@@ -356,7 +356,7 @@
 | R-OUT-12 | HTML 报告正文大块默认折叠：指定章节内容包 `details.section-fold`、章标题与「回到顶部」留在折叠块外，`summary` 提示条带该章关键摘要与展开/收起指引；覆盖章节 = 组合历史走势与回撤、财经新闻热点与持仓关联分析、组合演进、持仓基本面、持仓结构与集中度、风格与因子分析、数据源可用性矩阵；缺省一律收起（模板无 `open`，打开报告含带 `#锚点` 也不自动展开），会话内目录锚点跳转自动展开目标章折叠块，打印前全展开、打印后恢复原折叠状态；覆盖章节 = 组合历史走势与回撤、财经新闻热点与持仓关联分析、组合演进、持仓基本面、持仓结构与集中度、风格与因子分析、数据源可用性矩阵、持仓变动复盘、调仓纪律回放、行动建议（另财经新闻章内事件窗对照块为章内块级折叠；行动建议章降级占位分支不折叠，异常态常显） |
 | R-OUT-13 | 生成中断一致性：Ctrl+C 中断在生成层统一收口（`run_integrity`/`guard_run`）——清理本次未完成临时产物（登记清理 + 产物前缀预清扫），经进度通道明确提示「已写盘 / 未完成已丢弃 / 已清理临时文件」明细；HTML/Excel 产物同目录临时文件 + `os.replace` 原子落盘（单文件不半写）；运行状态以 `status=interrupted` 落 `perf_history.jsonl`（页头状态行显示「已中断」，下次启动不误判为成功）；后台健康检查收敛，中断收口不吞 KeyboardInterrupt（CLI 退出码 130 不变） |
 | R-OUT-14 | CLI 任务完成通知（`core/completion_notify`）：config.json `notify` 节三通道（webhook POST JSON / SMTP 邮件 / notify-send 桌面），失败（退出码非 0）必发、成功需 `notify.on_success=true`；无 `notify` 节或全部通道未配置 → 静默跳过（默认关，符合「配置文件不必须存在」惯例）；载荷含报告类型 / 退出码 / 产物路径（命名单源 `LATEST_XLSX_NAME`/`LATEST_HTML_NAME` + 结果标志推导）/ 错误数（全量计数）与明细（截断）/ 数据状态跟踪器降级摘要；单通道失败隔离、永不抛出、绝不改变 CLI 退出码（尽力而为，单次尝试无重试）；webhook URL 凭据纪律（异常消息落日志前掩码只记域名——凭据不落日志；HTTP 走 `make_http_client`——客户端统一；日志 logger `invest`——日志统一） |
-| R-OUT-15 | HTML 摘要区「本期要点与环比对照」（报告章节与增强开关 `summary_highlights`，默认关）：首屏执行摘要卡 = 关键指标环比行（总市值环比金额与比率 / 总收益率环比百分点 / 持仓数环比（新增数-清仓数） / 集中度 HHI 环比（行级降级：演进开关关闭或快照差异不可得时省略该行，整块照常））+ 本期关键变化 Top N（默认 5，新增/清仓/加减仓合并按市值变化绝对值降序，超上限写「等共 N 项变动」提示并指路组合演进章）；取数快照 diff 单源（`pipeline_data.diff` + `snapshot_diff_data.hhi_change`），零新增取数零计算重复；无上期快照（首次运行/非正式持仓源）时整块隐藏不写占位；开关关闭时关态产物逐字节不变 |
+| R-OUT-15 | HTML 摘要区「本期要点与环比对照」（报告章节与增强开关 `summary_highlights`，默认关）：首屏执行摘要卡 = 关键指标环比行（总市值环比金额与比率 / 总收益率环比百分点 / 持仓数环比（新增数-清仓数） / 集中度 HHI 环比（行级降级：演进开关关闭或快照差异不可得时省略该行，整块照常））+ 本期关键变化 Top N（默认 5，新增/清仓/加减仓合并按市值变化绝对值降序，超上限写「等共 N 项变动」提示并指路组合演进章）；标题下标注**对比基准**（基线报告的所属交易日与生成时间，基线时间戳不可解析时省略该行）；取数快照 diff 单源（`pipeline_data.diff` + `snapshot_diff_data.hhi_change`），零新增取数零计算重复；无上期快照（首次运行/非正式持仓源）时整块隐藏不写占位；开关关闭时关态产物逐字节不变 |
 
 ### 6.3 报告模块清单
 
@@ -766,7 +766,7 @@ LLM 五维度量化评分，每项满分 100：
 | R-EVO-03 | 演进数据注入 `evolution_data` 键，Excel「组合演进」页签与 HTML「组合演进」章节双端消费 |
 | R-EVO-04 | 组合演进章节可见性由独立配置项 `enable_portfolio_evolution` 控制（默认开启），与 `enable_history`/`enable_fund_deep_analysis` 相互独立；关闭仅隐藏报告章节，不影响持仓快照自动记录 |
 
-**自上次快照变化摘要（组合演进章顶部区块）**：对比去重后最近两次快照，输出新增/移除品种（按 code 合并比对，复用 `fetcher/history_diff.HistoryDiff` 引擎）、集中度 HHI 变化（本期 - 上期，权重口径与演进一致：市值优先、市值为 0 回退成本）、超 15% 警戒线品种（阈值复用 `analysis/simple_rebalance._THRESHOLD`，按权重降序），生成一段中文变化摘要文本供双端直接渲染。数据来源复用 `data/history/snapshots/` 本地快照，零网络请求。去重后有效快照 < 2 期（无上次快照可对比）时 `available=false`，写「快照差异不足」占位（technical.md §1.4.5 降级）。由 `analysis/snapshot_diff.py::build_snapshot_diff()` 计算（纯标准库、analysis 层隔离，复用 `portfolio_evolution` 的 `_dedup_by_date`/`_compute_hhi`/`_holding_weight`），注入 `snapshot_diff_data` 键。
+**自上次快照变化摘要（组合演进章顶部区块）**：对比**分属不同交易日**的最近两份快照（同一交易日多次运行比对无意义，基线选择与环比 diff 同口径，由 `history_snapshot.load_comparison_baseline` 统一提供），输出新增/移除品种（按 code 合并比对，复用 `fetcher/history_diff.HistoryDiff` 引擎）、集中度 HHI 变化（本期 - 上期，权重口径与演进一致：市值优先、市值为 0 回退成本）、超 15% 警戒线品种（阈值复用 `analysis/simple_rebalance._THRESHOLD`，按权重降序），生成一段中文变化摘要文本供双端直接渲染。数据来源复用 `data/history/snapshots/` 本地快照，零网络请求。有效快照 < 2 期或无更早交易日快照可对比时 `available=false`，写「快照差异不足」占位（technical.md §1.4.5 降级）。由 `analysis/snapshot_diff.py::build_snapshot_diff()` 计算（纯标准库、analysis 层隔离，复用 `portfolio_evolution` 的 `_compute_hhi`/`_holding_weight`），注入 `snapshot_diff_data` 键。
 
 **需求标识**：
 
@@ -774,7 +774,7 @@ LLM 五维度量化评分，每项满分 100：
 |:---------|:---------|
 | R-DIFF-01 | 自上次快照变化摘要基于本地快照对比，零网络请求；复用既有多快照数据（`data/history/snapshots/`），与组合演进同数据源 |
 | R-DIFF-02 | 输出新增/移除品种、集中度 HHI 变化（本期-上期，权重口径与演进一致）、超 15% 警戒线品种（按权重降序）；HHI 无可比权重时跳过 HHI 变化点 |
-| R-DIFF-03 | 去重后有效快照 < 2 期时 `snapshot_diff_data.available=false`、reason 说明，Excel/HTML 均写「快照差异不足」占位（technical.md §1.4.5 降级），不阻断报告生成 |
+| R-DIFF-03 | 有效快照 < 2 期或无更早交易日快照可对比时 `snapshot_diff_data.available=false`、reason 说明，Excel/HTML 均写「快照差异不足」占位（technical.md §1.4.5 降级），不阻断报告生成 |
 | R-DIFF-04 | 快照差异摘要注入 `snapshot_diff_data` 键，Excel 组合演进页签顶部「自上次快照变化摘要」区块 + HTML 组合演进章顶部摘要卡双端消费，与演进数据同开关（`enable_portfolio_evolution`） |
 
 #### 6.4.15 数据源可用性矩阵
@@ -851,11 +851,11 @@ LLM 五维度量化评分，每项满分 100：
 
 | 需求标识 | 需求描述 |
 |:---------|:---------|
-| R-SNP-01 | 每次生成 B/L 报告时自动创建持仓快照，用于环比对比 |
+| R-SNP-01 | 每次生成 B/L 报告时自动创建持仓快照，用于环比对比；环比基线取**上一个有报告的交易日的最新一份快照**（`history_snapshot.load_comparison_baseline`，同一交易日多次生成不互为比对对象；交易日归属 `trading_day_as_of`：盘前 <9:30 归前一交易日、节假日按日历回溯，与报告头「所属交易日」同口径） |
 | R-SNP-02 | 快照存放独立于缓存系统，不受菜单缓存清理命令影响 |
 | R-SNP-03 | 快照保留天数可配置（默认 180 天），超出限制自动删除最旧文件（与持仓变动复盘复盘窗口门槛 ≥12 期对齐，保障周频快照跨季度可用） |
 | R-SNP-04 | 快照最大数量可配置（默认 365 个），超出限制自动删除最旧文件 |
-| R-SNP-05 | 快照对比输出：总市值变化、总盈亏变化、新增/清仓/增持/减持品种 TOP5 |
+| R-SNP-05 | 快照对比输出：总市值变化、总盈亏变化、新增/清仓/增持/减持品种 TOP5；Excel 环比对比块与 LLM 环比上下文同步标注**对比基线**（基线报告的所属交易日与生成时间，基线时间戳不可解析/标注缺席时省略该行） |
 | R-SNP-06 | 首次运行无历史快照时跳过对比，下次自动建立基线 |
 
 ### 6.7 流动性风险分析

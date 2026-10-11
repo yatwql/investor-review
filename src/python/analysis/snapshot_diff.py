@@ -1,6 +1,8 @@
 """快照差异摘要 — 组合演进章顶部「自上次快照变化摘要」。
 
-对比去重后的最近两次快照，输出数据契约 `snapshot_diff_data`：
+对比**分属不同交易日**的最近两份快照（同一交易日多次运行比对无意义，
+基线选择与环比 diff 同口径，见 ``load_comparison_baseline``），
+输出数据契约 `snapshot_diff_data`：
   - 新增/移除品种（复用 `fetcher/history_diff.HistoryDiff` 引擎，action=新增/清仓）
   - 集中度 HHI 变化（本期 - 上期；市值口径优先，市值为 0 回退成本口径，
     与 `analysis/portfolio_evolution` 的权重口径一致）
@@ -10,8 +12,8 @@
   - 相关性矩阵差异（快照无相关性数据）
   - 行业/穿透结构差异（快照无行业/穿透字段）
 
-数据不足（去重后有效快照 < 2 期，无上次快照可对比）时返回 available=False
-的降级 dict，由展示层写入占位文本（§1.4.5 数据降级治理）。
+数据不足（无快照、期数低于下限，或无更早交易日的快照可对比）时返回
+available=False 的降级 dict，由展示层写入占位文本（§1.4.5 数据降级治理）。
 """
 
 from __future__ import annotations
@@ -21,7 +23,6 @@ from typing import Any
 
 from src.python.analysis.portfolio_evolution import (
     _compute_hhi,
-    _dedup_by_date,
     _format_period_label,
     _holding_weight,
 )
@@ -44,7 +45,8 @@ def build_snapshot_diff(
 ) -> dict[str, Any]:
     """构建快照差异摘要数据契约 dict。
 
-    从快照目录加载全部快照 → 按日期去重 → 取最近两次对比。
+    从快照目录取最新一份快照，再选所属交易日**更早**的最新一份作对比基线
+    （同一交易日多次运行跳过，与 ``report/_snapshot.py`` 环比 diff 同口径）。
 
     Args:
         threshold_pct: 超警戒线阈值（%），默认 15.0（与 simple_rebalance 一致）
@@ -54,7 +56,7 @@ def build_snapshot_diff(
 
     Returns:
         snapshot_diff_data 契约 dict：
-          - available: 数据是否充足（去重后有效快照 >= min_snapshots）
+          - available: 数据是否充足（最新期与更早交易日基线期均在且期数达标）
           - snapshot_count: 原始快照文件数
           - previous_date / current_date: 上期/最新期展示标签（MM-DD）
           - added / removed: 本期新增/移除品种 [{code, name}]
@@ -63,16 +65,26 @@ def build_snapshot_diff(
           - summary: 变化摘要文本（渲染层直接展示）
           - reason: available=False 时的降级原因
     """
-    from src.python.report.history_snapshot import load_all
+    from src.python.report.history_snapshot import load_all, load_comparison_baseline
 
     raw = load_all(snapshot_namespace)
-    snapshots = _dedup_by_date(raw)
+    raw_count = len(raw)
+    if raw_count < min_snapshots:
+        logger.warning("快照差异：有效快照 %d < 下限 %d，无上次快照可对比", raw_count, min_snapshots)
+        return _unavailable(raw_count, min_snapshots)
+    curr_sd = raw[-1]
 
-    if len(snapshots) < min_snapshots:
-        logger.warning("快照差异：有效快照 %d < 下限 %d，无上次快照可对比", len(snapshots), min_snapshots)
-        return _unavailable(len(raw), min_snapshots)
-
-    prev_sd, curr_sd = snapshots[-2], snapshots[-1]
+    prev_sd = load_comparison_baseline(curr_sd.timestamp, snapshot_namespace) if curr_sd.timestamp else None
+    # 退化口径（时间戳不可解析回退 load_latest）可能返回同一份快照——不可自比
+    if prev_sd is not None and prev_sd.timestamp == curr_sd.timestamp:
+        prev_sd = None
+    if prev_sd is None:
+        logger.warning("快照差异：无更早交易日的快照可对比（当前 %d 期）", raw_count)
+        return _unavailable(
+            raw_count,
+            min_snapshots,
+            reason=f"快照差异不足：无更早交易日的快照可对比（现有 {raw_count} 期均属同一交易日），变化摘要待积累",
+        )
 
     # 新增/移除品种（复用 HistoryDiff 引擎，action=新增/清仓）
     from src.python.fetcher.history_diff import HistoryDiff
@@ -93,7 +105,7 @@ def build_snapshot_diff(
 
     return {
         "available": True,
-        "snapshot_count": len(raw),
+        "snapshot_count": raw_count,
         "previous_date": _format_period_label(prev_sd.timestamp or ""),
         "current_date": _format_period_label(curr_sd.timestamp or ""),
         "added": added,
@@ -107,8 +119,10 @@ def build_snapshot_diff(
     }
 
 
-def _unavailable(snapshot_count: int, min_snapshots: int) -> dict[str, Any]:
-    """有效快照不足占位（§1.4.5 数据降级）。"""
+def _unavailable(snapshot_count: int, min_snapshots: int, reason: str = "") -> dict[str, Any]:
+    """数据不足占位（§1.4.5 数据降级）。"""
+    if not reason:
+        reason = f"快照差异不足：有效快照 < {min_snapshots} 期，无上次快照可对比，变化摘要待积累"
     return {
         "available": False,
         "snapshot_count": snapshot_count,
@@ -121,7 +135,7 @@ def _unavailable(snapshot_count: int, min_snapshots: int) -> dict[str, Any]:
         "hhi_change": None,
         "over_limit": [],
         "summary": "",
-        "reason": f"快照差异不足：有效快照 < {min_snapshots} 期，无上次快照可对比，变化摘要待积累",
+        "reason": reason,
     }
 
 

@@ -563,6 +563,14 @@ def generate_excel_report(
                 _ws_sum.cell(row=_last_row, column=1, value="距上次报告")
                 _ws_sum.cell(row=_last_row, column=2, value=f"{_diff['days_since_last_report']} 天")
                 _last_row += 1
+            if _diff.get("baseline_generated_at"):
+                _ws_sum.cell(row=_last_row, column=1, value="对比基准")
+                _ws_sum.cell(
+                    row=_last_row,
+                    column=2,
+                    value=f"交易日 {_diff.get('baseline_trading_day') or '--'} · 报告生成 {_diff['baseline_generated_at']}",
+                )
+                _last_row += 1
             if _diff.get("total_value_diff") is not None:
                 _ws_sum.cell(row=_last_row, column=1, value="总市值变化").font = _bold_font
                 _cell = _ws_sum.cell(row=_last_row, column=2, value=_diff["total_value_diff"])

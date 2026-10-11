@@ -514,11 +514,11 @@
 | R-EVO-02 | `src/test/unit/analysis/test_portfolio_evolution.py` | 批 4 |
 | R-EVO-03 | `src/test/unit/report/test_evolution_sheet.py` + `src/test/unit/report/test_evolution_html.py` | 批 4 |
 | R-EVO-04 | `src/test/unit/config/test_features.py` + `src/test/unit/report/test_section_visibility.py` | 批 4 |
-| R-SNP-01 | `src/test/unit/report/test_history_snapshot_namespace.py` | 批 4 |
+| R-SNP-01 | `src/test/unit/report/test_history_snapshot_namespace.py` + `src/test/unit/report/test_snapshot_baseline.py` + `src/test/unit/report/test_snapshot_baseline_edge.py` | 批 4 |
 | R-SNP-02 | `src/test/unit/handlers/test_handlers_cache.py` + `src/test/unit/report/test_history_snapshot_namespace.py` | 批 4 |
 | R-SNP-03 | `src/test/unit/report/test_history_snapshot_namespace.py` | 批 4 |
 | R-SNP-04 | `src/test/unit/report/test_history_snapshot_namespace.py` | 批 4 |
-| R-SNP-05 | `src/test/unit/analysis/test_snapshot_diff.py` | 批 4 |
+| R-SNP-05 | `src/test/unit/analysis/test_snapshot_diff.py` + `src/test/unit/report/test_excel_report_structure.py` + `src/test/unit/llm/test_llm_prompt_builders.py` | 批 4 |
 | R-SNP-06 | `src/test/unit/analysis/test_snapshot_diff_edge.py` | 批 4 |
 | R-CFL-01 | `src/test/unit/analysis/test_cost_flow.py` | 批 4 |
 | R-CFL-02 | `src/test/unit/analysis/test_cost_flow.py` | 批 4 |
@@ -526,7 +526,7 @@
 | R-CFL-04 | `src/test/unit/report/test_category.py` + `src/test/unit/analysis/test_cost_flow.py` | 批 4 |
 | R-DIFF-01 | `src/test/unit/analysis/test_snapshot_diff.py` | 批 4 |
 | R-DIFF-02 | `src/test/unit/analysis/test_snapshot_diff.py` | 批 4 |
-| R-DIFF-03 | `src/test/unit/analysis/test_snapshot_diff_edge.py` | 批 4 |
+| R-DIFF-03 | `src/test/unit/analysis/test_snapshot_diff.py` + `src/test/unit/analysis/test_snapshot_diff_edge.py` | 批 4 |
 | R-DIFF-04 | `src/test/unit/report/test_evolution_sheet.py` + `src/test/unit/report/test_evolution_html.py` | 批 4 |
 | R-LLM-01 | `src/test/unit/ui/test_tui_menu.py` | 批 5 |
 | R-LLM-02 | `src/test/unit/config/test_features.py` + `src/test/unit/llm/test_generate_all_llm.py` | 批 5 |

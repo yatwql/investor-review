@@ -351,6 +351,9 @@ def _validate_diff(diff: dict) -> None:
     _diff_type_map: dict[str, type | tuple[type, ...]] = {
         "is_first_check": bool,
         "days_since_last_report": (int, float),
+        "baseline_timestamp": str,
+        "baseline_generated_at": str,
+        "baseline_trading_day": str,
         "total_value_diff": (int, float),
         "total_value_diff_pct": (int, float),
         "total_pnl_diff": (int, float),

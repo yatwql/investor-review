@@ -75,9 +75,11 @@ def _inject_snapshot_diff_data(
 ) -> dict:
     """计算快照差异摘要并注入 pipeline_data（`snapshot_diff_data` 键）。
 
-       对比 `data/history/snapshots/` 去重后最近两次快照，输出组合演进章顶部
+       对比 `data/history/snapshots/` 分属不同交易日的最近两份快照（同一交易日
+       多次运行跳过，与环比 diff 同口径，基线由 `load_comparison_baseline` 提供），
+       输出组合演进章顶部
        「自上次快照变化摘要」（新增/移除品种 + 集中度 HHI 变化 + 超警戒线品种）。
-       有效快照 < 2 期时返回 available=False 的降级 dict，展示层写占位
+       有效快照 < 2 期或无更早交易日快照时返回 available=False 的降级 dict，展示层写占位
     （§1.4.5），不阻断报告生成（隔离）。
 
        Args:

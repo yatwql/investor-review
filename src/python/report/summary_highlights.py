@@ -39,6 +39,9 @@ def build_summary_highlights(
     Returns:
         契约 dict；无上期快照可对比时返回 None（渲染层整块隐藏）：
           - days_since_last_report: 距上次报告天数
+          - baseline_trading_day: 对比基线报告的所属交易日（YYYY-MM-DD；基线时间戳
+            不可解析时为 ""，渲染层省略对比基准行）
+          - baseline_generated_at: 对比基线报告的生成时间（YYYY-MM-DD HH:MM，同上降级）
           - total_value_diff / total_value_diff_pct: 总市值环比金额与比率
           - total_pnl_diff / total_pnl_pct_diff: 总盈亏环比金额与盈亏率百分点
           - holding_count_delta: 持仓数环比（新增品种数 - 清仓品种数）
@@ -81,6 +84,8 @@ def build_summary_highlights(
 
     return {
         "days_since_last_report": diff.get("days_since_last_report", 0),
+        "baseline_trading_day": diff.get("baseline_trading_day", ""),
+        "baseline_generated_at": diff.get("baseline_generated_at", ""),
         "total_value_diff": diff.get("total_value_diff", 0.0),
         "total_value_diff_pct": diff.get("total_value_diff_pct", 0.0),
         "total_pnl_diff": diff.get("total_pnl_diff", 0.0),

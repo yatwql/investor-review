@@ -1,17 +1,18 @@
 """快照差异摘要（自上次快照变化）纯计算测试。
 
 覆盖：
-  - 数据不足（去重后 < 2 期，无上次快照）→ available=False 降级占位
+  - 数据不足（无快照/期数低于下限/无更早交易日基线）→ available=False 降级占位
   - 两次快照差异：新增/移除品种检测
   - 集中度 HHI 变化计算（本期 - 上期）
   - 超警戒线品种检测（复用 15% 阈值）与按权重降序
   - 完全相同快照 → 摘要报告"持平"
   - summary 摘要文本覆盖所有变化点
   - 市值为 0 的旧快照 → 回退成本口径计算权重
-  - 同日多快照 → 按日去重后仍可对比（保留当日最后一份）
+  - 同一交易日多快照 → 基线跳过同交易日，取更早交易日最新一份对比
 
 测试隔离：conftest `_isolate_sensitive_paths` 已将 HISTORY_SNAPSHOT_DIR
-重定向到 tmp_path，测试通过 save() 构造快照，不触碰真实数据。
+重定向到 tmp_path，测试通过 save() 构造快照，不触碰真实数据；
+交易日历走 `offline_external_sources` 离线桩（回空集 → 排除周六日回退）。
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from src.python.analysis.snapshot_diff import build_snapshot_diff
 from src.python.report.history_snapshot import save
 from src.python.schemas.history import AccountSnapshot, SnapshotData, SnapshotHolding
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_analysis]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_analysis, pytest.mark.usefixtures("offline_external_sources")]
 
 
 # ── 辅助构造 ──────────────────────────────────────────────
@@ -183,14 +184,24 @@ def test_cost_fallback_when_market_value_zero():
     assert [o["code"] for o in data["over_limit"]] == ["B", "A"]
 
 
-# ── 同日去重 ──────────────────────────────────────────────
+# ── 同交易日基线跳过 ──────────────────────────────────────────
 
 
-def test_same_date_multiple_snapshots_dedup_keeps_last():
-    """同日两份快照按日去重保留最后一份，跨日对比仍可用。"""
+def test_same_trading_day_snapshots_unavailable_without_earlier_baseline():
+    """同属一个交易日的多份快照无更早基线 → available=False（reason 说明同一交易日）。"""
+    _save("20260701T100000", [_holding("A", "A基金", 5000, 4000)])
+    _save("20260701T200000", [_holding("A", "A基金", 5200, 4000)])
+    data = build_snapshot_diff()
+    assert data["available"] is False
+    assert "快照差异不足" in data["reason"]
+    assert "同一交易日" in data["reason"]
+
+
+def test_same_date_multiple_snapshots_baseline_uses_latest_of_earlier_day():
+    """同日多份快照跳过，基线取更早交易日的最后一份（而非当日第一份）。"""
     _save("20260701T080000", [_holding("A", "A基金", 5000, 4000), _holding("B", "B基金", 5000, 4000)])
     _save("20260701T120000", [_holding("A", "A基金", 7000, 4000), _holding("B", "B基金", 3000, 4000)])
-    _save("20260702T090000", [_holding("A", "A基金", 8000, 4000), _holding("B", "B基金", 2000, 4000)])
+    _save("20260702T100000", [_holding("A", "A基金", 8000, 4000), _holding("B", "B基金", 2000, 4000)])
     data = build_snapshot_diff()
     assert data["snapshot_count"] == 3  # 原始文件数
     assert data["previous_date"] == "07-01"

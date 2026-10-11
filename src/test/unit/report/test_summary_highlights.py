@@ -26,6 +26,9 @@ def _diff_dict(**overrides) -> dict:
     base = {
         "is_first_check": False,
         "days_since_last_report": 7,
+        "baseline_timestamp": "20260109T213000",
+        "baseline_trading_day": "2026-01-09",
+        "baseline_generated_at": "2026-01-09 21:30",
         "total_value_diff": 1000.0,
         "total_value_diff_pct": 1.5,
         "total_pnl_diff": 500.0,
@@ -111,6 +114,21 @@ class TestBuildSummaryHighlights:
         available = {"diff": _diff_dict(), "snapshot_diff_data": {"available": True, "hhi_change": 0.01}}
         assert build_summary_highlights(available)["hhi_change"] == 0.01
 
+    def test_baseline_labels_passed_through(self):
+        """对比基准标注（所属交易日 + 生成时间）从 diff 透传到契约（比对对象可见）。"""
+        h = build_summary_highlights({"diff": _diff_dict()})
+        assert h is not None
+        assert h["baseline_trading_day"] == "2026-01-09"
+        assert h["baseline_generated_at"] == "2026-01-09 21:30"
+
+    def test_baseline_labels_default_empty(self):
+        """diff 缺少基线标注键（旧口径/异常降级）→ 默认空串，渲染层省略该行。"""
+        diff = _diff_dict(baseline_trading_day="", baseline_generated_at="")
+        h = build_summary_highlights({"diff": diff})
+        assert h is not None
+        assert h["baseline_trading_day"] == ""
+        assert h["baseline_generated_at"] == ""
+
 
 class TestPnlPctDiffChain:
     """总盈亏率环比：HistoryDiff.compute 计算 → capture_snapshot diff dict 透传。"""
@@ -187,6 +205,14 @@ class TestSummarySectionTemplate:
         assert "新A" in html
         assert "集中度环比（HHI）" in html
         assert "距上次报告 7 天" in html
+        assert "对比基准：交易日 2026-01-09 · 报告生成 2026-01-09 21:30" in html
+
+    def test_baseline_line_omitted_when_labels_absent(self):
+        """基线标注缺失（空串）→ 对比基准行省略，其余照常渲染。"""
+        diff = _diff_dict(baseline_trading_day="", baseline_generated_at="")
+        html = self._render(build_summary_highlights({"diff": diff}))
+        assert "本期要点" in html
+        assert "对比基准" not in html
 
     def test_off_state_renders_nothing(self):
         """开关关闭（契约 None）→ 块零输出，首屏与既有产物逐字节一致。"""

@@ -30,6 +30,9 @@ def _build_difpipeline_data_block(pipeline_data: dict | None) -> str:
     lines: list[str] = []
     days = diff.get("days_since_last_report", 0)
     lines.append(f"【环比对比】距上次报告 {days} 天")
+    baseline_gen = diff.get("baseline_generated_at", "")
+    if baseline_gen:
+        lines.append(f"【对比基准】交易日 {diff.get('baseline_trading_day') or '--'}，报告生成于 {baseline_gen}")
 
     tv_diff = diff.get("total_value_diff", 0)
     tv_pct = diff.get("total_value_diff_pct", 0)

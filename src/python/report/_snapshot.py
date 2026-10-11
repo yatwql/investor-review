@@ -11,6 +11,23 @@ from src.python.report.progress import ProgressReporter
 logger = __import__("logging").getLogger("invest")
 
 
+def _baseline_labels(ts: str) -> tuple[str, str]:
+    """基线快照时间戳 →（所属交易日, 生成时间）展示串。
+
+    供 ``diff.baseline_trading_day`` / ``diff.baseline_generated_at`` 派生——
+    环比时标注“比对的是哪个交易日、什么时间生成的报告”。交易日归属与报告头
+    “所属交易日”同口径（``trading_day_as_of``）。时间戳不可解析时返回 ("", "")，
+    展示层按缺席降级（不写标注行）。
+    """
+    from src.python.core.trading_calendar import trading_day_as_of
+    from src.python.report.history_snapshot import _parse_snapshot_timestamp
+
+    dt = _parse_snapshot_timestamp(ts or "")
+    if dt is None:
+        return "", ""
+    return trading_day_as_of(dt), dt.strftime("%Y-%m-%d %H:%M")
+
+
 def capture_snapshot(
     holdings: list,
     details: list,
@@ -28,7 +45,8 @@ def capture_snapshot(
         config: 配置字典
         reporter: 进度报告接口
         snapshot_namespace: 快照隔离域（None=共享主目录；如 "web"=web 试算域），
-            差异计算基于同域上一份快照、保存与清理均在域内闭环
+            差异计算基于同域上一份**不同交易日**的快照（同一交易日多次运行跳过，
+            见 ``load_comparison_baseline``）、保存与清理均在域内闭环
         extra: 额外扩展字段（调用方 kwargs），透传到 pipeline_data
 
     Returns:
@@ -56,7 +74,7 @@ def capture_snapshot(
 
     from src.python.fetcher.history_diff import HistoryDiff
     from src.python.report.data_status import get_tracker as _get_degradation_tracker
-    from src.python.report.history_snapshot import load_latest, save
+    from src.python.report.history_snapshot import load_comparison_baseline, save
     from src.python.schemas.history import (
         AccountSnapshot,
         SnapshotData,
@@ -91,7 +109,7 @@ def capture_snapshot(
             total_pnl=sum(d.profit for d in details),
             timestamp=datetime.now().strftime("%Y%m%dT%H%M%S"),
         )
-        _old = load_latest(snapshot_namespace)
+        _old = load_comparison_baseline(_snapshot.timestamp, snapshot_namespace)
         _diff = HistoryDiff.compute(_snapshot, _old)
         save(_snapshot, snapshot_namespace)
         from src.python.core.constants import HISTORY_SNAPSHOT_MAX_COUNT, HISTORY_SNAPSHOT_RETENTION_DAYS
@@ -104,6 +122,9 @@ def capture_snapshot(
             namespace=snapshot_namespace,
         )
         if not _diff.is_first_check:
+            # 基线时间戳仅接受字符串（防御非标对象/桩），不可解析时标签降级为 ""
+            _raw_ts = _old.timestamp if isinstance(_old.timestamp, str) else ""
+            _baseline_td, _baseline_gen = _baseline_labels(_raw_ts)
             pipeline_data = {
                 "diff": {
                     "is_first_check": False,
@@ -112,6 +133,9 @@ def capture_snapshot(
                     "total_pnl_diff": _diff.total_pnl_diff,
                     "total_pnl_pct_diff": _diff.total_pnl_pct_diff,
                     "days_since_last_report": _diff.days_since_last_report,
+                    "baseline_timestamp": _raw_ts,
+                    "baseline_generated_at": _baseline_gen,
+                    "baseline_trading_day": _baseline_td,
                     "added": [
                         {
                             "name": a.name,

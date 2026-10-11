@@ -47,6 +47,7 @@ __all__ = [
     "elapsed_trading_days_with_natural_fallback",
     "get_last_trading_day",
     "get_prev_trading_day",
+    "trading_day_as_of",
 ]
 
 
@@ -134,21 +135,26 @@ def _is_trading_day(date: datetime) -> bool:
     return date.weekday() < 5
 
 
-def get_last_trading_day() -> str:
-    """获取最近一个交易日（YYYY-MM-DD），含节假日感知。
+def trading_day_as_of(moment: datetime) -> str:
+    """给定时点所属交易日（YYYY-MM-DD），含盘前与节假日感知口径。
 
-    判断逻辑：
-    1. 使用 akshare 交易日历判定节假日（端午、中秋、国庆等）
-    2. A 股盘前（< 9:30）退回上一交易日
-    3. 盘中/盘后（≥ 9:30）且当天为交易日 → 返回当天
-    4. 非交易日则向前查找最近一个交易日
+    与 :func:`get_last_trading_day` 是同一实现（后者即对“当前时刻”调用本函数）：
+
+    1. 盘前（< 9:30）归前一交易日——尚未开盘，数据仍为上一交易日收盘
+    2. 非交易日/节假日向前回溯最多 14 天（覆盖长假）
+    3. 交易日历不可用时由 :func:`_is_trading_day` 回退「排除周六日」近似口径
+
+    用途：判定「某时点产出物」（如持仓快照）的交易日归属——同一交易日内的
+    多次产出比对无意义（净值未变），须以交易日而非自然日判等。
+
+    Args:
+        moment: 待判定时点（naive 或带时区 datetime，按其自身钟面判定）
 
     Returns:
-        YYYY-MM-DD 格式的交易日字符串
+        YYYY-MM-DD 格式的所属交易日；回溯 14 天仍未命中（不应到达）时返回 moment 自身日期。
     """
-    now = datetime.now(BEIJING_TZ)
-    # 若盘前（< 9:30），基准日设为昨天
-    check = now - timedelta(days=1) if now.hour < 9 or now.hour == 9 and now.minute < 30 else now
+    # 盘前（< 9:30）基准日设为前一天
+    check = moment - timedelta(days=1) if moment.hour < 9 or moment.hour == 9 and moment.minute < 30 else moment
 
     # 从基准日起向前查找最近一个交易日
     for _ in range(14):  # 最多回溯 14 天（覆盖长假）
@@ -157,7 +163,22 @@ def get_last_trading_day() -> str:
         check -= timedelta(days=1)
 
     # 极端回退（不应到达）
-    return now.strftime("%Y-%m-%d")
+    return moment.strftime("%Y-%m-%d")
+
+
+def get_last_trading_day() -> str:
+    """获取最近一个交易日（YYYY-MM-DD），含节假日感知。
+
+    判断逻辑（委托 :func:`trading_day_as_of`，口径单源）：
+    1. 使用 akshare 交易日历判定节假日（端午、中秋、国庆等）
+    2. A 股盘前（< 9:30）退回上一交易日
+    3. 盘中/盘后（≥ 9:30）且当天为交易日 → 返回当天
+    4. 非交易日则向前查找最近一个交易日
+
+    Returns:
+        YYYY-MM-DD 格式的交易日字符串
+    """
+    return trading_day_as_of(datetime.now(BEIJING_TZ))
 
 
 def get_prev_trading_day(trading_day: str = "") -> str:

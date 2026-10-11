@@ -19,6 +19,9 @@
 - 两开关共享同一次子块扩展窗取数（未开启时零新增网络请求、产物逐字节一致）；同步区块契约注册表（走势章 4→5 区块）、TUI 面板编号、开关表与附录 H。
 - **品牌**：猫头鹰吉祥物「守望」上线——新增 `src/static/owl-mascot.svg`（卡通猫头鹰立于净值增长曲线，底色与 architecture.svg 同源），README 头部嵌入并补定位描述（夜间守望 / 智慧顾问不越位 / 全景视野 / 守口如命）；favicon.svg 改为品牌蓝底 + 猫头鹰头像（16px 可辨）。
 
+### Changed
+- **环比对比基线改为跨交易日 + 基线标注三面（HTML/Excel/LLM）**：同一交易日多次运行报告不再互为比对对象——`diff`（本期要点/Excel 环比块/LLM 环比上下文）与 `snapshot_diff`（组合演进「自上次快照变化摘要」）的基线统一取**上一个有报告的交易日的最新一份快照**（新增 `report/history_snapshot.load_comparison_baseline`；交易日归属经 `core/trading_calendar.trading_day_as_of`：盘前 <9:30 归前一交易日、节假日按日历回溯、日历不可用回退排除周六日，与报告头「所属交易日」同口径，`get_last_trading_day` 改为委托该函数保持单源）。`current_ts` 不可解析回退旧「上一份快照」口径不阻塞环比；基线候选文件损坏/时间戳坏自动跳过顺延；无可比基线时按首次运行口径隐藏环比块。同时 diff 契约新增 `baseline_trading_day`（基线报告所属交易日）/ `baseline_generated_at`（报告生成时间，`YYYY-MM-DD HH:MM`）/ `baseline_timestamp` 三个展示键，HTML「本期要点」标题下、Excel【环比对比】区块、LLM 环比上下文分别新增「对比基准」行——写明比对的是哪个交易日、什么时间生成的报告（标注不可解析时为空串，三处均省略该行；首跑/关态产物逐字节不变）。
+
 ### Fixed
 - **favicon**：旧图标 XML 注释内含 `--` 非法 token，严格 XML 解析器下图标渲染失败——随品牌图标重绘顺带修复。
 
