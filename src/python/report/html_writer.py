@@ -272,6 +272,8 @@ def _render_template(
     financial_indicator_data: dict | None = None,  # 财务指标契约（None=开关关闭/无数据）
     purchase_status_data: dict | None = None,  # 申购限购状态契约（None=开关关闭/无数据，申购状态列隐藏）
     data_source_catalog: list | None = None,  # 数据源说明表（实际使用清单 / 计费 / 凭据）
+    summary_highlights_data: dict
+    | None = None,  # 本期要点与环比对照契约（报告增强开关 summary_highlights，None=首屏块隐藏）
 ) -> str:
     """渲染 Jinja2 模板并返回 HTML。"""
     from src.python.config.features import enabled_experimental_features
@@ -387,6 +389,7 @@ def _render_template(
         schedule_replay_view=schedule_replay_view,
         financial_report_digest_data=financial_report_digest_data,
         financial_indicator_data=financial_indicator_data,
+        summary_highlights_data=summary_highlights_data,
     )
 
 
@@ -449,6 +452,8 @@ def write_html_report(
     | None = None,  # data 层：事件窗量化对照契约（报告章节与增强开关 `event_window_impact`，None=键缺席→整章隐藏）
     schedule_replay_data: dict
     | None = None,  # data 层：调仓纪律回放契约（实验开关 `rebalance_schedule_replay`，None=键缺席→整章隐藏）
+    summary_highlights_data: dict
+    | None = None,  # data 层：本期要点与环比对照契约（报告章节与增强开关 `summary_highlights`，None=键缺席→首屏块隐藏）
 ) -> str:
     """生成 HTML 分析报告并保存到文件。
 
@@ -737,6 +742,7 @@ def write_html_report(
         holding_change_view=holding_change_view,
         event_impact_view=event_impact_view,
         schedule_replay_view=schedule_replay_view,
+        summary_highlights_data=summary_highlights_data,
     )
 
     if enable_interactive_charts:

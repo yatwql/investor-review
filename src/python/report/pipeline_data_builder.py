@@ -94,6 +94,10 @@ _PIPELINE_DATA_KNOWN_KEYS: set[str] = {
     # 由 report/purchase_status.build_purchase_status_data 组装；开关关闭时为 None、
     # 全链失败时 available=False 静默隐列）
     "purchase_status_data",
+    # 本期要点与环比对照：摘要区首屏执行摘要卡（报告章节与增强开关 `summary_highlights`，
+    # 由 report/summary_highlights.build_summary_highlights 派生；开关关闭时键缺席、
+    # 无上期快照时键值为 None，首屏整块隐藏）
+    "summary_highlights_data",
 }
 
 # ── 已知 prep 顶层键（用于 build_prep() 类型校验） ──
@@ -166,6 +170,7 @@ _PIPELINE_DATA_TYPE_MAP: dict[str, type | tuple[type, ...]] = {
     "financial_report_digest_data": (dict, type(None)),
     "financial_indicator_data": (dict, type(None)),
     "purchase_status_data": (dict, type(None)),
+    "summary_highlights_data": (dict, type(None)),
     "prosperity_framework_data": dict,
     "market_sentiment_data": dict,
 }
@@ -349,6 +354,7 @@ def _validate_diff(diff: dict) -> None:
         "total_value_diff": (int, float),
         "total_value_diff_pct": (int, float),
         "total_pnl_diff": (int, float),
+        "total_pnl_pct_diff": (int, float),
         "added": list,
         "removed": list,
         "increased": list,

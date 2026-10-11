@@ -326,6 +326,13 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         False,
         True,
     ),
+    "summary_highlights": FeatureSwitchDef(
+        "本期要点与环比对照",
+        "摘要区首屏执行摘要卡：关键指标环比行（总市值/总收益率/持仓数/集中度） + 本期关键变化 Top N（快照 diff 单源派生，无上期快照时整块隐藏）",
+        GROUP_REPORT,
+        False,
+        True,
+    ),
 }
 
 # ── 出厂默认值投影 ──────────────────────────────────────────

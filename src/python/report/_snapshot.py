@@ -110,6 +110,7 @@ def capture_snapshot(
                     "total_value_diff": _diff.total_value_diff,
                     "total_value_diff_pct": _diff.total_value_diff_pct,
                     "total_pnl_diff": _diff.total_pnl_diff,
+                    "total_pnl_pct_diff": _diff.total_pnl_pct_diff,
                     "days_since_last_report": _diff.days_since_last_report,
                     "added": [
                         {
