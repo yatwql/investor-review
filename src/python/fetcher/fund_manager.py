@@ -374,20 +374,3 @@ def fetch_fund_manager(code: str) -> dict[str, Any] | None:
 
     logger.warning("基金经理全部解析失败 [%s]", code)
     return None
-
-
-def fetch_fund_manager_cached(code: str) -> dict[str, Any] | None:
-    """基金经理信息获取（含会话缓存），同一报告生成中同基金只获取一次。
-
-    消除多个模块独立调用 fetch_fund_manager 的冗余文件缓存读取。
-    """
-    from src.python.core.provider_registry import NOT_FOUND, get_registry
-
-    registry = get_registry()
-    cached = registry.session_cache_get("fund_manager", code)
-    if cached is not NOT_FOUND:
-        return cached
-    result = fetch_fund_manager(code)
-    if result is not None:
-        registry.session_cache_set("fund_manager", code, result, source="api")
-    return result

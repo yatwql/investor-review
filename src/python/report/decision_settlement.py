@@ -25,7 +25,6 @@ logger = logging.getLogger("invest")
 # 结算目标视界：决策满 MIN_SETTLE_BARS 个交易日后才结算（账本常量）
 # 沪深300 指数代码（基准；历史文件缓存走 history_index chain）
 _BENCHMARK_INDEX = "sh000300"
-_BENCHMARK_NAME = "沪深300"
 
 # 拉取窗口（交易日 bar 数）上界，防止一次结算请求过长历史
 _FETCH_DAYS_CAP = 120

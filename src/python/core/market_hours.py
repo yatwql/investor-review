@@ -31,8 +31,6 @@ _MORNING_START = 570  # 09:30
 _MORNING_END = 690  # 11:30
 _AFTERNOON_START = 780  # 13:00
 _AFTERNOON_END = 900  # 15:00
-_DEFAULT_START = "09:30"
-_DEFAULT_END = "15:00"
 
 # ── 官方交易状态缓存 ───────────────────────────────────
 _CACHE_KEY_MARKET_HOURS = "market_hours"

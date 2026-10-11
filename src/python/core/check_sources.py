@@ -9,7 +9,6 @@
 
 from __future__ import annotations
 
-import os
 import sys
 import time
 from collections.abc import Callable
@@ -33,35 +32,6 @@ _OK = "[V]" if _USE_ASCII else "✅"
 _WARN = "[!]" if _USE_ASCII else "⚠️"
 _ERR = "[X]" if _USE_ASCII else "❌"
 _SKIP = "[-]" if _USE_ASCII else "⏭️"
-
-
-def _use_ansi() -> bool:
-    """判断是否支持 ANSI 颜色输出。
-
-    同时满足以下条件时返回 True：
-    - 未设置 NO_COLOR 环境变量
-    - stdout 是终端（非管道重定向）
-    - 编码支持 Unicode/ANSI
-    """
-    if os.environ.get("NO_COLOR"):
-        return False
-    if not sys.stdout.isatty():
-        return False
-    return bool(sys.stdout.encoding and sys.stdout.encoding.upper() in ("UTF-8", "UTF8"))
-
-
-def _colored(text: str, ok: bool, warn: bool = False) -> str:
-    """简易颜色标记。终端不支持 ANSI 时自动降级纯文本。"""
-    if not _use_ansi():
-        return text
-    try:
-        if ok:
-            return f"\033[32m{text}\033[0m"
-        if warn:
-            return f"\033[33m{text}\033[0m"
-        return f"\033[31m{text}\033[0m"
-    except (UnicodeEncodeError, OSError):
-        return text
 
 
 def _check_http(

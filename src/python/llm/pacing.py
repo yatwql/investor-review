@@ -144,12 +144,6 @@ def get_policy(endpoint_key: str) -> PacingPolicy | None:
     return _POLICIES.get(endpoint_key)
 
 
-def describe() -> dict[str, str]:
-    """端点 → 策略的可读描述（供 ``doctor`` / 自检展示）。"""
-    _ensure_loaded()
-    return {k: repr(v) for k, v in _POLICIES.items()}
-
-
 def reset_policies() -> None:
     """清空策略缓存（测试隔离用；生产不调用）。"""
     global _LOADED
@@ -230,23 +224,6 @@ def _get_semaphore(endpoint_key: str, limit: int) -> threading.BoundedSemaphore:
             sem = threading.BoundedSemaphore(limit)
             _SEMS[endpoint_key] = sem
         return sem
-
-
-#: 协议默认端点（``endpoint`` 未配置时按 provider 类型回落到官方默认）。
-#: 用于把「运行时 URL」映射回配置里的 provider 名，从而取到其 pacing 策略。
-_DEFAULT_ENDPOINTS: dict[str, str] = {
-    "claude": "api.anthropic.com",
-    "openai": "api.openai.com",
-}
-
-
-def endpoint_key_for(provider_name: str, endpoint: str | None, provider_type: str = "") -> str:
-    """返回用于查策略的键——**provider 名**（配置里的条目名）。
-
-    传 ``endpoint`` 仅用于日志与将来「按域名而非条目名」的扩展；当前策略以
-    provider 条目名为准，保证与 ``llm_providers.json`` 一一对应、无歧义。
-    """
-    return provider_name or provider_type
 
 
 # ── 429 诊断：两级并发配置回显与生效并发建议（供 api_base 重试骨架调用） ──

@@ -16,17 +16,11 @@ from __future__ import annotations
 
 import logging
 from src.python.core.trading_calendar import elapsed_trading_days_with_natural_fallback
-from datetime import date
 
 logger = logging.getLogger("invest")
 
 # 有效历史下限（交易日）：低于此 span 判数据不足（§1.4.5）
 MIN_SPAN: int = 60
-
-
-def _to_date(s: str) -> date:
-    """ISO 日期字符串 → date 对象（格式异常时抛 ValueError，由调用方降级）。"""
-    return date.fromisoformat(s)
 
 
 def extract_drawdown_events(

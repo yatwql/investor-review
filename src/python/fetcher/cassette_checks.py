@@ -27,7 +27,6 @@ from src.python.providers.tiantian_holdings import quarter_walk_anchor
 
 # 录制中使用的标的（与 src/test/data/cassettes/ 内的实际请求一致）
 _STOCK_CODE = "600519"
-_ETF_CODE = "510300"
 _FUND_CODE = "110022"
 _FEEDER_FUND_CODE = "016055"
 """ETF 联接基金标的——其季报股票表按构造为空，取数会走到主页面锚点那一步。

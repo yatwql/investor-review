@@ -448,36 +448,6 @@ def _merge_stock_layer(
         merged[norm_name]["funds"].append("直接持有")
 
 
-def _enrich_with_industry_api(merged: dict[str, Any]) -> tuple[bool, str]:
-    """用 API 行业数据补充板块分类和概念（原地修改）。
-
-    Returns:
-        (success, failure_type)
-        - success=True 表示 API 获取成功（可能有部分数据），或无需调用 API（全为非 A 股）
-        - success=False 时 failure_type 为 ``"unreachable"``（连接失败）、
-          ``"empty"``（A 股代码存在但 API 返回空数据）
-    """
-    try:
-        all_codes: list[str] = []
-        for info in merged.values():
-            all_codes.extend(info.get("codes") or [])
-        if not all_codes:
-            return True, "no_a_share"
-        a_share_codes = [c for c in set(all_codes) if is_a_share_code(c)]
-        if not a_share_codes:
-            return True, "no_a_share"
-        from src.python.fetcher.industry import batch_fetch_industry_data as batch_ind
-
-        ind_data = batch_ind(a_share_codes)
-        if ind_data:
-            return True, _apply_industry_data(merged, ind_data)
-        logger.warning("[penetration] 行业分类 API 返回空数据（非关键）")
-        return False, "empty"
-    except Exception:
-        logger.warning("[penetration] 行业分类 API 获取失败（非关键）", exc_info=True)
-        return False, "unreachable"
-
-
 def _apply_industry_data(merged: dict[str, Any], ind_data: dict[str, dict]) -> str:
     """将行业分类数据应用到 merged 字典（原地修改）。
 

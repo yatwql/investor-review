@@ -37,7 +37,7 @@ PROJECT_ROOT = _find_project_root()
 # 应用名称（单一来源，TUI 首页 / 启动日志 / Web 首页 / HTML 报告首页 / Excel 首页统一引用）
 APP_NAME = "投资复盘助手"
 
-APP_VERSION = "0.12.9"
+APP_VERSION = "0.12.10"
 
 # ── 报告产物文件名（单一来源：Excel/HTML 写入器与 Web 预览下载统一引用） ──
 # 报告产物文件基名（归档名 = 基名 + 时间戳后缀）
@@ -64,10 +64,6 @@ HISTORY_SNAPSHOT_RETENTION_DAYS = 180
 # 180天×每日约1.5份 ≈ 270 以内，设为 365 防止误伤正常快照
 HISTORY_SNAPSHOT_MAX_COUNT = 365
 
-# 历史 K 线缓存 TTL（每周刷新）
-HISTORY_CHAIN_STOCK_TTL = CACHE_WEEKLY
-# 历史净值缓存 TTL（每月刷新）
-HISTORY_CHAIN_FUND_TTL = CACHE_MONTHLY
 
 # ── LLM 模型定价表（每百万 token，CNY）══ 唯一默认源 ══
 
