@@ -1163,7 +1163,7 @@ window.drawSimpleChart = function(canvasId, a, b, c) {
     <div class="report-footer" style="text-align: center; padding: 14px 20px; color: var(--text-faint); font-size: var(--fs-table-sm);">
         由 {{ app_name }} v{{ app_version }} 生成 · 个人投资分析报告 | 生成时间: {{ now }}
         {%- if debate_mode_combination %}
-        <br>🧪 辩论模式已启用：{{ debate_mode_combination }}
+        <br>辩论模式已启用：{{ debate_mode_combination }}
         {%- endif %}
         {%- if enabled_experiments %}
         <br>⚗ 本报告在 {{ enabled_experiments | length }} 项实验性功能开启下生成：{{ enabled_experiments | join("、") }}

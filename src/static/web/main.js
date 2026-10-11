@@ -1007,11 +1007,11 @@
     els.configPanel.appendChild(
       renderBoolGroup('llm', 'LLM 分析章节', surface.llm.enabled_llm, {
         prefix: 'enabled_llm.',
-        note: '辩论三模块（白脸/黑脸/综合）不在菜单展示，输出由下方「实验性功能」对应开关控制'
+        note: '辩论三模块（白脸/黑脸/综合）不在菜单展示，输出由下方「报告章节与增强」的正反辩论开关控制'
       })
     );
     // 功能开关两块（实验组 / 常规组）：清单、显示名、「影响报告」标记全部由
-    // 服务端 surface.features 下发，前端只负责分块渲染
+    // 服务端 surface.features 下发，前端只负责分块渲染；报告章节与增强块在上方单独渲染
     els.configPanel.appendChild(
       renderBoolGroup('features_experimental', '实验性功能（⚗ 默认关闭）', surface.features.experimental, {
         experimental: true,

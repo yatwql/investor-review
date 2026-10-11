@@ -76,7 +76,14 @@ class TestResolveExperimentFlags:
         改由 ``--feature NAME=VALUE``（全域双向）或 features.json 控制，若仍被
         ``--experiment`` 接受，用户会以为它还是实验开关。
         """
-        for promoted in ("deterministic_signal", "module_quality_gate", "decision_header_parse"):
+        for promoted in (
+            "deterministic_signal",
+            "module_quality_gate",
+            "decision_header_parse",
+            "llm_debate_procon",
+            "factor_catalog",
+            "rebalance_schedule_replay",
+        ):
             flags, unknown = resolve_experiment_flags([promoted])
             assert flags == set(), f"{promoted} 已转正，不应再被实验清单解析命中"
             assert unknown == [promoted]
@@ -152,15 +159,14 @@ class TestEnabledExperimentalFeatures:
         ]
 
     def test_follows_registry_order(self):
-        """多项启用时按注册表顺序返回，不随启用先后变化。"""
+        """按注册表顺序返回；已转正开关即使启用也不进清单。"""
         from src.python.config.features import set_feature_enabled
 
-        # 故意逆注册表顺序启用：decision_reflection 在注册表第 2，llm_debate_procon 第 1
-        set_feature_enabled("decision_reflection", True)
+        # 故意先启用已转正的 llm_debate_procon（实验组仅剩 decision_reflection）
         set_feature_enabled("llm_debate_procon", True)
+        set_feature_enabled("decision_reflection", True)
 
         assert [flag for flag, _name in enabled_experimental_features()] == [
-            "llm_debate_procon",
             "decision_reflection",
         ]
 
@@ -291,10 +297,11 @@ class TestReadSidePromotion:
     """读侧增强的转正：默认开、不在实验组、关门仍有效、默认路径真的走新实现。
 
     这批开关会改变产物内容，但代价面为零：只改提示词或加标注，**不增 LLM 调用
-    次数**。写账本的 ``decision_reflection`` 与换调用次数的 ``llm_debate_procon``
-    不在此列——后者把单次复盘调用放大，留在实验组由用户按需开启；信号沉淀账本
-    （原实验开关 ``signal_ledger``）已并入 ``deterministic_signal`` 并转正：账本有
-    真实数据积累验证，且写盘属幂等追加、开销可忽略。
+    次数**。写账本的 ``decision_reflection`` 仍留实验组（真实账本积累待验证）；
+    换调用次数的 ``llm_debate_procon`` 已转正入报告章节与增强组（默认关，用户
+    按需开启；同组相邻的 ``llm_debate_conditional`` 保持默认开）。信号沉淀账本
+    （原实验开关 ``signal_ledger``）已并入 ``deterministic_signal`` 并转正：账本
+    有真实数据积累验证，且写盘属幂等追加、开销可忽略。
     """
 
     PROMOTED = (
@@ -315,7 +322,7 @@ class TestReadSidePromotion:
             assert defaults[flag] is True, f"{flag} 转正后出厂默认应为开"
 
     def test_not_in_experimental_registry(self):
-        """不在实验组：不再进产物自述（面板可见性由常规组承接，转正不丢入口）。"""
+        """不在实验组：不再进产物自述（面板可见性由目标组承接，转正不丢入口）。"""
         for flag in self.PROMOTED:
             assert flag not in _experimental_flags()
             assert is_experimental_switch(flag) is False
@@ -648,26 +655,26 @@ class TestDeterministicSignalRegistry:
 
 @pytest.mark.unit
 class TestFactorCatalogSwitch:
-    """因子目录实验开关（R-FCT-05 载体）：实验组、默认关、可被 experiment 覆写。"""
+    """因子目录开关（R-FCT-05 载体）：已转正入报告章节与增强组、默认关、--experiment 不再接受。"""
 
     @pytest.mark.unit
-    def test_registered_in_experiment_group_default_off(self):
-        """注册于实验组，出厂默认关，面板可见，开启影响产物自述。"""
-        from src.python.config.features import GROUP_EXPERIMENTAL, feature_switch_registry
+    def test_registered_in_report_group_default_off(self):
+        """已转正：注册于报告章节与增强组，出厂默认关，面板可见，开启影响产物自述。"""
+        from src.python.config.features import GROUP_REPORT, feature_switch_registry
 
         switch = feature_switch_registry["factor_catalog"]
-        assert switch.group == GROUP_EXPERIMENTAL
+        assert switch.group == GROUP_REPORT
         assert switch.default is False
         assert switch.affects_report is True
 
     @pytest.mark.unit
-    def test_experiment_token_resolves(self):
-        """--experiment factor_catalog 令牌可解析（不产生未知令牌告警）。"""
+    def test_experiment_token_rejected_after_promotion(self):
+        """转正后 --experiment 不再接受——改由 --feature NAME=VALUE 或 features.json 控制。"""
         from src.python.config.features import resolve_experiment_flags
 
         on, unknown = resolve_experiment_flags(["factor_catalog"])
-        assert on == {"factor_catalog"}
-        assert unknown == []
+        assert on == set()
+        assert unknown == ["factor_catalog"]
 
     @pytest.mark.unit
     def test_switch_label_present(self):

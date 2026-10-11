@@ -40,11 +40,11 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 > **`--experiment` 说明**：等价于在 TUI 菜单 **[S]** / Web 配置面板中临时勾选实验开关，但**只作用于当前这一次命令、不改动持久化配置**——CI / 定时任务可在不污染用户配置的前提下试用实验功能；反之，用户配置里已开启的实验开关不会被本参数关闭。
 >
 > ```bash
-> # 单次运行启用正反辩论（三段式：白脸→黑脸→综合）
-> .venv/bin/python -m src.python.cli --experiment llm_debate_procon report --type full
+> # 单次运行启用决策跨期反思闭环（登记决策 → 真实行情结算 → 教训回灌）
+> .venv/bin/python -m src.python.cli --experiment decision_reflection report --type full
 >
-> # 用显示名指定、可重复叠加
-> .venv/bin/python -m src.python.cli --experiment 决策跨期反思闭环 --experiment 因子目录 report --type full
+> # 用显示名指定；已转正的开关（如正反辩论）改用 --feature 开启
+> .venv/bin/python -m src.python.cli --experiment 决策跨期反思闭环 --feature llm_debate_procon=on report --type full
 >
 
 

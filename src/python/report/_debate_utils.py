@@ -32,9 +32,9 @@ def detect_debate_mode(
 
     if not mode_label:
         if is_feature_enabled("llm_debate_procon"):
-            mode_label = "🧪 辩论模式"
+            mode_label = "辩论模式"
         elif is_feature_enabled("llm_debate_conditional"):
-            mode_label = "🧪 实验模式"
+            mode_label = "情景推理模式"
 
     if not mode_combination:
         _comb_parts = []

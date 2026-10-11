@@ -365,7 +365,7 @@ class TestExcelExperimentalNotice(unittest.TestCase):
         self.assertNotIn("⚗", self._sheet_text(ws))
 
     def test_notice_lists_enabled_display_names(self):
-        """启用项按显示名逐项列出，并给出总项数。"""
+        """启用项按显示名逐项列出并给总项数；已转正开关不计入（回归：辩论转正后清单只收实验组）。"""
         from src.python.config.features import set_feature_enabled
 
         set_feature_enabled("llm_debate_procon", True)
@@ -375,8 +375,8 @@ class TestExcelExperimentalNotice(unittest.TestCase):
         self._write_sheet(ws)
 
         text = self._sheet_text(ws)
-        self.assertIn("⚗ 本报告在 2 项实验性功能开启下生成", text)
-        self.assertIn("辩论-正反辩论", text)
+        self.assertIn("⚗ 本报告在 1 项实验性功能开启下生成", text)
+        self.assertNotIn("辩论-正反辩论", text)
         self.assertIn("决策跨期反思闭环", text)
         self.assertIn("实验功能输出质量可能不稳定，结论请自行复核", text)
 

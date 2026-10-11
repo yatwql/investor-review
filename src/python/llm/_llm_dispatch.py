@@ -336,7 +336,7 @@ def _dispatch_llm_workers(
                         _debate_info_container[0] = {
                             "pro_text": pro,
                             "con_text": con,
-                            "mode_label": "🧪 辩论模式",
+                            "mode_label": "辩论模式",
                             "mode_combination": _build_debate_mode_combination(),
                         }
                     if synthesis:

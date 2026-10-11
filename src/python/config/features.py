@@ -106,10 +106,6 @@ class FeatureSwitchDef:
 # 项标签上带「（影响报告）」。只改入口可见性的开关答 False，不得凭惯性落进自述——
 # 列出一个不改报告任何字节的开关，读者会推断内容受其影响。
 feature_switch_registry: dict[str, FeatureSwitchDef] = {
-    # ── 实验性功能：辩论-正反辩论（换调用次数的深度模式，非常驻能力） ──
-    # 集中度问答段为本流程内建段落（见 prompts_action._build_concentration_qa_block），
-    # 其触发阈值配置在 llm_settings.json 的 debate.concentration_qa.threshold。
-    "llm_debate_procon": FeatureSwitchDef("辩论-正反辩论", "三段式(白脸→黑脸→综合)", GROUP_EXPERIMENTAL, False, True),
     # ── 实验性功能：LLM 输出增强（写盘积累账本，需真实数据积累验证） ──
     "decision_reflection": FeatureSwitchDef(
         "决策跨期反思闭环",
@@ -138,6 +134,29 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
     # ── 报告章节与增强：持仓变动复盘（章节类转正项：移出实验组、default 保持 False）──
     # 声明位保持在原处——报告块面板编号按注册表顺序派生，转正项落在目标块块首，
     # 既有报告项编号不位移（见 how-to-use-tui-menu.md「转正项按注册表顺序落在目标块」）
+    # ── 报告章节与增强：已转正开关追加于块首（既有项编号不位移） ──
+    # 辩论-正反辩论（已转正，2026-10-11；三段式换调用次数，默认关）。
+    # 集中度问答段为本流程内建段落（见 prompts_action._build_concentration_qa_block），
+    # 其触发阈值配置在 llm_settings.json 的 debate.concentration_qa.threshold。
+    "llm_debate_procon": FeatureSwitchDef("辩论-正反辩论", "三段式(白脸→黑脸→综合)", GROUP_REPORT, False, True),
+    # 辩论增强：条件推理（自常规组挪入保持辩论开关相邻；默认开不变，情景段仍在既有调用内产出）
+    "llm_debate_conditional": FeatureSwitchDef("辩论-条件推理", "情景化分析(涨/跌/震荡)", GROUP_REPORT, True, True),
+    # 因子目录（已转正，2026-10-11；门槛评测三指标过审）
+    "factor_catalog": FeatureSwitchDef(
+        "因子目录",
+        "25 因子五来源族横截面信号入账与风格与因子分析区「因子目录」区块",
+        GROUP_REPORT,
+        False,
+        True,
+    ),
+    # 调仓纪律回放（已转正，2026-10-11；先决门槛三项过审）
+    "rebalance_schedule_replay": FeatureSwitchDef(
+        "调仓纪律回放",
+        "月度定期/阈值偏离纪律多期回放 vs 买入持有（含成本），回放章双线与逐期成本表",
+        GROUP_REPORT,
+        False,
+        True,
+    ),
     "holding_change_review": FeatureSwitchDef(
         "持仓变动复盘",
         "快照差分出新增/加仓/减仓/清仓事件清单与频率/结构演变/意图对账（区间净额推断，结构级）+ LLM 归因块",
@@ -163,24 +182,6 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         False,
         True,
     ),
-    # ── 实验性功能：因子目录信号源（门槛评测通过，25 因子五族横截面信号入账 +
-    # 风格与因子分析区「因子目录」区块；待真实报告验证后择机转正） ──
-    "factor_catalog": FeatureSwitchDef(
-        "因子目录",
-        "25 因子五来源族横截面信号入账与风格与因子分析区「因子目录」区块",
-        GROUP_EXPERIMENTAL,
-        False,
-        True,
-    ),
-    # ── 实验性功能：调仓纪律回放（先决门槛三项过审：指标原语复用 / 成本联动 /
-    # 2 个真实样例价值确认；验证通过后择机转正） ──
-    "rebalance_schedule_replay": FeatureSwitchDef(
-        "调仓纪律回放",
-        "月度定期/阈值偏离纪律多期回放 vs 买入持有（含成本），回放章双线与逐期成本表",
-        GROUP_EXPERIMENTAL,
-        False,
-        True,
-    ),
     # ── 常规开关：LLM 输出增强（只读侧注入，不增调用次数、不写盘） ──
     "module_quality_gate": FeatureSwitchDef(
         "模块级质量分级",
@@ -196,8 +197,6 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         True,
         True,
     ),
-    # ── 常规开关：辩论增强（在既有调用内追加情景段，不换调用次数） ──
-    "llm_debate_conditional": FeatureSwitchDef("辩论-条件推理", "情景化分析(涨/跌/震荡)", GROUP_STANDARD, True, True),
     # ── 常规开关：数据层（就绪态上体检与健康检查） ──
     "datasource_credential_ready": FeatureSwitchDef(
         "数据源凭据就绪",

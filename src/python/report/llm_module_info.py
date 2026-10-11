@@ -157,7 +157,7 @@ def build_llm_module_info(
 
         # 辩论模式标签映射（模块级覆盖）
         _DEBATE_LABELS: dict[str, str] = {
-            "llm_debate_procon": "🧪 辩论模式",
+            "llm_debate_procon": "辩论模式",
         }
 
         if reason == FAIL_REASON_DISABLED:

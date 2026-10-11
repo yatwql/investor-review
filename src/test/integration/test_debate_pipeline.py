@@ -118,7 +118,7 @@ class TestDebatePipelineProconEnabled(unittest.TestCase):
         # 正反辩论启用状态 + 用 side_effect 模拟 dispatch 填充 debate_info 容器
         mock_feature.side_effect = lambda name: name == "llm_debate_procon"
 
-        _debate_info = {"pro_text": "白脸观点", "con_text": "黑脸观点", "mode_label": "\U0001f9ea 辩论模式"}
+        _debate_info = {"pro_text": "白脸观点", "con_text": "黑脸观点", "mode_label": "辩论模式"}
 
         with patch("src.python.llm.generators_orchestrator._dispatch_llm_workers") as mock_dispatch:
             mock_dispatch.side_effect = _make_dispatch_mock(debate_info=_debate_info)

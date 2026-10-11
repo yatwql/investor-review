@@ -141,11 +141,11 @@ class TestArgparse:
         assert args.experiment == [("decision_reflection",)]
 
     def test_experiment_repeatable(self):
-        """--experiment 可重复指定，逐项独立解析。"""
+        """--experiment 可重复指定，逐项独立解析（键名与显示名混用）。"""
         args = _build_parser().parse_args(
-            ["--experiment", "decision_reflection", "--experiment", "factor_catalog", "report"]
+            ["--experiment", "decision_reflection", "--experiment", "决策跨期反思闭环", "report"]
         )
-        assert args.experiment == [("decision_reflection",), ("factor_catalog",)]
+        assert args.experiment == [("decision_reflection",), ("decision_reflection",)]
 
     def test_experiment_all(self):
         """--experiment all 展开为全部实验功能。"""
@@ -977,6 +977,7 @@ class TestMainEarlyExitExperiments:
         """跑一次 main()，返回被分派函数执行瞬间各实验开关的生效值。"""
         from src.python.config.features import (
             GROUP_EXPERIMENTAL,
+            GROUP_REPORT,
             GROUP_STANDARD,
             is_feature_enabled,
             switches_in_group,
@@ -987,6 +988,7 @@ class TestMainEarlyExitExperiments:
         def _record(*_args, **_kwargs) -> int:
             seen.update({flag: is_feature_enabled(flag) for flag, _d in switches_in_group(GROUP_STANDARD)})
             seen.update({flag: is_feature_enabled(flag) for flag, _d in switches_in_group(GROUP_EXPERIMENTAL)})
+            seen.update({flag: is_feature_enabled(flag) for flag, _d in switches_in_group(GROUP_REPORT)})
             return _EXIT_SUCCESS
 
         with (
@@ -1014,7 +1016,7 @@ class TestMainEarlyExitExperiments:
             patch_target,
         )
         assert seen["decision_reflection"] is True
-        assert seen["factor_catalog"] is False  # 未指定的实验开关不受影响
+        assert seen["factor_catalog"] is False  # 未指定的开关（已转正入报告组）不受影响
 
     def test_without_experiment_flag_keeps_defaults(self):
         """不传开关参数 → 实验组保持默认关闭（对照组，防误判为恒真）。"""
