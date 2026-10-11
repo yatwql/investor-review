@@ -47,13 +47,9 @@
 
 ## 已解决问题
 
-- rf-660 已修复（2026-10-10，死代码清扫）：**全仓 27 项零引用死代码 + 1 孤儿模块**——AST 顶层符号扫描（926 文件语料，词边界引用核验，定义行不计）确认：9 函数（`pacing.describe`/`endpoint_key_for` 自检展示与按域名取键设计从未接线、`http_client.make_async_http_client` 无异步调用方、`fetcher.fetch_market_data_cached`/`fetch_fund_manager_cached` 会话缓存旧包装被 registry 路径取代、`_index_history_cache_key`、`penetration._enrich_with_industry_api` 行业预取重构后残留、`check_sources._colored`、`drawdown_events._to_date`）+ 17 常量（`HISTORY_CHAIN_*_TTL` 被注册表 `cache_ttl` 取代、`tiantian_ranking` 风险阈值组、`category._NCOLS_WITH_FLOW` 等）+ 孤儿模块 `core/_session_cache.py`（provider_registry 已内联同版实现，文件内符号仅测试导入 `_SESSION_CACHE_MAX_ENTRIES`）。连同二阶级联孤儿 4 符号（`_use_ansi`、`_DEFAULT_ENDPOINTS`、`_EXTRA_HEADERS`、`category._NCOLS`）与 `drawdown_events` 的 `date` 死导入一并删除，测试 import 改指 `provider_registry`；−281 行 / 23 文件，30 符号全仓清零、21 文件语法全过。判定口径排除动态派发误报（f-string 键族 / `is_feature_enabled` 直调 / `data_key_file` 动态键名均判活）。
-- rf-659 已修复（2026-10-10，技术文档↔代码一致性核对）：**`technical.md` 三处与代码真值不一致**——① `valuation_data` 数据契约块过时：声明「3 键 + by_code 子项 6 键」，代码真值（`orchestrator.py::compute_valuation_data` 返回）为 4 顶层键（多 `basis_mode: "real_ttm"|"proxy_only"`）+ `by_code` 子项 8 键（多 `real`/`real_available`）——R-VAL-03 真实历史估值分位落地后契约块未同步；② `crisis_annotation_data` 自相矛盾：声明「8 键」而同块仅列 2 键，代码真值（`build_crisis_annotation`）= 2 顶层键；③ 3 处符号归属文件写错：`orchestrator.py::compute_factor_exposure_data`/`compute_market_temperature_data`/`compute_correlation_data` 实际定义在 `_report_factor_metrics.py`/`_report_aux_metrics.py`（orchestrator 仅 import 转发）。全部为文档侧修复。
-- rf-658 已修复（2026-10-10，需求↔技术文档一致性核对）：**`requirements.md` §6.3 报告模块清单表漏「持仓变动复盘」「调仓纪律回放」两行（表 17 行 vs 注册表/technical/README 均 19）**——两模块详细需求（§6.13 R-HCR、§6.15 R-SR）早已存在，仅总清单表未同步；补两行（序号 15/16，触发 B/L，开关 `holding_change_review`/`rebalance_schedule_replay` 默认关），原 15~17 顺延为 17~19，与 `_REPORT_SECTION_DEFAULT`（19 项）、R-OUT-05（页签 1~19）、reports-instruction「最多 19 个」对齐。
-
 ### 归档档案
 
-- [`archived_review-findings.0.12.x.md`](../archive/v0.12.x/archived_review-findings.0.12.x.md) — v0.12.1 ~ v0.12.9 批次（2026-10-03 ~ 2026-10-10）
+- [`archived_review-findings.0.12.x.md`](../archive/v0.12.x/archived_review-findings.0.12.x.md) — v0.12.1 ~ v0.12.10 批次（2026-10-03 ~ 2026-10-10）
 - [`archived_review-findings.0.11.x.md`](../archive/v0.11.x/archived_review-findings.0.11.x.md) — v0.11.0 ~ v0.11.11  （2026-09-18 ~ 2026-10-02）
 - [`archived_review-findings.0.10.x.md`](../archive/v0.10.x/archived_review-findings.0.10.x.md) — v0.10.1 ~ v0.10.20（2026-08-04 ~ 2026-09-15）
 - [`archived_review-findings.0.9.x.md`](../archive/v0.9.x/archived_review-findings.0.9.x.md) — v0.9.0 ~ v0.9.12（2026-07-30 ~ 2026-08-03）
