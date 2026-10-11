@@ -146,6 +146,7 @@ def _run_generation(state, params: dict) -> int:
             # None → generate_report 回退到配置层 history.fetch_mode 解析
             fetch_history=params.get("fetch_history"),
             force_llm=bool(params.get("force_llm")),
+            force_llm_modules=params.get("llm_modules"),
             output_dir=None,
             transactions=parsed.transactions,
             dividends=parsed.dividends,
@@ -241,6 +242,12 @@ def _handle_index():
     history_checked = bool(config.get("enable_history", True)) and fetch_mode != "off"
     # 表单说明文案（模板里嵌在复选框 label 括号中，不再重复「历史走势」前缀）
     config_note = "跟随配置开启" if history_checked else "当前配置关闭"
+    # 模块级强刷候选：键名单一来源 force_scope，中文名经注册表派生
+    from src.python.core.registry import get_llm_module_names
+    from src.python.llm.force_scope import FORCEABLE_LLM_MODULES
+
+    _llm_names = get_llm_module_names()
+    llm_module_choices = [(k, _llm_names.get(k, k)) for k in FORCEABLE_LLM_MODULES]
     # 静态资源带版本查询串 ?v={APP_VERSION}（防浏览器缓存旧 JS/CSS 导致功能异常）
     # 状态区系统信息（版本 / 机器 IP / LLM 状态）随页面渲染，对齐 TUI 状态面板
     return render_template(
@@ -249,6 +256,7 @@ def _handle_index():
         app_version=APP_VERSION,
         history_checked=history_checked,
         config_note=config_note,
+        llm_module_choices=llm_module_choices,
         system_info=_build_system_info(),
     )
 
@@ -274,6 +282,7 @@ def _handle_create_run(run_manager):
     report_type = payload.get("report_type", "basic")
     fetch_history = payload.get("fetch_history")
     force_llm = payload.get("force_llm", False)
+    llm_modules = payload.get("llm_modules")
     mode = payload.get("mode", "trial")
     use_existing = payload.get("use_existing", False)
 
@@ -284,6 +293,15 @@ def _handle_create_run(run_manager):
         return _err("BAD_PARAM", "历史走势参数不合法"), 400
     if not isinstance(force_llm, bool):
         return _err("BAD_PARAM", "强制 LLM 参数不合法"), 400
+    if llm_modules is not None:
+        if not isinstance(llm_modules, list) or not all(isinstance(m, str) for m in llm_modules):
+            return _err("BAD_PARAM", "LLM 模块列表参数不合法"), 400
+        from src.python.llm.force_scope import resolve_force_scope
+
+        try:
+            resolve_force_scope(False, llm_modules)
+        except ValueError as e:
+            return _err("BAD_PARAM", str(e)), 400
     if mode not in ("trial", "formal"):
         return _err("BAD_PARAM", "生成用途不合法（trial/formal）"), 400
     if not isinstance(use_existing, bool):
@@ -311,6 +329,7 @@ def _handle_create_run(run_manager):
             "report_type": report_type,
             "fetch_history": fetch_history,
             "force_llm": force_llm,
+            "llm_modules": llm_modules or None,
             "mode": mode,
             "use_existing": use_existing,
         }

@@ -211,7 +211,7 @@ llm/generators_orchestrator.py ──→ cache/（可选）
 | `both` | B | 轻量行情 + 快照 + 历史走势（条件） | HTML + Excel | ❌ |
 | `full` | L | 完整行情 + 穿透 + 快照 + 历史走势 + 资金流向 | HTML + Excel | ✅ |
 
-> 三种报告类型同样可由 CLI `--type basic/both/full` 与 Web 报告格式下拉（基础/标准/完整）触发，Web 侧可选「获取历史走势」「强制 LLM」两个选项。
+> 三种报告类型同样可由 CLI `--type basic/both/full` 与 Web 报告格式下拉（基础/标准/完整）触发，Web 侧可选「获取历史走势」「强制 LLM」两个选项（勾选强制 LLM 后可展开模块多选，默认全选=全量，子集经 `llm_modules` 参数下传）。
 
 ### 1.3 模块职责总览
 
@@ -366,7 +366,7 @@ section_visible = board_enabled(section.type) AND data_available(section.data_fl
 
 | 维度 | TUI | CLI | Web |
 |:-----|:----|:----|:----|
-| 参数传递 | 菜单交互逐步选择 | argparse 参数 + `--type basic/both/full` | 前端表单提交（报告格式下拉 + 获取历史走势/强制 LLM 复选） |
+| 参数传递 | 菜单交互逐步选择 | argparse 参数 + `--type basic/both/full` | 前端表单提交（报告格式下拉 + 获取历史走势/强制 LLM 复选 + 强制模块多选） |
 | 配置编辑 | 主菜单改项即写即存（写前 .bak） | 无（编辑 config.json 或走 TUI/Web） | 配置编辑面板（§1.8.11 白名单 7 组）即改即存 + 写前 .bak + 同源守卫 |
 | 进度传输 | 终端区实时刷新 | stdout/stderr 文本 | 事件缓冲 seq 增量轮询（`/api/runs/{id}/events`） |
 | 并发模型 | 单线程同步 | 单线程同步 | 单 worker 串行队列（HTTP 线程提交、worker 线程执行） |
@@ -457,12 +457,12 @@ while True:
 
 #### 1.6.4 报告生成流程
 
-`handlers_report.py` —— 三条生成命令（E/B/L）共用 `_run_generate(report_type, fetch_history, force_llm)` 骨架：
+`handlers_report.py` —— 三条生成命令（E/B/L）共用 `_run_generate(report_type, fetch_history, force_llm, force_llm_modules)` 骨架：
 
 1. **持仓准备**：`prepare_holdings()` → `select_holdings_file()`（交互式文件选择）→ `read_holdings_with_flows()`（主表 + 交易/分红流水）→ `warm_new_asset_caches()`（新资产缓存预热，委托 §3.6 缓存操作共享层）。
 2. **交互询问**（TUI 专属，CLI/Web 用参数/表单表达）：
    - `_prompt_history()`：委托 `report/history_policy.resolve_fetch_history` 单源解析三态（`enable_history=False` 先行跳过），`prompt` 时注入「是否获取组合历史走势数据（as-if 模拟）？」y/N 询问——渠道层不自行分支 `fetch_mode`。
-   - `_prompt_force_llm()`：询问「是否强制重新生成 LLM 内容（跳过缓存）？(y/N)」。
+   - `_prompt_force_llm()`：询问「是否强制重新生成 LLM 内容（跳过缓存）？(y/N)」；确认后追加模块多选（列出 FORCEABLE_LLM_MODULES 编号/键名，逗号分隔，回车=全部；仅指定子集时传 `force_llm_modules`，粒度优先于全量）。
 3. **委托共享层**：`orchestrator.generate_report(holdings, config, reporter, report_type, ...)`（§4.2）——reporter 注入 `TuiProgressReporter`，管线代码零改动。
 4. **收尾**：`finish_report()` → `print_error_summary()`（非致命错误汇总）+ `print_timing_summary()`（耗时排行）+ `press_any_key()`（等待返回菜单）。
 
@@ -507,7 +507,7 @@ CLI 渠道是**命令行参数**形态，面向脚本化与自动化场景：定
 `_build_parser()`（`cli/_parser.py`）：`prog="investor-util"`，全局参数 + 7 个子命令。
 
 - **全局参数**：`--config`（备用配置文件路径）、`--output`（报告输出目录，覆盖 config 的 output_dir）、`--verbose`（进度同步到 stderr，默认仅写 logs/app.log）、`--non-interactive`（跳过首次运行交互式引导，定时任务/脚本使用）、`--experiment NAME`（可重复；启用实验性功能且**仅本次运行生效、不写盘**。NAME 取开关名或显示名，`all` = 全部启用。取值经 `_experiment_name` argparse type 回调即时校验：空串/未知名即报错，可选值由 `features.describe_experiment_flags()` 生成）、`--feature NAME=VALUE`（可重复；**全部**功能开关的双向一次性开关，同样是仅本次运行、不写盘。VALUE 取 `on/off/true/false/1/0`（大小写不敏感），NAME 取注册表键名。取值经 `_feature_override` argparse type 回调即时校验：非 `NAME=VALUE` 形态、未知开关名、不可识别取值均即报错并列出可选值；同名后者覆盖前者。两者共用一个应用原语，`--feature` 在 `--experiment` 之后应用，故显式取值可覆盖 `--experiment` 的隐式「置开」）、`--version`。
-- **`report`**：`--type basic/both/full`（默认 basic）、`--history auto/off`（未指定回退配置层 `history.fetch_mode`，仅 both/full 有效）、`--force-llm`。
+- **`report`**：`--type basic/both/full`（默认 basic）、`--history auto/off`（未指定回退配置层 `history.fetch_mode`，仅 both/full 有效）、`--force-llm`（全量强刷）、`--llm-module KEY`（可重复传参，仅强刷指定模块，粒度优先于 `--force-llm`；可选键见 `llm/force_scope.py::FORCEABLE_LLM_MODULES`）。
 - **`cache`**：互斥组 `--update basic/position/all` / `--clean` / `--stats`。
 - **`whatif`**：`--candidate`（目标持仓，必填）、`--base`（基准持仓，缺省用 config 持仓）、`--effective-date`（调仓生效日，opt-in 联网取历史做时序回测）。
 - **`cassettes`**：数据源记录-回放维护（`core/cassette.py`），无参数列出已录制响应，`--verify` 逐条离线回放并交当前解析器解析（不联网）；**无需 config 且只读离线**（main() 中特殊前置分派）。
@@ -604,7 +604,7 @@ Web 渠道是第三种交互入口：**浏览器内完成「上传持仓 Excel �
 `web/runs.py` —— 管线为同步阻塞，Web 层用**单 worker 串行队列**消除进程内并发产物覆盖竞态：
 
 - **队列**：`submit(params)` → 生成 run_id（`secrets.token_urlsafe(8)` 不可预测）→ 入队 → worker 串行出队执行。队列容量 `_QUEUE_LIMIT=3`（含运行中），超出返回 None（前端 429「已有任务在跑，排队或稍后再试」）。
-- **快照语义**：每个 run 在**出队执行时**取一次 `get_config()` 快照（参数 file_id/report_type/fetch_history/force_llm + output_dir），run 期间不受外部配置修改影响；产物定位基于 run 快照而非实时 config（外部改 output_dir 时指向不错目录）。
+- **快照语义**：每个 run 在**出队执行时**取一次 `get_config()` 快照（参数 file_id/report_type/fetch_history/force_llm/llm_modules + output_dir），run 期间不受外部配置修改影响；产物定位基于 run 快照而非实时 config（外部改 output_dir 时指向不错目录）。
 - **状态机**：`queued → running → done/failed`；worker `try/except` 兜底——异常转 failed + error 日志（不崩溃服务、不静默挂起）；`exit_code` 对齐 CLI（0/1/2），前端按 exit_code 映射成功/部分失败/严重。
 - **内存权衡**：run 状态/事件为**内存态**（MVP），服务重启即丢进行中 run；历史记录页数据源 = `core.perf.load_history()`（管线自动落盘的 perf 快照）。
 - **内存上限**：run 记录保留 `_RUN_KEEP=20`（worker 完成时 trim 最旧）；事件缓冲每 run `_EVENT_LIMIT=500`（滚动丢弃最旧）。
@@ -635,7 +635,7 @@ Web 渠道是第三种交互入口：**浏览器内完成「上传持仓 Excel �
 
 `src/static/web/index.html` + `main.js` / `style.css`（原生 ES6 无框架、无 `innerHTML`，Flask `template_folder`/`static_folder` 由 `PROJECT_ROOT` 派生指向；`/static/main.js` URL 契约不变）：
 
-- **配置回填**：页面加载取一次 `get_config()`，报告格式/历史走势（`history.fetch_mode`）/强制 LLM 默认值跟随配置。
+- **配置回填**：页面加载取一次 `get_config()`，报告格式/历史走势（`history.fetch_mode`）/强制 LLM 默认值跟随配置；强制模块多选候选由 `_handle_index` 经 `force_scope.FORCEABLE_LLM_MODULES` + 注册表中文名派生注入（渠道不自持副本），全选/全不选均归一为不传（后端等价全量）。
 - **进度事件**：事件按 seq 编号渲染，进度条显示「当前阶段（第 N 步）：消息」，完成置 100%；轮询节流（防刷接口）。
 - **配置编辑面板**：`loadConfigEdit()` 拉取 `/api/config/edit` 全量可编辑面，按 8 块渲染（「功能开关」组拆为「实验性功能」「常规开关」两块，分块依据是 `features` 面的 `experimental` / `standard` 两键而非白名单分组）；保存语义**即改即存**（与 TUI「改一项存一项」一致）——checkbox/radio 改动即 POST，自由文本路径经各自「保存」按钮提交，对比指数池经添加/删除/重置动作提交；提交期间控件禁用，成功回读该项最新值，失败恢复改动前值并显示错误。`error_code` 驱动分支（BAD_PARAM 400 / 同源 403 / CONFIG_WRITE_FAILED 500），中文文案直显服务端不前端硬编码。
 - **状态区**：健康卡片（`/api/health` 60s 缓存 + 「重新检测」`?fresh=1` 强制重测）+ 历史运行记录卡片（最近 10 条，5s 短缓存）。
@@ -2963,7 +2963,7 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
 
 ### 5.1 架构总览
 
-`src/python/llm/` 包按调用层次分为四层，共 45 个子模块（顶层 36 + fact_checker/ 子包 9，均不含 `__init__.py`；`prompts.py` 为统一导出入口，实际逻辑在 prompts_core/tables/action/signals/data_blocks/review 6 文件中）：
+`src/python/llm/` 包按调用层次分为四层，共 46 个子模块（顶层 37 + fact_checker/ 子包 9，均不含 `__init__.py`；`prompts.py` 为统一导出入口，实际逻辑在 prompts_core/tables/action/signals/data_blocks/review 6 文件中）：
 
 ```
 入口层         generators_orchestrator.py    4+1 模块并行编排 + 缓存预检 + 生成后一遍（事实锚定/自检）
@@ -2985,6 +2985,7 @@ API 层         api.py        Provider 路由 + Multi-Provider Chain 遍历
                _llm_news_correlation.py  新闻关联闭包/结果缓存/安全直调
                prompts.py           统一导出入口（逻辑在 prompts_core/tables/action/signals/data_blocks/review 6 文件）
                depth_profile.py     报告深度档位表（brief/standard/deep 唯一事实来源）
+               force_scope.py       模块级强刷范围（可强刷键清单 + 粒度优先归一）
                fingerprint.py       缓存指纹计算（模块级见 module_fingerprint.py，C21 同源）
                session.py           会话用量追踪
                cost_tracker.py      Token 预算管理
@@ -3340,6 +3341,7 @@ make_http_client(timeout=10.0) → httpx.Client
 |:--|:--|:--|:--|:--|
 | `chain_overrides` | 调用级数据源覆盖上下文（本次运行指定首选/排除源；只排序与过滤，不绕过熔断与凭据就绪预检） | 数据源 | 数据获取 | 无 |
 | `depth_profile` | 报告深度档位表与解析（brief/standard/deep：只收窄模块集合与新闻采集规模，缺省档与既有行为逐字节一致） | LLM 智能分析 | 内容生成 | `config.json → llm_report_depth` |
+| `force_scope` | 模块级强刷范围（可强刷键清单 FORCEABLE_LLM_MODULES / resolve_force_scope 粒度优先归一与未知键校验 / is_module_forced；全局 force 与模块子集合并为模块键集合，强刷不改缓存键构造） | LLM 智能分析 | 内容生成 | 无（CLI `--llm-module` / TUI 多选 / Web 勾选，命令行一次性参数） |
 | `self_review` | 生成后自检（模型层复核各模块产出与数据是否自洽；分层于确定性事实校验之上，出厂默认关） | LLM 智能分析 | 内容生成 | `llm_settings.json → enabled_llm.self_review` |
 | `quarter_walk_anchor` | 季报回溯窗口的时间锚点上下文（记录-回放时固定为 cassette 录制时点，去时间依赖而保留请求形状漂移信号） | 数据源 | 数据获取 | 无 |
 | `apply_compliance_guardrails` | 合规声明集中注入（在 system prompt 尾部幂等叠加「仅供复盘参考、不构成投资建议」，窄判定角色可追加专属约束） | LLM 智能分析 | 内容生成 | 无 |

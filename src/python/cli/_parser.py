@@ -107,6 +107,17 @@ def _build_parser() -> argparse.ArgumentParser:
         "仅 --type both/full 时有效）",
     )
     report_p.add_argument("--force-llm", action="store_true", help="强制重新生成 LLM 内容（跳过缓存）")
+    from src.python.llm.force_scope import FORCEABLE_LLM_MODULES
+
+    report_p.add_argument(
+        "--llm-module",
+        action="append",
+        default=None,
+        metavar="KEY",
+        choices=list(FORCEABLE_LLM_MODULES),
+        help=f"仅强制重新生成指定 LLM 模块（可重复传参，粒度优先于 --force-llm 全量；"
+        f"可选: {', '.join(FORCEABLE_LLM_MODULES)}）",
+    )
     report_p.add_argument(
         "--prefer-source",
         action="append",

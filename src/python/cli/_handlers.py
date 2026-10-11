@@ -221,6 +221,7 @@ def _handle_report(args: argparse.Namespace, config: dict) -> int:
             # None（未显式传 --history）→ generate_report 回退到配置层 history.fetch_mode 解析
             fetch_history=args.history,
             force_llm=args.force_llm,
+            force_llm_modules=getattr(args, "llm_module", None),
             output_dir=args.output,
             transactions=transactions,
             dividends=dividends,

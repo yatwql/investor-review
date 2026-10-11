@@ -74,7 +74,8 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 |:-----|:-----|
 | `--type {basic,both,full}` | `basic`=仅 Excel 报告（约 1 分钟，默认）；`both`=Excel+HTML（不含 LLM，约 2 分钟）；`full`=全量含 LLM（约 5 分钟，需 LLM 配置） |
 | `--history {auto,off}` | 是否获取组合历史走势：`auto`=获取，`off`=跳过。未指定时按配置 `history.fetch_mode`（默认 `auto`）。仅 `--type both` / `full` 时有效 |
-| `--force-llm` | 强制重新调用 LLM API（忽略缓存），生成最新 LLM 内容 |
+| `--force-llm` | 强制重新调用 LLM API（忽略缓存），生成最新 LLM 内容（全量） |
+| `--llm-module KEY` | 模块级强刷：仅强制重生成指定模块，其余照常命中缓存（可重复传参；粒度优先于 `--force-llm`）。可选键：`global_macro` 全球政经局势 / `expert_review` 智囊团深度复盘 / `health_check` 持仓体检报告 / `penetration_deep` 穿透深度分析 / `news_correlation` 财经新闻关联 / `self_review` 生成后自检 / `holding_change` 持仓变动复盘归因 |
 | `--prefer-source NAME` | 本次运行优先使用某数据源（可重复；仅排到该数据源链首，**不绕过熔断与凭据就绪预检**，不写配置） |
 | `--exclude-source NAME` | 本次运行排除某数据源（可重复；用于排障复现，如「排除新浪看是否仍取到数据」）。未知名即报错并列出可用源名 |
 
@@ -246,6 +247,7 @@ TUI 菜单与 CLI 子命令落到**同一个业务编排函数**（`report/orche
 | 生成类型固定为 `full` | `--type full` | 报告类型默认是 `basic`，务必显式指定 |
 | 询问「是否获取组合历史走势数据」 | `--history auto` / `--history off` | 省略 `--history` 时按 `config.json` 的 `history.fetch_mode` 解析（`off` 跳过，`auto`/`prompt` 均视为获取） |
 | 询问「是否强制重新生成 LLM 内容」 | `--force-llm` | 不加则复用 LLM 缓存 |
+| 二段追问「哪些模块需要强制」（回车=全部） | `--llm-module KEY`（可重复） | 不选则全量强刷（与 `--force-llm` 等价） |
 | 首次运行交互式引导 | `--non-interactive` | 跳过引导，定时任务/脚本建议带上 |
 | 结束打印 LLM 会话用量 | —（打印耗时汇总） | 两条路径的收尾输出不同，不影响产物 |
 

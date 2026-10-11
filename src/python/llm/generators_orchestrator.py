@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from typing import Any
 
 
@@ -83,6 +84,7 @@ def _compute_module_cache_info(
     penetrated_assets: list[dict] | None,
     holdings_details: list[dict] | None,
     force: bool,
+    force_modules: Iterable[str] | None = None,
     *,
     history_data: dict | None = None,
     pipeline_data: dict | None = None,
@@ -131,29 +133,34 @@ def _compute_module_cache_info(
     fp_penetration_deep = penetration_deep_fingerprint(_inputs)
 
     force_flag = force
+    _forced = force_modules if force_modules is not None else frozenset()
     info: dict[str, dict] = {
         "global_macro": {
             "key": CACHE_PREFIX_LLM + f"global_macro_{fp_global_macro}",
             "ttl": get_cache_ttl_llm("global_macro"),
-            "can_cache": not force_flag and llm_config.get("cache_enabled_global_macro", True),
+            "can_cache": not (force_flag or "global_macro" in _forced)
+            and llm_config.get("cache_enabled_global_macro", True),
             "thinking_key": "thinking_enabled_global_macro",
         },
         "expert_review": {
             "key": CACHE_PREFIX_LLM + f"expert_review_{fp_expert_review}",
             "ttl": get_cache_ttl_llm("expert_review"),
-            "can_cache": not force_flag and llm_config.get("cache_enabled_expert_review", True),
+            "can_cache": not (force_flag or "expert_review" in _forced)
+            and llm_config.get("cache_enabled_expert_review", True),
             "thinking_key": "thinking_enabled_expert_review",
         },
         "health_check": {
             "key": CACHE_PREFIX_LLM + f"health_check_{fp_health_check}",
             "ttl": get_cache_ttl_llm("health_check"),
-            "can_cache": not force_flag and llm_config.get("cache_enabled_health_check", True),
+            "can_cache": not (force_flag or "health_check" in _forced)
+            and llm_config.get("cache_enabled_health_check", True),
             "thinking_key": "thinking_enabled_health_check",
         },
         "penetration_deep": {
             "key": CACHE_PREFIX_LLM + f"penetration_deep_{fp_penetration_deep}",
             "ttl": get_cache_ttl_llm("penetration_deep"),
-            "can_cache": not force_flag and llm_config.get("cache_enabled_penetration_deep", True),
+            "can_cache": not (force_flag or "penetration_deep" in _forced)
+            and llm_config.get("cache_enabled_penetration_deep", True),
             "thinking_key": "thinking_enabled_penetration_deep",
         },
     }
@@ -320,6 +327,7 @@ def generate_all_llm(
     holdings_details: list[dict] | None = None,
     sector_flow: list[dict] | None = None,
     force: bool = False,
+    force_modules: Iterable[str] | None = None,
     pipeline_data: dict | None = None,
     history_data: dict | None = None,
     metrics: dict | None = None,
@@ -352,6 +360,13 @@ def generate_all_llm(
     llm_config = get_llm_config()
     if llm_config is None:
         return (None, None, None, None, False, False, False, False)
+
+    # ── 强刷范围归一：全局 force 与模块级 force_modules 合并为模块键集合 ──
+    # 后续所有 force 判定（预检 can_cache / worker 闭包 / 串行后置模块）均按
+    # 「模块 ∈ 强刷集合」逐模块取值，未指定模块照常命中缓存。
+    from src.python.llm.force_scope import resolve_force_scope
+
+    _force_scope = resolve_force_scope(force, force_modules)
 
     # ── 竞争语境块：此处渲染**一次**，同一实例既进指纹（经预检）又进提示词
     #    （经 worker 分发）。两个消费点各自渲染会让「进键的文本」与「进提示词的
@@ -436,6 +451,7 @@ def generate_all_llm(
         penetrated_assets,
         holdings_details,
         force,
+        force_modules=_force_scope,
         history_data=history_data,
         pipeline_data=pipeline_data,
         competitive_context=competitive_context,
@@ -485,6 +501,7 @@ def generate_all_llm(
         holdings_details,
         sector_flow,
         pipeline_data=pipeline_data,
+        force_modules=_force_scope,
         metrics=metrics,
         data_quality_text=data_quality_text,
         comparison_indices=comparison_indices,
@@ -596,7 +613,7 @@ def generate_all_llm(
         holdings_details,
         penetrated_assets,
         llm_config,
-        force=force,
+        force="self_review" in _force_scope,
         purchase_constraint_block=purchase_constraint_block,
         holding_change_block=holding_change_block,
         event_impact_block=event_impact_block,
@@ -611,7 +628,7 @@ def generate_all_llm(
     run_holding_change_review(
         pipeline_data,
         llm_config,
-        force=force,
+        force="holding_change" in _force_scope,
         holdings_details=holdings_details,
         purchase_constraint_block=purchase_constraint_block,
     )

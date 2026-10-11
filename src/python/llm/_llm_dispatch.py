@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from typing import Any
 
@@ -59,6 +59,7 @@ def _build_module_fns(
     holdings_details: list[dict] | None,
     sector_flow: list[dict] | None,
     force: bool,
+    force_modules: Iterable[str] | None = None,
     pipeline_data: dict | None = None,
     competitive_context: str = "",
     metrics: dict | None = None,
@@ -77,7 +78,15 @@ def _build_module_fns(
     history_data 贯通到三个承接模块，使其写侧指纹与预检指纹同源（见
     ``llm/module_fingerprint.py``）；漏传会让写侧指纹少一项风险信号摘要，
     预检键永不命中。
+
+    ``force_modules`` 为模块级强刷集合：逐模块
+    ``force = 全局 force or 模块键 in 集合``，未指定模块照常走缓存。
     """
+    _forced = force_modules if force_modules is not None else frozenset()
+
+    def _mod_force(key: str) -> bool:
+        return force or key in _forced
+
     return {
         "global_macro": lambda c, lc: generate_global_macro(
             a_indices,
@@ -87,7 +96,7 @@ def _build_module_fns(
             total_cost,
             categories,
             sector_flow=sector_flow,
-            force=force,
+            force=_mod_force("global_macro"),
             http_client=c,
             llm_config=lc,
             competitive_context=competitive_context,
@@ -110,7 +119,7 @@ def _build_module_fns(
             holding_change_block=holding_change_block,
             event_impact_block=event_impact_block,
             schedule_replay_block=schedule_replay_block,
-            force=force,
+            force=_mod_force("expert_review"),
             http_client=c,
             llm_config=lc,
             pipeline_data=pipeline_data,
@@ -131,7 +140,7 @@ def _build_module_fns(
             holding_change_block=holding_change_block,
             event_impact_block=event_impact_block,
             schedule_replay_block=schedule_replay_block,
-            force=force,
+            force=_mod_force("health_check"),
             http_client=c,
             llm_config=lc,
             pipeline_data=pipeline_data,
@@ -151,7 +160,7 @@ def _build_module_fns(
             holding_change_block=holding_change_block,
             event_impact_block=event_impact_block,
             schedule_replay_block=schedule_replay_block,
-            force=force,
+            force=_mod_force("penetration_deep"),
             http_client=c,
             llm_config=lc,
             history_data=history_data,
@@ -177,6 +186,7 @@ def _dispatch_llm_workers(
     pipeline_data: dict | None = None,
     *,
     metrics: dict | None = None,
+    force_modules: Iterable[str] | None = None,
     data_quality_text: str = "",
     comparison_indices: dict[str, str] | None = None,
     history_data: dict | None = None,
@@ -264,6 +274,7 @@ def _dispatch_llm_workers(
         holdings_details=holdings_details,
         sector_flow=sector_flow,
         force=force,
+        force_modules=force_modules,
         pipeline_data=pipeline_data,
         competitive_context=competitive_context,
         metrics=_metrics,
@@ -307,7 +318,7 @@ def _dispatch_llm_workers(
                     categories,
                     penetrated_assets,
                     holdings_details=holdings_details,
-                    force=force,
+                    force=force or (force_modules is not None and "expert_review" in force_modules),
                     http_client=c,
                     llm_config=lc,
                     pipeline_data=pipeline_data,

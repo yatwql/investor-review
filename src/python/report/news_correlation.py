@@ -337,6 +337,7 @@ def _apply_llm_enhancement(
     industry_data: dict[str, dict],
     meta: dict,
     purchase_constraint_block: str = "",
+    force: bool = False,
 ) -> dict:
     """可选 LLM 增强：对新闻逐条判定关联度。
 
@@ -374,6 +375,7 @@ def _apply_llm_enhancement(
             penetrated_assets=penetrated_assets,
             purchase_constraint_block=purchase_constraint_block,
             industry_data=industry_data,
+            force=force,
         )
     except Exception:
         logger.warning("财经新闻热点与持仓关联分析（LLM）失败，降级为传统关键词匹配", exc_info=True)
@@ -440,6 +442,7 @@ def build_news_data(
     top_n: int = 100,
     penetrated_assets: list[dict] | None = None,
     purchase_constraint_block: str = "",
+    force_news_llm: bool = False,
 ) -> tuple[list[dict[str, Any]], dict]:
     """获取新闻数据并与持仓关联。
 
@@ -456,6 +459,8 @@ def build_news_data(
         penetrated_assets: 穿透 TOP10 资产列表（可选），
             每项含 name 和 codes 字段。传入后新闻关键词
             会额外覆盖穿透到的底层资产。
+        force_news_llm: 新闻关联 LLM 增强模块级强刷（
+            news_correlation ∈ 强刷集合时置 True，跳过 LLM 缓存）。
 
     Returns:
         (news_data, meta)
@@ -511,7 +516,13 @@ def build_news_data(
     )
 
     meta = _apply_llm_enhancement(
-        news_items, holdings, penetrated_assets, industry_data, meta, purchase_constraint_block
+        news_items,
+        holdings,
+        penetrated_assets,
+        industry_data,
+        meta,
+        purchase_constraint_block,
+        force=force_news_llm,
     )
     _enrich_news_keywords(news_items, holdings, penetrated_assets, industry_data)
     # 关键词显示脱敏（config anonymization.mode）：取数链真值不变，仅返回前

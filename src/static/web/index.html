@@ -75,6 +75,15 @@
               <input type="checkbox" id="force-llm" name="force_llm">
               <span>强制重新生成 LLM 内容（跳过缓存）</span>
             </label>
+            <div id="llm-module-group" class="field-check" role="group" aria-label="强制模块选择" hidden>
+              <span class="field-label">强制模块（默认全选 = 全部重新生成）</span>
+              {% for key, name in llm_module_choices %}
+              <label for="llm-module-{{ key }}" class="check-label">
+                <input type="checkbox" id="llm-module-{{ key }}" class="llm-module-cb" value="{{ key }}" checked>
+                <span>{{ name }}</span>
+              </label>
+              {% endfor %}
+            </div>
           </div>
           <div class="field-block" role="radiogroup" aria-label="生成用途">
             <span class="field-label">生成用途</span>
