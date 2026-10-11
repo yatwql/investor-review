@@ -17,6 +17,7 @@
 > 追加归档：2026-10-10 plan-89 大类资产收益贡献分解（大类 → 品种两级同口径归因）完成（见文末章节）
 > 追加归档：2026-10-10 plan-100 CLI 定时任务完成/失败通知（notify 三通道）完成（见文末章节）
 > 追加归档：2026-10-10 plan-117 取消联接基金穿透功能开关（穿透内置恒开）完成（见文末章节）
+> 追加归档：2026-10-11 plan-85 风险调整超额与基准对照、plan-88 危机区间双层回放完成（见文末章节）
 > 设计文档索引：plan-72 的设计文档 [`fund-purchase-limit-design.md`](fund-purchase-limit/fund-purchase-limit-design.md) **已随 plan-74 完成一并归档**（本目录 `fund-purchase-limit/`）；plan-73 的 LLM 上下文设计同在 `fund-purchase-limit/fund-purchase-limit-llm-context-design.md`（设计 + 已实施）；plan-76 的快照事件级设计在本目录 `holding-change-review/holding-change-review-design.md`（已实施，§15 实施与验收记录）；plan-77 的 What-if 成本与基准设计在本目录 `whatif-cost-benchmark/whatif-cost-benchmark-design.md`（已实施，§14 门槛与验收记录）；plan-78 的因子目录评测设计在本目录 `factor-zoo-catalog/factor-zoo-catalog-design.md`（已评测·判定转正立项，§13 判定记录）；plan-79 的事件窗设计在本目录 `event-window-impact/event-window-impact-design.md`（已实施，§14 判定记录）；plan-80 的调仓纪律回放设计在本目录 `rebalance-schedule-replay/rebalance-schedule-replay-design.md`（已实施，§14 实施与门槛判定记录）
 
 ---
@@ -332,3 +333,11 @@
 #### ✅ `plan-117` 取消联接基金穿透功能开关（穿透内置恒开） — 已完成（2026-10-10）
 
 **完成态（开关移除、穿透无条件执行）**：移除 `feeder_penetration` 功能开关（注册表 28→27 项、常规组 11→10；TUI [S] 面板常规块 12-21、报告块 22-34）；`fetcher/fund.py::with_feeder_penetration` 删 `is_feature_enabled` 分支，穿透无条件执行，结果标注键 `feeder_penetration` 与报告「穿透自目标 ETF（未折算持有比例）」标注不变；`features.json` 残留该键按「无消费者开关」告警（先例 plan-115 `metrics_*` 口径）。**取舍留档**：目标 ETF 锚点解析异常时无一键止血、只能发版修复——解析失败本就原样降级不硬失败，风险可接受。测试：删「开关关闭→不穿透」死用例，`test_switch_on_by_default` 改写为 `test_penetrates_unconditionally`（全仓开关置 False 仍穿透，防开关分支回潮），`TestRegistryLiveness.REMOVED_STALE_FLAGS` 增列防复活。
+
+#### ✅ `plan-85` 组合相对基准缺风险调整超额度量 — 已完成（2026-10-11）
+
+**完成态（风险调整超额与基准对照，开关 `risk_adjusted_excess` 默认关）**：新增 `analysis/benchmark_excess.py::build_risk_adjusted_excess`（纯标准库、analysis 层隔离）——基于子块扩展窗（`max(lookback_days, 365)` 交易日，与 `crisis_replay` 共享一次取数）的组合 as-if 日频归一化序列与基准 LOCF 对齐日线，逐基准计算年化 IR（超额日均值/日样本波动 ×√252，n-1 样本标准差）、年化跟踪误差、几何年化超额收益、完整月数（排除首尾不完整月）、近 12/24 个完整月月度跑赢胜率（无完整月写「无完整数据」）与滚动 250 日超额序列（前缀积 O(n)）；IR/TE 需 ≥60 对齐交易日、滚动需 ≥250，样本不足逐项「数据不足」占位（§1.4.5 分层降级）；未配置业绩基准整块 available=False + 「数据不可用：<原因>」。呈现：组合历史走势与回撤章新增第五区块「风险调整超额」（Excel `_write_excess_block` + HTML partial 五、块 + `drawSimpleChart` 滚动折线，图下说明），`section_block_registry` 同步 5 区块（双端提取三向一致）。装配：`report/_snapshot.py::assemble_history_augmented_data`（full/both 双路径同源，防契约漂移），契约 `risk_adjusted_excess_data` 注册附录 H 与 pipeline_data 已知键。**取舍留档**：24 月胜率在当前源能力（OTC 净值 ≤200 条 ≈ 17 个月）下恒降级为「数据不足」，保留槽位等数据/缓存扩展自动点亮。测试：IR/TE 与 `statistics` 模块数值交叉验证、零方差/短样本降级、胜率与完整月边界、滚动点位结构、双端区块呈现、装配接线（开关判定/共享取数/full 路径注入/取数 helper 降级）、开关注册断言（无硬编码计数）。
+
+#### ✅ `plan-88` 危机区间组合表现未量化回放 — 已完成（2026-10-11）
+
+**完成态（危机区间双层回放，开关 `crisis_replay` 默认关）**：`analysis/crisis_annotation.py` 静态清单 `CRISIS_INTERVALS` 新增 2025 关税冲击锚点（单一来源，全端标题/说明/占位动态跟随——移除 Excel 危机注释、HTML 章标题、占位文案硬编码年份清单）；`build_crisis_annotation` 增 replay 参数——回放态顶层 `replay: true` + 可选 `index_reason`，每区间加 `portfolio_return_pct`（子块扩展窗内区间首尾净值收益）/`index_return_pct`/`index_drawdown_pct`（指数层长窗 LOCF 序列）/`index_available`；**双层回放**：指数层覆盖全部静态区间（指数源可达 3650 交易日，`_crisis_index_days()` 按静态表最早起点动态推算、封顶 3650，经 `fetch_crisis_index_series`→`fetch_benchmarks` 取数），组合层仅子块扩展窗（`max(lookback, 365)`）内区间、窗外行状态标「组合窗口外」组合层指标留空；指数层不可用（未配置基准/取数失败）时静默缺席、组合层照常（两层独立降级）。呈现：危机表升级双层列（组合区间收益/指数区间收益/指数区间最大回撤 + 状态列，Excel `_write_crisis_replay_rows` 9 列、HTML 回放分支表），图下说明指数层不可用原因。未开启时产物逐字节一致（关态恒走旧路径）。测试：静态表锚点与形状（结构断言替代硬编码计数）、窗内/窗外/重叠段组合收益、指数统计与指数缺席降级、`index_reason` 呈现、回放态双端渲染、关态六列形态保持。

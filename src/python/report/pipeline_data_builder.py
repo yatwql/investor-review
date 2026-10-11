@@ -58,6 +58,10 @@ _PIPELINE_DATA_KNOWN_KEYS: set[str] = {
     # 宏观事件标注：危机/政策事件叠加到走势图的标注数据（build_crisis_annotation(history_data)，
     # 由编排层 compute_crisis_annotation_data 组装；无事件时为 None）
     "crisis_annotation_data",
+    # 风险调整超额：走势章子块数据源（功能开关 `risk_adjusted_excess`，
+    # 滚动 1Y 超额 + 年化 IR/跟踪误差 + 跑赢基准胜率，由编排层
+    # build_risk_adjusted_excess 组装；开关关闭时键不写入）
+    "risk_adjusted_excess_data",
     # 尾部风险：极端行情风险提示数据（尾部风险统计，
     # 由编排层 compute_tail_risk_data 组装；开关关闭时为 None）
     "tail_risk_data",
@@ -152,6 +156,7 @@ _PIPELINE_DATA_TYPE_MAP: dict[str, type | tuple[type, ...]] = {
     "valuation_data": (dict, type(None)),
     "market_temperature_data": (dict, type(None)),
     "crisis_annotation_data": (dict, type(None)),
+    "risk_adjusted_excess_data": (dict, type(None)),
     "tail_risk_data": (dict, type(None)),
     "snapshot_diff_data": (dict, type(None)),
     "decision_review_data": (dict, type(None)),

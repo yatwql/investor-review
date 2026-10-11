@@ -312,6 +312,20 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         True,
         True,
     ),
+    "risk_adjusted_excess": FeatureSwitchDef(
+        "风险调整超额",
+        "走势章新增「风险调整超额」子块：滚动 1Y 超额曲线 + 年化 IR/跟踪误差 + 近 12/24 月跑赢基准胜率（需配置业绩基准，独立拉长取数窗口）",
+        GROUP_REPORT,
+        False,
+        True,
+    ),
+    "crisis_replay": FeatureSwitchDef(
+        "危机回放",
+        "危机区间标注升级为双层回放：组合侧窗口内危机穿越表现（区间收益） + 指数侧历史危机区间表现（收益/最大回撤，长窗指数日线）",
+        GROUP_REPORT,
+        False,
+        True,
+    ),
 }
 
 # ── 出厂默认值投影 ──────────────────────────────────────────

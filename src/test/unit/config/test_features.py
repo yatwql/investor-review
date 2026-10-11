@@ -714,3 +714,27 @@ class TestProsperityFrameworkPromotion:
         assert sw.default is True
         assert sw.affects_report is True
         assert not is_experimental_switch("prosperity_framework")
+
+
+class TestHistoryAugmentedSwitches:
+    """风险调整超额（risk_adjusted_excess）/ 危机回放（crisis_replay）注册断言。"""
+
+    def test_registered_in_report_group_default_off(self):
+        """注册于报告章节与增强组、出厂默认关、声明影响报告产物、标签说明非空。"""
+        from src.python.config import features
+
+        for flag in ("risk_adjusted_excess", "crisis_replay"):
+            definition = features.feature_switch_registry[flag]
+            assert definition.group == features.GROUP_REPORT, f"{flag} 应属报告组"
+            assert definition.default is False, f"{flag} 出厂应默认关"
+            assert definition.affects_report is True, f"{flag} 开启改变产物，须声明影响报告"
+            assert definition.label.strip()
+            assert definition.desc.strip()
+
+    def test_defaults_projection_off(self):
+        """出厂默认值投影读取 API 同步为关（features.json 未覆写时的行为）。"""
+        from src.python.config.features import get_feature_defaults
+
+        defaults = get_feature_defaults()
+        assert defaults["risk_adjusted_excess"] is False
+        assert defaults["crisis_replay"] is False

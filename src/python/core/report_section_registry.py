@@ -153,7 +153,8 @@ _REPORT_SECTION_DEFAULT: list[dict] = [
         "data_flag": "llm_data_available",
     },
     # ── history 类型（始终显示，数据不可用时显示占位文本） ──
-    # 组合历史走势与回撤：一章分「走势表 + 回撤矩阵」两区块 + 危机区间标注（2015/2018/2020/2022）
+    # 组合历史走势与回撤：一章五区块（走势表 + 回撤矩阵 + 危机区间标注 + 月度收益日历 + 风险调整超额）——
+    # 危机静态表 2015/2018/2020/2022/2025 五区间；回放态双层（开关 crisis_replay），超额块随开关 risk_adjusted_excess
     {
         "key": "portfolio_history_drawdown",
         "name": "组合历史走势与回撤",

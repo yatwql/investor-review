@@ -209,12 +209,12 @@ def _generate_report_both(
         history_data = None
         reporter.info("[章节配置] 历史走势已关闭，跳过")
 
-    # 危机区间标注（crisis_annotation_data）：基于既有 bars 重叠裁剪，不拉长 lookback
-    from src.python.analysis.crisis_annotation import build_crisis_annotation
+    # 历史增强契约装配（危机区间标注[含回放态] + 风险调整超额）：full/both 两路径
+    # 共用 _snapshot.assemble_history_augmented_data 唯一实现——开关判定与子块长窗
+    # 取数集中，开关全关时仅写 crisis 关态契约（零新增取数，关态产物逐字节不变）
+    from src.python.report._snapshot import assemble_history_augmented_data
 
-    crisis_annotation_data = build_crisis_annotation(history_data)
-    if pipeline_data is not None:
-        pipeline_data["crisis_annotation_data"] = crisis_annotation_data
+    assemble_history_augmented_data(holdings, config, reporter, history_data, pipeline_data)
 
     # 尾部风险统计（tail_risk_data）：复用历史日收益序列，样本不足时 available=False
     from src.python.analysis.tail_risk import compute_tail_risk
@@ -297,7 +297,7 @@ def _generate_report_both(
             action_data=(pipeline_data or {}).get("action_data"),
             prosperity_framework_data=(pipeline_data or {}).get("prosperity_framework_data"),
             market_sentiment_data=(pipeline_data or {}).get("market_sentiment_data"),
-            crisis_annotation_data=crisis_annotation_data,
+            crisis_annotation_data=(pipeline_data or {}).get("crisis_annotation_data"),
             tail_risk_data=tail_risk_data,
             snapshot_diff_data=(pipeline_data or {}).get("snapshot_diff_data"),
             fund_flow_data=fund_flow_data,
@@ -310,6 +310,7 @@ def _generate_report_both(
             holding_change_data=(pipeline_data or {}).get("holding_change_data"),
             event_impact_data=(pipeline_data or {}).get("event_impact_data"),
             schedule_replay_data=(pipeline_data or {}).get("schedule_replay_data"),
+            risk_adjusted_excess_data=(pipeline_data or {}).get("risk_adjusted_excess_data"),
         )
         reporter.ok(f"HTML 报告已生成: {path}")
         result.html_ok = True
@@ -636,6 +637,7 @@ def _generate_report_full(
         holding_change_data=(pipeline_data or {}).get("holding_change_data"),
         event_impact_data=(pipeline_data or {}).get("event_impact_data"),
         schedule_replay_data=(pipeline_data or {}).get("schedule_replay_data"),
+        risk_adjusted_excess_data=(pipeline_data or {}).get("risk_adjusted_excess_data"),
     )
 
     # ── 7. Excel 报告 ──

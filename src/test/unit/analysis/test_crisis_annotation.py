@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
@@ -211,15 +211,19 @@ class TestBuildCrisisAnnotation:
 class TestCrisisIntervalHelpers:
     """CRISIS_INTERVALS 静态表 + 内部解析/重叠辅助。"""
 
-    def test_static_table_contains_four_known_intervals(self):
-        """静态表含 2015/2018/2020/2022 四个已知危机区间。"""
-        names = {it["name"] for it in CRISIS_INTERVALS}
-        assert names == {"2015 股灾", "2018 贸易摩擦", "2020 疫情冲击", "2022 市场调整"}
-        # 每项具备完整字段
+    def test_static_table_shapes_and_known_anchors(self):
+        """静态表结构完整（字段/日期/起止有序/名称唯一），含最早与最新锚点条目。
+
+        断言结构关系而非条数或全清单——静态表后续增补危机区间时本用例不需改写。
+        """
+        names = [it["name"] for it in CRISIS_INTERVALS]
+        assert len(names) == len(set(names))  # 名称唯一
+        # 最早（2015 股灾）与最新锚点（近窗口关税冲击）必须在表内
+        assert {"2015 股灾", "2025 关税冲击"} <= set(names)
+        # 每项具备完整字段，日期合法且起止有序
         for it in CRISIS_INTERVALS:
             assert {"name", "start", "end", "desc"} <= set(it)
-            date.fromisoformat(it["start"])
-            date.fromisoformat(it["end"])
+            assert date.fromisoformat(it["start"]) <= date.fromisoformat(it["end"])
 
     def test_parse_window_valid(self):
         """合法日期 → (start, end) date 对。"""
@@ -249,3 +253,120 @@ class TestCrisisIntervalHelpers:
         """window=None → None。"""
         raw = {"name": "2018 贸易摩擦", "start": "2018-06-19", "end": "2019-01-04"}
         assert _overlap_interval(raw, None) is None
+
+
+class TestCrisisReplay:
+    """回放态（功能开关 crisis_replay）双层契约 — 关态兼容 / 组合层 / 指数层 / 降级。"""
+
+    @staticmethod
+    def _index_series() -> dict:
+        """合成覆盖全部静态危机区间的主基准日线（每区间 起 100 / 深 85 / 收 95）。"""
+        bars: list[dict] = []
+        for iv in CRISIS_INTERVALS:
+            mid = (date.fromisoformat(iv["start"]) + timedelta(days=10)).isoformat()
+            bars.append({"date": iv["start"], "close": 100.0})
+            bars.append({"date": mid, "close": 85.0})
+            bars.append({"date": iv["end"], "close": 95.0})
+        bars.sort(key=lambda b: b["date"])
+        return {"name": "沪深300", "bars": bars}
+
+    def test_off_state_contract_has_no_replay_fields(self):
+        """关态（默认）：顶层无 replay 键、区间项无任何回放字段（历史契约逐字节兼容）。"""
+        contract = build_crisis_annotation(_history(_2018_BARS, "2018-01-01", "2018-12-31"))
+        assert "replay" not in contract
+        assert "index_reason" not in contract
+        for it in contract["intervals"]:
+            assert "portfolio_return_pct" not in it
+            assert "index_return_pct" not in it
+            assert "index_drawdown_pct" not in it
+            assert "index_available" not in it
+
+    def test_replay_marks_all_intervals_with_index_layer(self):
+        """回放态 + 指数序列 → 顶层 replay、全部区间含指数层字段；窗口外区间指数也算出。"""
+        contract = build_crisis_annotation(
+            _history(_2018_BARS, "2018-01-01", "2018-12-31"),
+            replay=True,
+            index_series=self._index_series(),
+        )
+        assert contract["replay"] is True
+        assert "index_reason" not in contract
+        for it in contract["intervals"]:
+            assert it["index_available"] is True
+            assert it["index_return_pct"] is not None
+            assert it["index_drawdown_pct"] is not None
+        # 窗口外的 2015 区间：组合层不可算、指数层有值（双层设计的互补关系）
+        it2015 = _interval(contract, "2015 股灾")
+        assert it2015["in_range"] is False
+        assert it2015["portfolio_return_pct"] is None
+
+    def test_replay_portfolio_layer_within_window(self):
+        """回放态窗口内区间（2018）→ 组合区间收益算出，回撤/恢复字段沿用关态语义。"""
+        contract = build_crisis_annotation(
+            _history(_2018_BARS, "2018-01-01", "2018-12-31"),
+            replay=True,
+            index_series=self._index_series(),
+        )
+        it = _interval(contract, "2018 贸易摩擦")
+        assert it["in_range"] is True
+        # 重叠段首尾：2018-06-20 100 → 2018-12-31 110 → +10%
+        assert it["portfolio_return_pct"] == pytest.approx(10.0)
+        assert it["interval_drawdown_pct"] == pytest.approx(30.0)
+
+    def test_replay_index_math(self):
+        """指数层收益/回撤：100 → 85 → 95 → 收益 -5%、最大回撤 15%。"""
+        contract = build_crisis_annotation(
+            _history(_2018_BARS, "2018-01-01", "2018-12-31"),
+            replay=True,
+            index_series=self._index_series(),
+        )
+        it = _interval(contract, "2015 股灾")
+        assert it["index_return_pct"] == pytest.approx(-5.0)
+        assert it["index_drawdown_pct"] == pytest.approx(15.0)
+
+    def test_replay_without_index_series_records_reason(self):
+        """指数序列缺失（未配置基准）→ index_reason 记录 + 全区间指数层不可用；组合层不受影响。"""
+        contract = build_crisis_annotation(
+            _history(_2018_BARS, "2018-01-01", "2018-12-31"),
+            replay=True,
+            index_series=None,
+        )
+        assert contract["replay"] is True
+        assert "基准" in str(contract["index_reason"])
+        assert all(not it["index_available"] for it in contract["intervals"])
+        it = _interval(contract, "2018 贸易摩擦")
+        assert it["portfolio_return_pct"] is not None  # 组合层独立于指数层
+
+    def test_replay_index_coverage_insufficient(self):
+        """指数日线区间内有效点不足 → 对应区间 index_available=False（不编造数值）。"""
+        contract = build_crisis_annotation(
+            _history(_2018_BARS, "2018-01-01", "2018-12-31"),
+            replay=True,
+            index_series={"bars": [{"date": "2015-06-12", "close": 100.0}]},
+        )
+        assert all(not it["index_available"] for it in contract["intervals"])
+
+    def test_replay_unavailable_history_falls_back_to_off_contract(self):
+        """history 不可用 → 关态占位（回放态亦退回占位，呈现层按关态渲染）。"""
+        contract = build_crisis_annotation(None, replay=True, index_series=self._index_series())
+        assert contract["available"] is False
+        assert "replay" not in contract
+
+    def test_recent_interval_in_extended_window(self):
+        """长窗 bars 覆盖近窗口关税冲击（2025-04）→ 该区间 in_range + 组合收益算出。"""
+        bars = _bars(
+            [
+                ("2025-03-01", 100.0),
+                ("2025-04-07", 100.0),
+                ("2025-04-15", 90.0),
+                ("2025-04-30", 97.0),
+                ("2025-05-01", 98.0),
+            ]
+        )
+        contract = build_crisis_annotation(
+            _history(bars, "2025-03-01", "2025-05-01"),
+            replay=True,
+            index_series=self._index_series(),
+        )
+        it = _interval(contract, "2025 关税冲击")
+        assert it["in_range"] is True
+        assert it["portfolio_return_pct"] == pytest.approx(-3.0)  # 100 → 97

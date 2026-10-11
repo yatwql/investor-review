@@ -3,10 +3,11 @@
 对应数据契约：所有 pipeline_data 顶层键必须先在已知键集合注册，
 否则 build()/merge_pipeline_data() 会记录「未注册键」警告并自动补注册。
 
-重点覆盖三契约键（危机标注/尾部风险/快照差异）：
+重点覆盖关键契约键（危机标注/尾部风险/快照差异/风险调整超额）：
   - crisis_annotation_data
   - tail_risk_data
   - snapshot_diff_data
+  - risk_adjusted_excess_data
 """
 
 from __future__ import annotations

@@ -32,7 +32,7 @@ from src.test.unit.report.test_html_report_structure import (
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
 
-def _render_drawdown(history_data, crisis_annotation=None) -> "BeautifulSoup":
+def _render_drawdown(history_data, crisis_annotation=None, excess=None) -> "BeautifulSoup":
     """渲染 portfolio_history_drawdown 可见、其余隐藏的模板。"""
     order = [dict(sec) for sec in _REPORT_SECTION_DEFAULT]
     numbers = {sec["key"]: sec["number"] for sec in order}
@@ -40,6 +40,7 @@ def _render_drawdown(history_data, crisis_annotation=None) -> "BeautifulSoup":
     data = _build_minimal_render_data(order, numbers, sv_dict)
     data["history_data"] = history_data
     data["crisis_annotation_data"] = crisis_annotation
+    data["risk_adjusted_excess_data"] = excess
     data["drawdown_min_span"] = 60  # html_writer 在生产路径中注入，测试直接渲染模板需自行提供
     return _render_template(data)
 
@@ -194,17 +195,17 @@ class TestHtmlDrawdownSection(unittest.TestCase):
         self.assertIn("2022 市场调整", text)
         self.assertIn("25.00%", text)  # 区间最大回撤
         self.assertIn("60 天", text)  # 恢复耗时
-        # 净值图说明跟随危机数据
-        self.assertIn("阴影区间为 2015/2018/2020/2022", text)
+        # 净值图说明跟随危机数据（不列举具体清单，静态表增补自动跟随）
+        self.assertIn("阴影区间为历史上 A 股主要危机时段", text)
 
     def test_crisis_caption_hidden_when_no_overlap(self):
         """危机区间无 in_range → 显示无重叠占位（无区间行），净值图说明不含危机文案。"""
         section = self._section(_history([]), _crisis(in_range=False))
         text = section.get_text()
-        self.assertIn("危机区间标注", text)  # 区块头仍显示
+        self.assertIn("危机区间标注", text)  # 区块头仍显示（标题动态列静态表清单）
         self.assertIn("报告数据窗口内无历史危机区间", text)  # 无重叠占位
-        self.assertNotIn("2022 市场调整", text)  # 无区间行
-        self.assertNotIn("阴影区间为 2015/2018/2020/2022", text)  # 净值图说明不跟随
+        self.assertNotIn("2022-01-04 ~ 2022-04-27", text)  # 无区间行（区间行才含日期）
+        self.assertNotIn("阴影区间为", text)  # 净值图说明不跟随
 
     def test_crisis_table_hidden_when_data_unavailable(self):
         """crisis_annotation_data 缺失 → 不渲染危机表。"""

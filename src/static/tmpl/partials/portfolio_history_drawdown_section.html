@@ -26,7 +26,7 @@
             <canvas id="portfolioChart" width="800" height="350" style="width:100%;height:350px;"></canvas>
             {% endif %}
             {% if _crisis_in_range %}
-            <div class="chart-caption">组合净值走势（阴影区间为 2015/2018/2020/2022 主要危机时段）</div>
+            <div class="chart-caption">组合净值走势（阴影区间为历史上 A 股主要危机时段，详见下方危机区间标注表）</div>
             {% else %}
             <div class="chart-caption">组合净值走势</div>
             {% endif %}
@@ -168,10 +168,37 @@
             {% elif history_data.bars %}
             <div class="empty-section" style="margin-top:16px;">📭 历史回撤数据不足（有效交易日不足 {{ drawdown_min_span }} 天），暂不计算回撤事件</div>
             {% endif %}
-            <!-- ── 三、危机区间标注（区间统计：区间回撤/恢复天数，图下说明） ── -->
+            <!-- ── 三、危机区间标注（区间统计：区间回撤/恢复天数，图下说明；回放态扩双层） ── -->
             {% if _crisis_ok %}
-            <div style="font-weight: bold; font-size: var(--fs-body); margin-top: 20px; margin-bottom: 6px;">危机区间标注（2015 股灾 / 2018 贸易摩擦 / 2020 疫情 / 2022 调整）</div>
-            {% if _crisis_in_range %}
+            <div style="font-weight: bold; font-size: var(--fs-body); margin-top: 20px; margin-bottom: 6px;">危机区间标注（{{ crisis_annotation_data.intervals | map(attribute='name') | join(' / ') }}）</div>
+            {% if crisis_annotation_data.replay %}
+            {#── 回放态（开关 crisis_replay）：全部区间列出——组合层仅窗口内有值，指数层覆盖历史区间 ──#}
+            <table>
+                <thead>
+                    <tr>
+                        <th>危机名称</th><th>区间</th><th>组合区间收益</th><th>组合区间最大回撤</th><th>最深日</th><th>恢复耗时</th><th>指数区间收益</th><th>指数区间最大回撤</th><th>状态</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for it in crisis_annotation_data.intervals %}
+                    <tr>
+                        <td>{{ it.name }}</td>
+                        <td>{{ it.start }} ~ {{ it.end }}</td>
+                        <td style="color:var(--profit); font-weight:600;">{% if it.in_range and it.portfolio_return_pct is not none %}{{ "%.2f"|format(it.portfolio_return_pct) }}%{% else %}—{% endif %}</td>
+                        <td style="color:var(--profit); font-weight:600;">{% if it.in_range and it.interval_drawdown_pct is not none %}{{ "%.2f"|format(it.interval_drawdown_pct) }}%{% else %}—{% endif %}</td>
+                        <td>{{ it.trough_date or "—" if it.in_range else "—" }}</td>
+                        <td>{% if it.in_range and it.recovery_days is not none %}{{ it.recovery_days }} 天{% elif it.in_range and it.recovered is false %}未恢复{% else %}—{% endif %}</td>
+                        <td>{% if it.index_available and it.index_return_pct is not none %}{{ "%.2f"|format(it.index_return_pct) }}%{% else %}—{% endif %}</td>
+                        <td>{% if it.index_available and it.index_drawdown_pct is not none %}{{ "%.2f"|format(it.index_drawdown_pct) }}%{% else %}—{% endif %}</td>
+                        <td>{% if it.in_range %}{% if it.recovered %}✅ 已恢复{% elif it.recovered is false %}⏳ 未恢复{% else %}—{% endif %}{% else %}组合窗口外{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% if crisis_annotation_data.index_reason %}
+            <div class="chart-caption">指数层：{{ crisis_annotation_data.index_reason }}</div>
+            {% endif %}
+            {% elif _crisis_in_range %}
             <table>
                 <thead>
                     <tr>
@@ -192,9 +219,9 @@
                 </tbody>
             </table>
             {% else %}
-            <div class="empty-section">报告数据窗口内无历史危机区间（2015/2018/2020/2022）</div>
+            <div class="empty-section">报告数据窗口内无历史危机区间</div>
             {% endif %}
-            <div class="chart-caption">说明：阴影/高亮区间为历史上 A 股主要危机时段；区间与报告数据窗口重叠时统计区间最大回撤与恢复耗时</div>
+            <div class="chart-caption">说明：阴影/高亮区间为历史上 A 股主要危机时段（静态历史事实表）；区间与报告数据窗口重叠时统计区间最大回撤与恢复耗时{% if crisis_annotation_data.replay %}；回放态另列组合区间收益与指数层（收益/最大回撤），超出组合数据窗口的区间标「组合窗口外」{% endif %}</div>
             {% endif %}
             <!-- ── 四、月度收益日历：年 × 月红绿格 + 口径与胜亏平统计 ── -->
             {% set monthly = history_data.monthly_returns %}
@@ -224,6 +251,57 @@
             </table>
             {% if monthly.stats %}
             <div class="chart-caption">口径 {{ monthly.caliber_label }}：胜 {{ monthly.stats.up }} / 亏 {{ monthly.stats.down }} / 平 {{ monthly.stats.flat }} 月 · 最长连亏 {{ monthly.stats.max_down_streak.length }} 月（结束于 {{ monthly.stats.max_down_streak.end_key or "—" }}）· 最佳 {{ monthly.stats.best.key }} {{ monthly.stats.best.return_pct | change }} · 最差 {{ monthly.stats.worst.key }} {{ monthly.stats.worst.return_pct | change }}（正值红 / 负值绿，空格为窗口外或无样本月份）</div>
+            {% endif %}
+            {% endif %}
+            <!-- ── 五、风险调整超额（开关 risk_adjusted_excess：滚动超额 + IR/TE + 跑赢胜率） ── -->
+            {% if risk_adjusted_excess_data %}
+            <div style="font-weight: bold; font-size: var(--fs-body); margin-top: 20px; margin-bottom: 6px;">五、风险调整超额</div>
+            {% if risk_adjusted_excess_data.available %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>基准</th><th>年化IR</th><th>跟踪误差</th><th>年化超额</th><th>近12月跑赢胜率</th><th>近24月跑赢胜率</th><th>完整月数</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for bm in risk_adjusted_excess_data.benchmarks %}
+                    <tr>
+                        <td>{{ bm.name }}</td>
+                        <td class="text-right">{% if bm.ir_annual is not none %}{{ "%.2f"|format(bm.ir_annual) }}{% else %}—{% endif %}</td>
+                        <td class="text-right">{% if bm.te_annual is not none %}{{ "%.2f"|format(bm.te_annual) }}{% else %}—{% endif %}</td>
+                        <td class="text-right" style="{% if bm.excess_annual_pct is not none %}font-weight:600; color: {{ bm.excess_annual_pct | profit_color }};{% endif %}">{% if bm.excess_annual_pct is not none %}{{ "%.2f"|format(bm.excess_annual_pct) }}%{% else %}—{% endif %}</td>
+                        <td class="text-right">{% if bm.win_rate_12m is not none %}{{ "%.1f"|format(bm.win_rate_12m) }}%{% else %}数据不足{% endif %}</td>
+                        <td class="text-right">{% if bm.win_rate_24m is not none %}{{ "%.1f"|format(bm.win_rate_24m) }}%{% else %}数据不足{% endif %}</td>
+                        <td class="text-right">{{ bm.complete_months }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% if risk_adjusted_excess_data.rolling and risk_adjusted_excess_data.rolling.available %}
+            <div style="font-weight: 600; margin: 16px 0 8px;">滚动 {{ risk_adjusted_excess_data.rolling.window_days }} 日超额（{{ risk_adjusted_excess_data.rolling.primary_name }}）</div>
+            <canvas id="excessRollingChart" width="800" height="240" style="width:100%;height:240px;" aria-label="组合相对基准滚动超额收益曲线（百分点）" role="img">图表无法显示，数据口径见下方说明</canvas>
+            <div class="chart-caption">滚动超额 = 近 {{ risk_adjusted_excess_data.rolling.window_days }} 个交易日组合与基准累计收益之差（百分点），逐交易日滚动；正值 = 窗口内跑赢基准</div>
+            <script>
+            (function(){
+                var pts = {{ risk_adjusted_excess_data.rolling.points | tojson }};
+                if (!pts || !pts.length) return;
+                var labels = pts.map(function(p){ return p.date; });
+                var values = pts.map(function(p){ return p.excess_pct; });
+                window.drawSimpleChart('excessRollingChart', [{
+                    label: '滚动超额(%)',
+                    values: values,
+                    color: '#2E75B6',
+                    fillColor: 'rgba(46,117,182,0.1)',
+                    width: 2
+                }], { labels: labels, yFormat: 'percent' });
+            })();
+            </script>
+            {% endif %}
+            {% if risk_adjusted_excess_data.notes %}
+            <div class="chart-caption">口径：{{ risk_adjusted_excess_data.notes | join('；') }}</div>
+            {% endif %}
+            {% else %}
+            <div class="empty-section">数据不可用：{{ risk_adjusted_excess_data.reason or "未知原因" }}</div>
             {% endif %}
             {% endif %}
             <!-- 数据加载状态（组合历史走势与回撤章单一份） -->
@@ -347,7 +425,7 @@
                 <p style="margin-top:8px;font-size: var(--fs-table);color:var(--text-muted);">
                     模块说明：基于当前持仓份额假设历史持仓不变（as-if 模拟），使用历史股价/净值
                     回溯计算组合的模拟走势与回撤，包括累计收益率、最大回撤、年化波动率等关键指标，
-                    并标注 2015/2018/2020/2022 主要历史危机时段。
+                    并标注历史上 A 股主要危机时段。
                 </p>
                 <p style="margin-top:12px;font-size: var(--fs-table-sm);color:#aaa;">
                     功能入口：菜单 L（生成全系列完整版报告）将自动获取历史数据 |
