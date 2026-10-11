@@ -629,7 +629,7 @@
 | R-HCR-02 | `src/test/unit/report/test_holding_change_panel.py` + `src/test/unit/report/test_holding_change_panel_edge.py` | 批 7 |
 | R-HCR-03 | `src/test/unit/report/test_holding_change_panel.py` + `src/test/integration/test_report_chapter_consistency.py` | 批 7 |
 | R-HCR-04 | `src/test/unit/analysis/test_holding_change_metrics.py` + `src/test/unit/report/test_holding_change_panel.py` | 批 7 |
-| R-HCR-05 | `src/test/unit/llm/test_holding_change_injection.py` | 批 7 |
+| R-HCR-05 | `src/test/unit/llm/test_holding_change_injection.py` + `src/test/unit/report/test_holding_change_panel.py` | 批 7 |
 | R-HCR-06 | `src/test/unit/analysis/test_holding_change_metrics.py` + `src/test/unit/report/test_holding_change_panel.py` | 批 7 |
 | R-FCT-01 | `src/test/unit/fetcher/test_factor_catalog_loader.py` + `src/test/unit/analysis/test_factor_evaluator.py` | 批 9 |
 | R-FCT-02 | `src/test/unit/analysis/test_factor_evaluator.py` + `src/test/unit/analysis/test_factor_evaluator_edge.py` + `src/test/unit/fetcher/test_factor_catalog_loader.py` | 批 9 |

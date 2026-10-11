@@ -3,7 +3,9 @@
 
    依赖 context 变量：section_visible / section_numbers / holding_change_view；
    视图由 report/holding_change_panel.build_holding_change_view 生成——全部行是
-   预格式化字符串，与 Excel 页签消费同一份 view（双端逐字节同文，不发散）。
+   预格式化字符串，与 Excel 页签消费同一份 view（双端逐字节同文，不发散）；
+   归因块例外：llm_review_html 为 LLM 产出的 HTML 原文，双端各取所需
+   （HTML 端 | safe 直出，Excel 端取同源纯文本块 + 标识行）。
 
    「区间净额推断、非逐笔」标注（limitations_note）与事件表同现——两端渲染
    分支成对出现，缺失即红（由双端一致性测试锁定）。
@@ -81,10 +83,12 @@
         {% endif %}
 
         <!-- ④ 变动动因 LLM 归因（llm_review 注入后出现；缺席 = 分支隐藏） -->
-        {% if _hc.get("llm_review_paragraphs") %}
+        <!-- 归因内容为 HTML（markdown_to_html + 尾部标识行）：与其他 LLM 章节
+             同构 | safe 原文直出，禁 autoescape（否则标签被转成可见乱码） -->
+        {% if _hc.get("llm_review_html") %}
         <div style="font-weight: bold; font-size: var(--fs-body); margin: 18px 0 6px;">④ 变动动因 LLM 归因</div>
         <div style="font-size: var(--fs-table); line-height: 1.9;">
-            {% for p in _hc.get("llm_review_paragraphs") %}<p style="margin: 6px 0;">{{ p }}</p>{% endfor %}
+            {{ _hc.get("llm_review_html") | safe }}
         </div>
         {% endif %}
     </div>

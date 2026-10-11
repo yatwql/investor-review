@@ -23,6 +23,7 @@
 - **环比对比基线改为跨交易日 + 基线标注三面（HTML/Excel/LLM）**：同一交易日多次运行报告不再互为比对对象——`diff`（本期要点/Excel 环比块/LLM 环比上下文）与 `snapshot_diff`（组合演进「自上次快照变化摘要」）的基线统一取**上一个有报告的交易日的最新一份快照**（新增 `report/history_snapshot.load_comparison_baseline`；交易日归属经 `core/trading_calendar.trading_day_as_of`：盘前 <9:30 归前一交易日、节假日按日历回溯、日历不可用回退排除周六日，与报告头「所属交易日」同口径，`get_last_trading_day` 改为委托该函数保持单源）。`current_ts` 不可解析回退旧「上一份快照」口径不阻塞环比；基线候选文件损坏/时间戳坏自动跳过顺延；无可比基线时按首次运行口径隐藏环比块。同时 diff 契约新增 `baseline_trading_day`（基线报告所属交易日）/ `baseline_generated_at`（报告生成时间，`YYYY-MM-DD HH:MM`）/ `baseline_timestamp` 三个展示键，HTML「本期要点」标题下、Excel【环比对比】区块、LLM 环比上下文分别新增「对比基准」行——写明比对的是哪个交易日、什么时间生成的报告（标注不可解析时为空串，三处均省略该行；首跑/关态产物逐字节不变）。
 
 ### Fixed
+- **持仓变动复盘「变动动因 LLM 归因」块标签乱码**：归因内容实为 HTML（`generate_llm_module` 统一骨架 = `markdown_to_html` + 尾部标识行），HTML 端曾逐段包 `<p>` 交 autoescape 转义，尾部标识行以可见乱码显示（`</p><p style="color:#888...">模型：…`）；Excel 端把整段 HTML 写进单元格。修复后与其余 LLM 章节同构呈现——view 单源拆三键 `llm_review_html`（HTML 端 `\| safe` 原文直出，含模型/Token/耗时/费用/缓存命中标识行）+ `llm_review_paragraphs`（Excel 端纯文本块，复用 `report/llm_content` 块级切分/剥离单源）+ `llm_review_footer`（标识行灰色小字，与其余 LLM 页签格式一致）；纯文本输入回退 `\n\n` 分段行为不变（回归测试 3 例）。
 - **favicon**：旧图标 XML 注释内含 `--` 非法 token，严格 XML 解析器下图标渲染失败——随品牌图标重绘顺带修复。
 
 （本次发布内容见下方归档索引）

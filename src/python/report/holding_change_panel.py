@@ -196,7 +196,9 @@ def build_holding_change_view(data: dict[str, Any] | None) -> dict[str, Any]:
         {"available", "reason", "title_summary", "window_lines",
          "event_header", "event_rows", "limitations_note",
          "metrics_lines", "intent_header", "intent_rows", "intent_lines",
-         "llm_review_paragraphs"}
+         "llm_review_paragraphs", "llm_review_footer", "llm_review_html"}
+        —— llm_review 三键：HTML 端用 ``llm_review_html``（原文直出）；
+        Excel 端用正文纯文本块 ``llm_review_paragraphs`` + 标识行 ``llm_review_footer``。
     """
     view: dict[str, Any] = {
         "available": False,
@@ -211,6 +213,8 @@ def build_holding_change_view(data: dict[str, Any] | None) -> dict[str, Any]:
         "intent_rows": [],
         "intent_lines": [],
         "llm_review_paragraphs": None,
+        "llm_review_footer": "",
+        "llm_review_html": None,
         "hint_line": (
             "每次生成报告会自动保存一份本地快照；积累 ≥2 个不同日期的快照后即可差分出变动事件，"
             f"复盘样本建议 ≥{MIN_REVIEW_PERIODS} 期且 ≥{MIN_REVIEW_EVENTS} 事件（不足时结论仅供参考）"
@@ -266,8 +270,44 @@ def build_holding_change_view(data: dict[str, Any] | None) -> dict[str, Any]:
 
     llm_review = data.get("llm_review")
     if isinstance(llm_review, str) and llm_review.strip():
-        view["llm_review_paragraphs"] = [p.strip() for p in llm_review.split("\n\n") if p.strip()]
+        paragraphs, footer, html = _llm_review_view(llm_review)
+        view["llm_review_paragraphs"] = paragraphs or None
+        view["llm_review_footer"] = footer
+        view["llm_review_html"] = html
     return view
+
+
+def _llm_review_view(llm_review: str) -> tuple[list[str], str, str]:
+    """归因内容 →（正文纯文本块，标识行纯文本，原始 HTML）。
+
+    真实产出经 ``generate_llm_module`` 统一骨架 = ``markdown_to_html`` + 尾部
+    ``<p style="color:#888;...">`` 标识行（非 Markdown 源文），直接按 \"\n\n\" 切分
+    或逐字节写单元格会把标签渲染成可见乱码：
+
+      - HTML 端整块原样渲染（与其他 LLM 章节 ``| safe`` 直出同构），
+        模板 autoescape 不得把标签转成文本；
+      - Excel 端按块级标签切分后剥离（复用 ``report/llm_content`` 单源：
+        ``_split_html_blocks`` / ``_strip_html``），标识行经
+        ``_extract_footer_text`` 提取为 footer 单独着色行，与其余 LLM 页签
+        标识行格式一致；正文块不含 footer（避免重复）。
+
+    纯文本输入（历史缓存/测试）回退按 \"\n\n\" 分段，footer 为空串。
+    """
+    from src.python.report.llm_content import (
+        _extract_footer_text,
+        _split_html_blocks,
+        _strip_html,
+    )
+
+    html = llm_review.strip()
+    footer = _extract_footer_text(html)
+    paragraphs: list[str] = []
+    for block in _split_html_blocks(html):
+        text = _strip_html(block)
+        if not text or (footer and text == footer):
+            continue
+        paragraphs.append(text)
+    return paragraphs, footer, html
 
 
 def _metrics_lines(metrics: dict[str, Any]) -> list[str]:
@@ -415,11 +455,22 @@ def write_holding_change_sheet(ws: Any, holding_change_data: dict[str, Any] | No
             row = write_data_row(ws, row, [line] + [""] * (_ncols - 1))
 
     # ── 5. LLM 归因块（llm_review 注入后出现；缺席 = 分支隐藏） ──
-    if view["llm_review_paragraphs"]:
+    if view["llm_review_paragraphs"] or view["llm_review_footer"]:
+        from openpyxl.styles import Alignment
+
+        from src.python.report.llm_content import _MODEL_NAME_FONT
+
         row += 1
         row = write_block_title(ws, row, LLM_BLOCK_TITLE, ncols=_ncols)
-        for paragraph in view["llm_review_paragraphs"]:
+        for paragraph in view["llm_review_paragraphs"] or []:
             row = write_data_row(ws, row, [paragraph] + [""] * (_ncols - 1))
+        # 底部标识行：灰色小字斜体，与其余 LLM 页签 footer 格式一致（标签已剥离）
+        if view["llm_review_footer"]:
+            footer_cell = ws.cell(row=row, column=1, value=view["llm_review_footer"])
+            footer_cell.font = _MODEL_NAME_FONT
+            footer_cell.alignment = Alignment(horizontal="left", vertical="center")
+            ws.row_dimensions[row].height = 20
+            row += 1
 
     freeze_header(ws, row=2)
     auto_width(ws)
