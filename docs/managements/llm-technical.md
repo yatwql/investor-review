@@ -157,7 +157,7 @@ skeleton.py:generate_llm_content()
 
 ### 2.1 子模块总览
 
-说明：`prompts.py` 为统一导出入口，将 `prompts_core.py` / `prompts_tables.py` / `prompts_action.py` / `prompts_signals.py` 的公开符号汇总导出。
+说明：`prompts.py` 为统一导出入口，将 `prompts_core.py` / `prompts_tables.py` / `prompts_action.py` / `prompts_signals.py` / `prompts_data_blocks.py` / `prompts_review.py` 的公开符号汇总导出。
 
 | 模块 | 分类 | 职责 | 入口函数 |
 |:-----|:-----|:------|:---------|
@@ -189,6 +189,8 @@ skeleton.py:generate_llm_content()
 | `cost_tracker.py` | 工具 | Token 预算管理、输入检查、成本摘要格式化（compact/verbose） | `reset_budget()` / `get_cost_summary()` |
 | `pricing.py` | 工具 | 模型定价合并、费用估算 | `estimate_cost()` / `reload_pricing()` |
 | `circuit_breaker.py` | 工具 | LLM 端点熔断器（连续 3 次失败 + 固定 60s 冷却） | `get_circuit_status()` |
+| `compliance.py` | 工具 | System Prompt 尾部合规声明注入（`api.call_llm` 单一漏斗，幂等不叠、不动缓存指纹；窄判定角色可经 `role` 追加约束） | `COMPLIANCE_CLOSING` |
+| `pacing.py` | 工具 | 端点级节流与并发治理（`PacingGate`：min_interval/jitter/max_concurrency，无声明零影响；详设见 §4.2.1） | `PacingGate` |
 | `markdown.py` | 工具 | Markdown→HTML 转换 | `markdown_to_html()` |
 | `_api_claude.py` / `_api_gemini.py` / `_api_openai.py` | 私有 | 各 Provider 单次调用实现（自包含依赖，委托 api_base 重试 + Extended Thinking 注入），api.py 分派目标 | `call_claude()` / `call_gemini()` / `call_openai()` |
 | `_batch_mode.py` | 私有 | 批量模式分块执行（`_BATCH_CHUNK_SIZE=10` 每批、最多 3 批并行，受 `min(3, 批数, 6)` 约束） | `run_batch_mode()` |

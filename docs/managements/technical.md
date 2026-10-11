@@ -245,6 +245,7 @@ llm/generators_orchestrator.py ──→ cache/（可选）
 | **贯穿** | 日志可视化 | 结构化日志读取（parse_log/tail_log/read_log），CLI/TUI/Web 三端共享 | `core/log_reader.py` |
 | **贯穿** | 系统自检 | 运行环境/配置/目录/功能开关/数据源适配/数据源凭据/数据源七组一次性盘点（开关 `doctor_check`，默认开），CLI/TUI/Web 三端共享；自身永不抛异常、零重依赖 | `core/doctor.py` |
 | **贯穿** | 数值归一 | 非有限值（NaN/±inf）防线收敛点：`safe_num` / `strict_num` / `finite_or` / `is_finite_number`；纯 stdlib、零项目内依赖，providers/analysis/report 任一侧可安全导入 | `core/num_utils.py` |
+| **贯穿** | 任务完成通知 | CLI 报告收尾按 `notify` 配置分发 webhook/邮件/桌面三通道（失败必发、成功需 `on_success`；尽力而为：单通道失败隔离、永不改退出码、未配置静默跳过） | `core/completion_notify.py` |
 
 ### 1.4 概要设计 — 核心架构决策
 
@@ -522,7 +523,7 @@ CLI 渠道是**命令行参数**形态，面向脚本化与自动化场景：定
 
 #### 1.7.4 子命令处理器（`cli/_handlers.py`）
 
-- **`_handle_report`**：`CliProgressReporter(verbose)` 注入 `generate_report`（§4.2）；`--output` 覆盖 `output_dir`，`--history` 为 None 时回退配置层解析；返回 `result.exit_code`。
+- **`_handle_report`**：`CliProgressReporter(verbose)` 注入 `generate_report`（§4.2）；`--output` 覆盖 `output_dir`，`--history` 为 None 时回退配置层解析；收尾经 `_notify_report_completion()` 按 `notify` 配置分发完成/失败通知（`core/completion_notify.py`，尽力而为不改退出码；无配置静默跳过）；返回 `result.exit_code`。
 - **`_handle_cache`**：三分支——`--clean` 委托 `cleanup_cache`；`--stats` 委托 `get_cache_stats` + 打印 LLM 配置状态（消费 `core/system_info.llm_status()` 单源，仅日志渲染）；`--update` 委托 `update_basic_cache`/`update_position_cache`（§3.6），`--update all` 委托 `update_all_cache` **最大努力模式**（basic 失败仍继续 position，退出码取两者 max）。
 - **`_handle_whatif`**：解析 `--base`/`--candidate` 两份持仓 → `run_whatif_simulation()`（§4.13）→ 结果 `ok` 判定，失败返回 2；`--effective-date` 触发时序回测扩展。
 - **`_handle_cassettes`**：无参数时经 `core/cassette.py::list_cassettes()` 列出已录制响应（来源/录制时间/交互数/大小）；`--verify` 时经 `fetcher/cassette_checks.py::CASSETTE_CHECKS` + `verify_cassettes()` 离线回放，有解析失败返回 `_EXIT_SEVERE`。纯只读展示层，不联网、不碰用户配置。
@@ -2962,29 +2963,38 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
 
 ### 5.1 架构总览
 
-`src/python/llm/` 包按调用层次分为四层，共 36 个子模块（含 fact_checker/ 子包 9 模块 / fallback.py / `_hallucination_filter.py`；`prompts.py` 为统一导出入口，实际逻辑在 core/tables/action/signals 4 文件中）：
+`src/python/llm/` 包按调用层次分为四层，共 45 个子模块（顶层 36 + fact_checker/ 子包 9，均不含 `__init__.py`；`prompts.py` 为统一导出入口，实际逻辑在 prompts_core/tables/action/signals/data_blocks/review 6 文件中）：
 
 ```
-入口层         generators_orchestrator.py    4+1 模块并行编排
+入口层         generators_orchestrator.py    4+1 模块并行编排 + 缓存预检 + 生成后一遍（事实锚定/自检）
                   │
 编排层         skeleton.py                   标准/批量模式共享骨架
+               _llm_dispatch.py              worker 装配/线程池分发/辩论路由（经门面 re-export，patch 点不变）
+               _batch_mode.py                批量模式分块执行（10 条/批、≤3 批并行）
+               self_review.py                生成后自检（串行后置，不经并行调度）
+               holding_change_review.py      持仓变动复盘归因（串行后置，不经并行调度）
                   │
 API 层         api.py        Provider 路由 + Multi-Provider Chain 遍历
                api_base.py   HTTP 调用 + 重试骨架
                strategy.py   多 Provider 切换策略引擎
+               _api_claude.py / _api_gemini.py / _api_openai.py  各 Provider 单次调用实现
+               pacing.py     端点级节流（PacingGate）
                   │
-共享层         generators.py         辩论/自检生成 + 单例四函数门面再导出（下沉 generators_singletons.py）
+共享层         generators.py         辩论/自检生成门面（单例四函数下沉 generators_singletons.py 再导出）
                generators_news.py   新闻 LLM 批量关联分析
                _llm_news_correlation.py  新闻关联闭包/结果缓存/安全直调
-               prompts.py           System/User Prompt 构建
-               prompts_signals.py   信号预消化（带方向标注的信号行，实验开关）
-               fingerprint.py       缓存指纹计算
+               prompts.py           统一导出入口（逻辑在 prompts_core/tables/action/signals/data_blocks/review 6 文件）
+               depth_profile.py     报告深度档位表（brief/standard/deep 唯一事实来源）
+               fingerprint.py       缓存指纹计算（模块级见 module_fingerprint.py，C21 同源）
                session.py           会话用量追踪
                cost_tracker.py      Token 预算管理
                pricing.py           费用估算（含 DeepSeek 峰谷定价）
+               compliance.py        System Prompt 尾部合规声明注入（call_llm 单一漏斗，幂等）
+               failure_reasons.py   模块失败原因常量（LLM_MODULE_FAILURE）
                markdown.py          Markdown→HTML 转换
                circuit_breaker.py   LLM API 熔断器
                fact_checker/        LLM 输出伪代码/幻觉过滤（子包 9 模块，__init__ 重导出 4 公开函数）
+               _hallucination_filter.py  虚构品种代码过滤（行内句段粒度删除）
                fallback.py          全失败降级占位模板
 ```
 
