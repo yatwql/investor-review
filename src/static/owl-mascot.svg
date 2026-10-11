@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 380" role="img" aria-label="投资复盘助手吉祥物：猫头鹰「守望」——站在净值增长曲线上夜间守望的智慧顾问">
+  <title>投资复盘助手吉祥物：猫头鹰「守望」</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f1b2d"/>
+      <stop offset="1" stop-color="#16283f"/>
+    </linearGradient>
+  </defs>
+  <!-- 夜空卡片（与 architecture.svg 同源底色） -->
+  <rect x="0" y="0" width="440" height="380" rx="28" fill="url(#bg)"/>
+  <!-- 月牙与星：夜间守望 -->
+  <path d="M85.01 58.02 A26 26 0 1 0 109.97 94.07 A22 22 0 0 1 85.01 58.02 Z" fill="#fbbf24"/>
+  <circle cx="150" cy="54" r="2.5" fill="#e8f1fb"/>
+  <circle cx="252" cy="42" r="2" fill="#9fb6d0"/>
+  <circle cx="330" cy="48" r="2" fill="#9fb6d0"/>
+  <circle cx="384" cy="96" r="2.5" fill="#e8f1fb"/>
+  <circle cx="52" cy="158" r="2" fill="#9fb6d0"/>
+  <circle cx="398" cy="190" r="1.8" fill="#9fb6d0"/>
+  <!-- 净值增长曲线（栖木）：复盘与量化风控语义 -->
+  <polyline points="52,306 128,284 196,290 268,254 356,196" fill="none" stroke="#34d399" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="356" cy="196" r="15" fill="#34d399" opacity="0.22"/>
+  <circle cx="356" cy="196" r="7" fill="#34d399"/>
+  <!-- 猫头鹰「守望」 -->
+  <g>
+    <!-- 耳簇 -->
+    <path d="M128 138 L120 92 L162 116 Z" fill="#2E75B6"/>
+    <path d="M252 138 L260 92 L218 116 Z" fill="#2E75B6"/>
+    <!-- 身体 -->
+    <ellipse cx="190" cy="198" rx="74" ry="84" fill="#2E75B6"/>
+    <!-- 双翼 -->
+    <ellipse cx="128" cy="222" rx="19" ry="36" fill="#255e9c" transform="rotate(14 128 222)"/>
+    <ellipse cx="252" cy="222" rx="19" ry="36" fill="#255e9c" transform="rotate(-14 252 222)"/>
+    <!-- 腹羽 -->
+    <ellipse cx="190" cy="236" rx="48" ry="40" fill="#e9f2fb"/>
+    <g fill="none" stroke="#b7d3ee" stroke-width="3" stroke-linecap="round">
+      <path d="M164 226 q11 11 22 0"/>
+      <path d="M188 226 q11 11 22 0"/>
+      <path d="M176 248 q11 11 22 0"/>
+      <path d="M200 248 q11 11 22 0"/>
+    </g>
+    <!-- 脸盘 -->
+    <circle cx="162" cy="178" r="40" fill="#f4f8fc"/>
+    <circle cx="218" cy="178" r="40" fill="#f4f8fc"/>
+    <!-- 眼睛（望向增长曲线终点） -->
+    <circle cx="162" cy="174" r="23" fill="#ffffff"/>
+    <circle cx="218" cy="174" r="23" fill="#ffffff"/>
+    <circle cx="167" cy="179" r="10.5" fill="#1d3557"/>
+    <circle cx="213" cy="179" r="10.5" fill="#1d3557"/>
+    <circle cx="171" cy="173" r="3.6" fill="#ffffff"/>
+    <circle cx="217" cy="173" r="3.6" fill="#ffffff"/>
+    <!-- 喙 -->
+    <path d="M190 194 L181 209 Q190 217 199 209 Z" fill="#fbbf24"/>
+    <!-- 爪（立于曲线之上） -->
+    <g stroke="#fbbf24" stroke-width="5" stroke-linecap="round" fill="none">
+      <path d="M176 276 V286 M176 286 L169 291 M176 286 L183 291"/>
+      <path d="M204 274 V284 M204 284 L197 289 M204 284 L211 289"/>
+    </g>
+  </g>
+</svg>
