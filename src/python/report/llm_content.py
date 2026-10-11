@@ -167,11 +167,6 @@ _MODEL_NAME_FONT = Font(
     italic=True,
 )
 
-_THINKING_FONT = Font(
-    color="888888",
-    size=9,
-    italic=True,
-)
 
 # 匹配事实校验摘要行（run_fact_check 追加到内容尾部）
 _FACT_CHECK_PASS_RE = re.compile(r"✓.*事实校验")  # 通过：✓ 事实校验通过

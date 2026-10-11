@@ -47,8 +47,6 @@ def write_block_title(ws, row: int, title: str, ncols: int | None = None) -> int
     return row + 1
 
 
-_FONT_WARN = Font(color="CC0000")
-
 # 空子块占位（框架先行，后续轮次填充时被真实数据替换）
 _PLACEHOLDER_EMPTY = "暂无触发"
 _PLACEHOLDER_UNAVAILABLE = "无持仓数据，行动建议无法生成"

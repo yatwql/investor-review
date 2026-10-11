@@ -202,11 +202,6 @@ def _fetch_us_from_tencent(missing: list[str]) -> dict[str, dict[str, Any]]:
     return results
 
 
-def _index_history_cache_key(code: str) -> str:
-    """指数历史日线的文件缓存键。"""
-    return f"history_index_{code}"
-
-
 def fetch_index_history(code: str, days: int = 365) -> list[dict] | None:
     """获取指数历史日线（走 history_index chain，不绕过 chain 层）。
 

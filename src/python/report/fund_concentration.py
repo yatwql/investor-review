@@ -31,12 +31,6 @@ _SNAPSHOT_TTL = 365 * 86400  # 接近永久
 _UNKNOWN_PERIOD = "未知"
 """报告期无法解析时 `holdings_freshness` 给出的展示文本（不参与推进判定）。"""
 
-_CONCENTRATION_THRESHOLDS = [
-    (3, "top3_pct"),
-    (5, "top5_pct"),
-    (10, "top10_pct"),
-]
-
 
 def _load_history_snapshot() -> dict[str, Any] | None:
     """读取历史集中度快照（固定键 fund_concentration_snapshot）。

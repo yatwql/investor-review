@@ -16,7 +16,7 @@ from src.python.core.provider_registry import (
     DataSourceRegistry,
     get_registry,
 )
-from src.python.core._session_cache import _SESSION_CACHE_MAX_ENTRIES
+from src.python.core.provider_registry import _SESSION_CACHE_MAX_ENTRIES
 from src.python.fetcher.chain import _DEFAULT_CHAINS
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_core]

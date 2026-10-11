@@ -49,8 +49,6 @@ TRUNCATION_SLACK_DAYS = 3
 
 EVENT_HEADER = ["区间起", "区间止", "品种", "代码", "方向", "份额变动", "市值变动(元)"]
 INTENT_HEADER = ["区间起", "区间止", "品种", "实际变动", "意图", "账本决策(区间内)", "对照"]
-# 预格式化行中右对齐的列下标（HTML 端仅样式差异，字符串双端同源）
-EVENT_RIGHT_ALIGN_FROM = 5
 LLM_BLOCK_TITLE = "变动动因 LLM 归因"
 
 _DIRECTION_TEXT = {1: "看多", -1: "看空", 0: "持平"}

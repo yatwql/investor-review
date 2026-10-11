@@ -73,7 +73,6 @@ EVENT_SETTLEMENT = "settlement"
 CARRIER_EXPERT_REVIEW = "expert_review"  # LLM 智囊团操作建议表
 CARRIER_REBALANCE = "rebalance"  # 极简再平衡信号（行动章）
 CARRIER_DISCIPLINE = "discipline"  # 交易纪律信号
-CARRIER_REBALANCE_ADVICE = "rebalance_advice"  # 再平衡建议清单
 CARRIER_GENERIC = "generic"  # 未细分载体（低层 API 默认值）
 
 

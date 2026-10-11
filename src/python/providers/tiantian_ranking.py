@@ -239,8 +239,6 @@ _RATING_THRESHOLDS: dict[str, list[float]] = {
     "qdii": [0.15, 0.35, 0.55, 0.80],
 }
 
-_KNOWN_RATING_TYPES = list(_RATING_THRESHOLDS.keys())
-
 
 def _get_rating_thresholds(fund_type_hint: str = "") -> list[float]:
     """根据基金类型获取对应的评级阈值列表。"""
@@ -355,9 +353,6 @@ def _parse_perf_evaluation(text: str) -> dict[str, Any] | None:
 
 
 # ── 风险分析 ─────────────────────────────────────────
-
-_SHARPE_THRESHOLDS = {"excellent": 1.5, "poor": 0.3}
-_MAX_DD_THRESHOLD = -40.0
 
 
 def _parse_risk_analysis(text: str) -> dict[str, Any] | None:

@@ -19,7 +19,6 @@ from src.python.report.data_status import STATUS_MESSAGES, DataStatus, DataStatu
 
 logger = logging.getLogger("invest")
 
-_NCOLS = 10
 _HEADERS = [
     "资产属性",
     "投资分类",
@@ -32,9 +31,6 @@ _HEADERS = [
     "本日盈亏",
     "年均股息率",
 ]
-# 成本流水子列（功能开关 `cost_lots` 开启时追加，默认关不渲染）
-_EXTRA_HEADERS = ["成本分档", "分红累计"]
-_NCOLS_WITH_FLOW = _NCOLS + len(_EXTRA_HEADERS)
 
 
 def _tier_label(buckets: dict | None) -> str:

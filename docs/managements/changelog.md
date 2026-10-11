@@ -9,6 +9,8 @@
 
 ## [0.12.10-dev] - 开发中（未发布）
 
+- **重构**：**全仓死代码清扫（rf-660）**——AST 顶层符号扫描 + 词边界引用核验确认 27 项死代码（9 函数 + 17 常量 + 1 孤儿模块 `core/_session_cache.py`，provider_registry 已内联同版实现）全部删除，并清掉 4 个二阶级联孤儿（`_use_ansi`、`_DEFAULT_ENDPOINTS`、`_EXTRA_HEADERS`、`category._NCOLS`）与 `drawdown_events` 的 `date` 死导入；`test_provider_registry` 的 `_SESSION_CACHE_MAX_ENTRIES` 导入改指 `provider_registry`。共 −281 行 / 23 文件。代表性死项：`pacing.describe`/`endpoint_key_for`（自检展示/按域名取键从未接线）、`http_client.make_async_http_client`（全仓无异步调用方）、`fetch_market_data_cached`/`fetch_fund_manager_cached`（会话缓存旧包装，registry 路径取代）、`HISTORY_CHAIN_*_TTL`（注册表 `cache_ttl` 取代）、`tiantian_ranking` 风险阈值常量组。同步 folders.md 目录树。
+
 - **文档**：**技术文档与代码一致性修复（rf-659）**——`technical.md` 三处：① `valuation_data` 数据契约块同步真实历史估值分位落地后的真值（3→4 顶层键含 `basis_mode`，`by_code` 子项 6→8 键含 `real`/`real_available`）；② `crisis_annotation_data` 键数声明自矛盾修正（8→2 键，与代码 `build_crisis_annotation` 顶层键一致）；③ 3 处符号归属改指真实定义文件（`compute_factor_exposure_data`/`compute_market_temperature_data`/`compute_correlation_data` 实际在 `_report_factor_metrics.py`/`_report_aux_metrics.py`，orchestrator 仅 import 转发）；纯文档侧，零代码影响。
 
 - **文档**：**需求文档模块清单补齐（rf-658）**——`requirements.md` §6.3 报告模块清单表补入「持仓变动复盘」「调仓纪律回放」两行（序号 15/16，开关默认关，原 15~17 顺延为 17~19），消除需求文档内部（与 R-OUT-05「页签 1~19」）及与技术文档/代码注册表（19 项）的不一致；两模块详细需求（§6.13/§6.15）早已存在，仅总清单表滞后。

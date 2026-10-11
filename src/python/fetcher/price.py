@@ -361,22 +361,3 @@ def fetch_market_data(code: str, expected_name: str = "") -> dict[str, Any] | No
             logger.warning("[price]%s 降级也失败——场外基金链路亦无数据", _tag)
 
     return result
-
-
-def fetch_market_data_cached(code: str, expected_name: str = "") -> dict[str, Any] | None:
-    """市场行情获取（含会话缓存），同一报告生成中同证券只获取一次。
-
-    消除多个模块独立调用 fetch_market_data 的冗余文件缓存读取。
-    """
-    from src.python.core.provider_registry import NOT_FOUND, get_registry
-
-    registry = get_registry()
-    # 路由（price_stock / price_fund_otc）作为会话缓存域，避免同代码跨路由串味
-    data_type = resolve_price_route(code, expected_name)
-    cached = registry.session_cache_get(data_type, code)
-    if cached is not NOT_FOUND:
-        return cached
-    result = fetch_market_data(code, expected_name)
-    if result and result.get("price", 0) > 0:
-        registry.session_cache_set(data_type, code, result, source="api")
-    return result
