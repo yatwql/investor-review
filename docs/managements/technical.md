@@ -450,7 +450,7 @@ while True:
 | 缓存管理 | `[1]`/`[2]` | 更新基础类 / 行情类缓存 |
 | | `[3]`/`[4]` | 清理过期缓存 / 查看缓存统计 |
 | 诊断 | `[V]` | 查看最近运行日志（可按级别筛选，`handlers_log.py::_cmd_view_logs`） |
-| | `[H]` | 查看数据源健康历史（近期检查记录，`handlers_log.py::_cmd_view_health_history`） |
+| | `[H]` | 查看数据源健康历史（`handlers_log.py::_cmd_view_health_history`） |
 | | `[T]` | 系统自检（环境/配置/目录/数据源一键体检，`handlers_log.py::_cmd_run_doctor`）；**受开关 `doctor_check` 约束（默认开）**——开关关闭时该菜单项由 `tui_menu._apply_feature_gates()` 就地裁剪，不出现在菜单中 |
 | 退出 | `[X]` | 退出程序 |
 

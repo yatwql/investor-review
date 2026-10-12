@@ -303,6 +303,10 @@
 - **功能开关面板分组重构（plan-120）**：功能开关分组从生命周期三组（实验 / 常规 / 报告章节与增强）切换为**作用域四组**——📊 呈现与体验（2）→ 🔍 分析增强·既有章内追加（14）→ 📑 独立章节与回放（6）→ ⚙ 机制与诊断（9，含实验项）；生命周期降为注册表 `FeatureSwitchDef.experimental` 独立字段（`--experiment` 取值域、CLI 帮助清单与页脚实验自述改看该字段，成员不变：决策跨期反思闭环 / 报告对话式追问）。**零行为变化**：31 键、默认值、`affects_report`、产物自述与报告字节全等；转正语义改为「摘除 experimental 身份」（作用域不变则原地留块，面板入口不随转正消失）。TUI `[S]` 面板按四组分块（编号 8-38 连续派生）、Web 配置面板 surface 改发 `groups` 四组（`report_switches` 键移除、实验项 ⚗ 逐行标记）、守护 `_format` 改注册表动态派生并新增旧三组名残留检测；四组文案与面板编号同步 requirements / technical / developer-guide / testplan 及各手册。落地设计见 [`feature-switch-grouping-redesign.md`](../archive/v0.12.x/feature-switch-grouping/feature-switch-grouping-redesign.md)。
 - **报告对话式追问 TUI 入口（plan-119，设计文档阶段 4）**：TUI 主菜单新增 `[Q]`（`tui/handlers_qa.py`，`report_qa` 开关门控、与 Web/报告区块同源就地裁剪）——选择输出目录 HTML 报告（倒序/回车=最新/取消守护）→ `input()` 多轮文本输入循环（提问/续问/退出指令，EOF/Ctrl+C 守护）；回答经 `html.parser` 纯文本化展示 + 轮数/用量/警示回显；错误信封分类（会话上限/报告不可用终止循环，其余继续提问）。会话/上下文/记账/降级全部经 `qa/session.py::ask_report_qa`（与 Web 同源同一服务），零 TUI 私有副本（同对象断言守卫）；`default_menu_key` 支持 Q。测试：`test_handlers_qa.py` + `test_handlers_qa_edge.py`（EOF/Ctrl+C/目录不可读边缘）+ 菜单索引/键位集合同步，R-QA-10（批 14）。
 
+### Changed
+
+- **TUI 主菜单 `[H]` 描述精简**：「查看数据源健康历史（近期检查记录）」改为「查看数据源健康历史」，手册总览/详解、R-DIAG-02、technical 菜单表同步
+
 ### Fixed
 
 - **禁用 LLM 模块误渲染故障占位章节（rf-664）**：`enabled_llm.<模块> = false` 时 HTML 报告仍渲染对应章节且带误导性故障占位（用户实测 `penetration_deep` 关闭仍出「、穿透深度分析」+「⚠️ 当前无法生成…LLM API 服务暂时不可用、API Key 配置错误」）。根因两层：① `report_template.html` 四个 LLM 章 include 共用单一 `section_visible("global_macro")` 守卫，`_compute_section_visibility` 已实现的逐模块章级隐藏 + 连续重编号未落到正文（导航逐模块剔除而正文照渲，序号缺键渲染为空）；② `llm/fallback.py::build_fallback_llm_content` 把禁用（`LLM_MODULE_FAILURE=disabled` 的 None）与生成失败混同，向禁用槽位注入占位。修复：四 include 改逐模块 `section_visible` 守卫（同时修复 global_macro 禁用连带隐藏其余兄弟 LLM 章节的过度隐藏）+ fallback 禁用槽位保持 None（占位只注入「启用但真实失败」的模块，禁用整章隐藏）。回归：模板逐模块隐藏与不过度隐藏反向 2 例 + fallback 禁用感知 4 例。

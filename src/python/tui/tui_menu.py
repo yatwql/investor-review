@@ -39,7 +39,7 @@ MENU_ITEMS: list[MenuItem] = [
     ("S", "配置功能开关（LLM 分析章节 + 四组功能开关）", None, False),
     ("R", "刷新配置", None, False),
     ("V", "查看最近运行日志（可按级别筛选）", None, False),
-    ("H", "查看数据源健康历史（近期检查记录）", None, False),
+    ("H", "查看数据源健康历史", None, False),
     ("T", "系统自检（环境/配置/目录/数据源一键体检）", None, False),
     ("X", "退出", None, True),
 ]
