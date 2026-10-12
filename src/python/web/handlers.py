@@ -1,4 +1,4 @@
-"""Web 路由 handler — 页面/上传/生成/轮询/预览/下载/历史/健康。
+"""Web 路由 handler — 页面/上传/生成/轮询/预览/下载/历史/健康/报告追问。
 
 生成 handler（``_run_generation``）复刻 ``cli.py:_handle_report`` 模板：
 读持仓（含流水页签）→ 建 reporter → ``generate_report`` → 映射 exit_code。
@@ -542,6 +542,55 @@ def _handle_config_edit():
     return _ok(get_config_edit_surface())
 
 
+# 追问错误码 → HTTP 状态码（与设计 §3.6 校验矩阵一致：
+# 参数/超长/会话与输入超限 400；报告缺失/结构不可解析 404；开关关闭 403；LLM 全链失败 503）
+_QA_STATUS_BY_CODE = {
+    "QA_REPORT_NOT_FOUND": 404,
+    "QA_CONTEXT_INVALID": 404,
+    "QA_LLM_UNAVAILABLE": 503,
+    "QA_LLM_FAILED": 503,
+}
+
+
+def _handle_report_qa_ask():
+    """POST /api/qa/ask — 报告对话式追问（``report_qa`` 开关控制，默认关）。
+
+    缺参/非法 report → 400；报告文件缺失/结构不可解析 → 404；开关关闭 → 403
+    （error_code=``QA_DISABLED``）；LLM 未配置/未产出 → 503（前端按信封
+    展示「服务暂不可用」占位，不把错误码当正常回答）。
+
+    report 路径净化在路由层（仅 output_dir 下 .html 文件名），语义校验
+    （问题长度/轮数/上下文）在 ``qa.session.ask_report_qa``（与 TUI 共用）。
+    """
+    from src.python.config.features import is_feature_enabled
+
+    if not is_feature_enabled("report_qa"):
+        return _err("QA_DISABLED", "报告追问功能未开启（功能开关面板启用「报告对话式追问」）"), 403
+
+    payload = request.get_json(silent=True) or {}
+    report = str(payload.get("report") or "").strip()
+    session_id = payload.get("session_id") or None
+    if session_id is not None and not isinstance(session_id, str):
+        return _err("BAD_PARAM", "session_id 参数不合法"), 400
+    if (
+        not report
+        or report != os.path.basename(report)
+        or ".." in report
+        or "/" in report
+        or "\\" in report
+        or os.path.splitext(report)[1].lower() != ".html"
+    ):
+        return _err("BAD_PARAM", "report 参数不合法（仅限 .html 报告文件名）"), 400
+
+    from src.python.qa.session import ask_report_qa
+
+    result = ask_report_qa(report=report, question=str(payload.get("question") or ""), session_id=session_id)
+    if not result.get("ok"):
+        code = result.get("error_code")
+        return _err(code, result.get("error")), _QA_STATUS_BY_CODE.get(code, 400)
+    return _ok(result)
+
+
 def _handle_serve_report(filename: str):
     """预览/下载产物（route ``<path:filename>`` → 参数名 filename）。
 
@@ -688,6 +737,7 @@ def create_handlers(app, run_manager) -> None:
     )
 
     app.add_url_rule("/api/reports/<path:filename>", "serve_report", _handle_serve_report, methods=["GET"])
+    app.add_url_rule("/api/qa/ask", "report_qa_ask", _handle_report_qa_ask, methods=["POST"])
     app.add_url_rule("/api/whatif", "whatif", _handle_whatif, methods=["POST"])
     app.add_url_rule("/api/cache", "cache_stats", _handle_cache_stats, methods=["GET"])
     app.add_url_rule("/api/cache/cleanup", "cache_cleanup", _handle_cache_cleanup, methods=["POST"])

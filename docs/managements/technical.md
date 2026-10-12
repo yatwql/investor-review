@@ -64,6 +64,7 @@
   - [6.5 代码类型判定中心化](#65-代码类型判定中心化)
   - [6.6 HTTP 客户端统一](#66-http-客户端统一)
   - [6.7 功能语义命名表](#67-功能语义命名表)
+  - [6.8 报告对话式追问](#68-报告对话式追问)
 - [7. 模块间依赖关系](#7-模块间依赖关系)
 - [8. 架构设计约束](#8-架构设计约束)
   - [8.1 数据获取层约束](#81-数据获取层约束)
@@ -3344,6 +3345,10 @@ make_http_client(timeout=10.0) → httpx.Client
 <!-- semantic-index:start -->
 | 语义 slug | 中文名（文档/UI） | 归入章节 | 决策链环节 | config 开关 |
 |:--|:--|:--|:--|:--|
+| `report_qa` | 报告对话式追问（报告页内对本期报告的会话式问答；独立 `qa/` 子包 + 实验开关，三端同源、默认关） | 报告对话式追问 | 内容生成 | `features.json → report_qa` |
+| `report_qa_context` | 追问上下文提取（报告 HTML → 分层截断文本 + 表头名映射持仓基线 + 生成条件声明；锚点单文件收敛、零取数） | 报告对话式追问 | 内容生成 | 无 |
+| `report_qa_session` | 追问会话服务（内存会话表带上限淘汰 / 轮数与输入双上限 / 用量独立记账；`QaSession` + `create_report_qa_session`，编排入口 `ask_report_qa`） | 报告对话式追问 | 内容生成 | 无 |
+| `report_qa_ask` | 追问问答路由（POST /api/qa/ask 校验矩阵与信封，`_handle_report_qa_ask`，开关关 403） | 报告对话式追问 | 报告输出 | 无 |
 | `chain_overrides` | 调用级数据源覆盖上下文（本次运行指定首选/排除源；只排序与过滤，不绕过熔断与凭据就绪预检） | 数据源 | 数据获取 | 无 |
 | `load_comparison_baseline` | 环比比对基线（跨交易日最新一份快照：同一交易日多次运行跳过，环比 diff 与快照差异摘要共用） | 投资分析汇总 | 监控 | 无 |
 | `trading_day_as_of` | 时点交易日归属（盘前 <9:30 归前一交易日、节假日按日历回溯；`get_last_trading_day` 委托同口径） | 数据源 | 数据获取 | 无 |
@@ -3543,6 +3548,20 @@ make_http_client(timeout=10.0) → httpx.Client
 
 ---
 
+### 6.8 报告对话式追问
+
+> 定位：读者在 HTML 报告页内对**本期报告**的会话式问答（实验开关 `report_qa`，默认关，见 requirements.md §6.17）。独立子包 `qa/` 而非并入 `llm/`——追问是「面向报告的服务」而非 LLM 报告模块：不进 `_MODULE_FNS`/模块注册（无模块缓存条目、无指纹、不参与报告模块状态标签），但其调用仍经 `llm/api.call_llm` 的 Provider Chain 路由与合规漏斗。依赖方向单向 `qa → llm`（api / markdown / fact_checker），`llm` 不感知 `qa`；回答用量独立记账，不写报告周期 LLM 用量统计。
+
+- **模块划分**：`qa/context.py`（`extract_report_qa_context`：`sec-*` 锚点分章 + 汇总/LLM 章全文、数据章摘要、整体字符上限三层截断 + 表头名映射持仓基线 + 生成条件声明；解析锚点收敛单文件，模板契约变更唯一同步点，失败显式报错不静默给错误上下文）；`qa/session.py`（`QaSession` 会话态 + `create_report_qa_session` 会话表登记/淘汰 + `ask_report_qa` 唯一编排入口：历史折叠、轮数与输入双上限、用量记账、事实核对、Markdown 渲染）；`web/handlers.py::_handle_report_qa_ask`（POST /api/qa/ask 校验矩阵与状态码映射）；`partials/report_qa_section.html`（报告尾部区块，JS 内嵌自包含，同源 fetch + `file://` 降级引导，样式全取报告既有 token）。
+- **数据流**：报告文件名（前端取自当前页 URL basename）→ 上下文（只读报告 HTML，零新增取数）→ system（边界规则 + 生成条件声明 + 本期报告内容）+ 最近 6 次问答历史（更早折叠为问题清单）+ 当前问题 → `call_llm` → `markdown_to_html` → `run_fact_check`（只检不改，警示不阻断）→ 统一信封返回。
+- **渲染期纪律**：会话态只活在 `qa/session.py` 服务内（进程内存、线程锁保护）；开关态经 `_render_template` 的 render context（`report_qa_enabled`）传递，不写 `_ENV.globals`；关闭时主模板 include 整体处于条件分支内，报告字节不变（实验项默认关、关闭时产物不变）。
+- **安全与日志**：report 参数三层同语义净化（路由/会话/上下文：basename + `.html` + 禁 `..` 与路径分隔符）；上下文在内存传递不落盘；日志只记会话 id、轮数、问题前 20 字与 token 数，不含上下文与回答正文。
+- **设计定稿与验证**：[报告对话式追问设计方案](../plan/report-followup-qa-design.md)；测试载体见 testplan.md §2.1（R-QA-01~09，批 13）。
+
+[↑ 回到顶部](#目录)
+
+---
+
 ## 7. 模块间依赖关系
 
 ```
@@ -3597,6 +3616,11 @@ llm/ (LLM 集成)
   → llm/generators_orchestrator.py → skeleton.py → api.py → api_base.py
   → llm/prompts.py / fingerprint.py / pricing.py / session.py
   → cache/ (LLM 结果缓存)
+
+qa/ (报告对话式追问，依赖方向 qa → llm 单向)
+  → qa/context.py → 报告 HTML 文件（只读，零取数）
+  → qa/session.py → llm/api.py (call_llm) / llm/markdown.py / llm/fact_checker.py
+  → web/handlers.py::_handle_report_qa_ask (POST /api/qa/ask 开关门与校验矩阵)
 
 tui/handlers_*.py (TUI 命令)
   → orchestrator.py 或 cache/operations.py (委托业务逻辑)
@@ -4018,7 +4042,7 @@ investor-util/
 | `llm_settings.json`（非敏感 LLM 设置） | `_llm_settings_defaults._DEFAULT_LLM_SETTINGS`（全局 2 项 + 5 模块块 + 辩论 + 事实校验 + 计价） | `_llm_settings_defaults._get_default_llm_settings_template()`（逐行手拼，与 dict 深等，见一致性测试） | `_llm_settings.get_llm_config()`：合并 settings+key+providers 三文件，联合 mtime/size 失效；`_merge_llm_defaults()` 运行时按 `_DEFAULT_LLM_SETTINGS` 补齐缺失键 | `_ensure_llm_settings_file()` 自动创建（`init_config()` 级联） | 无程序化写入（用户手动编辑；`_ensure_llm_settings_file` 仅首次创建） | `llm/pricing.py`（计价覆盖）、`llm/generators.py`、`llm/generators_orchestrator.py`、`llm/prompts_action.py`、`llm/skeleton.py`、`report/news_correlation.py`、`cli/cli.py`、`tui/tui_menu.py` + `tui/handlers_config.py`、`config/_validation.py` |
 | `llm_key.json`（敏感凭据） | 无（**C18 凭据分离**，代码默认值禁止内置 api_key） | 无模板 | `_llm_providers._load_llm_key_credentials()`（多凭据块字典；单凭据 flat 自动升级为 `_default`）；`get_llm_config()` 内联读取并合并覆盖同名字段（provider/endpoint 合法性告警） | 不自动创建；缺失时 `get_llm_config()` 回退判断 providers 链模式，两者皆无则 LLM 不可用（`generators_orchestrator` 降级占位） | `startup_wizard._write_llm_key_flat()`（首次引导交互式写入，C3 原子写） | `get_llm_config()` 合并主体；`_load_llm_key_credentials()` → providers 链 `credentials_ref` 凭据注入 |
 | `llm_providers.json`（多 Provider 链） | `_llm_providers_defaults._DEFAULT_LLM_PROVIDERS`（strategy=priority + 2 条示例链） | `_llm_providers_defaults._get_default_llm_providers_template()` | `_llm_providers._load_llm_providers()`（原始 JSON，根非 object/解析失败返回 None）；`get_llm_config()` 链模式（无 llm_key.json 时直接注入链数据）；`_inject_provider_chain_data()` 注入多链路由结果 | `_core._ensure_llm_providers_file()` 自动创建（`init_config()` 级联） | 无程序化写入（用户手动编辑 / init 自动创建） | `get_llm_config()`（链模式无 key 依赖）；`startup_wizard.py`（就绪检查：key 存在 或 providers 有链）；`_inject_provider_chain_data` |
-| `features.json`（Feature Flag 覆写） | `features.feature_switch_registry`（30 项声明，每条含显示名 + 说明 + 分组 + 默认值 + 是否改变产物五项；`_FEATURE_FLAGS_DEFAULT` 是其**派生投影**，非独立登记点）。实验组 1（决策反思，默认关）+ 常规组 9（确定性信号 1 + 景气度框架诊断 1 + 模块质量分级 1 + 决策头结构化 1 + 数据源凭据就绪 1 + 量化指标显示 1 + 交互图表 1 + 系统自检 1 + 数据源适配 1，默认开；联接基金穿透已内置恒开、无开关）+ 报告组 20（正反辩论 / 条件推理 / 因子目录 / 调仓纪律回放（以上四项为实验转正，追加块首） / 持仓变动复盘 / What-if 交易成本 / 事件窗量化对照 / 数据质量 / 市场温度 / 行业 Beta / 候选比较 / 成本流水 / 估值分位 / 财报摘要 / 市场情绪 / 财务指标 / 申购限购 / 风险调整超额 / 危机回放 / 本期要点与环比对照，4 项默认开（条件推理/数据质量/市场温度/申购限购））；分组即面板分块，决定该开关是否上屏与是否进产物自述（实验组 ∧ `affects_report`）；**只登记有消费者的开关**——LLM 模块启停与基金深度分析归 `llm_settings.json` 的 `enabled_llm`，新闻源 / 历史走势 / 匿名化归 `config.json`，这些能力不再在 features.json 另立同义开关，由 `test_features.py::TestRegistryLiveness` 逐项守住；命令行一次性开关见 `features.resolve_experiment_flags` / `describe_experiment_flags`（`--experiment`，实验组、只开）与 `features.parse_switch_override` / `resolve_switch_values` / `describe_switches`（`--feature NAME=VALUE`，全域、双向），两者与注册表同源 | 无模板（缺省全量在代码内，文件仅存需覆写的子集） | `features.load_feature_overrides()`（模块导入时自动调用，覆写合并进内存 `FEATURE_FLAGS`；无消费者键仍加载、但合并为一条 WARNING 列出键名——这类配置不驱动任何行为，静默忽略会让用户以为已生效；非 bool 值忽略） | **惰性创建**：缺失不创建、直接走代码默认；仅 `save_feature_overrides()` 时才写盘 | `features.save_feature_overrides()`（原子写，`merge=True` 默认合并同名覆写）；TUI `handlers_config.py`（菜单开关持久化）+ Web `web/config_edit.py`（配置面板写入，白名单由注册表生成） | `is_feature_enabled()` 遍布：`llm/generators_singletons.py` + `generators_orchestrator.py`（辩论模式）、`report/_report_generation.py` + `report/_chart_dataset_factory.py`（交互图表 / 量化指标总开关 / 本期要点与环比对照）、`report/_debate_utils.py`、`core/decision_ledger.py`（决策跨期反思闭环）、`llm/prompts_signals.py`（信号预消化，开关判定收敛于缓存后缀函数）、`report/llm_quality.py`（模块质量分级，§4.11）、`core/decision_header.py`（决策头结构化缓存后缀，§4.15）、`core/signal_ledger.py`（确定性信号沉淀，开关判定收敛于摘要函数，§4.16）、`core/doctor.py`（系统自检功能清单上屏，§4.17.3）、`web/handlers.py`（自检卡片可见性，§4.17.3）、`analysis/circuit_breaker_wrapper.py`（量化指标总开关联动的熔断特性开关）、`tui/handlers_config.py`（菜单状态）、`tui/tui_menu.py`（菜单项门控）、`web/config_edit.py`（面板状态） |
+| `features.json`（Feature Flag 覆写） | `features.feature_switch_registry`（31 项声明，每条含显示名 + 说明 + 分组 + 默认值 + 是否改变产物五项；`_FEATURE_FLAGS_DEFAULT` 是其**派生投影**，非独立登记点）。实验组 2（决策反思 + 报告对话式追问，默认关）+ 常规组 9（确定性信号 1 + 景气度框架诊断 1 + 模块质量分级 1 + 决策头结构化 1 + 数据源凭据就绪 1 + 量化指标显示 1 + 交互图表 1 + 系统自检 1 + 数据源适配 1，默认开；联接基金穿透已内置恒开、无开关）+ 报告组 20（正反辩论 / 条件推理 / 因子目录 / 调仓纪律回放（以上四项为实验转正，追加块首） / 持仓变动复盘 / What-if 交易成本 / 事件窗量化对照 / 数据质量 / 市场温度 / 行业 Beta / 候选比较 / 成本流水 / 估值分位 / 财报摘要 / 市场情绪 / 财务指标 / 申购限购 / 风险调整超额 / 危机回放 / 本期要点与环比对照，4 项默认开（条件推理/数据质量/市场温度/申购限购））；分组即面板分块，决定该开关是否上屏与是否进产物自述（实验组 ∧ `affects_report`）；**只登记有消费者的开关**——LLM 模块启停与基金深度分析归 `llm_settings.json` 的 `enabled_llm`，新闻源 / 历史走势 / 匿名化归 `config.json`，这些能力不再在 features.json 另立同义开关，由 `test_features.py::TestRegistryLiveness` 逐项守住；命令行一次性开关见 `features.resolve_experiment_flags` / `describe_experiment_flags`（`--experiment`，实验组、只开）与 `features.parse_switch_override` / `resolve_switch_values` / `describe_switches`（`--feature NAME=VALUE`，全域、双向），两者与注册表同源 | 无模板（缺省全量在代码内，文件仅存需覆写的子集） | `features.load_feature_overrides()`（模块导入时自动调用，覆写合并进内存 `FEATURE_FLAGS`；无消费者键仍加载、但合并为一条 WARNING 列出键名——这类配置不驱动任何行为，静默忽略会让用户以为已生效；非 bool 值忽略） | **惰性创建**：缺失不创建、直接走代码默认；仅 `save_feature_overrides()` 时才写盘 | `features.save_feature_overrides()`（原子写，`merge=True` 默认合并同名覆写）；TUI `handlers_config.py`（菜单开关持久化）+ Web `web/config_edit.py`（配置面板写入，白名单由注册表生成） | `is_feature_enabled()` 遍布：`llm/generators_singletons.py` + `generators_orchestrator.py`（辩论模式）、`report/_report_generation.py` + `report/_chart_dataset_factory.py`（交互图表 / 量化指标总开关 / 本期要点与环比对照）、`report/_debate_utils.py`、`core/decision_ledger.py`（决策跨期反思闭环）、`llm/prompts_signals.py`（信号预消化，开关判定收敛于缓存后缀函数）、`report/llm_quality.py`（模块质量分级，§4.11）、`core/decision_header.py`（决策头结构化缓存后缀，§4.15）、`core/signal_ledger.py`（确定性信号沉淀，开关判定收敛于摘要函数，§4.16）、`core/doctor.py`（系统自检功能清单上屏，§4.17.3）、`web/handlers.py`（自检卡片可见性，§4.17.3 + 报告对话式追问路由门 `_handle_report_qa_ask`）、`analysis/circuit_breaker_wrapper.py`（量化指标总开关联动的熔断特性开关）、`tui/handlers_config.py`（菜单状态）、`tui/tui_menu.py`（菜单项门控）、`web/config_edit.py`（面板状态） |
 
 ##### I.1.1 解析职责归属（协调者 vs 委托）
 

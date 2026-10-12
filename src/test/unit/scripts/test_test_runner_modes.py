@@ -59,6 +59,7 @@ class TestDevVerifySinglePhaseMerge:
         "unit_analysis",
         "unit_scripts",
         "unit_web",
+        "unit_qa",
         "unit_report",
     )
 

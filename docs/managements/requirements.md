@@ -993,6 +993,22 @@ LLM 五维度量化评分，每项满分 100：
 | R-EW-05 | 双端单源：契约 → `build_event_impact_view` 预格式化视图（列头 / 摘要行 / 事件行 / 降级行 / 口径标注全为字符串），Excel 端为财经新闻页签尾部区块、HTML 端为新闻章内 `event_impact_section.html` partial，双端消费同一份 view（逐字节同文）；口径标注与事件表双端同现，数据不足时双端同写占位 |
 | R-EW-06 | LLM 附录：分歧例提示词块只收「比对 = 分歧」行（与报告事件表同源；无分歧或契约缺席 → 空串，附录零贡献）契约构建期渲染一次，经统一 prompt 附录随全部 LLM 分析章携带（`extract_event_impact_block`）；进提示词必进指纹（块非空改变各模块缓存键、空串与不含该段逐字节一致） |
 
+### 6.17 报告对话式追问（报告页内会话式问答，默认关）
+
+> 报告尾部新增「报告追问（⚗ 实验）」交互区块：读者针对**本期报告内容**发起多轮提问，回答基于当期报告 HTML 反解析的上下文 + 会话内历史。功能开关 `report_qa`（实验组、默认关、影响产物）控制——关闭时区块不渲染（报告字节与引入前一致）、问答路由 403；开启时进入页脚实验自述清单（`affects_report` 口径）。服务端为独立子包 `qa/`（`context` 上下文提取 + `session` 会话服务），Web 路由 `report_qa_ask`（POST /api/qa/ask）承载传输；依赖方向 `qa → llm` 单向（仅经 `llm/api.call_llm` 既有 Provider Chain 与合规漏斗、`llm/markdown` 渲染、`llm/fact_checker` 核对，不进 LLM 模块注册、无模块缓存与指纹），零新增取数（只读报告 HTML）。TUI 追问入口（阶段 4）后续批次登记。
+
+| 需求标识 | 需求描述 |
+|:---------|:---------|
+| R-QA-01 | 开关门控：`report_qa` 登记实验组（默认关、影响报告产物）三端同源（TUI `[S]` / Web 配置面板 / CLI `--experiment`）；关闭 → 追问区块不渲染（主模板 include 整体处于 `report_qa_enabled` 分支内，报告字节不变）且 `/api/qa/ask` 返回 403（error_code `QA_DISABLED`）；开启 → 区块渲染并进入页脚实验自述清单 |
+| R-QA-02 | 上下文提取（`qa/context.py`，语义 `report_qa_context`）：只读 output_dir 下报告 HTML（零新增取数、不触数据源链路）；按 `div.section[id^=sec-]` 锚点分章，汇总与 LLM 章全文、其余数据章摘要、整体字符上限三层截断（截断带声明标记）；持仓明细表按**表头名**映射为基线（可选列增减不受影响、合计行按空代码剔除）；`<title>` 与汇总时间行构成生成条件声明 |
+| R-QA-03 | 上下文失败显式报错（不静默给错误上下文）：路径非法 → `QA_BAD_REPORT`、报告文件缺失 → `QA_REPORT_NOT_FOUND`、章锚点全缺失 → `QA_CONTEXT_INVALID`（「无法解析该报告结构，追问不可用」）；失败发生在消耗会话轮次之前，路径净化三层同语义（路由/会话/上下文） |
+| R-QA-04 | 会话服务（`qa/session.py`，语义 `report_qa_session`）：内存会话表带上限淘汰（超限按最久未用），同报告复用会话、换报告或未知 session_id 一律新建（防上下文串味）；同会话执行锁串行、跨会话并行；轮数硬上限（默认 10）→ `QA_SESSION_LIMIT` 显式提示，输入 token 软上限 → `QA_INPUT_CAP_EXCEEDED`；LLM 未配置 → `QA_LLM_UNAVAILABLE`、未产出有效回答 → `QA_LLM_FAILED`（失败不消耗轮次） |
+| R-QA-05 | 提示装配与历史：system = 边界规则（只答本期报告、不做仓位建议、不全市场筛选、报告外不编造）+ 生成条件声明 + 本期报告内容；历史取最近 6 次问答进 prompt、更早折叠为「仅问题」清单；历史存 Markdown 纯文本（去 HTML），上下文与回答正文不入日志 |
+| R-QA-06 | 回答渲染与质量核对：Markdown 经 `llm/markdown.markdown_to_html` 渲染（与报告 LLM 章同口径）；`run_fact_check(auto_correct=False)` 只检不改，summary 含 ⚠ 时回答尾部追加 `qa-fact-warning` 标注，核对异常降级返回原文不阻断；每答附「基于报告生成时的数据（非实时），仅供参考，不构成操作建议」尾注 |
+| R-QA-07 | Web 路由（语义 `report_qa_ask`，POST /api/qa/ask）：校验矩阵——开关关 403 / report 参数净化（basename、`.html`、禁 `..` 与路径分隔符）、session_id 类型、问题缺失与超长 400 / 报告缺失与结构不可解析 404 / LLM 全链失败 503 / 成功 200；响应统一信封，error_code 机器可判 |
+| R-QA-08 | 用量独立记账：`QaSession.usage`（input/output tokens + provider）按轮累计返回前端；追问不写报告周期 LLM 用量统计（`qa` 不依赖 `llm.session`，源码级断言守护）；日志只记会话 id、轮数、问题前 20 字与 token 数 |
+| R-QA-09 | 报告页区块（`partials/report_qa_section.html`）：开态在报告尾部渲染输入/发送/多轮消息/状态条（空态「输入问题开始追问」、进行态、失败态「服务暂不可用」、上限态）与剩余轮次 + 累计用量；同源 `fetch("/api/qa/ask")`，`file://` 直开降级为「经 Web 工作台打开报告后可使用追问」引导（零 CORS 机制）；样式全取报告既有 token（断点 768px、打印隐藏）；`report_qa_enabled` 经 render context 传递、不写模板 globals |
+
 ## 7. LLM 智能分析
 
 ### 7.1 概述
@@ -1392,9 +1408,9 @@ LLM 五维度量化评分，每项满分 100：
 
 ### 11.5 features.json（功能开关注册表）
 
-独立配置文件，提供 30 项功能开关的运行时覆写。不配置时全部使用代码内置默认值。开关分**实验组**（1 项，默认关，面板以 ⚗ 标识；仅 `decision_reflection`，其余验证通过的开关已转正出组）、**常规组**（9 项，默认开）与**报告章节与增强组**（20 项，多数默认关，`llm_debate_conditional`/`data_quality`/`market_temperature`/`fund_purchase_limit` 四项默认开）三块，分组表达「生命周期的当前状态」而非优先级——**转正**即把声明移出实验组（常驻读侧增强入常规组、默认值改 `true`；章节/页签类入报告章节与增强组、默认值保持关），面板可见性随分组自动延续。三组在 TUI 菜单 `[S]` / Web 配置面板 / CLI（`--experiment` 实验组简写、`--feature NAME=VALUE` 全域双向）中**同样可切换**；唯一登记点是 `config/features.py::feature_switch_registry`（显示名/说明/分组/默认值/产物影响五字段），渠道层不得另写清单。仅收录「有消费者」的开关——LLM 模块启停与基金深度分析（`llm_settings.json` 的 `enabled_llm`）、新闻源（`config.json` 的 `news_sources`）、历史走势与回撤（`config.json` 的 `enable_history`）、匿名化模式（`config.json` 的 `anonymization.mode`）各有归属配置，不在此文件。
+独立配置文件，提供 31 项功能开关的运行时覆写。不配置时全部使用代码内置默认值。开关分**实验组**（2 项，默认关，面板以 ⚗ 标识；`decision_reflection` 与 `report_qa`，其余验证通过的开关已转正出组）、**常规组**（9 项，默认开）与**报告章节与增强组**（20 项，多数默认关，`llm_debate_conditional`/`data_quality`/`market_temperature`/`fund_purchase_limit` 四项默认开）三块，分组表达「生命周期的当前状态」而非优先级——**转正**即把声明移出实验组（常驻读侧增强入常规组、默认值改 `true`；章节/页签类入报告章节与增强组、默认值保持关），面板可见性随分组自动延续。三组在 TUI 菜单 `[S]` / Web 配置面板 / CLI（`--experiment` 实验组简写、`--feature NAME=VALUE` 全域双向）中**同样可切换**；唯一登记点是 `config/features.py::feature_switch_registry`（显示名/说明/分组/默认值/产物影响五字段），渠道层不得另写清单。仅收录「有消费者」的开关——LLM 模块启停与基金深度分析（`llm_settings.json` 的 `enabled_llm`）、新闻源（`config.json` 的 `news_sources`）、历史走势与回撤（`config.json` 的 `enable_history`）、匿名化模式（`config.json` 的 `anonymization.mode`）各有归属配置，不在此文件。
 
-下表列常用开关（**非全集**，完整 30 项与分组清单见配置指引 `how-to-config.md` 功能开关节）：
+下表列常用开关（**非全集**，完整 31 项与分组清单见配置指引 `how-to-config.md` 功能开关节）：
 
 | 开关名 | 类型 | 默认值 | 说明 |
 |:-------|:----:|:------:|:-----|

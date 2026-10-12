@@ -163,7 +163,7 @@
 
 单元测试按被测模块分组，通过 **父子双层 marker** 实现灵活筛选：
 
-- **父标记 `unit`** 匹配全部 12 个已注册 `unit_*` 子标记（providers/fetcher/llm/news/report/config/core/cli/ui/analysis/scripts/web，其中 `unit_web` 为 Web 入口层），用于全量单元测试运行（`-m "unit"`）
+- **父标记 `unit`** 匹配全部 13 个已注册 `unit_*` 子标记（providers/fetcher/llm/news/report/config/core/cli/ui/analysis/scripts/web/qa，其中 `unit_web` 为 Web 入口层、`unit_qa` 为报告对话式追问），用于全量单元测试运行（`-m "unit"`）
 - **子标记**如 `unit_providers`、`unit_fetcher`、`unit_llm` 等支持单独运行指定模块的测试（`-m "unit_providers"`）
 - 新增单元测试文件时，必须为其测试类标注子标记和父标记，缺一不可
 
@@ -647,6 +647,15 @@
 | R-EW-04 | `src/test/unit/report/test_event_impact_wiring.py` + `src/test/unit/report/test_excel_generator.py` | 批 11 |
 | R-EW-05 | `src/test/unit/report/test_event_impact_wiring.py` + `src/test/unit/report/test_event_impact_panel.py` | 批 11 |
 | R-EW-06 | `src/test/unit/llm/test_event_impact_injection.py` + `src/test/unit/llm/test_module_fingerprint.py` | 批 11 |
+| R-QA-01 | `src/test/unit/report/test_report_qa_partial.py` + `src/test/unit/qa/test_report_qa_ask.py` | 批 13 |
+| R-QA-02 | `src/test/unit/qa/test_report_qa_context.py` | 批 13 |
+| R-QA-03 | `src/test/unit/qa/test_report_qa_context_edge.py` + `src/test/unit/qa/test_report_qa_session_edge.py` | 批 13 |
+| R-QA-04 | `src/test/unit/qa/test_report_qa_session.py` + `src/test/unit/qa/test_report_qa_session_edge.py` | 批 13 |
+| R-QA-05 | `src/test/unit/qa/test_report_qa_session.py` | 批 13 |
+| R-QA-06 | `src/test/unit/qa/test_report_qa_session.py` | 批 13 |
+| R-QA-07 | `src/test/unit/qa/test_report_qa_ask.py` | 批 13 |
+| R-QA-08 | `src/test/unit/qa/test_report_qa_session.py` | 批 13 |
+| R-QA-09 | `src/test/unit/report/test_report_qa_partial.py` | 批 13 |
 <!-- requirement-trace:end -->
 ---
 

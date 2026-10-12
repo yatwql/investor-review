@@ -1158,6 +1158,11 @@ window.drawSimpleChart = function(canvasId, a, b, c) {
     <!--  LLM API Usage -->
     {% include "partials/llm_usage_section.html" with context %}
     {% endif %}
+    {% if report_qa_enabled %}
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  报告追问（实验，report_qa；关态本分支不渲染，产物字节不变） -->
+    {% include "partials/report_qa_section.html" with context %}
+    {% endif %}
     <!--  FOOTER                                                -->
     <!-- ═══════════════════════════════════════════════════════ -->
     <div class="report-footer" style="text-align: center; padding: 14px 20px; color: var(--text-faint); font-size: var(--fs-table-sm);">

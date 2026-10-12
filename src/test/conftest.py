@@ -61,6 +61,7 @@ _KNOWN_MARKERS: set[str] = {
     "unit_analysis",
     "unit_scripts",
     "unit_web",
+    "unit_qa",
     # 跨领域标记
     "llm",
     "edge",
@@ -136,6 +137,7 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "unit_analysis: 分析计算模块单元测试（流动性/再平衡/汇率/无风险利率）")
     config.addinivalue_line("markers", "unit_scripts: scripts/ 工程脚本单元测试（历史痕迹检查/版本一致性等）")
     config.addinivalue_line("markers", "unit_web: Web 入口（src/python/web/）单元测试")
+    config.addinivalue_line("markers", "unit_qa: 报告对话式追问（src/python/qa/）单元测试")
     config.addinivalue_line("markers", "llm: LLM 相关测试（全部 mock，无需 API key）")
     config.addinivalue_line("markers", "edge: 边缘/异常场景测试 — 必须放在 *_edge.py 文件中，不得与普通测试混搭")
     config.addinivalue_line("markers", "smoke: 冒烟测试（快速验证核心功能）")
@@ -349,6 +351,20 @@ def _auto_reset_run_manager():
     from src.python.web.runs import reset_run_manager
 
     reset_run_manager()
+
+
+@pytest.fixture(autouse=True)
+def _auto_reset_report_qa_sessions():
+    """自动清空报告追问会话表（qa/session 模块级内存态），防止测试间串会话。
+
+    会话含问答历史/轮数/用量，泄漏会污染后续用例的会话复用与轮数断言；
+    与 _auto_reset_run_manager 同模式（额外带 teardown 双保险）。
+    """
+    from src.python.qa.session import reset_report_qa_sessions
+
+    reset_report_qa_sessions()
+    yield
+    reset_report_qa_sessions()
 
 
 @pytest.fixture(autouse=True)

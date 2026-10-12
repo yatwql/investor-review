@@ -83,6 +83,7 @@ UNIT_SUBS: tuple[str, ...] = (
     "unit_ui",
     "unit_scripts",
     "unit_web",
+    "unit_qa",
 )
 SCEN_SUBS: tuple[str, ...] = (
     "scenario_basic",

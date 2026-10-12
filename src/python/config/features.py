@@ -114,6 +114,15 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         False,
         True,
     ),
+    # ── 实验性功能：报告对话式追问（报告页同源问答、默认关；
+    #    消费点：web/handlers._handle_report_qa_ask（403 门）+ 报告模板追问区块 ──
+    "report_qa": FeatureSwitchDef(
+        "报告对话式追问",
+        "报告页内针对本期报告的会话式追问（零新增取数、轮数上限、用量独立记账）",
+        GROUP_EXPERIMENTAL,
+        False,
+        True,
+    ),
     # ── 常规开关：确定性信号（实时注入 + 跨期沉淀双面，账本已有真实积累故转正合并） ──
     "deterministic_signal": FeatureSwitchDef(
         "确定性信号模块",

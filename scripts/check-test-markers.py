@@ -50,6 +50,7 @@ EXPECTED_DIR_MARKERS: dict[str, set[str]] = {
     "unit/llm": {"unit", "unit_llm", "llm"},
     "unit/news": {"unit", "unit_news"},
     "unit/providers": {"unit", "unit_providers"},
+    "unit/qa": {"unit", "unit_qa"},
     "unit/report": {"unit", "unit_report"},
     "unit/scripts": {"unit", "unit_scripts"},
     "unit/startup": {"unit", "unit_ui"},

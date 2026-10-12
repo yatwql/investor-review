@@ -196,28 +196,28 @@ JSON {answer_html, usage, remaining_turns} → 报告页内嵌会话区渲染
 
 - 交付：`src/python/qa/`（`__init__.py` / `context.py` / `session.py`）+ `web/handlers.py::_handle_qa_ask` + `features.py` 开关登记 + 单元测试（`src/test/unit/qa/`）。
 - **验收标准**：
-  - [ ] `pytest src/test/unit/qa/` 全绿，覆盖：上下文提取（HTML→文本/截断策略/锚点缺失显式失败）、会话轮数上限、同 report 复用/换 report 重建、token 软上限降级、LLM 失败降级占位、事实校验失败不阻断、并发会话隔离（多线程 smoke）；
-  - [ ] 追问链路零外部取数（网络守卫 `conftest._block_external_network` 下通过，漏 mock 即硬失败）；
-  - [ ] `_handle_qa_ask` 校验矩阵：缺参/非法 report（路径穿越尝试）/开关关闭/question 超长 → 明确错误码（400/404/403）；
-  - [ ] `call_llm` 在所有测试中 mock（真实调用零容忍）；新测试文件带 marker（`unit_qa` 注册进 `conftest.py`）；
-  - [ ] ruff check/format 干净、`check-file-length` 通过、无任务编号入代码标识符与注释。
+  - [x] `pytest src/test/unit/qa/` 全绿，覆盖：上下文提取（HTML→文本/截断策略/锚点缺失显式失败）、会话轮数上限、同 report 复用/换 report 重建、token 软上限降级、LLM 失败降级占位、事实校验失败不阻断、并发会话隔离（多线程 smoke）；
+  - [x] 追问链路零外部取数（网络守卫 `conftest._block_external_network` 下通过，漏 mock 即硬失败）；
+  - [x] `_handle_qa_ask` 校验矩阵：缺参/非法 report（路径穿越尝试）/开关关闭/question 超长 → 明确错误码（400/404/403）；
+  - [x] `call_llm` 在所有测试中 mock（真实调用零容忍）；新测试文件带 marker（`unit_qa` 注册进 `conftest.py`）；
+  - [x] ruff check/format 干净、`check-file-length` 通过、无任务编号入代码标识符与注释。
 
 ### 阶段 2：报告页前端区块
 
 - 交付：`partials/report_qa_section.html` + `html_writer.py` context 接线 + JS 内嵌（同源 fetch / `file://` 降级探测）+ 样式契约遵守。
 - **验收标准**：
-  - [ ] 开关关 → 区块不渲染、报告 HTML 字节与开关引入前一致（关态不变回归测试）；
-  - [ ] 开关开 → 区块渲染（模板快照测试）；`report_qa_enabled` 经 render context 传递（无 globals 写入断言）；
-  - [ ] 问答流程手测项（文档化）：工作台打开 → 提问 → 回答/剩余轮数渲染 → 超限提示；`file://` 打开 → 引导文案；
-  - [ ] 空态/失败态文案遵守 `DESIGN.md` Data States 口径；`test_design_doc.py` 契约测试通过。
+  - [x] 开关关 → 区块不渲染、报告 HTML 字节与开关引入前一致（关态不变回归测试）；
+  - [x] 开关开 → 区块渲染（模板快照测试）；`report_qa_enabled` 经 render context 传递（无 globals 写入断言）；
+  - [x] 问答流程手测项（文档化）：工作台打开 → 提问 → 回答/剩余轮数渲染 → 超限提示；`file://` 打开 → 引导文案；
+  - [x] 空态/失败态文案遵守 `DESIGN.md` Data States 口径；`test_design_doc.py` 契约测试通过。
 
 ### 阶段 3：端到端接线 + 文档
 
 - 交付：Web 冒烟测试 + `manuals/how-to-use-web-mode.md` 追问章节 + `technical.md`（语义命名表 4 行登记 + 新章节）+ `llm-technical.md` 交叉引用 + `changelog.md` + `folders.md` 目录树 + `testplan.md` 用例计数。
 - **验收标准**：
-  - [ ] Web 冒烟：mock LLM 下完整「提问→回答→多轮→超限提示→刷新重建」流程；
-  - [ ] 语义命名表登记 4 slug，`check-semantic-index` 正反向一致；
-  - [ ] 文档十守护（钩子）通过：doc-drift（目录树/统计）/doc-links/version-consistency 全绿。
+  - [x] Web 冒烟：mock LLM 下完整「提问→回答→多轮→超限提示→刷新重建」流程；
+  - [x] 语义命名表登记 4 slug，`check-semantic-index` 正反向一致；
+  - [x] 文档十守护（钩子）通过：doc-drift（目录树/统计）/doc-links/version-consistency 全绿。
 
 ### 阶段 4：TUI 追问入口（增量）
 

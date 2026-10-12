@@ -276,11 +276,13 @@ def _render_template(
     | None = None,  # 本期要点与环比对照契约（报告增强开关 summary_highlights，None=首屏块隐藏）
 ) -> str:
     """渲染 Jinja2 模板并返回 HTML。"""
-    from src.python.config.features import enabled_experimental_features
+    from src.python.config.features import enabled_experimental_features, is_feature_enabled
     from src.python.report.chart_data_builder import build_evolution_chart_data
 
     # 实验功能清单：产物须自述生成条件（页脚）；零开关时为空列表，页脚不出现该行
     enabled_experiments = [name for _flag, name in enabled_experimental_features()]
+    # 报告追问区块开关态：经 render context 传递（不写模板 globals）；关态模板分支不渲染，报告字节不变
+    report_qa_enabled = is_feature_enabled("report_qa")
 
     # 估值分位 + 市场温度：开关关闭时为 None（模板保持既有输出）
     valuation_enabled = valuation_data is not None
@@ -349,6 +351,7 @@ def _render_template(
         debate_info=debate_info,
         debate_mode_combination=_debate_mode_combination,
         enabled_experiments=enabled_experiments,
+        report_qa_enabled=report_qa_enabled,
         section_order=order,
         section_numbers=section_numbers,
         section_visible_dict=section_visible_dict,
