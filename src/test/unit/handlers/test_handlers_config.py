@@ -384,7 +384,7 @@ class TestReportGroupMovedToSwitchPanel:
 
 
 class TestConfigDirInfoSubmenu:
-    """[D] 配置目录信息子菜单：二级选项分发、返回与无效输入。"""
+    """[D] 查看配置与目录信息子菜单：二级选项分发、返回与无效输入。"""
 
     @patch("builtins.input")
     @patch("src.python.tui.handlers_config._cmd_config_output_dir")

@@ -63,7 +63,7 @@ class TestTuiRouting(unittest.TestCase):
         self.assertSetEqual(keys, expected)
 
     def test_config_dir_info_routes_to_submenu(self):
-        """D 键路由到配置目录信息子菜单处理器。"""
+        """D 键路由到查看配置与目录信息子菜单处理器。"""
         from src.python.tui.tui import _bind_callbacks
         from src.python.tui.tui_menu import MENU_ITEMS
 

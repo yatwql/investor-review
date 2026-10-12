@@ -48,6 +48,14 @@ class TestMenuItems(unittest.TestCase):
         """菜单项应为 19 个（含受开关约束的 [T] 系统自检与 [Q] 报告追问；[C]/[F]/[O] 已聚合到 [D] 子菜单）。"""
         self.assertEqual(len(MENU_ITEMS), 19)
 
+    def test_labels_within_display_budget(self) -> None:
+        """菜单标签显示宽 ≤ 48（渲染前缀 7 列，80 列终端不折行，东亚宽度口径）。"""
+        import unicodedata
+
+        for key, label, _cb, _ex in MENU_ITEMS:
+            width = sum(2 if unicodedata.east_asian_width(ch) in "WF" else 1 for ch in label)
+            self.assertLessEqual(width, 48, f"[{key}] 标签显示宽 {width} 超预算: {label}")
+
     def test_whatif_item(self) -> None:
         """What-if 菜单项在报告生成组后（第 4 项，快捷键 W）。"""
         key, label, cb, is_exit = MENU_ITEMS[3]
@@ -97,10 +105,10 @@ class TestMenuItems(unittest.TestCase):
         self.assertFalse(is_exit)
 
     def test_config_dir_info_item(self) -> None:
-        """配置目录信息项在报告追问后（第 6 项，快捷键 D）。"""
+        """查看配置与目录信息项在报告追问后（第 6 项，快捷键 D）。"""
         key, label, cb, is_exit = MENU_ITEMS[5]
         self.assertEqual(key, "D")
-        self.assertIn("配置目录信息", label)
+        self.assertIn("配置与目录信息", label)
         self.assertIsNone(cb)
         self.assertFalse(is_exit)
 
@@ -306,7 +314,7 @@ class TestFeatureGatedMenuItems:
         assert "T" in {item[0] for item in tm.MENU_ITEMS}
 
     def test_config_dir_info_unaffected_by_doctor_gate(self):
-        """开关关闭只裁剪 [T] 自检，[D] 配置目录信息（无门控）仍在菜单中。"""
+        """开关关闭只裁剪 [T] 自检，[D] 查看配置与目录信息（无门控）仍在菜单中。"""
         import src.python.tui.tui_menu as tm
 
         self._apply(enabled=False)
