@@ -76,9 +76,7 @@
 
 **落地设计**：若判定转正，按 [`decision-reflection-shadow-design.md`](../plan/decision-reflection-shadow-design.md) 四迭代执行（决策条目结构化 → 到期结算器 → doctor 概览增强 → 报告内反思块），该设计以 Vibe-Trading `shadow_account`（extract→backtest→render）为参照；死线未过前不实施。plan-76 持仓变动复盘已落地，与其构成「意图 vs 成交」对账（只读，不互写）。
 
-**观测读数（2026-10-10）**：启用 24 次且持续活跃（`last_enabled_date=2026-10-10`）→ 判据①不成立；账本 10 决策 2 结算（`direction_accuracy=null`、`sample_sufficient=false`）→ 判据②成立；但 8 条 pending 全为 2026-10-08 单批（`horizon_bars=5`），预计 2026-10-15 前后集中结算、如期则已结算恰好达标 → 达标趋势存在，**本轮维持等待（不撤销、不转正、不实施设计）**。
-
-**终判（预计 2026-10-15 前后，需实际跑一次报告触发结算）**：已结算 ≥10 → 据 doctor 账本概览评估转正（正式命中率另需 `directional_total ≥ 20`，flat 占比高时可信度由人工裁定）；仍 <10 且无新增结算 → 撤销（含 `decision_llm_capture`、行动章复盘块注入与对应需求条目）。
+**当前状态**：功能持续被启用（活跃使用中），但账本结算样本不足——已结算 2/10，余 8 条 pending 均为 2026-10-08 单批（`horizon_bars=5`，预计 2026-10-15 前后集中结算）→ 维持观察，不撤销、不转正、不实施设计。**终判（2026-10-15 前后，需实际跑一次报告触发结算）**：已结算 ≥10 → 据 doctor 账本概览评估转正（正式命中率另需 `directional_total ≥ 20`，flat 占比高时可信度由人工裁定）；仍 <10 且无新增结算 → 撤销（含 `decision_llm_capture`、行动章复盘块注入与对应需求条目）。
 
 #### 🔲 `plan-94` 图表数据无导出通道
 
