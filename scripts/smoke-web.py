@@ -18,7 +18,7 @@
   9. 产物目录隔离  run 的 output_dir 落在临时目录，非项目真实 reports/
  10. 正式-用存量   POST /api/runs            → 无 file_id 提交 202 + run_id；
                                               带 file_id / 非法 mode → 400 BAD_PARAM
- 11. 配置编辑      GET /api/config/edit      → 200 + 7 组可编辑面（含 report_switches）；
+ 11. 配置编辑      GET /api/config/edit      → 200 + 6 组可编辑面 + features 四组分块（含 groups/experimental）；
                                               合法保存 enable_news → 200；
                                               非法键 → 400 BAD_PARAM
 
@@ -350,7 +350,7 @@ def _check_config_edit(client, results) -> None:
     本检查不会污染真实 data/config/。
     """
 
-    # ① GET 面板：7 组全量可编辑面
+    # ① GET 面板：6 组全量可编辑面 + features 四组分块
     resp_get = client.get("/api/config/edit")
     body_get = resp_get.get_json() or {}
     data = body_get.get("data") or {}
@@ -358,12 +358,15 @@ def _check_config_edit(client, results) -> None:
     ok = ok and set(data) >= {
         "paths",
         "sections",
-        "report_switches",
+        "features",
         "anonymization",
         "comparison_indices",
         "comparison_indices_defaults",
         "llm",
     }
+    feats = data.get("features") or {}
+    ok = ok and set(feats) >= {"groups", "labels", "experimental", "report_affecting"}
+    ok = ok and [g.get("key") for g in feats.get("groups", [])] != []
 
     # ② 合法保存：enable_news → 200 + key/value 回显
     resp_save = client.post("/api/config/edit", json={"key": "enable_news", "value": False})

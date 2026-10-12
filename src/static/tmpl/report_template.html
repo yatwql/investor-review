@@ -1101,22 +1101,28 @@ window.drawSimpleChart = function(canvasId, a, b, c) {
     <!-- ═══════════════════════════════════════════════════════ -->
     {% include "partials/global_macro_section.html" with context %}
 
+    {% endif %}
+    {% if section_visible("expert_review") %}
     <!-- ═══════════════════════════════════════════════════════ -->
     <!--  智囊团深度复盘 (Expert Review, LLM augment)              -->
     <!-- ═══════════════════════════════════════════════════════ -->
     {% include "partials/expert_review_section.html" with context %}
 
+    {% endif %}
+    {% if section_visible("health_check") %}
     <!-- ═══════════════════════════════════════════════════════ -->
     <!--  持仓体检报告 (Health Check, LLM augment)                -->
     <!-- ═══════════════════════════════════════════════════════ -->
     {% include "partials/health_check_section.html" with context %}
 
+    {% endif %}
+    {% if section_visible("penetration_deep") %}
     <!-- ═══════════════════════════════════════════════════════ -->
     <!--  穿透深度分析 (Penetration Deep, LLM augment)             -->
     <!-- ═══════════════════════════════════════════════════════ -->
     {% include "partials/penetration_deep_section.html" with context %}
 
-{% endif %}
+    {% endif %}
 
     {# 生成后自检（附录区块：不占报告章节号，不参与目录导航；零产出时整段不出现） #}
     {% if llm_enabled and self_review_block %}

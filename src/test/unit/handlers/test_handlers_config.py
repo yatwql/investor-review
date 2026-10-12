@@ -97,8 +97,8 @@ def _switch_menu_number(flag: str) -> int:
     """按面板同一派生规则计算某功能开关的菜单编号（测试输入用）。
 
     编号 = 标准模块数 + 各分组长度 + 块内序，与
-    ``handlers_config._cmd_config_llm_modules`` 实时派发同源：实验组新增/挪动
-    开关时自动跟随——硬编码编号会静默错位成「切换了别的开关」（本轮新增
+    ``handlers_config._cmd_config_llm_modules`` 实时派发同源：注册表新增/挪动
+    开关时自动跟随——硬编码编号会静默错位成「切换了别的开关」（新增
     持仓变动复盘时实测）。
     """
     from src.python.config.features import GROUP_ORDER, switches_in_group
@@ -114,7 +114,7 @@ def _switch_menu_number(flag: str) -> int:
 
 
 class TestConfigLlmModulesExperimentalFlags:
-    """_cmd_config_llm_modules: 实验块开关面板（清单取自 features 注册表实验组）。"""
+    """_cmd_config_llm_modules: 四组开关面板（清单与分块取自 features 注册表 GROUP_ORDER）。"""
 
     @patch("src.python.tui.handlers_config.press_any_key")
     @patch("src.python.tui.handlers_config.refresh_config")
@@ -133,10 +133,10 @@ class TestConfigLlmModulesExperimentalFlags:
         mock_refresh,
         mock_press,
     ):
-        """输入决策跨期反思闭环的派生编号 → 切换实验块第 2 项，持久化到 features.json。
+        """输入决策跨期反思闭环的派生编号 → 切换机制与诊断块内该项，持久化到 features.json。
 
-        实验块各项编号（正反辩论 / 决策跨期反思 / 景气度框架 / 持仓变动复盘）
-        随注册表实验组即时重排——本用例按面板同源规则取号，不写死。
+        各块各项编号（呈现与体验 / 分析增强 / 独立章节与回放 / 机制与诊断）
+        随注册表即时重排——本用例按面板同源规则取号，不写死。
         """
         from src.python.tui.handlers_config import _cmd_config_llm_modules
 
@@ -162,7 +162,7 @@ class TestConfigLlmModulesExperimentalFlags:
         mock_refresh,
         mock_press,
     ):
-        """输入景气度框架诊断的派生编号 → 切换该常规开关（默认开 → 关），持久化到 features.json。"""
+        """输入景气度框架诊断的派生编号 → 切换该开关（默认开 → 关），持久化到 features.json。"""
         from src.python.tui.handlers_config import _cmd_config_llm_modules
 
         _cmd_config_llm_modules()
@@ -187,9 +187,9 @@ class TestConfigLlmModulesExperimentalFlags:
         mock_refresh,
         mock_press,
     ):
-        """输入常规块首项（确定性信号模块，转正后默认开）→ 切换即关闭。
+        """输入机制与诊断块首项（确定性信号模块，非实验项、默认开）→ 切换即关闭。
 
-        转正不丢入口、也不等于不可关：常规块编号紧随实验块（编号由分组与块内
+        转正不丢入口、也不等于不可关：机制与诊断块编号紧随前三个块（编号由分组与块内
         顺序派生，本用例按面板同源规则取号），默认开故点一次写入 false。
         """
         from src.python.tui.handlers_config import _cmd_config_llm_modules
@@ -244,9 +244,8 @@ class TestConfigLlmModulesExperimentalFlags:
     ):
         """输入量化指标单开关的派生编号 → 持久化到 features.json。
 
-        常规块内顺序：确定性信号 / 模块级质量分级 / 决策头结构化 / 条件推理 /
-        数据源凭据就绪（转正项）→ 量化指标（原七项已合并为单开关 metrics_enabled）
-        → …；编号按注册表顺序派生，实验组或常规组增项时自动跟随。
+        面板块序（呈现与体验 → 分析增强 → 独立章节与回放 → 机制与诊断）与块内
+        顺序均按注册表声明序派生，任一组增项/挪项时编号自动跟随。
         """
         from src.python.tui.handlers_config import _cmd_config_llm_modules
 
@@ -271,9 +270,9 @@ class TestConfigLlmModulesExperimentalFlags:
         mock_refresh,
         mock_press,
     ):
-        """系统自检（转正项）在常规块内可切换——转正不丢入口（回归）。
+        """系统自检（转正项）在机制与诊断块内可切换——转正不丢入口（回归）。
 
-        编号 = 5 标准模块 + 实验块 + 常规块内 doctor_check 序位（派生，非写死）。
+        编号 = 标准模块数 + 四组块累计 + doctor_check 块内序位（派生，非写死）。
         它此前只能靠手改 features.json 关闭；本用例锁定它在面板内仍可关。
         """
         from src.python.tui.handlers_config import _cmd_config_llm_modules
@@ -381,7 +380,7 @@ class TestReportGroupMovedToSwitchPanel:
         src = self._source()
         assert "GROUP_ORDER" in src
         assert "for group in GROUP_ORDER" in src
-        assert "GROUP_EXPERIMENTAL, GROUP_STANDARD, GROUP_REPORT" not in src
+        assert "GROUP_EXPERIMENTAL" not in src and "GROUP_REPORT" not in src
 
 
 class TestConfigDirInfoSubmenu:

@@ -105,10 +105,10 @@ class TestAssembly:
 
 class TestFeatureRegistry:
     def test_switch_registered_in_report_group(self):
-        from src.python.config.features import GROUP_REPORT, feature_switch_registry
+        from src.python.config.features import GROUP_ANALYSIS, feature_switch_registry
 
         entry = feature_switch_registry["market_sentiment"]
-        assert entry.group == GROUP_REPORT
+        assert entry.group == GROUP_ANALYSIS
         assert entry.default is False
 
     def test_accessor_reads_registry(self, monkeypatch):

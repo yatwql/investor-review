@@ -7,12 +7,16 @@
   - 降级是静默的：用户看到的是"数据暂不可用"而非错误堆栈
   - 降级是完整的：所有 LLM 页签都获得同质的占位内容
   - 降级是可配置的：通过 features.llm_* 开关可独立关闭各模块
+  - 降级是诚实的：禁用（enabled_llm = false）≠ 生成失败——禁用槽位保持
+    None 由章级可见性整章隐藏，占位文本只注入「启用但真实失败」的模块
 """
 
 from __future__ import annotations
 
 import logging
 from datetime import datetime
+
+from src.python.llm.failure_reasons import FAIL_REASON_DISABLED, LLM_MODULE_FAILURE
 
 logger = logging.getLogger("invest")
 
@@ -113,32 +117,48 @@ def is_all_llm_failed(llm_content: tuple) -> bool:
     return all(c is None for c in llm_content[:4])
 
 
+def _disabled_module_keys() -> set[str]:
+    """当前被 ``enabled_llm`` 显式禁用的模块键集合（运行时失败登记簿推导）。
+
+    禁用是用户的配置选择，不是生成故障。占位文本写明「LLM API 服务暂时
+    不可用、API Key 配置错误」，注入禁用槽位会把配置选择误报成 API 故障。
+    禁用槽位保持 ``None``，由模板章级可见性（``section_visible`` ←
+    ``get_llm_chapter_disabled()``）整章隐藏，Excel 端同口径不建页签。
+
+    Returns:
+        禁用模块键集合（登记簿中无记录时为空集，即全部按启用处理）
+    """
+    return {key for key in _MODULE_KEYS if LLM_MODULE_FAILURE.get(key) == FAIL_REASON_DISABLED}
+
+
 def build_fallback_llm_content(
     llm_content: tuple,
     force: bool = False,
 ) -> tuple:
     """构建 LLM 降级内容。
 
-    当所有 LLM 模块均失败时，使用占位文本替换全部内容。
+    启用且生成失败的槽位注入占位文本；被禁用的槽位保持 ``None``
+    （禁用不是故障，不伪装 API 故障，也不渲染「待生成」占位）。
 
     Args:
         llm_content: 原始 LLM 内容元组 (global_macro, expert_review, health_check, penetration_deep)
-        force: 设为 True 时强制使用占位文本（用于测试/预览）
+        force: 设为 True 时对全部非禁用槽位强制使用占位文本（用于测试/预览）
 
     Returns:
-        处理后的 LLM 内容元组
+        处理后的 LLM 内容元组（禁用槽位恒为 None）
     """
+    disabled = _disabled_module_keys()
     if not force and not is_all_llm_failed(llm_content):
-        # 部分成功 → 仅替换失败项
+        # 部分成功 → 仅替换「启用且失败」的槽位（禁用槽位保持 None）
         result = list(llm_content[:4])
         for i, module_key in enumerate(_MODULE_KEYS):
-            if result[i] is None:
+            if result[i] is None and module_key not in disabled:
                 result[i] = get_placeholder_text(module_key)
         return tuple(result)
 
     if force or is_all_llm_failed(llm_content):
-        # 全部失败 → 全部使用占位文本
+        # 全部失败 → 非禁用槽位使用占位文本（全部禁用时全部保持 None，整章隐藏）
         ts = datetime.now().strftime("%Y-%m-%d %H:%M")
-        return tuple(get_placeholder_text(key, timestamp=ts) for key in _MODULE_KEYS)
+        return tuple(None if key in disabled else get_placeholder_text(key, timestamp=ts) for key in _MODULE_KEYS)
 
     return llm_content

@@ -16,7 +16,7 @@ from src.python.core.constants import APP_NAME, APP_VERSION
 def _experiment_name(value: str) -> tuple[str, ...]:
     """argparse type 回调 —— 校验并归一化 ``--experiment`` 取值。
 
-    取值清单取自 features 注册表的实验组（与 TUI 菜单 S / Web 配置面板同源），
+    取值清单取自 features 注册表的实验项（experimental 字段，与 TUI 菜单 S / Web 配置面板同源），
     支持开关名、显示名与 ``all``。命中多个（``all``）时返回全部开关名，调用方
     平铺后统一启用。
 
@@ -75,7 +75,7 @@ def _build_parser() -> argparse.ArgumentParser:
         action="append",
         type=_experiment_name,
         help="启用实验性功能，仅本次运行生效（不写入 features.json）。可重复指定；"
-        "NAME 取开关名或显示名，all=全部启用。等价于 --feature 的实验组只开简写。",
+        "NAME 取开关名或显示名，all=全部启用。等价于 --feature 只开全部实验项的简写。",
     )
     parser.add_argument(
         "--feature",
@@ -84,7 +84,7 @@ def _build_parser() -> argparse.ArgumentParser:
         type=_feature_override,
         help="覆写任意功能开关（含常规开关），仅本次运行生效（不写入 features.json）。可重复指定；"
         "NAME 取开关名，VALUE ∈ on/off/true/false/1/0（大小写不敏感）。"
-        "与 --experiment 的区别：本参数是全开关双向覆写，后者只开实验组。",
+        "与 --experiment 的区别：本参数是全开关双向覆写，后者只开实验项。",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s v{APP_VERSION}")
 

@@ -73,7 +73,7 @@ __all__ = [
 # ── 特性开关名 ──────────────────────────────────────────
 # 全链路（report seam / llm 注入 / 指纹后缀 / config.features 注册）收敛于此旗标
 # 确定性信号模块开关（实时预消化注入 + 跨期沉淀账本共用一个开关，
-# 原实验开关 signal_ledger 已并入 deterministic_signal 并转正为常规组）
+# 原实验开关 signal_ledger 已并入 deterministic_signal 并转正、实验身份已摘除）
 FEATURE_FLAG = "deterministic_signal"
 
 # ── 持久化路径 ──────────────────────────────────────────

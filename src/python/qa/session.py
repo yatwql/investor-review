@@ -1,6 +1,6 @@
 """报告问答会话服务（report_qa_session）— 会话表 / 轮数上限 / 用量记账 / 编排。
 
-设计落点：``docs/plan/report-followup-qa-design.md`` §3.4-3.6。
+设计落点：``docs/archive/v0.12.x/report-followup-qa/report-followup-qa-design.md`` §3.4-3.6。
 
 职责：
 

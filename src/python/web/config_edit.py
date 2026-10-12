@@ -20,9 +20,9 @@ from src.python.config.edit_ops import (  # noqa: F401  # 公开再导出
     config_edit_whitelist,
 )
 from src.python.config.features import (
-    GROUP_EXPERIMENTAL,
-    GROUP_REPORT,
-    GROUP_STANDARD,
+    GROUP_LABELS,
+    GROUP_ORDER,
+    experimental_flags,
     feature_switch_registry,
     switches_in_group,
 )
@@ -67,8 +67,6 @@ def get_config_edit_surface() -> dict:
         "enable_portfolio_evolution": is_enable_portfolio_evolution(config),
         "enable_action": is_enable_action(config),
     }
-    # 报告章节与增强：取值与显示名皆由功能开关注册表派生（GROUP_REPORT）
-    report_switches = {flag: is_feature_enabled(flag) for flag, _d in switches_in_group(GROUP_REPORT)}
     anon_mode = get_anonymization_mode()
     indices = config.get("comparison_indices") or get_default("comparison_indices")
 
@@ -84,19 +82,26 @@ def get_config_edit_surface() -> dict:
         except (OSError, json.JSONDecodeError) as e:
             logger.warning("读取 llm_settings.json 失败，LLM 开关按默认展示: %s", e)
     surface_enabled = {sfx: bool(enabled_map.get(sfx, True)) for sfx in visible_llm_module_names()}
-    # 功能开关：按注册表分组下发（实验组 / 常规组各一块），显示名与「是否影响报告」
-    # 标记由服务端同源下发——前端不维护任何开关字典，避免与注册表漂移。
+    # 功能开关：按 GROUP_ORDER 四组动态下发（组键/组标题/清单皆由注册表派生，
+    # 不硬编码组名，下次分组调整零改动）；显示名、「影响报告」标记与实验项清单
+    # 由服务端同源下发——前端不维护任何开关字典，避免与注册表漂移。
     features_surface = {
-        "experimental": {flag: is_feature_enabled(flag) for flag, _d in switches_in_group(GROUP_EXPERIMENTAL)},
-        "standard": {flag: is_feature_enabled(flag) for flag, _d in switches_in_group(GROUP_STANDARD)},
+        "groups": [
+            {
+                "key": group,
+                "title": GROUP_LABELS[group],
+                "switches": {flag: is_feature_enabled(flag) for flag, _d in switches_in_group(group)},
+            }
+            for group in GROUP_ORDER
+        ],
         "labels": {flag: d.label for flag, d in feature_switch_registry.items()},
+        "experimental": [flag for flag, _d in experimental_flags()],
         "report_affecting": [flag for flag, d in feature_switch_registry.items() if d.affects_report],
     }
 
     return {
         "paths": paths,
         "sections": sections,
-        "report_switches": report_switches,
         "anonymization": {"mode": anon_mode, "options": list(ANON_MODES)},
         "comparison_indices": dict(indices),
         "comparison_indices_defaults": dict(get_default("comparison_indices") or {}),

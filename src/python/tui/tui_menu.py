@@ -27,6 +27,7 @@ MENU_ITEMS: list[MenuItem] = [
     ("B", "生成标准报告(Excel+HTML) [按章节配置]", None, False),
     ("L", "生成完整报告(Excel+HTML) [含LLM，按章节配置]", None, False),
     ("W", "调仓 What-if 模拟（对比两份持仓，独立报告）", None, False),
+    ("Q", "报告对话式追问（对已生成 HTML 报告多轮提问）", None, False),
     ("D", "配置目录信息（持仓目录/文件名/输出目录）", None, False),
     ("1", "更新基础类缓存（含基金业绩/持仓/经理/基准等）", None, False),
     ("2", "更新行情类缓存（含价格/指数等）", None, False),
@@ -35,10 +36,10 @@ MENU_ITEMS: list[MenuItem] = [
     ("P", "配置基础报告章节组（基金深度分析/市场新闻/组合历史走势+回撤/组合演进/行动建议）", None, False),
     ("I", "管理对比指数池（自定义基准指数）", None, False),
     ("A", "配置持仓匿名化（代码/名称脱敏）", None, False),
-    ("S", "配置功能开关（LLM 分析章节 + 实验性/常规/报告章节与增强开关）", None, False),
+    ("S", "配置功能开关（LLM 分析章节 + 四组功能开关）", None, False),
     ("R", "刷新配置", None, False),
     ("V", "查看最近运行日志（可按级别筛选）", None, False),
-    ("H", "查看数据源健康历史（近期检查记录）", None, False),
+    ("H", "查看数据源健康历史", None, False),
     ("T", "系统自检（环境/配置/目录/数据源一键体检）", None, False),
     ("X", "退出", None, True),
 ]
@@ -46,7 +47,7 @@ MENU_ITEMS: list[MenuItem] = [
 # 受功能开关约束的菜单项：{快捷键: 开关名}。
 # 开关关闭时该菜单项整体不出现（在 _apply_feature_gates 中裁剪），
 # 避免用户点进去只得到一句「功能未启用」。
-FEATURE_GATED_ITEMS: dict[str, str] = {"T": "doctor_check"}
+FEATURE_GATED_ITEMS: dict[str, str] = {"T": "doctor_check", "Q": "report_qa"}
 
 
 def _apply_feature_gates() -> None:

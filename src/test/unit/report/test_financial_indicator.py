@@ -257,7 +257,7 @@ class TestSwitchAndWiring:
         assert is_enable_financial_indicator({"financial_indicator": False}) is True
 
     def test_default_config_has_switch_off(self):
-        """默认关的事实来源 = 功能开关注册表（GROUP_REPORT）。"""
+        """默认关的事实来源 = 功能开关注册表（GROUP_STANDALONE）。"""
         from src.python.config.features import feature_switch_registry
 
         assert feature_switch_registry["financial_indicator"].default is False

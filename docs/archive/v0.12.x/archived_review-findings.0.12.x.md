@@ -2,11 +2,13 @@
 
 > 归档时间：2026-10-03（v0.12.1 发布当日并入，0.12 系列首份）
 > 原始文件：`docs/managements/review-findings.md`
-> 涵盖版本：v0.12.1 ~ v0.12.8（2026-10-03 ~ 2026-10-09）
+> 涵盖版本：v0.12.1 ~ v0.12.12（2026-10-03 ~ 2026-10-12）
 > 追加归档：2026-10-09（v0.12.7 发布当日，v0.12.7 批次 20 条并入：rf-624 ~ rf-643 与历史编号 rf-75）
 > 追加归档：2026-10-09（v0.12.8 发布当日，v0.12.8 批次 8 条并入：rf-644 ~ rf-651）
 > 追加归档：2026-10-10（v0.12.9 发布当日，v0.12.9 批次 6 条并入：rf-652 ~ rf-657）
 > 追加归档：2026-10-11（v0.12.10 发布当日，v0.12.10 批次 3 条并入：rf-658 ~ rf-660）
+> 追加归档：2026-10-12（v0.12.11 发布当日，v0.12.11 批次 2 条并入：rf-661 ~ rf-662）
+> 追加归档：2026-10-12（v0.12.12-dev 开发期批次 3 条并入：rf-663 ~ rf-664、rf-666）
 > 归档内容：本迭代已修复的 rf 记录摘要行（v0.12.1 批次 rf-557 ~ rf-562；v0.12.2 批次 rf-563 ~ rf-570（限购线文档一致性、48h 技术债、plan-73 消费方补齐、CI 口径分叉根治）：报告目录分组线性投影与附录组、LLM 章级门控整章隐藏、JS 资产单源与打印断言、发布列与 changelog 发布指针一致性断言、跨组交错线性段拆块、实现与文档过期残留整改；v0.12.3 批次 rf-568、rf-571 ~ rf-578（测试有效性整改、pacing 端点节流生效与惰性装载修复、日志回显当前值纪律、密钥权限基线补漏、HTML 正文大块折叠扩展））
 
 ---
@@ -136,5 +138,8 @@
 - rf-660 已修复（2026-10-10，死代码清扫）：**全仓 27 项零引用死代码 + 1 孤儿模块**——AST 顶层符号扫描（926 文件语料，词边界引用核验，定义行不计）确认：9 函数（`pacing.describe`/`endpoint_key_for` 自检展示与按域名取键设计从未接线、`http_client.make_async_http_client` 无异步调用方、`fetcher.fetch_market_data_cached`/`fetch_fund_manager_cached` 会话缓存旧包装被 registry 路径取代、`_index_history_cache_key`、`penetration._enrich_with_industry_api` 行业预取重构后残留、`check_sources._colored`、`drawdown_events._to_date`）+ 17 常量（`HISTORY_CHAIN_*_TTL` 被注册表 `cache_ttl` 取代、`tiantian_ranking` 风险阈值组、`category._NCOLS_WITH_FLOW` 等）+ 孤儿模块 `core/_session_cache.py`（provider_registry 已内联同版实现，文件内符号仅测试导入 `_SESSION_CACHE_MAX_ENTRIES`）。连同二阶级联孤儿 4 符号（`_use_ansi`、`_DEFAULT_ENDPOINTS`、`_EXTRA_HEADERS`、`category._NCOLS`）与 `drawdown_events` 的 `date` 死导入一并删除，测试 import 改指 `provider_registry`；−281 行 / 23 文件，30 符号全仓清零、21 文件语法全过。判定口径排除动态派发误报（f-string 键族 / `is_feature_enabled` 直调 / `data_key_file` 动态键名均判活）。
 - rf-659 已修复（2026-10-10，技术文档↔代码一致性核对）：**`technical.md` 三处与代码真值不一致**——① `valuation_data` 数据契约块过时：声明「3 键 + by_code 子项 6 键」，代码真值（`orchestrator.py::compute_valuation_data` 返回）为 4 顶层键（多 `basis_mode: "real_ttm"|"proxy_only"`）+ `by_code` 子项 8 键（多 `real`/`real_available`）——R-VAL-03 真实历史估值分位落地后契约块未同步；② `crisis_annotation_data` 自相矛盾：声明「8 键」而同块仅列 2 键，代码真值（`build_crisis_annotation`）= 2 顶层键；③ 3 处符号归属文件写错：`orchestrator.py::compute_factor_exposure_data`/`compute_market_temperature_data`/`compute_correlation_data` 实际定义在 `_report_factor_metrics.py`/`_report_aux_metrics.py`（orchestrator 仅 import 转发）。全部为文档侧修复。
 - rf-658 已修复（2026-10-10，需求↔技术文档一致性核对）：**`requirements.md` §6.3 报告模块清单表漏「持仓变动复盘」「调仓纪律回放」两行（表 17 行 vs 注册表/technical/README 均 19）**——两模块详细需求（§6.13 R-HCR、§6.15 R-SR）早已存在，仅总清单表未同步；补两行（序号 15/16，触发 B/L，开关 `holding_change_review`/`rebalance_schedule_replay` 默认关），原 15~17 顺延为 17~19，与 `_REPORT_SECTION_DEFAULT`（19 项）、R-OUT-05（页签 1~19）、reports-instruction「最多 19 个」对齐。
-- rf-661 已修复（2026-10-11，60h 实现技术债核查）：**报告对话式追问设计文档落地后未回写实现真值**——`docs/plan/report-followup-qa-design.md` 落点符号 5 处仍为 `_handle_qa_ask`（实现为 `_handle_report_qa_ask`），§8 交付物清单测试/文档列漂移（缺 edge×2/ask/partial 五测试与 requirements/testplan/手册触点）。修复：落点符号全文替换 + §8 三行同步实际交付。
+- rf-661 已修复（2026-10-11，60h 实现技术债核查）：**报告对话式追问设计文档落地后未回写实现真值**——`docs/archive/v0.12.x/report-followup-qa/report-followup-qa-design.md` 落点符号 5 处仍为 `_handle_qa_ask`（实现为 `_handle_report_qa_ask`），§8 交付物清单测试/文档列漂移（缺 edge×2/ask/partial 五测试与 requirements/testplan/手册触点）。修复：落点符号全文替换 + §8 三行同步实际交付。
 - rf-662 已修复（2026-10-11，60h 实现技术债核查）：**报告文件名净化三处手写、语义已漂移**——Web 路由（`splitext`）/会话服务（`endswith`）/上下文提取（`Path.suffix`）三种后缀判断写法，对「`.html` 纯后缀无基名」判定不一致：前两层放行 → 会话壳入库后才被上下文层拒绝（错误路径不干净，写法漂移为既成事实）。修复：收敛单源 `qa/context.py::sanitize_report_filename`（三层各自转译错误面不变、分层防御语义不变，纯后缀全链统一拒绝且更早拦截），净化参数化用例补 `.html` 纯后缀 + 单源直测（大写 `.html` 接受），路由层参数化同步；`dev-verify` 6694 全绿。
+- rf-663 已修复（2026-10-12，36h 实现技术债核查批次）：① `check-doc-drift.py` docstring 检查项 4/8 三组生命周期措辞四组化（组名/残留名单以 `_GROUP_DOC_NAMES`/`_RETIRED_GROUP_NAMES` 派生为真值）；② `developer-guide.md` check-semantic-index 正向描述改「注册表每个键（全量）」；③ `main.js` 实验项注释改「实验身份与作用域分组正交」；④ plan-120 设计文档迁入 `docs/archive/v0.12.x/feature-switch-grouping/`（changelog/archived_plan/archived_changelog/folders 四链接与目录树同步），§8 补转正迁移演练实测记录（decision_reflection 内存模拟转正：experimental_flags 收窄至 report_qa、取值域拒绝、自述与 Web surface 联动、面板编号 1..31 零变化、finally 还原全复原）；⑤ P3 文件过长登记表补登 `features.py`(730)/`_format.py`(558)/`handlers_config.py`(534)（立号 rf-665）+ 归档补 rf-661/662 追加行。
+- rf-664 已修复（2026-10-12，禁用 LLM 模块误渲染故障占位章节）：根因① `report_template.html` 四个 LLM 章 include 共用单一 `section_visible("global_macro")` 守卫，逐模块章级隐藏与连续重编号未落到正文（「、穿透深度分析」空序号渲染、导航/正文不一致，且 global_macro 禁用连带隐藏兄弟章）；② `llm/fallback.py::build_fallback_llm_content` 把禁用产生的 None 与生成失败混同注入「LLM API 不可用」占位。修复：四 include 改逐模块 `section_visible` 守卫 + fallback 禁用槽位保持 None（占位只注入启用且真实失败的模块）；回归测试：模板四章逐一 subTest 遍历（隐藏/不连带/导航一致）+ fallback 禁用感知 3 例。
+- rf-666 已修复（2026-10-12，TUI 主菜单 [S] 标签旧三组措辞残留）：`tui/tui_menu.py` 标签「实验性/常规/报告章节与增强开关」改为「四组功能开关」，与手册/面板口径一致；plan-119 批次内修复，changelog 已记。

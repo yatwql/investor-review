@@ -171,16 +171,16 @@ def _cmd_config_llm_modules() -> None:
 
     标准 LLM 模块通过 enabled_llm 控制，存储在 llm_settings.json。
     功能开关（辩论模式增强、决策跨期反思闭环、量化指标、交互图表、系统自检、
-    数据源适配契约等）通过 Feature Flag 控制，存储在 features.json；两块的分组、
-    显示名与顺序均取自 ``features.feature_switch_registry``，新增开关自动上屏，
-    渠道层不另写清单。
+    数据源适配契约等）通过 Feature Flag 控制，存储在 features.json；四组分块的
+    分组标题、显示名与顺序均取自 ``features.GROUP_ORDER`` / ``GROUP_LABELS``，
+    新增开关自动上屏，渠道层不另写清单。
     辩论白脸/黑脸/综合（debate_pro/con/synthesis）保留在注册表
     （缓存 TTL/前缀清理仍依赖），菜单层隐藏，不在此面板展示。
     """
     from src.python.config.features import (
-        GROUP_EXPERIMENTAL,
         GROUP_LABELS,
         GROUP_ORDER,
+        experimental_flags,
         is_feature_enabled,
         switches_in_group,
     )
@@ -200,8 +200,8 @@ def _cmd_config_llm_modules() -> None:
     switch_blocks = [
         (GROUP_LABELS[group], [(flag, d.label) for flag, d in switches_in_group(group)]) for group in GROUP_ORDER
     ]
-    # 行首 ⚗ 标记仅给实验组（常规组靠分组标题区分，无需逐行标记）
-    experiment_flags = {flag for flag, _d in switches_in_group(GROUP_EXPERIMENTAL)}
+    # 行首 ⚗ 标记仅给实验项（experimental 字段，与所属组无关；当前 2 项均落机制与诊断块内）
+    experiment_keys = {flag for flag, _d in experimental_flags()}
 
     # 名称列宽：取清单内最长显示名，使各行状态方括号纵向对齐（超宽名不截断）
     name_column = max(
@@ -225,9 +225,9 @@ def _cmd_config_llm_modules() -> None:
             items.append((i, sfx, name, status, "llm"))
             rows.append(f"{i}. {pad_right(name, name_column)} [{status_str}]")
 
-        # ② 功能开关：编号紧随标准模块之后，实验块在前、常规块在其后，逐块顺序派发
-        # 编号由分组与块内顺序派生、非硬编码：某项转正即离开实验块，落进常规块中
-        # 它在注册表声明处的顺序位置
+        # ② 功能开关：编号紧随标准模块之后，四组按 GROUP_ORDER 逐块顺序派发
+        # 编号由组序与块内注册表顺序派生、非硬编码：转正 = 摘除 experimental 身份
+        # （行首 ⚗ 消失），作用域不变则原地留块，位置只随注册表声明顺序
         next_serial = len(module_names) + 1
         for title, block in switch_blocks:
             rows.append(None)
@@ -235,7 +235,7 @@ def _cmd_config_llm_modules() -> None:
             for j, (flag, label) in enumerate(block, next_serial):
                 status = is_feature_enabled(flag)
                 status_str = f"{GREEN}开启{RESET}" if status else f"{RED}关闭{RESET}"
-                marker = "⚗" if flag in experiment_flags else ""
+                marker = "⚗" if flag in experiment_keys else ""
                 items.append((j, flag, label, status, "feature"))
                 rows.append(f"{j}. {marker}{pad_right(label, name_column)} [{status_str}]")
             next_serial += len(block)
@@ -243,10 +243,9 @@ def _cmd_config_llm_modules() -> None:
         rows.append("0. 返回主菜单")
         print()
         print("\n".join(render_panel("配置 LLM 报告章节与功能开关", rows)))
-        print("  ⚗ 实验性功能默认关闭，开启后按各自说明增强报告输出")
-        print("     ⚠ 当前为实验阶段，输出质量可能不稳定")
-        print("  常规开关默认开启，关闭即按各自说明收回对应能力（详见 how-to-config 手册）")
-        print("  报告章节与增强默认多数关闭，开启即新增对应章节/列（依赖见各条说明）")
+        for _group in GROUP_ORDER:
+            print(f"  {GROUP_LABELS[_group]}")
+        print("  ⚗ 标记为实验项：默认关闭、处于实验阶段输出质量可能不稳定（各开关说明见 how-to-config 手册）")
         print("  基础报告章节组（基金深度分析/市场新闻/历史走势+回撤/组合演进/行动建议）在菜单 [P] 配置")
         print()
         try:

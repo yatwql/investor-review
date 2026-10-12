@@ -76,7 +76,7 @@ config_edit_whitelist = {
         for sfx in visible_llm_module_names()
     },
     # ── 7 功能开关（features.json；清单取自 features.feature_switch_registry 全注册表，
-    #      实验组与常规组同表同写入路径，分组只影响前端分块渲染）──
+    #      实验项与常规开关同表同写入路径，分组只影响前端分块渲染）──
     **{flag: {"kind": "bool", "target": "features", "writer": "features"} for flag in feature_switch_registry},
 }
 

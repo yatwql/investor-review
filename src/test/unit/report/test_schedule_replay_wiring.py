@@ -1,7 +1,7 @@
 """调仓纪律回放（schedule_replay_panel）接线测试 — 开关/挂载点/注册表/双端/模板。
 
 覆盖（对应验收条目）：
-  - 开关注册表：rebalance_schedule_replay 已登记（实验组、默认关、影响报告）
+  - 开关注册表：rebalance_schedule_replay 已登记（独立章节与回放组、默认关、影响报告）
   - 挂载点：seam 开关关闭零行为、开关注入契约、下游异常只告警不外抛
   - 注册表：章节条目（type/data_flag/序号）、页签名、导航分组、两端 board 层
   - 关态回退：契约缺席 → 章隐藏且不消耗连续编号（与「注册表无此章」逐位相等）
@@ -111,12 +111,12 @@ def reporter() -> _RecordingReporter:
 
 
 class TestFeatureSwitchRegistry:
-    """rebalance_schedule_replay 已转正入报告组且默认关、影响报告输出。"""
+    """rebalance_schedule_replay 已转正（作用域归独立章节与回放组）且默认关、影响报告输出。"""
 
-    def test_switch_registered_in_report_group_off_by_default(self):
+    def test_switch_registered_in_standalone_group_off_by_default(self):
         sw = feature_switch_registry["rebalance_schedule_replay"]
         assert sw.label == "调仓纪律回放"
-        assert sw.group == "report"
+        assert sw.group == "standalone"
         assert sw.default is False
         assert sw.affects_report is True
         assert is_feature_enabled("rebalance_schedule_replay") is False
@@ -126,7 +126,7 @@ class TestFeatureSwitchRegistry:
 
 
 class TestScheduleReplayMount:
-    """调仓纪律回放挂载点（实验组开关，产出 ``schedule_replay_data`` 契约）。"""
+    """调仓纪律回放挂载点（独立章开关，产出 ``schedule_replay_data`` 契约）。"""
 
     def test_flag_off_is_inert(self, reporter):
         """开关关闭 → 不装配、不注入、不告警（零导入零成本）。"""

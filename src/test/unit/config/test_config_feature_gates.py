@@ -130,8 +130,8 @@ class TestDatasinkFeatureGate:
         assert _DEFAULT_CONFIG["datasink"]["enabled"] is True
 
 
-class TestReportGroupSwitches:
-    """报告章节与增强开关：功能开关注册表为唯一真源（GROUP_REPORT）。"""
+class TestReportProducingSwitches:
+    """报告产物开关（作用域横跨分析增强 / 独立章两组）：功能开关注册表为唯一真源。"""
 
     KEYS = (
         "data_quality",
@@ -146,26 +146,29 @@ class TestReportGroupSwitches:
     )
 
     def test_known_report_keys_stay_in_group(self):
-        """已知报告组开关不得静默移出分组（子集断言：新增报告开关不要求改本清单）。"""
-        from src.python.config.features import GROUP_REPORT, switches_in_group
+        """已知报告产物开关不得静默移出作用域组（子集断言：新增报告开关不要求改本清单）。"""
+        from src.python.config.features import GROUP_ANALYSIS, GROUP_STANDALONE, switches_in_group
 
-        flags = {flag for flag, _d in switches_in_group(GROUP_REPORT)}
+        flags = {flag for flag, _d in switches_in_group(GROUP_ANALYSIS)}
+        flags |= {flag for flag, _d in switches_in_group(GROUP_STANDALONE)}
         assert set(self.KEYS) <= flags
 
     def test_accessor_matches_registry_default(self):
-        """报告组中提供 ``is_enable_*`` 读取器者，取值 == 注册表默认值（同源）。
+        """作用域组内提供 ``is_enable_*`` 读取器者，取值 == 注册表默认值（同源）。
 
         章节类转正开关（如 ``holding_change_review``）由挂载点直读 ``is_feature_enabled``，
         不带 config 读取器——读取器存在与否随形态，取值同源是不变式。
         """
         from src.python.config import _core
         from src.python.config.features import (
-            GROUP_REPORT,
+            GROUP_ANALYSIS,
+            GROUP_STANDALONE,
             feature_switch_registry,
             switches_in_group,
         )
 
-        for flag, _d in switches_in_group(GROUP_REPORT):
+        scope = switches_in_group(GROUP_ANALYSIS) + switches_in_group(GROUP_STANDALONE)
+        for flag, _d in scope:
             accessor = getattr(_core, f"is_enable_{flag}", None)
             if accessor is None:
                 continue

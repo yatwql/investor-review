@@ -10,11 +10,11 @@
   1.  报告章节表        core/report_section_registry.py `_REPORT_SECTION_DEFAULT` → manuals/reports-instruction.md
   2.  章节数量断言      同上（`页签编号 1~N` / `默认顺序（N 项` / `返回 result（N 项` / `N 个报告章节`）→ 全库文档
   3.  功能开关表        config/features.py `feature_switch_registry`    → manuals/how-to-config.md
-  4.  开关分组计数断言  同上（`⚗实验 A / 常规 B / 报告章节与增强 C`、`实验组（A 项`（含加粗组名与 `报告章节与增强组`）、`共/提供 N 项开关`、`完整 N 项与分组清单` 等）→ 全库文档
+  4.  开关分组计数断言  同上（四组连写链 `呈现与体验 A / 分析增强 B / 独立章节 C / 机制与诊断 D`、单组 `组名（N 项`（含加粗组名）、`共/提供 N 项开关`、`完整 N 项与分组清单`；另检旧三组名残留 `实验组/常规组/报告组/报告章节与增强组`，组名与残留名单以 `_GROUP_DOC_NAMES`/`_RETIRED_GROUP_NAMES` 注册表派生为真值）→ 全库文档
   5.  开关默认值断言    同上（`` `flag` `` 后紧随「默认开/关」）          → 全库文档
   6.  配置标量默认值表   config/_config_defaults.py `_DEFAULT_CONFIG`   → manuals/how-to-config.md
   7.  LLM 默认参数表     config/_llm_settings_defaults.py + 缓存 TTL 注册表 → managements/llm-technical.md
-  8.  TUI 面板编号       `tui/handlers_config.py` 的派生规则（LLM 可见模块 + 三组顺序连续编号）→ manuals/how-to-use-tui-menu.md
+  8.  TUI 面板编号       `tui/handlers_config.py` 的派生规则（LLM 可见模块 + 作用域四组顺序连续编号）→ manuals/how-to-use-tui-menu.md
   9.  目录树           文件系统实测（src/、scripts/、docs/{managements,manuals,plan}）→ managements/folders.md
   10. 项目统计表        文件系统实测（文件数/行数）+ 可选 pytest 收集数 → managements/folders.md
   11. 测试覆盖计数表    `scripts/collect-test-coverage.py` 快照 → managements/test-coverage.md（仅 `--with-test-count`）
@@ -101,10 +101,12 @@ from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc
     extract_switch_table,
     check_switch_table,
     _group_counts,
-    _TRIPLE_COUNT,
+    _GROUP_CHAIN_COUNT,
     _GROUPED_COUNT,
     _GROUP_NAME_TO_KIND,
-    _REPORT_BLOCK_COUNT,
+    _RETIRED_GROUP_NAMES,
+    _GROUP_DOC_NAMES,
+    _group_doc_name,
     _TOTAL_COUNT,
     _count_finding,
     check_switch_counts,
@@ -118,10 +120,9 @@ from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc
     _ttl_default,
     check_llm_defaults,
     _PANEL_SECTION_START,
-    _PANEL_SECTION_END,
     _PANEL_ROW,
-    _REPORT_RANGE,
-    _REPORT_ITEM,
+    _GROUP_PANEL_RANGE,
+    _PANEL_KEY_MAP_ROW,
     check_panel_numbering,
     _TEST_COVERAGE_ROW,
     _COUNT_CELL,

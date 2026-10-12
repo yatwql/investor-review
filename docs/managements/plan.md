@@ -1,5 +1,5 @@
 # 投资复盘助手 — 实现计划
-> 文档版本：0.12.11
+> 文档版本：0.12.12
 > **编号源**：`plan-next = 121`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-120，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
@@ -8,7 +8,7 @@
 
 本文档记录项目的实现计划。已完成的版本计划已归档，此处仅跟踪当前迭代中的工作。
 
-**当前迭代**：在办 10 项按「价值 / 收益 / 风险」分四档——P1 2 项（风险/核心价值改进 **plan-99/95**）、P2 5 项（改进批 **plan-90/92/93** + **plan-119** 报告追问 TUI 入口 + **plan-120** 功能开关面板分组重构）、P3 2 项（**plan-70** 死线观察，已有落地设计 `decision-reflection-shadow-design.md`；择机 **plan-94**）、P4 1 项（**plan-55** 评测先决未过，暂缓）。已完成任务与历史批次（含各借鉴批研究与未采纳记录）随档见文末「归档」索引。
+**当前迭代**：在办 8 项按「价值 / 收益 / 风险」分四档——P1 2 项（风险/核心价值改进 **plan-99/95**）、P2 3 项（改进批 **plan-90/92/93**）、P3 2 项（**plan-70** 死线观察，已有落地设计 `decision-reflection-shadow-design.md`；择机 **plan-94**）、P4 1 项（**plan-55** 评测先决未过，暂缓）。已完成任务与历史批次（含各借鉴批研究与未采纳记录）随档见文末「归档」索引。
 
 > **命名纪律（强制）**：重构/新增的变量名、函数名、注释与文档表述必须与新章节语义相关（如 `position_relationship`/`portfolio_history_drawdown`/`style_factor`/`action`），**绝对禁止用任务编号命名**（F 系列、plan-N、rf-N 等）。任务编号仅在本表作链接锚点，不进入实现层。
 
@@ -58,18 +58,6 @@
 
 **动作**：生成/刷新 `output_dir/index.html`（按日期列出 Excel/HTML 产物与打开链接），TUI 加「打开输出目录 / 最近报告」入口（与 rf-636 联动）；索引页不泄漏路径以外的本地信息，匿名化口径与报告一致
 
-#### 🔲 `plan-119` 报告对话式追问 TUI 追问入口（阶段 4）
-
-**背景**：plan-118 已落地阶段 1-3（Web 报告页追问）；落地设计 [`report-followup-qa-design.md`](../plan/report-followup-qa-design.md) §6 阶段 4 明确 TUI 侧交付与验收标准。TUI 现无「文本输入循环/会话态渲染」设施，需前置轻量输入循环。
-
-**动作**：TUI 主菜单新增追问入口（`report_qa` 开关门控裁剪同源），进入文本输入循环（复用 `input()` 的多轮 while + 退出指令 `q`/空行，**不引入全屏 TUI 库**），调用与 Web 同一 `qa/session.py::ask_report_qa` 会话服务——TUI 侧零重复实现（会话/上下文/记账/降级全部经 `qa/` 服务）。落地 `tui/handlers_qa.py` + `src/test/unit/tui/test_handlers_qa.py`（输入循环提问/回答/继续/退出/EOF 守护 + 无 TUI 私有副本断言）+ 手册 `how-to-use-tui-menu.md` 追问章节与面板编号同步（doc-drift）。阶段 5（转正评估）待本阶段稳定后按实验功能纪律另行推进
-
-#### 🔲 `plan-120` 功能开关面板分组重构（作用域四分组 + 生命周期解耦）
-
-**现状与问题**：`[S]` 面板 31 项开关按「生命周期」分三组（实验 2 / 常规 9 / 报告 20），`GROUP_REPORT` 占 65%（20 项）混杂「既有章内加列/块」（14 项）与「独立章/回放」（6 项），找「市场温度」需扫 20 行；`GROUP_STANDARD` 成杂物抽屉（读侧增强/诊断/接缝三类混列）；「报告章节与增强」命名与 14/20 项实际产物形态（非新增页签）不符。用户决策心智是「开了长出什么」（作用域），非「处于什么生命周期」。
-
-**动作**：换轴——作用域升主分类轴（四组 `GROUP_PRESENTATION` 呈现 / `GROUP_ANALYSIS` 既有章内追加 / `GROUP_STANDALONE` 独立章节回放 / `GROUP_MECHANISM` 机制诊断含实验），生命周期降为 `FeatureSwitchDef.experimental` 独立字段（`--experiment` 取值域改看此字段，集合不变）；**零行为变化**（key/default/affects_report 恒等、自述清单不变）。最大耦合面是守护脚本 `scripts/_doc_drift/_format.py` 硬编码三组正则与 `check_panel_numbering`，故**先扩守护脚本兼容四组 → 再切注册表 → 再刷文档**（4 迭代，每迭代含验收标准，见落地设计）。落地设计 [`feature-switch-grouping-redesign.md`](../plan/feature-switch-grouping-redesign.md)
-
 ### P3 — 预期实施，有空时安排
 
 > **候选说明**：plan-66 ~ plan-68（源 TradingAgents-CN 研究的 P4 候选，逐项分析见 [`tradingagents-cn-borrow-candidates-research.md`](../archive/v0.11.x/tradingagents-cn-borrow-research/tradingagents-cn-borrow-candidates-research.md)）仍为候选；**立项前须先做本仓库现状比对**（立项前提可能被既有实现推翻，须按「分层不重叠」重新定位）。
@@ -82,9 +70,7 @@
 
 **落地设计**：若判定转正，按 [`decision-reflection-shadow-design.md`](../plan/decision-reflection-shadow-design.md) 四迭代执行（决策条目结构化 → 到期结算器 → doctor 概览增强 → 报告内反思块），该设计以 Vibe-Trading `shadow_account`（extract→backtest→render）为参照；死线未过前不实施。plan-76 持仓变动复盘已落地，与其构成「意图 vs 成交」对账（只读，不互写）。
 
-**观测读数（2026-10-10）**：启用 24 次且持续活跃（`last_enabled_date=2026-10-10`）→ 判据①不成立；账本 10 决策 2 结算（`direction_accuracy=null`、`sample_sufficient=false`）→ 判据②成立；但 8 条 pending 全为 2026-10-08 单批（`horizon_bars=5`），预计 2026-10-15 前后集中结算、如期则已结算恰好达标 → 达标趋势存在，**本轮维持等待（不撤销、不转正、不实施设计）**。
-
-**终判（预计 2026-10-15 前后，需实际跑一次报告触发结算）**：已结算 ≥10 → 据 doctor 账本概览评估转正（正式命中率另需 `directional_total ≥ 20`，flat 占比高时可信度由人工裁定）；仍 <10 且无新增结算 → 撤销（含 `decision_llm_capture`、行动章复盘块注入与对应需求条目）。
+**当前状态**：功能持续被启用（活跃使用中），但账本结算样本不足——已结算 2/10，余 8 条 pending 均为 2026-10-08 单批（`horizon_bars=5`，预计 2026-10-15 前后集中结算）→ 维持观察，不撤销、不转正、不实施设计。**终判（2026-10-15 前后，需实际跑一次报告触发结算）**：已结算 ≥10 → 据 doctor 账本概览评估转正（正式命中率另需 `directional_total ≥ 20`，flat 占比高时可信度由人工裁定）；仍 <10 且无新增结算 → 撤销（含 `decision_llm_capture`、行动章复盘块注入与对应需求条目）。
 
 #### 🔲 `plan-94` 图表数据无导出通道
 

@@ -344,7 +344,7 @@ class TestDeterministicSignals:
 
 
 class TestProsperityDiagnosisMount:
-    """景气度框架诊断挂载点（实验组开关，产出 ``prosperity_framework_data`` 契约）。
+    """景气度框架诊断挂载点（机制与诊断组开关，产出 ``prosperity_framework_data`` 契约）。
 
     与其余挂载点共享同一守护契约：开关关闭零行为、下游异常只告警不外抛。
     """
@@ -395,7 +395,7 @@ class TestProsperityDiagnosisMount:
 
 
 class TestHoldingChangeMount:
-    """持仓变动复盘挂载点（实验组开关，产出 ``holding_change_data`` 契约）。
+    """持仓变动复盘挂载点（独立章开关，产出 ``holding_change_data`` 契约）。
 
     与其余挂载点共享同一守护契约：开关关闭零行为、下游异常只告警不外抛；
     另锁两条本章特有口径：契约经注入点整体写入（缺席 = 章隐藏），

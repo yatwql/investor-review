@@ -1,7 +1,7 @@
 # 功能开关面板分组重构（feature_switch 分组作用域化）迭代设计方案与实施计划
 
-> 关联任务：plan-120（`docs/managements/plan.md` P2 预期实施）
-> 版本：v0.12.11-dev · 状态：设计定稿（10 轮复盘后）
+> 关联任务：plan-120（已实施并归档，完成态见 `docs/archive/v0.12.x/archived_plan.0.12.x.md`）
+> 版本：v0.12.12-dev · 状态：设计定稿
 > 语义命名：本设计围绕既有注册表 `config/features.py::feature_switch_registry`（功能开关注册表唯一事实来源约束）；新增分组常量与字段以 `scope`/`GROUP_*` 语义命名。本文所有代码标识符以此为准，禁用任务编号命名（语义命名纪律）。
 
 ---
@@ -168,7 +168,7 @@ def is_experimental_switch(flag: str) -> bool:
 - 分块：`switch_blocks` 按 `GROUP_ORDER`（四组）派生，标题取 `GROUP_LABELS`；`next_serial` 连续派发逻辑不变（已核实 `handlers_config.py` 编号由分组循环派生、非硬编码，四组自动适配）；
 - ⚗ 逐行标记：改为 `flag in experiment_flags`，其中 `experiment_flags = {k for k,d in registry.items() if d.experimental}`（与 group 无关）——只有 `decision_reflection`/`report_qa` 带 ⚗，落在「机制与诊断」块内；
 - **面板标题**：`render_panel("配置 LLM 报告章节与功能开关", ...)` 需同步为与四组语义一致的标题（如「配置 LLM 报告章节与功能开关（四分组）」或保持现名但确认其仍准确——见迭代 2 验收）；
-- **底部硬编码说明文案**：`handlers_config.py` 第 251-253 行硬编码三行（「常规开关默认开启…」「报告章节与增强默认多数关闭…」），四组后必须改写为四行或按 `GROUP_LABELS` 派生，**此为设计初稿遗漏项**；
+- **底部硬编码说明文案**：`handlers_config.py` 第 251-253 行硬编码三行（「常规开关默认开启…」「报告章节与增强默认多数关闭…」），四组后必须改写为四行或按 `GROUP_LABELS` 派生；
 - 编号派生逻辑（`next_serial` 连续派发）不变，仅块数从 3 → 4。
 
 ### 4.5 Web 面板（`config_edit.py`）
@@ -187,11 +187,11 @@ GROUP_LABELS = {
     GROUP_PRESENTATION: "📊 呈现与体验（默认开启 · 只改呈现不改内容）",
     GROUP_ANALYSIS:     "🔍 分析增强·既有章内追加（默认关闭 · 在既有章节内追加分析块/列/子表）",
     GROUP_STANDALONE:   "📑 独立章节与回放（默认关闭 · 新增整页签或多期回放）",
-    GROUP_MECHANISM:    "⚙ 机制与诊断（默认关闭 · 内部机制与待验证功能）",
+    GROUP_MECHANISM:    "⚙ 机制与诊断（内部机制 / 诊断接缝 / 待验证实验）",
 }
 ```
 
-> 注：`GROUP_MECHANISM` 内 7 项机制/诊断类 `default=True`、2 项实验类 `default=False`，故标签取「默认关闭」不准确，改为中性表述（见复盘 R6 修订）。最终：`GROUP_MECHANISM: "⚙ 机制与诊断（内部机制 / 诊断接缝 / 待验证实验）"`。
+> 注：`GROUP_MECHANISM` 内 7 项机制/诊断类 `default=True`、2 项实验类 `default=False`，组内默认态混合，故标签不写死「默认关闭」，用中性表述。
 
 ---
 
@@ -203,7 +203,7 @@ GROUP_LABELS = {
 |:---|:---|
 | `config/features.py` | 组常量 4 个、`GROUP_LABELS`/`GROUP_ORDER`、`FeatureSwitchDef.experimental` 字段、31 项 group 重映射、`is_experimental_switch`/`enabled_experimental_features` 改判定、顶部注释转正语义 |
 | `scripts/_doc_drift/_format.py` | `_group_counts`（四组）、`_TRIPLE_COUNT`→四组连写正则、`_GROUP_NAME_TO_KIND`（新增四组中文名）、`_GROUPED_COUNT`/`_REPORT_BLOCK_COUNT` 适配、`check_panel_numbering` 四段边界 |
-| `src/python/tui/handlers_config.py` | 分块四组、`experiment_flags` 改 `d.experimental`、**面板标题 `render_panel(...)` 同步**、**底部三行硬编码说明改四组派生（初稿遗漏，迭代 2 必改）** |
+| `src/python/tui/handlers_config.py` | 分块四组、`experiment_flags` 改 `d.experimental`、**面板标题 `render_panel(...)` 同步**、**底部三行硬编码说明改四组派生（迭代 2 必改）** |
 | `src/python/web/config_edit.py` | **已核实硬编码三组**：import 三组常量 + 下发 dict 硬编码 `"experimental"/"standard"/"report"` 键（第 90-92）+ `report_switches`（第 71）；改为按 `GROUP_ORDER` 动态派生四组键 + 前端 JS/模板分组标题同步 |
 | `docs/manuals/how-to-use-tui-menu.md` | `[S]` 面板编号表 `_PANEL_SECTION_*` 区段 → 四组边界；面板图；三组/31 项措辞 |
 | `docs/manuals/how-to-config.md` | 开关表分组表头与计数措辞 |
@@ -291,10 +291,10 @@ GROUP_LABELS = {
 | **R3 页脚实验自述意外变化** | 报告产物字节变化，违反「零行为变化」 | `enabled_experimental_features` 改判定后，断言自述清单 = 2 项；关态产物逐字节不变 |
 | **R4 `default`/`affects_report` 误动** | 产物行为变化 | 迭代 2 验收逐项恒等断言 + 回归测试 |
 | **R5 手册编号表大面积重排** | 老用户肌肉记忆作废、文档触点多 | 保持编号连续派生逻辑不变，仅块边界变；手册用脚本派生编号而非手写 |
-| **R6 `GROUP_MECHANISM` 标签默认值表述** | 该组内 7 开 2 关，写「默认关闭」不准确 | 标签用中性表述，不写死默认值（已修订） |
+| **R6 `GROUP_MECHANISM` 标签默认值表述** | 该组内 7 开 2 关，写「默认关闭」不准确 | 标签用中性表述，不写死默认值 |
 | **R7 `_format.py` 逼近脚本红线** | 触发文件长度红线 finding | 迭代 1/3 均跑 `check-file-length`；必要时把面板检查逻辑拆到 `scripts/_doc_drift/` 子模块 |
-| **R9 Web `config_edit.py` 硬编码三组** | 下发 dict 硬编码三组键 + import 三组常量 + `report_switches`，漏改则 Web 面板分组错位或 KeyError | 迭代 2 明确改 `config_edit.py` 为按 `GROUP_ORDER` 动态派生；读 web/static JS/模板确认分组渲染消费键；迭代 4 验收含 Web 面板走查 |
 | **R8 转正语义文档与实现漂移** | `features.py` 顶部注释仍讲旧三组转正 | 迭代 2 同步更新顶部注释 + technical.md 转正说明 |
+| **R9 Web `config_edit.py` 硬编码三组** | 下发 dict 硬编码三组键 + import 三组常量 + `report_switches`，漏改则 Web 面板分组错位或 KeyError | 迭代 2 明确改 `config_edit.py` 为按 `GROUP_ORDER` 动态派生；读 web/static JS/模板确认分组渲染消费键；迭代 4 验收含 Web 面板走查 |
 | **R10 developer-guide 新增开关指南教错模型** | 「定分组与默认值」「覆盖三面」「实验性准入与转正判据」「内部接缝类开关转正」四段把「作用域 + 生命周期」耦合在单个 group 字段，四组后开发者照旧指南加开关会落错组、漏标 experimental | 迭代 3 重写为两轴模型（group 定作用域、experimental 定生命周期），四段逐段改；验收 grep 无「实验组 + False」耦合措辞 |
 | **R11 既有测试断言依赖三组划分** | `test_features.py::test_experiment_group_excludes_standard_switches` 等若断言「组名 ↔ 实验性」耦合关系，移组后误红 | 迭代 2 跑 `pytest src/test/unit/config -v` 逐条核对；断言改为基于 `experimental` 字段而非 group 名（`is_experimental_switch` 已改字段驱动，该用例应自然存活） |
 
@@ -307,23 +307,6 @@ GROUP_LABELS = {
 | 1 | `scripts/_doc_drift/_format.py`（四组适配） | `src/test/unit/scripts/` drift 相关用例（三/四组双态） | — |
 | 2 | `config/features.py` + `tui/handlers_config.py` + `web/config_edit.py` + `config/_core.py`（docstring） | `src/test/unit/config/test_features.py`（key/default/取值域恒等 + 四组计数 + `_experimental_flags()` 字段化改写 + `GROUP_EXPERIMENTAL` import 清零） | `features.py` 顶部注释 |
 | 3 | — | — | **16 份命中文档**（requirements 19 处 + developer-guide 9 处 + test-coverage 3 处 + 手册 + technical.md + testplan + llm-technical）+ changelog Added |
-| 4 | 转正迁移演练（临时改、测后还原） | TUI/Web 冒烟 + 十守护 | — |
+| 4 | 转正迁移演练（临时改、测后还原） | TUI/Web 冒烟 + 十守护 | 演练记录（见表下） |
 
----
-
-## 9. 复盘轨迹（10 轮，每轮一视角，已回写正文）
-
-> 设计定稿前经 10 轮不同视角复盘，发现并回写正文的关键修订如下（未列入的轮次为「核实无问题」）：
-
-| 轮 | 视角 | 发现 | 回写位置 |
-|:---|:---|:---|:---|
-| 1 | 架构约束遵从（注册表唯一事实来源 / 文件红线 / 语义命名） | 31 项全位置构造、`@dataclass(frozen=True)` 已确认 → 尾加默认字段安全；`GROUP_*` 常量非既有 slug，新 4 slug 需登记 | §4.2 / §5 |
-| 2 | 实现正确性 | `handlers_config.py` 底部硬编码三行文案 + `render_panel` 标题遗漏（初稿只说「四行说明」） | §4.4 / §5 |
-| 3 | Web/TUI 渲染 | `config_edit.py` 硬编码三组键 + `report_switches`（初稿以为自动适配）→ 新增 R9 | §4.5 / §5 / §7 |
-| 4 | 需求/测试追溯 | 文档触点清单从 ~8 文件扩到 **16 命中 / 20 受检**（requirements 19 + developer-guide 9） | §5 / §6 |
-| 5 | 文档一致性 | 新增开关指南会教错模型（四段两轴耦合）→ 新增 R10 | feature-switch-grouping-redesign.md §5 / §6 / §7 |
-| 6 | 语义命名/命名冲突 | doctor.py `GROUP_ORDER` 为本地常量不冲突（排除误报）；`_core.py` ~10 处 docstring 待清 | §5 |
-| 7 | 面板序与可用性 | 设计未定 `GROUP_ORDER` 新序 → 补序 rationale + 默认态摘要表（实测 13 开/18 关） | §4.1 |
-| 8 | 可测试性 | `test_features.py::_experimental_flags()` 用 `switches_in_group(GROUP_EXPERIMENTAL)`，移组后必断 | §5 / §6 |
-| 9 | 完整性 | `resolve_experiment_flags`/`describe_experiment_flags` 两处 `all`/清单分支同样字段化 → §4.3 扩为 4 函数表 | §4.3 / §7 R2 |
-| 10 | 整体一致性 | R2 强化（grep `GROUP_EXPERIMENTAL` 清零）+ 迭代 2 测试面补全 | §6 / §7 |
+> **转正迁移演练记录（2026-10-12，纯内存模拟 + `finally` 还原，零文件写入）**：将 `feature_switch_registry["decision_reflection"]` 以 `dataclasses.replace` 临时置 `experimental=False` + 出厂开（模拟真实转正判据）后：① `experimental_flags()` 收窄为 `report_qa` 单项；② `resolve_experiment_flags(["decision_reflection"])` 进 unknown 列表（CLI type 回调据此抛 `ArgumentTypeError` 拒绝），`resolve_experiment_flags(["report_qa"])` 仍正常；③ `describe_experiment_flags()` 页脚自述与 Web surface `features.experimental` 同源收窄；④ 组别归属与面板编号 1..31 零变化（转正不动作用域）；⑤ `finally` 还原后注册表对象同一性、取值域、自述、编号四项基线全复原。

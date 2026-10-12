@@ -1,7 +1,7 @@
 # 报告对话式追问（report_qa）迭代设计方案与实施计划
 
-> 关联任务：plan-102（`docs/managements/plan.md` P3 预期实施）；阶段 1-3 实施 = plan-118（已完成）；阶段 4 TUI 入口实施 = plan-119（plan.md P2）
-> 版本：v0.12.11-dev · 状态：阶段 0-3 已完成（阶段 4 实施中，阶段 5 未启动）
+> 关联任务：plan-102（`docs/managements/plan.md` P3 预期实施）；阶段 1-3 实施 = plan-118（已完成）；阶段 4 TUI 入口实施 = plan-119（已完成）
+> 版本：v0.12.11-dev · 状态：阶段 0-4 已完成（阶段 5 未启动）
 > 语义命名：功能 slug `report_qa`（报告问答追问）；本文所有代码标识符以此为准
 
 ---
@@ -219,13 +219,13 @@ JSON {answer_html, usage, remaining_turns} → 报告页内嵌会话区渲染
   - [x] 语义命名表登记 4 slug，`check-semantic-index` 正反向一致；
   - [x] 文档十守护（钩子）通过：doc-drift（目录树/统计）/doc-links/version-consistency 全绿。
 
-### 阶段 4：TUI 追问入口（增量）——已立项 `plan-119`
+### 阶段 4：TUI 追问入口（增量）——plan-119 已完成（2026-10-12）
 
 - 交付：TUI 文本输入循环（复用 `input()` 的多轮 while + 退出指令 `q`/空行，**不引入全屏 TUI 库**）+ 主菜单追问入口 + 调用同一 `qa/session.py` 会话服务。
 - **验收标准**：
-  - [ ] `pytest src/test/unit/tui/` 全绿：输入循环（提问/回答/继续/退出/EOF 守护）、与 Web 同源调用同一 `ask_report_qa`（无 TUI 私有副本断言）；
-  - [ ] TUI 侧零重复实现：会话/上下文/记账/降级全部经 `qa/` 服务；
-  - [ ] 手册 `how-to-use-tui-menu.md` 追问章节 + TUI 面板编号同步（doc-drift）。
+  - [x] `pytest` 全绿：输入循环（提问/回答/继续/退出/EOF 守护）、与 Web 同源调用同一 `ask_report_qa`（无 TUI 私有副本断言）；测试落仓库既有 `src/test/unit/handlers/`（`test_handlers_qa.py` + `test_handlers_qa_edge.py`，边缘场景按约定入 `*_edge.py` + `@pytest.mark.edge`）；
+  - [x] TUI 侧零重复实现：会话/上下文/记账/降级全部经 `qa/` 服务；
+  - [x] 手册 `how-to-use-tui-menu.md` 追问章节 + TUI 面板编号同步（doc-drift）。
 
 ### 阶段 5：转正评估（先决门槛）
 
