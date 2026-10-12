@@ -1044,7 +1044,7 @@ _session_usage = {
 }
 ```
 
-> **记账边界（报告对话式追问）**：`qa/`（报告对话式追问，见 technical.md §6.8）虽经 `call_llm()` 调用，但**不写**本节的 `_session_usage`——Web 常驻进程里的追问会污染下一报告的 LLM 用量页签；其用量独立记账于 `QaSession.usage`（input/output tokens + provider，按轮返回追问前端），并由 `src/test/unit/qa/test_report_qa_session.py` 的源码级断言守护（`qa.session` 不得导入 `llm.session`）。追问因此不进报告「LLM API 用量」页签与费用统计。
+> **记账边界（报告对话式追问）**：`qa/`（报告对话式追问，见 technical.md §6.8）虽经 `call_llm()` 调用，但**不写**本节的 `_session_usage`——Web 常驻进程或 TUI 会话里的追问会污染下一报告的 LLM 用量页签；其用量独立记账于 `QaSession.usage`（input/output tokens + provider，按轮返回追问入口——报告页区块与 TUI 共用同一信封），并由 `src/test/unit/qa/test_report_qa_session.py` 的源码级断言守护（`qa.session` 不得导入 `llm.session`）。追问因此不进报告「LLM API 用量」页签与费用统计。
 
 `llm/cost_tracker.py` 在前者之上提供 Token 预算管理：
 

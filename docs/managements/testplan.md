@@ -656,6 +656,7 @@
 | R-QA-07 | `src/test/unit/qa/test_report_qa_ask.py` | 批 13 |
 | R-QA-08 | `src/test/unit/qa/test_report_qa_session.py` | 批 13 |
 | R-QA-09 | `src/test/unit/report/test_report_qa_partial.py` | 批 13 |
+| R-QA-10 | `src/test/unit/handlers/test_handlers_qa.py` + `src/test/unit/handlers/test_handlers_qa_edge.py` | 批 14 |
 <!-- requirement-trace:end -->
 ---
 

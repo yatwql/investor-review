@@ -35,7 +35,7 @@ class TestTuiRouting(unittest.TestCase):
                 )
 
     def test_menu_key_coverage(self):
-        """MENU_ITEMS 包含所有标准功能键（C/F/O 已聚合到 D 子菜单；系统自检为 T）。"""
+        """MENU_ITEMS 包含所有标准功能键（C/F/O 已聚合到 D 子菜单；系统自检为 T；报告追问为 Q）。"""
         from src.python.tui.tui_menu import MENU_ITEMS
 
         keys = {item[0] for item in MENU_ITEMS}
@@ -45,6 +45,7 @@ class TestTuiRouting(unittest.TestCase):
             "B",
             "L",
             "W",
+            "Q",
             "D",
             "I",
             "A",

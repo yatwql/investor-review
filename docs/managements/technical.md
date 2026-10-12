@@ -3550,13 +3550,13 @@ make_http_client(timeout=10.0) → httpx.Client
 
 ### 6.8 报告对话式追问
 
-> 定位：读者在 HTML 报告页内对**本期报告**的会话式问答（实验开关 `report_qa`，默认关，见 requirements.md §6.17）。独立子包 `qa/` 而非并入 `llm/`——追问是「面向报告的服务」而非 LLM 报告模块：不进 `_MODULE_FNS`/模块注册（无模块缓存条目、无指纹、不参与报告模块状态标签），但其调用仍经 `llm/api.call_llm` 的 Provider Chain 路由与合规漏斗。依赖方向单向 `qa → llm`（api / markdown / fact_checker），`llm` 不感知 `qa`；回答用量独立记账，不写报告周期 LLM 用量统计。
+> 定位：读者在 HTML 报告页内对**本期报告**的会话式问答（实验开关 `report_qa`，默认关，见 requirements.md §6.17）；入口两个——报告页尾区块（阶段 1-3）与 TUI 主菜单 [Q] 文本输入循环（阶段 4），同一会话服务承载。独立子包 `qa/` 而非并入 `llm/`——追问是「面向报告的服务」而非 LLM 报告模块：不进 `_MODULE_FNS`/模块注册（无模块缓存条目、无指纹、不参与报告模块状态标签），但其调用仍经 `llm/api.call_llm` 的 Provider Chain 路由与合规漏斗。依赖方向单向 `qa → llm`（api / markdown / fact_checker），`llm` 不感知 `qa`；回答用量独立记账，不写报告周期 LLM 用量统计。
 
-- **模块划分**：`qa/context.py`（`extract_report_qa_context`：`sec-*` 锚点分章 + 汇总/LLM 章全文、数据章摘要、整体字符上限三层截断 + 表头名映射持仓基线 + 生成条件声明；解析锚点收敛单文件，模板契约变更唯一同步点，失败显式报错不静默给错误上下文）；`qa/session.py`（`QaSession` 会话态 + `create_report_qa_session` 会话表登记/淘汰 + `ask_report_qa` 唯一编排入口：历史折叠、轮数与输入双上限、用量记账、事实核对、Markdown 渲染）；`web/handlers.py::_handle_report_qa_ask`（POST /api/qa/ask 校验矩阵与状态码映射）；`partials/report_qa_section.html`（报告尾部区块，JS 内嵌自包含，同源 fetch + `file://` 降级引导，样式全取报告既有 token）。
+- **模块划分**：`qa/context.py`（`extract_report_qa_context`：`sec-*` 锚点分章 + 汇总/LLM 章全文、数据章摘要、整体字符上限三层截断 + 表头名映射持仓基线 + 生成条件声明；解析锚点收敛单文件，模板契约变更唯一同步点，失败显式报错不静默给错误上下文）；`qa/session.py`（`QaSession` 会话态 + `create_report_qa_session` 会话表登记/淘汰 + `ask_report_qa` 唯一编排入口：历史折叠、轮数与输入双上限、用量记账、事实核对、Markdown 渲染）；`web/handlers.py::_handle_report_qa_ask`（POST /api/qa/ask 校验矩阵与状态码映射）；`tui/handlers_qa.py`（主菜单 [Q] 入口：输出目录报告选择 + `input()` 多轮输入循环 + 回答纯文本化展示 + 会话续传；`FEATURE_GATED_ITEMS` 与 Web/报告区块同源裁剪；零业务副本——会话/上下文/记账/降级全部经 `ask_report_qa`）；`partials/report_qa_section.html`（报告尾部区块，JS 内嵌自包含，同源 fetch + `file://` 降级引导，样式全取报告既有 token）。
 - **数据流**：报告文件名（前端取自当前页 URL basename）→ 上下文（只读报告 HTML，零新增取数）→ system（边界规则 + 生成条件声明 + 本期报告内容）+ 最近 6 次问答历史（更早折叠为问题清单）+ 当前问题 → `call_llm` → `markdown_to_html` → `run_fact_check`（只检不改，警示不阻断）→ 统一信封返回。
 - **渲染期纪律**：会话态只活在 `qa/session.py` 服务内（进程内存、线程锁保护）；开关态经 `_render_template` 的 render context（`report_qa_enabled`）传递，不写 `_ENV.globals`；关闭时主模板 include 整体处于条件分支内，报告字节不变（实验项默认关、关闭时产物不变）。
 - **安全与日志**：report 参数三层同语义净化（路由/会话/上下文：basename + `.html` + 禁 `..` 与路径分隔符）；上下文在内存传递不落盘；日志只记会话 id、轮数、问题前 20 字与 token 数，不含上下文与回答正文。
-- **设计定稿与验证**：[报告对话式追问设计方案](../plan/report-followup-qa-design.md)；测试载体见 testplan.md §2.1（R-QA-01~09，批 13）。
+- **设计定稿与验证**：[报告对话式追问设计方案](../plan/report-followup-qa-design.md)；测试载体见 testplan.md §2.1（R-QA-01~10，批 13/14）。
 
 [↑ 回到顶部](#目录)
 

@@ -102,6 +102,7 @@ def _bind_callbacks() -> None:
         _cmd_generate_excel,
         _cmd_generate_full,
     )
+    from src.python.tui.handlers_qa import _cmd_report_qa
     from src.python.tui.handlers_whatif import _cmd_whatif
 
     callbacks: dict[str, Callable] = {
@@ -109,6 +110,7 @@ def _bind_callbacks() -> None:
         "B": _cmd_generate_both,
         "L": _cmd_generate_full,
         "W": _cmd_whatif,
+        "Q": _cmd_report_qa,
         "D": _cmd_config_dir_info,
         "1": _cmd_update_basic_cache,
         "2": _cmd_update_position_cache,
@@ -160,8 +162,9 @@ def main() -> None:
     except Exception:
         logger.debug("首次运行引导显示失败（非关键）", exc_info=True)
 
-    # 读取缺省菜单选项（config.json → default_menu_key），仅支持 E/B/L/W/D/1/2/3/4/P/I/A/S/R/V/H/T/X
-    # （T 系统自检受 doctor_check 开关门控：关闭时该项被裁剪，index_by_key 自然回落到首项）
+    # 读取缺省菜单选项（config.json → default_menu_key），仅支持 E/B/L/W/Q/D/1/2/3/4/P/I/A/S/R/V/H/T/X
+    # （T 系统自检受 doctor_check 开关门控、Q 报告追问受 report_qa 开关门控：
+    # 关闭时对应项被裁剪，index_by_key 自然回落到首项）
     from src.python.config import get_config
 
     _default_key = get_config().get("default_menu_key", "L").upper()

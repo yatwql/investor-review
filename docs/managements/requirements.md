@@ -995,7 +995,7 @@ LLM 五维度量化评分，每项满分 100：
 
 ### 6.17 报告对话式追问（报告页内会话式问答，默认关）
 
-> 报告尾部新增「报告追问（⚗ 实验）」交互区块：读者针对**本期报告内容**发起多轮提问，回答基于当期报告 HTML 反解析的上下文 + 会话内历史。功能开关 `report_qa`（机制与诊断组实验项、默认关、影响产物）控制——关闭时区块不渲染（报告字节与引入前一致）、问答路由 403；开启时进入页脚实验自述清单（`affects_report` 口径）。服务端为独立子包 `qa/`（`context` 上下文提取 + `session` 会话服务），Web 路由 `report_qa_ask`（POST /api/qa/ask）承载传输；依赖方向 `qa → llm` 单向（仅经 `llm/api.call_llm` 既有 Provider Chain 与合规漏斗、`llm/markdown` 渲染、`llm/fact_checker` 核对，不进 LLM 模块注册、无模块缓存与指纹），零新增取数（只读报告 HTML）。TUI 追问入口（阶段 4）后续批次登记。
+> 报告尾部新增「报告追问（⚗ 实验）」交互区块：读者针对**本期报告内容**发起多轮提问，回答基于当期报告 HTML 反解析的上下文 + 会话内历史。功能开关 `report_qa`（机制与诊断组实验项、默认关、影响产物）控制——关闭时区块不渲染（报告字节与引入前一致）、问答路由 403；开启时进入页脚实验自述清单（`affects_report` 口径）。服务端为独立子包 `qa/`（`context` 上下文提取 + `session` 会话服务），Web 路由 `report_qa_ask`（POST /api/qa/ask）承载传输；依赖方向 `qa → llm` 单向（仅经 `llm/api.call_llm` 既有 Provider Chain 与合规漏斗、`llm/markdown` 渲染、`llm/fact_checker` 核对，不进 LLM 模块注册、无模块缓存与指纹），零新增取数（只读报告 HTML）。TUI 追问入口已落地（主菜单 [Q] 文本输入循环，`report_qa` 门控，同源 `qa/session.py`，阶段 4 完成）。
 
 | 需求标识 | 需求描述 |
 |:---------|:---------|
@@ -1008,6 +1008,7 @@ LLM 五维度量化评分，每项满分 100：
 | R-QA-07 | Web 路由（语义 `report_qa_ask`，POST /api/qa/ask）：校验矩阵——开关关 403 / report 参数净化（basename、`.html`、禁 `..` 与路径分隔符）、session_id 类型、问题缺失与超长 400 / 报告缺失与结构不可解析 404 / LLM 全链失败 503 / 成功 200；响应统一信封，error_code 机器可判 |
 | R-QA-08 | 用量独立记账：`QaSession.usage`（input/output tokens + provider）按轮累计返回前端；追问不写报告周期 LLM 用量统计（`qa` 不依赖 `llm.session`，源码级断言守护）；日志只记会话 id、轮数、问题前 20 字与 token 数 |
 | R-QA-09 | 报告页区块（`partials/report_qa_section.html`）：开态在报告尾部渲染输入/发送/多轮消息/状态条（空态「输入问题开始追问」、进行态、失败态「服务暂不可用」、上限态）与剩余轮次 + 累计用量；同源 `fetch("/api/qa/ask")`，`file://` 直开降级为「经 Web 工作台打开报告后可使用追问」引导（零 CORS 机制）；样式全取报告既有 token（断点 768px、打印隐藏）；`report_qa_enabled` 经 render context 传递、不写模板 globals |
+| R-QA-10 | TUI 主菜单 [Q] 入口（`tui/handlers_qa.py`）：`input()` 多轮文本输入循环 —— 报告选择（输出目录顶层 `.html` 按修改时间倒序、回车=最新、q/EOF/Ctrl+C 取消）、回答纯文本化展示、会话续传（同 `session_id`）、轮数/用量/警示回显、错误信封（会话上限/报告不可用终止循环，其余继续提问）；`report_qa` 开关门控（`FEATURE_GATED_ITEMS` 就地裁剪，与 Web/报告区块同源，关闭时菜单项整体不出现）；零 TUI 私有副本（`ask_report_qa` 同源同对象断言）；`default_menu_key` 支持 Q |
 
 ## 7. LLM 智能分析
 

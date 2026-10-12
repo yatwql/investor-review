@@ -8,7 +8,7 @@
 > 追加归档：2026-10-10（v0.12.9 发布当日，v0.12.9 批次 6 条并入：rf-652 ~ rf-657）
 > 追加归档：2026-10-11（v0.12.10 发布当日，v0.12.10 批次 3 条并入：rf-658 ~ rf-660）
 > 追加归档：2026-10-12（v0.12.11 发布当日，v0.12.11 批次 2 条并入：rf-661 ~ rf-662）
-> 追加归档：2026-10-12（v0.12.12-dev 开发期批次 2 条并入：rf-663 ~ rf-664）
+> 追加归档：2026-10-12（v0.12.12-dev 开发期批次 3 条并入：rf-663 ~ rf-664、rf-666）
 > 归档内容：本迭代已修复的 rf 记录摘要行（v0.12.1 批次 rf-557 ~ rf-562；v0.12.2 批次 rf-563 ~ rf-570（限购线文档一致性、48h 技术债、plan-73 消费方补齐、CI 口径分叉根治）：报告目录分组线性投影与附录组、LLM 章级门控整章隐藏、JS 资产单源与打印断言、发布列与 changelog 发布指针一致性断言、跨组交错线性段拆块、实现与文档过期残留整改；v0.12.3 批次 rf-568、rf-571 ~ rf-578（测试有效性整改、pacing 端点节流生效与惰性装载修复、日志回显当前值纪律、密钥权限基线补漏、HTML 正文大块折叠扩展））
 
 ---
@@ -142,3 +142,4 @@
 - rf-662 已修复（2026-10-11，60h 实现技术债核查）：**报告文件名净化三处手写、语义已漂移**——Web 路由（`splitext`）/会话服务（`endswith`）/上下文提取（`Path.suffix`）三种后缀判断写法，对「`.html` 纯后缀无基名」判定不一致：前两层放行 → 会话壳入库后才被上下文层拒绝（错误路径不干净，写法漂移为既成事实）。修复：收敛单源 `qa/context.py::sanitize_report_filename`（三层各自转译错误面不变、分层防御语义不变，纯后缀全链统一拒绝且更早拦截），净化参数化用例补 `.html` 纯后缀 + 单源直测（大写 `.html` 接受），路由层参数化同步；`dev-verify` 6694 全绿。
 - rf-663 已修复（2026-10-12，36h 实现技术债核查批次）：① `check-doc-drift.py` docstring 检查项 4/8 三组生命周期措辞四组化（组名/残留名单以 `_GROUP_DOC_NAMES`/`_RETIRED_GROUP_NAMES` 派生为真值）；② `developer-guide.md` check-semantic-index 正向描述改「注册表每个键（全量）」；③ `main.js` 实验项注释改「实验身份与作用域分组正交」；④ plan-120 设计文档迁入 `docs/archive/v0.12.x/feature-switch-grouping/`（changelog/archived_plan/archived_changelog/folders 四链接与目录树同步），§8 补转正迁移演练实测记录（decision_reflection 内存模拟转正：experimental_flags 收窄至 report_qa、取值域拒绝、自述与 Web surface 联动、面板编号 1..31 零变化、finally 还原全复原）；⑤ P3 文件过长登记表补登 `features.py`(730)/`_format.py`(558)/`handlers_config.py`(534)（立号 rf-665）+ 归档补 rf-661/662 追加行。
 - rf-664 已修复（2026-10-12，禁用 LLM 模块误渲染故障占位章节）：根因① `report_template.html` 四个 LLM 章 include 共用单一 `section_visible("global_macro")` 守卫，逐模块章级隐藏与连续重编号未落到正文（「、穿透深度分析」空序号渲染、导航/正文不一致，且 global_macro 禁用连带隐藏兄弟章）；② `llm/fallback.py::build_fallback_llm_content` 把禁用产生的 None 与生成失败混同注入「LLM API 不可用」占位。修复：四 include 改逐模块 `section_visible` 守卫 + fallback 禁用槽位保持 None（占位只注入启用且真实失败的模块）；回归测试：模板四章逐一 subTest 遍历（隐藏/不连带/导航一致）+ fallback 禁用感知 3 例。
+- rf-666 已修复（2026-10-12，TUI 主菜单 [S] 标签旧三组措辞残留）：`tui/tui_menu.py` 标签「实验性/常规/报告章节与增强开关」改为「四组功能开关」，与手册/面板口径一致；plan-119 批次内修复，changelog 已记。

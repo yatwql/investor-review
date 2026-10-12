@@ -45,8 +45,8 @@ class TestMenuItems(unittest.TestCase):
             _tm.MENU_ITEMS[i] = (key, label, None, is_exit)
 
     def test_item_count(self) -> None:
-        """菜单项应为 18 个（含受开关约束的 [T] 系统自检；[C]/[F]/[O] 已聚合到 [D] 子菜单）。"""
-        self.assertEqual(len(MENU_ITEMS), 18)
+        """菜单项应为 19 个（含受开关约束的 [T] 系统自检与 [Q] 报告追问；[C]/[F]/[O] 已聚合到 [D] 子菜单）。"""
+        self.assertEqual(len(MENU_ITEMS), 19)
 
     def test_whatif_item(self) -> None:
         """What-if 菜单项在报告生成组后（第 4 项，快捷键 W）。"""
@@ -64,9 +64,17 @@ class TestMenuItems(unittest.TestCase):
         self.assertIsNone(cb)
         self.assertFalse(is_exit)
 
+    def test_qa_item(self) -> None:
+        """报告追问项在 What-if 后（第 5 项，快捷键 Q）。"""
+        key, label, cb, is_exit = MENU_ITEMS[4]
+        self.assertEqual(key, "Q")
+        self.assertIn("追问", label)
+        self.assertIsNone(cb)
+        self.assertFalse(is_exit)
+
     def test_last_item_exit(self) -> None:
         """最后一项快捷键 X，is_exit=True。"""
-        key, label, cb, is_exit = MENU_ITEMS[17]
+        key, label, cb, is_exit = MENU_ITEMS[18]
         self.assertEqual(key, "X")
         self.assertIn("退出", label)
         self.assertIsNone(cb)
@@ -74,7 +82,7 @@ class TestMenuItems(unittest.TestCase):
 
     def test_view_logs_item(self) -> None:
         """日志查看项在退出前（快捷键 V）。"""
-        key, label, cb, is_exit = MENU_ITEMS[14]
+        key, label, cb, is_exit = MENU_ITEMS[15]
         self.assertEqual(key, "V")
         self.assertIn("运行日志", label)
         self.assertIsNone(cb)
@@ -82,15 +90,15 @@ class TestMenuItems(unittest.TestCase):
 
     def test_health_history_item(self) -> None:
         """健康历史项在日志查看后（快捷键 H）。"""
-        key, label, cb, is_exit = MENU_ITEMS[15]
+        key, label, cb, is_exit = MENU_ITEMS[16]
         self.assertEqual(key, "H")
         self.assertIn("健康历史", label)
         self.assertIsNone(cb)
         self.assertFalse(is_exit)
 
     def test_config_dir_info_item(self) -> None:
-        """配置目录信息项在 What-if 后（第 5 项，快捷键 D）。"""
-        key, label, cb, is_exit = MENU_ITEMS[4]
+        """配置目录信息项在报告追问后（第 6 项，快捷键 D）。"""
+        key, label, cb, is_exit = MENU_ITEMS[5]
         self.assertEqual(key, "D")
         self.assertIn("配置目录信息", label)
         self.assertIsNone(cb)
@@ -98,7 +106,7 @@ class TestMenuItems(unittest.TestCase):
 
     def test_doctor_item(self) -> None:
         """系统自检项在健康历史后、退出前（快捷键 T）。"""
-        key, label, cb, is_exit = MENU_ITEMS[16]
+        key, label, cb, is_exit = MENU_ITEMS[17]
         self.assertEqual(key, "T")
         self.assertIn("系统自检", label)
         self.assertIsNone(cb)
@@ -135,19 +143,22 @@ class TestIndexByKey(unittest.TestCase):
         self.assertEqual(index_by_key("W"), 3)
 
     def test_find_X(self) -> None:
-        self.assertEqual(index_by_key("X"), 17)
+        self.assertEqual(index_by_key("X"), 18)
+
+    def test_find_Q(self) -> None:
+        self.assertEqual(index_by_key("Q"), 4)
 
     def test_find_D(self) -> None:
-        self.assertEqual(index_by_key("D"), 4)
+        self.assertEqual(index_by_key("D"), 5)
 
     def test_find_T(self) -> None:
-        self.assertEqual(index_by_key("T"), 16)
+        self.assertEqual(index_by_key("T"), 17)
 
     def test_find_V(self) -> None:
-        self.assertEqual(index_by_key("V"), 14)
+        self.assertEqual(index_by_key("V"), 15)
 
     def test_find_H(self) -> None:
-        self.assertEqual(index_by_key("H"), 15)
+        self.assertEqual(index_by_key("H"), 16)
 
     def test_find_nonexistent(self) -> None:
         self.assertIsNone(index_by_key("Z"))
@@ -157,7 +168,7 @@ class TestIndexByKey(unittest.TestCase):
         self.assertIsNone(index_by_key("e"))
 
     def test_find_number(self) -> None:
-        self.assertEqual(index_by_key("1"), 5)
+        self.assertEqual(index_by_key("1"), 6)
 
     def test_find_empty(self) -> None:
         self.assertIsNone(index_by_key(""))
