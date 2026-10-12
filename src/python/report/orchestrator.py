@@ -41,7 +41,6 @@ class ReportResult:
     holdings_ok: bool = False
     excel_ok: bool = False
     html_ok: bool = False
-    llm_ok: bool = True
     news_ok: bool = True
     history_ok: bool = True
     report_generated: bool = False

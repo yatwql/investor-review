@@ -33,6 +33,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 from src.python.config import get_default
+from src.python.qa.error_codes import QA_BAD_REPORT, QA_CONTEXT_INVALID, QA_REPORT_NOT_FOUND
 
 logger = logging.getLogger("invest")
 
@@ -233,11 +234,11 @@ def sanitize_report_filename(report: str) -> str | None:
 def _resolve_report_path(report: str, output_dir: str | None) -> Path:
     """解析报告文件路径（净化单源 + 分层防御）。"""
     if sanitize_report_filename(report) is None:
-        raise ReportQaContextError("report 参数不合法", code="QA_BAD_REPORT")
+        raise ReportQaContextError("report 参数不合法", code=QA_BAD_REPORT)
     base = output_dir or get_default("output_dir") or "reports"
     path = Path(base) / report
     if not path.is_file():
-        raise ReportQaContextError("报告文件不存在（可能已被删除或移动，请重新生成报告）", code="QA_REPORT_NOT_FOUND")
+        raise ReportQaContextError("报告文件不存在（可能已被删除或移动，请重新生成报告）", code=QA_REPORT_NOT_FOUND)
     return path
 
 
@@ -309,7 +310,7 @@ def extract_report_qa_context(report: str, output_dir: str | None = None) -> Rep
 
     if not parser.sections:
         logger.warning("[report_qa] 报告无可用章节锚点（sec-*），判定结构不可解析 report=%s", report)
-        raise ReportQaContextError("无法解析该报告结构，追问不可用（请重新生成报告后重试）", code="QA_CONTEXT_INVALID")
+        raise ReportQaContextError("无法解析该报告结构，追问不可用（请重新生成报告后重试）", code=QA_CONTEXT_INVALID)
 
     parts: list[str] = []
     for sid, lines in parser.sections:

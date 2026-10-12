@@ -24,12 +24,13 @@
   15. Provider Chain 降级表  `fetcher/chain.py` `_DEFAULT_CHAINS` → manuals/datasource-reliability.md（逐链双向）
   16. 守护清单同源        developer-guide P0/P2 门禁块 + ci.yml guards steps + CLAUDE.md/testplan.md 清单 + .githooks/pre-commit（五处）`check-*.py --ci` 引用集合两两一致
   17. 章节-区块矩阵      区块注册表三向对账（文档行 ↔ 注册表逐列 / 实现提取集合） → managements/technical.md §4.22
+  18. 手册菜单块一致性  双手册主菜单 code block（键集合/标签头）→ tui/tui_menu.py MENU_ITEMS
 
 按设计豁免的历史记录文档：`changelog.md` / `review-findings.md`（会如实引用旧数字作为变更记录）
 与 `docs/archive/**`（版本快照）不参与第 2/4/5 项扫描。
 
 用法：
-  python scripts/check-doc-drift.py                  # 十七项全查
+  python scripts/check-doc-drift.py                  # 十八项全查
   python scripts/check-doc-drift.py -v               # 详细输出（打印解析明细）
   python scripts/check-doc-drift.py --ci             # CI 模式：仅输出 文件:描述，退出码 2
   python scripts/check-doc-drift.py --with-test-count # 附带 pytest 收集，核对「测试用例数」与 test-coverage.md 计数表
@@ -39,7 +40,7 @@
   2 — 发现不一致（逐条列出 文件:描述，可直接按提示改）
 
 本文件为入口：仅保留 CLI 与编排（`run_checks` / `main`），检查实现分置于
-`_doc_drift/` 包内四个子模块（共享设施 / 文档格式族 / 目录树与统计 / 台账族），
+`_doc_drift/` 包内五个子模块（共享设施 / 文档格式族 / 目录树与统计 / 台账族 / 手册菜单块），
 并在下方**原面 re-export** 全部检查函数与常量——调用方（含按路径加载本模块的单测）
 零改动。
 """
@@ -157,6 +158,9 @@ from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc
     find_guard_parity,
     check_guard_parity,
     guard_parity_sources,
+    check_menu_blocks,
+    parse_menu_block_lines,
+    _HOW_TO_START_MD,
 )
 
 
@@ -173,6 +177,7 @@ def run_checks(with_test_count: bool = False) -> list[str]:
     findings += check_config_defaults(docs[_HOW_TO_CONFIG_MD])
     findings += check_llm_defaults(docs[_LLM_TECHNICAL_MD])
     findings += check_panel_numbering(docs[_TUI_MENU_MD])
+    findings += check_menu_blocks({_HOW_TO_START_MD: docs[_HOW_TO_START_MD], _TUI_MENU_MD: docs[_TUI_MENU_MD]})
     findings += check_dir_tree(docs[_FOLDERS_MD])
     findings += check_chain_table(docs[_RELIABILITY_MD])
     findings += check_archive_index()
@@ -188,7 +193,7 @@ def run_checks(with_test_count: bool = False) -> list[str]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="校验文档中的章节/开关/默认值/目录树/统计断言/归档索引/分区纪律/Thinking 支持矩阵/章节-区块矩阵与代码、配置文件、文件系统的一致性",
+        description="校验文档中的章节/开关/默认值/目录树/统计断言/归档索引/分区纪律/Thinking 支持矩阵/章节-区块矩阵/手册菜单块与代码、配置文件、文件系统的一致性",
     )
     add_common_args(parser)
     parser.add_argument(
@@ -235,7 +240,7 @@ def main() -> None:
     sys.exit(
         report(
             findings,
-            "[OK] 文档与实现一致性校验通过（章节/开关/默认值/面板编号/目录树/统计表/归档索引/分区纪律/Thinking 支持矩阵/章节-区块矩阵均与代码一致）",
+            "[OK] 文档与实现一致性校验通过（章节/开关/默认值/面板编号/目录树/统计表/归档索引/分区纪律/Thinking 支持矩阵/章节-区块矩阵/手册菜单块均与代码一致）",
             ci=args.ci,
             fail_message="[!] 发现 {n} 处文档与实现不一致，须修正后提交",
         )

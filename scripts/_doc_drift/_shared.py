@@ -37,6 +37,9 @@ _REPORTS_MD = _MANUALS / "reports-instruction.md"
 _TUI_MENU_MD = _MANUALS / "how-to-use-tui-menu.md"
 
 
+_HOW_TO_START_MD = _MANUALS / "how-to-start.md"
+
+
 _LLM_TECHNICAL_MD = _MANAGEMENTS / "llm-technical.md"
 
 _TECHNICAL_MD = _MANAGEMENTS / "technical.md"

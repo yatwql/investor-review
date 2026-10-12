@@ -19,6 +19,14 @@ from urllib.parse import urlparse
 
 from flask import request, send_from_directory
 
+from src.python.qa.error_codes import (
+    QA_CONTEXT_INVALID,
+    QA_DISABLED,
+    QA_LLM_FAILED,
+    QA_LLM_UNAVAILABLE,
+    QA_REPORT_NOT_FOUND,
+)
+
 logger = logging.getLogger("invest")
 
 # ── 退出码（对齐 cli.py）──────────────────────────────
@@ -545,10 +553,10 @@ def _handle_config_edit():
 # 追问错误码 → HTTP 状态码（与设计 §3.6 校验矩阵一致：
 # 参数/超长/会话与输入超限 400；报告缺失/结构不可解析 404；开关关闭 403；LLM 全链失败 503）
 _QA_STATUS_BY_CODE = {
-    "QA_REPORT_NOT_FOUND": 404,
-    "QA_CONTEXT_INVALID": 404,
-    "QA_LLM_UNAVAILABLE": 503,
-    "QA_LLM_FAILED": 503,
+    QA_REPORT_NOT_FOUND: 404,
+    QA_CONTEXT_INVALID: 404,
+    QA_LLM_UNAVAILABLE: 503,
+    QA_LLM_FAILED: 503,
 }
 
 
@@ -565,7 +573,7 @@ def _handle_report_qa_ask():
     from src.python.config.features import is_feature_enabled
 
     if not is_feature_enabled("report_qa"):
-        return _err("QA_DISABLED", "报告追问功能未开启（功能开关面板启用「报告对话式追问」）"), 403
+        return _err(QA_DISABLED, "报告追问功能未开启（功能开关面板启用「报告对话式追问」）"), 403
 
     payload = request.get_json(silent=True) or {}
     report = str(payload.get("report") or "").strip()

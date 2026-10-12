@@ -42,6 +42,15 @@ from src.python.qa.context import (
     extract_report_qa_context,
     sanitize_report_filename,
 )
+from src.python.qa.error_codes import (
+    QA_BAD_QUESTION,
+    QA_BAD_REPORT,
+    QA_INPUT_CAP_EXCEEDED,
+    QA_LLM_FAILED,
+    QA_LLM_UNAVAILABLE,
+    QA_QUESTION_TOO_LONG,
+    QA_SESSION_LIMIT,
+)
 
 logger = logging.getLogger("invest")
 
@@ -194,24 +203,24 @@ def ask_report_qa(
     """
     question = (question or "").strip()
     if not question:
-        return _fail("QA_BAD_QUESTION", "问题不能为空")
+        return _fail(QA_BAD_QUESTION, "问题不能为空")
     if len(question) > _QA_QUESTION_MAX_CHARS:
         return _fail(
-            "QA_QUESTION_TOO_LONG",
+            QA_QUESTION_TOO_LONG,
             f"问题过长（上限 {_QA_QUESTION_MAX_CHARS} 字），请精简后重试",
         )
     if sanitize_report_filename(report) is None:
-        return _fail("QA_BAD_REPORT", "report 参数不合法（仅限 .html 报告文件名）")
+        return _fail(QA_BAD_REPORT, "report 参数不合法（仅限 .html 报告文件名）")
 
     config = llm_config if llm_config is not None else get_llm_config()
     if not config:
-        return _fail("QA_LLM_UNAVAILABLE", "服务暂不可用（LLM 未配置）")
+        return _fail(QA_LLM_UNAVAILABLE, "服务暂不可用（LLM 未配置）")
 
     session = _acquire_session(report, session_id)
     with session._lock:  # 同会话串行（历史/轮数/记账一致性），跨会话并行
         if session.turns >= _QA_MAX_TURNS:
             return _fail(
-                "QA_SESSION_LIMIT",
+                QA_SESSION_LIMIT,
                 f"本轮对话已达 {_QA_MAX_TURNS} 轮上限，请刷新页面开始新会话",
                 session_id=session.session_id,
             )
@@ -232,7 +241,7 @@ def ask_report_qa(
         )
         if input_chars // _QA_TOKEN_CHARS_PER_TOKEN > _QA_INPUT_TOKEN_CAP:
             return _fail(
-                "QA_INPUT_CAP_EXCEEDED",
+                QA_INPUT_CAP_EXCEEDED,
                 "会话输入已达上限，请刷新页面开始新会话",
                 session_id=session.session_id,
             )
@@ -255,14 +264,14 @@ def ask_report_qa(
         if not content or not content.strip():
             logger.warning("[report_qa] LLM 未产出有效回答 report=%s", report)
             return _fail(
-                "QA_LLM_FAILED",
+                QA_LLM_FAILED,
                 "服务暂不可用（本次未产出有效回答，请稍后重试）",
                 session_id=session.session_id,
             )
         answer_html = markdown_to_html(content).strip()
         if not answer_html:
             return _fail(
-                "QA_LLM_FAILED",
+                QA_LLM_FAILED,
                 "服务暂不可用（本次未产出有效回答，请稍后重试）",
                 session_id=session.session_id,
             )
