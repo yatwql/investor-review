@@ -267,3 +267,22 @@ class TestMenuGating:
         # 开关关 → Q 与 T 一并就地裁剪
         hidden = self._with_menu(monkeypatch, set())
         assert "Q" not in {item[0] for item in hidden} and "T" not in {item[0] for item in hidden}
+
+
+# ── 错误码单一来源（同源断言） ──────────────────────────────────
+
+
+class TestErrorCodesSingleSource:
+    """退出策略 / Web 状态映射的错误码必须引用 qa.error_codes 常量（防字面量双写回潮）。"""
+
+    def test_exit_and_status_maps_use_shared_constants(self):
+        from src.python.qa import error_codes
+        from src.python.web import handlers as web_handlers
+
+        shared = {
+            value for name, value in vars(error_codes).items() if name.startswith("QA_") and isinstance(value, str)
+        }
+        assert shared, "qa.error_codes 应导出错误码常量"
+        assert set(handlers_qa._EXIT_LOOP_CODES) <= shared
+        assert set(handlers_qa._INPUT_ABORT_CODES) <= set(handlers_qa._EXIT_LOOP_CODES)
+        assert set(web_handlers._QA_STATUS_BY_CODE) <= shared

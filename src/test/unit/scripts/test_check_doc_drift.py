@@ -14,6 +14,7 @@
   - 归档索引完整性（管理文档 ↔ `docs/archive/` 双向对齐）
   - 管理文档分区纪律（未完成/已解决/已归档错置、现行 changelog 只允许开发段头）
   - 章节-区块矩阵（technical.md §4.22：文档行 ↔ 区块注册表逐列 / 键集双向 / 双端实现提取集合三向对账）
+  - 手册主菜单 code block ↔ MENU_ITEMS（键集合/标签头/多列与光标前缀解析/无块报错）
 
 兄弟分片：test_check_doc_drift_crosscheck.py（文档↔代码交叉校验：数据源链路表/Extended Thinking 支持矩阵/
 测试收集快照/生成产物/真实仓库冒烟/统计表回写同步/守护清单同源）。
@@ -29,6 +30,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from src.python.core.section_block_registry import SECTION_BLOCK_SPECS
+from src.python.tui.tui_menu import MENU_ITEMS
 
 import pytest
 from src.test._script_loader import load_script
@@ -700,3 +702,68 @@ class TestBlockMatrix:
         monkeypatch.delitem(SECTION_BLOCK_SPECS, "llm_usage")
         findings = drift.check_block_matrix(self._doc(drift))
         assert any("缺区块契约" in f for f in findings)
+
+
+class TestMenuBlockConsistency:
+    """手册主菜单 code block ↔ tui_menu.MENU_ITEMS 一致性（doc-drift 第 18 项）。"""
+
+    @staticmethod
+    def _menu_doc(*, skip: str | None = None, relabel: tuple[str, str] | None = None, extra: str | None = None) -> str:
+        """按当前 MENU_ITEMS 动态生成主菜单块（真值派生，不写死清单与条数）。"""
+        lines = []
+        for key, label, _cb, _is_quit in MENU_ITEMS:
+            if key == skip:
+                continue
+            if relabel and key == relabel[0]:
+                label = relabel[1]
+            lines.append(f"    [{key}] {label}")
+        if extra:
+            lines.append(extra)
+        return "```text\n" + "\n".join(lines) + "\n```\n"
+
+    def test_consistent_block_passes(self, drift, tmp_path):
+        """与真值一致的主菜单块无 finding。"""
+        p = tmp_path / "how-to-use-tui-menu.md"
+        assert drift.check_menu_blocks({p: self._menu_doc()}) == []
+
+    def test_missing_key_reported(self, drift, tmp_path):
+        """块内缺某个菜单键 → 报「缺少」并带真值标签。"""
+        p = tmp_path / "how-to-start.md"
+        findings = drift.check_menu_blocks({p: self._menu_doc(skip="Q")})
+        assert any("[Q]" in f and "缺少" in f for f in findings)
+
+    def test_unknown_key_reported(self, drift, tmp_path):
+        """块内出现 MENU_ITEMS 不存在的键 → 报「未知按键」。"""
+        p = tmp_path / "how-to-start.md"
+        findings = drift.check_menu_blocks({p: self._menu_doc(extra="    [Z] 不存在的项")})
+        assert any("[Z]" in f and "未知按键" in f for f in findings)
+
+    def test_label_head_drift_reported(self, drift, tmp_path):
+        """标签头与真值不一致 → 报漂移。"""
+        p = tmp_path / "how-to-use-tui-menu.md"
+        findings = drift.check_menu_blocks({p: self._menu_doc(relabel=("E", "生成基础版报告（仅 Excel）"))})
+        assert any("[E]" in f and "标签头" in f for f in findings)
+
+    def test_parenthetical_clarification_allowed(self, drift, tmp_path):
+        """括号内补充手册说明（头一致）不误报。"""
+        p = tmp_path / "how-to-use-tui-menu.md"
+        findings = drift.check_menu_blocks({p: self._menu_doc(relabel=("3", "清理过期缓存文件（二级：确认后执行）"))})
+        assert findings == []
+
+    def test_multicolumn_and_cursor_prefix_parsed(self, drift):
+        """两列排版与 `> ` 光标前缀均能解析出完整键集。"""
+        items = list(MENU_ITEMS)
+        half = (len(items) + 1) // 2
+        left = [f"    [{k}] {lb}" for k, lb, _cb, _q in items[:half]]
+        left[0] = "  > " + left[0][4:]
+        right = [f"    [{k}] {lb}" for k, lb, _cb, _q in items[half:]]
+        rows = [left[i] + ("        " + right[i] if i < len(right) else "") for i in range(half)]
+        parsed = drift.parse_menu_block_lines("```text\n" + "\n".join(rows) + "\n```\n")
+        assert set(parsed) == {k for k, _lb, _cb, _q in MENU_ITEMS}
+        assert parsed[items[0][0]] == items[0][1]
+
+    def test_no_menu_block_reported(self, drift, tmp_path):
+        """无主菜单块（缺 [E]/[X] 识别标志）→ 报未找到。"""
+        p = tmp_path / "faq.md"
+        findings = drift.check_menu_blocks({p: "# 无菜单块\n\n普通段落。\n"})
+        assert any("未找到主菜单 code block" in f for f in findings)

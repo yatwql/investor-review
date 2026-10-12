@@ -563,8 +563,6 @@ def _generate_report_full(
         from src.python.llm.fallback import build_fallback_llm_content
 
         llm_content = build_fallback_llm_content(llm_content)
-        if all(c is not None for c in llm_content[:4]):
-            result.llm_ok = True
 
     # ── 5b. 决策跨期反思闭环（LLM 载体登记 + 复盘区块装配）──
     # ③ 登记 LLM 操作建议 ④ 复盘区块数据契约注入 pipeline_data（HTML/Excel 行动章

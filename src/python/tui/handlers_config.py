@@ -134,7 +134,7 @@ def _cmd_config_output_dir() -> None:
 
 
 def _cmd_config_dir_info() -> None:
-    """配置目录信息子菜单 — 对应主菜单 [D] 及其二级选项 [C]/[F]/[O]/[B]。
+    """查看配置与目录信息子菜单 — 对应主菜单 [D] 及其二级选项 [C]/[F]/[O]/[B]。
 
     持仓目录 / 持仓文件名 / 报告输出目录三项聚合到 [D] 之下（主菜单不再单列）；
     子菜单循环直至 [B]（或空输入 / Ctrl+C）返回主菜单。
@@ -147,7 +147,7 @@ def _cmd_config_dir_info() -> None:
     ]
     while True:
         print()
-        print("  ── 配置目录信息 ──")
+        print("  ── 配置与目录信息 ──")
         for _key, _label, _fn in items:
             print(f"   [{_key}] {_label}")
         print("   [B] 返回主菜单")

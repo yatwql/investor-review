@@ -1,5 +1,5 @@
 # 测试覆盖统计
-> 文档版本：0.12.12
+> 文档版本：0.12.13
 
 > ⚠ 以下测试项数为撰写时的快照值，实际计数随版本迭代而变化。`模式对应测试量` 表由 `--mode bench --update-docs` 自动回填本机实测；功能域/分组等子表精确统计请运行 `scripts/collect-test-coverage.py`（或 `pytest src/test/ --collect-only -q`）获取实时计数。
 
@@ -10,20 +10,20 @@
 <!-- mode-count-table:start -->
 | `--mode` 值 | 覆盖项数 | 典型耗时 |
 |:------------|:--------:|:--------:|
-| `unit` | **9806** | ~31s |
-| `standard` | **8599** | ~32s |
-| `scenario` | **257** | ~11s |
-| `regression` | **257** | ~10s |
-| `dev-verify` | **6715** | ~31s |
-| `verify` | **9495** | ~36s |
-| `integration` | **299** | ~10s |
+| `unit` | **9815** | ~27s |
+| `standard` | **8608** | ~32s |
+| `scenario` | **257** | ~10s |
+| `regression` | **257** | ~11s |
+| `dev-verify` | **6723** | ~26s |
+| `verify` | **9503** | ~34s |
+| `integration` | **299** | ~11s |
 | `edge` | **1139** | ~15s |
 | `data` | **70** | ~4s |
-| `all` | **10159** | ~34s |
+| `all` | **10168** | ~36s |
 | `smoke` | **26** | ~3s |
 | `report` | **2555** | ~20s |
 | `all_no_unit` | **353** | ~10s |
-| `scenario_extreme` | **9** | ~4s |
+| `scenario_extreme` | **9** | ~3s |
 <!-- mode-count-table:end -->
 
 > 注：典型耗时按 开发机实测（Linux x86_64，Intel i5-13500H，12 核 16 线程，46.8 GiB 内存；pytest-xdist worker=8，即 medium 级别 = 50% 核数）。**耗时与硬件/操作系统/并行度强相关**——OS（调度器/文件系统/进程创建开销/电源管理）、CPU 或并行度不同时各模式耗时可能数倍于此，仅作相对量级参考。跨机器回填可用 `--mode bench --update-docs` 自动更新模式对应测试量 + 下方两张环境耗时对照表。
@@ -39,7 +39,7 @@
 #### 采集环境属性
 
 <!-- env-table:start -->
-| 环境属性 | dragonball（2026-10-12 实测） | stallman-NB1（2026-10-02 实测） |
+| 环境属性 | dragonball（2026-10-13 实测） | stallman-NB1（2026-10-02 实测） |
 |:---------|:---------------------------|:---|
 | 操作系统 | Linux | Windows |
 | 系统版本 | 6.18.25-x64v3-xanmod1 | 11 |
@@ -54,30 +54,30 @@
 | Python 版本 | 3.13.5 | 3.13.0 |
 | 并行级别 | medium | medium |
 | worker 数 | 8 | 4 |
-| 采集日期 | 2026-10-12 | 2026-10-02 |
+| 采集日期 | 2026-10-13 | 2026-10-02 |
 <!-- env-table:end -->
 
 #### 各模式耗时对照
 
 <!-- duration-table:start -->
-| `--mode` | dragonball（2026-10-12 实测） | stallman-NB1（2026-10-02 实测） |
+| `--mode` | dragonball（2026-10-13 实测） | stallman-NB1（2026-10-02 实测） |
 |:---------|:---------------------------:|:---:|
-| `unit` | ~31s | ~3min |
+| `unit` | ~27s | ~3min |
 | `standard` | ~32s | ~3min |
-| `scenario` | ~11s | ~51s |
-| `regression` | ~10s | ~1min |
-| `verify,regression` | ~47s（verify+regression 顺序之和） | ~5min（verify+regression 顺序之和） |
-| `dev-verify` | ~31s | ~4min |
-| `verify` | ~36s | ~4min |
-| `integration` | ~10s | ~2min |
+| `scenario` | ~10s | ~51s |
+| `regression` | ~11s | ~1min |
+| `verify,regression` | ~45s（verify+regression 顺序之和） | ~5min（verify+regression 顺序之和） |
+| `dev-verify` | ~26s | ~4min |
+| `verify` | ~34s | ~4min |
+| `integration` | ~11s | ~2min |
 | `edge` | ~15s | ~1min |
 | `data` | ~4s | ~31s |
-| `all` | ~34s | ~4min |
+| `all` | ~36s | ~4min |
 | `smoke` | ~3s | ~28s |
 | `report` | ~20s | ~2min |
 | `all_no_unit` | ~10s | ~1min |
-| `scenario_extreme` | ~4s | ~32s |
-| 数据更新时间 | 2026-10-12 | 2026-10-02 |
+| `scenario_extreme` | ~3s | ~32s |
+| 数据更新时间 | 2026-10-13 | 2026-10-02 |
 <!-- duration-table:end -->
 
 > **2026-10-03 门禁口径变更**：P0 `dev-verify` 与 P1 `verify` 的 marker 已并入 `unit_report` 域（98 文件 / 2,130 用例此前不进任何门禁档），新量级见上方「模式对应测试量」表（本机实测 ~38s / ~32s）；上方对照表中 `dev-verify`/`verify` 两行为**并入前快照**，跨档对比时以新口径为准。

@@ -198,7 +198,7 @@ def _cmd_cleanup_cache() -> None:
 
 
 def _cmd_show_cache_stats() -> None:
-    """查看缓存/状态统计信息。"""
+    """查看缓存与状态统计信息。"""
     from src.python.cache.operations import get_cache_stats
     from src.python.report.progress import TuiProgressReporter
 

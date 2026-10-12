@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.12.12
+> 文档版本：0.12.13
 
 ## 概述
 
@@ -104,7 +104,7 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 .venv/bin/python scripts/check-doc-traces.py --ci           # 文档历史痕迹检查
 .venv/bin/python scripts/check-task-numbering.py --ci       # 任务编号全局一致性检查
 .venv/bin/python scripts/check-semantic-index.py --ci       # 语义命名索引正反向校验
-.venv/bin/python scripts/check-doc-drift.py --ci            # 文档与实现一致性（章节/开关/默认值/面板编号/目录树/统计表/归档索引/分区纪律/Thinking 支持矩阵/章节-区块矩阵）
+.venv/bin/python scripts/check-doc-drift.py --ci            # 文档与实现一致性（章节/开关/默认值/面板编号/目录树/统计表/归档索引/分区纪律/Thinking 支持矩阵/章节-区块矩阵/手册菜单块）
 .venv/bin/python scripts/check-test-redundancy.py --ci      # 测试用例冗余与无效（死用例/无断言/完全重复/自证用例/硬编码演进总数）
 .venv/bin/python scripts/check-requirement-trace.py --ci   # 需求 ID ↔ 验证载体追溯（已补全域全覆盖 + 载体文件存在）
 .venv/bin/python scripts/check-version-consistency.py --ci   # 版本号全局一致性（APP_VERSION ↔ README/pyproject/管理文档 10 份）
@@ -1425,7 +1425,7 @@ CLI 模式的便捷入口，跳过 TUI 界面，直接以命令行模式运行�
 
 **`llm.sh` / `llm.ps1` — 完整报告快捷入口**
 
-只做一件事：生成含 LLM 分析章节的完整报告，等价于 TUI 菜单的「生成完整报告(Excel+HTML) [含LLM，按章节配置]」。
+只做一件事：生成含 LLM 分析章节的完整报告，等价于 TUI 菜单的「生成完整报告（Excel+HTML，含 LLM）」。
 子命令与报告类型写死在脚本里，免去每次敲 `report --type full`。
 
 ```bash

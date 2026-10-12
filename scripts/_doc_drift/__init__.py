@@ -96,6 +96,7 @@ from _doc_drift._shared import (  # noqa: F401
     _HOW_TO_CONFIG_MD,
     _REPORTS_MD,
     _TUI_MENU_MD,
+    _HOW_TO_START_MD,
     _LLM_TECHNICAL_MD,
     _TECHNICAL_MD,
     _TEST_COVERAGE_MD,
@@ -119,6 +120,11 @@ from _doc_drift._shared import (  # noqa: F401
     _collect_test_snapshot,
 )
 
+from _doc_drift._menu_blocks import (  # noqa: F401
+    check_menu_blocks,
+    parse_menu_block_lines,
+)
+
 __all__ = [
     "_README",
     "_MANUALS",
@@ -127,6 +133,7 @@ __all__ = [
     "_HOW_TO_CONFIG_MD",
     "_REPORTS_MD",
     "_TUI_MENU_MD",
+    "_HOW_TO_START_MD",
     "_LLM_TECHNICAL_MD",
     "_TECHNICAL_MD",
     "_TEST_COVERAGE_MD",
