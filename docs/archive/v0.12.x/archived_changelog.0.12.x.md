@@ -312,3 +312,15 @@
 - **禁用 LLM 模块误渲染故障占位章节（rf-664）**：`enabled_llm.<模块> = false` 时 HTML 报告仍渲染对应章节且带误导性故障占位（用户实测 `penetration_deep` 关闭仍出「、穿透深度分析」+「⚠️ 当前无法生成…LLM API 服务暂时不可用、API Key 配置错误」）。根因两层：① `report_template.html` 四个 LLM 章 include 共用单一 `section_visible("global_macro")` 守卫，`_compute_section_visibility` 已实现的逐模块章级隐藏 + 连续重编号未落到正文（导航逐模块剔除而正文照渲，序号缺键渲染为空）；② `llm/fallback.py::build_fallback_llm_content` 把禁用（`LLM_MODULE_FAILURE=disabled` 的 None）与生成失败混同，向禁用槽位注入占位。修复：四 include 改逐模块 `section_visible` 守卫（同时修复 global_macro 禁用连带隐藏其余兄弟 LLM 章节的过度隐藏）+ fallback 禁用槽位保持 None（占位只注入「启用但真实失败」的模块，禁用整章隐藏）。回归：模板逐模块隐藏与不过度隐藏反向 2 例 + fallback 禁用感知 4 例。
 - **36h 技术债核查批次整改（rf-663）**：`check-doc-drift.py` docstring 检查项 4/8 三组措辞四组化（组名与残留名单以 `_GROUP_DOC_NAMES`/`_RETIRED_GROUP_NAMES` 派生为真值）、`developer-guide.md` check-semantic-index 正向描述改「注册表每个键（全量）」、`main.js` 实验项注释改「实验身份与作用域分组正交」、plan-120 设计文档按先例迁入 `docs/archive/v0.12.x/feature-switch-grouping/`（changelog / archived_plan / archived_changelog / folders 四处链接与目录树同步）、设计文档 §8 补转正迁移演练实测记录（decision_reflection 内存模拟转正：`experimental_flags` 收窄至 report_qa、取值域拒绝、自述与 Web surface 联动、面板编号零变化、还原全复原）、P3 文件过长登记表补登 `features.py`（730）/ `_format.py`（558）/ `handlers_config.py`（534）三行 + 归档文件补 rf-661/662 追加归档行。
 - **TUI 主菜单 [S] 标签四组措辞对齐（rf-666）**：「配置功能开关」菜单标签残留旧三组描述（「实验性/常规/报告章节与增强开关」），改为「四组功能开关」，与手册/面板口径一致。
+
+## [0.12.13] - 2026-10-13
+
+### Changed
+
+- **TUI 主菜单 8 项描述整体精简**：[E] 生成基础报告（仅 Excel）、[B]/[L] 统一全角括号与产物标注（半角 `()`/`[方括号]` 与快捷键记号冲突消除、含 LLM 补空格）、[D] 改「查看配置与目录信息」（只读语义归位，子菜单横幅/docstring 同步）、[P] 改「配置报告可选章节（顺序与取舍）」（摘除 5 个章节名枚举——菜单与注册表双写漂移隐患）、[S] 改「配置功能开关（作用域四组，含 LLM 章节）」、[4] 改「查看缓存与状态统计」；新增菜单标签显示宽 ≤48 守卫断言（东亚宽度口径，80 列终端不折行，[P] 原 79 宽必折行）；手册双菜单块/详解标题/faq/developer-guide/requirements/technical/testplan（18→19 项）同步；跨渠道收尾（rf-667）：requirements E/B/L 行、technical B/L/[3][4] 行、CLI §10.1 对照表、faq [4] 措辞、web 手册镜像表 8→9 组修正、README（19 项菜单/10,000+ 用例/[D] 措辞）
+
+- **README 截图全面刷新（六图）**：报告实景三图改用**全新虚构多资产样例持仓**（两账户 10 只：个股/场外基金/ETF/债基/货基，编造份额成本，不使用真实持仓）以全量报告（24 开关全开 + 六 LLM 模块全开、真实调用）重拍——`report-overview`（完整目录导航与全部章节入口）/新增 `report-toc`（盈亏汇总与持仓概况）/`report-charts`（交互图表）；新增界面实景三图 `tui-menu`（19 项主菜单 pty 捕获渲染）、`web-workbench`（生成报告页签）、`web-config`（配置编辑面板）；README 新增 🖥️ 界面实景段，`folders.md` 目录树/统计行同步（截图 2→6 张）；样例生成与截图全程隔离（`--config` 副本 + `data/` 运行前备份恢复，快照零残留）
+
+### Fixed
+
+- **自审修复 rf-667 ~ rf-670**：testplan 两处「18 选项」残留与 [Q] 缺列（与 19 项口径统一，人工回归清单不再漏测 Q）；`check-doc-drift` 新增第 18 项「手册主菜单 code block ↔ MENU_ITEMS 逐键一致」机检（双手册键集合+标签头，防手写副本漂移）；QA 错误码收敛 `qa/error_codes.py` 单一来源（会话/上下文生产、Web 状态映射、TUI 退出策略同源引用）；删除只写不读的 `llm_ok` 死字段
