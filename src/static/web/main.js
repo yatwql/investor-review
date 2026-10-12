@@ -1076,7 +1076,7 @@
       var labels = (opts && opts.labels) || CONFIG_LABELS[groupKey];
       var label = (labels && labels[key]) || key;
       if (opts && opts.experimental && opts.experimental.indexOf(key) !== -1) {
-        // 实验项逐行 ⚗ 标记：清单由服务端下发，实验身份与所属组解耦（不再整块属实验组）
+        // 实验项逐行 ⚗ 标记：清单由服务端下发，实验身份与作用域分组正交（同组内可共存实验项与常规项）
         label = '⚗ ' + label;
       } else if (opts && opts.reportAffecting && opts.reportAffecting.indexOf(fullKey) !== -1) {
         // 「关闭即改变报告内容」与其「只影响入口显隐」的开关须可区分（标记清单由服务端下发）

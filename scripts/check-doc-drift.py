@@ -10,11 +10,11 @@
   1.  报告章节表        core/report_section_registry.py `_REPORT_SECTION_DEFAULT` → manuals/reports-instruction.md
   2.  章节数量断言      同上（`页签编号 1~N` / `默认顺序（N 项` / `返回 result（N 项` / `N 个报告章节`）→ 全库文档
   3.  功能开关表        config/features.py `feature_switch_registry`    → manuals/how-to-config.md
-  4.  开关分组计数断言  同上（`⚗实验 A / 常规 B / 报告章节与增强 C`、`实验组（A 项`（含加粗组名与 `报告章节与增强组`）、`共/提供 N 项开关`、`完整 N 项与分组清单` 等）→ 全库文档
+  4.  开关分组计数断言  同上（四组连写链 `呈现与体验 A / 分析增强 B / 独立章节 C / 机制与诊断 D`、单组 `组名（N 项`（含加粗组名）、`共/提供 N 项开关`、`完整 N 项与分组清单`；另检旧三组名残留 `实验组/常规组/报告组/报告章节与增强组`，组名与残留名单以 `_GROUP_DOC_NAMES`/`_RETIRED_GROUP_NAMES` 注册表派生为真值）→ 全库文档
   5.  开关默认值断言    同上（`` `flag` `` 后紧随「默认开/关」）          → 全库文档
   6.  配置标量默认值表   config/_config_defaults.py `_DEFAULT_CONFIG`   → manuals/how-to-config.md
   7.  LLM 默认参数表     config/_llm_settings_defaults.py + 缓存 TTL 注册表 → managements/llm-technical.md
-  8.  TUI 面板编号       `tui/handlers_config.py` 的派生规则（LLM 可见模块 + 三组顺序连续编号）→ manuals/how-to-use-tui-menu.md
+  8.  TUI 面板编号       `tui/handlers_config.py` 的派生规则（LLM 可见模块 + 作用域四组顺序连续编号）→ manuals/how-to-use-tui-menu.md
   9.  目录树           文件系统实测（src/、scripts/、docs/{managements,manuals,plan}）→ managements/folders.md
   10. 项目统计表        文件系统实测（文件数/行数）+ 可选 pytest 收集数 → managements/folders.md
   11. 测试覆盖计数表    `scripts/collect-test-coverage.py` 快照 → managements/test-coverage.md（仅 `--with-test-count`）

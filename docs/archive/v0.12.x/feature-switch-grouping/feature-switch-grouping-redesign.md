@@ -1,6 +1,6 @@
 # 功能开关面板分组重构（feature_switch 分组作用域化）迭代设计方案与实施计划
 
-> 关联任务：plan-120（`docs/managements/plan.md` P2 预期实施）
+> 关联任务：plan-120（已实施并归档，完成态见 `docs/archive/v0.12.x/archived_plan.0.12.x.md`）
 > 版本：v0.12.12-dev · 状态：设计定稿
 > 语义命名：本设计围绕既有注册表 `config/features.py::feature_switch_registry`（功能开关注册表唯一事实来源约束）；新增分组常量与字段以 `scope`/`GROUP_*` 语义命名。本文所有代码标识符以此为准，禁用任务编号命名（语义命名纪律）。
 
@@ -307,4 +307,6 @@ GROUP_LABELS = {
 | 1 | `scripts/_doc_drift/_format.py`（四组适配） | `src/test/unit/scripts/` drift 相关用例（三/四组双态） | — |
 | 2 | `config/features.py` + `tui/handlers_config.py` + `web/config_edit.py` + `config/_core.py`（docstring） | `src/test/unit/config/test_features.py`（key/default/取值域恒等 + 四组计数 + `_experimental_flags()` 字段化改写 + `GROUP_EXPERIMENTAL` import 清零） | `features.py` 顶部注释 |
 | 3 | — | — | **16 份命中文档**（requirements 19 处 + developer-guide 9 处 + test-coverage 3 处 + 手册 + technical.md + testplan + llm-technical）+ changelog Added |
-| 4 | 转正迁移演练（临时改、测后还原） | TUI/Web 冒烟 + 十守护 | — |
+| 4 | 转正迁移演练（临时改、测后还原） | TUI/Web 冒烟 + 十守护 | 演练记录（见表下） |
+
+> **转正迁移演练记录（2026-10-12，纯内存模拟 + `finally` 还原，零文件写入）**：将 `feature_switch_registry["decision_reflection"]` 以 `dataclasses.replace` 临时置 `experimental=False` + 出厂开（模拟真实转正判据）后：① `experimental_flags()` 收窄为 `report_qa` 单项；② `resolve_experiment_flags(["decision_reflection"])` 进 unknown 列表（CLI type 回调据此抛 `ArgumentTypeError` 拒绝），`resolve_experiment_flags(["report_qa"])` 仍正常；③ `describe_experiment_flags()` 页脚自述与 Web surface `features.experimental` 同源收窄；④ 组别归属与面板编号 1..31 零变化（转正不动作用域）；⑤ `finally` 还原后注册表对象同一性、取值域、自述、编号四项基线全复原。

@@ -433,6 +433,29 @@ class TestHtmlSectionVisibility(unittest.TestCase):
         self.assertIsNotNone(sec, "llm_usage 可见时应渲染 section 容器")
         self.assertIn(f"order: {self.numbers['llm_usage']}", sec.get("style", ""))
 
+    def test_disabled_llm_module_section_hidden_individually(self):
+        """逐模块守卫回归：单个 LLM 模块禁用只隐藏该章正文容器。
+
+        回归背景：四个 LLM 模块 include 曾共用单一 section_visible("global_macro")
+        守卫——penetration_deep 禁用时章级可见性已判 False、序号已剔除、导航
+        已剔除，但正文仍渲染出「、穿透深度分析」（序号缺键渲染为空）。
+        """
+        visible = (_ALWAYS_KEYS | _FUND_DEEP_ANALYSIS_KEYS | _NEWS_KEYS | _LLM_KEYS) - {"penetration_deep"}
+        soup = self._render_with_visibility(visible)
+        self.assertIsNone(soup.find(id="sec-penetration_deep"), "禁用模块不应渲染 section 容器")
+        for key in ("global_macro", "expert_review", "health_check", "llm_usage"):
+            self.assertIsNotNone(soup.find(id=f"sec-{key}"), f"{key} 可见时应渲染 section 容器")
+        nav_keys = {link.get("href", "").replace("#sec-", "") for link in soup.select("nav.section-nav a")}
+        self.assertNotIn("penetration_deep", nav_keys, "导航同样不应出现禁用模块")
+
+    def test_global_macro_disabled_does_not_hide_sibling_sections(self):
+        """逐模块守卫回归：global_macro 禁用不得连带隐藏其余 LLM 章（过度隐藏）。"""
+        visible = (_ALWAYS_KEYS | _FUND_DEEP_ANALYSIS_KEYS | _NEWS_KEYS | _LLM_KEYS) - {"global_macro"}
+        soup = self._render_with_visibility(visible)
+        self.assertIsNone(soup.find(id="sec-global_macro"), "禁用的 global_macro 不应渲染")
+        for key in ("expert_review", "health_check", "penetration_deep"):
+            self.assertIsNotNone(soup.find(id=f"sec-{key}"), f"{key} 可见时应渲染 section 容器")
+
 
 # ═══════════════════════════════════════════════════════════════
 #  Test: Custom Section Order

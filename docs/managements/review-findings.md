@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.12.12-dev
-> **编号源**：`rf-next = 663`（新增问题取此编号，完成后更新为 +1；已用最大 rf-662，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 666`（新增问题取此编号，完成后更新为 +1；已用最大 rf-665，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -39,6 +39,7 @@
 | **rf-626** | `llm/prompts_core.py`、`llm/generators.py`、`report/html_writer.py`、`analysis/rebalance.py` | 350 / 444 / 783 / 751 | **临界带四文件登记项，已出带**：`prompts_core`/`generators` 按域下沉完成（failure_reasons / prompts_data_blocks / prompts_review / generators_singletons 四新模块承载，门面 re-export 保留、消费方导入面不变）；`html_writer`(783)/`rebalance`(751) 距 1000 红线余量 217/249 | `html_writer`/`rebalance` 由 `-v` 月度复核、逼近 980 行启动拆分（方法沿用本次：域下沉 + 门面 re-export + 测试 patch 改指持有子模块） |
 | **rf-86** | `cache/operations.py` | 740 | 500-1000 可选优化区间，增长偏快，`-v` 按月复核 | 数据结构定义/基金刷新/公共缓存/持仓缓存/缓存清理 5 个职责 |
 | **rf-79** | `core/code_utils.py` | 731 | 500-1000 可选优化区间，维持现状，`-v` 按月复核 | 可考虑将 `estimate_market_cap_by_prefix()` 等非核心判定函数移出（不拆） |
+| **rf-665** | `config/features.py`、`_doc_drift/_format.py`、`tui/handlers_config.py` | 730 / 558 / 534 | 500-1000 可选优化区间，`-v` 按月复核（rf-663 核查发现补登记，原漏登） | `features.py` 随注册表逐开关增长（每项 ~10 行），逼近 980 行时考虑将 `FeatureSwitchDef` 字段声明/注册表条目下沉独立子模块；另两文件由 `-v` 月度复核 |
 | **rf-89** | `report/excel_generator.py` | 642 | 500-1000 可选优化区间，增长偏快，暂维持现状，`-v` 按月复核 | 页签编排可进一步下沉到独立 writer（后续择机） |
 | **rf-80** | `report/data_status.py` | 622 | 维持现状（DegradationTracker 单类，内部职责内聚） | DegradationTracker 单类偏大（不拆） |
 | **rf-81** | `report/html_renderers.py` | 577 | 维持现状（render 函数同属渲染域） | 所有 HTML render 函数揉合一体（不拆） |
@@ -46,6 +47,11 @@
 | **rf-78** | `fetcher/batch.py` | 520 | 维持现状（BatchDispatcher 内聚，复核确认不拆） | BatchDispatcher 本身内聚，可维持现状（不拆） |
 
 ## 已解决问题
+
+| # | 问题 | 处置 |
+|---|------|------|
+| **rf-663** | 36h 实现技术债核查批次（plan-120 提交后）：`check-doc-drift.py` docstring 检查项 4/8 仍为三组生命周期措辞、`developer-guide.md` check-semantic-index 正向描述失真（称仅校验两分组实为全注册表）、`main.js` 实验项注释残留旧模型对比措辞、plan-120 设计文档未按先例归档（链接悬置）、设计文档 §8「转正迁移演练」验收项未执行、P3 文件过长登记表漏登 3 文件 + 归档缺 rf-661/662 追加行 | 六项全修复（2026-10-12）：docstring 四组化（组名/残留名单以注册表派生为真值）、guide 描述改「全注册表每个键」、注释改「实验身份与作用域分组正交」、设计文档迁入 `docs/archive/v0.12.x/feature-switch-grouping/`（changelog/archived_plan/archived_changelog/folders 四链接与目录树同步）、§8 补演练记录（decision_reflection 内存模拟转正：取值域收窄至 report_qa、自述与 Web surface 联动、面板编号 1..31 零变化、finally 还原全复原）、P3 补登 `features.py`/`_format.py`/`handlers_config.py` 三行 + 归档补追加行；详见 changelog Fixed |
+| **rf-664** | 用户报告缺陷：`enabled_llm.penetration_deep = false` 时 HTML 报告仍渲染「、穿透深度分析」章节（序号缺键为空）并带「⚠️ 当前无法生成…LLM API 服务暂时不可用、API Key 配置错误」误导占位——① `report_template.html` 四个 LLM 章 include 共用单一 `section_visible("global_macro")` 守卫，逐模块章级隐藏与连续重编号未落到正文（导航已剔除、正文照渲）；② `llm/fallback.py::build_fallback_llm_content` 把禁用产生的 None 与生成失败混同注入占位 | 双层修复（2026-10-12）：四 include 改逐模块 `section_visible` 守卫（同时修复 global_macro 禁用连带隐藏兄弟章的过度隐藏）+ fallback 禁用槽位保持 None（占位只注入启用且真实失败的模块）；回归测试 6 例（模板逐模块隐藏×2 + fallback 禁用感知×4）全绿；详见 changelog Fixed |
 
 ### 归档档案
 

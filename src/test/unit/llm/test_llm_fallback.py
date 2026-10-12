@@ -132,6 +132,46 @@ class TestBuildFallbackLlmContent:
             assert "⚠️" in text
 
 
+# ── 禁用模块感知测试（禁用 ≠ 失败） ──────────────────────────
+
+
+class TestBuildFallbackDisabledAwareness:
+    """禁用模块（enabled_llm = false）不得被占位文本伪装成 LLM 故障。
+
+    禁用槽位为 None，与生成失败形状相同；占位文本写明「LLM API 服务暂时不可用、
+    API Key 配置错误」，注入禁用槽位会把用户的配置选择误报成故障。
+    """
+
+    @staticmethod
+    def _mark_disabled(monkeypatch, *keys: str) -> None:
+        """将指定模块在运行时失败登记簿中标记为禁用。"""
+        from src.python.llm.failure_reasons import FAIL_REASON_DISABLED, LLM_MODULE_FAILURE
+
+        for key in keys:
+            monkeypatch.setitem(LLM_MODULE_FAILURE, key, FAIL_REASON_DISABLED)
+
+    def test_disabled_slot_keeps_none_on_partial_failure(self, monkeypatch):
+        """部分失败时：禁用槽位保持 None，启用失败槽位仍注入真实故障占位。"""
+        self._mark_disabled(monkeypatch, "penetration_deep")
+        result = build_fallback_llm_content(("<p>宏观OK</p>", None, "<p>体检OK</p>", None))
+        assert result[0] == "<p>宏观OK</p>"
+        assert "⚠️" in result[1]  # expert_review 启用且失败 → 占位属真实故障
+        assert result[3] is None  # penetration_deep 禁用 → 不伪装 API 故障
+
+    def test_all_disabled_returns_all_none(self, monkeypatch):
+        """全部槽位禁用且无内容 → 全部保持 None（零占位，整章隐藏）。"""
+        self._mark_disabled(monkeypatch, "global_macro", "expert_review", "health_check", "penetration_deep")
+        result = build_fallback_llm_content((None, None, None, None))
+        assert result == (None, None, None, None)
+
+    def test_disabled_slot_content_preserved_when_present(self, monkeypatch):
+        """只动 None 槽位：禁用槽位已有内容时原样保留（不改写、不占位）。"""
+        self._mark_disabled(monkeypatch, "penetration_deep")
+        result = build_fallback_llm_content((None, None, None, "<p>已生成内容</p>"))
+        assert result[3] == "<p>已生成内容</p>"
+        assert "⚠️" in result[0]  # 启用失败槽位仍注入占位
+
+
 # ── is_placeholder_content 测试 ────────────────────────────────
 
 
