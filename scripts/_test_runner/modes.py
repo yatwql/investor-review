@@ -49,7 +49,7 @@ MODES: dict[str, dict] = {
         # 用例集合精确一致（零重叠零遗漏）。timeout = 原两阶段 300s×2 预算总和不变。
         "phases": [
             {
-                "marker": "((unit_core or unit_providers or unit_fetcher or unit_analysis or unit_scripts or unit_web or unit_report) and not (edge or data)) or scenario_basic",
+                "marker": "((unit_core or unit_providers or unit_fetcher or unit_analysis or unit_scripts or unit_web or unit_qa or unit_report) and not (edge or data)) or scenario_basic",
                 "desc": "核心模块单元 + 基础业务场景（单轮；耗时参考 docs/managements/test-coverage.md 环境耗时对照）",
                 "timeout_sec": 600,
                 "parallel": True,
@@ -57,8 +57,8 @@ MODES: dict[str, dict] = {
         ],
     },
     "verify": {
-        "marker": "unit_core or unit_providers or unit_fetcher or unit_config or unit_news or unit_llm or unit_analysis or unit_scripts or unit_web or unit_report",
-        "desc": "合入验证（核心/配置/新闻/LLM/报告模块单元测试，不含场景——场景由 P0+P2 覆盖）",
+        "marker": "unit_core or unit_providers or unit_fetcher or unit_config or unit_news or unit_llm or unit_analysis or unit_scripts or unit_web or unit_qa or unit_report",
+        "desc": "合入验证（核心/配置/新闻/LLM/报告/追问模块单元测试，不含场景——场景由 P0+P2 覆盖）",
         "timeout_sec": 300,
         "order": 6,
         "parallel": True,
@@ -247,6 +247,7 @@ UNIT_DOMAIN_LABELS: dict[str, str] = {
     "unit_cli": "CLI 命令行",
     "unit_ui": "TUI 交互",
     "unit_web": "Web 服务",
+    "unit_qa": "报告问答",
 }
 
 

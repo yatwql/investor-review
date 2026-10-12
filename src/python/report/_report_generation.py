@@ -108,6 +108,7 @@ def _generate_report_both(
     _enable_financial_report_digest = is_enable_financial_report_digest(config)
     _enable_financial_indicator = is_enable_financial_indicator(config)
     _enable_interactive_charts = is_feature_enabled("enable_interactive_charts")
+    _enable_summary_highlights = is_feature_enabled("summary_highlights")
     sec_order = get_report_section_order(config)
     output = output_dir or config.get("output_dir", "reports")
     news_top_count = effective_news_limit(int(config.get("news_top_count", 300)), resolve_depth_profile(config))
@@ -170,6 +171,12 @@ def _generate_report_both(
     # 2b2. 持仓变动复盘（报告章节与增强开关 holding_change_review，默认关；独立于演进开关）：
     #      事件清单差分须晚于本次快照捕获；开关关闭时键缺席 → 整章隐藏（见 seams）
     inject_holding_change_data(pipeline_data, config, reporter, snapshot_namespace=snapshot_namespace)
+    # 2b4. 摘要区本期要点与环比对照（报告章节与增强开关 summary_highlights，默认关）：
+    #      快照 diff 单源纯内存派生；无上期快照时键值为 None → 首屏整块隐藏
+    if _enable_summary_highlights and pipeline_data is not None:
+        from src.python.report.summary_highlights import build_summary_highlights
+
+        pipeline_data["summary_highlights_data"] = build_summary_highlights(pipeline_data)
     # 2c. 品种覆盖诊断 + 可信度摘要：逐品种数据状态/新鲜度标注，注入 pipeline_data
     #    （position_status + data_freshness）
     from src.python.core.data_freshness import build_freshness_summary
@@ -209,12 +216,12 @@ def _generate_report_both(
         history_data = None
         reporter.info("[章节配置] 历史走势已关闭，跳过")
 
-    # 危机区间标注（crisis_annotation_data）：基于既有 bars 重叠裁剪，不拉长 lookback
-    from src.python.analysis.crisis_annotation import build_crisis_annotation
+    # 历史增强契约装配（危机区间标注[含回放态] + 风险调整超额）：full/both 两路径
+    # 共用 _snapshot.assemble_history_augmented_data 唯一实现——开关判定与子块长窗
+    # 取数集中，开关全关时仅写 crisis 关态契约（零新增取数，关态产物逐字节不变）
+    from src.python.report._snapshot import assemble_history_augmented_data
 
-    crisis_annotation_data = build_crisis_annotation(history_data)
-    if pipeline_data is not None:
-        pipeline_data["crisis_annotation_data"] = crisis_annotation_data
+    assemble_history_augmented_data(holdings, config, reporter, history_data, pipeline_data)
 
     # 尾部风险统计（tail_risk_data）：复用历史日收益序列，样本不足时 available=False
     from src.python.analysis.tail_risk import compute_tail_risk
@@ -297,7 +304,7 @@ def _generate_report_both(
             action_data=(pipeline_data or {}).get("action_data"),
             prosperity_framework_data=(pipeline_data or {}).get("prosperity_framework_data"),
             market_sentiment_data=(pipeline_data or {}).get("market_sentiment_data"),
-            crisis_annotation_data=crisis_annotation_data,
+            crisis_annotation_data=(pipeline_data or {}).get("crisis_annotation_data"),
             tail_risk_data=tail_risk_data,
             snapshot_diff_data=(pipeline_data or {}).get("snapshot_diff_data"),
             fund_flow_data=fund_flow_data,
@@ -310,6 +317,8 @@ def _generate_report_both(
             holding_change_data=(pipeline_data or {}).get("holding_change_data"),
             event_impact_data=(pipeline_data or {}).get("event_impact_data"),
             schedule_replay_data=(pipeline_data or {}).get("schedule_replay_data"),
+            risk_adjusted_excess_data=(pipeline_data or {}).get("risk_adjusted_excess_data"),
+            summary_highlights_data=(pipeline_data or {}).get("summary_highlights_data"),
         )
         reporter.ok(f"HTML 报告已生成: {path}")
         result.html_ok = True
@@ -373,6 +382,7 @@ def _generate_report_full(
     reporter: ProgressReporter,
     fetch_history: bool = False,
     force_llm: bool = False,
+    force_llm_modules: list[str] | None = None,
     output_dir: str | None = None,
     transactions: list | None = None,
     dividends: list | None = None,
@@ -425,6 +435,9 @@ def _generate_report_full(
     _enable_cost_lots = is_enable_cost_lots(config)
     _enable_financial_report_digest = is_enable_financial_report_digest(config)
     _enable_financial_indicator = is_enable_financial_indicator(config)
+    from src.python.config.features import is_feature_enabled
+
+    _enable_summary_highlights = is_feature_enabled("summary_highlights")
     sec_order = get_report_section_order(config)
 
     # ── 1. 完整数据准备（含指数/穿透/分类） ──
@@ -474,6 +487,12 @@ def _generate_report_full(
     # 2b3. 调仓纪律回放（实验开关 rebalance_schedule_replay，默认关）：多期规则回放
     #     装配（持仓 + 历史净值 + 成本两态）；开关关闭时键缺席 → 整章隐藏（见 seams）
     inject_schedule_replay_data(pipeline_data, reporter, holdings=holdings)
+    # 2b4. 摘要区本期要点与环比对照（报告章节与增强开关 summary_highlights，默认关）：
+    #      快照 diff 单源纯内存派生；无上期快照时键值为 None → 首屏整块隐藏
+    if _enable_summary_highlights and pipeline_data is not None:
+        from src.python.report.summary_highlights import build_summary_highlights
+
+        pipeline_data["summary_highlights_data"] = build_summary_highlights(pipeline_data)
     perf.stop()
 
     # ── 3. 历史走势 + 全量量化指标 ──
@@ -535,6 +554,7 @@ def _generate_report_full(
         _enable_news,
         _enable_llm,
         reporter,
+        force_llm_modules=force_llm_modules,
         history_data=history_data,
         comparison_indices=_comparison_indices,
         metrics=_metrics,
@@ -636,6 +656,8 @@ def _generate_report_full(
         holding_change_data=(pipeline_data or {}).get("holding_change_data"),
         event_impact_data=(pipeline_data or {}).get("event_impact_data"),
         schedule_replay_data=(pipeline_data or {}).get("schedule_replay_data"),
+        risk_adjusted_excess_data=(pipeline_data or {}).get("risk_adjusted_excess_data"),
+        summary_highlights_data=(pipeline_data or {}).get("summary_highlights_data"),
     )
 
     # ── 7. Excel 报告 ──

@@ -9,11 +9,11 @@
 覆盖：
   - 正式源判定：默认配置/显式正式目录 → 正式
   - 非正式源判定：外部 demo 目录 / 上传暂存区 → 非正式
-  - capture 对非正式源：save/load_latest/prune 零调用、返回 None、reporter 提示
+  - capture 对非正式源：save/load_comparison_baseline/prune 零调用、返回 None、reporter 提示
   - capture 对正式源：环比/落盘/清理行为与守卫引入前一致（首轮 + 二次运行）
   - 命名空间域绕过守卫（web 试算域照常域内闭环）
 
-测试隔离：全 mock（save/load_latest/prune 打在 history_snapshot 模块上），
+测试隔离：全 mock（save/load_comparison_baseline/prune 打在 history_snapshot 模块上），
 不读写真实快照目录、不触网。
 """
 
@@ -26,7 +26,7 @@ import pytest
 
 from src.python.core.constants import PROJECT_ROOT
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_report, pytest.mark.usefixtures("offline_external_sources")]
 
 
 def _detail(code="SH600001", name="测试", mv=1200.0, cost=1000.0, profit=200.0):
@@ -116,7 +116,7 @@ class TestCaptureSnapshotSourceGuard:
     """capture_snapshot 对持仓源的门控行为。"""
 
     def test_non_formal_source_skips_entire_capture(self):
-        """非正式源（namespace=None）：save/load_latest/prune 零调用、返回 None。"""
+        """非正式源（namespace=None）：save/load_comparison_baseline/prune 零调用、返回 None。"""
         from src.python.report._snapshot import capture_snapshot
 
         config = {
@@ -127,7 +127,7 @@ class TestCaptureSnapshotSourceGuard:
         reporter = MagicMock()
         with (
             patch("src.python.report.history_snapshot.save") as mock_save,
-            patch("src.python.report.history_snapshot.load_latest") as mock_load,
+            patch("src.python.report.history_snapshot.load_comparison_baseline") as mock_load,
             patch("src.python.report.history_snapshot.prune") as mock_prune,
         ):
             result = capture_snapshot([_holding()], [_detail()], config, reporter)
@@ -145,25 +145,26 @@ class TestCaptureSnapshotSourceGuard:
         config = {"history": {"snapshot_retention_days": 60, "snapshot_max_count": 365}}
         reporter = MagicMock()
         with (
-            patch("src.python.report.history_snapshot.load_latest", return_value=None) as mock_load,
+            patch("src.python.report.history_snapshot.load_comparison_baseline", return_value=None) as mock_load,
             patch("src.python.report.history_snapshot.save") as mock_save,
             patch("src.python.report.history_snapshot.prune") as mock_prune,
         ):
             result = capture_snapshot([_holding()], [_detail()], config, reporter)
-        mock_load.assert_called_once_with(None)
+        mock_load.assert_called_once()
+        assert mock_load.call_args.args[1] is None, "基线加载基于共享主目录（默认 namespace）"
         mock_save.assert_called_once()
         mock_prune.assert_called_once()
         assert mock_save.call_args.args[1] is None, "正式源默认写共享主目录"
         assert result is None, "首轮（无历史快照）按首次运行口径返回 None"
 
     def test_formal_source_second_run_returns_diff(self):
-        """正式源二次运行：load_latest 参与环比，pipeline_data 携带 diff。"""
+        """正式源二次运行：load_comparison_baseline 参与环比，pipeline_data 携带 diff。"""
         from src.python.report._snapshot import capture_snapshot
 
         config = {"history": {"snapshot_retention_days": 60, "snapshot_max_count": 365}}
         reporter = MagicMock()
         with (
-            patch("src.python.report.history_snapshot.load_latest", return_value=_old_snapshot()),
+            patch("src.python.report.history_snapshot.load_comparison_baseline", return_value=_old_snapshot()),
             patch("src.python.report.history_snapshot.save") as mock_save,
             patch("src.python.report.history_snapshot.prune"),
         ):
@@ -184,7 +185,7 @@ class TestCaptureSnapshotSourceGuard:
         }
         reporter = MagicMock()
         with (
-            patch("src.python.report.history_snapshot.load_latest", return_value=None),
+            patch("src.python.report.history_snapshot.load_comparison_baseline", return_value=None),
             patch("src.python.report.history_snapshot.save") as mock_save,
             patch("src.python.report.history_snapshot.prune") as mock_prune,
         ):

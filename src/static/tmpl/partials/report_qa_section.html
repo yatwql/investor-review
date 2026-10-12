@@ -1,0 +1,305 @@
+<style>
+/* ── 报告追问（实验，report_qa 开关开态才渲染本区块）──
+   颜色/字阶全部取自报告 :root 既有 token（DESIGN.md Colors/Typography，暗色与打印已有变量覆盖，
+   本块不新增任何色值声明）；断点沿用报告既有 768px。 */
+.qa-block {
+    background: var(--surface);
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    margin: 0 0 24px;
+    padding: 16px 20px;
+}
+.qa-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+.qa-title {
+    font-size: var(--fs-h3);
+    font-weight: 600;
+    color: var(--text);
+    line-height: var(--lh-tight);
+}
+.qa-badge {
+    font-size: var(--fs-footnote);
+    color: var(--experimental-badge-text);
+    background: var(--experimental-badge-bg);
+    border-radius: 10px;
+    padding: 2px 8px;
+}
+.qa-sub {
+    font-size: var(--fs-footnote);
+    color: var(--text-faint);
+}
+/* 状态条（空态/进行中/失败三态：Data States 口径） */
+.qa-status {
+    font-size: var(--fs-table-sm);
+    color: var(--text-muted);
+    padding: 8px 10px;
+    background: var(--surface-2);
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    margin-bottom: 10px;
+    line-height: var(--lh-body);
+}
+.qa-status[data-state="loading"] {
+    color: var(--text-secondary);
+    border-style: solid;
+}
+.qa-status[data-state="error"] {
+    color: var(--warn-text);
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+}
+.qa-thread {
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+.qa-thread:not(:empty) {
+    display: flex;
+}
+.qa-msg {
+    font-size: var(--fs-table);
+    line-height: var(--lh-body);
+    border-radius: 6px;
+    padding: 10px 12px;
+    max-width: 92%;
+    overflow-wrap: anywhere;
+}
+.qa-msg-q {
+    align-self: flex-end;
+    background: var(--subtotal-bg);
+    color: var(--text);
+    border: 1px solid var(--border-light);
+}
+.qa-msg-a {
+    align-self: flex-start;
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+.qa-msg-a > p:first-child {
+    margin-top: 0;
+}
+.qa-msg-a > p:last-child {
+    margin-bottom: 0;
+}
+/* 服务端注入的回答尾注与事实核对警示（class 与 qa/session.py 输出同名） */
+.qa-answer-note {
+    color: var(--text-faint);
+    font-size: var(--fs-footnote);
+    margin-top: 6px;
+}
+.qa-fact-warning {
+    color: var(--warn-text);
+    background: var(--warn-bg);
+    border-left: 3px solid var(--warn-border);
+    padding: 6px 8px;
+    border-radius: 4px;
+    font-size: var(--fs-table-sm);
+    margin-top: 8px;
+}
+.qa-form {
+    display: flex;
+    gap: 8px;
+}
+.qa-input {
+    flex: 1;
+    min-width: 0;
+    font-size: var(--fs-table);
+    line-height: var(--lh-body);
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-family: var(--font-stack);
+}
+.qa-input::placeholder {
+    color: var(--text-faint);
+}
+.qa-input:focus {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+    border-color: var(--focus);
+}
+.qa-input:disabled {
+    background: var(--surface-2);
+    color: var(--text-faint);
+    cursor: not-allowed;
+}
+.qa-send {
+    font-size: var(--fs-table);
+    color: #fff;
+    background: var(--primary);
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-family: var(--font-stack);
+}
+.qa-send:hover:not(:disabled) {
+    background: var(--primary-hover);
+}
+.qa-send:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+}
+.qa-send:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+.qa-usage {
+    font-size: var(--fs-footnote);
+    color: var(--text-faint);
+    margin-top: 8px;
+    min-height: 1em;
+}
+@media (max-width: 768px) {
+    .qa-msg {
+        max-width: 100%;
+    }
+    .qa-form {
+        flex-direction: column;
+    }
+    .qa-send {
+        align-self: flex-end;
+    }
+}
+@media print {
+    .qa-block {
+        display: none !important;
+    }
+}
+</style>
+<div class="qa-block" id="report-qa" data-qa-root>
+    <div class="qa-head">
+        <span class="qa-title">报告追问</span>
+        <span class="qa-badge">⚗ 实验</span>
+        <span class="qa-sub">基于本期报告内容作答 · 数据为报告生成时点，非实时</span>
+    </div>
+    <div class="qa-status" data-qa-status data-state="idle">输入问题开始追问</div>
+    <div class="qa-thread" data-qa-thread aria-live="polite"></div>
+    <div class="qa-form">
+        <input class="qa-input" data-qa-input type="text" maxlength="1000" autocomplete="off"
+            placeholder="就本期报告提问，如：本期汇率风险如何？" aria-label="报告追问问题输入框" />
+        <button class="qa-send" data-qa-send type="button">发送</button>
+    </div>
+    <div class="qa-usage" data-qa-usage></div>
+</div>
+<script>
+/* 报告追问前端（report_qa）：同源 POST /api/qa/ask（信封 {ok,data|error_code,error}）；
+   file:// 直开时降级为引导文案（零后端依赖、零 CORS 机制）。会话态仅存页内（刷新即重建）。 */
+(function () {
+    var root = document.getElementById("report-qa");
+    if (!root) return;
+    var statusEl = root.querySelector("[data-qa-status]");
+    var threadEl = root.querySelector("[data-qa-thread]");
+    var inputEl = root.querySelector("[data-qa-input]");
+    var sendBtn = root.querySelector("[data-qa-send]");
+    var usageEl = root.querySelector("[data-qa-usage]");
+    var reportName = decodeURIComponent((location.pathname.split("/").pop() || ""));
+    var sessionId = null;
+    var busy = false;
+    var limitReached = false;
+
+    function setStatus(text, state) {
+        statusEl.textContent = text;
+        statusEl.setAttribute("data-state", state || "idle");
+    }
+    function syncLock() {
+        inputEl.disabled = busy || limitReached;
+        sendBtn.disabled = busy || limitReached;
+    }
+    function appendQ(text) {
+        var div = document.createElement("div");
+        div.className = "qa-msg qa-msg-q";
+        div.textContent = text;
+        threadEl.appendChild(div);
+    }
+    function appendA(html) {
+        var div = document.createElement("div");
+        div.className = "qa-msg qa-msg-a";
+        div.innerHTML = html; /* 服务端生成的渲染 HTML（与报告 LLM 章同口径） */
+        threadEl.appendChild(div);
+    }
+
+    if (location.protocol === "file:") {
+        limitReached = true;
+        syncLock();
+        setStatus("经 Web 工作台打开报告后可使用追问（当前为本地文件直开）", "idle");
+        return;
+    }
+    if (!/\.html$/i.test(reportName)) {
+        limitReached = true;
+        syncLock();
+        setStatus("无法识别报告文件，追问不可用", "error");
+        return;
+    }
+
+    async function ask() {
+        var question = (inputEl.value || "").trim();
+        if (busy || limitReached || !question) return;
+        busy = true;
+        syncLock();
+        setStatus("正在结合本期报告内容作答…", "loading");
+        try {
+            var resp = await fetch("/api/qa/ask", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ report: reportName, question: question, session_id: sessionId })
+            });
+            var body = null;
+            try {
+                body = await resp.json();
+            } catch (e) {
+                body = null;
+            }
+            if (body && body.ok && body.data && body.data.ok) {
+                var data = body.data;
+                sessionId = data.session_id;
+                appendQ(question);
+                appendA(data.answer_html);
+                var remaining = typeof data.remaining_turns === "number" ? data.remaining_turns : null;
+                var usage = data.usage || {};
+                usageEl.textContent =
+                    "剩余轮次 " + (remaining === null ? "—" : remaining) +
+                    " · 累计 input " + (usage.input_tokens || 0) +
+                    " / output " + (usage.output_tokens || 0) + " tokens";
+                inputEl.value = "";
+                if (remaining !== null && remaining <= 0) {
+                    limitReached = true;
+                    setStatus("本轮对话已达上限，刷新页面开始新会话", "error");
+                } else {
+                    setStatus("输入问题继续追问", "idle");
+                }
+            } else {
+                var code = (body && body.error_code) || "";
+                var message = (body && body.error) || "服务暂不可用，请稍后重试";
+                setStatus(message, "error");
+                if (code === "QA_SESSION_LIMIT" || code === "QA_INPUT_CAP_EXCEEDED") {
+                    limitReached = true;
+                }
+            }
+        } catch (e) {
+            setStatus("服务暂不可用，请稍后重试", "error");
+        } finally {
+            busy = false;
+            syncLock();
+            if (!limitReached) inputEl.focus();
+        }
+    }
+
+    sendBtn.addEventListener("click", ask);
+    inputEl.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter") {
+            ev.preventDefault();
+            ask();
+        }
+    });
+})();
+</script>

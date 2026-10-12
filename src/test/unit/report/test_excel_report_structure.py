@@ -365,7 +365,7 @@ class TestExcelExperimentalNotice(unittest.TestCase):
         self.assertNotIn("⚗", self._sheet_text(ws))
 
     def test_notice_lists_enabled_display_names(self):
-        """启用项按显示名逐项列出，并给出总项数。"""
+        """启用项按显示名逐项列出并给总项数；已转正开关不计入（回归：辩论转正后清单只收实验组）。"""
         from src.python.config.features import set_feature_enabled
 
         set_feature_enabled("llm_debate_procon", True)
@@ -375,8 +375,8 @@ class TestExcelExperimentalNotice(unittest.TestCase):
         self._write_sheet(ws)
 
         text = self._sheet_text(ws)
-        self.assertIn("⚗ 本报告在 2 项实验性功能开启下生成", text)
-        self.assertIn("辩论-正反辩论", text)
+        self.assertIn("⚗ 本报告在 1 项实验性功能开启下生成", text)
+        self.assertNotIn("辩论-正反辩论", text)
         self.assertIn("决策跨期反思闭环", text)
         self.assertIn("实验功能输出质量可能不稳定，结论请自行复核", text)
 
@@ -548,3 +548,55 @@ class TestExcelModuleSheets(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestExcelSummaryBaselineRow(unittest.TestCase):
+    """summary 页签【环比对比】区块的对比基准标注行（写明比对的交易日与生成时间）。"""
+
+    def test_baseline_row_written_in_summary_sheet(self):
+        """pipeline_data.diff 携带基线标注 → summary 页签写出「对比基准」行。"""
+        import os
+        import tempfile
+
+        from openpyxl import load_workbook
+
+        from src.python.report.excel_generator import generate_excel_report
+
+        diff = {
+            "is_first_check": False,
+            "days_since_last_report": 3,
+            "baseline_trading_day": "2026-01-09",
+            "baseline_generated_at": "2026-01-09 21:30",
+            "total_value_diff": 100.0,
+            "total_value_diff_pct": 0.5,
+            "total_pnl_diff": 50.0,
+            "added": [],
+            "removed": [],
+            "increased": [],
+            "decreased": [],
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            generate_excel_report(
+                holdings=[],
+                include_news=False,
+                output_dir=tmpdir,
+                news_top_count=5,
+                include_llm=False,
+                details=[],
+                a_indices={"上证指数": {"price": 3000, "change": 0.01, "change_pct": 0.01}},
+                us_indices={},
+                news_data=[],
+                news_llm_meta=None,
+                enable_fund_deep_analysis=False,
+                pipeline_data={"diff": diff},
+            )
+            xlsx_files = [f for f in os.listdir(tmpdir) if f.endswith(".xlsx")]
+            self.assertGreater(len(xlsx_files), 0, "应生成 xlsx 文件")
+            wb = load_workbook(os.path.join(tmpdir, xlsx_files[0]))
+            summary_name = next((n for n in wb.sheetnames if "投资分析汇总" in n), wb.sheetnames[0])
+            ws = wb[summary_name]
+            text = "\n".join(str(c.value) for row in ws.iter_rows() for c in row if c.value is not None)
+
+        self.assertIn("距上次报告", text)
+        self.assertIn("对比基准", text)
+        self.assertIn("交易日 2026-01-09 · 报告生成 2026-01-09 21:30", text)

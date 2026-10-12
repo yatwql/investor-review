@@ -58,7 +58,7 @@ class TestCheckpointSmoke:
 
     # ── Checkpoint 2 ─────────────────────────────────
 
-    @patch("src.python.report.history_snapshot.load_latest")
+    @patch("src.python.report.history_snapshot.load_comparison_baseline")
     @patch("src.python.report.history_snapshot.save")
     @patch("src.python.report.history_snapshot.prune")
     def test_capture_snapshot_extra_fields_wired(

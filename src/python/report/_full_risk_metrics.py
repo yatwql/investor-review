@@ -47,12 +47,13 @@ def _prepare_full_risk_metrics(
     history_data = fetch_history_data(holdings, config, reporter, fetch=fetch_history)
     perf.stop()
 
-    # 危机区间标注（crisis_annotation_data）：基于既有 bars 重叠裁剪，
-    # 复用历史数据不拉长 lookback（以 history.lookback_days 为准）
+    # 历史增强契约装配（危机区间标注[含回放态] + 风险调整超额）：full/both 两路径
+    # 共用 _snapshot.assemble_history_augmented_data 唯一实现（开关判定与子块长窗
+    # 取数集中；开关全关时仅写 crisis 关态契约，零新增取数）
     if pipeline_data is not None:
-        from src.python.analysis.crisis_annotation import build_crisis_annotation
+        from src.python.report._snapshot import assemble_history_augmented_data
 
-        pipeline_data["crisis_annotation_data"] = build_crisis_annotation(history_data)
+        assemble_history_augmented_data(holdings, config, reporter, history_data, pipeline_data)
 
         # 尾部风险统计（tail_risk_data）：复用历史日收益序列计算 VaR/最大单日跌幅/
         # 连续下跌/恢复天数；样本不足时 available=False（§1.4.5 数据降级）

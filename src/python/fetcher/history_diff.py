@@ -49,6 +49,7 @@ class HistoryDiff:
         total_value_diff = new.total_value - old.total_value
         total_value_diff_pct = (total_value_diff / old.total_value * 100) if old.total_value != 0 else 0.0
         total_pnl_diff = new.total_pnl - old.total_pnl
+        total_pnl_pct_diff = new.total_pnl_pct - old.total_pnl_pct
 
         # 2) 基准日对齐
         days_since_last = cls._compute_days_since(new.timestamp, old.timestamp)
@@ -125,6 +126,7 @@ class HistoryDiff:
             total_value_diff=round(total_value_diff, 2),
             total_value_diff_pct=round(total_value_diff_pct, 4),
             total_pnl_diff=round(total_pnl_diff, 2),
+            total_pnl_pct_diff=round(total_pnl_pct_diff, 4),
             days_since_last_report=days_since_last,
             added=tuple(added),
             removed=tuple(removed),

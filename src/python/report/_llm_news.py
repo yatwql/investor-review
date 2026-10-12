@@ -59,6 +59,7 @@ def _submit_llm_future(
     pipeline_data: dict | None,
     enable_llm: bool,
     *,
+    force_modules: set[str] | frozenset[str] | None = None,
     history_data: dict | None = None,
     comparison_indices: dict[str, str] | None = None,
     metrics: dict | None = None,
@@ -88,6 +89,7 @@ def _submit_llm_future(
         holdings_details=prep_data["holdings_details"],
         sector_flow=sector_flow,
         force=force_llm,
+        force_modules=force_modules,
         pipeline_data=pipeline_data,
         history_data=history_data,
         comparison_indices=comparison_indices,
@@ -102,8 +104,13 @@ def _submit_news_future(
     prep_data: dict,
     enable_news: bool,
     purchase_constraint_block: str = "",
+    force_news: bool = False,
 ) -> object | None:
-    """向线程池提交新闻获取任务，返回 Future 或 None。"""
+    """向线程池提交新闻获取任务，返回 Future 或 None。
+
+    ``force_news``：新闻关联 LLM 增强的模块级强刷（
+    ``news_correlation`` ∈ 强刷集合时置 True）。
+    """
     if not enable_news:
         return None
     from src.python.report.news_correlation import build_news_data
@@ -114,6 +121,7 @@ def _submit_news_future(
         prep_data["news_top_count"],
         prep_data["penetrated_assets"],
         purchase_constraint_block,
+        force_news,
     )
 
 
@@ -155,6 +163,7 @@ def _fetch_llm_and_news(
     enable_llm: bool,
     reporter: ProgressReporter,
     *,
+    force_llm_modules: set[str] | frozenset[str] | None = None,
     history_data: dict | None = None,
     comparison_indices: dict[str, str] | None = None,
     metrics: dict | None = None,
@@ -163,8 +172,15 @@ def _fetch_llm_and_news(
 
     内部管理线程池（max_workers=2）。
     LLM 和新闻的 ok/disabled/failed 计数统一归入此函数。
+
+    ``force_llm_modules``：模块级强刷集合——并行四模块经
+    ``generate_all_llm`` 同源消费，新闻 LLM 增强按 ``news_correlation``
+    是否在集合内单独置 force。
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    _forced = force_llm_modules if force_llm_modules is not None else frozenset()
+    _force_news = "news_correlation" in _forced
 
     llm_content: tuple = (None, None, None, None)
     news_data: list = []
@@ -197,7 +213,9 @@ def _fetch_llm_and_news(
         from src.python.config.features import is_feature_enabled
 
         if is_feature_enabled("event_window_impact") and enable_news:
-            _news_fut = _submit_news_future(pool, holdings, prep_data, enable_news, purchase_constraint_block)
+            _news_fut = _submit_news_future(
+                pool, holdings, prep_data, enable_news, purchase_constraint_block, _force_news
+            )
             news_data, news_llm_meta, news_ok = _collect_news_future_result(_news_fut, reporter)
             from src.python.report._experimental_seams import inject_event_impact_data
 
@@ -218,6 +236,7 @@ def _fetch_llm_and_news(
                     force_llm,
                     pipeline_data,
                     enable_llm,
+                    force_modules=_forced,
                     history_data=history_data,
                     comparison_indices=comparison_indices,
                     metrics=metrics,
@@ -226,7 +245,7 @@ def _fetch_llm_and_news(
                     llm_content, debate_info = _collect_llm_future_result(_llm_fut, reporter)
             return llm_content, news_data, news_llm_meta, news_ok, debate_info
 
-        _news_fut = _submit_news_future(pool, holdings, prep_data, enable_news, purchase_constraint_block)
+        _news_fut = _submit_news_future(pool, holdings, prep_data, enable_news, purchase_constraint_block, _force_news)
         _llm_fut = _submit_llm_future(
             pool,
             holdings,
@@ -235,6 +254,7 @@ def _fetch_llm_and_news(
             force_llm,
             pipeline_data,
             enable_llm,
+            force_modules=_forced,
             history_data=history_data,
             comparison_indices=comparison_indices,
             metrics=metrics,

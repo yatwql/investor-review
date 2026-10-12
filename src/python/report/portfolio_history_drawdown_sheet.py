@@ -1,12 +1,15 @@
-"""组合历史走势与回撤 Excel 写入模块 — 走势表 + 回撤矩阵 + 危机区间标注 + 月度收益日历合一页签（一章四区块）。
+"""组合历史走势与回撤 Excel 写入模块 — 走势表 + 回撤矩阵 + 危机区间标注 + 月度收益日历 + 风险调整超额合一页签（一章五区块）。
 
-「组合历史走势与回撤」一章分「走势表 + 回撤矩阵 + 危机区间标注 + 月度收益日历」四区块：
+「组合历史走势与回撤」一章分「走势表 + 回撤矩阵 + 危机区间标注 + 月度收益日历 + 风险调整超额」五区块：
   一、走势表（upper）—— 净值时间线 + 基准归一化 + 指标汇总（组合 vs 基准对比矩阵，仅一份）
   二、回撤矩阵（lower）—— 独立回撤事件明细（含恢复耗时）
-  三、危机区间标注 —— 2015/2018/2020/2022 静态日期表 + 区间统计（区间回撤/恢复天数）
+  三、危机区间标注 —— 静态历史危机表 + 区间统计；回放态（开关 crisis_replay）扩为
+    「组合 vs 指数」双层 9 列（组合层仅窗口内有值，指数层覆盖历史全区间）
   四、月度收益日历 —— 年 × 月红绿格（正值红字/负值绿字）+ 口径与胜亏平统计说明行；
     数据源 `history_data.monthly_returns`（analysis/monthly_returns，as-if 口径，
     双口径并排预留）
+  五、风险调整超额 —— 开关 risk_adjusted_excess 开启才写：基准 × 年化 IR/跟踪误差/
+    年化超额/近 12·24 月跑赢胜率表 + 滚动窗口超额序列 + 口径说明（§1.4.5 逐指标降级）
 
 指标区（累计收益/最大回撤/波动率/起止日）在章内**只出现一次**（组合 vs 基准矩阵，
 组合为第一列，天然包含全部组合指标）。数据不可用时整页写占位。
@@ -36,15 +39,25 @@ logger = logging.getLogger("invest")
 
 # 回撤明细表列数（危机区间表、指标矩阵均 ≤ 此列数时可复用 ncols）
 _DD_NCOLS = 8
-# 危机区间表列数
+# 危机区间表列数（关态 6 列）
 _CRISIS_NCOLS = 6
+# 危机回放态区间表列数（组合层 + 指数层双层 9 列）
+_CRISIS_REPLAY_NCOLS = 9
+# 风险调整超额指标表列数（基准 + 6 指标）
+_EXCESS_NCOLS = 7
 # 月度收益日历列数（年 + 12 月）
 _CAL_NCOLS = 13
 
-# 危机标注说明行（图下说明：区间数据出 → 说明出）
+# 危机标注说明行（图下说明：区间数据出 → 说明出；不列举具体危机清单，静态表增补自动跟随）
 _CRISIS_NOTE = (
-    "说明：阴影/高亮区间为历史上 A 股主要危机时段（2015 股灾 / 2018 贸易摩擦 / "
-    "2020 疫情冲击 / 2022 市场调整）；区间与报告数据窗口重叠时统计区间最大回撤与恢复耗时"
+    "说明：阴影/高亮区间为历史上 A 股主要危机时段（静态历史事实表，清单见危机名称列）；"
+    "区间与报告数据窗口重叠时统计区间最大回撤与恢复耗时"
+)
+
+# 危机回放说明行（双层口径：组合层窗口内 + 指数层历史全区间）
+_CRISIS_REPLAY_NOTE = (
+    "说明：双层回放——组合层区间统计仅覆盖报告数据窗口内的危机（窗口外标「组合窗口外」）；"
+    "指数层为主基准历史日线全区间统计，超出组合数据窗口的历史危机以指数表现作市场参照"
 )
 
 
@@ -230,6 +243,9 @@ def _write_crisis_block(
     write_block_title(ws, row, "三、危机区间标注", ncols=ncols)
     row += 1
 
+    if crisis_annotation and crisis_annotation.get("replay"):
+        return _write_crisis_replay_rows(ws, row, crisis_annotation, ncols)
+
     intervals = (crisis_annotation or {}).get("intervals", []) if crisis_annotation else []
     ncols_eff = max(ncols, _CRISIS_NCOLS)
     headers = ["危机名称", "区间", "区间最大回撤(%)", "最深日", "恢复耗时(天)", "状态"]
@@ -240,9 +256,7 @@ def _write_crisis_block(
     if not intervals:
         row = write_data_row(ws, row, ["危机区间数据不可用"] + [None] * (ncols_eff - 1))
     elif not in_range:
-        row = write_data_row(
-            ws, row, ["报告数据窗口内无历史危机区间（2015/2018/2020/2022）"] + [None] * (ncols_eff - 1)
-        )
+        row = write_data_row(ws, row, ["报告数据窗口内无历史危机区间"] + [None] * (ncols_eff - 1))
     else:
         for it in in_range:
             dd_pct = it.get("interval_drawdown_pct")
@@ -269,6 +283,142 @@ def _write_crisis_block(
     row += 1
     row = write_data_row(ws, row, [_CRISIS_NOTE] + [None] * (ncols_eff - 1))
     _apply_italic(ws, row - 1, ncols_eff)
+    return row
+
+
+def _write_crisis_replay_rows(
+    ws: Worksheet,
+    row: int,
+    crisis_annotation: dict[str, Any],
+    ncols: int,
+) -> int:
+    """写入危机回放态区间表（双层 9 列：组合层 + 指数层），返回下一行行号。"""
+    ncols_eff = max(ncols, _CRISIS_REPLAY_NCOLS)
+    headers = [
+        "危机名称",
+        "区间",
+        "组合区间收益(%)",
+        "组合区间最大回撤(%)",
+        "最深日",
+        "恢复耗时(天)",
+        "指数区间收益(%)",
+        "指数区间最大回撤(%)",
+        "状态",
+    ]
+    headers += [""] * (ncols_eff - _CRISIS_REPLAY_NCOLS)
+    row = write_header_row(ws, row, headers)
+
+    intervals = crisis_annotation.get("intervals") or []
+    if not intervals:
+        row = write_data_row(ws, row, ["危机区间数据不可用"] + [None] * (ncols_eff - 1))
+    else:
+        for it in intervals:
+            in_range = bool(it.get("in_range"))
+            p_ret = it.get("portfolio_return_pct")
+            p_dd = it.get("interval_drawdown_pct")
+            i_ret = it.get("index_return_pct")
+            i_dd = it.get("index_drawdown_pct")
+            if not in_range:
+                status: Any = "组合窗口外"
+            elif it.get("recovered") is True:
+                status = "已恢复"
+            elif it.get("recovered") is False:
+                status = "未恢复"
+            else:
+                status = "—"
+            cells: list[Any] = [
+                it.get("name", ""),
+                f"{it.get('start', '')} ~ {it.get('end', '')}",
+                round(p_ret / 100, 4) if in_range and p_ret is not None else None,
+                round(p_dd / 100, 4) if in_range and p_dd is not None else None,
+                it.get("trough_date", "") if in_range else None,
+                it.get("recovery_days")
+                if in_range and it.get("recovery_days") is not None
+                else ("--" if in_range else None),
+                round(i_ret / 100, 4) if i_ret is not None else None,
+                round(i_dd / 100, 4) if i_dd is not None else None,
+                status,
+            ]
+            cells += [None] * (ncols_eff - _CRISIS_REPLAY_NCOLS)
+            fmts: list[str | None] = [None, None, FMT_PERCENT, FMT_PERCENT, None, None, FMT_PERCENT, FMT_PERCENT, None]
+            fmts += [None] * (ncols_eff - _CRISIS_REPLAY_NCOLS)
+            row = write_data_row(ws, row, cells, formats=fmts)
+
+    idx_reason = crisis_annotation.get("index_reason")
+    if idx_reason:
+        row += 1
+        row = write_data_row(ws, row, [f"指数层：{idx_reason}"] + [None] * (ncols_eff - 1))
+        _apply_italic(ws, row - 1, ncols_eff)
+    row += 1
+    row = write_data_row(ws, row, [_CRISIS_REPLAY_NOTE] + [None] * (ncols_eff - 1))
+    _apply_italic(ws, row - 1, ncols_eff)
+    return row
+
+
+def _write_excess_block(
+    ws: Worksheet,
+    row: int,
+    excess: dict[str, Any] | None,
+    ncols: int,
+) -> int:
+    """写入五、风险调整超额区块（指标表 + 滚动超额序列 + 口径说明），返回下一行行号。
+
+    excess 为 None（开关 risk_adjusted_excess 关闭）时整块不写——关态产物逐字节不变。
+    """
+    if not excess:
+        return row
+    write_block_title(ws, row, "五、风险调整超额", ncols=ncols)
+    row += 1
+    ncols_eff = max(ncols, _EXCESS_NCOLS)
+
+    if not excess.get("available"):
+        row = write_data_row(ws, row, [f"数据不可用：{excess.get('reason') or '未知原因'}"] + [None] * (ncols_eff - 1))
+        return row + 1
+
+    headers = ["基准", "年化IR", "跟踪误差", "年化超额(%)", "近12月跑赢胜率", "近24月跑赢胜率", "完整月数"]
+    headers += [""] * (ncols_eff - _EXCESS_NCOLS)
+    row = write_header_row(ws, row, headers)
+    for bm in excess.get("benchmarks") or []:
+        wr12 = bm.get("win_rate_12m")
+        wr24 = bm.get("win_rate_24m")
+        cells: list[Any] = [
+            bm.get("name", ""),
+            bm.get("ir_annual"),
+            bm.get("te_annual"),
+            round(bm["excess_annual_pct"] / 100, 4) if bm.get("excess_annual_pct") is not None else None,
+            f"{wr12:.1f}%" if wr12 is not None else "数据不足",
+            f"{wr24:.1f}%" if wr24 is not None else "数据不足",
+            bm.get("complete_months"),
+        ]
+        cells += [None] * (ncols_eff - _EXCESS_NCOLS)
+        fmts: list[str | None] = [None, "0.00", "0.00", FMT_PERCENT, None, None, None]
+        fmts += [None] * (ncols_eff - _EXCESS_NCOLS)
+        row = write_data_row(ws, row, cells, formats=fmts)
+
+    rolling = excess.get("rolling") or {}
+    row += 1
+    if rolling.get("available"):
+        row = write_title_row(
+            ws, row, f"滚动 {rolling.get('window_days')} 日超额（{rolling.get('primary_name')}）", ncols=ncols
+        )
+        row = write_header_row(ws, row, ["日期", "滚动超额(%)"])
+        for pt in rolling.get("points") or []:
+            row = write_data_row(
+                ws,
+                row,
+                [pt.get("date", ""), round(float(pt.get("excess_pct") or 0.0) / 100, 4)],
+                formats=[None, FMT_PERCENT],
+            )
+    else:
+        row = write_data_row(
+            ws, row, [f"滚动超额数据不可用：{rolling.get('reason') or '未知原因'}"] + [None] * (ncols_eff - 1)
+        )
+
+    for note in excess.get("notes") or []:
+        row += 1
+        row = write_data_row(ws, row, [note] + [None] * (ncols_eff - 1))
+        _apply_italic(ws, row - 1, ncols_eff)
+    row += 1
     return row
 
 
@@ -318,17 +468,20 @@ def write_portfolio_history_drawdown_sheet(
     history_data: dict | None = None,
     crisis_annotation: dict[str, Any] | None = None,
     tail_risk: dict[str, Any] | None = None,
+    risk_adjusted_excess: dict[str, Any] | None = None,
 ) -> None:
-    """写入组合历史走势与回撤页签（一章四区块：走势表 + 回撤矩阵 + 危机区间标注 + 月度收益日历；尾部风险统计随回撤矩阵）。
+    """写入组合历史走势与回撤页签（一章五区块：走势表 + 回撤矩阵 + 危机区间标注 + 月度收益日历 + 风险调整超额；尾部风险统计随回撤矩阵）。
 
     Args:
         ws: openpyxl Worksheet 对象。
         history_data: `history_data` 数据契约 dict（bars / 指标 / drawdown_events / benchmarks）。
             None、status=unavailable 或 bars 为空时整页写占位。
-        crisis_annotation: `crisis_annotation_data` 数据契约 dict（危机区间标注）；
+        crisis_annotation: `crisis_annotation_data` 数据契约 dict（危机区间标注；回放态含双层字段）；
             None 时危机区块写"数据不可用"占位。
         tail_risk: `tail_risk_data` 数据契约 dict（尾部风险统计）；
             None 或 available=False 时尾部指标行写占位。
+        risk_adjusted_excess: `risk_adjusted_excess_data` 数据契约 dict（风险调整超额）；
+            None（开关关闭）时「五、风险调整超额」区块整体不写。
     """
     _name = get_report_sheet_name("portfolio_history_drawdown")
     ncols = _compute_ncols(history_data)
@@ -345,6 +498,7 @@ def write_portfolio_history_drawdown_sheet(
     row = _write_drawdown_block(ws, row, history_data, ncols)
     row = _write_crisis_block(ws, row, crisis_annotation, ncols)
     row = _write_monthly_calendar_block(ws, row, history_data, ncols)
+    row = _write_excess_block(ws, row, risk_adjusted_excess, ncols)
 
     freeze_header(ws, row=2)
     auto_width(ws, min_width=10, max_width=28)

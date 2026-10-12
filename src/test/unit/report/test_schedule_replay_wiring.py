@@ -111,12 +111,12 @@ def reporter() -> _RecordingReporter:
 
 
 class TestFeatureSwitchRegistry:
-    """rebalance_schedule_replay 已登记且默认关、影响报告输出。"""
+    """rebalance_schedule_replay 已转正入报告组且默认关、影响报告输出。"""
 
-    def test_switch_registered_in_experimental_group_off_by_default(self):
+    def test_switch_registered_in_report_group_off_by_default(self):
         sw = feature_switch_registry["rebalance_schedule_replay"]
         assert sw.label == "调仓纪律回放"
-        assert sw.group == "experimental"
+        assert sw.group == "report"
         assert sw.default is False
         assert sw.affects_report is True
         assert is_feature_enabled("rebalance_schedule_replay") is False

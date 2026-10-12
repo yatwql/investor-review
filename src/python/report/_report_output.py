@@ -136,6 +136,8 @@ def _generate_full_html_report(
     holding_change_data: dict | None = None,
     event_impact_data: dict | None = None,
     schedule_replay_data: dict | None = None,
+    risk_adjusted_excess_data: dict | None = None,
+    summary_highlights_data: dict | None = None,
 ) -> bool:
     """full 路径的 HTML 报告生成，返回是否成功。
 
@@ -216,6 +218,7 @@ def _generate_full_html_report(
             action_data=action_data,
             prosperity_framework_data=prosperity_framework_data,
             crisis_annotation_data=crisis_annotation_data,
+            risk_adjusted_excess_data=risk_adjusted_excess_data,
             tail_risk_data=tail_risk_data,
             snapshot_diff_data=snapshot_diff_data,
             fund_flow_data=fund_flow_data,
@@ -230,6 +233,7 @@ def _generate_full_html_report(
             holding_change_data=holding_change_data,
             event_impact_data=event_impact_data,
             schedule_replay_data=schedule_replay_data,
+            summary_highlights_data=summary_highlights_data,
         )
         reporter.ok(f"HTML 报告已生成: {path}")
         return True

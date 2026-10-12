@@ -30,7 +30,9 @@ HOLDING_CHANGE_MODULE_KEY = "holding_change"
 
 # ── 运行作用域载体：结果写回契约字段，不设模块级全局 ────────────
 # llm_review 由 build_holding_change_panel 初始化为 None；本模块成功后覆写为
-# Markdown 文本。报告双端渲染按「非空才显示归因块」分支（与自检块同构）。
+# HTML 文本（markdown_to_html + 尾部标识行，generate_llm_module 统一骨架，
+# 非 Markdown 源文）。报告双端渲染按「非空才显示归因块」分支（与自检块同构）：
+# HTML 端 llm_review_html 原文直出，Excel 端取纯文本块 + 标识行。
 REVIEW_FIELD = "llm_review"
 
 

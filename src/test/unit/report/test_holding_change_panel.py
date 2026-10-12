@@ -285,6 +285,63 @@ class TestExcelSheetConsistency:
         assert LLM_BLOCK_TITLE in first_cols
 
 
+# ── LLM 归因块呈现（HTML 原文直出 / Excel 纯文本 + 标识行） ──────
+
+_LLM_FOOTER_TEXT = (
+    "模型：deepseek-v4-flash | Token 用量：输入 1,892 / 输出 691 = 2,583 | "
+    "耗时: 4.0s | 估算费用：¥0.0043 | 缓存命中：384 tokens"
+)
+_LLM_REVIEW_HTML = (
+    f'<p>第一段归因正文。</p><p>第二段归因正文。</p><p style="color:#888;font-size:12px">{_LLM_FOOTER_TEXT}</p>'
+)
+
+
+class TestLLMReviewRendering:
+    """归因内容为 HTML（markdown_to_html + 尾部标识行）——双端各自正确呈现。
+
+    呈现契约：HTML 端逐段包 <p> 交 autoescape 会把标签转成可见乱码
+    （如 </p><p style=...> 泄漏到页面），必须 | safe 原文直出；
+    Excel 端整段 HTML 入单元格同样带标签，必须纯文本块 + 标识行单独着色
+    （标签不入单元格，与其余 LLM 页签一致）。
+    """
+
+    @staticmethod
+    def _contract_with_review() -> dict:
+        _save_four_periods()
+        contract = build_holding_change_panel(None, reference_time=_FIXED_NOW)
+        contract["llm_review"] = _LLM_REVIEW_HTML
+        return contract
+
+    def test_view_keeps_raw_html_and_strips_text_blocks(self):
+        view = build_holding_change_view(self._contract_with_review())
+        assert view["llm_review_html"] == _LLM_REVIEW_HTML
+        assert view["llm_review_paragraphs"] == ["第一段归因正文。", "第二段归因正文。"]
+        assert view["llm_review_footer"] == _LLM_FOOTER_TEXT
+        assert all("<" not in p for p in view["llm_review_paragraphs"])
+
+    def test_template_renders_footer_html_unescaped(self):
+        """模板 | safe 直出：标识行标签不得被 autoescape 转成可见乱码。"""
+        from src.python.report.html_jinja_env import _ENV
+
+        view = build_holding_change_view(self._contract_with_review())
+        html = _ENV.get_template("partials/holding_change_section.html").render(
+            section_visible=lambda key: True,
+            section_numbers={"holding_change": 15},
+            section_names={"holding_change": "持仓变动复盘"},
+            holding_change_view=view,
+        )
+        assert '<p style="color:#888;font-size:12px">' in html
+        assert "模型：deepseek-v4-flash" in html
+        assert "&lt;p style" not in html
+        assert "&lt;/p&gt;" not in html
+
+    def test_excel_writes_plain_blocks_and_footer_row(self):
+        first_cols, rows = _sheet_values(_write_sheet(self._contract_with_review()))
+        assert _LLM_FOOTER_TEXT in first_cols
+        assert "第一段归因正文。" in first_cols
+        assert not any("<p" in str(c) for r in rows for c in r if c)
+
+
 # ── 可见性关态（逐字节回退既有编号面） ─────────────────────
 
 

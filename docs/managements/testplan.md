@@ -1,5 +1,5 @@
 # 投资复盘助手 — 质量控制与测试标准
-> 文档版本：0.12.10
+> 文档版本：0.12.11
 
 ---
 
@@ -142,7 +142,7 @@
 | **S32: 跨账户转仓** | — | `test_scenario_operational_behavior.py` | 同一代码出现在两个账户 | 菜单 E | 各账户独立计算明细、分类各自汇总、总计=账户和 |
 | **S33: 新股中签待上市** | — | `test_scenario_operational_behavior.py` | 持仓含无行情新股尚未上市 | 菜单 E | 无行情降级 cost 正确显示、上市后正常计算、多只新股不干扰 |
 | **S34: 组合历史走势基准指数对比** | — | 单元测试（见下方注） | 持仓含 A 股+基金，config.json 含 `benchmark_indices: {"sh000300": "沪深300"}` | 菜单 L | 组合走势 + 基准指数走势归一化正确；HTML 走势图显示组合曲线+基准虚线+图例；Excel portfolio_history_drawdown 页签含基准列；benchmark_indices 为空时走势正常不崩溃 |
-| **D1: 辩论模式-正反辩论三段正常生成** | — | `test_debate_pipeline.py` | 含多品种持仓，Feature Flag `llm_debate_procon=true` | 菜单 L | pro（白脸）→ con（黑脸）→ synthesis（综合）三段完整生成；HTML 显示三色块+实验模式标签；Excel 显示"🧪 辩论模式"灰字注记；LLM 用量表正确归入"实验模式"行 |
+| **D1: 辩论模式-正反辩论三段正常生成** | — | `test_debate_pipeline.py` | 含多品种持仓，Feature Flag `llm_debate_procon=true` | 菜单 L | pro（白脸）→ con（黑脸）→ synthesis（综合）三段完整生成；HTML 显示三色块+辩论模式标签；Excel 显示"辩论模式"灰字注记；LLM 用量表正确归入"辩论模式"行 |
 | **D2: 辩论降级回退普通模式** | — | `test_debate_pipeline.py` | 正反辩论启用但 pro 或 con 返回 None | 菜单 L（模拟 LLM pro 失败） | 自动回退普通 expert_review；返回 8 元组（无 debate_info）；HTML 不显示辩论块，显示普通结果 |
 | **D3: Token 预算触发生成截断** | — | `test_debate_token_budget.py` | 配置极低 `max_total_tokens_per_report`，持仓数据量大使 pro+con 超 1× 预算 | 菜单 L（模拟长篇输出） | 超过 1× 预算跳过 synthesis，返回 pro+con 拼接；超过 2× 跳过全部 debate 回退普通模式；日志输出 budget 告警 |
 
@@ -163,7 +163,7 @@
 
 单元测试按被测模块分组，通过 **父子双层 marker** 实现灵活筛选：
 
-- **父标记 `unit`** 匹配全部 12 个已注册 `unit_*` 子标记（providers/fetcher/llm/news/report/config/core/cli/ui/analysis/scripts/web，其中 `unit_web` 为 Web 入口层），用于全量单元测试运行（`-m "unit"`）
+- **父标记 `unit`** 匹配全部 13 个已注册 `unit_*` 子标记（providers/fetcher/llm/news/report/config/core/cli/ui/analysis/scripts/web/qa，其中 `unit_web` 为 Web 入口层、`unit_qa` 为报告对话式追问），用于全量单元测试运行（`-m "unit"`）
 - **子标记**如 `unit_providers`、`unit_fetcher`、`unit_llm` 等支持单独运行指定模块的测试（`-m "unit_providers"`）
 - 新增单元测试文件时，必须为其测试类标注子标记和父标记，缺一不可
 
@@ -462,6 +462,7 @@
 | R-OUT-12 | `src/test/unit/report/test_html_report_structure.py` | 批 4 |
 | R-OUT-13 | `src/test/unit/report/test_run_integrity.py` | 批 9 |
 | R-OUT-14 | `src/test/unit/core/test_completion_notify.py` + `src/test/unit/cli/test_cli.py` | 批 13 |
+| R-OUT-15 | `src/test/unit/report/test_summary_highlights.py` | 批 14 |
 | R-COR-01 | `src/test/unit/analysis/test_correlation.py` + `src/test/unit/analysis/test_correlation_edge.py` + `src/test/unit/report/test_correlation_html.py` + `src/test/unit/report/test_position_structure_sheet.py` + `src/test/unit/fetcher/test_chain.py` | 批 14 |
 | R-PERF-01 | `src/test/unit/news/test_news_aggregator.py` | 批 4 |
 | R-PERF-02 | `src/test/unit/llm/test_generate_all_llm.py` | 批 4 |
@@ -513,11 +514,11 @@
 | R-EVO-02 | `src/test/unit/analysis/test_portfolio_evolution.py` | 批 4 |
 | R-EVO-03 | `src/test/unit/report/test_evolution_sheet.py` + `src/test/unit/report/test_evolution_html.py` | 批 4 |
 | R-EVO-04 | `src/test/unit/config/test_features.py` + `src/test/unit/report/test_section_visibility.py` | 批 4 |
-| R-SNP-01 | `src/test/unit/report/test_history_snapshot_namespace.py` | 批 4 |
+| R-SNP-01 | `src/test/unit/report/test_history_snapshot_namespace.py` + `src/test/unit/report/test_snapshot_baseline.py` + `src/test/unit/report/test_snapshot_baseline_edge.py` | 批 4 |
 | R-SNP-02 | `src/test/unit/handlers/test_handlers_cache.py` + `src/test/unit/report/test_history_snapshot_namespace.py` | 批 4 |
 | R-SNP-03 | `src/test/unit/report/test_history_snapshot_namespace.py` | 批 4 |
 | R-SNP-04 | `src/test/unit/report/test_history_snapshot_namespace.py` | 批 4 |
-| R-SNP-05 | `src/test/unit/analysis/test_snapshot_diff.py` | 批 4 |
+| R-SNP-05 | `src/test/unit/analysis/test_snapshot_diff.py` + `src/test/unit/report/test_excel_report_structure.py` + `src/test/unit/llm/test_llm_prompt_builders.py` | 批 4 |
 | R-SNP-06 | `src/test/unit/analysis/test_snapshot_diff_edge.py` | 批 4 |
 | R-CFL-01 | `src/test/unit/analysis/test_cost_flow.py` | 批 4 |
 | R-CFL-02 | `src/test/unit/analysis/test_cost_flow.py` | 批 4 |
@@ -525,7 +526,7 @@
 | R-CFL-04 | `src/test/unit/report/test_category.py` + `src/test/unit/analysis/test_cost_flow.py` | 批 4 |
 | R-DIFF-01 | `src/test/unit/analysis/test_snapshot_diff.py` | 批 4 |
 | R-DIFF-02 | `src/test/unit/analysis/test_snapshot_diff.py` | 批 4 |
-| R-DIFF-03 | `src/test/unit/analysis/test_snapshot_diff_edge.py` | 批 4 |
+| R-DIFF-03 | `src/test/unit/analysis/test_snapshot_diff.py` + `src/test/unit/analysis/test_snapshot_diff_edge.py` | 批 4 |
 | R-DIFF-04 | `src/test/unit/report/test_evolution_sheet.py` + `src/test/unit/report/test_evolution_html.py` | 批 4 |
 | R-LLM-01 | `src/test/unit/ui/test_tui_menu.py` | 批 5 |
 | R-LLM-02 | `src/test/unit/config/test_features.py` + `src/test/unit/llm/test_generate_all_llm.py` | 批 5 |
@@ -628,7 +629,7 @@
 | R-HCR-02 | `src/test/unit/report/test_holding_change_panel.py` + `src/test/unit/report/test_holding_change_panel_edge.py` | 批 7 |
 | R-HCR-03 | `src/test/unit/report/test_holding_change_panel.py` + `src/test/integration/test_report_chapter_consistency.py` | 批 7 |
 | R-HCR-04 | `src/test/unit/analysis/test_holding_change_metrics.py` + `src/test/unit/report/test_holding_change_panel.py` | 批 7 |
-| R-HCR-05 | `src/test/unit/llm/test_holding_change_injection.py` | 批 7 |
+| R-HCR-05 | `src/test/unit/llm/test_holding_change_injection.py` + `src/test/unit/report/test_holding_change_panel.py` | 批 7 |
 | R-HCR-06 | `src/test/unit/analysis/test_holding_change_metrics.py` + `src/test/unit/report/test_holding_change_panel.py` | 批 7 |
 | R-FCT-01 | `src/test/unit/fetcher/test_factor_catalog_loader.py` + `src/test/unit/analysis/test_factor_evaluator.py` | 批 9 |
 | R-FCT-02 | `src/test/unit/analysis/test_factor_evaluator.py` + `src/test/unit/analysis/test_factor_evaluator_edge.py` + `src/test/unit/fetcher/test_factor_catalog_loader.py` | 批 9 |
@@ -646,6 +647,15 @@
 | R-EW-04 | `src/test/unit/report/test_event_impact_wiring.py` + `src/test/unit/report/test_excel_generator.py` | 批 11 |
 | R-EW-05 | `src/test/unit/report/test_event_impact_wiring.py` + `src/test/unit/report/test_event_impact_panel.py` | 批 11 |
 | R-EW-06 | `src/test/unit/llm/test_event_impact_injection.py` + `src/test/unit/llm/test_module_fingerprint.py` | 批 11 |
+| R-QA-01 | `src/test/unit/report/test_report_qa_partial.py` + `src/test/unit/qa/test_report_qa_ask.py` | 批 13 |
+| R-QA-02 | `src/test/unit/qa/test_report_qa_context.py` | 批 13 |
+| R-QA-03 | `src/test/unit/qa/test_report_qa_context_edge.py` + `src/test/unit/qa/test_report_qa_session_edge.py` | 批 13 |
+| R-QA-04 | `src/test/unit/qa/test_report_qa_session.py` + `src/test/unit/qa/test_report_qa_session_edge.py` | 批 13 |
+| R-QA-05 | `src/test/unit/qa/test_report_qa_session.py` | 批 13 |
+| R-QA-06 | `src/test/unit/qa/test_report_qa_session.py` | 批 13 |
+| R-QA-07 | `src/test/unit/qa/test_report_qa_ask.py` | 批 13 |
+| R-QA-08 | `src/test/unit/qa/test_report_qa_session.py` | 批 13 |
+| R-QA-09 | `src/test/unit/report/test_report_qa_partial.py` | 批 13 |
 <!-- requirement-trace:end -->
 ---
 

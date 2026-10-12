@@ -11,6 +11,23 @@ from src.python.report.progress import ProgressReporter
 logger = __import__("logging").getLogger("invest")
 
 
+def _baseline_labels(ts: str) -> tuple[str, str]:
+    """基线快照时间戳 →（所属交易日, 生成时间）展示串。
+
+    供 ``diff.baseline_trading_day`` / ``diff.baseline_generated_at`` 派生——
+    环比时标注“比对的是哪个交易日、什么时间生成的报告”。交易日归属与报告头
+    “所属交易日”同口径（``trading_day_as_of``）。时间戳不可解析时返回 ("", "")，
+    展示层按缺席降级（不写标注行）。
+    """
+    from src.python.core.trading_calendar import trading_day_as_of
+    from src.python.report.history_snapshot import _parse_snapshot_timestamp
+
+    dt = _parse_snapshot_timestamp(ts or "")
+    if dt is None:
+        return "", ""
+    return trading_day_as_of(dt), dt.strftime("%Y-%m-%d %H:%M")
+
+
 def capture_snapshot(
     holdings: list,
     details: list,
@@ -28,7 +45,8 @@ def capture_snapshot(
         config: 配置字典
         reporter: 进度报告接口
         snapshot_namespace: 快照隔离域（None=共享主目录；如 "web"=web 试算域），
-            差异计算基于同域上一份快照、保存与清理均在域内闭环
+            差异计算基于同域上一份**不同交易日**的快照（同一交易日多次运行跳过，
+            见 ``load_comparison_baseline``）、保存与清理均在域内闭环
         extra: 额外扩展字段（调用方 kwargs），透传到 pipeline_data
 
     Returns:
@@ -56,7 +74,7 @@ def capture_snapshot(
 
     from src.python.fetcher.history_diff import HistoryDiff
     from src.python.report.data_status import get_tracker as _get_degradation_tracker
-    from src.python.report.history_snapshot import load_latest, save
+    from src.python.report.history_snapshot import load_comparison_baseline, save
     from src.python.schemas.history import (
         AccountSnapshot,
         SnapshotData,
@@ -91,7 +109,7 @@ def capture_snapshot(
             total_pnl=sum(d.profit for d in details),
             timestamp=datetime.now().strftime("%Y%m%dT%H%M%S"),
         )
-        _old = load_latest(snapshot_namespace)
+        _old = load_comparison_baseline(_snapshot.timestamp, snapshot_namespace)
         _diff = HistoryDiff.compute(_snapshot, _old)
         save(_snapshot, snapshot_namespace)
         from src.python.core.constants import HISTORY_SNAPSHOT_MAX_COUNT, HISTORY_SNAPSHOT_RETENTION_DAYS
@@ -104,13 +122,20 @@ def capture_snapshot(
             namespace=snapshot_namespace,
         )
         if not _diff.is_first_check:
+            # 基线时间戳仅接受字符串（防御非标对象/桩），不可解析时标签降级为 ""
+            _raw_ts = _old.timestamp if isinstance(_old.timestamp, str) else ""
+            _baseline_td, _baseline_gen = _baseline_labels(_raw_ts)
             pipeline_data = {
                 "diff": {
                     "is_first_check": False,
                     "total_value_diff": _diff.total_value_diff,
                     "total_value_diff_pct": _diff.total_value_diff_pct,
                     "total_pnl_diff": _diff.total_pnl_diff,
+                    "total_pnl_pct_diff": _diff.total_pnl_pct_diff,
                     "days_since_last_report": _diff.days_since_last_report,
+                    "baseline_timestamp": _raw_ts,
+                    "baseline_generated_at": _baseline_gen,
+                    "baseline_trading_day": _baseline_td,
                     "added": [
                         {
                             "name": a.name,
@@ -216,3 +241,166 @@ def fetch_history_data(
     except Exception:
         logger.info("[历史走势] 数据获取跳过", exc_info=True)
         return None
+
+
+# ── 子块独立长窗与危机回放指数层取数（风险调整超额 / 危机回放开关专用） ──────
+
+_EXTENDED_HISTORY_DAYS = 365
+"""风险调整超额/危机回放子块的长窗下限（交易日）——A 股历史 K 线单次可得上限 365。"""
+
+_CRISIS_INDEX_DAYS_MAX = 3650
+"""危机回放指数日线取数上限（fetch_index_history 源上限 3650）。"""
+
+
+def _crisis_index_days() -> int:
+    """危机回放指数层所需交易日数——按静态危机表最早区间起点动态推算。
+
+    自然日跨度 × 252/365 + 60 交易日缓冲，封顶源上限 3650；未来静态表
+    增补更早区间时自动延长取数窗口，无需手工调参。
+    """
+    from datetime import date as _date
+
+    from src.python.analysis.crisis_annotation import CRISIS_INTERVALS
+
+    try:
+        earliest = min(_date.fromisoformat(iv["start"]) for iv in CRISIS_INTERVALS)
+    except (KeyError, TypeError, ValueError):
+        return _CRISIS_INDEX_DAYS_MAX
+    span = (_date.today() - earliest).days
+    return max(0, min(_CRISIS_INDEX_DAYS_MAX, int(span * 252 / 365) + 60))
+
+
+def fetch_extended_history(
+    holdings: list,
+    config: dict | None,
+    reporter: ProgressReporter,
+) -> dict | None:
+    """获取子块独立长窗历史（as-if），供风险调整超额/危机回放计算。
+
+    与主走势窗口（``history.lookback_days``）解耦：主窗不动，子块自取
+    ``max(lookback_days, 365)`` 窗口。取数走与主历史同一条 chain 与文件缓存
+    （``history_*`` CACHE_WEEKLY），首次全量补齐、其后命中，网络成本受控；
+    两开关（风险调整超额/危机回放）共享同一次取数。开关关闭时本函数不会
+    被编排层调用（关态零新增请求）。
+
+    Args:
+        holdings: 持仓列表（code/name/shares 属性）
+        config: 配置字典（含 history 子段）
+        reporter: 进度报告接口
+
+    Returns:
+        history_data 契约 dict；不可用/异常返回 None（子块落 §1.4.5 降级）。
+    """
+    if not holdings:
+        return None
+    _cfg = (config or {}).get("history", {}) or {}
+    if not isinstance(_cfg, dict):
+        _cfg = {}
+    try:
+        _days = max(int(_cfg.get("lookback_days", 90) or 90), _EXTENDED_HISTORY_DAYS)
+    except (TypeError, ValueError):
+        _days = _EXTENDED_HISTORY_DAYS
+    try:
+        reporter.info("正在获取子块长窗历史（风险调整超额/危机回放）...")
+        from src.python.report.portfolio_history import PortfolioHistoryCalculator
+
+        _calc = PortfolioHistoryCalculator(
+            coverage_threshold=_cfg.get("coverage_threshold", 0.8),
+            benchmark_indices=_cfg.get("benchmark_indices", {}) or {},
+        )
+        _tuples = [(h.code, h.name, h.shares) for h in holdings]
+        data = _calc.get_combined_timeseries(_tuples, days=_days)
+        if data and data.get("status") != "unavailable":
+            reporter.ok("子块长窗历史获取完成")
+            return data
+        reporter.warn("子块长窗历史获取失败，相关子块将显示数据不足占位")
+        return None
+    except Exception:
+        logger.info("[子块长窗] 历史获取跳过", exc_info=True)
+        return None
+
+
+def fetch_crisis_index_series(config: dict | None) -> dict | None:
+    """危机回放指数层：主基准指数长窗日线（覆盖全部预设危机区间）。
+
+    只取 ``benchmark_indices`` 的第一个代码（回放表单指数列）；未配置基准
+    或获取失败返回 None（契约标未配置/指数层不可用，组合层不受影响）。
+
+    Args:
+        config: 配置字典（含 history.benchmark_indices）
+
+    Returns:
+        ``{"name": str, "bars": [{"date", "close"}, ...]}`` 或 None。
+    """
+    _cfg = (config or {}).get("history", {}) or {}
+    if not isinstance(_cfg, dict):
+        return None
+    indices = _cfg.get("benchmark_indices") or {}
+    if not isinstance(indices, dict) or not indices:
+        return None
+    code = next(iter(indices))
+    try:
+        from src.python.report.benchmark import fetch_benchmarks
+
+        raw = fetch_benchmarks({code: indices[code]}, days=_crisis_index_days())
+        if raw and (raw.get(code) or {}).get("bars"):
+            return raw[code]
+        return None
+    except Exception:
+        logger.info("[危机回放] 指数长窗获取跳过", exc_info=True)
+        return None
+
+
+def assemble_history_augmented_data(
+    holdings: list,
+    config: dict | None,
+    reporter: ProgressReporter,
+    history_data: dict | None,
+    pipeline_data: dict | None,
+) -> None:
+    """装配历史增强契约：危机区间标注（含回放态）+ 风险调整超额。
+
+    full（``_prepare_full_risk_metrics``）与 both（``_generate_report_both``）
+    两条报告路径的唯一装配实现——开关判定、子块长窗取数、指数层取数与契约
+    构建集中于此，避免双路径行为漂移。
+
+    行为：
+    - ``pipeline_data`` 为 None 时跳过（与历史行为一致）。
+    - 开关全关（默认）：仅写 crisis 关态契约（基于既有 bars，零新增取数），
+      ``risk_adjusted_excess_data`` 键不写入——关态产物逐字节不变。
+    - 任一开关开启：子块自取长窗历史（主走势窗口 ``history.lookback_days``
+      不动），两开关共享同一次取数；回放态另取主基准指数长窗日线。
+
+    Args:
+        holdings: 持仓列表（code/name/shares 属性）
+        config: 配置字典（含 history 子段）
+        reporter: 进度报告接口
+        history_data: 主窗口历史走势契约（可为 None）
+        pipeline_data: 管线数据字典（就地写入 crisis_annotation_data /
+            risk_adjusted_excess_data）；None 时直接返回
+    """
+    if pipeline_data is None:
+        return
+    from src.python.analysis.crisis_annotation import build_crisis_annotation
+    from src.python.config.features import is_feature_enabled
+
+    crisis_replay_on = is_feature_enabled("crisis_replay")
+    excess_on = is_feature_enabled("risk_adjusted_excess")
+
+    extended_history = None
+    if (crisis_replay_on or excess_on) and history_data and history_data.get("status") != "unavailable":
+        extended_history = fetch_extended_history(holdings, config, reporter)
+
+    if crisis_replay_on:
+        pipeline_data["crisis_annotation_data"] = build_crisis_annotation(
+            extended_history or history_data,
+            replay=True,
+            index_series=fetch_crisis_index_series(config),
+        )
+    else:
+        pipeline_data["crisis_annotation_data"] = build_crisis_annotation(history_data)
+
+    if excess_on:
+        from src.python.analysis.benchmark_excess import build_risk_adjusted_excess
+
+        pipeline_data["risk_adjusted_excess_data"] = build_risk_adjusted_excess(extended_history or history_data)

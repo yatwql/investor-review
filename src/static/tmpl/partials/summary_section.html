@@ -10,6 +10,52 @@
 
             <br>
 
+            {# 本期要点与环比对照（报告章节与增强开关 summary_highlights，features.json；默认关）：
+               快照 diff 单源派生的首屏执行摘要卡——关键指标环比行 + 本期关键变化 Top N；
+               对比基线为上一个有报告的交易日的最新一份报告（同交易日多次运行跳过），
+               标注行给出基线报告的所属交易日与生成时间（基线时间戳不可解析时省略）；
+               无上期快照时整块隐藏（不写占位，首屏不出现降级痕迹），开关关闭时本块零输出（关态产物逐字节不变） #}
+            {% set _sh = summary_highlights_data %}
+            {% if _sh %}
+            <div class="notice-banner" style="margin: 4px 0;">
+                <div style="font-weight: bold; font-size: var(--fs-body); margin-bottom: 6px;">本期要点（距上次报告 {{ _sh.days_since_last_report }} 天）</div>
+                {% if _sh.baseline_generated_at %}
+                <div style="font-size: var(--fs-table); line-height: 1.5; opacity: 0.75; margin: -2px 0 6px;">对比基准：交易日 {{ _sh.baseline_trading_day }} · 报告生成 {{ _sh.baseline_generated_at }}</div>
+                {% endif %}
+                <table class="kv-table">
+                    <tr>
+                        <td>总市值环比</td>
+                        <td><span style="color: {{ _sh.total_value_diff | profit_color }};">{{ "+" if _sh.total_value_diff > 0 }}{{ _sh.total_value_diff | money }} 元（{{ _sh.total_value_diff_pct | change }}）</span></td>
+                    </tr>
+                    <tr>
+                        <td>总收益率环比</td>
+                        <td><span style="color: {{ _sh.total_pnl_pct_diff | profit_color }};">{{ "+" if _sh.total_pnl_pct_diff > 0 }}{{ "%.2f" | format(_sh.total_pnl_pct_diff) }} 个百分点</span></td>
+                    </tr>
+                    <tr>
+                        <td>持仓数环比</td>
+                        <td>{{ "%+d" | format(_sh.holding_count_delta) }}（新增 {{ _sh.added_count }} / 清仓 {{ _sh.removed_count }}）</td>
+                    </tr>
+                    {% if _sh.hhi_change is not none %}
+                    <tr>
+                        <td>集中度环比（HHI）</td>
+                        <td><span style="color: {{ _sh.hhi_change | profit_color }};">{{ "+" if _sh.hhi_change > 0 }}{{ "%.4f" | format(_sh.hhi_change) }}</span></td>
+                    </tr>
+                    {% endif %}
+                </table>
+                {% if _sh.changes %}
+                <div style="font-size: var(--fs-table); line-height: 1.9; margin-top: 6px;">
+                    {% for c in _sh.changes %}
+                    <div>{{ c.action }}「{{ c.name }}」<span style="color: {{ c.value_diff | profit_color }};">{{ "+" if c.value_diff > 0 }}{{ c.value_diff | money }} 元</span></div>
+                    {% endfor %}
+                    {% if _sh.change_total > (_sh.changes | length) %}
+                    <div style="opacity: 0.75;">…等共 {{ _sh.change_total }} 项变动，完整明细见「组合演进」章</div>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            <br>
+            {% endif %}
+
             <!-- 持仓概况 -->
             <h3 style="color: var(--primary); font-size: var(--fs-h3); margin-bottom: 8px;">【持仓概况】</h3>
             <table class="kv-table">

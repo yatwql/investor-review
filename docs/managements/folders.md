@@ -1,5 +1,5 @@
 # 目录结构与项目统计
-> 文档版本：0.12.10
+> 文档版本：0.12.11
 >
 > 项目目录树 — 新增/重命名任何非排除文件或目录时，必须同步更新此文档。
 >
@@ -9,25 +9,25 @@
 >
 > | 类别 | 开发语言 | 文件数 | 代码行数 | 说明 |
 > |---|---|---|---|---|
-| 主程序代码 | Python | 345 | 91,760 | `src/` 下所有 `.py`（不含测试：`src/__init__.py` 顶层包标记 + `src/python/` 下 15 个 `__init__.py`，含 `web/` 服务层；近期新增 `providers/tiantian_purchase.py` 天天基金申购状态总表 provider + `fetcher/fund_purchase.py` 申购状态取数编排（双链路/准入/会话复用） + `core/jsonl_store.py` JSONL 原子原语 + `core/signal_ledger.py` 确定性信号账本 + `report/signal_record.py` 信号登记适配器 + `core/num_utils.py` 数值归一原语 + `core/doctor.py` 系统自检 + `core/cassette.py` 请求回放引擎 + `core/datasource_credential.py` 数据源凭据声明 + `fetcher/source_adapter.py` 适配契约 + `fetcher/quote_adapters.py` 行情域适配器 + `llm/module_fingerprint.py` 模块指纹唯一事实来源 + `report/_experimental_seams.py` 实验挂载点 + `report/holdings_freshness.py` 持仓报告期时效判定 + `report/experimental_notice.py` 实验功能清单语句单源 + `core/trading_calendar.py` 交易日历原语（时间距离一律以交易日计） + `providers/datasink.py` 全文本财报 provider（密钥/限速/配额） + `providers/hithink.py` 同花顺金融数据服务 provider（A 股行情/财务/基金/情绪面；凭据/qps 限速/信封错误码） + `fetcher/financial_report.py` 财报取数编排 + `fetcher/report_adapters.py` 财报域适配器 + `report/financial_report_digest.py` 财报摘要章节装配 + `providers/akshare_financial.py` 结构化财务指标主源 + `fetcher/financial_indicator_adapters.py` 财务指标域适配器 + `core/code_utils.py::to_fmp_symbol` 共享符号映射 + `providers/_utils.py::run_with_timeout` 共享取数超时原语 + `analysis/financial_indicator_extract.py` 财务指标全文解析（压平正文锚点提取，备用支路） + `fetcher/financial_indicator.py` 财务指标多期取数编排 + `analysis/financial_indicator.py` 财务指标派生（质量档/趋势/当前 PE·PB） + `report/financial_indicator.py` 财务指标章装配 + `report/holdings_detail_sheet.py` 持仓明细与分类 Excel 页签 + `report/position_structure_sheet.py` 持仓结构与集中度 Excel 页签 + `report/fundamental_snapshot_sheet.py` 持仓基本面 Excel 页签（三者均为章节合并写入器） + `llm/compliance.py` 合规声明集中注入（幂等叠加，单一漏斗覆盖全模块）） |
-| HTML 报告模板 | HTML | 22 | 5,105 | `src/static/tmpl/report_template.html` + `whatif_template.html`（调仓 What-if 独立 HTML 页）+ `partials/`（章节级/区块级 partial，主模板按 TOC 六组经 Jinja include 拆入，清单见目录树 `partials/` 节点） |
-| 架构图示 | SVG | 3 | 337 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览）+ 报告实景截图 2 张 PNG（`report-overview`/`report-charts`，不计入本行） |
-| 辅助脚本 | Python | 66 | 16,022 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评估、测试覆盖计数、代码/文档历史痕迹检查、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
-| 源代码合计 | — | 436 | 113,224 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 509 | 148,916 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 9,939 个 | `pytest --collect-only` 统计（`scripts/collect-test-coverage.py` 实时收集快照，不含 opt-in live 套件） |
-| 用户文档 | Markdown | 11 | 5,673 | 含 README.md（184 行）；行数为 README + manuals 之和 |
-| ├ manuals/ | 用户手册分册 | 10 | 5,489 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 166 | 61,860 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 11 + plan 5 + archive md 149），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 11 | 11,684 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
-| ├ archive/ | 版本归档 | 149 | 49,142 | 各版本 changelog/plan/review-findings 与设计文档归档（148 md 48,730 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
-| ├ plan/ | 中间设计文件 | 5 | 945 | 在办设计文档（扁平存放，完成后随完成态移入对应版本的归档子目录）：两份 Jev 新闻关联判定文档（对照评测方案 171 行 + 类型化判定通道接入设计 198 行）+ 决策跨期反思闭环设计 + Web 展示借鉴研究（awesome-design-md，Web 展示借鉴批立项依据）+ 报告/Web 浏览器验证方法与实测结论两份（浏览器人工验证的回填载体） |
+| 主程序代码 | Python | 351 | 93,862 | `src/` 下所有 `.py`（不含测试：`src/__init__.py` 顶层包标记 + `src/python/` 下 15 个 `__init__.py`，含 `web/` 服务层；近期新增 `providers/tiantian_purchase.py` 天天基金申购状态总表 provider + `fetcher/fund_purchase.py` 申购状态取数编排（双链路/准入/会话复用） + `core/jsonl_store.py` JSONL 原子原语 + `core/signal_ledger.py` 确定性信号账本 + `report/signal_record.py` 信号登记适配器 + `core/num_utils.py` 数值归一原语 + `core/doctor.py` 系统自检 + `core/cassette.py` 请求回放引擎 + `core/datasource_credential.py` 数据源凭据声明 + `fetcher/source_adapter.py` 适配契约 + `fetcher/quote_adapters.py` 行情域适配器 + `llm/module_fingerprint.py` 模块指纹唯一事实来源 + `report/_experimental_seams.py` 实验挂载点 + `report/holdings_freshness.py` 持仓报告期时效判定 + `report/experimental_notice.py` 实验功能清单语句单源 + `core/trading_calendar.py` 交易日历原语（时间距离一律以交易日计） + `providers/datasink.py` 全文本财报 provider（密钥/限速/配额） + `providers/hithink.py` 同花顺金融数据服务 provider（A 股行情/财务/基金/情绪面；凭据/qps 限速/信封错误码） + `fetcher/financial_report.py` 财报取数编排 + `fetcher/report_adapters.py` 财报域适配器 + `report/financial_report_digest.py` 财报摘要章节装配 + `providers/akshare_financial.py` 结构化财务指标主源 + `fetcher/financial_indicator_adapters.py` 财务指标域适配器 + `core/code_utils.py::to_fmp_symbol` 共享符号映射 + `providers/_utils.py::run_with_timeout` 共享取数超时原语 + `analysis/financial_indicator_extract.py` 财务指标全文解析（压平正文锚点提取，备用支路） + `fetcher/financial_indicator.py` 财务指标多期取数编排 + `analysis/financial_indicator.py` 财务指标派生（质量档/趋势/当前 PE·PB） + `report/financial_indicator.py` 财务指标章装配 + `report/holdings_detail_sheet.py` 持仓明细与分类 Excel 页签 + `report/position_structure_sheet.py` 持仓结构与集中度 Excel 页签 + `report/fundamental_snapshot_sheet.py` 持仓基本面 Excel 页签（三者均为章节合并写入器） + `llm/compliance.py` 合规声明集中注入（幂等叠加，单一漏斗覆盖全模块）） |
+| HTML 报告模板 | HTML | 23 | 5,543 | `src/static/tmpl/report_template.html` + `whatif_template.html`（调仓 What-if 独立 HTML 页）+ `partials/`（章节级/区块级 partial，主模板按 TOC 六组经 Jinja include 拆入，清单见目录树 `partials/` 节点） |
+| 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 报告实景截图 2 张 PNG（`report-overview`/`report-charts`，不计入本行） |
+| 辅助脚本 | Python | 66 | 16,027 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评估、测试覆盖计数、代码/文档历史痕迹检查、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
+| 源代码合计 | — | 444 | 115,828 | 主程序 + 模板 + 脚本 + SVG |
+| 测试代码 | Python | 523 | 151,585 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 10,127 个 | `pytest --collect-only` 统计（`scripts/collect-test-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 用户文档 | Markdown | 11 | 5,719 | 含 README.md（184 行）；行数为 README + manuals 之和 |
+| ├ manuals/ | 用户手册分册 | 10 | 5,524 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
+| 项目文档 | Markdown | 168 | 62,604 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 11 + plan 7 + archive md 149），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 11 | 11,784 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| ├ archive/ | 版本归档 | 149 | 49,195 | 各版本 changelog/plan/review-findings 与设计文档归档（148 md 48,730 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
+| ├ plan/ | 中间设计文件 | 7 | ~1536 | 在办设计文档（扁平存放，完成后随完成态移入对应版本的归档子目录）：两份 Jev 新闻关联判定文档（对照评测方案 + 类型化判定通道接入设计）+ 决策跨期反思闭环设计 + 报告对话式追问设计（报告问答追问，qa 子包）+ 功能开关面板分组重构设计（作用域四分组 + 生命周期解耦）+ Web 展示借鉴研究（awesome-design-md，立项依据）+ 报告/Web 浏览器验证方法两份（浏览器人工验证回填载体） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
 
 ## 版本演进对照（最初版本 → 最新发布 → 当前开发版）
 
 > **性质**：点对点快照对照（回答「这个项目从哪来、长到多大」），非门禁校验项——与上方「项目统计」的区别是它有**两个固定基准**：最初版本 vs 最新发布。
-> **三个读数**：最初版本 = 仓库首个提交（`项目初始基线`，2026-06-27）；最新发布 = 最近一次发布 tag（v0.12.10 · 2026-10-11）；**当前开发版 = 本次重跑时的工作区**（`git ls-files` 清单 + 直接读磁盘，故含未提交改动）——第三列是**滚动读数**（按需重跑刷新），前两列是固定快照（发布点不动）。
+> **三个读数**：最初版本 = 仓库首个提交（`项目初始基线`，2026-06-27）；最新发布 = 最近一次发布 tag（v0.12.11 · 2026-10-12）；**当前开发版 = 本次重跑时的工作区**（`git ls-files` 清单 + 直接读磁盘，故含未提交改动）——第三列是**滚动读数**（按需重跑刷新），前两列是固定快照（发布点不动）。
 > **复现方法**：与上方「项目统计」同一套分类规则，对每个 revision 各跑一遍下述三步；「当前开发版」一列按需重跑即可刷新（该列省略 `<rev>`、以 `git ls-files` 取清单，即在工作区上统计）。
 
 ```bash
@@ -44,25 +44,25 @@ git grep -c "def test_" <rev> -- 'src/test'
 
 > 等价做法（更省事，前两列即以此重跑）：`git archive <rev> | tar -x -C <临时目录>` 导出后本地计数——免去逐文件 `cat-file` 的解析；口径同上（末行无换行按 1 行计）。
 
-| 指标 | 最初版本（首个提交 · 2026-06-27） | 最新发布（最近发布 tag v0.12.10 · 2026-10-11） | 当前开发版（0.12.10 · 本次重跑时的工作区 · 2026-10-11） | 增长（最初 → 当前） |
+| 指标 | 最初版本（首个提交 · 2026-06-27） | 最新发布（最近发布 tag v0.12.11 · 2026-10-12） | 当前开发版（0.12.11 · 本次重跑时的工作区 · 2026-10-12） | 增长（最初 → 当前） |
 |:-----|:----------------------------------|:-----------------------|:--------------------------|:----:|
-| 主程序（`src/**/*.py`，不含测试） | 30 文件 / 7,258 行 | 345 文件 / 91,763 行 | 345 文件 / 91,763 行 | 12.6×
-| 测试（`src/test/**/*.py`） | 13 文件 / 6,108 行 | 509 文件 / 148,918 行 | 509 文件 / 148,918 行 | 24.4×
-| 辅助脚本（`scripts/*.py`） | 0（当时仅 `launch.sh` / `launch.ps1`） | 66 文件 / 16,022 行 | 66 文件 / 16,022 行 | 新增
-| HTML 报告模板（`src/static/tmpl/*.html`） | 0（当时为 `src/tmpl/`：1 个 / 469 行） | 22 文件 / 5,105 行 | 22 文件 / 5,105 行 | 1 → 22
-| 架构图示（SVG） | 0 | 4 文件 / 344 行 | 4 文件 / 344 行 | 新增
-| 文档（`.md`） | 7 文件 / 1,355 行 | 180 文件 / 67,711 行 | 180 文件 / 67,711 行 | 50.0×
-| **代码文件合计**（前 5 项） | **43** | **946** | **946** | 22.0×
-| **代码行合计**（前 5 项） | **13,366** | **262,152** | **262,152** | 19.6×
-| **测试用例数**（`def test_` 行数口径） | **491** | **9,469** | **9,469** | 19.3×
-| 仓库文件总数 | 56 | 1,175 | 1,175 | 21.0×
-| 仓库总行数（全部跟踪文件） | 15,600 | 338,082 | 338,082 | 21.7×
+| 主程序（`src/**/*.py`，不含测试） | 30 文件 / 7,258 行 | 351 文件 / 93,865 行 | 351 文件 / 93,865 行 | 12.9×
+| 测试（`src/test/**/*.py`） | 13 文件 / 6,108 行 | 523 文件 / 151,588 行 | 523 文件 / 151,588 行 | 24.8×
+| 辅助脚本（`scripts/*.py`） | 0（当时仅 `launch.sh` / `launch.ps1`） | 66 文件 / 16,027 行 | 66 文件 / 16,027 行 | 新增
+| HTML 报告模板（`src/static/tmpl/*.html`） | 0（当时为 `src/tmpl/`：1 个 / 469 行） | 23 文件 / 5,543 行 | 23 文件 / 5,543 行 | 1 → 23
+| 架构图示（SVG） | 0 | 5 文件 / 413 行 | 5 文件 / 413 行 | 新增
+| 文档（`.md`） | 7 文件 / 1,355 行 | 182 文件 / 68,501 行 | 182 文件 / 68,501 行 | 50.6×
+| **代码文件合计**（前 5 项） | **43** | **968** | **968** | 22.5×
+| **代码行合计**（前 5 项） | **13,366** | **267,436** | **267,436** | 20.0×
+| **测试用例数**（`def test_` 行数口径） | **491** | **9,636** | **9,636** | 19.6×
+| 仓库文件总数 | 56 | 1,200 | 1,200 | 21.4×
+| 仓库总行数（全部跟踪文件） | 15,600 | 344,195 | 344,195 | 22.1×
 
 > **口径与读数说明**（避免误读三个"新增/突增"）：
-> - **测试用例数**采 `git grep -c "def test_"` 的**行数口径**（含注释/文档串中的 `def test_` 提及）：最初 491 → 当前 9,469；按更严格的「以 `def test_` 开头的定义行（含类方法缩进）」口径为 9,416；按 pytest 实际收集（含参数化展开）为 **9,940** 项（另 20 项 opt-in live 反选，全量 9,960）——**执行口径见 `test-coverage.md`「模式对应测试量」表**，该表由 `--mode bench --update-docs` 自动回填，本表第三列与之并非同一读数，仅作跨版本可比的历史尺度。
-> - **测试 / 主程序行数比**由 0.84:1（6,108 / 7,258）升至 **1.62:1**（148,918 / 91,763，最新发布点），当前工作区为 **1.62:1**（148,918 / 91,763）——测试与文档的投入增速快于主程序，是增长里最显著的结构变化。
+> - **测试用例数**采 `git grep -c "def test_"` 的**行数口径**（含注释/文档串中的 `def test_` 提及）：最初 491 → 当前 9,636；按更严格的「以 `def test_` 开头的定义行（含类方法缩进）」口径为 9,583；按 pytest 实际收集（含参数化展开）为 **9,940** 项（另 20 项 opt-in live 反选，全量 9,960）——**执行口径见 `test-coverage.md`「模式对应测试量」表**，该表由 `--mode bench --update-docs` 自动回填，本表第三列与之并非同一读数，仅作跨版本可比的历史尺度。
+> - **测试 / 主程序行数比**由 0.84:1（6,108 / 7,258）升至 **1.61:1**（151,588 / 93,865，最新发布点），当前工作区为 **1.61:1**（151,588 / 93,865）——测试与文档的投入增速快于主程序，是增长里最显著的结构变化。
 > - 「辅助脚本 / 报告模板 / 架构图」显示"新增"含**目录口径差异**：最初版本布局不同（测试平铺为 `src/test_*.py`、模板在 `src/tmpl/`、无 `scripts/*.py`、无 SVG）。按「HTML 模板总数」直接比是 **1 → 22**（若把 Web 首页与图表调试页也计入则 1 → 24）。
-> - 「文档」为仓库内全部 `.md` 计数（当前 180 = 根 2 + `managements` 11 + `manuals` 10 + `plan` 5 + `archive` 149 + `src/` 下 3 个代码相邻 README）；按上方统计表口径的**项目文档**为 166 份（CLAUDE.md 1 + 管理文档 11 + 中间设计 5 + 归档 149，不含手册与 README；该行随 `check-doc-drift --sync` 刷新）。
+> - 「文档」为仓库内全部 `.md` 计数（总数 = 根 2 + `managements` 11 + `manuals` 10 + `plan` + `archive` 149 + `src/` 下 3 个代码相邻 README，其中 `plan` 为在办设计文档实数）；按上方统计表口径的**项目文档**为 CLAUDE.md 1 + 管理文档 11 + 中间设计（plan 实数）+ 归档 149（不含手册与 README）。本行数字随 `check-doc-drift --sync` 刷新，`plan` 分项以文件系统实测为准。
 
 ### 同口径对照之外的定性差异
 
@@ -193,7 +193,8 @@ investor-util/
 │   │   │   ├── industry_beta.py               #   行业 Beta 分析（纯计算：暴露占比 + 逐行业一元 OLS，复用 factor_exposure）
 │   │   │   ├── factor_evaluator.py            #   因子目录计算编排（池构造：直接持仓∪穿透 A 股 → 逐因子池内横截面 → 中性相对与评级，全链 fail-soft）
 │   │   │   ├── correlation.py                 #   持仓相关性矩阵（Pearson 相关/显著性/下三角矩阵）
-│   │   │   ├── crisis_annotation.py           #   危机区间标注（2015/2018/2020/2022 静态表 + 区间回撤/恢复 → crisis_annotation_data）
+│   │   │   ├── benchmark_excess.py            #   风险调整超额计算（IR/TE/年化超额/12·24 月胜率/滚动 250 日超额 → risk_adjusted_excess_data）
+│   │   │   ├── crisis_annotation.py           #   危机区间标注（2015/2018/2020/2022/2025 静态表 + 区间回撤/恢复 + 回放态指数层 → crisis_annotation_data）
 │   │   │   ├── prosperity_framework.py        #   景气度框架诊断（六维评分卡：景气/ROE 弹性/全球比较/流动性/集中度与周期拼接/业绩回撤；常规功能）
 │   │   │   ├── prosperity_scoring.py     #   景气度评分内核（配置默认值 + 权重常量 + 六维打分器；从 framework 拆出）
 │   │   │   ├── prosperity_signals.py   #   景气度框架本地信号提取原语（持仓/快照/基准 → 数值信号，零网络）
@@ -254,6 +255,7 @@ investor-util/
 │   │   │   ├── failure_reasons.py    #   LLM 模块失败原因常量（FAIL_REASON_* + LLM_MODULE_FAILURE，自 prompts_core 域下沉）
 │   │   │   ├── fallback.py           #   LLM 故障降级模板（所有模块失败时提供占位内容，防止报告空白）
 │   │   │   ├── fingerprint.py        #   缓存指纹（请求去重，避免重复调用）
+│   │   │   ├── force_scope.py        #   模块级强刷范围解析（可强刷键清单/粒度优先归一/未知键校验，三端与共享层共用）
 │   │   │   ├── generators.py         #   生成门面（辩论 pro/con/合成 + 自检 + 持仓变动归因生成器；单例四函数下沉 generators_singletons 后 re-export）
 │   │   │   ├── generators_news.py    #   新闻分析提示词生成
 │   │   │   ├── generators_orchestrator.py # LLM 批量编排门面（缓存预检 + 主编排入口，re-export 分发子模块）
@@ -286,6 +288,11 @@ investor-util/
 │   │   │   ├── history.py            #   历史净值/行情数据模型
 │   │   │   ├── factor_catalog.py     #   因子目录冻结清单（25 条五来源族 + 中性点 + 字段类型路由）
 │   │   │   └── replay_schedule.py     #   调仓纪律回放规则契约（月度定期/阈值偏离解析、权重校验、版本与指纹）
+│   │   │
+│   │   ├── qa/                      # 报告对话式追问子包（零取数上下文 + 会话服务）
+│   │   │   ├── __init__.py          #   子包标记（出口：ask_report_qa / extract_report_qa_context）
+│   │   │   ├── context.py           #   报告 HTML → 追问上下文与持仓基线（锚点单源/分层截断/生成条件声明）
+│   │   │   └── session.py           #   会话表（轮数/输入上限/用量独立记账/事实核对/Markdown 渲染）
 │   │   │
 │   │   ├── report/                   # 报告生成引擎
 │   │   │   ├── __init__.py           #   子包标记
@@ -343,12 +350,13 @@ investor-util/
 │   │   │   ├── decision_review_block.py # 决策复盘·「历史决策复盘」区块数据组装（available/免责声明/命中率/近期明细）
 │   │   │   ├── signal_record.py      #   确定性信号沉淀适配器（各信号类型评级→账本记录，含实时-非实时来源标注，开关 deterministic_signal）
 │   │   │   ├── portfolio_history.py  #   组合历史净值走势分析
-│   │   │   ├── portfolio_history_drawdown_sheet.py # 组合历史走势与回撤 Excel 页签（一章四区块：走势表 + 回撤矩阵 + 危机区间标注 + 月度收益日历）
+│   │   │   ├── portfolio_history_drawdown_sheet.py # 组合历史走势与回撤 Excel 页签（一章五区块：走势表 + 回撤矩阵 + 危机区间标注 + 月度收益日历 + 风险调整超额）
 │   │   │   ├── position_structure_sheet.py # 持仓结构与集中度 Excel 页签（一章三区块：重合度 + 相关性 + 集中度）
 │   │   │   ├── _history_quality.py   #   历史走势数据质量校验
 │   │   │   ├── history_snapshot.py   #   持仓快照管理（保留 180 天）
 │   │   │   ├── holdings_freshness.py #   基金持仓报告期时效判定（完整季度数口径 + 陈旧阈值）
 │   │   │   ├── _snapshot.py          #   快照与历史数据（持仓快照/环比差异/组合历史走势）
+│   │   │   ├── summary_highlights.py #   摘要区本期要点派生（快照 diff 单源 → 指标环比行 + 关键变化 Top N，开关 summary_highlights）
 │   │   │   ├── news_correlation.py   #   新闻与持仓关联分析报告
 │   │   │   ├── orchestrator.py       #   报告编排共享层（TUI/CLI 共用，聚合门面）
 │   │   │   ├── history_policy.py     #   历史走势获取策略解析（off/auto/prompt 单一事实来源，三渠道共用）
@@ -467,12 +475,13 @@ investor-util/
 │   │   ├── test-chart.html           #   独立调试页：6 图渲染/降级/离线场景自检（Chart.js 升级验证载体）
 │   │   ├── README.md                 #   资产说明 + Chart.js 版本号记录（升级指引：替换引擎后先在此页验证）
 │   │   ├── architecture.svg          #   README 首屏主图：三渠道→引擎→双报告
+│   │   ├── owl-mascot.svg            #   README 吉祥物「守望」猫头鹰插画（夜间守望/智慧顾问/全景视野定位隐喻）
 │   │   ├── llm-chain.svg             #   README LLM 智囊团 Provider 链式分发图
 │   │   ├── capabilities.svg          #   README 九大功能域总览图
 │   │   ├── report-overview.png       #   README 报告效果截图：首屏目录导航与盈亏汇总（示例持仓实景）
 │   │   ├── report-charts.png         #   README 报告效果截图：资产构成与穿透行业分布交互图表
 │   │   ├── web/                      #   Web UI 前端（Jinja 模板 + 静态资产，Flask template/static 目录指向此处）
-│   │   │   ├── favicon.svg           #   标签页图标（品牌蓝底 + 白色上升折线，link 声明免 /favicon.ico 404）
+│   │   │   ├── favicon.svg           #   标签页图标（品牌蓝底 + 猫头鹰头像「守望」，link 声明免 /favicon.ico 404）
 │   │   │   ├── index.html            #   单页 Web UI 模板（上传/格式选择/进度/结果/状态区三列含系统信息/日志查看卡）
 │   │   │   ├── main.js               #   前端逻辑（上传/提交/轮询/渲染/日志加载，原生 ES6，无 innerHTML）
 │   │   │   └── style.css             #   样式（CSS 变量/浅色主题/响应式 480px 断点/系统信息卡片/日志列表）
@@ -480,7 +489,7 @@ investor-util/
 │   │       ├── report_template.html  #   Jinja2 HTML 报告主模板
 │   │       ├── whatif_template.html  #   调仓 What-if 独立 HTML 页（双环图+变动明细）
 │   │       └── partials/             #   章节级 partial（report_template.html 按 TOC 六组经 Jinja include 拆入）
-│   │           ├── summary_section.html #   投资分析汇总章（指数卡/资产分布/账户小计，无序号区块）
+│   │           ├── summary_section.html #   投资分析汇总章（指数卡/资产分布/账户小计，无序号区块；首屏「本期要点」块随开关 summary_highlights）
 │   │           ├── holdings_detail_section.html #   持仓明细与分类章（区块①市值核算明细 + 区块②分类汇总）
 │   │           ├── penetration_section.html #   资产穿透 TOP10 章节（排名表 + 未折算/报告期脚注）
 │   │           ├── fund_performance_section.html #   基金业绩分析章（业绩表 + 候选比较/经理变更条件块）
@@ -499,6 +508,7 @@ investor-util/
 │   │           ├── data_source_status_section.html #   数据源可用性矩阵章（源健康/说明/覆盖/可信度四区块，fold 摘要行）
 │   │           ├── fundamental_snapshot_section.html # 持仓基本面章节（区块①财务指标 + 区块②财报摘要，块级开关各控一块）
 │   │           ├── llm_usage_section.html  #   LLM API 用量章（汇总区 + 模块明细表，菜单 L）
+│   │           ├── report_qa_section.html  #   报告对话式追问区块（⚗ 实验：多轮问答/状态四态/轮次与用量，报告尾部条件渲染）
 │   │           └── action_section.html     #   行动建议章节（再平衡信号/交易纪律/调仓建议/收益归因 + 门控块，开关 enable_action）
 │   │
 │   └── test/                         # 测试套件
@@ -523,7 +533,7 @@ investor-util/
 │       │   └── hallucination/        #   幻觉测试数据集
 │       │       ├── __init__.py       #       子包标记
 │       │       └── datasets.py       #       幻觉评估标准持仓数据
-│       ├── unit/                     #   单元测试（15 子目录）
+│       ├── unit/                     #   单元测试（16 子目录）
 │       │   ├── __init__.py           #   子包标记
 │       │   ├── conftest.py           #   单元测试 conftest
 │       │   ├── test_channel_layering.py #   三渠道薄壳层纪律扫描（禁私有导入/禁写原语/禁默认值字面量）
@@ -572,7 +582,8 @@ investor-util/
 │       │   │   ├── test_valuation_percentile_edge.py # 估值分位边缘场景（样本边界/恒平/极端值）
 │       │   │   ├── test_correlation.py        #   持仓相关性矩阵计算（已知答案/矩阵布局/降级）
 │       │   │   ├── test_correlation_edge.py   #   相关性矩阵边缘场景（NaN/Inf/日期缺口）
-│       │   │   ├── test_crisis_annotation.py   #   危机区间标注（2015/2018/2020/2022 静态表 + 区间回撤/恢复耗时/重叠）
+│       │   │   ├── test_crisis_annotation.py   #   危机区间标注（静态表锚点与区间统计 + 回放态双层/指数缺席降级）
+│       │   │   ├── test_benchmark_excess.py    #   风险调整超额计算（IR/TE 数值交叉验证 + 胜率/完整月 + 滚动 + 样本不足降级）
 │       │   │   ├── test_tail_risk.py           #   尾部风险统计（VaR95/99 固定 fixture 精度 + 最大单日跌幅 + 连续下跌 + 恢复三态）
 │       │   │   ├── test_tail_risk_edge.py      #   尾部风险边缘场景（0/负/NaN 跳过、量级、样本边界、持平序列）
 │       │   │   ├── test_portfolio_evolution.py #  组合演进聚合计算（多快照趋势/HHI/TOP 变迁）
@@ -707,6 +718,7 @@ investor-util/
 │       │   │   ├── test_cost_tracker.py     #   Token 成本跟踪测试
 │       │   │   ├── test_depth_profile.py    #   报告深度档位（档位表结构/非法回落/只收窄不放大/新闻下界）
 │       │   │   ├── test_self_review.py      #   生成后自检（开关零调用/失败隔离/注册纪律/指纹内容寻址）
+│       │   │   ├── test_force_scope.py       #   模块级强刷范围（键集注册表一致性/粒度优先/未知键校验/共享层接线/CLI 解析）
 │       │   │   ├── test_holding_change_injection.py #   持仓变动提示词注入链路 + 章内归因编排（提取同源/附录含块/指纹条件并入/归因准入与写回）
 │       │   │   ├── test_event_impact_injection.py #   事件窗分歧例块注入链路（四模块分发/传输层含块/辩论 inputs/指纹条件并入/附录逐字节回退）
 │       │   │   ├── test_schedule_replay_injection.py #   调仓纪律回放引用块注入链路（四模块分发/传输层含块/指纹条件并入/附录逐字节回退）
@@ -787,6 +799,14 @@ investor-util/
 │       │   │   ├── test_tiantian_fund_fee_edge.py # F10 费用页解析边缘（缺表/百分号变体/荒谬费率拒绝/异常输入）
 │       │   │   ├── test_tiantian_purchase.py  #   申购状态总表解析（四类代表行契约/akshare 备链路映射/直连抓取传输桩）
 │       │   │   └── test_tiantian_purchase_edge.py # 申购状态解析失败与载荷准入值域体检边缘场景
+│       │   ├── qa/                 #   报告对话式追问单元测试（3 测试文件 + 1 夹具）
+│       │   │   ├── __init__.py      #       子包标记
+│       │   │   ├── conftest.py      #       共享夹具（双样本报告 HTML：锚点/表头映射/噪声/超长数据章）
+│       │   │   ├── test_report_qa_context.py # 上下文提取（分章/表头名映射/摘要截断/生成条件声明）
+│       │   │   ├── test_report_qa_context_edge.py # 上下文边缘（路径净化/锚点缺失/整体上限钉死）
+│       │   │   ├── test_report_qa_session.py # 会话服务（编排/历史折叠/用量记账/事实核对/并发隔离）
+│       │   │   ├── test_report_qa_session_edge.py # 会话边缘（轮数硬上限/输入软上限/三层路径防御）
+│       │   │   └── test_report_qa_ask.py #   Web 路由 /api/qa/ask（开关门 403/参数 400/状态码映射/信封契约）
 │       │   ├── report/              #   报告单元测试
 │       │   │   ├── __init__.py      #       子包标记
 │       │   │   ├── test_design_doc.py #   设计语言契约（DESIGN.md 骨架/护栏对偶/引用存在）结构守卫
@@ -836,12 +856,15 @@ investor-util/
 │       │   │   ├── test_snapshot_namespace_consumers.py    #   快照命名空间消费方测试
 │       │   │   ├── test_snapshot_source_guard.py #   持仓源守卫（正式源判定/非正式源不落盘不比对/正式源行为不变/命名空间域不受限）
 │       │   │   ├── test_snapshot_source_guard_edge.py #   持仓源守卫边缘（解析异常 fail-closed/缺省回退/全局配置）
+│       │   │   ├── test_snapshot_baseline.py   #   环比比对基线（跨交易日选择/同日跳过/回退最新/域隔离/diff 透传）
+│       │   │   ├── test_snapshot_baseline_edge.py #   比对基线边缘（周末/盘前归属/节假日日历/损坏顺延/坏时间戳跳过）
 │       │   │   ├── test_style_factor_sheet.py     #   风格与因子分析页签呈现（一章三区块：风格表+因子回归+行业 Beta）
 │       │   │   ├── test_correlation_html.py       #   持仓关系矩阵章节（相关性/重合度区块）HTML 呈现
 │       │   │   ├── test_position_structure_sheet.py # 持仓结构与集中度页签（三区块 + 合并等价 + OR 可见性）
 │       │   │   ├── test_evolution_html.py         #   组合演进章节 HTML 呈现（图表+图下说明）
 │       │   │   ├── test_evolution_sheet.py        #   组合演进 Excel 页签呈现
 │       │   │   ├── test_holding_change_panel.py    #   持仓变动复盘面板（契约装配/双端单源/关态隐藏/开关注册/模板接线/提示词块与重排标注）
+│       │   │   ├── test_report_qa_partial.py #   报告追问区块 partial（Data States/信封消费/token 样式纪律/主模板 guard/开关隔离渲染）
 │       │   │   ├── test_event_impact_panel.py #   事件窗对照表编排（极性/日期解析表、品种索引、行组装与降级计数）
 │       │   │   ├── test_event_impact_panel_edge.py #   事件窗对照表编排边缘（空输入/坏 ctime/取数异常降级）
 │       │   │   ├── test_event_impact_wiring.py #   事件窗接线（开关/seam/注册表并入判定/关态回退/双端单源/分歧例召回/模板并入新闻章/新闻-LLM 串行化）
@@ -898,7 +921,8 @@ investor-util/
 │       │   │   ├── test_penetration_report_periods.py # 穿透报告期场景测试（不可得剔除/陈旧闸门/联接来源登记）
 │       │   │   ├── test_penetration_sheet.py      #   穿透页签写入测试（剔除原因与各基金报告期备注）
 │       │   │   ├── test_penetration_sheet_edge.py #   穿透页签写入边缘场景（空数据占位降级不抛错）
-│       │   │   ├── test_pipeline_data_builder.py    #   管线数据上下文组装测试（crisis_annotation/tail_risk/snapshot_diff 三键注册）
+│       │   │   ├── test_pipeline_data_builder.py    #   管线数据上下文组装测试（危机/尾部风险/快照差分/风险调整超额等键注册）
+│       │   │   ├── test_history_augmented_wiring.py # 历史增强装配接线（开关判定/子块扩展窗取数/full 路径注入/取数 helper）
 │       │       ├── test_purchase_status.py          # 申购限购状态展示层测试（契约/陈旧阶梯/单元格/脚注/模板条件渲染）
 │       │       ├── test_purchase_status_edge.py     # 申购限购状态边缘场景（0 元限额→限额未知/时间不可解析/过期档）
 │       │   │   ├── test_pipeline_utils.py          #   管线工具函数测试
@@ -911,6 +935,7 @@ investor-util/
 │       │   │   ├── test_orchestrator_generate_report.py # 报告生成主流程落盘与快照比对测试
 │       │   │   ├── test_run_integrity.py      #   运行一致性守卫（中断收口/原子落盘/已中断状态/guard_run）
 │       │   │   ├── test_summary.py                #   摘要生成测试
+│       │   │   ├── test_summary_highlights.py     #   摘要区本期要点与环比对照（降级判据/指标派生/排序截断/hhi 行级降级/新字段链路/模板双态）
 │       │   │   ├── test_summary_module_rows.py    #   摘要模块数据行与 LLM 用量深度行测试
 │       │   │   ├── test_llm_module_info.py         #   LLM 模块信息·Endpoint 汇总展示（主备排序标注/未映射不标注/去重）
 │       │   │   ├── test_llm_quality.py            #   LLM 输出质量分级（A~F 口径/横幅注入/开关/章节标记与提示词一致性锁）
@@ -1411,6 +1436,8 @@ investor-util/
 │       ├── jev-news-correlation-evaluation.md # 评测方案（三方对照：关键词/现网生成/Jev；预注册阈值与 go-no-go 判定）
 │       ├── jev-news-correlation-design.md # 设计草案（独立于对话链的类型化判定通道/模板理由/降级矩阵）
 │       ├── decision-reflection-shadow-design.md # 决策跨期反思闭环设计（Vibe 影子账户参照/转正路径，plan-70）
+│       ├── report-followup-qa-design.md # 报告对话式追问设计定稿（qa 独立子包/上下文从报告 HTML 提取/双端入口/5 阶段可验收计划，plan-102 评估交付）
+│       ├── feature-switch-grouping-redesign.md # 功能开关面板分组重构设计（作用域四分组 + 生命周期解耦 experimental 字段/守护脚本先行/4 迭代可验收，plan-120）
 │       ├── report-browser-verification.md # 报告浏览器验证方法与实测结论（六项拆分：CDP 自动化子项实测 + 人工步骤 + 复验清单，rf-113 验证载体）
 │       └── web-browser-verification.md # Web 浏览器验证方法与实测结论（五类 37 断言实测 + 人工步骤 + 复验清单，rf-257 验证载体）
 │

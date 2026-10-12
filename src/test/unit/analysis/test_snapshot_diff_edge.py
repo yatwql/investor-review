@@ -22,7 +22,12 @@ import src.python.core.constants as core_constants
 from src.python.report.history_snapshot import save
 from src.python.schemas.history import AccountSnapshot, SnapshotData, SnapshotHolding
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_analysis, pytest.mark.edge]
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.unit_analysis,
+    pytest.mark.edge,
+    pytest.mark.usefixtures("offline_external_sources"),
+]
 
 
 def _holding(code: str, name: str, mv: float, cost: float) -> SnapshotHolding:

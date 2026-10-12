@@ -14,6 +14,7 @@
   >>> path = save(sd)                # 共享主目录（默认）
   >>> path = save(sd, "web")         # web 试算隔离域
   >>> latest = load_latest("web")    # 读 web 域最新
+  >>> baseline = load_comparison_baseline("20261011T215611")  # 环比基线（跳过同一交易日）
   >>> all_snapshots = list_all()
   >>> prune(max_count=12)
 """
@@ -207,6 +208,79 @@ def load_latest(namespace: str | None = None) -> SnapshotData | None:
 
     latest = max(snapshots, key=lambda p: os.path.getmtime(p))
     return _load_file(latest)
+
+
+#: 快照时间戳可解析格式族（紧凑格式在前，与 save() 写盘格式一致）
+_SNAPSHOT_TS_FORMATS = (
+    "%Y%m%dT%H%M%S",
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%d",
+    "%Y%m%d",
+)
+
+
+def _parse_snapshot_timestamp(ts: str) -> datetime | None:
+    """解析快照时间戳（紧凑/ISO 格式族）；不可解析返回 None。"""
+    for fmt in _SNAPSHOT_TS_FORMATS:
+        try:
+            return datetime.strptime(ts, fmt)
+        except (ValueError, TypeError):
+            continue
+    return None
+
+
+def load_comparison_baseline(current_ts: str, namespace: str | None = None) -> SnapshotData | None:
+    """加载环比比对基线：域内所属交易日早于本次报告的最新一份快照。
+
+    同一交易日可能多次生成报告，与“上一份”比对时净值未变、结论无信息量；
+    基线因此跳过与 ``current_ts`` 同属一个交易日的全部快照，取**更早交易日中
+    时间戳最新**的一份——即“上一个有报告的交易日的最新一份报告”（中间隔日
+    未跑时自然落到更早可用快照）。交易日归属经
+    ``core.trading_calendar.trading_day_as_of``（盘前 <9:30 归前一交易日、
+    节假日回溯；交易日历不可用回退排除周六日），与报告头“所属交易日”同口径。
+
+    降级与容错：
+      - ``current_ts`` 不可解析 → 回退 :func:`load_latest`（退化为“上一份”旧口径，不阻塞环比）
+      - 候选快照内部时间戳不可解析或文件损坏 → 随 ``load_all`` 自动跳过
+      - 域内无快照或无更早交易日快照 → None（调用方按首次运行口径隐藏环比）
+
+    Args:
+        current_ts: 本次报告快照时间戳（``YYYYMMDDTHHMMSS``，兼容 ISO）
+        namespace: 隔离域标识（None=共享主目录，如 "web"=web 试算域）
+
+    Returns:
+        基线快照 SnapshotData；无可比基线时 None。
+
+    Raises:
+        ValueError: namespace 含非法字符时
+    """
+    current = _parse_snapshot_timestamp(current_ts or "")
+    if current is None:
+        logger.debug("[history_snapshot] 基线时间戳不可解析 %r，回退最新一份快照", current_ts)
+        return load_latest(namespace)
+
+    candidates = load_all(namespace)
+    if not candidates:
+        return None
+
+    from src.python.core.trading_calendar import trading_day_as_of
+
+    current_td = trading_day_as_of(current)
+    eligible: list[tuple[datetime, SnapshotData]] = []
+    for sd in candidates:
+        parsed = _parse_snapshot_timestamp(sd.timestamp or "")
+        if parsed is None:
+            continue
+        # 所属交易日更早才可比（trading_day_as_of 随时钟单调，早于当前交易日
+        # 的候选必然也是更早的时点）；同交易日候选一律跳过
+        if trading_day_as_of(parsed) < current_td:
+            eligible.append((parsed, sd))
+    if not eligible:
+        return None
+
+    # 取时间戳最新者（load_all 已跳过损坏文件）
+    eligible.sort(key=lambda item: item[0], reverse=True)
+    return eligible[0][1]
 
 
 def load_all(namespace: str | None = None) -> list[SnapshotData]:

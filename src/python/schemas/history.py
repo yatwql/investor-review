@@ -126,6 +126,7 @@ class DiffSummary:
     total_value_diff: float = 0.0  # 总市值变化
     total_value_diff_pct: float = 0.0  # 总市值变化率
     total_pnl_diff: float = 0.0  # 总盈亏变化
+    total_pnl_pct_diff: float = 0.0  # 总盈亏率变化（百分点，本期 total_pnl_pct - 上期）
     days_since_last_report: int = 0  # 距上次报告天数
 
     # ── 持仓级 ──

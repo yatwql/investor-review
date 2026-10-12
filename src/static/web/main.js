@@ -53,6 +53,8 @@
     els.reportType = $('report-type');
     els.historyFetch = $('history-fetch');
     els.forceLlm = $('force-llm');
+    els.llmModuleGroup = $('llm-module-group');
+    els.llmModuleCbs = document.querySelectorAll('.llm-module-cb');
     els.generateBtn = $('generate-btn');
     els.generateError = $('generate-error');
     els.progressSection = $('progress-section');
@@ -110,6 +112,10 @@
 
     els.fileInput.addEventListener('change', onFileSelected);
     els.generateForm.addEventListener('submit', onSubmit);
+    if (els.forceLlm) {
+      els.forceLlm.addEventListener('change', toggleLlmModuleGroup);
+      toggleLlmModuleGroup();
+    }
     $('health-refresh').addEventListener('click', function () {
       loadHealth(true);
     });
@@ -252,6 +258,21 @@
     return checked ? checked.value : 'trial';
   }
 
+  /* 模块级强刷选择：全选/全不选 → null（后端等价全量），子集 → 键列表 */
+  function selectedLlmModules() {
+    var all = Array.prototype.slice.call(els.llmModuleCbs || []);
+    if (!all.length) return null;
+    var picked = all.filter(function (cb) { return cb.checked; }).map(function (cb) { return cb.value; });
+    if (picked.length === 0 || picked.length === all.length) return null;
+    return picked;
+  }
+
+  /* 勾选「强制 LLM」时展开模块多选组（默认全选 = 全量，与旧行为一致） */
+  function toggleLlmModuleGroup() {
+    if (!els.llmModuleGroup) return;
+    els.llmModuleGroup.hidden = !els.forceLlm.checked;
+  }
+
   function currentSource() {
     var checked = document.querySelector('input[name="use_existing"]:checked');
     return checked ? checked.value : 'upload';
@@ -373,6 +394,7 @@
       // 历史走势/强制 LLM 开关：表单显式传值（默认值已在页面加载时按配置回填）
       fetch_history: els.historyFetch.checked,
       force_llm: els.forceLlm.checked,
+      llm_modules: selectedLlmModules(),
       mode: currentMode(),
       use_existing: existing,
     };
@@ -985,11 +1007,11 @@
     els.configPanel.appendChild(
       renderBoolGroup('llm', 'LLM 分析章节', surface.llm.enabled_llm, {
         prefix: 'enabled_llm.',
-        note: '辩论三模块（白脸/黑脸/综合）不在菜单展示，输出由下方「实验性功能」对应开关控制'
+        note: '辩论三模块（白脸/黑脸/综合）不在菜单展示，输出由下方「报告章节与增强」的正反辩论开关控制'
       })
     );
     // 功能开关两块（实验组 / 常规组）：清单、显示名、「影响报告」标记全部由
-    // 服务端 surface.features 下发，前端只负责分块渲染
+    // 服务端 surface.features 下发，前端只负责分块渲染；报告章节与增强块在上方单独渲染
     els.configPanel.appendChild(
       renderBoolGroup('features_experimental', '实验性功能（⚗ 默认关闭）', surface.features.experimental, {
         experimental: true,

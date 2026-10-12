@@ -1,5 +1,5 @@
 # LLM 集成层技术设计
-> 文档版本：0.12.10
+> 文档版本：0.12.11
 
 本文档是 `technical.md` 的 LLM 集成层专项技术设计补充，对应 `technical.md` §5（LLM 集成层概要设计）。
 `technical.md` §5 提供 LLM 层的总体架构、模块清单、调用链概览、多 Provider 链模式概要及关键机制速览；
@@ -157,7 +157,7 @@ skeleton.py:generate_llm_content()
 
 ### 2.1 子模块总览
 
-说明：`prompts.py` 为统一导出入口，将 `prompts_core.py` / `prompts_tables.py` / `prompts_action.py` / `prompts_signals.py` 的公开符号汇总导出。
+说明：`prompts.py` 为统一导出入口，将 `prompts_core.py` / `prompts_tables.py` / `prompts_action.py` / `prompts_signals.py` / `prompts_data_blocks.py` / `prompts_review.py` 的公开符号汇总导出。
 
 | 模块 | 分类 | 职责 | 入口函数 |
 |:-----|:-----|:------|:---------|
@@ -184,11 +184,14 @@ skeleton.py:generate_llm_content()
 | `prompts_action.py` | 工具 | 各模块 User Prompt 构建（global_macro / expert_review / health_check / penetration_deep / debate_synthesis）+ 集中度问答块 | `_build_expert_review_prompt()` / `_build_concentration_qa_block()` |
 | `prompts_signals.py` | 工具 | 信号预消化：行业资金流向段方向标注与分方向排名（无开关，默认路径）+ 算法评级信号块（市场温度/估值分位/尾部风险/持仓基本面/叙事与数字背离 → `信号：…` 行，`deterministic_signal` 开关（读侧注入面），判定收敛于缓存后缀函数保证读写键同源） | `_build_sector_flow_block()` / `_build_signal_digest_block()` / `_signal_digest_cache_suffix()` |
 | `fingerprint.py` | 工具 | LLM 缓存指纹计算、稳定性字段提取、TTL 查询 | `compute_fingerprint()` / `build_llm_fingerprint()` |
+| `force_scope.py` | 工具 | 模块级强刷范围：可强刷键清单（注册表 settings_suffix 子集）+ `resolve_force_scope` 粒度优先归一与未知键校验 + `is_module_forced`；全局 force 与模块子集在 `generate_all_llm` 入口归一为模块键集合，不改缓存键构造 | `resolve_force_scope()` / `is_module_forced()` |
 | `module_fingerprint.py` | 工具 | **模块指纹的唯一事实来源（预检侧与写侧同源）**：四模块指纹构造器 + 输入闭包 + 注册表，两侧都调用同一函数，结构性消除「预检键 ≠ 写侧键」的漂移 | `MODULE_FINGERPRINT_BUILDERS` / `ModuleFingerprintInputs` / `*_fingerprint()` |
 | `session.py` | 工具 | 会话级 Token 累计、模块级记录、格式化输出 | `track_session_usage()` / `get_session_usage()` |
 | `cost_tracker.py` | 工具 | Token 预算管理、输入检查、成本摘要格式化（compact/verbose） | `reset_budget()` / `get_cost_summary()` |
 | `pricing.py` | 工具 | 模型定价合并、费用估算 | `estimate_cost()` / `reload_pricing()` |
 | `circuit_breaker.py` | 工具 | LLM 端点熔断器（连续 3 次失败 + 固定 60s 冷却） | `get_circuit_status()` |
+| `compliance.py` | 工具 | System Prompt 尾部合规声明注入（`api.call_llm` 单一漏斗，幂等不叠、不动缓存指纹；窄判定角色可经 `role` 追加约束） | `COMPLIANCE_CLOSING` |
+| `pacing.py` | 工具 | 端点级节流与并发治理（`PacingGate`：min_interval/jitter/max_concurrency，无声明零影响；详设见 §4.2.1） | `PacingGate` |
 | `markdown.py` | 工具 | Markdown→HTML 转换 | `markdown_to_html()` |
 | `_api_claude.py` / `_api_gemini.py` / `_api_openai.py` | 私有 | 各 Provider 单次调用实现（自包含依赖，委托 api_base 重试 + Extended Thinking 注入），api.py 分派目标 | `call_claude()` / `call_gemini()` / `call_openai()` |
 | `_batch_mode.py` | 私有 | 批量模式分块执行（`_BATCH_CHUNK_SIZE=10` 每批、最多 3 批并行，受 `min(3, 批数, 6)` 约束） | `run_batch_mode()` |
@@ -1041,6 +1044,8 @@ _session_usage = {
 }
 ```
 
+> **记账边界（报告对话式追问）**：`qa/`（报告对话式追问，见 technical.md §6.8）虽经 `call_llm()` 调用，但**不写**本节的 `_session_usage`——Web 常驻进程里的追问会污染下一报告的 LLM 用量页签；其用量独立记账于 `QaSession.usage`（input/output tokens + provider，按轮返回追问前端），并由 `src/test/unit/qa/test_report_qa_session.py` 的源码级断言守护（`qa.session` 不得导入 `llm.session`）。追问因此不进报告「LLM API 用量」页签与费用统计。
+
 `llm/cost_tracker.py` 在前者之上提供 Token 预算管理：
 
 | 函数 | 职责 |
@@ -1268,7 +1273,7 @@ reload_pricing() → 合并 llm_settings.json → pricing
 
 所有键名由 `get_known_llm_settings_keys()` 统一校验。新增 LLM 模块只需在 registry.py 注册表中添加一行 `DataModuleDef`，无需修改 config 校验逻辑。
 
-> **辩论模块派生**：3 个辩论模块（`debate_pro`/`debate_con`/`debate_synthesis`，`settings_suffix` 同规则）同样按每模块 9 键派生（如 `model_debate_pro`、`system_prompt_debate_con`），使 `enabled_llm` 合法子键共 **10** 个（7 标准 + 3 辩论）。辩论开关实际由 `features.json` 的实验性 Flag（`llm_debate_procon`; 条件推理为常规开关 `llm_debate_conditional`）控制，集中度问答段内建于辩论流程，`enabled_llm` 辩论子键仅属校验层合法键，不在菜单 [S] 展示（由 `tui_menu.LLM_MENU_HIDDEN_KEYS` 隐藏），注册表保留以维持缓存 TTL/前缀清理。
+> **辩论模块派生**：3 个辩论模块（`debate_pro`/`debate_con`/`debate_synthesis`，`settings_suffix` 同规则）同样按每模块 9 键派生（如 `model_debate_pro`、`system_prompt_debate_con`），使 `enabled_llm` 合法子键共 **10** 个（7 标准 + 3 辩论）。辩论开关实际由 `features.json` 的报告章节与增强组 Flag（`llm_debate_procon` 默认关 / `llm_debate_conditional` 默认开，两者相邻可查）控制，集中度问答段内建于辩论流程，`enabled_llm` 辩论子键仅属校验层合法键，不在菜单 [S] 展示（由 `tui_menu.LLM_MENU_HIDDEN_KEYS` 隐藏），注册表保留以维持缓存 TTL/前缀清理。
 
 ### 12.3 报告深度档位（`llm_report_depth`）
 

@@ -1,7 +1,7 @@
 """快照命名空间消费层测试 — capture_snapshot / 组合演进 / 快照差异。
 
 覆盖：
-  - capture_snapshot(snapshot_namespace="web")：load_latest/save/prune 均在
+  - capture_snapshot(snapshot_namespace="web")：load_comparison_baseline/save/prune 均在
     web 域内闭环，主目录零新增（T3）
   - build_evolution_data(snapshot_namespace="web")：只聚合 web/ 快照（T4）
   - build_snapshot_diff(snapshot_namespace="web")：只对比 web/ 快照（T4）
@@ -76,7 +76,7 @@ class TestCaptureSnapshotNamespace:
         return h
 
     def test_capture_snapshot_namespace_closed_loop(self):
-        """capture_snapshot(namespace="web") → load_latest 基于 web 域上一份，主目录零新增。"""
+        """capture_snapshot(namespace="web") → 基线加载基于 web 域上一份（不同交易日），主目录零新增。"""
         reporter = MagicMock()
         config = {"history": {"snapshot_retention_days": 60, "snapshot_max_count": 365}}
         # 先在 web 域预置一份旧快照（模拟此前试算）
@@ -115,7 +115,7 @@ class TestCaptureSnapshotNamespace:
         reporter = MagicMock()
         config = {"history": {"snapshot_retention_days": 99, "snapshot_max_count": 200}}
         with (
-            patch("src.python.report.history_snapshot.load_latest", return_value=None),
+            patch("src.python.report.history_snapshot.load_comparison_baseline", return_value=None),
             patch("src.python.report.history_snapshot.save"),
             patch("src.python.fetcher.history_diff.HistoryDiff") as mock_hd,
             patch("src.python.report.history_snapshot.prune") as mock_prune,

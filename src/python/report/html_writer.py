@@ -256,6 +256,7 @@ def _render_template(
     prosperity_framework_data: dict
     | None = None,  # 景气度框架诊断契约（实验性功能 prosperity_framework，None=开关关闭）
     market_sentiment_data: dict | None = None,  # 市场情绪与持仓热点契约（报告增强开关 market_sentiment，None=开关关闭）
+    risk_adjusted_excess_data: dict | None = None,  # 风险调整超额契约（开关 risk_adjusted_excess，None=开关关闭）
     crisis_annotation_data: dict | None = None,  # 危机区间标注 crisis_annotation_data
     tail_risk_data: dict | None = None,  # 尾部风险统计 tail_risk_data（指标卡）
     snapshot_diff_data: dict | None = None,  # 快照差异摘要 snapshot_diff_data（组合演进章顶部）
@@ -271,13 +272,17 @@ def _render_template(
     financial_indicator_data: dict | None = None,  # 财务指标契约（None=开关关闭/无数据）
     purchase_status_data: dict | None = None,  # 申购限购状态契约（None=开关关闭/无数据，申购状态列隐藏）
     data_source_catalog: list | None = None,  # 数据源说明表（实际使用清单 / 计费 / 凭据）
+    summary_highlights_data: dict
+    | None = None,  # 本期要点与环比对照契约（报告增强开关 summary_highlights，None=首屏块隐藏）
 ) -> str:
     """渲染 Jinja2 模板并返回 HTML。"""
-    from src.python.config.features import enabled_experimental_features
+    from src.python.config.features import enabled_experimental_features, is_feature_enabled
     from src.python.report.chart_data_builder import build_evolution_chart_data
 
     # 实验功能清单：产物须自述生成条件（页脚）；零开关时为空列表，页脚不出现该行
     enabled_experiments = [name for _flag, name in enabled_experimental_features()]
+    # 报告追问区块开关态：经 render context 传递（不写模板 globals）；关态模板分支不渲染，报告字节不变
+    report_qa_enabled = is_feature_enabled("report_qa")
 
     # 估值分位 + 市场温度：开关关闭时为 None（模板保持既有输出）
     valuation_enabled = valuation_data is not None
@@ -346,6 +351,7 @@ def _render_template(
         debate_info=debate_info,
         debate_mode_combination=_debate_mode_combination,
         enabled_experiments=enabled_experiments,
+        report_qa_enabled=report_qa_enabled,
         section_order=order,
         section_numbers=section_numbers,
         section_visible_dict=section_visible_dict,
@@ -377,6 +383,7 @@ def _render_template(
         prosperity_framework_data=prosperity_framework_data,
         market_sentiment_data=market_sentiment_data,
         crisis_annotation_data=crisis_annotation_data,
+        risk_adjusted_excess_data=risk_adjusted_excess_data,
         tail_risk_data=tail_risk_data,
         snapshot_diff_data=snapshot_diff_data,
         decision_review_data=decision_review_data,
@@ -385,6 +392,7 @@ def _render_template(
         schedule_replay_view=schedule_replay_view,
         financial_report_digest_data=financial_report_digest_data,
         financial_indicator_data=financial_indicator_data,
+        summary_highlights_data=summary_highlights_data,
     )
 
 
@@ -428,6 +436,7 @@ def write_html_report(
     position_relationship_data: dict | None = None,
     evolution_data: dict | None = None,
     drawdown_min_span: int = DRAW_DOWN_MIN_SPAN,
+    risk_adjusted_excess_data: dict | None = None,  # 风险调整超额契约（开关 risk_adjusted_excess，None=开关关闭）
     crisis_annotation_data: dict | None = None,  # 危机区间标注 crisis_annotation_data
     tail_risk_data: dict | None = None,  # 尾部风险统计 tail_risk_data（指标卡）
     snapshot_diff_data: dict | None = None,  # 快照差异摘要 snapshot_diff_data（组合演进章顶部变化摘要）
@@ -446,6 +455,8 @@ def write_html_report(
     | None = None,  # data 层：事件窗量化对照契约（报告章节与增强开关 `event_window_impact`，None=键缺席→整章隐藏）
     schedule_replay_data: dict
     | None = None,  # data 层：调仓纪律回放契约（实验开关 `rebalance_schedule_replay`，None=键缺席→整章隐藏）
+    summary_highlights_data: dict
+    | None = None,  # data 层：本期要点与环比对照契约（报告章节与增强开关 `summary_highlights`，None=键缺席→首屏块隐藏）
 ) -> str:
     """生成 HTML 分析报告并保存到文件。
 
@@ -724,6 +735,7 @@ def write_html_report(
         prosperity_framework_data=prosperity_framework_data,
         market_sentiment_data=market_sentiment_data,
         crisis_annotation_data=crisis_annotation_data,
+        risk_adjusted_excess_data=risk_adjusted_excess_data,
         tail_risk_data=tail_risk_data,
         snapshot_diff_data=snapshot_diff_data,
         fund_flow_data=fund_flow_data,
@@ -733,6 +745,7 @@ def write_html_report(
         holding_change_view=holding_change_view,
         event_impact_view=event_impact_view,
         schedule_replay_view=schedule_replay_view,
+        summary_highlights_data=summary_highlights_data,
     )
 
     if enable_interactive_charts:

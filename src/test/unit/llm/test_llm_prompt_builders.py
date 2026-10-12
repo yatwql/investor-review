@@ -726,3 +726,39 @@ class TestPromptHoldingCodeMaskFold(unittest.TestCase):
         self.assertNotIn("600519", block)
         self.assertIn("000XXX", block)
         self.assertIn("白酒", block)
+
+
+class TestDiffContextBaselineBlock(unittest.TestCase):
+    """环比差异上下文块的对比基准标注（写明比对的交易日与生成时间）。"""
+
+    @staticmethod
+    def _diff(**overrides) -> dict:
+        base = {
+            "is_first_check": False,
+            "days_since_last_report": 2,
+            "baseline_trading_day": "2026-01-09",
+            "baseline_generated_at": "2026-01-09 21:30",
+            "total_value_diff": 100.0,
+            "total_value_diff_pct": 0.5,
+            "total_pnl_diff": 50.0,
+        }
+        base.update(overrides)
+        return base
+
+    def test_baseline_line_rendered(self):
+        """diff 携带基线标注 → 上下文块在【环比对比】行后给出【对比基准】行。"""
+        from src.python.llm.prompts_data_blocks import _build_difpipeline_data_block
+
+        block = _build_difpipeline_data_block({"diff": self._diff()})
+        self.assertIn("【环比对比】距上次报告 2 天", block)
+        self.assertIn("【对比基准】交易日 2026-01-09，报告生成于 2026-01-09 21:30", block)
+        # 标注行紧跟环比首行（LLM 先看到比对对象再看差异数值）
+        self.assertLess(block.index("【环比对比】"), block.index("【对比基准】"))
+
+    def test_baseline_line_absent_when_labels_missing(self):
+        """基线标注缺失（空串/旧口径 diff）→ 不输出【对比基准】行，其余照常。"""
+        from src.python.llm.prompts_data_blocks import _build_difpipeline_data_block
+
+        block = _build_difpipeline_data_block({"diff": self._diff(baseline_trading_day="", baseline_generated_at="")})
+        self.assertNotIn("【对比基准】", block)
+        self.assertIn("【环比对比】", block)

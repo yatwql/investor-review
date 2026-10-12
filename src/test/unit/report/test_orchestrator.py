@@ -570,7 +570,7 @@ class TestCaptureSnapshot:
         config = {"history": {"snapshot_retention_days": 60, "snapshot_max_count": 365}}
 
         with (
-            patch("src.python.report.history_snapshot.load_latest", return_value=None),
+            patch("src.python.report.history_snapshot.load_comparison_baseline", return_value=None),
             patch("src.python.report.history_snapshot.save") as mock_save,
             patch("src.python.fetcher.history_diff.HistoryDiff") as mock_hd,
             patch("src.python.report.history_snapshot.prune"),
@@ -610,7 +610,7 @@ class TestCaptureSnapshot:
         config = {"history": {"snapshot_retention_days": 60, "snapshot_max_count": 365}}
 
         with (
-            patch("src.python.report.history_snapshot.load_latest", return_value=None),
+            patch("src.python.report.history_snapshot.load_comparison_baseline", return_value=None),
             patch("src.python.report.history_snapshot.save") as mock_save,
             patch("src.python.fetcher.history_diff.HistoryDiff") as mock_hd,
             patch("src.python.report.history_snapshot.prune"),
@@ -644,7 +644,7 @@ class TestCaptureSnapshot:
         config = {"history": {"snapshot_retention_days": 60, "snapshot_max_count": 365}}
 
         with (
-            patch("src.python.report.history_snapshot.load_latest", return_value=None),
+            patch("src.python.report.history_snapshot.load_comparison_baseline", return_value=None),
             patch("src.python.report.history_snapshot.save") as mock_save,
             patch("src.python.fetcher.history_diff.HistoryDiff") as mock_hd,
             patch("src.python.report.history_snapshot.prune"),
@@ -695,7 +695,7 @@ class TestCaptureSnapshot:
         mock_diff.decreased = []
 
         with (
-            patch("src.python.report.history_snapshot.load_latest", return_value=MagicMock()),
+            patch("src.python.report.history_snapshot.load_comparison_baseline", return_value=MagicMock()),
             patch("src.python.report.history_snapshot.save"),
             patch("src.python.fetcher.history_diff.HistoryDiff") as mock_hd_cls,
             patch("src.python.report.history_snapshot.prune"),
@@ -722,7 +722,7 @@ class TestCaptureSnapshot:
         config = {"history": {"snapshot_retention_days": 99, "snapshot_max_count": 200}}
 
         with (
-            patch("src.python.report.history_snapshot.load_latest", return_value=None),
+            patch("src.python.report.history_snapshot.load_comparison_baseline", return_value=None),
             patch("src.python.report.history_snapshot.save"),
             patch("src.python.fetcher.history_diff.HistoryDiff") as mock_hd,
             patch("src.python.report.history_snapshot.prune") as mock_prune,
@@ -760,7 +760,7 @@ class TestCaptureSnapshot:
         mock_diff.decreased = []
 
         with (
-            patch("src.python.report.history_snapshot.load_latest", return_value=MagicMock()),
+            patch("src.python.report.history_snapshot.load_comparison_baseline", return_value=MagicMock()),
             patch("src.python.report.history_snapshot.save"),
             patch("src.python.fetcher.history_diff.HistoryDiff") as mock_hd_cls,
             patch("src.python.report.history_snapshot.prune"),
@@ -785,7 +785,7 @@ class TestCaptureSnapshot:
         config = {"history": {"snapshot_retention_days": 60, "snapshot_max_count": 365}}
 
         with (
-            patch("src.python.report.history_snapshot.load_latest", return_value=None),
+            patch("src.python.report.history_snapshot.load_comparison_baseline", return_value=None),
             patch("src.python.report.history_snapshot.save"),
             patch("src.python.fetcher.history_diff.HistoryDiff") as mock_hd,
             patch("src.python.report.history_snapshot.prune"),
@@ -810,7 +810,7 @@ class TestCaptureSnapshot:
         config = {"history": {"snapshot_retention_days": 60, "snapshot_max_count": 365}}
 
         with (
-            patch("src.python.report.history_snapshot.load_latest", side_effect=ValueError("测试异常")),
+            patch("src.python.report.history_snapshot.load_comparison_baseline", side_effect=ValueError("测试异常")),
             patch("src.python.report.history_snapshot.save"),
             patch("src.python.fetcher.history_diff.HistoryDiff"),
             patch("src.python.report.history_snapshot.prune"),
