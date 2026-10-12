@@ -235,8 +235,8 @@ TUI 菜单与 CLI 子命令落到**同一个业务编排函数**（`report/orche
 
 | TUI 菜单 | CLI 等价命令 |
 |:---------|:-------------|
-| **[E]** 生成基础版 Excel 分析报告 | `report --type basic` |
-| **[B]** 生成标准报告（Excel+HTML） | `report --type both --history auto` |
+| **[E]** 生成基础报告（仅 Excel） | `report --type basic` |
+| **[B]** 生成标准报告（Excel+HTML，按章节配置） | `report --type both --history auto` |
 | **[L]** 生成完整报告（Excel+HTML，含 LLM） | `report --type full --history auto` |
 | **[W]** 调仓 What-if 模拟 | `whatif --base <调仓前.xlsx> --candidate <调仓后.xlsx>` |
 
