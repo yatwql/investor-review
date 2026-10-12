@@ -10,6 +10,7 @@ from src.python.qa.context import (
     _QA_CONTEXT_CHAR_CAP,
     ReportQaContextError,
     extract_report_qa_context,
+    sanitize_report_filename,
 )
 
 pytestmark = [
@@ -23,11 +24,16 @@ pytestmark = [
 class TestPathGuard:
     """路径净化（与 Web 路由同款语义的双层防御）。"""
 
-    @pytest.mark.parametrize("bad", ["../evil.html", "sub/dir.html", "a\\b.html", "", ".."])
+    @pytest.mark.parametrize("bad", ["../evil.html", "sub/dir.html", "a\\b.html", "", "..", ".html"])
     def test_illegal_report_name_rejected(self, tmp_path, bad):
         with pytest.raises(ReportQaContextError) as excinfo:
             extract_report_qa_context(bad, output_dir=str(tmp_path))
         assert excinfo.value.code == "QA_BAD_REPORT"
+
+    def test_sanitize_single_source_accepts_uppercase_html(self):
+        assert sanitize_report_filename("报告.HTML") == "报告.HTML"
+        assert sanitize_report_filename("报告.html") == "报告.html"
+        assert sanitize_report_filename(".html") is None  # 纯后缀无基名，三层统一拒绝
 
     @pytest.mark.parametrize("bad", ["notes.txt", "report.html.exe", "noext"])
     def test_non_html_suffix_rejected(self, tmp_path, bad):

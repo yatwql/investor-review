@@ -572,14 +572,9 @@ def _handle_report_qa_ask():
     session_id = payload.get("session_id") or None
     if session_id is not None and not isinstance(session_id, str):
         return _err("BAD_PARAM", "session_id 参数不合法"), 400
-    if (
-        not report
-        or report != os.path.basename(report)
-        or ".." in report
-        or "/" in report
-        or "\\" in report
-        or os.path.splitext(report)[1].lower() != ".html"
-    ):
+    from src.python.qa.context import sanitize_report_filename
+
+    if sanitize_report_filename(report) is None:
         return _err("BAD_PARAM", "report 参数不合法（仅限 .html 报告文件名）"), 400
 
     from src.python.qa.session import ask_report_qa

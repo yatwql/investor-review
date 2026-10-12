@@ -29,7 +29,6 @@ Web 路由（``web/handlers._handle_report_qa_ask``）与 TUI 追问入口共用
 from __future__ import annotations
 
 import logging
-import os
 import threading
 import time
 import uuid
@@ -38,7 +37,11 @@ from src.python.config import get_llm_config
 from src.python.llm.api import call_llm
 from src.python.llm.fact_checker import run_fact_check
 from src.python.llm.markdown import markdown_to_html
-from src.python.qa.context import ReportQaContextError, extract_report_qa_context
+from src.python.qa.context import (
+    ReportQaContextError,
+    extract_report_qa_context,
+    sanitize_report_filename,
+)
 
 logger = logging.getLogger("invest")
 
@@ -197,13 +200,7 @@ def ask_report_qa(
             "QA_QUESTION_TOO_LONG",
             f"问题过长（上限 {_QA_QUESTION_MAX_CHARS} 字），请精简后重试",
         )
-    if (
-        not report
-        or report != os.path.basename(report)
-        or ".." in report
-        or "\\" in report
-        or not report.lower().endswith(".html")
-    ):
+    if sanitize_report_filename(report) is None:
         return _fail("QA_BAD_REPORT", "report 参数不合法（仅限 .html 报告文件名）")
 
     config = llm_config if llm_config is not None else get_llm_config()

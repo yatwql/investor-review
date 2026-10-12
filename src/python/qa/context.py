@@ -213,12 +213,27 @@ class _ReportHtmlParser(HTMLParser):
         self._flush_section()
 
 
-def _resolve_report_path(report: str, output_dir: str | None) -> Path:
-    """解析报告文件路径（与 Web 路由同款净化语义，双层防御）。"""
-    if not report or report != os.path.basename(report) or ".." in report or "\\" in report:
-        raise ReportQaContextError("report 参数不合法", code="QA_BAD_REPORT")
+def sanitize_report_filename(report: str) -> str | None:
+    """报告文件名单源净化（Web 路由 / 会话服务 / 上下文提取三层共用）。
+
+    合法：非空 basename、不含 ``..`` 与路径分隔符、后缀为 ``.html``
+    （大小写不敏感；``.html`` 这类纯后缀无基名一律拒绝）。非法返回
+    ``None``——各层转译为自己的错误面（Web 400 / ``QA_BAD_REPORT``），
+    分层防御语义不变（每层各自调用本函数）。
+    """
+    if not report or report != os.path.basename(report):
+        return None
+    if ".." in report or "/" in report or "\\" in report:
+        return None
     if Path(report).suffix.lower() != ".html":
-        raise ReportQaContextError("report 参数不合法（仅限 .html 报告）", code="QA_BAD_REPORT")
+        return None
+    return report
+
+
+def _resolve_report_path(report: str, output_dir: str | None) -> Path:
+    """解析报告文件路径（净化单源 + 分层防御）。"""
+    if sanitize_report_filename(report) is None:
+        raise ReportQaContextError("report 参数不合法", code="QA_BAD_REPORT")
     base = output_dir or get_default("output_dir") or "reports"
     path = Path(base) / report
     if not path.is_file():

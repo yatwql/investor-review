@@ -67,7 +67,7 @@ v0.7 调研（`docs/archive/v0.7.x/better-investment-advice/discussion-better-in
 报告页追问框（工作台同源打开 → fetch /api/qa/ask；file:// 打开 → 引导文案，不发请求）
     │ POST /api/qa/ask {report, session_id?, question}
     ▼
-web/handlers.py::_handle_qa_ask        ← 路由层：参数校验 / report 路径净化 / 开关判定
+web/handlers.py::_handle_report_qa_ask        ← 路由层：参数校验 / report 路径净化 / 开关判定
     ▼
 qa/session.py::ask_report_qa           ← 会话服务：线程安全会话表 / 轮数上限 / 用量记账
     ├── qa/context.py::extract_report_context   ← 上下文提取（首次提问惰性构建 + 会话内缓存）
@@ -84,7 +84,7 @@ JSON {answer_html, usage, remaining_turns} → 报告页内嵌会话区渲染
 |:---|:---|:---|
 | `report_qa` | `src/python/qa/`（新子包） | 追问会话服务（线程安全会话表/轮数上限/用量记账/编排） |
 | `report_qa_context` | `src/python/qa/context.py` | 报告上下文提取（HTML → 文本；关键数据摘要；截断策略） |
-| `report_qa_ask` | `src/python/web/handlers.py::_handle_qa_ask` | Web 问答路由（POST /api/qa/ask） |
+| `report_qa_ask` | `src/python/web/handlers.py::_handle_report_qa_ask` | Web 问答路由（POST /api/qa/ask） |
 | `report_qa_session` | `qa/session.py::QaSession` | 单会话态（历史问答/轮数/用量累计） |
 
 - `qa/` 为**独立子包**而非塞入 `llm/`：追问是「面向报告的服务」而非「LLM 报告模块」——不进 `_MODULE_FNS`、不进 LLM 模块注册（无模块级缓存条目、无指纹）；但其 LLM 调用仍经 `llm/api.py` 的 Provider Chain 路由。`llm/` 现 46 模块已近认知负担上限，新域独立成包降低技术债。依赖方向单向：`qa → llm`（api/fact_checker/markdown），`llm` 不感知 `qa`。
@@ -194,11 +194,11 @@ JSON {answer_html, usage, remaining_turns} → 报告页内嵌会话区渲染
 
 ### 阶段 1：后端会话服务 + Web 路由
 
-- 交付：`src/python/qa/`（`__init__.py` / `context.py` / `session.py`）+ `web/handlers.py::_handle_qa_ask` + `features.py` 开关登记 + 单元测试（`src/test/unit/qa/`）。
+- 交付：`src/python/qa/`（`__init__.py` / `context.py` / `session.py`）+ `web/handlers.py::_handle_report_qa_ask` + `features.py` 开关登记 + 单元测试（`src/test/unit/qa/`）。
 - **验收标准**：
   - [x] `pytest src/test/unit/qa/` 全绿，覆盖：上下文提取（HTML→文本/截断策略/锚点缺失显式失败）、会话轮数上限、同 report 复用/换 report 重建、token 软上限降级、LLM 失败降级占位、事实校验失败不阻断、并发会话隔离（多线程 smoke）；
   - [x] 追问链路零外部取数（网络守卫 `conftest._block_external_network` 下通过，漏 mock 即硬失败）；
-  - [x] `_handle_qa_ask` 校验矩阵：缺参/非法 report（路径穿越尝试）/开关关闭/question 超长 → 明确错误码（400/404/403）；
+  - [x] `_handle_report_qa_ask` 校验矩阵：缺参/非法 report（路径穿越尝试）/开关关闭/question 超长 → 明确错误码（400/404/403）；
   - [x] `call_llm` 在所有测试中 mock（真实调用零容忍）；新测试文件带 marker（`unit_qa` 注册进 `conftest.py`）；
   - [x] ruff check/format 干净、`check-file-length` 通过、无任务编号入代码标识符与注释。
 
@@ -255,8 +255,8 @@ JSON {answer_html, usage, remaining_turns} → 报告页内嵌会话区渲染
 
 | 阶段 | 代码 | 测试 | 文档 |
 |:---|:---|:---|:---|
-| 1 | `qa/__init__.py` `qa/context.py` `qa/session.py` `web/handlers.py::_handle_qa_ask` `config/features.py` 开关 | `src/test/unit/qa/test_report_qa_context.py` `test_report_qa_session.py` | — |
-| 2 | `src/static/tmpl/partials/report_qa_section.html` `report/html_writer.py` context 接线 | 模板快照/关态回归（report 域测试） | — |
-| 3 | — | Web 冒烟 | `how-to-use-web-mode.md` `technical.md` `llm-technical.md` `changelog.md` `folders.md` `testplan.md` |
+| 1 | `qa/__init__.py` `qa/context.py` `qa/session.py` `web/handlers.py::_handle_report_qa_ask` `config/features.py` 开关 | `src/test/unit/qa/`：`test_report_qa_context.py` `test_report_qa_context_edge.py` `test_report_qa_session.py` `test_report_qa_session_edge.py` `test_report_qa_ask.py` | — |
+| 2 | `src/static/tmpl/partials/report_qa_section.html` `report/html_writer.py` context 接线 | `src/test/unit/report/test_report_qa_partial.py`（区块渲染/样式 token 纪律/主模板 guard/关态字节回归） | — |
+| 3 | — | Web 冒烟（`test_report_qa_ask.py::TestEndToEndSmoke`：提问→多次问答→超限→刷新重建） | `requirements.md`（§6.17 R-QA-01~09）`testplan.md`（批 13）`how-to-use-web-mode.md`（§3.6）`reports-instruction.md` `faq.md` `technical.md`（§6.8）`llm-technical.md`（§9.1 记账边界）`changelog.md` `folders.md` `test-coverage.md` |
 | 4 | `tui/handlers_qa.py`（输入循环 + 菜单入口） | `src/test/unit/tui/test_handlers_qa.py` | `how-to-use-tui-menu.md` |
 | 5 | `features.py` 分组变更 | — | 转正记录 + 三端手册同步 |

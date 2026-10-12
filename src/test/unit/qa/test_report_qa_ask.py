@@ -69,7 +69,7 @@ class TestParamValidation:
 
     @pytest.mark.parametrize(
         "bad_report",
-        ["", "../evil.html", "sub/dir.html", "a\\b.html", "报告.txt", "报告.html.exe"],
+        ["", "../evil.html", "sub/dir.html", "a\\b.html", "报告.txt", "报告.html.exe", ".html"],
     )
     def test_illegal_report_returns_400(self, app_client, monkeypatch, bad_report):
         _enable_qa(monkeypatch, True)
