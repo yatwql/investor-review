@@ -149,9 +149,9 @@ class TestArgparse:
 
     def test_experiment_all(self):
         """--experiment all 展开为全部实验功能。"""
-        from src.python.config.features import GROUP_EXPERIMENTAL, switches_in_group
+        from src.python.config.features import experimental_flags
 
-        expected = tuple(sorted(flag for flag, _d in switches_in_group(GROUP_EXPERIMENTAL)))
+        expected = tuple(sorted(flag for flag, _d in experimental_flags()))
         args = _build_parser().parse_args(["--experiment", "all", "report"])
         assert args.experiment == [expected]
 
@@ -974,21 +974,13 @@ class TestMainEarlyExitExperiments:
 
     @staticmethod
     def _enabled_during_dispatch(argv: list[str], patch_target: str) -> dict[str, bool]:
-        """跑一次 main()，返回被分派函数执行瞬间各实验开关的生效值。"""
-        from src.python.config.features import (
-            GROUP_EXPERIMENTAL,
-            GROUP_REPORT,
-            GROUP_STANDARD,
-            is_feature_enabled,
-            switches_in_group,
-        )
+        """跑一次 main()，返回被分派函数执行瞬间全注册表各开关的生效值。"""
+        from src.python.config.features import feature_switch_registry, is_feature_enabled
 
         seen: dict[str, bool] = {}
 
         def _record(*_args, **_kwargs) -> int:
-            seen.update({flag: is_feature_enabled(flag) for flag, _d in switches_in_group(GROUP_STANDARD)})
-            seen.update({flag: is_feature_enabled(flag) for flag, _d in switches_in_group(GROUP_EXPERIMENTAL)})
-            seen.update({flag: is_feature_enabled(flag) for flag, _d in switches_in_group(GROUP_REPORT)})
+            seen.update({flag: is_feature_enabled(flag) for flag in feature_switch_registry})
             return _EXIT_SUCCESS
 
         with (
@@ -1016,14 +1008,14 @@ class TestMainEarlyExitExperiments:
             patch_target,
         )
         assert seen["decision_reflection"] is True
-        assert seen["factor_catalog"] is False  # 未指定的开关（已转正入报告组）不受影响
+        assert seen["factor_catalog"] is False  # 未指定的开关（已转正，非实验项）不受影响
 
     def test_without_experiment_flag_keeps_defaults(self):
-        """不传开关参数 → 实验组保持默认关闭（对照组，防误判为恒真）。"""
-        from src.python.config.features import GROUP_EXPERIMENTAL, switches_in_group
+        """不传开关参数 → 实验项保持默认关闭（对照组，防误判为恒真）。"""
+        from src.python.config.features import experimental_flags
 
         seen = self._enabled_during_dispatch(["cli.py", "doctor"], "src.python.cli.cli._handle_doctor")
-        experimental = [flag for flag, _d in switches_in_group(GROUP_EXPERIMENTAL)]
+        experimental = [flag for flag, _d in experimental_flags()]
         assert not any(seen[flag] for flag in experimental)
 
     @pytest.mark.parametrize(

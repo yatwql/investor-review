@@ -131,7 +131,7 @@ class TestRenderContextWiring:
         assert "report_qa_enabled=report_qa_enabled" in src
 
     def test_flag_defaults_off(self):
-        """注册表默认值必须为关（实验组纪律：默认关、开态才改产物）。"""
+        """注册表默认值必须为关（实验项纪律：默认关、开态才改产物）。"""
         from src.python.config.features import feature_switch_registry, is_feature_enabled
 
         assert feature_switch_registry["report_qa"].default is False

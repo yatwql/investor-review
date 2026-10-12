@@ -9,11 +9,13 @@
   ...     embed_chart_assets()
 
 配置持久化：功能开关可通过 features.json 覆写默认值。
-全部开关在 :data:`feature_switch_registry` 一处登记（显示名/说明/分组/默认值/
-产物影响），TUI 面板、Web 配置面板、CLI 取值域与文档清单一律由它派生——渠道层
-不得另写开关清单。分组（实验组 / 常规组 / 报告章节与增强组）决定面板可见性，
-「转正」即移出实验组——常驻读侧增强入常规组且默认值改 True、章节/页签类入
-报告章节与增强组且默认值保持 False，可见性随之延续。
+全部开关在 :data:`feature_switch_registry` 一处登记（显示名/说明/作用域分组/
+默认值/产物影响/实验身份），TUI 面板、Web 配置面板、CLI 取值域与文档清单一律
+由它派生——渠道层不得另写开关清单。分组（呈现与体验 / 分析增强 / 独立章节与
+回放 / 机制与诊断）表达**作用域**——「开了长出什么」，是面板主分类轴；
+**生命周期**是独立字段 ``experimental``：``--experiment`` 取值域与页脚实验自述
+只看该字段，不看分组。「转正」= 把 ``experimental`` 置 False 摘除实验身份；
+若作用域同时变化则再改 ``group``。
 模块级 LLM 分析章节、新闻源、报告章节等**不在此登记**——它们各有归属文件，
 见 ``feature_switch_registry`` 上方说明。
 """
@@ -36,31 +38,33 @@ logger = logging.getLogger("invest")
 
 FEATURES_FILE = os.path.join(PROJECT_ROOT, "data/config/features.json")
 
-# ── 分组常量 ────────────────────────────────────────────────
-# 分组表达的是**生命周期的当前状态**，不是优先级、不是新旧：
-#   GROUP_EXPERIMENTAL —— 会改变产物、需真实数据验证后择机转正，出厂默认关
-#   GROUP_STANDARD     —— 常驻能力，出厂默认开、用户可关
-# 「转正」= 把一条声明移出实验组，目标组按功能形态选——常驻读侧/诊断/接缝类
-# 入常规组并把 default 改 True；章节/页签类入报告章节与增强组且 default 保持
-# False（默认产物不变、按需开启）。此前「默认值」与
-# 「是否实验项」是同一件事的两个名字：转正会连带摘掉面板入口（doctor_check 转正
-# 后只剩手改 features.json 一条关闭途径），而从未被标为实验项的指标开关（原
-# metrics_* 七项，现并入单开关 metrics_enabled）则从来没有过任何界面入口。
-# 分组把这两件事拆开——可见性由分组决定、取值由 default 决定。
+# ── 分组常量（作用域轴）───────────────────────────────────────
+# 分组表达**作用域**——用户决策心智是「开了长出什么」：
+#   GROUP_PRESENTATION —— 呈现与体验：只改呈现不改内容（2 项全默认开）
+#   GROUP_ANALYSIS     —— 分析增强：在既有章节内追加分析块/列/子表
+#   GROUP_STANDALONE   —— 独立章节与回放：新增整页签或多期回放（全默认关）
+#   GROUP_MECHANISM    —— 机制与诊断：内部机制 / 诊断接缝 / 待验证实验
+# **生命周期是另一根轴**：``FeatureSwitchDef.experimental``（末位默认 False 字段）。
+# 此前「默认值」「是否实验项」「分组」三者纠缠在一个 group 字段上：转正会连带
+# 摘掉面板入口（doctor_check 转正后只剩手改 features.json 一条关闭途径）、
+# 组内默认态混合时标签写不准。解耦后：作用域由 group 定、生命周期由
+# experimental 定、取值由 default 定——``--experiment`` 取值域与页脚实验自述
+# 只看 experimental，「转正」= experimental 置 False（作用域也变时再改 group）。
 
-GROUP_EXPERIMENTAL = "experimental"
-GROUP_STANDARD = "standard"
-#: 报告章节与增强子模块（注册表分组 ``GROUP_REPORT``；取值落 features.json）
-GROUP_REPORT = "report"
+GROUP_PRESENTATION = "presentation"
+GROUP_ANALYSIS = "analysis"
+GROUP_STANDALONE = "standalone"
+GROUP_MECHANISM = "mechanism"
 
 # 分组标题（TUI 菜单 [S] 与 Web 配置面板共用同一措辞，渠道层不另写文字）
 GROUP_LABELS: dict[str, str] = {
-    GROUP_EXPERIMENTAL: "⚗ 实验性功能（默认关闭）",
-    GROUP_STANDARD: "常规开关（默认开启）",
-    GROUP_REPORT: "报告章节与增强（默认多数关闭）",
+    GROUP_PRESENTATION: "📊 呈现与体验（默认开启 · 只改呈现不改内容）",
+    GROUP_ANALYSIS: "🔍 分析增强·既有章内追加（默认关闭 · 在既有章节内追加分析块/列/子表）",
+    GROUP_STANDALONE: "📑 独立章节与回放（默认关闭 · 新增整页签或多期回放）",
+    GROUP_MECHANISM: "⚙ 机制与诊断（内部机制 / 诊断接缝 / 待验证实验）",
 }
-# 面板分块顺序（顺序即渲染顺序）
-GROUP_ORDER: tuple[str, ...] = (GROUP_EXPERIMENTAL, GROUP_STANDARD, GROUP_REPORT)
+# 面板分块顺序（顺序即渲染顺序；默认开在前、默认关在后、机制收尾）
+GROUP_ORDER: tuple[str, ...] = (GROUP_PRESENTATION, GROUP_ANALYSIS, GROUP_STANDALONE, GROUP_MECHANISM)
 
 
 @dataclass(frozen=True)
@@ -70,9 +74,12 @@ class FeatureSwitchDef:
     Attributes:
         label: 显示名（TUI 面板行名 / Web 配置面板标签，服务端同源下发）
         desc: 一句话说明（CLI 报错提示、控制台横幅、文档）
-        group: 分组（``GROUP_EXPERIMENTAL`` / ``GROUP_STANDARD`` / ``GROUP_REPORT``）
+        group: 作用域分组（``GROUP_PRESENTATION`` / ``GROUP_ANALYSIS`` /
+            ``GROUP_STANDALONE`` / ``GROUP_MECHANISM``）
         default: 出厂默认值（``features.json`` 未覆写时的取值）
         affects_report: 开启后报告产物内容是否可能不同——决定它是否进入产物自述
+        experimental: 生命周期为实验项（``--experiment`` 取值域即此字段为真者；
+            末位默认 False，仅实验项显式标注）
     """
 
     label: str
@@ -80,6 +87,7 @@ class FeatureSwitchDef:
     group: str
     default: bool
     affects_report: bool
+    experimental: bool = False
 
 
 # ── 功能开关注册表（唯一登记点） ────────────────────────────
@@ -95,66 +103,68 @@ class FeatureSwitchDef:
 #   - 基础报告章节（基金深度分析/市场新闻/组合演进/行动建议）→ config.json 的 enable_*
 #   - 匿名化模式 → config.json 的 anonymization.mode
 # 注：报告增强子模块（数据质量/行业Beta/候选比较/成本流水/估值分位/市场温度/财报摘要/
-# 财务指标）登记于本注册表 GROUP_REPORT 分组，取值落 features.json。
+# 财务指标）登记于本注册表 GROUP_ANALYSIS / GROUP_STANDALONE 分组，取值落 features.json。
 # 声明了却无人读取的开关会让用户照文档配置后毫无效果（本注册表曾含 16 项此类
 # 陈旧开关，已全部移除）。新增开关必须同时接线到消费点，回归测试见
 # test_features.py::TestRegistryLiveness。
 #
 # ``affects_report`` 是**产物自述的准入口径**：开启该开关后报告产物的内容是否可能
-# 不同。实验组中为 True 者进入报告自述（HTML 页脚 / Excel 落点）与控制台横幅，读者
-# 据此判断手上这份产物是否非默认开关下的结果；常规组中为 True 者在 Web 配置面板的
-# 项标签上带「（影响报告）」。只改入口可见性的开关答 False，不得凭惯性落进自述——
+# 不同。``experimental`` 与 ``affects_report`` 双真者进入报告自述（HTML 页脚 /
+# Excel 落点）与控制台横幅，读者据此判断手上这份产物是否非默认开关下的结果；
+# ``affects_report`` 为 True 的非实验项在 Web 配置面板的项标签上带「（影响报告）」。
+# 只改入口可见性的开关答 False，不得凭惯性落进自述——
 # 列出一个不改报告任何字节的开关，读者会推断内容受其影响。
 feature_switch_registry: dict[str, FeatureSwitchDef] = {
-    # ── 实验性功能：LLM 输出增强（写盘积累账本，需真实数据积累验证） ──
+    # ── 机制与诊断：LLM 输出增强实验项（写盘积累账本，experimental=True 需真实数据验证） ──
     "decision_reflection": FeatureSwitchDef(
         "决策跨期反思闭环",
         "登记决策 → 真实行情结算命中率 → 教训回灌专家复盘提示词",
-        GROUP_EXPERIMENTAL,
+        GROUP_MECHANISM,
         False,
         True,
+        experimental=True,
     ),
-    # ── 实验性功能：报告对话式追问（报告页同源问答、默认关；
+    # ── 机制与诊断：报告对话式追问实验项（报告页同源问答、experimental=True；
     #    消费点：web/handlers._handle_report_qa_ask（403 门）+ 报告模板追问区块 ──
     "report_qa": FeatureSwitchDef(
         "报告对话式追问",
         "报告页内针对本期报告的会话式追问（零新增取数、轮数上限、用量独立记账）",
-        GROUP_EXPERIMENTAL,
+        GROUP_MECHANISM,
         False,
         True,
+        experimental=True,
     ),
-    # ── 常规开关：确定性信号（实时注入 + 跨期沉淀双面，账本已有真实积累故转正合并） ──
+    # ── 机制与诊断：确定性信号（实时注入 + 跨期沉淀双面，账本已有真实积累故转正合并） ──
     "deterministic_signal": FeatureSwitchDef(
         "确定性信号模块",
         "市场温度/估值分位/尾部风险等确定性评级的实时预消化信号行注入复盘与体检提示词，"
         "并跨期沉淀为带实时-非实时标签的账本（统计默认只算实时），教训与命中率随摘要回灌提示词",
-        GROUP_STANDARD,
+        GROUP_MECHANISM,
         True,
         True,
     ),
-    # ── 常规功能：投资方法框架（实验转正项：真实组合样本验证评分口径达成，移入常规组、默认开）──
+    # ── 机制与诊断：投资方法框架（转正项：评分口径验证达成，已摘除实验身份、默认开）──
     "prosperity_framework": FeatureSwitchDef(
         "景气度框架诊断",
         "六维评分卡（景气方向/ROE 低位弹性/全球比较优势/流动性/集中度与周期拼接/业绩回撤印证）评估组合契合度，缺数据维度标记需核实",
-        GROUP_STANDARD,
+        GROUP_MECHANISM,
         True,
         True,
     ),
-    # ── 报告章节与增强：持仓变动复盘（章节类转正项：移出实验组、default 保持 False）──
-    # 声明位保持在原处——报告块面板编号按注册表顺序派生，转正项落在目标块块首，
-    # 既有报告项编号不位移（见 how-to-use-tui-menu.md「转正项按注册表顺序落在目标块」）
-    # ── 报告章节与增强：已转正开关追加于块首（既有项编号不位移） ──
+    # ── 分析增强与独立章节的转正项（实验身份已摘除，default 保持原值） ──
+    # 面板编号 = 组序 + 注册表内声明顺序派生；四分组后不再有「转正项追加块首、
+    # 既有项编号不位移」的跨块承诺（块边界由作用域决定，见手册面板编号表）
     # 辩论-正反辩论（已转正，2026-10-11；三段式换调用次数，默认关）。
     # 集中度问答段为本流程内建段落（见 prompts_action._build_concentration_qa_block），
     # 其触发阈值配置在 llm_settings.json 的 debate.concentration_qa.threshold。
-    "llm_debate_procon": FeatureSwitchDef("辩论-正反辩论", "三段式(白脸→黑脸→综合)", GROUP_REPORT, False, True),
-    # 辩论增强：条件推理（自常规组挪入保持辩论开关相邻；默认开不变，情景段仍在既有调用内产出）
-    "llm_debate_conditional": FeatureSwitchDef("辩论-条件推理", "情景化分析(涨/跌/震荡)", GROUP_REPORT, True, True),
+    "llm_debate_procon": FeatureSwitchDef("辩论-正反辩论", "三段式(白脸→黑脸→综合)", GROUP_ANALYSIS, False, True),
+    # 辩论增强：条件推理（与正反辩论相邻；默认开不变，情景段仍在既有调用内产出）
+    "llm_debate_conditional": FeatureSwitchDef("辩论-条件推理", "情景化分析(涨/跌/震荡)", GROUP_ANALYSIS, True, True),
     # 因子目录（已转正，2026-10-11；门槛评测三指标过审）
     "factor_catalog": FeatureSwitchDef(
         "因子目录",
         "25 因子五来源族横截面信号入账与风格与因子分析区「因子目录」区块",
-        GROUP_REPORT,
+        GROUP_ANALYSIS,
         False,
         True,
     ),
@@ -162,182 +172,180 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
     "rebalance_schedule_replay": FeatureSwitchDef(
         "调仓纪律回放",
         "月度定期/阈值偏离纪律多期回放 vs 买入持有（含成本），回放章双线与逐期成本表",
-        GROUP_REPORT,
+        GROUP_STANDALONE,
         False,
         True,
     ),
     "holding_change_review": FeatureSwitchDef(
         "持仓变动复盘",
         "快照差分出新增/加仓/减仓/清仓事件清单与频率/结构演变/意图对账（区间净额推断，结构级）+ LLM 归因块",
-        GROUP_REPORT,
+        GROUP_STANDALONE,
         False,
         True,
     ),
-    # ── 报告章节与增强：What-if 交易成本与基准对比（页签/区块类转正项：移出实验组、default 保持 False）──
-    # 声明位保持在原处——报告块面板编号按注册表顺序派生，转正项落在目标块块首
+    # ── 独立章节与回放：What-if 交易成本与基准对比（页签/区块类转正项：实验身份已摘除、default 保持 False）──
     "whatif_trade_cost": FeatureSwitchDef(
         "What-if 交易成本对比",
         "调仓回放计入申赎成本（FIFO 持有期阶梯）+ 成本前后收益差与业绩基准三线参照",
-        GROUP_REPORT,
+        GROUP_STANDALONE,
         False,
         True,
     ),
-    # ── 报告章节与增强：事件窗量化对照（区块类转正项：移出实验组、default 保持 False）──
-    # 声明位保持在原处——报告块面板编号按注册表顺序派生，转正项落在目标块块首
+    # ── 分析增强：事件窗量化对照（区块类转正项：实验身份已摘除、default 保持 False）──
     "event_window_impact": FeatureSwitchDef(
         "事件窗量化对照",
         "新闻事件映射交易日后 ±5 交易日窗口：品种收益/超额收益与文本极性同表对照，分歧例进 LLM 分析章",
-        GROUP_REPORT,
+        GROUP_ANALYSIS,
         False,
         True,
     ),
-    # ── 常规开关：LLM 输出增强（只读侧注入，不增调用次数、不写盘） ──
+    # ── 机制与诊断：LLM 输出增强（只读侧注入，不增调用次数、不写盘） ──
     "module_quality_gate": FeatureSwitchDef(
         "模块级质量分级",
         "按完整性/一致性给各 LLM 模块输出评 A~F 级，低评级随内容头部标注质量提示（不阻断不重试）",
-        GROUP_STANDARD,
+        GROUP_MECHANISM,
         True,
         True,
     ),
     "decision_header_parse": FeatureSwitchDef(
         "决策头结构化",
         "提示词追加受控 JSON 决策头，抽取优先读结构化、失败回落确定性表格解析（决策词归一，防写反方向）",
-        GROUP_STANDARD,
+        GROUP_MECHANISM,
         True,
         True,
     ),
-    # ── 常规开关：数据层（就绪态上体检与健康检查） ──
+    # ── 机制与诊断：数据层（就绪态上体检与健康检查） ──
     "datasource_credential_ready": FeatureSwitchDef(
         "数据源凭据就绪",
         "声明数据源所需凭据，缺失时链路跳过并给出可读指引；体检与健康检查报告就绪状态（需凭据的源如 DataSinking 财报）",
-        GROUP_STANDARD,
+        GROUP_MECHANISM,
         True,
         True,
     ),
-    # ── 常规开关：量化指标（原 metrics_* 七项逐项开关，已合并为单一总开关）──
+    # ── 呈现与体验：量化指标（原 metrics_* 七项逐项开关，已合并为单一总开关）──
     # 七项指标始终全量计算，开关只表达「量化指标画像是否输出」：关闭即雷达图
     # 各轴转 "N/A"（含降级 3 轴路径）+ 熔断器暂停指标失败计数，指标之间无差异化
     # 生效面，逐项开关未换来逐项控制价值，故收敛为一项（面板 7 行 → 1 行）。
     "metrics_enabled": FeatureSwitchDef(
         "量化指标显示",
         "报告量化指标是否输出（雷达图各轴）；关闭即各轴显示 N/A、熔断器暂停指标失败计数（指标始终全量计算）",
-        GROUP_STANDARD,
+        GROUP_PRESENTATION,
         True,
         True,
     ),
-    # ── 常规开关：功能特性 ──
+    # ── 呈现与体验：报告图表交互 ──
     "enable_interactive_charts": FeatureSwitchDef(
         "报告图表交互",
         "Chart.js 交互图（缩放/悬停）；关闭即回退 Canvas+表格静态渲染，且 HTML 不再单文件自包含",
-        GROUP_STANDARD,
+        GROUP_PRESENTATION,
         True,
         True,
     ),
-    # ── 常规开关：只读诊断（不改产物、不写文件，默认关的代价是环境出故障者看不到它） ──
+    # ── 机制与诊断：只读诊断（不改产物、不写文件，默认关的代价是环境出故障者看不到它） ──
     "doctor_check": FeatureSwitchDef(
         "系统自检上屏",
         "TUI 菜单 [T] 与 Web「系统自检」卡片可见性；CLI doctor 子命令不受本开关约束",
-        GROUP_STANDARD,
+        GROUP_MECHANISM,
         True,
         False,
     ),
-    # ── 常规开关：内部接缝（开关两态下报告产物逐源等价，保留为回退杠杆） ──
+    # ── 机制与诊断：内部接缝（开关两态下报告产物逐源等价，保留为回退杠杆） ──
     "datasource_adapter": FeatureSwitchDef(
         "数据源适配契约",
         "行情域三源走三段式适配器（参数转译→抓取→映射到标准字段）；置 false 回退既有转换函数",
-        GROUP_STANDARD,
+        GROUP_MECHANISM,
         True,
         False,
     ),
-    # ── 报告章节与增强（声明顺序即面板顺序）──
+    # ── 分析增强与独立章节与回放（以下声明顺序即各组组内面板顺序）──
     "data_quality": FeatureSwitchDef(
         "数据质量仪表盘",
         "「数据源可用性矩阵」章渲染数据覆盖/时效/降级状态区块",
-        GROUP_REPORT,
+        GROUP_ANALYSIS,
         True,
         True,
     ),
     "industry_beta": FeatureSwitchDef(
         "行业Beta子表",
         "「风格与因子分析」章渲染行业 Beta 子表（行业暴露 + 回归敏感性）",
-        GROUP_REPORT,
+        GROUP_ANALYSIS,
         False,
         True,
     ),
     "candidate_compare": FeatureSwitchDef(
         "候选基金比较子表",
         "「基金业绩分析」章渲染候选基金横向比较表（候选来自 comparison_candidates）",
-        GROUP_REPORT,
+        GROUP_ANALYSIS,
         False,
         True,
     ),
     "cost_lots": FeatureSwitchDef(
         "成本流水",
         "汇总/市值/分类页签渲染成本分档 + XIRR + 分红累计（需持仓 Excel 含交易/分红流水）",
-        GROUP_REPORT,
+        GROUP_ANALYSIS,
         False,
         True,
     ),
     "valuation_percentile": FeatureSwitchDef(
         "估值分位",
         "「资产穿透TOP10」章渲染估值分位列（真实历史 PE/PB 分位，无覆盖时回落价格分位代理）",
-        GROUP_REPORT,
+        GROUP_ANALYSIS,
         False,
         True,
     ),
     "market_temperature": FeatureSwitchDef(
         "市场温度",
         "「投资分析汇总」章渲染市场温度刻度行（三因子合成；数据不足时该行静默省略）",
-        GROUP_REPORT,
+        GROUP_ANALYSIS,
         True,
         True,
     ),
     "financial_report_digest": FeatureSwitchDef(
         "持仓个股财报摘要",
         "新增独立章：A 股标的财报章节摘要（需 DataSinking key）",
-        GROUP_REPORT,
+        GROUP_STANDALONE,
         False,
         True,
     ),
     "market_sentiment": FeatureSwitchDef(
         "市场情绪与资金热点",
         "行动建议章内嵌块「市场情绪与持仓热点」：持仓/穿透标的当日上榜龙虎榜与进入连板梯队的事件行（需同花顺 key；零命中时写市场概览与说明行）",
-        GROUP_REPORT,
+        GROUP_ANALYSIS,
         False,
         True,
     ),
     "financial_indicator": FeatureSwitchDef(
         "财务指标",
         "新增独立章：持仓 A 股基本面（指标 + 质量档 + 趋势 + 当前 PE/PB；需数据底座就绪）",
-        GROUP_REPORT,
+        GROUP_STANDALONE,
         False,
         True,
     ),
     "fund_purchase_limit": FeatureSwitchDef(
         "基金申购限购",
         "「持仓明细与分类」市值明细追加「申购状态」列（天天基金渠道口径，含日限/下一开放日；数据不可用时静默隐列）",
-        GROUP_REPORT,
+        GROUP_ANALYSIS,
         True,
         True,
     ),
     "risk_adjusted_excess": FeatureSwitchDef(
         "风险调整超额",
         "走势章新增「风险调整超额」子块：滚动 1Y 超额曲线 + 年化 IR/跟踪误差 + 近 12/24 月跑赢基准胜率（需配置业绩基准，独立拉长取数窗口）",
-        GROUP_REPORT,
+        GROUP_ANALYSIS,
         False,
         True,
     ),
     "crisis_replay": FeatureSwitchDef(
         "危机回放",
         "危机区间标注升级为双层回放：组合侧窗口内危机穿越表现（区间收益） + 指数侧历史危机区间表现（收益/最大回撤，长窗指数日线）",
-        GROUP_REPORT,
+        GROUP_STANDALONE,
         False,
         True,
     ),
     "summary_highlights": FeatureSwitchDef(
         "本期要点与环比对照",
         "摘要区首屏执行摘要卡：关键指标环比行（总市值/总收益率/持仓数/集中度） + 本期关键变化 Top N（快照 diff 单源派生，无上期快照时整块隐藏）",
-        GROUP_REPORT,
+        GROUP_ANALYSIS,
         False,
         True,
     ),
@@ -353,15 +361,25 @@ _FEATURE_FLAGS_DEFAULT: dict[str, bool] = {flag: d.default for flag, d in featur
 def switches_in_group(group: str) -> list[tuple[str, FeatureSwitchDef]]:
     """返回某分组下的开关声明 ``[(开关名, 声明), ...]``（顺序 = 注册表顺序）。
 
-    面板渲染与实验清单的唯一取数入口——渠道层据此分块，不自行筛选。
+    面板渲染的唯一取数入口——渠道层据此分块，不自行筛选；实验清单取
+    :func:`experimental_flags`（生命周期看字段、不看分组）。
     """
     return [(flag, d) for flag, d in feature_switch_registry.items() if d.group == group]
 
 
+def experimental_flags() -> list[tuple[str, FeatureSwitchDef]]:
+    """实验项清单 ``[(开关名, 声明), ...]``（顺序 = 注册表顺序）= ``experimental`` 为真者。
+
+    生命周期判定的唯一来源——``--experiment`` 取值域、CLI 帮助清单与页脚实验
+    自述均由此派生，与作用域分组无关。
+    """
+    return [(flag, d) for flag, d in feature_switch_registry.items() if d.experimental]
+
+
 def is_experimental_switch(flag: str) -> bool:
-    """判定开关是否属实验组（``--experiment`` 的取值域即此集合）。"""
+    """判定开关是否为实验项（``experimental`` 字段；``--experiment`` 的取值域即此集合）。"""
     d = feature_switch_registry.get(flag)
-    return d is not None and d.group == GROUP_EXPERIMENTAL
+    return d is not None and d.experimental
 
 
 # ── 开关名解析（``--experiment`` / ``--feature``） ──────────
@@ -380,7 +398,7 @@ def _match_experiment(token: str) -> str | None:
         命中的开关名，未匹配到返回 None
     """
     lowered = token.lower()
-    for flag, d in switches_in_group(GROUP_EXPERIMENTAL):
+    for flag, d in experimental_flags():
         if flag.lower() == lowered or d.label == token:
             return flag
     return None
@@ -390,8 +408,8 @@ def resolve_experiment_flags(names: list[str]) -> tuple[set[str], list[str]]:
     """将用户输入的实验功能名解析为开关名集合（注册表驱动）。
 
     接受三种写法（忽略首尾空白；开关名大小写不敏感）：
-      - 开关名：``deterministic_signal``
-      - 显示名：``信号预消化``
+      - 开关名：``decision_reflection``
+      - 显示名：``决策跨期反思闭环``
       - ``all``：全部实验功能
 
     Args:
@@ -408,7 +426,7 @@ def resolve_experiment_flags(names: list[str]) -> tuple[set[str], list[str]]:
         if not token:
             continue
         if token.lower() == EXPERIMENT_ALL:
-            resolved.update(flag for flag, _d in switches_in_group(GROUP_EXPERIMENTAL))
+            resolved.update(flag for flag, _d in experimental_flags())
             continue
         hit = _match_experiment(token)
         if hit is None:
@@ -420,7 +438,7 @@ def resolve_experiment_flags(names: list[str]) -> tuple[set[str], list[str]]:
 
 def describe_experiment_flags() -> str:
     """返回实验功能清单的人类可读串（供 CLI 帮助与报错提示复用）。"""
-    return "、".join(f"{flag}（{d.label}）" for flag, d in switches_in_group(GROUP_EXPERIMENTAL))
+    return "、".join(f"{flag}（{d.label}）" for flag, d in experimental_flags())
 
 
 def describe_switches() -> str:
@@ -481,18 +499,14 @@ def enabled_experimental_features() -> list[tuple[str, str]]:
     可脱离本机流转的文件，读者须能判断内容是否为非默认开关下的产物。
 
     只列注册表中 ``affects_report`` 为真者：只改交互入口可见性的开关不改报告
-    任何字节，列进自述会让读者推断内容受其影响。清单取自
-    :data:`feature_switch_registry` 的实验组，注册表仍是唯一来源；TUI 菜单 [S] 与
-    Web 配置面板渲染的是**全部开关**（含不影响产物者与常规组），两者用途不同。
+    任何字节，列进自述会让读者推断内容受其影响。清单取自 :func:`experimental_flags`
+    （生命周期看 ``experimental`` 字段），注册表仍是唯一来源；TUI 菜单 [S] 与
+    Web 配置面板渲染的是**全部开关**（含不影响产物者与非实验项），两者用途不同。
 
     Returns:
         已启用项的 ``(开关名, 显示名)`` 列表，按注册表顺序；无启用项时返回空列表。
     """
-    return [
-        (flag, d.label)
-        for flag, d in switches_in_group(GROUP_EXPERIMENTAL)
-        if d.affects_report and is_feature_enabled(flag)
-    ]
+    return [(flag, d.label) for flag, d in experimental_flags() if d.affects_report and is_feature_enabled(flag)]
 
 
 def log_experimental_features() -> None:
@@ -534,15 +548,17 @@ def log_experimental_features() -> None:
 __all__ = [
     "EXPERIMENT_ALL",
     "FEATURE_FLAGS",
-    "GROUP_EXPERIMENTAL",
+    "GROUP_ANALYSIS",
     "GROUP_LABELS",
+    "GROUP_MECHANISM",
     "GROUP_ORDER",
-    "GROUP_REPORT",
-    "GROUP_STANDARD",
+    "GROUP_PRESENTATION",
+    "GROUP_STANDALONE",
     "FeatureSwitchDef",
     "describe_experiment_flags",
     "describe_switches",
     "enabled_experimental_features",
+    "experimental_flags",
     "feature_switch_registry",
     "get_feature_defaults",
     "is_experimental_switch",

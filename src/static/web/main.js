@@ -919,7 +919,7 @@
   }
 
   /* ── 配置编辑（与 TUI 菜单一致，即改即存）──
-   * GET /api/config/edit 载入全量可编辑面 → 按 7 组分块渲染。
+   * GET /api/config/edit 载入全量可编辑面 → 按服务端分块渲染（路径/报告章节/功能开关四组/匿名化/对比指数/LLM）。
    * 保存语义即改即存（与 TUI「改一项存一项」一致）：checkbox/radio 改动即
    * POST /api/config/edit；自由文本路径经各自「保存」按钮提交；对比指数池经
    * 添加/删除/重置动作提交。提交期间该控件禁用，成功回读该项最新值，失败
@@ -994,35 +994,25 @@
     els.configPanel.appendChild(
       renderBoolGroup('sections', '报告章节', surface.sections, {})
     );
-    els.configPanel.appendChild(
-      // 报告章节与增强：键即功能开关名（注册表 GROUP_REPORT），显示名与「影响报告」
-      // 标记由服务端同源下发，前端不维护字典
-      renderBoolGroup('report_switches', '报告章节与增强', surface.report_switches, {
-        labels: surface.features.labels,
-        reportAffecting: surface.features.report_affecting
-      })
-    );
+    // 功能开关四组（呈现与体验/分析增强/独立章节与回放/机制与诊断）：组清单、组标题、
+    // 显示名与「影响报告」「实验项」标记全部由服务端 surface.features 按 GROUP_ORDER 下发，
+    // 前端只负责按组渲染（服务端增组/改名零前端改动）
+    (surface.features.groups || []).forEach(function (grp, i) {
+      els.configPanel.appendChild(
+        renderBoolGroup('features_' + grp.key, grp.title, grp.switches, {
+          experimental: surface.features.experimental,
+          labels: surface.features.labels,
+          reportAffecting: surface.features.report_affecting,
+          note: i === 0 ? '关闭「影响报告」的开关会改变报告产物内容；其余开关只影响入口显隐' : null
+        })
+      );
+    });
     els.configPanel.appendChild(renderAnonGroup(surface.anonymization));
     els.configPanel.appendChild(renderIndicesGroup(surface));
     els.configPanel.appendChild(
       renderBoolGroup('llm', 'LLM 分析章节', surface.llm.enabled_llm, {
         prefix: 'enabled_llm.',
-        note: '辩论三模块（白脸/黑脸/综合）不在菜单展示，输出由下方「报告章节与增强」的正反辩论开关控制'
-      })
-    );
-    // 功能开关两块（实验组 / 常规组）：清单、显示名、「影响报告」标记全部由
-    // 服务端 surface.features 下发，前端只负责分块渲染；报告章节与增强块在上方单独渲染
-    els.configPanel.appendChild(
-      renderBoolGroup('features_experimental', '实验性功能（⚗ 默认关闭）', surface.features.experimental, {
-        experimental: true,
-        labels: surface.features.labels
-      })
-    );
-    els.configPanel.appendChild(
-      renderBoolGroup('features_standard', '常规开关（默认开启）', surface.features.standard, {
-        labels: surface.features.labels,
-        reportAffecting: surface.features.report_affecting,
-        note: '关闭「影响报告」的开关会改变报告产物内容；其余开关只影响入口显隐'
+        note: '辩论三模块（白脸/黑脸/综合）不在菜单展示，输出由上方「分析增强」组的正反辩论开关控制'
       })
     );
   }
@@ -1085,7 +1075,8 @@
       var fullKey = opts && opts.prefix ? opts.prefix + key : key;
       var labels = (opts && opts.labels) || CONFIG_LABELS[groupKey];
       var label = (labels && labels[key]) || key;
-      if (opts && opts.experimental) {
+      if (opts && opts.experimental && opts.experimental.indexOf(key) !== -1) {
+        // 实验项逐行 ⚗ 标记：清单由服务端下发，实验身份与所属组解耦（不再整块属实验组）
         label = '⚗ ' + label;
       } else if (opts && opts.reportAffecting && opts.reportAffecting.indexOf(fullKey) !== -1) {
         // 「关闭即改变报告内容」与其「只影响入口显隐」的开关须可区分（标记清单由服务端下发）

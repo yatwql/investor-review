@@ -118,7 +118,7 @@ class TestSectionCounts:
 
 
 def drift_marker() -> str:
-    return "**⚗ 实验组（5 项，默认关）**：\n\n| 开关名 | 默认值 | 说明 |\n|:--|:--|:--|"
+    return "**呈现与体验（默认开启 · 只改呈现不改内容）**：\n\n| 开关名 | 默认值 | 说明 |\n|:--|:--|:--|"
 
 
 class TestSwitchTable:
@@ -150,28 +150,27 @@ class TestSwitchTable:
 
 
 class TestSwitchCounts:
-    def test_triple_form_mismatch(self, drift):
-        # 计数从注册表现算取值（禁写死演进总数）：仅报告组写错一位数
+    def test_chain_form_mismatch(self, drift):
+        # 计数从注册表现算取值（禁写死演进总数）：仅首组写错一位数
         counts = drift._group_counts()
-        _wrong_report = counts["report"] + 1
-        _text = (
-            f"全部 {len(drift.feature_switch_registry)} 项开关分三组"
-            f"（⚗实验 {counts['experimental']} / 常规 {counts['standard']} / 报告章节与增强 {_wrong_report}）"
-        )
+        wrong = list(counts.values())[0] + 1
+        units = [f"{name} {count}" for name, count in zip(drift._GROUP_DOC_NAMES, counts.values())]
+        units[0] = f"{drift._GROUP_DOC_NAMES[0]} {wrong}"
+        _text = f"分四组（{' / '.join(units)}）"
         findings = drift.check_switch_counts({Path("m.md"): _text})
-        assert len(findings) == 1 and str(_wrong_report) in findings[0]
+        assert len(findings) == 1 and str(wrong) in findings[0]
 
-    def test_report_group_form_mismatch(self, drift):
+    def test_retired_group_name_flagged(self, drift):
+        """旧三组名残留即报——不留新旧两套分组名共存的口子。"""
         findings = drift.check_switch_counts({Path("m.md"): "报告组（后 8 项）= 报告块"})
-        assert len(findings) == 1 and "报告组（后 8 项" in findings[0]
+        assert len(findings) == 1 and "报告组" in findings[0]
 
     def test_single_group_and_total_forms(self, drift):
         counts = drift._group_counts()
-        text = (
-            f"**⚗ 实验组（{counts['experimental']} 项，默认关）**\n"
-            f"**常规组（{counts['standard']} 项，默认开）**\n"
-            f"全部 {len(drift.feature_switch_registry)} 项开关\n"
+        headers = "\n".join(
+            f"**{name}（{count} 项，默认关）**" for name, count in zip(drift._GROUP_DOC_NAMES, counts.values())
         )
+        text = f"{headers}\n全部 {len(drift.feature_switch_registry)} 项开关\n"
         assert drift.check_switch_counts({Path("m.md"): text}) == []
 
     def test_total_mismatch(self, drift):
@@ -179,16 +178,18 @@ class TestSwitchCounts:
         findings = drift.check_switch_counts({Path("m.md"): f"提供 **{wrong_total} 项功能开关**的运行时覆写"})
         assert len(findings) == 1 and f"{wrong_total} 项功能开关" in findings[0]
 
-    def test_bold_grouped_triple_from_requirements(self, drift):
-        """requirements §11.5 加粗组名写法（分**实验组**（N 项…）与**报告章节与增强组**）同样受检。"""
+    def test_bold_grouped_counts_from_requirements(self, drift):
+        """requirements §11.5 加粗组名写法（分**呈现与体验**（N 项…）等四组）同样受检。"""
         counts = drift._group_counts()
-        _wrong_exp = counts["experimental"] + 1  # 仅实验组写错（计数从注册表现算，禁写死演进总数）
+        names = drift._GROUP_DOC_NAMES
+        keys = list(counts)
+        _wrong = counts[keys[0]] + 1  # 仅首组写错（计数从注册表现算，禁写死演进总数）
         text = (
-            f"开关分**实验组**（{_wrong_exp} 项，默认关）、**常规组**（{counts['standard']} 项，默认开）"
-            f"与**报告章节与增强组**（{counts['report']} 项，多数默认关）三块"
+            f"开关分**{names[0]}**（{_wrong} 项，默认关）、**{names[1]}**（{counts[keys[1]]} 项，默认开）"
+            f"与**{names[3]}**（{counts[keys[3]]} 项，多数默认关）四块"
         )
         findings = drift.check_switch_counts({Path("m.md"): text})
-        assert len(findings) == 1 and f"**实验组**（{_wrong_exp} 项" in findings[0]
+        assert len(findings) == 1 and f"**{names[0]}**（{_wrong} 项" in findings[0]
 
     def test_provide_unbolded_total_mismatch(self, drift):
         """「提供 N 项功能开关」（未加粗）合计写法受检（requirements §11.5 正文原式）。"""
@@ -277,44 +278,58 @@ class TestLlmDefaults:
 # ═══ TUI 面板编号 ═══
 
 
-def _panel_doc(numbers: list[int], report_range: tuple[int, int] | None, report_items: list[str]) -> str:
-    rows = "\n".join(f"| {n} | 开关 {n} | 效果 |" for n in numbers)
-    tail = ""
-    if report_range:
-        items = " / ".join(
-            f"{i} `{flag}`" for i, flag in zip(range(report_range[0], report_range[1] + 1), report_items)
-        )
-        tail = f"\n\n**报告章节与增强（面板编号 {report_range[0]}-{report_range[1]}）**：{items}。\n"
-    return f"交互式子菜单（面板标题「配置 LLM 报告章节与功能开关」）\n{rows}\n{tail}"
+def _panel_doc(
+    drift,
+    *,
+    drop_row: int | None = None,
+    wrong_range_idx: int | None = None,
+    reverse_map: bool = False,
+) -> str:
+    """按注册表现造 [S] 面板文档：四组块标题 + 全量行号表 + 键名映射表。
+
+    drop_row 行号表抽掉一行；wrong_range_idx 指定组的块标题区间写错；
+    reverse_map 颠倒映射表顺序——三种破坏各对应一类 finding。
+    """
+    llm = len(drift.filter_menu_llm_modules(drift.get_llm_module_names()))
+    counts = drift._group_counts()
+    names = drift._GROUP_DOC_NAMES
+    lines = ["交互式子菜单（面板标题「配置 LLM 报告章节与功能开关」）"]
+    mapping: list[str] = []
+    cursor = llm + 1
+    for idx, (group, name) in enumerate(zip(counts, names)):
+        flags = [flag for flag, _d in drift.switches_in_group(group)]
+        first = cursor
+        last = cursor + len(flags) - 1
+        shown = (first + 1, last + 1) if wrong_range_idx == idx else (first, last)
+        lines.append("")
+        lines.append(f"**{name}（面板编号 {shown[0]}-{shown[1]}）**：组说明")
+        for offset, flag in enumerate(flags):
+            n = cursor + offset
+            if n != drop_row:
+                lines.append(f"| {n} | 开关 {n} | 效果 |")
+            mapping.append(f"> | `{flag}` | {n} | {name} |")
+        cursor = last + 1
+    lines.append("")
+    lines.extend(reversed(mapping) if reverse_map else mapping)
+    return "\n".join(lines) + "\n"
 
 
 class TestPanelNumbering:
-    def _expected(self, drift) -> tuple[list[int], list[str]]:
-        counts = drift._group_counts()
-        llm = len(drift.filter_menu_llm_modules(drift.get_llm_module_names()))
-        numbers = list(range(llm + 1, llm + 1 + counts["experimental"] + counts["standard"]))
-        report_flags = [flag for flag, _d in drift.switches_in_group("report")]
-        return numbers, report_flags
-
     def test_correct_panel_passes(self, drift):
-        numbers, report_flags = self._expected(drift)
-        last = numbers[-1]
-        doc = _panel_doc(numbers, (last + 1, last + len(report_flags)), report_flags)
-        assert drift.check_panel_numbering(doc) == []
+        assert drift.check_panel_numbering(_panel_doc(drift)) == []
 
     def test_missing_number_reported(self, drift):
-        numbers, report_flags = self._expected(drift)
-        last = numbers[-1]
-        doc = _panel_doc(numbers[:-1], (last + 1, last + len(report_flags)), report_flags)
-        findings = drift.check_panel_numbering(doc)
+        llm = len(drift.filter_menu_llm_modules(drift.get_llm_module_names()))
+        findings = drift.check_panel_numbering(_panel_doc(drift, drop_row=llm + 3))
         assert any("编号序列" in f for f in findings)
 
-    def test_report_range_and_items_reported(self, drift):
-        numbers, report_flags = self._expected(drift)
-        last = numbers[-1]
-        doc = _panel_doc(numbers, (last + 1, last + len(report_flags)), list(reversed(report_flags)))
-        findings = drift.check_panel_numbering(doc)
-        assert any("报告块开关编号/顺序" in f for f in findings)
+    def test_group_range_mismatch_reported(self, drift):
+        findings = drift.check_panel_numbering(_panel_doc(drift, wrong_range_idx=2))
+        assert any("块标题编号" in f for f in findings)
+
+    def test_key_map_order_mismatch_reported(self, drift):
+        findings = drift.check_panel_numbering(_panel_doc(drift, reverse_map=True))
+        assert any("键名→菜单编号映射" in f for f in findings)
 
     def test_missing_section_reported(self, drift):
         findings = drift.check_panel_numbering("无面板表\n")

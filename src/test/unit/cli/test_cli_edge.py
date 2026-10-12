@@ -143,11 +143,11 @@ class TestCliEdge:
     @pytest.mark.edge
     def test_experiment_all_then_name_dedup(self):
         """all 与具体名称混用 → 解析结果去重，不产生重复启用。"""
-        from src.python.config.features import GROUP_EXPERIMENTAL, switches_in_group
+        from src.python.config.features import experimental_flags
 
         args = _build_parser().parse_args(["--experiment", "all", "--experiment", "decision_reflection", "report"])
         flags = {flag for group in args.experiment for flag in group}
-        assert flags == {flag for flag, _d in switches_in_group(GROUP_EXPERIMENTAL)}
+        assert flags == {flag for flag, _d in experimental_flags()}
 
     @pytest.mark.edge
     def test_apply_experiments_duplicate_groups(self, monkeypatch):

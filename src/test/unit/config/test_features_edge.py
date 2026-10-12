@@ -11,11 +11,10 @@ import pytest
 
 from src.python.config.features import (
     FEATURE_FLAGS,
-    GROUP_EXPERIMENTAL,
+    experimental_flags,
     parse_switch_override,
     resolve_experiment_flags,
     save_feature_overrides,
-    switches_in_group,
 )
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_config, pytest.mark.edge]
@@ -50,7 +49,7 @@ class TestResolveExperimentFlagsEdge:
     def test_all_uppercase(self):
         """all 同样大小写不敏感。"""
         flags, unknown = resolve_experiment_flags(["ALL"])
-        assert flags == {flag for flag, _d in switches_in_group(GROUP_EXPERIMENTAL)}
+        assert flags == {flag for flag, _d in experimental_flags()}
         assert unknown == []
 
     @pytest.mark.edge

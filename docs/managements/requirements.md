@@ -103,7 +103,7 @@
 | **诊断** | | |
 | V | 查看最近运行日志 | 按级别筛选查看结构化运行日志（`core/log_reader.py`），无需生成报告；配置损坏时仍可查看（日志读取不依赖 config） |
 | H | 查看数据源健康历史 | 查看近期数据源健康检查记录（`core/perf.py::summarize_health_history`），含 ok/total 与失败源清单 |
-| T | 系统自检 | 环境/配置/目录/数据源一键体检（`core/doctor.py`，失败项附修复建议）；由开关 `doctor_check` 门控（默认开启，属常规组），置 false 时该菜单项就地裁剪 |
+| T | 系统自检 | 环境/配置/目录/数据源一键体检（`core/doctor.py`，失败项附修复建议）；由开关 `doctor_check` 门控（默认开启，属机制与诊断组），置 false 时该菜单项就地裁剪 |
 | **系统** | | |
 | X | 退出 | 退出程序 |
 
@@ -126,7 +126,7 @@
 | R-WEB-05 | 生成完成后支持在线预览 HTML 产物与下载 Excel/HTML 产物 |
 | R-WEB-06 | 同一时间仅执行一个报告生成任务，新任务进入排队（单 worker 串行队列） |
 | R-WEB-07 | 上传文件与任务运行数据有生命周期管理：上传文件过期自动清理、运行记录按保留上限收敛 |
-| R-WEB-08 | 页面提供配置编辑面板，覆盖 TUI 可编辑配置全集（路径 / 报告章节 / 报告章节与增强 `report_switches` / 匿名化 / 对比指数池 / LLM 开关 / 功能开关——界面上分「实验性功能」「常规开关」「报告章节与增强」三块）：修改即写共享配置文件（config.json / llm_settings.json / features.json）并写前自动备份 `.bak`，TUI/CLI 下次读取即生效 |
+| R-WEB-08 | 页面提供配置编辑面板，覆盖 TUI 可编辑配置全集（路径 / 报告章节 / 匿名化 / 对比指数池 / LLM 开关 / 功能开关——功能开关界面按作用域分「呈现与体验」「分析增强」「独立章节与回放」「机制与诊断」四块，实验项以 ⚗ 标识）：修改即写共享配置文件（config.json / llm_settings.json / features.json）并写前自动备份 `.bak`，TUI/CLI 下次读取即生效 |
 | R-WEB-09 | 报告生成提供「试算 / 正式」两种输入模式（试算默认）：试算读上传临时文件、快照写入 `web/` 隔离域，不落正式持仓、不污染共享时间线；正式 + 上传先提升临时文件为正式持仓（旧文件备份 `.bak`）再生成，正式 + 用存量直接读正式持仓文件（路径仅从配置派生，无目录穿越向量）；正式模式快照写共享主目录，TUI/CLI 可对比 |
 | R-WEB-10 | 页面提供「调仓模拟」工作区（What-if）：基准持仓默认取配置的正式持仓文件、可改上传另一份 xlsx，目标持仓必传（复用上传校验）；生效日可选（YYYY-MM-DD，填写后 opt-in 联网时序回测，回测失败降级不阻塞）；与 TUI / CLI 同链 `run_whatif_simulation` 同步生成独立产物 `调仓模拟.xlsx` / `.html`（不更新正式持仓、不并入主报告），产物经 `/api/reports` 预览下载；同一时刻仅允许一个模拟（互斥锁，忙碌 429），错误信封按 FILE_EXPIRED / WHATIF_UNAVAILABLE / WHATIF_BUSY / WHATIF_FAILED 分支 |
 | R-WEB-11 | 页面「运行状态」区提供缓存卡：展示缓存文件数 / 占用空间 / 命中率 / 过期文件数与前缀分布（`GET /api/cache` 只读统计，过期数以 dry_run 预扫描不删除），支持一键清理过期缓存（`POST /api/cache/cleanup`，同源校验，与 TUI 清理同链）；缓存更新（TUI `[1][2]`）仍走 TUI / CLI，Web 不重复提供 |
@@ -150,7 +150,7 @@
 | R-DIAG-04 | CLI 提供 `doctor` 子命令：`--offline` 跳过联网检查、`--timeout SECONDS` 限定单次检查预算；**无需 config 且在 `init_config` 之前分派**——配置损坏正是它要诊断的场景，被开关或配置初始化拦住会形成死锁；**不受 `doctor_check` 开关约束**。退出码 `0`=全部通过、`1`=命令跑完但有失败项（≠ 命令自身失败） |
 | R-DIAG-05 | TUI 主菜单提供 `[T]` 系统自检项（默认出现），**由开关 `doctor_check` 门控**：`features.json` 中置 `false` 时该项由菜单门控就地裁剪，不出现在主菜单中 |
 | R-DIAG-06 | Web 提供 `GET /api/doctor` 接口（`network=0` 跳过联网、`timeout` 上限 15s、非法值回落默认）及运行状态区「系统自检」卡片（默认显示），卡片可见性由 `system_info["doctor_enabled"]` 控制（同上开关）；接口在配置损坏时仍返回 200 并给出失败结果行 |
-| R-DIAG-07 | 自检为只读诊断：不改动任何文件、不写产物，联网检查每次由调用方显式确认（TUI 询问后按需联网、Web 由按钮触发）。故其开关默认开启——默认关闭的代价是最需要它的人（环境故障者）恰好看不到它。开关属**常规组**（在 TUI 菜单 `[S]` 与 Web 配置面板的「常规开关」块中，非实验块），亦可改动 `features.json` |
+| R-DIAG-07 | 自检为只读诊断：不改动任何文件、不写产物，联网检查每次由调用方显式确认（TUI 询问后按需联网、Web 由按钮触发）。故其开关默认开启——默认关闭的代价是最需要它的人（环境故障者）恰好看不到它。开关属**机制与诊断组**（在 TUI 菜单 `[S]` 与 Web 配置面板的「机制与诊断」块中，非实验项），亦可改动 `features.json` |
 
 ---
 
@@ -922,7 +922,7 @@ LLM 五维度量化评分，每项满分 100：
 | R-WIF-10 | 时序回测输出 5 项对比指标：区间收益 / 年化收益 / 年化波动率 / 夏普比率 / 最大回撤（基准 vs 目标 + 变化箭头），同时输出归一化净值曲线与回撤曲线序列 |
 | R-WIF-11 | 回测结果在 Excel 第 4 页签「时序回测」与 HTML 时序回测章节呈现；历史数据不足/获取失败时降级占位并注明原因；回测为假设推演，不构成收益承诺 |
 | R-WIF-12 | 交易成本模型（纯计算零 I/O）：卖出腿按快照事件 **FIFO 批次**逐批判档——期初批建仓日 = 快照首见日（**下界估计**，真值可能更低，随数字标注），批次费率按**交易日**持有期阶梯选档加权（选档单源 `fee_schedule_model`，边界左闭右开、不含起点交易日、「N年」标签 ×250 保守解释）；买入腿按金额分档（含「每笔N元」固定费折算）；场内品种（股票/场内基金/指数）**未建模显式标注**不冒充 0；任一腿费率未知 → `rate/fee=None` 且 `fees_complete=False`。费率数据三级可得：天天基金 F10 费用页（`FEE_SCHEMA` 载荷准入）→ 申购状态全量表「手续费」列单档/优惠档 → `fund_fee_fallback` 配置兜底（仅补在线不可得侧，不覆盖在线结果） |
-| R-WIF-13 | 功能开关 `whatif_trade_cost`（报告章节与增强组、默认关）：关态与既有 what-if 产出**逐字节一致**（黄金 sha256 断言长期驻留）；开启时 Excel 追加第 5 页签「交易成本对比」（状态行/成本汇总/逐腿 11 列明细/成本后对比/业绩基准/说明与标注）+ HTML 追加⑧区（含成本折线图负载裁剪契约、说明区条件重编号⑨/⑧）；生效日 t0 一次性扣费的**成本前/后收益差**仅在回测可用且 `fees_complete` 且 `0 ≤ 扣费比 <1` 时计算（对原 100 基线，不重基）；无回测时仅出成本块；Excel 与 HTML 同源数值一致 |
+| R-WIF-13 | 功能开关 `whatif_trade_cost`（独立章节与回放组、默认关）：关态与既有 what-if 产出**逐字节一致**（黄金 sha256 断言长期驻留）；开启时 Excel 追加第 5 页签「交易成本对比」（状态行/成本汇总/逐腿 11 列明细/成本后对比/业绩基准/说明与标注）+ HTML 追加⑧区（含成本折线图负载裁剪契约、说明区条件重编号⑨/⑧）；生效日 t0 一次性扣费的**成本前/后收益差**仅在回测可用且 `fees_complete` 且 `0 ≤ 扣费比 <1` 时计算（对原 100 基线，不重基）；无回测时仅出成本块；Excel 与 HTML 同源数值一致 |
 | R-WIF-14 | 业绩基准三线（纯映射零 I/O + 报告层取数）：`resolve_benchmark_index` 三阶优先级——config `whatif_benchmark_index` 合法指数码覆盖 → 目标持仓成本降序取基金业绩基准文本在 `comparison_indices` 池反查 → 默认 `sh000300`（源标注 config/holdings/default）；基准曲线经既有指数链路取历史、LOCF 对齐回测标签后归一 100；取数/映射失败降级为「业绩基准：不可用」不阻断面板 |
 
 ### 6.12 持仓基本面（财务指标 + 持仓个股财报摘要，一章两区块）
@@ -943,7 +943,7 @@ LLM 五维度量化评分，每项满分 100：
 
 ### 6.13 持仓变动复盘（快照事件级，默认关）
 
-> 独立章（type=`holding_change`），功能开关 `holding_change_review`（报告章节与增强组、默认关）控制；事件由本地滚动快照差分推导（纯计算、零网络、只读），双端（Excel 页签 + HTML 章节）消费同一份预格式化视图。
+> 独立章（type=`holding_change`），功能开关 `holding_change_review`（独立章节与回放组、默认关）控制；事件由本地滚动快照差分推导（纯计算、零网络、只读），双端（Excel 页签 + HTML 章节）消费同一份预格式化视图。
 
 | 需求标识 | 需求描述 |
 |:---------|:---------|
@@ -956,7 +956,7 @@ LLM 五维度量化评分，每项满分 100：
 
 ### 6.14 因子目录（25 因子五来源族横截面，默认关）
 
-> 功能开关 `factor_catalog`（报告章节与增强组、默认关）控制；冻结目录 `factor_catalog`（25 条、五来源族各 5、版本随代码）为唯一事实来源，`factor_catalog_loader` 装载校验并备数四类输入（日K/基准指数/估值/财务指标，逐类型失败只记原因不外抛），`factor_evaluator` 算逐因子池内横截面与评级；信号经 `signal_ledger` 第 6 类 `factor_catalog` 每日单条快照入账，报告呈现为「风格与因子分析」章内区块四（Excel + HTML 同源，关态产物逐字节不变）。
+> 功能开关 `factor_catalog`（分析增强组、默认关）控制；冻结目录 `factor_catalog`（25 条、五来源族各 5、版本随代码）为唯一事实来源，`factor_catalog_loader` 装载校验并备数四类输入（日K/基准指数/估值/财务指标，逐类型失败只记原因不外抛），`factor_evaluator` 算逐因子池内横截面与评级；信号经 `signal_ledger` 第 6 类 `factor_catalog` 每日单条快照入账，报告呈现为「风格与因子分析」章内区块四（Excel + HTML 同源，关态产物逐字节不变）。
 
 | 需求标识 | 需求描述 |
 |:---------|:---------|
@@ -964,13 +964,13 @@ LLM 五维度量化评分，每项满分 100：
 | R-FCT-02 | 四类输入备数与逐因子计算 fail-soft：日K/基准指数/估值/财务指标逐类型失败入 `unavailable`（带原因）不外抛；单因子数据不足记不可算原因（基准指数不可得/估值字段不可得/财务指标不可得/日K不可得/有效码数不足），逐因子降级不截断整表；目录拒载/池空/备数异常返回 `available=false` 占位，全链不抛异常 |
 | R-FCT-03 | 信号入账：`signal_ledger` 新增第 6 类 `factor_catalog`（标签「因子目录」），每日单条组合级快照（rating = 中性上方计数/分母），detail 携带目录版本、可算计数与全部可算因子横截面值；开关关闭/数据不可用时该类零记录（关态与降级态一致） |
 | R-FCT-04 | 报告呈现面：「风格与因子分析」章内区块四——Excel 页签与 HTML 模板块同源消费 `factor_catalog_data`，三态：开关关闭（None）区块不渲染且产物逐字节不变、`available=false` 标题+原因占位、可用时表头/因子行/相对中性/不可算原因/说明区（版本+评级）全渲染，顺序固定在行业 Beta 之后 |
-| R-FCT-05 | 开关与池构造：`factor_catalog` 注册入报告章节与增强组（默认关、面板可见；原实验组转正），`--feature factor_catalog=on` 可切换；股票池 = 直接持仓 A 股（名称+代码双维过滤）∪ 穿透 top10 A 股代码（code/codes 两形状递归收集），去重升序，空池不备数 |
+| R-FCT-05 | 开关与池构造：`factor_catalog` 注册入分析增强组（默认关、面板可见；原实验身份已摘除），`--feature factor_catalog=on` 可切换；股票池 = 直接持仓 A 股（名称+代码双维过滤）∪ 穿透 top10 A 股代码（code/codes 两形状递归收集），去重升序，空池不备数 |
 
 ---
 
 ### 6.15 调仓纪律回放（纪律 vs 放任多期回放，默认关）
 
-> 功能开关 `rebalance_schedule_replay`（报告章节与增强组、默认关）控制；`analysis/schedule_replay` 复用 `metrics*`/`whatif_backtest` 原语做多期回放纯计算（不新造引擎），成本经 `trade_cost_model` 软接入（不可用时显式「未计成本」，零双实现），报告呈现为独立章「调仓纪律回放」（双线图 + 指标对照 + 逐期换手/成本表，Excel/HTML 同源 view，关态产物逐字节不变），回放结论经统一 prompt 附录随全部 LLM 分析章携带（进提示词必进指纹）。
+> 功能开关 `rebalance_schedule_replay`（独立章节与回放组、默认关）控制；`analysis/schedule_replay` 复用 `metrics*`/`whatif_backtest` 原语做多期回放纯计算（不新造引擎），成本经 `trade_cost_model` 软接入（不可用时显式「未计成本」，零双实现），报告呈现为独立章「调仓纪律回放」（双线图 + 指标对照 + 逐期换手/成本表，Excel/HTML 同源 view，关态产物逐字节不变），回放结论经统一 prompt 附录随全部 LLM 分析章携带（进提示词必进指纹）。
 
 | 需求标识 | 需求描述 |
 |:---------|:---------|
@@ -978,28 +978,28 @@ LLM 五维度量化评分，每项满分 100：
 | R-SR-02 | 成本软接入两态：`trade_cost_model` 可用时逐笔费率计入并落成本行；不可用/费率缺失时 cost_note=「未计成本」且面板与日志双回显，绝不并行写第二套成本实现（单源口径） |
 | R-SR-03 | 报告双端单源：`schedule_replay_panel` 契约 → 预格式化 view → Excel 页签与 HTML 章节逐字节同文（双线图数据、指标对照、逐期表、口径标注同现）；开关关闭时章节隐藏且不消耗连续章号（产物逐字节回退），开启但回放数据不足时双端写占位 |
 | R-SR-04 | LLM 引用接线：契约构建期渲染一次 `prompt_block`（回放结论只读引用），经统一 prompt 附录随全部 LLM 分析章携带；进提示词必进指纹（块非空改变缓存键、空串与不含该段逐字节一致），降级时只出表不出段落 |
-| R-SR-05 | 开关与挂载：`rebalance_schedule_replay` 注册入报告章节与增强组（默认关；原实验组转正），实验挂载点注入 `pipeline_data`（开关关闭零行为、装配异常只告警不外抛、与新闻链路无关） |
+| R-SR-05 | 开关与挂载：`rebalance_schedule_replay` 注册入独立章节与回放组（默认关；原实验身份已摘除），实验挂载点注入 `pipeline_data`（开关关闭零行为、装配异常只告警不外抛、与新闻链路无关） |
 
 ### 6.16 事件窗量化对照（新闻事件 × 交易日窗口，默认关）
 
-> 并入「财经新闻热点与持仓关联分析」**章内区块**（块级 partial，注册表无独立条目、不消耗连续章号），功能开关 `event_window_impact`（报告章节与增强组、默认关）控制；`analysis/event_window_impact` 纯计算（事件日映射交易日后 ±5 交易日窗口收益 vs 文本极性方向比对，零 I/O），`report/event_impact_panel` 只读新闻关联输出装配 `event_impact_data` 契约并渲染预格式化 view（Excel 财经新闻页签尾部区块 + HTML 章内 partial 双端同文），分歧例块经统一 prompt 附录随全部 LLM 分析章携带。
+> 并入「财经新闻热点与持仓关联分析」**章内区块**（块级 partial，注册表无独立条目、不消耗连续章号），功能开关 `event_window_impact`（分析增强组、默认关）控制；`analysis/event_window_impact` 纯计算（事件日映射交易日后 ±5 交易日窗口收益 vs 文本极性方向比对，零 I/O），`report/event_impact_panel` 只读新闻关联输出装配 `event_impact_data` 契约并渲染预格式化 view（Excel 财经新闻页签尾部区块 + HTML 章内 partial 双端同文），分歧例块经统一 prompt 附录随全部 LLM 分析章携带。
 
 | 需求标识 | 需求描述 |
 |:---------|:---------|
 | R-EW-01 | 事件窗纯计算（`analysis/event_window_impact`，零 I/O：行情与文本极性由编排层备入）：事件日 → 交易日映射唯一经交易日历（交易日取当日、否则取其后首个交易日，前向探测 ≤14 自然日，覆盖不到即降级，禁自建日历）；窗口 = 以映射交易日为中心在行情并集轴（品种 ∪ 基准）切 ±5 交易日，缺口按前值填充（LOCF 复用 `whatif_backtest` 单源实现，不第二套）；窗口收益 = 事件日前 1 个交易日收盘 → 后 5 个交易日收盘，超额 = 品种收益 − 基准收益；方向 = 收益符号（上/下/持平，不设人为容差），与文本极性（利好/利空/中性）比对出 一致 / 分歧 / 持平不判 / 中性不判 / 不可判 |
 | R-EW-02 | 契约与降级：注入 `pipeline_data["event_impact_data"]` 契约（available / reason / events / degraded / skipped / match_counts / benchmark / window / limitations_note / prompt_block）；事件日无法映射、品种或基准行情不可得、映射交易日不在行情轴、窗口越界、无事件日前基点、关键位无法解析、品种窗口实测缺失占比 >30% → 该事件降级不出行并入降级清单（带 reason 呈现），取数/计算异常只降级不外抛；事件表空 → `available=false`（双端写占位，不阻断报告主链路） |
 | R-EW-03 | 事件表编排只读与准入（`report/event_impact_panel`）：只读既有新闻关联输出的落盘字段（不新建第二份新闻元数据存储），文本极性取逐条 LLM 关联判定标记（`[利好]` / `[利空]`，有判定文本但无标记记中性、无判定文本记未判定）；关键词索引只收名称+代码双维判定的 A 股直接持仓与穿透 A 股代码（基金等无日频股票行情的品种不入索引、计入 unmatched 不硬算）；单次事件表行数上限 50（超出计入 skipped），基准经 `resolve_benchmark_index` 三阶映射（配置 `whatif_benchmark_index` 覆盖 → 持仓基准文本 → 宽基默认），行情/基准取数全部经注入的 chain 网关（模块零直连、零缓存直写） |
-| R-EW-04 | 开关可见性两层：`event_window_impact`（报告章节与增强组、默认关、影响产物自述）关闭时挂载点零行为（不装配、不注入）、区块零渲染、注册表无独立条目且不消耗连续章号（产物逐字节回退）；开启时新闻先行串行（事件表以本次新闻及其逐条 LLM 关联判定为输入），契约经 `_experimental_seams` 守卫注入，装配异常只告警 + 契约缺席不外抛，新闻父章关闭时区块随父章隐藏 |
+| R-EW-04 | 开关可见性两层：`event_window_impact`（分析增强组、默认关、影响产物自述）关闭时挂载点零行为（不装配、不注入）、区块零渲染、注册表无独立条目且不消耗连续章号（产物逐字节回退）；开启时新闻先行串行（事件表以本次新闻及其逐条 LLM 关联判定为输入），契约经 `_experimental_seams` 守卫注入，装配异常只告警 + 契约缺席不外抛，新闻父章关闭时区块随父章隐藏 |
 | R-EW-05 | 双端单源：契约 → `build_event_impact_view` 预格式化视图（列头 / 摘要行 / 事件行 / 降级行 / 口径标注全为字符串），Excel 端为财经新闻页签尾部区块、HTML 端为新闻章内 `event_impact_section.html` partial，双端消费同一份 view（逐字节同文）；口径标注与事件表双端同现，数据不足时双端同写占位 |
 | R-EW-06 | LLM 附录：分歧例提示词块只收「比对 = 分歧」行（与报告事件表同源；无分歧或契约缺席 → 空串，附录零贡献）契约构建期渲染一次，经统一 prompt 附录随全部 LLM 分析章携带（`extract_event_impact_block`）；进提示词必进指纹（块非空改变各模块缓存键、空串与不含该段逐字节一致） |
 
 ### 6.17 报告对话式追问（报告页内会话式问答，默认关）
 
-> 报告尾部新增「报告追问（⚗ 实验）」交互区块：读者针对**本期报告内容**发起多轮提问，回答基于当期报告 HTML 反解析的上下文 + 会话内历史。功能开关 `report_qa`（实验组、默认关、影响产物）控制——关闭时区块不渲染（报告字节与引入前一致）、问答路由 403；开启时进入页脚实验自述清单（`affects_report` 口径）。服务端为独立子包 `qa/`（`context` 上下文提取 + `session` 会话服务），Web 路由 `report_qa_ask`（POST /api/qa/ask）承载传输；依赖方向 `qa → llm` 单向（仅经 `llm/api.call_llm` 既有 Provider Chain 与合规漏斗、`llm/markdown` 渲染、`llm/fact_checker` 核对，不进 LLM 模块注册、无模块缓存与指纹），零新增取数（只读报告 HTML）。TUI 追问入口（阶段 4）后续批次登记。
+> 报告尾部新增「报告追问（⚗ 实验）」交互区块：读者针对**本期报告内容**发起多轮提问，回答基于当期报告 HTML 反解析的上下文 + 会话内历史。功能开关 `report_qa`（机制与诊断组实验项、默认关、影响产物）控制——关闭时区块不渲染（报告字节与引入前一致）、问答路由 403；开启时进入页脚实验自述清单（`affects_report` 口径）。服务端为独立子包 `qa/`（`context` 上下文提取 + `session` 会话服务），Web 路由 `report_qa_ask`（POST /api/qa/ask）承载传输；依赖方向 `qa → llm` 单向（仅经 `llm/api.call_llm` 既有 Provider Chain 与合规漏斗、`llm/markdown` 渲染、`llm/fact_checker` 核对，不进 LLM 模块注册、无模块缓存与指纹），零新增取数（只读报告 HTML）。TUI 追问入口（阶段 4）后续批次登记。
 
 | 需求标识 | 需求描述 |
 |:---------|:---------|
-| R-QA-01 | 开关门控：`report_qa` 登记实验组（默认关、影响报告产物）三端同源（TUI `[S]` / Web 配置面板 / CLI `--experiment`）；关闭 → 追问区块不渲染（主模板 include 整体处于 `report_qa_enabled` 分支内，报告字节不变）且 `/api/qa/ask` 返回 403（error_code `QA_DISABLED`）；开启 → 区块渲染并进入页脚实验自述清单 |
+| R-QA-01 | 开关门控：`report_qa` 登记为机制与诊断组实验项（默认关、影响报告产物）三端同源（TUI `[S]` / Web 配置面板 / CLI `--experiment`）；关闭 → 追问区块不渲染（主模板 include 整体处于 `report_qa_enabled` 分支内，报告字节不变）且 `/api/qa/ask` 返回 403（error_code `QA_DISABLED`）；开启 → 区块渲染并进入页脚实验自述清单 |
 | R-QA-02 | 上下文提取（`qa/context.py`，语义 `report_qa_context`）：只读 output_dir 下报告 HTML（零新增取数、不触数据源链路）；按 `div.section[id^=sec-]` 锚点分章，汇总与 LLM 章全文、其余数据章摘要、整体字符上限三层截断（截断带声明标记）；持仓明细表按**表头名**映射为基线（可选列增减不受影响、合计行按空代码剔除）；`<title>` 与汇总时间行构成生成条件声明 |
 | R-QA-03 | 上下文失败显式报错（不静默给错误上下文）：路径非法 → `QA_BAD_REPORT`、报告文件缺失 → `QA_REPORT_NOT_FOUND`、章锚点全缺失 → `QA_CONTEXT_INVALID`（「无法解析该报告结构，追问不可用」）；失败发生在消耗会话轮次之前，路径净化三层同语义（路由/会话/上下文） |
 | R-QA-04 | 会话服务（`qa/session.py`，语义 `report_qa_session`）：内存会话表带上限淘汰（超限按最久未用），同报告复用会话、换报告或未知 session_id 一律新建（防上下文串味）；同会话执行锁串行、跨会话并行；轮数硬上限（默认 10）→ `QA_SESSION_LIMIT` 显式提示，输入 token 软上限 → `QA_INPUT_CAP_EXCEEDED`；LLM 未配置 → `QA_LLM_UNAVAILABLE`、未产出有效回答 → `QA_LLM_FAILED`（失败不消耗轮次） |
@@ -1295,7 +1295,7 @@ LLM 五维度量化评分，每项满分 100：
 | `history.coverage_threshold` | float | 0.8 | — | 有效区间覆盖阈值 |
 | `history.benchmark_indices` | dict | {"sh000300":"沪深300"} | — | 基准指数配置，组合历史走势对比 |
 | `history.lookback_days` | int | 90 | — | 历史走势取数窗口（K 线条数/交易日），需 ≥ 60（MIN_SPAN）才能计算回撤分析 |
-| `features.json` 的 9 项报告开关 | bool | `data_quality` 与 `market_temperature` 默认开，其余 7 项默认关 | — | **报告章节与增强开关**（登记于功能开关注册表 `GROUP_REPORT`，存 `data/config/features.json`，菜单 `[S]` 报告块）：`data_quality`（数据质量仪表盘）/ `market_temperature`（市场温度，无数据时该行静默省略）/ `industry_beta`（行业 Beta 子表）/ `candidate_compare`（候选基金比较）/ `cost_lots`（成本流水）/ `valuation_percentile`（估值分位）/ `financial_report_digest`（持仓个股财报摘要）/ `financial_indicator`（财务指标）/ `market_sentiment`（市场情绪与资金热点，需同花顺 key） |
+| `features.json` 的 9 项报告开关 | bool | `data_quality` 与 `market_temperature` 默认开，其余 7 项默认关 | — | **报告产物开关**（登记于功能开关注册表 `GROUP_ANALYSIS` / `GROUP_STANDALONE`，存 `data/config/features.json`，菜单 `[S]` 分析增强 / 独立章节与回放块）：`data_quality`（数据质量仪表盘）/ `market_temperature`（市场温度，无数据时该行静默省略）/ `industry_beta`（行业 Beta 子表）/ `candidate_compare`（候选基金比较）/ `cost_lots`（成本流水）/ `valuation_percentile`（估值分位）/ `financial_report_digest`（持仓个股财报摘要）/ `financial_indicator`（财务指标）/ `market_sentiment`（市场情绪与资金热点，需同花顺 key） |
 | `holdings_start_date` | str | `""` | — | 组合建仓日期（YYYY-MM-DD，可选）。持仓 Excel 未录入交易/分红流水时，成本流水子模块按「建仓日一次性买入」近似年化（`build_approximate_fund_flow_data`）；空=不计算近似年化，仅成本分档近似（每份成本 vs 市价） |
 | `comparison_indices` | dict | {"sh000300":"沪深300","sh000905":"中证500","sh000012":"中证全债"} | — | 竞争语境对比指数池，支持多指数对比 |
 | `rebalance.threshold` | float | 0.15 | — | 单品种权重超限阈值（15%），超限触发再平衡建议 |
@@ -1408,7 +1408,7 @@ LLM 五维度量化评分，每项满分 100：
 
 ### 11.5 features.json（功能开关注册表）
 
-独立配置文件，提供 31 项功能开关的运行时覆写。不配置时全部使用代码内置默认值。开关分**实验组**（2 项，默认关，面板以 ⚗ 标识；`decision_reflection` 与 `report_qa`，其余验证通过的开关已转正出组）、**常规组**（9 项，默认开）与**报告章节与增强组**（20 项，多数默认关，`llm_debate_conditional`/`data_quality`/`market_temperature`/`fund_purchase_limit` 四项默认开）三块，分组表达「生命周期的当前状态」而非优先级——**转正**即把声明移出实验组（常驻读侧增强入常规组、默认值改 `true`；章节/页签类入报告章节与增强组、默认值保持关），面板可见性随分组自动延续。三组在 TUI 菜单 `[S]` / Web 配置面板 / CLI（`--experiment` 实验组简写、`--feature NAME=VALUE` 全域双向）中**同样可切换**；唯一登记点是 `config/features.py::feature_switch_registry`（显示名/说明/分组/默认值/产物影响五字段），渠道层不得另写清单。仅收录「有消费者」的开关——LLM 模块启停与基金深度分析（`llm_settings.json` 的 `enabled_llm`）、新闻源（`config.json` 的 `news_sources`）、历史走势与回撤（`config.json` 的 `enable_history`）、匿名化模式（`config.json` 的 `anonymization.mode`）各有归属配置，不在此文件。
+独立配置文件，提供 31 项功能开关的运行时覆写。不配置时全部使用代码内置默认值。开关按**作用域分四组**——**呈现与体验**（2 项，默认开：量化指标显示 / 报告图表交互）、**分析增强**（14 项，多数默认关，`llm_debate_conditional`/`data_quality`/`market_temperature`/`fund_purchase_limit` 四项默认开）、**独立章节与回放**（6 项，默认关）与**机制与诊断**（9 项，机制项默认开、⚗ 实验项默认关）——分组表达「开了长出什么」而非生命周期；**生命周期由独立字段 `experimental` 表达**（2 项：`decision_reflection` 与 `report_qa`，面板以 ⚗ 标识、随产物自述），**转正**即把该字段置 false（作用域不变则原地留块，作用域变化才改组），面板可见性不随转正摘除。四组在 TUI 菜单 `[S]` / Web 配置面板 / CLI（`--experiment` 只开全部实验项、`--feature NAME=VALUE` 全域双向）中**同样可切换**；唯一登记点是 `config/features.py::feature_switch_registry`（显示名/说明/作用域分组/默认值/产物影响/实验身份六字段），渠道层不得另写清单。仅收录「有消费者」的开关——LLM 模块启停与基金深度分析（`llm_settings.json` 的 `enabled_llm`）、新闻源（`config.json` 的 `news_sources`）、历史走势与回撤（`config.json` 的 `enable_history`）、匿名化模式（`config.json` 的 `anonymization.mode`）各有归属配置，不在此文件。
 
 下表列常用开关（**非全集**，完整 31 项与分组清单见配置指引 `how-to-config.md` 功能开关节）：
 
@@ -1422,7 +1422,7 @@ LLM 五维度量化评分，每项满分 100：
 | `decision_header_parse` | bool | true（默认开启） | 决策头结构化启停：专家复盘提示词追加一行受控 JSON 决策头（`决策头：{"decisions":[…]}`），抽取侧优先读结构化头、失败回落确定性表格解析（决策词归一，防写反方向）；关闭时提示词逐字节不变。**默认开启**——两路抽取口径同源，关闭只是去掉一层机器可读保障 |
 | `metrics_enabled` | bool | true | 量化指标显示（原 `metrics_sharpe` / `metrics_calmar` / `metrics_hhi` / `metrics_winrate` / `metrics_turnover` / `metrics_risk_contribution` / `metrics_beta` 七项并入）：指标始终全量计算；关闭即量化指标雷达图各轴显示 N/A（含降级 3 轴）且断路器暂停该组指标的失败计数，智囊团复盘指标表不受影响 |
 | `enable_interactive_charts` | bool | true | 报告 HTML 交互图表（Chart.js）；关闭时回退基础 Canvas 图表 |
-| `doctor_check` | bool | true（默认开启） | 系统自检功能上屏：开启时 TUI 菜单显示 `[T]` 系统自检项、Web 运行状态区渲染「系统自检」卡片（`GET /api/doctor`）；置 false 则两处入口一并隐藏。**仅约束 TUI/Web 两个日常入口**——`doctor` CLI 子命令不受本开关约束（配置损坏正是它要诊断的场景，被开关拦住会形成死锁）。属**常规组**开关（TUI 菜单 `[S]` / Web 配置面板的「常规开关」块），只影响入口显隐、不进报告产物自述 |
+| `doctor_check` | bool | true（默认开启） | 系统自检功能上屏：开启时 TUI 菜单显示 `[T]` 系统自检项、Web 运行状态区渲染「系统自检」卡片（`GET /api/doctor`）；置 false 则两处入口一并隐藏。**仅约束 TUI/Web 两个日常入口**——`doctor` CLI 子命令不受本开关约束（配置损坏正是它要诊断的场景，被开关拦住会形成死锁）。属**机制与诊断组**开关（TUI 菜单 `[S]` / Web 配置面板的「机制与诊断」块），只影响入口显隐、不进报告产物自述 |
 | `datasource_adapter` | bool | true（默认开启） | 数据源适配契约启停：行情域三源改由三段式适配器（参数转译→抓取→映射到标准字段）+ 声明式 alias 归一获取，与既有转换函数逐源等价（仅东方财富多出 `market_cap`/`pe` 两个 `None` 键）。**默认开启**——内部接缝，两种取值下报告数值不变；置 false 时链路走既有转换函数、行为逐字节不变（回退杠杆）。为接入新数据源/新字段预备 |
 | `datasource_credential_ready` | bool | true（默认开启） | 数据源凭据就绪指引启停：接入需 key 的源时补一行声明，链路即**主动跳过**缺凭据的源并给出可读指引（不进熔断计数）、`check-sources` 出 `⏭️` 跳过态与就绪摘要、`doctor` 出「数据源凭据」组。**当前全部数据源免费、声明表为空**，开启后可见的就是「均无需凭据（免费源）」。凭据只从环境变量读，**值永不落日志与报告**。**默认开启**——声明表为空时对报告产物零影响，且只读诊断不耗 LLM、不写盘 |
 

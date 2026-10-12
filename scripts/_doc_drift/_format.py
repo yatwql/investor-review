@@ -9,7 +9,7 @@ from _checklib import rel
 from _test_runner.modes import UNIT_DOMAIN_LABELS
 from src.python.config._config_defaults import _DEFAULT_CONFIG
 from src.python.config._llm_settings_defaults import _DEFAULT_LLM_SETTINGS
-from src.python.config.features import feature_switch_registry, switches_in_group
+from src.python.config.features import GROUP_LABELS, GROUP_ORDER, feature_switch_registry, switches_in_group
 from src.python.core.registry import _REPORT_SECTION_DEFAULT, get_cache_ttl_defaults, get_llm_module_names
 from src.python.tui.tui_menu import filter_menu_llm_modules
 
@@ -92,7 +92,20 @@ def check_section_counts(docs: dict[Path, str]) -> list[str]:
     return findings
 
 
-_SWITCH_TABLE_START = "**⚗ 实验组（"
+def _group_doc_name(group: str) -> str:
+    """组的**文档短名**（手册措辞）= 组标签「（」前缀去 emoji、取「·」前主名。
+
+    唯一事实来源仍是 ``GROUP_LABELS``/``GROUP_ORDER``；手册的组表头、连写计数与
+    面板块标题一律使用该短名，注册表改名则文档断言随之漂移报错。
+    """
+    prefix = GROUP_LABELS[group].split("（", 1)[0].strip()
+    return re.sub(r"^[^\u4e00-\u9fff]+", "", prefix).split("·", 1)[0]
+
+
+#: 按 ``GROUP_ORDER`` 派生的文档短名（呈现与体验/分析增强/独立章节与回放/机制与诊断）
+_GROUP_DOC_NAMES: tuple[str, ...] = tuple(_group_doc_name(g) for g in GROUP_ORDER)
+
+_SWITCH_TABLE_START = f"**{_GROUP_DOC_NAMES[0]}（"
 
 
 _SWITCH_ROW = re.compile(r"^\|\s*`([a-z0-9_]+)`\s*\|\s*\**`?(true|false)`?\**\s*\|")
@@ -133,28 +146,25 @@ def check_switch_table(doc_text: str) -> list[str]:
 
 
 def _group_counts() -> dict[str, int]:
-    return {
-        "experimental": len(switches_in_group("experimental")),
-        "standard": len(switches_in_group("standard")),
-        "report": len(switches_in_group("report")),
-    }
+    """四组计数（键 = ``GROUP_ORDER``）——drift 断言与面板编号派生共用。"""
+    return {group: len(switches_in_group(group)) for group in GROUP_ORDER}
 
 
-_TRIPLE_COUNT = re.compile(r"⚗实验\s*(\d+)\s*/\s*常规\s*(\d+)\s*/\s*报告章节与增强\s*(\d+)")
+#: 四组连写计数（顺序 = GROUP_ORDER）：如「呈现与体验 2 / 分析增强 14 / 独立章节与回放 6 / 机制与诊断 9」
+_GROUP_CHAIN_COUNT = re.compile(r"\s*/\s*".join(re.escape(name) + r"\s*(\d+)" for name in _GROUP_DOC_NAMES))
 
+_GROUPED_COUNT = re.compile(
+    r"(?:\*\*)?(" + "|".join(re.escape(name) for name in _GROUP_DOC_NAMES) + r")(?:组)?"
+    r"(?:\*\*)?[（(](?:前|次|后)?\s*(\d+)\s*项"
+)
 
-_GROUPED_COUNT = re.compile(r"(?:\*\*)?(实验组|常规组|报告组|报告章节与增强组)(?:\*\*)?[（(](?:前|次|后)?\s*(\d+)\s*项")
+_GROUP_NAME_TO_KIND: dict[str, str] = {}
+for _g_name, _g_key in zip(_GROUP_DOC_NAMES, GROUP_ORDER):
+    _GROUP_NAME_TO_KIND[_g_name] = _g_key
+    _GROUP_NAME_TO_KIND[_g_name + "组"] = _g_key
 
-
-_GROUP_NAME_TO_KIND = {
-    "实验组": "experimental",
-    "常规组": "standard",
-    "报告组": "report",
-    "报告章节与增强组": "report",
-}
-
-
-_REPORT_BLOCK_COUNT = re.compile(r"报告章节与增强[（(](\d+)\s*项")
+#: 旧三组分组名（生命周期轴曾兼作分组轴的遗留措辞）——扫描域命中即报残留
+_RETIRED_GROUP_NAMES: tuple[str, ...] = ("实验组", "常规组", "报告组", "报告章节与增强组")
 
 
 # 三种合计写法：带前缀未加粗（共/全部/提供 N 项开关，如 requirements §11.5「提供 N 项功能开关」）/
@@ -171,15 +181,19 @@ def _count_finding(path: Path, line_no: int, shown: str, expected: int) -> str:
 
 
 def check_switch_counts(docs: dict[Path, str]) -> list[str]:
-    """开关分组计数断言 ↔ 注册表分组计数（四种写法：三组连写 / 分组枚举 / 单块 / 合计）。"""
+    """开关分组计数断言 ↔ 注册表分组计数（四种写法：四组连写 / 分组枚举 / 单块 / 合计）。
+
+    另报**旧三组名残留**（``_RETIRED_GROUP_NAMES`` 命中即报）——文档措辞与
+    重构后的四组作用域轴保持一致，不给新旧两套分组名共存留口子。
+    """
     findings: list[str] = []
     counts = _group_counts()
     total = len(feature_switch_registry)
     for path, text in docs.items():
         for line_no, line in enumerate(text.splitlines(), 1):
-            for m in _TRIPLE_COUNT.finditer(line):
-                got = [int(m.group(i)) for i in (1, 2, 3)]
-                exp = [counts["experimental"], counts["standard"], counts["report"]]
+            for m in _GROUP_CHAIN_COUNT.finditer(line):
+                got = [int(m.group(i)) for i in range(1, len(GROUP_ORDER) + 1)]
+                exp = [counts[group] for group in GROUP_ORDER]
                 if got != exp:
                     findings.append(
                         f"{rel(path)}:{line_no}: 开关分组计数「{m.group(0)}」与注册表 "
@@ -189,9 +203,12 @@ def check_switch_counts(docs: dict[Path, str]) -> list[str]:
                 expected = counts[_GROUP_NAME_TO_KIND[m.group(1)]]
                 if int(m.group(2)) != expected:
                     findings.append(_count_finding(path, line_no, m.group(0), expected))
-            for m in _REPORT_BLOCK_COUNT.finditer(line):
-                if int(m.group(1)) != counts["report"]:
-                    findings.append(_count_finding(path, line_no, m.group(0), counts["report"]))
+            retired = [name for name in _RETIRED_GROUP_NAMES if name in line]
+            if retired:
+                findings.append(
+                    f"{rel(path)}:{line_no}: 旧三组分组名残留「{'/'.join(retired)}」"
+                    f"——四分组后应改用 {'/'.join(_GROUP_DOC_NAMES)} 相应措辞"
+                )
             for m in _TOTAL_COUNT.finditer(line):
                 if int(m.group(1) or m.group(2) or m.group(3)) != total:
                     findings.append(_count_finding(path, line_no, m.group(0), total))
@@ -303,73 +320,90 @@ def check_llm_defaults(doc_text: str) -> list[str]:
 _PANEL_SECTION_START = "交互式子菜单（面板标题"
 
 
-_PANEL_SECTION_END = "**报告章节与增强"
-
-
 _PANEL_ROW = re.compile(r"^\|\s*(\d+)(?:[-–](\d+))?\s*\|")
 
 
-_REPORT_RANGE = re.compile(r"报告章节与增强（面板编号\s*(\d+)-(\d+)）")
+#: 每组块标题「组短名（面板编号 X-Y）」——由 ``GROUP_LABELS`` 派生，手册措辞漂移即报错
+_GROUP_PANEL_RANGE: dict[str, "re.Pattern[str]"] = {
+    group: re.compile(re.escape(_group_doc_name(group)) + r"（面板编号\s*(\d+)-(\d+)）") for group in GROUP_ORDER
+}
 
 
-_REPORT_ITEM = re.compile(r"(\d+)\s*`([a-z0-9_]+)`")
+#: features.json 键名 → 菜单编号映射表行（兼容引用式 `> |` 前缀）：| `flag` | N | 组名 | 功能 |
+_PANEL_KEY_MAP_ROW = re.compile(r"^(?:>\s*)?\|\s*`([a-z0-9_]+)`\s*\|\s*(\d+)\s*\|\s*([^|]+?)\s*\|")
 
 
 def check_panel_numbering(doc_text: str) -> list[str]:
-    """校验 [S] 面板编号连续且分组边界与注册表一致（编号由 handlers_config.py 派生）。"""
+    """校验 [S] 面板编号表：行号序列 / 四组块标题区间 / features.json 键名映射均与注册表派生一致。
+
+    面板编号 = LLM 菜单模块数 + 四组按 ``GROUP_ORDER`` 连续派生（handlers_config.py
+    运行时派发，非硬编码）；组块标题与映射表组名措辞须与 ``GROUP_LABELS`` 组短名一致。
+    """
     findings: list[str] = []
     lines = doc_text.splitlines()
     start = next((i for i, ln in enumerate(lines) if ln.startswith(_PANEL_SECTION_START)), None)
-    end = next((i for i, ln in enumerate(lines) if ln.startswith(_PANEL_SECTION_END)), None)
-    if start is None or end is None or end <= start:
+    if start is None:
         return [f"{rel(_TUI_MENU_MD)}: 未找到 [S] 面板编号表区段"]
+    end = next(
+        (
+            i
+            for i in range(start + 1, len(lines))
+            if lines[i].startswith("#### ") or lines[i].startswith("## ") or lines[i] == "---"
+        ),
+        len(lines),
+    )
+    section = lines[start:end]
+    llm_visible = len(filter_menu_llm_modules(get_llm_module_names()))
+    total = len(feature_switch_registry)
+    expect_nums = list(range(llm_visible + 1, llm_visible + total + 1))
 
     numbers: list[int] = []
-    for line in lines[start:end]:
+    for line in section:
         m = _PANEL_ROW.match(line)
         if not m:
             continue
         lo = int(m.group(1))
         hi = int(m.group(2)) if m.group(2) else lo
         numbers.extend(range(lo, hi + 1))
-
-    llm_visible = len(filter_menu_llm_modules(get_llm_module_names()))
-    counts = _group_counts()
-    # 表格区段只覆盖实验组 + 常规组（报告组以文本区间 + 逐项枚举给出，下标单独校验）
-    table_last = llm_visible + counts["experimental"] + counts["standard"]
-    expect = list(range(llm_visible + 1, table_last + 1))
-    if numbers != expect:
+    if numbers != expect_nums:
         findings.append(
             f"{rel(_TUI_MENU_MD)}: 功能开关编号序列 {numbers or '空'} 与派生编号 "
-            f"{expect[0]}~{expect[-1]}（LLM 菜单模块 {llm_visible} 项 + 实验 {counts['experimental']} + 常规 {counts['standard']}，连续无缺）不一致"
+            f"{expect_nums[0]}~{expect_nums[-1]}（LLM 菜单模块 {llm_visible} 项 + 功能开关 {total} 项，连续无缺）不一致"
         )
-    # 组边界：实验组末号 / 常规组起号必须与分组计数一致
-    exp_first = llm_visible + 1
-    exp_last = exp_first + counts["experimental"] - 1
-    std_first = exp_last + 1
-    std_last = std_first + counts["standard"] - 1
-    if numbers[: counts["experimental"]] != list(range(exp_first, exp_last + 1)):
-        findings.append(f"{rel(_TUI_MENU_MD)}: 实验组编号应为 {exp_first}~{exp_last}（共 {counts['experimental']} 项）")
-    if numbers[counts["experimental"] : counts["experimental"] + counts["standard"]] != list(
-        range(std_first, std_last + 1)
-    ):
-        findings.append(f"{rel(_TUI_MENU_MD)}: 常规组编号应为 {std_first}~{std_last}（共 {counts['standard']} 项）")
 
-    m = _REPORT_RANGE.search(doc_text)
-    rep_first = std_last + 1
-    rep_last = rep_first + counts["report"] - 1
-    if not m:
-        findings.append(f"{rel(_TUI_MENU_MD)}: 报告块未标注「报告章节与增强（面板编号 {rep_first}-{rep_last}）」")
-    elif (int(m.group(1)), int(m.group(2))) != (rep_first, rep_last):
+    # 四组块标题区间：「组短名（面板编号 X-Y）」与组计数派生边界逐一比对
+    section_text = "\n".join(section)
+    cursor = llm_visible + 1
+    for group in GROUP_ORDER:
+        name = _group_doc_name(group)
+        first = cursor
+        last = cursor + len(switches_in_group(group)) - 1
+        m = _GROUP_PANEL_RANGE[group].search(section_text)
+        if not m:
+            findings.append(f"{rel(_TUI_MENU_MD)}: 缺少组块标题「{name}（面板编号 {first}-{last}）」")
+        elif (int(m.group(1)), int(m.group(2))) != (first, last):
+            findings.append(
+                f"{rel(_TUI_MENU_MD)}: 组「{name}」块标题编号 {m.group(1)}-{m.group(2)} 与派生区间 {first}-{last} 不一致"
+            )
+        cursor = last + 1
+
+    # features.json 键名 → 菜单编号映射表：全量、按面板顺序、组名一致
+    got_pairs: list[tuple[str, int, str]] = []
+    for line in section:
+        m = _PANEL_KEY_MAP_ROW.match(line)
+        if m and m.group(1) in feature_switch_registry:
+            got_pairs.append((m.group(1), int(m.group(2)), m.group(3)))
+    expect_pairs: list[tuple[str, int, str]] = []
+    cursor = llm_visible + 1
+    for group in GROUP_ORDER:
+        name = _group_doc_name(group)
+        for flag, _d in switches_in_group(group):
+            expect_pairs.append((flag, cursor, name))
+            cursor += 1
+    if got_pairs != expect_pairs:
         findings.append(
-            f"{rel(_TUI_MENU_MD)}: 报告块编号区间 {m.group(1)}-{m.group(2)} 与派生区间 {rep_first}-{rep_last} 不一致"
+            f"{rel(_TUI_MENU_MD)}: features.json 键名→菜单编号映射 {got_pairs} 与注册表派生 {expect_pairs} 不一致"
         )
-    else:
-        pairs = _REPORT_ITEM.findall(doc_text[m.start() :])
-        exp_pairs = [(str(rep_first + i), flag) for i, (flag, _d) in enumerate(switches_in_group("report"))]
-        got_pairs = [(num, flag) for num, flag in pairs if flag in feature_switch_registry]
-        if got_pairs != exp_pairs:
-            findings.append(f"{rel(_TUI_MENU_MD)}: 报告块开关编号/顺序 {got_pairs} 与注册表 {exp_pairs} 不一致")
     return findings
 
 

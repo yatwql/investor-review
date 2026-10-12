@@ -360,7 +360,7 @@ def is_enable_history(config: dict | None = None) -> bool:
 
 
 def is_enable_data_quality(config: dict | None = None) -> bool:
-    """数据质量仪表盘子模块是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_REPORT``）。
+    """数据质量仪表盘子模块是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_ANALYSIS``）。
 
     取值来自功能开关注册表（``features.data_quality``，数据质量仪表盘为长期可信核心，出厂默认开），可用 `features.json`
     覆盖；``config`` 形参仅为兼容既有调用签名保留，**取值不再读它**。
@@ -374,7 +374,7 @@ def is_enable_data_quality(config: dict | None = None) -> bool:
 
 
 def is_enable_candidate_compare(config: dict | None = None) -> bool:
-    """候选基金比较子表是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_REPORT``）。
+    """候选基金比较子表是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_ANALYSIS``）。
 
     取值来自功能开关注册表（``features.candidate_compare``，出厂默认关），可用 `features.json`
     覆盖；``config`` 形参仅为兼容既有调用签名保留，**取值不再读它**。
@@ -388,7 +388,7 @@ def is_enable_candidate_compare(config: dict | None = None) -> bool:
 
 
 def is_enable_financial_report_digest(config: dict | None = None) -> bool:
-    """持仓个股财报摘要章是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_REPORT``）。
+    """持仓个股财报摘要章是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_STANDALONE``）。
 
     取值来自功能开关注册表（``features.financial_report_digest``，出厂默认关（需 DataSinking key）），可用 `features.json`
     覆盖；``config`` 形参仅为兼容既有调用签名保留，**取值不再读它**。
@@ -439,7 +439,7 @@ def datasink_feature_ready(config: dict | None = None) -> bool:
 
 
 def is_enable_market_sentiment(config: dict | None = None) -> bool:
-    """市场情绪章是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_REPORT``）。
+    """市场情绪章是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_ANALYSIS``）。
 
     取值来自功能开关注册表（``features.market_sentiment``，出厂默认关），可用 `features.json`
     覆盖；``config`` 形参仅为兼容既有调用签名保留。
@@ -453,7 +453,7 @@ def is_enable_market_sentiment(config: dict | None = None) -> bool:
 
 
 def is_enable_financial_indicator(config: dict | None = None) -> bool:
-    """财务指标章是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_REPORT``）。
+    """财务指标章是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_STANDALONE``）。
 
     取值来自功能开关注册表（``features.financial_indicator``，出厂默认关（数据驱动）），可用 `features.json`
     覆盖；``config`` 形参仅为兼容既有调用签名保留，**取值不再读它**。
@@ -467,7 +467,7 @@ def is_enable_financial_indicator(config: dict | None = None) -> bool:
 
 
 def is_enable_cost_lots(config: dict | None = None) -> bool:
-    """成本流水子模块是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_REPORT``）。
+    """成本流水子模块是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_ANALYSIS``）。
 
     取值来自功能开关注册表（``features.cost_lots``，出厂默认关），可用 `features.json`
     覆盖；``config`` 形参仅为兼容既有调用签名保留，**取值不再读它**。
@@ -481,7 +481,7 @@ def is_enable_cost_lots(config: dict | None = None) -> bool:
 
 
 def is_enable_valuation_percentile(config: dict | None = None) -> bool:
-    """估值分位子模块是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_REPORT``）。
+    """估值分位子模块是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_ANALYSIS``）。
 
     取值来自功能开关注册表（``features.valuation_percentile``，出厂默认关），可用 `features.json`
     覆盖；``config`` 形参仅为兼容既有调用签名保留，**取值不再读它**。
@@ -495,7 +495,7 @@ def is_enable_valuation_percentile(config: dict | None = None) -> bool:
 
 
 def is_enable_market_temperature(config: dict | None = None) -> bool:
-    """市场温度子模块是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_REPORT``）。
+    """市场温度子模块是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_ANALYSIS``）。
 
     取值来自功能开关注册表（``features.market_temperature``，出厂默认开；数据不可用时该行静默省略），可用 `features.json`
     覆盖；``config`` 形参仅为兼容既有调用签名保留，**取值不再读它**。
@@ -509,7 +509,7 @@ def is_enable_market_temperature(config: dict | None = None) -> bool:
 
 
 def is_enable_industry_beta(config: dict | None = None) -> bool:
-    """行业 Beta 子表是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_REPORT``）。
+    """行业 Beta 子表是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_ANALYSIS``）。
 
     取值来自功能开关注册表（``features.industry_beta``，出厂默认关），可用 `features.json`
     覆盖；``config`` 形参仅为兼容既有调用签名保留，**取值不再读它**。
@@ -523,7 +523,7 @@ def is_enable_industry_beta(config: dict | None = None) -> bool:
 
 
 def is_enable_fund_purchase_limit(config: dict | None = None) -> bool:
-    """基金申购限购列是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_REPORT``）。
+    """基金申购限购列是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_ANALYSIS``）。
 
     取值来自功能开关注册表（``features.fund_purchase_limit``，出厂默认开），可用 `features.json`
     覆盖；``config`` 形参仅为兼容既有调用签名保留，**取值不再读它**。

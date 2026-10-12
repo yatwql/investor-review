@@ -365,7 +365,7 @@ class TestExcelExperimentalNotice(unittest.TestCase):
         self.assertNotIn("⚗", self._sheet_text(ws))
 
     def test_notice_lists_enabled_display_names(self):
-        """启用项按显示名逐项列出并给总项数；已转正开关不计入（回归：辩论转正后清单只收实验组）。"""
+        """启用项按显示名逐项列出并给总项数；已转正开关不计入（回归：辩论转正后清单只收实验项）。"""
         from src.python.config.features import set_feature_enabled
 
         set_feature_enabled("llm_debate_procon", True)

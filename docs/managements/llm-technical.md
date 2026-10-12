@@ -1273,7 +1273,7 @@ reload_pricing() → 合并 llm_settings.json → pricing
 
 所有键名由 `get_known_llm_settings_keys()` 统一校验。新增 LLM 模块只需在 registry.py 注册表中添加一行 `DataModuleDef`，无需修改 config 校验逻辑。
 
-> **辩论模块派生**：3 个辩论模块（`debate_pro`/`debate_con`/`debate_synthesis`，`settings_suffix` 同规则）同样按每模块 9 键派生（如 `model_debate_pro`、`system_prompt_debate_con`），使 `enabled_llm` 合法子键共 **10** 个（7 标准 + 3 辩论）。辩论开关实际由 `features.json` 的报告章节与增强组 Flag（`llm_debate_procon` 默认关 / `llm_debate_conditional` 默认开，两者相邻可查）控制，集中度问答段内建于辩论流程，`enabled_llm` 辩论子键仅属校验层合法键，不在菜单 [S] 展示（由 `tui_menu.LLM_MENU_HIDDEN_KEYS` 隐藏），注册表保留以维持缓存 TTL/前缀清理。
+> **辩论模块派生**：3 个辩论模块（`debate_pro`/`debate_con`/`debate_synthesis`，`settings_suffix` 同规则）同样按每模块 9 键派生（如 `model_debate_pro`、`system_prompt_debate_con`），使 `enabled_llm` 合法子键共 **10** 个（7 标准 + 3 辩论）。辩论开关实际由 `features.json` 的分析增强组 Flag（`llm_debate_procon` 默认关 / `llm_debate_conditional` 默认开，两者相邻可查）控制，集中度问答段内建于辩论流程，`enabled_llm` 辩论子键仅属校验层合法键，不在菜单 [S] 展示（由 `tui_menu.LLM_MENU_HIDDEN_KEYS` 隐藏），注册表保留以维持缓存 TTL/前缀清理。
 
 ### 12.3 报告深度档位（`llm_report_depth`）
 

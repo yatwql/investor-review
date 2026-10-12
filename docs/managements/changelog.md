@@ -9,8 +9,11 @@
 
 ## [0.12.12-dev] - 开发中（未发布）
 
-
 （本次发布内容见下方归档索引）
+
+### Added
+
+- **功能开关面板分组重构（plan-120）**：功能开关分组从生命周期三组（实验 / 常规 / 报告章节与增强）切换为**作用域四组**——📊 呈现与体验（2）→ 🔍 分析增强·既有章内追加（14）→ 📑 独立章节与回放（6）→ ⚙ 机制与诊断（9，含实验项）；生命周期降为注册表 `FeatureSwitchDef.experimental` 独立字段（`--experiment` 取值域、CLI 帮助清单与页脚实验自述改看该字段，成员不变：决策跨期反思闭环 / 报告对话式追问）。**零行为变化**：31 键、默认值、`affects_report`、产物自述与报告字节全等；转正语义改为「摘除 experimental 身份」（作用域不变则原地留块，面板入口不随转正消失）。TUI `[S]` 面板按四组分块（编号 8-38 连续派生）、Web 配置面板 surface 改发 `groups` 四组（`report_switches` 键移除、实验项 ⚗ 逐行标记）、守护 `_format` 改注册表动态派生并新增旧三组名残留检测；四组文案与面板编号同步 requirements / technical / developer-guide / testplan 及各手册。落地设计见 [`feature-switch-grouping-redesign.md`](../plan/feature-switch-grouping-redesign.md)。
 
 ## 归档
 

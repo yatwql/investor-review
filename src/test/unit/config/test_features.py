@@ -22,15 +22,16 @@ import pytest
 from src.python.config.features import (
     EXPERIMENT_ALL,
     FEATURE_FLAGS,
-    GROUP_EXPERIMENTAL,
+    GROUP_ANALYSIS,
     GROUP_LABELS,
+    GROUP_MECHANISM,
     GROUP_ORDER,
-    GROUP_STANDARD,
     FeatureSwitchDef,
     _FEATURE_FLAGS_DEFAULT,
     describe_experiment_flags,
     describe_switches,
     enabled_experimental_features,
+    experimental_flags,
     feature_switch_registry,
     is_experimental_switch,
     load_feature_overrides,
@@ -48,8 +49,8 @@ _REGISTRY_FILE = _PROJECT_ROOT / "src" / "python" / "config" / "features.py"
 
 
 def _experimental_flags() -> set[str]:
-    """实验组开关名集合（注册表是唯一来源，测试也不另写清单）。"""
-    return {flag for flag, _d in switches_in_group(GROUP_EXPERIMENTAL)}
+    """实验项开关名集合（注册表 `experimental` 字段是唯一来源，测试也不另写清单）。"""
+    return {flag for flag, _d in experimental_flags()}
 
 
 @pytest.mark.unit
@@ -72,7 +73,7 @@ class TestResolveExperimentFlags:
     def test_promoted_flag_rejected_after_leaving_experiment_group(self):
         """已转正的开关不再被 ``--experiment`` 接受——它已不是实验项。
 
-        转正的语义边界：``--experiment`` 的取值域取注册表实验组，转正后该开关
+        转正的语义边界：``--experiment`` 的取值域取注册表 ``experimental`` 字段，转正后该开关
         改由 ``--feature NAME=VALUE``（全域双向）或 features.json 控制，若仍被
         ``--experiment`` 接受，用户会以为它还是实验开关。
         """
@@ -90,7 +91,7 @@ class TestResolveExperimentFlags:
 
     def test_resolve_every_registry_entry(self):
         """注册表中每个实验功能的开关名与显示名均可解析。"""
-        for flag, definition in switches_in_group(GROUP_EXPERIMENTAL):
+        for flag, definition in experimental_flags():
             by_flag, unknown_flag = resolve_experiment_flags([flag])
             by_name, unknown_name = resolve_experiment_flags([definition.label])
             assert by_flag == {flag}, f"开关名解析失败: {flag}"
@@ -125,17 +126,17 @@ class TestResolveExperimentFlags:
     def test_describe_lists_all_entries(self):
         """清单描述串覆盖全部开关名与显示名。"""
         text = describe_experiment_flags()
-        for flag, definition in switches_in_group(GROUP_EXPERIMENTAL):
+        for flag, definition in experimental_flags():
             assert flag in text
             assert definition.label in text
 
     def test_experiment_group_excludes_standard_switches(self):
-        """常规开关不得混进实验清单——否则会被当实验项写进产物自述。"""
+        """非实验开关不得混进实验清单——否则会被当实验项写进产物自述。"""
         assert "metrics_enabled" not in _experimental_flags()
         assert "doctor_check" not in _experimental_flags()
         assert "datasource_adapter" not in _experimental_flags()
         assert is_experimental_switch("metrics_enabled") is False
-        # 转正入常规块的读侧增强同理：混进实验清单会被当成「非默认产物」写进自述
+        # 转正后的读侧增强同理：混进实验清单会被当成「非默认产物」写进自述
         assert "deterministic_signal" not in _experimental_flags()
         assert "decision_header_parse" not in _experimental_flags()
 
@@ -162,7 +163,7 @@ class TestEnabledExperimentalFeatures:
         """按注册表顺序返回；已转正开关即使启用也不进清单。"""
         from src.python.config.features import set_feature_enabled
 
-        # 故意先启用已转正的 llm_debate_procon（实验组仅剩 decision_reflection）
+        # 故意先启用已转正的 llm_debate_procon（实验清单只收 experimental 项，此处只启用其一）
         set_feature_enabled("llm_debate_procon", True)
         set_feature_enabled("decision_reflection", True)
 
@@ -194,13 +195,13 @@ class TestReportAffectingClassification:
             assert isinstance(definition.affects_report, bool), f"{flag} 的 affects_report 须为布尔"
 
     def test_entry_only_feature_excluded_from_notice(self, monkeypatch):
-        """只影响入口可见性的项不进清单（合成项验证，当前实验组恰无此类成员）。"""
+        """只影响入口可见性的项不进清单（合成项验证，当前实验项恰无此类成员）。"""
         from src.python.config import features
 
         monkeypatch.setitem(
             features.feature_switch_registry,
             "ui_only_probe",
-            FeatureSwitchDef("仅入口探针", "只改面板显隐", GROUP_EXPERIMENTAL, False, False),
+            FeatureSwitchDef("仅入口探针", "只改面板显隐", GROUP_MECHANISM, False, False, experimental=True),
         )
         monkeypatch.setitem(features.FEATURE_FLAGS, "ui_only_probe", True)
         monkeypatch.setitem(features.FEATURE_FLAGS, "decision_reflection", True)
@@ -236,7 +237,7 @@ class TestDoctorCheckPromotion:
         assert get_feature_defaults()["doctor_check"] is True
 
     def test_not_in_experimental_registry(self):
-        """不在实验组：不再进产物自述（面板可见性由常规组承接，转正不丢入口）。"""
+        """非实验项：不进产物自述（面板可见性由机制与诊断组承接，转正不丢入口）。"""
         assert "doctor_check" not in _experimental_flags()
         assert is_experimental_switch("doctor_check") is False
 
@@ -258,7 +259,8 @@ class TestDatasourceAdapterPromotion:
     由 ``test_quote_adapter_parity.py`` 逐源锁定），所以「打开它」对用户没有可
     感知收益，不该以默认关的形态摆一个不可理解的选择；而默认关的实际代价是
     生产路径从不执行适配器分支，新数据源/新字段的契约得不到实跑覆盖。故转正为
-    常规开关、默认开启；开关保留为回退杠杆（features.json 置 false 即回退）。
+    默认开启（摘除实验身份，作用域归机制与诊断组）；开关保留为回退杠杆
+    （features.json 置 false 即回退）。
     """
 
     def test_default_enabled(self):
@@ -267,7 +269,7 @@ class TestDatasourceAdapterPromotion:
         assert get_feature_defaults()["datasource_adapter"] is True
 
     def test_not_in_experimental_registry(self):
-        """不在实验组：不再进产物自述（面板可见性由常规组承接，转正不丢入口）。"""
+        """非实验项：不进产物自述（面板可见性由机制与诊断组承接，转正不丢入口）。"""
         assert "datasource_adapter" not in _experimental_flags()
         assert is_experimental_switch("datasource_adapter") is False
 
@@ -294,11 +296,11 @@ class TestDatasourceAdapterPromotion:
 
 @pytest.mark.unit
 class TestReadSidePromotion:
-    """读侧增强的转正：默认开、不在实验组、关门仍有效、默认路径真的走新实现。
+    """读侧增强的转正：默认开、非实验项、关门仍有效、默认路径真的走新实现。
 
     这批开关会改变产物内容，但代价面为零：只改提示词或加标注，**不增 LLM 调用
-    次数**。写账本的 ``decision_reflection`` 仍留实验组（真实账本积累待验证）；
-    换调用次数的 ``llm_debate_procon`` 已转正入报告章节与增强组（默认关，用户
+    次数**。写账本的 ``decision_reflection`` 仍标 ``experimental=True``（真实账本
+    积累待验证）；换调用次数的 ``llm_debate_procon`` 已转正入分析增强组（默认关，用户
     按需开启；同组相邻的 ``llm_debate_conditional`` 保持默认开）。信号沉淀账本
     （原实验开关 ``signal_ledger``）已并入 ``deterministic_signal`` 并转正：账本
     有真实数据积累验证，且写盘属幂等追加、开销可忽略。
@@ -322,7 +324,7 @@ class TestReadSidePromotion:
             assert defaults[flag] is True, f"{flag} 转正后出厂默认应为开"
 
     def test_not_in_experimental_registry(self):
-        """不在实验组：不再进产物自述（面板可见性由目标组承接，转正不丢入口）。"""
+        """非实验项：不进产物自述（面板可见性由作用域组承接，转正不丢入口）。"""
         for flag in self.PROMOTED:
             assert flag not in _experimental_flags()
             assert is_experimental_switch(flag) is False
@@ -349,7 +351,7 @@ class TestReadSidePromotion:
         assert debate_feature_cache_suffix() == "_c"
 
     def test_not_in_report_notice_after_promotion(self):
-        """已转正项不进产物自述——常规开关不再是「非默认产物」的标记。"""
+        """已转正项不进产物自述——非实验项不再是「非默认产物」的标记。"""
         from src.python.report.experimental_notice import enabled_notice_line
 
         assert enabled_notice_line() is None
@@ -447,7 +449,7 @@ class TestRegistryLiveness:
 
     @pytest.mark.unit
     def test_every_experimental_flag_is_registered(self):
-        """实验组开关都必须在默认值表登记，否则用户开了也无效。"""
+        """实验项开关都必须在默认值表登记，否则用户开了也无效。"""
         unregistered = sorted(_experimental_flags() - set(_FEATURE_FLAGS_DEFAULT))
         assert not unregistered, f"实验开关未登记到 _FEATURE_FLAGS_DEFAULT（永远开不起来）：{unregistered}"
 
@@ -480,16 +482,15 @@ class TestFeatureSwitchRegistryInvariants:
         assert sorted(grouped) == sorted(feature_switch_registry)
         assert len(grouped) == len(set(grouped)), "同一开关不得同时属两个分组"
 
-    def test_group_defaults_follow_lifecycle(self):
-        """分组即生命周期：实验组出厂关、常规组出厂开。
+    def test_experimental_items_default_off(self):
+        """跨轴唯一不变式：实验项出厂关（experimental 与 default 解耦后的剩余约束）。
 
-        「转正」= 改分组 + 改默认值两处声明；两者不一致即状态自相矛盾
-        （实验组里默认开的项会被当实验项写进产物自述，而它其实人人都在用）。
+        作用域分组不再携带生命周期语义——机制与诊断组内既有默认开的机制项，
+        也有默认关的实验项，故分组与默认值之间不再有恒定关系；但实验项若
+        默认开，会被当非默认产物写进自述而它其实人人都在用。
         """
-        for flag, d in switches_in_group(GROUP_EXPERIMENTAL):
-            assert d.default is False, f"实验组开关 {flag} 出厂默认应为关"
-        for flag, d in switches_in_group(GROUP_STANDARD):
-            assert d.default is True, f"常规组开关 {flag} 出厂默认应为开"
+        for flag, d in experimental_flags():
+            assert d.default is False, f"实验项 {flag} 出厂默认应为关"
 
     def test_labels_cover_all_groups(self):
         """每个分组都有面板标题（缺标题则分组块渲染为无名块）。"""
@@ -540,7 +541,7 @@ class TestSwitchOverrideParsing:
         assert "maybe" in str(err.value)
 
     def test_every_registry_flag_parsable(self):
-        """全部 19 项开关名都能被 ``--feature`` 取到（含常规组，这正是本批次的缺口）。"""
+        """全注册表开关名都能被 ``--feature`` 取到（含机制与诊断组，这正是本批次的缺口）。"""
         for flag in feature_switch_registry:
             assert parse_switch_override(f"{flag}=off") == (flag, False)
 
@@ -556,7 +557,7 @@ class TestSwitchOverrideParsing:
         assert resolve_switch_values([]) == []
 
     def test_describe_switches_covers_all_registry(self):
-        """帮助提示串覆盖全注册表（含常规组），供报错时列出可选项。"""
+        """帮助提示串覆盖全注册表（含四组全部开关），供报错时列出可选项。"""
         text = describe_switches()
         for flag, d in feature_switch_registry.items():
             assert flag in text
@@ -655,15 +656,15 @@ class TestDeterministicSignalRegistry:
 
 @pytest.mark.unit
 class TestFactorCatalogSwitch:
-    """因子目录开关（R-FCT-05 载体）：已转正入报告章节与增强组、默认关、--experiment 不再接受。"""
+    """因子目录开关（R-FCT-05 载体）：已转正入分析增强组、默认关、--experiment 不再接受。"""
 
     @pytest.mark.unit
-    def test_registered_in_report_group_default_off(self):
-        """已转正：注册于报告章节与增强组，出厂默认关，面板可见，开启影响产物自述。"""
-        from src.python.config.features import GROUP_REPORT, feature_switch_registry
+    def test_registered_in_analysis_group_default_off(self):
+        """已转正：注册于分析增强组，出厂默认关，面板可见，开启影响产物自述。"""
+        from src.python.config.features import feature_switch_registry
 
         switch = feature_switch_registry["factor_catalog"]
-        assert switch.group == GROUP_REPORT
+        assert switch.group == GROUP_ANALYSIS
         assert switch.default is False
         assert switch.affects_report is True
 
@@ -713,11 +714,11 @@ class TestBannerLogLevel:
 
 
 class TestProsperityFrameworkPromotion:
-    """景气度框架诊断实验转正锁定：注册表移入常规组且默认开（评分口径不变，仅分组与默认值）。"""
+    """景气度框架诊断实验转正锁定：摘除实验身份、作用域归机制与诊断组且默认开（评分口径不变）。"""
 
-    def test_promoted_to_standard_default_on(self):
+    def test_promoted_to_mechanism_default_on(self):
         sw = feature_switch_registry["prosperity_framework"]
-        assert sw.group == GROUP_STANDARD
+        assert sw.group == GROUP_MECHANISM
         assert sw.default is True
         assert sw.affects_report is True
         assert not is_experimental_switch("prosperity_framework")
@@ -726,13 +727,17 @@ class TestProsperityFrameworkPromotion:
 class TestHistoryAugmentedSwitches:
     """风险调整超额（risk_adjusted_excess）/ 危机回放（crisis_replay）注册断言。"""
 
-    def test_registered_in_report_group_default_off(self):
-        """注册于报告章节与增强组、出厂默认关、声明影响报告产物、标签说明非空。"""
+    def test_registered_in_report_scope_groups_default_off(self):
+        """注册于报告产物作用域（分析增强 / 独立章两组）、出厂默认关、声明影响报告产物、标签说明非空。"""
         from src.python.config import features
 
-        for flag in ("risk_adjusted_excess", "crisis_replay"):
+        expected_group = {
+            "risk_adjusted_excess": features.GROUP_ANALYSIS,
+            "crisis_replay": features.GROUP_STANDALONE,
+        }
+        for flag, group in expected_group.items():
             definition = features.feature_switch_registry[flag]
-            assert definition.group == features.GROUP_REPORT, f"{flag} 应属报告组"
+            assert definition.group == group, f"{flag} 应属 {group}"
             assert definition.default is False, f"{flag} 出厂应默认关"
             assert definition.affects_report is True, f"{flag} 开启改变产物，须声明影响报告"
             assert definition.label.strip()

@@ -163,7 +163,7 @@ class TestApplyFeaturesWrite:
 
         缺陷场景：量化指标开关与 ``enable_interactive_charts`` 从未出现在任何
         界面通道内，用户只能手改 features.json 才能关掉量化指标输出；本用例锁定
-        Web 面板对常规组的写入路径与实验组同源可用。
+        Web 面板对呈现与体验组开关的写入路径与实验项同源可用。
         """
         from src.python.config.features import FEATURES_FILE, is_feature_enabled
 
@@ -312,8 +312,8 @@ class TestConfigBackup:
         assert resp.get_json()["data"]["backup"] is None
 
 
-class TestReportGroupOverWeb:
-    """报告章节与增强：经 features 通道读写（注册表 GROUP_REPORT）。"""
+class TestReportScopeOverWeb:
+    """报告产物开关：经 features 通道读写（作用域横跨分析增强 / 独立章两组）。"""
 
     def test_whitelist_has_bare_flag_keys_not_config_paths(self):
 
@@ -321,13 +321,18 @@ class TestReportGroupOverWeb:
         for flag in ("data_quality", "market_temperature", "financial_indicator"):
             assert config_edit_whitelist[flag] == {"kind": "bool", "target": "features", "writer": "features"}
 
-    def test_surface_report_switches_derives_from_registry(self):
-        from src.python.config.features import GROUP_REPORT, switches_in_group
+    def test_surface_groups_derive_from_registry(self):
+        from src.python.config.features import GROUP_LABELS, GROUP_ORDER, experimental_flags, switches_in_group
         from src.python.web.config_edit import get_config_edit_surface
 
         surface = get_config_edit_surface()
-        assert set(surface["report_switches"]) == {flag for flag, _d in switches_in_group(GROUP_REPORT)}
-        assert "labels" not in surface["report_switches"]  # 显示名由 features.labels 同源下发
+        features = surface["features"]
+        assert [g["key"] for g in features["groups"]] == list(GROUP_ORDER)
+        for group in features["groups"]:
+            assert group["title"] == GROUP_LABELS[group["key"]]
+            assert set(group["switches"]) == {flag for flag, _d in switches_in_group(group["key"])}
+            assert "labels" not in group  # 显示名由 features.labels 同源下发
+        assert set(features["experimental"]) == {flag for flag, _d in experimental_flags()}
 
     def test_writing_report_flag_lands_in_features_store(self):
         from src.python.config.features import is_feature_enabled, set_feature_enabled
@@ -340,7 +345,7 @@ class TestReportGroupOverWeb:
 
 
 class TestWebPanelCoversAllSwitches:
-    """Web 配置面板的开关面必须覆盖注册表全部开关（含报告组），防渠道层漏渲染。"""
+    """Web 配置面板的开关面必须覆盖注册表全部开关（四组全覆盖），防渠道层漏渲染。"""
 
     def test_surface_flags_cover_registry(self):
         from src.python.config.features import feature_switch_registry
@@ -348,8 +353,7 @@ class TestWebPanelCoversAllSwitches:
 
         surface = get_config_edit_surface()
         shown = set()
-        for group in ("experimental", "standard"):
-            shown |= set(surface["features"][group])
-        shown |= set(surface["report_switches"])
+        for group in surface["features"]["groups"]:
+            shown |= set(group["switches"])
         missing = set(feature_switch_registry) - shown
         assert not missing, f"Web 面板未渲染这些开关：{sorted(missing)}"

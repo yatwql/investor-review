@@ -176,7 +176,7 @@ PYTHONWARNDEFAULTENCODING=1 .venv/bin/python -m pytest src/test/unit -q
 
 | 任务类型 | 必同步触点 |
 |:---------|:-----------|
-| 新报告章节 | `registry.py` 注册表 → `reports-instruction.md`（目录/章节表/分组表/可见性总表/页签上限）→ `requirements.md` 章清单 → `technical.md`（结果区计数/`report_section_order`）→ `how-to-use-tui-menu.md`（报告块编号段）→ `folders.md`（新 partial/模板）→ `report_template.html` include |
+| 新报告章节 | `registry.py` 注册表 → `reports-instruction.md`（目录/章节表/分组表/可见性总表/页签上限）→ `requirements.md` 章清单 → `technical.md`（结果区计数/`report_section_order`）→ `how-to-use-tui-menu.md`（面板编号段）→ `folders.md`（新 partial/模板）→ `report_template.html` include |
 | 新功能开关 | `features.py` 注册表 → `how-to-config.md`（开关表+计数+实验/常规分列+Web 面板行）→ `how-to-use-tui-menu.md`（开关区行与编号）→ `technical.md`（语义命名表/开关计数）→ `testplan.md`（若涉门禁） |
 | 新文件/目录 | `folders.md` 目录树（`check-doc-drift --sync` 回写统计表）→ 若为 `scripts/*`：本文件「辅助脚本速查」一览与分类段 |
 | 新测试 | `conftest.py` marker 注册（若需）→ `.venv/bin/python scripts/collect-test-coverage.py --update-docs` 回写 `test-coverage.md`/`folders.md` 计数行（不带标志仅输出供人工对照）→ 边缘用例入 `*_edge.py` |
@@ -1056,7 +1056,7 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
 
 校验技术设计文档（`technical.md`）「功能语义命名表」章节（`<!-- semantic-index:start/end -->` 标记区间）与代码的**正面一致性**，与 `check-code-traces.py` 的负面禁止互补：
 
-1. **正向**：功能开关注册表中 `GROUP_REPORT` 分组的每个键（报告章节与增强开关）必须已登记在「功能语义命名表」中（防新增开关绕过登记）
+1. **正向**：功能开关注册表中 `GROUP_ANALYSIS` / `GROUP_STANDALONE` 分组的每个键（分析增强与独立章节开关）必须已登记在「功能语义命名表」中（防新增开关绕过登记）
 2. **反向**：表中每个语义 slug 在 `src/python/` 下至少一处非注释代码引用（防僵尸条目——功能删除后表行残留）
 3. **合并章**：表下「合并章代码标识符」注声明的 sheet key 必须存在于 `core/registry.py` 的 `_REPORT_SECTION_DEFAULT` 注册表
 
@@ -1087,8 +1087,8 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
 
 1. 报告章节表（`reports-instruction.md`）↔ 章节注册表 `_REPORT_SECTION_DEFAULT`（行数/序号/名称）
 2. 章节数量断言（`页签编号 1~N` / `默认顺序（N 项` / `返回 result（N 项` / `N 个报告章节`）↔ 注册表章节数
-3. 功能开关表（`how-to-config.md` 三组区段）↔ `feature_switch_registry`（成员/默认值/无表外键）
-4. 开关分组计数断言（`⚗实验 A / 常规 B / 报告章节与增强 C`、`实验组（N 项`、`共 N 项开关`）↔ 分组计数
+3. 功能开关表（`how-to-config.md` 四组区段）↔ `feature_switch_registry`（成员/默认值/无表外键）
+4. 开关分组计数断言（`呈现与体验 A / 分析增强 B / 独立章节与回放 C / 机制与诊断 D` 连写、`<组名>（N 项`、`共 N 项开关`、旧三组名残留检测）↔ 分组计数
 5. 开关默认值断言（`` `flag` `` 后紧随「默认开/关」）↔ 注册表默认值
 6. 配置标量默认值表（`how-to-config.md`）↔ `_DEFAULT_CONFIG`
 7. LLM 默认参数表（`llm-technical.md`）↔ `_DEFAULT_LLM_SETTINGS` + 缓存 TTL 注册表
@@ -1726,35 +1726,37 @@ DataModuleDef("我的 LLM 分析", "llm_my_analysis",
 
 ### 新增功能开关检查清单
 
-全部功能开关以**注册表驱动**：`config/features.py` 的 `feature_switch_registry`（唯一事实源）一处登记，即自动出现在三个面，**不得在任一渠道层另写一份开关清单**。每条声明五个字段——显示名、说明、**分组**、**默认值**、产物影响。
+全部功能开关以**注册表驱动**：`config/features.py` 的 `feature_switch_registry`（唯一事实源）一处登记，即自动出现在三个面，**不得在任一渠道层另写一份开关清单**。每条声明六个字段——显示名、说明、**作用域分组**、**默认值**、产物影响、**实验身份**（末位可选，默认 `False`）。
 
-**先定分组，再定默认值**（两栏互不牵连，这是本注册表的核心取舍）：
+**先定作用域分组，再定默认值，实验身份独立标注**（三者解耦，这是本注册表的核心取舍）：
 
-| 分组 | 成员特征 | `default` | 面板标题 |
-|:--|:--|:--|:--|
-| `GROUP_EXPERIMENTAL` | 会改变报告产物、需真实数据验证后择机转正 | `False` | ⚗ 实验性功能（默认关闭） |
-| `GROUP_STANDARD` | 常驻能力，用户可关但默认开 | `True` | 常规开关（默认开启） |
+| 作用域分组 | 成员特征 | `default` | `experimental` | 面板标题 |
+|:--|:--|:--|:--|:--|
+| `GROUP_PRESENTATION` | 只改呈现不改内容的常驻能力 | `True` | `False` | 📊 呈现与体验（默认开启 · 只改呈现不改内容） |
+| `GROUP_ANALYSIS` | 既有章节内追加分析块/列/子表 | 多数 `False` | `False` | 🔍 分析增强·既有章内追加（默认关闭 · 在既有章节内追加分析块/列/子表） |
+| `GROUP_STANDALONE` | 新增整页签或多期回放 | `False` | `False` | 📑 独立章节与回放（默认关闭 · 新增整页签或多期回放） |
+| `GROUP_MECHANISM` | 内部机制 / 诊断接缝 / 待验证实验 | 机制项 `True`、实验项 `False` | 实验项 `True` | ⚙ 机制与诊断（内部机制 / 诊断接缝 / 待验证实验） |
 
 | # | 步骤 | 操作位置 | 产出 |
 |---|------|---------|------|
 | ① | **登记注册表** | `config/features.py` → `feature_switch_registry` | 追加 `"<flag>": FeatureSwitchDef("<显示名>", "<说明>", <分组>, <默认值>, <affects_report>)`；键名即 `features.json` 键名、`--experiment` / `--feature` 取值，显示名与说明自动下发三个面。`_FEATURE_FLAGS_DEFAULT` 是注册表的**派生投影**，不得单独在此另登记（新增开关只改注册表一处） |
-| ② | **定分组与默认值** | 同上声明第 3、4 位 | 会改变产物且未验证 → 实验组 + `False`；常驻能力 → 常规组 + `True`。两者一同决定「是否上屏」与「出厂取值」——**可见性由分组表达，不再与默认值绑定**，转正因此不会摘掉面板入口 |
+| ② | **定作用域与默认值** | 同上声明第 3、4 位（第 6 位 `experimental` 可选） | 作用域入四组之一（呈现与体验 / 分析增强 / 独立章节与回放 / 机制与诊断）；会改变产物且未验证 → `experimental=True` + `False`；常驻能力 → `False`（默认）+ `True`。作用域决定面板分块、`experimental` 决定实验身份与 `--experiment` 取值域、`default` 决定出厂取值——三者解耦，转正不会摘掉面板入口 |
 | ②′ | **回答产物影响** | 同上声明第 5 位 | 该开关**能否改变报告产物内容**——能则 `True`，仅影响入口可见性（菜单项/卡片显隐）则 `False`。答 `False` 者不进报告生成条件自述（`enabled_experimental_features()` 按此过滤）：报告是脱离本机流转的文件，列进一个不改任何字节的开关，读者会推断内容受其影响 |
 | ③ | **消费开关** | 功能实现处 | 一律经 `is_feature_enabled()` 读取；开关判定若影响提示词，须收敛在缓存后缀函数内部（见上方「缓存指纹必须读写两侧同源」） |
-| ④ | **覆盖三面** | 自动 | TUI 菜单 `[S]`（实验块 + 常规块，分块取自 `GROUP_ORDER`）/ Web 配置面板（同构两块）/ CLI `--experiment`（实验组简写）与 `--feature NAME=VALUE`（全域双向）均由注册表生成，无需改渠道代码 |
+| ④ | **覆盖三面** | 自动 | TUI 菜单 `[S]`（四组分块取自 `GROUP_ORDER`）/ Web 配置面板（同构四组，服务端动态下发）/ CLI `--experiment`（只开全部实验项的简写）与 `--feature NAME=VALUE`（全域双向）均由注册表生成，无需改渠道代码 |
 | ⑤ | **验证** | 终端 | `.venv/bin/python -m pytest src/test/unit/config/test_features.py src/test/unit/web/test_config_edit.py -v` — 注册表不变量（分组合法 / 五字段齐备 / 键集与派生投影一致）+ 配置编辑白名单覆盖全注册表 |
 
 > **菜单项/卡片可见性由开关门控**：若实验功能有常驻入口（TUI 菜单项、Web 卡片），开关关闭时必须**就地裁剪**而非渲染后置灰——TUI 侧向 `tui/tui_menu.py::FEATURE_GATED_ITEMS` 登记 `(菜单项, 开关名)`，Web 侧由 `system_info` 透出 `*_enabled` 供前端决定是否渲染；`tui/tui_menu.py::_apply_feature_gates()` 是统一裁剪点。
 
-> **「实验性」的准入与转正判据**：实验项的判定口径是「**能否改变报告产物内容**」，而非「新不新」。新增能力默认关的惯例适用于会改变产物的能力（LLM 增强、指标开关、数据结构变更）——它们需要真实数据验证，默认关是对既有用户产物的保护。但**只读诊断类能力（不改产物、不写文件、不在默认路径产生隐式网络或耗时代价）应默认开启**：默认关的实际代价是让最需要它的人（环境出故障的那批）恰好看不到它，而开启对默认输出零代价。此类能力转正后：① 声明从 `GROUP_EXPERIMENTAL` 改到 `GROUP_STANDARD` 并把 `default` 改 `True`（**一处字段改动**）——面板可见性随分组自动延续，不再出现「转正即从面板消失」；② 不再进产物自述（`affects_report` 答 `False` 且不在实验组）；③ 门控读取（`FEATURE_GATED_ITEMS` / `system_info`）**保留**——转正不等于不可关，`features.json` 置 `false` 仍可隐藏入口；④ 门控表与消费点均须有「默认配置下入口可见」的测试，只依赖 `patch` 覆盖取值的用例测不出默认值本身。系统自检（`doctor_check`）是此模式的首例。
+> **「实验性」的准入与转正判据**：实验项的判定口径是「**能否改变报告产物内容**」，而非「新不新」。新增能力默认关的惯例适用于会改变产物的能力（LLM 增强、指标开关、数据结构变更）——它们需要真实数据验证，默认关是对既有用户产物的保护。但**只读诊断类能力（不改产物、不写文件、不在默认路径产生隐式网络或耗时代价）应默认开启**：默认关的实际代价是让最需要它的人（环境出故障的那批）恰好看不到它，而开启对默认输出零代价。此类能力转正后：① `experimental` 置 `False`、`default` 改 `True`（**两处字段改动**；作用域属机制与诊断，`group` 不变）——面板可见性随分组自动延续，不再出现「转正即从面板消失」；② 不再进产物自述（`affects_report` 答 `False` 且 `experimental` 为 `False`）；③ 门控读取（`FEATURE_GATED_ITEMS` / `system_info`）**保留**——转正不等于不可关，`features.json` 置 `false` 仍可隐藏入口；④ 门控表与消费点均须有「默认配置下入口可见」的测试，只依赖 `patch` 覆盖取值的用例测不出默认值本身。系统自检（`doctor_check`）是此模式的首例。
 
-> **内部接缝类开关也应转正（第二类首例：`datasource_adapter`）**：判据与上一条同源但落在另一面——**开关两种取值下报告产物是否等价**。若等价（新实现只是把既有路径换成结构更清晰的等价实现，差异经等价性回归测试逐项锁定且不影响下游取值语义），则它既不是用户可感知的功能、也不是用户能做的选择，摆在用户面前只会让人误以为「开了有好处」，而默认关的实际代价是**生产路径从不执行新实现**、新数据源/新字段接入时才第一次实跑。此类开关转正为常规组、**默认开**：① 声明改到 `GROUP_STANDARD` 且 `default` 置 `True`；② 开关本身保留为**回退杠杆**（`features.json` 置 false 即回退既有实现）；③ 测试补四向——默认值、不在实验组、显式关闭仍走既有实现、默认配置下走新实现（见 `test_features.py::TestDatasourceAdapterPromotion`）。数据源适配契约（`datasource_adapter`）是此模式的首例。
+> **内部接缝类开关也应转正（第二类首例：`datasource_adapter`）**：判据与上一条同源但落在另一面——**开关两种取值下报告产物是否等价**。若等价（新实现只是把既有路径换成结构更清晰的等价实现，差异经等价性回归测试逐项锁定且不影响下游取值语义），则它既不是用户可感知的功能、也不是用户能做的选择，摆在用户面前只会让人误以为「开了有好处」，而默认关的实际代价是**生产路径从不执行新实现**、新数据源/新字段接入时才第一次实跑。此类开关转正为默认开（摘除实验身份，`group` 不变）：① `experimental` 置 `False` 且 `default` 置 `True`（**两处字段改动**）；② 开关本身保留为**回退杠杆**（`features.json` 置 false 即回退既有实现）；③ 测试补四向——默认值、非实验项（`--experiment` 取值域退出）、显式关闭仍走既有实现、默认配置下走新实现（见 `test_features.py::TestDatasourceAdapterPromotion`）。数据源适配契约（`datasource_adapter`）是此模式的首例。
 
-> **读侧增强类开关也应转正（第三类首例：`deterministic_signal` / `module_quality_gate` / `decision_header_parse` / `llm_debate_conditional` / `datasource_credential_ready`）**：判据落在「**开启的代价是否只在读侧**」——只在既有提示词或既有产物流水线上追加一段由**已算出的**数据派生的内容，不新增 LLM 调用次数、不写新的持久化文件、无隐式网络与耗时；且该段内容有确定的收益（方向性结论替代裸数值、结构化契约替代表格猜测、质量分级提示读者降级参考、缺凭据时给可读指引）。此类开关默认关的实际代价是**机制在生产路径从不执行**，用户手上的产物看不到这层增强；用户若逐项去 `features.json` 里打开它，等于用配置承担了本该由默认值表达的取舍（转正判据的可观测量：见 core/experiment_stats.py 的启用次数统计与 doctor 账本概览）。转正口径：① 声明改到 `GROUP_STANDARD` 且 `default` 置 `True`；② `affects_report` **照实答 `True`**——它们确实改变产物内容（`deterministic_signal` 注入信号块、`module_quality_gate` 注入质量横幅、`decision_header_parse` 追加契约行、`llm_debate_conditional` 追加情景段、`datasource_credential_ready` 改变数据源就绪行为），故 Web 面板照常带「（影响报告）」标记；③ 开关保留为关闭杠杆，`features.json` 置 false 即回到「未引入本机制」的行为；④ 凡开关改变提示词者，其缓存后缀函数（`structured_header_cache_suffix()` → `_dh`、`debate_feature_cache_suffix()` → `_c`、`prompts_signals._signal_digest_cache_suffix()`、`core.signal_ledger.summary_cache_suffix()` → `_sg`）随之由「默认返回空」变为「默认返回非空」——**升级后首次运行会换键重生成一次**，属预期行为，须在变更记录中写明；⑤ 测试补四向——默认值、不在实验组、显式关闭仍走未引入前的路径（关闭基线必须**显式**置 false，不能再依赖 `reset_feature_flags()`，它现在返回的是已转正的默认值）、默认配置下走增强路径（见 `test_features.py::TestReadSidePromotion`）。
+> **读侧增强类开关也应转正（第三类首例：`deterministic_signal` / `module_quality_gate` / `decision_header_parse` / `llm_debate_conditional` / `datasource_credential_ready`）**：判据落在「**开启的代价是否只在读侧**」——只在既有提示词或既有产物流水线上追加一段由**已算出的**数据派生的内容，不新增 LLM 调用次数、不写新的持久化文件、无隐式网络与耗时；且该段内容有确定的收益（方向性结论替代裸数值、结构化契约替代表格猜测、质量分级提示读者降级参考、缺凭据时给可读指引）。此类开关默认关的实际代价是**机制在生产路径从不执行**，用户手上的产物看不到这层增强；用户若逐项去 `features.json` 里打开它，等于用配置承担了本该由默认值表达的取舍（转正判据的可观测量：见 core/experiment_stats.py 的启用次数统计与 doctor 账本概览）。转正口径：① `experimental` 置 `False` 且 `default` 置 `True`（**两处字段改动**；作用域属机制与诊断，`group` 不变）；② `affects_report` **照实答 `True`**——它们确实改变产物内容（`deterministic_signal` 注入信号块、`module_quality_gate` 注入质量横幅、`decision_header_parse` 追加契约行、`llm_debate_conditional` 追加情景段、`datasource_credential_ready` 改变数据源就绪行为），故 Web 面板照常带「（影响报告）」标记；③ 开关保留为关闭杠杆，`features.json` 置 false 即回到「未引入本机制」的行为；④ 凡开关改变提示词者，其缓存后缀函数（`structured_header_cache_suffix()` → `_dh`、`debate_feature_cache_suffix()` → `_c`、`prompts_signals._signal_digest_cache_suffix()`、`core.signal_ledger.summary_cache_suffix()` → `_sg`）随之由「默认返回空」变为「默认返回非空」——**升级后首次运行会换键重生成一次**，属预期行为，须在变更记录中写明；⑤ 测试补四向——默认值、非实验项（`--experiment` 取值域退出）、显式关闭仍走未引入前的路径（关闭基线必须**显式**置 false，不能再依赖 `reset_feature_flags()`，它现在返回的是已转正的默认值）、默认配置下走增强路径（见 `test_features.py::TestReadSidePromotion`）。
 >
-> **章节/页签类开关转正目标是报告组（第四类首例：`holding_change_review` / `whatif_trade_cost` / `event_window_impact` 已按此转入「报告章节与增强」组，default 保持 `False`）**：判据落在「产物形态」——独立章节/页签类能力验证通过后的归宿是「报告章节与增强」组而非常规组：`default` 保持 `False`（默认产物字节不因转正变化，读者拿到的报告不因转正多出章节），面板入口随分组自动延续（实验块 → 报告块，`--experiment` 取值域随实验组身份同步退出），产物自述与启用统计随实验组身份移除（「质量可能不稳定」警示只属于未验证功能，统计的观测使命随转正完成）。转正定义因此为「**移出实验组、目标组按功能形态选**」。
+> **章节/页签类开关转正目标是独立章 / 分析增强组（第四类首例：`holding_change_review` / `whatif_trade_cost` / `event_window_impact` 已按此归入，default 保持 `False`）**：判据落在「产物形态」——独立章节/页签类能力验证通过后的归宿按作用域入独立章节与回放 / 分析增强组：`default` 保持 `False`（默认产物字节不因转正变化，读者拿到的报告不因转正多出章节），面板入口随分组自动延续，`--experiment` 取值域随 `experimental` 摘除同步退出，产物自述与启用统计随实验身份移除（「质量可能不稳定」警示只属于未验证功能，统计的观测使命随转正完成）。转正定义因此为「**摘除 experimental 身份，作用域变则同时改 group**」。
 >
-> **刻意不转正的两类（判据的反面）**：**写盘积累型**——`decision_reflection` 仍留在实验组（账本结算样本尚不足以判转正，撤销死线见 plan.md）。`signal_ledger`（确定性信号沉淀）不再单独设开关：其真实积累已验证（账本有存量数据、写盘幂等开销可忽略），并入 `deterministic_signal` 转正为常规开关；**调用次数放大型**——`llm_debate_procon` 把一次 `expert_review` 调用换成最多三次（pro → con → synthesis），默认开启直接改变费用与耗时量级，留实验组由用户按需开启。集中度问答不再受开关控制（原 `llm_debate_qa_concentration` 已撤销），改为辩论流程内建段落（阈值触发）。实验功能的真实使用情况可用 `core/experiment_stats.py`（启用计数）加 `doctor` 账本概览观测，作为转正/撤销的客观数据。
+> **刻意不转正的两类（判据的反面）**：**写盘积累型**——`decision_reflection` / `report_qa` 仍标 `experimental=True`（账本结算样本尚不足以判转正，撤销死线见 plan.md）。`signal_ledger`（确定性信号沉淀）不再单独设开关：其真实积累已验证（账本有存量数据、写盘幂等开销可忽略），并入 `deterministic_signal` 转正（摘除实验身份）。**调用次数放大型**——`llm_debate_procon` 把一次 `expert_review` 调用换成最多三次（pro → con → synthesis），默认开启直接改变费用与耗时量级，保持默认关、由用户按需开启。集中度问答不再受开关控制（原 `llm_debate_qa_concentration` 已撤销），改为辩论流程内建段落（阈值触发）。实验功能的真实使用情况可用 `core/experiment_stats.py`（启用计数）加 `doctor` 账本概览观测，作为转正/撤销的客观数据。
 
 > **诊断类命令不得依赖 config 初始化**：`doctor` / `view-logs` / `check-sources` 三个子命令在 `main()` 中**先于 `init_config` 分派**——配置损坏正是它们要定位的场景，若先初始化配置再分派，用户会在最需要诊断能力时被配置错误挡在门外（死锁）。新增诊断类命令遵循同一模式：**先分派、后初始化**，并把「命令失败」（退出码 2）与「命令跑完但结论不佳」（退出码 1）用 `_EXIT_SUCCESS` / `_EXIT_PARTIAL` / `_EXIT_SEVERE` 常量区分开，不得写裸字面量。**诊断类命令自身永不抛异常**——任何内部异常都转成一条结果行，否则等于在最需要它的时刻失效（`core/doctor.py`）。
 
