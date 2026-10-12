@@ -1,6 +1,6 @@
 """报告对话式追问（report_qa）— 面向本期报告的会话式答疑子包。
 
-设计定稿：``docs/plan/report-followup-qa-design.md``（立项评估交付的报告页对话式追问设计）。
+设计定稿：``docs/archive/v0.12.x/report-followup-qa/report-followup-qa-design.md``（立项评估交付的报告页对话式追问设计）。
 
 架构边界（依赖方向单向，llm 不感知 qa）：
 

@@ -352,7 +352,7 @@
 
 #### ✅ `plan-102` 报告对话式追问 — 立项评估完成（2026-10-11，设计定稿未实施）
 
-**完成态（立项评估交付，实施按设计分阶段推进）**：重提条件判定成立——v0.7 归档放弃「反问引导」的理由（单向报告无法承载交互）随 Web 工作台落地已解除，TUI 侧需新建轻量输入循环。设计定稿 [`docs/plan/report-followup-qa-design.md`](../../plan/report-followup-qa-design.md)：功能 slug `report_qa`，独立子包 `src/python/qa/`（`context.py` 报告 HTML 反解析上下文提取 + `session.py` 线程安全会话服务）与 `llm/` 解耦（追问非 LLM 报告模块，不进 `_MODULE_FNS`/C9 注册/无模块缓存；依赖单向 `qa → llm`）；复用 Provider Chain（C17）+ 合规声明漏斗 + `fact_checker` 回答事实校验（失败降级不阻断）+ `markdown_to_html` 同报告口径。成本四层有界：轮数硬上限（10）+ 输入 token 软上限 + 上下文单次提取会话内复用 + 历史折叠（近 6 轮）；回答不做结果缓存（命中率趋零负 ROI）；用量独立记账不污染报告周期 `_session_usage`。Web 报告页经既有 `/api/reports/` 同源路径追问（`file://` 打开降级引导文案，不引入 CORS）；开关 `report_qa` 实验组默认关（`affects_report=True`）。**明确不做**：仓位硬建议/全市场筛选（守归档边界）、报告外实时问答（零新增取数）、会话持久化、独立 HTTP 服务。实施分 5 阶段（后端会话服务 → 报告页区块 → 端到端+文档 → TUI 增量 → 转正评估），每阶段含可验收标准。
+**完成态（立项评估交付，实施按设计分阶段推进）**：重提条件判定成立——v0.7 归档放弃「反问引导」的理由（单向报告无法承载交互）随 Web 工作台落地已解除，TUI 侧需新建轻量输入循环。设计定稿 [`docs/archive/v0.12.x/report-followup-qa/report-followup-qa-design.md`](report-followup-qa/report-followup-qa-design.md)：功能 slug `report_qa`，独立子包 `src/python/qa/`（`context.py` 报告 HTML 反解析上下文提取 + `session.py` 线程安全会话服务）与 `llm/` 解耦（追问非 LLM 报告模块，不进 `_MODULE_FNS`/C9 注册/无模块缓存；依赖单向 `qa → llm`）；复用 Provider Chain（C17）+ 合规声明漏斗 + `fact_checker` 回答事实校验（失败降级不阻断）+ `markdown_to_html` 同报告口径。成本四层有界：轮数硬上限（10）+ 输入 token 软上限 + 上下文单次提取会话内复用 + 历史折叠（近 6 轮）；回答不做结果缓存（命中率趋零负 ROI）；用量独立记账不污染报告周期 `_session_usage`。Web 报告页经既有 `/api/reports/` 同源路径追问（`file://` 打开降级引导文案，不引入 CORS）；开关 `report_qa` 实验组默认关（`affects_report=True`）。**明确不做**：仓位硬建议/全市场筛选（守归档边界）、报告外实时问答（零新增取数）、会话持久化、独立 HTTP 服务。实施分 5 阶段（后端会话服务 → 报告页区块 → 端到端+文档 → TUI 增量 → 转正评估），每阶段含可验收标准。
 
 #### ✅ `plan-91` 摘要区「本期要点」与环比对照 — 已完成（2026-10-11）
 

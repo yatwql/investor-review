@@ -1,6 +1,6 @@
 """报告上下文提取（report_qa_context）— 报告 HTML → 追问上下文与持仓基线。
 
-设计落点：``docs/plan/report-followup-qa-design.md`` §3.3。
+设计落点：``docs/archive/v0.12.x/report-followup-qa/report-followup-qa-design.md`` §3.3。
 
 上下文三段（设计口径）：**报告章节文本 + 生成条件声明**（关键数据摘要由
 「汇总章全文」承担）——汇总/LLM 章全文保留，其余数据章摘要化，整体设字符上限。

@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.12.12-dev
+> 文档版本：0.12.12
 
 ## 目录
 
@@ -3556,7 +3556,7 @@ make_http_client(timeout=10.0) → httpx.Client
 - **数据流**：报告文件名（前端取自当前页 URL basename）→ 上下文（只读报告 HTML，零新增取数）→ system（边界规则 + 生成条件声明 + 本期报告内容）+ 最近 6 次问答历史（更早折叠为问题清单）+ 当前问题 → `call_llm` → `markdown_to_html` → `run_fact_check`（只检不改，警示不阻断）→ 统一信封返回。
 - **渲染期纪律**：会话态只活在 `qa/session.py` 服务内（进程内存、线程锁保护）；开关态经 `_render_template` 的 render context（`report_qa_enabled`）传递，不写 `_ENV.globals`；关闭时主模板 include 整体处于条件分支内，报告字节不变（实验项默认关、关闭时产物不变）。
 - **安全与日志**：report 参数三层同语义净化（路由/会话/上下文：basename + `.html` + 禁 `..` 与路径分隔符）；上下文在内存传递不落盘；日志只记会话 id、轮数、问题前 20 字与 token 数，不含上下文与回答正文。
-- **设计定稿与验证**：[报告对话式追问设计方案](../plan/report-followup-qa-design.md)；测试载体见 testplan.md §2.1（R-QA-01~10，批 13/14）。
+- **设计定稿与验证**：设计定稿已随功能完成归入版本归档（历史快照）；测试载体见 testplan.md §2.1（R-QA-01~10，批 13/14）。
 
 [↑ 回到顶部](#目录)
 
