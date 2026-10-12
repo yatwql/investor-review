@@ -10,20 +10,20 @@
 <!-- mode-count-table:start -->
 | `--mode` 值 | 覆盖项数 | 典型耗时 |
 |:------------|:--------:|:--------:|
-| `unit` | **9806** | ~32s |
-| `standard` | **8599** | ~31s |
+| `unit` | **9806** | ~31s |
+| `standard` | **8599** | ~32s |
 | `scenario` | **257** | ~11s |
 | `regression` | **257** | ~10s |
-| `dev-verify` | **6715** | ~23s |
-| `verify` | **9495** | ~37s |
+| `dev-verify` | **6715** | ~31s |
+| `verify` | **9495** | ~36s |
 | `integration` | **299** | ~10s |
 | `edge` | **1139** | ~15s |
-| `data` | **70** | ~3s |
-| `all` | **10159** | ~38s |
+| `data` | **70** | ~4s |
+| `all` | **10159** | ~34s |
 | `smoke` | **26** | ~3s |
 | `report` | **2555** | ~20s |
 | `all_no_unit` | **353** | ~10s |
-| `scenario_extreme` | **9** | ~3s |
+| `scenario_extreme` | **9** | ~4s |
 <!-- mode-count-table:end -->
 
 > 注：典型耗时按 开发机实测（Linux x86_64，Intel i5-13500H，12 核 16 线程，46.8 GiB 内存；pytest-xdist worker=8，即 medium 级别 = 50% 核数）。**耗时与硬件/操作系统/并行度强相关**——OS（调度器/文件系统/进程创建开销/电源管理）、CPU 或并行度不同时各模式耗时可能数倍于此，仅作相对量级参考。跨机器回填可用 `--mode bench --update-docs` 自动更新模式对应测试量 + 下方两张环境耗时对照表。
@@ -62,21 +62,21 @@
 <!-- duration-table:start -->
 | `--mode` | dragonball（2026-10-12 实测） | stallman-NB1（2026-10-02 实测） |
 |:---------|:---------------------------:|:---:|
-| `unit` | ~32s | ~3min |
-| `standard` | ~31s | ~3min |
+| `unit` | ~31s | ~3min |
+| `standard` | ~32s | ~3min |
 | `scenario` | ~11s | ~51s |
 | `regression` | ~10s | ~1min |
 | `verify,regression` | ~47s（verify+regression 顺序之和） | ~5min（verify+regression 顺序之和） |
-| `dev-verify` | ~23s | ~4min |
-| `verify` | ~37s | ~4min |
+| `dev-verify` | ~31s | ~4min |
+| `verify` | ~36s | ~4min |
 | `integration` | ~10s | ~2min |
 | `edge` | ~15s | ~1min |
-| `data` | ~3s | ~31s |
-| `all` | ~38s | ~4min |
+| `data` | ~4s | ~31s |
+| `all` | ~34s | ~4min |
 | `smoke` | ~3s | ~28s |
 | `report` | ~20s | ~2min |
 | `all_no_unit` | ~10s | ~1min |
-| `scenario_extreme` | ~3s | ~32s |
+| `scenario_extreme` | ~4s | ~32s |
 | 数据更新时间 | 2026-10-12 | 2026-10-02 |
 <!-- duration-table:end -->
 
