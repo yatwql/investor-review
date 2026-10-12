@@ -18,10 +18,10 @@
 | 测试用例 | — | — | 10,127 个 | `pytest --collect-only` 统计（`scripts/collect-test-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 11 | 5,719 | 含 README.md（184 行）；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 10 | 5,524 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 167 | 62,264 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 11 + plan 5 + archive md 149），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 11 | 11,796 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 168 | 62,601 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 11 + plan 7 + archive md 149），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 11 | 11,804 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 149 | 49,172 | 各版本 changelog/plan/review-findings 与设计文档归档（148 md 48,730 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
-| ├ plan/ | 中间设计文件 | 6 | 1207 | 在办设计文档（扁平存放，完成后随完成态移入对应版本的归档子目录）：两份 Jev 新闻关联判定文档（对照评测方案 171 行 + 类型化判定通道接入设计 198 行）+ 决策跨期反思闭环设计 + Web 展示借鉴研究（awesome-design-md，Web 展示借鉴批立项依据）+ 报告/Web 浏览器验证方法与实测结论两份（浏览器人工验证的回填载体） |
+| ├ plan/ | 中间设计文件 | 7 | ~1536 | 在办设计文档（扁平存放，完成后随完成态移入对应版本的归档子目录）：两份 Jev 新闻关联判定文档（对照评测方案 + 类型化判定通道接入设计）+ 决策跨期反思闭环设计 + 报告对话式追问设计（报告问答追问，qa 子包）+ 功能开关面板分组重构设计（作用域四分组 + 生命周期解耦）+ Web 展示借鉴研究（awesome-design-md，立项依据）+ 报告/Web 浏览器验证方法两份（浏览器人工验证回填载体） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
 
 ## 版本演进对照（最初版本 → 最新发布 → 当前开发版）
@@ -62,7 +62,7 @@ git grep -c "def test_" <rev> -- 'src/test'
 > - **测试用例数**采 `git grep -c "def test_"` 的**行数口径**（含注释/文档串中的 `def test_` 提及）：最初 491 → 当前 9,469；按更严格的「以 `def test_` 开头的定义行（含类方法缩进）」口径为 9,416；按 pytest 实际收集（含参数化展开）为 **9,940** 项（另 20 项 opt-in live 反选，全量 9,960）——**执行口径见 `test-coverage.md`「模式对应测试量」表**，该表由 `--mode bench --update-docs` 自动回填，本表第三列与之并非同一读数，仅作跨版本可比的历史尺度。
 > - **测试 / 主程序行数比**由 0.84:1（6,108 / 7,258）升至 **1.62:1**（148,918 / 91,763，最新发布点），当前工作区为 **1.62:1**（148,918 / 91,763）——测试与文档的投入增速快于主程序，是增长里最显著的结构变化。
 > - 「辅助脚本 / 报告模板 / 架构图」显示"新增"含**目录口径差异**：最初版本布局不同（测试平铺为 `src/test_*.py`、模板在 `src/tmpl/`、无 `scripts/*.py`、无 SVG）。按「HTML 模板总数」直接比是 **1 → 22**（若把 Web 首页与图表调试页也计入则 1 → 24）。
-> - 「文档」为仓库内全部 `.md` 计数（当前 180 = 根 2 + `managements` 11 + `manuals` 10 + `plan` 5 + `archive` 149 + `src/` 下 3 个代码相邻 README）；按上方统计表口径的**项目文档**为 166 份（CLAUDE.md 1 + 管理文档 11 + 中间设计 5 + 归档 149，不含手册与 README；该行随 `check-doc-drift --sync` 刷新）。
+> - 「文档」为仓库内全部 `.md` 计数（总数 = 根 2 + `managements` 11 + `manuals` 10 + `plan` + `archive` 149 + `src/` 下 3 个代码相邻 README，其中 `plan` 为在办设计文档实数）；按上方统计表口径的**项目文档**为 CLAUDE.md 1 + 管理文档 11 + 中间设计（plan 实数）+ 归档 149（不含手册与 README）。本行数字随 `check-doc-drift --sync` 刷新，`plan` 分项以文件系统实测为准。
 
 ### 同口径对照之外的定性差异
 
@@ -1437,6 +1437,7 @@ investor-util/
 │       ├── jev-news-correlation-design.md # 设计草案（独立于对话链的类型化判定通道/模板理由/降级矩阵）
 │       ├── decision-reflection-shadow-design.md # 决策跨期反思闭环设计（Vibe 影子账户参照/转正路径，plan-70）
 │       ├── report-followup-qa-design.md # 报告对话式追问设计定稿（qa 独立子包/上下文从报告 HTML 提取/双端入口/5 阶段可验收计划，plan-102 评估交付）
+│       ├── feature-switch-grouping-redesign.md # 功能开关面板分组重构设计（作用域四分组 + 生命周期解耦 experimental 字段/守护脚本先行/4 迭代可验收，plan-120）
 │       ├── report-browser-verification.md # 报告浏览器验证方法与实测结论（六项拆分：CDP 自动化子项实测 + 人工步骤 + 复验清单，rf-113 验证载体）
 │       └── web-browser-verification.md # Web 浏览器验证方法与实测结论（五类 37 断言实测 + 人工步骤 + 复验清单，rf-257 验证载体）
 │
