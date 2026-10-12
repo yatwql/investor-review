@@ -51,11 +51,27 @@
 
 ## 📸 实际报告效果
 
-由示例持仓（公开指数 ETF，本机真实行情）生成的 HTML 报告实景：
+由**全新虚构样例持仓**（两账户 · 10 只多资产混合：个股 / 场外基金 / ETF / 债基 / 货基，纯编造份额成本，本机真实行情）生成的 HTML 报告实景，全量报告（全部功能开关 + 六个 LLM 模块全开）：
 
-![报告首屏：目录导航与盈亏汇总](src/static/report-overview.png)
+![报告首屏：完整目录导航与章节入口](src/static/report-overview.png)
+
+![盈亏汇总与组合持仓概况](src/static/report-toc.png)
 
 ![交互图表：资产构成与穿透行业分布](src/static/report-charts.png)
+
+## 🖥️ 界面实景
+
+**TUI 交互模式**——全键盘主菜单（19 项，方向键 + 字母直达，页头常驻状态行）：
+
+![TUI 主菜单](src/static/tui-menu.png)
+
+**Web 浏览器模式**——标签页工作台（上传持仓 → 选格式 → 生成 → 预览下载）：
+
+![Web 工作台：生成报告](src/static/web-workbench.png)
+
+**Web 配置编辑面板**（与 TUI 菜单同源，即改即存）：
+
+![Web 配置编辑](src/static/web-config.png)
 
 ## 环境要求
 
