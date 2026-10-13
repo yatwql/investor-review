@@ -18,14 +18,16 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from _checklib import MANAGEMENTS_DIR  # noqa: E402
+
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 #: 门禁命令行中的守护脚本引用形如 ``scripts/check-xxx.py --ci``
 _SCRIPT_CI = re.compile(r"scripts/(check-[\w-]+\.py) --ci")
 
-_GUIDE_MD = _REPO_ROOT / "docs" / "managements" / "developer-guide.md"
+_GUIDE_MD = MANAGEMENTS_DIR / "developer-guide.md"
 _CLAUDE_MD = _REPO_ROOT / "CLAUDE.md"
-_TESTPLAN_MD = _REPO_ROOT / "docs" / "managements" / "testplan.md"
+_TESTPLAN_MD = MANAGEMENTS_DIR / "testplan.md"
 _CI_YML = _REPO_ROOT / ".github" / "workflows" / "ci.yml"
 _HOOK = _REPO_ROOT / ".githooks" / "pre-commit"
 

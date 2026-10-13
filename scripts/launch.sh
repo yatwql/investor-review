@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # scripts/launch.sh - 投资分析 TUI 启动脚本 (Linux)
 # Encoding: UTF-8 (no BOM)
 

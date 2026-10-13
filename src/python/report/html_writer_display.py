@@ -52,7 +52,21 @@ def _build_temperature_display(market_temperature_data: dict | None) -> dict | N
     Returns:
         含 available/score/tier/components/index_name/disclaimer 的展示 dict，或 None。
     """
-    from src.python.analysis.market_temperature import TEMPERATURE_DISCLAIMER
+    from src.python.analysis.market_temperature import (
+        MA_WINDOW,
+        TEMPERATURE_DISCLAIMER,
+        VOL_WINDOW,
+        W_MA_DEVIATION,
+        W_PERCENTILE,
+        W_VOLATILITY,
+    )
+    from src.python.analysis.valuation_percentile import (
+        HIGH_BOUND,
+        LOW_BOUND,
+        TIER_FAIR,
+        TIER_OVERVALUED,
+        TIER_UNDERVALUED,
+    )
 
     if not market_temperature_data:
         return None
@@ -85,10 +99,23 @@ def _build_temperature_display(market_temperature_data: dict | None) -> dict | N
             "ma_deviation": f"{dev * 100:+.1f}%",
             "volatility": f"{vol * 100:.1f}%",
         }
+    # 说明行文案由计算层权重/阈值常量单源派生（改常量文案自动跟随，不写死数字）
+    methodology = (
+        f"温度分 = 第一因子分位（估值分位优先，回落点位分位）×{W_PERCENTILE:.0%}"
+        f" + {MA_WINDOW}日均线偏离分量 ×{W_MA_DEVIATION:.0%}"
+        f" + {VOL_WINDOW}日年化波动率分量 ×{W_VOLATILITY:.0%}（反向：越波动越冷）"
+    )
+    tier_scale = (
+        f"{TIER_UNDERVALUED}（越冷越便宜）＜{LOW_BOUND:g} 分 · "
+        f"{TIER_FAIR} {LOW_BOUND:g}~{HIGH_BOUND:g} 分 · "
+        f"{TIER_OVERVALUED}（越热越贵）＞{HIGH_BOUND:g} 分（边界值归合理档）"
+    )
     return {
         "available": True,
         "score": market_temperature_data.get("score"),
         "tier": market_temperature_data.get("tier") or "合理",
+        "methodology": methodology,
+        "tier_scale": tier_scale,
         "components": components,
         "index_name": market_temperature_data.get("index_name") or "沪深300",
         "disclaimer": market_temperature_data.get("disclaimer") or TEMPERATURE_DISCLAIMER,

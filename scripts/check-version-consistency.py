@@ -39,7 +39,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_checklib）
-from _checklib import REPO_ROOT, add_common_args, rel as repo_rel  # noqa: E402
+from _checklib import MANAGEMENTS_DIR, REPO_ROOT, add_common_args, rel as repo_rel  # noqa: E402
 
 # ── 读取事实源 ──────────────────────────────────────────────
 
@@ -93,28 +93,28 @@ CHECKS.append((REPO_ROOT / "src" / "python" / "core" / "constants.py", "exact", 
 
 # Markdown 管理文档
 add_exact(REPO_ROOT / "README.md", r"> 当前版本：{v}")
-add_header(REPO_ROOT / "docs" / "managements" / "plan.md")
-add_header(REPO_ROOT / "docs" / "managements" / "technical.md")
-add_header(REPO_ROOT / "docs" / "managements" / "requirements.md")
-add_header(REPO_ROOT / "docs" / "managements" / "testplan.md")
-add_header(REPO_ROOT / "docs" / "managements" / "review-findings.md")
-add_header(REPO_ROOT / "docs" / "managements" / "llm-technical.md")
-add_header(REPO_ROOT / "docs" / "managements" / "folders.md")
+add_header(MANAGEMENTS_DIR / "plan.md")
+add_header(MANAGEMENTS_DIR / "technical.md")
+add_header(MANAGEMENTS_DIR / "requirements.md")
+add_header(MANAGEMENTS_DIR / "testplan.md")
+add_header(MANAGEMENTS_DIR / "review-findings.md")
+add_header(MANAGEMENTS_DIR / "llm-technical.md")
+add_header(MANAGEMENTS_DIR / "folders.md")
 # folders.md 版本演进对照表「当前开发版」列头版本号（同文件第二条断言，
 # 与版本头双点同步——表头是文档化读数，漏改即报错）
-add_evolution_head(REPO_ROOT / "docs" / "managements" / "folders.md")
+add_evolution_head(MANAGEMENTS_DIR / "folders.md")
 # folders.md 版本演进「最新发布」列（表头 + 说明行）↔ changelog 发布指针单源
 CHECKS.append(
     (
-        REPO_ROOT / "docs" / "managements" / "folders.md",
+        MANAGEMENTS_DIR / "folders.md",
         "release_tag",
-        (REPO_ROOT / "docs" / "managements" / "changelog.md",),
+        (MANAGEMENTS_DIR / "changelog.md",),
     )
 )
-add_header(REPO_ROOT / "docs" / "managements" / "test-coverage.md")
+add_header(MANAGEMENTS_DIR / "test-coverage.md")
 # changelog 无「文档版本：」头，用 [X.Y.Z] 标题行 contains 校验
-add_contains(REPO_ROOT / "docs" / "managements" / "changelog.md", "[{v}]")
-add_header(REPO_ROOT / "docs" / "managements" / "developer-guide.md")
+add_contains(MANAGEMENTS_DIR / "changelog.md", "[{v}]")
+add_header(MANAGEMENTS_DIR / "developer-guide.md")
 
 
 # ── 校验逻辑 ────────────────────────────────────────────────

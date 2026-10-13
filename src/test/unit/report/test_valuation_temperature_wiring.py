@@ -103,6 +103,44 @@ class TestBuildTemperatureDisplay(unittest.TestCase):
         d = _build_temperature_display({"available": True})
         assert d["tier"] == "合理"
 
+    def test_methodology_and_tier_scale_derived_from_constants(self):
+        """说明行两字段由计算层权重/阈值常量单源派生（改常量文案自动跟随）。"""
+        from src.python.analysis.market_temperature import (
+            MA_WINDOW,
+            VOL_WINDOW,
+            W_MA_DEVIATION,
+            W_PERCENTILE,
+            W_VOLATILITY,
+        )
+        from src.python.analysis.valuation_percentile import (
+            HIGH_BOUND,
+            LOW_BOUND,
+            TIER_FAIR,
+            TIER_OVERVALUED,
+            TIER_UNDERVALUED,
+        )
+        from src.python.report.html_writer import _build_temperature_display
+
+        d = _build_temperature_display({"available": True, "score": 52, "tier": "合理"})
+        assert f"×{W_PERCENTILE:.0%}" in d["methodology"]
+        assert f"{MA_WINDOW}日均线偏离" in d["methodology"]
+        assert f"×{W_MA_DEVIATION:.0%}" in d["methodology"]
+        assert f"{VOL_WINDOW}日年化波动率" in d["methodology"]
+        assert f"×{W_VOLATILITY:.0%}" in d["methodology"]
+        assert TIER_UNDERVALUED in d["tier_scale"]
+        assert f"＜{LOW_BOUND:g} 分" in d["tier_scale"]
+        assert TIER_FAIR in d["tier_scale"]
+        assert f"{LOW_BOUND:g}~{HIGH_BOUND:g} 分" in d["tier_scale"]
+        assert TIER_OVERVALUED in d["tier_scale"]
+        assert f"＞{HIGH_BOUND:g} 分" in d["tier_scale"]
+
+    def test_unavailable_has_no_methodology_fields(self):
+        from src.python.report.html_writer import _build_temperature_display
+
+        d = _build_temperature_display({"available": False})
+        assert "methodology" not in d
+        assert "tier_scale" not in d
+
 
 class TestAttachValuationToPenetration(unittest.TestCase):
     """_attach_valuation_to_penetration：穿透 TOP10 附加估值分位文本。"""
@@ -575,3 +613,53 @@ class TestValuationFooterText(unittest.TestCase):
         note = valuation_footer_note({"by_code": {}, "basis_mode": "real_ttm"})
         assert "真实历史估值分位（TTM 口径" in note
         assert "价格分位代理" in note
+
+
+class TestTemperatureMethodologyTemplate:
+    """模板渲染：温度块计算逻辑/分级标准两行渲染与缺字段静默省略。"""
+
+    @staticmethod
+    def _render(temperature: dict | None) -> str:
+        from src.python.report.html_jinja_env import _ENV
+
+        tpl = _ENV.get_template("partials/summary_section.html")
+        return tpl.render(
+            summary_highlights_data=None,
+            section_numbers={"summary": 1},
+            now="2026-01-10 15:00",
+            trading_day="2026-01-10",
+            categories={},
+            update_status=None,
+            total_mv=1100.0,
+            total_cost=1000.0,
+            total_profit=100.0,
+            total_profit_rate=10.0,
+            total_today_profit=0.0,
+            today_profit_rate=0.0,
+            a_indices=[],
+            us_indices=[],
+            data_unavailable=False,
+            flow_display=None,
+            market_temperature=temperature,
+            data_status_summary=None,
+            render_data_status=lambda _d: "",
+            render_back_to_top=lambda: "",
+        )
+
+    def test_methodology_rows_rendered(self):
+        """展示映射含两字段 → 计算逻辑/分级标准行渲染且文案上屏。"""
+        from src.python.report.html_writer import _build_temperature_display
+
+        d = _build_temperature_display({"available": True, "score": 52, "tier": "合理"})
+        html = self._render(d)
+        assert "计算逻辑" in html
+        assert "分级标准" in html
+        assert d["methodology"] in html
+        assert d["tier_scale"] in html
+
+    def test_rows_silently_omitted_without_fields(self):
+        """展示映射缺两字段（旧契约）→ 两行静默省略，其余温度行不受影响。"""
+        html = self._render({"available": True, "score": 52, "tier": "合理"})
+        assert "计算逻辑" not in html
+        assert "分级标准" not in html
+        assert "52" in html  # 既有温度行照常渲染

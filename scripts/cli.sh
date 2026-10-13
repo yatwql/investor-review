@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # scripts/cli.sh - 投资分析 CLI 命令行模式 (Linux/macOS)
 # Encoding: UTF-8 (no BOM)
 #

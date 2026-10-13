@@ -164,9 +164,14 @@ from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc
 )
 
 
-def run_checks(with_test_count: bool = False) -> list[str]:
-    """跑全部检查，返回不一致描述列表（空 = 全部一致）。"""
-    docs = _scan_docs()
+def run_checks(with_test_count: bool = False, docs: dict | None = None) -> list[str]:
+    """跑全部检查，返回不一致描述列表（空 = 全部一致）。
+
+    ``docs``：受检文档内容映射；None 时自行扫描（测试/独立调用形态）。
+    CLI 入口扫描一次后传入，供 verbose 统计块复用（避免 -v 模式二次全量读）。
+    """
+    if docs is None:
+        docs = _scan_docs()
     snapshot = _collect_test_snapshot(full_buckets=True) if with_test_count else {}
     findings: list[str] = []
     findings += check_section_table(docs[_REPORTS_MD])
@@ -221,10 +226,11 @@ def main() -> None:
         if applied:
             subprocess.run(["git", "add", str(_FOLDERS_MD)], cwd=REPO_ROOT, check=False)
 
-    findings = run_checks(with_test_count=args.with_test_count)
+    scanned_docs = _scan_docs() if args.verbose else None
+    findings = run_checks(with_test_count=args.with_test_count, docs=scanned_docs)
 
     if args.verbose:
-        docs = _scan_docs()
+        docs = scanned_docs
         actual = _stats_actual()
         print(f"  受检文档 {len(docs)} 份（历史记录类 changelog/review-findings 不参与计数扫描）")
         print(

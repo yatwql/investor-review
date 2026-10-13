@@ -29,6 +29,14 @@ from pathlib import Path
 #: 仓库根目录（`scripts/` 的上一级）
 REPO_ROOT: Path = Path(__file__).resolve().parent.parent
 
+# 文档树基础路径（单源上收：文档移动/改名时各检查脚本零改动；
+# 各脚本的受检清单与豁免策略仍归各自持有，此处只提供路径锚点）
+DOCS_DIR: Path = REPO_ROOT / "docs"
+MANAGEMENTS_DIR: Path = DOCS_DIR / "managements"
+MANUALS_DIR: Path = DOCS_DIR / "manuals"
+PLAN_DOCS_DIR: Path = DOCS_DIR / "plan"
+ARCHIVE_DOCS_DIR: Path = DOCS_DIR / "archive"
+
 
 def _force_utf8_stream(stream: object) -> None:
     """把非 UTF-8 的真实文本流收敛到 UTF-8（已是 UTF-8 / 非 TextIOWrapper 则无操作）。
