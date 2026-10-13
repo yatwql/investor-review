@@ -195,6 +195,10 @@
                     </td>
                 </tr>
                 {% endif %}
+                {% if market_temperature.methodology %}
+                <tr><td>计算逻辑</td><td style="font-size: var(--fs-table-sm); color: #888;">{{ market_temperature.methodology }}</td></tr>
+                <tr><td>分级标准</td><td style="font-size: var(--fs-table-sm); color: #888;">{{ market_temperature.tier_scale }}</td></tr>
+                {% endif %}
                 <tr><td>注</td><td style="font-size: var(--fs-table-sm); color: #888;">{{ market_temperature.disclaimer }}</td></tr>
             </table>
             {% endif %}
