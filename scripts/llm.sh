@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # scripts/llm.sh - 一键生成完整报告（含 LLM 分析章节）(Linux/macOS)
 # Encoding: UTF-8 (no BOM)
 #

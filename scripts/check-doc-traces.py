@@ -102,6 +102,9 @@ __all__ = [
 ]
 
 from _checklib import (  # noqa: E402
+    MANAGEMENTS_DIR,
+    MANUALS_DIR,
+    PLAN_DOCS_DIR,
     REPO_ROOT,
     add_common_args,
     conclusion_cache_load,
@@ -111,8 +114,8 @@ from _checklib import (  # noqa: E402
 
 README_PATH = REPO_ROOT / "README.md"
 DOC_DIRS = [
-    REPO_ROOT / "docs" / "managements",
-    REPO_ROOT / "docs" / "manuals",
+    MANAGEMENTS_DIR,
+    MANUALS_DIR,
 ]
 # 豁免文档：历史/计划记录性质（changelog/review-findings/plan 记录变更、自审与计划）
 SKIP_FILES = {"changelog.md", "review-findings.md", "plan.md"}
@@ -467,7 +470,7 @@ def _iter_docs(trace_exempt: bool = False) -> list[Path]:
             for fpath in sorted(doc_dir.rglob("*.md")):
                 if fpath.name in SKIP_FILES:
                     docs.append(fpath)
-        plan_dir = REPO_ROOT / "docs" / "plan"
+        plan_dir = PLAN_DOCS_DIR
         if plan_dir.exists():
             docs.extend(sorted(plan_dir.rglob("*.md")))
         return docs
@@ -483,11 +486,6 @@ def _iter_docs(trace_exempt: bool = False) -> list[Path]:
                 continue
             docs.append(fpath)
     return docs
-
-
-def _cache_inputs() -> list[Path]:
-    """结论缓存输入面：受检文档全集（复用 `_iter_docs` 两态走查，与扫描面严格一致）。"""
-    return [*_iter_docs(trace_exempt=False), *_iter_docs(trace_exempt=True)]
 
 
 def _render_summary(total: int, high: int, low: int, summary: dict[str, int]) -> int:
@@ -528,7 +526,10 @@ def main() -> int:
     args = parser.parse_args()
 
     # 结论缓存（仅 --ci 加载）：命中则逐字回放上次结论（通过与发现都缓存）
-    cache_inputs = _cache_inputs()
+    # 受检文档两态列表一次构造，指纹与扫描循环复用（避免同次运行 4 遍目录走查）
+    regular_docs = _iter_docs(trace_exempt=False)
+    exempt_docs = _iter_docs(trace_exempt=True)
+    cache_inputs = [*regular_docs, *exempt_docs]
     if args.ci:
         replay = _replay_conclusion(conclusion_cache_load("doc_traces", [Path(__file__)], cache_inputs))
         if replay is not None:
@@ -571,12 +572,12 @@ def main() -> int:
                     print(f"           {text}")
 
     # 常规文档：历史痕迹 + 章节编号全量检查
-    for doc in _iter_docs(trace_exempt=False):
+    for doc in regular_docs:
         report_doc(doc, scan_file(doc, args.verbose, chapter_only=False))
 
     # trace-exempt 文档（changelog/plan/review-findings + plan 目录）：
     # 仅章节编号检查（版本号等历史痕迹合法，不检查）
-    for doc in _iter_docs(trace_exempt=True):
+    for doc in exempt_docs:
         report_doc(doc, scan_file(doc, args.verbose, chapter_only=True))
 
     conclusion_cache_save(

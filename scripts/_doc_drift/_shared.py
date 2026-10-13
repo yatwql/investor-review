@@ -13,16 +13,16 @@ import subprocess
 import sys
 from importlib import metadata
 from pathlib import Path
-from _checklib import REPO_ROOT, rel
+from _checklib import MANAGEMENTS_DIR, MANUALS_DIR, REPO_ROOT, rel
 
 
 _README = REPO_ROOT / "README.md"
 
 
-_MANUALS = REPO_ROOT / "docs" / "manuals"
+_MANUALS = MANUALS_DIR
 
 
-_MANAGEMENTS = REPO_ROOT / "docs" / "managements"
+_MANAGEMENTS = MANAGEMENTS_DIR
 
 
 _FOLDERS_MD = _MANAGEMENTS / "folders.md"

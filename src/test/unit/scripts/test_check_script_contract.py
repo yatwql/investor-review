@@ -124,8 +124,18 @@ class TestCliSurfaceRule:
         assert len(_rule(mod.script_findings(path), "[cli-surface]")) == 1
 
     def test_with_common_args_passes(self, mod, tmp_path):
-        body = '"""说明。\n"""\nimport argparse\nfrom _checklib import add_common_args\nparser = add_common_args()\n'
+        body = (
+            '"""说明。\n"""\nimport argparse\nfrom _checklib import add_common_args\n'
+            "parser = add_common_args()\nargs = parser.parse_args()\nif args.verbose:\n    pass\n"
+        )
         assert _rule(mod.script_findings(_script(tmp_path, "check-y.py", body)), "[cli-surface]") == []
+
+    def test_unconsumed_verbose_flagged(self, mod, tmp_path):
+        """注册了 add_common_args 但不消费 args.verbose（空开关）→ 命中。"""
+        body = '"""说明。\n"""\nimport argparse\nfrom _checklib import add_common_args\nparser = add_common_args()\n'
+        findings = _rule(mod.script_findings(_script(tmp_path, "check-z.py", body)), "[cli-surface]")
+        assert len(findings) == 1
+        assert "空开关" in findings[0]
 
     def test_hook_entry_exempt(self, mod, tmp_path):
         path = _script(tmp_path, "check-task-numbering-hook.py", '"""说明。\n"""\nimport sys\n')

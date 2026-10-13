@@ -39,6 +39,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_checklib）
 from _checklib import (  # noqa: E402
+    MANAGEMENTS_DIR,
     REPO_ROOT,
     add_common_args,
     conclusion_cache_load,
@@ -48,7 +49,7 @@ from _checklib import (  # noqa: E402
     report,
 )
 
-_TECHNICAL_MD = REPO_ROOT / "docs" / "managements" / "technical.md"
+_TECHNICAL_MD = MANAGEMENTS_DIR / "technical.md"
 _FEATURES_PY = REPO_ROOT / "src/python/config/features.py"
 _CONFIG_DEFAULTS = REPO_ROOT / "src" / "python" / "config" / "_config_defaults.py"
 _SECTION_REGISTRY_PY = REPO_ROOT / "src" / "python" / "core" / "report_section_registry.py"
@@ -229,6 +230,7 @@ def run_checks(
     features_source: str,
     registry_source: str,
     code_root: Path,
+    code_texts: list[tuple[Path, str]] | None = None,
 ) -> list[str]:
     """三向校验，返回违规描述列表（空 = 全部通过）。"""
     findings: list[str] = []
@@ -241,8 +243,10 @@ def run_checks(
     merged_keys = parse_merged_sheet_keys(doc_text)
     switch_keys = feature_switch_keys(features_source)
     registry_keys = registry_section_keys(registry_source)
-    # 代码文本只收集一次（tokenize 是热点），所有 slug 复用同一份结果
-    code_texts = collect_code_texts(code_root)
+    # 代码文本只收集一次（tokenize 是热点），所有 slug 复用同一份结果；
+    # CLI 入口已预先收集时传入复用（指纹面与扫描面同源，免同次运行双 rglob）
+    if code_texts is None:
+        code_texts = collect_code_texts(code_root)
 
     # 正向：功能开关注册表键必须在表中登记
     for key in switch_keys:
@@ -274,7 +278,9 @@ def main() -> None:
     args = parser.parse_args()
 
     # 结论缓存（仅 --ci 加载）：输入面 = technical.md + src/python 全部 *.py
-    inputs = [_TECHNICAL_MD, *_CODE_ROOT.rglob("*.py")]
+    # 代码文本先收集一次，指纹输入面与 run_checks 扫描面同源复用（避免双 rglob）
+    code_texts = collect_code_texts(_CODE_ROOT)
+    inputs = [_TECHNICAL_MD, *(fpath for fpath, _text in code_texts)]
     if args.ci:
         cached = conclusion_cache_load("semantic_index", [Path(__file__)], inputs)
         if cached is not None:
@@ -284,7 +290,7 @@ def main() -> None:
     features_source = _FEATURES_PY.read_text(encoding="utf-8")
     registry_source = _SECTION_REGISTRY_PY.read_text(encoding="utf-8")
 
-    findings = run_checks(doc_text, features_source, registry_source, _CODE_ROOT)
+    findings = run_checks(doc_text, features_source, registry_source, _CODE_ROOT, code_texts=code_texts)
     conclusion_cache_save("semantic_index", [Path(__file__)], inputs, {"findings": findings})
 
     if args.verbose:

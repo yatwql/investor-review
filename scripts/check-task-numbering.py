@@ -37,10 +37,15 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享设施（_checklib）
-from _checklib import REPO_ROOT, add_common_args, report  # noqa: E402
+from _checklib import (
+    ARCHIVE_DOCS_DIR as _CK_ARCHIVE,
+    MANAGEMENTS_DIR as _CK_MANAGEMENTS,
+    add_common_args,
+    report,
+)  # noqa: E402
 
-MANAGEMENTS_DIR = REPO_ROOT / "docs" / "managements"
-ARCHIVE_DIR = REPO_ROOT / "docs" / "archive"
+MANAGEMENTS_DIR = _CK_MANAGEMENTS
+ARCHIVE_DIR = _CK_ARCHIVE
 
 # 每类编号的配置：当前管理文档 + 编号源标记名
 KINDS: dict[str, dict[str, str]] = {

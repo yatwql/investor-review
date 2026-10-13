@@ -296,12 +296,19 @@ def main() -> None:
             path_findings = geom_findings(path)
             if not args.ci:
                 _print_geom_report(path, path_findings, geom_notes(path))
+            if args.verbose:
+                status = "[!]" if path_findings else "[OK]"
+                print(f"  {status} {rel(path)}：{len(path_findings)} 处几何 finding")
             findings.extend(path_findings)
         ok_message = "[OK] SVG 几何审查通过（无越界/贴边/重叠/对齐问题）"
     elif args.command == "pixel":
+        if args.verbose:
+            print(f"[..] 像素越界检查：{args.path}（scale={args.scale:g}，右缘 {args.card_r:g}+{args.margin:g}px）")
         findings = pixel_findings(Path(args.path), args.scale, args.card_r, args.row_y0, args.row_y1, args.margin)
         ok_message = f"[OK] 卡片右缘 {args.card_r:g} 外 {args.margin:g}px 范围干净，无亮色像素越界"
     else:
+        if args.verbose:
+            print(f"[..] 文字越界检查：{args.path}（y {args.y0:g}~{args.y1:g}，scale={args.scale:g}）")
         findings = text_overflow_findings(Path(args.path), args.scale, args.card_r, args.y0, args.y1, args.margin)
         ok_message = f"[OK] 无文字色像素越出卡片右缘（{args.card_r:g} 外 {args.margin:g}px 干净）"
 

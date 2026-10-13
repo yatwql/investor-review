@@ -498,6 +498,8 @@ class _ToolRepoFixture:
             "README_FILE": tmp_path / "README.md",
             "CHANGELOG_FILE": docs / "changelog.md",
             "FOLDERS_FILE": docs / "folders.md",
+            "_MANAGEMENTS_DIR": docs,
+            "_ARCHIVE_DOCS_DIR": tmp_path / "docs" / "archive",
         }
         for name, value in paths.items():
             setattr(rel_mod, name, value)

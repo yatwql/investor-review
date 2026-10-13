@@ -33,16 +33,18 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import re
-import subprocess
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONSTANTS_FILE = REPO_ROOT / "src" / "python" / "core" / "constants.py"
 README_FILE = REPO_ROOT / "README.md"
-CHANGELOG_FILE = REPO_ROOT / "docs" / "managements" / "changelog.md"
-FOLDERS_FILE = REPO_ROOT / "docs" / "managements" / "folders.md"
-TEST_COVERAGE_FILE = REPO_ROOT / "docs" / "managements" / "test-coverage.md"
+# 文档树路径（本脚本自包含不依赖 _checklib，常量语义与其同名项一致）
+_MANAGEMENTS_DIR = REPO_ROOT / "docs" / "managements"
+_ARCHIVE_DOCS_DIR = REPO_ROOT / "docs" / "archive"
+CHANGELOG_FILE = _MANAGEMENTS_DIR / "changelog.md"
+FOLDERS_FILE = _MANAGEMENTS_DIR / "folders.md"
+TEST_COVERAGE_FILE = _MANAGEMENTS_DIR / "test-coverage.md"
 
 # P2 十守护清单（与 CLAUDE.md / testplan.md / developer-guide.md / ci.yml / pre-commit 钩子同源）
 GUARD_SCRIPTS = [
@@ -58,76 +60,32 @@ GUARD_SCRIPTS = [
     "scripts/check-file-length.py",
 ]
 
-_DEV_VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)-dev$")
-_RELEASE_VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
-_APP_VERSION_LINE_RE = re.compile(r'^APP_VERSION = "([^"]+)"', re.M)
-
-
-class ReleaseError(RuntimeError):
-    """命令无法继续（预检不过 / 输入不符合契约）；消息即用户可读原因。"""
-
-
-# ─────────────────────────── 基础执行与版本纯函数 ───────────────────────────
-
-
-def _exec(cmd: list[str], root: Path, runner=None, capture: bool = True) -> tuple[int, str, str]:
-    """执行外部命令（显式 UTF-8 解码，避免非 UTF-8 locale 下的隐式编码）。"""
-    if runner is not None:
-        return runner.run(cmd, root, capture=capture)
-    proc = subprocess.run(
-        [str(c) for c in cmd],
-        cwd=str(root),
-        encoding="utf-8",
-        errors="replace",
-        capture_output=capture,
-    )
-    return proc.returncode, proc.stdout or "", proc.stderr or ""
-
-
-def read_app_version(text: str) -> str:
-    m = _APP_VERSION_LINE_RE.search(text)
-    if not m:
-        raise ReleaseError("constants.py 中未找到 APP_VERSION 行")
-    return m.group(1)
-
-
-def render_app_version(text: str, version: str) -> str:
-    new_text, n = _APP_VERSION_LINE_RE.subn(f'APP_VERSION = "{version}"', text, count=1)
-    if n != 1:
-        raise ReleaseError("constants.py 中未找到 APP_VERSION 行")
-    return new_text
-
-
-def release_version_of(dev_version: str) -> str:
-    m = _DEV_VERSION_RE.match(dev_version)
-    if not m:
-        raise ReleaseError(f"当前版本 {dev_version} 不是 X.Y.Z-dev 形态（发布前应处于开发版）")
-    return f"{m.group(1)}.{m.group(2)}.{m.group(3)}"
-
-
-def next_dev_version_of(release_version: str) -> str:
-    m = _RELEASE_VERSION_RE.match(release_version)
-    if not m:
-        raise ReleaseError(f"{release_version} 不是 X.Y.Z 发布版形态")
-    return f"{m.group(1)}.{m.group(2)}.{int(m.group(3)) + 1}-dev"
-
-
-def render_readme_version(text: str, version: str) -> str:
-    new_text, n = re.subn(r"^(> 当前版本：)[^\s（]+", lambda m: m.group(1) + version, text, count=1, flags=re.M)
-    if n != 1:
-        raise ReleaseError("README.md 中未找到「> 当前版本：」行")
-    return new_text
-
-
-def normalize_release_title(title: str) -> str:
-    """剥离 `--title` 中多余的 `release: v… —— ` 前缀。
-
-    commit subject 由 publish 统一加前缀；title 自带前缀时会拼出双前缀
-    （发布提交实测）。剥离后为空（title 本身就是前缀）则按原样使用。
-    """
-    stripped = re.sub(r"^release:\s*v\S+\s*—+\s*", "", title.strip())
-    return stripped or title.strip()
-
+# ── 内部实现拆分（_release/ 包）：入口保留 CLI 面与路径常量，测试引用的符号原名 re-export ──
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享设施（_release 包）
+from _release._changelog_archive import (  # noqa: E402, F401 — _SECTION_NOTE 供测试经入口模块引用
+    SECTION_NOTE as _SECTION_NOTE,
+    apply_changelog_release,
+    write_archive_release,
+)
+from _release._common import ReleaseError, exec_command as _exec  # noqa: E402
+from _release._evolution import (  # noqa: E402, F401 — _line_count 供测试经入口模块引用
+    build_evolution_stats,
+    fmt_pair as _fmt_pair,
+    line_count as _line_count,
+    update_case_note,
+    update_evolution_table,
+    update_ratio_note,
+)
+from _release._versioning import (  # noqa: E402
+    DEV_VERSION_RE as _DEV_VERSION_RE,
+    RELEASE_VERSION_RE as _RELEASE_VERSION_RE,
+    next_dev_version_of,
+    normalize_release_title,
+    read_app_version,
+    release_version_of,
+    render_app_version,
+    render_readme_version,
+)
 
 def archive_paths_for(release_version: str) -> tuple[Path, str]:
     """按小版本推导归档目录与文件名（小版本号 → docs/archive/vX.Y.x/… 目录）。"""
@@ -136,90 +94,10 @@ def archive_paths_for(release_version: str) -> tuple[Path, str]:
         raise ReleaseError(f"{release_version} 不是 X.Y.Z 发布版形态")
     minor = f"{m.group(1)}.{m.group(2)}"
     name = f"archived_changelog.{minor}.x.md"
-    return REPO_ROOT / "docs" / "archive" / f"v{minor}.x" / name, name
+    return _ARCHIVE_DOCS_DIR / f"v{minor}.x" / name, name
 
 
 # ─────────────────────────── changelog 发布段迁移 ───────────────────────────
-
-_SECTION_NOTE = "（本次发布内容见下方归档索引）"
-
-
-def _find_section(text: str) -> tuple[int, int, str]:
-    """定位当前开发段（含正文），返回 (起点, 终点, 段内版本号)；终点=下一 ## 行。"""
-    header = re.search(r"^## \[([^\]]+)\] - 开发中（未发布）\s*$", text, re.M)
-    if not header:
-        raise ReleaseError("changelog 未找到「开发中（未发布）」段")
-    next_header = re.search(r"^## ", text[header.end() :], re.M)
-    if not next_header:
-        raise ReleaseError("changelog 开发段之后没有归档章节")
-    return header.start(), header.end() + next_header.start(), header.group(1)
-
-
-def apply_changelog_release(text: str, release_version: str, date: str) -> tuple[str, str]:
-    """发布段迁出：改指针、改归档索引、清空开发段并生成下一开发段。
-
-    返回 (新主文件文本, 迁出的发布段正文)。纯文本变换，不落盘。
-    """
-    section_start, section_end, current_dev = _find_section(text)
-    if current_dev != f"{release_version}-dev":
-        raise ReleaseError(f"changelog 开发段 {current_dev} 与目标发布版 {release_version} 不一致")
-
-    body = text[section_start:section_end]
-    # 迁出正文 = 段头之后到段尾注之前（尾注只属于主文件的占位说明）
-    body_core = body.split("\n", 1)[1] if "\n" in body else ""
-    body_core = re.sub(rf"^\s*\n*{re.escape(_SECTION_NOTE)}\s*$", "", body_core, flags=re.M)
-    body_core = body_core.strip("\n")
-
-    next_dev = next_dev_version_of(release_version)
-    new_section = f"## [{next_dev}] - 开发中（未发布）\n\n\n{_SECTION_NOTE}\n\n"
-
-    out = text[:section_start] + new_section + text[section_end:]
-
-    out, n_ptr = re.subn(
-        r"^(> \*\*最近发布 \[)[\d.]+(\]\*\*（)[\d-]+(）)",
-        lambda m: m.group(1) + release_version + m.group(2) + date + m.group(3),
-        out,
-        count=1,
-        flags=re.M,
-    )
-    if n_ptr != 1:
-        raise ReleaseError("changelog 未找到「最近发布」指针行")
-
-    _, archive_name = archive_paths_for(release_version)
-    idx_pat = re.compile(
-        rf"^(- \[`{re.escape(archive_name)}`\]\([^)]*\)\s*—\s*[^（]*?)"
-        r"(v[\d.]+)( ~ v[\d.]+)?（(\d{4}-\d{2}-\d{2})( ~ \d{4}-\d{2}-\d{2})?）",
-        re.M,
-    )
-    if archive_name not in out:
-        raise ReleaseError(f"changelog 归档索引中没有 {archive_name} 行（新小版本需先手工建归档文件）")
-
-    def _idx_repl(m: re.Match) -> str:
-        head, start_v, tail_v, start_d, tail_d = (
-            m.group(1),
-            m.group(2),
-            m.group(3),
-            m.group(4),
-            m.group(5),
-        )
-        end_v = f" ~ v{release_version}" if tail_v else ""
-        end_d = f" ~ {date}" if tail_d else ""
-        return f"{head}{start_v}{end_v}（{start_d}{end_d}）"
-
-    out, n_idx = idx_pat.subn(_idx_repl, out, count=1)
-    if n_idx != 1:
-        raise ReleaseError("changelog 归档索引行改写失败（格式与预期不符）")
-    return out, body_core
-
-
-def write_archive_release(archive_file: Path, release_version: str, date: str, body_core: str) -> None:
-    """把发布段正文追加到归档文件（`## [X.Y.Z] - 日期` 头，段间空行、无分隔线）。"""
-    if not archive_file.exists():
-        raise ReleaseError(f"归档文件不存在：{archive_file}")
-    old = archive_file.read_text(encoding="utf-8")
-    block = f"## [{release_version}] - {date}\n\n{body_core.strip()}\n\n"
-    archive_file.write_text(old.rstrip("\n") + "\n\n" + block.strip("\n") + "\n", encoding="utf-8")
-
 
 # ─────────────────────────── 预检 ───────────────────────────
 
@@ -374,228 +252,6 @@ def cmd_refresh(args: argparse.Namespace, runner=None) -> int:
 
 
 # ─────────────────────────── evolution ───────────────────────────
-
-
-def _line_count(data: bytes) -> int:
-    return data.count(b"\n") + (0 if data.endswith(b"\n") else 1)
-
-
-def build_evolution_stats(root: Path, runner=None) -> dict[str, int]:
-    """按 folders.md「复现方法」口径统计：git 清单 + 逐文件精确行数（工作区直读）。"""
-    rc, out, err = _exec(["git", "ls-files"], root, runner)
-    if rc != 0:
-        raise ReleaseError(f"git ls-files 失败：{err.strip()}")
-    paths = [p for p in out.splitlines() if p.strip()]
-
-    cats: dict[str, list[str]] = {"main": [], "test": [], "scripts": [], "tmpl": [], "svg": [], "md": []}
-    missing: list[str] = []
-    lines: dict[str, int] = {}
-    for rel in paths:
-        full = root / rel
-        try:
-            data = full.read_bytes()
-        except OSError:
-            missing.append(rel)
-            continue
-        lines[rel] = _line_count(data)
-        if rel.endswith(".py"):
-            if rel.startswith("src/test/"):
-                cats["test"].append(rel)
-            elif rel.startswith("src/"):
-                cats["main"].append(rel)
-            elif rel.startswith("scripts/"):
-                cats["scripts"].append(rel)
-        elif rel.endswith(".html") and rel.startswith("src/static/tmpl/"):
-            cats["tmpl"].append(rel)
-        elif rel.endswith(".svg"):
-            cats["svg"].append(rel)
-        elif rel.endswith(".md"):
-            cats["md"].append(rel)
-
-    def pair(name: str) -> tuple[int, int]:
-        fs = cats[name]
-        return len(fs), sum(lines[p] for p in fs)
-
-    main_f, main_l = pair("main")
-    test_f, test_l = pair("test")
-    scripts_f, scripts_l = pair("scripts")
-    tmpl_f, tmpl_l = pair("tmpl")
-    svg_f, svg_l = pair("svg")
-    md_f, md_l = pair("md")
-
-    test_bytes = [(root / p).read_bytes() for p in cats["test"]]
-    def_test_lines = sum(1 for data in test_bytes for ln in data.split(b"\n") if b"def test_" in ln)
-    def_test_strict = sum(1 for data in test_bytes for ln in data.split(b"\n") if ln.lstrip().startswith(b"def test_"))
-
-    five_files = main_f + test_f + scripts_f + tmpl_f + svg_f
-    five_lines = main_l + test_l + scripts_l + tmpl_l + svg_l
-    return {
-        "main_files": main_f,
-        "main_lines": main_l,
-        "test_files": test_f,
-        "test_lines": test_l,
-        "scripts_files": scripts_f,
-        "scripts_lines": scripts_l,
-        "tmpl_files": tmpl_f,
-        "tmpl_lines": tmpl_l,
-        "svg_files": svg_f,
-        "svg_lines": svg_l,
-        "md_files": md_f,
-        "md_lines": md_l,
-        "five_files": five_files,
-        "five_lines": five_lines,
-        "def_test_lines": def_test_lines,
-        "def_test_strict": def_test_strict,
-        "repo_files": len(paths),
-        "repo_lines": sum(lines[p] for p in paths),
-        "missing": len(missing),
-    }
-
-
-def _fmt_pair(files: int, lines_n: int) -> str:
-    return f"{files} 文件 / {lines_n:,} 行"
-
-
-def _growth(base_value: int, cur_value: int, override: str | None = None) -> str:
-    if override:
-        return override
-    if base_value == 0:
-        return "新增"
-    return f"{cur_value / base_value:.1f}×"
-
-
-def _cell_number(cell: str) -> int:
-    m = re.search(r"(\d[\d,]*)", cell)
-    if not m:
-        raise ReleaseError(f"基线单元格无数字：{cell!r}")
-    return int(m.group(1).replace(",", ""))
-
-
-def update_evolution_table(text: str, stats: dict[str, int], with_release: bool, date: str) -> str:
-    """改写演进对照表：指标行两列 + 增长列 + 当前开发版列头日期；`with_release` 时发布列同写。"""
-    rows: list[tuple[str, int, int, str | None]] = [
-        # (行标签锚, 发布列值, 开发列值, 增长格式覆盖)
-        ("| 主程序（", stats["main_lines"], stats["main_lines"], None),
-        ("| 测试（", stats["test_lines"], stats["test_lines"], None),
-        ("| 辅助脚本（", stats["scripts_lines"], stats["scripts_lines"], None),
-        ("| HTML 报告模板（", stats["tmpl_lines"], stats["tmpl_lines"], f"1 → {stats['tmpl_files']}"),
-        ("| 架构图示（", stats["svg_lines"], stats["svg_lines"], None),
-        ("| 文档（", stats["md_lines"], stats["md_lines"], None),
-        ("| **代码文件合计**", stats["five_files"], stats["five_files"], None),
-        ("| **代码行合计**", stats["five_lines"], stats["five_lines"], None),
-        ("| **测试用例数**", stats["def_test_lines"], stats["def_test_lines"], None),
-        ("| 仓库文件总数", stats["repo_files"], stats["repo_files"], None),
-        ("| 仓库总行数", stats["repo_lines"], stats["repo_lines"], None),
-    ]
-    out_lines: list[str] = []
-    seen: set[str] = set()
-    for line in text.split("\n"):
-        hit = next((anchor for anchor, _, _, _ in rows if line.startswith(anchor)), None)
-        if hit is None:
-            out_lines.append(line)
-            continue
-        rel_val, dev_val, override = next((r[1], r[2], r[3]) for r in rows if r[0] == hit)
-        cells = line.split("|")
-        if len(cells) < 6:
-            out_lines.append(line)
-            continue
-        base_cell = cells[2]
-        bold = "**" in cells[3]
-        pair_rows = hit in {"| 主程序（", "| 测试（", "| 辅助脚本（", "| HTML 报告模板（", "| 架构图示（", "| 文档（"}
-        if pair_rows:
-            # 行数指标行的增长比以「行数」为基准；基线以 0 开头（历史布局差异）直接判「新增」
-            if re.match(r"\s*0(?!\d)", base_cell):
-                base_val = 0
-            else:
-                ml = re.search(r"(\d[\d,]*) 文件 / (\d[\d,]*) 行", base_cell)
-                base_val = int(ml.group(2).replace(",", "")) if ml else _cell_number(base_cell)
-            files_key = {
-                "| 主程序（": "main_files",
-                "| 测试（": "test_files",
-                "| 辅助脚本（": "scripts_files",
-                "| HTML 报告模板（": "tmpl_files",
-                "| 架构图示（": "svg_files",
-                "| 文档（": "md_files",
-            }[hit]
-            rel_cell = _fmt_pair(stats[files_key], rel_val)
-            dev_cell = _fmt_pair(stats[files_key], dev_val)
-        else:
-            base_val = _cell_number(base_cell)
-            fmt = (lambda v: f"**{v:,}**") if bold else (lambda v: f"{v:,}")
-            rel_cell = fmt(rel_val)
-            dev_cell = fmt(dev_val)
-        growth = _growth(base_val, dev_val, override)
-        cells[3] = f" {rel_cell} " if with_release else cells[3]
-        cells[4] = f" {dev_cell} "
-        cells[5] = f" {growth}"
-        out_lines.append("|".join(cells))
-        seen.add(hit)
-    missing_rows = [anchor for anchor, _, _, _ in rows if anchor not in seen]
-    if missing_rows:
-        raise ReleaseError(f"演进对照表缺行：{missing_rows}")
-    result = "\n".join(out_lines)
-
-    result, n_date = re.subn(
-        r"(当前开发版（[^）]*?· 本次重跑时的工作区 · )\d{4}-\d{2}-\d{2}",
-        lambda m: m.group(1) + date,
-        result,
-        count=1,
-    )
-    if n_date != 1:
-        raise ReleaseError("演进对照表「当前开发版」列头日期模式缺失（列头格式变化时先同步本工具）")
-    return result
-
-
-def update_ratio_note(text: str, stats: dict[str, int], with_release: bool) -> str:
-    """测试/主程序行数比注释：`--release` 时最新发布点一并改写，否则只滚当前工作区。
-
-    两种目标模式任一缺失即抛 `ReleaseError`——宁可硬失败也不产出半新半旧的注释。
-    """
-    ratio = stats["test_lines"] / stats["main_lines"] if stats["main_lines"] else 0.0
-    pair = f"{stats['test_lines']:,} / {stats['main_lines']:,}"
-    if with_release:
-        text, n_release = re.subn(
-            r"升至 \*\*[\d.]+:\d\*\*（[\d,]+ / [\d,]+，最新发布点）",
-            f"升至 **{ratio:.2f}:1**（{pair}，最新发布点）",
-            text,
-            count=1,
-        )
-        if n_release != 1:
-            raise ReleaseError("比值注释「最新发布点」模式缺失（注释格式变化时先同步本工具）")
-    text, n_ws = re.subn(
-        r"当前工作区为 \*\*[\d.]+:\d\*\*（[\d,]+ / [\d,]+）",
-        f"当前工作区为 **{ratio:.2f}:1**（{pair}）",
-        text,
-        count=1,
-    )
-    if n_ws != 1:
-        raise ReleaseError("比值注释「当前工作区为」模式缺失（注释格式变化时先同步本工具）")
-    return text
-
-
-def update_case_note(text: str, stats: dict[str, int]) -> str:
-    """用例口径注释中的 grep / 严格定义行数；pytest 收集口径留人工核对提示。
-
-    目标短语在真实文档中位于行中（非行首），不做行首锚定；模式缺失即抛
-    `ReleaseError`（不静默漏更、不留滞留计数）。
-    """
-    text, n_grep = re.subn(
-        r"(最初 \d+ → 当前 )[\d,]+",
-        lambda m: m.group(1) + f"{stats['def_test_lines']:,}",
-        text,
-        count=1,
-    )
-    if n_grep != 1:
-        raise ReleaseError("用例口径注释「最初 → 当前」模式缺失（注释格式变化时先同步本工具）")
-    text, n_strict = re.subn(
-        r"口径为 [\d,]+；",
-        f"口径为 {stats['def_test_strict']:,}；",
-        text,
-        count=1,
-    )
-    if n_strict != 1:
-        raise ReleaseError("用例口径注释「口径为」模式缺失（注释格式变化时先同步本工具）")
-    return text
 
 
 def cmd_evolution(args: argparse.Namespace, runner=None) -> int:

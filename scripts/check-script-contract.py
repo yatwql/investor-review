@@ -7,7 +7,8 @@
                   节声明码集须 ⊆ {0, 2}（`_checklib.report` 返回值域）；
                   分级/环境缺失/事实源不可读等特例见 `_EXIT_CODE_WHITELIST`
   ② [cli-surface] 检查类 CLI 面：`check-*` 顶层脚本须调用 `_checklib.add_common_args`
-                  （统一 `-v/--verbose` + `--ci`）；钩子入口见 `_CLI_SURFACE_EXEMPT`
+                  （统一 `-v/--verbose` + `--ci`）且**消费** `args.verbose`（防空开关）；
+                  钩子入口见 `_CLI_SURFACE_EXEMPT`
   ③ [encoding]   文本 I/O 显式 encoding：`open()`（非二进制模式）、`Path.read_text/write_text`、
                   `subprocess` 文本模式均须显式 `encoding=`（cp936 Windows 静默编码头风险）
   ④ [test-coverage] 测试覆盖：顶层脚本须被 `src/test/` 下任一测试文件按文件名引用；
@@ -120,6 +121,17 @@ def calls_function(path: Path, func_name: str) -> bool:
     return False
 
 
+def consumes_verbose(path: Path) -> bool:
+    """是否引用了 `args.verbose`（规则② 消费侧：`add_common_args` 注册后不得留空开关）。"""
+    try:
+        tree = _parse(path)
+    except SyntaxError:
+        return False
+    return any(
+        isinstance(node, ast.Attribute) and node.attr == "verbose" for node in ast.walk(tree)
+    )
+
+
 def encoding_violations(path: Path) -> list[str]:
     """规则③：文本 I/O 缺显式 encoding 的位置清单。"""
     violations: list[str] = []
@@ -181,6 +193,8 @@ def script_findings(path: Path) -> list[str]:
 
     if is_check and name not in _CLI_SURFACE_EXEMPT and not calls_function(path, "add_common_args"):
         findings.append("[cli-surface] 未调用 _checklib.add_common_args（缺统一 -v/--ci 面）")
+    elif is_check and name not in _CLI_SURFACE_EXEMPT and not consumes_verbose(path):
+        findings.append("[cli-surface] -v/--verbose 已注册但未消费 args.verbose（空开关）")
 
     for detail in encoding_violations(path):
         findings.append(f"[encoding] {detail}")
