@@ -16,8 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
-import random
-import time
+import threading
 from typing import Any
 
 
@@ -30,13 +29,39 @@ from src.python.core.retry import (
     RetryPolicy,
     retry_transient,
 )
+from src.python.core.throttle import RateLimiter  # 间隔节流唯一原语（数据/调度/LLM 三层共用）
 
 logger = logging.getLogger("invest")
 
 _PUSH2_BASE = "https://push2.eastmoney.com/api/qt/stock/get"
 _TIMEOUT = 5.0
-# 每次请求前随机间隔（秒）：批量同速连续请求易触发服务端反爬断连
-_PUSH2_THROTTLE = (0.05, 0.2)
+#: push2 批量接口节流键（per-key 计量，RateLimiter 原语单源）
+_PUSH2_LIMIT_KEY = "eastmoney_industry"
+#: push2 批量接口最小请求间隔（秒；批量同速连续请求易触发服务端反爬断连）
+_PUSH2_MIN_INTERVAL = 0.1
+#: 抖动比例（间隔上叠加 uniform(0, 比例 × 间隔)，避免固定节奏的机器特征）
+_PUSH2_JITTER_RATIO = 0.5
+_limiter: RateLimiter | None = None
+_limiter_lock = threading.Lock()
+
+
+def _get_limiter() -> RateLimiter:
+    """push2 限速器（惰性单例；请求间隔统一走 RateLimiter 原语表达）。"""
+    global _limiter
+    if _limiter is None:
+        with _limiter_lock:
+            if _limiter is None:
+                _limiter = RateLimiter()
+    return _limiter
+
+
+def reset_eastmoney_industry_limiter() -> None:
+    """丢弃限速器单例（测试隔离用）。"""
+    global _limiter
+    with _limiter_lock:
+        _limiter = None
+
+
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     "Referer": "https://www.eastmoney.com/",
@@ -90,7 +115,7 @@ def make_push2_request(code: str, retries: int = _MAX_RETRIES) -> dict | None:
     logger.debug("东方财富 push2 请求: %s", code)
 
     def _attempt() -> str:
-        time.sleep(random.uniform(*_PUSH2_THROTTLE))
+        _get_limiter().acquire_interval(_PUSH2_LIMIT_KEY, _PUSH2_MIN_INTERVAL, jitter_ratio=_PUSH2_JITTER_RATIO)
         with make_http_client(timeout=_TIMEOUT) as client:
             resp = client.get(_PUSH2_BASE, params=params, headers=_HEADERS)
             return resp.text

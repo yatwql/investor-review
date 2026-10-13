@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
+from src.python.core.code_utils import is_six_digit_code
 from src.python.report.progress import ProgressReporter
 
 logger = logging.getLogger("invest")
@@ -53,7 +54,7 @@ def _fetch_holding_bars(code: str, name: str, days: int) -> list[dict] | None:
         return None
     elif is_qdii_extended(name) or is_bond_fund_by_name(name) or is_otc_fund_by_name(name, code):
         bars = fetch_with_incremental_fallback("history_fund_otc", code, days=days)
-    elif len(code) == 6 and code.isdigit():
+    elif is_six_digit_code(code):
         bars = fetch_with_incremental_fallback("history_fund_otc", code, days=days)
     else:
         return None

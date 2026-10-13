@@ -21,6 +21,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from src.python.core.code_utils import (
+    is_six_digit_code,
     is_a_share_stock,
     is_bond_fund_by_name,
     is_exchange_fund_code,
@@ -126,7 +127,7 @@ class PortfolioHistoryCalculator:
         elif is_otc_fund_by_name(name, code):
             logger.info("[history]%s OTC 基金→基金净值链路", _tag)
             bars = self._get_fund_history(code, days)
-        elif len(code) == 6 and code.isdigit():
+        elif is_six_digit_code(code):
             # 兜底：非 00 前缀的 6 位基金代码（如 011506、161725 等）
             logger.info("[history]%s 基金→基金净值链路", _tag)
             bars = self._get_fund_history(code, days)

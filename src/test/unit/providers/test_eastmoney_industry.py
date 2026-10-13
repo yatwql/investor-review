@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from src.python.providers.eastmoney_industry import (
     fetch_industry_and_concepts,
@@ -168,10 +168,11 @@ def _mock_httpx(text: str = "", error: type | None = None):
 
 @pytest.fixture(autouse=True)
 def _fast_throttle(monkeypatch):
-    """测试内屏蔽 push2 请求前随机间隔（节流本身由专项用例验证，其余用例不真睡）。"""
+    """测试内屏蔽 push2 请求前节流（节流本身由专项用例验证，其余用例不真睡）。"""
     from src.python.providers import eastmoney_industry as ei
 
-    monkeypatch.setattr(ei.time, "sleep", lambda _s: None)
+    # 最小间隔置 0 → RateLimiter.acquire_interval 直接放行，不触碰限速器状态
+    monkeypatch.setattr(ei, "_PUSH2_MIN_INTERVAL", 0.0)
 
 
 class TestSecid(unittest.TestCase):
@@ -494,22 +495,30 @@ class TestIndustryExtendedFields(unittest.TestCase):
             mock_push2.assert_called_once_with("600900")
 
     @patch("src.python.core.http_client.httpx.Client")
-    def test_request_applies_random_throttle(self, mock_client_cls):
-        """每次 push2 请求前随机间隔（防批量同速触发服务端反爬断连），间隔在声明档位内。"""
+    def test_request_applies_registered_throttle(self, mock_client_cls):
+        """每次 push2 请求前经 RateLimiter 原语按登记键/间隔/抖动取许可（节流单源）。"""
         from src.python.providers import eastmoney_industry as ei
 
+        ei.reset_eastmoney_industry_limiter()
         mock_client_cls.side_effect = _mock_httpx(json.dumps(_MOCK_SUCCESS_RESPONSE))
-        with (
-            patch.object(ei.time, "sleep") as mock_sleep,
-            patch.object(ei.random, "uniform", side_effect=lambda a, b: a) as mock_uniform,
-        ):
+        mock_limiter = Mock()
+        with patch.object(ei, "_get_limiter", return_value=mock_limiter):
             result = fetch_industry_and_concepts("600900")
 
         self.assertIsNotNone(result)
-        mock_sleep.assert_called()
-        lo, hi = mock_uniform.call_args.args
-        self.assertGreaterEqual(lo, 0.05)
-        self.assertLessEqual(hi, 0.2)
+        mock_limiter.acquire_interval.assert_called_once_with(
+            ei._PUSH2_LIMIT_KEY, ei._PUSH2_MIN_INTERVAL, jitter_ratio=ei._PUSH2_JITTER_RATIO
+        )
+
+    def test_limiter_singleton_and_reset(self):
+        """限速器为惰性单例，reset 后丢弃重建（与 cninfo/datasink 限速器隔离口径一致）。"""
+        from src.python.providers import eastmoney_industry as ei
+
+        ei.reset_eastmoney_industry_limiter()
+        first = ei._get_limiter()
+        self.assertIs(ei._get_limiter(), first)
+        ei.reset_eastmoney_industry_limiter()
+        self.assertIsNot(ei._get_limiter(), first)
 
 
 if __name__ == "__main__":

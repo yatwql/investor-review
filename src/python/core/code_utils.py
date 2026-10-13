@@ -133,6 +133,41 @@ def is_hk_stock_code(code: str) -> bool:
     return len(raw) == 5 and raw.isdigit()
 
 
+def is_six_digit_code(code: str) -> bool:
+    """判断是否为 6 位纯数字证券代码（各市场通用的代码形态合法性判定）。
+
+    配置键校验、申购状态行校验、基金净值链路兜底等场景统一经本原语判定，
+    不再在调用方内联 ``len(code) == 6 and code.isdigit()``（代码形态判定中心化约束）。
+
+    Args:
+        code: 证券代码，可含 sh/sz/bj 前缀
+
+    Returns:
+        True 为 6 位纯数字代码
+    """
+    raw = _strip_prefix(code)
+    if not raw:
+        return False
+    return len(raw) == 6 and raw.isdigit()
+
+
+def is_letter_based_code(code: str) -> bool:
+    """判断是否为字母为主的代码形态（美股等外盘字母/字母数字混合代码）。
+
+    纯数字代码（A 股/港股/基金等 5-6 位数字）与含非法字符的代码返回 False。
+
+    Args:
+        code: 证券代码
+
+    Returns:
+        True 为含字母的字母数字代码
+    """
+    stripped = (code or "").strip()
+    if not stripped:
+        return False
+    return stripped.isalnum() and any(ch.isalpha() for ch in stripped)
+
+
 # ═══════════════════════════════════════════════════════════════
 #  名称关键词型判定
 # ═══════════════════════════════════════════════════════════════

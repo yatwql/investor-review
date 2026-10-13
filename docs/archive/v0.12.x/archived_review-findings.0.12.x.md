@@ -11,6 +11,7 @@
 > 追加归档：2026-10-12（v0.12.12-dev 开发期批次 3 条并入：rf-663 ~ rf-664、rf-666）
 > 追加归档：2026-10-12（v0.12.13-dev 开发期批次 4 条并入：rf-667 ~ rf-670）
 > 追加归档：2026-10-13（v0.12.14-dev 开发期批次 1 条并入：rf-671）
+> 追加归档：2026-10-13（v0.12.14-dev 开发期批次 8 条并入：rf-672 ~ rf-679，架构约束 C 表/设计契约全面核查）
 > 归档内容：本迭代已修复的 rf 记录摘要行（v0.12.1 批次 rf-557 ~ rf-562；v0.12.2 批次 rf-563 ~ rf-570（限购线文档一致性、48h 技术债、plan-73 消费方补齐、CI 口径分叉根治）：报告目录分组线性投影与附录组、LLM 章级门控整章隐藏、JS 资产单源与打印断言、发布列与 changelog 发布指针一致性断言、跨组交错线性段拆块、实现与文档过期残留整改；v0.12.3 批次 rf-568、rf-571 ~ rf-578（测试有效性整改、pacing 端点节流生效与惰性装载修复、日志回显当前值纪律、密钥权限基线补漏、HTML 正文大块折叠扩展））
 
 ---
@@ -146,3 +147,11 @@
 - rf-664 已修复（2026-10-12，禁用 LLM 模块误渲染故障占位章节）：根因① `report_template.html` 四个 LLM 章 include 共用单一 `section_visible("global_macro")` 守卫，逐模块章级隐藏与连续重编号未落到正文（「、穿透深度分析」空序号渲染、导航/正文不一致，且 global_macro 禁用连带隐藏兄弟章）；② `llm/fallback.py::build_fallback_llm_content` 把禁用产生的 None 与生成失败混同注入「LLM API 不可用」占位。修复：四 include 改逐模块 `section_visible` 守卫 + fallback 禁用槽位保持 None（占位只注入启用且真实失败的模块）；回归测试：模板四章逐一 subTest 遍历（隐藏/不连带/导航一致）+ fallback 禁用感知 3 例。
 - rf-666 已修复（2026-10-12，TUI 主菜单 [S] 标签旧三组措辞残留）：`tui/tui_menu.py` 标签「实验性/常规/报告章节与增强开关」改为「四组功能开关」，与手册/面板口径一致；plan-119 批次内修复，changelog 已记。
 - rf-671 已修复（2026-10-13，默认开启的结构化决策头机器载荷直出用户可见面）：`decision_header_parse` 默认开启时提示词契约要求 LLM 在操作建议表后追加 `决策头：{...}` 单行 JSON（供决策跨期登记解析），但渲染层无剥离——实测 HTML 报告「智囊团深度复盘」章节正文与 Excel 同名页签单元格均直出原始 JSON。修复：`core/decision_header` 增 `strip_structured_header`（与解析侧共用标记常量与括号配对扫描单源，HTML 块/纯文本行/行内混排三形态，幂等），报告装配点在决策登记（capture 读原始载荷）之后、HTML/Excel 双端 writer 之前对 llm_content 四元组单点剥离（缓存保留原始内容不回写）；回归测试：正常形态 9 例 + 畸形矩阵 7 例 + 装配接线 4 例（登记先于剥离/双端写出前/元组作用域/导入存在）。
+- rf-672 已修复（2026-10-13，C1 代码形态判定散落 5 处）：`len(code)==6 and code.isdigit()` 形态在 config/_validation、providers/tiantian_purchase、report/_report_factor_metrics、report/portfolio_history、analysis/_fee_estimation 五处内联。修复：`core/code_utils` 增语义原语 `is_six_digit_code`（去前缀归一六位数字判定）与 `is_letter_based_code`（字母开头字母数字代码，替代美股内联判定），五处调用点收编；回归：原语正常/边界 12 例 + 收编守卫 1 例（src/python 下不得再现内联六位形态）。
+- rf-673 已修复（2026-10-13，C20 图注纪律缺口）：corrRollingChart 缺 `.chart-caption` 图注、drawdown 区 4 处表格口径说明块误用图注类名。修复：补 corr 图注（60/120 日端点窗口径句）；新增 `.note-caption` 类（与图注共声明同视觉档位，语义分离），4 处说明块改用；portfolioChart「双 caption」经复核为静态互斥分支（渲染态恰 1 caption）不属违规。回归：`TestChartCaptionContract` 3 例（canvas 全量图注附着机检/corrRollingChart 特定回归/说明附注类名分离）。
+- rf-674 已修复（2026-10-13，C27 eastmoney_industry 节流散点）：`_PUSH2_THROTTLE=(0.05,0.2)` 自建随机 sleep 节流。修复：迁移为 `RateLimiter` 惰性单例 + `acquire_interval`（登记键 `eastmoney_industry`、最小间隔 0.1s、抖动 0.5，镜像 eastmoney pager 先例），增 `reset_eastmoney_industry_limiter` 测试隔离原语；诊断修正：eastmoney.py pager 本就经 RateLimiter 合规、tencent.py 无批量分页属正常现状，C27 行文本无失实。回归：登记节流接线 1 例 + 限速器单例/reset 1 例，夹具改经 `_PUSH2_MIN_INTERVAL=0` 放行。
+- rf-675 已修复（2026-10-13，C10 per_source 算式复制）：`max(500, top_n×2)` 在 cache/operations 与 report/news_correlation 两处内联。修复：`fetcher/news.py::news_fetch_limits` 单源提供（保底常量 `_NEWS_PER_SOURCE_FLOOR`），两处调用点收编，C10 行补单源指引；诊断修正：现行 C10 行公式与代码一致，问题仅在调用方复制。回归：`test_news_fetch_limits.py` 4 例（透传/放大与保底关系/内联复制守卫/两处接线守卫）。
+- rf-676 已修复（2026-10-13，C25 whatif 回测窗口自然日近似）：`compute_backtest_days` 以自然日×5/7 折算交易日。修复：替换为 `count_trading_days_elapsed`（交易日历单源，内部含周六日回退），热身/钳位算式不变；C25 适用范围补接入点，两测试文件声明离线；回归：typical 用例改 hermetic（patch 单源断言接线参数与热身算式）。
+- rf-677 已修复（2026-10-13，C14 例外口径缺失）：约束表未覆盖 `html_jinja_env.py` 的 env 初始化期注册。修复：C 表后增「env 初始化期注册」例外脚注（无状态过滤器注册与 fail-closed 默认值属模板基础设施装配，渲染期数据仍禁入全局），核实 `_ENV.globals/filters` 写点仅 html_jinja_env.py；纯文档口径变更。
+- rf-678 已修复（2026-10-13，schemas/history.py docstring 失实）：模块 docstring 自称使用 mkstemp 写盘，实际模块仅数据契约不执行 I/O。修复：改述为「原子写入由 `report/history_snapshot.py::save` 经 `core/atomic_write` 唯一原语承担」；纯 docstring 修正。
+- rf-679 已挂账（2026-10-13，style 护栏观察项无挂账）：裸色值/圆角档外观察项（E 级不判 finding）缺治理归宿。处置：plan.md P3 增 `plan-121` 报告样式 token 收敛任务，退出判据=观察期后不再增长 + 存量收敛计划或白名单；rf 本体不改代码。

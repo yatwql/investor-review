@@ -33,6 +33,7 @@ from datetime import datetime
 from typing import Any
 
 
+from src.python.core.code_utils import is_six_digit_code
 from src.python.core.constants import BEIJING_TZ
 from src.python.core.http_client import make_http_client
 
@@ -182,7 +183,7 @@ def purchase_status_payload_is_valid(payload: object) -> bool:
         "purchase_fee_rate",
     )
     for code, row in rows.items():
-        if not (isinstance(code, str) and len(code) == 6 and code.isdigit()):
+        if not (isinstance(code, str) and is_six_digit_code(code)):
             return False
         if not isinstance(row, dict) or any(k not in row for k in required):
             return False

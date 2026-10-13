@@ -52,7 +52,7 @@ def _classify_fund_type(name: str, code: str) -> tuple[str, float]:
 
     # 代码特征识别（通过 code_utils 中心化函数判断）
     code = code.strip().upper()
-    from src.python.core.code_utils import is_a_share_code, is_hk_stock_code
+    from src.python.core.code_utils import is_a_share_code, is_hk_stock_code, is_letter_based_code
 
     # A 股股票
     if is_a_share_code(code.lower()):
@@ -61,7 +61,7 @@ def _classify_fund_type(name: str, code: str) -> tuple[str, float]:
     if is_hk_stock_code(code):
         return "stock", _STOCK_FEE_RATE
     # 美股：字母为主
-    if code.isalpha() or (code.isalnum() and not code.isdigit()):
+    if is_letter_based_code(code):
         return "stock", _STOCK_FEE_RATE
     # 无法识别 → 默认
     return "unknown", _DEFAULT_FEE_RATE

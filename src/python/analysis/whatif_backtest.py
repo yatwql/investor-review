@@ -5,9 +5,10 @@
 对比区间收益 / 年化收益 / 年化波动率 / 夏普 / 最大回撤。
 
 设计边界：
-  - **纯计算**：本模块不联网、不 import report/ 任何模块（analysis 层单向依赖纪律）。
+  - **纯计算**：本模块不取行情、不 import report/ 任何模块（analysis 层单向依赖纪律）。
     行情获取与 PortfolioHistoryCalculator 编排在 report/whatif_operations.py 完成，
-    本模块仅消费其输出的 bars 列表并计算指标。
+    本模块仅消费其输出的 bars 列表并计算指标；交易日计数经 core/trading_calendar
+    （带缓存与离线回退，交易日历单源）。
   - **opt-in**：仅当指定生效日时才启用时序回测；未指定时主 whatif 维持纯截面比较。
   - **降级**：数据不足 / 无可对齐锚点 / 生效日无效 → available=False，不阻塞主报告。
 """
@@ -25,6 +26,7 @@ from src.python.analysis.metrics import (
     sharpe_ratio,
 )
 from src.python.analysis.whatif import _arrow
+from src.python.core.trading_calendar import count_trading_days_elapsed
 
 # ── 常量 ────────────────────────────────────────────────
 
@@ -35,7 +37,7 @@ _MAX_BACKTEST_DAYS = 365
 """回测最多请求天数（股票/ETF K 线 provider 上限）。"""
 
 _BACKTEST_WARMUP_BARS = 20
-"""生效日→今日的自然日折算交易日后的热身缓冲 bar 数。"""
+"""生效日→今日的交易日计数（交易日历单源）之外的热身缓冲 bar 数。"""
 
 _VAR_EPS = 1e-15
 """方差下界：低于此值视为零波动（与 metrics 模块一致）。"""
@@ -47,7 +49,8 @@ _VAR_EPS = 1e-15
 def compute_backtest_days(effective_date: str, today: date | None = None) -> int | None:
     """按生效日折算回测行情请求天数。
 
-    自然日 → 交易日（×5/7）折算，加热身缓冲后钳位到 [30, 365]。
+    自然日 → 交易日经交易日历精确计数（交易日历单源 `count_trading_days_elapsed`，
+    日历不可用时其内部自动回退为排除周六日的近似口径），加热身缓冲后钳位到 [30, 365]。
 
     Args:
         effective_date: 调仓生效日（YYYY-MM-DD）
@@ -63,9 +66,8 @@ def compute_backtest_days(effective_date: str, today: date | None = None) -> int
     today = today or date.today()
     if eff >= today:
         return None
-    natural = (today - eff).days
-    trading = max(1, round(natural * 5 / 7))
-    return min(max(trading + _BACKTEST_WARMUP_BARS, _MIN_BACKTEST_DAYS), _MAX_BACKTEST_DAYS)
+    trading = count_trading_days_elapsed(effective_date, today.isoformat()) or 0
+    return min(max(max(1, trading) + _BACKTEST_WARMUP_BARS, _MIN_BACKTEST_DAYS), _MAX_BACKTEST_DAYS)
 
 
 # ── 序列对齐 ──────────────────────────────────────────

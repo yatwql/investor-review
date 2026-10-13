@@ -660,8 +660,11 @@
             font-size: var(--fs-table);
             letter-spacing: 1px;
         }
-        /* --- 图下说明（标注该图是什么图表；跟随 canvas 渲染分支，置于容器外避免溢出固定高度）--- */
-        .chart-caption {
+        /* --- 图下说明（标注该图是什么图表；跟随 canvas 渲染分支，置于容器外避免溢出固定高度）---
+           note-caption 为表格/统计口径的非图注附注，与图注共声明（同视觉档位），
+           类名分离使「`.chart-caption` 专属图表」的图注纪律可静态机检 --- */
+        .chart-caption,
+        .note-caption {
             text-align: center;
             font-size: var(--fs-table-sm);
             color: var(--chart-text, #888);

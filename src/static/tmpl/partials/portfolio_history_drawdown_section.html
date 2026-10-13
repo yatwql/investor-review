@@ -196,7 +196,7 @@
                 </tbody>
             </table>
             {% if crisis_annotation_data.index_reason %}
-            <div class="chart-caption">指数层：{{ crisis_annotation_data.index_reason }}</div>
+            <div class="note-caption">指数层：{{ crisis_annotation_data.index_reason }}</div>
             {% endif %}
             {% elif _crisis_in_range %}
             <table>
@@ -221,7 +221,7 @@
             {% else %}
             <div class="empty-section">报告数据窗口内无历史危机区间</div>
             {% endif %}
-            <div class="chart-caption">说明：阴影/高亮区间为历史上 A 股主要危机时段（静态历史事实表）；区间与报告数据窗口重叠时统计区间最大回撤与恢复耗时{% if crisis_annotation_data.replay %}；回放态另列组合区间收益与指数层（收益/最大回撤），超出组合数据窗口的区间标「组合窗口外」{% endif %}</div>
+            <div class="note-caption">说明：阴影/高亮区间为历史上 A 股主要危机时段（静态历史事实表）；区间与报告数据窗口重叠时统计区间最大回撤与恢复耗时{% if crisis_annotation_data.replay %}；回放态另列组合区间收益与指数层（收益/最大回撤），超出组合数据窗口的区间标「组合窗口外」{% endif %}</div>
             {% endif %}
             <!-- ── 四、月度收益日历：年 × 月红绿格 + 口径与胜亏平统计 ── -->
             {% set monthly = history_data.monthly_returns %}
@@ -250,7 +250,7 @@
                 </tbody>
             </table>
             {% if monthly.stats %}
-            <div class="chart-caption">口径 {{ monthly.caliber_label }}：胜 {{ monthly.stats.up }} / 亏 {{ monthly.stats.down }} / 平 {{ monthly.stats.flat }} 月 · 最长连亏 {{ monthly.stats.max_down_streak.length }} 月（结束于 {{ monthly.stats.max_down_streak.end_key or "—" }}）· 最佳 {{ monthly.stats.best.key }} {{ monthly.stats.best.return_pct | change }} · 最差 {{ monthly.stats.worst.key }} {{ monthly.stats.worst.return_pct | change }}（正值红 / 负值绿，空格为窗口外或无样本月份）</div>
+            <div class="note-caption">口径 {{ monthly.caliber_label }}：胜 {{ monthly.stats.up }} / 亏 {{ monthly.stats.down }} / 平 {{ monthly.stats.flat }} 月 · 最长连亏 {{ monthly.stats.max_down_streak.length }} 月（结束于 {{ monthly.stats.max_down_streak.end_key or "—" }}）· 最佳 {{ monthly.stats.best.key }} {{ monthly.stats.best.return_pct | change }} · 最差 {{ monthly.stats.worst.key }} {{ monthly.stats.worst.return_pct | change }}（正值红 / 负值绿，空格为窗口外或无样本月份）</div>
             {% endif %}
             {% endif %}
             <!-- ── 五、风险调整超额（开关 risk_adjusted_excess：滚动超额 + IR/TE + 跑赢胜率） ── -->
@@ -298,7 +298,7 @@
             </script>
             {% endif %}
             {% if risk_adjusted_excess_data.notes %}
-            <div class="chart-caption">口径：{{ risk_adjusted_excess_data.notes | join('；') }}</div>
+            <div class="note-caption">口径：{{ risk_adjusted_excess_data.notes | join('；') }}</div>
             {% endif %}
             {% else %}
             <div class="empty-section">数据不可用：{{ risk_adjusted_excess_data.reason or "未知原因" }}</div>
