@@ -12,9 +12,32 @@
   W1 裸色值存量（护栏 1）    非定义行出现 hex/rgb 字面量（**观察项**，统计不判 finding）
   W2 圆角档位（护栏 2）      ``border-radius`` 档外字面值（**观察项**，统计不判 finding）
 
-**观察期口径**（样式护栏先例，2026-10-08 立）：W 级仅统计与 ``-v`` 明细供分诊，
-**不判 finding**、不入 pre-commit 钩子域与 CI guards；待误报率稳定后再评估入域。
+**观察期口径**（样式护栏先例，2026-10-08 立；2026-10-13 样式收敛批次修订）：
+W 级仅统计与 ``-v`` 明细供分诊，**不判 finding**、不入 pre-commit 钩子域与 CI guards。
 检查域：两份报告模板 + partials + Web 工作台样式表。
+
+**W1 豁免域**（与契约护栏 1 的例外文字逐条同源；豁免命中不计入观察统计）：
+
+  1. 引号区间覆盖行——JS 图表配置串 / HTML 内联 style 属性所在行整行豁免（契约「Chart\n     配置域除外」同源；含跨行 style 属性与多行 JS 串拼接）
+  2. ``var(--x, <fallback>)`` 回退值——token 缺失防御，非裸值声明
+  3. ``@media print`` 块——打印恒定黑白域（双主题契约不覆盖打印态）
+  4. 暗色 override 块（``[data-theme="dark"]`` / ``.dark`` 选择器域）——契约「双主题
+     override 块除外」同源；判断为「最近选择器行」近似口径，多行选择器可能漏豁免
+  5. ``_RAW_COLOR_EXEMPTIONS`` 存量白名单——按（文件, 行内容正则, 理由）登记，仅兜契约钦定值
+     与恒定/派生域，不兜可收敛存量
+
+**流程管控**（样式收敛批次定档，防观察面演化失控）：
+
+  1. **永不自动转阻塞**：W 级纳入 pre-commit/CI 阻塞域必须走独立版本决策，不得随
+     本脚本改动顺带发生
+  2. **白名单只减不增**：新增豁免须带理由并复审；未命中任何现行行的白名单条目会被
+     ``-v`` 腐化警告点名，应及时删除
+  3. **收敛优先于豁免**：能等值收敛到 token 的一律收敛，白名单只兜契约钦定值与
+     恒定/派生域
+
+**W1 口径说明**：HTML 数字实体（``&#9888;`` ⚠ / ``&#10003;`` ✓ 等）不属于色值——
+hex 正则以 ``(?<!&)`` 前置断言排除实体形态；观察数口径以样式收敛批次
+（2026-10-13）为基线。
 
 用法：
   python scripts/check-style-guardrails.py           # 检查全部
@@ -52,10 +75,185 @@ DESIGN_DOC = "docs/managements/DESIGN.md"
 
 _COMMENT_PREFIXES = ("/*", "*", "//", "<!--", "#")
 _TOKEN_DEF = re.compile(r"--[\w-]+\s*:")  # 行内任意位置的变量定义形态（含单行 :root {...}）
-_HEX = re.compile(r"#[0-9a-fA-F]{3,8}\b")
+_HEX = re.compile(r"(?<!&)#[0-9a-fA-F]{3,8}\b")  # (?<!&)：排除 HTML 数字实体（&#9888; 等）误报
 _JS_STRING_HEX = re.compile(r"""['"]#[0-9a-fA-F]{3,8}['"]""")
 _RGB = re.compile(r"\b(?:rgba?|hsla?)\(")
 _RADIUS_PX = re.compile(r"border-radius:\s*(\d+(?:\.\d+)?px)")
+
+#: W1 存量白名单：(文件相对路径, 行内容正则, 理由)——只减不增，新增须带理由并复审
+_RAW_COLOR_EXEMPTIONS: tuple[tuple[str, str, str], ...] = (
+    (
+        "src/static/tmpl/report_template.html",
+        r"rgba\(0,\s*0,\s*0",
+        "黑色透明阴影/渐变纱——Elevation 契约钦定值及其派生（rest 阴影 0.1 / 侧栏纱 0.06 等），非语义色 token 域",
+    ),
+    (
+        "src/static/tmpl/whatif_template.html",
+        r"rgba\(0,\s*0,\s*0",
+        "同上（whatif 模板阴影阶沿用报告侧 Elevation 值）",
+    ),
+    (
+        "src/static/tmpl/partials/report_qa_section.html",
+        r"rgba\(0,\s*0,\s*0",
+        "同上（QA 分区卡片阴影沿用报告侧 Elevation 值）",
+    ),
+    (
+        "src/static/tmpl/report_template.html",
+        r"rgba\(255,255,255,0\.",
+        "主色底白纱派生面（--primary 之上的半透明白，常态/hover）——契约明文品牌蓝暗色保持原值、蓝底白字，无对应 token 角色",
+    ),
+    (
+        "src/static/tmpl/report_template.html",
+        r"rgba\(46,117,182,0\.",
+        "品牌蓝透明度派生面（TOC 分组 hover 底），无对应 token 角色",
+    ),
+    (
+        "src/static/web/style.css",
+        r"rgba\(31, ?111, ?1(?:76|78)|rgba\(31, ?35, ?40",
+        "web 侧 primary/text 透明度派生面（tab hover、日志 summary hover、代码底纱），无透明度 token 族",
+    ),
+    (
+        "src/static/web/style.css",
+        r"#fafbfc",
+        "上传/提交区灰底（含渐变端点）——双端定制灰阶，单 token 无法表达渐变与该档灰",
+    ),
+    (
+        "src/static/web/style.css",
+        r"rgba\(240, ?173, ?78",
+        "警告徽章琥珀透明派生（底/边），web 侧无透明度 token 族",
+    ),
+    (
+        "src/static/web/style.css",
+        r"#fff0f0|#b02a37",
+        "红底警示条（.formal-warning）error 透明派生面与对比红字，web 侧无 error 透明派生 token",
+    ),
+    (
+        "src/static/tmpl/report_template.html",
+        r"color: #fff",
+        "主色底白字（报告头/章节题/折叠钮/按钮）——契约明文品牌蓝暗色保持原值、蓝底白字恒成立；token 化需新增 --on-primary 双面角色，值恒等无增益",
+    ),
+    (
+        "src/static/tmpl/whatif_template.html",
+        r"color: #fff",
+        "同上（whatif 模板主色底白字）",
+    ),
+    (
+        "src/static/tmpl/partials/report_qa_section.html",
+        r"color: #fff",
+        "同上（QA 发送按钮主色底白字）",
+    ),
+    (
+        "src/static/web/style.css",
+        r"color: #fff",
+        "主色按钮/选中 tab 白字——同契约理由（品牌蓝暗色保持原值、蓝底白字）",
+    ),
+    (
+        "src/static/web/style.css",
+        r"#f0f6ff|#e8f1fb",
+        "上传区 primary 派生交互面（hover/focus/drag-over 底），无对应 token 角色",
+    ),
+    (
+        "src/static/web/style.css",
+        r"background: #e7e9ec",
+        "进度条轨道派生灰（--border 不等值），无对应 token 角色",
+    ),
+)
+
+
+def _quoted_lines(text: str) -> set[int]:
+    """引号区间覆盖的行号集合（JS 图表配置串 / HTML 内联 style 属性，整行豁免）。
+
+    跨行 ``style="...{% if %}...{% endif %}"`` 与多行 JS 串拼接均被覆盖；
+    口径为「引号内色值所在行整行豁免」——同行引号外的孤立声明极少出现且多为混合域。
+    """
+    out: set[int] = set()
+    quote: str | None = None
+    line_no = 1
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if ch == "\n":
+            line_no += 1
+        elif quote is None and ch in ("'", '"'):
+            quote = ch
+        elif quote is not None:
+            if ch == "\\":
+                i += 1  # 转义跳过下一字符
+            elif ch == quote:
+                quote = None
+            else:
+                out.add(line_no)
+        i += 1
+    return out
+
+
+def _in_var_fallback(code: str, pos: int) -> bool:
+    """``pos`` 是否落在 ``var(--x, <fallback>)`` 的回退值区间（token 缺失防御）。"""
+    for m in re.finditer(r"var\(\s*--[\w-]+\s*,", code):
+        close = code.find(")", m.end())
+        end = close if close != -1 else len(code)
+        if m.end() <= pos < end:
+            return True
+    return False
+
+
+def _scoped_block_lines(text: str, selector_re: str) -> set[int]:
+    """选择器域块覆盖的行号集合（近似口径：depth==0 累积选择器行直到 ``{``）。"""
+    out: set[int] = set()
+    pending = ""
+    depth = 0
+    inside = False
+    for i, raw in enumerate(text.splitlines(), 1):
+        line = raw.strip()
+        if depth == 0 and line:
+            pending = f"{pending} {line}".strip() if not pending else f"{pending} {line}"
+        if depth == 0 and "{" in line:
+            inside = bool(re.search(selector_re, pending))
+            pending = ""
+        if inside:
+            out.add(i)
+        depth += line.count("{") - line.count("}")
+        if depth <= 0:
+            depth = 0
+            inside = False
+    return out
+
+
+def _media_print_lines(text: str) -> set[int]:
+    """``@media print`` 块覆盖的行号集合（打印恒定黑白域，W1 豁免）。"""
+    return _scoped_block_lines(text, r"@media\s+print")
+
+
+def _dark_override_lines(text: str) -> set[int]:
+    """暗色 override 块覆盖的行号集合（契约「双主题 override 块除外」同源）。"""
+    return _scoped_block_lines(text, r'(\.dark\b|\[data-theme=["\']dark["\'])')
+
+
+def _w1_exempt(rel_path: str, line: str) -> str | None:
+    """存量白名单命中判定，返回豁免理由（未命中返回 None）。"""
+    for path_pat, line_pat, reason in _RAW_COLOR_EXEMPTIONS:
+        if rel_path == path_pat and re.search(line_pat, line):
+            return reason
+    return None
+
+
+def _stale_exemptions(targets: list[Path]) -> list[str]:
+    """白名单腐化检查：条目未命中任何现行行 → 应删除（白名单只减不增）。"""
+    stale: list[str] = []
+    for path_pat, line_pat, _reason in _RAW_COLOR_EXEMPTIONS:
+        hit = False
+        for path in targets:
+            if rel(path) != path_pat:
+                continue
+            for line in path.read_text(encoding="utf-8").splitlines():
+                if re.search(line_pat, line):
+                    hit = True
+                    break
+            if hit:
+                break
+        if not hit:
+            stale.append(f"{path_pat}: /{line_pat}/ 未命中任何现行行（白名单腐化，条目应删除）")
+    return stale
 
 
 def _is_comment(line: str) -> bool:
@@ -180,15 +378,30 @@ def check_token_alignment(report_css: str, web_css: str, design_text: str) -> li
 
 
 def observe_raw_colors(path: Path) -> list[str]:
-    """W1 裸色值存量（护栏 1，观察）：非注释/非定义/非 JS 串行的 hex 或 rgb 字面。"""
+    """W1 裸色值存量（护栏 1，观察）：豁免域（引号内/var 回退/print/暗色块/白名单）之外的 hex/rgb 字面。"""
     details: list[str] = []
     text = path.read_text(encoding="utf-8")
+    rel_path = rel(path)
+    print_lines = _media_print_lines(text)
+    dark_lines = _dark_override_lines(text)
+    quoted = _quoted_lines(text)
     for i, line in enumerate(text.splitlines(), 1):
         if _is_comment(line) or _TOKEN_DEF.search(line):
             continue
-        stripped = _JS_STRING_HEX.sub("", line)
-        if _HEX.search(stripped) or _RGB.search(stripped):
-            details.append(f"{rel(path)}:{i}: {line.strip()[:96]}")
+        if i in print_lines or i in dark_lines or i in quoted:
+            continue
+        exempt = _w1_exempt(rel_path, line)
+        if exempt is not None:
+            continue
+        for m in _HEX.finditer(line):
+            if not _in_var_fallback(line, m.start()):
+                details.append(f"{rel_path}:{i}: {line.strip()[:96]}")
+                break
+        else:
+            for m in _RGB.finditer(line):
+                if not _in_var_fallback(line, m.start()):
+                    details.append(f"{rel_path}:{i}: {line.strip()[:96]}")
+                    break
     return details
 
 
@@ -264,6 +477,7 @@ def main() -> int:
     args = parser.parse_args()
 
     findings, observations = run_checks()
+    stale = _stale_exemptions(_collect_files(None))
     w1, w2 = len(observations["raw_colors"]), len(observations["radius"])
 
     if args.verbose:
@@ -271,6 +485,9 @@ def main() -> int:
             print(f"  [观察] {line}")
         for line in observations["radius"]:
             print(f"  [观察] {line}")
+        print(f"  [豁免] W1 存量白名单 {len(_RAW_COLOR_EXEMPTIONS)} 条（命中即跳过，理由见常量声明）")
+        for line in stale:
+            print(f"  [!] {line}")
     if not args.ci and (w1 or w2):
         hint = "（-v 看明细）" if not args.verbose else ""
         print(f"[!] 观察项（不判 finding，观察期）：裸色值 {w1} 处、圆角档外 {w2} 处{hint}")

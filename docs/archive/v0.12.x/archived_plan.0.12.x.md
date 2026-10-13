@@ -18,6 +18,7 @@
 > 追加归档：2026-10-10 plan-100 CLI 定时任务完成/失败通知（notify 三通道）完成（见文末章节）
 > 追加归档：2026-10-10 plan-117 取消联接基金穿透功能开关（穿透内置恒开）完成（见文末章节）
 > 追加归档：2026-10-11 plan-85 风险调整超额与基准对照、plan-88 危机区间双层回放完成（见文末章节）
+> 追加归档：2026-10-13 plan-121 报告样式 token 收敛（style 护栏观察项转治理）完成（见文末章节）
 > 追加归档：2026-10-12 plan-120 功能开关面板分组重构（作用域四分组 + 生命周期解耦）完成（见文末章节）
 > 追加归档：2026-10-11 plan-101 LLM 强刷为全局粒度（模块级强刷）完成（见文末章节）
 > 追加归档：2026-10-11 plan-102 报告对话式追问立项评估完成（设计定稿，未实施；见文末章节）
@@ -372,3 +373,14 @@
 **交付**：TUI 主菜单新增 `[Q]`（`report_qa` 开关门控，`FEATURE_GATED_ITEMS` 与 Web/报告区块同源就地裁剪）；`tui/handlers_qa.py` 文本输入循环（`input()` 多轮 while + 回车/q 退出，EOF/Ctrl+C 守护，非全屏 TUI 库）——输出目录 HTML 报告选择（顶层 `.html` 按修改时间倒序、回车=最新、上限 8 份、目录不可读守护）→ 提问/续问（同 `session_id` 续传，10 轮上限后自动开新会话）→ 回答经 `html.parser` 剥离为纯文本展示 + 事实核对警示 + 轮数/用量页脚回显；错误信封分类（会话上限/报告不可用终止循环，其余继续提问）。同源接线：`qa/session.py::ask_report_qa` 模块级导入（测试以对象同一性断言，无 TUI 私有副本）；用量独立记账沿用 `QaSession.usage`（不进报告 LLM 用量页签）。
 
 **落地**：`src/python/tui/handlers_qa.py` + 菜单/门控/绑定接线（`tui_menu.py` / `tui.py`）；测试 `src/test/unit/handlers/test_handlers_qa.py`（选择/输入循环/会话续传/HTML 剥离/同源断言/菜单门控）+ `test_handlers_qa_edge.py`（EOF/Ctrl+C/目录不可读）+ `test_tui_menu.py`/`test_tui_routing.py` 键位集合同步（R-QA-10，批 14）；文档 requirements §6.17 R-QA-10、testplan、technical §6.8（双入口）、llm-technical §9.1 记账边界、手册 `how-to-use-tui-menu.md`（对话式追问类 + 门控说明）与 `how-to-config.md` 快捷键清单。测试目录按仓库既有约定落 `unit/handlers/`（设计稿 `unit/tui/` 目录不存在）。阶段 5（转正评估）待阶段 4 稳定后另行推进。
+
+#### ✅ `plan-121` 报告样式 token 收敛（style 护栏观察项转治理） — 已完成（2026-10-13）
+
+**收敛结果**：`check-style-guardrails.py` 观察数 裸色值 132 → **0**、圆角档外 8 → **0**（E 级 finding 范围不变）。
+
+- **误报修复**：HTML 数字实体（`&#9888;` ⚠ / `&#10003;` ✓ 等 ~13 处）曾被 hex 正则误计，以 `(?<!&)` 前置断言排除
+- **豁免域精确化**（与契约护栏 1 例外文字逐条同源）：引号区间覆盖行（JS 图表配置串 / HTML 内联 style 属性，含跨行续行）、`var(--x, fallback)` 回退值、`@media print` 块（打印恒定黑白域）、暗色 override 块（`[data-theme="dark"]` / `.dark` 选择器域）
+- **等值收敛**：whatif 调仓徽章/实验徽章/QA 徽章 10px → 999（胶囊档）、报告 source-tag 五连 3px → 4px（最小档）、whatif `#EEF5FB` → `var(--table-hover)`（双面既有 token，值恒等）
+- **存量白名单 15 条**（`_W1_EXEMPTIONS`，文件+行正则+理由）：Elevation 阴影阶钦定值、主色底白字（契约明文品牌蓝暗色保持原值、蓝底白字）、品牌蓝/primary 透明派生面、渐变灰底、琥珀/红底警示派生等——仅兜契约钦定值与恒定/派生域
+- **流程管控三定档**（写入脚本 docstring）：① W 级永不自动转阻塞（入 pre-commit/CI 须独立版本决策）；② 白名单只减不增（未命中现行行即腐化警告）；③ 收敛优先于豁免
+- **机制化验收**：测试 `TestBaselineNoGrowth` 断言真实仓库观察数 ≤ 基线（0/0），「观察期内不得增长」从人工纪律变为机器断言；豁免域各支回归 7 例（共 21 例全绿）

@@ -188,7 +188,7 @@
         .section { background: var(--surface); border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 24px; overflow-x: auto; }
         .section-title { background: var(--primary); color: #fff; padding: 12px 24px; font-size: var(--fs-h3); font-weight: 600; line-height: var(--lh-tight); }
         .block-title { font-size: var(--fs-body); font-weight: 600; margin: 16px 0 8px; padding-left: 8px; border-left: 3px solid var(--primary); line-height: var(--lh-tight); }
-        .experimental-badge { background: var(--experimental-badge-bg); color: var(--experimental-badge-text); font-size: var(--fs-footnote); padding: 2px 8px; border-radius: 10px; font-weight: normal; margin-left: 10px; vertical-align: middle; }
+        .experimental-badge { background: var(--experimental-badge-bg); color: var(--experimental-badge-text); font-size: var(--fs-footnote); padding: 2px 8px; border-radius: 999px; font-weight: normal; margin-left: 10px; vertical-align: middle; }
         .debate-block { margin: 12px 0; padding: 14px 16px; border-radius: 6px; }
         .debate-block .debate-label { font-size: var(--fs-body); font-weight: 600; margin-bottom: 8px; }
         .debate-block .debate-content { font-size: var(--fs-table); line-height: var(--lh-body); white-space: pre-wrap; }
@@ -302,11 +302,11 @@
 <div class="back-to-top-link"><a href="#report-top" title="回到报告顶部">↑ 回到顶部</a></div>
 {% endmacro %}
 
-        .source-tag { display: inline-block; background: var(--source-tag-bg); border-radius: 3px; padding: 1px 6px; font-size: var(--fs-footnote); margin: 1px; white-space: nowrap; }
-        .source-tag-holding { display: inline-block; background: var(--source-tag-bg); border-radius: 3px; padding: 1px 6px; font-size: var(--fs-footnote); margin: 1px; white-space: nowrap; color: var(--source-tag-text); }
-        .source-tag-penetration { display: inline-block; background: var(--source-tag-pen-bg); border-radius: 3px; padding: 1px 6px; font-size: var(--fs-footnote); margin: 1px; white-space: nowrap; color: var(--source-tag-pen-text); }
-        .source-tag-industry { display: inline-block; background: var(--source-tag-ind-bg); border-radius: 3px; padding: 1px 6px; font-size: var(--fs-footnote); margin: 1px; white-space: nowrap; color: var(--source-tag-ind-text); }
-        .source-tag-concept { display: inline-block; background: var(--source-tag-con-bg); border-radius: 3px; padding: 1px 6px; font-size: var(--fs-footnote); margin: 1px; white-space: nowrap; color: var(--source-tag-con-text); }
+        .source-tag { display: inline-block; background: var(--source-tag-bg); border-radius: 4px; padding: 1px 6px; font-size: var(--fs-footnote); margin: 1px; white-space: nowrap; }
+        .source-tag-holding { display: inline-block; background: var(--source-tag-bg); border-radius: 4px; padding: 1px 6px; font-size: var(--fs-footnote); margin: 1px; white-space: nowrap; color: var(--source-tag-text); }
+        .source-tag-penetration { display: inline-block; background: var(--source-tag-pen-bg); border-radius: 4px; padding: 1px 6px; font-size: var(--fs-footnote); margin: 1px; white-space: nowrap; color: var(--source-tag-pen-text); }
+        .source-tag-industry { display: inline-block; background: var(--source-tag-ind-bg); border-radius: 4px; padding: 1px 6px; font-size: var(--fs-footnote); margin: 1px; white-space: nowrap; color: var(--source-tag-ind-text); }
+        .source-tag-concept { display: inline-block; background: var(--source-tag-con-bg); border-radius: 4px; padding: 1px 6px; font-size: var(--fs-footnote); margin: 1px; white-space: nowrap; color: var(--source-tag-con-text); }
 
         /* ── 新闻表：窄屏（手机）卡片式堆叠布局 ─────────────────
            该表 7 列 + 全局 min-width 600px，手机上横向挤压会让标题/摘要/关键词/LLM 分析
