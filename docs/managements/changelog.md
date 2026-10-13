@@ -21,6 +21,7 @@
 
 ### Changed
 
+- 发布门禁扩展：`release.py gate`（P2）在十守护之后追加 `check-style-guardrails --ci` 设计护栏段（E 级 finding 拦截 / W 级观察统计随发布留档）——开发期快反馈仍由 unit 测试承担，护栏不入十守护清单与 pre-commit/CI guards；gate 测试补护栏调用与失败传播 2 例。
 - 样式护栏观察项治理（`plan-121`）：`check-style-guardrails.py` 裸色值 132→0、圆角档外 8→0——修 HTML 数字实体误报（`&#9888;` 等）、豁免域精确化（引号区间行 / var 回退 / print 块 / 暗色 override 块，与契约护栏例外同源）、存量白名单 15 条带理由登记；模板等值收敛（徽章 10px→999 胶囊档、source-tag 3px→4px、whatif hover→var(--table-hover)）；W 级管控三定档（永不自动转阻塞/白名单只减不增/收敛优先于豁免）+ 观察数基线断言机制化（`TestBaselineNoGrowth`）。
 
 - 技术设计文档：架构约束表增「env 初始化期注册」例外脚注（`html_jinja_env.py` 无状态过滤器注册与 fail-closed 默认值合法，渲染期数据仍禁入全局）；新闻抓取预算/交易日历约束行补单源指引与 whatif 回测接入点；`schemas/history.py` 模块 docstring 修正为数据契约职责（原子写入由 `report/history_snapshot.py::save` 经 `core/atomic_write` 承担）。
