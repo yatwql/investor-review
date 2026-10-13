@@ -259,3 +259,58 @@ class TestStripMarks:
     def test_none_and_empty(self):
         assert dh.strip_marks(None) == ""
         assert dh.strip_marks("") == ""
+
+
+class TestStripStructuredHeader:
+    """渲染前剥离结构化决策头（机器载荷不直出，标记与括号配对与解析侧单源）。"""
+
+    def test_html_block_removed_entirely(self):
+        html = (
+            "<p>| 🟢 低 | 040046 | 持有 | 测试品种 |</p>"
+            '<p>决策头：{"decisions":[{"code":"561910","action":"减仓","priority":"高"}]}</p>'
+            "<hr><p>【合规声明】本报告仅供参考。</p>"
+        )
+        out = dh.strip_structured_header(html)
+        assert out == ("<p>| 🟢 低 | 040046 | 持有 | 测试品种 |</p><hr><p>【合规声明】本报告仅供参考。</p>")
+        assert "决策头" not in out and '"decisions"' not in out
+
+    def test_plain_text_line_removed_with_newline(self):
+        text = '前文段落\n决策头：{"decisions":[]}\n后文段落'
+        assert dh.strip_structured_header(text) == "前文段落\n后文段落"
+
+    def test_no_marker_returns_unchanged(self):
+        html = "<p>正常操作建议表</p><hr>"
+        assert dh.strip_structured_header(html) == html
+
+    def test_none_and_empty_passthrough(self):
+        assert dh.strip_structured_header(None) is None
+        assert dh.strip_structured_header("") == ""
+
+    def test_braces_inside_json_string_do_not_truncate_payload(self):
+        payload = '{"decisions":[{"code":"600000","action":"加仓","priority":"高","note":"目标区间3000{支撑}3100"}]}'
+        html = f"<p>前文</p><p>决策头：{payload}</p><p>后文</p>"
+        out = dh.strip_structured_header(html)
+        assert out == "<p>前文</p><p>后文</p>"
+        assert "支撑" not in out
+
+    def test_mid_line_marker_keeps_prefix_text(self):
+        html = '<p>参考 决策头：{"decisions":[]}</p>'
+        assert dh.strip_structured_header(html) == "<p>参考 </p>"
+
+    def test_multiple_markers_all_removed(self):
+        text = (
+            '决策头：{"decisions":[]}\n甲\n'
+            '决策头：{"decisions":[{"code":"600519","action":"持有","priority":"低"}]}\n乙'
+        )
+        assert dh.strip_structured_header(text) == "甲\n乙"
+
+    def test_idempotent_when_applied_twice(self):
+        html = '<p>表</p><p>决策头：{"decisions":[]}</p><hr>'
+        once = dh.strip_structured_header(html)
+        assert dh.strip_structured_header(once) == once
+
+    def test_strip_undoes_instruction_pairing_roundtrip(self):
+        # 提示词契约 → LLM 输出 → 解析建账 → 渲染剥离：闭环后用户面无机器载荷
+        raw = '<p>决策头：{"decisions":[{"code":"600036","action":"减仓","priority":"高"}]}</p>'
+        assert dh.parse_structured_header(raw) is not None
+        assert dh.strip_structured_header(raw) == ""

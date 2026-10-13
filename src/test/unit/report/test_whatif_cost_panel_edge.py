@@ -20,7 +20,12 @@ import pytest
 
 from src.test.unit.report.test_whatif_cost_panel import _build, _whatif
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_report, pytest.mark.edge]
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.unit_report,
+    pytest.mark.edge,
+    pytest.mark.usefixtures("offline_external_sources"),
+]
 
 
 class TestCostPanelDegradation:

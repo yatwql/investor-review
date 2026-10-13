@@ -2,16 +2,22 @@
 
 覆盖：is_index_code / is_us_index_code / get_index_exchange_prefix /
       is_otc_fund_by_name / is_a_share_stock / is_a_share_code（00 重叠区场外基金辅助判定与 A 股代码判定）/
-      to_fmp_symbol（A 股代码 → FMP 风格符号）。
+      to_fmp_symbol（A 股代码 → FMP 风格符号）/
+      is_six_digit_code / is_letter_based_code（代码形态原语，含内联判定收编回归守卫）。
 """
 
 from __future__ import annotations
+
+import re
+from pathlib import Path
 
 import pytest
 
 from src.python.core.code_utils import (
     get_index_exchange_prefix,
     is_a_share_code,
+    is_letter_based_code,
+    is_six_digit_code,
     is_a_share_stock,
     is_index_code,
     is_otc_fund_by_name,
@@ -21,6 +27,7 @@ from src.python.core.code_utils import (
     get_exchange_category,
     to_exchange_symbol,
 )
+from src.python.core.constants import PROJECT_ROOT
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
 
@@ -298,3 +305,65 @@ class TestToExchangeSymbolAndCategory:
         assert get_exchange_category("830799") == "third"
         assert get_exchange_category("000001") == "szse"
         assert get_exchange_category("300750") == "szse"
+
+
+class TestIsSixDigitCode:
+    """6 位纯数字代码形态原语（配置键/申购行校验与基金链路兜底共用）。"""
+
+    def test_plain_six_digits(self):
+        assert is_six_digit_code("011506") is True
+        assert is_six_digit_code("600036") is True
+
+    def test_prefixed_six_digits(self):
+        assert is_six_digit_code("sh600036") is True
+        assert is_six_digit_code("sz161725") is True
+
+    def test_five_digit_hk_code_rejected(self):
+        assert is_six_digit_code("00700") is False
+
+    def test_seven_digits_rejected(self):
+        assert is_six_digit_code("1234567") is False
+
+    def test_letter_code_rejected(self):
+        assert is_six_digit_code("AAPL") is False
+
+    def test_empty_rejected(self):
+        assert is_six_digit_code("") is False
+
+
+class TestIsLetterBasedCode:
+    """字母为主代码形态原语（外盘字母/混合代码判定）。"""
+
+    def test_pure_letters(self):
+        assert is_letter_based_code("AAPL") is True
+
+    def test_mixed_alnum(self):
+        assert is_letter_based_code("BRK1") is True
+
+    def test_pure_digits_rejected(self):
+        assert is_letter_based_code("600036") is False
+        assert is_letter_based_code("00700") is False
+
+    def test_illegal_chars_rejected(self):
+        assert is_letter_based_code("BRK.B") is False
+
+    def test_empty_rejected(self):
+        assert is_letter_based_code("") is False
+        assert is_letter_based_code(None) is False
+
+
+class TestSixDigitJudgementCentralized:
+    """回归守卫：生产模块不得再内联 6 位纯数字判定（判定收敛 code_utils 单源）。"""
+
+    _INLINE_PATTERN = re.compile(r"len\([a-z_]+\) == 6 and [a-z_]+\.isdigit\(\)")
+
+    def test_no_inline_six_digit_checks_outside_code_utils(self):
+        offenders = []
+        src_root = Path(PROJECT_ROOT) / "src" / "python"
+        for path in src_root.rglob("*.py"):
+            if path.name == "code_utils.py" or "__pycache__" in path.parts:
+                continue
+            text = path.read_text(encoding="utf-8")
+            if self._INLINE_PATTERN.search(text):
+                offenders.append(str(path.relative_to(PROJECT_ROOT)))
+        assert offenders == [], f"内联 6 位数字判定应改用 is_six_digit_code()：{offenders}"

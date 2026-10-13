@@ -29,7 +29,7 @@ from src.python.config.anonymizer import (
 )
 from src.python.core.models import Holding
 
-pytestmark = [pytest.mark.scenario_security]
+pytestmark = [pytest.mark.scenario, pytest.mark.scenario_security]
 
 logger = logging.getLogger("invest")
 

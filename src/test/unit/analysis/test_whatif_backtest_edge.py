@@ -16,7 +16,12 @@ from datetime import date, datetime, timedelta
 
 import pytest
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_analysis, pytest.mark.edge]
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.unit_analysis,
+    pytest.mark.edge,
+    pytest.mark.usefixtures("offline_external_sources"),
+]
 
 
 def _bars(dates: list[str], values: list[float]) -> list[dict]:

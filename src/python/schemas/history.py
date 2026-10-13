@@ -7,7 +7,9 @@
 - DiffSummary：  新旧快照的差异摘要（组合级 + 持仓级）
 - HistoryBar：   单日价格/净值数据点（历史走势曲线基础单元）
 
-遵循原子写入约束：快照文件使用 tempfile.mkstemp + os.replace 写入。
+本模块只定义数据契约（dataclass），不执行任何 I/O——快照文件的原子写入
+（mkstemp + os.replace）由 `report/history_snapshot.py::save` 经 `core/atomic_write`
+唯一原语承担。
 """
 
 from __future__ import annotations

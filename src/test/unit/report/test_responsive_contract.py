@@ -13,7 +13,7 @@ import re
 import pytest
 from src.test._script_loader import load_script
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_web]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_report, pytest.mark.unit_web]
 
 _ROOT = pathlib.Path(__file__).resolve().parents[4]
 _REPORT = _ROOT / "src/static/tmpl/report_template.html"

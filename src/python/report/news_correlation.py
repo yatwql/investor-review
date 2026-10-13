@@ -472,14 +472,13 @@ def build_news_data(
         }
         获取失败时 news_data 为 []。
     """
-    from src.python.fetcher.news import aggregate_news, build_holding_keywords
+    from src.python.fetcher.news import aggregate_news, build_holding_keywords, news_fetch_limits
 
     keywords = build_holding_keywords(holdings, penetrated_assets=penetrated_assets)
     logger.info("%s关键词（含穿透）: %s", get_llm_module_name("news_correlation"), keywords)
 
     keywords, industry_data, lightweight_kw = _expand_industry_keywords(holdings, penetrated_assets, keywords)
-    # per_source 取大值保证召回覆盖面，避免去重后候选不足
-    per_source = max(500, top_n * 2)
+    top_n, per_source = news_fetch_limits(top_n)  # 抓取预算单源算式（取大值保证召回覆盖面）
     news_items = aggregate_news(
         keywords,
         top_n=top_n,

@@ -13,9 +13,13 @@
 
 from __future__ import annotations
 
+import re
 import unittest
+from pathlib import Path
 
 import pytest
+
+from src.python.core.constants import PROJECT_ROOT
 from bs4 import BeautifulSoup
 
 from .test_html_report_structure import (
@@ -1031,3 +1035,48 @@ class TestHtmlReportPeriodAnnotations(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestChartCaptionContract(unittest.TestCase):
+    """无障碍图注契约：每个 canvas 在同文件内须有 `.chart-caption` 附着（图注纪律）。
+
+    图注纪律要求 `.chart-caption` 专属图表说明；表格/统计口径附注使用
+    `.note-caption`，本契约据此类名分离做静态机检。
+    """
+
+    _TMPL_ROOT = Path(PROJECT_ROOT) / "src" / "static" / "tmpl"
+
+    def _template_files(self) -> list[Path]:
+        files = [self._TMPL_ROOT / "report_template.html", self._TMPL_ROOT / "whatif_template.html"]
+        files += sorted((self._TMPL_ROOT / "partials").glob("*.html"))
+        return [f for f in files if f.exists()]
+
+    def test_every_canvas_has_caption_after_in_same_file(self) -> None:
+        orphan = []
+        for path in self._template_files():
+            text = path.read_text(encoding="utf-8")
+            for match in re.finditer(r"<canvas", text):
+                if 'class="chart-caption"' not in text[match.start() :]:
+                    orphan.append(f"{path.name}:canvas@{match.start()}")
+        assert orphan == [], f"canvas 缺图注（`.chart-caption` 须出现在其后）：{orphan}"
+
+    def test_corr_rolling_chart_has_caption(self) -> None:
+        partial = self._TMPL_ROOT / "partials" / "position_structure_section.html"
+        text = partial.read_text(encoding="utf-8")
+        canvas_at = text.index('id="corrRollingChart"')
+        caption_at = text.index('class="chart-caption"', canvas_at)
+        assert caption_at > canvas_at
+
+    def test_chart_caption_not_reused_for_table_notes(self) -> None:
+        partial = self._TMPL_ROOT / "partials" / "portfolio_history_drawdown_section.html"
+        text = partial.read_text(encoding="utf-8")
+        for inner in (
+            "指数层：",
+            "说明：阴影/高亮区间",
+            "口径 {{ monthly.caliber_label }}",
+            "口径：{{ risk_adjusted_excess_data.notes",
+        ):
+            inner_at = text.index(">" + inner)
+            div_start = text.rfind("<div", 0, inner_at)
+            div_tag = text[div_start : text.index(">", div_start) + 1]
+            assert 'class="note-caption"' in div_tag, f"说明附注应使用 note-caption 类：{inner}"

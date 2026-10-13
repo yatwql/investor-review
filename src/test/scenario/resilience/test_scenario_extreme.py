@@ -29,7 +29,12 @@ _EXTREME_HOLDINGS_COUNT = 500
 # ═══════════════════════════════════════════════════════════════
 
 
-pytestmark = [pytest.mark.usefixtures("offline_external_sources")]
+pytestmark = [
+    pytest.mark.scenario,
+    pytest.mark.scenario_resilience,
+    pytest.mark.scenario_extreme,
+    pytest.mark.usefixtures("offline_external_sources"),
+]
 
 
 @pytest.mark.scenario_extreme

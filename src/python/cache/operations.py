@@ -274,7 +274,7 @@ def _refresh_news_cache(holdings: list) -> int:
     Returns:
         成功关联的新闻条数；无持仓或关键词为空时返回 0。
     """
-    from src.python.fetcher.news import aggregate_news, build_holding_keywords
+    from src.python.fetcher.news import aggregate_news, build_holding_keywords, news_fetch_limits
     from src.python.report.news_correlation import _expand_industry_keywords
 
     if not holdings:
@@ -283,8 +283,7 @@ def _refresh_news_cache(holdings: list) -> int:
     if not keywords:
         return 0
     keywords, _industry_data, lightweight_kw = _expand_industry_keywords(holdings, None, keywords)
-    top_n = _get_news_top_count()
-    per_source = max(500, top_n * 2)
+    top_n, per_source = news_fetch_limits(_get_news_top_count())  # 抓取预算单源算式
     news_items = aggregate_news(
         keywords,
         top_n=top_n,

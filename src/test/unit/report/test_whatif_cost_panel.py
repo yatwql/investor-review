@@ -27,7 +27,12 @@ from src.python.analysis.trade_cost_model import SIDE_BUY, SIDE_SELL
 from src.python.report.whatif_cost_panel import build_whatif_cost_panel
 from src.python.schemas.history import AccountSnapshot, SnapshotData, SnapshotHolding
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.unit_report,
+    # 附带依赖：回测窗口天数折算经交易日历（core/trading_calendar），非本文件测试目标
+    pytest.mark.usefixtures("offline_external_sources"),
+]
 
 _BENCH_POOL = {"sh000300": "沪深300", "sh000905": "中证500"}
 

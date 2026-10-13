@@ -137,4 +137,4 @@
 ## Known Gaps — 未覆盖面（随任务推进更新）
 
 - 工作台旧名 `--color-*` 兼容映射有效期一版，到期删除；报告 `--focus` token 已就位，应用点为组件状态矩阵（该项未覆盖）。
-- 样式护栏机检观察期：`check-style-guardrails` 已立（E 级判 finding / W 级观察统计），待稳定评估入 pre-commit 钩子域与 CI guards。
+- 样式护栏机检（`check-style-guardrails`）：E 级判 finding；W 级观察项经样式收敛批次（2026-10-13）归零（裸色值 132→0 / 圆角档外 8→0，含误报修复与豁免域精确化），存量白名单 15 条带理由登记于脚本 `_W1_EXEMPTIONS`。**管控定档**：运行域=unit 测试快反馈（E 级+基线断言）+ 发布门禁 release.py gate（E 级拦/W 级统计留档，2026-10-13 纳入）；纳入 pre-commit/CI guards 须独立决策；白名单只减不增（腐化自动警告）；收敛优先于豁免。观察数只减不增由 `TestBaselineNoGrowth` 基线断言机制化。

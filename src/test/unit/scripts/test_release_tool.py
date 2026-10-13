@@ -409,9 +409,34 @@ class TestGate:
         first = runner.calls[0]
         assert "test-runner" in first[1]
         assert "--mode" in first and "regression" in first
-        guard_calls = [c for c in runner.calls if any("check-" in part for part in c)]
+        guard_calls = [
+            c
+            for c in runner.calls
+            if any("check-" in part for part in c) and not any("style-guardrails" in part for part in c)
+        ]
         assert len(guard_calls) == len(rel.GUARD_SCRIPTS)
         assert all("--ci" in c for c in guard_calls)
+
+    def test_gate_runs_style_guardrail(self, rel):
+        """发布门禁包含设计护栏（E 级拦 / W 级观察统计；不并入十守护清单）。"""
+        runner = FakeRunner()
+        rc = rel.cmd_gate(ns(), runner=runner)
+        assert rc == 0
+        guardrail_calls = [c for c in runner.calls if any("style-guardrails" in part for part in c)]
+        assert len(guardrail_calls) == 1
+        assert "--ci" in guardrail_calls[0]
+        # 护栏在十守护之后执行（守护清单语义独立）
+        guard_idx = max(i for i, c in enumerate(runner.calls) if any("check-doc-links" in part for part in c))
+        assert runner.calls.index(guardrail_calls[0]) > guard_idx
+
+    def test_gate_stops_on_style_guardrail_failure(self, rel):
+        """设计护栏 E 级 finding → gate 非零退出并中止。"""
+        responses = [
+            (["scripts/test-runner.py"], (0, "", "")),
+            (["scripts/check-style-guardrails.py"], (2, "强调色越权", "")),
+        ]
+        rc = rel.cmd_gate(ns(), runner=FakeRunner(responses=responses))
+        assert rc == 2
 
     def test_gate_stops_on_regression_failure(self, rel):
         runner = FakeRunner(responses=[(["scripts/test-runner.py"], (1, "", "boom"))])

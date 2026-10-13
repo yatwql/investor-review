@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.12.13
+> 文档版本：0.13.0
 
 ## 概述
 
@@ -94,7 +94,7 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 |:-----|:-------|:-----|:-----|
 | **P0** | 提交前 | `.venv/bin/python scripts/test-runner.py --mode dev-verify` + 十守护（`--ci` 全套，钩子自动执行） | 阻塞提交，不得 commit |
 | **P1** | 合入 master 前 | `.venv/bin/python scripts/test-runner.py --mode verify` | 阻塞合入，不得 merge |
-| **P2** | 发布前 | `.venv/bin/python scripts/test-runner.py --mode regression` + 十守护（`--ci` 全套） | 阻塞发布，不得 release |
+| **P2** | 发布前 | `.venv/bin/python scripts/release.py gate`（= regression + 十守护 `--ci` 全套 + 设计护栏，gate 自动编排） | 阻塞发布，不得 release |
 
 **P0 提交前门禁**（全部通过才可 commit；手动项 = dev-verify，下列十守护由 pre-commit 钩子在 `git commit` 时自动执行、CI guards job 同源兜底，本地不手动重复——清单为五处同源引用）：
 
@@ -230,7 +230,7 @@ PYTHONWARNDEFAULTENCODING=1 .venv/bin/python -m pytest src/test/unit -q
 
 | 机制 | 触发 | 跨机器 |
 |:-----|:-----|:------|
-| **P0/P2 门禁** | 提交/发布前 10 个 `--ci` 守护脚本全量（清单见 P0/P2 门禁条款） | ✅ 零配置 |
+| **P0/P2 门禁** | 提交/发布前 10 个 `--ci` 守护脚本全量（清单见 P0/P2 门禁条款）；P2 另含设计护栏段（gate 内置 `check-style-guardrails`，E 级拦 / W 级观察统计） | ✅ 零配置 |
 | **dev-verify preflight** | `test-runner.py --mode dev-verify` 自动运行（仅 `check-task-numbering` 快检；重量守护不入预检，由钩子唯一执行防同树重复） | ✅ 零配置 |
 | **Claude Code hook** | 编辑 `plan.md`/`review-findings.md` 后实时校验 | ⚠️ clone 后运行 `.venv/bin/python scripts/install-claude-hook.py` |
 | **git pre-commit** | `git commit` 执行十守护（与 P0/CI guards 同源）：**读写分层调度**——不读 folders.md 的守护（快集 code-traces/task-numbering/semantic-index/requirement-trace + py 域 file-length + 测试域 test-redundancy）先行后台启动，与 `check-doc-drift` 串行段（跨域守护，恒跑；涉及 `docs/managements/` 或 `src/test/` 时 `--sync` 自动回写统计快照）并行执行；读 folders.md 的 version-consistency 与 doc 域（doc-traces/doc-links）在 doc-drift 完成后启动（避 --sync 写读竞态）；域条件不变（doc 域仅 `*.md`、py 域仅 `*.py`、测试域仅 `src/test/` 变更触发），典型提交约 1~4 秒；三守护另有结论缓存（输入指纹未变回放上次结论，冷/热 --ci 输出逐字一致）；CI guards job 恒全量兜底 | ⚠️ clone 后运行 `sh .githooks/install-hooks.sh` |
@@ -900,7 +900,7 @@ A: 运行 `.venv/bin/python scripts/check-test-markers.py`，脚本会静态扫�
 | `collect-test-coverage.py` | 测试 | 测试覆盖计数收集（`--collect-only` 快照；`--update-docs` 回写 test-coverage/folders 计数行） |
 | `smoke-web.py` | 测试 | Web 模式 HTTP 冒烟脚本（test_client 进程内全链路断言，可独立运行） |
 | `check-version-consistency.py` | 质量 | 版本号全局一致性检查（P0/P2 守护脚本 + 发布流程必跑） |
-| `check-style-guardrails.py` | 质量 | 设计护栏机检（DESIGN.md 护栏样式面；E 级：强调色越权/明暗同步/双面 token 对表判 finding，W 级：裸色值/圆角档位观察统计——**观察期**未入钩子与 CI） |
+| `check-style-guardrails.py` | 质量 | 设计护栏机检（DESIGN.md 护栏样式面；E 级：强调色越权/明暗同步/双面 token 对表判 finding，W 级：裸色值/圆角档位观察统计——未入 pre-commit 钩子与 CI guards；**发布门禁**（release.py gate）已纳入，开发期快反馈由 unit 测试承担） |
 | `check-script-contract.py` | 质量 | scripts 顶层脚本契约机检（退出码声明 ⊆ {0,2} 白名单、check-* 统一 `add_common_args` CLI 面、文本 I/O 显式 encoding、脚本↔测试覆盖映射，四条规则——**观察期**未入钩子与 CI） |
 | `release.py` | 发布 | 发布流程分步编排（check/prepare/refresh/evolution/gate/publish/devbump，每步独立可审阅、失败即停） |
 | `perf-report.py` | 诊断 | 端到端报告生成管线性能基准（独立脚本，mock 外部数据源） |
@@ -1262,7 +1262,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 .venv/bin/python scripts/release.py prepare   # 版本全链 + changelog 发布段归档 + 一致性 --fix
 .venv/bin/python scripts/release.py refresh   # bench --update-docs + collect + doc-drift --sync
 .venv/bin/python scripts/release.py evolution --release   # 演进对照快照（默认只滚当前开发版列）
-.venv/bin/python scripts/release.py gate      # P2：regression + 十守护 --ci
+.venv/bin/python scripts/release.py gate      # P2：regression + 十守护 --ci + 设计护栏（gate 内置）
 .venv/bin/python scripts/release.py publish --title "<发布主题>"   # release 提交 + P1 verify + --no-ff 合并 + tag
 .venv/bin/python scripts/release.py devbump    # 切下一开发版并提交
 ```

@@ -1,7 +1,7 @@
 """调仓 What-if 指定生效日时序回测纯计算测试。
 
 覆盖 `analysis/whatif_backtest.py`：
-  - compute_backtest_days 自然日→交易日折算 / 最小最大钳位 / 坏格式 / 未来日期
+  - compute_backtest_days 交易日历计数（交易日历单源）+ 热身折算 / 最小最大钳位 / 坏格式 / 未来日期
   - _align_series 并集日期 + pairwise LOCF + 首个双方有正值锚点 / 无锚点 / 0 值跳过
   - _normalize / _returns_from_values / _drawdown_series / _period_return / _vol_pct / _neg_dd
   - _build_metrics 5 行指标 + delta/arrow
@@ -30,7 +30,11 @@ from src.python.analysis.whatif_backtest import (
     compute_backtest_metrics,
 )
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_analysis]
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.unit_analysis,
+    pytest.mark.usefixtures("offline_external_sources"),
+]
 
 
 def _bars(dates: list[str], values: list[float]) -> list[dict]:
@@ -47,9 +51,19 @@ def _daily_dates(start: str, n: int) -> list[str]:
 # ── compute_backtest_days ──────────────────────────────────────
 
 
-def test_compute_backtest_days_typical():
-    """2026-07-01 → 44 天（33 自然日×5/7≈24 交易日 + 热身 20）。"""
-    assert compute_backtest_days("2026-07-01", today=date(2026, 8, 3)) == 44
+def test_compute_backtest_days_typical(monkeypatch):
+    """交易日经交易日历单源计数后加热身缓冲折算请求天数（接线 + 热身算式）。"""
+    import src.python.analysis.whatif_backtest as wb
+
+    calls: list[tuple[str, str]] = []
+
+    def _fake_count(start: str, end: str) -> int:
+        calls.append((start, end))
+        return 23
+
+    monkeypatch.setattr(wb, "count_trading_days_elapsed", _fake_count)
+    assert compute_backtest_days("2026-07-01", today=date(2026, 8, 3)) == 23 + wb._BACKTEST_WARMUP_BARS
+    assert calls == [("2026-07-01", "2026-08-03")]
 
 
 def test_compute_backtest_days_clamp_min():

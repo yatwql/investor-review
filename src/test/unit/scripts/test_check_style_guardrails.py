@@ -6,6 +6,9 @@
   - E2 明暗同步：dark 覆盖变量根缺命中 / 根齐通过
   - E3 双面 token 对表：表共名缺定义命中 / 两面同名颜色变量未登记命中 / 一致通过
   - W1/W2 观察语义：裸色值与圆角档外**不进 findings**（只进 observations）
+  - W1 豁免域：HTML 实体误报排除 / 引号区间行（JS 配置与内联 style，含跨行）/
+    var() 回退值 / @media print 块 / 暗色 override 块 / 存量白名单命中与腐化检测
+  - 收敛基线：真实仓库观察数只减不增（样式收敛批次基线机制化）
   - 真实仓库冒烟：E 级零 finding + observations 键齐备 + --ci 退出 0（结构断言）
 """
 
@@ -163,3 +166,92 @@ class TestRealRepoSmoke:
             timeout=60,
         )
         assert proc.returncode == 0, f"--ci 应退出 0（观察期 E 级零 finding）: {proc.stdout}{proc.stderr}"
+
+
+class TestW1Exemptions:
+    """W1 豁免域（引号行/var 回退/print/暗色块/白名单）与 HTML 实体误报修复。"""
+
+    def test_html_entity_not_observed(self, guard, tmp_path):
+        """HTML 数字实体（&#9888; ⚠ / &#10003; ✓ / &#8505; ⓘ）不得计为裸色值。"""
+        f = _write(
+            tmp_path,
+            "ent.html",
+            ":root { --ok: #0a0; }\n<span>&#9888; &#10003; &#8505; &#9675;</span>\n",
+        )
+        _, obs = guard.run_checks(files=[f], design_text=_MINIMAL_DESIGN)
+        assert obs["raw_colors"] == []
+
+    def test_quoted_line_exempt(self, guard, tmp_path):
+        """引号区间覆盖行豁免（JS 配置串 / HTML 内联 style 属性，含跨行续行）。"""
+        f = _write(
+            tmp_path,
+            "q.html",
+            ":root { --ok: #0a0; }\n"
+            "const cfg = { bg: 'rgba(46,117,182,0.1)', fg: '#fff' };\n"
+            '<td style="background-color: #FF4444; color: white;">x</td>\n'
+            '<td style="background-color: #FF8C00;\n'
+            '  color: white;">y</td>\n'
+            ".outside { color: #abc; }\n",
+        )
+        _, obs = guard.run_checks(files=[f], design_text=_MINIMAL_DESIGN)
+        assert len(obs["raw_colors"]) == 1 and "#abc" in obs["raw_colors"][0], "引号行豁免后仅引号外裸值应保留"
+
+    def test_var_fallback_exempt(self, guard, tmp_path):
+        """var(--x, <fallback>) 回退值豁免（token 缺失防御，非裸值声明）。"""
+        f = _write(
+            tmp_path,
+            "v.html",
+            ":root { --ok: #0a0; }\n.a { color: var(--chart-text, #888); }\n.b { border: 1px solid var(--border-color, rgba(128,128,128,0.25)); }\n",
+        )
+        _, obs = guard.run_checks(files=[f], design_text=_MINIMAL_DESIGN)
+        assert obs["raw_colors"] == []
+
+    def test_print_media_exempt(self, guard, tmp_path):
+        """@media print 块豁免（打印恒定黑白域），块外裸值仍观察。"""
+        f = _write(
+            tmp_path,
+            "p.html",
+            ":root { --ok: #0a0; }\n"
+            "@media print {\n  body { background: #fff; color: #000; }\n}\n"
+            ".d { color: #abc; }\n",
+        )
+        _, obs = guard.run_checks(files=[f], design_text=_MINIMAL_DESIGN)
+        assert len(obs["raw_colors"]) == 1 and "#abc" in obs["raw_colors"][0]
+
+    def test_dark_override_block_exempt(self, guard, tmp_path):
+        """暗色 override 块豁免（契约「双主题 override 块除外」），块外裸值仍观察。"""
+        f = _write(
+            tmp_path,
+            "dk.html",
+            ':root { --ok: #0a0; }\n[data-theme="dark"] .upload {\n  background: #1a1a1a;\n}\n.x { color: #abc; }\n',
+        )
+        _, obs = guard.run_checks(files=[f], design_text=_MINIMAL_DESIGN)
+        assert len(obs["raw_colors"]) == 1 and "#abc" in obs["raw_colors"][0]
+
+    def test_whitelist_exemption_and_stale_detection(self, guard, tmp_path, monkeypatch):
+        """存量白名单命中跳过；未命中现行行 → 腐化警告点名（只减不增纪律）。"""
+        f = _write(tmp_path, "w.html", ":root { --ok: #0a0; }\n.t { color: #123abc; }\n")
+        rel_path = guard.rel(f)
+        monkeypatch.setattr(
+            guard,
+            "_RAW_COLOR_EXEMPTIONS",
+            ((rel_path, r"#123abc", "测试豁免"), (rel_path, r"#deadbe", "注定腐化")),
+        )
+        _, obs = guard.run_checks(files=[f], design_text=_MINIMAL_DESIGN)
+        assert obs["raw_colors"] == [], "白名单命中的行不应进观察"
+        stale = guard._stale_exemptions([f])
+        assert len(stale) == 1 and "#deadbe" in stale[0]
+
+
+class TestBaselineNoGrowth:
+    """样式收敛批次基线：真实仓库观察数只减不增（管控机制化，非演进总数断言）。"""
+
+    #: 2026-10-13 样式收敛批次后的治理基线——只允许沿收敛路径下降，不得回升
+    _W1_BASELINE = 0
+    _W2_BASELINE = 0
+
+    def test_observed_counts_within_baseline(self, guard):
+        """新增裸色值/档外圆角必须走 token 或复审白名单，否则本断言红。"""
+        _, obs = guard.run_checks()
+        assert len(obs["raw_colors"]) <= self._W1_BASELINE
+        assert len(obs["radius"]) <= self._W2_BASELINE

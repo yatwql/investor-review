@@ -12,6 +12,7 @@
     evolution  版本演进对照快照：git 清单 + 逐文件行数口径；默认只滚「当前开发版」列，
                `--release` 时发布列与增长比一并写入（发布期在 prepare 之后执行）
     gate       P2 门禁：`--mode regression` + 十守护 `--ci`（清单与门禁文档同源）
+               + 设计护栏 `check-style-guardrails --ci`（E 级拦 / W 级观察统计）
     publish    release 提交 + P1 verify + --no-ff 合并 dev→master + tag（默认不推送）
     devbump    切下一开发版 X.Y.(Z+1)-dev + chore 提交
 
@@ -661,7 +662,21 @@ def cmd_gate(args: argparse.Namespace, runner=None) -> int:
     if worst:
         print("[ERR] P2 守护存在 finding，先修复再发布")
         return worst
-    print("[OK] P2 门禁全绿（regression + 十守护）")
+
+    # 设计护栏（不入十守护清单——清单为 pre-commit/CI guards 五处同源硬约定；
+    # 发布门禁域单独纳入：E 级拦 / W 级观察统计，开发期快反馈由 unit 测试承担）
+    print("[..] P2 门禁：设计护栏（check-style-guardrails，E 级拦 / W 级观察统计）")
+    rc, out, err = _exec([sys.executable, "scripts/check-style-guardrails.py", "--ci"], REPO_ROOT, runner)
+    if out.strip():
+        print("  " + out.strip().replace("\n", "\n  "))
+    if rc != 0:
+        if err.strip():
+            print("  " + err.strip().replace("\n", "\n  "))
+        print("[ERR] 设计护栏未通过，P2 中止")
+        return rc if rc in (1, 2, 3) else 1
+    print("[OK] 设计护栏通过\n")
+
+    print("[OK] P2 门禁全绿（regression + 十守护 + 设计护栏）")
     return 0
 
 
@@ -812,7 +827,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_evolution = sub.add_parser("evolution", help="版本演进对照快照（默认只滚当前开发版列）")
     p_evolution.add_argument("--release", action="store_true", help="发布期使用：发布列与增长比一并写入")
 
-    sub.add_parser("gate", help="P2 门禁：regression + 十守护 --ci")
+    sub.add_parser("gate", help="P2 门禁：regression + 十守护 --ci + 设计护栏")
 
     p_publish = sub.add_parser("publish", help="release 提交 + P1 verify + --no-ff 合并 + tag")
     p_publish.add_argument("--title", required=True, help="release 提交主题（changelog 摘要式短描述）")

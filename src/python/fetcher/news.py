@@ -95,3 +95,22 @@ def get_last_source_status() -> dict[str, dict]:
         {source_key: {"label": str, "success": bool, "count": int, "error": str | None}}
     """
     return _get_last_source_status()
+
+
+#: per_source 保底条数（低于该值去重后候选不足，削弱相关性召回覆盖面）
+_NEWS_PER_SOURCE_FLOOR = 500
+
+
+def news_fetch_limits(top_n: int) -> tuple[int, int]:
+    """由 LLM 用量预算 top_n 推导聚合抓取参数（抓取预算单源算式，调用方不得各自内联）。
+
+    ``per_source`` 每源获取数量与 ``top_n`` 最终截取数量解耦：按 top_n 放大、
+    保底 `_NEWS_PER_SOURCE_FLOOR`，保证去重后候选仍满足最终截取数。
+
+    Args:
+        top_n: 最终需要的新闻条数（LLM 用量预算 news_top_count）
+
+    Returns:
+        ``(top_n, per_source)``——原样透传 top_n 并给出放大后的每源抓取量
+    """
+    return int(top_n), max(_NEWS_PER_SOURCE_FLOOR, int(top_n) * 2)

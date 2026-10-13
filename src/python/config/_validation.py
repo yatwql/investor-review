@@ -11,6 +11,7 @@ import os
 import re
 from typing import Any
 
+from src.python.core.code_utils import is_six_digit_code
 from src.python.core.constants import PROJECT_ROOT
 from src.python.core.registry import get_known_enabled_llm_keys, get_report_section_keys
 from src.python.analysis.drawdown_events import MIN_SPAN
@@ -264,7 +265,7 @@ def _validate_fund_fee_fallback(config: dict, issues: int) -> int:
     from src.python.analysis.fee_schedule_model import build_config_fee_schedules
 
     for code, entry in fb.items():
-        if not (isinstance(code, str) and len(code) == 6 and code.isdigit()):
+        if not (isinstance(code, str) and is_six_digit_code(code)):
             logger.warning("config.json fund_fee_fallback 键 %r 不是 6 位基金代码，该条忽略", code)
             issues += 1
             continue

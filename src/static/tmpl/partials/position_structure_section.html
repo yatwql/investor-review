@@ -228,6 +228,7 @@
             <div class="corr-rolling-trend" style="margin-top: 16px;">
                 <div style="font-weight: 600; margin: 16px 0 8px;">滚动趋势：分散化是否随时间失效</div>
                 <canvas id="corrRollingChart" width="800" height="260" style="width:100%;height:260px;" aria-label="组合平均相关性滚动趋势图（60/120 日端点窗）" role="img">图表无法显示，数据见下方重点品对表</canvas>
+                <div class="chart-caption">组合平均相关性滚动趋势（60/120 日端点窗；数据见下方重点品对表）</div>
                 {% set _focus_pairs = _rolling["focus_pairs"] %}
                 {% if _focus_pairs %}
                 <table style="width: 100%; border-collapse: collapse; font-size: var(--fs-table-sm); margin-top: 8px;">
