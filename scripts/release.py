@@ -12,6 +12,7 @@
     evolution  版本演进对照快照：git 清单 + 逐文件行数口径；默认只滚「当前开发版」列，
                `--release` 时发布列与增长比一并写入（发布期在 prepare 之后执行）
     gate       P2 门禁：`--mode regression` + 十守护 `--ci`（清单与门禁文档同源）
+               + 设计护栏 `check-style-guardrails --ci`（E 级拦 / W 级观察统计）
     publish    release 提交 + P1 verify + --no-ff 合并 dev→master + tag（默认不推送）
     devbump    切下一开发版 X.Y.(Z+1)-dev + chore 提交
 
