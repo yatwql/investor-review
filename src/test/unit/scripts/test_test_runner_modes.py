@@ -19,6 +19,8 @@ import itertools
 import pytest
 from src.test._script_loader import load_script
 
+pytestmark = [pytest.mark.unit]
+
 
 @pytest.mark.unit_scripts
 class TestDevVerifyPreflightDedup:

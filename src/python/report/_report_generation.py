@@ -20,6 +20,7 @@ from src.python.report._experimental_seams import (
     record_llm_decisions_and_review_block,
     record_prosperity_diagnosis,
 )
+from src.python.core.decision_header import strip_structured_header
 from src.python.report.progress import ProgressReporter
 from src.python.report._report_output import (  # noqa: F401  # 产物落盘子模块（消费方在本门面，patch 点不变）
     _generate_full_excel_report,
@@ -568,6 +569,13 @@ def _generate_report_full(
     # ③ 登记 LLM 操作建议 ④ 复盘区块数据契约注入 pipeline_data（HTML/Excel 行动章
     # 内嵌块消费）。挂载点实现与异常守护见 `_experimental_seams`。
     record_llm_decisions_and_review_block(prep, llm_content, _enable_llm, pipeline_data, reporter)
+
+    # ── 5b'. 结构化决策头渲染剥离 ──
+    # 决策头是给上方登记解析的机器载荷（单行 JSON，用户不可读）；登记完成后从
+    # 四元组整体剥离——HTML/Excel 双端写出共用本元组，单点剥离即双端干净；
+    # 缓存保留原始内容不回写（登记与剥离每次运行重新执行）。
+    if llm_content:
+        llm_content = tuple(strip_structured_header(_item) for _item in llm_content)
 
     # ── 5c. 模块级质量分级（实验开关，默认关闭）──
     # 只标注不阻断、不重试、不写回缓存。置于决策登记之后：横幅会改变内容文本，

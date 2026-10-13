@@ -18,7 +18,7 @@ import pytest
 from src.python.core.models import Holding
 from src.python.report.market_value import DetailRow
 
-pytestmark = [pytest.mark.scenario_perf]
+pytestmark = [pytest.mark.scenario, pytest.mark.scenario_perf]
 
 logger = logging.getLogger("invest")
 

@@ -202,3 +202,31 @@ class TestParsePriorityBoundaries:
     )
     def test_priority_shapes(self, text, expected):
         assert dh.parse_priority(text) == expected
+
+
+class TestStripStructuredHeaderMalformed:
+    """剥离：畸形决策头形态矩阵（载荷缺失/未闭合/块未闭合/EOF 粘连）。"""
+
+    def test_marker_without_json_plain_line_removed(self):
+        assert dh.strip_structured_header("a\n决策头：\nb") == "a\nb"
+
+    def test_unclosed_json_removed_through_block_close(self):
+        html = '<p>前文</p><p>决策头：{"decisions":[{"code":"600000"</p><hr>'
+        assert dh.strip_structured_header(html) == "<p>前文</p><hr>"
+
+    def test_marker_at_eof_without_newline(self):
+        assert dh.strip_structured_header("决策头：") == ""
+
+    def test_unclosed_block_at_eof_removed(self):
+        assert dh.strip_structured_header("<p>前文</p><p>决策头：") == "<p>前文</p>"
+
+    def test_mid_line_marker_without_json_removes_only_marker(self):
+        assert dh.strip_structured_header("<p>前文 决策头：</p>") == "<p>前文 </p>"
+
+    def test_fenced_json_inside_html_block_removed_with_block(self):
+        html = '<p>决策头：\n```json\n{"decisions":[]}\n```</p><p>后文</p>'
+        assert dh.strip_structured_header(html) == "<p>后文</p>"
+
+    def test_uppercase_p_block_removed(self):
+        html = '<P>决策头：{"decisions":[]}</P><p>后文</p>'
+        assert dh.strip_structured_header(html) == "<p>后文</p>"

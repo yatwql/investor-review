@@ -280,8 +280,8 @@ def _extract_header_payload(text: str | None) -> str | None:
     """从文本中取出 ``决策头：`` 之后的 JSON 载荷。
 
     按**括号配对**截取（而非「首个 ``{`` 到末个 ``}``」）：模型偶尔在同一行写出
-    多段内容，末个 ``}` 会跨段拼接成非法 JSON。配对扫描带字符串状态跟踪，引号内的
-    花括号不计入深度。
+    多段内容，末个 ``}` 会跨段拼接成非法 JSON。配对扫描复用 :func:`_match_json_end`
+    （与渲染剥离共用单源，引号内的花括号不计入深度）。
     """
     if not text or STRUCTURED_HEADER_MARKER not in text:
         return None
@@ -290,11 +290,22 @@ def _extract_header_payload(text: str | None) -> str | None:
     start = line.find("{")
     if start < 0:
         return None
+    end = _match_json_end(line, start, len(line))
+    return line[start:end] if end is not None else None
+
+
+def _match_json_end(text: str, start: int, limit: int) -> int | None:
+    """从 ``start``（须指向 ``{``）做括号配对扫描，返回闭合 ``}`` 之后的下标。
+
+    扫描区间 ``[start, limit)``；带字符串/转义状态跟踪——字符串值内的花括号
+    不计入深度，避免载荷被提前截断。未闭合返回 ``None``。解析提取与渲染剥离
+    共用本扫描，两个方向的载荷边界判定完全一致。
+    """
     depth = 0
     in_string = False
     escaped = False
-    for index in range(start, len(line)):
-        char = line[index]
+    for index in range(start, limit):
+        char = text[index]
         if in_string:
             if escaped:
                 escaped = False
@@ -310,7 +321,7 @@ def _extract_header_payload(text: str | None) -> str | None:
         elif char == "}":
             depth -= 1
             if depth == 0:
-                return line[start : index + 1]
+                return index + 1
     return None
 
 
@@ -358,6 +369,70 @@ def parse_structured_header(text: str | None) -> list[dict[str, Any]] | None:
     return rows or None
 
 
+_P_BLOCK_OPEN_RE = re.compile(r"<p(?:\s[^<>]*)?>[ \t]*\Z", re.IGNORECASE)
+_BLOCK_CLOSE_TAIL_RE = re.compile(r"[ \t]*</p>", re.IGNORECASE)
+
+
+def _strip_span(text: str, marker_idx: int) -> tuple[int, int]:
+    """计算 ``marker_idx`` 处决策头的剥离区间 ``[start, end)``（调用方保证标记存在）。"""
+    marker_end = marker_idx + len(STRUCTURED_HEADER_MARKER)
+    line_start = text.rfind("\n", 0, marker_idx) + 1
+    prefix = text[line_start:marker_idx]
+    open_block = _P_BLOCK_OPEN_RE.search(prefix)
+    newline = text.find("\n", marker_end)
+    p_close = text.find("</p>", marker_end)
+    # 载荷扫描边界：行尾与块闭标签先到者（载荷不允许跨越行/块）
+    limit = newline if newline >= 0 else len(text)
+    if 0 <= p_close < limit:
+        limit = p_close
+    brace = text.find("{", marker_end, limit)
+    payload_end = _match_json_end(text, brace, limit) if brace >= 0 else None
+
+    if open_block:
+        # 标记独占 <p> 块（块开标签与标记间仅空白）：连标签整块剥离
+        start = line_start + open_block.start()
+        if payload_end is not None:
+            end = payload_end
+            close = _BLOCK_CLOSE_TAIL_RE.match(text, end)
+            if close:
+                end = close.end()
+        elif p_close >= 0:
+            end = p_close + len("</p>")
+        else:
+            end = (newline + 1) if newline >= 0 else len(text)
+    elif prefix.strip():
+        # 标记行内混排（标记前有正文）：仅剥标记自身，载荷随配对截取
+        start = marker_idx
+        end = payload_end if payload_end is not None else marker_end
+    else:
+        # 标记独占一行（纯文本形态）：整行连换行一并剥除，不留空行
+        start = line_start
+        end = (newline + 1) if newline >= 0 else len(text)
+    return start, end
+
+
+def strip_structured_header(text: str | None) -> str | None:
+    """剥离结构化决策头——渲染前清理机器载荷（用户可见面不直出 `决策头：{...}`）。
+
+    提示词契约要求 LLM 在操作建议表后追加单行 JSON
+    （:func:`build_structured_header_instruction`），供登记解析
+    （:func:`parse_structured_header`）消费；解析完成后写侧把该行从内容中移除，
+    HTML 报告正文与 Excel 页签即不向最终用户展示原始 JSON。与解析侧共用标记
+    常量与括号配对扫描（单源）。幂等；无标记原样返回。
+    形态：HTML 块 `<p>决策头：{...}</p>` 整块移除；纯文本独占行整行移除（含
+    换行）；行内混排仅移除标记至载荷末（前置正文保留），载荷缺失（畸形）时
+    只移除标记本身。
+    """
+    if not text or STRUCTURED_HEADER_MARKER not in text:
+        return text
+    out = text
+    while STRUCTURED_HEADER_MARKER in out:
+        marker_idx = out.find(STRUCTURED_HEADER_MARKER)
+        start, end = _strip_span(out, marker_idx)
+        out = out[:start] + out[end:]
+    return out
+
+
 __all__ = [
     "CANONICAL_DECISION_WORDS",
     "COMPOUND_PREFIX_CHARS",
@@ -377,5 +452,6 @@ __all__ = [
     "parse_priority",
     "parse_structured_header",
     "strip_marks",
+    "strip_structured_header",
     "structured_header_cache_suffix",
 ]
