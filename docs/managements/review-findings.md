@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.13.2-dev
-> **编号源**：`rf-next = 680`（新增问题取此编号，完成后更新为 +1；已用最大 rf-679，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 682`（新增问题取此编号，完成后更新为 +1；已用最大 rf-681，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -62,3 +62,8 @@
 - [`archived_review-findings.0.3.x.md`](../archive/v0.3.x/archived_review-findings.0.3.x.md)
 - [`archived_review-findings.0.2.x.md`](../archive/v0.2.x/archived_review-findings.0.2.x.md)
 - [`archived_review-findings.0.1.x.md`](../archive/v0.1.x/archived_review-findings.0.1.x.md)
+
+### 开发期已修复（0.13.2-dev）
+
+- rf-680 已修复（2026-10-14，technical.md §1.6.3 菜单体系与实现脱节）：菜单表停在 18 项旧态（缺 `[Q]` 报告对话式追问、`[T]` 单门控表述过时、多处标签与 `[S]` 面板分块/默认项描述过期），§1.6.1 模块表缺 `handlers_log.py`/`handlers_qa.py`/`status_line.py`。修复：按实际排列重写 19 项菜单表 + `FEATURE_GATED_ITEMS` 双门控语义（`report_qa` ⚗ 默认关 / `doctor_check` 默认开，`_apply_feature_gates` 在 `_bind_callbacks` 前执行）+ 页头状态行 `build_status_line` 五项描述；TUI 菜单手册同步核对——主菜单 `[D]`/`[1]`/`[I]` 标签对齐实际显示、[1] 缓存清单补全（refresh 组 18 模块）、[2] 附带清除 LLM 清单补生成后自检/持仓变动复盘归因/辩论三模块、[A] 名称替换表述改「品种X」。纯文档对齐。
+- rf-681 已修复（2026-10-14，CLI/Web 渠道文档与实现脱节）：technical.md §1.7.2 缺 `report --prefer-source/--exclude-source`；§1.8.4 路由表缺 `/api/whatif`、`GET /api/cache`、`POST /api/cache/cleanup`、`POST /api/qa/ask` 四行；§1.8.8 仍称配置面板「8 块、experimental/standard 两键」（实际 9 块，「功能开关」组按 `features.groups` 四组分块，无 `standard` 键）；§1.8.9 同源校验行未覆盖 whatif/cache-cleanup 两个 POST；§1.8.1 handlers 行路由清单旧。手册同步——Web 手册 §5 LLM 分析章节行列旧名 5 项（实际 7 项现行名）、§5.1 开关分块命名与「（影响报告）」举例过期（现由 `report_affecting` 全量下发）、自检卡定位「常规开关区第 24 项」改「机制与诊断区」；CLI 手册 §10.1「按菜单项逐项对照」改「生成类菜单对照 + 无 CLI 等价项声明」。纯文档对齐。
