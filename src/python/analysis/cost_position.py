@@ -1,6 +1,6 @@
 """持仓成本相对历史价格区间位置（cost_position）— 纯计算层。
 
-指标定义（设计见 ``docs/plan/holding-cost-position-design.md``）：
+指标定义（设计见 ``docs/archive/v0.13.x/holding-cost-position-design.md``）：
 
 .. code-block:: text
 
