@@ -8,7 +8,7 @@ echo "正在启动投资复盘助手 ..."
 
 # 0. 解析入口参数（默认 TUI；web 入口启动轻量 Web 服务，参数透传 --host/--port/--config）
 ENTRY="tui"
-if [ "$1" = "web" ] || [ "$1" = "tui" ]; then
+if [ "${1:-}" = "web" ] || [ "${1:-}" = "tui" ]; then
     ENTRY="$1"
     shift
 fi
@@ -49,7 +49,7 @@ if [ -d ".venv" ] || [ -L ".venv" ]; then
         echo "检测到本地虚拟环境。"
         _init_venv_if_needed ".venv"
     fi
-elif [ -n "$VENV_PATH" ]; then
+elif [ -n "${VENV_PATH:-}" ]; then
     # VENV_PATH 环境变量指向外部管理的 .venv 目录
     echo "正在链接外部虚拟环境: $VENV_PATH"
     if [ ! -d "$VENV_PATH" ]; then
