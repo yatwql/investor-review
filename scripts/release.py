@@ -87,6 +87,7 @@ from _release._versioning import (  # noqa: E402
     render_readme_version,
 )
 
+
 def archive_paths_for(release_version: str) -> tuple[Path, str]:
     """按小版本推导归档目录与文件名（小版本号 → docs/archive/vX.Y.x/… 目录）。"""
     m = _RELEASE_VERSION_RE.match(release_version)

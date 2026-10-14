@@ -127,9 +127,7 @@ def consumes_verbose(path: Path) -> bool:
         tree = _parse(path)
     except SyntaxError:
         return False
-    return any(
-        isinstance(node, ast.Attribute) and node.attr == "verbose" for node in ast.walk(tree)
-    )
+    return any(isinstance(node, ast.Attribute) and node.attr == "verbose" for node in ast.walk(tree))
 
 
 def encoding_violations(path: Path) -> list[str]:

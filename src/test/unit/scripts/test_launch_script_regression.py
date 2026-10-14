@@ -53,9 +53,7 @@ class TestLaunchScriptUnboundVariableRegression:
         (tmp_path / "emptybin").mkdir()
         result = self._run(tmp_path)
         combined = result.stdout + result.stderr
-        assert "unbound variable" not in combined, (
-            f"launch.sh 在 set -u 下引用了未定义变量（裸 $1）：\n{combined}"
-        )
+        assert "unbound variable" not in combined, f"launch.sh 在 set -u 下引用了未定义变量（裸 $1）：\n{combined}"
         assert "未找到 Python" in result.stderr, f"应走到 Python 探测失败分支：\n{combined}"
         assert result.returncode == 1
 
@@ -68,12 +66,8 @@ class TestLaunchScriptUnboundVariableRegression:
         stub.chmod(0o755)
         result = self._run(tmp_path)  # 显式不传 VENV_PATH
         combined = result.stdout + result.stderr
-        assert "unbound variable" not in combined, (
-            f"launch.sh 在 set -u 下引用了未定义的 VENV_PATH：\n{combined}"
-        )
-        assert "正在创建本地虚拟环境" in result.stdout, (
-            f"应越过 VENV_PATH 判断进入本地创建分支：\n{combined}"
-        )
+        assert "unbound variable" not in combined, f"launch.sh 在 set -u 下引用了未定义的 VENV_PATH：\n{combined}"
+        assert "正在创建本地虚拟环境" in result.stdout, f"应越过 VENV_PATH 判断进入本地创建分支：\n{combined}"
 
     @pytest.mark.parametrize("arg", ["web", "tui"])
     def test_entry_args_parse_with_python_missing(self, tmp_path, arg):
