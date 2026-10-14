@@ -144,7 +144,8 @@ class TestShellNounsetPositionalParam:
 
         例外：若同一顶层块中该位置参数已先经 `${N:-}` 守卫（launch.sh 的
         `if [ "${1:-}" … ]; then ENTRY="$1"` 模式），后续裸引用不会触发 unbound，
-        视为安全——否则该守卫写法会被迫退化，误报反降低可读性。
+        视为安全——否则该守卫写法会被迫退化，误报反降低可读性。`shift` 会改变
+        位置参数语义（$1 变为下一个可能未设置的参数），遇 shift 须清空豁免集。
         """
         offenders = []
         for path in _shell_scripts():
@@ -167,6 +168,8 @@ class TestShellNounsetPositionalParam:
                         offenders.append(f"{path.name}:{idx + 1}  裸位置参数 {stripped[:40]}")
                 if stripped == "}" and depth > 0:
                     depth -= 1
+                if re.fullmatch(r"shift(\s+\d+)?", stripped):
+                    guarded.clear()  # shift 后位置参数语义改变，早期守卫不再适用
         assert offenders == [], (
             "set -u 下顶层裸 $N 在无参调用时展开即崩（launch.sh 已实际发生），"
             "应改用 ${N:-} 或先判 $#：\n" + "\n".join(offenders)
