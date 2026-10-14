@@ -223,6 +223,8 @@ def generate_excel_report(
     financial_indicator_data: dict | None = None,  # 财务指标数据契约（功能开关 `financial_indicator`，默认关）
     purchase_status_data: dict
     | None = None,  # 申购限购状态契约（功能开关 `fund_purchase_limit`；None 时从 pipeline_data 读取）
+    cost_position_data: dict
+    | None = None,  # 持仓成本区间位置契约（功能开关 `cost_position`；None 时从 pipeline_data 读取）
 ) -> None:
     """生成 Excel 报告的核心逻辑。
 
@@ -352,6 +354,9 @@ def generate_excel_report(
             purchase_status_data
             if purchase_status_data is not None
             else (pipeline_data or {}).get("purchase_status_data")
+        ),
+        cost_position_data=(
+            cost_position_data if cost_position_data is not None else (pipeline_data or {}).get("cost_position_data")
         ),
         valuation_data=valuation_data if valuation_data is not None else (pipeline_data or {}).get("valuation_data"),
         market_temperature_data=(

@@ -28,6 +28,7 @@ def write_content_sheets(
     market_temperature_data: dict | None = None,
     enable_fund_deep_analysis: bool = False,
     purchase_status_data: dict | None = None,
+    cost_position_data: dict | None = None,
 ) -> dict:
     """写入汇总 / 持仓明细与分类 / 穿透 / 基金业绩页签，返回穿透结果。
 
@@ -41,6 +42,8 @@ def write_content_sheets(
             开关关闭或 None 时汇总页签保持既有输出。
         purchase_status_data: 申购限购状态契约（持仓明细「申购状态」条件列），
             开关关闭（None）或 available=False 时该列不渲染（保持既有 15/16 列输出）。
+        cost_position_data: 持仓成本区间位置契约（持仓明细「成本区间位置」两条件列），
+            开关关闭（None）或 available=False 时两列不渲染（保持既有输出）。
     """
     fund_flow_data = data.get("fund_flow_data") if enable_cost_lots else None
 
@@ -83,6 +86,7 @@ def write_content_sheets(
         data["details"],
         fund_flow_data=fund_flow_data,
         purchase_status_data=purchase_status_data,
+        cost_position_data=cost_position_data,
     )
 
     compute_pen = modules.get("compute_penetration_top10", lambda _a, _b: {})

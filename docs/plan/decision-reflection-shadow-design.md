@@ -1,33 +1,25 @@
 # 决策跨期反思闭环（decision_reflection）设计 —— plan-70
 
-> **状态**：设计（plan-70 原仅有「撤销死线」动作，本文件补齐落地路径；死线条款
-> 仍然有效并优先）。
-> **参照**：Vibe-Trading `agent/src/shadow_account`（extract → codegen → backtest
-> → render 影子账户闭环，3.2K 行 + 2.5K 行测试）。
-> **研究背景**：见 `vibe-trading-borrow-candidates-research.md` §2.1。
+> **状态**：设计（plan-70 死线未过；仅在转正判定后按本设计实施，死线条款优先）。
 
 ## 1. 问题重述
 
-`decision_reflection` 实验（`core/decision_ledger` + `decision_llm_capture` +
-experiment_stats 观测）现状：真实账本积累极少、闭环从未被真实数据跑通。plan-70
-原动作是「2 个发布周期内无增长即撤销」。本设计回答：**若要给转正一次机会，闭环
-应当长什么样**。
+> `decision_reflection` 实验（`core/decision_ledger` + `decision_llm_capture` +
+experiment_stats 观测）的真实账本积累不足、闭环未被真实数据跑通。本设计给出
+**若判定转正，闭环的落地形态**。
 
-## 2. Vibe-Trading 影子账户的核心思想（可借鉴点）
+## 2. 闭环核心机制
 
-1. **把行为结构化成可回放的 profile**：`extract_shadow_profile` 从 journal 提取
-   ShadowProfile/ShadowRule（规则化、可序列化、可复跑）——对应我们：把每次复盘/
-   调仓 LLM 给出的「行动建议」从自由文本提炼成结构化决策条目（品种/方向/理由
-   摘要/置信表述），存入 `decision_ledger.jsonl`（已有）但补齐**可结算字段**。
-2. **到期自动回放对账**：影子回测按期复跑 profile，对比「如果按规则做 vs 实际」。
-   对应我们：**结算器**——新报告生成时，对账本中未到期的条目按当前行情结算
-   （建议后 N 交易日的品种收益 vs 同期基准），回写 direction_accuracy。
-3. **归因报告而非裸数字**：AttributionBreakdown 把结果拆成可解释块。对应我们：
-   doctor 账本概览已有雏形，补「命中率分品种/分理由类型」拆解。
+1. **把行为结构化成可回放的 profile**：把每次复盘/调仓 LLM 给出的「行动建议」
+   从自由文本提炼成结构化决策条目（品种/方向/理由摘要/置信表述），存入
+   `decision_ledger.jsonl`（已有）并补齐**可结算字段**。
+2. **到期自动回放对账（结算器）**：新报告生成时，对账本中未到期的条目按当前
+   行情结算（建议后 N 交易日的品种收益 vs 同期基准），回写 `direction_accuracy`。
+3. **归因报告而非裸数字**：doctor 账本概览已有雏形，补「命中率/准确率分品种、
+   分理由类型」拆解。
 
-**不照搬**：其 codegen 生成可执行配置文件的形态（把影子编译成回测配置）对我们
-过重——我们已有 whatif_backtest 引擎，结算器直接复用其指标原语即可，不新增引擎。
-
+**实现取舍**：不引入「把决策编译成回测配置」的形态（过重）；结算器直接复用
+whatif_backtest 引擎指标原语，不新增引擎。
 ## 3. 落地路径（若观测期数据支持转正）
 
 四个迭代串行推进，每个迭代单独可合并（P0 门禁绿）；前置依赖未满足不得开工。

@@ -3397,6 +3397,8 @@ make_http_client(timeout=10.0) → httpx.Client
 | `fund_purchase_limit` | 基金申购限购状态列（持仓明细两端——Excel 市值明细/分类汇总两区块末列 + HTML 市值明细/持仓分类表条件列：申购状态 + 日限额/下一开放日，天天基金渠道口径；数据不可用静默隐列） | 持仓明细与分类 | 数据获取 | 功能开关 `fund_purchase_limit`（默认开） |
 | `purchase_status_data` | 申购限购状态数据契约（C19：available/reason/rows/fetched_at/source） | 持仓明细与分类 | 数据获取 | 无（契约） |
 | `purchase_status` | 申购状态展示装配与展示单源（`report/purchase_status.py`：契约构建/陈旧阶梯分档/单元格文案/口径脚注，Excel 与 HTML 共用） | 持仓明细与分类 | 报告输出 | 无（单源模块） |
+| `cost_position` | 持仓成本区间位置列（持仓明细两端——Excel 市值明细/分类汇总两区块末列两列：每份成本相对近 20/260 交易日价格区间百分位，≈1 追涨嫌疑；纯计算 `analysis/cost_position.py` + 编排 `report/cost_position.py`，行情缺失静默隐列） | 持仓明细与分类 | 数据获取 | 功能开关 `cost_position`（默认开） |
+| `cost_position_data` | 持仓成本区间位置数据契约（available/positions/footnote） | 持仓明细与分类 | 数据获取 | 无（契约） |
 | `whatif_trade_cost` | What-if 交易成本对比（回放计入申赎成本：FIFO 快照批次交易日持有期阶梯 + 金额分档申购；t0 一次性扣费成本前/后差 + 业绩基准三线；费率未知/场内品种显式标注不出成本后数字） | 调仓 What-if | 报告输出 | 报告章节与增强开关 `whatif_trade_cost`（默认关） |
 | `trade_cost_model` | 调仓交易成本模型唯一实现（快照事件 FIFO 批次重放：期初批首见日下界 + 逐批判档加权 + 腿级费用聚合 → `trade_cost` 契约，纯计算零 I/O；表选档下沉 `fee_schedule_model`） | 调仓 What-if | 分析计算 | 随 `whatif_trade_cost` |
 | `fee_schedule_model` | 申赎费率表模型唯一实现（F10 费用表文本解析 / 单档与配置构建 / 金额与交易日持有期选档，边界左闭右开） | 调仓 What-if | 数据获取 | 随 `whatif_trade_cost` |

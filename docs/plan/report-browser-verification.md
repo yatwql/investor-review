@@ -1,9 +1,9 @@
-# 报告浏览器验证方法与实测结论（rf-113 · plan-1 Iter 7 六项）
+# 报告浏览器验证方法与实测结论（rf-113 六项）
 
-> **关联**：`docs/managements/review-findings.md` → **rf-113**（Iter 7 全链路浏览器人工验证 6 项）；勾选清单 [`docs/archive/v0.9.x/chartjs-upgrade/iter7-verification-checklist.md`](../archive/v0.9.x/chartjs-upgrade/iter7-verification-checklist.md)（①~⑥、逐步操作与判定标准、2026-08-06 另机历史进度）。
-> **目的**：把 6 项拆成「**可自动化的实测项**」与「**必须人工的项**」，留下可复现的验证方法与本次实测结论——后续报告模板 / `chart-*.js` / Chart.js 版本改动后直接复用本方法（脚本与产物在 `docs/tmp/rf113/`，git 忽略，重跑即重建）。
-> **本次实测**：2026-10-09 · 本机 headless Chromium **148.0.7778.96**（`~/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome`，`--headless=new`）· Node **v22.23.1** 全局 WebSocket 直连 CDP · 被测报告 `reports/个人投资分析报告.html`（v0.12.7-dev，生成于 2026-10-09 07:18:43，925,814 字节单文件）。
-> **红线遵守**：不真实调用 LLM、不生成报告（仅打开既有产物）；不改 `data/config/`、`data/holdings/`；按任务约束**未跑 `scripts/check-*.py` 守护、未 `git add/commit`、未改 `docs/managements/`**（rf-113 台账由维护者回填，建议文本随实测结果一并返回）。
+> **关联**：`docs/managements/review-findings.md` → **rf-113**（全链路浏览器人工验证 6 项）；勾选清单 [`docs/archive/v0.9.x/chartjs-upgrade/iter7-verification-checklist.md`](../archive/v0.9.x/chartjs-upgrade/iter7-verification-checklist.md)（①~⑥、逐步操作与判定标准）。
+> **目的**：把 6 项拆成「**可自动化的实测项**」与「**必须人工的项**」，留下可复现的验证方法与实测结论——后续报告模板 / `chart-*.js` / Chart.js 版本改动后直接复用本方法（脚本与产物在 `docs/tmp/rf113/`，git 忽略，重跑即重建）。
+> **实测环境**：本机 headless Chromium（`--headless=new`）· Node 全局 WebSocket 直连 CDP · 被测报告取 `reports/` 下既有单文件 HTML 产物。
+> **复跑红线**：不真实调用 LLM、不生成报告（仅打开既有产物）；不改 `data/config/`、`data/holdings/`。
 
 ---
 
@@ -78,8 +78,7 @@ node docs/tmp/rf113/run-rf113.mjs
   - `Chart.getChart()` 命中 6/6 canvas，引擎已加载 → 过
   - console error / 未捕获异常 **0 条**（含清单 1.7「页面无 JS 报错」口径）→ 过
 - **证据**：`docs/tmp/rf113/results/①-testchart-ok-badge.json`、`docs/tmp/rf113/screenshots/01-testchart-ok-badge.png`
-- **历史（已过项）**：2026-08-06 Windows 另机人工——ok/degraded 6/6 渲染 + tooltip、empty 4/6 + 2 占位、offline 守卫生效（Chrome + Firefox；期间修复 rf-248/249/251），见归档清单 §①。
-- **残留（人工范围）**：本机仅 Chromium；Firefox 抽验历史已过、Edge 同 Chromium 内核可视为覆盖，**Safari 14+ 抽验仍属人工**（不阻塞）。
+- **残留（人工范围）**：本机仅 Chromium；Firefox 抽验已过、Edge 同 Chromium 内核可视为覆盖，**Safari 14+ 抽验仍属人工**（不阻塞）。
 
 ### ② 打印降级 2.4 afterprint — 自动化实测结论
 
@@ -97,8 +96,7 @@ node docs/tmp/rf113/run-rf113.mjs
 | 观察项（非断言） | ⚠ canvas 内联 `display` 打印前 `block`（Chart.js v4.4.3 初始化写入）→ afterprint 后 `''`（computed `inline`）；几何零偏差、tooltip 正常，详见 §4 发现 2 |
 
 - **证据**：`docs/tmp/rf113/results/②-report-afterprint.json`、`docs/tmp/rf113/screenshots/04-report-beforeprint.png`（快照态）、`05-report-afterprint-hover.png`（恢复后 hover tooltip）
-- **历史（已过项）**：2026-08-06 Windows 另机人工——2.1 2x DPI 清晰、2.2 浅色主题、2.3 单图不跨页（`break-inside: avoid`），见归档清单 §②。
-- **人工范围**：真实 `Ctrl+P` 打印预览的分页/着色效果 headless 无法出 UI，2.1~2.3 仍以人工预览为准（已有历史结论）；本自动化覆盖 2.4「派发打印事件 → 快照插入/移除 → 交互恢复」全链路。
+- **人工范围**：真实 `Ctrl+P` 打印预览的分页/着色效果 headless 无法出 UI，2.1~2.3 仍以人工预览为准（以人工预览为准）；本自动化覆盖 2.4「派发打印事件 → 快照插入/移除 → 交互恢复」全链路。
 
 ### ③ 离线验证 3.1 — 自动化实测结论
 
@@ -117,7 +115,6 @@ node docs/tmp/rf113/run-rf113.mjs
   - console error **0 条** → 过
   - 视觉证据：环形图（资产构成）完整渲染，含图例与「导出PNG」按钮
 - **证据**：`docs/tmp/rf113/results/③-report-offline.json`、`docs/tmp/rf113/screenshots/07-report-offline.png`、`07b-report-offline-chart.png`
-- **历史（已过项）**：3.2~3.4（删除/改名 `chart.min.js` → `typeof Chart` 双守卫静默跳过、无 JS 报错、真实报告回退明细表格）2026-08-06 另机已过（含 rf-249 口径修正），见归档清单 §③。
 
 ### ④ 微信内置浏览器实测 — 人工验证步骤（不可自动化）
 
@@ -157,7 +154,7 @@ node docs/tmp/rf113/run-rf113.mjs
 ### ⑥ 禁用 Canvas 后 fallback — 自动化实测（表现记录型）+ 人工步骤
 
 - **方法（自动化模拟）**：`Page.addScriptToEvaluateOnNewDocument` 注入 `HTMLCanvasElement.prototype.getContext = () => null`（现代浏览器无「禁用 Canvas」开关时的标准模拟），打开真实报告并展开全部章节，逐条记录实际表现。
-- **实际表现（按实测写，rf-249 口径复核成立）**：
+- **实际表现（按实测写，修复后口径复核成立）**：
 
 | 观察点 | 实测结果 |
 |:-------|:---------|
@@ -168,33 +165,32 @@ node docs/tmp/rf113/run-rf113.mjs
 | 明细表格兜底 | ✅ **41 张**可见表格，浅色下文字可读（截图 `06b`） |
 | 页面其余交互 | ✅ 折叠 `details` 正常开合、主题切换/TOC 结构在位——图表失败**不拖垮整页** |
 
-- **判定（按 rf-249 修正后的口径）**：
+- **判定（按修正后口径）**：
   - 6.1 原文断言「6 图区域显示内嵌 fallback 文本」在现代 Chrome **不成立**（不渲染 canvas 内文本）；**实际兜底 = 图表区空白 + 明细表格可读** → 兜底机制成立，6.1 按修正口径记录为「实测完成，原文断言已修正」。
   - 6.2「fallback 文本对比度 ≥4.5:1」因文本不渲染 **不适用**；替代口径「浅色模式下兜底数据可读」→ 明细表格可读（`06b`），✅。
 - **证据**：`docs/tmp/rf113/results/⑥-report-no-canvas.json`、`screenshots/06-report-no-canvas.png`、`06b-report-no-canvas-chart.png`
 - **人工复核步骤（可选，保留原清单口径）**：
   1. 若所用 Chrome 版本 DevTools 设置里存在 **Disable canvas** 复选项 → 勾选后刷新报告 → 对照上表逐条核对（图表区空白 + 表格兜底 + 页面可用）→ 测完取消勾选。
   2. 若设置项不存在（新版本 DevTools 可能已移除）→ 直接复跑本脚本场景 ⑥：`node docs/tmp/rf113/run-rf113.mjs`，或把覆写 script 注入本地副本 html 后人工打开，判定标准同上表。
-- **历史（已过项）**：3.4「现代浏览器不渲染 `<canvas>` fallback 文本、真实报告回退明细表格」2026-08-06 已按实测修正（rf-249），本次自动化复核与之一致。
 
 ---
 
-## 3. 六项状态总表（含历史已过项与日期）
+## 3. 六项状态总表
 
 | 项 | 标题 | 结果 | 说明与证据 |
 |:--:|:-----|:----:|:----------|
-| ① | 6 图渲染 + 交互（验收 2） | ✅ **通过** | 2026-08-06 Windows Chrome+Firefox 人工全过（tooltip/降级/空数据/离线守卫）；**2026-10-09 headless Chromium 148 自动化回归**：`?s=ok` **6/6 badge ok**、横幅 ok、console 0 error。`results/①-testchart-ok-badge.json`。Safari 抽验仍属人工（不阻塞） |
-| ② | 打印降级（验收 3） | ✅ **通过** | 2.1~2.3 2026-08-06 人工过（2x DPI / 浅色 / 不跨页）；**2.4 2026-10-09 自动化过**：beforeprint 插入 10 张 2x 快照 + 10/10 canvas 隐藏 → afterprint 移除 0 残留、几何 0px 偏差、真实 hover tooltip 恢复（active 2→2）、console 0。附观察：内联 `display block→''`（§4 发现 2）。真实 `Ctrl+P` 分页效果仍以人工预览为准（历史已过）。`results/②-report-afterprint.json` |
-| ③ | 离线验证（验收 4 / R21） | ✅ **通过** | 3.2~3.4 2026-08-06 人工过（引擎缺失守卫）；**3.1 2026-10-09 自动化过**：静态 5 类外链全 0（PASS）+ `--host-resolver-rules=MAP * ~NOTFOUND` 断 DNS 打开 → 10/10 图渲染且有绘制像素、外域请求 0、console 0 error。`static-selfcontained.log` + `results/③-report-offline.json` |
+| ① | 6 图渲染 + 交互（验收 2） | ✅ **通过** | 人工抽验（tooltip/降级/空数据/离线守卫）+ **headless 自动化回归**：`?s=ok` **6/6 badge ok**、横幅 ok、console 0 error。`results/①-testchart-ok-badge.json`。Safari 抽验仍属人工（不阻塞） |
+| ② | 打印降级（验收 3） | ✅ **通过** | 2.1~2.3 人工过（2x DPI / 浅色 / 不跨页）；**2.4 自动化过**：beforeprint 插入 10 张 2x 快照 + 10/10 canvas 隐藏 → afterprint 移除 0 残留、几何 0px 偏差、真实 hover tooltip 恢复（active 2→2）、console 0。附观察：内联 `display block→''`（§4 发现 2）。真实 `Ctrl+P` 分页效果仍以人工预览为准。`results/②-report-afterprint.json` |
+| ③ | 离线验证（验收 4 / R21） | ✅ **通过** | 3.2~3.4 人工过（引擎缺失守卫）；**3.1 自动化过**：静态 5 类外链全 0（PASS）+ `--host-resolver-rules=MAP * ~NOTFOUND` 断 DNS 打开 → 10/10 图渲染且有绘制像素、外域请求 0、console 0 error。`static-selfcontained.log` + `results/③-report-offline.json` |
 | ④ | 微信内置浏览器（验收 6 / R22） | ⏳ **待人工（不可自动化）** | 需微信真机 X5/内核 + 文件传输助手链路。步骤与判定见 §2④（4.1 链接访问必过；4.2 file:// 或 4.3 兜底任一过即 ④ 通过；4.4 横竖屏不溢出） |
-| ⑤ | 移动端 375px 不溢出（A4） | ✅ **通过（报告产物）** | **2026-10-09 自动化**：报告 375px `scrollWidth==clientWidth==375` 无横向滚动、10/10 图初始化、轴标签 45° 不重叠、表格容器内滚动不撑破页面。**附带发现**：调试页 `test-chart.html` 375px 自身溢出 61px（`minmax(420px,1fr)`，§4 发现 1，仅调试页）。`results/⑤-report-375px.json` / `⑤-testchart-375px.json` |
-| ⑥ | 禁用 Canvas 后 fallback（A1） | ⚠️ **实测完成（断言口径已修正）** | **2026-10-09 自动化**：原断言「canvas 显示 fallback 文本」**不成立**（文本在 DOM 但不渲染，rf-249 复核）；实际表现 = 0/10 图初始化 + 图表区空白 + **41 张明细表格兜底可读** + 页面其余交互正常 + console 10 条（模拟所致）。6.2 因文本不渲染不适用，浅色兜底可读 ✅。可选人工 DevTools 复核步骤见 §2⑥。`results/⑥-report-no-canvas.json` |
+| ⑤ | 移动端 375px 不溢出（A4） | ✅ **通过（报告产物）** | **自动化**：报告 375px `scrollWidth==clientWidth==375` 无横向滚动、10/10 图初始化、轴标签 45° 不重叠、表格容器内滚动不撑破页面。**附带发现**：调试页 `test-chart.html` 375px 自身溢出 61px（`minmax(420px,1fr)`，§4 发现 1，仅调试页）。`results/⑤-report-375px.json` / `⑤-testchart-375px.json` |
+| ⑥ | 禁用 Canvas 后 fallback（A1） | ⚠️ **实测完成（断言口径已修正）** | **自动化**：原断言「canvas 显示 fallback 文本」**不成立**（文本在 DOM 但不渲染，口径复核）；实际表现 = 0/10 图初始化 + 图表区空白 + **41 张明细表格兜底可读** + 页面其余交互正常 + console 10 条（模拟所致）。6.2 因文本不渲染不适用，浅色兜底可读 ✅。可选人工 DevTools 复核步骤见 §2⑥。`results/⑥-report-no-canvas.json` |
 
 **自动化断言合计**：5 场景 PASS / 1 场景 FAIL（调试页 ⑤，另列缺陷）/ 1 场景表现记录（⑥）；**人工余项**：④ 微信真机（+ ① Safari 抽验、② 真实 `Ctrl+P` 分页抽验，均不阻塞）。
 
 ---
 
-## 4. 本次实测发现（描述，未编号）
+## 4. 实测发现（描述，未编号）
 
 **发现 1（影响 ⑤ 调试页，不影响报告）：`test-chart.html` 在 375px 视口横向溢出 61px。**
 

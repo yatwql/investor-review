@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.13.2-dev
-> **编号源**：`rf-next = 685`（新增问题取此编号，完成后更新为 +1；已用最大 rf-684，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 686`（新增问题取此编号，完成后更新为 +1；已用最大 rf-685，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -36,7 +36,7 @@
 | # | 文件 | 行数 | 状态 | 拆分建议 |
 |---|------|------|------|----------|
 
-| **rf-626** | `llm/prompts_core.py`、`llm/generators.py`、`report/html_writer.py`、`analysis/rebalance.py` | 350 / 444 / 783 / 751 | **临界带四文件登记项，已出带**：`prompts_core`/`generators` 按域下沉完成（failure_reasons / prompts_data_blocks / prompts_review / generators_singletons 四新模块承载，门面 re-export 保留、消费方导入面不变）；`html_writer`(783)/`rebalance`(751) 距 1000 红线余量 217/249 | `html_writer`/`rebalance` 由 `-v` 月度复核、逼近 980 行启动拆分（方法沿用本次：域下沉 + 门面 re-export + 测试 patch 改指持有子模块） |
+| **rf-626** | `llm/prompts_core.py`、`llm/generators.py`、`report/html_writer.py`、`analysis/rebalance.py` | 350 / 444 / 783 / 751 | **临界带四文件登记项**：`html_writer`(783)/`rebalance`(751) 距 1000 红线余量 217/249，`-v` 月度复核 | `html_writer`/`rebalance` 逼近 980 行启动拆分（域下沉 + 门面 re-export + 测试 patch 改指持有子模块） |
 | **rf-86** | `cache/operations.py` | 740 | 500-1000 可选优化区间，增长偏快，`-v` 按月复核 | 数据结构定义/基金刷新/公共缓存/持仓缓存/缓存清理 5 个职责 |
 | **rf-79** | `core/code_utils.py` | 731 | 500-1000 可选优化区间，维持现状，`-v` 按月复核 | 可考虑将 `estimate_market_cap_by_prefix()` 等非核心判定函数移出（不拆） |
 | **rf-665** | `config/features.py`、`_doc_drift/_format.py`、`tui/handlers_config.py` | 730 / 558 / 534 | 500-1000 可选优化区间，`-v` 按月复核 | `features.py` 随注册表逐开关增长（每项 ~10 行），逼近 980 行时考虑将 `FeatureSwitchDef` 字段声明/注册表条目下沉独立子模块；另两文件由 `-v` 月度复核 |
@@ -65,11 +65,11 @@
 
 ### 开发期已修复（0.13.2-dev）
 
-- rf-682 已修复（2026-10-14，`scripts/launch.sh` 无参启动崩溃）：`658e5860` 引入的 `$1` 裸引用（当时无 `set -u` 无害）被后续加固批次 `bee600b4` 的 `set -euo pipefail` 激活为硬缺陷——无参调用（默认 TUI 路径）报 `$1: unbound variable` 退出；同文件第 64 行 `$VENV_PATH` 裸引用为同款未爆雷（无 `.venv` 且未设 `VENV_PATH` 时触发）。门禁盲区：十守护/CI 均为静态检查，从不执行启动脚本，「加固」类改动零成本穿过全部门禁。修复：两处改 `${1:-}`/`${VENV_PATH:-}` 默认展开；新增 `test_launch_script_regression.py` 4 用例（PATH 收窄 + python 桩在 tmp 目录断言「越过缺陷行且 stderr 无 unbound variable」，已验证旧脚本上必红），封住行为回归面。
+> 已修复条目的完整复盘移至 `changelog.md` 0.13.2-dev 段，此处仅保留摘要行。
 
-- rf-683 已修复（2026-10-14，scripts/ 目录质量核查 · shell 契约门禁盲区）：`scripts/` 全面核查发现——① `launch.sh` 有 4 处 `set -e` 下的死代码 `$?` 检查（`if [ $? -ne 0 ]` 紧跟独立命令永不触发，失败时 `set -e` 已提前中止脚本，错误处理分支是假安全感，用户只看到原始退出码）；② 质量门禁盲区根因：十守护/CI 全为 Python 静态检查，从不执行/解析 shell，`.sh` 的「运行行为」在整个体系里零覆盖，`set -euo pipefail` 这类改变运行时语义的改动对所有门禁不可见（正是 rf-682 缺陷穿过全部门禁的机制）。修复：4 处死代码改 `if ! cmd; then …`（把命令放进 `if` 条件本身）；新增 `test_shell_contract.py` 静态机检（`set -e` 死代码 `$?` / `set -u` 裸位置参数 `${N:-}` 守卫传播 / `bash -n` 语法），已在注入缺陷的临时副本上验证必红。残余风险：环境变量裸引用（如 `$VENV_PATH`）无法廉价静态区分「脚本内已赋值」与「外部注入」，靠 `test_launch_script_regression.py` 行为面兜底；业界标准解法 shellcheck（SC2154）本机与 CI 均未安装，如需彻底封堵可后续加入 CI guards job。
-
-- rf-684 已修复（2026-10-14，`check-test-redundancy.py` 完全重复比对盲区）：`self.<attr>` 间接调用无法静态解析时跳过比对——曾致 62 个用例（`test_progress.py` 25 / `test_market_hours.py` 12 等 9 文件）长期脱离重复比对，其中 `self.r`/`self.fn`（setUp 赋值）35 例、`self._run`/`self._call`（分支型 helper）27 例。增强三档绑定解析：setUp/setUpClass 赋值解析 + 分支型方法体哈希绑定 + 三档均败才跳过（跳过降为保底）。盲区 62→0、全仓零 finding（印证此前增强指纹人工核查「无真重复」结论）；红验证 setUp 同体对与分支型同体对均报重复、不同绑定不误报；契约测试 4 新增。
-
-- rf-680 已修复（2026-10-14，technical.md §1.6.3 菜单体系与实现脱节）：菜单表停在 18 项旧态（缺 `[Q]` 报告对话式追问、`[T]` 单门控表述过时、多处标签与 `[S]` 面板分块/默认项描述过期），§1.6.1 模块表缺 `handlers_log.py`/`handlers_qa.py`/`status_line.py`。修复：按实际排列重写 19 项菜单表 + `FEATURE_GATED_ITEMS` 双门控语义（`report_qa` ⚗ 默认关 / `doctor_check` 默认开，`_apply_feature_gates` 在 `_bind_callbacks` 前执行）+ 页头状态行 `build_status_line` 五项描述；TUI 菜单手册同步核对——主菜单 `[D]`/`[1]`/`[I]` 标签对齐实际显示、[1] 缓存清单补全（refresh 组 18 模块）、[2] 附带清除 LLM 清单补生成后自检/持仓变动复盘归因/辩论三模块、[A] 名称替换表述改「品种X」。纯文档对齐。
-- rf-681 已修复（2026-10-14，CLI/Web 渠道文档与实现脱节）：technical.md §1.7.2 缺 `report --prefer-source/--exclude-source`；§1.8.4 路由表缺 `/api/whatif`、`GET /api/cache`、`POST /api/cache/cleanup`、`POST /api/qa/ask` 四行；§1.8.8 仍称配置面板「8 块、experimental/standard 两键」（实际 9 块，「功能开关」组按 `features.groups` 四组分块，无 `standard` 键）；§1.8.9 同源校验行未覆盖 whatif/cache-cleanup 两个 POST；§1.8.1 handlers 行路由清单旧。手册同步——Web 手册 §5 LLM 分析章节行列旧名 5 项（实际 7 项现行名）、§5.1 开关分块命名与「（影响报告）」举例过期（现由 `report_affecting` 全量下发）、自检卡定位「常规开关区第 24 项」改「机制与诊断区」；CLI 手册 §10.1「按菜单项逐项对照」改「生成类菜单对照 + 无 CLI 等价项声明」。纯文档对齐。
+- rf-682 已修复（2026-10-14）：`scripts/launch.sh` 无参启动 unbound variable 崩溃（默认展开修复 + 4 回归用例）
+- rf-683 已修复（2026-10-14）：`launch.sh` 死代码 `$?` 清理 + `test_shell_contract.py` 静态机检，封堵 shell 行为门禁盲区（含豁免集遇 shift 清空的漏报精度补丁）
+- rf-684 已修复（2026-10-14）：`check-test-redundancy.py` 完全重复比对三档绑定解析，根治 62 例跳过盲区
+- rf-680 已修复（2026-10-14）：technical.md §1.6.3 TUI 菜单体系与实现对齐（含 TUI 手册同步）
+- rf-681 已修复（2026-10-14）：technical.md §1.7/§1.8 与 Web/CLI 手册的路由、配置面板、LLM 章节对齐
+- rf-685 已修复（2026-10-14）：`cost_position` 收盘价提取消除同名二次实现——复用 `valuation_percentile.extract_closes` 共享单一事实来源，区间有效性过滤收敛至 `compute_window_position`
