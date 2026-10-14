@@ -31,8 +31,7 @@ _init_venv_if_needed() {
     local target="$1"
     if [ ! -f "$target/pyvenv.cfg" ] && [ ! -f "$target/bin/activate" ] && [ ! -f "$target/Scripts/activate" ]; then
         echo "虚拟环境目录为空，正在创建: $target"
-        $PYTHON_CMD -m venv "$target"
-        if [ $? -ne 0 ]; then
+        if ! $PYTHON_CMD -m venv "$target"; then
             echo "错误: 创建虚拟环境失败: $target" >&2
             exit 1
         fi
@@ -83,10 +82,7 @@ else
     echo "错误: 未找到虚拟环境激活脚本（.venv/bin/activate 或 .venv/Scripts/activate）。" >&2
     exit 1
 fi
-if [ $? -ne 0 ]; then
-    echo "错误: 激活虚拟环境失败。" >&2
-    exit 1
-fi
+# 注：激活失败由 set -e 直接中止（source 非零即退），故无需额外 $? 检查
 
 # 3.5. 检查 Python 版本（要求 >= 3.10）
 echo "正在检查 Python 版本 ..."
@@ -112,8 +108,7 @@ fi
 if [ "$SKIP_INSTALL" = false ]; then
     echo "正在安装依赖 ..."
     # -qq 级静默：抑制 pip 版本通知和下载进度条
-    pip install -qq -r requirements.txt
-    if [ $? -eq 0 ]; then
+    if pip install -qq -r requirements.txt; then
         echo "$REQ_HASH" > "$DEPS_MARKER"
     else
         echo "错误: 安装依赖失败。" >&2
@@ -139,7 +134,4 @@ else
     echo "正在启动主程序 ..."
     $PYTHON_CMD src/python/tui/tui.py
 fi
-if [ $? -ne 0 ]; then
-    echo "错误: 程序运行失败。" >&2
-    exit 1
-fi
+# 注：程序非零退出由 set -e 直接中止（其上 $? 检查为死代码，已移除）

@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.13.2-dev
-> **编号源**：`rf-next = 683`（新增问题取此编号，完成后更新为 +1；已用最大 rf-682，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 684`（新增问题取此编号，完成后更新为 +1；已用最大 rf-683，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -66,6 +66,8 @@
 ### 开发期已修复（0.13.2-dev）
 
 - rf-682 已修复（2026-10-14，`scripts/launch.sh` 无参启动崩溃）：`658e5860` 引入的 `$1` 裸引用（当时无 `set -u` 无害）被后续加固批次 `bee600b4` 的 `set -euo pipefail` 激活为硬缺陷——无参调用（默认 TUI 路径）报 `$1: unbound variable` 退出；同文件第 64 行 `$VENV_PATH` 裸引用为同款未爆雷（无 `.venv` 且未设 `VENV_PATH` 时触发）。门禁盲区：十守护/CI 均为静态检查，从不执行启动脚本，「加固」类改动零成本穿过全部门禁。修复：两处改 `${1:-}`/`${VENV_PATH:-}` 默认展开；新增 `test_launch_script_regression.py` 4 用例（PATH 收窄 + python 桩在 tmp 目录断言「越过缺陷行且 stderr 无 unbound variable」，已验证旧脚本上必红），封住行为回归面。
+
+- rf-683 已修复（2026-10-14，scripts/ 目录质量核查 · shell 契约门禁盲区）：`scripts/` 全面核查发现——① `launch.sh` 有 4 处 `set -e` 下的死代码 `$?` 检查（`if [ $? -ne 0 ]` 紧跟独立命令永不触发，失败时 `set -e` 已提前中止脚本，错误处理分支是假安全感，用户只看到原始退出码）；② 质量门禁盲区根因：十守护/CI 全为 Python 静态检查，从不执行/解析 shell，`.sh` 的「运行行为」在整个体系里零覆盖，`set -euo pipefail` 这类改变运行时语义的改动对所有门禁不可见（正是 rf-682 缺陷穿过全部门禁的机制）。修复：4 处死代码改 `if ! cmd; then …`（把命令放进 `if` 条件本身）；新增 `test_shell_contract.py` 静态机检（`set -e` 死代码 `$?` / `set -u` 裸位置参数 `${N:-}` 守卫传播 / `bash -n` 语法），已在注入缺陷的临时副本上验证必红。残余风险：环境变量裸引用（如 `$VENV_PATH`）无法廉价静态区分「脚本内已赋值」与「外部注入」，靠 `test_launch_script_regression.py` 行为面兜底；业界标准解法 shellcheck（SC2154）本机与 CI 均未安装，如需彻底封堵可后续加入 CI guards job。
 
 - rf-680 已修复（2026-10-14，technical.md §1.6.3 菜单体系与实现脱节）：菜单表停在 18 项旧态（缺 `[Q]` 报告对话式追问、`[T]` 单门控表述过时、多处标签与 `[S]` 面板分块/默认项描述过期），§1.6.1 模块表缺 `handlers_log.py`/`handlers_qa.py`/`status_line.py`。修复：按实际排列重写 19 项菜单表 + `FEATURE_GATED_ITEMS` 双门控语义（`report_qa` ⚗ 默认关 / `doctor_check` 默认开，`_apply_feature_gates` 在 `_bind_callbacks` 前执行）+ 页头状态行 `build_status_line` 五项描述；TUI 菜单手册同步核对——主菜单 `[D]`/`[1]`/`[I]` 标签对齐实际显示、[1] 缓存清单补全（refresh 组 18 模块）、[2] 附带清除 LLM 清单补生成后自检/持仓变动复盘归因/辩论三模块、[A] 名称替换表述改「品种X」。纯文档对齐。
 - rf-681 已修复（2026-10-14，CLI/Web 渠道文档与实现脱节）：technical.md §1.7.2 缺 `report --prefer-source/--exclude-source`；§1.8.4 路由表缺 `/api/whatif`、`GET /api/cache`、`POST /api/cache/cleanup`、`POST /api/qa/ask` 四行；§1.8.8 仍称配置面板「8 块、experimental/standard 两键」（实际 9 块，「功能开关」组按 `features.groups` 四组分块，无 `standard` 键）；§1.8.9 同源校验行未覆盖 whatif/cache-cleanup 两个 POST；§1.8.1 handlers 行路由清单旧。手册同步——Web 手册 §5 LLM 分析章节行列旧名 5 项（实际 7 项现行名）、§5.1 开关分块命名与「（影响报告）」举例过期（现由 `report_affecting` 全量下发）、自检卡定位「常规开关区第 24 项」改「机制与诊断区」；CLI 手册 §10.1「按菜单项逐项对照」改「生成类菜单对照 + 无 CLI 等价项声明」。纯文档对齐。
