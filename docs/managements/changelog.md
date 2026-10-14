@@ -13,7 +13,9 @@
 
 - **`scripts/launch.sh` 无参启动崩溃（rf-682）**：`set -euo pipefail` 下裸引用 `$1`/`$VENV_PATH`，无参调用（默认 TUI 路径）或未设 `VENV_PATH` 时直接 `unbound variable` 退出；改 `${1:-}`/`${VENV_PATH:-}` 默认展开，新增 `test_launch_script_regression.py` 回归用例 4 例。
 
-- **shell 契约门禁盲区（rf-683）**：`scripts/` 目录全面核查发现——① `launch.sh` 有 4 处 `set -e` 下的死代码 `$?` 检查（`if [ $? -ne 0 ]` 永不触发，失败时脚本已提前退出，错误处理分支是假安全感）；② 十守护/CI 全为 Python 静态检查，从不执行/解析 shell，`.sh` 的「运行行为」在整个质量体系里零覆盖，`set -euo` 这类改变运行时语义的改动对所有门禁不可见（rf-682 缺陷穿过全部门禁的根因）。修复：`launch.sh` 4 处死代码改 `if ! cmd; then …` 写法；新增 `test_shell_contract.py` 静态机检（`set -e` 死代码 `$?` / `set -u` 裸位置参数 + `bash -n` 语法），已在注入缺陷的临时副本上验证「必红」，封堵回流。
+- **shell 契约门禁盲区（rf-683）**：`scripts/` 目录全面核查发现——① `launch.sh` 有 4 处 `set -e` 下的死代码 `$?` 检查（`if [ $? -ne 0 ]` 永不触发，失败时脚本已提前退出，错误处理分支是假安全感）；② 十守护/CI 全为 Python 静态检查，从不执行/解析 shell，`.sh` 的「运行行为」在整个质量体系里零覆盖（rf-682 缺陷穿过全部门禁的根因）。修复：`launch.sh` 4 处死代码改 `if ! cmd; then …` 写法；新增 `test_shell_contract.py` 静态机检，已验证必红，封堵回流。
+
+- **测试冗余检查盲区根治（rf-684）**：`check-test-redundancy.py` 完全重复比对对 62 个用例（self 间接调用无法静态解析）长期跳过——占位面集中在 `test_progress.py`（25）与 `test_market_hours.py`（12）。增强三档绑定解析：① `_class_attr_binding` 新增 setUp/setUpClass 内 `self.<attr> = <值>` 赋值解析（覆盖 self.r/self.fn 类 35 例）；② 无单一 return 的分支型 helper（_run/_call 类 27 例）取方法体 sha1 哈希为绑定；③ 三档均失败才跳过（跳过是保底而非默认）。盲区 62→0，全仓 9675 用例仍零重复；红验证：setUp 同体对 / 分支型 helper 同体对均报重复、不同绑定/不同方法体不误报；契约测试 36→40。缓存逻辑版本随脚本哈希自动失效，无需手动 bump。
 
 ### Changed
 

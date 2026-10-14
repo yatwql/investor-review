@@ -156,7 +156,7 @@ class TestDuplicates:
         assert findings == [] and skipped == 0
 
     def test_unresolvable_self_indirection_skipped(self, redundancy):
-        """self 间接调用来自 setUp（类体内无绑定）→ 跳过比对，不误报。"""
+        """self 间接调用既无类体/方法/setUp 绑定（如 mock fixture 注入）→ 跳过比对，不误报。"""
         src = (
             "class TestX:\n"
             "    def test_a(self):\n        assert self.r.run() == 1\n"
@@ -166,6 +166,58 @@ class TestDuplicates:
         assert all(redundancy.body_signature(c) is None for c in cases)
         findings, skipped = redundancy.check_duplicate_bodies(cases)
         assert findings == [] and skipped == 2
+
+    def test_setUp_binding_resolved_and_duplicates_detected(self, redundancy):
+        """self.<attr> 在 setUp 中赋值 → 绑定解析成功，同体用例报重复（不再跳过）。"""
+        src = (
+            "class TestX:\n"
+            "    def setUp(self):\n        self.r = FakeReporter()\n"
+            "    def test_a(self):\n        assert self.r.get_errors() == []\n"
+            "    def test_b(self):\n        assert self.r.get_errors() == []\n"
+        )
+        cases = _cases(redundancy, src)
+        assert all(redundancy.body_signature(c) is not None for c in cases)
+        findings, skipped = redundancy.check_duplicate_bodies(cases)
+        assert len(findings) == 1 and skipped == 0
+
+    def test_setUp_different_binding_not_grouped(self, redundancy):
+        """同名 setUp 赋值但构造不同 → 绑定不同，并行覆盖不算重复。"""
+        src = (
+            "class TestA:\n"
+            "    def setUp(self):\n        self.r = AlphaReporter()\n"
+            "    def test_x(self):\n        assert self.r.get_errors() == []\n"
+            "class TestB:\n"
+            "    def setUp(self):\n        self.r = BetaReporter()\n"
+            "    def test_x(self):\n        assert self.r.get_errors() == []\n"
+        )
+        findings, skipped = redundancy.check_duplicate_bodies(_cases(redundancy, src))
+        assert findings == [] and skipped == 0
+
+    def test_branch_method_body_hash_duplicates_detected(self, redundancy):
+        """无单一 return 的分支型 helper → 方法体哈希绑定，同体同实现用例报重复。"""
+        src = (
+            "class TestX:\n"
+            "    def _run(self, v):\n        if v:\n            return 1\n        return 2\n"
+            "    def test_a(self):\n        assert self._run(1) == 1\n"
+            "    def test_b(self):\n        assert self._run(1) == 1\n"
+        )
+        cases = _cases(redundancy, src)
+        assert all(redundancy.body_signature(c) is not None for c in cases)
+        findings, skipped = redundancy.check_duplicate_bodies(cases)
+        assert len(findings) == 1 and skipped == 0
+
+    def test_branch_method_different_body_not_grouped(self, redundancy):
+        """同名分支型 helper 但方法体不同 → 方法体哈希不同，并行覆盖不算重复。"""
+        src = (
+            "class TestA:\n"
+            "    def _run(self, v):\n        if v:\n            return 1\n        return 2\n"
+            "    def test_x(self):\n        assert self._run(1) == 1\n"
+            "class TestB:\n"
+            "    def _run(self, v):\n        if v:\n            return 9\n        return 8\n"
+            "    def test_x(self):\n        assert self._run(1) == 1\n"
+        )
+        findings, skipped = redundancy.check_duplicate_bodies(_cases(redundancy, src))
+        assert findings == [] and skipped == 0
 
 
 # ═══ 自证用例 ═══

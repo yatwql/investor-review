@@ -9,8 +9,10 @@
      - `Test*` 类定义了 `__init__`（pytest 整类跳过）
   B. **无断言用例** — 既无 `assert`、也无 `pytest.raises/warns/fail`、也无 mock 断言（`assert_called*`）
   C. **完全重复用例** — 去掉 docstring 后「函数体 + 参数 + 装饰器」AST 归一化完全相同（同一被测对象同一断言）。
-     为避免把「同名方法绑定不同被测对象」的并行覆盖误判为重复，凡函数体内出现无法解析的
-     `self.<attr>` 间接调用（求值目标来自 setUp / 基类 / 外部模块）一律跳过比对。
+     为避免把「同名方法绑定不同被测对象」的并行覆盖误判为重复，`self.<attr>` 间接调用先三档解析绑定：
+     类体赋值 / 方法返回值 / setUp(setUpClass) 内 `self.<attr> = <值>` 赋值；类内定义但无单一
+     return 的分支型 helper（如 `_run`/`_call`）取方法体哈希为绑定。三档均无法解析（求值目标
+     来自基类/外部模块/mock fixture）才跳过比对——跳过是保底而非默认，能解析的必须参与比对。
   D. **自证用例（mock 替代被测对象）** — 同一用例内既 patch 了某个符号（`@patch("<mod>.<fn>")`），
      又直接调用同名函数，且把该 mock 的 `.return_value` 设成某个字面量、再用断言与该字面量比较——
      此时断言恒真，等于没测（常见于「顺手把被测函数也 patch 了」）。
@@ -99,7 +101,12 @@ def _dump(node: ast.AST) -> str:
 
 
 def _class_attr_binding(cls: ast.ClassDef | None, attr: str) -> str | None:
-    """解析类内 ``self.<attr>`` 的绑定目标（赋值式 / 方法返回式 / staticmethod）。"""
+    """解析类内 ``self.<attr>`` 的绑定目标（赋值式 / 方法返回式 / setUp 赋值式 / staticmethod）。
+
+    第 3 档 setUp 解析：类体内无绑定、也无同名方法时，扫 ``setUp``/``setUpClass`` 里的
+    ``self.<attr> = <值>`` 赋值，取其值的归一化 dump。这是 62 个盲区里最大的一类
+    （``self.r``/``self.fn`` 在 setUp 里构造），解析后才能参与重复比对而非被跳过。
+    """
     if cls is None:
         return None
     for stmt in cls.body:
@@ -111,6 +118,37 @@ def _class_attr_binding(cls: ast.ClassDef | None, attr: str) -> str | None:
                 if isinstance(inner, ast.Return) and inner.value is not None:
                     return _dump(inner.value)
             return None
+    # 第 3 档：setUp / setUpClass 里的 self.<attr> = <值>
+    for stmt in cls.body:
+        if not isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)) or stmt.name not in ("setUp", "setUpClass"):
+            continue
+        for sub in ast.walk(stmt):
+            if (
+                isinstance(sub, ast.Assign)
+                and len(sub.targets) == 1
+                and isinstance(sub.targets[0], ast.Attribute)
+                and isinstance(sub.targets[0].value, ast.Name)
+                and sub.targets[0].value.id == "self"
+                and sub.targets[0].attr == attr
+            ):
+                return _dump(sub.value)
+    return None
+
+
+def _method_body_hash(cls: ast.ClassDef | None, attr: str) -> str | None:
+    """类内定义但无单一 return 的分支型 helper（如 ``_run``/``_call``）→ 方法体哈希。
+
+    分支型 helper 的行为由整个方法体决定，无法压成单个 return 表达式。取「去掉
+    docstring 后的方法体 AST dump 的 sha1」作为其绑定指纹：同名 helper 不同实现 →
+    不同哈希 → 不误判为重复；同名同实现（继承或复制）→ 相同哈希 → 正常比对。
+    """
+    if cls is None:
+        return None
+    for stmt in cls.body:
+        if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)) and stmt.name == attr:
+            core = _strip_docstring(stmt.body)
+            payload = _dump(ast.Module(body=core, type_ignores=[]))
+            return f"method-body:{hashlib.sha1(payload.encode('utf-8')).hexdigest()[:16]}"
     return None
 
 
@@ -352,11 +390,17 @@ def check_assertion_free(cases: list[TestCase]) -> list[str]:
 
 
 def body_signature(case: TestCase) -> str | None:
-    """归一化指纹；含无法解析的 self 间接调用时返回 None（跳过比对，避免并行覆盖误报）。"""
+    """归一化指纹；含无法解析的 self 间接调用时返回 None（跳过比对，避免并行覆盖误报）。
+
+    三档绑定解析：类体赋值 / 方法返回值 / setUp 赋值（第 1、3 档）；无单一 return
+    的分支型 helper 取方法体哈希（第 2 档扩展）。三档均失败才返回 None 跳过。
+    """
     attrs = _self_attrs(case.node) & _SUT_ATTRS
     bindings: list[str] = []
     for attr in sorted(attrs):
         resolved = _class_attr_binding(case.cls, attr)
+        if resolved is None:
+            resolved = _method_body_hash(case.cls, attr)
         if resolved is None:
             return None
         bindings.append(f"{attr}={resolved}")
