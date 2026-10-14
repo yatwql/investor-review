@@ -191,6 +191,11 @@ def prepare_report_data(
             purchase_status_data, [d.code for d in details]
         )
 
+    # 持仓成本区间位置（数据契约 cost_position_data）：功能开关 `cost_position`
+    # 开启时计算（复用既有行情历史链，不新增数据源）；关闭时返回 None（两列隐藏）；
+    # 全链失败返回 available=False 的降级契约（静默隐列，不阻断主链路）
+    cost_position_data = compute_cost_position_data(holdings, config)
+
     # 行动建议单一数据源：再平衡信号等纯算法产出，action_data数据契约
     # （单源计算，行动建议板块与智囊团深度复盘行动摘要共享同一对象）
     holdings_details = [
@@ -312,6 +317,8 @@ def prepare_report_data(
         "financial_indicator_data": financial_indicator_data,
         # 申购限购状态（数据契约 purchase_status_data；开关关闭时为 None）
         "purchase_status_data": purchase_status_data,
+        # 持仓成本区间位置（数据契约 cost_position_data；开关关闭时为 None）
+        "cost_position_data": cost_position_data,
     }
 
 
@@ -420,6 +427,18 @@ def compute_purchase_status_data(
     from src.python.report.purchase_status import build_purchase_status_data
 
     return build_purchase_status_data(config, holdings_details)
+
+
+def compute_cost_position_data(holdings: list, config: dict) -> dict | None:
+    """编排持仓成本区间位置数据（`cost_position_data` 数据契约）。
+
+    功能开关 `cost_position` 开启时计算（复用既有行情历史链，不新增数据源）；
+    关闭返回 None（持仓明细「成本区间位置」两列隐藏）；全链失败返回
+    available=False 降级契约（静默隐列，不阻断主链路）。
+    """
+    from src.python.report.cost_position import compute_cost_position_data as _compute
+
+    return _compute(holdings, config)
 
 
 def compute_valuation_data(

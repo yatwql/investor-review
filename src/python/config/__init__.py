@@ -79,6 +79,7 @@ from src.python.config._core import (
     is_enable_market_temperature,
     is_enable_industry_beta,
     is_enable_fund_purchase_limit,
+    is_enable_cost_position,
     get_comparison_candidates,
     set_config,
     del_config,
@@ -154,6 +155,7 @@ __all__ = [
     "is_enable_market_temperature",
     "is_enable_industry_beta",
     "is_enable_fund_purchase_limit",
+    "is_enable_cost_position",
     "get_comparison_candidates",
     # LLM 配置
     "get_llm_config",

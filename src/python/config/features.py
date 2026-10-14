@@ -328,6 +328,13 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         True,
         True,
     ),
+    "cost_position": FeatureSwitchDef(
+        "持仓成本区间位置",
+        "「持仓明细与分类」市值明细追加「成本区间位置」列（每份成本相对近 20/260 交易日价格区间百分位，≈1 追涨嫌疑；行情缺失时静默隐列）",
+        GROUP_ANALYSIS,
+        True,
+        True,
+    ),
     "risk_adjusted_excess": FeatureSwitchDef(
         "风险调整超额",
         "走势章新增「风险调整超额」子块：滚动 1Y 超额曲线 + 年化 IR/跟踪误差 + 近 12/24 月跑赢基准胜率（需配置业绩基准，独立拉长取数窗口）",

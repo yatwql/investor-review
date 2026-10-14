@@ -1,9 +1,9 @@
 # Web 模式浏览器真机验证方法与实测结论（rf-257 五类 UX 项）
 
-> **关联**：`docs/managements/review-findings.md` → **rf-257**（plan-8 Web 模式浏览器真机人工验收）；勾选清单 [`docs/archive/v0.10.x/web-ui/web-ui-verification-checklist.md`](../archive/v0.10.x/web-ui/web-ui-verification-checklist.md)（①~⑤ 五类、逐步操作与判定标准）；启动方式见 [`docs/manuals/how-to-use-web-mode.md`](../manuals/how-to-use-web-mode.md) §1。
-> **目的**：把五类验收项拆成「**可自动化的实测项**」与「**必须人工的项**」，并留下可复现的验证方法与本次实测结论——后续 Web UI 改动复验时直接复用本方法（脚本与产物在 `docs/tmp/rf257/`，git 忽略，重跑即重建）。
-> **本次实测**：2026-10-09 · 本机 headless Chromium **148.0.7778.96**（`~/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome`）· Node **v22.23.1** 全局 WebSocket 直连 CDP · 服务 `v0.12.7-dev`。
-> **红线遵守**：全程 **0 次真实 `POST /api/runs`**（浏览器侧 CDP 捕获 0 次 + 服务端 `server.log` 中 `POST /api/runs` 出现 0 次）；不改 `data/config/`、`data/holdings/` 正式持仓；上传测试仅落到 `data/holdings/uploads/` 临时区（测后已清空还原）。本次按任务约束**未跑 `scripts/check-*.py` 守护、未 `git add/commit`、未改 `docs/managements/`**（rf-257 台账由维护者回填）。
+> **关联**：`docs/managements/review-findings.md` → **rf-257**（Web 模式浏览器真机人工验收）；勾选清单 [`docs/archive/v0.10.x/web-ui/web-ui-verification-checklist.md`](../archive/v0.10.x/web-ui/web-ui-verification-checklist.md)（①~⑤ 五类、逐步操作与判定标准）；启动方式见 [`docs/manuals/how-to-use-web-mode.md`](../manuals/how-to-use-web-mode.md) §1。
+> **目的**：把五类验收项拆成「**可自动化的实测项**」与「**必须人工的项**」，并留下可复现的验证方法与实测结论——后续 Web UI 改动复验时直接复用本方法（脚本与产物在 `docs/tmp/rf257/`，git 忽略，重跑即重建）。
+> **实测环境**：本机 headless Chromium · Node 全局 WebSocket 直连 CDP。
+> **复跑红线**：全程 **0 次真实 `POST /api/runs`**（浏览器侧 CDP 捕获 0 次 + 服务端 `server.log` 中 `POST /api/runs` 出现 0 次）；不改 `data/config/`、`data/holdings/` 正式持仓；上传测试仅落到 `data/holdings/uploads/` 临时区（测后已清空还原）。
 
 ---
 
@@ -41,7 +41,7 @@ kill "$SERVER_PID"  <chrome_pid>
 ls data/holdings/uploads/     # 应为空；有残留则删除本次测试产生的 uuid 文件
 ```
 
-本次实测参数：服务端口 `39445`（PID 3040331）、CDP 端口 `54333`（Chrome PID 3042330），验证结束均已 `kill`，`data/holdings/uploads/` 已清空还原。
+复跑时选定空闲端口启动服务与 CDP；验证结束须 `kill` 服务与浏览器进程，`data/holdings/uploads/` 清空还原。
 
 ### 1.2 前置断言（每次复验先看这三条）
 
@@ -81,15 +81,15 @@ ls data/holdings/uploads/     # 应为空；有残留则删除本次测试产生
 
 > 每项标注 **【自动化实测结论】**（命令 + 证据路径，本次已跑）或 **【人工验证步骤】**（操作 + 判定标准，本次未跑）。
 
-### ① 页面渲染（rf-274 回归确认）
+### ① 页面渲染
 
 | 清单项 | 类型 | 结论与证据 |
 |:------|:----|:----------|
 | 1.1 样式生效 + 7 卡齐全 | 自动化 | **过**。`getComputedStyle` 抽查 `section.card`：`border-radius=8px`、`background=rgb(255,255,255)`、`box-shadow=rgba(31,35,40,.05)…`，`body` 背景 `rgb(243,245,248)`（非浏览器默认白底黑字）；`styleSheets` 含 `/static/style.css?v=0.12.7-dev` 且解析出 **171 条规则**。7 卡按 `h2` 圆圈序号齐备：`① 上传持仓｜② 生成报告｜④ 生成进度｜⑤ 生成结果｜③ 配置编辑｜⑥ 运行状态｜⑦ 日志查看`（DOM 顺序 ①②④⑤\|③\|⑥⑦，分属不同页签，属预期结构）。证据 `cdp-run.log` 1.1a/1.1b/1.1c |
 | 1.2 main.js 生效（配置面板 / 健康 / 最近运行） | 自动化 | **过**。`#config-panel` 子节点 9、可交互控件 63（面板自动渲染）；`#health-list` 首屏「正在检测...」→ 12 行实际探测结果（含耗时）；`#history-list` 首屏「加载中...」→ 自动加载出最近运行记录。证据 `cdp-run.log` 1.2a/1.2b/1.2c |
-| 1.3 页头应用名 + 版本 + 副标题 | 自动化 | **过**。`h1=投资复盘助手`、`subtitle=v0.12.7-dev · 上传持仓 Excel…`、`document.title=投资复盘助手 v0.12.7-dev`。证据 `cdp-run.log` 1.3 |
+| 1.3 页头应用名 + 版本 + 副标题 | 自动化 | **过**。`h1=投资复盘助手`、`subtitle=<版本> · 上传持仓 Excel…`、`document.title=投资复盘助手 <版本>`。证据 `cdp-run.log` 1.3 |
 | 1.4 Console 无 JS 报错 | 自动化 | **过**。页面加载 + 全程交互：`console.error=0`、`exceptionThrown=0`、`Log(error)=0`（仅刻意负面上传产生 2 条「400 /api/upload」网络日志，属预期负向用例）。证据 `cdp-run.log` 1.4 |
-| 1.5 Network 无 404（尤其 main.js/style.css） | 自动化 | **过**。`/static/main.js→200`、`/static/style.css→200`（另有一次 304 复用）；**非预期 4xx/5xx = 0**（仅 `POST /api/upload→400` ×2 为刻意负向用例；本机 headless 未请求 `/favicon.ico`）。证据 `cdp-run.log` 1.5a/1.5b —— **rf-274 回归确认闭合** |
+| 1.5 Network 无 404（尤其 main.js/style.css） | 自动化 | **过**。`/static/main.js→200`、`/static/style.css→200`（另有一次 304 复用）；**非预期 4xx/5xx = 0**（仅 `POST /api/upload→400` ×2 为刻意负向用例；本机 headless 未请求 `/favicon.ico`）。证据 `cdp-run.log` 1.5a/1.5b —— **无 404 回归闭合** |
 
 **① 判定：通过**（5/5 过，全部自动化实测）。
 
@@ -160,7 +160,7 @@ ls data/holdings/uploads/     # 应为空；有残留则删除本次测试产生
 
 | 项 | 标题 | 结果 | 说明与证据 |
 |:--:|:-----|:----:|:----------|
-| ① | 页面渲染（JS/CSS 加载） | ✅ **通过（全自动化）** | 5/5；`/static/main.js`、`/static/style.css` 均 200、171 条规则、Console 0 error → **rf-274 回归闭合**。`docs/tmp/rf257/cdp-run.log` 1.1a~1.5b |
+| ① | 页面渲染（JS/CSS 加载） | ✅ **通过（全自动化）** | 5/5；`/static/main.js`、`/static/style.css` 均 200、171 条规则、Console 0 error → **无 404 回归闭合**。`docs/tmp/rf257/cdp-run.log` 1.1a~1.5b |
 | ② | 上传表单 UX | ✅ **通过（2.1~2.4 全自动化；2.5/2.6 合成事件+可达性口径）** | accept 断言 + 合法/非法/空文件三路径状态文案；真实拖拽、真实 Tab/Enter 留人工抽验。`cdp-run.log` 2.1~2.6 |
 | ③ | 进度事件可视化 | 🟡 **部分自动化** | 静态初始态 + 显隐逻辑过（3.1a/3.1b/3.3a）；真实进度以 smoke-web 第 4/5/6 项为已有证据，**完整进度观察需人工跑一次 basic**（full 抽验）。`cdp-run.log` 3.1a~3.3a + `smoke-web.log` |
 | ④ | 375px 响应式 | ❌ **不过（部分自动化）** | 4.2/4.4 过；**4.1、4.3 不过**：375px 下横向滚动（`scrollWidth 421 > 375`）、报告格式 select `right=404` 溢出 29px，根因见 §4 缺陷 1；4.5 结果区按钮待人工。`cdp-run.log` 4.1~4.4 + `overflow-debug.log` |
@@ -170,7 +170,7 @@ ls data/holdings/uploads/     # 应为空；有残留则删除本次测试产生
 
 ---
 
-## 4. 本次实测发现（描述，未编号）
+## 4. 实测发现（描述，未编号）
 
 **发现 1（阻断 ④）：375px 下页面横向滚动，根因是「正式更新」radio 文案中的绝对持仓路径不可断行。**
 

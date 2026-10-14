@@ -536,6 +536,20 @@ def is_enable_fund_purchase_limit(config: dict | None = None) -> bool:
     return is_feature_enabled("fund_purchase_limit")
 
 
+def is_enable_cost_position(config: dict | None = None) -> bool:
+    """持仓成本区间位置列是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_ANALYSIS``）。
+
+    取值来自功能开关注册表（``features.cost_position``，出厂默认开），可用 `features.json`
+    覆盖；``config`` 形参仅为兼容既有调用签名保留，**取值不再读它**。
+
+    Args:
+        config: 兼容形参（不参与取值）
+    """
+    from src.python.config.features import is_feature_enabled
+
+    return is_feature_enabled("cost_position")
+
+
 def get_comparison_candidates(config: dict | None = None) -> list[str]:
     """候选基金比较子表候选基金代码列表。
 

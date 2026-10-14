@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.13.1
-> **编号源**：`rf-next = 680`（新增问题取此编号，完成后更新为 +1；已用最大 rf-679，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> 文档版本：0.13.2
+> **编号源**：`rf-next = 686`（新增问题取此编号，完成后更新为 +1；已用最大 rf-685，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -36,7 +36,7 @@
 | # | 文件 | 行数 | 状态 | 拆分建议 |
 |---|------|------|------|----------|
 
-| **rf-626** | `llm/prompts_core.py`、`llm/generators.py`、`report/html_writer.py`、`analysis/rebalance.py` | 350 / 444 / 783 / 751 | **临界带四文件登记项，已出带**：`prompts_core`/`generators` 按域下沉完成（failure_reasons / prompts_data_blocks / prompts_review / generators_singletons 四新模块承载，门面 re-export 保留、消费方导入面不变）；`html_writer`(783)/`rebalance`(751) 距 1000 红线余量 217/249 | `html_writer`/`rebalance` 由 `-v` 月度复核、逼近 980 行启动拆分（方法沿用本次：域下沉 + 门面 re-export + 测试 patch 改指持有子模块） |
+| **rf-626** | `llm/prompts_core.py`、`llm/generators.py`、`report/html_writer.py`、`analysis/rebalance.py` | 350 / 444 / 783 / 751 | **临界带四文件登记项**：`html_writer`(783)/`rebalance`(751) 距 1000 红线余量 217/249，`-v` 月度复核 | `html_writer`/`rebalance` 逼近 980 行启动拆分（域下沉 + 门面 re-export + 测试 patch 改指持有子模块） |
 | **rf-86** | `cache/operations.py` | 740 | 500-1000 可选优化区间，增长偏快，`-v` 按月复核 | 数据结构定义/基金刷新/公共缓存/持仓缓存/缓存清理 5 个职责 |
 | **rf-79** | `core/code_utils.py` | 731 | 500-1000 可选优化区间，维持现状，`-v` 按月复核 | 可考虑将 `estimate_market_cap_by_prefix()` 等非核心判定函数移出（不拆） |
 | **rf-665** | `config/features.py`、`_doc_drift/_format.py`、`tui/handlers_config.py` | 730 / 558 / 534 | 500-1000 可选优化区间，`-v` 按月复核 | `features.py` 随注册表逐开关增长（每项 ~10 行），逼近 980 行时考虑将 `FeatureSwitchDef` 字段声明/注册表条目下沉独立子模块；另两文件由 `-v` 月度复核 |
@@ -50,6 +50,7 @@
 
 ### 归档档案
 
+- [`archived_review-findings.0.13.x.md`](../archive/v0.13.x/archived_review-findings.0.13.x.md) — v0.13.x 开发期已修复批次（2026-10-14）
 - [`archived_review-findings.0.12.x.md`](../archive/v0.12.x/archived_review-findings.0.12.x.md) — v0.12.x 已修复批次与开发期追加（2026-10-03 ~ 2026-10-12）
 - [`archived_review-findings.0.11.x.md`](../archive/v0.11.x/archived_review-findings.0.11.x.md) — v0.11.0 ~ v0.11.11  （2026-09-18 ~ 2026-10-02）
 - [`archived_review-findings.0.10.x.md`](../archive/v0.10.x/archived_review-findings.0.10.x.md) — v0.10.1 ~ v0.10.20（2026-08-04 ~ 2026-09-15）
