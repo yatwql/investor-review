@@ -355,10 +355,11 @@ class TestOverviewSection:
     def test_total_row_count_and_percentile_ordering(self, mod):
         records = _records(6)
         row = _overview_row(mod.build_trend_report(records), "合计（当前口径）")
-        assert len(row) == 7
+        assert len(row) == 8  # 口径/样本数/平均/中位/P95/P99/最长/中位秒品种
         assert int(row[1]) == len(records)
-        seconds = [float(cell.rstrip("s")) for cell in row[3:]]  # 中位/P95/P99/最长
+        seconds = [float(cell.rstrip("s")) for cell in row[3:7]]  # 中位/P95/P99/最长
         assert seconds == sorted(seconds)
+        assert float(row[7]) > 0  # 中位秒/品种（规模归一化）
 
     def test_single_report_type_renders_only_total_row(self, mod):
         text = mod.build_trend_report(_records(3, report_type="full"))
@@ -380,6 +381,15 @@ class TestOverviewSection:
 
     def test_empty_records_skip_overview(self, mod):
         assert "总体分位概览" not in mod.build_trend_report([])
+
+    def test_small_sample_note_rendered_for_low_n(self, mod):
+        """小样本提示：n<20 时告知最近秩分位趋近最大值。"""
+        text = mod.build_trend_report(_records(4))
+        assert "参考性有限" in text
+        assert "样本数 <20" in text
+
+    def test_no_small_sample_note_at_sufficient_n(self, mod):
+        assert "参考性有限" not in mod.build_trend_report(_records(21))
 
 
 class TestBreakdownSection:
@@ -567,7 +577,37 @@ class TestMachineReadable:
 
         records = _records(2)
         parsed = _json.loads(mod._machine_readable(records, "json"))
-        assert parsed == records
+        assert parsed["records"] == records
+        assert parsed["record_count"] == len(records)
+
+    def test_json_summary_carries_computed_stats(self, mod):
+        """信封 summary 与 Markdown 段同源：分位/归一/演进/漂移/离群/异常。"""
+        import json as _json
+
+        summary = _json.loads(mod._machine_readable(_records(3), "json"))["summary"]
+        assert summary["total_seconds"]["count"] == 3
+        assert summary["per_holding_median"] == pytest.approx(0.55)  # 10/20、11/20、12/20 的中位
+        assert summary["version_evolution"][0]["count"] == 3
+        assert summary["drift"] == []  # 样本 <6 不参与漂移
+        assert summary["outliers"] == []
+        assert summary["abnormal"] == []
+
+    def test_csv_header_carries_new_dimensions(self, mod):
+        header = mod._machine_readable(_records(1), "csv").strip().splitlines()[0]
+        assert header.startswith("timestamp,version,report_type")
+        for col in ("per_holding_seconds", "outlier", "slowest_phase", "errors_count"):
+            assert col in header
+
+    def test_csv_row_normalizes_and_flags_outlier(self, mod):
+        records = _records(6)
+        records[-1]["total_seconds"] = 6636.0
+        lines = mod._machine_readable(records, "csv").strip().splitlines()
+        outlier_cells = next(ln for ln in lines[1:] if "6636.0" in ln).split(",")
+        assert outlier_cells[6] == "331.800"  # 秒/品种 = 6636 / 20
+        assert outlier_cells[7] == "1"  # 离群标记
+        assert outlier_cells[8] == "采集"  # 最慢阶段
+        normal_cells = next(ln for ln in lines[1:] if "6636.0" not in ln).split(",")
+        assert normal_cells[7] == "0"
 
     def test_csv_has_header_and_one_row_per_record(self, mod):
         records = _records(3)
@@ -620,6 +660,95 @@ class TestSummaryAndOutlierK:
         records = _records(6)
         records[-1]["total_seconds"] = 6636.0
         assert "稳健均值" in mod.build_trend_report(records)
+
+
+class TestVersionEvolutionSection:
+    """版本演进总表：首现时间排序、较上一版 delta/警示、归一化列。"""
+
+    def _two_versions(self) -> list[dict]:
+        old = _records(3, version="0.1.0")
+        new = _records(3, version="0.2.0", start=10)
+        for r in new:
+            r["total_seconds"] = 40.0
+        return old + new
+
+    def test_rows_ordered_by_first_seen_with_empty_delta_for_first(self, mod):
+        text = mod.build_trend_report(self._two_versions())
+        assert "## 版本演进总表" in text
+        lines = text.splitlines()
+        i_old = next(i for i, ln in enumerate(lines) if ln.startswith("| 0.1.0 | full"))
+        i_new = next(i for i, ln in enumerate(lines) if ln.startswith("| 0.2.0 | full"))
+        assert i_old < i_new
+        assert lines[i_old].rstrip().endswith("| — |")  # 同类型首版无对比
+
+    def test_large_regression_marked_with_delta(self, mod):
+        text = mod.build_trend_report(self._two_versions())
+        line = next(ln for ln in text.splitlines() if "⚠变慢" in ln)
+        assert "+29.0s" in line  # 中位 40.0 - 11.0
+        assert "⚠变慢" in line
+
+    def test_per_holding_column_rendered(self, mod):
+        text = mod.build_trend_report(self._two_versions())
+        line = next(ln for ln in text.splitlines() if ln.startswith("| 0.2.0 | full"))
+        assert "2.000" in line  # 40s / 20 品种
+
+    def test_single_report_type_keeps_type_column(self, mod):
+        text = mod.build_trend_report(_records(3))
+        assert "| 版本 | 报告类型 | 样本数 | 中位 | P95 | 中位秒/品种 | 较上一版中位 |" in text
+
+
+class TestAbnormalSection:
+    """异常运行专区：中断/非完成/带错误；干净数据整段省略。"""
+
+    def test_absent_for_clean_records(self, mod):
+        assert "异常运行" not in mod.build_trend_report(_records(4))
+
+    def test_is_abnormal_record_rules(self, mod):
+        assert not mod._is_abnormal_record({"status": "completed"})
+        assert not mod._is_abnormal_record({})
+        assert mod._is_abnormal_record({"interrupted_stage": "Excel 生成"})
+        assert mod._is_abnormal_record({"status": "failed"})
+        assert mod._is_abnormal_record({"errors": ["行情超时"]})
+
+    def test_lists_interrupted_and_errored_runs(self, mod):
+        records = _records(3)
+        records[1]["status"] = "interrupted"
+        records[1]["interrupted_stage"] = "Excel 生成"
+        records[2]["errors"] = ["行情超时"]
+        text = mod.build_trend_report(records)
+        assert "## 异常运行" in text
+        assert "| interrupted |" in text
+        assert "| Excel 生成 |" in text
+        assert "行情超时" in text
+
+
+class TestDriftSection:
+    """同版本漂移：时间对半中位差 + 噪声带显著性。"""
+
+    def _drifting(self) -> list[dict]:
+        records = _records(8)
+        for i, r in enumerate(records):
+            r["total_seconds"] = 20.0 if i < 4 else 60.0
+        return records
+
+    def test_absent_below_min_samples(self, mod):
+        assert "同版本漂移" not in mod.build_trend_report(_records(5))
+
+    def test_flags_within_version_regression(self, mod):
+        text = mod.build_trend_report(self._drifting())
+        assert "## 同版本漂移（渐进劣化检测）" in text
+        row = next(ln for ln in text.splitlines() if "+40.0s" in ln)
+        assert "| 是 |" in row  # 两半零方差 → 零噪声带 → 显著
+
+    def test_flat_series_not_significant(self, mod):
+        records = _records(8)
+        for r in records:
+            r["total_seconds"] = 20.0
+        text = mod.build_trend_report(records)
+        assert "否（噪声带内）" in text  # delta=0 不显著
+
+    def test_drift_kept_in_summary_mode(self, mod):
+        assert "同版本漂移" in mod.build_trend_report(self._drifting(), summary=True)
 
 
 class TestGroupPercentileLines:

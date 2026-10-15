@@ -905,7 +905,7 @@ A: 运行 `.venv/bin/python scripts/check-test-markers.py`，脚本会静态扫�
 | `check-script-contract.py` | 质量 | scripts 顶层脚本契约机检（退出码声明 ⊆ {0,2} 白名单、check-* 统一 `add_common_args` CLI 面、文本 I/O 显式 encoding、脚本↔测试覆盖映射，四条规则——**观察期**未入钩子与 CI） |
 | `release.py` | 发布 | 发布流程分步编排（check/prepare/refresh/evolution/gate/publish/devbump，每步独立可审阅、失败即停） |
 | `perf-test-report.py` | 诊断 | 端到端报告生成管线性能基准（独立脚本，mock 外部数据源） |
-| `perf-view.py` | 诊断 | 性能历史趋势查看（读取 perf_history.jsonl → 跨版本耗时对比 + P95/P99 分位概览 + 离群/尾部归因/时段聚合） |
+| `perf-view.py` | 诊断 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 时段聚合/机读输出） |
 | `probe.py` | 诊断 | 探测统一入口（按 target 分发到 `probes/` 子模块；新探针实现契约面登记即用） |
 | `probe-csi-factor-indices.py` / `probe-push2.py` | 诊断 | 旧入口兼容垫片（薄委托到 `probes/csi.py` / `probes/push2.py`，用法不变） |
 | `check-svg.py` | 诊断 | README SVG 架构图检查（子命令 `geom` 几何 / `pixel` 像素 / `text-overflow` 文字色越界；像素子命令需 Pillow） |
@@ -1293,7 +1293,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 **`perf-view.py` — 性能历史趋势查看**
 
-读取 `data/state/perf_history.jsonl`（由 `PerfCollector` 在每次报告生成时自动追加），按版本和报告类型分组统计，输出版本间性能趋势对比；并输出跨版本「总体分位概览」（样本数 / 平均 / 中位 / **P95** / **P99** / 最长）。
+读取 `data/state/perf_history.jsonl`（由 `PerfCollector` 在每次报告生成时自动追加），按版本和报告类型分组统计，输出版本间性能趋势对比；输出跨版本「总体分位概览」（样本数 / 平均 / 中位 / **P95** / **P99** / 最长 / 中位秒每品种，n<20 附小样本提示）、**版本演进总表**（每版中位/P95/较上一版 delta+⚠，按首现时间排序）、离群与尾部归因、**异常运行专区**（中断/失败，无则省略）与**同版本漂移检测**（时间对半、噪声带判显著）。
 
 ```bash
 # 输出全部历史趋势到 stdout

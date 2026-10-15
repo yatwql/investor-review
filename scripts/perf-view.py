@@ -18,8 +18,9 @@
   python scripts/perf-view.py --summary                # 仅输出概览段（略去逐版本分组）
   python scripts/perf-view.py --outlier-k 4.0          # 自定义离群判定系数（默认 3.5）
 
-归因能力：离群点标注（中位 ± MAD）、稳健均值、阶段级分位、尾部归因（最慢运行
-逐阶段 z 分数）、时段聚合、版本间对比、机读输出。
+归因能力：版本演进总表、离群点标注（中位 ± MAD）、稳健均值、阶段级分位、尾部归因
+（最慢运行逐阶段 z 分数）、异常运行专区（中断/失败）、同版本漂移检测（渐进劣化）、
+秒/品种归一化、小样本分位提示、时段聚合、版本间对比、机读输出（记录 + 汇总信封）。
 
 定位说明：本脚本是**运行历史查看**（被动统计既有记录），不是性能测试——
 样本取决于最近跑过什么，不可复现，故**不用于 CI 门禁**；性能门禁由主动压测的
@@ -53,6 +54,9 @@ _TREND_REPORT_PATH = os.path.join(_TMP_DIR, "perf_trend.md")
 
 #: 离群判定系数（中位 + k × 1.4826 × MAD）；3.5 为常用经验值，可经 --outlier-k 覆盖
 _OUTLIER_K = 3.5
+
+#: 同版本漂移检测的最少样本（时间对半后每边 ≥3；低于此不参与，半样本中位不稳）
+_DRIFT_MIN_SAMPLES = 6
 
 
 # ── 统计工具 ──
@@ -143,6 +147,14 @@ def _stdev(values: list[float]) -> float:
     return math.sqrt(sum((v - mean) ** 2 for v in values) / len(values))
 
 
+def _cv(values: list[float]) -> float:
+    """变异系数（标准差/均值）；样本 <2 或均值为 0 时返回 0。"""
+    if len(values) < 2:
+        return 0.0
+    mean = _mean(values)
+    return (_stdev(values) / mean) if mean > 0 else 0.0
+
+
 def _z_scores(values: list[float]) -> list[float]:
     """逐样本 z 分数（总体标准差口径）；标准差为 0 时全为 0。"""
     if not values:
@@ -171,6 +183,19 @@ def _total_summary(records: list[dict[str, Any]]) -> dict[str, float]:
         "p99": round(_percentile(totals, 99), 1),
         "max": round(_min_max(totals)[1], 1),
     }
+
+
+def _per_holding_median(records: list[dict[str, Any]]) -> float | None:
+    """秒/品种（总耗时 ÷ 持仓数）的中位——跨规模（持仓数不同）可比的归一化口径。
+
+    持仓数为 0/缺失的记录跳过；无有效记录返回 None。
+    """
+    vals = [
+        float(r.get("total_seconds") or 0) / int(r.get("holdings_count") or 0)
+        for r in records
+        if int(r.get("holdings_count") or 0) > 0
+    ]
+    return round(_median(vals), 3) if vals else None
 
 
 def _filter_records(
@@ -302,15 +327,18 @@ def _overview_lines(records: list[dict[str, Any]]) -> list[str]:
         "样本口径与下方分组一致（受 `--report-type` / `--last` 影响）；"
         "分位为**最近秩**口径——P95/P99 即 95%/99% 的报告生成在该耗时内完成。",
         "",
-        "| 口径 | 样本数 | 平均 | 中位 | P95 | P99 | 最长 |",
-        "|:-----|------:|----:|----:|----:|----:|-----:|",
+        "| 口径 | 样本数 | 平均 | 中位 | P95 | P99 | 最长 | 中位秒/品种 |",
+        "|:-----|------:|----:|----:|----:|----:|-----:|-----------:|",
     ]
     for label, subset in rows:
         stat = _total_summary(subset)
+        ph = _per_holding_median(subset)
         lines.append(
             f"| {label} | {int(stat['count'])} | {stat['avg']:.1f}s | {stat['p50']:.1f}s | "
-            f"{stat['p95']:.1f}s | {stat['p99']:.1f}s | {stat['max']:.1f}s |"
+            f"{stat['p95']:.1f}s | {stat['p99']:.1f}s | {stat['max']:.1f}s | {ph if ph is not None else '—'} |"
         )
+    if any(len(subset) < 20 for _, subset in rows):
+        lines.append("注：样本数 <20 的口径，最近秩 P95/P99 趋近最大值，参考性有限。")
     lines.append("")
     return lines
 
@@ -327,15 +355,14 @@ def _outlier_lines(records: list[dict[str, Any]], k: float = _OUTLIER_K) -> list
         f"判定：总耗时 > 中位 + {k} × 1.4826 × MAD（上界 {threshold:.1f}s）；"
         "MAD 为 0 时不判离群。用 `--exclude-outlier` 可剔除后重算。",
         "",
-        "| 时间 | 版本 | 类型 | 总耗时 | 最慢阶段 |",
-        "|:-----|:-----|:-----|------:|:---------|",
+        "| 时间 | 版本 | 类型 | 总耗时 | 最慢阶段 | 错误数 |",
+        "|:-----|:-----|:-----|------:|:---------|------:|",
     ]
     for r in outliers:
-        phases = r.get("phases") if isinstance(r.get("phases"), dict) else {}
-        slowest = max(phases.items(), key=lambda kv: kv[1])[0] if phases else "?"
+        slowest = _slowest_phase(r) or "?"
         lines.append(
             f"| {r.get('timestamp', '?')[:16]} | {r.get('version', '?')} | {r.get('report_type', '?')} | "
-            f"{float(r.get('total_seconds') or 0):.1f}s | {slowest} |"
+            f"{float(r.get('total_seconds') or 0):.1f}s | {slowest} | {len(r.get('errors') or [])} |"
         )
     lines.append("")
     return lines
@@ -384,6 +411,187 @@ def _tail_attribution_lines(records: list[dict[str, Any]]) -> list[str]:
     ]
     for name, sec, med, z, ratio in rows:
         lines.append(f"| {name} | {sec:.1f}s | {med:.1f}s | {ratio:.2f}× | {z:+.2f} |")
+    lines.append("")
+    return lines
+
+
+def _slowest_phase(record: dict[str, Any]) -> str:
+    """记录中最慢阶段名（无阶段数据返回空串）。"""
+    phases = record.get("phases") if isinstance(record.get("phases"), dict) else {}
+    if not phases:
+        return ""
+    return max(phases.items(), key=lambda kv: kv[1])[0]
+
+
+def _version_evolution_data(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """版本演进数据：每（版本, 报告类型）一行，按该版本首次运行时间排序。
+
+    Returns:
+        [{report_type, version, count, median, p95, per_holding, delta_prev, pct_prev}]
+        （同类型首版的 delta_prev/pct_prev 为 None）。
+    """
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for r in records:
+        groups[(str(r.get("report_type", "?")), str(r.get("version", "?")))].append(r)
+    first_ts = {key: min(str(r.get("timestamp", "")) for r in recs) for key, recs in groups.items()}
+
+    rows: list[dict[str, Any]] = []
+    for rt in sorted({key[0] for key in groups}):
+        versions = sorted((key[1] for key in groups if key[0] == rt), key=lambda v: first_ts[(rt, v)])
+        prev_median: float | None = None
+        for ver in versions:
+            recs = groups[(rt, ver)]
+            totals = [float(r.get("total_seconds") or 0) for r in recs]
+            median = round(_median(totals), 1)
+            delta: float | None = None
+            pct: float | None = None
+            if prev_median is not None:
+                delta = round(median - prev_median, 1)
+                pct = round((median - prev_median) / prev_median * 100, 1) if prev_median > 0 else None
+            rows.append(
+                {
+                    "report_type": rt,
+                    "version": ver,
+                    "count": len(recs),
+                    "median": median,
+                    "p95": round(_percentile(totals, 95), 1),
+                    "per_holding": _per_holding_median(recs),
+                    "delta_prev": delta,
+                    "pct_prev": pct,
+                }
+            )
+            prev_median = median
+    return rows
+
+
+def _version_evolution_lines(records: list[dict[str, Any]]) -> list[str]:
+    """版本演进总表：一眼看出哪个版本开始变慢。"""
+    rows = _version_evolution_data(records)
+    if not rows:
+        return []
+    lines = [
+        "## 版本演进总表",
+        "",
+        "同报告类型按版本**首次运行时间**排序；「较上一版」为中位总耗时之差，"
+        "|变化| ≥10% 标注 ⚠（变慢/变快）；秒/品种为跨规模归一化口径。",
+        "",
+        "| 版本 | 报告类型 | 样本数 | 中位 | P95 | 中位秒/品种 | 较上一版中位 |",
+        "|:-----|:---------|------:|----:|----:|-----------:|:-----------|",
+    ]
+    for row in rows:
+        ph = f"{row['per_holding']:.3f}" if row["per_holding"] is not None else "—"
+        if row["delta_prev"] is None:
+            delta_cell = "—"
+        else:
+            delta_cell = f"{row['delta_prev']:+.1f}s"
+            if row["pct_prev"] is not None:
+                delta_cell += f"（{row['pct_prev']:+.1f}%）"
+                if abs(row["pct_prev"]) >= 10:
+                    delta_cell += " ⚠变慢" if row["delta_prev"] > 0 else " ⚠变快"
+        lines.append(
+            f"| {row['version']} | {row['report_type']} | {row['count']} | "
+            f"{row['median']:.1f}s | {row['p95']:.1f}s | {ph} | {delta_cell} |"
+        )
+    lines.append("")
+    return lines
+
+
+def _is_abnormal_record(record: dict[str, Any]) -> bool:
+    """中断 / 非完成状态 / 带错误——三者占其一即异常。"""
+    if record.get("interrupted_stage"):
+        return True
+    if record.get("status") not in (None, "", "completed"):
+        return True
+    return bool(record.get("errors"))
+
+
+def _abnormal_lines(records: list[dict[str, Any]]) -> list[str]:
+    """异常运行专区：中断/非完成/带错误的运行（无则整段省略）。"""
+    bad = [r for r in records if _is_abnormal_record(r)]
+    if not bad:
+        return []
+    lines = [
+        "## 异常运行（中断 / 非完成 / 带错误）",
+        "",
+        "| 时间 | 版本 | 类型 | 状态 | 中断阶段 | 总耗时 | 错误数 | 错误摘要 |",
+        "|:-----|:-----|:-----|:-----|:---------|------:|------:|:---------|",
+    ]
+    for r in bad:
+        errs = r.get("errors") or []
+        summary = "—"
+        if errs:
+            summary = str(errs[0])[:40] + (f"（共 {len(errs)} 条）" if len(errs) > 1 else "")
+        lines.append(
+            f"| {str(r.get('timestamp', '?'))[:16]} | {r.get('version', '?')} | {r.get('report_type', '?')} | "
+            f"{r.get('status') or '—'} | {r.get('interrupted_stage') or '—'} | "
+            f"{float(r.get('total_seconds') or 0):.1f}s | {len(errs)} | {summary} |"
+        )
+    lines.append("")
+    return lines
+
+
+def _drift_data(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """同版本漂移数据：同（版本, 类型）按时间对半，后半 vs 前半中位差 + 显著性。
+
+    显著性与版本对比同口径：|变化| 超过两半变异系数之和 × 较大中位（噪声带）。
+    样本 < `_DRIFT_MIN_SAMPLES` 的组不参与（半样本中位不稳）；输入须按时间升序
+    （load_history 追加写入天然有序）。
+    """
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for r in records:
+        groups[(str(r.get("report_type", "?")), str(r.get("version", "?")))].append(r)
+    first_ts = {key: min(str(r.get("timestamp", "")) for r in recs) for key, recs in groups.items()}
+
+    rows: list[dict[str, Any]] = []
+    for key in sorted(groups, key=lambda k: (first_ts[k], k)):
+        recs = groups[key]
+        if len(recs) < _DRIFT_MIN_SAMPLES:
+            continue
+        half = len(recs) // 2
+        first, second = recs[:half], recs[-half:]
+        first_totals = [float(r.get("total_seconds") or 0) for r in first]
+        second_totals = [float(r.get("total_seconds") or 0) for r in second]
+        first_med = round(_median(first_totals), 1)
+        second_med = round(_median(second_totals), 1)
+        delta = round(second_med - first_med, 1)
+        pct = round((second_med - first_med) / first_med * 100, 1) if first_med > 0 else None
+        noise = (_cv(first_totals) + _cv(second_totals)) * max(first_med, second_med)
+        rows.append(
+            {
+                "report_type": key[0],
+                "version": key[1],
+                "count": len(recs),
+                "first_median": first_med,
+                "second_median": second_med,
+                "delta": delta,
+                "pct": pct,
+                "significant": bool(abs(delta) > noise),
+            }
+        )
+    return rows
+
+
+def _drift_lines(records: list[dict[str, Any]]) -> list[str]:
+    """同版本漂移段（渐进劣化检测；无合格组则整段省略）。"""
+    rows = _drift_data(records)
+    if not rows:
+        return []
+    lines = [
+        "## 同版本漂移（渐进劣化检测）",
+        "",
+        f"同（版本, 类型）按时间对半，后半 vs 前半中位差；样本 <{_DRIFT_MIN_SAMPLES} 的组不参与。"
+        "显著性与版本对比同口径（变化 > 两半变异系数之和 × 较大中位 = 噪声带）。",
+        "",
+        "| 版本 | 类型 | 样本 | 前半中位 | 后半中位 | 变化 | 显著 |",
+        "|:-----|:-----|-----:|--------:|--------:|-----:|:-----|",
+    ]
+    for row in rows:
+        pct_cell = f"（{row['pct']:+.1f}%）" if row["pct"] is not None else ""
+        mark = "是" if row["significant"] else "否（噪声带内）"
+        lines.append(
+            f"| {row['version']} | {row['report_type']} | {row['count']} | "
+            f"{row['first_median']:.1f}s | {row['second_median']:.1f}s | {row['delta']:+.1f}s{pct_cell} | {mark} |"
+        )
     lines.append("")
     return lines
 
@@ -510,6 +718,7 @@ def _compare_versions(
             "median": round(_median(totals), 1),
             "p95": round(_percentile(totals, 95), 1),
             "cv": round(_stdev(totals) / _mean(totals), 3) if totals and _mean(totals) > 0 else 0.0,
+            "per_holding": _per_holding_median(recs),
         }
 
     stats_a = _merge_phase_stats(recs_a)
@@ -546,8 +755,7 @@ def _cv_of_phase(records: list[dict[str, Any]], phase: str) -> float:
     ]
     if len(vals) < 2:
         return 0.0
-    mean = _mean(vals)
-    return (_stdev(vals) / mean) if mean > 0 else 0.0
+    return _cv(vals)
 
 
 def _compare_lines(records: list[dict[str, Any]], version_a: str, version_b: str) -> list[str]:
@@ -556,12 +764,13 @@ def _compare_lines(records: list[dict[str, Any]], version_a: str, version_b: str
     lines = [
         f"## 版本对比：{version_a} → {version_b}",
         "",
-        "| 版本 | 样本数 | 中位总耗时 | P95 | 变异系数 |",
-        "|:-----|------:|----------:|----:|--------:|",
+        "| 版本 | 样本数 | 中位总耗时 | P95 | 中位秒/品种 | 变异系数 |",
+        "|:-----|------:|----------:|----:|-----------:|--------:|",
     ]
     for key in ("a", "b"):
         s = cmp[key]
-        lines.append(f"| {s['version']} | {s['count']} | {s['median']:.1f}s | {s['p95']:.1f}s | {s['cv']:.3f} |")
+        ph = f"{s['per_holding']:.3f}" if s["per_holding"] is not None else "—"
+        lines.append(f"| {s['version']} | {s['count']} | {s['median']:.1f}s | {s['p95']:.1f}s | {ph} | {s['cv']:.3f} |")
     lines.append("")
     if not cmp["phases"]:
         lines.append("_两版本均无阶段样本。_")
@@ -581,17 +790,77 @@ def _compare_lines(records: list[dict[str, Any]], version_a: str, version_b: str
     return lines
 
 
-def _machine_readable(records: list[dict[str, Any]], fmt: str) -> str:
-    """机读输出：JSON（完整记录）或 CSV（逐运行一行）。"""
+def _machine_summary(records: list[dict[str, Any]], outlier_k: float = _OUTLIER_K) -> dict[str, Any]:
+    """机读汇总：与 Markdown 段同源的分位/离群/异常/演进/漂移统计。"""
+    by_type: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for r in records:
+        by_type[str(r.get("report_type", "?"))].append(r)
+    return {
+        "total_seconds": _total_summary(records),
+        "per_holding_median": _per_holding_median(records),
+        "by_report_type": {rt: _total_summary(sub) for rt, sub in sorted(by_type.items())},
+        "outliers": [
+            {
+                "timestamp": r.get("timestamp", ""),
+                "version": r.get("version", ""),
+                "report_type": r.get("report_type", ""),
+                "total_seconds": float(r.get("total_seconds") or 0),
+                "slowest_phase": _slowest_phase(r),
+                "errors_count": len(r.get("errors") or []),
+            }
+            for r in _outlier_records(records, outlier_k)
+        ],
+        "abnormal": [
+            {
+                "timestamp": r.get("timestamp", ""),
+                "version": r.get("version", ""),
+                "report_type": r.get("report_type", ""),
+                "status": r.get("status"),
+                "interrupted_stage": r.get("interrupted_stage"),
+                "errors_count": len(r.get("errors") or []),
+                "total_seconds": float(r.get("total_seconds") or 0),
+            }
+            for r in records
+            if _is_abnormal_record(r)
+        ],
+        "version_evolution": _version_evolution_data(records),
+        "drift": _drift_data(records),
+    }
+
+
+def _machine_readable(records: list[dict[str, Any]], fmt: str, outlier_k: float = _OUTLIER_K) -> str:
+    """机读输出：JSON 信封（记录 + 汇总统计）或 CSV（含归一/离群/最慢阶段列）。"""
     if fmt == "json":
-        return json.dumps(records, ensure_ascii=False, indent=2)
+        payload = {
+            "record_count": len(records),
+            "records": records,
+            "summary": _machine_summary(records, outlier_k),
+        }
+        return json.dumps(payload, ensure_ascii=False, indent=2)
     import csv
     import io
 
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow(["timestamp", "version", "report_type", "holdings_count", "total_seconds", "status"])
+    writer.writerow(
+        [
+            "timestamp",
+            "version",
+            "report_type",
+            "holdings_count",
+            "total_seconds",
+            "status",
+            "per_holding_seconds",
+            "outlier",
+            "slowest_phase",
+            "interrupted_stage",
+            "errors_count",
+        ]
+    )
+    outlier_ids = {id(r) for r in _outlier_records(records, outlier_k)}
     for r in records:
+        holdings = int(r.get("holdings_count") or 0)
+        total = float(r.get("total_seconds") or 0)
         writer.writerow(
             [
                 r.get("timestamp", ""),
@@ -600,6 +869,11 @@ def _machine_readable(records: list[dict[str, Any]], fmt: str) -> str:
                 r.get("holdings_count", ""),
                 r.get("total_seconds", 0),
                 r.get("status", ""),
+                f"{total / holdings:.3f}" if holdings > 0 else "",
+                "1" if id(r) in outlier_ids else "0",
+                _slowest_phase(r),
+                r.get("interrupted_stage") or "",
+                len(r.get("errors") or []),
             ]
         )
     return buf.getvalue()
@@ -640,9 +914,16 @@ def build_trend_report(
     # ── 跨版本分位概览（P95/P99 报告生成耗时） ──
     lines.extend(_overview_lines(scoped))
 
+    # ── 版本演进总表（哪一版开始变慢） ──
+    lines.extend(_version_evolution_lines(scoped))
+
     # ── 离群运行与尾部归因（稳健口径） ──
     lines.extend(_outlier_lines(scoped, outlier_k))
     lines.extend(_tail_attribution_lines(scoped))
+
+    # ── 异常运行与同版本渐进漂移 ──
+    lines.extend(_abnormal_lines(scoped))
+    lines.extend(_drift_lines(scoped))
 
     # ── LLM 运行上下文（等待/重试/降级/缓存/用量） ──
     lines.extend(_llm_context_lines(scoped))
@@ -679,6 +960,8 @@ def build_trend_report(
             f"- 95% 的报告在 **{_percentile(totals, 95):.1f}s** 内完成，"
             f"99% 在 **{_percentile(totals, 99):.1f}s** 内完成"
         )
+        if len(group_records) < 20:
+            lines.append("_（样本 <20：最近秩分位趋近最大值，参考性有限）_")
         lines.append("")
 
         # ── 各阶段耗时（含阶段级分位） ──
@@ -767,7 +1050,9 @@ def main() -> int:
 
     # ── 机读输出（与 Markdown 互斥，便于管道消费） ──
     if args.json or args.csv:
-        print(_machine_readable(scoped, "json" if args.json else "csv"))
+        if args.save:
+            print("[!] --save 在机读模式下不适用（--json/--csv 只向 stdout 输出）", file=sys.stderr)
+        print(_machine_readable(scoped, "json" if args.json else "csv", args.outlier_k))
     else:
         report = build_trend_report(
             records,

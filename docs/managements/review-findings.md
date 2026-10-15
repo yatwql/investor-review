@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.13.4-dev
-> **编号源**：`rf-next = 688`（新增问题取此编号，完成后更新为 +1；已用最大 rf-687，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 689`（新增问题取此编号，完成后更新为 +1；已用最大 rf-688，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -36,6 +36,7 @@
 | # | 文件 | 行数 | 状态 | 拆分建议 |
 |---|------|------|------|----------|
 
+| **rf-688** | `scripts/perf-view.py` | 1079 | **破线豁免挂账**（>1000 红线；2026-10-15 版本演进/漂移/归一化/机读信封四项增强后越线，`check-file-length.py` 的 `EXEMPTIONS` 同步登记） | 拆 `scripts/_perf_view/` 子包（stats 纯函数先行，约 150 行 → 主文件回落 ≤1000 后同步移除豁免）；测试经主入口 re-export 访问 `mod._*` 符号不受影响 |
 | **rf-626** | `llm/prompts_core.py`、`llm/generators.py`、`report/html_writer.py`、`analysis/rebalance.py` | 350 / 444 / 783 / 751 | **临界带四文件登记项**：`html_writer`(783)/`rebalance`(751) 距 1000 红线余量 217/249，`-v` 月度复核 | `html_writer`/`rebalance` 逼近 980 行启动拆分（域下沉 + 门面 re-export + 测试 patch 改指持有子模块） |
 | **rf-86** | `cache/operations.py` | 740 | 500-1000 可选优化区间，增长偏快，`-v` 按月复核 | 数据结构定义/基金刷新/公共缓存/持仓缓存/缓存清理 5 个职责 |
 | **rf-79** | `core/code_utils.py` | 731 | 500-1000 可选优化区间，维持现状，`-v` 按月复核 | 可考虑将 `estimate_market_cap_by_prefix()` 等非核心判定函数移出（不拆） |
