@@ -29,7 +29,7 @@ import sys
 import tempfile
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 # ── 项目路径 ─────────────────────────────────────
@@ -51,6 +51,93 @@ _REPORT_OUTPUT_DIR = os.path.join(
     "tmp",
 )
 _PERF_REPORT_PATH = os.path.join(_REPORT_OUTPUT_DIR, "better-investment-performance-test-report.md")
+
+# ── 行情/K线历史/交易日历离线桩 ───────────────────
+#
+# 门禁相关的三阶段必须与网络条件无关：真实行情抓取（Tencent/Sina K 线）走同源
+# 重试退避，交易日历首拉 akshare（Sina 源）——CI 冷缓存或端点变慢时，门禁会测成
+# 「网络状况」而非「代码性能」（实测：断网后 Phase1 从个位数秒级涨到四十余秒，
+# 全耗在 K 线重试退避上；桩后断网 Phase1=2.3s / Phase3=2.1s）。桩钉在咽喉而非
+# 各调用点：
+#   ① fetch_market_data —— 行情链唯一入口。函数内 import 的调用方
+#      （基金风格分类等）读 fetcher.price 模块属性，市值核算是模块级绑定，
+#      故两处都钉；
+#   ② trading_calendar._get_trading_calendar —— 日历模块唯一网络出口
+#      （ak.tool_trade_date_hist_sina）。所有日历函数经它取集合，钉住即全链离线
+#      （含各模块模块级绑定的 get_last_trading_day）；
+#   ③ chain/chain_incremental 的 fetch_with_incremental_fallback —— K 线/历史链
+#      唯一入口（流动性检查、风格因子、事件面板、市场情绪逐仓拉历史都经它）。
+#      注：portfolio_history 是模块级绑定，但其仅在 fetch_history=True 路径生效，
+#      本脚本 Phase 2 显式传 False，不入桩。
+#
+# 边界：Phase 2 的新闻/财报类抓取仍走真实网络（断网自动降级，实测 26s 内完成，
+# 且其耗时不入门禁判定——门禁只看 basic 即 Phase 1），故不为它们编造返回契约。
+
+
+def _last_workday_str() -> str:
+    """最近一个工作日（YYYY-MM-DD，仅去周末，无节假日感知——基准用）。"""
+    day = date.today()
+    while day.weekday() >= 5:
+        day -= timedelta(days=1)
+    return day.isoformat()
+
+
+def _stub_trading_calendar() -> set[str]:
+    """交易日历桩：近 400 天 + 未来 30 天的工作日集合（零网络）。"""
+    dates: set[str] = set()
+    day = date.today() - timedelta(days=400)
+    end = date.today() + timedelta(days=30)
+    while day <= end:
+        if day.weekday() < 5:
+            dates.add(day.isoformat())
+        day += timedelta(days=1)
+    return dates
+
+
+def _mock_bars(chain_name: str, code: str, days: int = 30, **_kw: Any) -> list[dict[str, Any]]:
+    """历史K线桩：约 `days` 自然日窗口内的工作日 OHLC 序列（确定性、升序、零网络）。
+
+    至少返回 5 根（极短窗口/周末起步也要给出可计算样本）；收盘价带周期性波动，
+    保证收益率/流动性类计算不会除零。
+    """
+    target = max(5, int(days) * 5 // 7)
+    rows: list[dict[str, Any]] = []
+    day = date.today()
+    while len(rows) < target:
+        if day.weekday() < 5:
+            idx = len(rows)
+            close = 10.0 + (idx % 7) * 0.1
+            rows.append(
+                {
+                    "date": day.isoformat(),
+                    "open": round(close - 0.05, 2),
+                    "high": round(close + 0.1, 2),
+                    "low": round(close - 0.15, 2),
+                    "close": close,
+                    "volume": 1_000_000 + idx * 1000,
+                    "code": code,
+                }
+            )
+        day -= timedelta(days=1)
+    rows.reverse()
+    return rows
+
+
+def _mock_quote(code: str, expected_name: str = "") -> dict[str, Any]:
+    """行情桩：固定价格，让市值/盈亏/行情明细走真实计算路径（而非降级占位）。
+
+    与 `fetch_market_data(code, expected_name)` 同签名；键集满足明细行消费
+    （price/yesterday_close/price_date/source/source_api/name）。
+    """
+    return {
+        "price": 10.0,
+        "yesterday_close": 9.9,
+        "price_date": _last_workday_str(),
+        "source": "性能测试桩",
+        "source_api": "tencent",
+        "name": expected_name or "",
+    }
+
 
 # ── LLM 生成 mock ─────────────────────────────────
 #
@@ -237,12 +324,33 @@ def _generate_details(holdings: list[Any]) -> list[Any]:
 # ── 性能基准主要流程 ─────────────────────────────
 
 
+def _isolate_state_writes() -> str:
+    """状态隔离：把 perf 历史/数据源健康快照重定向到临时目录。
+
+    基准运行不得把记录写进真实 `perf_history.jsonl` / `datasource_health.jsonl`——
+    否则会污染运行历史视图的统计样本（perf-view 的分位/离群分析直接受此影响）。
+    两者都是 perf.py 的模块级变量（该文件头注明「测试时可通过 setattr 重定向」），
+    直接改写；本脚本是一次性 CLI，无需还原。
+
+    Returns:
+        隔离目录路径
+    """
+    from src.python.core import perf as _perf_state
+
+    iso_dir = tempfile.mkdtemp(prefix="perf_bench_state_")
+    _perf_state._PERF_HISTORY_FILE = os.path.join(iso_dir, "perf_history.jsonl")
+    _perf_state._HEALTH_CHECK_FILE = os.path.join(iso_dir, "datasource_health.jsonl")
+    return iso_dir
+
+
 def run_perf_test() -> tuple[dict[str, float], PerfSample, PerfSample]:
     """执行性能基准测试，返回（各阶段耗时, Phase1/2 样本规模, Phase3 样本规模）。"""
     from unittest.mock import patch
 
     from src.python.report.excel_generator import generate_excel_report
     from src.python.report.progress import SilentProgressReporter
+
+    _isolate_state_writes()
 
     timings: dict[str, float] = {}
 
@@ -272,6 +380,12 @@ def run_perf_test() -> tuple[dict[str, float], PerfSample, PerfSample]:
         patch("src.python.report.fund_performance.write_fund_performance_sheet"),
         patch("src.python.fetcher.industry.batch_fetch_industry_data", return_value={}),
         patch("src.python.fetcher.fund.fetch_fund_rankings", return_value=None),
+        # 行情/K线历史/交易日历离线桩（咽喉点说明见 _mock_quote 处）
+        patch("src.python.fetcher.price.fetch_market_data", new=_mock_quote),
+        patch("src.python.report.market_value.fetch_market_data", new=_mock_quote),
+        patch("src.python.core.trading_calendar._get_trading_calendar", new=_stub_trading_calendar),
+        patch("src.python.fetcher.chain.fetch_with_incremental_fallback", new=_mock_bars),
+        patch("src.python.fetcher.chain_incremental.fetch_with_incremental_fallback", new=_mock_bars),
     ):
         t_start = time.perf_counter()
         generate_excel_report(
@@ -297,6 +411,12 @@ def run_perf_test() -> tuple[dict[str, float], PerfSample, PerfSample]:
         patch("src.python.fetcher.industry.batch_fetch_industry_data", return_value={}),
         patch("src.python.fetcher.fund.fetch_fund_rankings", return_value=None),
         patch(_LLM_MOCK_TARGET, return_value=_LLM_MOCK_VALUE),
+        # 行情/K线历史/交易日历离线桩（咽喉点说明见 _mock_quote 处）
+        patch("src.python.fetcher.price.fetch_market_data", new=_mock_quote),
+        patch("src.python.report.market_value.fetch_market_data", new=_mock_quote),
+        patch("src.python.core.trading_calendar._get_trading_calendar", new=_stub_trading_calendar),
+        patch("src.python.fetcher.chain.fetch_with_incremental_fallback", new=_mock_bars),
+        patch("src.python.fetcher.chain_incremental.fetch_with_incremental_fallback", new=_mock_bars),
     ):
         # 公开 API（generate_report 报告类型分发），不依赖编排层内部私有函数
         from src.python.report.orchestrator import generate_report
@@ -329,6 +449,12 @@ def run_perf_test() -> tuple[dict[str, float], PerfSample, PerfSample]:
         patch("src.python.report.fund_performance.write_fund_performance_sheet"),
         patch("src.python.fetcher.industry.batch_fetch_industry_data", return_value={}),
         patch("src.python.fetcher.fund.fetch_fund_rankings", return_value=None),
+        # 行情/K线历史/交易日历离线桩（咽喉点说明见 _mock_quote 处）
+        patch("src.python.fetcher.price.fetch_market_data", new=_mock_quote),
+        patch("src.python.report.market_value.fetch_market_data", new=_mock_quote),
+        patch("src.python.core.trading_calendar._get_trading_calendar", new=_stub_trading_calendar),
+        patch("src.python.fetcher.chain.fetch_with_incremental_fallback", new=_mock_bars),
+        patch("src.python.fetcher.chain_incremental.fetch_with_incremental_fallback", new=_mock_bars),
     ):
         t_start = time.perf_counter()
         generate_excel_report(

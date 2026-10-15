@@ -171,6 +171,64 @@ class TestDottedReferencesResolve:
         return False
 
 
+class TestOfflineStubs:
+    """离线桩：门禁相关的网络咽喉桩与状态隔离。"""
+
+    def test_mock_bars_shape_and_order(self, perf_test_report):
+        bars = perf_test_report._mock_bars("history_stock", "600519", days=30)
+        assert len(bars) >= 5
+        dates = [b["date"] for b in bars]
+        assert dates == sorted(dates), "K 线桩必须按日期升序"
+        for key in ("open", "high", "low", "close", "volume"):
+            assert all(key in b for b in bars)
+        closes = {b["close"] for b in bars}
+        assert len(closes) > 1, "收盘价必须有波动（否则收益率/流动性计算除零）"
+        assert all(b["high"] >= b["close"] >= b["low"] for b in bars)
+
+    def test_mock_bars_scales_with_days(self, perf_test_report):
+        short = perf_test_report._mock_bars("history_stock", "600519", days=20)
+        long_ = perf_test_report._mock_bars("history_stock", "600519", days=365)
+        assert len(long_) > len(short)
+
+    def test_mock_bars_tolerates_extras_kwargs(self, perf_test_report):
+        """调用方可能带 diagnostics 等额外参数，桩必须吞下。"""
+        bars = perf_test_report._mock_bars("history_stock", "600519", days=30, diagnostics=None)
+        assert bars
+
+    def test_calendar_stub_is_weekdays_only(self, perf_test_report):
+        from datetime import date as _date
+
+        dates = perf_test_report._stub_trading_calendar()
+        assert dates
+        assert all(_date.fromisoformat(d).weekday() < 5 for d in dates)
+        assert _date.today().isoformat() <= max(dates)
+
+    def test_last_workday_str_is_weekday(self, perf_test_report):
+        from datetime import date as _date
+
+        assert _date.fromisoformat(perf_test_report._last_workday_str()).weekday() < 5
+
+    def test_quote_stub_carries_detail_row_keys(self, perf_test_report):
+        quote = perf_test_report._mock_quote("600519", "贵州茅台")
+        for key in ("price", "yesterday_close", "price_date", "source", "source_api", "name"):
+            assert key in quote
+        assert quote["price"] > 0 and quote["yesterday_close"] > 0
+        assert quote["name"] == "贵州茅台"
+
+    def test_state_isolation_redirects_perf_paths(self, perf_test_report):
+        """基准不得写真实 perf 历史/健康快照（否则污染运行历史统计样本）。"""
+        from src.python.core import perf as perf_mod
+
+        orig = (perf_mod._PERF_HISTORY_FILE, perf_mod._HEALTH_CHECK_FILE)
+        try:
+            iso_dir = perf_test_report._isolate_state_writes()
+            assert perf_mod._PERF_HISTORY_FILE.startswith(iso_dir)
+            assert perf_mod._HEALTH_CHECK_FILE.startswith(iso_dir)
+            assert perf_mod._PERF_HISTORY_FILE != orig[0]
+        finally:
+            perf_mod._PERF_HISTORY_FILE, perf_mod._HEALTH_CHECK_FILE = orig
+
+
 class TestGateMode:
     """门禁模式：退出码契约（0 达标 / 2 未达标，与检查脚本一致）。"""
 
