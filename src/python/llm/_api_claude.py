@@ -14,6 +14,8 @@ if TYPE_CHECKING:
 from src.python.llm.api_base import (
     _extract_content,
     _check_claude_truncation,
+    _get_last_llm_failure,
+    _get_last_server_error,
     _get_last_thinking_exhausted,
     _is_effort_model,
     clear_last_thinking_exhausted,
@@ -113,7 +115,15 @@ def call_claude(
     # max_tokens 耗尽，同样需要安全网兜底。非 effort 模型仍需显式开启 thinking 才重试。
     _is_forced_reasoning = bool(model) and _is_effort_model(model)
     _thinking_exhausted = _get_last_thinking_exhausted()
-    if call_result[0] is None and (_is_forced_reasoning or (_thinking_exhausted and thinking_was_enabled)):
+    # 安全网前提：服务端**正常返回**但无正文。服务侧故障（响应体携带 error 信封，
+    # 如服务端排队超时）或传输失败/熔断（无响应体，失败原因非空）对同一坏端点
+    # 重试只会重复失败——最坏再挂一个超时周期——直接返回 None 走 provider 切换。
+    _service_side_failure = _get_last_server_error() or _get_last_llm_failure() is not None
+    if (
+        call_result[0] is None
+        and not _service_side_failure
+        and (_is_forced_reasoning or (_thinking_exhausted and thinking_was_enabled))
+    ):
         if _thinking_exhausted:
             _think_cfg = payload.get("thinking") or payload.get("output_config") or payload.get("reasoning_effort")
             logger.warning(

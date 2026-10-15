@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.13.3-dev
-> **编号源**：`rf-next = 687`（新增问题取此编号，完成后更新为 +1；已用最大 rf-686，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 688`（新增问题取此编号，完成后更新为 +1；已用最大 rf-687，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -69,3 +69,4 @@
 > 完整复盘见 `changelog.md` 0.13.3-dev 段；此处仅摘要行。
 
 - rf-686 已修复（2026-10-15）：release 编排 `prepare`/`evolution` 改文档后未同步 folders.md 统计表，导致 refresh 的 bench 因 crosscheck 过期红而重跑整套——两步各补收尾 `check-doc-drift --sync`，从源头消除发布期重复 bench
+- rf-687 已修复（2026-10-15）：LLM provider 故障切换迟滞（read 超时被服务端滴流骗过挂足 900s + 错误信封误判安全网对死端点无效重试，最坏 15~30 分钟才切备用）——新增 `post_with_deadline` 墙钟原语 + 信封标志让安全网只对服务端正常返回的空响应触发

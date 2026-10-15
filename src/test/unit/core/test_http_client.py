@@ -3,6 +3,7 @@
 测试目标：
   - _should_verify — SSL_VERIFY 环境变量解析
   - make_http_client — 客户端创建、verify 参数合并
+  - post_with_deadline — 墙钟总超时（read 超时被服务端滴流骗过时的兜底放弃）
 
 运行：
   pytest src/test/unit/core/test_http_client.py -v
@@ -10,10 +11,14 @@
 
 from __future__ import annotations
 
+import threading
+import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-from src.python.core.http_client import _should_verify, make_http_client
+import httpx
+
+from src.python.core.http_client import _should_verify, make_http_client, post_with_deadline
 import pytest
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
@@ -139,6 +144,56 @@ class TestMakeHttpClient(unittest.TestCase):
         with make_http_client(timeout=30.0) as client:
             self.assertFalse(client.is_closed)
         self.assertTrue(client.is_closed)
+
+
+class TestPostWithDeadline(unittest.TestCase):
+    """post_with_deadline — 墙钟总超时：read 超时被服务端滴流骗过时的兜底。
+
+    回归场景（上游服务过载事故）：网关排队时配置的 read 超时未触发，
+    单请求挂足服务端 900s 上限才返回，调用方故障切换迟滞十余分钟。
+    """
+
+    _URL = "https://api.example.com/v1/messages"
+
+    def test_hung_post_abandoned_at_wall_clock(self) -> None:
+        """服务端挂起 → 墙钟到点放弃并归一为 httpx.ReadTimeout。"""
+        release = threading.Event()
+
+        def _hung_post(*args: object, **kwargs: object) -> None:
+            release.wait(10)  # 模拟服务端挂起：远超用例墙钟
+            raise AssertionError("墙钟放弃后主线程不应再等待本 POST")
+
+        mock_client = MagicMock()
+        mock_client.post.side_effect = _hung_post
+        start = time.monotonic()
+        try:
+            with self.assertRaises(httpx.ReadTimeout):
+                post_with_deadline(mock_client, self._URL, {}, {}, 0.3)
+        finally:
+            release.set()
+        self.assertLess(time.monotonic() - start, 5.0)
+
+    def test_fast_post_result_passes_through(self) -> None:
+        """快速完成的 POST 原样透传，墙钟不干扰正常路径。"""
+        mock_response = MagicMock()
+        mock_client = MagicMock()
+        mock_client.post.return_value = mock_response
+        self.assertIs(post_with_deadline(mock_client, self._URL, {}, {}, 5.0), mock_response)
+
+    def test_post_exception_crosses_thread_unchanged(self) -> None:
+        """线程内 httpx 异常原样上抛（包装不吞异常，分类层拿到原异常类型）。"""
+        mock_client = MagicMock()
+        mock_client.post.side_effect = httpx.ConnectError("connection refused")
+        with self.assertRaises(httpx.ConnectError):
+            post_with_deadline(mock_client, self._URL, {}, {}, 5.0)
+
+    def test_nonpositive_timeout_skips_wall_clock(self) -> None:
+        """timeout<=0 → 不设墙钟，保持纯 httpx 行为（直通调用）。"""
+        mock_response = MagicMock()
+        mock_client = MagicMock()
+        mock_client.post.return_value = mock_response
+        self.assertIs(post_with_deadline(mock_client, self._URL, {}, {}, 0), mock_response)
+        mock_client.post.assert_called_once()
 
 
 class TestTransportFactory:

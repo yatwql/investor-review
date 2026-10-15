@@ -14,6 +14,7 @@ from typing import Any
 
 import httpx
 
+from src.python.core.http_client import post_with_deadline
 from src.python.core.retry import STRATEGY_TABLE, RetryPolicy, retry_transient
 
 from src.python.llm.circuit_breaker import (
@@ -41,6 +42,8 @@ __all__ = [
     "_get_last_llm_failure",
     "_get_last_thinking_exhausted",
     "clear_last_thinking_exhausted",
+    "_get_last_server_error",
+    "clear_last_server_error",
     "LLM_TIMEOUT",
     "_RETRY_DELAYS",
     "TRUNCATION_MARKER",
@@ -133,6 +136,29 @@ def clear_last_thinking_exhausted() -> None:
         del _thinking_exhausted_local.last
     except AttributeError:
         pass
+
+
+# ── 服务端错误信封标志（线程局部） ──
+# 200 响应体携带 error 字段（如 DeepSeek 兼容端点「无法在服务端超时上限内开始处理」）
+# 在提取层与「200 但 content 为空」不可区分（都表现为 _extract_content 返回 None），
+# 只有 _extract_content 看得到真实 JSON。此标志供上层安全网区分服务侧故障与
+# 真·空响应：对已故障的端点关 thinking 重试只会重复失败，最坏再挂一个超时周期。
+_server_error_local = threading.local()
+
+
+def _set_last_server_error(value: bool) -> None:
+    """设置当前线程的服务端错误信封标志。"""
+    _server_error_local.last = value
+
+
+def _get_last_server_error() -> bool:
+    """返回当前线程最近一次响应提取是否因响应体携带 error 信封而失败。"""
+    return bool(getattr(_server_error_local, "last", False))
+
+
+def clear_last_server_error() -> None:
+    """清除当前线程的服务端错误信封标志（测试隔离复位用）。"""
+    _set_last_server_error(False)
 
 
 def _get_last_llm_failure() -> str | None:
@@ -371,8 +397,10 @@ def _extract_content(data: dict) -> str | None:
         None: 响应格式异常或内容被过滤
     """
     _set_last_thinking_exhausted(False)  # 每次提取前复位（当前线程），仅 max_tokens 无正文分支置 True
+    _set_last_server_error(False)
     # API 返回了错误信息
     if data and "error" in data:
+        _set_last_server_error(True)
         logger.warning("LLM API 返回错误: %s", data["error"])
         return None
 
@@ -589,7 +617,7 @@ def _attempt_api_call(
         ("fatal", error_msg) — 不可恢复（响应解析失败）
     """
     try:
-        resp = client.post(url, json=payload, headers=headers, timeout=timeout)
+        resp = post_with_deadline(client, url, headers, payload, timeout)
         if resp.status_code in (429, 503):
             if resp.status_code == 429:
                 logger.warning(

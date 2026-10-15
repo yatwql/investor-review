@@ -2,6 +2,7 @@
 
 覆盖：
   - attempt_api_call：200 成功 / 429 / 503 / 超时 / HTTP 错误 / JSON 解码异常分支
+  - 墙钟总超时衔接：挂起被 core 墙钟放弃后归一为可重试超时（原语在 core/http_client.post_with_deadline）
   - 429 诊断建议回显（并发/间隔配置现值、绑定项判定、两级到底推配额）
   - retry_policy_factory：尝试次数跟随 max_retries 与手工退避表 / 上限钳位
 
@@ -9,6 +10,8 @@
   pytest src/test/unit/llm/test_llm_api_attempt.py -v
 """
 
+import threading
+import time
 import unittest
 from unittest.mock import MagicMock, patch
 import httpx
@@ -314,3 +317,56 @@ class TestRetryPolicyFactory(unittest.TestCase):
 
         policy = _retry_policy(len(_RETRY_DELAYS) + 3)
         self.assertEqual(policy.delay_for(len(_RETRY_DELAYS) + 3), _RETRY_DELAYS[-1])
+
+
+class TestAttemptApiCallWallClock(unittest.TestCase):
+    """_attempt_api_call × 墙钟总超时：挂起/传输异常归一为可重试超时。
+
+    墙钟原语（post_with_deadline）本体测试见 core/test_http_client.py；
+    此处验证与 LLM 重试分类的衔接：挂起被墙钟放弃后与 httpx read 超时走
+    同一路径（retryable → 退避重试 → 耗尽后切换 provider）。
+    """
+
+    _URL = "https://api.example.com/v1/messages"
+
+    def setUp(self) -> None:
+        from src.python.llm.api_base import _attempt_api_call
+
+        self._attempt_api_call = _attempt_api_call
+
+    def test_hung_post_classified_retryable(self) -> None:
+        """服务端挂起 → 墙钟放弃 → 归一为可重试超时（retryable/None）。"""
+        release = threading.Event()
+
+        def _hung_post(*args: object, **kwargs: object) -> None:
+            release.wait(10)  # 模拟服务端挂起：远超用例墙钟
+            raise AssertionError("墙钟放弃后主线程不应再等待本 POST")
+
+        mock_client = MagicMock(spec=httpx.Client)
+        mock_client.post.side_effect = _hung_post
+        start = time.monotonic()
+        try:
+            kind, info = self._attempt_api_call(mock_client, self._URL, {}, {}, timeout=0.3)
+        finally:
+            release.set()
+        self.assertEqual(kind, "retryable")
+        self.assertIsNone(info)
+        self.assertLess(time.monotonic() - start, 5.0)
+
+    def test_fast_post_result_passes_through(self) -> None:
+        """快速完成的 POST 原样透传，墙钟不干扰正常路径。"""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"content": "ok"}
+        mock_client = MagicMock(spec=httpx.Client)
+        mock_client.post.return_value = mock_response
+        kind, info = self._attempt_api_call(mock_client, self._URL, {}, {}, timeout=5.0)
+        self.assertEqual(kind, "success")
+        self.assertEqual(info, {"content": "ok"})
+
+    def test_transport_error_classified_via_attempt(self) -> None:
+        """传输异常经 _attempt_api_call 归一为可重试（既有分类路径不受墙钟影响）。"""
+        mock_client = MagicMock(spec=httpx.Client)
+        mock_client.post.side_effect = httpx.ConnectError("connection refused")
+        kind, _info = self._attempt_api_call(mock_client, self._URL, {}, {}, timeout=5.0)
+        self.assertEqual(kind, "retryable")
