@@ -1296,7 +1296,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 读取 `data/state/perf_history.jsonl`（由 `PerfCollector` 在每次报告生成时自动追加），按版本和报告类型分组统计，输出版本间性能趋势对比；输出跨版本「总体分位概览」（样本数 / 平均 / 中位 / **P95** / **P99** / 最长 / 中位秒每品种，n<20 附小样本提示）、**版本演进总表**（每版中位/P95/较上一版 delta+⚠，按首现时间排序）、离群与尾部归因、**异常运行专区**（中断/失败，无则省略）与**同版本漂移检测**（时间对半、噪声带判显著）。
 
 ```bash
-# 输出全部历史趋势到 stdout
+# 输出全部历史趋势到 stdout（--json/--csv 机读模式同样只向 stdout，落盘需自行重定向）
 .venv/bin/python scripts/perf-view.py
 
 # 仅看 full 类型报告的性能趋势
@@ -1333,7 +1333,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 | `--by day\|week\|hour` | 按时段聚合（样本数/中位/P95/最长），看工作日-周末与 LLM 服务端高峰差异 |
 | LLM 运行上下文段 | 重试次数与退避等待、端点节流等待、provider 降级、缓存命中/未命中、累计费用与 provider/模型分布——回答「时间花在白等还是真推理」 |
 | `--compare 旧 新` | 版本间阶段级对比（中位 delta / 倍数 / 变异系数判显著）；显著性口径：变化幅度需超过两版本各自变异系数之和 × 较大中位值（噪声带），避免把抖动当回归 |
-| `--json` / `--csv` | 机读输出（完整记录 / 逐运行一行），便于管道与外部工具消费 |
+| `--json` / `--csv` | 机读输出，**只向 stdout 打印**（需自行重定向落盘；`--save` 在机读模式不适用，会打警告）——`--json` 为信封 `{record_count, records, summary}`（summary 与 Markdown 各段同源：分位/按类型/离群/异常/演进/漂移）；`--csv` 每运行一行，含 `per_holding_seconds`/`outlier`/`slowest_phase`/`interrupted_stage`/`errors_count` 列 |
 | `--summary` | 仅输出概览段（总体分位/离群/尾部归因/LLM 上下文/时段聚合/对比），略去逐版本分组详情 |
 | `--outlier-k 系数` | 自定义离群判定系数（中位 + k × 1.4826 × MAD，默认 3.5）；系数越小越敏感 |
 
