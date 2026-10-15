@@ -142,7 +142,7 @@ PATTERNS: list[tuple[str, str, str]] = [
     #  隔离"替代 R11、"5 级评级阈值"替代 P2）。合法领域值经 _magic_excludes()
     #  行豁免（TOP10 前 N 名、F401/E402 等 lint 码、VaR95/MD5 风险与算法名、
     #  T2/T3/T4 数据层级值、A1:B1 Excel 单元格、Q3 季度、DeepSeek V4 模型名、
-    #  Jinja2/ES5 技术名）。前限排除 ASCII 字母/数字（避免内嵌 AB14/MC19 命中）
+    #  P50/P95/P99 分位记号、Jinja2/ES5 技术名）。前限排除 ASCII 字母/数字（避免内嵌 AB14/MC19 命中）
     #  与井号（#C00000 十六进制色值）；后限排除字母数字，避免尾部粘连误伤。
     (
         r"(?<![A-Za-z0-9#])[A-Z][A-Za-z]*[0-9]{1,3}(?![A-Za-z0-9])",
@@ -397,6 +397,7 @@ def _magic_excludes() -> list[re.Pattern]:
       - TOP\\d+            —— 前 N 名（TOP10/TOP3…），业务语义
       - MD5/SHA\\d+/AES\\d+ —— 哈希/加密算法名
       - VaR\\d+            —— 尾部风险指标（VaR95/VaR99）
+      - [Pp](?:50|75|90|95|99)\\b —— 统计分位记号（P50/P95/P99，性能与风险口径）
       - Jinja2/ES5/ES6/V8/Win32/UTF-\\d —— 技术栈名（V8 为 JS 引擎）
       - [A-Z]{1,3}\\d{3}\\b —— linter/静态检查码（F401/E402/PERF203/F811…）
       - [Qq][1-4]\\b        —— 季度（2026-07（Q3））
@@ -409,7 +410,7 @@ def _magic_excludes() -> list[re.Pattern]:
       - P0~P4                —— 门禁档位（P0/P1/P2）与价格/事件区间点位（P0~P4）
       - MV\\d                —— 市值时点（MV0 起始市值）
       - [Ee]1~3 / [Ww]1~2    —— 样式护栏编号（DESIGN.md「机检落地」段定义的 E/W 级）
-      - [Pp]hase\\d           —— 性能基准阶段（Phase1/2/3，perf-report 口径）
+      - [Pp]hase\\d           —— 性能基准阶段（Phase1/2/3，perf-test-report 口径）
       - [Yy]\\d\\b / [Zz]\\d\\b —— 边缘测试组标签（Y1~Y6/Z1，文件内组织编号）
       - 微信\\s*X\\d+         —— 微信浏览器内核（X5）
       - ETF\\d+/主动\\d+/基金\\d+ —— 测试数据标签（基金简称）
@@ -418,6 +419,7 @@ def _magic_excludes() -> list[re.Pattern]:
         re.compile(r"TOP\d+"),
         re.compile(r"\b(?:MD5|SHA\d+|AES\d*|DES\d*)\b"),
         re.compile(r"VaR\d+"),
+        re.compile(r"\b[Pp](?:50|75|90|95|99)\b"),
         re.compile(r"Jinja2|ES5|ES6|V8|Win32|UTF-\d"),
         re.compile(r"[A-Z]{1,3}\d{3}\b"),
         re.compile(r"[Qq][1-4]\b"),

@@ -6,7 +6,7 @@
 输出性能报告 Markdown。
 
 用法：
-  python scripts/perf-report.py
+  python scripts/perf-test-report.py
 
 输出：
   docs/tmp/better-investment-performance-test-report.md

@@ -2,7 +2,8 @@
 """性能历史趋势查看工具 — Layer 3：跨版本耗时趋势可视化。
 
 读取 data/state/perf_history.jsonl，按版本和报告类型分组统计，
-输出版本间性能趋势对比 Markdown 表格。
+输出版本间性能趋势对比 Markdown 表格；另输出跨版本「总体分位概览」，
+给出 P95 / P99 报告生成耗时（最近秩分位：95% / 99% 的报告在该时间内完成）。
 
 用法：
   python scripts/perf-view.py                          # 输出到 stdout
@@ -14,6 +15,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import sys
 from collections import defaultdict
@@ -46,6 +48,60 @@ def _min_max(values: list[float]) -> tuple[float, float]:
     if not values:
         return 0.0, 0.0
     return min(values), max(values)
+
+
+def _percentile(values: list[float], pct: float) -> float:
+    """最近秩（nearest-rank）分位数：`ceil(pct% × n)` 位样本值。
+
+    口径含义：至少 `pct%` 的样本 ≤ 返回值——P95 即「95% 的报告生成在该耗时内完成」，
+    P99 即「99% 的报告生成在该耗时内完成」。空输入返回 0.0。
+
+    Args:
+        values: 样本值（任意顺序，内部排序）。
+        pct: 百分位（0~100）。
+
+    Returns:
+        分位值；空输入为 0.0。
+    """
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    rank = math.ceil(pct / 100 * len(ordered))
+    rank = min(max(rank, 1), len(ordered))
+    return ordered[rank - 1]
+
+
+def _total_summary(records: list[dict[str, Any]]) -> dict[str, float]:
+    """总耗时汇总：样本数 / 平均 / 中位 / P95 / P99 / 最长。
+
+    Returns:
+        {"count", "avg", "p50", "p95", "p99", "max"}（秒，保留 1 位小数）。
+    """
+    totals = [float(r.get("total_seconds") or 0) for r in records]
+    if not totals:
+        return {key: 0.0 for key in ("count", "avg", "p50", "p95", "p99", "max")}
+    return {
+        "count": float(len(totals)),
+        "avg": round(_mean(totals), 1),
+        "p50": round(_percentile(totals, 50), 1),
+        "p95": round(_percentile(totals, 95), 1),
+        "p99": round(_percentile(totals, 99), 1),
+        "max": round(_min_max(totals)[1], 1),
+    }
+
+
+def _filter_records(
+    records: list[dict[str, Any]],
+    report_type: str | None,
+    last_n: int | None,
+) -> list[dict[str, Any]]:
+    """按报告类型过滤并截取最近 N 条（分组与分位概览共用同一口径）。"""
+    filtered = records
+    if report_type:
+        filtered = [r for r in filtered if r.get("report_type") == report_type]
+    if last_n:
+        filtered = filtered[-last_n:]
+    return filtered
 
 
 def _merge_phase_stats(
@@ -83,11 +139,7 @@ def _group_records(
     Returns:
         {group_key: [records]}
     """
-    filtered = records
-    if report_type:
-        filtered = [r for r in filtered if r.get("report_type") == report_type]
-    if last_n:
-        filtered = filtered[-last_n:]
+    filtered = _filter_records(records, report_type, last_n)
 
     groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for r in filtered:
@@ -100,6 +152,32 @@ def _group_records(
 
 
 # ── 报告生成 ──
+
+
+def _overview_lines(records: list[dict[str, Any]]) -> list[str]:
+    """跨版本总体分位概览（含 P95/P99 报告生成耗时）Markdown 行。"""
+    report_types = sorted({str(r.get("report_type", "?")) for r in records})
+    rows: list[tuple[str, list[dict[str, Any]]]] = [("合计（当前口径）", records)]
+    if len(report_types) > 1:  # 单一类型时与合计行重复，不重复渲染
+        rows.extend((rt, [r for r in records if str(r.get("report_type", "?")) == rt]) for rt in report_types)
+
+    lines = [
+        "## 总体分位概览（跨版本）",
+        "",
+        "样本口径与下方分组一致（受 `--report-type` / `--last` 影响）；"
+        "分位为**最近秩**口径——P95/P99 即 95%/99% 的报告生成在该耗时内完成。",
+        "",
+        "| 口径 | 样本数 | 平均 | 中位 | P95 | P99 | 最长 |",
+        "|:-----|------:|----:|----:|----:|----:|-----:|",
+    ]
+    for label, subset in rows:
+        stat = _total_summary(subset)
+        lines.append(
+            f"| {label} | {int(stat['count'])} | {stat['avg']:.1f}s | {stat['p50']:.1f}s | "
+            f"{stat['p95']:.1f}s | {stat['p99']:.1f}s | {stat['max']:.1f}s |"
+        )
+    lines.append("")
+    return lines
 
 
 def build_trend_report(
@@ -124,6 +202,9 @@ def build_trend_report(
         lines.append("")
         return "\n".join(lines)
 
+    # ── 跨版本分位概览（P95/P99 报告生成耗时） ──
+    lines.extend(_overview_lines(_filter_records(records, report_type, last_n)))
+
     # ── 按组输出详情 ──
     for group_key, group_records in groups.items():
         lines.append(f"## {group_key}")
@@ -134,6 +215,10 @@ def build_trend_report(
         totals = [r.get("total_seconds", 0) for r in group_records]
         lines.append(f"- 总耗时范围：{_min_max(totals)[0]:.1f}s ~ {_min_max(totals)[1]:.1f}s")
         lines.append(f"- 平均总耗时：**{_mean(totals):.1f}s**")
+        lines.append(
+            f"- 95% 的报告在 **{_percentile(totals, 95):.1f}s** 内完成，"
+            f"99% 在 **{_percentile(totals, 99):.1f}s** 内完成"
+        )
         lines.append("")
 
         # ── 各阶段平均耗时 ──

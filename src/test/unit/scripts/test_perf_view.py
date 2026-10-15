@@ -1,8 +1,9 @@
-"""perf-view.py 性能趋势查看测试（阶段统计合并 / 分组聚合 / 趋势报告渲染）。
+"""perf-view.py 性能趋势查看测试（阶段统计合并 / 分组聚合 / 分位概览 / 趋势报告渲染）。
 
-覆盖 `_mean`/`_min_max` 的空输入降级、`_merge_phase_stats` 的跨记录聚合、
-`_group_records` 的类型过滤 + 截尾 + 按时间排序，以及 `build_trend_report`
-的空数据文案、分组表头、阶段表与「最近 5 次」明细截断。
+覆盖 `_mean`/`_min_max`/`_percentile` 的空输入降级与最近秩口径、`_total_summary`
+的汇总字段、`_merge_phase_stats` 的跨记录聚合、`_group_records` 的类型过滤 + 截尾
++ 按时间排序，以及 `build_trend_report` 的空数据文案、总体分位概览（P95/P99）、
+分组表头、阶段表与「最近 5 次」明细截断。
 """
 
 from __future__ import annotations
@@ -52,6 +53,59 @@ class TestStatsHelpers:
 
     def test_min_max_of_empty_is_zero_pair(self, mod):
         assert mod._min_max([]) == (0.0, 0.0)
+
+
+class TestPercentile:
+    """最近秩分位数：口径（≥pct% 样本 ≤ 返回值）与边界。"""
+
+    def test_nearest_rank_on_twenty_samples(self, mod):
+        values = [float(i) for i in range(1, 21)]  # 1..20
+        assert mod._percentile(values, 50) == 10.0
+        assert mod._percentile(values, 95) == 19.0
+        assert mod._percentile(values, 99) == 20.0
+
+    @pytest.mark.parametrize("pct", [50, 90, 95, 99])
+    def test_covers_at_least_pct_of_samples(self, mod, pct):
+        """分位值必须让 ≥pct% 的样本落在其内（口径本身的可验证表述）。"""
+        values = [float(i) for i in range(1, 101)]
+        covered = sum(v <= mod._percentile(values, pct) for v in values)
+        assert covered * 100 >= pct * len(values)
+
+    @pytest.mark.parametrize("pct", [-10.0, 0.0, 100.0, 150.0])
+    def test_out_of_range_pct_stays_within_min_max(self, mod, pct):
+        values = [3.0, 1.0, 2.0]
+        assert min(values) <= mod._percentile(values, pct) <= max(values)
+
+    def test_empty_returns_zero(self, mod):
+        assert mod._percentile([], 95) == 0.0
+
+    def test_input_order_irrelevant(self, mod):
+        values = [30.0, 10.0, 40.0, 20.0]
+        assert mod._percentile(values, 95) == mod._percentile(sorted(values), 95) == 40.0
+
+
+class TestTotalSummary:
+    """总耗时汇总字段：平均/中位/分位/极值与空输入降级。"""
+
+    def test_summary_of_known_totals(self, mod):
+        records = [{"total_seconds": v} for v in (10.0, 20.0, 30.0, 40.0)]
+        stat = mod._total_summary(records)
+        assert stat["count"] == 4
+        assert stat["avg"] == pytest.approx(25.0)
+        assert stat["p50"] == 20.0
+        assert stat["p95"] == 40.0
+        assert stat["p99"] == 40.0
+        assert stat["max"] == 40.0
+
+    def test_percentiles_never_below_median(self, mod):
+        records = [{"total_seconds": 10.0 + i} for i in range(10)]
+        stat = mod._total_summary(records)
+        assert stat["p50"] <= stat["p95"] <= stat["p99"] <= stat["max"]
+
+    @pytest.mark.parametrize("records", [[], [{"total_seconds": None}, {}]])
+    def test_empty_or_missing_totals_degrade_to_zero(self, mod, records):
+        stat = mod._total_summary(records)
+        assert stat["count"] == 0 or stat["p95"] == 0.0
 
 
 class TestMergePhaseStats:
@@ -166,3 +220,71 @@ class TestBuildTrendReport:
         assert "0.1.0 / basic" in text
         assert "0.1.0 / full" not in text
         assert "运行次数：**2**" in text
+
+
+# ── 总体分位概览（P95/P99） ──
+
+
+def _overview_row(text: str, label: str) -> list[str]:
+    """取出分位概览表中指定口径的行单元格（无则返回空列表）。"""
+    for line in text.splitlines():
+        if line.startswith(f"| {label} |"):
+            return [cell.strip() for cell in line.strip().strip("|").split("|")]
+    return []
+
+
+class TestOverviewSection:
+    """总体分位概览：P95/P99 报告生成耗时的表结构、行拆分与过滤口径。"""
+
+    def test_percentile_columns_rendered(self, mod):
+        text = mod.build_trend_report(_records(4))
+        assert "## 总体分位概览（跨版本）" in text
+        assert "| 口径 | 样本数 | 平均 | 中位 | P95 | P99 | 最长 |" in text
+
+    def test_total_row_count_and_percentile_ordering(self, mod):
+        records = _records(6)
+        row = _overview_row(mod.build_trend_report(records), "合计（当前口径）")
+        assert len(row) == 7
+        assert int(row[1]) == len(records)
+        seconds = [float(cell.rstrip("s")) for cell in row[3:]]  # 中位/P95/P99/最长
+        assert seconds == sorted(seconds)
+
+    def test_single_report_type_renders_only_total_row(self, mod):
+        text = mod.build_trend_report(_records(3, report_type="full"))
+        assert _overview_row(text, "full") == []
+        assert _overview_row(text, "合计（当前口径）")
+
+    def test_rows_split_by_report_type_when_multiple(self, mod):
+        records = _records(2, report_type="full") + _records(3, report_type="basic")
+        text = mod.build_trend_report(records)
+        assert int(_overview_row(text, "full")[1]) == 2
+        assert int(_overview_row(text, "basic")[1]) == 3
+        assert int(_overview_row(text, "合计（当前口径）")[1]) == len(records)
+
+    def test_overview_follows_report_type_and_last_n(self, mod):
+        records = _records(4, report_type="full") + _records(4, report_type="basic")
+        text = mod.build_trend_report(records, report_type="basic", last_n=2)
+        assert int(_overview_row(text, "合计（当前口径）")[1]) == 2
+        assert _overview_row(text, "full") == []
+
+    def test_empty_records_skip_overview(self, mod):
+        assert "总体分位概览" not in mod.build_trend_report([])
+
+
+class TestGroupPercentileLines:
+    """分组段内的「95% / 99% 完成时间」直给行。"""
+
+    def test_group_renders_p95_p99_line(self, mod):
+        text = mod.build_trend_report(_records(5))
+        line = next(ln for ln in text.splitlines() if ln.startswith("- 95% 的报告在"))
+        values = [float(part.split("**")[1].rstrip("s")) for part in line.split("，")]
+        assert len(values) == 2
+        assert values[0] <= values[1]
+
+    def test_group_percentiles_within_group_range(self, mod):
+        records = _records(7)
+        text = mod.build_trend_report(records)
+        line = next(ln for ln in text.splitlines() if ln.startswith("- 95% 的报告在"))
+        p95, p99 = [float(part.split("**")[1].rstrip("s")) for part in line.split("，")]
+        totals = [r["total_seconds"] for r in records]
+        assert min(totals) <= p95 <= p99 <= max(totals)

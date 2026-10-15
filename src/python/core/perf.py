@@ -2,7 +2,7 @@
 
 三层体系：
     Layer 1 — 本模块（PerfCollector）+ orchestrator.py 埋点
-    Layer 2 — scripts/perf-report.py（独立基准，mock 外部数据源）
+    Layer 2 — scripts/perf-test-report.py（独立基准，mock 外部数据源）
     Layer 3 — scripts/perf-view.py（历史趋势可视化）
 
 设计约束遵从（详见 technical.md §8）：

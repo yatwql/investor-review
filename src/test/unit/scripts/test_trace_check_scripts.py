@@ -914,6 +914,21 @@ class TestTaskCodeCommentPatterns:
         for line in flagged:
             assert _code_hit(code_traces, line) is not None, f"魔法编号未检出: {line}"
 
+    def test_magic_percentile_notation_not_flagged(self, code_traces):
+        """MAGIC 合法领域值：分位记号（P50/P90/P95/P99）为性能/风险统计口径，非任务编号。"""
+        legit = [
+            "P95 / P99 报告生成耗时",
+            "P50 中位数",
+            "P90 上限",
+            "分位输出 P95、P99",
+        ]
+        for line in legit:
+            assert _code_hit(code_traces, line) is None, f"分位记号被误伤: {line}"
+
+    def test_magic_percentile_exemption_stays_narrow(self, code_traces):
+        """豁免只覆盖两位数分位记号：一位数近邻（P9）仍属魔法编号须检出。"""
+        assert _code_hit(code_traces, "P9 协议") is not None
+
     def test_dashtask_letter_digit_flagged(self, code_traces):
         """DASHTASK：注释中"字母-数字/连续字母-数字"（F-1/G-1/TASK-22/D-8）疑似任务编号须检出。"""
         flagged = [
