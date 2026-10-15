@@ -12,14 +12,19 @@
   python scripts/perf-view.py --last 30                # 仅查看最近 30 条记录
   python scripts/perf-view.py --exclude-outlier        # 剔除离群运行（稳健口径）
   python scripts/perf-view.py --by day                 # 按时段聚合（day/week/hour）
+  python scripts/perf-view.py --compare 0.13.3 0.13.4  # 版本间阶段级对比
+  python scripts/perf-view.py --json                   # 机读输出（JSON）
+  python scripts/perf-view.py --csv                    # 机读输出（CSV）
+  python scripts/perf-view.py --gate 600               # 阈值门禁（P95 超限退出 2）
 
 归因能力：离群点标注（中位 ± MAD）、稳健均值、阶段级分位、尾部归因（最慢运行
-逐阶段 z 分数）、时段聚合。
+逐阶段 z 分数）、时段聚合、版本间对比、机读输出与阈值门禁。
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import os
 import statistics
@@ -466,12 +471,148 @@ def _llm_context_lines(records: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
+def _version_records(records: list[dict[str, Any]], version: str) -> list[dict[str, Any]]:
+    """取指定版本的记录（版本号精确匹配）。"""
+    return [r for r in records if str(r.get("version", "")) == version]
+
+
+def _compare_versions(
+    records: list[dict[str, Any]],
+    version_a: str,
+    version_b: str,
+) -> dict[str, Any]:
+    """版本间阶段级对比（含变异系数判显著）。
+
+    显著性口径：两版本各自阶段耗时的**变异系数**（标准差/均值）作为噪声带——
+    差异幅度超过两版本噪声带之和才判「显著」，避免把运行抖动当回归。
+
+    Returns:
+        {"a": {...}, "b": {...}, "phases": [{name, a_median, b_median, delta, ratio, significant}]}
+    """
+    recs_a = _version_records(records, version_a)
+    recs_b = _version_records(records, version_b)
+
+    def _summary(recs: list[dict[str, Any]]) -> dict[str, Any]:
+        totals = [float(r.get("total_seconds") or 0) for r in recs]
+        return {
+            "version": version_a if recs is recs_a else version_b,
+            "count": len(recs),
+            "median": round(_median(totals), 1),
+            "p95": round(_percentile(totals, 95), 1),
+            "cv": round(_stdev(totals) / _mean(totals), 3) if totals and _mean(totals) > 0 else 0.0,
+        }
+
+    stats_a = _merge_phase_stats(recs_a)
+    stats_b = _merge_phase_stats(recs_b)
+    rows: list[dict[str, Any]] = []
+    for name in sorted(set(stats_a) | set(stats_b)):
+        a_med = stats_a.get(name, {}).get("p50", 0.0)
+        b_med = stats_b.get(name, {}).get("p50", 0.0)
+        a_cv = _cv_of_phase(recs_a, name)
+        b_cv = _cv_of_phase(recs_b, name)
+        delta = b_med - a_med
+        ratio = (b_med / a_med) if a_med > 0 else 0.0
+        noise = (a_cv + b_cv) * max(a_med, b_med)
+        rows.append(
+            {
+                "name": name,
+                "a_median": round(a_med, 2),
+                "b_median": round(b_med, 2),
+                "delta": round(delta, 2),
+                "ratio": round(ratio, 3),
+                "significant": abs(delta) > noise,
+            }
+        )
+    rows.sort(key=lambda row: -abs(row["delta"]))
+    return {"a": _summary(recs_a), "b": _summary(recs_b), "phases": rows}
+
+
+def _cv_of_phase(records: list[dict[str, Any]], phase: str) -> float:
+    """某阶段在该版本内的变异系数（噪声带）；样本不足或均值为 0 时返回 0。"""
+    vals = [
+        float(r["phases"][phase])
+        for r in records
+        if isinstance(r.get("phases"), dict) and isinstance(r["phases"].get(phase), (int, float))
+    ]
+    if len(vals) < 2:
+        return 0.0
+    mean = _mean(vals)
+    return (_stdev(vals) / mean) if mean > 0 else 0.0
+
+
+def _compare_lines(records: list[dict[str, Any]], version_a: str, version_b: str) -> list[str]:
+    """版本间对比 Markdown 段。"""
+    cmp = _compare_versions(records, version_a, version_b)
+    lines = [
+        f"## 版本对比：{version_a} → {version_b}",
+        "",
+        "| 版本 | 样本数 | 中位总耗时 | P95 | 变异系数 |",
+        "|:-----|------:|----------:|----:|--------:|",
+    ]
+    for key in ("a", "b"):
+        s = cmp[key]
+        lines.append(f"| {s['version']} | {s['count']} | {s['median']:.1f}s | {s['p95']:.1f}s | {s['cv']:.3f} |")
+    lines.append("")
+    if not cmp["phases"]:
+        lines.append("_两版本均无阶段样本。_")
+        lines.append("")
+        return lines
+    lines.append("| 阶段 | 旧版中位 | 新版中位 | 变化 | 倍数 | 显著 |")
+    lines.append("|:-----|--------:|--------:|-----:|-----:|:-----|")
+    for row in cmp["phases"]:
+        mark = "是" if row["significant"] else "否（噪声带内）"
+        lines.append(
+            f"| {row['name']} | {row['a_median']:.2f}s | {row['b_median']:.2f}s | "
+            f"{row['delta']:+.2f}s | {row['ratio']:.2f}× | {mark} |"
+        )
+    lines.append("")
+    lines.append("显著性口径：变化幅度需超过两版本各自变异系数之和 × 较大中位值（噪声带）。")
+    lines.append("")
+    return lines
+
+
+def _machine_readable(records: list[dict[str, Any]], fmt: str) -> str:
+    """机读输出：JSON（完整记录）或 CSV（逐运行一行）。"""
+    if fmt == "json":
+        return json.dumps(records, ensure_ascii=False, indent=2)
+    import csv
+    import io
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["timestamp", "version", "report_type", "holdings_count", "total_seconds", "status"])
+    for r in records:
+        writer.writerow(
+            [
+                r.get("timestamp", ""),
+                r.get("version", ""),
+                r.get("report_type", ""),
+                r.get("holdings_count", ""),
+                r.get("total_seconds", 0),
+                r.get("status", ""),
+            ]
+        )
+    return buf.getvalue()
+
+
+def _gate_findings(records: list[dict[str, Any]], threshold: float) -> list[str]:
+    """阈值门禁：P95 总耗时超限即报 finding（供 CI 拦截性能回归）。"""
+    if not records:
+        return []
+    totals = [float(r.get("total_seconds") or 0) for r in records]
+    p95 = _percentile(totals, 95)
+    if p95 > threshold:
+        return [f"P95 总耗时 {p95:.1f}s 超过阈值 {threshold:.1f}s（样本 {len(totals)} 条）"]
+    return []
+
+
 def build_trend_report(
     records: list[dict[str, Any]],
     report_type: str | None = None,
     last_n: int | None = None,
     exclude_outlier: bool = False,
     by: str | None = None,
+    compare: tuple[str, str] | None = None,
 ) -> str:
     """生成性能趋势 Markdown 报告字符串。"""
     groups = _group_records(records, report_type, last_n, exclude_outlier)
@@ -504,6 +645,10 @@ def build_trend_report(
     # ── 时段聚合（可选） ──
     if by:
         lines.extend(_bucket_lines(scoped, by))
+
+    # ── 版本间对比（可选） ──
+    if compare:
+        lines.extend(_compare_lines(records, compare[0], compare[1]))
 
     # ── 按组输出详情 ──
     for group_key, group_records in groups.items():
@@ -580,6 +725,21 @@ def main() -> int:
         help="剔除离群运行（中位 ± MAD 稳健口径）后统计",
     )
     parser.add_argument("--by", choices=["day", "week", "hour"], help="按时段聚合（日/ISO 周/小时）")
+    parser.add_argument(
+        "--compare",
+        nargs=2,
+        metavar=("旧版本", "新版本"),
+        help="版本间阶段级对比（带变异系数判显著）",
+    )
+    parser.add_argument("--json", action="store_true", help="机读输出：完整记录 JSON")
+    parser.add_argument("--csv", action="store_true", help="机读输出：逐运行 CSV")
+    parser.add_argument(
+        "--gate",
+        type=float,
+        default=None,
+        metavar="秒",
+        help="阈值门禁：P95 总耗时超限则退出码 2（供 CI 拦截性能回归）",
+    )
     args = parser.parse_args()
 
     records = load_history()
@@ -587,20 +747,36 @@ def main() -> int:
         print("[!] 暂无性能历史数据（data/state/perf_history.jsonl 不存在或为空）")
         return 1
 
-    report = build_trend_report(
-        records,
-        report_type=args.report_type,
-        last_n=args.last,
-        exclude_outlier=args.exclude_outlier,
-        by=args.by,
-    )
-    print(report)
+    scoped = _filter_records(records, args.report_type, args.last, args.exclude_outlier)
 
-    if args.save:
-        os.makedirs(_TMP_DIR, exist_ok=True)
-        with open(_TREND_REPORT_PATH, "w", encoding="utf-8") as f:
-            f.write(report)
-        print(f"[OK] 已写入: {_TREND_REPORT_PATH}")
+    # ── 机读输出（与 Markdown 互斥，便于管道消费） ──
+    if args.json or args.csv:
+        print(_machine_readable(scoped, "json" if args.json else "csv"))
+    else:
+        report = build_trend_report(
+            records,
+            report_type=args.report_type,
+            last_n=args.last,
+            exclude_outlier=args.exclude_outlier,
+            by=args.by,
+            compare=tuple(args.compare) if args.compare else None,
+        )
+        print(report)
+
+        if args.save:
+            os.makedirs(_TMP_DIR, exist_ok=True)
+            with open(_TREND_REPORT_PATH, "w", encoding="utf-8") as f:
+                f.write(report)
+            print(f"[OK] 已写入: {_TREND_REPORT_PATH}")
+
+    # ── 阈值门禁（退出码 2 = 发现 finding，与检查脚本契约一致） ──
+    if args.gate is not None:
+        findings = _gate_findings(scoped, args.gate)
+        for finding in findings:
+            print(f"[ERR] {finding}")
+        if findings:
+            return 2
+        print(f"[OK] P95 总耗时未超阈值 {args.gate:.1f}s（样本 {len(scoped)} 条）")
 
     return 0
 

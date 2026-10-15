@@ -505,6 +505,103 @@ class TestLlmContextSection:
         assert mod._llm_context_lines(records) == []
 
 
+class TestVersionCompare:
+    """版本间对比：阶段级 delta 与变异系数判显著。"""
+
+    def _two_versions(self) -> list[dict]:
+        old = _records(4, version="0.1.0")
+        new = _records(4, version="0.2.0")
+        for r in new:
+            r["phases"] = {"采集": 30.0}
+            r["total_seconds"] = 30.0
+        return old + new
+
+    def test_compare_reports_both_versions(self, mod):
+        cmp = mod._compare_versions(self._two_versions(), "0.1.0", "0.2.0")
+        assert cmp["a"]["count"] == 4
+        assert cmp["b"]["count"] == 4
+        assert cmp["a"]["version"] == "0.1.0"
+        assert cmp["b"]["version"] == "0.2.0"
+
+    def test_compare_phase_delta_and_ratio(self, mod):
+        cmp = mod._compare_versions(self._two_versions(), "0.1.0", "0.2.0")
+        row = next(r for r in cmp["phases"] if r["name"] == "采集")
+        # 基准版本阶段值为 1.0+i（i=0..3）→ 最近秩中位取第 2 位 = 2.0；对照版本固定 30.0
+        assert row["a_median"] == pytest.approx(2.0)
+        assert row["b_median"] == pytest.approx(30.0)
+        assert row["delta"] == pytest.approx(28.0)
+        assert row["ratio"] > 1
+
+    def test_compare_marks_significant_beyond_noise(self, mod):
+        """对照版本阶段耗时稳定且大幅上升 → 判显著。"""
+        cmp = mod._compare_versions(self._two_versions(), "0.1.0", "0.2.0")
+        row = next(r for r in cmp["phases"] if r["name"] == "采集")
+        assert row["significant"] is True
+
+    def test_compare_ignores_noise_band(self, mod):
+        """两版本耗时分布重叠（差异在噪声带内）→ 不判显著。"""
+        records = _records(4, version="0.1.0") + _records(4, version="0.2.0")
+        cmp = mod._compare_versions(records, "0.1.0", "0.2.0")
+        row = next(r for r in cmp["phases"] if r["name"] == "采集")
+        assert row["significant"] is False
+
+    def test_compare_unknown_version_yields_empty(self, mod):
+        cmp = mod._compare_versions(_records(3), "9.9.9", "8.8.8")
+        assert cmp["a"]["count"] == 0
+        assert cmp["phases"] == []
+
+    def test_compare_section_rendered(self, mod):
+        text = mod.build_trend_report(self._two_versions(), compare=("0.1.0", "0.2.0"))
+        assert "## 版本对比：0.1.0 → 0.2.0" in text
+        assert "| 阶段 | 旧版中位 | 新版中位 | 变化 | 倍数 | 显著 |" in text
+
+    def test_compare_section_absent_by_default(self, mod):
+        assert "版本对比" not in mod.build_trend_report(_records(3))
+
+
+class TestMachineReadable:
+    """机读输出：JSON 与 CSV。"""
+
+    def test_json_round_trips_records(self, mod):
+        import json as _json
+
+        records = _records(2)
+        parsed = _json.loads(mod._machine_readable(records, "json"))
+        assert parsed == records
+
+    def test_csv_has_header_and_one_row_per_record(self, mod):
+        records = _records(3)
+        lines = mod._machine_readable(records, "csv").strip().splitlines()
+        assert lines[0].startswith("timestamp,version,report_type")
+        assert len(lines) == len(records) + 1
+
+    def test_csv_row_carries_total_seconds(self, mod):
+        records = _records(1)
+        row = mod._machine_readable(records, "csv").strip().splitlines()[1]
+        assert str(records[0]["total_seconds"]) in row
+
+
+class TestGateFindings:
+    """阈值门禁：P95 超限报 finding。"""
+
+    def test_gate_passes_below_threshold(self, mod):
+        assert mod._gate_findings(_records(5), 1000.0) == []
+
+    def test_gate_flags_above_threshold(self, mod):
+        findings = mod._gate_findings(_records(5), 1.0)
+        assert len(findings) == 1
+        assert "超过阈值" in findings[0]
+
+    def test_gate_empty_records_pass(self, mod):
+        assert mod._gate_findings([], 1.0) == []
+
+    def test_gate_uses_p95_not_max(self, mod):
+        """单条离群不应直接触发门禁（P95 口径对尾部不敏感）。"""
+        records = _records(20)
+        records[-1]["total_seconds"] = 9999.0
+        assert mod._gate_findings(records, 100.0) == []
+
+
 class TestGroupPercentileLines:
     """分组段内的「95% / 99% 完成时间」直给行。"""
 
