@@ -277,9 +277,18 @@ class TestGroupRecords:
         stamps = [r["timestamp"] for r in groups["0.1.0 / full"]]
         assert stamps == sorted(stamps)
 
-    def test_group_keys_sorted(self, mod):
+    def test_group_order_follows_first_run_time_not_version_string(self, mod):
+        """组间按首次运行时间升序（最新组在末）；版本号字符串序不作数（0.9 > 0.10）。"""
+        records = [
+            {"version": "0.9.0", "report_type": "full", "timestamp": "2026-01-05 00:00:00"},
+            {"version": "0.10.0", "report_type": "full", "timestamp": "2026-01-01 00:00:00"},
+        ]
+        assert list(mod._group_records(records, None, None)) == ["0.10.0 / full", "0.9.0 / full"]
+
+    def test_group_order_stable_tiebreak_by_key(self, mod):
+        """首次运行时间相同（同批写入）时按组键字典序稳定排序。"""
         records = _records(1, version="0.9.0") + _records(1, version="0.10.0")
-        assert list(mod._group_records(records, None, None)) == sorted(["0.9.0 / full", "0.10.0 / full"])
+        assert list(mod._group_records(records, None, None)) == ["0.10.0 / full", "0.9.0 / full"]
 
     def test_missing_fields_default_to_question_mark(self, mod):
         groups = mod._group_records([{"phases": {}}], None, None)

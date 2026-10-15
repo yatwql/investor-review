@@ -296,6 +296,10 @@ def _group_records(
 ) -> dict[str, list[dict[str, Any]]]:
     """按 version+report_type 分组。
 
+    组间顺序按各组**首次运行时间**升序（与版本演进总表同口径）——最新版本组
+    在最末；组内记录按时间戳升序。不用版本号字符串序：主版本位数不同时
+    字典序与数值序相反（“9” > “10”），与真实先后不符。
+
     Returns:
         {group_key: [records]}
     """
@@ -305,10 +309,10 @@ def _group_records(
     for r in filtered:
         key = f"{r.get('version', '?')} / {r.get('report_type', '?')}"
         groups[key].append(r)
-    # 按时间排序
+    # 组内按时间排序；组间按首次运行时间（首条即最早）升序，最新组在末尾
     for g in groups:
         groups[g].sort(key=lambda x: x.get("timestamp", ""))
-    return dict(sorted(groups.items()))
+    return {k: groups[k] for k in sorted(groups, key=lambda k: (str(groups[k][0].get("timestamp", "")), k))}
 
 
 # ── 报告生成 ──
