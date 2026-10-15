@@ -9,6 +9,9 @@
 
 ## [0.13.3-dev] - 开发中（未发布）
 
+### Fixed
+
+- **release 编排：prepare/evolution 收尾补 `check-doc-drift --sync`（rf-686）**：v0.13.2 发布复盘发现 `prepare`（版本全链 + changelog 发布段归档，改写多处文档）与 `evolution`（改写 folders.md 演进表/比率/注释）均改动画布却不同步 folders.md 统计表，而 `refresh` 的 sync 又排在 bench 之后——导致 refresh 的 bench（含 doc-drift crosscheck 单测）因统计过期而红，被迫手动 sync 后整套 bench（14 模式，单遍 ~250s）重跑一遍。修复：两步各自改完文档后立即 sync，从源头保持 folders.md 一致，后续 refresh/publish 的测试不再因统计过期而失败（发布提速，消除重复 bench）。
 
 （本次发布内容见下方归档索引）
 

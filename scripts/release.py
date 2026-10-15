@@ -208,6 +208,15 @@ def cmd_prepare(args: argparse.Namespace, runner=None) -> int:
         print("[ERR] 版本一致性 --fix 未收敛，按上方 [ERR] 逐个处理后重跑 prepare")
         return rc
 
+    # prepare 改写了 changelog/归档/版本头等多处文档，会改变 folders.md 统计表所依据的
+    # 行数 → 立即同步，否则后续 refresh 的 bench（含 doc-drift crosscheck 单测）会因
+    # 统计过期而红，被迫手动 sync 后重跑整套 bench
+    rc, out, err = _exec([sys.executable, "scripts/check-doc-drift.py", "--sync"], REPO_ROOT, runner)
+    print((out or err).rstrip())
+    if rc != 0:
+        print("[ERR] 文档统计快照同步失败，按上方输出处理后重跑 prepare")
+        return rc
+
     rc, status_out, _ = _exec(["git", "status", "--short"], REPO_ROOT, runner)
     if rc == 0 and status_out.strip():
         print("\n[..] 本次改动清单（请审阅 diff）：")
@@ -270,6 +279,15 @@ def cmd_evolution(args: argparse.Namespace, runner=None) -> int:
         print(f"[ERR] {exc}")
         return 2
     FOLDERS_FILE.write_text(text, encoding="utf-8")
+
+    # evolution 改写了 folders.md（演进表/比率/注释），会改变其统计表所依据的行数 → 立即
+    # 同步，否则后续 publish 的 verify（含 doc-drift crosscheck 单测）会因统计过期而红
+    rc, out, err = _exec([sys.executable, "scripts/check-doc-drift.py", "--sync"], REPO_ROOT, runner)
+    print((out or err).rstrip())
+    if rc != 0:
+        print("[ERR] 文档统计快照同步失败，按上方输出处理后重跑本子命令")
+        return rc
+
     scope = "发布列 + 当前开发版列" if args.release else "当前开发版列（发布列不动）"
     print(f"[OK] 演进对照已更新：{scope}（{date}）")
     print(

@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.13.3-dev
-> **编号源**：`rf-next = 686`（新增问题取此编号，完成后更新为 +1；已用最大 rf-685，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 687`（新增问题取此编号，完成后更新为 +1；已用最大 rf-686，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -63,3 +63,9 @@
 - [`archived_review-findings.0.3.x.md`](../archive/v0.3.x/archived_review-findings.0.3.x.md)
 - [`archived_review-findings.0.2.x.md`](../archive/v0.2.x/archived_review-findings.0.2.x.md)
 - [`archived_review-findings.0.1.x.md`](../archive/v0.1.x/archived_review-findings.0.1.x.md)
+
+### 开发期已修复（0.13.3-dev）
+
+> 完整复盘见 `changelog.md` 0.13.3-dev 段；此处仅摘要行。
+
+- rf-686 已修复（2026-10-15）：release 编排 `prepare`/`evolution` 改文档后未同步 folders.md 统计表，导致 refresh 的 bench 因 crosscheck 过期红而重跑整套——两步各补收尾 `check-doc-drift --sync`，从源头消除发布期重复 bench
