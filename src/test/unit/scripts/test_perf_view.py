@@ -766,9 +766,16 @@ class TestGroupPercentileLines:
     def test_group_renders_p95_p99_line(self, mod):
         text = mod.build_trend_report(_records(5))
         line = next(ln for ln in text.splitlines() if ln.startswith("- 95% 的报告在"))
+        # 统一句式：两段都带全主语「N% 的报告在 … 内完成」（不省略第二段主语）
+        assert "99% 的报告在" in line
         values = [float(part.split("**")[1].rstrip("s")) for part in line.split("，")]
         assert len(values) == 2
         assert values[0] <= values[1]
+
+    def test_overview_wording_unified(self, mod):
+        """概览口径行与分组行句式统一（95%/99% 各自带全主语与「该耗时内完成」）。"""
+        text = mod.build_trend_report(_records(3))
+        assert "P95 即 95% 的报告在该耗时内完成，P99 即 99% 的报告在该耗时内完成" in text
 
     def test_group_percentiles_within_group_range(self, mod):
         records = _records(7)

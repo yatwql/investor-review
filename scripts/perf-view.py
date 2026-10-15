@@ -3,7 +3,7 @@
 
 读取 data/state/perf_history.jsonl，按版本和报告类型分组统计，
 输出版本间性能趋势对比 Markdown 表格；另输出跨版本「总体分位概览」，
-给出 P95 / P99 报告生成耗时（最近秩分位：95% / 99% 的报告在该时间内完成）。
+给出 P95 / P99 报告生成耗时（最近秩分位：95% 的报告在该耗时内完成，99% 的报告在该耗时内完成）。
 
 用法：
   python scripts/perf-view.py                          # 输出到 stdout
@@ -77,8 +77,8 @@ def _min_max(values: list[float]) -> tuple[float, float]:
 def _percentile(values: list[float], pct: float) -> float:
     """最近秩（nearest-rank）分位数：`ceil(pct% × n)` 位样本值。
 
-    口径含义：至少 `pct%` 的样本 ≤ 返回值——P95 即「95% 的报告生成在该耗时内完成」，
-    P99 即「99% 的报告生成在该耗时内完成」。空输入返回 0.0。
+    口径含义：至少 `pct%` 的样本 ≤ 返回值——P95 即「95% 的报告在该耗时内完成」，
+    P99 即「99% 的报告在该耗时内完成」。空输入返回 0.0。
 
     Args:
         values: 样本值（任意顺序，内部排序）。
@@ -329,7 +329,7 @@ def _overview_lines(records: list[dict[str, Any]]) -> list[str]:
         "## 总体分位概览（跨版本）",
         "",
         "样本口径与下方分组一致（受 `--report-type` / `--last` 影响）；"
-        "分位为**最近秩**口径——P95/P99 即 95%/99% 的报告生成在该耗时内完成。",
+        "分位为**最近秩**口径——P95 即 95% 的报告在该耗时内完成，P99 即 99% 的报告在该耗时内完成。",
         "",
         "| 口径 | 样本数 | 平均 | 中位 | P95 | P99 | 最长 | 中位秒/品种 |",
         "|:-----|------:|----:|----:|----:|----:|-----:|-----------:|",
@@ -962,7 +962,7 @@ def build_trend_report(
             lines.append(f"- 平均总耗时：**{_mean(totals):.1f}s**")
         lines.append(
             f"- 95% 的报告在 **{_percentile(totals, 95):.1f}s** 内完成，"
-            f"99% 在 **{_percentile(totals, 99):.1f}s** 内完成"
+            f"99% 的报告在 **{_percentile(totals, 99):.1f}s** 内完成"
         )
         if len(group_records) < 20:
             lines.append("_（样本 <20：最近秩分位趋近最大值，参考性有限）_")
