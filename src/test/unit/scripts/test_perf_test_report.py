@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+import ast
+import importlib
 import inspect
 import re
 from datetime import datetime
@@ -111,6 +113,62 @@ class TestVerdict:
     def test_under_and_over_target(self, perf_test_report):
         assert "✅" in perf_test_report._verdict(0.0, 60.0)
         assert "❌" in perf_test_report._verdict(60.01, 60.0)
+
+
+class TestDottedReferencesResolve:
+    """回归：脚本内的 dotted 引用（import 符号 / patch 目标 / 常量目标）必须真实存在。
+
+    防重构后脚本悄然失效——编排层私有函数迁移曾使 Phase 2 运行期才 ImportError，
+    仅靠非运行期用例（只测 helper）不会暴露，直到 CI 性能门禁实际跑全流程才红。
+    """
+
+    def test_all_dotted_references_resolve(self, perf_test_report):
+        tree = ast.parse(inspect.getsource(perf_test_report))
+        refs: set[str] = set()
+
+        # ① from A import b / from A import (b, c) → 解析 A.b
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("src.python"):
+                for alias in node.names:
+                    refs.add(f"{node.module}.{alias.name}")
+
+        # ② patch("a.b.c") → mock 目标属性必须存在
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            fn = node.func
+            name = fn.id if isinstance(fn, ast.Name) else (fn.attr if isinstance(fn, ast.Attribute) else "")
+            if name == "patch" and node.args and isinstance(node.args[0], ast.Constant):
+                value = node.args[0].value
+                if isinstance(value, str) and value.startswith("src.python"):
+                    refs.add(value)
+
+        # ③ 模块级字符串常量（如 LLM mock 目标常量）
+        for node in tree.body:
+            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant):
+                if isinstance(node.value.value, str) and node.value.value.startswith("src.python"):
+                    refs.add(node.value.value)
+
+        broken = sorted(ref for ref in refs if not self._resolve(ref))
+        assert refs, "应至少收集到一批 dotted 引用（收集器本身失效时测试无意义）"
+        assert not broken, f"以下 dotted 引用无法解析（重构后脚本引用失效）：{broken}"
+
+    @staticmethod
+    def _resolve(path: str) -> bool:
+        """从左到右逐段尝试 import，支持「模块」与「模块.属性链」两种形态。"""
+        parts = path.split(".")
+        for split in range(len(parts) - 1, 0, -1):
+            try:
+                obj = importlib.import_module(".".join(parts[:split]))
+            except ImportError:
+                continue
+            try:
+                for attr in parts[split:]:
+                    obj = getattr(obj, attr)
+            except AttributeError:
+                continue
+            return True
+        return False
 
 
 class TestGateMode:

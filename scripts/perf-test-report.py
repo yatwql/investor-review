@@ -298,13 +298,15 @@ def run_perf_test() -> tuple[dict[str, float], PerfSample, PerfSample]:
         patch("src.python.fetcher.fund.fetch_fund_rankings", return_value=None),
         patch(_LLM_MOCK_TARGET, return_value=_LLM_MOCK_VALUE),
     ):
-        from src.python.report.orchestrator import _generate_report_both
+        # 公开 API（generate_report 报告类型分发），不依赖编排层内部私有函数
+        from src.python.report.orchestrator import generate_report
 
         t_start = time.perf_counter()
-        result = _generate_report_both(
+        result = generate_report(
             holdings,
             config,
             reporter,
+            report_type="both",
             fetch_history=False,
             output_dir=tmp_dir.name,
         )
