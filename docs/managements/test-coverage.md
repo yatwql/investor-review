@@ -10,18 +10,18 @@
 <!-- mode-count-table:start -->
 | `--mode` 值 | 覆盖项数 | 典型耗时 |
 |:------------|:--------:|:--------:|
-| `unit` | **9960** | ~32s |
-| `standard` | **8729** | ~24s |
-| `scenario` | **287** | ~13s |
+| `unit` | **9960** | ~36s |
+| `standard` | **8729** | ~26s |
+| `scenario` | **287** | ~12s |
 | `regression` | **287** | ~12s |
-| `dev-verify` | **6808** | ~28s |
+| `dev-verify` | **6808** | ~27s |
 | `verify` | **9624** | ~34s |
 | `integration` | **329** | ~12s |
 | `edge` | **1163** | ~15s |
-| `data` | **70** | ~3s |
+| `data` | **70** | ~4s |
 | `all` | **10289** | ~35s |
 | `smoke` | **26** | ~3s |
-| `report` | **2594** | ~24s |
+| `report` | **2594** | ~25s |
 | `all_no_unit` | **329** | ~12s |
 | `scenario_extreme` | **9** | ~3s |
 <!-- mode-count-table:end -->
@@ -62,19 +62,19 @@
 <!-- duration-table:start -->
 | `--mode` | dragonball（2026-10-15 实测） | stallman-NB1（2026-10-02 实测） |
 |:---------|:---------------------------:|:---:|
-| `unit` | ~32s | ~3min |
-| `standard` | ~24s | ~3min |
-| `scenario` | ~13s | ~51s |
+| `unit` | ~36s | ~3min |
+| `standard` | ~26s | ~3min |
+| `scenario` | ~12s | ~51s |
 | `regression` | ~12s | ~1min |
-| `verify,regression` | ~46s（verify+regression 顺序之和） | ~5min（verify+regression 顺序之和） |
-| `dev-verify` | ~28s | ~4min |
+| `verify,regression` | ~47s（verify+regression 顺序之和） | ~5min（verify+regression 顺序之和） |
+| `dev-verify` | ~27s | ~4min |
 | `verify` | ~34s | ~4min |
 | `integration` | ~12s | ~2min |
 | `edge` | ~15s | ~1min |
-| `data` | ~3s | ~31s |
+| `data` | ~4s | ~31s |
 | `all` | ~35s | ~4min |
 | `smoke` | ~3s | ~28s |
-| `report` | ~24s | ~2min |
+| `report` | ~25s | ~2min |
 | `all_no_unit` | ~12s | ~1min |
 | `scenario_extreme` | ~3s | ~32s |
 | 数据更新时间 | 2026-10-15 | 2026-10-02 |
