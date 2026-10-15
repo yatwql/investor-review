@@ -594,20 +594,20 @@ def _generate_report_full(
     bind_llm_observation(_llm_sink)
     try:
         llm_content, news_data, news_llm_meta, news_ok, debate_info = _fetch_llm_and_news(
-        holdings,
-        prep,
-        sector_flow,
-        force_llm,
-        pipeline_data,
-        _enable_news,
-        _enable_llm,
-        reporter,
-        force_llm_modules=force_llm_modules,
-        history_data=history_data,
-        comparison_indices=_comparison_indices,
-        metrics=_metrics,
-        span_recorder=perf.recorder("LLM+新闻"),
-    )
+            holdings,
+            prep,
+            sector_flow,
+            force_llm,
+            pipeline_data,
+            _enable_news,
+            _enable_llm,
+            reporter,
+            force_llm_modules=force_llm_modules,
+            history_data=history_data,
+            comparison_indices=_comparison_indices,
+            metrics=_metrics,
+            span_recorder=perf.recorder("LLM+新闻"),
+        )
     finally:
         bind_llm_observation(None)
     if _enable_llm:
