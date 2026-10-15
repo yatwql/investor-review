@@ -581,25 +581,45 @@ class TestMachineReadable:
         assert str(records[0]["total_seconds"]) in row
 
 
-class TestGateFindings:
-    """阈值门禁：P95 超限报 finding。"""
+class TestSummaryAndOutlierK:
+    """概览模式与可调离群系数。"""
 
-    def test_gate_passes_below_threshold(self, mod):
-        assert mod._gate_findings(_records(5), 1000.0) == []
+    def test_summary_omits_group_details(self, mod):
+        text = mod.build_trend_report(_records(4), summary=True)
+        assert "## 总体分位概览（跨版本）" in text
+        assert "概览模式" in text
+        assert "## 0.1.0 / full" not in text
 
-    def test_gate_flags_above_threshold(self, mod):
-        findings = mod._gate_findings(_records(5), 1.0)
-        assert len(findings) == 1
-        assert "超过阈值" in findings[0]
+    def test_summary_keeps_outlier_and_tail_sections(self, mod):
+        records = _records(6)
+        records[-1]["total_seconds"] = 6636.0
+        text = mod.build_trend_report(records, summary=True)
+        assert "## 离群运行（稳健口径）" in text
+        assert "## 尾部归因（最慢一次运行）" in text
 
-    def test_gate_empty_records_pass(self, mod):
-        assert mod._gate_findings([], 1.0) == []
+    def test_default_mode_keeps_group_details(self, mod):
+        assert "## 0.1.0 / full" in mod.build_trend_report(_records(3))
 
-    def test_gate_uses_p95_not_max(self, mod):
-        """单条离群不应直接触发门禁（P95 口径对尾部不敏感）。"""
-        records = _records(20)
-        records[-1]["total_seconds"] = 9999.0
-        assert mod._gate_findings(records, 100.0) == []
+    def test_outlier_k_controls_sensitivity(self, mod):
+        """系数越小越敏感：同一批样本在 k=1.0 下比 k=3.5 下标出更多离群。"""
+        records = _records(10)
+        records[-1]["total_seconds"] = 200.0
+        strict = mod._outlier_records(records, 1.0)
+        loose = mod._outlier_records(records, 3.5)
+        assert len(strict) >= len(loose)
+
+    def test_outlier_k_flows_into_report(self, mod):
+        records = _records(10)
+        records[-1]["total_seconds"] = 200.0
+        text = mod.build_trend_report(records, outlier_k=1.0)
+        assert "1.0 × 1.4826 × MAD" in text
+
+    def test_robust_mean_only_shown_when_outlier_present(self, mod):
+        """无离群时稳健均值与普通均值相同，不并列展示（避免冗余）。"""
+        assert "稳健均值" not in mod.build_trend_report(_records(4))
+        records = _records(6)
+        records[-1]["total_seconds"] = 6636.0
+        assert "稳健均值" in mod.build_trend_report(records)
 
 
 class TestGroupPercentileLines:

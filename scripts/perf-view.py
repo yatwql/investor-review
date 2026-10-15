@@ -15,10 +15,15 @@
   python scripts/perf-view.py --compare 0.13.3 0.13.4  # 版本间阶段级对比
   python scripts/perf-view.py --json                   # 机读输出（JSON）
   python scripts/perf-view.py --csv                    # 机读输出（CSV）
-  python scripts/perf-view.py --gate 600               # 阈值门禁（P95 超限退出 2）
+  python scripts/perf-view.py --summary                # 仅输出概览段（略去逐版本分组）
+  python scripts/perf-view.py --outlier-k 4.0          # 自定义离群判定系数（默认 3.5）
 
 归因能力：离群点标注（中位 ± MAD）、稳健均值、阶段级分位、尾部归因（最慢运行
-逐阶段 z 分数）、时段聚合、版本间对比、机读输出与阈值门禁。
+逐阶段 z 分数）、时段聚合、版本间对比、机读输出。
+
+定位说明：本脚本是**运行历史查看**（被动统计既有记录），不是性能测试——
+样本取决于最近跑过什么，不可复现，故**不用于 CI 门禁**；性能门禁由主动压测的
+`perf-test-report.py` 承担（同条件可比，退化即回归）。
 """
 
 from __future__ import annotations
@@ -45,6 +50,9 @@ from src.python.core.perf import load_history
 
 _TMP_DIR = os.path.join(_PROJECT_ROOT, "docs", "tmp")
 _TREND_REPORT_PATH = os.path.join(_TMP_DIR, "perf_trend.md")
+
+#: 离群判定系数（中位 + k × 1.4826 × MAD）；3.5 为常用经验值，可经 --outlier-k 覆盖
+_OUTLIER_K = 3.5
 
 
 # ── 统计工具 ──
@@ -101,7 +109,7 @@ def _mad(values: list[float]) -> float:
     return statistics.median([abs(v - med) for v in values])
 
 
-def _outlier_threshold(values: list[float], k: float = 3.5) -> float | None:
+def _outlier_threshold(values: list[float], k: float = _OUTLIER_K) -> float | None:
     """离群上界：`中位 + k × 1.4826 × MAD`（MAD 归一化到正态尺度）。
 
     MAD 为 0（样本高度一致）时返回 None——此时任何偏离都不宜判为离群，
@@ -115,15 +123,15 @@ def _outlier_threshold(values: list[float], k: float = 3.5) -> float | None:
     return _median(values) + k * scale
 
 
-def _is_outlier(value: float, values: list[float], k: float = 3.5) -> bool:
+def _is_outlier(value: float, values: list[float], k: float = _OUTLIER_K) -> bool:
     """该值是否超出稳健离群上界（阈值不可得时一律不判离群）。"""
     threshold = _outlier_threshold(values, k)
     return threshold is not None and value > threshold
 
 
-def _robust_mean(values: list[float]) -> float:
+def _robust_mean(values: list[float], k: float = _OUTLIER_K) -> float:
     """稳健均值：剔除离群点后的均值（无离群点时等于普通均值）。"""
-    kept = [v for v in values if not _is_outlier(v, values)]
+    kept = [v for v in values if not _is_outlier(v, values, k)]
     return _mean(kept or values)
 
 
@@ -170,6 +178,7 @@ def _filter_records(
     report_type: str | None,
     last_n: int | None,
     exclude_outlier: bool = False,
+    outlier_k: float = _OUTLIER_K,
 ) -> list[dict[str, Any]]:
     """按报告类型过滤并截取最近 N 条（分组与分位概览共用同一口径）。
 
@@ -183,14 +192,14 @@ def _filter_records(
         filtered = filtered[-last_n:]
     if exclude_outlier:
         totals = [float(r.get("total_seconds") or 0) for r in filtered]
-        filtered = [r for r in filtered if not _is_outlier(float(r.get("total_seconds") or 0), totals)]
+        filtered = [r for r in filtered if not _is_outlier(float(r.get("total_seconds") or 0), totals, outlier_k)]
     return filtered
 
 
-def _outlier_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _outlier_records(records: list[dict[str, Any]], k: float = _OUTLIER_K) -> list[dict[str, Any]]:
     """标出总耗时离群的运行（供报告显式列出，而非静默剔除）。"""
     totals = [float(r.get("total_seconds") or 0) for r in records]
-    return [r for r in records if _is_outlier(float(r.get("total_seconds") or 0), totals)]
+    return [r for r in records if _is_outlier(float(r.get("total_seconds") or 0), totals, k)]
 
 
 def _merge_breakdown_stats(
@@ -258,13 +267,14 @@ def _group_records(
     report_type: str | None,
     last_n: int | None,
     exclude_outlier: bool = False,
+    outlier_k: float = _OUTLIER_K,
 ) -> dict[str, list[dict[str, Any]]]:
     """按 version+report_type 分组。
 
     Returns:
         {group_key: [records]}
     """
-    filtered = _filter_records(records, report_type, last_n, exclude_outlier)
+    filtered = _filter_records(records, report_type, last_n, exclude_outlier, outlier_k)
 
     groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for r in filtered:
@@ -305,16 +315,16 @@ def _overview_lines(records: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
-def _outlier_lines(records: list[dict[str, Any]]) -> list[str]:
+def _outlier_lines(records: list[dict[str, Any]], k: float = _OUTLIER_K) -> list[str]:
     """离群运行提示段（显式列出而非静默剔除）。"""
-    outliers = _outlier_records(records)
+    outliers = _outlier_records(records, k)
     if not outliers:
         return []
-    threshold = _outlier_threshold([float(r.get("total_seconds") or 0) for r in records])
+    threshold = _outlier_threshold([float(r.get("total_seconds") or 0) for r in records], k)
     lines = [
         "## 离群运行（稳健口径）",
         "",
-        f"判定：总耗时 > 中位 + 3.5 × 1.4826 × MAD（上界 {threshold:.1f}s）；"
+        f"判定：总耗时 > 中位 + {k} × 1.4826 × MAD（上界 {threshold:.1f}s）；"
         "MAD 为 0 时不判离群。用 `--exclude-outlier` 可剔除后重算。",
         "",
         "| 时间 | 版本 | 类型 | 总耗时 | 最慢阶段 |",
@@ -595,17 +605,6 @@ def _machine_readable(records: list[dict[str, Any]], fmt: str) -> str:
     return buf.getvalue()
 
 
-def _gate_findings(records: list[dict[str, Any]], threshold: float) -> list[str]:
-    """阈值门禁：P95 总耗时超限即报 finding（供 CI 拦截性能回归）。"""
-    if not records:
-        return []
-    totals = [float(r.get("total_seconds") or 0) for r in records]
-    p95 = _percentile(totals, 95)
-    if p95 > threshold:
-        return [f"P95 总耗时 {p95:.1f}s 超过阈值 {threshold:.1f}s（样本 {len(totals)} 条）"]
-    return []
-
-
 def build_trend_report(
     records: list[dict[str, Any]],
     report_type: str | None = None,
@@ -613,10 +612,16 @@ def build_trend_report(
     exclude_outlier: bool = False,
     by: str | None = None,
     compare: tuple[str, str] | None = None,
+    summary: bool = False,
+    outlier_k: float = _OUTLIER_K,
 ) -> str:
-    """生成性能趋势 Markdown 报告字符串。"""
-    groups = _group_records(records, report_type, last_n, exclude_outlier)
-    scoped = _filter_records(records, report_type, last_n, exclude_outlier)
+    """生成性能趋势 Markdown 报告字符串。
+
+    ``summary``：仅输出概览段（总体分位/离群/尾部归因/LLM 上下文/时段聚合/对比），
+    略去逐版本分组详情——记录多、分组多时避免输出过长。
+    """
+    groups = _group_records(records, report_type, last_n, exclude_outlier, outlier_k)
+    scoped = _filter_records(records, report_type, last_n, exclude_outlier, outlier_k)
 
     lines: list[str] = [
         "# 报告生成性能趋势",
@@ -636,7 +641,7 @@ def build_trend_report(
     lines.extend(_overview_lines(scoped))
 
     # ── 离群运行与尾部归因（稳健口径） ──
-    lines.extend(_outlier_lines(scoped))
+    lines.extend(_outlier_lines(scoped, outlier_k))
     lines.extend(_tail_attribution_lines(scoped))
 
     # ── LLM 运行上下文（等待/重试/降级/缓存/用量） ──
@@ -650,6 +655,12 @@ def build_trend_report(
     if compare:
         lines.extend(_compare_lines(records, compare[0], compare[1]))
 
+    # ── 概览模式：略去逐版本分组详情 ──
+    if summary:
+        lines.append("_（概览模式：已略去逐版本分组详情，去掉 `--summary` 可查看）_")
+        lines.append("")
+        return "\n".join(lines)
+
     # ── 按组输出详情 ──
     for group_key, group_records in groups.items():
         lines.append(f"## {group_key}")
@@ -659,7 +670,11 @@ def build_trend_report(
 
         totals = [r.get("total_seconds", 0) for r in group_records]
         lines.append(f"- 总耗时范围：{_min_max(totals)[0]:.1f}s ~ {_min_max(totals)[1]:.1f}s")
-        lines.append(f"- 平均总耗时：**{_mean(totals):.1f}s**（稳健均值 {_robust_mean(totals):.1f}s）")
+        # 稳健均值仅在存在离群点时并列展示（无离群时与普通均值相同，并列属冗余）
+        if _outlier_records(group_records, outlier_k):
+            lines.append(f"- 平均总耗时：**{_mean(totals):.1f}s**（稳健均值 {_robust_mean(totals, outlier_k):.1f}s）")
+        else:
+            lines.append(f"- 平均总耗时：**{_mean(totals):.1f}s**")
         lines.append(
             f"- 95% 的报告在 **{_percentile(totals, 95):.1f}s** 内完成，"
             f"99% 在 **{_percentile(totals, 99):.1f}s** 内完成"
@@ -733,12 +748,13 @@ def main() -> int:
     )
     parser.add_argument("--json", action="store_true", help="机读输出：完整记录 JSON")
     parser.add_argument("--csv", action="store_true", help="机读输出：逐运行 CSV")
+    parser.add_argument("--summary", action="store_true", help="仅输出概览段（略去逐版本分组详情）")
     parser.add_argument(
-        "--gate",
+        "--outlier-k",
         type=float,
-        default=None,
-        metavar="秒",
-        help="阈值门禁：P95 总耗时超限则退出码 2（供 CI 拦截性能回归）",
+        default=_OUTLIER_K,
+        metavar="系数",
+        help=f"离群判定系数（中位 + k × 1.4826 × MAD，默认 {_OUTLIER_K}）",
     )
     args = parser.parse_args()
 
@@ -747,7 +763,7 @@ def main() -> int:
         print("[!] 暂无性能历史数据（data/state/perf_history.jsonl 不存在或为空）")
         return 1
 
-    scoped = _filter_records(records, args.report_type, args.last, args.exclude_outlier)
+    scoped = _filter_records(records, args.report_type, args.last, args.exclude_outlier, args.outlier_k)
 
     # ── 机读输出（与 Markdown 互斥，便于管道消费） ──
     if args.json or args.csv:
@@ -760,6 +776,8 @@ def main() -> int:
             exclude_outlier=args.exclude_outlier,
             by=args.by,
             compare=tuple(args.compare) if args.compare else None,
+            summary=args.summary,
+            outlier_k=args.outlier_k,
         )
         print(report)
 
@@ -768,15 +786,6 @@ def main() -> int:
             with open(_TREND_REPORT_PATH, "w", encoding="utf-8") as f:
                 f.write(report)
             print(f"[OK] 已写入: {_TREND_REPORT_PATH}")
-
-    # ── 阈值门禁（退出码 2 = 发现 finding，与检查脚本契约一致） ──
-    if args.gate is not None:
-        findings = _gate_findings(scoped, args.gate)
-        for finding in findings:
-            print(f"[ERR] {finding}")
-        if findings:
-            return 2
-        print(f"[OK] P95 总耗时未超阈值 {args.gate:.1f}s（样本 {len(scoped)} 条）")
 
     return 0
 

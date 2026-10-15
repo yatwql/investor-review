@@ -113,6 +113,36 @@ class TestVerdict:
         assert "❌" in perf_test_report._verdict(60.01, 60.0)
 
 
+class TestGateMode:
+    """门禁模式：退出码契约（0 达标 / 2 未达标，与检查脚本一致）。"""
+
+    def _run_main(self, perf_test_report, monkeypatch, basic_time: float, gate: bool) -> int:
+        monkeypatch.setattr(perf_test_report, "run_perf_test", lambda: ({}, None, None))
+        monkeypatch.setattr(perf_test_report, "write_perf_report", lambda *a, **k: "report.md")
+        monkeypatch.setattr(
+            perf_test_report,
+            "run_perf_test",
+            lambda: ({"phase1_basic_excel": basic_time}, None, None),
+        )
+        argv = ["perf-test-report.py"] + (["--gate"] if gate else [])
+        monkeypatch.setattr("sys.argv", argv)
+        return perf_test_report.main()
+
+    def test_gate_passes_at_target(self, perf_test_report, monkeypatch):
+        assert self._run_main(perf_test_report, monkeypatch, 60.0, gate=True) == 0
+
+    def test_gate_fails_above_target_with_exit_2(self, perf_test_report, monkeypatch):
+        """门禁模式未达标退出 2（与检查脚本「发现 finding」契约一致）。"""
+        assert self._run_main(perf_test_report, monkeypatch, 60.01, gate=True) == 2
+
+    def test_non_gate_mode_keeps_exit_1(self, perf_test_report, monkeypatch):
+        """非门禁模式保持原有退出码 1（人工运行语义不变）。"""
+        assert self._run_main(perf_test_report, monkeypatch, 60.01, gate=False) == 1
+
+    def test_non_gate_mode_passes_at_target(self, perf_test_report, monkeypatch):
+        assert self._run_main(perf_test_report, monkeypatch, 10.0, gate=False) == 0
+
+
 class TestTestTimeText:
     """测试时间文案：按时刻动态生成。"""
 

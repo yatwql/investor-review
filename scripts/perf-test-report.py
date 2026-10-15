@@ -7,17 +7,23 @@
 
 用法：
   python scripts/perf-test-report.py
+  python scripts/perf-test-report.py --gate          # 门禁模式：未达标退出码 2（供 CI 拦截）
 
 输出：
   docs/tmp/better-investment-performance-test-report.md
 
 目标：
   - basic 模式总耗时 < 60s
+
+定位说明：本脚本是**性能测试**（主动压测）——自造模拟持仓、mock 外部数据源，
+同条件可比，故适合做 CI 门禁（退化即回归）。运行历史查看（被动统计既有记录、
+样本不可控）由 `perf-view.py` 承担，**不用于门禁**。
 """
 
 from __future__ import annotations
 
 import logging
+import argparse
 import os
 import sys
 import tempfile
@@ -439,6 +445,14 @@ def write_perf_report(timings: dict[str, float], phase1: PerfSample, phase3: Per
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="端到端性能基准测试")
+    parser.add_argument(
+        "--gate",
+        action="store_true",
+        help="门禁模式：未达标时退出码 2（与检查脚本契约一致，供 CI 拦截性能回归）",
+    )
+    args = parser.parse_args()
+
     print("=" * 60)
     print("  端到端性能基准测试")
     print("=" * 60)
@@ -451,13 +465,17 @@ def main() -> int:
     print(f"  [OK] 报告已写入: {report_path}")
 
     basic_time = timings.get("phase1_basic_excel", 0)
-    if basic_time <= _TARGET_SECONDS:
+    passed = basic_time <= _TARGET_SECONDS
+    if passed:
         print(f"\n[OK] basic 模式达标: {basic_time:.2f}s ≤ {_TARGET_SECONDS}s")
     else:
-        print(f"\n[!] basic 模式未达标: {basic_time:.2f}s > {_TARGET_SECONDS}s")
+        print(f"\n[ERR] basic 模式未达标: {basic_time:.2f}s > {_TARGET_SECONDS}s")
 
     print("=" * 60)
-    return 0 if basic_time <= _TARGET_SECONDS else 1
+    if args.gate:
+        # 门禁模式：退出码 2 = 发现 finding（与检查脚本契约一致）
+        return 0 if passed else 2
+    return 0 if passed else 1
 
 
 if __name__ == "__main__":

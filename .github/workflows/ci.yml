@@ -89,6 +89,37 @@ jobs:
       - name: Ruff Lint 检查
         run: python -m ruff check
 
+  perf-gate:
+    # 性能门禁（阻塞）：主动压测脚本自造模拟持仓、mock 外部数据源，同条件可比——
+    # 管线退化即回归。与运行历史查看（perf-view.py，样本不可控、不可复现）分工不同，
+    # 后者**不用于门禁**。阈值见脚本 _TARGET_SECONDS（basic 模式 ≤ 60s）。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 设置 Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: 安装依赖
+        run: |
+          pip install --retries 5 --timeout 60 -e ".[test]"
+
+      - name: 端到端性能门禁（basic 模式 ≤ 60s）
+        run: python scripts/perf-test-report.py --gate
+
+      - name: 上传性能报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-test-report
+          path: docs/tmp/better-investment-performance-test-report.md
+          if-no-files-found: warn
+          retention-days: 7
+
   guards:
     # 十守护（与 P0/P2 门禁同源）：文档/编号/语义命名/需求追溯/版本号/文档链接等一致性。
     # 阻塞型（无 continue-on-error）——这些漂移必须当场修掉，否则会像“财报域备源静默失效”

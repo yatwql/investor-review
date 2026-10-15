@@ -1278,11 +1278,16 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 ```bash
 .venv/bin/python scripts/perf-test-report.py
+
+# 门禁模式：未达标退出码 2（供 CI 拦截性能回归）
+.venv/bin/python scripts/perf-test-report.py --gate
 ```
 
 **输出**：`docs/tmp/better-investment-performance-test-report.md`
 
 **目标**：basic 模式总耗时 < 60s
+
+**门禁归属**：本脚本是**性能测试**（主动压测，同条件可比），故承担 CI 性能门禁（`perf-gate` job）；运行历史查看（`perf-view.py`，样本不可控、不可复现）不用于门禁。
 
 **`perf-view.py` — 性能历史趋势查看**
 
@@ -1327,7 +1332,10 @@ sh .githooks/install-hooks.sh --off   # 停用
 | LLM 运行上下文段 | 重试次数与退避等待、端点节流等待、provider 降级、缓存命中/未命中、累计费用与 provider/模型分布——回答「时间花在白等还是真推理」 |
 | `--compare 旧 新` | 版本间阶段级对比（中位 delta / 倍数 / 变异系数判显著）；显著性口径：变化幅度需超过两版本各自变异系数之和 × 较大中位值（噪声带），避免把抖动当回归 |
 | `--json` / `--csv` | 机读输出（完整记录 / 逐运行一行），便于管道与外部工具消费 |
-| `--gate 秒` | 阈值门禁：P95 总耗时超限则退出码 2（与检查脚本契约一致），可挂 CI 拦截性能回归；P95 口径对单条离群不敏感，配合 `--exclude-outlier` 可只看正常运行 |
+| `--summary` | 仅输出概览段（总体分位/离群/尾部归因/LLM 上下文/时段聚合/对比），略去逐版本分组详情 |
+| `--outlier-k 系数` | 自定义离群判定系数（中位 + k × 1.4826 × MAD，默认 3.5）；系数越小越敏感 |
+
+**定位边界（重要）**：本脚本是**运行历史查看**（被动统计既有记录）——样本取决于最近跑过什么、不可复现，故**不用于 CI 门禁**。性能门禁由主动压测的 `perf-test-report.py --gate` 承担（自造模拟持仓、mock 外部数据源，同条件可比，退化即回归）。
 
 **数据来源**：每次 `generate_report()` 调用时自动记录到 `data/state/perf_history.jsonl`，无需手动触发；中断运行以 `status=interrupted` 记录（含 `interrupted_stage`），与成功完成（`completed`）区分，页头状态行据显「已中断」。
 
