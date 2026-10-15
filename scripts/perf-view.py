@@ -10,6 +10,11 @@
   python scripts/perf-view.py --save                   # 同时写入 docs/tmp/perf_trend.md
   python scripts/perf-view.py --report-type full       # 仅查看 full 类型
   python scripts/perf-view.py --last 30                # 仅查看最近 30 条记录
+  python scripts/perf-view.py --exclude-outlier        # 剔除离群运行（稳健口径）
+  python scripts/perf-view.py --by day                 # 按时段聚合（day/week/hour）
+
+归因能力：离群点标注（中位 ± MAD）、稳健均值、阶段级分位、尾部归因（最慢运行
+逐阶段 z 分数）、时段聚合。
 """
 
 from __future__ import annotations
@@ -17,8 +22,10 @@ from __future__ import annotations
 import argparse
 import math
 import os
+import statistics
 import sys
 from collections import defaultdict
+from datetime import datetime
 from typing import Any
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -71,6 +78,69 @@ def _percentile(values: list[float], pct: float) -> float:
     return ordered[rank - 1]
 
 
+def _median(values: list[float]) -> float:
+    """中位数（空输入 0.0）。"""
+    if not values:
+        return 0.0
+    return statistics.median(values)
+
+
+def _mad(values: list[float]) -> float:
+    """中位绝对偏差（MAD）：`median(|x - median(x)|)`。
+
+    比标准差更耐离群点——单条 6636s 异常几乎不影响 MAD，故用它做离群判定基准。
+    """
+    if not values:
+        return 0.0
+    med = _median(values)
+    return statistics.median([abs(v - med) for v in values])
+
+
+def _outlier_threshold(values: list[float], k: float = 3.5) -> float | None:
+    """离群上界：`中位 + k × 1.4826 × MAD`（MAD 归一化到正态尺度）。
+
+    MAD 为 0（样本高度一致）时返回 None——此时任何偏离都不宜判为离群，
+    避免把正常抖动误标。
+    """
+    if not values:
+        return None
+    scale = 1.4826 * _mad(values)
+    if scale <= 0:
+        return None
+    return _median(values) + k * scale
+
+
+def _is_outlier(value: float, values: list[float], k: float = 3.5) -> bool:
+    """该值是否超出稳健离群上界（阈值不可得时一律不判离群）。"""
+    threshold = _outlier_threshold(values, k)
+    return threshold is not None and value > threshold
+
+
+def _robust_mean(values: list[float]) -> float:
+    """稳健均值：剔除离群点后的均值（无离群点时等于普通均值）。"""
+    kept = [v for v in values if not _is_outlier(v, values)]
+    return _mean(kept or values)
+
+
+def _stdev(values: list[float]) -> float:
+    """总体标准差（空输入 0.0）；与 MAD 对照用，说明稳健性差异。"""
+    if not values:
+        return 0.0
+    mean = _mean(values)
+    return math.sqrt(sum((v - mean) ** 2 for v in values) / len(values))
+
+
+def _z_scores(values: list[float]) -> list[float]:
+    """逐样本 z 分数（总体标准差口径）；标准差为 0 时全为 0。"""
+    if not values:
+        return []
+    sd = _stdev(values)
+    if sd <= 0:
+        return [0.0] * len(values)
+    mean = _mean(values)
+    return [(v - mean) / sd for v in values]
+
+
 def _total_summary(records: list[dict[str, Any]]) -> dict[str, float]:
     """总耗时汇总：样本数 / 平均 / 中位 / P95 / P99 / 最长。
 
@@ -94,14 +164,28 @@ def _filter_records(
     records: list[dict[str, Any]],
     report_type: str | None,
     last_n: int | None,
+    exclude_outlier: bool = False,
 ) -> list[dict[str, Any]]:
-    """按报告类型过滤并截取最近 N 条（分组与分位概览共用同一口径）。"""
+    """按报告类型过滤并截取最近 N 条（分组与分位概览共用同一口径）。
+
+    ``exclude_outlier``：按总耗时稳健离群上界（中位 ± MAD）剔除离群运行——
+    服务端超时重试等外部故障会把均值抬高数十秒，剔除后才是「正常运行」口径。
+    """
     filtered = records
     if report_type:
         filtered = [r for r in filtered if r.get("report_type") == report_type]
     if last_n:
         filtered = filtered[-last_n:]
+    if exclude_outlier:
+        totals = [float(r.get("total_seconds") or 0) for r in filtered]
+        filtered = [r for r in filtered if not _is_outlier(float(r.get("total_seconds") or 0), totals)]
     return filtered
+
+
+def _outlier_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """标出总耗时离群的运行（供报告显式列出，而非静默剔除）。"""
+    totals = [float(r.get("total_seconds") or 0) for r in records]
+    return [r for r in records if _is_outlier(float(r.get("total_seconds") or 0), totals)]
 
 
 def _merge_breakdown_stats(
@@ -140,10 +224,10 @@ def _merge_breakdown_stats(
 def _merge_phase_stats(
     records: list[dict[str, Any]],
 ) -> dict[str, dict[str, float]]:
-    """合并所有记录中的阶段统计。
+    """合并所有记录中的阶段统计（含阶段级分位）。
 
     Returns:
-        {phase_name: {avg, min, max, count}}
+        {phase_name: {avg, min, max, p50, p95, count}}
     """
     phase_values: dict[str, list[float]] = defaultdict(list)
     for r in records:
@@ -157,6 +241,8 @@ def _merge_phase_stats(
             "avg": round(_mean(vals), 2),
             "min": round(_min_max(vals)[0], 2),
             "max": round(_min_max(vals)[1], 2),
+            "p50": round(_percentile(vals, 50), 2),
+            "p95": round(_percentile(vals, 95), 2),
             "count": len(vals),
         }
     return result
@@ -166,13 +252,14 @@ def _group_records(
     records: list[dict[str, Any]],
     report_type: str | None,
     last_n: int | None,
+    exclude_outlier: bool = False,
 ) -> dict[str, list[dict[str, Any]]]:
     """按 version+report_type 分组。
 
     Returns:
         {group_key: [records]}
     """
-    filtered = _filter_records(records, report_type, last_n)
+    filtered = _filter_records(records, report_type, last_n, exclude_outlier)
 
     groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for r in filtered:
@@ -213,13 +300,126 @@ def _overview_lines(records: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
+def _outlier_lines(records: list[dict[str, Any]]) -> list[str]:
+    """离群运行提示段（显式列出而非静默剔除）。"""
+    outliers = _outlier_records(records)
+    if not outliers:
+        return []
+    threshold = _outlier_threshold([float(r.get("total_seconds") or 0) for r in records])
+    lines = [
+        "## 离群运行（稳健口径）",
+        "",
+        f"判定：总耗时 > 中位 + 3.5 × 1.4826 × MAD（上界 {threshold:.1f}s）；"
+        "MAD 为 0 时不判离群。用 `--exclude-outlier` 可剔除后重算。",
+        "",
+        "| 时间 | 版本 | 类型 | 总耗时 | 最慢阶段 |",
+        "|:-----|:-----|:-----|------:|:---------|",
+    ]
+    for r in outliers:
+        phases = r.get("phases") if isinstance(r.get("phases"), dict) else {}
+        slowest = max(phases.items(), key=lambda kv: kv[1])[0] if phases else "?"
+        lines.append(
+            f"| {r.get('timestamp', '?')[:16]} | {r.get('version', '?')} | {r.get('report_type', '?')} | "
+            f"{float(r.get('total_seconds') or 0):.1f}s | {slowest} |"
+        )
+    lines.append("")
+    return lines
+
+
+def _tail_attribution_lines(records: list[dict[str, Any]]) -> list[str]:
+    """尾部归因：最慢那次运行逐阶段 z 分数，直给「哪一步超常、超多少倍」。"""
+    if len(records) < 3:
+        return []
+    slowest = max(records, key=lambda r: float(r.get("total_seconds") or 0))
+    slowest_phases = slowest.get("phases") if isinstance(slowest.get("phases"), dict) else {}
+    if not slowest_phases:
+        return []
+
+    rows: list[tuple[str, float, float, float, float]] = []
+    for name, sec in slowest_phases.items():
+        # 同阶段历史序列（仅取含该阶段的运行，缺失阶段不参与该阶段基线）
+        series = [
+            float(r["phases"][name])
+            for r in records
+            if isinstance(r.get("phases"), dict) and isinstance(r["phases"].get(name), (int, float))
+        ]
+        if len(series) < 3:
+            continue
+        zs = _z_scores(series)
+        # 本次运行在该序列中的位置：按「含该阶段的运行」顺序对齐
+        ordered = [
+            r for r in records if isinstance(r.get("phases"), dict) and isinstance(r["phases"].get(name), (int, float))
+        ]
+        z = zs[ordered.index(slowest)] if slowest in ordered else 0.0
+        med = _median(series)
+        ratio = (float(sec) / med) if med > 0 else 0.0
+        rows.append((name, float(sec), med, z, ratio))
+
+    if not rows:
+        return []
+    rows.sort(key=lambda row: -row[3])
+    lines = [
+        "## 尾部归因（最慢一次运行）",
+        "",
+        f"样本：{slowest.get('timestamp', '?')[:16]} · {slowest.get('version', '?')} · "
+        f"总耗时 {float(slowest.get('total_seconds') or 0):.1f}s；z 分数按同阶段历史序列计算。",
+        "",
+        "| 阶段 | 本次耗时 | 历史中位 | 倍数 | z 分数 |",
+        "|:-----|--------:|--------:|-----:|------:|",
+    ]
+    for name, sec, med, z, ratio in rows:
+        lines.append(f"| {name} | {sec:.1f}s | {med:.1f}s | {ratio:.2f}× | {z:+.2f} |")
+    lines.append("")
+    return lines
+
+
+def _bucket_key(timestamp: str, by: str) -> str:
+    """时间戳 → 时段键（day=日期 / week=ISO 周 / hour=小时）。"""
+    ts = str(timestamp or "")
+    if by == "hour":
+        return ts[11:13] or "?"
+    if by == "week":
+        try:
+            year, week, _ = datetime.fromisoformat(ts).isocalendar()
+            return f"{year}-W{week:02d}"
+        except ValueError:
+            return "?"
+    return ts[:10] or "?"
+
+
+def _bucket_lines(records: list[dict[str, Any]], by: str) -> list[str]:
+    """按时段聚合（day/week/hour）：样本数 / 中位 / P95 / 最长。"""
+    buckets: dict[str, list[float]] = defaultdict(list)
+    for r in records:
+        buckets[_bucket_key(r.get("timestamp", ""), by)].append(float(r.get("total_seconds") or 0))
+    if not buckets:
+        return []
+    label = {"day": "日期", "week": "ISO 周", "hour": "小时"}[by]
+    lines = [
+        f"## 时段聚合（按{label}）",
+        "",
+        "| 时段 | 样本数 | 中位 | P95 | 最长 |",
+        "|:-----|------:|----:|----:|-----:|",
+    ]
+    for key in sorted(buckets):
+        vals = buckets[key]
+        lines.append(
+            f"| {key} | {len(vals)} | {_median(vals):.1f}s | {_percentile(vals, 95):.1f}s | {_min_max(vals)[1]:.1f}s |"
+        )
+    lines.append("")
+    return lines
+
+
 def build_trend_report(
     records: list[dict[str, Any]],
     report_type: str | None = None,
     last_n: int | None = None,
+    exclude_outlier: bool = False,
+    by: str | None = None,
 ) -> str:
     """生成性能趋势 Markdown 报告字符串。"""
-    groups = _group_records(records, report_type, last_n)
+    groups = _group_records(records, report_type, last_n, exclude_outlier)
+    scoped = _filter_records(records, report_type, last_n, exclude_outlier)
 
     lines: list[str] = [
         "# 报告生成性能趋势",
@@ -236,7 +436,15 @@ def build_trend_report(
         return "\n".join(lines)
 
     # ── 跨版本分位概览（P95/P99 报告生成耗时） ──
-    lines.extend(_overview_lines(_filter_records(records, report_type, last_n)))
+    lines.extend(_overview_lines(scoped))
+
+    # ── 离群运行与尾部归因（稳健口径） ──
+    lines.extend(_outlier_lines(scoped))
+    lines.extend(_tail_attribution_lines(scoped))
+
+    # ── 时段聚合（可选） ──
+    if by:
+        lines.extend(_bucket_lines(scoped, by))
 
     # ── 按组输出详情 ──
     for group_key, group_records in groups.items():
@@ -247,21 +455,22 @@ def build_trend_report(
 
         totals = [r.get("total_seconds", 0) for r in group_records]
         lines.append(f"- 总耗时范围：{_min_max(totals)[0]:.1f}s ~ {_min_max(totals)[1]:.1f}s")
-        lines.append(f"- 平均总耗时：**{_mean(totals):.1f}s**")
+        lines.append(f"- 平均总耗时：**{_mean(totals):.1f}s**（稳健均值 {_robust_mean(totals):.1f}s）")
         lines.append(
             f"- 95% 的报告在 **{_percentile(totals, 95):.1f}s** 内完成，"
             f"99% 在 **{_percentile(totals, 99):.1f}s** 内完成"
         )
         lines.append("")
 
-        # ── 各阶段平均耗时 ──
+        # ── 各阶段耗时（含阶段级分位） ──
         phase_stats = _merge_phase_stats(group_records)
         if phase_stats:
-            lines.append("| 阶段 | 平均耗时 | 最短 | 最长 | 次数 |")
-            lines.append("|:-----|--------:|----:|----:|-----:|")
+            lines.append("| 阶段 | 平均耗时 | 中位 | P95 | 最短 | 最长 | 次数 |")
+            lines.append("|:-----|--------:|----:|----:|----:|----:|-----:|")
             for name, stat in phase_stats.items():
                 lines.append(
-                    f"| {name} | {stat['avg']:.2f}s | {stat['min']:.2f}s | {stat['max']:.2f}s | {stat['count']} |"
+                    f"| {name} | {stat['avg']:.2f}s | {stat['p50']:.2f}s | {stat['p95']:.2f}s | "
+                    f"{stat['min']:.2f}s | {stat['max']:.2f}s | {stat['count']} |"
                 )
             lines.append("")
 
@@ -306,6 +515,12 @@ def main() -> int:
     parser.add_argument("--report-type", choices=["basic", "both", "full"], help="仅查看指定报告类型")
     parser.add_argument("--last", type=int, default=None, help="仅查看最近 N 条记录")
     parser.add_argument("--save", action="store_true", help="同时写入 docs/tmp/perf_trend.md")
+    parser.add_argument(
+        "--exclude-outlier",
+        action="store_true",
+        help="剔除离群运行（中位 ± MAD 稳健口径）后统计",
+    )
+    parser.add_argument("--by", choices=["day", "week", "hour"], help="按时段聚合（日/ISO 周/小时）")
     args = parser.parse_args()
 
     records = load_history()
@@ -313,7 +528,13 @@ def main() -> int:
         print("[!] 暂无性能历史数据（data/state/perf_history.jsonl 不存在或为空）")
         return 1
 
-    report = build_trend_report(records, report_type=args.report_type, last_n=args.last)
+    report = build_trend_report(
+        records,
+        report_type=args.report_type,
+        last_n=args.last,
+        exclude_outlier=args.exclude_outlier,
+        by=args.by,
+    )
     print(report)
 
     if args.save:

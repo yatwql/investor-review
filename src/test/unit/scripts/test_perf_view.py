@@ -144,6 +144,81 @@ class TestMergeBreakdownStats:
         assert names == sorted(names)
 
 
+class TestRobustStats:
+    """稳健统计：中位/MAD/离群判定/稳健均值/z 分数。"""
+
+    def test_median_and_mad_of_known_values(self, mod):
+        values = [1.0, 2.0, 3.0, 4.0, 100.0]
+        assert mod._median(values) == 3.0
+        assert mod._mad(values) == pytest.approx(1.0)
+
+    def test_mad_is_robust_to_single_outlier(self, mod):
+        """单条极端值对 MAD 的影响远小于对标准差的影响（选它做基准的理由）。"""
+        base = [10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0]
+        with_outlier = base + [6636.0]
+        mad_shift = abs(mod._mad(with_outlier) - mod._mad(base))
+        sd_shift = abs(mod._stdev(with_outlier) - mod._stdev(base))
+        assert mad_shift < sd_shift / 100
+
+    def test_outlier_detected_above_threshold(self, mod):
+        values = [10.0, 11.0, 12.0, 13.0, 14.0, 6636.0]
+        assert mod._is_outlier(6636.0, values) is True
+        assert mod._is_outlier(14.0, values) is False
+
+    def test_uniform_samples_never_flagged(self, mod):
+        """MAD 为 0（样本高度一致）时不判离群，避免把正常抖动误标。"""
+        values = [100.0, 100.0, 100.0, 100.0]
+        assert mod._outlier_threshold(values) is None
+        assert mod._is_outlier(100.0, values) is False
+
+    def test_robust_mean_drops_outlier(self, mod):
+        values = [10.0, 11.0, 12.0, 13.0, 14.0, 6636.0]
+        assert mod._robust_mean(values) < mod._mean(values)
+        assert mod._robust_mean(values) == pytest.approx(mod._mean([10.0, 11.0, 12.0, 13.0, 14.0]))
+
+    def test_robust_mean_equals_mean_without_outlier(self, mod):
+        values = [10.0, 11.0, 12.0, 13.0]
+        assert mod._robust_mean(values) == pytest.approx(mod._mean(values))
+
+    def test_z_scores_center_and_scale(self, mod):
+        zs = mod._z_scores([1.0, 2.0, 3.0])
+        assert sum(zs) == pytest.approx(0.0)
+        assert zs[-1] > zs[0]
+
+    def test_z_scores_of_constant_series_are_zero(self, mod):
+        assert mod._z_scores([5.0, 5.0, 5.0]) == [0.0, 0.0, 0.0]
+
+    def test_empty_inputs_degrade_to_zero(self, mod):
+        assert mod._median([]) == 0.0
+        assert mod._mad([]) == 0.0
+        assert mod._outlier_threshold([]) is None
+        assert mod._z_scores([]) == []
+
+
+class TestOutlierFiltering:
+    """`--exclude-outlier` 口径：剔除离群后统计。"""
+
+    def _records_with_outlier(self) -> list[dict]:
+        records = _records(6)
+        records[-1]["total_seconds"] = 6636.0
+        return records
+
+    def test_filter_drops_outlier_record(self, mod):
+        records = self._records_with_outlier()
+        kept = mod._filter_records(records, None, None, exclude_outlier=True)
+        assert len(kept) == len(records) - 1
+        assert all(r["total_seconds"] < 1000 for r in kept)
+
+    def test_filter_keeps_all_when_no_outlier(self, mod):
+        records = _records(5)
+        assert mod._filter_records(records, None, None, exclude_outlier=True) == records
+
+    def test_outlier_records_lists_flagged_runs(self, mod):
+        records = self._records_with_outlier()
+        flagged = mod._outlier_records(records)
+        assert [r["total_seconds"] for r in flagged] == [6636.0]
+
+
 class TestMergePhaseStats:
     """`_merge_phase_stats` 跨记录合并。"""
 
@@ -232,7 +307,7 @@ class TestBuildTrendReport:
         text = mod.build_trend_report(_records(3))
         assert "## 0.1.0 / full" in text
         assert "运行次数：**3**" in text
-        assert "| 阶段 | 平均耗时 | 最短 | 最长 | 次数 |" in text
+        assert "| 阶段 | 平均耗时 | 中位 | P95 | 最短 | 最长 | 次数 |" in text
         assert "| 采集 |" in text
 
     def test_detail_table_capped_at_five_runs(self, mod):
@@ -321,6 +396,71 @@ class TestBreakdownSection:
     def test_breakdown_table_absent_for_legacy_records(self, mod):
         """无 breakdown 的历史记录：不出现空表（保持旧输出形状）。"""
         assert "阶段细分" not in mod.build_trend_report(_records(3))
+
+
+class TestOutlierAndTailSections:
+    """离群段与尾部归因段：渲染与口径。"""
+
+    def _records_with_outlier(self) -> list[dict]:
+        records = _records(6)
+        records[-1]["total_seconds"] = 6636.0
+        records[-1]["phases"] = {"采集": 6600.0}
+        return records
+
+    def test_outlier_section_lists_flagged_run(self, mod):
+        text = mod.build_trend_report(self._records_with_outlier())
+        assert "## 离群运行（稳健口径）" in text
+        assert "6636.0s" in text
+
+    def test_outlier_section_absent_without_outlier(self, mod):
+        assert "离群运行" not in mod.build_trend_report(_records(5))
+
+    def test_tail_attribution_ranks_slowest_phase_first(self, mod):
+        text = mod.build_trend_report(self._records_with_outlier())
+        assert "## 尾部归因（最慢一次运行）" in text
+        rows = [ln for ln in text.splitlines() if ln.startswith("| 采集 |")]
+        assert rows, "尾部归因表应含最慢阶段行"
+        assert "6600.0s" in rows[0]
+
+    def test_tail_attribution_needs_enough_samples(self, mod):
+        """样本过少（<3）时不做归因（z 分数无意义）。"""
+        assert "尾部归因" not in mod.build_trend_report(_records(2))
+
+    def test_exclude_outlier_changes_overview_sample_count(self, mod):
+        records = self._records_with_outlier()
+        with_outlier = _overview_row(mod.build_trend_report(records), "合计（当前口径）")
+        without = _overview_row(mod.build_trend_report(records, exclude_outlier=True), "合计（当前口径）")
+        assert int(without[1]) == int(with_outlier[1]) - 1
+
+
+class TestTimeBuckets:
+    """时段聚合（day/week/hour）。"""
+
+    def test_bucket_key_shapes(self, mod):
+        assert mod._bucket_key("2026-10-15T12:50:59", "day") == "2026-10-15"
+        assert mod._bucket_key("2026-10-15T12:50:59", "hour") == "12"
+        assert mod._bucket_key("2026-10-15T12:50:59", "week").startswith("2026-W")
+
+    def test_bucket_key_malformed_timestamp(self, mod):
+        assert mod._bucket_key("", "day") == "?"
+        assert mod._bucket_key("not-a-date", "week") == "?"
+
+    def test_bucket_lines_group_by_day(self, mod):
+        """按日分桶：桶数 = 不同日期数，样本数合计 = 记录数。"""
+        records = _records(2, start=1) + _records(2, start=1)
+        lines = mod._bucket_lines(records, "day")
+        assert "## 时段聚合（按日期）" in lines[0]
+        rows = [ln for ln in lines if ln.startswith("| 2026-01-")]
+        distinct_days = {r["timestamp"][:10] for r in records}
+        assert len(rows) == len(distinct_days)
+        assert sum(int(ln.split("|")[2]) for ln in rows) == len(records)
+
+    def test_by_option_renders_bucket_section(self, mod):
+        text = mod.build_trend_report(_records(3), by="hour")
+        assert "## 时段聚合（按小时）" in text
+
+    def test_no_by_option_skips_bucket_section(self, mod):
+        assert "时段聚合" not in mod.build_trend_report(_records(3))
 
 
 class TestGroupPercentileLines:

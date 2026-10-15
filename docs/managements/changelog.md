@@ -11,6 +11,8 @@
 
 ### Changed
 
+- **性能视图稳健统计与归因（plan-124）**：`perf-view.py` 新增离群运行段（总耗时 > 中位 + 3.5 × 1.4826 × MAD 判离群，MAD 为 0 时不判；显式列出而非静默剔除）、稳健均值（剔除离群后均值，与普通均值并列）、阶段级分位（阶段表增中位与 P95）、尾部归因（最慢一次运行逐阶段 z 分数与相对历史中位倍数，直给哪一步超常）、时段聚合（`--by day|week|hour`）；新增 `--exclude-outlier` 按稳健口径剔除离群后重算全部统计。实测：126 条历史中自动标出 6636s 那条服务端超时运行，尾部归因定位到 `LLM+新闻` 22.37× / z=+6.14，剔除后均值由 519.7s 降至 362.9s。
+
 - **运行观测面扩充（plan-123）：LLM 模块级细分 + full 埋点补回 + 诊断落盘**：`perf_history.jsonl` 记录新增 `breakdown`（父阶段下的子项自身耗时）与 `counters`（运行期诊断计数）两个旁路观测面，**不参与 `total_seconds`**（保历史可比与 ETA 口径稳定）。`core/perf.py` 新增线程安全 `PhaseBreakdownRecorder`（`PerfCollector.recorder(父阶段)` 取用，四模块在线程池并发写不丢计数）；`LLM+新闻` 阶段细分到四个 LLM 模块与新闻获取（`_llm_dispatch` 逐模块计时、`_llm_news` 新闻获取计时，`span_recorder` 为可选参数，None 时行为零变化）；full 路径 `_report_output.py` 两个 helper 经 `run_integrity.current_perf()` 补回 `HTML 生成`/`Excel 生成` 阶段计时（此前 full 运行丢失这两个阶段，实测 126 条历史中二者各仅 6 条且均早期版本）；`errors`/`warnings_count` 由「恒空」改为自动采集——首个阶段计时时挂只计数日志 handler、`save()` 摘除，WARNING/ERROR 自动入 `counters`（错误消息封顶保留，计数照常累加）。`perf-view.py` 分组段新增「阶段细分」表（旧记录无 `breakdown` 时不渲染空表）。方案与口径见 [`perf-observability-design.md`](../plan/perf-observability-design.md)。
 
 - **perf-view 新增 P95/P99 分位概览**：`scripts/perf-view.py` 输出新增「总体分位概览（跨版本）」表（口径 / 样本数 / 平均 / 中位 / **P95** / **P99** / 最长），并在每个版本分组段直给「95% 的报告在 Xs 内完成，99% 在 Ys 内完成」。分位采**最近秩**（`ceil(pct% × n)` 位样本值）口径，含义即 95% / 99% 的报告生成在该耗时内完成。新增 `_percentile()` / `_total_summary()` / `_overview_lines()`，过滤逻辑抽为 `_filter_records()` 与分组共用（`--report-type` / `--last` 对概览同步生效）；单一报告类型时只渲染合计行，不重复出类型行。同步文档：developer-guide「perf-view」段（分位口径说明 + 脚本清单）与 how-to-use-cli-mode 性能历史小节。回归 = `test_perf_view.py` 新增分位口径 / 汇总字段 / 概览表结构 / 分组完成时间四组用例。
