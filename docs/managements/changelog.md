@@ -11,7 +11,7 @@
 
 ### Changed
 
-- **性能门禁可靠性：压测脚本网络无关性与状态隔离**：`perf-test-report.py` 三阶段的外部网络咽喉全部桩掉——行情（`fetch_market_data` 两处绑定）、K 线历史链（`chain`/`chain_incremental.fetch_with_incremental_fallback`，流动性检查/风格因子/事件面板逐仓拉历史都经它）、交易日历（`trading_calendar._get_trading_calendar`，模块唯一网络出口）；断网实测 Phase1 47.3s→2.3s、Phase3 89.5s→2.1s（此前 CI 门禁红正是因为冷缓存下 K 线重试退避拖过 60s 阈值，测成了网络状况而非代码性能）。同时新增 `_isolate_state_writes()`：基准运行的 perf 历史/数据源健康快照重定向到临时目录，不再污染 `perf-view` 的统计样本；Phase 2 新闻/财报抓取保留真实网络（断网自动降级已验证，且不入门禁判定）。
+- **性能门禁可靠性：压测脚本网络无关性与状态隔离**：`perf-test-report.py` 两层离线——① 传输层 `_install_offline_network()`：socket 出口瞬时抛 `OSError`（各抓取器按常规失败类型走既有降级，不崩溃）+ `time.sleep` 置零（同源重试/退避不再真等；全仓无 `from time import sleep`，一处补丁全覆盖），对一切外部抓取（穿透/基金经理/分红/情绪/财报/新闻等，随配置开关增减）兜底；② 咽喉桩保留热点路径真实计算：行情（`fetch_market_data` 两处绑定）、K 线历史链（`chain`/`chain_incremental.fetch_with_incremental_fallback`，流动性/风格因子/事件面板逐仓拉历史都经它）、交易日历（`trading_calendar._get_trading_calendar`，模块唯一网络出口）。使基准与「网络状况/冷热缓存/配置开关组合」无关——冷缓存断网下全流程 58s→2.8s（此前 CI 门禁红正是因为冷缓存下重试退避拖过 60s 阈值，测成了网络状况而非代码性能）。同时 `_isolate_state_writes()` 把 perf 历史/数据源健康快照/熔断状态一并重定向到临时目录，不再污染 `perf-view` 的统计样本与真实运行的供应商熔断状态。
 
 - **性能门禁归属修正 + 视图输出精简**：① 性能门禁改由**主动压测**脚本承担——`perf-test-report.py` 新增 `--gate`（未达标退出码 2，与检查脚本契约一致），CI 新增阻塞型 `perf-gate` job（basic 模式 ≤ 60s，并上传性能报告产物）；② `perf-view.py` **移除 `--gate`**——它是运行历史查看（被动统计既有记录），样本取决于最近跑过什么、不可复现，不适合做门禁（同一份代码跑 10 次与跑 3 次的 P95 不同，且混入 LLM 服务端延迟/网络/机器负载等与提交无关的因素）；③ `perf-view.py` 新增 `--summary`（仅输出概览段，略去逐版本分组详情，记录多时避免输出过长）与 `--outlier-k`（自定义离群判定系数，默认 3.5）；④ 稳健均值改为**仅在存在离群点时**与普通均值并列展示（无离群时两者相同，并列属冗余）。
 

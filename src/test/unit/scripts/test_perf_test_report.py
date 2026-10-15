@@ -216,17 +216,62 @@ class TestOfflineStubs:
         assert quote["name"] == "贵州茅台"
 
     def test_state_isolation_redirects_perf_paths(self, perf_test_report):
-        """基准不得写真实 perf 历史/健康快照（否则污染运行历史统计样本）。"""
+        """基准不得写真实 perf 历史/健康快照/熔断状态（防污染统计与真实运行）。"""
         from src.python.core import perf as perf_mod
+        from src.python.core import provider_registry as registry_mod
 
-        orig = (perf_mod._PERF_HISTORY_FILE, perf_mod._HEALTH_CHECK_FILE)
+        orig = (perf_mod._PERF_HISTORY_FILE, perf_mod._HEALTH_CHECK_FILE, registry_mod._CIRCUIT_BREAKER_STATE_FILE)
         try:
             iso_dir = perf_test_report._isolate_state_writes()
             assert perf_mod._PERF_HISTORY_FILE.startswith(iso_dir)
             assert perf_mod._HEALTH_CHECK_FILE.startswith(iso_dir)
+            # 熔断文件名以绝对路径传入，os.path.join 丢弃前面的目录段 → 落在隔离目录
+            assert registry_mod._CIRCUIT_BREAKER_STATE_FILE.startswith(iso_dir)
             assert perf_mod._PERF_HISTORY_FILE != orig[0]
         finally:
-            perf_mod._PERF_HISTORY_FILE, perf_mod._HEALTH_CHECK_FILE = orig
+            (
+                perf_mod._PERF_HISTORY_FILE,
+                perf_mod._HEALTH_CHECK_FILE,
+                registry_mod._CIRCUIT_BREAKER_STATE_FILE,
+            ) = orig
+
+    def test_offline_network_blocks_connect_and_neutralizes_sleep(self, perf_test_report, monkeypatch):
+        """传输层离线：建连瞬时 OSError（既有 except 接住走降级）+ 退避不真等。"""
+        import socket as socket_mod
+        import time as time_mod
+
+        orig = {
+            "sleep": time_mod.sleep,
+            "connect": socket_mod.socket.connect,
+            "connect_ex": socket_mod.socket.connect_ex,
+            "create_connection": socket_mod.create_connection,
+            "getaddrinfo": socket_mod.getaddrinfo,
+        }
+        try:
+            perf_test_report._install_offline_network()
+            # 退避归零：原本要睡 5 秒的调用瞬时返回（5 倍余量，不靠毫秒级精度）
+            t0 = time_mod.monotonic()
+            time_mod.sleep(5)
+            assert time_mod.monotonic() - t0 < 1.0
+            # 建连瞬时失败且为常规失败类型（OSError，非 BaseException）
+            s = socket_mod.socket()
+            try:
+                with pytest.raises(OSError):
+                    s.connect(("127.0.0.1", 9))
+            finally:
+                s.close()
+        finally:
+            for name, value in orig.items():
+                if name == "sleep":
+                    time_mod.sleep = value
+                elif name == "connect":
+                    socket_mod.socket.connect = value
+                elif name == "connect_ex":
+                    socket_mod.socket.connect_ex = value
+                elif name == "create_connection":
+                    socket_mod.create_connection = value
+                else:
+                    socket_mod.getaddrinfo = value
 
 
 class TestGateMode:

@@ -15,8 +15,8 @@
 目标：
   - basic 模式总耗时 < 60s
 
-定位说明：本脚本是**性能测试**（主动压测）——自造模拟持仓、mock 外部数据源，
-同条件可比，故适合做 CI 门禁（退化即回归）。运行历史查看（被动统计既有记录、
+定位说明：本脚本是**性能测试**（主动压测）——自造模拟持仓、外部数据源**全离线**
+（传输层按设计禁网，断网/冷缓存同样可复现），同条件可比，故适合做 CI 门禁（退化即回归）。运行历史查看（被动统计既有记录、
 样本不可控）由 `perf-view.py` 承担，**不用于门禁**。
 """
 
@@ -52,26 +52,23 @@ _REPORT_OUTPUT_DIR = os.path.join(
 )
 _PERF_REPORT_PATH = os.path.join(_REPORT_OUTPUT_DIR, "better-investment-performance-test-report.md")
 
-# ── 行情/K线历史/交易日历离线桩 ───────────────────
+# ── 离线策略：传输层离线 + 咽喉桩 ────────────────────
 #
-# 门禁相关的三阶段必须与网络条件无关：真实行情抓取（Tencent/Sina K 线）走同源
-# 重试退避，交易日历首拉 akshare（Sina 源）——CI 冷缓存或端点变慢时，门禁会测成
-# 「网络状况」而非「代码性能」（实测：断网后 Phase1 从个位数秒级涨到四十余秒，
-# 全耗在 K 线重试退避上；桩后断网 Phase1=2.3s / Phase3=2.1s）。桩钉在咽喉而非
-# 各调用点：
-#   ① fetch_market_data —— 行情链唯一入口。函数内 import 的调用方
-#      （基金风格分类等）读 fetcher.price 模块属性，市值核算是模块级绑定，
-#      故两处都钉；
-#   ② trading_calendar._get_trading_calendar —— 日历模块唯一网络出口
-#      （ak.tool_trade_date_hist_sina）。所有日历函数经它取集合，钉住即全链离线
-#      （含各模块模块级绑定的 get_last_trading_day）；
-#   ③ chain/chain_incremental 的 fetch_with_incremental_fallback —— K 线/历史链
-#      唯一入口（流动性检查、风格因子、事件面板、市场情绪逐仓拉历史都经它）。
+# 基准必须与「网络状况 / 冷热缓存 / 配置开关组合」无关——否则门禁测成环境而非
+# 代码（实测冷缓存断网 Phase1 达 58s，全耗在各抓取器同源重试退避上；CI 冷缓存
+# + 端点慢即拖过 60s 阈值）。两层配合：
+#   ① `_install_offline_network()`（见下）——socket 出口瞬时失败 + time.sleep
+#      置空：所有外部抓取（穿透/基金经理/分红/情绪/财报/新闻/财务指标…，随配置
+#      开关增减、会演进）一律走既有降级路径且不再等重试，无需逐个点名；
+#   ② 下列咽喉桩——让**热点路径仍走真实计算**而非降级占位，保持基准内容稳定：
+#      - fetch_market_data（两处绑定：fetcher.price 定义处 + market_value 模块级
+#        绑定；函数内 import 的调用方读前者）→ 行情链唯一入口，市值/盈亏明细真实算；
+#      - trading_calendar._get_trading_calendar —— 日历模块唯一网络出口
+#        （ak.tool_trade_date_hist_sina），钉住即 last/prev/as_of/count 全链离线；
+#      - chain/chain_incremental 的 fetch_with_incremental_fallback —— K 线/历史链
+#        唯一入口（流动性/风格因子/事件面板逐仓拉历史都经它）。
 #      注：portfolio_history 是模块级绑定，但其仅在 fetch_history=True 路径生效，
 #      本脚本 Phase 2 显式传 False，不入桩。
-#
-# 边界：Phase 2 的新闻/财报类抓取仍走真实网络（断网自动降级，实测 26s 内完成，
-# 且其耗时不入门禁判定——门禁只看 basic 即 Phase 1），故不为它们编造返回契约。
 
 
 def _last_workday_str() -> str:
@@ -325,22 +322,49 @@ def _generate_details(holdings: list[Any]) -> list[Any]:
 
 
 def _isolate_state_writes() -> str:
-    """状态隔离：把 perf 历史/数据源健康快照重定向到临时目录。
+    """状态隔离：把 perf 历史/数据源健康快照/熔断状态重定向到临时目录。
 
-    基准运行不得把记录写进真实 `perf_history.jsonl` / `datasource_health.jsonl`——
-    否则会污染运行历史视图的统计样本（perf-view 的分位/离群分析直接受此影响）。
-    两者都是 perf.py 的模块级变量（该文件头注明「测试时可通过 setattr 重定向」），
-    直接改写；本脚本是一次性 CLI，无需还原。
+    基准运行不得写进真实 `perf_history.jsonl` / `datasource_health.jsonl`（污染
+    运行历史视图的统计样本，perf-view 的分位/离群分析直接受此影响）与
+    `circuit_breaker.json`（离线按设计全失败会记熔断，会污染到用户真实运行误
+    跳过供应商）。路径均为模块级变量（perf.py 文件头注明「测试时可通过 setattr
+    重定向」；熔断文件名传绝对路径时 ``os.path.join`` 会丢弃前面的目录段），
+    直接改写；一次性 CLI 无需还原。
 
     Returns:
         隔离目录路径
     """
     from src.python.core import perf as _perf_state
+    from src.python.core import provider_registry as _registry
 
     iso_dir = tempfile.mkdtemp(prefix="perf_bench_state_")
     _perf_state._PERF_HISTORY_FILE = os.path.join(iso_dir, "perf_history.jsonl")
     _perf_state._HEALTH_CHECK_FILE = os.path.join(iso_dir, "datasource_health.jsonl")
+    _registry._CIRCUIT_BREAKER_STATE_FILE = os.path.join(iso_dir, "circuit_breaker.json")
     return iso_dir
+
+
+def _install_offline_network() -> None:
+    """传输层离线 + 重试退避归零（一次性 CLI 进程，不还原）。
+
+    - socket 四类出口（connect/connect_ex/create_connection/getaddrinfo）瞬时抛
+      ``OSError``——这是各抓取器的常规失败类型，既有 ``except Exception`` 正常
+      接住并走降级，不会崩溃（断网全量跑通已验证）；
+    - ``time.sleep`` 置空——同源重试/退避循环不再真等（冷缓存断网下 Phase1 的
+      58s 几乎全是这类等待）。全仓无 ``from time import ... sleep``，补丁模块
+      属性即覆盖全部调用点。
+    """
+    import socket as _socket
+    import time as _time
+
+    def _blocked(*_args: object, **_kwargs: object) -> None:
+        raise OSError("perf-test-report: 基准运行按设计禁网")
+
+    _socket.socket.connect = _blocked
+    _socket.socket.connect_ex = _blocked
+    _socket.create_connection = _blocked
+    _socket.getaddrinfo = _blocked
+    _time.sleep = lambda _seconds: None
 
 
 def run_perf_test() -> tuple[dict[str, float], PerfSample, PerfSample]:
@@ -351,6 +375,7 @@ def run_perf_test() -> tuple[dict[str, float], PerfSample, PerfSample]:
     from src.python.report.progress import SilentProgressReporter
 
     _isolate_state_writes()
+    _install_offline_network()
 
     timings: dict[str, float] = {}
 

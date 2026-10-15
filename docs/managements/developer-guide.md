@@ -1289,7 +1289,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 **门禁归属**：本脚本是**性能测试**（主动压测，同条件可比），故承担 CI 性能门禁（`perf-gate` job）；运行历史查看（`perf-view.py`，样本不可控、不可复现）不用于门禁。
 
-**可靠性保障**：三阶段的外部网络咽喉（行情 `fetch_market_data`、K线历史链 `fetch_with_incremental_fallback`、交易日历 `_get_trading_calendar`）全部打桩——门禁测的是代码性能而非网络状况（断网下 Phase1/Phase3 均 2s 量级）；`_isolate_state_writes()` 把 perf 历史/健康快照重定向到临时目录，基准运行不污染 `perf-view` 统计样本。Phase 2 新闻/财报抓取保留真实网络（断网自动降级，不入门禁判定）。
+**可靠性保障**：**传输层离线**（`_install_offline_network()`：socket 出口瞬时 `OSError` 走既有降级 + `time.sleep` 置零消掉重试退避）对一切外部抓取兜底，行情/K线历史/交易日历三处咽喉另打桩让热点路径仍走真实计算——门禁测的是代码性能而非网络状况（冷缓存断网全流程 2.8s）；`_isolate_state_writes()` 把 perf 历史/健康快照/熔断状态重定向到临时目录，基准运行不污染 `perf-view` 统计样本与真实运行的供应商熔断状态。
 
 **`perf-view.py` — 性能历史趋势查看**
 
