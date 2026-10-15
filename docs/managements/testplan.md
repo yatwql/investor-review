@@ -1,5 +1,5 @@
 # 投资复盘助手 — 质量控制与测试标准
-> 文档版本：0.13.2
+> 文档版本：0.13.3
 
 ---
 
@@ -36,7 +36,7 @@
 | `providers/tiantian_purchase.py` | 四类代表行契约解析 + 载荷准入 + 降级 | 真实响应样本 fixture（`var reData=` 前缀）四类代表行逐字段断言；`purchase_schema` 准入（行数骤降/字段缺失判失败且不污染旧缓存）；0 元限额 → `None`；传输桩回放直连抓取；akshare 备链字段映射（`test_tiantian_purchase*.py`，异常样本入 `*_edge.py` 带 `@pytest.mark.edge`） |
 | `fetcher/fund_purchase.py` | 链注册同构 + 四级降级阶梯 | 链注册与 `_DEFAULT_CHAINS` 同构；主链 → 备链 → 过期缓存 → 暂不可用逐级断言；会话缓存同会话只经链 1 次；`data_status` 成败记录（`test_fund_purchase.py`） |
 | `report/purchase_status.py` + 展示层 | 陈旧阶梯三档 + 单源文案 + 双端条件列 | ≤3 / 4~7 / >7 交易日（按交易日历，含长假不计）；单元格各状态分支；0 元限额 →「限额未知」；口径脚注 Excel/HTML 同源；开关关 15 列基线不变；受限索引 restricted_index 准入四条（契约/可用/时效/受限交集）与字段值同源断言、stale 档仍准入；`available=False` 静默隐列 + 契约注入管线冒烟（`test_purchase_status*.py` / `test_holdings_detail_sheet.py` / `test_pipeline_purchase_status.py`） |
-| `llm/` 包 | 全路径覆盖 | API 路由、Provider 回退、截断检测+自动重试、空内容安抚重试、熔断器、缓存命中/未命中、Extended Thinking 注入/降级、thinking 耗尽自动重试（关闭 thinking 同 provider 重试一次，仍失败才切换）、thinking 并发信号量（`llm_max_thinking_concurrency` 串行化，`TestThinkingConcurrencyLimit`）、指纹确定性 |
+| `llm/` 包 | 全路径覆盖 | API 路由、Provider 回退、截断检测+自动重试、空内容安抚重试、熔断器、缓存命中/未命中、Extended Thinking 注入/降级、thinking 耗尽/偶发空 content 自动重试（关闭 thinking 同 provider 重试一次，仅服务端正常返回时触发——error 信封/传输失败等服务侧故障跳过安全网直接切换）、挂起归一衔接（墙钟放弃后归一可重试超时，原语本体见 `core/test_http_client.py::TestPostWithDeadline`）、thinking 并发信号量（`llm_max_thinking_concurrency` 串行化，`TestThinkingConcurrencyLimit`）、指纹确定性 |
 | `llm/` — 辩论模式 | 6 文件专项覆盖 | `test_debate_generators.py`（三段生成流程 pro→con→synthesis 控制）、`test_debate_prompts.py`（提示词模板/合成提示/集中度问答块）、`test_debate_token_budget.py`（Token 预算守卫 1×/2× 阈值）、`test_debate_edge.py`（边缘测试文件隔离 合规边缘场景 11 项）、`test_debate_conditional.py`（条件推理场景注入）、`test_debate_qa.py`（集中度问答阈值触发） |
 | `report/*.py` | 正常 + 空数据 + 边界 | 单条持仓、最大 100 条持仓、零成本/零市值、全亏损、全盈利、混合账户 |
 | `core/market_hours.py` | 所有时段边界 | 开盘/收盘/午休/周末/节假日/UTC 时区、config 覆盖、API 掉线回退 |

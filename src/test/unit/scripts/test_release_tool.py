@@ -532,6 +532,9 @@ class TestEvolutionCommand:
         today = dt.date.today().isoformat()
         assert f"本次重跑时的工作区 · {today}" in text
         assert "已更新" in capsys.readouterr().out
+        # 回归：evolution 改写 folders.md 演进表后必须立即 sync 其统计表，否则后续 publish 的
+        # verify（含 doc-drift crosscheck 单测）会因统计过期而红
+        assert any(any("check-doc-drift.py" in p for p in c) and any("--sync" in p for p in c) for c in runner.calls)
 
 
 # ─────────────────────────── prepare / publish / devbump ───────────────────────────
@@ -554,6 +557,9 @@ class TestPrepare:
         )
         assert "## [0.12.6] - 2026-10-08" in archived and "内容甲" in archived
         assert any(any("check-version-consistency.py" in p for p in c) and "--fix" in c for c in runner.calls)
+        # 回归：prepare 改写多处文档后必须立即 sync folders.md 统计表，否则后续 refresh 的
+        # bench（含 doc-drift crosscheck 单测）会因统计过期而红
+        assert any(any("check-doc-drift.py" in p for p in c) and any("--sync" in p for p in c) for c in runner.calls)
 
     def test_preflight_failure_leaves_files_untouched(self, rel, tmp_path):
         fx = _ToolRepoFixture(rel, tmp_path)

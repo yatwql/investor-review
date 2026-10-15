@@ -21,11 +21,16 @@ SSL 验证由环境变量 ``SSL_VERIFY`` 控制（默认 ``true``）：
 
 from __future__ import annotations
 
+import logging
 import os
+import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from typing import Any
 
 import httpx
+
+logger = logging.getLogger("invest")
 
 
 def _should_verify() -> bool:
@@ -90,6 +95,50 @@ def make_http_client(**kwargs) -> httpx.Client:
         if transport is not None:
             kwargs["transport"] = transport
     return httpx.Client(**kwargs)
+
+
+def post_with_deadline(
+    client: httpx.Client,
+    url: str,
+    headers: dict,
+    payload: dict,
+    timeout: float,
+) -> Any:
+    """执行 HTTP POST，附带端到端墙钟截止，防 read 超时被服务端滴流骗过。
+
+    httpx 的 read 超时度量「相邻两次收到数据的间隔」而非请求总时长：服务端
+    网关排队期间若滴流字节（或提前返回响应头），计时器被不断重置，配置的
+    timeout 完全不生效（实测上游服务过载时单请求挂足其 900s 上限）。
+
+    此处把 POST 放进独立 daemon 线程执行，主线程 join 等待；到点未返回即放弃，
+    归一为 ``httpx.ReadTimeout``，与既有 read 超时走同一分类路径（调用方的
+    重试/切换逻辑无需感知两种超时）。被放弃的线程继续挂至服务端返回后自然
+    消亡（daemon 线程不阻塞进程退出）；共享 ``httpx.Client`` 线程安全，挂起
+    连接由其连接池自行回收。
+
+    ``timeout <= 0`` 时不设墙钟，保持纯 httpx 超时行为。
+    """
+    if timeout <= 0:
+        return client.post(url, json=payload, headers=headers, timeout=timeout)
+
+    box: dict[str, Any] = {}
+
+    def _run() -> None:
+        try:
+            box["resp"] = client.post(url, json=payload, headers=headers, timeout=timeout)
+        except BaseException as exc:  # 异常须跨线程原样上抛，由调用方按类型分流
+            box["exc"] = exc
+
+    worker = threading.Thread(target=_run, name="http-post-deadline", daemon=True)
+    worker.start()
+    worker.join(timeout)
+    if worker.is_alive():
+        # 不回显完整 URL：通用层避免潜在敏感查询串入日志，调用方自带标签/端点上下文
+        logger.warning("POST 总时长超过墙钟上限 %.0fs，放弃等待", timeout)
+        raise httpx.ReadTimeout(f"wall-clock deadline exceeded ({timeout}s)")
+    if "exc" in box:
+        raise box["exc"]
+    return box["resp"]
 
 
 def make_transport(**kwargs) -> httpx.HTTPTransport:

@@ -485,3 +485,38 @@ class TestThinkingExhaustedConfigEcho(unittest.TestCase):
         text = "\n".join(cm.output)
         self.assertIn("对应 max_tokens", text)
         self.assertNotRegex(text, r"max_tokens\w*=\d+", "无上下文时不得显示任何数值")
+
+
+class TestServerErrorEnvelopeFlag(unittest.TestCase):
+    """_extract_content 的「服务端错误信封」标志：安全网判别服务侧故障与真·空响应。
+
+    200+error 信封（如服务端排队超时）与 200+空 content 在提取层都表现为 None，
+    仅响应 JSON 可区分；标志由 _extract_content 按次写入/复位，供 call_claude
+    安全网决定是否对同一端点关 thinking 重试。
+    """
+
+    def test_error_envelope_sets_flag(self) -> None:
+        """200 + error 信封 → None 且置标志（安全网应据此跳过重试）。"""
+        from src.python.llm.api_base import _extract_content, _get_last_server_error
+
+        msg = "We were unable to start processing your request within the 900-second timeout limit."
+        out = _extract_content({"error": {"message": msg}})
+        self.assertIsNone(out)
+        self.assertTrue(_get_last_server_error())
+
+    def test_empty_content_list_does_not_set_flag(self) -> None:
+        """200 + 空 content 列表（真·空响应，安全网目标场景）→ None 不置标志。"""
+        from src.python.llm.api_base import _extract_content, _get_last_server_error
+
+        out = _extract_content({"content": [], "stop_reason": "end_turn"})
+        self.assertIsNone(out)
+        self.assertFalse(_get_last_server_error())
+
+    def test_flag_resets_at_next_extraction(self) -> None:
+        """标志按次复位：上一次信封不污染下一次正常响应的判定。"""
+        from src.python.llm.api_base import _extract_content, _get_last_server_error
+
+        _extract_content({"error": {"message": "boom"}})
+        out = _extract_content({"content": [{"type": "text", "text": "ok"}]})
+        self.assertEqual(out, "ok")
+        self.assertFalse(_get_last_server_error())

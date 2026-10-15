@@ -59,3 +59,11 @@
 - **文档与实现对齐（TUI 菜单体系，rf-680）**：技术设计文档 §1.6.3 按实际菜单重写（静态 19 项实际排列、补 `[Q]` 报告对话式追问、`[T]`/`[Q]` 双门控 `FEATURE_GATED_ITEMS` 语义、`[S]` 面板四组分块取自 `GROUP_ORDER`/`GROUP_LABELS`、`[A]` 四模式键名、`[R]` 重载范围、页头状态行 `build_status_line` 五项），§1.6.1 模块表补 `handlers_log.py`/`handlers_qa.py`/`status_line.py` 三行；TUI 菜单手册同步：主菜单 `[D]`/`[1]`/`[I]` 标签对齐实际显示、[1] 缓存清单补全（refresh 组 18 模块）、[2] 附带清除 LLM 清单补生成后自检/持仓变动复盘归因/辩论三模块、[A] 名称替换表述改「品种X」。
 
 - **文档与实现对齐（CLI/Web 渠道，rf-681）**：技术设计文档 §1.7.2 补 `report --prefer-source/--exclude-source`；§1.8.4 路由表补 `/api/whatif`、`GET /api/cache`、`POST /api/cache/cleanup`、`POST /api/qa/ask` 四行，§1.8.1/§1.8.8/§1.8.9 同步（handlers 路由清单、配置面板 9 块按 `features.groups` 四组分块、同源校验覆盖四个 POST 写路由）；Web 手册 §5 LLM 分析章节行改现行 7 模块名、§5.1 开关分块与「（影响报告）」标记口径对齐 `report_affecting` 下发、自检卡定位改「机制与诊断」区；CLI 手册 §10.1 改生成类菜单对照并声明无 CLI 等价项。
+
+## [0.13.3] - 2026-10-15
+
+### Fixed
+
+- **release 编排：prepare/evolution 收尾补 `check-doc-drift --sync`（rf-686）**：v0.13.2 发布复盘发现 `prepare`（版本全链 + changelog 发布段归档，改写多处文档）与 `evolution`（改写 folders.md 演进表/比率/注释）均改动画布却不同步 folders.md 统计表，而 `refresh` 的 sync 又排在 bench 之后——导致 refresh 的 bench（含 doc-drift crosscheck 单测）因统计过期而红，被迫手动 sync 后整套 bench（14 模式，单遍 ~250s）重跑一遍。修复：两步各自改完文档后立即 sync，从源头保持 folders.md 一致，后续 refresh/publish 的测试不再因统计过期而失败（发布提速，消除重复 bench）。
+
+- **LLM provider 故障切换迟滞修复：墙钟总超时 + 安全网判别服务侧故障（rf-687）**：外部服务事故（DeepSeek 过载）暴露两个缺陷——① httpx read 超时度量「块间间隔」，服务端网关排队滴流时配置的 timeout（120s）完全不生效，单请求挂足服务端 900s 上限；② 200+error 信封被「关闭 thinking」安全网误判为偶发空响应，对同一死端点再白打一轮——最坏 15~30 分钟才切到备用 provider。修复：① 新增 `core/http_client.post_with_deadline` 墙钟原语（POST 以独立 daemon 线程执行、主线程 join(timeout) 到点放弃，归一为 httpx.ReadTimeout 走既有超时分类：退避重试→耗尽后切换）；② `_extract_content` 置「服务端错误信封」线程局部标志，安全网仅对服务端正常返回的空响应触发（传输失败/熔断同理跳过）。故障期单模块切换耗时从 ~15 分钟降至 ~4 分钟（503 重试 + 两个墙钟周期）；同步 technical.md 调用流程图/机制容错表、testplan `llm/` 包覆盖清单、llm-technical 失败追踪表超时口径、how-to-config-llm timeout 语义（端到端墙钟上限）。

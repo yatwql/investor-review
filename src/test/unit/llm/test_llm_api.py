@@ -359,6 +359,43 @@ class TestCallClaudeThinkingDegradation(unittest.TestCase):
 
     @patch("src.python.llm._api_claude.call_llm_with_retry")
     @patch("src.python.llm._api_claude._get_last_thinking_exhausted")
+    def test_server_error_envelope_skips_safety_net(self, mock_get: MagicMock, mock_retry: MagicMock) -> None:
+        """服务端错误信封（200+error，如排队超时）→ 安全网不触发，直接走 provider 切换。
+
+        信封意味着服务端故障而非空响应：对同一坏端点关 thinking 重试只会重复
+        失败，最坏再挂一个超时周期（服务端过载场景：挂起 900s 返回信封后又
+        白打一轮）。
+        """
+        mock_get.return_value = False
+        mock_retry.return_value = (None, None)
+        with patch("src.python.llm._api_claude._get_last_server_error", return_value=True):
+            result, _ = call_claude(
+                **self.base_kw,
+                model="DeepSeek-V4-Flash",
+                config_field="max_tokens_global_macro",
+                llm_config={},
+            )
+        self.assertIsNone(result)
+        self.assertEqual(mock_retry.call_count, 1)
+
+    @patch("src.python.llm._api_claude.call_llm_with_retry")
+    @patch("src.python.llm._api_claude._get_last_thinking_exhausted")
+    def test_transport_failure_skips_safety_net(self, mock_get: MagicMock, mock_retry: MagicMock) -> None:
+        """传输层失败（超时/网络异常等，无响应体，失败原因非空）→ 安全网不触发。"""
+        mock_get.return_value = False
+        mock_retry.return_value = (None, None)
+        with patch("src.python.llm._api_claude._get_last_llm_failure", return_value="timeout"):
+            result, _ = call_claude(
+                **self.base_kw,
+                model="DeepSeek-V4-Flash",
+                config_field="max_tokens_global_macro",
+                llm_config={},
+            )
+        self.assertIsNone(result)
+        self.assertEqual(mock_retry.call_count, 1)
+
+    @patch("src.python.llm._api_claude.call_llm_with_retry")
+    @patch("src.python.llm._api_claude._get_last_thinking_exhausted")
     @patch("src.python.llm._api_claude.clear_last_thinking_exhausted")
     def test_no_thinking_enabled_no_retry(
         self, mock_clear: MagicMock, mock_get: MagicMock, mock_retry: MagicMock

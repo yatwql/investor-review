@@ -1,5 +1,5 @@
 # LLM 集成层技术设计
-> 文档版本：0.13.2
+> 文档版本：0.13.3
 
 本文档是 `technical.md` 的 LLM 集成层专项技术设计补充，对应 `technical.md` §5（LLM 集成层概要设计）。
 `technical.md` §5 提供 LLM 层的总体架构、模块清单、调用链概览、多 Provider 链模式概要及关键机制速览；
@@ -126,12 +126,12 @@ skeleton.py:generate_llm_content()
     │  ② call_llm()
     │      └─ api.py:call_llm()
     │             │  路由 provider → call_claude() / call_openai()
-    │             │  ③ 空内容处理：thinking 耗尽→关闭 thinking 同 provider 重试一次；仍失败→切换 provider；""→安抚重试
+    │             │  ③ 空内容处理：仅服务端正常返回的无正文（thinking 耗尽/偶发空 content）→关闭 thinking 同 provider 重试一次；服务侧故障（error 信封/传输失败/熔断）直接切换 provider；""→安抚重试
     │             │  ④ 回退 provider（主 provider 失败时）
     │             └─ api_base.py:call_llm_with_retry()
     │                    │  熔断预检 → 熔断中则直接返回
     │                    │  循环 attempt=0..max_retries:
-    │                    │    _attempt_api_call() → HTTP POST
+    │                    │    _attempt_api_call() → 墙钟截止 POST（总时长=timeout，防服务端滴流骗过 read 超时）
     │                    │    成功 → _process_success_response()
     │                    │           → _extract_content()
     │                    │           → 截断检测
@@ -564,7 +564,7 @@ call_llm(system_prompt, user_prompt, llm_config, ...)
     │
     │          成功 → 返回 (content, usage, provider_name)
     │          空内容 None（无 text block，如 thinking 耗尽 max_tokens 预算）
-    │            → 先关闭 thinking 同 provider 重试一次（安全网）；仍无正文再切换下一 entry
+    │            → 先关闭 thinking 同 provider 重试一次（安全网；仅服务端正常返回时触发，error 信封/传输失败/熔断等服务侧故障直接切换）；仍无正文再切换下一 entry
     │          空字符串 ""（真正被过滤/无内容）→ 内容过滤安抚重试（追加安抚指令重试一次）
     │          失败 → 记录失败原因，继续下一 entry
     │
@@ -735,6 +735,10 @@ call_gemini() Extended Thinking 注入
     ── 熔断中直接跳过，不发起 HTTP
 
 第 2 层：重试骨架（api_base.py）
+    ── 墙钟总超时（core/http_client.post_with_deadline）：POST 以独立 daemon
+       线程执行、主线程 join(timeout) 到点放弃并归一为超时——httpx read
+       超时是「块间间隔」，服务端排队滴流时会被骗过（实测挂足 900s），
+       须以墙钟兜底总时长
     ── 可重试错误 (503/超时/网络异常) → 递增退避重试（1s/3s/5s/10s/15s）
     ── 配额/限速/风控终态 (429/403) → 不重试，记 FAIL_REASON_QUOTA_EXCEEDED 并降级
     ── 致命错误 (JSON 解析失败) → 不重试
@@ -755,6 +759,9 @@ call_gemini() Extended Thinking 注入
        且判定为思考耗尽 → 先关闭 thinking 同 provider 重试一次（安全网）
        （DeepSeek V4 强制推理模型思考部分耗尽 max_tokens 预算时响应仅含
         thinking block 无 text；重试后仍无正文才切换下一 provider）
+    ── 安全网仅对服务端**正常返回**的无正文触发：响应体携带 error 信封
+       （服务端故障，如排队超时）或传输失败/熔断（无响应体）不触发，
+       直接切换 provider（对坏端点重试只会重复失败、再挂一个超时周期）
     ── 真正空字符串 ""（可能被内容审查拦截）→ 追加安抚指令重试一次
     ── 安抚成功 → 返回重试结果
     ── 安抚失败 → 切换 provider
@@ -780,7 +787,7 @@ policy = replace(_RETRY_POLICY, attempts=max(1, max_retries + 1))   # 尝试次�
 | 常量 | 含义 | 触发场景 |
 |:-----|:------|:---------|
 | `FAIL_REASON_CIRCUIT_OPEN` | 熔断开启 | 冷却期内跳过请求 |
-| `FAIL_REASON_TIMEOUT` | 请求超时 | 超过 timeout 秒数未收到响应 |
+| `FAIL_REASON_TIMEOUT` | 请求超时 | 端到端总时长（墙钟）超过 timeout 秒数未收到完整响应（含服务端排队；read 超时被滴流骗过时由 `post_with_deadline` 墙钟兜底） |
 | `FAIL_REASON_NETWORK_ERROR` | 网络异常 | 传输失败 / 503 等非 429 HTTP 错误 |
 | `FAIL_REASON_QUOTA_EXCEEDED` | 配额/限速/风控终态 | 429 / 403（不重试；429 首试即长冷却熔断，不进入全链延迟重试） |
 | `FAIL_REASON_API_ERROR` | API 响应异常 | JSON 解析失败、响应格式异常 |

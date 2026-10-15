@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.13.2
+> 文档版本：0.13.3
 
 ## 目录
 
@@ -3035,9 +3035,10 @@ generators_orchestrator（并行调度 4+1 模块）
             │      ├── api._call_provider_entry() × N（逐链尝试）
             │      │      └── _resolve_entry_credentials()（credentials_ref 解析）
             │      └── api_base._attempt_api_call()
-            │              ├── Claude/DeepSeek(Claude 端点) → HTTP POST {endpoint}/v1/messages
-            │              └── OpenAI/DeepSeek(OpenAI 端点) → HTTP POST {endpoint}/v1/chat/completions
-            │ ④ 空内容处理（thinking 耗尽→关闭 thinking 同 provider 重试一次；仍失败→切换 provider）
+            │              └── core.http_client.post_with_deadline()（墙钟截止：总时长=timeout，防滴流骗过 read 超时）
+            │                      ├── Claude/DeepSeek(Claude 端点) → HTTP POST {endpoint}/v1/messages
+            │                      └── OpenAI/DeepSeek(OpenAI 端点) → HTTP POST {endpoint}/v1/chat/completions
+            │ ④ 空内容处理（仅服务端正常返回的无正文：thinking 耗尽/偶发空 content→关闭 thinking 同 provider 重试一次；服务侧故障——error 信封/传输失败/熔断——直接切换 provider）
             │ ⑤ Markdown→HTML（markdown.py）
             │ ⑥ 写入缓存（Provider 感知键名，记录实际 Provider 名）
             └── 返回 (result, usage, provider_name) 三元组
@@ -3085,7 +3086,8 @@ LLM API 调用支持多 Provider 链式容错，与数据获取层的 Provider C
 | Extended Thinking | Claude: `thinking.budget_tokens`；DeepSeek: `output_config.effort` | 与 `temperature` 互斥 |
 | Prompt Caching | Anthropic 专属，system prompt 数组 + `cache_control: ephemeral` | 5 分钟内复用免全价 |
 | 截断重试 | 检测 `TRUNCATION_MARKER` 后自动 1.5× max_tokens 重试一次 | 修复内容被截断的情况 |
-| 空内容处理 | `_extract_content` 无 text block（DeepSeek 思考耗尽）→ 先关闭 thinking 同 provider 重试一次（安全网）；仍无正文再切换 provider；真正空字符串 `""` 追加安抚指令重试一次 | 应对思考预算耗尽 + 内容审查误杀 |
+| 空内容处理 | `_extract_content` 无 text block（DeepSeek 思考耗尽/偶发空 content）→ 先关闭 thinking 同 provider 重试一次（安全网，仅服务端正常返回时触发；error 信封/传输失败/熔断等服务侧故障直接切换）；仍无正文再切换 provider；真正空字符串 `""` 追加安抚指令重试一次 | 应对思考预算耗尽 + 内容审查误杀，且不对已故障端点无效重试 |
+| 墙钟总超时 | `core/http_client.post_with_deadline()` — POST 以独立 daemon 线程执行、主线程 join(timeout) 到点放弃并归一为 httpx.ReadTimeout | read 超时是块间间隔会被服务端滴流骗过（实测挂足 900s），墙钟兜底总时长，故障期快速切换 provider |
 | 会话用量追踪 | `session.py` 维护线程安全 `session_usage` 字典 + `cost_tracker.py` 报告级预算管理 | 按模块粒度追踪 token/费用/缓存命中/耗时 |
 | Token 预算告警 | `cost_tracker.check_input_budget()` — 累计输入 Token 超 8K 时日志告警（不截断） | 为模型分层提供基线数据 |
 | 调用耗时记录 | `skeleton.py` `time.monotonic()` 计时 → `record_per_module(duration=)` → HTML 页脚展示 | 每次 call_llm() 记录实际耗时 |

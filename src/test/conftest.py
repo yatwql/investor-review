@@ -284,6 +284,25 @@ def _auto_reset_last_reason():
 
 
 @pytest.fixture(autouse=True)
+def _auto_reset_llm_failure_state():
+    """自动复位 LLM 调用失败的模块级/线程局部状态，防止测试间污染。
+
+    覆盖 ``llm/api_base`` 两处：全局 ``_last_llm_failure_reason``（成功时清除、
+    失败时写入，供 call_llm 切换日志与 call_claude 安全网判定）与线程局部
+    「服务端错误信封」标志（_extract_content 写入，安全网据此区分服务端故障
+    与真·空响应）。安全网用例常 mock call_llm_with_retry，写入路径不执行，
+    残留值会让安全网判定随执行顺序漂移。与 ``_auto_reset_last_reason`` 同习语。
+    """
+    from src.python.llm import api_base
+
+    api_base.clear_last_llm_failure()
+    api_base.clear_last_server_error()
+    yield
+    api_base.clear_last_llm_failure()
+    api_base.clear_last_server_error()
+
+
+@pytest.fixture(autouse=True)
 def _auto_reset_adapter_registry():
     """自动重置数据源适配器注册表，防止测试间状态污染。
 
