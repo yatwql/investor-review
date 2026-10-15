@@ -333,6 +333,7 @@ def generate_all_llm(
     metrics: dict | None = None,
     degradation_events: list[dict] | None = None,
     comparison_indices: dict[str, str] | None = None,
+    span_recorder=None,
 ) -> tuple[str | None, str | None, str | None, str | None, bool, bool, bool, bool]:
     """并行生成全球政经局势 + 智囊团深度复盘 + 持仓体检报告 + 穿透深度分析。
 
@@ -352,6 +353,8 @@ def generate_all_llm(
             详细状态块**一次**，同一实例既进 health_check 指纹又进其提示词——否则
             数据源恢复后仍会复用故障期间缓存的健康结论。
         comparison_indices: {代码: 名称} 对比指数池，用于竞争语境多指数对比。
+        span_recorder: 逐模块耗时记录器（`LLM+新闻` 父阶段绑定）；
+            只用于观测，None 时行为零变化。
 
     Returns:
         (global_macro_html, expert_review_html, health_check_html, penetration_deep_html,
@@ -512,6 +515,7 @@ def generate_all_llm(
         holding_change_block=holding_change_block,
         event_impact_block=event_impact_block,
         schedule_replay_block=schedule_replay_block,
+        span_recorder=span_recorder,
     )
 
     # 合并预检结果 + 工作线程结果

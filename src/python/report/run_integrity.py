@@ -122,6 +122,16 @@ def bind_perf(perf: Any) -> None:
         ctx.perf = perf
 
 
+def current_perf() -> Any | None:
+    """取本次运行绑定的 PerfCollector（无运行上下文/未绑定时 None）。
+
+    供深层 helper（如 full 路径 HTML/Excel 写出）补阶段埋点——避免为计时把
+    `perf` 逐层透传签名，同时保持取用点集中可审计（与 bind_perf 同源）。
+    """
+    ctx = _current.get()
+    return ctx.perf if ctx is not None else None
+
+
 def bind_health(future: Any, report_type: str, holdings: list) -> None:
     """绑定后台健康检查 future（中断时收敛，防线程残留）。"""
     ctx = _current.get()

@@ -136,6 +136,12 @@ class _StubPerf:
     def stop(self, *args, **kwargs) -> None:
         pass
 
+    def recorder(self, *args, **kwargs):
+        """子项记录器替身（运行观测面）：返回吞掉记录调用的空对象。"""
+        from unittest.mock import MagicMock
+
+        return MagicMock()
+
     def save(self, *args, **kwargs) -> None:
         pass
 

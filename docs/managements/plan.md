@@ -1,6 +1,6 @@
 # 投资复盘助手 — 实现计划
 > 文档版本：0.13.4-dev
-> **编号源**：`plan-next = 123`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-122，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`plan-next = 127`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-126，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -8,7 +8,7 @@
 
 本文档记录项目的实现计划。已完成的版本计划已归档，此处仅跟踪当前迭代中的工作。
 
-**当前迭代**：在办 7 项按「价值 / 收益 / 风险」分四档——P1 2 项（风险/核心价值改进 **plan-99/95**）、P2 2 项（改进批 **plan-92/93**）、P3 2 项（**plan-70** 死线观察，已有落地设计 `decision-reflection-shadow-design.md`；择机 **plan-94**）、P4 1 项（**plan-55** 评测先决未过，暂缓）。已完成任务与历史批次（含各借鉴批研究与未采纳记录）随档见文末「归档」索引。
+**当前迭代**：在办 11 项按「价值 / 收益 / 风险」分四档——P1 6 项（风险/核心价值改进 **plan-99/95** + 运行观测四步 **plan-123/124/125/126**，方案见 [`perf-observability-design.md`](../plan/perf-observability-design.md)）、P2 2 项（改进批 **plan-92/93**）、P3 2 项（**plan-70** 死线观察，已有落地设计 `decision-reflection-shadow-design.md`；择机 **plan-94**）、P4 1 项（**plan-55** 评测先决未过，暂缓）。已完成任务与历史批次（含各借鉴批研究与未采纳记录）随档见文末「归档」索引。
 
 > **命名纪律（强制）**：重构/新增的变量名、函数名、注释与文档表述必须与新章节语义相关（如 `position_relationship`/`portfolio_history_drawdown`/`style_factor`/`action`），**绝对禁止用任务编号命名**（F 系列、plan-N、rf-N 等）。任务编号仅在本表作链接锚点，不进入实现层。
 
@@ -35,6 +35,30 @@
 **现状与问题**：`finish_report` 仅错误摘要 + 耗时排行 + 按任意键；全仓无 `webbrowser`/`os.startfile`/`xdg-open`——生成完仍要手动进目录找文件（HTML 路径虽有打印但不可直接操作）
 
 **动作**：收尾打印本次产物路径清单 + 询问「按 O 打开输出目录」（跨平台 start/explorer/xdg-open，失败回退打印路径不报错）；Web 侧已有下载入口不受影响
+
+#### 🔲 `plan-123` 运行观测打点补齐（LLM 模块级细分 + full 埋点补回 + 诊断落盘）
+
+**现状与问题**：实测 126 条 `perf_history.jsonl`——全量仅 8 个阶段名，`LLM+新闻` 单桶占 full 总时长中位 **91%**（无法定位到具体模块）；`HTML 生成`/`Excel 生成` 各仅 6 条（均早期版本，当前 full 走 `_report_output.py` 两个 helper 无埋点，**埋点倒退**）；`errors` 126/126 为 `[]`、`warnings_count` 恒 0（日志中 503/超时/降级大量存在，对统计不可见）
+
+**动作**：`core/perf.py` 加线程安全子项计时（`PhaseBreakdownRecorder`）+ 快照增 `breakdown`/`counters`（**不参与 `total_seconds`**，保历史可比与 ETA 口径）；LLM 四模块与新闻获取各自耗时入 `breakdown`；full 路径 `_report_output.py` 两个 helper 补 HTML/Excel 阶段埋点；首个阶段计时时挂只计数日志 handler、`save()` 摘除——WARNING/ERROR 自动入 `warnings_count`/`errors`/`counters`（根因修复「诊断字段恒空」）；`perf-view.py` 增阶段细分展示。方案与口径见 [`perf-observability-design.md`](../plan/perf-observability-design.md)
+
+#### 🔲 `plan-124` 性能视图稳健统计与归因
+
+**现状与问题**：单条 6636s 异常（服务端超时重试）把均值抬高 51s，需人工剔除；阶段表只有均值/极值无分位；最慢那次运行「哪个阶段超常」靠人眼比；无按日/周/时段的趋势聚合
+
+**动作**：离群点标注（中位 ± MAD 口径）与 `--exclude-outlier`、稳健均值口径；阶段级 P50/P95/P99；尾部归因（最慢运行逐阶段 z 分数）直给「哪一步超常、超多少倍」；`--by day|week|hour` 时段聚合（工作日/周末、LLM 服务端高峰）
+
+#### 🔲 `plan-125` 运行上下文维度采集（provider/缓存/等待/用量）
+
+**现状与问题**：记录只有 version/report_type/holdings_count——无法回答「换 provider 或关 thinking 省多少」「数据准备 130~233s 的离群批次是不是冷缓存」「时间花在白等还是真推理」，也无法按「速度 × 质量」权衡
+
+**动作**：采集 provider/model/thinking 档、fallback 链命中位置、重试次数与**退避等待秒数**（`core/retry.py` 观察点 + `llm/pacing.py` 节流门等待）、缓存命中（新闻/行情/LLM）、tokens 与费用（`llm/cost_tracker.py`）、质量评级；`数据准备` 子阶段细分；降级事件按来源分类计数（`DegradationTracker`）。与 plan-123 分开立项的理由：二者共用 LLM 调用链触点，合并改造可避免同段链路二次返工
+
+#### 🔲 `plan-126` 性能对比、机读输出与阈值门禁
+
+**现状与问题**：只有合成基准（`perf-test-report.py`）有 60s 目标，**真实运行无门禁**——性能退化不会被告警；版本间对比需人工对齐两份视图；输出仅 Markdown，无法入 CI 判定
+
+**动作**：`--compare A B` 版本间阶段级 delta（带变异系数判显著，避免把抖动当回归）；`--json`/`--csv` 机读输出；`--gate` 阈值（噪声带取同版本多次运行离散度）退出码 0/2，可挂 CI；基线随 tag 固化并纳入发布归档刷新口径
 
 ### P2 — 下一阶段就绪（满足条件即开工）
 

@@ -108,6 +108,42 @@ class TestTotalSummary:
         assert stat["count"] == 0 or stat["p95"] == 0.0
 
 
+class TestMergeBreakdownStats:
+    """`_merge_breakdown_stats` 跨记录合并阶段细分。"""
+
+    def test_merges_spans_across_records(self, mod):
+        records = [
+            {"breakdown": {"LLM+新闻": {"持仓体检报告": 10.0, "新闻获取": 4.0}}},
+            {"breakdown": {"LLM+新闻": {"持仓体检报告": 20.0}}},
+        ]
+        stats = mod._merge_breakdown_stats(records)
+        assert stats["LLM+新闻"]["持仓体检报告"]["avg"] == pytest.approx(15.0)
+        assert stats["LLM+新闻"]["持仓体检报告"]["max"] == pytest.approx(20.0)
+        assert stats["LLM+新闻"]["持仓体检报告"]["count"] == 2
+        assert stats["LLM+新闻"]["新闻获取"]["count"] == 1
+
+    @pytest.mark.parametrize(
+        "records",
+        [
+            [],
+            [{}],
+            [{"breakdown": None}],
+            [{"breakdown": "not-a-dict"}],
+            [{"breakdown": {"LLM+新闻": "not-a-dict"}}],
+            [{"breakdown": {"LLM+新闻": {"模块": "abc"}}}],
+        ],
+    )
+    def test_missing_or_malformed_breakdown_ignored(self, mod, records):
+        """旧记录（无 breakdown）与脏数据均不得报错。"""
+        assert mod._merge_breakdown_stats(records) == {}
+
+    def test_span_names_sorted_within_parent(self, mod):
+        """子项按名称排序（与阶段表同口径，输出稳定可 diff）。"""
+        records = [{"breakdown": {"LLM+新闻": {"新闻获取": 1.0, "持仓体检报告": 2.0}}}]
+        names = list(mod._merge_breakdown_stats(records)["LLM+新闻"])
+        assert names == sorted(names)
+
+
 class TestMergePhaseStats:
     """`_merge_phase_stats` 跨记录合并。"""
 
@@ -269,6 +305,22 @@ class TestOverviewSection:
 
     def test_empty_records_skip_overview(self, mod):
         assert "总体分位概览" not in mod.build_trend_report([])
+
+
+class TestBreakdownSection:
+    """分组段的「阶段细分」表：新观测面可见，旧记录不渲染。"""
+
+    def test_breakdown_table_rendered_when_present(self, mod):
+        records = _records(2)
+        records[0]["breakdown"] = {"LLM+新闻": {"持仓体检报告": 40.0}}
+        text = mod.build_trend_report(records)
+        assert "**阶段细分**" in text
+        assert "| 父阶段 | 子项 | 平均耗时 | 最长 | 次数 |" in text
+        assert "| LLM+新闻 | 持仓体检报告 |" in text
+
+    def test_breakdown_table_absent_for_legacy_records(self, mod):
+        """无 breakdown 的历史记录：不出现空表（保持旧输出形状）。"""
+        assert "阶段细分" not in mod.build_trend_report(_records(3))
 
 
 class TestGroupPercentileLines:

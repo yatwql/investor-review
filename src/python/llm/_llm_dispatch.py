@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from collections.abc import Callable, Iterable
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from typing import Any
@@ -196,10 +197,14 @@ def _dispatch_llm_workers(
     holding_change_block: str = "",
     event_impact_block: str = "",
     schedule_replay_block: str = "",
+    span_recorder=None,
 ) -> dict[str, dict]:
     """对缓存未命中的模块提交线程池任务，返回结果字典。
 
     Args:
+        span_recorder: 逐模块耗时记录器（`LLM+新闻` 父阶段绑定）；
+            None 时零行为变化。记录的是模块**自身耗时**，四模块并发故之和不
+            等于父阶段墙钟。
         _debate_info_container: 辩论模式信息捕获容器（list[dict|None]），
             启用辩论模式时闭包写入 debate_info dict，调用方事后读取。
         competitive_context: 由调用方（``generate_all_llm``）渲染一次的竞争语境
@@ -255,9 +260,12 @@ def _dispatch_llm_workers(
                 _settings.pop("http2", None)
                 c = make_http_client(timeout=LLM_TIMEOUT, **_settings)
             try:
+                _started = time.perf_counter()
                 return fn(c, llm_config)
             finally:
                 c.close()
+                if span_recorder is not None:
+                    span_recorder.record(_label_map.get(label, label), time.perf_counter() - _started)
 
         return _run
 

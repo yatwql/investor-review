@@ -1310,10 +1310,22 @@ sh .githooks/install-hooks.sh --off   # 停用
 | 平均耗时 | 该阶段历史平均耗时 |
 | 最短/最长 | 该阶段历史最小/最大耗时 |
 | 次数 | 该阶段出现次数（条件阶段如历史走势仅在启用时出现） |
+| 阶段细分 | 父阶段下的子项自身耗时（如 `LLM+新闻` → 四个 LLM 模块与新闻获取）；子项可并行，**之和不等于父阶段耗时**，仅用于定位瓶颈 |
 
 **分位口径**：`总体分位概览`与各分组的 P95/P99 均为**最近秩**（nearest-rank）分位——取 `ceil(pct% × n)` 位样本值，故「P95 = 95% 的报告生成在该耗时内完成」，「P99 = 99% 的报告生成在该耗时内完成」；分组行同时直给「95% / 99% 的报告在 Xs 内完成」。概览口径与分组一致（受 `--report-type` / `--last` 影响）；仅单一报告类型时只渲染合计行（不重复出类型行）。
 
 **数据来源**：每次 `generate_report()` 调用时自动记录到 `data/state/perf_history.jsonl`，无需手动触发；中断运行以 `status=interrupted` 记录（含 `interrupted_stage`），与成功完成（`completed`）区分，页头状态行据显「已中断」。
+
+**记录字段分层**（观测面口径，详见 [`perf-observability-design.md`](../plan/perf-observability-design.md)）：
+
+| 字段 | 含义 | 是否参与总耗时 |
+|:-----|:-----|:---------------|
+| `phases` | 粗粒度阶段墙钟（数据准备/快照对比/历史走势/行业资金流向/LLM+新闻/HTML 生成/Excel 生成） | **是**（`total_seconds` 唯一来源，保证跨版本可比与 ETA 口径稳定） |
+| `breakdown` | 父阶段下的子项自身耗时（LLM 四模块、新闻获取） | 否（子项可并行） |
+| `counters` | 运行期诊断计数（`warnings`/`errors` 等） | 否 |
+| `errors` / `warnings_count` | 错误消息（封顶保留）与告警数 | 否 |
+
+`counters` 的 `warnings`/`errors` 由 `PerfCollector` 在首个阶段计时时挂上的只计数日志 handler 自动采集（`invest` logger 的 WARNING/ERROR），`save()` 时摘除——告警来源分散在 `reporter.add_error` 与各模块 `logger.warning`，集中采集避免逐点改造与新增链路漏登记。
 
 **`probe.py` — 探测统一入口（target 分发 registry）**
 

@@ -756,6 +756,44 @@ class TestThinkingConcurrencyLimit(unittest.TestCase):
         self.assertLessEqual(_tracking["max_active"], 3)
 
 
+class TestDispatchModuleSpans(unittest.TestCase):
+    """逐模块耗时记录：模块自身耗时入 recorder，None 时零行为变化。"""
+
+    def _run_dispatch(self, span_recorder):
+        from src.python.llm.generators_orchestrator import _dispatch_llm_workers
+
+        keys = ("health_check", "expert_review", "global_macro", "penetration_deep")
+        fns = {key: (lambda _c, _lc, _k=key: (f"<p>{_k}</p>", False)) for key in keys}
+        needs = dict.fromkeys(keys, True)
+        with (
+            patch("src.python.llm._llm_dispatch._build_module_fns", return_value=fns),
+            patch("src.python.llm.generators_orchestrator._build_competitive_context_block", return_value=""),
+            patch("src.python.llm._llm_dispatch.make_http_client", return_value=MagicMock()),
+        ):
+            return _dispatch_llm_workers(
+                needs, {}, False, {}, {}, 0, 0, 0, 0, 0, {}, None, None, None, span_recorder=span_recorder
+            )
+
+    def test_each_module_recorded_under_semantic_label(self) -> None:
+        """四个模块各记一条子项，键为语义模块名（非模块 key）。"""
+        from src.python.core.perf import PhaseBreakdownRecorder
+        from src.python.core.registry import get_llm_module_name
+
+        recorder = PhaseBreakdownRecorder("LLM+新闻")
+        self._run_dispatch(recorder)
+        spans = recorder.spans()
+        expected = {
+            get_llm_module_name(k) for k in ("health_check", "expert_review", "global_macro", "penetration_deep")
+        }
+        self.assertEqual(set(spans), expected)
+        self.assertTrue(all(sec >= 0 for sec in spans.values()))
+
+    def test_none_recorder_keeps_dispatch_working(self) -> None:
+        """recorder 为 None（旧调用方）时分发照常返回结果。"""
+        result = self._run_dispatch(None)
+        self.assertEqual(len(result), 4)
+
+
 class TestNewsCorrelationNotOrchestrated(unittest.TestCase):
     """新闻关联不经编排层线程池（模块注册须与真实运行路径一致）。
 

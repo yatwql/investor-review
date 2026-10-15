@@ -559,6 +559,7 @@ def _generate_report_full(
         history_data=history_data,
         comparison_indices=_comparison_indices,
         metrics=_metrics,
+        span_recorder=perf.recorder("LLM+新闻"),
     )
     if _enable_llm:
         from src.python.llm.fallback import build_fallback_llm_content

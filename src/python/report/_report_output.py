@@ -49,8 +49,12 @@ def _generate_full_excel_report(
 ) -> bool:
     """full 路径的 Excel 报告生成，返回是否成功。"""
     from src.python.report.excel_generator import generate_excel_report
+    from src.python.report.run_integrity import current_perf
 
+    _perf = current_perf()
     reporter.info("正在生成 Excel 报告...")
+    if _perf is not None:
+        _perf.start("Excel 生成")
     try:
         generate_excel_report(
             holdings,
@@ -90,6 +94,9 @@ def _generate_full_excel_report(
         logger.exception("Excel 报告生成失败")
         result.errors.append("Excel 报告生成失败")
         return False
+    finally:
+        if _perf is not None:
+            _perf.stop()
 
 
 def _generate_full_html_report(
@@ -173,9 +180,13 @@ def _generate_full_html_report(
     """
     from src.python.config.features import is_feature_enabled
     from src.python.report.html_writer import write_html_report
+    from src.python.report.run_integrity import current_perf
 
+    _perf = current_perf()
     _report_label = "含新闻 + LLM" if news_ok else "仅 LLM"
     reporter.info(f"正在生成 HTML 报告（{_report_label}分析章节）...")
+    if _perf is not None:
+        _perf.start("HTML 生成")
     try:
         _enable_interactive_charts = is_feature_enabled("enable_interactive_charts")
         chart_datasets = _build_chart_datasets_for_report(
@@ -242,3 +253,6 @@ def _generate_full_html_report(
         logger.exception("HTML 报告写入失败")
         result.errors.append("HTML 报告生成失败")
         return False
+    finally:
+        if _perf is not None:
+            _perf.stop()

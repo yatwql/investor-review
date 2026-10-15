@@ -104,6 +104,39 @@ def _filter_records(
     return filtered
 
 
+def _merge_breakdown_stats(
+    records: list[dict[str, Any]],
+) -> dict[str, dict[str, dict[str, float]]]:
+    """合并记录中的阶段细分（`breakdown`）统计。
+
+    Returns:
+        {父阶段: {子项名: {avg, max, count}}}；无细分数据时为空字典。
+    """
+    values: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+    for r in records:
+        breakdown = r.get("breakdown")
+        if not isinstance(breakdown, dict):
+            continue
+        for parent, spans in breakdown.items():
+            if not isinstance(spans, dict):
+                continue
+            for name, sec in spans.items():
+                if isinstance(sec, bool) or not isinstance(sec, (int, float)):
+                    continue
+                values[parent][name].append(float(sec))
+    result: dict[str, dict[str, dict[str, float]]] = {}
+    for parent, spans in values.items():
+        result[parent] = {
+            name: {
+                "avg": round(_mean(vals), 2),
+                "max": round(_min_max(vals)[1], 2),
+                "count": len(vals),
+            }
+            for name, vals in sorted(spans.items())
+        }
+    return result
+
+
 def _merge_phase_stats(
     records: list[dict[str, Any]],
 ) -> dict[str, dict[str, float]]:
@@ -230,6 +263,18 @@ def build_trend_report(
                 lines.append(
                     f"| {name} | {stat['avg']:.2f}s | {stat['min']:.2f}s | {stat['max']:.2f}s | {stat['count']} |"
                 )
+            lines.append("")
+
+        # ── 阶段细分（breakdown：子项自身耗时，可并行，之和不等于父阶段墙钟） ──
+        breakdown_stats = _merge_breakdown_stats(group_records)
+        if breakdown_stats:
+            lines.append("**阶段细分**（子项自身耗时；父阶段内子项可并行，之和不等于父阶段耗时）：")
+            lines.append("")
+            lines.append("| 父阶段 | 子项 | 平均耗时 | 最长 | 次数 |")
+            lines.append("|:-----|:-----|--------:|----:|-----:|")
+            for parent, spans in breakdown_stats.items():
+                for name, stat in spans.items():
+                    lines.append(f"| {parent} | {name} | {stat['avg']:.2f}s | {stat['max']:.2f}s | {stat['count']} |")
             lines.append("")
 
         # ── 最近 5 次运行明细 ──
