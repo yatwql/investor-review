@@ -463,6 +463,48 @@ class TestTimeBuckets:
         assert "时段聚合" not in mod.build_trend_report(_records(3))
 
 
+class TestLlmContextSection:
+    """LLM 运行上下文段：等待/重试/降级/缓存/用量汇总。"""
+
+    def _records_with_llm(self) -> list[dict]:
+        records = _records(2)
+        records[0]["llm"] = {
+            "retry_count": 2,
+            "retry_wait_seconds": 3.0,
+            "pacing_wait_seconds": 1.5,
+            "fallbacks": 1,
+            "cache_hits": 3,
+            "cache_misses": 1,
+            "total_cost": 0.42,
+            "providers": {"deepseek-main": 4},
+            "models": {"deepseek-v4-flash": 4},
+        }
+        return records
+
+    def test_context_section_rendered(self, mod):
+        text = mod.build_trend_report(self._records_with_llm())
+        assert "## LLM 运行上下文" in text
+        assert "重试退避等待" in text
+        assert "端点节流等待" in text
+        assert "deepseek-main×4" in text
+
+    def test_context_section_absent_without_data(self, mod):
+        """旧记录无 llm 字段：不渲染空段。"""
+        assert "LLM 运行上下文" not in mod.build_trend_report(_records(3))
+
+    def test_context_aggregates_across_records(self, mod):
+        records = self._records_with_llm()
+        records[1]["llm"] = {"retry_count": 1, "retry_wait_seconds": 1.0}
+        lines = mod._llm_context_lines(records)
+        retry_row = next(ln for ln in lines if ln.startswith("| 重试次数 |"))
+        assert "3" in retry_row
+
+    def test_context_ignores_malformed_llm_field(self, mod):
+        records = _records(2)
+        records[0]["llm"] = "not-a-dict"
+        assert mod._llm_context_lines(records) == []
+
+
 class TestGroupPercentileLines:
     """分组段内的「95% / 99% 完成时间」直给行。"""
 

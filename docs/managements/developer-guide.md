@@ -1324,6 +1324,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 | 阶段级分位 | 阶段表含中位与 P95（不只均值/极值） |
 | 尾部归因 | 最慢一次运行逐阶段 z 分数与「相对历史中位倍数」，直给哪一步超常 |
 | `--by day\|week\|hour` | 按时段聚合（样本数/中位/P95/最长），看工作日-周末与 LLM 服务端高峰差异 |
+| LLM 运行上下文段 | 重试次数与退避等待、端点节流等待、provider 降级、缓存命中/未命中、累计费用与 provider/模型分布——回答「时间花在白等还是真推理」 |
 
 **数据来源**：每次 `generate_report()` 调用时自动记录到 `data/state/perf_history.jsonl`，无需手动触发；中断运行以 `status=interrupted` 记录（含 `interrupted_stage`），与成功完成（`completed`）区分，页头状态行据显「已中断」。
 
@@ -1334,9 +1335,12 @@ sh .githooks/install-hooks.sh --off   # 停用
 | `phases` | 粗粒度阶段墙钟（数据准备/快照对比/历史走势/行业资金流向/LLM+新闻/HTML 生成/Excel 生成） | **是**（`total_seconds` 唯一来源，保证跨版本可比与 ETA 口径稳定） |
 | `breakdown` | 父阶段下的子项自身耗时（LLM 四模块、新闻获取） | 否（子项可并行） |
 | `counters` | 运行期诊断计数（`warnings`/`errors` 等） | 否 |
+| `llm` | LLM 运行上下文（provider/model/thinking、重试与节流等待秒数、provider 降级次数、缓存命中、逐模块 tokens/费用） | 否 |
 | `errors` / `warnings_count` | 错误消息（封顶保留）与告警数 | 否 |
 
 `counters` 的 `warnings`/`errors` 由 `PerfCollector` 在首个阶段计时时挂上的只计数日志 handler 自动采集（`invest` logger 的 WARNING/ERROR），`save()` 时摘除——告警来源分散在 `reporter.add_error` 与各模块 `logger.warning`，集中采集避免逐点改造与新增链路漏登记。
+
+`llm` 上下文由 `llm/observation.py` 的运行观测汇聚器（`bind_llm_observation` / `current_llm_observation`）在调用链上归集：重试退避（`core/retry.py` 的 `on_retry` 回调）、端点节流等待（`llm/pacing.py` 的 `PacingGate`）、provider 命中与降级（`llm/api.py` 的 provider 链）、模块级缓存命中（`generators_orchestrator` 预检）、逐模块 model/tokens/费用（`llm/session.py` 单源）。未绑定汇聚器时（如单测直调 LLM 层）所有记录调用为空操作，行为零变化。
 
 **`probe.py` — 探测统一入口（target 分发 registry）**
 

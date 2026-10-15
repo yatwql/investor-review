@@ -162,6 +162,8 @@ class ReportRunSnapshot:
     breakdown: dict[str, dict[str, float]] = field(default_factory=dict)
     #: 运行期诊断计数（warnings/errors/retry/degrade:<来源> 等）
     counters: dict[str, int] = field(default_factory=dict)
+    #: LLM 运行上下文（provider/model/thinking/重试与节流等待/缓存命中/用量）
+    llm: dict[str, Any] = field(default_factory=dict)
 
     @property
     def total_seconds(self) -> float:
@@ -177,6 +179,7 @@ class ReportRunSnapshot:
             "total_seconds": round(self.total_seconds, 3),
             "breakdown": {parent: spans for parent, spans in self.breakdown.items() if spans},
             "counters": self.counters,
+            "llm": self.llm,
             "errors": self.errors,
             "warnings_count": self.warnings_count,
             "status": self.status,
@@ -228,6 +231,7 @@ class PerfCollector:
         self._interrupted_stage: str | None = None
         self._saved = False
         self._log_handler: logging.Handler | None = None
+        self._llm_context: dict[str, Any] = {}
 
     @property
     def report_type(self) -> str:
@@ -328,6 +332,11 @@ class PerfCollector:
                 self._recorders[parent_phase] = rec
             return rec
 
+    def set_llm_context(self, context: dict[str, Any] | None) -> None:
+        """登记本次运行的 LLM 上下文（provider/model/等待/缓存/用量），空值忽略。"""
+        if context:
+            self._llm_context = dict(context)
+
     # ── 日志诊断采集 ──
 
     def _ensure_log_capture(self) -> None:
@@ -371,6 +380,7 @@ class PerfCollector:
             interrupted_stage=self._interrupted_stage if self._interrupted else None,
             breakdown=breakdown,
             counters=counters,
+            llm=dict(self._llm_context),
         )
 
     def save(self) -> None:

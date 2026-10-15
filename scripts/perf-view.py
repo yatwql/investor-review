@@ -410,6 +410,62 @@ def _bucket_lines(records: list[dict[str, Any]], by: str) -> list[str]:
     return lines
 
 
+def _llm_context_lines(records: list[dict[str, Any]]) -> list[str]:
+    """LLM 运行上下文汇总：等待/重试/降级/缓存命中/用量。
+
+    回答「时间花在白等还是真推理」「缓存冷热影响多大」——等待秒数与真实推理
+    耗时并列展示，便于判断优化方向。
+    """
+    with_ctx = [r for r in records if isinstance(r.get("llm"), dict) and r["llm"]]
+    if not with_ctx:
+        return []
+
+    def _sum(key: str) -> float:
+        return sum(float(r["llm"].get(key) or 0) for r in with_ctx)
+
+    retry_wait = _sum("retry_wait_seconds")
+    pacing_wait = _sum("pacing_wait_seconds")
+    retries = int(_sum("retry_count"))
+    fallbacks = int(_sum("fallbacks"))
+    hits = int(_sum("cache_hits"))
+    misses = int(_sum("cache_misses"))
+    cost = _sum("total_cost")
+
+    lines = [
+        "## LLM 运行上下文",
+        "",
+        f"样本：{len(with_ctx)} 条含上下文记录（共 {len(records)} 条）。",
+        "",
+        "| 指标 | 合计 | 均值/次 |",
+        "|:-----|-----:|--------:|",
+        f"| 重试次数 | {retries} | {retries / len(with_ctx):.2f} |",
+        f"| 重试退避等待 | {retry_wait:.1f}s | {retry_wait / len(with_ctx):.1f}s |",
+        f"| 端点节流等待 | {pacing_wait:.1f}s | {pacing_wait / len(with_ctx):.1f}s |",
+        f"| provider 降级 | {fallbacks} | {fallbacks / len(with_ctx):.2f} |",
+        f"| 缓存命中/未命中 | {hits} / {misses} | — |",
+    ]
+    if cost:
+        lines.append(f"| 累计费用 | {cost:.4f} | {cost / len(with_ctx):.4f} |")
+    lines.append("")
+
+    providers: dict[str, int] = defaultdict(int)
+    models: dict[str, int] = defaultdict(int)
+    for r in with_ctx:
+        for name, n in (r["llm"].get("providers") or {}).items():
+            providers[name] += int(n)
+        for name, n in (r["llm"].get("models") or {}).items():
+            models[name] += int(n)
+    if providers or models:
+        lines.append("| 维度 | 取值（调用次数） |")
+        lines.append("|:-----|:-----------------|")
+        if providers:
+            lines.append("| provider | " + "、".join(f"{k}×{v}" for k, v in sorted(providers.items())) + " |")
+        if models:
+            lines.append("| 模型 | " + "、".join(f"{k}×{v}" for k, v in sorted(models.items())) + " |")
+        lines.append("")
+    return lines
+
+
 def build_trend_report(
     records: list[dict[str, Any]],
     report_type: str | None = None,
@@ -441,6 +497,9 @@ def build_trend_report(
     # ── 离群运行与尾部归因（稳健口径） ──
     lines.extend(_outlier_lines(scoped))
     lines.extend(_tail_attribution_lines(scoped))
+
+    # ── LLM 运行上下文（等待/重试/降级/缓存/用量） ──
+    lines.extend(_llm_context_lines(scoped))
 
     # ── 时段聚合（可选） ──
     if by:

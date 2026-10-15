@@ -125,6 +125,48 @@ class TestPacingGate:
                 pass
         assert time.monotonic() - t0 >= 0.045
 
+
+class TestPacingWaitObservation:
+    """节流等待入运行观测（回答「时间花在白等还是真推理」）。"""
+
+    def test_wait_recorded_when_sink_bound(self):
+        from src.python.llm.observation import LlmObservation, bind_llm_observation, clear_llm_observation
+
+        register_policies([{"name": "slow", "pacing": {"min_interval": 0.05}}])
+        sink = LlmObservation()
+        bind_llm_observation(sink)
+        try:
+            for _ in range(3):
+                with PacingGate("slow"):
+                    pass
+        finally:
+            clear_llm_observation()
+        assert sink.snapshot()["pacing_wait_seconds"] > 0
+
+    def test_no_sink_keeps_gate_working(self):
+        """未绑定观测时过闸照常（零行为变化）。"""
+        from src.python.llm.observation import clear_llm_observation
+
+        register_policies([{"name": "slow", "pacing": {"min_interval": 0.02}}])
+        clear_llm_observation()
+        t0 = time.monotonic()
+        with PacingGate("slow"):
+            pass
+        assert time.monotonic() - t0 >= 0.015
+
+    def test_unconstrained_endpoint_records_nothing(self):
+        from src.python.llm.observation import LlmObservation, bind_llm_observation, clear_llm_observation
+
+        register_policies([{"name": "paid"}])
+        sink = LlmObservation()
+        bind_llm_observation(sink)
+        try:
+            with PacingGate("paid"):
+                pass
+        finally:
+            clear_llm_observation()
+        assert "pacing_wait_seconds" not in sink.snapshot()
+
     def test_max_concurrency_enforced(self):
         """在途并发峰值不得超过声明的上限。"""
         register_policies([{"name": "serial", "pacing": {"max_concurrency": 1}}])

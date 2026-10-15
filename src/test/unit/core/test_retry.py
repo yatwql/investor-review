@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import httpx
 import pytest
+from unittest.mock import MagicMock, patch
 
 import src.python.core.retry as rt
 
@@ -175,6 +176,54 @@ class TestExplicitDelayTable:
         monkeypatch.setattr(rt.random, "uniform", lambda _a, _b: 0.25)
         policy = rt.RetryPolicy(strategy=rt.STRATEGY_TABLE, delays=(99.0,), max_backoff=10.0, jitter=0.5)
         assert policy.delay_for(1) == 10.25
+
+
+class TestRetryWaitObservation:
+    """重试退避等待入运行观测（白等时间的主要来源）。"""
+
+    def test_retry_wait_recorded_via_skeleton(self):
+        """经 LLM 骨架重试时，退避秒数计入观测汇聚器。"""
+        import src.python.llm.api_base as api_base
+        from src.python.llm.observation import LlmObservation, bind_llm_observation, clear_llm_observation
+
+        sink = LlmObservation()
+        bind_llm_observation(sink)
+        try:
+            with patch.object(api_base, "_attempt_api_call", return_value=("retryable", 500)):
+                with patch.object(api_base, "_retry_policy", return_value=rt.RetryPolicy(attempts=2, delays=(0.0,))):
+                    api_base.call_llm_with_retry(
+                        "Claude",
+                        MagicMock(),
+                        "http://x",
+                        {},
+                        {},
+                        1.0,
+                        1,
+                        100,
+                        "field",
+                        lambda _d: None,
+                        lambda _d, _n: False,
+                        "claude",
+                    )
+        finally:
+            clear_llm_observation()
+        assert sink.snapshot()["retry_count"] >= 1
+
+    def test_no_sink_keeps_retry_working(self):
+        """未绑定观测时重试照常（零行为变化）。"""
+        from src.python.llm.observation import clear_llm_observation
+
+        clear_llm_observation()
+        calls = {"n": 0}
+
+        def fn():
+            calls["n"] += 1
+            raise httpx.ConnectTimeout("x")
+
+        policy = rt.RetryPolicy(attempts=2, strategy=rt.STRATEGY_FIXED, base_backoff=0.0)
+        with pytest.raises(httpx.ConnectTimeout):
+            rt.retry_transient(fn, policy=policy, sleep=lambda _s: None)
+        assert calls["n"] == 2
 
 
 class TestLlmSkeletonDelegation:

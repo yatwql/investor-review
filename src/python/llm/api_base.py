@@ -714,6 +714,11 @@ def call_llm_with_retry(
         return result
 
     def _on_retry(failed_attempt: int, delay: float, _exc: BaseException | None) -> None:
+        from src.python.llm.observation import current_llm_observation
+
+        _sink = current_llm_observation()
+        if _sink is not None:
+            _sink.note_retry(delay)
         logger.warning(
             "%s API %s (尝试 %d/%d)，%.1fs 后重试...",
             label,

@@ -180,6 +180,11 @@ def _precheck_one_cache(
     if not cache_info["can_cache"]:
         return (None, False)
     cached = cache_get(cache_info["key"], cache_info["ttl"])
+    from src.python.llm.observation import current_llm_observation
+
+    _sink = current_llm_observation()
+    if _sink is not None:
+        _sink.note_cache(bool(cached))
     if not cached:
         return (None, False)
     thinking_enabled = llm_config.get(cache_info["thinking_key"], False)
