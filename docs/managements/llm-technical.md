@@ -787,7 +787,7 @@ policy = replace(_RETRY_POLICY, attempts=max(1, max_retries + 1))   # 尝试次�
 | 常量 | 含义 | 触发场景 |
 |:-----|:------|:---------|
 | `FAIL_REASON_CIRCUIT_OPEN` | 熔断开启 | 冷却期内跳过请求 |
-| `FAIL_REASON_TIMEOUT` | 请求超时 | 超过 timeout 秒数未收到响应 |
+| `FAIL_REASON_TIMEOUT` | 请求超时 | 端到端总时长（墙钟）超过 timeout 秒数未收到完整响应（含服务端排队；read 超时被滴流骗过时由 `post_with_deadline` 墙钟兜底） |
 | `FAIL_REASON_NETWORK_ERROR` | 网络异常 | 传输失败 / 503 等非 429 HTTP 错误 |
 | `FAIL_REASON_QUOTA_EXCEEDED` | 配额/限速/风控终态 | 429 / 403（不重试；429 首试即长冷却熔断，不进入全链延迟重试） |
 | `FAIL_REASON_API_ERROR` | API 响应异常 | JSON 解析失败、响应格式异常 |
