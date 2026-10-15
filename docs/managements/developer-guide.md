@@ -829,6 +829,7 @@ mod = load_script("_test_runner/modes.py", module_name="modes_under_test")   # �
 3. **`changelog.md`** — 记录新增的测试数量和覆盖场景
 4. **`plan.md`** — 如果在迭代中新增的功能，更新对应条目的完成状态
 5. **`unit/conftest.py`** — 新增 `unit/` 下测试文件时确认 `pytestmark` 列表包含正确的 `unit_*` 子标记
+6. **`conftest.py` 隔离 fixture** — 新增模块级单例时加 autouse 复位 fixture（参照 `_auto_reset_last_reason` 习语，如 `_auto_reset_llm_failure_state`）；新增持久化状态文件/输出目录时在 `_isolate_sensitive_paths` 增加 `monkeypatch.setattr` 重定向——细则见 CLAUDE.md「新增测试隔离要求」，漏加会让用例随执行顺序漂移
 
 **新增后必须执行的验证**：
 
@@ -1259,9 +1260,9 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 ```bash
 .venv/bin/python scripts/release.py check     # 预检：分支/工作树/版本形态/tag/版本一致性
-.venv/bin/python scripts/release.py prepare   # 版本全链 + changelog 发布段归档 + 一致性 --fix
+.venv/bin/python scripts/release.py prepare   # 版本全链 + changelog 发布段归档 + 一致性 --fix + 收尾 doc-drift --sync
 .venv/bin/python scripts/release.py refresh   # bench --update-docs + collect + doc-drift --sync
-.venv/bin/python scripts/release.py evolution --release   # 演进对照快照（默认只滚当前开发版列）
+.venv/bin/python scripts/release.py evolution --release   # 演进对照快照（默认只滚当前开发版列）+ 收尾 doc-drift --sync
 .venv/bin/python scripts/release.py gate      # P2：regression + 十守护 --ci + 设计护栏（gate 内置）
 .venv/bin/python scripts/release.py publish --title "<发布主题>"   # release 提交 + P1 verify + --no-ff 合并 + tag
 .venv/bin/python scripts/release.py devbump    # 切下一开发版并提交
@@ -1823,9 +1824,9 @@ registry 的测试在 `src/test/unit/core/test_registry.py`，验证 TTL 默认�
 
 ## 版本发布流程
 
-发布版本时，按以下五步顺序执行：
+发布版本时，按以下六步顺序执行：
 
-> 可用 `scripts/release.py` 分步编排（五步的可执行封装，每步独立可审阅、失败即停）：`prepare`（版本全链与 changelog 归档）、`refresh` + `evolution --release`（数据刷新与演进快照）、`gate`（P2 门禁）、`publish --title`（release 提交 + P1 verify + `--no-ff` 合并 + tag）、`devbump`（切开发版），另有 `check` 预检；下列手动命令为底层口径，脚本失败时按手动步骤排查。
+> 可用 `scripts/release.py` 分步编排（发布流程的可执行封装，每步独立可审阅、失败即停）：`check`（预检）→ `prepare`（版本全链、changelog 发布段归档与一致性 `--fix`，收尾自动 `doc-drift --sync`）→ `refresh` + `evolution --release`（数据刷新与演进快照，evolution 收尾同样自动 sync）→ `gate`（P2 门禁）→ `publish --title`（release 提交 + P1 verify + `--no-ff` 合并 + tag）→ `devbump`（切开发版）；rf/plan/docs-plan 归档迁移保留人工（需判断归档段语义）且必须在 `gate`/`publish` 前完成（见下方步骤③）。下列手动命令为底层口径，脚本失败时按手动步骤排查。
 
 **① 版本号一致**
 
@@ -1850,9 +1851,18 @@ registry 的测试在 `src/test/unit/core/test_registry.py`，验证 TTL 默认�
 - `folders.md` — 项目统计表及目录树新增/重命名文件；**版本演进对照表（`## 版本演进对照`）每次发布必须更新**：「最新发布」列按新 tag 重跑快照统计（复现方法见 folders.md 表头：`git ls-tree` + `git cat-file --batch` 计行 + `git grep -c "def test_"` 数用例），「当前开发版」列同步重跑；列头版本号与 tag/日期由 `check-version-consistency.py --fix`（`evolution_head`/`release_tag` 断言）同步，只改版本号不刷演进表数据行属发布遗漏
 - `datasource.md` + `datasource-reliability.md` — 数据源清单/路由归属/可靠性描述与实际代码配置一致
 
+`release.py evolution --release` 输出的「需人工核对的注释行」（test-coverage 用例口径注释中的 pytest 实际收集数与 opt-in live 项数、folders.md 文档注释行的目录分解数）脚本不代写，须按实测回填后再提交。
+
 数据快照更新与「版本号一致」的版本头同步可在同一次提交内完成。
 
-**③ 版本标签**
+**③ 发布归档迁移（四项强制，未完成不得继续 `gate`/`publish`）**
+
+- ① `review-findings.md`「已解决问题」区**全部**条目迁入对应版本的自审归档（同步更新归档头部涵盖版本/追加行与主文件「归档档案」索引行）
+- ② `plan.md` 不得残留 ✅/已完成任务节（完成态移入对应版本的 plan 归档）
+- ③ changelog 已发布段移入对应版本的 changelog 归档（`release.py prepare` 自动执行，人工核对指针与归档索引）
+- ④ `docs/plan/` 中**已完成任务**的迭代设计文件移入对应版本归档子目录（在办任务的设计文件保留，按其关联 plan/rf 任务状态判定），同步更新 plan.md/folders.md 引用链接与目录树
+
+**④ 版本标签**
 
 完成版本号更新并提交后，执行：
 
@@ -1863,11 +1873,11 @@ git push origin --tags
 
 确保每次发布都可追溯。
 
-**④ 开发版本切换**
+**⑤ 开发版本切换**
 
 发布版本并打 tag 后，**立即**将 `APP_VERSION` 和所有管理文档版本头改为**下一个版本的 `-dev`**（如发布 v0.6.8 后即改为 v0.6.9-dev），运行 `check-version-consistency.py` 验证全链 `[OK]` 后提交，然后继续开发。开发期间版本号始终标识为下一个预期发布版本的 `-dev`。
 
-**⑤ 合并入 master**
+**⑥ 合并入 master**
 
 发布并打 tag 后，**必须**把 `dev` 合并入 `master` 并推送（`master` 是发布分支，只存放已发布状态；不得只打 tag 而不更新 master）：
 
@@ -1877,7 +1887,7 @@ git checkout master && git merge --no-ff dev -m "Merge branch 'dev' — v{x.y.z}
 git checkout dev
 ```
 
-合入后确认 tag 所指提交已在 `master` 可达（`git merge-base --is-ancestor v{x.y.z} origin/master`）；`master` 推送会触发 CI 的 P1（`verify`）档。本步与步骤④互不替代：④ 是让 dev 进入下一个开发周期，⑤ 是把已发布状态同步到发布分支。
+合入后确认 tag 所指提交已在 `master` 可达（`git merge-base --is-ancestor v{x.y.z} origin/master`）；`master` 推送会触发 CI 的 P1（`verify`）档。本步与步骤⑤互不替代：⑤ 是让 dev 进入下一个开发周期，⑥ 是把已发布状态同步到发布分支。
 
 ## 关键纪律来源
 
