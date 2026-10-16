@@ -14,17 +14,16 @@
 | # | 问题 | 修复方向 |
 |---|------|----------|
 
-| **rf-113** | plan-1 **Iter 7 全链路浏览器人工验证余 3 项待人工**（不可自动化，均不阻塞）：微信内置浏览器真机、Safari 90+ 抽验、真实 `Ctrl+P` 分页抽验；自动化子项实测结论与复跑方式见验证文档（脚本与证据在 git 忽略的 `docs/tmp/rf113/`，重跑即建） | 验证方法与判定标准见 [`docs/plan/report-browser-verification.md`](../plan/report-browser-verification.md)（§1.1 复跑命令 + §2④ 步骤与判定 + §5 复验清单；勾选清单留存 [`docs/archive/v0.9.x/chartjs-upgrade/iter7-verification-checklist.md`](../archive/v0.9.x/chartjs-upgrade/iter7-verification-checklist.md)）；全部完成后回填 changelog、本表移至已解决（rf-114 随之解锁） |
 | **rf-257** | plan-8 **Web 模式浏览器真机人工验收余人工项**：真实 basic/full 进度观察、结果区按钮 4.5、提交即禁用 5.3、2.5/2.6 真实拖拽与 Tab/Enter 抽验；其余断言已自动化实测通过（结论与复跑方式见验证文档；脚本与证据在 git 忽略的 `docs/tmp/rf257/`，重跑即建） | 验证方法与判定标准见 [`docs/plan/web-browser-verification.md`](../plan/web-browser-verification.md)（§1.1 启动/收尾命令 + §5 复验清单；勾选清单留存 [`docs/archive/v0.10.x/web-ui/web-ui-verification-checklist.md`](../archive/v0.10.x/web-ui/web-ui-verification-checklist.md)）；复跑：`.venv/bin/python scripts/smoke-web.py` + `node docs/tmp/rf257/cdp-check.mjs`，收尾必做 kill 服务/浏览器 + 清空 `data/holdings/uploads/`；全部完成后本表移至已解决 |
 
 ### P2 — 中优先：价值明确、成本可控（下批排期）
 
-> 入选标准：修复路径清晰、成本可控；rf-114 须待 rf-113 人工验证完成后执行。
+> 入选标准：修复路径清晰、成本可控；rf-114 须待 rf-113 人工验证完成后执行（**已满足**：rf-113 已于 2026-10-16 完成）。
 
 | # | 问题 | 修复方向 |
 |---|------|----------|
 
-| **rf-114** | 双渲染路径共存——模板保留 Canvas `drawSimpleChart()`（265 行内联 JS）+ Chart.js 渲染器，Feature Flag OFF 时回退 Canvas 路径 | 删除 `drawSimpleChart()` + Canvas 回退分支 + Feature Flag 条件分支，Chart.js 成唯一渲染器；**前置：rf-113 人工验证完成（确认 Chart.js 真机渲染可靠）**；触发条件：plan-1 稳定 2 版本（阶段 2→3 切换，判定标准见 upgrade.md §4.15） |
+| **rf-114** | 双渲染路径共存——模板保留 Canvas `drawSimpleChart()`（265 行内联 JS）+ Chart.js 渲染器，Feature Flag OFF 时回退 Canvas 路径 | 删除 `drawSimpleChart()` + Canvas 回退分支 + Feature Flag 条件分支，Chart.js 成唯一渲染器；**前置已满足：rf-113 人工验证完成（2026-10-16，确认 Chart.js 真机渲染可靠）**；触发条件：plan-1 稳定 2 版本（阶段 2→3 切换，判定标准见 upgrade.md §4.15） |
 
 
 ### P3 — 持续监控：文件过长登记表（>500 行观察，脚本域 >400 即入观察 / **>1000 行为硬上限必须拆分**（主程序与脚本）；按距红线余量升序）
@@ -71,6 +70,7 @@
 ### 开发期已修复（0.13.5-dev）
 
 > rf-689 已修复（2026-10-16）：发布归档迁移改动后便宜守护未跑 `check-doc-traces` 即进 gate，P2 门禁因文档级 finding 双跑全量 regression——developer-guide 发布流程段已补「进 gate 前必跑便宜守护」分层纪律。
+> rf-113 已修复（2026-10-16）：Iter 7 全链路浏览器人工验证六项全部完成——headless 自动化回归（① 6 图 badge / ② 2.4 afterprint / ③ 3.1 断网渲染 / ⑤ 375px 报告+调试页 / ⑥ 禁 Canvas 兜底，复跑 5 PASS + ⑥ 表现记录口径）+ 人工抽验（② 真实 Ctrl+P 打印预览、④ 微信真机 4.3+4.4、Safari 90+ iPad 抽验、Windows Chrome/Firefox；4.1 链接访问维护者豁免）；附带发现两处已由 rf-645 修复并复跑确认（⑤-testchart 转 PASS）。方法与证据见 `docs/plan/report-browser-verification.md`，勾选清单归档留存；rf-114 前置随之满足。
 
 ### 开发期已修复（0.13.4-dev）
 

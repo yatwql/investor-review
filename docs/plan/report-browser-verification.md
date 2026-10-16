@@ -96,7 +96,8 @@ node docs/tmp/rf113/run-rf113.mjs
 | 观察项（非断言） | ⚠ canvas 内联 `display` 打印前 `block`（Chart.js v4.4.3 初始化写入）→ afterprint 后 `''`（computed `inline`）；几何零偏差、tooltip 正常，详见 §4 发现 2 |
 
 - **证据**：`docs/tmp/rf113/results/②-report-afterprint.json`、`docs/tmp/rf113/screenshots/04-report-beforeprint.png`（快照态）、`05-report-afterprint-hover.png`（恢复后 hover tooltip）
-- **人工范围**：真实 `Ctrl+P` 打印预览的分页/着色效果 headless 无法出 UI，2.1~2.3 仍以人工预览为准（以人工预览为准）；本自动化覆盖 2.4「派发打印事件 → 快照插入/移除 → 交互恢复」全链路。
+- **人工范围**：真实 `Ctrl+P` 打印预览的分页/着色效果 headless 无法出 UI，2.1~2.3 以人工预览为准；本自动化覆盖 2.4「派发打印事件 → 快照插入/移除 → 交互恢复」全链路。
+- **本次状态**：真实 `Ctrl+P` 人工抽验 ✅——预览中 2x 清晰度、浅色主题、图不跨页断开，与预期一致。
 
 ### ③ 离线验证 3.1 — 自动化实测结论
 
@@ -130,7 +131,7 @@ node docs/tmp/rf113/run-rf113.mjs
 | 4.4 横竖屏 | 竖屏 ↔ 横屏切换，滚动浏览图表章节 | 图表自适应、**不横向溢出**（A4：`responsive + maintainAspectRatio`）→ 4.4 过 |
 | **判定** | 4.1 过；且 4.2 / 4.3 **任一**过 → **④ 通过**；4.4 单独勾选 | 微信内触屏无 hover，图表退化为可读静态呈现属合理预期，不构成功能缺失（upgrade.md §4.14） |
 
-- **本次状态**：⏳ 未执行（等真机人工）；完成后把结果回填归档清单 §④ 并更新 §3 总表。
+- **本次状态**：✅ **完成（④ 通过）**——**4.3 ✅**：微信打开报告文件 → 页面渲染正常、明细表格兜底可读（图表区空白，属 X5 对 file:// 下脚本/canvas 的拦截，兜底口径成立）；**4.4 ✅**：横竖屏切换不横向溢出；**4.1 未执行**（维护者决定豁免不测：file:// 直开已覆盖渲染链路，按此口径关单）；**4.2 不成立**（图表未渲染，由 4.3 覆盖）。结果已回填归档清单 §④ 明细行与结果汇总表。
 
 ### ⑤ 移动端 375px 适配 — 自动化实测结论
 
@@ -144,11 +145,12 @@ node docs/tmp/rf113/run-rf113.mjs
   - 溢出诊断里的 3203 个「超视口元素」全部是滚动容器内的宽表格节点，属容器内滚动，不产生文档级横向滚动条（以 `scrollWidth<=clientWidth` 为判据）
 - **证据**：`docs/tmp/rf113/results/⑤-report-375px.json`、`screenshots/03-report-375.png`、`03b-report-375-chart.png`、`03c-report-375-line.png`、`03d-report-375-bar.png`
 
-**（b）调试页 `test-chart.html?s=ok` → ❌ 5.1 不过（调试页自身溢出，见 §4 发现 1）**
+**（b）调试页 `test-chart.html?s=ok` → ✅ 修复后通过（原 ❌ 5.1 不过，根因与修复见 §4 发现 1 / rf-645）**
 
-- **结果**：375px 下 `documentElement.scrollWidth **436** > clientWidth **375**`（`body.scrollWidth=420`），出现文档级横向滚动；6 图本身渲染正常（6/6 ok badge）、console error 0。
+- **原实测（修复前取证）**：375px 下 `documentElement.scrollWidth **436** > clientWidth **375**`（`body.scrollWidth=420`），出现文档级横向滚动；6 图本身渲染正常（6/6 ok badge）、console error 0。
 - **根因**：调试页 `.grid { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)) }` → 图卡最小 420px + 左右 16px 边距 = 436px，放不进 375px 视口。
-- **影响面**：仅调试页布局，**不涉及报告产物**；rf-113 ⑤ 的验证对象是报告 → ⑤ 按报告判过，调试页问题单列（待父级编号）。
+- **影响面**：仅调试页布局，**不涉及报告产物**；rf-113 ⑤ 的验证对象是报告 → ⑤ 按报告判过，调试页问题单列并已登记修复（rf-645）。
+- **修复后复跑**：grid 列下限改 `minmax(min(420px, 100%), 1fr)` 后复跑场景 `⑤-testchart-375px` → **PASS**（375px 无横向滚动）。
 - **证据**：`docs/tmp/rf113/results/⑤-testchart-375px.json`、`screenshots/02-testchart-375.png`、`02b-testchart-375-chart.png`（截图可见卡片右侧被裁）
 
 ### ⑥ 禁用 Canvas 后 fallback — 自动化实测（表现记录型）+ 人工步骤
@@ -179,14 +181,14 @@ node docs/tmp/rf113/run-rf113.mjs
 
 | 项 | 标题 | 结果 | 说明与证据 |
 |:--:|:-----|:----:|:----------|
-| ① | 6 图渲染 + 交互（验收 2） | ✅ **通过** | 人工抽验（tooltip/降级/空数据/离线守卫）+ **headless 自动化回归**：`?s=ok` **6/6 badge ok**、横幅 ok、console 0 error。`results/①-testchart-ok-badge.json`。Safari 抽验仍属人工（不阻塞） |
-| ② | 打印降级（验收 3） | ✅ **通过** | 2.1~2.3 人工过（2x DPI / 浅色 / 不跨页）；**2.4 自动化过**：beforeprint 插入 10 张 2x 快照 + 10/10 canvas 隐藏 → afterprint 移除 0 残留、几何 0px 偏差、真实 hover tooltip 恢复（active 2→2）、console 0。附观察：内联 `display block→''`（§4 发现 2）。真实 `Ctrl+P` 分页效果仍以人工预览为准。`results/②-report-afterprint.json` |
+| ① | 6 图渲染 + 交互（验收 2） | ✅ **通过** | 人工抽验（tooltip/降级/空数据/离线守卫）+ **headless 自动化回归**：`?s=ok` **6/6 badge ok**、横幅 ok、console 0 error。`results/①-testchart-ok-badge.json`。Safari 90+ 抽验 ✅（iPad 打开报告未发现问题） |
+| ② | 打印降级（验收 3） | ✅ **通过** | 2.1~2.3 人工过（2x DPI / 浅色 / 不跨页）；**2.4 自动化过**：beforeprint 插入 10 张 2x 快照 + 10/10 canvas 隐藏 → afterprint 移除 0 残留、几何 0px 偏差、真实 hover tooltip 恢复（active 2→2）、console 0。附观察：内联 `display block→''`（§4 发现 2）。真实 `Ctrl+P` 人工抽验 ✅（2x/浅色/不跨页与预览一致）。`results/②-report-afterprint.json` |
 | ③ | 离线验证（验收 4 / R21） | ✅ **通过** | 3.2~3.4 人工过（引擎缺失守卫）；**3.1 自动化过**：静态 5 类外链全 0（PASS）+ `--host-resolver-rules=MAP * ~NOTFOUND` 断 DNS 打开 → 10/10 图渲染且有绘制像素、外域请求 0、console 0 error。`static-selfcontained.log` + `results/③-report-offline.json` |
-| ④ | 微信内置浏览器（验收 6 / R22） | ⏳ **待人工（不可自动化）** | 需微信真机 X5/内核 + 文件传输助手链路。步骤与判定见 §2④（4.1 链接访问必过；4.2 file:// 或 4.3 兜底任一过即 ④ 通过；4.4 横竖屏不溢出） |
-| ⑤ | 移动端 375px 不溢出（A4） | ✅ **通过（报告产物）** | **自动化**：报告 375px `scrollWidth==clientWidth==375` 无横向滚动、10/10 图初始化、轴标签 45° 不重叠、表格容器内滚动不撑破页面。**附带发现**：调试页 `test-chart.html` 375px 自身溢出 61px（`minmax(420px,1fr)`，§4 发现 1，仅调试页）。`results/⑤-report-375px.json` / `⑤-testchart-375px.json` |
+| ④ | 微信内置浏览器（验收 6 / R22） | ✅ **通过（真机人工）** | 微信打开文件：页面+表格渲染 ✅（4.3，图表空白属 X5 拦 file:// 预期）+ 横竖屏不溢出 ✅（4.4）；4.1 链接访问经维护者决定豁免未测、4.2 图表未渲染由 4.3 覆盖。记录见 §2④ |
+| ⑤ | 移动端 375px 不溢出（A4） | ✅ **通过（报告产物）** | **自动化**：报告 375px `scrollWidth==clientWidth==375` 无横向滚动、10/10 图初始化、轴标签 45° 不重叠、表格容器内滚动不撑破页面。**附带发现**：调试页 `test-chart.html` 375px 自身溢出 61px（`minmax(420px,1fr)`）→ **已修复（rf-645：列下限改 `minmax(min(420px,100%),1fr)`），复跑转 PASS**（§4 发现 1）。`results/⑤-report-375px.json` / `⑤-testchart-375px.json` |
 | ⑥ | 禁用 Canvas 后 fallback（A1） | ⚠️ **实测完成（断言口径已修正）** | **自动化**：原断言「canvas 显示 fallback 文本」**不成立**（文本在 DOM 但不渲染，口径复核）；实际表现 = 0/10 图初始化 + 图表区空白 + **41 张明细表格兜底可读** + 页面其余交互正常 + console 10 条（模拟所致）。6.2 因文本不渲染不适用，浅色兜底可读 ✅。可选人工 DevTools 复核步骤见 §2⑥。`results/⑥-report-no-canvas.json` |
 
-**自动化断言合计**：5 场景 PASS / 1 场景 FAIL（调试页 ⑤，另列缺陷）/ 1 场景表现记录（⑥）；**人工余项**：④ 微信真机（+ ① Safari 抽验、② 真实 `Ctrl+P` 分页抽验，均不阻塞）。
+**自动化断言合计**：修复后复跑 **5 场景 PASS**（① / ⑤-testchart（修复后转 PASS）/ ⑤-report / ② / ③）+ 1 场景表现记录（⑥，`pass:false` 为模拟 `getContext→null` 的已知口径，见 §2⑥/记录 3）；**人工余项**：无——六项全部完成（Safari 90+ iPad 抽验 ✅、真实 `Ctrl+P` 分页抽验 ✅、④ 微信真机 4.3 + 4.4 过 / 4.1 豁免）。
 
 ---
 
@@ -197,14 +199,14 @@ node docs/tmp/rf113/run-rf113.mjs
 - 现象：375px 设备模拟下 `documentElement.scrollWidth=436 > clientWidth=375`（`body.scrollWidth=420`），整页出现横向滚动条；6 图渲染本身正常。
 - 根因：调试页 `.grid { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)) }` —— 图卡最小宽 420px + `body` 左右 16px 边距 = 436px，列宽无法收缩到 375px。
 - 影响面：仅 TD8/S2 调试页布局，报告产物在 375px 下实测无溢出（见 §2⑤a）。清单 5.1 若按调试页走查会误判为报告缺陷，建议后续把 5.1 的执行载体明确为报告 HTML（或顺手把调试页 `minmax` 降到 ≤343px，如 `minmax(min(420px, 100%), 1fr)`）。
-- 处置：**未自行修复/编号**，交由维护者登记。
+- 处置：**已修复并登记为 rf-645**——grid 列下限改 `minmax(min(420px, 100%), 1fr)`（回归用例 `test_feature_interactive.py`）；复跑场景 `⑤-testchart-375px` 已转 PASS。
 
 **发现 2（轻微，影响 ② 观察项）：`chart-print.js` 的 afterprint 恢复把 canvas 内联 `display` 置空而非还原原值。**
 
 - 现象：Chart.js v4.4.3 初始化时给 canvas 写入内联 `display:block; box-sizing:border-box`（实测打印前 10/10 为 `block`）；`afterprint` 走 `restoreFromPrint()` 的 `canvas.style.display = ''` → 内联值变 `''`，computed `display` 由 `block` 变为 `inline`。
 - 实测影响：canvas **可见**（≠ none）、**文档坐标几何偏差 0px**、tooltip 交互正常恢复——当前无可见布局位移；但内联样式与打印前不一致（inline 替换元素依赖基线排版，主题/容器样式变化时可能出现细微行高间隙），属「恢复不精确」而非功能失效。
 - 可选修复方向（未实施）：`beforeprint` 时记录原 `display` 值、`afterprint` 按记录还原（`canvas.style.display = saved`），或统一恢复为 `'block'`。
-- 处置：**未自行修复/编号**，交由维护者登记。
+- 处置：**已修复并登记为 rf-645**——`beforeprint` 记录各 canvas 原内联 display、`afterprint` 按记录还原（未记录回退 `block`、周期末清空记录）；回归用例 3 项在 `test_feature_interactive.py`，复跑场景 ② 仍 PASS。
 
 **记录 3（非缺陷，供口径对齐）：⑥ 场景 console 的 10 条 `Failed to create chart` 属模拟产物。** 真实环境无法「禁用 Canvas」（无该开关），此错误只在注入 `getContext→null` 时出现；⑥ 的判定只看「兜底数据可读 + 页面不垮」，不以 console 零错误为口径。
 
@@ -213,6 +215,6 @@ node docs/tmp/rf113/run-rf113.mjs
 ## 5. 复验清单（报告模板 / chart-*.js / Chart.js 升级后）
 
 1. 静态零外链：§1.1 ①（5 条 grep，全 0 即过）。
-2. `node docs/tmp/rf113/run-rf113.mjs` → 对照 §1.1 输出摘要：①/⑤-report/②/③ 必须 PASS；⑤-testchart 仅在发现 1 修复后才会 PASS；⑥ 看 §2⑥ 表逐条。
-3. 手工抽验（headless 覆盖不到的）：真实 `Ctrl+P` 预览（2.1~2.3 口径）、微信真机（④ 全套）、Safari 抽验。
-4. 结论回填：归档清单勾选 → `changelog.md` 记录 → `review-findings.md` rf-113 状态更新（由维护者执行，回填依据为本文件的总表与实测记录）。
+2. `node docs/tmp/rf113/run-rf113.mjs` → 对照 §1.1 输出摘要：①/⑤-report/②/③ 必须 PASS；⑤-testchart 亦须 PASS（发现 1 已修复）；⑥ 看 §2⑥ 表逐条（`pass:false` 属已知模拟口径，不作门禁）。
+3. 手工抽验（headless 覆盖不到的）：真实 `Ctrl+P` 预览（2.1~2.3 口径）、微信真机（④ 全套）、Safari 抽验。—— 本轮全部通过（Ctrl+P、微信真机、Safari iPad）。
+4. 结论回填：归档清单勾选 → `changelog.md` 记录 → `review-findings.md` rf-113 状态更新（回填依据为本文件的总表与实测记录）。—— **三项已执行，rf-113 已收口**。
