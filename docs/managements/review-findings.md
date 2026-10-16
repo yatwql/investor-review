@@ -1,5 +1,5 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.13.4-dev
+> 文档版本：0.13.4
 > **编号源**：`rf-next = 689`（新增问题取此编号，完成后更新为 +1；已用最大 rf-688，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
@@ -50,7 +50,7 @@
 
 ### 归档档案
 
-- [`archived_review-findings.0.13.x.md`](../archive/v0.13.x/archived_review-findings.0.13.x.md) — v0.13.x 开发期已修复批次（2026-10-14 ~ 2026-10-15）
+- [`archived_review-findings.0.13.x.md`](../archive/v0.13.x/archived_review-findings.0.13.x.md) — v0.13.x 开发期已修复批次（2026-10-14 ~ 2026-10-16）
 - [`archived_review-findings.0.12.x.md`](../archive/v0.12.x/archived_review-findings.0.12.x.md) — v0.12.x 已修复批次与开发期追加（2026-10-03 ~ 2026-10-12）
 - [`archived_review-findings.0.11.x.md`](../archive/v0.11.x/archived_review-findings.0.11.x.md) — v0.11.0 ~ v0.11.11  （2026-09-18 ~ 2026-10-02）
 - [`archived_review-findings.0.10.x.md`](../archive/v0.10.x/archived_review-findings.0.10.x.md) — v0.10.1 ~ v0.10.20（2026-08-04 ~ 2026-09-15）
@@ -70,4 +70,4 @@
 
 ### 开发期已修复（0.13.4-dev）
 
-> `scripts/perf-view.py` 行数破线豁免（rf-688）：拆分 `scripts/_perf_view/` 子包后主入口回落红线内，`EXEMPTIONS` 豁免登记与 P3 挂账行同步移除。
+> 本批摘要已随 v0.13.4 发布迁入 [`archived_review-findings.0.13.x.md`](../archive/v0.13.x/archived_review-findings.0.13.x.md)；此处不再保留。

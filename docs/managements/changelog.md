@@ -2,40 +2,19 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
-> **最近发布 [0.13.3]**（2026-10-15）——已发布版本段随发布移入 [`archived_changelog.0.13.x.md`](../archive/v0.13.x/archived_changelog.0.13.x.md)；本文件只保留当前开发版本段与归档索引。
+> **最近发布 [0.13.4]**（2026-10-16）——已发布版本段随发布移入 [`archived_changelog.0.13.x.md`](../archive/v0.13.x/archived_changelog.0.13.x.md)；本文件只保留当前开发版本段与归档索引。
 
 ---
 
 
-## [0.13.4-dev] - 开发中（未发布）
+## [0.13.5-dev] - 开发中（未发布）
 
-### Changed
 
-- **perf-view 读数体验升级（--version / 阶段降序与占比 / 数据新鲜度 / 缺数据提示）**：① 新增 `--version` 前缀过滤（`0.13.4` 命中 `0.13.4-dev`，头部明示「版本筛选」行，可与 `--report-type`/`--last` 组合，`_filter_records`/`_group_records`/机读输出同口径）；② 组详情**阶段表按中位降序**（最慢阶段在前，同分按名保持可 diff）并新增**占比**列（阶段均值 ÷ 组平均总耗时，附并行可超 100% 说明），阶段细分子项同改平均耗时降序；③ 头部新增**数据新鲜度**行（最新记录时间戳 + 距今时长，解析失败降级显示原值）——先判断数据是否新鲜再读数；④ **缺数据明示**：完整报告范围无 `breakdown` 时显示「暂无阶段细分」提示行（不再静默省表），无 `llm` 字段时显示「暂无 LLM 上下文」提示段（basic/both 范围不渲染），区分「无数据」与「不适用」。测试 +6（版本过滤/新鲜度/降序语义/占比/双提示正反向）。
-- **perf-view 拆分子包与管理文档最新状态同步**：① `perf-view.py` 拆出 `scripts/_perf_view/`（`stats.py` 承载分位/离群/稳健统计与记录过滤分组纯函数，主入口 re-export 保 `load_script` 直调测试可达）——主文件回落 1000 行红线内，`check-file-length` 的 `EXEMPTIONS` 豁免与 review-findings rf-688 挂账同步移除；② **管理文档对齐最新状态**：plan.md 移除已完成的 plan-123~126 四个待办块与概述计数（11→7 项），四项完成摘要迁入 `archived_plan.0.13.x.md`；review-findings P3 文件过长登记表按 `check-file-length -v` 真值刷新 6 处行数（html_writer/code_utils/features/excel_generator/operations 等）；`perf-observability-design.md` 头部与 §7 标注四步已实施（保留为现行口径参考）。
-- **perf-view 分组节排序改为真实时间序**：逐版本分组详情（`## 版本 / 类型` 各节）原按版本号**字符串字典序**——`0.9.9` 会排在 `0.13.4` 之后、最新开发版卡在中间，与真实先后不符；改为按各组**首次运行时间**升序（与版本演进总表同口径），最新版本组在最末；组内明细行仍按时间戳升序，同时首次运行时间相同时按组键稳定排序（可复现）。
-- **perf-view 视图输出增强（版本演进 / 漂移检测 / 归一化 / 机读信封）**：① **版本演进总表**——每个（版本, 报告类型）一行（同类型按该版本首现时间排序）：样本数 / 中位 / P95 / **中位秒每品种**（总耗时 ÷ 持仓数，跨持仓规模可比）/ 较上一版中位 delta（|变化| ≥10% 标注 ⚠变慢/变快），一眼看出哪个版本开始变慢；② **机读输出升级**——`--json` 改为信封 `{record_count, records, summary}`（summary 与 Markdown 段同源：分位/按类型/离群/异常/演进/漂移；原为裸记录数组，仓库内无程序化消费方，语义变更安全），`--csv` 增 `per_holding_seconds`/`outlier`/`slowest_phase`/`interrupted_stage`/`errors_count` 列；③ **归一化与小样本提示**——总体分位概览增「中位秒/品种」列，n<20 的口径/分组附「最近秩分位趋近最大值，参考性有限」提示（不改分位算法，保历史可比）；④ **异常运行专区**——中断（`interrupted_stage`）/非完成状态/带错误的运行单独成表（状态/中断阶段/错误数/首条摘要；当前历史无此类记录时整段省略），离群表同增错误数列；⑤ **同版本漂移检测**——同（版本, 类型）按时间对半比较前后半中位（样本 ≥6 参与），显著性与版本对比同噪声带口径（两半变异系数之和 × 较大中位），检出同版本内渐进劣化且不受换版混杂，与演进总表（看换版跳变）互补。
-- **性能门禁可靠性：压测脚本网络无关性与状态隔离**：`perf-test-report.py` 两层离线——① 传输层 `_install_offline_network()`：socket 出口瞬时抛 `OSError`（各抓取器按常规失败类型走既有降级，不崩溃）+ `time.sleep` 置零（同源重试/退避不再真等；全仓无 `from time import sleep`，一处补丁全覆盖），对一切外部抓取（穿透/基金经理/分红/情绪/财报/新闻等，随配置开关增减）兜底；② 咽喉桩保留热点路径真实计算：行情（`fetch_market_data` 两处绑定）、K 线历史链（`chain`/`chain_incremental.fetch_with_incremental_fallback`，流动性/风格因子/事件面板逐仓拉历史都经它）、交易日历（`trading_calendar._get_trading_calendar`，模块唯一网络出口）。使基准与「网络状况/冷热缓存/配置开关组合」无关——冷缓存断网下全流程 58s→2.8s（此前 CI 门禁红正是因为冷缓存下重试退避拖过 60s 阈值，测成了网络状况而非代码性能）。同时 `_isolate_state_writes()` 把 perf 历史/数据源健康快照/熔断状态一并重定向到临时目录，不再污染 `perf-view` 的统计样本与真实运行的供应商熔断状态。
-
-- **性能门禁归属修正 + 视图输出精简**：① 性能门禁改由**主动压测**脚本承担——`perf-test-report.py` 新增 `--gate`（未达标退出码 2，与检查脚本契约一致），CI 新增阻塞型 `perf-gate` job（basic 模式 ≤ 60s，并上传性能报告产物）；② `perf-view.py` **移除 `--gate`**——它是运行历史查看（被动统计既有记录），样本取决于最近跑过什么、不可复现，不适合做门禁（同一份代码跑 10 次与跑 3 次的 P95 不同，且混入 LLM 服务端延迟/网络/机器负载等与提交无关的因素）；③ `perf-view.py` 新增 `--summary`（仅输出概览段，略去逐版本分组详情，记录多时避免输出过长）与 `--outlier-k`（自定义离群判定系数，默认 3.5）；④ 稳健均值改为**仅在存在离群点时**与普通均值并列展示（无离群时两者相同，并列属冗余）。
-
-- **性能对比、机读输出与阈值门禁（plan-126）**：`perf-view.py` 新增 `--compare 旧版本 新版本`（阶段级中位 delta / 倍数 / 变异系数判显著——变化幅度需超过两版本各自变异系数之和 × 较大中位值，避免把运行抖动当回归）、`--json` / `--csv` 机读输出（完整记录 / 逐运行一行）、`--gate 秒` 阈值门禁（P95 总耗时超限退出码 2，与检查脚本契约一致，可挂 CI 拦截真实运行的性能回归；P95 口径对单条离群不敏感，配合 `--exclude-outlier` 可只看正常运行）。
-
-- **运行上下文维度采集（plan-125）**：`perf_history.jsonl` 记录新增 `llm` 字段（provider/model/thinking、重试次数与退避等待秒数、端点节流等待秒数、provider 降级次数、模块级缓存命中/未命中、逐模块 tokens 与费用）。新增 `llm/observation.py` 运行观测汇聚器（`bind_llm_observation`/`current_llm_observation`，线程安全），在调用链上归集：重试退避（`core/retry.py` 的 `on_retry`）、端点节流等待（`llm/pacing.py` 的 `PacingGate`）、provider 命中与降级（`llm/api.py` provider 链）、模块级缓存命中（编排层预检）、逐模块 model/tokens/费用（`llm/session.py` 单源）；未绑定汇聚器时所有记录调用为空操作（单测直调 LLM 层行为零变化）。`perf-view.py` 新增「LLM 运行上下文」段（等待/重试/降级/缓存/费用与 provider/模型分布），回答「时间花在白等还是真推理」。
-
-- **性能视图稳健统计与归因（plan-124）**：`perf-view.py` 新增离群运行段（总耗时 > 中位 + 3.5 × 1.4826 × MAD 判离群，MAD 为 0 时不判；显式列出而非静默剔除）、稳健均值（剔除离群后均值，与普通均值并列）、阶段级分位（阶段表增中位与 P95）、尾部归因（最慢一次运行逐阶段 z 分数与相对历史中位倍数，直给哪一步超常）、时段聚合（`--by day|week|hour`）；新增 `--exclude-outlier` 按稳健口径剔除离群后重算全部统计。实测：126 条历史中自动标出 6636s 那条服务端超时运行，尾部归因定位到 `LLM+新闻` 22.37× / z=+6.14，剔除后均值由 519.7s 降至 362.9s。
-
-- **运行观测面扩充（plan-123）：LLM 模块级细分 + full 埋点补回 + 诊断落盘**：`perf_history.jsonl` 记录新增 `breakdown`（父阶段下的子项自身耗时）与 `counters`（运行期诊断计数）两个旁路观测面，**不参与 `total_seconds`**（保历史可比与 ETA 口径稳定）。`core/perf.py` 新增线程安全 `PhaseBreakdownRecorder`（`PerfCollector.recorder(父阶段)` 取用，四模块在线程池并发写不丢计数）；`LLM+新闻` 阶段细分到四个 LLM 模块与新闻获取（`_llm_dispatch` 逐模块计时、`_llm_news` 新闻获取计时，`span_recorder` 为可选参数，None 时行为零变化）；full 路径 `_report_output.py` 两个 helper 经 `run_integrity.current_perf()` 补回 `HTML 生成`/`Excel 生成` 阶段计时（此前 full 运行丢失这两个阶段，实测 126 条历史中二者各仅 6 条且均早期版本）；`errors`/`warnings_count` 由「恒空」改为自动采集——首个阶段计时时挂只计数日志 handler、`save()` 摘除，WARNING/ERROR 自动入 `counters`（错误消息封顶保留，计数照常累加）。`perf-view.py` 分组段新增「阶段细分」表（旧记录无 `breakdown` 时不渲染空表）。方案与口径见 [`perf-observability-design.md`](../plan/perf-observability-design.md)。
-
-- **perf-view 新增 P95/P99 分位概览**：`scripts/perf-view.py` 输出新增「总体分位概览（跨版本）」表（口径 / 样本数 / 平均 / 中位 / **P95** / **P99** / 最长），并在每个版本分组段直给「95% 的报告在 Xs 内完成，99% 的报告在 Ys 内完成」。分位采**最近秩**（`ceil(pct% × n)` 位样本值）口径，含义即 95% 的报告在该耗时内完成，99% 的报告在该耗时内完成。新增 `_percentile()` / `_total_summary()` / `_overview_lines()`，过滤逻辑抽为 `_filter_records()` 与分组共用（`--report-type` / `--last` 对概览同步生效）；单一报告类型时只渲染合计行，不重复出类型行。同步文档：developer-guide「perf-view」段（分位口径说明 + 脚本清单）与 how-to-use-cli-mode 性能历史小节。回归 = `test_perf_view.py` 新增分位口径 / 汇总字段 / 概览表结构 / 分组完成时间四组用例。
-
-- **developer-guide 核对更新：补发布归档迁移四项 + release 收尾 sync 口径**：对照近期变更核对开发者指南，修复 4 类缺口——① 版本发布流程五步→六步，新增步骤③「发布归档迁移（四项强制）」（rf/plan 完成态/changelog 段/docs-plan 设计文件四项，未完成不得继续 `gate`/`publish`——此前指南完全缺失该强制项），原③④⑤顺延为④⑤⑥并修正步骤间互引用；② 发布类命令注释与编排提示补 `prepare`/`evolution` 收尾自动 `check-doc-drift --sync` 实况（rf-686 后口径同步），并明示归档迁移保留人工且须前置；③ 「② 发布数据文档刷新」补 `evolution --release` 输出「需人工核对注释行」的回填义务（test-coverage 用例收集口径 + folders.md 文档目录分解数）；④ 新增测试指南「新增后必须更新的文件」清单补第 6 条 conftest 隔离 fixture（模块级单例 autouse 复位、持久化/输出路径在 `_isolate_sensitive_paths` 重定向，指向 CLAUDE.md「新增测试隔离要求」细则）。新增段落措辞经 `check-doc-traces` ARCHIVE 规则复核（面向读者文档不写归档目录/文件名）。
-
-- **`perf-report.py` 更名 `perf-test-report.py`**：与「历史趋势查看 `perf-view.py`」对仗，突出其**基准测试**定位（自造模拟持仓跑 basic/both 管线、mock LLM，输出 `docs/tmp/better-investment-performance-test-report.md`）。`git mv` 保留历史，同步更新脚本自引用、`core/perf.py` 分层注释、`_traces_code/patterns.py` 注释、developer-guide 脚本清单与诊断段、folders.md 目录树；配套测试同步更名 `test_perf_test_report.py`（fixture 名与 `load_script` 入参随改），`test_script_loader.py` 的模块名派生断言随新文件名（`perf_test_report`）更新。
+（本次发布内容见下方归档索引）
 
 ## 归档
 
-- [`archived_changelog.0.13.x.md`](../archive/v0.13.x/archived_changelog.0.13.x.md) — v0.13.0 ~ v0.13.3（2026-10-13 ~ 2026-10-15）
+- [`archived_changelog.0.13.x.md`](../archive/v0.13.x/archived_changelog.0.13.x.md) — v0.13.0 ~ v0.13.4（2026-10-13 ~ 2026-10-16）
 - [`archived_changelog.0.12.x.md`](../archive/v0.12.x/archived_changelog.0.12.x.md) — v0.12.1 ~ v0.12.13（2026-10-03 ~ 2026-10-13）
 - [`archived_changelog.0.11.x.md`](../archive/v0.11.x/archived_changelog.0.11.x.md) — v0.11.0 ~ v0.11.12 + v0.12.0（2026-09-15 ~ 2026-10-03）
 - [`archived_changelog.0.10.x.md`](../archive/v0.10.x/archived_changelog.0.10.x.md) — v0.10.1 ~ v0.10.19（2026-08-04 ~ 2026-09-13）

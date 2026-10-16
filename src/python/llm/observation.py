@@ -1,6 +1,6 @@
 """LLM 运行观测汇聚 —— 把调用链上的等待/选路/用量事实汇入本次运行的 perf 记录。
 
-设计意图（见 `docs/plan/perf-observability-design.md`）：回答「时间花在白等还是真推理」
+设计意图（见 `docs/archive/v0.13.x/perf-observability-design.md`）：回答「时间花在白等还是真推理」
 「换 provider 或关 thinking 省多少」「缓存冷热影响多大」这类问题，需要把分散在
 重试骨架（`core/retry.py` 退避）、端点节流（`llm/pacing.py` 等待）、会话用量
 （`llm/session.py` 逐模块 model/tokens/cost）三处的事实，按**本次运行**归集。

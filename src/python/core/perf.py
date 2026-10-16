@@ -21,7 +21,7 @@
     - 同时通过 logging 输出 INFO 级计时日志
     - 结果包含版本号，支持跨版本性能趋势追踪
 
-观测面分层（见 docs/plan/perf-observability-design.md）：
+观测面分层（见 docs/archive/v0.13.x/perf-observability-design.md）：
     phases   — 粗粒度阶段墙钟（ETA 预估与历史对比的基准口径）
     breakdown— 父阶段下的子项自身耗时（子项可并行，之和可大于父阶段墙钟）
     counters — 诊断计数（warnings/errors 等；由日志采集与调用点登记共同填充）

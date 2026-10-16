@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.13.4-dev
+> 文档版本：0.13.4
 
 ## 概述
 
@@ -1346,7 +1346,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 **数据来源**：每次 `generate_report()` 调用时自动记录到 `data/state/perf_history.jsonl`，无需手动触发；中断运行以 `status=interrupted` 记录（含 `interrupted_stage`），与成功完成（`completed`）区分，页头状态行据显「已中断」。
 
-**记录字段分层**（观测面口径，详见 [`perf-observability-design.md`](../plan/perf-observability-design.md)）：
+**记录字段分层**（观测面口径）：
 
 | 字段 | 含义 | 是否参与总耗时 |
 |:-----|:-----|:---------------|
