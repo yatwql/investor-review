@@ -42,6 +42,11 @@
                     </tr>
                     {% endif %}
                 </table>
+                {% if _sh.qdii_value_diff %}
+                <div style="font-size: var(--fs-footnote); line-height: 1.5; opacity: 0.75; margin-top: 4px;">
+                    注：总市值环比含 QDII 官方净值变动 {{ "+" if _sh.qdii_value_diff > 0 }}{{ _sh.qdii_value_diff | money }} 元{% if _sh.qdii_lagged %}（T-1 口径，滞后一个交易日）{% endif %}。
+                </div>
+                {% endif %}
                 {% if _sh.changes %}
                 <div style="font-size: var(--fs-table); line-height: 1.9; margin-top: 6px;">
                     {% for c in _sh.changes %}

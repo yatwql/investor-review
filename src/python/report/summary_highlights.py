@@ -43,6 +43,9 @@ def build_summary_highlights(
             不可解析时为 ""，渲染层省略对比基准行）
           - baseline_generated_at: 对比基线报告的生成时间（YYYY-MM-DD HH:MM，同上降级）
           - total_value_diff / total_value_diff_pct: 总市值环比金额与比率
+          - qdii_value_diff / qdii_lagged: 环比中含有的 QDII 官方净值变动金额及
+            是否滞后口径（T-1）——供渲染层在环比行下注明「其中 QDII …」，无 QDII
+            或变动为 0 时渲染层省略该注
           - total_pnl_diff / total_pnl_pct_diff: 总盈亏环比金额与盈亏率百分点
           - holding_count_delta: 持仓数环比（新增品种数 - 清仓品种数）
           - added_count / removed_count: 本期新增/清仓品种数（持仓数环比注脚）
@@ -88,6 +91,8 @@ def build_summary_highlights(
         "baseline_generated_at": diff.get("baseline_generated_at", ""),
         "total_value_diff": diff.get("total_value_diff", 0.0),
         "total_value_diff_pct": diff.get("total_value_diff_pct", 0.0),
+        "qdii_value_diff": diff.get("qdii_value_diff", 0.0),
+        "qdii_lagged": bool(diff.get("qdii_lagged", False)),
         "total_pnl_diff": diff.get("total_pnl_diff", 0.0),
         "total_pnl_pct_diff": diff.get("total_pnl_pct_diff", 0.0),
         "holding_count_delta": added_count - removed_count,

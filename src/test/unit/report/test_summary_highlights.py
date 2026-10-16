@@ -11,6 +11,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 
 from src.python.fetcher.history_diff import HistoryDiff
@@ -129,6 +131,20 @@ class TestBuildSummaryHighlights:
         assert h["baseline_trading_day"] == ""
         assert h["baseline_generated_at"] == ""
 
+    def test_qdii_note_fields_passthrough(self):
+        """QDII 口径注字段（金额 / 是否滞后）从 diff 透传到契约。"""
+        h = build_summary_highlights({"diff": _diff_dict(qdii_value_diff=-557.29, qdii_lagged=True)})
+        assert h is not None
+        assert h["qdii_value_diff"] == -557.29
+        assert h["qdii_lagged"] is True
+
+    def test_qdii_note_fields_default_when_absent(self):
+        """diff 无 QDII 键（旧口径）→ 金额 0 且非滞后，渲染层据此省略该注。"""
+        h = build_summary_highlights({"diff": _diff_dict()})
+        assert h is not None
+        assert h["qdii_value_diff"] == 0.0
+        assert h["qdii_lagged"] is False
+
 
 class TestPnlPctDiffChain:
     """总盈亏率环比：HistoryDiff.compute 计算 → capture_snapshot diff dict 透传。"""
@@ -236,3 +252,65 @@ class TestSummarySectionTemplate:
         }
         html = self._render(build_summary_highlights(pd, max_changes=5))
         assert "等共 7 项变动" in html
+
+    def test_qdii_note_rendered_when_present(self):
+        """环比含 QDII 净值变动 → 渲染口径注（金额 + T-1 滞后标注）。"""
+        diff = _diff_dict(qdii_value_diff=-557.29, qdii_lagged=True)
+        html = self._render(build_summary_highlights({"diff": diff}))
+        assert "含 QDII 官方净值变动 -557.29 元" in html
+        assert "T-1 口径，滞后一个交易日" in html
+
+    def test_qdii_note_omitted_when_absent(self):
+        """无 QDII 变动（键缺席/金额 0）→ 口径注省略，其余照常渲染。"""
+        html = self._render(build_summary_highlights({"diff": _diff_dict()}))
+        assert "本期要点" in html
+        assert "QDII 官方净值变动" not in html
+
+
+class TestQdiiLaggedValueDiff:
+    """环比中 QDII 净值变动分项（``_snapshot._classify_qdii_value_diff``）。"""
+
+    @staticmethod
+    def _detail(code: str, name: str, mv: float, nav_date: str):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(code=code, name=name, market_value=mv, nav_date=nav_date)
+
+    @staticmethod
+    def _old(holdings) -> SnapshotData:
+        return SnapshotData(
+            accounts=(AccountSnapshot(account_name="全部", holdings=tuple(holdings)),),
+            total_value=sum(h.market_value for h in holdings),
+            total_cost=0.0,
+            total_pnl=0.0,
+            timestamp="2026-01-09T15:00:00",
+        )
+
+    @patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-01-12")
+    def test_qdii_subtotal_and_lagged_flag(self, mock_td):
+        """QDII 分项 = 各 QDII 品种市值差之和；净值日期早于 T → 滞后口径 True。"""
+        from src.python.report._snapshot import _classify_qdii_value_diff
+
+        old = self._old(
+            [
+                SnapshotHolding(
+                    code="017730", name="嘉实全球产业升级股票(QDII)A", shares=1.0, cost_price=1.0, market_value=29044.75
+                ),
+                SnapshotHolding(code="600900", name="长江电力", shares=1.0, cost_price=1.0, market_value=26415.0),
+            ]
+        )
+        details = [
+            self._detail("017730", "嘉实全球产业升级股票(QDII)A", 28373.06, "2026-01-09"),
+            self._detail("600900", "长江电力", 26442.0, "2026-01-12"),
+        ]
+        diff, lagged = _classify_qdii_value_diff(details, old)
+        assert diff == pytest.approx(-671.69)
+        assert lagged is True
+
+    @patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-01-12")
+    def test_no_qdii_returns_zero(self, mock_td):
+        """无 QDII 持仓 → (0.0, False)，渲染层据此省略口径注。"""
+        from src.python.report._snapshot import _classify_qdii_value_diff
+
+        details = [self._detail("600900", "长江电力", 26442.0, "2026-01-12")]
+        assert _classify_qdii_value_diff(details, None) == (0.0, False)
