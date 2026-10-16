@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -191,8 +192,49 @@ def _price_chain_slots() -> tuple[dict[str, tuple[str, _ProviderFunc]], dict[str
 _OTC_NAV_ROUTES = frozenset({"price_fund_otc"})
 
 
-def _price_cache_fresh(data: dict, data_type: str, name: str = "") -> bool:
-    """收市后验证价格缓存数据是否来自当前交易日。
+def _cache_captured_at(cache_key: str | None) -> float | None:
+    """价格缓存写入时刻（epoch 秒）；无缓存 / 读取异常返回 None。
+
+    缓存文件把写入时刻存于 ``_ts``，但 ``cache.get`` 只返回 ``_data``，故用
+    ``get_cache_age`` 反推写入时刻。调用方在 ``fetch_with_fallback`` 之后读取时，
+    实时抓取刚刚写盘（age≈0）、缓存命中则反映原始写入时刻——两种情况都能还原
+    「这份价格是什么时候抓到的」。
+    """
+    if not cache_key:
+        return None
+    try:
+        from src.python.cache import get_cache_age
+
+        age = get_cache_age(cache_key)
+        if age is None:
+            return None
+        return time.time() - age
+    except Exception:
+        logger.debug("[price] 读取缓存写入时刻失败: %s", cache_key, exc_info=True)
+        return None
+
+
+def _trading_day_close_epoch(trading_day: str) -> float | None:
+    """交易日收盘时点（北京时间 15:00）的 epoch 秒；解析失败返回 None。"""
+    from datetime import datetime, timedelta
+
+    from src.python.core.constants import BEIJING_TZ
+    from src.python.core.market_hours import _AFTERNOON_END
+
+    try:
+        day = datetime.strptime(trading_day, "%Y-%m-%d")
+    except (ValueError, TypeError):
+        return None
+    return (day.replace(tzinfo=BEIJING_TZ) + timedelta(minutes=_AFTERNOON_END)).timestamp()
+
+
+def _price_cache_fresh(
+    data: dict,
+    data_type: str,
+    name: str = "",
+    cache_key: str | None = None,
+) -> bool:
+    """收市后验证价格缓存数据是否来自当前交易日（且已过收盘时点）。
 
     缓存命中的缓存若 price_date 早于**该路由允许的最新日期**，说明是跨日残留的过时
     数据（例如盘中 Tencent 降级到 EastMoney 写入的上一交易日净值），应强制刷新。
@@ -204,6 +246,13 @@ def _price_cache_fresh(data: dict, data_type: str, name: str = "") -> bool:
         QDII 合法为 T-1（以前一交易日为阈值），国内场外 T 日当晚即披露、
         盘后应已到 T（以最近交易日为阈值）。
 
+    场内行情还须通过**收盘时点**校验：``price_date == T`` 只说明「数据属于 T 日」，
+    但 T 日收盘（15:00）之前写入的缓存是**盘中残留**——盘后或次日盘前继续沿用会把
+    盘中价当作 T 日收盘价，使「本日盈亏」与「快照环比」系统性偏离真实涨跌。故当
+    T 日已收盘（now ≥ T 日 15:00）时，要求缓存写入时刻 ≥ T 日 15:00；午间休市等
+    T 日尚未收盘的时段不施加此约束（上午收盘价即当时最新价）。传入 ``cache_key``
+    方能取到写入时刻；缺省（None）时跳过该时点校验以兼容旧调用。
+
     QDII 判定与 ``report.market_value.price_update_status`` 同源自
     ``is_qdii_extended``，确保「缓存新鲜度门禁」与「价格更新状态」口径一致——
     否则门禁会放行一份报告口径上已过期的国内场外缓存（T-1），导致价格更新状态
@@ -214,6 +263,7 @@ def _price_cache_fresh(data: dict, data_type: str, name: str = "") -> bool:
         data_type: 价格路由（``price_stock`` / ``price_fund_otc``）
         name: 持仓名称，用于区分 QDII 与国内场外（场外提供商返回的 ``name`` 常为空，
             必须由调用方传入持仓名）
+        cache_key: 价格缓存键；传入时可校验缓存写入时点（场内收盘价口径）
     """
     try:
         from src.python.core.market_hours import is_market_open as _mh_open
@@ -231,7 +281,16 @@ def _price_cache_fresh(data: dict, data_type: str, name: str = "") -> bool:
                 from src.python.report.market_value import get_prev_trading_day as _gp
 
                 td = _gp(td)
-        return pd >= td
+        if pd < td:
+            return False
+        # 场内行情：T 日收盘价只在收盘后成形；盘中写入（price_date==T）属残留
+        if data_type not in _OTC_NAV_ROUTES:
+            captured_at = _cache_captured_at(cache_key)
+            close_epoch = _trading_day_close_epoch(td)
+            if captured_at is not None and close_epoch is not None and captured_at < close_epoch <= time.time():
+                logger.debug("[price] 场内价格缓存为 %s 盘中残留（写入早于收盘），强制刷新", td)
+                return False
+        return True
     except Exception:
         logger.warning("[price] _price_cache_fresh 校验异常，保守视作新鲜", exc_info=True)
         return True
@@ -296,12 +355,13 @@ def _fetch_price_with_cache_refresh(
     else:
         _t.record(_src_key, "T2", success=False, failure_type="unreachable", message=diag.summary())
 
-    if r is not None and not _price_cache_fresh(r, data_type, expected_name):
+    if r is not None and not _price_cache_fresh(r, data_type, expected_name, cache_key):
         from src.python.cache import clear as _cache_clear
         from src.python.report.market_value import get_last_trading_day as _gtd
 
         _td = _gtd()
-        logger.debug("价格缓存来自 %s（交易日 %s），跨日残留，强制刷新", r.get("price_date", "?"), _td)
+        logger.debug("价格缓存来自 %s（交易日 %s），跨日/盘中残留，强制刷新", r.get("price_date", "?"), _td)
+        _stale_fallback = r
         _cache_clear(cache_key)
         refresh_diag = FailureDiagnostics()
         r = fetch_with_fallback(
@@ -317,6 +377,10 @@ def _fetch_price_with_cache_refresh(
         if r is not None:
             _t.record(f"{_src_key}_refresh", "T2", success=True)
         else:
+            # 刷新后全链仍不可用 → 退回刷新前那份（过时但有值），不因清缓存反而丢数据
+            # （与 fetch_with_fallback 的过期缓存兜底同旨）。
+            logger.info("[price] %s 强制刷新失败，退回刷新前的过时缓存", code)
+            r = _stale_fallback
             _t.record(
                 f"{_src_key}_refresh",
                 "T2",

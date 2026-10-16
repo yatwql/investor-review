@@ -20,6 +20,15 @@ import pytest
 pytestmark = [pytest.mark.unit, pytest.mark.unit_fetcher, pytest.mark.usefixtures("offline_external_sources")]
 
 
+def _epoch(year: int, month: int, day: int, hour: int, minute: int) -> float:
+    """北京时间某时刻的 epoch 秒（测试固定时点用，避免依赖宿主时钟）。"""
+    from datetime import datetime
+
+    from src.python.core.constants import BEIJING_TZ
+
+    return datetime(year, month, day, hour, minute, tzinfo=BEIJING_TZ).timestamp()
+
+
 class TestNameMatches(unittest.TestCase):
     """_name_matches 纯函数测试。"""
 
@@ -459,10 +468,10 @@ class TestOtcNavBackupSource(unittest.TestCase):
 class TestPriceCacheFresh(unittest.TestCase):
     """_price_cache_fresh 收市后新鲜度验证测试。"""
 
-    def _call(self, data: dict, data_type: str = "price_stock", name: str = "") -> bool:
+    def _call(self, data: dict, data_type: str = "price_stock", name: str = "", cache_key: str | None = None) -> bool:
         from src.python.fetcher.price import _price_cache_fresh
 
-        return _price_cache_fresh(data, data_type, name)
+        return _price_cache_fresh(data, data_type, name, cache_key)
 
     @patch("src.python.core.market_hours.is_market_open", return_value=True)
     def test_market_open_always_fresh(self, mock_open):
@@ -534,6 +543,62 @@ class TestPriceCacheFresh(unittest.TestCase):
         """场外净值早于前一交易日 → 仍判跨日残留（不放过真正的过时数据）。"""
         self.assertFalse(self._call({"price_date": "2026-07-29"}, "price_fund_otc"))
 
+    @patch("src.python.fetcher.price.time.time", return_value=_epoch(2026, 7, 31, 20, 0))
+    @patch("src.python.fetcher.price._cache_captured_at", return_value=_epoch(2026, 7, 31, 13, 0))
+    @patch("src.python.core.market_hours.is_market_open", return_value=False)
+    @patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-31")
+    def test_intraday_tick_after_close_stale(self, mock_td, mock_open, mock_captured, mock_time):
+        """场内：price_date==T 但缓存写于 T 日盘中（收盘前）→ 判过时（收盘价口径）。
+
+        回归：盘后/次日盘前运行曾只看 price_date==T 就复用盘中价，把 13:01 的
+        29.35 当成 10-15 收盘价（真实 29.60），导致本日盈亏与快照环比系统性偏离。
+        """
+        data = {"price_date": "2026-07-31"}
+        self.assertFalse(self._call(data, "price_stock", "长江电力", "price_stock_600900"))
+
+    @patch("src.python.fetcher.price.time.time", return_value=_epoch(2026, 7, 31, 20, 0))
+    @patch("src.python.fetcher.price._cache_captured_at", return_value=_epoch(2026, 7, 31, 15, 30))
+    @patch("src.python.core.market_hours.is_market_open", return_value=False)
+    @patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-31")
+    def test_post_close_tick_fresh(self, mock_td, mock_open, mock_captured, mock_time):
+        """场内：缓存写于 T 日收盘之后 → 确为收盘价，判新鲜（不误伤正常盘后缓存）。"""
+        data = {"price_date": "2026-07-31"}
+        self.assertTrue(self._call(data, "price_stock", "长江电力", "price_stock_600900"))
+
+    @patch("src.python.fetcher.price.time.time", return_value=_epoch(2026, 7, 31, 12, 0))
+    @patch("src.python.fetcher.price._cache_captured_at", return_value=_epoch(2026, 7, 31, 11, 0))
+    @patch("src.python.core.market_hours.is_market_open", return_value=False)
+    @patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-31")
+    def test_intraday_tick_before_close_allowed(self, mock_td, mock_open, mock_captured, mock_time):
+        """午间休市（T 日尚未收盘）→ 不施加收盘时点约束，上午收盘价即可用。"""
+        data = {"price_date": "2026-07-31"}
+        self.assertTrue(self._call(data, "price_stock", "长江电力", "price_stock_600900"))
+
+    @patch("src.python.fetcher.price.time.time", return_value=_epoch(2026, 7, 31, 20, 0))
+    @patch("src.python.fetcher.price._cache_captured_at", return_value=_epoch(2026, 7, 31, 13, 0))
+    @patch("src.python.core.market_hours.is_market_open", return_value=False)
+    @patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-31")
+    def test_otc_route_ignores_capture_time(self, mock_td, mock_open, mock_captured, mock_time):
+        """场外路由不受收盘时点约束（净值披露与场内盘中价语义不同）。"""
+        data = {"price_date": "2026-07-31"}
+        self.assertTrue(self._call(data, "price_fund_otc", "建信高端装备股票A", "price_fund_otc_011506"))
+
+    @patch("src.python.fetcher.price.time.time", return_value=1_000_000.0)
+    @patch("src.python.cache.get_cache_age", return_value=3600.0)
+    def test_cache_captured_at_from_age(self, mock_age, mock_time):
+        """``_cache_captured_at`` 由缓存年龄反推写入时刻；无缓存键返回 None。"""
+        from src.python.fetcher.price import _cache_captured_at
+
+        self.assertEqual(_cache_captured_at("price_stock_600900"), 1_000_000.0 - 3600.0)
+        self.assertIsNone(_cache_captured_at(None))
+
+    def test_trading_day_close_epoch_is_1500_beijing(self):
+        """交易日收盘时点＝北京时间 15:00；非法日期返回 None。"""
+        from src.python.fetcher.price import _trading_day_close_epoch
+
+        self.assertEqual(_trading_day_close_epoch("2026-07-31"), _epoch(2026, 7, 31, 15, 0))
+        self.assertIsNone(_trading_day_close_epoch("not-a-date"))
+
 
 class TestFetchPriceCacheRefresh(unittest.TestCase):
     """_fetch_price_with_cache_refresh 跨日残留强刷路径测试。"""
@@ -557,11 +622,11 @@ class TestFetchPriceCacheRefresh(unittest.TestCase):
         "source": "东方财富",
     }
 
-    def _call(self):
+    def _call(self, data_type: str = "price_fund_otc"):
         from src.python.fetcher.price import _fetch_price_with_cache_refresh
 
         return _fetch_price_with_cache_refresh(
-            "price_fund_otc",
+            data_type,
             "011506",
             "price_011506",
             "测试基金",
@@ -576,6 +641,18 @@ class TestFetchPriceCacheRefresh(unittest.TestCase):
         result = self._call()
         self.assertEqual(result["price"], 1.2345)  # 返回第二次（最新）结果
         self.assertEqual(result["price_date"], "2026-07-31")
+        self.assertEqual(mock_fallback.call_count, 2)
+        mock_clear.assert_called_once_with("price_011506")
+
+    @patch("src.python.fetcher.price._price_cache_fresh", return_value=False)
+    @patch("src.python.cache.clear")
+    @patch("src.python.fetcher.price.fetch_with_fallback")
+    def test_refresh_failure_keeps_pre_refresh_value(self, mock_fallback, mock_clear, mock_fresh):
+        """强制刷新后全链仍失败 → 退回刷新前的过时缓存（不因清缓存反而丢数据）。"""
+        mock_fallback.side_effect = [self._STALE, None]
+        result = self._call()
+        self.assertIsNotNone(result)
+        self.assertEqual(result["price_date"], "2026-07-30")
         self.assertEqual(mock_fallback.call_count, 2)
         mock_clear.assert_called_once_with("price_011506")
 
@@ -617,3 +694,36 @@ class TestFetchPriceCacheRefresh(unittest.TestCase):
         self.assertIsNone(result)
         self.assertEqual(mock_fallback.call_count, 1)
         mock_clear.assert_not_called()
+
+    _INTRADAY_RESIDUAL = {
+        "name": "长江电力",
+        "code": "600900",
+        "price": 29.35,
+        "yesterday_close": 29.45,
+        "price_date": "2026-07-31",  # 日期看似最新，但写于当日盘中
+        "source_api": "tencent",
+        "source": "腾讯财经",
+    }
+    _POST_CLOSE = {
+        **_INTRADAY_RESIDUAL,
+        "price": 29.60,
+    }
+
+    @patch("src.python.fetcher.price.time.time", return_value=_epoch(2026, 7, 31, 20, 0))
+    @patch("src.python.cache.get_cache_age", return_value=7 * 3600.0)
+    @patch("src.python.core.market_hours.is_market_open", return_value=False)
+    @patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-31")
+    @patch("src.python.cache.clear")
+    @patch("src.python.fetcher.price.fetch_with_fallback")
+    def test_intraday_residual_triggers_refresh(
+        self, mock_fallback, mock_clear, mock_td, mock_open, mock_age, mock_time
+    ):
+        """端到端：场内缓存写于 T 日盘中 → 真新鲜度校验判过时 → 清缓存重取到收盘价。
+
+        回归复现路径：仅凭 price_date 判等（==T 即放行）会把这枚盘中价带入当日盘后。
+        """
+        mock_fallback.side_effect = [self._INTRADAY_RESIDUAL, self._POST_CLOSE]
+        result = self._call("price_stock")
+        self.assertEqual(result["price"], 29.60)
+        self.assertEqual(mock_fallback.call_count, 2)
+        mock_clear.assert_called_once_with("price_011506")

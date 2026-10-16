@@ -386,6 +386,7 @@ def _generate_details(holdings: list[Holding], today_str: str = "") -> list[Deta
         # 缓存键/会话域按价格路由分域（price_stock / price_fund_otc）：
         # 00 重叠区同一代码可能是股票与场外基金两只证券，共用键会串味
         _route = resolve_price_route(h.code, h.name)
+        _cache_key = price_cache_key(h.code, h.name)
         mkt = registry.fetch_cached_only(
             h.code,
             _route,
@@ -394,7 +395,9 @@ def _generate_details(holdings: list[Holding], today_str: str = "") -> list[Deta
         # 收市后校验价格缓存日期是否 ≥ 该路由允许的最新日期（跨日残留缓存 → 降级重取）。
         # 阈值按路由分域：场内须等于最近交易日；场外官方净值中 QDII 合法为 T-1，
         # 国内场外 T 日当晚披露、盘后须到 T（传入持仓名供 is_qdii_extended 区分）。
-        if mkt is not None and not _price_cache_fresh(mkt, _route, h.name):
+        # 另传 cache_key：场内还须校验缓存写入时点（收盘前写入的盘中价即便 price_date==T
+        # 也是残留，沿用会把盘中价当收盘价，污染本日盈亏与快照环比）。
+        if mkt is not None and not _price_cache_fresh(mkt, _route, h.name, _cache_key):
             logger.debug(
                 "CACHE_ONLY 缓存过时: %s (%s) price_date=%s，降级到实时获取",
                 h.name,

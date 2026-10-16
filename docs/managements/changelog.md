@@ -11,6 +11,7 @@
 
 ### Fixed
 
+- **盘前/盘后价格缓存误用盘中价（rf-691）**：`_price_cache_fresh` 此前只比 `price_date`，把交易日 T 盘中写入的场内缓存（如 10-15 13:01 的 29.35）当作 T 日收盘价（真实 29.60）在盘后/次日盘前沿用，使「本日盈亏」与「快照环比」系统性偏离真实涨跌。现增加收盘时点校验：T 日已收盘（now ≥ 15:00）时要求缓存写入时刻 ≥ T 日 15:00（午间休市不施加），`report/market_value.py` 的 `CACHE_ONLY` 分支与 `_fetch_price_with_cache_refresh` 两处传入 `cache_key`；强制刷新失败时退回刷新前的过时缓存（不再因清缓存反而丢数据）。新增 `test_fetcher_price.py` 8 个回归用例。
 - **Web 生成完成后按钮复位（rf-690）**：run 完成后「生成报告」按钮停在「生成中...」禁用态、无法再次生成或换格式再生成（rf-257 真机 basic 实测揭示）——根因是 `pollOnce` 完成分支只移除 `aria-busy`、未复位文案与禁用态、未清已消费的 `file_id`；完成分支与 `resetFlow` 共用 `restoreGenerateBtn()` 单源复位（清 `state.fileId` → `updateGenerateBtn()` → 文案还原 +「请重新上传」提示；正式-用存量免上传立即可再生成），新增 `test_web_generate_flow.py` 源结构回归 3 用例。
 
 ### Changed
