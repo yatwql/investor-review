@@ -455,6 +455,23 @@
     }
   }
 
+  /* 生成按钮与上传态复位（生成完成与流程重置共用单源）：上传文件已随 run 消费
+   * 清理 → 试算/正式-上传清 file_id 后由 updateGenerateBtn() 判定并提示重新上传；
+   * 正式-用存量免上传，复位后立即可再次生成（换格式再生成同入口） */
+  function restoreGenerateBtn(message) {
+    els.generateBtn.removeAttribute('aria-busy');
+    state.fileId = null;
+    state.uploadInfo = null;
+    els.fileInput.value = '';
+    updateGenerateBtn();
+    els.generateBtn.textContent = '生成报告';
+    if (isFormalExisting()) {
+      setStatus(els.uploadStatus, '可直接重新生成（读取当前正式持仓文件）', 'ok');
+    } else {
+      setStatus(els.uploadStatus, message || '持仓文件已随本次生成消费，如需再次生成请重新上传', 'busy');
+    }
+  }
+
   function pollOnce() {
     fetch('/api/runs/' + encodeURIComponent(state.runId) + '/events?after=' + state.lastSeq, {
       signal: AbortSignal.timeout(10000),
@@ -467,7 +484,7 @@
         }
         if (data.status === 'done' || data.status === 'failed') {
           stopPolling();
-          els.generateBtn.removeAttribute('aria-busy');
+          restoreGenerateBtn();
           loadResult();
         }
       })
@@ -614,8 +631,6 @@
 
   function resetFlow(message) {
     stopPolling();
-    state.fileId = null;
-    state.uploadInfo = null;
     state.runId = null;
     state.lastSeq = 0;
     els.progressSection.hidden = true;
@@ -623,15 +638,8 @@
     els.generateError.textContent = '';
     // 试算/正式-上传：上传文件已随 run 消费清理，需重新上传；
     // 正式-用存量：无需上传，直接重新生成（提示与焦点均不指向重新上传）
-    updateGenerateBtn();
-    els.generateBtn.textContent = '生成报告';
-    if (isFormalExisting()) {
-      setStatus(els.uploadStatus, '可直接重新生成（读取当前正式持仓文件）', 'ok');
-    } else {
-      els.fileInput.value = '';
-      if (message) {
-        setStatus(els.uploadStatus, message, 'busy');
-      }
+    restoreGenerateBtn(message);
+    if (!isFormalExisting()) {
       els.fileInput.focus();
     }
   }

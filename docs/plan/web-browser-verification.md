@@ -145,7 +145,7 @@ ls data/holdings/uploads/     # 应为空；有残留则删除本次测试产生
 |:------|:----|:----------|
 | 5.1 初始 disabled | 自动化 | **过**。DOMContentLoaded 时点 `#generate-btn.disabled=true`；disabled 视觉 `opacity=0.5`、`cursor=not-allowed`。证据 `cdp-run.log` 5.1/5.1b |
 | 5.2 上传 + 选格式后可点 | 自动化 | **过**。合法上传成功后 `disabled=false`（格式默认已选 basic）。证据 `cdp-run.log` 5.2 |
-| 5.3 点击生成后转禁用 | **人工** | 需真实提交（本次红线禁止，不实际提交生成）。代码路径：`onSubmit` 先 `disabled=true` + `aria-busy=true` + 文案「正在提交...」 |
+| 5.3 点击生成后转禁用（完成后恢复） | **人工** | 真机 basic 实测已执行：点击即转禁用「正在提交...」→「生成中...」✅；**首测完成态按钮未复位**（停在「生成中...」禁用态，缺陷已修复：完成分支与 `resetFlow` 共用 `restoreGenerateBtn()` 单源复位 + 回归用例），复测并入 rf-257 收尾。代码路径：`onSubmit` 先 `disabled=true` + `aria-busy=true` |
 | 5.4 次级按钮 hover + 点击动作 | 自动化 | **过**。**真实鼠标**（`cdp-hover-debug.mjs`：`Input.dispatchMouseEvent` + 先 `scrollIntoView` 保证元素在视口内）4/4 按钮命中且移出后还原：`#generate-btn` 背景 `rgb(31,111,178) → rgb(24,90,146)`（`--primary → --primary-hover`，按钮已处于可用态）、`#config-reload`/`#health-refresh`/`#log-load` 边框 `rgb(217,220,225) → rgb(31,111,178)`，`:hover` 链逐级命中目标按钮；**375px 下** `#health-refresh` 真实 hover 同样命中。另以 `CSS.forcePseudoState` 强制 `:hover` 作为确定性兑底口径亦全部命中。**点击动作**：「刷新」→ 缓存统计回填（`306 个`）、**「加载日志」→ 日志列表真实加载**（只读 `GET`）。证据 `cdp-run.log` 5.4a/5.4b/5.4c/5.4d + `hover-debug.json`。注：「清理过期」会写 `data/cache/`，本次不点，留人工 |
 | 5.5 加载态占位非空白 | 自动化 | **过**。首屏时点（Fetch 暂扣响应保证可观察）`#health-list`「正在检测...」、`#history-list`「加载中...」。证据 `cdp-run.log` 5.5 |
 | 5.6 正式更新未确认被拦 | 自动化 | **过**。切到「正式更新」→ `#formal-options` 展开、未勾选「我已知晓」时 `disabled=true`（提交被拦）；勾选后 `disabled=false`；切回试算 → 展开区收起、确认勾选自动清除。证据 `cdp-run.log` 5.6 |

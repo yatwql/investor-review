@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.13.5-dev
-> **编号源**：`rf-next = 690`（新增问题取此编号，完成后更新为 +1；已用最大 rf-689，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 691`（新增问题取此编号，完成后更新为 +1；已用最大 rf-690，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -70,6 +70,7 @@
 ### 开发期已修复（0.13.5-dev）
 
 > rf-689 已修复（2026-10-16）：发布归档迁移改动后便宜守护未跑 `check-doc-traces` 即进 gate，P2 门禁因文档级 finding 双跑全量 regression——developer-guide 发布流程段已补「进 gate 前必跑便宜守护」分层纪律。
+> rf-690 已修复（2026-10-16）：run 完成后「生成报告」按钮停在「生成中...」禁用态、无法再次/换格式生成（rf-257 真机 basic 实测揭示）——`pollOnce` 完成分支只移除 `aria-busy`、未复位文案与禁用态、未清已消费 `file_id`；完成分支与 `resetFlow` 共用 `restoreGenerateBtn()` 单源复位（清 `state.fileId` → `updateGenerateBtn()` → 文案还原 +「请重新上传」提示，正式-用存量免上传立即可再生成），新增 `test_web_generate_flow.py` 3 个源结构回归用例；真机复测并入 rf-257 收尾确认。
 > rf-113 已修复（2026-10-16）：Iter 7 全链路浏览器人工验证六项全部完成——headless 自动化回归（① 6 图 badge / ② 2.4 afterprint / ③ 3.1 断网渲染 / ⑤ 375px 报告+调试页 / ⑥ 禁 Canvas 兜底，复跑 5 PASS + ⑥ 表现记录口径）+ 人工抽验（② 真实 Ctrl+P 打印预览、④ 微信真机 4.3+4.4、Safari 90+ iPad 抽验、Windows Chrome/Firefox；4.1 链接访问维护者豁免）；附带发现两处已由 rf-645 修复并复跑确认（⑤-testchart 转 PASS）。方法与证据见 `docs/plan/report-browser-verification.md`，勾选清单归档留存；rf-114 前置随之满足。
 
 ### 开发期已修复（0.13.4-dev）
