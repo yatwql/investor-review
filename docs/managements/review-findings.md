@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.13.5-dev
-> **编号源**：`rf-next = 689`（新增问题取此编号，完成后更新为 +1；已用最大 rf-688，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 690`（新增问题取此编号，完成后更新为 +1；已用最大 rf-689，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -67,6 +67,10 @@
 ### 开发期已修复（0.13.3-dev）
 
 > 本批摘要已随 v0.13.3 发布迁入 [`archived_review-findings.0.13.x.md`](../archive/v0.13.x/archived_review-findings.0.13.x.md)；此处不再保留。
+
+### 开发期已修复（0.13.5-dev）
+
+> rf-689 已修复（2026-10-16）：发布归档迁移改动后便宜守护未跑 `check-doc-traces` 即进 gate，P2 门禁因文档级 finding 双跑全量 regression——developer-guide 发布流程段已补「进 gate 前必跑便宜守护」分层纪律。
 
 ### 开发期已修复（0.13.4-dev）
 
