@@ -6,24 +6,30 @@
 输出性能报告 Markdown。
 
 用法：
-  python scripts/perf-report.py
+  python scripts/perf-test-report.py
+  python scripts/perf-test-report.py --gate          # 门禁模式：未达标退出码 2（供 CI 拦截）
 
 输出：
   docs/tmp/better-investment-performance-test-report.md
 
 目标：
   - basic 模式总耗时 < 60s
+
+定位说明：本脚本是**性能测试**（主动压测）——自造模拟持仓、外部数据源**全离线**
+（传输层按设计禁网，断网/冷缓存同样可复现），同条件可比，故适合做 CI 门禁（退化即回归）。运行历史查看（被动统计既有记录、
+样本不可控）由 `perf-view.py` 承担，**不用于门禁**。
 """
 
 from __future__ import annotations
 
 import logging
+import argparse
 import os
 import sys
 import tempfile
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 # ── 项目路径 ─────────────────────────────────────
@@ -45,6 +51,90 @@ _REPORT_OUTPUT_DIR = os.path.join(
     "tmp",
 )
 _PERF_REPORT_PATH = os.path.join(_REPORT_OUTPUT_DIR, "better-investment-performance-test-report.md")
+
+# ── 离线策略：传输层离线 + 咽喉桩 ────────────────────
+#
+# 基准必须与「网络状况 / 冷热缓存 / 配置开关组合」无关——否则门禁测成环境而非
+# 代码（实测冷缓存断网 Phase1 达 58s，全耗在各抓取器同源重试退避上；CI 冷缓存
+# + 端点慢即拖过 60s 阈值）。两层配合：
+#   ① `_install_offline_network()`（见下）——socket 出口瞬时失败 + time.sleep
+#      置空：所有外部抓取（穿透/基金经理/分红/情绪/财报/新闻/财务指标…，随配置
+#      开关增减、会演进）一律走既有降级路径且不再等重试，无需逐个点名；
+#   ② 下列咽喉桩——让**热点路径仍走真实计算**而非降级占位，保持基准内容稳定：
+#      - fetch_market_data（两处绑定：fetcher.price 定义处 + market_value 模块级
+#        绑定；函数内 import 的调用方读前者）→ 行情链唯一入口，市值/盈亏明细真实算；
+#      - trading_calendar._get_trading_calendar —— 日历模块唯一网络出口
+#        （ak.tool_trade_date_hist_sina），钉住即 last/prev/as_of/count 全链离线；
+#      - chain/chain_incremental 的 fetch_with_incremental_fallback —— K 线/历史链
+#        唯一入口（流动性/风格因子/事件面板逐仓拉历史都经它）。
+#      注：portfolio_history 是模块级绑定，但其仅在 fetch_history=True 路径生效，
+#      本脚本 Phase 2 显式传 False，不入桩。
+
+
+def _last_workday_str() -> str:
+    """最近一个工作日（YYYY-MM-DD，仅去周末，无节假日感知——基准用）。"""
+    day = date.today()
+    while day.weekday() >= 5:
+        day -= timedelta(days=1)
+    return day.isoformat()
+
+
+def _stub_trading_calendar() -> set[str]:
+    """交易日历桩：近 400 天 + 未来 30 天的工作日集合（零网络）。"""
+    dates: set[str] = set()
+    day = date.today() - timedelta(days=400)
+    end = date.today() + timedelta(days=30)
+    while day <= end:
+        if day.weekday() < 5:
+            dates.add(day.isoformat())
+        day += timedelta(days=1)
+    return dates
+
+
+def _mock_bars(chain_name: str, code: str, days: int = 30, **_kw: Any) -> list[dict[str, Any]]:
+    """历史K线桩：约 `days` 自然日窗口内的工作日 OHLC 序列（确定性、升序、零网络）。
+
+    至少返回 5 根（极短窗口/周末起步也要给出可计算样本）；收盘价带周期性波动，
+    保证收益率/流动性类计算不会除零。
+    """
+    target = max(5, int(days) * 5 // 7)
+    rows: list[dict[str, Any]] = []
+    day = date.today()
+    while len(rows) < target:
+        if day.weekday() < 5:
+            idx = len(rows)
+            close = 10.0 + (idx % 7) * 0.1
+            rows.append(
+                {
+                    "date": day.isoformat(),
+                    "open": round(close - 0.05, 2),
+                    "high": round(close + 0.1, 2),
+                    "low": round(close - 0.15, 2),
+                    "close": close,
+                    "volume": 1_000_000 + idx * 1000,
+                    "code": code,
+                }
+            )
+        day -= timedelta(days=1)
+    rows.reverse()
+    return rows
+
+
+def _mock_quote(code: str, expected_name: str = "") -> dict[str, Any]:
+    """行情桩：固定价格，让市值/盈亏/行情明细走真实计算路径（而非降级占位）。
+
+    与 `fetch_market_data(code, expected_name)` 同签名；键集满足明细行消费
+    （price/yesterday_close/price_date/source/source_api/name）。
+    """
+    return {
+        "price": 10.0,
+        "yesterday_close": 9.9,
+        "price_date": _last_workday_str(),
+        "source": "性能测试桩",
+        "source_api": "tencent",
+        "name": expected_name or "",
+    }
+
 
 # ── LLM 生成 mock ─────────────────────────────────
 #
@@ -231,12 +321,61 @@ def _generate_details(holdings: list[Any]) -> list[Any]:
 # ── 性能基准主要流程 ─────────────────────────────
 
 
+def _isolate_state_writes() -> str:
+    """状态隔离：把 perf 历史/数据源健康快照/熔断状态重定向到临时目录。
+
+    基准运行不得写进真实 `perf_history.jsonl` / `datasource_health.jsonl`（污染
+    运行历史视图的统计样本，perf-view 的分位/离群分析直接受此影响）与
+    `circuit_breaker.json`（离线按设计全失败会记熔断，会污染到用户真实运行误
+    跳过供应商）。路径均为模块级变量（perf.py 文件头注明「测试时可通过 setattr
+    重定向」；熔断文件名传绝对路径时 ``os.path.join`` 会丢弃前面的目录段），
+    直接改写；一次性 CLI 无需还原。
+
+    Returns:
+        隔离目录路径
+    """
+    from src.python.core import perf as _perf_state
+    from src.python.core import provider_registry as _registry
+
+    iso_dir = tempfile.mkdtemp(prefix="perf_bench_state_")
+    _perf_state._PERF_HISTORY_FILE = os.path.join(iso_dir, "perf_history.jsonl")
+    _perf_state._HEALTH_CHECK_FILE = os.path.join(iso_dir, "datasource_health.jsonl")
+    _registry._CIRCUIT_BREAKER_STATE_FILE = os.path.join(iso_dir, "circuit_breaker.json")
+    return iso_dir
+
+
+def _install_offline_network() -> None:
+    """传输层离线 + 重试退避归零（一次性 CLI 进程，不还原）。
+
+    - socket 四类出口（connect/connect_ex/create_connection/getaddrinfo）瞬时抛
+      ``OSError``——这是各抓取器的常规失败类型，既有 ``except Exception`` 正常
+      接住并走降级，不会崩溃（断网全量跑通已验证）；
+    - ``time.sleep`` 置空——同源重试/退避循环不再真等（冷缓存断网下 Phase1 的
+      58s 几乎全是这类等待）。全仓无 ``from time import ... sleep``，补丁模块
+      属性即覆盖全部调用点。
+    """
+    import socket as _socket
+    import time as _time
+
+    def _blocked(*_args: object, **_kwargs: object) -> None:
+        raise OSError("perf-test-report: 基准运行按设计禁网")
+
+    _socket.socket.connect = _blocked
+    _socket.socket.connect_ex = _blocked
+    _socket.create_connection = _blocked
+    _socket.getaddrinfo = _blocked
+    _time.sleep = lambda _seconds: None
+
+
 def run_perf_test() -> tuple[dict[str, float], PerfSample, PerfSample]:
     """执行性能基准测试，返回（各阶段耗时, Phase1/2 样本规模, Phase3 样本规模）。"""
     from unittest.mock import patch
 
     from src.python.report.excel_generator import generate_excel_report
     from src.python.report.progress import SilentProgressReporter
+
+    _isolate_state_writes()
+    _install_offline_network()
 
     timings: dict[str, float] = {}
 
@@ -266,6 +405,12 @@ def run_perf_test() -> tuple[dict[str, float], PerfSample, PerfSample]:
         patch("src.python.report.fund_performance.write_fund_performance_sheet"),
         patch("src.python.fetcher.industry.batch_fetch_industry_data", return_value={}),
         patch("src.python.fetcher.fund.fetch_fund_rankings", return_value=None),
+        # 行情/K线历史/交易日历离线桩（咽喉点说明见 _mock_quote 处）
+        patch("src.python.fetcher.price.fetch_market_data", new=_mock_quote),
+        patch("src.python.report.market_value.fetch_market_data", new=_mock_quote),
+        patch("src.python.core.trading_calendar._get_trading_calendar", new=_stub_trading_calendar),
+        patch("src.python.fetcher.chain.fetch_with_incremental_fallback", new=_mock_bars),
+        patch("src.python.fetcher.chain_incremental.fetch_with_incremental_fallback", new=_mock_bars),
     ):
         t_start = time.perf_counter()
         generate_excel_report(
@@ -291,14 +436,22 @@ def run_perf_test() -> tuple[dict[str, float], PerfSample, PerfSample]:
         patch("src.python.fetcher.industry.batch_fetch_industry_data", return_value={}),
         patch("src.python.fetcher.fund.fetch_fund_rankings", return_value=None),
         patch(_LLM_MOCK_TARGET, return_value=_LLM_MOCK_VALUE),
+        # 行情/K线历史/交易日历离线桩（咽喉点说明见 _mock_quote 处）
+        patch("src.python.fetcher.price.fetch_market_data", new=_mock_quote),
+        patch("src.python.report.market_value.fetch_market_data", new=_mock_quote),
+        patch("src.python.core.trading_calendar._get_trading_calendar", new=_stub_trading_calendar),
+        patch("src.python.fetcher.chain.fetch_with_incremental_fallback", new=_mock_bars),
+        patch("src.python.fetcher.chain_incremental.fetch_with_incremental_fallback", new=_mock_bars),
     ):
-        from src.python.report.orchestrator import _generate_report_both
+        # 公开 API（generate_report 报告类型分发），不依赖编排层内部私有函数
+        from src.python.report.orchestrator import generate_report
 
         t_start = time.perf_counter()
-        result = _generate_report_both(
+        result = generate_report(
             holdings,
             config,
             reporter,
+            report_type="both",
             fetch_history=False,
             output_dir=tmp_dir.name,
         )
@@ -321,6 +474,12 @@ def run_perf_test() -> tuple[dict[str, float], PerfSample, PerfSample]:
         patch("src.python.report.fund_performance.write_fund_performance_sheet"),
         patch("src.python.fetcher.industry.batch_fetch_industry_data", return_value={}),
         patch("src.python.fetcher.fund.fetch_fund_rankings", return_value=None),
+        # 行情/K线历史/交易日历离线桩（咽喉点说明见 _mock_quote 处）
+        patch("src.python.fetcher.price.fetch_market_data", new=_mock_quote),
+        patch("src.python.report.market_value.fetch_market_data", new=_mock_quote),
+        patch("src.python.core.trading_calendar._get_trading_calendar", new=_stub_trading_calendar),
+        patch("src.python.fetcher.chain.fetch_with_incremental_fallback", new=_mock_bars),
+        patch("src.python.fetcher.chain_incremental.fetch_with_incremental_fallback", new=_mock_bars),
     ):
         t_start = time.perf_counter()
         generate_excel_report(
@@ -439,6 +598,14 @@ def write_perf_report(timings: dict[str, float], phase1: PerfSample, phase3: Per
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="端到端性能基准测试")
+    parser.add_argument(
+        "--gate",
+        action="store_true",
+        help="门禁模式：未达标时退出码 2（与检查脚本契约一致，供 CI 拦截性能回归）",
+    )
+    args = parser.parse_args()
+
     print("=" * 60)
     print("  端到端性能基准测试")
     print("=" * 60)
@@ -451,13 +618,17 @@ def main() -> int:
     print(f"  [OK] 报告已写入: {report_path}")
 
     basic_time = timings.get("phase1_basic_excel", 0)
-    if basic_time <= _TARGET_SECONDS:
+    passed = basic_time <= _TARGET_SECONDS
+    if passed:
         print(f"\n[OK] basic 模式达标: {basic_time:.2f}s ≤ {_TARGET_SECONDS}s")
     else:
-        print(f"\n[!] basic 模式未达标: {basic_time:.2f}s > {_TARGET_SECONDS}s")
+        print(f"\n[ERR] basic 模式未达标: {basic_time:.2f}s > {_TARGET_SECONDS}s")
 
     print("=" * 60)
-    return 0 if basic_time <= _TARGET_SECONDS else 1
+    if args.gate:
+        # 门禁模式：退出码 2 = 发现 finding（与检查脚本契约一致）
+        return 0 if passed else 2
+    return 0 if passed else 1
 
 
 if __name__ == "__main__":

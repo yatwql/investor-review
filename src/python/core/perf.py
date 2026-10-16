@@ -2,7 +2,7 @@
 
 三层体系：
     Layer 1 — 本模块（PerfCollector）+ orchestrator.py 埋点
-    Layer 2 — scripts/perf-report.py（独立基准，mock 外部数据源）
+    Layer 2 — scripts/perf-test-report.py（独立基准，mock 外部数据源）
     Layer 3 — scripts/perf-view.py（历史趋势可视化）
 
 设计约束遵从（详见 technical.md §8）：
@@ -15,9 +15,16 @@
     - 每次 generate_report() 自动收集各阶段耗时
     - 阶段开始时可经 stage_announcer 向进度通道广播状态行（当前阶段 / 已耗时 /
       预计剩余，ETA 基于本文件历史同阶段中位数，计算失败静默降级）
+    - 粗粒度阶段进 `phases`（**唯一**参与 total_seconds 的集合，保证跨版本可比）；
+      阶段内细分进 `breakdown`，运行期诊断计数进 `counters`（不参与 total_seconds）
     - 写入 data/state/perf_history.jsonl（JSONL 格式，一行一次运行）
     - 同时通过 logging 输出 INFO 级计时日志
     - 结果包含版本号，支持跨版本性能趋势追踪
+
+观测面分层（见 docs/archive/v0.13.x/perf-observability-design.md）：
+    phases   — 粗粒度阶段墙钟（ETA 预估与历史对比的基准口径）
+    breakdown— 父阶段下的子项自身耗时（子项可并行，之和可大于父阶段墙钟）
+    counters — 诊断计数（warnings/errors 等；由日志采集与调用点登记共同填充）
 """
 
 from __future__ import annotations
@@ -26,6 +33,7 @@ import json
 import logging
 import os
 import statistics
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -54,6 +62,89 @@ class _PhaseRecord:
     seconds: float
 
 
+#: errors 列表最多保留的条数（日志采集可能持续产出，避免异常百出时字段膨胀）
+_MAX_CAPTURED_ERRORS = 20
+#: 单条错误消息最长保留字符数
+_MAX_ERROR_MESSAGE_CHARS = 200
+
+
+class PhaseBreakdownRecorder:
+    """父阶段绑定的子项耗时与诊断计数记录器（线程安全）。
+
+    由 :meth:`PerfCollector.recorder` 创建并归其所有——`PerfCollector` 仍为
+    普通局部对象、非模块级单例（沿用既有设计约束）。LLM 四模块在线程池中
+    并发写，故内部以 `threading.Lock` 保护。
+
+    口径：记录的是**子项自身耗时**；父阶段内子项可能并行（LLM 与新闻并行、
+    四模块并发），故子项之和可大于父阶段墙钟时长，且**不参与** `total_seconds`。
+
+    用法::
+
+        rec = perf.recorder("LLM+新闻")
+        rec.record("持仓体检报告", 40.1)   # 子项耗时
+        rec.count("retry")                # 诊断计数
+    """
+
+    def __init__(self, parent_phase: str) -> None:
+        self._parent_phase = parent_phase
+        self._lock = threading.Lock()
+        self._spans: dict[str, float] = {}
+        self._counters: dict[str, int] = {}
+
+    @property
+    def parent_phase(self) -> str:
+        """所绑定的父阶段名（与 `PerfCollector.start` 传入一致）。"""
+        return self._parent_phase
+
+    def record(self, name: str, seconds: float) -> None:
+        """记录一个子项耗时（同名子项多次调用则累加，非数值输入静默忽略）。"""
+        try:
+            sec = float(seconds)
+        except (TypeError, ValueError):
+            return
+        if sec < 0 or sec != sec or sec == float("inf"):  # 负值/NaN/inf 视为无效
+            return
+        with self._lock:
+            self._spans[name] = round(self._spans.get(name, 0.0) + sec, 3)
+
+    def count(self, key: str, n: int = 1) -> None:
+        """累加一个诊断计数（如 retry/fallback）。"""
+        with self._lock:
+            self._counters[key] = self._counters.get(key, 0) + int(n)
+
+    def spans(self) -> dict[str, float]:
+        """子项耗时快照（副本）。"""
+        with self._lock:
+            return dict(self._spans)
+
+    def counters(self) -> dict[str, int]:
+        """诊断计数快照（副本）。"""
+        with self._lock:
+            return dict(self._counters)
+
+
+class _LogCounterHandler(logging.Handler):
+    """只计数不输出的日志 handler：把运行期 WARNING/ERROR 计入诊断面。
+
+    由 `PerfCollector` 在首个阶段计时时挂到 `invest` logger、`save()` 时摘除。
+    集中采集优于逐点改造：告警来源分散在 `reporter.add_error` / `logger.warning`
+    多处，且新增链路无需再手工登记。计数失败绝不打断生成（emit 内全覆盖异常）。
+    """
+
+    def __init__(self, collector: "PerfCollector") -> None:
+        super().__init__(level=logging.WARNING)
+        self._collector = collector
+
+    def emit(self, record: logging.LogRecord) -> None:  # pragma: no cover - 异常分支不构造
+        try:
+            if record.levelno >= logging.ERROR:
+                self._collector.note_error(str(record.getMessage()))
+            else:
+                self._collector.count("warnings")
+        except Exception:
+            pass
+
+
 @dataclass
 class ReportRunSnapshot:
     """一次报告生成运行的完整耗时快照。"""
@@ -67,6 +158,12 @@ class ReportRunSnapshot:
     warnings_count: int = 0
     status: str = "completed"  # 运行状态：completed / interrupted（中断收口写入）
     interrupted_stage: str | None = None  # 中断时活跃阶段名（仅 status=interrupted）
+    #: 父阶段 → {子项名: 自身耗时秒}（子项可并行，之和不参与 total_seconds）
+    breakdown: dict[str, dict[str, float]] = field(default_factory=dict)
+    #: 运行期诊断计数（warnings/errors/retry/degrade:<来源> 等）
+    counters: dict[str, int] = field(default_factory=dict)
+    #: LLM 运行上下文（provider/model/thinking/重试与节流等待/缓存命中/用量）
+    llm: dict[str, Any] = field(default_factory=dict)
 
     @property
     def total_seconds(self) -> float:
@@ -80,6 +177,9 @@ class ReportRunSnapshot:
             "holdings_count": self.holdings_count,
             "phases": {p.name: round(p.seconds, 3) for p in self.phases},
             "total_seconds": round(self.total_seconds, 3),
+            "breakdown": {parent: spans for parent, spans in self.breakdown.items() if spans},
+            "counters": self.counters,
+            "llm": self.llm,
             "errors": self.errors,
             "warnings_count": self.warnings_count,
             "status": self.status,
@@ -121,13 +221,17 @@ class PerfCollector:
         self._holdings_count = len(holdings)
         self._phases: list[_PhaseRecord] = []
         self._errors: list[str] = []
-        self._warnings_count: int = 0
+        self._counters: dict[str, int] = {}
+        self._recorders: dict[str, PhaseBreakdownRecorder] = {}
+        self._lock = threading.Lock()
         self._current_name: str | None = None
         self._current_start: float | None = None
         self._stage_announcer = stage_announcer
         self._interrupted = False
         self._interrupted_stage: str | None = None
         self._saved = False
+        self._log_handler: logging.Handler | None = None
+        self._llm_context: dict[str, Any] = {}
 
     @property
     def report_type(self) -> str:
@@ -138,6 +242,7 @@ class PerfCollector:
 
     def start(self, phase_name: str) -> None:
         """开始一个新阶段计时。若前一阶段尚未关闭，自动关闭并记录警告。"""
+        self._ensure_log_capture()
         if self._current_name is not None:
             logger.warning(
                 "[perf] 阶段 '%s' 未结束即启动 '%s'，自动关闭前一阶段",
@@ -193,17 +298,76 @@ class PerfCollector:
         self._interrupted_stage = self._current_name
 
     def add_error(self, message: str) -> None:
-        """记录一条错误。"""
-        self._errors.append(message)
+        """记录一条错误（同时计入 `counters["errors"]`）。"""
+        self.note_error(message)
+
+    def note_error(self, message: str) -> None:
+        """记录一条错误消息并递增错误计数（日志采集与调用点登记共用入口）。"""
+        self.count("errors")
+        if len(self._errors) < _MAX_CAPTURED_ERRORS:
+            self._errors.append(message[:_MAX_ERROR_MESSAGE_CHARS])
+
+    def count(self, key: str, n: int = 1) -> None:
+        """累加一个运行期诊断计数（跨阶段的横切项，如 warnings/errors/retry）。"""
+        with self._lock:
+            self._counters[key] = self._counters.get(key, 0) + int(n)
+
+    def counts(self) -> dict[str, int]:
+        """诊断计数快照（副本）。"""
+        with self._lock:
+            return dict(self._counters)
 
     def inc_warning(self) -> None:
-        """增加警告计数。"""
-        self._warnings_count += 1
+        """增加警告计数（等价于 `count("warnings")`）。"""
+        self.count("warnings")
+
+    # ── 阶段细分 ──
+
+    def recorder(self, parent_phase: str) -> PhaseBreakdownRecorder:
+        """取（或新建）指定父阶段的子项记录器；同一父阶段复用同一实例。"""
+        with self._lock:
+            rec = self._recorders.get(parent_phase)
+            if rec is None:
+                rec = PhaseBreakdownRecorder(parent_phase)
+                self._recorders[parent_phase] = rec
+            return rec
+
+    def set_llm_context(self, context: dict[str, Any] | None) -> None:
+        """登记本次运行的 LLM 上下文（provider/model/等待/缓存/用量），空值忽略。"""
+        if context:
+            self._llm_context = dict(context)
+
+    # ── 日志诊断采集 ──
+
+    def _ensure_log_capture(self) -> None:
+        """首次阶段计时时挂上只计数的日志 handler（幂等）。"""
+        if self._log_handler is not None:
+            return
+        handler = _LogCounterHandler(self)
+        logger.addHandler(handler)
+        self._log_handler = handler
+
+    def _detach_log_capture(self) -> None:
+        """摘除日志 handler（save 时调用；未挂载时为空操作）。"""
+        if self._log_handler is None:
+            return
+        logger.removeHandler(self._log_handler)
+        self._log_handler = None
 
     # ── 快照输出 ──
 
     def snapshot(self) -> ReportRunSnapshot:
-        """生成当前会话的运行时快照。"""
+        """生成当前会话的运行时快照（含子项细分与诊断计数）。"""
+        with self._lock:
+            recorders = list(self._recorders.values())
+        counters = self.counts()
+        breakdown: dict[str, dict[str, float]] = {}
+        for rec in recorders:
+            spans = rec.spans()
+            if spans:
+                breakdown[rec.parent_phase] = spans
+            for key, n in rec.counters().items():
+                counters[key] = counters.get(key, 0) + n
         return ReportRunSnapshot(
             version=APP_VERSION,
             timestamp=datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
@@ -211,9 +375,12 @@ class PerfCollector:
             holdings_count=self._holdings_count,
             phases=list(self._phases),
             errors=list(self._errors),
-            warnings_count=self._warnings_count,
+            warnings_count=counters.get("warnings", 0),
             status="interrupted" if self._interrupted else "completed",
             interrupted_stage=self._interrupted_stage if self._interrupted else None,
+            breakdown=breakdown,
+            counters=counters,
+            llm=dict(self._llm_context),
         )
 
     def save(self) -> None:
@@ -227,6 +394,7 @@ class PerfCollector:
         line = json.dumps(self.snapshot().to_json(), ensure_ascii=False) + "\n"
         _append_jsonl_atomic(_PERF_HISTORY_FILE, line)
         self._saved = True
+        self._detach_log_capture()
         logger.info("[perf] 耗时已记录到 %s", _PERF_HISTORY_FILE)
 
 

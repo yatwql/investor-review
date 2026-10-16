@@ -1,6 +1,6 @@
 # 投资复盘助手 — 实现计划
-> 文档版本：0.13.3
-> **编号源**：`plan-next = 123`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-122，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> 文档版本：0.13.4
+> **编号源**：`plan-next = 127`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-126，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -64,7 +64,7 @@
 
 **落地设计**：若判定转正，按 [`decision-reflection-shadow-design.md`](../plan/decision-reflection-shadow-design.md) 四迭代执行（决策条目结构化 → 到期结算器 → doctor 概览增强 → 报告内反思块），该设计以 Vibe-Trading `shadow_account`（extract→backtest→render）为参照；死线未过前不实施。plan-76 持仓变动复盘已落地，与其构成「意图 vs 成交」对账（只读，不互写）。
 
-**当前状态**：功能持续被启用（活跃使用中），但账本结算样本不足（已结算 <10，`direction_accuracy` 无法给出可信命中率）→ 维持观察，不撤销、不转正、不实施设计。**终判（跑一次报告触发结算后）**：已结算 ≥10 → 据 doctor 账本概览评估转正（正式命中率另需 `directional_total ≥ 20`，flat 占比高时可信度由人工裁定）；仍 <10 且无新增结算 → 撤销（含 `decision_llm_capture`、行动章复盘块注入与对应需求条目）。
+**当前状态（2026-10-16 终判已执行）**：`experiment_stats` 启用 **46** 次且持续增长（`last_enabled_date=2026-10-16`，判据①不触发）；`fold_ledger` 已结算 **5** 条 <10，但为**新增结算**（10-14/10-15 落地；pending 6 条按 `MIN_SETTLE_BARS=5` 交易日陆续到期，达标趋势明确），`directional_total=3`（`direction_accuracy=0.0` 不可信，flat 2 条）→ **撤销与转正条件均不满足 → 维持观察**，不撤销、不转正、不实施设计。下个观察点：下个发布周期重跑 `fold_ledger`——已结算 ≥10 → 据 doctor 账本概览评估转正（正式命中率另需 `directional_total ≥ 20`，flat 占比高时可信度由人工裁定）；仍 <10 且无新增结算 → 撤销（含 `decision_llm_capture`、行动章复盘块注入与对应需求条目）。
 
 #### 🔲 `plan-94` 图表数据无导出通道
 

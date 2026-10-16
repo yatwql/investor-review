@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.13.3
+> 文档版本：0.13.4
 
 ## 概述
 
@@ -829,6 +829,7 @@ mod = load_script("_test_runner/modes.py", module_name="modes_under_test")   # �
 3. **`changelog.md`** — 记录新增的测试数量和覆盖场景
 4. **`plan.md`** — 如果在迭代中新增的功能，更新对应条目的完成状态
 5. **`unit/conftest.py`** — 新增 `unit/` 下测试文件时确认 `pytestmark` 列表包含正确的 `unit_*` 子标记
+6. **`conftest.py` 隔离 fixture** — 新增模块级单例时加 autouse 复位 fixture（参照 `_auto_reset_last_reason` 习语，如 `_auto_reset_llm_failure_state`）；新增持久化状态文件/输出目录时在 `_isolate_sensitive_paths` 增加 `monkeypatch.setattr` 重定向——细则见 CLAUDE.md「新增测试隔离要求」，漏加会让用例随执行顺序漂移
 
 **新增后必须执行的验证**：
 
@@ -903,8 +904,8 @@ A: 运行 `.venv/bin/python scripts/check-test-markers.py`，脚本会静态扫�
 | `check-style-guardrails.py` | 质量 | 设计护栏机检（DESIGN.md 护栏样式面；E 级：强调色越权/明暗同步/双面 token 对表判 finding，W 级：裸色值/圆角档位观察统计——未入 pre-commit 钩子与 CI guards；**发布门禁**（release.py gate）已纳入，开发期快反馈由 unit 测试承担） |
 | `check-script-contract.py` | 质量 | scripts 顶层脚本契约机检（退出码声明 ⊆ {0,2} 白名单、check-* 统一 `add_common_args` CLI 面、文本 I/O 显式 encoding、脚本↔测试覆盖映射，四条规则——**观察期**未入钩子与 CI） |
 | `release.py` | 发布 | 发布流程分步编排（check/prepare/refresh/evolution/gate/publish/devbump，每步独立可审阅、失败即停） |
-| `perf-report.py` | 诊断 | 端到端报告生成管线性能基准（独立脚本，mock 外部数据源） |
-| `perf-view.py` | 诊断 | 性能历史趋势查看（读取 perf_history.jsonl → 跨版本耗时对比） |
+| `perf-test-report.py` | 诊断 | 端到端报告生成管线性能基准（独立脚本，mock 外部数据源） |
+| `perf-view.py` | 诊断 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 时段聚合/机读输出） |
 | `probe.py` | 诊断 | 探测统一入口（按 target 分发到 `probes/` 子模块；新探针实现契约面登记即用） |
 | `probe-csi-factor-indices.py` / `probe-push2.py` | 诊断 | 旧入口兼容垫片（薄委托到 `probes/csi.py` / `probes/push2.py`，用法不变） |
 | `check-svg.py` | 诊断 | README SVG 架构图检查（子命令 `geom` 几何 / `pixel` 像素 / `text-overflow` 文字色越界；像素子命令需 Pillow） |
@@ -1259,9 +1260,9 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 ```bash
 .venv/bin/python scripts/release.py check     # 预检：分支/工作树/版本形态/tag/版本一致性
-.venv/bin/python scripts/release.py prepare   # 版本全链 + changelog 发布段归档 + 一致性 --fix
+.venv/bin/python scripts/release.py prepare   # 版本全链 + changelog 发布段归档 + 一致性 --fix + 收尾 doc-drift --sync
 .venv/bin/python scripts/release.py refresh   # bench --update-docs + collect + doc-drift --sync
-.venv/bin/python scripts/release.py evolution --release   # 演进对照快照（默认只滚当前开发版列）
+.venv/bin/python scripts/release.py evolution --release   # 演进对照快照（默认只滚当前开发版列）+ 收尾 doc-drift --sync
 .venv/bin/python scripts/release.py gate      # P2：regression + 十守护 --ci + 设计护栏（gate 内置）
 .venv/bin/python scripts/release.py publish --title "<发布主题>"   # release 提交 + P1 verify + --no-ff 合并 + tag
 .venv/bin/python scripts/release.py devbump    # 切下一开发版并提交
@@ -1271,28 +1272,38 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 ### 诊断类
 
-**`perf-report.py` — 端到端性能基准**
+**`perf-test-report.py` — 端到端性能基准**
 
 生成 20+ 品种 + 3 年模拟持仓，运行 basic/both 报告生成管线，测量各阶段耗时。
 
 ```bash
-.venv/bin/python scripts/perf-report.py
+.venv/bin/python scripts/perf-test-report.py
+
+# 门禁模式：未达标退出码 2（供 CI 拦截性能回归）
+.venv/bin/python scripts/perf-test-report.py --gate
 ```
 
 **输出**：`docs/tmp/better-investment-performance-test-report.md`
 
 **目标**：basic 模式总耗时 < 60s
 
+**门禁归属**：本脚本是**性能测试**（主动压测，同条件可比），故承担 CI 性能门禁（`perf-gate` job）；运行历史查看（`perf-view.py`，样本不可控、不可复现）不用于门禁。
+
+**可靠性保障**：**传输层离线**（`_install_offline_network()`：socket 出口瞬时 `OSError` 走既有降级 + `time.sleep` 置零消掉重试退避）对一切外部抓取兜底，行情/K线历史/交易日历三处咽喉另打桩让热点路径仍走真实计算——门禁测的是代码性能而非网络状况（冷缓存断网全流程 2.8s）；`_isolate_state_writes()` 把 perf 历史/健康快照/熔断状态重定向到临时目录，基准运行不污染 `perf-view` 统计样本与真实运行的供应商熔断状态。
+
 **`perf-view.py` — 性能历史趋势查看**
 
-读取 `data/state/perf_history.jsonl`（由 `PerfCollector` 在每次报告生成时自动追加），按版本和报告类型分组统计，输出版本间性能趋势对比。
+读取 `data/state/perf_history.jsonl`（由 `PerfCollector` 在每次报告生成时自动追加），按版本和报告类型分组统计（分组节按各组**首次运行时间**排序，最新版本在最末；组内明细行按时间戳升序），输出版本间性能趋势对比；输出跨版本「总体分位概览」（样本数 / 平均 / 中位 / **P95** / **P99** / 最长 / 中位秒每品种，n<20 附小样本提示）、**版本演进总表**（每版中位/P95/较上一版 delta+⚠，按首现时间排序）、离群与尾部归因、**异常运行专区**（中断/失败，无则省略）与**同版本漂移检测**（时间对半、噪声带判显著）。头部含**数据新鲜度**行（最新记录时间戳与距今时长）与可选**版本筛选**行；组详情阶段表按**中位降序**（最慢在前）并含**占比**列；阶段细分/LLM 上下文在范围内应有数据而缺时**明示提示行**（区分「无数据」与「不适用」）而非静默省略。
 
 ```bash
-# 输出全部历史趋势到 stdout
+# 输出全部历史趋势到 stdout（--json/--csv 机读模式同样只向 stdout，落盘需自行重定向）
 .venv/bin/python scripts/perf-view.py
 
 # 仅看 full 类型报告的性能趋势
 .venv/bin/python scripts/perf-view.py --report-type full
+
+# 仅看某版本系列（前缀匹配，0.13.4 可命中 0.13.4-dev）
+.venv/bin/python scripts/perf-view.py --version 0.13.4
 
 # 仅看最近 30 条记录
 .venv/bin/python scripts/perf-view.py --last 30
@@ -1308,9 +1319,46 @@ sh .githooks/install-hooks.sh --off   # 停用
 | 阶段 | 报告生成管线阶段名称（行情获取/快照对比/历史走势/HTML 生成/Excel 生成 等） |
 | 平均耗时 | 该阶段历史平均耗时 |
 | 最短/最长 | 该阶段历史最小/最大耗时 |
-| 次数 | 该阶段出现次数（条件阶段如历史走势仅在启用时出现） |
+| 次数 | 该阶段出现次数（条件阶段如历史走势仅在启用时出现）；行序按**中位降序**（最慢阶段在前，同分按名） |
+| 占比 | 阶段均值 ÷ 组平均总耗时；并行执行的阶段之和可超 100% |
+| 阶段细分 | 父阶段下的子项自身耗时（如 `LLM+新闻` → 四个 LLM 模块与新闻获取）；子项可并行，**之和不等于父阶段耗时**，仅用于定位瓶颈（子项按平均耗时降序） |
+
+**分位口径**：`总体分位概览`与各分组的 P95/P99 均为**最近秩**（nearest-rank）分位——取 `ceil(pct% × n)` 位样本值，统一表述为「95% 的报告在 Xs 内完成，99% 的报告在 Ys 内完成」（概览口径行同句式：P95 即 95% 的报告在该耗时内完成，P99 即 99% 的报告在该耗时内完成；两段均带全主语，不分省略变体）。概览口径与分组一致（受 `--report-type` / `--last` 影响）；仅单一报告类型时只渲染合计行（不重复出类型行）。
+
+**稳健统计与归因**（`--exclude-outlier` / `--by`）：
+
+| 能力 | 口径 |
+|:-----|:-----|
+| 离群运行段 | 总耗时 > 中位 + 3.5 × 1.4826 × MAD 判为离群（MAD 为 0 时不判，避免把正常抖动误标）；显式列出而非静默剔除 |
+| 稳健均值 | 剔除离群点后的均值（无离群时等于普通均值），与普通均值并列展示 |
+| `--exclude-outlier` | 按上述口径剔除离群运行后重算全部统计（服务端超时重试等外部故障不再抬高均值） |
+| 阶段级分位 | 阶段表含中位与 P95（不只均值/极值） |
+| 尾部归因 | 最慢一次运行逐阶段 z 分数与「相对历史中位倍数」，直给哪一步超常 |
+| `--by day\|week\|hour` | 按时段聚合（样本数/中位/P95/最长），看工作日-周末与 LLM 服务端高峰差异 |
+| LLM 运行上下文段 | 重试次数与退避等待、端点节流等待、provider 降级、缓存命中/未命中、累计费用与 provider/模型分布——回答「时间花在白等还是真推理」 |
+| `--compare 旧 新` | 版本间阶段级对比（中位 delta / 倍数 / 变异系数判显著）；显著性口径：变化幅度需超过两版本各自变异系数之和 × 较大中位值（噪声带），避免把抖动当回归 |
+| `--json` / `--csv` | 机读输出，**只向 stdout 打印**（需自行重定向落盘；`--save` 在机读模式不适用，会打警告）——`--json` 为信封 `{record_count, records, summary}`（summary 与 Markdown 各段同源：分位/按类型/离群/异常/演进/漂移）；`--csv` 每运行一行，含 `per_holding_seconds`/`outlier`/`slowest_phase`/`interrupted_stage`/`errors_count` 列 |
+| `--version 前缀` | 仅查看版本前缀匹配的记录（`X.Y.Z` 命中带后缀的同系列版本；头部明示「版本筛选」行），与 `--report-type`/`--last`/机读输出同口径生效 |
+| `--summary` | 仅输出概览段（总体分位/离群/尾部归因/LLM 上下文/时段聚合/对比），略去逐版本分组详情 |
+| `--outlier-k 系数` | 自定义离群判定系数（中位 + k × 1.4826 × MAD，默认 3.5）；系数越小越敏感 |
+
+**定位边界（重要）**：本脚本是**运行历史查看**（被动统计既有记录）——样本取决于最近跑过什么、不可复现，故**不用于 CI 门禁**。性能门禁由主动压测的 `perf-test-report.py --gate` 承担（自造模拟持仓、mock 外部数据源，同条件可比，退化即回归）。
 
 **数据来源**：每次 `generate_report()` 调用时自动记录到 `data/state/perf_history.jsonl`，无需手动触发；中断运行以 `status=interrupted` 记录（含 `interrupted_stage`），与成功完成（`completed`）区分，页头状态行据显「已中断」。
+
+**记录字段分层**（观测面口径）：
+
+| 字段 | 含义 | 是否参与总耗时 |
+|:-----|:-----|:---------------|
+| `phases` | 粗粒度阶段墙钟（数据准备/快照对比/历史走势/行业资金流向/LLM+新闻/HTML 生成/Excel 生成） | **是**（`total_seconds` 唯一来源，保证跨版本可比与 ETA 口径稳定） |
+| `breakdown` | 父阶段下的子项自身耗时（LLM 四模块、新闻获取） | 否（子项可并行） |
+| `counters` | 运行期诊断计数（`warnings`/`errors` 等） | 否 |
+| `llm` | LLM 运行上下文（provider/model/thinking、重试与节流等待秒数、provider 降级次数、缓存命中、逐模块 tokens/费用） | 否 |
+| `errors` / `warnings_count` | 错误消息（封顶保留）与告警数 | 否 |
+
+`counters` 的 `warnings`/`errors` 由 `PerfCollector` 在首个阶段计时时挂上的只计数日志 handler 自动采集（`invest` logger 的 WARNING/ERROR），`save()` 时摘除——告警来源分散在 `reporter.add_error` 与各模块 `logger.warning`，集中采集避免逐点改造与新增链路漏登记。
+
+`llm` 上下文由 `llm/observation.py` 的运行观测汇聚器（`bind_llm_observation` / `current_llm_observation`）在调用链上归集：重试退避（`core/retry.py` 的 `on_retry` 回调）、端点节流等待（`llm/pacing.py` 的 `PacingGate`）、provider 命中与降级（`llm/api.py` 的 provider 链）、模块级缓存命中（`generators_orchestrator` 预检）、逐模块 model/tokens/费用（`llm/session.py` 单源）。未绑定汇聚器时（如单测直调 LLM 层）所有记录调用为空操作，行为零变化。
 
 **`probe.py` — 探测统一入口（target 分发 registry）**
 
@@ -1823,9 +1871,9 @@ registry 的测试在 `src/test/unit/core/test_registry.py`，验证 TTL 默认�
 
 ## 版本发布流程
 
-发布版本时，按以下五步顺序执行：
+发布版本时，按以下六步顺序执行：
 
-> 可用 `scripts/release.py` 分步编排（五步的可执行封装，每步独立可审阅、失败即停）：`prepare`（版本全链与 changelog 归档）、`refresh` + `evolution --release`（数据刷新与演进快照）、`gate`（P2 门禁）、`publish --title`（release 提交 + P1 verify + `--no-ff` 合并 + tag）、`devbump`（切开发版），另有 `check` 预检；下列手动命令为底层口径，脚本失败时按手动步骤排查。
+> 可用 `scripts/release.py` 分步编排（发布流程的可执行封装，每步独立可审阅、失败即停）：`check`（预检）→ `prepare`（版本全链、changelog 发布段归档与一致性 `--fix`，收尾自动 `doc-drift --sync`）→ `refresh` + `evolution --release`（数据刷新与演进快照，evolution 收尾同样自动 sync）→ `gate`（P2 门禁）→ `publish --title`（release 提交 + P1 verify + `--no-ff` 合并 + tag）→ `devbump`（切开发版）；rf/plan/docs-plan 归档迁移保留人工（需判断归档段语义）且必须在 `gate`/`publish` 前完成（见下方步骤③）。下列手动命令为底层口径，脚本失败时按手动步骤排查。
 
 **① 版本号一致**
 
@@ -1850,9 +1898,18 @@ registry 的测试在 `src/test/unit/core/test_registry.py`，验证 TTL 默认�
 - `folders.md` — 项目统计表及目录树新增/重命名文件；**版本演进对照表（`## 版本演进对照`）每次发布必须更新**：「最新发布」列按新 tag 重跑快照统计（复现方法见 folders.md 表头：`git ls-tree` + `git cat-file --batch` 计行 + `git grep -c "def test_"` 数用例），「当前开发版」列同步重跑；列头版本号与 tag/日期由 `check-version-consistency.py --fix`（`evolution_head`/`release_tag` 断言）同步，只改版本号不刷演进表数据行属发布遗漏
 - `datasource.md` + `datasource-reliability.md` — 数据源清单/路由归属/可靠性描述与实际代码配置一致
 
+`release.py evolution --release` 输出的「需人工核对的注释行」（test-coverage 用例口径注释中的 pytest 实际收集数与 opt-in live 项数、folders.md 文档注释行的目录分解数）脚本不代写，须按实测回填后再提交。
+
 数据快照更新与「版本号一致」的版本头同步可在同一次提交内完成。
 
-**③ 版本标签**
+**③ 发布归档迁移（四项强制，未完成不得继续 `gate`/`publish`）**
+
+- ① `review-findings.md`「已解决问题」区**全部**条目迁入对应版本的自审归档（同步更新归档头部涵盖版本/追加行与主文件「归档档案」索引行）
+- ② `plan.md` 不得残留 ✅/已完成任务节（完成态移入对应版本的 plan 归档）
+- ③ changelog 已发布段移入对应版本的 changelog 归档（`release.py prepare` 自动执行，人工核对指针与归档索引）
+- ④ `docs/plan/` 中**已完成任务**的迭代设计文件移入对应版本归档子目录（在办任务的设计文件保留，按其关联 plan/rf 任务状态判定），同步更新 plan.md/folders.md 引用链接与目录树
+
+**④ 版本标签**
 
 完成版本号更新并提交后，执行：
 
@@ -1863,11 +1920,11 @@ git push origin --tags
 
 确保每次发布都可追溯。
 
-**④ 开发版本切换**
+**⑤ 开发版本切换**
 
 发布版本并打 tag 后，**立即**将 `APP_VERSION` 和所有管理文档版本头改为**下一个版本的 `-dev`**（如发布 v0.6.8 后即改为 v0.6.9-dev），运行 `check-version-consistency.py` 验证全链 `[OK]` 后提交，然后继续开发。开发期间版本号始终标识为下一个预期发布版本的 `-dev`。
 
-**⑤ 合并入 master**
+**⑥ 合并入 master**
 
 发布并打 tag 后，**必须**把 `dev` 合并入 `master` 并推送（`master` 是发布分支，只存放已发布状态；不得只打 tag 而不更新 master）：
 
@@ -1877,7 +1934,7 @@ git checkout master && git merge --no-ff dev -m "Merge branch 'dev' — v{x.y.z}
 git checkout dev
 ```
 
-合入后确认 tag 所指提交已在 `master` 可达（`git merge-base --is-ancestor v{x.y.z} origin/master`）；`master` 推送会触发 CI 的 P1（`verify`）档。本步与步骤④互不替代：④ 是让 dev 进入下一个开发周期，⑤ 是把已发布状态同步到发布分支。
+合入后确认 tag 所指提交已在 `master` 可达（`git merge-base --is-ancestor v{x.y.z} origin/master`）；`master` 推送会触发 CI 的 P1（`verify`）档。本步与步骤⑤互不替代：⑤ 是让 dev 进入下一个开发周期，⑥ 是把已发布状态同步到发布分支。
 
 ## 关键纪律来源
 

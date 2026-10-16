@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from typing import Any
 
 logger = logging.getLogger("invest")
@@ -184,7 +185,15 @@ class PacingGate:
             self._sem.acquire()
         # 间隔控制（含抖动）：在拿到并发许可之后执行，使间隔真正约束「请求发出」时刻
         if self._policy.min_interval > 0:
+            _started = time.perf_counter()
             _acquire_interval(self._key, self._policy)
+            _waited = time.perf_counter() - _started
+            if _waited > 0:
+                from src.python.llm.observation import current_llm_observation
+
+                _sink = current_llm_observation()
+                if _sink is not None:
+                    _sink.note_pacing_wait(_waited)
         return self
 
     def __exit__(self, *exc: Any) -> bool:

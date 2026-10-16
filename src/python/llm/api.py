@@ -413,6 +413,11 @@ def call_llm(
             if result is not None:
                 logger.info("provider 成功: %s", _entry_desc)
                 attempted.append(f"{name}: SUCCESS")
+                from src.python.llm.observation import current_llm_observation
+
+                _sink = current_llm_observation()
+                if _sink is not None:
+                    _sink.note_call(provider=name, model=entry_model or "")
                 if module_key:
                     LLM_MODULE_FAILURE[module_key] = {
                         "attempted": attempted,
@@ -423,6 +428,11 @@ def call_llm(
                 reason = _get_last_llm_failure() or FAIL_REASON_API_ERROR
                 logger.warning("provider %s 失败（%s），切换下一 provider", _entry_desc, reason)
                 attempted.append(f"{name}: {reason}")
+                from src.python.llm.observation import current_llm_observation
+
+                _sink = current_llm_observation()
+                if _sink is not None:
+                    _sink.note_fallback()
         except Exception:
             logger.warning("provider %s 异常，切换下一 provider", _entry_desc, exc_info=True)
             attempted.append(f"{name}: EXCEPTION")

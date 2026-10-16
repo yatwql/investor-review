@@ -377,6 +377,48 @@ def _generate_report_both(
 # ── _generate_report_full（HTML+Excel+LLM）──
 
 
+def _record_llm_context(perf) -> None:
+    """把本次运行的 LLM 上下文写入 perf 记录（provider/等待/缓存/用量/质量）。
+
+    三个来源合并（均为可选，缺失即跳过）：
+      - 运行观测汇聚器：重试与节流等待、provider/model 命中、缓存命中、降级次数
+      - 会话用量：逐模块 model/tokens/cost/thinking（`llm/session.py` 单源）
+      - 质量评级：模块级评级（开关关闭时无评级，不写入）
+
+    任何异常静默降级——观测不得影响报告生成。
+    """
+    try:
+        from src.python.llm.observation import current_llm_observation
+        from src.python.llm.session import get_session_usage
+
+        context: dict = {}
+        sink = current_llm_observation()
+        if sink is not None:
+            context.update(sink.snapshot())
+
+        usage = get_session_usage()
+        per_module = usage.get("per_module") or {}
+        if per_module:
+            context["modules"] = {
+                key: {
+                    "model": entry.get("model", ""),
+                    "thinking": bool(entry.get("thinking")),
+                    "cached": bool(entry.get("cached")),
+                    "input_tokens": int(entry.get("input_tokens", 0)),
+                    "output_tokens": int(entry.get("output_tokens", 0)),
+                    "cost": round(float(entry.get("cost", 0.0)), 6),
+                }
+                for key, entry in sorted(per_module.items())
+            }
+        if usage.get("call_count"):
+            context["call_count"] = int(usage["call_count"])
+            context["total_cost"] = round(float(usage.get("total_cost", 0.0)), 6)
+
+        perf.set_llm_context(context)
+    except Exception:
+        logger.debug("[perf] LLM 上下文登记失败，已忽略", exc_info=True)
+
+
 def _generate_report_full(
     holdings: list,
     config: dict,
@@ -546,20 +588,28 @@ def _generate_report_full(
     # ── 5. 并行获取 LLM + 新闻 ──
     _comparison_indices = config.get("comparison_indices", None)
     perf.start("LLM+新闻")
-    llm_content, news_data, news_llm_meta, news_ok, debate_info = _fetch_llm_and_news(
-        holdings,
-        prep,
-        sector_flow,
-        force_llm,
-        pipeline_data,
-        _enable_news,
-        _enable_llm,
-        reporter,
-        force_llm_modules=force_llm_modules,
-        history_data=history_data,
-        comparison_indices=_comparison_indices,
-        metrics=_metrics,
-    )
+    from src.python.llm.observation import LlmObservation, bind_llm_observation
+
+    _llm_sink = LlmObservation()
+    bind_llm_observation(_llm_sink)
+    try:
+        llm_content, news_data, news_llm_meta, news_ok, debate_info = _fetch_llm_and_news(
+            holdings,
+            prep,
+            sector_flow,
+            force_llm,
+            pipeline_data,
+            _enable_news,
+            _enable_llm,
+            reporter,
+            force_llm_modules=force_llm_modules,
+            history_data=history_data,
+            comparison_indices=_comparison_indices,
+            metrics=_metrics,
+            span_recorder=perf.recorder("LLM+新闻"),
+        )
+    finally:
+        bind_llm_observation(None)
     if _enable_llm:
         from src.python.llm.fallback import build_fallback_llm_content
 
@@ -696,6 +746,7 @@ def _generate_report_full(
 
     result.news_ok = news_ok
     result.report_generated = result.html_ok or result.excel_ok
+    _record_llm_context(perf)
     perf.save()
     _collect_health_checks(_health_fut, "full", holdings)
     return result

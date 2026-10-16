@@ -350,7 +350,10 @@ class TestNewsChainContainsBlock(unittest.TestCase):
 
         pool = MagicMock()
         _submit_news_future(pool, [], {"news_top_count": 10, "penetrated_assets": None}, True, _BLOCK)
-        assert pool.submit.call_args.args[4] == _BLOCK
+        # args = (计时包装器, span_recorder, build_news_data, holdings, top_count,
+        #         penetrated, 块, force)，故块在包装器实参第 7 位；
+        # 对 build_news_data 而言仍是第 4 位置实参
+        assert pool.submit.call_args.args[6] == _BLOCK
 
     def test_run_safe_passes_block_keyword(self):
         """run_news_correlation_safe → enhance_news_correlation 收到块。"""

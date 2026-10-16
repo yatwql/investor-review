@@ -7,6 +7,24 @@
 
 ---
 
+## plan-126 性能对比、机读输出与阈值门禁 ✅
+
+**完成（2026-10-15，v0.13.4-dev）**：`perf-view.py` 获得 `--compare A B`（阶段级中位 delta/倍数 + 变异系数判显著，噪声带内不判回归）、`--json`/`--csv` 机读输出、`--gate` 阈值判定（退出码 0/2）。**门禁归属修正**：CI `perf-gate` 门禁由主动压测 `perf-test-report.py --gate` 承担（同条件可比），历史视图不做门禁——样本不可控、不可复现、测环境不测代码。后续增强：`--json` 升级信封 `{record_count, records, summary}`（与 Markdown 各段同源）、CSV 增归一/离群/最慢阶段列。
+
+**落地设计**：[`perf-observability-design.md`](perf-observability-design.md) §9（门禁归属决策）· §10（输出增强）——设计文档已随 v0.13.4 发布归档于本目录。
+
+## plan-125 运行上下文维度采集（provider/缓存/等待/用量） ✅
+
+**完成（2026-10-15，v0.13.4-dev）**：`perf_history.jsonl` 记录增 `llm` 字段（provider/model/thinking 档、重试与退避等待秒数、端点节流等待、provider 降级、模块级缓存命中、逐模块 tokens/费用）。`llm/observation.py` 汇聚器（`bind_llm_observation`/`current_llm_observation`，线程安全）在调用链归集：`core/retry.py` 退避观察点、`llm/pacing.py` 节流门、`llm/api.py` provider 链、编排层预检、`llm/session.py` 单源用量；未绑定时全链空操作。`perf-view.py` 增「LLM 运行上下文」段——直给「时间花在白等还是真推理」。
+
+## plan-124 性能视图稳健统计与归因 ✅
+
+**完成（2026-10-15，v0.13.4-dev）**：离群点标注（中位 + k × 1.4826 × MAD，`--outlier-k` 可调）与 `--exclude-outlier` 稳健口径、稳健均值（仅存在离群点时与普通均值并列）；阶段级 P50/P95/P99；尾部归因（最慢一次运行逐阶段 z 分数直给「哪步超常、超多少倍」）；`--by day|week|hour` 时段聚合。
+
+## plan-123 运行观测打点补齐（LLM 模块级细分 + full 埋点补回 + 诊断落盘） ✅
+
+**完成（2026-10-15，v0.13.4-dev）**：`core/perf.py` 增线程安全 `PhaseBreakdownRecorder`，快照带 `breakdown`/`counters`（**不参与 `total_seconds`**，保历史可比与 ETA 口径）；LLM 四模块与新闻获取逐子项耗时入 `breakdown["LLM+新闻"]`；full 路径 `_report_output.py` 两个 helper 补 HTML/Excel 阶段埋点；首个阶段计时时挂只计数日志 handler、`save()` 摘除，WARNING/ERROR 自动入 `warnings_count`/`errors`/`counters`（根因修复「诊断字段恒空」）；`perf-view.py` 增阶段细分表。
+
 ## plan-122 脚本目录优化批次（审计落地） ✅
 
 **完成（2026-10-13）**：scripts 全目录审计（67 文件/16,397 行）后六项优化全部落地：

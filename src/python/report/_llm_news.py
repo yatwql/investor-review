@@ -1,10 +1,15 @@
 """LLM/新闻并行获取 — 线程池提交/收集/报告。
 
 统一管理 LLM 内容和新闻数据的并行获取。
+
+观测：`LLM+新闻` 阶段内各子项自身耗时经 `span_recorder` 记入
+`perf_history.jsonl` 的 `breakdown`（子项自身耗时，LLM 与新闻并行，故之和不参与
+`total_seconds`）。recorder 为 None 时行为零变化。
 """
 
 from __future__ import annotations
 
+import time
 
 from src.python.report.progress import ProgressReporter
 
@@ -50,6 +55,16 @@ def _report_llm_module_results(
         reporter.info("所有 LLM 内容已跳过，未调用 LLM")
 
 
+def _timed_news_fetch(span_recorder, build_fn, *args, **kwargs) -> tuple:
+    """执行新闻获取并记入子项耗时（`span_recorder` 为 None 时零行为变化）。"""
+    started = time.perf_counter()
+    try:
+        return build_fn(*args, **kwargs)
+    finally:
+        if span_recorder is not None:
+            span_recorder.record("新闻获取", time.perf_counter() - started)
+
+
 def _submit_llm_future(
     pool,
     holdings: list,
@@ -63,8 +78,13 @@ def _submit_llm_future(
     history_data: dict | None = None,
     comparison_indices: dict[str, str] | None = None,
     metrics: dict | None = None,
+    span_recorder=None,
 ) -> object | None:
-    """向线程池提交 LLM 生成任务，返回 Future 或 None。"""
+    """向线程池提交 LLM 生成任务，返回 Future 或 None。
+
+    ``span_recorder``：四模块耗时记录器（由调用方按 `LLM+新闻` 父阶段建立），
+    下传 `generate_all_llm` 逐模块记时；None 时行为零变化。
+    """
     if not enable_llm:
         return None
     from src.python.llm import generate_all_llm
@@ -95,6 +115,7 @@ def _submit_llm_future(
         comparison_indices=comparison_indices,
         metrics=metrics,
         degradation_events=_degradation_events,
+        span_recorder=span_recorder,
     )
 
 
@@ -105,17 +126,21 @@ def _submit_news_future(
     enable_news: bool,
     purchase_constraint_block: str = "",
     force_news: bool = False,
+    span_recorder=None,
 ) -> object | None:
     """向线程池提交新闻获取任务，返回 Future 或 None。
 
     ``force_news``：新闻关联 LLM 增强的模块级强刷（
     ``news_correlation`` ∈ 强刷集合时置 True）。
+    ``span_recorder``：新闻获取耗时记录器（None 时零行为变化）。
     """
     if not enable_news:
         return None
     from src.python.report.news_correlation import build_news_data
 
     return pool.submit(
+        _timed_news_fetch,
+        span_recorder,
         build_news_data,
         holdings,
         prep_data["news_top_count"],
@@ -167,11 +192,15 @@ def _fetch_llm_and_news(
     history_data: dict | None = None,
     comparison_indices: dict[str, str] | None = None,
     metrics: dict | None = None,
+    span_recorder=None,
 ) -> tuple[tuple, list, dict, bool]:
     """并行获取 LLM 内容 + 新闻数据，统一处理 4 分支。
 
     内部管理线程池（max_workers=2）。
     LLM 和新闻的 ok/disabled/failed 计数统一归入此函数。
+
+    ``span_recorder``：`LLM+新闻` 父阶段的子项记录器（上层按父阶段建立），
+    逐模块与新闻获取各自记时；None 时零行为变化。
 
     ``force_llm_modules``：模块级强刷集合——并行四模块经
     ``generate_all_llm`` 同源消费，新闻 LLM 增强按 ``news_correlation``
@@ -214,7 +243,13 @@ def _fetch_llm_and_news(
 
         if is_feature_enabled("event_window_impact") and enable_news:
             _news_fut = _submit_news_future(
-                pool, holdings, prep_data, enable_news, purchase_constraint_block, _force_news
+                pool,
+                holdings,
+                prep_data,
+                enable_news,
+                purchase_constraint_block,
+                _force_news,
+                span_recorder=span_recorder,
             )
             news_data, news_llm_meta, news_ok = _collect_news_future_result(_news_fut, reporter)
             from src.python.report._experimental_seams import inject_event_impact_data
@@ -240,12 +275,21 @@ def _fetch_llm_and_news(
                     history_data=history_data,
                     comparison_indices=comparison_indices,
                     metrics=metrics,
+                    span_recorder=span_recorder,
                 )
                 if _llm_fut is not None:
                     llm_content, debate_info = _collect_llm_future_result(_llm_fut, reporter)
             return llm_content, news_data, news_llm_meta, news_ok, debate_info
 
-        _news_fut = _submit_news_future(pool, holdings, prep_data, enable_news, purchase_constraint_block, _force_news)
+        _news_fut = _submit_news_future(
+            pool,
+            holdings,
+            prep_data,
+            enable_news,
+            purchase_constraint_block,
+            _force_news,
+            span_recorder=span_recorder,
+        )
         _llm_fut = _submit_llm_future(
             pool,
             holdings,
@@ -258,6 +302,7 @@ def _fetch_llm_and_news(
             history_data=history_data,
             comparison_indices=comparison_indices,
             metrics=metrics,
+            span_recorder=span_recorder,
         )
 
         if _llm_fut is not None and _news_fut is not None:

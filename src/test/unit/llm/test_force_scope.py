@@ -218,7 +218,8 @@ class TestNewsForceModules:
         with patch("src.python.report.news_correlation.build_news_data") as mock_build:
             _submit_news_future(pool, [], {"news_top_count": 10, "penetrated_assets": None}, True, "", True)
         args = pool.submit.call_args.args
-        assert args[0] is mock_build
+        # args = (计时包装器, span_recorder, build_news_data, …)
+        assert args[2] is mock_build
         assert args[-1] is True
 
     def test_submit_news_future_default_false(self):

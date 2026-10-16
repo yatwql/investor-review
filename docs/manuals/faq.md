@@ -718,7 +718,7 @@ A: `data/state/` 存放跨会话持久化的运行时状态文件，目前包含
 
 **Q: data/state/perf_history.jsonl 有何用途？如何查看？**
 
-A: 每次通过菜单 E/B/L 或 CLI 生成报告时，程序自动记录各阶段耗时（行情获取、数据准备、快照对比、历史走势、LLM+新闻、Excel 生成、HTML 生成等）到该文件。运行 `.venv/bin/python scripts/perf-view.py` 即可查看按版本和报告类型分组的耗时趋势对比表格。可用于发现版本间性能退化。
+A: 每次通过菜单 E/B/L 或 CLI 生成报告时，程序自动记录各阶段耗时（行情获取、数据准备、快照对比、历史走势、LLM+新闻、Excel 生成、HTML 生成等）到该文件。运行 `.venv/bin/python scripts/perf-view.py` 即可查看按版本和报告类型分组的耗时趋势对比表格，以及版本演进总表（每版中位与较上一版变化）和同版本漂移段（同一版本内的渐进劣化）。可用于发现版本间性能退化。
 
 **Q: data/state/datasource_health.jsonl 有何用途？**
 
