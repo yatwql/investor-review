@@ -53,7 +53,7 @@ ls data/holdings/uploads/     # 应为空；有残留则删除本次测试产生
 
 ### 1.3 自动化脚本覆盖的检查点
 
-`docs/tmp/rf257/cdp-check.mjs`（**37 项断言**：33 过 / 2 不过 / 2 人工，全部中文输出）关键技术手段：
+`docs/tmp/rf257/cdp-check.mjs`（**37 项断言**：rf-644 修复后复跑 **35 过 / 0 不过 / 2 人工**；修复前 33/2/2，全部中文输出）关键技术手段：
 
 - **Console/异常**：`Runtime.consoleAPICalled(error)` + `Runtime.exceptionThrown` + `Log.entryAdded(error)`（域启用后先清缓冲再导航，避免上一页回放污染）。
 - **Network**：`Network.responseReceived` 记录全部状态码；`Network.setCacheDisabled` 保证读到当前版本静态资源。
@@ -127,9 +127,9 @@ ls data/holdings/uploads/     # 应为空；有残留则删除本次测试产生
 
 | 清单项 | 类型 | 结论与证据 |
 |:------|:----|:----------|
-| 4.1 无横向滚动 | 自动化 | **不过**。375px 设备模拟下 `documentElement.clientWidth=375`、`scrollWidth=421`、`body.scrollWidth=404` → **存在横向滚动**（`hScroll=true`）。证据 `cdp-run.log` 4.1、`overflow-debug.log` |
+| 4.1 无横向滚动 | 自动化 | **过（rf-644 修复后复跑）**。375px 设备模拟下 `clientWidth=375`、`scrollWidth=375`、`bodyScrollWidth=375`、`hScroll=false`；修复前 `scrollWidth=421`（取证保留，根因见 §4 发现 1）。证据 `cdp-run.log` 4.1、`overflow-debug.log` |
 | 4.2 卡片单列不超容器 | 自动化 | **过**。生成页签可见卡片各 343px 宽、`left=16/right=359`、自上而下单列堆叠、均不超 375。证据 `cdp-run.log` 4.2 |
-| 4.3 表单控件不溢出 | 自动化 | **不过**。`select#report-type` 矩形 `left=41 → right=404`（**超出视口 29px**）；同列的 `check-label`/`radio-label` 一并被撑到 `right=404`。证据 `cdp-run.log` 4.3、`mincontent-debug.json`、`wrap-debug.json` |
+| 4.3 表单控件不溢出 | 自动化 | **过（rf-644 修复后复跑）**。全部控件 `right≤359`、`溢出=[]`；修复前 select `right=404` 超视口 29px（取证保留，根因见 §4 发现 1）。证据 `cdp-run.log` 4.3、`mincontent-debug.json`、`wrap-debug.json` |
 | 4.4 ⑥ 状态网格降单列 | 自动化 | **过**。⑥ 页签 `status-grid-3` 在 375px 下 `grid-template-columns="293px"`（**1 列**），`scrollWidth=375 ≤ clientWidth=375` 无溢出。证据 `cdp-run.log` 4.4 |
 | 4.5 结果区预览/下载按钮 | **人工** | 结果卡需真实生成产物才渲染按钮（本次禁 `POST /api/runs`） |
 
@@ -137,7 +137,7 @@ ls data/holdings/uploads/     # 应为空；有残留则删除本次测试产生
 
 **【人工验证步骤】**：`F12` → `Ctrl+Shift+M` → 选 iPhone SE（375×667）→ 判定：**4.1** 页面无横向滚动条；**4.3** 报告格式下拉、复选/单选、按钮均可点选不溢出；**4.5** 跑一次 basic 后 ⑤ 结果区「预览/下载」按钮可点击、不重叠；**4.4** 切「运行状态」页签确认网格单列 → 退出设备模式。
 
-**④ 判定：不过（部分自动化）** —— 4.2/4.4 过，**4.1/4.3 不过（真实响应式缺陷，见 §4）**，4.5 待人工。
+**④ 判定：通过（rf-644 修复后复跑全过）** —— 4.1/4.2/4.3/4.4 自动化过（修复前 4.1/4.3 不过，根因与处置见 §4 发现 1），4.5 结果区按钮留人工（需真实生成产物）。
 
 ### ⑤ 按钮态
 
@@ -163,10 +163,10 @@ ls data/holdings/uploads/     # 应为空；有残留则删除本次测试产生
 | ① | 页面渲染（JS/CSS 加载） | ✅ **通过（全自动化）** | 5/5；`/static/main.js`、`/static/style.css` 均 200、171 条规则、Console 0 error → **无 404 回归闭合**。`docs/tmp/rf257/cdp-run.log` 1.1a~1.5b |
 | ② | 上传表单 UX | ✅ **通过（2.1~2.4 全自动化；2.5/2.6 合成事件+可达性口径）** | accept 断言 + 合法/非法/空文件三路径状态文案；真实拖拽、真实 Tab/Enter 留人工抽验。`cdp-run.log` 2.1~2.6 |
 | ③ | 进度事件可视化 | 🟡 **部分自动化** | 静态初始态 + 显隐逻辑过（3.1a/3.1b/3.3a）；真实进度以 smoke-web 第 4/5/6 项为已有证据，**完整进度观察需人工跑一次 basic**（full 抽验）。`cdp-run.log` 3.1a~3.3a + `smoke-web.log` |
-| ④ | 375px 响应式 | ❌ **不过（部分自动化）** | 4.2/4.4 过；**4.1、4.3 不过**：375px 下横向滚动（`scrollWidth 421 > 375`）、报告格式 select `right=404` 溢出 29px，根因见 §4 缺陷 1；4.5 结果区按钮待人工。`cdp-run.log` 4.1~4.4 + `overflow-debug.log` |
+| ④ | 375px 响应式 | ✅ **通过（rf-644 修复后复跑；4.5 留人工）** | 4.1~4.4 自动化全过（`scrollWidth=375`、控件 `溢出=[]`、状态网格单列）；修复前 4.1/4.3 不过（根因与处置见 §4 发现 1 / rf-644）；4.5 结果区按钮待人工。`cdp-run.log` 4.1~4.4 + `overflow-debug.log` |
 | ⑤ | 按钮态 | ✅ **通过（5.3 留人工）** | 5.1/5.2/5.4/5.5/5.6 自动化过（真实鼠标 hover 4/4 按钮命中 + `forcePseudoState` 双口径，含 375px 复测）；5.3 提交即禁用需人工跑一次生成。`cdp-run.log` 5.1~5.6 + `hover-debug.json` |
 
-自动化断言合计：**33 过 / 2 不过 / 2 人工**（`cdp-run.log` 末尾 `{"pass":33,"manual":2,"fail":2}`）。
+自动化断言合计：**rf-644 修复后复跑 35 过 / 0 不过 / 2 人工**（`cdp-run.log` 末尾 `{"pass":35,"manual":2}`；修复前 33/2/2）。
 
 ---
 
@@ -180,11 +180,12 @@ ls data/holdings/uploads/     # 应为空；有残留则删除本次测试产生
   - 断词规则对照：默认 `369px`、`overflow-wrap:break-word` **369px（无效）**、`overflow-wrap:anywhere` 16px、`word-break:break-all` 32px；
   - 溢出随**安装路径长度**变化：路径越长越容易溢出（本机路径较长），换一台路径短的机器可能暂时不复现——结构性风险仍存在。
   - 连带：调仓模拟页签 `用当前正式持仓文件（<路径>）` 的 `min-content=385px`，且原生 file input `#whatif-cand-input` 内在宽 **347px > 可用 293px**（与路径无关，任何机器 375px 打开该页签都会溢出）。
-- 可选修复方向（未实施，供决策）：给长路径文案加 `overflow-wrap: anywhere`（或 `word-break: break-all`）、给 `select`/`input[type=file]` 加 `max-width: 100%`（本次已在页面内临时验证 `max-width:100%` 对 select 无效——因为 select 是被上层撑宽的，须断在文案处）。
+- 可选修复方向（当时未实施）：给长路径文案加 `overflow-wrap: anywhere`（或 `word-break: break-all`）、给 `select`/`input[type=file]` 加 `max-width: 100%`（本次已在页面内临时验证 `max-width:100%` 对 select 无效——因为 select 是被上层撑宽的，须断在文案处）。
+- **处置：已修复（rf-644，三层钳制）**——`.radio-label span` `overflow-wrap:anywhere` 断词 + `.generate-form > *` 行线宽按列封顶 + `select`/file input `min-width:0; max-width:100%`；真机 CDP 复验 375px 断言 35/0/2、五页签×十二视口 60/60、新旧 CSS A/B `scroll 404→375`；回归用例 `test_web_responsive.py` 5 项。
 
-**发现 2（低，观察项）：浏览器对 `/favicon.ico` 的默认探测。** 本机 headless Chromium 本次未发起 favicon 请求（`favicon 404×0`），但用 `curl` 直接访问返回 404；若某些浏览器/标签页请求 favicon，Network 会出现一条 404。是否补一个 favicon 由维护者决定（不影响清单判定，本清单只看应用资源）。
+**发现 2（低，观察项）：浏览器对 `/favicon.ico` 的默认探测。** 本机 headless Chromium 本次未发起 favicon 请求（`favicon 404×0`），但用 `curl` 直接访问返回 404；若某些浏览器/标签页请求 favicon，Network 会出现一条 404。是否补一个 favicon 由维护者决定（不影响清单判定，本清单只看应用资源）。**处置：已补（rf-644）**——`src/static/web/favicon.svg` + `index.html` link 声明，回归 `test_favicon_declared_and_served`；复跑 `favicon 404×0`。
 
-**发现 3（低，观察项）：`data/holdings/uploads/` 为上传临时区。** 测试上传会在此生成 uuid 文件（1h TTL 自动清理）；复验脚本结束时应清空，避免残留干扰「不改 `data/holdings`」约束。
+**发现 3（低，观察项）：`data/holdings/uploads/` 为上传临时区。** 测试上传会在此生成 uuid 文件（1h TTL 自动清理）；复验脚本结束时应清空，避免残留干扰「不改 `data/holdings`」约束。本轮复跑已按此清空（含历史测试残留）。
 
 ---
 

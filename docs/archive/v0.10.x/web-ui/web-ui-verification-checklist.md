@@ -1,9 +1,9 @@
 # plan-8 Web 模式浏览器人工验收清单（rf-257）
 
-> **归档说明**：随 plan-8 设计文档一并归档，清单在 review-findings.md P2B 跟踪（rf-257 Web 模式浏览器真机人工验收）。关联方案文档见同目录 [`plan-web-ui-implementation.md`](./plan-web-ui-implementation.md) 与 [`plan-web-ui.md`](./plan-web-ui.md)。
+> **归档说明**：随 plan-8 设计文档一并归档，清单在 review-findings.md P1 跟踪（rf-257 Web 模式浏览器真机人工验收）。关联方案文档见同目录 [`plan-web-ui-implementation.md`](./plan-web-ui-implementation.md) 与 [`plan-web-ui.md`](./plan-web-ui.md)。
 >
 > 关联：`plan-web-ui-implementation.md` §10 三阶段验收标准（阶段 1 浏览器完成 basic 生成并预览 / 阶段 2 full 进度可观察 + 错误中文反馈 / 阶段 3 样式 + 375px 移动端不溢出）+ §6.5（样式/加载态/按钮态）+ §6.6（响应式/可访问性/状态恢复）+ R12（浏览器兼容 Chrome/Edge 90+、Firefox 90+）
-> 状态：⏳ 部分完成（rf-257，review-findings.md P2B）——脚本化冒烟 9/9 过 + 首次 Firefox 153 走查已发现并修复 rf-274（`/static/main.js` 404）；待补验：① 渲染、② 上传表单 UX、③ 进度可视化、④ 375px 响应式、⑤ 按钮态
+> 状态：🟡 部分完成（rf-257，review-findings.md P1）——①②④⑤已自动化实测通过（rf-644 修复后复跑 35/0/2 + smoke-web 11/11；④ 375px 修复后全过、①含 rf-274 回归），③ 静态项过；方法与证据见 [`docs/plan/web-browser-verification.md`](../../../plan/web-browser-verification.md) §3 总表。**余人工项**：真实 basic/full 进度观察、4.5 结果区按钮、5.3 提交即禁用、2.5/2.6 真实拖拽与 Tab/Enter 抽验（勾选框由人工完成后打勾）
 > 目的：plan-8 自动化测试已落地（`unit_web` 212 例 + 冒烟 9/9），以下为**只能真实浏览器交互才能验证的 UX/视觉项**——本清单提供可勾选的操作步骤，勾选完成后回填 `changelog.md` 并将 rf-257 从 review-findings.md 待处理移至已修复表。
 >
 > 文档版本：0.11.2-dev（`src/static/web/` 已从 `web/templates|static/` 迁移为统一前端目录，静态路由固定 `/static/*`）
@@ -102,11 +102,11 @@
 
 | 项 | 标题 | 结果 | 备注 |
 |:--:|:-----|:----:|:-----|
-| ① | 页面渲染（JS/CSS 加载） | ☐ 通过 / ☐ 不通过 | rf-274 回归确认 |
-| ② | 上传表单 UX | ☐ 通过 / ☐ 不通过 | |
-| ③ | 进度事件可视化 | ☐ 通过 / ☐ 不通过 | |
-| ④ | 375px 响应式 | ☐ 通过 / ☐ 不通过 | |
-| ⑤ | 按钮态 | ☐ 通过 / ☐ 不通过 | |
+| ① | 页面渲染（JS/CSS 加载） | ☐ 通过 / ☐ 不通过 | rf-274 回归确认；自动化 5/5 过（复跑 console 0 error、静态资源 200） |
+| ② | 上传表单 UX | ☐ 通过 / ☐ 不通过 | 自动化 2.1~2.4 与 2.6 可达性过；2.5/2.6 真实交互留人工 |
+| ③ | 进度事件可视化 | ☐ 通过 / ☐ 不通过 | 静态项+显隐自动化过（3.1a/3.1b/3.3a）；真实 basic/full 进度观察待人工 |
+| ④ | 375px 响应式 | ☐ 通过 / ☐ 不通过 | rf-644 修复后复跑 4.1~4.4 全过；4.5 结果区按钮待人工 |
+| ⑤ | 按钮态 | ☐ 通过 / ☐ 不通过 | 5.1/5.2/5.4/5.5/5.6 自动化过；5.3 提交即禁用待人工 |
 
 **全部通过后处理**：
 1. `review-findings.md` rf-257 从 P2B 待处理移至已修复表（含验证摘要 + 环境 + 浏览器版本）
