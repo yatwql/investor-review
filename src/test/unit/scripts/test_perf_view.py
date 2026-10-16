@@ -138,10 +138,10 @@ class TestMergeBreakdownStats:
         assert mod._merge_breakdown_stats(records) == {}
 
     def test_span_names_sorted_within_parent(self, mod):
-        """子项按名称排序（与阶段表同口径，输出稳定可 diff）。"""
-        records = [{"breakdown": {"LLM+新闻": {"新闻获取": 1.0, "持仓体检报告": 2.0}}}]
+        """子项按平均耗时降序（最慢在前；此 fixture 下字母序恰为相反序，口径可区分）。"""
+        records = [{"breakdown": {"LLM+新闻": {"新闻获取": 3.0, "持仓体检报告": 2.0}}}]
         names = list(mod._merge_breakdown_stats(records)["LLM+新闻"])
-        assert names == sorted(names)
+        assert names == ["新闻获取", "持仓体检报告"]
 
 
 class TestRobustStats:
@@ -235,8 +235,9 @@ class TestMergePhaseStats:
         assert stats["渲染"]["count"] == 1
 
     def test_phase_names_sorted(self, mod):
+        """阶段按中位降序（最慢在前；字母序为 LLM/渲染/采集，与降序可区分）。"""
         records = [{"phases": {"渲染": 1.0, "采集": 2.0, "LLM": 3.0}}]
-        assert list(mod._merge_phase_stats(records)) == ["LLM", "渲染", "采集"]
+        assert list(mod._merge_phase_stats(records)) == ["LLM", "采集", "渲染"]
 
     @pytest.mark.parametrize("phases", [{}, "not-a-dict"])
     def test_missing_or_malformed_phases_ignored(self, mod, phases):
@@ -244,6 +245,36 @@ class TestMergePhaseStats:
 
 
 # ── 分组聚合 ──
+
+
+class TestVersionFilter:
+    """`version` 前缀过滤（CLI `--version` 参数的实现层）。"""
+
+    def test_filter_by_version_prefix(self, mod):
+        records = [
+            {"version": "0.13.4-dev", "report_type": "full"},
+            {"version": "0.13.3", "report_type": "full"},
+            {"version": "0.9.9", "report_type": "full"},
+        ]
+        hit = mod._filter_records(records, None, None, version="0.13.4")
+        assert [r["version"] for r in hit] == ["0.13.4-dev"]
+        prefix2 = mod._filter_records(records, None, None, version="0.13")
+        assert [r["version"] for r in prefix2] == ["0.13.4-dev", "0.13.3"]
+        assert mod._filter_records(records, None, None, version="9") == []
+
+    def test_filter_version_applies_after_report_type(self, mod):
+        records = [
+            {"version": "0.1.0", "report_type": "full"},
+            {"version": "0.1.0", "report_type": "basic"},
+            {"version": "0.2.0", "report_type": "basic"},
+        ]
+        kept = mod._filter_records(records, "basic", None, version="0.1.0")
+        assert [r["report_type"] for r in kept] == ["basic"]
+
+    def test_group_records_transmits_version(self, mod):
+        records = _records(2, version="0.1.0") + _records(2, version="0.2.0")
+        groups = mod._group_records(records, None, None, version="0.2.0")
+        assert list(groups) == ["0.2.0 / full"]
 
 
 class TestGroupRecords:
@@ -316,8 +347,24 @@ class TestBuildTrendReport:
         text = mod.build_trend_report(_records(3))
         assert "## 0.1.0 / full" in text
         assert "运行次数：**3**" in text
-        assert "| 阶段 | 平均耗时 | 中位 | P95 | 最短 | 最长 | 次数 |" in text
+        assert "| 阶段 | 平均耗时 | 中位 | P95 | 最短 | 最长 | 次数 | 占比 |" in text
         assert "| 采集 |" in text
+        assert "占比 = 阶段均值 ÷ 组平均总耗时" in text
+
+    def test_version_filter_scopes_groups_and_header(self, mod):
+        """`--version` 前缀过滤：头部明示筛选条件，组范围随之收窄。"""
+        records = _records(2, version="0.1.0") + _records(2, version="0.2.0")
+        text = mod.build_trend_report(records, version="0.2")
+        assert "**版本筛选**：0.2（前缀匹配）" in text
+        assert "0.1.0 / full" not in text
+        assert "0.2.0 / full" in text
+
+    def test_freshness_line_from_latest_timestamp(self, mod):
+        """头部数据新鲜度：最新记录时间戳原值必在；相对时长随当下演进，不断言具体值。"""
+        text = mod.build_trend_report(_records(2))
+        line = next(ln for ln in text.splitlines() if "数据新鲜度" in ln)
+        assert line.startswith("**数据新鲜度**：最新记录 2026-01")
+        assert "（" in line
 
     def test_detail_table_capped_at_five_runs(self, mod):
         text = mod.build_trend_report(_records(8))
@@ -413,8 +460,14 @@ class TestBreakdownSection:
         assert "| LLM+新闻 | 持仓体检报告 |" in text
 
     def test_breakdown_table_absent_for_legacy_records(self, mod):
-        """无 breakdown 的历史记录：不出现空表（保持旧输出形状）。"""
-        assert "阶段细分" not in mod.build_trend_report(_records(3))
+        """无 breakdown 的完整报告组：不出现空表，渲染缺数据提示行。"""
+        text = mod.build_trend_report(_records(3))
+        assert "| 父阶段 |" not in text
+        assert "暂无阶段细分" in text
+
+    def test_breakdown_hint_skipped_for_non_full_group(self, mod):
+        """basic 组本无 LLM/新闻细分：不显示缺数据提示。"""
+        assert "暂无阶段细分" not in mod.build_trend_report(_records(3, report_type="basic"))
 
 
 class TestOutlierAndTailSections:
@@ -508,8 +561,11 @@ class TestLlmContextSection:
         assert "deepseek-main×4" in text
 
     def test_context_section_absent_without_data(self, mod):
-        """旧记录无 llm 字段：不渲染空段。"""
-        assert "LLM 运行上下文" not in mod.build_trend_report(_records(3))
+        """无 llm 字段：完整报告范围明示缺数据提示，basic 范围无 LLM 语境不渲染段。"""
+        text = mod.build_trend_report(_records(3))
+        assert "暂无 LLM 上下文" in text
+        basic_text = mod.build_trend_report(_records(3, report_type="basic"))
+        assert "LLM 运行上下文" not in basic_text
 
     def test_context_aggregates_across_records(self, mod):
         records = self._records_with_llm()

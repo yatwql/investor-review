@@ -162,15 +162,20 @@ def _filter_records(
     last_n: int | None,
     exclude_outlier: bool = False,
     outlier_k: float = _OUTLIER_K,
+    version: str | None = None,
 ) -> list[dict[str, Any]]:
-    """按报告类型过滤并截取最近 N 条（分组与分位概览共用同一口径）。
+    """按版本、报告类型过滤并截取最近 N 条（分组与分位概览共用同一口径）。
 
+    ``version``：前缀匹配（`X.Y.Z` 命中带后缀的同系列版本），None 不过滤版本；
+    在报告类型过滤之后、截尾之前应用。
     ``exclude_outlier``：按总耗时稳健离群上界（中位 ± MAD）剔除离群运行——
     服务端超时重试等外部故障会把均值抬高数十秒，剔除后才是「正常运行」口径。
     """
     filtered = records
     if report_type:
         filtered = [r for r in filtered if r.get("report_type") == report_type]
+    if version:
+        filtered = [r for r in filtered if str(r.get("version") or "").startswith(version)]
     if last_n:
         filtered = filtered[-last_n:]
     if exclude_outlier:
@@ -192,6 +197,7 @@ def _merge_breakdown_stats(
 
     Returns:
         {父阶段: {子项名: {avg, max, count}}}；无细分数据时为空字典。
+        父内子项按平均耗时降序（最慢在前，同分按名——输出稳定可 diff）。
     """
     values: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
     for r in records:
@@ -207,14 +213,15 @@ def _merge_breakdown_stats(
                 values[parent][name].append(float(sec))
     result: dict[str, dict[str, dict[str, float]]] = {}
     for parent, spans in values.items():
-        result[parent] = {
+        spans_stats = {
             name: {
                 "avg": round(_mean(vals), 2),
                 "max": round(_min_max(vals)[1], 2),
                 "count": len(vals),
             }
-            for name, vals in sorted(spans.items())
+            for name, vals in spans.items()
         }
+        result[parent] = dict(sorted(spans_stats.items(), key=lambda kv: (-kv[1]["avg"], kv[0])))
     return result
 
 
@@ -224,7 +231,8 @@ def _merge_phase_stats(
     """合并所有记录中的阶段统计（含阶段级分位）。
 
     Returns:
-        {phase_name: {avg, min, max, p50, p95, count}}
+        {phase_name: {avg, min, max, p50, p95, count}}，按中位降序
+        （最慢阶段排最前，同分按名——输出稳定可 diff）。
     """
     phase_values: dict[str, list[float]] = defaultdict(list)
     for r in records:
@@ -233,7 +241,7 @@ def _merge_phase_stats(
             for name, sec in phases.items():
                 phase_values[name].append(sec)
     result: dict[str, dict[str, float]] = {}
-    for name, vals in sorted(phase_values.items()):
+    for name, vals in phase_values.items():
         result[name] = {
             "avg": round(_mean(vals), 2),
             "min": round(_min_max(vals)[0], 2),
@@ -242,7 +250,7 @@ def _merge_phase_stats(
             "p95": round(_percentile(vals, 95), 2),
             "count": len(vals),
         }
-    return result
+    return dict(sorted(result.items(), key=lambda kv: (-kv[1]["p50"], kv[0])))
 
 
 def _group_records(
@@ -251,8 +259,9 @@ def _group_records(
     last_n: int | None,
     exclude_outlier: bool = False,
     outlier_k: float = _OUTLIER_K,
+    version: str | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
-    """按 version+report_type 分组。
+    """按 version+report_type 分组（``version`` 前缀透传给过滤器）。
 
     组间顺序按各组**首次运行时间**升序（与版本演进总表同口径）——最新版本组
     在最末；组内记录按时间戳升序。不用版本号字符串序：主版本位数不同时
@@ -261,7 +270,7 @@ def _group_records(
     Returns:
         {group_key: [records]}
     """
-    filtered = _filter_records(records, report_type, last_n, exclude_outlier, outlier_k)
+    filtered = _filter_records(records, report_type, last_n, exclude_outlier, outlier_k, version)
 
     groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for r in filtered:

@@ -646,6 +646,31 @@ def _machine_readable(records: list[dict[str, Any]], fmt: str, outlier_k: float 
     return buf.getvalue()
 
 
+def _freshness_line(records: list[dict[str, Any]]) -> str | None:
+    """数据新鲜度行：最新记录时间戳与距今时长（读表先判断数据是否新鲜）。
+
+    时间戳解析失败时降级为仅展示原值；时刻不得展示相对时长。
+    """
+    stamps = sorted(str(r.get("timestamp") or "") for r in records if r.get("timestamp"))
+    if not stamps:
+        return None
+    latest = stamps[-1]
+    try:
+        dt = datetime.fromisoformat(latest.replace("Z", "+00:00"))
+        now = datetime.now(dt.tzinfo) if dt.tzinfo else datetime.now()
+        secs = max((now - dt).total_seconds(), 0.0)
+    except ValueError:
+        return f"**数据新鲜度**：最新记录 {latest[:19]}（时间解析失败，显示原值）"
+    when = latest[:16]
+    if secs < 60:
+        return f"**数据新鲜度**：最新记录 {when}（刚刚）"
+    if secs < 3600:
+        return f"**数据新鲜度**：最新记录 {when}（{int(secs // 60)} 分钟前）"
+    if secs < 86400:
+        return f"**数据新鲜度**：最新记录 {when}（{int(secs // 3600)} 小时前）"
+    return f"**数据新鲜度**：最新记录 {when}（{int(secs // 86400)} 天前）"
+
+
 def build_trend_report(
     records: list[dict[str, Any]],
     report_type: str | None = None,
@@ -655,21 +680,25 @@ def build_trend_report(
     compare: tuple[str, str] | None = None,
     summary: bool = False,
     outlier_k: float = _OUTLIER_K,
+    version: str | None = None,
 ) -> str:
     """生成性能趋势 Markdown 报告字符串。
 
     ``summary``：仅输出概览段（总体分位/离群/尾部归因/LLM 上下文/时段聚合/对比），
     略去逐版本分组详情——记录多、分组多时避免输出过长。
     """
-    groups = _group_records(records, report_type, last_n, exclude_outlier, outlier_k)
-    scoped = _filter_records(records, report_type, last_n, exclude_outlier, outlier_k)
+    groups = _group_records(records, report_type, last_n, exclude_outlier, outlier_k, version)
+    scoped = _filter_records(records, report_type, last_n, exclude_outlier, outlier_k, version)
+    fresh = _freshness_line(records)
 
     lines: list[str] = [
         "# 报告生成性能趋势",
         "",
         "**数据来源**：`data/state/perf_history.jsonl`",
         f"**总记录数**：{len(records)} 条",
+        *([f"**版本筛选**：{version}（前缀匹配）"] if version else []),
         f"**分组数**：{len(groups)} 组",
+        *([fresh] if fresh else []),
         "",
     ]
 
@@ -693,7 +722,15 @@ def build_trend_report(
     lines.extend(_drift_lines(scoped))
 
     # ── LLM 运行上下文（等待/重试/降级/缓存/用量） ──
-    lines.extend(_llm_context_lines(scoped))
+    llm_ctx_lines = _llm_context_lines(scoped)
+    if llm_ctx_lines:
+        lines.extend(llm_ctx_lines)
+    elif any(str(r.get("report_type")) == "full" for r in scoped):
+        # 范围内有完整报告记录（会产生上下文）但无数据：明示缺而非静默省段
+        lines.append("## LLM 运行上下文")
+        lines.append("")
+        lines.append("_（暂无 LLM 上下文记录：provider/等待/用量维度随完整报告采集，历史记录不含此维度）_")
+        lines.append("")
 
     # ── 时段聚合（可选） ──
     if by:
@@ -734,13 +771,16 @@ def build_trend_report(
         # ── 各阶段耗时（含阶段级分位） ──
         phase_stats = _merge_phase_stats(group_records)
         if phase_stats:
-            lines.append("| 阶段 | 平均耗时 | 中位 | P95 | 最短 | 最长 | 次数 |")
-            lines.append("|:-----|--------:|----:|----:|----:|----:|-----:|")
+            total_avg = _mean(totals) if totals else 0.0
+            lines.append("| 阶段 | 平均耗时 | 中位 | P95 | 最短 | 最长 | 次数 | 占比 |")
+            lines.append("|:-----|--------:|----:|----:|----:|----:|-----:|-----:|")
             for name, stat in phase_stats.items():
+                pct = (stat["avg"] / total_avg * 100) if total_avg > 0 else 0.0
                 lines.append(
                     f"| {name} | {stat['avg']:.2f}s | {stat['p50']:.2f}s | {stat['p95']:.2f}s | "
-                    f"{stat['min']:.2f}s | {stat['max']:.2f}s | {stat['count']} |"
+                    f"{stat['min']:.2f}s | {stat['max']:.2f}s | {stat['count']} | {pct:.0f}% |"
                 )
+            lines.append("_（占比 = 阶段均值 ÷ 组平均总耗时；并行执行的阶段之和可超 100%）_")
             lines.append("")
 
         # ── 阶段细分（breakdown：子项自身耗时，可并行，之和不等于父阶段墙钟） ──
@@ -753,6 +793,10 @@ def build_trend_report(
             for parent, spans in breakdown_stats.items():
                 for name, stat in spans.items():
                     lines.append(f"| {parent} | {name} | {stat['avg']:.2f}s | {stat['max']:.2f}s | {stat['count']} |")
+            lines.append("")
+        elif str(group_records[0].get("report_type")) == "full":
+            # 完整报告组但无细分数据（记录早于细分采集）：明示缺而非静默省表
+            lines.append("_（暂无阶段细分：LLM/新闻子项细分随完整报告采集，该组历史记录不含此维度）_")
             lines.append("")
 
         # ── 最近 5 次运行明细 ──
@@ -782,6 +826,10 @@ def build_trend_report(
 def main() -> int:
     parser = argparse.ArgumentParser(description="查看性能历史趋势")
     parser.add_argument("--report-type", choices=["basic", "both", "full"], help="仅查看指定报告类型")
+    parser.add_argument(
+        "--version",
+        help="仅查看指定版本（前缀匹配，如 0.13.4 可命中 0.13.4-dev）",
+    )
     parser.add_argument("--last", type=int, default=None, help="仅查看最近 N 条记录")
     parser.add_argument("--save", action="store_true", help="同时写入 docs/tmp/perf_trend.md")
     parser.add_argument(
@@ -813,7 +861,7 @@ def main() -> int:
         print("[!] 暂无性能历史数据（data/state/perf_history.jsonl 不存在或为空）")
         return 1
 
-    scoped = _filter_records(records, args.report_type, args.last, args.exclude_outlier, args.outlier_k)
+    scoped = _filter_records(records, args.report_type, args.last, args.exclude_outlier, args.outlier_k, args.version)
 
     # ── 机读输出（与 Markdown 互斥，便于管道消费） ──
     if args.json or args.csv:
@@ -830,6 +878,7 @@ def main() -> int:
             compare=tuple(args.compare) if args.compare else None,
             summary=args.summary,
             outlier_k=args.outlier_k,
+            version=args.version,
         )
         print(report)
 
