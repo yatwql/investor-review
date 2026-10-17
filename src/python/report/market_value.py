@@ -390,7 +390,7 @@ def _generate_details(holdings: list[Holding], today_str: str = "") -> list[Deta
         mkt = registry.fetch_cached_only(
             h.code,
             _route,
-            lambda c, _n=h.name: price_cache_key(c, _n),
+            lambda _c, _key=_cache_key: _key,
         )
         # 收市后校验价格缓存日期是否 ≥ 该路由允许的最新日期（跨日残留缓存 → 降级重取）。
         # 阈值按路由分域：场内须等于最近交易日；场外官方净值中 QDII 合法为 T-1，

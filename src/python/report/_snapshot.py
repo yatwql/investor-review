@@ -159,7 +159,6 @@ def capture_snapshot(
         )
         _old = load_comparison_baseline(_snapshot.timestamp, snapshot_namespace)
         _diff = HistoryDiff.compute(_snapshot, _old)
-        _qdii_value_diff, _qdii_lagged = _classify_qdii_value_diff(details, _old)
         save(_snapshot, snapshot_namespace)
         from src.python.core.constants import HISTORY_SNAPSHOT_MAX_COUNT, HISTORY_SNAPSHOT_RETENTION_DAYS
         from src.python.report.history_snapshot import prune as _prune_snapshots
@@ -174,6 +173,8 @@ def capture_snapshot(
             # 基线时间戳仅接受字符串（防御非标对象/桩），不可解析时标签降级为 ""
             _raw_ts = _old.timestamp if isinstance(_old.timestamp, str) else ""
             _baseline_td, _baseline_gen = _baseline_labels(_raw_ts)
+            # 首次运行无基线：QDII 分项无意义，计算只在有环比时进行
+            _qdii_value_diff, _qdii_lagged = _classify_qdii_value_diff(details, _old)
             pipeline_data = {
                 "diff": {
                     "is_first_check": False,

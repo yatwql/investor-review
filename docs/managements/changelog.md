@@ -11,10 +11,15 @@
 
 ### Fixed
 
+- **LLM 观测未写入性能记录（rf-692）**：full 路径在 LLM 阶段结束的 `finally` 中解绑全局 sink 后，收尾 `_record_llm_context(perf)` 仍取全局 → 取到 None，重试/节流等待/降级/缓存/thinking 观测整段丢失（性能台账只剩会话用量）。改为显式传入本次绑定的 sink（`_record_llm_context(perf, _llm_sink)`）；新增 2 个回归用例。
+
 - **盘前/盘后价格缓存误用盘中价（rf-691）**：`_price_cache_fresh` 此前只比 `price_date`，把交易日 T 盘中写入的场内缓存（如 10-15 13:01 的 29.35）当作 T 日收盘价（真实 29.60）在盘后/次日盘前沿用，使「本日盈亏」与「快照环比」系统性偏离真实涨跌。现增加收盘时点校验：T 日已收盘（now ≥ 15:00）时要求缓存写入时刻 ≥ T 日 15:00（午间休市不施加），`report/market_value.py` 的 `CACHE_ONLY` 分支与 `_fetch_price_with_cache_refresh` 两处传入 `cache_key`；强制刷新失败时退回刷新前的过时缓存（不再因清缓存反而丢数据）。新增 `test_fetcher_price.py` 8 个回归用例。
 - **Web 生成完成后按钮复位（rf-690）**：run 完成后「生成报告」按钮停在「生成中...」禁用态、无法再次生成或换格式再生成（rf-257 真机 basic 实测揭示）——根因是 `pollOnce` 完成分支只移除 `aria-busy`、未复位文案与禁用态、未清已消费的 `file_id`；完成分支与 `resetFlow` 共用 `restoreGenerateBtn()` 单源复位（清 `state.fileId` → `updateGenerateBtn()` → 文案还原 +「请重新上传」提示；正式-用存量免上传立即可再生成），新增 `test_web_generate_flow.py` 源结构回归 3 用例。
 
 ### Changed
+
+- **perf-view 统计分组去重（技术债）**：`_version_evolution_data` 与 `_drift_data` 各自重复实现「按（类型, 版本）分组 + 首次运行时间排序键」，`build_trend_report` 又对同一批记录重复过滤两次；抽出 `_group_by_version_type` / `_group_filtered` 共用，`_group_records` 复用之；`_compare_versions` 的 `_summary` 改用显式版本参数（原靠对象 identity 判分支）。
+- **快照/取价微清理**：`capture_snapshot` 的 QDII 分项改为仅在存在环比时计算（首次运行不再为丢弃的结果调用交易日历）；`market_value` 的 `CACHE_ONLY` 分支复用已算好的缓存键，避免同一键重复计算两次。
 
 - **环比 QDII 口径可见（R-OUT-15 增强）**：QDII 官方净值滞后一个交易日，其市值差实际是上一交易日的净值变动，与当日 A 股涨跌混在同一个「总市值环比」里易被误读（用户实测：本日盈亏 −808.44 与环比 −530.73 差额中 +557.29 来自 QDII 口径差）。摘要区「本期要点」总市值环比行下新增 QDII 口径注：显示环比含有的 QDII 官方净值变动金额，滞后一日时标注「T-1 口径，滞后一个交易日」；无 QDII 或变动为 0 时省略。`_snapshot.capture_snapshot` 经 `_classify_qdii_value_diff` 注入 `qdii_value_diff`/`qdii_lagged`，`summary_highlights` 透传，`summary_section.html` 渲染；新增 `test_summary_highlights.py` 6 个回归用例。
 - **发布流程分层纪律补充（rf-689）**：developer-guide 发布流程段增加「归档迁移/管理文档改动后、进 `gate` 前必跑便宜守护（`check-doc-traces` 等）」——守护发现前置，防止 P2 门禁因文档级 finding 双跑全量 regression（v0.13.4 发布时实际发生一次：管理文档引用归档路径触发 ARCHIVE 痕迹拦截，gate 第二轮才过）。

@@ -54,7 +54,9 @@ from _perf_view.stats import (
     _OUTLIER_K,
     _cv,
     _filter_records,
-    _group_records,
+    _group_by_version_type,
+    _group_filtered,
+    _group_records as _group_records,  # re-export：经 load_script 供测试直调
     _is_outlier as _is_outlier,  # re-export：经 load_script 供测试直调
     _mad as _mad,  # re-export：同上
     _mean,
@@ -197,10 +199,7 @@ def _version_evolution_data(records: list[dict[str, Any]]) -> list[dict[str, Any
         [{report_type, version, count, median, p95, per_holding, delta_prev, pct_prev}]
         （同类型首版的 delta_prev/pct_prev 为 None）。
     """
-    groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
-    for r in records:
-        groups[(str(r.get("report_type", "?")), str(r.get("version", "?")))].append(r)
-    first_ts = {key: min(str(r.get("timestamp", "")) for r in recs) for key, recs in groups.items()}
+    groups, first_ts = _group_by_version_type(records)
 
     rows: list[dict[str, Any]] = []
     for rt in sorted({key[0] for key in groups}):
@@ -304,10 +303,7 @@ def _drift_data(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     样本 < `_DRIFT_MIN_SAMPLES` 的组不参与（半样本中位不稳）；输入须按时间升序
     （load_history 追加写入天然有序）。
     """
-    groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
-    for r in records:
-        groups[(str(r.get("report_type", "?")), str(r.get("version", "?")))].append(r)
-    first_ts = {key: min(str(r.get("timestamp", "")) for r in recs) for key, recs in groups.items()}
+    groups, first_ts = _group_by_version_type(records)
 
     rows: list[dict[str, Any]] = []
     for key in sorted(groups, key=lambda k: (first_ts[k], k)):
@@ -477,10 +473,10 @@ def _compare_versions(
     recs_a = _version_records(records, version_a)
     recs_b = _version_records(records, version_b)
 
-    def _summary(recs: list[dict[str, Any]]) -> dict[str, Any]:
+    def _summary(recs: list[dict[str, Any]], version: str) -> dict[str, Any]:
         totals = [float(r.get("total_seconds") or 0) for r in recs]
         return {
-            "version": version_a if recs is recs_a else version_b,
+            "version": version,
             "count": len(recs),
             "median": round(_median(totals), 1),
             "p95": round(_percentile(totals, 95), 1),
@@ -510,7 +506,7 @@ def _compare_versions(
             }
         )
     rows.sort(key=lambda row: -abs(row["delta"]))
-    return {"a": _summary(recs_a), "b": _summary(recs_b), "phases": rows}
+    return {"a": _summary(recs_a, version_a), "b": _summary(recs_b, version_b), "phases": rows}
 
 
 def _cv_of_phase(records: list[dict[str, Any]], phase: str) -> float:
@@ -687,8 +683,8 @@ def build_trend_report(
     ``summary``：仅输出概览段（总体分位/离群/尾部归因/LLM 上下文/时段聚合/对比），
     略去逐版本分组详情——记录多、分组多时避免输出过长。
     """
-    groups = _group_records(records, report_type, last_n, exclude_outlier, outlier_k, version)
     scoped = _filter_records(records, report_type, last_n, exclude_outlier, outlier_k, version)
+    groups = _group_filtered(scoped)
     fresh = _freshness_line(records)
 
     lines: list[str] = [

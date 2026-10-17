@@ -1,9 +1,13 @@
-"""full 路径 HTML/Excel 阶段埋点回归测试。
+"""full 路径 HTML/Excel 阶段埋点 + LLM 观测登记回归测试。
 
-回归场景：full 路径的 HTML/Excel 写出经 `_report_output.py` 两个 helper 完成，
+回归场景一：full 路径的 HTML/Excel 写出经 `_report_output.py` 两个 helper 完成，
 而阶段计时只存在于 `_report_generation.py` 的 both 路径——full 运行因此**丢失**
 `HTML 生成`/`Excel 生成` 两个阶段（实测 126 条历史记录中二者各仅 6 条，均早期版本），
 渲染耗时对统计不可见。此处锁定「helper 内确实补了阶段计时」。
+
+回归场景二：LLM 观测汇聚器在 LLM 阶段结束的 ``finally`` 中已被全局解绑，
+登记时若再取全局，观测（重试/节流等待/降级/缓存）会整段丢失。此处锁定
+「登记使用本次绑定的 sink」。
 
 运行：
   pytest src/test/unit/report/test_report_output_spans.py -v
@@ -181,3 +185,45 @@ class TestFullPathPhaseSpans:
         )
 
         assert ok is True
+
+
+class TestLlmObservationRecorded:
+    """回归：LLM 观测汇聚器在全局解绑后仍能写入 perf 记录。
+
+    管线在 LLM 阶段结束的 ``finally`` 中解绑全局 sink（防跨运行串味），若登记时
+    再取 ``current_llm_observation()`` 则为 None → 重试/节流等待/降级/缓存整段
+    观测丢失，perf 记录只剩会话用量。此处锁定「登记使用本次绑定的 sink」。
+    """
+
+    def test_record_llm_context_uses_passed_sink(self):
+        """传入 sink 即计入观测字段，即使全局已解绑。"""
+        from unittest.mock import patch
+
+        from src.python.core.perf import PerfCollector
+        from src.python.llm.observation import LlmObservation, clear_llm_observation
+
+        perf = PerfCollector(report_type="full", holdings=[])
+        sink = LlmObservation()
+        sink.note_retry(4.0)
+        sink.note_pacing_wait(2.5)
+        sink.note_fallback()
+        sink.note_call(provider="claude", model="m1", thinking=True)
+        clear_llm_observation()  # 模拟管线 finally 已解绑全局
+
+        with patch("src.python.llm.session.get_session_usage", return_value={}):
+            rg._record_llm_context(perf, sink)
+
+        llm = perf.snapshot().llm
+        assert llm["retry_count"] == 1
+        assert llm["retry_wait_seconds"] == pytest.approx(4.0)
+        assert llm["pacing_wait_seconds"] == pytest.approx(2.5)
+        assert llm["fallbacks"] == 1
+        assert llm["thinking_calls"] == 1
+        assert llm["providers"] == {"claude": 1}
+
+    def test_full_path_passes_bound_sink(self):
+        """full 路径登记时传入已绑定的 sink（结构锁定，防回退为取全局）。"""
+        import inspect
+
+        src = inspect.getsource(rg._generate_report_full)
+        assert "_record_llm_context(perf, _llm_sink)" in src
