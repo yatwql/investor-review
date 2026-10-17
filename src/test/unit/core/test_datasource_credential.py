@@ -149,8 +149,8 @@ class TestKeyFileCredential:
     判定顺序：环境变量优先（便于 CI / 临时切换），否则读声明的密钥文件。
     """
 
-    def _write_key(self, path, value, field="api_key"):
-        path.write_text(json.dumps({field: value}, ensure_ascii=False), encoding="utf-8")
+    def _write_key(self, path, value, field="api_key", section="example"):
+        path.write_text(json.dumps({section: {field: value}}, ensure_ascii=False), encoding="utf-8")
         return str(path)
 
     def test_key_file_declared_and_present_is_ready(self, monkeypatch, tmp_path):

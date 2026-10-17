@@ -156,9 +156,8 @@ def _key_file_path(spec: CredentialSpec) -> str:
 def _read_key_file(path: str, field: str, section: str = "") -> str:
     """从 JSON 密钥文件读取字段值（文件缺失/不可解析/字段空白时返回空串）。
 
-    通用结构以 provider 为节（``{"datasink": {"api_key": "..."}}``）：
-    给了 ``section`` 且该节为对象时取节内字段；否则回退到顶层平铺字段
-    （兼容单源文件 ``{"api_key": "..."}``）。
+    结构以 provider 为节（``{"datasink": {"api_key": "..."}}``）：只认节内字段，
+    节缺失或非对象即视为无凭据（调用点恒传非空 section）。
     """
     try:
         with open(path, encoding="utf-8") as f:
@@ -167,8 +166,8 @@ def _read_key_file(path: str, field: str, section: str = "") -> str:
         return ""
     if not isinstance(data, dict):
         return ""
-    section_data = data.get(section) if section else None
-    value = section_data.get(field) if isinstance(section_data, dict) else data.get(field)
+    section_data = data.get(section)
+    value = section_data.get(field) if isinstance(section_data, dict) else None
     return value.strip() if isinstance(value, str) and not _is_blank(value) else ""
 
 

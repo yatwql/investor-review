@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.13.5-dev
-> **编号源**：`rf-next = 698`（新增问题取此编号，完成后更新为 +1；已用最大 rf-697，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 699`（新增问题取此编号，完成后更新为 +1；已用最大 rf-698，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -79,6 +79,7 @@
 > rf-697 已修复（2026-10-17）：P1（`verify`）/P2（`regression`）/P0 预检均按 `unit` 通配或 `unit_*` 域集筛选，conftest 的 `pytest_configure` 曾漏注册 `unit`——10,136 条 unit 用例全部不在任何门禁收集范围（P0/P1 实跑数与 test-coverage 台账 6,969/9,800 吻合即为实证；`unit` 档单跑 10,136 为对照实证）。conftest 注册行补齐，域选择器与期望表经测试锁死同源；dev-verify 6,969→6,978、verify 9,800→10,145（P1 +345，≈+1s）。
 > rf-697 登记待决（2026-10-17，rf-694 处置调研附带发现）：`verify`（P1 合入门禁）与 `dev-verify`（P0）选择器均不含 `unit_cli`（137 用例）与 `unit_ui`（187 用例）——若属「交互层不进快速门禁」的既定口径应在 testplan 显式登记；若非故意即 P1 覆盖缺口（典型：TUI/CLI 改动可绕 P1 入 master）。与 rf-694 同批定口径。
 > rf-113 已修复（2026-10-16）：Iter 7 全链路浏览器人工验证六项全部完成——headless 自动化回归（① 6 图 badge / ② 2.4 afterprint / ③ 3.1 断网渲染 / ⑤ 375px 报告+调试页 / ⑥ 禁 Canvas 兜底，复跑 5 PASS + ⑥ 表现记录口径）+ 人工抽验（② 真实 Ctrl+P 打印预览、④ 微信真机 4.3+4.4、Safari 90+ iPad 抽验、Windows Chrome/Firefox；4.1 链接访问维护者豁免）；附带发现两处已由 rf-645 修复并复跑确认（⑤-testchart 转 PASS）。方法与证据见 `docs/plan/report-browser-verification.md`，勾选清单归档留存；rf-114 前置随之满足。
+> rf-698 已处置（2026-10-17，用户裁决口径清理）：按「不再对旧配置项/旧缓存文件/旧数据结构做兼容」移除 5 处残留兼容分支——① `config/anonymizer.py` 的 `profit_rate_pct`「旧键兼容」注释修正（经核该键实为汇总取数/渲染的现役键，同步分支保留防残留原精度，仅删误导口径）；② `core/perf.py` `_phase_seconds` 早期 list 形状死分支（ETA 仅采样最近 20 条，旧形状自然出窗）；③ `fetcher/industry.py` 缓存载荷 schema 迁移清理链全删（函数 + 3 处调用，迁移窗口≤两周已过）；④ `datasource_credential._read_key_file` 顶层平铺回退（生产调用点恒传非空 section，旧单源文件形态失效）；⑤ `deepseek-chat`/`deepseek-reasoner` 停用别名全部兼容移除（价目两条目 + thinking 三名单；旧名历史费用改显 `-`、存量旧配置不再获思考安全网，均经用户确认）。手册与 `llm-technical.md` 价目/峰谷枚举/effort 名单同源刷新；别名价格锁改负向锁（锁定移除行为防回填）、删 3 个旧形状/旧载荷正测、凭据测试改写节结构；dev-verify 6,975 通过。
 
 ### 开发期已修复（0.13.4-dev）
 

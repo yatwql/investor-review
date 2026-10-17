@@ -567,14 +567,9 @@ def estimate_stage_eta(
 
 
 def _phase_seconds(phases: Any, phase_name: str) -> float | None:
-    """从历史记录的 phases 字段取指定阶段耗时（兼容 dict / 早期 list 两种形状）。"""
+    """从历史记录的 phases 字段取指定阶段耗时（dict 形状；非 dict 记录不计样本）。"""
     if isinstance(phases, dict):
         sec = phases.get(phase_name)
-    elif isinstance(phases, list):
-        sec = next(
-            (p.get("seconds") for p in phases if isinstance(p, dict) and p.get("name") == phase_name),
-            None,
-        )
     else:
         return None
     if isinstance(sec, bool) or not isinstance(sec, (int, float)) or sec < 0:

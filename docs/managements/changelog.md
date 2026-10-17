@@ -21,6 +21,8 @@
 
 ### Changed
 
+- **旧配置/旧缓存/旧模型名兼容代码清理（rf-698，用户裁决口径）**：移除 5 处残留兼容分支——perf 阶段 ETA 的早期 list 形状 `phases` 死分支（旧记录已自然出 20 条采样窗）；行业缓存缺扩展字段载荷的 schema 迁移清理链（迁移窗口≤两周已过）；数据源密钥文件顶层平铺 `{"api_key": ...}` 回退（生产调用点恒传非空 section）；停用别名 `deepseek-chat`/`deepseek-reasoner` 在价目表与 Extended Thinking 三名单的全部收录（旧名历史调用费用改显 `-`、存量旧配置不再获思考安全网，已经用户确认接受）；另修正 anonymizer `profit_rate_pct`「旧键兼容」误导注释（实为现役汇总键，同步分支保留）。手册/`llm-technical.md` 价目与峰谷枚举同源刷新；测试侧别名价格锁改负向锁（锁定移除行为防回填）并删 3 个旧形状/旧载荷正测。
+
 - **P1 门禁域范围纳入 TUI/CLI，确立「归域即进门禁」不变式（rf-694/rf-695/rf-697，`technical.md` §4.23）**：`verify`（P1）选择器增 `unit_ui`/`unit_cli`；目录归域特例（`unit/handlers`·`unit/cache`→`unit_core`、`unit/startup`→`unit_ui`）在期望表注释/conftest 缺标警告/技术设计三处同源登记；新增 `TestP1GateCoversDeclaredDomains` 双结构锁（期望表全部 unit_* 域 ∈ verify；P0 域集 ⊆ P1）防「改域=门禁搬家」回退。审计改域迁移方案废弃：`unit_ui` 入门禁后 handlers 挂 `unit_core` 与挂 `unit_ui` 门禁结果恒同，迁移改动面 ~20 处且零覆盖收益，故保留期望表已登记口径。
 - **perf-view 统计分组去重（技术债）**：`_version_evolution_data` 与 `_drift_data` 各自重复实现「按（类型, 版本）分组 + 首次运行时间排序键」，`build_trend_report` 又对同一批记录重复过滤两次；抽出 `_group_by_version_type` / `_group_filtered` 共用，`_group_records` 复用之；`_compare_versions` 的 `_summary` 改用显式版本参数（原靠对象 identity 判分支）。
 - **快照/取价微清理**：`capture_snapshot` 的 QDII 分项改为仅在存在环比时计算（首次运行不再为丢弃的结果调用交易日历）；`market_value` 的 `CACHE_ONLY` 分支复用已算好的缓存键，避免同一键重复计算两次。

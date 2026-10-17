@@ -241,7 +241,9 @@ def _anonymize_detail_entry(d: dict[str, Any]) -> None:
 
     d["profit"] = round(mv - cost, 2)
     d["profit_rate"] = round((mv - cost) / cost * 100, 1) if cost else 0.0
-    if "profit_rate_pct" in d:  # 旧键兼容：同步为派生值，避免残留原精度
+    # profit_rate_pct 是汇总取数/渲染的现役键（见 _aggregate_details_summary），
+    # 同步为派生值防残留原精度——非旧键兼容分支
+    if "profit_rate_pct" in d:
         d["profit_rate_pct"] = d["profit_rate"]
 
 

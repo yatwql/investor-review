@@ -208,9 +208,6 @@ class TestSupportsExtendedThinking(unittest.TestCase):
     def test_deepseek_v4_pro_supported(self) -> None:
         self.assertTrue(_supports_extended_thinking("deepseek-v4-pro"))
 
-    def test_deepseek_chat_supported(self) -> None:
-        self.assertTrue(_supports_extended_thinking("deepseek-chat"))
-
     def test_deepseek_flash_supported(self) -> None:
         """新一代 Flash 正式模型名 deepseek-flash 支持 Extended Thinking。"""
         self.assertTrue(_supports_extended_thinking("deepseek-flash"))
@@ -268,9 +265,6 @@ class TestIsEffortModel(unittest.TestCase):
     def test_deepseek_v4_pro_is_effort(self) -> None:
         self.assertTrue(_is_effort_model("deepseek-v4-pro"))
 
-    def test_deepseek_chat_is_effort(self) -> None:
-        self.assertTrue(_is_effort_model("deepseek-chat"))
-
     def test_deepseek_flash_is_effort(self) -> None:
         """deepseek-flash 属 effort 族。
 
@@ -312,7 +306,6 @@ class TestIsDefaultThinkingOn(unittest.TestCase):
         """DeepSeek 推理族默认开思考（effort=high）。"""
         self.assertTrue(_is_default_thinking_on("deepseek-flash"))
         self.assertTrue(_is_default_thinking_on("deepseek-v4-flash"))
-        self.assertTrue(_is_default_thinking_on("deepseek-chat"))
 
     def test_claude_gemini_not_default_on(self) -> None:
         """Anthropic 原生 / Gemini 默认不思考，不注入 disabled。"""
@@ -532,30 +525,17 @@ class TestPricing(unittest.TestCase):
         self.assertEqual(cost_peak, "¥0.040")
         self.assertEqual(cost_idle, "¥0.020")
 
-    def test_retired_flash_aliases_billed_as_flash_series(self) -> None:
-        """已停用别名 deepseek-chat / deepseek-reasoner 与 flash 系列同价（闲时与高峰两段）。
+    def test_retired_flash_aliases_not_billed(self) -> None:
+        """停用别名不再兼容：deepseek-chat / deepseek-reasoner 不收录价格表，费用估算按未知模型出 "-"。
 
-        二者分别是 v4-flash 的非思考 / 思考模式别名（2026-07-24 下线）。条目保留而非
-        删除，是为了让停用前产生的历史调用仍能算出金额——删条目会让这些记录一律显示
-        "-"，把「模型确实存在过」的历史费用变成不可读。锁定「模型名 → 单价」可防止
-        误改单价导致费用估算整体偏移。
+        项目口径：不为旧模型名/旧配置保留兼容条目；本测锁定移除行为，防止别名被
+        重新塞回价格表或 thinking 名单（名单侧断言见同文件 thinking 用例）。
         """
-        reference_idle = estimate_cost("deepseek-flash", 1_000_000, 1_000_000, at_time=self._IDLE_TIME)
-        reference_peak = estimate_cost("deepseek-flash", 1_000_000, 1_000_000, at_time=self._PEAK_TIME)
-        self.assertEqual(reference_idle, "¥5.000")
-        self.assertEqual(reference_peak, "¥10.000")
         for alias in ("deepseek-chat", "deepseek-reasoner"):
-            self.assertEqual(
-                estimate_cost(alias, 1_000_000, 1_000_000, at_time=self._IDLE_TIME),
-                reference_idle,
-            )
-            self.assertEqual(
-                estimate_cost(alias, 1_000_000, 1_000_000, at_time=self._PEAK_TIME),
-                reference_peak,
-            )
+            self.assertEqual(estimate_cost(alias, 1_000_000, 1_000_000, at_time=self._IDLE_TIME), "-")
 
     def test_retired_alias_cache_hit_rate_follows_flash_series(self) -> None:
-        """别名条目须带缓存命中价（闲时 0.02）——缺该字段会回落为 input 价，高估约 50 倍。"""
+        """别名不在价格表→缓存命中价同样不再可得（费用估算整条出 "-"，不得回落到 input 价）。"""
         for alias in ("deepseek-chat", "deepseek-reasoner"):
             self.assertEqual(
                 estimate_cost(
@@ -565,7 +545,7 @@ class TestPricing(unittest.TestCase):
                     cache_hit_input_tokens=1_000_000,
                     at_time=self._IDLE_TIME,
                 ),
-                "¥0.020",
+                "-",
             )
 
     def test_kimi_pricing_locked(self) -> None:
@@ -599,8 +579,6 @@ class TestPricing(unittest.TestCase):
         for model in (
             "deepseek-flash",
             "deepseek-v4-flash",
-            "deepseek-chat",
-            "deepseek-reasoner",
             "claude-sonnet-4-6",
             "gpt-4o",
             "kimi-k2.6",
