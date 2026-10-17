@@ -568,6 +568,7 @@
 | R-WEB-09 | `src/test/unit/web/test_holdings_update.py` + `src/test/unit/web/test_holdings_update_edge.py` | 批 6 |
 | R-WEB-10 | `src/test/unit/web/test_whatif_api.py` + `src/test/unit/web/test_whatif_api_edge.py` | 批 6 |
 | R-WEB-11 | `src/test/unit/web/test_cache_api.py` | 批 6 |
+| R-WEB-12 | `src/test/unit/web/test_scheduler.py` | 批 10 |
 | R-TUI-01 | `src/test/unit/ui/test_tui_menu.py` | 批 6 |
 | R-TUI-02 | `src/test/unit/ui/test_tui_menu.py` + `src/test/unit/ui/test_tui_keys.py` | 批 6 |
 | R-TUI-06 | `src/test/unit/ui/test_tui_menu.py` + `src/test/unit/config/test_config.py` | 批 6 |

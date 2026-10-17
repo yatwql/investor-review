@@ -1111,3 +1111,28 @@ class TestShortCacheConcurrency:
             assert h._history_cache["data"] == [1, 2, 3]
         h._history_cache["ts"] = 0.0
         h._history_cache["data"] = None
+
+
+class TestRunEventsFirstSeqPayload:
+    """first_seq 下发：缓冲淘汰后客户端可识别缺口（不静默跳号）。"""
+
+    def test_events_payload_carries_first_seq_after_eviction(self, tmp_path, monkeypatch):
+        """事件缓冲淘汰后，events 载荷的 first_seq 等于仍保留的最小序号。"""
+        monkeypatch.setattr("src.python.web.runs._EVENT_LIMIT", 2)
+        rm = RunManager(executor=_fake_executor(tmp_path))
+        app = create_app(rm)
+        app.config["TESTING"] = True
+        client = app.test_client()
+        run_id = rm.submit({"report_type": "basic"})
+        # 等 worker 完成（fake executor 推 2 条事件）后再灌入超额事件，避免交错
+        for _ in range(200):
+            if rm.get(run_id).status in ("done", "failed"):
+                break
+            time.sleep(0.01)
+        state = rm.get(run_id)
+        for i in range(5):
+            state.push_event("info", f"补录事件 {i + 1}")
+        data = client.get(f"/api/runs/{run_id}/events?after=0").get_json()["data"]
+        # 共 7 条事件、上限 2 → 仅保留 6/7
+        assert data["first_seq"] == 6
+        assert [e["seq"] for e in data["events"]] == [6, 7]

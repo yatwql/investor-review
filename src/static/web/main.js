@@ -30,6 +30,8 @@
   }
 
   var POLL_INTERVAL_MS = 2000;
+  // 活动 run 会话标记（sessionStorage）：刷新/误关重开页面据此重建进度视图续轮询
+  var RUN_ID_KEY = 'investor_util_active_run_id';
 
   var state = {
     fileId: null,
@@ -37,6 +39,7 @@
     runId: null,
     lastSeq: 0,
     pollTimer: null,
+    pollBusy: false,
   };
 
   var els = {};
@@ -81,6 +84,15 @@
     els.formalHint = $('formal-hint');
     els.confirmOverwrite = $('confirm-overwrite');
     els.configPanel = $('config-panel');
+
+    // 定时生成调度面板（配置页签）
+    els.schedEnabled = $('sched-enabled');
+    els.schedTime = $('sched-time');
+    els.schedType = $('sched-type');
+    els.schedWeekdayCbs = document.querySelectorAll('.sched-weekday-cb');
+    els.schedSave = $('sched-save');
+    els.schedStatus = $('sched-status');
+    els.schedNext = $('sched-next');
 
     // 标签页工作台：导航按钮 + 面板切换（点击 / 方向键 / hash 深链）
     els.tabButtons = document.querySelectorAll('.tab-btn');
@@ -127,6 +139,7 @@
     $('config-reload').addEventListener('click', function () {
       loadConfigEdit();
     });
+    els.schedSave.addEventListener('click', saveScheduler);
     $('log-load').addEventListener('click', loadLogs);
 
     // 标签页工作台：五区切换（点击 + 方向键 + hash 深链）
@@ -211,6 +224,13 @@
 
     // 缓存统计（运行状态区卡片，服务端只读扫描）
     safeRun(loadCacheStats, [], els.cacheStatus, '缓存统计加载失败');
+
+    // 定时生成调度（读取当前调度配置与下次触发预估）
+    safeRun(loadScheduler, [], els.schedStatus, '调度配置加载失败，请稍后重试');
+
+    // 断点续轮询：sessionStorage 中有活动 run → 重建进度视图续轮询（run 已随
+    // 服务重启消失时，首帧轮询走 404 终态分支收口，不空转重试）
+    resumeActiveRun();
 
     // 轮询节流：页面不可见时暂停轮询，恢复可见立即同步一次（省流量/省请求）
     document.addEventListener('visibilitychange', function () {
@@ -414,6 +434,7 @@
       .then(function (data) {
         state.runId = data.run_id;
         state.lastSeq = 0;
+        saveRunId(data.run_id);
         els.generateBtn.textContent = '生成中...';
         showProgress();
         startPolling();
@@ -472,27 +493,96 @@
     }
   }
 
+  /* ── 活动 run 会话标记（sessionStorage）：刷新/误关重开页面续轮询 ──
+   * 存储不可用（隐私模式等）只放弃恢复，不影响主流程 */
+  function saveRunId(runId) {
+    try {
+      sessionStorage.setItem(RUN_ID_KEY, runId);
+    } catch (e) {
+      /* 放弃持久化 */
+    }
+  }
+
+  function loadRunId() {
+    try {
+      return sessionStorage.getItem(RUN_ID_KEY);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function clearRunId() {
+    try {
+      sessionStorage.removeItem(RUN_ID_KEY);
+    } catch (e) {
+      /* 放弃清理 */
+    }
+  }
+
+  /* 断点续轮询：加载时若 sessionStorage 中有活动 run，重建进度视图并续轮询 */
+  function resumeActiveRun() {
+    var runId = loadRunId();
+    if (!runId) {
+      return;
+    }
+    state.runId = runId;
+    state.lastSeq = 0;
+    els.generateBtn.setAttribute('aria-busy', 'true');
+    els.generateBtn.textContent = '生成中...';
+    showProgress();
+    startPolling();
+  }
+
   function pollOnce() {
-    fetch('/api/runs/' + encodeURIComponent(state.runId) + '/events?after=' + state.lastSeq, {
-      signal: AbortSignal.timeout(10000),
-    })
+    // 在途互斥：上一轮 fetch 未返回时跳过本 tick（响应超时 10s > 间隔 2s，
+    // 并发堆叠会造成同一批事件重复渲染与重复计数）
+    if (state.pollBusy) {
+      return;
+    }
+    state.pollBusy = true;
+    var req;
+    try {
+      req = fetch('/api/runs/' + encodeURIComponent(state.runId) + '/events?after=' + state.lastSeq, {
+        signal: AbortSignal.timeout(10000),
+      });
+    } catch (syncErr) {
+      state.pollBusy = false;
+      return;
+    }
+    req
       .then(handleResponse)
       .then(function (data) {
-        appendEvents(data.events || []);
+        state.pollBusy = false;
+        // 缺口判定：first_seq 为服务端仍保留的最小序号，大于已读+1 说明中间事件
+        // 已被缓冲上限淘汰——插入省略占位并前移 lastSeq，不静默跳号
+        var firstSeq = data.first_seq;
+        if (typeof firstSeq === 'number' && firstSeq > state.lastSeq + 1) {
+          appendGapNotice(firstSeq - state.lastSeq - 1);
+          state.lastSeq = firstSeq - 1;
+        }
+        // 序号过滤：只回放 seq 大于已读序号的事件（防在途重叠/重复响应重复渲染）
+        appendEvents(
+          (data.events || []).filter(function (ev) {
+            return ev.seq > state.lastSeq;
+          })
+        );
         if (data.last_seq > state.lastSeq) {
           state.lastSeq = data.last_seq;
         }
         if (data.status === 'done' || data.status === 'failed') {
           stopPolling();
+          clearRunId();
           restoreGenerateBtn();
           loadResult();
         }
       })
       .catch(function (err) {
+        state.pollBusy = false;
         // 任务不存在（服务重启后内存 run 注册表清空）：终态处理——停止轮询、单源
         // 复位生成按钮并渲染结果区，否则 404 被当瞬时错误无限重试、界面永久卡在进行中
         if (err && (err.httpStatus === 404 || err.errorCode === 'NOT_FOUND')) {
           stopPolling();
+          clearRunId();
           restoreGenerateBtn();
           els.progressPhase.textContent = '任务已失效';
           renderResultState(2, ['任务已不存在（服务可能已重启），请刷新页面后重新生成'], []);
@@ -529,6 +619,20 @@
     els.progressBar.style.width = pct + '%';
     els.progressBar.setAttribute('aria-valuenow', String(pct));
     els.progressEvents.scrollTop = els.progressEvents.scrollHeight;
+  }
+
+  /* 事件缺口占位行：说明被缓冲上限淘汰的中间事件条数（不静默跳号） */
+  function appendGapNotice(count) {
+    var li = document.createElement('li');
+    li.className = 'event event-gap';
+    var num = document.createElement('span');
+    num.className = 'event-seq';
+    num.textContent = '…';
+    var text = document.createElement('span');
+    text.textContent = '中间已省略 ' + count + ' 条进度事件（超出事件缓冲上限）';
+    li.appendChild(num);
+    li.appendChild(text);
+    els.progressEvents.appendChild(li);
   }
 
   function eventIcon(level) {
@@ -642,6 +746,7 @@
     stopPolling();
     state.runId = null;
     state.lastSeq = 0;
+    clearRunId();
     els.progressSection.hidden = true;
     els.resultSection.hidden = true;
     els.generateError.textContent = '';
@@ -1593,6 +1698,62 @@
     whatifState.running = false;
     els.whatifBtn.textContent = '开始模拟';
     updateWhatifBtn();
+  }
+
+  /* ── 定时生成调度面板：读取/保存 config.json scheduler 块 ── */
+  function loadScheduler() {
+    fetch('/api/scheduler', { signal: AbortSignal.timeout(10000) })
+      .then(handleResponse)
+      .then(function (data) {
+        els.schedEnabled.checked = !!data.enabled;
+        els.schedTime.value = data.time || '07:30';
+        els.schedType.value = data.report_type || 'basic';
+        els.schedWeekdayCbs.forEach(function (cb) {
+          cb.checked = (data.weekdays || []).indexOf(Number(cb.value)) !== -1;
+        });
+        setStatus(els.schedStatus, '已加载当前调度配置', 'ok');
+        renderSchedulerNext(data);
+      })
+      .catch(function (err) {
+        setStatus(els.schedStatus, err.message || '调度配置加载失败', 'error');
+      });
+  }
+
+  function saveScheduler() {
+    var weekdays = [];
+    els.schedWeekdayCbs.forEach(function (cb) {
+      if (cb.checked) {
+        weekdays.push(Number(cb.value));
+      }
+    });
+    setStatus(els.schedStatus, '保存中...', 'busy');
+    fetch('/api/scheduler', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        enabled: els.schedEnabled.checked,
+        time: els.schedTime.value,
+        weekdays: weekdays,
+        report_type: els.schedType.value,
+      }),
+      signal: AbortSignal.timeout(10000),
+    })
+      .then(handleResponse)
+      .then(function (data) {
+        setStatus(els.schedStatus, data.enabled ? '调度已启用' : '调度已保存（未启用）', 'ok');
+        renderSchedulerNext(data);
+      })
+      .catch(function (err) {
+        setStatus(els.schedStatus, err.message || '调度保存失败', 'error');
+      });
+  }
+
+  function renderSchedulerNext(data) {
+    if (data.next_fire) {
+      els.schedNext.textContent = '下次触发：' + data.next_fire + '（宽限 ' + data.grace_minutes + ' 分钟内顺延补触发）';
+    } else {
+      els.schedNext.textContent = '调度未启用';
+    }
   }
 
   /* ── 缓存卡：统计 + 清理过期（对应 TUI [3][4]）── */

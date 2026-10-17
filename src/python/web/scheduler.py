@@ -1,0 +1,265 @@
+"""内置定时生成调度器（config.json ``scheduler`` 块，缺省关闭）。
+
+Web 服务启动后随进程常驻一个 daemon 调度线程：按间隔单步评估「是否到达
+今日触发时刻」——每步重读配置（Web 调度面板/手动改 config.json 即时生效，
+无需重启）。触发即向 ``RunManager`` 提交「正式-用存量」生成：与手动生成
+同队列同 worker 串行，天然同 run 互斥；队列有活动任务时在宽限窗内顺延重试，
+宽限超时登记「错过」不再补跑。
+
+触发状态按「计划签名 + 日期」持久化到 ``data/state/scheduler_fired.json``，
+进程重启不重复触发；该文件的测试隔离见 ``src/test/_path_isolation.py``。
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import re
+import threading
+from datetime import datetime, timedelta
+from typing import Any
+
+from src.python.config import get_config
+from src.python.core.constants import PROJECT_ROOT
+
+logger = logging.getLogger("invest")
+
+# 触发状态账本路径（测试经 src/test/_path_isolation.py 重定向到 tmp_path）
+_FIRED_STATE_FILE = os.path.join(PROJECT_ROOT, "data", "state", "scheduler_fired.json")
+
+# 调度评估间隔（秒）：面板改配置最迟一个间隔后生效
+_TICK_INTERVAL_S = 30
+# 触发窗宽限期（分钟）：过时刻后仍补触发的窗口；超窗登记「错过」
+_FIRE_GRACE_MINUTES = 30
+# 触发账本保留天数（超期条目写回时剔除，防长期膨胀）
+_LEDGER_RETAIN_DAYS = 7
+_TIME_RE = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
+_REPORT_TYPES = ("basic", "both", "full")
+_DEFAULT_BLOCK: dict[str, Any] = {
+    "enabled": False,
+    "time": "07:30",
+    "weekdays": [0, 1, 2, 3, 4, 5, 6],
+    "report_type": "basic",
+}
+
+
+def normalize_block(raw: Any) -> dict:
+    """把任意 ``scheduler`` 原始块归一化为完整可用形状（缺省/非法项回默认）。
+
+    Args:
+        raw: 配置中读到的原始值（可能是 None/部分字段/类型不符）。
+
+    Returns:
+        完整块 ``{enabled, time, weekdays, report_type}``（供面板回显）。
+    """
+    raw = raw if isinstance(raw, dict) else {}
+    block = dict(_DEFAULT_BLOCK)
+    if isinstance(raw.get("enabled"), bool):
+        block["enabled"] = raw["enabled"]
+    time_text = str(raw.get("time") or "")
+    match = _TIME_RE.match(time_text)
+    if match:
+        block["time"] = f"{int(match.group(1)):02d}:{int(match.group(2)):02d}"
+    days = raw.get("weekdays")
+    if isinstance(days, list):
+        try:
+            cleaned = sorted({int(d) for d in days})
+        except (TypeError, ValueError):
+            cleaned = []
+        if cleaned and 0 <= cleaned[0] and cleaned[-1] <= 6:
+            block["weekdays"] = cleaned
+    if raw.get("report_type") in _REPORT_TYPES:
+        block["report_type"] = raw["report_type"]
+    return block
+
+
+def validate_block(payload: Any) -> dict:
+    """校验面板/接口提交的 ``scheduler`` 块，返回归一化配置。
+
+    Raises:
+        ValueError: 任一字段非法（错误文案直映 HTTP 400 的中文提示）。
+    """
+    if not isinstance(payload, dict):
+        raise ValueError("调度配置格式不合法")
+    enabled = payload.get("enabled")
+    if not isinstance(enabled, bool):
+        raise ValueError("启用开关须为布尔值")
+    time_text = str(payload.get("time") or "")
+    match = _TIME_RE.match(time_text)
+    if match is None:
+        raise ValueError("时刻格式须为 HH:MM（00:00-23:59）")
+    days_raw = payload.get("weekdays")
+    if not isinstance(days_raw, list) or not days_raw:
+        raise ValueError("执行日不能为空（0=周一 … 6=周日）")
+    try:
+        days = sorted({int(d) for d in days_raw})
+    except (TypeError, ValueError):
+        raise ValueError("执行日须为 0-6 整数（0=周一 … 6=周日）") from None
+    if days[0] < 0 or days[-1] > 6:
+        raise ValueError("执行日须为 0-6 整数（0=周一 … 6=周日）")
+    report_type = payload.get("report_type", "basic")
+    if report_type not in _REPORT_TYPES:
+        raise ValueError("报告格式不合法（basic/both/full）")
+    hour, minute = int(match.group(1)), int(match.group(2))
+    return {"enabled": enabled, "time": f"{hour:02d}:{minute:02d}", "weekdays": days, "report_type": report_type}
+
+
+def parse_schedule(config: Any) -> dict | None:
+    """从配置解析可执行计划；未启用/非法返回 None（非法项记 WARNING）。"""
+    raw = config.get("scheduler") if isinstance(config, dict) else None
+    if not isinstance(raw, dict) or raw.get("enabled") is not True:
+        return None
+    try:
+        block = validate_block(raw)
+    except ValueError as e:
+        logger.warning("定时生成配置非法，本次不调度：%s", e)
+        return None
+    fire_minutes = int(block["time"][:2]) * 60 + int(block["time"][3:])
+    return {**block, "minutes": fire_minutes}
+
+
+def schedule_signature(schedule: dict) -> str:
+    """计划签名（时刻+执行日+报告类型）：改任一参数视为新计划、当日可再触发。"""
+    return f"{schedule['time']}|{','.join(str(d) for d in schedule['weekdays'])}|{schedule['report_type']}"
+
+
+def next_fire_at(now: datetime, schedule: dict) -> datetime | None:
+    """下一个触发时刻（严格 > now；今天未到点且逢执行日 → 今天）。"""
+    for offset in range(8):
+        day = (now + timedelta(days=offset)).date()
+        if day.weekday() not in schedule["weekdays"]:
+            continue
+        candidate = datetime(day.year, day.month, day.day) + timedelta(minutes=schedule["minutes"])
+        if candidate > now:
+            return candidate
+    return None  # 不可达：weekdays 非空时 8 天内必有匹配
+
+
+def _load_fired() -> dict[str, str]:
+    """读触发账本（计划签名 → 日期）；缺失按空账本，损坏记 ERROR 并按空处理。"""
+    try:
+        with open(_FIRED_STATE_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        fired = data.get("fired")
+        return {str(k): str(v) for k, v in fired.items()} if isinstance(fired, dict) else {}
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError):
+        logger.exception("定时生成账本读取失败，按空账本处理（当日计划可能重复触发）")
+        return {}
+
+
+def _save_fired(fired: dict[str, str]) -> None:
+    """原子写触发账本（tmp + replace），写回时剔除超保留期条目；写失败记 ERROR。"""
+    cutoff = (datetime.now() - timedelta(days=_LEDGER_RETAIN_DAYS)).strftime("%Y-%m-%d")
+    pruned = {k: v for k, v in fired.items() if v >= cutoff}
+    try:
+        os.makedirs(os.path.dirname(_FIRED_STATE_FILE), exist_ok=True)
+        tmp_path = _FIRED_STATE_FILE + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump({"fired": pruned}, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, _FIRED_STATE_FILE)
+    except OSError:
+        logger.exception("定时生成账本写入失败（重启后当日计划可能重复触发）")
+
+
+def status_payload(config: Any = None) -> dict:
+    """GET /api/scheduler 载荷：归一化配置 + 下次触发预估 + 最近触发日。"""
+    if config is None:
+        config = get_config()
+    block = normalize_block(config.get("scheduler") if isinstance(config, dict) else None)
+    schedule = parse_schedule(config)
+    now = datetime.now()
+    fired = _load_fired()
+    return {
+        **block,
+        "next_fire": next_fire_at(now, schedule).strftime("%Y-%m-%d %H:%M") if schedule else None,
+        "last_fired": fired.get(schedule_signature(schedule)) if schedule else None,
+        "grace_minutes": _FIRE_GRACE_MINUTES,
+    }
+
+
+class SchedulerService:
+    """常驻调度线程：按间隔调用 :meth:`tick` 评估并触发生成。"""
+
+    def __init__(self, run_manager: Any) -> None:
+        self._run_manager = run_manager
+        self._stop_event = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def tick(self, now: datetime | None = None) -> str:
+        """单步调度评估（测试注入 now 直接驱动；线程循环按真实时钟调用）。
+
+        Returns:
+            动作标签：``disabled`` 未启用 / ``waiting`` 未到时刻或非执行日 /
+            ``fired`` 已触发 / ``deferred`` 顺延（活动任务或队列满，宽限内重试）/
+            ``missed`` 错过（超宽限，登记不再补）/ ``duplicate`` 今日已触发过。
+        """
+        schedule = parse_schedule(get_config())
+        if schedule is None:
+            return "disabled"
+        now = datetime.now() if now is None else now
+        if now.weekday() not in schedule["weekdays"]:
+            return "waiting"
+        now_minutes = now.hour * 60 + now.minute
+        if now_minutes < schedule["minutes"]:
+            return "waiting"
+        signature = schedule_signature(schedule)
+        today = now.strftime("%Y-%m-%d")
+        fired = _load_fired()
+        if fired.get(signature) == today:
+            return "duplicate"
+        if now_minutes > schedule["minutes"] + _FIRE_GRACE_MINUTES:
+            fired[signature] = today
+            _save_fired(fired)
+            logger.warning(
+                "定时生成错过触发窗（%s，宽限 %d 分钟已过），今日不再补跑", schedule["time"], _FIRE_GRACE_MINUTES
+            )
+            return "missed"
+        # 与手动生成同队列互斥：有活动任务顺延（不登记，下个间隔重试）
+        if any(r.status in ("queued", "running") for r in self._run_manager.list_runs(limit=50)):
+            logger.info("定时生成到达时刻（%s），存在活动任务顺延重试", schedule["time"])
+            return "deferred"
+        run_id = self._run_manager.submit(
+            {
+                "file_id": None,
+                "report_type": schedule["report_type"],
+                "fetch_history": None,
+                "force_llm": False,
+                "llm_modules": None,
+                "mode": "formal",
+                "use_existing": True,
+            }
+        )
+        if run_id is None:
+            logger.warning("定时生成提交失败（队列已满），宽限窗内继续重试（%s）", schedule["time"])
+            return "deferred"
+        fired[signature] = today
+        _save_fired(fired)
+        logger.info("定时生成已触发（%s，报告类型 %s，run %s）", schedule["time"], schedule["report_type"], run_id)
+        return "fired"
+
+    def start(self) -> None:
+        """启动 daemon 调度线程（幂等：已在运行则不重复启动）。"""
+        if self._thread is not None and self._thread.is_alive():
+            return
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._loop, name="web_scheduler", daemon=True)
+        self._thread.start()
+
+    def stop(self, timeout: float = 2.0) -> None:
+        """停止调度线程（测试收尾用；daemon 线程随进程退出兜底）。"""
+        self._stop_event.set()
+        if self._thread is not None:
+            self._thread.join(timeout=timeout)
+            self._thread = None
+
+    def _loop(self) -> None:
+        """线程主循环：单步评估 + 间隔等待；异常兜底不得杀死调度线程。"""
+        while not self._stop_event.is_set():
+            try:
+                self.tick()
+            except Exception:
+                logger.exception("定时生成调度 tick 异常（下一间隔继续）")
+            self._stop_event.wait(_TICK_INTERVAL_S)

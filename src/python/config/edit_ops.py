@@ -252,3 +252,23 @@ def apply_config_edit(payload: dict) -> dict:
     else:
         new_value = _apply_plain_value(key, payload.get("value"), entry)
     return {"key": key, "value": new_value, "backup": backup_path}
+
+
+def apply_scheduler_block(block: dict) -> dict:
+    """保存内置定时生成的 ``scheduler`` 配置块（渠道共享的写入口）。
+
+    与 ``apply_config_edit`` 同构：写前对 config.json 做单槽 .bak 备份。
+    调度侧已完成格式校验（时刻/执行日/报告格式），此处只负责落盘，
+    保证配置写原语不散落到渠道层。
+
+    Args:
+        block: 已校验归一化的 ``{enabled, time, weekdays, report_type}``。
+
+    Returns:
+        ``{"key": "scheduler", "value": 块, "backup": .bak 路径或 None}``。
+    """
+    from src.python.config import set_config
+
+    backup_path = config_backup_file(_target_path("config"))
+    set_config("scheduler", block)
+    return {"key": "scheduler", "value": block, "backup": backup_path}

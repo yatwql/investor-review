@@ -373,7 +373,15 @@ def _handle_run_events(run_manager, run_id):
         after = 0
     events = state.events_after(after)
     last_seq = events[-1]["seq"] if events else after
-    return _ok({"events": events, "status": state.status, "last_seq": last_seq})
+    return _ok(
+        {
+            "events": events,
+            "status": state.status,
+            "last_seq": last_seq,
+            # first_seq：仍保留的最小序号（None = 缓冲空）——客户端据识别被淘汰的中间事件
+            "first_seq": state.oldest_seq(),
+        }
+    )
 
 
 def _handle_run_history():
@@ -715,6 +723,39 @@ def _handle_health_history():
 # ── 路由注册 ─────────────────────────────────────────
 
 
+def _handle_scheduler_get():
+    """GET 定时生成：归一化调度配置 + 下次触发预估（只读）。"""
+    from src.python.web.scheduler import status_payload
+
+    return _ok(status_payload())
+
+
+def _handle_scheduler_post():
+    """保存定时生成配置（写 config.json ``scheduler`` 块，副作用，同源守卫）。
+
+    校验失败（时刻/执行日/报告格式非法）→ 400 BAD_PARAM；
+    写共享配置异常 → 500 CONFIG_WRITE_FAILED（详情记日志，前端不泄露内部细节）。
+    """
+    from src.python.config.edit_ops import apply_scheduler_block
+    from src.python.web.scheduler import status_payload, validate_block
+
+    if not _is_same_origin():
+        return _err("BAD_PARAM", "同源校验失败，拒绝提交"), 403
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return _err("BAD_PARAM", "请求体格式不合法"), 400
+    try:
+        block = validate_block(payload)
+    except ValueError as e:
+        return _err("BAD_PARAM", str(e)), 400
+    try:
+        apply_scheduler_block(block)
+    except Exception:
+        logger.exception("[scheduler] 调度配置写入失败")
+        return _err("CONFIG_WRITE_FAILED", "配置写入失败（详情请查看日志）"), 500
+    return _ok(status_payload())
+
+
 def create_handlers(app, run_manager) -> None:
     """注册全部 HTTP 路由。
 
@@ -750,3 +791,5 @@ def create_handlers(app, run_manager) -> None:
     app.add_url_rule("/api/logs", "logs", _handle_logs, methods=["GET"])
 
     app.add_url_rule("/api/config/edit", "config_edit", _handle_config_edit, methods=["GET", "POST"])
+    app.add_url_rule("/api/scheduler", "scheduler_get", _handle_scheduler_get, methods=["GET"])
+    app.add_url_rule("/api/scheduler", "scheduler_set", _handle_scheduler_post, methods=["POST"])

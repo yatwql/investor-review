@@ -203,8 +203,9 @@
 | `notify.webhook_url` | `""` | 任务完成通知 webhook 地址（HTTP POST JSON 事件），空=不启用；URL 常含路径凭据，日志只记域名 | 手动编辑 |
 | `notify.email` | `{smtp_host:"",...}` | 任务完成通知邮件通道（`smtp_host` 与 `to`均非空才启用；`use_ssl` 切 SSL/STARTTLS；`to` 支持逗号/分号多地址） | 手动编辑 |
 | `notify.desktop` | `false` | 任务完成通知桌面通道（Linux notify-send；未安装时记日志跳过） | 手动编辑 |
+| `scheduler` | `{...}` | 内置定时生成（Web 专属）：`enabled` 启用开关（缺省 `false`）/ `time` 触发时刻 HH:MM（本机时区）/ `weekdays` 执行日（0=周一 … 6=周日）/ `report_type` 报告格式（basic/both/full）；到点自动读正式持仓生成（正式-用存量），与手动生成同队列串行互斥、宽限 30 分钟内顺延 | Web 调度面板（配置页签） / 手动编辑 |
 
-> 以上两条同样作用于 **Web 试算快照域**（`data/history/snapshots/web/`）：Web「临时试算」的快照按相同保留天数与上限在试算域内独立清理，与共享主目录互不影响。Web 模式无新增配置键。
+> 以上两条同样作用于 **Web 试算快照域**（`data/history/snapshots/web/`）：Web「临时试算」的快照按相同保留天数与上限在试算域内独立清理，与共享主目录互不影响。Web 模式除定时生成 `scheduler` 块（Web 专属，见上方字段总表与 Web 手册「定时生成调度面板」）外无新增配置键。
 
 ---
 
