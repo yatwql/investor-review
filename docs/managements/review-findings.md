@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.13.5-dev
-> **编号源**：`rf-next = 693`（新增问题取此编号，完成后更新为 +1；已用最大 rf-692，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 698`（新增问题取此编号，完成后更新为 +1；已用最大 rf-697，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -73,6 +73,11 @@
 > rf-690 已修复（2026-10-16）：run 完成后「生成报告」按钮停在「生成中...」禁用态、无法再次/换格式生成（rf-257 真机 basic 实测揭示）——`pollOnce` 完成分支只移除 `aria-busy`、未复位文案与禁用态、未清已消费 `file_id`；完成分支与 `resetFlow` 共用 `restoreGenerateBtn()` 单源复位（清 `state.fileId` → `updateGenerateBtn()` → 文案还原 +「请重新上传」提示，正式-用存量免上传立即可再生成），新增 `test_web_generate_flow.py` 3 个源结构回归用例；真机复测并入 rf-257 收尾确认。
 > rf-691 已修复（2026-10-17）：盘前/盘后「价格缓存新鲜度门禁」只比 `price_date`，把 T 日盘中写入的场内缓存（如 10-15 13:01 的盘中价 29.35）当作 T 日收盘价（真实 29.60）沿用——「本日盈亏」与「快照环比」因此系统性偏离（实例：2026-10-17 03:56 报告两值差 −277.71 中 −835.00 来自 4 只 A 股/ETF 基线取到盘中价）。`_price_cache_fresh` 增加收盘时点校验（T 日已收盘时要求缓存写入时刻 ≥ T 日 15:00，午间休市不施加），report `CACHE_ONLY` 分支与 `_fetch_price_with_cache_refresh` 两处传 `cache_key`；刷新失败退回刷新前的过时缓存避免丢数据；新增 `test_fetcher_price.py` 8 个回归用例。
 > rf-692 已修复（2026-10-17）：full 路径 LLM 观测整段丢失——LLM 阶段结束的 `finally` 已 `bind_llm_observation(None)` 解绑全局 sink，收尾 `_record_llm_context(perf)` 仍从 `current_llm_observation()` 取，取到 None → 重试/节流等待/降级/缓存/thinking 全部未写入 perf 记录（只剩会话用量）。改为 `_record_llm_context(perf, sink)` 显式传入本次绑定的 sink，full 路径调用点传 `_llm_sink`；新增 `test_report_output_spans.py` 2 个回归用例（传入 sink 生效 + 结构锁定调用点）。
+> rf-693 已修复（2026-10-17）：LLM 决策登记整批失效——结构化决策头（`decision_header_parse` 默认开）优先路产物仅 `{code, direction, magnitude}` 三字段，`register_llm_decisions` 直取 `row["detail"]` → `KeyError: 'detail'` 被实验挂载点守护吞成告警（perf 运行明细「错误 1」即此），当批 LLM 操作建议不入决策账本。按技术设计 §4.15「两路产物形状统一」在登记纪律统一入口 `_collect_decision` 回补 `detail` 空串（契约无理由列，账本 detail 缺省为空不阻结算）；修正 `parse_structured_header`「与表格解析同形状」误导 docstring；新增 2 个回归用例。
+> rf-696 已修复（2026-10-17）：全仓测试语义审计初判「scenario 三子域约 22 用例静默漏出 P2 回归门禁」，复核实证为静态 AST 扫描未计入类装饰器沿基类 MRO 继承的佩戴（pytest 标记解析走继承链），六子目录 `-m scenario` 收集对拍命中=总数、零遗漏。真实薄弱点：裸 `scenario` 门禁佩戴全靠隐式继承、收集期无硬校验（缺标记警告只查「无任何自定义 marker」，只挂子域 marker 的新文件仍会静默漏出回归）。修复：conftest `pytest_collection_modifyitems` 增 scenario 目录×裸 `scenario` marker 双向收集期拦截（与 edge 隔离同范式；scenario_* 子域 marker 不受约束），新增 `test_conftest_scenario_gate.py` 5 个钩子直驱回归用例（违规拦截/合规放行/反斜杠路径归一/子域不豁免）；全仓 10,467 用例收集零报错。
+> rf-694/rf-695 已处置（2026-10-17，与 rf-697 同批收口）：复核发现两类「目录↔域不互恰」实为 `check-test-markers.py` 期望表**已登记的刻意归域**（子集语义：`unit/handlers`/`unit/cache`→`unit_core`、`unit/startup`→`unit_ui`），非漂移；用户裁决 TUI/CLI 进 P1 后，「归域即进门禁」成为全局不变式（`verify` 选择器纳入 `unit_ui`/`unit_cli`，P1 实测 10,145 条），改域迁移方案废弃（改动面大且零门禁收益）。本批新增防回退机制：`TestP1GateCoversDeclaredDomains` 结构锁（期望表全部 unit_* 域必在 verify 内 + P0 域集 ⊆ P1）+ 期望表/conftest 缺标警告/`technical.md` §4.23 决策登记三处口径同源。
+> rf-697 已修复（2026-10-17）：P1（`verify`）/P2（`regression`）/P0 预检均按 `unit` 通配或 `unit_*` 域集筛选，conftest 的 `pytest_configure` 曾漏注册 `unit`——10,136 条 unit 用例全部不在任何门禁收集范围（P0/P1 实跑数与 test-coverage 台账 6,969/9,800 吻合即为实证；`unit` 档单跑 10,136 为对照实证）。conftest 注册行补齐，域选择器与期望表经测试锁死同源；dev-verify 6,969→6,978、verify 9,800→10,145（P1 +345，≈+1s）。
+> rf-697 登记待决（2026-10-17，rf-694 处置调研附带发现）：`verify`（P1 合入门禁）与 `dev-verify`（P0）选择器均不含 `unit_cli`（137 用例）与 `unit_ui`（187 用例）——若属「交互层不进快速门禁」的既定口径应在 testplan 显式登记；若非故意即 P1 覆盖缺口（典型：TUI/CLI 改动可绕 P1 入 master）。与 rf-694 同批定口径。
 > rf-113 已修复（2026-10-16）：Iter 7 全链路浏览器人工验证六项全部完成——headless 自动化回归（① 6 图 badge / ② 2.4 afterprint / ③ 3.1 断网渲染 / ⑤ 375px 报告+调试页 / ⑥ 禁 Canvas 兜底，复跑 5 PASS + ⑥ 表现记录口径）+ 人工抽验（② 真实 Ctrl+P 打印预览、④ 微信真机 4.3+4.4、Safari 90+ iPad 抽验、Windows Chrome/Firefox；4.1 链接访问维护者豁免）；附带发现两处已由 rf-645 修复并复跑确认（⑤-testchart 转 PASS）。方法与证据见 `docs/plan/report-browser-verification.md`，勾选清单归档留存；rf-114 前置随之满足。
 
 ### 开发期已修复（0.13.4-dev）

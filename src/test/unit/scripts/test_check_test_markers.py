@@ -4,7 +4,8 @@
 语法错误降级）、`_get_relative_dir` 的目录键、`check_file` 的四类违规分支
 （未注册标记 / 已移除标记 / edge 文件缺 edge / 目录期望标记缺失）与干净路径；
 以及标记清单的单一事实来源（由 `conftest.py` 注册语句 AST 派生）与目录期望表
-同 `src/test/` 目录结构的双向绑定。
+同 `src/test/` 目录结构的双向绑定；及 P1 门禁域覆盖结构锁（期望表声明的全部
+unit_* 域必须在 `verify` 选择器内，决策见技术设计 §4.23）。
 """
 
 from __future__ import annotations
@@ -260,6 +261,43 @@ def _unit_dir_to_marker(repo_root: Path) -> dict[str, str]:
         if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id == "_DIR_TO_MARKER":
             return ast.literal_eval(node.value)
     raise AssertionError("src/test/unit/conftest.py 未找到 _DIR_TO_MARKER")
+
+
+class TestP1GateCoversDeclaredDomains:
+    """P1 门禁域覆盖结构锁：期望表声明的每个 unit_* 域必须出现在 `verify` 选择器。
+
+    背景（门禁「归域即进门禁」决策，技术设计 §4.23）：目录归域即进门禁——归域特例
+    （handlers/cache→unit_core、startup→unit_ui）只有在全部域入门禁时才成立；
+    选择器一旦漏域即静默重现「改域=门禁搬家」覆盖缺口。域集合从期望表/注册表
+    动态派生，不写死域数（测试真值单一来源纪律）。
+    """
+
+    @staticmethod
+    def _runner_modes():
+        from src.test._script_loader import load_script
+
+        return load_script("test-runner.py").MODES
+
+    def test_every_declared_unit_domain_is_p1_gated(self, mod):
+        import re
+
+        domains: set[str] = set()
+        for markers in mod.EXPECTED_DIR_MARKERS.values():
+            domains |= {m for m in markers if m.startswith("unit_")}
+        expr = self._runner_modes()["verify"]["marker"]
+        ungated = {d for d in domains if not re.search(rf"\b{d}\b", expr)}
+        assert not ungated, f"未纳入 P1（verify）选择器的 unit_* 域: {sorted(ungated)}"
+
+    def test_verify_selector_is_superset_of_dev_verify_domains(self):
+        # P0 快速门禁的域集不得超出 P1（否则 P0 独有域逃逸合入门禁）
+        import re
+
+        modes = self._runner_modes()
+        p0 = modes["dev-verify"]["phases"][0]["marker"]
+        p1 = modes["verify"]["marker"]
+        p0_domains = set(re.findall(r"\bunit_[a-z_]+\b", p0))
+        p1_domains = set(re.findall(r"\bunit_[a-z_]+\b", p1))
+        assert p0_domains <= p1_domains, f"P1 缺失 P0 独有域: {sorted(p0_domains - p1_domains)}"
 
 
 class TestExpectationTableBoundToTree:

@@ -777,13 +777,41 @@ def pytest_collection_modifyitems(config, items):
                 f"    请为该测试添加 @pytest.mark.edge，或移出 _edge.py 文件。"
             )
 
+    # ── scenario 目录×基础 marker 双向一致校验（与上方 edge 隔离同纪律）──
+    # 背景：scenario/regression（P2 门禁）/integration 三模式按裸 `scenario`
+    # marker 筛选；子域 marker（scenario_security 等）不被任何门禁选择器消费。
+    # 仓内裸 scenario 现状靠基类/模块级佩戴隐式继承，新文件若只带子域 marker
+    # 将静默漏出回归门禁（连下方缺标记警告都不触发，它只查「无任何自定义
+    # marker」）——本段收集期双向硬拦截：目录内必带裸 scenario；带裸 scenario
+    # 必属 scenario 目录（scenario_* 子域 marker 不受本约束）。
+    for item in items:
+        fspath_norm = str(item.fspath).replace("\\", "/")
+        in_scen_dir = "/test/scenario/" in fspath_norm
+        has_scen = item.get_closest_marker("scenario") is not None
+        if in_scen_dir and not has_scen:
+            raise pytest.UsageError(
+                f"[!] scenario 门禁 marker 违规：\n"
+                f"    测试项 {item.name}（{fspath_norm}）位于 src/test/scenario/ 下，"
+                f"但未佩戴基础 `scenario` marker——不会被 scenario/regression/"
+                f"integration 门禁选择器收集。\n    请在模块级 pytestmark 或基类上补"
+                f" @pytest.mark.scenario（子域 marker 另挂）。"
+            )
+        if has_scen and not in_scen_dir:
+            raise pytest.UsageError(
+                f"[!] scenario 门禁 marker 违规：\n"
+                f"    测试项 {item.name}（{fspath_norm}）佩戴了基础 `scenario` "
+                f"marker，但不在 src/test/scenario/ 目录下——scenario 选择器会越目录"
+                f"误抓。\n    请移入 scenario 目录，或改用 scenario_* 子域/其他 marker。"
+            )
+
     # ═══════════════════════════════════════════════════════════════
     # 标记遗漏警告（预防性）
     # ═══════════════════════════════════════════════════════════════
     # 检查每个测试是否至少有一个项目自定义标记。
     # 若没有，发出 PytestWarning 提醒补充 pytestmark 模块级变量。
     # 当前全部已有测试均已覆盖（通过 pytestmark 模块级变量），
-    # 本检查旨在防止新增测试文件时遗漏标记。
+    # 本检查旨在防止新增测试文件时遗漏标记。目录归域特例（handlers/cache→unit_core、
+    # startup→unit_ui 等）以 scripts/check-test-markers.py 期望表为单一事实来源。
     _warned_files: set[str] = set()
     for item in items:
         item_markers = {m.name for m in item.iter_markers()}
@@ -798,6 +826,8 @@ def pytest_collection_modifyitems(config, items):
                     f"[!] 测试文件缺少项目标记（pytestmark）：{fspath}\n"
                     f"    请在文件顶部添加 pytestmark 变量，例如：\n"
                     f"    pytestmark = [pytest.mark.unit, pytest.mark.unit_report]\n"
+                    f"    目录归域以 scripts/check-test-markers.py 期望表为准（特例："
+                    f"unit/startup→unit_ui、unit/handlers 与 unit/cache→unit_core）\n"
                     f"    已知标记：{', '.join(sorted(_KNOWN_MARKERS))}"
                 )
             )

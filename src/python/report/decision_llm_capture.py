@@ -196,7 +196,8 @@ def _collect_decision(
     """把一条候选决策并入结果集（登记纪律在此统一执行）。
 
     纪律：持有/中性剔除；非持仓 code（空上下文/幻觉）不入账；同 code 保留
-    优先级强度最高一条；name 缺失回填持仓名；baseline 取持仓 price，无价则 None。
+    优先级强度最高一条；name 缺失回填持仓名；detail 缺失回补空串（结构化头
+    契约无理由列）；baseline 取持仓 price，无价则 None。
     """
     if row["direction"] not in (dl.DIRECTION_LONG, dl.DIRECTION_SHORT):
         return  # 持有/中性剔除（结算无方向语义，落账即成永久 pending）
@@ -205,6 +206,10 @@ def _collect_decision(
         return  # 非持仓 code（空上下文/幻觉）不入账
     if not row.get("name"):
         row["name"] = holding["name"]
+    # 结构化决策头契约仅 {code, action, priority} 三字段（无理由列）：detail 在此
+    # 回补，保证两路入账行同形（技术设计 §4.15「两路产物形状统一」），登记侧
+    # 直取 row["detail"] 不再 KeyError。
+    row.setdefault("detail", "")
     rank = MAGNITUDE_RANK.get(row["magnitude"], 0)
     prev = best.get(row["code"])
     if prev is None or rank > MAGNITUDE_RANK.get(prev["magnitude"], 0):
