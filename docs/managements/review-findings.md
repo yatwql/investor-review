@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.13.6-dev
-> **编号源**：`rf-next = 706`（新增问题取此编号，完成后更新为 +1；已用最大 rf-705，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 708`（新增问题取此编号，完成后更新为 +1；已用最大 rf-707，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -23,6 +23,8 @@
 | # | 问题 | 修复方向 |
 |---|------|----------|
 
+| **rf-706** | Web 进度事件通道缺完整性防护——① **轮询重叠重复**：`setInterval(pollOnce, 2s)` 无 in-flight 互斥，单次 fetch 超时 10s，生成期同进程 CPU 忙时响应变慢，下一轮带**旧** `after` 发出，两条响应先后进 `appendEvents` → 同批事件重复入 DOM（无按 seq 去重）；② **缓冲丢弃静默跳号**：`runs.py` 事件缓冲 `_EVENT_LIMIT=500` 滚动丢最旧，客户端落后时 `events_after` 只从仍存活的序号返回，前端不检测缺口 → 进度行无声缺失、「第 N 步」跳号无解释 | ① `pollOnce` 加 in-flight 守卫（上一轮未归不开新一轮），并按 `seq > lastSeq` 严格过滤重复；② events 响应补 `first_seq`（缓冲最旧序号），前端发现 `lastSeq + 1 < first_seq` 时插入「中间 N 条事件已省略」占位行；补源结构回归 + 重叠/缺口用例 |
+| **rf-707** | Web 生成中刷新页面丢失任务追踪——`state.runId` 仅存内存（提交响应写入、`resetFlow` 清空），无 sessionStorage/URL 持久化：运行中 F5 或移动端切后台被回收后回到工作台，进度视图无法复原——任务在服务端继续执行，用户只能等完成后翻「运行历史」；`GET /api/runs/{id}` 可查但页面无恢复入口 | runId 写 sessionStorage（随 `resetFlow` 清除），页面加载时若存在未完成 run 且后端可查 → 自动重建进度视图从 `after=0` 续轮询；run 已不存在 → 走既有任务不存在终态（rf-705 口径）不重轮；补「刷新恢复」源结构回归用例 |
 | **rf-114** | 双渲染路径共存——模板保留 Canvas `drawSimpleChart()`（265 行内联 JS）+ Chart.js 渲染器，Feature Flag OFF 时回退 Canvas 路径 | 删除 `drawSimpleChart()` + Canvas 回退分支 + Feature Flag 条件分支，Chart.js 成唯一渲染器；**前置已满足：rf-113 人工验证完成（2026-10-16，确认 Chart.js 真机渲染可靠）**；触发条件：plan-1 稳定 2 版本（阶段 2→3 切换，判定标准见 upgrade.md §4.15） |
 
 
