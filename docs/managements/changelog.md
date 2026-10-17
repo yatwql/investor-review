@@ -21,6 +21,7 @@
 
 ### Changed
 
+- **设计契约审计与护栏观察维度增设（rf-699）**：全量 UI/报告样式人工比对 DESIGN.md + 基线对拍定位契约落稿后新增违规仅 3 行（`summary_section.html` 内联 `#888` 裸色值×2、`opacity:0.75` 档外×1），已修并顺手消同模式存量 1 行；护栏 `check-style-guardrails` 增设 W3 内联色值/W4 档外字号/W5 档外间距三维观察（W1 引号整行豁免为 JS 图表配置设计，HTML 内联色值盲区按位置级找回；存量 40/8/175 入只减不增基线并入契约 Known Gaps）；DESIGN.md 基线数字刷新（700 存量 3→9、600 25→63）；工作台旧 `--color-*` 兼容映射到期删除（零消费者，`TestLegacyMappingRemoved` 负向锁）。
 - **旧配置/旧缓存/旧模型名兼容代码清理（rf-698，用户裁决口径）**：移除 5 处残留兼容分支——perf 阶段 ETA 的早期 list 形状 `phases` 死分支（旧记录已自然出 20 条采样窗）；行业缓存缺扩展字段载荷的 schema 迁移清理链（迁移窗口≤两周已过）；数据源密钥文件顶层平铺 `{"api_key": ...}` 回退（生产调用点恒传非空 section）；停用别名 `deepseek-chat`/`deepseek-reasoner` 在价目表与 Extended Thinking 三名单的全部收录（旧名历史调用费用改显 `-`、存量旧配置不再获思考安全网，已经用户确认接受）；另修正 anonymizer `profit_rate_pct`「旧键兼容」误导注释（实为现役汇总键，同步分支保留）。手册/`llm-technical.md` 价目与峰谷枚举同源刷新；测试侧别名价格锁改负向锁（锁定移除行为防回填）并删 3 个旧形状/旧载荷正测。
 
 - **P1 门禁域范围纳入 TUI/CLI，确立「归域即进门禁」不变式（rf-694/rf-695/rf-697，`technical.md` §4.23）**：`verify`（P1）选择器增 `unit_ui`/`unit_cli`；目录归域特例（`unit/handlers`·`unit/cache`→`unit_core`、`unit/startup`→`unit_ui`）在期望表注释/conftest 缺标警告/技术设计三处同源登记；新增 `TestP1GateCoversDeclaredDomains` 双结构锁（期望表全部 unit_* 域 ∈ verify；P0 域集 ⊆ P1）防「改域=门禁搬家」回退。审计改域迁移方案废弃：`unit_ui` 入门禁后 handlers 挂 `unit_core` 与挂 `unit_ui` 门禁结果恒同，迁移改动面 ~20 处且零覆盖收益，故保留期望表已登记口径。

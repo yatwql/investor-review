@@ -409,7 +409,7 @@ def _magic_excludes() -> list[re.Pattern]:
       - F10                  —— 天天基金 F10 交易费率页（基金数据源域名）
       - P0~P4                —— 门禁档位（P0/P1/P2）与价格/事件区间点位（P0~P4）
       - MV\\d                —— 市值时点（MV0 起始市值）
-      - [Ee]1~3 / [Ww]1~2    —— 样式护栏编号（DESIGN.md「机检落地」段定义的 E/W 级）
+      - [Ee]1~3 / [Ww]1~5    —— 样式护栏编号（DESIGN.md「机检落地」段定义的 E/W 级）
       - [Pp]hase\\d           —— 性能基准阶段（Phase1/2/3，perf-test-report 口径）
       - [Yy]\\d\\b / [Zz]\\d\\b —— 边缘测试组标签（Y1~Y6/Z1，文件内组织编号）
       - 微信\\s*X\\d+         —— 微信浏览器内核（X5）
@@ -431,7 +431,7 @@ def _magic_excludes() -> list[re.Pattern]:
         re.compile(r"\bF10\b"),
         re.compile(r"\bP[0-4]\b"),
         re.compile(r"\bMV\d\b"),
-        re.compile(r"\b[EW][123]\b"),
+        re.compile(r"\b[EW][1-5]\b"),
         re.compile(r"(?<![A-Za-z0-9])[Pp][Hh][Aa][Ss][Ee]\s*\d", re.IGNORECASE),
         re.compile(r"\b[Yy]\d\b"),
         re.compile(r"\b[Zz]\d\b"),

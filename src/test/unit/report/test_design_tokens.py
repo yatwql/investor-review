@@ -2,7 +2,7 @@
 """双面设计 token 同名对表守卫（DESIGN.md Colors 角色契约）。
 
 跨面共享角色必须在 HTML 报告与 Web 工作台两面 :root 同名定义；
-工作台旧 --color-* 名保留一版 var() 兼容映射但引用点已全部切新名；
+工作台旧 --color-* 名兼容映射已到期删除（新代码一律用角色名）；
 报告品牌蓝只允许出现在 Chart 域定义与 JS fallback（CSS 用法须走 --primary）。
 """
 
@@ -32,21 +32,7 @@ SHARED_ROLES = [
     "font-stack",
 ]
 
-# 工作台旧名 → 新名（兼容映射必须成对存在）
-LEGACY_MIGRATIONS = [
-    ("--color-bg", "--bg"),
-    ("--color-surface", "--surface"),
-    ("--color-border", "--border"),
-    ("--color-text", "--text"),
-    ("--color-text-secondary", "--text-secondary"),
-    ("--color-primary", "--primary"),
-    ("--color-primary-hover", "--primary-hover"),
-    ("--color-ok", "--ok"),
-    ("--color-warn", "--warn"),
-    ("--color-error", "--error"),
-    ("--color-focus", "--focus"),
-    ("--color-accent", "--accent"),
-]
+# 工作台旧名 --color-* 兼容映射已随宽限期结束删除（TestLegacyMappingRemoved 锁移除态）
 
 
 def _root_defs(text: str) -> set[str]:
@@ -80,16 +66,14 @@ class TestSharedRoleParity:
         assert "--font-stack" in report_defs and "--font-stack" in web_defs
 
 
-class TestLegacyMapping:
-    """工作台旧名兼容映射与引用迁移。"""
+class TestLegacyMappingRemoved:
+    """工作台旧名兼容映射到期删除（DESIGN.md Known Gaps「有效期一版」条款落地）。"""
 
-    def test_legacy_names_mapped_to_roles(self):
+    def test_legacy_mapping_deleted(self):
+        """:root 不得再含 --color-* 映射定义（防被重新塞回）。"""
         css = WEB_CSS.read_text(encoding="utf-8")
-        root = css.split(":root", 1)[1].split("}", 1)[0]
-        for old, new in LEGACY_MIGRATIONS:
-            assert re.search(rf"{re.escape(old)}\s*:\s*var\({re.escape(new)}\)", root), (
-                f"旧名映射缺失: {old} -> var({new})"
-            )
+        leftover_defs = re.findall(r"--color-[a-z-]+\s*:", css)
+        assert leftover_defs == [], f"兼容映射仍存在: {sorted(set(leftover_defs))}"
 
     def test_no_legacy_references_remain(self):
         css = WEB_CSS.read_text(encoding="utf-8")

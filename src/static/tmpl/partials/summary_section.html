@@ -43,7 +43,7 @@
                     {% endif %}
                 </table>
                 {% if _sh.qdii_value_diff %}
-                <div style="font-size: var(--fs-footnote); line-height: 1.5; opacity: 0.75; margin-top: 4px;">
+                <div style="font-size: var(--fs-footnote); line-height: 1.5; opacity: 0.7; margin-top: 4px;">
                     注：总市值环比含 QDII 官方净值变动 {{ "+" if _sh.qdii_value_diff > 0 }}{{ _sh.qdii_value_diff | money }} 元{% if _sh.qdii_lagged %}（T-1 口径，滞后一个交易日）{% endif %}。
                 </div>
                 {% endif %}
@@ -201,10 +201,10 @@
                 </tr>
                 {% endif %}
                 {% if market_temperature.methodology %}
-                <tr><td>计算逻辑</td><td style="font-size: var(--fs-table-sm); color: #888;">{{ market_temperature.methodology }}</td></tr>
-                <tr><td>分级标准</td><td style="font-size: var(--fs-table-sm); color: #888;">{{ market_temperature.tier_scale }}</td></tr>
+                <tr><td>计算逻辑</td><td style="font-size: var(--fs-table-sm); color: var(--text-muted);">{{ market_temperature.methodology }}</td></tr>
+                <tr><td>分级标准</td><td style="font-size: var(--fs-table-sm); color: var(--text-muted);">{{ market_temperature.tier_scale }}</td></tr>
                 {% endif %}
-                <tr><td>注</td><td style="font-size: var(--fs-table-sm); color: #888;">{{ market_temperature.disclaimer }}</td></tr>
+                <tr><td>注</td><td style="font-size: var(--fs-table-sm); color: var(--text-muted);">{{ market_temperature.disclaimer }}</td></tr>
             </table>
             {% endif %}
         </div>
