@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.13.6-dev
-> **编号源**：`rf-next = 700`（新增问题取此编号，完成后更新为 +1；已用最大 rf-699，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 701`（新增问题取此编号，完成后更新为 +1；已用最大 rf-700，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -62,6 +62,10 @@
 - [`archived_review-findings.0.3.x.md`](../archive/v0.3.x/archived_review-findings.0.3.x.md)
 - [`archived_review-findings.0.2.x.md`](../archive/v0.2.x/archived_review-findings.0.2.x.md)
 - [`archived_review-findings.0.1.x.md`](../archive/v0.1.x/archived_review-findings.0.1.x.md)
+
+### 开发期已修复（0.13.6-dev）
+
+> rf-700 已修复（2026-10-17）：LLM 模型定价表 5 处偏离官方现价——`MODEL_PRICING` 的 Claude Opus 4.x 仍按旧旗舰价 15/75（官方 $5/$25）、Haiku 4.5 仍按 Haiku 3 价 0.25/1.25（官方 $1/$5）、Fable 5 误植 Sonnet 价 3/15（官方 $10/$50）、Gemini 3.5/2.5 Flash 仍按预览期价 0.15/0.60（GA 价 $1.5/$9.0、$0.30/$2.50）、2.5 Pro 输出价 5.00（官方 $10.00）、OpenAI 缓存命中无折扣（官方 50% 折扣）——逐家官方定价页核实后统一修正，并同步 `llm-technical.md` 附录 B 与 `how-to-config-llm.md` 定价表（用户实际在用的 DeepSeek 峰谷价与 Kimi 价经核实无偏差）
 
 ### 开发期已修复（0.13.3-dev）
 
