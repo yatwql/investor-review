@@ -7,6 +7,9 @@
 通过标准：
   - unit/ 下每个文件按目录期望须含对应 unit_* 子标记（unit/conftest.py 已有运行时强制）
   - scenario/ 下每个文件按目录期望须含对应 scenario_* 标记
+  - 期望表声明的全部 unit_* 域必须被 P1 门禁（test-runner `verify`）选择器覆盖——
+    目录归域即进门禁，防止「改域=门禁搬家」静默丢覆盖（结构锁见
+    test_check_test_markers.py::TestP1GateCoversDeclaredDomains，决策见技术设计 §4.23）
   - _edge.py 文件必须包含 pytest.mark.edge
   - 标记须在 src/test/conftest.py 注册集内（`KNOWN_MARKERS` 由该文件 AST 派生，conftest 新增标记自动跟随）
   - `DEPRECATED_MARKERS` 登记的已移除标记不得出现（当前登记集为空）
@@ -37,7 +40,9 @@ CONFTEST_PATH = REPO_ROOT / "src" / "test" / "conftest.py"
 
 # 期望的标记映射：子目录名 → 应含的标记名集合
 # 目录结构绑定：键必须是 `src/test/` 下真实存在的子目录（unit/* 与 scenario/* 全覆盖，
-# 由单测双向校验）；子集语义是「至少命中其一」，故 `unit/handlers` 取 `unit_core`（该目录无专属标记）。
+# 由单测双向校验）；子集语义是「至少命中其一」，故 `unit/handlers`/`unit/cache` 取
+# `unit_core`（TUI 处理层/缓存基础设施无专属域，归核心域搭车 P1 门禁）、
+# `unit/startup` 取 `unit_ui`（交互引导属 UI 域）——归域决策见技术设计 §4.23。
 EXPECTED_DIR_MARKERS: dict[str, set[str]] = {
     # unit 子模块 — 由 pytestmark 模块级列表覆盖
     "unit/analysis": {"unit", "unit_analysis"},

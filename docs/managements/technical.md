@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.13.4
+> 文档版本：0.13.5
 
 ## 目录
 
@@ -50,6 +50,7 @@
   - [4.20 景气度框架诊断（常规功能 prosperity_framework）](#420-景气度框架诊断常规功能-prosperity_framework)
   - [4.21 正文大块默认折叠（HTML 报告）](#421-正文大块默认折叠html-报告)
   - [4.22 章节-区块矩阵](#422-章节-区块矩阵)
+  - [4.23 测试域归属与门禁纳入纪律](#423-测试域归属与门禁纳入纪律)
 - [5. LLM 集成层（概要设计）](#5-llm-集成层概要设计)
   - [5.1 架构总览](#51-架构总览)
   - [5.2 调用链概览](#52-调用链概览)
@@ -1068,20 +1069,34 @@ _fetch_with_cache_refresh() 返回数据后
 ┌─────────────────────┐
 │ is_market_open()?   │── YES → 盘中，短 TTL 已保证实时性，无需验证
 └────────┬────────────┘
-        NO（盘后）
+        NO（盘后/盘前/午间休市）
          │
          ▼
 ┌─────────────────────┐
-│ price_date ≥         │
-│ 最近交易日?          │── YES → 新鲜缓存，返回
+│ price_date ≥ 该路由  │── NO（跨日残留）
+│ 允许的最新日期?      │
 └────────┬────────────┘
-        NO（跨日残留）
+        YES
          │
          ▼
-cache_clear(cache_key) → 强制刷新 → 重新走 Provider Chain → 成功后自动写回缓存
-（盘中因 Tencent 不可用降级写入 EastMoney 净值，
-  或盘中缓存的上一交易日残留，均在收市后自动清除）
+┌──────────────────────────────┐
+│ 场内且 T 日已收盘(now ≥ 15:00) │── YES（盘中残留）
+│ 而缓存写于 T 日 15:00 之前?     │
+└────────┬──────────────────────┘
+        NO（午间休市等 T 未收盘）
+         │
+         ▼
+      新鲜缓存，返回
+
+残留路径 → cache_clear(cache_key) → 强制刷新 → 重新走 Provider Chain → 成功后自动写回缓存；
+强制刷新后全链仍不可用 → 退回刷新前那份过时缓存（不因清缓存反而丢数据）
 ```
+
+两道门禁的语义分工：
+
+- **日期门禁**：`price_date` 早于「该路由允许的最新日期」→ 跨日残留（例如盘中因 Tencent 不可用降级写入 EastMoney 的上一交易日净值），收市后清除重取。阈值按路由分域——场内须等于最近交易日；场外官方净值中 QDII 合法为 T-1，国内场外 T 日当晚披露、盘后须到 T（用 `is_qdii_extended` 按持仓名细分，与「价格更新状态」同源）。
+- **收盘时点门禁**：`price_date == T` 只说明「数据属于 T 日」，但 T 日收盘价只在 15:00 之后才成形。若缓存在 T 日盘中写入（如 13:01 的 29.35），盘后或次日盘前仅凭日期相等就沿用，会把盘中价当成 T 日收盘价，使「本日盈亏」与「快照环比」系统性偏离真实涨跌。故当 T 日已收盘（`now ≥ T 15:00`）时，要求缓存写入时刻 ≥ T 日 15:00；午间休市（T 日尚未收盘）不施加此约束——上午收盘价即当时最新价。缓存写入时刻由 `_cache_captured_at()` 经 `cache.get_cache_age()` 反推（`cache.get` 只返回 `_data`，不暴露 `_ts`）。
+- **调用点接线**：`report/market_value.py` 的 `CACHE_ONLY` 分支与 `_fetch_price_with_cache_refresh` 均须传 `cache_key`（不传则跳过收盘时点门禁，兼容旧调用）。
 
 #### 2.4.2 指数独立获取
 
@@ -2677,7 +2692,7 @@ report/decision_llm_capture.py   # 抽取：结构化优先 → 表格兜底
 
 词表分**规范词**（减仓/加仓/持有，提示词契约固定三值）与**扩展词**（清仓·减持·卖出·止损 / 增持·买入·建仓 / 观望），只收语义单向词——`止盈`（可能部分落袋也可能清仓）、`调仓`（方向不明）**不入词表**：宁可判不出，不可判错。
 
-**结构化决策头（开关 `decision_header_parse`，默认开）**：开启时提示词末尾追加一行 `决策头：{"decisions":[{"code","action","priority"}]}` 契约；抽取侧先 `parse_structured_header` 读结构化头，逐字段归一校验（`action` 必须经上述判据归一为方向，否则丢弃该条；`code` 必须 6 位数字），全批不可用 → 回落确定性表格解析。两路产物形状统一为 `{code, name, direction, magnitude, detail, …}`（结构化头的 `priority` 在解析侧即归一为 `magnitude`），`_collect_decision` 对两路走同一段登记纪律（持有剔除 / code 白名单 / 名称回填 / 同码取高）。
+**结构化决策头（开关 `decision_header_parse`，默认开）**：开启时提示词末尾追加一行 `决策头：{"decisions":[{"code","action","priority"}]}` 契约；抽取侧先 `parse_structured_header` 读结构化头，逐字段归一校验（`action` 必须经上述判据归一为方向，否则丢弃该条；`code` 必须 6 位数字），全批不可用 → 回落确定性表格解析。两路产物形状统一为 `{code, name, direction, magnitude, detail, …}`（结构化头的 `priority` 在解析侧即归一为 `magnitude`），`_collect_decision` 对两路走同一段登记纪律（持有剔除 / code 白名单 / 名称回填 / detail 空串回补 / 同码取高）。
 
 - **载荷提取用花括号配平扫描**（字符串/转义感知），而非 `find("{")`/`rfind("}")`——后者在同一行出现两个 JSON 对象时会把跨度拉通成非法 JSON；`决策头：` 后为空行时以空串兜底，不抛 `IndexError`。
 - **缓存键同源**：开关影响提示词 → **写侧指纹**与**预检指纹**都取自 `llm/module_fingerprint.py::expert_review_fingerprint()` 内无条件调用的 `structured_header_cache_suffix()`（开关判定收敛在函数内部）。关闭返回 `""`（键不变、不误伤旧缓存）；开启两侧同步换键，避免预检命中旧键而跳过重生成使开关形同虚设。关闭时提示词**逐字节不变**。
@@ -2972,6 +2987,18 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
 | 17 | `data_source_status` | — | data_source_status_section.html | 源健康 / 数据源说明 / 品种覆盖 / 可信度 | data_quality_sheet.py | HTML 端表格直排无序号标记；Excel 端四子块 |
 | 18 | `fundamental_snapshot` | 2 | fundamental_snapshot_section.html | 财务指标 / 持仓个股财报摘要 | fundamental_snapshot_sheet.py | 两区块各由功能开关门控 |
 | 19 | `llm_usage` | — | llm_usage_section.html | — | excel_llm_usage.py | 单表章 |
+
+### 4.23 测试域归属与门禁纳入纪律
+
+**决策**：测试目录的 marker 归域以 `scripts/check-test-markers.py` 的 `EXPECTED_DIR_MARKERS` 期望表为单一事实来源，且**归域即进门禁**——期望表声明的每一个 `unit_*` 域必须出现在 P1（`--mode verify`）选择器中，`dev-verify`（P0）域集必须 ⊆ P1；快速门禁与合入门禁的差集只允许是「域内子集」维度（`and not (edge or data)`、`scenario_basic`），不允许是「域」维度。
+
+**动机**：门禁档位按 marker 表达式筛选，「改域=门禁搬家」——归域调整若与选择器漂移，用例会静默脱离回归覆盖（审计中实际发现两例：`unit` 曾在 `pytest_configure` 漏注册致 `unit` 通配表达式匹配全空，unit_* 全集 10,136 条不进任何档位；TUI/CLI 域曾不在 `verify` 选择器）。另需防止「为进门禁而蹭域」的语义漂移反弹——归域特例必须显式登记。
+
+**已登记归域特例**：`unit/handlers`（TUI 处理层）与 `unit/cache`（存储/IO 基础设施）取 `unit_core`（无专属域，归核心域搭车门禁，子集语义「至少命中其一」）；`unit/startup`（首次运行交互引导）取 `unit_ui`。conftest 缺标记警告文案同步指向期望表，新增/调整特例须同批更新期望表与本节。
+
+**守护**：`test_check_test_markers.py::TestP1GateCoversDeclaredDomains` 双结构锁（期望表全部 unit_* 域 ∈ verify 选择器；P0 域集 ⊆ P1）——域集合从期望表/模式注册表动态派生，不写死域数（测试真值单一来源纪律）。场景侧同源机制：`scenario` 目录×裸 `scenario` marker 收集期双向硬拦截（见 conftest）。
+
+[↑ 回到顶部](#目录)
 
 ## 5. LLM 集成层（概要设计）
 

@@ -1,5 +1,5 @@
 # LLM 集成层技术设计
-> 文档版本：0.13.4
+> 文档版本：0.13.5
 
 本文档是 `technical.md` 的 LLM 集成层专项技术设计补充，对应 `technical.md` §5（LLM 集成层概要设计）。
 `technical.md` §5 提供 LLM 层的总体架构、模块清单、调用链概览、多 Provider 链模式概要及关键机制速览；
@@ -1163,7 +1163,7 @@ reload_pricing() → 合并 llm_settings.json → pricing
 
 ### 10.4 峰谷定价（DeepSeek）
 
-`MODEL_PRICING` 中含 `"peak"` 高峰价子段的模型（`deepseek-flash` / `deepseek-v4-flash` / `deepseek-v4-pro` / `deepseek-chat` / `deepseek-reasoner`）
+`MODEL_PRICING` 中含 `"peak"` 高峰价子段的模型（`deepseek-flash` / `deepseek-v4-flash` / `deepseek-v4-pro`）
 采用峰谷定价：高峰日（周一至周五，不含中国法定节假日）的高峰时段按 `peak` 子段单价计费，
 其余时段（闲时，含周末与法定节假日全天）按 base 单价计费。
 
@@ -1457,9 +1457,7 @@ LLM 集成层与系统其他组件的接口：
 | claude-opus-4-6 | 15.00 | 75.00 | 1.50 | |
 | claude-sonnet-4-6 | 3.00 | 15.00 | 0.30 | |
 | claude-sonnet-4-8 | 3.00 | 15.00 | 0.30 | |
-| deepseek-chat | 1.00 / 2.00 | 4.00 / 8.00 | 0.02 / 0.04 | 峰谷定价（闲时/高峰）；**已停用别名**（flash 系列非思考模式的兼容名，2026-07-24 下线，条目保留供历史记录计费） |
 | deepseek-flash | 1.00 / 2.00 | 4.00 / 8.00 | 0.02 / 0.04 | 峰谷定价（闲时/高峰）；DeepSeek-V4.1-Flash 正式模型名（2026-09-10 发布） |
-| deepseek-reasoner | 1.00 / 2.00 | 4.00 / 8.00 | 0.02 / 0.04 | 峰谷定价（闲时/高峰）；**已停用别名**（flash 系列思考模式的兼容名，2026-07-24 下线，条目保留供历史记录计费） |
 | deepseek-v4-flash | 1.00 / 2.00 | 4.00 / 8.00 | 0.02 / 0.04 | 峰谷定价（闲时/高峰）；别名，端点仍接受、底层由 V4.1-Flash 接管并按同价计费 |
 | deepseek-v4-pro | 4.50 / 9.00 | 13.50 / 27.00 | 0.15 / 0.30 | 峰谷定价（闲时/高峰）；官方 2026-09-10 公告继续提供 API 服务，计费方式不变 |
 | gemini-2.0-flash | 0.10 | 0.40 | 0.01 | |

@@ -6,6 +6,9 @@
   - E2 明暗同步：dark 覆盖变量根缺命中 / 根齐通过
   - E3 双面 token 对表：表共名缺定义命中 / 两面同名颜色变量未登记命中 / 一致通过
   - W1/W2 观察语义：裸色值与圆角档外**不进 findings**（只进 observations）
+  - W3 内联色值：HTML 引号内（非 script 域）色值独立观察——W1 引号整行豁免为 JS
+    图表配置设计，内联 style 盲区由本项找回；css 文件与 script 域不归 W3
+  - W4/W5 档外字号/间距：字面值不在契约档位集才观察，var()/token/图标 ≥24px 不判
   - W1 豁免域：HTML 实体误报排除 / 引号区间行（JS 配置与内联 style，含跨行）/
     var() 回退值 / @media print 块 / 暗色 override 块 / 存量白名单命中与腐化检测
   - 收敛基线：真实仓库观察数只减不增（样式收敛批次基线机制化）
@@ -148,7 +151,7 @@ class TestRealRepoSmoke:
     def test_e_level_clean(self, guard):
         findings, obs = guard.run_checks()
         assert findings == [], f"E 级应零 finding: {findings[:3]}"
-        assert set(obs) == {"raw_colors", "radius"}
+        assert set(obs) == {"raw_colors", "radius", "inline_colors", "type_scale", "spacing_scale"}
 
     def test_radius_tiers_match_design(self, guard):
         """圆角档位与 DESIGN.md Layout「圆角档」同源（4/6/8 明文 + 999 药丸）。"""
@@ -243,15 +246,63 @@ class TestW1Exemptions:
         assert len(stale) == 1 and "#deadbe" in stale[0]
 
 
+class TestInlineColors:
+    """W3 内联/属性色值：HTML 引号内非 script 域色值进观察，W1 归零口径不受影响。"""
+
+    def test_inline_style_hex_observed(self, guard, tmp_path):
+        f = _write(tmp_path, "i.html", '<td style="color: #888;">x</td>\n')
+        _, obs = guard.run_checks(files=[f], design_text=_MINIMAL_DESIGN)
+        assert len(obs["inline_colors"]) == 1, "内联 style 色值应进 W3"
+        assert obs["raw_colors"] == [], "W1 引号豁免口径保持不变"
+
+    def test_script_region_not_inline(self, guard, tmp_path):
+        """<script> 域 JS 字符串色值属绘制/图表配置域，不归 W3。"""
+        f = _write(tmp_path, "s.html", "<script>\nvar c = '#abc123';\n</script>\n")
+        _, obs = guard.run_checks(files=[f], design_text=_MINIMAL_DESIGN)
+        assert obs["inline_colors"] == []
+
+    def test_css_file_not_inline_domain(self, guard, tmp_path):
+        f = _write(tmp_path, "x.css", ".a { color: #888; }\n")
+        _, obs = guard.run_checks(files=[f], design_text=_MINIMAL_DESIGN)
+        assert obs["inline_colors"] == [] and len(obs["raw_colors"]) == 1
+
+
+class TestScaleObservations:
+    """W4 档外字号 / W5 档外间距：只判字面量，var()/档位值/图标字号不判。"""
+
+    def test_out_of_tier_font_and_margin_observed(self, guard, tmp_path):
+        f = _write(tmp_path, "o.css", ".a { font-size: 15px; margin: 10px 0; }\n")
+        _, obs = guard.run_checks(files=[f], design_text=_MINIMAL_DESIGN)
+        assert any("font-size 15px" in x for x in obs["type_scale"])
+        assert any("间距 10px" in x for x in obs["spacing_scale"])
+
+    def test_tier_and_token_values_not_observed(self, guard, tmp_path):
+        f = _write(
+            tmp_path,
+            "t.css",
+            ".a { font-size: var(--fs-body); margin: 8px 12px; }\n.b { font-size: 28px; }\n",
+        )
+        _, obs = guard.run_checks(files=[f], design_text=_MINIMAL_DESIGN)
+        assert obs["type_scale"] == [] and obs["spacing_scale"] == []
+
+
 class TestBaselineNoGrowth:
     """样式收敛批次基线：真实仓库观察数只减不增（管控机制化，非演进总数断言）。"""
 
     #: 2026-10-13 样式收敛批次后的治理基线——只允许沿收敛路径下降，不得回升
     _W1_BASELINE = 0
     _W2_BASELINE = 0
+    #: W3/W4/W5 为设计契约审计批次（2026-10-17）新增观察维度——按实测存量登记，
+    #: 同样只减不增（新增内联色值/档外字号间距必须走 token 或先入契约登记）
+    _W3_BASELINE = 40
+    _W4_BASELINE = 8
+    _W5_BASELINE = 175
 
     def test_observed_counts_within_baseline(self, guard):
         """新增裸色值/档外圆角必须走 token 或复审白名单，否则本断言红。"""
         _, obs = guard.run_checks()
         assert len(obs["raw_colors"]) <= self._W1_BASELINE
         assert len(obs["radius"]) <= self._W2_BASELINE
+        assert len(obs["inline_colors"]) <= self._W3_BASELINE
+        assert len(obs["type_scale"]) <= self._W4_BASELINE
+        assert len(obs["spacing_scale"]) <= self._W5_BASELINE

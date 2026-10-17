@@ -57,8 +57,8 @@ MODES: dict[str, dict] = {
         ],
     },
     "verify": {
-        "marker": "unit_core or unit_providers or unit_fetcher or unit_config or unit_news or unit_llm or unit_analysis or unit_scripts or unit_web or unit_qa or unit_report",
-        "desc": "合入验证（核心/配置/新闻/LLM/报告/追问模块单元测试，不含场景——场景由 P0+P2 覆盖）",
+        "marker": "unit_core or unit_providers or unit_fetcher or unit_config or unit_news or unit_llm or unit_analysis or unit_scripts or unit_web or unit_qa or unit_report or unit_cli or unit_ui",
+        "desc": "合入验证（全部 unit_* 域单元测试，含 TUI/CLI——2026-10-17 起目录归域即进门禁，见技术设计 §4.23；不含场景——场景由 P0+P2 覆盖）",
         "timeout_sec": 300,
         "order": 6,
         "parallel": True,

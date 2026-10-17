@@ -37,7 +37,7 @@ PROJECT_ROOT = _find_project_root()
 # 应用名称（单一来源，TUI 首页 / 启动日志 / Web 首页 / HTML 报告首页 / Excel 首页统一引用）
 APP_NAME = "投资复盘助手"
 
-APP_VERSION = "0.13.4"
+APP_VERSION = "0.13.5"
 
 # ── 报告产物文件名（单一来源：Excel/HTML 写入器与 Web 预览下载统一引用） ──
 # 报告产物文件基名（归档名 = 基名 + 时间戳后缀）
@@ -124,23 +124,6 @@ MODEL_PRICING: dict[str, dict[str, float | dict[str, float]]] = {
         "output": 13.5,
         "input_cache_hit": 0.15,
         "peak": {"input": 9.0, "output": 27.0, "input_cache_hit": 0.30},
-    },
-    # deepseek-chat / deepseek-reasoner 是 flash 系列的**已停用兼容别名**（二者分别
-    # 对应非思考 / 思考模式，并非独立模型；2026-07-24 23:59 北京时间下线后端点
-    # 不再接受，新请求一律失败）。条目按 flash 系列单价保留而非删除：
-    # 报告与性能页签在渲染时用本表估算**历史记录**（模型名 + token 数）的费用，删条目
-    # 会让停用前产生的调用一律显示 "-"。新配置请改用 deepseek-flash。
-    "deepseek-chat": {
-        "input": 1.0,
-        "output": 4.0,
-        "input_cache_hit": 0.02,
-        "peak": {"input": 2.0, "output": 8.0, "input_cache_hit": 0.04},
-    },
-    "deepseek-reasoner": {
-        "input": 1.0,
-        "output": 4.0,
-        "input_cache_hit": 0.02,
-        "peak": {"input": 2.0, "output": 8.0, "input_cache_hit": 0.04},
     },
     # ── Kimi（月之暗面开放平台，元/百万 token，platform.kimi.com 官方价）──
     # kimi-k2.6：通用模型（256k 上下文，支持思考/非思考模式）

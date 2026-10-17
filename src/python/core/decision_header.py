@@ -333,8 +333,10 @@ def parse_structured_header(text: str | None) -> list[dict[str, Any]] | None:
     整体不可解析（缺标记/非法 JSON/无有效条目）返回 None。
 
     Returns:
-        ``[{code, direction, magnitude}, ...]``（与表格解析同形状，``magnitude``
-        即优先级强度 high/mid/low）；不可用时 None。
+        ``[{code, direction, magnitude}, ...]``（``magnitude`` 即优先级强度
+        high/mid/low）；**仅三字段**——表格行另有的 ``name``/``detail`` 由消费侧
+        （``decision_llm_capture._collect_decision``）回补后方与表格行同形；
+        不可用时 None。
     """
     payload = _extract_header_payload(text)
     if not payload:

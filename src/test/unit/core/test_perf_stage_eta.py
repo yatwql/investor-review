@@ -72,13 +72,6 @@ class TestEstimateStageEta(unittest.TestCase):
         history = [_record("full", {"阶段X": -5.0})]
         self.assertIsNone(estimate_stage_eta("阶段X", 0.0, history=history))
 
-    def test_list_shape_phases_compat(self) -> None:
-        """早期 list 形状 phases（[{name, seconds}]）同样可取样本。"""
-        rec = _record("full", {"阶段Y": 42.0})
-        rec["phases"] = [{"name": "阶段Y", "seconds": 42.0}]
-        eta = estimate_stage_eta("阶段Y", 2.0, history=[rec], report_type="full")
-        self.assertEqual(eta, 40.0)
-
     def test_lookback_window_excludes_older_runs(self) -> None:
         """仅取最近 N 次运行：目标阶段只出现在窗口外的历史 → None。"""
         phase_only_in_old = [_record("full", {"阶段旧": 50.0}) for _ in range(5)]

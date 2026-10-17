@@ -28,6 +28,54 @@ def _baseline_labels(ts: str) -> tuple[str, str]:
     return trading_day_as_of(dt), dt.strftime("%Y-%m-%d %H:%M")
 
 
+def _classify_qdii_value_diff(details: list, old) -> tuple[float, bool]:
+    """环比中 QDII 官方净值变动的金额与是否滞后口径（T-1）。
+
+    QDII 官方净值天然滞后一个交易日：本次快照用的是 T-1 净值、基线快照用的是
+    更早一期净值，故其市值差实际反映的是**上一交易日**的净值变动，与当日 A 股
+    涨跌混在同一个「总市值环比」里。此处按 ``is_qdii_extended`` 与 HistoryDiff
+    同口径（按 code 合并账户）算出该分项，供摘要区在环比下注明口径。
+
+    滞后判定用明细行的净值日期是否早于最近交易日：当日已披露即非滞后（罕见，
+    部分 QDII 会按时披露）；无 QDII 持仓时返回 (0.0, False)，渲染层省略该注。
+
+    Args:
+        details: 本次行情明细行（含 ``code`` / ``name`` / ``market_value`` / ``nav_date``）
+        old: 基线快照（``SnapshotData``；None=首次运行）
+
+    Returns:
+        (QDII 市值差金额, 是否滞后口径)。
+    """
+    from src.python.core.code_utils import is_qdii_extended
+
+    names: dict[str, str] = {d.code.strip(): getattr(d, "name", "") for d in details}
+    new_by_code: dict[str, float] = {}
+    for d in details:
+        code = d.code.strip()
+        new_by_code[code] = new_by_code.get(code, 0.0) + d.market_value
+    old_by_code: dict[str, float] = {}
+    if old is not None:
+        for account in old.accounts:
+            for h in account.holdings:
+                code = h.code.strip()
+                names.setdefault(code, h.name)
+                old_by_code[code] = old_by_code.get(code, 0.0) + h.market_value
+
+    qdii_codes = {code for code, name in names.items() if is_qdii_extended(name)}
+    if not qdii_codes:
+        return 0.0, False
+
+    value_diff = sum(new_by_code.get(code, 0.0) - old_by_code.get(code, 0.0) for code in qdii_codes)
+
+    from src.python.core.trading_calendar import get_last_trading_day
+
+    trading_day = get_last_trading_day()
+    lagged = any(
+        getattr(d, "nav_date", "") and d.nav_date < trading_day for d in details if d.code.strip() in qdii_codes
+    )
+    return round(value_diff, 2), lagged
+
+
 def capture_snapshot(
     holdings: list,
     details: list,
@@ -125,11 +173,15 @@ def capture_snapshot(
             # 基线时间戳仅接受字符串（防御非标对象/桩），不可解析时标签降级为 ""
             _raw_ts = _old.timestamp if isinstance(_old.timestamp, str) else ""
             _baseline_td, _baseline_gen = _baseline_labels(_raw_ts)
+            # 首次运行无基线：QDII 分项无意义，计算只在有环比时进行
+            _qdii_value_diff, _qdii_lagged = _classify_qdii_value_diff(details, _old)
             pipeline_data = {
                 "diff": {
                     "is_first_check": False,
                     "total_value_diff": _diff.total_value_diff,
                     "total_value_diff_pct": _diff.total_value_diff_pct,
+                    "qdii_value_diff": _qdii_value_diff,
+                    "qdii_lagged": _qdii_lagged,
                     "total_pnl_diff": _diff.total_pnl_diff,
                     "total_pnl_pct_diff": _diff.total_pnl_pct_diff,
                     "days_since_last_report": _diff.days_since_last_report,

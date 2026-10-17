@@ -377,7 +377,7 @@ def _generate_report_both(
 # ── _generate_report_full（HTML+Excel+LLM）──
 
 
-def _record_llm_context(perf) -> None:
+def _record_llm_context(perf, sink=None) -> None:
     """把本次运行的 LLM 上下文写入 perf 记录（provider/等待/缓存/用量/质量）。
 
     三个来源合并（均为可选，缺失即跳过）：
@@ -385,14 +385,20 @@ def _record_llm_context(perf) -> None:
       - 会话用量：逐模块 model/tokens/cost/thinking（`llm/session.py` 单源）
       - 质量评级：模块级评级（开关关闭时无评级，不写入）
 
+    ``sink`` 必须由调用方传入本次绑定的汇聚器：管线在 LLM 阶段结束的 ``finally``
+    中已将全局 sink 解绑（防跨运行串味），此时 ``current_llm_observation()`` 已为
+    None，再取全局会丢失整段观测。
+
     任何异常静默降级——观测不得影响报告生成。
     """
     try:
-        from src.python.llm.observation import current_llm_observation
         from src.python.llm.session import get_session_usage
 
         context: dict = {}
-        sink = current_llm_observation()
+        if sink is None:
+            from src.python.llm.observation import current_llm_observation
+
+            sink = current_llm_observation()
         if sink is not None:
             context.update(sink.snapshot())
 
@@ -746,7 +752,7 @@ def _generate_report_full(
 
     result.news_ok = news_ok
     result.report_generated = result.html_ok or result.excel_ok
-    _record_llm_context(perf)
+    _record_llm_context(perf, _llm_sink)
     perf.save()
     _collect_health_checks(_health_fut, "full", holdings)
     return result

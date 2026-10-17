@@ -73,6 +73,16 @@ STYLE_DOMAIN = (
 #: 圆角档位（DESIGN.md Layout「圆角档」+ 药丸/全圆钮 999px；字面 px 值白名单）
 RADIUS_TIERS = frozenset({4, 6, 8, 999})
 
+#: 字阶档位（DESIGN.md Typography 字阶表；图标 >24px 豁免；rem 按根 16px 折算）
+FONT_TIERS = frozenset({11, 12, 13, 14, 16, 17, 18, 20, 22})
+
+#: 间距档位（DESIGN.md Layout 间距阶；0 为显式清零合法）
+SPACING_TIERS = frozenset({0, 4, 8, 12, 16, 24, 32})
+
+_FONT_SIZE = re.compile(r"font-size:\s*(\d+(?:\.\d+)?)(px|rem)")
+_SPACING_DECL = re.compile(r"(?:padding|margin|gap|row-gap|column-gap)(?:-(?:top|right|bottom|left))?\s*:\s*([^;}]+)")
+_SPACING_PX = re.compile(r"(-?[\d.]+)px\b")
+
 #: DESIGN.md 文件（Colors / Layout 真值来源）
 DESIGN_DOC = "docs/managements/DESIGN.md"
 
@@ -198,6 +208,48 @@ def _in_var_fallback(code: str, pos: int) -> bool:
         if m.end() <= pos < end:
             return True
     return False
+
+
+def _script_block_lines(text: str) -> set[int]:
+    """``<script>`` 区域行号集（JS 字符串色值属图表配置/绘制域，不归 W3 内联属性）。"""
+    out: set[int] = set()
+    inside = False
+    for i, raw in enumerate(text.splitlines(), 1):
+        if "<script" in raw:
+            inside = True
+        if inside:
+            out.add(i)
+        if "</script>" in raw:
+            inside = False
+    return out
+
+
+def _quoted_positions(text: str) -> set[tuple[int, int]]:
+    """引号内字符的 (行, 列) 集合；状态机与 ``_quoted_lines`` 同构（转义处理一致）。"""
+    out: set[tuple[int, int]] = set()
+    quote: str | None = None
+    line_no = 1
+    col = 0
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if ch == "\n":
+            line_no += 1
+            col = 0
+        elif quote is None and ch in ("'", '"'):
+            quote = ch
+        elif quote is not None:
+            if ch == "\\":
+                i += 1
+                col += 2
+                continue
+            elif ch == quote:
+                quote = None
+            else:
+                out.add((line_no, col))
+        col += 1
+        i += 1
+    return out
 
 
 def _scoped_block_lines(text: str, selector_re: str) -> set[int]:
@@ -419,6 +471,64 @@ def observe_radius(path: Path) -> list[str]:
     return details
 
 
+def observe_inline_colors(path: Path) -> list[str]:
+    """W3 内联/属性色值（护栏 1，观察）：W1 的引号整行豁免为 JS 图表配置设计，
+    HTML 内联 ``style=``/旧式色值属性被同域连带豁免形成盲区——本项按 (行,列) 位置
+    级判定把引号内非 script 域的色值找回，独立口径不并入 W1 归零基线。"""
+    if path.suffix.lower() != ".html":
+        return []
+    text = path.read_text(encoding="utf-8")
+    quoted = _quoted_positions(text)
+    script = _script_block_lines(text)
+    details: list[str] = []
+    for i, line in enumerate(text.splitlines(), 1):
+        if i in script or _is_comment(line):
+            continue
+        for m in _HEX.finditer(line):
+            if (i, m.start()) in quoted:
+                details.append(f"{rel(path)}:{i}: {line.strip()[:96]}")
+                break
+        else:
+            for m in _RGB.finditer(line):
+                if (i, m.start()) in quoted:
+                    details.append(f"{rel(path)}:{i}: {line.strip()[:96]}")
+                    break
+    return details
+
+
+def observe_type_scale(path: Path) -> list[str]:
+    """W4 档外字号（护栏 6/字阶表，观察）：字面 px/rem 字号不在 8 档集（图标 >24px
+    与 var(--fs-*) token 天然不命中；rem 按根 16px 折算）。"""
+    details: list[str] = []
+    text = path.read_text(encoding="utf-8")
+    print_lines = _media_print_lines(text)
+    for i, line in enumerate(text.splitlines(), 1):
+        if _is_comment(line) or i in print_lines:
+            continue
+        for m in _FONT_SIZE.finditer(line):
+            val = float(m[1]) * (16 if m[2] == "rem" else 1)
+            if val >= 24 or int(val) in FONT_TIERS:
+                continue
+            details.append(f"{rel(path)}:{i}: font-size {m[1]}{m[2]} 档外（字阶 {sorted(FONT_TIERS)}）")
+    return details
+
+
+def observe_spacing_scale(path: Path) -> list[str]:
+    """W5 档外间距（护栏 2/Layout 间距阶，观察）：padding/margin/gap 首个字面 px
+    值不在 4/8/12/16/24/32 档（仅首值近似口径，控制噪声；auto/calc/%/em 不判）。"""
+    details: list[str] = []
+    text = path.read_text(encoding="utf-8")
+    print_lines = _media_print_lines(text)
+    for i, line in enumerate(text.splitlines(), 1):
+        if _is_comment(line) or i in print_lines:
+            continue
+        for m in _SPACING_DECL.finditer(line):
+            px = _SPACING_PX.search(m.group(1))
+            if px and float(px.group(1)) not in SPACING_TIERS:
+                details.append(f"{rel(path)}:{i}: 间距 {px.group(1)}px 档外（间距阶 {sorted(SPACING_TIERS)}）")
+    return details
+
+
 def _collect_files(paths: tuple[str, ...] | None) -> list[Path]:
     files: list[Path] = []
     for rel_path in paths or STYLE_DOMAIN:
@@ -453,7 +563,13 @@ def run_checks(
 
     brand = _brand_hexes(targets)
     findings: list[str] = []
-    observations: dict[str, list[str]] = {"raw_colors": [], "radius": []}
+    observations: dict[str, list[str]] = {
+        "raw_colors": [],
+        "radius": [],
+        "inline_colors": [],
+        "type_scale": [],
+        "spacing_scale": [],
+    }
 
     report_css = ""
     web_css = ""
@@ -468,6 +584,9 @@ def run_checks(
             findings += check_dark_sync(path)
         observations["raw_colors"] += observe_raw_colors(path)
         observations["radius"] += observe_radius(path)
+        observations["inline_colors"] += observe_inline_colors(path)
+        observations["type_scale"] += observe_type_scale(path)
+        observations["spacing_scale"] += observe_spacing_scale(path)
 
     if design_text and report_css and web_css:
         findings += check_token_alignment(report_css, web_css, design_text)
@@ -482,22 +601,30 @@ def main() -> int:
     findings, observations = run_checks()
     stale = _stale_exemptions(_collect_files(None))
     w1, w2 = len(observations["raw_colors"]), len(observations["radius"])
+    w3, w4, w5 = (len(observations[k]) for k in ("inline_colors", "type_scale", "spacing_scale"))
 
     if args.verbose:
         for line in observations["raw_colors"]:
             print(f"  [观察] {line}")
         for line in observations["radius"]:
             print(f"  [观察] {line}")
+        for key in ("inline_colors", "type_scale", "spacing_scale"):
+            for line in observations[key]:
+                print(f"  [观察] {line}")
         print(f"  [豁免] W1 存量白名单 {len(_RAW_COLOR_EXEMPTIONS)} 条（命中即跳过，理由见常量声明）")
         for line in stale:
             print(f"  [!] {line}")
-    if not args.ci and (w1 or w2):
+    if not args.ci and (w1 or w2 or w3 or w4 or w5):
         hint = "（-v 看明细）" if not args.verbose else ""
-        print(f"[!] 观察项（不判 finding，观察期）：裸色值 {w1} 处、圆角档外 {w2} 处{hint}")
+        print(
+            f"[!] 观察项（不判 finding，观察期）：裸色值 {w1} 处、圆角档外 {w2} 处、"
+            f"内联色值 {w3} 处、字号档外 {w4} 处、间距档外 {w5} 处{hint}"
+        )
 
     return report(
         findings,
-        f"[OK] 设计护栏 E 级通过（观察期统计：裸色值 {w1}、圆角档外 {w2}）",
+        f"[OK] 设计护栏 E 级通过（观察期统计：裸色值 {w1}、圆角档外 {w2}、"
+        f"内联色值 {w3}、字号档外 {w4}、间距档外 {w5}）",
         ci=args.ci,
     )
 

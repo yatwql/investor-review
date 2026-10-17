@@ -253,6 +253,39 @@ def _merge_phase_stats(
     return dict(sorted(result.items(), key=lambda kv: (-kv[1]["p50"], kv[0])))
 
 
+def _group_by_version_type(
+    records: list[dict[str, Any]],
+) -> tuple[dict[tuple[str, str], list[dict[str, Any]]], dict[tuple[str, str], str]]:
+    """按（报告类型, 版本）分组，并给出每组首次运行时间（组序基准）。
+
+    版本演进总表与同版本漂移共用同一分组口径（原先两处各写一遍分组 +
+    「首次运行时间」排序键，新增维度时容易一处改一处漏）。
+
+    Returns:
+        (groups, first_ts)：groups 值为该组记录（保持输入顺序）；first_ts 为该组
+        最小 timestamp 字符串（紧凑 ISO 串的字典序与时间序一致）。
+    """
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for r in records:
+        groups[(str(r.get("report_type", "?")), str(r.get("version", "?")))].append(r)
+    first_ts = {key: min(str(r.get("timestamp", "")) for r in recs) for key, recs in groups.items()}
+    return groups, first_ts
+
+
+def _group_filtered(filtered: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    """把已过滤的记录按 version / report_type 分组（不重复过滤）。
+
+    组间按各组首次运行时间升序（最新版本组在最末）；组内按时间戳升序。
+    """
+    groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for r in filtered:
+        key = f"{r.get('version', '?')} / {r.get('report_type', '?')}"
+        groups[key].append(r)
+    for g in groups:
+        groups[g].sort(key=lambda x: x.get("timestamp", ""))
+    return {k: groups[k] for k in sorted(groups, key=lambda k: (str(groups[k][0].get("timestamp", "")), k))}
+
+
 def _group_records(
     records: list[dict[str, Any]],
     report_type: str | None,
@@ -270,13 +303,4 @@ def _group_records(
     Returns:
         {group_key: [records]}
     """
-    filtered = _filter_records(records, report_type, last_n, exclude_outlier, outlier_k, version)
-
-    groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for r in filtered:
-        key = f"{r.get('version', '?')} / {r.get('report_type', '?')}"
-        groups[key].append(r)
-    # 组内按时间排序；组间按首次运行时间（首条即最早）升序，最新组在末尾
-    for g in groups:
-        groups[g].sort(key=lambda x: x.get("timestamp", ""))
-    return {k: groups[k] for k in sorted(groups, key=lambda k: (str(groups[k][0].get("timestamp", "")), k))}
+    return _group_filtered(_filter_records(records, report_type, last_n, exclude_outlier, outlier_k, version))

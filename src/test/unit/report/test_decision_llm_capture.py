@@ -257,6 +257,30 @@ class TestStructuredHeader:
         rows = cap.extract_llm_decisions(html, _HOLDINGS)
         assert rows[0]["direction"] == dl.DIRECTION_SHORT  # 开关关闭 → 走表格
 
+    def test_structured_row_shape_backfilled(self):
+        # 决策头契约仅 {code, action, priority}（无 name/理由列）：抽取侧须回补成
+        # 与表格行同形（技术设计 §4.15 两路产物形状统一），下游不再缺字段
+        html = _HTML_HEADER + ('<p>决策头：{"decisions":[{"code":"561910","action":"减仓","priority":"高"}]}</p>')
+        rows = cap.extract_llm_decisions(html, _HOLDINGS)
+        assert [r["code"] for r in rows] == ["561910"]
+        row = rows[0]
+        assert row["name"] == "招商中证电池主题ETF"  # 持仓名回填
+        assert row["detail"] == ""  # 无理由列 → 空串回补
+        assert row["carrier"] == dl.CARRIER_EXPERT_REVIEW
+        assert row["baseline_close"] == 0.712
+
+    def test_register_structured_row_no_keyerror(self, tmp_path):
+        # 回归：登记侧直取 row["detail"]，结构化头路径曾缺此键 → KeyError: 'detail'
+        # 被挂载点守护吞成告警，整批 LLM 建议全部登记失效（perf 运行明细「错误」现形）
+        html = _HTML_HEADER + ('<p>决策头：{"decisions":[{"code":"600900","action":"减仓","priority":"中"}]}</p>')
+        lp = str(tmp_path / "ledger.jsonl")
+        out = cap.register_llm_decisions(html, _HOLDINGS, report_date="2026-10-17", path=lp)
+        assert out["registered"] == 1
+        d = dl.fold_ledger(path=lp)["decisions"][0]
+        assert d["detail"] == ""
+        assert d["name"] == "长江电力"
+        assert d["direction"] == dl.DIRECTION_SHORT
+
 
 class TestRegister:
     """登记落账（仅可结算方向且带基线）。"""

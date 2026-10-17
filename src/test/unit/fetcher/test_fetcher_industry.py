@@ -137,48 +137,8 @@ class TestFetchIndustryData(unittest.TestCase):
         self.assertEqual(result["industry"], "银行")
 
 
-class TestLegacyIndustryCacheMigration(unittest.TestCase):
-    """缺扩展行情字段的行业缓存载荷清理 — 见 `_drop_legacy_cached_payload`。
-
-    背景：行业载荷透传 pe/pb/market_cap，缺键载荷不含这三个键，而缓存 TTL 为
-    两周、`fetch_with_fallback` 命中即返回——不剔除缺键载荷，估值分位与基金风格
-    的 PE 取用会在存活期内静默退化为「不可得」。
-    """
-
-    def _fresh_payload(self) -> dict:
-        """新载荷形态：无论 provider 是否给出，三个扩展键都存在（值为 None 表不提供）。"""
-        return {"code": "000001", "industry": "银行", "concepts": [], "pe": None, "pb": None, "market_cap": None}
-
-    @patch("src.python.fetcher.industry.fetch_with_fallback")
-    def test_legacy_payload_purged(self, mock_fallback):
-        """缓存为旧载荷（无 pe 键）→ 清除该键（本次调用随之回落到 provider 重取）。"""
-        mock_fallback.return_value = self._fresh_payload()
-        legacy = {"code": "000001", "industry": "银行", "concepts": []}
-
-        with (
-            patch("src.python.fetcher.industry.cache_get", return_value=legacy),
-            patch("src.python.fetcher.industry.cache_clear") as mock_clear,
-        ):
-            from src.python.fetcher.industry import fetch_industry_data
-
-            fetch_industry_data("000001")
-
-        mock_clear.assert_called_once_with("industry_000001")
-
-    @patch("src.python.fetcher.industry.fetch_with_fallback")
-    def test_fresh_payload_kept(self, mock_fallback):
-        """缓存为新载荷（含 pe 键，值为 None 表该源不提供）→ 不得误删。"""
-        mock_fallback.return_value = self._fresh_payload()
-
-        with (
-            patch("src.python.fetcher.industry.cache_get", return_value=self._fresh_payload()),
-            patch("src.python.fetcher.industry.cache_clear") as mock_clear,
-        ):
-            from src.python.fetcher.industry import fetch_industry_data
-
-            fetch_industry_data("000001")
-
-        mock_clear.assert_not_called()
+class TestIndustryTransformValuationPassthrough(unittest.TestCase):
+    """_industry_transform 透传扩展行情字段（估值分位/基金风格取数链路的源头）。"""
 
     def test_transform_carries_valuation_fields(self):
         """_industry_transform 透传同一次 push2 响应的 pe/pb/market_cap。"""

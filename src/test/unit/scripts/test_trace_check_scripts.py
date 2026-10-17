@@ -13,6 +13,7 @@
   - 架构约束代号（C1~C25，technical.md 定义）在注释/文档正文属暗号须检出；约束定义处
     （technical.md / llm-technical.md）豁免；非约束 C+数字（色值 C00000、C26+、内嵌
     AB14/MC19）不误伤
+  - MAGIC/DASHTASK/UNDERSCORE 合法领域值豁免由专文件 test_trace_domain_exemptions.py 覆盖
 
 测试通过脚本 import 方式直接复用 PATTERNS / EXCLUDE_LINE / 各扫描函数，
 不运行真实 CLI（避免扫描全仓、受控制台 GBK 编码影响）。
@@ -887,91 +888,6 @@ class TestTaskCodeCommentPatterns:
         ]
         for line in legit:
             assert _code_hit(code_traces, line) is None, f"合法系列词被误伤: {line}"
-
-    def test_legit_letter_digit_not_flagged(self, code_traces):
-        """合法领域值不误伤：场景标签（S-P1）、小写缩写（f9）、Excel 单元格/范围。"""
-        legit = [
-            "S-P1 场景",
-            "f9=市盈率",
-            "合并 A1:B1",
-            "数据在 B2~B5",
-        ]
-        for line in legit:
-            assert _code_hit(code_traces, line) is None, f"合法字母+数字被误伤: {line}"
-
-    def test_magic_number_letter_digit_flagged(self, code_traces):
-        """MAGIC：注释中"字母+数字/连续字母+数字"（R11/C26/AB14/HH6）属魔法编号须检出。"""
-        flagged = [
-            "K9 优先级",  # P0~P4 已入合法领域值（门禁档位/公式价格符号），非此列
-            "R17 兼容",
-            "C26 兼容",  # 超出约束表编号范围仍是字母+数字，属魔法编号
-            "AB14 兼容",  # 连续字母+数字（内嵌命中也是魔法编号）
-            "MC19 协议",
-            "D8 数据",
-            "HH6 组合",
-            "C19 契约",
-        ]
-        for line in flagged:
-            assert _code_hit(code_traces, line) is not None, f"魔法编号未检出: {line}"
-
-    def test_magic_percentile_notation_not_flagged(self, code_traces):
-        """MAGIC 合法领域值：分位记号（P50/P90/P95/P99）为性能/风险统计口径，非任务编号。"""
-        legit = [
-            "P95 / P99 报告生成耗时",
-            "P50 中位数",
-            "P90 上限",
-            "分位输出 P95、P99",
-        ]
-        for line in legit:
-            assert _code_hit(code_traces, line) is None, f"分位记号被误伤: {line}"
-
-    def test_magic_percentile_exemption_stays_narrow(self, code_traces):
-        """豁免只覆盖两位数分位记号：一位数近邻（P9）仍属魔法编号须检出。"""
-        assert _code_hit(code_traces, "P9 协议") is not None
-
-    def test_dashtask_letter_digit_flagged(self, code_traces):
-        """DASHTASK：注释中"字母-数字/连续字母-数字"（F-1/G-1/TASK-22/D-8）疑似任务编号须检出。"""
-        flagged = [
-            "F-1 方案",
-            "G-1 批次",
-            "TASK-22 编号",
-            "D-8 数据",
-            "I-02 配置",
-            "CONCENTRATION-03 阈值",  # 非 requirements.md 需求 ID 形态的裸字母-数字
-        ]
-        for line in flagged:
-            assert _code_hit(code_traces, line) is not None, f"疑似任务编号未检出: {line}"
-
-    def test_dashtask_legit_not_flagged(self, code_traces):
-        """DASHTASK 合法领域值不误伤：交易日（T-1）、小写下标/编码（i-1/utf-8）、计数算术（N-2 项）。"""
-        legit = [
-            "T-1 交易日",
-            "i-1 下标",
-            "utf-8 编码",
-            "N-2 项",
-            "R-LLM-DB-QA-CONCENTRATION-03/04：需求",  # requirements.md 定义的需求 ID
-        ]
-        for line in legit:
-            assert _code_hit(code_traces, line) is None, f"合法字母-数字被误伤: {line}"
-
-    def test_underscore_letter_digit_flagged(self, code_traces):
-        """UNDERSCORE：注释中"字母_数字/连续字母_数字"（F_1/H_1/MINE_22）疑似无意义代码须检出。"""
-        flagged = [
-            "F_1 变量",
-            "H_1 命名",
-            "MINE_22 编号",
-        ]
-        for line in flagged:
-            assert _code_hit(code_traces, line) is not None, f"疑似无意义代码未检出: {line}"
-
-    def test_underscore_legit_not_flagged(self, code_traces):
-        """UNDERSCORE 合法领域值不误伤：小写语义短名（changed_1m/syl_1y）。"""
-        legit = [
-            "changed_1m 周期",
-            "syl_1y 跨度",
-        ]
-        for line in legit:
-            assert _code_hit(code_traces, line) is None, f"合法字母_数字被误伤: {line}"
 
     def test_arch_constraint_codes_flagged(self, code_traces):
         """架构约束代号（C1~C25，technical.md 定义）在注释中属暗号须检出。"""
