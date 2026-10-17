@@ -109,9 +109,14 @@ def format_session_usage(raw: dict[str, Any] | None) -> dict[str, Any]:
 def _normalize_usage_tokens(provider: str, usage: dict | None) -> tuple[int, int, int]:
     """把 provider 原始 usage 归一为 ``(input, output, cache_hit)``。
 
-    - ``claude`` 协议：``input_tokens`` / ``output_tokens`` / ``cache_read_input_tokens``；
+    统一契约：``input`` 为**总输入**（含缓存命中部分），``cache_hit`` 是其子集，
+    下游 ``cache_miss = input - cache_hit`` 恒非负。
+
+    - ``claude`` 协议（含 DeepSeek/Kimi Anthropic 兼容端点）：``input_tokens``
+      仅计缓存未命中部分，补上 ``cache_read_input_tokens`` 归一为总输入；
     - 其余协议（``openai`` 原生；``gemini`` 经 ``usageMetadata`` 归一形）：
-      ``prompt_tokens`` / ``completion_tokens``，缓存命中读
+      ``prompt_tokens`` / ``completion_tokens`` 本身含命中部分；缓存命中优先读
+      DeepSeek 原生端点顶层 ``prompt_cache_hit_tokens``，回退
       ``prompt_tokens_details.cached_tokens``（字段缺失或为空时为 0）。
 
     ``api_base._log_token_usage`` 与本模块 ``track_session_usage`` 共用本函数
@@ -120,16 +125,20 @@ def _normalize_usage_tokens(provider: str, usage: dict | None) -> tuple[int, int
     if not usage:
         return (0, 0, 0)
     if provider == "claude":
+        # input_tokens 不含命中 → 归一为 input_tokens + cache_read（总量口径）
+        cache_hit = usage.get("cache_read_input_tokens", 0) or 0
         return (
-            usage.get("input_tokens", 0) or 0,
+            (usage.get("input_tokens", 0) or 0) + cache_hit,
             usage.get("output_tokens", 0) or 0,
-            usage.get("cache_read_input_tokens", 0) or 0,
+            cache_hit,
         )
-    details = usage.get("prompt_tokens_details") or {}
+    hit = usage.get("prompt_cache_hit_tokens")
+    if hit is None:
+        hit = (usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0)
     return (
         usage.get("prompt_tokens", 0) or 0,
         usage.get("completion_tokens", 0) or 0,
-        details.get("cached_tokens", 0) or 0,
+        hit or 0,
     )
 
 

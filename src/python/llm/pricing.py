@@ -346,7 +346,9 @@ def estimate_cost(
     peak = pricing.get("peak")
     if isinstance(peak, dict) and _is_peak_minute(_effective_minute(at_time), _is_idle_day(at_time)):
         effective = peak
-    cache_miss = input_tokens - cache_hit_input_tokens
+    # 下限 0：防御非归一调用方传入"命中 > 总输入"（如把仅未命中的
+    # input_tokens 与 cache_read 直接相减）导致费用出现负数
+    cache_miss = max(input_tokens - cache_hit_input_tokens, 0)
     cost = cache_miss / 1_000_000 * float(effective["input"]) + output_tokens / 1_000_000 * float(effective["output"])
     if cache_hit_input_tokens > 0:
         cache_rate = effective.get("input_cache_hit", effective["input"])

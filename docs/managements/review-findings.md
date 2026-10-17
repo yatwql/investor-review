@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.13.6-dev
-> **编号源**：`rf-next = 701`（新增问题取此编号，完成后更新为 +1；已用最大 rf-700，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 704`（新增问题取此编号，完成后更新为 +1；已用最大 rf-703，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -65,6 +65,12 @@
 
 ### 开发期已修复（0.13.6-dev）
 
+> rf-702 已修复（2026-10-17）：LLM 计费口径统一——Anthropic 兼容端点 `input_tokens` 仅计未命中，与 `cache_miss = input − hit` 公式相减产生负费用；`estimate_cost` 补 `max(…, 0)` 下限，归一层把 claude 协议 `input_tokens` 补 `cache_read_input_tokens` 归一为总输入（详见 changelog）
+>
+> rf-703 已修复（2026-10-17）：会话/报告费用统计与单次估算口径统一——报告页脚、批处理汇总、新闻相关性估值均改走 `_normalize_usage_tokens` 归一层，会话累计费用与单次 `estimate_cost` 同参等值（回归用例已补）
+>
+> rf-701 已修复（2026-10-17）：openai 分支补读 DeepSeek 原生端点顶层 `prompt_cache_hit_tokens`（优先于 `prompt_tokens_details.cached_tokens`）；字段名以官方 API 文档核实（顶层 hit/miss 且 `prompt_tokens = hit + miss`），回归用例已补
+>
 > rf-700 已修复（2026-10-17）：LLM 模型定价表 5 处偏离官方现价——`MODEL_PRICING` 的 Claude Opus 4.x 仍按旧旗舰价 15/75（官方 $5/$25）、Haiku 4.5 仍按 Haiku 3 价 0.25/1.25（官方 $1/$5）、Fable 5 误植 Sonnet 价 3/15（官方 $10/$50）、Gemini 3.5/2.5 Flash 仍按预览期价 0.15/0.60（GA 价 $1.5/$9.0、$0.30/$2.50）、2.5 Pro 输出价 5.00（官方 $10.00）、OpenAI 缓存命中无折扣（官方 50% 折扣）——逐家官方定价页核实后统一修正，并同步 `llm-technical.md` 附录 B 与 `how-to-config-llm.md` 定价表（用户实际在用的 DeepSeek 峰谷价与 Kimi 价经核实无偏差）
 
 ### 开发期已修复（0.13.3-dev）
