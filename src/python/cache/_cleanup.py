@@ -91,6 +91,22 @@ def cleanup_expired(dry_run: bool = False) -> int:
         return removed
 
 
+def auto_cleanup_expired() -> int:
+    """生成等入口的静默自动清理（尽力而为）。
+
+    包装 :func:`cleanup_expired`：任何异常一律吞掉（记 debug 日志）并返回 0，
+    保证无人值守调用方（CLI 定时任务等）不会因清理失败而影响主流程。
+
+    Returns:
+        已删除的过期文件数；清理失败时为 0
+    """
+    try:
+        return cleanup_expired(dry_run=False)
+    except Exception:  # noqa: BLE001 —— 自动清理绝不影响调用方
+        logger.debug("过期缓存自动清理失败（忽略，不影响主流程）", exc_info=True)
+        return 0
+
+
 _SENSITIVE_PREFIXES: tuple[str, ...] = (
     "holding_",
     "penetration_",

@@ -629,6 +629,15 @@ def generate_report(
             仅 both/full 生效；快照对比/组合演进/快照差异均在本域内闭环。
     """
     result = ReportResult()
+
+    # 生成入口静默自动清理过期缓存（尽力而为：清理失败绝不影响生成——无人值守
+    # CLI 定时任务此前无任何自动清理入口，过期缓存文件只增不减）
+    from src.python.cache import auto_cleanup_expired
+
+    removed = auto_cleanup_expired()
+    if removed:
+        logger.info("生成前自动清理过期缓存 %d 个文件", removed)
+
     if fetch_history is None:
         # 未显式传参 → 委托 history_policy 解析（off/auto/prompt 单一事实来源）：
         # 非交互场景 prompt 按获取处理，TUI 通过注入 ask 回调交互询问。

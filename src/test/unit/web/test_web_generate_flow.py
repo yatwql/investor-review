@@ -60,3 +60,29 @@ class TestGenerateBtnRestoreAfterRun:
         """resetFlow 与完成分支共用同一复位函数（防两处口径漂移）。"""
         body = _block(r"function resetFlow\(message\)\s*\{.*?\n  \}", _main_js())
         assert "restoreGenerateBtn(message)" in body, "resetFlow 须复用单源复位"
+
+
+class TestPollUnknownRunTerminal:
+    """任务丢失（服务重启）后轮询终态处理：404 不得被当瞬时错误无限重试。"""
+
+    def test_catch_treats_not_found_as_terminal(self) -> None:
+        """pollOnce catch 识别 404/NOT_FOUND → 停轮询 + 单源复位 + 结果区落态。"""
+        body = _block(r"function pollOnce\(\)\s*\{.*?\n  \}", _main_js())
+        catch = _block(r"\.catch\(function \(err\) \{.*?\n      \}\)", body)
+        assert "err.httpStatus === 404" in catch, "404 须被识别为任务不存在"
+        assert "err.errorCode === 'NOT_FOUND'" in catch, "须同时识别 NOT_FOUND 错误码"
+        i_stop = catch.index("stopPolling()")
+        i_restore = catch.index("restoreGenerateBtn()")
+        i_render = catch.index("renderResultState(2")
+        assert i_stop < i_restore < i_render, "终态须先停轮询、再单源复位、最后渲染结果区"
+        assert "任务已不存在" in catch, "结果区须给出任务已失效的可操作提示"
+        assert "任务已失效" in catch, "进度阶段须落终态文案，不得停在进行中"
+
+    def test_transient_errors_keep_retrying(self) -> None:
+        """非终态错误不在 catch 内无条件停轮/落态（瞬时错误仍等下一轮重试）。"""
+        body = _block(r"function pollOnce\(\)\s*\{.*?\n  \}", _main_js())
+        catch = _block(r"\.catch\(function \(err\) \{.*?\n      \}\)", body)
+        if_block = _block(r"if \(err && \(err\.httpStatus === 404.*?\n        \}", catch)
+        remainder = catch.replace(if_block, "")
+        assert "stopPolling()" not in remainder, "停轮必须限定在任务不存在终态分支内"
+        assert "renderResultState(2" not in remainder, "结果区落态必须限定在终态分支内"

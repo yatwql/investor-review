@@ -7,6 +7,10 @@
 
 ---
 
+## plan-127 HTML 报告无打印/PDF 导出入口 ✅
+
+**完成（2026-10-18，v0.13.6-dev）**：报告右上角新增浮动「打印 / 导出 PDF」按钮（`report-print-btn`，主题切换 🌙 左侧，44×44 触控目标、`--primary`/`--primary-hover` 语义 token、`window.print()` 唤起浏览器打印/另存 PDF），打印稿经独立 `@media print` 规则自隐藏（不动既有浮动控件隐藏清单）；补模板结构/可访问性/触控尺寸/打印自隐藏回归用例（`test_html_template.py::TestHtmlPrintButton`），`reports-instruction.md` 交互功能清单同步入口说明。
+
 ## plan-126 性能对比、机读输出与阈值门禁 ✅
 
 **完成（2026-10-15，v0.13.4-dev）**：`perf-view.py` 获得 `--compare A B`（阶段级中位 delta/倍数 + 变异系数判显著，噪声带内不判回归）、`--json`/`--csv` 机读输出、`--gate` 阈值判定（退出码 0/2）。**门禁归属修正**：CI `perf-gate` 门禁由主动压测 `perf-test-report.py --gate` 承担（同条件可比），历史视图不做门禁——样本不可控、不可复现、测环境不测代码。后续增强：`--json` 升级信封 `{record_count, records, summary}`（与 Markdown 各段同源）、CSV 增归一/离群/最慢阶段列。

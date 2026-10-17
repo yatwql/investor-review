@@ -488,7 +488,16 @@
           loadResult();
         }
       })
-      .catch(function () {
+      .catch(function (err) {
+        // 任务不存在（服务重启后内存 run 注册表清空）：终态处理——停止轮询、单源
+        // 复位生成按钮并渲染结果区，否则 404 被当瞬时错误无限重试、界面永久卡在进行中
+        if (err && (err.httpStatus === 404 || err.errorCode === 'NOT_FOUND')) {
+          stopPolling();
+          restoreGenerateBtn();
+          els.progressPhase.textContent = '任务已失效';
+          renderResultState(2, ['任务已不存在（服务可能已重启），请刷新页面后重新生成'], []);
+          return;
+        }
         // 轮询瞬时失败静默，下一周期重试（网络抖动不中断流程）
       });
   }

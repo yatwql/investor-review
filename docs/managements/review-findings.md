@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.13.6-dev
-> **编号源**：`rf-next = 704`（新增问题取此编号，完成后更新为 +1；已用最大 rf-703，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 706`（新增问题取此编号，完成后更新为 +1；已用最大 rf-705，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -65,6 +65,10 @@
 
 ### 开发期已修复（0.13.6-dev）
 
+> rf-704 已修复（2026-10-18）：过期缓存生成路径自动清理——`cache.auto_cleanup_expired()` 尽力而为包装（任何异常吞掉返回 0，绝不影响主流程），`report/orchestrator.generate_report` 入口调用（CLI/TUI/Web 三渠道共用入口）、仅清到文件时记 info 日志；无人值守 CLI 定时任务不再只增不减地堆积过期缓存（回归用例已补：生成入口触发清理 + 包装吞异常）
+>
+> rf-705 已修复（2026-10-18）：Web 进度轮询任务丢失终态——`main.js pollOnce` catch 识别 404/`NOT_FOUND` 为终态：停止轮询 + 复用 `restoreGenerateBtn()` 单源复位生成按钮 + 进度阶段落「任务已失效」+ 结果区渲染失败态提示刷新，不再被当瞬时错误无限重试；其余瞬时错误保持静默重试（回归用例已补：main.js 源结构断言）
+>
 > rf-702 已修复（2026-10-17）：LLM 计费口径统一——Anthropic 兼容端点 `input_tokens` 仅计未命中，与 `cache_miss = input − hit` 公式相减产生负费用；`estimate_cost` 补 `max(…, 0)` 下限，归一层把 claude 协议 `input_tokens` 补 `cache_read_input_tokens` 归一为总输入（详见 changelog）
 >
 > rf-703 已修复（2026-10-17）：会话/报告费用统计与单次估算口径统一——报告页脚、批处理汇总、新闻相关性估值均改走 `_normalize_usage_tokens` 归一层，会话累计费用与单次 `estimate_cost` 同参等值（回归用例已补）

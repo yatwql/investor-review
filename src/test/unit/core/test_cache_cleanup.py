@@ -370,6 +370,30 @@ class TestCleanupExpired(CacheTestBase):
 
 
 # ═══════════════════════════════════════════════════════════
+#  生成入口自动清理包装（尽力而为）测试
+# ═══════════════════════════════════════════════════════════
+
+
+class TestAutoCleanupBestEffort(CacheTestBase):
+    """auto_cleanup_expired：正常委托 cleanup_expired + 异常吞掉不影响调用方。"""
+
+    def test_auto_cleanup_delegates_to_cleanup_expired(self):
+        """正常路径委托 cleanup_expired(dry_run=False) 并透传删除数。"""
+        with patch("src.python.cache._cleanup.cleanup_expired", return_value=3) as m:
+            from src.python.cache import auto_cleanup_expired
+
+            self.assertEqual(auto_cleanup_expired(), 3)
+            m.assert_called_once_with(dry_run=False)
+
+    def test_auto_cleanup_swallows_exception(self):
+        """清理抛任何异常时返回 0 且不上抛（主流程绝不因清理失败中断）。"""
+        with patch("src.python.cache._cleanup.cleanup_expired", side_effect=OSError("磁盘错误")):
+            from src.python.cache import auto_cleanup_expired
+
+            self.assertEqual(auto_cleanup_expired(), 0)
+
+
+# ═══════════════════════════════════════════════════════════
 #  clear_by_group 测试
 # ═══════════════════════════════════════════════════════════
 
