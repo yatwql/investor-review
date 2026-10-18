@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.13.6-dev
-> **编号源**：`rf-next = 712`（新增问题取此编号，完成后更新为 +1；已用最大 rf-711，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 713`（新增问题取此编号，完成后更新为 +1；已用最大 rf-712，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -22,8 +22,8 @@
 
 | # | 问题 | 修复方向 |
 |---|------|----------|
-
-| **rf-114** | 双渲染路径共存——模板保留 Canvas `drawSimpleChart()`（265 行内联 JS）+ Chart.js 渲染器，Feature Flag OFF 时回退 Canvas 路径 | 删除 `drawSimpleChart()` + Canvas 回退分支 + Feature Flag 条件分支，Chart.js 成唯一渲染器；触发条件：plan-1 稳定 2 版本（阶段 2→3 切换，判定标准见 upgrade.md §4.15） |
+| **rf-114** | 双渲染路径共存——模板保留 Canvas `drawSimpleChart()`（265 行内联 JS）+ Chart.js 渲染器，Feature Flag OFF 时回退 Canvas 路径 | 删除 `drawSimpleChart()` + Canvas 回退分支 + Feature Flag 条件分支，Chart.js 成唯一渲染器；**执行时同步摘除 `enable_interactive_charts` 注册表条目**（条件分支删除后开关失去消费者）并联动 how-to-config N 节与产物自述口径；触发条件：plan-1 稳定 2 版本（阶段 2→3 切换，判定标准见 upgrade.md §4.15） |
+| **rf-712** | `prosperity_framework` 转正后未迁组 + 需求文档死常量——①消费点在 `report/_report_aux_metrics.py`（报告渲染的六维评分卡区块），按组语义属「分析增强」却仍在「机制与诊断」组（实验期归属遗留，转正时未复核作用域）；②requirements R-PF-01 引用 v0.12 分组重组已废弃的 `GROUP_STANDARD` 常量（现行组键 presentation/analysis/standalone/mechanism），守护不校验需求正文组常量，陈旧引用无机器拦截 | 迁组 mechanism → analysis（面板/文档分组归属随迁同步）+ R-PF-01 组常量改现行值；可选在 `check-doc-drift` 补需求正文组常量名 ↔ `GROUP_LABELS` 键比对，防同类陈旧引用 |
 
 
 ### P3 — 持续监控：文件过长登记表（>500 行观察，脚本域 >400 即入观察 / **>1000 行为硬上限必须拆分**（主程序与脚本）；按距红线余量升序）
