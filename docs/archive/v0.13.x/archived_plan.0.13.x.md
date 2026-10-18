@@ -23,6 +23,10 @@
 
 **完成（2026-10-19，v0.13.7-dev）**：`text_layout.wrap_prompt`——提示宽 ≤ 终端宽原样返回（宽屏零开销），超宽按显示宽度折行并以「  >  」输入位短尾缀收尾（窄屏提示与光标不脱节）；`handlers_report`（5 处费用/确认提示，最宽 68 列）、`handlers_log`（级别筛选/联网自检）、`handlers_qa`（报告选择）、`handlers_whatif`（路径/生效日）共 10 处长提示接入。机检守护：`test_text_layout.py::TestInputPromptNarrowContract` AST 扫描 `tui/*.py` 全部 `input()`——裸字面量提示 >40 列（与 `terminal_columns` 下限一致）未包 `wrap_prompt` 即红；具名提示 `_QA_PROMPT` 显式锚定 ≤40 列。测试：`TestWrapPrompt` 4 例（宽内原样/折行不越界/末行输入位/不丢字）。
 
+## plan-149 [S] 面板主路径零学习成本交互 ✅
+
+**完成（2026-10-19，v0.13.7-dev）**：提示语从占位符写法「输入编号或键名 (0-34)，? 编号 看说明」改为一句话主路径教学「输入编号切换开关（如 3）· ?3 查看说明 · 0 返回」（r/ra/x/k 高级命令退居页脚图例，窄屏图例去掉与提示重复的主路径行）；写路径（编号/键名直取、赋值、r/ra/x 恢复默认）所有宽度成功后即时重绘面板、反馈行带编号（`[OK] 3 名称 已关闭`）——手机端不再要求按 `p` 才见结果；修复 `?` 说明分支写反的重绘标志（此前窄屏说明被整屏重绘顶走、宽屏误提示「状态已更新」），只读查询窄屏留屏、宽/中档照常重绘；失败路径窄屏保持一行反馈（`p` 重绘）。契约测试 `TestRepaintAndHelpVisible` 三例（写后重绘带编号 / 窄屏说明留屏 / 宽屏重绘且无误导提示）+ 白话化测试改锚新提示；手册 [S] 用法段与 technical 面板描述同步。
+
 ## plan-94 图表数据无导出通道 ✅
 
 **完成（2026-10-18，v0.13.7-dev）**：选型为**前端每图导出**（不做整份 `chart_data.csv` 产物）——`src/static/chart-export.js` 为每张 Chart.js 图表注入 `.chart-export-actions` 组容器（「导出PNG」+「导出CSV」并排，浮于图卡右上角、存在 `.chart-title` 时进标题栏右侧，按组容器幂等判重）；CSV 读 `chart.data`（与屏显/悬停值同源，Python 数据层已按匿名化口径脱敏），首列表头取 x/r 轴标题（缺省「标签」）、系列列取 dataset label（单系列缺省「数值」），RFC 4180 引号转义 + CRLF + UTF-8 BOM 后 `Blob` 纯前端本地下载（零后端，`URL.createObjectURL` 用后释放），文件名 `<key>.csv`；模板定位样式三处同步（主报告 `report_template.html` / What-if `whatif_template.html` / 调试页 `test-chart.html`：绝对定位移到组容器、按钮静态排布不重叠、打印态隐藏组容器），what-if 关态金样基线随模板 CSS 与内联脚本字节变化显式复核更新。测试：`test_feature_interactive.py` 新增 `TestChartExportCsv` 4 例（双按钮注入与组容器幂等 / Blob MIME+BOM+ObjectURL 释放 / 行列取自 chart.data 与 RFC 4180+CRLF / 三模板组容器定位且按钮不绝对定位）。文档：reports-instruction 交互图表特性补双按钮与 CSV 口径、README 能力表补 CSV、folders 目录树说明。

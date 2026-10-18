@@ -258,7 +258,7 @@ def _show_switch_detail(choice: str, items: list[tuple[int, str, str, bool, str]
     else:
         matched = [it for it in items if it[1] == raw]
         if not matched:
-            print(f"  {YELLOW}[!]{RESET} 请输入 ? 加编号或键名（如 ? 1 / ? doctor_check）")
+            print(f"  {YELLOW}[!]{RESET} 请输入 ? 加编号或键名（如 ?3 或 ? news_correlation）")
             return
     _, key, name, curr, kind = matched[0]
     if kind == "llm":
@@ -484,9 +484,9 @@ def _cmd_config_llm_modules() -> None:
             *legend_lines(_COST_HISTORY_DAYS, columns, reveal_key=reveal_keys),
         ]
         if not repaint:
-            # 窄终端（手机）：一次操作只回一行反馈，不整屏重绘——纵向空间是这里最稀缺
-            # 的资源，34 项面板重绘一次就要滚过一屏多。输入 p 可随时重绘。
-            print("  （状态已更新 · 输入 p 重绘面板）")
+            # 窄终端（手机）：只读查询（? 说明）与失败路径不整屏重绘——详情/报错留屏
+            # 不被面板顶走；写路径成功后 repaint=True 即时重绘（结果必须立刻可见）
+            print("  （输入 p 重绘面板）")
             print()
         elif boxed:
             print("\n".join(render_panel("配置 LLM 报告章节与功能开关", panel_rows)))
@@ -506,12 +506,9 @@ def _cmd_config_llm_modules() -> None:
         # 本轮已渲染 → 窄终端下一轮只回反馈行（省纵向空间）；宽/中档照常整屏重绘
         repaint = not narrow
         try:
-            total = len(items)
-            prompt = (
-                f"  输入编号或键名切换 (0-{total})，? 编号或键名查看说明: "
-                if layout_tier(columns) != "narrow"
-                else f"  输入编号或键名 (0-{total})，? 编号 看说明: "
-            )
+            # 提示只教主路径：一个具体例子 + 说明查询 + 返回。r/ra/x/k 等高级命令
+            # 放页脚图例，不进提示行——提示行要不看文档就能读懂
+            prompt = "  输入编号切换开关（如 3）· ?3 查看说明 · 0 返回: "
             choice = input(prompt).strip()
         except (EOFError, KeyboardInterrupt):
             print()
@@ -521,8 +518,9 @@ def _cmd_config_llm_modules() -> None:
             break
 
         if choice.startswith("?"):
+            # 只读查询：不改状态（禁止「状态已更新」类误导提示）；repaint 保持输入前
+            # 赋值——窄屏 False 让说明留屏不被面板顶走，宽/中档 True 照常重绘
             _show_switch_detail(choice, items)
-            repaint = narrow  # 窄终端查完说明只看反馈行，不整屏重绘
             continue
 
         if choice.lower() == "p":
@@ -543,11 +541,13 @@ def _cmd_config_llm_modules() -> None:
         if lowered == "ra":
             removed = clear_feature_overrides(None)
             _emit(f"  {GREEN}[OK]{RESET} 已恢复功能开关全部默认（移除 {removed} 项覆写）")
+            repaint = True
             continue
         if lowered == "x":
             exp_keys = sorted(flag for flag, _d in experimental_flags())
             clear_feature_overrides(exp_keys)
             _emit(f"  {GREEN}[OK]{RESET} 实验项已全部关闭（回到无实验态）：{'、'.join(exp_keys)}")
+            repaint = True
             continue
         head, space, rest = raw.partition(" ")
         if head.lower() == "r" and space and rest.strip():
@@ -561,6 +561,7 @@ def _cmd_config_llm_modules() -> None:
                 group_flags = [flag for flag, _d in switches_in_group(group)]
                 removed = clear_feature_overrides(group_flags)
                 _emit(f"  {GREEN}[OK]{RESET} 已恢复「{GROUP_LABELS[group]}」默认（移除 {removed} 项覆写）")
+                repaint = True
             continue
 
         assign_name, eq, assign_val = raw.partition("=")
@@ -603,12 +604,14 @@ def _cmd_config_llm_modules() -> None:
                 continue
             new_val = not target[3]
 
-        _, key, name, _curr, kind = target
+        num, key, name, _curr, kind = target
         payload_key = f"enabled_llm.{key}" if kind == "llm" else key
         if _apply_edit({"key": payload_key, "value": new_val}):
             if kind == "llm":
                 enabled_map[key] = new_val
-            _emit(f"  {GREEN}[OK]{RESET} {name} 已{'开启' if new_val else '关闭'}")
+            # 反馈行带编号：紧接的重绘面板里可按编号对上号；写路径所有宽度即时重绘
+            _emit(f"  {GREEN}[OK]{RESET} {num} {name} 已{'开启' if new_val else '关闭'}")
+            repaint = True
             # 刷新配置缓存
             refresh_config()
 

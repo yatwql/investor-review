@@ -187,7 +187,7 @@ def legend_lines(cost_days: int, columns: int, *, tier: str | None = None, revea
     if tier == "narrow":
         # 窄终端：只留「怎么用」——符号释义与键名位置说明对 40~60 列的手机太占地方
         lines += wrap_hanging("  ⚗ 实验项（默认关） · * 与默认不同", limit)
-        lines += wrap_hanging("  输入编号切换（窄屏用编号最省事）；? 编号 查看该开关说明", limit)
+        # 主路径（编号切换 / ?3 说明 / 0 返回）已在输入提示里教，这里只列高级命令
         lines += wrap_hanging(
             "  r 编号 恢复本组默认 · ra 全部恢复 · x 实验项全关 · " + ("k 隐藏键名" if reveal_key else "k 显示键名"),
             limit,
@@ -202,7 +202,7 @@ def legend_lines(cost_days: int, columns: int, *, tier: str | None = None, revea
     )
     lines += wrap_hanging(key_note, limit)
     lines += wrap_hanging(f"  行尾「N次 ¥X 均¥Y」= 近 {cost_days} 日该模块调用次数 / 累计费用 / 单次均值", limit)
-    lines += wrap_hanging("  ? 编号 查看说明 · r 编号 恢复本组默认 · ra 恢复全部 · x 实验项全关 · 0 返回", limit)
+    lines += wrap_hanging("  ?编号 查看说明 · r 编号 恢复本组默认 · ra 恢复全部 · x 实验项全关 · 0 返回", limit)
     return lines
 
 

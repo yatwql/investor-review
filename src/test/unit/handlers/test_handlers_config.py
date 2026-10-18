@@ -911,10 +911,21 @@ class TestPanelPlainLanguageCopy:
         src = (Path(__file__).resolve().parents[4] / "src" / "python" / "tui" / "handlers_config.py").read_text(
             encoding="utf-8"
         )
-        assert "输入编号或键名切换 (0-" in src
+        assert "输入编号切换开关（如 3）" in src
         assert "请输入 ? 加编号或键名" in out
         assert "输入编号或键名" in out
         assert "slug" not in out and "slug" not in src
+
+    def test_prompt_teaches_main_path_with_example(self):
+        """提示语自带具体例子（如 3 / ?3 / 0 返回）——不看文档也知道怎么按。"""
+        from pathlib import Path
+
+        src = (Path(__file__).resolve().parents[4] / "src" / "python" / "tui" / "handlers_config.py").read_text(
+            encoding="utf-8"
+        )
+        assert "输入编号切换开关（如 3）" in src, "主路径要有具体编号示例，不能只写占位符"
+        assert "?3 查看说明" in src, "说明查询要有无空格写法示例"
+        assert "0 返回" in src, "返回通道要在提示语里可见"
 
 
 class TestLlmRowCostSuffix:
