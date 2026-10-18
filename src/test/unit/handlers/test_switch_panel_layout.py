@@ -243,6 +243,29 @@ class TestRepaintAndHelpVisible:
         assert "输入 p 重绘面板" in text
         assert text.index("出厂默认") > text.index("功能开关（"), "详情应出现在面板之后而非被顶走"
 
+    def test_esc_returns_to_main_menu_without_write(self):
+        """子菜单 Esc（input_choice → None）即时返回主菜单：不重绘、不写配置。"""
+        import contextlib
+        import io
+        from unittest.mock import patch
+
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        buf = io.StringIO()
+        with (
+            patch.dict("os.environ", {"COLUMNS": "40"}),
+            patch("os.get_terminal_size", side_effect=OSError()),
+            patch("src.python.tui.handlers_config.input_choice", return_value=None),
+            patch("src.python.tui.handlers_config.press_any_key"),
+            patch("src.python.tui.handlers_config.refresh_config"),
+            patch("src.python.tui.handlers_config._apply_edit") as mock_apply,
+            patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json")),
+        ):
+            with contextlib.redirect_stdout(buf):
+                _cmd_config_llm_modules()
+        assert buf.getvalue().count("功能开关（") == 1, "Esc 直接返回，不应重绘面板"
+        mock_apply.assert_not_called()
+
     def test_wide_question_mark_repaints_without_stale_hint(self):
         """宽终端 `?3` 说明：随后正常重绘，且不出现「状态已更新」误导提示。"""
         text = self._run(120, ("?3", "0"))

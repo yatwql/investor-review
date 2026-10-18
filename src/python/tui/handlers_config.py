@@ -33,6 +33,7 @@ from src.python.tui.switch_panel import (
     wrap_hanging,
 )
 from src.python.tui.text_layout import display_width, pad_right, render_panel, truncate_display
+from src.python.tui.tui_keys import input_choice
 
 logger = setup_logger()
 
@@ -105,9 +106,12 @@ def _edit_single_config(key: str, label: str, default: str = "", *, pre_hook=Non
     print(f"  当前{label}: {current}")
     print(f"  请输入新{label}（留空则不修改）:")
     try:
-        new_val = input("  > ").strip()
+        new_val = input_choice("  > ")
     except (EOFError, KeyboardInterrupt):
         print()
+        return
+    if new_val is None:
+        print("  未修改")
         return
     if new_val:
         if _apply_edit({"key": key, "value": new_val}):
@@ -191,10 +195,13 @@ def _cmd_config_dir_info() -> None:
         print("   [B] 返回主菜单")
         print()
         try:
-            choice = input("  选择 > ").strip().upper()
+            choice = input_choice("  选择 > ")
         except (EOFError, KeyboardInterrupt):
             print()
             return
+        if choice is None:
+            return
+        choice = choice.upper()
         if not choice or choice == "B":
             return
         handler: Callable[[], None] | None = next((fn for _key, _label, fn in items if _key == choice), None)
@@ -248,7 +255,7 @@ def _show_switch_detail(choice: str, items: list[tuple[int, str, str, bool, str]
     from src.python.config.features import GROUP_LABELS, feature_switch_registry
     from src.python.core.experiment_stats import load_experiment_usage
 
-    raw = choice.lstrip("?").strip()
+    raw = choice.lstrip("?？").strip()  # 半角/全角问号均可作前缀
     matched: list[tuple[int, str, str, bool, str]] = []
     if raw.isdigit():
         matched = [it for it in items if it[0] == int(raw)]
@@ -509,17 +516,21 @@ def _cmd_config_llm_modules() -> None:
             # 提示只教主路径：一个具体例子 + 说明查询 + 返回。r/ra/x/k 等高级命令
             # 放页脚图例，不进提示行——提示行要不看文档就能读懂
             prompt = "  输入编号切换开关（如 3）· ?3 查看说明 · 0 返回: "
-            choice = input(prompt).strip()
+            choice = input_choice(prompt)
         except (EOFError, KeyboardInterrupt):
             print()
+            break
+
+        if choice is None:  # Esc：误入面板即时返回主菜单
             break
 
         if choice == "0":
             break
 
-        if choice.startswith("?"):
-            # 只读查询：不改状态（禁止「状态已更新」类误导提示）；repaint 保持输入前
-            # 赋值——窄屏 False 让说明留屏不被面板顶走，宽/中档 True 照常重绘
+        # 只读查询（半角 ? 与全角 ？ 均收——中文输入法默认输出全角问号）
+        if choice[:1] in ("?", "？"):
+            # 不改状态（禁止「状态已更新」类误导提示）；repaint 保持输入前赋值——
+            # 窄屏 False 让说明留屏不被面板顶走，宽/中档 True 照常重绘
             _show_switch_detail(choice, items)
             continue
 
@@ -637,11 +648,14 @@ def _cmd_config_comparison_indices() -> None:
         print("\n".join(render_panel("管理对比指数池", rows)))
         print()
         try:
-            choice = input("  请选择 (A/D/R/0): ").strip().upper()
+            choice = input_choice("  请选择 (A/D/R/0): ")
         except (EOFError, KeyboardInterrupt):
             print()
             break
 
+        if choice is None:
+            break
+        choice = choice.upper()
         if choice == "0":
             break
         elif choice == "A":
@@ -663,18 +677,22 @@ def _add_comparison_index(indices: dict[str, str]) -> None:
     """添加指数到对比池。"""
     print("  请输入指数代码（如 sh000905）:")
     try:
-        code = input("  > ").strip()
+        code = input_choice("  > ")
     except (EOFError, KeyboardInterrupt):
         print()
+        return
+    if code is None:
         return
     if not code:
         print(f"  {YELLOW}[!]{RESET} 代码不能为空")
         return
     print("  请输入指数名称（如 中证500）:")
     try:
-        name = input("  > ").strip()
+        name = input_choice("  > ")
     except (EOFError, KeyboardInterrupt):
         print()
+        return
+    if name is None:
         return
     if not name:
         print(f"  {YELLOW}[!]{RESET} 名称不能为空")
@@ -695,9 +713,11 @@ def _remove_comparison_index(indices: dict[str, str]) -> None:
         print(f"    [{i}] {code} ({name})")
     print("    [0] 取消")
     try:
-        choice = input("  > ").strip()
+        choice = input_choice("  > ")
     except (EOFError, KeyboardInterrupt):
         print()
+        return
+    if choice is None:
         return
     try:
         idx = int(choice)
@@ -761,11 +781,13 @@ def _cmd_config_report_boards() -> None:
         print("  提示：报告章节与增强、LLM 分析章节请在菜单 [S] 配置")
         print()
         try:
-            choice = input("  输入编号切换 (0-6): ").strip()
+            choice = input_choice("  输入编号切换 (0-6): ")
         except (EOFError, KeyboardInterrupt):
             print()
             break
 
+        if choice is None:
+            break
         if choice == "0":
             break
 
@@ -849,11 +871,13 @@ def _cmd_config_anonymization_mode() -> None:
         print("\n".join(render_panel("配置持仓匿名化", rows)))
         print()
         try:
-            choice = input("  请选择 (0-4): ").strip()
+            choice = input_choice("  请选择 (0-4): ")
         except (EOFError, KeyboardInterrupt):
             print()
             break
 
+        if choice is None:
+            break
         if choice == "0":
             break
 

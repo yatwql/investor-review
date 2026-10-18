@@ -17,6 +17,7 @@ from src.python.core.logger import setup_logger
 from src.python.core.reader import get_xlsx_info, list_xlsx_files, read_holdings
 from src.python.report.progress import TuiProgressReporter
 from src.python.tui.text_layout import wrap_prompt
+from src.python.tui.tui_keys import input_choice
 from src.python.tui.tui_handlers import print_error_with_hint, select_holdings_file
 from src.python.tui.tui_menu import get_config_cache, press_any_key
 
@@ -51,7 +52,10 @@ def _select_candidate_file(base_file: str) -> str | None:
         acct_str = f"{info.get('accounts', '?')}" if "error" not in info else "err"
         print(f"  [{i}]  {name_disp:38s} {size_str:>10s} {mtime:>22s} {acct_str:>8s}")
     try:
-        choice = input("  请输入编号: ").strip()
+        choice = input_choice("  请输入编号: ")
+        if choice is None:  # Esc：取消选择
+            print()
+            return None
         idx = int(choice) - 1
         if 0 <= idx < len(files):
             return files[idx]
@@ -77,9 +81,11 @@ def _input_candidate_path(base_file: str) -> str | None:
         print("  [1] 自动复制基准文件为可编辑目标模板（调仓后）")
         print("  [2] 手动输入目标文件完整路径")
         try:
-            choice = input("  请输入选择（直接回车取消）: ").strip()
+            choice = input_choice("  请输入选择（直接回车取消）: ")
         except (EOFError, KeyboardInterrupt):
             print()
+            return None
+        if choice is None:
             return None
         if not choice:
             return None
@@ -93,9 +99,11 @@ def _input_candidate_path(base_file: str) -> str | None:
 def _manual_input_path() -> str | None:
     """手动输入目标文件完整路径；直接回车取消返回 None。"""
     try:
-        path = input(wrap_prompt("  请输入目标文件完整路径（直接回车取消）: ")).strip()
+        path = input_choice(wrap_prompt("  请输入目标文件完整路径（直接回车取消）: "))
     except (EOFError, KeyboardInterrupt):
         print()
+        return None
+    if path is None:
         return None
     if not path:
         return None

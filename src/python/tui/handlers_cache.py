@@ -16,6 +16,7 @@ import os
 from src.python.core.logger import setup_logger
 from src.python.core.reader import read_holdings, require_holdings
 from src.python.tui.tui_handlers import print_error_with_hint, select_holdings_file
+from src.python.tui.tui_keys import input_choice
 from src.python.tui.tui_menu import GREEN, RED, RESET, YELLOW, press_any_key, refresh_config
 
 logger = setup_logger()
@@ -264,7 +265,10 @@ def _cmd_cache_management() -> None:
     _render_cache_stats()
     while True:
         print("  命令: 3 清理过期缓存 · B 返回主菜单（回车也返回）")
-        choice = input("  缓存管理> ").strip().lower()
+        raw = input_choice("  缓存管理> ")
+        if raw is None:  # Esc：返回主菜单
+            return
+        choice = raw.lower()
         if choice in ("", "b", "0"):
             return
         if choice == "3":

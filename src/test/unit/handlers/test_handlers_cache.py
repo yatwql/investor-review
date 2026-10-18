@@ -757,3 +757,18 @@ class TestCacheManagementSubmenu(unittest.TestCase):
         with contextlib.redirect_stdout(buf):
             _cmd_cache_management()
         self.assertEqual(mock_stats.call_count, 1)
+
+
+class TestCacheManagementEsc(unittest.TestCase):
+    """缓存管理子菜单：Esc（input_choice → None）即时返回主菜单。"""
+
+    def test_esc_returns_without_reprompt(self) -> None:
+        """Esc 取消：直接返回，不再次提示（区别于空回车/未知命令的继续循环）。"""
+        from unittest.mock import patch
+
+        from src.python.tui.handlers_cache import _cmd_cache_management
+
+        with patch("src.python.tui.handlers_cache.input_choice", return_value=None) as mock_choice:
+            result = _cmd_cache_management()
+        self.assertIsNone(result)
+        mock_choice.assert_called_once()
