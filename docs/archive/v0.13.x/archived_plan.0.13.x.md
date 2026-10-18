@@ -7,6 +7,10 @@
 
 ---
 
+## plan-131 report_qa 转正评估挂账（判据与执行清单） ✅
+
+首轮评估执行并落定判据——①观察数据：`experiment_stats` 实测 report_qa 启用 5 次（最近 2026-10-13，对照 decision_reflection 51 次），非零启用 → 未触发撤销条件⑤，频次偏低 → 未满足转正条件④的「真实使用」充分样本；②质量抽检：`QaSession` 仅内存态不持久化，无历史问答样本可抽检 → 判据挂账保留（样本留痕为转正前置）；③成本实测：`QaSession.usage` 已有 token 口径（API 载荷带出）但未接费用口径、不入 perf 记录 → 费用留痕缺口同挂账；④转正清单（摘 experimental、入报告增强组并复核 `affects_report`、三端文档同步、`--experiment` 取值域收窄）与⑤撤销清单（注册表条目 + 页内区块摘除）固化为执行清单；结论：维持实验观察，判据与清单的长期单一事实位由 plan-136「实验项生命周期表」承接（report_qa 行双向引用本条）。
+
 ## plan-99 LLM 运行事前无成本预估与预算上限 ✅
 
 **完成（2026-10-18，v0.13.6-dev）**：`llm/cost_forecast.py` 事前费用预估——计划参与模块（`visible_llm_module_names()` ∩ `enabled_llm` ∩ `depth_gate` 档位收窄）× 生效模型单价（`model_<模块>` → 多链首链 → 顶层默认）给区间：perf 历史逐模块实际费用优先（最近 30 次运行，辩论特征开启时标准样本 ×3、辩论三键并入 expert_review 口径）、无历史回落静态 token 包络（8K~48K 输入 × `max_tokens_<模块>` 输出）；全部无法定价 → `ok=False` **不阻塞**（渠道跳过确认）。日预算 `llm_settings.json → daily_cost_limit`（默认 0=不启用），今日已花费 = perf 当日 `llm.total_cost` 汇总（与事后统计同源）；超限交互询问「降级走缓存继续 / 中止」（降级清空强刷范围），非交互硬闸：CLI `--yes`/`--non-interactive`/非 TTY 直接中止退出码 2，Web 创建 409 `BUDGET_EXCEEDED`（`budget_ack` 显式确认放行）+ `_run_generation_impl` 执行体兜底（定时调度/直连 API 同拦）。三渠道接线：TUI `_prompt_cost_forecast`（`[L]` full 前）、Web `GET /api/runs/cost-preflight` + `main.js` 提交前弹层（预检失败放行）、CLI `_confirm_cost_forecast` + `--yes`。计费数学抽 `pricing.compute_cost_value()` 数值单源（`estimate_cost` 字符串契约不变）。需求登记 R-LLM-13；回归用例 `test_cost_forecast.py` / `test_cli_cost_forecast.py` / `test_cost_forecast_flow.py` / `test_handlers_report.py::TestPromptCostForecast|TestCmdGenerateFullForecastWiring`。
