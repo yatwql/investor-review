@@ -449,3 +449,142 @@ class TestConfigDirInfoSubmenu:
 
         mock_input.assert_called_once()
         mock_dir.assert_not_called()
+
+
+class TestSwitchPanelReadonlyInfo:
+    """_cmd_config_llm_modules 只读信息面：? 编号详情 / * 漂移标记 / ⚗ 启用统计上屏。"""
+
+    @patch("src.python.tui.handlers_config.press_any_key")
+    @patch("src.python.tui.handlers_config.refresh_config")
+    @patch("src.python.tui.handlers_config.input", side_effect=[f"? {_switch_menu_number('decision_reflection')}", "0"])
+    @patch("src.python.config.features.save_feature_overrides")
+    @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
+    @patch("src.python.core.registry.get_llm_module_names")
+    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
+    def test_question_mark_shows_feature_detail_readonly(
+        self, mock_read, mock_names, mock_filter, mock_save, mock_input, mock_refresh, mock_press, capsys
+    ):
+        """`? 编号` 上屏说明/当前/默认/存储键，纯只读（不触发任何配置写入）。"""
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        _cmd_config_llm_modules()
+
+        out = capsys.readouterr().out
+        assert "登记决策 → 真实行情结算命中率 → 教训回灌专家复盘提示词" in out, "注册表 desc 应上屏"
+        assert "features.json → decision_reflection" in out
+        assert "出厂默认" in out
+        mock_save.assert_not_called()
+
+    @patch("src.python.tui.handlers_config.press_any_key")
+    @patch("src.python.tui.handlers_config.refresh_config")
+    @patch("src.python.tui.handlers_config.input", side_effect=["? abc", f"? {9999}", "0"])
+    @patch("src.python.config.features.save_feature_overrides")
+    @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
+    @patch("src.python.core.registry.get_llm_module_names")
+    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
+    def test_question_mark_invalid_input_reprompts(
+        self, mock_read, mock_names, mock_filter, mock_save, mock_input, mock_refresh, mock_press, capsys
+    ):
+        """非数字编号与越界编号均给出行内提示并回到面板，不抛出、不写配置。"""
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        _cmd_config_llm_modules()
+
+        out = capsys.readouterr().out
+        assert "请输入 ? 加编号" in out
+        assert "无效编号" in out
+        mock_save.assert_not_called()
+
+    @patch("src.python.tui.handlers_config.press_any_key")
+    @patch("src.python.tui.handlers_config.refresh_config")
+    @patch("src.python.tui.handlers_config.input", side_effect=["? 1", "0"])
+    @patch("src.python.config.features.save_feature_overrides")
+    @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
+    @patch("src.python.core.registry.get_llm_module_names")
+    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
+    def test_question_mark_shows_llm_module_detail(
+        self, mock_read, mock_names, mock_filter, mock_save, mock_input, mock_refresh, mock_press, capsys
+    ):
+        """LLM 模块详情：enabled_llm 存储键 + 当前/出厂默认（默认开）+ 只读。"""
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        _cmd_config_llm_modules()
+
+        out = capsys.readouterr().out
+        assert "llm_settings.json → enabled_llm.global_macro" in out
+        assert "当前  : 开启" in out and "出厂默认: 开启" in out
+        mock_save.assert_not_called()
+
+    @patch("src.python.tui.handlers_config.press_any_key")
+    @patch("src.python.tui.handlers_config.refresh_config")
+    @patch("src.python.tui.handlers_config.input", side_effect=["0"])
+    @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
+    @patch("src.python.core.registry.get_llm_module_names")
+    @patch(
+        "src.python.tui.handlers_config._read_llm_settings",
+        return_value=({"enabled_llm": {"global_macro": False}}, "/fake/llm_settings.json"),
+    )
+    def test_non_default_llm_module_star_marked(
+        self, mock_read, mock_names, mock_filter, mock_input, mock_refresh, mock_press, capsys
+    ):
+        """LLM 模块显示值 ≠ 出厂默认时行尾标 *（关闭的默认开模块）。"""
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        _cmd_config_llm_modules()
+
+        out = capsys.readouterr().out
+        assert "全球政经局势" in out and "[关闭]*" in out
+        assert "与出厂默认值不一致" in out, "页脚应有 * 释义"
+
+    @patch("src.python.tui.handlers_config.press_any_key")
+    @patch("src.python.tui.handlers_config.refresh_config")
+    @patch("src.python.tui.handlers_config.input", side_effect=["0"])
+    @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
+    @patch("src.python.core.registry.get_llm_module_names")
+    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
+    def test_non_default_feature_star_marked(
+        self, mock_read, mock_names, mock_filter, mock_input, mock_refresh, mock_press, capsys
+    ):
+        """功能开关与出厂默认不一致时行尾标 *（默认关的开关被置开）。"""
+        import re
+
+        from src.python.config.features import set_feature_enabled
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        set_feature_enabled("decision_reflection", True)
+        try:
+            _cmd_config_llm_modules()
+            out = capsys.readouterr().out
+            assert re.search(r"决策跨期反思闭环\s+\[开启\]\*", out), f"应有 [开启]* 漂移标记:\n{out}"
+        finally:
+            set_feature_enabled("decision_reflection", False)
+
+    @patch("src.python.tui.handlers_config.press_any_key")
+    @patch("src.python.tui.handlers_config.refresh_config")
+    @patch("src.python.tui.handlers_config.input", side_effect=["0"])
+    @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
+    @patch("src.python.core.registry.get_llm_module_names")
+    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
+    def test_experiment_stats_suffix_on_experimental_row(
+        self, mock_read, mock_names, mock_filter, mock_input, mock_refresh, mock_press, capsys
+    ):
+        """⚗ 实验项行尾附启用统计（次数 + 最近日期 MM-DD），数据来自 experiment_stats。"""
+        import json
+        import os
+
+        from src.python.core import experiment_stats
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        os.makedirs(os.path.dirname(experiment_stats.EXPERIMENT_STATS_FILE), exist_ok=True)
+        with open(experiment_stats.EXPERIMENT_STATS_FILE, "w", encoding="utf-8") as f:
+            json.dump(
+                {"decision_reflection": {"enabled_count": 5, "last_enabled_date": "2026-10-13"}},
+                f,
+                ensure_ascii=False,
+            )
+
+        _cmd_config_llm_modules()
+
+        out = capsys.readouterr().out
+        assert "启用 5 次" in out
+        assert "最近 10-13" in out

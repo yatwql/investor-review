@@ -166,6 +166,58 @@ def _cmd_config_dir_info() -> None:
         handler()
 
 
+def _show_switch_detail(choice: str, items: list[tuple[int, str, str, bool, str]]) -> None:
+    """``? 编号`` 上屏面板单项说明与当前值/默认值（只读信息查询，不写配置）。
+
+    Args:
+        choice: 用户输入（``?`` 后跟编号，如 ``? 3``）。
+        items: 面板当前派发的条目 ``(编号, 键, 显示名, 当前状态, 类别)``。
+    """
+    from src.python.config._llm_settings_defaults import _DEFAULT_LLM_SETTINGS
+    from src.python.config.features import GROUP_LABELS, feature_switch_registry
+    from src.python.core.experiment_stats import load_experiment_usage
+
+    raw = choice.lstrip("?").strip()
+    try:
+        idx = int(raw)
+    except (ValueError, TypeError):
+        print(f"  {YELLOW}[!]{RESET} 请输入 ? 加编号（如 ? 1）")
+        return
+    matched = [it for it in items if it[0] == idx]
+    if not matched:
+        print(f"  {YELLOW}[!]{RESET} 无效编号")
+        return
+    _, key, name, curr, kind = matched[0]
+    if kind == "llm":
+        default = _DEFAULT_LLM_SETTINGS.get("enabled_llm", {}).get(key, True)
+        desc = "标准 LLM 分析章节（模块配置说明见 how-to-config 手册「LLM 分析章节」）"
+        group_label = "LLM 分析章节"
+        storage = f"llm_settings.json → enabled_llm.{key}"
+        life = ""
+    else:
+        d = feature_switch_registry[key]
+        default = d.default
+        desc = d.desc
+        group_label = GROUP_LABELS.get(d.group, d.group)
+        storage = f"features.json → {key}"
+        life = ""
+        if d.experimental:
+            entry = load_experiment_usage().get(key) or {}
+            life = " · 实验项"
+            if isinstance(entry.get("enabled_count"), int):
+                date = str(entry.get("last_enabled_date") or "")[5:]
+                life += f" · 启用 {entry['enabled_count']} 次" + (f" · 最近 {date}" if date else "")
+    print()
+    print(f"  ── {name}（{key}）" + "─" * 8)
+    print(f"  说明  : {desc}")
+    print(f"  分组  : {group_label}{life}")
+    print(f"  存储  : {storage}")
+    detail = f"  当前  : {'开启' if curr else '关闭'}   出厂默认: {'开启' if default else '关闭'}"
+    if curr != default:
+        detail += "（不一致，行尾标 *）"
+    print(detail)
+
+
 def _cmd_config_llm_modules() -> None:
     """配置各 LLM 报告的启用/停用，以及全部功能开关（llm_settings.json + features.json）。
 
@@ -176,7 +228,12 @@ def _cmd_config_llm_modules() -> None:
     新增开关自动上屏，渠道层不另写清单。
     辩论白脸/黑脸/综合（debate_pro/con/synthesis）保留在注册表
     （缓存 TTL/前缀清理仍依赖），菜单层隐藏，不在此面板展示。
+
+    只读信息面（不引入配置写路径、不改编号派发）：``? 编号`` 查看该项说明与
+    当前值/默认值；行尾 ``*`` 标记与出厂默认值不一致项（配置漂移）；⚗ 实验项
+    行尾附 ``experiment_stats`` 启用统计（读取失败静默省略）。
     """
+    from src.python.config._llm_settings_defaults import _DEFAULT_LLM_SETTINGS
     from src.python.config.features import (
         GROUP_LABELS,
         GROUP_ORDER,
@@ -184,6 +241,7 @@ def _cmd_config_llm_modules() -> None:
         is_feature_enabled,
         switches_in_group,
     )
+    from src.python.core.experiment_stats import load_experiment_usage
     from src.python.core.registry import get_llm_module_names
 
     result = _read_llm_settings()
@@ -192,14 +250,14 @@ def _cmd_config_llm_modules() -> None:
     settings = result[0]
 
     enabled_map = settings.get("enabled_llm", {})
+    # 出厂默认（漂移比对基准）：enabled_llm 缺省值与运行时兜底一致取 True
+    default_enabled = _DEFAULT_LLM_SETTINGS.get("enabled_llm", {})
     # 菜单层隐藏辩论三模块（注册表保留：缓存 TTL/前缀清理仍依赖）
     # 实际辩论开关由下方实验性 Feature Flag（正反辩论等）控制
     module_names = filter_menu_llm_modules(get_llm_module_names())
 
     # 功能开关分块：(分组标题, [(flag_key, 显示名), ...])，顺序即注册表顺序
-    switch_blocks = [
-        (GROUP_LABELS[group], [(flag, d.label) for flag, d in switches_in_group(group)]) for group in GROUP_ORDER
-    ]
+    switch_blocks = [(GROUP_LABELS[group], list(switches_in_group(group))) for group in GROUP_ORDER]
     # 行首 ⚗ 标记仅给实验项（experimental 字段，与所属组无关；当前 2 项均落机制与诊断块内）
     experiment_keys = {flag for flag, _d in experimental_flags()}
 
@@ -209,7 +267,7 @@ def _cmd_config_llm_modules() -> None:
             display_width,
             [
                 *module_names.values(),
-                *(label for _title, block in switch_blocks for _flag, label in block),
+                *(d.label for _title, block in switch_blocks for _flag, d in block),
             ],
         )
     )
@@ -217,13 +275,17 @@ def _cmd_config_llm_modules() -> None:
     while True:
         rows: list[str | None] = []
         items: list[tuple[int, str, str, bool, str]] = []
+        # 实验项启用统计每轮渲染时读取（开关写入后即刷新；读取失败由
+        # load_experiment_usage 容错返回空 dict，行尾统计静默省略）
+        exp_stats = load_experiment_usage()
 
-        # ① 标准 LLM 模块（1-5）
+        # ① 标准 LLM 模块（1-5）——行尾 * 标记与出厂默认不一致项
         for i, (sfx, name) in enumerate(module_names.items(), 1):
             status = enabled_map.get(sfx, True)
             status_str = f"{GREEN}开启{RESET}" if status else f"{RED}关闭{RESET}"
+            star = "" if status == default_enabled.get(sfx, True) else "*"
             items.append((i, sfx, name, status, "llm"))
-            rows.append(f"{i}. {pad_right(name, name_column)} [{status_str}]")
+            rows.append(f"{i}. {pad_right(name, name_column)} [{status_str}]{star}")
 
         # ② 功能开关：编号紧随标准模块之后，四组按 GROUP_ORDER 逐块顺序派发
         # 编号由组序与块内注册表顺序派生、非硬编码：转正 = 摘除 experimental 身份
@@ -232,12 +294,19 @@ def _cmd_config_llm_modules() -> None:
         for title, block in switch_blocks:
             rows.append(None)
             rows.append(title)
-            for j, (flag, label) in enumerate(block, next_serial):
+            for j, (flag, d) in enumerate(block, next_serial):
                 status = is_feature_enabled(flag)
                 status_str = f"{GREEN}开启{RESET}" if status else f"{RED}关闭{RESET}"
                 marker = "⚗" if flag in experiment_keys else ""
-                items.append((j, flag, label, status, "feature"))
-                rows.append(f"{j}. {marker}{pad_right(label, name_column)} [{status_str}]")
+                star = "" if status == d.default else "*"
+                suffix = star
+                if flag in experiment_keys:
+                    entry = exp_stats.get(flag) or {}
+                    if isinstance(entry.get("enabled_count"), int):
+                        date = str(entry.get("last_enabled_date") or "")[5:]
+                        suffix += f"（启用 {entry['enabled_count']} 次" + (f" · 最近 {date}" if date else "") + "）"
+                items.append((j, flag, d.label, status, "feature"))
+                rows.append(f"{j}. {marker}{pad_right(d.label, name_column)} [{status_str}]{suffix}")
             next_serial += len(block)
 
         rows.append("0. 返回主菜单")
@@ -245,18 +314,23 @@ def _cmd_config_llm_modules() -> None:
         print("\n".join(render_panel("配置 LLM 报告章节与功能开关", rows)))
         for _group in GROUP_ORDER:
             print(f"  {GROUP_LABELS[_group]}")
-        print("  ⚗ 标记为实验项：默认关闭、处于实验阶段输出质量可能不稳定（各开关说明见 how-to-config 手册）")
+        print("  ⚗ 标记为实验项：默认关闭、处于实验阶段输出质量可能不稳定（行尾附启用统计；各开关说明见 how-to-config 手册）")
+        print("  * 与出厂默认值不一致（配置漂移提示）；输入 ? 编号 查看该项说明与当前值/默认值")
         print("  基础报告章节组（基金深度分析/市场新闻/历史走势+回撤/组合演进/行动建议）在菜单 [P] 配置")
         print()
         try:
             total = len(items)
-            choice = input(f"  输入编号切换 (0-{total}): ").strip()
+            choice = input(f"  输入编号切换 (0-{total})，? 编号 查看说明: ").strip()
         except (EOFError, KeyboardInterrupt):
             print()
             break
 
         if choice == "0":
             break
+
+        if choice.startswith("?"):
+            _show_switch_detail(choice, items)
+            continue
 
         try:
             idx = int(choice)
