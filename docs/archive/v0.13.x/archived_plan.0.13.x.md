@@ -7,6 +7,10 @@
 
 ---
 
+## plan-136 实验项生命周期表（technical 单一事实）✅
+
+technical.md 新增 §6.9「实验项生命周期表」（功能语义命名表邻域，TOC 同步）——七列结构（flag/实验目的/判据来源/转正条件/撤销条件/观察数据源/当前态）覆盖当前全部 2 个 ⚗ 实验项：`decision_reflection`（死线条目维护判据①②，表收「已结算≥10 可信 / 启用停止增长或样本<10 无趋势即撤销」三元组）与 `report_qa`（归档评估记录固化判据④⑤与执行清单，表收「样本充分+留痕可抽检+费用接入 perf 才转正」三元组）。详文不复制、双向回链防口径漂移：plan-70 条目与归档 plan-131 记录各补「单一事实位」链接指向 §6.9；纪律入表头——立项（新增 experimental=True）/转正（摘 experimental）/撤销（删条目与机制）任一发生必须同步刷新本表。doc-links（死锚/序列）与 doc-drift 全绿。
+
 ## plan-135 S 面板操作增强（批量恢复默认 / 实验项一键全关 / slug 切换）✅
 
 三项写路径增强落地（编号派发与 Web 面板派生零改动）——①批量恢复默认：新原语 `features.clear_feature_overrides(flags|None)`（恢复默认=删除 features.json 覆写键而非写入同值，批量原子写走 save 同一 write_json_atomic，运行时经 _FEATURES_FLAGS 锁回 `_FEATURE_FLAGS_DEFAULT`、None 时顺带清掉无消费者残留键），面板 `r 编号或slug`（按注册表派生该条目所在分组键集）/ `ra`（全部）上屏实际移除键数；②实验项一键全关 `x`：experimental 集合回默认并删覆写，回到无实验态做 bisect；③slug 双通道：裸 slug 与编号等价切换、`slug=on|off` 走 CLI `parse_switch_override` 同一解析器与词表（旧键别名过渡一致，LLM 模块用同词表常量本地校验）、`? slug` 查详情（`_match_switch_item` 辅助定位）。LLM 条目拒绝 `r`（恢复默认仅限功能开关分组）。新增 10 单测（`TestSwitchPanelOperations`，monkeypatch FEATURES_FILE 到临时文件 + 种子载入同源），handlers_config 39/39 绿；手册 [S] 新增写路径三通道段并顺带修复 [P] 报告章节与增强清单（并两财务项、补景气度、默认开清单补景气度）。
@@ -25,7 +29,7 @@
 
 ## plan-131 report_qa 转正评估挂账（判据与执行清单） ✅
 
-首轮评估执行并落定判据——①观察数据：`experiment_stats` 实测 report_qa 启用 5 次（最近 2026-10-13，对照 decision_reflection 51 次），非零启用 → 未触发撤销条件⑤，频次偏低 → 未满足转正条件④的「真实使用」充分样本；②质量抽检：`QaSession` 仅内存态不持久化，无历史问答样本可抽检 → 判据挂账保留（样本留痕为转正前置）；③成本实测：`QaSession.usage` 已有 token 口径（API 载荷带出）但未接费用口径、不入 perf 记录 → 费用留痕缺口同挂账；④转正清单（摘 experimental、入报告增强组并复核 `affects_report`、三端文档同步、`--experiment` 取值域收窄）与⑤撤销清单（注册表条目 + 页内区块摘除）固化为执行清单；结论：维持实验观察，判据与清单的长期单一事实位由 plan-136「实验项生命周期表」承接（report_qa 行双向引用本条）。
+首轮评估执行并落定判据——①观察数据：`experiment_stats` 实测 report_qa 启用 5 次（最近 2026-10-13，对照 decision_reflection 51 次），非零启用 → 未触发撤销条件⑤，频次偏低 → 未满足转正条件④的「真实使用」充分样本；②质量抽检：`QaSession` 仅内存态不持久化，无历史问答样本可抽检 → 判据挂账保留（样本留痕为转正前置）；③成本实测：`QaSession.usage` 已有 token 口径（API 载荷带出）但未接费用口径、不入 perf 记录 → 费用留痕缺口同挂账；④转正清单（摘 experimental、入报告增强组并复核 `affects_report`、三端文档同步、`--experiment` 取值域收窄）与⑤撤销清单（注册表条目 + 页内区块摘除）固化为执行清单；结论：维持实验观察，判据与清单的长期单一事实位由「实验项生命周期表」承接（report_qa 行双向引用本条）。**单一事实位**：条件—数据—态结构化口径见 [technical §6.9 实验项生命周期表](../../managements/technical.md#69-实验项生命周期表)；转正/撤销执行时双方同步刷新。
 
 ## plan-99 LLM 运行事前无成本预估与预算上限 ✅
 
