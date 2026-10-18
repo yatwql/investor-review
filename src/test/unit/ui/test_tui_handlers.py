@@ -673,6 +673,8 @@ class TestPromptEscCancel(unittest.TestCase):
                 "src.python.tui.tui_handlers.list_xlsx_files",
                 return_value=["/tmp/a.xlsx", "/tmp/b.xlsx"],
             ),
+            patch("os.path.getsize", return_value=1024),
+            patch("os.path.getmtime", return_value=0.0),
             patch("src.python.tui.tui_handlers.input_choice", return_value=None),
             patch("sys.stdout", new_callable=io.StringIO) as out,
         ):
