@@ -178,6 +178,9 @@ class TestGetKeyLinux(unittest.TestCase):
     def setUp(self) -> None:
         import termios
 
+        import src.python.tui.tui_keys as tui_keys_mod
+
+        tui_keys_mod._esc_residue_pending = False  # 残留标志隔离：不跨用例泄漏
         self._termios_error = termios.error
         self._stdin_patcher = patch("src.python.tui.tui_keys.sys.stdin")
         self._mock_stdin = self._stdin_patcher.start()
@@ -242,10 +245,29 @@ class TestGetKeyLinux(unittest.TestCase):
         self.assertEqual(_get_key_linux(), KEY_UNKNOWN)
 
     def test_standalone_esc(self) -> None:
-        """单独 ESC 键（select 超时无后继字节）→ KEY_ESC（首页退出别名）。"""
+        """单独 ESC 键（select 超时无后继字节）→ KEY_ESC（首页连按两次退出首按）。"""
         self._mock_stdin.read.return_value = "\x1b"
         self._mock_select.return_value = ([], [], [])
         self.assertEqual(_get_key_linux(), KEY_ESC)
+
+    def test_late_arrow_sequence_mapped_after_lone_esc(self) -> None:
+        """孤 ESC 之后迟到的方向键续段被吸收并映射回方向键（拆包不误触发直达键）。"""
+        self._mock_stdin.read.side_effect = ["\x1b"]
+        self._mock_select.return_value = ([], [], [])
+        self.assertEqual(_get_key_linux(), KEY_ESC)
+        self._mock_stdin.read.side_effect = ["[", "A"]
+        self._mock_select.return_value = ([self._mock_stdin], [], [])
+        self.assertEqual(_get_key_linux(), KEY_UP)
+
+    def test_residue_cleared_by_normal_key(self) -> None:
+        """残留标志下的普通字符：清标志并按普通键处理（不吞字）。"""
+        self._mock_stdin.read.side_effect = ["\x1b"]
+        self._mock_select.return_value = ([], [], [])
+        self.assertEqual(_get_key_linux(), KEY_ESC)
+        self._mock_stdin.read.side_effect = ["q"]
+        self.assertEqual(_get_key_linux(), "Q")
+        self._mock_stdin.read.side_effect = ["z"]
+        self.assertEqual(_get_key_linux(), "Z")
 
     def test_esc_timeout_relaxed_for_high_latency_links(self) -> None:
         """首段共聚窗口 ≥0.5s + 续读窗口 ≥0.3s：高延迟链路（手机网络/SSH）方向键
@@ -299,6 +321,11 @@ class TestInputChoice(unittest.TestCase):
             mock_stdin.isatty.return_value = False
             self.assertEqual(input_choice("  > "), "3")
 
+    def setUp(self) -> None:
+        import src.python.tui.tui_keys as tui_keys_mod
+
+        tui_keys_mod._esc_residue_pending = False  # 残留标志隔离：不跨用例泄漏
+
     def _linux_env(self, read_bytes):
         """装配 Linux raw 读行环境（与 TestGetKeyLinux 同手法）。"""
         return (
@@ -323,6 +350,33 @@ class TestInputChoice(unittest.TestCase):
             mock_stdin.isatty.return_value = True
             mock_stdin.fileno.return_value = 99
             self.assertIsNone(_input_choice_linux("  > "))
+
+    def test_linux_residue_sequence_swallowed(self) -> None:
+        """孤 Esc 后迟到的方向键序列：整段吞掉不进输入行，随后输入正常。"""
+        stdin, _tcg, _tcs, _raw, _read = self._linux_env([b"\x1b"])
+        with (
+            stdin as mock_stdin,
+            _tcg,
+            _tcs,
+            _raw,
+            patch("select.select", return_value=([], [], [])),
+            _read,
+        ):
+            mock_stdin.isatty.return_value = True
+            mock_stdin.fileno.return_value = 99
+            self.assertIsNone(_input_choice_linux("  > "))  # 孤 Esc → 取消并置残留标志
+        stdin2, _tcg2, _tcs2, _raw2, _read2 = self._linux_env([b"[", b"A", b"3", b"\r"])
+        with (
+            stdin2 as mock_stdin,
+            _tcg2,
+            _tcs2,
+            _raw2,
+            patch("select.select", return_value=([mock_stdin], [], [])),
+            _read2,
+        ):
+            mock_stdin.isatty.return_value = True
+            mock_stdin.fileno.return_value = 99
+            self.assertEqual(_input_choice_linux("  > "), "3")
 
     def test_linux_enter_submits_line(self) -> None:
         """逐字节输入 + 回车 → strip 后的行内容。"""

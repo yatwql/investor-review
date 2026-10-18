@@ -821,7 +821,21 @@ class TestNarrowMainLoopDirectNav(unittest.TestCase):
         self.assertEqual(renders, 2, "宽屏方向键移动选中态后重绘")
         cleared.assert_not_called()
 
-    def test_esc_key_exits(self):
-        """Esc → 退出（与 0/X 同为首页退出通道，手机客户端普遍有 Esc 键）。"""
-        fired, _, _, _, _ = self._drive(["KEY_ESC"], columns=100)
+    def test_esc_double_press_exits(self):
+        """Esc 连按两次（3 秒窗口内）→ 退出（首按给确认提示，不立即退出）。"""
+        fired, _, _, _, _ = self._drive(["KEY_ESC", "KEY_ESC"], columns=100)
         self.assertEqual(fired, ["exit"])
+
+    def test_esc_single_press_shows_confirm_hint(self):
+        """单次 Esc 不退出：输出「再按一次」确认提示（方向键拆包误判不致退出）。"""
+        fired, renders, _, out, _ = self._drive(["KEY_ESC", "0"], columns=100)
+        self.assertEqual(fired, ["exit"])
+        self.assertIn("再按一次 Esc 退出", out)
+        self.assertEqual(renders, 1, "提示不触发整屏重绘")
+
+    def test_hint_lines_included_in_inplace_clear(self):
+        """反馈行并入原地重绘清除范围：清帧调用 = 帧行数 + 反馈行数（防清帧错位）。"""
+        fired, renders, _, out, cleared = self._drive(["KEY_ESC", "KEY_DOWN", "0"], columns=40, tty=True)
+        self.assertEqual(fired, ["exit"])
+        self.assertEqual(renders, 2)
+        cleared.assert_called_once_with(1)  # 渲染器 mock 帧行数 0 + Esc 提示 1 行

@@ -19,6 +19,82 @@ KEY_UNKNOWN = "KEY_UNKNOWN"
 
 # Linux ESC 序列读取超时（秒）。0.3s 面向高延迟链路（手机蜂窝网 / SSH）：
 # 方向键三字节序列可能分节到达，过短的超时会把序列拆散误判成孤 ESC
+# 方向键序列映射（CSI 与应用光标模式 O 前缀变体同权——部分终端/会话在 smkx 后发送后者）
+_CSI_SEQUENCE_MAPPING = {
+    "\x1b[A": KEY_UP,
+    "\x1b[B": KEY_DOWN,
+    "\x1bOA": KEY_UP,
+    "\x1bOB": KEY_DOWN,
+}
+
+# 孤 ESC 残留标志：高延迟链路上 ESC 与其后续字节拆包到达时，首段超时已按孤 ESC 返回，
+# 迟到的前缀（[ / O）由下一次读键按序列续读吸收并映射回方向键——否则残留字节会被当成
+# 普通按键误触发直达键（如 [A 的 A 命中匿名化面板）。get_key 与 input_choice 共用。
+_esc_residue_pending = False
+
+
+def _mark_esc_residue() -> None:
+    """孤 ESC 判定后置残留标志（下一次读键优先按序列吸收迟到前缀）。"""
+    global _esc_residue_pending
+    _esc_residue_pending = True
+
+
+def _take_esc_residue(ch: str) -> str | None:
+    """get_key 路径的残留吸收：迟到序列前缀 → 读完整段并映射；其他 → 清标志放行。
+
+    Args:
+        ch: 本次读到的首个字符（孤 ESC 之后的下一次读）。
+
+    Returns:
+        映射后的键名（方向键或 KEY_UNKNOWN）；无残留或首字符非前缀时 None。
+    """
+    global _esc_residue_pending
+    if not _esc_residue_pending:
+        return None
+    _esc_residue_pending = False
+    if ch not in ("[", "O"):
+        return None  # 非序列续段：按普通键继续处理
+    import select
+
+    rdy, _, _ = select.select([sys.stdin], [], [], _ESC_TIMEOUT)
+    if not rdy:
+        return KEY_UNKNOWN
+    b2 = sys.stdin.read(1)
+    if not b2:
+        return KEY_UNKNOWN
+    return _CSI_SEQUENCE_MAPPING.get("\x1b" + ch + b2, KEY_UNKNOWN)
+
+
+def _swallow_esc_residue_byte(b: bytes, fd: int) -> bool:
+    """input_choice 路径的残留吸收：迟到的 [ / O 前缀吞掉整段序列并清标志。
+
+    Args:
+        b: 本次读到的字节（孤 ESC 之后的下一次读）。
+        fd: 输入文件描述符（续读用）。
+
+    Returns:
+        bool True = 已消费该字节（调用方 continue）。
+    """
+    global _esc_residue_pending
+    if not _esc_residue_pending:
+        return False
+    _esc_residue_pending = False
+    if b not in (b"[", b"O"):
+        return False
+    import select
+
+    rdy, _, _ = select.select([fd], [], [], _ESC_TIMEOUT)
+    if not rdy:
+        return True
+    fin = os.read(fd, 1)
+    while fin and not (fin.isalpha() or fin == b"~"):
+        rdy2, _, _ = select.select([fd], [], [], _ESC_TIMEOUT)
+        if not rdy2:
+            break
+        fin = os.read(fd, 1)
+    return True
+
+
 # 方向键序列续读窗口（同一次输入爆发内的后续字节）与首段共聚窗口（ESC 后等 '[' 的窗口）。
 # 首段更大：高延迟链路（手机网络/SSH）上终端会把 ESC [ A 拆成独立分节到达，
 # 窗口过短会把方向键误判为孤 Esc（主菜单上 = 退出别名，行为最重，须留足余量）
@@ -98,9 +174,13 @@ def _get_key_linux() -> str:
             return KEY_CTRL_C
         if ch in ("\r", "\n"):
             return KEY_ENTER
+        residue = _take_esc_residue(ch)  # 孤 ESC 后迟到的序列续段：吸收并映射回方向键
+        if residue is not None:
+            return residue
         if ch == "\x1b":  # ESC 序列 -> 方向键；超时无后继字节 → 孤 ESC（Esc 键）
             rdy, _, _ = select.select([sys.stdin], [], [], _ESC_FIRST_TIMEOUT)
             if not rdy:
+                _mark_esc_residue()  # 迟到续段由下一次读键吸收（拆包不致误触发直达键）
                 return KEY_ESC
             b1 = sys.stdin.read(1)
             if not b1:
@@ -111,10 +191,7 @@ def _get_key_linux() -> str:
             b2 = sys.stdin.read(1)
             if not b2:
                 return KEY_UNKNOWN
-            seq = ch + b1 + b2
-            # 应用光标模式变体（部分终端/会话在 smkx 后发送 O 前缀两字节序列）与 CSI 同权映射
-            mapping = {"\x1b[A": KEY_UP, "\x1b[B": KEY_DOWN, "\x1bOA": KEY_UP, "\x1bOB": KEY_DOWN}
-            return mapping.get(seq, KEY_UNKNOWN)
+            return _CSI_SEQUENCE_MAPPING.get(ch + b1 + b2, KEY_UNKNOWN)
         if ch:
             return ch.upper()
         return KEY_UNKNOWN
@@ -166,6 +243,8 @@ def _input_choice_linux(prompt: str) -> str | None:
             if not b:  # EOF
                 print(flush=True)
                 return None
+            if _swallow_esc_residue_byte(b, fd):  # 孤 Esc 后迟到的方向键序列：整段吞掉
+                continue
             if b in (b"\r", b"\n"):
                 print(flush=True)
                 return buf.decode("utf-8", errors="replace").strip()
@@ -180,6 +259,7 @@ def _input_choice_linux(prompt: str) -> str | None:
             if b == b"\x1b":
                 rdy, _, _ = select.select([fd], [], [], _ESC_FIRST_TIMEOUT)
                 if not rdy:  # 孤立 Esc → 即时取消（手机 SSH 直接回上一步）
+                    _mark_esc_residue()  # 迟到续段由下一次读键吸收
                     print(flush=True)
                     return None
                 nxt = os.read(fd, 1)  # 方向键等序列：吞掉不响应（本行不支持移动）

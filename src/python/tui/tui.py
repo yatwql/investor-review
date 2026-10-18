@@ -6,6 +6,7 @@ from __future__ import annotations
 import atexit
 import os
 import sys
+import time
 from collections.abc import Callable
 
 # 确保项目根目录在 sys.path 中（支持直接执行 python src/python/tui/tui.py）
@@ -171,6 +172,23 @@ def _can_repaint_inplace() -> bool:
         return False
 
 
+_ESC_EXIT_CONFIRM_WINDOW = 3.0  # 主菜单 Esc 连按两次确认窗口（秒）
+
+
+def _print_hint(text: str) -> int:
+    """主菜单按键反馈单行（按宽度折行，不整屏重绘）。
+
+    Returns:
+        int 占用行数（调用方并入原地重绘的清除范围，避免清帧错位）。
+    """
+    from src.python.tui.text_layout import wrap_with_prefix
+
+    lines = wrap_with_prefix("  ", text, terminal_columns())
+    for line in lines:
+        print(line)
+    return len(lines)
+
+
 def _clear_last_frame(lines: int) -> None:
     """把光标移回上一帧首行并清空其下内容（ANSI：光标上移 N 行 + 清屏至末尾）。"""
     if lines > 0:
@@ -184,7 +202,7 @@ def main() -> None:
     窄屏档（<64 列）交互主路径仍是「按字母/数字键直达」（未登记键静默忽略
     且不重绘）；方向键/Enter 同样可用——移动选中态后**原地重绘**（ANSI 光标
     上移+清屏，菜单不滚屏），不支持 ANSI 的环境（管道/测试/旧控制台）回退
-    整屏追加。Esc 与 0/X 同为退出别名（手机 SSH 客户端普遍提供 Esc 键）。
+    整屏追加。Esc 需连按两次确认（3 秒窗口；防高延迟链路方向键拆包把孤 ESC 误判为退出），0/X 单次即退。
     """
     init_config()
     _apply_feature_gates()  # 必须在 _bind_callbacks 之前：裁剪后索引才与渲染一致
@@ -226,8 +244,11 @@ def main() -> None:
     _idx = index_by_key(_default_key)
     sel: int = _idx if _idx is not None else 0
 
+    esc_exit_armed: float | None = None
+
     while True:
         frame_lines = _render_menu_frame(sel)
+        hint_lines = 0  # 帧下方反馈行数（原地重绘时并入清除范围）
 
         # 内层按键循环：直达键（快捷键/退出）处理后重绘或退出；方向键/Enter
         # 全档导航——窄屏优先原地重绘（菜单不滚屏），不可用时回退整屏追加
@@ -238,8 +259,14 @@ def main() -> None:
             if key == KEY_CTRL_C:
                 exit_app()
             if key == KEY_ESC:
-                # Esc 退出别名：与 0/X 一致（手机客户端普遍有 Esc 键）
-                exit_app()
+                # Esc 退出别名：连按两次确认（3 秒窗口）——孤 Esc 可能是方向键拆包
+                # 误判（高延迟链路），误判代价从「退出程序」降为「多按一次」
+                now = time.monotonic()
+                if esc_exit_armed is not None and now - esc_exit_armed <= _ESC_EXIT_CONFIRM_WINDOW:
+                    exit_app()
+                esc_exit_armed = now
+                hint_lines += _print_hint("再按一次 Esc 退出（0 / X 亦可）")
+                continue
             if key == "0":
                 # 0 作退出别名：与子菜单「0 = 返回」的习惯一致（在首页返回即退出程序）
                 exit_app()
@@ -258,9 +285,11 @@ def main() -> None:
             if key == KEY_UP or key == KEY_DOWN:
                 sel = (sel - 1) % len(MENU_ITEMS) if key == KEY_UP else (sel + 1) % len(MENU_ITEMS)
                 if narrow and _can_repaint_inplace():
-                    # 窄屏导航：原地重绘（光标上移+清屏），手机短屏菜单不被顶出可视区
-                    _clear_last_frame(frame_lines)
+                    # 窄屏导航：原地重绘（光标上移+清屏），手机短屏菜单不被顶出可视区；
+                    # 反馈行（hint_lines）一并清除，避免清帧范围错位
+                    _clear_last_frame(frame_lines + hint_lines)
                     frame_lines = _render_menu_frame(sel)
+                    hint_lines = 0
                     continue
                 break  # 宽/中档整屏重绘；窄屏不支持 ANSI 时同样回退追加
             if narrow:
