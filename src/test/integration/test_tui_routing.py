@@ -35,7 +35,7 @@ class TestTuiRouting(unittest.TestCase):
                 )
 
     def test_menu_key_coverage(self):
-        """MENU_ITEMS 包含所有标准功能键（C/F/O 已聚合到 D 子菜单；系统自检为 T；报告追问为 Q）。"""
+        """MENU_ITEMS 包含所有标准功能键（C/F/O 已聚合到 D 子菜单；系统自检为 T；报告追问为 Q；缓存清理与统计合并为 [4] 子菜单，不再单列 [3]）。"""
         from src.python.tui.tui_menu import MENU_ITEMS
 
         keys = {item[0] for item in MENU_ITEMS}
@@ -51,7 +51,6 @@ class TestTuiRouting(unittest.TestCase):
             "A",
             "1",
             "2",
-            "3",
             "4",
             "S",
             "R",
@@ -71,6 +70,17 @@ class TestTuiRouting(unittest.TestCase):
         d_item = next(item for item in MENU_ITEMS if item[0] == "D")
         cb_name = d_item[2].__name__ if d_item[2] else ""
         self.assertEqual(cb_name, "_cmd_config_dir_info")
+
+    def test_cache_key_routes_to_cache_management(self):
+        """4 键路由到缓存管理子菜单处理器（原 [3] 清理收敛为子菜单内命令）。"""
+        from src.python.tui.tui import _bind_callbacks
+        from src.python.tui.tui_menu import MENU_ITEMS
+
+        _bind_callbacks()
+        c_item = next(item for item in MENU_ITEMS if item[0] == "4")
+        cb_name = c_item[2].__name__ if c_item[2] else ""
+        self.assertEqual(cb_name, "_cmd_cache_management")
+        self.assertEqual(c_item[1], "缓存管理（统计与清理）")
 
     def test_doctor_key_routes_to_doctor(self):
         """T 键路由到系统自检处理器。"""

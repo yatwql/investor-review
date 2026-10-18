@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import io
 import unittest
 from unittest.mock import MagicMock, patch
@@ -686,3 +687,73 @@ class TestReadHoldingsGate(unittest.TestCase):
         self.assertIn("持仓文件为空", out)
         self.assertIn("四列", out)
         mock_clear.assert_not_called()
+
+
+@pytest.mark.unit_core
+class TestCacheManagementSubmenu(unittest.TestCase):
+    """_cmd_cache_management：统计首屏 → 输入 3 清理 → 回统计刷新 / B 返回动线。"""
+
+    @staticmethod
+    def _stats(expired: int = 2):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(
+            total_files=5,
+            total_size_bytes=4096,
+            hit_total=10,
+            hit_rate=80.0,
+            top_by_size=[],
+            by_prefix={"fund": 3},
+            expired=expired,
+            snapshot_files=0,
+            snapshot_size_bytes=0,
+            state_files=0,
+            state_size_bytes=0,
+        )
+
+    @patch("src.python.tui.handlers_cache.press_any_key")
+    @patch("src.python.cache.operations.cleanup_cache", return_value=2)
+    @patch("src.python.cache.operations.get_cache_stats")
+    @patch("builtins.input", side_effect=["3", "b"])
+    def test_stats_then_cleanup_then_refresh(self, mock_input, mock_stats, mock_cleanup, mock_press):
+        """先统计、输入 3 清理一次、清理后回到统计刷新（stats 渲染两轮）、b 返回。"""
+        from src.python.tui.handlers_cache import _cmd_cache_management
+
+        mock_stats.return_value = self._stats()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            _cmd_cache_management()
+        out = buf.getvalue()
+        self.assertIn("data/cache", out)
+        self.assertIn("输入 3 可清理", out)
+        self.assertIn("命令: 3 清理过期缓存", out)
+        mock_cleanup.assert_called_once()
+        self.assertEqual(mock_stats.call_count, 2)
+
+    @patch("builtins.input", side_effect=["x", ""])
+    @patch("src.python.cache.operations.cleanup_cache")
+    @patch("src.python.cache.operations.get_cache_stats")
+    def test_unknown_command_hint_without_cleanup(self, mock_stats, mock_cleanup, mock_input):
+        """未知命令给出行内提示，不执行清理；回车直接返回（统计只渲染一轮）。"""
+        from src.python.tui.handlers_cache import _cmd_cache_management
+
+        mock_stats.return_value = self._stats()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            _cmd_cache_management()
+        out = buf.getvalue()
+        self.assertIn("未知命令", out)
+        mock_cleanup.assert_not_called()
+        self.assertEqual(mock_stats.call_count, 1)
+
+    @patch("builtins.input", side_effect=[""])
+    @patch("src.python.cache.operations.get_cache_stats")
+    def test_immediate_return_renders_stats_once(self, mock_stats, mock_input):
+        """回车直接返回：仍展示一轮统计（动线先统计后决策）。"""
+        from src.python.tui.handlers_cache import _cmd_cache_management
+
+        mock_stats.return_value = self._stats(expired=0)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            _cmd_cache_management()
+        self.assertEqual(mock_stats.call_count, 1)

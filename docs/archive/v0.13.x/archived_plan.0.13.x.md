@@ -7,6 +7,10 @@
 
 ---
 
+## plan-139 缓存管理子菜单（[3]+[4] 合并动线）✅
+
+按计划二选一「原快捷键保留其一作入口」落地——保留 `[4]` 作**缓存管理（统计与清理）**子菜单入口（与状态行 `〔详情 [4][H][S]〕` 既有指引一致，零状态行改动），原 `[3]` 清理收敛为子菜单内命令。实现：`handlers_cache` 统计体拆 `_render_cache_stats`（首屏只读、去掉尾部按键等待、过期行改「输入 3 可清理」）+ `_cmd_cache_management` 命令循环（首屏统计一次 → `3` 清理并回统计刷新 / `B`·回车·`0` 返回 / 未知行内提示不重刷统计）；`tui_menu.MENU_ITEMS` 删 `[3]` 元组、`[4]` 改标签（标签头「缓存管理」）；`tui._bind_callbacks` 改绑 `_cmd_cache_management`。测试：`test_tui_routing` 键集去 3 + 新增 4 路由用例，doc-drift 括号豁免用例改挂 `[4]`（原挂 3 会静默失义），`TestCacheManagementSubmenu` 3 例（统计-清理-刷新闭环 stats=2 / 未知命令不清理 stats=1 / 回车直返），60 passed。文档 8 触点：双手册菜单块（含 how-to-start 两列样例重排）、tui-menu 缓存节合并重写、faq 7 处、datasource-reliability、how-to-config、Web 模式 `[3][4]`→`[4]`、requirements 菜单表与 R-CCH-33、technical 两行；残留扫描 0。
+
 ## plan-138 LLM 模块区历史费用显示✅
 
 ①核实为既有能力——`record_per_module` 调用点齐全（api_base 调用链/skeleton/generators_news/orchestrator 缓存命中），session per_module → `_report_generation` 建 `context["modules"]` → perf `llm.modules`，本次新增的是**归集读取**（真正支撑逐模块累计的读取端）：`perf.module_cost_summary(days=7, path=None)` 按窗口过滤 timestamp 并汇总 total/runs/avg，损坏行/缺 llm 块/非数值 cost 均容错；②`[S]` LLM 模块行尾附「· 近7日 ¥X（N 次 · 均 ¥Y）」，无样本模块不带摘要，读取异常 logger.debug + 静默省略（面板照常渲染）；③口径对齐——helper 与事前费用预估（cost_forecast 读同一 `llm.modules.*.cost`）、日预算（同记录 `llm.total_cost`）同记录同字段同 `compute_cost_value` 单价数学，模块费用为总额子集，三处数字不打架（helper docstring 与手册双写）。测试：`TestModuleCostHistory` 3 例（窗口内归集/空文件/窗口过滤）+ `TestLlmRowCostSuffix` 3 例（行尾摘要/异常静默/未打桩走真实数据），perf 241 + handlers 72 全绿。手册 [S] 费用摘要说明；顺带修正 handlers 注释陈旧编号（标准 LLM 模块 1-5 → 1-7）。

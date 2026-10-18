@@ -79,8 +79,7 @@ def _print_session_usage_on_exit() -> None:
 def _bind_callbacks() -> None:
     """运行时将函数引用填入 MENU_ITEMS。"""
     from src.python.tui.handlers_cache import (
-        _cmd_cleanup_cache,
-        _cmd_show_cache_stats,
+        _cmd_cache_management,
         _cmd_update_basic_cache,
         _cmd_update_position_cache,
     )
@@ -114,8 +113,7 @@ def _bind_callbacks() -> None:
         "D": _cmd_config_dir_info,
         "1": _cmd_update_basic_cache,
         "2": _cmd_update_position_cache,
-        "3": _cmd_cleanup_cache,
-        "4": _cmd_show_cache_stats,
+        "4": _cmd_cache_management,
         "I": _cmd_config_comparison_indices,
         "A": _cmd_config_anonymization_mode,
         "P": _cmd_config_report_boards,
