@@ -39,7 +39,7 @@ MENU_ITEMS: list[MenuItem] = [
     ("V", "查看最近运行日志（可按级别筛选）", None, False),
     ("H", "查看数据源健康历史", None, False),
     ("T", "系统自检（环境/配置/目录/数据源一键体检）", None, False),
-    ("X", "退出", None, True),
+    ("X", "退出（0 亦可）", None, True),
 ]
 
 # 受功能开关约束的菜单项：{快捷键: 开关名}。
@@ -126,13 +126,23 @@ def print_header() -> None:
 
 
 def render_menu(sel: int) -> None:
-    """打印带选择指示器的菜单。"""
+    """打印带选择指示器的菜单（按终端宽度折行，窄屏不硬折）。"""
+    from src.python.tui.text_layout import terminal_columns, wrap_with_prefix
+
+    columns = terminal_columns()
     print()
     for i, (key, label, _cb, is_exit) in enumerate(MENU_ITEMS):
         prefix = "  >" if i == sel else "   "
-        print(f"{prefix} [{key}] {label}")
+        head = f"{prefix} [{key}] "
+        # 长标签（如「生成标准报告（Excel+HTML，按章节配置）」）在手机窄屏上折行：
+        # 前缀（光标/编号）不参与断行，续行缩进到标签起始列，视觉上仍归属同一项
+        print("\n".join(wrap_with_prefix(head, label, columns)))
     print()
-    print("  方向键移动 | Enter 确认 | 字母/数字键直达 | 0 退出 | Ctrl+C 退出")
+    # 页脚按终端宽度折行：窄屏（手机）上不硬折，键位提示也不会被右边界切掉
+    from src.python.tui.text_layout import terminal_columns, wrap_with_prefix
+
+    footer = "方向键移动 | Enter 确认 | 字母/数字键直达 | 0 或 X 退出 | Ctrl+C 退出"
+    print("\n".join(wrap_with_prefix("  ", footer, terminal_columns())))
     print()
 
 

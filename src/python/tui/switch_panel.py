@@ -34,10 +34,16 @@
 
 from __future__ import annotations
 
-import os
 
 from src.python.core.ansi_colors import DIM, GREEN, RED, RESET
-from src.python.tui.text_layout import display_width, pad_right, truncate_display, wrap_display
+from src.python.tui.text_layout import (
+    display_width,
+    pad_right,
+    terminal_columns,
+    truncate_display,
+    wrap_display,
+    wrap_hanging,
+)
 
 #: 单行四列版面的最小终端宽度（含面板边框与标题占位）
 WIDE_MIN_COLUMNS = 96
@@ -55,30 +61,6 @@ _STATUS_LONG = {True: "开启", False: "关闭"}
 def use_panel_box(columns: int) -> bool:
     """是否画盒线面板（窄终端不画：把边框与分隔线的列宽/行数让给内容）。"""
     return layout_tier(columns) != "narrow"
-
-
-def terminal_columns(default: int = 100) -> int:
-    """当前终端列数（读 `COLUMNS` 环境变量与实际终端尺寸，取可用值的较大者兜底）。
-
-    Args:
-        default: 无法探测时的兜底列数。
-
-    Returns:
-        终端列数（下限 40，避免异常值把小面板压成不可读）。
-    """
-    # 优先级：实时终端尺寸 > `COLUMNS` 环境变量 > 兜底值。
-    # 实时值放最前——终端 resize（手机横竖屏/分屏）后 ioctl 立即反映新宽度，
-    # 而 `COLUMNS` 只是会话建立时导出的快照，常已过期。不取两者最大值，
-    # 否则窄终端永远被判成宽屏。
-    for fd in (1, 2):
-        try:
-            return max(40, os.get_terminal_size(fd).columns)
-        except OSError:
-            continue
-    env = os.environ.get("COLUMNS")
-    if env and env.isdigit() and int(env) > 0:
-        return max(40, int(env))
-    return max(40, default)
 
 
 def layout_tier(columns: int) -> str:
@@ -184,31 +166,6 @@ def format_item(
         return [truncate_display(f"{prefix}{label}{tail}", limit), *wrap_display(second, limit)]
     name_budget = limit - display_width(prefix) - display_width(tail)
     return [f"{prefix}{truncate_display(label, name_budget)}{tail}"]
-
-
-def wrap_hanging(text: str, columns: int, indent: str = "    ") -> list[str]:
-    """按列宽折行并给续行加悬挂缩进（面板内成段文字用，续行不顶到左边框）。
-
-    首行用满 `columns` 列，续行**扣除缩进宽度后**再折行——否则「缩进 + 满宽续行」
-    会超出面板内宽 2~10 列（窄终端上表现为右侧被硬折）。
-    """
-    indent_width = display_width(indent)
-    remaining = text
-    lines: list[str] = []
-    first = True
-    while remaining:
-        budget = columns if first else max(10, columns - indent_width)
-        wrapped = wrap_display(remaining, budget)
-        if not wrapped:
-            break
-        head = wrapped[0]
-        lines.append(head if first else indent + head)
-        cut = remaining.find(head)
-        if cut < 0:
-            break
-        remaining = remaining[cut + len(head) :].lstrip()
-        first = False
-    return lines
 
 
 def legend_lines(cost_days: int, columns: int, *, tier: str | None = None, reveal_key: bool = False) -> list[str]:

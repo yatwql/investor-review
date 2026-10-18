@@ -625,14 +625,44 @@ class TestMainLoopExitKeys(unittest.TestCase):
         fired, _ = self._drive(["Z"])
         self.assertEqual(fired, [])
 
-    def test_footer_documents_zero_exit(self):
-        """页脚明确写出 `0 退出`，否则用户无从发现该别名。"""
-        from src.python.tui.tui_menu import render_menu
-
+    def test_footer_documents_both_exit_keys(self):
+        """页脚同时写出 `0` 与 `X` 都能退出，否则用户无从发现退出别名。"""
         import contextlib
         import io
+
+        from src.python.tui.tui_menu import render_menu
 
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             render_menu(0)
-        self.assertIn("0 退出", buf.getvalue())
+        footer = buf.getvalue()
+        self.assertIn("0 或 X 退出", footer)
+        self.assertIn("Ctrl+C 退出", footer)
+
+    def test_exit_item_label_mentions_zero_alias(self):
+        """退出项标签本身也点明 `0 亦可`——光标停在该项时就能看到，不必只看页脚。"""
+        from src.python.tui.tui_menu import MENU_ITEMS
+
+        exit_items = [item for item in MENU_ITEMS if item[3]]
+        self.assertEqual(len(exit_items), 1)
+        self.assertIn("0 亦可", exit_items[0][1])
+
+    def test_footer_wraps_within_terminal_width(self):
+        """窄屏（手机）页脚按可用宽度折行：不硬折、不越界，续行缩进对齐。"""
+        import contextlib
+        import io
+        from unittest.mock import patch
+
+        from src.python.tui.text_layout import display_width
+        from src.python.tui.tui_menu import render_menu
+
+        for columns in (40, 46, 60):
+            buf = io.StringIO()
+            with (
+                patch.dict("os.environ", {"COLUMNS": str(columns)}),
+                patch("os.get_terminal_size", side_effect=OSError()),
+                contextlib.redirect_stdout(buf),
+            ):
+                render_menu(0)
+            for line in buf.getvalue().splitlines():
+                self.assertLessEqual(display_width(line), columns, (columns, line))

@@ -410,7 +410,8 @@ TUI（Text User Interface）是系统**主要交互渠道**：桌面终端内的
 | `tui/handlers_whatif.py` | 调仓模拟外壳 | What-if 对话流程，委托 `report/whatif_operations.py`（§4.13） |
 | `tui/handlers_log.py` | 诊断外壳 | `[V]` 运行日志查看（按级别筛选）/ `[H]` 数据源健康历史 / `[T]` 系统自检（doctor，§4.17）三命令 |
 | `tui/handlers_qa.py` | 报告追问外壳 | `[Q]` 入口：输出目录报告选择 + 文本输入循环，委托 `qa/session.ask_report_qa`（§6.8）；`report_qa` 门控 |
-| `tui/switch_panel.py` | `[S]` 面板响应式排版 | `layout_tier()` 按终端列数分三档（≥96 宽 / 64~95 中 / <64 窄）、`format_item()` 逐档生成「编号·名称·键名(淡色)·状态·备注」行、`legend_lines()` 页脚图例折行、`terminal_columns()` 宽度探测（`COLUMNS` > 实际尺寸 > 兜底）；**只排版不取数**，不变式「任意档位每行 ≤ 面板内宽」由单测锁定 |
+| `tui/text_layout.py` | 终端排版原语 | `display_width`（东亚宽度，剥离 ANSI）/`pad_right`/`truncate_display`（按列截断带省略号）/`wrap_display`（按列折行）/`wrap_hanging`（续行悬挂缩进，逐行扣减缩进宽度）/`wrap_with_prefix`（前缀不参与断行，续行对齐正文列）/`render_panel`（盒线面板，统一定宽）/`terminal_columns`（实时尺寸 > `COLUMNS` > 兜底，下限 40）；TUI 所有打印型输出按它折行，窄屏（手机）不硬折 |
+| `tui/switch_panel.py` | `[S]` 面板响应式排版 | `layout_tier()` 按终端列数分三档（≥96 宽 / 64~95 中 / <64 窄）、`format_item()` 逐档生成「编号·名称·键名(淡色)·状态·备注」行、`legend_lines()` 页脚图例折行、`format_item(reveal_key=)` 窄屏按 `k` 追加键名行；终端宽度探测与折行原语在 `tui/text_layout.py`（本模块 re-export `terminal_columns`）；**只排版不取数**，不变式「任意档位每行 ≤ 面板内宽」由单测锁定 |
 | `tui/status_line.py` | 页头状态行 | `build_status_line()` 五项常驻状态（上次报告时间/缓存过期数/数据新鲜度/降级源数/LLM 状态点），全本地取数、逐项降级、TTL 记忆化 |
 | `report/progress.py` | 进度报告 | TuiProgressReporter（`[..]`/`[OK]`/`[!]`/`[ERR]` 前缀 + 耗时排行） |
 
@@ -439,7 +440,7 @@ while True:
 
 #### 1.6.3 菜单体系
 
-`tui/tui_menu.py:MENU_ITEMS` —— 每项 `(快捷键, 显示标签, 回调, 是否退出)`，回调由 `_bind_callbacks()` 在**运行时**从 handlers 模块填入（定义时不直接 import，避免启动即加载全部处理器）。静态清单共 **18 项**（下表按菜单实际排列顺序）；首页按键分派：方向键移动、`Enter` 执行当前项、字母/数字键按 `index_by_key` 直达（未登记键无反应）、`0` 与 `[X]` 同为退出通道（`0` 在子菜单语义为「返回」，故首页保持一致习惯）、`Ctrl+C` 退出。`[T]`/`[Q]` 登记于 `FEATURE_GATED_ITEMS`（菜单键 → Feature Flag），`main()` 启动时在绑定回调**之前**执行 `tui_menu._apply_feature_gates()` 按 `is_feature_enabled` 就地裁剪（裁剪后索引才与渲染一致）：`report_qa`（⚗ 实验项，默认关）关闭时移除 `[Q]`，`doctor_check`（默认开）关闭时移除 `[T]`——默认配置下实际渲染 **17 项**。
+`tui/tui_menu.py:MENU_ITEMS` —— 每项 `(快捷键, 显示标签, 回调, 是否退出)`，回调由 `_bind_callbacks()` 在**运行时**从 handlers 模块填入（定义时不直接 import，避免启动即加载全部处理器）。静态清单共 **18 项**（下表按菜单实际排列顺序）；首页按键分派：方向键移动、`Enter` 执行当前项、字母/数字键按 `index_by_key` 直达（未登记键无反应）、`0` 与 `[X]` 同为退出通道（`0` 在子菜单语义为「返回」，故首页保持一致习惯；`[X]` 标签写明「退出（0 亦可）」，页脚提示同为「0 或 X 退出」）、`Ctrl+C` 退出。菜单项长标签与页脚提示经 `wrap_with_prefix` 按终端宽度折行（续行对齐标签起始列），窄屏不会硬折。`[T]`/`[Q]` 登记于 `FEATURE_GATED_ITEMS`（菜单键 → Feature Flag），`main()` 启动时在绑定回调**之前**执行 `tui_menu._apply_feature_gates()` 按 `is_feature_enabled` 就地裁剪（裁剪后索引才与渲染一致）：`report_qa`（⚗ 实验项，默认关）关闭时移除 `[Q]`，`doctor_check`（默认开）关闭时移除 `[T]`——默认配置下实际渲染 **17 项**。
 
 | 分组 | 快捷键 | 功能 |
 |:-----|:------|:-----|
