@@ -929,8 +929,14 @@ window.drawSimpleChart = function(canvasId, a, b, c) {
             var idx = Math.round(ratio * (nPoints - 1));
             idx = Math.max(0, Math.min(nPoints - 1, idx));
 
-            /* 构建 tooltip 内容 */
-            var html = '<div style="font-weight:600;margin-bottom:3px;">索引 ' + idx + '</div>';
+            /* 构建 tooltip 内容（DOM API + textContent/createTextNode——
+               标签/数值可能含不可信内容，禁 HTML 字符串拼接注入） */
+            tooltipEl.textContent = '';
+            var tipHead = document.createElement('div');
+            tipHead.style.fontWeight = '600';
+            tipHead.style.marginBottom = '3px';
+            tipHead.textContent = '索引 ' + idx;
+            tooltipEl.appendChild(tipHead);
             for (var ti = 0; ti < validDs.length; ti++) {
                 var tv = validDs[ti].values[idx];
                 var tLabel = validDs[ti].label || '';
@@ -943,11 +949,24 @@ window.drawSimpleChart = function(canvasId, a, b, c) {
                 } else {
                     tVal = tv.toLocaleString();
                 }
-                html += '<div><span style="display:inline-block;width:10px;height:10px;' +
-                    'border-radius:50%;background:' + tColor + ';margin-right:6px;"></span>' +
-                    (tLabel ? tLabel + ': ' : '') + '<strong>' + tVal + '</strong></div>';
+                var tipRow = document.createElement('div');
+                var tipDot = document.createElement('span');
+                tipDot.style.display = 'inline-block';
+                tipDot.style.width = '10px';
+                tipDot.style.height = '10px';
+                tipDot.style.borderRadius = '50%';
+                /* 属性赋值 = CSS 值解析（非法值被拒），非 HTML 注入 */
+                tipDot.style.backgroundColor = tColor;
+                tipDot.style.marginRight = '6px';
+                tipRow.appendChild(tipDot);
+                if (tLabel) {
+                    tipRow.appendChild(document.createTextNode(tLabel + ': '));
+                }
+                var tipStrong = document.createElement('strong');
+                tipStrong.textContent = tVal;
+                tipRow.appendChild(tipStrong);
+                tooltipEl.appendChild(tipRow);
             }
-            tooltipEl.innerHTML = html;
             tooltipEl.style.display = 'block';
             var ttX = e.clientX + 14;
             var ttY = e.clientY - 10;

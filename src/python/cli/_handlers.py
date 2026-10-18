@@ -239,25 +239,10 @@ def _handle_report(args: argparse.Namespace, config: dict) -> int:
 
 
 def _collect_degradation_summary(max_items: int = 10) -> list[str]:
-    """从数据状态跟踪器收集降级摘要（最新在前、按源去重；异常时返回空）。"""
-    try:
-        from src.python.report.data_status import get_tracker
+    """降级摘要行——委托 `report/data_status.degradation_summary`（单源，CLI/Web 收尾共用）。"""
+    from src.python.report.data_status import degradation_summary
 
-        events = [e for e in get_tracker().get_log() if e.get("degraded")]
-    except Exception:
-        return []
-    lines: list[str] = []
-    seen: set[str] = set()
-    for e in reversed(events):
-        source_key = str(e.get("source_key") or "")
-        if not source_key or source_key in seen:
-            continue
-        seen.add(source_key)
-        failure_type = e.get("failure_type") or "降级"
-        lines.append(f"{source_key}: {failure_type}（累计{e.get('count', 0)}次）")
-        if len(lines) >= max_items:
-            break
-    return lines
+    return degradation_summary(max_items)
 
 
 def _notify_report_completion(args: argparse.Namespace, config: dict, exit_code: int, result: object) -> None:

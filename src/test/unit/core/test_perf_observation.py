@@ -190,3 +190,49 @@ class TestLogCapture:
             assert record["breakdown"]["LLM+新闻"]["持仓体检报告"] == 40.0
             assert record["counters"]["warnings"] == 1
             assert record["warnings_count"] == 1
+
+
+class TestTelemetryRetentionCap:
+    """遥测 JSONL 保留上限（perf_history / datasource_health 防无界增长）。"""
+
+    def test_perf_history_trims_oldest_at_cap(self):
+        """写入超过上限 → 只留末尾 N 行（最旧丢弃）。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "perf_history.jsonl")
+            with (
+                patch("src.python.core.perf._PERF_HISTORY_FILE", path),
+                patch("src.python.core.perf._PERF_HISTORY_KEEP_LINES", 2),
+            ):
+                for _ in range(4):
+                    perf = PerfCollector(report_type="basic", holdings=[])
+                    perf.start("阶段")
+                    perf.stop()
+                    perf.save()
+                lines = Path(path).read_text(encoding="utf-8").splitlines()
+            assert len(lines) == 2
+
+    def test_health_check_history_trims_oldest_at_cap(self):
+        """健康检查快照同样受上限约束（datasource_health.jsonl）。"""
+        from src.python.core.perf import save_health_check_snapshot
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "datasource_health.jsonl")
+            with (
+                patch("src.python.core.perf._HEALTH_CHECK_FILE", path),
+                patch("src.python.core.perf._HEALTH_CHECK_KEEP_LINES", 2),
+            ):
+                for i in range(4):
+                    save_health_check_snapshot(
+                        [{"name": "tencent", "ok": True, "latency_ms": float(i), "message": ""}],
+                        report_type="basic",
+                    )
+                lines = Path(path).read_text(encoding="utf-8").splitlines()
+            assert len(lines) == 2
+            # 保留的是最新两条（末行 = 最后一次写入）
+            assert json.loads(lines[-1])["sources"]["tencent"]["latency_ms"] == 3.0
+
+    def test_no_cap_by_default_keeps_all(self):
+        """缺省上限远大于日常量 → 不裁剪（行为回归锚点）。"""
+        from src.python.core.perf import _PERF_HISTORY_KEEP_LINES
+
+        assert _PERF_HISTORY_KEEP_LINES >= 100

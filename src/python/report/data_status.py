@@ -234,6 +234,33 @@ def reset_tracker() -> None:
         _tracker_instance = None
 
 
+def degradation_summary(max_items: int = 10) -> list[str]:
+    """从跟踪器事件日志收集降级摘要行（最新在前、按源去重）——通知载荷单源。
+
+    供任务完成通知在 CLI/Web 收尾调用（同源复用，渠道层不再各自镜像）；
+    任何异常返回空列表——摘要非关键，不拖垮收尾。
+
+    Args:
+        max_items: 最多返回行数（同源多事件只留最新一条）
+    """
+    try:
+        events = [e for e in get_tracker().get_log() if e.get("degraded")]
+    except Exception:
+        return []
+    lines: list[str] = []
+    seen: set[str] = set()
+    for e in reversed(events):
+        source_key = str(e.get("source_key") or "")
+        if not source_key or source_key in seen:
+            continue
+        seen.add(source_key)
+        failure_type = e.get("failure_type") or "降级"
+        lines.append(f"{source_key}: {failure_type}（累计{e.get('count', 0)}次）")
+        if len(lines) >= max_items:
+            break
+    return lines
+
+
 # ── 降级阈值控制 ──────────────────────────────
 
 

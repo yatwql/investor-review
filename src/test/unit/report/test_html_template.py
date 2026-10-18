@@ -199,3 +199,30 @@ class TestHtmlPrintButton(unittest.TestCase):
             self.html,
         )
         self.assertIsNotNone(m, "@media print 应含 .report-print-btn 自隐藏规则")
+
+
+class TestTooltipXssHygiene(unittest.TestCase):
+    """图表 tooltip XSS 纪律：DOM API 构建，全文无 HTML 注入 sink。"""
+
+    def setUp(self):
+        tmpl_path = os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "..",
+            "..",
+            "static",
+            "tmpl",
+            "report_template.html",
+        )
+        with open(os.path.normpath(tmpl_path), encoding="utf-8") as f:
+            self.html = f.read()
+
+    def test_no_html_injection_sinks_anywhere(self):
+        """模板内联 JS 禁 innerHTML / insertAdjacentHTML / document.write / eval。"""
+        for sink in ("innerHTML", "insertAdjacentHTML", "document.write", "eval("):
+            self.assertNotIn(sink, self.html, f"模板出现 HTML 注入 sink: {sink}")
+
+    def test_tooltip_built_with_dom_api(self):
+        """tooltip 内容用 createTextNode + textContent 构建（标签/数值不可信）。"""
+        self.assertIn("createTextNode", self.html)
+        self.assertIn("textContent", self.html)

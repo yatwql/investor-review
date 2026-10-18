@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.13.6-dev
-> **编号源**：`rf-next = 708`（新增问题取此编号，完成后更新为 +1；已用最大 rf-707，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 712`（新增问题取此编号，完成后更新为 +1；已用最大 rf-711，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -40,7 +40,8 @@
 | **rf-79** | `core/code_utils.py` | 766 | 500-1000 可选优化区间，维持现状，`-v` 按月复核 | 可考虑将 `estimate_market_cap_by_prefix()` 等非核心判定函数移出（不拆） |
 | **rf-665** | `config/features.py`、`_doc_drift/_format.py`、`tui/handlers_config.py` | 737 / 558 / 534 | 500-1000 可选优化区间，`-v` 按月复核 | `features.py` 随注册表逐开关增长（每项 ~10 行），逼近 980 行时考虑将 `FeatureSwitchDef` 字段声明/注册表条目下沉独立子模块；另两文件由 `-v` 月度复核 |
 | **rf-89** | `report/excel_generator.py` | 659 | 500-1000 可选优化区间，增长偏快，暂维持现状，`-v` 按月复核 | 页签编排可进一步下沉到独立 writer（后续择机） |
-| **rf-80** | `report/data_status.py` | 622 | 维持现状（DegradationTracker 单类，内部职责内聚） | DegradationTracker 单类偏大（不拆） |
+| **rf-80** | `report/data_status.py` | 649 | 维持现状（DegradationTracker 单类，内部职责内聚；本轮新增通知降级摘要单源下沉后复核） | DegradationTracker 单类偏大（不拆） |
+| **rf-711** | `web/handlers.py` | 852 | 500-1000 可选优化区间，距 1000 红线余量 148 且随 Web 功能持续增长，`-v` 按月复核 | 生成执行体（`_run_generation` 包装器+impl+通知）可下沉 `web/run_generation.py` 子模块（逼近 980 行时启动） |
 | **rf-81** | `report/html_renderers.py` | 577 | 维持现状（render 函数同属渲染域） | 所有 HTML render 函数揉合一体（不拆） |
 | **rf-85** | `fetcher/fund.py` | 553 | 500-1000 可选优化区间，暂维持现状，若再增则按职责拆分 | 排名/持仓/基准三职责可拆分为子模块（后续择机） |
 | **rf-78** | `fetcher/batch.py` | 520 | 维持现状（BatchDispatcher 内聚，复核确认不拆） | BatchDispatcher 本身内聚，可维持现状（不拆） |
@@ -65,6 +66,12 @@
 
 ### 开发期已修复（0.13.6-dev）
 
+> rf-708 已修复（2026-10-18）：完成通知 Web 渠道接线——`_run_generation` 改薄包装器（委托 `_run_generation_impl` + `result_box` 回传产物标志），收尾经 `_notify_web_completion` 按 `notify` 配置门控派发（Web 手动生成 + 内置定时调度共用，无人值守定时失败不再静默）；降级摘要单源下沉 `report/data_status.degradation_summary()`，CLI `_collect_degradation_summary` 改委托（回归用例已补：门控前置/载荷/吞异常/包装器接线）
+>
+> rf-709 已修复（2026-10-18）：报告模板 tooltip XSS 纪律——`drawSimpleChart` hover 内容改 DOM API 构建（`createElement` + `textContent`/`createTextNode`，色点走 `style.backgroundColor` 属性赋值），全文 `innerHTML` 清零；模板源结构测试断言无注入 sink（innerHTML/insertAdjacentHTML/document.write/eval）防回归
+>
+> rf-710 已修复（2026-10-18）：遥测 JSONL 保留上限——`jsonl_store` 追加原语增 `max_lines` 尾部保留参数（超限丢最旧行，原子写语义不变）；perf 历史 5000 行 / 健康检查历史 2000 行上限（账本/去重锚点等业务态文件不设，避免丢失跨会话状态）（回归用例已补：裁剪/不裁剪/批量/缺省行为）
+>
 > rf-706 已修复（2026-10-18）：Web 进度事件通道完整性——`pollOnce` 增在途互斥（pollBusy，成功/异常/同步抛三路复位）+ 按 `seq > lastSeq` 过滤重复回放；服务端 events 载荷补 `first_seq`（`RunState.oldest_seq`），前端缺口时渲染「中间已省略 N 条」占位行，不再静默跳号（回归用例已补：RunState 边界 + 载荷字段 + main.js 源结构）
 >
 > rf-707 已修复（2026-10-18）：Web 生成进度断点续传——活动 run 写 sessionStorage（提交成功/流程重置/轮询完成/任务失效四点闭环清理），页面加载 `resumeActiveRun()` 重建进度视图从 `after=0` 续轮询；run 已随服务重启消失时走既有任务不存在终态收口，不空转重试（回归用例已补：main.js 源结构）

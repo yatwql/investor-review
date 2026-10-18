@@ -461,7 +461,7 @@
 | R-OUT-11 | `src/test/unit/report/test_theme_js.py` + `src/test/unit/report/test_feature_interactive.py` | 批 4 |
 | R-OUT-12 | `src/test/unit/report/test_html_report_structure.py` | 批 4 |
 | R-OUT-13 | `src/test/unit/report/test_run_integrity.py` | 批 9 |
-| R-OUT-14 | `src/test/unit/core/test_completion_notify.py` + `src/test/unit/cli/test_cli.py` | 批 13 |
+| R-OUT-14 | `src/test/unit/core/test_completion_notify.py` + `src/test/unit/cli/test_cli.py` + `src/test/unit/web/test_web_completion_notify.py` | 批 13 |
 | R-OUT-15 | `src/test/unit/report/test_summary_highlights.py` | 批 14 |
 | R-COR-01 | `src/test/unit/analysis/test_correlation.py` + `src/test/unit/analysis/test_correlation_edge.py` + `src/test/unit/report/test_correlation_html.py` + `src/test/unit/report/test_position_structure_sheet.py` + `src/test/unit/fetcher/test_chain.py` | 批 14 |
 | R-PERF-01 | `src/test/unit/news/test_news_aggregator.py` | 批 4 |

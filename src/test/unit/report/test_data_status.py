@@ -797,3 +797,29 @@ class TestMarkDataUsed:
 
         # 异常被吞掉且未写入任何观测事件（观测失败不影响取数）
         assert len(tracker.get_log()) == log_before
+
+
+class TestDegradationSummary:
+    """degradation_summary：通知降级摘要单源（CLI/Web 收尾共用）。"""
+
+    def test_max_items_caps_result(self, monkeypatch):
+        """max_items 上限生效（超限截断，最新在前）。"""
+        from src.python.report import data_status as ds
+
+        events = [{"source_key": f"src{i}", "degraded": True, "failure_type": "timeout", "count": 1} for i in range(5)]
+        tracker = ds.get_tracker()
+        monkeypatch.setattr(tracker, "get_log", lambda: events)
+
+        lines = ds.degradation_summary(max_items=3)
+
+        assert len(lines) == 3
+        assert lines[0].startswith("src4")
+
+    def test_empty_log_returns_empty(self, monkeypatch):
+        """无事件 → 空列表（门控后的载荷 degradations 字段）。"""
+        from src.python.report import data_status as ds
+
+        tracker = ds.get_tracker()
+        monkeypatch.setattr(tracker, "get_log", lambda: [])
+
+        assert ds.degradation_summary() == []

@@ -3,6 +3,9 @@
 生成 handler（``_run_generation``）复刻 ``cli.py:_handle_report`` 模板：
 读持仓（含流水页签）→ 建 reporter → ``generate_report`` → 映射 exit_code。
 Worker 线程经 RunManager 执行，产物定位基于出队时配置快照的 output_dir。
+完成/失败通知：``_run_generation`` 收尾按 ``notify`` 配置派发
+``completion_notify`` 事件（Web 手动生成 + 内置定时调度共用此执行体，
+两条链路的无人值守通知统一在 ``_notify_web_completion``）。
 
 响应统一信封：成功 ``{"ok": true, "data": ...}``；
 错误 ``{"ok": false, "error_code": str|null, "error": 中文文案}``
@@ -71,7 +74,23 @@ def _web_input_mode_snapshot_domain(mode: str) -> str | None:
 
 
 def _run_generation(state, params: dict) -> int:
+    """RunManager 执行体入口：委托 ``_run_generation_impl``，收尾派发完成通知。
+
+    通知契约与 CLI ``_handle_report`` 同构：门控前置（未配置不碰跟踪器）、
+    尽力而为（异常只 DEBUG，绝不改变退出码 / run 状态）；Web 手动生成与
+    内置定时调度共用本入口——定时无人值守正是通知的核心价值。
+    """
+    result_box: dict = {}
+    exit_code = _run_generation_impl(state, params, result_box)
+    _notify_web_completion(state, params, exit_code, result_box.get("result"))
+    return exit_code
+
+
+def _run_generation_impl(state, params: dict, result_box: dict | None = None) -> int:
     """单个 run 的执行体：读持仓 → 建 reporter → generate_report → 映射退出码。
+
+    ``result_box``（可选出参）回传 ``ReportResult``，供收尾通知载荷读取
+    excel_ok/html_ok 产物标志；早期严重失败/异常时无 result 可传。
 
     在 worker 线程执行。每个 run 启动时取一次 ``get_config()`` 快照
     （run 期间不受外部配置修改影响）；产物 output_dir 基于该快照
@@ -164,6 +183,8 @@ def _run_generation(state, params: dict) -> int:
 
         state.output_dir = config.get("output_dir") or get_default("output_dir")
         state.errors = list(result.errors)
+        if result_box is not None:
+            result_box["result"] = result
         return result.exit_code
     except Exception:
         logger.exception("[web-run] run %s 生成异常", state.run_id)
@@ -174,6 +195,42 @@ def _run_generation(state, params: dict) -> int:
         # promote 为 copy，临时文件生命周期不变，仍由这里统一清理）
         if file_id:
             discard_file(file_id)
+
+
+def _notify_web_completion(state, params: dict, exit_code: int, result: object) -> None:
+    """Web 生成收尾完成/失败通知（门控前置 + 尽力而为，与 CLI ``_notify_report_completion`` 同构）。
+
+    Web 手动生成与内置定时调度共用 ``_run_generation`` 执行体——两条链路的
+    通知统一在此派发（定时无人值守正是通知的核心价值）。
+    契约：未配置任何通道时 ``should_notify`` 即返回（不碰跟踪器、不构造
+    事件）；本函数内部任何异常只记 DEBUG，绝不改变 exit_code / run 状态。
+    """
+    try:
+        from src.python.config import get_config
+        from src.python.core.completion_notify import (
+            build_completion_event,
+            dispatch_completion_notification,
+            should_notify,
+        )
+        from src.python.report.data_status import degradation_summary
+
+        config = get_config() or {}
+        notify_cfg = config.get("notify") or {}
+        if not should_notify(notify_cfg, ok=exit_code == 0):
+            return
+        output_dir = state.output_dir or config.get("output_dir") or "reports"
+        event = build_completion_event(
+            report_type=str(params.get("report_type", "basic") or "basic"),
+            exit_code=exit_code,
+            output_dir=str(output_dir),
+            errors=list(state.errors or []),
+            excel_ok=bool(getattr(result, "excel_ok", False)),
+            html_ok=bool(getattr(result, "html_ok", False)),
+            degradations=degradation_summary(),
+        )
+        dispatch_completion_notification(event, notify_cfg)
+    except Exception:
+        logger.debug("完成通知发送流程异常（非关键，不影响任务）", exc_info=True)
 
 
 def _build_artifacts(params: dict, state) -> list[dict]:

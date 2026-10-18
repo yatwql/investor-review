@@ -711,8 +711,8 @@ A: `data/state/` 存放跨会话持久化的运行时状态文件，目前包含
 - `.degradation_state.json` — 降级状态（各数据源上次成功获取的时间戳）
 - `circuit_breaker.json` — 熔断器状态（Provider 级熔断记忆，跨会话恢复）
 - `rebalance_silence.json` — 再平衡告警静默期
-- `perf_history.jsonl` — **每次报告生成的阶段耗时记录**（供 `scripts/perf-view.py` 做跨版本趋势分析）
-- `datasource_health.jsonl` — **每次报告生成时自动执行的数据源健康检查结果**（HTTP 连通性+延迟）
+- `perf_history.jsonl` — **每次报告生成的阶段耗时记录**（供 `scripts/perf-view.py` 做跨版本趋势分析；自动保留最近 5000 条，超出丢弃最旧）
+- `datasource_health.jsonl` — **每次报告生成时自动执行的数据源健康检查结果**（HTTP 连通性+延迟；自动保留最近 2000 条，超出丢弃最旧）
 
 该目录与 `data/cache/` 隔离，**不会被菜单 `[3]`（清理过期缓存）删除**，也不会被 `cleanup_expired()` 扫描。菜单 `[4]`（查看缓存与状态统计）会单独列出该目录的文件数量和大小。如手动删除该目录，程序会自动重建，但会丢失降级记忆（熔断从零开始）和性能历史数据。
 

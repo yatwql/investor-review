@@ -49,6 +49,10 @@ logger = logging.getLogger("invest")
 # module-level 变量，测试时可通过 setattr 重定向（测试隔离模式）
 _PERF_HISTORY_DIR = os.path.join(PROJECT_ROOT, "data", "state")
 _PERF_HISTORY_FILE = os.path.join(_PERF_HISTORY_DIR, "perf_history.jsonl")
+# 遥测保留上限（防只增文件无界增长；超出后追加时丢最旧行，
+# 见 core/jsonl_store.append_jsonl_atomic_many 的 max_lines——
+# 5000 条 ≈ 每日 4 次生成的三年余，远超 perf-view 趋势分析所需）
+_PERF_HISTORY_KEEP_LINES = 5000
 
 
 # ── 数据结构 ────────────────────────────────────────────
@@ -392,7 +396,7 @@ class PerfCollector:
             logger.debug("[perf] 本次运行已记录，跳过重复落盘")
             return
         line = json.dumps(self.snapshot().to_json(), ensure_ascii=False) + "\n"
-        _append_jsonl_atomic(_PERF_HISTORY_FILE, line)
+        _append_jsonl_atomic(_PERF_HISTORY_FILE, line, max_lines=_PERF_HISTORY_KEEP_LINES)
         self._saved = True
         self._detach_log_capture()
         logger.info("[perf] 耗时已记录到 %s", _PERF_HISTORY_FILE)
@@ -401,19 +405,27 @@ class PerfCollector:
 # ── 原子写入工具 ────────────────────────────
 
 
-def _append_jsonl_atomic(path: str, line: str) -> None:
+def _append_jsonl_atomic(path: str, line: str, max_lines: int | None = None) -> None:
     """向 JSONL 文件原子追加一行（原语见 `core/jsonl_store.py`）。
 
     策略：读全部现有内容 → 追加新行 → tempfile.mkstemp + os.replace 写回。
     遵循原子写入：直接覆写会因断电/崩溃产生半写损坏文件。
+
+    Args:
+        path: 目标文件路径
+        line: 已序列化单行（含换行）
+        max_lines: 保留上限（透传 jsonl_store，仅遥测历史启用；None = 不限）
     """
-    append_jsonl_atomic(path, line, prefix=".perf_history_", log_tag="perf", noun="历史文件")
+    append_jsonl_atomic(path, line, prefix=".perf_history_", log_tag="perf", noun="历史文件", max_lines=max_lines)
 
 
 # ── 数据源健康检查持久化 ──────────────────────────────
 
 # 健康检查历史文件（同 data/state/ 目录）
 _HEALTH_CHECK_FILE = os.path.join(_PERF_HISTORY_DIR, "datasource_health.jsonl")
+# 健康检查遥测保留上限（同 perf_history 防无界增长；
+# summarize_health_history 只取末 10 条，2000 条余量充足）
+_HEALTH_CHECK_KEEP_LINES = 2000
 
 
 def save_health_check_snapshot(
@@ -441,7 +453,7 @@ def save_health_check_snapshot(
         "fail_count": sum(1 for r in results if not r["ok"]),
     }
     line = json.dumps(snapshot, ensure_ascii=False) + "\n"
-    _append_jsonl_atomic(_HEALTH_CHECK_FILE, line)
+    _append_jsonl_atomic(_HEALTH_CHECK_FILE, line, max_lines=_HEALTH_CHECK_KEEP_LINES)
     logger.info("[health] 数据源健康检查结果已记录到 %s", _HEALTH_CHECK_FILE)
 
 

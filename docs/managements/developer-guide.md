@@ -1347,7 +1347,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 **定位边界（重要）**：本脚本是**运行历史查看**（被动统计既有记录）——样本取决于最近跑过什么、不可复现，故**不用于 CI 门禁**。性能门禁由主动压测的 `perf-test-report.py --gate` 承担（自造模拟持仓、mock 外部数据源，同条件可比，退化即回归）。
 
-**数据来源**：每次 `generate_report()` 调用时自动记录到 `data/state/perf_history.jsonl`，无需手动触发；中断运行以 `status=interrupted` 记录（含 `interrupted_stage`），与成功完成（`completed`）区分，页头状态行据显「已中断」。
+**数据来源**：每次 `generate_report()` 调用时自动记录到 `data/state/perf_history.jsonl`（自动保留最近 5000 条，超出丢弃最旧），无需手动触发；中断运行以 `status=interrupted` 记录（含 `interrupted_stage`），与成功完成（`completed`）区分，页头状态行据显「已中断」。
 
 **记录字段分层**（观测面口径）：
 

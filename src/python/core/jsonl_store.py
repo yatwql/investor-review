@@ -37,6 +37,7 @@ def append_jsonl_atomic(
     prefix: str = ".jsonl_",
     log_tag: str = "jsonl",
     noun: str = "JSONL 文件",
+    max_lines: int | None = None,
 ) -> bool:
     """向 JSONL 文件原子追加一行（`line` 需自带结尾换行）。
 
@@ -52,7 +53,7 @@ def append_jsonl_atomic(
         持久化，不承担中断调用链的职责）；但必须把成败**如实返回**——调用方若对
         外承诺「已写入 N 条」，就得据此判定，否则写盘失败会被报成成功。
     """
-    return append_jsonl_atomic_many(path, [line], prefix=prefix, log_tag=log_tag, noun=noun)
+    return append_jsonl_atomic_many(path, [line], prefix=prefix, log_tag=log_tag, noun=noun, max_lines=max_lines)
 
 
 def append_jsonl_atomic_many(
@@ -62,6 +63,7 @@ def append_jsonl_atomic_many(
     prefix: str = ".jsonl_",
     log_tag: str = "jsonl",
     noun: str = "JSONL 文件",
+    max_lines: int | None = None,
 ) -> bool:
     """向 JSONL 文件**一次性**原子追加多行（`lines` 每项需自带结尾换行）。
 
@@ -73,6 +75,11 @@ def append_jsonl_atomic_many(
         path: 目标 JSONL 文件路径（父目录不存在时自动创建）
         lines: 已序列化的多行内容（每项含 "\\n"）；空列表时立即返回 True
         其余参数同 :func:`append_jsonl_atomic`
+
+    ``max_lines``（保留上限）：追加后超限时只留末尾 N 行、最旧行丢弃——专为
+    **遥测类**只增历史（perf/健康检查）防无界增长设计；业务态账本（决策/信号/
+    折叠/去重锚点）丢失即丢状态，**不得设置**。追加本就要重写全文件，裁剪零
+    额外 I/O 成本。
 
     Returns:
         是否落盘成功（语义同 :func:`append_jsonl_atomic`）。
@@ -87,9 +94,22 @@ def append_jsonl_atomic_many(
         except OSError:
             logger.warning("[%s] %s不可读，将重新创建: %s", log_tag, noun, path)
 
+    content = existing + "".join(lines)
+    if max_lines is not None:
+        parts = content.splitlines(keepends=True)
+        if len(parts) > max_lines:
+            logger.debug(
+                "[%s] %s超出保留上限（%d 行），丢弃最旧 %d 行",
+                log_tag,
+                noun,
+                len(parts),
+                len(parts) - max_lines,
+            )
+            content = "".join(parts[-max_lines:])
+
     return write_text_atomic(
         path,
-        existing + "".join(lines),
+        content,
         prefix=prefix,
         log_tag=log_tag,
         noun=noun,

@@ -17,6 +17,10 @@
 
 ### Fixed
 
+- 完成通知 Web 渠道接线（rf-708）：`_run_generation` 改薄包装器（委托执行体 + `result_box` 回传产物标志），收尾按 `notify` 配置门控派发完成/失败通知——Web 手动生成与内置定时调度共用（无人值守定时失败不再静默，与 CLI 同构：门控前置、尽力而为不改退出码/不改 run 状态）；降级摘要单源下沉 `report/data_status.degradation_summary()`，CLI 原函数改委托；补门控/载荷/吞异常/接线回归用例
+- 报告模板 tooltip XSS 纪律（rf-709）：`drawSimpleChart` hover 内容改 DOM API 构建（`createElement` + `textContent`/`createTextNode`，色点走 `style.backgroundColor` 属性赋值），全文 `innerHTML` 清零；模板源结构测试断言无注入 sink 防回归
+- 遥测 JSONL 保留上限（rf-710）：`jsonl_store` 追加原语增 `max_lines` 尾部保留参数（超限丢最旧行，原子写语义不变），perf 历史 5000 行 / 健康检查历史 2000 行上限；账本/去重锚点等业务态文件不设（避免丢失跨会话状态）；补裁剪/批量/缺省行为回归用例
+
 - LLM 计费口径统一修复（rf-701/702/703）：`_normalize_usage_tokens` claude 分支把 `input_tokens` 归一为总输入（补 `cache_read_input_tokens`，兼容端点命中大于未命中不再产生负费用），openai 分支补读 DeepSeek 原生端点顶层 `prompt_cache_hit_tokens`（优先于 `prompt_tokens_details.cached_tokens`）；`estimate_cost` 的 `cache_miss` 下限 0 防御；报告页脚/批处理汇总/新闻相关性费用估值统一走归一层，会话累计费用与单次估算同参等值；补 5 个回归用例
 - LLM 模型定价表按官方定价页核实修正（rf-700）：Claude Opus 4.x 15/75→5/25、Haiku 4.5 0.25/1.25→1/5、Fable 5 3/15→10/50、Gemini 3.5 Flash 0.15/0.6→1.5/9、Gemini 2.5 Flash 0.15/0.6→0.30/2.50、2.5 Pro 输出 5→10、GPT-4o/mini 缓存命中补 50% 折扣；同步 `llm-technical.md` 附录 B 与 `how-to-config-llm.md` 定价表。DeepSeek 峰谷价与 Kimi 价经核实无偏差，不影响现有费用估算
 - 过期缓存生成路径自动清理（rf-704）：`cache.auto_cleanup_expired()` 尽力而为包装（任何异常吞掉返回 0），`generate_report` 入口调用（CLI/TUI/Web 三渠道共用入口），无人值守 CLI 定时任务不再只增不减地堆积过期缓存文件；补委托与吞异常回归用例

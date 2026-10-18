@@ -247,7 +247,7 @@ llm/generators_orchestrator.py ──→ cache/（可选）
 | **贯穿** | 日志可视化 | 结构化日志读取（parse_log/tail_log/read_log），CLI/TUI/Web 三端共享 | `core/log_reader.py` |
 | **贯穿** | 系统自检 | 运行环境/配置/目录/功能开关/数据源适配/数据源凭据/数据源七组一次性盘点（开关 `doctor_check`，默认开），CLI/TUI/Web 三端共享；自身永不抛异常、零重依赖 | `core/doctor.py` |
 | **贯穿** | 数值归一 | 非有限值（NaN/±inf）防线收敛点：`safe_num` / `strict_num` / `finite_or` / `is_finite_number`；纯 stdlib、零项目内依赖，providers/analysis/report 任一侧可安全导入 | `core/num_utils.py` |
-| **贯穿** | 任务完成通知 | CLI 报告收尾按 `notify` 配置分发 webhook/邮件/桌面三通道（失败必发、成功需 `on_success`；尽力而为：单通道失败隔离、永不改退出码、未配置静默跳过） | `core/completion_notify.py` |
+| **贯穿** | 任务完成通知 | CLI/Web 报告收尾按 `notify` 配置分发 webhook/邮件/桌面三通道（失败必发、成功需 `on_success`；尽力而为：单通道失败隔离、永不改退出码、未配置静默跳过；降级摘要单源 `report/data_status.degradation_summary()`） | `core/completion_notify.py` |
 
 ### 1.4 概要设计 — 核心架构决策
 
@@ -559,7 +559,7 @@ Web 渠道是第三种交互入口：**浏览器内完成「上传持仓 Excel �
 |:-----|:-----|:---------|
 | `web/server.py` | 启动入口 | sys.path 注入、参数解析、端口检测、output_dir 写锁检测、init_config、app.run |
 | `web/app.py` | Flask 应用工厂 | 统一 JSON 错误处理、request_id 访问日志、注入 run_manager |
-| `web/handlers.py` | API 路由 | 页面/上传/生成/轮询/预览/下载/历史/健康/日志/缓存统计与清理/What-if/报告追问/配置编辑；`_run_generation` 复刻 CLI 报告流程；`_build_system_info` 委托 `core/system_info.build_system_info` 单源组装状态区系统信息（版本/本机 IP/持仓输出摘要/LLM 含多链/自检卡片可见性，与 TUI 同组展示原语）；`_handle_logs`/`_handle_health_history` 薄展示（委托 `core/log_reader.py` + `core/perf.py`，无解析逻辑）；`_handle_doctor` 薄展示（委托 `core/doctor.py`）；`_handle_config_edit` 同源守卫（`_is_same_origin`）；`_build_artifacts` 委托 `orchestrator.artifacts_for_report_type` 类型语义与 `core/constants` 最新产物名（不镜像 CLI --type 规则与文件名字面量）；空持仓门经 `core/reader.require_holdings` 单源（HTTP 端不带服务端路径） |
+| `web/handlers.py` | API 路由 | 页面/上传/生成/轮询/预览/下载/历史/健康/日志/缓存统计与清理/What-if/报告追问/配置编辑；`_run_generation` 薄包装器（委托 `_run_generation_impl` + `result_box` 回传产物标志，收尾经 `_notify_web_completion` 按 `notify` 配置门控派发完成通知——Web 手动 + 内置定时调度共用，与 CLI 同构尽力而为不改退出码）；`_build_system_info` 委托 `core/system_info.build_system_info` 单源组装状态区系统信息（版本/本机 IP/持仓输出摘要/LLM 含多链/自检卡片可见性，与 TUI 同组展示原语）；`_handle_logs`/`_handle_health_history` 薄展示（委托 `core/log_reader.py` + `core/perf.py`，无解析逻辑）；`_handle_doctor` 薄展示（委托 `core/doctor.py`）；`_handle_config_edit` 同源守卫（`_is_same_origin`）；`_build_artifacts` 委托 `orchestrator.artifacts_for_report_type` 类型语义与 `core/constants` 最新产物名（不镜像 CLI --type 规则与文件名字面量）；空持仓门经 `core/reader.require_holdings` 单源（HTTP 端不带服务端路径） |
 | `web/upload.py` | 上传安全 | 服务端 uuid 重命名、扩展名白名单、大小上限、PK 魔数、原子落盘、TTL 清理 |
 | `web/config_edit.py` | 配置编辑 | 薄外观：再导出共享层 `config/edit_ops.py` 符号（`apply_config_edit`/`config_edit_whitelist`/`config_backup_file`）+ `get_config_edit_surface` 组装呈现面；规则与写入单源在共享层，与 TUI 同一函数 |
 | `web/runs.py` | 运行管理 | RunManager 单 worker 串行队列 + run 状态/事件注册表（Lock 保护） |
@@ -3516,7 +3516,8 @@ make_http_client(timeout=10.0) → httpx.Client
 | `num_utils` | 数值归一原语（`safe_num` 显式拦下 NaN/±inf，替代失效的 `try: float()` 兜底） | 诊断 | 数据获取 | 无（模块级，A 通道无开关） |
 | `retry` | 重试与退避唯一原语（`RetryPolicy` 策略算式——固定/线性/指数/**显式序列**、`is_transient_exception` 瞬时判据、`retry_transient` 执行器；取数链路、各 provider 与 LLM 调用骨架共用） | 诊断 | 数据获取 | 无（模块级） |
 | `throttle` | 按名最小间隔节流唯一原语（`RateLimiter` + `interval_delay` 抖动算式；数据层限速/批量调度/LLM 端点节流三层共用） | 诊断 | 数据获取 | 无（模块级） |
-| `completion_notify` | 任务完成通知（CLI 报告收尾按 `notify` 配置分发 webhook/邮件/桌面三通道事件——失败必发、成功需 `on_success`；无配置静默跳过；单通道失败隔离、永不抛出不改退出码；webhook URL 日志只记域名） | 诊断 | 报告 | 随 `notify` 配置节 |
+| `completion_notify` | 任务完成通知（CLI/Web 报告收尾按 `notify` 配置分发 webhook/邮件/桌面三通道事件——失败必发、成功需 `on_success`；无配置静默跳过；单通道失败隔离、永不抛出不改退出码；webhook URL 日志只记域名；降级摘要单源 `report/data_status.degradation_summary()`） | 诊断 | 报告 | 随 `notify` 配置节 |
+| `degradation_summary` | 通知降级摘要单源（数据状态跟踪器事件日志 → 摘要行，最新在前按源去重；CLI/Web 收尾共用，渠道层不再各自镜像） | 诊断 | 报告 | 随 `notify` 配置节 |
 | `doctor` | 系统自检（环境/配置/目录/功能开关/数据源适配/数据源凭据/数据源七组，失败项附可执行建议，自身永不抛异常） | 诊断 | 诊断 | 开关 `doctor_check`（默认开；CLI `doctor` 子命令不受开关约束） |
 | `doctor_check` | 自检功能上屏门控（TUI 菜单 [T] 与 Web 状态区自检卡片可见性） | 诊断 | 诊断 | 开关 `doctor_check`（默认开，非实验项） |
 | `datasource_fields` | 数据域标准字段记录（`schemas/datasource_fields.py`，类型注解即缺省语义） | 数据源适配 | 数据获取 | 随 `datasource_adapter` |
