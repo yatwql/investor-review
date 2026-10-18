@@ -905,7 +905,7 @@ A: 运行 `.venv/bin/python scripts/check-test-markers.py`，脚本会静态扫�
 | `check-script-contract.py` | 质量 | scripts 顶层脚本契约机检（退出码声明 ⊆ {0,2} 白名单、check-* 统一 `add_common_args` CLI 面、文本 I/O 显式 encoding、脚本↔测试覆盖映射，四条规则——**观察期**未入钩子与 CI） |
 | `release.py` | 发布 | 发布流程分步编排（check/prepare/refresh/evolution/gate/publish/devbump，每步独立可审阅、失败即停） |
 | `perf-test-report.py` | 诊断 | 端到端报告生成管线性能基准（独立脚本，mock 外部数据源） |
-| `perf-view.py` | 诊断 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 时段聚合/机读输出） |
+| `perf-view.py` | 诊断 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 时段聚合（耗时与费用合计/环比）/机读输出（llm_cost、by_period 费用字段）） |
 | `probe.py` | 诊断 | 探测统一入口（按 target 分发到 `probes/` 子模块；新探针实现契约面登记即用） |
 | `probe-csi-factor-indices.py` / `probe-push2.py` | 诊断 | 旧入口兼容垫片（薄委托到 `probes/csi.py` / `probes/push2.py`，用法不变） |
 | `check-svg.py` | 诊断 | README SVG 架构图检查（子命令 `geom` 几何 / `pixel` 像素 / `text-overflow` 文字色越界；像素子命令需 Pillow） |
@@ -1293,11 +1293,14 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 **`perf-view.py` — 性能历史趋势查看**
 
-读取 `data/state/perf_history.jsonl`（由 `PerfCollector` 在每次报告生成时自动追加），按版本和报告类型分组统计（分组节按各组**首次运行时间**排序，最新版本在最末；组内明细行按时间戳升序），输出版本间性能趋势对比；输出跨版本「总体分位概览」（样本数 / 平均 / 中位 / **P95** / **P99** / 最长 / 中位秒每品种，n<20 附小样本提示）、**版本演进总表**（每版中位/P95/较上一版 delta+⚠，按首现时间排序）、离群与尾部归因、**异常运行专区**（中断/失败，无则省略）与**同版本漂移检测**（时间对半、噪声带判显著）。头部含**数据新鲜度**行（最新记录时间戳与距今时长）与可选**版本筛选**行；组详情阶段表按**中位降序**（最慢在前）并含**占比**列；阶段细分/LLM 上下文在范围内应有数据而缺时**明示提示行**（区分「无数据」与「不适用」）而非静默省略。
+读取 `data/state/perf_history.jsonl`（由 `PerfCollector` 在每次报告生成时自动追加），按版本和报告类型分组统计（分组节按各组**首次运行时间**排序，最新版本在最末；组内明细行按时间戳升序），输出版本间性能趋势对比；输出跨版本「总体分位概览」（样本数 / 平均 / 中位 / **P95** / **P99** / 最长 / 中位秒每品种，n<20 附小样本提示）、**版本演进总表**（每版中位/P95/较上一版 delta+⚠，按首现时间排序）、离群与尾部归因、**异常运行专区**（中断/失败，无则省略）与**同版本漂移检测**（时间对半、噪声带判显著）。头部含**数据新鲜度**行（最新记录时间戳与距今时长）与可选**版本筛选**行；组详情阶段表按**中位降序**（最慢在前）并含**占比**列；阶段细分/LLM 上下文在范围内应有数据而缺时**明示提示行**（区分「无数据」与「不适用」）而非静默省略。`--by day|week|hour` 时段聚合在耗时列外附**费用合计/费用环比**（与 LLM 段「累计费用」同源的 `llm.total_cost`，范围内无费用样本自动省列，首档环比为 —、末档附提示行）；`--json` 汇总带 `llm_cost` 费用块（`--by` 时另附 `by_period` 时段费用序列），CSV 列不变。
 
 ```bash
 # 输出全部历史趋势到 stdout（--json/--csv 机读模式同样只向 stdout，落盘需自行重定向）
 .venv/bin/python scripts/perf-view.py
+
+# 按日聚合：耗时与费用合计/费用环比同表（LLM 费用趋势视图）
+.venv/bin/python scripts/perf-view.py --by day
 
 # 仅看 full 类型报告的性能趋势
 .venv/bin/python scripts/perf-view.py --report-type full

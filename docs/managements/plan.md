@@ -58,13 +58,6 @@
 
 **动作**：whatif 模板按主报告同参补 `.report-print-btn`（44×44 触控目标、`--primary`/`--primary-hover` 语义 token、`window.print()`、打印稿自隐藏），断言口径与主报告用例对齐（`test_whatif_html` 补对应用例）
 
-#### 🔲 `plan-129` LLM 费用无跨运行趋势视图
-
-**现状与问题**：`perf_history.jsonl` 已逐次记录 `llm` 费用字段，perf-view LLM 段只有全期「累计费用」单行，`--by day|week|hour` 时段聚合又只算耗时（样本数/中位/P95/最长）——两者未交叉，看不到「本周比上周多花多少」的费用趋势
-
-**动作**：perf-view 按 `--by` 口径补费用聚合与环比趋势（当期 vs 上期 delta），`--json` 机读输出同步带费用字段；数据零新增，纯脚本侧聚合，沿用既有稳健统计口径
-
-
 ### P3 — 预期实施，有空时安排
 
 > **候选说明**：plan-66 ~ plan-68（源 TradingAgents-CN 研究的 P4 候选，逐项分析见 [`tradingagents-cn-borrow-candidates-research.md`](../archive/v0.11.x/tradingagents-cn-borrow-research/tradingagents-cn-borrow-candidates-research.md)）仍为候选；**立项前须先做本仓库现状比对**（立项前提可能被既有实现推翻，须按「分层不重叠」重新定位）。

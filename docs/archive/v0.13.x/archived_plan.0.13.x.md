@@ -7,6 +7,10 @@
 
 ---
 
+## plan-129 LLM 费用无跨运行趋势视图 ✅
+
+**完成（2026-10-18，v0.13.6-dev）**：perf-view `--by day|week|hour` 时段聚合表在耗时列外新增**费用合计/费用环比**列（数据源既有 `llm.total_cost`，零新增；时段键升序即时间序；首档环比为 —、末档附「费用环比（末档 vs 前档）」提示行；范围内无费用样本自动省列）；`--json` 汇总新增 `llm_cost` 费用块（runs/total/mean/median/max，沿用既有均值/中位/极值 helper，无样本为 null）与 `--by` 时的 `by_period` 时段费用序列（bucket 升序可直接相邻差分，未传 `--by` 为 null）；CSV 列不变。回归用例 `test_perf_view.py::TestBucketCostAggregation / TestLlmCostMachineData`（9 例）。
+
 ## plan-130 应用内定时生成（免外部任务计划） ✅
 
 **完成（2026-10-18，v0.13.6-dev）**：Web 工作台配置页签新增「定时生成」调度面板（执行日/时刻/报告类型/启用开关），保存写入 `config.json` 的 `scheduler` 块（缺省关闭；`_DEFAULT_CONFIG`/配置模板/`how-to-config.md` 字段总表同步）；服务端新增 `web/scheduler.py` daemon 调度线程每 30s 重读配置评估触发窗（宽限 30 分钟内顺延活动任务、超时登记错过），触发即向 RunManager 提交「正式-用存量」生成——与手动生成同队列同 worker 串行，复用生成入口自动清理与完成链路；触发账本按「计划签名+日期」原子写 `data/state/scheduler_fired.json`（损坏兜底 + `_path_isolation` 重定向）；`GET/POST /api/scheduler`（校验 400 / 同源守卫 403 / 写失败 500）；服务器/容器场景的 CLI cron 替代方案见 Web 手册 §5.4。回归用例：`src/test/unit/web/test_scheduler.py`（解析/触发窗/账本/API/面板接线 + 前端源结构断言），需求登记 R-WEB-12。

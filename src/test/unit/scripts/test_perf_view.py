@@ -840,3 +840,111 @@ class TestGroupPercentileLines:
         p95, p99 = [float(part.split("**")[1].rstrip("s")) for part in line.split("，")]
         totals = [r["total_seconds"] for r in records]
         assert min(totals) <= p95 <= p99 <= max(totals)
+
+
+def _cost_records() -> list[dict]:
+    """跨三天含/不含 llm 费用的样本（day/hour 聚合共用）。"""
+    return [
+        {
+            "version": "0.1.0",
+            "report_type": "full",
+            "timestamp": "2026-01-01 10:00:00",
+            "total_seconds": 10.0,
+            "llm": {"total_cost": 0.10},
+        },
+        {
+            "version": "0.1.0",
+            "report_type": "full",
+            "timestamp": "2026-01-01 11:00:00",
+            "total_seconds": 12.0,
+            "llm": {"total_cost": 0.15},
+        },
+        {
+            "version": "0.1.0",
+            "report_type": "full",
+            "timestamp": "2026-01-02 10:00:00",
+            "total_seconds": 9.0,
+            "llm": {"total_cost": 0.05},
+        },
+        {
+            "version": "0.1.0",
+            "report_type": "basic",
+            "timestamp": "2026-01-03 10:00:00",
+            "total_seconds": 11.0,
+        },
+    ]
+
+
+class TestBucketCostAggregation:
+    """--by 时段聚合的费用列与环比（费用趋势视图核心）。"""
+
+    def test_cost_columns_and_per_bucket_sums(self, mod):
+        """有费用样本时出费用合计/环比列，各时段求和、首档环比为破折号。"""
+        text = "\n".join(mod._bucket_lines(_cost_records(), "day"))
+        assert "费用合计" in text and "费用环比" in text
+        day1 = next(ln for ln in text.splitlines() if ln.startswith("| 2026-01-01 "))
+        day2 = next(ln for ln in text.splitlines() if ln.startswith("| 2026-01-02 "))
+        day3 = next(ln for ln in text.splitlines() if ln.startswith("| 2026-01-03 "))
+        assert "0.2500 | —" in day1, "首档无上期，费用合计为 0.10+0.15、环比为 —"
+        assert "0.0500 | -0.2000" in day2, "环比 = 0.05 − 0.25"
+        assert "0.0000 | -0.0500" in day3, "无 llm 记录的时段计零并参与环比"
+
+    def test_last_bucket_delta_footer(self, mod):
+        """末档 vs 前档提示行给出当期环比（趋势一眼可读）。"""
+        text = "\n".join(mod._bucket_lines(_cost_records(), "day"))
+        assert "**费用环比（末档 vs 前档）**：0.0500 → 0.0000（-0.0500）" in text
+
+    def test_cost_columns_absent_without_cost_samples(self, mod):
+        """范围内无费用样本时省略费用列（不制造全列噪音）。"""
+        text = "\n".join(mod._bucket_lines(_records(3), "day"))
+        assert "费用合计" not in text and "费用环比" not in text
+        assert "| 时段 | 样本数 | 中位 | P95 | 最长 |" in text
+
+    def test_hour_bucket_keeps_cost_crossing(self, mod):
+        """hour 口径同样交叉费用（同一代码路径，覆盖键分支）。"""
+        text = "\n".join(mod._bucket_lines(_cost_records(), "hour"))
+        assert "费用合计" in text
+        hour10 = next(ln for ln in text.splitlines() if ln.startswith("| 10 "))
+        assert "0.1500" in hour10, "10 点档 = 0.10 + 0.05"
+
+
+class TestLlmCostMachineData:
+    """--json 费用字段：llm_cost 汇总与 --by 时段费用序列。"""
+
+    def test_summary_carries_llm_cost_block(self, mod):
+        import json as _json
+
+        payload = _json.loads(mod._machine_readable(_cost_records(), "json"))
+        cost = payload["summary"]["llm_cost"]
+        assert cost["runs"] == 3
+        assert cost["total"] == pytest.approx(0.30, abs=1e-6)
+        assert cost["mean"] == pytest.approx(0.10, abs=1e-6)
+        assert 0 < cost["median"] <= cost["max"]
+
+    def test_summary_llm_cost_null_without_samples(self, mod):
+        import json as _json
+
+        payload = _json.loads(mod._machine_readable(_records(2), "json"))
+        assert payload["summary"]["llm_cost"] is None
+
+    def test_by_period_series_sorted_with_costs(self, mod):
+        import json as _json
+
+        payload = _json.loads(mod._machine_readable(_cost_records(), "json", by="day"))
+        series = payload["summary"]["by_period"]
+        buckets = [p["bucket"] for p in series]
+        assert buckets == sorted(buckets), "时段键升序即时间序，可直接相邻差分"
+        assert [p["total_cost"] for p in series] == pytest.approx([0.25, 0.05, 0.0])
+        assert [p["runs"] for p in series] == [2, 1, 1]
+
+    def test_by_period_null_without_by(self, mod):
+        import json as _json
+
+        payload = _json.loads(mod._machine_readable(_records(2), "json"))
+        assert payload["summary"]["by_period"] is None
+
+    def test_report_by_day_shows_cost_columns(self, mod):
+        """整链：build_trend_report(--by day) 输出含费用列与环比的时段表。"""
+        text = mod.build_trend_report(_cost_records(), by="day")
+        assert "## 时段聚合（按日期）" in text
+        assert "费用合计" in text and "费用环比（末档 vs 前档）" in text
