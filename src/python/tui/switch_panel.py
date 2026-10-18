@@ -126,6 +126,7 @@ def format_item(
     name_column: int,
     key_column: int,
     number_width: int = 1,
+    reveal_key: bool = False,
 ) -> list[str]:
     """把一个开关/模块条目排版成 1~2 行（随终端宽度自适应）。
 
@@ -141,6 +142,8 @@ def format_item(
         name_column: 名称列宽（宽/中档对齐用，取面板内最长名称）。
         key_column: 键名列宽（同上）。
         number_width: 编号列宽（按最大编号位数右对齐，使 1 与 10 起各列同位）。
+        reveal_key: 窄档是否显示键名——手机屏幕窄、键名放不进单行，故**默认不显示**
+            （用编号即可操作）；按 `k` 时才追加缩进的键名行，供需要时抄写/粘贴。
 
     Returns:
         1 行（wide/narrow）或 2 行（medium）文本，均不超过 `inner_width(columns)`。
@@ -171,9 +174,14 @@ def format_item(
             second += f"{DIM}{notes}{RESET}"
         return [truncate_display(first, limit), *wrap_display(second, limit)]
 
-    # narrow：单行压缩，键名不进版面（改由 `? 编号` 查看），名称按剩余列截断
+    # narrow：单行压缩（键名默认不进版面——手机窄屏放不下，且编号足够操作）；
+    # 用户按 `k` 时输出两行：名称+状态 / 缩进键名，供抄写粘贴。
     prefix = f"{num} {marker}"
     tail = f" {status}{star}"
+    if reveal_key:
+        indent = " " * (display_width(num) + 1)
+        second = f"{indent}{DIM}{key}{RESET}" + (f"{DIM}{notes}{RESET}" if notes else "")
+        return [truncate_display(f"{prefix}{label}{tail}", limit), *wrap_display(second, limit)]
     name_budget = limit - display_width(prefix) - display_width(tail)
     return [f"{prefix}{truncate_display(label, name_budget)}{tail}"]
 
@@ -203,13 +211,14 @@ def wrap_hanging(text: str, columns: int, indent: str = "    ") -> list[str]:
     return lines
 
 
-def legend_lines(cost_days: int, columns: int, *, tier: str | None = None) -> list[str]:
+def legend_lines(cost_days: int, columns: int, *, tier: str | None = None, reveal_key: bool = False) -> list[str]:
     """页脚图例（按终端宽度折行；窄档只保留符号释义与命令提示）。
 
     Args:
         cost_days: 费用摘要回看窗口天数（与 `perf.module_cost_summary` 口径一致）。
         columns: 终端列数。
         tier: 版面档位；缺省按 `columns` 推导。
+        reveal_key: 窄档当前是否已显示键名（决定提示写「k 显示键名」还是「k 隐藏键名」）。
 
     Returns:
         图例行列表，每行不超过 `inner_width(columns)`。
@@ -221,8 +230,11 @@ def legend_lines(cost_days: int, columns: int, *, tier: str | None = None) -> li
     if tier == "narrow":
         # 窄终端：只留「怎么用」——符号释义与键名位置说明对 40~60 列的手机太占地方
         lines += wrap_hanging("  ⚗ 实验项（默认关） · * 与默认不同", limit)
-        lines += wrap_hanging("  输入编号切换；? 编号 查看说明（含键名）", limit)
-        lines += wrap_hanging("  r 编号 恢复本组默认 · ra 全部恢复 · x 实验项全关", limit)
+        lines += wrap_hanging("  输入编号切换（窄屏用编号最省事）；? 编号 查看该开关说明", limit)
+        lines += wrap_hanging(
+            "  r 编号 恢复本组默认 · ra 全部恢复 · x 实验项全关 · " + ("k 隐藏键名" if reveal_key else "k 显示键名"),
+            limit,
+        )
         return lines
 
     lines += wrap_hanging("  ⚗ 实验项（默认关，质量可能不稳定） · * 与出厂默认不一致（配置漂移）", limit)

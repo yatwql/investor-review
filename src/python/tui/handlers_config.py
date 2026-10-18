@@ -376,6 +376,7 @@ def _cmd_config_llm_modules() -> None:
             print(line)
 
     repaint = True  # 首次进入与输入 p 时重绘；窄终端操作后不重绘（见下方反馈行）
+    reveal_keys = False  # 窄屏键名可见性：默认关（编号更好按），`k` 切换
     while True:
         rows: list[str | None] = []
         items: list[tuple[int, str, str, bool, str]] = []
@@ -421,6 +422,7 @@ def _cmd_config_llm_modules() -> None:
                     name_column=name_column,
                     key_column=key_column_llm,
                     number_width=len(str(len(module_names) + len(feature_switch_registry))),
+                    reveal_key=reveal_keys,
                 )
             )
 
@@ -468,6 +470,7 @@ def _cmd_config_llm_modules() -> None:
                         name_column=name_column,
                         key_column=key_column_sw,
                         number_width=len(str(len(module_names) + len(feature_switch_registry))),
+                        reveal_key=reveal_keys,
                     )
                 )
             next_serial += len(block)
@@ -475,7 +478,11 @@ def _cmd_config_llm_modules() -> None:
         rows.append("")
         rows.append("0. 返回主菜单")
         print()
-        panel_rows = [*rows, None if boxed else "", *legend_lines(_COST_HISTORY_DAYS, columns)]
+        panel_rows = [
+            *rows,
+            None if boxed else "",
+            *legend_lines(_COST_HISTORY_DAYS, columns, reveal_key=reveal_keys),
+        ]
         if not repaint:
             # 窄终端（手机）：一次操作只回一行反馈，不整屏重绘——纵向空间是这里最稀缺
             # 的资源，34 项面板重绘一次就要滚过一屏多。输入 p 可随时重绘。
@@ -486,7 +493,7 @@ def _cmd_config_llm_modules() -> None:
         else:
             # 窄终端（手机）：不画盒线——把边框列宽让给内容，也不让右边框在换行时错位。
             # 标题按可用宽度截断：连标题都不能越界，否则窄屏照样折行。
-            header = truncate_display(f"功能开关（{len(items)} 项，键名用 ? 编号 查看）", inner_width(columns) - 5)
+            header = truncate_display(f"功能开关（{len(items)} 项）", inner_width(columns) - 5)
             print(f"  ── {header} ──")
             print("\n".join(f"  {row}" if row else "" for row in panel_rows))
         if repaint:
@@ -520,6 +527,14 @@ def _cmd_config_llm_modules() -> None:
 
         if choice.lower() == "p":
             repaint = True
+            continue
+
+        if choice.lower() == "k":
+            if narrow:
+                reveal_keys = not reveal_keys
+                repaint = True  # 版面行数变化，需要重绘才能生效
+            else:
+                _emit("  [!] 当前终端宽度已直接显示键名列，无需 k 切换")
             continue
 
         # ── 写路径三通道：批量命令 / 赋值（CLI 同词表）/ 编号或键名直取 ──

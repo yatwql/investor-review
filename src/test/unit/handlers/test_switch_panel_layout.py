@@ -180,7 +180,7 @@ class TestPanelWidthSweep:
         """窄终端不画盒线：省下边框列宽给内容，也避免右边框随换行错位。"""
         narrow = "\n".join(self._render(50))
         assert "┌──" not in narrow and "│" not in narrow
-        assert "键名用 ? 编号 查看" in narrow
+        assert "功能开关（" in narrow
 
     def test_wide_keeps_box_and_key_column(self):
         wide = "\n".join(self._render(140))
@@ -191,7 +191,7 @@ class TestPanelWidthSweep:
         """窄终端一次操作只回反馈行（`p` 才重绘）——纵向空间是手机最稀缺资源。"""
         lines = self._render(50, keys=("zzz=on", "0"))
         text = "\n".join(lines)
-        assert text.count("键名用 ? 编号 查看") == 1, "操作后不应整屏重绘"
+        assert text.count("功能开关（") == 1, "操作后不应整屏重绘"
         assert "输入 p 重绘面板" in text
 
 
@@ -242,3 +242,61 @@ class TestStatusColoring:
             pytest.skip("当前环境启用了颜色（TTY）")
         assert self._item(True).count("[开启]") == 1
         assert self._item(False).count("[关闭]") == 1
+
+
+class TestNarrowKeyReveal:
+    """窄屏键名按需显示：默认不占版面（编号更易按），`k` 展开键名行。"""
+
+    @staticmethod
+    def _rows(keys, columns=50) -> list[str]:
+        import contextlib
+        import io
+        from unittest.mock import patch
+
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        buf = io.StringIO()
+        with (
+            patch.dict("os.environ", {"COLUMNS": str(columns)}),
+            patch("os.get_terminal_size", side_effect=OSError()),
+            patch("builtins.input", side_effect=keys),
+            patch("src.python.tui.handlers_config.press_any_key"),
+            patch("src.python.tui.handlers_config.refresh_config"),
+            patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json")),
+        ):
+            with contextlib.redirect_stdout(buf):
+                _cmd_config_llm_modules()
+        return [ln for ln in buf.getvalue().splitlines() if ln.strip() and not ln.startswith("20")]
+
+    def test_narrow_default_hides_key_names(self):
+        """窄屏默认不显示键名（手机屏幕窄、编号更好按），图例提示可按 k 展开。"""
+        lines = self._rows(("0",))
+        text = "\n".join(lines)
+        assert "global_macro" not in text
+        assert "k 显示键名" in text
+        # 条目行只有「编号 名称 [状态]」，不出现英文键名
+        item_rows = [ln for ln in lines if "[开]" in ln or "[关]" in ln]
+        assert item_rows and all("_" not in ln for ln in item_rows)
+
+    def test_k_reveals_key_names_under_each_item(self):
+        """按 k 后以缩进行显示键名，供需要时抄写/粘贴（再按 k 收起）。"""
+        lines = self._rows(("k", "0"))
+        text = "\n".join(lines)
+        assert "global_macro" in text and "news_correlation" in text
+        assert "k 隐藏键名" in text
+        # 键名行缩进在名称行之下（不与编号行同列起始）
+        key_line = next(ln for ln in lines if "global_macro" in ln)
+        assert key_line.lstrip().startswith("global_macro")
+
+    def test_key_input_still_accepted_without_reveal(self):
+        """键名不显示但**不取消**键名输入：直接 `键名=on|off` 仍生效（兼容脚本/熟练用户）。"""
+        lines = self._rows(("doctor_check=off", "? doctor_check", "0"))
+        text = "\n".join(lines)
+        assert "system_failure" not in text
+        assert "系统自检上屏" in text  # `? doctor_check` 查到了说明
+        assert "存储  : features.json → doctor_check" in text
+
+    def test_k_is_noop_with_hint_on_wide_terminal(self):
+        """宽/中档键名恒显，按 k 给出说明性提示且不改变版面。"""
+        text = "\n".join(self._rows(("k", "0"), columns=120))
+        assert "已直接显示键名列" in text
