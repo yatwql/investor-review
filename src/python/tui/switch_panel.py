@@ -19,13 +19,24 @@
 
 不变式：任何档位下**每一行的显示宽度都不超过面板内宽**（`inner_width`）——窄终端
 上宁可截断名称，也不让盒线右边框错位或被终端硬折成锯齿。
+
+设计约定（同一份代码同时服务手机 SSH 与笔记本终端，故按「宽 → 窄」逐级让位）：
+
+1. **先让装饰、再让信息**：窄档（< 64 列）不画盒线（省 6 列与每块的分隔线，直接换
+   来可用宽度），组间用空白行分隔；宽/中档保留盒线做视觉分区。
+2. **纵向稀缺优先**：中档逐行判断「单行放得下就单行」——同一面板里短条目仍是一行，
+   只有超宽条目才换第二行，避免手机上把 34 项摊成 70 行。
+3. **键名可见性分级**：宽档行内淡色列；中档优先行内、放不下才移到次行；窄档不进版面，
+   由页脚明确指路 `? 编号`（**绝不静默隐藏**，否则用户又要猜）。
+4. **宽度探测取实时值**：`os.get_terminal_size()` 优先（resize 后立即生效），不可用时
+   退回 `COLUMNS`，最后兜底值——避免手机端设了窄宽却被判成宽屏。
 """
 
 from __future__ import annotations
 
 import os
 
-from src.python.core.ansi_colors import DIM, RESET
+from src.python.core.ansi_colors import DIM, GREEN, RED, RESET
 from src.python.tui.text_layout import display_width, pad_right, truncate_display, wrap_display
 
 #: 单行四列版面的最小终端宽度（含面板边框与标题占位）
@@ -41,6 +52,11 @@ _STATUS_SHORT = {True: "开", False: "关"}
 _STATUS_LONG = {True: "开启", False: "关闭"}
 
 
+def use_panel_box(columns: int) -> bool:
+    """是否画盒线面板（窄终端不画：把边框与分隔线的列宽/行数让给内容）。"""
+    return layout_tier(columns) != "narrow"
+
+
 def terminal_columns(default: int = 100) -> int:
     """当前终端列数（读 `COLUMNS` 环境变量与实际终端尺寸，取可用值的较大者兜底）。
 
@@ -50,16 +66,19 @@ def terminal_columns(default: int = 100) -> int:
     Returns:
         终端列数（下限 40，避免异常值把小面板压成不可读）。
     """
-    # 优先级：显式 COLUMNS（用户/SSH 客户端声明）> 实际终端尺寸 > 兜底值。
-    # 不取三者最大值——手机 SSH 的 COLUMNS 本就小于笔记本，取最大会让窄终端
-    # 永远走宽版面（面板被终端硬折成锯齿）。
+    # 优先级：实时终端尺寸 > `COLUMNS` 环境变量 > 兜底值。
+    # 实时值放最前——终端 resize（手机横竖屏/分屏）后 ioctl 立即反映新宽度，
+    # 而 `COLUMNS` 只是会话建立时导出的快照，常已过期。不取两者最大值，
+    # 否则窄终端永远被判成宽屏。
+    for fd in (1, 2):
+        try:
+            return max(40, os.get_terminal_size(fd).columns)
+        except OSError:
+            continue
     env = os.environ.get("COLUMNS")
     if env and env.isdigit() and int(env) > 0:
         return max(40, int(env))
-    try:
-        return max(40, os.get_terminal_size().columns)
-    except OSError:
-        return max(40, default)
+    return max(40, default)
 
 
 def layout_tier(columns: int) -> str:
@@ -77,9 +96,15 @@ def inner_width(columns: int) -> int:
 
 
 def _status(enabled: bool, tier: str) -> str:
-    """状态文本：宽/中档用「开启/关闭」，窄档用「开/关」。"""
+    """状态文本：宽/中档用「开启/关闭」，窄档用「开/关」；**开启绿 / 关闭红**。
+
+    着色在方括号内（`[` + 颜色 + 标签 + `RESET` + `]`），非 TTY 或 `NO_COLOR`
+    下颜色常量为空串，宽度计算不受影响（`display_width` 会剥离 ANSI 序列）。
+    关闭项必须一眼可辨——面板里 34 项逐行扫读时，靠颜色而非靠读字判断状态。
+    """
     label = _STATUS_SHORT[enabled] if tier == "narrow" else _STATUS_LONG[enabled]
-    return f"[{label}]"
+    color = GREEN if enabled else RED
+    return f"[{color}{label}{RESET}]" if color else f"[{label}]"
 
 
 def format_heading(head: str, enabled_count: int, total: int, columns: int) -> str:
@@ -132,8 +157,11 @@ def format_item(
         return [truncate_display(line, limit)]
 
     if tier == "medium":
-        # 两行：名称与状态上行，键名(淡色)+备注缩进下行——手机上既看得全名称，
-        # 又不牺牲键名可见性（`? 键名` / `键名=on|off` 照常可用）。
+        # 逐行判断：单行放得下就单行（纵向稀缺优先，短条目不必占两行）；放不下才换行
+        # ——名称+状态一行，键名(淡色)+备注缩进一行，键名可见性不牺牲。
+        single = f"{num}. {marker}{label} {DIM}{key}{RESET} {status}{star}"
+        if display_width(single) + display_width(notes) <= limit:
+            return [single + (f"{DIM}{notes}{RESET}" if notes else "")]
         first = (
             f"{num}. {marker}{truncate_display(label, limit - display_width(f'{num}. {marker} ') - 7)}{star} {status}"
         )
@@ -151,11 +179,28 @@ def format_item(
 
 
 def wrap_hanging(text: str, columns: int, indent: str = "    ") -> list[str]:
-    """按列宽折行并给续行加悬挂缩进（面板内成段文字用，续行不顶到左边框）。"""
-    wrapped = wrap_display(text, columns)
-    if len(wrapped) <= 1:
-        return wrapped
-    return [wrapped[0], *(indent + line.lstrip() for line in wrapped[1:])]
+    """按列宽折行并给续行加悬挂缩进（面板内成段文字用，续行不顶到左边框）。
+
+    首行用满 `columns` 列，续行**扣除缩进宽度后**再折行——否则「缩进 + 满宽续行」
+    会超出面板内宽 2~10 列（窄终端上表现为右侧被硬折）。
+    """
+    indent_width = display_width(indent)
+    remaining = text
+    lines: list[str] = []
+    first = True
+    while remaining:
+        budget = columns if first else max(10, columns - indent_width)
+        wrapped = wrap_display(remaining, budget)
+        if not wrapped:
+            break
+        head = wrapped[0]
+        lines.append(head if first else indent + head)
+        cut = remaining.find(head)
+        if cut < 0:
+            break
+        remaining = remaining[cut + len(head) :].lstrip()
+        first = False
+    return lines
 
 
 def legend_lines(cost_days: int, columns: int, *, tier: str | None = None) -> list[str]:
@@ -200,6 +245,7 @@ __all__ = [
     "inner_width",
     "layout_tier",
     "legend_lines",
+    "use_panel_box",
     "wrap_hanging",
     "terminal_columns",
 ]

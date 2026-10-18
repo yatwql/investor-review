@@ -454,7 +454,7 @@ while True:
 | 配置管理 | `[P]` | 报告可选章节开关（顺序与取舍） |
 | | `[I]` | 对比指数池管理（自定义基准指数） |
 | | `[A]` | 持仓匿名化模式（off / code_display / full_anonymous / summary 四种） |
-| | `[S]` | LLM 模块与功能开关配置（① 标准 LLM 模块启停 `enabled_llm`（键域 = 注册表 LLM 模块全集；辩论三段不在模块注册表内，由功能开关 `llm_debate_procon` 控制、缓存登记在缓存域）；面板每行显式展示键名（淡色列），版面按终端宽度自适应三档（`tui/switch_panel.py`）→ ② 四组功能开关分块：呈现与体验 / 分析增强·既有章内追加 / 独立章节与回放 / 机制与诊断；分块标题、显示名与顺序取自 `features.GROUP_ORDER`/`GROUP_LABELS`，新增开关自动上屏，实验项行首 ⚗ 标记） |
+| | `[S]` | LLM 模块与功能开关配置（① 标准 LLM 模块启停 `enabled_llm`（键域 = 注册表 LLM 模块全集；辩论三段不在模块注册表内，由功能开关 `llm_debate_procon` 控制、缓存登记在缓存域）；面板每行显式展示键名（淡色列），版面按终端宽度自适应三档（`tui/switch_panel.py`：<64 列去盒线、窄屏操作后不整屏重绘改 `p` 重绘、所有提示按宽折行）→ ② 四组功能开关分块：呈现与体验 / 分析增强·既有章内追加 / 独立章节与回放 / 机制与诊断；分块标题、显示名与顺序取自 `features.GROUP_ORDER`/`GROUP_LABELS`，新增开关自动上屏，实验项行首 ⚗ 标记） |
 | | `[R]` | 刷新配置（config.json + llm_settings.json + llm_key.json，附带重载定价与批量限速器） |
 | 诊断 | `[V]` | 查看最近运行日志（可按级别筛选，`handlers_log.py::_cmd_view_logs`） |
 | | `[H]` | 查看数据源健康历史（`handlers_log.py::_cmd_view_health_history`） |

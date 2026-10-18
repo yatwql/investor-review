@@ -141,3 +141,104 @@ class TestLegendAndHeading:
         lines = wrap_hanging("  " + "很长的说明文字" * 8, 40)
         assert len(lines) > 1
         assert all(line.startswith("    ") for line in lines[1:])
+
+
+class TestPanelWidthSweep:
+    """面板端到端宽度扫描：40~200 列任意宽度都不越界、窄档不画盒线。"""
+
+    def _render(self, columns: int, keys=("0",)) -> list[str]:
+        import contextlib
+        import io
+        from unittest.mock import patch
+
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        buf = io.StringIO()
+        with (
+            patch.dict("os.environ", {"COLUMNS": str(columns)}),
+            patch("os.get_terminal_size", side_effect=OSError()),
+            patch("builtins.input", side_effect=list(keys)),
+            patch("src.python.tui.handlers_config.press_any_key"),
+            patch("src.python.tui.handlers_config.refresh_config"),
+            patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json")),
+        ):
+            with contextlib.redirect_stdout(buf):
+                _cmd_config_llm_modules()
+        return [ln for ln in buf.getvalue().splitlines() if ln.strip() and not ln.startswith("20")]
+
+    @pytest.mark.parametrize("columns", [40, 44, 52, 60, 64, 80, 95, 96, 120, 160, 200])
+    def test_no_line_exceeds_terminal_width(self, columns):
+        """任何宽度下（含 `?` 详情与错误提示）所有行都不超过终端列数。"""
+        for lines in (
+            self._render(columns),
+            self._render(columns, keys=("? 3", "? news_correlation", "r 3", "zzz=on", "0")),
+        ):
+            for line in lines:
+                assert display_width(line) <= columns, (columns, line)
+
+    def test_narrow_drops_box_borders(self):
+        """窄终端不画盒线：省下边框列宽给内容，也避免右边框随换行错位。"""
+        narrow = "\n".join(self._render(50))
+        assert "┌──" not in narrow and "│" not in narrow
+        assert "键名用 ? 编号 查看" in narrow
+
+    def test_wide_keeps_box_and_key_column(self):
+        wide = "\n".join(self._render(140))
+        assert "┌──" in wide
+        assert "global_macro" in wide
+
+    def test_narrow_does_not_repaint_after_action(self):
+        """窄终端一次操作只回反馈行（`p` 才重绘）——纵向空间是手机最稀缺资源。"""
+        lines = self._render(50, keys=("zzz=on", "0"))
+        text = "\n".join(lines)
+        assert text.count("键名用 ? 编号 查看") == 1, "操作后不应整屏重绘"
+        assert "输入 p 重绘面板" in text
+
+
+class TestStatusColoring:
+    """状态着色：开启绿 / 关闭红（面板 34 项靠颜色一眼辨状态，不靠读字）。"""
+
+    @staticmethod
+    def _item(enabled: bool, columns: int = 120) -> str:
+        return format_item(
+            number=9,
+            label="因子目录",
+            key="factor_catalog",
+            enabled=enabled,
+            star="",
+            marker="",
+            notes="",
+            columns=columns,
+            name_column=26,
+            key_column=25,
+            number_width=2,
+        )[0]
+
+    def test_enabled_is_green_disabled_is_red(self, monkeypatch):
+        """强制着色下：开启用 GREEN、关闭用 RED（ANSI 码落在方括号内）。"""
+        import src.python.tui.switch_panel as sp
+
+        monkeypatch.setattr(sp, "GREEN", "<G>", raising=True)
+        monkeypatch.setattr(sp, "RED", "<R>", raising=True)
+        monkeypatch.setattr(sp, "RESET", "</>", raising=True)
+        assert "[<G>开启</>]" in self._item(True)
+        assert "[<R>关闭</>]" in self._item(False)
+
+    def test_narrow_short_labels_are_colored_too(self, monkeypatch):
+        """窄档用「开/关」短标签，颜色同样保留（手机上一眼可辨）。"""
+        import src.python.tui.switch_panel as sp
+
+        monkeypatch.setattr(sp, "GREEN", "<G>", raising=True)
+        monkeypatch.setattr(sp, "RED", "<R>", raising=True)
+        monkeypatch.setattr(sp, "RESET", "</>", raising=True)
+        assert "[<G>开</>]" in self._item(True, columns=50)
+        assert "[<R>关</>]" in self._item(False, columns=50)
+
+    def test_no_color_env_keeps_plain_brackets(self):
+        """非 TTY / NO_COLOR：颜色常量为空 → 只剩纯文本方括号（宽度不受影响）。"""
+        import src.python.tui.switch_panel as sp
+
+        if sp.GREEN or sp.RED:  # 仅在无颜色环境下才有意义
+            pytest.skip("当前环境启用了颜色（TTY）")
+        assert self._item(True).count("[开启]") == 1
+        assert self._item(False).count("[关闭]") == 1

@@ -29,9 +29,10 @@ from src.python.tui.switch_panel import (
     layout_tier,
     legend_lines,
     terminal_columns,
+    use_panel_box,
     wrap_hanging,
 )
-from src.python.tui.text_layout import display_width, pad_right, render_panel
+from src.python.tui.text_layout import display_width, pad_right, render_panel, truncate_display
 
 logger = setup_logger()
 
@@ -279,14 +280,17 @@ def _show_switch_detail(choice: str, items: list[tuple[int, str, str, bool, str]
             if isinstance(entry.get("enabled_count"), int):
                 date = str(entry.get("last_enabled_date") or "")[5:]
                 life += f" · 启用 {entry['enabled_count']} 次" + (f" · 最近 {date}" if date else "")
-    # 详情按终端宽度折行：手机窄终端的说明段（`desc` 常含整句）也能读全
+    # 详情按终端宽度折行：手机窄终端的说明段（`desc` 常含整句）与存储路径都能读全，
+    # 且任何一行都不越界（否则窄屏右侧被硬折成锯齿）
     width = inner_width(terminal_columns()) - 2
     print()
-    print(f"  ── {name}（{key}）")
+    print(truncate_display(f"  ── {name}（{key}）", width))
     for line in wrap_hanging(f"  说明  : {desc}", width, indent="          "):
         print(line)
-    print(f"  分组  : {group_label}{life}")
-    print(f"  存储  : {storage}")
+    for line in wrap_hanging(f"  分组  : {group_label}{life}", width, indent="          "):
+        print(line)
+    for line in wrap_hanging(f"  存储  : {storage}", width, indent="          "):
+        print(line)
     detail = f"  当前  : {'开启' if curr else '关闭'}   出厂默认: {'开启' if default else '关闭'}"
     if curr != default:
         detail += "（不一致，行尾标 *）"
@@ -366,6 +370,12 @@ def _cmd_config_llm_modules() -> None:
     key_column_llm = max(map(display_width, module_names)) if module_names else 0
     key_column_sw = max((display_width(flag) for _title, block in switch_blocks for flag, _d in block), default=0)
 
+    def _emit(message: str) -> None:
+        """按当前内宽输出一行提示（窄屏上 `[!]`/`[OK]` 长句也不越界折行）。"""
+        for line in wrap_hanging(message, inner_width(terminal_columns())):
+            print(line)
+
+    repaint = True  # 首次进入与输入 p 时重绘；窄终端操作后不重绘（见下方反馈行）
     while True:
         rows: list[str | None] = []
         items: list[tuple[int, str, str, bool, str]] = []
@@ -382,6 +392,7 @@ def _cmd_config_llm_modules() -> None:
 
         # 终端宽度每轮读取：手机 SSH（窄）与笔记本（宽）同一份代码自适应
         columns = terminal_columns()
+        narrow = layout_tier(columns) == "narrow"
 
         # ① 标准 LLM 模块（1-7）——行尾 * 标记与出厂默认不一致项
         for i, (sfx, name) in enumerate(module_names.items(), 1):
@@ -417,8 +428,9 @@ def _cmd_config_llm_modules() -> None:
         # 编号由组序与块内注册表顺序派生、非硬编码：转正 = 摘除 experimental 身份
         # （行首 ⚗ 消失），作用域不变则原地留块，位置只随注册表声明顺序
         next_serial = len(module_names) + 1
+        boxed = use_panel_box(columns)
         for group, block in switch_blocks:
-            rows.append(None)
+            rows.append(None if boxed else "")
             rows.append(
                 format_heading(
                     GROUP_LABELS[group].split("（", 1)[0],
@@ -463,20 +475,29 @@ def _cmd_config_llm_modules() -> None:
         rows.append("")
         rows.append("0. 返回主菜单")
         print()
-        print(
-            "\n".join(
-                render_panel(
-                    "配置 LLM 报告章节与功能开关",
-                    [*rows, None, *legend_lines(_COST_HISTORY_DAYS, columns)],
-                )
-            )
-        )
-        for _line in wrap_hanging(
-            "  基础报告章节组（基金深度分析/市场新闻/历史走势+回撤/组合演进/行动建议）在菜单 [P] 配置",
-            inner_width(columns),
-        ):
-            print(_line)
-        print()
+        panel_rows = [*rows, None if boxed else "", *legend_lines(_COST_HISTORY_DAYS, columns)]
+        if not repaint:
+            # 窄终端（手机）：一次操作只回一行反馈，不整屏重绘——纵向空间是这里最稀缺
+            # 的资源，34 项面板重绘一次就要滚过一屏多。输入 p 可随时重绘。
+            print("  （状态已更新 · 输入 p 重绘面板）")
+            print()
+        elif boxed:
+            print("\n".join(render_panel("配置 LLM 报告章节与功能开关", panel_rows)))
+        else:
+            # 窄终端（手机）：不画盒线——把边框列宽让给内容，也不让右边框在换行时错位。
+            # 标题按可用宽度截断：连标题都不能越界，否则窄屏照样折行。
+            header = truncate_display(f"功能开关（{len(items)} 项，键名用 ? 编号 查看）", inner_width(columns) - 5)
+            print(f"  ── {header} ──")
+            print("\n".join(f"  {row}" if row else "" for row in panel_rows))
+        if repaint:
+            for _line in wrap_hanging(
+                "  基础报告章节组（基金深度分析/市场新闻/历史走势+回撤/组合演进/行动建议）在菜单 [P] 配置",
+                inner_width(columns),
+            ):
+                print(_line)
+            print()
+        # 本轮已渲染 → 窄终端下一轮只回反馈行（省纵向空间）；宽/中档照常整屏重绘
+        repaint = not narrow
         try:
             total = len(items)
             prompt = (
@@ -494,6 +515,11 @@ def _cmd_config_llm_modules() -> None:
 
         if choice.startswith("?"):
             _show_switch_detail(choice, items)
+            repaint = narrow  # 窄终端查完说明只看反馈行，不整屏重绘
+            continue
+
+        if choice.lower() == "p":
+            repaint = True
             continue
 
         # ── 写路径三通道：批量命令 / 赋值（CLI 同词表）/ 编号或键名直取 ──
@@ -501,25 +527,25 @@ def _cmd_config_llm_modules() -> None:
         lowered = raw.lower()
         if lowered == "ra":
             removed = clear_feature_overrides(None)
-            print(f"  {GREEN}[OK]{RESET} 已恢复功能开关全部默认（移除 {removed} 项覆写）")
+            _emit(f"  {GREEN}[OK]{RESET} 已恢复功能开关全部默认（移除 {removed} 项覆写）")
             continue
         if lowered == "x":
             exp_keys = sorted(flag for flag, _d in experimental_flags())
             clear_feature_overrides(exp_keys)
-            print(f"  {GREEN}[OK]{RESET} 实验项已全部关闭（回到无实验态）：{'、'.join(exp_keys)}")
+            _emit(f"  {GREEN}[OK]{RESET} 实验项已全部关闭（回到无实验态）：{'、'.join(exp_keys)}")
             continue
         head, space, rest = raw.partition(" ")
         if head.lower() == "r" and space and rest.strip():
             target = _match_switch_item(rest, items)
             if target is None:
-                print(f"  {YELLOW}[!]{RESET} 未识别目标「{rest.strip()}」（输入编号或键名）")
+                _emit(f"  {YELLOW}[!]{RESET} 未识别目标「{rest.strip()}」（输入编号或键名）")
             elif target[4] != "feature":
-                print(f"  {YELLOW}[!]{RESET} 恢复默认仅支持功能开关分组（LLM 模块可逐项切换）")
+                _emit(f"  {YELLOW}[!]{RESET} 恢复默认仅支持功能开关分组（LLM 模块可逐项切换）")
             else:
                 group = feature_switch_registry[target[1]].group
                 group_flags = [flag for flag, _d in switches_in_group(group)]
                 removed = clear_feature_overrides(group_flags)
-                print(f"  {GREEN}[OK]{RESET} 已恢复「{GROUP_LABELS[group]}」默认（移除 {removed} 项覆写）")
+                _emit(f"  {GREEN}[OK]{RESET} 已恢复「{GROUP_LABELS[group]}」默认（移除 {removed} 项覆写）")
             continue
 
         assign_name, eq, assign_val = raw.partition("=")
@@ -535,30 +561,30 @@ def _cmd_config_llm_modules() -> None:
                 try:
                     _parsed_flag, new_val = parse_switch_override(raw)
                 except ValueError as e:
-                    print(f"  {YELLOW}[!]{RESET} {e}")
+                    _emit(f"  {YELLOW}[!]{RESET} {e}")
                     continue
                 target = feature_item
             elif llm_item is not None:
                 new_val = parse_switch_value(assign_val)
                 if new_val is None:
-                    print(f"  {YELLOW}[!]{RESET} 取值不可识别；可选: on / off")
+                    _emit(f"  {YELLOW}[!]{RESET} 取值不可识别；可选: on / off")
                     continue
                 target = llm_item
             else:
                 try:
                     parse_switch_override(raw)
                 except ValueError as e:
-                    print(f"  {YELLOW}[!]{RESET} {e}")
+                    _emit(f"  {YELLOW}[!]{RESET} {e}")
                 else:
-                    print(f"  {YELLOW}[!]{RESET} 未知条目「{assign_name}」")
+                    _emit(f"  {YELLOW}[!]{RESET} 未知条目「{assign_name}」")
                 continue
         else:
             target = _match_switch_item(raw, items)
             if target is None:
                 if raw.isdigit():
-                    print(f"  {YELLOW}[!]{RESET} 无效编号")
+                    _emit(f"  {YELLOW}[!]{RESET} 无效编号")
                 else:
-                    print(f"  {YELLOW}[!]{RESET} 未知编号或键名「{raw}」（可输入编号、键名 或 键名=on|off）")
+                    _emit(f"  {YELLOW}[!]{RESET} 未知编号或键名「{raw}」（可输入编号、键名 或 键名=on|off）")
                 continue
             new_val = not target[3]
 
@@ -567,7 +593,7 @@ def _cmd_config_llm_modules() -> None:
         if _apply_edit({"key": payload_key, "value": new_val}):
             if kind == "llm":
                 enabled_map[key] = new_val
-            print(f"  {GREEN}[OK]{RESET} {name} 已{'开启' if new_val else '关闭'}")
+            _emit(f"  {GREEN}[OK]{RESET} {name} 已{'开启' if new_val else '关闭'}")
             # 刷新配置缓存
             refresh_config()
 
