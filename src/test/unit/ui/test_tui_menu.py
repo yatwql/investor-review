@@ -669,7 +669,7 @@ class TestMainLoopExitKeys(unittest.TestCase):
 
 
 class TestRenderMenuNarrowDirect(unittest.TestCase):
-    """首页菜单两档渲染：narrow 免导航直达（无选中态、直达页脚）/ 宽中档方向键导航。"""
+    """首页菜单两档渲染：narrow 直达+导航并存（选中态 + 双提示页脚）/ 宽中档导航。"""
 
     @staticmethod
     def _render(columns: int) -> str:
@@ -688,16 +688,18 @@ class TestRenderMenuNarrowDirect(unittest.TestCase):
             render_menu(1)
         return buf.getvalue()
 
-    def test_narrow_has_no_selection_indicator(self):
-        """narrow（40 列）不渲染 `>` 选中指示器——没有方向键导航，指示器会误导。"""
+    def test_narrow_renders_selection_indicator(self):
+        """narrow（40 列）同样渲染 `>` 选中指示器——方向键导航在窄屏可用。"""
         out = self._render(40)
-        self.assertNotIn(">", out.split("窄屏直达")[0], "窄屏菜单不应出现选中指示器")
+        self.assertIn(">", out)
 
-    def test_narrow_footer_documents_direct_keys(self):
-        """narrow 页脚写明直达路径与退出键（页脚在 40 列会折行，按逻辑内容断言）。"""
+    def test_narrow_footer_documents_direct_and_nav_keys(self):
+        """narrow 页脚同时写明直达与导航路径及退出键（40 列折行，按逻辑内容断言）。"""
         out = self._render(40)
-        footer = out.split("窄屏直达", 1)[1]
+        footer = " ".join(out.split("窄屏直达", 1)[1].split())
         self.assertIn("窄屏直达", out)
+        self.assertIn("↑↓ 选择", footer)
+        self.assertIn("Enter 执行", footer)
         self.assertIn("Esc / 0 /", footer)
         self.assertIn("X 退出", footer)
         self.assertIn("Ctrl+C 退出", footer)
@@ -712,11 +714,12 @@ class TestRenderMenuNarrowDirect(unittest.TestCase):
 
 
 class TestNarrowMainLoopDirectNav(unittest.TestCase):
-    """narrow 档主循环：方向键/Enter/未登记字母静默忽略且零重绘（免导航直达）。"""
+    """narrow 档主循环：直达键零重绘主路径不变；方向键/Enter 导航可用
+    （非 TTY 回退整屏追加，TTY 原地重绘不滚屏）。"""
 
     @staticmethod
-    def _drive(keys: list[str], columns: int) -> tuple[list[str], int]:
-        """驱动真实 main()：返回（退出回调触发记录, render_menu 调用次数）。"""
+    def _drive(keys: list[str], columns: int, *, tty: bool = False):
+        """驱动真实 main()：返回（退出记录, render_menu 次数, execute_item 参数, stdout, 清帧 spy）。"""
         import contextlib
         import io
         from unittest.mock import MagicMock, patch
@@ -725,6 +728,7 @@ class TestNarrowMainLoopDirectNav(unittest.TestCase):
         import src.python.tui.tui_menu as menu_mod
 
         fired: list[str] = []
+        executed: list[int] = []
         seq = iter(keys)
 
         def _fake_key() -> str:
@@ -737,7 +741,14 @@ class TestNarrowMainLoopDirectNav(unittest.TestCase):
             fired.append("exit")
             raise SystemExit
 
+        def _fake_execute(idx: int) -> None:
+            executed.append(idx)
+
         render_mock = MagicMock()
+        clear_mock = MagicMock()
+        buf = io.StringIO()
+        if tty:
+            buf.isatty = lambda: True  # 模拟交互终端以走窄屏原地重绘分支
         with (
             patch.object(tui_mod, "get_key", _fake_key),
             patch.object(tui_mod, "exit_app", _fake_exit),
@@ -746,30 +757,71 @@ class TestNarrowMainLoopDirectNav(unittest.TestCase):
             patch.object(tui_mod, "init_config"),
             patch.object(tui_mod, "_apply_feature_gates"),
             patch.object(tui_mod, "_bind_callbacks"),
+            patch.object(tui_mod, "execute_item", _fake_execute),
             patch.object(tui_mod, "print_header"),
             patch.object(tui_mod, "show_config"),
             patch.object(tui_mod, "render_menu", render_mock),
+            patch.object(tui_mod, "_clear_last_frame", clear_mock),
         ):
             try:
-                with contextlib.redirect_stdout(io.StringIO()):
+                with contextlib.redirect_stdout(buf):
                     tui_mod.main()
             except SystemExit:
                 pass
-        return fired, render_mock.call_count
+        return fired, render_mock.call_count, executed, buf.getvalue(), clear_mock
 
-    def test_narrow_nav_keys_cause_no_rerender(self):
-        """窄屏（40 列）下方向键/Enter/未登记字母不触发重绘，按 0 退出。"""
-        fired, renders = self._drive(["KEY_DOWN", "KEY_UP", "KEY_ENTER", "Z", "0"], columns=40)
+    def test_narrow_nav_keys_move_selection_and_rerender(self):
+        """窄屏（40 列）方向键移动选中态并重绘（非 TTY 回退整屏追加）；未登记字母仍零重绘。"""
+        fired, renders, executed, _, _ = self._drive(["KEY_DOWN", "KEY_UP", "Z", "0"], columns=40)
         self.assertEqual(fired, ["exit"])
-        self.assertEqual(renders, 1, "窄屏直达模式：非直达键不重绘，菜单不出屏")
+        self.assertEqual(executed, [])
+        self.assertEqual(renders, 3, "初帧 + 方向键两帧；未登记字母不重绘")
+
+    def test_narrow_enter_executes_selected(self):
+        """窄屏 Enter 执行当前选中项（与宽/中档一致的导航确认语义）。"""
+        import src.python.tui.tui_menu as menu_mod
+
+        fired, renders, executed, _, _ = self._drive(["KEY_ENTER", "0"], columns=40)
+        sel_default = [i for i, (key, *_rest) in enumerate(menu_mod.MENU_ITEMS) if key == "L"][0]
+        self.assertEqual(executed, [sel_default], "Enter 执行默认选中项（缺省键 L）")
+        self.assertEqual(fired, ["exit"])
+        self.assertEqual(renders, 2)
+
+    def test_narrow_arrow_inplace_repaint_on_tty(self):
+        """TTY 窄屏方向键走原地重绘分支：清帧助手被调用，仍在内层循环（不追加新屏）。"""
+        fired, renders, _, _, cleared = self._drive(["KEY_DOWN", "0"], columns=40, tty=True)
+        self.assertEqual(fired, ["exit"])
+        self.assertEqual(renders, 2, "初帧 + 原地重绘一帧（不追加新屏）")
+        cleared.assert_called_once()
+
+    def test_narrow_arrow_fallback_without_ansi(self):
+        """非 TTY（管道/测试）窄屏方向键回退整屏追加：清帧助手不被调用、重绘计数正确。"""
+        fired, renders, _, _, cleared = self._drive(["KEY_DOWN", "0"], columns=40, tty=False)
+        self.assertEqual(fired, ["exit"])
+        self.assertEqual(renders, 2)
+        cleared.assert_not_called()
+
+    def test_clear_last_frame_writes_ansi(self):
+        """清帧助手：n>0 输出光标上移 n 行 + 清屏至末尾；n=0 不输出。"""
+        import contextlib
+        import io as _io
+
+        import src.python.tui.tui as tui_mod
+
+        buf = _io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            tui_mod._clear_last_frame(5)
+            tui_mod._clear_last_frame(0)
+        self.assertEqual(buf.getvalue(), "\x1b[5A\x1b[0J")
 
     def test_wide_arrow_key_rerenders(self):
-        """宽屏（100 列）方向键仍走导航主路径：每按一次重绘一屏。"""
-        fired, renders = self._drive(["KEY_DOWN", "0"], columns=100)
+        """宽屏（100 列）方向键仍走导航主路径：每按一次重绘一屏（整屏追加，不走原地重绘）。"""
+        fired, renders, _, _, cleared = self._drive(["KEY_DOWN", "0"], columns=100)
         self.assertEqual(fired, ["exit"])
         self.assertEqual(renders, 2, "宽屏方向键移动选中态后重绘")
+        cleared.assert_not_called()
 
     def test_esc_key_exits(self):
         """Esc → 退出（与 0/X 同为首页退出通道，手机客户端普遍有 Esc 键）。"""
-        fired, _ = self._drive(["KEY_ESC"], columns=100)
+        fired, _, _, _, _ = self._drive(["KEY_ESC"], columns=100)
         self.assertEqual(fired, ["exit"])

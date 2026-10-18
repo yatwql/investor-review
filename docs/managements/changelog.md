@@ -9,6 +9,8 @@
 
 ## [0.13.7-dev] - 开发中（未发布）
 
+- **新增**：TUI 窄屏恢复方向键导航（用户要求）——窄屏（<64 列）在直达主路径之外恢复 ↑↓/Enter 选中导航：`>` 选中指示器全档渲染，选中移动后**原地重绘**（ANSI 光标上移+清屏，手机短屏菜单不被顶出可视区；POSIX+TTY 门控，管道/测试/旧控制台回退整屏追加），页脚改「窄屏直达：按菜单 [键] 执行 · ↑↓ 选择 · Enter 执行」；原地重绘以帧行数计数代理实现。测试：窄屏主循环 6 例（导航重绘/Enter 执行/原地 vs 回退分支/清帧助手）+ 渲染 3 例
+
 - **新增**：LLM 多链线路优先级三渠道可调（CLI/TUI/Web 同源编辑层）——降级顺序真值 `llm_providers.json → providers[].priority` 此前只能手改 JSON 文件；共享编辑层新增 `llm_providers.priority` 动作写通道（order 置换校验、priority 按新序归一化 10/20…、注释保留写入、写前 .bak），CLI `--llm-provider-order NAME,…`（持久化写盘后退出，区别于 `--feature` 仅本次运行不写盘）、TUI 新菜单 `[M]`（编号交换面板，Esc 返回）、Web 配置面板「LLM 多链线路优先级」块（▲▼ 调序即存，失败恢复原序）。测试：`test_config_llm_providers_priority` 11 例 + CLI/面板/Web 8 例
 - **修复**：高延迟链路方向键被误判为主菜单退出（用户实测反馈，rf-723）——终端把 `ESC [ A` 拆包分节到达时，首段 0.3s 窗口超时即判孤 Esc，而孤 Esc 是首页退出别名，按方向键直接退出程序；首段共聚窗口独立加大为 `_ESC_FIRST_TIMEOUT=0.5s`（续读仍 0.3s），并补 SS3 应用光标序列（`OA`/`OB`，部分终端 smkx 后发送）映射（此前落未知键）
 - **修复**：`_update_json_raw_text` 对 list 值静默不替换（rf-724）——字段级文本替换只处理 dict（brace 平衡）与标量（正则），list 值匹配不到原文即无声跳过，写入看似成功实则落空；新增 `_replace_array_block`（bracket 平衡，与 dict 版同构）接入分派

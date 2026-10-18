@@ -131,13 +131,60 @@ def _bind_callbacks() -> None:
         MENU_ITEMS[i] = (key, _label, callbacks.get(key), is_exit)
 
 
-def main() -> None:
-    """TUI 主循环。宽/中档：方向键导航 + Enter 确认；窄屏（手机）：免导航直达。
+class _FrameLineCounter:
+    """透明代理：累计 write 的换行数并透传到底层流（原地重绘需知道上一帧占用行数）。"""
 
-    窄屏档（<64 列）交互主路径是「按字母/数字键直达」：方向键/Enter/未知键
-    静默忽略且**不重绘**——手机短屏上每按一次重绘一屏会把菜单顶出可视区，
-    直达模式下按键即执行，无滚动、无重绘。Esc 与 0/X 同为退出别名（手机
-    SSH 客户端普遍提供 Esc 键）。
+    def __init__(self, stream):
+        self._stream = stream
+        self.lines = 0
+
+    def write(self, text: str):
+        self.lines += text.count("\n")
+        return self._stream.write(text)
+
+    def flush(self):
+        return self._stream.flush()
+
+
+def _render_menu_frame(sel: int) -> int:
+    """渲染一整帧首页（页眉 + 配置摘要 + 菜单），返回本帧占用行数。"""
+    counter = _FrameLineCounter(sys.stdout)
+    original = sys.stdout
+    sys.stdout = counter
+    try:
+        print_header()
+        show_config()
+        render_menu(sel)
+    finally:
+        sys.stdout = original
+    return counter.lines
+
+
+def _can_repaint_inplace() -> bool:
+    """窄屏原地重绘可用性：POSIX + TTY（需 ANSI 光标控制）。
+
+    管道/测试（非 TTY）与旧控制台（无 ANSI）回退整屏追加重绘。
+    """
+    try:
+        return os.name == "posix" and sys.stdout.isatty()
+    except Exception:
+        return False
+
+
+def _clear_last_frame(lines: int) -> None:
+    """把光标移回上一帧首行并清空其下内容（ANSI：光标上移 N 行 + 清屏至末尾）。"""
+    if lines > 0:
+        sys.stdout.write(f"\x1b[{lines}A\x1b[0J")
+        sys.stdout.flush()
+
+
+def main() -> None:
+    """TUI 主循环。方向键导航 + Enter 确认（全档可用）；窄屏直达并存。
+
+    窄屏档（<64 列）交互主路径仍是「按字母/数字键直达」（未登记键静默忽略
+    且不重绘）；方向键/Enter 同样可用——移动选中态后**原地重绘**（ANSI 光标
+    上移+清屏，菜单不滚屏），不支持 ANSI 的环境（管道/测试/旧控制台）回退
+    整屏追加。Esc 与 0/X 同为退出别名（手机 SSH 客户端普遍提供 Esc 键）。
     """
     init_config()
     _apply_feature_gates()  # 必须在 _bind_callbacks 之前：裁剪后索引才与渲染一致
@@ -180,12 +227,10 @@ def main() -> None:
     sel: int = _idx if _idx is not None else 0
 
     while True:
-        print_header()
-        show_config()
-        render_menu(sel)
+        frame_lines = _render_menu_frame(sel)
 
-        # 内层按键循环：直达键（快捷键/退出）处理后重绘或退出；窄屏导航键
-        # 静默忽略且不回到重绘点（免导航直达模式，见函数 docstring）
+        # 内层按键循环：直达键（快捷键/退出）处理后重绘或退出；方向键/Enter
+        # 全档导航——窄屏优先原地重绘（菜单不滚屏），不可用时回退整屏追加
         while True:
             key = get_key()
             narrow = layout_tier(terminal_columns()) == "narrow"
@@ -207,17 +252,19 @@ def main() -> None:
                 if narrow:
                     continue  # 窄屏直达模式：未登记字母同样静默忽略
                 break
-            if narrow:
-                continue  # 窄屏直达模式：方向键/Enter/未知键静默忽略，不重绘
             if key == KEY_ENTER:
                 execute_item(sel)
                 break
-            if key == KEY_UP:
-                sel = (sel - 1) % len(MENU_ITEMS)
-                break
-            if key == KEY_DOWN:
-                sel = (sel + 1) % len(MENU_ITEMS)
-                break
+            if key == KEY_UP or key == KEY_DOWN:
+                sel = (sel - 1) % len(MENU_ITEMS) if key == KEY_UP else (sel + 1) % len(MENU_ITEMS)
+                if narrow and _can_repaint_inplace():
+                    # 窄屏导航：原地重绘（光标上移+清屏），手机短屏菜单不被顶出可视区
+                    _clear_last_frame(frame_lines)
+                    frame_lines = _render_menu_frame(sel)
+                    continue
+                break  # 宽/中档整屏重绘；窄屏不支持 ANSI 时同样回退追加
+            if narrow:
+                continue  # 窄屏未知键静默忽略，不重绘
             # 宽/中档未知键：重绘一屏给出反馈
             break
 
