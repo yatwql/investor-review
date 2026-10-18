@@ -438,6 +438,25 @@ class TestClearByGroup(CacheTestBase):
         self.assertTrue(os.path.exists(_cache_path("news_abc")))
         self.assertIn("股票价格", result)
 
+    def test_clear_preload_group_covers_debate_segments(self):
+        """preload 组清除辩论三段缓存（缓存专属登记改挂后防回退）。"""
+        self._write_cache("llm_debate_pro_abc", {"d": 1}, ts=1000.0)
+        self._write_cache("llm_debate_con_abc", {"d": 2}, ts=1000.0)
+        self._write_cache("llm_debate_synthesis_abc", {"d": 3}, ts=1000.0)
+        self._write_cache("news_abc", {"d": 4}, ts=1000.0)
+
+        from src.python.cache import clear_by_group
+
+        result = clear_by_group("preload")
+
+        from src.python.cache import _cache_path
+
+        for key in ("llm_debate_pro_abc", "llm_debate_con_abc", "llm_debate_synthesis_abc"):
+            self.assertFalse(os.path.exists(_cache_path(key)), key)
+        self.assertTrue(os.path.exists(_cache_path("news_abc")))
+        for label in ("辩论白脸", "辩论黑脸", "辩论综合"):
+            self.assertIn(label, result)
+
     def test_clear_refresh_clears_exact_keys(self):
         """refresh 组也清除 fund_benchmarks 精确键名。"""
         self._write_cache("fund_benchmarks", {"d": 1}, ts=1000.0)

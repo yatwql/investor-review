@@ -68,9 +68,9 @@ class TestDisplayPrimitives:
     def test_model_route_labels_use_effective_model(self):
         labels = model_route_labels({"model": "base-model", "model_news_correlation": "special-model"})
         # 每个可见模块一行「显示名=生效模型」（覆盖与模块清单一致，不写死条数）
-        from src.python.core.registry import visible_llm_module_names
+        from src.python.core.registry import get_llm_module_names
 
-        assert len(labels) == len(visible_llm_module_names())
+        assert len(labels) == len(get_llm_module_names())
         assert any(label.startswith("财经新闻热点与持仓关联分析=special-model") for label in labels)
 
 

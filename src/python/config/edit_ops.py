@@ -28,7 +28,7 @@ from src.python.config.features import (
     feature_switch_registry,
 )
 from src.python.core.atomic_write import copy_file_atomic
-from src.python.core.registry import visible_llm_module_names
+from src.python.core.registry import get_llm_module_names
 
 logger = logging.getLogger("invest")
 
@@ -73,7 +73,7 @@ config_edit_whitelist = {
     # ── 6 LLM 分析章节开关（llm_settings.json enabled_llm；清单 = 注册表可见标准模块）──
     **{
         f"enabled_llm.{sfx}": {"kind": "bool", "target": "llm_settings", "writer": "llm"}
-        for sfx in visible_llm_module_names()
+        for sfx in get_llm_module_names()
     },
     # ── 7 功能开关（features.json；清单取自 features.feature_switch_registry 全注册表，
     #      实验项与常规开关同表同写入路径，分组只影响前端分块渲染）──

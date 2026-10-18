@@ -666,9 +666,6 @@ class TestSystemInfo:
             module_names={
                 "global_macro": "全球政经局势",
                 "expert_review": "智囊团深度复盘",
-                "debate_pro": "正反辩论",
-                "debate_con": "正反辩论反方",
-                "debate_synthesis": "辩论总结",
             },
         )
         info = _build_system_info()
@@ -679,10 +676,13 @@ class TestSystemInfo:
         assert llm["model"] == "claude-sonnet-4-6"
         assert llm["endpoint_display"] == "api.anthropic.com"
         assert llm["circuit"] == "正常"
-        # 模型路由：隐藏后缀（辩论三模块）不展示；未配置的模块级 model 回退到全局 model
+        # 模型路由：每条 = 模块名=生效模型，覆盖注册表 LLM 模块全集（不写死条数/清单）；
+        # 未配置的模块级 model 回退到全局 model
         assert "全球政经局势=claude-sonnet-4-6" in llm["route"]
         assert "智囊团深度复盘=claude-sonnet-4-6" in llm["route"]
-        assert not any("正反辩论" in r for r in llm["route"])
+        assert len(llm["route"]) == 2
+        for entry in llm["route"]:
+            assert entry.endswith("=claude-sonnet-4-6")
 
     def test_flat_mode_module_model_override(self, monkeypatch):
         """模块级 model_{sfx} 覆盖全局 model（路由展示各模块实际模型）。"""

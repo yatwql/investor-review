@@ -453,7 +453,7 @@ while True:
 | 配置管理 | `[P]` | 报告可选章节开关（顺序与取舍） |
 | | `[I]` | 对比指数池管理（自定义基准指数） |
 | | `[A]` | 持仓匿名化模式（off / code_display / full_anonymous / summary 四种） |
-| | `[S]` | LLM 模块与功能开关配置（① 标准 LLM 模块启停 `enabled_llm`（辩论三模块菜单层隐藏）→ ② 四组功能开关分块：呈现与体验 / 分析增强·既有章内追加 / 独立章节与回放 / 机制与诊断；分块标题、显示名与顺序取自 `features.GROUP_ORDER`/`GROUP_LABELS`，新增开关自动上屏，实验项行首 ⚗ 标记） |
+| | `[S]` | LLM 模块与功能开关配置（① 标准 LLM 模块启停 `enabled_llm`（键域 = 注册表 LLM 模块全集；辩论三段不在模块注册表内，由功能开关 `llm_debate_procon` 控制、缓存登记在缓存域）→ ② 四组功能开关分块：呈现与体验 / 分析增强·既有章内追加 / 独立章节与回放 / 机制与诊断；分块标题、显示名与顺序取自 `features.GROUP_ORDER`/`GROUP_LABELS`，新增开关自动上屏，实验项行首 ⚗ 标记） |
 | | `[R]` | 刷新配置（config.json + llm_settings.json + llm_key.json，附带重载定价与批量限速器） |
 | 诊断 | `[V]` | 查看最近运行日志（可按级别筛选，`handlers_log.py::_cmd_view_logs`） |
 | | `[H]` | 查看数据源健康历史（`handlers_log.py::_cmd_view_health_history`） |
@@ -686,7 +686,7 @@ Web 渠道是第三种交互入口：**浏览器内完成「上传持仓 Excel �
 
 配置编辑的职责边界：**「能改什么」由白名单唯一确定，「怎么改」由共享编辑层单源执行**——Web `POST /api/config/edit` 与 TUI 配置面板（`_apply_edit` 外壳）同走 `config/edit_ops.py::apply_config_edit`，两渠道同一函数、同一强度；不引入任何白名单之外的新配置项。核心实现 `config/edit_ops.py`（`web/config_edit.py` 仅保留 `get_config_edit_surface` 呈现面组装）：
 
-- **白名单 `config_edit_whitelist`**（定义于 `config/edit_ops.py`，小写模块级 dict，唯一事实来源）：点分键 → `{"kind", "target", "writer"}`。`kind` 取 `str`/`bool`/`enum`/`action`；`target` 取 `config`/`llm_settings`/`features`（落盘目标文件）；`writer` 取 `scalar`/`anonymization`/`llm`/`features`/`comparison_indices`（写入分派器）。全集 6 组 48 条键（前端把「功能开关」组按 surface 下发的 `groups` 渲染成四块，故界面共 9 块）：自由文本路径 3（holdings_dir / holdings_filename / output_dir）、报告章节开关 5、匿名化 1 键 4 档、对比指数池 1 键（增/删/重置默认）、LLM 分析章节开关 7（enabled_llm，隐藏辩论三模块不展示）、功能开关 31（features.json 全注册表：呈现与体验 2 + 分析增强 14 + 独立章节与回放 6 + 机制与诊断 9；分组、默认值与显示名同源，面板显示名与「影响报告」标记由 surface 下发，前端不写字典）。
+- **白名单 `config_edit_whitelist`**（定义于 `config/edit_ops.py`，小写模块级 dict，唯一事实来源）：点分键 → `{"kind", "target", "writer"}`。`kind` 取 `str`/`bool`/`enum`/`action`；`target` 取 `config`/`llm_settings`/`features`（落盘目标文件）；`writer` 取 `scalar`/`anonymization`/`llm`/`features`/`comparison_indices`（写入分派器）。全集 6 组 44 条键（前端把「功能开关」组按 surface 下发的 `groups` 渲染成四块，故界面共 9 块）：自由文本路径 3（holdings_dir / holdings_filename / output_dir）、报告章节开关 5、匿名化 1 键 4 档、对比指数池 1 键（增/删/重置默认）、LLM 分析章节开关 7（enabled_llm，键域=注册表 LLM 模块全集）、功能开关 27（features.json 全注册表：呈现与体验 1 + 分析增强 16 + 独立章节与回放 5 + 机制与诊断 5；分组、默认值与显示名同源，面板显示名与「影响报告」标记由 surface 下发，前端不写字典）。
 - **写入分派（共享层 `_dispatch_write` 单点，两渠道无各自实现）**：config.json 顶层标量 → `set_config`（`_PATH_CONFIG_KEYS` 路径键自动反绝对化）；嵌套 dict（comparison_indices）→ 读合并后 `set_config` 整块写；报告章节与增强开关（`GROUP_REPORT`）→ `save_feature_overrides`；`anonymization.mode` → `set_anonymization_mode`；`enabled_llm.*` → 共享 `write_llm_settings`（`config/_llm_settings.py` 公开原语，自 `tui/handlers_config.py` 抽取，TUI 改委托、行为零变化；保留注释 + mkstemp + `os.replace` 原子写 + `get_llm_config()` 缓存刷新）；功能开关（三组同一路径）→ `save_feature_overrides`（features.json）。
 - **类型/枚举校验（共享层 `_apply_plain_value`/`_apply_comparison_action`，Web 400 / TUI 黄色提示行同一规则）**：`set_config` 不做值类型/模式验证，规则集中在共享编辑层——kind=str 须非空字符串（trim 后判空），`holdings_filename` 额外拒绝路径分隔符（防破坏文件定位）；kind=bool 仅接受 `True`/`False`（`1`/`"true"`/`0.0` 等一律拒绝）；kind=enum 严格匹配合法枚举值（大小写/空白/非字符串拒绝）；对比指数池 code 非空且长度 ≥3、拒绝路径分隔符（防 `../` 穿越）、拒绝重复入池，name 非空。校验失败 Web 统一 400 BAD_PARAM（服务端中文文案）。
 - **写前备份 `config_backup_file`**：写目标文件前单槽 `.bak` 备份（`core/atomic_write.copy_file_atomic` 原子复制），原文件不存在时返回 None（不备份）；单槽轮转——第二次写覆盖上一版 `.bak`，供手动还原（`.bak` 改回原名）。
@@ -3044,7 +3044,7 @@ API 层         api.py        Provider 路由 + Multi-Provider Chain 遍历
 
 **LLM 模块配置化**：每个 LLM 模块（global_macro / expert_review / health_check / penetration_deep / news_correlation）在 `core/registry.py` 中通过 `settings_suffix` 注册，自动派生 `llm_settings.json` 的所有合法键名。
 
-**辩论模式（报告章节与增强路由）**：当 Feature Flag `llm_debate_procon` 启用时，`_llm_dispatch.py` 中的 `_debate_wrapper` 闭包替换 `_MODULE_FNS["expert_review"]`；`llm_debate_conditional`（同组、默认开）仅叠加模式组合，不触发路由。辩论模式与标准模式互斥（辩论优先），路由后 `skeleton.generate_llm_module()` 走辩论三段缓存（`llm_debate_pro_` / `llm_debate_con_` / `llm_debate_synthesis_`）而非标准 expert_review 缓存。三段独立的 `DataModuleDef` 注册在 `core/registry.py` 中（preload 组，24h TTL）。
+**辩论模式（报告章节与增强路由）**：当 Feature Flag `llm_debate_procon` 启用时，`_llm_dispatch.py` 中的 `_debate_wrapper` 闭包替换 `_MODULE_FNS["expert_review"]`；`llm_debate_conditional`（同组、默认开）仅叠加模式组合，不触发路由。辩论模式与标准模式互斥（辩论优先），路由后 `skeleton.generate_llm_module()` 走辩论三段缓存（`llm_debate_pro_` / `llm_debate_con_` / `llm_debate_synthesis_`）而非标准 expert_review 缓存。三段缓存由缓存专属登记 `_CACHE_ONLY_REGISTRY`（`core/data_registry.py`）承载——不在模块注册表内，故菜单/配置编辑/`llm_settings` 键域均不含其键；缓存侧访问器 `get_cache_registry()` 合并输出前缀/TTL/组归属（preload 组，24h TTL），缓存 key 与既有磁盘缓存不变。
 
 各子模块的详细设计见 `llm-technical.md` §1~§4（架构总览、模块清单、骨架流程、并行编排）。
 
@@ -3205,7 +3205,7 @@ class DataModuleDef:
 | 行业 | 1 | industry |
 | 新闻（refresh） | 1 | news |
 | LLM 分析（preload/refresh） | 5 | global_macro、expert_review、news_correlation、health_check、penetration_deep |
-| 辩论缓存（preload，实验） | 3 | llm_debate_pro、llm_debate_con、llm_debate_synthesis |
+| 辩论缓存（preload，缓存专属登记） | 3 | llm_debate_pro、llm_debate_con、llm_debate_synthesis |
 | 补充数据（refresh） | 3 | profit_forecast、sector_flow、dividend |
 | 基金深度分析（refresh/无分组） | 4 | fund_manager、fund_concentration、fund_style_snapshot、**extended** |
 | 无风险利率（refresh） | 1 | **bond_yield** |
@@ -3535,6 +3535,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `resolve_switch_values` | 命令行开关增量的归并去重（同名后写覆盖先写） | 功能开关 | 配置编辑 | 无（命令行一次性开关，不写盘） |
 | `describe_switches` | 全注册表开关名清单（CLI 报错提示的可选值来源） | 功能开关 | 配置编辑 | 无（提示文案来源） |
 | `cassette` | 数据源记录-回放（真实响应体离线录制/回放引擎，`Cassette`/`cassette_replay`/`cassette_record`） | 数据源记录-回放 | 数据获取（测试基建） | 无（测试基建，不控制运行时行为） |
+| `get_cache_registry` | 缓存域注册表访问器（常规模块 + 注册表外**缓存专属**项：辩论三段缓存的前缀/TTL/preload 组归属） | 缓存引擎 | 缓存治理 | 无（缓存基础设施，不控制运行时行为；运行时开关由 `llm_debate_procon` 控制） |
 | `cassette_checks` | 已录制响应 → 当前解析器的绑定表（录制自检与 `cassettes --verify` 共用） | 数据源记录-回放 | 数据获取（测试基建） | 无（测试基建） |
 | `use_transport_factory` | 传输工厂注入点（`make_http_client` 的响应来源替换，C5 唯一构造点上的挂载） | 数据源记录-回放 | 数据获取（测试基建） | 无（测试基建） |
 | `credential_spec` | 数据源凭据声明（`CredentialSpec` 冻结 dataclass + `CREDENTIAL_SPECS` 注册表） | 数据源可用性矩阵 | 监控 | 已内置（不可关闭） |

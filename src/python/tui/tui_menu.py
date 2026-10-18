@@ -16,7 +16,6 @@ import sys
 from collections.abc import Callable
 
 from src.python.core.ansi_colors import GREEN, RED, RESET, YELLOW
-from src.python.core.registry import LLM_HIDDEN_KEYS
 from src.python.config import get_config
 
 # 每个菜单项：(快捷键, 显示标签, 回调函数, 是否退出项)
@@ -77,16 +76,13 @@ def get_config_cache() -> dict | None:
     return _config_cache
 
 
-# ── LLM 菜单隐藏模块 ──────────────────────────────────────
-# 辩论三模块（debate_pro/con/synthesis）在注册表中保留
-# （缓存 TTL/前缀清理仍依赖），但不在菜单/状态面板展示，避免误导为可开关模块。
-# 实际辩论开关由 features.json 控制（正反辩论为实验 Flag；条件推理为常规开关；集中度问答为流程内建段）。
-LLM_MENU_HIDDEN_KEYS: frozenset[str] = LLM_HIDDEN_KEYS
-
-
 def filter_menu_llm_modules(module_names: dict[str, str]) -> dict[str, str]:
-    """菜单层过滤：剔除隐藏的 LLM 模块（注册表条目保留）。"""
-    return {k: v for k, v in module_names.items() if k not in LLM_MENU_HIDDEN_KEYS}
+    """菜单 LLM 模块清单门面（恒等返回）。
+
+    注册表不含任何面板隐藏模块，本函数保留调用面稳定（菜单 / [S] 面板 /
+    强刷多选 / 手册菜单块同步均经此派发），不做过滤。
+    """
+    return dict(module_names)
 
 
 # ── 界面输出 ──────────────────────────────────────────────

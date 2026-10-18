@@ -14,7 +14,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from src.python.core.registry import visible_llm_module_names
+from src.python.core.registry import get_llm_module_names
 from src.python.llm import cost_forecast as cf
 from src.python.llm.cost_forecast import (
     budget_status,
@@ -31,7 +31,7 @@ pytestmark = [pytest.mark.unit, pytest.mark.unit_llm]
 
 def _enabled_only(*targets: str) -> dict:
     """构造 enabled_llm：仅 targets 开启（键空间取自注册表，不写死清单）。"""
-    return {k: (k in targets) for k in visible_llm_module_names()}
+    return {k: (k in targets) for k in get_llm_module_names()}
 
 
 def _known_model() -> str:

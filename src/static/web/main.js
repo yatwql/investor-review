@@ -1209,7 +1209,7 @@
     els.configPanel.appendChild(
       renderBoolGroup('llm', 'LLM 分析章节', surface.llm.enabled_llm, {
         prefix: 'enabled_llm.',
-        note: '辩论三模块（白脸/黑脸/综合）不在菜单展示，输出由上方「分析增强」组的正反辩论开关控制'
+        note: '辩论三段（白脸/黑脸/综合）不占模块清单位，输出由上方「分析增强」组的正反辩论开关控制'
       })
     );
   }

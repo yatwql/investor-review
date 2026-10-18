@@ -44,9 +44,15 @@ class TestMenuItems(unittest.TestCase):
         for i, (key, label, _cb, is_exit) in enumerate(_tm.MENU_ITEMS):
             _tm.MENU_ITEMS[i] = (key, label, None, is_exit)
 
-    def test_item_count(self) -> None:
-        """菜单项应为 19 个（含受开关约束的 [T] 系统自检与 [Q] 报告追问；[C]/[F]/[O] 已聚合到 [D] 子菜单）。"""
-        self.assertEqual(len(MENU_ITEMS), 19)
+    def test_key_set_complete(self) -> None:
+        """菜单键集合完整（会话/报告/缓存/配置/诊断/退出各域齐备，逐键断言不写死条数）。"""
+        expected = {
+            "E", "B", "L", "W", "Q", "D",
+            "1", "2", "4",
+            "P", "I", "A", "S", "R",
+            "V", "H", "T", "X",
+        }  # fmt: skip
+        self.assertSetEqual({item[0] for item in MENU_ITEMS}, expected)
 
     def test_labels_within_display_budget(self) -> None:
         """菜单标签显示宽 ≤ 48（渲染前缀 7 列，80 列终端不折行，东亚宽度口径）。"""
@@ -57,8 +63,8 @@ class TestMenuItems(unittest.TestCase):
             self.assertLessEqual(width, 48, f"[{key}] 标签显示宽 {width} 超预算: {label}")
 
     def test_whatif_item(self) -> None:
-        """What-if 菜单项在报告生成组后（第 4 项，快捷键 W）。"""
-        key, label, cb, is_exit = MENU_ITEMS[3]
+        """What-if 菜单项在报告生成组后（快捷键 W）。"""
+        key, label, cb, is_exit = MENU_ITEMS[index_by_key("W")]
         self.assertEqual(key, "W")
         self.assertIn("What-if", label)
         self.assertIsNone(cb)
@@ -66,15 +72,15 @@ class TestMenuItems(unittest.TestCase):
 
     def test_first_item_excel(self) -> None:
         """第一项快捷键 E。"""
-        key, label, cb, is_exit = MENU_ITEMS[0]
+        key, label, cb, is_exit = MENU_ITEMS[index_by_key("E")]
         self.assertEqual(key, "E")
         self.assertIn("Excel", label)
         self.assertIsNone(cb)
         self.assertFalse(is_exit)
 
     def test_qa_item(self) -> None:
-        """报告追问项在 What-if 后（第 5 项，快捷键 Q）。"""
-        key, label, cb, is_exit = MENU_ITEMS[4]
+        """报告追问项在 What-if 后（快捷键 Q）。"""
+        key, label, cb, is_exit = MENU_ITEMS[index_by_key("Q")]
         self.assertEqual(key, "Q")
         self.assertIn("追问", label)
         self.assertIsNone(cb)
@@ -82,7 +88,7 @@ class TestMenuItems(unittest.TestCase):
 
     def test_last_item_exit(self) -> None:
         """最后一项快捷键 X，is_exit=True。"""
-        key, label, cb, is_exit = MENU_ITEMS[18]
+        key, label, cb, is_exit = MENU_ITEMS[-1]
         self.assertEqual(key, "X")
         self.assertIn("退出", label)
         self.assertIsNone(cb)
@@ -90,7 +96,7 @@ class TestMenuItems(unittest.TestCase):
 
     def test_view_logs_item(self) -> None:
         """日志查看项在退出前（快捷键 V）。"""
-        key, label, cb, is_exit = MENU_ITEMS[15]
+        key, label, cb, is_exit = MENU_ITEMS[index_by_key("V")]
         self.assertEqual(key, "V")
         self.assertIn("运行日志", label)
         self.assertIsNone(cb)
@@ -98,15 +104,15 @@ class TestMenuItems(unittest.TestCase):
 
     def test_health_history_item(self) -> None:
         """健康历史项在日志查看后（快捷键 H）。"""
-        key, label, cb, is_exit = MENU_ITEMS[16]
+        key, label, cb, is_exit = MENU_ITEMS[index_by_key("H")]
         self.assertEqual(key, "H")
         self.assertIn("健康历史", label)
         self.assertIsNone(cb)
         self.assertFalse(is_exit)
 
     def test_config_dir_info_item(self) -> None:
-        """查看配置与目录信息项在报告追问后（第 6 项，快捷键 D）。"""
-        key, label, cb, is_exit = MENU_ITEMS[5]
+        """查看配置与目录信息项在报告追问后（快捷键 D）。"""
+        key, label, cb, is_exit = MENU_ITEMS[index_by_key("D")]
         self.assertEqual(key, "D")
         self.assertIn("配置与目录信息", label)
         self.assertIsNone(cb)
@@ -114,7 +120,7 @@ class TestMenuItems(unittest.TestCase):
 
     def test_doctor_item(self) -> None:
         """系统自检项在健康历史后、退出前（快捷键 T）。"""
-        key, label, cb, is_exit = MENU_ITEMS[17]
+        key, label, cb, is_exit = MENU_ITEMS[index_by_key("T")]
         self.assertEqual(key, "T")
         self.assertIn("系统自检", label)
         self.assertIsNone(cb)
@@ -142,31 +148,23 @@ class TestMenuItems(unittest.TestCase):
 
 
 class TestIndexByKey(unittest.TestCase):
-    """index_by_key 快捷键查找测试。"""
+    """index_by_key 快捷键查找测试（结构关系断言，菜单增删不失效）。"""
 
-    def test_find_E(self) -> None:
+    def test_every_key_resolves_to_itself(self) -> None:
+        """每个菜单键经 index_by_key 定位回自身（键↔索引双向一致）。"""
+        for key, _label, _cb, _ex in MENU_ITEMS:
+            idx = index_by_key(key)
+            self.assertIsNotNone(idx, key)
+            self.assertEqual(MENU_ITEMS[idx][0], key)
+
+    def test_first_and_last_positions(self) -> None:
+        """首项为 E、末项为退出键 X（位序语义，不写死条数）。"""
         self.assertEqual(index_by_key("E"), 0)
+        self.assertEqual(index_by_key("X"), len(MENU_ITEMS) - 1)
 
-    def test_find_W(self) -> None:
-        self.assertEqual(index_by_key("W"), 3)
-
-    def test_find_X(self) -> None:
-        self.assertEqual(index_by_key("X"), 18)
-
-    def test_find_Q(self) -> None:
-        self.assertEqual(index_by_key("Q"), 4)
-
-    def test_find_D(self) -> None:
-        self.assertEqual(index_by_key("D"), 5)
-
-    def test_find_T(self) -> None:
-        self.assertEqual(index_by_key("T"), 17)
-
-    def test_find_V(self) -> None:
-        self.assertEqual(index_by_key("V"), 15)
-
-    def test_find_H(self) -> None:
-        self.assertEqual(index_by_key("H"), 16)
+    def test_whatif_after_llm(self) -> None:
+        """What-if 紧跟完整报告之后。"""
+        self.assertEqual(index_by_key("W"), index_by_key("L") + 1)
 
     def test_find_nonexistent(self) -> None:
         self.assertIsNone(index_by_key("Z"))
@@ -176,7 +174,10 @@ class TestIndexByKey(unittest.TestCase):
         self.assertIsNone(index_by_key("e"))
 
     def test_find_number(self) -> None:
-        self.assertEqual(index_by_key("1"), 6)
+        """数字快捷键可定位（缓存类命令项）。"""
+        idx = index_by_key("1")
+        self.assertIsNotNone(idx)
+        self.assertEqual(MENU_ITEMS[idx][0], "1")
 
     def test_find_empty(self) -> None:
         self.assertIsNone(index_by_key(""))
@@ -223,32 +224,26 @@ class TestConfigCache(unittest.TestCase):
 
 
 class TestFilterMenuLlmModules(unittest.TestCase):
-    """菜单层隐藏辩论三模块（注册表条目保留）。"""
+    """菜单 LLM 清单门面恒等；模块清单与缓存域注册表职责分离。"""
 
-    def test_filter_hides_legacy_debate_modules(self):
-        """过滤后仅剩标准模块，不含辩论三模块。
-
-        期望集合由「注册表全集 ⊖ 菜单隐藏集」结构导出（不写死逐条清单）：
-        新增模块时本用例不需改，仅当**隐藏集**变化才应重审。
-        """
+    def test_filter_is_identity_facade(self):
+        """过滤器恒等返回（调用面保留）：键值对与注册表清单完全一致。"""
         from src.python.core.registry import get_llm_module_names
-        from src.python.tui.tui_menu import LLM_MENU_HIDDEN_KEYS, filter_menu_llm_modules
+        from src.python.tui.tui_menu import filter_menu_llm_modules
 
         module_names = get_llm_module_names()
-        filtered = filter_menu_llm_modules(module_names)
-        self.assertEqual(set(filtered.keys()), set(module_names) - set(LLM_MENU_HIDDEN_KEYS))
-        for hidden in LLM_MENU_HIDDEN_KEYS:
-            self.assertNotIn(hidden, filtered)
-            self.assertIn(hidden, module_names, "隐藏集成员必须仍在注册表内（缓存 TTL 依赖）")
+        self.assertEqual(filter_menu_llm_modules(module_names), module_names)
 
-    def test_registry_keeps_legacy_debate_modules(self):
-        """注册表仍保留辩论三模块（缓存 TTL/前缀清理依赖），未被删除。"""
-        from src.python.core.registry import get_llm_module_names
+    def test_registry_excludes_debate_but_cache_domain_keeps(self):
+        """模块清单不含辩论三段；缓存域注册表仍登记其前缀/TTL/组归属。"""
+        from src.python.core.registry import get_cache_registry, get_llm_module_names
 
         names = get_llm_module_names()
-        self.assertIn("debate_pro", names)
-        self.assertIn("debate_con", names)
-        self.assertIn("debate_synthesis", names)
+        for key in ("debate_pro", "debate_con", "debate_synthesis"):
+            self.assertNotIn(key, names)
+        cache_types = {m.data_type for m in get_cache_registry()}
+        for data_type in ("llm_debate_pro", "llm_debate_con", "llm_debate_synthesis"):
+            self.assertIn(data_type, cache_types)
 
 
 @pytest.mark.unit

@@ -30,7 +30,7 @@ from src.python.config.features import (
 logger = logging.getLogger("invest")
 
 # LLM 分析章节可编辑开关 = 注册表可见标准模块（共享单源）；辩论三模块为隐藏项
-from src.python.core.registry import LLM_HIDDEN_KEYS, visible_llm_module_names  # noqa: E402
+from src.python.core.registry import get_llm_module_names  # noqa: E402
 
 
 def get_config_edit_surface() -> dict:
@@ -81,7 +81,7 @@ def get_config_edit_surface() -> dict:
             enabled_map = json.loads(strip_json_comments(raw)).get("enabled_llm") or {}
         except (OSError, json.JSONDecodeError) as e:
             logger.warning("读取 llm_settings.json 失败，LLM 开关按默认展示: %s", e)
-    surface_enabled = {sfx: bool(enabled_map.get(sfx, True)) for sfx in visible_llm_module_names()}
+    surface_enabled = {sfx: bool(enabled_map.get(sfx, True)) for sfx in get_llm_module_names()}
     # 功能开关：按 GROUP_ORDER 四组动态下发（组键/组标题/清单皆由注册表派生，
     # 不硬编码组名，下次分组调整零改动）；显示名、「影响报告」标记与实验项清单
     # 由服务端同源下发——前端不维护任何开关字典，避免与注册表漂移。
@@ -105,9 +105,6 @@ def get_config_edit_surface() -> dict:
         "anonymization": {"mode": anon_mode, "options": list(ANON_MODES)},
         "comparison_indices": dict(indices),
         "comparison_indices_defaults": dict(get_default("comparison_indices") or {}),
-        "llm": {
-            "enabled_llm": surface_enabled,
-            "hidden_modules": sorted(LLM_HIDDEN_KEYS),
-        },
+        "llm": {"enabled_llm": surface_enabled},
         "features": features_surface,
     }

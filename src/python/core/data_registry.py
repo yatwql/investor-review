@@ -23,9 +23,10 @@ from src.python.core.constants import CACHE_DAILY, CACHE_MONTHLY, CACHE_TWO_WEEK
 
 __all__ = [
     "DataModuleDef",
-    "LLM_HIDDEN_KEYS",
+    "_CACHE_ONLY_REGISTRY",
     "LLM_MODULE_GATED_SECTIONS",
     "_MODULE_REGISTRY",
+    "get_cache_registry",
     "get_cache_ttl_defaults",
     "get_exact_type_map",
     "get_known_enabled_llm_keys",
@@ -35,7 +36,6 @@ __all__ = [
     "get_prefix_type_map",
     "get_registered_data_types",
     "get_registry",
-    "visible_llm_module_names",
 ]
 
 # ── 模块定义 ────────────────────────────────────────────────
@@ -224,31 +224,6 @@ _MODULE_REGISTRY: tuple[DataModuleDef, ...] = (
         settings_suffix="holding_change",
         cache_groups=("preload",),
     ),
-    # ── 辩论模式（preload 组，实验功能）──
-    DataModuleDef(
-        "辩论白脸",
-        "llm_debate_pro",
-        cache_prefixes=("llm_debate_pro_",),
-        cache_ttl=86400,
-        settings_suffix="debate_pro",
-        cache_groups=("preload",),
-    ),
-    DataModuleDef(
-        "辩论黑脸",
-        "llm_debate_con",
-        cache_prefixes=("llm_debate_con_",),
-        cache_ttl=86400,
-        settings_suffix="debate_con",
-        cache_groups=("preload",),
-    ),
-    DataModuleDef(
-        "辩论综合",
-        "llm_debate_synthesis",
-        cache_prefixes=("llm_debate_synthesis_",),
-        cache_ttl=86400,
-        settings_suffix="debate_synthesis",
-        cache_groups=("preload",),
-    ),
     # ── 补充数据（refresh 组）──
     DataModuleDef(
         "机构盈利预测",
@@ -340,6 +315,48 @@ _MODULE_REGISTRY: tuple[DataModuleDef, ...] = (
 
 
 # ── 派生产出 ────────────────────────────────────────────────
+# ── 缓存专属登记（注册表外：辩论三段缓存）─────────────────────
+# 辩论白脸/黑脸/综合三段的运行时开关挂 features（llm_debate_procon，分析增强组），
+# 三段**不属于 LLM 模块注册表**：菜单、配置编辑白名单与 llm_settings 键域均不含
+# 其键（settings_suffix 为空）。但磁盘缓存仍以 llm_debate_pro_ / llm_debate_con_ /
+# llm_debate_synthesis_ 前缀存在——其前缀分类、默认 TTL（24h）与 preload 组归属
+# 由本常量单一承载，缓存侧访问器（TTL / 前缀 / 精确键 / 数据类型 / 组清除）合并
+# 输出；缓存 key 与组名不变，磁盘同名缓存持续被识别与清理，无兼容窗口。
+_CACHE_ONLY_REGISTRY: tuple[DataModuleDef, ...] = (
+    DataModuleDef(
+        "辩论白脸",
+        "llm_debate_pro",
+        cache_prefixes=("llm_debate_pro_",),
+        cache_ttl=86400,
+        cache_groups=("preload",),
+    ),
+    DataModuleDef(
+        "辩论黑脸",
+        "llm_debate_con",
+        cache_prefixes=("llm_debate_con_",),
+        cache_ttl=86400,
+        cache_groups=("preload",),
+    ),
+    DataModuleDef(
+        "辩论综合",
+        "llm_debate_synthesis",
+        cache_prefixes=("llm_debate_synthesis_",),
+        cache_ttl=86400,
+        cache_groups=("preload",),
+    ),
+)
+
+
+def get_cache_registry() -> tuple[DataModuleDef, ...]:
+    """缓存域注册表 = 常规数据模块 + 缓存专属模块（辩论三段缓存）。
+
+    仅缓存引擎消费（组清除 / TTL 解析 / 前缀与数据类型分类）；
+    模块清单类消费（菜单、配置键域、章节可见性）一律走 ``_MODULE_REGISTRY``，
+    不含缓存专属项。
+    """
+    return (*_MODULE_REGISTRY, *_CACHE_ONLY_REGISTRY)
+
+
 # 以下函数从 _MODULE_REGISTRY 动态生成，供 config.py / cache.py 使用
 
 
@@ -353,7 +370,7 @@ def get_cache_ttl_defaults() -> dict[str, float]:
 
     未注册的类型回退到 CACHE_DAILY。
     """
-    return {m.data_type: m.cache_ttl for m in _MODULE_REGISTRY}
+    return {m.data_type: m.cache_ttl for m in get_cache_registry()}
 
 
 def get_prefix_type_map() -> dict[str, str]:
@@ -362,7 +379,7 @@ def get_prefix_type_map() -> dict[str, str]:
     用于 cleanup_expired() 从文件名前缀推断数据类型。
     """
     result: dict[str, str] = {}
-    for m in _MODULE_REGISTRY:
+    for m in get_cache_registry():
         for prefix in m.cache_prefixes:
             result[prefix] = m.data_type
     return result
@@ -373,7 +390,7 @@ def get_exact_type_map() -> dict[str, str]:
 
     用于固定键名（无通配前缀）的缓存文件清理。
     """
-    return {key: m.data_type for m in _MODULE_REGISTRY for key in m.exact_cache_keys}
+    return {key: m.data_type for m in get_cache_registry() for key in m.exact_cache_keys}
 
 
 def get_known_llm_settings_keys() -> set[str]:
@@ -404,7 +421,7 @@ def get_known_llm_settings_keys() -> set[str]:
 
 def get_registered_data_types() -> set[str]:
     """返回所有已注册的数据类型集合。"""
-    return {m.data_type for m in _MODULE_REGISTRY}
+    return {m.data_type for m in get_cache_registry()}
 
 
 def get_known_enabled_llm_keys() -> set[str]:
@@ -447,11 +464,6 @@ def get_llm_module_names() -> dict[str, str]:
     return {m.settings_suffix: m.name for m in _MODULE_REGISTRY if m.is_llm and m.settings_suffix is not None}
 
 
-# 面板隐藏的 LLM 模块集合（单一事实来源）：辩论三模块保留在注册表
-# （缓存 TTL/前缀清理仍依赖），但不入状态面板/配置面板/编辑白名单。
-# TUI 菜单过滤、Web 状态面与配置编辑白名单均由此派生，禁止渠道自持副本。
-LLM_HIDDEN_KEYS: frozenset[str] = frozenset({"debate_pro", "debate_con", "debate_synthesis"})
-
 # 报告章级开关集合（单一事实来源）：这些 LLM 分析章由 llm_settings.json →
 # enabled_llm.<key> 逐模块独立控制，禁用时**整章隐藏**（目录/正文/Excel 页签与
 # 连续重编号同步剔除），而非显示「待生成」占位；HTML/Excel 两端可见性判定同由此派生，
@@ -461,8 +473,3 @@ LLM_HIDDEN_KEYS: frozenset[str] = frozenset({"debate_pro", "debate_con", "debate
 LLM_MODULE_GATED_SECTIONS: frozenset[str] = frozenset(
     {"global_macro", "expert_review", "health_check", "penetration_deep"}
 )
-
-
-def visible_llm_module_names() -> dict[str, str]:
-    """面板可见的 LLM 标准模块映射（settings_suffix → 中文名，已剔除隐藏模块）。"""
-    return {k: v for k, v in get_llm_module_names().items() if k not in LLM_HIDDEN_KEYS}

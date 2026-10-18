@@ -18,7 +18,7 @@ from src.python.config.edit_ops import (
     config_edit_whitelist,
 )
 from src.python.config.features import feature_switch_registry
-from src.python.core.registry import visible_llm_module_names
+from src.python.core.registry import get_llm_module_names
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_config]
 
@@ -37,8 +37,8 @@ def _read_config_json() -> dict:
 class TestWhitelistStructure:
     """白名单 = 唯一事实来源：与注册表派生的结构关系（不写死条数）。"""
 
-    def test_llm_module_keys_match_visible_registry(self):
-        expected = {f"enabled_llm.{m}" for m in visible_llm_module_names()}
+    def test_llm_module_keys_match_registry(self):
+        expected = {f"enabled_llm.{m}" for m in get_llm_module_names()}
         actual = {k for k in config_edit_whitelist if k.startswith("enabled_llm.")}
         assert actual == expected
 

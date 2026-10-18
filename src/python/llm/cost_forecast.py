@@ -87,7 +87,7 @@ def resolve_planned_modules(
     Returns:
         计划参与的模块后缀列表；配置不可读时为空列表。
     """
-    from src.python.core.registry import visible_llm_module_names
+    from src.python.core.registry import get_llm_module_names
     from src.python.llm.depth_profile import depth_gate, resolve_depth_profile
     from src.python.llm.skeleton import is_llm_module_enabled
 
@@ -96,7 +96,7 @@ def resolve_planned_modules(
         return []
     profile = resolve_depth_profile(config)
     return sorted(
-        sfx for sfx in visible_llm_module_names() if is_llm_module_enabled(cfg, sfx) and depth_gate(True, sfx, profile)
+        sfx for sfx in get_llm_module_names() if is_llm_module_enabled(cfg, sfx) and depth_gate(True, sfx, profile)
     )
 
 
