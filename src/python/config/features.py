@@ -143,14 +143,6 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         True,
         True,
     ),
-    # ── 机制与诊断：投资方法框架（转正项：评分口径验证达成，已摘除实验身份、默认开）──
-    "prosperity_framework": FeatureSwitchDef(
-        "景气度框架诊断",
-        "六维评分卡（景气方向/ROE 低位弹性/全球比较优势/流动性/集中度与周期拼接/业绩回撤印证）评估组合契合度，缺数据维度标记需核实",
-        GROUP_MECHANISM,
-        True,
-        True,
-    ),
     # ── 分析增强与独立章节的转正项（实验身份已摘除，default 保持原值） ──
     # 面板编号 = 组序 + 注册表内声明顺序派生；四分组后不再有「转正项追加块首、
     # 既有项编号不位移」的跨块承诺（块边界由作用域决定，见手册面板编号表）
@@ -354,6 +346,15 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         "摘要区首屏执行摘要卡：关键指标环比行（总市值/总收益率/持仓数/集中度） + 本期关键变化 Top N（快照 diff 单源派生，无上期快照时整块隐藏）",
         GROUP_ANALYSIS,
         False,
+        True,
+    ),
+    # ── 分析增强：投资方法框架（转正项：评分口径验证达成，已摘除实验身份、默认开；
+    # 行动章内嵌评分卡区块，作用域属既有章内追加） ──
+    "prosperity_framework": FeatureSwitchDef(
+        "景气度框架诊断",
+        "六维评分卡（景气方向/ROE 低位弹性/全球比较优势/流动性/集中度与周期拼接/业绩回撤印证）评估组合契合度，缺数据维度标记需核实",
+        GROUP_ANALYSIS,
+        True,
         True,
     ),
 }

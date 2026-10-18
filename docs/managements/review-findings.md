@@ -23,7 +23,6 @@
 | # | 问题 | 修复方向 |
 |---|------|----------|
 | **rf-114** | 双渲染路径共存——模板保留 Canvas `drawSimpleChart()`（265 行内联 JS）+ Chart.js 渲染器，Feature Flag OFF 时回退 Canvas 路径 | 删除 `drawSimpleChart()` + Canvas 回退分支 + Feature Flag 条件分支，Chart.js 成唯一渲染器；**执行时同步摘除 `enable_interactive_charts` 注册表条目**（条件分支删除后开关失去消费者）并联动 how-to-config N 节与产物自述口径；触发条件：plan-1 稳定 2 版本（阶段 2→3 切换，判定标准见 upgrade.md §4.15） |
-| **rf-712** | `prosperity_framework` 转正后未迁组 + 需求文档死常量——①消费点在 `report/_report_aux_metrics.py`（报告渲染的六维评分卡区块），按组语义属「分析增强」却仍在「机制与诊断」组（实验期归属遗留，转正时未复核作用域）；②requirements R-PF-01 引用 v0.12 分组重组已废弃的 `GROUP_STANDARD` 常量（现行组键 presentation/analysis/standalone/mechanism），守护不校验需求正文组常量，陈旧引用无机器拦截 | 迁组 mechanism → analysis（面板/文档分组归属随迁同步）+ R-PF-01 组常量改现行值；可选在 `check-doc-drift` 补需求正文组常量名 ↔ `GROUP_LABELS` 键比对，防同类陈旧引用 |
 
 
 ### P3 — 持续监控：文件过长登记表（>500 行观察，脚本域 >400 即入观察 / **>1000 行为硬上限必须拆分**（主程序与脚本）；按距红线余量升序）
@@ -71,6 +70,7 @@
 > rf-709 已修复（2026-10-18）：报告模板 tooltip XSS 纪律——`drawSimpleChart` hover 内容改 DOM API 构建（`createElement` + `textContent`/`createTextNode`，色点走 `style.backgroundColor` 属性赋值），全文 `innerHTML` 清零，模板源结构测试断言防回归
 >
 > rf-710 已修复（2026-10-18）：遥测 JSONL 保留上限——`jsonl_store` 追加原语增 `max_lines` 尾部保留参数（超限丢最旧行，原子写语义不变）；perf 历史 5000 行 / 健康检查历史 2000 行上限（账本/去重锚点等业务态文件不设，避免丢失跨会话状态）
+> rf-712 已修复（2026-10-18）：`prosperity_framework` 转正后未迁组——作用域复核为行动章内嵌评分卡区块，注册表分组机制与诊断 → 分析增强（面板编号/手册分组表/文档归属随迁同步）；requirements R-PF-01 引用的已废弃 `GROUP_STANDARD` 常量改现行 `GROUP_ANALYSIS`，how-to-config 分组计数残留同步修正（详见 changelog）
 >
 > rf-706 已修复（2026-10-18）：Web 进度事件通道完整性——`pollOnce` 增在途互斥（pollBusy，成功/异常/同步抛三路复位）+ 按 `seq > lastSeq` 过滤重复回放；服务端 events 载荷补 `first_seq`（`RunState.oldest_seq`），前端缺口时渲染「中间已省略 N 条」占位行，不再静默跳号
 >

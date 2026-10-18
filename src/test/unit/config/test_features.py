@@ -716,9 +716,9 @@ class TestBannerLogLevel:
 class TestProsperityFrameworkPromotion:
     """景气度框架诊断实验转正锁定：摘除实验身份、作用域归机制与诊断组且默认开（评分口径不变）。"""
 
-    def test_promoted_to_mechanism_default_on(self):
+    def test_promoted_to_analysis_default_on(self):
         sw = feature_switch_registry["prosperity_framework"]
-        assert sw.group == GROUP_MECHANISM
+        assert sw.group == GROUP_ANALYSIS
         assert sw.default is True
         assert sw.affects_report is True
         assert not is_experimental_switch("prosperity_framework")

@@ -320,7 +320,7 @@
 
 | # | 需求 | 说明 |
 |---|------|------|
-| R-PF-01 | **常规开关**：`prosperity_framework` 默认开（`GROUP_STANDARD`、`affects_report=True`；实验转正——降级矩阵/真实样本/口径认可判据达成）；关闭时报告与未引入时**逐字节一致**（零行为变化） |
+| R-PF-01 | **常规开关**：`prosperity_framework` 默认开（`GROUP_ANALYSIS`、`affects_report=True`；实验转正——降级矩阵/真实样本/口径认可判据达成，作用域复核入分析增强组）；关闭时报告与未引入时**逐字节一致**（零行为变化） |
 | R-PF-02 | **六维评分卡**：景气方向/通胀属性 25 + ROE 低位弹性 20 + 全球视野/中国比较优势 15 + 流动性 10 + 集中度与周期拼接 15 + 业绩与回撤印证 15 = 满分 100 |
 | R-PF-03 | **客观化口径**：全部输入取自既有能力（穿透重仓的板块/概念、`financial_indicator_data` 的 ROE、`check_liquidity` 的变现天数、历史快照的换手代理、`history_data` 的区间收益与最大回撤）；不新增外部数据源、不新增 LLM 调用 |
 | R-PF-09 | **两项扩展必标口径（阶段一）**：②维基金层 ROE 按**前十大重仓股加权推演**（阶段一；全量持仓口径待同花顺历史持仓接口收尾后升级，记录以 `basis` 区分），证据/持仓视角/契约说明三处均标「按框架推演」；④维场外赎回天数一律按 `R-LIQ-03` 的类型默认档口径（**单一维护点，不在此重复档位串**），并在证据中标「类型默认档（非实测）」；两者均不得冒充披露/实测口径 |
@@ -1410,7 +1410,7 @@ LLM 五维度量化评分，每项满分 100：
 
 ### 11.5 features.json（功能开关注册表）
 
-独立配置文件，提供 32 项功能开关的运行时覆写。不配置时全部使用代码内置默认值。开关按**作用域分四组**——**呈现与体验**（2 项，默认开：量化指标显示 / 报告图表交互）、**分析增强**（15 项，多数默认关，`llm_debate_conditional`/`data_quality`/`market_temperature`/`fund_purchase_limit`/`cost_position` 五项默认开）、**独立章节与回放**（6 项，默认关）与**机制与诊断**（9 项，机制项默认开、⚗ 实验项默认关）——分组表达「开了长出什么」而非生命周期；**生命周期由独立字段 `experimental` 表达**（2 项：`decision_reflection` 与 `report_qa`，面板以 ⚗ 标识、随产物自述），**转正**即把该字段置 false（作用域不变则原地留块，作用域变化才改组），面板可见性不随转正摘除。四组在 TUI 菜单 `[S]` / Web 配置面板 / CLI（`--experiment` 只开全部实验项、`--feature NAME=VALUE` 全域双向）中**同样可切换**；唯一登记点是 `config/features.py::feature_switch_registry`（显示名/说明/作用域分组/默认值/产物影响/实验身份六字段），渠道层不得另写清单。仅收录「有消费者」的开关——LLM 模块启停与基金深度分析（`llm_settings.json` 的 `enabled_llm`）、新闻源（`config.json` 的 `news_sources`）、历史走势与回撤（`config.json` 的 `enable_history`）、匿名化模式（`config.json` 的 `anonymization.mode`）各有归属配置，不在此文件。
+独立配置文件，提供 32 项功能开关的运行时覆写。不配置时全部使用代码内置默认值。开关按**作用域分四组**——**呈现与体验**（2 项，默认开：量化指标显示 / 报告图表交互）、**分析增强**（16 项，多数默认关，`llm_debate_conditional`/`data_quality`/`market_temperature`/`fund_purchase_limit`/`cost_position` 五项默认开）、**独立章节与回放**（6 项，默认关）与**机制与诊断**（8 项，机制项默认开、⚗ 实验项默认关）——分组表达「开了长出什么」而非生命周期；**生命周期由独立字段 `experimental` 表达**（2 项：`decision_reflection` 与 `report_qa`，面板以 ⚗ 标识、随产物自述），**转正**即把该字段置 false（作用域不变则原地留块，作用域变化才改组），面板可见性不随转正摘除。四组在 TUI 菜单 `[S]` / Web 配置面板 / CLI（`--experiment` 只开全部实验项、`--feature NAME=VALUE` 全域双向）中**同样可切换**；唯一登记点是 `config/features.py::feature_switch_registry`（显示名/说明/作用域分组/默认值/产物影响/实验身份六字段），渠道层不得另写清单。仅收录「有消费者」的开关——LLM 模块启停与基金深度分析（`llm_settings.json` 的 `enabled_llm`）、新闻源（`config.json` 的 `news_sources`）、历史走势与回撤（`config.json` 的 `enable_history`）、匿名化模式（`config.json` 的 `anonymization.mode`）各有归属配置，不在此文件。
 
 下表列常用开关（**非全集**，完整 32 项与分组清单见配置指引 `how-to-config.md` 功能开关节）：
 

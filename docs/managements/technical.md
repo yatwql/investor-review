@@ -2932,7 +2932,7 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
 
 **配置**：顶层键 `prosperity_framework`（`boom_keywords` / `global_edge_keywords` / `defensive_keywords` / `concentration_target_pct`，手动编辑）。
 
-**开关**：机制与诊断组 `prosperity_framework`（默认开、`affects_report=True`；实验转正：降级矩阵/真实样本/口径认可判据达成，评分口径不变）；关闭时报告与未引入时逐字节一致。
+**开关**：分析增强组 `prosperity_framework`（默认开、`affects_report=True`；实验转正：降级矩阵/真实样本/口径认可判据达成，评分口径不变）；关闭时报告与未引入时逐字节一致。
 
 ### 4.21 正文大块默认折叠（HTML 报告）
 
@@ -3480,7 +3480,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `_pair_similarity` | 标题相似度口径的唯一实现（归一化 → 日期剥离 → 英文分桶占位 → 双向 ratio + 实体 bigram 交集；链路判定与校准工具共用，防两套口径漂移） | 财经新闻热点与持仓关联分析 | 数据获取 | 随 `enable_news` |
 | `anchor_rules_version` | 锚点规则时代指纹字段（`_rules_fingerprint()` 由阈值/模板词表/方向词对/正则 + 行为探针派生，规则一改自动变，供校准工具区分时代） | 财经新闻热点与持仓关联分析 | 数据获取 | 随 `enable_news` |
 | `news_dedup_rules` | 去重规则原语模块（阈值常量 / 模板词表与掩码 / 标题归一化 / 实体 bigram / 相似度口径 / 方向词对 / 规则指纹的唯一实现） | 财经新闻热点与持仓关联分析 | 数据获取 | 随 `enable_news` |
-| `record_prosperity_diagnosis` | 景气度框架诊断挂载点（机制与诊断组开关；守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供） | 行动建议（章内嵌块） | 报告输出 | 机制与诊断开关 `prosperity_framework`（默认开） |
+| `record_prosperity_diagnosis` | 景气度框架诊断挂载点（分析增强组开关；守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供） | 行动建议（章内嵌块） | 报告输出 | 分析增强开关 `prosperity_framework`（默认开） |
 | `inject_holding_change_data` | 持仓变动复盘挂载点（独立章节与回放组开关；守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供） | 持仓变动复盘（报告独立章，type=holding_change） | 报告输出 | 独立章节与回放开关 `holding_change_review`（默认关） |
 | `inject_event_impact_data` | 事件窗量化对照挂载点（分析增强组开关；守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供；新闻先行串行段内注入，供分歧例附录块同轮进 LLM） | 事件窗量化对照（财经新闻章内区块，随父章；注册表无独立条目） | 报告输出 | 报告章节与增强开关 `event_window_impact`（默认关） |
 | `inject_schedule_replay_data` | 调仓纪律回放挂载点（守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供；快照与持仓变动注入后串行装配，回放引用 `prompt_block` 经统一附录进 LLM） | 调仓纪律回放（报告独立章，type=schedule_replay） | 报告输出 | 功能开关 `rebalance_schedule_replay`（默认关，独立章节与回放组） |
@@ -3548,7 +3548,7 @@ make_http_client(timeout=10.0) → httpx.Client
 
 > **子功能并入说明**：以下语义已并入其他功能，不作为独立标识符参与本表校验——`dividend_flow`（分红现金流，并入 `fund_flow`）、`holding_diagnosis`（品种覆盖诊断，并入 `data_quality`）。
 
-| `prosperity_framework` | 景气度框架诊断（六维评分卡：景气方向/ROE 低位弹性/全球视野与比较优势/流动性/集中度与周期拼接/业绩与回撤印证；缺数据维度标记需核实、不计分） | 行动建议（章内嵌块） | 调仓 | 机制与诊断开关 `prosperity_framework`（默认开） |
+| `prosperity_framework` | 景气度框架诊断（六维评分卡：景气方向/ROE 低位弹性/全球视野与比较优势/流动性/集中度与周期拼接/业绩与回撤印证；缺数据维度标记需核实、不计分） | 行动建议（章内嵌块） | 调仓 | 分析增强开关 `prosperity_framework`（默认开） |
 | `market_sentiment` | 市场情绪与持仓热点（行动建议章内嵌块：龙虎榜/连板梯队 ∩ 持仓与穿透标的；功能开关，默认关） | 行动建议（章内嵌块） | 报告输出 | 功能开关 `market_sentiment`（默认关） |
 | `build_market_sentiment` | 市场情绪纯装配（龙虎榜/连板梯队 × 持仓与穿透标的 → 事件行契约；只按代码精确匹配，不猜概念） | 行动建议（章内嵌块） | 分析计算 | 随 `market_sentiment` |
 | `market_sentiment_data` | 市场情绪与持仓热点数据契约（available/trade_date/summary/rows/failures；类型 dict） | 行动建议（章内嵌块） | 报告输出 | 无（契约） |
