@@ -4,7 +4,7 @@ import logging
 
 from src.python.core.constants import CACHE_DAILY
 
-from ._cleanup import _process_cache_file, cleanup_expired, clean_sensitive
+from ._cleanup import _process_cache_file, auto_cleanup_expired, cleanup_expired, clean_sensitive
 from ._groups import clear_by_group, clear_by_prefix
 from ._io import _read_cache_data, _write_atomic
 from ._paths import _CACHE_DIR, _GZIP_SUFFIX, _GZIP_THRESHOLD, _cache_path, check_cache_dir_permissions, get_cache_dir
@@ -36,6 +36,7 @@ __all__ = [
     "get_cache_age",
     "get_cache_age_by_data_type",
     "cleanup_expired",
+    "auto_cleanup_expired",
     "clean_sensitive",
     "clear_by_prefix",
     "clear_by_group",

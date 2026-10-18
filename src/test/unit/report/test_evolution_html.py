@@ -2,7 +2,7 @@
 
 覆盖：
   - available=True → 汇总提示 + ①总市值趋势 + ②HHI 趋势 + ③TOP 持仓占比变迁 + 说明
-  - enable_interactive_charts=True → 3 张 Chart.js 画布 + 3 条 .chart-caption（图下说明）
+  - 3 张 Chart.js 画布 + 3 条 .chart-caption（图下说明）
   - 多账户 → ④账户配置流表
   - available=False（快照不足）→ 降级占位「组合演进数据不足」
   - evolution_data=None → 章节整体隐藏（html_writer 数据门控）
@@ -34,7 +34,7 @@ def _order_with_evolution() -> list[dict]:
     return [dict(sec) for sec in _REPORT_SECTION_DEFAULT] + [dict(_EVO_SECTION)]
 
 
-def _render_evolution(evolution_data, interactive: bool = False) -> "BeautifulSoup":
+def _render_evolution(evolution_data) -> "BeautifulSoup":
     """渲染 portfolio_evolution 可见、其余隐藏的模板。"""
     from src.python.report.chart_data_builder import build_evolution_chart_data
 
@@ -44,8 +44,6 @@ def _render_evolution(evolution_data, interactive: bool = False) -> "BeautifulSo
     data = _build_minimal_render_data(order, numbers, sv_dict)
     data["evolution_data"] = evolution_data
     data["evolution_chart_data"] = build_evolution_chart_data(evolution_data)
-    if interactive:
-        data["enable_interactive_charts"] = True
     return _render_template(data)
 
 
@@ -76,8 +74,8 @@ def _evolution_data(**extra) -> dict:
 class TestHtmlEvolutionSection(unittest.TestCase):
     """组合演进章节 HTML 呈现测试。"""
 
-    def _section(self, evolution_data, interactive: bool = False):
-        return _render_evolution(evolution_data, interactive=interactive).find(id="sec-portfolio_evolution")
+    def _section(self, evolution_data):
+        return _render_evolution(evolution_data).find(id="sec-portfolio_evolution")
 
     def test_full_rendering_when_available(self):
         """available=True → 汇总提示 + ①总市值 + ②HHI + ③TOP 变迁 + 说明。"""
@@ -98,9 +96,9 @@ class TestHtmlEvolutionSection(unittest.TestCase):
         self.assertIn("权重口径", text)
         self.assertIn("快照格式限制", text)
 
-    def test_interactive_charts_and_captions(self):
-        """enable_interactive_charts=True → 3 张画布 + 3 条图下说明（图下说明）。"""
-        section = self._section(_evolution_data(), interactive=True)
+    def test_charts_and_captions(self):
+        """3 张画布 + 3 条图下说明（图下说明）。"""
+        section = self._section(_evolution_data())
         self.assertEqual(len(section.select("canvas")), 3)
         for cid in ("chart_evolution_total", "chart_evolution_hhi", "chart_evolution_top"):
             self.assertIsNotNone(section.find(id=cid), f"缺画布 {cid}")
@@ -129,7 +127,7 @@ class TestHtmlEvolutionSection(unittest.TestCase):
         """TOP 变迁图仅在 top_holdings > 1 时渲染（单品种无需变迁图）。"""
         data = _evolution_data()
         data["top_holdings"] = [{"code": "a", "name": "资产A", "weights": [100.0, 100.0, 100.0], "present_count": 3}]
-        section = self._section(data, interactive=True)
+        section = self._section(data)
         self.assertIsNone(section.find(id="chart_evolution_top"), "单品种不应渲染 TOP 变迁图")
 
     def test_account_flows_rendered_when_multi_account(self):

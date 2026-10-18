@@ -310,7 +310,6 @@ class TestFinancialReportProbes:
             return cs._OK, 1.0, "不应被调用"
 
         monkeypatch.setattr(cs, "_checks", [("datasink", "DataSinking 财报", "财报全文", _probe)])
-        monkeypatch.setattr(cs, "credential_ready_enabled", lambda: True)
         monkeypatch.setattr(cs, "missing_credential", lambda sid: object() if sid == "datasink" else None)
         monkeypatch.setattr(cs, "credential_hint", lambda _spec: "缺凭据：请设置 DATASINK_API_KEY")
 

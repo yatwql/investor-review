@@ -1,6 +1,6 @@
 # 投资复盘助手 — 实现计划
-> 文档版本：0.13.5
-> **编号源**：`plan-next = 127`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-126，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> 文档版本：0.13.6
+> **编号源**：`plan-next = 142`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-141，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -8,7 +8,7 @@
 
 本文档记录项目的实现计划。已完成的版本计划已归档，此处仅跟踪当前迭代中的工作。
 
-**当前迭代**：在办 7 项按「价值 / 收益 / 风险」分四档——P1 2 项（风险/核心价值改进 **plan-99/95**）、P2 2 项（改进批 **plan-92/93**）、P3 2 项（**plan-70** 死线观察，已有落地设计 `decision-reflection-shadow-design.md`；择机 **plan-94**）、P4 1 项（**plan-55** 评测先决未过，暂缓）。已完成任务与历史批次（含各借鉴批研究与未采纳记录）随档见文末「归档」索引。
+**当前迭代**：在办 7 项按「价值 / 收益 / 风险」分四档——P1 1 项（**plan-95**）、P2 3 项（**plan-92/93/128**）、P3 2 项（**plan-70** 死线观察、**plan-94** 择机）、P4 1 项（**plan-55** 评测先决未过，暂缓）。已完成任务随档见文末「归档」索引。
 
 > **命名纪律（强制）**：重构/新增的变量名、函数名、注释与文档表述必须与新章节语义相关（如 `position_relationship`/`portfolio_history_drawdown`/`style_factor`/`action`），**绝对禁止用任务编号命名**（F 系列、plan-N、rf-N 等）。任务编号仅在本表作链接锚点，不进入实现层。
 
@@ -23,12 +23,6 @@
 ### P1 — 当前待办（立即执行）
 
 > 入选标准：立即可执行且价值/风险最高——数据完整性与费用风险、核心量化缺口与报告首屏呈现。
-
-#### 🔲 `plan-99` LLM 运行事前无成本预估与预算上限
-
-**现状与问题**：`estimate_cost`/session usage 均为事后统计（完成后才 print_llm_session_usage）；full 模式多模块 + 辩论/深度档开销差异大——跑前不知道这次大约花多少，也无预算熔断
-
-**动作**：生成前按启用模块数 × 模型单价给区间预估并确认（TUI y/N、Web 弹层、CLI `--yes` 跳过）；可选日预算上限（超限时提示降级走缓存或中止），预估失败不阻塞生成
 
 #### 🔲 `plan-95` 生成完成后无一键打开
 
@@ -52,6 +46,12 @@
 
 **动作**：生成/刷新 `output_dir/index.html`（按日期列出 Excel/HTML 产物与打开链接），TUI 加「打开输出目录 / 最近报告」入口（与 rf-636 联动）；索引页不泄漏路径以外的本地信息，匿名化口径与报告一致
 
+#### 🔲 `plan-128` 调仓对比页无打印/PDF 入口
+
+**现状与问题**：主报告已有右上角浮动「打印 / 导出 PDF」按钮，调仓 What-if 对比页（`whatif_template.html`）未同步——其打印 CSS（`@media print`/A4 版式/图表降级）本就齐备，但同样只能 Ctrl+P 发现，双页入口不一致
+
+**动作**：whatif 模板按主报告同参补 `.report-print-btn`（44×44 触控目标、`--primary`/`--primary-hover` 语义 token、`window.print()`、打印稿自隐藏），断言口径与主报告用例对齐（`test_whatif_html` 补对应用例）
+
 ### P3 — 预期实施，有空时安排
 
 > **候选说明**：plan-66 ~ plan-68（源 TradingAgents-CN 研究的 P4 候选，逐项分析见 [`tradingagents-cn-borrow-candidates-research.md`](../archive/v0.11.x/tradingagents-cn-borrow-research/tradingagents-cn-borrow-candidates-research.md)）仍为候选；**立项前须先做本仓库现状比对**（立项前提可能被既有实现推翻，须按「分层不重叠」重新定位）。
@@ -62,9 +62,11 @@
 
 **动作**：以 `experiment_stats` 启用计数与账本结算数跨发布周期观察两条判据：① 启用次数停止增长（无真实使用），或 ② `data/state/decision_ledger.jsonl` 已结算样本 <10 条（折叠统计 `direction_accuracy` 无法给出可信命中率）**且已结算无达标趋势** → 撤销该实验功能（含 LLM 决策登记（`decision_llm_capture`）/行动章复盘块注入与对应需求条目）；满足可信样本（已结算 ≥10）则据 doctor 账本概览评估转正。观测手段：`experiment_stats` 启用计数 + `doctor` 复盘账本概览。
 
+**单一事实位**：本实验的「条件—数据—态」结构化口径见 [technical §6.9 实验项生命周期表](technical.md#69-实验项生命周期表)（决策跨期反思闭环行）；立项/转正/撤销时双方同步刷新。
+
 **落地设计**：若判定转正，按 [`decision-reflection-shadow-design.md`](../plan/decision-reflection-shadow-design.md) 四迭代执行（决策条目结构化 → 到期结算器 → doctor 概览增强 → 报告内反思块），该设计以 Vibe-Trading `shadow_account`（extract→backtest→render）为参照；死线未过前不实施。plan-76 持仓变动复盘已落地，与其构成「意图 vs 成交」对账（只读，不互写）。
 
-**当前状态（2026-10-16 终判已执行）**：`experiment_stats` 启用 **46** 次且持续增长（`last_enabled_date=2026-10-16`，判据①不触发）；`fold_ledger` 已结算 **5** 条 <10，但为**新增结算**（10-14/10-15 落地；pending 6 条按 `MIN_SETTLE_BARS=5` 交易日陆续到期，达标趋势明确），`directional_total=3`（`direction_accuracy=0.0` 不可信，flat 2 条）→ **撤销与转正条件均不满足 → 维持观察**，不撤销、不转正、不实施设计。下个观察点：下个发布周期重跑 `fold_ledger`——已结算 ≥10 → 据 doctor 账本概览评估转正（正式命中率另需 `directional_total ≥ 20`，flat 占比高时可信度由人工裁定）；仍 <10 且无新增结算 → 撤销（含 `decision_llm_capture`、行动章复盘块注入与对应需求条目）。
+**当前状态**：撤销与转正条件均不满足，**维持观察**（不撤销、不转正、不实施设计）。下个观察点：下个发布周期重跑 `fold_ledger`——已结算 ≥10 → 据 doctor 账本概览评估转正（正式命中率另需 `directional_total ≥ 20`，flat 占比高时可信度由人工裁定）；仍 <10 且无新增结算 → 撤销（含 `decision_llm_capture`、行动章复盘块注入与对应需求条目）。
 
 #### 🔲 `plan-94` 图表数据无导出通道
 
@@ -82,7 +84,7 @@
 
 **先决门槛（未过不接入）**：按 `docs/plan/jev-news-correlation-evaluation.md` 跑三方对照（关键词确定性 / 现网生成模型 / Jev），主指标选取、预检收窄结论与预注册阈值见该文档 §2/§7。**未达阈值则归档为已评估未采纳。**
 
-**待评测结论确认后再实施的部分**：见 `docs/plan/jev-news-correlation-design.md`（独立于对话链的类型化判定通道、问项版本参与缓存指纹、五键类型化通道下不读取、失败降级矩阵）。
+**待评测结论确认后再实施的部分**：见 `docs/plan/jev-news-correlation-design.md`。
 
 **约束与红线**：① 不得作为用户可选的对话模型（该模型不生成文本）；② 不得做成「生成 + 判定」双供应商级联（无信息增量且多一个中间失败态）；③ 语料含真实持仓与新闻，冻结产物必须落 `docs/tmp/`（git 忽略），仅脱敏样例可入库；④ 类型化通道故障不得拖垮生成链（熔断实例分离）；⑤ 新增配置键须按开关注册表统一纪律登记，默认值保持 `chat` 使缺省行为逐字节不变。
 

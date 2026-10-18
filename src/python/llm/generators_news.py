@@ -230,12 +230,14 @@ def _finalize_news_token_usage(
     """计算 Token 用量并记录日志。返回 token_usage dict。"""
     total_in = batch_usage.get("input", 0)
     total_out = batch_usage.get("output", 0)
+    total_hit = batch_usage.get("cache_hit", 0)
     token_usage: dict = {}
     if total_in > 0 or total_out > 0:
         token_usage = {
             "model": _model,
             "input_tokens": total_in,
             "output_tokens": total_out,
+            "cache_read_input_tokens": total_hit,
             "total_tokens": total_in + total_out,
         }
     # 无论是否有新用量，都记录 per_module（all_cached 时也需标记缓存状态）
@@ -243,12 +245,17 @@ def _finalize_news_token_usage(
         if total_in > 0 or total_out > 0:
             _log_token_usage(
                 llm_config.get("provider", "unknown"),
-                {"input_tokens": total_in, "output_tokens": total_out},
+                {
+                    # 合成 usage 还原未命中口径：input_tokens=未命中 + cache_read=命中
+                    "input_tokens": total_in - total_hit,
+                    "output_tokens": total_out,
+                    "cache_read_input_tokens": total_hit,
+                },
                 f"{_MN('news_correlation')}（批处理）",
                 model_name=_model,
             )
         _cost_val = 0.0
-        _cost = estimate_cost(_model, total_in, total_out, cache_hit_input_tokens=0)
+        _cost = estimate_cost(_model, total_in, total_out, cache_hit_input_tokens=total_hit)
         if _cost != "-":
             try:
                 _cost_val = float(_cost.lstrip("$¥€£"))
@@ -264,6 +271,7 @@ def _finalize_news_token_usage(
             _model,
             inp=total_in,
             out=total_out,
+            cache_hit_tokens=total_hit,
             cached=all_cached,
             cost=_cost_val,
             endpoint=_endpoint,

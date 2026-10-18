@@ -80,7 +80,6 @@ class TestResolveExperimentFlags:
         for promoted in (
             "deterministic_signal",
             "module_quality_gate",
-            "decision_header_parse",
             "llm_debate_procon",
             "factor_catalog",
             "rebalance_schedule_replay",
@@ -134,11 +133,9 @@ class TestResolveExperimentFlags:
         """非实验开关不得混进实验清单——否则会被当实验项写进产物自述。"""
         assert "metrics_enabled" not in _experimental_flags()
         assert "doctor_check" not in _experimental_flags()
-        assert "datasource_adapter" not in _experimental_flags()
         assert is_experimental_switch("metrics_enabled") is False
         # 转正后的读侧增强同理：混进实验清单会被当成「非默认产物」写进自述
         assert "deterministic_signal" not in _experimental_flags()
-        assert "decision_header_parse" not in _experimental_flags()
 
 
 @pytest.mark.unit
@@ -251,42 +248,17 @@ class TestDoctorCheckPromotion:
 
 
 @pytest.mark.unit
-class TestDatasourceAdapterPromotion:
-    """数据源适配契约的开关归类与默认值。
+class TestDatasourceAdapterBuiltinized:
+    """数据源适配契约已内置（不可关闭）：默认链路即走适配器分支。
 
-    它是内部接缝而非用户功能：开关开/关下报告产物逐源等价（唯一非等价处是
-    东财源多出 market_cap/pe 两个 None 键，下游一律 ``.get()`` 读取，语义不变，
-    由 ``test_quote_adapter_parity.py`` 逐源锁定），所以「打开它」对用户没有可
-    感知收益，不该以默认关的形态摆一个不可理解的选择；而默认关的实际代价是
-    生产路径从不执行适配器分支，新数据源/新字段的契约得不到实跑覆盖。故转正为
-    默认开启（摘除实验身份，作用域归机制与诊断组）；开关保留为回退杠杆
-    （features.json 置 false 即回退）。
+    适配器与既有手写转换函数逐源等价（唯一非等价处是东财源多出
+    market_cap/pe 两个 None 键，下游一律 ``.get()`` 读取，语义不变，由
+    ``test_quote_adapter_parity.py`` 逐源锁定）；适配器不可用时链路自动
+    回退既有映射（回退用例由 parity 文件锁定）。
     """
 
-    def test_default_enabled(self):
-        from src.python.config.features import get_feature_defaults
-
-        assert get_feature_defaults()["datasource_adapter"] is True
-
-    def test_not_in_experimental_registry(self):
-        """非实验项：不进产物自述（面板可见性由机制与诊断组承接，转正不丢入口）。"""
-        assert "datasource_adapter" not in _experimental_flags()
-        assert is_experimental_switch("datasource_adapter") is False
-
-    def test_switch_still_honored(self):
-        """转正不等于不可关：回退杠杆仍有效。"""
-        from src.python.config.features import is_feature_enabled, set_feature_enabled
-
-        set_feature_enabled("datasource_adapter", False)
-
-        assert is_feature_enabled("datasource_adapter") is False
-
     def test_default_config_runs_adapter_chain(self):
-        """默认配置（无任何覆写）下链路即走适配器分支——转正的实际效果。
-
-        缺陷场景：默认关时生产路径永远取既有转换函数，适配器分支只在测试里
-        被显式打开，接新数据源时契约是否真的能跑通没有实跑证据。
-        """
+        """默认配置（无任何覆写）下链路即走适配器分支——内置的实际效果。"""
         from src.python.fetcher import price as price_module
 
         providers, _transforms = price_module._price_chain_slots()
@@ -309,9 +281,7 @@ class TestReadSidePromotion:
     PROMOTED = (
         "deterministic_signal",
         "module_quality_gate",
-        "decision_header_parse",
         "llm_debate_conditional",
-        "datasource_credential_ready",
     )
 
     def test_default_enabled(self):
@@ -515,7 +485,7 @@ class TestSwitchOverrideParsing:
         """取值词表覆盖 1/0 与 yes/no。"""
         assert parse_switch_override("metrics_enabled=1") == ("metrics_enabled", True)
         assert parse_switch_override("metrics_enabled=0") == ("metrics_enabled", False)
-        assert parse_switch_override("enable_interactive_charts=no") == ("enable_interactive_charts", False)
+        assert parse_switch_override("data_quality=no") == ("data_quality", False)
 
     def test_parse_tolerates_surrounding_spaces(self):
         """``NAME = VALUE`` 两侧空白可容忍（手输命令行常见）。"""
@@ -716,9 +686,9 @@ class TestBannerLogLevel:
 class TestProsperityFrameworkPromotion:
     """景气度框架诊断实验转正锁定：摘除实验身份、作用域归机制与诊断组且默认开（评分口径不变）。"""
 
-    def test_promoted_to_mechanism_default_on(self):
+    def test_promoted_to_analysis_default_on(self):
         sw = feature_switch_registry["prosperity_framework"]
-        assert sw.group == GROUP_MECHANISM
+        assert sw.group == GROUP_ANALYSIS
         assert sw.default is True
         assert sw.affects_report is True
         assert not is_experimental_switch("prosperity_framework")
@@ -750,3 +720,54 @@ class TestHistoryAugmentedSwitches:
         defaults = get_feature_defaults()
         assert defaults["risk_adjusted_excess"] is False
         assert defaults["crisis_replay"] is False
+
+
+class TestPublicSwitchVocabulary:
+    """公开开关词表与解析器：CLI 与 TUI 共用一份词表（渠道不引私有符号）。"""
+
+    def test_parse_switch_value_uses_shared_vocabulary(self):
+        """真值来源词表：词表内每个取值都能解析为对应布尔，词表外返回 None。"""
+        from src.python.config.features import (
+            SWITCH_FALSE_TOKENS,
+            SWITCH_TRUE_TOKENS,
+            parse_switch_value,
+        )
+
+        for token in SWITCH_TRUE_TOKENS:
+            assert parse_switch_value(token) is True, token
+            assert parse_switch_value(f"  {token.upper()}  ") is True, token
+        for token in SWITCH_FALSE_TOKENS:
+            assert parse_switch_value(token) is False, token
+        for token in ("maybe", "", "onoff", "2"):
+            assert parse_switch_value(token) is None, token
+
+    def test_override_and_value_parser_agree(self):
+        """`NAME=VALUE` 解析结果与单值解析器一致（同一词表，不会两处口径漂移）。"""
+        from src.python.config.features import parse_switch_override, parse_switch_value
+
+        for token in ("on", "yes", "0", "disable"):
+            name, value = parse_switch_override(f"doctor_check={token}")
+            assert name == "doctor_check"
+            assert value is parse_switch_value(token)
+
+
+class TestDefaultEnabledLlmAccessor:
+    """公开 `default_enabled_llm()`：展示层取出厂默认不引私有模板。"""
+
+    def test_returns_enabled_llm_defaults_copy(self):
+        """返回值等于 enabled_llm 出厂默认，且是副本（改动不污染全局默认）。"""
+        from src.python.config import default_enabled_llm
+        from src.python.config._llm_settings_defaults import _DEFAULT_LLM_SETTINGS
+
+        expected = _DEFAULT_LLM_SETTINGS["enabled_llm"]
+        got = default_enabled_llm()
+        assert got == expected
+        got["__probe__"] = True
+        assert "__probe__" not in default_enabled_llm()
+
+    def test_covers_registered_llm_modules(self):
+        """注册表 LLM 模块的后缀都出现在默认映射里（新增模块须同步默认值）。"""
+        from src.python.config import default_enabled_llm
+        from src.python.core.registry import get_llm_module_names
+
+        assert set(get_llm_module_names()) <= set(default_enabled_llm())

@@ -233,10 +233,25 @@ class TestTrackSessionUsage(unittest.TestCase):
                 "cache_read_input_tokens": 5,
             },
         )
-        self.assertEqual(_session_usage["input_tokens"], 10)
+        # 归一口径：input=10+5=15（总量，含命中），命中单列为 cache_hit_tokens
+        self.assertEqual(_session_usage["input_tokens"], 15)
         self.assertEqual(_session_usage["output_tokens"], 20)
         self.assertEqual(_session_usage["cache_hit_tokens"], 5)
         self.assertEqual(_session_usage["call_count"], 1)
+
+    def test_session_cost_matches_per_call_estimate(self):
+        """会话费用与单次估算口径一致：同一份归一用量下两者等值。"""
+        from src.python.llm.pricing import estimate_cost
+
+        usage = {
+            "input_tokens": 10,
+            "output_tokens": 5,
+            "cache_read_input_tokens": 5,
+        }
+        track_session_usage("claude", usage, model_name="claude-sonnet-4-6")
+        # 归一口径：总输入 15（含命中 5），命中按折扣价
+        expected = float(estimate_cost("claude-sonnet-4-6", 15, 5, cache_hit_input_tokens=5).lstrip("$¥€£"))
+        self.assertAlmostEqual(_session_usage["total_cost"], expected, places=6)
 
     def test_openai_provider_tokens(self):
         """openai provider 使用 prompt_tokens / completion_tokens。"""
@@ -348,12 +363,61 @@ class TestNormalizeUsageTokens(unittest.TestCase):
         """claude 协议读三件套 input/output/cache_read。"""
         from src.python.llm.session import _normalize_usage_tokens
 
+        # 归一契约：input 为总输入（含命中）→ 10 + 3
         self.assertEqual(
             _normalize_usage_tokens(
                 "claude",
                 {"input_tokens": 10, "output_tokens": 5, "cache_read_input_tokens": 3},
             ),
-            (10, 5, 3),
+            (13, 5, 3),
+        )
+
+    def test_claude_compat_hit_exceeds_miss_is_total(self):
+        """Anthropic 兼容端点 input_tokens 仅计未命中 → 归一为总量，命中可大于未命中。
+
+        实测形态：DeepSeek Anthropic 端点专家复盘 input_tokens=180 /
+        cache_read_input_tokens=1792，修复前归一后 input=180 会在计费侧
+        算出 cache_miss=180-1792 为负（负费用显示）。
+        """
+        from src.python.llm.session import _normalize_usage_tokens
+
+        usage = {
+            "input_tokens": 180,
+            "output_tokens": 357,
+            "cache_read_input_tokens": 1792,
+        }
+        self.assertEqual(
+            _normalize_usage_tokens("claude", usage),
+            (1972, 357, 1792),
+        )
+
+    def test_openai_native_top_level_cache_hit(self):
+        """openai 原生端点顶层 prompt_cache_hit_tokens 被识别（DeepSeek 原生形态）。"""
+        from src.python.llm.session import _normalize_usage_tokens
+
+        usage = {
+            "prompt_tokens": 2000,
+            "completion_tokens": 100,
+            "prompt_cache_hit_tokens": 1500,
+        }
+        self.assertEqual(
+            _normalize_usage_tokens("openai", usage),
+            (2000, 100, 1500),
+        )
+
+    def test_openai_top_level_cache_hit_priority(self):
+        """顶层 prompt_cache_hit_tokens 优先于 prompt_tokens_details.cached_tokens。"""
+        from src.python.llm.session import _normalize_usage_tokens
+
+        usage = {
+            "prompt_tokens": 200,
+            "completion_tokens": 50,
+            "prompt_cache_hit_tokens": 60,
+            "prompt_tokens_details": {"cached_tokens": 55},
+        }
+        self.assertEqual(
+            _normalize_usage_tokens("openai", usage),
+            (200, 50, 60),
         )
 
     def test_openai_reads_cached_tokens(self):

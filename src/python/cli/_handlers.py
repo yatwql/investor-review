@@ -192,6 +192,50 @@ def _resolve_source_overrides(args: argparse.Namespace) -> tuple[str | None, tup
     return preferred_list[0], tuple(exclude_list)
 
 
+def _confirm_cost_forecast(args: argparse.Namespace) -> tuple[bool, bool]:
+    """CLI 事前费用预估确认（交互 y/N；``--yes`` / ``--non-interactive`` / 非 TTY 跳过确认）。
+
+    - 预估不可用或无模块参与 → 跳过确认继续（预估失败不阻塞生成）；
+    - 日预算超限为**硬闸**：交互时询问「降级走缓存 / 中止」，非交互直接中止；
+    - 其余交互场景 y/N 确认（默认 N 中止）；非交互跳过确认直接继续。
+
+    Returns:
+        (proceed, degrade)——proceed=False 为中止；degrade=True 为交互确认
+        「降级走缓存继续」（调用方清空强刷范围）。
+    """
+    from src.python.llm.cost_forecast import budget_status, forecast_run_cost, forecast_summary_lines
+
+    forecast = forecast_run_cost()
+    budget = budget_status()
+    for line in forecast_summary_lines(forecast, budget):
+        print(f"  [..] {line}")
+    if not forecast.get("ok") or forecast.get("module_count", 0) == 0:
+        return (True, False)
+    interactive = not getattr(args, "yes", False) and not getattr(args, "non_interactive", False) and sys.stdin.isatty()
+    if budget.get("exceeded"):
+        if not interactive:
+            print("  [ERR] 今日 LLM 费用已达日预算上限，非交互模式直接中止（需 --yes 场景请先调预算或走缓存）")
+            return (False, False)
+        try:
+            resp = input("  [!] 今日 LLM 费用已达日预算上限：y=降级走缓存继续 / N=中止 (y/N): ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            return (False, False)
+        if resp != "y":
+            print("  [ERR] 已中止本次生成（日预算超限）")
+            return (False, False)
+        return (True, True)
+    if not interactive:
+        return (True, False)
+    try:
+        resp = input("  [..] 本次生成费用预估如上，确认继续？(y/N): ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        return (False, False)
+    if resp != "y":
+        print("  [ERR] 已中止本次生成（费用预估确认未通过）")
+        return (False, False)
+    return (True, False)
+
+
 def _handle_report(args: argparse.Namespace, config: dict) -> int:
     """处理 report 子命令——委托 orchestrator 共享层。
 
@@ -207,6 +251,17 @@ def _handle_report(args: argparse.Namespace, config: dict) -> int:
 
     reporter = CliProgressReporter(verbose=args.verbose)
 
+    # ── 事前费用预估与日预算（仅 full 模式含 LLM 调用）：确认通过才进生成 ──
+    _force_llm = args.force_llm
+    _llm_modules = getattr(args, "llm_module", None)
+    if args.type == "full":
+        _proceed, _degrade = _confirm_cost_forecast(args)
+        if not _proceed:
+            print("  [ERR] 已中止本次生成（LLM 费用预估/日预算处置为中止，未执行任何生成）")
+            return _EXIT_SEVERE
+        if _degrade:
+            _force_llm, _llm_modules = False, None
+
     # 调用级源覆盖（仅本次运行，不写配置）：排障/评测用（如「只用腾讯源复现」）
     from src.python.fetcher.chain import chain_overrides
 
@@ -220,8 +275,8 @@ def _handle_report(args: argparse.Namespace, config: dict) -> int:
             report_type=args.type,
             # None（未显式传 --history）→ generate_report 回退到配置层 history.fetch_mode 解析
             fetch_history=args.history,
-            force_llm=args.force_llm,
-            force_llm_modules=getattr(args, "llm_module", None),
+            force_llm=_force_llm,
+            force_llm_modules=_llm_modules,
             output_dir=args.output,
             transactions=transactions,
             dividends=dividends,
@@ -239,25 +294,10 @@ def _handle_report(args: argparse.Namespace, config: dict) -> int:
 
 
 def _collect_degradation_summary(max_items: int = 10) -> list[str]:
-    """从数据状态跟踪器收集降级摘要（最新在前、按源去重；异常时返回空）。"""
-    try:
-        from src.python.report.data_status import get_tracker
+    """降级摘要行——委托 `report/data_status.degradation_summary`（单源，CLI/Web 收尾共用）。"""
+    from src.python.report.data_status import degradation_summary
 
-        events = [e for e in get_tracker().get_log() if e.get("degraded")]
-    except Exception:
-        return []
-    lines: list[str] = []
-    seen: set[str] = set()
-    for e in reversed(events):
-        source_key = str(e.get("source_key") or "")
-        if not source_key or source_key in seen:
-            continue
-        seen.add(source_key)
-        failure_type = e.get("failure_type") or "降级"
-        lines.append(f"{source_key}: {failure_type}（累计{e.get('count', 0)}次）")
-        if len(lines) >= max_items:
-            break
-    return lines
+    return degradation_summary(max_items)
 
 
 def _notify_report_completion(args: argparse.Namespace, config: dict, exit_code: int, result: object) -> None:

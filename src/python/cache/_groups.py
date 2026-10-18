@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 import os
 
-from src.python.core.registry import get_registry
+from src.python.core.registry import get_cache_registry
 
 from ._paths import _CACHE_DIR, _GZIP_SUFFIX, _cache_path
 from ._store import _cache_lock, clear
@@ -50,7 +50,7 @@ def clear_by_prefix(key_prefix: str) -> int:
 def clear_by_group(group_name: str) -> dict[str, int]:
     """清除指定缓存组的所有缓存文件。
 
-    从 registry 自动推导该组包含的所有模块的缓存前缀和精确键名，
+    从缓存域注册表（含注册表外缓存专属项）自动推导该组的缓存前缀与精确键名，
     逐一调用 clear_by_prefix / clear。
 
     Args:
@@ -60,7 +60,7 @@ def clear_by_group(group_name: str) -> dict[str, int]:
         {模块名: 清除的文件数} 字典，方便日志/UI 展示
     """
     result: dict[str, int] = {}
-    for m in get_registry():
+    for m in get_cache_registry():
         if group_name not in m.cache_groups:
             continue
         total = 0

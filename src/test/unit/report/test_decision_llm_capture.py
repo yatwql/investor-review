@@ -204,12 +204,7 @@ class TestRegressionMisleadingRows:
 
 
 class TestStructuredHeader:
-    """结构化决策头（开关 decision_header_parse）优先 + 表格兜底。"""
-
-    @pytest.fixture(autouse=True)
-    def _enable_structured(self):
-        set_feature_enabled("decision_header_parse", True)
-        yield
+    """结构化决策头（已内置）优先 + 表格兜底。"""
 
     def test_structured_takes_priority(self):
         # 表行给「减仓」，决策头给「加仓」→ 以结构化头为准
@@ -246,16 +241,6 @@ class TestStructuredHeader:
         # 结构化头里没有合法条目 → 整批不可用 → 表格兜底（长江电力加仓）
         assert _ids_for(rows) == ["600900"]
         assert rows[0]["direction"] == dl.DIRECTION_LONG
-
-    def test_flag_off_ignores_header(self):
-        set_feature_enabled("decision_header_parse", False)  # 转正后默认开，基准须显式关
-        set_feature_enabled("decision_reflection", True)
-        html = _HTML_HEADER + (
-            "<p>| 🔴 高 | 561910 招商中证电池主题ETF | 减仓 | 负收益 |</p>"
-            '<p>决策头：{"decisions":[{"code":"561910","action":"加仓","priority":"高"}]}</p>'
-        )
-        rows = cap.extract_llm_decisions(html, _HOLDINGS)
-        assert rows[0]["direction"] == dl.DIRECTION_SHORT  # 开关关闭 → 走表格
 
     def test_structured_row_shape_backfilled(self):
         # 决策头契约仅 {code, action, priority}（无 name/理由列）：抽取侧须回补成

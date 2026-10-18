@@ -20,6 +20,9 @@ _DEFAULT_LLM_SETTINGS: dict[str, Any] = {
     "llm_max_thinking_concurrency": 1,
     # 全链路失败（网络/超时/接口异常）后整链重试 1 次的等待秒数（0 = 不等待）
     "llm_full_fail_retry_delay": 30,
+    # LLM 日费用预算上限（货币数值，0 = 不启用）：与事前费用预估同页展示，
+    # 超限时交互渠道询问「降级走缓存 / 中止」，非交互渠道直接中止
+    "daily_cost_limit": 0,
     "enabled_llm": {
         "global_macro": True,
         "expert_review": True,
@@ -203,6 +206,9 @@ def _get_default_llm_settings_template() -> str:
     lines.append(f'  "llm_max_thinking_concurrency": {d["llm_max_thinking_concurrency"]},')
     lines.append(
         _kv("llm_full_fail_retry_delay", "// 全链路失败（网络/超时/接口异常）后整链重试 1 次的等待秒数（0=不等待）")
+    )
+    lines.append(
+        _kv("daily_cost_limit", "// LLM 日费用预算上限（货币数值，0=不启用）：超限交互询问降级/中止，非交互中止")
     )
 
     # ── 模块开关 ──

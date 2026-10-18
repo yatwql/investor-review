@@ -666,9 +666,6 @@ class TestSystemInfo:
             module_names={
                 "global_macro": "全球政经局势",
                 "expert_review": "智囊团深度复盘",
-                "debate_pro": "正反辩论",
-                "debate_con": "正反辩论反方",
-                "debate_synthesis": "辩论总结",
             },
         )
         info = _build_system_info()
@@ -679,10 +676,13 @@ class TestSystemInfo:
         assert llm["model"] == "claude-sonnet-4-6"
         assert llm["endpoint_display"] == "api.anthropic.com"
         assert llm["circuit"] == "正常"
-        # 模型路由：隐藏后缀（辩论三模块）不展示；未配置的模块级 model 回退到全局 model
+        # 模型路由：每条 = 模块名=生效模型，覆盖注册表 LLM 模块全集（不写死条数/清单）；
+        # 未配置的模块级 model 回退到全局 model
         assert "全球政经局势=claude-sonnet-4-6" in llm["route"]
         assert "智囊团深度复盘=claude-sonnet-4-6" in llm["route"]
-        assert not any("正反辩论" in r for r in llm["route"])
+        assert len(llm["route"]) == 2
+        for entry in llm["route"]:
+            assert entry.endswith("=claude-sonnet-4-6")
 
     def test_flat_mode_module_model_override(self, monkeypatch):
         """模块级 model_{sfx} 覆盖全局 model（路由展示各模块实际模型）。"""
@@ -1111,3 +1111,28 @@ class TestShortCacheConcurrency:
             assert h._history_cache["data"] == [1, 2, 3]
         h._history_cache["ts"] = 0.0
         h._history_cache["data"] = None
+
+
+class TestRunEventsFirstSeqPayload:
+    """first_seq 下发：缓冲淘汰后客户端可识别缺口（不静默跳号）。"""
+
+    def test_events_payload_carries_first_seq_after_eviction(self, tmp_path, monkeypatch):
+        """事件缓冲淘汰后，events 载荷的 first_seq 等于仍保留的最小序号。"""
+        monkeypatch.setattr("src.python.web.runs._EVENT_LIMIT", 2)
+        rm = RunManager(executor=_fake_executor(tmp_path))
+        app = create_app(rm)
+        app.config["TESTING"] = True
+        client = app.test_client()
+        run_id = rm.submit({"report_type": "basic"})
+        # 等 worker 完成（fake executor 推 2 条事件）后再灌入超额事件，避免交错
+        for _ in range(200):
+            if rm.get(run_id).status in ("done", "failed"):
+                break
+            time.sleep(0.01)
+        state = rm.get(run_id)
+        for i in range(5):
+            state.push_event("info", f"补录事件 {i + 1}")
+        data = client.get(f"/api/runs/{run_id}/events?after=0").get_json()["data"]
+        # 共 7 条事件、上限 2 → 仅保留 6/7
+        assert data["first_seq"] == 6
+        assert [e["seq"] for e in data["events"]] == [6, 7]

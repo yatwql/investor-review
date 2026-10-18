@@ -2,8 +2,8 @@
    持仓基本面章节 partial（供 report_template.html 经 include 引入）。
 
    一章两区块（同一 `<section>` 内）：
-     区块① 财务指标（`financial_indicator_data`，功能开关 `financial_indicator`）
-     区块② 持仓个股财报摘要（`financial_report_digest_data`，功能开关 `financial_report_digest`）
+     区块① 财务指标（`financial_indicator_data`，功能开关 `stock_fundamentals`）
+     区块② 持仓个股财报摘要（`financial_report_digest_data`，功能开关 `stock_fundamentals`）
 
    区块级开关：契约 dict 为 None 表示该功能开关关闭 → 该区块整体不渲染
    （残留的分隔线也一并省略）；契约非 None 但 available=False（开关开启但数据不可用）
@@ -38,7 +38,7 @@
             {% else %}持仓基本面数据暂不可用{% endif %} —— 点击展开/收起{% if financial_indicator_data and financial_report_digest_data %}财务指标与财报摘要明细{% elif financial_indicator_data %}财务指标明细{% elif financial_report_digest_data %}财报摘要明细{% else %}明细{% endif %}
         </summary>
 
-    {# ── 区块① 财务指标（功能开关 financial_indicator；None=关闭，整块不渲染）── #}
+    {# ── 区块① 财务指标（功能开关 stock_fundamentals；None=关闭，整块不渲染）── #}
     {% if financial_indicator_data %}
     {% set _fi = financial_indicator_data or {} %}
     <div class="block-title">一、财务指标</div>
@@ -119,7 +119,7 @@
             <p style="margin-top:12px;font-size: var(--fs-table-sm);color:var(--text-faint);">
                 指标主源为 akshare（需本地安装，无需凭据）；备用支路（DataSinking 财报章节解析）需 DataSinking key
                 （配于 data/config/data_key.json 的 datasink 节，或环境变量 DATASINK_API_KEY）。
-                该块由功能开关 <code>financial_indicator</code> 控制——TUI 菜单 <code>[S]</code> →「报告章节与增强」/
+                该块由功能开关 <code>stock_fundamentals</code>（个股基本面）控制——TUI 菜单 <code>[S]</code> →「报告章节与增强」/
                 Web 配置面板同名区块，开启后生效。
             </p>
         </div>
@@ -127,7 +127,7 @@
     {% endif %}
     {% endif %}
 
-    {# ── 区块② 持仓个股财报摘要（功能开关 financial_report_digest；None=关闭，整块不渲染）── #}
+    {# ── 区块② 持仓个股财报摘要（功能开关 stock_fundamentals；None=关闭，整块不渲染）── #}
     {% if financial_report_digest_data %}
     {% set _frd = financial_report_digest_data or {} %}
     <div class="block-title">二、持仓个股财报摘要</div>
@@ -190,7 +190,7 @@
                 {{ _frd.get("reason") or "暂无 A 股标的或未取到财报" }}。
             </p>
             <p style="margin-top:12px;font-size: var(--fs-table-sm);color:var(--text-faint);">
-                该块由功能开关 <code>financial_report_digest</code> 控制——TUI 菜单 <code>[S]</code> →「报告章节与增强」/
+                该块由功能开关 <code>stock_fundamentals</code>（个股基本面）控制——TUI 菜单 <code>[S]</code> →「报告章节与增强」/
                 Web 配置面板同名区块，开启后生效。取数需 DataSinking key
                 （配于 data/config/data_key.json 的 datasink 节，或环境变量 DATASINK_API_KEY；免费 key 可在 datasink.ing 领取）；
                 主源缺目标章节时由巨潮资讯网备源接管（公开数据，无需凭据）。

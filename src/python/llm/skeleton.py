@@ -135,9 +135,9 @@ def _finalize_and_cache(
 
     _model_name = model or llm_config.get("model", "") or "未指定"
     if usage:
-        inp = usage.get("input_tokens", usage.get("prompt_tokens", 0))
-        out = usage.get("output_tokens", usage.get("completion_tokens", 0))
-        cache_hit = usage.get("cache_read_input_tokens", 0)
+        from src.python.llm.session import _normalize_usage_tokens
+
+        inp, out, cache_hit = _normalize_usage_tokens("claude" if "input_tokens" in usage else "openai", usage)
         _footer = f"模型：{_model_name} | Token 用量：输入 {inp:,} / 输出 {out:,} = {inp + out:,}"
         if duration > 0:
             _footer += f" | 耗时: {duration:.1f}s"
@@ -150,8 +150,7 @@ def _finalize_and_cache(
             _footer += " | Extended Thinking"
         html += f'<p style="color:#888;font-size:12px">{_footer}</p>'
         if module_key:
-            _inp = usage.get("input_tokens", usage.get("prompt_tokens", 0)) if usage else 0
-            _out = usage.get("output_tokens", usage.get("completion_tokens", 0)) if usage else 0
+            _inp, _out = inp, out  # 与页脚共用同一份归一后用量
             _cost_val = 0.0
             if _cost != "-":
                 try:
@@ -159,7 +158,7 @@ def _finalize_and_cache(
                 except ValueError:
                     logger.warning("LLM 费用字符串解析失败: %s", _cost)
             _endpoint_for_record = endpoint or llm_config.get("endpoint", "") or ""
-            _cache_hit = usage.get("cache_read_input_tokens", 0)
+            _cache_hit = cache_hit
             record_per_module(
                 module_key,
                 _model_name,

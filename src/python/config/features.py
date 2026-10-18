@@ -5,8 +5,8 @@
 
 用法：
   >>> from src.python.config.features import is_feature_enabled, FEATURE_FLAGS
-  >>> if is_feature_enabled("enable_interactive_charts"):
-  ...     embed_chart_assets()
+  >>> if is_feature_enabled("metrics_enabled"):
+  ...     render_metric_cards()
 
 配置持久化：功能开关可通过 features.json 覆写默认值。
 全部开关在 :data:`feature_switch_registry` 一处登记（显示名/说明/作用域分组/
@@ -27,7 +27,7 @@ import logging
 import os
 import threading
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Iterable
 
 from src.python.core.atomic_write import write_json_atomic
 from src.python.core.constants import PROJECT_ROOT
@@ -143,14 +143,6 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         True,
         True,
     ),
-    # ── 机制与诊断：投资方法框架（转正项：评分口径验证达成，已摘除实验身份、默认开）──
-    "prosperity_framework": FeatureSwitchDef(
-        "景气度框架诊断",
-        "六维评分卡（景气方向/ROE 低位弹性/全球比较优势/流动性/集中度与周期拼接/业绩回撤印证）评估组合契合度，缺数据维度标记需核实",
-        GROUP_MECHANISM,
-        True,
-        True,
-    ),
     # ── 分析增强与独立章节的转正项（实验身份已摘除，default 保持原值） ──
     # 面板编号 = 组序 + 注册表内声明顺序派生；四分组后不再有「转正项追加块首、
     # 既有项编号不位移」的跨块承诺（块边界由作用域决定，见手册面板编号表）
@@ -207,21 +199,6 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         True,
         True,
     ),
-    "decision_header_parse": FeatureSwitchDef(
-        "决策头结构化",
-        "提示词追加受控 JSON 决策头，抽取优先读结构化、失败回落确定性表格解析（决策词归一，防写反方向）",
-        GROUP_MECHANISM,
-        True,
-        True,
-    ),
-    # ── 机制与诊断：数据层（就绪态上体检与健康检查） ──
-    "datasource_credential_ready": FeatureSwitchDef(
-        "数据源凭据就绪",
-        "声明数据源所需凭据，缺失时链路跳过并给出可读指引；体检与健康检查报告就绪状态（需凭据的源如 DataSinking 财报）",
-        GROUP_MECHANISM,
-        True,
-        True,
-    ),
     # ── 呈现与体验：量化指标（原 metrics_* 七项逐项开关，已合并为单一总开关）──
     # 七项指标始终全量计算，开关只表达「量化指标画像是否输出」：关闭即雷达图
     # 各轴转 "N/A"（含降级 3 轴路径）+ 熔断器暂停指标失败计数，指标之间无差异化
@@ -233,26 +210,10 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         True,
         True,
     ),
-    # ── 呈现与体验：报告图表交互 ──
-    "enable_interactive_charts": FeatureSwitchDef(
-        "报告图表交互",
-        "Chart.js 交互图（缩放/悬停）；关闭即回退 Canvas+表格静态渲染，且 HTML 不再单文件自包含",
-        GROUP_PRESENTATION,
-        True,
-        True,
-    ),
     # ── 机制与诊断：只读诊断（不改产物、不写文件，默认关的代价是环境出故障者看不到它） ──
     "doctor_check": FeatureSwitchDef(
         "系统自检上屏",
         "TUI 菜单 [T] 与 Web「系统自检」卡片可见性；CLI doctor 子命令不受本开关约束",
-        GROUP_MECHANISM,
-        True,
-        False,
-    ),
-    # ── 机制与诊断：内部接缝（开关两态下报告产物逐源等价，保留为回退杠杆） ──
-    "datasource_adapter": FeatureSwitchDef(
-        "数据源适配契约",
-        "行情域三源走三段式适配器（参数转译→抓取→映射到标准字段）；置 false 回退既有转换函数",
         GROUP_MECHANISM,
         True,
         False,
@@ -300,9 +261,9 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         True,
         True,
     ),
-    "financial_report_digest": FeatureSwitchDef(
-        "持仓个股财报摘要",
-        "新增独立章：A 股标的财报章节摘要（需 DataSinking key）",
+    "stock_fundamentals": FeatureSwitchDef(
+        "个股基本面",
+        "新增独立章：持仓个股基本面（财务指标 + 质量档/趋势/当前 PE-PB 与 A 股财报章节摘要两块；需数据底座与 DataSinking key）",
         GROUP_STANDALONE,
         False,
         True,
@@ -311,13 +272,6 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         "市场情绪与资金热点",
         "行动建议章内嵌块「市场情绪与持仓热点」：持仓/穿透标的当日上榜龙虎榜与进入连板梯队的事件行（需同花顺 key；零命中时写市场概览与说明行）",
         GROUP_ANALYSIS,
-        False,
-        True,
-    ),
-    "financial_indicator": FeatureSwitchDef(
-        "财务指标",
-        "新增独立章：持仓 A 股基本面（指标 + 质量档 + 趋势 + 当前 PE/PB；需数据底座就绪）",
-        GROUP_STANDALONE,
         False,
         True,
     ),
@@ -354,6 +308,15 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         "摘要区首屏执行摘要卡：关键指标环比行（总市值/总收益率/持仓数/集中度） + 本期关键变化 Top N（快照 diff 单源派生，无上期快照时整块隐藏）",
         GROUP_ANALYSIS,
         False,
+        True,
+    ),
+    # ── 分析增强：投资方法框架（转正项：评分口径验证达成，已摘除实验身份、默认开；
+    # 行动章内嵌评分卡区块，作用域属既有章内追加） ──
+    "prosperity_framework": FeatureSwitchDef(
+        "景气度框架诊断",
+        "六维评分卡（景气方向/ROE 低位弹性/全球比较优势/流动性/集中度与周期拼接/业绩回撤印证）评估组合契合度，缺数据维度标记需核实",
+        GROUP_ANALYSIS,
+        True,
         True,
     ),
 }
@@ -394,8 +357,9 @@ def is_experimental_switch(flag: str) -> bool:
 EXPERIMENT_ALL = "all"
 
 # ``--feature NAME=VALUE`` 的取值词表（大小写不敏感）
-_SWITCH_TRUE_TOKENS = frozenset({"on", "true", "1", "yes", "enable", "enabled"})
-_SWITCH_FALSE_TOKENS = frozenset({"off", "false", "0", "no", "disable", "disabled"})
+# 开关取值词表（公开：CLI --feature 与 TUI [S] 面板共用同一词表，避免两处各写一份）
+SWITCH_TRUE_TOKENS = frozenset({"on", "true", "1", "yes", "enable", "enabled"})
+SWITCH_FALSE_TOKENS = frozenset({"off", "false", "0", "no", "disable", "disabled"})
 
 
 def _match_experiment(token: str) -> str | None:
@@ -488,15 +452,43 @@ def parse_switch_override(token: str) -> tuple[str, bool]:
     name = name.strip()
     if not sep or not name:
         raise ValueError("应为 NAME=VALUE 形式（如 module_quality_gate=on）")
+    if name in _MERGED_SWITCH_KEYS:
+        mapped = _MERGED_SWITCH_KEYS[name]
+        logger.warning(
+            "[features] --feature 旧键 '%s' 已并入 '%s'（一版过渡，后续版本将不再识别）",
+            name,
+            mapped,
+        )
+        name = mapped
     if name not in feature_switch_registry:
         raise ValueError(f"未知功能开关 '{name}'；可选: {describe_switches()}")
 
     value = raw_value.strip().lower()
-    if value in _SWITCH_TRUE_TOKENS:
+    if value in SWITCH_TRUE_TOKENS:
         return name, True
-    if value in _SWITCH_FALSE_TOKENS:
+    if value in SWITCH_FALSE_TOKENS:
         return name, False
     raise ValueError(f"开关 '{name}' 的取值 '{raw_value}' 不可识别；可选: on / off")
+
+
+def parse_switch_value(text: str) -> bool | None:
+    """把单个取值文本按开关词表解析为布尔（``None`` = 词表外）。
+
+    与 :func:`parse_switch_override` 共用同一词表：CLI ``--feature NAME=VALUE``
+    与 TUI ``[S]`` 面板的 ``键名=值`` 通道因此不会出现「一处认 on、一处只认 true」。
+
+    Args:
+        text: 取值文本（大小写不敏感，允许首尾空白），如 ``on`` / ``off`` / ``1``。
+
+    Returns:
+        True / False；不在词表内返回 None（调用方自行给出提示）。
+    """
+    value = text.strip().lower()
+    if value in SWITCH_TRUE_TOKENS:
+        return True
+    if value in SWITCH_FALSE_TOKENS:
+        return False
+    return None
 
 
 def enabled_experimental_features() -> list[tuple[str, str]]:
@@ -626,6 +618,55 @@ def set_feature_enabled(flag_name: str, enabled: bool) -> None:
         logger.info("[features] 功能开关 '%s': %s → %s", flag_name, old, enabled)
 
 
+_MERGED_SWITCH_KEYS: dict[str, str] = {
+    "financial_report_digest": "stock_fundamentals",
+    "financial_indicator": "stock_fundamentals",
+}
+
+
+def _migrate_merged_switch_keys(raw: dict[str, Any], *, location: str) -> dict[str, Any]:
+    """已合并开关的旧键收敛到新键（读写同规则，一版过渡）。
+
+    规则：bool 旧键按**并集**并入（任一为 True 即 True——「曾开启过就开」，两章
+    本就同开同关）；新键已显式存在时以新键为准（旧键仅丢弃并告警）；迁移后旧键
+    不再入内存、不再落盘。
+
+    Args:
+        raw: 原始覆写字典（不修改入参）
+        location: 告警语境（features.json 读取 / 写入 / --feature）
+
+    Returns:
+        迁移后的字典；无旧键时原样返回
+    """
+    legacy = {k: v for k, v in raw.items() if k in _MERGED_SWITCH_KEYS and isinstance(v, bool)}
+    if not legacy:
+        return raw
+    merged = {k: v for k, v in raw.items() if k not in _MERGED_SWITCH_KEYS}
+    new_key = next(iter(dict.fromkeys(_MERGED_SWITCH_KEYS.values())))
+    values = list(legacy.values())
+    union_value = any(values)
+    conflict = any(v != union_value for v in values)
+    if isinstance(merged.get(new_key), bool):
+        logger.warning(
+            "[features] %s 含已合并旧键 %s，与新键 %s 并存——以新键为准（旧键已丢弃）",
+            location,
+            "、".join(sorted(legacy)),
+            new_key,
+        )
+    else:
+        merged[new_key] = union_value
+        suffix = "（新旧取值不一致，取并集）" if conflict else ""
+        logger.warning(
+            "[features] %s 旧键 %s 已并入新键 %s = %s%s；请更新 features.json / --feature 参数",
+            location,
+            "、".join(sorted(legacy)),
+            new_key,
+            union_value,
+            suffix,
+        )
+    return merged
+
+
 def load_feature_overrides() -> None:
     """从 features.json 加载覆写配置，合并到 FEATURE_FLAGS。
 
@@ -633,8 +674,8 @@ def load_feature_overrides() -> None:
 
     JSON 格式：
       {
-        "enable_interactive_charts": false,
-        "metrics_enabled": true
+        "metrics_enabled": true,
+        "data_quality": false
       }
     """
     if not os.path.exists(FEATURES_FILE):
@@ -649,6 +690,7 @@ def load_feature_overrides() -> None:
     if not isinstance(overrides, dict):
         logger.warning("[features] 覆写文件格式异常（应为 JSON object），忽略")
         return
+    overrides = _migrate_merged_switch_keys(overrides, location="features.json 读取")
 
     valid_count = 0
     changed = 0
@@ -702,6 +744,8 @@ def save_feature_overrides(overrides: dict[str, bool], merge: bool = True) -> No
                 existing = json.load(f)
         except (json.JSONDecodeError, OSError):
             existing = {}
+    existing = _migrate_merged_switch_keys(existing, location="features.json 写入")
+    overrides = _migrate_merged_switch_keys(overrides, location="写入参数")
 
     existing.update(overrides)
 
@@ -723,6 +767,65 @@ def save_feature_overrides(overrides: dict[str, bool], merge: bool = True) -> No
     # 同步运行时状态
     for flag_name, enabled in cleaned.items():
         FEATURE_FLAGS[flag_name] = enabled
+
+
+def clear_feature_overrides(flags: Iterable[str] | None = None) -> int:
+    """移除功能开关覆写，使开关回到出厂默认（「恢复默认」= 删键而非写入同值）。
+
+    features.json 只存与代码默认的差异，恢复默认在语义上应删除键：批量原子写一份
+    剔除目标键后的覆写文件，并把运行时状态同步回 ``_FEATURE_FLAGS_DEFAULT``。
+    单键不存在于文件时自然忽略（但运行时仍回默认——会话内 set_feature_enabled
+    的临时切换同样被恢复）。
+
+    Args:
+        flags: 要恢复的开关键集合；None 表示清空全部覆写（恢复全部默认）。
+
+    Returns:
+        从覆写文件中实际移除的键数（文件不存在或无匹配键时为 0）。
+    """
+    file_keys: dict[str, Any] = {}
+    if os.path.exists(FEATURES_FILE):
+        try:
+            with open(FEATURES_FILE, encoding="utf-8") as f:
+                loaded = json.load(f)
+            if isinstance(loaded, dict):
+                file_keys = {k: v for k, v in loaded.items() if isinstance(v, bool)}
+        except (json.JSONDecodeError, OSError):
+            file_keys = {}
+
+    if flags is None:
+        remaining: dict[str, Any] = {}
+    else:
+        targets = set(flags)
+        remaining = {k: v for k, v in file_keys.items() if k not in targets}
+    removed = len(file_keys) - len(remaining)
+
+    if len(remaining) != len(file_keys):
+        # 与 save_feature_overrides 同一原子写原语；只落 bool 条目（与保存路径口径一致）
+        write_json_atomic(
+            FEATURES_FILE,
+            remaining,
+            prefix=".features_",
+            log_tag="features",
+            noun="功能开关覆写",
+        )
+
+    with _FEATURES_LOCK:
+        if flags is None:
+            for key in list(FEATURE_FLAGS):
+                if key in _FEATURE_FLAGS_DEFAULT:
+                    FEATURE_FLAGS[key] = _FEATURE_FLAGS_DEFAULT[key]
+                else:
+                    # 覆写文件已清空，无消费者的运行时残留键一并移除
+                    FEATURE_FLAGS.pop(key, None)
+        else:
+            for key in flags:
+                if key in FEATURE_FLAGS and key in _FEATURE_FLAGS_DEFAULT:
+                    FEATURE_FLAGS[key] = _FEATURE_FLAGS_DEFAULT[key]
+
+    if removed:
+        logger.info("[features] 已恢复 %d 项功能开关覆写至出厂默认", removed)
+    return removed
 
 
 def reset_feature_flags() -> None:

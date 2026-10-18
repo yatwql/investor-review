@@ -15,6 +15,7 @@ from src.python.web.runs import (
     _QUEUE_LIMIT,
     _RUN_KEEP,
     RunManager,
+    RunState,
     get_run_manager,
     reset_run_manager,
 )
@@ -176,3 +177,26 @@ class TestSingletonReset:
         m2 = get_run_manager()
         assert m2 is not m1
         assert len(m2.list_runs()) == 0
+
+
+class TestOldestSeqGapBaseline:
+    """事件缓冲缺口判定基准：oldest_seq 反映淘汰后的最小保留序号。
+
+    回归背景：事件缓冲按上限滚动丢弃最旧事件后，客户端 lastSeq 之后可能
+    出现真实空洞；服务端须把 oldest_seq 作为 first_seq 下发，客户端据此
+    渲染省略占位而不是静默跳号。
+    """
+
+    def test_empty_buffer_returns_none(self):
+        """缓冲为空（尚无事件）时返回 None（无缺口可言）。"""
+        state = RunState("r-gap-1", {})
+        assert state.oldest_seq() is None
+
+    def test_tracks_eviction_boundary(self, monkeypatch):
+        """淘汰发生后 oldest_seq 精确等于仍保留的最小序号。"""
+        monkeypatch.setattr("src.python.web.runs._EVENT_LIMIT", 3)
+        state = RunState("r-gap-2", {})
+        for i in range(6):
+            state.push_event("info", f"事件 {i + 1}")
+        assert state.oldest_seq() == 4
+        assert [e["seq"] for e in state.events_after(0)] == [4, 5, 6]

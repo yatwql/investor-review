@@ -208,9 +208,9 @@ _REPORT_SECTION_DEFAULT: list[dict] = [
         "nav_group": "appendix",
         "data_flag": None,
     },
-    # ── fundamental_snapshot 类型（两功能开关各控一块，默认关）──
-    # 持仓基本面 = 财务指标（financial_indicator）+ 持仓个股财报摘要（financial_report_digest）；
-    # 两契约 OR 决定章节可见性（任一块就绪即显示，块级开关各控各的渲染）
+    # ── fundamental_snapshot 类型（单一功能开关控两块，默认关）──
+    # 持仓基本面 = 财务指标 + 持仓个股财报摘要（功能开关 stock_fundamentals「个股基本面」合并控两块）；
+    # 两契约 OR 决定章节可见性（任一块就绪即显示，块级契约仍各控各的渲染）
     {
         "key": "fundamental_snapshot",
         "name": "持仓基本面",

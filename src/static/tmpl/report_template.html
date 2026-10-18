@@ -459,6 +459,16 @@
             display: flex; align-items: center; justify-content: center;
         }
         .theme-toggle-btn:hover { background: var(--primary-hover); }
+        /* ── 打印/导出 PDF 按钮（浮动右上角，主题切换左侧）── */
+        .report-print-btn {
+            position: fixed; right: 64px; top: 12px; z-index: 101;
+            width: 44px; height: 44px; border-radius: 50%;
+            background: var(--primary); color: #fff; border: none; cursor: pointer;
+            font-size: var(--fs-h2); line-height: 1; box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .report-print-btn:hover { background: var(--primary-hover); }
+        @media print { .report-print-btn { display: none !important; } }
         body.toc-collapsed .toc-sidebar { transform: translateX(-105%); }
         body.toc-collapsed .toc-toggle-btn { display: block; }
         /* 宽屏：展开时内容让出左侧栏 */
@@ -689,277 +699,7 @@
         @media print { .chart-export-btn { display: none; } }
     </style>
 
-{% if section_visible("portfolio_history_drawdown") %}
-<script>
-/* --- Native Canvas 2D chart renderer (multi-dataset, no external deps) --- */
-window.drawSimpleChart = function(canvasId, a, b, c) {
-    /* 兼容旧调用格式 (canvasId, labels, values, opts) → 新格式 (canvasId, datasets, opts) */
-    var datasets, opts;
-    if (Array.isArray(a) && a.length > 0 && typeof a[0] === 'object' && 'values' in a[0]) {
-        datasets = a;
-        opts = b || {};
-    } else {
-        datasets = [{
-            label: '',
-            values: b,
-            color: (c && c.lineColor) || '#2E75B6',
-            fillColor: (c && c.fillColor) || 'rgba(46,117,182,0.1)',
-            width: (c && c.lineWidth) || 2,
-            dash: (c && c.dash) || [],
-        }];
-        opts = c || {};
-    }
 
-    /* 移除无数据或全空 datasets */
-    var validDs = datasets.filter(function(ds){ return ds.values && ds.values.length > 0; });
-    if (validDs.length === 0) return;
-    var nPoints = validDs[0].values.length;
-    var hasMulti = validDs.length > 1;
-
-    var canvas = document.getElementById(canvasId);
-    if (!canvas) return;
-
-    var viewW = window.innerWidth;
-    var safeMax = Math.max(300, viewW - 96);
-    var dispW = Math.min(canvas.clientWidth, safeMax);
-    var dispH = canvas.clientHeight;
-    if (dispW < 50 || dispH < 20) return;
-    canvas.style.width = dispW + 'px';
-    canvas.style.height = dispH + 'px';
-
-    var dpr = window.devicePixelRatio || 1;
-    canvas.width = dispW * dpr;
-    canvas.height = dispH * dpr;
-
-    var ctx = canvas.getContext('2d');
-    ctx.scale(dpr, dpr);
-
-    /* 多 dataset 时右侧留出 legend 空间 */
-    var margin = { top: 12, right: hasMulti ? 110 : 12, bottom: 32, left: 62 };
-    var plotW = dispW - margin.left - margin.right;
-    var plotH = dispH - margin.top - margin.bottom;
-    if (plotW < 50 || plotH < 20) return;
-
-    ctx.clearRect(0, 0, dispW, dispH);
-
-    /* 全局 Y 范围：跨所有 dataset */
-    var globalMin = Infinity, globalMax = -Infinity;
-    for (var di = 0; di < validDs.length; di++) {
-        var vs = validDs[di].values;
-        for (var vi = 0; vi < vs.length; vi++) {
-            if (vs[vi] < globalMin) globalMin = vs[vi];
-            if (vs[vi] > globalMax) globalMax = vs[vi];
-        }
-    }
-    if (globalMin === Infinity) return;
-    var range = globalMax - globalMin;
-    if (range < 1e-10) { range = Math.max(Math.abs(globalMax) * 0.1, 1); globalMin = globalMax - range; globalMax += range; }
-    var pad = range * 0.08;
-    var yMin = globalMin - pad;
-    var yMax = globalMax + pad;
-    var yRange = yMax - yMin;
-    if (yRange < 1e-10) yRange = 1;
-
-    function xPos(i) { return margin.left + (nPoints <= 1 ? plotW/2 : (i/(nPoints-1))*plotW); }
-    function yPos(v) { return margin.top + plotH - ((v - yMin) / yRange) * plotH; }
-
-    ctx.font = '11px -apple-system, "Microsoft YaHei", "PingFang SC", sans-serif';
-    ctx.textBaseline = 'middle';
-
-    /* Y 轴刻度 */
-    var yTickCount = 5;
-    for (var t = 0; t <= yTickCount; t++) {
-        var yv = yMin + (t / yTickCount) * yRange;
-        var y = yPos(yv);
-        ctx.strokeStyle = 'rgba(0,0,0,0.06)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(margin.left, y);
-        ctx.lineTo(dispW - margin.right, y);
-        ctx.stroke();
-        var label;
-        if (opts.yFormat === 'currency') {
-            var wan = yv / 10000;
-            label = wan >= 10000 ? '¥' + (wan/10000).toFixed(1) + '亿' : '¥' + wan.toFixed(0) + '万';
-        } else if (opts.yFormat === 'percent') {
-            label = yv.toFixed(1) + '%';
-        } else {
-            label = yv.toLocaleString();
-        }
-        ctx.fillStyle = '#666';
-        ctx.textAlign = 'right';
-        ctx.fillText(label, margin.left - 6, y);
-    }
-
-    /* 危机区间带（opts.crisisBands: [{startIndex, endIndex, label}]）——
-       折线之前绘制半透明阴影，标注 2015/2018/2020/2022 主要危机时段 */
-    if (opts.crisisBands && opts.crisisBands.length) {
-        ctx.save();
-        ctx.fillStyle = 'rgba(231,76,60,0.07)';
-        for (var bi = 0; bi < opts.crisisBands.length; bi++) {
-            var band = opts.crisisBands[bi];
-            var bx0 = xPos(band.startIndex);
-            var bx1 = xPos(band.endIndex);
-            if (bx1 <= bx0) continue;
-            ctx.fillRect(bx0, margin.top, bx1 - bx0, plotH);
-        }
-        ctx.restore();
-    }
-
-    /* 图例（多 dataset 时绘制，右上角） */
-    if (hasMulti) {
-        var legX = dispW - margin.right + 8;
-        var legY = margin.top;
-        ctx.textBaseline = 'middle';
-        ctx.font = '12px -apple-system, "Microsoft YaHei", "PingFang SC", sans-serif';
-        for (var li = 0; li < validDs.length; li++) {
-            var ds = validDs[li];
-            var ly = legY + li * 20;
-            ctx.strokeStyle = ds.color || '#2E75B6';
-            ctx.lineWidth = 2;
-            if (ds.dash && ds.dash.length) ctx.setLineDash(ds.dash);
-            else ctx.setLineDash([]);
-            ctx.beginPath();
-            ctx.moveTo(legX, ly);
-            ctx.lineTo(legX + 16, ly);
-            ctx.stroke();
-            ctx.setLineDash([]);
-            ctx.fillStyle = '#444';
-            ctx.textAlign = 'left';
-            ctx.fillText(ds.label || '', legX + 22, ly);
-        }
-    }
-
-    /* X 轴标签 */
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillStyle = '#666';
-    ctx.font = '11px -apple-system, "Microsoft YaHei", "PingFang SC", sans-serif';
-    var nLabels = Math.min(10, nPoints);
-    var step = Math.max(1, Math.floor(nPoints / nLabels));
-    var xIndices = [];
-    for (var i = 0; i < nPoints; i += step) xIndices.push(i);
-    if (xIndices[xIndices.length-1] !== nPoints-1 && nPoints > 1) xIndices.push(nPoints-1);
-    var dateLabels = opts.labels || [];
-    for (var k = 0; k < xIndices.length; k++) {
-        var idx = xIndices[k];
-        var lbl = dateLabels.length ? (dateLabels[idx] || '') : ('' + idx);
-        ctx.fillText(lbl && lbl.length >= 10 ? lbl.substring(5, 10) : lbl, xPos(idx), margin.top + plotH + 6);
-    }
-
-    /* 逐 dataset 绘制 */
-    for (var di = 0; di < validDs.length; di++) {
-        var ds = validDs[di];
-        var vs = ds.values;
-
-        /* 填充 */
-        if (ds.fill !== false) {
-            ctx.beginPath();
-            ctx.moveTo(xPos(0), yPos(vs[0]));
-            for (var i = 1; i < vs.length; i++) ctx.lineTo(xPos(i), yPos(vs[i]));
-            ctx.lineTo(xPos(vs.length-1), yPos(yMin));
-            ctx.lineTo(xPos(0), yPos(yMin));
-            ctx.closePath();
-            ctx.fillStyle = ds.fillColor || 'rgba(46,117,182,0.1)';
-            ctx.fill();
-        }
-
-        /* 折线 */
-        if (ds.dash && ds.dash.length) ctx.setLineDash(ds.dash);
-        else ctx.setLineDash([]);
-        ctx.beginPath();
-        for (var i = 0; i < vs.length; i++) {
-            if (i === 0) ctx.moveTo(xPos(i), yPos(vs[i]));
-            else ctx.lineTo(xPos(i), yPos(vs[i]));
-        }
-        ctx.strokeStyle = ds.color || '#2E75B6';
-        ctx.lineWidth = ds.width || 2;
-        ctx.lineJoin = 'round';
-        ctx.lineCap = 'round';
-        ctx.stroke();
-        ctx.setLineDash([]);
-    }
-
-    /* Y 轴 */
-    ctx.strokeStyle = '#ccc';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(margin.left, margin.top);
-    ctx.lineTo(margin.left, margin.top + plotH);
-    ctx.stroke();
-
-    /* Tooltip（mousemove 显示当前索引所有 dataset 的值） */
-    if (hasMulti) {
-        var tooltipEl = document.getElementById('chart-tooltip-' + canvasId);
-        if (tooltipEl) {
-            /* 重绘时复用已有 tooltip 元素，无需重建 */
-        } else {
-            tooltipEl = document.createElement('div');
-            tooltipEl.id = 'chart-tooltip-' + canvasId;
-            tooltipEl.style.cssText = 'position:fixed;display:none;pointer-events:none;' +
-                'background:rgba(40,40,40,0.9);color:#fff;padding:6px 10px;border-radius:4px;' +
-                'font:12px/1.5 -apple-system,"Microsoft YaHei","PingFang SC",sans-serif;' +
-                'z-index:1000;white-space:nowrap;';
-            document.body.appendChild(tooltipEl);
-        }
-
-        /* 防泄漏：移除旧 listener 再添加，避免重绘时重复注册 */
-        if (canvas._chartTooltipHandlers) {
-            canvas.removeEventListener('mousemove', canvas._chartTooltipHandlers.mousemove);
-            canvas.removeEventListener('mouseleave', canvas._chartTooltipHandlers.mouseleave);
-            canvas._chartTooltipHandlers = null;
-        }
-
-        var handlerMove = function(e){
-            var rect = canvas.getBoundingClientRect();
-            var mx = e.clientX - rect.left;
-            /* 计算 hover 对应的数据索引 */
-            var chartX = mx - margin.left;
-            var ratio = chartX / plotW;
-            var idx = Math.round(ratio * (nPoints - 1));
-            idx = Math.max(0, Math.min(nPoints - 1, idx));
-
-            /* 构建 tooltip 内容 */
-            var html = '<div style="font-weight:600;margin-bottom:3px;">索引 ' + idx + '</div>';
-            for (var ti = 0; ti < validDs.length; ti++) {
-                var tv = validDs[ti].values[idx];
-                var tLabel = validDs[ti].label || '';
-                var tColor = validDs[ti].color || '#2E75B6';
-                var tVal;
-                if (opts.yFormat === 'currency') {
-                    tVal = '¥' + tv.toLocaleString();
-                } else if (opts.yFormat === 'percent') {
-                    tVal = tv.toFixed(2) + '%';
-                } else {
-                    tVal = tv.toLocaleString();
-                }
-                html += '<div><span style="display:inline-block;width:10px;height:10px;' +
-                    'border-radius:50%;background:' + tColor + ';margin-right:6px;"></span>' +
-                    (tLabel ? tLabel + ': ' : '') + '<strong>' + tVal + '</strong></div>';
-            }
-            tooltipEl.innerHTML = html;
-            tooltipEl.style.display = 'block';
-            var ttX = e.clientX + 14;
-            var ttY = e.clientY - 10;
-            if (ttX + tooltipEl.offsetWidth > window.innerWidth) ttX = e.clientX - tooltipEl.offsetWidth - 14;
-            if (ttY < 4) ttY = 4;
-            tooltipEl.style.left = ttX + 'px';
-            tooltipEl.style.top = ttY + 'px';
-        };
-
-        var handlerLeave = function(){
-            if (tooltipEl) tooltipEl.style.display = 'none';
-        };
-
-        canvas._chartTooltipHandlers = { mousemove: handlerMove, mouseleave: handlerLeave };
-        canvas.addEventListener('mousemove', handlerMove);
-        canvas.addEventListener('mouseleave', handlerLeave);
-    }
-};
-</script>
-{% endif %}
-
-{% if enable_interactive_charts %}
 {# Chart.js 交互图表（本地 bundle：相对路径，离线自包含） #}
 {# chart_datasets 数据经 context 传递（不写 _ENV.globals） #}
 <script type="application/json" id="chart-data">{{ chart_datasets | tojson }}</script>
@@ -970,7 +710,6 @@ window.drawSimpleChart = function(canvasId, a, b, c) {
 <script defer src="chart-export.js"></script>
 <script defer src="chart-common.js"></script>
 <script defer src="chart-init.js"></script>
-{% endif %}
 {# 左侧目录 TOC（独立于图表开关，始终加载；本地 bundle） #}
 <script defer src="toc.js"></script>
 {# 正文大块折叠交互（锚点/打印自动展开；beforeprint 用捕获阶段先于 chart-print 快照展开） #}
@@ -1008,6 +747,9 @@ window.drawSimpleChart = function(canvasId, a, b, c) {
 
     <!-- 主题切换（暗色模式（主题切换））：浮动右上角，theme.js 接管 icon/aria-label -->
     <button type="button" class="theme-toggle-btn" id="theme-toggle-btn" aria-label="切换深色模式" title="切换深色模式">🌙</button>
+
+    <!-- 打印/导出 PDF：浮动右上角，唤起浏览器打印（图表经打印降级快照为静态图） -->
+    <button type="button" class="report-print-btn" id="report-print-btn" aria-label="打印或导出 PDF" title="打印 / 导出 PDF" onclick="window.print()">🖨️</button>
 
 <div class="container">
 

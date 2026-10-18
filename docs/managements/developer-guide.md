@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.13.5
+> 文档版本：0.13.6
 
 ## 概述
 
@@ -177,7 +177,11 @@ PYTHONWARNDEFAULTENCODING=1 .venv/bin/python -m pytest src/test/unit -q
 | 任务类型 | 必同步触点 |
 |:---------|:-----------|
 | 新报告章节 | `registry.py` 注册表 → `reports-instruction.md`（目录/章节表/分组表/可见性总表/页签上限）→ `requirements.md` 章清单 → `technical.md`（结果区计数/`report_section_order`）→ `how-to-use-tui-menu.md`（面板编号段）→ `folders.md`（新 partial/模板）→ `report_template.html` include |
-| 新功能开关 | `features.py` 注册表 → `how-to-config.md`（开关表+计数+实验/常规分列+Web 面板行）→ `how-to-use-tui-menu.md`（开关区行与编号）→ `technical.md`（语义命名表/开关计数）→ `testplan.md`（若涉门禁） |
+| 新功能开关 | `features.py` 注册表 → `how-to-config.md`（开关表+计数+实验/常规分列+Web 面板行）→ `how-to-use-tui-menu.md`（开关区行与编号）→ `how-to-use-web-mode.md`（Web 面板分组行）→ `technical.md`（语义命名表/开关计数）→ **`experimental=True` 时 `technical.md` §6.9 生命周期表补行** → `testplan.md`（若涉门禁） |
+| 开关合并/内置化（删条目） | `features.py` 旧键迁移表（`_MERGED_SWITCH_KEYS`，一版过渡+告警）→ 注册表计数与四组分解（`how-to-config` / `how-to-use-tui-menu` / `how-to-use-web-mode` / `technical` 语义表与统计行）→ **面板编号单次重排**（`[S]` 各组分块区间在多处手册出现）→ 消费点门控收敛（`config/_core.py` helper 与调用点）→ 本地 `features.json` 迁移 → 关态用例退役 |
+| 菜单项增删/合并/重排 | `tui_menu.MENU_ITEMS`（含页脚键位提示 `render_menu` 与退出别名文案）→ 双手册主菜单 code block（`how-to-start` + `how-to-use-tui-menu`，doc-drift 机检键集合与标签头）→ `how-to-config.md` 的 `default_menu_key` 快捷键清单 → `technical.md` 菜单表 + 项数（静态项数 / 默认门控后渲染项数两处）→ `testplan.md` 菜单清单与二级子菜单 → `status_line` 页脚指引 → README 界面描述 → 子菜单二级键集合（如 `[D]` 的 C/F/O/M/B） |
+| 新增终端打印文本（提示/面板/列表） | 一律用 `tui/text_layout.py` 原语折行（`wrap_display` / `wrap_hanging` / `wrap_with_prefix` / `truncate_display`）并按 `terminal_columns()` 取宽——手机窄屏（40~60 列）与笔记本宽屏同一份代码；新增用例须覆盖窄宽两档与「不越界」不变式 |
+| 新配置入口（新增面板/子菜单项） | `_CONFIG_ENTRY_MAP`（`[D]` 配置入口地图，键位真实性由单测对 `MENU_ITEMS` 兜底）→ 对应手册章节 → `requirements.md` 菜单表行 |
 | 新文件/目录 | `folders.md` 目录树（`check-doc-drift --sync` 回写统计表）→ 若为 `scripts/*`：本文件「辅助脚本速查」一览与分类段 |
 | 新测试 | `conftest.py` marker 注册（若需）→ `.venv/bin/python scripts/collect-test-coverage.py --update-docs` 回写 `test-coverage.md`/`folders.md` 计数行（不带标志仅输出供人工对照）→ 边缘用例入 `*_edge.py` |
 | 新 LLM 模块/seam | `registry.py` + 统一附录（`skeleton._build_prompt_appendix`）+ `technical.md`（语义命名表/seam 表/附录 H）→ 指纹条件并入用例 |
@@ -905,7 +909,7 @@ A: 运行 `.venv/bin/python scripts/check-test-markers.py`，脚本会静态扫�
 | `check-script-contract.py` | 质量 | scripts 顶层脚本契约机检（退出码声明 ⊆ {0,2} 白名单、check-* 统一 `add_common_args` CLI 面、文本 I/O 显式 encoding、脚本↔测试覆盖映射，四条规则——**观察期**未入钩子与 CI） |
 | `release.py` | 发布 | 发布流程分步编排（check/prepare/refresh/evolution/gate/publish/devbump，每步独立可审阅、失败即停） |
 | `perf-test-report.py` | 诊断 | 端到端报告生成管线性能基准（独立脚本，mock 外部数据源） |
-| `perf-view.py` | 诊断 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 时段聚合/机读输出） |
+| `perf-view.py` | 诊断 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 时段聚合（耗时与费用合计/环比）/机读输出（llm_cost、by_period 费用字段）） |
 | `probe.py` | 诊断 | 探测统一入口（按 target 分发到 `probes/` 子模块；新探针实现契约面登记即用） |
 | `probe-csi-factor-indices.py` / `probe-push2.py` | 诊断 | 旧入口兼容垫片（薄委托到 `probes/csi.py` / `probes/push2.py`，用法不变） |
 | `check-svg.py` | 诊断 | README SVG 架构图检查（子命令 `geom` 几何 / `pixel` 像素 / `text-overflow` 文字色越界；像素子命令需 Pillow） |
@@ -1293,11 +1297,14 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 **`perf-view.py` — 性能历史趋势查看**
 
-读取 `data/state/perf_history.jsonl`（由 `PerfCollector` 在每次报告生成时自动追加），按版本和报告类型分组统计（分组节按各组**首次运行时间**排序，最新版本在最末；组内明细行按时间戳升序），输出版本间性能趋势对比；输出跨版本「总体分位概览」（样本数 / 平均 / 中位 / **P95** / **P99** / 最长 / 中位秒每品种，n<20 附小样本提示）、**版本演进总表**（每版中位/P95/较上一版 delta+⚠，按首现时间排序）、离群与尾部归因、**异常运行专区**（中断/失败，无则省略）与**同版本漂移检测**（时间对半、噪声带判显著）。头部含**数据新鲜度**行（最新记录时间戳与距今时长）与可选**版本筛选**行；组详情阶段表按**中位降序**（最慢在前）并含**占比**列；阶段细分/LLM 上下文在范围内应有数据而缺时**明示提示行**（区分「无数据」与「不适用」）而非静默省略。
+读取 `data/state/perf_history.jsonl`（由 `PerfCollector` 在每次报告生成时自动追加），按版本和报告类型分组统计（分组节按各组**首次运行时间**排序，最新版本在最末；组内明细行按时间戳升序），输出版本间性能趋势对比；输出跨版本「总体分位概览」（样本数 / 平均 / 中位 / **P95** / **P99** / 最长 / 中位秒每品种，n<20 附小样本提示）、**版本演进总表**（每版中位/P95/较上一版 delta+⚠，按首现时间排序）、离群与尾部归因、**异常运行专区**（中断/失败，无则省略）与**同版本漂移检测**（时间对半、噪声带判显著）。头部含**数据新鲜度**行（最新记录时间戳与距今时长）与可选**版本筛选**行；组详情阶段表按**中位降序**（最慢在前）并含**占比**列；阶段细分/LLM 上下文在范围内应有数据而缺时**明示提示行**（区分「无数据」与「不适用」）而非静默省略。`--by day|week|hour` 时段聚合在耗时列外附**费用合计/费用环比**（与 LLM 段「累计费用」同源的 `llm.total_cost`，范围内无费用样本自动省列，首档环比为 —、末档附提示行）；`--json` 汇总带 `llm_cost` 费用块（`--by` 时另附 `by_period` 时段费用序列），CSV 列不变。
 
 ```bash
 # 输出全部历史趋势到 stdout（--json/--csv 机读模式同样只向 stdout，落盘需自行重定向）
 .venv/bin/python scripts/perf-view.py
+
+# 按日聚合：耗时与费用合计/费用环比同表（LLM 费用趋势视图）
+.venv/bin/python scripts/perf-view.py --by day
 
 # 仅看 full 类型报告的性能趋势
 .venv/bin/python scripts/perf-view.py --report-type full
@@ -1344,7 +1351,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 **定位边界（重要）**：本脚本是**运行历史查看**（被动统计既有记录）——样本取决于最近跑过什么、不可复现，故**不用于 CI 门禁**。性能门禁由主动压测的 `perf-test-report.py --gate` 承担（自造模拟持仓、mock 外部数据源，同条件可比，退化即回归）。
 
-**数据来源**：每次 `generate_report()` 调用时自动记录到 `data/state/perf_history.jsonl`，无需手动触发；中断运行以 `status=interrupted` 记录（含 `interrupted_stage`），与成功完成（`completed`）区分，页头状态行据显「已中断」。
+**数据来源**：每次 `generate_report()` 调用时自动记录到 `data/state/perf_history.jsonl`（自动保留最近 5000 条，超出丢弃最旧），无需手动触发；中断运行以 `status=interrupted` 记录（含 `interrupted_stage`），与成功完成（`completed`）区分，页头状态行据显「已中断」。
 
 **记录字段分层**（观测面口径）：
 
@@ -1766,7 +1773,7 @@ DataModuleDef("我的 LLM 分析", "llm_my_analysis",
 
 > **提示词内容必须进指纹（唯一事实来源 `llm/module_fingerprint.py`）**：缓存键与提示词内容脱钩会静默复用陈旧结论（键不变 → 预检命中旧键 → 不重生成、不报错）。因此**凡进了提示词的段落都必须进该模块的指纹**：已渲染文本（`competitive_context` / `data_quality_text`）、量化指标（`metrics`）、以及 `pipeline_data` 派生的【环比变化】【数据质量降级】两段——**只进「提示词确实含该段」的模块**，不进提示词的模块并入即纯成本失效。判据与完整清单见 `llm-technical.md` §7.1。
 >
-> **开关改变提示词 → 同一后缀函数供两侧调用**：凡开关**会改变提示词内容**（`deterministic_signal` 注入信号块与确定性信号摘要、`decision_header_parse` 追加决策头契约、辩论增强后缀），其开关判定必须**收敛在后缀函数内部**，由 `module_fingerprint.py` 的构造器统一调用——写侧与预检侧只调用同一构造函数，不得任一环节自行拼接（自行拼接的后果是两侧结果永久不等：写侧照常写入、预检侧永不命中，表现为「开关看似生效但每次仍全量调用 LLM」）。后缀函数关闭时返回 `""`（键不变、不误伤既有缓存），开启时返回稳定短串（如 `"_dh"`）。**内容指纹型**后缀（如 `decision_ledger.lessons_cache_suffix`、`prompts_signals._signal_digest_cache_suffix`、`signal_ledger.summary_cache_suffix`）另取块内容 md5 作版本，使数值变化即换键。
+> **开关改变提示词 → 同一后缀函数供两侧调用**：凡开关**会改变提示词内容**（`deterministic_signal` 注入信号块与确定性信号摘要、辩论增强后缀），其开关判定必须**收敛在后缀函数内部**，由 `module_fingerprint.py` 的构造器统一调用——写侧与预检侧只调用同一构造函数，不得任一环节自行拼接（自行拼接的后果是两侧结果永久不等：写侧照常写入、预检侧永不命中，表现为「开关看似生效但每次仍全量调用 LLM」）。后缀函数关闭时返回 `""`（键不变、不误伤既有缓存），开启时返回稳定短串（如 `"_dh"`）。**内容指纹型**后缀（如 `decision_ledger.lessons_cache_suffix`、`prompts_signals._signal_digest_cache_suffix`、`signal_ledger.summary_cache_suffix`）另取块内容 md5 作版本，使数值变化即换键。
 
 > **追加型状态文件一律走共享原语 `core/jsonl_store.py`**：`perf`（性能历史）、`decision_ledger`（决策账本）、`signal_ledger`（信号账本）三者的「读全文 → 拼接 → 写临时文件 → `os.replace`」逻辑已抽为 `append_jsonl_atomic()` / `read_jsonl()`，**新增任何 JSONL 持久化都不得再抄一份**——各自只保留自己的序列化口径（如 `decision_ledger` 的 `sort_keys=True` + `ensure_ascii=False`）与 `prefix`/日志标签，行为逐字不变由 `test_jsonl_store.py::TestDelegationPreservesBehaviour` 锁定。新增持久化文件时**必须**在 `src/test/conftest.py` 的 `_isolate_sensitive_paths` 中把路径重定向到 `tmp_path`，不得依赖测试自行清理。
 
@@ -1798,13 +1805,15 @@ DataModuleDef("我的 LLM 分析", "llm_my_analysis",
 
 > **「实验性」的准入与转正判据**：实验项的判定口径是「**能否改变报告产物内容**」，而非「新不新」。新增能力默认关的惯例适用于会改变产物的能力（LLM 增强、指标开关、数据结构变更）——它们需要真实数据验证，默认关是对既有用户产物的保护。但**只读诊断类能力（不改产物、不写文件、不在默认路径产生隐式网络或耗时代价）应默认开启**：默认关的实际代价是让最需要它的人（环境出故障的那批）恰好看不到它，而开启对默认输出零代价。此类能力转正后：① `experimental` 置 `False`、`default` 改 `True`（**两处字段改动**；作用域属机制与诊断，`group` 不变）——面板可见性随分组自动延续，不再出现「转正即从面板消失」；② 不再进产物自述（`affects_report` 答 `False` 且 `experimental` 为 `False`）；③ 门控读取（`FEATURE_GATED_ITEMS` / `system_info`）**保留**——转正不等于不可关，`features.json` 置 `false` 仍可隐藏入口；④ 门控表与消费点均须有「默认配置下入口可见」的测试，只依赖 `patch` 覆盖取值的用例测不出默认值本身。系统自检（`doctor_check`）是此模式的首例。
 
-> **内部接缝类开关也应转正（第二类首例：`datasource_adapter`）**：判据与上一条同源但落在另一面——**开关两种取值下报告产物是否等价**。若等价（新实现只是把既有路径换成结构更清晰的等价实现，差异经等价性回归测试逐项锁定且不影响下游取值语义），则它既不是用户可感知的功能、也不是用户能做的选择，摆在用户面前只会让人误以为「开了有好处」，而默认关的实际代价是**生产路径从不执行新实现**、新数据源/新字段接入时才第一次实跑。此类开关转正为默认开（摘除实验身份，`group` 不变）：① `experimental` 置 `False` 且 `default` 置 `True`（**两处字段改动**）；② 开关本身保留为**回退杠杆**（`features.json` 置 false 即回退既有实现）；③ 测试补四向——默认值、非实验项（`--experiment` 取值域退出）、显式关闭仍走既有实现、默认配置下走新实现（见 `test_features.py::TestDatasourceAdapterPromotion`）。数据源适配契约（`datasource_adapter`）是此模式的首例。
+> **内部接缝类开关也应转正（第二类首例：`datasource_adapter`）**：判据与上一条同源但落在另一面——**开关两种取值下报告产物是否等价**。若等价（新实现只是把既有路径换成结构更清晰的等价实现，差异经等价性回归测试逐项锁定且不影响下游取值语义），则它既不是用户可感知的功能、也不是用户能做的选择，摆在用户面前只会让人误以为「开了有好处」，而默认关的实际代价是**生产路径从不执行新实现**、新数据源/新字段接入时才第一次实跑。此类开关转正为默认开（摘除实验身份，`group` 不变）：① `experimental` 置 `False` 且 `default` 置 `True`（**两处字段改动**）；② 开关经跨版本稳定期评估后**进一步内置化**（删开关与关态死分支；回退仅保留「适配器不可用时回落既有映射」的运行时安全网，不再可经配置触发）；③ 测试守两向——默认配置走新实现、回退与既有实现等价（见 `test_features.py::TestDatasourceAdapterBuiltinized` 与 `test_quote_adapter_parity.py`）。数据源适配契约（`datasource_adapter`）是此模式的首例（已内置）。
 
-> **读侧增强类开关也应转正（第三类首例：`deterministic_signal` / `module_quality_gate` / `decision_header_parse` / `llm_debate_conditional` / `datasource_credential_ready`）**：判据落在「**开启的代价是否只在读侧**」——只在既有提示词或既有产物流水线上追加一段由**已算出的**数据派生的内容，不新增 LLM 调用次数、不写新的持久化文件、无隐式网络与耗时；且该段内容有确定的收益（方向性结论替代裸数值、结构化契约替代表格猜测、质量分级提示读者降级参考、缺凭据时给可读指引）。此类开关默认关的实际代价是**机制在生产路径从不执行**，用户手上的产物看不到这层增强；用户若逐项去 `features.json` 里打开它，等于用配置承担了本该由默认值表达的取舍（转正判据的可观测量：见 core/experiment_stats.py 的启用次数统计与 doctor 账本概览）。转正口径：① `experimental` 置 `False` 且 `default` 置 `True`（**两处字段改动**；作用域属机制与诊断，`group` 不变）；② `affects_report` **照实答 `True`**——它们确实改变产物内容（`deterministic_signal` 注入信号块、`module_quality_gate` 注入质量横幅、`decision_header_parse` 追加契约行、`llm_debate_conditional` 追加情景段、`datasource_credential_ready` 改变数据源就绪行为），故 Web 面板照常带「（影响报告）」标记；③ 开关保留为关闭杠杆，`features.json` 置 false 即回到「未引入本机制」的行为；④ 凡开关改变提示词者，其缓存后缀函数（`structured_header_cache_suffix()` → `_dh`、`debate_feature_cache_suffix()` → `_c`、`prompts_signals._signal_digest_cache_suffix()`、`core.signal_ledger.summary_cache_suffix()` → `_sg`）随之由「默认返回空」变为「默认返回非空」——**升级后首次运行会换键重生成一次**，属预期行为，须在变更记录中写明；⑤ 测试补四向——默认值、非实验项（`--experiment` 取值域退出）、显式关闭仍走未引入前的路径（关闭基线必须**显式**置 false，不能再依赖 `reset_feature_flags()`，它现在返回的是已转正的默认值）、默认配置下走增强路径（见 `test_features.py::TestReadSidePromotion`）。
+> **读侧增强类开关也应转正（第三类首例：`deterministic_signal` / `module_quality_gate` / `llm_debate_conditional`）**：判据落在「**开启的代价是否只在读侧**」——只在既有提示词或既有产物流水线上追加一段由**已算出的**数据派生的内容，不新增 LLM 调用次数、不写新的持久化文件、无隐式网络与耗时；且该段内容有确定的收益（方向性结论替代裸数值、结构化契约替代表格猜测、质量分级提示读者降级参考、缺凭据时给可读指引）。此类开关默认关的实际代价是**机制在生产路径从不执行**，用户手上的产物看不到这层增强；用户若逐项去 `features.json` 里打开它，等于用配置承担了本该由默认值表达的取舍（转正判据的可观测量：见 core/experiment_stats.py 的启用次数统计与 doctor 账本概览）。转正口径：① `experimental` 置 `False` 且 `default` 置 `True`（**两处字段改动**；作用域属机制与诊断，`group` 不变）；② `affects_report` **照实答 `True`**——它们确实改变产物内容（`deterministic_signal` 注入信号块、`module_quality_gate` 注入质量横幅、`llm_debate_conditional` 追加情景段），故 Web 面板照常带「（影响报告）」标记；③ 开关保留为关闭杠杆，`features.json` 置 false 即回到「未引入本机制」的行为；④ 凡开关改变提示词者，其缓存后缀函数（`structured_header_cache_suffix()` → `_dh`、`debate_feature_cache_suffix()` → `_c`、`prompts_signals._signal_digest_cache_suffix()`、`core.signal_ledger.summary_cache_suffix()` → `_sg`）随之由「默认返回空」变为「默认返回非空」——**升级后首次运行会换键重生成一次**，属预期行为，须在变更记录中写明；⑤ 测试补四向——默认值、非实验项（`--experiment` 取值域退出）、显式关闭仍走未引入前的路径（关闭基线必须**显式**置 false，不能再依赖 `reset_feature_flags()`，它现在返回的是已转正的默认值）、默认配置下走增强路径（见 `test_features.py::TestReadSidePromotion`）。
 >
 > **章节/页签类开关转正目标是独立章 / 分析增强组（第四类首例：`holding_change_review` / `whatif_trade_cost` / `event_window_impact` 已按此归入，default 保持 `False`）**：判据落在「产物形态」——独立章节/页签类能力验证通过后的归宿按作用域入独立章节与回放 / 分析增强组：`default` 保持 `False`（默认产物字节不因转正变化，读者拿到的报告不因转正多出章节），面板入口随分组自动延续，`--experiment` 取值域随 `experimental` 摘除同步退出，产物自述与启用统计随实验身份移除（「质量可能不稳定」警示只属于未验证功能，统计的观测使命随转正完成）。转正定义因此为「**摘除 experimental 身份，作用域变则同时改 group**」。
 >
 > **刻意不转正的两类（判据的反面）**：**写盘积累型**——`decision_reflection` / `report_qa` 仍标 `experimental=True`（账本结算样本尚不足以判转正，撤销死线见 plan.md）。`signal_ledger`（确定性信号沉淀）不再单独设开关：其真实积累已验证（账本有存量数据、写盘幂等开销可忽略），并入 `deterministic_signal` 转正（摘除实验身份）。**调用次数放大型**——`llm_debate_procon` 把一次 `expert_review` 调用换成最多三次（pro → con → synthesis），默认开启直接改变费用与耗时量级，保持默认关、由用户按需开启。集中度问答不再受开关控制（原 `llm_debate_qa_concentration` 已撤销），改为辩论流程内建段落（阈值触发）。实验功能的真实使用情况可用 `core/experiment_stats.py`（启用计数）加 `doctor` 账本概览观测，作为转正/撤销的客观数据。
+
+> **生命周期单一事实位**：全部 `experimental=True` 开关的「实验目的 / 判据来源 / 转正条件 / 撤销条件 / 观察数据源 / 当前态」以 `technical.md` §6.9「实验项生命周期表」为**单一事实位**——立项（新增实验项）、转正（摘 `experimental`）、撤销（删注册表条目与机制）任一发生时**必须同步刷新该表**；判据详文仍留在 `plan.md` 死线条目与版本归档的评估记录（两者回链 `technical.md` §6.9「实验项生命周期表」，表内不复制全文，避免两处口径漂移）。上文的转正判据分类学讲「怎么判」，`technical.md` §6.9 记录「当前每个实验项处在哪一步」。
 
 > **诊断类命令不得依赖 config 初始化**：`doctor` / `view-logs` / `check-sources` 三个子命令在 `main()` 中**先于 `init_config` 分派**——配置损坏正是它们要定位的场景，若先初始化配置再分派，用户会在最需要诊断能力时被配置错误挡在门外（死锁）。新增诊断类命令遵循同一模式：**先分派、后初始化**，并把「命令失败」（退出码 2）与「命令跑完但结论不佳」（退出码 1）用 `_EXIT_SUCCESS` / `_EXIT_PARTIAL` / `_EXIT_SEVERE` 常量区分开，不得写裸字面量。**诊断类命令自身永不抛异常**——任何内部异常都转成一条结果行，否则等于在最需要它的时刻失效（`core/doctor.py`）。
 

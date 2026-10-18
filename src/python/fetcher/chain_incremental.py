@@ -16,7 +16,6 @@ from src.python.cache import set as cache_set
 from src.python.core.constants import CACHE_WEEKLY
 from src.python.core.datasource_credential import (
     credential_hint,
-    credential_ready_enabled,
     missing_credential,
 )
 from src.python.core.provider_registry import get_registry
@@ -102,7 +101,7 @@ def _try_providers(
         # 凭据就绪预检：与 fetch_with_fallback 同一判定（见彼处注释——配置级
         # 问题不计入熔断）。历史 chain 若缺此分支，需 key 的源会在此被当作
         # 「不可达」反复重试并累计熔断，正是本机制要消除的行为。
-        _spec = missing_credential(provider_name) if credential_ready_enabled() else None
+        _spec = missing_credential(provider_name)
         if _spec is not None:
             logger.info("[%s] %s 缺少凭据，跳过（%s）", chain_name, provider_name, _spec.env_var)
             if diagnostics is not None:

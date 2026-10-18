@@ -1010,3 +1010,27 @@ class TestGenerateReport:
         assert result.excel_ok is True
         assert result.report_generated is True
         mock_xls.assert_called_once()
+
+
+@pytest.mark.unit
+@pytest.mark.unit_report
+class TestAutoCleanupOnGenerate:
+    """生成入口触发过期缓存自动清理（无人值守路径回收缺失回归）。"""
+
+    def test_generate_report_triggers_auto_cleanup(self, monkeypatch) -> None:
+        """generate_report 开头调用 auto_cleanup_expired（CLI/TUI/Web 三渠道共用入口）。"""
+        calls: list[int] = []
+        monkeypatch.setattr(
+            "src.python.cache.auto_cleanup_expired",
+            lambda: calls.append(1) or 0,
+        )
+        mock_reporter = MagicMock()
+        with (
+            patch("src.python.core.trading_calendar._get_trading_calendar", return_value=set()),
+            patch("src.python.fetcher.index.fetch_indices", return_value={}),
+            patch("src.python.fetcher.index.fetch_us_indices", return_value={}),
+            patch("src.python.report._report_generation._spawn_health_checks", return_value=None),
+            patch("src.python.report._report_generation._collect_health_checks"),
+        ):
+            generate_report(holdings=[], config={}, reporter=mock_reporter, report_type="basic")
+        assert calls == [1], "生成入口须触发一次过期缓存自动清理"

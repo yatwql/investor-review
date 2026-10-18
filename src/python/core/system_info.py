@@ -93,10 +93,10 @@ def resolve_provider_credentials(entry: dict, all_creds: dict) -> tuple[str, str
 
 def model_route_labels(llm_config: dict) -> list[str]:
     """flat 模式模型路由行：``模块显示名=生效模型``（面板隐藏模块已剔除）。"""
-    from src.python.core.registry import visible_llm_module_names
+    from src.python.core.registry import get_llm_module_names
 
     model = llm_config.get("model") or "默认"
-    return [f"{name}={llm_config.get(f'model_{sfx}') or model}" for sfx, name in visible_llm_module_names().items()]
+    return [f"{name}={llm_config.get(f'model_{sfx}') or model}" for sfx, name in get_llm_module_names().items()]
 
 
 def build_system_info() -> dict:

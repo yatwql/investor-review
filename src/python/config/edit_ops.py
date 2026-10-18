@@ -28,7 +28,7 @@ from src.python.config.features import (
     feature_switch_registry,
 )
 from src.python.core.atomic_write import copy_file_atomic
-from src.python.core.registry import visible_llm_module_names
+from src.python.core.registry import get_llm_module_names
 
 logger = logging.getLogger("invest")
 
@@ -73,7 +73,7 @@ config_edit_whitelist = {
     # ── 6 LLM 分析章节开关（llm_settings.json enabled_llm；清单 = 注册表可见标准模块）──
     **{
         f"enabled_llm.{sfx}": {"kind": "bool", "target": "llm_settings", "writer": "llm"}
-        for sfx in visible_llm_module_names()
+        for sfx in get_llm_module_names()
     },
     # ── 7 功能开关（features.json；清单取自 features.feature_switch_registry 全注册表，
     #      实验项与常规开关同表同写入路径，分组只影响前端分块渲染）──
@@ -252,3 +252,23 @@ def apply_config_edit(payload: dict) -> dict:
     else:
         new_value = _apply_plain_value(key, payload.get("value"), entry)
     return {"key": key, "value": new_value, "backup": backup_path}
+
+
+def apply_scheduler_block(block: dict) -> dict:
+    """保存内置定时生成的 ``scheduler`` 配置块（渠道共享的写入口）。
+
+    与 ``apply_config_edit`` 同构：写前对 config.json 做单槽 .bak 备份。
+    调度侧已完成格式校验（时刻/执行日/报告格式），此处只负责落盘，
+    保证配置写原语不散落到渠道层。
+
+    Args:
+        block: 已校验归一化的 ``{enabled, time, weekdays, report_type}``。
+
+    Returns:
+        ``{"key": "scheduler", "value": 块, "backup": .bak 路径或 None}``。
+    """
+    from src.python.config import set_config
+
+    backup_path = config_backup_file(_target_path("config"))
+    set_config("scheduler", block)
+    return {"key": "scheduler", "value": block, "backup": backup_path}

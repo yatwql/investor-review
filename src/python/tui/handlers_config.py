@@ -22,7 +22,17 @@ from src.python.tui.tui_menu import (
     press_any_key,
     refresh_config,
 )
-from src.python.tui.text_layout import display_width, pad_right, render_panel
+from src.python.tui.switch_panel import (
+    format_heading,
+    format_item,
+    inner_width,
+    layout_tier,
+    legend_lines,
+    terminal_columns,
+    use_panel_box,
+    wrap_hanging,
+)
+from src.python.tui.text_layout import display_width, pad_right, render_panel, truncate_display
 
 logger = setup_logger()
 
@@ -133,10 +143,37 @@ def _cmd_config_output_dir() -> None:
     _edit_single_config("output_dir", "报告输出目录")
 
 
+# 配置入口地图（只读索引）：配置项 → 所在菜单键。真值是主菜单 MENU_ITEMS 的按键，
+# 本表只做「配置散在哪些键」的导流说明（零行为变化，不改任何配置）。新增配置入口时
+# 在此补一行；键位调整时由 test_handlers_config 的「入口地图键均存在于主菜单」用例兜底。
+_CONFIG_ENTRY_MAP: tuple[tuple[str, str, str], ...] = (
+    ("功能开关 / LLM 模块启停 / 实验项", "[S]", "四组功能开关 + 7 个 LLM 标准模块，行尾费用摘要与启用统计"),
+    ("报告章节取舍（顺序与开关）", "[P]", "基金深度分析 / 市场新闻 / 历史走势+回撤 / 组合演进 / 行动建议"),
+    ("对比指数池（自定义基准）", "[I]", "增删指数、恢复默认"),
+    ("持仓匿名化（代码/名称脱敏）", "[A]", "off / code_display / full_anonymous / summary 四档"),
+    ("配置文件与目录位置", "[D]", "持仓目录 / 持仓文件名 / 报告输出目录（子菜单 C/F/O）"),
+    ("重新加载配置", "[R]", "改完 config.json / llm_settings.json 手工项后刷新内存配置"),
+    ("缓存管理（统计与清理）", "[4]", "统计首屏 + 子菜单内 3 清理过期缓存"),
+    ("数据源健康历史 / 运行日志", "[H] / [V]", "近期数据源检查记录 / 结构化运行日志（可按级别筛选）"),
+    ("系统自检", "[T]", "环境/配置/目录/数据源一键体检（开关 doctor_check 关闭时该键不可见）"),
+)
+
+
+def _render_config_entry_map() -> None:
+    """渲染配置入口地图（只读索引，不写配置、不等待按键）。"""
+    print()
+    print("  ── 配置入口地图（哪个配置在哪个菜单）──")
+    width = max(display_width(label) for label, _key, _hint in _CONFIG_ENTRY_MAP)
+    for label, key, hint in _CONFIG_ENTRY_MAP:
+        print(f"   {pad_right(label, width)}  →  {pad_right(key, 9)} {hint}")
+    print("  （仅索引导流，不修改任何配置；config.json 手工键说明见手册 how-to-config）")
+
+
 def _cmd_config_dir_info() -> None:
-    """查看配置与目录信息子菜单 — 对应主菜单 [D] 及其二级选项 [C]/[F]/[O]/[B]。
+    """查看配置与目录信息子菜单 — 对应主菜单 [D] 及其二级选项 [C]/[F]/[O]/[M]/[B]。
 
     持仓目录 / 持仓文件名 / 报告输出目录三项聚合到 [D] 之下（主菜单不再单列）；
+    ``[M]`` 打印配置入口地图（各配置项 → 所在菜单键，只读索引）；
     子菜单循环直至 [B]（或空输入 / Ctrl+C）返回主菜单。
     子项在调用时从模块全局取函数（便于测试打桩与后续替换）。
     """
@@ -144,6 +181,7 @@ def _cmd_config_dir_info() -> None:
         ("C", "持仓信息目录", _cmd_config_dir),
         ("F", "持仓信息文件名", _cmd_config_filename),
         ("O", "报告输出目录", _cmd_config_output_dir),
+        ("M", "配置入口地图（各配置项所在菜单）", _render_config_entry_map),
     ]
     while True:
         print()
@@ -161,29 +199,142 @@ def _cmd_config_dir_info() -> None:
             return
         handler: Callable[[], None] | None = next((fn for _key, _label, fn in items if _key == choice), None)
         if handler is None:
-            print("  [!] 无效选择，请输入 C/F/O/B")
+            print("  [!] 无效选择，请输入 C/F/O/M/B")
             continue
         handler()
+
+
+# 持仓变动复盘双入口互指标注（只读行尾提示，行为零变化）：章本体（独立章节组
+# `holding_change_review`）与归因内容（LLM 区 `holding_change` 模块）为解耦的有意
+# 设计、默认态相反，面板相邻两行命名近似易误判——两侧行尾互相指出对方入口位置。
+_DUAL_ENTRY_CROSS_HINTS = {
+    "holding_change": "· 见独立组",
+    "holding_change_review": "· 见 LLM 区",
+}
+
+_EXPERIMENT_MARK_COLUMNS = 2
+"""行首实验项标记 ⚗ 的占位列宽（非实验项留同宽空白以对齐状态列）。"""
+
+_COST_HISTORY_DAYS = 7
+"""LLM 模块行尾历史费用摘要的回看窗口天数（数据源 perf 历史 llm.modules 费用）。"""
+
+
+def _match_switch_item(
+    token: str, items: list[tuple[int, str, str, bool, str]]
+) -> tuple[int, str, str, bool, str] | None:
+    """按编号（纯数字）或条目键名（LLM 模块/功能开关键）在面板条目中定位一项。
+
+    Args:
+        token: 用户输入的目标（编号或键名，允许首尾空白）。
+        items: 面板当前派发的条目 ``(编号, 键, 显示名, 当前状态, 类别)``。
+
+    Returns:
+        匹配的条目；无匹配返回 None（调用方给出行内提示）。
+    """
+    token = token.strip()
+    if token.isdigit():
+        return next((it for it in items if it[0] == int(token)), None)
+    return next((it for it in items if it[1] == token), None)
+
+
+def _show_switch_detail(choice: str, items: list[tuple[int, str, str, bool, str]]) -> None:
+    """``? 编号或键名`` 上屏面板单项说明与当前值/默认值（只读信息查询，不写配置）。
+
+    Args:
+        choice: 用户输入（``?`` 后跟编号或条目键名，如 ``? 3`` / ``? doctor_check``）。
+        items: 面板当前派发的条目 ``(编号, 键, 显示名, 当前状态, 类别)``。
+    """
+    from src.python.config import default_enabled_llm
+    from src.python.config.features import GROUP_LABELS, feature_switch_registry
+    from src.python.core.experiment_stats import load_experiment_usage
+
+    raw = choice.lstrip("?").strip()
+    matched: list[tuple[int, str, str, bool, str]] = []
+    if raw.isdigit():
+        matched = [it for it in items if it[0] == int(raw)]
+        if not matched:
+            print(f"  {YELLOW}[!]{RESET} 无效编号")
+            return
+    else:
+        matched = [it for it in items if it[1] == raw]
+        if not matched:
+            print(f"  {YELLOW}[!]{RESET} 请输入 ? 加编号或键名（如 ? 1 / ? doctor_check）")
+            return
+    _, key, name, curr, kind = matched[0]
+    if kind == "llm":
+        default = default_enabled_llm().get(key, True)
+        desc = "标准 LLM 分析章节（模块配置说明见 how-to-config 手册「LLM 分析章节」）"
+        group_label = "LLM 分析章节"
+        storage = f"llm_settings.json → enabled_llm.{key}"
+        life = ""
+    else:
+        d = feature_switch_registry[key]
+        default = d.default
+        desc = d.desc
+        group_label = GROUP_LABELS.get(d.group, d.group)
+        storage = f"features.json → {key}"
+        life = ""
+        if d.experimental:
+            entry = load_experiment_usage().get(key) or {}
+            life = " · 实验项"
+            if isinstance(entry.get("enabled_count"), int):
+                date = str(entry.get("last_enabled_date") or "")[5:]
+                life += f" · 启用 {entry['enabled_count']} 次" + (f" · 最近 {date}" if date else "")
+    # 详情按终端宽度折行：手机窄终端的说明段（`desc` 常含整句）与存储路径都能读全，
+    # 且任何一行都不越界（否则窄屏右侧被硬折成锯齿）
+    width = inner_width(terminal_columns()) - 2
+    print()
+    print(truncate_display(f"  ── {name}（{key}）", width))
+    for line in wrap_hanging(f"  说明  : {desc}", width, indent="          "):
+        print(line)
+    for line in wrap_hanging(f"  分组  : {group_label}{life}", width, indent="          "):
+        print(line)
+    for line in wrap_hanging(f"  存储  : {storage}", width, indent="          "):
+        print(line)
+    detail = f"  当前  : {'开启' if curr else '关闭'}   出厂默认: {'开启' if default else '关闭'}"
+    if curr != default:
+        detail += "（不一致，行尾标 *）"
+    for line in wrap_hanging(detail, width, indent="          "):
+        print(line)
 
 
 def _cmd_config_llm_modules() -> None:
     """配置各 LLM 报告的启用/停用，以及全部功能开关（llm_settings.json + features.json）。
 
     标准 LLM 模块通过 enabled_llm 控制，存储在 llm_settings.json。
-    功能开关（辩论模式增强、决策跨期反思闭环、量化指标、交互图表、系统自检、
-    数据源适配契约等）通过 Feature Flag 控制，存储在 features.json；四组分块的
+    功能开关（辩论模式增强、决策跨期反思闭环、量化指标、系统自检、
+    确定性信号等）通过 Feature Flag 控制，存储在 features.json；四组分块的
     分组标题、显示名与顺序均取自 ``features.GROUP_ORDER`` / ``GROUP_LABELS``，
     新增开关自动上屏，渠道层不另写清单。
     辩论白脸/黑脸/综合（debate_pro/con/synthesis）保留在注册表
     （缓存 TTL/前缀清理仍依赖），菜单层隐藏，不在此面板展示。
+
+    只读信息面（不引入配置写路径、不改编号派发）：``? 编号`` 查看该项说明与
+    当前值/默认值；行尾 ``*`` 标记与出厂默认值不一致项（配置漂移）；⚗ 实验项
+    行尾附 ``experiment_stats`` 启用统计（读取失败静默省略）。
+
+    写路径三通道（编号派发与 Web 面板派生不受影响）：
+      - 批量：``r 编号或键名`` 恢复该项所在分组出厂默认、``ra`` 恢复全部默认
+        （均走 ``features.clear_feature_overrides`` 批量原子写，恢复默认=删覆写键）、
+        ``x`` 实验项一键全关（experimental 集合回到无实验态，便于 bisect）；
+      - 键名：裸键名切换，与编号双通道（编号漂移免疫）；
+      - 赋值：``键名=on|off``，与 CLI ``--feature NAME=VALUE`` 同一解析器与词表
+        （含已合并旧键别名过渡）。
     """
+    from src.python.config import default_enabled_llm
     from src.python.config.features import (
         GROUP_LABELS,
         GROUP_ORDER,
+        clear_feature_overrides,
         experimental_flags,
+        feature_switch_registry,
         is_feature_enabled,
+        parse_switch_override,
+        parse_switch_value,
         switches_in_group,
     )
+    from src.python.core.experiment_stats import load_experiment_usage
+    from src.python.core.perf import module_cost_summary
     from src.python.core.registry import get_llm_module_names
 
     result = _read_llm_settings()
@@ -192,14 +343,14 @@ def _cmd_config_llm_modules() -> None:
     settings = result[0]
 
     enabled_map = settings.get("enabled_llm", {})
-    # 菜单层隐藏辩论三模块（注册表保留：缓存 TTL/前缀清理仍依赖）
-    # 实际辩论开关由下方实验性 Feature Flag（正反辩论等）控制
+    # 出厂默认（漂移比对基准）：enabled_llm 缺省值与运行时兜底一致取 True
+    default_enabled = default_enabled_llm()
+    # LLM 模块清单 = 模块注册表全集（辩论三段不在模块注册表内，其缓存登记在缓存域）；
+    # 辩论运行开关由下方功能开关（正反辩论 / 条件推理）控制
     module_names = filter_menu_llm_modules(get_llm_module_names())
 
     # 功能开关分块：(分组标题, [(flag_key, 显示名), ...])，顺序即注册表顺序
-    switch_blocks = [
-        (GROUP_LABELS[group], [(flag, d.label) for flag, d in switches_in_group(group)]) for group in GROUP_ORDER
-    ]
+    switch_blocks = [(group, list(switches_in_group(group))) for group in GROUP_ORDER]
     # 行首 ⚗ 标记仅给实验项（experimental 字段，与所属组无关；当前 2 项均落机制与诊断块内）
     experiment_keys = {flag for flag, _d in experimental_flags()}
 
@@ -209,48 +360,159 @@ def _cmd_config_llm_modules() -> None:
             display_width,
             [
                 *module_names.values(),
-                *(label for _title, block in switch_blocks for _flag, label in block),
+                *(d.label for _title, block in switch_blocks for _flag, d in block),
             ],
         )
     )
+    # 键名列宽：面板内显式展示每一项的键名（`? 编号`/`键名`/`键名=on|off` 都以此为输入，
+    # 不让用户猜）。标准模块与功能开关**各自取块内最长键名**分行对齐——开关键名明显更长
+    # （如 `rebalance_schedule_replay`），统一取全局最长会把整个面板宽度撑大。
+    key_column_llm = max(map(display_width, module_names)) if module_names else 0
+    key_column_sw = max((display_width(flag) for _title, block in switch_blocks for flag, _d in block), default=0)
 
+    def _emit(message: str) -> None:
+        """按当前内宽输出一行提示（窄屏上 `[!]`/`[OK]` 长句也不越界折行）。"""
+        for line in wrap_hanging(message, inner_width(terminal_columns())):
+            print(line)
+
+    repaint = True  # 首次进入与输入 p 时重绘；窄终端操作后不重绘（见下方反馈行）
+    reveal_keys = False  # 窄屏键名可见性：默认关（编号更好按），`k` 切换
     while True:
         rows: list[str | None] = []
         items: list[tuple[int, str, str, bool, str]] = []
+        # 实验项启用统计每轮渲染时读取（开关写入后即刷新；读取失败由
+        # load_experiment_usage 容错返回空 dict，行尾统计静默省略）
+        exp_stats = load_experiment_usage()
+        # 近 N 日模块费用摘要：与事前费用预估/日预算同源（perf 历史 llm.modules），
+        # 读取失败静默省略（不打断面板）
+        try:
+            cost_history = module_cost_summary(_COST_HISTORY_DAYS)
+        except Exception:
+            logger.debug("[S] 模块费用摘要读取失败，静默省略", exc_info=True)
+            cost_history = {}
 
-        # ① 标准 LLM 模块（1-5）
+        # 终端宽度每轮读取：手机 SSH（窄）与笔记本（宽）同一份代码自适应
+        columns = terminal_columns()
+        narrow = layout_tier(columns) == "narrow"
+
+        # ① 标准 LLM 模块（1-7）——行尾 * 标记与出厂默认不一致项
         for i, (sfx, name) in enumerate(module_names.items(), 1):
             status = enabled_map.get(sfx, True)
-            status_str = f"{GREEN}开启{RESET}" if status else f"{RED}关闭{RESET}"
+            star = "" if status == default_enabled.get(sfx, True) else "*"
             items.append((i, sfx, name, status, "llm"))
-            rows.append(f"{i}. {pad_right(name, name_column)} [{status_str}]")
+            cross_hint = _DUAL_ENTRY_CROSS_HINTS.get(sfx, "")
+            cost_info = cost_history.get(sfx) or {}
+            runs = cost_info.get("runs")
+            notes = f" {cross_hint}" if cross_hint else ""
+            if isinstance(runs, int) and runs > 0:
+                notes += (
+                    f" · {runs}次 ¥{float(cost_info.get('total') or 0.0):.4f}"
+                    f" 均¥{float(cost_info.get('avg') or 0.0):.4f}"
+                )
+            rows.extend(
+                format_item(
+                    number=i,
+                    label=name,
+                    key=sfx,
+                    enabled=status,
+                    star=star,
+                    marker="",
+                    notes=notes,
+                    columns=columns,
+                    name_column=name_column,
+                    key_column=key_column_llm,
+                    number_width=len(str(len(module_names) + len(feature_switch_registry))),
+                    reveal_key=reveal_keys,
+                )
+            )
 
         # ② 功能开关：编号紧随标准模块之后，四组按 GROUP_ORDER 逐块顺序派发
         # 编号由组序与块内注册表顺序派生、非硬编码：转正 = 摘除 experimental 身份
         # （行首 ⚗ 消失），作用域不变则原地留块，位置只随注册表声明顺序
         next_serial = len(module_names) + 1
-        for title, block in switch_blocks:
-            rows.append(None)
-            rows.append(title)
-            for j, (flag, label) in enumerate(block, next_serial):
+        boxed = use_panel_box(columns)
+        for group, block in switch_blocks:
+            rows.append(None if boxed else "")
+            rows.append(
+                format_heading(
+                    GROUP_LABELS[group].split("（", 1)[0],
+                    sum(1 for flag, _d in block if is_feature_enabled(flag)),
+                    len(block),
+                    columns,
+                )
+            )
+            for j, (flag, d) in enumerate(block, next_serial):
                 status = is_feature_enabled(flag)
-                status_str = f"{GREEN}开启{RESET}" if status else f"{RED}关闭{RESET}"
-                marker = "⚗" if flag in experiment_keys else ""
-                items.append((j, flag, label, status, "feature"))
-                rows.append(f"{j}. {marker}{pad_right(label, name_column)} [{status_str}]")
+                # 行首 ⚗ 占位列：实验项标 ⚗、其余留同宽空白——标记宽度按显示列计，
+                # 保证同块内各行的状态列严格对齐（⚗ 为歧义宽度字符，不能按 1 列假设）
+                marker = pad_right("⚗" if flag in experiment_keys else "", _EXPERIMENT_MARK_COLUMNS)
+                star = "" if status == d.default else "*"
+                notes = ""
+                if flag in experiment_keys:
+                    entry = exp_stats.get(flag) or {}
+                    if isinstance(entry.get("enabled_count"), int):
+                        date = str(entry.get("last_enabled_date") or "")[5:]
+                        notes += f"（启用 {entry['enabled_count']} 次" + (f" · 最近 {date}" if date else "") + "）"
+                items.append((j, flag, d.label, status, "feature"))
+                cross_hint = _DUAL_ENTRY_CROSS_HINTS.get(flag, "")
+                if cross_hint:
+                    notes += f" {cross_hint}"
+                rows.extend(
+                    format_item(
+                        number=j,
+                        label=d.label,
+                        key=flag,
+                        enabled=status,
+                        star=star,
+                        marker=marker,
+                        notes=notes,
+                        columns=columns,
+                        name_column=name_column,
+                        key_column=key_column_sw,
+                        number_width=len(str(len(module_names) + len(feature_switch_registry))),
+                        reveal_key=reveal_keys,
+                    )
+                )
             next_serial += len(block)
 
+        rows.append("")
         rows.append("0. 返回主菜单")
         print()
-        print("\n".join(render_panel("配置 LLM 报告章节与功能开关", rows)))
-        for _group in GROUP_ORDER:
-            print(f"  {GROUP_LABELS[_group]}")
-        print("  ⚗ 标记为实验项：默认关闭、处于实验阶段输出质量可能不稳定（各开关说明见 how-to-config 手册）")
-        print("  基础报告章节组（基金深度分析/市场新闻/历史走势+回撤/组合演进/行动建议）在菜单 [P] 配置")
-        print()
+        panel_rows = [
+            *rows,
+            None if boxed else "",
+            *legend_lines(_COST_HISTORY_DAYS, columns, reveal_key=reveal_keys),
+        ]
+        if not repaint:
+            # 窄终端（手机）：一次操作只回一行反馈，不整屏重绘——纵向空间是这里最稀缺
+            # 的资源，34 项面板重绘一次就要滚过一屏多。输入 p 可随时重绘。
+            print("  （状态已更新 · 输入 p 重绘面板）")
+            print()
+        elif boxed:
+            print("\n".join(render_panel("配置 LLM 报告章节与功能开关", panel_rows)))
+        else:
+            # 窄终端（手机）：不画盒线——把边框列宽让给内容，也不让右边框在换行时错位。
+            # 标题按可用宽度截断：连标题都不能越界，否则窄屏照样折行。
+            header = truncate_display(f"功能开关（{len(items)} 项）", inner_width(columns) - 5)
+            print(f"  ── {header} ──")
+            print("\n".join(f"  {row}" if row else "" for row in panel_rows))
+        if repaint:
+            for _line in wrap_hanging(
+                "  基础报告章节组（基金深度分析/市场新闻/历史走势+回撤/组合演进/行动建议）在菜单 [P] 配置",
+                inner_width(columns),
+            ):
+                print(_line)
+            print()
+        # 本轮已渲染 → 窄终端下一轮只回反馈行（省纵向空间）；宽/中档照常整屏重绘
+        repaint = not narrow
         try:
             total = len(items)
-            choice = input(f"  输入编号切换 (0-{total}): ").strip()
+            prompt = (
+                f"  输入编号或键名切换 (0-{total})，? 编号或键名查看说明: "
+                if layout_tier(columns) != "narrow"
+                else f"  输入编号或键名 (0-{total})，? 编号 看说明: "
+            )
+            choice = input(prompt).strip()
         except (EOFError, KeyboardInterrupt):
             print()
             break
@@ -258,23 +520,97 @@ def _cmd_config_llm_modules() -> None:
         if choice == "0":
             break
 
-        try:
-            idx = int(choice)
-            matched = [it for it in items if it[0] == idx]
-            if matched:
-                _, key, name, curr, kind = matched[0]
-                new_val = not curr
-                payload_key = f"enabled_llm.{key}" if kind == "llm" else key
-                if _apply_edit({"key": payload_key, "value": new_val}):
-                    if kind == "llm":
-                        enabled_map[key] = new_val
-                    print(f"  {GREEN}[OK]{RESET} {name} 已{'开启' if new_val else '关闭'}")
-                    # 刷新配置缓存
-                    refresh_config()
+        if choice.startswith("?"):
+            _show_switch_detail(choice, items)
+            repaint = narrow  # 窄终端查完说明只看反馈行，不整屏重绘
+            continue
+
+        if choice.lower() == "p":
+            repaint = True
+            continue
+
+        if choice.lower() == "k":
+            if narrow:
+                reveal_keys = not reveal_keys
+                repaint = True  # 版面行数变化，需要重绘才能生效
             else:
-                print(f"  {YELLOW}[!]{RESET} 无效编号")
-        except (ValueError, TypeError):
-            print(f"  {YELLOW}[!]{RESET} 请输入有效编号")
+                _emit("  [!] 当前终端宽度已直接显示键名列，无需 k 切换")
+            continue
+
+        # ── 写路径三通道：批量命令 / 赋值（CLI 同词表）/ 编号或键名直取 ──
+        raw = choice.strip()
+        lowered = raw.lower()
+        if lowered == "ra":
+            removed = clear_feature_overrides(None)
+            _emit(f"  {GREEN}[OK]{RESET} 已恢复功能开关全部默认（移除 {removed} 项覆写）")
+            continue
+        if lowered == "x":
+            exp_keys = sorted(flag for flag, _d in experimental_flags())
+            clear_feature_overrides(exp_keys)
+            _emit(f"  {GREEN}[OK]{RESET} 实验项已全部关闭（回到无实验态）：{'、'.join(exp_keys)}")
+            continue
+        head, space, rest = raw.partition(" ")
+        if head.lower() == "r" and space and rest.strip():
+            target = _match_switch_item(rest, items)
+            if target is None:
+                _emit(f"  {YELLOW}[!]{RESET} 未识别目标「{rest.strip()}」（输入编号或键名）")
+            elif target[4] != "feature":
+                _emit(f"  {YELLOW}[!]{RESET} 恢复默认仅支持功能开关分组（LLM 模块可逐项切换）")
+            else:
+                group = feature_switch_registry[target[1]].group
+                group_flags = [flag for flag, _d in switches_in_group(group)]
+                removed = clear_feature_overrides(group_flags)
+                _emit(f"  {GREEN}[OK]{RESET} 已恢复「{GROUP_LABELS[group]}」默认（移除 {removed} 项覆写）")
+            continue
+
+        assign_name, eq, assign_val = raw.partition("=")
+        assign_name = assign_name.strip()
+        target = None
+        new_val = False
+        if eq:
+            # 赋值通道：功能开关走 CLI 同一解析器（词表/旧键别名过渡一致）；
+            # LLM 模块不在 feature 注册表，用与 CLI 相同的 on/off 词表本地校验
+            feature_item = next((it for it in items if it[1] == assign_name and it[4] == "feature"), None)
+            llm_item = next((it for it in items if it[1] == assign_name and it[4] == "llm"), None)
+            if feature_item is not None:
+                try:
+                    _parsed_flag, new_val = parse_switch_override(raw)
+                except ValueError as e:
+                    _emit(f"  {YELLOW}[!]{RESET} {e}")
+                    continue
+                target = feature_item
+            elif llm_item is not None:
+                new_val = parse_switch_value(assign_val)
+                if new_val is None:
+                    _emit(f"  {YELLOW}[!]{RESET} 取值不可识别；可选: on / off")
+                    continue
+                target = llm_item
+            else:
+                try:
+                    parse_switch_override(raw)
+                except ValueError as e:
+                    _emit(f"  {YELLOW}[!]{RESET} {e}")
+                else:
+                    _emit(f"  {YELLOW}[!]{RESET} 未知条目「{assign_name}」")
+                continue
+        else:
+            target = _match_switch_item(raw, items)
+            if target is None:
+                if raw.isdigit():
+                    _emit(f"  {YELLOW}[!]{RESET} 无效编号")
+                else:
+                    _emit(f"  {YELLOW}[!]{RESET} 未知编号或键名「{raw}」（可输入编号、键名 或 键名=on|off）")
+                continue
+            new_val = not target[3]
+
+        _, key, name, _curr, kind = target
+        payload_key = f"enabled_llm.{key}" if kind == "llm" else key
+        if _apply_edit({"key": payload_key, "value": new_val}):
+            if kind == "llm":
+                enabled_map[key] = new_val
+            _emit(f"  {GREEN}[OK]{RESET} {name} 已{'开启' if new_val else '关闭'}")
+            # 刷新配置缓存
+            refresh_config()
 
     press_any_key()
 

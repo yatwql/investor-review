@@ -160,6 +160,11 @@ def main() -> int:
         # 启动时清理全部残留上传文件（§6.1：残留由启动清理兜底）
         cleanup_all()
 
+        # 内置定时生成调度（缺省关闭；线程每间隔重读配置，面板改配置即生效）
+        from src.python.web.scheduler import SchedulerService
+
+        SchedulerService(run_manager).start()
+
         if args.host in ("0.0.0.0", "::"):
             logger.warning("Web 服务监听 %s —— 局域网可访问，请仅限可信网络（无内建认证）", args.host)
         logger.info("Web 服务已启动: http://127.0.0.1:%d （Ctrl+C 退出）", args.port)

@@ -1,6 +1,7 @@
-"""行情域适配契约等价性回归测试 —— 试点验收标准。
+"""行情域适配契约等价性回归测试 —— 试点验收标准（适配契约已内置，不可关闭；
+本文件同时锁定「适配器不可用时回退既有转换函数」这条安全网）。
 
-适配器路径必须与既有手写转换函数**等价**，否则实验开关一开就会静默改变
+适配器路径必须与既有手写转换函数**等价**，否则回退/换源会静默改变
 报告数值。逐源锁定的等价性：
 
 - 腾讯/新浪：与既有转换函数输出**逐键逐值相等**；
@@ -17,7 +18,6 @@ from unittest.mock import patch
 
 import pytest
 
-from src.python.config.features import set_feature_enabled
 from src.python.fetcher import price as price_module
 from src.python.fetcher.quote_adapters import (
     EastMoneyQuoteAdapter,
@@ -132,18 +132,17 @@ class TestTransformParity(unittest.TestCase):
 
 
 class TestChainSlotSelection(unittest.TestCase):
-    """开关决定链路取哪套映射（结构断言，不依赖数值）。"""
+    """链路映射取哪套（结构断言，不依赖数值）：内置取适配器，适配器不可用时回退。"""
 
-    def test_flag_off_uses_legacy_mappings_verbatim(self):
-        """开关关闭时返回既有映射对象本身（行为逐字节不变的结构保证）。"""
-        set_feature_enabled("datasource_adapter", False)
-        providers, transforms = price_module._price_chain_slots()
+    def test_adapter_unavailable_falls_back_legacy_verbatim(self):
+        """适配器不可用（导入失败等）时返回既有映射对象本身（回退路径逐字节不变）。"""
+        with patch("src.python.fetcher.source_adapter.adapter_chain_slots", return_value=({}, {})):
+            providers, transforms = price_module._price_chain_slots()
         self.assertIs(providers, price_module._PRICE_PROVIDERS)
         self.assertIs(transforms, price_module._PRICE_TRANSFORMS)
 
-    def test_flag_on_uses_adapters(self):
-        """开关开启时改用适配器映射（源集合含场外净值备源）。"""
-        set_feature_enabled("datasource_adapter", True)
+    def test_builtin_uses_adapters(self):
+        """内置后改用适配器映射（源集合含场外净值备源）。"""
         providers, transforms = price_module._price_chain_slots()
         expected = {"tencent", "sina", "eastmoney", "sina_fund", "hithink"}
         self.assertEqual(set(providers), expected)
@@ -153,7 +152,7 @@ class TestChainSlotSelection(unittest.TestCase):
 
 
 class TestEndToEndParity(unittest.TestCase):
-    """端到端：开关开/关下 fetch 结果一致（走完整链路 + 缓存 + 校验）。"""
+    """端到端：回退态（适配器不可用）与适配器态 fetch 结果一致（完整链路 + 缓存 + 校验）。"""
 
     def _run(self, code: str, data_type: str, cache_key: str) -> dict:
         from src.python.cache import clear as cache_clear
@@ -171,9 +170,9 @@ class TestEndToEndParity(unittest.TestCase):
             patch.dict(price_module._PRICE_PROVIDERS, {"tencent": ("腾讯财经", _fake_fetch)}, clear=True),
             patch.object(tencent, "fetch_price", _fake_fetch),
         ):
-            set_feature_enabled("datasource_adapter", False)
-            legacy = self._run("600519", "price", "price_600519")
-            set_feature_enabled("datasource_adapter", True)
+            # 回退态（适配器不可用→既有映射）vs 适配器态，逐键等价
+            with patch("src.python.fetcher.source_adapter.adapter_chain_slots", return_value=({}, {})):
+                legacy = self._run("600519", "price", "price_600519")
             adapted = self._run("600519", "price", "price_600519")
 
         self.assertEqual(legacy, adapted)
@@ -190,9 +189,8 @@ class TestEndToEndParity(unittest.TestCase):
             patch.dict(price_module._PRICE_PROVIDERS, {"eastmoney": ("东方财富", _fake_nav)}, clear=True),
             patch.object(eastmoney, "fetch_nav", _fake_nav),
         ):
-            set_feature_enabled("datasource_adapter", False)
-            legacy = self._run("110022", "price", "price_110022")
-            set_feature_enabled("datasource_adapter", True)
+            with patch("src.python.fetcher.source_adapter.adapter_chain_slots", return_value=({}, {})):
+                legacy = self._run("110022", "price", "price_110022")
             adapted = self._run("110022", "price", "price_110022")
 
         self.assertEqual(

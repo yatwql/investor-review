@@ -121,7 +121,7 @@ class TestFundamentalSnapshotPlaceholderGuidance(unittest.TestCase):
         )
         assert "持仓个股财报摘要暂不可用" in html
         assert "全部标的未取到财报" in html
-        assert "financial_report_digest" in html
+        assert "stock_fundamentals" in html
         assert "report_submodules." not in html
 
     def test_indicator_placeholder_shows_reason_and_current_switch(self):
@@ -136,7 +136,7 @@ class TestFundamentalSnapshotPlaceholderGuidance(unittest.TestCase):
         )
         assert "财务指标暂不可用" in html
         assert "暂无可用财务指标数据" in html
-        assert "financial_indicator" in html
+        assert "stock_fundamentals" in html
         assert "report_submodules." not in html
 
     def test_no_legacy_report_submodules_path_anywhere_in_templates(self):
@@ -147,3 +147,82 @@ class TestFundamentalSnapshotPlaceholderGuidance(unittest.TestCase):
             if "report_submodules." in p.read_text(encoding="utf-8")
         ]
         assert offenders == []
+
+
+class TestHtmlPrintButton(unittest.TestCase):
+    """HTML 打印/导出 PDF 浮动按钮 — 存在性/可访问性/触控尺寸/打印自隐藏。"""
+
+    def setUp(self):
+        tmpl_path = os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "..",
+            "..",
+            "static",
+            "tmpl",
+            "report_template.html",
+        )
+        with open(os.path.normpath(tmpl_path), encoding="utf-8") as f:
+            self.html = f.read()
+
+    def test_print_button_present_with_print_action(self):
+        """浮动打印按钮存在且点击唤起 window.print()。"""
+        self.assertIn('class="report-print-btn"', self.html)
+        self.assertIn('id="report-print-btn"', self.html)
+        self.assertIn('onclick="window.print()"', self.html)
+
+    def test_print_button_accessible(self):
+        """按钮含 aria-label 与 title（可发现性护栏）。"""
+        m = re.search(r'<button[^>]*class="report-print-btn"[^>]*>', self.html)
+        self.assertIsNotNone(m, "应存在 report-print-btn 按钮元素")
+        tag = m.group(0)
+        self.assertIn('aria-label="打印或导出 PDF"', tag)
+        self.assertIn("title=", tag)
+
+    def test_print_button_touch_target_and_tokens(self):
+        """44×44 触控目标 + 固定右上浮动，配色取语义 token 并有 hover 反馈。"""
+        m = re.search(r"\.report-print-btn\s*\{[^}]*\}", self.html)
+        self.assertIsNotNone(m, "应存在 .report-print-btn 样式规则")
+        css = m.group(0)
+        self.assertIn("position: fixed", css)
+        self.assertIn("width: 44px", css)
+        self.assertIn("height: 44px", css)
+        self.assertIn("var(--primary)", css)
+        hover = re.search(r"\.report-print-btn:hover\s*\{[^}]*\}", self.html)
+        self.assertIsNotNone(hover, "按钮须有 hover 反馈（设计契约护栏）")
+        self.assertIn("var(--primary-hover)", hover.group(0))
+
+    def test_print_button_hidden_in_print(self):
+        """打印稿自隐藏（浮动控件不入 PDF/纸稿）。"""
+        m = re.search(
+            r"@media print\s*\{\s*\.report-print-btn\s*\{\s*display:\s*none\s*!important\s*;\s*\}",
+            self.html,
+        )
+        self.assertIsNotNone(m, "@media print 应含 .report-print-btn 自隐藏规则")
+
+
+class TestTooltipXssHygiene(unittest.TestCase):
+    """图表 tooltip XSS 纪律：DOM API 构建，全文无 HTML 注入 sink。"""
+
+    def setUp(self):
+        tmpl_path = os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "..",
+            "..",
+            "static",
+            "tmpl",
+            "report_template.html",
+        )
+        with open(os.path.normpath(tmpl_path), encoding="utf-8") as f:
+            self.html = f.read()
+
+    def test_no_html_injection_sinks_anywhere(self):
+        """模板内联 JS 禁 innerHTML / insertAdjacentHTML / document.write / eval。"""
+        for sink in ("innerHTML", "insertAdjacentHTML", "document.write", "eval("):
+            self.assertNotIn(sink, self.html, f"模板出现 HTML 注入 sink: {sink}")
+
+    def test_legacy_canvas_renderer_removed(self):
+        """Canvas 回退渲染器（drawSimpleChart 与旧 Flag 门）已整体移除，Chart.js 为唯一渲染器。"""
+        self.assertNotIn("drawSimpleChart", self.html)
+        self.assertNotIn("enable_interactive", self.html)

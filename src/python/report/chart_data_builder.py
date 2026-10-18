@@ -28,6 +28,8 @@ DATASET_KEYS = (
     "category_doughnut",
     "industry_bar",
     "penetration_bar",
+    "excess_rolling",
+    "corr_rolling",
     "radar",
 )
 
@@ -462,3 +464,71 @@ def _extract_rate(win_rate: Any) -> float | None:
 def _is_valid_metric(value: Any) -> bool:
     """指标值是否有效（float/int 且非 None）。"""
     return isinstance(value, (int, float)) and value is not None
+
+
+def _build_excess_rolling_dataset(risk_adjusted_excess_data: dict | None) -> dict:
+    """excess_rolling 数据集：风险调整超额章「滚动超额」单线曲线（rolling.points）。"""
+    rolling = (risk_adjusted_excess_data or {}).get("rolling") or {}
+    if not rolling.get("available"):
+        return {}
+    points = rolling.get("points") or []
+    if len(points) < 2:
+        return {}
+    return {
+        "labels": [pt["date"] for pt in points],
+        "datasets": [
+            {
+                "label": "滚动超额(%)",
+                "data": [pt.get("excess_pct") for pt in points],
+                "borderColor": "#2E75B6",
+                "backgroundColor": "rgba(46,117,182,0.1)",
+            }
+        ],
+    }
+
+
+def _build_corr_rolling_dataset(position_relationship_data: dict | None) -> dict:
+    """corr_rolling 数据集：持仓重合度滚动相关（60/120 日端点窗，重点品对虚线）。
+
+    对齐语义：各序列按日期映射到公共端点轴；入选条件为序列起点落在公共端点轴
+    上（晚起点品对合法）；缺位序列整体跳过，不占位不传 None；公共起点取所有
+    入选序列均覆盖的首个下标，起点后不足 2 点整图不产出。
+    """
+    rolling = (position_relationship_data or {}).get("rolling") or {}
+    p60_120 = rolling.get("portfolio") or {}
+    base = p60_120.get("60") or p60_120.get("120") or []
+    if len(base) < 2:
+        return {}
+    base_dates = [pt["date"] for pt in base]
+    base_set = set(base_dates)
+    cands: list[tuple[str, list, str, list]] = [
+        ("组合平均 60日", p60_120.get("60") or [], "#2E75B6", []),
+        ("组合平均 120日", p60_120.get("120") or [], "#2E75B6", [6, 4]),
+    ]
+    pair_colors = ["#CC0000", "#E68A00", "#2E7D32"]
+    for fi, pair in enumerate(rolling.get("focus_pairs") or []):
+        f60 = (pair.get("series") or {}).get("60") or []
+        name = f"{pair.get('name_a', '?')}×{pair.get('name_b', '?')}"
+        cands.append((name, f60, pair_colors[fi % len(pair_colors)], [5, 3]))
+    mapped: list[tuple[str, dict, str, list]] = []
+    for label, pts, color, dash in cands:
+        if not pts or pts[0].get("date") not in base_set:
+            continue
+        mapped.append((label, {pt["date"]: pt["value"] for pt in pts}, color, dash))
+    if not mapped:
+        return {}
+    start = -1
+    for i, d in enumerate(base_dates):
+        if all(d in m for _l, m, _c, _d in mapped):
+            start = i
+            break
+    if start < 0 or len(base_dates) - start < 2:
+        return {}
+    labels = base_dates[start:]
+    return {
+        "labels": labels,
+        "datasets": [
+            {"label": label, "data": [m[d] for d in labels], "borderColor": color, "borderDash": dash or None}
+            for label, m, color, dash in mapped
+        ],
+    }

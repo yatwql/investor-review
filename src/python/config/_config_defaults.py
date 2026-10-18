@@ -117,6 +117,14 @@ _DEFAULT_CONFIG = {
         "excess_threshold_up": 80,  # 超额收益 ≥ 此值 → 评级上调一级
         "excess_threshold_down": 40,  # 超额收益 < 此值 → 评级下调一级
     },
+    # ── O. 内置定时生成（Web 调度面板；缺省关闭）──
+    # 时刻为本机时区 HH:MM；weekdays 0=周一 … 6=周日；report_type: basic/both/full
+    "scheduler": {
+        "enabled": False,
+        "time": "07:30",
+        "weekdays": [0, 1, 2, 3, 4, 5, 6],
+        "report_type": "basic",
+    },
     # ── M. 景气度框架诊断（实验性功能 `prosperity_framework`）──
     # 六维评分卡的关键词与目标值：方法骨架借鉴开源项目 zhengxi-views（MIT）；
     # 详见 docs/plan/prosperity-framework-design.md
@@ -399,6 +407,15 @@ def _build_template_from_defaults() -> str:
         f'    "email": {json.dumps(d["notify"]["email"], ensure_ascii=False, indent=2).replace(chr(10), chr(10) + "    ")},  // SMTP 邮件通道（smtp_host 或 to 为空=不启用）',
         f'    "desktop": {json.dumps(d["notify"]["desktop"])},  // 桌面通知（notify-send，Linux）',
         f'    "timeout_seconds": {d["notify"]["timeout_seconds"]}  // 通道超时（秒）',
+        "  },",
+        "",
+        # ── O ──
+        "  // ── O. 内置定时生成（Web 调度面板；缺省关闭）──",
+        '  "scheduler": {',
+        f'    "enabled": {json.dumps(d["scheduler"]["enabled"])},  // 启用内置定时生成（与手动生成同队列串行）',
+        f'    "time": {json.dumps(d["scheduler"]["time"])},  // 触发时刻 HH:MM（本机时区）',
+        f'    "weekdays": {json.dumps(d["scheduler"]["weekdays"])},  // 执行日 0=周一 … 6=周日',
+        f'    "report_type": {json.dumps(d["scheduler"]["report_type"])}  // 报告格式 basic/both/full',
         "  }",
         "}",
     ]

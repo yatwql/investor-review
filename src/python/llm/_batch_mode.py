@@ -69,7 +69,7 @@ def _execute_and_merge_batch(
     item_cache_keys: dict[int, str],
     per_item_cache_fn: Any,
     total_batches: int,
-) -> tuple[int, int]:
+) -> tuple[int, int, int]:
     """执行单批 LLM 调用、解析结果并写入缓存。
 
     Returns:
@@ -87,6 +87,7 @@ def _execute_and_merge_batch(
     batch_client = make_http_client(timeout=LLM_TIMEOUT)
     total_in = 0
     total_out = 0
+    total_hit = 0
     try:
         batch_items = [items[i] for i in batch_indices]
         user_prompt = batch_prompt_fn(batch_items, context_fp)
@@ -124,14 +125,18 @@ def _execute_and_merge_batch(
                 if per_item_cache_fn and item_cache_keys.get(global_idx):
                     cache_set(item_cache_keys[global_idx], parsed)
             if usage:
-                total_in += usage.get("input_tokens", usage.get("prompt_tokens", 0))
-                total_out += usage.get("output_tokens", usage.get("completion_tokens", 0))
+                from src.python.llm.session import _normalize_usage_tokens
+
+                _inp, _out, _hit = _normalize_usage_tokens("claude" if "input_tokens" in usage else "openai", usage)
+                total_in += _inp
+                total_out += _out
+                total_hit += _hit
             logger.info("%s [%d/%d] 批完成", _MN(module_key), batch_id + 1, total_batches)
         else:
             logger.warning("%s（批 %d/%d）: 分析失败", _MN(module_key), batch_id + 1, total_batches)
     finally:
         batch_client.close()
-    return total_in, total_out
+    return total_in, total_out, total_hit
 
 
 def run_batch_mode(
@@ -173,6 +178,7 @@ def run_batch_mode(
 
     total_in = 0
     total_out = 0
+    total_hit = 0
 
     if uncached_indices and batch_prompt_fn and response_parser:
         batches = [
@@ -206,10 +212,16 @@ def run_batch_mode(
             }
             for future in as_completed(_fut_map):
                 try:
-                    inp, out = future.result()
+                    inp, out, hit = future.result()
                     total_in += inp
                     total_out += out
+                    total_hit += hit
                 except Exception as e:  # noqa: PERF203
                     logger.warning("批处理异常: %s", e)
 
-    return (results_map, all_cached, {"input": total_in, "output": total_out, "model": _model}, cached_count)
+    return (
+        results_map,
+        all_cached,
+        {"input": total_in, "output": total_out, "cache_hit": total_hit, "model": _model},
+        cached_count,
+    )

@@ -221,9 +221,9 @@ class TestArgparseFeatureOverrides:
     def test_feature_repeatable(self):
         """可重复指定，逐项独立解析并保留顺序。"""
         args = _build_parser().parse_args(
-            ["--feature", "metrics_enabled=off", "--feature", "enable_interactive_charts=off", "report"]
+            ["--feature", "metrics_enabled=off", "--feature", "data_quality=off", "report"]
         )
-        assert args.feature == [("metrics_enabled", False), ("enable_interactive_charts", False)]
+        assert args.feature == [("metrics_enabled", False), ("data_quality", False)]
 
     def test_feature_unknown_name_rejected(self):
         """未知开关名 → SystemExit(2)（解析期报错，不留到运行时静默失效）。"""
@@ -1057,7 +1057,7 @@ class TestMainEarlyExitExperiments:
         # 常规开关（默认开、非实验项）不受 --experiment 取值域影响，保持默认
         from src.python.config.features import is_feature_enabled
 
-        assert is_feature_enabled("datasource_adapter") is True
+        assert is_feature_enabled("deterministic_signal") is True
 
 
 # ═══════════════════════════════════════════════════════════════

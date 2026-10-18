@@ -12,6 +12,7 @@ ANSI 颜色序列不占显示列：`GREEN`/`RESET` 等常量在非 TTY 下为空
 
 from __future__ import annotations
 
+import os
 import re
 import unicodedata
 from collections.abc import Iterable
@@ -41,9 +42,78 @@ def display_width(text: str) -> int:
     return width
 
 
+def terminal_columns(default: int = 100) -> int:
+    """当前终端列数（实时尺寸优先，其次 `COLUMNS` 环境变量，最后兜底值）。
+
+    优先级取实时值——终端 resize（手机横竖屏、分屏）后 ioctl 立即反映新宽度；
+    `COLUMNS` 只是会话建立时的快照，常已过期。不取两者最大值，否则窄终端会被
+    误判成宽屏（内容被终端硬折成锯齿）。下限 40 列，避免异常值压成不可读。
+
+    Args:
+        default: 探测不到时的兜底列数。
+
+    Returns:
+        终端列数（≥ 40）。
+    """
+    for fd in (1, 2):
+        try:
+            return max(40, os.get_terminal_size(fd).columns)
+        except OSError:
+            continue
+    env = os.environ.get("COLUMNS")
+    if env and env.isdigit() and int(env) > 0:
+        return max(40, int(env))
+    return max(40, default)
+
+
 def pad_right(text: str, columns: int) -> str:
     """右补空格至指定显示列数，用于对齐表格列；已超宽则原样返回（不截断）。"""
     return text + " " * max(0, columns - display_width(text))
+
+
+def wrap_display(text: str, columns: int) -> list[str]:
+    """按显示列宽折行（中文按 2 列计），返回行列表。
+
+    用于面板页脚图例：图例文本长度随文案演进变化，手写多行容易越界或被终端硬折
+    得参差不齐。折行在**空白处**优先断行（保持词/短语完整），超长无空白串才按列
+    硬切；已含换行的文本逐段处理。
+
+    Args:
+        text: 待折行文本（可含 ANSI 序列，宽度计算已剔除）。
+        columns: 每行最大显示列数（≤0 时原样返回单行）。
+
+    Returns:
+        折行后的行列表（无内容时返回空列表）。
+    """
+    if columns <= 0:
+        return [text]
+    lines: list[str] = []
+    for paragraph in text.split("\n"):
+        current = ""
+        for token in re.split(r"(\s+)", paragraph):
+            if not token:
+                continue
+            candidate = current + token
+            if display_width(candidate) <= columns or not current.strip():
+                # 单个 token 本身就超宽时按列硬切，避免整行越界
+                while display_width(candidate) > columns and display_width(token) > columns:
+                    cut = ""
+                    for char in token:
+                        if display_width(cut + char) > columns:
+                            break
+                        cut += char
+                    if current.strip():
+                        lines.append(current.rstrip())
+                        current = ""
+                    lines.append(cut)
+                    token = token[len(cut) :]
+                    candidate = current + token
+                current = candidate
+                continue
+            lines.append(current.rstrip())
+            current = token.lstrip()
+        lines.append(current.rstrip())
+    return [line for line in lines if line.strip() or line == ""]
 
 
 def render_panel(title: str, rows: Iterable[str | None] = (), *, min_field: int = MIN_FIELD_WIDTH) -> list[str]:
@@ -68,3 +138,93 @@ def render_panel(title: str, rows: Iterable[str | None] = (), *, min_field: int 
             lines.append(f"  │ {row}{' ' * (field - display_width(row))}│")
     lines.append(f"  └{'─' * (field + 1)}┘")
     return lines
+
+
+def truncate_display(text: str, columns: int, ellipsis: str = "…") -> str:
+    """按显示列宽截断文本（超宽时以省略号收尾），用于窄终端的单行压缩。
+
+    Args:
+        text: 原文（可含 ANSI 序列）。
+        columns: 允许的最大显示列数（≤0 时返回空串）。
+        ellipsis: 省略号（自身宽度计入列宽预算）。
+
+    Returns:
+        截断后的文本；未超宽时原样返回。
+    """
+    if columns <= 0:
+        return ""
+    if display_width(text) <= columns:
+        return text
+    budget = columns - display_width(ellipsis)
+    if budget <= 0:
+        return ellipsis[:0]
+    out = ""
+    for char in text:
+        if display_width(out + char) > budget:
+            break
+        out += char
+    return out + ellipsis
+
+
+def wrap_hanging(text: str, columns: int, indent: str = "    ") -> list[str]:
+    """按列宽折行并给续行加悬挂缩进（面板内成段文字用，续行不顶到左边框）。
+
+    首行用满 `columns` 列，续行**扣除缩进宽度后**再折行——否则「缩进 + 满宽续行」
+    会超出面板内宽 2~10 列（窄终端上表现为右侧被硬折）。
+    """
+    indent_width = display_width(indent)
+    remaining = text
+    lines: list[str] = []
+    first = True
+    while remaining:
+        budget = columns if first else max(10, columns - indent_width)
+        wrapped = wrap_display(remaining, budget)
+        if not wrapped:
+            break
+        head = wrapped[0]
+        lines.append(head if first else indent + head)
+        cut = remaining.find(head)
+        if cut < 0:
+            break
+        remaining = remaining[cut + len(head) :].lstrip()
+        first = False
+    return lines
+
+
+def wrap_with_prefix(prefix: str, text: str, columns: int, *, indent: str | None = None) -> list[str]:
+    """带首行前缀的折行：首行用「前缀 + 正文」，续行按缩进对齐。
+
+    与 :func:`wrap_hanging` 的区别：前缀（如 `  > [B] `、`  说明  : `）**不参与**
+    折行断点——否则 `wrap_display` 会在前缀后的空白处断开，出现「第一行只剩前缀」
+    的碎片行。折行预算逐行扣减：首行 = `columns - 前缀宽`，续行 = `columns - 缩进宽`。
+
+    Args:
+        prefix: 首行前缀（原样保留，可含 ANSI）。
+        text: 正文。
+        columns: 每行最大显示列数。
+        indent: 续行缩进；缺省用与前缀等宽的空白（视觉上对齐到正文起始列）。
+
+    Returns:
+        行列表，每行显示宽度 ≤ `columns`（单 token 超宽时才硬切）。
+    """
+    head_indent = indent if indent is not None else " " * display_width(prefix)
+    indent_width = display_width(head_indent)
+    remaining = text
+    lines: list[str] = []
+    prefix_cell = prefix
+    budget = max(10, columns - display_width(prefix_cell))
+    while remaining:
+        wrapped = wrap_display(remaining, budget)
+        if not wrapped:
+            break
+        chunk = wrapped[0]
+        lines.append(prefix_cell + chunk)
+        cut = remaining.find(chunk)
+        if cut < 0:
+            break
+        remaining = remaining[cut + len(chunk) :].lstrip()
+        if not remaining:
+            break
+        prefix_cell = head_indent
+        budget = max(10, columns - indent_width)
+    return lines or [prefix]

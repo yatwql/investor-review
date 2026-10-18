@@ -178,7 +178,6 @@ def _generate_full_html_report(
             与 Excel 侧同源，由编排层 `_generate_report_full` 注入——须在写 HTML 之前完成
             取数，否则本类别既不出现在矩阵、说明表也记「未使用」（与 Excel 自相矛盾）。
     """
-    from src.python.config.features import is_feature_enabled
     from src.python.report.html_writer import write_html_report
     from src.python.report.run_integrity import current_perf
 
@@ -188,13 +187,11 @@ def _generate_full_html_report(
     if _perf is not None:
         _perf.start("HTML 生成")
     try:
-        _enable_interactive_charts = is_feature_enabled("enable_interactive_charts")
         chart_datasets = _build_chart_datasets_for_report(
             history_data=history_data,
             details=prep.get("details"),
             risk_metrics=prep.get("risk_metrics"),
             all_metrics=metrics,
-            enable_interactive=_enable_interactive_charts,
         )
         path = write_html_report(
             holdings,
@@ -218,7 +215,6 @@ def _generate_full_html_report(
             enable_llm=enable_llm,
             debate_info=debate_info,
             chart_datasets=chart_datasets,
-            enable_interactive_charts=_enable_interactive_charts,
             style_factor_data=style_factor_data,
             factor_catalog_data=factor_catalog_data,
             position_relationship_data=position_relationship_data,

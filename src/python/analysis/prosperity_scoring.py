@@ -388,7 +388,7 @@ def _score_roe(
                 "max_score": _W_ROE,
                 "status": "unverified",
                 "evidence": [],
-                "unverified": ["未取到个股 ROE（功能开关 `financial_indicator` 默认关）→ 该维不计分"],
+                "unverified": ["未取到个股 ROE（功能开关 `stock_fundamentals`（个股基本面）默认关）→ 该维不计分"],
             },
             {},
         )

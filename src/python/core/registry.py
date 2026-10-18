@@ -24,9 +24,10 @@ from src.python.core.computation_registry import (  # noqa: F401
 )
 from src.python.core.data_registry import (  # noqa: F401
     DataModuleDef,
-    LLM_HIDDEN_KEYS,
     LLM_MODULE_GATED_SECTIONS,
+    _CACHE_ONLY_REGISTRY,
     _MODULE_REGISTRY,
+    get_cache_registry,
     get_cache_ttl_defaults,
     get_exact_type_map,
     get_known_enabled_llm_keys,
@@ -36,7 +37,6 @@ from src.python.core.data_registry import (  # noqa: F401
     get_prefix_type_map,
     get_registered_data_types,
     get_registry,
-    visible_llm_module_names,
 )
 from src.python.core.report_section_registry import (  # noqa: F401
     NAV_GROUPS,

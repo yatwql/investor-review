@@ -201,3 +201,167 @@ class TestPromptHistory(unittest.TestCase):
         ):
             result = _prompt_history()
         self.assertTrue(result)
+
+
+@pytest.mark.unit_core
+class TestPromptCostForecast(unittest.TestCase):
+    """_prompt_cost_forecast：区间预估确认 + 日预算超限处置（预估失败不阻塞）。"""
+
+    @staticmethod
+    def _fc(**over):
+        base = {
+            "ok": True,
+            "module_count": 3,
+            "low": 0.1,
+            "high": 0.9,
+            "basis": "static",
+            "symbol": "¥",
+            "reason": None,
+        }
+        base.update(over)
+        return base
+
+    @staticmethod
+    def _budget(**over):
+        base = {"enabled": False, "limit": 0.0, "spent": 0.0, "exceeded": False, "symbol": "¥"}
+        base.update(over)
+        return base
+
+    def test_confirm_yes_proceeds(self):
+        from src.python.tui.handlers_report import _prompt_cost_forecast
+
+        with (
+            patch("src.python.tui.handlers_report.forecast_run_cost", return_value=self._fc()),
+            patch("src.python.tui.handlers_report.budget_status", return_value=self._budget()),
+            patch("builtins.input", return_value="y"),
+        ):
+            assert _prompt_cost_forecast(False, None) == (True, False)
+
+    def test_confirm_default_no_aborts_with_message(self):
+        from src.python.tui.handlers_report import _prompt_cost_forecast
+
+        with (
+            patch("src.python.tui.handlers_report.forecast_run_cost", return_value=self._fc()),
+            patch("src.python.tui.handlers_report.budget_status", return_value=self._budget()),
+            patch("builtins.input", return_value=""),
+        ):
+            assert _prompt_cost_forecast(False, None) == (False, False)
+
+    def test_forecast_unavailable_skips_prompt(self):
+        """预估失败不阻塞生成：不询问、直接继续。"""
+        from src.python.tui.handlers_report import _prompt_cost_forecast
+
+        with (
+            patch(
+                "src.python.tui.handlers_report.forecast_run_cost", return_value=self._fc(ok=False, reason="模型未知")
+            ),
+            patch("src.python.tui.handlers_report.budget_status", return_value=self._budget()),
+            patch("builtins.input", side_effect=AssertionError("预估失败时不应询问")),
+        ):
+            assert _prompt_cost_forecast(False, None) == (True, False)
+
+    def test_zero_modules_skips_prompt(self):
+        from src.python.tui.handlers_report import _prompt_cost_forecast
+
+        with (
+            patch(
+                "src.python.tui.handlers_report.forecast_run_cost",
+                return_value=self._fc(module_count=0, low=0.0, high=0.0),
+            ),
+            patch("src.python.tui.handlers_report.budget_status", return_value=self._budget()),
+            patch("builtins.input", side_effect=AssertionError("无模块参与不应询问")),
+        ):
+            assert _prompt_cost_forecast(False, None) == (True, False)
+
+    def test_budget_exceeded_yes_degrades_force(self):
+        from src.python.tui.handlers_report import _prompt_cost_forecast
+
+        with (
+            patch("src.python.tui.handlers_report.forecast_run_cost", return_value=self._fc()),
+            patch(
+                "src.python.tui.handlers_report.budget_status",
+                return_value=self._budget(enabled=True, limit=1.0, spent=1.2, exceeded=True),
+            ),
+            patch("builtins.input", return_value="y"),
+        ):
+            assert _prompt_cost_forecast(True, None) == (True, True), "超限确认降级须回报清空强刷范围"
+
+    def test_budget_exceeded_default_aborts(self):
+        from src.python.tui.handlers_report import _prompt_cost_forecast
+
+        with (
+            patch("src.python.tui.handlers_report.forecast_run_cost", return_value=self._fc()),
+            patch(
+                "src.python.tui.handlers_report.budget_status",
+                return_value=self._budget(enabled=True, limit=1.0, spent=1.2, exceeded=True),
+            ),
+            patch("builtins.input", return_value=""),
+        ):
+            assert _prompt_cost_forecast(False, None) == (False, False)
+
+    def test_budget_exceeded_eof_aborts(self):
+        from src.python.tui.handlers_report import _prompt_cost_forecast
+
+        with (
+            patch("src.python.tui.handlers_report.forecast_run_cost", return_value=self._fc()),
+            patch(
+                "src.python.tui.handlers_report.budget_status",
+                return_value=self._budget(enabled=True, limit=1.0, spent=1.2, exceeded=True),
+            ),
+            patch("builtins.input", side_effect=EOFError),
+        ):
+            assert _prompt_cost_forecast(False, None) == (False, False)
+
+    def test_summary_lines_printed_with_prefix(self):
+        import contextlib
+        import io
+
+        from src.python.tui.handlers_report import _prompt_cost_forecast
+
+        buf = io.StringIO()
+        with (
+            patch("src.python.tui.handlers_report.forecast_run_cost", return_value=self._fc()),
+            patch("src.python.tui.handlers_report.budget_status", return_value=self._budget()),
+            patch("builtins.input", return_value="y"),
+            contextlib.redirect_stdout(buf),
+        ):
+            _prompt_cost_forecast(False, None)
+        out = buf.getvalue()
+        assert "[..]" in out and "费用预估" in out, "预估行须带上屏前缀"
+
+
+@pytest.mark.unit_core
+class TestCmdGenerateFullForecastWiring(unittest.TestCase):
+    """_cmd_generate_full 与费用预估的接线：中止不进生成、降级清空强刷。"""
+
+    def _run(self, forecast_result, force=(False, None)):
+        from src.python.tui import handlers_report as hr
+
+        with (
+            patch.object(hr, "TuiProgressReporter") as reporter_cls,
+            patch.object(hr, "_prompt_force_llm", return_value=force),
+            patch.object(hr, "_prompt_cost_forecast", return_value=forecast_result) as fc,
+            patch.object(hr, "_run_generate") as run_gen,
+            patch.object(hr, "print_llm_session_usage") as usage,
+        ):
+            hr._cmd_generate_full()
+            return fc, run_gen, usage, reporter_cls
+
+    def test_abort_skips_generation(self):
+        fc, run_gen, usage, _ = self._run((False, False))
+        fc.assert_called_once()
+        run_gen.assert_not_called()
+        usage.assert_not_called()
+
+    def test_degrade_clears_force_scope(self):
+        _, run_gen, _, _ = self._run((True, True), force=(True, ["global_macro"]))
+        run_gen.assert_called_once()
+        _, kwargs = run_gen.call_args
+        assert kwargs["force_llm"] is False, "降级走缓存须清空全量强刷"
+        assert kwargs["force_llm_modules"] is None, "降级走缓存须清空模块级强刷"
+
+    def test_normal_proceed_passes_force_through(self):
+        _, run_gen, _, _ = self._run((True, False), force=(True, None))
+        run_gen.assert_called_once()
+        _, kwargs = run_gen.call_args
+        assert kwargs["force_llm"] is True, "未降级时强刷范围原样透传"

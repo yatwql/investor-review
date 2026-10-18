@@ -140,9 +140,8 @@ class TestReportProducingSwitches:
         "cost_lots",
         "valuation_percentile",
         "market_temperature",
-        "financial_report_digest",
+        "stock_fundamentals",
         "market_sentiment",
-        "financial_indicator",
     )
 
     def test_known_report_keys_stay_in_group(self):
@@ -183,12 +182,12 @@ class TestReportProducingSwitches:
 
     def test_accessor_follows_runtime_override(self):
         """运行时覆盖（features.json / --feature）即时反映到访问器。"""
-        from src.python.config import is_enable_financial_indicator
+        from src.python.config import is_enable_stock_fundamentals
         from src.python.config.features import set_feature_enabled
 
-        assert is_enable_financial_indicator() is False
-        set_feature_enabled("financial_indicator", True)
-        assert is_enable_financial_indicator() is True
+        assert is_enable_stock_fundamentals() is False
+        set_feature_enabled("stock_fundamentals", True)
+        assert is_enable_stock_fundamentals() is True
 
     def test_config_json_no_longer_carries_report_submodules(self):
         from src.python.config import get_config

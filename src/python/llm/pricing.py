@@ -34,6 +34,7 @@ __all__ = [
     "PRICING_WEEKEND_ALWAYS_IDLE",
     "PRICING_HOLIDAY_ALWAYS_IDLE",
     "reload_pricing",
+    "compute_cost_value",
     "estimate_cost",
 ]
 
@@ -298,6 +299,60 @@ def reload_pricing() -> None:
         logger.debug("加载定价配置失败，使用默认定价", exc_info=True)
 
 
+def compute_cost_value(
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    cache_hit_input_tokens: int = 0,
+    at_time: datetime | None = None,
+) -> float | None:
+    """估算 LLM API 调用的费用**数值**——`estimate_cost` 的格式化前单源。
+
+    计费规则与 `estimate_cost` 完全同源（峰谷价、缓存命中按 input_cache_hit 费率、
+    命中数不得超过总输入的下限防御）；本函数只负责算数，不做货币符号格式化。
+    事前费用预估（cost_forecast）与事后统计共享本函数，避免两处计费口径漂移。
+
+    Args:
+        model: 模型名称
+        input_tokens: 总输入 token 数（含缓存命中+缓存未命中）
+        output_tokens: 输出 token 数
+        cache_hit_input_tokens: 其中属于缓存命中的 token 数（默认 0）
+        at_time: 计费时刻（默认当前时间；naive 视为已在定价时区，便于测试固定时刻）
+
+    Returns:
+        费用数值（货币单位同 PRICING_CURRENCY）；未知模型或无 token 时返回 None
+    """
+    global _PRICING_LOADED
+    if not _PRICING_LOADED:
+        reload_pricing()
+        _PRICING_LOADED = True
+    if not input_tokens and not output_tokens:
+        return None
+    model_lower = model.lower().strip()
+    pricing = PRICING_MERGED.get(model_lower)
+    if not pricing:
+        for known, price in PRICING_MERGED.items():
+            if model_lower.startswith(known):
+                pricing = price
+                break
+    if not pricing:
+        return None
+    # 峰谷定价：高峰日（工作日且非法定节假日）命中高峰时段时切换到高峰价子段；
+    # 周末/法定节假日全天恒为闲时（受对应开关控制）
+    effective: dict[str, float | dict[str, float]] = pricing
+    peak = pricing.get("peak")
+    if isinstance(peak, dict) and _is_peak_minute(_effective_minute(at_time), _is_idle_day(at_time)):
+        effective = peak
+    # 下限 0：防御非归一调用方传入"命中 > 总输入"（如把仅未命中的
+    # input_tokens 与 cache_read 直接相减）导致费用出现负数
+    cache_miss = max(input_tokens - cache_hit_input_tokens, 0)
+    cost = cache_miss / 1_000_000 * float(effective["input"]) + output_tokens / 1_000_000 * float(effective["output"])
+    if cache_hit_input_tokens > 0:
+        cache_rate = effective.get("input_cache_hit", effective["input"])
+        cost += cache_hit_input_tokens / 1_000_000 * float(cache_rate)
+    return cost
+
+
 def estimate_cost(
     model: str,
     input_tokens: int,
@@ -305,9 +360,9 @@ def estimate_cost(
     cache_hit_input_tokens: int = 0,
     at_time: datetime | None = None,
 ) -> str:
-    """估算 LLM API 调用的费用。
+    """估算 LLM API 调用的费用（格式化字符串）。
 
-    基于已知模型定价（每百万 token 价格）。
+    基于已知模型定价（每百万 token 价格），计费数学单源于 `compute_cost_value`。
     未知模型返回 "-"。
     货币符号由 PRICING_CURRENCY 决定（自 llm_settings.json → pricing.currency）。
     若存在缓存命中 token，按 input_cache_hit 费率计算（通常为 input 的 10%）。
@@ -325,32 +380,9 @@ def estimate_cost(
     Returns:
         格式化费用字符串，如 "$0.008"、"¥0.06" 或 "-"
     """
-    global _PRICING_LOADED
-    if not _PRICING_LOADED:
-        reload_pricing()
-        _PRICING_LOADED = True
-    if not input_tokens and not output_tokens:
+    cost = compute_cost_value(model, input_tokens, output_tokens, cache_hit_input_tokens, at_time)
+    if cost is None:
         return "-"
-    model_lower = model.lower().strip()
-    pricing = PRICING_MERGED.get(model_lower)
-    if not pricing:
-        for known, price in PRICING_MERGED.items():
-            if model_lower.startswith(known):
-                pricing = price
-                break
-    if not pricing:
-        return "-"
-    # 峰谷定价：高峰日（工作日且非法定节假日）命中高峰时段时切换到高峰价子段；
-    # 周末/法定节假日全天恒为闲时（受对应开关控制）
-    effective: dict[str, float | dict[str, float]] = pricing
-    peak = pricing.get("peak")
-    if isinstance(peak, dict) and _is_peak_minute(_effective_minute(at_time), _is_idle_day(at_time)):
-        effective = peak
-    cache_miss = input_tokens - cache_hit_input_tokens
-    cost = cache_miss / 1_000_000 * float(effective["input"]) + output_tokens / 1_000_000 * float(effective["output"])
-    if cache_hit_input_tokens > 0:
-        cache_rate = effective.get("input_cache_hit", effective["input"])
-        cost += cache_hit_input_tokens / 1_000_000 * float(cache_rate)
     symbol = CURRENCY_SYMBOLS.get(PRICING_CURRENCY, "$")
     if cost < 0.01:
         return f"{symbol}{cost:.4f}"

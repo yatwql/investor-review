@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.python.config.features import reset_feature_flags, set_feature_enabled
+from src.python.config.features import reset_feature_flags
 from src.python.core import decision_ledger as dl
 from src.python.core import decision_header as dh
 
@@ -218,14 +218,9 @@ class TestParseStructuredHeader:
 
 
 class TestStructuredHeaderCacheSuffix:
-    """缓存指纹后缀：开关关 → 空（不误伤旧缓存）；开 → 固定后缀换键。"""
+    """缓存指纹后缀：恒为 _dh（区分未引入本机制前的旧缓存指纹；预检键 = 读写键）。"""
 
-    def test_flag_off_returns_empty(self):
-        set_feature_enabled(dh.STRUCTURED_HEADER_FLAG, False)  # 转正后默认开，基准须显式关
-        assert dh.structured_header_cache_suffix() == ""
-
-    def test_flag_on_returns_suffix(self):
-        set_feature_enabled(dh.STRUCTURED_HEADER_FLAG, True)
+    def test_constant_suffix(self):
         assert dh.structured_header_cache_suffix() == "_dh"
 
 

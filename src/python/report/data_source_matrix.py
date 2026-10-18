@@ -384,7 +384,7 @@ _SOURCE_CATALOG: list[dict[str, Any]] = [
         "credential_source_id": "datasink",
         "billing_provider": "datasink",
         "note": (
-            "免费 key 需自备（datasink.ing）；需开启 功能开关 `financial_report_digest` 或 financial_indicator 才会取用；"
+            "免费 key 需自备（datasink.ing）；需开启 功能开关 `stock_fundamentals`（个股基本面）才会取用；"
             "同花顺官方源不含公告原文，故本类别无兜底源"
         ),
     },
@@ -398,7 +398,7 @@ _SOURCE_CATALOG: list[dict[str, Any]] = [
         "auth": "无需（主源）",
         "note": (
             "备用支路需 DataSinking key、兜底槽位需 hithink key；"
-            "两者均需开启 功能开关 `financial_indicator` 或 valuation_percentile"
+            "两者均需开启 功能开关 `stock_fundamentals`（个股基本面）或 valuation_percentile"
         ),
     },
     {
@@ -456,16 +456,15 @@ def build_data_source_catalog() -> list[dict[str, Any]]:
         类别（如历史走势只登记缓存键）以 provider 级归属为补充正面证据。
         需 key 的类别（如财报全文）的 ``auth`` 附加就绪状态。
     """
-    from src.python.core.datasource_credential import credential_readiness, credential_ready_enabled
+    from src.python.core.datasource_credential import credential_readiness
 
     observed = {ev["source_key"] for ev in get_tracker().get_log()}
     provider_usage = get_provider_usage()
     readiness: dict[str, dict[str, Any]] = {}
-    if credential_ready_enabled():
-        try:
-            readiness = {row["source_id"]: row for row in credential_readiness()}
-        except Exception:
-            logger.debug("[matrix] 凭据就绪矩阵读取失败，说明表不附就绪态")
+    try:
+        readiness = {row["source_id"]: row for row in credential_readiness()}
+    except Exception:
+        logger.debug("[matrix] 凭据就绪矩阵读取失败，说明表不附就绪态")
     plan = _datasink_plan()
 
     rows: list[dict[str, Any]] = []

@@ -197,8 +197,8 @@ def _cmd_cleanup_cache() -> None:
     press_any_key()
 
 
-def _cmd_show_cache_stats() -> None:
-    """查看缓存与状态统计信息。"""
+def _render_cache_stats() -> None:
+    """渲染缓存与状态统计（缓存管理子菜单首屏：只读，不等待按键）。"""
     from src.python.cache.operations import get_cache_stats
     from src.python.report.progress import TuiProgressReporter
 
@@ -228,7 +228,7 @@ def _cmd_show_cache_stats() -> None:
     for prefix, count in sorted(stats.by_prefix.items()):
         print(f"    {prefix}_*: {count} 个文件")
     print()
-    print(f"  过期文件: {stats.expired} 个（菜单 [3] 可清理）")
+    print(f"  过期文件: {stats.expired} 个（输入 3 可清理）")
 
     # ── 2. data/history/snapshots 快照文件 ──
     if stats.snapshot_files > 0:
@@ -254,4 +254,21 @@ def _cmd_show_cache_stats() -> None:
         print(f"  文件: {stats.state_files} 个 | 大小: {stats.state_size_bytes / 1024:.1f} KB")
         print("  （运行时状态，跨会话持久化，不随缓存清理）")
 
-    press_any_key()
+
+def _cmd_cache_management() -> None:
+    """缓存管理子菜单：先统计后清理动线（合并原清理与统计两个平级入口）。
+
+    首屏展示统计（想清理前先看规模），随后命令循环：
+    ``3`` 清理过期缓存（执行后回到统计刷新展示）、``B``/回车 返回主菜单。
+    """
+    _render_cache_stats()
+    while True:
+        print("  命令: 3 清理过期缓存 · B 返回主菜单（回车也返回）")
+        choice = input("  缓存管理> ").strip().lower()
+        if choice in ("", "b", "0"):
+            return
+        if choice == "3":
+            _cmd_cleanup_cache()  # 原平级入口逻辑收敛于此（含按任意键确认）
+            _render_cache_stats()  # 清理后回统计刷新，动线闭环
+            continue
+        print(f"  {YELLOW}[!]{RESET} 未知命令（3 清理过期缓存 / B 返回）")

@@ -197,6 +197,38 @@
           <button type="button" id="config-reload" class="btn btn-secondary btn-sm">重新加载</button>
         </div>
       </section>
+
+      <!-- 定时生成（内置调度，缺省关闭）：直改 config.json scheduler 块 -->
+      <section class="card" aria-labelledby="scheduler-heading">
+        <h2 id="scheduler-heading">定时生成（内置调度，缺省关闭）</h2>
+        <p class="config-note">按执行日与时刻自动读取正式持仓文件生成报告（正式-用存量；与手动生成同队列串行，同一时刻仅一个任务在跑）；保存即写入 config.json 的 scheduler 块，缺省关闭、对现有功能零影响</p>
+        <div class="sched-row">
+          <label class="sched-switch" for="sched-enabled"><input type="checkbox" id="sched-enabled"> 启用调度</label>
+          <label for="sched-time">时刻 <input type="time" id="sched-time" value="07:30" step="60"></label>
+          <label for="sched-type">报告格式
+            <select id="sched-type">
+              <option value="basic">仅 Excel（约 1 分钟）</option>
+              <option value="both">HTML + Excel（约 2 分钟）</option>
+              <option value="full">全量含 LLM（约 5 分钟）</option>
+            </select>
+          </label>
+        </div>
+        <fieldset class="sched-weekdays">
+          <legend>执行日</legend>
+          <label><input type="checkbox" class="sched-weekday-cb" value="0"> 周一</label>
+          <label><input type="checkbox" class="sched-weekday-cb" value="1"> 周二</label>
+          <label><input type="checkbox" class="sched-weekday-cb" value="2"> 周三</label>
+          <label><input type="checkbox" class="sched-weekday-cb" value="3"> 周四</label>
+          <label><input type="checkbox" class="sched-weekday-cb" value="4"> 周五</label>
+          <label><input type="checkbox" class="sched-weekday-cb" value="5"> 周六</label>
+          <label><input type="checkbox" class="sched-weekday-cb" value="6"> 周日</label>
+        </fieldset>
+        <div class="config-actions">
+          <button type="button" id="sched-save" class="btn btn-primary btn-sm">保存调度</button>
+          <span id="sched-status" class="status-text" role="status" aria-live="polite"></span>
+        </div>
+        <p id="sched-next" class="field-hint"></p>
+      </section>
     </div>
 
     <!-- ══ 工作区：运行状态 ══ -->

@@ -3,6 +3,9 @@
 生成 handler（``_run_generation``）复刻 ``cli.py:_handle_report`` 模板：
 读持仓（含流水页签）→ 建 reporter → ``generate_report`` → 映射 exit_code。
 Worker 线程经 RunManager 执行，产物定位基于出队时配置快照的 output_dir。
+完成/失败通知：``_run_generation`` 收尾按 ``notify`` 配置派发
+``completion_notify`` 事件（Web 手动生成 + 内置定时调度共用此执行体，
+两条链路的无人值守通知统一在 ``_notify_web_completion``）。
 
 响应统一信封：成功 ``{"ok": true, "data": ...}``；
 错误 ``{"ok": false, "error_code": str|null, "error": 中文文案}``
@@ -71,7 +74,23 @@ def _web_input_mode_snapshot_domain(mode: str) -> str | None:
 
 
 def _run_generation(state, params: dict) -> int:
+    """RunManager 执行体入口：委托 ``_run_generation_impl``，收尾派发完成通知。
+
+    通知契约与 CLI ``_handle_report`` 同构：门控前置（未配置不碰跟踪器）、
+    尽力而为（异常只 DEBUG，绝不改变退出码 / run 状态）；Web 手动生成与
+    内置定时调度共用本入口——定时无人值守正是通知的核心价值。
+    """
+    result_box: dict = {}
+    exit_code = _run_generation_impl(state, params, result_box)
+    _notify_web_completion(state, params, exit_code, result_box.get("result"))
+    return exit_code
+
+
+def _run_generation_impl(state, params: dict, result_box: dict | None = None) -> int:
     """单个 run 的执行体：读持仓 → 建 reporter → generate_report → 映射退出码。
+
+    ``result_box``（可选出参）回传 ``ReportResult``，供收尾通知载荷读取
+    excel_ok/html_ok 产物标志；早期严重失败/异常时无 result 可传。
 
     在 worker 线程执行。每个 run 启动时取一次 ``get_config()`` 快照
     （run 期间不受外部配置修改影响）；产物 output_dir 基于该快照
@@ -103,6 +122,20 @@ def _run_generation(state, params: dict) -> int:
     try:
         # 每个 run 启动取一次配置快照（run 期间不受外部配置修改影响）
         config = get_config()
+
+        # ── 日预算硬闸（LLM 费用，权威兜底）：超限且未经确认 → 本次运行中止。
+        #    覆盖定时调度与直连 API 等不经弹层的链路（create_run 已先挡一道 409）。──
+        if params.get("report_type") == "full" and not params.get("budget_ack"):
+            from src.python.llm.cost_forecast import budget_status
+
+            _budget = budget_status()
+            if _budget.get("exceeded"):
+                state.errors.append(
+                    f"今日 LLM 费用已达日预算上限（已花 {_budget['symbol']}{_budget['spent']:.4f}"
+                    f" / 上限 {_budget['symbol']}{_budget['limit']:.4f}），本次生成已中止；"
+                    "确认「降级走缓存继续」后重试可继续"
+                )
+                return _EXIT_SEVERE
         # 输入模式 → 快照隔离域（试算→web/ 正式→共享主目录），单一来源
         snapshot_namespace = _web_input_mode_snapshot_domain(mode)
 
@@ -164,6 +197,8 @@ def _run_generation(state, params: dict) -> int:
 
         state.output_dir = config.get("output_dir") or get_default("output_dir")
         state.errors = list(result.errors)
+        if result_box is not None:
+            result_box["result"] = result
         return result.exit_code
     except Exception:
         logger.exception("[web-run] run %s 生成异常", state.run_id)
@@ -174,6 +209,42 @@ def _run_generation(state, params: dict) -> int:
         # promote 为 copy，临时文件生命周期不变，仍由这里统一清理）
         if file_id:
             discard_file(file_id)
+
+
+def _notify_web_completion(state, params: dict, exit_code: int, result: object) -> None:
+    """Web 生成收尾完成/失败通知（门控前置 + 尽力而为，与 CLI ``_notify_report_completion`` 同构）。
+
+    Web 手动生成与内置定时调度共用 ``_run_generation`` 执行体——两条链路的
+    通知统一在此派发（定时无人值守正是通知的核心价值）。
+    契约：未配置任何通道时 ``should_notify`` 即返回（不碰跟踪器、不构造
+    事件）；本函数内部任何异常只记 DEBUG，绝不改变 exit_code / run 状态。
+    """
+    try:
+        from src.python.config import get_config
+        from src.python.core.completion_notify import (
+            build_completion_event,
+            dispatch_completion_notification,
+            should_notify,
+        )
+        from src.python.report.data_status import degradation_summary
+
+        config = get_config() or {}
+        notify_cfg = config.get("notify") or {}
+        if not should_notify(notify_cfg, ok=exit_code == 0):
+            return
+        output_dir = state.output_dir or config.get("output_dir") or "reports"
+        event = build_completion_event(
+            report_type=str(params.get("report_type", "basic") or "basic"),
+            exit_code=exit_code,
+            output_dir=str(output_dir),
+            errors=list(state.errors or []),
+            excel_ok=bool(getattr(result, "excel_ok", False)),
+            html_ok=bool(getattr(result, "html_ok", False)),
+            degradations=degradation_summary(),
+        )
+        dispatch_completion_notification(event, notify_cfg)
+    except Exception:
+        logger.debug("完成通知发送流程异常（非关键，不影响任务）", exc_info=True)
 
 
 def _build_artifacts(params: dict, state) -> list[dict]:
@@ -315,6 +386,25 @@ def _handle_create_run(run_manager):
     if not isinstance(use_existing, bool):
         return _err("BAD_PARAM", "输入来源参数不合法"), 400
 
+    budget_ack = bool(payload.get("budget_ack", False))
+    if "budget_ack" in payload and not isinstance(payload["budget_ack"], bool):
+        return _err("BAD_PARAM", "预算确认参数不合法"), 400
+    # ── 日预算硬闸（LLM 费用）：超限且未经弹层确认 → 409（自动化需显式 budget_ack）──
+    if report_type == "full":
+        from src.python.llm.cost_forecast import budget_status
+
+        _budget = budget_status()
+        if _budget.get("exceeded") and not budget_ack:
+            return (
+                _err(
+                    "BUDGET_EXCEEDED",
+                    f"今日 LLM 费用已达日预算上限"
+                    f"（已花 {_budget['symbol']}{_budget['spent']:.4f} / 上限 {_budget['symbol']}{_budget['limit']:.4f}），"
+                    "确认「降级走缓存继续」后重试",
+                ),
+                409,
+            )
+
     # 模式 × 输入来源组合校验：
     #   - 正式 + 用存量：无需上传（不携带 file_id），读正式持仓文件
     #   - 其余（试算 / 正式 + 上传）：必须有合法未过期 file_id
@@ -340,11 +430,28 @@ def _handle_create_run(run_manager):
             "llm_modules": llm_modules or None,
             "mode": mode,
             "use_existing": use_existing,
+            "budget_ack": budget_ack,
         }
     )
     if run_id is None:
         return _err("RUN_QUEUE_FULL", "已有任务在跑，排队或稍后再试"), 429
     return _ok({"run_id": run_id}), 202
+
+
+def _handle_cost_preflight():
+    """GET /api/runs/cost-preflight —— 事前费用预估 + 日预算状态（生成确认弹层数据源）。
+
+    仅 ``report_type=full``（含 LLM 调用）时给 ``forecast``；``budget`` 恒给。
+    预估失败（``forecast.ok=False``）由客户端按「不阻塞生成」处置，本接口不报错。
+    """
+    from src.python.llm.cost_forecast import budget_status, forecast_run_cost
+
+    report_type = request.args.get("report_type", "full")
+    payload: dict = {"relevant": report_type == "full"}
+    if payload["relevant"]:
+        payload["forecast"] = forecast_run_cost()
+    payload["budget"] = budget_status()
+    return _ok(payload)
 
 
 def _handle_list_runs(run_manager):
@@ -373,7 +480,15 @@ def _handle_run_events(run_manager, run_id):
         after = 0
     events = state.events_after(after)
     last_seq = events[-1]["seq"] if events else after
-    return _ok({"events": events, "status": state.status, "last_seq": last_seq})
+    return _ok(
+        {
+            "events": events,
+            "status": state.status,
+            "last_seq": last_seq,
+            # first_seq：仍保留的最小序号（None = 缓冲空）——客户端据识别被淘汰的中间事件
+            "first_seq": state.oldest_seq(),
+        }
+    )
 
 
 def _handle_run_history():
@@ -715,6 +830,39 @@ def _handle_health_history():
 # ── 路由注册 ─────────────────────────────────────────
 
 
+def _handle_scheduler_get():
+    """GET 定时生成：归一化调度配置 + 下次触发预估（只读）。"""
+    from src.python.web.scheduler import status_payload
+
+    return _ok(status_payload())
+
+
+def _handle_scheduler_post():
+    """保存定时生成配置（写 config.json ``scheduler`` 块，副作用，同源守卫）。
+
+    校验失败（时刻/执行日/报告格式非法）→ 400 BAD_PARAM；
+    写共享配置异常 → 500 CONFIG_WRITE_FAILED（详情记日志，前端不泄露内部细节）。
+    """
+    from src.python.config.edit_ops import apply_scheduler_block
+    from src.python.web.scheduler import status_payload, validate_block
+
+    if not _is_same_origin():
+        return _err("BAD_PARAM", "同源校验失败，拒绝提交"), 403
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return _err("BAD_PARAM", "请求体格式不合法"), 400
+    try:
+        block = validate_block(payload)
+    except ValueError as e:
+        return _err("BAD_PARAM", str(e)), 400
+    try:
+        apply_scheduler_block(block)
+    except Exception:
+        logger.exception("[scheduler] 调度配置写入失败")
+        return _err("CONFIG_WRITE_FAILED", "配置写入失败（详情请查看日志）"), 500
+    return _ok(status_payload())
+
+
 def create_handlers(app, run_manager) -> None:
     """注册全部 HTTP 路由。
 
@@ -729,6 +877,7 @@ def create_handlers(app, run_manager) -> None:
     app.add_url_rule("/api/runs", "list_runs", lambda: _handle_list_runs(run_manager), methods=["GET"])
     # 静态历史路由必须先注册
     app.add_url_rule("/api/runs/history", "run_history", _handle_run_history, methods=["GET"])
+    app.add_url_rule("/api/runs/cost-preflight", "cost_preflight", _handle_cost_preflight, methods=["GET"])
     app.add_url_rule(
         "/api/runs/<run_id>", "run_detail", lambda run_id: _handle_run_detail(run_manager, run_id), methods=["GET"]
     )
@@ -750,3 +899,5 @@ def create_handlers(app, run_manager) -> None:
     app.add_url_rule("/api/logs", "logs", _handle_logs, methods=["GET"])
 
     app.add_url_rule("/api/config/edit", "config_edit", _handle_config_edit, methods=["GET", "POST"])
+    app.add_url_rule("/api/scheduler", "scheduler_get", _handle_scheduler_get, methods=["GET"])
+    app.add_url_rule("/api/scheduler", "scheduler_set", _handle_scheduler_post, methods=["POST"])

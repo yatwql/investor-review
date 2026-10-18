@@ -79,8 +79,7 @@ def _print_session_usage_on_exit() -> None:
 def _bind_callbacks() -> None:
     """运行时将函数引用填入 MENU_ITEMS。"""
     from src.python.tui.handlers_cache import (
-        _cmd_cleanup_cache,
-        _cmd_show_cache_stats,
+        _cmd_cache_management,
         _cmd_update_basic_cache,
         _cmd_update_position_cache,
     )
@@ -114,8 +113,7 @@ def _bind_callbacks() -> None:
         "D": _cmd_config_dir_info,
         "1": _cmd_update_basic_cache,
         "2": _cmd_update_position_cache,
-        "3": _cmd_cleanup_cache,
-        "4": _cmd_show_cache_stats,
+        "4": _cmd_cache_management,
         "I": _cmd_config_comparison_indices,
         "A": _cmd_config_anonymization_mode,
         "P": _cmd_config_report_boards,
@@ -185,6 +183,9 @@ def main() -> None:
         elif key == KEY_ENTER:
             execute_item(sel)
         elif key == KEY_CTRL_C:
+            exit_app()
+        elif key == "0":
+            # 0 作退出别名：与子菜单「0 = 返回」的习惯一致（在首页返回即退出程序）
             exit_app()
         elif len(key) == 1 and ("A" <= key <= "Z" or "a" <= key <= "z" or "0" <= key <= "9"):
             idx = index_by_key(key.upper())

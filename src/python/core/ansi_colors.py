@@ -21,10 +21,11 @@ except ImportError:
 
 # ANSI 颜色：非 TTY 或设置了 NO_COLOR 环境变量时禁用颜色输出
 if "NO_COLOR" in os.environ or not sys.stdout.isatty():
-    GREEN = RED = YELLOW = CYAN = RESET = ""
+    GREEN = RED = YELLOW = CYAN = DIM = RESET = ""
 else:
     GREEN = "\033[92m"
     RED = "\033[91m"
     YELLOW = "\033[93m"
     CYAN = "\033[96m"
+    DIM = "\033[2m"  # 次要信息降权（键名/费用/图例），让主列先被看到
     RESET = "\033[0m"

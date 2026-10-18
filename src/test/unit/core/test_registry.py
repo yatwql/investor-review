@@ -695,3 +695,49 @@ class TestFacadeReexports:
         from src.python.core import data_registry, report_section_registry
 
         assert set(data_registry.__all__) & set(report_section_registry.__all__) == set()
+
+
+class TestCacheOnlyDebateRegistry:
+    """缓存专属登记（辩论三段）：模块清单域不含、缓存域访问器全覆盖。"""
+
+    _DEBATE_CACHE_TYPES = ("llm_debate_pro", "llm_debate_con", "llm_debate_synthesis")
+
+    def test_cache_accessors_cover_debate_segments(self) -> None:
+        """TTL/前缀/数据类型三张缓存表均含辩论三段，TTL=24h，前缀自映射。"""
+        from src.python.core.registry import (
+            get_cache_ttl_defaults,
+            get_llm_module_names,
+            get_prefix_type_map,
+            get_registered_data_types,
+        )
+
+        wanted = set(self._DEBATE_CACHE_TYPES)
+        # 模块清单域：菜单/白名单/llm_settings 键域不含
+        assert wanted.isdisjoint(get_llm_module_names())
+        # 缓存域：三张表全覆盖
+        ttl = get_cache_ttl_defaults()
+        prefixes = get_prefix_type_map()
+        assert wanted <= set(ttl)
+        assert wanted <= set(get_registered_data_types())
+        for data_type in wanted:
+            assert ttl[data_type] == 86400
+            assert prefixes[f"{data_type}_"] == data_type
+
+    def test_cache_registry_is_registry_plus_cache_only(self) -> None:
+        """缓存域注册表 = 常规注册表 ∪ 缓存专属项，常规项无重复。"""
+        from src.python.core.data_registry import _MODULE_REGISTRY
+        from src.python.core.registry import get_cache_registry
+
+        cache_registry = get_cache_registry()
+        assert set(_MODULE_REGISTRY) < set(cache_registry)
+        assert len(cache_registry) == len(set(cache_registry))
+        extra = {m.data_type for m in cache_registry} - {m.data_type for m in _MODULE_REGISTRY}
+        assert extra == set(self._DEBATE_CACHE_TYPES)
+
+    def test_cache_only_entries_not_llm_typed(self) -> None:
+        """缓存专属项无 settings_suffix（不进 enabled_llm/llm_settings 合法键域）。"""
+        from src.python.core.registry import get_cache_registry
+
+        for m in get_cache_registry():
+            if m.data_type in self._DEBATE_CACHE_TYPES:
+                assert not m.is_llm

@@ -87,6 +87,15 @@ class RunState:
             if s > after
         ]
 
+    def oldest_seq(self) -> int | None:
+        """事件缓冲中仍保留的最小序号（缓冲为空返回 None）——轮询缺口判定基准。
+
+        轮询增量通道把它作为 ``first_seq`` 下发：当其大于客户端已读序号 +1，
+        说明中间事件已被 ``_EVENT_LIMIT`` 滚动淘汰，客户端据此渲染省略占位，
+        不静默跳号（与前端序号过滤配合，区分「淘汰」与「重叠重放」）。
+        """
+        return self._events[0][0] if self._events else None
+
     def snapshot(self) -> dict:
         """返回 run 状态快照（不含事件，供 /api/runs/{id}）。"""
         return {

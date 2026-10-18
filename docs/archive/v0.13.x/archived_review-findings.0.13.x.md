@@ -1,8 +1,8 @@
 # 自审记录归档 — v0.13.x
 
-> 归档时间：2026-10-17（v0.13.5 发布，第四批开发期已修复批次追加；前批 2026-10-16 v0.13.4、2026-10-15 v0.13.3、首批 2026-10-14 v0.13.2）
+> 归档时间：2026-10-18（v0.13.6 发布，第五批开发期已修复批次追加；前批 2026-10-17 v0.13.5、2026-10-16 v0.13.4、2026-10-15 v0.13.3、首批 2026-10-14 v0.13.2）
 > 原始文件：`docs/managements/review-findings.md`
-> 涵盖版本：v0.13.x 开发期已修复项（v0.13.1 → v0.13.5）
+> 涵盖版本：v0.13.x 开发期已修复项（v0.13.1 → v0.13.6）
 > 归档内容：由各版本发布时人工迁入
 
 ---
@@ -47,3 +47,37 @@
 - rf-113 已修复（2026-10-16）：Iter 7 全链路浏览器人工验证六项全部完成——headless 自动化回归（① 6 图 badge / ② 2.4 afterprint / ③ 3.1 断网渲染 / ⑤ 375px 报告+调试页 / ⑥ 禁 Canvas 兜底，复跑 5 PASS + ⑥ 表现记录口径）+ 人工抽验（② 真实 Ctrl+P 打印预览、④ 微信真机 4.3+4.4、Safari 90+ iPad 抽验、Windows Chrome/Firefox；4.1 链接访问维护者豁免）；附带发现两处已由 rf-645 修复并复跑确认（⑤-testchart 转 PASS）。方法与证据见 `docs/plan/report-browser-verification.md`，勾选清单归档留存；rf-114 前置随之满足。
 - rf-698 已处置（2026-10-17，用户裁决口径清理）：按「不再对旧配置项/旧缓存文件/旧数据结构做兼容」移除 5 处残留兼容分支——① `config/anonymizer.py` 的 `profit_rate_pct`「旧键兼容」注释修正（经核该键实为汇总取数/渲染的现役键，同步分支保留防残留原精度，仅删误导口径）；② `core/perf.py` `_phase_seconds` 早期 list 形状死分支（ETA 仅采样最近 20 条，旧形状自然出窗）；③ `fetcher/industry.py` 缓存载荷 schema 迁移清理链全删（函数 + 3 处调用，迁移窗口≤两周已过）；④ `datasource_credential._read_key_file` 顶层平铺回退（生产调用点恒传非空 section，旧单源文件形态失效）；⑤ `deepseek-chat`/`deepseek-reasoner` 停用别名全部兼容移除（价目两条目 + thinking 三名单；旧名历史费用改显 `-`、存量旧配置不再获思考安全网，均经用户确认）。手册与 `llm-technical.md` 价目/峰谷枚举/effort 名单同源刷新；别名价格锁改负向锁（锁定移除行为防回填）、删 3 个旧形状/旧载荷正测、凭据测试改写节结构；dev-verify 6,975 通过。
 - rf-699 已处置（2026-10-17，设计契约审计）：全量 UI/报告样式人工比对 DESIGN.md，按基线对拍（契约落稿 commit a17b26f5 → HEAD）定位新增违规仅 3 行（均在 `summary_section.html`：市场温度两行内联 `#888` 裸色值 + QDII 注 `opacity:0.75` 档外），已修（→`var(--text-muted)`/0.7 档内，顺手消同模式存量 1 行）；护栏盲区增设 W3 内联色值/W4 档外字号/W5 档外间距三维观察（W1 引号整行豁免为 JS 图表配置设计、测试钉死不可收窄，W3 按位置级找回 HTML 内联色值盲区——原「裸色值 0」对内联域属假零），实测存量 40/8/175 入 `TestBaselineNoGrowth` 只减不增基线并入契约 Known Gaps；DESIGN.md 基线数字刷新（700 存量 3→9、600 25→63、工作台旧 `--color-*` 描述改角色名体系），`--color-*` 兼容映射到期删除（实测零消费者）并由 `TestLegacyMappingRemoved` 负向锁防回填；新增护栏测试 5 用例，unit_report/unit_web/scenario_basic 全绿。
+
+## 开发期已修复（0.13.6-dev）
+
+> 完整复盘见 `changelog.md` 0.13.6-dev 段；此处仅摘要行。
+
+> rf-708 已修复（2026-10-18）：完成通知 Web 渠道接线——`_run_generation` 改薄包装器（委托 `_run_generation_impl` + `result_box` 回传产物标志），收尾经 `_notify_web_completion` 按 `notify` 配置门控派发（Web 手动生成 + 内置定时调度共用，无人值守定时失败不再静默）；降级摘要单源下沉 `report/data_status.degradation_summary()`，CLI `_collect_degradation_summary` 改委托
+>
+> rf-709 已修复（2026-10-18）：报告模板 tooltip XSS 纪律——`drawSimpleChart` hover 内容改 DOM API 构建（`createElement` + `textContent`/`createTextNode`，色点走 `style.backgroundColor` 属性赋值），全文 `innerHTML` 清零，模板源结构测试断言防回归
+>
+> rf-710 已修复（2026-10-18）：遥测 JSONL 保留上限——`jsonl_store` 追加原语增 `max_lines` 尾部保留参数（超限丢最旧行，原子写语义不变）；perf 历史 5000 行 / 健康检查历史 2000 行上限（账本/去重锚点等业务态文件不设，避免丢失跨会话状态）
+> rf-712 已修复（2026-10-18）：`prosperity_framework` 转正后未迁组——作用域复核为行动章内嵌评分卡区块，注册表分组机制与诊断 → 分析增强（面板编号/手册分组表/文档归属随迁同步）；requirements R-PF-01 引用的已废弃 `GROUP_STANDARD` 常量改现行 `GROUP_ANALYSIS`，how-to-config 分组计数残留同步修正（详见 changelog）
+> rf-713 已修复（2026-10-18）：technical.md「写入分派」段残留 `GROUP_REPORT` 分组名与「三组同一路径」过期表述——改写为「注册表四组同一路径」并删已废弃分组名（详见 changelog）
+> rf-718 已修复（2026-10-18）：`[S]` 窄屏（手机）仍引导用户输入键名，而键名放不进行、打起来也费劲——改为**编号为主路径**、`k` 按需展开键名行，键名输入保留但不作引导（详见 changelog）
+> rf-717 已修复（2026-10-18）：`[S]` 面板「开启/关闭」失去着色（重构排版时状态标签退化为纯文本，关闭项不再醒目标红）——恢复 GREEN/RED 着色（含窄档短标签），3 单测锁定（详见 changelog）
+> rf-716 已修复（2026-10-18）：`[S]` 面板「键名」只出现在提示语里、用户无从得知（人机交互缺陷），且窄终端（手机 SSH）下 98 列面板被硬折——键名改为行内淡色列显式展示，排版抽 `tui/switch_panel.py` 做宽/中/窄三档响应式（附不越界不变式单测），另修编号两位数错位与页脚超宽（详见 changelog）
+> rf-715 已修复（2026-10-18）：渠道层私引配置私有符号——`[S]` 只读详情与写路径三通道直引 `_DEFAULT_LLM_SETTINGS` / `_SWITCH_TRUE_TOKENS` / `_SWITCH_FALSE_TOKENS`（`test_channel_layering` 红）→ 新增公开面 `config.default_enabled_llm()` 与 `features.SWITCH_*_TOKENS` + `features.parse_switch_value()`，渠道改走公开 API（详见 changelog）
+> rf-714 已修复（2026-10-18）：`[S]` 面板页脚/帮助/报错含开发者术语「slug」用户不可理解——用户可见文案统一改「键名」（与手册既有术语一致，提示行同步去 CLI 字样），源码级回归断言禁回潮（详见 changelog）
+> rf-114 已修复（2026-10-18）：双渲染路径收敛——删除 Canvas `drawSimpleChart` 定义块与全部 Feature Flag 条件分支（主模板 + 5 个 partial），Chart.js 成唯一渲染器；`enable_interactive_charts` 开关随消费者消失一并摘除（面板 31 项、其后编号前移）；滚动超额与持仓重合度滚动相关两张 Canvas-only 存活图移植 Chart.js（`excess_rolling`/`corr_rolling` 数据集 + 初始化器，对齐与降级语义不变）；单渲染器结构回归锚点已补（详见 changelog）
+>
+> rf-706 已修复（2026-10-18）：Web 进度事件通道完整性——`pollOnce` 增在途互斥（pollBusy，成功/异常/同步抛三路复位）+ 按 `seq > lastSeq` 过滤重复回放；服务端 events 载荷补 `first_seq`（`RunState.oldest_seq`），前端缺口时渲染「中间已省略 N 条」占位行，不再静默跳号
+>
+> rf-707 已修复（2026-10-18）：Web 生成进度断点续传——活动 run 写 sessionStorage（提交成功/流程重置/轮询完成/任务失效四点闭环清理），页面加载 `resumeActiveRun()` 重建进度视图从 `after=0` 续轮询；run 已随服务重启消失时走既有任务不存在终态收口，不空转重试
+>
+> rf-704 已修复（2026-10-18）：过期缓存生成路径自动清理——`cache.auto_cleanup_expired()` 尽力而为包装（任何异常吞掉返回 0，绝不影响主流程），`report/orchestrator.generate_report` 入口调用（CLI/TUI/Web 三渠道共用入口）；无人值守 CLI 定时任务不再只增不减地堆积过期缓存
+>
+> rf-705 已修复（2026-10-18）：Web 进度轮询任务丢失终态——`main.js pollOnce` catch 识别 404/`NOT_FOUND` 为终态：停止轮询 + 复用 `restoreGenerateBtn()` 单源复位生成按钮 + 进度阶段落「任务已失效」+ 结果区渲染失败态提示刷新，不再被当瞬时错误无限重试；其余瞬时错误保持静默重试
+>
+> rf-702 已修复（2026-10-17）：LLM 计费口径统一——归一层把 claude 协议 `input_tokens` 补 `cache_read_input_tokens` 归一为总输入（兼容端点命中大于未命中不再产生负费用），`estimate_cost` 补 `max(…, 0)` 下限（详见 changelog）
+>
+> rf-703 已修复（2026-10-17）：会话/报告费用统计与单次估算口径统一——报告页脚、批处理汇总、新闻相关性估值均改走 `_normalize_usage_tokens` 归一层，会话累计费用与单次 `estimate_cost` 同参等值
+>
+> rf-701 已修复（2026-10-17）：openai 分支补读 DeepSeek 原生端点顶层 `prompt_cache_hit_tokens`（优先于 `prompt_tokens_details.cached_tokens`；详见 changelog）
+>
+> rf-700 已修复（2026-10-17）：LLM 模型定价表多处偏离官方现价——逐家官方定价页核实后统一修正，并同步 `llm-technical.md` 附录 B 与 `how-to-config-llm.md` 定价表（明细详见 changelog）

@@ -1,5 +1,5 @@
 # 测试覆盖统计
-> 文档版本：0.13.5
+> 文档版本：0.13.6
 
 > ⚠ 以下测试项数为撰写时的快照值，实际计数随版本迭代而变化。`模式对应测试量` 表由 `--mode bench --update-docs` 自动回填本机实测；功能域/分组等子表精确统计请运行 `scripts/collect-test-coverage.py`（或 `pytest src/test/ --collect-only -q`）获取实时计数。
 
@@ -10,19 +10,19 @@
 <!-- mode-count-table:start -->
 | `--mode` 值 | 覆盖项数 | 典型耗时 |
 |:------------|:--------:|:--------:|
-| `unit` | **10146** | ~33s |
-| `standard` | **8915** | ~33s |
+| `unit` | **10377** | ~35s |
+| `standard` | **9146** | ~33s |
 | `scenario` | **287** | ~12s |
 | `regression` | **287** | ~12s |
-| `dev-verify` | **6981** | ~33s |
-| `verify` | **10146** | ~35s |
-| `integration` | **329** | ~12s |
-| `edge` | **1163** | ~15s |
+| `dev-verify` | **7172** | ~32s |
+| `verify` | **10377** | ~35s |
+| `integration` | **330** | ~12s |
+| `edge` | **1163** | ~16s |
 | `data` | **70** | ~4s |
-| `all` | **10475** | ~37s |
+| `all` | **10707** | ~38s |
 | `smoke` | **26** | ~4s |
-| `report` | **2608** | ~28s |
-| `all_no_unit` | **329** | ~12s |
+| `report` | **2621** | ~24s |
+| `all_no_unit` | **330** | ~12s |
 | `scenario_extreme` | **9** | ~3s |
 <!-- mode-count-table:end -->
 
@@ -39,7 +39,7 @@
 #### 采集环境属性
 
 <!-- env-table:start -->
-| 环境属性 | dragonball（2026-10-17 实测） | stallman-NB1（2026-10-02 实测） |
+| 环境属性 | dragonball（2026-10-18 实测） | stallman-NB1（2026-10-02 实测） |
 |:---------|:---------------------------|:---|
 | 操作系统 | Linux | Windows |
 | 系统版本 | 6.18.25-x64v3-xanmod1 | 11 |
@@ -54,30 +54,30 @@
 | Python 版本 | 3.13.5 | 3.13.0 |
 | 并行级别 | medium | medium |
 | worker 数 | 8 | 4 |
-| 采集日期 | 2026-10-17 | 2026-10-02 |
+| 采集日期 | 2026-10-18 | 2026-10-02 |
 <!-- env-table:end -->
 
 #### 各模式耗时对照
 
 <!-- duration-table:start -->
-| `--mode` | dragonball（2026-10-17 实测） | stallman-NB1（2026-10-02 实测） |
+| `--mode` | dragonball（2026-10-18 实测） | stallman-NB1（2026-10-02 实测） |
 |:---------|:---------------------------:|:---:|
-| `unit` | ~33s | ~3min |
+| `unit` | ~35s | ~3min |
 | `standard` | ~33s | ~3min |
 | `scenario` | ~12s | ~51s |
 | `regression` | ~12s | ~1min |
 | `verify,regression` | ~47s（verify+regression 顺序之和） | ~5min（verify+regression 顺序之和） |
-| `dev-verify` | ~33s | ~4min |
+| `dev-verify` | ~32s | ~4min |
 | `verify` | ~35s | ~4min |
 | `integration` | ~12s | ~2min |
-| `edge` | ~15s | ~1min |
+| `edge` | ~16s | ~1min |
 | `data` | ~4s | ~31s |
-| `all` | ~37s | ~4min |
+| `all` | ~38s | ~4min |
 | `smoke` | ~4s | ~28s |
-| `report` | ~28s | ~2min |
+| `report` | ~24s | ~2min |
 | `all_no_unit` | ~12s | ~1min |
 | `scenario_extreme` | ~3s | ~32s |
-| 数据更新时间 | 2026-10-17 | 2026-10-02 |
+| 数据更新时间 | 2026-10-18 | 2026-10-02 |
 <!-- duration-table:end -->
 
 > **2026-10-03 门禁口径变更**：P0 `dev-verify` 与 P1 `verify` 的 marker 已并入 `unit_report` 域（98 文件 / 2,130 用例此前不进任何门禁档），新量级见上方「模式对应测试量」表（本机实测 ~38s / ~32s）；上方对照表中 `dev-verify`/`verify` 两行为**并入前快照**，跨档对比时以新口径为准。
@@ -105,12 +105,12 @@
 | **数据源 Provider** | `providers/`(tencent, eastmoney, sina, tiantian, akshare_extras, datasink, cninfo, akshare_financial) | `unit/providers/test_{tencent,eastmoney,sina,tiantian,akshare_extras}.py` + `test_eastmoney_industry.py`（含 push2 估值字段 PE/PB 提取）+ `test_eastmoney_industry_rest.py`（行业数据 REST 接口）+ `test_eastmoney_index_edge.py`（push2his 指数 K 线边缘：无法映射/结构异常/重试耗尽/5xx 不重试）+ `test_sina_edge.py`/`test_tencent_edge.py` + `test_numeric_guard_regression.py`（非有限数值归一防线：各解析器非有限值拦截 + 合法输入行为不变）+ `test_cninfo.py`（财报备源：orgId 解析/文种归类与报告期推导/PDF 解析接缝与缺库降级/限速与 HTTP 分支）+ `test_provider_utils.py`（provider 失败原因载体：消费即清/线程隔离/链路尝试前清残值）+ `test_cassette_replay.py`（真实录制响应体解析 + **季报回放窗口锚定录制时点**的时间无关回归） + `test_tiantian_fund_fee.py`/`test_tiantian_fund_fee_edge.py`（F10 费用页申购/赎回费率表解析：阶梯/优惠费率/每笔固定费/载荷准入/akshare 备链与异常输入边缘） | 547 |
 | **数据获取调度** | `fetcher/`(price, index, fund, industry, chain, history_diff, source_adapter, quote_adapters, financial_report, report_adapters, financial_indicator_adapters) | `unit/fetcher/test_fetcher*.py` + `test_fund*.py` + `test_chain*.py` + `test_chain_diagnostics.py`（链路失败原因采集与可读渲染）+ `test_chain_overrides.py`（**调用级源覆盖 preferred/exclude**：排序/过滤/作用域/嵌套恢复/边界/优先级/CLI 接入）+ `test_fetcher_api_edge.py` + `test_source_adapter*.py`/`test_quote_adapter_parity.py`（数据源适配契约三段式与行情域三源等价性）+ `test_fetcher_industry.py`（估值字段网关：Provider Chain 路由 + push2 会话复用与按代码去重） + `test_financial_indicator.py`（财务指标链路：主源→解析支路降级、逐章节试取、源身份注入、多期直连路径传输级重试）+ `test_stale_cache_helper.py`（集中度收敛唯一原语 + 过期缓存降级回写助手：盖 `_payload_ver` 语义版本戳/准入判据/链路过期段路由） + `test_fund_fee.py`（申赎费率取数编排：链注册同构/四级降级阶梯/载荷准入不污染旧缓存/会话复用/`fetch_fee_index` 费率索引装配） | 611 |
 | **新闻处理** | `providers/`(\*_news.py, news_aggregator, news_correlator, news_keywords, news_sources) | `unit/news/test_{akshare,cls,eastmoney,sina,wallstreetcn}_news.py` + `test_news_{aggregator,correlator,keywords,sources}.py`（akshare 含源内接口降级：主接口异常降级到补充接口 / 双接口失败返回空不抛） | 226 |
-| **报告生成** | `report/`(excel_generator, excel_module_loader, excel_sheet_factory, excel_market_data, excel_content_sheets, excel_news_warning, excel_fund_deep_analysis, excel_llm_usage, html, chart_data_builder, pipeline_data_builder, category, penetration, fund_performance, fund_candidate, market_value, summary, summary_llm_usage, news_correlation, qdii_timezone, fund_concentration, fund_manager, style_factor_sheet, portfolio_history, portfolio_history_drawdown_sheet, history_snapshot, position_structure_sheet, evolution_sheet, holding_change_panel, action_sheet, data_quality_sheet, decision_record, decision_llm_capture, decision_settlement, decision_review_block, signal_record, llm_quality, whatif_operations, whatif_sheet, whatif_writer, financial_report_digest, financial_indicator, fundamental_snapshot_sheet, fundamental_snapshot) | `unit/report/` 共 120 文件（含 `__init__.py`）含 test_html_writer、test_html_template、test_html_report_structure（导航结构：章节锚点/目录折叠/六组分组导航 + 页脚实验功能清单，拆分分片 test_html_report_structure_toc / test_html_report_structure_content）、test_llm_module_info（LLM 模块信息·Endpoint 汇总展示：主备排序标注/未映射不标注/去重）、test_position_structure_sheet、test_holdings_detail_sheet、test_fundamental_snapshot_sheet、test_fund_performance_manager_block、test_correlation_html、test_drawdown_html_excel（组合历史走势与回撤章：走势表 + 回撤矩阵 + 危机区间标注）、test_tail_risk_wiring（尾部风险接线：pipeline 注入 + Excel 五行 + HTML 卡）、test_style_factor_sheet（风格与因子分析章：基金风格表 + 风格因子回归 + 行业 Beta 子表）、test_fund_candidate（基金业绩分析章候选基金比较子表：候选校验/截断/开关门控/比较维度/重合度复用）、test_valuation_temperature_wiring（估值分位+市场温度报告层接线：穿透估值列 + 汇总温度行）、test_pipeline_data_builder（管线数据契约：crisis_annotation/tail_risk/snapshot_diff 三键注册 + 键台账与附录 H 同步校验）、test_whatif_operations、test_whatif_sheet、test_whatif_html、test_whatif_writer、test_whatif_cost_panel、test_whatif_cost_panel_edge（交易成本面板：成本契约装配/impact 手算/基准对齐与门控/换手翻转回归/异常与降级边缘）、test_evolution_sheet、test_evolution_html、test_holding_change_panel（持仓变动复盘面板：契约装配/双端单源/关态/提示词块与重排标注）、test_holding_change_panel_edge、test_action_sheet、test_action_html、test_decision_record（决策复盘·确定性登记）、test_decision_llm_capture（决策复盘·LLM 建议表解析登记：误导性操作格不登记回归 + 结构化决策头优先/回落矩阵，受 `decision_header_parse` 门控）、test_decision_settlement（决策复盘·结算）、test_decision_review_block（决策复盘·复盘区块）、test_signal_record（确定性信号沉淀适配器：五类抽取 / 不可用占位跳过 / 聚合行与无代码行跳过 / 持仓级与组合级实时-非实时判定 / 幂等与开关无感）、test_llm_quality（模块级质量分级：A~F 口径/横幅注入/Excel 载体契约/章节标记与提示词一致性锁）、test_data_quality_sheet、test_data_status_message（降级事件可读失败原因：message 透传 + 矩阵渲染优先取原因 + 无原因逐字回落）、test_experimental_seams（管线实验挂载点：开关关闭无感/开关开启生效/下游异常只告警不外抛 + 接线次序守卫）、test_chart_data_builder、test_theme_js、test_holdings_freshness（持仓报告期时效口径：写法兼容/季度数边界/阈值判定/缺失报告期不判陈旧）、test_penetration_sheet（穿透页签备注：剔除原因细分与明细 + 各基金报告期上屏）、test_penetration（合并/排序/TOP10 与比值归一；分类与报告期拆分分片 test_penetration_classify / test_penetration_report_periods（含持仓报告期陈旧闸门：陈旧基金剔除出 TOP10 并计入未穿透 + 报告期明细贯通））、test_excel_report_structure（用量页签实验功能清单：显示名逐项列出 / 零开关不出现 / 无会话用量时仍在 + 汇总页脚兜底落点：用量页签缺席或为空时写入 / 已载清单时不重复 / 无汇总页签时静默跳过）、test_html_report_structure（页脚实验功能清单：显示名顿号相连 / 零开关与漏传上下文均不出现空壳行 + 页脚句式与 Excel 落点逐字一致 + 报告期标注：陈旧剔除横幅 / 集中度报告期列与「无对比意义」/ 候选比较报告期注记 / 无陈旧项时零噪声）、（集中度区块用例并入 test_position_structure_sheet：报告期列 / 陈旧后缀 / 环比仅在报告期推进时呈现 / 首检基线）、test_fund_concentration（含报告期语义：同报告期不报环比 / 推进照常对比 / 旧快照维持原行为 / 快照记录报告期 / 未推进条目原样沿用）、test_html_fund_deep_renderers（HTML 基金深度分析渲染器：报告期标注与陈旧剔除同 Excel 口径）、test_fund_candidate（含真实入参形状：不 mock 计算引擎，风格列被填出 + 重合度按 Jaccard 精确取值 / 既有基金基准收集时序）、test_fund_roe_estimate（基金重仓股 ROE 加权估算：加权纯计算/陈旧闸门/非 A 股过滤/known_roe 免取数）、test_history_policy（历史走势获取策略 off/auto/prompt 单源）、test_anonymize_pipeline（报告管线匿名化接线：装配边界 pair 匿名/渲染层折叠/产物单元格清扫/新闻标签脱敏）等 | 2,608 |
+| **报告生成** | `report/`(excel_generator, excel_module_loader, excel_sheet_factory, excel_market_data, excel_content_sheets, excel_news_warning, excel_fund_deep_analysis, excel_llm_usage, html, chart_data_builder, pipeline_data_builder, category, penetration, fund_performance, fund_candidate, market_value, summary, summary_llm_usage, news_correlation, qdii_timezone, fund_concentration, fund_manager, style_factor_sheet, portfolio_history, portfolio_history_drawdown_sheet, history_snapshot, position_structure_sheet, evolution_sheet, holding_change_panel, action_sheet, data_quality_sheet, decision_record, decision_llm_capture, decision_settlement, decision_review_block, signal_record, llm_quality, whatif_operations, whatif_sheet, whatif_writer, financial_report_digest, financial_indicator, fundamental_snapshot_sheet, fundamental_snapshot) | `unit/report/` 共 120 文件（含 `__init__.py`）含 test_html_writer、test_html_template、test_html_report_structure（导航结构：章节锚点/目录折叠/六组分组导航 + 页脚实验功能清单，拆分分片 test_html_report_structure_toc / test_html_report_structure_content）、test_llm_module_info（LLM 模块信息·Endpoint 汇总展示：主备排序标注/未映射不标注/去重）、test_position_structure_sheet、test_holdings_detail_sheet、test_fundamental_snapshot_sheet、test_fund_performance_manager_block、test_correlation_html、test_drawdown_html_excel（组合历史走势与回撤章：走势表 + 回撤矩阵 + 危机区间标注）、test_tail_risk_wiring（尾部风险接线：pipeline 注入 + Excel 五行 + HTML 卡）、test_style_factor_sheet（风格与因子分析章：基金风格表 + 风格因子回归 + 行业 Beta 子表）、test_fund_candidate（基金业绩分析章候选基金比较子表：候选校验/截断/开关门控/比较维度/重合度复用）、test_valuation_temperature_wiring（估值分位+市场温度报告层接线：穿透估值列 + 汇总温度行）、test_pipeline_data_builder（管线数据契约：crisis_annotation/tail_risk/snapshot_diff 三键注册 + 键台账与附录 H 同步校验）、test_whatif_operations、test_whatif_sheet、test_whatif_html、test_whatif_writer、test_whatif_cost_panel、test_whatif_cost_panel_edge（交易成本面板：成本契约装配/impact 手算/基准对齐与门控/换手翻转回归/异常与降级边缘）、test_evolution_sheet、test_evolution_html、test_holding_change_panel（持仓变动复盘面板：契约装配/双端单源/关态/提示词块与重排标注）、test_holding_change_panel_edge、test_action_sheet、test_action_html、test_decision_record（决策复盘·确定性登记）、test_decision_llm_capture（决策复盘·LLM 建议表解析登记：误导性操作格不登记回归 + 结构化决策头优先/回落矩阵）、test_decision_settlement（决策复盘·结算）、test_decision_review_block（决策复盘·复盘区块）、test_signal_record（确定性信号沉淀适配器：五类抽取 / 不可用占位跳过 / 聚合行与无代码行跳过 / 持仓级与组合级实时-非实时判定 / 幂等与开关无感）、test_llm_quality（模块级质量分级：A~F 口径/横幅注入/Excel 载体契约/章节标记与提示词一致性锁）、test_data_quality_sheet、test_data_status_message（降级事件可读失败原因：message 透传 + 矩阵渲染优先取原因 + 无原因逐字回落）、test_experimental_seams（管线实验挂载点：开关关闭无感/开关开启生效/下游异常只告警不外抛 + 接线次序守卫）、test_chart_data_builder、test_theme_js、test_holdings_freshness（持仓报告期时效口径：写法兼容/季度数边界/阈值判定/缺失报告期不判陈旧）、test_penetration_sheet（穿透页签备注：剔除原因细分与明细 + 各基金报告期上屏）、test_penetration（合并/排序/TOP10 与比值归一；分类与报告期拆分分片 test_penetration_classify / test_penetration_report_periods（含持仓报告期陈旧闸门：陈旧基金剔除出 TOP10 并计入未穿透 + 报告期明细贯通））、test_excel_report_structure（用量页签实验功能清单：显示名逐项列出 / 零开关不出现 / 无会话用量时仍在 + 汇总页脚兜底落点：用量页签缺席或为空时写入 / 已载清单时不重复 / 无汇总页签时静默跳过）、test_html_report_structure（页脚实验功能清单：显示名顿号相连 / 零开关与漏传上下文均不出现空壳行 + 页脚句式与 Excel 落点逐字一致 + 报告期标注：陈旧剔除横幅 / 集中度报告期列与「无对比意义」/ 候选比较报告期注记 / 无陈旧项时零噪声）、（集中度区块用例并入 test_position_structure_sheet：报告期列 / 陈旧后缀 / 环比仅在报告期推进时呈现 / 首检基线）、test_fund_concentration（含报告期语义：同报告期不报环比 / 推进照常对比 / 旧快照维持原行为 / 快照记录报告期 / 未推进条目原样沿用）、test_html_fund_deep_renderers（HTML 基金深度分析渲染器：报告期标注与陈旧剔除同 Excel 口径）、test_fund_candidate（含真实入参形状：不 mock 计算引擎，风格列被填出 + 重合度按 Jaccard 精确取值 / 既有基金基准收集时序）、test_fund_roe_estimate（基金重仓股 ROE 加权估算：加权纯计算/陈旧闸门/非 A 股过滤/known_roe 免取数）、test_history_policy（历史走势获取策略 off/auto/prompt 单源）、test_anonymize_pipeline（报告管线匿名化接线：装配边界 pair 匿名/渲染层折叠/产物单元格清扫/新闻标签脱敏）等 | 2,608 |
 | **LLM 智能分析** | `llm/`(api, circuit_breaker, fingerprint, module_fingerprint, generators, generators_singletons, markdown, pricing, prompts, session, skeleton, llm_content, cost_tracker, fallback, prompts_signals, failure_reasons, prompts_data_blocks, prompts_review) | `unit/llm/`(含 API 路由/熔断/重试/降级/骨架/prompts/generators/辩论/cache、DeepSeek 峰谷定价/时段/时区/周末与法定节假日全天闲时规则/V4.1-Flash 正式模型名定价与 effort 族判定、Kimi k2.6/k3 定价锁定（单价/缓存命中价/无峰谷加成）、Kimi thinking 支持判定与默认开思考显式禁用安全网、信号预消化与结构化决策头提示词契约、模块指纹唯一事实来源同源校验（含提示词承载段与辩论综合键全文进键）、持仓变动提示词注入双轨（提取同源/附录含块/指纹条件并入/归因准入与写回） 等) | 1,256 |
 | **配置管理** | `config/`, `core/constants.py` | `unit/config/test_config*.py` + `test_edit_ops.py`（配置编辑共享层：白名单结构/值规则/写入与备份） + `test_features.py`（功能开关名解析与取数 + 开关注册表活性：每项开关须有消费者 / 陈旧开关不得回归 / 无消费者键加载时告警 + 开关注册表统一不变量：单条声明五字段齐备 / 分组覆盖全集不重不漏 / 默认值遵循分组 / 默认值字典为派生投影） | 409 |
 | **核心基础设施** | `core/`(cache, models, reader, experiment_stats, registry, data_registry, report_section_registry, circuit_breaker, http_client, atomic_write, jsonl_store, num_utils, cassette, datasource_credential, market_hours, code_utils, filesystem, log_reader, doctor, decision_ledger, signal_ledger, decision_header)、`provider_registry.py`、`tui/handlers_*.py` | `unit/core/` 全部（含 `test_decision_ledger.py`/`test_decision_ledger_edge.py` 决策账本、`test_signal_ledger.py`/`test_signal_ledger_edge.py` 确定性信号账本、`test_jsonl_store.py` JSONL 原子原语、`test_num_utils_edge.py` 数值归一、`test_cassette*.py` 请求回放、`test_datasource_credential*.py` 凭据就绪、`test_decision_header.py`/`test_decision_header_edge.py` 决策头解析、`test_doctor.py` 系统自检（七组检查 / 永不抛异常契约 / 只读探测不留残留）、`*_edge.py`、`test_log_reader.py` 日志可视化）+ `unit/cache/` + `unit/handlers/`（含配置面板盒线等宽回归）+ `unit/core/test_system_info.py`（状态组装与展示原语）+ `unit/cache/test_cache_operations.py`（编排下沉）+ `unit/test_channel_layering.py`（三渠道薄壳纪律） | 1,503 |
 | **分析计算** | `analysis/`(liquidity, rebalance, fx_exposure, bond_yield, alignment_correction, drawdown_warning, drawdown_events, factor_exposure, industry_beta, correlation, crisis_annotation, tail_risk, portfolio_evolution, snapshot_diff, holding_change_events, holding_change_metrics, action_advisor, trade_discipline, rebalance_advisor, return_attribution, cost_flow, cost_position, whatif, whatif_backtest, valuation_percentile, market_temperature, metrics, financial_indicator_extract) | `unit/analysis/test_{liquidity,rebalance,bond_yield,fx_exposure,alignment_correction,drawdown_warning,drawdown_events,factor_exposure,industry_beta}*.py` + `test_correlation.py` + `test_correlation_edge.py` + `test_crisis_annotation.py` + `test_tail_risk.py` + `test_tail_risk_edge.py` + `test_portfolio_evolution.py` + `test_snapshot_diff.py` + `test_snapshot_diff_edge.py` + `test_holding_change_events.py`/`test_holding_change_events_edge.py`/`test_holding_change_metrics.py`（持仓变动复盘：事件抽取/边缘/指标与重排识别） + `test_action_advisor.py` + `test_trade_discipline.py` + `test_rebalance_advisor.py` + `test_return_attribution.py` + `test_cost_flow.py`（成本流水：XIRR/成本分档/分红累计） + `test_cost_position.py`/`test_cost_position_edge.py`（持仓成本区间位置：百分位/clamp/中性值/窗口切片 + 退化序列/非有限值边缘） + `test_valuation_percentile.py`/`test_valuation_percentile_edge.py`（价格分位代理：收盘价提取/解析解/三档刻度）+ `test_market_temperature.py`/`test_market_temperature_edge.py`（三因子合成温度计）+ `test_metrics.py`/`test_metrics_edge.py`（量化指标：夏普/卡玛/集中度/胜率/换手/风险贡献/波动率/组合 Beta）+ `test_whatif.py` + `test_whatif_backtest.py` + `test_whatif_backtest_edge.py` + `test_trade_cost_model.py`/`test_trade_cost_model_edge.py`（交易成本模型：FIFO 档位手算/金额分档/批次重放/聚合契约与临界边缘）+ `test_benchmark_index_resolver.py`（基准指数三阶映射）+ `test_financial_indicator_extract.py`/`test_financial_indicator_extract_edge.py`（财务指标全文解析：真实年报夹具逐字段复现/行文变体/单位换算/精度切分/扣非排除/取值窗口边界/异常幅度） | 1,234 |
-| **TUI 交互** | `tui/tui*.py`, `tui/status_line.py`, `tui/handlers*.py`, `tui/tui_keys.py`, `tui/text_layout.py` | `unit/ui/test_{tui_keys,tui_handlers,tui_menu}.py` + `test_text_layout.py`（显示宽度口径 + 盒线面板等宽不变式）+ `test_handlers_log.py`（日志可视化 + 系统自检）+ `test_tui_edge.py` + `unit/startup/test_startup_wizard.py`（unit_ui 标记） | 196 |
+| **TUI 交互** | `tui/tui*.py`, `tui/status_line.py`, `tui/handlers*.py`, `tui/tui_keys.py`, `tui/text_layout.py` | `unit/ui/test_{tui_keys,tui_handlers,tui_menu}.py`（含主循环退出通道：`0`/`X` 双退出、未映射键不误退、页脚提示与折行）+ `test_text_layout.py`（显示宽度口径 + 盒线面板等宽不变式 + 折行/截断原语）+ `unit/handlers/test_switch_panel_layout.py`（`[S]` 三档响应式排版：40~200 列不越界不变式、状态着色、窄屏 `k` 展开键名、操作后不整屏重绘）+ `test_handlers_log.py`（日志可视化 + 系统自检）+ `test_tui_edge.py` + `unit/startup/test_startup_wizard.py`（unit_ui 标记） | 196 |
 | **CLI 命令行** | `cli/cli.py`（门面）, `cli/_parser.py`, `cli/_handlers.py`, `cli/__main__.py`, `report/cli_progress.py` | `unit/cli/test_cli*.py`（含 doctor 子命令解析/处理/分派、模块入口退出码传递、报告完成后 LLM 成本与缓存命中率摘要调用、**调用级源指定 `--prefer-source` / `--exclude-source` 参数解析与覆盖作用域接入**/生效日 `--effective-date` argparse 类型钩子（共享层归一化前置校验）） | 140 |
 | **Web 服务** | `web/`(server, app, handlers, config_edit, upload, progress, runs) | `unit/web/test_{upload,upload_edge,progress,runs,handlers,server}.py` + `test_config_edit.py`/`test_config_edit_edge.py`（启动防护 output_dir 写锁/端口占用、上传安全、进度事件缓冲、RunManager 运行管理、Flask 路由全链路、配置编辑：白名单完备/写分派/校验守卫/写前备份/极端输入）+ `test_smoke_web.py`（11 项全链路断言）+ `test_handlers.py` 日志/健康历史/自检端点（/api/logs + /api/health/history + /api/doctor）+ `test_health_credential.py`（健康检查凭据跳过态与就绪摘要）+ `test_handlers.py` 短缓存并发安全（线程锁读写段/TTL/?fresh=1/8 线程并发写）+ `test_whatif_api.py`/`test_whatif_api_edge.py`（调仓 What-if 接口：成功链路/参数校验/错误信封/同源 403/互斥 429/生效日容错）+ `test_cache_api.py`（缓存管理接口：统计只读 dry_run/前缀降序保序/清理计数透传/同源 403）+ `test_web_static_serving.py` 五区页签结构契约（页签↔面板配对/What-if 控件/缓存控件/main.js 接线） | 283 |
 | **报告问答** | `qa/`(context, session) | `unit/qa/`：test_report_qa_context（分章提取/表头名映射持仓/摘要与上限截断/生成条件声明）+ test_report_qa_context_edge（路径净化三层防御/锚点缺失/整体上限钉死）+ test_report_qa_session（编排契约/历史折叠/用量独立记账/事实核对降级与警示/会话表并发隔离）+ test_report_qa_session_edge（轮数硬上限/输入软上限/上下文失败不耗轮）+ test_report_qa_ask（开关门 403/参数与路径净化 400/错误码→状态码映射/信封契约）+ test_report_qa_partial（报告区块 partial：Data States/信封消费/token 样式纪律/主模板 guard/开关隔离渲染，文件在 unit/report、按 unit_qa 计入本域） | 87 |

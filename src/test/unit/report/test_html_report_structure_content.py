@@ -393,35 +393,29 @@ class TestHtmlInteractiveCharts(unittest.TestCase):
         self.assertIsNone(soup.find(id="portfolioChart"))
         self.assertIsNone(soup.find(id="drawdownChart"))
 
-    def test_flag_off_legacy_canvas_regression(self) -> None:
-        """Flag OFF 时报告与基础版一致（Canvas + 表格）。
+    def test_sole_chartjs_renderer_regression(self) -> None:
+        """Chart.js 为唯一渲染器：历史章输出交互 canvas，旧 Canvas 路径零残留。
 
-        enable_interactive_charts=False（默认渲染路径）：
-          - 6 个 Chart.js canvas 均不输出（无空 div / 空 canvas 残留）
-          - Canvas（portfolioChart / drawdownChart）正常保留
-          - drawSimpleChart 定义保留（绘图函数可用）
+        enable_interactive_charts 开关已随 Canvas 回退分支移除（回归锚点）：
+          - chart_portfolio_line / chart_drawdown / chart_radar canvas 均输出
+          - 旧 portfolioChart / drawdownChart canvas 与 drawSimpleChart 定义不再出现
         """
         order = [dict(sec) for sec in _REPORT_SECTION_DEFAULT]
         numbers = {sec["key"]: sec["number"] for sec in order}
         sv_dict = {sec["key"]: True for sec in order}
         data = _build_minimal_render_data(order, numbers, sv_dict)
         data["history_data"] = self._HISTORY
-        # 显式置 False（默认值即 False，此处防御性声明）
-        data["enable_interactive_charts"] = False
+        data["chart_datasets"] = {
+            k: {"labels": ["a"], "datasets": [{"data": [1.0]}]}
+            for k in ("portfolio_line", "drawdown", "category_doughnut", "industry_bar", "penetration_bar", "radar")
+        }
         soup = _render_template(data)
 
-        for key in (
-            "chart_portfolio_line",
-            "chart_drawdown",
-            "chart_category_doughnut",
-            "chart_industry_bar",
-            "chart_penetration_bar",
-            "chart_radar",
-        ):
-            self.assertIsNone(soup.find(id=key), f"Flag OFF 时不应输出 {key} canvas")
-        self.assertIsNotNone(soup.find(id="portfolioChart"), "Flag OFF 时应保留旧净值 Canvas")
-        self.assertIsNotNone(soup.find(id="drawdownChart"), "Flag OFF 时应保留旧回撤 Canvas")
-        self.assertIn("drawSimpleChart", str(soup), "Flag OFF 时应保留旧绘图函数")
+        for key in ("chart_portfolio_line", "chart_drawdown", "chart_radar"):
+            self.assertIsNotNone(soup.find(id=key), f"应输出 {key} canvas")
+        self.assertIsNone(soup.find(id="portfolioChart"), "旧净值 Canvas 不应再出现")
+        self.assertIsNone(soup.find(id="drawdownChart"), "旧回撤 Canvas 不应再出现")
+        self.assertNotIn("drawSimpleChart", str(soup), "旧绘图函数不应再出现")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1063,7 +1057,7 @@ class TestChartCaptionContract(unittest.TestCase):
     def test_corr_rolling_chart_has_caption(self) -> None:
         partial = self._TMPL_ROOT / "partials" / "position_structure_section.html"
         text = partial.read_text(encoding="utf-8")
-        canvas_at = text.index('id="corrRollingChart"')
+        canvas_at = text.index('id="chart_corr_rolling"')
         caption_at = text.index('class="chart-caption"', canvas_at)
         assert caption_at > canvas_at
 

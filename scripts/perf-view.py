@@ -374,23 +374,58 @@ def _bucket_key(timestamp: str, by: str) -> str:
 
 
 def _bucket_lines(records: list[dict[str, Any]], by: str) -> list[str]:
-    """按时段聚合（day/week/hour）：样本数 / 中位 / P95 / 最长。"""
+    """按时段聚合（day/week/hour）：样本数 / 中位 / P95 / 最长 / 费用合计 / 费用环比。
+
+    费用列仅在范围内存在费用样本时出现（零费用不制造全列噪音）；费用环比 =
+    本时段 llm 费用合计 − 上一时序时段合计，首时段无上期为 —。时段键升序即
+    时间序（ISO 日期 / ISO 周 / 小时），费用与耗时同表交叉，直接读出趋势。
+    """
     buckets: dict[str, list[float]] = defaultdict(list)
+    costs: dict[str, float] = defaultdict(float)
     for r in records:
-        buckets[_bucket_key(r.get("timestamp", ""), by)].append(float(r.get("total_seconds") or 0))
+        key = _bucket_key(r.get("timestamp", ""), by)
+        buckets[key].append(float(r.get("total_seconds") or 0))
+        llm = r.get("llm")
+        if isinstance(llm, dict):
+            costs[key] += float(llm.get("total_cost") or 0)
     if not buckets:
         return []
+    has_cost = any(v > 0 for v in costs.values())
     label = {"day": "日期", "week": "ISO 周", "hour": "小时"}[by]
-    lines = [
-        f"## 时段聚合（按{label}）",
-        "",
-        "| 时段 | 样本数 | 中位 | P95 | 最长 |",
-        "|:-----|------:|----:|----:|-----:|",
-    ]
-    for key in sorted(buckets):
+    lines = [f"## 时段聚合（按{label}）", ""]
+    if has_cost:
+        lines.extend(
+            [
+                "| 时段 | 样本数 | 中位 | P95 | 最长 | 费用合计 | 费用环比 |",
+                "|:-----|------:|----:|----:|-----:|--------:|--------:|",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                "| 时段 | 样本数 | 中位 | P95 | 最长 |",
+                "|:-----|------:|----:|----:|-----:|",
+            ]
+        )
+    keys = sorted(buckets)
+    prev_cost: float | None = None
+    for key in keys:
         vals = buckets[key]
-        lines.append(
+        row = (
             f"| {key} | {len(vals)} | {_median(vals):.1f}s | {_percentile(vals, 95):.1f}s | {_min_max(vals)[1]:.1f}s |"
+        )
+        if has_cost:
+            cur = costs.get(key, 0.0)
+            delta_cell = "—" if prev_cost is None else f"{cur - prev_cost:+.4f}"
+            row += f" {cur:.4f} | {delta_cell} |"
+            prev_cost = cur
+        lines.append(row)
+    if has_cost and len(keys) >= 2:
+        last_cost = costs.get(keys[-1], 0.0)
+        prev_cost2 = costs.get(keys[-2], 0.0)
+        lines.append("")
+        lines.append(
+            f"**费用环比（末档 vs 前档）**：{prev_cost2:.4f} → {last_cost:.4f}（{last_cost - prev_cost2:+.4f}）"
         )
     lines.append("")
     return lines
@@ -553,8 +588,51 @@ def _compare_lines(records: list[dict[str, Any]], version_a: str, version_b: str
     return lines
 
 
-def _machine_summary(records: list[dict[str, Any]], outlier_k: float = _OUTLIER_K) -> dict[str, Any]:
-    """机读汇总：与 Markdown 段同源的分位/离群/异常/演进/漂移统计。"""
+def _llm_cost_data(records: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """机读费用汇总：含 llm 记录数与费用合计/均值/中位/单次最高（无样本 → None）。
+
+    费用字段与 Markdown LLM 段的「累计费用」同源（``llm.total_cost``），
+    统计用既有均值/中位/极值 helper（中位稳健抗单次异常）。
+    """
+    costs = [float(r["llm"].get("total_cost") or 0) for r in records if isinstance(r.get("llm"), dict) and r["llm"]]
+    if not costs:
+        return None
+    return {
+        "runs": len(costs),
+        "total": round(sum(costs), 6),
+        "mean": round(_mean(costs), 6),
+        "median": round(_median(costs), 6),
+        "max": round(_min_max(costs)[1], 6),
+    }
+
+
+def _cost_period_data(records: list[dict[str, Any]], by: str) -> list[dict[str, Any]]:
+    """按 ``--by`` 时段的费用序列（机读）：``[{bucket, runs, total_cost}]``（时段键升序）。
+
+    runs 为时段内全部记录数，total_cost 仅累加含 ``llm.total_cost`` 的记录；
+    时段键升序即时间序，消费方可直接做相邻差分。
+    """
+    runs: dict[str, int] = defaultdict(int)
+    costs: dict[str, float] = defaultdict(float)
+    for r in records:
+        key = _bucket_key(r.get("timestamp", ""), by)
+        runs[key] += 1
+        llm = r.get("llm")
+        if isinstance(llm, dict):
+            costs[key] += float(llm.get("total_cost") or 0)
+    return [{"bucket": key, "runs": runs[key], "total_cost": round(costs.get(key, 0.0), 6)} for key in sorted(runs)]
+
+
+def _machine_summary(
+    records: list[dict[str, Any]],
+    outlier_k: float = _OUTLIER_K,
+    by: str | None = None,
+) -> dict[str, Any]:
+    """机读汇总：与 Markdown 段同源的分位/离群/异常/演进/漂移统计 + 费用字段。
+
+    ``llm_cost`` 恒为键（无费用样本为 null）；``by`` 给定时附 ``by_period``
+    时段费用序列，否则为 null。
+    """
     by_type: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for r in records:
         by_type[str(r.get("report_type", "?"))].append(r)
@@ -562,6 +640,8 @@ def _machine_summary(records: list[dict[str, Any]], outlier_k: float = _OUTLIER_
         "total_seconds": _total_summary(records),
         "per_holding_median": _per_holding_median(records),
         "by_report_type": {rt: _total_summary(sub) for rt, sub in sorted(by_type.items())},
+        "llm_cost": _llm_cost_data(records),
+        "by_period": _cost_period_data(records, by) if by else None,
         "outliers": [
             {
                 "timestamp": r.get("timestamp", ""),
@@ -591,13 +671,21 @@ def _machine_summary(records: list[dict[str, Any]], outlier_k: float = _OUTLIER_
     }
 
 
-def _machine_readable(records: list[dict[str, Any]], fmt: str, outlier_k: float = _OUTLIER_K) -> str:
-    """机读输出：JSON 信封（记录 + 汇总统计）或 CSV（含归一/离群/最慢阶段列）。"""
+def _machine_readable(
+    records: list[dict[str, Any]],
+    fmt: str,
+    outlier_k: float = _OUTLIER_K,
+    by: str | None = None,
+) -> str:
+    """机读输出：JSON 信封（记录 + 汇总统计含费用字段）或 CSV（含归一/离群/最慢阶段列）。
+
+    ``by`` 透传给汇总的 ``by_period`` 时段费用序列（仅 JSON；CSV 列不变）。
+    """
     if fmt == "json":
         payload = {
             "record_count": len(records),
             "records": records,
-            "summary": _machine_summary(records, outlier_k),
+            "summary": _machine_summary(records, outlier_k, by),
         }
         return json.dumps(payload, ensure_ascii=False, indent=2)
     import csv
@@ -840,7 +928,11 @@ def main() -> int:
         metavar=("旧版本", "新版本"),
         help="版本间阶段级对比（带变异系数判显著）",
     )
-    parser.add_argument("--json", action="store_true", help="机读输出：完整记录 JSON")
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="机读输出：完整记录 JSON（附 llm_cost 费用汇总，--by 时另附 by_period 时段费用序列）",
+    )
     parser.add_argument("--csv", action="store_true", help="机读输出：逐运行 CSV")
     parser.add_argument("--summary", action="store_true", help="仅输出概览段（略去逐版本分组详情）")
     parser.add_argument(
@@ -863,7 +955,7 @@ def main() -> int:
     if args.json or args.csv:
         if args.save:
             print("[!] --save 在机读模式下不适用（--json/--csv 只向 stdout 输出）", file=sys.stderr)
-        print(_machine_readable(scoped, "json" if args.json else "csv", args.outlier_k))
+        print(_machine_readable(scoped, "json" if args.json else "csv", args.outlier_k, by=args.by))
     else:
         report = build_trend_report(
             records,

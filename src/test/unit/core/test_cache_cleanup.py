@@ -370,6 +370,30 @@ class TestCleanupExpired(CacheTestBase):
 
 
 # ═══════════════════════════════════════════════════════════
+#  生成入口自动清理包装（尽力而为）测试
+# ═══════════════════════════════════════════════════════════
+
+
+class TestAutoCleanupBestEffort(CacheTestBase):
+    """auto_cleanup_expired：正常委托 cleanup_expired + 异常吞掉不影响调用方。"""
+
+    def test_auto_cleanup_delegates_to_cleanup_expired(self):
+        """正常路径委托 cleanup_expired(dry_run=False) 并透传删除数。"""
+        with patch("src.python.cache._cleanup.cleanup_expired", return_value=3) as m:
+            from src.python.cache import auto_cleanup_expired
+
+            self.assertEqual(auto_cleanup_expired(), 3)
+            m.assert_called_once_with(dry_run=False)
+
+    def test_auto_cleanup_swallows_exception(self):
+        """清理抛任何异常时返回 0 且不上抛（主流程绝不因清理失败中断）。"""
+        with patch("src.python.cache._cleanup.cleanup_expired", side_effect=OSError("磁盘错误")):
+            from src.python.cache import auto_cleanup_expired
+
+            self.assertEqual(auto_cleanup_expired(), 0)
+
+
+# ═══════════════════════════════════════════════════════════
 #  clear_by_group 测试
 # ═══════════════════════════════════════════════════════════
 
@@ -413,6 +437,25 @@ class TestClearByGroup(CacheTestBase):
             self.assertFalse(os.path.exists(_cache_path(key)))
         self.assertTrue(os.path.exists(_cache_path("news_abc")))
         self.assertIn("股票价格", result)
+
+    def test_clear_preload_group_covers_debate_segments(self):
+        """preload 组清除辩论三段缓存（缓存专属登记改挂后防回退）。"""
+        self._write_cache("llm_debate_pro_abc", {"d": 1}, ts=1000.0)
+        self._write_cache("llm_debate_con_abc", {"d": 2}, ts=1000.0)
+        self._write_cache("llm_debate_synthesis_abc", {"d": 3}, ts=1000.0)
+        self._write_cache("news_abc", {"d": 4}, ts=1000.0)
+
+        from src.python.cache import clear_by_group
+
+        result = clear_by_group("preload")
+
+        from src.python.cache import _cache_path
+
+        for key in ("llm_debate_pro_abc", "llm_debate_con_abc", "llm_debate_synthesis_abc"):
+            self.assertFalse(os.path.exists(_cache_path(key)), key)
+        self.assertTrue(os.path.exists(_cache_path("news_abc")))
+        for label in ("辩论白脸", "辩论黑脸", "辩论综合"):
+            self.assertIn(label, result)
 
     def test_clear_refresh_clears_exact_keys(self):
         """refresh 组也清除 fund_benchmarks 精确键名。"""

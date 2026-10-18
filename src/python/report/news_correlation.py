@@ -385,11 +385,10 @@ def _apply_llm_enhancement(
     meta["token_usage"] = token_usage
     meta["thinking_enabled"] = llm_config.get("thinking_enabled_news_correlation", False)
     if token_usage and token_usage.get("model"):
-        meta["cost_estimation"] = estimate_cost(
-            token_usage.get("model", ""),
-            token_usage.get("input_tokens", 0),
-            token_usage.get("output_tokens", 0),
-        )
+        from src.python.llm.session import _normalize_usage_tokens
+
+        _inp, _out, _hit = _normalize_usage_tokens("claude" if "input_tokens" in token_usage else "openai", token_usage)
+        meta["cost_estimation"] = estimate_cost(token_usage.get("model", ""), _inp, _out, cache_hit_input_tokens=_hit)
     else:
         meta["cost_estimation"] = "-"
     if cached:

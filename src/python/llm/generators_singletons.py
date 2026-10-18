@@ -13,7 +13,6 @@ if TYPE_CHECKING:
     import httpx
 
 from src.python.config.features import is_feature_enabled
-from src.python.core.decision_header import structured_header_cache_suffix
 from src.python.llm.module_fingerprint import (
     ModuleFingerprintInputs,
     debate_feature_cache_suffix,
@@ -158,9 +157,8 @@ def generate_expert_review(
     _fp_suffix = debate_feature_cache_suffix()
     _enable_conditional = "c" in _fp_suffix
     _enable_signal_digest = is_feature_enabled("deterministic_signal")
-    # 结构化决策头（decision_header_parse）：开关判定收敛在 suffix 函数内，
-    # 关闭 → "" 且不追加提示词契约段；指纹侧由 module_fingerprint 同源现算。
-    _structured_suffix = structured_header_cache_suffix()
+    # 结构化决策头（已内置）：提示词始终追加契约段；缓存指纹后缀（恒含 _dh）
+    # 由 module_fingerprint 同源现算。
     # 指纹输入闭包与预检侧同构；后缀（辩论增强/教训/信号/决策头）统一在
     # module_fingerprint 内拼接，读写键同源由结构保证。
     # competitive_context / metrics 是其提示词正文段（对比块 + 指标表 + 情景分析），
@@ -201,7 +199,6 @@ def generate_expert_review(
             metrics=metrics,
             enable_conditional=_enable_conditional,
             enable_signal_digest=_enable_signal_digest,
-            enable_structured_header=bool(_structured_suffix),
         )
 
     return generate_llm_module(

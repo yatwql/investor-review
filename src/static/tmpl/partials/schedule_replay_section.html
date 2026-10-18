@@ -37,7 +37,7 @@
 
         <!-- ① 双线图：纪律回放 vs 买入持有（交互图表开启时渲染） -->
         <div style="font-weight: bold; font-size: var(--fs-body); margin: 10px 0 6px;">① 纪律回放 vs 买入持有</div>
-        {% if enable_interactive_charts and _sr.get("chart") %}
+        {% if _sr.get("chart") %}
         <script type="application/json" id="schedule-replay-chart-data">{{ _sr.get("chart") | tojson }}</script>
         <div class="chart-box" style="height:300px;">
             <canvas id="chart_schedule_replay" width="800" height="300" style="width:100%;height:100%;" aria-label="调仓纪律回放与买入持有净值对比折线图（悬停查看精确值）" role="img">图表无法显示，数据见报告明细表格</canvas>

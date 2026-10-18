@@ -747,7 +747,9 @@ class TestMenuBlockConsistency:
     def test_parenthetical_clarification_allowed(self, drift, tmp_path):
         """括号内补充手册说明（头一致）不误报。"""
         p = tmp_path / "how-to-use-tui-menu.md"
-        findings = drift.check_menu_blocks({p: self._menu_doc(relabel=("3", "清理过期缓存文件（二级：确认后执行）"))})
+        findings = drift.check_menu_blocks(
+            {p: self._menu_doc(relabel=("4", "缓存管理（统计与清理）（二级：先统计后清理）"))}
+        )
         assert findings == []
 
     def test_multicolumn_and_cursor_prefix_parsed(self, drift):

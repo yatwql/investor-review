@@ -229,7 +229,7 @@ class TestWriteHtmlReportChartMerge(unittest.TestCase):
         mock_template.return_value = tmpl
         return tmpl
 
-    def _call_write_html_report(self, *, chart_datasets=None, enable_interactive_charts=False):
+    def _call_write_html_report(self, *, chart_datasets=None):
         from src.python.report.html_writer import write_html_report
 
         with ExitStack() as stack:
@@ -256,7 +256,6 @@ class TestWriteHtmlReportChartMerge(unittest.TestCase):
                 output_dir=self._tmp,
                 include_news=False,  # 图表补齐与新闻无关，跳过新闻获取避免真实抓取
                 chart_datasets=chart_datasets,
-                enable_interactive_charts=enable_interactive_charts,
             )
 
         _, kwargs = tmpl.render.call_args
@@ -265,7 +264,7 @@ class TestWriteHtmlReportChartMerge(unittest.TestCase):
     def test_chart_merge_fills_category_doughnut(self):
         """分类饼图由 cat_data 补齐，不显示 100% 其他/暂不可用。"""
         chart_datasets = {"portfolio_line": {}, "drawdown": {}, "radar": {}}
-        kwargs = self._call_write_html_report(chart_datasets=chart_datasets, enable_interactive_charts=True)
+        kwargs = self._call_write_html_report(chart_datasets=chart_datasets)
         merged = kwargs["chart_datasets"]
         self.assertEqual(merged["category_doughnut"]["labels"], ["股票", "基金"])
         self.assertEqual(merged["category_doughnut"]["datasets"][0]["data"], [8000.0, 4000.0])
@@ -276,7 +275,7 @@ class TestWriteHtmlReportChartMerge(unittest.TestCase):
     def test_chart_merge_fills_penetration_charts(self):
         """行业分布 + 穿透 TOP10 图由 penetration 补齐，不误报"暂不可用"。"""
         chart_datasets = {"portfolio_line": {}, "drawdown": {}, "radar": {}}
-        kwargs = self._call_write_html_report(chart_datasets=chart_datasets, enable_interactive_charts=True)
+        kwargs = self._call_write_html_report(chart_datasets=chart_datasets)
         merged = kwargs["chart_datasets"]
         self.assertEqual(merged["industry_bar"]["labels"], ["白酒", "新能源"])
         self.assertEqual(merged["penetration_bar"]["labels"], ["贵州茅台", "宁德时代"])
@@ -288,22 +287,22 @@ class TestWriteHtmlReportChartMerge(unittest.TestCase):
         章节开头不得显示"行业数据暂不可用/穿透数据暂不可用"。
         """
         chart_datasets = {"portfolio_line": {}, "drawdown": {}, "radar": {}}
-        kwargs = self._call_write_html_report(chart_datasets=chart_datasets, enable_interactive_charts=True)
+        kwargs = self._call_write_html_report(chart_datasets=chart_datasets)
         merged = kwargs["chart_datasets"]
         self.assertTrue(merged["industry_bar"]["labels"], "部分失败时行业图不应为空")
         self.assertTrue(merged["penetration_bar"]["labels"], "部分失败时穿透图不应为空")
 
-    def test_chart_merge_skipped_when_flag_off(self):
-        """Flag 关闭（enable_interactive_charts=False）→ 不触发补齐，模板不渲染图表。"""
+    def test_chart_merge_fills_excess_and_corr_placeholders(self):
+        """补齐含滚动超额/相关滚动两图：无源数据时产出空占位（模板守卫跳过渲染）。"""
         chart_datasets = {"portfolio_line": {}, "drawdown": {}, "radar": {}}
-        kwargs = self._call_write_html_report(chart_datasets=chart_datasets, enable_interactive_charts=False)
+        kwargs = self._call_write_html_report(chart_datasets=chart_datasets)
         merged = kwargs["chart_datasets"]
-        self.assertNotIn("category_doughnut", merged)
-        self.assertNotIn("industry_bar", merged)
+        self.assertEqual(merged["excess_rolling"], {})
+        self.assertEqual(merged["corr_rolling"], {})
 
     def test_chart_merge_skipped_when_datasets_none(self):
-        """chart_datasets=None → 补齐逻辑跳过（保持默认不渲染 Chart.js）。"""
-        kwargs = self._call_write_html_report(chart_datasets=None, enable_interactive_charts=True)
+        """chart_datasets=None → 补齐逻辑跳过（模板图表容器显示占位文案）。"""
+        kwargs = self._call_write_html_report(chart_datasets=None)
         self.assertIsNone(kwargs["chart_datasets"])
 
 

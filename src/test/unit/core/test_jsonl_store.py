@@ -94,6 +94,44 @@ class TestAppendJsonlAtomic:
         assert append_jsonl_atomic(str(tmp_path / "events.jsonl"), '{"a": 1}\n') is False
 
 
+class TestMaxLinesRetention:
+    """max_lines 尾部保留（遥测防无界增长；业务态账本不设）。"""
+
+    def test_trims_oldest_beyond_cap(self, tmp_path):
+        """超出上限 → 只留末尾 N 行，顺序保持（最新在末尾）。"""
+        target = tmp_path / "events.jsonl"
+        for i in range(5):
+            append_jsonl_atomic(str(target), f'{{"seq": {i}}}\n', max_lines=3)
+
+        assert [r["seq"] for r in read_jsonl(str(target))] == [2, 3, 4]
+
+    def test_below_cap_unchanged(self, tmp_path):
+        """未超上限 → 不裁剪（与不设上限行为一致）。"""
+        target = tmp_path / "events.jsonl"
+        append_jsonl_atomic(str(target), '{"seq": 1}\n', max_lines=3)
+        append_jsonl_atomic(str(target), '{"seq": 2}\n', max_lines=3)
+
+        assert [r["seq"] for r in read_jsonl(str(target))] == [1, 2]
+
+    def test_batch_payload_trims_in_one_write(self, tmp_path):
+        """批量写入 + 裁剪：一次调用追加多行，超限只留末尾（零额外 I/O）。"""
+        target = tmp_path / "events.jsonl"
+        append_jsonl_atomic(str(target), '{"seq": 0}\n', max_lines=3)
+        payload = "".join(f'{{"seq": {i}}}\n' for i in range(1, 6))
+
+        append_jsonl_atomic(str(target), payload, max_lines=3)
+
+        assert [r["seq"] for r in read_jsonl(str(target))] == [3, 4, 5]
+
+    def test_none_keeps_everything(self, tmp_path):
+        """max_lines=None（缺省）→ 全量保留（业务态/未设上限调用点契约）。"""
+        target = tmp_path / "events.jsonl"
+        for i in range(4):
+            append_jsonl_atomic(str(target), f'{{"seq": {i}}}\n')
+
+        assert [r["seq"] for r in read_jsonl(str(target))] == [0, 1, 2, 3]
+
+
 class TestReadJsonl:
     """容错读取。"""
 

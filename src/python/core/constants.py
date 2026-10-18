@@ -37,7 +37,7 @@ PROJECT_ROOT = _find_project_root()
 # 应用名称（单一来源，TUI 首页 / 启动日志 / Web 首页 / HTML 报告首页 / Excel 首页统一引用）
 APP_NAME = "投资复盘助手"
 
-APP_VERSION = "0.13.5"
+APP_VERSION = "0.13.6"
 
 # ── 报告产物文件名（单一来源：Excel/HTML 写入器与 Web 预览下载统一引用） ──
 # 报告产物文件基名（归档名 = 基名 + 时间戳后缀）
@@ -86,14 +86,18 @@ MODEL_PRICING: dict[str, dict[str, float | dict[str, float]]] = {
     "claude-sonnet-4-6": {"input": 3.0, "output": 15.0, "input_cache_hit": 0.30},
     "claude-sonnet-4-8": {"input": 3.0, "output": 15.0, "input_cache_hit": 0.30},
     "claude-sonnet-4-": {"input": 3.0, "output": 15.0, "input_cache_hit": 0.30},
-    "claude-opus-4-6": {"input": 15.0, "output": 75.0, "input_cache_hit": 1.50},
-    "claude-opus-4-8": {"input": 15.0, "output": 75.0, "input_cache_hit": 1.50},
-    "claude-opus-4-": {"input": 15.0, "output": 75.0, "input_cache_hit": 1.50},
-    "claude-haiku-4-5": {"input": 0.25, "output": 1.25, "input_cache_hit": 0.025},
-    "claude-haiku-4-": {"input": 0.25, "output": 1.25, "input_cache_hit": 0.025},
-    "claude-fable-5": {"input": 3.0, "output": 15.0, "input_cache_hit": 0.30},
-    "gpt-4o": {"input": 2.5, "output": 10.0, "input_cache_hit": 2.5},
-    "gpt-4o-mini": {"input": 0.15, "output": 0.6, "input_cache_hit": 0.15},
+    # Opus 4.x 官方定价 $5/$25（缓存命中 $0.50，10%）；2026-10-17 官方定价页核实
+    "claude-opus-4-6": {"input": 5.0, "output": 25.0, "input_cache_hit": 0.50},
+    "claude-opus-4-8": {"input": 5.0, "output": 25.0, "input_cache_hit": 0.50},
+    "claude-opus-4-": {"input": 5.0, "output": 25.0, "input_cache_hit": 0.50},
+    # Haiku 4.5 官方 $1/$5（缓存命中 $0.10）；2026-10-17 官方定价页核实
+    "claude-haiku-4-5": {"input": 1.0, "output": 5.0, "input_cache_hit": 0.10},
+    "claude-haiku-4-": {"input": 1.0, "output": 5.0, "input_cache_hit": 0.10},
+    # Fable 5 官方 $10/$50（缓存命中 $1.00）；2026-10-17 官方定价页核实
+    "claude-fable-5": {"input": 10.0, "output": 50.0, "input_cache_hit": 1.00},
+    # OpenAI 缓存命中 50% 折扣；2026-10-17 官方定价页核实
+    "gpt-4o": {"input": 2.5, "output": 10.0, "input_cache_hit": 1.25},
+    "gpt-4o-mini": {"input": 0.15, "output": 0.6, "input_cache_hit": 0.075},
     # ── DeepSeek 峰谷定价（元/百万 token）──
     # base 为闲时价；peak 为高峰价（高峰时段为闲时的 2 倍）。峰谷时段、周末与法定
     # 节假日规则见下方 PRICING_PEAK_PERIODS / PRICING_WEEKEND_ALWAYS_IDLE /
@@ -131,11 +135,14 @@ MODEL_PRICING: dict[str, dict[str, float | dict[str, float]]] = {
     # kimi-k3：旗舰模型（1M 上下文）
     "kimi-k3": {"input": 20.0, "output": 100.0, "input_cache_hit": 2.00},
     # Gemini
-    "gemini-3.5-flash": {"input": 0.15, "output": 0.60, "input_cache_hit": 0.015},
-    "gemini-3.5-": {"input": 0.15, "output": 0.60, "input_cache_hit": 0.015},
-    "gemini-2.5-flash": {"input": 0.15, "output": 0.60, "input_cache_hit": 0.015},
-    "gemini-2.5-pro": {"input": 1.25, "output": 5.0, "input_cache_hit": 0.125},
-    "gemini-2.5-": {"input": 1.25, "output": 5.0, "input_cache_hit": 0.125},
+    # Gemini 3.5 Flash 正式 GA 价 $1.50/$9.00（缓存命中 $0.15）；2026-10-17 按 ai.google.dev 核实
+    "gemini-3.5-flash": {"input": 1.5, "output": 9.0, "input_cache_hit": 0.15},
+    "gemini-3.5-": {"input": 1.5, "output": 9.0, "input_cache_hit": 0.15},
+    # Gemini 2.5 Flash GA 价 $0.30/$2.50（缓存命中 $0.03）；2026-10-17 按 ai.google.dev 核实
+    "gemini-2.5-flash": {"input": 0.30, "output": 2.50, "input_cache_hit": 0.03},
+    # Gemini 2.5 Pro 官方 $1.25/$10.00（≤200k 上下文）；2026-10-17 按 ai.google.dev 核实
+    "gemini-2.5-pro": {"input": 1.25, "output": 10.0, "input_cache_hit": 0.125},
+    "gemini-2.5-": {"input": 1.25, "output": 10.0, "input_cache_hit": 0.125},
     "gemini-2.0-flash": {"input": 0.10, "output": 0.40, "input_cache_hit": 0.01},
     "gemini-2.0-": {"input": 0.10, "output": 0.40, "input_cache_hit": 0.01},
 }

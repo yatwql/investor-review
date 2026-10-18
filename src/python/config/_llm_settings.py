@@ -66,6 +66,15 @@ _llm_config_size: int = 0
 _llm_config_lock = threading.Lock()
 
 
+def default_enabled_llm() -> dict[str, bool]:
+    """返回 ``enabled_llm`` 的出厂默认映射（副本）。
+
+    渠道与展示层需要「模块出厂默认开/关」时走本函数，避免直接导入私有默认模板
+    （``_DEFAULT_LLM_SETTINGS``）——前者是公开面，默认值调整只改一处。
+    """
+    return dict(_DEFAULT_LLM_SETTINGS.get("enabled_llm") or {})
+
+
 def _check_unknown_llm_keys(settings: dict) -> None:
     """检查 llm_settings.json 中是否存在未知键名。"""
     unknown = [key for key in settings if key not in _KNOWN_LLM_SETTINGS_KEYS]

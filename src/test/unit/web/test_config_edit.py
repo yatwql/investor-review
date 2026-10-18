@@ -161,8 +161,8 @@ class TestApplyFeaturesWrite:
     def test_standard_switch_write_takes_effect(self, app_client):
         """常规开关（量化指标）写：features.json 含覆写，运行时开关生效。
 
-        缺陷场景：量化指标开关与 ``enable_interactive_charts`` 从未出现在任何
-        界面通道内，用户只能手改 features.json 才能关掉量化指标输出；本用例锁定
+        缺陷场景：量化指标开关曾无任何界面通道，用户只能手改
+        features.json 才能关掉量化指标输出；本用例锁定
         Web 面板对呈现与体验组开关的写入路径与实验项同源可用。
         """
         from src.python.config.features import FEATURES_FILE, is_feature_enabled
@@ -318,7 +318,7 @@ class TestReportScopeOverWeb:
     def test_whitelist_has_bare_flag_keys_not_config_paths(self):
 
         assert not [k for k in config_edit_whitelist if k.startswith("report_submodules.")], "旧 config 路径应已移除"
-        for flag in ("data_quality", "market_temperature", "financial_indicator"):
+        for flag in ("data_quality", "market_temperature", "stock_fundamentals"):
             assert config_edit_whitelist[flag] == {"kind": "bool", "target": "features", "writer": "features"}
 
     def test_surface_groups_derive_from_registry(self):

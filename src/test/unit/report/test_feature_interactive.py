@@ -1,8 +1,8 @@
-"""交互图表 Feature Flag + 报告管线集成单元测试。
+"""交互图表单渲染器（Chart.js 唯一路径）+ 报告管线集成单元测试。
 
 覆盖：
-  - enable_interactive_charts Flag 默认开启（features.py 注册）
-  - _build_chart_datasets_for_report：Flag 关闭 → None；开启 → 数据集 dict
+  - enable_interactive_charts 开关已随 Canvas 回退分支移除（注册表与模板零残留）
+  - _build_chart_datasets_for_report：恒构建数据集（无 Flag 分支）
   - 顶层兜底：build_chart_datasets 异常 → 返回空 dict（报告仍正常）
   - _copy_js_assets：Chart.js 本地 bundle 全部 JS 文件随报告复制
   - 调试页 test-chart.html 引擎注入列表与报告模板一致（浏览器人工验证前置载体）
@@ -22,7 +22,6 @@ from unittest.mock import patch
 
 import pytest
 
-from src.python.config.features import is_feature_enabled
 from src.python.report._report_generation import _build_chart_datasets_for_report
 from src.python.report.html_writer import _copy_js_assets, _inline_js_assets
 from src.python.report.html_writer_assets import JS_ASSETS
@@ -45,31 +44,34 @@ def _history_ok() -> dict:
     }
 
 
-class TestFeatureFlagRegistration:
-    def test_flag_registered_and_default_enabled(self) -> None:
-        """enable_interactive_charts 注册且默认开启。"""
-        assert is_feature_enabled("enable_interactive_charts") is True
+class TestChartSoleRendererRegression:
+    """单渲染器回归：enable_interactive_charts 已随 Canvas 回退路径整体移除。"""
 
-    def test_flag_disabled_via_overrides(self) -> None:
-        """运行时关闭 Flag 生效。"""
-        from src.python.config.features import set_feature_enabled
+    def test_flag_entry_absent_from_registry(self) -> None:
+        from src.python.config.features import feature_switch_registry
 
-        try:
-            set_feature_enabled("enable_interactive_charts", False)
-            assert is_feature_enabled("enable_interactive_charts") is False
-        finally:
-            set_feature_enabled("enable_interactive_charts", True)
+        assert "enable_interactive_charts" not in feature_switch_registry
+
+    def test_templates_free_of_legacy_canvas_path(self) -> None:
+        tmpl_root = os.path.normpath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..", "static", "tmpl"),
+        )
+        hits = []
+        for dirpath, _dirs, files in os.walk(tmpl_root):
+            for fname in files:
+                if not fname.endswith(".html"):
+                    continue
+                with open(os.path.join(dirpath, fname), encoding="utf-8") as f:
+                    txt = f.read()
+                if "drawSimpleChart" in txt or "enable_interactive" in txt:
+                    hits.append(fname)
+        assert hits == []
 
 
 class TestBuildChartDatasetsForReport:
-    def test_flag_off_returns_none(self) -> None:
-        """Flag 关闭 → helper 返回 None（模板回退旧 Canvas）。"""
-        result = _build_chart_datasets_for_report(history_data=_history_ok(), enable_interactive=False)
-        assert result is None
-
-    def test_flag_on_returns_datasets(self) -> None:
-        """Flag 开启 → helper 返回数据集 dict。"""
-        result = _build_chart_datasets_for_report(history_data=_history_ok(), enable_interactive=True)
+    def test_always_returns_datasets(self) -> None:
+        """无 Flag 分支：helper 恒构建数据集 dict。"""
+        result = _build_chart_datasets_for_report(history_data=_history_ok())
         assert isinstance(result, dict)
         assert "portfolio_line" in result
 
@@ -81,7 +83,7 @@ class TestBuildChartDatasetsForReport:
             "src.python.report.chart_data_builder.build_chart_datasets",
             side_effect=RuntimeError("boom"),
         ):
-            result = _build_chart_datasets_for_report(history_data=_history_ok(), enable_interactive=True)
+            result = _build_chart_datasets_for_report(history_data=_history_ok())
         assert result == {}
 
 

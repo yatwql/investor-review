@@ -29,10 +29,19 @@ class TestLogTokenUsage(unittest.TestCase):
         with self.assertLogs("invest", level="INFO") as cm:
             _log_token_usage("claude", usage, "test_label", model_name="test-model")
         joined = "".join(cm.output)
-        self.assertIn("输入 100", joined)
+        # 归一口径：输入显示总量 100+10=110（命中单列"缓存命中 10"）
+        self.assertIn("输入 110", joined)
         self.assertIn("输出 50", joined)
         self.assertIn("缓存命中 10", joined)
         self.assertIn("test_label", joined)
+
+    def test_cache_miss_clamp_prevents_negative_cost(self) -> None:
+        """命中 > 总输入（非归一调用方）→ cache_miss 下限 0，费用不出现负数。"""
+        from src.python.llm.pricing import estimate_cost
+
+        cost = estimate_cost("deepseek-v4-flash", 180, 357, cache_hit_input_tokens=1792)
+        self.assertTrue(cost.startswith(("¥", "$", "€", "£")))
+        self.assertGreaterEqual(float(cost.lstrip("¥$€£")), 0.0)
 
     def test_openai_usage_logged(self) -> None:
         """OpenAI 格式用量 → info 日志含输入/输出（无缓存命中字段）。"""

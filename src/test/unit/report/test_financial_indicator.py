@@ -155,7 +155,7 @@ class TestOrchestration:
         details = [SimpleNamespace(code="600900", price=40.0)]
         from src.python.config.features import set_feature_enabled
 
-        set_feature_enabled("financial_indicator", True)
+        set_feature_enabled("stock_fundamentals", True)
         out = compute_financial_indicator_data([_holding()], None, {}, None, details=details)
         assert out is not None and out["available"] is True
         assert out["rows"][0]["pe"] == pytest.approx(20.0)
@@ -166,7 +166,7 @@ class TestOrchestration:
 
         from src.python.config.features import set_feature_enabled
 
-        set_feature_enabled("financial_indicator", True)
+        set_feature_enabled("stock_fundamentals", True)
         out = compute_financial_indicator_data(
             [],
             [
@@ -249,18 +249,18 @@ class TestDatasinkGate:
 class TestSwitchAndWiring:
     def test_switch_accessor_ignores_config_arg(self):
         """config 形参仅为兼容保留：取值只认功能开关注册表，传什么都不参与判定。"""
-        from src.python.config import is_enable_financial_indicator
+        from src.python.config import is_enable_stock_fundamentals
         from src.python.config.features import set_feature_enabled
 
-        assert is_enable_financial_indicator({"financial_indicator": True}) is False
-        set_feature_enabled("financial_indicator", True)
-        assert is_enable_financial_indicator({"financial_indicator": False}) is True
+        assert is_enable_stock_fundamentals({"stock_fundamentals": True}) is False
+        set_feature_enabled("stock_fundamentals", True)
+        assert is_enable_stock_fundamentals({"stock_fundamentals": False}) is True
 
     def test_default_config_has_switch_off(self):
         """默认关的事实来源 = 功能开关注册表（GROUP_STANDALONE）。"""
         from src.python.config.features import feature_switch_registry
 
-        assert feature_switch_registry["financial_indicator"].default is False
+        assert feature_switch_registry["stock_fundamentals"].default is False
 
     def test_registry_section_registered(self):
         from src.python.core.registry import _REPORT_SECTION_DEFAULT, get_report_section_keys, get_report_sheet_name

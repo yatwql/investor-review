@@ -51,7 +51,7 @@ def _contract() -> dict:
                 "max_score": 20,
                 "status": "unverified",
                 "evidence": [],
-                "unverified": ["未取到个股 ROE（功能开关 `financial_indicator` 默认关）→ 该维不计分"],
+                "unverified": ["未取到个股 ROE（功能开关 `stock_fundamentals`（个股基本面）默认关）→ 该维不计分"],
             },
         ],
         "holdings_view": [
@@ -66,7 +66,7 @@ def _contract() -> dict:
         ],
         "concentration_pct": 100.0,
         "turnover_proxy_pct": None,
-        "unverified": ["ROE 低位弹性：未取到个股 ROE（功能开关 `financial_indicator` 默认关）→ 该维不计分"],
+        "unverified": ["ROE 低位弹性：未取到个股 ROE（功能开关 `stock_fundamentals`（个股基本面）默认关）→ 该维不计分"],
         "partial_notes": [],
         "notes": ["本评分衡量组合与景气度框架的契合度，非组合优劣判断，亦非投资建议；标注「需核实」的项请自行核实。"],
     }
@@ -200,7 +200,6 @@ class TestHtmlRendering:
             section_numbers=numbers,
             section_visible_dict=sv,
             chart_datasets={},
-            enable_interactive_charts=False,
             action_data={
                 "available": True,
                 "summary": "s",

@@ -84,10 +84,10 @@ _PIPELINE_DATA_KNOWN_KEYS: set[str] = {
     # `rebalance_schedule_replay`，由 report/_experimental_seams.inject_schedule_replay_data
     # 注入；开关关闭时键缺席，整章隐藏）
     "schedule_replay_data",
-    # 持仓个股财报摘要：A 股标的的财报章节摘要（功能开关 `financial_report_digest`，
+    # 持仓个股财报摘要：A 股标的的财报章节摘要（功能开关 `stock_fundamentals`，
     # 由 report/financial_report_digest.build_financial_report_digest 组装；开关关闭时为 None）
     "financial_report_digest_data",
-    # 财务指标：持仓 A 股基本面（功能开关 `financial_indicator`，
+    # 财务指标：持仓 A 股基本面（功能开关 `stock_fundamentals`，
     # 由 report/financial_indicator.build_financial_indicator 组装；开关关闭时为 None）
     "financial_indicator_data",
     # 申购限购状态：持仓明细「申购状态」列数据源（功能开关 `fund_purchase_limit`，
@@ -132,10 +132,10 @@ _PREP_KNOWN_KEYS: set[str] = {
     # 市场温度：价格分位+均线偏离+波动率三因子合成温度计（功能开关 `market_temperature`，
     # 由编排层 compute_market_temperature_data 组装；开关关闭时为 None）
     "market_temperature_data",
-    # 持仓个股财报摘要：A 股标的的财报章节摘要（功能开关 `financial_report_digest`，
+    # 持仓个股财报摘要：A 股标的的财报章节摘要（功能开关 `stock_fundamentals`，
     # 由 prepare_report_data 组装；开关关闭时为 None）
     "financial_report_digest_data",
-    # 财务指标：持仓 A 股基本面（功能开关 `financial_indicator`，
+    # 财务指标：持仓 A 股基本面（功能开关 `stock_fundamentals`，
     # 由 prepare_report_data 组装；开关关闭时为 None）
     "financial_indicator_data",
     # 申购限购状态：持仓明细「申购状态」列数据源（功能开关 `fund_purchase_limit`，
