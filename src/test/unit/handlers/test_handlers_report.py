@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import io
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -365,3 +366,97 @@ class TestCmdGenerateFullForecastWiring(unittest.TestCase):
         run_gen.assert_called_once()
         _, kwargs = run_gen.call_args
         assert kwargs["force_llm"] is True, "未降级时强刷范围原样透传"
+
+
+@pytest.mark.unit_core
+class TestPromptEscCancel(unittest.TestCase):
+    """提示处 Esc 统一取消（PromptCancelledError）：全链路回归防回退。"""
+
+    def test_force_llm_first_prompt_esc_cancels(self):
+        """强制重生成询问处按 Esc → 取消流程（而非默认 N 继续）。"""
+        from src.python.tui.handlers_report import PromptCancelledError, _prompt_force_llm
+
+        with (
+            patch("src.python.tui.handlers_report.input_choice", return_value=None),
+            pytest.raises(PromptCancelledError),
+        ):
+            _prompt_force_llm(MagicMock())
+
+    def test_force_llm_module_subset_esc_cancels(self):
+        """模块子集录入处按 Esc → 取消流程（而非空串=全部模块）。"""
+        from src.python.tui.handlers_report import PromptCancelledError, _prompt_force_llm
+
+        with (
+            patch("src.python.tui.handlers_report.input_choice", side_effect=["y", None]),
+            pytest.raises(PromptCancelledError),
+        ):
+            _prompt_force_llm(MagicMock())
+
+    def test_history_ask_esc_cancels(self):
+        """历史走势 y/N 处按 Esc → 取消生成（而非答 N 不获取继续）。"""
+        from src.python.tui.handlers_report import PromptCancelledError, _prompt_history
+
+        with (
+            patch(
+                "src.python.tui.handlers_report.get_config_cache",
+                return_value={"history": {"fetch_mode": "prompt"}},
+            ),
+            patch("src.python.config.is_enable_history", return_value=True),
+            patch("src.python.tui.handlers_report.input_choice", return_value=None),
+            pytest.raises(PromptCancelledError),
+        ):
+            _prompt_history()
+
+    def test_cost_confirm_esc_aborts_with_cancel_message(self):
+        """费用预估确认处按 Esc → 中止生成并给出取消反馈。"""
+        from src.python.tui.handlers_report import _prompt_cost_forecast
+
+        with (
+            patch(
+                "src.python.tui.handlers_report.forecast_run_cost",
+                return_value={
+                    "ok": True,
+                    "module_count": 3,
+                    "low": 0.1,
+                    "high": 0.9,
+                    "basis": "static",
+                    "symbol": "¥",
+                    "reason": None,
+                },
+            ),
+            patch(
+                "src.python.tui.handlers_report.budget_status",
+                return_value={"enabled": False, "limit": 0.0, "spent": 0.0, "exceeded": False, "symbol": "¥"},
+            ),
+            patch("src.python.tui.handlers_report.input_choice", return_value=None),
+            patch("sys.stdout", new_callable=io.StringIO) as out,
+        ):
+            assert _prompt_cost_forecast(False, None) == (False, False)
+        assert "已取消本次生成" in out.getvalue()
+
+    def test_cost_budget_exceeded_esc_aborts(self):
+        """日预算超限处置处按 Esc → 中止生成。"""
+        from src.python.tui.handlers_report import _prompt_cost_forecast
+
+        with (
+            patch(
+                "src.python.tui.handlers_report.forecast_run_cost",
+                return_value={
+                    "ok": True,
+                    "module_count": 3,
+                    "low": 0.1,
+                    "high": 0.9,
+                    "basis": "static",
+                    "symbol": "¥",
+                    "reason": None,
+                },
+            ),
+            patch(
+                "src.python.tui.handlers_report.budget_status",
+                return_value={"enabled": True, "limit": 1.0, "spent": 1.5, "exceeded": True, "symbol": "¥"},
+            ),
+            patch("src.python.tui.handlers_report.input_choice", return_value=None),
+            patch("sys.stdout", new_callable=io.StringIO) as out,
+        ):
+            assert _prompt_cost_forecast(False, None) == (False, False)
+        assert "已取消本次生成" in out.getvalue()

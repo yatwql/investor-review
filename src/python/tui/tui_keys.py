@@ -235,6 +235,15 @@ def _get_key_linux() -> str:
 # ── 菜单行输入 ────────────────────────────────────────────────
 
 
+class PromptCancelledError(Exception):
+    """输入提示处 Esc 即时取消：中止当前菜单项并返回主菜单（全提示统一取消信号）。
+
+    `input_choice` 调用方在收到 None（Esc）时抛出，`tui_handlers.execute_item`
+    单点捕获并打印反馈——含 y/N 确认、级别筛选、日期录入等所有选择类提示，
+    使「提示处按 Esc 即时取消」在每处一致（长文本提问保留 q/回车取消，见手册）。
+    """
+
+
 def input_choice(prompt: str) -> str | None:
     """菜单选择行输入：单独 Esc **即时**取消（返回 None），其余与 ``input()`` 同语义。
 

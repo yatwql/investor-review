@@ -18,6 +18,7 @@ from src.python.llm.pricing import CURRENCY_SYMBOLS
 from src.python.core.logger import setup_logger
 from src.python.core.reader import get_xlsx_info, list_xlsx_files, read_holdings_with_flows, require_holdings
 from src.python.report.progress import TuiProgressReporter
+from src.python.tui.tui_keys import PromptCancelledError, input_choice
 from src.python.tui.tui_menu import MENU_ITEMS, get_config_cache, press_any_key, refresh_config
 
 logger = setup_logger()
@@ -176,7 +177,12 @@ def select_holdings_file() -> str | None:
         acct_str = f"{info.get('accounts', '?')}" if "error" not in info else "err"
         print(f"  [{i}]  {name_disp:38s} {size_str:>10s} {mtime:>22s} {acct_str:>8s}")
     try:
-        choice = input("  请输入编号: ").strip()
+        choice = input_choice("  请输入编号: ")
+        if choice is None:  # Esc：取消选择
+            print()
+            print("  [!] 已取消选择")
+            return None
+        choice = choice.strip()
         idx = int(choice) - 1
         if 0 <= idx < len(files):
             return files[idx]
@@ -205,6 +211,9 @@ def execute_item(sel: int) -> None:
             _busy = True
         try:
             callback()
+        except PromptCancelledError:
+            # Esc 取消：单点反馈后即时返回主菜单（不再等待按键，保持「即时」语义）
+            print("  [!] 已取消，返回主菜单")
         except KeyboardInterrupt:
             print()
             print("  操作已取消")

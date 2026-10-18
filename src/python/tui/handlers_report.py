@@ -17,6 +17,7 @@ from src.python.tui.tui_handlers import (
     print_llm_session_usage,
 )
 from src.python.tui.text_layout import wrap_prompt
+from src.python.tui.tui_keys import PromptCancelledError, input_choice
 from src.python.tui.tui_menu import get_config_cache
 
 logger = setup_logger()
@@ -38,10 +39,12 @@ def _prompt_history() -> bool:
 
     def _ask_history() -> bool:
         try:
-            resp = input(wrap_prompt("  [..] 是否获取组合历史走势数据（as-if 模拟）？(y/N): ")).strip().lower()
+            resp = input_choice(wrap_prompt("  [..] 是否获取组合历史走势数据（as-if 模拟）？(y/N): "))
         except (EOFError, KeyboardInterrupt):
             return False
-        return resp == "y"
+        if resp is None:  # Esc：中止生成返回主菜单（Esc ≠ 答 N 继续）
+            raise PromptCancelledError
+        return resp.strip().lower() == "y"
 
     return resolve_fetch_history(config, ask=_ask_history)
 
@@ -57,10 +60,12 @@ def _prompt_force_llm(reporter: TuiProgressReporter) -> tuple[bool, list[str] | 
     from src.python.llm.force_scope import FORCEABLE_LLM_MODULES, resolve_force_scope
 
     try:
-        _resp = input(wrap_prompt("  [..] 是否强制重新生成 LLM 内容（跳过缓存）？(y/N): ")).strip().lower()
-        _force = _resp == "y"
+        _resp = input_choice(wrap_prompt("  [..] 是否强制重新生成 LLM 内容（跳过缓存）？(y/N): "))
     except (EOFError, KeyboardInterrupt):
-        _force = False
+        _resp = ""
+    if _resp is None:  # Esc：中止流程返回主菜单
+        raise PromptCancelledError
+    _force = _resp.strip().lower() == "y"
     if not _force:
         return (False, None)
     reporter.ok("将跳过 LLM 缓存强制重新生成")
@@ -70,9 +75,12 @@ def _prompt_force_llm(reporter: TuiProgressReporter) -> tuple[bool, list[str] | 
         print("  [..] 指定强制模块（可选）：")
         for i, key in enumerate(FORCEABLE_LLM_MODULES, 1):
             print(f"      {i}. {key}（{_names.get(key, key)}）")
-        _resp2 = input(wrap_prompt("  [..] 输入编号或键名（逗号分隔，回车=全部模块）: ")).strip()
+        _resp2 = input_choice(wrap_prompt("  [..] 输入编号或键名（逗号分隔，回车=全部模块）: "))
     except (EOFError, KeyboardInterrupt):
         _resp2 = ""
+    if _resp2 is None:  # Esc：中止流程返回主菜单
+        raise PromptCancelledError
+    _resp2 = _resp2.strip()
     if not _resp2:
         return (True, None)
     _tokens = [t for t in _resp2.replace(",", " ").split() if t]
@@ -170,21 +178,25 @@ def _prompt_cost_forecast(force_llm: bool, force_modules: list[str] | None) -> t
         return (True, False)
     if budget.get("exceeded"):
         try:
-            resp = (
-                input(wrap_prompt("  [!] 今日 LLM 费用已达日预算上限：y=降级走缓存继续 / N=中止 (y/N): "))
-                .strip()
-                .lower()
-            )
+            resp = input_choice(wrap_prompt("  [!] 今日 LLM 费用已达日预算上限：y=降级走缓存继续 / N=中止 (y/N): "))
         except (EOFError, KeyboardInterrupt):
             return (False, False)
+        if resp is None:  # Esc：取消生成返回主菜单
+            print("  [!] 已取消本次生成")
+            return (False, False)
+        resp = resp.strip().lower()
         if resp != "y":
             print("  [!] 已中止本次生成（日预算超限）")
             return (False, False)
         return (True, bool(force_llm) or bool(force_modules))
     try:
-        resp = input(wrap_prompt("  [..] 本次生成费用预估如上，确认继续？(y/N): ")).strip().lower()
+        resp = input_choice(wrap_prompt("  [..] 本次生成费用预估如上，确认继续？(y/N): "))
     except (EOFError, KeyboardInterrupt):
         return (False, False)
+    if resp is None:  # Esc：取消生成返回主菜单
+        print("  [!] 已取消本次生成")
+        return (False, False)
+    resp = resp.strip().lower()
     if resp != "y":
         print("  [!] 已中止本次生成（费用预估确认未通过）")
         return (False, False)

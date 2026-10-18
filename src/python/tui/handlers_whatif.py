@@ -17,7 +17,7 @@ from src.python.core.logger import setup_logger
 from src.python.core.reader import get_xlsx_info, list_xlsx_files, read_holdings
 from src.python.report.progress import TuiProgressReporter
 from src.python.tui.text_layout import wrap_prompt
-from src.python.tui.tui_keys import input_choice
+from src.python.tui.tui_keys import PromptCancelledError, input_choice
 from src.python.tui.tui_handlers import print_error_with_hint, select_holdings_file
 from src.python.tui.tui_menu import get_config_cache, press_any_key
 
@@ -151,10 +151,13 @@ def _prompt_effective_date() -> str:
 
     while True:
         try:
-            raw = input(wrap_prompt("  [..] 调仓生效日 YYYY-MM-DD（可选，回车跳过以启用时序回测）: ")).strip()
+            raw = input_choice(wrap_prompt("  [..] 调仓生效日 YYYY-MM-DD（可选，回车跳过以启用时序回测）: "))
         except (EOFError, KeyboardInterrupt):
             print()
             return ""
+        if raw is None:  # Esc：中止 What-if 返回主菜单（与同命令其余提示同径）
+            raise PromptCancelledError
+        raw = raw.strip()
         if not raw:
             return ""
         try:
