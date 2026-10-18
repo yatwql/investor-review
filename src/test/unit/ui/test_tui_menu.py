@@ -839,3 +839,46 @@ class TestNarrowMainLoopDirectNav(unittest.TestCase):
         self.assertEqual(fired, ["exit"])
         self.assertEqual(renders, 2)
         cleared.assert_called_once_with(1)  # 渲染器 mock 帧行数 0 + Esc 提示 1 行
+
+
+class TestTierSemanticParity(unittest.TestCase):
+    """守护「分档只改版式不改语义」（架构设计约束·TUI 分档条目）：同一按键在窄/宽两档产生
+    相同的语义动作与可观察反馈——分档至多改变呈现方式（原地重绘 vs 整屏追加、
+    单行提示 vs 重绘一屏），不得删改按键语义或反馈本身。"""
+
+    _drive = staticmethod(TestNarrowMainLoopDirectNav._drive)
+
+    def test_registered_letter_parity(self):
+        """登记字母键：两档执行同一菜单项（语义不随宽度漂移）。"""
+        narrow = self._drive(["A", "0"], columns=40)
+        wide = self._drive(["A", "0"], columns=100)
+        self.assertEqual(narrow[2], wide[2], "执行同一选中项")
+        self.assertTrue(narrow[2], "确实执行了 [A]")
+
+    def test_enter_and_nav_parity(self):
+        """方向键 + Enter：两档执行同一选中项。"""
+        narrow = self._drive(["KEY_DOWN", "KEY_ENTER", "0"], columns=40)
+        wide = self._drive(["KEY_DOWN", "KEY_ENTER", "0"], columns=100)
+        self.assertEqual(narrow[2], wide[2], "↓ 后 Enter 执行同一项")
+        self.assertTrue(narrow[2])
+
+    def test_unregistered_letter_feedback_both_tiers(self):
+        """未登记字母：两档都有可观察反馈（窄 = 单行提示文本，宽 = 重绘一屏）。"""
+        narrow = self._drive(["Z", "0"], columns=40)
+        wide = self._drive(["Z", "0"], columns=100)
+        self.assertIn("未登记", narrow[3], "窄屏未登记键须有单行反馈")
+        self.assertEqual(wide[1], 2, "宽档未登记键反馈 = 重绘一屏")
+
+    def test_unknown_key_feedback_both_tiers(self):
+        """未知键（KEY_RIGHT）：两档都有可观察反馈（窄 = 单行提示，宽 = 重绘）。"""
+        narrow = self._drive(["KEY_RIGHT", "0"], columns=40)
+        wide = self._drive(["KEY_RIGHT", "0"], columns=100)
+        self.assertIn("未识别按键", narrow[3], "窄屏未知键须有单行反馈")
+        self.assertEqual(wide[1], 2, "宽档未知键反馈 = 重绘一屏")
+
+    def test_esc_exit_parity(self):
+        """Esc 连按两次退出：两档一致。"""
+        narrow = self._drive(["KEY_ESC", "KEY_ESC"], columns=40)
+        wide = self._drive(["KEY_ESC", "KEY_ESC"], columns=100)
+        self.assertEqual(narrow[0], ["exit"])
+        self.assertEqual(wide[0], ["exit"])

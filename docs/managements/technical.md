@@ -440,7 +440,7 @@ while True:
 
 #### 1.6.3 菜单体系
 
-`tui/tui_menu.py:MENU_ITEMS` —— 每项 `(快捷键, 显示标签, 回调, 是否退出)`，回调由 `_bind_callbacks()` 在**运行时**从 handlers 模块填入（定义时不直接 import，避免启动即加载全部处理器）。静态清单共 **19 项**（下表按菜单实际排列顺序）；首页按键分派分两档（`layout_tier`，<64 列为 narrow）：方向键移动选中态 + `Enter` 执行当前项**全档可用**；narrow 档直达主路径（字母/数字键即执行，未登记键静默忽略且不重绘）与导航并存——方向键移动后**原地重绘**（`_render_menu_frame` 帧行数计数代理 + ANSI 光标上移/清屏，POSIX+TTY 门控，管道/测试/旧控制台回退整屏追加），页脚为「窄屏直达 + ↑↓ 选择」双提示。字母/数字键按 `index_by_key` 直达（未登记键无反应）、`Esc`/`0` 与 `[X]` 同为退出通道（`0` 在子菜单语义为「返回」，故首页保持一致习惯；`[X]` 标签写明「退出（0 亦可）」，页脚提示同为「Esc / 0 / X 退出」）、`Ctrl+C` 退出。菜单项长标签与页脚提示经 `wrap_with_prefix` 按终端宽度折行（续行对齐标签起始列），窄屏不会硬折。`[T]`/`[Q]` 登记于 `FEATURE_GATED_ITEMS`（菜单键 → Feature Flag），`main()` 启动时在绑定回调**之前**执行 `tui_menu._apply_feature_gates()` 按 `is_feature_enabled` 就地裁剪（裁剪后索引才与渲染一致）：`report_qa`（⚗ 实验项，默认关）关闭时移除 `[Q]`，`doctor_check`（默认开）关闭时移除 `[T]`——默认配置下实际渲染 **18 项**。
+`tui/tui_menu.py:MENU_ITEMS` —— 每项 `(快捷键, 显示标签, 回调, 是否退出)`，回调由 `_bind_callbacks()` 在**运行时**从 handlers 模块填入（定义时不直接 import，避免启动即加载全部处理器）。静态清单共 **19 项**（下表按菜单实际排列顺序）；首页按键分派分两档（`layout_tier`，<64 列为 narrow）：方向键移动选中态 + `Enter` 执行当前项**全档可用**；narrow 档直达主路径（字母/数字键即执行，未登记键给**单行反馈**不整屏重绘——「分档只改版式不改语义」约束 C29）与导航并存——方向键移动后**原地重绘**（`_render_menu_frame` 帧行数计数代理 + ANSI 光标上移/清屏，POSIX+TTY 门控，管道/测试/旧控制台回退整屏追加），页脚为「窄屏直达 + ↑↓ 选择」双提示。字母/数字键按 `index_by_key` 直达（未登记键无反应）、`Esc`/`0` 与 `[X]` 同为退出通道（`0` 在子菜单语义为「返回」，故首页保持一致习惯；`[X]` 标签写明「退出（0 亦可）」，页脚提示同为「Esc / 0 / X 退出」）、`Ctrl+C` 退出。菜单项长标签与页脚提示经 `wrap_with_prefix` 按终端宽度折行（续行对齐标签起始列），窄屏不会硬折。`[T]`/`[Q]` 登记于 `FEATURE_GATED_ITEMS`（菜单键 → Feature Flag），`main()` 启动时在绑定回调**之前**执行 `tui_menu._apply_feature_gates()` 按 `is_feature_enabled` 就地裁剪（裁剪后索引才与渲染一致）：`report_qa`（⚗ 实验项，默认关）关闭时移除 `[Q]`，`doctor_check`（默认开）关闭时移除 `[T]`——默认配置下实际渲染 **18 项**。
 
 | 分组 | 快捷键 | 功能 |
 |:-----|:------|:-----|
@@ -3708,9 +3708,9 @@ web/ (Web 服务层，薄入口)
 本节定义系统架构层面的**设计约束**。所有新增或修改的代码必须遵守，违反即视为架构违规。
 约束按职责域分组，每个约束包含：设计目的（为何存在）、违反后果（不遵守的影响）、适用范围（哪些模块/场景受约束）。
 
-> **约束外参照（语义命名纪律）**：除上表 C1~C28 编号约束外，**语义命名纪律**以 [「功能语义命名表」](#67-功能语义命名表) 为唯一现状基准——代码/配置标识符（函数/变量/模块/config 键）必须与表中语义 slug 一致，禁止用任务代号（`plan-N`/`rf-N`/系列代号）命名；新增功能先定语义名再设计。该纪律属全局代码卫生，与编号约束并列遵守，由双脚本强制：`scripts/check-code-traces.py --ci`（负面禁止 IDENT/CODE）+ `scripts/check-semantic-index.py --ci`（正面双向校验本表与代码一致）。
+> **约束外参照（语义命名纪律）**：除上表 C1~C29 编号约束外，**语义命名纪律**以 [「功能语义命名表」](#67-功能语义命名表) 为唯一现状基准——代码/配置标识符（函数/变量/模块/config 键）必须与表中语义 slug 一致，禁止用任务代号（`plan-N`/`rf-N`/系列代号）命名；新增功能先定语义名再设计。该纪律属全局代码卫生，与编号约束并列遵守，由双脚本强制：`scripts/check-code-traces.py --ci`（负面禁止 IDENT/CODE）+ `scripts/check-semantic-index.py --ci`（正面双向校验本表与代码一致）。
 
-> **约束外参照（文档与实现一致性纪律）**：除上表 C1~C28 编号约束外，**文档中的事实断言**（章节表与数量、功能开关表与分组计数、默认值表、TUI 面板编号、目录树、项目统计表）必须与代码/配置文件/文件系统一致，由 `scripts/check-doc-drift.py --ci` 强制（十项逐条对账，`changelog.md`/`review-findings.md` 与版本快照类文档按设计豁免）；历史痕迹类约束另由 `scripts/check-doc-traces.py --ci` 强制。
+> **约束外参照（文档与实现一致性纪律）**：除上表 C1~C29 编号约束外，**文档中的事实断言**（章节表与数量、功能开关表与分组计数、默认值表、TUI 面板编号、目录树、项目统计表）必须与代码/配置文件/文件系统一致，由 `scripts/check-doc-drift.py --ci` 强制（十项逐条对账，`changelog.md`/`review-findings.md` 与版本快照类文档按设计豁免）；历史痕迹类约束另由 `scripts/check-doc-traces.py --ci` 强制。
 
 > **约束外参照（脚本 CLI 契约）**：`scripts/` 下的检查脚本统一 `-v/--verbose` + `--ci`（仅输出 `文件:描述`）与退出码语义（0=通过 / 2=发现 finding，`check-code-traces.py` 保留 HIGH=1、LOW=3 分级）；共享设施集中在 `scripts/_checklib.py`（CLI/输出/路径/文档区间解析）；历史痕迹检查内部实现拆在 `scripts/_traces_code/` 包内（共享排除模式在 `exemptions.py`，`_traces_common.py` 已并入其中删除）；检查脚本内部实现普遍拆 `前置横线包`pattern（`_doc_drift/` / `_traces_code/` / `_test_runner/` / `_halluc_sampler/`，入口仅留 CLI 与原面 re-export）；连通性探测统一入口 `scripts/probe.py`（target registry，实现在 `scripts/probes/`，新探针登记即用）；发布编排分步 CLI `scripts/release.py`（check/prepare/refresh/evolution/gate/publish/devbump，每步独立可审阅、失败即停，内部实现同为入口薄 CLI + 单模块）。
 
@@ -3767,6 +3767,7 @@ web/ (Web 服务层，薄入口)
 | **C26** | **重试与退避唯一原语** — 凡「失败后重试」必须经 `core/retry.py`（`RetryPolicy` 策略 / `is_transient_exception` 瞬时判据 / `retry_transient` 执行器），禁止各模块自建重试循环与退避算式；各来源差异只用策略参数表达 | 退避数值与「可重试」口径各写一处必然漂移：最坏时延无法估算、策略调整需改 N 处、测试钉住的次数与等待量随之失真 | 全部「失败后重试」路径：数据获取层（Provider Chain 同源重试、provider 连接级重试、akshare 超时重试、HTTP 429 退避）+ LLM 调用链（`llm/api_base.py` 的 503/超时/网络重试（429/403 归 quota 终态不重试），退避用显式序列策略表达；其**失败分类**（内容级/配额级判定）与终态副作用仍属 LLM 层职责，见 §5.4） |
 | **C27** | **间隔节流唯一原语** — 凡「两次请求至少间隔多久」必须经 `core/throttle.py`（`RateLimiter` + `interval_delay`），禁止自建「间隔 + 睡眠」与抖动算式 | 同一约束在数据层/调度层/LLM 层各写一份 → 抖动幅度与等待语义不一致；通用原语若住在某一上层模块，会被其他层反向依赖（层次倒置） | 数据源 qps 限速、`batch_rate_limit`、LLM 端点级节流（`pacing`） |
 | **C28** | **大文件红线体系（主程序/脚本/测试）** — 单文件行数按域执行固定红线：主程序（`src/python/`）> 1000 行、脚本（`scripts/` 递归含包内子模块）> 1000 行、测试（`src/test/`）> 1200 行即 finding；警戒区（`-v` 清单：主程序 500 / 脚本 400 / 测试 800）为可选优化区间；超限必须拆分，或在 `check-file-length` 的 `EXEMPTIONS` 登记并与 review-findings 挂账同步 | 行数无红线时文件无限膨胀（`scripts/` 未入守护域时 `factor_zoo_eval.py` 达 1595 行而无发现渠道）；阈值只写在文档不进守护脚本会改一处漏一处；无警戒区则只能在破线后才察觉，拆分时机失去观察缓冲 | 所有 py 源文件：`src/python/`、`scripts/`（含包内子模块）、`src/test/`；阈值与清单由 `scripts/check-file-length.py --ci` 单源强制（`_LIMIT_BY_KIND` / `_WARN_BY_KIND`），口径同步 developer-guide「文件膨胀阈值」表与 review-findings 文件过长登记表 |
+| **C29** | **TUI 分档只改版式不改语义** — `layout_tier` 的 wide/medium/narrow 分支只允许改**版式与密度**（列宽/盒线/折行/图例详略/重绘机制），不得改**按键语义、反馈有无、写路径可见性**：同一按键在各档必须产生相同的语义动作与可观察反馈（执行/退出/选中移动/单行提示），分档至多改变反馈的呈现方式 | 分档分支改语义曾三次造成用户可见缺陷：写路径窄屏不重绘（切换无结果）、方向键在窄屏解析漂移为孤 Esc（误退程序）、窄屏导航被整体删除（按键无反应）；语义随宽度漂移违反「同键同果」预期，且每档分支都是独立回归面 | `src/python/tui/` 全部 `layout_tier`/`narrow` 分支点（主循环、菜单渲染、各面板）；守护 = `test_tui_menu.py::TestTierSemanticParity`（同按键两档同语义/同反馈）+ `_print_hint` 单行反馈原语 |
 
 > **C14 例外：env 初始化期注册（非渲染期）** — `_ENV.globals` 与模板过滤器仅允许在 `report/html_jinja_env.py` 的**工厂初始化期**（进程/工厂单次建立）注册为**无状态纯函数**（如 `profit_color`、`price_type_color`、`money`、`fmt_bps`、`dt`——只依赖入参生成 CSS 变量表达式/格式化文本）。约束禁止的是**渲染期数据**（section 可见性、业务字典等随每次运行变化的值）写入全局；过滤器注册与 Jinja 环境构建属于模板基础设施装配，不构成渲染态状态污染（并发/多次渲染下各 `render()` 仍只经 context 传数据）。
 

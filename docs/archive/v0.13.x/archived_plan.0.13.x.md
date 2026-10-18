@@ -35,6 +35,10 @@
 
 **完成（2026-10-19，v0.13.7-dev）**：新增 `tui_keys.input_choice(prompt) -> str | None`——菜单选择行输入：raw 模式逐字节读行（回显自理、退格按 UTF-8 字符回剥），孤立 Esc 经 `_ESC_TIMEOUT` 判定即时返回 None（手机 SSH 误入子菜单直接回上一步，不必找「0 返回」）；回车提交并 strip，Ctrl+C 转发 KeyboardInterrupt 与各调用方既有 except 分支衔接；非 TTY（测试/管道）回退 `input()` 且同样 strip，既有测试驱动方式不变。接入 14 处选择/录入点（[S] 面板、配置菜单、对比指数池、报告章节、匿名化、目录信息、字段编辑、指数代码/名称录入、缓存管理、问答报告选择、What-if 文件编号/选项/路径）；QA 长文本提问与 y/N 确认保留 `input()`（q/回车取消）。Windows 分支 msvcrt 同语义。测试：`TestInputChoice` 7 例 + [S] Esc 返回不写配置 + 缓存菜单 Esc 不重提示；既有 17 处 `<module>.input` patch 改靶 `builtins.input`（模块内已无直调）。
 
+## plan-154 TUI「分档只改版式不改语义」统一纪律（C29 + 守护） ✅
+
+**完成概要**（2026-10-19，窄/宽交互审计后用户确认方案）：审计列全 `layout_tier` 分支点，确认历次「互动不一致」缺陷同源——分档分支改掉了按键语义/反馈。落地：① 架构约束 **C29**（分档只允许改版式与密度，不得改按键语义、反馈有无、写路径可见性；适用 `src/python/tui/` 全部分档分支点）；② 窄屏未登记字母/未知键从静默忽略改为单行反馈（`_print_hint` 原语，并入原地重绘清除范围），与宽档「重绘即反馈」对齐；③ 守护测试 `TestTierSemanticParity` 5 例锁「同按键两档同语义同反馈」。R-TUI-07 / technical 菜单段 / changelog 同步
+
 ## plan-153 TUI 窄屏恢复方向键导航（原地重绘） ✅
 
 **完成概要**（2026-10-19，用户直接要求）：窄屏（<64 列）在直达主路径外恢复 ↑↓/Enter 导航——`>` 选中指示器全档渲染（render_menu 去除窄屏特判），选中移动后原地重绘（`_render_menu_frame` 用 `_FrameLineCounter` 计数帧行数 + `_clear_last_frame` ANSI 光标上移/清屏，`_can_repaint_inplace` POSIX+TTY 门控，不可用回退整屏追加），Enter 全档执行当前项；页脚双提示（直达 + ↑↓ 选择）。R-TUI-07 / technical 菜单架构段（顺带修正项数 18→19）/ tui 手册窄屏注同步。测试：`TestNarrowMainLoopDirectNav` 6 例（含原地 vs 回退分支 spy 区分、清帧助手 ANSI 输出）+ 渲染 3 例

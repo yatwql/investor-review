@@ -277,7 +277,10 @@ def main() -> None:
                     execute_item(idx)
                     break  # 直达执行后回到重绘点（子菜单关闭 → 刷新首页）
                 if narrow:
-                    continue  # 窄屏直达模式：未登记字母同样静默忽略
+                    # 窄屏直达模式：未登记字母给单行反馈（不整屏重绘）——与宽档「重绘即
+                    # 反馈」同语义：任何按键都有可观察结果（分档只改版式不改语义）
+                    hint_lines += _print_hint(f"「{key.upper()}」未登记（键位见上方菜单）")
+                    continue
                 break
             if key == KEY_ENTER:
                 execute_item(sel)
@@ -293,7 +296,9 @@ def main() -> None:
                     continue
                 break  # 宽/中档整屏重绘；窄屏不支持 ANSI 时同样回退追加
             if narrow:
-                continue  # 窄屏未知键静默忽略，不重绘
+                # 窄屏未知键：单行反馈（不整屏重绘），与宽档「重绘一屏」同语义
+                hint_lines += _print_hint("未识别按键")
+                continue
             # 宽/中档未知键：重绘一屏给出反馈
             break
 
