@@ -17,8 +17,6 @@ KEY_CTRL_C = "KEY_CTRL_C"
 KEY_ESC = "KEY_ESC"
 KEY_UNKNOWN = "KEY_UNKNOWN"
 
-# Linux ESC 序列读取超时（秒）。0.3s 面向高延迟链路（手机蜂窝网 / SSH）：
-# 方向键三字节序列可能分节到达，过短的超时会把序列拆散误判成孤 ESC
 # 方向键序列映射（CSI 与应用光标模式 O 前缀变体同权——部分终端/会话在 smkx 后发送后者）
 _CSI_SEQUENCE_MAPPING = {
     "\x1b[A": KEY_UP,
@@ -31,6 +29,34 @@ _CSI_SEQUENCE_MAPPING = {
 # 迟到的前缀（[ / O）由下一次读键按序列续读吸收并映射回方向键——否则残留字节会被当成
 # 普通按键误触发直达键（如 [A 的 A 命中匿名化面板）。get_key 与 input_choice 共用。
 _esc_residue_pending = False
+
+
+# 序列半途前缀（如 "\x1b["）：序列已消费前缀但末字节超时/未到——**下一个字节一律按
+# 序列补全处理**（映射回方向键或吞掉为 KEY_UNKNOWN），绝不进入字母分派。否则迟到的
+# B 会被当成独立按键触发 [B] 直达（实测：拆包方向键末字节泄漏启动了 B 报告）。
+_seq_prefix_pending = ""
+
+
+def _mark_seq_prefix(prefix: str) -> None:
+    """记录半途序列前缀（下一次读键强制按补全处理）。"""
+    global _seq_prefix_pending
+    _seq_prefix_pending = prefix
+
+
+def _take_seq_completion(ch: str) -> str | None:
+    """半途序列补全：消费下一个字节，能拼出已知序列则映射，否则吞掉（KEY_UNKNOWN）。
+
+    Args:
+        ch: 下一次读到的字符。
+
+    Returns:
+        键名（方向键或 KEY_UNKNOWN）；无半途序列时 None。
+    """
+    global _seq_prefix_pending
+    if not _seq_prefix_pending:
+        return None
+    prefix, _seq_prefix_pending = _seq_prefix_pending, ""
+    return _CSI_SEQUENCE_MAPPING.get(prefix + ch, KEY_UNKNOWN)
 
 
 def _mark_esc_residue() -> None:
@@ -58,9 +84,11 @@ def _take_esc_residue(ch: str) -> str | None:
 
     rdy, _, _ = select.select([sys.stdin], [], [], _ESC_TIMEOUT)
     if not rdy:
+        _mark_seq_prefix("\x1b" + ch)  # 末字节迟到：下一字节按补全处理，不泄漏为独立键
         return KEY_UNKNOWN
     b2 = sys.stdin.read(1)
     if not b2:
+        _mark_seq_prefix("\x1b" + ch)
         return KEY_UNKNOWN
     return _CSI_SEQUENCE_MAPPING.get("\x1b" + ch + b2, KEY_UNKNOWN)
 
@@ -174,6 +202,9 @@ def _get_key_linux() -> str:
             return KEY_CTRL_C
         if ch in ("\r", "\n"):
             return KEY_ENTER
+        done = _take_seq_completion(ch)  # 半途序列补全：强制映射/吞掉，不进字母分派
+        if done is not None:
+            return done
         residue = _take_esc_residue(ch)  # 孤 ESC 后迟到的序列续段：吸收并映射回方向键
         if residue is not None:
             return residue
@@ -187,9 +218,11 @@ def _get_key_linux() -> str:
                 return KEY_UNKNOWN
             rdy2, _, _ = select.select([sys.stdin], [], [], _ESC_TIMEOUT)
             if not rdy2:
+                _mark_seq_prefix(ch + b1)  # 末字节迟到：下一字节按补全处理，不泄漏为独立键
                 return KEY_UNKNOWN
             b2 = sys.stdin.read(1)
             if not b2:
+                _mark_seq_prefix(ch + b1)
                 return KEY_UNKNOWN
             return _CSI_SEQUENCE_MAPPING.get(ch + b1 + b2, KEY_UNKNOWN)
         if ch:

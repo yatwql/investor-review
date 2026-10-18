@@ -180,7 +180,8 @@ class TestGetKeyLinux(unittest.TestCase):
 
         import src.python.tui.tui_keys as tui_keys_mod
 
-        tui_keys_mod._esc_residue_pending = False  # 残留标志隔离：不跨用例泄漏
+        tui_keys_mod._esc_residue_pending = False  # 残留/半途序列标志隔离：不跨用例泄漏
+        tui_keys_mod._seq_prefix_pending = ""
         self._termios_error = termios.error
         self._stdin_patcher = patch("src.python.tui.tui_keys.sys.stdin")
         self._mock_stdin = self._stdin_patcher.start()
@@ -259,6 +260,26 @@ class TestGetKeyLinux(unittest.TestCase):
         self._mock_select.return_value = ([self._mock_stdin], [], [])
         self.assertEqual(_get_key_linux(), KEY_UP)
 
+    def test_partial_sequence_final_byte_maps_not_dispatches(self) -> None:
+        """序列末字节超时后迟到：按补全映射回方向键，绝不进字母分派（曾泄漏启动 B 报告）。"""
+        # ESC [ 齐到、末字节 B 超时 → KEY_UNKNOWN + 记半途前缀
+        self._mock_stdin.read.side_effect = ["\x1b", "["]
+        self._mock_select.side_effect = [([self._mock_stdin], [], []), ([], [], [])]
+        self.assertEqual(_get_key_linux(), KEY_UNKNOWN)
+        # 迟到的 B → 补全映射为 KEY_DOWN（导航），而非独立键 "B"
+        self._mock_stdin.read.side_effect = ["B"]
+        self.assertEqual(_get_key_linux(), KEY_DOWN)
+
+    def test_partial_sequence_swallow_unrelated_byte(self) -> None:
+        """半途序列后的无关字节：吞掉为 KEY_UNKNOWN（丢失一键，不误触发功能）。"""
+        self._mock_stdin.read.side_effect = ["\x1b", "["]
+        self._mock_select.side_effect = [([self._mock_stdin], [], []), ([], [], [])]
+        self.assertEqual(_get_key_linux(), KEY_UNKNOWN)
+        self._mock_stdin.read.side_effect = ["x"]
+        self.assertEqual(_get_key_linux(), KEY_UNKNOWN)
+        self._mock_stdin.read.side_effect = ["y"]  # 标志已清，恢复正常分派
+        self.assertEqual(_get_key_linux(), "Y")
+
     def test_residue_cleared_by_normal_key(self) -> None:
         """残留标志下的普通字符：清标志并按普通键处理（不吞字）。"""
         self._mock_stdin.read.side_effect = ["\x1b"]
@@ -324,7 +345,8 @@ class TestInputChoice(unittest.TestCase):
     def setUp(self) -> None:
         import src.python.tui.tui_keys as tui_keys_mod
 
-        tui_keys_mod._esc_residue_pending = False  # 残留标志隔离：不跨用例泄漏
+        tui_keys_mod._esc_residue_pending = False  # 残留/半途序列标志隔离：不跨用例泄漏
+        tui_keys_mod._seq_prefix_pending = ""
 
     def _linux_env(self, read_bytes):
         """装配 Linux raw 读行环境（与 TestGetKeyLinux 同手法）。"""

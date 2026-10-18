@@ -436,7 +436,7 @@ while True:
 | 字母/数字（A-Z/0-9） | `index_by_key(key.upper())` 直达并执行对应快捷键菜单项 |
 | Ctrl+C | `exit_app()` 退出 |
 
-键盘封装跨平台：Windows 用 `msvcrt`（方向键 `\xe0` 前缀 + 第二字节映射 H/P），Linux/macOS 用 `tty.setraw` + `termios` + `select` 读 ESC 序列（`\x1b[A`/`\x1b[B` 与 SS3 `\x1bOA`/`\x1bOB` 方向键；ESC 后首段共聚窗口 `_ESC_FIRST_TIMEOUT=0.5`s + 续读窗口 `_ESC_TIMEOUT=0.3s`，防高延迟链路拆包把方向键误判为孤 Esc）。所有读键路径统一返回标准化键名，菜单层不感知平台差异；非交互 stdin（非 tty）返回 `KEY_UNKNOWN`，保证管道/重定向环境不阻塞。
+键盘封装跨平台：Windows 用 `msvcrt`（方向键 `\xe0` 前缀 + 第二字节映射 H/P），Linux/macOS 用 `tty.setraw` + `termios` + `select` 读 ESC 序列（`\x1b[A`/`\x1b[B` 与 O 前缀变体 `\x1bOA`/`\x1bOB` 方向键；ESC 后首段共聚窗口 `_ESC_FIRST_TIMEOUT=0.5`s + 续读窗口 `_ESC_TIMEOUT=0.3$s`；拆包防护三件套：孤 Esc 后迟到前缀吸收映射、半途序列（前缀已消费末字节未到）下一字节强制按补全处理不进字母分派、主菜单 Esc 连按两次确认——误判方向键不致退出或误触发直达）。所有读键路径统一返回标准化键名，菜单层不感知平台差异；非交互 stdin（非 tty）返回 `KEY_UNKNOWN`，保证管道/重定向环境不阻塞。
 
 #### 1.6.3 菜单体系
 
