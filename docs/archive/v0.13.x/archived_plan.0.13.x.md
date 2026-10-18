@@ -35,6 +35,10 @@
 
 **完成（2026-10-19，v0.13.7-dev）**：新增 `tui_keys.input_choice(prompt) -> str | None`——菜单选择行输入：raw 模式逐字节读行（回显自理、退格按 UTF-8 字符回剥），孤立 Esc 经 `_ESC_TIMEOUT` 判定即时返回 None（手机 SSH 误入子菜单直接回上一步，不必找「0 返回」）；回车提交并 strip，Ctrl+C 转发 KeyboardInterrupt 与各调用方既有 except 分支衔接；非 TTY（测试/管道）回退 `input()` 且同样 strip，既有测试驱动方式不变。接入 14 处选择/录入点（[S] 面板、配置菜单、对比指数池、报告章节、匿名化、目录信息、字段编辑、指数代码/名称录入、缓存管理、问答报告选择、What-if 文件编号/选项/路径）；QA 长文本提问与 y/N 确认保留 `input()`（q/回车取消）。Windows 分支 msvcrt 同语义。测试：`TestInputChoice` 7 例 + [S] Esc 返回不写配置 + 缓存菜单 Esc 不重提示；既有 17 处 `<module>.input` patch 改靶 `builtins.input`（模块内已无直调）。
 
+## plan-152 LLM 多链 Provider 优先级三渠道可调（CLI/TUI/Web） ✅
+
+**完成概要**（2026-10-19）：共享编辑层 `llm_providers.priority` 动作写通道（order 置换校验 + priority 归一化 10/20… + 注释保留 + 写前 .bak）；CLI `--llm-provider-order` 持久化写盘后退出；TUI `[M]` 编号交换面板（`input_choice` Esc 返回）；Web 配置面「LLM 多链线路优先级」块 ▲▼ 调序即存。实现中连带修复 `_update_json_raw_text` 对 list 值静默不替换（新增 `_replace_array_block`，rf-724）。测试：config 11 例（置换校验/归一化/注释保留/备份/缺失回退/损坏回退）+ CLI 5 例 + 面板 5 例 + Web 3 例
+
 ## plan-94 图表数据无导出通道 ✅
 
 **完成（2026-10-18，v0.13.7-dev）**：选型为**前端每图导出**（不做整份 `chart_data.csv` 产物）——`src/static/chart-export.js` 为每张 Chart.js 图表注入 `.chart-export-actions` 组容器（「导出PNG」+「导出CSV」并排，浮于图卡右上角、存在 `.chart-title` 时进标题栏右侧，按组容器幂等判重）；CSV 读 `chart.data`（与屏显/悬停值同源，Python 数据层已按匿名化口径脱敏），首列表头取 x/r 轴标题（缺省「标签」）、系列列取 dataset label（单系列缺省「数值」），RFC 4180 引号转义 + CRLF + UTF-8 BOM 后 `Blob` 纯前端本地下载（零后端，`URL.createObjectURL` 用后释放），文件名 `<key>.csv`；模板定位样式三处同步（主报告 `report_template.html` / What-if `whatif_template.html` / 调试页 `test-chart.html`：绝对定位移到组容器、按钮静态排布不重叠、打印态隐藏组容器），what-if 关态金样基线随模板 CSS 与内联脚本字节变化显式复核更新。测试：`test_feature_interactive.py` 新增 `TestChartExportCsv` 4 例（双按钮注入与组容器幂等 / Blob MIME+BOM+ObjectURL 释放 / 行列取自 chart.data 与 RFC 4180+CRLF / 三模板组容器定位且按钮不绝对定位）。文档：reports-instruction 交互图表特性补双按钮与 CSV 口径、README 能力表补 CSV、folders 目录树说明。

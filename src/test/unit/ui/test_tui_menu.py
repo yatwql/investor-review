@@ -49,7 +49,7 @@ class TestMenuItems(unittest.TestCase):
         expected = {
             "E", "B", "L", "W", "Q", "D",
             "1", "2", "4",
-            "P", "I", "A", "S", "R",
+            "P", "I", "A", "S", "M", "R",
             "V", "H", "T", "X",
         }  # fmt: skip
         self.assertSetEqual({item[0] for item in MENU_ITEMS}, expected)

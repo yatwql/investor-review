@@ -21,6 +21,7 @@
     [I] 管理对比指数池（自定义基准指数）
     [A] 配置持仓匿名化（代码/名称脱敏）
     [S] 配置功能开关（作用域四组，含 LLM 章节）
+    [M] 配置 LLM 多链线路优先级（降级顺序）
     [R] 刷新配置
     [V] 查看最近运行日志（可按级别筛选）
     [H] 查看数据源健康历史
@@ -314,6 +315,10 @@
 >
 > 全部 27 项功能开关的键空间、默认值与分组见上表及[配置指引-功能开关 §N](how-to-config.md#n-功能开关featuresjson)（缺省值：呈现与体验组默认开；分析增强、独立章组默认关；机制与诊断组机制项默认开、实验项默认关）。**联接基金穿透无开关**（内置恒开，不在此列）。
 > **不在 `features.json` 的开关**：LLM 模块启停与基金深度分析走 `llm_settings.json` 的 `enabled_llm`（本菜单标准模块区，编号 1-7），新闻源走 `config.json` 的 `news_sources`，历史走势与回撤走 `config.json` 的 `enable_history`，匿名化模式走 `config.json` 的 `anonymization.mode`（菜单 **[A]**）。
+
+#### [M] 配置 LLM 多链线路优先级（降级顺序）
+
+多链（Multi-Provider Chain）按 `llm_providers.json → providers[].priority` 降级（数值小 = 链序靠前）。面板按当前顺序列出线路，输入**两个编号**交换位置（如 `3 1`）即写盘——写前自动 `.bak` 备份、注释保留；`Esc` 即时返回主菜单，仅一条线路时显示「无需调整」。当前策略为 `weighted`/`cost_first` 时实际链序由权重/成本决定，此顺序仅在 `priority`/`fallback_only` 策略下生效（面板会提示）。同步入口：CLI `--llm-provider-order`、Web 配置面板（见 how-to-config-llm.md）。
 
 #### [A] 配置持仓匿名化（代码/名称脱敏）
 

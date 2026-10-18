@@ -90,6 +90,7 @@ def _bind_callbacks() -> None:
         _cmd_config_comparison_indices,
         _cmd_config_dir_info,
         _cmd_config_llm_modules,
+        _cmd_config_llm_providers,
         _cmd_config_report_boards,
         _cmd_refresh_config,
     )
@@ -120,6 +121,7 @@ def _bind_callbacks() -> None:
         "A": _cmd_config_anonymization_mode,
         "P": _cmd_config_report_boards,
         "S": _cmd_config_llm_modules,
+        "M": _cmd_config_llm_providers,
         "R": _cmd_refresh_config,
         "V": _cmd_view_logs,
         "H": _cmd_view_health_history,

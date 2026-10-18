@@ -436,7 +436,7 @@ while True:
 | 字母/数字（A-Z/0-9） | `index_by_key(key.upper())` 直达并执行对应快捷键菜单项 |
 | Ctrl+C | `exit_app()` 退出 |
 
-键盘封装跨平台：Windows 用 `msvcrt`（方向键 `\xe0` 前缀 + 第二字节映射 H/P），Linux/macOS 用 `tty.setraw` + `termios` + `select` 读 ESC 序列（`\x1b[A`/`\x1b[B` 方向键，ESC 后续字节 `_ESC_TIMEOUT=0.15`s 超时窗口）。所有读键路径统一返回标准化键名，菜单层不感知平台差异；非交互 stdin（非 tty）返回 `KEY_UNKNOWN`，保证管道/重定向环境不阻塞。
+键盘封装跨平台：Windows 用 `msvcrt`（方向键 `\xe0` 前缀 + 第二字节映射 H/P），Linux/macOS 用 `tty.setraw` + `termios` + `select` 读 ESC 序列（`\x1b[A`/`\x1b[B` 与 SS3 `\x1bOA`/`\x1bOB` 方向键；ESC 后首段共聚窗口 `_ESC_FIRST_TIMEOUT=0.5`s + 续读窗口 `_ESC_TIMEOUT=0.3s`，防高延迟链路拆包把方向键误判为孤 Esc）。所有读键路径统一返回标准化键名，菜单层不感知平台差异；非交互 stdin（非 tty）返回 `KEY_UNKNOWN`，保证管道/重定向环境不阻塞。
 
 #### 1.6.3 菜单体系
 
@@ -3395,6 +3395,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `trading_day_as_of` | 时点交易日归属（盘前 <9:30 归前一交易日、节假日按日历回溯；`get_last_trading_day` 委托同口径） | 数据源 | 数据获取 | 无 |
 | `depth_profile` | 报告深度档位表与解析（brief/standard/deep：只收窄模块集合与新闻采集规模，缺省档与既有行为逐字节一致） | LLM 智能分析 | 内容生成 | `config.json → llm_report_depth` |
 | `force_scope` | 模块级强刷范围（可强刷键清单 FORCEABLE_LLM_MODULES / resolve_force_scope 粒度优先归一与未知键校验 / is_module_forced；全局 force 与模块子集合并为模块键集合，强刷不改缓存键构造） | LLM 智能分析 | 内容生成 | 无（CLI `--llm-module` / TUI 多选 / Web 勾选，命令行一次性参数） |
+| `llm_providers.priority` | LLM 多链线路优先级（降级顺序三渠道调序：共享编辑层 reorder 动作归一化写盘，CLI `--llm-provider-order` / TUI [M] 面板 / Web 配置面 ▲▼） | LLM 智能分析 | 内容生成 | `llm_providers.json → providers[].priority` |
 | `self_review` | 生成后自检（模型层复核各模块产出与数据是否自洽；分层于确定性事实校验之上，出厂默认关） | LLM 智能分析 | 内容生成 | `llm_settings.json → enabled_llm.self_review` |
 | `quarter_walk_anchor` | 季报回溯窗口的时间锚点上下文（记录-回放时固定为 cassette 录制时点，去时间依赖而保留请求形状漂移信号） | 数据源 | 数据获取 | 无 |
 | `apply_compliance_guardrails` | 合规声明集中注入（在 system prompt 尾部幂等叠加「仅供复盘参考、不构成投资建议」，窄判定角色可追加专属约束） | LLM 智能分析 | 内容生成 | 无 |

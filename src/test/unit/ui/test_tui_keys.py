@@ -248,10 +248,18 @@ class TestGetKeyLinux(unittest.TestCase):
         self.assertEqual(_get_key_linux(), KEY_ESC)
 
     def test_esc_timeout_relaxed_for_high_latency_links(self) -> None:
-        """ESC 序列分节读取超时 ≥0.3s：高延迟链路（手机网络/SSH）方向键序列不被拆散。"""
-        from src.python.tui.tui_keys import _ESC_TIMEOUT
+        """首段共聚窗口 ≥0.5s + 续读窗口 ≥0.3s：高延迟链路（手机网络/SSH）方向键
+        序列拆包不被误判为孤 Esc（主菜单上孤 Esc = 退出别名，误判即意外退出）。"""
+        from src.python.tui.tui_keys import _ESC_FIRST_TIMEOUT, _ESC_TIMEOUT
 
+        assert _ESC_FIRST_TIMEOUT >= 0.5
         assert _ESC_TIMEOUT >= 0.3
+
+    def test_escape_ss3_application_cursor(self) -> None:
+        """应用光标模式序列（O 前缀变体）→ KEY_UP（部分终端 smkx 后发送此格式）。"""
+        self._mock_stdin.read.side_effect = ["\x1b", "O", "A"]
+        self._mock_select.return_value = ([self._mock_stdin], [], [])
+        self.assertEqual(_get_key_linux(), KEY_UP)
 
     # -- 普通键 -------------------------------------------------------
 

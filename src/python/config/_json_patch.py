@@ -41,6 +41,8 @@ def _update_json_raw_text(raw: str, current: dict, new: dict) -> str:
 
         if isinstance(old_val, dict):
             result = _replace_dict_block(result, key, new_val)
+        elif isinstance(old_val, list):
+            result = _replace_array_block(result, key, new_val)
         else:
             old_json = json.dumps(old_val, ensure_ascii=False, indent=2) if old_val is not None else "null"
             new_json = json.dumps(new_val, ensure_ascii=False, indent=2) if new_val is not None else "null"
@@ -96,6 +98,47 @@ def _replace_dict_block(text: str, key: str, new_val: dict) -> str:
                 return text[: match.start()] + f'"{key}": {block_text}' + text[pos + 1 :]
         pos += 1
     return text  # brace 不平衡，放弃替换
+
+
+def _replace_array_block(text: str, key: str, new_val: list) -> str:
+    """在 JSON 文本中找到指定 key 的 array 值区块，自适应缩进替换。
+
+    bracket 平衡算法（与 ``_replace_dict_block`` 同构）：正确匹配嵌套方括号，
+    自适应周围缩进。注意：被替换区块内的行注释随区块一并刷新（数组整体重写，
+    区块外注释不受影响）——调用方须保证数组内容可全量重序列化。
+    """
+    match = re.search(re.escape(f'"{key}":') + r"\s*\[", text)
+    if not match:
+        return text
+
+    line_start = text.rfind("\n", 0, match.start()) + 1
+    base_indent = match.start() - line_start
+
+    INNER_INDENT = 4
+    lines = json.dumps(new_val, ensure_ascii=False, indent=INNER_INDENT).split("\n")
+    block_lines = [lines[0]]
+    for line in lines[1:]:
+        stripped = line.lstrip()
+        leading = len(line) - len(stripped)
+        if leading == 0:
+            block_lines.append(" " * base_indent + stripped)
+        else:
+            block_lines.append(" " * base_indent + line)
+    block_text = "\n".join(block_lines)
+
+    bracket_start = match.end() - 1
+    depth = 0
+    pos = bracket_start
+    while pos < len(text):
+        ch = text[pos]
+        if ch == "[":
+            depth += 1
+        elif ch == "]":
+            depth -= 1
+            if depth == 0:
+                return text[: match.start()] + f'"{key}": {block_text}' + text[pos + 1 :]
+        pos += 1
+    return text  # bracket 不平衡，放弃替换
 
 
 # ═══════════════════════════════════════════════════════════════

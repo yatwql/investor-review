@@ -35,6 +35,7 @@ MENU_ITEMS: list[MenuItem] = [
     ("I", "管理对比指数池（自定义基准指数）", None, False),
     ("A", "配置持仓匿名化（代码/名称脱敏）", None, False),
     ("S", "配置功能开关（作用域四组，含 LLM 章节）", None, False),
+    ("M", "配置 LLM 多链线路优先级（降级顺序）", None, False),
     ("R", "刷新配置", None, False),
     ("V", "查看最近运行日志（可按级别筛选）", None, False),
     ("H", "查看数据源健康历史", None, False),

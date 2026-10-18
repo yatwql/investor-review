@@ -166,6 +166,16 @@ LLM 配置由三个独立文件管理：
 
 > **不得内联 `api_key`**：本文件可提交仓库（团队共享调优参数），因此**只放路由字段**——写入 `api_key` 等于把密钥随配置入库。校验器遇到非空内联 `api_key` 会记 WARNING 并**跳过整条 provider**（不是仅告警后放行）。密钥一律写在 `llm_key.json` 的凭据块里，本文件用 `credentials_ref` 引用。`model` / `endpoint` 属非敏感路由字段，可留在本文件按条目覆盖凭据块同名值。
 
+### 调整多链线路优先级
+
+降级顺序的真值是 `providers[].priority`（数值越小越优先，`priority`/`fallback_only` 策略下即实际链序）。三个入口写同一份文件、走同一校验（order 必须恰好覆盖全部线路名，写前自动 `.bak` 备份、注释保留）：
+
+- **TUI**：主菜单 `[M]` —— 面板按当前顺序列出线路，输入两个编号交换位置（如 `3 1`）即写盘
+- **Web**：配置面板「LLM 多链线路优先级」块，▲▼ 按钮调序即存
+- **CLI**：`python -m src.python.cli --llm-provider-order deepseek-main,gemini-fallback report --type basic` —— 顺序靠前优先，写盘后退出；`NAME` 须恰好覆盖全部现有线路（少写/多写/重复均拒绝，报错会列出当前名单）
+
+> `weighted` / `cost_first` 策略下实际链序由权重/成本决定，上面顺序仅在 `priority` / `fallback_only` 策略下生效。
+
 ### 端点级节流（`pacing`）
 
 **为什么需要它**：同一次报告生成的 LLM 调用会落在不同端点上，而各端点背后的服务约束截然不同——

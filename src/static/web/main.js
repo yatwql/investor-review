@@ -1206,6 +1206,10 @@
     });
     els.configPanel.appendChild(renderAnonGroup(surface.anonymization));
     els.configPanel.appendChild(renderIndicesGroup(surface));
+    var provGroup = renderProvidersGroup(surface);
+    if (provGroup) {
+      els.configPanel.appendChild(provGroup);
+    }
     els.configPanel.appendChild(
       renderBoolGroup('llm', 'LLM 分析章节', surface.llm.enabled_llm, {
         prefix: 'enabled_llm.',
@@ -1383,6 +1387,97 @@
 
     group.appendChild(makeGroupErrorEl());
     return group;
+  }
+
+  /* ── LLM 多链线路优先级：▲▼ 调序 → POST reorder（与 CLI/TUI 同一编辑层） ── */
+  function renderProvidersGroup(surface) {
+    var prov = surface.llm_providers;
+    if (!prov || !(prov.providers || []).length) {
+      return null; // 无多链线路（含配置读取失败回退空清单）时不占面板位
+    }
+    var group = document.createElement('div');
+    group.className = 'config-group';
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-label', 'LLM 多链线路优先级');
+    var heading = document.createElement('h3');
+    heading.className = 'config-group-title';
+    heading.textContent = 'LLM 多链线路优先级';
+    group.appendChild(heading);
+
+    var priorityAware = prov.strategy === 'priority' || prov.strategy === 'fallback_only';
+    var note = document.createElement('p');
+    note.className = 'config-note-sub';
+    note.textContent = '按下列顺序降级（越靠前越优先）。当前策略 ' + prov.strategy + (priorityAware
+      ? '：顺序即实际链序'
+      : '：实际链序由权重/成本决定，此顺序仅在 priority / fallback_only 策略下生效');
+    group.appendChild(note);
+
+    var listWrap = document.createElement('div');
+    listWrap.className = 'config-indices-list';
+    renderProvidersList(listWrap, prov);
+    group.appendChild(listWrap);
+    group.appendChild(makeGroupErrorEl());
+    return group;
+  }
+
+  function renderProvidersList(wrap, prov) {
+    wrap.textContent = '';
+    (prov.providers || []).forEach(function (p, i, items) {
+      var row = document.createElement('div');
+      row.className = 'config-index-row';
+      var name = document.createElement('span');
+      name.className = 'config-index-name';
+      name.textContent = (i + 1) + '. ' + p.name + '（' + p.provider + '）priority ' + p.priority;
+      row.appendChild(name);
+      [['▲', i > 0, '上移'], ['▼', i < items.length - 1, '下移']].forEach(function (spec) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-secondary btn-sm config-index-del';
+        btn.textContent = spec[0];
+        btn.disabled = !spec[1];
+        btn.setAttribute('aria-label', spec[2] + ' ' + p.name);
+        btn.addEventListener('click', onProviderMove);
+        row.appendChild(btn);
+      });
+      wrap.appendChild(row);
+    });
+  }
+
+  function onProviderMove(e) {
+    var btn = e.target;
+    var group = btn.closest('.config-group');
+    var prov = configState.surface.llm_providers;
+    var items = (prov.providers || []).slice();
+    var rows = Array.prototype.slice.call(group.querySelectorAll('.config-index-row'));
+    var idx = rows.indexOf(btn.closest('.config-index-row'));
+    var target = btn.textContent === '\u25b2' ? idx - 1 : idx + 1;
+    if (idx < 0 || target < 0 || target >= items.length) {
+      return;
+    }
+    var moved = items.splice(idx, 1)[0];
+    items.splice(target, 0, moved);
+    var order = items.map(function (p) { return p.name; });
+    var listWrap = group.querySelector('.config-indices-list');
+    Array.prototype.forEach.call(group.querySelectorAll('button'), function (b) { b.disabled = true; });
+    postConfigEdit({ key: 'llm_providers.priority', action: 'reorder', order: order })
+      .then(function (data) {
+        // 服务端回传生效顺序；priority 已归一化为 10,20,…，本地对齐后整组重渲染
+        var names = (data && data.value && data.value.order) || order;
+        var byName = {};
+        (prov.providers || []).forEach(function (p) { byName[p.name] = p; });
+        prov.providers = names.map(function (n, i) {
+          var src = byName[n] || {};
+          var next = {};
+          Object.keys(src).forEach(function (k) { next[k] = src[k]; });
+          next.priority = (i + 1) * 10;
+          return next;
+        });
+        renderProvidersList(listWrap, prov);
+      })
+      .catch(function (err) {
+        showGroupError(group, err); // 失败：本地顺序未改，重渲染恢复原状
+        renderProvidersList(listWrap, prov);
+      });
   }
 
   function renderIndicesList(wrap, indices) {

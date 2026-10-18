@@ -75,6 +75,13 @@ config_edit_whitelist = {
         f"enabled_llm.{sfx}": {"kind": "bool", "target": "llm_settings", "writer": "llm"}
         for sfx in get_llm_module_names()
     },
+    # ── LLM 多链线路优先级（llm_providers.json）—— order 置换校验 + priority 归一化 ──
+    "llm_providers.priority": {
+        "kind": "action",
+        "actions": ("reorder",),
+        "target": "llm_providers",
+        "writer": "llm_providers",
+    },
     # ── 7 功能开关（features.json；清单取自 features.feature_switch_registry 全注册表，
     #      实验项与常规开关同表同写入路径，分组只影响前端分块渲染）──
     **{flag: {"kind": "bool", "target": "features", "writer": "features"} for flag in feature_switch_registry},
@@ -91,6 +98,10 @@ def _target_path(target: str) -> str:
         from src.python.config._llm_settings import get_llm_settings_path
 
         return get_llm_settings_path()
+    if target == "llm_providers":
+        from src.python.config._llm_providers import _get_llm_providers_path
+
+        return _get_llm_providers_path()
     if target == "features":
         from src.python.config.features import FEATURES_FILE
 
@@ -223,6 +234,64 @@ def _apply_comparison_action(payload: dict, entry: dict) -> dict:
     return indices
 
 
+def _apply_llm_provider_action(payload: dict, entry: dict) -> dict:
+    """LLM 多链线路重排（reorder）：order 必须是当前线路名单的**置换**。
+
+    语义唯一实现在此（CLI ``--llm-provider-order`` / TUI 面板 / Web 配置面均为薄适配）：
+    priority 按新顺序归一化为 10, 20, 30…（数值小者链序靠前，与
+    ``strategy.resolve_provider_chain`` 的 priority 排序口径一致）；其余字段
+    （provider / credentials_ref / model / endpoint / weight / timeout…）原样保留。
+
+    Args:
+        payload: ``{"action": "reorder", "order": [线路名…]}``。
+        entry: 白名单条目（校验 action 在允许集合内）。
+
+    Returns:
+        ``{"order": 生效顺序}``。
+
+    Raises:
+        ConfigEditError: 动作非法 / order 格式错 / 未恰好覆盖全部线路 / 配置无有效线路。
+    """
+    import copy
+
+    from src.python.config._llm_providers import (
+        _load_llm_providers,
+        _parse_providers_list,
+        write_llm_providers,
+    )
+    from src.python.config._llm_providers_defaults import _DEFAULT_LLM_PROVIDERS
+
+    action = payload.get("action")
+    if action not in entry["actions"]:
+        raise ConfigEditError(f"llm_providers 动作不合法（reorder）: {action}")
+    order = payload.get("order")
+    if not isinstance(order, list) or not order or not all(isinstance(item, str) and item.strip() for item in order):
+        raise ConfigEditError("order 必须为非空的线路名列表")
+    names = [item.strip() for item in order]
+    if len(set(names)) != len(names):
+        raise ConfigEditError("order 中存在重复线路名")
+
+    raw = _load_llm_providers()
+    if raw is None:
+        raw = copy.deepcopy(_DEFAULT_LLM_PROVIDERS)  # 文件缺失 → 内置模板上重排（写入即物化文件）
+    providers = _parse_providers_list(raw)
+    if not providers:
+        raise ConfigEditError("llm_providers.json 无有效线路，先修复配置文件后重试")
+    current = [str(p.get("name")) for p in providers]
+    if len(names) != len(current) or set(names) != set(current):
+        raise ConfigEditError(f"order 须恰好覆盖全部线路（当前: {'、'.join(current)}）")
+
+    rank = {name: (idx + 1) * 10 for idx, name in enumerate(names)}
+    new_list = []
+    for item in raw.get("providers", []):
+        item_name = str(item.get("name", ""))
+        # 解析层已剔除的无效条目原样保留（不因重排丢失）；有效条目按新序归一化 priority
+        new_list.append({**item, "priority": rank[item_name]} if item_name in rank else item)
+    new_raw = {**raw, "providers": new_list}
+    write_llm_providers(new_raw, _target_path("llm_providers"))
+    return {"order": names}
+
+
 def apply_config_edit(payload: dict) -> dict:
     """应用单次配置编辑（Web POST / TUI 菜单共用入口）。
 
@@ -249,6 +318,8 @@ def apply_config_edit(payload: dict) -> dict:
 
     if entry["writer"] == "comparison_indices":
         new_value = _apply_comparison_action(payload, entry)
+    elif entry["writer"] == "llm_providers":
+        new_value = _apply_llm_provider_action(payload, entry)
     else:
         new_value = _apply_plain_value(key, payload.get("value"), entry)
     return {"key": key, "value": new_value, "backup": backup_path}

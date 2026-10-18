@@ -357,3 +357,65 @@ class TestWebPanelCoversAllSwitches:
             shown |= set(group["switches"])
         missing = set(feature_switch_registry) - shown
         assert not missing, f"Web 面板未渲染这些开关：{sorted(missing)}"
+
+
+class TestLlmProvidersBlock:
+    """LLM 多链线路优先级块：GET surface 按 priority 排序展示 + POST reorder 落盘（与 CLI/TUI 同源编辑层）。"""
+
+    @staticmethod
+    def _write_providers_file(tmp_path, priorities=(10, 20)) -> str:
+        path = os.path.join(str(tmp_path), "llm_providers.json")
+        data = {
+            "strategy": "priority",
+            "providers": [
+                {"name": "main", "provider": "claude", "credentials_ref": "env:CRED1", "priority": priorities[0]},
+                {"name": "aux", "provider": "openai", "credentials_ref": "env:CRED2", "priority": priorities[1]},
+            ],
+        }
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+        return path
+
+    def test_surface_lists_providers_sorted_by_priority(self, monkeypatch):
+        """surface：providers 按 priority 升序（数值小 = 链序靠前），策略一并回传。"""
+        fake = {
+            "strategy": "weighted",
+            "providers": [
+                {"name": "b", "provider": "openai", "priority": 20},
+                {"name": "a", "provider": "claude", "priority": 10},
+            ],
+        }
+        monkeypatch.setattr("src.python.config.get_llm_providers", lambda: fake)
+        from src.python.web.config_edit import get_config_edit_surface
+
+        block = get_config_edit_surface()["llm_providers"]
+        assert block["strategy"] == "weighted"
+        assert [p["name"] for p in block["providers"]] == ["a", "b"]
+
+    def test_post_reorder_persists(self, app_client, tmp_path, monkeypatch):
+        """POST reorder → 200 + 生效 order 回传；文件 priority 归一化为 10/20 写盘。"""
+        providers_path = self._write_providers_file(tmp_path)
+        monkeypatch.setattr("src.python.config._llm_providers._get_llm_providers_path", lambda: providers_path)
+        resp = app_client.post(
+            "/api/config/edit",
+            json={"key": "llm_providers.priority", "action": "reorder", "order": ["aux", "main"]},
+        )
+        assert resp.status_code == 200
+        assert resp.get_json()["data"]["value"]["order"] == ["aux", "main"]
+        with open(providers_path, encoding="utf-8") as f:
+            by_name = {p["name"]: p for p in json.load(f)["providers"]}
+        assert by_name["aux"]["priority"] == 10
+        assert by_name["main"]["priority"] == 20
+
+    def test_post_reorder_invalid_returns_400(self, app_client, tmp_path, monkeypatch):
+        """非置换 order → 400 BAD_PARAM，原文件不动。"""
+        providers_path = self._write_providers_file(tmp_path)
+        monkeypatch.setattr("src.python.config._llm_providers._get_llm_providers_path", lambda: providers_path)
+        resp = app_client.post(
+            "/api/config/edit",
+            json={"key": "llm_providers.priority", "action": "reorder", "order": ["main"]},
+        )
+        assert resp.status_code == 400
+        with open(providers_path, encoding="utf-8") as f:
+            by_name = {p["name"]: p for p in json.load(f)["providers"]}
+        assert by_name["main"]["priority"] == 10

@@ -31,6 +31,16 @@ def _experiment_name(value: str) -> tuple[str, ...]:
     return tuple(sorted(flags))
 
 
+def _provider_order(value: str) -> list[str]:
+    """``--llm-provider-order`` 参数校验：非空线路名列表（覆盖性校验在共享编辑层）。"""
+    names = [part.strip() for part in value.split(",")]
+    if not names or not all(names):
+        raise argparse.ArgumentTypeError("线路名列表不能为空（如 deepseek-main,gemini-fallback）")
+    if len(set(names)) != len(names):
+        raise argparse.ArgumentTypeError("线路名重复")
+    return names
+
+
 def _feature_override(value: str) -> tuple[str, bool]:
     """argparse type 回调 —— 校验 ``--feature NAME=VALUE`` 取值。
 
@@ -85,6 +95,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="覆写任意功能开关（含常规开关），仅本次运行生效（不写入 features.json）。可重复指定；"
         "NAME 取开关名，VALUE ∈ on/off/true/false/1/0（大小写不敏感）。"
         "与 --experiment 的区别：本参数是全开关双向覆写，后者只开实验项。",
+    )
+    parser.add_argument(
+        "--llm-provider-order",
+        metavar="NAME[,NAME...]",
+        type=_provider_order,
+        help="重排 LLM 多链线路优先级并**写入** llm_providers.json（靠前优先），随后退出。"
+        "NAME 须恰好覆盖全部现有线路（如 deepseek-main,gemini-fallback）。"
+        "与 --feature（仅本次运行、不写盘）不同：本参数持久化；亦可在 TUI 菜单 [M] / Web 配置面调序。",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s v{APP_VERSION}")
 

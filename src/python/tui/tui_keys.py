@@ -19,7 +19,11 @@ KEY_UNKNOWN = "KEY_UNKNOWN"
 
 # Linux ESC 序列读取超时（秒）。0.3s 面向高延迟链路（手机蜂窝网 / SSH）：
 # 方向键三字节序列可能分节到达，过短的超时会把序列拆散误判成孤 ESC
+# 方向键序列续读窗口（同一次输入爆发内的后续字节）与首段共聚窗口（ESC 后等 '[' 的窗口）。
+# 首段更大：高延迟链路（手机网络/SSH）上终端会把 ESC [ A 拆成独立分节到达，
+# 窗口过短会把方向键误判为孤 Esc（主菜单上 = 退出别名，行为最重，须留足余量）
 _ESC_TIMEOUT = 0.3
+_ESC_FIRST_TIMEOUT = 0.5
 
 
 def get_key() -> str:
@@ -95,7 +99,7 @@ def _get_key_linux() -> str:
         if ch in ("\r", "\n"):
             return KEY_ENTER
         if ch == "\x1b":  # ESC 序列 -> 方向键；超时无后继字节 → 孤 ESC（Esc 键）
-            rdy, _, _ = select.select([sys.stdin], [], [], _ESC_TIMEOUT)
+            rdy, _, _ = select.select([sys.stdin], [], [], _ESC_FIRST_TIMEOUT)
             if not rdy:
                 return KEY_ESC
             b1 = sys.stdin.read(1)
@@ -108,7 +112,8 @@ def _get_key_linux() -> str:
             if not b2:
                 return KEY_UNKNOWN
             seq = ch + b1 + b2
-            mapping = {"\x1b[A": KEY_UP, "\x1b[B": KEY_DOWN}
+            # 应用光标模式变体（部分终端/会话在 smkx 后发送 O 前缀两字节序列）与 CSI 同权映射
+            mapping = {"\x1b[A": KEY_UP, "\x1b[B": KEY_DOWN, "\x1bOA": KEY_UP, "\x1bOB": KEY_DOWN}
             return mapping.get(seq, KEY_UNKNOWN)
         if ch:
             return ch.upper()
@@ -173,7 +178,7 @@ def _input_choice_linux(prompt: str) -> str | None:
                     sys.stdout.flush()
                 continue
             if b == b"\x1b":
-                rdy, _, _ = select.select([fd], [], [], _ESC_TIMEOUT)
+                rdy, _, _ = select.select([fd], [], [], _ESC_FIRST_TIMEOUT)
                 if not rdy:  # 孤立 Esc → 即时取消（手机 SSH 直接回上一步）
                     print(flush=True)
                     return None

@@ -895,3 +895,72 @@ def _cmd_config_anonymization_mode() -> None:
             print(f"  {YELLOW}[!]{RESET} 请输入有效编号")
 
     press_any_key()
+
+
+def _cmd_config_llm_providers() -> None:
+    """管理 LLM 多链线路优先级（降级顺序）。
+
+    与 CLI ``--llm-provider-order``、Web 配置面同源：写路径全部经共享编辑层
+    ``apply_config_edit``（llm_providers.priority / reorder），本面板只做展示与
+    「交换两个编号」的输入适配。Esc 即时返回主菜单。
+    """
+    from src.python.config import get_llm_providers
+
+    while True:
+        cfg = get_llm_providers()
+        strategy = str(cfg.get("strategy") or "priority")
+        raw_providers = [p for p in (cfg.get("providers") or []) if isinstance(p, dict)]
+        # 展示顺序 = priority 升序（数值小 = 链序靠前），与运行时 priority 策略口径一致
+        ordered = sorted(enumerate(raw_providers), key=lambda t: (t[1].get("priority", 99), t[0]))
+        columns = terminal_columns()
+        width = inner_width(columns)
+        print()
+        print(truncate_display(f"  ── LLM 多链线路优先级（strategy: {strategy}） ──", width))
+        if len(ordered) < 2:
+            for line in wrap_hanging("  当前仅一条线路（或未配置多链），无需调整", width):
+                print(line)
+            return
+        for num, (_idx, provider) in enumerate(ordered, 1):
+            row = (
+                f"  {num}. {provider.get('name')}（{provider.get('provider')}）priority {provider.get('priority', 99)}"
+            )
+            for line in wrap_hanging(row, width):
+                print(line)
+        if strategy not in ("priority", "fallback_only"):
+            for line in wrap_hanging(
+                f"  提示：当前策略 {strategy} 下实际链序由权重/成本决定，此处顺序仅在 priority / fallback_only 策略下生效",
+                width,
+            ):
+                print(line)
+        print()
+        try:
+            choice = input_choice("  输入两个编号交换优先级（如 3 1）· 0 返回: ")
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return
+        if choice is None or choice == "0":
+            return
+        parts = choice.split()
+        swapped = None
+        if len(parts) == 2:
+            try:
+                a, b = int(parts[0]), int(parts[1])
+            except ValueError:
+                a = b = -1
+            if 1 <= a <= len(ordered) and 1 <= b <= len(ordered) and a != b:
+                swapped = (a, b)
+        if swapped is None:
+            for line in wrap_hanging(
+                f"  {YELLOW}[!]{RESET} 请输入两个不同的编号交换位置（如 3 1），范围 1-{len(ordered)}", width
+            ):
+                print(line)
+            continue
+        a, b = swapped
+        names = [str(p.get("name")) for _i, p in ordered]
+        names[a - 1], names[b - 1] = names[b - 1], names[a - 1]
+        if _apply_edit({"key": "llm_providers.priority", "action": "reorder", "order": names}):
+            for line in wrap_hanging(
+                f"  {GREEN}[OK]{RESET} 已交换 {ordered[a - 1][1].get('name')} 与 {ordered[b - 1][1].get('name')} 的优先级",
+                width,
+            ):
+                print(line)
