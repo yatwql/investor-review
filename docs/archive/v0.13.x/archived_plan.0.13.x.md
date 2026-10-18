@@ -7,6 +7,14 @@
 
 ---
 
+## plan-133 机制类开关内置化评估（逃生分支清理）✅
+
+逐项评估执行完毕，三开关全部内置化（删注册表条目 + 关态死分支）——证据：①parity 先行（`test_quote_adapter_parity` 七源等价 + 回退态强制回落用例改写后继续锁定两套映射；结构化头「整批不可用 → 表格兜底」等价锁；凭据预检在「全部数据源免费无需凭据」现状下两态同为直通）；②跨版本稳定期：2026-09-10 引入、09-11 转正默认开，历时月余、横跨 v0.12.12→v0.13.5 多个发布无回退提交；③本地真实 `features.json` 无关态覆写（残留旧键由「无消费者开关」告警提示清理）。落地：`datasource_adapter` 链路恒走适配器（适配器不可用回落既有映射的安全网与 doctor 自检保留）、`decision_header_parse` 提示词恒追加结构化决策头（`_dh` 指纹后缀常驻、解析双路与回落保留）、`datasource_credential_ready` 凭据预检恒执行（`check_sources`/`chain`/`chain_incremental`/`doctor`/`data_source_matrix` 六处闸门删净，doctor 凭据组恒产出）；面板 31→28 项（机制与诊断 8→5）单次重排，手册/requirements/technical（§2.5/§2.7 改内置标题、语义命名表重键、统计行按注册表动态重算）/developer-guide 转正判据同步；OFF 态专属用例随行为退役（-8 例），回归总量不降。不内置清单照案确认：关态有真实场景的七项保持现状，`deterministic_signal`/`prosperity_framework` 观察期未过不评，`module_quality_gate` 弱候选暂缓。
+
+## plan-132 S 面板信息增强（说明查看 / 非默认标记 / 实验统计上屏）✅
+
+三项只读信息面落地——①`? 编号` 查看说明与当前值/出厂默认值/存储键（功能开关取注册表 `desc`，LLM 模块取 `enabled_llm` 键；`_show_switch_detail` 只读，不写配置不改编号派发）；②行尾 `*` 标记与出厂默认不一致项（LLM 模块按 `_DEFAULT_LLM_SETTINGS` 出厂值、功能开关按 `FeatureSwitchDef.default` 比对，页脚释义）；③⚗ 实验项行尾附 `experiment_stats` 启用统计（启用 N 次 · 最近 MM-DD，每轮渲染实时读取、读取失败静默省略）。手册 [S] 节同步，新增 6 单测。
+
 ## plan-131 report_qa 转正评估挂账（判据与执行清单） ✅
 
 首轮评估执行并落定判据——①观察数据：`experiment_stats` 实测 report_qa 启用 5 次（最近 2026-10-13，对照 decision_reflection 51 次），非零启用 → 未触发撤销条件⑤，频次偏低 → 未满足转正条件④的「真实使用」充分样本；②质量抽检：`QaSession` 仅内存态不持久化，无历史问答样本可抽检 → 判据挂账保留（样本留痕为转正前置）；③成本实测：`QaSession.usage` 已有 token 口径（API 载荷带出）但未接费用口径、不入 perf 记录 → 费用留痕缺口同挂账；④转正清单（摘 experimental、入报告增强组并复核 `affects_report`、三端文档同步、`--experiment` 取值域收窄）与⑤撤销清单（注册表条目 + 页内区块摘除）固化为执行清单；结论：维持实验观察，判据与清单的长期单一事实位由 plan-136「实验项生命周期表」承接（report_qa 行双向引用本条）。

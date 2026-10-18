@@ -80,7 +80,6 @@ class TestResolveExperimentFlags:
         for promoted in (
             "deterministic_signal",
             "module_quality_gate",
-            "decision_header_parse",
             "llm_debate_procon",
             "factor_catalog",
             "rebalance_schedule_replay",
@@ -134,11 +133,9 @@ class TestResolveExperimentFlags:
         """非实验开关不得混进实验清单——否则会被当实验项写进产物自述。"""
         assert "metrics_enabled" not in _experimental_flags()
         assert "doctor_check" not in _experimental_flags()
-        assert "datasource_adapter" not in _experimental_flags()
         assert is_experimental_switch("metrics_enabled") is False
         # 转正后的读侧增强同理：混进实验清单会被当成「非默认产物」写进自述
         assert "deterministic_signal" not in _experimental_flags()
-        assert "decision_header_parse" not in _experimental_flags()
 
 
 @pytest.mark.unit
@@ -251,42 +248,17 @@ class TestDoctorCheckPromotion:
 
 
 @pytest.mark.unit
-class TestDatasourceAdapterPromotion:
-    """数据源适配契约的开关归类与默认值。
+class TestDatasourceAdapterBuiltinized:
+    """数据源适配契约已内置（不可关闭）：默认链路即走适配器分支。
 
-    它是内部接缝而非用户功能：开关开/关下报告产物逐源等价（唯一非等价处是
-    东财源多出 market_cap/pe 两个 None 键，下游一律 ``.get()`` 读取，语义不变，
-    由 ``test_quote_adapter_parity.py`` 逐源锁定），所以「打开它」对用户没有可
-    感知收益，不该以默认关的形态摆一个不可理解的选择；而默认关的实际代价是
-    生产路径从不执行适配器分支，新数据源/新字段的契约得不到实跑覆盖。故转正为
-    默认开启（摘除实验身份，作用域归机制与诊断组）；开关保留为回退杠杆
-    （features.json 置 false 即回退）。
+    适配器与既有手写转换函数逐源等价（唯一非等价处是东财源多出
+    market_cap/pe 两个 None 键，下游一律 ``.get()`` 读取，语义不变，由
+    ``test_quote_adapter_parity.py`` 逐源锁定）；适配器不可用时链路自动
+    回退既有映射（回退用例由 parity 文件锁定）。
     """
 
-    def test_default_enabled(self):
-        from src.python.config.features import get_feature_defaults
-
-        assert get_feature_defaults()["datasource_adapter"] is True
-
-    def test_not_in_experimental_registry(self):
-        """非实验项：不进产物自述（面板可见性由机制与诊断组承接，转正不丢入口）。"""
-        assert "datasource_adapter" not in _experimental_flags()
-        assert is_experimental_switch("datasource_adapter") is False
-
-    def test_switch_still_honored(self):
-        """转正不等于不可关：回退杠杆仍有效。"""
-        from src.python.config.features import is_feature_enabled, set_feature_enabled
-
-        set_feature_enabled("datasource_adapter", False)
-
-        assert is_feature_enabled("datasource_adapter") is False
-
     def test_default_config_runs_adapter_chain(self):
-        """默认配置（无任何覆写）下链路即走适配器分支——转正的实际效果。
-
-        缺陷场景：默认关时生产路径永远取既有转换函数，适配器分支只在测试里
-        被显式打开，接新数据源时契约是否真的能跑通没有实跑证据。
-        """
+        """默认配置（无任何覆写）下链路即走适配器分支——内置的实际效果。"""
         from src.python.fetcher import price as price_module
 
         providers, _transforms = price_module._price_chain_slots()
@@ -309,9 +281,7 @@ class TestReadSidePromotion:
     PROMOTED = (
         "deterministic_signal",
         "module_quality_gate",
-        "decision_header_parse",
         "llm_debate_conditional",
-        "datasource_credential_ready",
     )
 
     def test_default_enabled(self):

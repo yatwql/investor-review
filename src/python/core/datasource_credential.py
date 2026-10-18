@@ -64,15 +64,11 @@ __all__ = [
     "CredentialSpec",
     "credential_hint",
     "credential_readiness",
-    "credential_ready_enabled",
     "credential_value",
     "missing_credential",
     "register_credential_spec",
     "reset_credential_specs",
 ]
-
-# 实验开关名：本模块的全部判定受它约束，开关名只此一处出现
-_FEATURE_FLAG = "datasource_credential_ready"
 
 
 @dataclass(frozen=True)
@@ -118,17 +114,6 @@ def register_credential_spec(spec: CredentialSpec) -> None:
 def reset_credential_specs() -> None:
     """清空声明表（测试隔离用；生产代码不得调用）。"""
     CREDENTIAL_SPECS.clear()
-
-
-def credential_ready_enabled() -> bool:
-    """本机制是否启用（常规开关 ``datasource_credential_ready``，默认开启）。
-
-    开关名收敛在此处——各调用点用本函数判定，不各自硬编码开关字符串；
-    开关关闭时全部调用点的行为与未引入本机制时逐字一致。
-    """
-    from src.python.config.features import is_feature_enabled
-
-    return is_feature_enabled(_FEATURE_FLAG)
 
 
 def _is_blank(value: str | None) -> bool:

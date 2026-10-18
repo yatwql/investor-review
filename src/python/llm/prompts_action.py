@@ -200,7 +200,6 @@ def _build_expert_review_prompt(
     industry_concentration: dict[str, float] | None = None,
     skip_scenarios: bool = False,  # 辩论模式跳过所有情景分析
     enable_signal_digest: bool = False,
-    enable_structured_header: bool = False,
 ) -> str:
     """构建智囊团深度复盘的用户提示词（紧凑格式）。
 
@@ -216,9 +215,6 @@ def _build_expert_review_prompt(
             避免双重情景输出）。
         enable_signal_digest: 注入算法评级预消化信号块（开关
             ``deterministic_signal``；无可用信号时静默跳过）。
-        enable_structured_header: 追加受控 JSON 决策头契约（开关
-            ``decision_header_parse``，默认开启）。关闭时提示词与未加此项前逐字节一致，
-            不扰动既有缓存指纹。
     """
     now_bj = datetime.now(BEIJING_TZ).strftime("%Y-%m-%d %H:%M")
     cat_parts = [f"{k}{v}只" for k, v in (categories or {}).items()]
@@ -279,10 +275,8 @@ def _build_expert_review_prompt(
         "| 🟡 中 | XXX | 减仓/加仓/持有 | 简述理由 |\n"
         "| 🟢 低 | XXX | 减仓/加仓/持有 | 简述理由 |\n"
     )
-    # 结构化决策头（开关 decision_header_parse）：与上表同源，供抽取侧优先读取。
-    # 关闭时 append 空串，提示词逐字节不变。
-    if enable_structured_header:
-        parts.append(build_structured_header_instruction())
+    # 结构化决策头（已内置不可关闭）：与上表同源，供抽取侧优先读取。
+    parts.append(build_structured_header_instruction())
     parts += [
         "",
         "【持仓明细】",

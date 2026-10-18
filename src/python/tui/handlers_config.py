@@ -222,8 +222,8 @@ def _cmd_config_llm_modules() -> None:
     """配置各 LLM 报告的启用/停用，以及全部功能开关（llm_settings.json + features.json）。
 
     标准 LLM 模块通过 enabled_llm 控制，存储在 llm_settings.json。
-    功能开关（辩论模式增强、决策跨期反思闭环、量化指标、交互图表、系统自检、
-    数据源适配契约等）通过 Feature Flag 控制，存储在 features.json；四组分块的
+    功能开关（辩论模式增强、决策跨期反思闭环、量化指标、系统自检、
+    确定性信号等）通过 Feature Flag 控制，存储在 features.json；四组分块的
     分组标题、显示名与顺序均取自 ``features.GROUP_ORDER`` / ``GROUP_LABELS``，
     新增开关自动上屏，渠道层不另写清单。
     辩论白脸/黑脸/综合（debate_pro/con/synthesis）保留在注册表
@@ -314,7 +314,9 @@ def _cmd_config_llm_modules() -> None:
         print("\n".join(render_panel("配置 LLM 报告章节与功能开关", rows)))
         for _group in GROUP_ORDER:
             print(f"  {GROUP_LABELS[_group]}")
-        print("  ⚗ 标记为实验项：默认关闭、处于实验阶段输出质量可能不稳定（行尾附启用统计；各开关说明见 how-to-config 手册）")
+        print(
+            "  ⚗ 标记为实验项：默认关闭、处于实验阶段输出质量可能不稳定（行尾附启用统计；各开关说明见 how-to-config 手册）"
+        )
         print("  * 与出厂默认值不一致（配置漂移提示）；输入 ? 编号 查看该项说明与当前值/默认值")
         print("  基础报告章节组（基金深度分析/市场新闻/历史走势+回撤/组合演进/行动建议）在菜单 [P] 配置")
         print()

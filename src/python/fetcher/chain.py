@@ -23,7 +23,6 @@ from src.python.cache import set as cache_set
 from src.python.core.constants import CACHE_WEEKLY
 from src.python.core.datasource_credential import (
     credential_hint,
-    credential_ready_enabled,
     missing_credential,
 )
 from src.python.core.provider_registry import TRANSPORT_FAILURE, get_registry
@@ -201,11 +200,10 @@ def fetch_with_fallback(
                 diagnostics.add(label, "未注册")
             continue
 
-        # 凭据就绪预检（开关 datasource_credential_ready）：
-        # 配置级问题（用户没配 key），**不计入熔断计数器**——混入可用性统计
-        # 会污染数据源可用性矩阵的语义；仅以可读原因进入「错误即 UX」通道。
-        # 开关关闭 / 无声明凭据 → 该分支恒不触发，行为与未引入本机制时逐字一致。
-        _spec = missing_credential(provider_name) if credential_ready_enabled() else None
+        # 凭据就绪预检（已内置）：配置级问题（用户没配 key）**不计入熔断计数器**——
+        # 混入可用性统计会污染数据源可用性矩阵的语义；仅以可读原因进入
+        # 「错误即 UX」通道。无声明凭据时该分支恒不触发。
+        _spec = missing_credential(provider_name)
         if _spec is not None:
             logger.info("[%s]%s %s 缺少凭据，跳过（%s）", data_type, _code_tag, label, _spec.env_var)
             if diagnostics is not None:

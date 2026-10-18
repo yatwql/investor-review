@@ -1,7 +1,7 @@
-"""数据源凭据声明与就绪判定单元测试（常规开关 `datasource_credential_ready`，默认开启）。
+"""数据源凭据声明与就绪判定单元测试（机制已内置，不可关闭）。
 
 覆盖：声明注册、就绪判定（未声明 / 未设 / 空白 / 已设）、可读指引措辞、
-就绪矩阵结构、开关判定、凭据值不外泄。
+就绪矩阵结构、凭据值不外泄。
 
 注：本模块当前**没有真实需要凭据的数据源**（全部免费源），故测试用**合成声明**
 证明机制可用——不为了演示而把假数据源写进生产注册表。
@@ -16,13 +16,11 @@ import json
 
 import pytest
 
-from src.python.config import features
 from src.python.core.datasource_credential import (
     CREDENTIAL_SPECS,
     CredentialSpec,
     credential_hint,
     credential_readiness,
-    credential_ready_enabled,
     credential_value,
     missing_credential,
     register_credential_spec,
@@ -248,20 +246,3 @@ class TestKeyFileCredential:
         for row in credential_readiness():
             assert "super-secret-value" not in str(row)
         assert credential_value("undeclared") == ""
-
-
-class TestReadyEnabled:
-    """开关判定：开关名收敛在模块内，转正后默认开启。
-
-    本机制转正为常规开关：可见面是只读诊断（体检的就绪矩阵 + check-sources 的
-    跳过态），声明表为空时对报告产物零影响，且不耗 LLM、不写盘；默认关的实际
-    代价是机制在生产路径从不执行——接入需 key 的源时才第一次实跑。开关本身保留，
-    ``features.json`` 置 false 即回到「未引入本机制」的行为。
-    """
-
-    def test_default_enabled(self):
-        assert credential_ready_enabled() is True
-
-    def test_disabled_when_flag_cleared(self, monkeypatch):
-        monkeypatch.setitem(features.FEATURE_FLAGS, "datasource_credential_ready", False)
-        assert credential_ready_enabled() is False

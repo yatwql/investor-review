@@ -374,12 +374,10 @@ def register_adapter_survey(fn: Callable[[], list]) -> None:
 def _check_source_adapters() -> list[dict[str, Any]]:
     """数据源适配契约自检（离线，不发起任何网络请求）。
 
-    报告已登记的适配器数量与其契约自检结论，并标注契约路径是否已由实验开关
-    启用——开关未启用时声明与自检仍可核验（这正是接入新数据源前要看的）。
+    报告已登记的适配器数量与其契约自检结论（数据源适配契约已内置，
+    契约自检恒执行；适配器不可用时链路自动回退既有转换函数）。
     """
     try:
-        from src.python.config.features import is_feature_enabled
-
         # 适配器巡检函数由 fetcher/source_adapter 导入时注册（core 不反向 import 上层）；
         # 未注册（fetcher 未加载，如最小化 web 请求场景）→ 声明「未注册」不影响其余自检
         from src.python.core.doctor import _adapter_survey
@@ -394,7 +392,6 @@ def _check_source_adapters() -> list[dict[str, Any]]:
                 )
             ]
         reports = _adapter_survey()
-        enabled = is_feature_enabled("datasource_adapter")
     except Exception as exc:  # noqa: BLE001
         return [_item(GROUP_ADAPTER, "适配契约", False, f"执行失败: {type(exc).__name__}: {exc}")]
 
@@ -410,7 +407,6 @@ def _check_source_adapters() -> list[dict[str, Any]]:
         ]
 
     domains = "、".join(sorted({r["domain"] for r in reports}))
-    path_state = "已启用" if enabled else "未启用（开关 datasource_adapter 已关闭，链路走既有转换函数）"
     bad = [r for r in reports if not r["ok"]]
     if bad:
         detail = "；".join(f"{r['display_name']}：{r['message']}" for r in bad)
@@ -428,7 +424,7 @@ def _check_source_adapters() -> list[dict[str, Any]]:
             GROUP_ADAPTER,
             "适配契约",
             True,
-            f"{len(reports)} 个适配器（域：{domains}）契约自检通过；契约路径{path_state}",
+            f"{len(reports)} 个适配器（域：{domains}）契约自检通过；契约路径已内置",
         )
     ]
 
@@ -436,14 +432,11 @@ def _check_source_adapters() -> list[dict[str, Any]]:
 def _check_datasource_credentials() -> list[dict[str, Any]]:
     """数据源凭据就绪自检（离线，不发起任何网络请求）。
 
-    只报告「变量名 + 是否就绪」，**不含凭据值**。开关关闭时不产出该组，
-    体检输出与未引入本机制时逐字一致。
+    只报告「变量名 + 是否就绪」，**不含凭据值**（本机制已内置，恒产出该组）。
     """
     try:
-        from src.python.core.datasource_credential import credential_readiness, credential_ready_enabled
+        from src.python.core.datasource_credential import credential_readiness
 
-        if not credential_ready_enabled():
-            return []
         rows = credential_readiness()
     except Exception as exc:  # noqa: BLE001
         return [_item(GROUP_CREDENTIAL, "凭据就绪", False, f"执行失败: {type(exc).__name__}: {exc}")]

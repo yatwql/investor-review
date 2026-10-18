@@ -1392,7 +1392,7 @@ LLM 集成层与系统其他组件的接口：
 | LLM 模块 | 依赖数据源 | 缓存指纹依赖 |
 |:---------|:----------|:------------|
 | `global_macro` | A股指数 + 美股指数 + 总市值+总盈亏 + 分类 + (可选)行业资金流向 | 指数收盘价 + 持仓汇总 + 竞争语境块（`competitive_context`） |
-| `expert_review` | 总市值/成本/盈亏 + 持仓数量 + 分类 + 穿透资产 + 持仓明细 + 组合历史走势 + 竞争语境块 + 量化指标 + (可选)pipeline_data | 持仓品种/份额/成本（剔除行情波动）+ 组合风险信号摘要（`history_data` 的 max_drawdown_pct / annualized_volatility / total_return_pct / status）+ 竞争语境块（`competitive_context`）+ 量化指标（`metrics`）+ 辩论增强后缀（`llm_debate_conditional` → `_c`）+ pipeline_data 派生块后缀（【环比变化】【数据质量降级】两段）+ 开关类后缀（`decision_reflection` 教训区块指纹、`deterministic_signal` 信号块指纹与确定性信号摘要指纹 → `_sg`、`decision_header_parse` → `_dh`） |
+| `expert_review` | 总市值/成本/盈亏 + 持仓数量 + 分类 + 穿透资产 + 持仓明细 + 组合历史走势 + 竞争语境块 + 量化指标 + (可选)pipeline_data | 持仓品种/份额/成本（剔除行情波动）+ 组合风险信号摘要（`history_data` 的 max_drawdown_pct / annualized_volatility / total_return_pct / status）+ 竞争语境块（`competitive_context`）+ 量化指标（`metrics`）+ 辩论增强后缀（`llm_debate_conditional` → `_c`）+ pipeline_data 派生块后缀（【环比变化】【数据质量降级】两段）+ 开关类后缀（`decision_reflection` 教训区块指纹、`deterministic_signal` 信号块指纹与确定性信号摘要指纹 → `_sg`）+ 已内置后缀（`decision_header_parse` → `_dh`，恒含不参与开关判定） |
 | `health_check` | 同 expert_review | 持仓品种/份额/成本（剔除行情波动）+ 组合风险信号摘要 + 数据质量详细状态块（`data_quality_text`，本次运行的降级事件画像）+ pipeline_data 派生块后缀（【环比变化】【数据质量降级】两段）+ 信号预消化后缀（`deterministic_signal`） |
 | `penetration_deep` | 同 expert_review + 穿透 TOP10（含行业/板块） | 同上 + 穿透 mv/ratio/sector（full_penetration=True） |
 | `news_correlation` | 过滤后的新闻列表 + 持仓摘要 + 穿透资产 + 行业/概念数据 | 标题前 80 字 + 持仓指纹 |
@@ -1405,9 +1405,9 @@ LLM 集成层与系统其他组件的接口：
 
 历史教训：该纪律此前靠「两侧注释声明同调」维持，每逢新增输入都要两处手工各改一遍，漏改即产生**读写键永不同源**——预检 read 落空、每次报告全量派发，不报错、只表现为静默的性能与日志噪声（`history_data` 风险信号与辩论增强后缀各发生过一次）。反方向的漏改则产生**覆盖不足**——输入进了提示词却没进指纹，键不变、预检命中旧键、复用按旧数据算出的结论，同样不报错（`competitive_context` / `metrics` 发生过一次）。故本条纪律的落实方式是**结构性收敛而非复查纪律**：任何一方若再自行拼接模块指纹、或对同一输入各自渲染，即属违规。
 
-开关类后缀（`decision_reflection` 教训区块指纹、`deterministic_signal` 信号块指纹与确定性信号摘要 → `_sg`、`decision_header_parse` → `_dh`、辩论增强 → `_c`）**开关判定一律收敛在指纹构造器内部**：关闭时返回 `""`（键不变、不误伤旧缓存），开启时两侧同步换键——只改一侧会让预检命中旧键而跳过重生成，开关形同虚设。同源与覆盖保证由 `src/test/unit/llm/test_module_fingerprint.py` 锁定（断言预检键 == 写侧键、覆盖四模块 × 多场景；断言「进了提示词必须进键」与「未进提示词的模块不得被并入」），「一次渲染」由 `test_generate_all_llm.py::TestCompetitiveContextRenderedOnce` 与 `TestDataQualityBlockRenderedOnce` 以「渲染次数 == 1」+ 同一实例断言（`assertIs`）锁定。
+开关类后缀（`decision_reflection` 教训区块指纹、`deterministic_signal` 信号块指纹与确定性信号摘要 → `_sg`、辩论增强 → `_c`；决策头结构化后缀 `_dh` 已内置恒含，不参与开关判定）**开关判定一律收敛在指纹构造器内部**：关闭时返回 `""`（键不变、不误伤旧缓存），开启时两侧同步换键——只改一侧会让预检命中旧键而跳过重生成，开关形同虚设。同源与覆盖保证由 `src/test/unit/llm/test_module_fingerprint.py` 锁定（断言预检键 == 写侧键、覆盖四模块 × 多场景；断言「进了提示词必须进键」与「未进提示词的模块不得被并入」），「一次渲染」由 `test_generate_all_llm.py::TestCompetitiveContextRenderedOnce` 与 `TestDataQualityBlockRenderedOnce` 以「渲染次数 == 1」+ 同一实例断言（`assertIs`）锁定。
 
-**结构化决策头（`decision_header_parse`，默认开）**：开启时 `_build_expert_review_prompt` 在「### 操作建议」表之后追加一行 `决策头：{"decisions":[{"code","action","priority"}]}` 契约（`core/decision_header.build_structured_header_instruction()`，与解析器同源、由测试锁定互读）；关闭时 append 空串，提示词**逐字节不变**。该段只在标准模式 expert_review 生效，辩论模式路径不追加。解析侧归一见 `technical.md` §4.15。
+**结构化决策头（已内置）**：`_build_expert_review_prompt` 恒在「### 操作建议」表之后追加一行 `决策头：{"decisions":[{"code","action","priority"}]}` 契约（`core/decision_header.build_structured_header_instruction()`，与解析器同源、由测试锁定互读；缓存指纹后缀 `_dh` 常驻）。该段只在标准模式 expert_review 生效，辩论模式路径不追加。解析侧归一见 `technical.md` §4.15。
 
 **账本上下文注入（`skeleton.py::_LEDGER_CONTEXT_MODULES`）**：标准模式 `expert_review` 的 user prompt 首轮组装时，按开关追加两类**跨期账本上下文**——决策教训（`decision_ledger.lessons_block()`）与确定性信号摘要（`signal_ledger.summary_block()`）。两者各自做开关与样本门槛判断（关闭或无内容返回空串，注入逐字节无变化），故开关关闭时提示词不受影响；两处注入点与两处指纹后缀一一对应，见上表 `expert_review` 行。摘要**只统计实时来源记录**（非实时记录不参与），防止降级行情算出的评级污染跨期判断——纪律说明见 `technical.md` §4.16。
 

@@ -16,7 +16,6 @@ from collections.abc import Callable
 from src.python.core.datasource_credential import (
     credential_hint,
     credential_readiness,
-    credential_ready_enabled,
     missing_credential,
 )
 from src.python.core.http_client import make_http_client
@@ -307,13 +306,12 @@ def run_health_checks(max_timeout: float = 15.0) -> list[dict]:
     results: list[dict] = []
     results_lock = threading.Lock()
 
-    # 凭据就绪预检（开关 datasource_credential_ready）：未就绪的源**不发起
+    # 凭据就绪预检（已内置）：未就绪的源**不发起
     # 探测**——探测只会拿到 401/403，与其如实报「源不可达」不如直接说明缺什么。
     # 跳过项不计入 err/warn（配置级问题，不是源故障），故不影响退出码。
-    _gate = credential_ready_enabled()
     pending: list[tuple[str, str, Callable]] = []
     for source_id, name, label, fn in _checks:
-        _spec = missing_credential(source_id) if _gate else None
+        _spec = missing_credential(source_id)
         if _spec is None:
             pending.append((name, label, fn))
             continue
@@ -434,8 +432,7 @@ def run_check_sources() -> None:
     if skip_count:
         summary += f" / {_SKIP} {skip_count}"
     print(summary)
-    if credential_ready_enabled():
-        print(f"  {_credential_summary()}")
+    print(f"  {_credential_summary()}")
     if hint_items:
         print(f"  {_WARN} {hint_items[0]['message']}")
     print()

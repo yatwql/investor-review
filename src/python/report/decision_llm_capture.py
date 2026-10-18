@@ -13,7 +13,7 @@
   - 方向与优先级的归一判据（词表、否定守卫、二义不猜）统一定义在
     ``core.decision_header``，本模块只做「取行 → 归一 → 按纪律登记」。
 
-抽取顺序：结构化决策头优先（开关 ``decision_header_parse``），
+抽取顺序：结构化决策头优先（已内置不可关闭），
 不可用时回落确定性表格解析；两路都不落默认值。
 
 登记纪律（承接设计文档 §4.2，防技术债务）：
@@ -32,12 +32,10 @@ import logging
 import re
 from typing import Any, Iterable
 
-from src.python.config.features import is_feature_enabled
 from src.python.core import decision_ledger as dl
 from src.python.core.num_utils import finite_or
 from src.python.core.decision_header import (
     MAGNITUDE_RANK,
-    STRUCTURED_HEADER_FLAG,
     extract_code,
     parse_decision_word,
     parse_priority,
@@ -158,7 +156,7 @@ def extract_llm_decisions(
     """从 expert_review 内容抽取可登记的方向决策行（按 code 去重）。
 
     两路抽取，**结构化优先、确定性表格兜底**：
-      ① 结构化决策头（开关 ``decision_header_parse``）——提示词追加的受控
+      ① 结构化决策头（已内置）——提示词追加的受控
          JSON 行，解析失败/缺失即回落；
       ② 操作建议表行（默认路径，始终可用）。
     两路都不做默认值填充：判不出方向即不登记。
@@ -174,9 +172,7 @@ def extract_llm_decisions(
         return []
     holdings = _build_holdings_index(holdings_details)
     best: dict[str, dict[str, Any]] = {}
-    structured = None
-    if is_feature_enabled(STRUCTURED_HEADER_FLAG):
-        structured = parse_structured_header(_normalized_text(expert_review_html))
+    structured = parse_structured_header(_normalized_text(expert_review_html))
     if structured is not None:
         for item in structured:
             _collect_decision(best, item, holdings)

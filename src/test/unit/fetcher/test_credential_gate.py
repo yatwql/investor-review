@@ -1,8 +1,8 @@
-"""链路凭据预检单元测试（常规开关 `datasource_credential_ready`，默认开启）。
+"""链路凭据预检单元测试（凭据就绪预检已内置，不可关闭）。
 
-覆盖：开关开启且凭据缺失 → **跳过该 provider 并落到下一链路**、可读原因进入
-失败诊断、**不计入熔断失败计数**；补上凭据 → 该 provider 正常参与；开关关闭
-→ 预检不发生（行为与未引入本机制时一致）；历史 chain 的遍历循环同样受控。
+覆盖：凭据缺失 → **跳过该 provider 并落到下一链路**、可读原因进入失败诊断、
+**不计入熔断失败计数**；补上凭据 → 该 provider 正常参与；历史 chain 的遍历
+循环同样受控。
 
 注：生产声明表为空（全部免费源），故用合成声明验证机制。
 
@@ -16,7 +16,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.python.config import features
 from src.python.core.datasource_credential import CredentialSpec, register_credential_spec
 from src.python.fetcher.chain import (
     FailureDiagnostics,
@@ -27,7 +26,6 @@ from src.python.fetcher.chain import (
 pytestmark = [pytest.mark.unit, pytest.mark.unit_fetcher]
 
 _ENV_VAR = "INVESTOR_UTIL_GATE_KEY"
-_FLAG = "datasource_credential_ready"
 
 
 def _fake_registry() -> MagicMock:
@@ -35,10 +33,6 @@ def _fake_registry() -> MagicMock:
     reg = MagicMock()
     reg.is_circuit_broken.return_value = False
     return reg
-
-
-def _enabled(monkeypatch) -> None:
-    monkeypatch.setitem(features.FEATURE_FLAGS, _FLAG, True)
 
 
 class TestFallbackChainCredentialGate:
@@ -65,7 +59,6 @@ class TestFallbackChainCredentialGate:
 
     def test_missing_credential_skips_provider_and_falls_through(self, monkeypatch):
         """缺凭据 → 不调用该 provider，落到下一链路，且不崩溃。"""
-        _enabled(monkeypatch)
         monkeypatch.delenv(_ENV_VAR, raising=False)
         register_credential_spec(CredentialSpec("tencent", "腾讯财经", _ENV_VAR, "https://example.com/apply"))
 
@@ -81,7 +74,6 @@ class TestFallbackChainCredentialGate:
 
     def test_missing_credential_not_counted_as_circuit_failure(self, monkeypatch):
         """凭据缺失是配置级问题 → 不计入熔断失败计数。"""
-        _enabled(monkeypatch)
         monkeypatch.delenv(_ENV_VAR, raising=False)
         register_credential_spec(CredentialSpec("tencent", "腾讯财经", _ENV_VAR))
 
@@ -94,7 +86,6 @@ class TestFallbackChainCredentialGate:
 
     def test_credential_present_provider_participates(self, monkeypatch):
         """补上凭据 → 该 provider 正常参与（预检不再触发）。"""
-        _enabled(monkeypatch)
         monkeypatch.setenv(_ENV_VAR, "key-value")
         register_credential_spec(CredentialSpec("tencent", "腾讯财经", _ENV_VAR))
 
@@ -102,19 +93,8 @@ class TestFallbackChainCredentialGate:
         assert calls == ["tencent"]
         assert result == {"name": "从腾讯取到"}
 
-    def test_flag_off_precheck_not_applied(self, monkeypatch):
-        """开关关闭 → 缺凭据也照常尝试（行为与未引入本机制时一致）。"""
-        monkeypatch.setitem(features.FEATURE_FLAGS, _FLAG, False)
-        monkeypatch.delenv(_ENV_VAR, raising=False)
-        register_credential_spec(CredentialSpec("tencent", "腾讯财经", _ENV_VAR))
-
-        result, calls = self._run(monkeypatch, cache_key="_gate_test_4")
-        assert calls == ["tencent"]
-        assert result == {"name": "从腾讯取到"}
-
     def test_undeclared_source_probed_normally_when_enabled(self, monkeypatch):
         """开关开启但该源未声明凭据 → 不跳过（声明即数据，未声明即免费源）。"""
-        _enabled(monkeypatch)
         result, calls = self._run(monkeypatch, cache_key="_gate_test_5")
         assert calls == ["tencent"]
 
@@ -124,7 +104,6 @@ class TestHistoryChainCredentialGate:
 
     def test_missing_credential_skips_in_history_loop(self, monkeypatch):
         """历史 chain 中缺凭据的 provider 同样跳过，不记录失败。"""
-        _enabled(monkeypatch)
         monkeypatch.delenv(_ENV_VAR, raising=False)
         register_credential_spec(CredentialSpec("tencent", "腾讯财经", _ENV_VAR))
 
@@ -140,18 +119,3 @@ class TestHistoryChainCredentialGate:
         assert mock_call.call_args[0][0] == "sina", "缺凭据的 tencent 不应被调用"
         reg.record_failure.assert_not_called()
         assert _ENV_VAR in diag.summary()
-
-    def test_flag_off_history_loop_unchanged(self, monkeypatch):
-        """开关关闭 → 历史 chain 首个 provider 照常被调用。"""
-        monkeypatch.setitem(features.FEATURE_FLAGS, _FLAG, False)
-        monkeypatch.delenv(_ENV_VAR, raising=False)
-        register_credential_spec(CredentialSpec("tencent", "腾讯财经", _ENV_VAR))
-
-        reg = _fake_registry()
-        with patch(
-            "src.python.fetcher.chain_incremental._call_history_provider", return_value=[{"close": 1.0}]
-        ) as mock_call:
-            data = _try_providers(["tencent", "sina"], reg, "history_index", "sh000001", 30, None)
-
-        assert data
-        assert mock_call.call_args[0][0] == "tencent"

@@ -1057,7 +1057,7 @@ class TestMainEarlyExitExperiments:
         # 常规开关（默认开、非实验项）不受 --experiment 取值域影响，保持默认
         from src.python.config.features import is_feature_enabled
 
-        assert is_feature_enabled("datasource_adapter") is True
+        assert is_feature_enabled("deterministic_signal") is True
 
 
 # ═══════════════════════════════════════════════════════════════

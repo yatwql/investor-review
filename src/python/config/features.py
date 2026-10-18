@@ -199,21 +199,6 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         True,
         True,
     ),
-    "decision_header_parse": FeatureSwitchDef(
-        "决策头结构化",
-        "提示词追加受控 JSON 决策头，抽取优先读结构化、失败回落确定性表格解析（决策词归一，防写反方向）",
-        GROUP_MECHANISM,
-        True,
-        True,
-    ),
-    # ── 机制与诊断：数据层（就绪态上体检与健康检查） ──
-    "datasource_credential_ready": FeatureSwitchDef(
-        "数据源凭据就绪",
-        "声明数据源所需凭据，缺失时链路跳过并给出可读指引；体检与健康检查报告就绪状态（需凭据的源如 DataSinking 财报）",
-        GROUP_MECHANISM,
-        True,
-        True,
-    ),
     # ── 呈现与体验：量化指标（原 metrics_* 七项逐项开关，已合并为单一总开关）──
     # 七项指标始终全量计算，开关只表达「量化指标画像是否输出」：关闭即雷达图
     # 各轴转 "N/A"（含降级 3 轴路径）+ 熔断器暂停指标失败计数，指标之间无差异化
@@ -229,14 +214,6 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
     "doctor_check": FeatureSwitchDef(
         "系统自检上屏",
         "TUI 菜单 [T] 与 Web「系统自检」卡片可见性；CLI doctor 子命令不受本开关约束",
-        GROUP_MECHANISM,
-        True,
-        False,
-    ),
-    # ── 机制与诊断：内部接缝（开关两态下报告产物逐源等价，保留为回退杠杆） ──
-    "datasource_adapter": FeatureSwitchDef(
-        "数据源适配契约",
-        "行情域三源走三段式适配器（参数转译→抓取→映射到标准字段）；置 false 回退既有转换函数",
         GROUP_MECHANISM,
         True,
         False,
