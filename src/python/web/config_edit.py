@@ -29,7 +29,7 @@ from src.python.config.features import (
 
 logger = logging.getLogger("invest")
 
-# LLM 分析章节可编辑开关 = 注册表可见标准模块（共享单源）；辩论三模块为隐藏项
+# LLM 分析章节可编辑开关 = 模块注册表全集（共享单源；辩论三段不在其内，缓存登记在缓存域）
 from src.python.core.registry import get_llm_module_names  # noqa: E402
 
 

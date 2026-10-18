@@ -325,8 +325,8 @@ def _cmd_config_llm_modules() -> None:
     enabled_map = settings.get("enabled_llm", {})
     # 出厂默认（漂移比对基准）：enabled_llm 缺省值与运行时兜底一致取 True
     default_enabled = default_enabled_llm()
-    # 菜单层隐藏辩论三模块（注册表保留：缓存 TTL/前缀清理仍依赖）
-    # 实际辩论开关由下方实验性 Feature Flag（正反辩论等）控制
+    # LLM 模块清单 = 模块注册表全集（辩论三段不在模块注册表内，其缓存登记在缓存域）；
+    # 辩论运行开关由下方功能开关（正反辩论 / 条件推理）控制
     module_names = filter_menu_llm_modules(get_llm_module_names())
 
     # 功能开关分块：(分组标题, [(flag_key, 显示名), ...])，顺序即注册表顺序

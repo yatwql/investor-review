@@ -43,7 +43,7 @@ _DEBATE_CALL_MULT = 3
 """辩论模式下 expert_review 的静态调用倍数（正/反/综述三次调用）。"""
 
 _DEBATE_KEYS = ("debate_pro", "debate_con", "debate_synthesis")
-"""辩论三模块键（费用并入 expert_review 口径，与其计划参与口径对齐）。"""
+"""辩论三段缓存键（缓存域登记；费用并入 expert_review 口径，与其计划参与口径对齐）。"""
 
 
 def _currency_symbol() -> str:

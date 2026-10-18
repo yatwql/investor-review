@@ -18,8 +18,8 @@
 | 测试用例 | — | — | 10,651 个 | `pytest --collect-only` 统计（`scripts/collect-test-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 11 | 5,845 | 含 README.md（211 行）；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 10 | 5,634 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 174 | 63,408 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 11 + plan 4 + archive md 157），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 11 | 12,005 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 174 | 63,409 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 11 + plan 4 + archive md 157），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 11 | 12,006 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 157 | 50,552 | 各版本 changelog/plan/review-findings 与设计文档归档（157 md 50,492 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 5 | ~762 | 在办设计文档（扁平存放，完成后随完成态移入对应版本的归档子目录）：两份 Jev 新闻关联判定文档（对照评测方案 + 类型化判定通道接入设计）+ 决策跨期反思闭环设计 + Web 浏览器验证方法（浏览器真机验收回填载体，完成后随完成态移入归档）+ LLM 调用成本优化分析 |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -454,7 +454,7 @@ investor-util/
 │   │   │   ├── tui_handlers.py       #   键盘/事件处理
 │   │   │   ├── tui_keys.py           #   终端键盘输入封装
 │   │   │   ├── status_line.py        #   页头状态行（五项本地单源取数/TTL 记忆化/逐项降级为 —）
-│   │   │   └── tui_menu.py           #   菜单系统（19 项菜单定义/门控/渲染）
+│   │   │   └── tui_menu.py           #   菜单系统（18 项菜单定义/门控/渲染）
 │   │   │
 │   │   └── web/                      # 轻量 Web 模式入口（浏览器内上传/生成/预览/下载）
 │   │   │   ├── __init__.py           #   子包标记，re-export main/create_app
@@ -488,7 +488,7 @@ investor-util/
 │   │   ├── report-overview.png       #   README 报告效果截图：首屏完整目录导航与章节入口（虚构样例持仓实景）
 │   │   ├── report-toc.png            #   README 报告效果截图：盈亏汇总与组合持仓概况
 │   │   ├── report-charts.png         #   README 报告效果截图：资产构成与穿透行业分布交互图表
-│   │   ├── tui-menu.png              #   README 界面实景：TUI 全键盘主菜单（19 项 + 页头状态行）
+│   │   ├── tui-menu.png              #   README 界面实景：TUI 全键盘主菜单（18 项 + 页头状态行）
 │   │   ├── web-workbench.png         #   README 界面实景：Web 工作台生成报告页签（上传→选格式→生成）
 │   │   ├── web-config.png            #   README 界面实景：Web 配置编辑面板（与 TUI 菜单同源）
 │   │   ├── web/                      #   Web UI 前端（Jinja 模板 + 静态资产，Flask template/static 目录指向此处）

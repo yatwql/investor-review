@@ -402,7 +402,7 @@ TUI（Text User Interface）是系统**主要交互渠道**：桌面终端内的
 | 模块 | 职责 | 关键内容 |
 |:-----|:-----|:---------|
 | `tui/tui.py` | 主入口/主循环 | sys.path 注入、init_config、_bind_callbacks、启动清理/隐私提示/首次引导、方向键导航循环、LLM 会话统计 |
-| `tui/tui_menu.py` | 菜单定义与渲染 | MENU_ITEMS 列表（19 项）、render_menu/print_header/show_config、_apply_feature_gates（开关门控裁剪）、index_by_key、press_any_key/exit_app |
+| `tui/tui_menu.py` | 菜单定义与渲染 | MENU_ITEMS 列表（18 项）、render_menu/print_header/show_config、_apply_feature_gates（开关门控裁剪）、index_by_key、press_any_key/exit_app |
 | `tui/tui_keys.py` | 键盘封装 | 跨平台（Windows msvcrt / Linux tty+termios+select），标准化键名 KEY_UP/DOWN/ENTER/CTRL_C |
 | `tui/handlers_report.py` | 报告生成外壳 | `_run_generate` 骨架、`_prompt_history`（委托 resolve_fetch_history + 注入 y/N 询问）/`_prompt_force_llm` 交互询问、E/B/L 三命令 |
 | `tui/handlers_config.py` | 配置管理外壳 | 目录/文件名/输出目录/章节/指数池/匿名化/LLM 模块与功能开关/刷新等 8 项配置命令 |
@@ -438,7 +438,7 @@ while True:
 
 #### 1.6.3 菜单体系
 
-`tui/tui_menu.py:MENU_ITEMS` —— 每项 `(快捷键, 显示标签, 回调, 是否退出)`，回调由 `_bind_callbacks()` 在**运行时**从 handlers 模块填入（定义时不直接 import，避免启动即加载全部处理器）。静态清单共 **19 项**（下表按菜单实际排列顺序）；`[T]`/`[Q]` 登记于 `FEATURE_GATED_ITEMS`（菜单键 → Feature Flag），`main()` 启动时在绑定回调**之前**执行 `tui_menu._apply_feature_gates()` 按 `is_feature_enabled` 就地裁剪（裁剪后索引才与渲染一致）：`report_qa`（⚗ 实验项，默认关）关闭时移除 `[Q]`，`doctor_check`（默认开）关闭时移除 `[T]`——默认配置下实际渲染 **18 项**。
+`tui/tui_menu.py:MENU_ITEMS` —— 每项 `(快捷键, 显示标签, 回调, 是否退出)`，回调由 `_bind_callbacks()` 在**运行时**从 handlers 模块填入（定义时不直接 import，避免启动即加载全部处理器）。静态清单共 **18 项**（下表按菜单实际排列顺序）；`[T]`/`[Q]` 登记于 `FEATURE_GATED_ITEMS`（菜单键 → Feature Flag），`main()` 启动时在绑定回调**之前**执行 `tui_menu._apply_feature_gates()` 按 `is_feature_enabled` 就地裁剪（裁剪后索引才与渲染一致）：`report_qa`（⚗ 实验项，默认关）关闭时移除 `[Q]`，`doctor_check`（默认开）关闭时移除 `[T]`——默认配置下实际渲染 **17 项**。
 
 | 分组 | 快捷键 | 功能 |
 |:-----|:------|:-----|

@@ -21,7 +21,6 @@
 > 入选标准：修复路径清晰、成本可控；rf-114 前置（rf-113 人工验证）已满足。
 
 | # | 问题 | 修复方向 |
-| **rf-713** | technical.md「写入分派」段残留已删除的 `GROUP_REPORT` 分组名与「功能开关（三组同一路径）」过期表述（注册表现为作用域四分组，doc-drift 未覆盖该行） | 改写为「功能开关（注册表四组同一路径）→ `save_feature_overrides`」并删 `GROUP_REPORT` 名；同类登记表自述行纳入 doc-drift 巡检范围可一并考虑 |
 
 
 ### P3 — 持续监控：文件过长登记表（>500 行观察，脚本域 >400 即入观察 / **>1000 行为硬上限必须拆分**（主程序与脚本）；按距红线余量升序）
@@ -70,6 +69,7 @@
 >
 > rf-710 已修复（2026-10-18）：遥测 JSONL 保留上限——`jsonl_store` 追加原语增 `max_lines` 尾部保留参数（超限丢最旧行，原子写语义不变）；perf 历史 5000 行 / 健康检查历史 2000 行上限（账本/去重锚点等业务态文件不设，避免丢失跨会话状态）
 > rf-712 已修复（2026-10-18）：`prosperity_framework` 转正后未迁组——作用域复核为行动章内嵌评分卡区块，注册表分组机制与诊断 → 分析增强（面板编号/手册分组表/文档归属随迁同步）；requirements R-PF-01 引用的已废弃 `GROUP_STANDARD` 常量改现行 `GROUP_ANALYSIS`，how-to-config 分组计数残留同步修正（详见 changelog）
+> rf-713 已修复（2026-10-18）：technical.md「写入分派」段残留 `GROUP_REPORT` 分组名与「三组同一路径」过期表述——改写为「注册表四组同一路径」并删已废弃分组名（详见 changelog）
 > rf-715 已修复（2026-10-18）：渠道层私引配置私有符号——`[S]` 只读详情与写路径三通道直引 `_DEFAULT_LLM_SETTINGS` / `_SWITCH_TRUE_TOKENS` / `_SWITCH_FALSE_TOKENS`（`test_channel_layering` 红）→ 新增公开面 `config.default_enabled_llm()` 与 `features.SWITCH_*_TOKENS` + `features.parse_switch_value()`，渠道改走公开 API（详见 changelog）
 > rf-714 已修复（2026-10-18）：`[S]` 面板页脚/帮助/报错含开发者术语「slug」用户不可理解——用户可见文案统一改「键名」（与手册既有术语一致，提示行同步去 CLI 字样），源码级回归断言禁回潮（详见 changelog）
 > rf-114 已修复（2026-10-18）：双渲染路径收敛——删除 Canvas `drawSimpleChart` 定义块与全部 Feature Flag 条件分支（主模板 + 5 个 partial），Chart.js 成唯一渲染器；`enable_interactive_charts` 开关随消费者消失一并摘除（面板 31 项、其后编号前移）；滚动超额与持仓重合度滚动相关两张 Canvas-only 存活图移植 Chart.js（`excess_rolling`/`corr_rolling` 数据集 + 初始化器，对齐与降级语义不变）；单渲染器结构回归锚点已补（详见 changelog）
