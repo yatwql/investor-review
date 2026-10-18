@@ -2,7 +2,7 @@
 
 - `_common`：ReleaseError 与子进程执行原语（各步骤共享）
 - `_versioning`：版本号解析/渲染纯函数（X.Y.Z-dev 推导与改写）
-- `_changelog_archive`：changelog 发布段迁出与归档追加（纯文本变换）
+- `_changelog_archive`：changelog 发布段迁出、归档追加与归档头部两行派生（纯文本变换）
 - `_evolution`：版本演进快照统计与表格回写（纯函数）
 
 拆分纪律：下沉模块只收**显式参数**（文本/root/runner），不读入口模块的

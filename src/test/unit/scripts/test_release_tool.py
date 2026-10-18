@@ -147,7 +147,10 @@ class TestChangelogRelease:
 
     def test_write_archive_release_appends_and_accumulates(self, rel, tmp_path):
         archive = tmp_path / "archived_changelog.0.12.x.md"
-        archive.write_text("# 归档\n\n头部说明\n", encoding="utf-8")
+        archive.write_text(
+            "# 归档\n\n> 归档时间：2026-10-03（v0.12.1 发布当日并入）\n> 涵盖版本：v0.12.1（2026-10-03）\n> 头部说明\n",
+            encoding="utf-8",
+        )
         rel.write_archive_release(archive, "0.12.6", "2026-10-08", "- 新条目")
         rel.write_archive_release(archive, "0.12.7", "2026-10-15", "- 次条目")
         text = archive.read_text(encoding="utf-8")
@@ -155,6 +158,40 @@ class TestChangelogRelease:
         assert text.index("## [0.12.6]") < text.index("## [0.12.7]")
         assert "头部说明" in text
         assert text.endswith("\n") and not text.endswith("\n\n")
+
+    def test_archive_header_span_and_time_derived_from_sections(self, rel, tmp_path):
+        """头部两行由归档段列表派生：涵盖版本区间 + 归档时间并入记录（含段数与日期）。"""
+        archive = tmp_path / "archived_changelog.0.12.x.md"
+        archive.write_text(
+            "# 归档\n\n> 归档时间：2026-10-03（首份）\n> 涵盖版本：v0.12.1（2026-10-03）\n",
+            encoding="utf-8",
+        )
+        rel.write_archive_release(archive, "0.12.1", "2026-10-03", "- 甲")
+        text = archive.read_text(encoding="utf-8")
+        assert "> 涵盖版本：v0.12.1（2026-10-03）" in text
+        assert "已并入 1 段：v0.12.1（10-03）" in text
+
+        rel.write_archive_release(archive, "0.12.7", "2026-10-15", "- 乙")
+        text = archive.read_text(encoding="utf-8")
+        assert "> 涵盖版本：v0.12.1 ~ v0.12.7（2026-10-03 ~ 2026-10-15）" in text
+        assert "> 归档时间：2026-10-15（v0.12.7 发布并入；已并入 2 段：v0.12.1（10-03）、v0.12.7（10-15））" in text
+
+    def test_archive_header_untouched_without_header_lines(self, rel, tmp_path):
+        """早期归档无这两行（如 v0.1.x）：原样跳过，不补写、不报错。"""
+        archive = tmp_path / "archived_changelog.0.1.x.md"
+        archive.write_text("# 归档\n\n> 从 changelog 迁移的早期记录。\n", encoding="utf-8")
+        rel.write_archive_release(archive, "0.1.9", "2026-07-01", "- 甲")
+        text = archive.read_text(encoding="utf-8")
+        assert "涵盖版本" not in text and "归档时间" not in text
+        assert "## [0.1.9] - 2026-07-01" in text
+
+    def test_archive_header_requires_sections(self, rel, tmp_path):
+        """有头部两行却没有任何发布段 → 报错（避免写出无法自证涵盖范围的头）。"""
+        archive = tmp_path / "archived_changelog.0.12.x.md"
+        archive.write_text("# 归档\n\n> 归档时间：2026-10-03\n> 涵盖版本：v0.12.1\n", encoding="utf-8")
+        # 追加本身会带入一个段，故直接对纯函数断言「无段」路径
+        with pytest.raises(rel.ReleaseError, match="没有 .*段"):
+            rel.render_archive_header("# 归档\n\n> 归档时间：x\n> 涵盖版本：y\n", "0.12.6", "2026-10-08")
 
     def test_write_archive_release_missing_file_raises(self, rel, tmp_path):
         with pytest.raises(rel.ReleaseError, match="归档文件不存在"):
