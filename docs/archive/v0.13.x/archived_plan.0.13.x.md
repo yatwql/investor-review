@@ -7,6 +7,10 @@
 
 ---
 
+## plan-135 S 面板操作增强（批量恢复默认 / 实验项一键全关 / slug 切换）✅
+
+三项写路径增强落地（编号派发与 Web 面板派生零改动）——①批量恢复默认：新原语 `features.clear_feature_overrides(flags|None)`（恢复默认=删除 features.json 覆写键而非写入同值，批量原子写走 save 同一 write_json_atomic，运行时经 _FEATURES_FLAGS 锁回 `_FEATURE_FLAGS_DEFAULT`、None 时顺带清掉无消费者残留键），面板 `r 编号或slug`（按注册表派生该条目所在分组键集）/ `ra`（全部）上屏实际移除键数；②实验项一键全关 `x`：experimental 集合回默认并删覆写，回到无实验态做 bisect；③slug 双通道：裸 slug 与编号等价切换、`slug=on|off` 走 CLI `parse_switch_override` 同一解析器与词表（旧键别名过渡一致，LLM 模块用同词表常量本地校验）、`? slug` 查详情（`_match_switch_item` 辅助定位）。LLM 条目拒绝 `r`（恢复默认仅限功能开关分组）。新增 10 单测（`TestSwitchPanelOperations`，monkeypatch FEATURES_FILE 到临时文件 + 种子载入同源），handlers_config 39/39 绿；手册 [S] 新增写路径三通道段并顺带修复 [P] 报告章节与增强清单（并两财务项、补景气度、默认开清单补景气度）。
+
 ## plan-134 财报基本面两开关合并（个股基本面单一开关）✅
 
 两开关合并为单一 `stock_fundamentals`（「个股基本面」，默认关，独立章节与回放组）——①单开关控持仓基本面两块：`is_enable_financial_indicator`/`is_enable_financial_report_digest` 收敛为 `is_enable_stock_fundamentals`（_report_generation 两处 `or` 门控与 orchestrator 两个 compute 门改读同键）；章级细分不另设子开关，由既有报告章节配置承接（`fundamental_snapshot` 章整体显隐，`report_section_order` 不动）；②旧键一版过渡：`_migrate_merged_switch_keys` 在 load/save 双路径按并集迁移（任一旧键 True 即 True；新键并存时以新键为准；迁后旧键不入内存不落盘），`--feature` 旧键别名告警映射，本地 features.json 已迁（21 键）；③注册表/面板/Web 白名单/TUI 由注册表派生自动生效，面板 28→27 单次重排（独立 25-29 / 机制 30-34），测试改造（helpers/置位键/矩阵 note/模板指引断言/实验文案）+ 定向 305+235 绿，同步触点 12 份文档（矩阵/模板占位/4 手册/管理 5）；④不合并对照照案登记：`llm_debate_procon`×`llm_debate_conditional`（默认值与风格正交）、`market_temperature`×`market_sentiment`（跨章）保持现状。

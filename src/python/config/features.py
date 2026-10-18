@@ -27,7 +27,7 @@ import logging
 import os
 import threading
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Iterable
 
 from src.python.core.atomic_write import write_json_atomic
 from src.python.core.constants import PROJECT_ROOT
@@ -746,6 +746,65 @@ def save_feature_overrides(overrides: dict[str, bool], merge: bool = True) -> No
     # 同步运行时状态
     for flag_name, enabled in cleaned.items():
         FEATURE_FLAGS[flag_name] = enabled
+
+
+def clear_feature_overrides(flags: Iterable[str] | None = None) -> int:
+    """移除功能开关覆写，使开关回到出厂默认（「恢复默认」= 删键而非写入同值）。
+
+    features.json 只存与代码默认的差异，恢复默认在语义上应删除键：批量原子写一份
+    剔除目标键后的覆写文件，并把运行时状态同步回 ``_FEATURE_FLAGS_DEFAULT``。
+    单键不存在于文件时自然忽略（但运行时仍回默认——会话内 set_feature_enabled
+    的临时切换同样被恢复）。
+
+    Args:
+        flags: 要恢复的开关键集合；None 表示清空全部覆写（恢复全部默认）。
+
+    Returns:
+        从覆写文件中实际移除的键数（文件不存在或无匹配键时为 0）。
+    """
+    file_keys: dict[str, Any] = {}
+    if os.path.exists(FEATURES_FILE):
+        try:
+            with open(FEATURES_FILE, encoding="utf-8") as f:
+                loaded = json.load(f)
+            if isinstance(loaded, dict):
+                file_keys = {k: v for k, v in loaded.items() if isinstance(v, bool)}
+        except (json.JSONDecodeError, OSError):
+            file_keys = {}
+
+    if flags is None:
+        remaining: dict[str, Any] = {}
+    else:
+        targets = set(flags)
+        remaining = {k: v for k, v in file_keys.items() if k not in targets}
+    removed = len(file_keys) - len(remaining)
+
+    if len(remaining) != len(file_keys):
+        # 与 save_feature_overrides 同一原子写原语；只落 bool 条目（与保存路径口径一致）
+        write_json_atomic(
+            FEATURES_FILE,
+            remaining,
+            prefix=".features_",
+            log_tag="features",
+            noun="功能开关覆写",
+        )
+
+    with _FEATURES_LOCK:
+        if flags is None:
+            for key in list(FEATURE_FLAGS):
+                if key in _FEATURE_FLAGS_DEFAULT:
+                    FEATURE_FLAGS[key] = _FEATURE_FLAGS_DEFAULT[key]
+                else:
+                    # 覆写文件已清空，无消费者的运行时残留键一并移除
+                    FEATURE_FLAGS.pop(key, None)
+        else:
+            for key in flags:
+                if key in FEATURE_FLAGS and key in _FEATURE_FLAGS_DEFAULT:
+                    FEATURE_FLAGS[key] = _FEATURE_FLAGS_DEFAULT[key]
+
+    if removed:
+        logger.info("[features] 已恢复 %d 项功能开关覆写至出厂默认", removed)
+    return removed
 
 
 def reset_feature_flags() -> None:

@@ -588,3 +588,230 @@ class TestSwitchPanelReadonlyInfo:
         out = capsys.readouterr().out
         assert "启用 5 次" in out
         assert "最近 10-13" in out
+
+
+class TestSwitchPanelOperations:
+    """[S] 面板写路径三通道：批量恢复默认（r/ra）、实验项全关（x）、slug/赋值直取。
+
+    全部用例把 ``features.FEATURES_FILE`` 指向临时文件（持久化隔离），运行时
+    FEATURE_FLAGS 由 conftest 自动重置兜底。
+    """
+
+    @staticmethod
+    def _seed(tmp_path, monkeypatch, initial: dict):
+        import src.python.config.features as features_mod
+
+        path = tmp_path / "features.json"
+        path.write_text(json.dumps(initial, ensure_ascii=False), encoding="utf-8")
+        monkeypatch.setattr(features_mod, "FEATURES_FILE", str(path))
+        # 载入种子覆写，使运行时与文件同源（与真实会话「导入即加载」一致）
+        features_mod.load_feature_overrides()
+        return path
+
+    @staticmethod
+    def _read(path) -> dict:
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    @patch("src.python.tui.handlers_config.press_any_key")
+    @patch("src.python.tui.handlers_config.refresh_config")
+    @patch("src.python.config.features.filter_menu_llm_modules", return_value=None, create=True)
+    @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
+    @patch("src.python.core.registry.get_llm_module_names")
+    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
+    def test_restore_group_clears_overrides_in_group(
+        self, mock_read, mock_names, mock_filter, _mock_ff, mock_refresh, mock_press, tmp_path, monkeypatch, capsys
+    ):
+        """`r 编号` 只恢复该项所在分组的覆写（跨组键保留），运行时回出厂默认。"""
+        from src.python.config.features import is_feature_enabled
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        path = self._seed(tmp_path, monkeypatch, {"doctor_check": False, "market_temperature": False})
+        with patch(
+            "builtins.input",
+            side_effect=[f"r {_switch_menu_number('doctor_check')}", "0"],
+        ):
+            _cmd_config_llm_modules()
+
+        out = capsys.readouterr().out
+        assert "已恢复「⚙ 机制与诊断" in out and "移除 1 项覆写" in out
+        assert self._read(path) == {"market_temperature": False}, "同组 doctor_check 覆写应删、跨组键保留"
+        assert is_feature_enabled("doctor_check") is True, "运行时应回出厂默认"
+        assert is_feature_enabled("market_temperature") is False
+
+    @patch("src.python.tui.handlers_config.press_any_key")
+    @patch("src.python.tui.handlers_config.refresh_config")
+    @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
+    @patch("src.python.core.registry.get_llm_module_names")
+    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
+    def test_restore_all_clears_file(
+        self, mock_read, mock_names, mock_filter, mock_refresh, mock_press, tmp_path, monkeypatch, capsys
+    ):
+        """`ra` 清空全部覆写（恢复全部默认），文件保留为空对象。"""
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        path = self._seed(
+            tmp_path, monkeypatch, {"doctor_check": False, "market_temperature": False, "cost_lots": True}
+        )
+        with patch("builtins.input", side_effect=["ra", "0"]):
+            _cmd_config_llm_modules()
+
+        out = capsys.readouterr().out
+        assert "已恢复功能开关全部默认（移除 3 项覆写）" in out
+        assert self._read(path) == {}
+
+    @patch("src.python.tui.handlers_config.press_any_key")
+    @patch("src.python.tui.handlers_config.refresh_config")
+    @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
+    @patch("src.python.core.registry.get_llm_module_names")
+    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
+    def test_experimental_all_switched_off(
+        self, mock_read, mock_names, mock_filter, mock_refresh, mock_press, tmp_path, monkeypatch, capsys
+    ):
+        """`x` 实验项一键全关：experimental 集合回默认（删覆写），文件内实验键清掉。"""
+        from src.python.config.features import experimental_flags, is_feature_enabled
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        path = self._seed(tmp_path, monkeypatch, {"decision_reflection": True, "report_qa": True, "cost_lots": True})
+        with patch("builtins.input", side_effect=["x", "0"]):
+            _cmd_config_llm_modules()
+
+        out = capsys.readouterr().out
+        assert "实验项已全部关闭（回到无实验态）" in out
+        for flag, _d in experimental_flags():
+            assert flag in out, "被关闭的实验项应列出"
+            assert is_feature_enabled(flag) is False
+        assert self._read(path) == {"cost_lots": True}, "非实验键不受影响"
+
+    @patch("src.python.tui.handlers_config.press_any_key")
+    @patch("src.python.tui.handlers_config.refresh_config")
+    @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
+    @patch("src.python.core.registry.get_llm_module_names")
+    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
+    def test_feature_slug_toggles_without_number(
+        self, mock_read, mock_names, mock_filter, mock_refresh, mock_press, tmp_path, monkeypatch, capsys
+    ):
+        """裸 slug 直接切换（编号/slug 双通道，编号漂移免疫）。"""
+        from src.python.config.features import is_feature_enabled
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        path = self._seed(tmp_path, monkeypatch, {})
+        with patch("builtins.input", side_effect=["doctor_check", "0"]):
+            _cmd_config_llm_modules()
+
+        out = capsys.readouterr().out
+        assert "系统自检" in out and "已关闭" in out
+        assert is_feature_enabled("doctor_check") is False
+        assert self._read(path) == {"doctor_check": False}
+
+    @patch("src.python.tui.handlers_config.press_any_key")
+    @patch("src.python.tui.handlers_config.refresh_config")
+    @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
+    @patch("src.python.core.registry.get_llm_module_names")
+    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
+    def test_assignment_uses_cli_vocabulary(
+        self, mock_read, mock_names, mock_filter, mock_refresh, mock_press, tmp_path, monkeypatch, capsys
+    ):
+        """`slug=on|off` 与 CLI --feature 同词表同解析（两次赋值均落盘）。"""
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        path = self._seed(tmp_path, monkeypatch, {})
+        with patch("builtins.input", side_effect=["doctor_check=off", "doctor_check=on", "0"]):
+            _cmd_config_llm_modules()
+
+        out = capsys.readouterr().out
+        assert out.count("已关闭") >= 1 and out.count("已开启") >= 1
+        assert self._read(path) == {"doctor_check": True}
+
+    @patch("src.python.tui.handlers_config.press_any_key")
+    @patch("src.python.tui.handlers_config.refresh_config")
+    @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
+    @patch("src.python.core.registry.get_llm_module_names")
+    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
+    def test_assignment_invalid_value_reports_cli_error(
+        self, mock_read, mock_names, mock_filter, mock_refresh, mock_press, tmp_path, monkeypatch, capsys
+    ):
+        """非法取值走 CLI 解析器词表报错，不写盘、状态不变。"""
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        path = self._seed(tmp_path, monkeypatch, {})
+        with patch("builtins.input", side_effect=["doctor_check=maybe", "0"]):
+            _cmd_config_llm_modules()
+
+        out = capsys.readouterr().out
+        assert "取值 'maybe' 不可识别" in out
+        assert self._read(path) == {}
+
+    @patch("src.python.tui.handlers_config.press_any_key")
+    @patch("src.python.tui.handlers_config.refresh_config")
+    @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
+    @patch("src.python.core.registry.get_llm_module_names")
+    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
+    def test_restore_rejects_llm_item(
+        self, mock_read, mock_names, mock_filter, mock_refresh, mock_press, tmp_path, monkeypatch, capsys
+    ):
+        """`r 1`（LLM 模块条目）被拒——恢复默认仅支持功能开关分组，且不写任何配置。"""
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        path = self._seed(tmp_path, monkeypatch, {"doctor_check": False})
+        with patch("builtins.input", side_effect=["r 1", "0"]):
+            _cmd_config_llm_modules()
+
+        out = capsys.readouterr().out
+        assert "恢复默认仅支持功能开关分组" in out
+        assert self._read(path) == {"doctor_check": False}
+
+    @patch("src.python.tui.handlers_config.press_any_key")
+    @patch("src.python.tui.handlers_config.refresh_config")
+    @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
+    @patch("src.python.core.registry.get_llm_module_names")
+    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
+    def test_restore_unknown_target_reports(
+        self, mock_read, mock_names, mock_filter, mock_refresh, mock_press, tmp_path, monkeypatch, capsys
+    ):
+        """`r 不存在的目标` 给出行内提示，不抛出、不写盘。"""
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        path = self._seed(tmp_path, monkeypatch, {})
+        with patch("builtins.input", side_effect=["r nope", "0"]):
+            _cmd_config_llm_modules()
+
+        out = capsys.readouterr().out
+        assert "未识别目标" in out and "输入编号或 slug" in out
+        assert self._read(path) == {}
+
+    @patch("src.python.tui.handlers_config.press_any_key")
+    @patch("src.python.tui.handlers_config.refresh_config")
+    @patch("src.python.config.features.save_feature_overrides")
+    @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
+    @patch("src.python.core.registry.get_llm_module_names")
+    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
+    def test_question_mark_slug_detail_readonly(
+        self, mock_read, mock_names, mock_filter, mock_save, mock_refresh, mock_press, capsys
+    ):
+        """`? slug` 与编号通道同源上屏详情，纯只读。"""
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        with patch("builtins.input", side_effect=["? doctor_check", "0"]):
+            _cmd_config_llm_modules()
+
+        out = capsys.readouterr().out
+        assert "features.json → doctor_check" in out
+        assert "出厂默认" in out
+        mock_save.assert_not_called()
+
+    @patch("src.python.tui.handlers_config.press_any_key")
+    @patch("src.python.tui.handlers_config.refresh_config")
+    @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
+    @patch("src.python.core.registry.get_llm_module_names")
+    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
+    def test_unknown_input_reports_three_channel_hint(
+        self, mock_read, mock_names, mock_filter, mock_refresh, mock_press, capsys
+    ):
+        """未知输入给出三通道提示（编号 / slug / slug=on|off），不抛出。"""
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        with patch("builtins.input", side_effect=["definitely_nope", "0"]):
+            _cmd_config_llm_modules()
+
+        out = capsys.readouterr().out
+        assert "未知编号或开关名" in out and "slug=on|off" in out
