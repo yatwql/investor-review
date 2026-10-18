@@ -13,6 +13,7 @@
 
 - HTML 报告右上角浮动「打印 / 导出 PDF」按钮（plan-127）：`window.print()` 唤起浏览器打印/另存 PDF，44×44 触控目标、`--primary` 语义色、打印稿自隐藏（独立 `@media print` 规则）；补模板结构/可访问性/触控尺寸/打印隐藏回归用例，`reports-instruction.md` 同步入口说明
 - Web 内置定时生成（plan-130）：配置页签新增「定时生成」调度面板（执行日/时刻/报告类型/启用开关），保存写入 `config.json` 的 `scheduler` 块；服务端 daemon 调度线程到点自动读正式持仓生成（正式-用存量），与手动生成同队列串行互斥、宽限 30 分钟内顺延、超时登记错过，触发账本落 `data/state/scheduler_fired.json` 防重启重复；缺省关闭零行为变化，面板改配置 30s 内生效无需重启（`GET/POST /api/scheduler`，校验 400 + 同源守卫 403）；补解析/触发窗/账本/API/面板接线回归用例，配置默认值模板与 `how-to-config.md`/`how-to-use-web-mode.md` 同步
+- LLM 运行事前费用预估与日预算（plan-99）：full 生成前三渠道上屏费用区间——计划参与模块（`enabled_llm` ∩ 深度档位收窄）× 生效模型单价，perf 历史逐模块实际费用优先、静态 token 包络兜底、全部无法定价时降级「不阻塞」（渠道跳过确认继续）；TUI y/N 确认、Web 提交前弹层（预检失败/无模块直接放行）、CLI 交互确认 + `--yes` 跳过（`--non-interactive`/非 TTY 同样跳过）。`llm_settings.json` 新增 `daily_cost_limit`（默认 0=不启用）为日费用硬闸：今日已花费（perf 当日 `llm.total_cost` 汇总，与事后统计同源）达上限时交互询问「降级走缓存继续 / 中止」（降级清空强刷范围），非交互链路直接中止——CLI 退出码 2、Web 创建 409 `BUDGET_EXCEEDED` + 执行体兜底（定时调度/直连 API 同拦）；计费数学抽 `pricing.compute_cost_value()` 数值单源（`estimate_cost` 格式化契约不变）；补 4 个测试文件（预估三态/辩论口径/预算边界/三通道接线/弹层源结构），需求登记 R-LLM-13，配置/CLI/Web/TUI 手册与语义命名表同步
 - perf-view 费用趋势（plan-129）：`--by day|week|hour` 时段聚合表新增「费用合计/费用环比」列（耗时与 `llm.total_cost` 同表交叉，零数据新增，无费用样本自动省列，末档附环比提示行）；`--json` 汇总新增 `llm_cost` 费用块（runs/合计/均值/中位/单次最高）与 `--by` 时的 `by_period` 时段费用序列；补 9 个回归用例（费用列/环比/省列/机读字段/整链渲染）
 
 ### Fixed

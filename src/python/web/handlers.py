@@ -122,6 +122,20 @@ def _run_generation_impl(state, params: dict, result_box: dict | None = None) ->
     try:
         # 每个 run 启动取一次配置快照（run 期间不受外部配置修改影响）
         config = get_config()
+
+        # ── 日预算硬闸（LLM 费用，权威兜底）：超限且未经确认 → 本次运行中止。
+        #    覆盖定时调度与直连 API 等不经弹层的链路（create_run 已先挡一道 409）。──
+        if params.get("report_type") == "full" and not params.get("budget_ack"):
+            from src.python.llm.cost_forecast import budget_status
+
+            _budget = budget_status()
+            if _budget.get("exceeded"):
+                state.errors.append(
+                    f"今日 LLM 费用已达日预算上限（已花 {_budget['symbol']}{_budget['spent']:.4f}"
+                    f" / 上限 {_budget['symbol']}{_budget['limit']:.4f}），本次生成已中止；"
+                    "确认「降级走缓存继续」后重试可继续"
+                )
+                return _EXIT_SEVERE
         # 输入模式 → 快照隔离域（试算→web/ 正式→共享主目录），单一来源
         snapshot_namespace = _web_input_mode_snapshot_domain(mode)
 
@@ -372,6 +386,25 @@ def _handle_create_run(run_manager):
     if not isinstance(use_existing, bool):
         return _err("BAD_PARAM", "输入来源参数不合法"), 400
 
+    budget_ack = bool(payload.get("budget_ack", False))
+    if "budget_ack" in payload and not isinstance(payload["budget_ack"], bool):
+        return _err("BAD_PARAM", "预算确认参数不合法"), 400
+    # ── 日预算硬闸（LLM 费用）：超限且未经弹层确认 → 409（自动化需显式 budget_ack）──
+    if report_type == "full":
+        from src.python.llm.cost_forecast import budget_status
+
+        _budget = budget_status()
+        if _budget.get("exceeded") and not budget_ack:
+            return (
+                _err(
+                    "BUDGET_EXCEEDED",
+                    f"今日 LLM 费用已达日预算上限"
+                    f"（已花 {_budget['symbol']}{_budget['spent']:.4f} / 上限 {_budget['symbol']}{_budget['limit']:.4f}），"
+                    "确认「降级走缓存继续」后重试",
+                ),
+                409,
+            )
+
     # 模式 × 输入来源组合校验：
     #   - 正式 + 用存量：无需上传（不携带 file_id），读正式持仓文件
     #   - 其余（试算 / 正式 + 上传）：必须有合法未过期 file_id
@@ -397,11 +430,28 @@ def _handle_create_run(run_manager):
             "llm_modules": llm_modules or None,
             "mode": mode,
             "use_existing": use_existing,
+            "budget_ack": budget_ack,
         }
     )
     if run_id is None:
         return _err("RUN_QUEUE_FULL", "已有任务在跑，排队或稍后再试"), 429
     return _ok({"run_id": run_id}), 202
+
+
+def _handle_cost_preflight():
+    """GET /api/runs/cost-preflight —— 事前费用预估 + 日预算状态（生成确认弹层数据源）。
+
+    仅 ``report_type=full``（含 LLM 调用）时给 ``forecast``；``budget`` 恒给。
+    预估失败（``forecast.ok=False``）由客户端按「不阻塞生成」处置，本接口不报错。
+    """
+    from src.python.llm.cost_forecast import budget_status, forecast_run_cost
+
+    report_type = request.args.get("report_type", "full")
+    payload: dict = {"relevant": report_type == "full"}
+    if payload["relevant"]:
+        payload["forecast"] = forecast_run_cost()
+    payload["budget"] = budget_status()
+    return _ok(payload)
 
 
 def _handle_list_runs(run_manager):
@@ -827,6 +877,7 @@ def create_handlers(app, run_manager) -> None:
     app.add_url_rule("/api/runs", "list_runs", lambda: _handle_list_runs(run_manager), methods=["GET"])
     # 静态历史路由必须先注册
     app.add_url_rule("/api/runs/history", "run_history", _handle_run_history, methods=["GET"])
+    app.add_url_rule("/api/runs/cost-preflight", "cost_preflight", _handle_cost_preflight, methods=["GET"])
     app.add_url_rule(
         "/api/runs/<run_id>", "run_detail", lambda run_id: _handle_run_detail(run_manager, run_id), methods=["GET"]
     )

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from src.python.core.logger import setup_logger
 from src.python.core.registry import get_llm_module_names
+from src.python.llm.cost_forecast import budget_status, forecast_run_cost, forecast_summary_lines
 from src.python.report import orchestrator
 from src.python.report.progress import TuiProgressReporter
 from src.python.tui.tui_handlers import (
@@ -149,10 +150,51 @@ def _cmd_generate_both() -> None:
     _run_generate("both", fetch_history=_prompt_history())
 
 
+def _prompt_cost_forecast(force_llm: bool, force_modules: list[str] | None) -> tuple[bool, bool]:
+    """TUI 事前费用预估确认：区间预估上屏 + 日预算超限处置。
+
+    - 预估不可用（ok=False）或无模块参与 → 跳过确认继续（预估失败不阻塞生成）；
+    - 日预算超限 → 询问「降级走缓存继续 / 中止」，确认降级时由调用方清空强刷范围；
+    - 其余 → y/N 确认（默认 N 中止）。
+
+    Returns:
+        (proceed, degrade)——proceed=False 为用户选择中止（不进入生成）；
+        degrade=True 表示经确认降级走缓存（force 范围由调用方清空）。
+    """
+    forecast = forecast_run_cost()
+    budget = budget_status()
+    for line in forecast_summary_lines(forecast, budget):
+        print(f"  [..] {line}")
+    if not forecast.get("ok") or forecast.get("module_count", 0) == 0:
+        return (True, False)
+    if budget.get("exceeded"):
+        try:
+            resp = input("  [!] 今日 LLM 费用已达日预算上限：y=降级走缓存继续 / N=中止 (y/N): ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            return (False, False)
+        if resp != "y":
+            print("  [!] 已中止本次生成（日预算超限）")
+            return (False, False)
+        return (True, bool(force_llm) or bool(force_modules))
+    try:
+        resp = input("  [..] 本次生成费用预估如上，确认继续？(y/N): ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        return (False, False)
+    if resp != "y":
+        print("  [!] 已中止本次生成（费用预估确认未通过）")
+        return (False, False)
+    return (True, False)
+
+
 def _cmd_generate_full() -> None:
     """生成包含所有内容的全系列报告（Excel + HTML + 新闻 + LLM 分析章节）。"""
     reporter = TuiProgressReporter()
     _force, _force_modules = _prompt_force_llm(reporter)
+    _proceed, _degrade = _prompt_cost_forecast(_force, _force_modules)
+    if not _proceed:
+        return
+    if _degrade:
+        _force, _force_modules = False, None
     _run_generate(
         "full",
         fetch_history=_prompt_history(),

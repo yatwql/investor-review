@@ -119,6 +119,11 @@ def _build_parser() -> argparse.ArgumentParser:
         f"可选: {', '.join(FORCEABLE_LLM_MODULES)}）",
     )
     report_p.add_argument(
+        "--yes",
+        action="store_true",
+        help="跳过生成前 LLM 费用预估确认（脚本/自动化常用；日预算超限仍直接中止）",
+    )
+    report_p.add_argument(
         "--prefer-source",
         action="append",
         default=None,

@@ -348,7 +348,7 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
 
 > 以下为 `llm_settings.json` 的全部配置项。`{module}` 占位符替换为具体的模块后缀（global_macro / expert_review / health_check / penetration_deep / news_correlation / self_review / holding_change）。
 
-配置分为**全局配置**和**模块级配置**两类。全局配置共有 9 项：
+配置分为**全局配置**和**模块级配置**两类。全局配置共有 10 项：
 
 - `max_retries`（int，默认 `2`）：**503**/超时/网络异常最多重试次数（**429/403 归 quota 不重试**——429 首试即 600s 长冷却熔断）
 - `llm_full_fail_retry_delay`（int，默认 `30`）：整链全挂后的延迟重试等待秒数（`0`=不等待）——网络/超时/单次 API 错误等**瞬时类**失败在整链失败后等待该秒数重试 1 次；配额（429/403）与熔断终态不重试
@@ -360,6 +360,7 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
 - `fact_check`（dict，默认 `{tolerance: 1.0}`）：LLM 输出数值一致性检测配置。详见下节「事实校验容差配置」
 - `pricing`（dict，默认 `{currency: "CNY", timezone: "Asia/Shanghai", peak_periods: ["09:00-12:00", "14:00-18:00"], idle_periods: [], weekend_always_idle: true, holiday_always_idle: true}`）：模型 Token 定价表 + 峰谷时段配置，可省略（使用代码内置定价），仅需覆盖时添加。除 `currency`（货币符号）、`timezone`（峰谷判定时区，IANA 名称）、`peak_periods` / `idle_periods`（高峰/闲时段，`"HH:MM-HH:MM"` 列表）、`weekend_always_idle`（周末全天闲时开关，默认 `true`）、`holiday_always_idle`（法定节假日全天闲时开关，默认 `true`）外，其余键按模型名合并覆盖价格。详见下方「完整模型定价表」章节
 - `news_correlation_top_n`（int，默认 `30`）：送 LLM 分析的新闻条数。仅 news_correlation 模块有效，值越大 Token 消耗越高
+- `daily_cost_limit`（数值，默认 `0`）：LLM **日费用预算上限**（货币单位与 `pricing.currency` 一致，`0`=不启用）。启用后 full 生成前展示**事前费用预估区间**（计划参与模块 × 模型单价；perf 历史逐模块实际费用优先、无历史静态兜底）与今日已花费；达到上限时交互渠道（TUI / Web / CLI 终端）询问「降级走缓存继续 / 中止」，非交互渠道（`--yes`、`--non-interactive`、非 TTY、Web 定时调度）直接中止。今日已花费 = perf 历史当日 `llm.total_cost` 汇总，与报告内 LLM 用量统计同源；与**报告级输入 Token 预警**（`cost_tracker`，默认 8K、仅告警不阻断）分层——本项是**生成前的日费用硬闸**
 - `debate`（dict，可选实验功能）：辩论模式配置。含 procon（三段式正反辩论，`per_call_max_tokens` 限定每阶段输出上限，默认 18432（null 时按代码兜底同值））、conditional（条件情景推理）、concentration_qa（集中度问答阈值，辩论流程内建段落的触发阈值），以及 `max_total_tokens_per_report`（单次报告辩论总 Token 预算上限，默认 72000，覆盖三段式真实成本）和 `per_call_timeout_override`（辩论单次 API 超时覆盖）。**本段仅控制辩论行为的参数，启停由 Feature Flag（`llm_debate_*`）决定，非配置直接启用**；决策跨期反思闭环（`decision_reflection`）同样由 Feature Flag 启停，无独立配置段
 
 ### 模块级配置

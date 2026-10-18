@@ -538,6 +538,7 @@
 | R-LLM-09 | `src/test/unit/llm/test_prompts_signals.py` | 批 5 |
 | R-LLM-11 | `src/test/unit/llm/test_depth_profile.py` + `src/test/unit/report/test_summary.py` + `src/test/unit/report/test_summary_module_rows.py` | 批 5 |
 | R-LLM-12 | `src/test/unit/llm/test_self_review.py` + `src/test/unit/report/test_llm_module_info.py` | 批 5 |
+| R-LLM-13 | `src/test/unit/llm/test_cost_forecast.py` + `src/test/unit/cli/test_cli_cost_forecast.py` + `src/test/unit/web/test_cost_forecast_flow.py` + `src/test/unit/handlers/test_handlers_report.py` | 批 5 |
 | R-DATA-08 | `src/test/unit/fetcher/test_chain_overrides.py` | 批 5 |
 | R-LLM-10 | `src/test/unit/llm/test_llm_pacing.py`（策略解析/容错/注册/惰性装载兜底/零开销直通/间隔/抖动/并发上限/异常释放/403 不重试）+ `src/test/unit/config/test_config_llm_multi.py`（pacing 透传/缺省不注入/非对象忽略）+ `src/test/unit/llm/test_llm_api_multi.py`（`endpoint_key` 逐层下传并到达重试骨架——漏传则 `PacingGate` 拿空键、端点节流空转） | 批 5 |
 | R-LLM-08 | `src/test/unit/llm/test_llm_api.py` + `src/test/unit/report/test_llm_module_info.py` | 批 5 |

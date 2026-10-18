@@ -424,6 +424,81 @@
       body.file_id = state.fileId;
     }
 
+    // full 模式含 LLM 调用：先取事前费用预估做确认弹层（预估失败不阻塞）；
+    // 超日预算时须显式确认（budget_ack + 降级走缓存）才能提交
+    if (body.report_type === 'full') {
+      confirmCostForecast().then(function (decision) {
+        if (!decision.proceed) {
+          resetGenerateBtn();
+          return;
+        }
+        if (decision.budgetAck) {
+          body.budget_ack = true;
+        }
+        if (decision.forceDowngraded) {
+          body.force_llm = false;
+          body.llm_modules = null;
+        }
+        submitRun(body);
+      });
+      return;
+    }
+    submitRun(body);
+  }
+
+  function resetGenerateBtn() {
+    els.generateBtn.removeAttribute('aria-busy');
+    updateGenerateBtn();
+    els.generateBtn.textContent = '生成报告';
+  }
+
+  /* ── 事前费用预估确认弹层（native confirm；预估失败/无模块/网络失败 → 不阻塞继续）── */
+  function confirmCostForecast() {
+    return fetch('/api/runs/cost-preflight?report_type=full', {
+      signal: AbortSignal.timeout(8000),
+    })
+      .then(function (res) {
+        if (!res.ok) {
+          return null;
+        }
+        return res.json();
+      })
+      .then(function (j) {
+        return j && j.data ? j.data : null;
+      })
+      .then(function (data) {
+        var f = data && data.forecast;
+        var b = data && data.budget;
+        if (!f || !f.ok || !f.module_count) {
+          return { proceed: true };
+        }
+        var sym = f.symbol || '¥';
+        var bsym = (b && b.symbol) || sym;
+        var lines =
+          '本次生成 LLM 费用预估 ' + sym + f.low.toFixed(4) +
+          ' ~ ' + sym + f.high.toFixed(4) + '（计划 ' + f.module_count + ' 个模块）';
+        if (b && b.enabled) {
+          lines += '\n今日已花费 ' + bsym + b.spent.toFixed(4) + ' / 日预算 ' + bsym + b.limit.toFixed(4);
+        } else if (b) {
+          lines += '\n今日已花费 ' + bsym + b.spent.toFixed(4) + '（未设日预算上限）';
+        }
+        if (b && b.exceeded) {
+          if (!window.confirm('[!] ' + lines + '\n\n今日已超日预算。确定「降级走缓存」继续？')) {
+            return { proceed: false };
+          }
+          return { proceed: true, budgetAck: true, forceDowngraded: true };
+        }
+        if (!window.confirm('[..] ' + lines + '\n\n继续生成？')) {
+          return { proceed: false };
+        }
+        return { proceed: true };
+      })
+      .catch(function () {
+        return { proceed: true };
+      });
+  }
+
+  function submitRun(body) {
     fetch('/api/runs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

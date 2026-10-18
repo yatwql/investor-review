@@ -7,6 +7,10 @@
 
 ---
 
+## plan-99 LLM 运行事前无成本预估与预算上限 ✅
+
+**完成（2026-10-18，v0.13.6-dev）**：`llm/cost_forecast.py` 事前费用预估——计划参与模块（`visible_llm_module_names()` ∩ `enabled_llm` ∩ `depth_gate` 档位收窄）× 生效模型单价（`model_<模块>` → 多链首链 → 顶层默认）给区间：perf 历史逐模块实际费用优先（最近 30 次运行，辩论特征开启时标准样本 ×3、辩论三键并入 expert_review 口径）、无历史回落静态 token 包络（8K~48K 输入 × `max_tokens_<模块>` 输出）；全部无法定价 → `ok=False` **不阻塞**（渠道跳过确认）。日预算 `llm_settings.json → daily_cost_limit`（默认 0=不启用），今日已花费 = perf 当日 `llm.total_cost` 汇总（与事后统计同源）；超限交互询问「降级走缓存继续 / 中止」（降级清空强刷范围），非交互硬闸：CLI `--yes`/`--non-interactive`/非 TTY 直接中止退出码 2，Web 创建 409 `BUDGET_EXCEEDED`（`budget_ack` 显式确认放行）+ `_run_generation_impl` 执行体兜底（定时调度/直连 API 同拦）。三渠道接线：TUI `_prompt_cost_forecast`（`[L]` full 前）、Web `GET /api/runs/cost-preflight` + `main.js` 提交前弹层（预检失败放行）、CLI `_confirm_cost_forecast` + `--yes`。计费数学抽 `pricing.compute_cost_value()` 数值单源（`estimate_cost` 字符串契约不变）。需求登记 R-LLM-13；回归用例 `test_cost_forecast.py` / `test_cli_cost_forecast.py` / `test_cost_forecast_flow.py` / `test_handlers_report.py::TestPromptCostForecast|TestCmdGenerateFullForecastWiring`。
+
 ## plan-129 LLM 费用无跨运行趋势视图 ✅
 
 **完成（2026-10-18，v0.13.6-dev）**：perf-view `--by day|week|hour` 时段聚合表在耗时列外新增**费用合计/费用环比**列（数据源既有 `llm.total_cost`，零新增；时段键升序即时间序；首档环比为 —、末档附「费用环比（末档 vs 前档）」提示行；范围内无费用样本自动省列）；`--json` 汇总新增 `llm_cost` 费用块（runs/total/mean/median/max，沿用既有均值/中位/极值 helper，无样本为 null）与 `--by` 时的 `by_period` 时段费用序列（bucket 升序可直接相邻差分，未传 `--by` 为 null）；CSV 列不变。回归用例 `test_perf_view.py::TestBucketCostAggregation / TestLlmCostMachineData`（9 例）。

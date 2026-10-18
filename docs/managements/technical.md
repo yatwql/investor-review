@@ -513,7 +513,7 @@ CLI 渠道是**命令行参数**形态，面向脚本化与自动化场景：定
 `_build_parser()`（`cli/_parser.py`）：`prog="investor-util"`，全局参数 + 7 个子命令。
 
 - **全局参数**：`--config`（备用配置文件路径）、`--output`（报告输出目录，覆盖 config 的 output_dir）、`--verbose`（进度同步到 stderr，默认仅写 logs/app.log）、`--non-interactive`（跳过首次运行交互式引导，定时任务/脚本使用）、`--experiment NAME`（可重复；启用实验性功能且**仅本次运行生效、不写盘**。NAME 取开关名或显示名，`all` = 全部启用。取值经 `_experiment_name` argparse type 回调即时校验：空串/未知名即报错，可选值由 `features.describe_experiment_flags()` 生成）、`--feature NAME=VALUE`（可重复；**全部**功能开关的双向一次性开关，同样是仅本次运行、不写盘。VALUE 取 `on/off/true/false/1/0`（大小写不敏感），NAME 取注册表键名。取值经 `_feature_override` argparse type 回调即时校验：非 `NAME=VALUE` 形态、未知开关名、不可识别取值均即报错并列出可选值；同名后者覆盖前者。两者共用一个应用原语，`--feature` 在 `--experiment` 之后应用，故显式取值可覆盖 `--experiment` 的隐式「置开」）、`--version`。
-- **`report`**：`--type basic/both/full`（默认 basic）、`--history auto/off`（未指定回退配置层 `history.fetch_mode`，仅 both/full 有效）、`--force-llm`（全量强刷）、`--llm-module KEY`（可重复传参，仅强刷指定模块，粒度优先于 `--force-llm`；可选键见 `llm/force_scope.py::FORCEABLE_LLM_MODULES`）、`--prefer-source NAME`（可重复；本次运行优先数据源，仅排到链首，不绕过熔断与凭据就绪预检，不写配置）、`--exclude-source NAME`（可重复；排障复现排除数据源，未知名即报错并列出可用源名）。
+- **`report`**：`--type basic/both/full`（默认 basic）、`--history auto/off`（未指定回退配置层 `history.fetch_mode`，仅 both/full 有效）、`--force-llm`（全量强刷）、`--llm-module KEY`（可重复传参，仅强刷指定模块，粒度优先于 `--force-llm`；可选键见 `llm/force_scope.py::FORCEABLE_LLM_MODULES`）、`--prefer-source NAME`（可重复；本次运行优先数据源，仅排到链首，不绕过熔断与凭据就绪预检，不写配置）、`--exclude-source NAME`（可重复；排障复现排除数据源，未知名即报错并列出可用源名）、`--yes`（跳过生成前 LLM 费用预估确认，仅 full 有预估；日预算超限仍直接中止）。
 - **`cache`**：互斥组 `--update basic/position/all` / `--clean` / `--stats`。
 - **`whatif`**：`--candidate`（目标持仓，必填）、`--base`（基准持仓，缺省用 config 持仓）、`--effective-date`（调仓生效日，opt-in 联网取历史做时序回测）。
 - **`cassettes`**：数据源记录-回放维护（`core/cassette.py`），无参数列出已录制响应，`--verify` 逐条离线回放并交当前解析器解析（不联网）；**无需 config 且只读离线**（main() 中特殊前置分派）。
@@ -592,9 +592,10 @@ Web 渠道是第三种交互入口：**浏览器内完成「上传持仓 Excel �
 |:-----|:-----|:-----|:-----|
 | GET | `/` | index | 单页 UI |
 | POST | `/api/upload` | 上传持仓 | 校验 → 落盘 → 预检 → file_id |
-| POST | `/api/runs` | 创建生成任务 | 单 worker 队列；队列满 429 |
+| POST | `/api/runs` | 创建生成任务 | 单 worker 队列；队列满 429；full + 日预算超限且未确认（`budget_ack`）→ 409 `BUDGET_EXCEEDED` |
 | GET | `/api/runs` | 运行列表 | 最近 run（时间倒序，limit 10） |
 | GET | `/api/runs/history` | 历史记录 | `core.perf.load_history()` perf 快照（5s 短缓存） |
+| GET | `/api/runs/cost-preflight` | 生成前费用预估（full 弹层数据源） | 只读：`cost_forecast` forecast + budget；预估失败以数据面表达（`ok:false`）不报错 |
 | GET | `/api/runs/{id}` | run 详情 | 状态快照（不含事件） |
 | GET | `/api/runs/{id}/events?after=N` | 增量事件 | seq 单调递增，`seq > after` 增量轮询 |
 | GET | `/api/reports/<path>` | 产物预览/下载 | `send_from_directory`（内置 `..` 净化）+ 扩展名白名单 |
@@ -3394,6 +3395,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `self_review` | 生成后自检（模型层复核各模块产出与数据是否自洽；分层于确定性事实校验之上，出厂默认关） | LLM 智能分析 | 内容生成 | `llm_settings.json → enabled_llm.self_review` |
 | `quarter_walk_anchor` | 季报回溯窗口的时间锚点上下文（记录-回放时固定为 cassette 录制时点，去时间依赖而保留请求形状漂移信号） | 数据源 | 数据获取 | 无 |
 | `apply_compliance_guardrails` | 合规声明集中注入（在 system prompt 尾部幂等叠加「仅供复盘参考、不构成投资建议」，窄判定角色可追加专属约束） | LLM 智能分析 | 内容生成 | 无 |
+| `cost_forecast` | 事前费用预估与日预算（计划参与模块×模型单价区间预估：历史实际费用优先、静态包络兜底、无法定价降级不阻塞；日预算超限交互询问降级/中止、非交互硬闸——TUI/CLI/Web 三渠道同源数据面） | LLM 智能分析 | 内容生成 | `llm_settings.json → daily_cost_limit` |
 | `print_llm_cost_summary` | CLI 收尾 LLM 成本摘要行（调用次数/输入输出 token/模型名，无调用时静默） | CLI 命令行 | 运行收尾 | 无 |
 | `print_cache_hit_summary` | CLI 收尾缓存命中率行（命中/总数/命中率，无缓存读写时静默，0% 亦输出） | CLI 命令行 | 运行收尾 | 无 |
 | `hithink` | 同花顺金融数据服务 provider（A 股行情/财务/基金/情绪面；凭据声明/qps 限速/信封错误码） | 数据源 | 数据获取 | 需凭据源（`data_key.json` 的 `hithink` 节或 `HITHINK_FINANCE_API_KEY`） |

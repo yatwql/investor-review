@@ -76,6 +76,7 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 | `--history {auto,off}` | 是否获取组合历史走势：`auto`=获取，`off`=跳过。未指定时按配置 `history.fetch_mode`（默认 `auto`）。仅 `--type both` / `full` 时有效 |
 | `--force-llm` | 强制重新调用 LLM API（忽略缓存），生成最新 LLM 内容（全量） |
 | `--llm-module KEY` | 模块级强刷：仅强制重生成指定模块，其余照常命中缓存（可重复传参；粒度优先于 `--force-llm`）。可选键：`global_macro` 全球政经局势 / `expert_review` 智囊团深度复盘 / `health_check` 持仓体检报告 / `penetration_deep` 穿透深度分析 / `news_correlation` 财经新闻关联 / `self_review` 生成后自检 / `holding_change` 持仓变动复盘归因 |
+| `--yes` | 跳过生成前 LLM 费用预估确认（仅 `--type full` 有预估与确认；`--non-interactive`/非 TTY 同样跳过；日预算超限仍直接中止） |
 | `--prefer-source NAME` | 本次运行优先使用某数据源（可重复；仅排到该数据源链首，**不绕过熔断与凭据就绪预检**，不写配置） |
 | `--exclude-source NAME` | 本次运行排除某数据源（可重复；用于排障复现，如「排除新浪看是否仍取到数据」）。未知名即报错并列出可用源名 |
 
@@ -248,6 +249,8 @@ TUI 菜单与 CLI 子命令落到**同一个业务编排函数**（`report/orche
 | 询问「是否获取组合历史走势数据」 | `--history auto` / `--history off` | 省略 `--history` 时按 `config.json` 的 `history.fetch_mode` 解析（`off` 跳过，`auto`/`prompt` 均视为获取） |
 | 询问「是否强制重新生成 LLM 内容」 | `--force-llm` | 不加则复用 LLM 缓存 |
 | 二段追问「哪些模块需要强制」（回车=全部） | `--llm-module KEY`（可重复） | 不选则全量强刷（与 `--force-llm` 等价） |
+| 询问「本次生成费用预估如上，确认继续？」（y/N） | `--yes` | 预估行恒打印（今日已花费/日预算同屏）；脚本与定时任务必须带 `--yes` 或 `--non-interactive` |
+| 超日预算时询问「降级走缓存继续 / 中止」 | —（非交互直接中止，退出码 2） | 上限由 `llm_settings.json → daily_cost_limit` 配置（默认 0=不启用）；交互终端保留询问，降级会清空本次强刷范围 |
 | 首次运行交互式引导 | `--non-interactive` | 跳过引导，定时任务/脚本建议带上 |
 | 结束打印 LLM 会话用量 | —（打印耗时汇总） | 两条路径的收尾输出不同，不影响产物 |
 
