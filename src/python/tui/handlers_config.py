@@ -231,7 +231,7 @@ def _show_switch_detail(choice: str, items: list[tuple[int, str, str, bool, str]
         choice: 用户输入（``?`` 后跟编号或条目键名，如 ``? 3`` / ``? doctor_check``）。
         items: 面板当前派发的条目 ``(编号, 键, 显示名, 当前状态, 类别)``。
     """
-    from src.python.config._llm_settings_defaults import _DEFAULT_LLM_SETTINGS
+    from src.python.config import default_enabled_llm
     from src.python.config.features import GROUP_LABELS, feature_switch_registry
     from src.python.core.experiment_stats import load_experiment_usage
 
@@ -249,7 +249,7 @@ def _show_switch_detail(choice: str, items: list[tuple[int, str, str, bool, str]
             return
     _, key, name, curr, kind = matched[0]
     if kind == "llm":
-        default = _DEFAULT_LLM_SETTINGS.get("enabled_llm", {}).get(key, True)
+        default = default_enabled_llm().get(key, True)
         desc = "标准 LLM 分析章节（模块配置说明见 how-to-config 手册「LLM 分析章节」）"
         group_label = "LLM 分析章节"
         storage = f"llm_settings.json → enabled_llm.{key}"
@@ -301,10 +301,8 @@ def _cmd_config_llm_modules() -> None:
       - 赋值：``键名=on|off``，与 CLI ``--feature NAME=VALUE`` 同一解析器与词表
         （含已合并旧键别名过渡）。
     """
-    from src.python.config._llm_settings_defaults import _DEFAULT_LLM_SETTINGS
+    from src.python.config import default_enabled_llm
     from src.python.config.features import (
-        _SWITCH_FALSE_TOKENS,
-        _SWITCH_TRUE_TOKENS,
         GROUP_LABELS,
         GROUP_ORDER,
         clear_feature_overrides,
@@ -312,6 +310,7 @@ def _cmd_config_llm_modules() -> None:
         feature_switch_registry,
         is_feature_enabled,
         parse_switch_override,
+        parse_switch_value,
         switches_in_group,
     )
     from src.python.core.experiment_stats import load_experiment_usage
@@ -325,7 +324,7 @@ def _cmd_config_llm_modules() -> None:
 
     enabled_map = settings.get("enabled_llm", {})
     # 出厂默认（漂移比对基准）：enabled_llm 缺省值与运行时兜底一致取 True
-    default_enabled = _DEFAULT_LLM_SETTINGS.get("enabled_llm", {})
+    default_enabled = default_enabled_llm()
     # 菜单层隐藏辩论三模块（注册表保留：缓存 TTL/前缀清理仍依赖）
     # 实际辩论开关由下方实验性 Feature Flag（正反辩论等）控制
     module_names = filter_menu_llm_modules(get_llm_module_names())
@@ -474,12 +473,8 @@ def _cmd_config_llm_modules() -> None:
                     continue
                 target = feature_item
             elif llm_item is not None:
-                token = assign_val.strip().lower()
-                if token in _SWITCH_TRUE_TOKENS:
-                    new_val = True
-                elif token in _SWITCH_FALSE_TOKENS:
-                    new_val = False
-                else:
+                new_val = parse_switch_value(assign_val)
+                if new_val is None:
                     print(f"  {YELLOW}[!]{RESET} 取值不可识别；可选: on / off")
                     continue
                 target = llm_item

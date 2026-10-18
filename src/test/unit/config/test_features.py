@@ -720,3 +720,54 @@ class TestHistoryAugmentedSwitches:
         defaults = get_feature_defaults()
         assert defaults["risk_adjusted_excess"] is False
         assert defaults["crisis_replay"] is False
+
+
+class TestPublicSwitchVocabulary:
+    """公开开关词表与解析器：CLI 与 TUI 共用一份词表（渠道不引私有符号）。"""
+
+    def test_parse_switch_value_uses_shared_vocabulary(self):
+        """真值来源词表：词表内每个取值都能解析为对应布尔，词表外返回 None。"""
+        from src.python.config.features import (
+            SWITCH_FALSE_TOKENS,
+            SWITCH_TRUE_TOKENS,
+            parse_switch_value,
+        )
+
+        for token in SWITCH_TRUE_TOKENS:
+            assert parse_switch_value(token) is True, token
+            assert parse_switch_value(f"  {token.upper()}  ") is True, token
+        for token in SWITCH_FALSE_TOKENS:
+            assert parse_switch_value(token) is False, token
+        for token in ("maybe", "", "onoff", "2"):
+            assert parse_switch_value(token) is None, token
+
+    def test_override_and_value_parser_agree(self):
+        """`NAME=VALUE` 解析结果与单值解析器一致（同一词表，不会两处口径漂移）。"""
+        from src.python.config.features import parse_switch_override, parse_switch_value
+
+        for token in ("on", "yes", "0", "disable"):
+            name, value = parse_switch_override(f"doctor_check={token}")
+            assert name == "doctor_check"
+            assert value is parse_switch_value(token)
+
+
+class TestDefaultEnabledLlmAccessor:
+    """公开 `default_enabled_llm()`：展示层取出厂默认不引私有模板。"""
+
+    def test_returns_enabled_llm_defaults_copy(self):
+        """返回值等于 enabled_llm 出厂默认，且是副本（改动不污染全局默认）。"""
+        from src.python.config import default_enabled_llm
+        from src.python.config._llm_settings_defaults import _DEFAULT_LLM_SETTINGS
+
+        expected = _DEFAULT_LLM_SETTINGS["enabled_llm"]
+        got = default_enabled_llm()
+        assert got == expected
+        got["__probe__"] = True
+        assert "__probe__" not in default_enabled_llm()
+
+    def test_covers_registered_llm_modules(self):
+        """注册表 LLM 模块的后缀都出现在默认映射里（新增模块须同步默认值）。"""
+        from src.python.config import default_enabled_llm
+        from src.python.core.registry import get_llm_module_names
+
+        assert set(get_llm_module_names()) <= set(default_enabled_llm())

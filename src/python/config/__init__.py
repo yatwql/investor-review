@@ -95,6 +95,7 @@ from src.python.config._llm_settings import (
     _llm_config_size,
     invalidate_llm_config_cache,
     # LLM 配置
+    default_enabled_llm,
     get_llm_config,
     get_llm_settings_path,
     # 章节可见性
@@ -140,6 +141,7 @@ __all__ = [
     "is_enable_news",
     "is_enable_history",
     "is_enable_llm",
+    "default_enabled_llm",
     "is_enable_portfolio_evolution",
     "is_enable_stock_fundamentals",
     "is_enable_action",

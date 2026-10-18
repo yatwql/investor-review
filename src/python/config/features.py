@@ -357,8 +357,9 @@ def is_experimental_switch(flag: str) -> bool:
 EXPERIMENT_ALL = "all"
 
 # ``--feature NAME=VALUE`` 的取值词表（大小写不敏感）
-_SWITCH_TRUE_TOKENS = frozenset({"on", "true", "1", "yes", "enable", "enabled"})
-_SWITCH_FALSE_TOKENS = frozenset({"off", "false", "0", "no", "disable", "disabled"})
+# 开关取值词表（公开：CLI --feature 与 TUI [S] 面板共用同一词表，避免两处各写一份）
+SWITCH_TRUE_TOKENS = frozenset({"on", "true", "1", "yes", "enable", "enabled"})
+SWITCH_FALSE_TOKENS = frozenset({"off", "false", "0", "no", "disable", "disabled"})
 
 
 def _match_experiment(token: str) -> str | None:
@@ -463,11 +464,31 @@ def parse_switch_override(token: str) -> tuple[str, bool]:
         raise ValueError(f"未知功能开关 '{name}'；可选: {describe_switches()}")
 
     value = raw_value.strip().lower()
-    if value in _SWITCH_TRUE_TOKENS:
+    if value in SWITCH_TRUE_TOKENS:
         return name, True
-    if value in _SWITCH_FALSE_TOKENS:
+    if value in SWITCH_FALSE_TOKENS:
         return name, False
     raise ValueError(f"开关 '{name}' 的取值 '{raw_value}' 不可识别；可选: on / off")
+
+
+def parse_switch_value(text: str) -> bool | None:
+    """把单个取值文本按开关词表解析为布尔（``None`` = 词表外）。
+
+    与 :func:`parse_switch_override` 共用同一词表：CLI ``--feature NAME=VALUE``
+    与 TUI ``[S]`` 面板的 ``键名=值`` 通道因此不会出现「一处认 on、一处只认 true」。
+
+    Args:
+        text: 取值文本（大小写不敏感，允许首尾空白），如 ``on`` / ``off`` / ``1``。
+
+    Returns:
+        True / False；不在词表内返回 None（调用方自行给出提示）。
+    """
+    value = text.strip().lower()
+    if value in SWITCH_TRUE_TOKENS:
+        return True
+    if value in SWITCH_FALSE_TOKENS:
+        return False
+    return None
 
 
 def enabled_experimental_features() -> list[tuple[str, str]]:
