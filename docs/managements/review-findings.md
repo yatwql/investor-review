@@ -14,16 +14,16 @@
 | # | 问题 | 修复方向 |
 |---|------|----------|
 
-| **rf-257** | plan-8 **Web 模式浏览器真机人工验收余 4 类人工项**：真实 basic/full 进度观察（3.1c/3.2/3.3/3.4）、结果区按钮 4.5、提交即禁用 5.3、2.5/2.6 真实拖拽与 Tab/Enter 抽验；其余断言已自动化复跑通过（修复后 35/0/2 + smoke 11/11；④ 375px 经 rf-644 修复后全过；结论与复跑方式见验证文档；脚本与证据在 git 忽略的 `docs/tmp/rf257/`，重跑即建） | 验证方法与判定标准见 [`docs/plan/web-browser-verification.md`](../plan/web-browser-verification.md)（§1.1 启动/收尾命令 + §5 复验清单；勾选清单留存 [`docs/archive/v0.10.x/web-ui/web-ui-verification-checklist.md`](../archive/v0.10.x/web-ui/web-ui-verification-checklist.md)）；复跑：`.venv/bin/python scripts/smoke-web.py` + `node docs/tmp/rf257/cdp-check.mjs`，收尾必做 kill 服务/浏览器 + 清空 `data/holdings/uploads/`；全部完成后本表移至已解决 |
+| **rf-257** | plan-8 **Web 模式浏览器真机人工验收余 4 类人工项**：真实 basic/full 进度观察（3.1c/3.2/3.3/3.4）、结果区按钮 4.5、提交即禁用 5.3、2.5/2.6 真实拖拽与 Tab/Enter 抽验；其余断言已自动化复跑通过 | 验证方法与判定标准见 [`docs/plan/web-browser-verification.md`](../plan/web-browser-verification.md)（§1.1 启动/收尾命令 + §5 复验清单）；复跑：`.venv/bin/python scripts/smoke-web.py` + `node docs/tmp/rf257/cdp-check.mjs`，收尾必做 kill 服务/浏览器 + 清空 `data/holdings/uploads/`；全部完成后本表移至已解决 |
 
 ### P2 — 中优先：价值明确、成本可控（下批排期）
 
-> 入选标准：修复路径清晰、成本可控；rf-114 须待 rf-113 人工验证完成后执行（**已满足**：rf-113 已于 2026-10-16 完成）。
+> 入选标准：修复路径清晰、成本可控；rf-114 前置（rf-113 人工验证）已满足。
 
 | # | 问题 | 修复方向 |
 |---|------|----------|
 
-| **rf-114** | 双渲染路径共存——模板保留 Canvas `drawSimpleChart()`（265 行内联 JS）+ Chart.js 渲染器，Feature Flag OFF 时回退 Canvas 路径 | 删除 `drawSimpleChart()` + Canvas 回退分支 + Feature Flag 条件分支，Chart.js 成唯一渲染器；**前置已满足：rf-113 人工验证完成（2026-10-16，确认 Chart.js 真机渲染可靠）**；触发条件：plan-1 稳定 2 版本（阶段 2→3 切换，判定标准见 upgrade.md §4.15） |
+| **rf-114** | 双渲染路径共存——模板保留 Canvas `drawSimpleChart()`（265 行内联 JS）+ Chart.js 渲染器，Feature Flag OFF 时回退 Canvas 路径 | 删除 `drawSimpleChart()` + Canvas 回退分支 + Feature Flag 条件分支，Chart.js 成唯一渲染器；触发条件：plan-1 稳定 2 版本（阶段 2→3 切换，判定标准见 upgrade.md §4.15） |
 
 
 ### P3 — 持续监控：文件过长登记表（>500 行观察，脚本域 >400 即入观察 / **>1000 行为硬上限必须拆分**（主程序与脚本）；按距红线余量升序）
@@ -35,13 +35,13 @@
 | # | 文件 | 行数 | 状态 | 拆分建议 |
 |---|------|------|------|----------|
 
-| **rf-626** | `llm/prompts_core.py`、`llm/generators.py`、`report/html_writer.py`、`analysis/rebalance.py` | 350 / 444 / 796 / 751 | **临界带四文件登记项**：`html_writer`(796)/`rebalance`(751) 距 1000 红线余量 204/249，`-v` 月度复核 | `html_writer`/`rebalance` 逼近 980 行启动拆分（域下沉 + 门面 re-export + 测试 patch 改指持有子模块） |
+| **rf-626** | `llm/prompts_core.py`、`llm/generators.py`、`report/html_writer.py`、`analysis/rebalance.py` | 350 / 444 / 796 / 751 | **临界带四文件登记项**，`-v` 月度复核 | `html_writer`/`rebalance` 逼近 980 行启动拆分（域下沉 + 门面 re-export + 测试 patch 改指持有子模块） |
 | **rf-86** | `cache/operations.py` | 739 | 500-1000 可选优化区间，增长偏快，`-v` 按月复核 | 数据结构定义/基金刷新/公共缓存/持仓缓存/缓存清理 5 个职责 |
 | **rf-79** | `core/code_utils.py` | 766 | 500-1000 可选优化区间，维持现状，`-v` 按月复核 | 可考虑将 `estimate_market_cap_by_prefix()` 等非核心判定函数移出（不拆） |
 | **rf-665** | `config/features.py`、`_doc_drift/_format.py`、`tui/handlers_config.py` | 737 / 558 / 534 | 500-1000 可选优化区间，`-v` 按月复核 | `features.py` 随注册表逐开关增长（每项 ~10 行），逼近 980 行时考虑将 `FeatureSwitchDef` 字段声明/注册表条目下沉独立子模块；另两文件由 `-v` 月度复核 |
 | **rf-89** | `report/excel_generator.py` | 659 | 500-1000 可选优化区间，增长偏快，暂维持现状，`-v` 按月复核 | 页签编排可进一步下沉到独立 writer（后续择机） |
-| **rf-80** | `report/data_status.py` | 649 | 维持现状（DegradationTracker 单类，内部职责内聚；本轮新增通知降级摘要单源下沉后复核） | DegradationTracker 单类偏大（不拆） |
-| **rf-711** | `web/handlers.py` | 852 | 500-1000 可选优化区间，距 1000 红线余量 148 且随 Web 功能持续增长，`-v` 按月复核 | 生成执行体（`_run_generation` 包装器+impl+通知）可下沉 `web/run_generation.py` 子模块（逼近 980 行时启动） |
+| **rf-80** | `report/data_status.py` | 649 | 维持现状（DegradationTracker 单类，内部职责内聚） | DegradationTracker 单类偏大（不拆） |
+| **rf-711** | `web/handlers.py` | 852 | 500-1000 可选优化区间，增长较快，`-v` 按月复核 | 生成执行体可下沉 `web/run_generation.py` 子模块（逼近 980 行时启动） |
 | **rf-81** | `report/html_renderers.py` | 577 | 维持现状（render 函数同属渲染域） | 所有 HTML render 函数揉合一体（不拆） |
 | **rf-85** | `fetcher/fund.py` | 553 | 500-1000 可选优化区间，暂维持现状，若再增则按职责拆分 | 排名/持仓/基准三职责可拆分为子模块（后续择机） |
 | **rf-78** | `fetcher/batch.py` | 520 | 维持现状（BatchDispatcher 内聚，复核确认不拆） | BatchDispatcher 本身内聚，可维持现状（不拆） |
@@ -66,36 +66,24 @@
 
 ### 开发期已修复（0.13.6-dev）
 
-> rf-708 已修复（2026-10-18）：完成通知 Web 渠道接线——`_run_generation` 改薄包装器（委托 `_run_generation_impl` + `result_box` 回传产物标志），收尾经 `_notify_web_completion` 按 `notify` 配置门控派发（Web 手动生成 + 内置定时调度共用，无人值守定时失败不再静默）；降级摘要单源下沉 `report/data_status.degradation_summary()`，CLI `_collect_degradation_summary` 改委托（回归用例已补：门控前置/载荷/吞异常/包装器接线）
+> rf-708 已修复（2026-10-18）：完成通知 Web 渠道接线——`_run_generation` 改薄包装器（委托 `_run_generation_impl` + `result_box` 回传产物标志），收尾经 `_notify_web_completion` 按 `notify` 配置门控派发（Web 手动生成 + 内置定时调度共用，无人值守定时失败不再静默）；降级摘要单源下沉 `report/data_status.degradation_summary()`，CLI `_collect_degradation_summary` 改委托
 >
-> rf-709 已修复（2026-10-18）：报告模板 tooltip XSS 纪律——`drawSimpleChart` hover 内容改 DOM API 构建（`createElement` + `textContent`/`createTextNode`，色点走 `style.backgroundColor` 属性赋值），全文 `innerHTML` 清零；模板源结构测试断言无注入 sink（innerHTML/insertAdjacentHTML/document.write/eval）防回归
+> rf-709 已修复（2026-10-18）：报告模板 tooltip XSS 纪律——`drawSimpleChart` hover 内容改 DOM API 构建（`createElement` + `textContent`/`createTextNode`，色点走 `style.backgroundColor` 属性赋值），全文 `innerHTML` 清零，模板源结构测试断言防回归
 >
-> rf-710 已修复（2026-10-18）：遥测 JSONL 保留上限——`jsonl_store` 追加原语增 `max_lines` 尾部保留参数（超限丢最旧行，原子写语义不变）；perf 历史 5000 行 / 健康检查历史 2000 行上限（账本/去重锚点等业务态文件不设，避免丢失跨会话状态）（回归用例已补：裁剪/不裁剪/批量/缺省行为）
+> rf-710 已修复（2026-10-18）：遥测 JSONL 保留上限——`jsonl_store` 追加原语增 `max_lines` 尾部保留参数（超限丢最旧行，原子写语义不变）；perf 历史 5000 行 / 健康检查历史 2000 行上限（账本/去重锚点等业务态文件不设，避免丢失跨会话状态）
 >
-> rf-706 已修复（2026-10-18）：Web 进度事件通道完整性——`pollOnce` 增在途互斥（pollBusy，成功/异常/同步抛三路复位）+ 按 `seq > lastSeq` 过滤重复回放；服务端 events 载荷补 `first_seq`（`RunState.oldest_seq`），前端缺口时渲染「中间已省略 N 条」占位行，不再静默跳号（回归用例已补：RunState 边界 + 载荷字段 + main.js 源结构）
+> rf-706 已修复（2026-10-18）：Web 进度事件通道完整性——`pollOnce` 增在途互斥（pollBusy，成功/异常/同步抛三路复位）+ 按 `seq > lastSeq` 过滤重复回放；服务端 events 载荷补 `first_seq`（`RunState.oldest_seq`），前端缺口时渲染「中间已省略 N 条」占位行，不再静默跳号
 >
-> rf-707 已修复（2026-10-18）：Web 生成进度断点续传——活动 run 写 sessionStorage（提交成功/流程重置/轮询完成/任务失效四点闭环清理），页面加载 `resumeActiveRun()` 重建进度视图从 `after=0` 续轮询；run 已随服务重启消失时走既有任务不存在终态收口，不空转重试（回归用例已补：main.js 源结构）
+> rf-707 已修复（2026-10-18）：Web 生成进度断点续传——活动 run 写 sessionStorage（提交成功/流程重置/轮询完成/任务失效四点闭环清理），页面加载 `resumeActiveRun()` 重建进度视图从 `after=0` 续轮询；run 已随服务重启消失时走既有任务不存在终态收口，不空转重试
 >
-> rf-704 已修复（2026-10-18）：过期缓存生成路径自动清理——`cache.auto_cleanup_expired()` 尽力而为包装（任何异常吞掉返回 0，绝不影响主流程），`report/orchestrator.generate_report` 入口调用（CLI/TUI/Web 三渠道共用入口）、仅清到文件时记 info 日志；无人值守 CLI 定时任务不再只增不减地堆积过期缓存（回归用例已补：生成入口触发清理 + 包装吞异常）
+> rf-704 已修复（2026-10-18）：过期缓存生成路径自动清理——`cache.auto_cleanup_expired()` 尽力而为包装（任何异常吞掉返回 0，绝不影响主流程），`report/orchestrator.generate_report` 入口调用（CLI/TUI/Web 三渠道共用入口）；无人值守 CLI 定时任务不再只增不减地堆积过期缓存
 >
-> rf-705 已修复（2026-10-18）：Web 进度轮询任务丢失终态——`main.js pollOnce` catch 识别 404/`NOT_FOUND` 为终态：停止轮询 + 复用 `restoreGenerateBtn()` 单源复位生成按钮 + 进度阶段落「任务已失效」+ 结果区渲染失败态提示刷新，不再被当瞬时错误无限重试；其余瞬时错误保持静默重试（回归用例已补：main.js 源结构断言）
+> rf-705 已修复（2026-10-18）：Web 进度轮询任务丢失终态——`main.js pollOnce` catch 识别 404/`NOT_FOUND` 为终态：停止轮询 + 复用 `restoreGenerateBtn()` 单源复位生成按钮 + 进度阶段落「任务已失效」+ 结果区渲染失败态提示刷新，不再被当瞬时错误无限重试；其余瞬时错误保持静默重试
 >
-> rf-702 已修复（2026-10-17）：LLM 计费口径统一——Anthropic 兼容端点 `input_tokens` 仅计未命中，与 `cache_miss = input − hit` 公式相减产生负费用；`estimate_cost` 补 `max(…, 0)` 下限，归一层把 claude 协议 `input_tokens` 补 `cache_read_input_tokens` 归一为总输入（详见 changelog）
+> rf-702 已修复（2026-10-17）：LLM 计费口径统一——归一层把 claude 协议 `input_tokens` 补 `cache_read_input_tokens` 归一为总输入（兼容端点命中大于未命中不再产生负费用），`estimate_cost` 补 `max(…, 0)` 下限（详见 changelog）
 >
-> rf-703 已修复（2026-10-17）：会话/报告费用统计与单次估算口径统一——报告页脚、批处理汇总、新闻相关性估值均改走 `_normalize_usage_tokens` 归一层，会话累计费用与单次 `estimate_cost` 同参等值（回归用例已补）
+> rf-703 已修复（2026-10-17）：会话/报告费用统计与单次估算口径统一——报告页脚、批处理汇总、新闻相关性估值均改走 `_normalize_usage_tokens` 归一层，会话累计费用与单次 `estimate_cost` 同参等值
 >
-> rf-701 已修复（2026-10-17）：openai 分支补读 DeepSeek 原生端点顶层 `prompt_cache_hit_tokens`（优先于 `prompt_tokens_details.cached_tokens`）；字段名以官方 API 文档核实（顶层 hit/miss 且 `prompt_tokens = hit + miss`），回归用例已补
+> rf-701 已修复（2026-10-17）：openai 分支补读 DeepSeek 原生端点顶层 `prompt_cache_hit_tokens`（优先于 `prompt_tokens_details.cached_tokens`；详见 changelog）
 >
-> rf-700 已修复（2026-10-17）：LLM 模型定价表 5 处偏离官方现价——`MODEL_PRICING` 的 Claude Opus 4.x 仍按旧旗舰价 15/75（官方 $5/$25）、Haiku 4.5 仍按 Haiku 3 价 0.25/1.25（官方 $1/$5）、Fable 5 误植 Sonnet 价 3/15（官方 $10/$50）、Gemini 3.5/2.5 Flash 仍按预览期价 0.15/0.60（GA 价 $1.5/$9.0、$0.30/$2.50）、2.5 Pro 输出价 5.00（官方 $10.00）、OpenAI 缓存命中无折扣（官方 50% 折扣）——逐家官方定价页核实后统一修正，并同步 `llm-technical.md` 附录 B 与 `how-to-config-llm.md` 定价表（用户实际在用的 DeepSeek 峰谷价与 Kimi 价经核实无偏差）
-
-### 开发期已修复（0.13.3-dev）
-
-> 本批摘要已随 v0.13.3 发布迁入 [`archived_review-findings.0.13.x.md`](../archive/v0.13.x/archived_review-findings.0.13.x.md)；此处不再保留。
-
-### 开发期已修复（0.13.4-dev）
-
-> 本批摘要已随 v0.13.4 发布迁入 [`archived_review-findings.0.13.x.md`](../archive/v0.13.x/archived_review-findings.0.13.x.md)；此处不再保留。
-
-### 开发期已修复（0.13.5-dev）
-
-> 本批摘要已随 v0.13.5 发布迁入 [`archived_review-findings.0.13.x.md`](../archive/v0.13.x/archived_review-findings.0.13.x.md)；此处不再保留。
+> rf-700 已修复（2026-10-17）：LLM 模型定价表多处偏离官方现价——逐家官方定价页核实后统一修正，并同步 `llm-technical.md` 附录 B 与 `how-to-config-llm.md` 定价表（明细详见 changelog）
