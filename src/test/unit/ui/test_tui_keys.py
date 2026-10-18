@@ -20,6 +20,7 @@ from src.python.tui.tui_keys import (
     KEY_CTRL_C,
     KEY_DOWN,
     KEY_ENTER,
+    KEY_ESC,
     KEY_UNKNOWN,
     KEY_UP,
     get_key,
@@ -45,6 +46,9 @@ class TestConstants(unittest.TestCase):
 
     def test_key_ctrl_c(self) -> None:
         self.assertEqual(KEY_CTRL_C, "KEY_CTRL_C")
+
+    def test_key_esc(self) -> None:
+        self.assertEqual(KEY_ESC, "KEY_ESC")
 
     def test_key_unknown(self) -> None:
         self.assertEqual(KEY_UNKNOWN, "KEY_UNKNOWN")
@@ -108,6 +112,11 @@ class TestGetKeyWindows(unittest.TestCase):
         """Enter 回车 → KEY_ENTER。"""
         self._mock_getch.return_value = b"\r"
         self.assertEqual(_get_key_windows(), KEY_ENTER)
+
+    def test_esc(self) -> None:
+        """ESC 键 → KEY_ESC（首页退出别名）。"""
+        self._mock_getch.return_value = b"\x1b"
+        self.assertEqual(_get_key_windows(), KEY_ESC)
 
     def test_arrow_up(self) -> None:
         """方向键上 (b'\\xe0' + b'H') → KEY_UP。"""
@@ -230,10 +239,16 @@ class TestGetKeyLinux(unittest.TestCase):
         self.assertEqual(_get_key_linux(), KEY_UNKNOWN)
 
     def test_standalone_esc(self) -> None:
-        """单独 ESC 键（select 超时）→ KEY_UNKNOWN。"""
+        """单独 ESC 键（select 超时无后继字节）→ KEY_ESC（首页退出别名）。"""
         self._mock_stdin.read.return_value = "\x1b"
         self._mock_select.return_value = ([], [], [])
-        self.assertEqual(_get_key_linux(), KEY_UNKNOWN)
+        self.assertEqual(_get_key_linux(), KEY_ESC)
+
+    def test_esc_timeout_relaxed_for_high_latency_links(self) -> None:
+        """ESC 序列分节读取超时 ≥0.3s：高延迟链路（手机网络/SSH）方向键序列不被拆散。"""
+        from src.python.tui.tui_keys import _ESC_TIMEOUT
+
+        assert _ESC_TIMEOUT >= 0.3
 
     # -- 普通键 -------------------------------------------------------
 

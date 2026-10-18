@@ -7,6 +7,22 @@
 
 ---
 
+## plan-142 首页窄屏「免导航直达」重绘策略 ✅
+
+**完成（2026-10-19，v0.13.7-dev）**：narrow 档（<64 列，`layout_tier`）交互主路径改为「按字母/数字键直达」——`tui.main` 拆出内层按键循环：直达键（快捷键）执行后回重绘点刷新首页，方向键/Enter/未登记字母在窄屏**静默忽略且不重绘**（此前每按一次整屏追加一屏，手机短屏上菜单被顶出可视区）；`render_menu` narrow 档不渲染 `>` 选中指示器（无导航则指示器误导），页脚换「窄屏直达：按菜单 [键] 执行」文案，宽/中档方向键导航与「方向键移动 | Enter 确认…」页脚不变。测试：`test_tui_menu.py` 新增 `TestRenderMenuNarrowDirect`（narrow 无指示器/直达页脚、宽屏保留选中态）与 `TestNarrowMainLoopDirectNav`（窄屏三类非直达键零重绘、宽屏方向键重绘、Esc 退出）。文档：tui-menu 手册键盘操作表补 Esc 行与窄屏说明、FAQ 无响应排查措辞同步、requirements R-TUI-07 与 technical 按键分派描述同步。
+
+## plan-143 ESC 序列读取超时适配高延迟链路 ✅
+
+**完成（2026-10-19，v0.13.7-dev）**：`tui_keys._ESC_TIMEOUT` 0.15s → 0.3s——手机蜂窝网/高延迟 SSH 下方向键三字节序列可能分节到达，0.15s 会把序列拆散误判成孤 ESC（方向键时灵时不灵）；回归用例断言超时 ≥0.3s。
+
+## plan-144 Esc 键作为首页退出别名 ✅
+
+**完成（2026-10-19，v0.13.7-dev）**：`tui_keys` 新增 `KEY_ESC`（Linux 孤 ESC：序列读取超时无后继字节；Windows `b"\x1b"`），`tui.main` 将 Esc 与 `0`/`[X]` 同列为退出通道（手机 SSH 客户端普遍提供 Esc 键）；页脚退出提示统一为「Esc / 0 / X 退出」。测试：`test_tui_keys.py` 常量/Windows/Linux 孤 ESC 三例 + 主循环 Esc 退出例，既有「孤 ESC → KEY_UNKNOWN」用例改为 KEY_ESC（刻意行为变更）。
+
+## plan-145 input() 提示窄屏折行纪律与机检 ✅
+
+**完成（2026-10-19，v0.13.7-dev）**：`text_layout.wrap_prompt`——提示宽 ≤ 终端宽原样返回（宽屏零开销），超宽按显示宽度折行并以「  >  」输入位短尾缀收尾（窄屏提示与光标不脱节）；`handlers_report`（5 处费用/确认提示，最宽 68 列）、`handlers_log`（级别筛选/联网自检）、`handlers_qa`（报告选择）、`handlers_whatif`（路径/生效日）共 10 处长提示接入。机检守护：`test_text_layout.py::TestInputPromptNarrowContract` AST 扫描 `tui/*.py` 全部 `input()`——裸字面量提示 >40 列（与 `terminal_columns` 下限一致）未包 `wrap_prompt` 即红；具名提示 `_QA_PROMPT` 显式锚定 ≤40 列。测试：`TestWrapPrompt` 4 例（宽内原样/折行不越界/末行输入位/不丢字）。
+
 ## plan-94 图表数据无导出通道 ✅
 
 **完成（2026-10-18，v0.13.7-dev）**：选型为**前端每图导出**（不做整份 `chart_data.csv` 产物）——`src/static/chart-export.js` 为每张 Chart.js 图表注入 `.chart-export-actions` 组容器（「导出PNG」+「导出CSV」并排，浮于图卡右上角、存在 `.chart-title` 时进标题栏右侧，按组容器幂等判重）；CSV 读 `chart.data`（与屏显/悬停值同源，Python 数据层已按匿名化口径脱敏），首列表头取 x/r 轴标题（缺省「标签」）、系列列取 dataset label（单系列缺省「数值」），RFC 4180 引号转义 + CRLF + UTF-8 BOM 后 `Blob` 纯前端本地下载（零后端，`URL.createObjectURL` 用后释放），文件名 `<key>.csv`；模板定位样式三处同步（主报告 `report_template.html` / What-if `whatif_template.html` / 调试页 `test-chart.html`：绝对定位移到组容器、按钮静态排布不重叠、打印态隐藏组容器），what-if 关态金样基线随模板 CSS 与内联脚本字节变化显式复核更新。测试：`test_feature_interactive.py` 新增 `TestChartExportCsv` 4 例（双按钮注入与组容器幂等 / Blob MIME+BOM+ObjectURL 释放 / 行列取自 chart.data 与 RFC 4180+CRLF / 三模板组容器定位且按钮不绝对定位）。文档：reports-instruction 交互图表特性补双按钮与 CSV 口径、README 能力表补 CSV、folders 目录树说明。

@@ -17,6 +17,7 @@ from html.parser import HTMLParser
 from src.python.core.logger import setup_logger
 from src.python.qa.error_codes import QA_CONTEXT_INVALID, QA_INPUT_CAP_EXCEEDED, QA_REPORT_NOT_FOUND, QA_SESSION_LIMIT
 from src.python.qa.session import ask_report_qa
+from src.python.tui.text_layout import wrap_prompt
 
 logger = setup_logger()
 
@@ -120,7 +121,7 @@ def _select_report(output_dir: str) -> str | None:
         print(f"    {i}. {name}  ({stamp})")
     while True:
         try:
-            raw = input("  选择报告编号（直接回车 = 最新，q 取消）: ").strip()
+            raw = input(wrap_prompt("  选择报告编号（直接回车 = 最新，q 取消）: ")).strip()
         except (EOFError, KeyboardInterrupt):
             print()
             return None

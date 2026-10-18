@@ -14,16 +14,18 @@ KEY_UP = "KEY_UP"
 KEY_DOWN = "KEY_DOWN"
 KEY_ENTER = "KEY_ENTER"
 KEY_CTRL_C = "KEY_CTRL_C"
+KEY_ESC = "KEY_ESC"
 KEY_UNKNOWN = "KEY_UNKNOWN"
 
-# Linux ESC 序列读取超时（秒）
-_ESC_TIMEOUT = 0.15
+# Linux ESC 序列读取超时（秒）。0.3s 面向高延迟链路（手机蜂窝网 / SSH）：
+# 方向键三字节序列可能分节到达，过短的超时会把序列拆散误判成孤 ESC
+_ESC_TIMEOUT = 0.3
 
 
 def get_key() -> str:
     """读取一个键盘输入，返回标准化键名。
 
-    支持方向键、回车、Ctrl+C 和普通字母键（字母统一转为大写）。
+    支持方向键、回车、Ctrl+C、Esc（孤立 ESC → KEY_ESC）和普通字母键（字母统一转为大写）。
 
     Returns:
         标准键名字符串
@@ -48,6 +50,8 @@ def _get_key_windows() -> str:
         return KEY_CTRL_C
     if ch == b"\r":  # Enter
         return KEY_ENTER
+    if ch == b"\x1b":  # ESC（孤 ESC → Esc 键，首页退出别名）
+        return KEY_ESC
     if ch in (b"\xe0", b"\x00"):  # 方向键/功能键前缀
         try:
             ch2 = msvcrt.getch()
@@ -90,10 +94,10 @@ def _get_key_linux() -> str:
             return KEY_CTRL_C
         if ch in ("\r", "\n"):
             return KEY_ENTER
-        if ch == "\x1b":  # ESC 序列 -> 方向键
+        if ch == "\x1b":  # ESC 序列 -> 方向键；超时无后继字节 → 孤 ESC（Esc 键）
             rdy, _, _ = select.select([sys.stdin], [], [], _ESC_TIMEOUT)
             if not rdy:
-                return KEY_UNKNOWN
+                return KEY_ESC
             b1 = sys.stdin.read(1)
             if not b1:
                 return KEY_UNKNOWN

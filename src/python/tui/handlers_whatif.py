@@ -16,6 +16,7 @@ from src.python.config import get_config, get_default
 from src.python.core.logger import setup_logger
 from src.python.core.reader import get_xlsx_info, list_xlsx_files, read_holdings
 from src.python.report.progress import TuiProgressReporter
+from src.python.tui.text_layout import wrap_prompt
 from src.python.tui.tui_handlers import print_error_with_hint, select_holdings_file
 from src.python.tui.tui_menu import get_config_cache, press_any_key
 
@@ -92,7 +93,7 @@ def _input_candidate_path(base_file: str) -> str | None:
 def _manual_input_path() -> str | None:
     """手动输入目标文件完整路径；直接回车取消返回 None。"""
     try:
-        path = input("  请输入目标文件完整路径（直接回车取消）: ").strip()
+        path = input(wrap_prompt("  请输入目标文件完整路径（直接回车取消）: ")).strip()
     except (EOFError, KeyboardInterrupt):
         print()
         return None
@@ -142,7 +143,7 @@ def _prompt_effective_date() -> str:
 
     while True:
         try:
-            raw = input("  [..] 调仓生效日 YYYY-MM-DD（可选，回车跳过以启用时序回测）: ").strip()
+            raw = input(wrap_prompt("  [..] 调仓生效日 YYYY-MM-DD（可选，回车跳过以启用时序回测）: ")).strip()
         except (EOFError, KeyboardInterrupt):
             print()
             return ""

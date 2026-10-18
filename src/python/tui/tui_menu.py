@@ -126,22 +126,30 @@ def print_header() -> None:
 
 
 def render_menu(sel: int) -> None:
-    """打印带选择指示器的菜单（按终端宽度折行，窄屏不硬折）。"""
+    """打印菜单（按终端宽度折行；narrow 档为免导航直达，不渲染选中态）。
+
+    narrow（<64 列，手机竖屏）下没有方向键导航：不渲染 `>` 选中指示器，
+    页脚为直达提示（按字母/数字键即执行，按键不重绘，见 tui.main 内层循环）。
+    """
+    from src.python.tui.switch_panel import layout_tier
     from src.python.tui.text_layout import terminal_columns, wrap_with_prefix
 
     columns = terminal_columns()
+    narrow = layout_tier(columns) == "narrow"
     print()
     for i, (key, label, _cb, is_exit) in enumerate(MENU_ITEMS):
-        prefix = "  >" if i == sel else "   "
+        prefix = "   " if narrow else ("  >" if i == sel else "   ")
         head = f"{prefix} [{key}] "
         # 长标签（如「生成标准报告（Excel+HTML，按章节配置）」）在手机窄屏上折行：
         # 前缀（光标/编号）不参与断行，续行缩进到标签起始列，视觉上仍归属同一项
         print("\n".join(wrap_with_prefix(head, label, columns)))
     print()
     # 页脚按终端宽度折行：窄屏（手机）上不硬折，键位提示也不会被右边界切掉
-    from src.python.tui.text_layout import terminal_columns, wrap_with_prefix
-
-    footer = "方向键移动 | Enter 确认 | 字母/数字键直达 | 0 或 X 退出 | Ctrl+C 退出"
+    footer = (
+        "窄屏直达：按菜单 [键] 执行 | Esc / 0 / X 退出 | Ctrl+C 退出"
+        if narrow
+        else "方向键移动 | Enter 确认 | 字母/数字键直达 | Esc / 0 / X 退出 | Ctrl+C 退出"
+    )
     print("\n".join(wrap_with_prefix("  ", footer, terminal_columns())))
     print()
 

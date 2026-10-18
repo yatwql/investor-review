@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 from src.python.core.logger import setup_logger
+from src.python.tui.text_layout import wrap_prompt
 from src.python.tui.tui_menu import GREEN, RED, RESET, YELLOW, press_any_key
 
 logger = setup_logger()
@@ -24,7 +25,7 @@ _LEVEL_PROMPT_TEXT = "（留空=全部，可选: DEBUG/INFO/WARNING/ERROR/CRITIC
 
 def _level_prompt() -> str | None:
     """交互式级别筛选提示；空回车返回 None（全部），无效级别提示后按全部处理。"""
-    raw = input(f"  按级别筛选 {_LEVEL_PROMPT_TEXT}: ").strip().upper()
+    raw = input(wrap_prompt(f"  按级别筛选 {_LEVEL_PROMPT_TEXT}: ")).strip().upper()
     if not raw:
         return None
     if raw in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
@@ -123,7 +124,7 @@ def _cmd_run_doctor() -> None:
     """
     from src.python.core.doctor import format_doctor_report, run_doctor_checks, summarize_doctor_results
 
-    raw = input("  是否包含数据源网络检查？(y=联网 / 空回车=仅本地): ").strip().lower()
+    raw = input(wrap_prompt("  是否包含数据源网络检查？(y=联网 / 空回车=仅本地): ")).strip().lower()
     include_network = raw in ("y", "yes", "是")
 
     scope = f"（含数据源联网检查，最多约 {_DOCTOR_NETWORK_TIMEOUT:g}s）" if include_network else "（仅本地）"

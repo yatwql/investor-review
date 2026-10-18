@@ -626,7 +626,7 @@ class TestMainLoopExitKeys(unittest.TestCase):
         self.assertEqual(fired, [])
 
     def test_footer_documents_both_exit_keys(self):
-        """页脚同时写出 `0` 与 `X` 都能退出，否则用户无从发现退出别名。"""
+        """页脚同时写出 `Esc`、`0` 与 `X` 都能退出，否则用户无从发现退出别名。"""
         import contextlib
         import io
 
@@ -636,7 +636,7 @@ class TestMainLoopExitKeys(unittest.TestCase):
         with contextlib.redirect_stdout(buf):
             render_menu(0)
         footer = buf.getvalue()
-        self.assertIn("0 或 X 退出", footer)
+        self.assertIn("Esc / 0 / X 退出", footer)
         self.assertIn("Ctrl+C 退出", footer)
 
     def test_exit_item_label_mentions_zero_alias(self):
@@ -666,3 +666,110 @@ class TestMainLoopExitKeys(unittest.TestCase):
                 render_menu(0)
             for line in buf.getvalue().splitlines():
                 self.assertLessEqual(display_width(line), columns, (columns, line))
+
+
+class TestRenderMenuNarrowDirect(unittest.TestCase):
+    """首页菜单两档渲染：narrow 免导航直达（无选中态、直达页脚）/ 宽中档方向键导航。"""
+
+    @staticmethod
+    def _render(columns: int) -> str:
+        import contextlib
+        import io
+        from unittest.mock import patch
+
+        from src.python.tui.tui_menu import render_menu
+
+        buf = io.StringIO()
+        with (
+            patch.dict("os.environ", {"COLUMNS": str(columns)}),
+            patch("os.get_terminal_size", side_effect=OSError()),
+            contextlib.redirect_stdout(buf),
+        ):
+            render_menu(1)
+        return buf.getvalue()
+
+    def test_narrow_has_no_selection_indicator(self):
+        """narrow（40 列）不渲染 `>` 选中指示器——没有方向键导航，指示器会误导。"""
+        out = self._render(40)
+        self.assertNotIn(">", out.split("窄屏直达")[0], "窄屏菜单不应出现选中指示器")
+
+    def test_narrow_footer_documents_direct_keys(self):
+        """narrow 页脚写明直达路径与退出键（页脚在 40 列会折行，按逻辑内容断言）。"""
+        out = self._render(40)
+        footer = out.split("窄屏直达", 1)[1]
+        self.assertIn("窄屏直达", out)
+        self.assertIn("Esc / 0 /", footer)
+        self.assertIn("X 退出", footer)
+        self.assertIn("Ctrl+C 退出", footer)
+        self.assertNotIn("方向键移动", out)
+
+    def test_wide_keeps_selection_indicator_and_nav_footer(self):
+        """宽屏（100 列）保留 `>` 选中态与方向键页脚（导航主路径不变）。"""
+        out = self._render(100)
+        self.assertIn(">", out)
+        self.assertIn("方向键移动", out)
+        self.assertIn("Esc / 0 / X 退出", out)
+
+
+class TestNarrowMainLoopDirectNav(unittest.TestCase):
+    """narrow 档主循环：方向键/Enter/未登记字母静默忽略且零重绘（免导航直达）。"""
+
+    @staticmethod
+    def _drive(keys: list[str], columns: int) -> tuple[list[str], int]:
+        """驱动真实 main()：返回（退出回调触发记录, render_menu 调用次数）。"""
+        import contextlib
+        import io
+        from unittest.mock import MagicMock, patch
+
+        import src.python.tui.tui as tui_mod
+        import src.python.tui.tui_menu as menu_mod
+
+        fired: list[str] = []
+        seq = iter(keys)
+
+        def _fake_key() -> str:
+            try:
+                return next(seq)
+            except StopIteration:
+                raise SystemExit from None
+
+        def _fake_exit() -> None:
+            fired.append("exit")
+            raise SystemExit
+
+        render_mock = MagicMock()
+        with (
+            patch.object(tui_mod, "get_key", _fake_key),
+            patch.object(tui_mod, "exit_app", _fake_exit),
+            patch.object(menu_mod, "exit_app", _fake_exit),
+            patch.object(tui_mod, "terminal_columns", return_value=columns),
+            patch.object(tui_mod, "init_config"),
+            patch.object(tui_mod, "_apply_feature_gates"),
+            patch.object(tui_mod, "_bind_callbacks"),
+            patch.object(tui_mod, "print_header"),
+            patch.object(tui_mod, "show_config"),
+            patch.object(tui_mod, "render_menu", render_mock),
+        ):
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    tui_mod.main()
+            except SystemExit:
+                pass
+        return fired, render_mock.call_count
+
+    def test_narrow_nav_keys_cause_no_rerender(self):
+        """窄屏（40 列）下方向键/Enter/未登记字母不触发重绘，按 0 退出。"""
+        fired, renders = self._drive(["KEY_DOWN", "KEY_UP", "KEY_ENTER", "Z", "0"], columns=40)
+        self.assertEqual(fired, ["exit"])
+        self.assertEqual(renders, 1, "窄屏直达模式：非直达键不重绘，菜单不出屏")
+
+    def test_wide_arrow_key_rerenders(self):
+        """宽屏（100 列）方向键仍走导航主路径：每按一次重绘一屏。"""
+        fired, renders = self._drive(["KEY_DOWN", "0"], columns=100)
+        self.assertEqual(fired, ["exit"])
+        self.assertEqual(renders, 2, "宽屏方向键移动选中态后重绘")
+
+    def test_esc_key_exits(self):
+        """Esc → 退出（与 0/X 同为首页退出通道，手机客户端普遍有 Esc 键）。"""
+        fired, _ = self._drive(["KEY_ESC"], columns=100)
+        self.assertEqual(fired, ["exit"])

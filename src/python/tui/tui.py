@@ -17,7 +17,9 @@ if _project_root not in sys.path:
 from src.python.config import init_config
 from src.python.llm.pricing import CURRENCY_SYMBOLS
 from src.python.core.logger import log_app_boundary, setup_logger
-from src.python.tui.tui_keys import KEY_CTRL_C, KEY_DOWN, KEY_ENTER, KEY_UP, get_key
+from src.python.tui.switch_panel import layout_tier
+from src.python.tui.text_layout import terminal_columns
+from src.python.tui.tui_keys import KEY_CTRL_C, KEY_DOWN, KEY_ENTER, KEY_ESC, KEY_UP, get_key
 from src.python.tui.tui_handlers import execute_item
 from src.python.tui.tui_menu import (
     MENU_ITEMS,
@@ -128,7 +130,13 @@ def _bind_callbacks() -> None:
 
 
 def main() -> None:
-    """TUI 主循环。支持方向键导航 + Enter 确认 + 字母快捷键 + Ctrl+C。"""
+    """TUI 主循环。宽/中档：方向键导航 + Enter 确认；窄屏（手机）：免导航直达。
+
+    窄屏档（<64 列）交互主路径是「按字母/数字键直达」：方向键/Enter/未知键
+    静默忽略且**不重绘**——手机短屏上每按一次重绘一屏会把菜单顶出可视区，
+    直达模式下按键即执行，无滚动、无重绘。Esc 与 0/X 同为退出别名（手机
+    SSH 客户端普遍提供 Esc 键）。
+    """
     init_config()
     _apply_feature_gates()  # 必须在 _bind_callbacks 之前：裁剪后索引才与渲染一致
     _bind_callbacks()
@@ -174,24 +182,42 @@ def main() -> None:
         show_config()
         render_menu(sel)
 
-        key = get_key()
+        # 内层按键循环：直达键（快捷键/退出）处理后重绘或退出；窄屏导航键
+        # 静默忽略且不回到重绘点（免导航直达模式，见函数 docstring）
+        while True:
+            key = get_key()
+            narrow = layout_tier(terminal_columns()) == "narrow"
 
-        if key == KEY_UP:
-            sel = (sel - 1) % len(MENU_ITEMS)
-        elif key == KEY_DOWN:
-            sel = (sel + 1) % len(MENU_ITEMS)
-        elif key == KEY_ENTER:
-            execute_item(sel)
-        elif key == KEY_CTRL_C:
-            exit_app()
-        elif key == "0":
-            # 0 作退出别名：与子菜单「0 = 返回」的习惯一致（在首页返回即退出程序）
-            exit_app()
-        elif len(key) == 1 and ("A" <= key <= "Z" or "a" <= key <= "z" or "0" <= key <= "9"):
-            idx = index_by_key(key.upper())
-            if idx is not None:
-                sel = idx
-                execute_item(idx)
+            if key == KEY_CTRL_C:
+                exit_app()
+            if key == KEY_ESC:
+                # Esc 退出别名：与 0/X 一致（手机客户端普遍有 Esc 键）
+                exit_app()
+            if key == "0":
+                # 0 作退出别名：与子菜单「0 = 返回」的习惯一致（在首页返回即退出程序）
+                exit_app()
+            if len(key) == 1 and ("A" <= key <= "Z" or "a" <= key <= "z" or "0" <= key <= "9"):
+                idx = index_by_key(key.upper())
+                if idx is not None:
+                    sel = idx
+                    execute_item(idx)
+                    break  # 直达执行后回到重绘点（子菜单关闭 → 刷新首页）
+                if narrow:
+                    continue  # 窄屏直达模式：未登记字母同样静默忽略
+                break
+            if narrow:
+                continue  # 窄屏直达模式：方向键/Enter/未知键静默忽略，不重绘
+            if key == KEY_ENTER:
+                execute_item(sel)
+                break
+            if key == KEY_UP:
+                sel = (sel - 1) % len(MENU_ITEMS)
+                break
+            if key == KEY_DOWN:
+                sel = (sel + 1) % len(MENU_ITEMS)
+                break
+            # 宽/中档未知键：重绘一屏给出反馈
+            break
 
 
 if __name__ == "__main__":
