@@ -7,6 +7,10 @@
 
 ---
 
+## plan-138 LLM 模块区历史费用显示✅
+
+①核实为既有能力——`record_per_module` 调用点齐全（api_base 调用链/skeleton/generators_news/orchestrator 缓存命中），session per_module → `_report_generation` 建 `context["modules"]` → perf `llm.modules`，本次新增的是**归集读取**（真正支撑逐模块累计的读取端）：`perf.module_cost_summary(days=7, path=None)` 按窗口过滤 timestamp 并汇总 total/runs/avg，损坏行/缺 llm 块/非数值 cost 均容错；②`[S]` LLM 模块行尾附「· 近7日 ¥X（N 次 · 均 ¥Y）」，无样本模块不带摘要，读取异常 logger.debug + 静默省略（面板照常渲染）；③口径对齐——helper 与事前费用预估（cost_forecast 读同一 `llm.modules.*.cost`）、日预算（同记录 `llm.total_cost`）同记录同字段同 `compute_cost_value` 单价数学，模块费用为总额子集，三处数字不打架（helper docstring 与手册双写）。测试：`TestModuleCostHistory` 3 例（窗口内归集/空文件/窗口过滤）+ `TestLlmRowCostSuffix` 3 例（行尾摘要/异常静默/未打桩走真实数据），perf 241 + handlers 72 全绿。手册 [S] 费用摘要说明；顺带修正 handlers 注释陈旧编号（标准 LLM 模块 1-5 → 1-7）。
+
 ## plan-137 持仓变动复盘双入口标注（面板混淆点）✅
 
 按优先项「只读标注（零行为变化）」落地，二选一取 A——`handlers_config` 新增展示层常量 `_DUAL_ENTRY_CROSS_HINTS`（holding_change → 「· 章本体在「独立组」」、holding_change_review → 「· 归因在「LLM 区」」），两渲染环行尾各查一次挂提示；清单仍由注册表派生（标注不入注册表、不动编号派发、不改 Web）。廉价联动（B 项条件告示）不采用，避免展示层引入状态判定。新增 `TestDualEntryCrossHints` 2 例（互指两行且仅两行携带、纯只读不触发 save）——夹具补 holding_change 模块（共享五模块夹具不含归因模块）；handlers_config 41/41 绿。手册 [S] 补双入口解耦说明段。

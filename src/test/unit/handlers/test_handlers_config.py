@@ -872,3 +872,63 @@ class TestDualEntryCrossHints:
 
         assert "章本体在「独立组」" in capsys.readouterr().out
         mock_save.assert_not_called()
+
+
+class TestLlmRowCostSuffix:
+    """[S] LLM 模块行尾历史费用摘要：近 N 日累计/次数/均值，读取失败静默省略。"""
+
+    def _render(self, capsys):
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        with patch("builtins.input", side_effect=["0"]):
+            _cmd_config_llm_modules()
+        return capsys.readouterr().out
+
+    @patch("src.python.tui.handlers_config.press_any_key")
+    @patch("src.python.tui.handlers_config.refresh_config")
+    @patch("src.python.core.perf.module_cost_summary")
+    @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
+    @patch("src.python.core.registry.get_llm_module_names")
+    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
+    def test_row_carries_window_cost(
+        self, mock_read, mock_names, mock_filter, mock_cost, mock_refresh, mock_press, capsys
+    ):
+        """有费用样本的模块行附近 7 日累计/次数/均值，无样本模块行不带摘要。"""
+        mock_cost.return_value = {"global_macro": {"total": 1.234567, "runs": 3, "avg": 0.411522}}
+        out = self._render(capsys)
+        gm_lines = [
+            ln for ln in out.splitlines() if " [" in ln and ln.split(" [")[0].rstrip().endswith(". 全球政经局势")
+        ]
+        assert len(gm_lines) == 1
+        assert "近7日 ¥1.2346（3 次 · 均 ¥0.4115）" in gm_lines[0]
+        er_lines = [
+            ln for ln in out.splitlines() if " [" in ln and ln.split(" [")[0].rstrip().endswith(". 智囊团深度复盘")
+        ]
+        assert len(er_lines) == 1
+        assert "近7日" not in er_lines[0]
+
+    @patch("src.python.tui.handlers_config.press_any_key")
+    @patch("src.python.tui.handlers_config.refresh_config")
+    @patch("src.python.core.perf.module_cost_summary", side_effect=RuntimeError("boom"))
+    @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
+    @patch("src.python.core.registry.get_llm_module_names")
+    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
+    def test_read_failure_is_silent(
+        self, mock_read, mock_names, mock_filter, mock_cost, mock_refresh, mock_press, capsys
+    ):
+        """费用摘要读取异常：面板照常渲染、无摘要文本、不抛错。"""
+        out = self._render(capsys)
+        assert "配置 LLM 报告章节与功能开关" in out
+        assert "近7日" not in out
+
+    @patch("src.python.tui.handlers_config.press_any_key")
+    @patch("src.python.tui.handlers_config.refresh_config")
+    @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
+    @patch("src.python.core.registry.get_llm_module_names")
+    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
+    def test_default_render_uses_real_summary(
+        self, mock_read, mock_names, mock_filter, mock_refresh, mock_press, capsys
+    ):
+        """未打桩时走真实 module_cost_summary（真实 perf 历史），面板不抛错。"""
+        out = self._render(capsys)
+        assert "配置 LLM 报告章节与功能开关" in out

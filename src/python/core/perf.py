@@ -37,7 +37,7 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from src.python.core.constants import APP_VERSION, PROJECT_ROOT
@@ -532,6 +532,59 @@ def load_history(path: str | None = None) -> list[dict[str, Any]]:
                 except json.JSONDecodeError:
                     logger.warning("[perf] 忽略损坏行: %s", line[:80])
     return records
+
+
+def module_cost_summary(days: int = 7, path: str | None = None) -> dict[str, dict[str, Any]]:
+    """按模块汇总近 N 日运行的 LLM 费用（[S] 面板行尾历史费用摘要数据源）。
+
+    读取 perf 历史记录的 ``llm.modules.*.cost``——与运行事前费用预估
+    （``llm.cost_forecast``）和日费用预算统计（``daily_cost_limit``）**同一记录、
+    同一字段、同一计费数学**（``llm.pricing.compute_cost_value``），三处展示的
+    数字同源不打架；模块费用为 ``llm.total_cost`` 的子集，不会大于同窗口总额。
+
+    Args:
+        days: 回看窗口天数（含今日，按记录 ``timestamp`` 本地时间过滤）。
+        path: 历史文件路径，默认 ``_PERF_HISTORY_FILE``（测试可指向临时文件）。
+
+    Returns:
+        ``{模块 key: {"total": 费用合计, "runs": 含该模块的运行数, "avg": 单次均值}}``；
+        无可汇总样本或读取失败返回空 dict（调用方静默省略展示）。
+    """
+    try:
+        records = load_history(path)
+    except OSError:
+        return {}
+    cutoff = datetime.now() - timedelta(days=days)
+    summary: dict[str, dict[str, Any]] = {}
+    for rec in records:
+        ts = rec.get("timestamp")
+        if isinstance(ts, str):
+            try:
+                when = datetime.fromisoformat(ts)
+            except ValueError:
+                when = None
+            if when is not None and when < cutoff:
+                continue
+        llm = rec.get("llm")
+        if not isinstance(llm, dict):
+            continue
+        modules = llm.get("modules")
+        if not isinstance(modules, dict):
+            continue
+        for key, entry in modules.items():
+            if not isinstance(entry, dict):
+                continue
+            try:
+                cost = float(entry.get("cost") or 0.0)
+            except (TypeError, ValueError):
+                continue
+            bucket = summary.setdefault(str(key), {"total": 0.0, "runs": 0})
+            bucket["total"] += cost
+            bucket["runs"] += 1
+    for bucket in summary.values():
+        bucket["total"] = round(bucket["total"], 6)
+        bucket["avg"] = round(bucket["total"] / bucket["runs"], 6) if bucket["runs"] else 0.0
+    return summary
 
 
 # ── 阶段 ETA 预估（事中进度显示） ────────────────────────

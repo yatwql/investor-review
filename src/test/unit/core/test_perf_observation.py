@@ -236,3 +236,74 @@ class TestTelemetryRetentionCap:
         from src.python.core.perf import _PERF_HISTORY_KEEP_LINES
 
         assert _PERF_HISTORY_KEEP_LINES >= 100
+
+
+class TestModuleCostHistory:
+    """module_cost_summary：近 N 日按模块费用归集（[S] 面板摘要数据源）。"""
+
+    def _write_history(self, tmp_path, lines):
+        p = tmp_path / "perf_history.jsonl"
+        p.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return str(p)
+
+    def test_aggregates_modules_within_window(self, tmp_path):
+        """窗口内按模块累计/计数/均值正确，窗口外记录排除，损坏行忽略。"""
+        from src.python.core.perf import module_cost_summary
+        from datetime import datetime, timedelta
+
+        now = datetime.now()
+        old = (now - timedelta(days=10)).isoformat(timespec="seconds")
+        path = self._write_history(
+            tmp_path,
+            [
+                json.dumps(
+                    {
+                        "timestamp": now.isoformat(timespec="seconds"),
+                        "llm": {
+                            "total_cost": 2.0,
+                            "modules": {
+                                "global_macro": {"cost": 1.5, "model": "m"},
+                                "news_correlation": {"cost": 0.5, "model": "m"},
+                            },
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "timestamp": now.isoformat(timespec="seconds"),
+                        "llm": {"modules": {"global_macro": {"cost": 0.5}}},
+                    }
+                ),
+                json.dumps({"timestamp": old, "llm": {"modules": {"global_macro": {"cost": 9.9}}}}),
+                "{bad json line",
+                json.dumps({"timestamp": now.isoformat(timespec="seconds"), "errors": []}),
+            ],
+        )
+        out = module_cost_summary(days=7, path=path)
+        assert out["global_macro"] == {"total": 2.0, "runs": 2, "avg": 1.0}
+        assert out["news_correlation"] == {"total": 0.5, "runs": 1, "avg": 0.5}
+        assert "debate_pro" not in out
+
+    def test_empty_when_missing_file(self, tmp_path):
+        """文件不存在返回空 dict（调用方静默省略）。"""
+        from src.python.core.perf import module_cost_summary
+
+        assert module_cost_summary(days=7, path=str(tmp_path / "nonexistent.jsonl")) == {}
+
+    def test_window_filter_excludes_without_losing_other_modules(self, tmp_path):
+        """窗口过滤只剔除过期样本：模块若仅剩过期样本则整体缺席，其余模块保留。"""
+        from src.python.core.perf import module_cost_summary
+        from datetime import datetime, timedelta
+
+        old = (datetime.now() - timedelta(days=30)).isoformat(timespec="seconds")
+        now = datetime.now().isoformat(timespec="seconds")
+        path = self._write_history(
+            tmp_path,
+            [
+                json.dumps({"timestamp": old, "llm": {"modules": {"self_review": {"cost": 3.0}}}}),
+                json.dumps({"timestamp": now, "llm": {"modules": {"global_macro": {"cost": 0.25}}}}),
+            ],
+        )
+        out = module_cost_summary(days=7, path=path)
+        assert "self_review" not in out
+        assert out["global_macro"]["total"] == 0.25

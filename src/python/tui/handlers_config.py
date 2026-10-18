@@ -174,6 +174,9 @@ _DUAL_ENTRY_CROSS_HINTS = {
     "holding_change_review": "· 归因在「LLM 区」",
 }
 
+_COST_HISTORY_DAYS = 7
+"""LLM 模块行尾历史费用摘要的回看窗口天数（数据源 perf 历史 llm.modules 费用）。"""
+
 
 def _match_switch_item(
     token: str, items: list[tuple[int, str, str, bool, str]]
@@ -284,6 +287,7 @@ def _cmd_config_llm_modules() -> None:
         switches_in_group,
     )
     from src.python.core.experiment_stats import load_experiment_usage
+    from src.python.core.perf import module_cost_summary
     from src.python.core.registry import get_llm_module_names
 
     result = _read_llm_settings()
@@ -320,15 +324,33 @@ def _cmd_config_llm_modules() -> None:
         # 实验项启用统计每轮渲染时读取（开关写入后即刷新；读取失败由
         # load_experiment_usage 容错返回空 dict，行尾统计静默省略）
         exp_stats = load_experiment_usage()
+        # 近 N 日模块费用摘要：与事前费用预估/日预算同源（perf 历史 llm.modules），
+        # 读取失败静默省略（不打断面板）
+        try:
+            cost_history = module_cost_summary(_COST_HISTORY_DAYS)
+        except Exception:
+            logger.debug("[S] 模块费用摘要读取失败，静默省略", exc_info=True)
+            cost_history = {}
 
-        # ① 标准 LLM 模块（1-5）——行尾 * 标记与出厂默认不一致项
+        # ① 标准 LLM 模块（1-7）——行尾 * 标记与出厂默认不一致项
         for i, (sfx, name) in enumerate(module_names.items(), 1):
             status = enabled_map.get(sfx, True)
             status_str = f"{GREEN}开启{RESET}" if status else f"{RED}关闭{RESET}"
             star = "" if status == default_enabled.get(sfx, True) else "*"
             items.append((i, sfx, name, status, "llm"))
             cross_hint = _DUAL_ENTRY_CROSS_HINTS.get(sfx, "")
-            rows.append(f"{i}. {pad_right(name, name_column)} [{status_str}]{star}{cross_hint}")
+            cost_info = cost_history.get(sfx) or {}
+            runs = cost_info.get("runs")
+            cost_suffix = ""
+            if isinstance(runs, int) and runs > 0:
+                cost_suffix = (
+                    f" · 近{_COST_HISTORY_DAYS}日 ¥{float(cost_info.get('total') or 0.0):.4f}"
+                    f"（{runs} 次 · 均 ¥{float(cost_info.get('avg') or 0.0):.4f}）"
+                )
+            rows.append(
+                f"{i}. {pad_right(name, name_column)} [{status_str}]{star}"
+                f"{f' {cross_hint}' if cross_hint else ''}{cost_suffix}"
+            )
 
         # ② 功能开关：编号紧随标准模块之后，四组按 GROUP_ORDER 逐块顺序派发
         # 编号由组序与块内注册表顺序派生、非硬编码：转正 = 摘除 experimental 身份
