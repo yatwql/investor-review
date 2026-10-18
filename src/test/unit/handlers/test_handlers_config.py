@@ -963,3 +963,69 @@ class TestLlmRowCostSuffix:
         """未打桩时走真实 module_cost_summary（真实 perf 历史），面板不抛错。"""
         out = self._render(capsys)
         assert "配置 LLM 报告章节与功能开关" in out
+
+
+class TestConfigEntryMap:
+    """配置入口地图（[D] 子菜单 [M]）：只读索引，键位真实性由主菜单兜底。"""
+
+    @staticmethod
+    def _map() -> tuple[tuple[str, str, str], ...]:
+        from src.python.tui.handlers_config import _CONFIG_ENTRY_MAP
+
+        return _CONFIG_ENTRY_MAP
+
+    def test_every_mapped_key_exists_in_main_menu(self):
+        """地图中每个菜单键都真实存在于主菜单（键位调整时本用例兜底）。"""
+        from src.python.tui.tui_menu import MENU_ITEMS
+
+        menu_keys = {key for key, _label, _cb, _ex in MENU_ITEMS}
+        for label, keys, _hint in self._map():
+            for key in keys.replace("/", " ").split():
+                token = key.strip("[]")
+                assert token in menu_keys, f"{label} 映射到不存在的菜单键 {key}"
+
+    def test_map_entries_are_unique_and_described(self):
+        """条目唯一且每行三列齐备（配置项 / 菜单键 / 说明），键统一加方括号。"""
+        entries = self._map()
+        labels = [label for label, _k, _h in entries]
+        assert len(labels) == len(set(labels))
+        for label, keys, hint in entries:
+            assert label.strip() and hint.strip()
+            assert keys.startswith("[") and keys.endswith("]")
+
+    @patch("builtins.input", side_effect=["M", "B"])
+    def test_d_submenu_renders_map_then_returns(self, mock_input, capsys):
+        """[D] → M 打印入口地图后回到子菜单，B 返回；全程不调用任何写入处理器。"""
+        from src.python.tui.handlers_config import _cmd_config_dir_info
+
+        with (
+            patch("src.python.tui.handlers_config._cmd_config_dir") as m_dir,
+            patch("src.python.tui.handlers_config._cmd_config_filename") as m_fn,
+            patch("src.python.tui.handlers_config._cmd_config_output_dir") as m_out,
+        ):
+            _cmd_config_dir_info()
+        out = capsys.readouterr().out
+        assert "配置入口地图" in out
+        assert "功能开关 / LLM 模块启停 / 实验项" in out
+        for handler in (m_dir, m_fn, m_out):
+            handler.assert_not_called()
+
+    @patch("builtins.input", side_effect=["Z", "B"])
+    def test_invalid_choice_lists_map_option(self, mock_input, capsys):
+        """无效选择提示含新增的 M 选项（C/F/O/M/B）。"""
+        from src.python.tui.handlers_config import _cmd_config_dir_info
+
+        _cmd_config_dir_info()
+        assert "请输入 C/F/O/M/B" in capsys.readouterr().out
+
+    def test_map_rendering_is_readonly(self):
+        """纯渲染无副作用：不调用配置写入/刷新入口。"""
+        from src.python.tui.handlers_config import _render_config_entry_map
+
+        with (
+            patch("src.python.tui.handlers_config.refresh_config") as m_refresh,
+            patch("src.python.config.features.save_feature_overrides") as m_save,
+        ):
+            _render_config_entry_map()
+        m_refresh.assert_not_called()
+        m_save.assert_not_called()

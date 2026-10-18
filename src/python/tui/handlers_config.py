@@ -133,10 +133,37 @@ def _cmd_config_output_dir() -> None:
     _edit_single_config("output_dir", "报告输出目录")
 
 
+# 配置入口地图（只读索引）：配置项 → 所在菜单键。真值是主菜单 MENU_ITEMS 的按键，
+# 本表只做「配置散在哪些键」的导流说明（零行为变化，不改任何配置）。新增配置入口时
+# 在此补一行；键位调整时由 test_handlers_config 的「入口地图键均存在于主菜单」用例兜底。
+_CONFIG_ENTRY_MAP: tuple[tuple[str, str, str], ...] = (
+    ("功能开关 / LLM 模块启停 / 实验项", "[S]", "四组功能开关 + 7 个 LLM 标准模块，行尾费用摘要与启用统计"),
+    ("报告章节取舍（顺序与开关）", "[P]", "基金深度分析 / 市场新闻 / 历史走势+回撤 / 组合演进 / 行动建议"),
+    ("对比指数池（自定义基准）", "[I]", "增删指数、恢复默认"),
+    ("持仓匿名化（代码/名称脱敏）", "[A]", "off / code_display / full_anonymous / summary 四档"),
+    ("配置文件与目录位置", "[D]", "持仓目录 / 持仓文件名 / 报告输出目录（子菜单 C/F/O）"),
+    ("重新加载配置", "[R]", "改完 config.json / llm_settings.json 手工项后刷新内存配置"),
+    ("缓存管理（统计与清理）", "[4]", "统计首屏 + 子菜单内 3 清理过期缓存"),
+    ("数据源健康历史 / 运行日志", "[H] / [V]", "近期数据源检查记录 / 结构化运行日志（可按级别筛选）"),
+    ("系统自检", "[T]", "环境/配置/目录/数据源一键体检（开关 doctor_check 关闭时该键不可见）"),
+)
+
+
+def _render_config_entry_map() -> None:
+    """渲染配置入口地图（只读索引，不写配置、不等待按键）。"""
+    print()
+    print("  ── 配置入口地图（哪个配置在哪个菜单）──")
+    width = max(display_width(label) for label, _key, _hint in _CONFIG_ENTRY_MAP)
+    for label, key, hint in _CONFIG_ENTRY_MAP:
+        print(f"   {pad_right(label, width)}  →  {pad_right(key, 9)} {hint}")
+    print("  （仅索引导流，不修改任何配置；config.json 手工键说明见手册 how-to-config）")
+
+
 def _cmd_config_dir_info() -> None:
-    """查看配置与目录信息子菜单 — 对应主菜单 [D] 及其二级选项 [C]/[F]/[O]/[B]。
+    """查看配置与目录信息子菜单 — 对应主菜单 [D] 及其二级选项 [C]/[F]/[O]/[M]/[B]。
 
     持仓目录 / 持仓文件名 / 报告输出目录三项聚合到 [D] 之下（主菜单不再单列）；
+    ``[M]`` 打印配置入口地图（各配置项 → 所在菜单键，只读索引）；
     子菜单循环直至 [B]（或空输入 / Ctrl+C）返回主菜单。
     子项在调用时从模块全局取函数（便于测试打桩与后续替换）。
     """
@@ -144,6 +171,7 @@ def _cmd_config_dir_info() -> None:
         ("C", "持仓信息目录", _cmd_config_dir),
         ("F", "持仓信息文件名", _cmd_config_filename),
         ("O", "报告输出目录", _cmd_config_output_dir),
+        ("M", "配置入口地图（各配置项所在菜单）", _render_config_entry_map),
     ]
     while True:
         print()
@@ -161,7 +189,7 @@ def _cmd_config_dir_info() -> None:
             return
         handler: Callable[[], None] | None = next((fn for _key, _label, fn in items if _key == choice), None)
         if handler is None:
-            print("  [!] 无效选择，请输入 C/F/O/B")
+            print("  [!] 无效选择，请输入 C/F/O/M/B")
             continue
         handler()
 
