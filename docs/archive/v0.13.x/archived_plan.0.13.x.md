@@ -7,6 +7,10 @@
 
 ---
 
+## plan-137 持仓变动复盘双入口标注（面板混淆点）✅
+
+按优先项「只读标注（零行为变化）」落地，二选一取 A——`handlers_config` 新增展示层常量 `_DUAL_ENTRY_CROSS_HINTS`（holding_change → 「· 章本体在「独立组」」、holding_change_review → 「· 归因在「LLM 区」」），两渲染环行尾各查一次挂提示；清单仍由注册表派生（标注不入注册表、不动编号派发、不改 Web）。廉价联动（B 项条件告示）不采用，避免展示层引入状态判定。新增 `TestDualEntryCrossHints` 2 例（互指两行且仅两行携带、纯只读不触发 save）——夹具补 holding_change 模块（共享五模块夹具不含归因模块）；handlers_config 41/41 绿。手册 [S] 补双入口解耦说明段。
+
 ## plan-136 实验项生命周期表（technical 单一事实）✅
 
 technical.md 新增 §6.9「实验项生命周期表」（功能语义命名表邻域，TOC 同步）——七列结构（flag/实验目的/判据来源/转正条件/撤销条件/观察数据源/当前态）覆盖当前全部 2 个 ⚗ 实验项：`decision_reflection`（死线条目维护判据①②，表收「已结算≥10 可信 / 启用停止增长或样本<10 无趋势即撤销」三元组）与 `report_qa`（归档评估记录固化判据④⑤与执行清单，表收「样本充分+留痕可抽检+费用接入 perf 才转正」三元组）。详文不复制、双向回链防口径漂移：plan-70 条目与归档 plan-131 记录各补「单一事实位」链接指向 §6.9；纪律入表头——立项（新增 experimental=True）/转正（摘 experimental）/撤销（删条目与机制）任一发生必须同步刷新本表。doc-links（死锚/序列）与 doc-drift 全绿。

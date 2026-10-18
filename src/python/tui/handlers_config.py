@@ -166,6 +166,15 @@ def _cmd_config_dir_info() -> None:
         handler()
 
 
+# 持仓变动复盘双入口互指标注（只读行尾提示，行为零变化）：章本体（独立章节组
+# `holding_change_review`）与归因内容（LLM 区 `holding_change` 模块）为解耦的有意
+# 设计、默认态相反，面板相邻两行命名近似易误判——两侧行尾互相指出对方入口位置。
+_DUAL_ENTRY_CROSS_HINTS = {
+    "holding_change": "· 章本体在「独立组」",
+    "holding_change_review": "· 归因在「LLM 区」",
+}
+
+
 def _match_switch_item(
     token: str, items: list[tuple[int, str, str, bool, str]]
 ) -> tuple[int, str, str, bool, str] | None:
@@ -318,7 +327,8 @@ def _cmd_config_llm_modules() -> None:
             status_str = f"{GREEN}开启{RESET}" if status else f"{RED}关闭{RESET}"
             star = "" if status == default_enabled.get(sfx, True) else "*"
             items.append((i, sfx, name, status, "llm"))
-            rows.append(f"{i}. {pad_right(name, name_column)} [{status_str}]{star}")
+            cross_hint = _DUAL_ENTRY_CROSS_HINTS.get(sfx, "")
+            rows.append(f"{i}. {pad_right(name, name_column)} [{status_str}]{star}{cross_hint}")
 
         # ② 功能开关：编号紧随标准模块之后，四组按 GROUP_ORDER 逐块顺序派发
         # 编号由组序与块内注册表顺序派生、非硬编码：转正 = 摘除 experimental 身份
@@ -339,6 +349,9 @@ def _cmd_config_llm_modules() -> None:
                         date = str(entry.get("last_enabled_date") or "")[5:]
                         suffix += f"（启用 {entry['enabled_count']} 次" + (f" · 最近 {date}" if date else "") + "）"
                 items.append((j, flag, d.label, status, "feature"))
+                cross_hint = _DUAL_ENTRY_CROSS_HINTS.get(flag, "")
+                if cross_hint:
+                    suffix += f" {cross_hint}"
                 rows.append(f"{j}. {marker}{pad_right(d.label, name_column)} [{status_str}]{suffix}")
             next_serial += len(block)
 

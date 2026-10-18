@@ -815,3 +815,60 @@ class TestSwitchPanelOperations:
 
         out = capsys.readouterr().out
         assert "未知编号或开关名" in out and "slug=on|off" in out
+
+
+class TestDualEntryCrossHints:
+    """持仓变动复盘双入口互指标注：LLM 行指章本体、独立组行指归因（只读，零行为变化）。"""
+
+    @patch("src.python.tui.handlers_config.press_any_key")
+    @patch("src.python.tui.handlers_config.refresh_config")
+    @patch(
+        "src.python.tui.handlers_config.filter_menu_llm_modules",
+        return_value={
+            **_STANDARD_LLM_MODULES,
+            "holding_change": "持仓变动复盘归因",
+        },
+    )
+    @patch("src.python.core.registry.get_llm_module_names")
+    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
+    def test_both_rows_carry_cross_hint(self, mock_read, mock_names, mock_filter, mock_refresh, mock_press, capsys):
+        """两行各自携带对方入口提示，且仅这两行携带。"""
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        with patch("builtins.input", side_effect=["0"]):
+            _cmd_config_llm_modules()
+
+        lines = capsys.readouterr().out.splitlines()
+        llm_lines = [ln for ln in lines if " [" in ln and ln.split(" [")[0].rstrip().endswith(". 持仓变动复盘归因")]
+        feature_lines = [ln for ln in lines if " [" in ln and ln.split(" [")[0].rstrip().endswith(". 持仓变动复盘")]
+        assert len(llm_lines) == 1, "LLM 模块行应唯一出现"
+        assert len(feature_lines) == 1, "独立组开关行应唯一出现"
+        assert "章本体在「独立组」" in llm_lines[0]
+        assert "归因在「LLM 区」" in feature_lines[0]
+        # 其余行不携带互指提示（标注不扩散）
+        other = [ln for ln in lines if "章本体在「独立组」" in ln or "归因在「LLM 区」" in ln]
+        assert len(other) == 2
+
+    @patch("src.python.tui.handlers_config.press_any_key")
+    @patch("src.python.tui.handlers_config.refresh_config")
+    @patch("src.python.config.features.save_feature_overrides")
+    @patch(
+        "src.python.tui.handlers_config.filter_menu_llm_modules",
+        return_value={
+            **_STANDARD_LLM_MODULES,
+            "holding_change": "持仓变动复盘归因",
+        },
+    )
+    @patch("src.python.core.registry.get_llm_module_names")
+    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
+    def test_hints_are_readonly_annotations(
+        self, mock_read, mock_names, mock_filter, mock_save, mock_refresh, mock_press, capsys
+    ):
+        """互指标注纯只读：渲染不触发任何配置写入。"""
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        with patch("builtins.input", side_effect=["0"]):
+            _cmd_config_llm_modules()
+
+        assert "章本体在「独立组」" in capsys.readouterr().out
+        mock_save.assert_not_called()
