@@ -15,6 +15,16 @@ from src.python.tui.text_layout import display_width
 pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
 
 
+@pytest.fixture(autouse=True)
+def _deterministic_panel_width(monkeypatch):
+    """固定终端宽度：`[S]` 面板版面按终端列数分三档，断言文案需绑定确定档位。
+
+    dev-verify 在非 TTY 子进程里跑（拿不到真实终端宽度），不锁定会让同一断言随
+    执行环境在「宽/中/窄」三档间漂移 —— 属测试环境不确定性，不是产品行为差异。
+    """
+    monkeypatch.setenv("COLUMNS", "120")
+
+
 class TestReadLlmSettings:
     """_read_llm_settings: JSON 注释支持 + 文件不存在处理。"""
 
@@ -534,7 +544,7 @@ class TestSwitchPanelReadonlyInfo:
 
         out = capsys.readouterr().out
         assert "全球政经局势" in out and "[关闭]*" in out
-        assert "与出厂默认值不一致" in out, "页脚应有 * 释义"
+        assert "与出厂默认不一致" in out, "页脚应有 * 释义"
 
     @patch("src.python.tui.handlers_config.press_any_key")
     @patch("src.python.tui.handlers_config.refresh_config")
@@ -555,7 +565,9 @@ class TestSwitchPanelReadonlyInfo:
         try:
             _cmd_config_llm_modules()
             out = capsys.readouterr().out
-            assert re.search(r"决策跨期反思闭环\s+\[开启\]\*", out), f"应有 [开启]* 漂移标记:\n{out}"
+            assert re.search(r"决策跨期反思闭环\s+decision_reflection\s+\[开启\]\*", out), (
+                f"应有 [开启]* 漂移标记:\n{out}"
+            )
         finally:
             set_feature_enabled("decision_reflection", False)
 
@@ -839,14 +851,14 @@ class TestDualEntryCrossHints:
             _cmd_config_llm_modules()
 
         lines = capsys.readouterr().out.splitlines()
-        llm_lines = [ln for ln in lines if " [" in ln and ln.split(" [")[0].rstrip().endswith(". 持仓变动复盘归因")]
-        feature_lines = [ln for ln in lines if " [" in ln and ln.split(" [")[0].rstrip().endswith(". 持仓变动复盘")]
+        llm_lines = [ln for ln in lines if "持仓变动复盘归因" in ln and "holding_change " in ln]
+        feature_lines = [ln for ln in lines if "持仓变动复盘" in ln and "holding_change_review " in ln]
         assert len(llm_lines) == 1, "LLM 模块行应唯一出现"
         assert len(feature_lines) == 1, "独立组开关行应唯一出现"
-        assert "章本体在「独立组」" in llm_lines[0]
-        assert "归因在「LLM 区」" in feature_lines[0]
+        assert "见独立组" in llm_lines[0]
+        assert "见 LLM 区" in feature_lines[0]
         # 其余行不携带互指提示（标注不扩散）
-        other = [ln for ln in lines if "章本体在「独立组」" in ln or "归因在「LLM 区」" in ln]
+        other = [ln for ln in lines if "见独立组" in ln or "见 LLM 区" in ln]
         assert len(other) == 2
 
     @patch("src.python.tui.handlers_config.press_any_key")
@@ -870,7 +882,7 @@ class TestDualEntryCrossHints:
         with patch("builtins.input", side_effect=["0"]):
             _cmd_config_llm_modules()
 
-        assert "章本体在「独立组」" in capsys.readouterr().out
+        assert "见独立组" in capsys.readouterr().out
         mock_save.assert_not_called()
 
 
@@ -927,16 +939,12 @@ class TestLlmRowCostSuffix:
         """有费用样本的模块行附近 7 日累计/次数/均值，无样本模块行不带摘要。"""
         mock_cost.return_value = {"global_macro": {"total": 1.234567, "runs": 3, "avg": 0.411522}}
         out = self._render(capsys)
-        gm_lines = [
-            ln for ln in out.splitlines() if " [" in ln and ln.split(" [")[0].rstrip().endswith(". 全球政经局势")
-        ]
+        gm_lines = [ln for ln in out.splitlines() if ". 全球政经局势 " in ln and "global_macro " in ln]
         assert len(gm_lines) == 1
-        assert "近7日 ¥1.2346（3 次 · 均 ¥0.4115）" in gm_lines[0]
-        er_lines = [
-            ln for ln in out.splitlines() if " [" in ln and ln.split(" [")[0].rstrip().endswith(". 智囊团深度复盘")
-        ]
+        assert "3次 ¥1.2346 均¥0.4115" in gm_lines[0]
+        er_lines = [ln for ln in out.splitlines() if ". 智囊团深度复盘 " in ln and "expert_review " in ln]
         assert len(er_lines) == 1
-        assert "近7日" not in er_lines[0]
+        assert "次 ¥" not in er_lines[0]
 
     @patch("src.python.tui.handlers_config.press_any_key")
     @patch("src.python.tui.handlers_config.refresh_config")
@@ -950,7 +958,10 @@ class TestLlmRowCostSuffix:
         """费用摘要读取异常：面板照常渲染、无摘要文本、不抛错。"""
         out = self._render(capsys)
         assert "配置 LLM 报告章节与功能开关" in out
-        assert "近7日" not in out
+        # 页脚图例本身含「N次 ¥X 均¥Y」字样，故只断言条目行不带费用摘要
+        item_rows = [ln for ln in out.splitlines() if "[开启]" in ln or "[关闭]" in ln]
+        assert item_rows
+        assert not any("次 ¥" in ln for ln in item_rows)
 
     @patch("src.python.tui.handlers_config.press_any_key")
     @patch("src.python.tui.handlers_config.refresh_config")
@@ -1029,3 +1040,79 @@ class TestConfigEntryMap:
             _render_config_entry_map()
         m_refresh.assert_not_called()
         m_save.assert_not_called()
+
+
+class TestKeyColumnVisible:
+    """面板显式展示键名：无需猜测即可直接输入（`? 键名` / `键名=on|off`）。"""
+
+    @staticmethod
+    def _rows(capsys) -> list[str]:
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        with (
+            patch("builtins.input", side_effect=["0"]),
+            patch("src.python.tui.handlers_config.press_any_key"),
+            patch("src.python.tui.handlers_config.refresh_config"),
+            patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json")),
+            patch("src.python.core.registry.get_llm_module_names", return_value={"global_macro": "全球政经局势"}),
+        ):
+            _cmd_config_llm_modules()
+        out = capsys.readouterr().out
+        return [ln for ln in out.splitlines() if "[开启]" in ln or "[关闭]" in ln]
+
+    def test_every_row_shows_its_key(self, capsys):
+        """每一行都同时出现「编号 + 名称 + 键名」——键名与注册表真值逐一对应。"""
+        from src.python.config.features import feature_switch_registry
+
+        rows = self._rows(capsys)
+        assert rows
+        flat = "\n".join(rows)
+        assert "global_macro" in flat
+        # 注册表全集里每个开关键名（长键名同样完整展示，不截断）
+        missing = [key for key in feature_switch_registry if key not in flat]
+        assert missing == []
+
+    def test_key_column_is_aligned_within_each_block(self, capsys):
+        """同一块内各行状态列一致（块内按最长名称/键名对齐；块间以分隔线断开）。"""
+        import re
+
+        from src.python.tui.text_layout import display_width
+
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        with (
+            patch("builtins.input", side_effect=["0"]),
+            patch("src.python.tui.handlers_config.press_any_key"),
+            patch("src.python.tui.handlers_config.refresh_config"),
+            patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json")),
+        ):
+            _cmd_config_llm_modules()
+        out = capsys.readouterr().out
+
+        block_columns: list[set[int]] = [set()]
+        for ln in out.splitlines():
+            if "│───" in ln:  # 组分隔线 → 新块
+                block_columns.append(set())
+                continue
+            m = re.search(r"\[(开启|关闭)\]", ln)
+            if m:
+                block_columns[-1].add(display_width(ln[: m.start()]))
+        non_empty = [cols for cols in block_columns if cols]
+        assert non_empty
+        for cols in non_empty:
+            assert len(cols) == 1, f"块内状态列未对齐: {sorted(cols)}"
+
+    def test_footer_explains_key_column_and_cost(self, capsys):
+        """页脚图例解释键名列与费用摘要口径（不靠用户推断）。"""
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        with (
+            patch("builtins.input", side_effect=["0"]),
+            patch("src.python.tui.handlers_config.press_any_key"),
+            patch("src.python.tui.handlers_config.refresh_config"),
+            patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json")),
+        ):
+            _cmd_config_llm_modules()
+        out = capsys.readouterr().out
+        assert "键名即行内淡色列" in out
+        assert "近 7 日该模块调用次数 / 累计费用 / 单次均值" in out

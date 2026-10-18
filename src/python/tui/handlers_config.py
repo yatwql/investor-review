@@ -22,6 +22,15 @@ from src.python.tui.tui_menu import (
     press_any_key,
     refresh_config,
 )
+from src.python.tui.switch_panel import (
+    format_heading,
+    format_item,
+    inner_width,
+    layout_tier,
+    legend_lines,
+    terminal_columns,
+    wrap_hanging,
+)
 from src.python.tui.text_layout import display_width, pad_right, render_panel
 
 logger = setup_logger()
@@ -198,9 +207,12 @@ def _cmd_config_dir_info() -> None:
 # `holding_change_review`）与归因内容（LLM 区 `holding_change` 模块）为解耦的有意
 # 设计、默认态相反，面板相邻两行命名近似易误判——两侧行尾互相指出对方入口位置。
 _DUAL_ENTRY_CROSS_HINTS = {
-    "holding_change": "· 章本体在「独立组」",
-    "holding_change_review": "· 归因在「LLM 区」",
+    "holding_change": "· 见独立组",
+    "holding_change_review": "· 见 LLM 区",
 }
+
+_EXPERIMENT_MARK_COLUMNS = 2
+"""行首实验项标记 ⚗ 的占位列宽（非实验项留同宽空白以对齐状态列）。"""
 
 _COST_HISTORY_DAYS = 7
 """LLM 模块行尾历史费用摘要的回看窗口天数（数据源 perf 历史 llm.modules 费用）。"""
@@ -267,15 +279,19 @@ def _show_switch_detail(choice: str, items: list[tuple[int, str, str, bool, str]
             if isinstance(entry.get("enabled_count"), int):
                 date = str(entry.get("last_enabled_date") or "")[5:]
                 life += f" · 启用 {entry['enabled_count']} 次" + (f" · 最近 {date}" if date else "")
+    # 详情按终端宽度折行：手机窄终端的说明段（`desc` 常含整句）也能读全
+    width = inner_width(terminal_columns()) - 2
     print()
-    print(f"  ── {name}（{key}）" + "─" * 8)
-    print(f"  说明  : {desc}")
+    print(f"  ── {name}（{key}）")
+    for line in wrap_hanging(f"  说明  : {desc}", width, indent="          "):
+        print(line)
     print(f"  分组  : {group_label}{life}")
     print(f"  存储  : {storage}")
     detail = f"  当前  : {'开启' if curr else '关闭'}   出厂默认: {'开启' if default else '关闭'}"
     if curr != default:
         detail += "（不一致，行尾标 *）"
-    print(detail)
+    for line in wrap_hanging(detail, width, indent="          "):
+        print(line)
 
 
 def _cmd_config_llm_modules() -> None:
@@ -330,7 +346,7 @@ def _cmd_config_llm_modules() -> None:
     module_names = filter_menu_llm_modules(get_llm_module_names())
 
     # 功能开关分块：(分组标题, [(flag_key, 显示名), ...])，顺序即注册表顺序
-    switch_blocks = [(GROUP_LABELS[group], list(switches_in_group(group))) for group in GROUP_ORDER]
+    switch_blocks = [(group, list(switches_in_group(group))) for group in GROUP_ORDER]
     # 行首 ⚗ 标记仅给实验项（experimental 字段，与所属组无关；当前 2 项均落机制与诊断块内）
     experiment_keys = {flag for flag, _d in experimental_flags()}
 
@@ -344,6 +360,11 @@ def _cmd_config_llm_modules() -> None:
             ],
         )
     )
+    # 键名列宽：面板内显式展示每一项的键名（`? 编号`/`键名`/`键名=on|off` 都以此为输入，
+    # 不让用户猜）。标准模块与功能开关**各自取块内最长键名**分行对齐——开关键名明显更长
+    # （如 `rebalance_schedule_replay`），统一取全局最长会把整个面板宽度撑大。
+    key_column_llm = max(map(display_width, module_names)) if module_names else 0
+    key_column_sw = max((display_width(flag) for _title, block in switch_blocks for flag, _d in block), default=0)
 
     while True:
         rows: list[str | None] = []
@@ -359,66 +380,111 @@ def _cmd_config_llm_modules() -> None:
             logger.debug("[S] 模块费用摘要读取失败，静默省略", exc_info=True)
             cost_history = {}
 
+        # 终端宽度每轮读取：手机 SSH（窄）与笔记本（宽）同一份代码自适应
+        columns = terminal_columns()
+
         # ① 标准 LLM 模块（1-7）——行尾 * 标记与出厂默认不一致项
         for i, (sfx, name) in enumerate(module_names.items(), 1):
             status = enabled_map.get(sfx, True)
-            status_str = f"{GREEN}开启{RESET}" if status else f"{RED}关闭{RESET}"
             star = "" if status == default_enabled.get(sfx, True) else "*"
             items.append((i, sfx, name, status, "llm"))
             cross_hint = _DUAL_ENTRY_CROSS_HINTS.get(sfx, "")
             cost_info = cost_history.get(sfx) or {}
             runs = cost_info.get("runs")
-            cost_suffix = ""
+            notes = f" {cross_hint}" if cross_hint else ""
             if isinstance(runs, int) and runs > 0:
-                cost_suffix = (
-                    f" · 近{_COST_HISTORY_DAYS}日 ¥{float(cost_info.get('total') or 0.0):.4f}"
-                    f"（{runs} 次 · 均 ¥{float(cost_info.get('avg') or 0.0):.4f}）"
+                notes += (
+                    f" · {runs}次 ¥{float(cost_info.get('total') or 0.0):.4f}"
+                    f" 均¥{float(cost_info.get('avg') or 0.0):.4f}"
                 )
-            rows.append(
-                f"{i}. {pad_right(name, name_column)} [{status_str}]{star}"
-                f"{f' {cross_hint}' if cross_hint else ''}{cost_suffix}"
+            rows.extend(
+                format_item(
+                    number=i,
+                    label=name,
+                    key=sfx,
+                    enabled=status,
+                    star=star,
+                    marker="",
+                    notes=notes,
+                    columns=columns,
+                    name_column=name_column,
+                    key_column=key_column_llm,
+                    number_width=len(str(len(module_names) + len(feature_switch_registry))),
+                )
             )
 
         # ② 功能开关：编号紧随标准模块之后，四组按 GROUP_ORDER 逐块顺序派发
         # 编号由组序与块内注册表顺序派生、非硬编码：转正 = 摘除 experimental 身份
         # （行首 ⚗ 消失），作用域不变则原地留块，位置只随注册表声明顺序
         next_serial = len(module_names) + 1
-        for title, block in switch_blocks:
+        for group, block in switch_blocks:
             rows.append(None)
-            rows.append(title)
+            rows.append(
+                format_heading(
+                    GROUP_LABELS[group].split("（", 1)[0],
+                    sum(1 for flag, _d in block if is_feature_enabled(flag)),
+                    len(block),
+                    columns,
+                )
+            )
             for j, (flag, d) in enumerate(block, next_serial):
                 status = is_feature_enabled(flag)
-                status_str = f"{GREEN}开启{RESET}" if status else f"{RED}关闭{RESET}"
-                marker = "⚗" if flag in experiment_keys else ""
+                # 行首 ⚗ 占位列：实验项标 ⚗、其余留同宽空白——标记宽度按显示列计，
+                # 保证同块内各行的状态列严格对齐（⚗ 为歧义宽度字符，不能按 1 列假设）
+                marker = pad_right("⚗" if flag in experiment_keys else "", _EXPERIMENT_MARK_COLUMNS)
                 star = "" if status == d.default else "*"
-                suffix = star
+                notes = ""
                 if flag in experiment_keys:
                     entry = exp_stats.get(flag) or {}
                     if isinstance(entry.get("enabled_count"), int):
                         date = str(entry.get("last_enabled_date") or "")[5:]
-                        suffix += f"（启用 {entry['enabled_count']} 次" + (f" · 最近 {date}" if date else "") + "）"
+                        notes += f"（启用 {entry['enabled_count']} 次" + (f" · 最近 {date}" if date else "") + "）"
                 items.append((j, flag, d.label, status, "feature"))
                 cross_hint = _DUAL_ENTRY_CROSS_HINTS.get(flag, "")
                 if cross_hint:
-                    suffix += f" {cross_hint}"
-                rows.append(f"{j}. {marker}{pad_right(d.label, name_column)} [{status_str}]{suffix}")
+                    notes += f" {cross_hint}"
+                rows.extend(
+                    format_item(
+                        number=j,
+                        label=d.label,
+                        key=flag,
+                        enabled=status,
+                        star=star,
+                        marker=marker,
+                        notes=notes,
+                        columns=columns,
+                        name_column=name_column,
+                        key_column=key_column_sw,
+                        number_width=len(str(len(module_names) + len(feature_switch_registry))),
+                    )
+                )
             next_serial += len(block)
 
+        rows.append("")
         rows.append("0. 返回主菜单")
         print()
-        print("\n".join(render_panel("配置 LLM 报告章节与功能开关", rows)))
-        for _group in GROUP_ORDER:
-            print(f"  {GROUP_LABELS[_group]}")
         print(
-            "  ⚗ 标记为实验项：默认关闭、处于实验阶段输出质量可能不稳定（行尾附启用统计；各开关说明见 how-to-config 手册）"
+            "\n".join(
+                render_panel(
+                    "配置 LLM 报告章节与功能开关",
+                    [*rows, None, *legend_lines(_COST_HISTORY_DAYS, columns)],
+                )
+            )
         )
-        print("  * 与出厂默认值不一致（配置漂移提示）；输入 ? 编号或键名 查看该项说明与当前值/默认值")
-        print("  批量：r 编号或键名 恢复本组默认 · ra 恢复全部默认 · x 实验项全关；键名=on|off 直接设置")
-        print("  基础报告章节组（基金深度分析/市场新闻/历史走势+回撤/组合演进/行动建议）在菜单 [P] 配置")
+        for _line in wrap_hanging(
+            "  基础报告章节组（基金深度分析/市场新闻/历史走势+回撤/组合演进/行动建议）在菜单 [P] 配置",
+            inner_width(columns),
+        ):
+            print(_line)
         print()
         try:
             total = len(items)
-            choice = input(f"  输入编号或键名切换 (0-{total})，? 编号或键名查看说明: ").strip()
+            prompt = (
+                f"  输入编号或键名切换 (0-{total})，? 编号或键名查看说明: "
+                if layout_tier(columns) != "narrow"
+                else f"  输入编号或键名 (0-{total})，? 编号 看说明: "
+            )
+            choice = input(prompt).strip()
         except (EOFError, KeyboardInterrupt):
             print()
             break

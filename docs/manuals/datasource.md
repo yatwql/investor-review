@@ -65,7 +65,7 @@ LLM 分析结果独立缓存，通过指纹自动失效，不占用数据源请�
 - **A 股指数** → `history_index` 通道：腾讯财经 → 东方财富 `push2his`（免 key 的独立厂商备源）→ 新浪财经 → 同花顺官方日 K（需 key）。新浪 `getKLineData` 端点实测不可用，故东方财富为实际第二可用源；各 provider 内置传输级退避重试（历史链无链级重试）
 - **美股指数** → `history_index_us` 通道：新浪财经 → 腾讯财经。两者共用指数 K 线函数（`fetch_index_kline`），新浪侧实现位于 `providers/sina_kline.py`，但其 `getKLineData` 端点对全部代码返回 404/空，实际取数通常由腾讯完成；而腾讯 K 线接口对 `gb_*` 代码支持有限，因此该通道可能整链取空——空结果按正常降级记录（成因与现状见 `datasource-reliability.md` §4.2）
 - **风格与因子分析·风格因子回归**（`analysis/style_factor_regression.py`，写入 `style_factor_data` 契约）复用 `history_index` 通道，并行拉取 CSI 风格因子指数 K 线（价值=sh000919、成长=sh000925、质量=sh000930）与基准指数（沪深300 sh000300）做 OLS 回归。因子指数不注册到 `_A_INDICES`（避免污染实时指数循环 fetch_indices），无专属缓存前缀，随 `history_index_` 统一按 TTL 管理
-- **风格与因子分析·行业 Beta 子表**（`analysis/industry_beta.py`，内嵌于 `style_factor_data.industry_beta`，开关 功能开关 `industry_beta` 默认关）复用 `history_index` 通道拉取中证行业指数 K 线（`INDUSTRY_INDEX_MAP`：银行=sh000986、证券=sz399975、白酒/食品饮料=sz399997、半导体/电子=sz399995、有色/贵金属=sz399996、煤炭=sz399998、医药=sz399989、钢铁=sz399994、房地产=sh000980、能源=sh000928、环保=sz399973、保险=sz399983）做单因子 OLS（复用 `compute_factor_exposure`，不重复实现）；行业分类复用 `batch_fetch_industry_data`（`industry_` 前缀缓存）
+- **风格与因子分析·行业 Beta 子表**（`analysis/industry_beta.py`，内嵌于 `style_factor_data.industry_beta`，功能开关 `industry_beta` 默认关）复用 `history_index` 通道拉取中证行业指数 K 线（`INDUSTRY_INDEX_MAP`：银行=sh000986、证券=sz399975、白酒/食品饮料=sz399997、半导体/电子=sz399995、有色/贵金属=sz399996、煤炭=sz399998、医药=sz399989、钢铁=sz399994、房地产=sh000980、能源=sh000928、环保=sz399973、保险=sz399983）做单因子 OLS（复用 `compute_factor_exposure`，不重复实现）；行业分类复用 `batch_fetch_industry_data`（`industry_` 前缀缓存）
 
 ### 实时行情
 
@@ -99,7 +99,7 @@ LLM 分析结果独立缓存，通过指纹自动失效，不占用数据源请�
 > **在报告里怎么看同花顺有没被用上**：行情 / 历史日 K / 财务指标 / 基金持仓这几条链路里同花顺都是**末位兜底槽**（前序腾讯/新浪/天天基金/akshare 成功就不会轮到它），故「没出现在报告里」不等于「key 没生效」。看两列即可判定：① 可用性矩阵的**「命中源（本次取数）」**列——列出本次该类别实际服务的 provider 与次数（如 `同花顺金融数据 ×2`；全部命中缓存时显示 `—`），只有真的走到该源时才会点名；② 说明表的**「本次使用」**列——该类别本次有没有取到数据（含命中缓存）。两者并读即得「用了谁的数」与「有没有取到」。市场情绪是唯一以同花顺为**唯一源**的类别，其数据被取到时矩阵会出现「市场情绪」行、说明表出现同名行；若该区块空白，先看 `logs/app.log` 的 `[market_sentiment] 命中 N 条`——`N=0` 表示持仓/穿透标的当日未上榜（源已取到、只是无事件行），非故障。
 ### 财报全文（DataSinking 主源 + 巨潮备源）
 
-由 `fetcher/financial_report.py` 逐标的取数、`report/financial_report_digest.py` 装配（章节 `financial_report_digest`，开关 功能开关 `stock_fundamentals` 默认关）：
+由 `fetcher/financial_report.py` 逐标的取数、`report/financial_report_digest.py` 装配（数据域 `financial_report_digest`，功能开关 `stock_fundamentals` 默认关）：
 
 - **鉴权**：主源需用户自备 key（免费 key 在 datasink.ing 领取），存通用密钥文件 `data/config/data_key.json` 的 `datasink` 节（`{"datasink": {"api_key": "..."}}`）或环境变量 `DATASINK_API_KEY`（优先）；缺 key 时链路主动跳过、交由**巨潮备源**接管（公开数据，无需凭据）
 - **取数**：`/documents`（元数据，年报优先、半年报兜底）→ `/documents/{id}?section=`（按配置 `datasink.sections` 逐章节取正文并拼接）→ 按 `datasink.max_chars` 截断；单篇正文经 Provider Chain + 财报域适配器两槽（复用缓存/熔断/降级）

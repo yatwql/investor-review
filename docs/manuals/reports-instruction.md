@@ -277,6 +277,8 @@
 | `financial_indicator` | 功能开关 `stock_fundamentals`（默认关） | DataSinking 就绪（配置位 + 凭据）且有 A 股标的 | E / B / L |
 | `holding_change` | 功能开关 `holding_change_review`（默认关，无 board 章节开关） | 持仓变动复盘契约：快照准入（≥12 期且 ≥10 事件）不满足时占位 | E / B / L |
 
+> `financial_report` 与 `financial_indicator` 两行是同一「持仓基本面」章节的两块（财报摘要 / 财务指标），由**同一个**功能开关 `stock_fundamentals` 同开同关——两块各自再按数据契约判定「有数据才渲染，无数据写占位」。
+
 ---
 
 ## 调仓 What-if 模拟（独立报告）

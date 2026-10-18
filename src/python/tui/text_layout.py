@@ -46,6 +46,51 @@ def pad_right(text: str, columns: int) -> str:
     return text + " " * max(0, columns - display_width(text))
 
 
+def wrap_display(text: str, columns: int) -> list[str]:
+    """按显示列宽折行（中文按 2 列计），返回行列表。
+
+    用于面板页脚图例：图例文本长度随文案演进变化，手写多行容易越界或被终端硬折
+    得参差不齐。折行在**空白处**优先断行（保持词/短语完整），超长无空白串才按列
+    硬切；已含换行的文本逐段处理。
+
+    Args:
+        text: 待折行文本（可含 ANSI 序列，宽度计算已剔除）。
+        columns: 每行最大显示列数（≤0 时原样返回单行）。
+
+    Returns:
+        折行后的行列表（无内容时返回空列表）。
+    """
+    if columns <= 0:
+        return [text]
+    lines: list[str] = []
+    for paragraph in text.split("\n"):
+        current = ""
+        for token in re.split(r"(\s+)", paragraph):
+            if not token:
+                continue
+            candidate = current + token
+            if display_width(candidate) <= columns or not current.strip():
+                # 单个 token 本身就超宽时按列硬切，避免整行越界
+                while display_width(candidate) > columns and display_width(token) > columns:
+                    cut = ""
+                    for char in token:
+                        if display_width(cut + char) > columns:
+                            break
+                        cut += char
+                    if current.strip():
+                        lines.append(current.rstrip())
+                        current = ""
+                    lines.append(cut)
+                    token = token[len(cut) :]
+                    candidate = current + token
+                current = candidate
+                continue
+            lines.append(current.rstrip())
+            current = token.lstrip()
+        lines.append(current.rstrip())
+    return [line for line in lines if line.strip() or line == ""]
+
+
 def render_panel(title: str, rows: Iterable[str | None] = (), *, min_field: int = MIN_FIELD_WIDTH) -> list[str]:
     """渲染一个盒线面板，返回待逐行打印的文本。
 
@@ -68,3 +113,29 @@ def render_panel(title: str, rows: Iterable[str | None] = (), *, min_field: int 
             lines.append(f"  │ {row}{' ' * (field - display_width(row))}│")
     lines.append(f"  └{'─' * (field + 1)}┘")
     return lines
+
+
+def truncate_display(text: str, columns: int, ellipsis: str = "…") -> str:
+    """按显示列宽截断文本（超宽时以省略号收尾），用于窄终端的单行压缩。
+
+    Args:
+        text: 原文（可含 ANSI 序列）。
+        columns: 允许的最大显示列数（≤0 时返回空串）。
+        ellipsis: 省略号（自身宽度计入列宽预算）。
+
+    Returns:
+        截断后的文本；未超宽时原样返回。
+    """
+    if columns <= 0:
+        return ""
+    if display_width(text) <= columns:
+        return text
+    budget = columns - display_width(ellipsis)
+    if budget <= 0:
+        return ellipsis[:0]
+    out = ""
+    for char in text:
+        if display_width(out + char) > budget:
+            break
+        out += char
+    return out + ellipsis

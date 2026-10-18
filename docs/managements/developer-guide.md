@@ -177,7 +177,10 @@ PYTHONWARNDEFAULTENCODING=1 .venv/bin/python -m pytest src/test/unit -q
 | 任务类型 | 必同步触点 |
 |:---------|:-----------|
 | 新报告章节 | `registry.py` 注册表 → `reports-instruction.md`（目录/章节表/分组表/可见性总表/页签上限）→ `requirements.md` 章清单 → `technical.md`（结果区计数/`report_section_order`）→ `how-to-use-tui-menu.md`（面板编号段）→ `folders.md`（新 partial/模板）→ `report_template.html` include |
-| 新功能开关 | `features.py` 注册表 → `how-to-config.md`（开关表+计数+实验/常规分列+Web 面板行）→ `how-to-use-tui-menu.md`（开关区行与编号）→ `technical.md`（语义命名表/开关计数）→ `testplan.md`（若涉门禁） |
+| 新功能开关 | `features.py` 注册表 → `how-to-config.md`（开关表+计数+实验/常规分列+Web 面板行）→ `how-to-use-tui-menu.md`（开关区行与编号）→ `how-to-use-web-mode.md`（Web 面板分组行）→ `technical.md`（语义命名表/开关计数）→ **`experimental=True` 时 `technical.md` §6.9 生命周期表补行** → `testplan.md`（若涉门禁） |
+| 开关合并/内置化（删条目） | `features.py` 旧键迁移表（`_MERGED_SWITCH_KEYS`，一版过渡+告警）→ 注册表计数与四组分解（`how-to-config` / `how-to-use-tui-menu` / `how-to-use-web-mode` / `technical` 语义表与统计行）→ **面板编号单次重排**（`[S]` 各组分块区间在多处手册出现）→ 消费点门控收敛（`config/_core.py` helper 与调用点）→ 本地 `features.json` 迁移 → 关态用例退役 |
+| 菜单项增删/合并/重排 | `tui_menu.MENU_ITEMS` → 双手册主菜单 code block（`how-to-start` + `how-to-use-tui-menu`，doc-drift 机检键集合与标签头）→ `how-to-config.md` 的 `default_menu_key` 快捷键清单 → `technical.md` 菜单表 + 项数（静态项数 / 默认门控后渲染项数两处）→ `testplan.md` 菜单清单与二级子菜单 → `status_line` 页脚指引 → README 界面描述 → 子菜单二级键集合（如 `[D]` 的 C/F/O/M/B） |
+| 新配置入口（新增面板/子菜单项） | `_CONFIG_ENTRY_MAP`（`[D]` 配置入口地图，键位真实性由单测对 `MENU_ITEMS` 兜底）→ 对应手册章节 → `requirements.md` 菜单表行 |
 | 新文件/目录 | `folders.md` 目录树（`check-doc-drift --sync` 回写统计表）→ 若为 `scripts/*`：本文件「辅助脚本速查」一览与分类段 |
 | 新测试 | `conftest.py` marker 注册（若需）→ `.venv/bin/python scripts/collect-test-coverage.py --update-docs` 回写 `test-coverage.md`/`folders.md` 计数行（不带标志仅输出供人工对照）→ 边缘用例入 `*_edge.py` |
 | 新 LLM 模块/seam | `registry.py` + 统一附录（`skeleton._build_prompt_appendix`）+ `technical.md`（语义命名表/seam 表/附录 H）→ 指纹条件并入用例 |
@@ -1808,6 +1811,8 @@ DataModuleDef("我的 LLM 分析", "llm_my_analysis",
 > **章节/页签类开关转正目标是独立章 / 分析增强组（第四类首例：`holding_change_review` / `whatif_trade_cost` / `event_window_impact` 已按此归入，default 保持 `False`）**：判据落在「产物形态」——独立章节/页签类能力验证通过后的归宿按作用域入独立章节与回放 / 分析增强组：`default` 保持 `False`（默认产物字节不因转正变化，读者拿到的报告不因转正多出章节），面板入口随分组自动延续，`--experiment` 取值域随 `experimental` 摘除同步退出，产物自述与启用统计随实验身份移除（「质量可能不稳定」警示只属于未验证功能，统计的观测使命随转正完成）。转正定义因此为「**摘除 experimental 身份，作用域变则同时改 group**」。
 >
 > **刻意不转正的两类（判据的反面）**：**写盘积累型**——`decision_reflection` / `report_qa` 仍标 `experimental=True`（账本结算样本尚不足以判转正，撤销死线见 plan.md）。`signal_ledger`（确定性信号沉淀）不再单独设开关：其真实积累已验证（账本有存量数据、写盘幂等开销可忽略），并入 `deterministic_signal` 转正（摘除实验身份）。**调用次数放大型**——`llm_debate_procon` 把一次 `expert_review` 调用换成最多三次（pro → con → synthesis），默认开启直接改变费用与耗时量级，保持默认关、由用户按需开启。集中度问答不再受开关控制（原 `llm_debate_qa_concentration` 已撤销），改为辩论流程内建段落（阈值触发）。实验功能的真实使用情况可用 `core/experiment_stats.py`（启用计数）加 `doctor` 账本概览观测，作为转正/撤销的客观数据。
+
+> **生命周期单一事实位**：全部 `experimental=True` 开关的「实验目的 / 判据来源 / 转正条件 / 撤销条件 / 观察数据源 / 当前态」以 `technical.md` §6.9「实验项生命周期表」为**单一事实位**——立项（新增实验项）、转正（摘 `experimental`）、撤销（删注册表条目与机制）任一发生时**必须同步刷新该表**；判据详文仍留在 `plan.md` 死线条目与版本归档的评估记录（两者回链 `technical.md` §6.9「实验项生命周期表」，表内不复制全文，避免两处口径漂移）。上文的转正判据分类学讲「怎么判」，`technical.md` §6.9 记录「当前每个实验项处在哪一步」。
 
 > **诊断类命令不得依赖 config 初始化**：`doctor` / `view-logs` / `check-sources` 三个子命令在 `main()` 中**先于 `init_config` 分派**——配置损坏正是它们要定位的场景，若先初始化配置再分派，用户会在最需要诊断能力时被配置错误挡在门外（死锁）。新增诊断类命令遵循同一模式：**先分派、后初始化**，并把「命令失败」（退出码 2）与「命令跑完但结论不佳」（退出码 1）用 `_EXIT_SUCCESS` / `_EXIT_PARTIAL` / `_EXIT_SEVERE` 常量区分开，不得写裸字面量。**诊断类命令自身永不抛异常**——任何内部异常都转成一条结果行，否则等于在最需要它的时刻失效（`core/doctor.py`）。
 
