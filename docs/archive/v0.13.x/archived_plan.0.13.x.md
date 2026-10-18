@@ -7,6 +7,10 @@
 
 ---
 
+## plan-94 图表数据无导出通道 ✅
+
+**完成（2026-10-18，v0.13.7-dev）**：选型为**前端每图导出**（不做整份 `chart_data.csv` 产物）——`src/static/chart-export.js` 为每张 Chart.js 图表注入 `.chart-export-actions` 组容器（「导出PNG」+「导出CSV」并排，浮于图卡右上角、存在 `.chart-title` 时进标题栏右侧，按组容器幂等判重）；CSV 读 `chart.data`（与屏显/悬停值同源，Python 数据层已按匿名化口径脱敏），首列表头取 x/r 轴标题（缺省「标签」）、系列列取 dataset label（单系列缺省「数值」），RFC 4180 引号转义 + CRLF + UTF-8 BOM 后 `Blob` 纯前端本地下载（零后端，`URL.createObjectURL` 用后释放），文件名 `<key>.csv`；模板定位样式三处同步（主报告 `report_template.html` / What-if `whatif_template.html` / 调试页 `test-chart.html`：绝对定位移到组容器、按钮静态排布不重叠、打印态隐藏组容器），what-if 关态金样基线随模板 CSS 与内联脚本字节变化显式复核更新。测试：`test_feature_interactive.py` 新增 `TestChartExportCsv` 4 例（双按钮注入与组容器幂等 / Blob MIME+BOM+ObjectURL 释放 / 行列取自 chart.data 与 RFC 4180+CRLF / 三模板组容器定位且按钮不绝对定位）。文档：reports-instruction 交互图表特性补双按钮与 CSV 口径、README 能力表补 CSV、folders 目录树说明。
+
 ## plan-141 配置入口地图（[D] 子菜单只读索引）✅
 
 按计划「①先行」落地（只读索引，零行为变化；②③明确不做并记录理由）：`handlers_config` 新增 `_CONFIG_ENTRY_MAP` 常量（9 行三元组：配置项 / 菜单键 / 补充说明）与 `_render_config_entry_map()`（按 `display_width` 对齐的只读渲染，不等待按键、不写配置），`[D]` 子菜单新增 `[M] 配置入口地图` 项（items 表 + 无效选择提示改 C/F/O/M/B + docstring 更新）。地图覆盖：功能开关与 LLM 模块启停 `[S]`（含行尾费用摘要/启用统计）、报告章节取舍 `[P]`、对比指数池 `[I]`、匿名化 `[A]`、配置文件与目录 `[D]`（C/F/O）、刷新配置 `[R]`、缓存管理 `[4]`、健康历史与日志 `[H]/[V]`、系统自检 `[T]`（标注 `doctor_check` 关闭时不可见）。测试 5 例：键位真实性兜底（地图每个键均存在于 `MENU_ITEMS`——键位调整/菜单合并时自动红）、条目唯一且三列齐备且键带方括号、`[D]`→`M`→`B` 动线（断言 C/F/O 三个写入处理器均未被调用）、无效选择提示含 M、渲染零副作用（refresh_config / save_feature_overrides 均未触发）。handlers_config 50/50 绿。文档：tui-menu [D] 节标题与样例块加 M 并补说明、requirements D 行、technical 菜单表 [D] 行。

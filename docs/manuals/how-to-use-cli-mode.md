@@ -60,7 +60,7 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 > # 本次运行关闭系统自检的界面入口（CLI 的 doctor 子命令本就不受该开关约束）
 > .venv/bin/python -m src.python.cli --feature doctor_check=off doctor
 >
-> # 本次运行关闭量化指标输出（雷达图各轴 N/A）+ 关闭交互图表（HTML 回退静态渲染）
+> # 本次运行关闭量化指标输出（雷达图各轴 N/A）+ 关闭数据质量仪表盘（数据源可用性矩阵不渲染区块）
 > .venv/bin/python -m src.python.cli --feature metrics_enabled=off --feature data_quality=off report --type full
 > ```
 >

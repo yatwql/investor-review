@@ -33,14 +33,14 @@
   .chart-title { font-size: 13px; font-weight: bold; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
   .chart-holder { height: 300px; position: relative; }
   .chart-empty-note { color: #888; text-align: center; padding: 40px 0; font-size: 13px; }
+  .chart-export-actions { position: absolute; top: 6px; right: 6px; z-index: 5; display: flex; gap: 8px; }
   .chart-export-btn {
-    position: absolute; top: 6px; right: 6px; z-index: 5;
     padding: 3px 10px; font-size: 12px; line-height: 1.6;
     color: var(--chart-text, #333); background: rgba(255, 255, 255, 0.9);
     border: 1px solid #d0d5dd; border-radius: 4px; cursor: pointer;
   }
   .chart-export-btn:hover { background: #e9ecf0; }
-  .chart-title .chart-export-btn { position: static; margin-left: 8px; }
+  .chart-title .chart-export-actions { position: static; margin-left: auto; }
   .badge { font-size: 11px; padding: 1px 8px; border-radius: 10px; color: #fff; }
   .badge.ok { background: #2E7D32; }
   .badge.degraded { background: #E68A00; }

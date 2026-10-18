@@ -332,11 +332,11 @@ class TestSwitchOffGoldenBaseline(unittest.TestCase):
     后更新基线常量（评审动作，不是自动豁免）。
     """
 
-    # 基线复核记录（2026-10-13，样式收敛批次）：字节差异仅来自 whatif 模板两处刻意
-    # CSS 收敛——调仓行 hover #EEF5FB → var(--table-hover)（双面既有 token，值恒等）
-    # 与 .action-badge 圆角 10px → 999（胶囊档位归一）；关态业务字节面零变化。
-    _GOLDEN_BASE_SHA256 = "6539c1446726704c8f630f4ba11e084fa8a60c6095047a3668a3f8d223d7a503"
-    _GOLDEN_FULL_SHA256 = "0bf45796b65171ad32fa59cbd776fea079bd2ac7dc3aa334770398f5ca7450b2"
+    # 基线复核记录（2026-10-18，单图导出 CSV 批次）：字节差异仅来自 whatif 模板导出按钮
+    # CSS 收敛（.chart-export-btn 绝对定位移入 .chart-export-actions 组容器，PNG/CSV 双按钮
+    # 并排布局）与内联 chart-export.js 的 CSV 导出逻辑增补；关态业务字节面零变化。
+    _GOLDEN_BASE_SHA256 = "373265510d9422e92b934f1ba5433777983dd6bf5a069cd2a3dbd31d29b09f86"
+    _GOLDEN_FULL_SHA256 = "844d213ef19fb8f74ad8a3381607dada9479652102acc97f71cd8fc47945181a"
 
     def _render(self, **extra) -> str:
         from unittest.mock import patch
