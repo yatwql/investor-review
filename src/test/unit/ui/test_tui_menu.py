@@ -561,3 +561,78 @@ class TestStatusLine(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestMainLoopExitKeys(unittest.TestCase):
+    """首页退出通道：`X`（显式退出项）与 `0`（退出别名）都退出、其它键不误退。"""
+
+    """首页退出通道：`X`（显式退出项）与 `0`（退出别名）都退出；其它键不误退。"""
+
+    @staticmethod
+    def _drive(keys: list[str]) -> tuple[list[str], str]:
+        """驱动真实 main() 循环：返回（退出回调触发记录, 打印内容）。"""
+        import contextlib
+        import io
+        from unittest.mock import patch
+
+        import src.python.tui.tui as tui_mod
+        import src.python.tui.tui_menu as menu_mod
+
+        fired: list[str] = []
+        seq = iter(keys)
+
+        def _fake_key() -> str:
+            try:
+                return next(seq)
+            except StopIteration:
+                raise SystemExit from None
+
+        def _fake_exit() -> None:
+            fired.append("exit")
+            raise SystemExit
+
+        out = io.StringIO()
+        with (
+            patch.object(tui_mod, "get_key", _fake_key),
+            patch.object(tui_mod, "exit_app", _fake_exit),
+            patch.object(menu_mod, "exit_app", _fake_exit),
+            patch.object(tui_mod, "init_config"),
+            patch.object(tui_mod, "_apply_feature_gates"),
+            patch.object(tui_mod, "_bind_callbacks"),
+            patch.object(tui_mod, "print_header"),
+            patch.object(tui_mod, "show_config"),
+            patch.object(tui_mod, "render_menu"),
+        ):
+            try:
+                with contextlib.redirect_stdout(out):
+                    tui_mod.main()
+            except SystemExit:
+                pass
+        return fired, out.getvalue()
+
+    def test_zero_key_exits(self):
+        """按 0 → 退出（与子菜单「0 = 返回」的习惯一致，首页返回即退出程序）。"""
+        fired, _ = self._drive(["0"])
+        self.assertEqual(fired, ["exit"])
+
+    def test_upper_x_exits_via_menu_item(self):
+        """按 X → 命中 [X] 退出项。"""
+        fired, _ = self._drive(["X"])
+        self.assertEqual(fired, ["exit"])
+
+    def test_non_exit_key_does_not_exit(self):
+        """按未映射键（如 Z）不退出（按键无效但不误退）。"""
+        fired, _ = self._drive(["Z"])
+        self.assertEqual(fired, [])
+
+    def test_footer_documents_zero_exit(self):
+        """页脚明确写出 `0 退出`，否则用户无从发现该别名。"""
+        from src.python.tui.tui_menu import render_menu
+
+        import contextlib
+        import io
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            render_menu(0)
+        self.assertIn("0 退出", buf.getvalue())

@@ -184,6 +184,9 @@ def main() -> None:
             execute_item(sel)
         elif key == KEY_CTRL_C:
             exit_app()
+        elif key == "0":
+            # 0 作退出别名：与子菜单「0 = 返回」的习惯一致（在首页返回即退出程序）
+            exit_app()
         elif len(key) == 1 and ("A" <= key <= "Z" or "a" <= key <= "z" or "0" <= key <= "9"):
             idx = index_by_key(key.upper())
             if idx is not None:

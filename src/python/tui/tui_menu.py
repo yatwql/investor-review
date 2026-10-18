@@ -132,7 +132,7 @@ def render_menu(sel: int) -> None:
         prefix = "  >" if i == sel else "   "
         print(f"{prefix} [{key}] {label}")
     print()
-    print("  方向键移动 | Enter 确认 | 字母/数字键直达 | Ctrl+C 退出")
+    print("  方向键移动 | Enter 确认 | 字母/数字键直达 | 0 退出 | Ctrl+C 退出")
     print()
 
 
