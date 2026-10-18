@@ -121,7 +121,7 @@ class TestFundamentalSnapshotPlaceholderGuidance(unittest.TestCase):
         )
         assert "持仓个股财报摘要暂不可用" in html
         assert "全部标的未取到财报" in html
-        assert "financial_report_digest" in html
+        assert "stock_fundamentals" in html
         assert "report_submodules." not in html
 
     def test_indicator_placeholder_shows_reason_and_current_switch(self):
@@ -136,7 +136,7 @@ class TestFundamentalSnapshotPlaceholderGuidance(unittest.TestCase):
         )
         assert "财务指标暂不可用" in html
         assert "暂无可用财务指标数据" in html
-        assert "financial_indicator" in html
+        assert "stock_fundamentals" in html
         assert "report_submodules." not in html
 
     def test_no_legacy_report_submodules_path_anywhere_in_templates(self):

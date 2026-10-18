@@ -387,18 +387,20 @@ def is_enable_candidate_compare(config: dict | None = None) -> bool:
     return is_feature_enabled("candidate_compare")
 
 
-def is_enable_financial_report_digest(config: dict | None = None) -> bool:
-    """持仓个股财报摘要章是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_STANDALONE``）。
+def is_enable_stock_fundamentals(config: dict | None = None) -> bool:
+    """个股基本面章是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_STANDALONE``）。
 
-    取值来自功能开关注册表（``features.financial_report_digest``，出厂默认关（需 DataSinking key）），可用 `features.json`
-    覆盖；``config`` 形参仅为兼容既有调用签名保留，**取值不再读它**。
+    合并原「财务指标」与「持仓个股财报摘要」两开关为单一「个股基本面」开关，同时
+    控制该章财务指标块与财报摘要块的渲染；取值来自功能开关注册表
+    （``features.stock_fundamentals``，出厂默认关（需数据底座与 DataSinking key）），
+    可用 `features.json` 覆盖；``config`` 形参仅为兼容既有调用签名保留，**取值不再读它**。
 
     Args:
         config: 兼容形参（不参与取值）
     """
     from src.python.config.features import is_feature_enabled
 
-    return is_feature_enabled("financial_report_digest")
+    return is_feature_enabled("stock_fundamentals")
 
 
 def is_enable_datasink(config: dict | None = None) -> bool:
@@ -450,20 +452,6 @@ def is_enable_market_sentiment(config: dict | None = None) -> bool:
     from src.python.config.features import is_feature_enabled
 
     return is_feature_enabled("market_sentiment")
-
-
-def is_enable_financial_indicator(config: dict | None = None) -> bool:
-    """财务指标章是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_STANDALONE``）。
-
-    取值来自功能开关注册表（``features.financial_indicator``，出厂默认关（数据驱动）），可用 `features.json`
-    覆盖；``config`` 形参仅为兼容既有调用签名保留，**取值不再读它**。
-
-    Args:
-        config: 兼容形参（不参与取值）
-    """
-    from src.python.config.features import is_feature_enabled
-
-    return is_feature_enabled("financial_indicator")
 
 
 def is_enable_cost_lots(config: dict | None = None) -> bool:

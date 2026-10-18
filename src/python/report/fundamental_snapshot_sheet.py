@@ -6,8 +6,8 @@
         负债率/现金流/EPS/每股净资产 + 质量档 + 年度趋势 + 当前 PE/PB + 数据来源），20 列
   区块② 持仓个股财报摘要（DataSinking 全文本财报章节正文摘要），10 列
 
-两个区块各由**独立功能开关**驱动（`financial_indicator` / `financial_report_digest`）：
-契约 dict 为 None 表示该开关关闭 → 该区块整体不写；契约非 None 但 `available=False`
+两个区块由**单一功能开关** `stock_fundamentals`（个股基本面）驱动；契约 dict 为
+None 表示该开关关闭 → 该区块整体不写；契约非 None 但 `available=False`
 （开关开启但数据不可用）→ 该区块写占位与失败清单（§1.4.5 数据降级治理）。
 章节整体按注册表 `data_flag_any` 的 OR 口径显示（两契约任一就绪即显示）。
 """
@@ -216,9 +216,9 @@ def write_fundamental_snapshot_sheet(
     Args:
         ws: openpyxl Worksheet 对象
         indicator_data: ``financial_indicator_data`` 契约 dict；None 表示功能开关
-            `financial_indicator` 关闭（区块①整体不写）。
+            `stock_fundamentals` 关闭或数据未生成（区块①整体不写）。
         digest_data: ``financial_report_digest_data`` 契约 dict；None 表示功能开关
-            `financial_report_digest` 关闭（区块②整体不写）。
+            `stock_fundamentals` 关闭或数据未生成（区块②整体不写）。
     """
     write_title_row(ws, 1, get_report_sheet_name("fundamental_snapshot"), ncols=len(_INDICATOR_COLUMNS))
 

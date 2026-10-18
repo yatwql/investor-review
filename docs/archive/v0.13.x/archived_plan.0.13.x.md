@@ -7,6 +7,10 @@
 
 ---
 
+## plan-134 财报基本面两开关合并（个股基本面单一开关）✅
+
+两开关合并为单一 `stock_fundamentals`（「个股基本面」，默认关，独立章节与回放组）——①单开关控持仓基本面两块：`is_enable_financial_indicator`/`is_enable_financial_report_digest` 收敛为 `is_enable_stock_fundamentals`（_report_generation 两处 `or` 门控与 orchestrator 两个 compute 门改读同键）；章级细分不另设子开关，由既有报告章节配置承接（`fundamental_snapshot` 章整体显隐，`report_section_order` 不动）；②旧键一版过渡：`_migrate_merged_switch_keys` 在 load/save 双路径按并集迁移（任一旧键 True 即 True；新键并存时以新键为准；迁后旧键不入内存不落盘），`--feature` 旧键别名告警映射，本地 features.json 已迁（21 键）；③注册表/面板/Web 白名单/TUI 由注册表派生自动生效，面板 28→27 单次重排（独立 25-29 / 机制 30-34），测试改造（helpers/置位键/矩阵 note/模板指引断言/实验文案）+ 定向 305+235 绿，同步触点 12 份文档（矩阵/模板占位/4 手册/管理 5）；④不合并对照照案登记：`llm_debate_procon`×`llm_debate_conditional`（默认值与风格正交）、`market_temperature`×`market_sentiment`（跨章）保持现状。
+
 ## plan-133 机制类开关内置化评估（逃生分支清理）✅
 
 逐项评估执行完毕，三开关全部内置化（删注册表条目 + 关态死分支）——证据：①parity 先行（`test_quote_adapter_parity` 七源等价 + 回退态强制回落用例改写后继续锁定两套映射；结构化头「整批不可用 → 表格兜底」等价锁；凭据预检在「全部数据源免费无需凭据」现状下两态同为直通）；②跨版本稳定期：2026-09-10 引入、09-11 转正默认开，历时月余、横跨 v0.12.12→v0.13.5 多个发布无回退提交；③本地真实 `features.json` 无关态覆写（残留旧键由「无消费者开关」告警提示清理）。落地：`datasource_adapter` 链路恒走适配器（适配器不可用回落既有映射的安全网与 doctor 自检保留）、`decision_header_parse` 提示词恒追加结构化决策头（`_dh` 指纹后缀常驻、解析双路与回落保留）、`datasource_credential_ready` 凭据预检恒执行（`check_sources`/`chain`/`chain_incremental`/`doctor`/`data_source_matrix` 六处闸门删净，doctor 凭据组恒产出）；面板 31→28 项（机制与诊断 8→5）单次重排，手册/requirements/technical（§2.5/§2.7 改内置标题、语义命名表重键、统计行按注册表动态重算）/developer-guide 转正判据同步；OFF 态专属用例随行为退役（-8 例），回归总量不降。不内置清单照案确认：关态有真实场景的七项保持现状，`deterministic_signal`/`prosperity_framework` 观察期未过不评，`module_quality_gate` 弱候选暂缓。

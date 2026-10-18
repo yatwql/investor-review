@@ -318,7 +318,7 @@ class TestReportScopeOverWeb:
     def test_whitelist_has_bare_flag_keys_not_config_paths(self):
 
         assert not [k for k in config_edit_whitelist if k.startswith("report_submodules.")], "旧 config 路径应已移除"
-        for flag in ("data_quality", "market_temperature", "financial_indicator"):
+        for flag in ("data_quality", "market_temperature", "stock_fundamentals"):
             assert config_edit_whitelist[flag] == {"kind": "bool", "target": "features", "writer": "features"}
 
     def test_surface_groups_derive_from_registry(self):

@@ -1411,9 +1411,9 @@ LLM 五维度量化评分，每项满分 100：
 
 ### 11.5 features.json（功能开关注册表）
 
-独立配置文件，提供 28 项功能开关的运行时覆写。不配置时全部使用代码内置默认值。开关按**作用域分四组**——**呈现与体验**（1 项，默认开：量化指标显示）、**分析增强**（16 项，多数默认关，`llm_debate_conditional`/`data_quality`/`market_temperature`/`fund_purchase_limit`/`cost_position` 五项默认开）、**独立章节与回放**（6 项，默认关）与**机制与诊断**（5 项，机制项默认开、⚗ 实验项默认关）——分组表达「开了长出什么」而非生命周期；**生命周期由独立字段 `experimental` 表达**（2 项：`decision_reflection` 与 `report_qa`，面板以 ⚗ 标识、随产物自述），**转正**即把该字段置 false（作用域不变则原地留块，作用域变化才改组），面板可见性不随转正摘除。四组在 TUI 菜单 `[S]` / Web 配置面板 / CLI（`--experiment` 只开全部实验项、`--feature NAME=VALUE` 全域双向）中**同样可切换**；唯一登记点是 `config/features.py::feature_switch_registry`（显示名/说明/作用域分组/默认值/产物影响/实验身份六字段），渠道层不得另写清单。仅收录「有消费者」的开关——LLM 模块启停与基金深度分析（`llm_settings.json` 的 `enabled_llm`）、新闻源（`config.json` 的 `news_sources`）、历史走势与回撤（`config.json` 的 `enable_history`）、匿名化模式（`config.json` 的 `anonymization.mode`）各有归属配置，不在此文件。
+独立配置文件，提供 27 项功能开关的运行时覆写。不配置时全部使用代码内置默认值。开关按**作用域分四组**——**呈现与体验**（1 项，默认开：量化指标显示）、**分析增强**（16 项，多数默认关，`llm_debate_conditional`/`data_quality`/`market_temperature`/`fund_purchase_limit`/`cost_position` 五项默认开）、**独立章节与回放**（5 项，默认关）与**机制与诊断**（5 项，机制项默认开、⚗ 实验项默认关）——分组表达「开了长出什么」而非生命周期；**生命周期由独立字段 `experimental` 表达**（2 项：`decision_reflection` 与 `report_qa`，面板以 ⚗ 标识、随产物自述），**转正**即把该字段置 false（作用域不变则原地留块，作用域变化才改组），面板可见性不随转正摘除。四组在 TUI 菜单 `[S]` / Web 配置面板 / CLI（`--experiment` 只开全部实验项、`--feature NAME=VALUE` 全域双向）中**同样可切换**；唯一登记点是 `config/features.py::feature_switch_registry`（显示名/说明/作用域分组/默认值/产物影响/实验身份六字段），渠道层不得另写清单。仅收录「有消费者」的开关——LLM 模块启停与基金深度分析（`llm_settings.json` 的 `enabled_llm`）、新闻源（`config.json` 的 `news_sources`）、历史走势与回撤（`config.json` 的 `enable_history`）、匿名化模式（`config.json` 的 `anonymization.mode`）各有归属配置，不在此文件。
 
-下表列常用开关（**非全集**，完整 28 项与分组清单见配置指引 `how-to-config.md` 功能开关节）：
+下表列常用开关（**非全集**，完整 27 项与分组清单见配置指引 `how-to-config.md` 功能开关节）：
 
 | 开关名 | 类型 | 默认值 | 说明 |
 |:-------|:----:|:------:|:-----|

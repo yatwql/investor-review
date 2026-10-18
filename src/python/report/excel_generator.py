@@ -204,7 +204,7 @@ def generate_excel_report(
     enable_llm: bool = True,  # board 层：LLM 分析章节是否开启
     enable_history: bool = True,  # board 层：历史走势章节是否开启
     enable_portfolio_evolution: bool = True,  # board 层：组合演进章节是否开启
-    enable_fundamental_snapshot: bool = False,  # board 层：持仓基本面章（= 财务指标或财报摘要任一开关开启）
+    enable_fundamental_snapshot: bool = False,  # board 层：持仓基本面章（功能开关 stock_fundamentals）
     enable_action: bool = False,  # board 层：行动建议章节是否开启（config 默认开）
     enable_data_quality: bool = False,  # 子模块：数据质量仪表盘（功能开关 `data_quality`）
     progress: ProgressReporter | None = None,
@@ -219,8 +219,8 @@ def generate_excel_report(
     market_temperature_data: dict
     | None = None,  # 市场温度数据契约（「投资分析汇总」温度刻度行；None 时从 pipeline_data 读取）
     financial_report_digest_data: dict
-    | None = None,  # 持仓个股财报摘要数据契约（功能开关 `financial_report_digest`，默认关）
-    financial_indicator_data: dict | None = None,  # 财务指标数据契约（功能开关 `financial_indicator`，默认关）
+    | None = None,  # 持仓个股财报摘要数据契约（功能开关 `stock_fundamentals`，默认关）
+    financial_indicator_data: dict | None = None,  # 财务指标数据契约（功能开关 `stock_fundamentals`，默认关）
     purchase_status_data: dict
     | None = None,  # 申购限购状态契约（功能开关 `fund_purchase_limit`；None 时从 pipeline_data 读取）
     cost_position_data: dict

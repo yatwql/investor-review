@@ -111,8 +111,7 @@ class TestBothPathDegrade:
             patch("src.python.config.is_enable_news", return_value=False),
             patch("src.python.config.is_enable_history", return_value=False),
             patch("src.python.config.is_enable_fund_deep_analysis", return_value=False),
-            patch("src.python.config.is_enable_financial_indicator", return_value=False),
-            patch("src.python.config.is_enable_financial_report_digest", return_value=False),
+            patch("src.python.config.is_enable_stock_fundamentals", return_value=False),
             patch("src.python.config.is_enable_portfolio_evolution", return_value=False),
         ):
             result = generate_report(

@@ -160,9 +160,9 @@ class TestPrepareReportData:
             "valuation_data",
             # 市场温度契约（功能开关 market_temperature 关闭时为 None）
             "market_temperature_data",
-            # 持仓个股财报摘要契约（功能开关 financial_report_digest 关闭时为 None）
+            # 持仓个股财报摘要契约（功能开关 stock_fundamentals 关闭时为 None）
             "financial_report_digest_data",
-            # 财务指标契约（功能开关 financial_indicator 关闭时为 None）
+            # 财务指标契约（功能开关 stock_fundamentals 关闭时为 None）
             "financial_indicator_data",
             # 申购限购状态契约（功能开关 fund_purchase_limit 关闭时为 None）
             "purchase_status_data",

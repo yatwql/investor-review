@@ -369,8 +369,8 @@ class TestDataSourceCatalog:
     def test_financial_report_row_hints_required_switches(self):
         """财报全文行须写明「需开启哪些开关才会取用」（否则读者会误以为未被调用）。"""
         row = self._rows()["financial_report"]
-        assert "financial_report_digest" in row["note"]
-        assert "financial_indicator" in row["note"]
+        assert "stock_fundamentals" in row["note"]
+        assert "financial_report_digest" not in row["note"]
 
     def test_used_by_category_prefix(self):
         from src.python.report.data_status import mark_data_used

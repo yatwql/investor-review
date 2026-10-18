@@ -74,12 +74,11 @@ def _generate_report_both(
         is_enable_action,
         is_enable_cost_lots,
         is_enable_data_quality,
-        is_enable_financial_indicator,
-        is_enable_financial_report_digest,
         is_enable_fund_deep_analysis,
         is_enable_history,
         is_enable_news,
         is_enable_portfolio_evolution,
+        is_enable_stock_fundamentals,
     )
     from src.python.config.features import is_feature_enabled
     from src.python.core.perf import PerfCollector
@@ -106,8 +105,7 @@ def _generate_report_both(
     _enable_action = is_enable_action(config)
     _enable_data_quality = is_enable_data_quality(config)
     _enable_cost_lots = is_enable_cost_lots(config)
-    _enable_financial_report_digest = is_enable_financial_report_digest(config)
-    _enable_financial_indicator = is_enable_financial_indicator(config)
+    _enable_stock_fundamentals = is_enable_stock_fundamentals(config)
     _enable_summary_highlights = is_feature_enabled("summary_highlights")
     sec_order = get_report_section_order(config)
     output = output_dir or config.get("output_dir", "reports")
@@ -130,7 +128,7 @@ def _generate_report_both(
     # 持仓个股财报摘要（数据契约）：both 路径不计算穿透，仅按持仓 A 股标的取数；
     # 关闭 / 无 key 时为 None（章节隐藏/写占位）
     financial_report_digest_data = None
-    if _enable_financial_report_digest:
+    if _enable_stock_fundamentals:
         from src.python.report.financial_report_digest import build_financial_report_digest
 
         financial_report_digest_data = build_financial_report_digest(holdings, config, reporter)
@@ -138,7 +136,7 @@ def _generate_report_both(
     # 财务指标（数据契约）：both 路径同样只按持仓 A 股标的取数（无穿透），
     # 现价取自行情明细（PE/PB 用）；关闭时为 None（章节隐藏）
     financial_indicator_data = None
-    if _enable_financial_indicator:
+    if _enable_stock_fundamentals:
         from src.python.fetcher.financial_indicator import collect_price_map
         from src.python.report.financial_indicator import build_financial_indicator
 
@@ -308,7 +306,7 @@ def _generate_report_both(
             fund_flow_data=fund_flow_data,
             valuation_data=valuation_data,
             market_temperature_data=market_temperature_data,
-            enable_fundamental_snapshot=_enable_financial_indicator or _enable_financial_report_digest,
+            enable_fundamental_snapshot=_enable_stock_fundamentals,
             financial_report_digest_data=financial_report_digest_data,
             financial_indicator_data=financial_indicator_data,
             purchase_status_data=purchase_status_data,
@@ -352,7 +350,7 @@ def _generate_report_both(
             dividends=dividends,
             valuation_data=valuation_data,
             market_temperature_data=market_temperature_data,
-            enable_fundamental_snapshot=_enable_financial_indicator or _enable_financial_report_digest,
+            enable_fundamental_snapshot=_enable_stock_fundamentals,
             financial_report_digest_data=financial_report_digest_data,
             financial_indicator_data=financial_indicator_data,
             purchase_status_data=purchase_status_data,
@@ -449,13 +447,12 @@ def _generate_report_full(
         is_enable_action,
         is_enable_cost_lots,
         is_enable_data_quality,
-        is_enable_financial_indicator,
-        is_enable_financial_report_digest,
         is_enable_fund_deep_analysis,
         is_enable_history,
         is_enable_llm,
         is_enable_news,
         is_enable_portfolio_evolution,
+        is_enable_stock_fundamentals,
     )
     from src.python.fetcher.akshare import get_sector_fund_flow
     from src.python.core.perf import PerfCollector
@@ -479,8 +476,7 @@ def _generate_report_full(
     _enable_llm = is_enable_llm(config)
     _enable_data_quality = is_enable_data_quality(config)
     _enable_cost_lots = is_enable_cost_lots(config)
-    _enable_financial_report_digest = is_enable_financial_report_digest(config)
-    _enable_financial_indicator = is_enable_financial_indicator(config)
+    _enable_stock_fundamentals = is_enable_stock_fundamentals(config)
     from src.python.config.features import is_feature_enabled
 
     _enable_summary_highlights = is_feature_enabled("summary_highlights")
@@ -707,7 +703,7 @@ def _generate_report_full(
         (pipeline_data or {}).get("market_temperature_data"),
         (pipeline_data or {}).get("decision_review_data"),
         prosperity_framework_data=(pipeline_data or {}).get("prosperity_framework_data"),
-        enable_fundamental_snapshot=_enable_financial_indicator or _enable_financial_report_digest,
+        enable_fundamental_snapshot=_enable_stock_fundamentals,
         financial_report_digest_data=(pipeline_data or {}).get("financial_report_digest_data"),
         financial_indicator_data=(pipeline_data or {}).get("financial_indicator_data"),
         purchase_status_data=(pipeline_data or {}).get("purchase_status_data"),
@@ -744,7 +740,7 @@ def _generate_report_full(
         _enable_cost_lots,
         transactions,
         dividends,
-        enable_fundamental_snapshot=_enable_financial_indicator or _enable_financial_report_digest,
+        enable_fundamental_snapshot=_enable_stock_fundamentals,
     )
 
     result.news_ok = news_ok

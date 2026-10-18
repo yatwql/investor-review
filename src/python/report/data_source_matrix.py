@@ -384,7 +384,7 @@ _SOURCE_CATALOG: list[dict[str, Any]] = [
         "credential_source_id": "datasink",
         "billing_provider": "datasink",
         "note": (
-            "免费 key 需自备（datasink.ing）；需开启 功能开关 `financial_report_digest` 或 financial_indicator 才会取用；"
+            "免费 key 需自备（datasink.ing）；需开启 功能开关 `stock_fundamentals`（个股基本面）才会取用；"
             "同花顺官方源不含公告原文，故本类别无兜底源"
         ),
     },
@@ -398,7 +398,7 @@ _SOURCE_CATALOG: list[dict[str, Any]] = [
         "auth": "无需（主源）",
         "note": (
             "备用支路需 DataSinking key、兜底槽位需 hithink key；"
-            "两者均需开启 功能开关 `financial_indicator` 或 valuation_percentile"
+            "两者均需开启 功能开关 `stock_fundamentals`（个股基本面）或 valuation_percentile"
         ),
     },
     {

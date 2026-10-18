@@ -334,14 +334,14 @@ def compute_financial_report_digest_data(
 ) -> dict | None:
     """编排持仓个股财报摘要数据（`financial_report_digest_data` 数据契约）。
 
-    功能开关 `financial_report_digest` 开启时，对持仓 + 穿透中的 A 股
+    功能开关 `stock_fundamentals`（个股基本面）开启时，对持仓 + 穿透中的 A 股
     标的取最新年报（无年报退半年报）的目标章节正文；关闭时返回 None（章节隐藏）。
     缺凭据 / 无 A 股标的 / 全部无覆盖时返回 available=False 的降级契约，
     不阻断报告主链路。
     """
-    from src.python.config import is_enable_financial_report_digest
+    from src.python.config import is_enable_stock_fundamentals
 
-    if not is_enable_financial_report_digest(config):
+    if not is_enable_stock_fundamentals(config):
         return None
     from src.python.report.financial_report_digest import build_financial_report_digest
 
@@ -388,14 +388,14 @@ def compute_financial_indicator_data(
 ) -> dict | None:
     """编排财务指标数据（`financial_indicator_data` 数据契约）。
 
-    功能开关 `financial_indicator` 开启时，对持仓 + 穿透中的 A 股标的
+    功能开关 `stock_fundamentals`（个股基本面）开启时，对持仓 + 穿透中的 A 股标的
     取多期指标（主源 akshare，失败落 DataSinking 解析支路），派生质量档/年度趋势/
     当前 PE/PB（PE/PB 需现价，取自行情明细）；关闭时返回 None（章节隐藏）。
     无 A 股标的 / 数据源不可用时返回 available=False 的降级契约，不阻断主链路。
     """
-    from src.python.config import is_enable_financial_indicator
+    from src.python.config import is_enable_stock_fundamentals
 
-    if not is_enable_financial_indicator(config):
+    if not is_enable_stock_fundamentals(config):
         return None
     from src.python.fetcher.financial_indicator import collect_price_map
     from src.python.report.financial_indicator import build_financial_indicator
