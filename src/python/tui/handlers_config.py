@@ -181,10 +181,10 @@ _COST_HISTORY_DAYS = 7
 def _match_switch_item(
     token: str, items: list[tuple[int, str, str, bool, str]]
 ) -> tuple[int, str, str, bool, str] | None:
-    """按编号（纯数字）或条目 slug（LLM 模块/功能开关键）在面板条目中定位一项。
+    """按编号（纯数字）或条目键名（LLM 模块/功能开关键）在面板条目中定位一项。
 
     Args:
-        token: 用户输入的目标（编号或 slug，允许首尾空白）。
+        token: 用户输入的目标（编号或键名，允许首尾空白）。
         items: 面板当前派发的条目 ``(编号, 键, 显示名, 当前状态, 类别)``。
 
     Returns:
@@ -197,10 +197,10 @@ def _match_switch_item(
 
 
 def _show_switch_detail(choice: str, items: list[tuple[int, str, str, bool, str]]) -> None:
-    """``? 编号或 slug`` 上屏面板单项说明与当前值/默认值（只读信息查询，不写配置）。
+    """``? 编号或键名`` 上屏面板单项说明与当前值/默认值（只读信息查询，不写配置）。
 
     Args:
-        choice: 用户输入（``?`` 后跟编号或条目 slug，如 ``? 3`` / ``? doctor_check``）。
+        choice: 用户输入（``?`` 后跟编号或条目键名，如 ``? 3`` / ``? doctor_check``）。
         items: 面板当前派发的条目 ``(编号, 键, 显示名, 当前状态, 类别)``。
     """
     from src.python.config._llm_settings_defaults import _DEFAULT_LLM_SETTINGS
@@ -217,7 +217,7 @@ def _show_switch_detail(choice: str, items: list[tuple[int, str, str, bool, str]
     else:
         matched = [it for it in items if it[1] == raw]
         if not matched:
-            print(f"  {YELLOW}[!]{RESET} 请输入 ? 加编号或 slug（如 ? 1 / ? doctor_check）")
+            print(f"  {YELLOW}[!]{RESET} 请输入 ? 加编号或键名（如 ? 1 / ? doctor_check）")
             return
     _, key, name, curr, kind = matched[0]
     if kind == "llm":
@@ -266,11 +266,11 @@ def _cmd_config_llm_modules() -> None:
     行尾附 ``experiment_stats`` 启用统计（读取失败静默省略）。
 
     写路径三通道（编号派发与 Web 面板派生不受影响）：
-      - 批量：``r 编号或slug`` 恢复该项所在分组出厂默认、``ra`` 恢复全部默认
+      - 批量：``r 编号或键名`` 恢复该项所在分组出厂默认、``ra`` 恢复全部默认
         （均走 ``features.clear_feature_overrides`` 批量原子写，恢复默认=删覆写键）、
         ``x`` 实验项一键全关（experimental 集合回到无实验态，便于 bisect）；
-      - slug：裸 slug 切换，与编号双通道（编号漂移免疫）；
-      - 赋值：``slug=on|off``，与 CLI ``--feature NAME=VALUE`` 同一解析器与词表
+      - 键名：裸键名切换，与编号双通道（编号漂移免疫）；
+      - 赋值：``键名=on|off``，与 CLI ``--feature NAME=VALUE`` 同一解析器与词表
         （含已合并旧键别名过渡）。
     """
     from src.python.config._llm_settings_defaults import _DEFAULT_LLM_SETTINGS
@@ -385,13 +385,13 @@ def _cmd_config_llm_modules() -> None:
         print(
             "  ⚗ 标记为实验项：默认关闭、处于实验阶段输出质量可能不稳定（行尾附启用统计；各开关说明见 how-to-config 手册）"
         )
-        print("  * 与出厂默认值不一致（配置漂移提示）；输入 ? 编号或 slug 查看该项说明与当前值/默认值")
-        print("  批量：r 编号或slug 恢复本组默认 · ra 恢复全部默认 · x 实验项全关；slug=on|off 按 CLI 词表设置")
+        print("  * 与出厂默认值不一致（配置漂移提示）；输入 ? 编号或键名 查看该项说明与当前值/默认值")
+        print("  批量：r 编号或键名 恢复本组默认 · ra 恢复全部默认 · x 实验项全关；键名=on|off 直接设置")
         print("  基础报告章节组（基金深度分析/市场新闻/历史走势+回撤/组合演进/行动建议）在菜单 [P] 配置")
         print()
         try:
             total = len(items)
-            choice = input(f"  输入编号或 slug 切换 (0-{total})，? 编号或 slug 查看说明: ").strip()
+            choice = input(f"  输入编号或键名切换 (0-{total})，? 编号或键名查看说明: ").strip()
         except (EOFError, KeyboardInterrupt):
             print()
             break
@@ -403,7 +403,7 @@ def _cmd_config_llm_modules() -> None:
             _show_switch_detail(choice, items)
             continue
 
-        # ── 写路径三通道：批量命令 / 赋值（CLI 同词表）/ 编号或 slug 直取 ──
+        # ── 写路径三通道：批量命令 / 赋值（CLI 同词表）/ 编号或键名直取 ──
         raw = choice.strip()
         lowered = raw.lower()
         if lowered == "ra":
@@ -419,7 +419,7 @@ def _cmd_config_llm_modules() -> None:
         if head.lower() == "r" and space and rest.strip():
             target = _match_switch_item(rest, items)
             if target is None:
-                print(f"  {YELLOW}[!]{RESET} 未识别目标「{rest.strip()}」（输入编号或 slug）")
+                print(f"  {YELLOW}[!]{RESET} 未识别目标「{rest.strip()}」（输入编号或键名）")
             elif target[4] != "feature":
                 print(f"  {YELLOW}[!]{RESET} 恢复默认仅支持功能开关分组（LLM 模块可逐项切换）")
             else:
@@ -469,7 +469,7 @@ def _cmd_config_llm_modules() -> None:
                 if raw.isdigit():
                     print(f"  {YELLOW}[!]{RESET} 无效编号")
                 else:
-                    print(f"  {YELLOW}[!]{RESET} 未知编号或开关名「{raw}」（可输入编号、slug 或 slug=on|off）")
+                    print(f"  {YELLOW}[!]{RESET} 未知编号或键名「{raw}」（可输入编号、键名 或 键名=on|off）")
                 continue
             new_val = not target[3]
 

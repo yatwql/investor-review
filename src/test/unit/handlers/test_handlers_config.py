@@ -591,7 +591,7 @@ class TestSwitchPanelReadonlyInfo:
 
 
 class TestSwitchPanelOperations:
-    """[S] 面板写路径三通道：批量恢复默认（r/ra）、实验项全关（x）、slug/赋值直取。
+    """[S] 面板写路径三通道：批量恢复默认（r/ra）、实验项全关（x）、键名/赋值直取。
 
     全部用例把 ``features.FEATURES_FILE`` 指向临时文件（持久化隔离），运行时
     FEATURE_FLAGS 由 conftest 自动重置兜底。
@@ -776,7 +776,7 @@ class TestSwitchPanelOperations:
             _cmd_config_llm_modules()
 
         out = capsys.readouterr().out
-        assert "未识别目标" in out and "输入编号或 slug" in out
+        assert "未识别目标" in out and "输入编号或键名" in out
         assert self._read(path) == {}
 
     @patch("src.python.tui.handlers_config.press_any_key")
@@ -807,14 +807,14 @@ class TestSwitchPanelOperations:
     def test_unknown_input_reports_three_channel_hint(
         self, mock_read, mock_names, mock_filter, mock_refresh, mock_press, capsys
     ):
-        """未知输入给出三通道提示（编号 / slug / slug=on|off），不抛出。"""
+        """未知输入给出三通道提示（编号 / 键名 / 键名=on|off），不抛出。"""
         from src.python.tui.handlers_config import _cmd_config_llm_modules
 
         with patch("builtins.input", side_effect=["definitely_nope", "0"]):
             _cmd_config_llm_modules()
 
         out = capsys.readouterr().out
-        assert "未知编号或开关名" in out and "slug=on|off" in out
+        assert "未知编号或键名" in out and "键名=on|off" in out
 
 
 class TestDualEntryCrossHints:
@@ -872,6 +872,37 @@ class TestDualEntryCrossHints:
 
         assert "章本体在「独立组」" in capsys.readouterr().out
         mock_save.assert_not_called()
+
+
+class TestPanelPlainLanguageCopy:
+    """[S] 面板用户文案白话化：不出现开发者术语 slug（页脚/帮助/报错全量断言）。"""
+
+    @patch("src.python.tui.handlers_config.press_any_key")
+    @patch("src.python.tui.handlers_config.refresh_config")
+    @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
+    @patch("src.python.core.registry.get_llm_module_names")
+    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
+    def test_render_and_help_have_no_dev_jargon(
+        self, mock_read, mock_names, mock_filter, mock_refresh, mock_press, capsys
+    ):
+        """面板渲染 + `?` 未识别帮助 + r 未识别提示：全部用「键名」，无 'slug'。"""
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        with patch("builtins.input", side_effect=["? nope", "r nope", "0"]):
+            _cmd_config_llm_modules()
+
+        out = capsys.readouterr().out
+        # input() 的提示串在 input 被 mock 后不会上屏，页脚文案按源码断言（同
+        # test_boards_panel_points_to_switch_menu 的取法）
+        from pathlib import Path
+
+        src = (Path(__file__).resolve().parents[4] / "src" / "python" / "tui" / "handlers_config.py").read_text(
+            encoding="utf-8"
+        )
+        assert "输入编号或键名切换 (0-" in src
+        assert "请输入 ? 加编号或键名" in out
+        assert "输入编号或键名" in out
+        assert "slug" not in out and "slug" not in src
 
 
 class TestLlmRowCostSuffix:
