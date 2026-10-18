@@ -61,7 +61,7 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 > .venv/bin/python -m src.python.cli --feature doctor_check=off doctor
 >
 > # 本次运行关闭量化指标输出（雷达图各轴 N/A）+ 关闭交互图表（HTML 回退静态渲染）
-> .venv/bin/python -m src.python.cli --feature metrics_enabled=off --feature enable_interactive_charts=off report --type full
+> .venv/bin/python -m src.python.cli --feature metrics_enabled=off --feature data_quality=off report --type full
 > ```
 >
 > 两个参数可同时使用：`--feature` 在 `--experiment` 之后应用，故 `--experiment all --feature factor_catalog=off` 表示「其余实验功能全开、只关掉因子目录」。

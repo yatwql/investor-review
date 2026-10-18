@@ -19,6 +19,7 @@
 
 - 完成通知 Web 渠道接线（rf-708）：`_run_generation` 改薄包装器（委托执行体 + `result_box` 回传产物标志），收尾按 `notify` 配置门控派发完成/失败通知——Web 手动生成与内置定时调度共用（无人值守定时失败不再静默，与 CLI 同构：门控前置、尽力而为不改退出码/不改 run 状态）；降级摘要单源下沉 `report/data_status.degradation_summary()`，CLI 原函数改委托；补门控/载荷/吞异常/接线回归用例
 - 景气度框架诊断迁组（rf-712）：`prosperity_framework` 作用域复核为行动章内嵌评分卡区块（属「既有章内追加分析块」），注册表分组由机制与诊断迁至分析增强——面板编号、TUI 手册分组表、how-to-config/technical 归属描述随迁同步；requirements R-PF-01 引用的已废弃 `GROUP_STANDARD` 常量改现行 `GROUP_ANALYSIS`，并修正 how-to-config「31 项」与分组计数残留
+- 双渲染路径收敛（rf-114）：删除模板 Canvas 回退渲染器 `drawSimpleChart` 与全部 `enable_interactive_charts` Feature Flag 条件分支（主模板 2 处 + 组合演进/持仓明细/穿透/纪律回放/组合历史回撤 5 个 partial），Chart.js 成唯一渲染器（引擎缺失/数据不足时画布占位、数据表格照常，逐图独立 try/catch 不连锁）；开关随消费者消失一并摘除（功能开关 32→31 项、面板其后编号前移，Web/TUI/CLI 三端与文档同源同步）；滚动超额曲线与持仓重合度滚动相关图原为 Canvas-only，移植为 `excess_rolling`/`corr_rolling` Chart.js 数据集（`write_html_report` 权威重建，对齐/降级语义不变）；补单渲染器结构回归锚点与两 builder 回归用例
 - 报告模板 tooltip XSS 纪律（rf-709）：`drawSimpleChart` hover 内容改 DOM API 构建（`createElement` + `textContent`/`createTextNode`，色点走 `style.backgroundColor` 属性赋值），全文 `innerHTML` 清零；模板源结构测试断言无注入 sink 防回归
 - 遥测 JSONL 保留上限（rf-710）：`jsonl_store` 追加原语增 `max_lines` 尾部保留参数（超限丢最旧行，原子写语义不变），perf 历史 5000 行 / 健康检查历史 2000 行上限；账本/去重锚点等业务态文件不设（避免丢失跨会话状态）；补裁剪/批量/缺省行为回归用例
 

@@ -18,13 +18,9 @@
             {% set _crisis_ok = crisis_annotation_data and crisis_annotation_data.available %}
             {% set _crisis_in_range = _crisis_ok and (crisis_annotation_data.intervals | selectattr("in_range") | list) %}
             <!-- ── 一、走势表：净值趋势图 + 危机区间着色 ── -->
-            {% if enable_interactive_charts %}
             <div class="chart-box" style="height:350px;">
                 <canvas id="chart_portfolio_line" width="800" height="350" style="width:100%;height:100%;" aria-label="净值趋势图（悬停查看精确值）" role="img">图表无法显示，数据见报告明细表格</canvas>
             </div>
-            {% else %}
-            <canvas id="portfolioChart" width="800" height="350" style="width:100%;height:350px;"></canvas>
-            {% endif %}
             {% if _crisis_in_range %}
             <div class="chart-caption">组合净值走势（阴影区间为历史上 A 股主要危机时段，详见下方危机区间标注表）</div>
             {% else %}
@@ -113,7 +109,6 @@
                 {% endif %}
             </div>
             <div style="text-align:center;font-size: var(--fs-table-sm);color:var(--text-muted);margin-top:6px;">说明：尾部风险基于历史日收益序列（历史模拟法 VaR）；恢复天数指自最大单日跌幅日收复跌幅前水平所需交易日</div>
-            {% if enable_interactive_charts %}
             {# 量化指标 Radar：3 张摘要卡片 + 雷达图增强（三级降级，同改造前） #}
             <div class="chart-box" style="height:320px;margin-top:16px;">
                 {% if data_unavailable %}
@@ -130,16 +125,11 @@
             {% if not data_unavailable and chart_datasets and chart_datasets.get("radar", {}).get("labels") and chart_datasets["radar"]["datasets"][0].get("note") %}
             <div style="text-align:center;font-size: var(--fs-table-sm);color:var(--text-muted);margin-top:4px;">{{ chart_datasets["radar"]["datasets"][0]["note"] }}</div>
             {% endif %}
-            {% endif %}
             <!-- ── 二、回撤矩阵：回撤走势 + 回撤明细表 ── -->
             {% if history_data.bars and history_data.get("drawdown_available") %}
-            {% if enable_interactive_charts %}
             <div class="chart-box" style="height:250px;margin-top:16px;">
                 <canvas id="chart_drawdown" width="800" height="250" style="width:100%;height:100%;" aria-label="回撤分析图（悬停查看精确值）" role="img">图表无法显示，数据见报告明细表格</canvas>
             </div>
-            {% else %}
-            <canvas id="drawdownChart" width="800" height="250" style="width:100%;height:250px;"></canvas>
-            {% endif %}
             <div class="chart-caption">历史回撤走势</div>
             {% if history_data.drawdown_events %}
             <div style="font-weight: bold; font-size: var(--fs-body); margin-top: 20px; margin-bottom: 6px;">回撤明细（{{ history_data.drawdown_events | length }} 次显著回撤）</div>
@@ -279,23 +269,8 @@
             </table>
             {% if risk_adjusted_excess_data.rolling and risk_adjusted_excess_data.rolling.available %}
             <div style="font-weight: 600; margin: 16px 0 8px;">滚动 {{ risk_adjusted_excess_data.rolling.window_days }} 日超额（{{ risk_adjusted_excess_data.rolling.primary_name }}）</div>
-            <canvas id="excessRollingChart" width="800" height="240" style="width:100%;height:240px;" aria-label="组合相对基准滚动超额收益曲线（百分点）" role="img">图表无法显示，数据口径见下方说明</canvas>
+            <canvas id="chart_excess_rolling" width="800" height="240" style="width:100%;height:240px;" aria-label="滚动超额走势图（悬停查看精确值）" role="img">图表无法显示，数据见上方滚动超额表</canvas>
             <div class="chart-caption">滚动超额 = 近 {{ risk_adjusted_excess_data.rolling.window_days }} 个交易日组合与基准累计收益之差（百分点），逐交易日滚动；正值 = 窗口内跑赢基准</div>
-            <script>
-            (function(){
-                var pts = {{ risk_adjusted_excess_data.rolling.points | tojson }};
-                if (!pts || !pts.length) return;
-                var labels = pts.map(function(p){ return p.date; });
-                var values = pts.map(function(p){ return p.excess_pct; });
-                window.drawSimpleChart('excessRollingChart', [{
-                    label: '滚动超额(%)',
-                    values: values,
-                    color: '#2E75B6',
-                    fillColor: 'rgba(46,117,182,0.1)',
-                    width: 2
-                }], { labels: labels, yFormat: 'percent' });
-            })();
-            </script>
             {% endif %}
             {% if risk_adjusted_excess_data.notes %}
             <div class="note-caption">口径：{{ risk_adjusted_excess_data.notes | join('；') }}</div>
@@ -332,92 +307,6 @@
             </div>
             {% endif %}
         </div>
-        {% if not enable_interactive_charts %}
-        <script>
-        (function(){
-            var bars = {{ history_data.bars | tojson }};
-            if(!bars || !bars.length) return;
-            var values = bars.map(function(b){ return b.total_value; });
-            var labels = bars.map(function(b){ return b.date; });
-            /* 归一化组合至 100 基点，与基准指数同量纲比较 */
-            var firstVal = values[0];
-            var normValues = values.map(function(v){ return +(v / firstVal * 100).toFixed(2); });
-            var datasets = [{
-                label: '组合 (as-if)',
-                values: normValues,
-                color: '#2E75B6',
-                fillColor: 'rgba(46,117,182,0.1)',
-                width: 2
-            }];
-            /* 叠加基准指数（归一化至 100） */
-            var benchmarks = {{ (history_data.benchmarks or []) | tojson }};
-            var bmColors = ['#CC0000', '#E68A00', '#2E7D32'];
-            if (benchmarks && benchmarks.length) {
-                for (var bi = 0; bi < benchmarks.length; bi++) {
-                    var bm = benchmarks[bi];
-                    if (!bm.bars || !bm.bars.length) continue;
-                    datasets.push({
-                        label: bm.name,
-                        values: bm.bars.map(function(b){ return b.value; }),
-                        color: bmColors[bi % bmColors.length],
-                        width: 1.5,
-                        dash: [5, 3]
-                    });
-                }
-            }
-            /* 危机区间带：从 crisis_annotation_data 计算起止索引（无重叠为空 → 说明不出） */
-            var crisisBands = [];
-            var crisisAnnotation = {{ (crisis_annotation_data or {}) | tojson }};
-            if (crisisAnnotation && crisisAnnotation.intervals) {
-                for (var ci = 0; ci < crisisAnnotation.intervals.length; ci++) {
-                    var iv = crisisAnnotation.intervals[ci];
-                    if (!iv.in_range) continue;
-                    var si = -1, ei = -1;
-                    for (var k2 = 0; k2 < labels.length; k2++) {
-                        if (si === -1 && labels[k2] >= iv.start) si = k2;
-                        if (labels[k2] <= iv.end) ei = k2;
-                    }
-                    if (si !== -1 && ei !== -1 && si <= ei) {
-                        crisisBands.push({ startIndex: si, endIndex: ei, label: iv.name });
-                    }
-                }
-            }
-            window.drawSimpleChart('portfolioChart', datasets, { yFormat: 'index', labels: labels, crisisBands: crisisBands });
-
-            /* 回撤走势图（独立 canvas，透明红填充；无 canvas 时 drawSimpleChart 安全跳过） */
-            var drawdowns = bars.map(function(b){ return b.drawdown_pct; });
-            var ddDatasets = [{
-                label: '组合回撤',
-                values: drawdowns,
-                color: '#CC0000',
-                fillColor: 'rgba(204,0,0,0.15)',
-                width: 1.5
-            }];
-            if (benchmarks && benchmarks.length) {
-                var bmColors2 = ['#9CA3AF', '#B0BEC5', '#90A4AE'];
-                for (var di = 0; di < benchmarks.length; di++) {
-                    var bm2 = benchmarks[di];
-                    if (!bm2.bars || !bm2.bars.length) continue;
-                    var bmValues = bm2.bars.map(function(b){ return b.value; });
-                    var bmDrawdowns = [], bmPeak = bmValues[0];
-                    for (var vi = 0; vi < bmValues.length; vi++) {
-                        if (bmValues[vi] > bmPeak) bmPeak = bmValues[vi];
-                        bmDrawdowns.push(-(bmPeak - bmValues[vi]) / bmPeak * 100);
-                    }
-                    ddDatasets.push({
-                        label: bm2.name,
-                        values: bmDrawdowns,
-                        color: bmColors2[di % bmColors2.length],
-                        width: 1,
-                        dash: [4, 3],
-                        fill: false
-                    });
-                }
-            }
-            window.drawSimpleChart('drawdownChart', ddDatasets, { yFormat: 'percent', labels: labels });
-        })();
-        </script>
-        {% endif %}
         {% else %}
         <div class="section-content">
             <div class="empty-note">

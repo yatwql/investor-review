@@ -200,7 +200,6 @@ class TestHtmlRendering:
             section_numbers=numbers,
             section_visible_dict=sv,
             chart_datasets={},
-            enable_interactive_charts=False,
             action_data={
                 "available": True,
                 "summary": "s",

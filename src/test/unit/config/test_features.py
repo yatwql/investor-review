@@ -515,7 +515,7 @@ class TestSwitchOverrideParsing:
         """取值词表覆盖 1/0 与 yes/no。"""
         assert parse_switch_override("metrics_enabled=1") == ("metrics_enabled", True)
         assert parse_switch_override("metrics_enabled=0") == ("metrics_enabled", False)
-        assert parse_switch_override("enable_interactive_charts=no") == ("enable_interactive_charts", False)
+        assert parse_switch_override("data_quality=no") == ("data_quality", False)
 
     def test_parse_tolerates_surrounding_spaces(self):
         """``NAME = VALUE`` 两侧空白可容忍（手输命令行常见）。"""

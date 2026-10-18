@@ -310,8 +310,8 @@ class TestHtmlRollingTrend(unittest.TestCase):
         text = section.get_text()
         html = str(section)
         self.assertIn("滚动趋势", text)
-        self.assertIn("corrRollingChart", html)
-        self.assertIn("drawSimpleChart", html)
+        self.assertIn("chart_corr_rolling", html)
+        self.assertNotIn("drawSimpleChart", html)
         self.assertIn("重点品对", text)
         # 焦点品对表：最新值与首→末趋势
         self.assertIn("0.95", text)
@@ -322,23 +322,24 @@ class TestHtmlRollingTrend(unittest.TestCase):
         # 覆盖区间行
         self.assertIn("2026-04-01 ~ 2026-09-05", text)
 
-    def test_chart_datasets_script_contains_no_null_literals(self):
-        """脚本走日期映射防御：不含会污染极值轴的 null 值占位构造。"""
+    def test_no_legacy_canvas_script_in_rolling_block(self):
+        """滚动子块不再内联 Canvas 脚本（corr_rolling 数据集由 write_html_report 补齐）。"""
         html = self._section_html(_with_rolling(_rolling_data()))
-        self.assertIn("baseSet", html)
-        self.assertIn("window.drawSimpleChart", html)
+        self.assertIn("chart_corr_rolling", html)
+        self.assertNotIn("drawSimpleChart", html)
+        self.assertNotIn("baseSet", html)
 
     def test_rolling_absent_keeps_static_block_only(self):
         """无 rolling 键（既有契约）→ 静态矩阵照常、滚动子块不出现。"""
         section = self._section(_correlation_data())
         self.assertNotIn("滚动趋势", section.get_text())
-        self.assertNotIn("corrRollingChart", str(section))
+        self.assertNotIn("chart_corr_rolling", str(section))
 
     def test_rolling_unavailable_omits_block(self):
         """rolling.available=False → 子块整体不渲染（静态矩阵不受影响）。"""
         section = self._section(_with_rolling(_rolling_data(available=False, status="insufficient")))
         self.assertNotIn("滚动趋势", section.get_text())
-        self.assertNotIn("corrRollingChart", str(section))
+        self.assertNotIn("chart_corr_rolling", str(section))
         self.assertIn("配对明细", section.get_text())  # 静态块仍在
 
     def test_rolling_empty_portfolio_omits_block(self):
@@ -346,7 +347,7 @@ class TestHtmlRollingTrend(unittest.TestCase):
         empty = _rolling_data()
         empty["portfolio"] = {"60": [], "120": []}
         section = self._section(_with_rolling(empty))
-        self.assertNotIn("corrRollingChart", str(section))
+        self.assertNotIn("chart_corr_rolling", str(section))
 
 
 class TestCorrelationRollingWiring(unittest.TestCase):

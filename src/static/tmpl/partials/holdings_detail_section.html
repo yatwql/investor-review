@@ -154,7 +154,6 @@
                     </tr>
                 </tbody>
             </table>
-            {% if enable_interactive_charts %}
             {# 资产构成 Doughnut：按资产属性聚合市值的交互环形图 #}
             <div style="max-width:480px;margin:12px auto;">
                 <div class="chart-box" style="height:320px;">
@@ -168,7 +167,6 @@
                 <div class="chart-caption">资产构成分布</div>
                 {% endif %}
             </div>
-            {% endif %}
         </div>
         {{ render_data_status(data_status_category) }}
         {{ render_back_to_top() }}

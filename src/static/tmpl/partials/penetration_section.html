@@ -2,7 +2,6 @@
         <div class="section-title">{{ section_numbers['penetration'] }}、{{ section_names['penetration'] }}</div>
         {% if penetration and penetration.get("top10") %}
         <div class="section-content" style="padding: 0;">
-            {% if enable_interactive_charts %}
             {# 行业分布 + 穿透 TOP10：两个垂直柱状图分两行显示、居中，避免小屏并排不齐。
                空值语义（§4.12）：dataset 无 labels 时不渲染 canvas，显示占位提示。 #}
             <div class="penetration-charts" style="display: flex; flex-wrap: wrap; gap: 16px; padding: 12px;">
@@ -31,7 +30,6 @@
                     {% endif %}
                 </div>
             </div>
-            {% endif %}
             <table>
                 <thead>
                     <tr>

@@ -21,6 +21,8 @@ from types import SimpleNamespace
 import pytest
 
 from src.python.report.chart_data_builder import (
+    _build_corr_rolling_dataset,
+    _build_excess_rolling_dataset,
     DATASET_KEYS,
     build_chart_datasets,
     build_evolution_chart_data,
@@ -100,25 +102,21 @@ def _gen_bars(n: int, start: str = "2024-01-01") -> list[dict]:
 
 
 class TestKeysContract:
-    def test_output_contains_all_six_keys(self) -> None:
-        """正常输入下，输出包含全部 6 个固定键。"""
+    def test_builder_output_within_contract(self) -> None:
+        """正常输入下，builder 直产键全集在契约内且含基础六键。"""
         ds = build_chart_datasets(
             history_data=_history_ok(),
             details=_details(),
             penetration=_penetration(),
         )
-        assert set(DATASET_KEYS) == set(ds.keys())
+        base = {"portfolio_line", "drawdown", "category_doughnut", "industry_bar", "penetration_bar", "radar"}
+        assert base <= set(ds.keys())
+        assert set(ds.keys()) <= set(DATASET_KEYS)
 
-    def test_key_contract_matches_constant(self) -> None:
-        """固定键顺序与 DATASET_KEYS 常量一致（§4.11 契约）。"""
-        assert list(DATASET_KEYS) == [
-            "portfolio_line",
-            "drawdown",
-            "category_doughnut",
-            "industry_bar",
-            "penetration_bar",
-            "radar",
-        ]
+    def test_key_contract_unique_and_writer_supplemented(self) -> None:
+        """键契约：唯一；基础六键 builder 直产，excess/corr 两键由 write_html_report 补齐。"""
+        assert len(DATASET_KEYS) == len(set(DATASET_KEYS))
+        assert {"excess_rolling", "corr_rolling"} <= set(DATASET_KEYS)
 
     def test_dataset_schema_shape(self) -> None:
         """每张图均遵循通用 schema：labels + datasets[0].degraded。"""
@@ -135,7 +133,7 @@ class TestKeysContract:
                 "hhi": 0.2,
             },
         )
-        for key in DATASET_KEYS:
+        for key in ds:
             chart = ds[key]
             assert "labels" in chart, f"{key} 缺 labels"
             assert isinstance(chart["datasets"], list), f"{key} datasets 应为 list"
@@ -700,3 +698,85 @@ class TestEvolutionChartData:
         before = dict(src)
         build_evolution_chart_data(src)
         assert src == before
+
+
+class TestExcessRollingDataset:
+    """滚动超额数据集（excess_rolling）builder 回归。"""
+
+    def test_unavailable_returns_empty(self) -> None:
+        assert _build_excess_rolling_dataset(None) == {}
+        assert _build_excess_rolling_dataset({"rolling": {"available": False}}) == {}
+        assert (
+            _build_excess_rolling_dataset(
+                {"rolling": {"available": True, "points": [{"date": "d1", "excess_pct": 0.1}]}}
+            )
+            == {}
+        )
+
+    def test_available_builds_single_line(self) -> None:
+        data = {
+            "rolling": {
+                "available": True,
+                "points": [
+                    {"date": "2026-01-01", "excess_pct": 0.5},
+                    {"date": "2026-01-02", "excess_pct": -0.2},
+                ],
+            }
+        }
+        out = _build_excess_rolling_dataset(data)
+        assert out["labels"] == ["2026-01-01", "2026-01-02"]
+        assert out["datasets"][0]["data"] == [0.5, -0.2]
+        assert out["datasets"][0]["label"] == "滚动超额(%)"
+
+
+class TestCorrRollingDataset:
+    """持仓重合度滚动相关数据集（corr_rolling）builder 回归。"""
+
+    @staticmethod
+    def _rolling(p60=None, focus=None):
+        return {"rolling": {"portfolio": {"60": p60 or [], "120": []}, "focus_pairs": focus or []}}
+
+    def test_missing_or_short_returns_empty(self) -> None:
+        assert _build_corr_rolling_dataset(None) == {}
+        assert _build_corr_rolling_dataset(self._rolling(p60=[{"date": "d1", "value": 0.5}])) == {}
+
+    def test_focus_pair_aligned_from_start(self) -> None:
+        p60 = [{"date": "d1", "value": 0.3}, {"date": "d2", "value": 0.4}]
+        focus = [
+            {
+                "name_a": "甲",
+                "name_b": "乙",
+                "series": {"60": [{"date": "d1", "value": 0.9}, {"date": "d2", "value": 0.95}]},
+            }
+        ]
+        out = _build_corr_rolling_dataset(self._rolling(p60=p60, focus=focus))
+        assert out["labels"] == ["d1", "d2"]
+        assert [d["label"] for d in out["datasets"]] == ["组合平均 60日", "甲×乙"]
+        assert out["datasets"][1]["data"] == [0.9, 0.95]
+        assert out["datasets"][1]["borderDash"] == [5, 3]
+
+    def test_late_start_aligns_to_common_start(self) -> None:
+        p60 = [{"date": "d1", "value": 0.3}, {"date": "d2", "value": 0.4}, {"date": "d3", "value": 0.5}]
+        focus = [
+            {
+                "name_a": "甲",
+                "name_b": "乙",
+                "series": {"60": [{"date": "d2", "value": 0.9}, {"date": "d3", "value": 0.95}]},
+            }
+        ]
+        out = _build_corr_rolling_dataset(self._rolling(p60=p60, focus=focus))
+        assert out["labels"] == ["d2", "d3"]
+        assert out["datasets"][0]["data"] == [0.4, 0.5]
+        assert out["datasets"][1]["data"] == [0.9, 0.95]
+
+    def test_unaligned_sequence_excluded(self) -> None:
+        p60 = [{"date": "d1", "value": 0.3}, {"date": "d2", "value": 0.4}]
+        focus = [
+            {
+                "name_a": "甲",
+                "name_b": "乙",
+                "series": {"60": [{"date": "dx", "value": 0.9}, {"date": "d2", "value": 0.95}]},
+            }
+        ]
+        out = _build_corr_rolling_dataset(self._rolling(p60=p60, focus=focus))
+        assert [d["label"] for d in out["datasets"]] == ["组合平均 60日"]

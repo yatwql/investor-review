@@ -1410,9 +1410,9 @@ LLM 五维度量化评分，每项满分 100：
 
 ### 11.5 features.json（功能开关注册表）
 
-独立配置文件，提供 32 项功能开关的运行时覆写。不配置时全部使用代码内置默认值。开关按**作用域分四组**——**呈现与体验**（2 项，默认开：量化指标显示 / 报告图表交互）、**分析增强**（16 项，多数默认关，`llm_debate_conditional`/`data_quality`/`market_temperature`/`fund_purchase_limit`/`cost_position` 五项默认开）、**独立章节与回放**（6 项，默认关）与**机制与诊断**（8 项，机制项默认开、⚗ 实验项默认关）——分组表达「开了长出什么」而非生命周期；**生命周期由独立字段 `experimental` 表达**（2 项：`decision_reflection` 与 `report_qa`，面板以 ⚗ 标识、随产物自述），**转正**即把该字段置 false（作用域不变则原地留块，作用域变化才改组），面板可见性不随转正摘除。四组在 TUI 菜单 `[S]` / Web 配置面板 / CLI（`--experiment` 只开全部实验项、`--feature NAME=VALUE` 全域双向）中**同样可切换**；唯一登记点是 `config/features.py::feature_switch_registry`（显示名/说明/作用域分组/默认值/产物影响/实验身份六字段），渠道层不得另写清单。仅收录「有消费者」的开关——LLM 模块启停与基金深度分析（`llm_settings.json` 的 `enabled_llm`）、新闻源（`config.json` 的 `news_sources`）、历史走势与回撤（`config.json` 的 `enable_history`）、匿名化模式（`config.json` 的 `anonymization.mode`）各有归属配置，不在此文件。
+独立配置文件，提供 31 项功能开关的运行时覆写。不配置时全部使用代码内置默认值。开关按**作用域分四组**——**呈现与体验**（1 项，默认开：量化指标显示 / 报告图表交互）、**分析增强**（16 项，多数默认关，`llm_debate_conditional`/`data_quality`/`market_temperature`/`fund_purchase_limit`/`cost_position` 五项默认开）、**独立章节与回放**（6 项，默认关）与**机制与诊断**（8 项，机制项默认开、⚗ 实验项默认关）——分组表达「开了长出什么」而非生命周期；**生命周期由独立字段 `experimental` 表达**（2 项：`decision_reflection` 与 `report_qa`，面板以 ⚗ 标识、随产物自述），**转正**即把该字段置 false（作用域不变则原地留块，作用域变化才改组），面板可见性不随转正摘除。四组在 TUI 菜单 `[S]` / Web 配置面板 / CLI（`--experiment` 只开全部实验项、`--feature NAME=VALUE` 全域双向）中**同样可切换**；唯一登记点是 `config/features.py::feature_switch_registry`（显示名/说明/作用域分组/默认值/产物影响/实验身份六字段），渠道层不得另写清单。仅收录「有消费者」的开关——LLM 模块启停与基金深度分析（`llm_settings.json` 的 `enabled_llm`）、新闻源（`config.json` 的 `news_sources`）、历史走势与回撤（`config.json` 的 `enable_history`）、匿名化模式（`config.json` 的 `anonymization.mode`）各有归属配置，不在此文件。
 
-下表列常用开关（**非全集**，完整 32 项与分组清单见配置指引 `how-to-config.md` 功能开关节）：
+下表列常用开关（**非全集**，完整 31 项与分组清单见配置指引 `how-to-config.md` 功能开关节）：
 
 | 开关名 | 类型 | 默认值 | 说明 |
 |:-------|:----:|:------:|:-----|
@@ -1423,7 +1423,6 @@ LLM 五维度量化评分，每项满分 100：
 | `module_quality_gate` | bool | true（默认开启） | 模块级质量分级启停：对 4 个 LLM 模块输出按完整性/篇幅评 A~F，低评级中「内容在但存在缺陷」者随内容头部注入 `【内容质量提示】` 横幅（只标注、不阻断、不重试、不写回缓存）。**默认开启**——纯只读分级，A/B 级健康输出零噪音 |
 | `decision_header_parse` | bool | true（默认开启） | 决策头结构化启停：专家复盘提示词追加一行受控 JSON 决策头（`决策头：{"decisions":[…]}`），抽取侧优先读结构化头、失败回落确定性表格解析（决策词归一，防写反方向）；关闭时提示词逐字节不变。**默认开启**——两路抽取口径同源，关闭只是去掉一层机器可读保障 |
 | `metrics_enabled` | bool | true | 量化指标显示（原 `metrics_sharpe` / `metrics_calmar` / `metrics_hhi` / `metrics_winrate` / `metrics_turnover` / `metrics_risk_contribution` / `metrics_beta` 七项并入）：指标始终全量计算；关闭即量化指标雷达图各轴显示 N/A（含降级 3 轴）且断路器暂停该组指标的失败计数，智囊团复盘指标表不受影响 |
-| `enable_interactive_charts` | bool | true | 报告 HTML 交互图表（Chart.js）；关闭时回退基础 Canvas 图表 |
 | `doctor_check` | bool | true（默认开启） | 系统自检功能上屏：开启时 TUI 菜单显示 `[T]` 系统自检项、Web 运行状态区渲染「系统自检」卡片（`GET /api/doctor`）；置 false 则两处入口一并隐藏。**仅约束 TUI/Web 两个日常入口**——`doctor` CLI 子命令不受本开关约束（配置损坏正是它要诊断的场景，被开关拦住会形成死锁）。属**机制与诊断组**开关（TUI 菜单 `[S]` / Web 配置面板的「机制与诊断」块），只影响入口显隐、不进报告产物自述 |
 | `datasource_adapter` | bool | true（默认开启） | 数据源适配契约启停：行情域三源改由三段式适配器（参数转译→抓取→映射到标准字段）+ 声明式 alias 归一获取，与既有转换函数逐源等价（仅东方财富多出 `market_cap`/`pe` 两个 `None` 键）。**默认开启**——内部接缝，两种取值下报告数值不变；置 false 时链路走既有转换函数、行为逐字节不变（回退杠杆）。为接入新数据源/新字段预备 |
 | `datasource_credential_ready` | bool | true（默认开启） | 数据源凭据就绪指引启停：接入需 key 的源时补一行声明，链路即**主动跳过**缺凭据的源并给出可读指引（不进熔断计数）、`check-sources` 出 `⏭️` 跳过态与就绪摘要、`doctor` 出「数据源凭据」组。**当前全部数据源免费、声明表为空**，开启后可见的就是「均无需凭据（免费源）」。凭据只从环境变量读，**值永不落日志与报告**。**默认开启**——声明表为空时对报告产物零影响，且只读诊断不耗 LLM、不写盘 |
@@ -1431,8 +1430,8 @@ LLM 五维度量化评分，每项满分 100：
 用法：在 `features.json` 中仅列出需覆写的开关，未列出的保持默认值。
 ```json
 {
-  "enable_interactive_charts": true,
-  "metrics_enabled": false
+  "metrics_enabled": false,
+  "data_quality": false
 }
 ```
 

@@ -222,7 +222,7 @@ class TestTooltipXssHygiene(unittest.TestCase):
         for sink in ("innerHTML", "insertAdjacentHTML", "document.write", "eval("):
             self.assertNotIn(sink, self.html, f"模板出现 HTML 注入 sink: {sink}")
 
-    def test_tooltip_built_with_dom_api(self):
-        """tooltip 内容用 createTextNode + textContent 构建（标签/数值不可信）。"""
-        self.assertIn("createTextNode", self.html)
-        self.assertIn("textContent", self.html)
+    def test_legacy_canvas_renderer_removed(self):
+        """Canvas 回退渲染器（drawSimpleChart 与旧 Flag 门）已整体移除，Chart.js 为唯一渲染器。"""
+        self.assertNotIn("drawSimpleChart", self.html)
+        self.assertNotIn("enable_interactive", self.html)

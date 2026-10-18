@@ -144,9 +144,8 @@ def _build_minimal_render_data(
         "section_order": section_order,
         "section_numbers": section_numbers,
         "section_visible_dict": section_visible_dict,
-        # Chart.js 交互图表：默认关闭，模板走基础绘图路径
+        # Chart.js 数据集空 → 图表容器显示占位文案
         "chart_datasets": {},
-        "enable_interactive_charts": False,
     }
 
     # 基金深度分析模块可见时，填充 mock 数据结构（模板内部 .get() 要求 dict 非 None）

@@ -108,7 +108,6 @@ def _generate_report_both(
     _enable_cost_lots = is_enable_cost_lots(config)
     _enable_financial_report_digest = is_enable_financial_report_digest(config)
     _enable_financial_indicator = is_enable_financial_indicator(config)
-    _enable_interactive_charts = is_feature_enabled("enable_interactive_charts")
     _enable_summary_highlights = is_feature_enabled("summary_highlights")
     sec_order = get_report_section_order(config)
     output = output_dir or config.get("output_dir", "reports")
@@ -274,7 +273,6 @@ def _generate_report_both(
         chart_datasets = _build_chart_datasets_for_report(
             history_data=history_data,
             details=details,
-            enable_interactive=_enable_interactive_charts,
         )
         # 成本流水数据（fund_flow_data）：复用 excel_market_data 组装逻辑，
         # 开关关闭返回 None（HTML 模板保持既有输出）。
@@ -297,7 +295,6 @@ def _generate_report_both(
             enable_action=_enable_action,
             enable_llm=False,
             chart_datasets=chart_datasets,
-            enable_interactive_charts=_enable_interactive_charts,
             evolution_data=(pipeline_data or {}).get("evolution_data"),
             enable_data_quality=_enable_data_quality,
             position_status=(pipeline_data or {}).get("position_status"),

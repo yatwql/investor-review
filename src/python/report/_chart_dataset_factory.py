@@ -23,18 +23,14 @@ def _build_chart_datasets_for_report(
     details: list | None = None,
     risk_metrics: dict | None = None,
     all_metrics: dict | None = None,
-    enable_interactive: bool = True,
 ) -> dict | None:
-    """构建 Chart.js 数据集（Flag 关闭或数据缺失时返回 None/空 dict）。
+    """构建 Chart.js 数据集（数据缺失时返回空 dict，单图失败独立降级）。
 
-       - Flag 关闭 → None（模板不渲染 Chart.js，回退旧 Canvas）
-    - Flag 开启 → build_chart_datasets（内部对单图失败独立 try/except，）
+    - build_chart_datasets（内部对单图失败独立 try/except）
 
        量化指标总开关（``metrics_enabled``）：关闭时 radar 数据集各轴输出
        "N/A"（含降级 3 轴路径）；开启或未传时按数据原值渲染。
     """
-    if not enable_interactive:
-        return None
     try:
         from src.python.config.features import is_feature_enabled
         from src.python.report.chart_data_builder import build_chart_datasets

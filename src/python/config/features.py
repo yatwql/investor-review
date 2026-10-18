@@ -5,8 +5,8 @@
 
 用法：
   >>> from src.python.config.features import is_feature_enabled, FEATURE_FLAGS
-  >>> if is_feature_enabled("enable_interactive_charts"):
-  ...     embed_chart_assets()
+  >>> if is_feature_enabled("metrics_enabled"):
+  ...     render_metric_cards()
 
 配置持久化：功能开关可通过 features.json 覆写默认值。
 全部开关在 :data:`feature_switch_registry` 一处登记（显示名/说明/作用域分组/
@@ -221,14 +221,6 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
     "metrics_enabled": FeatureSwitchDef(
         "量化指标显示",
         "报告量化指标是否输出（雷达图各轴）；关闭即各轴显示 N/A、熔断器暂停指标失败计数（指标始终全量计算）",
-        GROUP_PRESENTATION,
-        True,
-        True,
-    ),
-    # ── 呈现与体验：报告图表交互 ──
-    "enable_interactive_charts": FeatureSwitchDef(
-        "报告图表交互",
-        "Chart.js 交互图（缩放/悬停）；关闭即回退 Canvas+表格静态渲染，且 HTML 不再单文件自包含",
         GROUP_PRESENTATION,
         True,
         True,
@@ -634,8 +626,8 @@ def load_feature_overrides() -> None:
 
     JSON 格式：
       {
-        "enable_interactive_charts": false,
-        "metrics_enabled": true
+        "metrics_enabled": true,
+        "data_quality": false
       }
     """
     if not os.path.exists(FEATURES_FILE):

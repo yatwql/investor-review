@@ -394,6 +394,56 @@
     }), 'schedule_replay');
   }
 
+  function initExcessRollingChart() {
+    var ds = chartData['excess_rolling'];
+    var el = document.getElementById('chart_excess_rolling');
+    if (!ds || !ds.labels || ds.labels.length < 2 || !ds.datasets || !ds.datasets.length || !el) {
+      return;
+    }
+    var datasets = ds.datasets.map(function (d) {
+      return {
+        label: d.label,
+        data: d.data,
+        borderColor: d.borderColor || '#2E75B6',
+        backgroundColor: d.backgroundColor || 'rgba(46,117,182,0.1)',
+        borderWidth: 2,
+        pointRadius: 0,
+        fill: true,
+        tension: 0.1
+      };
+    });
+    trackChart(new Chart(el, {
+      type: 'line',
+      data: { labels: ds.labels, datasets: datasets },
+      options: lineOptions('超额 (%)')
+    }), 'excess_rolling');
+  }
+
+  function initCorrRollingChart() {
+    var ds = chartData['corr_rolling'];
+    var el = document.getElementById('chart_corr_rolling');
+    if (!ds || !ds.labels || ds.labels.length < 2 || !ds.datasets || !ds.datasets.length || !el) {
+      return;
+    }
+    var datasets = ds.datasets.map(function (d) {
+      return {
+        label: d.label,
+        data: d.data,
+        borderColor: d.borderColor || '#2E75B6',
+        borderWidth: 2,
+        pointRadius: 0,
+        fill: false,
+        tension: 0.1,
+        borderDash: d.borderDash || undefined
+      };
+    });
+    trackChart(new Chart(el, {
+      type: 'line',
+      data: { labels: ds.labels, datasets: datasets },
+      options: lineOptions('相关系数')
+    }), 'corr_rolling');
+  }
+
  /* ── 注册初始化函数（每个独立 try/catch）────────── */
   var inits = {
     portfolio_line: initPortfolioChart,
@@ -405,7 +455,9 @@
     evolution_total: initEvolutionTotalChart,
     evolution_hhi: initEvolutionHhiChart,
     evolution_top: initEvolutionTopChart,
-    schedule_replay: initScheduleReplayChart
+    schedule_replay: initScheduleReplayChart,
+    excess_rolling: initExcessRollingChart,
+    corr_rolling: initCorrRollingChart
   };
 
   Object.keys(inits).forEach(function (key) {

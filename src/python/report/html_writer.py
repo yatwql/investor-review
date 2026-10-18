@@ -241,7 +241,6 @@ def _render_template(
     data_status_history: DataStatus,
     data_source_matrix: dict,
     chart_datasets: dict | None = None,
-    enable_interactive_charts: bool = False,
     style_factor_data: dict | None = None,
     factor_catalog_data: dict | None = None,
     factor_names: dict | None = None,
@@ -367,7 +366,6 @@ def _render_template(
         report_year=datetime.now().year,
         data_unavailable=bool(total_mv == 0 and total_cost > 0),
         chart_datasets=chart_datasets,
-        enable_interactive_charts=enable_interactive_charts,
         style_factor_data=style_factor_data,
         factor_catalog_data=factor_catalog_data,
         factor_names=factor_names or {},
@@ -430,7 +428,6 @@ def write_html_report(
     market_sentiment_data: dict | None = None,  # 市场情绪与持仓热点契约（报告增强开关 market_sentiment，None=开关关闭）
     debate_info: dict | None = None,
     chart_datasets: dict | None = None,
-    enable_interactive_charts: bool = False,
     style_factor_data: dict | None = None,
     factor_catalog_data: dict | None = None,
     position_relationship_data: dict | None = None,
@@ -476,9 +473,7 @@ def write_html_report(
         a_indices: 可选预获取 A 股指数数据，传入时跳过 HTTP 请求。
         us_indices: 可选预获取美股指数数据，传入时跳过 HTTP 请求。
         chart_datasets: Chart.js 数据集（chart_data_builder 输出），经 context 传递。
-            默认 None → 图表章节回退旧 Canvas 渲染。
-        enable_interactive_charts: Chart.js 交互图表总开关（Feature Flag）。
-            默认 False → 模板不加载 chart.min.js / canvas 容器。
+            默认 None → 图表容器显示占位文案（数据表格照常渲染）。
 
     Returns:
         最新版报告的绝对路径
@@ -509,9 +504,11 @@ def write_html_report(
     # 这三张图的数据源（cat_data / penetration）只在 write_html_report 内计算，
     # 调用侧传入的 chart_datasets 拿不到它们，导致图表误显示"暂不可用"。
     # 此处用权威数据重建并覆盖，保证图表与表格同源（单图失败仅跳过该图）。
-    if enable_interactive_charts and chart_datasets is not None:
+    if chart_datasets is not None:
         from src.python.report.chart_data_builder import (
             _build_category_doughnut_dataset,
+            _build_corr_rolling_dataset,
+            _build_excess_rolling_dataset,
             _build_industry_bar_dataset,
             _build_penetration_bar_dataset,
         )
@@ -528,6 +525,14 @@ def write_html_report(
             chart_datasets["penetration_bar"] = _build_penetration_bar_dataset(penetration)
         except Exception:
             logger.warning("[chart] penetration_bar 数据补齐失败，保留原数据集", exc_info=True)
+        try:
+            chart_datasets["excess_rolling"] = _build_excess_rolling_dataset(risk_adjusted_excess_data)
+        except Exception:
+            logger.warning("[chart] excess_rolling 数据补齐失败，保留原数据集", exc_info=True)
+        try:
+            chart_datasets["corr_rolling"] = _build_corr_rolling_dataset(position_relationship_data)
+        except Exception:
+            logger.warning("[chart] corr_rolling 数据补齐失败，保留原数据集", exc_info=True)
 
     # ── 13) 基金经理变更监控 ──
     manager_analysis = _render_manager_analysis(holdings, enable_fund_deep_analysis, prog)
@@ -727,7 +732,6 @@ def write_html_report(
         data_source_matrix=data_source_matrix,
         data_source_catalog=data_source_catalog,
         chart_datasets=chart_datasets,
-        enable_interactive_charts=enable_interactive_charts,
         data_quality_enabled=enable_data_quality,
         position_status=position_status,
         data_freshness=data_freshness,
@@ -748,11 +752,10 @@ def write_html_report(
         summary_highlights_data=summary_highlights_data,
     )
 
-    if enable_interactive_charts:
-        _copy_js_assets(output_dir)
-        # 内嵌 Chart.js 资产 → HTML 单文件自包含（下载/移动/单发移动端浏览
-        # 不再依赖同目录松散 JS；_copy_js_assets 仍保留以兼容既有产物布局）
-        html = _inline_js_assets(html)
+    _copy_js_assets(output_dir)
+    # 内嵌 Chart.js 资产 → HTML 单文件自包含（下载/移动/单发移动端浏览
+    # 不再依赖同目录松散 JS；_copy_js_assets 仍保留以兼容既有产物布局）
+    html = _inline_js_assets(html)
 
     # 产物文本清扫（匿名化）：字段层未覆盖的派生面（分类/业绩/管理人等从
     # holdings 直取名称的区块）在最终 HTML 文本统一真名→代号；明细区块已
