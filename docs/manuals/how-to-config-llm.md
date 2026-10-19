@@ -168,7 +168,7 @@ LLM 配置由三个独立文件管理：
 
 ### 调整多链线路优先级
 
-降级顺序的真值是 `providers[].priority`（数值越小越优先，`priority`/`fallback_only` 策略下即实际链序）。三个入口写同一份文件、走同一校验（order 必须恰好覆盖全部线路名，写前自动 `.bak` 备份、注释保留）：
+备用顺序的真值是 `providers[].priority`（数值越小越优先，`priority`/`fallback_only` 策略下即实际链序）。三个入口写同一份文件、走同一校验（order 必须恰好覆盖全部线路名，写前自动 `.bak` 备份、注释保留）：
 
 - **TUI**：主菜单 `[M]` —— 面板按当前顺序列出线路，输入两个编号交换位置（如 `3 1`）即写盘
 - **Web**：配置面板「LLM 多链线路优先级」块，▲▼ 按钮调序即存
@@ -370,7 +370,7 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
 - `fact_check`（dict，默认 `{tolerance: 1.0}`）：LLM 输出数值一致性检测配置。详见下节「事实校验容差配置」
 - `pricing`（dict，默认 `{currency: "CNY", timezone: "Asia/Shanghai", peak_periods: ["09:00-12:00", "14:00-18:00"], idle_periods: [], weekend_always_idle: true, holiday_always_idle: true}`）：模型 Token 定价表 + 峰谷时段配置，可省略（使用代码内置定价），仅需覆盖时添加。除 `currency`（货币符号）、`timezone`（峰谷判定时区，IANA 名称）、`peak_periods` / `idle_periods`（高峰/闲时段，`"HH:MM-HH:MM"` 列表）、`weekend_always_idle`（周末全天闲时开关，默认 `true`）、`holiday_always_idle`（法定节假日全天闲时开关，默认 `true`）外，其余键按模型名合并覆盖价格。详见下方「完整模型定价表」章节
 - `news_correlation_top_n`（int，默认 `30`）：送 LLM 分析的新闻条数。仅 news_correlation 模块有效，值越大 Token 消耗越高
-- `daily_cost_limit`（数值，默认 `0`）：LLM **日费用预算上限**（货币单位与 `pricing.currency` 一致，`0`=不启用）。启用后 full 生成前展示**事前费用预估区间**（计划参与模块 × 模型单价；perf 历史逐模块实际费用优先、无历史静态兜底）与今日已花费；达到上限时交互渠道（TUI / Web / CLI 终端）询问「降级走缓存继续 / 中止」，非交互渠道（`--yes`、`--non-interactive`、非 TTY、Web 定时调度）直接中止。今日已花费 = perf 历史当日 `llm.total_cost` 汇总，与报告内 LLM 用量统计同源；与**报告级输入 Token 预警**（`cost_tracker`，默认 8K、仅告警不阻断）分层——本项是**生成前的日费用硬闸**
+- `daily_cost_limit`（数值，默认 `0`）：LLM **日费用预算上限**（货币单位与 `pricing.currency` 一致，`0`=不启用）。启用后 full 生成前展示**事前费用预估区间**（计划参与模块 × 模型单价；perf 历史逐模块实际费用优先、无历史静态兜底）与今日已花费；达到上限时交互渠道（TUI / Web / CLI 终端）询问「用已有结果继续 / 中止」，非交互渠道（`--yes`、`--non-interactive`、非 TTY、Web 定时调度）直接中止。今日已花费 = perf 历史当日 `llm.total_cost` 汇总，与报告内 LLM 用量统计同源；与**报告级输入 Token 预警**（`cost_tracker`，默认 8K、仅告警不阻断）分层——本项是**生成前的日费用硬闸**
 - `debate`（dict，可选实验功能）：辩论模式配置。含 procon（三段式正反辩论，`per_call_max_tokens` 限定每阶段输出上限，默认 18432（null 时按代码兜底同值））、conditional（条件情景推理）、concentration_qa（集中度问答阈值，辩论流程内建段落的触发阈值），以及 `max_total_tokens_per_report`（单次报告辩论总 Token 预算上限，默认 72000，覆盖三段式真实成本）和 `per_call_timeout_override`（辩论单次 API 超时覆盖）。**本段仅控制辩论行为的参数，启停由 Feature Flag（`llm_debate_*`）决定，非配置直接启用**；决策跨期反思闭环（`decision_reflection`）同样由 Feature Flag 启停，无独立配置段
 
 ### 模块级配置

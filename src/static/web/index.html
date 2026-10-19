@@ -316,7 +316,7 @@
               {% else %}
               {% if system_info.llm.circuit != "—" %}
               <div class="health-row">
-                <span class="health-name">熔断状态</span>
+                <span class="health-name">自动重试</span>
                 <span class="health-status">{{ system_info.llm.circuit }}</span>
               </div>
               {% endif %}

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""主路径击键数基线（人因指标快照）。
+"""主路径击键数基线 + 动线语义快照（人因指标）。
 
 为什么需要：门禁此前只有「通过/失败」与工程指标（问数、行数），于是交互优化
 容易被工程指标带跑——把三问合并成一问（问数 3→1）曾换来「提示像记密码」。
@@ -10,22 +10,22 @@
 更新方式：确认改动是有意为之且已复核击键数合理后，运行
 ``TUI_KEYSTROKE_UPDATE=1 .venv/bin/python -m pytest src/test/unit/ui/test_keystroke_baseline.py -q``
 
-边界说明：计数从**主菜单进入**到**该动线结束**，不含报告生成内部与退出提示；
-每条动线的最短击键序列即其可执行规格，序列耗尽即视为「主路径变长」。
+击键数与语义的分工：本文件守**击键数不增**（含主菜单 `/` 筛选动线）；
+三条动线的**关键语义词必须上屏**由 ``src/test/scenario/basic/test_tui_flow_semantics.py``
+守着——两者共用 ``src/test/_tui_flow.py`` 的同一套驱动器，避免打点分叉。
 """
 
 from __future__ import annotations
 
-import contextlib
-import io
 import json
 import os
-import sys
-import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+from src.test._tui_flow import common_patches as _common_patches
+from src.test._tui_flow import run_flow as _run_flow
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_ui]
 
@@ -33,111 +33,8 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 BASELINE_FILE = REPO_ROOT / "src" / "test" / "data" / "fixtures" / "tui_keystroke_baseline.json"
 
 
-class _KeyFeeder:
-    """按脚本喂键并计数；序列耗尽即断言「主路径变长」。"""
-
-    def __init__(self, keys: list[str]):
-        self._keys = list(keys)
-        self.consumed = 0
-        self.prompts: list[str] = []
-
-    def __call__(self, prompt: str = "", **_kw) -> str:
-        if not self._keys:
-            raise AssertionError(
-                f"击键序列已耗尽（已消费 {self.consumed} 键）——主路径变长或新增了确认屏；已记录的提示语：{self.prompts}"
-            )
-        self.prompts.append(prompt)
-        self.consumed += 1
-        return self._keys.pop(0)
-
-
-def _patch_readers(feeder: _KeyFeeder):
-    """把按键读取入口替换为 feeder。
-
-    打点纪律（踩过一次坑）：**不得** patch 源头 ``tui_keys.input_choice``——
-    处理器模块在流程中被惰性导入，导入期读到的若是 feeder 就会永久绑定，
-    污染后续所有用例。故只 patch「已导入的消费方」与 ``get_key`` 源头。
-    """
-    from src.python.tui import (
-        handlers_cache,
-        handlers_config,
-        handlers_log,
-        handlers_qa,
-        handlers_report,
-        handlers_whatif,
-        panel_runtime,
-        tui,
-        tui_keys,
-        tui_menu,
-        tui_handlers,
-    )
-
-    patches = []
-    # get_key 是 input_choice 的内部读取入口（同模块动态查找）→ patch 源头即可覆盖两者
-    for mod in (tui, tui_menu, tui_keys):
-        if hasattr(mod, "get_key"):
-            patches.append(patch.object(mod, "get_key", feeder))
-    # 消费方逐个 patch（这些模块已在测试导入期完成导入，绑定固定）
-    consumers = (
-        panel_runtime,
-        tui_handlers,
-        handlers_report,
-        handlers_config,
-        handlers_cache,
-        handlers_log,
-        handlers_qa,
-        handlers_whatif,
-    )
-    for mod in consumers:
-        if hasattr(mod, "input_choice"):
-            patches.append(patch.object(mod, "input_choice", feeder))
-    return patches
-
-
-def _run_flow(keys: list[str], *, pre_patches=(), handler_patches=()) -> _KeyFeeder:
-    """驱动主循环走完一条动线，返回 feeder（含消费数）。"""
-    from src.python.tui import tui
-
-    from src.python.tui.tui_menu import MENU_ITEMS
-
-    feeder = _KeyFeeder(keys)
-    snapshot = list(MENU_ITEMS)  # 主循环会按功能开关就地裁剪菜单，跑完必须还原
-    ctxs = [p for p in _patch_readers(feeder)] + list(pre_patches) + list(handler_patches)
-    entered = []
-    try:
-        for ctx in ctxs:  # 显式进入/退出：ExitStack 在 unittest 与 pytest 混跑时曾遗留激活中的打点
-            ctx.__enter__()
-            entered.append(ctx)
-        with contextlib.redirect_stdout(io.StringIO()):
-            with contextlib.suppress(SystemExit):
-                tui.main()
-    finally:
-        for ctx in reversed(entered):
-            with contextlib.suppress(RuntimeError):
-                ctx.__exit__(None, None, None)
-        MENU_ITEMS[:] = snapshot
-    if os.environ.get("TUI_KEYSTROKE_DEBUG") == "1":
-        print(f"[keystroke] 消费 {feeder.consumed} 键，剩余 {feeder._keys}，提示 {feeder.prompts}", file=sys.stderr)
-    return feeder
-
-
-def _common_patches():
-    """屏蔽与交互无关的体量：帧渲染、启动副作用、退出统计。"""
-    from src.python.tui import tui
-
-    return [
-        patch.object(tui, "_render_menu_frame", return_value=0),
-        patch.object(tui, "init_config"),
-        patch.object(tui, "_apply_feature_gates"),
-        patch.object(tui, "_print_session_usage_on_exit"),
-        patch("src.python.cache.cleanup_expired", return_value=0),
-        patch("src.python.report.privacy_notice.show_privacy_notice_if_needed"),
-        patch("src.python.startup_wizard.show_startup_wizard_if_needed"),
-    ]
-
-
-class TestKeystrokeBaseline(unittest.TestCase):
-    """三条主路径的击键数快照。"""
+class TestKeystrokeBaseline:
+    """主路径的击键数快照。"""
 
     def _measure_all(self) -> dict[str, int]:
         from src.python.tui import handlers_cache, handlers_config, handlers_report
@@ -193,6 +90,14 @@ class TestKeystrokeBaseline(unittest.TestCase):
                 patch.object(handlers_report, "finish_report"),
                 patch.object(handlers_report, "print_llm_session_usage"),
             ],
+        ).consumed
+
+        # 6) 主菜单 → `/` 筛选「缓存」→ [3] 缓存面板 → 0 返回 → 0 清除筛选 → 0 退出
+        #    筛选是「少按键找项」的手段，本身不得比直接按 [3] 多出无谓确认
+        flows["filter_then_cache_panel"] = _run_flow(
+            ["/", "缓存", "3", "0", "0", "0"],
+            pre_patches=_common_patches(),
+            handler_patches=[patch.object(handlers_cache, "_render_cache_stats", return_value=None)],
         ).consumed
         return flows
 

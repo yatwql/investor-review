@@ -45,12 +45,12 @@ class TestTuiRouting(unittest.TestCase):
         self.assertEqual(cb_name, "_cmd_config_dir_info")
 
     def test_cache_key_routes_to_cache_management(self):
-        """4 键路由到缓存管理子菜单处理器（原 [3] 清理收敛为子菜单内命令）。"""
+        """[3] 键路由到缓存管理子菜单处理器（原 [3] 清理收敛为子菜单内命令）。"""
         from src.python.tui.tui import _bind_callbacks
         from src.python.tui.tui_menu import MENU_ITEMS
 
         _bind_callbacks()
-        c_item = next(item for item in MENU_ITEMS if item[0] == "4")
+        c_item = next(item for item in MENU_ITEMS if item[0] == "3")
         cb_name = c_item[2].__name__ if c_item[2] else ""
         self.assertEqual(cb_name, "_cmd_cache_management")
         self.assertEqual(c_item[1], "缓存管理（统计与清理）")

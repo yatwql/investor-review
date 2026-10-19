@@ -55,10 +55,8 @@ _DISPLAY_CALLS = {
 }
 
 # 内部值豁免：作为查表键/槽名等程序标识符存在，不直接上屏
-ALLOWLIST_INTERNAL_VALUES = {
-    # circuit_breaker 的上游返回值，仅作 _CIRCUIT_USER_TEXT 查表键（上屏前已转用户词）
-    ("tui_menu.py", "熔断中"),
-}
+# （当前为空：端点状态映射在 `core.system_info.circuit_display`，TUI 只渲染归一结果）
+ALLOWLIST_INTERNAL_VALUES: set[tuple[str, str]] = set()
 
 
 def _tui_sources():

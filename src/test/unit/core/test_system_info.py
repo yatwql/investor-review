@@ -37,13 +37,24 @@ class TestDisplayPrimitives:
         assert simplify_endpoint("not-a-url") == "not-a-url"
 
     def test_circuit_display_default_semantics(self):
-        # flat 模式：字面「默认」视为无端点；多链模式：仍查熔断状态
+        # flat 模式：字面「默认」视为无端点；多链模式：仍查端点状态
         assert circuit_display("默认", default_as_none=True) == "—"
         assert circuit_display("", default_as_none=True) == "—"
         assert circuit_display("") == "—"
         with patch("src.python.llm.circuit_breaker.get_circuit_status", return_value="熔断中"):
-            assert circuit_display("默认") == "熔断中"
-            assert circuit_display("https://x/y") == "熔断中"
+            assert circuit_display("默认") == "暂时失败"
+            assert circuit_display("https://x/y") == "暂时失败"
+
+    def test_circuit_display_normalizes_to_user_word(self):
+        """端点状态上屏必须用用户词（上游技术词只在日志/代码注释里）：
+
+        `熔断中` → `暂时失败`；未知上游文案原样透传（不吞信息、不误报）。
+        三渠道（TUI / CLI / Web）消费同一原语，故此处即全局口径。
+        """
+        with patch("src.python.llm.circuit_breaker.get_circuit_status", return_value="正常"):
+            assert circuit_display("https://x/y") == "正常"
+        with patch("src.python.llm.circuit_breaker.get_circuit_status", return_value="未知状态X"):
+            assert circuit_display("https://x/y") == "未知状态X", "未知文案须原样透传"
 
     def test_labels(self):
         assert strategy_label("priority") == "优先级排序"

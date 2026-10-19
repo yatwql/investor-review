@@ -3,5 +3,6 @@
   "exit_via_zero": 1,
   "switch_panel_readonly": 4,
   "cache_panel_return": 3,
-  "generate_full_default_path": 3
+  "generate_full_default_path": 3,
+  "filter_then_cache_panel": 6
 }

@@ -912,3 +912,105 @@ class TestTierSemanticParity(unittest.TestCase):
         wide = self._drive(["KEY_ESC", "KEY_ESC"], columns=100)
         self.assertEqual(narrow[0], ["exit"])
         self.assertEqual(wide[0], ["exit"])
+
+
+class TestMenuGroups(unittest.TestCase):
+    """主菜单任务分组（生成 / 数据与查看 / 配置 / 诊断）：结构关系，不写死条数。"""
+
+    def test_groups_cover_every_item_exactly_once_except_exit(self) -> None:
+        """分组必须恰好覆盖全部非退出项一次；退出项列在分组之外。"""
+        from src.python.tui.tui_menu import MENU_GROUPS
+
+        keys = {item[0] for item in MENU_ITEMS}
+        grouped = [key for _title, group_keys in MENU_GROUPS for key in group_keys]
+        assert len(grouped) == len(set(grouped)), f"分组内键重复: {grouped}"
+        assert set(grouped) <= keys, f"分组含未知键: {set(grouped) - keys}"
+        assert keys - set(grouped) == {"X"}, f"未入组项应仅退出项，实测: {keys - set(grouped)}"
+
+    def test_group_titles_are_task_domains(self) -> None:
+        """组标题按任务域（用户视角）而非模块分层（工程视角）。"""
+        from src.python.tui.tui_menu import MENU_GROUPS
+
+        titles = [title for title, _keys in MENU_GROUPS]
+        assert len(titles) == len(set(titles)), f"组标题重复: {titles}"
+        for expected in ("生成报告", "数据与查看", "配置", "诊断与排查"):
+            assert expected in titles, f"缺少任务分组「{expected}」: {titles}"
+
+    def test_generation_group_holds_all_report_actions(self) -> None:
+        """生成组收纳全部报告产出动线（含调仓模拟），用户不必在菜单里翻找。"""
+        from src.python.tui.tui_menu import MENU_GROUPS
+
+        generation = next(keys for title, keys in MENU_GROUPS if title == "生成报告")
+        assert {"E", "B", "L", "W"} <= set(generation)
+
+
+class TestMatchMenuItems(unittest.TestCase):
+    """`/` 关键词筛选：标签子串 + 按键等值（大小写不敏感）。"""
+
+    def test_empty_keyword_returns_every_index(self) -> None:
+        from src.python.tui.tui_menu import match_menu_items
+
+        assert match_menu_items("") == list(range(len(MENU_ITEMS)))
+        assert match_menu_items("   ") == list(range(len(MENU_ITEMS)))
+
+    def test_label_substring_matches(self) -> None:
+        from src.python.tui.tui_menu import match_menu_items
+
+        keys = [MENU_ITEMS[i][0] for i in match_menu_items("缓存")]
+        assert set(keys) == {"1", "2", "3"}, f"「缓存」应命中三个缓存项: {keys}"
+
+    def test_key_equality_is_case_insensitive(self) -> None:
+        from src.python.tui.tui_menu import match_menu_items
+
+        # 按键精确命中优先：单键名筛选不得被标签里的拉丁字母（Excel/HTML）带偏
+        assert [MENU_ITEMS[i][0] for i in match_menu_items("s")] == ["S"]
+        assert [MENU_ITEMS[i][0] for i in match_menu_items("T")] == ["T"]
+        assert [MENU_ITEMS[i][0] for i in match_menu_items("t")] == ["T"]
+        assert [MENU_ITEMS[i][0] for i in match_menu_items("1")] == ["1"]
+
+    def test_no_match_returns_empty(self) -> None:
+        from src.python.tui.tui_menu import match_menu_items
+
+        assert match_menu_items("不存在的关键词") == []
+
+    def test_next_matching_wraps_both_directions(self) -> None:
+        from src.python.tui.tui_menu import match_menu_items, next_matching
+
+        matches = match_menu_items("缓存")
+        assert next_matching(matches, matches[-1], 1) == matches[0], "向下越界须回绕到首个匹配"
+        assert next_matching(matches, matches[0], -1) == matches[-1], "向上越界须回绕到末个匹配"
+        assert next_matching([], 0, 1) is None, "无匹配项时不得返回索引"
+
+
+class TestRenderMenuGroups(unittest.TestCase):
+    """渲染：分组标题 + 筛选态只显示命中项（含筛选状态行）。"""
+
+    def _render(self, filter_text: str = "") -> str:
+        from src.python.tui.tui_menu import render_menu
+
+        buf = StringIO()
+        with patch("sys.stdout", buf):
+            render_menu(0, filter_text)
+        return buf.getvalue()
+
+    def test_group_headers_rendered_in_menu(self) -> None:
+        from src.python.tui.tui_menu import MENU_GROUPS
+
+        out = self._render()
+        positions = [out.find(f"── {title} ──") for title, _keys in MENU_GROUPS]
+        assert all(p >= 0 for p in positions), f"分组标题未全部上屏: {out[:400]}"
+        assert positions == sorted(positions), "分组标题须按 MENU_GROUPS 次序出现"
+        for key, _label, _cb, _exit in MENU_ITEMS:
+            assert f"[{key}]" in out, f"菜单项 [{key}] 未渲染"
+
+    def test_filter_keeps_only_matching_items(self) -> None:
+        out = self._render("缓存")
+        assert "筛选「缓存」：3 项" in out, f"缺少筛选状态行: {out[:300]}"
+        assert "[1]" in out and "[2]" in out and "[3]" in out
+        assert "[L]" not in out, "未命中项不得出现在筛选结果中"
+        assert "── 配置 ──" not in out, "无命中项的分组标题不得出现"
+
+    def test_empty_filter_result_keeps_frame(self) -> None:
+        out = self._render("不存在的关键词")
+        assert "筛选「不存在的关键词」：0 项" in out
+        assert "[X]" not in out and "[E]" not in out

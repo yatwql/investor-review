@@ -21,7 +21,7 @@ _DEFAULT_LLM_SETTINGS: dict[str, Any] = {
     # 全链路失败（网络/超时/接口异常）后整链重试 1 次的等待秒数（0 = 不等待）
     "llm_full_fail_retry_delay": 30,
     # LLM 日费用预算上限（货币数值，0 = 不启用）：与事前费用预估同页展示，
-    # 超限时交互渠道询问「降级走缓存 / 中止」，非交互渠道直接中止
+    # 超限时交互渠道询问「用已有结果继续 / 中止」，非交互渠道直接中止
     "daily_cost_limit": 0,
     "enabled_llm": {
         "global_macro": True,

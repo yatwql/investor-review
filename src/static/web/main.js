@@ -425,7 +425,7 @@
     }
 
     // full 模式含 LLM 调用：先取事前费用预估做确认弹层（预估失败不阻塞）；
-    // 超日预算时须显式确认（budget_ack + 降级走缓存）才能提交
+    // 超日预算时须显式确认（budget_ack + 用已有结果）才能提交
     if (body.report_type === 'full') {
       confirmCostForecast().then(function (decision) {
         if (!decision.proceed) {
@@ -483,7 +483,7 @@
           lines += '\n今日已花费 ' + bsym + b.spent.toFixed(4) + '（未设日预算上限）';
         }
         if (b && b.exceeded) {
-          if (!window.confirm('[!] ' + lines + '\n\n今日已超日预算。确定「降级走缓存」继续？')) {
+          if (!window.confirm('[!] ' + lines + '\n\n今日已超日预算。确定「用已有结果继续」？')) {
             return { proceed: false };
           }
           return { proceed: true, budgetAck: true, forceDowngraded: true };
@@ -1407,7 +1407,7 @@
     var priorityAware = prov.strategy === 'priority' || prov.strategy === 'fallback_only';
     var note = document.createElement('p');
     note.className = 'config-note-sub';
-    note.textContent = '按下列顺序降级（越靠前越优先）。当前策略 ' + prov.strategy + (priorityAware
+    note.textContent = '按下列顺序作为备用（越靠前越优先）。当前策略 ' + prov.strategy + (priorityAware
       ? '：顺序即实际链序'
       : '：实际链序由权重/成本决定，此顺序仅在 priority / fallback_only 策略下生效');
     group.appendChild(note);

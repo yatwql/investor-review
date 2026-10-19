@@ -31,8 +31,13 @@ def simplify_endpoint(endpoint: str) -> str:
     return endpoint
 
 
+# 端点重试状态 → 上屏用户词（DESIGN-TUI Vocabulary：熔断 / 退避不上屏）。
+# 诊断细节仍用技术词（日志/代码注释）；此处只做上屏归一，三渠道共用同一词。
+_CIRCUIT_USER_TEXT = {"熔断中": "暂时失败"}
+
+
 def circuit_display(endpoint: str, *, default_as_none: bool = False) -> str:
-    """熔断状态展示规则（渠道无关的唯一判定）。
+    """端点状态展示规则（渠道无关的唯一判定 + 上屏用户词归一）。
 
     Args:
         endpoint: provider endpoint。
@@ -40,14 +45,15 @@ def circuit_display(endpoint: str, *, default_as_none: bool = False) -> str:
             多链模式（False）仅空端点视为无端点。
 
     Returns:
-        熔断状态字符串；无端点返回 ``—``。
+        用户词状态（``正常`` / ``暂时失败``）；无端点返回 ``—``；未知上游文案原样返回。
     """
     if not endpoint or (default_as_none and endpoint == "默认"):
         return "—"
     # 熔断文案判定经 core 网关注册获取（上游模块导入时注册），本模块不反向 import 上层
     from src.python.core.circuit_breaker import circuit_text
 
-    return circuit_text(endpoint)
+    status = circuit_text(endpoint)
+    return _CIRCUIT_USER_TEXT.get(status, status)
 
 
 def strategy_label(strategy_raw: str) -> str:

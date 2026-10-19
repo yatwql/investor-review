@@ -133,7 +133,7 @@ def _run_generation_impl(state, params: dict, result_box: dict | None = None) ->
                 state.errors.append(
                     f"今日 LLM 费用已达日预算上限（已花 {_budget['symbol']}{_budget['spent']:.4f}"
                     f" / 上限 {_budget['symbol']}{_budget['limit']:.4f}），本次生成已中止；"
-                    "确认「降级走缓存继续」后重试可继续"
+                    "确认「用已有结果继续」后重试可继续"
                 )
                 return _EXIT_SEVERE
         # 输入模式 → 快照隔离域（试算→web/ 正式→共享主目录），单一来源
@@ -400,7 +400,7 @@ def _handle_create_run(run_manager):
                     "BUDGET_EXCEEDED",
                     f"今日 LLM 费用已达日预算上限"
                     f"（已花 {_budget['symbol']}{_budget['spent']:.4f} / 上限 {_budget['symbol']}{_budget['limit']:.4f}），"
-                    "确认「降级走缓存继续」后重试",
+                    "确认「用已有结果继续」后重试",
                 ),
                 409,
             )

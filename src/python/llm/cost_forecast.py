@@ -9,7 +9,7 @@
   - **日预算**：`llm_settings.json → daily_cost_limit`（0/缺省 = 不启用）。今日已
     花费从 `perf_history.jsonl` 当日记录的 `llm.total_cost` 求和——与事后统计
     （session usage / perf 汇总）同源，避免两处数字打架。预算是**硬闸**：交互
-    渠道询问「降级走缓存 / 中止」，非交互渠道直接中止。
+    渠道询问「用已有结果继续 / 中止」，非交互渠道直接中止。
 
 计费数学单源于 `llm.pricing.compute_cost_value`（与事后 `estimate_cost` 同一实现）。
 """

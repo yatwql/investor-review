@@ -402,7 +402,7 @@ TUI（Text User Interface）是系统**主要交互渠道**：桌面终端内的
 | 模块 | 职责 | 关键内容 |
 |:-----|:-----|:---------|
 | `tui/tui.py` | 主入口/主循环 | sys.path 注入、init_config、_bind_callbacks、启动清理/隐私提示/首次引导、方向键导航循环、LLM 会话统计 |
-| `tui/tui_menu.py` | 菜单定义与渲染 | MENU_ITEMS 列表、render_menu/print_header/show_config、_apply_feature_gates（开关门控裁剪）、index_by_key、press_any_key/exit_app、`_circuit_user_text`（端点状态转用户词） |
+| `tui/tui_menu.py` | 菜单定义与渲染 | MENU_ITEMS 列表、MENU_GROUPS（任务分组：生成报告/数据与查看/配置/诊断与排查）、render_menu/print_header/show_config、_apply_feature_gates（开关门控裁剪）、index_by_key、match_menu_items/next_matching（`/` 筛选与筛选内导航）、press_any_key/exit_app |
 | `tui/tui_keys.py` | 键盘封装 | 跨平台（Windows msvcrt / Linux tty+termios+select），标准化键名 KEY_UP/DOWN/ENTER/CTRL_C |
 | `tui/handlers_report.py` | 报告生成外壳 | `_run_generate` 骨架、`_prompt_generate_confirm` 合并单屏一次确认（full：费用预估上屏 + 回车/`f`/`q`/`h` 单问，`f` 触发 `_select_force_modules` 模块多选，含日预算超限安全网）/`_prompt_history`（委托 resolve_fetch_history + 注入 y/N 询问，仅 both）、E/B/L 三命令 |
 | `tui/handlers_config.py` | 配置管理外壳 | 目录/文件名/输出目录/章节/指数池/匿名化/LLM 模块与功能开关/刷新等 8 项配置命令 |
@@ -443,7 +443,7 @@ while True:
 
 #### 1.6.3 菜单体系
 
-`tui/tui_menu.py:MENU_ITEMS` —— 每项 `(快捷键, 显示标签, 回调, 是否退出)`，回调由 `_bind_callbacks()` 在**运行时**从 handlers 模块填入（定义时不直接 import，避免启动即加载全部处理器）。静态清单共 **19 项**（下表按菜单实际排列顺序）；首页按键分派分两档（`layout_tier`，<64 列为 narrow）：方向键移动选中态 + `Enter` 执行当前项**全档可用**；narrow 档直达主路径（字母/数字键即执行，未登记键给**单行反馈**不整屏重绘——「分档只改版式不改语义」约束 C29）与导航并存——方向键移动后**原地重绘**（`_render_menu_frame` 帧行数计数代理 + ANSI 光标上移/清屏，POSIX+TTY 门控，管道/测试/旧控制台回退整屏追加），页脚为「窄屏直达 + ↑↓ 选择」双提示。字母/数字键按 `index_by_key` 直达（未登记键无反应）、`Esc`/`0` 与 `[X]` 同为退出通道（`0` 在子菜单语义为「返回」，故首页保持一致习惯；`[X]` 标签写明「退出（0 亦可）」，页脚提示同为「Esc / 0 / X 退出」）、`Ctrl+C` 退出。菜单项长标签与页脚提示经 `wrap_with_prefix` 按终端宽度折行（续行对齐标签起始列），窄屏不会硬折。`[T]`/`[Q]` 登记于 `FEATURE_GATED_ITEMS`（菜单键 → Feature Flag），`main()` 启动时在绑定回调**之前**执行 `tui_menu._apply_feature_gates()` 按 `is_feature_enabled` 就地裁剪（裁剪后索引才与渲染一致）：`report_qa`（⚗ 实验项，默认关）关闭时移除 `[Q]`，`doctor_check`（默认开）关闭时移除 `[T]`——默认配置下实际渲染 **18 项**。
+`tui/tui_menu.py:MENU_ITEMS` —— 每项 `(快捷键, 显示标签, 回调, 是否退出)`，回调由 `_bind_callbacks()` 在**运行时**从 handlers 模块填入（定义时不直接 import，避免启动即加载全部处理器）。静态清单共 **19 项**（下表按菜单实际排列顺序）；首页按键分派分两档（`layout_tier`，<64 列为 narrow）：方向键移动选中态 + `Enter` 执行当前项**全档可用**；narrow 档直达主路径（字母/数字键即执行，未登记键给**单行反馈**不整屏重绘——「分档只改版式不改语义」约束 C29）与导航并存——方向键移动后**原地重绘**（`_render_menu_frame` 帧行数计数代理 + ANSI 光标上移/清屏，POSIX+TTY 门控，管道/测试/旧控制台回退整屏追加），页脚为「窄屏直达 + ↑↓ 选择」双提示。字母/数字键按 `index_by_key` 直达（未登记键无反应）、`Esc`/`0` 与 `[X]` 同为退出通道（`0` 在子菜单语义为「返回」，故首页保持一致习惯；`[X]` 标签写明「退出（0 亦可）」，页脚提示同为「Esc / 0 / X 退出」）、`Ctrl+C` 退出。菜单项长标签与页脚提示经 `wrap_with_prefix` 按终端宽度折行（续行对齐标签起始列），窄屏不会硬折。渲染按 `MENU_GROUPS`（生成报告 / 数据与查看 / 配置 / 诊断与排查）分组并印组标题，未入组的退出项列在末尾（分组覆盖完整性由 `test_tui_menu.TestMenuGroups` 守护：全项恰好一次、退出项在外）。主菜单支持 `/` 关键词筛选：`tui._read_filter_keyword` 读一行关键词（空=清除、Esc 保持原筛选），`match_menu_items` 按键精确命中优先、否则按标签子串匹配；筛选态只渲染命中项与命中分组，`↑↓` 在命中集内回绕（`next_matching`），按到被隐藏项的键给单行反馈而不静默吞键，`0` 先清筛选（无筛选时才是退出）。`[T]`/`[Q]` 登记于 `FEATURE_GATED_ITEMS`（菜单键 → Feature Flag），`main()` 启动时在绑定回调**之前**执行 `tui_menu._apply_feature_gates()` 按 `is_feature_enabled` 就地裁剪（裁剪后索引才与渲染一致）：`report_qa`（⚗ 实验项，默认关）关闭时移除 `[Q]`，`doctor_check`（默认开）关闭时移除 `[T]`——默认配置下实际渲染 **18 项**。
 
 | 分组 | 快捷键 | 功能 |
 |:-----|:------|:-----|
@@ -465,7 +465,7 @@ while True:
 | | `[T]` | 系统自检（环境/配置/目录/数据源一键体检，`handlers_log.py::_cmd_run_doctor`；`doctor_check` 门控） |
 | 退出 | `[X]` | 退出程序 |
 
-菜单渲染层与状态面板：`print_header`（标题 + 页头常驻状态行 `status_line.build_status_line()`——上次报告时间/缓存过期数/数据新鲜度/备用源数/LLM 状态点五项，全本地取数、单项异常降级为 `—`、TTL 记忆化——+ 首次运行指引：缺持仓文件/缺 LLM 配置提示）、`show_config`（持仓目录/持仓文件、输出目录、新闻抓取上限、文件就绪状态 `[OK]`/`[!!]`、匿名化状态、隐私声明、LLM 配置状态单链/多链两视图）。LLM 状态面板支持多 Provider 链式模式（策略、各 provider 后端/模型/优先级/自动重试状态、模块级偏好）；上屏词按 `DESIGN-TUI` 术语表转用户词（端点熔断状态 → 「自动重试: 正常/暂时失败」）；面板数据消费 `core/system_info.llm_status()` 单源（configured 判定与多链/flat 分支唯一在共享层，渠道只做终端渲染）。
+菜单渲染层与状态面板：`print_header`（标题 + 页头常驻状态行 `status_line.build_status_line()`——上次报告时间/缓存过期数/数据新鲜度/备用源数/LLM 状态点五项，全本地取数、单项异常降级为 `—`、TTL 记忆化——+ 首次运行指引：缺持仓文件/缺 LLM 配置提示）、`show_config`（持仓目录/持仓文件、输出目录、新闻抓取上限、文件就绪状态 `[OK]`/`[!!]`、匿名化状态、隐私声明、LLM 配置状态单链/多链两视图）。LLM 状态面板支持多 Provider 链式模式（策略、各 provider 后端/模型/优先级/自动重试状态、模块级偏好）；上屏词按 `DESIGN-TUI` 术语表转用户词——端点状态由 `core.system_info.circuit_display` **唯一归一**（`熔断中`→`暂时失败`，未知上游文案透传），TUI/CLI/Web 三渠道共用同一词，各渠道不得自带映射表；面板数据消费 `core/system_info.llm_status()` 单源（configured 判定与多链/flat 分支唯一在共享层，渠道只做终端渲染）。
 
 #### 1.6.4 报告生成流程
 

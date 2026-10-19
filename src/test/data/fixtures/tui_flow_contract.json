@@ -1,0 +1,25 @@
+{
+  "generate_full_force_modules": {
+    "keys": 4,
+    "must_show": [
+      "是否重新生成",
+      "会产生费用",
+      "仅重新生成"
+    ]
+  },
+  "toggle_feature_switch": {
+    "keys": 4,
+    "must_show": [
+      "决策跨期反思闭环",
+      "已开启"
+    ]
+  },
+  "filter_logs_by_level": {
+    "keys": 4,
+    "must_show": [
+      "最近日志（级别: ERROR）",
+      "读取行情失败",
+      "按任意键返回菜单"
+    ]
+  }
+}
