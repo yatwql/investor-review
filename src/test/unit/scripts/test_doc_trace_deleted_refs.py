@@ -9,7 +9,11 @@ historical/current 集合由测试注入，不依赖真实 git 历史（确定�
 
 from __future__ import annotations
 
+import contextlib
+import io
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 from src.test._script_loader import load_script
@@ -82,3 +86,38 @@ class TestScanDeletedSymbolRefs:
         """历史集为空（git 不可用语义）→ 静默跳过，不误报。"""
         hits = _hits(doc_traces, tmp_path, "调用 `_old_helper_fn()` 完成。\n", hist=set())
         assert hits == []
+
+
+class TestHistoricalDefsEnvironment:
+    """历史 def 全集的环境防护（浅克隆不静默假绿）。"""
+
+    def test_shallow_clone_skips_with_warning(self, doc_traces):
+        """浅克隆 → 空集 + stderr 告警（防 CI 浅克隆下历史集≈当前集全漏报）。"""
+        doc_traces._HIST_DEFS = None
+        try:
+            with patch.object(doc_traces, "subprocess") as msub:
+                msub.run.return_value = SimpleNamespace(returncode=0, stdout="true\n", stderr="")
+                err = io.StringIO()
+                with contextlib.redirect_stderr(err):
+                    assert doc_traces._historical_defs() == set()
+            assert "浅克隆" in err.getvalue()
+        finally:
+            doc_traces._HIST_DEFS = None  # 复位进程级缓存防污染后续用例
+
+    def test_full_clone_parses_added_defs(self, doc_traces):
+        """全历史 → 解析 +def 新增行（含 async）。"""
+        doc_traces._HIST_DEFS = None
+        shallow = SimpleNamespace(returncode=0, stdout="false\n", stderr="")
+        log = SimpleNamespace(
+            returncode=0,
+            stdout="+def _sample_added_fn(a):\n+    pass\n+async def _sample_async_fn():\n",
+            stderr="",
+        )
+        try:
+            with patch.object(doc_traces, "subprocess") as msub:
+                msub.run.side_effect = [shallow, log]
+                hist = doc_traces._historical_defs()
+            assert "_sample_added_fn" in hist
+            assert "_sample_async_fn" in hist
+        finally:
+            doc_traces._HIST_DEFS = None

@@ -131,6 +131,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # 全历史克隆：check-doc-traces 的已删函数残留检查依赖 git log -p 全史；
+          # 默认浅克隆（depth=1）下 HEAD 被视作根提交，输出全部现存代码为新增行，
+          # 历史 def 全集≈当前全集 → 已删函数全部漏报（静默失效）
+          fetch-depth: 0
 
       - name: 设置 Python 3.13
         uses: actions/setup-python@v5

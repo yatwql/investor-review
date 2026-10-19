@@ -499,28 +499,41 @@ _CUR_DEFS: set[str] | None = None
 def _historical_defs() -> set[str]:
     """git 历史中曾定义过的 def 名全集（单 pass `git log -p` 新增行提取，约 1s）。
 
-    仅 src/ 与 scripts/（文档引用的都是生产/脚本函数）；git 不可用时返回空集
-    （已删函数检查静默跳过，不误报）。模块级缓存，同次进程只算一次。
+    仅 src/ 与 scripts/（文档引用的都是生产/脚本函数）。git 不可用或**浅克隆**
+    （fetch-depth=1：HEAD 被视作根提交，输出全部现存代码，历史集≈当前集导致
+    全漏报）时返回空集并 stderr 告警（不静默假绿）。模块级缓存，同次进程只算一次。
     """
     global _HIST_DEFS
     if _HIST_DEFS is None:
-        result = subprocess.run(
-            ["git", "log", "--format=", "-p", "--unified=0", "--", "src", "scripts"],
+        shallow = subprocess.run(
+            ["git", "rev-parse", "--is-shallow-repository"],
             capture_output=True,
             text=True,
             encoding="utf-8",
             errors="replace",
             cwd=REPO_ROOT,
         )
-        _HIST_DEFS = (
-            {
-                m.group(1)
-                for line in result.stdout.splitlines()
-                if (m := re.match(r"^\+ *(?:async )?def ([a-z_]\w*)\(", line))
-            }
-            if result.returncode == 0
-            else set()
-        )
+        if shallow.returncode != 0 or shallow.stdout.strip() == "true":
+            print("[!] 浅克隆/git 不可用环境：已删函数残留检查跳过（需 fetch-depth=0 全历史）", file=sys.stderr)
+            _HIST_DEFS = set()
+        else:
+            result = subprocess.run(
+                ["git", "log", "--format=", "-p", "--unified=0", "--", "src", "scripts"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                cwd=REPO_ROOT,
+            )
+            _HIST_DEFS = (
+                {
+                    m.group(1)
+                    for line in result.stdout.splitlines()
+                    if (m := re.match(r"^\+ *(?:async )?def ([a-z_]\w*)\(", line))
+                }
+                if result.returncode == 0
+                else set()
+            )
     return _HIST_DEFS
 
 
