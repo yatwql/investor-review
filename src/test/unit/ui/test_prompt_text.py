@@ -45,10 +45,10 @@ class TestConfirmPrompt:
 
     def test_question_precedes_keys(self):
         prompt = confirm_prompt(
-            "是否强制刷新？（强刷=重新调模型计费）", options="f=强制刷新 / q=中止", default="用缓存生成"
+            "是否重新生成？（f=重新调用 AI，会产生费用）", options="f=重新生成 / q=中止", default="用已有结果生成"
         )
-        assert prompt.index("是否强制刷新") < prompt.index("回车=用缓存生成")
-        assert "f=强制刷新" in prompt
+        assert prompt.index("是否重新生成") < prompt.index("回车=用已有结果生成")
+        assert "f=重新生成" in prompt
 
 
 class TestHelpLines:

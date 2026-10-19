@@ -150,11 +150,12 @@ class TestKeystrokeBaseline(unittest.TestCase):
         # 2) 主菜单 → 0 退出（返回键在首页即退出别名）
         flows["exit_via_zero"] = _run_flow(["0"], pre_patches=_common_patches()).consumed
 
-        # 3) 主菜单 → [S] 功能开关面板 → ?3 看说明（只读路径）→ 0 返回 → 任意键 → X
-        #    取只读路径：切换项会写 llm_settings.json，基线采集不得改动用户配置
+        # 3) 主菜单 → [S] 功能开关面板 → ?3 看说明（只读路径）→ 0 返回 → X
+        #    取只读路径：切换项会写 llm_settings.json，基线采集不得改动用户配置；
+        #    面板退出后不再有「按任意键」闸门（短反馈直接回菜单，长输出才设闸门）
         self.write_guard = MagicMock(return_value=False)
         flows["switch_panel_readonly"] = _run_flow(
-            ["S", "?3", "0", " ", "X"],
+            ["S", "?3", "0", "X"],
             pre_patches=_common_patches(),
             handler_patches=[
                 patch.object(handlers_config, "_apply_edit", self.write_guard),
@@ -169,14 +170,14 @@ class TestKeystrokeBaseline(unittest.TestCase):
             ],
         ).consumed
 
-        # 4) 主菜单 → [3] 缓存管理 → 0 返回 → 任意键 → X
+        # 4) 主菜单 → [3] 缓存管理 → 0 返回 → X（清理/返回均无闸门）
         flows["cache_panel_return"] = _run_flow(
-            ["3", "0", " ", "X"],
+            ["3", "0", "X"],
             pre_patches=_common_patches(),
             handler_patches=[patch.object(handlers_cache, "_render_cache_stats", return_value=None)],
         ).consumed
 
-        # 5) 主菜单 → [L] → 回车（默认=用缓存生成）→ 生成（编排打桩，收尾闸门不计）→ X
+        # 5) 主菜单 → [L] → 回车（默认=用已有结果生成）→ 生成（编排打桩，收尾闸门不计）→ X
         flows["generate_full_default_path"] = _run_flow(
             ["L", "", "X"],
             pre_patches=_common_patches(),

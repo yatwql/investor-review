@@ -196,7 +196,7 @@ def legend_lines(cost_days: int, columns: int, *, tier: str | None = None, revea
         )
         return lines
 
-    lines += wrap_hanging("  ⚗ 实验项（默认关，质量可能不稳定） · * 与出厂默认不一致（配置漂移）", limit)
+    lines += wrap_hanging("  ⚗ 实验项（默认关，质量可能不稳定） · * 与出厂默认不一致", limit)
     key_note = (
         "  键名即行内淡色列：可直接输入键名（也可 ? 键名 / 键名=on|off）代替编号，面板增删项后仍然稳定"
         if tier == "wide"

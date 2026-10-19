@@ -214,14 +214,14 @@ class TestPromptGenerateConfirm(unittest.TestCase):
         self.assertEqual(self._call("h", config=self._config("off"))[2], False)
 
     def test_budget_exceeded_yes_degrades_no_force(self):
-        """预算超限 + y → 降级走缓存（无强刷）；auto 模式历史仍自动获取，不输出降级提示。"""
+        """预算超限 + y → 用已有结果继续（不重新生成）；auto 模式历史仍自动获取，不输出历史提示。"""
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             result = self._call("y", budget=_budget(enabled=True, limit=1.0, spent=1.2, exceeded=True))
         self.assertEqual(result[0], False)
         self.assertEqual(result[1], None)
         self.assertEqual(result[2], True)
-        self.assertNotIn("本次不获取历史走势", buf.getvalue())
+        self.assertNotIn("不获取历史走势", buf.getvalue())
 
     def test_budget_exceeded_prompt_mode_history_not_asked(self):
         """安全网降级不追加历史询问：prompt 模式历史=不获取，并输出提示行告知（告知后覆盖语义锁定）。"""
@@ -232,17 +232,17 @@ class TestPromptGenerateConfirm(unittest.TestCase):
             )
         self.assertEqual(result[0], False)
         self.assertEqual(result[2], False)
-        self.assertIn("本次不获取历史走势", buf.getvalue())
+        self.assertIn("本次用已有结果，不获取历史走势", buf.getvalue())
 
     def test_budget_exceeded_off_mode_no_history_notice(self):
-        """off 模式降级无历史概念 → 不输出降级提示（提示仅 prompt 模式）。"""
+        """off 模式无历史概念 → 不输出历史提示（提示仅 prompt 模式）。"""
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             result = self._call(
                 "y", config=self._config("off"), budget=_budget(enabled=True, limit=1.0, spent=1.2, exceeded=True)
             )
         self.assertEqual(result[2], False)
-        self.assertNotIn("本次不获取历史走势", buf.getvalue())
+        self.assertNotIn("不获取历史走势", buf.getvalue())
 
     def test_substring_word_not_mistrigger(self):
         """词级精确匹配：'of' 不误触强刷（默认生成）、'faq' 不误中止（非 None）。"""
@@ -263,7 +263,7 @@ class TestPromptGenerateConfirm(unittest.TestCase):
         self.assertIsNone(self._call("", budget=_budget(enabled=True, limit=1.0, spent=1.2, exceeded=True)))
 
     def test_question_line_explains_force_cost_tradeoff(self):
-        """问句必须讲清强刷代价差异：默认走缓存不产生新费用 / f 重新调模型计费。
+        """问句必须讲清重新生成的代价差异：默认用已有结果免费 / f 重调模型产生费用。
 
         守护点：仅给键位图例（回车 / f / q）而无代价说明时，用户须记住暗语并自行推断
         两者差别——问句描述丢失即视为回归。
@@ -288,13 +288,13 @@ class TestPromptGenerateConfirm(unittest.TestCase):
         ):
             hr._prompt_generate_confirm(reporter, self._config())
         out = buf.getvalue()
-        self.assertIn("是否强制刷新", out)
-        self.assertIn("计费", out)
-        self.assertIn("不产生新费用", out)
+        self.assertIn("是否重新生成", out)
+        self.assertIn("会产生费用", out)
+        self.assertIn("免费", out)
         # 问句必须在按键行之前上屏（先讲为什么，再让人按键作答）
-        self.assertIn("是否强制刷新", at_prompt[0])
+        self.assertIn("是否重新生成", at_prompt[0])
         prompt_text = mock_choice.call_args.args[0]
-        self.assertIn("用缓存生成", prompt_text)
+        self.assertIn("用已有结果生成", prompt_text)
         self.assertIn("可选模块", prompt_text)
 
     def test_summary_lines_printed_with_prefix(self):

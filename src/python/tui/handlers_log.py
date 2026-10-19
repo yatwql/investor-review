@@ -57,12 +57,10 @@ def _cmd_view_logs() -> None:
     except (ValueError, OSError):
         logger.exception("读取运行日志失败")
         print(f"  {RED}[ERR]{RESET} 读取运行日志失败")
-        press_any_key()
         return
 
     if not entries:
         print(f"  {YELLOW}[!]{RESET} 无匹配日志条目")
-        press_any_key()
         return
 
     level_label = level or "全部"
@@ -90,12 +88,10 @@ def _cmd_view_health_history() -> None:
     except OSError:
         logger.exception("读取数据源健康历史失败")
         print(f"  {RED}[ERR]{RESET} 读取数据源健康历史失败")
-        press_any_key()
         return
 
     if not summaries:
         print(f"  {YELLOW}[!]{RESET} 暂无数据源健康历史记录")
-        press_any_key()
         return
 
     print()
@@ -141,7 +137,6 @@ def _cmd_run_doctor() -> None:
     except Exception:
         logger.exception("系统自检执行失败")
         print(f"  {RED}[ERR]{RESET} 系统自检执行失败（详见日志）")
-        press_any_key()
         return
 
     print()

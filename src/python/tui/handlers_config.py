@@ -19,7 +19,6 @@ from src.python.tui.tui_menu import (
     YELLOW,
     filter_menu_llm_modules,
     get_config_cache,
-    press_any_key,
     refresh_config,
 )
 from src.python.tui.switch_panel import (
@@ -92,7 +91,6 @@ def _read_llm_settings() -> tuple[dict, str] | None:
         return settings, config_path
     except (FileNotFoundError, json.JSONDecodeError):
         print(f"  {RED}[ERR]{RESET} 无法读取 llm_settings.json")
-        press_any_key()
         return None
 
 
@@ -567,8 +565,6 @@ def _cmd_config_llm_modules() -> None:
     except (EOFError, KeyboardInterrupt):
         print()
 
-    press_any_key()
-
 
 def _cmd_config_comparison_indices() -> None:
     """管理对比指数池（竞争语境中使用的多指数对比）。交互循环经 `panel_loop` 单源。"""
@@ -620,8 +616,6 @@ def _cmd_config_comparison_indices() -> None:
         )
     except (EOFError, KeyboardInterrupt):
         print()
-
-    press_any_key()
 
 
 def _add_comparison_index(indices: dict[str, str]) -> None:
@@ -763,7 +757,6 @@ def _cmd_config_report_boards() -> None:
         print()
 
     refresh_config()
-    press_any_key()
 
 
 def _cmd_refresh_config() -> None:
@@ -794,7 +787,6 @@ def _cmd_refresh_config() -> None:
         print(f"  {GREEN}[OK]{RESET} llm_settings.json + llm_key.json 已重新加载")
     else:
         print(f"  {YELLOW}[!]{RESET} LLM 未配置（llm_key.json 或 llm_providers.json 缺失或无效）")
-    press_any_key()
 
 
 def _cmd_config_anonymization_mode() -> None:
@@ -859,11 +851,9 @@ def _cmd_config_anonymization_mode() -> None:
     except (EOFError, KeyboardInterrupt):
         print()
 
-    press_any_key()
-
 
 def _cmd_config_llm_providers() -> None:
-    """管理 LLM 多链线路优先级（降级顺序）。
+    """管理 LLM 多链线路优先级（备用顺序）。
 
     与 CLI ``--llm-provider-order``、Web 配置面同源：写路径全部经共享编辑层
     ``apply_config_edit``（llm_providers.priority / reorder），本面板只做展示与

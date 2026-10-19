@@ -169,7 +169,6 @@ class TestPanelWidthSweep:
             patch.dict("os.environ", {"COLUMNS": str(columns)}),
             patch("os.get_terminal_size", side_effect=OSError()),
             patch("builtins.input", side_effect=list(keys)),
-            patch("src.python.tui.handlers_config.press_any_key"),
             patch("src.python.tui.handlers_config.refresh_config"),
             patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json")),
         ):
@@ -226,7 +225,6 @@ class TestRepaintAndHelpVisible:
             patch.dict("os.environ", {"COLUMNS": str(columns)}),
             patch("os.get_terminal_size", side_effect=OSError()),
             patch("builtins.input", side_effect=list(keys)),
-            patch("src.python.tui.handlers_config.press_any_key"),
             patch("src.python.tui.handlers_config.refresh_config"),
             patch("src.python.tui.handlers_config._apply_edit", return_value=True),
             patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json")),
@@ -265,7 +263,6 @@ class TestRepaintAndHelpVisible:
             patch.dict("os.environ", {"COLUMNS": "40"}),
             patch("os.get_terminal_size", side_effect=OSError()),
             patch("src.python.tui.handlers_config.input_choice", return_value=None),
-            patch("src.python.tui.handlers_config.press_any_key"),
             patch("src.python.tui.handlers_config.refresh_config"),
             patch("src.python.tui.handlers_config._apply_edit") as mock_apply,
             patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json")),
@@ -348,7 +345,6 @@ class TestNarrowKeyReveal:
             patch.dict("os.environ", {"COLUMNS": str(columns)}),
             patch("os.get_terminal_size", side_effect=OSError()),
             patch("builtins.input", side_effect=keys),
-            patch("src.python.tui.handlers_config.press_any_key"),
             patch("src.python.tui.handlers_config.refresh_config"),
             patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json")),
         ):

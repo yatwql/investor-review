@@ -57,8 +57,8 @@ def confirm_prompt(question: str, *, options: str, default: str, prefix: str = "
     """确认类提示：问句讲清后果 + 选项串 + 默认项声明。
 
     Args:
-        question: 问句（须含后果/代价，如「是否强制刷新 LLM？（强刷=重新调模型计费）」）。
-        options: 选项串（如 ``f=强制刷新 / q=中止``）。
+        question: 问句（须含后果/代价，如「是否重新生成？（f=重新调用 AI，会产生费用）」）。
+        options: 选项串（如 ``f=重新生成 / q=中止``）。
         default: 回车执行的动作名。
         prefix: 行首缩进。
 

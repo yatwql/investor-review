@@ -264,14 +264,14 @@ TUI 菜单 **[S]** 查看状态时会显示多链模式详情：
 LLM Provider 状态
 状态: 已配置 | 策略: 优先级排序 | 多链服务: 2 provider
   [1] deepseek-main (claude)
-      模型: deepseek-v4-flash    优先级: 10    熔断: 正常
+      模型: deepseek-v4-flash    优先级: 10    自动重试: 正常
   [2] gemini-fallback (gemini)
-      模型: gemini-2.5-flash    优先级: 20    熔断: 正常
+      模型: gemini-2.5-flash    优先级: 20    自动重试: 正常
   ▶ 模块偏好: 智囊团深度复盘 → gemini-fallback / 持仓体检报告 → gemini-fallback
 ```
 
 - 首行状态：`状态` 行显示所选策略（优先级排序 / 加权随机 / 价格最低优先 / 仅 Fallback）与 provider 数量
-- 每个 provider 单独两行：`[序号] 名称 (backend)` + `模型 / 优先级 / 熔断` 状态
+- 每个 provider 单独两行：`[序号] 名称 (backend)` + `模型 / 优先级 / 自动重试` 状态
 - `▶ 模块偏好` 行仅在配置了 `preferred_providers` 时显示
 
 ### 兼容性

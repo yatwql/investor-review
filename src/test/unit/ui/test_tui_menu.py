@@ -477,21 +477,21 @@ class TestStatusLine(unittest.TestCase):
                 self.assertEqual(_freshness_part(), "新鲜度 —")
 
     def test_degraded_count_from_health_history(self) -> None:
-        """健康历史末条 fail_count → 降级源数；无记录 → —。"""
+        """健康历史末条 fail_count → 备用源数；无记录 → —。"""
         from src.python.tui.status_line import _degraded_part
 
         with patch(
             "src.python.core.perf.summarize_health_history",
             return_value=[{"fail_count": 2}],
         ):
-            self.assertEqual(_degraded_part(), "降级源 2")
+            self.assertEqual(_degraded_part(), "备用源 2")
         with patch("src.python.core.perf.summarize_health_history", return_value=[]):
-            self.assertEqual(_degraded_part(), "降级源 —")
+            self.assertEqual(_degraded_part(), "备用源 —")
         with patch(
             "src.python.core.perf.summarize_health_history",
             side_effect=OSError("读档失败"),
         ):
-            self.assertEqual(_degraded_part(), "降级源 —")
+            self.assertEqual(_degraded_part(), "备用源 —")
 
     def test_llm_status_dot(self) -> None:
         """LLM 状态点：已配置 ● / 未配置 ○ / 异常 —。"""
@@ -536,7 +536,7 @@ class TestStatusLine(unittest.TestCase):
         self.assertIn("上次报告 —", line)
         self.assertIn("缓存过期 5", line)
         self.assertIn("新鲜度 —", line)
-        self.assertIn("降级源 —", line)
+        self.assertIn("备用源 —", line)
         self.assertIn("LLM ●", line)
         self.assertIn("〔详情 [4][H][S]〕", line)
 
@@ -551,7 +551,7 @@ class TestStatusLine(unittest.TestCase):
             patch("src.python.core.system_info.llm_status", side_effect=side_effect),
         ):
             line = build_status_line()
-        for label in ("上次报告", "缓存过期", "新鲜度", "降级源", "LLM"):
+        for label in ("上次报告", "缓存过期", "新鲜度", "备用源", "LLM"):
             self.assertIn(f"{label} —", line)
 
     def test_memo_ttl_reuses_then_refreshes(self) -> None:

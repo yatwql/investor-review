@@ -40,14 +40,13 @@ def _panel_last_switch_flag() -> str:
     return blocks[-1][0]
 
 
-@patch("src.python.tui.handlers_config.press_any_key")
 @patch("src.python.tui.handlers_config.refresh_config")
 @patch("src.python.config.features.save_feature_overrides")
 @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
 @patch("src.python.core.registry.get_llm_module_names")
 @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
 def test_panel_arrow_up_wraps_to_last_switch_and_enter_toggles(
-    mock_read, mock_names, mock_filter, mock_save, mock_refresh, mock_press
+    mock_read, mock_names, mock_filter, mock_save, mock_refresh
 ):
     """面板以 arrows=True 调行输入：↑ 游标回绕到末项，Enter 按其编号走既有派发。"""
     from src.python.tui.handlers_config import _cmd_config_llm_modules
@@ -60,17 +59,15 @@ def test_panel_arrow_up_wraps_to_last_switch_and_enter_toggles(
     assert mock_save.called, "Enter 应按选中项（末开关）触发既有切换派发"
     saved_keys = set(next(iter(mock_save.call_args.args)))
     assert saved_keys == {last_flag}
-    mock_press.assert_called_once()
 
 
-@patch("src.python.tui.handlers_config.press_any_key")
 @patch("src.python.tui.handlers_config.refresh_config")
 @patch("src.python.config.features.save_feature_overrides")
 @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
 @patch("src.python.core.registry.get_llm_module_names")
 @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
 def test_panel_enter_without_navigation_keeps_original_semantics(
-    mock_read, mock_names, mock_filter, mock_save, mock_refresh, mock_press
+    mock_read, mock_names, mock_filter, mock_save, mock_refresh
 ):
     """未用方向键时裸回车保持原语义（不误触任何切换）。"""
     from src.python.tui.handlers_config import _cmd_config_llm_modules
@@ -79,18 +76,14 @@ def test_panel_enter_without_navigation_keeps_original_semantics(
         _cmd_config_llm_modules()
 
     assert not mock_save.called, "无导航姿态的回车不得触发切换"
-    mock_press.assert_called_once()
 
 
-@patch("src.python.tui.handlers_config.press_any_key")
 @patch("src.python.tui.handlers_config.refresh_config")
 @patch("src.python.config.features.save_feature_overrides")
 @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
 @patch("src.python.core.registry.get_llm_module_names")
 @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
-def test_panel_arrow_down_shows_position_feedback(
-    mock_read, mock_names, mock_filter, mock_save, mock_refresh, mock_press, capsys
-):
+def test_panel_arrow_down_shows_position_feedback(mock_read, mock_names, mock_filter, mock_save, mock_refresh, capsys):
     """↓ 移动游标给可观察位置反馈（▸ 行），不改任何开关状态。"""
     from src.python.tui.handlers_config import _cmd_config_llm_modules
 
@@ -108,11 +101,10 @@ class TestSubmenuArrowNav:
     锁定 panel_loop 迁移后子菜单的 ↑/↓ 导航 + Enter 按选中项派发，及空回车默认语义。
     """
 
-    @patch("src.python.tui.handlers_config.press_any_key")
     @patch("src.python.tui.handlers_config.refresh_config")
     @patch("src.python.tui.handlers_config._apply_edit", return_value=True)
     @patch("src.python.config.get_config", return_value={})
-    def test_report_boards_arrow_down_enter_toggles_selected(self, _mock_get, mock_apply, _mock_refresh, _mock_press):
+    def test_report_boards_arrow_down_enter_toggles_selected(self, _mock_get, mock_apply, _mock_refresh):
         """[P] ↓ 移到第 2 项（市场新闻）后 Enter 按其编号派发切换。"""
         from src.python.tui.handlers_config import _cmd_config_report_boards
         from src.python.tui.tui_keys import KEY_DOWN
@@ -124,10 +116,9 @@ class TestSubmenuArrowNav:
         assert mock_apply.called, "Enter 应按选中项触发既有切换派发"
         assert mock_apply.call_args.args[0]["key"] == "enable_news", "↓ 后 Enter 命中第 2 项（市场新闻）"
 
-    @patch("src.python.tui.handlers_config.press_any_key")
     @patch("src.python.tui.handlers_config._apply_edit", return_value=True)
     @patch("src.python.config.anonymizer.get_anonymization_mode", return_value="off")
-    def test_anonymization_arrow_down_enter_selects_mode(self, _mock_cur, mock_apply, _mock_press):
+    def test_anonymization_arrow_down_enter_selects_mode(self, _mock_cur, mock_apply):
         """[A] ↓ 移到第 2 项后 Enter 选中该匿名化模式。"""
         from src.python.tui.handlers_config import _cmd_config_anonymization_mode
         from src.python.tui.tui_keys import KEY_DOWN
@@ -174,7 +165,6 @@ class TestInlineCursorRendering:
     本类直接断言渲染文本里的行内游标字符，漏画即红。
     """
 
-    @patch("src.python.tui.handlers_config.press_any_key")
     @patch("src.python.tui.handlers_config.refresh_config")
     @patch("src.python.config.features.save_feature_overrides")
     @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
@@ -191,7 +181,6 @@ class TestInlineCursorRendering:
                 _cmd_config_llm_modules()
         assert re.search(r"▸\s*\d+\.", buf.getvalue()), "[S] 方向键移动后渲染须在行内编号前画 ▸"
 
-    @patch("src.python.tui.handlers_config.press_any_key")
     @patch("src.python.tui.handlers_config.refresh_config")
     @patch("src.python.tui.handlers_config.get_config_cache")
     def test_comparison_indices_arrow_shows_cursor(self, mock_cache, *_mocks):

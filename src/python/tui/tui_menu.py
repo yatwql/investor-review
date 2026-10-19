@@ -35,7 +35,7 @@ MENU_ITEMS: list[MenuItem] = [
     ("I", "管理对比指数池（自定义基准指数）", None, False),
     ("A", "配置持仓匿名化（代码/名称脱敏）", None, False),
     ("S", "配置功能开关（作用域四组，含 LLM 章节）", None, False),
-    ("M", "配置 LLM 多链线路优先级（降级顺序）", None, False),
+    ("M", "配置 LLM 多链线路优先级（备用顺序）", None, False),
     ("R", "刷新配置", None, False),
     ("V", "查看最近运行日志（可按级别筛选）", None, False),
     ("H", "查看数据源健康历史", None, False),
@@ -193,12 +193,22 @@ def _show_privacy_and_security_status() -> None:
     print()
 
 
+# 端点自动重试状态 → 用户词（DESIGN-TUI Vocabulary：熔断 / 退避不上屏）
+_CIRCUIT_USER_TEXT = {"正常": "正常", "熔断中": "暂时失败"}
+
+
+def _circuit_user_text(status: str) -> str:
+    """端点状态转用户词（未知值原样返回，不吞信息）。"""
+    return _CIRCUIT_USER_TEXT.get(status, status)
+
+
 def _show_llm_config_status() -> None:
     """显示 LLM 配置状态（绿色已配置 / 红色未配置）。
 
     数据来自 ``core.system_info.llm_status`` 单源（三渠道共用判定树），
     本函数只做终端渲染，不自行组装状态。
     """
+
     from src.python.core.system_info import llm_status
 
     llm = llm_status()
@@ -208,7 +218,7 @@ def _show_llm_config_status() -> None:
     if llm.get("mode") == "multi":
         _show_multi_chain_status(llm)
         return
-    cb_display = f" |  熔断: {llm['circuit']}" if llm["circuit"] != "—" else ""
+    cb_display = f" |  自动重试: {_circuit_user_text(llm['circuit'])}" if llm["circuit"] != "—" else ""
     print(
         f"  LLM: {GREEN}已配置{RESET}  provider={llm['provider']}  model={llm['model']}"
         f"  endpoint={llm['endpoint_display']}{cb_display}"
@@ -225,11 +235,11 @@ def _show_multi_chain_status(llm: dict) -> None:
     print(f"  LLM: {GREEN}已配置{RESET}")
     print(f"  策略: {llm['strategy']}  |  多链服务 ({len(llm['providers'])} provider)")
     for i, p in enumerate(llm["providers"], 1):
-        cb_status = p["circuit"]
+        cb_status = _circuit_user_text(p["circuit"])
         cb_icon = f"{GREEN}✓{RESET}" if cb_status == "正常" else f"{RED}⚠{RESET}"
         print(f"    [{i}] {p['name']}  ({p['backend']})")
         print(f"         模型: {p['model']}")
-        print(f"         优先级: {p['priority']}    熔断: {cb_icon} {cb_status}")
+        print(f"         优先级: {p['priority']}    自动重试: {cb_icon} {cb_status}")
     if llm.get("preferred"):
         print(f"    ▶ 模块偏好: {' / '.join(llm['preferred'])}")
 

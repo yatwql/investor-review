@@ -121,7 +121,6 @@ def prepare_holdings() -> "tuple[list, list, list] | None":
             require_holdings(holdings, filepath)
         except ValueError as e:
             print(f"  [ERR] {e}")
-            press_any_key()
             return None
         print(f"  [OK] 成功读取 {len(holdings)} 条持仓记录")
         if parsed.transactions or parsed.dividends:
@@ -132,7 +131,6 @@ def prepare_holdings() -> "tuple[list, list, list] | None":
         return holdings, parsed.transactions, parsed.dividends
     except Exception as e:
         print_error_with_hint(e, "读取持仓失败")
-        press_any_key()
         return None
 
 
@@ -212,16 +210,14 @@ def execute_item(sel: int) -> None:
         try:
             callback()
         except PromptCancelledError:
-            # Esc 取消：单点反馈后即时返回主菜单（不再等待按键，保持「即时」语义）
+            # Esc 取消：单点反馈后即时返回主菜单
             print("  [!] 已取消，返回主菜单")
         except KeyboardInterrupt:
             print()
             print("  操作已取消")
-            press_any_key()
         except Exception as e:
             logger.exception("菜单项执行异常")
             print_error_with_hint(e, "操作执行异常")
-            press_any_key()
         finally:
             with _busy_lock:
                 _busy = False

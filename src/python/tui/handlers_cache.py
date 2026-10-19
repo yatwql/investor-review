@@ -49,7 +49,6 @@ def _read_holdings_and_clear_cache(group_name: str) -> list | None:
             require_holdings(holdings, filepath)
         except ValueError as e:
             print(f"  {RED}[ERR]{RESET} {e}")
-            press_any_key()
             return None
         print(f"  {GREEN}[OK]{RESET} 共 {len(holdings)} 条持仓记录")
         print("  [..] 清除旧缓存...")
@@ -62,7 +61,6 @@ def _read_holdings_and_clear_cache(group_name: str) -> list | None:
         return holdings
     except Exception as e:
         print_error_with_hint(e, "读取持仓失败")
-        press_any_key()
         return None
 
 
@@ -196,8 +194,7 @@ def _cmd_cleanup_cache() -> None:
     from src.python.report.progress import TuiProgressReporter
 
     reporter = TuiProgressReporter()
-    cleanup_cache(reporter)
-    press_any_key()
+    cleanup_cache(reporter)  # 完成后直接回面板：短反馈不设按键闸门（契约 Feedback §闸门白名单）
 
 
 def _render_cache_stats() -> None:
@@ -276,7 +273,7 @@ def _cmd_cache_management() -> None:
         return []
 
     def _cleanup() -> None:
-        _cmd_cleanup_cache()  # 原平级入口逻辑收敛于此（含按任意键确认）
+        _cmd_cleanup_cache()  # 原平级入口逻辑收敛于此（清理后直接回面板，不设闸门）
         state["draw_stats"] = True  # 清理后回统计刷新，动线闭环
 
     items = [

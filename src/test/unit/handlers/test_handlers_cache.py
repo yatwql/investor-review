@@ -176,12 +176,12 @@ class TestPrintCacheRefreshReport(unittest.TestCase):
 
 @pytest.mark.unit_core
 class TestCmdCleanupCache(unittest.TestCase):
-    """_cmd_cleanup_cache 清理命令（委托 operations 并等待按键）。"""
+    """_cmd_cleanup_cache 清理命令（委托 operations，短反馈不设按键闸门）。"""
 
     @patch("src.python.cache.operations.cleanup_cache", return_value=5)
     @patch("src.python.tui.handlers_cache.press_any_key")
     def test_cleanup_removed_some(self, mock_press, mock_cleanup):
-        """有过期文件：cleanup_cache 以 TuiProgressReporter 调用一次，并等待按键。"""
+        """有过期文件：cleanup_cache 以 TuiProgressReporter 调用一次，完成后直接回面板。"""
         from src.python.report.progress import TuiProgressReporter
         from src.python.tui.handlers_cache import _cmd_cleanup_cache
 
@@ -189,18 +189,18 @@ class TestCmdCleanupCache(unittest.TestCase):
 
         mock_cleanup.assert_called_once()
         self.assertIsInstance(mock_cleanup.call_args.args[0], TuiProgressReporter)
-        mock_press.assert_called_once()
+        mock_press.assert_not_called()
 
     @patch("src.python.cache.operations.cleanup_cache", return_value=0)
     @patch("src.python.tui.handlers_cache.press_any_key")
     def test_cleanup_nothing(self, mock_press, mock_cleanup):
-        """无过期文件（返回 0）：仍委托调用一次并等待按键，不抛异常。"""
+        """无过期文件（返回 0）：仍委托调用一次，不设闸门、不抛异常。"""
         from src.python.tui.handlers_cache import _cmd_cleanup_cache
 
         _cmd_cleanup_cache()
 
         mock_cleanup.assert_called_once()
-        mock_press.assert_called_once()
+        mock_press.assert_not_called()
 
 
 @pytest.mark.unit_core
@@ -687,6 +687,7 @@ class TestReadHoldingsGate(unittest.TestCase):
         self.assertIn("持仓文件为空", out)
         self.assertIn("四列", out)
         mock_clear.assert_not_called()
+        mock_press.assert_not_called()  # 短错误反馈不设闸门
 
 
 @pytest.mark.unit_core
@@ -729,6 +730,7 @@ class TestCacheManagementSubmenu(unittest.TestCase):
         self.assertIn("3 清理过期缓存", out)
         mock_cleanup.assert_called_once()
         self.assertEqual(mock_stats.call_count, 2)
+        mock_press.assert_not_called()  # 清理完成即回面板，不多按一次键
 
     @patch("builtins.input", side_effect=["x", ""])
     @patch("src.python.cache.operations.cleanup_cache")

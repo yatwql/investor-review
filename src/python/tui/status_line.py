@@ -6,7 +6,7 @@
   - 缓存过期数    ← ``cache`` 的 ``get_cache_stats().expired``（清单预估）
   - 数据新鲜度    ← 最新价格缓存的 ``price_date``（数据日期 + 自然日龄；
     页头不引入交易日历取数——日历缓存未命中时会走 akshare 触网）
-  - 降级源数      ← ``core/perf`` 的 ``datasource_health.jsonl`` 末条 ``fail_count``
+  - 备用源数      ← ``core/perf`` 的 ``datasource_health.jsonl`` 末条 ``fail_count``
   - LLM 状态点    ← ``core/system_info.llm_status``（● 已配置 / ○ 未配置）
 
 契约：
@@ -98,17 +98,17 @@ def _freshness_part() -> str:
 
 
 def _degraded_part() -> str:
-    """降级源数（最近一次健康历史的失败源计数，无记录显示 —）。"""
+    """备用源数（最近一次健康历史的失败源计数，无记录显示 —）。"""
     try:
         from src.python.core.perf import summarize_health_history
 
         rows = summarize_health_history(limit=1)
         if not rows:
-            return "降级源 —"
-        return f"降级源 {int(rows[-1].get('fail_count') or 0)}"
+            return "备用源 —"
+        return f"备用源 {int(rows[-1].get('fail_count') or 0)}"
     except Exception:
-        logger.debug("状态行「降级源」取数失败，降级为 —", exc_info=True)
-        return "降级源 —"
+        logger.debug("状态行「备用源」取数失败，降级为 —", exc_info=True)
+        return "备用源 —"
 
 
 def _llm_part() -> str:
@@ -130,7 +130,7 @@ def build_status_line(*, now: float | None = None) -> str:
 
     Returns:
         形如 ``状态 │ 上次报告 10-07 09:55 · 缓存过期 3 · 新鲜度 最新 ·
-        降级源 0 · LLM ●〔详情 [4][H][S]〕`` 的单行文本。
+        备用源 0 · LLM ●〔详情 [4][H][S]〕`` 的单行文本。
     """
     ts = time.time() if now is None else float(now)
     cached = _memo.get("line")
