@@ -149,11 +149,12 @@ def _cmd_generate_both() -> None:
 
 
 def _prompt_generate_confirm(reporter: TuiProgressReporter, config: dict) -> tuple[bool, list[str] | None, bool] | None:
-    """问句式单屏一次确认：费用预估上屏 + 问句（讲清重新生成代价差异）+ 键位行（回车 / f / [h] / q）。
+    """问句式单屏一次确认：费用预估上屏 + 问句（讲清 Y/N 各自代价）+ 键位行（回车/Y / N / [h] / q）。
 
     替代原先「①是否重新生成 y/N → ③费用预估 y/N」两问（默认路径从 2~3 问降为 1 问）；历史走势以
     ``h`` 选项并入本屏（仅 fetch_mode=prompt 时展示，其余模式由共享层 resolve 单源解析）。
-    按键按**词**精确匹配（空格/逗号分隔，支持 ``f h`` 组合，``of``/``faq`` 这类子串不误触发）。
+    按键按**词**精确匹配（空格/逗号分隔，支持 ``n h`` 组合；``f`` 为 ``N`` 同义键，
+    ``of``/``faq`` 这类子串不误触发）。
 
     Returns:
         (force_llm, force_llm_modules, fetch_history)；None=中止（不进入生成）。
@@ -191,13 +192,11 @@ def _prompt_generate_confirm(reporter: TuiProgressReporter, config: dict) -> tup
 
     # 问句式：问句行先答「为什么/代价是什么」，键位行只作答——不要求用户记暗语
     hist_opt = " / h=含历史走势" if (mode == "prompt" and is_enable_history(config)) else ""
-    _question = (
-        "  [?] 是否重新生成全部 AI 分析？（f=跳过已有结果重新调用 AI，会产生费用；默认=用已有结果，免费但可能不是最新）"
-    )
+    _question = "  [?] 是否用已有的 AI 分析结果生成？（Y=用已有结果，免费但可能不是最新；N=重新生成，会产生费用）"
     for _line in wrap_hanging(_question, terminal_columns(), indent="      "):
         print(_line)
     try:
-        resp = input_choice(wrap_prompt(f"  回车=用已有结果生成 / f=重新生成（可选模块）{hist_opt} / q=中止: "))
+        resp = input_choice(wrap_prompt(f"  回车/Y=用已有结果生成 / N=重新生成（可选模块）{hist_opt} / q=中止: "))
     except (EOFError, KeyboardInterrupt):
         return None
     if resp is None:  # Esc
@@ -208,7 +207,7 @@ def _prompt_generate_confirm(reporter: TuiProgressReporter, config: dict) -> tup
         print("  [!] 已中止本次生成")
         return None
     force_llm, force_modules = (False, None)
-    if "f" in tokens:
+    if tokens & {"n", "f"}:  # N=重新生成（默认 Y 侧不进此分支）；f 与 N 同义
         reporter.ok("将忽略已有结果，重新调用 AI 生成")
         force_llm, force_modules = _select_force_modules(reporter)
     # 历史：复用共享层 resolve（ask 回调返回本屏 h 选择），不再单独询问

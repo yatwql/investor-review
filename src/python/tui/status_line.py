@@ -24,9 +24,14 @@ import time
 from datetime import datetime
 from typing import Any
 
+from src.python.core.ansi_colors import DIM, GREEN, RESET, YELLOW
+
 logger = logging.getLogger(__name__)
 
 _STATUS_TTL = 45.0  # 页头重绘频繁，缓存/健康历史等重取限频（秒）
+# 数据新鲜度告警阈值（自然日）：超过则在页头用黄色提示「数据偏旧」
+_STALE_DAYS = 7
+
 _memo: dict[str, Any] = {}
 
 
@@ -91,7 +96,8 @@ def _freshness_part() -> str:
             return "新鲜度 —"
         date_obj = datetime.strptime(str(raw_date)[:10], "%Y-%m-%d").date()
         age = max((datetime.now().date() - date_obj).days, 0)
-        return f"新鲜度 {date_obj:%m-%d}（{age}天）"
+        text = f"新鲜度 {date_obj:%m-%d}（{age}天）"
+        return f"{YELLOW}{text}{RESET}" if age >= _STALE_DAYS else text
     except Exception:
         logger.debug("状态行「新鲜度」取数失败，降级为 —", exc_info=True)
         return "新鲜度 —"
@@ -105,7 +111,8 @@ def _degraded_part() -> str:
         rows = summarize_health_history(limit=1)
         if not rows:
             return "备用源 —"
-        return f"备用源 {int(rows[-1].get('fail_count') or 0)}"
+        fails = int(rows[-1].get("fail_count") or 0)
+        return f"{YELLOW}备用源 {fails}{RESET}" if fails else "备用源 0"
     except Exception:
         logger.debug("状态行「备用源」取数失败，降级为 —", exc_info=True)
         return "备用源 —"
@@ -116,7 +123,9 @@ def _llm_part() -> str:
     try:
         from src.python.core.system_info import llm_status
 
-        return "LLM ●" if llm_status().get("configured") else "LLM ○"
+        if llm_status().get("configured"):
+            return f"LLM {GREEN}●{RESET}"
+        return f"LLM {YELLOW}○{RESET}"
     except Exception:
         logger.debug("状态行「LLM」取数失败，降级为 —", exc_info=True)
         return "LLM —"
@@ -144,7 +153,7 @@ def build_status_line(*, now: float | None = None) -> str:
             _degraded_part(),
             _llm_part(),
         ]
-        line = "状态 │ " + " · ".join(parts) + "〔详情 [4][H][S]〕"
+        line = "状态 │ " + " · ".join(parts) + f"{DIM}〔详情 [4][H][S]〕{RESET}"
     except Exception:
         logger.debug("状态行组装失败，降级显示", exc_info=True)
         line = "状态 │ —"

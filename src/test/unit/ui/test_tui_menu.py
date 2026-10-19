@@ -1014,3 +1014,39 @@ class TestRenderMenuGroups(unittest.TestCase):
         out = self._render("不存在的关键词")
         assert "筛选「不存在的关键词」：0 项" in out
         assert "[X]" not in out and "[E]" not in out
+
+
+class TestHeaderBrandColor(unittest.TestCase):
+    """页头品牌色与分组结构色：一色一职责（测试环境颜色常量为空，故强制着色后校验包裹位置）。"""
+
+    def test_app_name_version_bold_orange(self):
+        import src.python.core.ansi_colors as colors
+        from src.python.core.constants import APP_NAME, APP_VERSION
+
+        buf = StringIO()
+        with (
+            patch.object(colors, "ORANGE", "<O>"),
+            patch.object(colors, "BOLD", "<B>"),
+            patch.object(colors, "BLUE", "<U>"),
+            patch.object(colors, "RESET", "</>"),
+            patch("sys.stdout", buf),
+        ):
+            print_header()
+        out = buf.getvalue()
+        self.assertIn(f"<B><O>{APP_NAME}  v{APP_VERSION}</>", out, "应用名与版本号须为橙色粗体")
+        self.assertNotIn("<U>", out, "品牌行不得落结构蓝——蓝只属于分组标题")
+
+    def test_menu_group_heading_bold_blue(self):
+        import src.python.core.ansi_colors as colors
+        from src.python.tui.tui_menu import render_menu
+
+        buf = StringIO()
+        with (
+            patch.object(colors, "BLUE", "<U>"),
+            patch.object(colors, "BOLD", "<B>"),
+            patch.object(colors, "RESET", "</>"),
+            patch("sys.stdout", buf),
+        ):
+            render_menu(0)
+        out = buf.getvalue()
+        self.assertIn("<B><U>  ── 生成报告 ──</>", out, "分组标题须为蓝色粗体")

@@ -404,7 +404,7 @@ TUI（Text User Interface）是系统**主要交互渠道**：桌面终端内的
 | `tui/tui.py` | 主入口/主循环 | sys.path 注入、init_config、_bind_callbacks、启动清理/隐私提示/首次引导、方向键导航循环、LLM 会话统计 |
 | `tui/tui_menu.py` | 菜单定义与渲染 | MENU_ITEMS 列表、MENU_GROUPS（任务分组：生成报告/数据与查看/配置/诊断与排查）、render_menu/print_header/show_config、_apply_feature_gates（开关门控裁剪）、index_by_key、match_menu_items/next_matching（`/` 筛选与筛选内导航）、press_any_key/exit_app |
 | `tui/tui_keys.py` | 键盘封装 | 跨平台（Windows msvcrt / Linux tty+termios+select），标准化键名 KEY_UP/DOWN/ENTER/CTRL_C |
-| `tui/handlers_report.py` | 报告生成外壳 | `_run_generate` 骨架、`_prompt_generate_confirm` 合并单屏一次确认（full：费用预估上屏 + 回车/`f`/`q`/`h` 单问，`f` 触发 `_select_force_modules` 模块多选，含日预算超限安全网）/`_prompt_history`（委托 resolve_fetch_history + 注入 y/N 询问，仅 both）、E/B/L 三命令 |
+| `tui/handlers_report.py` | 报告生成外壳 | `_run_generate` 骨架、`_prompt_generate_confirm` 合并单屏一次确认（full：费用预估上屏 + 回车/`Y`/`N`/`q`/`h` 单问，默认侧 `Y`=用已有结果，`N`（同义 `f`）触发 `_select_force_modules` 模块多选，含日预算超限安全网）/`_prompt_history`（委托 resolve_fetch_history + 注入 y/N 询问，仅 both）、E/B/L 三命令 |
 | `tui/handlers_config.py` | 配置管理外壳 | 目录/文件名/输出目录/章节/指数池/匿名化/LLM 模块与功能开关/刷新等 8 项配置命令 |
 | `tui/handlers_cache.py` | 缓存管理外壳 | 更新基础/持仓缓存、清理过期、查看统计 4 项命令 |
 | `tui/handlers_whatif.py` | 调仓模拟外壳 | What-if 对话流程，委托 `report/whatif_operations.py`（§4.13） |
@@ -465,7 +465,7 @@ while True:
 | | `[T]` | 系统自检（环境/配置/目录/数据源一键体检，`handlers_log.py::_cmd_run_doctor`；`doctor_check` 门控） |
 | 退出 | `[X]` | 退出程序 |
 
-菜单渲染层与状态面板：`print_header`（标题 + 页头常驻状态行 `status_line.build_status_line()`——上次报告时间/缓存过期数/数据新鲜度/备用源数/LLM 状态点五项，全本地取数、单项异常降级为 `—`、TTL 记忆化——+ 首次运行指引：缺持仓文件/缺 LLM 配置提示）、`show_config`（持仓目录/持仓文件、输出目录、新闻抓取上限、文件就绪状态 `[OK]`/`[!!]`、匿名化状态、隐私声明、LLM 配置状态单链/多链两视图）。LLM 状态面板支持多 Provider 链式模式（策略、各 provider 后端/模型/优先级/自动重试状态、模块级偏好）；上屏词按 `DESIGN-TUI` 术语表转用户词——端点状态由 `core.system_info.circuit_display` **唯一归一**（`熔断中`→`暂时失败`，未知上游文案透传），TUI/CLI/Web 三渠道共用同一词，各渠道不得自带映射表；面板数据消费 `core/system_info.llm_status()` 单源（configured 判定与多链/flat 分支唯一在共享层，渠道只做终端渲染）。
+菜单渲染层与状态面板：`print_header`（标题 + 页头常驻状态行 `status_line.build_status_line()`——上次报告时间/缓存过期数/数据新鲜度/备用源数/LLM 状态点五项，全本地取数、单项异常降级为 `—`、TTL 记忆化——+ 首次运行指引：缺持仓文件/缺 LLM 配置提示）、`show_config`（持仓目录/持仓文件、输出目录、新闻抓取上限、文件就绪状态 `[OK]`/`[!!]`、匿名化状态、隐私声明、LLM 配置状态单链/多链两视图）。LLM 状态面板支持多 Provider 链式模式（策略、各 provider 后端/模型/优先级/自动重试状态、模块级偏好）；上屏词按 `DESIGN-TUI` 术语表转用户词——端点状态由 `core.system_info.circuit_display` **唯一归一**（`熔断中`→`暂时失败`，未知上游文案透传），TUI/CLI/Web 三渠道共用同一词，各渠道不得自带映射表；面板数据消费 `core/system_info.llm_status()` 单源（configured 判定与多链/flat 分支唯一在共享层，渠道只做终端渲染）。**配色一色一职责**（角色表见 `DESIGN-TUI` Colors）：品牌橙=应用名与版本号、结构蓝粗=分组标题（`text_layout.style_heading` 单源，首页与 `[S]` 同步改色）、焦点青=选中标记/面板游标、状态色按值给（绿正常/黄注意/红错误）、DIM=分隔线与页脚图例；非 TTY 与 `NO_COLOR` 下全量退化无色。
 
 #### 1.6.4 报告生成流程
 
@@ -473,7 +473,7 @@ while True:
 
 1. **持仓准备**：`prepare_holdings()` → `select_holdings_file()`（交互式文件选择）→ `read_holdings_with_flows()`（主表 + 交易/分红流水）→ `warm_new_asset_caches()`（新资产缓存预热，委托 §3.6 缓存操作共享层）。
 2. **交互询问**（TUI 专属，CLI/Web 用参数/表单表达；`E`/basic 无询问直连）：
-   - `_prompt_generate_confirm()`（仅 `L`/full）：**合并单屏一次确认**——先上屏事前费用预估与今日已花费/日预算，随后**问句**「是否重新生成全部 AI 分析？（`f`=跳过已有结果重新调用 AI，会产生费用；默认=用已有结果，免费但可能不是最新）」+ 键位行「回车=用已有结果生成 / `f`=重新生成（可选模块） / `q`=中止」（`history.fetch_mode=prompt` 且 `enable_history` 开时多一个 `h`=含历史走势选项）；历史三态仍委托 `report/history_policy.resolve_fetch_history` 单源解析（`ask` 回调返回本屏 `h` 是否按下），渠道层不自行分支 `fetch_mode`；日预算超限走**独立安全网确认**（用已有结果继续 / 中止），Esc 即时取消返回主菜单。提示按键按**词**精确匹配（空格/逗号分隔，支持 `f h` 组合，`of`/`faq` 这类子串不误触发）；安全网降级路径**不追加历史询问**（`ask` 恒 False：prompt 模式回落为不获取、auto 仍自动获取，交互最小化），该路径且 prompt 模式时输出一行「本次用已有结果，不获取历史走势」提示保证可感知（告知后覆盖，不追加提问）。返回 `(force_llm, force_llm_modules, fetch_history)`，`None` 表示中止。
+   - `_prompt_generate_confirm()`（仅 `L`/full）：**合并单屏一次确认**——先上屏事前费用预估与今日已花费/日预算，随后**问句**「是否用已有的 AI 分析结果生成？（`Y`=用已有结果，免费但可能不是最新；`N`=重新生成，会产生费用）」+ 键位行「回车/`Y`=用已有结果生成 / `N`=重新生成（可选模块） / `q`=中止」（回答键 Y/N 一看即懂，默认侧 `Y` 即回车）（`history.fetch_mode=prompt` 且 `enable_history` 开时多一个 `h`=含历史走势选项）；历史三态仍委托 `report/history_policy.resolve_fetch_history` 单源解析（`ask` 回调返回本屏 `h` 是否按下），渠道层不自行分支 `fetch_mode`；日预算超限走**独立安全网确认**（用已有结果继续 / 中止），Esc 即时取消返回主菜单。提示按键按**词**精确匹配（空格/逗号分隔，支持 `n h` 组合，`f` 为 `N` 同义键，`of`/`on`/`faq` 这类子串不误触发）；安全网降级路径**不追加历史询问**（`ask` 恒 False：prompt 模式回落为不获取、auto 仍自动获取，交互最小化），该路径且 prompt 模式时输出一行「本次用已有结果，不获取历史走势」提示保证可感知（告知后覆盖，不追加提问）。返回 `(force_llm, force_llm_modules, fetch_history)`，`None` 表示中止。
    - `_select_force_modules()`（`L` 按 `f` 触发）：模块多选（列出 FORCEABLE_LLM_MODULES 编号/键名，逗号分隔，回车=全部；仅指定子集时传 `force_llm_modules`，粒度优先于全量）。
    - `_prompt_history()`（仅 `B`/both）：同样委托 `resolve_fetch_history` 单源三态，`prompt` 时注入「是否获取组合历史走势数据（as-if 模拟）？」y/N 询问。
 3. **委托共享层**：`orchestrator.generate_report(holdings, config, reporter, report_type, ...)`（§4.2）——reporter 注入 `TuiProgressReporter`，管线代码零改动。

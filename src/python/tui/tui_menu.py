@@ -15,7 +15,7 @@ import os
 import sys
 from collections.abc import Callable
 
-from src.python.core.ansi_colors import GREEN, RED, RESET, YELLOW
+from src.python.core.ansi_colors import CYAN, DIM, GREEN, RED, RESET, YELLOW
 from src.python.config import get_config
 
 # 每个菜单项：(快捷键, 显示标签, 回调函数, 是否退出项)
@@ -99,7 +99,8 @@ def filter_menu_llm_modules(module_names: dict[str, str]) -> dict[str, str]:
 
 
 def print_sep(char: str = "=", width: int = 56) -> None:
-    print(char * width)
+    """横向分隔线（弱化层：不抢标题与内容的注意力）。"""
+    print(f"{DIM}{char * width}{RESET}")
 
 
 def print_header() -> None:
@@ -107,7 +108,9 @@ def print_header() -> None:
     from src.python.core.constants import APP_NAME, APP_VERSION
 
     print_sep()
-    print(f"        {APP_NAME}  v{APP_VERSION}")
+    from src.python.core.ansi_colors import BOLD, ORANGE, RESET
+
+    print(f"        {BOLD}{ORANGE}{APP_NAME}  v{APP_VERSION}{RESET}")
     print_sep()
 
     # 页头常驻状态行（全本地取数、逐项降级、TTL 内记忆化）
@@ -145,7 +148,7 @@ def render_menu(sel: int, filter_text: str = "") -> None:
     并存：渲染 `>` 选中指示器；页脚提示两种入口（见 tui.main 内层循环）。
     """
     from src.python.tui.switch_panel import layout_tier
-    from src.python.tui.text_layout import terminal_columns, wrap_with_prefix
+    from src.python.tui.text_layout import style_heading, terminal_columns, wrap_with_prefix
 
     columns = terminal_columns()
     narrow = layout_tier(columns) == "narrow"
@@ -155,7 +158,8 @@ def render_menu(sel: int, filter_text: str = "") -> None:
 
     def _render_item(index: int) -> None:
         key, label, _cb, _is_exit = MENU_ITEMS[index]
-        prefix = "  >" if index == sel else "   "
+        # 焦点色（青）只标当前选中行：一色一职责，不与结构蓝/状态色混用
+        prefix = f"  {CYAN}>{RESET}" if index == sel else "   "
         head = f"{prefix} [{key}] "
         # 长标签（如「生成标准报告（Excel+HTML，按章节配置）」）在手机窄屏上折行：
         # 前缀（光标/编号）不参与断行，续行缩进到标签起始列，视觉上仍归属同一项
@@ -173,7 +177,8 @@ def render_menu(sel: int, filter_text: str = "") -> None:
         members = [i for i in members if i is not None and i in visible_set]
         if not members:
             continue
-        print("\n".join(wrap_with_prefix("  ", f"── {title} ──", columns)))
+        for _line in wrap_with_prefix("  ", f"── {title} ──", columns):
+            print(style_heading(_line))
         for index in members:
             _render_item(index)
     for index, (key, _label, _cb, _is_exit) in enumerate(MENU_ITEMS):
@@ -187,7 +192,7 @@ def render_menu(sel: int, filter_text: str = "") -> None:
         if narrow
         else "方向键移动 | Enter 确认 | 字母/数字键直达 | / 关键词筛选 | Esc / 0 / X 退出 | Ctrl+C 退出"
     )
-    print("\n".join(wrap_with_prefix("  ", footer, terminal_columns())))
+    print("\n".join(f"{DIM}{_line}{RESET}" for _line in wrap_with_prefix("  ", footer, terminal_columns())))
     print()
 
 
@@ -202,9 +207,9 @@ def show_config() -> None:
     print(f"  输出目录: {config.get('output_dir') or get_default('output_dir')}")
     print(f"  新闻抓取上限: {config.get('news_top_count', '300')} 条")
     if os.path.exists(holdings_path):
-        print("  状态: [OK] 文件就绪")
+        print(f"  状态: {GREEN}[OK]{RESET} 文件就绪")
     else:
-        print("  状态: [!!] 文件未找到")
+        print(f"  状态: {RED}[!!]{RESET} 文件未找到")
     _show_privacy_and_security_status()
     _show_llm_config_status()
     print()

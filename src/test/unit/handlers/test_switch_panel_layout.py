@@ -141,6 +141,15 @@ class TestLegendAndHeading:
     def test_heading_carries_on_count(self):
         assert format_heading("⚙ 机制与诊断", 4, 5, 120) == "⚙ 机制与诊断（4/5 开）"
 
+    def test_heading_bold_blue(self, monkeypatch):
+        """结构色：分组标题 = 蓝 + 粗（与首页分组同源 style_heading，非 TTY 下常量为空故强制着色校验）。"""
+        import src.python.core.ansi_colors as colors
+
+        monkeypatch.setattr(colors, "BLUE", "<U>", raising=True)
+        monkeypatch.setattr(colors, "BOLD", "<B>", raising=True)
+        monkeypatch.setattr(colors, "RESET", "</>", raising=True)
+        assert format_heading("⚙ 机制与诊断", 4, 5, 120) == "<B><U>⚙ 机制与诊断（4/5 开）</>"
+
     def test_heading_truncated_on_narrow_terminal(self):
         long_head = "🔍 分析增强·既有章内追加与大量补充说明文字"
         out = format_heading(long_head, 14, 16, 46)

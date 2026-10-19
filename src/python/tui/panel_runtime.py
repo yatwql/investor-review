@@ -21,6 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Iterable, Literal
 
+from src.python.core.ansi_colors import CYAN, RESET
 from src.python.tui.tui_keys import KEY_DOWN, KEY_UP, input_choice
 
 
@@ -80,8 +81,11 @@ class NavState:
         return False
 
     def marker(self, index: int) -> str:
-        """行内游标标记：engaged 且命中当前行给 ``▸``，否则空格（占位对齐）。"""
-        return "▸" if self.engaged and index == self.cursor else " "
+        """行内游标标记：engaged 且命中当前行给青色 ``▸``（焦点色），否则空格（占位对齐）。
+
+        焦点色与首页选中标记同源：一屏只有「当前选中」用青，不与结构蓝/状态色混用。
+        """
+        return f"{CYAN}▸{RESET}" if self.engaged and index == self.cursor else " "
 
 
 @dataclass(frozen=True)

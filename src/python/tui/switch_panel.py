@@ -39,6 +39,7 @@ from src.python.core.ansi_colors import DIM, GREEN, RED, RESET
 from src.python.tui.text_layout import (
     display_width,
     pad_right,
+    style_heading,
     terminal_columns,
     truncate_display,
     wrap_display,
@@ -90,9 +91,9 @@ def _status(enabled: bool, tier: str) -> str:
 
 
 def format_heading(head: str, enabled_count: int, total: int, columns: int) -> str:
-    """分组标题行（含该组开启数，窄终端自动截断）。"""
-    text = f"{head}（{enabled_count}/{total} 开）"
-    return truncate_display(text, inner_width(columns))
+    """分组标题行（含该组开启数；窄终端先截断再上色——截断不吃转义序列）。"""
+    text = truncate_display(f"{head}（{enabled_count}/{total} 开）", inner_width(columns))
+    return style_heading(text)
 
 
 def format_item(

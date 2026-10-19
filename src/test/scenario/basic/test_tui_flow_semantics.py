@@ -44,7 +44,9 @@ def _assert_flow(name: str, feeder) -> None:
     assert feeder.consumed == spec["keys"], (
         f"动线「{name}」击键数由 {spec['keys']} 变为 {feeder.consumed}——主路径不得变长"
     )
-    missing = [word for word in spec["must_show"] if word not in feeder.output]
+    # 屏幕文本按列折行（空白处断行或超长硬切），语义词比对前两侧同剥空白
+    screen = "".join(feeder.output.split())
+    missing = [word for word in spec["must_show"] if "".join(word.split()) not in screen]
     assert missing == [], f"动线「{name}」缺少关键语义词 {missing}；实际上屏：\n{feeder.output[-800:]}"
 
 
@@ -72,14 +74,14 @@ def _report_patches(captured: dict):
 
 @pytest.mark.scenario_basic
 class TestGenerateFullWithModuleForce:
-    """动线 1：生成完整报告且只强刷指定模块（P0 快反馈）。"""
+    """动线 1：生成完整报告且只重新生成指定模块（P0 快反馈）。"""
 
     def test_flow_counts_and_cost_semantics(self):
         from src.python.llm.force_scope import FORCEABLE_LLM_MODULES
 
         captured: dict = {}
         feeder = run_flow(
-            ["L", "f", "1 3", "X"],
+            ["L", "N", "1 3", "X"],
             pre_patches=common_patches(),
             handler_patches=_report_patches(captured),
         )

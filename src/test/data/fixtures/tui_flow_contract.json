@@ -2,7 +2,7 @@
   "generate_full_force_modules": {
     "keys": 4,
     "must_show": [
-      "是否重新生成",
+      "用已有的 AI 分析结果",
       "会产生费用",
       "仅重新生成"
     ]

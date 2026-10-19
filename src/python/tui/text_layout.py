@@ -19,6 +19,25 @@ from collections.abc import Iterable
 
 _ANSI_SEQ = re.compile(r"\x1b\[[0-9;]*m")
 
+
+def style_heading(text: str) -> str:
+    """分组标题样式（蓝色粗体）——结构色，不承载状态语义。
+
+    约定先排版（折行/截断）再调用本函数：`display_width` 会剔除 ANSI，但
+    截断按字符逐个累加，先上色有把转义序列切断的风险；
+    非 TTY / `NO_COLOR` 下颜色常量为空串，本函数退化为恒等（文本本身仍可读）。
+
+    Args:
+        text: 已排好版的标题文本。
+
+    Returns:
+        着色后的标题；无颜色能力时原样返回。
+    """
+    from src.python.core.ansi_colors import BLUE, BOLD, RESET
+
+    return f"{BOLD}{BLUE}{text}{RESET}"
+
+
 # 东亚宽度 W(ide)/F(ullwidth) 的字符占 2 列；A(mbiguous)（含盒线字符）与其余按 1 列计
 _WIDE = ("W", "F")
 

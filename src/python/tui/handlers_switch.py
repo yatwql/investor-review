@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from src.python.core.ansi_colors import RESET, YELLOW
 from src.python.tui.switch_panel import inner_width, terminal_columns, wrap_hanging
-from src.python.tui.text_layout import truncate_display
+from src.python.tui.text_layout import style_heading, truncate_display
 
 DUAL_ENTRY_CROSS_HINTS = {
     "holding_change": "· 见独立组",
@@ -93,7 +93,7 @@ def show_switch_detail(choice: str, items: list[tuple[int, str, str, bool, str]]
     # 且任何一行都不越界（否则窄屏右侧被硬折成锯齿）
     width = inner_width(terminal_columns()) - 2
     print()
-    print(truncate_display(f"  ── {name}（{key}）", width))
+    print(style_heading(truncate_display(f"  ── {name}（{key}）", width)))
     for line in wrap_hanging(f"  说明  : {desc}", width, indent="          "):
         print(line)
     for line in wrap_hanging(f"  分组  : {group_label}{life}", width, indent="          "):

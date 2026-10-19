@@ -197,9 +197,10 @@ class TestPromptGenerateConfirm(unittest.TestCase):
         """输入 q → 中止（None）。"""
         self.assertIsNone(self._call("q"))
 
-    def test_f_triggers_module_selection(self):
-        """输入 f → 触发模块选择，透传其返回的强刷范围。"""
-        self.assertEqual(self._call("f", force_modules=(True, None)), (True, None, True))
+    def test_force_key_triggers_module_selection(self):
+        """输入 N（及同义键 f）→ 触发模块选择，透传其返回的重生成范围。"""
+        for key in ("N", "f"):
+            self.assertEqual(self._call(key, force_modules=(True, None)), (True, None, True))
 
     def test_prompt_mode_enter_no_history(self):
         """fetch_mode=prompt 且回车（未按 h）→ 历史 False。"""
@@ -245,28 +246,31 @@ class TestPromptGenerateConfirm(unittest.TestCase):
         self.assertNotIn("不获取历史走势", buf.getvalue())
 
     def test_substring_word_not_mistrigger(self):
-        """词级精确匹配：'of' 不误触强刷（默认生成）、'faq' 不误中止（非 None）。"""
+        """词级精确匹配：'of' 不误触重新生成、'faq' 不误中止、'on' 不含独立的 n 键。"""
         r_of = self._call("of")
         self.assertIsNotNone(r_of)
-        self.assertEqual(r_of[0], False, "子串含 f 不应触发强刷")
+        self.assertEqual(r_of[0], False, "子串含 f 不应触发重新生成")
         r_faq = self._call("faq")
         self.assertIsNotNone(r_faq, "子串含 q 不应中止")
         self.assertEqual(r_faq[0], False)
+        r_on = self._call("on")
+        self.assertEqual(r_on[0], False, "子串含 n 不应触发重新生成")
 
     def test_combo_space_triggers_both(self):
-        """'f h' 空格分隔组合：强刷与历史同时生效。"""
-        result = self._call("f h", config=self._config("prompt"), force_modules=(True, None))
-        self.assertEqual(result, (True, None, True))
+        """'n h' 空格分隔组合：重新生成与历史同时生效（f 为 N 同义键，组合同样生效）。"""
+        for combo in ("n h", "f h"):
+            result = self._call(combo, config=self._config("prompt"), force_modules=(True, None))
+            self.assertEqual(result, (True, None, True))
 
     def test_budget_exceeded_default_aborts(self):
         """预算超限 + 默认（非 y）→ 中止（None）。"""
         self.assertIsNone(self._call("", budget=_budget(enabled=True, limit=1.0, spent=1.2, exceeded=True)))
 
     def test_question_line_explains_force_cost_tradeoff(self):
-        """问句必须讲清重新生成的代价差异：默认用已有结果免费 / f 重调模型产生费用。
+        """问句必须讲清 Y/N 各自代价：Y=用已有结果免费 / N=重调模型产生费用，键位行明示 Y/N。
 
-        守护点：仅给键位图例（回车 / f / q）而无代价说明时，用户须记住暗语并自行推断
-        两者差别——问句描述丢失即视为回归。
+        守护点：仅给键位图例而无代价说明时，用户须记住暗语并自行推断两者差别；
+        只写暗语键（如退回单字母作答）而不再展示 Y/N 时，「默认用 Y」的可读性即回归。
         """
         from src.python.tui import handlers_report as hr
 
@@ -287,15 +291,20 @@ class TestPromptGenerateConfirm(unittest.TestCase):
             contextlib.redirect_stdout(buf),
         ):
             hr._prompt_generate_confirm(reporter, self._config())
-        out = buf.getvalue()
-        self.assertIn("是否重新生成", out)
+        # 问句与按键行都会按列折行，语义断言前剥掉全部空白（与 _assert_flow 同口径）
+        out = "".join(buf.getvalue().split())
+        self.assertIn("是否用已有的AI分析结果", out)
         self.assertIn("会产生费用", out)
         self.assertIn("免费", out)
         # 问句必须在按键行之前上屏（先讲为什么，再让人按键作答）
-        self.assertIn("是否重新生成", at_prompt[0])
-        prompt_text = mock_choice.call_args.args[0]
+        at_input = "".join(at_prompt[0].split())
+        self.assertIn("是否用已有的AI分析结果", at_input)
+        prompt_text = "".join(mock_choice.call_args.args[0].split())
         self.assertIn("用已有结果生成", prompt_text)
         self.assertIn("可选模块", prompt_text)
+        # Y/N 明示：默认侧 Y（回车=Y=用已有结果），N=重新生成——不得退回只给暗语键
+        self.assertIn("回车/Y=", prompt_text)
+        self.assertIn("N=重新生成", prompt_text)
 
     def test_summary_lines_printed_with_prefix(self):
         """费用预估行带上屏前缀 [..]。"""

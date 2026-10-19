@@ -40,7 +40,7 @@ from src.python.tui.handlers_switch import (
     match_switch_item,
     show_switch_detail,
 )
-from src.python.tui.text_layout import display_width, pad_right, render_panel, truncate_display
+from src.python.tui.text_layout import display_width, pad_right, render_panel, style_heading, truncate_display
 from src.python.tui.tui_keys import input_choice
 
 logger = setup_logger()
@@ -173,7 +173,7 @@ _CONFIG_ENTRY_MAP: tuple[tuple[str, str, str], ...] = (
 def _render_config_entry_map() -> None:
     """渲染配置入口地图（只读索引，不写配置、不等待按键）。"""
     print()
-    print("  ── 配置入口地图（哪个配置在哪个菜单）──")
+    print(style_heading("  ── 配置入口地图（哪个配置在哪个菜单）──"))
     width = max(display_width(label) for label, _key, _hint in _CONFIG_ENTRY_MAP)
     for label, key, hint in _CONFIG_ENTRY_MAP:
         print(f"   {pad_right(label, width)}  →  {pad_right(key, 9)} {hint}")
@@ -197,7 +197,7 @@ def _cmd_config_dir_info() -> None:
 
     def _render(nav: NavState) -> list[str]:
         print()
-        print("  ── 配置与目录信息 ──")
+        print(style_heading("  ── 配置与目录信息 ──"))
         for i, (_key, label, _fn) in enumerate(items):
             print(f" {nav.marker(i)} [{_key}] {label}")
         print(f" {nav.marker(len(items))} [0] 返回主菜单")
@@ -429,7 +429,7 @@ def _cmd_config_llm_modules() -> None:
             print("\n".join(render_panel("配置 LLM 报告章节与功能开关", panel_rows)))
         else:
             header = truncate_display(f"功能开关（{len(tuples)} 项）", inner_width(columns) - 5)
-            print(f"  ── {header} ──")
+            print(style_heading(f"  ── {header} ──"))
             print("\n".join(f"  {row}" if row else "" for row in panel_rows))
         if state["repaint"]:
             for _line in wrap_hanging(
@@ -877,7 +877,7 @@ def _cmd_config_llm_providers() -> None:
     if len(ordered) < 2:
         # 单线路直接返回（不进入输入循环，行输入不被触发）
         print()
-        print(truncate_display(f"  ── LLM 多链线路优先级（strategy: {strategy}） ──", width))
+        print(style_heading(truncate_display(f"  ── LLM 多链线路优先级（strategy: {strategy}） ──", width)))
         for line in wrap_hanging("  当前仅一条线路（或未配置多链），无需调整", width):
             print(line)
         return
