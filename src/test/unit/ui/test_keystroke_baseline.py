@@ -52,22 +52,43 @@ class _KeyFeeder:
 
 
 def _patch_readers(feeder: _KeyFeeder):
-    """把所有按键读取入口替换为 feeder（各模块按名导入，需逐模块打点）。"""
+    """把按键读取入口替换为 feeder。
+
+    打点纪律（踩过一次坑）：**不得** patch 源头 ``tui_keys.input_choice``——
+    处理器模块在流程中被惰性导入，导入期读到的若是 feeder 就会永久绑定，
+    污染后续所有用例。故只 patch「已导入的消费方」与 ``get_key`` 源头。
+    """
     from src.python.tui import (
         handlers_cache,
         handlers_config,
+        handlers_log,
+        handlers_qa,
         handlers_report,
+        handlers_whatif,
         panel_runtime,
         tui,
         tui_keys,
         tui_menu,
+        tui_handlers,
     )
 
     patches = []
+    # get_key 是 input_choice 的内部读取入口（同模块动态查找）→ patch 源头即可覆盖两者
     for mod in (tui, tui_menu, tui_keys):
         if hasattr(mod, "get_key"):
             patches.append(patch.object(mod, "get_key", feeder))
-    for mod in (tui_keys, panel_runtime, handlers_report, handlers_config, handlers_cache):
+    # 消费方逐个 patch（这些模块已在测试导入期完成导入，绑定固定）
+    consumers = (
+        panel_runtime,
+        tui_handlers,
+        handlers_report,
+        handlers_config,
+        handlers_cache,
+        handlers_log,
+        handlers_qa,
+        handlers_whatif,
+    )
+    for mod in consumers:
         if hasattr(mod, "input_choice"):
             patches.append(patch.object(mod, "input_choice", feeder))
     return patches
@@ -82,14 +103,18 @@ def _run_flow(keys: list[str], *, pre_patches=(), handler_patches=()) -> _KeyFee
     feeder = _KeyFeeder(keys)
     snapshot = list(MENU_ITEMS)  # 主循环会按功能开关就地裁剪菜单，跑完必须还原
     ctxs = [p for p in _patch_readers(feeder)] + list(pre_patches) + list(handler_patches)
+    entered = []
     try:
-        with contextlib.ExitStack() as stack:
-            for ctx in ctxs:
-                stack.enter_context(ctx)
-            with contextlib.redirect_stdout(io.StringIO()):
-                with contextlib.suppress(SystemExit):
-                    tui.main()
+        for ctx in ctxs:  # 显式进入/退出：ExitStack 在 unittest 与 pytest 混跑时曾遗留激活中的打点
+            ctx.__enter__()
+            entered.append(ctx)
+        with contextlib.redirect_stdout(io.StringIO()):
+            with contextlib.suppress(SystemExit):
+                tui.main()
     finally:
+        for ctx in reversed(entered):
+            with contextlib.suppress(RuntimeError):
+                ctx.__exit__(None, None, None)
         MENU_ITEMS[:] = snapshot
     if os.environ.get("TUI_KEYSTROKE_DEBUG") == "1":
         print(f"[keystroke] 消费 {feeder.consumed} 键，剩余 {feeder._keys}，提示 {feeder.prompts}", file=sys.stderr)

@@ -57,8 +57,7 @@ class TestPanelPromptsUseTemplate:
                 if not (isinstance(prompt_kw.value, ast.Call) and _call_name(prompt_kw.value) == "panel_prompt"):
                     violations.append(f"{path.name}:{node.lineno}")
         assert violations == [], (
-            "panel_loop 的 prompt 必须由 prompt_text.panel_prompt 产出（禁止手写字面量）：\n"
-            + "\n".join(violations)
+            "panel_loop 的 prompt 必须由 prompt_text.panel_prompt 产出（禁止手写字面量）：\n" + "\n".join(violations)
         )
 
 
@@ -71,7 +70,9 @@ class TestNoHiddenEnterCancel:
             for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
                 if "直接回车取消" in line or "（回车取消" in line:
                     violations.append(f"{path.name}:{lineno} {line.strip()[:60]}")
-        assert violations == [], "回车承担取消语义时须置句首显式声明（如 `回车=取消 / ...`）：\n" + "\n".join(violations)
+        assert violations == [], "回车承担取消语义时须置句首显式声明（如 `回车=取消 / ...`）：\n" + "\n".join(
+            violations
+        )
 
 
 class TestInputChoiceDeclaresEnter:

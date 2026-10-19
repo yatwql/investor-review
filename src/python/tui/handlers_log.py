@@ -26,9 +26,7 @@ _LEVEL_PROMPT_TEXT = "（留空=全部，可选: DEBUG/INFO/WARNING/ERROR/CRITIC
 
 def _level_prompt() -> str | None:
     """交互式级别筛选提示；空回车返回 None（全部），无效级别提示后按全部处理。"""
-    raw = input_choice(
-        wrap_prompt(f"  按级别筛选 {_LEVEL_PROMPT_TEXT}（回车=全部级别 · Esc 取消）: ")
-    )
+    raw = input_choice(wrap_prompt(f"  按级别筛选 {_LEVEL_PROMPT_TEXT}（回车=全部级别 · Esc 取消）: "))
     if raw is None:  # Esc：取消查看返回主菜单
         raise PromptCancelledError
     raw = raw.strip().upper()

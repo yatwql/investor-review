@@ -84,9 +84,7 @@ def keys_help_lines(items, *, columns: int | None = None) -> list[str]:  # noqa:
         if getattr(item, "kind", "action") == "return":
             continue
         lines += wrap_hanging(f"    {item.key} — {item.label}", columns, indent="      ")
-    lines += wrap_hanging(
-        "    ↑ ↓ 移动选中 · 回车 执行提示行标注的默认项 · 0 / Esc 返回", columns, indent="      "
-    )
+    lines += wrap_hanging("    ↑ ↓ 移动选中 · 回车 执行提示行标注的默认项 · 0 / Esc 返回", columns, indent="      ")
     return lines
 
 
