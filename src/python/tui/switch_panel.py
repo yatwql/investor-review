@@ -103,6 +103,7 @@ def format_item(
     enabled: bool,
     star: str,
     marker: str,
+    cursor: str = "",
     notes: str,
     columns: int,
     name_column: int,
@@ -119,6 +120,9 @@ def format_item(
         enabled: 当前是否开启。
         star: 与出厂默认不一致的标记（`"*"` 或 `""`）。
         marker: 实验项标记（`⚗` + 占位空格，已按显示列补齐）。
+        cursor: 方向键游标标记（``nav.marker(i)``，即 ``▸`` 或空格占位）——拼在首行
+            编号前、截断前生效，保证「每行 ≤ 面板内宽」不变式；续行（medium 键名行）
+            不带游标。
         notes: 备注（互指提示 / 费用摘要 / 启用统计），已拼好的纯文本。
         columns: 终端列数。
         name_column: 名称列宽（宽/中档对齐用，取面板内最长名称）。
@@ -137,19 +141,17 @@ def format_item(
     num = f"{number:>{number_width}}"
 
     if tier == "wide":
-        head = f"{num}. {marker}{pad_right(label, name_column)} {DIM}{pad_right(key, key_column)}{RESET} {status}{star}"
+        head = f"{cursor}{num}. {marker}{pad_right(label, name_column)} {DIM}{pad_right(key, key_column)}{RESET} {status}{star}"
         line = head + (f"{DIM}{notes}{RESET}" if notes else "")
         return [truncate_display(line, limit)]
 
     if tier == "medium":
         # 逐行判断：单行放得下就单行（纵向稀缺优先，短条目不必占两行）；放不下才换行
         # ——名称+状态一行，键名(淡色)+备注缩进一行，键名可见性不牺牲。
-        single = f"{num}. {marker}{label} {DIM}{key}{RESET} {status}{star}"
+        single = f"{cursor}{num}. {marker}{label} {DIM}{key}{RESET} {status}{star}"
         if display_width(single) + display_width(notes) <= limit:
             return [single + (f"{DIM}{notes}{RESET}" if notes else "")]
-        first = (
-            f"{num}. {marker}{truncate_display(label, limit - display_width(f'{num}. {marker} ') - 7)}{star} {status}"
-        )
+        first = f"{cursor}{num}. {marker}{truncate_display(label, limit - display_width(f'{num}. {marker} ') - 8)}{star} {status}"
         indent = " " * (display_width(num) + 2)
         second = f"{indent}{DIM}{key}{RESET}"
         if notes:
@@ -158,7 +160,7 @@ def format_item(
 
     # narrow：单行压缩（键名默认不进版面——手机窄屏放不下，且编号足够操作）；
     # 用户按 `k` 时输出两行：名称+状态 / 缩进键名，供抄写粘贴。
-    prefix = f"{num} {marker}"
+    prefix = f"{cursor}{num} {marker}"
     tail = f" {status}{star}"
     if reveal_key:
         indent = " " * (display_width(num) + 1)

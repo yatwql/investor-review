@@ -85,6 +85,15 @@ class TestFormatItemTiers:
         assert "rebalance_schedule_replay" not in lines[0]
         assert "[关]*" in lines[0]  # 状态用短标签省列
 
+    @pytest.mark.parametrize("columns", [40, 46, 80, 120])
+    def test_cursor_prepends_and_keeps_width(self, columns):
+        """cursor= 把 ▸ 拼在首行编号前（截断前），且不破坏「每行 ≤ 内宽」不变式。"""
+        lines = format_item(columns=columns, cursor="▸", **_ITEM)
+        assert lines[0].startswith("▸"), "首行须以游标 ▸ 开头"
+        limit = inner_width(columns)
+        assert all(display_width(ln) <= limit for ln in lines), "游标拼入后仍不得超内宽"
+        assert "▸" not in format_item(columns=columns, **_ITEM)[0], "缺省 cursor 不得出现 ▸（向后兼容）"
+
     @pytest.mark.parametrize("columns", [40, 46, 60, 64, 80, 95, 96, 120, 200])
     def test_no_row_exceeds_inner_width(self, columns):
         """不变式：任何档位、任何宽度下每行都不超过内宽（窄终端不撑破右边框）。"""

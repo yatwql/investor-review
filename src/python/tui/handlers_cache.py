@@ -17,6 +17,7 @@ from src.python.core.logger import setup_logger
 from src.python.core.reader import read_holdings, require_holdings
 from src.python.tui.tui_handlers import print_error_with_hint, select_holdings_file
 from src.python.tui.tui_keys import input_choice
+from src.python.tui.panel_runtime import NavState, PanelItem, panel_loop
 from src.python.tui.tui_menu import GREEN, RED, RESET, YELLOW, press_any_key, refresh_config
 
 logger = setup_logger()
@@ -260,19 +261,33 @@ def _cmd_cache_management() -> None:
     """缓存管理子菜单：先统计后清理动线（合并原清理与统计两个平级入口）。
 
     首屏展示统计（想清理前先看规模），随后命令循环：
-    ``3`` 清理过期缓存（执行后回到统计刷新展示）、``B``/回车 返回主菜单。
+    ``3`` 清理过期缓存（执行后回到统计刷新展示）、``0``/回车 返回主菜单。
+    交互循环经 `panel_loop` 单源；统计只在首屏与清理后重绘（`_render` 自管脏标记）。
     """
-    _render_cache_stats()
-    while True:
-        print("  命令: 3 清理过期缓存 · B 返回主菜单（回车也返回）")
-        raw = input_choice("  缓存管理> ")
-        if raw is None:  # Esc：返回主菜单
-            return
-        choice = raw.lower()
-        if choice in ("", "b", "0"):
-            return
-        if choice == "3":
-            _cmd_cleanup_cache()  # 原平级入口逻辑收敛于此（含按任意键确认）
-            _render_cache_stats()  # 清理后回统计刷新，动线闭环
-            continue
-        print(f"  {YELLOW}[!]{RESET} 未知命令（3 清理过期缓存 / B 返回）")
+    state = {"draw_stats": True}
+
+    def _render(nav: NavState) -> list[str]:
+        if state["draw_stats"]:
+            _render_cache_stats()
+            state["draw_stats"] = False
+        print(f" {nav.marker(0)}3 清理过期缓存")
+        print(f" {nav.marker(1)}0 返回主菜单（回车也返回）")
+        return []
+
+    def _cleanup() -> None:
+        _cmd_cleanup_cache()  # 原平级入口逻辑收敛于此（含按任意键确认）
+        state["draw_stats"] = True  # 清理后回统计刷新，动线闭环
+
+    items = [
+        PanelItem("3", "清理过期缓存", action=_cleanup),
+        PanelItem("0", "返回主菜单", kind="return"),
+    ]
+
+    panel_loop(
+        items,
+        render=_render,
+        prompt="  缓存管理> ",
+        read=input_choice,
+        default_key="0",  # 空回车返回
+        on_text=lambda _t: print(f"  {YELLOW}[!]{RESET} 未知命令（3 清理过期缓存 / 0 返回）"),
+    )

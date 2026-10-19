@@ -412,6 +412,7 @@ TUI（Text User Interface）是系统**主要交互渠道**：桌面终端内的
 | `tui/handlers_qa.py` | 报告追问外壳 | `[Q]` 入口：输出目录报告选择 + 文本输入循环，委托 `qa/session.ask_report_qa`（§6.8）；`report_qa` 门控 |
 | `tui/text_layout.py` | 终端排版原语 | `display_width`（东亚宽度，剥离 ANSI）/`pad_right`/`truncate_display`（按列截断带省略号）/`wrap_display`（按列折行）/`wrap_hanging`（续行悬挂缩进，逐行扣减缩进宽度）/`wrap_with_prefix`（前缀不参与断行，续行对齐正文列）/`render_panel`（盒线面板，统一定宽）/`terminal_columns`（实时尺寸 > `COLUMNS` > 兜底，下限 40）；TUI 所有打印型输出按它折行，窄屏（手机）不硬折 |
 | `tui/switch_panel.py` | `[S]` 面板响应式排版 | `layout_tier()` 按终端列数分三档（≥96 宽 / 64~95 中 / <64 窄）、`format_item()` 逐档生成「编号·名称·键名(淡色)·状态·备注」行、`legend_lines()` 页脚图例折行、`format_item(reveal_key=)` 窄屏按 `k` 追加键名行；终端宽度探测与折行原语在 `tui/text_layout.py`（本模块 re-export `terminal_columns`）；**只排版不取数**，不变式「任意档位每行 ≤ 面板内宽」由单测锁定 |
+| `tui/panel_runtime.py` | TUI 统一交互运行时 | `NavState`（游标 + engaged 导航态，语义真值取自主循环 `sel`）/ `PanelItem`（key/label/kind/action 派发项）/ `panel_loop`（读键→导航→派发→反馈/重绘单源循环：方向键回绕且跳过 return 项、Enter 防误触 engaged 门控、直达键游标同步不置 engaged、Esc/return 退出、`pick>1` 收集、`on_text` 词法、Ctrl+C/EOF/render 异常原样上抛）；全列表面板（`[P]/[A]/[D]/[I]/[S]/[M]`/缓存）与主循环 `sel` 收敛于此，导航态为实例态、模块内零可变全局（C14）；只统一「怎么到达一次派发」，不改「派发什么」 |
 | `tui/status_line.py` | 页头状态行 | `build_status_line()` 五项常驻状态（上次报告时间/缓存过期数/数据新鲜度/降级源数/LLM 状态点），全本地取数、逐项降级、TTL 记忆化 |
 | `report/progress.py` | 进度报告 | TuiProgressReporter（`[..]`/`[OK]`/`[!]`/`[ERR]` 前缀 + 耗时排行） |
 
@@ -431,10 +432,12 @@ while True:
 
 | 按键 | 行为 |
 |:-----|:-----|
-| ↑ / ↓ | `sel` 在 MENU_ITEMS 上循环移动（`(sel ± 1) % len`） |
+| ↑ / ↓ | `nav`（`NavState`）在 MENU_ITEMS 上循环移动（`panel_runtime` 单源回绕，等价原 `(sel ± 1) % len`） |
 | Enter | `execute_item(sel)` 执行当前选中项 |
 | 字母/数字（A-Z/0-9） | `index_by_key(key.upper())` 直达并执行对应快捷键菜单项 |
 | Ctrl+C | `exit_app()` 退出 |
+
+**统一交互运行时**：列表型子菜单的「读键 → 导航态 → 派发 → 反馈/重绘」循环控制流单源于 `tui/panel_runtime.py`（`NavState`/`PanelItem`/`panel_loop`）——语义真值取自主循环 `sel`；`[P]/[A]/[D]/[I]/[S]/[M]`/缓存管理等全列表面板与主循环均收敛到 `NavState`/`panel_loop`，方向键导航不再逐面板手写（修复「上下键仅首页生效」）。主循环 Enter 无条件派发（`render_menu` 自带高亮、`engaged` 不门控），子菜单 Enter 经 `engaged` 门控防误触，二者导航回绕共用 `NavState.move` 单源。
 
 键盘封装跨平台：Windows 用 `msvcrt`（方向键 `\xe0` 前缀 + 第二字节映射 H/P），Linux/macOS 用 `tty.setraw` + `termios` + `select` 读 ESC 序列（`\x1b[A`/`\x1b[B` 与 O 前缀变体 `\x1bOA`/`\x1bOB` 方向键；ESC 后首段共聚窗口 `_ESC_FIRST_TIMEOUT=0.5`s + 续读窗口 `_ESC_TIMEOUT=0.3$s`；拆包防护三件套：孤 Esc 后迟到前缀吸收映射、半途序列（前缀已消费末字节未到）下一字节强制按补全处理不进字母分派、主菜单 Esc 连按两次确认——误判方向键不致退出或误触发直达；**读取一律 `os.read(fd, 1)` 原始字节与 select 同 fd**——禁止 `sys.stdin.read`（用户态缓冲会把整包吞走，此后 select(fd) 谎报「无数据」，整包方向键被误判为孤 ESC：首按挂退出确认态、次按误退出，缓冲时代电脑上亦 100% 触发）；**任何非 Esc 按键解除主菜单退出确认态**（拆包孤 ESC 挂起的确认不被后续按键引爆），宽/窄档方向键均原地重绘）；`input_choice(prompt, arrows=True)` 供列表面板（`[S]`）返回 ↑/↓（行内已有内容时序列仍吞掉保行编辑），非 Esc 按键同样解除退出确认态的对偶语义由各提示的 Esc 取消承接）。所有读键路径统一返回标准化键名，菜单层不感知平台差异；非交互 stdin（非 tty）返回 `KEY_UNKNOWN`，保证管道/重定向环境不阻塞。
 
@@ -3767,7 +3770,7 @@ web/ (Web 服务层，薄入口)
 | **C26** | **重试与退避唯一原语** — 凡「失败后重试」必须经 `core/retry.py`（`RetryPolicy` 策略 / `is_transient_exception` 瞬时判据 / `retry_transient` 执行器），禁止各模块自建重试循环与退避算式；各来源差异只用策略参数表达 | 退避数值与「可重试」口径各写一处必然漂移：最坏时延无法估算、策略调整需改 N 处、测试钉住的次数与等待量随之失真 | 全部「失败后重试」路径：数据获取层（Provider Chain 同源重试、provider 连接级重试、akshare 超时重试、HTTP 429 退避）+ LLM 调用链（`llm/api_base.py` 的 503/超时/网络重试（429/403 归 quota 终态不重试），退避用显式序列策略表达；其**失败分类**（内容级/配额级判定）与终态副作用仍属 LLM 层职责，见 §5.4） |
 | **C27** | **间隔节流唯一原语** — 凡「两次请求至少间隔多久」必须经 `core/throttle.py`（`RateLimiter` + `interval_delay`），禁止自建「间隔 + 睡眠」与抖动算式 | 同一约束在数据层/调度层/LLM 层各写一份 → 抖动幅度与等待语义不一致；通用原语若住在某一上层模块，会被其他层反向依赖（层次倒置） | 数据源 qps 限速、`batch_rate_limit`、LLM 端点级节流（`pacing`） |
 | **C28** | **大文件红线体系（主程序/脚本/测试）** — 单文件行数按域执行固定红线：主程序（`src/python/`）> 1000 行、脚本（`scripts/` 递归含包内子模块）> 1000 行、测试（`src/test/`）> 1200 行即 finding；警戒区（`-v` 清单：主程序 500 / 脚本 400 / 测试 800）为可选优化区间；超限必须拆分，或在 `check-file-length` 的 `EXEMPTIONS` 登记并与 review-findings 挂账同步 | 行数无红线时文件无限膨胀（`scripts/` 未入守护域时 `factor_zoo_eval.py` 达 1595 行而无发现渠道）；阈值只写在文档不进守护脚本会改一处漏一处；无警戒区则只能在破线后才察觉，拆分时机失去观察缓冲 | 所有 py 源文件：`src/python/`、`scripts/`（含包内子模块）、`src/test/`；阈值与清单由 `scripts/check-file-length.py --ci` 单源强制（`_LIMIT_BY_KIND` / `_WARN_BY_KIND`），口径同步 developer-guide「文件膨胀阈值」表与 review-findings 文件过长登记表 |
-| **C29** | **TUI 分档只改版式不改语义** — `layout_tier` 的 wide/medium/narrow 分支只允许改**版式与密度**（列宽/盒线/折行/图例详略/重绘机制），不得改**按键语义、反馈有无、写路径可见性**：同一按键在各档必须产生相同的语义动作与可观察反馈（执行/退出/选中移动/单行提示），分档至多改变反馈的呈现方式 | 分档分支改语义曾三次造成用户可见缺陷：写路径窄屏不重绘（切换无结果）、方向键在窄屏解析漂移为孤 Esc（误退程序）、窄屏导航被整体删除（按键无反应）；语义随宽度漂移违反「同键同果」预期，且每档分支都是独立回归面 | `src/python/tui/` 全部 `layout_tier`/`narrow` 分支点（主循环、菜单渲染、各面板）；守护 = `test_tui_menu.py::TestTierSemanticParity`（同按键两档同语义/同反馈）+ `_print_hint` 单行反馈原语 |
+| **C29** | **TUI 分档只改版式不改语义** — `layout_tier` 的 wide/medium/narrow 分支只允许改**版式与密度**（列宽/盒线/折行/图例详略/重绘机制），不得改**按键语义、反馈有无、写路径可见性**：同一按键在各档必须产生相同的语义动作与可观察反馈（执行/退出/选中移动/单行提示），分档至多改变反馈的呈现方式 | 分档分支改语义曾三次造成用户可见缺陷：写路径窄屏不重绘（切换无结果）、方向键在窄屏解析漂移为孤 Esc（误退程序）、窄屏导航被整体删除（按键无反应）；语义随宽度漂移违反「同键同果」预期，且每档分支都是独立回归面 | `src/python/tui/` 全部 `layout_tier`/`narrow` 分支点（主循环、菜单渲染、各面板）；守护 = `test_tui_menu.py::TestTierSemanticParity`（同按键两档同语义/同反馈）+ `_print_hint` 单行反馈原语；**本次重构后**导航/派发控制流单源于 `tui/panel_runtime.py::panel_loop`——同一读键→导航→派发→反馈循环全列表面板共用一份实现，「同键同果」由构造性成立（分档只改 render 版式、不改派发），从「测试逐处兜底」升级为运行时单源** |
 
 > **C14 例外：env 初始化期注册（非渲染期）** — `_ENV.globals` 与模板过滤器仅允许在 `report/html_jinja_env.py` 的**工厂初始化期**（进程/工厂单次建立）注册为**无状态纯函数**（如 `profit_color`、`price_type_color`、`money`、`fmt_bps`、`dt`——只依赖入参生成 CSS 变量表达式/格式化文本）。约束禁止的是**渲染期数据**（section 可见性、业务字典等随每次运行变化的值）写入全局；过滤器注册与 Jinja 环境构建属于模板基础设施装配，不构成渲染态状态污染（并发/多次渲染下各 `render()` 仍只经 context 传数据）。
 
@@ -3835,6 +3838,7 @@ investor-util/
 │   │       ├── tui.py           #   主循环入口
 │   │       ├── tui_handlers.py  #   键盘/事件处理
 │   │       ├── tui_keys.py      #   键盘输入封装
+│   │       ├── panel_runtime.py  #   统一交互运行时（NavState/panel_loop，列表面板导航态单源）
 │   │       └── tui_menu.py      #   菜单交互
 │   │   ├── web/                # Web 浏览器模式入口
 │   │   │   ├── __init__.py     #   子包标记

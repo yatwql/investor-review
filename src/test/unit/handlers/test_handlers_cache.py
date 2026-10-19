@@ -691,7 +691,7 @@ class TestReadHoldingsGate(unittest.TestCase):
 
 @pytest.mark.unit_core
 class TestCacheManagementSubmenu(unittest.TestCase):
-    """_cmd_cache_management：统计首屏 → 输入 3 清理 → 回统计刷新 / B 返回动线。"""
+    """_cmd_cache_management：统计首屏 → 输入 3 清理 → 回统计刷新 / 0 返回动线。"""
 
     @staticmethod
     def _stats(expired: int = 2):
@@ -714,9 +714,9 @@ class TestCacheManagementSubmenu(unittest.TestCase):
     @patch("src.python.tui.handlers_cache.press_any_key")
     @patch("src.python.cache.operations.cleanup_cache", return_value=2)
     @patch("src.python.cache.operations.get_cache_stats")
-    @patch("builtins.input", side_effect=["3", "b"])
+    @patch("builtins.input", side_effect=["3", "0"])
     def test_stats_then_cleanup_then_refresh(self, mock_input, mock_stats, mock_cleanup, mock_press):
-        """先统计、输入 3 清理一次、清理后回到统计刷新（stats 渲染两轮）、b 返回。"""
+        """先统计、输入 3 清理一次、清理后回到统计刷新（stats 渲染两轮）、0 返回。"""
         from src.python.tui.handlers_cache import _cmd_cache_management
 
         mock_stats.return_value = self._stats()
@@ -726,7 +726,7 @@ class TestCacheManagementSubmenu(unittest.TestCase):
         out = buf.getvalue()
         self.assertIn("data/cache", out)
         self.assertIn("输入 3 可清理", out)
-        self.assertIn("命令: 3 清理过期缓存", out)
+        self.assertIn("3 清理过期缓存", out)
         mock_cleanup.assert_called_once()
         self.assertEqual(mock_stats.call_count, 2)
 

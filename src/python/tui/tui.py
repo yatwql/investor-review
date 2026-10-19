@@ -18,6 +18,7 @@ if _project_root not in sys.path:
 from src.python.config import init_config
 from src.python.llm.pricing import CURRENCY_SYMBOLS
 from src.python.core.logger import log_app_boundary, setup_logger
+from src.python.tui.panel_runtime import NavState
 from src.python.tui.switch_panel import layout_tier
 from src.python.tui.text_layout import terminal_columns
 from src.python.tui.tui_keys import KEY_CTRL_C, KEY_DOWN, KEY_ENTER, KEY_ESC, KEY_UP, get_key
@@ -242,12 +243,14 @@ def main() -> None:
 
     _default_key = get_config().get("default_menu_key", "L").upper()
     _idx = index_by_key(_default_key)
-    sel: int = _idx if _idx is not None else 0
+    # 导航态单源（NavState）：首页 Enter 无条件派发、render_menu 自带高亮，故 cursor 即原 sel；
+    # engaged 不影响主循环（仅 marker 用），与子菜单 panel_loop 的 engaged 门控语义独立
+    nav = NavState(count=len(MENU_ITEMS), cursor=_idx if _idx is not None else 0)
 
     esc_exit_armed: float | None = None
 
     while True:
-        frame_lines = _render_menu_frame(sel)
+        frame_lines = _render_menu_frame(nav.cursor)
         hint_lines = 0  # 帧下方反馈行数（原地重绘时并入清除范围）
 
         # 内层按键循环：直达键（快捷键/退出）处理后重绘或退出；方向键/Enter
@@ -276,7 +279,7 @@ def main() -> None:
             if len(key) == 1 and ("A" <= key <= "Z" or "a" <= key <= "z" or "0" <= key <= "9"):
                 idx = index_by_key(key.upper())
                 if idx is not None:
-                    sel = idx
+                    nav.sync(idx)
                     execute_item(idx)
                     break  # 直达执行后回到重绘点（子菜单关闭 → 刷新首页）
                 if narrow:
@@ -286,16 +289,16 @@ def main() -> None:
                     continue
                 break
             if key == KEY_ENTER:
-                execute_item(sel)
+                execute_item(nav.cursor)
                 break
             if key == KEY_UP or key == KEY_DOWN:
-                sel = (sel - 1) % len(MENU_ITEMS) if key == KEY_UP else (sel + 1) % len(MENU_ITEMS)
+                nav.move(key)  # 单源回绕（全菜单项可导航）；等价原 (sel±1)%len
                 if _can_repaint_inplace():
                     # 导航原地重绘（光标上移+清屏）：窄屏防菜单顶出可视区、宽屏防滚屏
                     # 堆积（宽/窄同一导航手感，仅版式分档不改交互）；
                     # 反馈行（hint_lines）一并清除，避免清帧范围错位
                     _clear_last_frame(frame_lines + hint_lines)
-                    frame_lines = _render_menu_frame(sel)
+                    frame_lines = _render_menu_frame(nav.cursor)
                     hint_lines = 0
                     continue
                 break  # 非 TTY/旧控制台：回退整屏追加

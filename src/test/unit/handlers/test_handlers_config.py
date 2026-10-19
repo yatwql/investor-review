@@ -401,8 +401,8 @@ class TestConfigDirInfoSubmenu:
     @patch("src.python.tui.handlers_config._cmd_config_filename")
     @patch("src.python.tui.handlers_config._cmd_config_dir")
     def test_dispatches_three_sub_options_then_returns(self, mock_dir, mock_filename, mock_out, mock_input):
-        """依次选 C/F/O 分别路由到三个处理器，B 返回。"""
-        mock_input.side_effect = ["C", "F", "O", "B"]
+        """依次选 C/F/O 分别路由到三个处理器，0 返回。"""
+        mock_input.side_effect = ["C", "F", "O", "0"]
 
         from src.python.tui.handlers_config import _cmd_config_dir_info
 
@@ -416,7 +416,7 @@ class TestConfigDirInfoSubmenu:
     @patch("src.python.tui.handlers_config._cmd_config_dir")
     def test_lowercase_choice_accepted(self, mock_dir, mock_input):
         """小写子键归一化为大写后分发。"""
-        mock_input.side_effect = ["c", "B"]
+        mock_input.side_effect = ["c", "0"]
 
         from src.python.tui.handlers_config import _cmd_config_dir_info
 
@@ -427,8 +427,8 @@ class TestConfigDirInfoSubmenu:
     @patch("builtins.input")
     @patch("src.python.tui.handlers_config._cmd_config_dir")
     def test_back_returns_without_dispatch(self, mock_dir, mock_input):
-        """选 B 直接返回，不触发任何处理器。"""
-        mock_input.side_effect = ["B"]
+        """选 0 直接返回，不触发任何处理器。"""
+        mock_input.side_effect = ["0"]
 
         from src.python.tui.handlers_config import _cmd_config_dir_info
 
@@ -440,7 +440,7 @@ class TestConfigDirInfoSubmenu:
     @patch("src.python.tui.handlers_config._cmd_config_dir")
     def test_unknown_choice_reprompts(self, mock_dir, mock_input, capsys):
         """无效子键提示后重新等待输入，不误触发处理器。"""
-        mock_input.side_effect = ["Z", "B"]
+        mock_input.side_effect = ["Z", "0"]
 
         from src.python.tui.handlers_config import _cmd_config_dir_info
 
@@ -1035,9 +1035,9 @@ class TestConfigEntryMap:
             assert label.strip() and hint.strip()
             assert keys.startswith("[") and keys.endswith("]")
 
-    @patch("builtins.input", side_effect=["M", "B"])
+    @patch("builtins.input", side_effect=["M", "0"])
     def test_d_submenu_renders_map_then_returns(self, mock_input, capsys):
-        """[D] → M 打印入口地图后回到子菜单，B 返回；全程不调用任何写入处理器。"""
+        """[D] → M 打印入口地图后回到子菜单，0 返回；全程不调用任何写入处理器。"""
         from src.python.tui.handlers_config import _cmd_config_dir_info
 
         with (
@@ -1052,13 +1052,13 @@ class TestConfigEntryMap:
         for handler in (m_dir, m_fn, m_out):
             handler.assert_not_called()
 
-    @patch("builtins.input", side_effect=["Z", "B"])
+    @patch("builtins.input", side_effect=["Z", "0"])
     def test_invalid_choice_lists_map_option(self, mock_input, capsys):
-        """无效选择提示含新增的 M 选项（C/F/O/M/B）。"""
+        """无效选择提示含新增的 M 选项（C/F/O/M/0）。"""
         from src.python.tui.handlers_config import _cmd_config_dir_info
 
         _cmd_config_dir_info()
-        assert "请输入 C/F/O/M/B" in capsys.readouterr().out
+        assert "请输入 C/F/O/M/0" in capsys.readouterr().out
 
     def test_map_rendering_is_readonly(self):
         """纯渲染无副作用：不调用配置写入/刷新入口。"""
