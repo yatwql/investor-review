@@ -153,10 +153,13 @@ def _prompt_generate_confirm(reporter: TuiProgressReporter, config: dict) -> tup
 
     替代原先「①强刷 y/N → ③费用预估 y/N」两问（默认路径从 2~3 问降为 1 问）；历史走势以
     ``h`` 选项并入本屏（仅 fetch_mode=prompt 时展示，其余模式由共享层 resolve 单源解析）。
+    按键按**词**精确匹配（空格/逗号分隔，支持 ``f h`` 组合，``of``/``faq`` 这类子串不误触发）。
 
     Returns:
         (force_llm, force_llm_modules, fetch_history)；None=中止（不进入生成）。
     日预算超限走独立安全网确认（降级走缓存 / 中止），不并入单屏——费用保护不受合并影响。
+    降级路径不追加历史询问（prompt 模式回落为不获取），但输出一行「本次不获取历史走势」
+    提示保证可感知（告知后覆盖，不追加提问）。
     """
     from src.python.config import is_enable_history
     from src.python.report.history_policy import resolve_fetch_history
@@ -167,6 +170,7 @@ def _prompt_generate_confirm(reporter: TuiProgressReporter, config: dict) -> tup
         print(f"  [..] {line}")
 
     # 安全网：日预算超限 → 独立确认（降级走缓存继续 / 中止），不给强刷入口
+    mode = ((config.get("history") or {}).get("fetch_mode")) or "auto"
     if budget.get("exceeded"):
         try:
             resp = input_choice(wrap_prompt("  [!] 今日 LLM 费用已达日预算上限：y=降级走缓存继续 / N=中止 (y/N): "))
@@ -179,10 +183,11 @@ def _prompt_generate_confirm(reporter: TuiProgressReporter, config: dict) -> tup
             print("  [!] 已中止本次生成（日预算超限）")
             return None
         fetch_history = resolve_fetch_history(config, ask=lambda: False) if is_enable_history(config) else False
+        if mode == "prompt" and is_enable_history(config):
+            print("  [..] 降级走缓存：本次不获取历史走势")
         return (False, None, fetch_history)
 
     # 合并单屏：回车=默认生成（走缓存）/ f=强制刷新（选模块）/ h=含历史走势 / q=中止
-    mode = ((config.get("history") or {}).get("fetch_mode")) or "auto"
     hist_opt = " / h=含历史走势" if (mode == "prompt" and is_enable_history(config)) else ""
     try:
         resp = input_choice(wrap_prompt(f"  [..] 回车=生成 / f=强制刷新{hist_opt} / q=中止: "))
@@ -191,16 +196,16 @@ def _prompt_generate_confirm(reporter: TuiProgressReporter, config: dict) -> tup
     if resp is None:  # Esc
         print("  [!] 已取消本次生成")
         return None
-    low = resp.strip().lower()
-    if "q" in low:
+    tokens = set(resp.strip().lower().replace(",", " ").split())  # 词级匹配，子串不误触发
+    if "q" in tokens:
         print("  [!] 已中止本次生成")
         return None
     force_llm, force_modules = (False, None)
-    if "f" in low:
+    if "f" in tokens:
         reporter.ok("将跳过 LLM 缓存强制重新生成")
         force_llm, force_modules = _select_force_modules(reporter)
     # 历史：复用共享层 resolve（ask 回调返回本屏 h 选择），不再单独询问
-    fetch_history = resolve_fetch_history(config, ask=lambda: "h" in low) if is_enable_history(config) else False
+    fetch_history = resolve_fetch_history(config, ask=lambda: "h" in tokens) if is_enable_history(config) else False
     return (force_llm, force_modules, fetch_history)
 
 

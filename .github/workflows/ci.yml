@@ -53,6 +53,10 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         run: python scripts/test-runner.py --mode regression --no-timeout
 
+      - name: 集成契约（integration 标记恒跑）
+        # 三档按分支分流，纯 integration 标记的跨模块契约测试不被任何档覆盖——恒跑兜底（42 例/5.5s）
+        run: python -m pytest -m integration -q --tb=short
+
       # 即使测试失败也上传报告，便于诊断失败测试（保留 7 天）
       - name: 上传测试报告
         if: always()

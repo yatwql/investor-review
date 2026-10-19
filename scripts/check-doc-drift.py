@@ -24,7 +24,8 @@
   15. Provider Chain 降级表  `fetcher/chain.py` `_DEFAULT_CHAINS` → manuals/datasource-reliability.md（逐链双向）
   16. 守护清单同源        developer-guide P0/P2 门禁块 + ci.yml guards steps + CLAUDE.md/testplan.md 清单 + .githooks/pre-commit（五处）`check-*.py --ci` 引用集合两两一致
   17. 章节-区块矩阵      区块注册表三向对账（文档行 ↔ 注册表逐列 / 实现提取集合） → managements/technical.md §4.22
-  18. 手册菜单块一致性  双手册主菜单 code block（键集合/标签头）→ tui/tui_menu.py MENU_ITEMS
+  18. 手册菜单块一致性  双手册主菜单 code block（键集合/标签头）→ tui/tui_menu.py MENU_ITEMS；
+      全文档「返回主菜单」行键=0 不变量（返回键全局统一，结构化行校验/prose 豁免）
 
 按设计豁免的历史记录文档：`changelog.md` / `review-findings.md`（会如实引用旧数字作为变更记录）
 与 `docs/archive/**`（版本快照）不参与第 2/4/5 项扫描。
@@ -159,6 +160,7 @@ from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc
     check_guard_parity,
     guard_parity_sources,
     check_menu_blocks,
+    check_return_key_invariant,
     parse_menu_block_lines,
     _HOW_TO_START_MD,
 )
@@ -183,6 +185,7 @@ def run_checks(with_test_count: bool = False, docs: dict | None = None) -> list[
     findings += check_llm_defaults(docs[_LLM_TECHNICAL_MD])
     findings += check_panel_numbering(docs[_TUI_MENU_MD])
     findings += check_menu_blocks({_HOW_TO_START_MD: docs[_HOW_TO_START_MD], _TUI_MENU_MD: docs[_TUI_MENU_MD]})
+    findings += check_return_key_invariant(docs)
     findings += check_dir_tree(docs[_FOLDERS_MD])
     findings += check_chain_table(docs[_RELIABILITY_MD])
     findings += check_archive_index()

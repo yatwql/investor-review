@@ -415,7 +415,7 @@ P0 问题必须在 commit 前解决，否则代码不应进入版本控制。P1 
 在一次典型开发周期中：
 1. **提交前门禁验证**：修改代码后运行 `--mode dev-verify` 确认核心单元+基础场景通过（P0 强制）
 2. **全场景补充验证**：若改动了跨模块路径/数据流，再跑 `--mode regression` 确保全场景正常
-3. 如果改了跨模块调用关系（缓存、新闻流水线、TUI 路由等），再跑 `--mode integration` 确认接口契约和全链路正常
+3. 如果改了跨模块调用关系（缓存、新闻流水线、TUI 路由等），再跑 `--mode integration` 确认接口契约和全链路正常（CI test job 对 `-m integration` 标记**恒跑兑底**，本地按需先行可更快反馈）
 4. 如果改了 Provider、缓存或数据获取逻辑，再跑 `--mode verify` 确认整条管道通畅
 5. 通过后 commit，积累多次提交后准备合并到 master
 6. 合并前 CI 自动跑 `--mode verify` 作为合入门禁
@@ -445,7 +445,7 @@ P0 问题必须在 commit 前解决，否则代码不应进入版本控制。P1 
   - **`scenario_security` — 安全基线场景**：5 项安全基线自动化验证——密钥文件权限不可公开读取、缓存文件不含明文密钥、匿名化模式报告不含真实名称/代码、LLM API 日志不记录完整密钥、HTML 报告不泄露文件系统路径。
 
 - **`--mode regression`** 与 `--mode scenario` 完全相同，但语义定位为"提交前回归验证"。建议在 git hook 或 CI 前置检查中使用此名称，使流水线意图更加清晰。
-- **`--mode integration`** 覆盖场景测试 + 集成测试（`scenario or integration`）。在全部业务场景基础上，增加模块间验证：接口契约、错误隔离、新闻流水线、缓存一致性、TUI 路由。用于修改了跨模块调用关系后的定向回归。
+- **`--mode integration`** 覆盖场景测试 + 集成测试（`scenario or integration`）。在全部业务场景基础上，增加模块间验证：接口契约、错误隔离、新闻流水线、缓存一致性、TUI 路由。用于修改了跨模块调用关系后的定向回归。CI test job 以 `pytest -m integration` 恒跑纯集成契约档（42 例 / 5.5s，不依赖分支条件），本地改跨模块时仍建议先行 `--mode integration`。
 - **`--mode dev-verify`** 提交前门禁模式（P0），组合 8 个 unit 子模块（unit_core/unit_providers/unit_fetcher/unit_analysis/unit_scripts/unit_web/unit_qa/unit_report，排除 edge/data）并行 + 基础业务场景（`scenario_basic`）。约 20s，适合开发者改完代码后随时跑。不包含极限场景（scenario_extreme）和 LLM/日期/容错等专项场景。
 - **`--mode verify`** 合入门禁模式（`unit_core or unit_providers or unit_fetcher or unit_config or unit_news or unit_llm or unit_analysis or unit_scripts or unit_web or unit_qa or unit_report`），包含核心基础设施 + 数据源 Provider + 数据获取调度 + 配置管理 + 新闻聚合 + LLM 模块 + 分析计算 + 工程脚本 + Web 入口 + 报告对话式追问 + 报告生成的单元测试，共约 10s（并行执行）。场景测试由 P0 dev-verify（基础场景）和 P2 verify,regression（全场景）覆盖。
 
@@ -824,7 +824,7 @@ mod = load_script("check-svg.py")                                            # �
 mod = load_script("_test_runner/modes.py", module_name="modes_under_test")   # 子路径 + 显式模块名
 ```
 
-> 唯一实现为 `src/test/_script_loader.py`：按文件名/子路径加载 `scripts/` 下脚本、每次调用重新执行返回新实例、注册进 `sys.modules`（`@dataclass` 按 `cls.__module__` 回查命名空间依赖它）。**禁止**在测试文件里再手写 `importlib.util.spec_from_file_location` 样板或自定义 `_load_script`——`unit/scripts/test_script_loader.py` 的样板唯一性机检会检出（除 loader 自身外出现动态加载样板、或定义同名本地加载器均判失败）。
+> 唯一实现为 `src/test/_script_loader.py`：按文件名/子路径加载 `scripts/` 下脚本、每次调用重新执行返回新实例、注册进 `sys.modules`（`@dataclass` 按 `cls.__module__` 回查命名空间依赖它）。**禁止**在测试文件里再手写 `importlib.util.spec_from_file_location` 样板或自定义 _load_script 同名加载器——`unit/scripts/test_script_loader.py` 的样板唯一性机检会检出（除 loader 自身外出现动态加载样板、或定义同名本地加载器均判失败）。
 
 **新增后必须更新的文件**：
 
@@ -1760,7 +1760,7 @@ DataModuleDef("我的 LLM 分析", "llm_my_analysis",
 |---|------|---------|------|
 | ① | **注册模块定义** | `core/registry.py` → `_MODULE_REGISTRY` | 添加 `DataModuleDef` 实例，含 `settings_suffix` |
 | ② | **配置 JSON 键组** | `llm_settings.json` | 新增 9~10 个 `{key}_{suffix}` 配置键（`news_correlation` 不含 `output_brief`） |
-| ③ | **实现生成函数** | `llm/generators.py` | 新增生成函数，通过 `_call_llm()` 调用 LLM |
+| ③ | **实现生成函数** | `llm/generators.py` | 新增生成函数，通过 `call_llm()` 调用 LLM |
 | ④ | **注册调度入口** | `llm/_llm_dispatch.py` + `llm/generators_orchestrator.py` + `llm/module_fingerprint.py` | 在 `_llm_dispatch._build_module_fns()` 返回的 `_MODULE_FNS` 字典中添加新模块条目（键=settings_suffix，值=lambda 调用新函数）；在 orchestrator 的 `_compute_module_cache_info()` 中添加对应的 `info` 条目。**指纹不进 orchestrator**：在 `module_fingerprint.py` 的 `MODULE_FINGERPRINT_BUILDERS` 登记该模块的构造器（输入闭包 `ModuleFingerprintInputs`），预检侧按键取指纹、写侧闭包调用同一函数——两侧都不得自行拼接指纹片段 |
 | ⑤ | **添加报告页签** | `report/llm_content.py` | 在 `write_llm_sheets()` 的 `_module_keys` 和 `_module_contents` 列表中添加新模块键名 |
 | ⑥ | **暴露导出接口** | `llm/__init__.py` | 将新生成函数加入 `__all__` |

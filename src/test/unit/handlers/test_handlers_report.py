@@ -214,10 +214,49 @@ class TestPromptGenerateConfirm(unittest.TestCase):
         self.assertEqual(self._call("h", config=self._config("off"))[2], False)
 
     def test_budget_exceeded_yes_degrades_no_force(self):
-        """预算超限 + y → 降级走缓存（无强刷）。"""
-        result = self._call("y", budget=_budget(enabled=True, limit=1.0, spent=1.2, exceeded=True))
+        """预算超限 + y → 降级走缓存（无强刷）；auto 模式历史仍自动获取，不输出降级提示。"""
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            result = self._call("y", budget=_budget(enabled=True, limit=1.0, spent=1.2, exceeded=True))
         self.assertEqual(result[0], False)
         self.assertEqual(result[1], None)
+        self.assertEqual(result[2], True)
+        self.assertNotIn("本次不获取历史走势", buf.getvalue())
+
+    def test_budget_exceeded_prompt_mode_history_not_asked(self):
+        """安全网降级不追加历史询问：prompt 模式历史=不获取，并输出提示行告知（告知后覆盖语义锁定）。"""
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            result = self._call(
+                "y", config=self._config("prompt"), budget=_budget(enabled=True, limit=1.0, spent=1.2, exceeded=True)
+            )
+        self.assertEqual(result[0], False)
+        self.assertEqual(result[2], False)
+        self.assertIn("本次不获取历史走势", buf.getvalue())
+
+    def test_budget_exceeded_off_mode_no_history_notice(self):
+        """off 模式降级无历史概念 → 不输出降级提示（提示仅 prompt 模式）。"""
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            result = self._call(
+                "y", config=self._config("off"), budget=_budget(enabled=True, limit=1.0, spent=1.2, exceeded=True)
+            )
+        self.assertEqual(result[2], False)
+        self.assertNotIn("本次不获取历史走势", buf.getvalue())
+
+    def test_substring_word_not_mistrigger(self):
+        """词级精确匹配：'of' 不误触强刷（默认生成）、'faq' 不误中止（非 None）。"""
+        r_of = self._call("of")
+        self.assertIsNotNone(r_of)
+        self.assertEqual(r_of[0], False, "子串含 f 不应触发强刷")
+        r_faq = self._call("faq")
+        self.assertIsNotNone(r_faq, "子串含 q 不应中止")
+        self.assertEqual(r_faq[0], False)
+
+    def test_combo_space_triggers_both(self):
+        """'f h' 空格分隔组合：强刷与历史同时生效。"""
+        result = self._call("f h", config=self._config("prompt"), force_modules=(True, None))
+        self.assertEqual(result, (True, None, True))
 
     def test_budget_exceeded_default_aborts(self):
         """预算超限 + 默认（非 y）→ 中止（None）。"""

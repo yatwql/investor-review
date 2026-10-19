@@ -452,7 +452,7 @@ while True:
 | | `[L]` | 生成完整报告（Excel+HTML，含 LLM，full；`config.default_menu_key` 缺省指向本项） |
 | | `[W]` | 调仓 What-if 模拟（对比两份持仓，独立报告） |
 | | `[Q]` | 报告对话式追问（选择已生成 HTML 报告进入多轮文本输入循环，委托 `qa/session.ask_report_qa`，§6.8；`report_qa` 门控） |
-| 配置管理 | `[D]` | 查看配置与目录信息**子菜单**（`handlers_config.py::_cmd_config_dir_info`，二级选项 `[C]` 持仓目录 / `[F]` 持仓文件名 / `[O]` 报告输出目录 / `[M]` 配置入口地图（`_CONFIG_ENTRY_MAP` 只读索引：配置项 → 所在菜单键，键位真实性由单测对主菜单兜底） / `[B]` 返回主菜单；子菜单内循环直至返回） |
+| 配置管理 | `[D]` | 查看配置与目录信息**子菜单**（`handlers_config.py::_cmd_config_dir_info`，二级选项 `[C]` 持仓目录 / `[F]` 持仓文件名 / `[O]` 报告输出目录 / `[M]` 配置入口地图（`_CONFIG_ENTRY_MAP` 只读索引：配置项 → 所在菜单键，键位真实性由单测对主菜单兜底） / `[0]` 返回主菜单；子菜单内循环直至返回） |
 | 缓存管理 | `[1]`/`[2]` | 更新基础类缓存（基金业绩/持仓/经理/基准等，`clear_by_group("refresh")` 先清后取）/ 行情类缓存（价格/指数等，`clear_by_group("preload")` 先清后取） |
 | | `[4]` | 缓存管理**子菜单**（统计首屏 → 子菜单内 `3` 清理过期 / `B`/回车 返回；合并原清理与统计两个平级入口，`handlers_cache.py::_cmd_cache_management`） |
 | 配置管理 | `[P]` | 报告可选章节开关（顺序与取舍） |
@@ -473,7 +473,7 @@ while True:
 
 1. **持仓准备**：`prepare_holdings()` → `select_holdings_file()`（交互式文件选择）→ `read_holdings_with_flows()`（主表 + 交易/分红流水）→ `warm_new_asset_caches()`（新资产缓存预热，委托 §3.6 缓存操作共享层）。
 2. **交互询问**（TUI 专属，CLI/Web 用参数/表单表达；`E`/basic 无询问直连）：
-   - `_prompt_generate_confirm()`（仅 `L`/full）：**合并单屏一次确认**——先上屏事前费用预估与今日已花费/日预算，随后单条提示「回车=生成（走缓存）/ `f`=强制刷新 / `q`=中止」（`history.fetch_mode=prompt` 且 `enable_history` 开时多一个 `h`=含历史走势选项）；历史三态仍委托 `report/history_policy.resolve_fetch_history` 单源解析（`ask` 回调返回本屏 `h` 是否按下），渠道层不自行分支 `fetch_mode`；日预算超限走**独立安全网确认**（降级走缓存 / 中止），Esc 即时取消返回主菜单。返回 `(force_llm, force_llm_modules, fetch_history)`，`None` 表示中止。
+   - `_prompt_generate_confirm()`（仅 `L`/full）：**合并单屏一次确认**——先上屏事前费用预估与今日已花费/日预算，随后单条提示「回车=生成（走缓存）/ `f`=强制刷新 / `q`=中止」（`history.fetch_mode=prompt` 且 `enable_history` 开时多一个 `h`=含历史走势选项）；历史三态仍委托 `report/history_policy.resolve_fetch_history` 单源解析（`ask` 回调返回本屏 `h` 是否按下），渠道层不自行分支 `fetch_mode`；日预算超限走**独立安全网确认**（降级走缓存 / 中止），Esc 即时取消返回主菜单。提示按键按**词**精确匹配（空格/逗号分隔，支持 `f h` 组合，`of`/`faq` 这类子串不误触发）；安全网降级路径**不追加历史询问**（`ask` 恒 False：prompt 模式回落为不获取、auto 仍自动获取，交互最小化），降级且 prompt 模式时输出一行「本次不获取历史走势」提示保证可感知（告知后覆盖，不追加提问）。返回 `(force_llm, force_llm_modules, fetch_history)`，`None` 表示中止。
    - `_select_force_modules()`（`L` 按 `f` 触发）：模块多选（列出 FORCEABLE_LLM_MODULES 编号/键名，逗号分隔，回车=全部；仅指定子集时传 `force_llm_modules`，粒度优先于全量）。
    - `_prompt_history()`（仅 `B`/both）：同样委托 `resolve_fetch_history` 单源三态，`prompt` 时注入「是否获取组合历史走势数据（as-if 模拟）？」y/N 询问。
 3. **委托共享层**：`orchestrator.generate_report(holdings, config, reporter, report_type, ...)`（§4.2）——reporter 注入 `TuiProgressReporter`，管线代码零改动。
@@ -1444,7 +1444,7 @@ _write_atomic(fd, tmp_path, final_path)
 | **输入参数指纹** | `news_aggregator.py:_compute_cache_key()` | 新闻源参数+关键词（拼接→MD5） | `news_*` |
 | **输入数据指纹** | `llm/fingerprint.py` | LLM 模块依赖数据（持仓汇总/结构序列化→MD5） | `llm_global_macro_*`、`expert_review_*`、`health_check_*`、`penetration_deep_*`、`news_item_*` |
 
-**LLM 指纹筛选**：expert_review / health_check / penetration_deep 的 `_compute_fingerprint()` 在序列化前排除行情波动字段（`price`、`change_pct`），仅品种/份额/成本变化时指纹改变。
+**LLM 指纹筛选**：expert_review / health_check / penetration_deep 的 `compute_fingerprint()` 在序列化前排除行情波动字段（`price`、`change_pct`），仅品种/份额/成本变化时指纹改变。
 
 **精确键名**：`fund_benchmarks.json`、`fund_concentration_snapshot.json`、`holdings_tracking.json` 等无指纹后缀，仅依赖标准 TTL 过期刷新。
 

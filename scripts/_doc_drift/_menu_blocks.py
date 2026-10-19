@@ -4,6 +4,11 @@
 （how-to-start.md / how-to-use-tui-menu.md）的主菜单 code block 是文档侧副本，
 本模块机检「键集合一致 + 每键标签头一致」。标签头 = 第一个全角括号前的文本——
 手册允许在括号内追加补充说明（如 [D] 的「二级：」提示），头文本必须与真值相同。
+
+同时承载**返回键不变量**（同属第 18 项域）：子菜单面板返回键已全局统一为 0，
+本模块对全部受检文档校验「返回主菜单」行的键必须为 0——覆盖主菜单块以外的
+图块/列表项/表格行（本轮实际拦住的残留形态正是表格内 `` `[B]` 返回``，人工
+grep 模式会漏）；自由 prose 叙述豁免，防 FAQ「Ctrl+C 返回主菜单」类误报。
 """
 
 from __future__ import annotations
@@ -77,4 +82,43 @@ def check_menu_blocks(manual_texts: dict[Path, str]) -> list[str]:
             got = _label_head(documented[key])
             if got != want:
                 findings.append(f"{rel(path)}: [{key}] 标签头「{got}」与 tui_menu.MENU_ITEMS「{want}」不一致")
+    return findings
+
+
+#: 返回键紧邻键记号：`[X]` 与「返回主菜单」间仅记号/空白（≤6 字符）——
+#: 排除行内远处 `[L]` 等非返回键（防 changelog 式列表行误报）
+_RET_NEAR_KEY_RE = re.compile(r"\[([A-Za-z0-9])\][`*\s]{0,6}返回主菜单")
+#: 返回前缀行尾裸键：列表/图块行「**0 返回」「0 返回」形态
+_RET_TAIL_KEY_RE = re.compile(r"([A-Za-z0-9])\s*(?:\*\*|\])?\s*$")
+
+
+def check_return_key_invariant(manual_texts: dict[Path, str]) -> list[str]:
+    """校验文档中「返回主菜单」的键必须为 0（返回键全局统一），返回不一致列表。
+
+    校验域：code block 内行 ∪ 列表项行 ∪ 表格行（结构化描述）；自由 prose
+    叙述豁免（FAQ 的「Ctrl+C 返回主菜单」、QA 流内「`q` 返回主菜单」——线性
+    输入流退出非面板导航）。紧邻与行尾键均解析不出时同样豁免，宁漏勿误报。
+    历史记录类文档（changelog/plan/review-findings）由扫描入口排除。
+    """
+    findings: list[str] = []
+    for path, text in manual_texts.items():
+        in_block = False
+        for lineno, raw in enumerate(text.splitlines(), 1):
+            stripped = raw.strip()
+            if stripped.startswith("```"):
+                in_block = not in_block
+                continue
+            if "返回主菜单" not in stripped:
+                continue
+            in_list = bool(re.match(r"^\s*[-*]\s", raw))
+            in_table = stripped.startswith("|")
+            if not (in_block or in_list or in_table):
+                continue
+            m = _RET_NEAR_KEY_RE.search(stripped)
+            if m is None:
+                m = _RET_TAIL_KEY_RE.search(stripped[: stripped.find("返回主菜单")])
+            if m is None:
+                continue  # 键解析不出（叙述/特殊形态）→ 豁免
+            if m.group(1) != "0":
+                findings.append(f"{rel(path)}:{lineno}: 「返回主菜单」键为 [{m.group(1)}]，应为 0（返回键全局统一）")
     return findings
