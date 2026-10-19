@@ -110,6 +110,7 @@ def panel_loop(
     repaint: Literal["loop", "feedback"] = "loop",
     on_text: Callable[[str], None] | None = None,
     on_nav_moved: Callable[[], None] | None = None,
+    on_help: Callable[[str], bool] | None = None,
     default_key: str | None = None,
     direct: bool = True,
     pick: int = 1,
@@ -137,6 +138,9 @@ def panel_loop(
         on_text: 未命中任何项键时的自由文本词法（如 S 面板 ``?3``/``key=on``、
             M 面板 ``3 1``）；``None`` = 无效反馈。
         on_nav_moved: 方向键移动成功后的回调（供 ``feedback`` 面板置重绘标记）。
+        on_help: 面板自定义帮助（收到去掉问号的目标，``""`` 表示无参）；返回 True
+            表示已处理。返回 False / 未提供时由运行时印通用「可用键一览」——``?``
+            因此全面板可用（帮助入口不再是个别面板的特权）。
         default_key: 裸回车（空输入）且未导航时的默认派发项键；``None`` = 交
             `on_text`（无则无效反馈）——保持「不误触切换」原语义。
         direct: 单字符直达派发开关（键入即派发并同步游标）；M 面板置 False 让数字
@@ -161,6 +165,11 @@ def panel_loop(
 
         if choice is None:  # Esc：误入面板即时返回
             return
+
+        # ── ? 帮助（运行时单源：无参=可用键一览，?N=单项详情；全面板一致）──
+        if choice[:1] in ("?", "？"):
+            _emit_help(choice[1:].strip(), items, on_help)
+            continue
 
         # ── 方向键导航：移动游标（跳过 return 项），回调面板置重绘，按 repaint 策略补位置反馈 ──
         if choice in (KEY_UP, KEY_DOWN):
@@ -261,6 +270,28 @@ def _emit_nav_feedback(nav: NavState, items: list[PanelItem]) -> None:
         return
     item = items[nav.cursor % len(items)]
     print(f"  ▸ {item.key}. {item.label}（回车选择 · Esc 返回）")
+
+
+def _emit_help(
+    target: str,
+    items: list[PanelItem],
+    on_help: Callable[[str], bool] | None,
+) -> None:
+    """``?`` / ``?键`` 帮助输出（帮助入口全面板可用的单源实现）。"""
+    from src.python.tui.prompt_text import item_detail_lines, keys_help_lines
+
+    if on_help is not None and on_help(target):
+        return
+    if not target:
+        for line in keys_help_lines(items):
+            print(line)
+        return
+    item = _find_by_key(target, items) or _find_by_key(target.upper(), items)
+    if item is None:
+        _emit_invalid()
+        return
+    for line in item_detail_lines(item):
+        print(line)
 
 
 def _emit_invalid() -> None:

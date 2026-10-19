@@ -18,6 +18,7 @@ from src.python.core.reader import read_holdings, require_holdings
 from src.python.tui.tui_handlers import print_error_with_hint, select_holdings_file
 from src.python.tui.tui_keys import input_choice
 from src.python.tui.panel_runtime import NavState, PanelItem, panel_loop
+from src.python.tui.prompt_text import panel_prompt
 from src.python.tui.tui_menu import GREEN, RED, RESET, YELLOW, press_any_key, refresh_config
 
 logger = setup_logger()
@@ -286,7 +287,7 @@ def _cmd_cache_management() -> None:
     panel_loop(
         items,
         render=_render,
-        prompt="  缓存管理> ",
+        prompt=panel_prompt("输入编号执行", example="3 清理过期"),
         read=input_choice,
         default_key="0",  # 空回车返回
         on_text=lambda _t: print(f"  {YELLOW}[!]{RESET} 未知命令（3 清理过期缓存 / 0 返回）"),

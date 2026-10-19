@@ -73,7 +73,7 @@ def _input_candidate_path(base_file: str) -> str | None:
     提供 3 个选项：
       1) 自动复制基准文件为可编辑目标模板（调仓后）
       2) 手动输入目标文件完整路径（可位于任意位置）
-      3) 直接回车取消
+      3) 回车=取消（Esc 亦可）
     """
     print("  [ERR] 持仓目录下未找到基准之外的 xlsx 文件")
     print("     可复制基准持仓文件并修改后作为目标（调仓后/假设）")
@@ -81,7 +81,7 @@ def _input_candidate_path(base_file: str) -> str | None:
         print("  [1] 自动复制基准文件为可编辑目标模板（调仓后）")
         print("  [2] 手动输入目标文件完整路径")
         try:
-            choice = input_choice("  请输入选择（直接回车取消）: ")
+            choice = input_choice("  回车=取消 / 输入编号选择（1 或 2）: ")
         except (EOFError, KeyboardInterrupt):
             print()
             return None
@@ -97,9 +97,9 @@ def _input_candidate_path(base_file: str) -> str | None:
 
 
 def _manual_input_path() -> str | None:
-    """手动输入目标文件完整路径；直接回车取消返回 None。"""
+    """手动输入目标文件完整路径；回车=取消（返回 None）。"""
     try:
-        path = input_choice(wrap_prompt("  请输入目标文件完整路径（直接回车取消）: "))
+        path = input_choice(wrap_prompt("  回车=取消 / 请输入目标文件完整路径: "))
     except (EOFError, KeyboardInterrupt):
         print()
         return None

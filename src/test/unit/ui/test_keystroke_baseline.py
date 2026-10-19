@@ -77,14 +77,20 @@ def _run_flow(keys: list[str], *, pre_patches=(), handler_patches=()) -> _KeyFee
     """驱动主循环走完一条动线，返回 feeder（含消费数）。"""
     from src.python.tui import tui
 
+    from src.python.tui.tui_menu import MENU_ITEMS
+
     feeder = _KeyFeeder(keys)
+    snapshot = list(MENU_ITEMS)  # 主循环会按功能开关就地裁剪菜单，跑完必须还原
     ctxs = [p for p in _patch_readers(feeder)] + list(pre_patches) + list(handler_patches)
-    with contextlib.ExitStack() as stack:
-        for ctx in ctxs:
-            stack.enter_context(ctx)
-        with contextlib.redirect_stdout(io.StringIO()):
-            with contextlib.suppress(SystemExit):
-                tui.main()
+    try:
+        with contextlib.ExitStack() as stack:
+            for ctx in ctxs:
+                stack.enter_context(ctx)
+            with contextlib.redirect_stdout(io.StringIO()):
+                with contextlib.suppress(SystemExit):
+                    tui.main()
+    finally:
+        MENU_ITEMS[:] = snapshot
     if os.environ.get("TUI_KEYSTROKE_DEBUG") == "1":
         print(f"[keystroke] 消费 {feeder.consumed} 键，剩余 {feeder._keys}，提示 {feeder.prompts}", file=sys.stderr)
     return feeder
@@ -97,6 +103,7 @@ def _common_patches():
     return [
         patch.object(tui, "_render_menu_frame", return_value=0),
         patch.object(tui, "init_config"),
+        patch.object(tui, "_apply_feature_gates"),
         patch.object(tui, "_print_session_usage_on_exit"),
         patch("src.python.cache.cleanup_expired", return_value=0),
         patch("src.python.report.privacy_notice.show_privacy_notice_if_needed"),

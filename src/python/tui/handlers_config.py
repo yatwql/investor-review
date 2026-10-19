@@ -33,6 +33,7 @@ from src.python.tui.switch_panel import (
     wrap_hanging,
 )
 from src.python.tui.panel_runtime import NavState, PanelItem, panel_loop
+from src.python.tui.prompt_text import panel_prompt
 from src.python.tui.handlers_switch import (
     COST_HISTORY_DAYS,
     DUAL_ENTRY_CROSS_HINTS,
@@ -212,7 +213,7 @@ def _cmd_config_dir_info() -> None:
         panel_loop(
             panel_items,
             render=_render,
-            prompt="  选择 > ",
+            prompt=panel_prompt("选择", example="C/F/O/M", help_hint=None),
             read=input_choice,
             on_text=lambda _t: print("  [!] 无效选择，请输入 C/F/O/M/0"),
             default_key="0",
@@ -447,12 +448,15 @@ def _cmd_config_llm_modules() -> None:
         num, key, name, _curr, kind = target
         _apply_toggle(num, key, name, kind, new_val)
 
+    def _on_help(target: str) -> bool:
+        """``?键`` 详情（丰富多段输出）；``?`` 无参交运行时印可用键一览。"""
+        if not target:
+            return False
+        show_switch_detail(target, state["tuples"])
+        return True
+
     def _on_text(choice: str) -> None:
         tuples = state["tuples"]
-        # 只读查询（半角 ? 与全角 ？ 均收——中文输入法默认输出全角问号）
-        if choice[:1] in ("?", "？"):
-            show_switch_detail(choice, tuples)
-            return
         if choice.lower() == "p":
             state["repaint"] = True
             return
@@ -553,10 +557,11 @@ def _cmd_config_llm_modules() -> None:
         panel_loop(
             panel_items,
             render=_render,
-            prompt="  输入编号切换开关（如 3）· ?3 查看说明 · 0 返回: ",
+            prompt=panel_prompt("输入编号切换开关", example="3", help_hint="?3 查看说明"),
             read=input_choice,
             repaint="feedback",
             on_text=_on_text,
+            on_help=_on_help,
             on_nav_moved=lambda: state.update(repaint=True),
         )
     except (EOFError, KeyboardInterrupt):
@@ -609,7 +614,7 @@ def _cmd_config_comparison_indices() -> None:
         panel_loop(
             items,
             render=_render,
-            prompt="  请选择 (A/D/R/0): ",
+            prompt=panel_prompt("选择操作", example="A 添加 / D 删除 / R 重置"),
             read=input_choice,
             on_text=lambda _t: print(f"  {YELLOW}[!]{RESET} 无效选择，请重试"),
         )
@@ -750,7 +755,7 @@ def _cmd_config_report_boards() -> None:
         panel_loop(
             items,
             render=_render,
-            prompt="  输入编号切换 (0-6): ",
+            prompt=panel_prompt("输入编号切换 (0-6)"),
             read=input_choice,
             on_text=lambda _t: print(f"  {YELLOW}[!]{RESET} 无效编号"),
         )
@@ -844,7 +849,13 @@ def _cmd_config_anonymization_mode() -> None:
     items.append(PanelItem("0", "返回主菜单", kind="return"))
 
     try:
-        panel_loop(items, render=_render, prompt="  请选择 (0-4): ", read=input_choice, on_text=_on_text)
+        panel_loop(
+            items,
+            render=_render,
+            prompt=panel_prompt("选择匿名化模式", example="1-4 选模式"),
+            read=input_choice,
+            on_text=_on_text,
+        )
     except (EOFError, KeyboardInterrupt):
         print()
 
@@ -958,7 +969,7 @@ def _cmd_config_llm_providers() -> None:
         panel_loop(
             items,
             render=_render,
-            prompt="  输入两个编号交换优先级（如 3 1）· 0 返回: ",
+            prompt=panel_prompt("输入两个编号交换优先级", example="3 1"),
             read=input_choice,
             pick=2,
             on_picked=_on_picked,

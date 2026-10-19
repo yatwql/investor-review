@@ -924,28 +924,25 @@ class TestPanelPlainLanguageCopy:
             _cmd_config_llm_modules()
 
         out = capsys.readouterr().out
-        # input() 的提示串在 input 被 mock 后不会上屏，页脚文案按源码断言（同
-        # test_boards_panel_points_to_switch_menu 的取法）
-        from pathlib import Path
+        # 提示串由模板产出（input 被 mock 后不上屏），故断言「模板渲染结果」——不再
+        # 按源码 grep，改提示措辞时用例仍表达真实意图
+        from src.python.tui.prompt_text import panel_prompt
 
-        src = (Path(__file__).resolve().parents[4] / "src" / "python" / "tui" / "handlers_config.py").read_text(
-            encoding="utf-8"
-        )
-        assert "输入编号切换开关（如 3）" in src
+        prompt = panel_prompt("输入编号切换开关", example="3", help_hint="?3 查看说明")
+        assert "输入编号切换开关（如 3）" in prompt
+        assert "?3 查看说明" in prompt and "0 返回" in prompt
         assert "请输入 ? 加编号或键名" in out
         assert "输入编号或键名" in out
-        assert "slug" not in out and "slug" not in src
+        assert "slug" not in out, "面板输出不得出现内部术语 slug"
 
     def test_prompt_teaches_main_path_with_example(self):
         """提示语自带具体例子（如 3 / ?3 / 0 返回）——不看文档也知道怎么按。"""
-        from pathlib import Path
+        from src.python.tui.prompt_text import panel_prompt
 
-        src = (Path(__file__).resolve().parents[4] / "src" / "python" / "tui" / "handlers_config.py").read_text(
-            encoding="utf-8"
-        )
-        assert "输入编号切换开关（如 3）" in src, "主路径要有具体编号示例，不能只写占位符"
-        assert "?3 查看说明" in src, "说明查询要有无空格写法示例"
-        assert "0 返回" in src, "返回通道要在提示语里可见"
+        prompt = panel_prompt("输入编号切换开关", example="3", help_hint="?3 查看说明")
+        assert "输入编号切换开关（如 3）" in prompt, "主路径要有具体编号示例，不能只写占位符"
+        assert "?3 查看说明" in prompt, "说明查询要有无空格写法示例"
+        assert "0 返回" in prompt, "返回通道要在提示语里可见"
 
 
 class TestLlmRowCostSuffix:
