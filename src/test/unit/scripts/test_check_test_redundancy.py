@@ -404,3 +404,132 @@ class TestFactsCache:
         """隔离：缓存路径必须被 TEST_REDUNDANCY_CACHE 重定向到 tmp_path（不碰真实 data/cache）。"""
         cache_path = redundancy._facts_cache_path()
         assert str(cache_path).startswith(str(tmp_tree.parents[1]))
+
+
+@pytest.fixture()
+def quality_tree(redundancy, tmp_path, monkeypatch):
+    """新类公共树：与类内 tmp_tree 分名且构造顺序不同（避免被完全重复比对命中）。"""
+    monkeypatch.setenv("TEST_REDUNDANCY_CACHE", str(tmp_path / "data" / "cache" / "facts.json"))
+    root = tmp_path / "src" / "test"
+    (root / "unit").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(redundancy, "_TEST_ROOT", root)
+    monkeypatch.setattr(redundancy, "_LIVE_DIR", root / "live")
+    return root
+
+
+def _put(root, name, body):
+    """写入合成测试文件（与类内 _write 结构不同：无返回值）。"""
+    out = root / "unit" / name
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(body, encoding="utf-8")
+
+
+class TestQualityChecksAndAudit:
+    """第 6/7/8 类机检（恒真断言/死 fixture/弱 mock 断言）与 --audit 骨架审计。"""
+
+    def test_trivially_true_reported(self, redundancy, quality_tree):
+        """assert True / x == x 被检出为恒真断言。"""
+        _put(
+            quality_tree,
+            "test_a.py",
+            "def test_t():\n    assert True\n\ndef test_u():\n    a = f()\n    assert a == a\n",
+        )
+        findings, _ = redundancy.run_checks()
+        assert sum("恒真断言" in f for f in findings) == 2
+
+    def test_normal_assert_not_flagged_trivial(self, redundancy, quality_tree):
+        """正常比较断言不被恒真断言误报。"""
+        _put(quality_tree, "test_a.py", "def test_t():\n    assert f(1) == 2\n")
+        findings, _ = redundancy.run_checks()
+        assert not [f for f in findings if "恒真断言" in f]
+
+    def test_weak_mock_attr_reported(self, redundancy, quality_tree):
+        """assert <mock>.<属性> 真值被检出为弱 mock 断言（Mock 恒真）。"""
+        _put(quality_tree, "test_a.py", "def test_t(mock_cfg):\n    assert mock_cfg.enabled\n")
+        findings, _ = redundancy.run_checks()
+        assert any("弱 mock 断言" in f and "enabled" in f for f in findings)
+
+    def test_mock_dedicated_assertions_not_flagged(self, redundancy, quality_tree):
+        """assert_called* / .call_count 比较等专用断言不算弱 mock 断言。"""
+        _put(
+            quality_tree,
+            "test_a.py",
+            "def test_t(m_client):\n    m_client.assert_called_once()\n\ndef test_u(m_client):\n    assert m_client.call_count == 1\n",
+        )
+        findings, _ = redundancy.run_checks()
+        assert not [f for f in findings if "弱 mock 断言" in f]
+
+    def test_assert_is_not_none_mock_reported(self, redundancy, quality_tree):
+        """assertIsNotNone(<mock>) 恒真（Mock 不为 None）被检出。"""
+        _put(
+            quality_tree,
+            "test_a.py",
+            "class TestA:\n    def test_t(self, m_client):\n        self.assertIsNotNone(m_client)\n",
+        )
+        findings, _ = redundancy.run_checks()
+        assert any("弱 mock 断言" in f and "assertIsNotNone" in f for f in findings)
+
+    def test_assert_is_not_none_real_object_not_flagged(self, redundancy, quality_tree):
+        """真实对象的 assertIsNotNone 不被误报（名不含 mock/m_ 前缀）。"""
+        _put(
+            quality_tree,
+            "test_a.py",
+            "class TestA:\n    def test_t(self, real_client):\n        self.assertIsNotNone(real_client)\n",
+        )
+        findings, _ = redundancy.run_checks()
+        assert not [f for f in findings if "弱 mock 断言" in f]
+
+    def test_unused_fixture_reported(self, redundancy, quality_tree):
+        """定义后全仓无引用的 fixture 被检出（死 fixture）。"""
+        _put(quality_tree, "test_a.py", "import pytest\n\n@pytest.fixture\ndef orphan_helper():\n    return 1\n")
+        findings, _ = redundancy.run_checks()
+        assert any("死 fixture" in f and "orphan_helper" in f for f in findings)
+
+    def test_referenced_fixture_not_flagged(self, redundancy, quality_tree):
+        """被用例签名引用的 fixture 不误报。"""
+        _put(
+            quality_tree,
+            "test_a.py",
+            "import pytest\n\n@pytest.fixture\ndef used_helper():\n    return 1\n\ndef test_use(used_helper):\n    assert used_helper == 1\n",
+        )
+        findings, _ = redundancy.run_checks()
+        assert not [f for f in findings if "死 fixture" in f]
+
+    def test_autouse_fixture_exempt(self, redundancy, quality_tree):
+        """autouse fixture 由 pytest 机制消费（无参数引用），不判死。"""
+        _put(
+            quality_tree,
+            "test_a.py",
+            "import pytest\n\n@pytest.fixture(autouse=True)\ndef _isolate():\n    pass\n\ndef test_x():\n    assert 1\n",
+        )
+        findings, _ = redundancy.run_checks()
+        assert not [f for f in findings if "死 fixture" in f]
+
+    def test_audit_groups_cross_file_same_skeleton(self, redundancy, quality_tree):
+        """两文件同名同骨架（仅字面量异）→ 骨架审计分组输出。"""
+        _put(quality_tree, "test_a.py", "class TestA:\n    def test_same(self):\n        assert fetch(10) == 'X'\n")
+        _put(quality_tree, "test_b.py", "class TestB:\n    def test_same(self):\n        assert fetch(20) == 'Y'\n")
+        lines, stats = redundancy.audit_similar_bodies()
+        assert stats["groups"] == 1
+        assert any("test_same" in line for line in lines)
+
+    def test_audit_hides_intra_file_groups_by_default(self, redundancy, quality_tree):
+        """同文件跨类同名同骨架：默认不列（仅跨文件高信号），include_intra 后列出。"""
+        _put(
+            quality_tree,
+            "test_a.py",
+            "class TestA:\n    def test_same(self):\n        assert fetch(10) == 'X'\n\n\nclass TestB:\n    def test_same(self):\n        assert fetch(20) == 'Y'\n",
+        )
+        default_lines, default_stats = redundancy.audit_similar_bodies()
+        assert default_stats["groups"] == 0
+        assert default_stats["intra_groups_total"] >= 1
+        intra_lines, _ = redundancy.audit_similar_bodies(include_intra=True)
+        assert any("test_same" in line for line in intra_lines)
+
+    def test_audit_different_bodies_not_grouped(self, redundancy, quality_tree):
+        """不同骨架不组成同名同骨架组。"""
+        _put(quality_tree, "test_a.py", "def test_one():\n    assert f(1) == 2\n")
+        _put(quality_tree, "test_b.py", "def test_one():\n    assert g(1) + h(2) + k(3)\n")
+        lines, stats = redundancy.audit_similar_bodies()
+        assert stats["groups"] == 0
+        assert lines == []
