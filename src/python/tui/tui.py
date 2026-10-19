@@ -118,7 +118,7 @@ def _bind_callbacks() -> None:
         "D": _cmd_config_dir_info,
         "1": _cmd_update_basic_cache,
         "2": _cmd_update_position_cache,
-        "4": _cmd_cache_management,
+        "3": _cmd_cache_management,
         "I": _cmd_config_comparison_indices,
         "A": _cmd_config_anonymization_mode,
         "P": _cmd_config_report_boards,
@@ -236,7 +236,7 @@ def main() -> None:
     except Exception:
         logger.debug("首次运行引导显示失败（非关键）", exc_info=True)
 
-    # 读取缺省菜单选项（config.json → default_menu_key），仅支持 E/B/L/W/Q/D/1/2/3/4/P/I/A/S/R/V/H/T/X
+    # 读取缺省菜单选项（config.json → default_menu_key），仅支持 E/B/L/W/Q/D/1/2/3/P/I/A/S/R/V/H/T/X
     # （T 系统自检受 doctor_check 开关门控、Q 报告追问受 report_qa 开关门控：
     # 关闭时对应项被裁剪，index_by_key 自然回落到首项）
     from src.python.config import get_config

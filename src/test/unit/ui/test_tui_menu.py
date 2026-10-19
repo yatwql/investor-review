@@ -48,11 +48,28 @@ class TestMenuItems(unittest.TestCase):
         """菜单键集合完整（会话/报告/缓存/配置/诊断/退出各域齐备，逐键断言不写死条数）。"""
         expected = {
             "E", "B", "L", "W", "Q", "D",
-            "1", "2", "4",
+            "1", "2", "3",
             "P", "I", "A", "S", "M", "R",
             "V", "H", "T", "X",
         }  # fmt: skip
         self.assertSetEqual({item[0] for item in MENU_ITEMS}, expected)
+
+    def test_digit_keys_contiguous(self) -> None:
+        """数字键必须连续无断层（1..N）：断层会让用户按到一个「不存在的键」并被当成误操作。
+
+        守护要点：数字键是主菜单第一入口（识别成本为零），一旦中间缺号，界面就在
+        误导用户；本断言只锁「连续 + 从 1 起」的结构关系，不锁具体条数。
+        """
+        digits = sorted(int(item[0]) for item in MENU_ITEMS if item[0].isdigit())
+        assert digits == list(range(1, len(digits) + 1)), f"数字键不连续: {digits}"
+
+    def test_callback_dispatch_covers_every_non_exit_item(self) -> None:
+        """每个非退出菜单项都有派发回调（键改号后不得漏接线）。"""
+        import src.python.tui.tui as _tui
+
+        _tui._bind_callbacks()
+        missing = [key for key, _label, cb, is_exit in MENU_ITEMS if not is_exit and cb is None]
+        assert missing == [], f"菜单项缺回调: {missing}"
 
     def test_labels_within_display_budget(self) -> None:
         """菜单标签显示宽 ≤ 48（渲染前缀 7 列，80 列终端不折行，东亚宽度口径）。"""

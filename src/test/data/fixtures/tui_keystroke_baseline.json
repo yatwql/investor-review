@@ -1,0 +1,7 @@
+{
+  "exit_via_x": 1,
+  "exit_via_zero": 1,
+  "switch_panel_readonly": 5,
+  "cache_panel_return": 4,
+  "generate_full_default_path": 3
+}

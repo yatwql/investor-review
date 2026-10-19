@@ -14,12 +14,12 @@
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 6 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`，不计入本行） |
 | 辅助脚本 | Python | 74 | 18,417 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评估、测试覆盖计数、代码/文档历史痕迹检查、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
 | 源代码合计 | — | 462 | 122,496 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 550 | 161,054 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 10,867 个 | `pytest --collect-only` 统计（`scripts/collect-test-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 测试代码 | Python | 552 | 161,386 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 10,880 个 | `pytest --collect-only` 统计（`scripts/collect-test-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 11 | 5,892 | 含 README.md（211 行）；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 10 | 5,681 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 176 | 64,169 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 11 + plan 5 + archive md 157），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 11 | 12,079 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 177 | 64,301 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 11 + plan 5 + archive md 157），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 12 | 12,211 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 157 | 50,722 | 各版本 changelog/plan/review-findings 与设计文档归档（157 md 50,492 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 7 | ~1279 | 在办设计文档（扁平存放，完成后随完成态移入对应版本的归档子目录）：两份 Jev 新闻关联判定文档（对照评测方案 + 类型化判定通道接入设计）+ 决策跨期反思闭环设计 + Web 浏览器验证方法（浏览器真机验收回填载体，完成后随完成态移入归档）+ LLM 调用成本优化分析 |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -543,7 +543,8 @@ investor-util/
 │       │   ├── fixtures/             #   上游正文夹具（解析层回归用，与 cassettes/ 互补：锁「已取回正文形态」）
 │       │   │   ├── README.md         #   夹具清单与来源/核对值约定
 │       │   │   ├── datasink_indicator_section_600900.md # 长江电力 2025 年报「公司简介和主要财务指标」章节全文
-│       │   │   └── fund_purchase_table.txt # 天天基金申购状态总表真实响应样本（var reData= 前缀 + 四类代表行）
+│       │   │   ├── fund_purchase_table.txt # 天天基金申购状态总表真实响应样本（var reData= 前缀 + 四类代表行）
+│       │   │   └── tui_keystroke_baseline.json # 主路径击键数基线快照（TUI_KEYSTROKE_UPDATE=1 重写）
 │       │   └── hallucination/        #   幻觉测试数据集
 │       │       ├── __init__.py       #       子包标记
 │       │       └── datasets.py       #       幻觉评估标准持仓数据
@@ -1025,9 +1026,11 @@ investor-util/
 │       │   │   ├── __init__.py      #       子包标记
 │       │   │   ├── test_panel_runtime.py          #   TUI 统一交互运行时（NavState 回绕/Enter 防误触/pick 收集/退出语义矩阵）
 │       │   │   ├── test_tui_keys.py              #   TUI 键盘输入测试
+│       │   │   ├── test_design_tui_doc.py   #   终端交互契约（DESIGN-TUI.md 骨架/键表/护栏对偶/术语表/引用存在）结构守卫
 │       │   │   ├── test_tui_edge.py         #   TUI 边缘场景
 │       │   │   ├── test_tui_handlers.py     #   TUI 事件处理测试
 │       │   │   ├── test_tui_menu.py         #   TUI 菜单测试
+│       │   │   ├── test_keystroke_baseline.py #   主路径击键数基线（5 条动线击键数快照守卫；防新增确认屏/闸门把主路径拉长）
 │       │   │   ├── test_text_layout.py      #   文本宽度与盒线面板等宽不变式（中英混排行宽一致）
 │       │   │   └── test_handlers_log.py     #   日志可视化命令处理测试（查看日志/健康历史）
 │       │   └── web/                  #   Web 模式单元测试
@@ -1239,6 +1242,7 @@ investor-util/
 │   │   └── reports-instruction.md    #     报告使用说明
 │   ├── managements/                  #   管理文档
 │   │   ├── DESIGN.md                 #     设计语言契约（Web/报告 UI 改动首个读取入口：色彩角色/字阶/组件六态/断点/护栏）
+│   │   ├── DESIGN-TUI.md             #     终端交互契约（TUI 改动首个读取入口：键分工总表/提示四成分/默认项标注/术语对照/反馈口径/护栏/Known Gaps）
 │   │   ├── changelog.md              #     变更日志
 │   │   ├── developer-guide.md        #     开发者指南（开发纪律/门禁/测试/脚本/发布）
 │   │   ├── folders.md                #     目录结构
