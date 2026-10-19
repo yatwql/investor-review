@@ -186,6 +186,9 @@ class TestGetKeyLinux(unittest.TestCase):
         self._stdin_patcher = patch("src.python.tui.tui_keys.sys.stdin")
         self._mock_stdin = self._stdin_patcher.start()
         self._mock_stdin.fileno.return_value = 99
+        # 读键根因：os.read 原始字节（sys.stdin.read 带缓冲会让 select(fd) 谎报）
+        self._osread_patcher = patch("src.python.tui.tui_keys.os.read")
+        self._mock_osread = self._osread_patcher.start()
 
         # 使用全局模块级 patch，因为 _get_key_linux 内部通过 import 获取模块
         self._tcgetattr_patcher = patch("termios.tcgetattr")
@@ -202,6 +205,7 @@ class TestGetKeyLinux(unittest.TestCase):
         self._mock_select = self._select_patcher.start()
 
     def tearDown(self) -> None:
+        self._osread_patcher.stop()
         self._select_patcher.stop()
         self._setraw_patcher.stop()
         self._tcsetattr_patcher.stop()
@@ -212,82 +216,82 @@ class TestGetKeyLinux(unittest.TestCase):
 
     def test_ctrl_c(self) -> None:
         """Ctrl+C 输入 → KEY_CTRL_C。"""
-        self._mock_stdin.read.return_value = "\x03"
+        self._mock_osread.return_value = b"\x03"
         self.assertEqual(_get_key_linux(), KEY_CTRL_C)
 
     def test_enter_cr(self) -> None:
         """回车 \\r → KEY_ENTER。"""
-        self._mock_stdin.read.return_value = "\r"
+        self._mock_osread.return_value = b"\r"
         self.assertEqual(_get_key_linux(), KEY_ENTER)
 
     def test_enter_lf(self) -> None:
         """换行 \\n → KEY_ENTER。"""
-        self._mock_stdin.read.return_value = "\n"
+        self._mock_osread.return_value = b"\n"
         self.assertEqual(_get_key_linux(), KEY_ENTER)
 
     # -- ESC / 方向键 -------------------------------------------------
 
     def test_escape_up(self) -> None:
         """ESC [ A → KEY_UP。"""
-        self._mock_stdin.read.side_effect = ["\x1b", "[", "A"]
+        self._mock_osread.side_effect = [b"\x1b", b"[", b"A"]
         self._mock_select.return_value = ([self._mock_stdin], [], [])
         self.assertEqual(_get_key_linux(), KEY_UP)
 
     def test_escape_down(self) -> None:
         """ESC [ B → KEY_DOWN。"""
-        self._mock_stdin.read.side_effect = ["\x1b", "[", "B"]
+        self._mock_osread.side_effect = [b"\x1b", b"[", b"B"]
         self._mock_select.return_value = ([self._mock_stdin], [], [])
         self.assertEqual(_get_key_linux(), KEY_DOWN)
 
     def test_escape_unknown_seq(self) -> None:
         """ESC [ X → KEY_UNKNOWN。"""
-        self._mock_stdin.read.side_effect = ["\x1b", "[", "X"]
+        self._mock_osread.side_effect = [b"\x1b", b"[", b"X"]
         self._mock_select.return_value = ([self._mock_stdin], [], [])
         self.assertEqual(_get_key_linux(), KEY_UNKNOWN)
 
     def test_standalone_esc(self) -> None:
         """单独 ESC 键（select 超时无后继字节）→ KEY_ESC（首页连按两次退出首按）。"""
-        self._mock_stdin.read.return_value = "\x1b"
+        self._mock_osread.return_value = b"\x1b"
         self._mock_select.return_value = ([], [], [])
         self.assertEqual(_get_key_linux(), KEY_ESC)
 
     def test_late_arrow_sequence_mapped_after_lone_esc(self) -> None:
         """孤 ESC 之后迟到的方向键续段被吸收并映射回方向键（拆包不误触发直达键）。"""
-        self._mock_stdin.read.side_effect = ["\x1b"]
+        self._mock_osread.side_effect = [b"\x1b"]
         self._mock_select.return_value = ([], [], [])
         self.assertEqual(_get_key_linux(), KEY_ESC)
-        self._mock_stdin.read.side_effect = ["[", "A"]
+        self._mock_osread.side_effect = [b"[", b"A"]
         self._mock_select.return_value = ([self._mock_stdin], [], [])
         self.assertEqual(_get_key_linux(), KEY_UP)
 
     def test_partial_sequence_final_byte_maps_not_dispatches(self) -> None:
         """序列末字节超时后迟到：按补全映射回方向键，绝不进字母分派（曾泄漏启动 B 报告）。"""
         # ESC [ 齐到、末字节 B 超时 → KEY_UNKNOWN + 记半途前缀
-        self._mock_stdin.read.side_effect = ["\x1b", "["]
+        self._mock_osread.side_effect = [b"\x1b", b"["]
         self._mock_select.side_effect = [([self._mock_stdin], [], []), ([], [], [])]
         self.assertEqual(_get_key_linux(), KEY_UNKNOWN)
         # 迟到的 B → 补全映射为 KEY_DOWN（导航），而非独立键 "B"
-        self._mock_stdin.read.side_effect = ["B"]
+        self._mock_osread.side_effect = [b"B"]
         self.assertEqual(_get_key_linux(), KEY_DOWN)
 
     def test_partial_sequence_swallow_unrelated_byte(self) -> None:
         """半途序列后的无关字节：吞掉为 KEY_UNKNOWN（丢失一键，不误触发功能）。"""
-        self._mock_stdin.read.side_effect = ["\x1b", "["]
+        self._mock_osread.side_effect = [b"\x1b", b"["]
         self._mock_select.side_effect = [([self._mock_stdin], [], []), ([], [], [])]
         self.assertEqual(_get_key_linux(), KEY_UNKNOWN)
-        self._mock_stdin.read.side_effect = ["x"]
+        self._mock_osread.side_effect = [b"x"]
         self.assertEqual(_get_key_linux(), KEY_UNKNOWN)
-        self._mock_stdin.read.side_effect = ["y"]  # 标志已清，恢复正常分派
+        self._mock_osread.side_effect = [b"y"]  # 标志已清，恢复正常分派
         self.assertEqual(_get_key_linux(), "Y")
 
     def test_residue_cleared_by_normal_key(self) -> None:
         """残留标志下的普通字符：清标志并按普通键处理（不吞字）。"""
-        self._mock_stdin.read.side_effect = ["\x1b"]
+        self._mock_osread.side_effect = [b"\x1b"]
         self._mock_select.return_value = ([], [], [])
         self.assertEqual(_get_key_linux(), KEY_ESC)
-        self._mock_stdin.read.side_effect = ["q"]
+        self._mock_osread.side_effect = [b"q"]
         self.assertEqual(_get_key_linux(), "Q")
-        self._mock_stdin.read.side_effect = ["z"]
+        self._mock_osread.side_effect = [b"z"]
         self.assertEqual(_get_key_linux(), "Z")
 
     def test_esc_timeout_relaxed_for_high_latency_links(self) -> None:
@@ -300,7 +304,7 @@ class TestGetKeyLinux(unittest.TestCase):
 
     def test_escape_ss3_application_cursor(self) -> None:
         """应用光标模式序列（O 前缀变体）→ KEY_UP（部分终端 smkx 后发送此格式）。"""
-        self._mock_stdin.read.side_effect = ["\x1b", "O", "A"]
+        self._mock_osread.side_effect = [b"\x1b", b"O", b"A"]
         self._mock_select.return_value = ([self._mock_stdin], [], [])
         self.assertEqual(_get_key_linux(), KEY_UP)
 
@@ -308,12 +312,12 @@ class TestGetKeyLinux(unittest.TestCase):
 
     def test_normal_key(self) -> None:
         """普通字母键 → 转为大写。"""
-        self._mock_stdin.read.return_value = "x"
+        self._mock_osread.return_value = b"x"
         self.assertEqual(_get_key_linux(), "X")
 
     def test_empty_key(self) -> None:
         """空字符串 → KEY_UNKNOWN。"""
-        self._mock_stdin.read.return_value = ""
+        self._mock_osread.return_value = b""
         self.assertEqual(_get_key_linux(), KEY_UNKNOWN)
 
     # -- 异常路径 -----------------------------------------------------
@@ -325,8 +329,8 @@ class TestGetKeyLinux(unittest.TestCase):
         self._mock_tcsetattr.assert_called_once()
 
     def test_keyboard_interrupt(self) -> None:
-        """sys.stdin.read 抛出 KeyboardInterrupt → KEY_CTRL_C。"""
-        self._mock_stdin.read.side_effect = KeyboardInterrupt()
+        """os.read 抛出 KeyboardInterrupt → KEY_CTRL_C。"""
+        self._mock_osread.side_effect = KeyboardInterrupt()
         self.assertEqual(_get_key_linux(), KEY_CTRL_C)
 
 
@@ -425,6 +429,52 @@ class TestInputChoice(unittest.TestCase):
             with self.assertRaises(KeyboardInterrupt):
                 _input_choice_linux("  > ")
 
+    def test_linux_arrows_return_nav_keys(self) -> None:
+        """arrows=True 且行为空：↑/↓ 序列返回方向键键名（列表面板导航）。"""
+        for seq, expect in (([b"\x1b", b"[", b"A"], KEY_UP), ([b"\x1b", b"[", b"B"], KEY_DOWN)):
+            stdin, _tcg, _tcs, _raw, _read = self._linux_env(seq)
+            with (
+                stdin as mock_stdin,
+                _tcg,
+                _tcs,
+                _raw,
+                patch("select.select", return_value=([mock_stdin], [], [])),
+                _read,
+            ):
+                mock_stdin.isatty.return_value = True
+                mock_stdin.fileno.return_value = 99
+                self.assertEqual(_input_choice_linux("  > ", arrows=True), expect)
+
+    def test_linux_arrows_swallowed_when_line_has_content(self) -> None:
+        """行内已有内容：方向键序列仍吞掉（保行编辑），Enter 提交原行。"""
+        stdin, _tcg, _tcs, _raw, _read = self._linux_env([b"3", b"\x1b", b"[", b"B", b"\r"])
+        with (
+            stdin as mock_stdin,
+            _tcg,
+            _tcs,
+            _raw,
+            patch("select.select", return_value=([mock_stdin], [], [])),
+            _read,
+        ):
+            mock_stdin.isatty.return_value = True
+            mock_stdin.fileno.return_value = 99
+            self.assertEqual(_input_choice_linux("  > ", arrows=True), "3")
+
+    def test_linux_arrows_disabled_swallows_sequences(self) -> None:
+        """默认（arrows=False）：方向键序列整段吞掉（既有调用方行为不变）。"""
+        stdin, _tcg, _tcs, _raw, _read = self._linux_env([b"\x1b", b"[", b"B", b"3", b"\r"])
+        with (
+            stdin as mock_stdin,
+            _tcg,
+            _tcs,
+            _raw,
+            patch("select.select", return_value=([mock_stdin], [], [])),
+            _read,
+        ):
+            mock_stdin.isatty.return_value = True
+            mock_stdin.fileno.return_value = 99
+            self.assertEqual(_input_choice_linux("  > "), "3")
+
     @unittest.skipUnless(os.name == "nt", "Windows only")
     def test_windows_esc_cancels(self) -> None:
         """Esc 键（单字符 \x1b）即时取消。"""
@@ -436,6 +486,73 @@ class TestInputChoice(unittest.TestCase):
         """逐字符输入 + 回车 → strip 后的行内容。"""
         with patch("msvcrt.getwch", side_effect=["3", "\r"]):
             self.assertEqual(_input_choice_windows("  > "), "3")
+
+
+@unittest.skipIf(os.name != "posix", "Linux only")
+class TestGetKeyWholePacketPty(unittest.TestCase):
+    """整包 ESC[B（电脑常态）必须即时解析为方向键。
+
+    回归锚点：sys.stdin.read 缓冲把整包吞进用户态后 select(fd) 谎报「无数据」，
+    每次方向键都被误判为孤 ESC——首按挂上退出确认态、次按即误退出程序（用户实测
+    「首页按两次方向键第二次退出」）。pty 真链路断言 <0.4s 返回 KEY_DOWN（误判
+    路径耗时 ≥0.8s 且返回 KEY_ESC）。
+    """
+
+    @unittest.skipUnless(os.name == "posix", "pty 仅 POSIX")
+    def test_whole_packet_arrow_returns_down_immediately(self) -> None:
+        """整包 ESC[B 到达 → 子进程全新解释器上 get_key 即时返回 KEY_DOWN（<0.4s）。
+
+        误判路径（缓冲谎报）耗时 ≥0.8s 且返回 KEY_ESC，本断言两头都拦得住。
+        """
+        import subprocess
+        import sys as _sys
+        import time as _time
+
+        import pty as _pty
+
+        code = (
+            "import sys, time\n"
+            f"sys.path.insert(0, {os.getcwd()!r})\n"
+            "from src.python.tui.tui_keys import get_key\n"
+            "import termios, tty\n"
+            "tty.setraw(0)\n"  # 先切 raw：父进程随后写入的字节不进规范行缓冲
+            "sys.stderr.write('READY\\n'); sys.stderr.flush()\n"
+            "t0 = time.time()\n"
+            "k = get_key()\n"
+            "dt = time.time() - t0\n"
+            "sys.stderr.write(f'k={k} dt={dt:.2f}\\n'); sys.stderr.flush()\n"
+            "sys.exit(0 if (k == 'KEY_DOWN' and dt < 0.4) else 1)\n"
+        )
+        master, slave = _pty.openpty()
+        proc = subprocess.Popen(
+            [_sys.executable, "-c", code],
+            stdin=slave,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+        os.close(slave)
+        # 子进程 READY（已 setraw）后写入 → dt 为纯解析耗时：
+        # 即时解析 ~ms；缓冲谎报误判路径 = 0.5+0.3 两段超时 ≥0.8s，两头都拦得住
+        ready = proc.stderr.readline()
+        if b"READY" not in ready:
+            os.close(master)
+            proc.kill()
+            self.fail(f"子进程未就绪：{ready!r}")
+        _time.sleep(0.12)  # 等子进程跨入 get_key 读阻塞（READY 后立即写有毫秒级竞态）
+        os.write(master, b"\x1b[B")
+        try:
+            _, err = proc.communicate(timeout=6)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.communicate()
+            os.close(master)
+            self.fail("get_key 未在 6s 内返回（疑似阻塞）")
+        os.close(master)
+        self.assertEqual(
+            proc.returncode,
+            0,
+            f"整包方向键须即时解析为 KEY_DOWN（<0.4s），而非孤 ESC 误判；child={err.decode(errors='replace')[-300:]}",
+        )
 
 
 if __name__ == "__main__":

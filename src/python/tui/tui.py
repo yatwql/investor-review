@@ -255,6 +255,9 @@ def main() -> None:
         while True:
             key = get_key()
             narrow = layout_tier(terminal_columns()) == "narrow"
+            if key != KEY_ESC and esc_exit_armed is not None:
+                # 任何非 Esc 按键解除退出确认态：拆包孤 ESC 挂起的确认不被后续按键引爆
+                esc_exit_armed = None
 
             if key == KEY_CTRL_C:
                 exit_app()
@@ -287,14 +290,15 @@ def main() -> None:
                 break
             if key == KEY_UP or key == KEY_DOWN:
                 sel = (sel - 1) % len(MENU_ITEMS) if key == KEY_UP else (sel + 1) % len(MENU_ITEMS)
-                if narrow and _can_repaint_inplace():
-                    # 窄屏导航：原地重绘（光标上移+清屏），手机短屏菜单不被顶出可视区；
+                if _can_repaint_inplace():
+                    # 导航原地重绘（光标上移+清屏）：窄屏防菜单顶出可视区、宽屏防滚屏
+                    # 堆积（宽/窄同一导航手感，仅版式分档不改交互）；
                     # 反馈行（hint_lines）一并清除，避免清帧范围错位
                     _clear_last_frame(frame_lines + hint_lines)
                     frame_lines = _render_menu_frame(sel)
                     hint_lines = 0
                     continue
-                break  # 宽/中档整屏重绘；窄屏不支持 ANSI 时同样回退追加
+                break  # 非 TTY/旧控制台：回退整屏追加
             if narrow:
                 # 窄屏未知键：单行反馈（不整屏重绘），与宽档「重绘一屏」同语义
                 hint_lines += _print_hint("未识别按键")

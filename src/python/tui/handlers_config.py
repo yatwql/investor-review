@@ -343,6 +343,7 @@ def _cmd_config_llm_modules() -> None:
     from src.python.core.experiment_stats import load_experiment_usage
     from src.python.core.perf import module_cost_summary
     from src.python.core.registry import get_llm_module_names
+    from src.python.tui.tui_keys import KEY_DOWN, KEY_UP
 
     result = _read_llm_settings()
     if result is None:
@@ -384,6 +385,8 @@ def _cmd_config_llm_modules() -> None:
 
     repaint = True  # 首次进入与输入 p 时重绘；窄终端操作后不重绘（见下方反馈行）
     reveal_keys = False  # 窄屏键名可见性：默认关（编号更好按），`k` 切换
+    cursor = 0  # 方向键导航游标（items 下标）；engaged 前 Enter 维持原语义（不误触切换）
+    cursor_engaged = False
     while True:
         rows: list[str | None] = []
         items: list[tuple[int, str, str, bool, str]] = []
@@ -516,7 +519,7 @@ def _cmd_config_llm_modules() -> None:
             # 提示只教主路径：一个具体例子 + 说明查询 + 返回。r/ra/x/k 等高级命令
             # 放页脚图例，不进提示行——提示行要不看文档就能读懂
             prompt = "  输入编号切换开关（如 3）· ?3 查看说明 · 0 返回: "
-            choice = input_choice(prompt)
+            choice = input_choice(prompt, arrows=True)
         except (EOFError, KeyboardInterrupt):
             print()
             break
@@ -526,6 +529,19 @@ def _cmd_config_llm_modules() -> None:
 
         if choice == "0":
             break
+
+        # 方向键导航：↑/↓ 移动游标（▸ 反馈行给可观察位置），Enter 按选中项编号走既有派发
+        if choice in (KEY_UP, KEY_DOWN):
+            if items:
+                cursor_engaged = True
+                cursor = (cursor - 1) % len(items) if choice == KEY_UP else (cursor + 1) % len(items)
+                _num, _key, _name, _st, _kd = items[cursor]
+                _emit(f"  ▸ {_num}. {_name}（回车切换 · Esc 返回）")
+                repaint = True
+            continue
+        if choice == "" and cursor_engaged and items:
+            cursor = min(cursor, len(items) - 1)
+            choice = str(items[cursor][0])  # Enter = 对选中项按其编号派发（复用编号写路径）
 
         # 只读查询（半角 ? 与全角 ？ 均收——中文输入法默认输出全角问号）
         if choice[:1] in ("?", "？"):

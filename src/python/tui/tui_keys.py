@@ -25,6 +25,45 @@ _CSI_SEQUENCE_MAPPING = {
     "\x1bOB": KEY_DOWN,
 }
 
+
+def _read_key_char(fd: int) -> str:
+    """从 fd 读一个输入字符——必须走 ``os.read`` 原始字节，不得用 ``sys.stdin.read``。
+
+    Python 的 stdin 带用户态缓冲：读首字节会把整包（如方向键 ``ESC [ B``）吞进
+    缓冲区，此后 ``select(fd)`` 对残余字节谎报「无数据」，整包方向键被误判为
+    孤 ESC（电脑上也 100% 触发：首按挂上退出确认态、次按即退出）。select 的
+    真实性依赖「字节留在内核」，故读取与 select 必须同用 fd/``os.read``。
+    """
+    import select as _select
+
+    try:
+        b = os.read(fd, 1)
+    except OSError:
+        return ""
+    if not b:
+        return ""
+    if b[0] < 0x80:
+        return b.decode("ascii", errors="replace")
+    if (b[0] & 0xE0) == 0xC0:
+        need = 1
+    elif (b[0] & 0xF0) == 0xE0:
+        need = 2
+    elif (b[0] & 0xF8) == 0xF0:
+        need = 3
+    else:
+        return b.decode("utf-8", errors="replace")
+    data = b
+    for _ in range(need):
+        rdy, _, _ = _select.select([fd], [], [], 0.05)
+        if not rdy:
+            break
+        try:
+            data += os.read(fd, 1)
+        except OSError:
+            break
+    return data.decode("utf-8", errors="replace")
+
+
 # 孤 ESC 残留标志：高延迟链路上 ESC 与其后续字节拆包到达时，首段超时已按孤 ESC 返回，
 # 迟到的前缀（[ / O）由下一次读键按序列续读吸收并映射回方向键——否则残留字节会被当成
 # 普通按键误触发直达键（如 [A 的 A 命中匿名化面板）。get_key 与 input_choice 共用。
@@ -65,11 +104,12 @@ def _mark_esc_residue() -> None:
     _esc_residue_pending = True
 
 
-def _take_esc_residue(ch: str) -> str | None:
+def _take_esc_residue(ch: str, fd: int) -> str | None:
     """get_key 路径的残留吸收：迟到序列前缀 → 读完整段并映射；其他 → 清标志放行。
 
     Args:
         ch: 本次读到的首个字符（孤 ESC 之后的下一次读）。
+        fd: 输入流文件描述符（select 与读取必须同 fd——见 ``_read_key_char``）。
 
     Returns:
         映射后的键名（方向键或 KEY_UNKNOWN）；无残留或首字符非前缀时 None。
@@ -82,11 +122,11 @@ def _take_esc_residue(ch: str) -> str | None:
         return None  # 非序列续段：按普通键继续处理
     import select
 
-    rdy, _, _ = select.select([sys.stdin], [], [], _ESC_TIMEOUT)
+    rdy, _, _ = select.select([fd], [], [], _ESC_TIMEOUT)
     if not rdy:
         _mark_seq_prefix("\x1b" + ch)  # 末字节迟到：下一字节按补全处理，不泄漏为独立键
         return KEY_UNKNOWN
-    b2 = sys.stdin.read(1)
+    b2 = _read_key_char(fd)
     if not b2:
         _mark_seq_prefix("\x1b" + ch)
         return KEY_UNKNOWN
@@ -187,11 +227,13 @@ def _get_key_linux() -> str:
     except ImportError:
         return KEY_UNKNOWN
     ch = ""
+    fd = None
+    old = None
     try:
         fd = sys.stdin.fileno()
         old = termios.tcgetattr(fd)  # type: ignore[attr-defined]
         tty.setraw(fd)  # type: ignore[attr-defined]
-        ch = sys.stdin.read(1)
+        ch = _read_key_char(fd)  # 原始字节读取：select(fd) 真实性依赖字节留在内核
     except (termios.error, ValueError, OSError):  # type: ignore[attr-defined]
         pass
     except KeyboardInterrupt:
@@ -205,22 +247,22 @@ def _get_key_linux() -> str:
         done = _take_seq_completion(ch)  # 半途序列补全：强制映射/吞掉，不进字母分派
         if done is not None:
             return done
-        residue = _take_esc_residue(ch)  # 孤 ESC 后迟到的序列续段：吸收并映射回方向键
+        residue = _take_esc_residue(ch, fd)  # 孤 ESC 后迟到的序列续段：吸收并映射回方向键
         if residue is not None:
             return residue
         if ch == "\x1b":  # ESC 序列 -> 方向键；超时无后继字节 → 孤 ESC（Esc 键）
-            rdy, _, _ = select.select([sys.stdin], [], [], _ESC_FIRST_TIMEOUT)
+            rdy, _, _ = select.select([fd], [], [], _ESC_FIRST_TIMEOUT)
             if not rdy:
                 _mark_esc_residue()  # 迟到续段由下一次读键吸收（拆包不致误触发直达键）
                 return KEY_ESC
-            b1 = sys.stdin.read(1)
+            b1 = _read_key_char(fd)
             if not b1:
                 return KEY_UNKNOWN
-            rdy2, _, _ = select.select([sys.stdin], [], [], _ESC_TIMEOUT)
+            rdy2, _, _ = select.select([fd], [], [], _ESC_TIMEOUT)
             if not rdy2:
                 _mark_seq_prefix(ch + b1)  # 末字节迟到：下一字节按补全处理，不泄漏为独立键
                 return KEY_UNKNOWN
-            b2 = sys.stdin.read(1)
+            b2 = _read_key_char(fd)
             if not b2:
                 _mark_seq_prefix(ch + b1)
                 return KEY_UNKNOWN
@@ -229,7 +271,8 @@ def _get_key_linux() -> str:
             return ch.upper()
         return KEY_UNKNOWN
     finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old)  # type: ignore[attr-defined]
+        if fd is not None and old is not None:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)  # type: ignore[attr-defined]
 
 
 # ── 菜单行输入 ────────────────────────────────────────────────
@@ -244,25 +287,28 @@ class PromptCancelledError(Exception):
     """
 
 
-def input_choice(prompt: str) -> str | None:
+def input_choice(prompt: str, arrows: bool = False) -> str | None:
     """菜单选择行输入：单独 Esc **即时**取消（返回 None），其余与 ``input()`` 同语义。
 
     子菜单用它替换 ``input()``——误入子菜单后按 Esc 立刻回上一步，不必找「0 返回」；
     回车提交、首尾空白剥离、Ctrl+C 抛 KeyboardInterrupt（与既有 except 分支衔接）。
     非 TTY（测试 / 管道）回退到内置 ``input()``（同样 strip），既有测试驱动方式不变。
+    ``arrows=True`` 时方向键（↑/↓，含 O 前缀变体）在**行内无已输入内容**时返回
+    ``KEY_UP``/``KEY_DOWN`` 供列表面板导航；行内已有内容时序列仍被吞掉（保行编辑）。
 
     Args:
         prompt: 输入提示（调用方负责折行）。
+        arrows: 是否启用方向键导航返回（默认关闭，既有调用方行为不变）。
 
     Returns:
-        提交的行内容（已 strip）；Esc 取消返回 None。
+        提交的行内容（已 strip）；Esc 取消返回 None；arrows 开启时可能返回方向键键名。
     """
     if os.name == "nt":
-        return _input_choice_windows(prompt)
-    return _input_choice_linux(prompt)
+        return _input_choice_windows(prompt, arrows=arrows)
+    return _input_choice_linux(prompt, arrows=arrows)
 
 
-def _input_choice_linux(prompt: str) -> str | None:
+def _input_choice_linux(prompt: str, arrows: bool = False) -> str | None:
     """POSIX 分支：raw 模式逐字节读行（回显自理），孤立 ESC 按超时判定即时取消。"""
     if not sys.stdin.isatty():
         return input(prompt).strip()
@@ -304,12 +350,21 @@ def _input_choice_linux(prompt: str) -> str | None:
                     _mark_esc_residue()  # 迟到续段由下一次读键吸收
                     print(flush=True)
                     return None
-                nxt = os.read(fd, 1)  # 方向键等序列：吞掉不响应（本行不支持移动）
-                if nxt == b"[":
+                nxt = os.read(fd, 1)  # 序列：arrows 开启且行为空时返回 ↑/↓，其余整段吞掉
+                if nxt in (b"[", b"O"):
+                    seq = b"\x1b" + nxt
                     while True:
                         fin = os.read(fd, 1)
                         if not fin or fin.isalpha() or fin == b"~":
                             break
+                        seq += fin
+                    if fin:
+                        seq += fin
+                    if arrows and not buf:
+                        mapped = _CSI_SEQUENCE_MAPPING.get(seq.decode("latin-1"))
+                        if mapped in (KEY_UP, KEY_DOWN):
+                            print(flush=True)
+                            return mapped
                 continue
             if b == b"\x03":  # raw 模式 ISIG 关闭 → Ctrl+C 手动转发给 except 分支
                 raise KeyboardInterrupt
@@ -322,7 +377,7 @@ def _input_choice_linux(prompt: str) -> str | None:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)  # type: ignore[attr-defined]
 
 
-def _input_choice_windows(prompt: str) -> str | None:
+def _input_choice_windows(prompt: str, arrows: bool = False) -> str | None:
     """Windows 分支：msvcrt 逐字符读行，Esc 键（\x1b 单字符）即时取消。"""
     if not sys.stdin.isatty():
         return input(prompt).strip()
@@ -340,8 +395,15 @@ def _input_choice_windows(prompt: str) -> str | None:
         if ch == "\x1b":  # Esc 键 → 即时取消
             print(flush=True)
             return None
-        if ch in ("\x00", "\xe0"):  # 方向键/功能键双字节前缀：吞掉
-            msvcrt.getwch()
+        if ch in ("\x00", "\xe0"):  # 方向键/功能键双字节前缀：arrows 开启且行为空时返回 ↑/↓
+            ch2 = msvcrt.getwch()
+            if arrows and not buf:
+                if ch2 == "H":
+                    print(flush=True)
+                    return KEY_UP
+                if ch2 == "P":
+                    print(flush=True)
+                    return KEY_DOWN
             continue
         if ch in ("\x7f", "\x08"):
             if buf:

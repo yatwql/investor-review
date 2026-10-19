@@ -436,7 +436,7 @@ while True:
 | 字母/数字（A-Z/0-9） | `index_by_key(key.upper())` 直达并执行对应快捷键菜单项 |
 | Ctrl+C | `exit_app()` 退出 |
 
-键盘封装跨平台：Windows 用 `msvcrt`（方向键 `\xe0` 前缀 + 第二字节映射 H/P），Linux/macOS 用 `tty.setraw` + `termios` + `select` 读 ESC 序列（`\x1b[A`/`\x1b[B` 与 O 前缀变体 `\x1bOA`/`\x1bOB` 方向键；ESC 后首段共聚窗口 `_ESC_FIRST_TIMEOUT=0.5`s + 续读窗口 `_ESC_TIMEOUT=0.3$s`；拆包防护三件套：孤 Esc 后迟到前缀吸收映射、半途序列（前缀已消费末字节未到）下一字节强制按补全处理不进字母分派、主菜单 Esc 连按两次确认——误判方向键不致退出或误触发直达）。所有读键路径统一返回标准化键名，菜单层不感知平台差异；非交互 stdin（非 tty）返回 `KEY_UNKNOWN`，保证管道/重定向环境不阻塞。
+键盘封装跨平台：Windows 用 `msvcrt`（方向键 `\xe0` 前缀 + 第二字节映射 H/P），Linux/macOS 用 `tty.setraw` + `termios` + `select` 读 ESC 序列（`\x1b[A`/`\x1b[B` 与 O 前缀变体 `\x1bOA`/`\x1bOB` 方向键；ESC 后首段共聚窗口 `_ESC_FIRST_TIMEOUT=0.5`s + 续读窗口 `_ESC_TIMEOUT=0.3$s`；拆包防护三件套：孤 Esc 后迟到前缀吸收映射、半途序列（前缀已消费末字节未到）下一字节强制按补全处理不进字母分派、主菜单 Esc 连按两次确认——误判方向键不致退出或误触发直达；**读取一律 `os.read(fd, 1)` 原始字节与 select 同 fd**——禁止 `sys.stdin.read`（用户态缓冲会把整包吞走，此后 select(fd) 谎报「无数据」，整包方向键被误判为孤 ESC：首按挂退出确认态、次按误退出，缓冲时代电脑上亦 100% 触发）；**任何非 Esc 按键解除主菜单退出确认态**（拆包孤 ESC 挂起的确认不被后续按键引爆），宽/窄档方向键均原地重绘）；`input_choice(prompt, arrows=True)` 供列表面板（`[S]`）返回 ↑/↓（行内已有内容时序列仍吞掉保行编辑），非 Esc 按键同样解除退出确认态的对偶语义由各提示的 Esc 取消承接）。所有读键路径统一返回标准化键名，菜单层不感知平台差异；非交互 stdin（非 tty）返回 `KEY_UNKNOWN`，保证管道/重定向环境不阻塞。
 
 #### 1.6.3 菜单体系
 

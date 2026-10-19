@@ -833,6 +833,19 @@ class TestNarrowMainLoopDirectNav(unittest.TestCase):
         self.assertIn("再按一次 Esc 退出", out)
         self.assertEqual(renders, 1, "提示不触发整屏重绘")
 
+    def test_esc_armed_cancelled_by_navigation_key(self):
+        """任何非 Esc 按键解除退出确认态：孤 Esc 挂起的确认不被后续按键引爆。"""
+        fired, _, _, out, _ = self._drive(["KEY_ESC", "KEY_DOWN", "KEY_ESC", "0"], columns=100)
+        self.assertEqual(fired, ["exit"])
+        self.assertEqual(out.count("再按一次 Esc 退出"), 2, "两次独立 Esc 首按（确认态已被方向键解除）")
+
+    def test_wide_arrow_inplace_repaint_on_tty(self):
+        """宽屏 TTY 方向键同样原地重绘：宽/窄导航手感一致，不滚屏堆积。"""
+        fired, renders, _, _, cleared = self._drive(["KEY_DOWN", "0"], columns=100, tty=True)
+        self.assertEqual(fired, ["exit"])
+        self.assertEqual(renders, 2)
+        cleared.assert_called_once()
+
     def test_hint_lines_included_in_inplace_clear(self):
         """反馈行并入原地重绘清除范围：清帧调用 = 帧行数 + 反馈行数（防清帧错位）。"""
         fired, renders, _, out, cleared = self._drive(["KEY_ESC", "KEY_DOWN", "0"], columns=40, tty=True)
