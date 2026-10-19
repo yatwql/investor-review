@@ -35,6 +35,7 @@ MENU_ITEMS: list[MenuItem] = [
     ("I", "管理对比指数池（自定义基准指数）", None, False),
     ("A", "配置持仓匿名化（代码/名称脱敏）", None, False),
     ("S", "配置功能开关（作用域四组，含 LLM 章节）", None, False),
+    ("M", "配置 LLM 多链线路优先级（降级顺序）", None, False),
     ("R", "刷新配置", None, False),
     ("V", "查看最近运行日志（可按级别筛选）", None, False),
     ("H", "查看数据源健康历史", None, False),
@@ -126,10 +127,16 @@ def print_header() -> None:
 
 
 def render_menu(sel: int) -> None:
-    """打印带选择指示器的菜单（按终端宽度折行，窄屏不硬折）。"""
+    """打印菜单（按终端宽度折行；全档渲染选中态，窄屏导航时由主循环原地重绘）。
+
+    narrow（<64 列，手机竖屏）下直达主路径（按字母/数字键即执行）与方向键导航
+    并存：渲染 `>` 选中指示器；页脚提示两种入口（见 tui.main 内层循环）。
+    """
+    from src.python.tui.switch_panel import layout_tier
     from src.python.tui.text_layout import terminal_columns, wrap_with_prefix
 
     columns = terminal_columns()
+    narrow = layout_tier(columns) == "narrow"
     print()
     for i, (key, label, _cb, is_exit) in enumerate(MENU_ITEMS):
         prefix = "  >" if i == sel else "   "
@@ -139,9 +146,11 @@ def render_menu(sel: int) -> None:
         print("\n".join(wrap_with_prefix(head, label, columns)))
     print()
     # 页脚按终端宽度折行：窄屏（手机）上不硬折，键位提示也不会被右边界切掉
-    from src.python.tui.text_layout import terminal_columns, wrap_with_prefix
-
-    footer = "方向键移动 | Enter 确认 | 字母/数字键直达 | 0 或 X 退出 | Ctrl+C 退出"
+    footer = (
+        "窄屏直达：按菜单 [键] 执行 · ↑↓ 选择 · Enter 执行 | Esc / 0 / X 退出 | Ctrl+C 退出"
+        if narrow
+        else "方向键移动 | Enter 确认 | 字母/数字键直达 | Esc / 0 / X 退出 | Ctrl+C 退出"
+    )
     print("\n".join(wrap_with_prefix("  ", footer, terminal_columns())))
     print()
 

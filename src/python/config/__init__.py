@@ -27,6 +27,7 @@ from src.python.config import _json_patch as _json_patch
 from src.python.config import _llm_settings as _llm_settings
 from src.python.config import _llm_settings_defaults as _llm_settings_defaults
 from src.python.config import _validation as _validation
+from src.python.config._llm_providers import get_llm_providers, write_llm_providers  # noqa: F401
 
 # ── JSON 注释剥离 ──
 from src.python.config._comments import _strip_json_comments
@@ -159,6 +160,8 @@ __all__ = [
     "get_comparison_candidates",
     # LLM 配置
     "get_llm_config",
+    "get_llm_providers",
+    "write_llm_providers",
     "get_llm_settings_path",
     # 渠道共享：默认值 / 持仓路径 / 本地状态 / 注释解析（公开 API）
     "get_default",

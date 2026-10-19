@@ -14,6 +14,12 @@ from _release._versioning import archive_name_for, next_dev_version_of
 
 SECTION_NOTE = "（本次发布内容见下方归档索引）"
 
+# 归档文件头部的两行自述（随每次并入自动重写，见 render_archive_header）
+_HEADER_SPAN_RE = re.compile(r"^> 涵盖版本：.*$", re.M)
+_HEADER_TIME_RE = re.compile(r"^> 归档时间：.*$", re.M)
+# 归档内各发布段标题：`## [X.Y.Z] - YYYY-MM-DD`
+_RELEASE_SECTION_RE = re.compile(r"^## \[([^\]]+)\] - (\d{4}-\d{2}-\d{2})\s*$", re.M)
+
 
 def _find_section(text: str) -> tuple[int, int, str]:
     """定位当前开发段（含正文），返回 (起点, 终点, 段内版本号)；终点=下一 ## 行。"""
@@ -83,10 +89,55 @@ def apply_changelog_release(text: str, release_version: str, date: str) -> tuple
     return out, body_core
 
 
+def render_archive_header(text: str, release_version: str, date: str) -> str:
+    """按归档内实际发布段重写头部「涵盖版本 / 归档时间」两行（纯文本变换）。
+
+    两行的真值是**归档文件自身各发布段标题**（`## [X.Y.Z] - 日期`）——先追加新段再
+    调用本函数，涵盖区间与并入记录就由段列表唯一派生，无需人工维护、不会与正文漂移：
+
+    - `> 涵盖版本：v{首段} ~ v{末段}（{首段日期} ~ {末段日期}）`（单段时省略区间）
+    - `> 归档时间：{发行日期}（v{版本} 发布并入；已并入 N 段：v{版本}（MM-DD）、…）`
+
+    早期归档（如 v0.1.x）头部没有这两行，属既成历史文件：**原样跳过**，不补写、不报错
+    ——那个小版本不会再发布，改造它的历史头部没有收益。
+
+    Args:
+        text: 已包含新发布段的归档全文。
+        release_version: 目标版本字符串（三段式，由调用方传入）。
+        date: 本次发行日期（`YYYY-MM-DD`）。
+
+    Returns:
+        头部两行已更新的全文；两行缺任一行时原样返回。
+    """
+    if not (_HEADER_SPAN_RE.search(text) and _HEADER_TIME_RE.search(text)):
+        return text
+    sections = _RELEASE_SECTION_RE.findall(text)
+    if not sections:
+        raise ReleaseError("归档文件内没有 `## [版本] - 日期` 段，无法推导头部涵盖版本")
+
+    first_version, first_date = sections[0]
+    last_version, last_date = sections[-1]
+    span = (
+        f"v{first_version}（{first_date}）"
+        if first_version == last_version
+        else f"v{first_version} ~ v{last_version}（{first_date} ~ {last_date}）"
+    )
+    merged = "、".join(f"v{version}（{day[5:]}）" for version, day in sections)
+    time_note = f"{date}（v{release_version} 发布并入；已并入 {len(sections)} 段：{merged}）"
+
+    text = _HEADER_SPAN_RE.sub(f"> 涵盖版本：{span}", text, count=1)
+    return _HEADER_TIME_RE.sub(f"> 归档时间：{time_note}", text, count=1)
+
+
 def write_archive_release(archive_file: Path, release_version: str, date: str, body_core: str) -> None:
-    """把发布段正文追加到归档文件（`## [X.Y.Z] - 日期` 头，段间空行、无分隔线）。"""
+    """把发布段正文追加到归档文件，并重写头部涵盖版本/归档时间两行。
+
+    段格式：`## [X.Y.Z] - 日期` 头条 + 正文，段间空行、无分隔线。头部两行的更新
+    由 :func:`render_archive_header` 依段落列表派生——头部两行由发布编排自动维护。
+    """
     if not archive_file.exists():
         raise ReleaseError(f"归档文件不存在：{archive_file}")
     old = archive_file.read_text(encoding="utf-8")
     block = f"## [{release_version}] - {date}\n\n{body_core.strip()}\n\n"
-    archive_file.write_text(old.rstrip("\n") + "\n\n" + block.strip("\n") + "\n", encoding="utf-8")
+    merged = old.rstrip("\n") + "\n\n" + block.strip("\n") + "\n"
+    archive_file.write_text(render_archive_header(merged, release_version, date), encoding="utf-8")

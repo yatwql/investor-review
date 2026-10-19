@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.13.6
-> **编号源**：`rf-next = 719`（新增问题取此编号，完成后更新为 +1；已用最大 rf-718，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> 文档版本：0.13.7
+> **编号源**：`rf-next = 733`（新增问题取此编号，完成后更新为 +1；已用最大 rf-732，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -13,6 +13,7 @@
 
 | # | 问题 | 修复方向 |
 |---|------|----------|
+| **rf-731** | 费用预估不感知强刷范围：`llm/cost_forecast.py` 全文无 force 字样，`forecast_run_cost()` 只按「计划参与模块（`enabled_llm` ∩ 深度档位）」估价——`[L]` 合并屏上屏的预估对「回车走缓存（实际≈¥0）」与「`f` 全量强刷（实际可能数倍）」给同一区间，用户据预估决策会系统性误判；日预算硬闸只拦「今日已花费≥上限」不预测本次 | 属 R-LLM-13 语义升级（三渠道同源）：`forecast_run_cost` 接受强刷范围参数（`resolve_force_scope` 归一后的 force_scope 全局已可查询，接入即可），合并屏 `f`/选模块后**重打一行更新预估**，Web cost-preflight / CLI 确认同步；预估行文案区分走缓存/强刷口径 |
 
 | **rf-257** | plan-8 **Web 模式浏览器真机人工验收余 4 类人工项**：真实 basic/full 进度观察（3.1c/3.2/3.3/3.4）、结果区按钮 4.5、提交即禁用 5.3、2.5/2.6 真实拖拽与 Tab/Enter 抽验；其余断言已自动化复跑通过 | 验证方法与判定标准见 [`docs/plan/web-browser-verification.md`](../plan/web-browser-verification.md)（§1.1 启动/收尾命令 + §5 复验清单）；复跑：`.venv/bin/python scripts/smoke-web.py` + `node docs/tmp/rf257/cdp-check.mjs`，收尾必做 kill 服务/浏览器 + 清空 `data/holdings/uploads/`；全部完成后本表移至已解决 |
 
@@ -64,3 +65,7 @@
 ### 开发期已修复（0.13.6-dev）
 
 > 本批摘要已随 v0.13.6 发布迁入 [`archived_review-findings.0.13.x.md`](../archive/v0.13.x/archived_review-findings.0.13.x.md)；此处不再保留。
+
+### 开发期已修复（0.13.7-dev）
+
+> 本批摘要已随 v0.13.7 发布迁入 [`archived_review-findings.0.13.x.md`](../archive/v0.13.x/archived_review-findings.0.13.x.md)；此处不再保留。

@@ -16,6 +16,8 @@ from src.python.tui.tui_handlers import (
     print_error_with_hint,
     print_llm_session_usage,
 )
+from src.python.tui.text_layout import terminal_columns, wrap_hanging, wrap_prompt
+from src.python.tui.tui_keys import PromptCancelledError, input_choice
 from src.python.tui.tui_menu import get_config_cache
 
 logger = setup_logger()
@@ -37,41 +39,37 @@ def _prompt_history() -> bool:
 
     def _ask_history() -> bool:
         try:
-            resp = input("  [..] 是否获取组合历史走势数据（as-if 模拟）？(y/N): ").strip().lower()
+            resp = input_choice(wrap_prompt("  [..] 是否获取组合历史走势数据（as-if 模拟）？(y/N): "))
         except (EOFError, KeyboardInterrupt):
             return False
-        return resp == "y"
+        if resp is None:  # Esc：中止生成返回主菜单（Esc ≠ 答 N 继续）
+            raise PromptCancelledError
+        return resp.strip().lower() == "y"
 
     return resolve_fetch_history(config, ask=_ask_history)
 
 
-def _prompt_force_llm(reporter: TuiProgressReporter) -> tuple[bool, list[str] | None]:
-    """TUI 专属：询问用户是否强制刷新 LLM 缓存，可选模块级粒度。
+def _select_force_modules(reporter: TuiProgressReporter) -> tuple[bool, list[str] | None]:
+    """模块级强刷选择（合并单屏按 ``f`` 后触发）：列可选模块、输入子集、回车=全量。
 
     Returns:
-        (force_llm, force_llm_modules)——均未指定时 (False, None)；
-        强制且未选模块时 (True, None)（全量）；指定模块时 (False, [keys])，
+        (force_llm, force_llm_modules)——回车全量 (True, None)；指定子集 (False, [keys])，
         让模块级粒度优先生效（共享层 resolve_force_scope 同源合并）。
     """
     from src.python.llm.force_scope import FORCEABLE_LLM_MODULES, resolve_force_scope
 
-    try:
-        _resp = input("  [..] 是否强制重新生成 LLM 内容（跳过缓存）？(y/N): ").strip().lower()
-        _force = _resp == "y"
-    except (EOFError, KeyboardInterrupt):
-        _force = False
-    if not _force:
-        return (False, None)
-    reporter.ok("将跳过 LLM 缓存强制重新生成")
     # 模块级粒度：列出可选模块，输入编号/键名子集（逗号或空格分隔），回车=全量
     try:
         _names = get_llm_module_names()
         print("  [..] 指定强制模块（可选）：")
         for i, key in enumerate(FORCEABLE_LLM_MODULES, 1):
             print(f"      {i}. {key}（{_names.get(key, key)}）")
-        _resp2 = input("  [..] 输入编号或键名（逗号分隔，回车=全部模块）: ").strip()
+        _resp2 = input_choice(wrap_prompt("  [..] 输入编号或键名（逗号分隔，回车=全部模块）: "))
     except (EOFError, KeyboardInterrupt):
         _resp2 = ""
+    if _resp2 is None:  # Esc：中止流程返回主菜单
+        raise PromptCancelledError
+    _resp2 = _resp2.strip()
     if not _resp2:
         return (True, None)
     _tokens = [t for t in _resp2.replace(",", " ").split() if t]
@@ -150,54 +148,81 @@ def _cmd_generate_both() -> None:
     _run_generate("both", fetch_history=_prompt_history())
 
 
-def _prompt_cost_forecast(force_llm: bool, force_modules: list[str] | None) -> tuple[bool, bool]:
-    """TUI 事前费用预估确认：区间预估上屏 + 日预算超限处置。
+def _prompt_generate_confirm(reporter: TuiProgressReporter, config: dict) -> tuple[bool, list[str] | None, bool] | None:
+    """问句式单屏一次确认：费用预估上屏 + 问句（讲清强刷代价差异）+ 键位行（回车 / f / [h] / q）。
 
-    - 预估不可用（ok=False）或无模块参与 → 跳过确认继续（预估失败不阻塞生成）；
-    - 日预算超限 → 询问「降级走缓存继续 / 中止」，确认降级时由调用方清空强刷范围；
-    - 其余 → y/N 确认（默认 N 中止）。
+    替代原先「①强刷 y/N → ③费用预估 y/N」两问（默认路径从 2~3 问降为 1 问）；历史走势以
+    ``h`` 选项并入本屏（仅 fetch_mode=prompt 时展示，其余模式由共享层 resolve 单源解析）。
+    按键按**词**精确匹配（空格/逗号分隔，支持 ``f h`` 组合，``of``/``faq`` 这类子串不误触发）。
 
     Returns:
-        (proceed, degrade)——proceed=False 为用户选择中止（不进入生成）；
-        degrade=True 表示经确认降级走缓存（force 范围由调用方清空）。
+        (force_llm, force_llm_modules, fetch_history)；None=中止（不进入生成）。
+    日预算超限走独立安全网确认（降级走缓存 / 中止），不并入单屏——费用保护不受合并影响。
+    降级路径不追加历史询问（prompt 模式回落为不获取），但输出一行「本次不获取历史走势」
+    提示保证可感知（告知后覆盖，不追加提问）。
     """
+    from src.python.config import is_enable_history
+    from src.python.report.history_policy import resolve_fetch_history
+
     forecast = forecast_run_cost()
     budget = budget_status()
     for line in forecast_summary_lines(forecast, budget):
         print(f"  [..] {line}")
-    if not forecast.get("ok") or forecast.get("module_count", 0) == 0:
-        return (True, False)
+
+    # 安全网：日预算超限 → 独立确认（降级走缓存继续 / 中止），不给强刷入口
+    mode = ((config.get("history") or {}).get("fetch_mode")) or "auto"
     if budget.get("exceeded"):
         try:
-            resp = input("  [!] 今日 LLM 费用已达日预算上限：y=降级走缓存继续 / N=中止 (y/N): ").strip().lower()
+            resp = input_choice(wrap_prompt("  [!] 今日 LLM 费用已达日预算上限：y=降级走缓存继续 / N=中止 (y/N): "))
         except (EOFError, KeyboardInterrupt):
-            return (False, False)
-        if resp != "y":
+            return None
+        if resp is None:  # Esc
+            print("  [!] 已取消本次生成")
+            return None
+        if resp.strip().lower() != "y":
             print("  [!] 已中止本次生成（日预算超限）")
-            return (False, False)
-        return (True, bool(force_llm) or bool(force_modules))
+            return None
+        fetch_history = resolve_fetch_history(config, ask=lambda: False) if is_enable_history(config) else False
+        if mode == "prompt" and is_enable_history(config):
+            print("  [..] 降级走缓存：本次不获取历史走势")
+        return (False, None, fetch_history)
+
+    # 问句式：问句行先答「为什么/代价是什么」，键位行只作答——不要求用户记暗语
+    hist_opt = " / h=含历史走势" if (mode == "prompt" and is_enable_history(config)) else ""
+    _question = "  [?] 是否强制刷新 LLM？（强刷=重新调模型计费；默认=用已有缓存生成，不产生新费用）"
+    for _line in wrap_hanging(_question, terminal_columns(), indent="      "):
+        print(_line)
     try:
-        resp = input("  [..] 本次生成费用预估如上，确认继续？(y/N): ").strip().lower()
+        resp = input_choice(wrap_prompt(f"  回车=用缓存生成 / f=强制刷新（可选模块）{hist_opt} / q=中止: "))
     except (EOFError, KeyboardInterrupt):
-        return (False, False)
-    if resp != "y":
-        print("  [!] 已中止本次生成（费用预估确认未通过）")
-        return (False, False)
-    return (True, False)
+        return None
+    if resp is None:  # Esc
+        print("  [!] 已取消本次生成")
+        return None
+    tokens = set(resp.strip().lower().replace(",", " ").split())  # 词级匹配，子串不误触发
+    if "q" in tokens:
+        print("  [!] 已中止本次生成")
+        return None
+    force_llm, force_modules = (False, None)
+    if "f" in tokens:
+        reporter.ok("将跳过 LLM 缓存强制重新生成")
+        force_llm, force_modules = _select_force_modules(reporter)
+    # 历史：复用共享层 resolve（ask 回调返回本屏 h 选择），不再单独询问
+    fetch_history = resolve_fetch_history(config, ask=lambda: "h" in tokens) if is_enable_history(config) else False
+    return (force_llm, force_modules, fetch_history)
 
 
 def _cmd_generate_full() -> None:
     """生成包含所有内容的全系列报告（Excel + HTML + 新闻 + LLM 分析章节）。"""
     reporter = TuiProgressReporter()
-    _force, _force_modules = _prompt_force_llm(reporter)
-    _proceed, _degrade = _prompt_cost_forecast(_force, _force_modules)
-    if not _proceed:
+    config = get_config_cache() or {}
+    confirm = _prompt_generate_confirm(reporter, config)
+    if confirm is None:  # 中止（Esc / q / 预算超限中止）
         return
-    if _degrade:
-        _force, _force_modules = False, None
+    _force, _force_modules, _fetch_history = confirm
     _run_generate(
         "full",
-        fetch_history=_prompt_history(),
+        fetch_history=_fetch_history,
         force_llm=_force,
         force_llm_modules=_force_modules,
     )

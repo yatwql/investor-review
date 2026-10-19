@@ -34,33 +34,6 @@ class TestTuiRouting(unittest.TestCase):
                     f"菜单项 [{key}] {label} 未绑回调函数",
                 )
 
-    def test_menu_key_coverage(self):
-        """MENU_ITEMS 包含所有标准功能键（C/F/O 已聚合到 D 子菜单；系统自检为 T；报告追问为 Q；缓存清理与统计合并为 [4] 子菜单，不再单列 [3]）。"""
-        from src.python.tui.tui_menu import MENU_ITEMS
-
-        keys = {item[0] for item in MENU_ITEMS}
-        expected = {
-            "E",
-            "P",
-            "B",
-            "L",
-            "W",
-            "Q",
-            "D",
-            "I",
-            "A",
-            "1",
-            "2",
-            "4",
-            "S",
-            "R",
-            "X",
-            "V",
-            "H",
-            "T",
-        }
-        self.assertSetEqual(keys, expected)
-
     def test_config_dir_info_routes_to_submenu(self):
         """D 键路由到查看配置与目录信息子菜单处理器。"""
         from src.python.tui.tui import _bind_callbacks

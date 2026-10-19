@@ -1,6 +1,6 @@
 # 投资复盘助手 — 实现计划
-> 文档版本：0.13.6
-> **编号源**：`plan-next = 142`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-141，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> 文档版本：0.13.7
+> **编号源**：`plan-next = 156`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-154，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -8,7 +8,7 @@
 
 本文档记录项目的实现计划。已完成的版本计划已归档，此处仅跟踪当前迭代中的工作。
 
-**当前迭代**：在办 7 项按「价值 / 收益 / 风险」分四档——P1 1 项（**plan-95**）、P2 3 项（**plan-92/93/128**）、P3 2 项（**plan-70** 死线观察、**plan-94** 择机）、P4 1 项（**plan-55** 评测先决未过，暂缓）。已完成任务随档见文末「归档」索引。
+**当前迭代**：在办 9 项按「价值 / 收益 / 风险」分四档——P1 1 项（**plan-95**）、P2 5 项（**plan-92/93/128/146/147**）、P3 2 项（**plan-70** 死线观察、**plan-148**）、P4 1 项（**plan-55** 评测先决未过，暂缓）。**plan-155（TUI 统一交互运行时）**：运行时/全量面板迁移/游标渲染/返回键统一已提交（rf-730），rf-728（[L] 生成前三次确认合并为单屏一次确认）亦已实现——均待真机验证后归档。已完成任务随档见文末「归档」索引。
 
 > **命名纪律（强制）**：重构/新增的变量名、函数名、注释与文档表述必须与新章节语义相关（如 `position_relationship`/`portfolio_history_drawdown`/`style_factor`/`action`），**绝对禁止用任务编号命名**（F 系列、plan-N、rf-N 等）。任务编号仅在本表作链接锚点，不进入实现层。
 
@@ -52,6 +52,24 @@
 
 **动作**：whatif 模板按主报告同参补 `.report-print-btn`（44×44 触控目标、`--primary`/`--primary-hover` 语义 token、`window.print()`、打印稿自隐藏），断言口径与主报告用例对齐（`test_whatif_html` 补对应用例）
 
+#### 🔲 `plan-146` 长输出面板窄屏卡片化
+
+**现状与问题**：健康历史、日志详情、配置入口地图等多行表格型输出在 narrow（<64 列）下仍按表格渲染，列被折成锯齿、信息密度崩塌；[S] 面板已有「两行卡片」先例（`switch_panel` MEDIUM 档）但未推广到其他面板
+
+**动作**：逐面板排查多行表格输出，narrow 档退化为两行卡片式（`layout_tier` 判档 + `text_layout` 原语），按面板分批落地，每批同步窄/宽两档用例
+
+#### 🔲 `plan-155` TUI 统一交互运行时（panel_runtime）— 实施中（rf-730 已随实现转已解决）
+
+**原问题**：「读键 → 导航态 → 派发 → 反馈/重绘」的循环控制流在 13 处面板各自手写，词汇层（`tui_keys`/`text_layout`）已单源但控制流从未抽出——方向键导航仅首页完整生效（S 面板游标只在临时反馈行、重绘后无行内标记「像没反应」，P 及其余子菜单完全无导航）；历次交互缺陷均为逐面板打补丁，C29 靠测试逐处兜底。
+
+**已交付**：按 [`tui-panel-runtime-design.md`](../plan/tui-panel-runtime-design.md) 8 迭代实施完成——新建 `tui/panel_runtime.py`（`NavState`/`PanelItem`/`panel_loop`，导航态单源，语义真值取自主循环）+ `test_panel_runtime.py`（28 例）；全部列表面板（`[P]/[A]/[D]/[I]/[S]/[M]`/缓存管理）迁移到 `panel_loop`（方向键导航全面板生效、Enter 防误触 engaged 门控、直达键游标同步不置 engaged、`kind=return` 项不参与回绕）；主循环 `sel` 亦 NavState 化（机械等价替换，parity 5 例全绿）；`[S]` 匹配/详情辅助抽出至 `handlers_switch.py`（`handlers_config.py` 压回 958 行，低于 C28 红线 1000；**残值**：`[S]` 主循环本体仍在 `handlers_config`，全量域拆分（<800 设计目标）因几十处测试 patch 点耦合另立专项，未随本条）；文档触点同步（technical 模块表+C29 升级为「构造性成立」+§1.6、folders 目录树、requirements R-TUI-08、testplan §2.1、how-to 键位表、changelog）。验收：dev-verify 7202 通过 / 0 失败，ruff、doc-drift、doc-links、requirement-trace、file-length 全绿。
+
+#### 🔲 `plan-147` 手机使用动线文档化
+
+**现状与问题**：scheduler 定时生成、Web 工作台移动端自适应、HTML 报告手机自检均已存在，但无「手机场景推荐动线」文档——手机上跑 TUI 生成报告（LLM 费用高、耗时长、会话易断线）不如「定时生成 + Web/HTML 查看」，用户无从知晓
+
+**动作**：FAQ 补「手机使用建议」节（Termux/Termius 客户端、横屏/外接键盘条、推荐动线：scheduler 定时生成 + Web 查看/报告追问，TUI 手机端定位为轻操作：开关调整/缓存清理/自检），并与既有窄屏直达说明互链
+
 ### P3 — 预期实施，有空时安排
 
 > **候选说明**：plan-66 ~ plan-68（源 TradingAgents-CN 研究的 P4 候选，逐项分析见 [`tradingagents-cn-borrow-candidates-research.md`](../archive/v0.11.x/tradingagents-cn-borrow-research/tradingagents-cn-borrow-candidates-research.md)）仍为候选；**立项前须先做本仓库现状比对**（立项前提可能被既有实现推翻，须按「分层不重叠」重新定位）。
@@ -68,11 +86,11 @@
 
 **当前状态**：撤销与转正条件均不满足，**维持观察**（不撤销、不转正、不实施设计）。下个观察点：下个发布周期重跑 `fold_ledger`——已结算 ≥10 → 据 doctor 账本概览评估转正（正式命中率另需 `directional_total ≥ 20`，flat 占比高时可信度由人工裁定）；仍 <10 且无新增结算 → 撤销（含 `decision_llm_capture`、行动章复盘块注入与对应需求条目）。
 
-#### 🔲 `plan-94` 图表数据无导出通道
+#### 🔲 `plan-148` 窄屏 40 列设计基准纪律化
 
-**现状与问题**：HTML 9 图数据仅存在于 JS 数据集，读者想二次分析（透视/自绘图）只能手动誊抄；无 CSV 导出
+**现状与问题**：`terminal_columns` 下限 40 列、narrow 档 <64 列已是事实基准，但「新交互面板以 40 列为设计基准」只是口头纪律；无全景机检兜底（`input()` 提示折行已有机检，面板/表格输出无）
 
-**动作**：每图「导出 CSV」前端 Blob 下载（纯本地零后端），或报告产物附一份 `chart_data.csv`；导出内容沿用匿名化脱敏口径，与屏显一致
+**动作**：评估全景守护脚本（模拟 `COLUMNS=40` 跑全部面板渲染路径，断言无行超宽），成本过高则退化为「新增面板验收清单」写入 developer-guide 触点表
 
 ### P4 — 实验候选（先决门槛未过，暂缓）
 

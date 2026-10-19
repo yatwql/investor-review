@@ -634,3 +634,49 @@ class TestPrepareHoldingsGate(unittest.TestCase):
         out = buf.getvalue()
         self.assertIn("持仓文件为空", out)
         mock_press.assert_called_once()
+
+
+class TestPromptEscCancel(unittest.TestCase):
+    """提示处 Esc 统一取消：调度层单点捕获 + 文件选择即时取消。"""
+
+    def setUp(self):
+        _th_module._busy = False
+
+    def tearDown(self):
+        _th_module._busy = False
+
+    @patch("src.python.tui.tui_handlers.MENU_ITEMS")
+    def test_execute_item_prompt_cancelled_feedback(self, mock_menu):
+        """回调内抛统一取消信号 → 单点打印反馈并即时返回主菜单（不等待按键）。"""
+        from src.python.tui.tui_keys import PromptCancelledError
+
+        def _cancel():
+            raise PromptCancelledError
+
+        mock_menu.__getitem__.return_value = ("T", "Test", _cancel, False)
+        with (
+            patch("sys.stdout", new_callable=io.StringIO) as out,
+            patch("src.python.tui.tui_handlers.press_any_key") as mock_wait,
+        ):
+            execute_item(0)
+        assert "已取消，返回主菜单" in out.getvalue()
+        mock_wait.assert_not_called()
+
+    def test_select_holdings_file_esc_returns_none(self):
+        """持仓文件编号选择处按 Esc → 返回 None（取消选择）。"""
+        with (
+            patch("src.python.tui.tui_handlers.refresh_config"),
+            patch("src.python.tui.tui_handlers.get_config_cache", return_value={}),
+            # 指定持仓路径为函数内动态导入 → patch 源模块；令其不存在以进入目录枚举分支
+            patch("src.python.config.resolve_holdings_path", return_value="/nonexistent/持仓.xlsx"),
+            patch(
+                "src.python.tui.tui_handlers.list_xlsx_files",
+                return_value=["/tmp/a.xlsx", "/tmp/b.xlsx"],
+            ),
+            patch("os.path.getsize", return_value=1024),
+            patch("os.path.getmtime", return_value=0.0),
+            patch("src.python.tui.tui_handlers.input_choice", return_value=None),
+            patch("sys.stdout", new_callable=io.StringIO) as out,
+        ):
+            assert select_holdings_file() is None
+        assert "已取消选择" in out.getvalue()

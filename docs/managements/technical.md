@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.13.6
+> 文档版本：0.13.7
 
 ## 目录
 
@@ -404,7 +404,7 @@ TUI（Text User Interface）是系统**主要交互渠道**：桌面终端内的
 | `tui/tui.py` | 主入口/主循环 | sys.path 注入、init_config、_bind_callbacks、启动清理/隐私提示/首次引导、方向键导航循环、LLM 会话统计 |
 | `tui/tui_menu.py` | 菜单定义与渲染 | MENU_ITEMS 列表（18 项）、render_menu/print_header/show_config、_apply_feature_gates（开关门控裁剪）、index_by_key、press_any_key/exit_app |
 | `tui/tui_keys.py` | 键盘封装 | 跨平台（Windows msvcrt / Linux tty+termios+select），标准化键名 KEY_UP/DOWN/ENTER/CTRL_C |
-| `tui/handlers_report.py` | 报告生成外壳 | `_run_generate` 骨架、`_prompt_history`（委托 resolve_fetch_history + 注入 y/N 询问）/`_prompt_force_llm` 交互询问、E/B/L 三命令 |
+| `tui/handlers_report.py` | 报告生成外壳 | `_run_generate` 骨架、`_prompt_generate_confirm` 合并单屏一次确认（full：费用预估上屏 + 回车/`f`/`q`/`h` 单问，`f` 触发 `_select_force_modules` 模块多选，含日预算超限安全网）/`_prompt_history`（委托 resolve_fetch_history + 注入 y/N 询问，仅 both）、E/B/L 三命令 |
 | `tui/handlers_config.py` | 配置管理外壳 | 目录/文件名/输出目录/章节/指数池/匿名化/LLM 模块与功能开关/刷新等 8 项配置命令 |
 | `tui/handlers_cache.py` | 缓存管理外壳 | 更新基础/持仓缓存、清理过期、查看统计 4 项命令 |
 | `tui/handlers_whatif.py` | 调仓模拟外壳 | What-if 对话流程，委托 `report/whatif_operations.py`（§4.13） |
@@ -412,6 +412,7 @@ TUI（Text User Interface）是系统**主要交互渠道**：桌面终端内的
 | `tui/handlers_qa.py` | 报告追问外壳 | `[Q]` 入口：输出目录报告选择 + 文本输入循环，委托 `qa/session.ask_report_qa`（§6.8）；`report_qa` 门控 |
 | `tui/text_layout.py` | 终端排版原语 | `display_width`（东亚宽度，剥离 ANSI）/`pad_right`/`truncate_display`（按列截断带省略号）/`wrap_display`（按列折行）/`wrap_hanging`（续行悬挂缩进，逐行扣减缩进宽度）/`wrap_with_prefix`（前缀不参与断行，续行对齐正文列）/`render_panel`（盒线面板，统一定宽）/`terminal_columns`（实时尺寸 > `COLUMNS` > 兜底，下限 40）；TUI 所有打印型输出按它折行，窄屏（手机）不硬折 |
 | `tui/switch_panel.py` | `[S]` 面板响应式排版 | `layout_tier()` 按终端列数分三档（≥96 宽 / 64~95 中 / <64 窄）、`format_item()` 逐档生成「编号·名称·键名(淡色)·状态·备注」行、`legend_lines()` 页脚图例折行、`format_item(reveal_key=)` 窄屏按 `k` 追加键名行；终端宽度探测与折行原语在 `tui/text_layout.py`（本模块 re-export `terminal_columns`）；**只排版不取数**，不变式「任意档位每行 ≤ 面板内宽」由单测锁定 |
+| `tui/panel_runtime.py` | TUI 统一交互运行时 | `NavState`（游标 + engaged 导航态，语义真值取自主循环 `sel`）/ `PanelItem`（key/label/kind/action 派发项）/ `panel_loop`（读键→导航→派发→反馈/重绘单源循环：方向键回绕且跳过 return 项、Enter 防误触 engaged 门控、直达键游标同步不置 engaged、Esc/return 退出、`pick>1` 收集、`on_text` 词法、Ctrl+C/EOF/render 异常原样上抛）；全列表面板（`[P]/[A]/[D]/[I]/[S]/[M]`/缓存）与主循环 `sel` 收敛于此，导航态为实例态、模块内零可变全局（C14）；只统一「怎么到达一次派发」，不改「派发什么」 |
 | `tui/status_line.py` | 页头状态行 | `build_status_line()` 五项常驻状态（上次报告时间/缓存过期数/数据新鲜度/降级源数/LLM 状态点），全本地取数、逐项降级、TTL 记忆化 |
 | `report/progress.py` | 进度报告 | TuiProgressReporter（`[..]`/`[OK]`/`[!]`/`[ERR]` 前缀 + 耗时排行） |
 
@@ -431,16 +432,18 @@ while True:
 
 | 按键 | 行为 |
 |:-----|:-----|
-| ↑ / ↓ | `sel` 在 MENU_ITEMS 上循环移动（`(sel ± 1) % len`） |
+| ↑ / ↓ | `nav`（`NavState`）在 MENU_ITEMS 上循环移动（`panel_runtime` 单源回绕，等价原 `(sel ± 1) % len`） |
 | Enter | `execute_item(sel)` 执行当前选中项 |
 | 字母/数字（A-Z/0-9） | `index_by_key(key.upper())` 直达并执行对应快捷键菜单项 |
 | Ctrl+C | `exit_app()` 退出 |
 
-键盘封装跨平台：Windows 用 `msvcrt`（方向键 `\xe0` 前缀 + 第二字节映射 H/P），Linux/macOS 用 `tty.setraw` + `termios` + `select` 读 ESC 序列（`\x1b[A`/`\x1b[B` 方向键，ESC 后续字节 `_ESC_TIMEOUT=0.15`s 超时窗口）。所有读键路径统一返回标准化键名，菜单层不感知平台差异；非交互 stdin（非 tty）返回 `KEY_UNKNOWN`，保证管道/重定向环境不阻塞。
+**统一交互运行时**：列表型子菜单的「读键 → 导航态 → 派发 → 反馈/重绘」循环控制流单源于 `tui/panel_runtime.py`（`NavState`/`PanelItem`/`panel_loop`）——语义真值取自主循环 `sel`；`[P]/[A]/[D]/[I]/[S]/[M]`/缓存管理等全列表面板与主循环均收敛到 `NavState`/`panel_loop`，方向键导航不再逐面板手写（修复「上下键仅首页生效」）。主循环 Enter 无条件派发（`render_menu` 自带高亮、`engaged` 不门控），子菜单 Enter 经 `engaged` 门控防误触，二者导航回绕共用 `NavState.move` 单源。
+
+键盘封装跨平台：Windows 用 `msvcrt`（方向键 `\xe0` 前缀 + 第二字节映射 H/P），Linux/macOS 用 `tty.setraw` + `termios` + `select` 读 ESC 序列（`\x1b[A`/`\x1b[B` 与 O 前缀变体 `\x1bOA`/`\x1bOB` 方向键；ESC 后首段共聚窗口 `_ESC_FIRST_TIMEOUT=0.5`s + 续读窗口 `_ESC_TIMEOUT=0.3$s`；拆包防护三件套：孤 Esc 后迟到前缀吸收映射、半途序列（前缀已消费末字节未到）下一字节强制按补全处理不进字母分派、主菜单 Esc 连按两次确认——误判方向键不致退出或误触发直达；**读取一律 `os.read(fd, 1)` 原始字节与 select 同 fd**——禁止 `sys.stdin.read`（用户态缓冲会把整包吞走，此后 select(fd) 谎报「无数据」，整包方向键被误判为孤 ESC：首按挂退出确认态、次按误退出，缓冲时代电脑上亦 100% 触发）；**任何非 Esc 按键解除主菜单退出确认态**（拆包孤 ESC 挂起的确认不被后续按键引爆），宽/窄档方向键均原地重绘）；`input_choice(prompt, arrows=True)` 供列表面板（`[S]`）返回 ↑/↓（行内已有内容时序列仍吞掉保行编辑），非 Esc 按键同样解除退出确认态的对偶语义由各提示的 Esc 取消承接）。所有读键路径统一返回标准化键名，菜单层不感知平台差异；非交互 stdin（非 tty）返回 `KEY_UNKNOWN`，保证管道/重定向环境不阻塞。
 
 #### 1.6.3 菜单体系
 
-`tui/tui_menu.py:MENU_ITEMS` —— 每项 `(快捷键, 显示标签, 回调, 是否退出)`，回调由 `_bind_callbacks()` 在**运行时**从 handlers 模块填入（定义时不直接 import，避免启动即加载全部处理器）。静态清单共 **18 项**（下表按菜单实际排列顺序）；首页按键分派：方向键移动、`Enter` 执行当前项、字母/数字键按 `index_by_key` 直达（未登记键无反应）、`0` 与 `[X]` 同为退出通道（`0` 在子菜单语义为「返回」，故首页保持一致习惯；`[X]` 标签写明「退出（0 亦可）」，页脚提示同为「0 或 X 退出」）、`Ctrl+C` 退出。菜单项长标签与页脚提示经 `wrap_with_prefix` 按终端宽度折行（续行对齐标签起始列），窄屏不会硬折。`[T]`/`[Q]` 登记于 `FEATURE_GATED_ITEMS`（菜单键 → Feature Flag），`main()` 启动时在绑定回调**之前**执行 `tui_menu._apply_feature_gates()` 按 `is_feature_enabled` 就地裁剪（裁剪后索引才与渲染一致）：`report_qa`（⚗ 实验项，默认关）关闭时移除 `[Q]`，`doctor_check`（默认开）关闭时移除 `[T]`——默认配置下实际渲染 **17 项**。
+`tui/tui_menu.py:MENU_ITEMS` —— 每项 `(快捷键, 显示标签, 回调, 是否退出)`，回调由 `_bind_callbacks()` 在**运行时**从 handlers 模块填入（定义时不直接 import，避免启动即加载全部处理器）。静态清单共 **19 项**（下表按菜单实际排列顺序）；首页按键分派分两档（`layout_tier`，<64 列为 narrow）：方向键移动选中态 + `Enter` 执行当前项**全档可用**；narrow 档直达主路径（字母/数字键即执行，未登记键给**单行反馈**不整屏重绘——「分档只改版式不改语义」约束 C29）与导航并存——方向键移动后**原地重绘**（`_render_menu_frame` 帧行数计数代理 + ANSI 光标上移/清屏，POSIX+TTY 门控，管道/测试/旧控制台回退整屏追加），页脚为「窄屏直达 + ↑↓ 选择」双提示。字母/数字键按 `index_by_key` 直达（未登记键无反应）、`Esc`/`0` 与 `[X]` 同为退出通道（`0` 在子菜单语义为「返回」，故首页保持一致习惯；`[X]` 标签写明「退出（0 亦可）」，页脚提示同为「Esc / 0 / X 退出」）、`Ctrl+C` 退出。菜单项长标签与页脚提示经 `wrap_with_prefix` 按终端宽度折行（续行对齐标签起始列），窄屏不会硬折。`[T]`/`[Q]` 登记于 `FEATURE_GATED_ITEMS`（菜单键 → Feature Flag），`main()` 启动时在绑定回调**之前**执行 `tui_menu._apply_feature_gates()` 按 `is_feature_enabled` 就地裁剪（裁剪后索引才与渲染一致）：`report_qa`（⚗ 实验项，默认关）关闭时移除 `[Q]`，`doctor_check`（默认开）关闭时移除 `[T]`——默认配置下实际渲染 **18 项**。
 
 | 分组 | 快捷键 | 功能 |
 |:-----|:------|:-----|
@@ -449,13 +452,13 @@ while True:
 | | `[L]` | 生成完整报告（Excel+HTML，含 LLM，full；`config.default_menu_key` 缺省指向本项） |
 | | `[W]` | 调仓 What-if 模拟（对比两份持仓，独立报告） |
 | | `[Q]` | 报告对话式追问（选择已生成 HTML 报告进入多轮文本输入循环，委托 `qa/session.ask_report_qa`，§6.8；`report_qa` 门控） |
-| 配置管理 | `[D]` | 查看配置与目录信息**子菜单**（`handlers_config.py::_cmd_config_dir_info`，二级选项 `[C]` 持仓目录 / `[F]` 持仓文件名 / `[O]` 报告输出目录 / `[M]` 配置入口地图（`_CONFIG_ENTRY_MAP` 只读索引：配置项 → 所在菜单键，键位真实性由单测对主菜单兜底） / `[B]` 返回主菜单；子菜单内循环直至返回） |
+| 配置管理 | `[D]` | 查看配置与目录信息**子菜单**（`handlers_config.py::_cmd_config_dir_info`，二级选项 `[C]` 持仓目录 / `[F]` 持仓文件名 / `[O]` 报告输出目录 / `[M]` 配置入口地图（`_CONFIG_ENTRY_MAP` 只读索引：配置项 → 所在菜单键，键位真实性由单测对主菜单兜底） / `[0]` 返回主菜单；子菜单内循环直至返回） |
 | 缓存管理 | `[1]`/`[2]` | 更新基础类缓存（基金业绩/持仓/经理/基准等，`clear_by_group("refresh")` 先清后取）/ 行情类缓存（价格/指数等，`clear_by_group("preload")` 先清后取） |
 | | `[4]` | 缓存管理**子菜单**（统计首屏 → 子菜单内 `3` 清理过期 / `B`/回车 返回；合并原清理与统计两个平级入口，`handlers_cache.py::_cmd_cache_management`） |
 | 配置管理 | `[P]` | 报告可选章节开关（顺序与取舍） |
 | | `[I]` | 对比指数池管理（自定义基准指数） |
 | | `[A]` | 持仓匿名化模式（off / code_display / full_anonymous / summary 四种） |
-| | `[S]` | LLM 模块与功能开关配置（① 标准 LLM 模块启停 `enabled_llm`（键域 = 注册表 LLM 模块全集；辩论三段不在模块注册表内，由功能开关 `llm_debate_procon` 控制、缓存登记在缓存域）；面板每行显式展示键名（淡色列），版面按终端宽度自适应三档（`tui/switch_panel.py`：<64 列去盒线、窄屏操作后不整屏重绘改 `p` 重绘、所有提示按宽折行）→ ② 四组功能开关分块：呈现与体验 / 分析增强·既有章内追加 / 独立章节与回放 / 机制与诊断；分块标题、显示名与顺序取自 `features.GROUP_ORDER`/`GROUP_LABELS`，新增开关自动上屏，实验项行首 ⚗ 标记） |
+| | `[S]` | LLM 模块与功能开关配置（① 标准 LLM 模块启停 `enabled_llm`（键域 = 注册表 LLM 模块全集；辩论三段不在模块注册表内，由功能开关 `llm_debate_procon` 控制、缓存登记在缓存域）；面板每行显式展示键名（淡色列），版面按终端宽度自适应三档（`tui/switch_panel.py`：<64 列去盒线、写路径切换后即时重绘且反馈带编号，只读查询/失败路径窄屏一行反馈（`p` 重绘）、所有提示按宽折行）→ ② 四组功能开关分块：呈现与体验 / 分析增强·既有章内追加 / 独立章节与回放 / 机制与诊断；分块标题、显示名与顺序取自 `features.GROUP_ORDER`/`GROUP_LABELS`，新增开关自动上屏，实验项行首 ⚗ 标记） |
 | | `[R]` | 刷新配置（config.json + llm_settings.json + llm_key.json，附带重载定价与批量限速器） |
 | 诊断 | `[V]` | 查看最近运行日志（可按级别筛选，`handlers_log.py::_cmd_view_logs`） |
 | | `[H]` | 查看数据源健康历史（`handlers_log.py::_cmd_view_health_history`） |
@@ -469,9 +472,10 @@ while True:
 `handlers_report.py` —— 三条生成命令（E/B/L）共用 `_run_generate(report_type, fetch_history, force_llm, force_llm_modules)` 骨架：
 
 1. **持仓准备**：`prepare_holdings()` → `select_holdings_file()`（交互式文件选择）→ `read_holdings_with_flows()`（主表 + 交易/分红流水）→ `warm_new_asset_caches()`（新资产缓存预热，委托 §3.6 缓存操作共享层）。
-2. **交互询问**（TUI 专属，CLI/Web 用参数/表单表达）：
-   - `_prompt_history()`：委托 `report/history_policy.resolve_fetch_history` 单源解析三态（`enable_history=False` 先行跳过），`prompt` 时注入「是否获取组合历史走势数据（as-if 模拟）？」y/N 询问——渠道层不自行分支 `fetch_mode`。
-   - `_prompt_force_llm()`：询问「是否强制重新生成 LLM 内容（跳过缓存）？(y/N)」；确认后追加模块多选（列出 FORCEABLE_LLM_MODULES 编号/键名，逗号分隔，回车=全部；仅指定子集时传 `force_llm_modules`，粒度优先于全量）。
+2. **交互询问**（TUI 专属，CLI/Web 用参数/表单表达；`E`/basic 无询问直连）：
+   - `_prompt_generate_confirm()`（仅 `L`/full）：**合并单屏一次确认**——先上屏事前费用预估与今日已花费/日预算，随后**问句**「是否强制刷新 LLM？（强刷=重新调模型计费；默认=用已有缓存生成，不产生新费用）」+ 键位行「回车=用缓存生成 / `f`=强制刷新（可选模块） / `q`=中止」（`history.fetch_mode=prompt` 且 `enable_history` 开时多一个 `h`=含历史走势选项）；历史三态仍委托 `report/history_policy.resolve_fetch_history` 单源解析（`ask` 回调返回本屏 `h` 是否按下），渠道层不自行分支 `fetch_mode`；日预算超限走**独立安全网确认**（降级走缓存 / 中止），Esc 即时取消返回主菜单。提示按键按**词**精确匹配（空格/逗号分隔，支持 `f h` 组合，`of`/`faq` 这类子串不误触发）；安全网降级路径**不追加历史询问**（`ask` 恒 False：prompt 模式回落为不获取、auto 仍自动获取，交互最小化），降级且 prompt 模式时输出一行「本次不获取历史走势」提示保证可感知（告知后覆盖，不追加提问）。返回 `(force_llm, force_llm_modules, fetch_history)`，`None` 表示中止。
+   - `_select_force_modules()`（`L` 按 `f` 触发）：模块多选（列出 FORCEABLE_LLM_MODULES 编号/键名，逗号分隔，回车=全部；仅指定子集时传 `force_llm_modules`，粒度优先于全量）。
+   - `_prompt_history()`（仅 `B`/both）：同样委托 `resolve_fetch_history` 单源三态，`prompt` 时注入「是否获取组合历史走势数据（as-if 模拟）？」y/N 询问。
 3. **委托共享层**：`orchestrator.generate_report(holdings, config, reporter, report_type, ...)`（§4.2）——reporter 注入 `TuiProgressReporter`，管线代码零改动。
 4. **收尾**：`finish_report()` → `print_error_summary()`（非致命错误汇总）+ `print_timing_summary()`（耗时排行）+ `press_any_key()`（等待返回菜单）。
 
@@ -1440,7 +1444,7 @@ _write_atomic(fd, tmp_path, final_path)
 | **输入参数指纹** | `news_aggregator.py:_compute_cache_key()` | 新闻源参数+关键词（拼接→MD5） | `news_*` |
 | **输入数据指纹** | `llm/fingerprint.py` | LLM 模块依赖数据（持仓汇总/结构序列化→MD5） | `llm_global_macro_*`、`expert_review_*`、`health_check_*`、`penetration_deep_*`、`news_item_*` |
 
-**LLM 指纹筛选**：expert_review / health_check / penetration_deep 的 `_compute_fingerprint()` 在序列化前排除行情波动字段（`price`、`change_pct`），仅品种/份额/成本变化时指纹改变。
+**LLM 指纹筛选**：expert_review / health_check / penetration_deep 的 `compute_fingerprint()` 在序列化前排除行情波动字段（`price`、`change_pct`），仅品种/份额/成本变化时指纹改变。
 
 **精确键名**：`fund_benchmarks.json`、`fund_concentration_snapshot.json`、`holdings_tracking.json` 等无指纹后缀，仅依赖标准 TTL 过期刷新。
 
@@ -3395,6 +3399,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `trading_day_as_of` | 时点交易日归属（盘前 <9:30 归前一交易日、节假日按日历回溯；`get_last_trading_day` 委托同口径） | 数据源 | 数据获取 | 无 |
 | `depth_profile` | 报告深度档位表与解析（brief/standard/deep：只收窄模块集合与新闻采集规模，缺省档与既有行为逐字节一致） | LLM 智能分析 | 内容生成 | `config.json → llm_report_depth` |
 | `force_scope` | 模块级强刷范围（可强刷键清单 FORCEABLE_LLM_MODULES / resolve_force_scope 粒度优先归一与未知键校验 / is_module_forced；全局 force 与模块子集合并为模块键集合，强刷不改缓存键构造） | LLM 智能分析 | 内容生成 | 无（CLI `--llm-module` / TUI 多选 / Web 勾选，命令行一次性参数） |
+| `llm_providers.priority` | LLM 多链线路优先级（降级顺序三渠道调序：共享编辑层 reorder 动作归一化写盘，CLI `--llm-provider-order` / TUI [M] 面板 / Web 配置面 ▲▼） | LLM 智能分析 | 内容生成 | `llm_providers.json → providers[].priority` |
 | `self_review` | 生成后自检（模型层复核各模块产出与数据是否自洽；分层于确定性事实校验之上，出厂默认关） | LLM 智能分析 | 内容生成 | `llm_settings.json → enabled_llm.self_review` |
 | `quarter_walk_anchor` | 季报回溯窗口的时间锚点上下文（记录-回放时固定为 cassette 录制时点，去时间依赖而保留请求形状漂移信号） | 数据源 | 数据获取 | 无 |
 | `apply_compliance_guardrails` | 合规声明集中注入（在 system prompt 尾部幂等叠加「仅供复盘参考、不构成投资建议」，窄判定角色可追加专属约束） | LLM 智能分析 | 内容生成 | 无 |
@@ -3707,9 +3712,9 @@ web/ (Web 服务层，薄入口)
 本节定义系统架构层面的**设计约束**。所有新增或修改的代码必须遵守，违反即视为架构违规。
 约束按职责域分组，每个约束包含：设计目的（为何存在）、违反后果（不遵守的影响）、适用范围（哪些模块/场景受约束）。
 
-> **约束外参照（语义命名纪律）**：除上表 C1~C28 编号约束外，**语义命名纪律**以 [「功能语义命名表」](#67-功能语义命名表) 为唯一现状基准——代码/配置标识符（函数/变量/模块/config 键）必须与表中语义 slug 一致，禁止用任务代号（`plan-N`/`rf-N`/系列代号）命名；新增功能先定语义名再设计。该纪律属全局代码卫生，与编号约束并列遵守，由双脚本强制：`scripts/check-code-traces.py --ci`（负面禁止 IDENT/CODE）+ `scripts/check-semantic-index.py --ci`（正面双向校验本表与代码一致）。
+> **约束外参照（语义命名纪律）**：除上表 C1~C29 编号约束外，**语义命名纪律**以 [「功能语义命名表」](#67-功能语义命名表) 为唯一现状基准——代码/配置标识符（函数/变量/模块/config 键）必须与表中语义 slug 一致，禁止用任务代号（`plan-N`/`rf-N`/系列代号）命名；新增功能先定语义名再设计。该纪律属全局代码卫生，与编号约束并列遵守，由双脚本强制：`scripts/check-code-traces.py --ci`（负面禁止 IDENT/CODE）+ `scripts/check-semantic-index.py --ci`（正面双向校验本表与代码一致）。
 
-> **约束外参照（文档与实现一致性纪律）**：除上表 C1~C28 编号约束外，**文档中的事实断言**（章节表与数量、功能开关表与分组计数、默认值表、TUI 面板编号、目录树、项目统计表）必须与代码/配置文件/文件系统一致，由 `scripts/check-doc-drift.py --ci` 强制（十项逐条对账，`changelog.md`/`review-findings.md` 与版本快照类文档按设计豁免）；历史痕迹类约束另由 `scripts/check-doc-traces.py --ci` 强制。
+> **约束外参照（文档与实现一致性纪律）**：除上表 C1~C29 编号约束外，**文档中的事实断言**（章节表与数量、功能开关表与分组计数、默认值表、TUI 面板编号、目录树、项目统计表）必须与代码/配置文件/文件系统一致，由 `scripts/check-doc-drift.py --ci` 强制（十项逐条对账，`changelog.md`/`review-findings.md` 与版本快照类文档按设计豁免）；历史痕迹类约束另由 `scripts/check-doc-traces.py --ci` 强制。
 
 > **约束外参照（脚本 CLI 契约）**：`scripts/` 下的检查脚本统一 `-v/--verbose` + `--ci`（仅输出 `文件:描述`）与退出码语义（0=通过 / 2=发现 finding，`check-code-traces.py` 保留 HIGH=1、LOW=3 分级）；共享设施集中在 `scripts/_checklib.py`（CLI/输出/路径/文档区间解析）；历史痕迹检查内部实现拆在 `scripts/_traces_code/` 包内（共享排除模式在 `exemptions.py`，`_traces_common.py` 已并入其中删除）；检查脚本内部实现普遍拆 `前置横线包`pattern（`_doc_drift/` / `_traces_code/` / `_test_runner/` / `_halluc_sampler/`，入口仅留 CLI 与原面 re-export）；连通性探测统一入口 `scripts/probe.py`（target registry，实现在 `scripts/probes/`，新探针登记即用）；发布编排分步 CLI `scripts/release.py`（check/prepare/refresh/evolution/gate/publish/devbump，每步独立可审阅、失败即停，内部实现同为入口薄 CLI + 单模块）。
 
@@ -3766,6 +3771,7 @@ web/ (Web 服务层，薄入口)
 | **C26** | **重试与退避唯一原语** — 凡「失败后重试」必须经 `core/retry.py`（`RetryPolicy` 策略 / `is_transient_exception` 瞬时判据 / `retry_transient` 执行器），禁止各模块自建重试循环与退避算式；各来源差异只用策略参数表达 | 退避数值与「可重试」口径各写一处必然漂移：最坏时延无法估算、策略调整需改 N 处、测试钉住的次数与等待量随之失真 | 全部「失败后重试」路径：数据获取层（Provider Chain 同源重试、provider 连接级重试、akshare 超时重试、HTTP 429 退避）+ LLM 调用链（`llm/api_base.py` 的 503/超时/网络重试（429/403 归 quota 终态不重试），退避用显式序列策略表达；其**失败分类**（内容级/配额级判定）与终态副作用仍属 LLM 层职责，见 §5.4） |
 | **C27** | **间隔节流唯一原语** — 凡「两次请求至少间隔多久」必须经 `core/throttle.py`（`RateLimiter` + `interval_delay`），禁止自建「间隔 + 睡眠」与抖动算式 | 同一约束在数据层/调度层/LLM 层各写一份 → 抖动幅度与等待语义不一致；通用原语若住在某一上层模块，会被其他层反向依赖（层次倒置） | 数据源 qps 限速、`batch_rate_limit`、LLM 端点级节流（`pacing`） |
 | **C28** | **大文件红线体系（主程序/脚本/测试）** — 单文件行数按域执行固定红线：主程序（`src/python/`）> 1000 行、脚本（`scripts/` 递归含包内子模块）> 1000 行、测试（`src/test/`）> 1200 行即 finding；警戒区（`-v` 清单：主程序 500 / 脚本 400 / 测试 800）为可选优化区间；超限必须拆分，或在 `check-file-length` 的 `EXEMPTIONS` 登记并与 review-findings 挂账同步 | 行数无红线时文件无限膨胀（`scripts/` 未入守护域时 `factor_zoo_eval.py` 达 1595 行而无发现渠道）；阈值只写在文档不进守护脚本会改一处漏一处；无警戒区则只能在破线后才察觉，拆分时机失去观察缓冲 | 所有 py 源文件：`src/python/`、`scripts/`（含包内子模块）、`src/test/`；阈值与清单由 `scripts/check-file-length.py --ci` 单源强制（`_LIMIT_BY_KIND` / `_WARN_BY_KIND`），口径同步 developer-guide「文件膨胀阈值」表与 review-findings 文件过长登记表 |
+| **C29** | **TUI 分档只改版式不改语义** — `layout_tier` 的 wide/medium/narrow 分支只允许改**版式与密度**（列宽/盒线/折行/图例详略/重绘机制），不得改**按键语义、反馈有无、写路径可见性**：同一按键在各档必须产生相同的语义动作与可观察反馈（执行/退出/选中移动/单行提示），分档至多改变反馈的呈现方式 | 分档分支改语义曾三次造成用户可见缺陷：写路径窄屏不重绘（切换无结果）、方向键在窄屏解析漂移为孤 Esc（误退程序）、窄屏导航被整体删除（按键无反应）；语义随宽度漂移违反「同键同果」预期，且每档分支都是独立回归面 | `src/python/tui/` 全部 `layout_tier`/`narrow` 分支点（主循环、菜单渲染、各面板）；守护 = `test_tui_menu.py::TestTierSemanticParity`（同按键两档同语义/同反馈）+ `_print_hint` 单行反馈原语；**本次重构后**导航/派发控制流单源于 `tui/panel_runtime.py::panel_loop`——同一读键→导航→派发→反馈循环全列表面板共用一份实现，「同键同果」由构造性成立（分档只改 render 版式、不改派发），从「测试逐处兜底」升级为运行时单源** |
 
 > **C14 例外：env 初始化期注册（非渲染期）** — `_ENV.globals` 与模板过滤器仅允许在 `report/html_jinja_env.py` 的**工厂初始化期**（进程/工厂单次建立）注册为**无状态纯函数**（如 `profit_color`、`price_type_color`、`money`、`fmt_bps`、`dt`——只依赖入参生成 CSS 变量表达式/格式化文本）。约束禁止的是**渲染期数据**（section 可见性、业务字典等随每次运行变化的值）写入全局；过滤器注册与 Jinja 环境构建属于模板基础设施装配，不构成渲染态状态污染（并发/多次渲染下各 `render()` 仍只经 context 传数据）。
 
@@ -3833,6 +3839,7 @@ investor-util/
 │   │       ├── tui.py           #   主循环入口
 │   │       ├── tui_handlers.py  #   键盘/事件处理
 │   │       ├── tui_keys.py      #   键盘输入封装
+│   │       ├── panel_runtime.py  #   统一交互运行时（NavState/panel_loop，列表面板导航态单源）
 │   │       └── tui_menu.py      #   菜单交互
 │   │   ├── web/                # Web 浏览器模式入口
 │   │   │   ├── __init__.py     #   子包标记

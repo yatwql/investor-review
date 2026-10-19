@@ -15,6 +15,7 @@ from src.python.tui.text_layout import (
     display_width,
     pad_right,
     render_panel,
+    wrap_prompt,
 )
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_ui]
@@ -124,3 +125,84 @@ class TestRenderPanel:
         for line in render_panel("配置持仓匿名化", ["当前模式: off", None, "► 1. 关闭", "0. 返回主菜单"]):
             assert line.startswith("  ┌") or line.startswith("  │") or line.startswith("  └")
             assert line.endswith("┐") or line.endswith("│") or line.endswith("┘")
+
+
+class TestWrapPrompt:
+    """wrap_prompt: input() 提示窄屏折行助手（手机短屏提示与光标不脱节）。"""
+
+    def test_short_prompt_returned_unchanged(self):
+        """宽度内的提示原样返回（宽屏零开销，行形态不变）。"""
+        prompt = "  确认继续？(y/N): "
+        assert wrap_prompt(prompt, columns=100) == prompt
+
+    def test_long_prompt_wraps_within_columns(self):
+        """超宽提示按显示宽度折行，每行不超列宽。"""
+        prompt = "  [!] 今日 LLM 费用已达日预算上限：y=降级走缓存继续 / N=中止 (y/N): "
+        result = wrap_prompt(prompt, columns=40)
+        for line in result.splitlines():
+            assert display_width(line) <= 40
+
+    def test_long_prompt_ends_with_input_caret_line(self):
+        """折行后末行为「  >  」输入位短尾缀，光标与提示不再脱节。"""
+        prompt = "  [!] 今日 LLM 费用已达日预算上限：y=降级走缓存继续 / N=中止 (y/N): "
+        result = wrap_prompt(prompt, columns=40)
+        assert result.endswith("\n  >  ")
+
+    def test_wrapped_prompt_keeps_full_text(self):
+        """折行只改排版不丢字：去尾缀后按显示宽度拼接 ≈ 原提示（去空白）。"""
+        prompt = "  [!] 今日 LLM 费用已达日预算上限：y=降级走缓存继续 / N=中止 (y/N): "
+        body = wrap_prompt(prompt, columns=40)[: -len("\n  >  ")]
+        assert "".join(body.split()) == "".join(prompt.split())
+
+
+class TestInputPromptNarrowContract:
+    """input() 提示窄屏契约（机检）：裸字面量提示不得超窄屏基准宽度。
+
+    窄屏基准 40 列与 `terminal_columns` 下限一致；超长提示必须经
+    `wrap_prompt(...)` 折行（AST 上表现为 input 的参数是 wrap_prompt 调用），
+    防止新增交互提示在手机竖屏上折行后光标脱节。
+    """
+
+    _NARROW_FLOOR = 40
+
+    @staticmethod
+    def _tui_sources():
+        import pathlib
+
+        root = pathlib.Path(__file__).resolve().parents[4] / "src" / "python" / "tui"
+        return sorted(root.glob("*.py"))
+
+    def test_bare_literal_prompts_fit_narrow_floor(self):
+        """tui/ 全部 input() 的裸字符串提示 ≤ 40 列；超长者必须走 wrap_prompt。"""
+        import ast
+
+        from src.python.tui.text_layout import display_width
+
+        violations = []
+        for path in self._tui_sources():
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "input"):
+                    continue
+                if not node.args:
+                    continue
+                arg = node.args[0]
+                # 已经包了 wrap_prompt（任意宽度）→ 合规；变量/ f-string 运行时决定 → 另测锚定
+                if isinstance(arg, ast.Call):
+                    func = arg.func
+                    name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+                    if name == "wrap_prompt":
+                        continue
+                    continue
+                if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                    width = display_width(arg.value)
+                    if width > self._NARROW_FLOOR:
+                        violations.append(f"{path.name}:{node.lineno} 宽 {width} 列未折行: {arg.value!r}")
+        assert violations == [], "超窄屏基准的 input() 提示须经 wrap_prompt 折行:\n" + "\n".join(violations)
+
+    def test_named_prompts_fit_narrow_floor(self):
+        """已知具名提示（无法 AST 量宽的变量形态）显式锚定 ≤ 40 列。"""
+        from src.python.tui.handlers_qa import _QA_PROMPT
+        from src.python.tui.text_layout import display_width
+
+        assert display_width(_QA_PROMPT) <= self._NARROW_FLOOR

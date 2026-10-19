@@ -33,6 +33,27 @@ logger = logging.getLogger("invest")
 from src.python.core.registry import get_llm_module_names  # noqa: E402
 
 
+def _llm_providers_surface() -> dict:
+    """LLM 多链线路面：策略 + 按 priority 升序的线路清单（与 TUI 面板同源展示）。
+
+    Returns:
+        ``{"strategy": ..., "providers": [{"name", "provider", "priority"}…]}``；
+        providers 顺序 = priority 升序（数值小者链序靠前）。
+    """
+    from src.python.config import get_llm_providers
+
+    cfg = get_llm_providers()
+    providers = [p for p in (cfg.get("providers") or []) if isinstance(p, dict)]
+    ordered = sorted(enumerate(providers), key=lambda t: (t[1].get("priority", 99), t[0]))
+    return {
+        "strategy": str(cfg.get("strategy") or "priority"),
+        "providers": [
+            {"name": p.get("name"), "provider": p.get("provider"), "priority": p.get("priority", 99)}
+            for _idx, p in ordered
+        ],
+    }
+
+
 def get_config_edit_surface() -> dict:
     """读取面板全量可编辑面（GET /api/config/edit）。
 
@@ -106,5 +127,6 @@ def get_config_edit_surface() -> dict:
         "comparison_indices": dict(indices),
         "comparison_indices_defaults": dict(get_default("comparison_indices") or {}),
         "llm": {"enabled_llm": surface_enabled},
+        "llm_providers": _llm_providers_surface(),
         "features": features_surface,
     }

@@ -34,6 +34,19 @@ _DEBUG_PAGE_PATH = os.path.normpath(
 _CHART_PRINT_PATH = os.path.normpath(
     os.path.join(os.path.dirname(__file__), "..", "..", "..", "static", "chart-print.js"),
 )
+_CHART_EXPORT_PATH = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "static", "chart-export.js"),
+)
+# 携带导出按钮样式的模板（主报告 / What-if 独立页 / 调试页）
+_EXPORT_BTN_TEMPLATES = (
+    os.path.normpath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "..", "static", "tmpl", "report_template.html")
+    ),
+    os.path.normpath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "..", "static", "tmpl", "whatif_template.html")
+    ),
+    os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "static", "test-chart.html")),
+)
 
 
 def _history_ok() -> dict:
@@ -286,3 +299,47 @@ class TestChartPrintDisplayRestore:
         src = self._src()
         assert "return 'block';" in src, "未记录回退 block（与 Chart.js 初始化内联值一致）"
         assert re.search(r"savedDisplays\s*=\s*\[\];", src), "打印周期结束应清空记录，避免跨周期残留"
+
+
+class TestChartExportCsv:
+    """单图导出 CSV：PNG/CSV 双按钮注入 + 屏显同源数据本地 Blob 下载。"""
+
+    @staticmethod
+    def _src() -> str:
+        with open(_CHART_EXPORT_PATH, encoding="utf-8") as f:
+            return f.read()
+
+    def test_injects_png_and_csv_buttons_in_group(self) -> None:
+        """每图注入 PNG/CSV 两枚按钮，按组容器判重（同一图只注入一组）。"""
+        src = self._src()
+        assert "导出PNG" in src, "应保留 PNG 导出按钮"
+        assert "导出CSV" in src, "应提供 CSV 导出按钮"
+        assert "chart-export-actions" in src, "双按钮须有组容器统一布局"
+        assert "box.querySelector('.chart-export-actions')" in src, "幂等守卫须按组容器判重，避免重复注入"
+
+    def test_csv_download_is_local_blob_with_utf8_bom(self) -> None:
+        """CSV 走本地 Blob 下载（零后端），MIME 为 text/csv，带 UTF-8 BOM 供 Excel 直开。"""
+        src = self._src()
+        assert "text/csv" in src, "Blob MIME 须为 text/csv"
+        assert "\\ufeff" in src, "CSV 须带 UTF-8 BOM（Excel 双击打开不乱码）"
+        assert "URL.createObjectURL" in src and "URL.revokeObjectURL" in src, "ObjectURL 用后须释放，避免内存泄漏"
+        assert ".csv'" in src, "下载文件名以 .csv 结尾"
+
+    def test_csv_rows_derived_from_chart_display_data(self) -> None:
+        """CSV 行列取自 chart.data（与屏显同源），RFC 4180 转义 + CRLF 行分隔。"""
+        src = self._src()
+        assert "data.labels" in src and "data.datasets" in src, "首列为标签、其后各列为数据系列"
+        assert """s.replace(/"/g, '""')""" in src, "引号须翻倍转义（RFC 4180）"
+        assert "'\\r\\n'" in src, "行分隔须为 CRLF"
+
+    def test_templates_anchor_actions_group_not_single_button(self) -> None:
+        """三处模板把绝对定位放在组容器上，按钮自身静态排布（双按钮并排不重叠）。"""
+        for path in _EXPORT_BTN_TEMPLATES:
+            name = os.path.basename(path)
+            with open(path, encoding="utf-8") as f:
+                content = f.read()
+            assert ".chart-export-actions" in content, f"{name} 缺组容器样式"
+            blocks = re.findall(r"\.chart-export-btn\s*\{([^}]*)\}", content)
+            assert blocks, f"{name} 缺按钮样式"
+            for block in blocks:
+                assert "position: absolute" not in block, f"{name} 按钮自身不得绝对定位（两按钮同坐标会重叠）"

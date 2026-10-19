@@ -290,3 +290,52 @@ def _inject_provider_chain_data(config: dict) -> dict:
                     )
 
     return config
+
+
+def get_llm_providers() -> dict:
+    """多链配置公开只读访问（TUI / Web 面板与编辑层共用单源）。
+
+    Returns:
+        ``{"strategy": ..., "providers": [...]}``；文件缺失 → 内置默认模板的深拷贝
+        （与运行时缺省行为一致）；文件存在但损坏 → ``{}``（不静默顶替，损坏须暴露），
+        调用方可安全读取。
+    """
+    import copy
+
+    path = _get_llm_providers_path()
+    if not os.path.exists(path):
+        from src.python.config._llm_providers_defaults import _DEFAULT_LLM_PROVIDERS
+
+        return copy.deepcopy(_DEFAULT_LLM_PROVIDERS)
+    raw = _load_llm_providers()
+    return raw if raw is not None else {}  # 文件存在但损坏 → {}（不静默顶替默认模板）
+
+
+def write_llm_providers(config: dict, path: str) -> None:
+    """写入 llm_providers.json（保留注释与未变更字段；原子写）。
+
+    TUI / Web / CLI 共享的 llm_providers.json 写入原语（与 write_llm_settings 同构）：
+    仅更新发生变化的字段对应文本区块，注释与其他字段原样保留；原子写入
+    （mkstemp + os.replace）。
+
+    Args:
+        config: 要写入的多链配置 dict（可只含变更字段，如重排后的 providers 数组）。
+        path: llm_providers.json 绝对路径。
+    """
+    from src.python.config import _comments
+    from src.python.config._core import _atomic_write
+    from src.python.config._json_patch import _update_json_raw_text
+
+    try:
+        with open(path, encoding="utf-8") as f:
+            raw = f.read()
+    except FileNotFoundError:
+        raw = ""
+
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if raw.strip():
+        current = json.loads(_comments._strip_json_comments(raw))
+        updated_raw = _update_json_raw_text(raw, current, config)
+        _atomic_write(path, updated_raw)
+    else:
+        _atomic_write(path, json.dumps(config, ensure_ascii=False, indent=2))

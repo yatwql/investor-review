@@ -7,6 +7,50 @@
 
 ---
 
+## plan-142 首页窄屏「免导航直达」重绘策略 ✅
+
+**完成（2026-10-19，v0.13.7-dev）**：narrow 档（<64 列，`layout_tier`）交互主路径改为「按字母/数字键直达」——`tui.main` 拆出内层按键循环：直达键（快捷键）执行后回重绘点刷新首页，方向键/Enter/未登记字母在窄屏**静默忽略且不重绘**（此前每按一次整屏追加一屏，手机短屏上菜单被顶出可视区）；`render_menu` narrow 档不渲染 `>` 选中指示器（无导航则指示器误导），页脚换「窄屏直达：按菜单 [键] 执行」文案，宽/中档方向键导航与「方向键移动 | Enter 确认…」页脚不变。测试：`test_tui_menu.py` 新增 `TestRenderMenuNarrowDirect`（narrow 无指示器/直达页脚、宽屏保留选中态）与 `TestNarrowMainLoopDirectNav`（窄屏三类非直达键零重绘、宽屏方向键重绘、Esc 退出）。文档：tui-menu 手册键盘操作表补 Esc 行与窄屏说明、FAQ 无响应排查措辞同步、requirements R-TUI-07 与 technical 按键分派描述同步。
+
+## plan-143 ESC 序列读取超时适配高延迟链路 ✅
+
+**完成（2026-10-19，v0.13.7-dev）**：`tui_keys._ESC_TIMEOUT` 0.15s → 0.3s——手机蜂窝网/高延迟 SSH 下方向键三字节序列可能分节到达，0.15s 会把序列拆散误判成孤 ESC（方向键时灵时不灵）；回归用例断言超时 ≥0.3s。
+
+## plan-144 Esc 键作为首页退出别名 ✅
+
+**完成（2026-10-19，v0.13.7-dev）**：`tui_keys` 新增 `KEY_ESC`（Linux 孤 ESC：序列读取超时无后继字节；Windows `b"\x1b"`），`tui.main` 将 Esc 与 `0`/`[X]` 同列为退出通道（手机 SSH 客户端普遍提供 Esc 键）；页脚退出提示统一为「Esc / 0 / X 退出」。测试：`test_tui_keys.py` 常量/Windows/Linux 孤 ESC 三例 + 主循环 Esc 退出例，既有「孤 ESC → KEY_UNKNOWN」用例改为 KEY_ESC（刻意行为变更）。
+
+## plan-145 input() 提示窄屏折行纪律与机检 ✅
+
+**完成（2026-10-19，v0.13.7-dev）**：`text_layout.wrap_prompt`——提示宽 ≤ 终端宽原样返回（宽屏零开销），超宽按显示宽度折行并以「  >  」输入位短尾缀收尾（窄屏提示与光标不脱节）；`handlers_report`（5 处费用/确认提示，最宽 68 列）、`handlers_log`（级别筛选/联网自检）、`handlers_qa`（报告选择）、`handlers_whatif`（路径/生效日）共 10 处长提示接入。机检守护：`test_text_layout.py::TestInputPromptNarrowContract` AST 扫描 `tui/*.py` 全部 `input()`——裸字面量提示 >40 列（与 `terminal_columns` 下限一致）未包 `wrap_prompt` 即红；具名提示 `_QA_PROMPT` 显式锚定 ≤40 列。测试：`TestWrapPrompt` 4 例（宽内原样/折行不越界/末行输入位/不丢字）。
+
+## plan-149 [S] 面板主路径零学习成本交互 ✅
+
+**完成（2026-10-19，v0.13.7-dev）**：提示语从占位符写法「输入编号或键名 (0-34)，? 编号 看说明」改为一句话主路径教学「输入编号切换开关（如 3）· ?3 查看说明 · 0 返回」（r/ra/x/k 高级命令退居页脚图例，窄屏图例去掉与提示重复的主路径行）；写路径（编号/键名直取、赋值、r/ra/x 恢复默认）所有宽度成功后即时重绘面板、反馈行带编号（`[OK] 3 名称 已关闭`）——手机端不再要求按 `p` 才见结果；修复 `?` 说明分支写反的重绘标志（此前窄屏说明被整屏重绘顶走、宽屏误提示「状态已更新」），只读查询窄屏留屏、宽/中档照常重绘；失败路径窄屏保持一行反馈（`p` 重绘）。契约测试 `TestRepaintAndHelpVisible` 三例（写后重绘带编号 / 窄屏说明留屏 / 宽屏重绘且无误导提示）+ 白话化测试改锚新提示；手册 [S] 用法段与 technical 面板描述同步。
+
+## plan-150 `?` 说明入口兼容全角问号 ✅
+
+**完成（2026-10-19，v0.13.7-dev）**：[S] 面板说明查询入口同时收半角 `?` 与全角 `？`——中文输入法下用户直接敲出的就是全角问号，原实现只认半角导致全角输入落到「未知编号或键名」分支；说明分支判断与详情剥前缀两处放行 `？`，回归用例 `test_full_width_question_mark_shows_detail` 锁「全角同效 + 只读不写配置」。
+
+## plan-151 子菜单 Esc 即时返回上一步 ✅
+
+**完成（2026-10-19，v0.13.7-dev）**：新增 `tui_keys.input_choice(prompt) -> str | None`——菜单选择行输入：raw 模式逐字节读行（回显自理、退格按 UTF-8 字符回剥），孤立 Esc 经 `_ESC_TIMEOUT` 判定即时返回 None（手机 SSH 误入子菜单直接回上一步，不必找「0 返回」）；回车提交并 strip，Ctrl+C 转发 KeyboardInterrupt 与各调用方既有 except 分支衔接；非 TTY（测试/管道）回退 `input()` 且同样 strip，既有测试驱动方式不变。接入 14 处选择/录入点（[S] 面板、配置菜单、对比指数池、报告章节、匿名化、目录信息、字段编辑、指数代码/名称录入、缓存管理、问答报告选择、What-if 文件编号/选项/路径）；QA 长文本提问与 y/N 确认保留 `input()`（q/回车取消）。Windows 分支 msvcrt 同语义。测试：`TestInputChoice` 7 例 + [S] Esc 返回不写配置 + 缓存菜单 Esc 不重提示；既有 17 处 `<module>.input` patch 改靶 `builtins.input`（模块内已无直调）。
+
+## plan-154 TUI「分档只改版式不改语义」统一纪律（C29 + 守护） ✅
+
+**完成概要**（2026-10-19，窄/宽交互审计后用户确认方案）：审计列全 `layout_tier` 分支点，确认历次「互动不一致」缺陷同源——分档分支改掉了按键语义/反馈。落地：① 架构约束 **C29**（分档只允许改版式与密度，不得改按键语义、反馈有无、写路径可见性；适用 `src/python/tui/` 全部分档分支点）；② 窄屏未登记字母/未知键从静默忽略改为单行反馈（`_print_hint` 原语，并入原地重绘清除范围），与宽档「重绘即反馈」对齐；③ 守护测试 `TestTierSemanticParity` 5 例锁「同按键两档同语义同反馈」。R-TUI-07 / technical 菜单段 / changelog 同步
+
+## plan-153 TUI 窄屏恢复方向键导航（原地重绘） ✅
+
+**完成概要**（2026-10-19，用户直接要求）：窄屏（<64 列）在直达主路径外恢复 ↑↓/Enter 导航——`>` 选中指示器全档渲染（render_menu 去除窄屏特判），选中移动后原地重绘（`_render_menu_frame` 用 `_FrameLineCounter` 计数帧行数 + `_clear_last_frame` ANSI 光标上移/清屏，`_can_repaint_inplace` POSIX+TTY 门控，不可用回退整屏追加），Enter 全档执行当前项；页脚双提示（直达 + ↑↓ 选择）。R-TUI-07 / technical 菜单架构段（顺带修正项数 18→19）/ tui 手册窄屏注同步。测试：`TestNarrowMainLoopDirectNav` 6 例（含原地 vs 回退分支 spy 区分、清帧助手 ANSI 输出）+ 渲染 3 例
+
+## plan-152 LLM 多链 Provider 优先级三渠道可调（CLI/TUI/Web） ✅
+
+**完成概要**（2026-10-19）：共享编辑层 `llm_providers.priority` 动作写通道（order 置换校验 + priority 归一化 10/20… + 注释保留 + 写前 .bak）；CLI `--llm-provider-order` 持久化写盘后退出；TUI `[M]` 编号交换面板（`input_choice` Esc 返回）；Web 配置面「LLM 多链线路优先级」块 ▲▼ 调序即存。实现中连带修复 `_update_json_raw_text` 对 list 值静默不替换（新增 `_replace_array_block`，rf-724）。测试：config 11 例（置换校验/归一化/注释保留/备份/缺失回退/损坏回退）+ CLI 5 例 + 面板 5 例 + Web 3 例
+
+## plan-94 图表数据无导出通道 ✅
+
+**完成（2026-10-18，v0.13.7-dev）**：选型为**前端每图导出**（不做整份 `chart_data.csv` 产物）——`src/static/chart-export.js` 为每张 Chart.js 图表注入 `.chart-export-actions` 组容器（「导出PNG」+「导出CSV」并排，浮于图卡右上角、存在 `.chart-title` 时进标题栏右侧，按组容器幂等判重）；CSV 读 `chart.data`（与屏显/悬停值同源，Python 数据层已按匿名化口径脱敏），首列表头取 x/r 轴标题（缺省「标签」）、系列列取 dataset label（单系列缺省「数值」），RFC 4180 引号转义 + CRLF + UTF-8 BOM 后 `Blob` 纯前端本地下载（零后端，`URL.createObjectURL` 用后释放），文件名 `<key>.csv`；模板定位样式三处同步（主报告 `report_template.html` / What-if `whatif_template.html` / 调试页 `test-chart.html`：绝对定位移到组容器、按钮静态排布不重叠、打印态隐藏组容器），what-if 关态金样基线随模板 CSS 与内联脚本字节变化显式复核更新。测试：`test_feature_interactive.py` 新增 `TestChartExportCsv` 4 例（双按钮注入与组容器幂等 / Blob MIME+BOM+ObjectURL 释放 / 行列取自 chart.data 与 RFC 4180+CRLF / 三模板组容器定位且按钮不绝对定位）。文档：reports-instruction 交互图表特性补双按钮与 CSV 口径、README 能力表补 CSV、folders 目录树说明。
+
 ## plan-141 配置入口地图（[D] 子菜单只读索引）✅
 
 按计划「①先行」落地（只读索引，零行为变化；②③明确不做并记录理由）：`handlers_config` 新增 `_CONFIG_ENTRY_MAP` 常量（9 行三元组：配置项 / 菜单键 / 补充说明）与 `_render_config_entry_map()`（按 `display_width` 对齐的只读渲染，不等待按键、不写配置），`[D]` 子菜单新增 `[M] 配置入口地图` 项（items 表 + 无效选择提示改 C/F/O/M/B + docstring 更新）。地图覆盖：功能开关与 LLM 模块启停 `[S]`（含行尾费用摘要/启用统计）、报告章节取舍 `[P]`、对比指数池 `[I]`、匿名化 `[A]`、配置文件与目录 `[D]`（C/F/O）、刷新配置 `[R]`、缓存管理 `[4]`、健康历史与日志 `[H]/[V]`、系统自检 `[T]`（标注 `doctor_check` 关闭时不可见）。测试 5 例：键位真实性兜底（地图每个键均存在于 `MENU_ITEMS`——键位调整/菜单合并时自动红）、条目唯一且三列齐备且键带方括号、`[D]`→`M`→`B` 动线（断言 C/F/O 三个写入处理器均未被调用）、无效选择提示含 M、渲染零副作用（refresh_config / save_feature_overrides 均未触发）。handlers_config 50/50 绿。文档：tui-menu [D] 节标题与样例块加 M 并补说明、requirements D 行、technical 菜单表 [D] 行。

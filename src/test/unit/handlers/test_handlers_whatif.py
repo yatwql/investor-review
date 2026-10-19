@@ -446,3 +446,17 @@ class TestPromptEffectiveDate(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestEffectiveDateEscCancel(unittest.TestCase):
+    """日期录入处 Esc 统一取消（PromptCancelledError，与同命令兄弟提示同径）。"""
+
+    def test_date_prompt_esc_cancels(self):
+        """生效日录入处按 Esc → 中止 What-if 流程（而非当作跳过继续向导）。"""
+        from src.python.tui.handlers_whatif import PromptCancelledError, _prompt_effective_date
+
+        with (
+            patch("src.python.tui.handlers_whatif.input_choice", return_value=None),
+            pytest.raises(PromptCancelledError),
+        ):
+            _prompt_effective_date()

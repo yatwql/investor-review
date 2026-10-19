@@ -32,7 +32,7 @@ class TestCmdViewLogs(unittest.TestCase):
         out = io.StringIO()
         with (
             patch("sys.stdout", out),
-            patch("src.python.tui.handlers_log.input", return_value=level_input),
+            patch("src.python.tui.handlers_log.input_choice", return_value=level_input),
             patch("src.python.tui.handlers_log.press_any_key"),
         ):
             _cmd_view_logs()
@@ -59,7 +59,7 @@ class TestCmdViewLogs(unittest.TestCase):
         """级别提示输入 ERROR → read_log(level="ERROR")。"""
         with (
             patch("src.python.core.log_reader.read_log", return_value=[]) as mock_read,
-            patch("src.python.tui.handlers_log.input", return_value="ERROR"),
+            patch("src.python.tui.handlers_log.input_choice", return_value="ERROR"),
             patch("src.python.tui.handlers_log.press_any_key"),
             patch("sys.stdout", new_callable=io.StringIO),
         ):
@@ -70,7 +70,7 @@ class TestCmdViewLogs(unittest.TestCase):
         """空回车 → level=None（全部）。"""
         with (
             patch("src.python.core.log_reader.read_log", return_value=[]) as mock_read,
-            patch("src.python.tui.handlers_log.input", return_value=""),
+            patch("src.python.tui.handlers_log.input_choice", return_value=""),
             patch("src.python.tui.handlers_log.press_any_key"),
             patch("sys.stdout", new_callable=io.StringIO),
         ):
@@ -81,7 +81,7 @@ class TestCmdViewLogs(unittest.TestCase):
         """无效级别 → 提示并将 level 置 None（显示全部）。"""
         with (
             patch("src.python.core.log_reader.read_log", return_value=[]) as mock_read,
-            patch("src.python.tui.handlers_log.input", return_value="VERBOSE"),
+            patch("src.python.tui.handlers_log.input_choice", return_value="VERBOSE"),
             patch("src.python.tui.handlers_log.press_any_key"),
             patch("sys.stdout", new_callable=io.StringIO) as mock_out,
         ):
@@ -93,7 +93,7 @@ class TestCmdViewLogs(unittest.TestCase):
         """无匹配条目提示。"""
         with (
             patch("src.python.core.log_reader.read_log", return_value=[]),
-            patch("src.python.tui.handlers_log.input", return_value=""),
+            patch("src.python.tui.handlers_log.input_choice", return_value=""),
             patch("src.python.tui.handlers_log.press_any_key"),
             patch("sys.stdout", new_callable=io.StringIO) as mock_out,
         ):
@@ -104,7 +104,7 @@ class TestCmdViewLogs(unittest.TestCase):
         """read_log 抛异常 → [ERR] 提示且不崩溃。"""
         with (
             patch("src.python.core.log_reader.read_log", side_effect=OSError("IO error")),
-            patch("src.python.tui.handlers_log.input", return_value=""),
+            patch("src.python.tui.handlers_log.input_choice", return_value=""),
             patch("src.python.tui.handlers_log.press_any_key"),
             patch("sys.stdout", new_callable=io.StringIO) as mock_out,
         ):
@@ -158,3 +158,27 @@ class TestCmdViewHealthHistory(unittest.TestCase):
         ):
             _cmd_view_health_history()
         self.assertIn("[ERR]", mock_out.getvalue())
+
+
+class TestPromptEscCancel(unittest.TestCase):
+    """提示处 Esc 统一取消（PromptCancelledError）：级别筛选 / 自检联网询问。"""
+
+    def test_level_prompt_esc_cancels(self):
+        """级别筛选处按 Esc → 取消查看（而非视为全部级别继续）。"""
+        from src.python.tui.handlers_log import PromptCancelledError, _level_prompt
+
+        with (
+            patch("src.python.tui.handlers_log.input_choice", return_value=None),
+            pytest.raises(PromptCancelledError),
+        ):
+            _level_prompt()
+
+    def test_doctor_network_prompt_esc_cancels(self):
+        """自检联网询问处按 Esc → 中止自检（而非仅本地继续）。"""
+        from src.python.tui.handlers_log import PromptCancelledError, _cmd_run_doctor
+
+        with (
+            patch("src.python.tui.handlers_log.input_choice", return_value=None),
+            pytest.raises(PromptCancelledError),
+        ):
+            _cmd_run_doctor()

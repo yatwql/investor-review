@@ -212,7 +212,9 @@
         .notice-banner { background: var(--notice-bg); border-left: 4px solid var(--notice-border); padding: 10px 14px; font-size: var(--fs-table); border-radius: 4px; }
         /* 单元级空态/提示（三档空态族之单元级；占位框并入） */
         .empty-note { padding: 20px; text-align: center; color: var(--text-faint); background: var(--empty-section-bg); border: 1px dashed var(--border-dashed); border-radius: 6px; }
-        .chart-export-btn { position: absolute; top: 6px; right: 6px; z-index: 5; font-size: var(--fs-footnote); }
+        .chart-export-actions { position: absolute; top: 6px; right: 6px; z-index: 5; display: flex; gap: 8px; }
+        .chart-title .chart-export-actions { position: static; margin-left: auto; }
+        .chart-export-btn { font-size: var(--fs-footnote); }
         /* ── 触屏档（≤768）：触控目标 ≥44px（DESIGN Responsive 契约）── */
         @media (max-width: 768px) {
             .back-to-top-link a { display: inline-flex; align-items: center; min-height: 44px; }

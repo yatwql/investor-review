@@ -127,6 +127,27 @@ def _apply_cli_switches(pairs: list[tuple[str, bool]] | None) -> None:
     )
 
 
+def _apply_cli_llm_provider_order(order: list[str]) -> int:
+    """``--llm-provider-order``：经共享编辑层持久化重排多链线路，打印生效链序后退出。
+
+    Args:
+        order: 目标顺序（靠前优先），须恰好覆盖全部现有线路。
+
+    Returns:
+        int 退出码（0=成功, 2=校验/写入失败）。
+    """
+    from src.python.config.edit_ops import ConfigEditError, apply_config_edit
+
+    try:
+        result = apply_config_edit({"key": "llm_providers.priority", "action": "reorder", "order": order})
+    except ConfigEditError as e:
+        print(f"[!] {e}")
+        return _EXIT_SEVERE
+    names = (result.get("value") or {}).get("order") or order
+    print(f"[OK] 多链线路优先级已写入 llm_providers.json：{' → '.join(names)}")
+    return _EXIT_SUCCESS
+
+
 def _prepare_early_exit_switches(groups: list[tuple[str, ...]] | None, pairs: list[tuple[str, bool]] | None) -> None:
     """为不初始化 config 的早返回命令应用命令行开关（--experiment / --feature）。
 
@@ -191,6 +212,10 @@ def main() -> int:
     # 命令行开关（需在配置初始化之后：覆写加载已完成，此处为本次运行增量）
     _apply_cli_experiments(args.experiment)
     _apply_cli_switches(args.feature)
+
+    # 多链线路优先级调整：持久化写盘后退出（调整类命令，不触发报告生成）
+    if args.llm_provider_order:
+        return _apply_cli_llm_provider_order(args.llm_provider_order)
 
     # 首次运行引导（非交互/CI/脚本环境自动跳过，不阻塞命令执行）
     try:

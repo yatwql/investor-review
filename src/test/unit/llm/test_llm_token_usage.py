@@ -15,6 +15,9 @@ pytestmark = [
     pytest.mark.unit,
     pytest.mark.unit_llm,
     pytest.mark.llm,
+    # 峰谷计价用例经 pricing._is_holiday → 交易日历（工作日才触达）；本文件测的是
+    # 计量口径而非节假日判定，日历走离线桩（空集→非节假日），防工作日在 CI 点燃
+    pytest.mark.usefixtures("offline_external_sources"),
 ]
 
 

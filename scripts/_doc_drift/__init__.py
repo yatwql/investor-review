@@ -122,6 +122,7 @@ from _doc_drift._shared import (  # noqa: F401
 
 from _doc_drift._menu_blocks import (  # noqa: F401
     check_menu_blocks,
+    check_return_key_invariant,
     parse_menu_block_lines,
 )
 

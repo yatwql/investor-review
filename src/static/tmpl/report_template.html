@@ -680,12 +680,17 @@
             color: var(--chart-text, #888);
             margin-top: 4px;
         }
-        /* --- 单图导出按钮（chart-export.js 注入；打印时隐藏）--- */
+        /* --- 单图导出按钮（chart-export.js 注入 PNG/CSV 双按钮；打印时隐藏）--- */
         .chart-box { position: relative; }
-        .chart-export-btn {
+        .chart-export-actions {
             position: absolute;
             top: 6px; right: 6px;
             z-index: 5;
+            display: flex;
+            gap: 8px;
+        }
+        .chart-title .chart-export-actions { position: static; margin-left: auto; }
+        .chart-export-btn {
             padding: 3px 10px;
             font-size: var(--fs-table-sm);
             line-height: var(--lh-table);
@@ -696,7 +701,7 @@
             cursor: pointer;
         }
         .chart-export-btn:hover { background: var(--table-hover); }
-        @media print { .chart-export-btn { display: none; } }
+        @media print { .chart-export-actions, .chart-export-btn { display: none; } }
     </style>
 
 

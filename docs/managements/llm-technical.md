@@ -1,5 +1,5 @@
 # LLM 集成层技术设计
-> 文档版本：0.13.6
+> 文档版本：0.13.7
 
 本文档是 `technical.md` 的 LLM 集成层专项技术设计补充，对应 `technical.md` §5（LLM 集成层概要设计）。
 `technical.md` §5 提供 LLM 层的总体架构、模块清单、调用链概览、多 Provider 链模式概要及关键机制速览；
@@ -589,17 +589,17 @@ call_llm(system_prompt, user_prompt, llm_config, ...)
 }
 ```
 
-**Extended Thinking 注入**（`_configure_extended_thinking()`）：
+**Extended Thinking 注入**（provider 适配层统一模式，配置驱动）：
 
 ```
-_configure_extended_thinking(payload, llm_config, config_field, model, max_tokens)
+注入流程(payload, llm_config, config_field, model, max_tokens)
     │
     ├─ 读取 thinking_enabled_{module_suffix}
     │      False → 默认开思考模型（DeepSeek 推理族 / Kimi）显式注入
     │             thinking.disabled（防思考 token 占满 max_tokens 而无正文）；
     │             默认不思考模型（Anthropic 原生）无操作返回
     │
-    ├─ 验证模型兼容性 (_supports_extended_thinking)
+    ├─ 验证模型兼容性
     │      不兼容 → 自动降级跳过，记录 WARNING
     │
     ├─ payload["thinking"] = {"type": "enabled"}
@@ -666,7 +666,7 @@ call_gemini() Extended Thinking 注入
     ├─ 读取 thinking_enabled_{module_suffix}
     │      False → 无操作返回
     │
-    ├─ 验证模型兼容性 (_supports_extended_thinking)
+    ├─ 验证模型兼容性
     │      不兼容 → 自动降级跳过，记录 WARNING
     │
     └─ 启用 Thinking →
@@ -794,7 +794,7 @@ policy = replace(_RETRY_POLICY, attempts=max(1, max_retries + 1))   # 尝试次�
 | `FAIL_REASON_DISABLED` | 模块已禁用 | enabled_llm.xxx = false |
 | `FAIL_REASON_NOT_CONFIGURED` | LLM 未配置 | get_llm_config() 返回 None |
 
-每次新生成开始时 `_clear_last_llm_failure()` 清除上次失败；失败原因通过 `LLM_MODULE_FAILURE[module_key]` 字典留存。多链模式下，该字典记录每个模块的完整调用历程：
+每次新生成开始时从 `LLM_MODULE_FAILURE` 移除该模块旧失败记录；失败原因通过 `LLM_MODULE_FAILURE[module_key]` 字典留存。多链模式下，该字典记录每个模块的完整调用历程：
 
 ```python
 LLM_MODULE_FAILURE: dict[str, dict] = {
@@ -894,7 +894,7 @@ penetrated_assets ──→ extract_stable_penetration()
 
 ### 7.3 TTL 分辨率
 
-`_get_cache_ttl_llm(subtype)` 两级优先级：
+`get_ttl(data_type)` 两级优先级：
 
 1. `config.json` → `cache_ttl.llm_{subtype}` 用户显式配置
 2. 代码默认值（hardcoded defaults）：

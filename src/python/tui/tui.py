@@ -6,6 +6,7 @@ from __future__ import annotations
 import atexit
 import os
 import sys
+import time
 from collections.abc import Callable
 
 # 确保项目根目录在 sys.path 中（支持直接执行 python src/python/tui/tui.py）
@@ -17,7 +18,10 @@ if _project_root not in sys.path:
 from src.python.config import init_config
 from src.python.llm.pricing import CURRENCY_SYMBOLS
 from src.python.core.logger import log_app_boundary, setup_logger
-from src.python.tui.tui_keys import KEY_CTRL_C, KEY_DOWN, KEY_ENTER, KEY_UP, get_key
+from src.python.tui.panel_runtime import NavState
+from src.python.tui.switch_panel import layout_tier
+from src.python.tui.text_layout import terminal_columns
+from src.python.tui.tui_keys import KEY_CTRL_C, KEY_DOWN, KEY_ENTER, KEY_ESC, KEY_UP, get_key
 from src.python.tui.tui_handlers import execute_item
 from src.python.tui.tui_menu import (
     MENU_ITEMS,
@@ -88,6 +92,7 @@ def _bind_callbacks() -> None:
         _cmd_config_comparison_indices,
         _cmd_config_dir_info,
         _cmd_config_llm_modules,
+        _cmd_config_llm_providers,
         _cmd_config_report_boards,
         _cmd_refresh_config,
     )
@@ -118,6 +123,7 @@ def _bind_callbacks() -> None:
         "A": _cmd_config_anonymization_mode,
         "P": _cmd_config_report_boards,
         "S": _cmd_config_llm_modules,
+        "M": _cmd_config_llm_providers,
         "R": _cmd_refresh_config,
         "V": _cmd_view_logs,
         "H": _cmd_view_health_history,
@@ -127,8 +133,78 @@ def _bind_callbacks() -> None:
         MENU_ITEMS[i] = (key, _label, callbacks.get(key), is_exit)
 
 
+class _FrameLineCounter:
+    """透明代理：累计 write 的换行数并透传到底层流（原地重绘需知道上一帧占用行数）。"""
+
+    def __init__(self, stream):
+        self._stream = stream
+        self.lines = 0
+
+    def write(self, text: str):
+        self.lines += text.count("\n")
+        return self._stream.write(text)
+
+    def flush(self):
+        return self._stream.flush()
+
+
+def _render_menu_frame(sel: int) -> int:
+    """渲染一整帧首页（页眉 + 配置摘要 + 菜单），返回本帧占用行数。"""
+    counter = _FrameLineCounter(sys.stdout)
+    original = sys.stdout
+    sys.stdout = counter
+    try:
+        print_header()
+        show_config()
+        render_menu(sel)
+    finally:
+        sys.stdout = original
+    return counter.lines
+
+
+def _can_repaint_inplace() -> bool:
+    """窄屏原地重绘可用性：POSIX + TTY（需 ANSI 光标控制）。
+
+    管道/测试（非 TTY）与旧控制台（无 ANSI）回退整屏追加重绘。
+    """
+    try:
+        return os.name == "posix" and sys.stdout.isatty()
+    except Exception:
+        return False
+
+
+_ESC_EXIT_CONFIRM_WINDOW = 3.0  # 主菜单 Esc 连按两次确认窗口（秒）
+
+
+def _print_hint(text: str) -> int:
+    """主菜单按键反馈单行（按宽度折行，不整屏重绘）。
+
+    Returns:
+        int 占用行数（调用方并入原地重绘的清除范围，避免清帧错位）。
+    """
+    from src.python.tui.text_layout import wrap_with_prefix
+
+    lines = wrap_with_prefix("  ", text, terminal_columns())
+    for line in lines:
+        print(line)
+    return len(lines)
+
+
+def _clear_last_frame(lines: int) -> None:
+    """把光标移回上一帧首行并清空其下内容（ANSI：光标上移 N 行 + 清屏至末尾）。"""
+    if lines > 0:
+        sys.stdout.write(f"\x1b[{lines}A\x1b[0J")
+        sys.stdout.flush()
+
+
 def main() -> None:
-    """TUI 主循环。支持方向键导航 + Enter 确认 + 字母快捷键 + Ctrl+C。"""
+    """TUI 主循环。方向键导航 + Enter 确认（全档可用）；窄屏直达并存。
+
+    窄屏档（<64 列）交互主路径仍是「按字母/数字键直达」（未登记键静默忽略
+    且不重绘）；方向键/Enter 同样可用——移动选中态后**原地重绘**（ANSI 光标
+    上移+清屏，菜单不滚屏），不支持 ANSI 的环境（管道/测试/旧控制台）回退
+    整屏追加。Esc 需连按两次确认（3 秒窗口；防高延迟链路方向键拆包把孤 ESC 误判为退出），0/X 单次即退。
+    """
     init_config()
     _apply_feature_gates()  # 必须在 _bind_callbacks 之前：裁剪后索引才与渲染一致
     _bind_callbacks()
@@ -167,31 +243,71 @@ def main() -> None:
 
     _default_key = get_config().get("default_menu_key", "L").upper()
     _idx = index_by_key(_default_key)
-    sel: int = _idx if _idx is not None else 0
+    # 导航态单源（NavState）：首页 Enter 无条件派发、render_menu 自带高亮，故 cursor 即原 sel；
+    # engaged 不影响主循环（仅 marker 用），与子菜单 panel_loop 的 engaged 门控语义独立
+    nav = NavState(count=len(MENU_ITEMS), cursor=_idx if _idx is not None else 0)
+
+    esc_exit_armed: float | None = None
 
     while True:
-        print_header()
-        show_config()
-        render_menu(sel)
+        frame_lines = _render_menu_frame(nav.cursor)
+        hint_lines = 0  # 帧下方反馈行数（原地重绘时并入清除范围）
 
-        key = get_key()
+        # 内层按键循环：直达键（快捷键/退出）处理后重绘或退出；方向键/Enter
+        # 全档导航——窄屏优先原地重绘（菜单不滚屏），不可用时回退整屏追加
+        while True:
+            key = get_key()
+            narrow = layout_tier(terminal_columns()) == "narrow"
+            if key != KEY_ESC and esc_exit_armed is not None:
+                # 任何非 Esc 按键解除退出确认态：拆包孤 ESC 挂起的确认不被后续按键引爆
+                esc_exit_armed = None
 
-        if key == KEY_UP:
-            sel = (sel - 1) % len(MENU_ITEMS)
-        elif key == KEY_DOWN:
-            sel = (sel + 1) % len(MENU_ITEMS)
-        elif key == KEY_ENTER:
-            execute_item(sel)
-        elif key == KEY_CTRL_C:
-            exit_app()
-        elif key == "0":
-            # 0 作退出别名：与子菜单「0 = 返回」的习惯一致（在首页返回即退出程序）
-            exit_app()
-        elif len(key) == 1 and ("A" <= key <= "Z" or "a" <= key <= "z" or "0" <= key <= "9"):
-            idx = index_by_key(key.upper())
-            if idx is not None:
-                sel = idx
-                execute_item(idx)
+            if key == KEY_CTRL_C:
+                exit_app()
+            if key == KEY_ESC:
+                # Esc 退出别名：连按两次确认（3 秒窗口）——孤 Esc 可能是方向键拆包
+                # 误判（高延迟链路），误判代价从「退出程序」降为「多按一次」
+                now = time.monotonic()
+                if esc_exit_armed is not None and now - esc_exit_armed <= _ESC_EXIT_CONFIRM_WINDOW:
+                    exit_app()
+                esc_exit_armed = now
+                hint_lines += _print_hint("再按一次 Esc 退出（0 / X 亦可）")
+                continue
+            if key == "0":
+                # 0 作退出别名：与子菜单「0 = 返回」的习惯一致（在首页返回即退出程序）
+                exit_app()
+            if len(key) == 1 and ("A" <= key <= "Z" or "a" <= key <= "z" or "0" <= key <= "9"):
+                idx = index_by_key(key.upper())
+                if idx is not None:
+                    nav.sync(idx)
+                    execute_item(idx)
+                    break  # 直达执行后回到重绘点（子菜单关闭 → 刷新首页）
+                if narrow:
+                    # 窄屏直达模式：未登记字母给单行反馈（不整屏重绘）——与宽档「重绘即
+                    # 反馈」同语义：任何按键都有可观察结果（分档只改版式不改语义）
+                    hint_lines += _print_hint(f"「{key.upper()}」未登记（键位见上方菜单）")
+                    continue
+                break
+            if key == KEY_ENTER:
+                execute_item(nav.cursor)
+                break
+            if key == KEY_UP or key == KEY_DOWN:
+                nav.move(key)  # 单源回绕（全菜单项可导航）；等价原 (sel±1)%len
+                if _can_repaint_inplace():
+                    # 导航原地重绘（光标上移+清屏）：窄屏防菜单顶出可视区、宽屏防滚屏
+                    # 堆积（宽/窄同一导航手感，仅版式分档不改交互）；
+                    # 反馈行（hint_lines）一并清除，避免清帧范围错位
+                    _clear_last_frame(frame_lines + hint_lines)
+                    frame_lines = _render_menu_frame(nav.cursor)
+                    hint_lines = 0
+                    continue
+                break  # 非 TTY/旧控制台：回退整屏追加
+            if narrow:
+                # 窄屏未知键：单行反馈（不整屏重绘），与宽档「重绘一屏」同语义
+                hint_lines += _print_hint("未识别按键")
+                continue
+            # 宽/中档未知键：重绘一屏给出反馈
+            break
 
 
 if __name__ == "__main__":

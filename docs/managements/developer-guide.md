@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.13.6
+> 文档版本：0.13.7
 
 ## 概述
 
@@ -105,7 +105,7 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 .venv/bin/python scripts/check-task-numbering.py --ci       # 任务编号全局一致性检查
 .venv/bin/python scripts/check-semantic-index.py --ci       # 语义命名索引正反向校验
 .venv/bin/python scripts/check-doc-drift.py --ci            # 文档与实现一致性（章节/开关/默认值/面板编号/目录树/统计表/归档索引/分区纪律/Thinking 支持矩阵/章节-区块矩阵/手册菜单块）
-.venv/bin/python scripts/check-test-redundancy.py --ci      # 测试用例冗余与无效（死用例/无断言/完全重复/自证用例/硬编码演进总数）
+.venv/bin/python scripts/check-test-redundancy.py --ci      # 测试用例冗余与无效（死用例/无断言/完全重复/自证用例/硬编码演进总数/恒真断言/死 fixture/弱 mock 断言）
 .venv/bin/python scripts/check-requirement-trace.py --ci   # 需求 ID ↔ 验证载体追溯（已补全域全覆盖 + 载体文件存在）
 .venv/bin/python scripts/check-version-consistency.py --ci   # 版本号全局一致性（APP_VERSION ↔ README/pyproject/管理文档 10 份）
 .venv/bin/python scripts/check-doc-links.py --ci              # 文档死链/死锚点/重复标题/层级/编号序列/§引用机检
@@ -415,7 +415,7 @@ P0 问题必须在 commit 前解决，否则代码不应进入版本控制。P1 
 在一次典型开发周期中：
 1. **提交前门禁验证**：修改代码后运行 `--mode dev-verify` 确认核心单元+基础场景通过（P0 强制）
 2. **全场景补充验证**：若改动了跨模块路径/数据流，再跑 `--mode regression` 确保全场景正常
-3. 如果改了跨模块调用关系（缓存、新闻流水线、TUI 路由等），再跑 `--mode integration` 确认接口契约和全链路正常
+3. 如果改了跨模块调用关系（缓存、新闻流水线、TUI 路由等），再跑 `--mode integration` 确认接口契约和全链路正常（CI test job 对 `-m integration` 标记**恒跑兑底**，本地按需先行可更快反馈）
 4. 如果改了 Provider、缓存或数据获取逻辑，再跑 `--mode verify` 确认整条管道通畅
 5. 通过后 commit，积累多次提交后准备合并到 master
 6. 合并前 CI 自动跑 `--mode verify` 作为合入门禁
@@ -445,7 +445,7 @@ P0 问题必须在 commit 前解决，否则代码不应进入版本控制。P1 
   - **`scenario_security` — 安全基线场景**：5 项安全基线自动化验证——密钥文件权限不可公开读取、缓存文件不含明文密钥、匿名化模式报告不含真实名称/代码、LLM API 日志不记录完整密钥、HTML 报告不泄露文件系统路径。
 
 - **`--mode regression`** 与 `--mode scenario` 完全相同，但语义定位为"提交前回归验证"。建议在 git hook 或 CI 前置检查中使用此名称，使流水线意图更加清晰。
-- **`--mode integration`** 覆盖场景测试 + 集成测试（`scenario or integration`）。在全部业务场景基础上，增加模块间验证：接口契约、错误隔离、新闻流水线、缓存一致性、TUI 路由。用于修改了跨模块调用关系后的定向回归。
+- **`--mode integration`** 覆盖场景测试 + 集成测试（`scenario or integration`）。在全部业务场景基础上，增加模块间验证：接口契约、错误隔离、新闻流水线、缓存一致性、TUI 路由。用于修改了跨模块调用关系后的定向回归。CI test job 以 `pytest -m integration` 恒跑纯集成契约档（42 例 / 5.5s，不依赖分支条件），本地改跨模块时仍建议先行 `--mode integration`。
 - **`--mode dev-verify`** 提交前门禁模式（P0），组合 8 个 unit 子模块（unit_core/unit_providers/unit_fetcher/unit_analysis/unit_scripts/unit_web/unit_qa/unit_report，排除 edge/data）并行 + 基础业务场景（`scenario_basic`）。约 20s，适合开发者改完代码后随时跑。不包含极限场景（scenario_extreme）和 LLM/日期/容错等专项场景。
 - **`--mode verify`** 合入门禁模式（`unit_core or unit_providers or unit_fetcher or unit_config or unit_news or unit_llm or unit_analysis or unit_scripts or unit_web or unit_qa or unit_report`），包含核心基础设施 + 数据源 Provider + 数据获取调度 + 配置管理 + 新闻聚合 + LLM 模块 + 分析计算 + 工程脚本 + Web 入口 + 报告对话式追问 + 报告生成的单元测试，共约 10s（并行执行）。场景测试由 P0 dev-verify（基础场景）和 P2 verify,regression（全场景）覆盖。
 
@@ -824,7 +824,7 @@ mod = load_script("check-svg.py")                                            # �
 mod = load_script("_test_runner/modes.py", module_name="modes_under_test")   # 子路径 + 显式模块名
 ```
 
-> 唯一实现为 `src/test/_script_loader.py`：按文件名/子路径加载 `scripts/` 下脚本、每次调用重新执行返回新实例、注册进 `sys.modules`（`@dataclass` 按 `cls.__module__` 回查命名空间依赖它）。**禁止**在测试文件里再手写 `importlib.util.spec_from_file_location` 样板或自定义 `_load_script`——`unit/scripts/test_script_loader.py` 的样板唯一性机检会检出（除 loader 自身外出现动态加载样板、或定义同名本地加载器均判失败）。
+> 唯一实现为 `src/test/_script_loader.py`：按文件名/子路径加载 `scripts/` 下脚本、每次调用重新执行返回新实例、注册进 `sys.modules`（`@dataclass` 按 `cls.__module__` 回查命名空间依赖它）。**禁止**在测试文件里再手写 `importlib.util.spec_from_file_location` 样板或自定义 _load_script 同名加载器——`unit/scripts/test_script_loader.py` 的样板唯一性机检会检出（除 loader 自身外出现动态加载样板、或定义同名本地加载器均判失败）。
 
 **新增后必须更新的文件**：
 
@@ -897,7 +897,7 @@ A: 运行 `.venv/bin/python scripts/check-test-markers.py`，脚本会静态扫�
 | `check-doc-drift.py` | 测试 | 文档与实现一致性校验（章节表/章节数量、开关表/分组计数/默认值断言、配置与 LLM 默认值表、TUI 面板编号、目录树、项目统计表；`--sync` 自动回写统计快照） |
 | `check-doc-links.py` | 测试 | 文档链接与结构一致性校验（死链/死锚点/重复标题/层级/编号序列/§引用） |
 | `check-file-length.py` | 测试 | 单文件行数红线守护（主程序/脚本 >1000 行 / 测试 >1200 行；豁免登记与 review-findings 挂账同步，`-v` 输出可选优化区间清单供登记表派生） |
-| `check-test-redundancy.py` | 测试 | 测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数） |
+| `check-test-redundancy.py` | 测试 | 测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言） |
 | `check-requirement-trace.py` | 测试 | 需求 ID ↔ 验证载体追溯（单段 ID 全域覆盖 / 载体文件存在 / ID 双向一致） |
 | `install-claude-hook.py` | 测试 | 安装/卸载 Claude Code PostToolUse hook（任务编号一致性自动校验） |
 | `llm-hallucination-sampler.py` | 测试 | 10 组标准持仓 × LLM 幻觉率采样（薄 CLI，实现在 `_halluc_sampler/` 包） |
@@ -1133,7 +1133,7 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
 
 **`check-test-redundancy.py` — 测试用例冗余与无效检查**
 
-静态分析 `src/test/`（默认跳过 `pytest.ini` 刻意排除的 `live/` 真网套件），抓五类「看着有测试其实没测住」的问题：
+静态分析 `src/test/`（默认跳过 `pytest.ini` 刻意排除的 `live/` 真网套件），抓八类「看着有测试其实没测住」的问题：
 
 1. **死用例**：同文件同类同名重复定义（后者覆盖前者）、类名不以 `Test` 开头的方法形式 `test_*`、`Test*` 类定义了 `__init__`（pytest 整类跳过）
 2. **无断言用例**：既无 `assert`、也无 `pytest.raises/warns/fail`、也无 `assertEqual` 等 `assert*` / `assert_called*`，且不经同类辅助方法（如 `self._assert_pairs_contain(...)`，其内部含断言）——断言落在辅助方法里同样算数
@@ -1143,13 +1143,20 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
    这类总数是文档真值来源的派生量，**新增一条需求/章节/开关就会把测试打红**——良性变更被误判为回归，而它捕捉不到任何真实缺陷；且与门禁脚本（如 `check-requirement-trace` 的全域覆盖断言）**职责重复**。
    正确写法是断言**结构关系**：集合双向相等（`set(a) == set(b)`）、子集/覆盖（`expected <= set(a)`）、序号连续（`numbers == list(range(1, n+1))`）、唯一性（`len(keys) == len(set(keys))`）。
    判定保守（宁少报不误报）：仅看 `assert` 中的 `len(x) ==/> 数字`；实参名需含语义关键词（`requirement`/`section`/`switch`/`module`/`domain`/…）**或**文件路径含 `requirement`/`registry`；忽略 `<= 3` 的小数字（常为有意断言）。
+6. **恒真断言**：`assert True` / `assert x == x`——形式上有断言、实际不验证任何行为
+7. **死 fixture**：test 文件内定义（排除 conftest 自身与 autouse）且全仓语料（测试 + conftest）无任何引用——定义后从未被消费的死代码
+8. **弱 mock 断言**：`assert <mock>.<属性>` 作真值 / `assertIsNotNone(<mock>)`——Mock 恒真且恒不为 None，断言恒成立不验证行为（`.called` / `assert_called*` 等专用断言不算弱）
 
 ```bash
-.venv/bin/python scripts/check-test-redundancy.py                 # 五类全查
+.venv/bin/python scripts/check-test-redundancy.py                 # 八类全查
 .venv/bin/python scripts/check-test-redundancy.py -v              # 详细输出（扫描规模 + 各类计数 + 跳过的间接调用用例数）
 .venv/bin/python scripts/check-test-redundancy.py --ci            # CI 模式（只输出 文件:描述，退出码 2）
 .venv/bin/python scripts/check-test-redundancy.py --include-live  # 连带扫描 src/test/live/
+.venv/bin/python scripts/check-test-redundancy.py --audit         # 附加建议性骨架审计（同名同骨架分组找复制粘贴嫌疑；恒不参与退出码）
+.venv/bin/python scripts/check-test-redundancy.py --audit --audit-all  # 骨架审计连带文件内组（默认仅跨文件）
 ```
+
+> `--audit` 为建议性输出：骨架同构多为合法矩阵契约（同场景×不同模块），须人工判读后决定合并或差异化断言；`--audit-all` 连带文件内组。
 
 > 删除/合并用例后须同步刷新 `test-coverage.md`（模式/子标记计数）与 `folders.md`（测试文件数/行数/用例数），
 > 两处由 `check-doc-drift.py --with-test-count` 兜底核对。**修法优先级**：名实不符的用例应改成真正跑它名字
@@ -1760,7 +1767,7 @@ DataModuleDef("我的 LLM 分析", "llm_my_analysis",
 |---|------|---------|------|
 | ① | **注册模块定义** | `core/registry.py` → `_MODULE_REGISTRY` | 添加 `DataModuleDef` 实例，含 `settings_suffix` |
 | ② | **配置 JSON 键组** | `llm_settings.json` | 新增 9~10 个 `{key}_{suffix}` 配置键（`news_correlation` 不含 `output_brief`） |
-| ③ | **实现生成函数** | `llm/generators.py` | 新增生成函数，通过 `_call_llm()` 调用 LLM |
+| ③ | **实现生成函数** | `llm/generators.py` | 新增生成函数，通过 `call_llm()` 调用 LLM |
 | ④ | **注册调度入口** | `llm/_llm_dispatch.py` + `llm/generators_orchestrator.py` + `llm/module_fingerprint.py` | 在 `_llm_dispatch._build_module_fns()` 返回的 `_MODULE_FNS` 字典中添加新模块条目（键=settings_suffix，值=lambda 调用新函数）；在 orchestrator 的 `_compute_module_cache_info()` 中添加对应的 `info` 条目。**指纹不进 orchestrator**：在 `module_fingerprint.py` 的 `MODULE_FINGERPRINT_BUILDERS` 登记该模块的构造器（输入闭包 `ModuleFingerprintInputs`），预检侧按键取指纹、写侧闭包调用同一函数——两侧都不得自行拼接指纹片段 |
 | ⑤ | **添加报告页签** | `report/llm_content.py` | 在 `write_llm_sheets()` 的 `_module_keys` 和 `_module_contents` 列表中添加新模块键名 |
 | ⑥ | **暴露导出接口** | `llm/__init__.py` | 将新生成函数加入 `__all__` |
@@ -1882,7 +1889,7 @@ registry 的测试在 `src/test/unit/core/test_registry.py`，验证 TTL 默认�
 
 发布版本时，按以下六步顺序执行：
 
-> 可用 `scripts/release.py` 分步编排（发布流程的可执行封装，每步独立可审阅、失败即停）：`check`（预检）→ `prepare`（版本全链、changelog 发布段归档与一致性 `--fix`，收尾自动 `doc-drift --sync`）→ `refresh` + `evolution --release`（数据刷新与演进快照，evolution 收尾同样自动 sync）→ `gate`（P2 门禁）→ `publish --title`（release 提交 + P1 verify + `--no-ff` 合并 + tag）→ `devbump`（切开发版）；rf/plan/docs-plan 归档迁移保留人工（需判断归档段语义）且必须在 `gate`/`publish` 前完成（见下方步骤③）；**分层纪律**：归档迁移或任何涉及管理文档/代码注释的改动完成后，进 `gate` 前先跑秒级便宜守护（至少 `check-doc-traces --ci` + `check-doc-links --ci`，改动面大时十守护全跑）——守护发现前置，避免 P2 门禁的全量 regression 因文档级 finding 白跑第二轮。下列手动命令为底层口径，脚本失败时按手动步骤排查。
+> 可用 `scripts/release.py` 分步编排（发布流程的可执行封装，每步独立可审阅、失败即停）：`check`（预检）→ `prepare`（版本全链、changelog 发布段归档**并自动重写归档头部「涵盖版本 / 归档时间」（区间与并入记录由归档内各发布段标题派生，无需人工维护）**、一致性 `--fix`，收尾自动 `doc-drift --sync`）→ `refresh` + `evolution --release`（数据刷新与演进快照，evolution 收尾同样自动 sync）→ `gate`（P2 门禁）→ `publish --title`（release 提交 + P1 verify + `--no-ff` 合并 + tag）→ `devbump`（切开发版）；rf/plan/docs-plan 归档迁移保留人工（需判断归档段语义）且必须在 `gate`/`publish` 前完成（见下方步骤③）；**分层纪律**：归档迁移或任何涉及管理文档/代码注释的改动完成后，进 `gate` 前先跑秒级便宜守护（至少 `check-doc-traces --ci` + `check-doc-links --ci`，改动面大时十守护全跑）——守护发现前置，避免 P2 门禁的全量 regression 因文档级 finding 白跑第二轮。下列手动命令为底层口径，脚本失败时按手动步骤排查。
 
 **① 版本号一致**
 
@@ -1915,7 +1922,7 @@ registry 的测试在 `src/test/unit/core/test_registry.py`，验证 TTL 默认�
 
 - ① `review-findings.md`「已解决问题」区**全部**条目迁入对应版本的自审归档（同步更新归档头部涵盖版本/追加行与主文件「归档档案」索引行）
 - ② `plan.md` 不得残留 ✅/已完成任务节（完成态移入对应版本的 plan 归档）
-- ③ changelog 已发布段移入对应版本的 changelog 归档（`release.py prepare` 自动执行，人工核对指针与归档索引）
+- ③ changelog 已发布段移入对应版本的 changelog 归档 + 归档头部「涵盖版本」「归档时间」两行重写（`release.py prepare` 全部自动执行：段追加与头部区间/并入记录均由归档内 `## [版本] - 日期` 段列表派生；人工只需核对 diff 中主文件指针与归档索引行）
 - ④ `docs/plan/` 中**已完成任务**的迭代设计文件移入对应版本归档子目录（在办任务的设计文件保留，按其关联 plan/rf 任务状态判定），同步更新 plan.md/folders.md 引用链接与目录树
 
 **④ 版本标签**

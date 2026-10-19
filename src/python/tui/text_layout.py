@@ -191,6 +191,21 @@ def wrap_hanging(text: str, columns: int, indent: str = "    ") -> list[str]:
     return lines
 
 
+def wrap_prompt(prompt: str, columns: int | None = None) -> str:
+    """``input()`` 提示折行助手：超宽按显示宽度折行，末行留「  > 」输入位。
+
+    提示显示宽度不超过当前终端宽度时原样返回（零开销）；超窄屏（手机）
+    折行后追加短尾缀行，输入光标与提示不再脱节。窄屏验收基准 40 列
+    （与 :func:`terminal_columns` 下限一致），超长提示的机检守护见
+    ``test_text_layout.py::TestInputPromptNarrowContract``。
+    """
+    columns = columns or terminal_columns()
+    if display_width(prompt) <= columns:
+        return prompt
+    lines = wrap_display(prompt.strip(), columns)
+    return "\n".join(lines) + "\n  >  "
+
+
 def wrap_with_prefix(prefix: str, text: str, columns: int, *, indent: str | None = None) -> list[str]:
     """带首行前缀的折行：首行用「前缀 + 正文」，续行按缩进对齐。
 

@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from src.python.tui.switch_panel import (
@@ -82,6 +84,15 @@ class TestFormatItemTiers:
         assert len(lines) == 1
         assert "rebalance_schedule_replay" not in lines[0]
         assert "[关]*" in lines[0]  # 状态用短标签省列
+
+    @pytest.mark.parametrize("columns", [40, 46, 80, 120])
+    def test_cursor_prepends_and_keeps_width(self, columns):
+        """cursor= 把 ▸ 拼在首行编号前（截断前），且不破坏「每行 ≤ 内宽」不变式。"""
+        lines = format_item(columns=columns, cursor="▸", **_ITEM)
+        assert lines[0].startswith("▸"), "首行须以游标 ▸ 开头"
+        limit = inner_width(columns)
+        assert all(display_width(ln) <= limit for ln in lines), "游标拼入后仍不得超内宽"
+        assert "▸" not in format_item(columns=columns, **_ITEM)[0], "缺省 cursor 不得出现 ▸（向后兼容）"
 
     @pytest.mark.parametrize("columns", [40, 46, 60, 64, 80, 95, 96, 120, 200])
     def test_no_row_exceeds_inner_width(self, columns):
@@ -187,12 +198,89 @@ class TestPanelWidthSweep:
         assert "┌──" in wide
         assert "global_macro" in wide
 
-    def test_narrow_does_not_repaint_after_action(self):
-        """窄终端一次操作只回反馈行（`p` 才重绘）——纵向空间是手机最稀缺资源。"""
+    def test_narrow_failed_write_stays_on_feedback_line(self):
+        """窄终端失败路径（无效赋值）不重绘：一行报错即可，`p` 才重绘面板。"""
         lines = self._render(50, keys=("zzz=on", "0"))
         text = "\n".join(lines)
-        assert text.count("功能开关（") == 1, "操作后不应整屏重绘"
+        assert text.count("功能开关（") == 1, "失败路径不应整屏重绘"
         assert "输入 p 重绘面板" in text
+
+
+class TestRepaintAndHelpVisible:
+    """写路径即时重绘 + `?` 说明留屏（人机交互反馈即时性契约，宽窄两档）。
+
+    反馈契约三条：①切换成功后面板立即重绘且反馈行带编号（不需再按 `p`）；
+    ②窄终端 `?` 说明不被重绘顶走；③只读查询不出现「状态已更新」类误导提示。
+    """
+
+    @staticmethod
+    def _run(columns: int, keys: tuple[str, ...]) -> str:
+        import contextlib
+        import io
+        from unittest.mock import patch
+
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        buf = io.StringIO()
+        with (
+            patch.dict("os.environ", {"COLUMNS": str(columns)}),
+            patch("os.get_terminal_size", side_effect=OSError()),
+            patch("builtins.input", side_effect=list(keys)),
+            patch("src.python.tui.handlers_config.press_any_key"),
+            patch("src.python.tui.handlers_config.refresh_config"),
+            patch("src.python.tui.handlers_config._apply_edit", return_value=True),
+            patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json")),
+        ):
+            with contextlib.redirect_stdout(buf):
+                _cmd_config_llm_modules()
+        return buf.getvalue()
+
+    def test_narrow_write_repaints_with_numbered_feedback(self):
+        """窄终端切换成功：反馈行带编号，且面板立即重绘（不需再按 `p`）。"""
+        text = self._run(40, ("3", "0"))
+        plain = re.sub(r"\x1b\[[0-9;]*m", "", text)  # 剥离颜色码后匹配反馈文案
+        # 反馈长句在窄屏会折成多行（名称/状态词各占一行），只锚定「[OK] + 编号」前缀
+        assert re.search(r"\[OK\] 3", plain), "反馈行应带被切换项的编号"
+        assert "已关闭" in plain or "已开启" in plain
+        assert text.count("功能开关（") == 2, "写路径成功后应立即重绘面板"
+        assert "输入 p 重绘面板" not in text
+
+    def test_narrow_question_mark_keeps_detail_on_screen(self):
+        """窄终端 `?3` 说明：详情上屏后不被整屏重绘顶走，只给 `p` 重绘提示。"""
+        text = self._run(40, ("?3", "0"))
+        assert text.count("功能开关（") == 1, "只读查询不应整屏重绘"
+        assert "输入 p 重绘面板" in text
+        assert text.index("出厂默认") > text.index("功能开关（"), "详情应出现在面板之后而非被顶走"
+
+    def test_esc_returns_to_main_menu_without_write(self):
+        """子菜单 Esc（input_choice → None）即时返回主菜单：不重绘、不写配置。"""
+        import contextlib
+        import io
+        from unittest.mock import patch
+
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        buf = io.StringIO()
+        with (
+            patch.dict("os.environ", {"COLUMNS": "40"}),
+            patch("os.get_terminal_size", side_effect=OSError()),
+            patch("src.python.tui.handlers_config.input_choice", return_value=None),
+            patch("src.python.tui.handlers_config.press_any_key"),
+            patch("src.python.tui.handlers_config.refresh_config"),
+            patch("src.python.tui.handlers_config._apply_edit") as mock_apply,
+            patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json")),
+        ):
+            with contextlib.redirect_stdout(buf):
+                _cmd_config_llm_modules()
+        assert buf.getvalue().count("功能开关（") == 1, "Esc 直接返回，不应重绘面板"
+        mock_apply.assert_not_called()
+
+    def test_wide_question_mark_repaints_without_stale_hint(self):
+        """宽终端 `?3` 说明：随后正常重绘，且不出现「状态已更新」误导提示。"""
+        text = self._run(120, ("?3", "0"))
+        assert text.count("┌──") == 2, "宽档只读查询后照常重绘面板"
+        assert "状态已更新" not in text, "只读查询不得暗示状态被修改"
+        assert "出厂默认" in text
 
 
 class TestStatusColoring:

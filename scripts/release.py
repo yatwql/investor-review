@@ -65,6 +65,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享设�
 from _release._changelog_archive import (  # noqa: E402, F401 — _SECTION_NOTE 供测试经入口模块引用
     SECTION_NOTE as _SECTION_NOTE,
     apply_changelog_release,
+    render_archive_header,
     write_archive_release,
 )
 from _release._common import ReleaseError, exec_command as _exec  # noqa: E402

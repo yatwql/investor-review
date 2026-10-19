@@ -769,3 +769,52 @@ class TestMenuBlockConsistency:
         p = tmp_path / "faq.md"
         findings = drift.check_menu_blocks({p: "# 无菜单块\n\n普通段落。\n"})
         assert any("未找到主菜单 code block" in f for f in findings)
+
+
+class TestReturnKeyInvariant:
+    """全文档「返回主菜单」键=0 不变量（第 18 项扩展：返回键全局统一）。"""
+
+    def test_zero_forms_all_pass(self, drift, tmp_path):
+        """各合法 0 键形态（图块/列表/表格）无 finding。"""
+        p = tmp_path / "how-to-use-tui-menu.md"
+        text = (
+            "```text\n   [0] 返回主菜单\n```\n"
+            "- **0 返回主菜单**（回车同效）\n"
+            "| D | 聚合三项；`[0]` 返回主菜单，改完可继续改其它项 |\n"
+        )
+        assert drift.check_return_key_invariant({p: text}) == []
+
+    def test_block_b_key_reported(self, drift, tmp_path):
+        """图块 [B] 返回 → 报应为 0。"""
+        p = tmp_path / "how-to-use-tui-menu.md"
+        findings = drift.check_return_key_invariant({p: "```text\n   [B] 返回主菜单\n```\n"})
+        assert any("[B]" in f and "应为 0" in f for f in findings)
+
+    def test_list_bold_b_reported(self, drift, tmp_path):
+        """列表项「**B 返回主菜单**」→ 报应为 0。"""
+        p = tmp_path / "how-to-use-tui-menu.md"
+        findings = drift.check_return_key_invariant({p: "- **B 返回主菜单**（回车同效）\n"})
+        assert any("[B]" in f and "应为 0" in f for f in findings)
+
+    def test_table_backtick_key_reported(self, drift, tmp_path):
+        """表格内反引号包裹的 `[B]` 返回（真实残留形态，人工 grep 模式会漏）→ 报应为 0。"""
+        p = tmp_path / "requirements.md"
+        findings = drift.check_return_key_invariant(
+            {p: "| D | 聚合三项，另有配置入口地图；`[B]` 返回主菜单，改完可继续改其它项 |\n"}
+        )
+        assert any("[B]" in f and "应为 0" in f for f in findings)
+
+    def test_prose_exempt(self, drift, tmp_path):
+        """自由 prose 叙述豁免（FAQ 的 Ctrl+C 形态 / QA 流内 q 退出非面板导航）。"""
+        p = tmp_path / "faq.md"
+        text = "按 `Ctrl+C` 中断返回主菜单，检查 `logs/app.log`。\n\n3. 输入问题回车；输入回车或 `q` 返回主菜单。\n"
+        assert drift.check_return_key_invariant({p: text}) == []
+
+    def test_distant_key_and_tail_chinese_exempt(self, drift, tmp_path):
+        """行内远处非返回键与行尾中文（changelog 式列表/表格叙述）不误报。"""
+        p = tmp_path / "technical.md"
+        text = (
+            "- **优化**：`[L]` 生成确认合并，Esc 即时取消（返回主菜单）语义不变\n"
+            "| **Esc** | 子菜单：按 Esc 即时取消返回主菜单，无需找「0 返回」 |\n"
+        )
+        assert drift.check_return_key_invariant({p: text}) == []

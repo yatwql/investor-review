@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """测试用例冗余与无效检查（test redundancy / dead test check）—— 静态扫测试源，找「跑不到」「测不出」「同义反复」「重复」的用例。
 
-四类检查（全部基于 AST 静态分析，不执行测试、不依赖网络）：
+八类检查（全部基于 AST 静态分析，不执行测试、不依赖网络）：
 
   A. **死用例（不可收集 / 被覆盖）** — pytest 永远不会执行的用例：
      - 同文件同类内同名重复定义（后者覆盖前者）
@@ -18,20 +18,28 @@
      此时断言恒真，等于没测（常见于「顺手把被测函数也 patch 了」）。
   E. **硬编码「会演进的总数」** — 把需求/章节/开关等可增长集合的条数写死在断言里（如
      `assert len(req_ids) == 276`）。这类总数是文档真值来源的派生量，新增一条需求就会把测试打红，
-     且与门禁脚本的全域覆盖断言职责重复。正确做法：结构关系断言（集合双向相等 / 域覆盖 / 序号连续）。结构关系断言（集合双向相等 / 域覆盖 / 序号连续）。
+     且与门禁脚本的全域覆盖断言职责重复。正确做法：结构关系断言（集合双向相等 / 域覆盖 / 序号连续）。
+  F. **恒真断言** — `assert True` / `assert x == x`：形式上有断言、实际不验证任何行为。
+  G. **死 fixture** — test 文件内定义（排除 conftest 与 autouse）且全仓语料（测试 + conftest）
+     无任何引用——定义后从未被用例/夹具消费的死代码。
+  H. **弱 mock 断言** — `assert <mock>.<属性>` 作真值 / `assertIsNotNone(<mock>)`：Mock 对象
+     恒真且不为 None，断言恒成立不验证行为（`.called` / `assert_called*` 等专用断言不算弱）。
 
 按设计排除：`src/test/live/`（`pytest.ini` 刻意排除的 opt-in 真网套件，默认不扫，`--include-live` 可纳入）、
 `*_edge.py` 不特殊对待（同为测试，同样受检）。
 
 用法：
-  python scripts/check-test-redundancy.py                 # 四类全查
+  python scripts/check-test-redundancy.py                 # 八类全查
   python scripts/check-test-redundancy.py -v              # 详细输出（打印被跳过的间接调用用例数等）
   python scripts/check-test-redundancy.py --ci            # CI 模式：仅输出 文件:描述，退出码 2
   python scripts/check-test-redundancy.py --include-live  # 连带扫描 src/test/live/
+  python scripts/check-test-redundancy.py --audit         # 附加建议性骨架审计（同名同骨架分组，找复制粘贴嫌疑）
+  python scripts/check-test-redundancy.py --audit --audit-all  # 骨架审计连带文件内组（默认仅跨文件高信号）
 
 退出码：
   0 — 全部通过
-  2 — 发现死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数
+  2 — 发现死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言
+  注：`--audit` 为建议性附加输出，恒不改变退出码（骨架同构多为合法矩阵契约，须人工判读）
 
 性能（增量事实缓存）：
   按文件「size:mtime_ns」签名缓存每文件检查事实，未变更文件免解析免检查；跨文件重复
@@ -542,6 +550,171 @@ def check_hardcoded_evolving_totals(cases: list[TestCase]) -> list[str]:
 #  增量事实缓存（性能层，不改判定口径）
 # ═══════════════════════════════════════════════════════════════
 
+# ═════════════════════════════════════════════════════════════
+#  F/G/H. 恒真断言 / 死 fixture / 弱 mock 断言
+# ═════════════════════════════════════════════════════════════
+
+
+def check_trivially_true(cases: list[TestCase]) -> list[str]:
+    """F：恒真断言——`assert True` / `assert x == x`，不验证任何行为。"""
+    findings: list[str] = []
+    for case in cases:
+        for sub in ast.walk(case.node):
+            if not isinstance(sub, ast.Assert):
+                continue
+            t = sub.test
+            if isinstance(t, ast.Constant) and t.value is True:
+                findings.append(
+                    f"{rel(case.path)}:{case.lineno}: 用例 {case.name} 恒真断言（assert True，不验证任何行为）"
+                )
+            elif (
+                isinstance(t, ast.Compare)
+                and len(t.ops) == 1
+                and isinstance(t.left, ast.Name)
+                and any(isinstance(c, ast.Name) and c.id == t.left.id for c in t.comparators)
+            ):
+                findings.append(
+                    f"{rel(case.path)}:{case.lineno}: 用例 {case.name} 恒真断言（x == x 恒真，不验证任何行为）"
+                )
+    return findings
+
+
+def _is_mock_name(node: ast.AST) -> bool:
+    """变量名是否 mock 形态（含 mock / m_ 前缀）。"""
+    if not isinstance(node, ast.Name):
+        return False
+    low = node.id.lower()
+    return "mock" in low or low.startswith("m_")
+
+
+def check_weak_mock_assertions(cases: list[TestCase]) -> list[str]:
+    """H：弱 mock 断言——`assert <mock>.<属性>` 真值 / `assertIsNotNone(<mock>)`（含 unittest 方法形态）。"""
+    findings: list[str] = []
+    for case in cases:
+        for sub in ast.walk(case.node):
+            if isinstance(sub, ast.Assert):
+                t = sub.test
+                if (
+                    isinstance(t, ast.Attribute)
+                    and _is_mock_name(t.value)
+                    and not t.attr.startswith(("called", "call_", "assert_", "reset"))
+                ):
+                    findings.append(
+                        f"{rel(case.path)}:{case.lineno}: 用例 {case.name} 弱 mock 断言（assert {t.value.id}.{t.attr} 真值"
+                        "——Mock 恒真，应改断言具体值/调用参数）"
+                    )
+            elif (
+                isinstance(sub, ast.Call)
+                and isinstance(sub.func, ast.Attribute)
+                and sub.func.attr in ("assertIsNotNone", "assertTrue")
+                and len(sub.args) == 1
+                and _is_mock_name(sub.args[0])
+            ):
+                findings.append(
+                    f"{rel(case.path)}:{case.lineno}: 用例 {case.name} 弱 mock 断言（{sub.func.attr}(<mock>)"
+                    "——Mock 恒真且不为 None，应改断言具体值/调用参数）"
+                )
+    return findings
+
+
+def _fixture_exposed_name(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str | None:
+    """fixture 暴露名（`name=` 别名优先于函数名）；非 fixture / autouse（机制消费）返回 None。"""
+    is_fixture = False
+    exposed = node.name
+    for deco in node.decorator_list:
+        target = deco.func if isinstance(deco, ast.Call) else deco
+        if isinstance(target, ast.Attribute) and target.attr == "fixture":
+            pass
+        elif isinstance(target, ast.Name) and target.id == "fixture":
+            pass
+        else:
+            continue
+        if isinstance(deco, ast.Call):
+            if any(kw.arg == "autouse" and getattr(kw.value, "value", None) is True for kw in deco.keywords):
+                return None  # autouse 由 pytest 机制自动消费，无参数引用，不判死
+            for kw in deco.keywords:
+                if kw.arg == "name" and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
+                    exposed = kw.value.value  # @pytest.fixture(name="别名")：用例参数引用的是别名
+        is_fixture = True
+    return exposed if is_fixture else None
+
+
+def check_dead_fixtures(facts: dict[str, dict]) -> list[str]:
+    """G：死 fixture——test 文件内定义且暴露名未被本文件任何函数参数 / usefixtures 引用（conftest 定义不判死）。"""
+    findings: list[str] = []
+    for key, item in facts.items():
+        local = set(item.get("params", [])) | set(item.get("usefix", []))
+        for name, lineno in item.get("fixtures", []):
+            if name not in local:
+                findings.append(f"{rel(Path(key))}:{lineno}: fixture {name} 定义后无引用（死 fixture，删除或接入用例）")
+    return findings
+
+
+# ═════════════════════════════════════════════════════════════
+#  I. 骨架审计（--audit 建议性，不参与守护退出码）
+# ═════════════════════════════════════════════════════════════
+
+
+class _Skeletonizer(ast.NodeTransformer):
+    """骨架归一：字面量→占位（True/False/None 保留种类）、参数名→A、私有名→N。"""
+
+    def visit_Constant(self, node: ast.Constant):
+        if node.value is True or node.value is False or node.value is None:
+            return node
+        return ast.copy_location(ast.Constant("<V>"), node)
+
+    def visit_arg(self, node: ast.arg):
+        node.arg = "A"
+        return node
+
+    def visit_Name(self, node: ast.Name):
+        if node.id.startswith("_"):
+            node.id = "N"
+        return node
+
+
+def _skeleton_hash(case: TestCase) -> str | None:
+    """骨架哈希：同名同骨架 = 复制粘贴嫌疑（仅字面量/局部私有名不同）。"""
+    try:
+        node = ast.parse(ast.unparse(case.node)).body[0]
+    except (ValueError, SyntaxError, MemoryError):
+        return None
+    node = _Skeletonizer().visit(node)
+    fn = ast.FunctionDef(
+        name="t", args=node.args, body=_strip_docstring(node.body), decorator_list=[], returns=None, type_comment=None
+    )
+    return hashlib.sha1(ast.dump(ast.fix_missing_locations(fn), include_attributes=False).encode("utf-8")).hexdigest()[
+        :10
+    ]
+
+
+def audit_similar_bodies(include_live: bool = False, include_intra: bool = False) -> tuple[list[str], dict[str, int]]:
+    """同名同骨架分组（建议性审计）：默认仅跨文件组（复制粘贴高信号），``include_intra`` 连带文件内组。"""
+    groups: dict[tuple[str, str], list[str]] = defaultdict(list)
+    for path in _iter_test_files(include_live):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError):
+            continue
+        for case in cases_in_module(path, tree):
+            sk = _skeleton_hash(case)
+            if sk is None:
+                continue
+            cls_name = case.cls.name if case.cls is not None else "(module)"
+            groups[(case.name, sk)].append(f"{rel(path)}::{cls_name}")
+    lines: list[str] = []
+    n_intra = 0
+    for (name, sk), members in sorted(groups.items()):
+        if len(members) < 2:
+            continue
+        if len({m.split("::")[0] for m in members}) < 2:
+            n_intra += 1
+            if not include_intra:
+                continue
+        lines.append(f"[{name} / {sk}] " + " ; ".join(members))
+    return lines, {"groups": len(lines), "intra_groups_total": n_intra}
+
+
 _CACHE_ENV = "TEST_REDUNDANCY_CACHE"
 _CACHE_FILE = "test_redundancy_facts.json"
 
@@ -592,16 +765,36 @@ def _save_facts_cache(path: Path, files: dict[str, dict]) -> None:
 
 
 def _file_facts(path: Path, tree: ast.Module, cases: list[TestCase]) -> dict:
-    """单文件冷路径事实：四类文件内检查结果 + 跨文件重复比对所需指纹。
+    """单文件冷路径事实：各类文件内检查结果 + fixture 消费面 + 跨文件重复比对所需指纹。
 
     检查函数本体不改（单测契约不变），仅把调用从「全集两遍」变为「每文件一遍、命中缓存零遍」。
     """
+    fixtures: list[list] = []
+    params: list[str] = []
+    usefix: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            args = node.args
+            params.extend(a.arg for a in (*args.posonlyargs, *args.args, *args.kwonlyargs))
+            for extra in (args.vararg, args.kwarg):
+                if extra is not None:
+                    params.append(extra.arg)
+            exposed = _fixture_exposed_name(node)
+            if exposed is not None:
+                fixtures.append([exposed, node.lineno])
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "usefixtures":
+            usefix.extend(a.value for a in node.args if isinstance(a, ast.Constant) and isinstance(a.value, str))
     return {
         "count": len(cases),
         "dead": check_dead_tests(cases, {path: tree}),
         "assertion": check_assertion_free(cases),
         "self": check_self_fulfilling(cases),
         "hard": check_hardcoded_evolving_totals(cases),
+        "trivial": check_trivially_true(cases),
+        "weak": check_weak_mock_assertions(cases),
+        "fixtures": fixtures,
+        "params": params,
+        "usefix": usefix,
         "entries": [{"sig": body_signature(c), "lineno": c.lineno, "name": c.name} for c in cases],
     }
 
@@ -639,10 +832,13 @@ def run_checks(include_live: bool = False) -> tuple[list[str], dict[str, int]]:
     判定逐文件调用同一组 check_*（冷路径才算），跨文件只做事实归并与重复比对归并。
     """
     facts, parse_errors = _collect_facts(include_live)
+    dead_fixtures = check_dead_fixtures(facts)  # per-file 事实聚合判定（零额外解析，不污染缓存热路径）
     dead: list[str] = []
     assertion_free: list[str] = []
     self_fulfilling: list[str] = []
     hardcoded: list[str] = []
+    trivial: list[str] = []
+    weak: list[str] = []
     entries: list[tuple[str, int, str, str | None]] = []
     n_cases = 0
     for key, item in facts.items():
@@ -651,6 +847,8 @@ def run_checks(include_live: bool = False) -> tuple[list[str], dict[str, int]]:
         assertion_free += item["assertion"]
         self_fulfilling += item["self"]
         hardcoded += item["hard"]
+        trivial += item["trivial"]
+        weak += item["weak"]
         n_cases += item["count"]
         entries.extend((rel_path, e["lineno"], e["name"], e["sig"]) for e in item["entries"])
     dup_findings, skipped = _group_duplicate_entries(entries)
@@ -661,6 +859,9 @@ def run_checks(include_live: bool = False) -> tuple[list[str], dict[str, int]]:
     findings += dup_findings
     findings += self_fulfilling
     findings += hardcoded
+    findings += trivial
+    findings += dead_fixtures
+    findings += weak
     stats = {
         "files": len(facts),
         "cases": n_cases,
@@ -670,16 +871,26 @@ def run_checks(include_live: bool = False) -> tuple[list[str], dict[str, int]]:
         "duplicate": len(dup_findings),
         "self_fulfilling": len(self_fulfilling),
         "hardcoded_totals": len(hardcoded),
+        "trivial": len(trivial),
+        "dead_fixtures": len(dead_fixtures),
+        "weak_mock": len(weak),
     }
     return findings, stats
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数）",
+        description=(
+            "测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / "
+            "恒真断言 / 死 fixture / 弱 mock 断言）"
+        ),
     )
     add_common_args(parser)
     parser.add_argument("--include-live", action="store_true", help="连带扫描 src/test/live/（默认按 pytest.ini 排除）")
+    parser.add_argument(
+        "--audit", action="store_true", help="附加建议性骨架审计（同名同骨架分组，找复制粘贴嫌疑；恒不参与退出码）"
+    )
+    parser.add_argument("--audit-all", action="store_true", help="--audit 连带文件内组（默认仅跨文件高信号）")
     args = parser.parse_args()
 
     findings, stats = run_checks(include_live=args.include_live)
@@ -692,14 +903,27 @@ def main() -> None:
         print(
             f"  死用例 {stats['dead']} / 无断言 {stats['assertion_free']} /"
             f" 完全重复 {stats['duplicate']} / 自证用例 {stats['self_fulfilling']} /"
-            f" 硬编码演进总数 {stats['hardcoded_totals']}"
+            f" 硬编码演进总数 {stats['hardcoded_totals']} / 恒真断言 {stats['trivial']} /"
+            f" 死 fixture {stats['dead_fixtures']} / 弱 mock 断言 {stats['weak_mock']}"
         )
         print(f"  因不可解析的 self 间接调用而跳过重复比对的用例：{stats['duplicate_skipped']}")
+
+    if args.audit:
+        audit_lines, audit_stats = audit_similar_bodies(include_live=args.include_live, include_intra=args.audit_all)
+        hidden = (
+            "" if args.audit_all else f"（另文件内组 {audit_stats['intra_groups_total']} 未列，--audit-all 可显示）"
+        )
+        print(f"\n[..] 骨架审计（建议性，恒不参与退出码）：同名同骨架组 {audit_stats['groups']}{hidden}")
+        for line in audit_lines:
+            print(f"  {line}")
+        if audit_lines:
+            print("  说明：同构多为合法矩阵契约（同场景×不同模块），人工判读后如为复制粘贴须合并或差异化断言")
 
     sys.exit(
         report(
             findings,
-            "[OK] 测试用例冗余与无效检查通过（无死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数）",
+            "[OK] 测试用例冗余与无效检查通过（无死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / "
+            "恒真断言 / 死 fixture / 弱 mock 断言）",
             ci=args.ci,
             fail_message="[!] 发现 {n} 处测试用例问题，须修正后提交",
         )

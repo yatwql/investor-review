@@ -128,7 +128,7 @@ class TestConfigLlmModulesExperimentalFlags:
 
     @patch("src.python.tui.handlers_config.press_any_key")
     @patch("src.python.tui.handlers_config.refresh_config")
-    @patch("src.python.tui.handlers_config.input", side_effect=[str(_switch_menu_number("decision_reflection")), "0"])
+    @patch("builtins.input", side_effect=[str(_switch_menu_number("decision_reflection")), "0"])
     @patch("src.python.config.features.save_feature_overrides")
     @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
     @patch("src.python.core.registry.get_llm_module_names")
@@ -157,7 +157,7 @@ class TestConfigLlmModulesExperimentalFlags:
 
     @patch("src.python.tui.handlers_config.press_any_key")
     @patch("src.python.tui.handlers_config.refresh_config")
-    @patch("src.python.tui.handlers_config.input", side_effect=[str(_switch_menu_number("prosperity_framework")), "0"])
+    @patch("builtins.input", side_effect=[str(_switch_menu_number("prosperity_framework")), "0"])
     @patch("src.python.config.features.save_feature_overrides")
     @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
     @patch("src.python.core.registry.get_llm_module_names")
@@ -182,7 +182,7 @@ class TestConfigLlmModulesExperimentalFlags:
 
     @patch("src.python.tui.handlers_config.press_any_key")
     @patch("src.python.tui.handlers_config.refresh_config")
-    @patch("src.python.tui.handlers_config.input", side_effect=[str(_switch_menu_number("deterministic_signal")), "0"])
+    @patch("builtins.input", side_effect=[str(_switch_menu_number("deterministic_signal")), "0"])
     @patch("src.python.config.features.save_feature_overrides")
     @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
     @patch("src.python.core.registry.get_llm_module_names")
@@ -211,7 +211,7 @@ class TestConfigLlmModulesExperimentalFlags:
 
     @patch("src.python.tui.handlers_config.press_any_key")
     @patch("src.python.tui.handlers_config.refresh_config")
-    @patch("src.python.tui.handlers_config.input", side_effect=[str(_switch_menu_number("llm_debate_procon")), "0"])
+    @patch("builtins.input", side_effect=[str(_switch_menu_number("llm_debate_procon")), "0"])
     @patch("src.python.config.features.save_feature_overrides")
     @patch("src.python.config.features.set_feature_enabled")
     @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
@@ -237,7 +237,7 @@ class TestConfigLlmModulesExperimentalFlags:
 
     @patch("src.python.tui.handlers_config.press_any_key")
     @patch("src.python.tui.handlers_config.refresh_config")
-    @patch("src.python.tui.handlers_config.input", side_effect=[str(_switch_menu_number("metrics_enabled")), "0"])
+    @patch("builtins.input", side_effect=[str(_switch_menu_number("metrics_enabled")), "0"])
     @patch("src.python.config.features.save_feature_overrides")
     @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
     @patch("src.python.core.registry.get_llm_module_names")
@@ -265,7 +265,7 @@ class TestConfigLlmModulesExperimentalFlags:
 
     @patch("src.python.tui.handlers_config.press_any_key")
     @patch("src.python.tui.handlers_config.refresh_config")
-    @patch("src.python.tui.handlers_config.input", side_effect=[str(_switch_menu_number("doctor_check")), "0"])
+    @patch("builtins.input", side_effect=[str(_switch_menu_number("doctor_check")), "0"])
     @patch("src.python.config.features.save_feature_overrides")
     @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
     @patch("src.python.core.registry.get_llm_module_names")
@@ -323,7 +323,7 @@ class TestConfigPanelsAreRectangular:
         assert len(widths) == 1, f"面板右边框未对齐，出现 {len(widths)} 种行宽：{sorted(widths)}"
 
     @patch("src.python.tui.handlers_config.press_any_key")
-    @patch("src.python.tui.handlers_config.input", side_effect=["0"])
+    @patch("builtins.input", side_effect=["0"])
     @patch("src.python.tui.handlers_config._read_llm_settings")
     def test_llm_modules_panel_rectangular(self, mock_read, mock_input, mock_press, capsys):
         """LLM 分析章节面板：标准模块行与实验开关行在同一右边框内。"""
@@ -334,7 +334,7 @@ class TestConfigPanelsAreRectangular:
 
     @patch("src.python.tui.handlers_config.press_any_key")
     @patch("src.python.tui.handlers_config.refresh_config")
-    @patch("src.python.tui.handlers_config.input", side_effect=["0"])
+    @patch("builtins.input", side_effect=["0"])
     @patch("src.python.tui.handlers_config.get_config_cache")
     def test_comparison_indices_panel_rectangular(self, mock_cache, mock_input, mock_refresh, mock_press, capsys):
         """对比指数池面板：指数名含中文时右边框仍对齐。"""
@@ -345,7 +345,7 @@ class TestConfigPanelsAreRectangular:
 
     @patch("src.python.tui.handlers_config.press_any_key")
     @patch("src.python.tui.handlers_config.refresh_config")
-    @patch("src.python.tui.handlers_config.input", side_effect=["0"])
+    @patch("builtins.input", side_effect=["0"])
     @patch("src.python.config.get_config", return_value={})
     def test_report_boards_panel_rectangular(self, mock_get, mock_input, mock_refresh, mock_press, capsys):
         """报告可选章节面板：最长行（增强子模块说明）决定宽度且不撑破边框。"""
@@ -355,7 +355,7 @@ class TestConfigPanelsAreRectangular:
 
     @patch("src.python.tui.handlers_config.press_any_key")
     @patch("src.python.tui.handlers_config.refresh_config")
-    @patch("src.python.tui.handlers_config.input", side_effect=["0"])
+    @patch("builtins.input", side_effect=["0"])
     @patch("src.python.config.get_config", return_value=_SUB_BASE_CONFIG)
     def test_anonymization_panel_rectangular(self, mock_get, mock_input, mock_refresh, mock_press, capsys):
         """匿名化面板：带选中标记的行与普通行同宽（自成一档内区宽度）。"""
@@ -401,8 +401,8 @@ class TestConfigDirInfoSubmenu:
     @patch("src.python.tui.handlers_config._cmd_config_filename")
     @patch("src.python.tui.handlers_config._cmd_config_dir")
     def test_dispatches_three_sub_options_then_returns(self, mock_dir, mock_filename, mock_out, mock_input):
-        """依次选 C/F/O 分别路由到三个处理器，B 返回。"""
-        mock_input.side_effect = ["C", "F", "O", "B"]
+        """依次选 C/F/O 分别路由到三个处理器，0 返回。"""
+        mock_input.side_effect = ["C", "F", "O", "0"]
 
         from src.python.tui.handlers_config import _cmd_config_dir_info
 
@@ -416,7 +416,7 @@ class TestConfigDirInfoSubmenu:
     @patch("src.python.tui.handlers_config._cmd_config_dir")
     def test_lowercase_choice_accepted(self, mock_dir, mock_input):
         """小写子键归一化为大写后分发。"""
-        mock_input.side_effect = ["c", "B"]
+        mock_input.side_effect = ["c", "0"]
 
         from src.python.tui.handlers_config import _cmd_config_dir_info
 
@@ -427,8 +427,8 @@ class TestConfigDirInfoSubmenu:
     @patch("builtins.input")
     @patch("src.python.tui.handlers_config._cmd_config_dir")
     def test_back_returns_without_dispatch(self, mock_dir, mock_input):
-        """选 B 直接返回，不触发任何处理器。"""
-        mock_input.side_effect = ["B"]
+        """选 0 直接返回，不触发任何处理器。"""
+        mock_input.side_effect = ["0"]
 
         from src.python.tui.handlers_config import _cmd_config_dir_info
 
@@ -440,7 +440,7 @@ class TestConfigDirInfoSubmenu:
     @patch("src.python.tui.handlers_config._cmd_config_dir")
     def test_unknown_choice_reprompts(self, mock_dir, mock_input, capsys):
         """无效子键提示后重新等待输入，不误触发处理器。"""
-        mock_input.side_effect = ["Z", "B"]
+        mock_input.side_effect = ["Z", "0"]
 
         from src.python.tui.handlers_config import _cmd_config_dir_info
 
@@ -466,7 +466,7 @@ class TestSwitchPanelReadonlyInfo:
 
     @patch("src.python.tui.handlers_config.press_any_key")
     @patch("src.python.tui.handlers_config.refresh_config")
-    @patch("src.python.tui.handlers_config.input", side_effect=[f"? {_switch_menu_number('decision_reflection')}", "0"])
+    @patch("builtins.input", side_effect=[f"? {_switch_menu_number('decision_reflection')}", "0"])
     @patch("src.python.config.features.save_feature_overrides")
     @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
     @patch("src.python.core.registry.get_llm_module_names")
@@ -487,7 +487,7 @@ class TestSwitchPanelReadonlyInfo:
 
     @patch("src.python.tui.handlers_config.press_any_key")
     @patch("src.python.tui.handlers_config.refresh_config")
-    @patch("src.python.tui.handlers_config.input", side_effect=["? abc", f"? {9999}", "0"])
+    @patch("builtins.input", side_effect=["? abc", f"? {9999}", "0"])
     @patch("src.python.config.features.save_feature_overrides")
     @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
     @patch("src.python.core.registry.get_llm_module_names")
@@ -507,7 +507,27 @@ class TestSwitchPanelReadonlyInfo:
 
     @patch("src.python.tui.handlers_config.press_any_key")
     @patch("src.python.tui.handlers_config.refresh_config")
-    @patch("src.python.tui.handlers_config.input", side_effect=["? 1", "0"])
+    @patch("builtins.input", side_effect=["？1", "0"])
+    @patch("src.python.config.features.save_feature_overrides")
+    @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
+    @patch("src.python.core.registry.get_llm_module_names")
+    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
+    def test_full_width_question_mark_shows_detail(
+        self, mock_read, mock_names, mock_filter, mock_save, mock_input, mock_refresh, mock_press, capsys
+    ):
+        """全角 `？`（中文输入法默认输出）与半角 `?` 同效上屏说明，同样只读。"""
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        _cmd_config_llm_modules()
+
+        out = capsys.readouterr().out
+        assert "llm_settings.json → enabled_llm.global_macro" in out
+        assert "出厂默认" in out
+        mock_save.assert_not_called()
+
+    @patch("src.python.tui.handlers_config.press_any_key")
+    @patch("src.python.tui.handlers_config.refresh_config")
+    @patch("builtins.input", side_effect=["? 1", "0"])
     @patch("src.python.config.features.save_feature_overrides")
     @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
     @patch("src.python.core.registry.get_llm_module_names")
@@ -527,7 +547,7 @@ class TestSwitchPanelReadonlyInfo:
 
     @patch("src.python.tui.handlers_config.press_any_key")
     @patch("src.python.tui.handlers_config.refresh_config")
-    @patch("src.python.tui.handlers_config.input", side_effect=["0"])
+    @patch("builtins.input", side_effect=["0"])
     @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
     @patch("src.python.core.registry.get_llm_module_names")
     @patch(
@@ -548,7 +568,7 @@ class TestSwitchPanelReadonlyInfo:
 
     @patch("src.python.tui.handlers_config.press_any_key")
     @patch("src.python.tui.handlers_config.refresh_config")
-    @patch("src.python.tui.handlers_config.input", side_effect=["0"])
+    @patch("builtins.input", side_effect=["0"])
     @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
     @patch("src.python.core.registry.get_llm_module_names")
     @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
@@ -573,7 +593,7 @@ class TestSwitchPanelReadonlyInfo:
 
     @patch("src.python.tui.handlers_config.press_any_key")
     @patch("src.python.tui.handlers_config.refresh_config")
-    @patch("src.python.tui.handlers_config.input", side_effect=["0"])
+    @patch("builtins.input", side_effect=["0"])
     @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
     @patch("src.python.core.registry.get_llm_module_names")
     @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
@@ -911,10 +931,21 @@ class TestPanelPlainLanguageCopy:
         src = (Path(__file__).resolve().parents[4] / "src" / "python" / "tui" / "handlers_config.py").read_text(
             encoding="utf-8"
         )
-        assert "输入编号或键名切换 (0-" in src
+        assert "输入编号切换开关（如 3）" in src
         assert "请输入 ? 加编号或键名" in out
         assert "输入编号或键名" in out
         assert "slug" not in out and "slug" not in src
+
+    def test_prompt_teaches_main_path_with_example(self):
+        """提示语自带具体例子（如 3 / ?3 / 0 返回）——不看文档也知道怎么按。"""
+        from pathlib import Path
+
+        src = (Path(__file__).resolve().parents[4] / "src" / "python" / "tui" / "handlers_config.py").read_text(
+            encoding="utf-8"
+        )
+        assert "输入编号切换开关（如 3）" in src, "主路径要有具体编号示例，不能只写占位符"
+        assert "?3 查看说明" in src, "说明查询要有无空格写法示例"
+        assert "0 返回" in src, "返回通道要在提示语里可见"
 
 
 class TestLlmRowCostSuffix:
@@ -1004,9 +1035,9 @@ class TestConfigEntryMap:
             assert label.strip() and hint.strip()
             assert keys.startswith("[") and keys.endswith("]")
 
-    @patch("builtins.input", side_effect=["M", "B"])
+    @patch("builtins.input", side_effect=["M", "0"])
     def test_d_submenu_renders_map_then_returns(self, mock_input, capsys):
-        """[D] → M 打印入口地图后回到子菜单，B 返回；全程不调用任何写入处理器。"""
+        """[D] → M 打印入口地图后回到子菜单，0 返回；全程不调用任何写入处理器。"""
         from src.python.tui.handlers_config import _cmd_config_dir_info
 
         with (
@@ -1021,13 +1052,13 @@ class TestConfigEntryMap:
         for handler in (m_dir, m_fn, m_out):
             handler.assert_not_called()
 
-    @patch("builtins.input", side_effect=["Z", "B"])
+    @patch("builtins.input", side_effect=["Z", "0"])
     def test_invalid_choice_lists_map_option(self, mock_input, capsys):
-        """无效选择提示含新增的 M 选项（C/F/O/M/B）。"""
+        """无效选择提示含新增的 M 选项（C/F/O/M/0）。"""
         from src.python.tui.handlers_config import _cmd_config_dir_info
 
         _cmd_config_dir_info()
-        assert "请输入 C/F/O/M/B" in capsys.readouterr().out
+        assert "请输入 C/F/O/M/0" in capsys.readouterr().out
 
     def test_map_rendering_is_readonly(self):
         """纯渲染无副作用：不调用配置写入/刷新入口。"""
