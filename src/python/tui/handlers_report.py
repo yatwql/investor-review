@@ -16,7 +16,7 @@ from src.python.tui.tui_handlers import (
     print_error_with_hint,
     print_llm_session_usage,
 )
-from src.python.tui.text_layout import wrap_prompt
+from src.python.tui.text_layout import terminal_columns, wrap_hanging, wrap_prompt
 from src.python.tui.tui_keys import PromptCancelledError, input_choice
 from src.python.tui.tui_menu import get_config_cache
 
@@ -149,7 +149,7 @@ def _cmd_generate_both() -> None:
 
 
 def _prompt_generate_confirm(reporter: TuiProgressReporter, config: dict) -> tuple[bool, list[str] | None, bool] | None:
-    """合并单屏一次确认：费用预估上屏 + 单条提示（回车=生成 / f=强刷 / [h=历史] / q=中止）。
+    """问句式单屏一次确认：费用预估上屏 + 问句（讲清强刷代价差异）+ 键位行（回车 / f / [h] / q）。
 
     替代原先「①强刷 y/N → ③费用预估 y/N」两问（默认路径从 2~3 问降为 1 问）；历史走势以
     ``h`` 选项并入本屏（仅 fetch_mode=prompt 时展示，其余模式由共享层 resolve 单源解析）。
@@ -187,10 +187,13 @@ def _prompt_generate_confirm(reporter: TuiProgressReporter, config: dict) -> tup
             print("  [..] 降级走缓存：本次不获取历史走势")
         return (False, None, fetch_history)
 
-    # 合并单屏：回车=默认生成（走缓存）/ f=强制刷新（选模块）/ h=含历史走势 / q=中止
+    # 问句式：问句行先答「为什么/代价是什么」，键位行只作答——不要求用户记暗语
     hist_opt = " / h=含历史走势" if (mode == "prompt" and is_enable_history(config)) else ""
+    _question = "  [?] 是否强制刷新 LLM？（强刷=重新调模型计费；默认=用已有缓存生成，不产生新费用）"
+    for _line in wrap_hanging(_question, terminal_columns(), indent="      "):
+        print(_line)
     try:
-        resp = input_choice(wrap_prompt(f"  [..] 回车=生成 / f=强制刷新{hist_opt} / q=中止: "))
+        resp = input_choice(wrap_prompt(f"  回车=用缓存生成 / f=强制刷新（可选模块）{hist_opt} / q=中止: "))
     except (EOFError, KeyboardInterrupt):
         return None
     if resp is None:  # Esc
