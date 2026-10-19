@@ -64,7 +64,7 @@
 
 **交付方式**：与 `plan-157`、`plan-158` **同一 PR 交付**；同批必须跑 `dev-verify` + 面板窄/宽两档用例（C29 语义不变）
 
-**进展**：新建 `tui/prompt_text.py`（`panel_prompt` / `confirm_prompt` / `keys_help_lines` / `item_detail_lines`）+ 用例 6 例；7 处 `panel_loop` 提示全部改模板产出，机检断言「prompt 必须是 `panel_prompt` 调用」。**剩余**：`input_choice` 类提示（报告确认 / 模块选择 / 追问编号 / What-if 日期）迁移到 `confirm_prompt`，机检规则 3 的白名单（4 条运行时内部短提示）保持只减不增
+**进展**：新建 `tui/prompt_text.py`（`panel_prompt` / `keys_help_lines` / `item_detail_lines`）+ 用例；7 处 `panel_loop` 提示全部改模板产出，机检断言「prompt 必须是 `panel_prompt` 调用」。**原「剩余：`input_choice` 类提示迁移到 `confirm_prompt`」方向关闭**——确认类屏已按「问句行 + 键位行」两行式落地（生成确认 Y/N 化）后单行模板失去挂点，`confirm_prompt` 已删除（review-findings 已解决 rf-733，`panel_prompt` 保留）；机检规则 3 的白名单（4 条运行时内部短提示）保持只减不增
 
 #### 🔲 `plan-160` 主菜单编号连续化
 

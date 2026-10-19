@@ -427,7 +427,7 @@
     // full 模式含 LLM 调用：先取事前费用预估做确认弹层（预估失败不阻塞）；
     // 超日预算时须显式确认（budget_ack + 用已有结果）才能提交
     if (body.report_type === 'full') {
-      confirmCostForecast().then(function (decision) {
+      confirmCostForecast(body.llm_modules).then(function (decision) {
         if (!decision.proceed) {
           resetGenerateBtn();
           return;
@@ -453,8 +453,13 @@
   }
 
   /* ── 事前费用预估确认弹层（native confirm；预估失败/无模块/网络失败 → 不阻塞继续）── */
-  function confirmCostForecast() {
-    return fetch('/api/runs/cost-preflight?report_type=full', {
+  function confirmCostForecast(modules) {
+    // 重新生成范围透传预检：选了模块时预估按所选范围重估（与提交 body 同源）
+    var qs = '/api/runs/cost-preflight?report_type=full';
+    if (modules && modules.length) {
+      qs += '&llm_modules=' + encodeURIComponent(modules.join(','));
+    }
+    return fetch(qs, {
       signal: AbortSignal.timeout(8000),
     })
       .then(function (res) {
@@ -477,6 +482,10 @@
         var lines =
           '本次生成 LLM 费用预估 ' + sym + f.low.toFixed(4) +
           ' ~ ' + sym + f.high.toFixed(4) + '（计划 ' + f.module_count + ' 个模块）';
+        if (f.forced_count) {
+          lines += '\n其中 ' + f.forced_count + ' 个模块重新生成：' +
+            sym + f.forced_low.toFixed(4) + ' ~ ' + sym + f.forced_high.toFixed(4);
+        }
         if (b && b.enabled) {
           lines += '\n今日已花费 ' + bsym + b.spent.toFixed(4) + ' / 日预算 ' + bsym + b.limit.toFixed(4);
         } else if (b) {

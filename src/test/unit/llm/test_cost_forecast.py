@@ -272,3 +272,67 @@ class TestSummaryLines:
         off = {"enabled": False, "limit": 0.0, "spent": 0.3, "exceeded": False, "symbol": "¥"}
         assert any("已达上限" in ln for ln in forecast_summary_lines(fc, on))
         assert any("未设日预算上限" in ln for ln in forecast_summary_lines(fc, off))
+
+
+class TestForceScopeForecast:
+    """重新生成范围感知：选模块路径与默认路径不再给同一区间（范围内模块静态口径）。"""
+
+    @staticmethod
+    def _cfg():
+        return {
+            "provider": "openai",
+            "model": "gpt-4o",
+            "api_key": "k",
+            "base_url": "",
+            "temperature": 0.2,
+            "timeout": 30,
+            "max_retries": 2,
+            "enabled": True,
+            "enabled_llm": [],
+        }
+
+    @staticmethod
+    def _hist():
+        # perf 历史真实结构：rec["llm"]["modules"][键]["cost"]
+        return [
+            {
+                "run_id": "r1",
+                "llm": {
+                    "modules": {
+                        "expert_review": {"ok": True, "cost": 0.5},
+                        "global_macro": {"ok": True, "cost": 0.3},
+                    }
+                },
+            }
+        ]
+
+    def test_default_path_has_no_forced_breakdown(self):
+        fc = forecast_run_cost(self._cfg(), self._cfg(), history=self._hist())
+        assert fc["force_scope"] == []
+        assert fc["forced_count"] == 0
+        lines = forecast_summary_lines(fc)
+        assert not any("重新生成" in ln for ln in lines), "默认路径无重新生成拆行"
+
+    def test_module_scope_prices_forced_module_at_static(self):
+        fc = forecast_run_cost(self._cfg(), self._cfg(), history=self._hist(), force_modules=["expert_review"])
+        assert fc["force_scope"] == ["expert_review"]
+        assert fc["detail"]["expert_review"]["basis"] == "static", "范围内模块按静态口径（历史样本含缓存折扣不适用）"
+        assert fc["forced_count"] == 1
+        assert fc["forced_low"] > 0 and fc["forced_high"] >= fc["forced_low"]
+        assert any("重新生成" in ln for ln in forecast_summary_lines(fc)), "重新生成拆行须上屏"
+
+    def test_unscoped_modules_keep_history_caliber(self):
+        fc = forecast_run_cost(self._cfg(), self._cfg(), history=self._hist(), force_modules=["expert_review"])
+        other = fc["detail"]["global_macro"]
+        assert other["basis"] == "history", "范围外模块维持历史实际费用口径"
+        assert other["samples"] == 1
+
+    def test_full_force_covers_planned_forceable(self):
+        fc = forecast_run_cost(self._cfg(), self._cfg(), history=self._hist(), force_llm=True)
+        assert fc["force_scope"], "全量重新生成须列出范围"
+        assert fc["forced_count"] == len(set(fc["force_scope"]) & set(fc["modules"]))
+        assert fc["forced_count"] == len(fc["modules"]), "计划模块均可重新生成时全覆盖"
+
+    def test_invalid_force_module_raises(self):
+        with pytest.raises(ValueError):
+            forecast_run_cost(self._cfg(), self._cfg(), history=self._hist(), force_modules=["market_overview"])

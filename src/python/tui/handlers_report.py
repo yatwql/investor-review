@@ -155,6 +155,7 @@ def _prompt_generate_confirm(reporter: TuiProgressReporter, config: dict) -> tup
     ``h`` 选项并入本屏（仅 fetch_mode=prompt 时展示，其余模式由共享层 resolve 单源解析）。
     按键按**词**精确匹配（空格/逗号分隔，支持 ``n h`` 组合；``f`` 为 ``N`` 同义键，
     ``of``/``faq`` 这类子串不误触发）。
+    N 选模块/全量后按所选范围重打更新预估行（三渠道预估同源）。
 
     Returns:
         (force_llm, force_llm_modules, fetch_history)；None=中止（不进入生成）。
@@ -210,6 +211,11 @@ def _prompt_generate_confirm(reporter: TuiProgressReporter, config: dict) -> tup
     if tokens & {"n", "f"}:  # N=重新生成（默认 Y 侧不进此分支）；f 与 N 同义
         reporter.ok("将忽略已有结果，重新调用 AI 生成")
         force_llm, force_modules = _select_force_modules(reporter)
+        # 重打更新预估：重新生成范围已定，按新范围重估（范围内模块静态单价口径、
+        # 范围外维持历史口径）；仅刷预估行，不重复预算行
+        _scoped = forecast_run_cost(force_llm=force_llm, force_modules=force_modules)
+        for _line in forecast_summary_lines(_scoped):
+            print(f"  [..] {_line}")
     # 历史：复用共享层 resolve（ask 回调返回本屏 h 选择），不再单独询问
     fetch_history = resolve_fetch_history(config, ask=lambda: "h" in tokens) if is_enable_history(config) else False
     return (force_llm, force_modules, fetch_history)

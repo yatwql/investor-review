@@ -202,6 +202,55 @@ class TestPromptGenerateConfirm(unittest.TestCase):
         for key in ("N", "f"):
             self.assertEqual(self._call(key, force_modules=(True, None)), (True, None, True))
 
+    def test_selection_reprints_scoped_forecast(self):
+        """N 选模块后重打更新预估：第二次预估调用带所选范围，更新预估行上屏。"""
+        from src.python.tui import handlers_report as hr
+
+        calls: list[dict] = []
+
+        def _rec(*args, **kwargs):
+            calls.append(kwargs)
+            return _fc(high=9.99) if len(calls) > 1 else _fc()
+
+        reporter = MagicMock()
+        buf = io.StringIO()
+        with (
+            patch.object(hr, "forecast_run_cost", side_effect=_rec),
+            patch.object(hr, "budget_status", return_value=_budget()),
+            patch.object(hr, "input_choice", return_value="n"),
+            patch.object(hr, "_select_force_modules", return_value=(False, ["m1", "m3"])),
+            patch("src.python.config.is_enable_history", return_value=True),
+            contextlib.redirect_stdout(buf),
+        ):
+            result = hr._prompt_generate_confirm(reporter, self._config())
+        self.assertEqual(result, (False, ["m1", "m3"], True))
+        self.assertEqual(calls[0], {}, "首行预估为默认口径（无范围参数）")
+        self.assertEqual(calls[1], {"force_llm": False, "force_modules": ["m1", "m3"]}, "重打预估须带所选重新生成范围")
+        self.assertIn("9.9900", buf.getvalue(), "更新预估行须上屏")
+
+    def test_full_force_selection_reprints_full_scope(self):
+        """全量重新生成（选择屏回车=全部模块）重打预估须带 force_llm=True。"""
+        from src.python.tui import handlers_report as hr
+
+        calls: list[dict] = []
+
+        def _rec(*args, **kwargs):
+            calls.append(kwargs)
+            return _fc()
+
+        reporter = MagicMock()
+        with (
+            patch.object(hr, "forecast_run_cost", side_effect=_rec),
+            patch.object(hr, "budget_status", return_value=_budget()),
+            patch.object(hr, "input_choice", return_value="n"),
+            patch.object(hr, "_select_force_modules", return_value=(True, None)),
+            patch("src.python.config.is_enable_history", return_value=True),
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            result = hr._prompt_generate_confirm(reporter, self._config())
+        self.assertEqual(result, (True, None, True))
+        self.assertEqual(calls[1], {"force_llm": True, "force_modules": None})
+
     def test_prompt_mode_enter_no_history(self):
         """fetch_mode=prompt 且回车（未按 h）→ 历史 False。"""
         self.assertEqual(self._call("", config=self._config("prompt"))[2], False)

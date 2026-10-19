@@ -443,13 +443,20 @@ def _handle_cost_preflight():
 
     仅 ``report_type=full``（含 LLM 调用）时给 ``forecast``；``budget`` 恒给。
     预估失败（``forecast.ok=False``）由客户端按「不阻塞生成」处置，本接口不报错。
+    ``llm_modules`` 查询参数（逗号分隔）透传重新生成范围——与 ``POST /api/runs``
+    的 ``resolve_force_scope`` 同源，预估按所选范围重估（范围内模块静态单价
+    口径）；非法模块键以 ``forecast.ok=false`` 数据面表达（预估失败不阻塞语义）。
     """
     from src.python.llm.cost_forecast import budget_status, forecast_run_cost
 
     report_type = request.args.get("report_type", "full")
+    _mods = [m.strip() for m in request.args.get("llm_modules", "").split(",") if m.strip()]
     payload: dict = {"relevant": report_type == "full"}
     if payload["relevant"]:
-        payload["forecast"] = forecast_run_cost()
+        try:
+            payload["forecast"] = forecast_run_cost(force_modules=_mods or None)
+        except ValueError as exc:  # 非法模块键 → 数据面降级，不 500 不阻塞
+            payload["forecast"] = {"ok": False, "reason": str(exc)}
     payload["budget"] = budget_status()
     return _ok(payload)
 

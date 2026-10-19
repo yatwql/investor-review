@@ -13,8 +13,6 @@
 
 | # | 问题 | 修复方向 |
 |---|------|----------|
-| **rf-731** | 费用预估不感知强刷范围：`llm/cost_forecast.py` 全文无 force 字样，`forecast_run_cost()` 只按「计划参与模块（`enabled_llm` ∩ 深度档位）」估价——`[L]` 合并屏上屏的预估对「回车走缓存（实际≈¥0）」与「`N` 全量重新生成（实际可能数倍）」给同一区间，用户据预估决策会系统性误判；日预算硬闸只拦「今日已花费≥上限」不预测本次 | 属 R-LLM-13 语义升级（三渠道同源）：`forecast_run_cost` 接受强刷范围参数（`resolve_force_scope` 归一后的 force_scope 全局已可查询，接入即可），合并屏 `N`/选模块后**重打一行更新预估**，Web cost-preflight / CLI 确认同步；预估行文案区分走缓存/强刷口径 |
-
 | **rf-257** | plan-8 **Web 模式浏览器真机人工验收余 4 类人工项**：真实 basic/full 进度观察（3.1c/3.2/3.3/3.4）、结果区按钮 4.5、提交即禁用 5.3、2.5/2.6 真实拖拽与 Tab/Enter 抽验；其余断言已自动化复跑通过 | 验证方法与判定标准见 [`docs/plan/web-browser-verification.md`](../plan/web-browser-verification.md)（§1.1 启动/收尾命令 + §5 复验清单）；复跑：`.venv/bin/python scripts/smoke-web.py` + `node docs/tmp/rf257/cdp-check.mjs`，收尾必做 kill 服务/浏览器 + 清空 `data/holdings/uploads/`；全部完成后本表移至已解决 |
 
 ### P2 — 中优先：价值明确、成本可控（下批排期）
@@ -23,7 +21,6 @@
 
 | # | 问题 | 修复方向 |
 |---|------|----------|
-| **rf-733** | `tui/prompt_text.confirm_prompt`（问句 + `回车=` 默认项 + 选项串的确认提示模板）在 `src/python/` 零调用方——生成确认屏用 `wrap_hanging` + `wrap_prompt` 手写问句与键位行，模板只被自身单测与 prompt 契约清单引用，属「建了但没接线」的无调用方代码面；后续确认类屏若继续手写，模板与手写两套口径会各自漂移 | 二选一并择一落地：① 确认类屏（生成确认 / 日预算安全网 / What-if 完成确认）改走 `confirm_prompt` 统一产出，删各屏手写串并保留键位行差异入参；② 若认定「问句 + 键位行」手写已够用，删除该助手与专属用例，同步收窄 prompt 契约清单 |
 
 
 ### P3 — 持续监控：文件过长登记表（>500 行观察，脚本域 >400 即入观察 / **>1000 行为硬上限必须拆分**（主程序与脚本）；按距红线余量升序）
@@ -71,3 +68,8 @@
 ### 开发期已修复（0.13.7-dev）
 
 > 本批摘要已随 v0.13.7 发布迁入 [`archived_review-findings.0.13.x.md`](../archive/v0.13.x/archived_review-findings.0.13.x.md)；此处不再保留。
+
+### 开发期已修复（0.13.8-dev）
+
+- **rf-731**：LLM 费用预估接入重新生成范围——`forecast_run_cost(force_llm/force_modules)`（与 `POST /api/runs` 同源 `resolve_force_scope` 归一；范围内模块保证重新调用、按静态单价口径，范围外维持历史实际费用口径），摘要行新增「其中 N 个模块重新生成」拆行；TUI `[L]` 屏 `N`/选模块/全量后按所选范围重打更新预估行，Web `cost-preflight` 透传 `llm_modules` 查询参数（非法键 `ok:false` 数据面降级不 500）、确认弹层显示拆行，CLI `--yes` 确认透传 `--force-llm`/`--llm-module`。日预算硬闸维持「当日累计」判定不改为按次预测（按投影拦截会误伤「用已有结果」路径；本次费用预测由更新预估在展示层承担）。
+- **rf-733**：删除 `tui/prompt_text.confirm_prompt`（问句+选项+默认项单行模板，`src/python/` 零生产调用）——确认类屏已按「问句行 + 键位行」两行式落地（生成确认 Y/N 化），单行模板失去挂点；其专属用例与 prompt 契约清单 `_DISPLAY_CALLS` 中的登记同步删除，`panel_prompt`（列表面板四成分模板）保留。plan-159「剩余：input_choice 类提示迁移到 confirm_prompt」方向随之关闭（不迁，两行式为准）。

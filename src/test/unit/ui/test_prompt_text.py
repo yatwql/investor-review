@@ -7,7 +7,6 @@ import pytest
 
 from src.python.tui.panel_runtime import PanelItem
 from src.python.tui.prompt_text import (
-    confirm_prompt,
     item_detail_lines,
     keys_help_lines,
     panel_prompt,
@@ -38,17 +37,6 @@ class TestPanelPrompt:
         prompt = panel_prompt("按级别筛选", example="如 ERROR", default="全部级别", help_hint=None, back=None)
         assert "?" not in prompt and "0 返回" not in prompt
         assert "回车=全部级别" in prompt
-
-
-class TestConfirmPrompt:
-    """confirm_prompt：问句在前、按键作答在后。"""
-
-    def test_question_precedes_keys(self):
-        prompt = confirm_prompt(
-            "是否重新生成？（f=重新调用 AI，会产生费用）", options="f=重新生成 / q=中止", default="用已有结果生成"
-        )
-        assert prompt.index("是否重新生成") < prompt.index("回车=用已有结果生成")
-        assert "f=重新生成" in prompt
 
 
 class TestHelpLines:

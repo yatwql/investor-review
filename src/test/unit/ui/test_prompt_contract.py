@@ -46,7 +46,6 @@ _DISPLAY_CALLS = {
     "wrap_prompt",
     "wrap_hanging",
     "panel_prompt",
-    "confirm_prompt",
     "print_error_with_hint",
     "ok",
     "warn",

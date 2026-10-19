@@ -205,7 +205,10 @@ def _confirm_cost_forecast(args: argparse.Namespace) -> tuple[bool, bool]:
     """
     from src.python.llm.cost_forecast import budget_status, forecast_run_cost, forecast_summary_lines
 
-    forecast = forecast_run_cost()
+    # 预估透传重新生成范围（--force-llm/--llm-module，与 TUI/Web 同源 resolve_force_scope）
+    _force_llm = bool(getattr(args, "force_llm", False))
+    _llm_modules = getattr(args, "llm_module", None) or None
+    forecast = forecast_run_cost(force_llm=_force_llm, force_modules=_llm_modules)
     budget = budget_status()
     for line in forecast_summary_lines(forecast, budget):
         print(f"  [..] {line}")

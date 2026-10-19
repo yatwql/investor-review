@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from src.python.tui.text_layout import terminal_columns, wrap_hanging
 
-__all__ = ["panel_prompt", "confirm_prompt", "keys_help_lines", "item_detail_lines"]
+__all__ = ["panel_prompt", "keys_help_lines", "item_detail_lines"]
 
 
 def panel_prompt(
@@ -51,21 +51,6 @@ def panel_prompt(
     if back:
         parts.append(back)
     return " · ".join(parts) + ": "
-
-
-def confirm_prompt(question: str, *, options: str, default: str, prefix: str = "  ") -> str:
-    """确认类提示：问句讲清后果 + 选项串 + 默认项声明。
-
-    Args:
-        question: 问句（须含后果/代价，如「是否重新生成？（f=重新调用 AI，会产生费用）」）。
-        options: 选项串（如 ``f=重新生成 / q=中止``）。
-        default: 回车执行的动作名。
-        prefix: 行首缩进。
-
-    Returns:
-        提示串（问句在前、按键作答在后，读题即可决策）。
-    """
-    return f"{prefix}{question} 回车={default} / {options}: "
 
 
 def keys_help_lines(items, *, columns: int | None = None) -> list[str]:  # noqa: ANN001 - PanelItem 协议
