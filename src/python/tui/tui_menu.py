@@ -15,7 +15,7 @@ import os
 import sys
 from collections.abc import Callable
 
-from src.python.core.ansi_colors import GREEN, RED, RESET, YELLOW
+from src.python.core.ansi_colors import CYAN, DIM, GREEN, RED, RESET, YELLOW
 from src.python.config import get_config
 
 # 每个菜单项：(快捷键, 显示标签, 回调函数, 是否退出项)
@@ -30,12 +30,12 @@ MENU_ITEMS: list[MenuItem] = [
     ("D", "查看配置与目录信息（持仓目录/文件名/输出目录）", None, False),
     ("1", "更新基础类缓存（含基金业绩/持仓/经理/基准等）", None, False),
     ("2", "更新行情类缓存（含价格/指数等）", None, False),
-    ("4", "缓存管理（统计与清理）", None, False),
+    ("3", "缓存管理（统计与清理）", None, False),
     ("P", "配置报告可选章节（顺序与取舍）", None, False),
     ("I", "管理对比指数池（自定义基准指数）", None, False),
     ("A", "配置持仓匿名化（代码/名称脱敏）", None, False),
     ("S", "配置功能开关（作用域四组，含 LLM 章节）", None, False),
-    ("M", "配置 LLM 多链线路优先级（降级顺序）", None, False),
+    ("M", "配置 LLM 多链线路优先级（备用顺序）", None, False),
     ("R", "刷新配置", None, False),
     ("V", "查看最近运行日志（可按级别筛选）", None, False),
     ("H", "查看数据源健康历史", None, False),
@@ -48,18 +48,35 @@ MENU_ITEMS: list[MenuItem] = [
 # 避免用户点进去只得到一句「功能未启用」。
 FEATURE_GATED_ITEMS: dict[str, str] = {"T": "doctor_check", "Q": "report_qa"}
 
+# 主菜单分组（按任务域编排）：组序即阅读序，组内保留 MENU_ITEMS 的原始次序。
+# 未列入任何组的项（退出）渲染在分组之后——组覆盖完整性由菜单用例守护。
+MENU_GROUPS: list[tuple[str, tuple[str, ...]]] = [
+    ("生成报告", ("E", "B", "L", "W")),
+    ("数据与查看", ("Q", "1", "2", "3")),
+    ("配置", ("P", "S", "M", "I", "A", "D", "R")),
+    ("诊断与排查", ("V", "H", "T")),
+]
+
+
+# 菜单母本（定义时的完整清单）：门控裁剪**从母本重建**而不是就地过滤——
+# 就地过滤会把关闭过的项永久删除，运行中在 [S] 重新开启后该项仍不出现（只能重启）。
+_ALL_MENU_ITEMS: list[MenuItem] = list(MENU_ITEMS)
+
 
 def _apply_feature_gates() -> None:
-    """按功能开关就地裁剪 MENU_ITEMS（切片赋值保持列表对象不变，调用方视图同步）。"""
+    """按功能开关重建 MENU_ITEMS（幂等、可逆；切片赋值保持列表对象不变）。
+
+    幂等可逆是硬要求：主循环每帧调用一次（开关在 `[S]` 改完返回首页即刻生效），
+    所以必须每次从 `_ALL_MENU_ITEMS` 母本重新裁剪——否则「先关后开」的项回不来。
+    """
     from src.python.config.features import is_feature_enabled
 
     disabled = {
         key
         for key, flag in FEATURE_GATED_ITEMS.items()
-        if key in {item[0] for item in MENU_ITEMS} and not is_feature_enabled(flag)
+        if not is_feature_enabled(flag) and any(item[0] == key for item in _ALL_MENU_ITEMS)
     }
-    if disabled:
-        MENU_ITEMS[:] = [item for item in MENU_ITEMS if item[0] not in disabled]
+    MENU_ITEMS[:] = [item for item in _ALL_MENU_ITEMS if item[0] not in disabled]
 
 
 _config_cache: dict | None = None
@@ -90,7 +107,8 @@ def filter_menu_llm_modules(module_names: dict[str, str]) -> dict[str, str]:
 
 
 def print_sep(char: str = "=", width: int = 56) -> None:
-    print(char * width)
+    """横向分隔线（弱化层：不抢标题与内容的注意力）。"""
+    print(f"{DIM}{char * width}{RESET}")
 
 
 def print_header() -> None:
@@ -98,7 +116,9 @@ def print_header() -> None:
     from src.python.core.constants import APP_NAME, APP_VERSION
 
     print_sep()
-    print(f"        {APP_NAME}  v{APP_VERSION}")
+    from src.python.core.ansi_colors import BOLD, ORANGE, RESET
+
+    print(f"        {BOLD}{ORANGE}{APP_NAME}  v{APP_VERSION}{RESET}")
     print_sep()
 
     # 页头常驻状态行（全本地取数、逐项降级、TTL 内记忆化）
@@ -126,32 +146,61 @@ def print_header() -> None:
         print()
 
 
-def render_menu(sel: int) -> None:
+def render_menu(sel: int, filter_text: str = "") -> None:
     """打印菜单（按终端宽度折行；全档渲染选中态，窄屏导航时由主循环原地重绘）。
+
+    按 ``MENU_GROUPS`` 分组渲染（生成 / 数据与查看 / 配置 / 诊断），未入组项
+    （退出）列在末尾。``filter_text`` 非空时只渲染匹配项并顶部给筛选状态行。
 
     narrow（<64 列，手机竖屏）下直达主路径（按字母/数字键即执行）与方向键导航
     并存：渲染 `>` 选中指示器；页脚提示两种入口（见 tui.main 内层循环）。
     """
     from src.python.tui.switch_panel import layout_tier
-    from src.python.tui.text_layout import terminal_columns, wrap_with_prefix
+    from src.python.tui.text_layout import style_heading, terminal_columns, wrap_with_prefix
 
     columns = terminal_columns()
     narrow = layout_tier(columns) == "narrow"
-    print()
-    for i, (key, label, _cb, is_exit) in enumerate(MENU_ITEMS):
-        prefix = "  >" if i == sel else "   "
+    visible = match_menu_items(filter_text)
+    visible_set = set(visible)
+    grouped_keys = {key for _title, keys in MENU_GROUPS for key in keys}
+
+    def _render_item(index: int) -> None:
+        key, label, _cb, _is_exit = MENU_ITEMS[index]
+        # 焦点色（青）只标当前选中行：一色一职责，不与结构蓝/状态色混用
+        prefix = f"  {CYAN}>{RESET}" if index == sel else "   "
         head = f"{prefix} [{key}] "
         # 长标签（如「生成标准报告（Excel+HTML，按章节配置）」）在手机窄屏上折行：
         # 前缀（光标/编号）不参与断行，续行缩进到标签起始列，视觉上仍归属同一项
         print("\n".join(wrap_with_prefix(head, label, columns)))
+
+    print()
+    if filter_text:
+        print(
+            "\n".join(
+                wrap_with_prefix("  ", f"筛选「{filter_text}」：{len(visible)} 项（/ 改关键词 · 0 清除）", columns)
+            )
+        )
+    for title, keys in MENU_GROUPS:
+        members = [index_by_key(key) for key in keys]
+        members = [i for i in members if i is not None and i in visible_set]
+        if not members:
+            continue
+        for _line in wrap_with_prefix("  ", f"── {title} ──", columns):
+            print(style_heading(_line))
+        for index in members:
+            _render_item(index)
+    for index, (key, _label, _cb, _is_exit) in enumerate(MENU_ITEMS):
+        if key in grouped_keys or index not in visible_set:
+            continue
+        _render_item(index)
     print()
     # 页脚按终端宽度折行：窄屏（手机）上不硬折，键位提示也不会被右边界切掉
     footer = (
-        "窄屏直达：按菜单 [键] 执行 · ↑↓ 选择 · Enter 执行 | Esc / 0 / X 退出 | Ctrl+C 退出"
+        "窄屏直达 · ↑↓ 选择 · 回车执行 | / 筛选 | Esc / 0 / X 退出 | Ctrl+C 退出"
         if narrow
-        else "方向键移动 | Enter 确认 | 字母/数字键直达 | Esc / 0 / X 退出 | Ctrl+C 退出"
+        else "↑↓ 移动 | 回车执行 | 字母/数字键直达 | / 筛选 | Esc / 0 / X 退出 | Ctrl+C 退出"
     )
-    print("\n".join(wrap_with_prefix("  ", footer, terminal_columns())))
+    print("\n".join(f"{DIM}{_line}{RESET}" for _line in wrap_with_prefix("  ", footer, terminal_columns())))
     print()
 
 
@@ -166,9 +215,9 @@ def show_config() -> None:
     print(f"  输出目录: {config.get('output_dir') or get_default('output_dir')}")
     print(f"  新闻抓取上限: {config.get('news_top_count', '300')} 条")
     if os.path.exists(holdings_path):
-        print("  状态: [OK] 文件就绪")
+        print(f"  状态: {GREEN}[OK]{RESET} 文件就绪")
     else:
-        print("  状态: [!!] 文件未找到")
+        print(f"  状态: {RED}[!!]{RESET} 文件未找到")
     _show_privacy_and_security_status()
     _show_llm_config_status()
     print()
@@ -199,6 +248,7 @@ def _show_llm_config_status() -> None:
     数据来自 ``core.system_info.llm_status`` 单源（三渠道共用判定树），
     本函数只做终端渲染，不自行组装状态。
     """
+
     from src.python.core.system_info import llm_status
 
     llm = llm_status()
@@ -208,7 +258,8 @@ def _show_llm_config_status() -> None:
     if llm.get("mode") == "multi":
         _show_multi_chain_status(llm)
         return
-    cb_display = f" |  熔断: {llm['circuit']}" if llm["circuit"] != "—" else ""
+    # 状态文案已由 core.system_info.circuit_display 归一为用户词（三渠道同源）
+    cb_display = f" |  自动重试: {llm['circuit']}" if llm["circuit"] != "—" else ""
     print(
         f"  LLM: {GREEN}已配置{RESET}  provider={llm['provider']}  model={llm['model']}"
         f"  endpoint={llm['endpoint_display']}{cb_display}"
@@ -229,7 +280,7 @@ def _show_multi_chain_status(llm: dict) -> None:
         cb_icon = f"{GREEN}✓{RESET}" if cb_status == "正常" else f"{RED}⚠{RESET}"
         print(f"    [{i}] {p['name']}  ({p['backend']})")
         print(f"         模型: {p['model']}")
-        print(f"         优先级: {p['priority']}    熔断: {cb_icon} {cb_status}")
+        print(f"         优先级: {p['priority']}    自动重试: {cb_icon} {cb_status}")
     if llm.get("preferred"):
         print(f"    ▶ 模块偏好: {' / '.join(llm['preferred'])}")
 
@@ -243,6 +294,45 @@ def index_by_key(key: str) -> int | None:
         if k == key:
             return i
     return None
+
+
+def match_menu_items(keyword: str) -> list[int]:
+    """返回标签或按键命中关键词的菜单索引（空关键词=全部）。
+
+    Args:
+        keyword: 筛选关键词（大小写不敏感；按键精确命中优先，否则按标签子串）。
+
+    Returns:
+        按 MENU_ITEMS 次序的索引列表。
+    """
+    word = (keyword or "").strip().lower()
+    if not word:
+        return list(range(len(MENU_ITEMS)))
+    # 按键精确命中优先：输入单键名（如 "T"/"1"）时不应被标签里的拉丁字母噪声干扰
+    for i, (key, _label, _cb, _is_exit) in enumerate(MENU_ITEMS):
+        if word == key.lower():
+            return [i]
+    return [i for i, (_key, label, _cb, _is_exit) in enumerate(MENU_ITEMS) if word in label.lower()]
+
+
+def next_matching(matches: list[int], cursor: int, step: int) -> int | None:
+    """在筛选结果内按方向移动选中项（回绕）；无匹配返回 None。
+
+    Args:
+        matches: ``match_menu_items`` 的索引列表。
+        cursor: 当前选中索引。
+        step: +1 向下 / -1 向上。
+
+    Returns:
+        下一个匹配索引（回绕）；无匹配项时 None。
+    """
+    if not matches:
+        return None
+    if step > 0:
+        later = [i for i in matches if i > cursor]
+        return later[0] if later else matches[0]
+    earlier = [i for i in matches if i < cursor]
+    return earlier[-1] if earlier else matches[-1]
 
 
 # ── 通用 UI 辅助 ──────────────────────────────────────────────

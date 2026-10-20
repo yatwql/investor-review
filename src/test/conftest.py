@@ -266,6 +266,22 @@ def _auto_reset_provider_registry():
 
 
 @pytest.fixture(autouse=True)
+def _restore_menu_items():
+    """自动还原 ``MENU_ITEMS``（模块级可变列表），防止功能开关裁剪串扰。
+
+    ``tui_menu._apply_feature_gates()`` 用切片赋值**原地裁剪**全局菜单（菜单项整体
+    消失而非置灰），裁剪后不会自动恢复。任一用例触发裁剪（如把 doctor_check 关掉）
+    就会让同进程后续用例看到项数不足的菜单——单进程顺序下通常不暴露，xdist 分片
+    改变用例顺序后即表现为「页脚断言缺退出键」类随机失败。
+    """
+    from src.python.tui import tui_menu
+
+    snapshot = list(tui_menu.MENU_ITEMS)
+    yield
+    tui_menu.MENU_ITEMS[:] = snapshot
+
+
+@pytest.fixture(autouse=True)
 def _auto_reset_last_reason():
     """自动清除「provider 失败原因」线程本地载体，防止测试间状态污染。
 

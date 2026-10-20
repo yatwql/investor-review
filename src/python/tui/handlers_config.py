@@ -17,31 +17,26 @@ from src.python.tui.tui_menu import (
     RED,
     RESET,
     YELLOW,
-    filter_menu_llm_modules,
     get_config_cache,
-    press_any_key,
     refresh_config,
 )
 from src.python.tui.switch_panel import (
-    format_heading,
-    format_item,
     inner_width,
-    layout_tier,
-    legend_lines,
     terminal_columns,
+    render_titled_panel,
     use_panel_box,
     wrap_hanging,
 )
 from src.python.tui.panel_runtime import NavState, PanelItem, panel_loop
-from src.python.tui.handlers_switch import (
-    COST_HISTORY_DAYS,
-    DUAL_ENTRY_CROSS_HINTS,
-    EXPERIMENT_MARK_COLUMNS,
-    match_switch_item,
-    show_switch_detail,
-)
-from src.python.tui.text_layout import display_width, pad_right, render_panel, truncate_display
+from src.python.tui.prompt_text import panel_prompt
+from src.python.tui.text_layout import display_width, pad_right, style_heading, truncate_display
 from src.python.tui.tui_keys import input_choice
+
+# ── 兼容再导出（面板本体已迁至 handlers_switch）──────────────────────────
+# `[S]` 面板现在 `handlers_switch.run_llm_modules_panel`，但它对该模块的取值统一经
+# `handlers_config.<符号>`（函数内局部导入），以便既有测试 patch 点与外部调用保持有效。
+# 这些名字在本文件内可能已无直接引用，故显式豁免 F401。
+from src.python.tui.tui_menu import filter_menu_llm_modules  # noqa: F401
 
 logger = setup_logger()
 
@@ -62,6 +57,10 @@ def _apply_edit(payload: dict) -> bool:
 
     try:
         apply_config_edit(payload)
+        # 配置已变：清页头状态行记忆（否则 TTL 内回首页仍显示旧值）
+        from src.python.tui.status_line import reset_status_memo
+
+        reset_status_memo()
         return True
     except ConfigEditError as e:
         print(f"  {YELLOW}[!]{RESET} {e}")
@@ -91,7 +90,6 @@ def _read_llm_settings() -> tuple[dict, str] | None:
         return settings, config_path
     except (FileNotFoundError, json.JSONDecodeError):
         print(f"  {RED}[ERR]{RESET} 无法读取 llm_settings.json")
-        press_any_key()
         return None
 
 
@@ -165,7 +163,7 @@ _CONFIG_ENTRY_MAP: tuple[tuple[str, str, str], ...] = (
     ("持仓匿名化（代码/名称脱敏）", "[A]", "off / code_display / full_anonymous / summary 四档"),
     ("配置文件与目录位置", "[D]", "持仓目录 / 持仓文件名 / 报告输出目录（子菜单 C/F/O）"),
     ("重新加载配置", "[R]", "改完 config.json / llm_settings.json 手工项后刷新内存配置"),
-    ("缓存管理（统计与清理）", "[4]", "统计首屏 + 子菜单内 3 清理过期缓存"),
+    ("缓存管理（统计与清理）", "[3]", "统计首屏 + 子菜单内 3 清理过期缓存"),
     ("数据源健康历史 / 运行日志", "[H] / [V]", "近期数据源检查记录 / 结构化运行日志（可按级别筛选）"),
     ("系统自检", "[T]", "环境/配置/目录/数据源一键体检（开关 doctor_check 关闭时该键不可见）"),
 )
@@ -173,12 +171,23 @@ _CONFIG_ENTRY_MAP: tuple[tuple[str, str, str], ...] = (
 
 def _render_config_entry_map() -> None:
     """渲染配置入口地图（只读索引，不写配置、不等待按键）。"""
+    columns = terminal_columns()
+    inner = inner_width(columns)
     print()
-    print("  ── 配置入口地图（哪个配置在哪个菜单）──")
-    width = max(display_width(label) for label, _key, _hint in _CONFIG_ENTRY_MAP)
-    for label, key, hint in _CONFIG_ENTRY_MAP:
-        print(f"   {pad_right(label, width)}  →  {pad_right(key, 9)} {hint}")
-    print("  （仅索引导流，不修改任何配置；config.json 手工键说明见手册 how-to-config）")
+    print(style_heading(truncate_display("  ── 配置入口地图（哪个配置在哪个菜单）──", inner)))
+    if use_panel_box(columns):
+        width = max(display_width(label) for label, _key, _hint in _CONFIG_ENTRY_MAP)
+        for label, key, hint in _CONFIG_ENTRY_MAP:
+            print(f"   {pad_right(label, width)}  →  {pad_right(key, 9)} {hint}")
+    else:
+        # 窄档：表格放不下 → 两项一组（菜单键 + 标签 + 悬挂缩进说明），不硬折成锯齿
+        for label, key, hint in _CONFIG_ENTRY_MAP:
+            for line in wrap_hanging(f"   [{key}] {label}", inner):
+                print(line)
+            for line in wrap_hanging(f"     {hint}", inner, indent="     "):
+                print(line)
+    for line in wrap_hanging("  （仅索引导流，不修改任何配置；config.json 手工键说明见手册 how-to-config）", inner):
+        print(line)
 
 
 def _cmd_config_dir_info() -> None:
@@ -198,7 +207,7 @@ def _cmd_config_dir_info() -> None:
 
     def _render(nav: NavState) -> list[str]:
         print()
-        print("  ── 配置与目录信息 ──")
+        print(style_heading("  ── 配置与目录信息 ──"))
         for i, (_key, label, _fn) in enumerate(items):
             print(f" {nav.marker(i)} [{_key}] {label}")
         print(f" {nav.marker(len(items))} [0] 返回主菜单")
@@ -212,7 +221,7 @@ def _cmd_config_dir_info() -> None:
         panel_loop(
             panel_items,
             render=_render,
-            prompt="  选择 > ",
+            prompt=panel_prompt("选择", example="C/F/O/M", help_hint=None),
             read=input_choice,
             on_text=lambda _t: print("  [!] 无效选择，请输入 C/F/O/M/0"),
             default_key="0",
@@ -225,344 +234,14 @@ def _cmd_config_dir_info() -> None:
 # `holding_change_review`）与归因内容（LLM 区 `holding_change` 模块）为解耦的有意
 # 设计、默认态相反，面板相邻两行命名近似易误判——两侧行尾互相指出对方入口位置。
 def _cmd_config_llm_modules() -> None:
-    """配置各 LLM 报告的启用/停用，以及全部功能开关（llm_settings.json + features.json）。
+    """配置各 LLM 报告的启用/停用，以及全部功能开关——实现见 ``handlers_switch``。
 
-    标准 LLM 模块通过 enabled_llm 控制，存储在 llm_settings.json。
-    功能开关（辩论模式增强、决策跨期反思闭环、量化指标、系统自检、
-    确定性信号等）通过 Feature Flag 控制，存储在 features.json；四组分块的
-    分组标题、显示名与顺序均取自 ``features.GROUP_ORDER`` / ``GROUP_LABELS``，
-    新增开关自动上屏，渠道层不另写清单。
-    辩论白脸/黑脸/综合（debate_pro/con/synthesis）保留在注册表
-    （缓存 TTL/前缀清理仍依赖），菜单层隐藏，不在此面板展示。
-
-    只读信息面（不引入配置写路径、不改编号派发）：``? 编号`` 查看该项说明与
-    当前值/默认值；行尾 ``*`` 标记与出厂默认值不一致项（配置漂移）；⚗ 实验项
-    行尾附 ``experiment_stats`` 启用统计（读取失败静默省略）。
-
-    写路径三通道（编号派发与 Web 面板派生不受影响）：
-      - 批量：``r 编号或键名`` 恢复该项所在分组出厂默认、``ra`` 恢复全部默认
-        （均走 ``features.clear_feature_overrides`` 批量原子写，恢复默认=删覆写键）、
-        ``x`` 实验项一键全关（experimental 集合回到无实验态，便于 bisect）；
-      - 键名：裸键名切换，与编号双通道（编号漂移免疫）；
-      - 赋值：``键名=on|off``，与 CLI ``--feature NAME=VALUE`` 同一解析器与词表
-        （含已合并旧键别名过渡）。
+    本文件只保留菜单入口；面板本体（渲染/派发/重绘/帮助）在
+    ``handlers_switch.run_llm_modules_panel``（域拆分：本文件已接近单文件行数红线）。
     """
-    from src.python.config import default_enabled_llm
-    from src.python.config.features import (
-        GROUP_LABELS,
-        GROUP_ORDER,
-        clear_feature_overrides,
-        experimental_flags,
-        feature_switch_registry,
-        is_feature_enabled,
-        parse_switch_override,
-        parse_switch_value,
-        switches_in_group,
-    )
-    from src.python.core.experiment_stats import load_experiment_usage
-    from src.python.core.perf import module_cost_summary
-    from src.python.core.registry import get_llm_module_names
+    from src.python.tui.handlers_switch import run_llm_modules_panel
 
-    result = _read_llm_settings()
-    if result is None:
-        return
-    settings = result[0]
-
-    enabled_map = settings.get("enabled_llm", {})
-    # 出厂默认（漂移比对基准）：enabled_llm 缺省值与运行时兜底一致取 True
-    default_enabled = default_enabled_llm()
-    # LLM 模块清单 = 模块注册表全集（辩论三段不在模块注册表内，其缓存登记在缓存域）；
-    # 辩论运行开关由下方功能开关（正反辩论 / 条件推理）控制
-    module_names = filter_menu_llm_modules(get_llm_module_names())
-
-    # 功能开关分块：(分组标题, [(flag_key, 显示名), ...])，顺序即注册表顺序
-    switch_blocks = [(group, list(switches_in_group(group))) for group in GROUP_ORDER]
-    # 行首 ⚗ 标记仅给实验项（experimental 字段，与所属组无关；当前 2 项均落机制与诊断块内）
-    experiment_keys = {flag for flag, _d in experimental_flags()}
-
-    # 名称列宽：取清单内最长显示名，使各行状态方括号纵向对齐（超宽名不截断）
-    name_column = max(
-        map(
-            display_width,
-            [
-                *module_names.values(),
-                *(d.label for _title, block in switch_blocks for _flag, d in block),
-            ],
-        )
-    )
-    # 键名列宽：面板内显式展示每一项的键名（`? 编号`/`键名`/`键名=on|off` 都以此为输入，
-    # 不让用户猜）。标准模块与功能开关**各自取块内最长键名**分行对齐——开关键名明显更长
-    # （如 `rebalance_schedule_replay`），统一取全局最长会把整个面板宽度撑大。
-    key_column_llm = max(map(display_width, module_names)) if module_names else 0
-    key_column_sw = max((display_width(flag) for _title, block in switch_blocks for flag, _d in block), default=0)
-
-    def _emit(message: str) -> None:
-        """按当前内宽输出一行提示（窄屏上 `[!]`/`[OK]` 长句也不越界折行）。"""
-        for line in wrap_hanging(message, inner_width(terminal_columns())):
-            print(line)
-
-    state = {"repaint": True, "reveal_keys": False, "tuples": []}
-
-    def _apply_toggle(num: int, key: str, name: str, kind: str, new_val: bool) -> None:
-        """写路径单源：应用开/关切换 + 反馈 + 置重绘 + 刷新缓存（编号/键名/赋值三通道汇合）。"""
-        payload_key = f"enabled_llm.{key}" if kind == "llm" else key
-        if _apply_edit({"key": payload_key, "value": new_val}):
-            if kind == "llm":
-                enabled_map[key] = new_val
-            _emit(f"  {GREEN}[OK]{RESET} {num} {name} 已{'开启' if new_val else '关闭'}")
-            state["repaint"] = True
-            refresh_config()
-
-    def _make_toggle(num: str, key: str, name: str, kind: str) -> Callable[[], None]:
-        def _toggle() -> None:
-            curr = enabled_map.get(key, True) if kind == "llm" else is_feature_enabled(key)
-            _apply_toggle(int(num), key, name, kind, not curr)
-
-        return _toggle
-
-    def _render(nav: NavState) -> list[str]:
-        rows: list[str | None] = []
-        tuples: list[tuple[int, str, str, bool, str]] = []
-        exp_stats = load_experiment_usage()
-        try:
-            cost_history = module_cost_summary(COST_HISTORY_DAYS)
-        except Exception:
-            logger.debug("[S] 模块费用摘要读取失败，静默省略", exc_info=True)
-            cost_history = {}
-
-        columns = terminal_columns()
-        narrow = layout_tier(columns) == "narrow"
-
-        # ① 标准 LLM 模块（1-7）——行尾 * 标记与出厂默认不一致项
-        for i, (sfx, name) in enumerate(module_names.items(), 1):
-            status = enabled_map.get(sfx, True)
-            star = "" if status == default_enabled.get(sfx, True) else "*"
-            tuples.append((i, sfx, name, status, "llm"))
-            cross_hint = DUAL_ENTRY_CROSS_HINTS.get(sfx, "")
-            cost_info = cost_history.get(sfx) or {}
-            runs = cost_info.get("runs")
-            notes = f" {cross_hint}" if cross_hint else ""
-            if isinstance(runs, int) and runs > 0:
-                notes += (
-                    f" · {runs}次 ¥{float(cost_info.get('total') or 0.0):.4f}"
-                    f" 均¥{float(cost_info.get('avg') or 0.0):.4f}"
-                )
-            rows.extend(
-                format_item(
-                    number=i,
-                    label=name,
-                    key=sfx,
-                    enabled=status,
-                    star=star,
-                    marker="",
-                    cursor=nav.marker(i - 1),
-                    notes=notes,
-                    columns=columns,
-                    name_column=name_column,
-                    key_column=key_column_llm,
-                    number_width=len(str(len(module_names) + len(feature_switch_registry))),
-                    reveal_key=state["reveal_keys"],
-                )
-            )
-
-        # ② 功能开关：编号紧随标准模块之后，四组按 GROUP_ORDER 逐块顺序派发
-        next_serial = len(module_names) + 1
-        boxed = use_panel_box(columns)
-        for group, block in switch_blocks:
-            rows.append(None if boxed else "")
-            rows.append(
-                format_heading(
-                    GROUP_LABELS[group].split("（", 1)[0],
-                    sum(1 for flag, _d in block if is_feature_enabled(flag)),
-                    len(block),
-                    columns,
-                )
-            )
-            for j, (flag, d) in enumerate(block, next_serial):
-                status = is_feature_enabled(flag)
-                # 行首 ⚗ 占位列：实验项标 ⚗、其余留同宽空白以对齐状态列
-                marker = pad_right("⚗" if flag in experiment_keys else "", EXPERIMENT_MARK_COLUMNS)
-                star = "" if status == d.default else "*"
-                notes = ""
-                if flag in experiment_keys:
-                    entry = exp_stats.get(flag) or {}
-                    if isinstance(entry.get("enabled_count"), int):
-                        date = str(entry.get("last_enabled_date") or "")[5:]
-                        notes += f"（启用 {entry['enabled_count']} 次" + (f" · 最近 {date}" if date else "") + "）"
-                tuples.append((j, flag, d.label, status, "feature"))
-                cross_hint = DUAL_ENTRY_CROSS_HINTS.get(flag, "")
-                if cross_hint:
-                    notes += f" {cross_hint}"
-                rows.extend(
-                    format_item(
-                        number=j,
-                        label=d.label,
-                        key=flag,
-                        enabled=status,
-                        star=star,
-                        marker=marker,
-                        cursor=nav.marker(j - 1),
-                        notes=notes,
-                        columns=columns,
-                        name_column=name_column,
-                        key_column=key_column_sw,
-                        number_width=len(str(len(module_names) + len(feature_switch_registry))),
-                        reveal_key=state["reveal_keys"],
-                    )
-                )
-            next_serial += len(block)
-
-        rows.append("")
-        rows.append(f"{nav.marker(len(tuples))}0. 返回主菜单")
-        state["tuples"] = tuples
-        print()
-        panel_rows = [
-            *rows,
-            None if boxed else "",
-            *legend_lines(COST_HISTORY_DAYS, columns, reveal_key=state["reveal_keys"]),
-        ]
-        if not state["repaint"]:
-            # 窄终端（手机）：只读查询（? 说明）与失败路径不整屏重绘——详情/报错留屏
-            # 不被面板顶走；写路径成功后 repaint=True 即时重绘（结果必须立刻可见）
-            print("  （输入 p 重绘面板）")
-            print()
-        elif boxed:
-            print("\n".join(render_panel("配置 LLM 报告章节与功能开关", panel_rows)))
-        else:
-            header = truncate_display(f"功能开关（{len(tuples)} 项）", inner_width(columns) - 5)
-            print(f"  ── {header} ──")
-            print("\n".join(f"  {row}" if row else "" for row in panel_rows))
-        if state["repaint"]:
-            for _line in wrap_hanging(
-                "  基础报告章节组（基金深度分析/市场新闻/历史走势+回撤/组合演进/行动建议）在菜单 [P] 配置",
-                inner_width(columns),
-            ):
-                print(_line)
-            print()
-        # 本轮已渲染 → 窄终端下一轮只回反馈行（省纵向空间）；宽/中档照常整屏重绘
-        state["repaint"] = not narrow
-        return []
-
-    def _dispatch_tuple(target: tuple[int, str, str, bool, str], new_val: bool) -> None:
-        num, key, name, _curr, kind = target
-        _apply_toggle(num, key, name, kind, new_val)
-
-    def _on_text(choice: str) -> None:
-        tuples = state["tuples"]
-        # 只读查询（半角 ? 与全角 ？ 均收——中文输入法默认输出全角问号）
-        if choice[:1] in ("?", "？"):
-            show_switch_detail(choice, tuples)
-            return
-        if choice.lower() == "p":
-            state["repaint"] = True
-            return
-        if choice.lower() == "k":
-            if layout_tier(terminal_columns()) == "narrow":
-                state["reveal_keys"] = not state["reveal_keys"]
-                state["repaint"] = True  # 版面行数变化，需要重绘才能生效
-            else:
-                _emit("  [!] 当前终端宽度已直接显示键名列，无需 k 切换")
-            return
-
-        # ── 写路径三通道：批量命令 / 赋值（CLI 同词表）/ 编号或键名直取 ──
-        raw = choice.strip()
-        lowered = raw.lower()
-        if lowered == "ra":
-            removed = clear_feature_overrides(None)
-            _emit(f"  {GREEN}[OK]{RESET} 已恢复功能开关全部默认（移除 {removed} 项覆写）")
-            state["repaint"] = True
-            return
-        if lowered == "x":
-            exp_keys = sorted(flag for flag, _d in experimental_flags())
-            clear_feature_overrides(exp_keys)
-            _emit(f"  {GREEN}[OK]{RESET} 实验项已全部关闭（回到无实验态）：{'、'.join(exp_keys)}")
-            state["repaint"] = True
-            return
-        head, space, rest = raw.partition(" ")
-        if head.lower() == "r" and space and rest.strip():
-            target = match_switch_item(rest, tuples)
-            if target is None:
-                _emit(f"  {YELLOW}[!]{RESET} 未识别目标「{rest.strip()}」（输入编号或键名）")
-            elif target[4] != "feature":
-                _emit(f"  {YELLOW}[!]{RESET} 恢复默认仅支持功能开关分组（LLM 模块可逐项切换）")
-            else:
-                group = feature_switch_registry[target[1]].group
-                group_flags = [flag for flag, _d in switches_in_group(group)]
-                removed = clear_feature_overrides(group_flags)
-                _emit(f"  {GREEN}[OK]{RESET} 已恢复「{GROUP_LABELS[group]}」默认（移除 {removed} 项覆写）")
-                state["repaint"] = True
-            return
-
-        assign_name, eq, assign_val = raw.partition("=")
-        assign_name = assign_name.strip()
-        if eq:
-            # 赋值通道：功能开关走 CLI 同一解析器（词表/旧键别名过渡一致）；
-            # LLM 模块不在 feature 注册表，用与 CLI 相同的 on/off 词表本地校验
-            feature_item = next((it for it in tuples if it[1] == assign_name and it[4] == "feature"), None)
-            llm_item = next((it for it in tuples if it[1] == assign_name and it[4] == "llm"), None)
-            if feature_item is not None:
-                try:
-                    _parsed_flag, new_val = parse_switch_override(raw)
-                except ValueError as e:
-                    _emit(f"  {YELLOW}[!]{RESET} {e}")
-                    return
-                _dispatch_tuple(feature_item, new_val)
-                return
-            if llm_item is not None:
-                new_val = parse_switch_value(assign_val)
-                if new_val is None:
-                    _emit(f"  {YELLOW}[!]{RESET} 取值不可识别；可选: on / off")
-                    return
-                _dispatch_tuple(llm_item, new_val)
-                return
-            try:
-                parse_switch_override(raw)
-            except ValueError as e:
-                _emit(f"  {YELLOW}[!]{RESET} {e}")
-            else:
-                _emit(f"  {YELLOW}[!]{RESET} 未知条目「{assign_name}」")
-            return
-
-        target = match_switch_item(raw, tuples)
-        if target is None:
-            if raw.isdigit():
-                _emit(f"  {YELLOW}[!]{RESET} 无效编号")
-            else:
-                _emit(f"  {YELLOW}[!]{RESET} 未知编号或键名「{raw}」（可输入编号、键名 或 键名=on|off）")
-            return
-        _dispatch_tuple(target, not target[3])
-
-    # 可派发项清单：编号在 setup 已固定（module_names + switch_blocks 顺序稳定）
-    panel_items = [
-        PanelItem(str(i), name, action=_make_toggle(str(i), sfx, name, "llm"))
-        for i, (sfx, name) in enumerate(module_names.items(), 1)
-    ]
-    _next_serial = len(module_names) + 1
-    for _g, _block in switch_blocks:
-        for _flag, _d in _block:
-            panel_items.append(
-                PanelItem(
-                    str(_next_serial), _d.label, action=_make_toggle(str(_next_serial), _flag, _d.label, "feature")
-                )
-            )
-            _next_serial += 1
-    panel_items.append(PanelItem("0", "返回主菜单", kind="return"))
-
-    try:
-        # 提示只教主路径：一个具体例子 + 说明查询 + 返回。r/ra/x/k 等高级命令放页脚图例
-        panel_loop(
-            panel_items,
-            render=_render,
-            prompt="  输入编号切换开关（如 3）· ?3 查看说明 · 0 返回: ",
-            read=input_choice,
-            repaint="feedback",
-            on_text=_on_text,
-            on_nav_moved=lambda: state.update(repaint=True),
-        )
-    except (EOFError, KeyboardInterrupt):
-        print()
-
-    press_any_key()
+    run_llm_modules_panel()
 
 
 def _cmd_config_comparison_indices() -> None:
@@ -590,7 +269,7 @@ def _cmd_config_comparison_indices() -> None:
             f"{nav.marker(3)}0. 返回主菜单",
         ]
         print()
-        print("\n".join(render_panel("管理对比指数池", rows)))
+        print("\n".join(render_titled_panel("管理对比指数池", rows)))
         print()
         return []
 
@@ -599,9 +278,24 @@ def _cmd_config_comparison_indices() -> None:
             print(f"  {GREEN}[OK]{RESET} 对比指数池已重置为默认预设")
 
     items = [
-        PanelItem("A", "添加指数", action=lambda: _add_comparison_index(_indices())),
-        PanelItem("D", "删除指数", action=lambda: _remove_comparison_index(_indices())),
-        PanelItem("R", "重置为默认预设", action=_reset),
+        PanelItem(
+            "A",
+            "添加指数",
+            action=lambda: _add_comparison_index(_indices()),
+            detail="输入指数代码与名称后加入对比指数池（用于报告中的基准对比）",
+        ),
+        PanelItem(
+            "D",
+            "删除指数",
+            action=lambda: _remove_comparison_index(_indices()),
+            detail="从对比指数池中移除一个指数（不影响已生成的报告）",
+        ),
+        PanelItem(
+            "R",
+            "重置为默认预设",
+            action=_reset,
+            detail="清空自定义，恢复出厂预设的对比指数清单",
+        ),
         PanelItem("0", "返回主菜单", kind="return"),
     ]
 
@@ -609,14 +303,12 @@ def _cmd_config_comparison_indices() -> None:
         panel_loop(
             items,
             render=_render,
-            prompt="  请选择 (A/D/R/0): ",
+            prompt=panel_prompt("选择操作", example="A 添加 / D 删除 / R 重置"),
             read=input_choice,
             on_text=lambda _t: print(f"  {YELLOW}[!]{RESET} 无效选择，请重试"),
         )
     except (EOFError, KeyboardInterrupt):
         print()
-
-    press_any_key()
 
 
 def _add_comparison_index(indices: dict[str, str]) -> None:
@@ -730,18 +422,27 @@ def _cmd_config_report_boards() -> None:
         rows.append(f"{nav.marker(6)}0. 返回主菜单")
         return [
             None,
-            *render_panel("配置报告可选章节", rows),
-            "  提示：报告章节与增强、LLM 分析章节请在菜单 [S] 配置",
+            *render_titled_panel("配置报告可选章节", rows),
+            *wrap_hanging("  提示：报告章节与增强、LLM 分析章节请在菜单 [S] 配置", inner_width(terminal_columns())),
             None,
         ]
 
-    items = [PanelItem(num, _flags[num][1], action=_make_toggle(num)) for num in sorted(_flags)]
+    items = [
+        PanelItem(
+            num,
+            _flags[num][1],
+            action=_make_toggle(num),
+            detail="切换该章节是否出现在标准/完整报告中（当前启用状态见面板方括号）",
+        )
+        for num in sorted(_flags)
+    ]
     items += [
         PanelItem(
             "6",
             "报告增强子模块 / LLM 分析章节",
             kind="info",
             action=lambda: print(f"  {YELLOW}[!]{RESET} 报告增强子模块与 LLM 分析章节请使用菜单 [S] 配置"),
+            detail="报告增强子模块与 LLM 分析章节统一在菜单 [S] 的功能开关注册表中配置（本面板不重复设入口）",
         ),
         PanelItem("0", "返回主菜单", kind="return"),
     ]
@@ -750,7 +451,7 @@ def _cmd_config_report_boards() -> None:
         panel_loop(
             items,
             render=_render,
-            prompt="  输入编号切换 (0-6): ",
+            prompt=panel_prompt("输入编号切换 (0-6)"),
             read=input_choice,
             on_text=lambda _t: print(f"  {YELLOW}[!]{RESET} 无效编号"),
         )
@@ -758,18 +459,20 @@ def _cmd_config_report_boards() -> None:
         print()
 
     refresh_config()
-    press_any_key()
 
 
 def _cmd_refresh_config() -> None:
-    """重新加载所有配置（config.json + llm_settings.json + llm_key.json）。"""
+    """重新加载所有配置（config.json + LLM 三文件合并缓存：llm_settings/llm_key/llm_providers）。"""
     from src.python.config import get_config, get_llm_config
     from src.python.config._core import invalidate_config_cache
     from src.python.config._llm_settings import invalidate_llm_config_cache
     from src.python.llm.pricing import reload_pricing
+    from src.python.tui.status_line import reset_status_memo
 
     invalidate_config_cache()
     invalidate_llm_config_cache()
+    # 页头状态行记忆一并清除（TTL 内不清则首页仍显旧状态）
+    reset_status_memo()
 
     config = get_config()
     llm_config = get_llm_config()
@@ -786,10 +489,9 @@ def _cmd_refresh_config() -> None:
     if config:
         print(f"  {GREEN}[OK]{RESET} config.json 已重新加载")
     if llm_config:
-        print(f"  {GREEN}[OK]{RESET} llm_settings.json + llm_key.json 已重新加载")
+        print(f"  {GREEN}[OK]{RESET} LLM 配置已重新加载（llm_settings + llm_key + llm_providers）")
     else:
         print(f"  {YELLOW}[!]{RESET} LLM 未配置（llm_key.json 或 llm_providers.json 缺失或无效）")
-    press_any_key()
 
 
 def _cmd_config_anonymization_mode() -> None:
@@ -822,7 +524,7 @@ def _cmd_config_anonymization_mode() -> None:
             rows.append(f"{nav.marker(i)}{mode_marker} {i + 1}. {pad_right(desc, desc_column)}")
         rows += [None, f"{nav.marker(4)}0. 返回主菜单"]
         print()
-        print("\n".join(render_panel("配置持仓匿名化", rows)))
+        print("\n".join(render_titled_panel("配置持仓匿名化", rows)))
         print()
         return []
 
@@ -838,131 +540,34 @@ def _cmd_config_anonymization_mode() -> None:
             print(f"  {YELLOW}[!]{RESET} 无效编号")
 
     items = [
-        PanelItem(str(i), ANONYMIZATION_MODE_DESCRIPTIONS.get(k, k), action=lambda i=i: _apply_mode(str(i)))
+        PanelItem(
+            str(i),
+            ANONYMIZATION_MODE_DESCRIPTIONS.get(k, k),
+            action=lambda i=i: _apply_mode(str(i)),
+            detail="切换到该匿名化模式（当前模式见面板顶部；立即写入配置）",
+        )
         for i, k in enumerate(_ORDERED_KEYS, 1)
     ]
-    items.append(PanelItem("0", "返回主菜单", kind="return"))
-
-    try:
-        panel_loop(items, render=_render, prompt="  请选择 (0-4): ", read=input_choice, on_text=_on_text)
-    except (EOFError, KeyboardInterrupt):
-        print()
-
-    press_any_key()
-
-
-def _cmd_config_llm_providers() -> None:
-    """管理 LLM 多链线路优先级（降级顺序）。
-
-    与 CLI ``--llm-provider-order``、Web 配置面同源：写路径全部经共享编辑层
-    ``apply_config_edit``（llm_providers.priority / reorder），本面板只做展示与
-    「交换两个编号」的输入适配。Esc 即时返回主菜单。
-    """
-    from src.python.config import get_llm_providers
-
-    state: dict = {"ordered": [], "width": 80}
-
-    def _load() -> tuple[str, list]:
-        cfg = get_llm_providers()
-        strategy = str(cfg.get("strategy") or "priority")
-        raw_providers = [p for p in (cfg.get("providers") or []) if isinstance(p, dict)]
-        # 展示顺序 = priority 升序（数值小 = 链序靠前），与运行时 priority 策略口径一致
-        ordered = sorted(enumerate(raw_providers), key=lambda t: (t[1].get("priority", 99), t[0]))
-        return strategy, ordered
-
-    strategy, ordered = _load()
-    columns = terminal_columns()
-    width = inner_width(columns)
-    if len(ordered) < 2:
-        # 单线路直接返回（不进入输入循环，行输入不被触发）
-        print()
-        print(truncate_display(f"  ── LLM 多链线路优先级（strategy: {strategy}） ──", width))
-        for line in wrap_hanging("  当前仅一条线路（或未配置多链），无需调整", width):
-            print(line)
-        return
-
-    def _render(nav: NavState) -> list[str]:
-        strategy, ordered = _load()
-        columns = terminal_columns()
-        width = inner_width(columns)
-        state["ordered"] = ordered
-        state["width"] = width
-        print()
-        print(truncate_display(f"  ── LLM 多链线路优先级（strategy: {strategy}） ──", width))
-        for num, (_i, provider) in enumerate(ordered, 1):
-            row = (
-                f"  {nav.marker(num - 1)}{num}. {provider.get('name')}（{provider.get('provider')}）priority "
-                f"{provider.get('priority', 99)}"
-            )
-            for line in wrap_hanging(row, width):
-                print(line)
-        print(f"  {nav.marker(len(ordered))}0. 返回主菜单")
-        if strategy not in ("priority", "fallback_only"):
-            for line in wrap_hanging(
-                f"  提示：当前策略 {strategy} 下实际链序由权重/成本决定，此处顺序仅在 priority / fallback_only 策略下生效",
-                width,
-            ):
-                print(line)
-        print()
-        return []
-
-    def _try_swap(a: int, b: int) -> bool:
-        """配对交换：越界/相同编号返回 False（调用方给统一重提示），成功经共享编辑层写盘。"""
-        ordered = state["ordered"]
-        width = state["width"]
-        if not (1 <= a <= len(ordered) and 1 <= b <= len(ordered) and a != b):
-            return False
-        names = [str(p.get("name")) for _i, p in ordered]
-        names[a - 1], names[b - 1] = names[b - 1], names[a - 1]
-        if _apply_edit({"key": "llm_providers.priority", "action": "reorder", "order": names}):
-            for line in wrap_hanging(
-                f"  {GREEN}[OK]{RESET} 已交换 {ordered[a - 1][1].get('name')} 与 {ordered[b - 1][1].get('name')} 的优先级",
-                width,
-            ):
-                print(line)
-        return True
-
-    def _invalid() -> None:
-        ordered = state["ordered"]
-        width = state["width"]
-        for line in wrap_hanging(
-            f"  {YELLOW}[!]{RESET} 请输入两个不同的编号交换位置（如 3 1），范围 1-{len(ordered)}",
-            width,
-        ):
-            print(line)
-
-    def _on_text(choice: str) -> None:
-        parts = choice.split()
-        if len(parts) == 2:
-            try:
-                a, b = int(parts[0]), int(parts[1])
-            except ValueError:
-                a = b = -1
-            if _try_swap(a, b):
-                return
-        _invalid()
-
-    def _on_picked(keys: tuple[str, ...]) -> None:
-        try:
-            a, b = int(keys[0]), int(keys[1])
-        except ValueError:
-            a = b = -1
-        if not _try_swap(a, b):
-            _invalid()
-
-    # 可派发项：编号线路（可导航，供 ↑↓ + Enter 收集配对）+ 0 返回
-    items = [PanelItem(str(i), str(p.get("name"))) for i, (_x, p) in enumerate(ordered, 1)]
     items.append(PanelItem("0", "返回主菜单", kind="return"))
 
     try:
         panel_loop(
             items,
             render=_render,
-            prompt="  输入两个编号交换优先级（如 3 1）· 0 返回: ",
+            prompt=panel_prompt("选择匿名化模式", example="1-4 选模式"),
             read=input_choice,
-            pick=2,
-            on_picked=_on_picked,
             on_text=_on_text,
         )
     except (EOFError, KeyboardInterrupt):
         print()
+
+
+def _cmd_config_llm_providers() -> None:
+    """管理 LLM 多链线路优先级（备用顺序）——实现见 ``handlers_llm_providers``。
+
+    与 CLI ``--llm-provider-order``、Web 配置面同源：写路径全部经共享编辑层
+    ``apply_config_edit``（llm_providers.priority / reorder）。本文件只保留菜单入口。
+    """
+    from src.python.tui.handlers_llm_providers import run_llm_providers_panel
+
+    run_llm_providers_panel()

@@ -18,6 +18,7 @@ from src.python.core.reader import read_holdings, require_holdings
 from src.python.tui.tui_handlers import print_error_with_hint, select_holdings_file
 from src.python.tui.tui_keys import input_choice
 from src.python.tui.panel_runtime import NavState, PanelItem, panel_loop
+from src.python.tui.prompt_text import panel_prompt
 from src.python.tui.tui_menu import GREEN, RED, RESET, YELLOW, press_any_key, refresh_config
 
 logger = setup_logger()
@@ -48,7 +49,6 @@ def _read_holdings_and_clear_cache(group_name: str) -> list | None:
             require_holdings(holdings, filepath)
         except ValueError as e:
             print(f"  {RED}[ERR]{RESET} {e}")
-            press_any_key()
             return None
         print(f"  {GREEN}[OK]{RESET} 共 {len(holdings)} 条持仓记录")
         print("  [..] 清除旧缓存...")
@@ -61,7 +61,6 @@ def _read_holdings_and_clear_cache(group_name: str) -> list | None:
         return holdings
     except Exception as e:
         print_error_with_hint(e, "读取持仓失败")
-        press_any_key()
         return None
 
 
@@ -195,8 +194,7 @@ def _cmd_cleanup_cache() -> None:
     from src.python.report.progress import TuiProgressReporter
 
     reporter = TuiProgressReporter()
-    cleanup_cache(reporter)
-    press_any_key()
+    cleanup_cache(reporter)  # 完成后直接回面板：短反馈不设按键闸门（契约 Feedback §闸门白名单）
 
 
 def _render_cache_stats() -> None:
@@ -214,47 +212,64 @@ def _render_cache_stats() -> None:
 
     cache_dir = get_cache_dir()
 
+    from src.python.tui.switch_panel import inner_width
+    from src.python.tui.text_layout import terminal_columns, wrap_hanging
+
+    inner = inner_width(terminal_columns())
+
+    def _emit(text: str) -> None:
+        """按内宽折行输出（窄终端上路径/统计不撑出边界；短行原样）。"""
+        for line in wrap_hanging(text, inner):
+            print(line)
+
+    def _rule(title: str) -> None:
+        """分隔标题：宽度自适应内宽（窄屏不硬折）。"""
+        from src.python.tui.switch_panel import narrow_rule
+
+        print(f"  {title}")
+        print(narrow_rule(terminal_columns()))
+
     # ── 1. data/cache 缓存文件 ──
-    print("  ════════════════ data/cache ════════════════")
-    print(f"  目录: {cache_dir}")
-    print(f"  文件: {stats.total_files} 个 | 大小: {stats.total_size_bytes / 1024:.0f} KB")
+    _rule("data/cache")
+    _emit(f"  目录: {cache_dir}")
+    _emit(f"  文件: {stats.total_files} 个 | 大小: {stats.total_size_bytes / 1024:.0f} KB")
     if stats.hit_total > 0:
-        print(f"  命中率:   {stats.hit_rate:.1f}% ({stats.hit_total} 次请求)")
+        _emit(f"  命中率: {stats.hit_rate:.1f}% ({stats.hit_total} 次请求)")
     if stats.top_by_size:
         print("  最大文件:")
         for key, size in stats.top_by_size[:3]:
             size_kb = size / 1024
             disp = f"{size_kb / 1024:.1f} MB" if size_kb >= 1024 else f"{size_kb:.0f} KB"
-            print(f"    {key}.json  ({disp})")
+            _emit(f"    {key}.json  ({disp})")
     print("  前缀分布:")
     for prefix, count in sorted(stats.by_prefix.items()):
-        print(f"    {prefix}_*: {count} 个文件")
+        _emit(f"    {prefix}_*: {count} 个文件")
     print()
-    print(f"  过期文件: {stats.expired} 个（输入 3 可清理）")
+    _emit(f"  过期文件: {stats.expired} 个（输入 3 可清理）")
 
     # ── 2. data/history/snapshots 快照文件 ──
     if stats.snapshot_files > 0:
         print()
-        print("  ════════ data/history/snapshots ════════")
+        _rule("data/history/snapshots")
         _hist_dir = os.path.join(PROJECT_ROOT, "data", "history", "snapshots")
-        print(f"  目录: {os.path.abspath(_hist_dir)}")
-        print(f"  文件: {stats.snapshot_files} 个 | 大小: {stats.snapshot_size_bytes / 1024:.0f} KB")
+        _emit(f"  目录: {os.path.abspath(_hist_dir)}")
+        _emit(f"  文件: {stats.snapshot_files} 个 | 大小: {stats.snapshot_size_bytes / 1024:.0f} KB")
         _latest = max(
             (os.path.getmtime(os.path.join(_hist_dir, _f)) for _f in os.listdir(_hist_dir) if _f.endswith(".json")),
             default=0,
         )
         if _latest:
-            print(f"  最新: {datetime.fromtimestamp(_latest).strftime('%Y-%m-%d %H:%M')}")
-        print("  （持仓快照，超期自动删除，不随缓存清理）")
+            _emit(f"  最新: {datetime.fromtimestamp(_latest).strftime('%Y-%m-%d %H:%M')}")
+        _emit("  （持仓快照，超期自动删除，不随缓存清理）")
 
     # ── 3. data/state 运行时状态文件 ──
     if stats.state_files > 0:
         print()
-        print("  ═══════════════ data/state ═══════════════")
+        _rule("data/state")
         _state_dir = os.path.join(PROJECT_ROOT, "data", "state")
-        print(f"  目录: {os.path.abspath(_state_dir)}")
-        print(f"  文件: {stats.state_files} 个 | 大小: {stats.state_size_bytes / 1024:.1f} KB")
-        print("  （运行时状态，跨会话持久化，不随缓存清理）")
+        _emit(f"  目录: {os.path.abspath(_state_dir)}")
+        _emit(f"  文件: {stats.state_files} 个 | 大小: {stats.state_size_bytes / 1024:.1f} KB")
+        _emit("  （运行时状态，跨会话持久化，不随缓存清理）")
 
 
 def _cmd_cache_management() -> None:
@@ -275,18 +290,23 @@ def _cmd_cache_management() -> None:
         return []
 
     def _cleanup() -> None:
-        _cmd_cleanup_cache()  # 原平级入口逻辑收敛于此（含按任意键确认）
+        _cmd_cleanup_cache()  # 原平级入口逻辑收敛于此（清理后直接回面板，不设闸门）
         state["draw_stats"] = True  # 清理后回统计刷新，动线闭环
 
     items = [
-        PanelItem("3", "清理过期缓存", action=_cleanup),
+        PanelItem(
+            "3",
+            "清理过期缓存",
+            action=_cleanup,
+            detail="删除已超过各自有效期的缓存文件（未过期的不动；清理后统计自动刷新）",
+        ),
         PanelItem("0", "返回主菜单", kind="return"),
     ]
 
     panel_loop(
         items,
         render=_render,
-        prompt="  缓存管理> ",
+        prompt=panel_prompt("输入编号执行", example="3 清理过期"),
         read=input_choice,
         default_key="0",  # 空回车返回
         on_text=lambda _t: print(f"  {YELLOW}[!]{RESET} 未知命令（3 清理过期缓存 / 0 返回）"),

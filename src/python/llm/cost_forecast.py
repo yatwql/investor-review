@@ -9,7 +9,7 @@
   - **日预算**：`llm_settings.json → daily_cost_limit`（0/缺省 = 不启用）。今日已
     花费从 `perf_history.jsonl` 当日记录的 `llm.total_cost` 求和——与事后统计
     （session usage / perf 汇总）同源，避免两处数字打架。预算是**硬闸**：交互
-    渠道询问「降级走缓存 / 中止」，非交互渠道直接中止。
+    渠道询问「用已有结果继续 / 中止」，非交互渠道直接中止。
 
 计费数学单源于 `llm.pricing.compute_cost_value`（与事后 `estimate_cost` 同一实现）。
 """
@@ -187,6 +187,8 @@ def forecast_run_cost(
     config: dict[str, Any] | None = None,
     *,
     history: list[dict[str, Any]] | None = None,
+    force_llm: bool = False,
+    force_modules: list[str] | None = None,
 ) -> dict[str, Any]:
     """给本次生成的 LLM 费用**区间预估**（预估失败返回 ok=False，不抛异常）。
 
@@ -194,6 +196,9 @@ def forecast_run_cost(
         llm_config: LLM 配置字典；None 时读取。
         config: 报告配置字典（深度档位）；None 时自动读取。
         history: perf 历史记录注入（测试用）；None 时读取 perf_history.jsonl。
+        force_llm: 全量重新生成（跳过全部已有结果）；与 ``force_modules`` 经
+            ``resolve_force_scope`` 归一（与创建运行同源，非法模块键抛 ValueError）。
+        force_modules: 模块级重新生成范围（粒度优先于 ``force_llm``）。
 
     Returns:
         dict：``ok`` 预估是否可用（False → 渠道层跳过确认继续，不阻塞）；
@@ -201,9 +206,18 @@ def forecast_run_cost(
         ``low``/``high`` 区间（费用数值）；``currency``/``symbol``；
         ``basis`` 依据（``history:<n>``/``static``/``mixed``/``no-modules``）；
         ``history_runs`` 参与样本的运行数；``unpriced`` 无法定价的模块（有历史
-        时可缺席）；``detail`` 逐模块 {low, high, samples, basis}。
+        时可缺席）；``detail`` 逐模块 {low, high, samples, basis}；
+        ``force_scope`` 重新生成范围（排序模块键，空=默认路径）；范围内模块保证
+        重新调用（无缓存折扣），按静态单价口径计价并给出 ``forced_count`` /
+        ``forced_low`` / ``forced_high`` 拆分区间（摘要行单独拆行）。
     """
-    return _forecast_run_cost_impl(llm_config, config, history=history)
+    return _forecast_run_cost_impl(
+        llm_config,
+        config,
+        history=history,
+        force_llm=force_llm,
+        force_modules=force_modules,
+    )
 
 
 def is_feature_enabled_for_debate() -> bool:
@@ -221,14 +235,24 @@ def _forecast_run_cost_impl(
     config: dict[str, Any] | None,
     *,
     history: list[dict[str, Any]] | None,
+    force_llm: bool = False,
+    force_modules: list[str] | None = None,
 ) -> dict[str, Any]:
+    from src.python.llm.force_scope import resolve_force_scope
+
     cfg = llm_config if llm_config is not None else _get_llm_config()
     planned = resolve_planned_modules(cfg, config)
+    # 重新生成范围（与创建运行 resolve_force_scope 同源）；空 = 默认路径（历史口径）
+    scope = resolve_force_scope(force_llm, force_modules) if (force_llm or force_modules) else frozenset()
     base: dict[str, Any] = {
         "ok": True,
         "reason": None,
         "modules": planned,
         "module_count": len(planned),
+        "force_scope": sorted(scope),
+        "forced_count": 0,
+        "forced_low": 0.0,
+        "forced_high": 0.0,
         "low": 0.0,
         "high": 0.0,
         "currency": PRICING_CURRENCY,
@@ -251,9 +275,28 @@ def _forecast_run_cost_impl(
     unpriced: list[str] = []
     detail: dict[str, dict[str, Any]] = {}
     history_parts = 0
+    forced_low = 0.0
+    forced_high = 0.0
+    forced_count = 0
     for sfx in planned:
         samples = hist_samples.get(sfx) or []
-        if samples:
+        if sfx in scope:
+            # 重新生成范围内模块：保证重新调用（无缓存折扣），历史样本含缓存
+            # 折扣不再适用——优先静态单价口径；静态不可得时回落历史样本（保守近似）
+            rng = _static_module_cost_range(cfg, sfx, debate_active)
+            if rng is not None:
+                lo, hi = rng
+                part_basis = "static"
+            elif samples:
+                lo, hi = min(samples), max(samples)
+                part_basis = "history"
+            else:
+                unpriced.append(sfx)
+                continue
+            forced_low += lo
+            forced_high += hi
+            forced_count += 1
+        elif samples:
             lo, hi = min(samples), max(samples)
             part_basis = "history"
             history_parts += 1
@@ -292,6 +335,9 @@ def _forecast_run_cost_impl(
             "basis": part_basis,
             "unpriced": unpriced,
             "detail": detail,
+            "forced_count": forced_count,
+            "forced_low": round(forced_low, 6),
+            "forced_high": round(forced_high, 6),
         }
     )
     if unpriced:
@@ -370,6 +416,13 @@ def forecast_summary_lines(
                 f"本次生成 LLM 费用预估 {symbol}{forecast['low']:.4f} ~ {symbol}{forecast['high']:.4f}"
                 f"（计划 {forecast['module_count']} 个模块，依据：{basis_desc}）"
             )
+            forced_count = int(forecast.get("forced_count") or 0)
+            if forced_count:
+                lines.append(
+                    f"其中 {forced_count} 个模块重新生成："
+                    f"{symbol}{float(forecast.get('forced_low') or 0.0):.4f} ~ "
+                    f"{symbol}{float(forecast.get('forced_high') or 0.0):.4f}"
+                )
         if forecast.get("reason"):
             lines.append(f"预估说明：{forecast['reason']}")
     else:

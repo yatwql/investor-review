@@ -27,16 +27,16 @@ pytestmark = [pytest.mark.unit, pytest.mark.unit_ui]
 class TestCmdViewLogs(unittest.TestCase):
     """_cmd_view_logs 日志查看。"""
 
-    def _run(self, level_input: str = "") -> str:
-        """执行命令并捕获输出（mock 输入与翻页等待）。"""
+    def _run(self, level_input: str = "") -> tuple[str, object]:
+        """执行命令并捕获输出（mock 输入与翻页等待，返回输出与闸门 mock）。"""
         out = io.StringIO()
         with (
             patch("sys.stdout", out),
             patch("src.python.tui.handlers_log.input_choice", return_value=level_input),
-            patch("src.python.tui.handlers_log.press_any_key"),
+            patch("src.python.tui.handlers_log.press_any_key") as mock_press,
         ):
             _cmd_view_logs()
-        return out.getvalue()
+        return out.getvalue(), mock_press
 
     def test_output_entries(self):
         """有日志时输出条目，traceback 折叠为提示行。"""
@@ -50,10 +50,11 @@ class TestCmdViewLogs(unittest.TestCase):
             ),
         ]
         with patch("src.python.core.log_reader.read_log", return_value=entries):
-            out = self._run()
+            out, mock_press = self._run()
         self.assertIn("应用启动", out)
         self.assertIn("读取行情失败", out)
         self.assertIn("⤷ 堆栈详情 +2 行", out)
+        mock_press.assert_called_once()  # 长输出（日志详情）保留闸门
 
     def test_level_filter_passthrough(self):
         """级别提示输入 ERROR → read_log(level="ERROR")。"""
@@ -90,26 +91,28 @@ class TestCmdViewLogs(unittest.TestCase):
         self.assertIn("无效级别", mock_out.getvalue())
 
     def test_no_match(self):
-        """无匹配条目提示。"""
+        """无匹配条目提示（短反馈不设闸门）。"""
         with (
             patch("src.python.core.log_reader.read_log", return_value=[]),
             patch("src.python.tui.handlers_log.input_choice", return_value=""),
-            patch("src.python.tui.handlers_log.press_any_key"),
+            patch("src.python.tui.handlers_log.press_any_key") as mock_press,
             patch("sys.stdout", new_callable=io.StringIO) as mock_out,
         ):
             _cmd_view_logs()
         self.assertIn("无匹配日志条目", mock_out.getvalue())
+        mock_press.assert_not_called()
 
     def test_exception_fallback(self):
-        """read_log 抛异常 → [ERR] 提示且不崩溃。"""
+        """read_log 抛异常 → [ERR] 提示且不崩溃（短反馈不设闸门）。"""
         with (
             patch("src.python.core.log_reader.read_log", side_effect=OSError("IO error")),
             patch("src.python.tui.handlers_log.input_choice", return_value=""),
-            patch("src.python.tui.handlers_log.press_any_key"),
+            patch("src.python.tui.handlers_log.press_any_key") as mock_press,
             patch("sys.stdout", new_callable=io.StringIO) as mock_out,
         ):
             _cmd_view_logs()
         self.assertIn("[ERR]", mock_out.getvalue())
+        mock_press.assert_not_called()
 
 
 class TestCmdViewHealthHistory(unittest.TestCase):
@@ -130,7 +133,7 @@ class TestCmdViewHealthHistory(unittest.TestCase):
         ]
         with (
             patch("src.python.core.perf.summarize_health_history", return_value=summaries),
-            patch("src.python.tui.handlers_log.press_any_key"),
+            patch("src.python.tui.handlers_log.press_any_key") as mock_press,
             patch("sys.stdout", new_callable=io.StringIO) as mock_out,
         ):
             _cmd_view_health_history()
@@ -138,26 +141,29 @@ class TestCmdViewHealthHistory(unittest.TestCase):
         self.assertIn("2026-08-16 10:00:00", out)
         self.assertIn("8/10", out)
         self.assertIn("腾讯K线", out)
+        mock_press.assert_called_once()  # 长输出（健康历史）保留闸门
 
     def test_empty(self):
-        """无历史记录提示。"""
+        """无历史记录提示（短反馈不设闸门）。"""
         with (
             patch("src.python.core.perf.summarize_health_history", return_value=[]),
-            patch("src.python.tui.handlers_log.press_any_key"),
+            patch("src.python.tui.handlers_log.press_any_key") as mock_press,
             patch("sys.stdout", new_callable=io.StringIO) as mock_out,
         ):
             _cmd_view_health_history()
         self.assertIn("暂无数据源健康历史记录", mock_out.getvalue())
+        mock_press.assert_not_called()
 
     def test_exception_fallback(self):
-        """异常 → [ERR] 提示且不崩溃。"""
+        """异常 → [ERR] 提示且不崩溃（短反馈不设闸门）。"""
         with (
             patch("src.python.core.perf.summarize_health_history", side_effect=OSError("IO error")),
-            patch("src.python.tui.handlers_log.press_any_key"),
+            patch("src.python.tui.handlers_log.press_any_key") as mock_press,
             patch("sys.stdout", new_callable=io.StringIO) as mock_out,
         ):
             _cmd_view_health_history()
         self.assertIn("[ERR]", mock_out.getvalue())
+        mock_press.assert_not_called()
 
 
 class TestPromptEscCancel(unittest.TestCase):

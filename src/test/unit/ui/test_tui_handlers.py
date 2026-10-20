@@ -413,12 +413,12 @@ class TestExecuteItem(unittest.TestCase):
 
     @patch("src.python.tui.tui_handlers.MENU_ITEMS")
     def test_keyboard_interrupt_handled(self, mock_menu):
-        """KeyboardInterrupt 被捕获并调用 _press_any_key。"""
+        """KeyboardInterrupt 被捕获并新增操作提示（不设按键闸门，即时回主菜单）。"""
         callback = MagicMock(side_effect=KeyboardInterrupt)
         mock_menu.__getitem__.return_value = ("T", "Test", callback, False)
         with patch("src.python.tui.tui_handlers.press_any_key") as mock_pak:
             execute_item(0)
-            mock_pak.assert_called_once()
+            mock_pak.assert_not_called()
         self.assertFalse(_th_module._busy)
 
     @patch("src.python.tui.tui_handlers.MENU_ITEMS")
@@ -633,7 +633,7 @@ class TestPrepareHoldingsGate(unittest.TestCase):
         self.assertIsNone(result)
         out = buf.getvalue()
         self.assertIn("持仓文件为空", out)
-        mock_press.assert_called_once()
+        mock_press.assert_not_called()  # 短错误反馈不设闸门
 
 
 class TestPromptEscCancel(unittest.TestCase):

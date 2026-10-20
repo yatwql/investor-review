@@ -6,7 +6,7 @@
 逐条比对，使漂移在提交前暴露（与 check-doc-traces 的「历史痕迹」检查互补：
 那边管「不该写的内容」，这边管「写了但与实现不符的内容」）。
 
-十七项检查（权威源 → 受检文档）：
+十九项检查（权威源 → 受检文档）：
   1.  报告章节表        core/report_section_registry.py `_REPORT_SECTION_DEFAULT` → manuals/reports-instruction.md
   2.  章节数量断言      同上（`页签编号 1~N` / `默认顺序（N 项` / `返回 result（N 项` / `N 个报告章节`）→ 全库文档
   3.  功能开关表        config/features.py `feature_switch_registry`    → manuals/how-to-config.md
@@ -26,12 +26,13 @@
   17. 章节-区块矩阵      区块注册表三向对账（文档行 ↔ 注册表逐列 / 实现提取集合） → managements/technical.md §4.22
   18. 手册菜单块一致性  双手册主菜单 code block（键集合/标签头）→ tui/tui_menu.py MENU_ITEMS；
       全文档「返回主菜单」行键=0 不变量（返回键全局统一，结构化行校验/prose 豁免）
+  19. 需求菜单表        requirements.md §3.2 菜单表（键集合/分组标题/组内顺序）→ tui/tui_menu.py MENU_ITEMS + MENU_GROUPS（历史漂移：组重排未跟、M/Q 整行缺失、缓存编号错）
 
 按设计豁免的历史记录文档：`changelog.md` / `review-findings.md`（会如实引用旧数字作为变更记录）
 与 `docs/archive/**`（版本快照）不参与第 2/4/5 项扫描。
 
 用法：
-  python scripts/check-doc-drift.py                  # 十八项全查
+  python scripts/check-doc-drift.py                  # 十九项全查
   python scripts/check-doc-drift.py -v               # 详细输出（打印解析明细）
   python scripts/check-doc-drift.py --ci             # CI 模式：仅输出 文件:描述，退出码 2
   python scripts/check-doc-drift.py --with-test-count # 附带 pytest 收集，核对「测试用例数」与 test-coverage.md 计数表
@@ -79,6 +80,7 @@ from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc
     _PLAN_MD,
     _CHANGELOG_MD,
     _REVIEW_FINDINGS_MD,
+    _REQUIREMENTS_MD,
     _HISTORY_DOCS,
     _TREE_ROOTS,
     _GENERATED_DIRS,
@@ -161,6 +163,7 @@ from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc
     guard_parity_sources,
     check_menu_blocks,
     check_return_key_invariant,
+    check_requirements_menu_table,
     parse_menu_block_lines,
     _HOW_TO_START_MD,
 )
@@ -186,6 +189,7 @@ def run_checks(with_test_count: bool = False, docs: dict | None = None) -> list[
     findings += check_panel_numbering(docs[_TUI_MENU_MD])
     findings += check_menu_blocks({_HOW_TO_START_MD: docs[_HOW_TO_START_MD], _TUI_MENU_MD: docs[_TUI_MENU_MD]})
     findings += check_return_key_invariant(docs)
+    findings += check_requirements_menu_table(docs[_REQUIREMENTS_MD])
     findings += check_dir_tree(docs[_FOLDERS_MD])
     findings += check_chain_table(docs[_RELIABILITY_MD])
     findings += check_archive_index()

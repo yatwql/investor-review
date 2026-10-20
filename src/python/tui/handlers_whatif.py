@@ -19,7 +19,7 @@ from src.python.report.progress import TuiProgressReporter
 from src.python.tui.text_layout import wrap_prompt
 from src.python.tui.tui_keys import PromptCancelledError, input_choice
 from src.python.tui.tui_handlers import print_error_with_hint, select_holdings_file
-from src.python.tui.tui_menu import get_config_cache, press_any_key
+from src.python.tui.tui_menu import get_config_cache
 
 logger = setup_logger()
 
@@ -73,7 +73,7 @@ def _input_candidate_path(base_file: str) -> str | None:
     提供 3 个选项：
       1) 自动复制基准文件为可编辑目标模板（调仓后）
       2) 手动输入目标文件完整路径（可位于任意位置）
-      3) 直接回车取消
+      3) 回车=取消（Esc 亦可）
     """
     print("  [ERR] 持仓目录下未找到基准之外的 xlsx 文件")
     print("     可复制基准持仓文件并修改后作为目标（调仓后/假设）")
@@ -81,7 +81,7 @@ def _input_candidate_path(base_file: str) -> str | None:
         print("  [1] 自动复制基准文件为可编辑目标模板（调仓后）")
         print("  [2] 手动输入目标文件完整路径")
         try:
-            choice = input_choice("  请输入选择（直接回车取消）: ")
+            choice = input_choice("  回车=取消 / 输入编号选择（1 或 2）: ")
         except (EOFError, KeyboardInterrupt):
             print()
             return None
@@ -97,9 +97,9 @@ def _input_candidate_path(base_file: str) -> str | None:
 
 
 def _manual_input_path() -> str | None:
-    """手动输入目标文件完整路径；直接回车取消返回 None。"""
+    """手动输入目标文件完整路径；回车=取消（返回 None）。"""
     try:
-        path = input_choice(wrap_prompt("  请输入目标文件完整路径（直接回车取消）: "))
+        path = input_choice(wrap_prompt("  回车=取消 / 请输入目标文件完整路径: "))
     except (EOFError, KeyboardInterrupt):
         print()
         return None
@@ -151,7 +151,7 @@ def _prompt_effective_date() -> str:
 
     while True:
         try:
-            raw = input_choice(wrap_prompt("  [..] 调仓生效日 YYYY-MM-DD（可选，回车跳过以启用时序回测）: "))
+            raw = input_choice(wrap_prompt("  [..] 调仓生效日 YYYY-MM-DD（回车=跳过，不做时序回测）: "))
         except (EOFError, KeyboardInterrupt):
             print()
             return ""
@@ -194,11 +194,9 @@ def _cmd_whatif() -> None:
         cand = read_holdings(cand_file)
         if not base:
             print(f"  [ERR] 基准持仓读取失败或为空: {base_file}")
-            press_any_key()
             return
         if not cand:
             print(f"  [ERR] 目标持仓读取失败或为空: {cand_file}")
-            press_any_key()
             return
         print(f"  [OK] 基准 {len(base)} 条 / 目标 {len(cand)} 条持仓")
         eff = _prompt_effective_date()
@@ -213,7 +211,6 @@ def _cmd_whatif() -> None:
         )
         if not result.ok:
             print(f"  [ERR] 调仓对比数据不可用: {result.reason}")
-            press_any_key()
             return
         print("  [OK] 调仓模拟报告已生成（独立产物，不并入主报告）")
         print(f"       Excel: {result.excel}")
@@ -221,4 +218,3 @@ def _cmd_whatif() -> None:
     except Exception as e:
         logger.exception("调仓 What-if 模拟失败")
         print_error_with_hint(e, "调仓 What-if 模拟失败")
-    press_any_key()

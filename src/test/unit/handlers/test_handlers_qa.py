@@ -89,6 +89,23 @@ class TestReportSelection:
         assert handlers_qa._select_report(str(tmp_path)) == "A.html"
         assert "可追问的报告" in capsys.readouterr().out
 
+    def test_selection_prompt_declares_enter_and_cancel(self, tmp_path, monkeypatch):
+        """选择屏提示写明回车动作名与取消键（回车语义唯一化：默认项必须有名字）。"""
+        from src.python.tui import handlers_qa
+
+        _fake_reports(tmp_path, ["a.html"])
+        prompts: list[str] = []
+
+        def _capture(prompt):
+            prompts.append(prompt)
+            return "q"
+
+        monkeypatch.setattr(handlers_qa, "input_choice", _capture)
+        handlers_qa._select_report(str(tmp_path))
+        assert prompts, "未捕获到选择提示"
+        assert "回车=最新报告" in prompts[0]
+        assert "q=取消" in prompts[0]
+
     def test_number_selection_and_revalidate(self, tmp_path, monkeypatch, capsys):
         _fake_reports(tmp_path, ["A.html", "B.html"])
         monkeypatch.setattr("builtins.input", _input_mock(["x", "99", "2"]))
@@ -286,3 +303,10 @@ class TestErrorCodesSingleSource:
         assert set(handlers_qa._EXIT_LOOP_CODES) <= shared
         assert set(handlers_qa._INPUT_ABORT_CODES) <= set(handlers_qa._EXIT_LOOP_CODES)
         assert set(web_handlers._QA_STATUS_BY_CODE) <= shared
+
+    def test_question_prompt_declares_enter_action(self):
+        """提问屏：回车不是裸回车，写明「结束追问返回主菜单」。"""
+        from src.python.tui.handlers_qa import _QA_PROMPT
+
+        assert "回车=" in _QA_PROMPT
+        assert "返回主菜单" in _QA_PROMPT

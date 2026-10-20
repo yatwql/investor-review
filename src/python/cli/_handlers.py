@@ -39,12 +39,12 @@ def _show_llm_config_status_cli() -> None:
         logger.info("状态: 已配置 | 策略: %s | 多链服务: %d provider", llm["strategy"], len(llm["providers"]))
         for i, p in enumerate(llm["providers"], 1):
             logger.info("  [%d] %s (%s)", i, p["name"], p["backend"])
-            logger.info("      模型: %s    优先级: %s    熔断: %s", p["model"], p["priority"], p["circuit"])
+            logger.info("      模型: %s    优先级: %s    自动重试: %s", p["model"], p["priority"], p["circuit"])
         if llm.get("preferred"):
             logger.info("  ▶ 模块偏好: %s", " / ".join(llm["preferred"]))
     else:
         logger.info(
-            "状态: 已配置 | provider=%s | model=%s | endpoint=%s | 熔断: %s",
+            "状态: 已配置 | provider=%s | model=%s | endpoint=%s | 自动重试: %s",
             llm["provider"],
             llm["model"],
             llm["endpoint_display"],
@@ -196,16 +196,19 @@ def _confirm_cost_forecast(args: argparse.Namespace) -> tuple[bool, bool]:
     """CLI 事前费用预估确认（交互 y/N；``--yes`` / ``--non-interactive`` / 非 TTY 跳过确认）。
 
     - 预估不可用或无模块参与 → 跳过确认继续（预估失败不阻塞生成）；
-    - 日预算超限为**硬闸**：交互时询问「降级走缓存 / 中止」，非交互直接中止；
+    - 日预算超限为**硬闸**：交互时询问「用已有结果继续 / 中止」，非交互直接中止；
     - 其余交互场景 y/N 确认（默认 N 中止）；非交互跳过确认直接继续。
 
     Returns:
         (proceed, degrade)——proceed=False 为中止；degrade=True 为交互确认
-        「降级走缓存继续」（调用方清空强刷范围）。
+        「用已有结果继续」（调用方清空重新生成范围）。
     """
     from src.python.llm.cost_forecast import budget_status, forecast_run_cost, forecast_summary_lines
 
-    forecast = forecast_run_cost()
+    # 预估透传重新生成范围（--force-llm/--llm-module，与 TUI/Web 同源 resolve_force_scope）
+    _force_llm = bool(getattr(args, "force_llm", False))
+    _llm_modules = getattr(args, "llm_module", None) or None
+    forecast = forecast_run_cost(force_llm=_force_llm, force_modules=_llm_modules)
     budget = budget_status()
     for line in forecast_summary_lines(forecast, budget):
         print(f"  [..] {line}")
@@ -214,10 +217,14 @@ def _confirm_cost_forecast(args: argparse.Namespace) -> tuple[bool, bool]:
     interactive = not getattr(args, "yes", False) and not getattr(args, "non_interactive", False) and sys.stdin.isatty()
     if budget.get("exceeded"):
         if not interactive:
-            print("  [ERR] 今日 LLM 费用已达日预算上限，非交互模式直接中止（需 --yes 场景请先调预算或走缓存）")
+            print("  [ERR] 今日 LLM 费用已达日预算上限，非交互模式直接中止（需 --yes 场景请先调预算或用已有结果）")
             return (False, False)
         try:
-            resp = input("  [!] 今日 LLM 费用已达日预算上限：y=降级走缓存继续 / N=中止 (y/N): ").strip().lower()
+            resp = (
+                input("  [!] 今日 LLM 费用已达日预算上限：y=继续（用已有结果，本次不重新生成） / N=中止 (y/N): ")
+                .strip()
+                .lower()
+            )
         except (EOFError, KeyboardInterrupt):
             return (False, False)
         if resp != "y":

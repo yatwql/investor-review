@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.13.7
-> **编号源**：`rf-next = 733`（新增问题取此编号，完成后更新为 +1；已用最大 rf-732，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> 文档版本：0.13.8
+> **编号源**：`rf-next = 740`（新增问题取此编号，完成后更新为 +1；已用最大 rf-733，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -13,8 +13,6 @@
 
 | # | 问题 | 修复方向 |
 |---|------|----------|
-| **rf-731** | 费用预估不感知强刷范围：`llm/cost_forecast.py` 全文无 force 字样，`forecast_run_cost()` 只按「计划参与模块（`enabled_llm` ∩ 深度档位）」估价——`[L]` 合并屏上屏的预估对「回车走缓存（实际≈¥0）」与「`f` 全量强刷（实际可能数倍）」给同一区间，用户据预估决策会系统性误判；日预算硬闸只拦「今日已花费≥上限」不预测本次 | 属 R-LLM-13 语义升级（三渠道同源）：`forecast_run_cost` 接受强刷范围参数（`resolve_force_scope` 归一后的 force_scope 全局已可查询，接入即可），合并屏 `f`/选模块后**重打一行更新预估**，Web cost-preflight / CLI 确认同步；预估行文案区分走缓存/强刷口径 |
-
 | **rf-257** | plan-8 **Web 模式浏览器真机人工验收余 4 类人工项**：真实 basic/full 进度观察（3.1c/3.2/3.3/3.4）、结果区按钮 4.5、提交即禁用 5.3、2.5/2.6 真实拖拽与 Tab/Enter 抽验；其余断言已自动化复跑通过 | 验证方法与判定标准见 [`docs/plan/web-browser-verification.md`](../plan/web-browser-verification.md)（§1.1 启动/收尾命令 + §5 复验清单）；复跑：`.venv/bin/python scripts/smoke-web.py` + `node docs/tmp/rf257/cdp-check.mjs`，收尾必做 kill 服务/浏览器 + 清空 `data/holdings/uploads/`；全部完成后本表移至已解决 |
 
 ### P2 — 中优先：价值明确、成本可控（下批排期）
@@ -22,6 +20,7 @@
 > 入选标准：修复路径清晰、成本可控；rf-114 前置（rf-113 人工验证）已满足。
 
 | # | 问题 | 修复方向 |
+|---|------|----------|
 
 
 ### P3 — 持续监控：文件过长登记表（>500 行观察，脚本域 >400 即入观察 / **>1000 行为硬上限必须拆分**（主程序与脚本）；按距红线余量升序）
@@ -48,7 +47,7 @@
 
 ### 归档档案
 
-- [`archived_review-findings.0.13.x.md`](../archive/v0.13.x/archived_review-findings.0.13.x.md) — v0.13.x 开发期已修复批次（2026-10-14 ~ 2026-10-18）
+- [`archived_review-findings.0.13.x.md`](../archive/v0.13.x/archived_review-findings.0.13.x.md) — v0.13.x 开发期已修复批次（2026-10-14 ~ 2026-10-20）
 - [`archived_review-findings.0.12.x.md`](../archive/v0.12.x/archived_review-findings.0.12.x.md) — v0.12.x 已修复批次与开发期追加（2026-10-03 ~ 2026-10-12）
 - [`archived_review-findings.0.11.x.md`](../archive/v0.11.x/archived_review-findings.0.11.x.md) — v0.11.0 ~ v0.11.11  （2026-09-18 ~ 2026-10-02）
 - [`archived_review-findings.0.10.x.md`](../archive/v0.10.x/archived_review-findings.0.10.x.md) — v0.10.1 ~ v0.10.20（2026-08-04 ~ 2026-09-15）
@@ -62,10 +61,7 @@
 - [`archived_review-findings.0.2.x.md`](../archive/v0.2.x/archived_review-findings.0.2.x.md)
 - [`archived_review-findings.0.1.x.md`](../archive/v0.1.x/archived_review-findings.0.1.x.md)
 
-### 开发期已修复（0.13.6-dev）
 
-> 本批摘要已随 v0.13.6 发布迁入 [`archived_review-findings.0.13.x.md`](../archive/v0.13.x/archived_review-findings.0.13.x.md)；此处不再保留。
+### 开发期已修复（0.13.8-dev）
 
-### 开发期已修复（0.13.7-dev）
-
-> 本批摘要已随 v0.13.7 发布迁入 [`archived_review-findings.0.13.x.md`](../archive/v0.13.x/archived_review-findings.0.13.x.md)；此处不再保留。
+（本版开发期已修复项已随 v0.13.8 发布迁入上方归档档案）

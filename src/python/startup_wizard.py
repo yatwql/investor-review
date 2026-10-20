@@ -182,7 +182,7 @@ def _prompt_enter_key() -> bool:
 def _handle_key_input() -> None:
     """读取 API Key 并原子写入 flat llm_key.json。"""
     try:
-        api_key = input("  请输入 API Key（回车跳过）: ").strip()
+        api_key = input("  请输入 API Key（回车=跳过）: ").strip()
         if not api_key:
             _print_line("已跳过 Key 输入，可在菜单「LLM 配置」中补充。")
             return

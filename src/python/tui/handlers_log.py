@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 from src.python.core.logger import setup_logger
-from src.python.tui.text_layout import wrap_prompt
+from src.python.tui.text_layout import terminal_columns, wrap_hanging, wrap_prompt
 from src.python.tui.tui_keys import PromptCancelledError, input_choice
 from src.python.tui.tui_menu import GREEN, RED, RESET, YELLOW, press_any_key
 
@@ -26,7 +26,7 @@ _LEVEL_PROMPT_TEXT = "（留空=全部，可选: DEBUG/INFO/WARNING/ERROR/CRITIC
 
 def _level_prompt() -> str | None:
     """交互式级别筛选提示；空回车返回 None（全部），无效级别提示后按全部处理。"""
-    raw = input_choice(wrap_prompt(f"  按级别筛选 {_LEVEL_PROMPT_TEXT}: "))
+    raw = input_choice(wrap_prompt(f"  按级别筛选 {_LEVEL_PROMPT_TEXT}（回车=全部级别 · Esc 取消）: "))
     if raw is None:  # Esc：取消查看返回主菜单
         raise PromptCancelledError
     raw = raw.strip().upper()
@@ -57,23 +57,33 @@ def _cmd_view_logs() -> None:
     except (ValueError, OSError):
         logger.exception("读取运行日志失败")
         print(f"  {RED}[ERR]{RESET} 读取运行日志失败")
-        press_any_key()
         return
 
     if not entries:
         print(f"  {YELLOW}[!]{RESET} 无匹配日志条目")
-        press_any_key()
         return
+
+    from src.python.tui.switch_panel import inner_width, narrow_rule, use_panel_box
+
+    columns = terminal_columns()
+    inner = inner_width(columns)
+    narrow = not use_panel_box(columns)
+    rule = narrow_rule(columns)
 
     level_label = level or "全部"
     print()
-    print(f"  {'=' * 40}")
+    print(rule)
     print(f"  最近日志（级别: {level_label}）")
-    print(f"  {'=' * 40}")
+    print(rule)
     for entry in entries:
         color = _level_color(entry.level)
         line = f"  {entry.time} [{entry.level}] {entry.message}"
-        print(f"{color}{line}{RESET}" if color else line)
+        if narrow:
+            # 窄档：先按内宽悬挂折行，再逐行上色（着色放在折行之后，ANSI 不被截断）
+            for piece in wrap_hanging(line, inner):
+                print(f"{color}{piece}{RESET}" if color else piece)
+        else:
+            print(f"{color}{line}{RESET}" if color else line)
         # traceback 等续行折叠为一行提示，避免刷屏
         body_lines = entry.body.splitlines()[1:]
         if body_lines:
@@ -90,18 +100,23 @@ def _cmd_view_health_history() -> None:
     except OSError:
         logger.exception("读取数据源健康历史失败")
         print(f"  {RED}[ERR]{RESET} 读取数据源健康历史失败")
-        press_any_key()
         return
 
     if not summaries:
         print(f"  {YELLOW}[!]{RESET} 暂无数据源健康历史记录")
-        press_any_key()
         return
 
+    from src.python.tui.switch_panel import inner_width, narrow_rule, use_panel_box
+
+    columns = terminal_columns()
+    inner = inner_width(columns)
+    narrow = not use_panel_box(columns)
+    rule = narrow_rule(columns)
+
     print()
-    print(f"  {'=' * 40}")
+    print(rule)
     print("  数据源健康历史（最近 10 次检查）")
-    print(f"  {'=' * 40}")
+    print(rule)
     for summary in summaries:
         ts = summary["timestamp"].replace("T", " ")
         ok_count = summary["ok_count"]
@@ -109,9 +124,16 @@ def _cmd_view_health_history() -> None:
         fail_count = summary["fail_count"]
         status = GREEN if fail_count == 0 else RED
         extra = f"  |  {summary['report_type']}" if summary.get("report_type") else ""
-        print(f"  {ts}  {status}{ok_count}/{total} 正常{RESET}{extra}  |  失败 {fail_count}")
+        head = f"  {ts}  {status}{ok_count}/{total} 正常{RESET}{extra}  |  失败 {fail_count}"
+        if narrow:
+            # 窄档：一条记录压成「时间 + 结果」行，失败源悬挂折行，不留列错位
+            print(ts)
+            print(f"  {status}{ok_count}/{total} 正常{RESET} · 失败 {fail_count}{extra}")
+        else:
+            print(head)
         if summary["failed_sources"]:
-            print(f"      失败源: {', '.join(summary['failed_sources'])}")
+            for line in wrap_hanging(f"      失败源: {', '.join(summary['failed_sources'])}", inner, indent="      "):
+                print(line)
     press_any_key()
 
 
@@ -141,7 +163,6 @@ def _cmd_run_doctor() -> None:
     except Exception:
         logger.exception("系统自检执行失败")
         print(f"  {RED}[ERR]{RESET} 系统自检执行失败（详见日志）")
-        press_any_key()
         return
 
     print()

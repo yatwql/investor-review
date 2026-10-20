@@ -97,6 +97,28 @@ class TestConfirmCostForecast:
         )
         assert result == (True, False)
 
+    def test_force_flags_flow_into_forecast(self):
+        """CLI --force-llm/--llm-module 须进入确认预估（三渠道同源感知重新生成范围）。"""
+        seen: dict = {}
+
+        def _rec(*args, **kwargs):
+            seen.update(kwargs)
+            return _fc()
+
+        args = argparse.Namespace(yes=True, non_interactive=False, force_llm=True, llm_module=["expert_review"])
+        stdin = MagicMock()
+        stdin.isatty.return_value = True
+        with (
+            patch("src.python.llm.cost_forecast.forecast_run_cost", side_effect=_rec),
+            patch("src.python.llm.cost_forecast.budget_status", return_value=_budget()),
+            patch("src.python.cli._handlers.sys.stdin", stdin),
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            ok, degrade = _confirm_cost_forecast(args)
+        assert ok and not degrade
+        assert seen.get("force_llm") is True
+        assert seen.get("force_modules") == ["expert_review"], "模块级范围须透传预估"
+
     def test_forecast_unavailable_nonblocking(self):
         result, _ = _confirm_with(
             _fc(ok=False, reason="模型未知"), _budget(), answer=MagicMock(side_effect=AssertionError("不阻塞"))

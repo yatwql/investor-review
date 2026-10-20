@@ -55,6 +55,31 @@ def _update_json_raw_text(raw: str, current: dict, new: dict) -> str:
     return result
 
 
+def _detect_indent_unit(text: str, default: int = 2) -> int:
+    """从 JSON 文本探测缩进单位（首个缩进内容行的前导空格数）。
+
+    写回时必须沿用文件现有缩进风格：硬编码缩进会把 2 空格风格的文件在
+    数组/对象整块重写后变成 4 空格（字段值与注释无损，但版式跳变，
+    人工 diff 噪声大）。缩进单位取首个「缩进且非注释」行的前导空格数——
+    顶层成员行即基准单位（模板与既有配置均为 2）。
+
+    Args:
+        text: 原始 JSON 文本（可含 ``//`` 注释）。
+        default: 未探测到（压缩成单行）时的兜底缩进单位。
+
+    Returns:
+        缩进单位（空格数，≥1）。
+    """
+    for line in text.splitlines():
+        stripped = line.lstrip()
+        if not stripped or stripped.startswith("//"):
+            continue
+        leading = len(line) - len(stripped)
+        if leading > 0:
+            return leading
+    return default
+
+
 def _replace_dict_block(text: str, key: str, new_val: dict) -> str:
     """在 JSON 文本中找到指定 key 的 dict 值区块，自适应缩进替换。
 
@@ -69,8 +94,8 @@ def _replace_dict_block(text: str, key: str, new_val: dict) -> str:
     line_start = text.rfind("\n", 0, match.start()) + 1
     base_indent = match.start() - line_start  # ""{key}"" 前的空格数
 
-    # 序列化新值，使用 4 空格内缩
-    INNER_INDENT = 4
+    # 序列化新值，内缩沿用文件现有缩进单位（而非硬编码 4）
+    INNER_INDENT = _detect_indent_unit(text)
     lines = json.dumps(new_val, ensure_ascii=False, indent=INNER_INDENT).split("\n")
 
     # 第一行是 "{"，续行加 base_indent 前缀，末行 "}" 也加 base_indent
@@ -104,7 +129,8 @@ def _replace_array_block(text: str, key: str, new_val: list) -> str:
     """在 JSON 文本中找到指定 key 的 array 值区块，自适应缩进替换。
 
     bracket 平衡算法（与 ``_replace_dict_block`` 同构）：正确匹配嵌套方括号，
-    自适应周围缩进。注意：被替换区块内的行注释随区块一并刷新（数组整体重写，
+    自适应周围缩进（缩进单位经 ``_detect_indent_unit`` 沿用文件现有风格）。
+    注意：被替换区块内的行注释随区块一并刷新（数组整体重写，
     区块外注释不受影响）——调用方须保证数组内容可全量重序列化。
     """
     match = re.search(re.escape(f'"{key}":') + r"\s*\[", text)
@@ -114,7 +140,7 @@ def _replace_array_block(text: str, key: str, new_val: list) -> str:
     line_start = text.rfind("\n", 0, match.start()) + 1
     base_indent = match.start() - line_start
 
-    INNER_INDENT = 4
+    INNER_INDENT = _detect_indent_unit(text)
     lines = json.dumps(new_val, ensure_ascii=False, indent=INNER_INDENT).split("\n")
     block_lines = [lines[0]]
     for line in lines[1:]:

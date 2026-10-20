@@ -168,13 +168,15 @@ LLM 配置由三个独立文件管理：
 
 ### 调整多链线路优先级
 
-降级顺序的真值是 `providers[].priority`（数值越小越优先，`priority`/`fallback_only` 策略下即实际链序）。三个入口写同一份文件、走同一校验（order 必须恰好覆盖全部线路名，写前自动 `.bak` 备份、注释保留）：
+备用顺序的真值是 `providers[].priority`（数值越小越优先，`priority`/`fallback_only` 策略下即实际链序）。各处展示一律按这个链序排列（首页配置块 `[1]/[2]`、页头状态行的链首线路、`[M]` 面板编号、Web 配置面一致），`providers` 数组里条目的物理位置不影响链序。三个入口写同一份文件、走同一校验（order 必须恰好覆盖全部线路名，写前自动 `.bak` 备份、注释保留）：
 
 - **TUI**：主菜单 `[M]` —— 面板按当前顺序列出线路，输入两个编号交换位置（如 `3 1`）即写盘
 - **Web**：配置面板「LLM 多链线路优先级」块，▲▼ 按钮调序即存
 - **CLI**：`python -m src.python.cli --llm-provider-order deepseek-main,gemini-fallback report --type basic` —— 顺序靠前优先，写盘后退出；`NAME` 须恰好覆盖全部现有线路（少写/多写/重复均拒绝，报错会列出当前名单）
 
 > `weighted` / `cost_first` 策略下实际链序由权重/成本决定，上面顺序仅在 `priority` / `fallback_only` 策略下生效。
+
+写回只动 `providers` 区块：文件原有缩进风格与注释保留；文件头的「主：/备：」这类线路标注会在写盘时中性化为「线路：」（链序以 `priority` 升序为准，标注在换序后即失效，避免注释与字段相互矛盾）。
 
 ### 端点级节流（`pacing`）
 
@@ -264,14 +266,14 @@ TUI 菜单 **[S]** 查看状态时会显示多链模式详情：
 LLM Provider 状态
 状态: 已配置 | 策略: 优先级排序 | 多链服务: 2 provider
   [1] deepseek-main (claude)
-      模型: deepseek-v4-flash    优先级: 10    熔断: 正常
+      模型: deepseek-v4-flash    优先级: 10    自动重试: 正常
   [2] gemini-fallback (gemini)
-      模型: gemini-2.5-flash    优先级: 20    熔断: 正常
+      模型: gemini-2.5-flash    优先级: 20    自动重试: 正常
   ▶ 模块偏好: 智囊团深度复盘 → gemini-fallback / 持仓体检报告 → gemini-fallback
 ```
 
 - 首行状态：`状态` 行显示所选策略（优先级排序 / 加权随机 / 价格最低优先 / 仅 Fallback）与 provider 数量
-- 每个 provider 单独两行：`[序号] 名称 (backend)` + `模型 / 优先级 / 熔断` 状态
+- 每个 provider 单独两行：`[序号] 名称 (backend)` + `模型 / 优先级 / 自动重试` 状态
 - `▶ 模块偏好` 行仅在配置了 `preferred_providers` 时显示
 
 ### 兼容性
@@ -370,7 +372,7 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
 - `fact_check`（dict，默认 `{tolerance: 1.0}`）：LLM 输出数值一致性检测配置。详见下节「事实校验容差配置」
 - `pricing`（dict，默认 `{currency: "CNY", timezone: "Asia/Shanghai", peak_periods: ["09:00-12:00", "14:00-18:00"], idle_periods: [], weekend_always_idle: true, holiday_always_idle: true}`）：模型 Token 定价表 + 峰谷时段配置，可省略（使用代码内置定价），仅需覆盖时添加。除 `currency`（货币符号）、`timezone`（峰谷判定时区，IANA 名称）、`peak_periods` / `idle_periods`（高峰/闲时段，`"HH:MM-HH:MM"` 列表）、`weekend_always_idle`（周末全天闲时开关，默认 `true`）、`holiday_always_idle`（法定节假日全天闲时开关，默认 `true`）外，其余键按模型名合并覆盖价格。详见下方「完整模型定价表」章节
 - `news_correlation_top_n`（int，默认 `30`）：送 LLM 分析的新闻条数。仅 news_correlation 模块有效，值越大 Token 消耗越高
-- `daily_cost_limit`（数值，默认 `0`）：LLM **日费用预算上限**（货币单位与 `pricing.currency` 一致，`0`=不启用）。启用后 full 生成前展示**事前费用预估区间**（计划参与模块 × 模型单价；perf 历史逐模块实际费用优先、无历史静态兜底）与今日已花费；达到上限时交互渠道（TUI / Web / CLI 终端）询问「降级走缓存继续 / 中止」，非交互渠道（`--yes`、`--non-interactive`、非 TTY、Web 定时调度）直接中止。今日已花费 = perf 历史当日 `llm.total_cost` 汇总，与报告内 LLM 用量统计同源；与**报告级输入 Token 预警**（`cost_tracker`，默认 8K、仅告警不阻断）分层——本项是**生成前的日费用硬闸**
+- `daily_cost_limit`（数值，默认 `0`）：LLM **日费用预算上限**（货币单位与 `pricing.currency` 一致，`0`=不启用）。启用后 full 生成前展示**事前费用预估区间**（计划参与模块 × 模型单价；perf 历史逐模块实际费用优先、无历史静态兜底；TUI `N` 多选 / CLI `--force-llm`/`--llm-module` / Web 勾选的重新生成范围进入预估——范围内模块按静态单价、范围外维持历史口径，并以「其中 N 个模块重新生成」拆行显示）与今日已花费；达到上限时交互渠道（TUI / Web / CLI 终端）询问「用已有结果继续 / 中止」，非交互渠道（`--yes`、`--non-interactive`、非 TTY、Web 定时调度）直接中止。今日已花费 = perf 历史当日 `llm.total_cost` 汇总，与报告内 LLM 用量统计同源；与**报告级输入 Token 预警**（`cost_tracker`，默认 8K、仅告警不阻断）分层——本项是**生成前的日费用硬闸**
 - `debate`（dict，可选实验功能）：辩论模式配置。含 procon（三段式正反辩论，`per_call_max_tokens` 限定每阶段输出上限，默认 18432（null 时按代码兜底同值））、conditional（条件情景推理）、concentration_qa（集中度问答阈值，辩论流程内建段落的触发阈值），以及 `max_total_tokens_per_report`（单次报告辩论总 Token 预算上限，默认 72000，覆盖三段式真实成本）和 `per_call_timeout_override`（辩论单次 API 超时覆盖）。**本段仅控制辩论行为的参数，启停由 Feature Flag（`llm_debate_*`）决定，非配置直接启用**；决策跨期反思闭环（`decision_reflection`）同样由 Feature Flag 启停，无独立配置段
 
 ### 模块级配置

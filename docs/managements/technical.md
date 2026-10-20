@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.13.7
+> 文档版本：0.13.8
 
 ## 目录
 
@@ -402,9 +402,9 @@ TUI（Text User Interface）是系统**主要交互渠道**：桌面终端内的
 | 模块 | 职责 | 关键内容 |
 |:-----|:-----|:---------|
 | `tui/tui.py` | 主入口/主循环 | sys.path 注入、init_config、_bind_callbacks、启动清理/隐私提示/首次引导、方向键导航循环、LLM 会话统计 |
-| `tui/tui_menu.py` | 菜单定义与渲染 | MENU_ITEMS 列表（18 项）、render_menu/print_header/show_config、_apply_feature_gates（开关门控裁剪）、index_by_key、press_any_key/exit_app |
+| `tui/tui_menu.py` | 菜单定义与渲染 | MENU_ITEMS 列表、MENU_GROUPS（任务分组：生成报告 E/B/L/W · 数据与查看 Q/1/2/3 · 配置 P/S/M/I/A/D/R · 诊断与排查 V/H/T）、render_menu/print_header/show_config、_apply_feature_gates（开关门控裁剪）、index_by_key、match_menu_items/next_matching（`/` 筛选与筛选内导航）、press_any_key/exit_app |
 | `tui/tui_keys.py` | 键盘封装 | 跨平台（Windows msvcrt / Linux tty+termios+select），标准化键名 KEY_UP/DOWN/ENTER/CTRL_C |
-| `tui/handlers_report.py` | 报告生成外壳 | `_run_generate` 骨架、`_prompt_generate_confirm` 合并单屏一次确认（full：费用预估上屏 + 回车/`f`/`q`/`h` 单问，`f` 触发 `_select_force_modules` 模块多选，含日预算超限安全网）/`_prompt_history`（委托 resolve_fetch_history + 注入 y/N 询问，仅 both）、E/B/L 三命令 |
+| `tui/handlers_report.py` | 报告生成外壳 | `_run_generate` 骨架、`_prompt_generate_confirm` 合并单屏一次确认（full：费用预估上屏 + 回车/`Y`/`N`/`q`/`h` 单问，默认侧 `Y`=用已有结果，`N`（同义 `f`）触发 `_select_force_modules` 模块多选，含日预算超限安全网）/`_prompt_history`（委托 resolve_fetch_history + 注入 y/N 询问，仅 both）、E/B/L 三命令 |
 | `tui/handlers_config.py` | 配置管理外壳 | 目录/文件名/输出目录/章节/指数池/匿名化/LLM 模块与功能开关/刷新等 8 项配置命令 |
 | `tui/handlers_cache.py` | 缓存管理外壳 | 更新基础/持仓缓存、清理过期、查看统计 4 项命令 |
 | `tui/handlers_whatif.py` | 调仓模拟外壳 | What-if 对话流程，委托 `report/whatif_operations.py`（§4.13） |
@@ -413,7 +413,7 @@ TUI（Text User Interface）是系统**主要交互渠道**：桌面终端内的
 | `tui/text_layout.py` | 终端排版原语 | `display_width`（东亚宽度，剥离 ANSI）/`pad_right`/`truncate_display`（按列截断带省略号）/`wrap_display`（按列折行）/`wrap_hanging`（续行悬挂缩进，逐行扣减缩进宽度）/`wrap_with_prefix`（前缀不参与断行，续行对齐正文列）/`render_panel`（盒线面板，统一定宽）/`terminal_columns`（实时尺寸 > `COLUMNS` > 兜底，下限 40）；TUI 所有打印型输出按它折行，窄屏（手机）不硬折 |
 | `tui/switch_panel.py` | `[S]` 面板响应式排版 | `layout_tier()` 按终端列数分三档（≥96 宽 / 64~95 中 / <64 窄）、`format_item()` 逐档生成「编号·名称·键名(淡色)·状态·备注」行、`legend_lines()` 页脚图例折行、`format_item(reveal_key=)` 窄屏按 `k` 追加键名行；终端宽度探测与折行原语在 `tui/text_layout.py`（本模块 re-export `terminal_columns`）；**只排版不取数**，不变式「任意档位每行 ≤ 面板内宽」由单测锁定 |
 | `tui/panel_runtime.py` | TUI 统一交互运行时 | `NavState`（游标 + engaged 导航态，语义真值取自主循环 `sel`）/ `PanelItem`（key/label/kind/action 派发项）/ `panel_loop`（读键→导航→派发→反馈/重绘单源循环：方向键回绕且跳过 return 项、Enter 防误触 engaged 门控、直达键游标同步不置 engaged、Esc/return 退出、`pick>1` 收集、`on_text` 词法、Ctrl+C/EOF/render 异常原样上抛）；全列表面板（`[P]/[A]/[D]/[I]/[S]/[M]`/缓存）与主循环 `sel` 收敛于此，导航态为实例态、模块内零可变全局（C14）；只统一「怎么到达一次派发」，不改「派发什么」 |
-| `tui/status_line.py` | 页头状态行 | `build_status_line()` 五项常驻状态（上次报告时间/缓存过期数/数据新鲜度/降级源数/LLM 状态点），全本地取数、逐项降级、TTL 记忆化 |
+| `tui/status_line.py` | 页头状态行 | `build_status_line()` 五项常驻状态（上次报告时间/缓存过期数/数据新鲜度/备用源数/LLM 状态点），全本地取数、逐项降级、TTL 记忆化 |
 | `report/progress.py` | 进度报告 | TuiProgressReporter（`[..]`/`[OK]`/`[!]`/`[ERR]` 前缀 + 耗时排行） |
 
 #### 1.6.2 主循环与键盘导航
@@ -443,7 +443,7 @@ while True:
 
 #### 1.6.3 菜单体系
 
-`tui/tui_menu.py:MENU_ITEMS` —— 每项 `(快捷键, 显示标签, 回调, 是否退出)`，回调由 `_bind_callbacks()` 在**运行时**从 handlers 模块填入（定义时不直接 import，避免启动即加载全部处理器）。静态清单共 **19 项**（下表按菜单实际排列顺序）；首页按键分派分两档（`layout_tier`，<64 列为 narrow）：方向键移动选中态 + `Enter` 执行当前项**全档可用**；narrow 档直达主路径（字母/数字键即执行，未登记键给**单行反馈**不整屏重绘——「分档只改版式不改语义」约束 C29）与导航并存——方向键移动后**原地重绘**（`_render_menu_frame` 帧行数计数代理 + ANSI 光标上移/清屏，POSIX+TTY 门控，管道/测试/旧控制台回退整屏追加），页脚为「窄屏直达 + ↑↓ 选择」双提示。字母/数字键按 `index_by_key` 直达（未登记键无反应）、`Esc`/`0` 与 `[X]` 同为退出通道（`0` 在子菜单语义为「返回」，故首页保持一致习惯；`[X]` 标签写明「退出（0 亦可）」，页脚提示同为「Esc / 0 / X 退出」）、`Ctrl+C` 退出。菜单项长标签与页脚提示经 `wrap_with_prefix` 按终端宽度折行（续行对齐标签起始列），窄屏不会硬折。`[T]`/`[Q]` 登记于 `FEATURE_GATED_ITEMS`（菜单键 → Feature Flag），`main()` 启动时在绑定回调**之前**执行 `tui_menu._apply_feature_gates()` 按 `is_feature_enabled` 就地裁剪（裁剪后索引才与渲染一致）：`report_qa`（⚗ 实验项，默认关）关闭时移除 `[Q]`，`doctor_check`（默认开）关闭时移除 `[T]`——默认配置下实际渲染 **18 项**。
+`tui/tui_menu.py:MENU_ITEMS` —— 每项 `(快捷键, 显示标签, 回调, 是否退出)`，回调由 `_bind_callbacks()` 在**运行时**从 handlers 模块填入（定义时不直接 import，避免启动即加载全部处理器）。静态清单共 **19 项**（下表按菜单实际排列顺序）；首页按键分派分两档（`layout_tier`，<64 列为 narrow）：方向键移动选中态 + `Enter` 执行当前项**全档可用**；narrow 档直达主路径（字母/数字键即执行，未登记键给**单行反馈**不整屏重绘——「分档只改版式不改语义」约束 C29）与导航并存——方向键移动后**原地重绘**（`_render_menu_frame` 帧行数计数代理 + ANSI 光标上移/清屏，POSIX+TTY 门控，管道/测试/旧控制台回退整屏追加），页脚为「窄屏直达 + ↑↓ 选择」双提示。字母/数字键按 `index_by_key` 直达（未登记键无反应）、`Esc`/`0` 与 `[X]` 同为退出通道（`0` 在子菜单语义为「返回」，故首页保持一致习惯；`[X]` 标签写明「退出（0 亦可）」，页脚提示同为「Esc / 0 / X 退出」）、`Ctrl+C` 退出。菜单项长标签与页脚提示经 `wrap_with_prefix` 按终端宽度折行（续行对齐标签起始列），窄屏不会硬折。渲染按 `MENU_GROUPS`（生成报告 / 数据与查看 / 配置 / 诊断与排查）分组并印组标题，未入组的退出项列在末尾（分组覆盖完整性由 `test_tui_menu.TestMenuGroups` 守护：全项恰好一次、退出项在外）。主菜单支持 `/` 关键词筛选：`tui._read_filter_keyword` 读一行关键词（空=清除、Esc 保持原筛选），`match_menu_items` 按键精确命中优先、否则按标签子串匹配；筛选态只渲染命中项与命中分组，`↑↓` 在命中集内回绕（`next_matching`），按到被隐藏项的键给单行反馈而不静默吞键，`0` 先清筛选（无筛选时才是退出）。`[T]`/`[Q]` 登记于 `FEATURE_GATED_ITEMS`（菜单键 → Feature Flag），`main()` 启动时在绑定回调**之前**执行 `tui_menu._apply_feature_gates()` 按 `is_feature_enabled` 就地裁剪（裁剪后索引才与渲染一致）：`report_qa`（⚗ 实验项，默认关）关闭时移除 `[Q]`，`doctor_check`（默认开）关闭时移除 `[T]`——默认配置下实际渲染 **18 项**。
 
 | 分组 | 快捷键 | 功能 |
 |:-----|:------|:-----|
@@ -454,7 +454,7 @@ while True:
 | | `[Q]` | 报告对话式追问（选择已生成 HTML 报告进入多轮文本输入循环，委托 `qa/session.ask_report_qa`，§6.8；`report_qa` 门控） |
 | 配置管理 | `[D]` | 查看配置与目录信息**子菜单**（`handlers_config.py::_cmd_config_dir_info`，二级选项 `[C]` 持仓目录 / `[F]` 持仓文件名 / `[O]` 报告输出目录 / `[M]` 配置入口地图（`_CONFIG_ENTRY_MAP` 只读索引：配置项 → 所在菜单键，键位真实性由单测对主菜单兜底） / `[0]` 返回主菜单；子菜单内循环直至返回） |
 | 缓存管理 | `[1]`/`[2]` | 更新基础类缓存（基金业绩/持仓/经理/基准等，`clear_by_group("refresh")` 先清后取）/ 行情类缓存（价格/指数等，`clear_by_group("preload")` 先清后取） |
-| | `[4]` | 缓存管理**子菜单**（统计首屏 → 子菜单内 `3` 清理过期 / `B`/回车 返回；合并原清理与统计两个平级入口，`handlers_cache.py::_cmd_cache_management`） |
+| | `[3]` | 缓存管理**子菜单**（统计首屏 → 子菜单内 `3` 清理过期 / `B`/回车 返回；合并原清理与统计两个平级入口，`handlers_cache.py::_cmd_cache_management`） |
 | 配置管理 | `[P]` | 报告可选章节开关（顺序与取舍） |
 | | `[I]` | 对比指数池管理（自定义基准指数） |
 | | `[A]` | 持仓匿名化模式（off / code_display / full_anonymous / summary 四种） |
@@ -465,7 +465,7 @@ while True:
 | | `[T]` | 系统自检（环境/配置/目录/数据源一键体检，`handlers_log.py::_cmd_run_doctor`；`doctor_check` 门控） |
 | 退出 | `[X]` | 退出程序 |
 
-菜单渲染层与状态面板：`print_header`（标题 + 页头常驻状态行 `status_line.build_status_line()`——上次报告时间/缓存过期数/数据新鲜度/降级源数/LLM 状态点五项，全本地取数、单项异常降级为 `—`、TTL 记忆化——+ 首次运行指引：缺持仓文件/缺 LLM 配置提示）、`show_config`（持仓目录/持仓文件、输出目录、新闻抓取上限、文件就绪状态 `[OK]`/`[!!]`、匿名化状态、隐私声明、LLM 配置状态单链/多链两视图）。LLM 状态面板支持多 Provider 链式模式（策略、各 provider 后端/模型/优先级/熔断状态、模块级偏好）；面板数据消费 `core/system_info.llm_status()` 单源（configured 判定与多链/flat 分支唯一在共享层，渠道只做终端渲染）。
+面板交互运行时 `tui/panel_runtime.py`：`PanelItem(key, label, kind, action, detail)` + `panel_loop` 统一承接导航/派发/反馈/重绘与帮助——`?` 打印本面板可用键一览、`?键` 打印单项详情（详情文案取 `PanelItem.detail`，面板各写业务含义、渲染单源；`on_help` 可整面板接管）。菜单渲染层与状态面板：`print_header`（标题 + 页头常驻状态行 `status_line.build_status_line()`——上次报告时间/缓存过期数/数据新鲜度/备用源数/LLM 状态点五项，全本地取数、单项异常降级为 `—`、TTL 记忆化——+ 首次运行指引：缺持仓文件/缺 LLM 配置提示）、`show_config`（持仓目录/持仓文件、输出目录、新闻抓取上限、文件就绪状态 `[OK]`/`[!!]`、匿名化状态、隐私声明、LLM 配置状态单链/多链两视图）。LLM 状态面板支持多 Provider 链式模式（策略、各 provider 后端/模型/优先级/自动重试状态、模块级偏好）；上屏词按 `DESIGN-TUI` 术语表转用户词——端点状态由 `core.system_info.circuit_display` **唯一归一**（`熔断中`→`暂时失败`，未知上游文案透传），TUI/CLI/Web 三渠道共用同一词，各渠道不得自带映射表；面板数据消费 `core/system_info.llm_status()` 单源（configured 判定与多链/flat 分支唯一在共享层，渠道只做终端渲染）；多链 `providers` 出口按链序排列——排序口径唯一实现在 `config/_llm_providers.order_providers_by_chain`（`priority` 升序、同值保持数组原序），`llm_status()` 与 `[M]` 面板同经此函数，`chain_head` 恒等于 `providers[0]`，保证首页编号 / 状态行链首 / 面板编号三处不会出现相反顺序（数组物理顺序不作数：reorder 只改 priority 值、不改数组项位置）。**配色一色一职责**（角色表见 `DESIGN-TUI` Colors）：品牌橙=应用名与版本号、结构蓝粗=分组标题（`text_layout.style_heading` 单源，首页与 `[S]` 同步改色）、焦点青=选中标记/面板游标、状态色按值给（绿正常/黄注意/红错误）、DIM=分隔线与页脚图例；非 TTY 与 `NO_COLOR` 下全量退化无色。
 
 #### 1.6.4 报告生成流程
 
@@ -473,8 +473,8 @@ while True:
 
 1. **持仓准备**：`prepare_holdings()` → `select_holdings_file()`（交互式文件选择）→ `read_holdings_with_flows()`（主表 + 交易/分红流水）→ `warm_new_asset_caches()`（新资产缓存预热，委托 §3.6 缓存操作共享层）。
 2. **交互询问**（TUI 专属，CLI/Web 用参数/表单表达；`E`/basic 无询问直连）：
-   - `_prompt_generate_confirm()`（仅 `L`/full）：**合并单屏一次确认**——先上屏事前费用预估与今日已花费/日预算，随后**问句**「是否强制刷新 LLM？（强刷=重新调模型计费；默认=用已有缓存生成，不产生新费用）」+ 键位行「回车=用缓存生成 / `f`=强制刷新（可选模块） / `q`=中止」（`history.fetch_mode=prompt` 且 `enable_history` 开时多一个 `h`=含历史走势选项）；历史三态仍委托 `report/history_policy.resolve_fetch_history` 单源解析（`ask` 回调返回本屏 `h` 是否按下），渠道层不自行分支 `fetch_mode`；日预算超限走**独立安全网确认**（降级走缓存 / 中止），Esc 即时取消返回主菜单。提示按键按**词**精确匹配（空格/逗号分隔，支持 `f h` 组合，`of`/`faq` 这类子串不误触发）；安全网降级路径**不追加历史询问**（`ask` 恒 False：prompt 模式回落为不获取、auto 仍自动获取，交互最小化），降级且 prompt 模式时输出一行「本次不获取历史走势」提示保证可感知（告知后覆盖，不追加提问）。返回 `(force_llm, force_llm_modules, fetch_history)`，`None` 表示中止。
-   - `_select_force_modules()`（`L` 按 `f` 触发）：模块多选（列出 FORCEABLE_LLM_MODULES 编号/键名，逗号分隔，回车=全部；仅指定子集时传 `force_llm_modules`，粒度优先于全量）。
+   - `_prompt_generate_confirm()`（仅 `L`/full）：**合并单屏一次确认**——先上屏事前费用预估与今日已花费/日预算，随后**问句**「是否用已有的 AI 分析结果生成？（`Y`=用已有结果，免费但可能不是最新；`N`=重新生成，会产生费用）」+ 键位行「回车/`Y`=用已有结果生成 / `N`=重新生成（可选模块） / `q`=中止」（回答键 Y/N 一看即懂，默认侧 `Y` 即回车）（`history.fetch_mode=prompt` 且 `enable_history` 开时多一个 `h`=含历史走势选项）；历史三态仍委托 `report/history_policy.resolve_fetch_history` 单源解析（`ask` 回调返回本屏 `h` 是否按下），渠道层不自行分支 `fetch_mode`；日预算超限走**独立安全网确认**（用已有结果继续 / 中止），Esc 即时取消返回主菜单。提示按键按**词**精确匹配（空格/逗号分隔，支持 `n h` 组合，`f` 为 `N` 同义键，`of`/`on`/`faq` 这类子串不误触发）；安全网降级路径**不追加历史询问**（`ask` 恒 False：prompt 模式回落为不获取、auto 仍自动获取，交互最小化），该路径且 prompt 模式时输出一行「本次用已有结果，不获取历史走势」提示保证可感知（告知后覆盖，不追加提问）。返回 `(force_llm, force_llm_modules, fetch_history)`，`None` 表示中止。
+   - `_select_force_modules()`（`L` 按 `N`/`f` 触发）：模块多选（列出 FORCEABLE_LLM_MODULES 编号/键名，逗号分隔，回车=全部；仅指定子集时传 `force_llm_modules`，粒度优先于全量）；选后按所选范围**重打更新预估行**（`forecast_run_cost(force_llm/force_modules)` 三渠道同源：范围内模块静态单价口径、范围外历史口径，摘要行「其中 N 个模块重新生成」拆行）。
    - `_prompt_history()`（仅 `B`/both）：同样委托 `resolve_fetch_history` 单源三态，`prompt` 时注入「是否获取组合历史走势数据（as-if 模拟）？」y/N 询问。
 3. **委托共享层**：`orchestrator.generate_report(holdings, config, reporter, report_type, ...)`（§4.2）——reporter 注入 `TuiProgressReporter`，管线代码零改动。
 4. **收尾**：`finish_report()` → `print_error_summary()`（非致命错误汇总）+ `print_timing_summary()`（耗时排行）+ `press_any_key()`（等待返回菜单）。
@@ -602,7 +602,7 @@ Web 渠道是第三种交互入口：**浏览器内完成「上传持仓 Excel �
 | POST | `/api/runs` | 创建生成任务 | 单 worker 队列；队列满 429；full + 日预算超限且未确认（`budget_ack`）→ 409 `BUDGET_EXCEEDED` |
 | GET | `/api/runs` | 运行列表 | 最近 run（时间倒序，limit 10） |
 | GET | `/api/runs/history` | 历史记录 | `core.perf.load_history()` perf 快照（5s 短缓存） |
-| GET | `/api/runs/cost-preflight` | 生成前费用预估（full 弹层数据源） | 只读：`cost_forecast` forecast + budget；预估失败以数据面表达（`ok:false`）不报错 |
+| GET | `/api/runs/cost-preflight` | 生成前费用预估（full 弹层数据源） | 只读：`cost_forecast` forecast + budget；`llm_modules` 查询参数（逗号分隔）透传重新生成范围（与 `POST /api/runs` 的 `resolve_force_scope` 同源，预估按所选范围重估；非法键 `ok:false` 数据面降级不 500）；预估失败以数据面表达（`ok:false`）不报错 |
 | GET | `/api/runs/{id}` | run 详情 | 状态快照（不含事件） |
 | GET | `/api/runs/{id}/events?after=N` | 增量事件 | seq 单调递增，`seq > after` 增量轮询 |
 | GET | `/api/reports/<path>` | 产物预览/下载 | `send_from_directory`（内置 `..` 净化）+ 扩展名白名单 |
@@ -3147,9 +3147,11 @@ LLM API 调用支持多 Provider 链式容错，与数据获取层的 Provider C
 
 ```
 config.json (基础配置)       → get_config() 内存缓存，按 mtime 自动失效
-llm_settings.json (非敏感)    → get_llm_config() 合并读取，联合 mtime 失效
+llm_settings.json (非敏感)    → get_llm_config() 三文件合并读取，判据 = 三文件 mtime+size；
+                                 写原语写后主动失效 + TUI [R] 显式失效（手工改/互换免重启）
 llm_key.json (敏感凭据)       → 覆盖 llm_settings.json 的同名字段；多凭据块供 credentials_ref 引用
 llm_providers.json (链配置)   → _load_llm_providers() 读取，_inject_provider_chain_data 注入
+                                 （同入 get_llm_config 合并缓存判据；页头状态行显示链首线路）
 local_state.json (机器本地)   → get_flag()/set_flag() 读写
 ```
 
@@ -3162,7 +3164,7 @@ config/
 ├── _config_defaults.py           # config.json 默认值定义 + 模板生成
 ├── _core.py                      # 核心读写：get_config()、set_config()、del_config()、init_config()
 ├── _local_state.py               # 机器本地状态读写（get_flag/set_flag，data/state/local_state.json）
-├── _json_patch.py                # JSON 字段级文本替换（_update_json_raw_text/_replace_dict_block）
+├── _json_patch.py                # JSON 字段级文本替换（_update_json_raw_text/_replace_dict_block；缩进单位经 _detect_indent_unit 沿用文件风格）
 ├── _validation.py                # 配置校验：validate_config()、_absolutize_paths()
 ├── _llm_settings.py              # llm_settings.json 读取/合并/缓存与 LLM 配置入口
 ├── _llm_settings_defaults.py     # llm_settings.json 默认模板生成
@@ -3403,7 +3405,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `self_review` | 生成后自检（模型层复核各模块产出与数据是否自洽；分层于确定性事实校验之上，出厂默认关） | LLM 智能分析 | 内容生成 | `llm_settings.json → enabled_llm.self_review` |
 | `quarter_walk_anchor` | 季报回溯窗口的时间锚点上下文（记录-回放时固定为 cassette 录制时点，去时间依赖而保留请求形状漂移信号） | 数据源 | 数据获取 | 无 |
 | `apply_compliance_guardrails` | 合规声明集中注入（在 system prompt 尾部幂等叠加「仅供复盘参考、不构成投资建议」，窄判定角色可追加专属约束） | LLM 智能分析 | 内容生成 | 无 |
-| `cost_forecast` | 事前费用预估与日预算（计划参与模块×模型单价区间预估：历史实际费用优先、静态包络兜底、无法定价降级不阻塞；日预算超限交互询问降级/中止、非交互硬闸——TUI/CLI/Web 三渠道同源数据面） | LLM 智能分析 | 内容生成 | `llm_settings.json → daily_cost_limit` |
+| `cost_forecast` | 事前费用预估与日预算（计划参与模块×模型单价区间预估：历史实际费用优先、静态包络兜底、无法定价降级不阻塞；重新生成范围感知——`force_llm`/`force_modules` 与创建运行同源 `resolve_force_scope` 归一，范围内模块按静态单价口径、范围外维持历史口径，摘要行拆分显示；日预算超限交互询问降级/中止、非交互硬闸——TUI/CLI/Web 三渠道同源数据面） | LLM 智能分析 | 内容生成 | `llm_settings.json → daily_cost_limit` |
 | `print_llm_cost_summary` | CLI 收尾 LLM 成本摘要行（调用次数/输入输出 token/模型名，无调用时静默） | CLI 命令行 | 运行收尾 | 无 |
 | `print_cache_hit_summary` | CLI 收尾缓存命中率行（命中/总数/命中率，无缓存读写时静默，0% 亦输出） | CLI 命令行 | 运行收尾 | 无 |
 | `hithink` | 同花顺金融数据服务 provider（A 股行情/财务/基金/情绪面；凭据声明/qps 限速/信封错误码） | 数据源 | 数据获取 | 需凭据源（`data_key.json` 的 `hithink` 节或 `HITHINK_FINANCE_API_KEY`） |

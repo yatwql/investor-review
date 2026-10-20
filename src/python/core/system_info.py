@@ -31,8 +31,13 @@ def simplify_endpoint(endpoint: str) -> str:
     return endpoint
 
 
+# 端点重试状态 → 上屏用户词（DESIGN-TUI Vocabulary：熔断 / 退避不上屏）。
+# 诊断细节仍用技术词（日志/代码注释）；此处只做上屏归一，三渠道共用同一词。
+_CIRCUIT_USER_TEXT = {"熔断中": "暂时失败"}
+
+
 def circuit_display(endpoint: str, *, default_as_none: bool = False) -> str:
-    """熔断状态展示规则（渠道无关的唯一判定）。
+    """端点状态展示规则（渠道无关的唯一判定 + 上屏用户词归一）。
 
     Args:
         endpoint: provider endpoint。
@@ -40,14 +45,15 @@ def circuit_display(endpoint: str, *, default_as_none: bool = False) -> str:
             多链模式（False）仅空端点视为无端点。
 
     Returns:
-        熔断状态字符串；无端点返回 ``—``。
+        用户词状态（``正常`` / ``暂时失败``）；无端点返回 ``—``；未知上游文案原样返回。
     """
     if not endpoint or (default_as_none and endpoint == "默认"):
         return "—"
     # 熔断文案判定经 core 网关注册获取（上游模块导入时注册），本模块不反向 import 上层
     from src.python.core.circuit_breaker import circuit_text
 
-    return circuit_text(endpoint)
+    status = circuit_text(endpoint)
+    return _CIRCUIT_USER_TEXT.get(status, status)
 
 
 def strategy_label(strategy_raw: str) -> str:
@@ -179,8 +185,10 @@ def llm_status() -> dict:
 
     Returns:
         dict：未配置 ``{"configured": False}``；多链含 ``mode="multi"`` /
-        strategy / providers / preferred；flat 含 ``mode="flat"`` / provider /
-        model / endpoint / endpoint_display / circuit / route。
+        strategy / providers / preferred / chain_head（链首线路名，仅
+        priority / fallback_only 策略给出，其余策略为 None）；flat 含
+        ``mode="flat"`` / provider / model / endpoint / endpoint_display /
+        circuit / route。
     """
     from src.python.config import get_llm_config
     from src.python.core.registry import get_llm_module_names
@@ -197,9 +205,14 @@ def llm_status() -> dict:
 
     # ── credentials_ref 多链模式 ──
     if provider_list and not llm_config.get("api_key"):
+        from src.python.config._llm_providers import order_providers_by_chain
+
         all_creds = llm_config.get("_llm_credentials", {}) or {}
+        # 链序口径单一：按 priority 升序输出（与 [M] 面板 / 运行时 resolve_provider_chain 一致），
+        # 数组物理顺序不作数（reorder 只改 priority）——否则首页 [1] 可能是链尾。
+        ordered_entries = order_providers_by_chain(provider_list)
         providers = []
-        for entry in provider_list:
+        for entry in ordered_entries:
             model, endpoint = resolve_provider_credentials(entry, all_creds)
             providers.append(
                 {
@@ -216,12 +229,19 @@ def llm_status() -> dict:
             f"{get_llm_module_names().get(mk, mk)} → {pname}"
             for mk, pname in (llm_config.get("_preferred_providers", {}) or {}).items()
         ]
+        # 链首线路：仅顺序即链序的策略（priority/fallback_only）给出；
+        # weighted/cost_first 实际链序由权重/成本决定，给 priority 首位会误导。
+        # 与上方 providers 列表同序：链首恒为 providers[0]（便于「一眼对上编号 1」）。
+        chain_head = None
+        if llm_config.get("_strategy", "priority") in ("priority", "fallback_only") and ordered_entries:
+            chain_head = ordered_entries[0].get("name")
         return {
             "configured": True,
             "mode": "multi",
             "strategy": strategy_label(llm_config.get("_strategy", "priority")),
             "providers": providers,
             "preferred": preferred,
+            "chain_head": chain_head,
         }
 
     # ── 传统 flat 模式：单 provider ──

@@ -40,7 +40,8 @@ _DEFAULT_LLM_PROVIDERS: dict[str, Any] = {
 def _get_default_llm_providers_template() -> str:
     """返回带注释的默认 llm_providers.json 模板字符串。
 
-    主：DeepSeek（通过 claude 兼容端点）/ 辅：Gemini
+    模板头注释只写**稳定事实**（链序由 priority 升序决定），不写「主/备」
+    这类换序后就会失效的相对标注——避免注释与字段相互矛盾。
     使用者需自行在 llm_key.json 中配置对应凭据块。
     """
     d = _DEFAULT_LLM_PROVIDERS
@@ -57,6 +58,7 @@ def _get_default_llm_providers_template() -> str:
     # ── 头部注释 ──
     lines.append("  // LLM Provider 多链配置")
     lines.append("  // 按优先级尝试多个 provider，直到第一个成功返回")
+    lines.append("  // 链序真值：下方 providers[].priority 升序（数值小者靠前），与数组项顺序无关")
     lines.append("  // 有效 provider 类型：claude, openai, gemini")
     lines.append("  //")
     lines.append("  // 使用前请先在 llm_key.json 中配置对应的 credentials_ref 凭据块，")

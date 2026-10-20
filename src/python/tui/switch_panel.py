@@ -39,6 +39,7 @@ from src.python.core.ansi_colors import DIM, GREEN, RED, RESET
 from src.python.tui.text_layout import (
     display_width,
     pad_right,
+    style_heading,
     terminal_columns,
     truncate_display,
     wrap_display,
@@ -56,6 +57,44 @@ _PANEL_CHROME = 6
 _STATUS_SHORT = {True: "开", False: "关"}
 #: 状态标签（宽/中档用）
 _STATUS_LONG = {True: "开启", False: "关闭"}
+
+
+def narrow_rule(columns: int | None = None) -> str:
+    """窄档分隔线：宽度随内宽自适应（不硬折成两截）。
+
+    长输出面板（日志/健康历史/缓存统计）在窄屏上共用同一分隔线口径，
+    避免各处手写 ``"=" * 40`` 在 40 列终端上正好溢出。
+    """
+    cols = columns or terminal_columns()
+    return "  " + "=" * max(10, min(40, inner_width(cols) - 2))
+
+
+def render_titled_panel(title: str, rows, *, columns: int | None = None) -> list[str]:  # noqa: ANN001
+    """按档位渲染「标题 + 行」面板：宽/中档画盒线，窄档退化为无边框 + 行内截断。
+
+    为什么需要：``text_layout.render_panel`` 的宽度是**内容驱动**的（下限 41 列内容 +
+    边框），它不看终端宽度——直接在窄终端画盒线会撑出 49~57 列，被终端硬折成锯齿，
+    违背「窄档不画盒线、先让装饰再让信息」的既有约定（见模块 docstring 约定 1）。
+
+    Args:
+        title: 面板标题（窄档渲染为 ``── 标题 ──`` 结构标题行）。
+        rows: 内容行；``None`` 表示盒线版式下的内区分隔线，窄档渲染为空行。
+        columns: 终端列数；``None`` 取实时值。
+
+    Returns:
+        待逐行打印的文本（已按档位决定盒线/截断；每行显示宽度 ≤ ``inner_width(columns)``）。
+    """
+    from src.python.tui.text_layout import render_panel
+
+    cols = columns or terminal_columns()
+    body = list(rows)
+    if use_panel_box(cols):
+        return render_panel(title, body)
+    width = inner_width(cols)
+    lines = [style_heading(truncate_display(f"  ── {title} ──", width))]
+    for row in body:
+        lines.append("" if row is None else truncate_display(f"  {row}", width))
+    return lines
 
 
 def use_panel_box(columns: int) -> bool:
@@ -90,9 +129,9 @@ def _status(enabled: bool, tier: str) -> str:
 
 
 def format_heading(head: str, enabled_count: int, total: int, columns: int) -> str:
-    """分组标题行（含该组开启数，窄终端自动截断）。"""
-    text = f"{head}（{enabled_count}/{total} 开）"
-    return truncate_display(text, inner_width(columns))
+    """分组标题行（含该组开启数；窄终端先截断再上色——截断不吃转义序列）。"""
+    text = truncate_display(f"{head}（{enabled_count}/{total} 开）", inner_width(columns))
+    return style_heading(text)
 
 
 def format_item(
@@ -196,7 +235,7 @@ def legend_lines(cost_days: int, columns: int, *, tier: str | None = None, revea
         )
         return lines
 
-    lines += wrap_hanging("  ⚗ 实验项（默认关，质量可能不稳定） · * 与出厂默认不一致（配置漂移）", limit)
+    lines += wrap_hanging("  ⚗ 实验项（默认关，质量可能不稳定） · * 与出厂默认不一致", limit)
     key_note = (
         "  键名即行内淡色列：可直接输入键名（也可 ? 键名 / 键名=on|off）代替编号，面板增删项后仍然稳定"
         if tier == "wide"
@@ -216,6 +255,8 @@ __all__ = [
     "inner_width",
     "layout_tier",
     "legend_lines",
+    "narrow_rule",
+    "render_titled_panel",
     "use_panel_box",
     "wrap_hanging",
     "terminal_columns",

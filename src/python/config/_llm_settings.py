@@ -268,7 +268,11 @@ def invalidate_llm_config_cache() -> None:
 
 
 def get_llm_config() -> dict | None:
-    """读取 LLM 配置（合并 llm_settings.json + llm_key.json + llm_providers.json）。"""
+    """读取 LLM 配置（合并 llm_settings.json + llm_key.json + llm_providers.json）。
+
+    合并结果带内存缓存：判据 = 三文件 mtime+size；写原语写后主动失效；
+    TUI [R] 刷新显式失效。三文件任一手工修改后下一次读取即见新值。
+    """
     global _llm_config_cache, _llm_config_mtime, _llm_config_size
 
     with _llm_config_lock:
@@ -311,8 +315,15 @@ def get_llm_config() -> dict | None:
             key_mtime = os.path.getmtime(_llm_providers._get_llm_key_path())
             key_size = os.path.getsize(_llm_providers._get_llm_key_path())
             settings_size = os.path.getsize(settings_path) if os.path.exists(settings_path) else 0
-            combined_mtime = max(key_mtime, settings_mtime)
-            combined_size = key_size + settings_size
+            # 判据必须覆盖全部三个合并输入文件：providers 单独变更（多链 reorder、
+            # 手工改优先级）也须触发重读。providers_mtime 是主证据（priority 10↔20
+            # 等长替换时 size 不变）；providers_size 参与和可捕获「文件被删除」
+            # （size 减小 → miss → 重读回退默认链）。
+            providers_path = _llm_providers._get_llm_providers_path()
+            providers_mtime = os.path.getmtime(providers_path) if os.path.exists(providers_path) else 0
+            providers_size = os.path.getsize(providers_path) if os.path.exists(providers_path) else 0
+            combined_mtime = max(key_mtime, settings_mtime, providers_mtime)
+            combined_size = key_size + settings_size + providers_size
 
             if (
                 _llm_config_cache is not None

@@ -56,6 +56,7 @@ _CHANGELOG_MD = _MANAGEMENTS / "changelog.md"
 
 
 _REVIEW_FINDINGS_MD = _MANAGEMENTS / "review-findings.md"
+_REQUIREMENTS_MD = _MANAGEMENTS / "requirements.md"
 
 
 _HISTORY_DOCS = {_MANAGEMENTS / "changelog.md", _MANAGEMENTS / "review-findings.md"}

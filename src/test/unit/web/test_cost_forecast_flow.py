@@ -81,6 +81,21 @@ class TestCostPreflight:
         assert resp.status_code == 200
         assert resp.get_json()["data"]["forecast"]["ok"] is False, "预估失败以数据面表达，不报错"
 
+    def test_preflight_passes_force_scope(self, app_client):
+        with (
+            patch("src.python.llm.cost_forecast.forecast_run_cost", return_value=_fc()) as m,
+            patch("src.python.llm.cost_forecast.budget_status", return_value=_budget()),
+        ):
+            resp = app_client.get("/api/runs/cost-preflight?report_type=full&llm_modules=expert_review")
+        assert resp.status_code == 200
+        assert m.call_args.kwargs["force_modules"] == ["expert_review"], "重新生成范围须透传预检"
+
+    def test_preflight_invalid_module_key_data_degrades(self, app_client):
+        with patch("src.python.llm.cost_forecast.budget_status", return_value=_budget()):
+            resp = app_client.get("/api/runs/cost-preflight?report_type=full&llm_modules=no_such_module")
+        assert resp.status_code == 200, "非法模块键不 500"
+        assert resp.get_json()["data"]["forecast"]["ok"] is False
+
 
 class TestCreateRunBudgetGate:
     """POST /api/runs 日预算硬闸（full 模式；显式 budget_ack 放行）。"""
@@ -201,10 +216,10 @@ class TestMainJsCostForecastWiring:
         block = re.search(r"if \(body\.report_type === 'full'\) \{.*?\n    \}", src, re.S)
         assert block, "full 分支须先走费用预估确认"
         body = block.group(0)
-        assert "confirmCostForecast()" in body
+        assert "confirmCostForecast(body.llm_modules)" in body
         assert "submitRun(body)" in body, "确认通过才提交"
         assert "resetGenerateBtn()" in body, "取消须复位按钮"
-        assert body.index("confirmCostForecast()") < body.index("submitRun(body)"), "先确认后提交"
+        assert body.index("confirmCostForecast(body.llm_modules)") < body.index("submitRun(body)"), "先确认后提交"
 
     def test_ack_and_downgrade_injected(self) -> None:
         src = self._src()
@@ -215,9 +230,14 @@ class TestMainJsCostForecastWiring:
 
     def test_preflight_network_failure_nonblocking(self) -> None:
         src = self._src()
-        fn = re.search(r"function confirmCostForecast\(\) \{.*?\n  \}", src, re.S)
+        fn = re.search(r"function confirmCostForecast\(modules\) \{.*?\n  \}", src, re.S)
         assert fn, "confirmCostForecast 定义缺失"
         body = fn.group(0)
         assert "/api/runs/cost-preflight" in body
+        assert "llm_modules=" in body, "模块级重新生成范围须进预检查询串"
         assert "proceed: true" in body, "预检失败/预估不可用须放行（服务端硬闸兜底）"
         assert "budgetAck: true" in body, "超限确认分支须产出 ack"
+
+    def test_preflight_dialog_shows_forced_breakdown(self) -> None:
+        src = self._src()
+        assert re.search(r"f\.forced_count[\s\S]{0,200}个模块重新生成", src), "弹层文案须显示重新生成拆行"

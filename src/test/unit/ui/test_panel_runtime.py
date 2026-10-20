@@ -230,10 +230,53 @@ class TestPanelLoopTextAndPick:
             _simple_items([]),
             render=_render_blank,
             prompt="> ",
-            read=_reader(["?3", "0"]),
+            read=_reader(["k9", "0"]),
             on_text=seen.append,
         )
-        assert seen == ["?3"], "未命中项键的多字符交 on_text 词法"
+        assert seen == ["k9"], "未命中项键的多字符交 on_text 词法"
+
+    def test_help_swallowed_by_runtime(self, capsys):
+        """``?`` 与 ``?键`` 由运行时承接，不进面板词法（帮助入口全面板可用）。"""
+        seen: list[str] = []
+        panel_loop(
+            _simple_items([]),
+            render=_render_blank,
+            prompt="> ",
+            read=_reader(["?", "?2", "0"]),
+            on_text=seen.append,
+        )
+        out = capsys.readouterr().out
+        assert seen == [], "帮助输入不得落进面板词法"
+        assert "可用键：" in out, "? 无参须印本面板可用键一览"
+
+    def test_panel_help_hook_takes_precedence(self, capsys):
+        """面板提供 on_help 时优先自处理；返回 False 表示交回运行时通用一览。"""
+        handled: list[str] = []
+
+        def _on_help(target: str) -> bool:
+            handled.append(target)
+            return False
+
+        panel_loop(
+            _simple_items([]),
+            render=_render_blank,
+            prompt="> ",
+            read=_reader(["?", "?1", "0"]),
+            on_help=_on_help,
+        )
+        out = capsys.readouterr().out
+        assert handled == ["", "1"], f"on_help 应收到去问号目标: {handled}"
+        assert "可用键：" in out, "on_help 返回 False 时回落通用一览"
+
+    def test_item_detail_rendered_by_help(self, capsys):
+        """``?键`` 渲染 PanelItem.detail（面板各写各的业务含义，渲染单源）。"""
+        items = [
+            PanelItem("1", "甲", detail="甲的补充说明：当前值 10，切换后立即写入"),
+            PanelItem("0", "返回", kind="return"),
+        ]
+        panel_loop(items, render=_render_blank, prompt="> ", read=_reader(["?1", "0"]))
+        out = capsys.readouterr().out
+        assert "甲的补充说明" in out, "?键 须显示 item.detail 而不是只给键与名称"
 
     def test_direct_false_routes_char_to_on_text(self):
         seen: list[str] = []

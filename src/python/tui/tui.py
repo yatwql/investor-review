@@ -28,6 +28,8 @@ from src.python.tui.tui_menu import (
     _apply_feature_gates,
     exit_app,
     index_by_key,
+    match_menu_items,
+    next_matching,
     print_header,
     render_menu,
     show_config,
@@ -118,7 +120,7 @@ def _bind_callbacks() -> None:
         "D": _cmd_config_dir_info,
         "1": _cmd_update_basic_cache,
         "2": _cmd_update_position_cache,
-        "4": _cmd_cache_management,
+        "3": _cmd_cache_management,
         "I": _cmd_config_comparison_indices,
         "A": _cmd_config_anonymization_mode,
         "P": _cmd_config_report_boards,
@@ -148,7 +150,7 @@ class _FrameLineCounter:
         return self._stream.flush()
 
 
-def _render_menu_frame(sel: int) -> int:
+def _render_menu_frame(sel: int, filter_text: str = "") -> int:
     """渲染一整帧首页（页眉 + 配置摘要 + 菜单），返回本帧占用行数。"""
     counter = _FrameLineCounter(sys.stdout)
     original = sys.stdout
@@ -156,7 +158,7 @@ def _render_menu_frame(sel: int) -> int:
     try:
         print_header()
         show_config()
-        render_menu(sel)
+        render_menu(sel, filter_text)
     finally:
         sys.stdout = original
     return counter.lines
@@ -195,6 +197,42 @@ def _clear_last_frame(lines: int) -> None:
     if lines > 0:
         sys.stdout.write(f"\x1b[{lines}A\x1b[0J")
         sys.stdout.flush()
+
+
+def _read_filter_keyword(prompt: str) -> str | None:
+    """筛选关键词读取入口（单独抽函数：行输入基于 raw 模式，与主循环逐键分离）。
+
+    测试可整体替掉本入口，不必碰 ``tui_keys`` 源头（源头打点会把 feeder 永久绑定到
+    惰性导入的处理器模块上）。
+    """
+    from src.python.tui.tui_keys import input_choice
+
+    return input_choice(prompt)
+
+
+def _ask_menu_filter(current: str) -> str:
+    """读取主菜单筛选关键词（回车提交，空=清除；Esc 保持原筛选不变）。
+
+    Args:
+        current: 当前生效的关键词。
+
+    Returns:
+        新的关键词（Esc/EOF 时原样返回）。
+    """
+    from src.python.tui.text_layout import wrap_prompt
+
+    hint = f"当前「{current}」· 回车清除" if current else "空=显示全部"
+    try:
+        raw = _read_filter_keyword(wrap_prompt(f"  筛选关键词（{hint} · Esc 取消）: "))
+    except (EOFError, KeyboardInterrupt):
+        return current
+    if raw is None:  # Esc：不改筛选
+        return current
+    keyword = raw.strip()
+    if keyword and not match_menu_items(keyword):
+        _print_hint(f"「{keyword}」无匹配菜单项，保持原菜单")
+        return current
+    return keyword
 
 
 def main() -> None:
@@ -236,7 +274,7 @@ def main() -> None:
     except Exception:
         logger.debug("首次运行引导显示失败（非关键）", exc_info=True)
 
-    # 读取缺省菜单选项（config.json → default_menu_key），仅支持 E/B/L/W/Q/D/1/2/3/4/P/I/A/S/R/V/H/T/X
+    # 读取缺省菜单选项（config.json → default_menu_key），仅支持 E/B/L/W/Q/D/1/2/3/P/I/A/S/R/V/H/T/X
     # （T 系统自检受 doctor_check 开关门控、Q 报告追问受 report_qa 开关门控：
     # 关闭时对应项被裁剪，index_by_key 自然回落到首项）
     from src.python.config import get_config
@@ -248,9 +286,18 @@ def main() -> None:
     nav = NavState(count=len(MENU_ITEMS), cursor=_idx if _idx is not None else 0)
 
     esc_exit_armed: float | None = None
+    menu_filter = ""  # 主菜单关键词筛选（`/` 设定，`0` 清除；空=不筛选）
 
     while True:
-        frame_lines = _render_menu_frame(nav.cursor)
+        # 每帧重建门控：功能开关在 [S] 面板改完返回首页即生效（含重新开启被裁剪的项），
+        # 无需重启；裁剪后项数变化 → 重新绑定回调并夹紧游标（防越界）
+        _apply_feature_gates()
+        _bind_callbacks()
+        nav.count = len(MENU_ITEMS)
+        if nav.cursor >= nav.count:
+            nav.sync(0)
+        frame_lines = _render_menu_frame(nav.cursor, menu_filter)
+        visible = match_menu_items(menu_filter)  # 当前可见项索引（未筛选=全部）
         hint_lines = 0  # 帧下方反馈行数（原地重绘时并入清除范围）
 
         # 内层按键循环：直达键（快捷键/退出）处理后重绘或退出；方向键/Enter
@@ -273,12 +320,25 @@ def main() -> None:
                 esc_exit_armed = now
                 hint_lines += _print_hint("再按一次 Esc 退出（0 / X 亦可）")
                 continue
+            if key == "/":
+                # 关键词筛选：回车提交（空=清除），Esc 保持原有筛选不变
+                menu_filter = _ask_menu_filter(menu_filter)
+                break  # 重绘（带/不带筛选）
             if key == "0":
+                if menu_filter:
+                    # 有筛选时 0 先清筛选（退出仍可 X / 再按 0 / Esc）
+                    menu_filter = ""
+                    hint_lines += _print_hint("已清除筛选")
+                    break
                 # 0 作退出别名：与子菜单「0 = 返回」的习惯一致（在首页返回即退出程序）
                 exit_app()
             if len(key) == 1 and ("A" <= key <= "Z" or "a" <= key <= "z" or "0" <= key <= "9"):
                 idx = index_by_key(key.upper())
                 if idx is not None:
+                    if menu_filter and idx not in visible:
+                        # 筛选态下按到被隐藏的项：给可观察反馈，不静默吞键
+                        hint_lines += _print_hint(f"「{key.upper()}」不在当前筛选结果中（/ 改关键词 · 0 清除筛选）")
+                        continue
                     nav.sync(idx)
                     execute_item(idx)
                     break  # 直达执行后回到重绘点（子菜单关闭 → 刷新首页）
@@ -289,16 +349,27 @@ def main() -> None:
                     continue
                 break
             if key == KEY_ENTER:
+                if menu_filter and nav.cursor not in visible:
+                    target = next_matching(visible, nav.cursor, 1)
+                    if target is not None:
+                        nav.sync(target)
                 execute_item(nav.cursor)
                 break
             if key == KEY_UP or key == KEY_DOWN:
-                nav.move(key)  # 单源回绕（全菜单项可导航）；等价原 (sel±1)%len
+                step = 1 if key == KEY_DOWN else -1
+                if menu_filter:
+                    # 筛选态：只在匹配项之间移动（回绕），不让选中态落到隐藏项上
+                    target = next_matching(visible, nav.cursor, step)
+                    if target is not None:
+                        nav.sync(target)
+                else:
+                    nav.move(key)  # 单源回绕（全菜单项可导航）；等价原 (sel±1)%len
                 if _can_repaint_inplace():
                     # 导航原地重绘（光标上移+清屏）：窄屏防菜单顶出可视区、宽屏防滚屏
                     # 堆积（宽/窄同一导航手感，仅版式分档不改交互）；
                     # 反馈行（hint_lines）一并清除，避免清帧范围错位
                     _clear_last_frame(frame_lines + hint_lines)
-                    frame_lines = _render_menu_frame(nav.cursor)
+                    frame_lines = _render_menu_frame(nav.cursor, menu_filter)
                     hint_lines = 0
                     continue
                 break  # 非 TTY/旧控制台：回退整屏追加
