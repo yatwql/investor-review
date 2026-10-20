@@ -70,7 +70,8 @@ class TestClassifyPair:
         assert tool.classify_pair(_CROSS_SAFE_RATIO, 1, False, "A", "B") == "cross_safe_kept"
 
     def test_cross_candidate_branches(self, tool):
-        assert tool.classify_pair(_CROSS_CANDIDATE_RATIO, _CROSS_BIGRAM_MIN, False, "A", "B") == "cross_merge"
+        # bg=3 下限档无共享事件词（"A"/"B" 无任何事件词）→ 事件不一致，候选区保留
+        assert tool.classify_pair(_CROSS_CANDIDATE_RATIO, _CROSS_BIGRAM_MIN, False, "A", "B") == "cross_skip"
         assert (
             tool.classify_pair(_CROSS_BG2_RATIO, 2, False, "CPI同比增长2.5%PPI同比下降0.8%", "CPI涨2.5%PPI降0.8%")
             == "cross_merge_bg2"
@@ -89,6 +90,18 @@ class TestClassifyPair:
             )
             == "cross_opposite"
         )
+
+    def test_cross_merge_requires_event_group_at_bg3_floor(self, tool):
+        """bg=3 下限档事件不一致 → cross_skip（与生产同源，同主体不同事件不合并）。"""
+        assert (
+            tool.classify_pair(0.38, 3, False, "中际旭创港股暗盘跌1.84%", "中际旭创，18.89亿元资金抢筹") == "cross_skip"
+        )
+        assert (
+            tool.classify_pair(0.43, 3, False, "兆易创新：提议回购20亿元A股", "又一批公司集体回购公告") == "cross_merge"
+        )
+        assert (
+            tool.classify_pair(0.43, 4, False, "中际旭创新闻甲", "中际旭创新闻乙丙丁") == "cross_merge"
+        )  # ≥4 不受判据影响
 
     def test_below_candidate(self, tool):
         assert tool.classify_pair(_CROSS_CANDIDATE_RATIO - 0.01, 9, False, "A", "B") == "below_candidate"

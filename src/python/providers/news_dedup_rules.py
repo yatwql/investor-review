@@ -558,10 +558,49 @@ _TOKEN_LIKE = re.compile(r"^(?=.*[a-z])[a-z0-9]+$|^_tk:[a-z]+$")
 # 跨主体高频共现的泛词、又与指标/板块缩写同形，仅凭「含字母」无法区分——
 # 靠这些词过闸的 bg=2 合并抽样绝大多数为误合并（不同基金各自行情、不同指数、
 # "20cm" 俚语、CE 认证标记）；CPI/PPI/IPO/AMD 类真发布会与公司缩写不在表内、
-# 照常作专名证据。误合并会静默丢掉一篇独立报道，可见重复不会，故宁可少合并
-# 不错合；新泛词在校准抽样中现身时按同口径扩表（与 _STOP_BIGRAMS/
+# 照常作专名证据（gdp 除外：2026-10-20 校准实证「沙特阿拉伯二季度GDP」与
+# 「欧元区二季度GDP」共享 gdp 被合并，跨经济体数据发布非同一事件，同口径入表）；
+# 误合并会静默丢掉一篇独立报道，可见重复不会，故宁可少合并不错合；
+# 新泛词在校准抽样中现身时按同口径扩表（与 _STOP_BIGRAMS/
 # _OPPOSITE_PAIRS 同为词表维护项）。本表已入规则指纹，改动自动分锚点时代。
-_GENERIC_TOKENS: frozenset[str] = frozenset({"ai", "etf", "cm", "gb", "ce", "pcb"})
+_GENERIC_TOKENS: frozenset[str] = frozenset({"ai", "etf", "cm", "gb", "ce", "pcb", "gdp"})
+
+# 跨源 bg=3 下限档的事件信号词组（2026-10-20 锚点回放定档）：实体重叠 ≠ 事件
+# 重叠——同主体公司名天然贡献多个 bigram，bg=3 可由「同主体不同事件」对凑满
+# （中际旭创「暗盘跌 vs 资金抢筹」、SK海力士「盘前跌 vs 上调目标价」）。仅
+# overlap 恰为 bg=3 下限档引入本判据（≥4 实体证据更强，维持现状）：两标题
+# 命中的事件词组须有交集（组内互认，立案/调查/留置/被查属同一事件类型），
+# 否则不合并、落候选区保留。词表刻意排除职务/身份词（董事长/总经理——跨事件
+# 普遍命中，会把「中投副总任命」与「卫通副总离任」误连）与泛状态词（新高/
+# 反弹/放量——跨事件高频）；误合并会静默丢掉一篇独立报道，可见重复不会，
+# 宁可少合并。词组入规则指纹，改动自动分锚点时代。
+_EVENT_GROUPS: tuple[tuple[str, ...], ...] = (
+    ("财报", "业绩", "预告", "快报", "年报", "季报", "半年报", "中报", "四季报"),
+    ("回购", "注销"),
+    ("增持", "减持"),
+    ("分红", "配股", "送转", "解禁"),
+    ("收购", "并购", "要约", "私有化", "股权"),
+    ("制裁",),
+    ("袭击", "空袭", "炮击", "摧毁"),
+    ("停火", "谈判"),
+    ("目标价", "评级", "首评", "覆盖"),
+    ("立案", "调查", "留置", "被查", "处罚", "警示函"),
+    ("涨停",),
+    ("跌停",),
+    ("停牌", "复牌"),
+    ("上市", "退市", "申购", "中签", "募资", "ipo"),
+    ("调研", "电话会", "发布会", "路演"),
+    ("举牌",),
+    ("重组", "拆分"),
+)
+
+
+def share_event_group(text_a: str, text_b: str) -> bool:
+    """两标题是否命中同一事件信号词组（bg=3 下限档事件一致性判据）。
+
+    参数须为已归一化标题（调用方负责 ``_normalize_title``）。
+    """
+    return any(any(w in text_a for w in group) and any(w in text_b for w in group) for group in _EVENT_GROUPS)
 
 
 def proper_noun_tokens(tokens: set[str]) -> list[str]:
@@ -616,6 +655,7 @@ def _rules_fingerprint() -> str:
         ",".join(f"{a}>{b}" for a, b in _OPPOSITE_PAIRS),
         _TOKEN_LIKE.pattern,
         ",".join(sorted(_GENERIC_TOKENS)),
+        ";".join(",".join(group) for group in _EVENT_GROUPS),
         _RATIO_CLEAN.pattern,
         _ENG_PLACEHOLDER.pattern,
         probes,
