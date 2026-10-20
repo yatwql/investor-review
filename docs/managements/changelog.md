@@ -9,6 +9,7 @@
 
 ## [0.13.8-dev] - 开发中（未发布）
 
+- **TUI 交互契约定稿 + 结构守卫扩面**（plan-156）：`docs/managements/DESIGN-TUI.md` 成为 TUI 侧唯一判据（与 `DESIGN.md` 对称）——键分工总表 / 提示三段式 / 默认项与取消语法 / 配色一色一职责 / 术语表与适用范围 / 反馈与空态口径 / 闸门白名单 / 护栏 / Known Gaps；Feedback 节补页头状态行口径（五项常驻，LLM 段含链首线路名，与 `[M]` 面板同排序）。契约结构测试由 9 例扩到 19 例：新增必需节（含 Colors）子集、四张表列集合、关键口径句成句存在、闸门白名单文档↔代码双向一致（文档写 `handlers_log._cmd_view_logs`、代码常量带 `.py` 后缀也须对上）。同步 CLAUDE.md「设计契约」条目（拆分为 Web/HTML 与 TUI 两份契约及各自守卫）与 developer-guide 文档触点清单（新增「TUI 交互改动」行）。
 - **多链线路顺序三处统一**（review-findings rf-737）：排序上提为共享单一实现 `config/_llm_providers.order_providers_by_chain`（`priority` 升序、同值保持数组原序），`llm_status()` 与 TUI `[M]` 面板同经此函数，`chain_head` 恒等于 `providers[0]`。此前 `llm_status()` 按 `providers` 数组物理顺序输出、面板按 priority 排序，reorder 后首页显示 `[1] 优先级 20 / [2] 优先级 10` 而面板是反的，与状态行链首自相矛盾——现在首页配置块、状态行链首、`[M]` 面板编号、Web 配置面四处顺序一致。
 - **多链配置文件写回保真**（review-findings rf-735 / rf-736）：
   - 缩进不再漂移：`_json_patch` 新增 `_detect_indent_unit`，数组/对象整块重写沿用文件现有缩进单位（`_replace_dict_block` 与 `_replace_array_block` 同修）——此前硬编码 4 空格会把 2 空格风格的文件（`llm_providers.json` / `llm_settings.json`）写成 4 空格，字段值无损但版式跳变、diff 噪声大

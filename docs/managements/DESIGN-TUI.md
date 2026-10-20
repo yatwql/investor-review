@@ -2,7 +2,7 @@
 
 > **适用对象**：`src/python/tui/` 下一切交互改动——提示语、键位、面板版式、反馈与空态文案。
 > **定位**：TUI 侧**唯一判据**，与 [`DESIGN.md`](DESIGN.md)（Web/报告视觉契约）对称：一个守「看什么」，一个守「怎么按、按了会怎样」。
-> **守卫**：`src/test/unit/ui/test_design_tui_doc.py`（骨架 / 键表 / 护栏 / 术语表的子集断言）。
+> **守卫**：`src/test/unit/ui/test_design_tui_doc.py`（骨架 / 键表 / 表格列 / 口径句 / 护栏 / 术语表 / 闸门白名单交叉校验） + `src/test/unit/ui/test_prompt_contract.py`（上屏提示成分、禁用词、闸门白名单机检）。
 > **设计依据**：[`tui-interaction-hci-design.md`](../plan/tui-interaction-hci-design.md)（在办设计文档：HCI 原则对照、措施分批与验收载体）。
 
 ---
@@ -114,6 +114,7 @@ TUI 的第一用户是**在手机上用 SSH 看持仓的人**，不是写代码�
 | 错误 | `[ERR]` | 原因 + 下一步动作（不得只给异常类名） |
 | 空态 | `[!]` | 说清「为什么没有」+「怎么才会有」 |
 | 面板按键反馈 | 无前缀单行 | 一次按键必有可观察结果（C29 两档同语义） |
+| 页头状态行 | 无前缀 | 五项常驻（上次报告/缓存过期/新鲜度/备用源/LLM），LLM 段 = 状态点 + 多链链首线路名；顺序与 `[M]` 面板编号同一口径（`config/_llm_providers.order_providers_by_chain`），窄终端先弃「详情」指引、五个语义段不折行 |
 
 ### 按键闸门白名单（`按任意键返回菜单`）
 
