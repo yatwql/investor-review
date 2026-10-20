@@ -114,7 +114,7 @@ investor-util/
 │   │   │   ├── _validation.py        #   配置校验函数集
 │   │   │   ├── anonymizer.py         #   匿名化模块（4 模式：关闭/代码显示/完全匿名/汇总）
 │   │   │   ├── edit_ops.py           #   配置编辑共享层（白名单+值规则+写入分派+写前备份，Web/TUI 唯一编辑通道）
-│   │   │   └── features.py           #   功能开关注册表（唯一登记点：27 项声明的显示名/说明/分组/默认值/产物影响；默认值字典为其派生投影；运行时覆写持久化到 data/config/features.json；含作用域四组 27 项）
+│   │   │   └── features.py           #   功能开关注册表（唯一登记点：全量声明的显示名/说明/分组/默认值/产物影响；默认值字典为其派生投影；运行时覆写持久化到 data/config/features.json；按作用域四组划分）
 │   │   │
 │   │   ├── fetcher/                  # 数据获取调度
 │   │   │   ├── __init__.py           #   子包标记
@@ -244,7 +244,7 @@ investor-util/
 │   │   │   ├── self_review.py        #   生成后自检（模型层复核；运行作用域载体 + 固定非质量保证尾注）
 │   │   │   ├── holding_change_review.py #   持仓变动复盘归因（章内 LLM 归因块；编排层串行入口 + 归因生成器 + 窗口信号对账块 + 失败原因登记）
 │   │   │   ├── fact_checker/         # LLM 事实锚定校验器（数值/品种/排名一致性校验）
-│   │   │   │   ├── __init__.py       #       子包标记，re-export run_fact_check 等 4 个公开函数
+│   │   │   │   ├── __init__.py       #       子包标记，re-export run_fact_check 等公开函数
 │   │   │   │   ├── _constants.py     #       关键词词表/指数代码集/默认容差
 │   │   │   │   ├── _context.py       #       语境检测（回撤/变化率/贡献度/仓位/假设/建议）
 │   │   │   │   ├── _corrections.py   #       数值自动修正
@@ -258,10 +258,10 @@ investor-util/
 │   │   │   ├── fallback.py           #   LLM 故障降级模板（所有模块失败时提供占位内容，防止报告空白）
 │   │   │   ├── fingerprint.py        #   缓存指纹（请求去重，避免重复调用）
 │   │   │   ├── force_scope.py        #   模块级强刷范围解析（可强刷键清单/粒度优先归一/未知键校验，三端与共享层共用）
-│   │   │   ├── generators.py         #   生成门面（辩论 pro/con/合成 + 自检 + 持仓变动归因生成器；单例四函数下沉 generators_singletons 后 re-export）
+│   │   │   ├── generators.py         #   生成门面（辩论 pro/con/合成 + 自检 + 持仓变动归因生成器；单例生成函数下沉 generators_singletons 后 re-export）
 │   │   │   ├── generators_news.py    #   新闻分析提示词生成
 │   │   │   ├── generators_orchestrator.py # LLM 批量编排门面（缓存预检 + 主编排入口，re-export 分发子模块）
-│   │   │   ├── generators_singletons.py #   单例四生成函数（global_macro/expert_review/health_check/penetration_deep，自 generators 域下沉，门面再导出；测试 patch 解析点）
+│   │   │   ├── generators_singletons.py #   单例生成函数（global_macro/expert_review/health_check/penetration_deep，自 generators 域下沉，门面再导出；测试 patch 解析点）
 │   │   │   ├── _llm_dispatch.py        #   worker 装配与线程池并发分发（_MODULE_FNS 映射/进度回调/辩论路由，从 orchestrator 拆出）
 │   │   │   ├── _api_claude.py         #   Claude API 调用实现
 │   │   │   ├── _api_gemini.py         #   Gemini API 调用实现
@@ -418,7 +418,7 @@ investor-util/
 │   │   │   ├── holding_status.py     #   品种级数据状态标注（品种覆盖诊断，position_status）
 │   │   │   ├── data_freshness.py     #   数据可信度诊断（新鲜度分类 + 单日跳变检测，data_freshness）
 │   │   │   ├── datasource_credential.py # 数据源凭据声明与就绪判定（CredentialSpec 注册表/缺失判定/可读指引/就绪矩阵；已内置不可关闭，凭据值永不落日志与报告）
-│   │   │   ├── doctor.py             #   系统自检（环境/配置/目录/功能开关/数据源适配/数据源凭据/数据源七组检查 + 修复建议；零重依赖、自身永不抛异常；上屏开关 doctor_check 默认开）
+│   │   │   ├── doctor.py             #   系统自检（环境/配置/目录/功能开关/数据源适配/数据源凭据/数据源等分组检查 + 修复建议；零重依赖、自身永不抛异常；上屏开关 doctor_check 默认开）
 │   │   │   ├── decision_header.py    #   决策头解析（决策词归一/优先级/代码提取/结构化决策头/缓存后缀），无 report/llm 依赖
 │   │   │   ├── decision_ledger.py    #   决策跨期反思账本（事件 JSONL 持久化/结算折叠/教训区块+缓存指纹/开关），无 report/llm 依赖
 │   │   │   ├── experiment_stats.py   #   实验功能使用统计（启用计数/最近启用日期，data/state/experiment_stats.json；为转正/撤销决策提供客观数据）
@@ -459,7 +459,7 @@ investor-util/
 │   │   │   ├── prompt_text.py   #   提示语模板（提示四成分唯一产出通道：动作+示例 · 默认项 · 帮助入口 · 返回键；`?` 帮助文案）
 │   │   │   ├── handlers_switch.py   #   [S] 功能开关面板本体（run_llm_modules_panel 主循环 + match_switch_item/show_switch_detail）
 │   │   │   ├── handlers_llm_providers.py  #  [M] 多链优先级面板（按链序展示 + 交换两编号；写盘经共享 _apply_edit）
-│   │   │   └── tui_menu.py           #   菜单系统（18 项菜单定义/门控/渲染）
+│   │   │   └── tui_menu.py           #   菜单系统（菜单定义/门控/渲染）
 │   │   │
 │   │   └── web/                      # 轻量 Web 模式入口（浏览器内上传/生成/预览/下载）
 │   │   │   ├── __init__.py           #   子包标记，re-export main/create_app
@@ -493,7 +493,7 @@ investor-util/
 │   │   ├── report-overview.png       #   README 报告效果截图：首屏完整目录导航与章节入口（虚构样例持仓实景）
 │   │   ├── report-toc.png            #   README 报告效果截图：盈亏汇总与组合持仓概况
 │   │   ├── report-charts.png         #   README 报告效果截图：资产构成与穿透行业分布交互图表
-│   │   ├── tui-menu.png              #   README 界面实景：TUI 全键盘主菜单（18 项 + 页头状态行）
+│   │   ├── tui-menu.png              #   README 界面实景：TUI 全键盘主菜单（页头状态行）
 │   │   ├── web-workbench.png         #   README 界面实景：Web 工作台生成报告页签（上传→选格式→生成）
 │   │   ├── web-config.png            #   README 界面实景：Web 配置编辑面板（与 TUI 菜单同源）
 │   │   ├── web/                      #   Web UI 前端（Jinja 模板 + 静态资产，Flask template/static 目录指向此处）
@@ -663,7 +663,7 @@ investor-util/
 │       │   │   ├── test_experiment_stats.py #   实验功能使用统计测试（累计计数/日期刷新/去重幂等/损坏容错/doctor 集成/报告入口接线）
 │       │   │   ├── test_decision_ledger.py  #   决策账本核心测试（事件持久化/结算折叠/同日去重/教训区块）
 │       │   │   ├── test_decision_ledger_edge.py # 决策账本边缘场景（空账本/损坏行/阈值边界）
-│       │   │   ├── test_doctor.py           #   系统自检测试（七组检查/永不抛异常契约/只读探测不留残留/统计与渲染）
+│       │   │   ├── test_doctor.py           #   系统自检测试（分组检查/永不抛异常契约/只读探测不留残留/统计与渲染）
 │       │   │   ├── test_doctor_credential.py # 体检「数据源凭据」组（受开关约束/无声明报免费源/缺失给变量名建议/网络组不重复计失败）
 │       │   │   ├── test_datasource_credential.py # 数据源凭据声明与就绪判定核心测试（声明表/空白串视为缺失/指引措辞/就绪矩阵）
 │       │   │   ├── test_datasource_credential_edge.py # 凭据声明边缘场景（空表/缺 env_var/各类空白字符/重复注册/清空回落）
@@ -1066,7 +1066,7 @@ investor-util/
 │       │   │   ├── test_server.py   #       启动防护（output_dir 写锁检测/端口占用）
 │       │   │   ├── test_scheduler.py #     Web 定时生成调度（解析/触发窗评估/账本/API/面板接线）
 │       │   │   ├── test_web_completion_notify.py # Web 收尾完成通知接线（门控前置/载荷/吞异常/包装器委托）
-│       │   │   └── test_smoke_web.py #      Web 冒烟脚本载体（test_client 11 项全链路断言）
+│       │   │   └── test_smoke_web.py #      Web 冒烟脚本载体（test_client 全链路断言）
 │       ├── integration/              #   集成测试（契约/隔离/流水线）
 │       │   ├── __init__.py           #   子包标记
 │       │   ├── test_cache_consistency.py      #   缓存前缀契约跨模块共享集成测试
@@ -1108,7 +1108,7 @@ investor-util/
 │       │   ├── datetime/            #   日期时间场景测试
 │       │   │   ├── __init__.py      #       子包标记
 │       │   │   └── test_datetime_scenarios.py #   日期时间场景测试
-│       │   ├── llm/                 #   LLM 场景测试（9 测试文件）
+│       │   ├── llm/                 #   LLM 场景测试
 │       │   │   ├── __init__.py      #       子包标记
 │       │   │   ├── test_llm_disabled.py          #   LLM 不启用
 │       │   │   ├── test_llm_disabled_cache.py    #   禁用+缓存混合
@@ -1185,7 +1185,7 @@ investor-util/
 │   │   ├── metrics.py               #       指标 A/B/C 计算与三态判定（可得率/信号增量相关/耗时比）
 │   │   ├── stages.py                #       评测阶段编排（catalog/fields/signals/timing 落盘）
 │   │   └── report.py                #       判定书生成（judge 汇总 + 判定书 Markdown 渲染）
-│   ├── llm-hallucination-sampler.py #   LLM 幻觉率采样 CLI（10组标准持仓+事实校验器验证；实现在 _halluc_sampler/）
+│   ├── llm-hallucination-sampler.py #   LLM 幻觉率采样 CLI（标准持仓集+事实校验器验证；实现在 _halluc_sampler/）
 │   ├── perf-test-report.py          #   端到端性能基准测试（独立脚本，mock 外部数据源）
 │   ├── perf-view.py                 #   性能历史趋势查看（perf_history.jsonl -> 分位/演进/漂移 Markdown + 机读）
 │   ├── _perf_view/                  #   perf-view 统计实现包（入口 perf-view.py 保留 CLI/报告编排与 re-export）
@@ -1243,7 +1243,7 @@ investor-util/
 │   │   ├── _versioning.py            #       版本号解析/渲染纯函数（X.Y.Z-dev 推导与改写 / 归档名派生）
 │   │   ├── _changelog_archive.py     #       changelog 发布段迁出与归档追加（纯文本变换）
 │   │   └── _evolution.py             #       版本演进快照统计与表格回写（git 清单 + 逐文件行数）
-│   └── smoke-web.py                 #   Web 模式 HTTP 冒烟脚本（test_client 11 项全链路验证，可独立运行）
+│   └── smoke-web.py                 #   Web 模式 HTTP 冒烟脚本（test_client 全链路验证，可独立运行）
 ├── docs/                         # 项目文档
 │   ├── manuals/                      #   用户手册分册
 │   │   ├── datasource.md             #     数据源一览
@@ -1312,8 +1312,8 @@ investor-util/
 │   │   │   │   └── market_value_split.md     # 市值拆分设计
 │   │   │   ├── refactor-summary-llm-usage/        # LLM 用量摘要重构
 │   │   │   │   └── summary-llm-usage-split-plan.md # LLM 用量摘要拆分计划
-│   │   │   └── test-verify-mode-optimization/     # 测试verify 模式运行优化
-│   │   │       └── verify_mode_optimization.md # 测试verify 模式运行优化
+│   │   │   └── test-verify-mode-optimization/     # 测试 verify 模式运行优化
+│   │   │       └── verify_mode_optimization.md # 测试 verify 模式运行优化
 │   │   ├── v0.4.x/                            # v0.4.x 版本归档
 │   │   │   ├── archived_changelog.0.4.x.md        # 变更日志归档 v0.4.x
 │   │   │   ├── archived_plan.0.4.x.md             # 实现计划归档 v0.4.x
