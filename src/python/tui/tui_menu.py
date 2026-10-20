@@ -53,7 +53,7 @@ FEATURE_GATED_ITEMS: dict[str, str] = {"T": "doctor_check", "Q": "report_qa"}
 MENU_GROUPS: list[tuple[str, tuple[str, ...]]] = [
     ("生成报告", ("E", "B", "L", "W")),
     ("数据与查看", ("Q", "1", "2", "3")),
-    ("配置", ("D", "P", "I", "A", "S", "M", "R")),
+    ("配置", ("P", "S", "M", "I", "A", "D", "R")),
     ("诊断与排查", ("V", "H", "T")),
 ]
 
