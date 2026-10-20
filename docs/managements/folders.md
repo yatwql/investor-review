@@ -1410,13 +1410,13 @@ investor-util/
 │   │   │   ├── archived_review-findings.0.13.x.md # 自审记录归档 v0.13.x（开发期已修复批次）
 │   │   │   ├── llm-cost-optimization.md # LLM 调用成本优化分析归档（实测画像 + 行动清单闭环：计费口径/闲时调度/模型映射已核实，output_brief 机制已具备）
 │   │   │   ├── holding-cost-position-design.md # 持仓成本相对历史价格区间位置设计
-│   │   │   ├── tui-panel-runtime-design.md # TUI 统一交互运行时设计（NavState/PanelItem/panel_loop 契约 + 13 面板清单 + 8 迭代，已完成）
-│   │   │   ├── tui-interaction-hci-design.md # TUI 交互 HCI 治理设计（HCI 原则对照 + 交互契约 v0 + M1~M10 措施与机检载体，已完成）
+│   │   │   ├── tui-panel-runtime-design.md # TUI 统一交互运行时设计（NavState/PanelItem/panel_loop 契约 + 13 面板清单 + 8 迭代）
+│   │   │   ├── tui-interaction-hci-design.md # TUI 交互 HCI 治理设计（HCI 原则对照 + 交互契约 v0 + M1~M10 措施与机检载体）
 │   │   │   ├── perf-observability-design.md # 运行观测与性能归因设计（perf_history 观测面：细分/计数/上下文维度/对比门禁）
 │   │   │   └── report-browser-verification.md # 报告浏览器验证方法与实测结论（六项拆分：CDP 自动化子项实测 + 人工步骤 + 复验清单）
 │   │   ├── v0.12.x/                         # v0.12.x 版本归档（0.12 系列首份）
 │   │   │   ├── archived_changelog.0.12.x.md # v0.12.1 已发布变更记录
-│   │   │   ├── archived_plan.0.12.x.md       # v0.12.x 已完成计划项（含限购信息接入与持仓展示面设计）
+│   │   │   ├── archived_plan.0.12.x.md       # 实现计划归档 v0.12.x（含限购信息接入与持仓展示面设计）
 │   │   │   ├── archived_review-findings.0.12.x.md # v0.12.x 开发期已修复记录
 │   │   │   ├── awesome-design-md-borrow-candidates-research.md # Web 展示借鉴研究（awesome-design-md 73 份 DESIGN.md 骨架与样板要点 + 我方两面样式差距映射，6 立项 / 5 不采纳）
 │   │   │   ├── gs-quant-borrow-candidates-research.md # gs-quant 借鉴候选研究（高盛量化库剖析，2 立项 / 1 参照 / 10 不采纳）
@@ -1511,11 +1511,11 @@ investor-util/
 │   │   │   ├── financial-indicator-source/ #   基本面数据源主备与财务指标提取设计归档
 │   │   │   │   └── financial-indicator-source-design.md # 标准字段契约/全文解析支路/真实估值分位(TTM)/底座门禁/LLM 注入
 │   │   │   ├── report-followup-qa/ #   报告对话式追问设计归档（qa 独立子包设计）
-│   │   │   │   └── report-followup-qa-design.md # 报告对话式追问设计定稿（上下文从报告 HTML 提取/会话服务/报告页区块/TUI [Q] 入口/转正路径，阶段 0-4 已完成）
+│   │   │   │   └── report-followup-qa-design.md # 报告对话式追问设计（上下文从报告 HTML 提取/会话服务/报告页区块/TUI [Q] 入口/转正路径）
 │   └── plan/                          #   中间设计文件（在办设计文档，扁平存放）；完成后随完成态移入对应版本的归档子目录
 │       ├── jev-news-correlation-evaluation.md # 评测方案（三方对照：关键词/现网生成/Jev；预注册阈值与 go-no-go 判定）
 │       ├── jev-news-correlation-design.md # 设计草案（独立于对话链的类型化判定通道/模板理由/降级矩阵）
-│       ├── decision-reflection-shadow-design.md # 决策跨期反思闭环设计（Vibe 影子账户参照/转正路径，观察中）
+│       ├── decision-reflection-shadow-design.md # 决策跨期反思闭环设计（Vibe 影子账户参照/转正路径）
 │       └── web-browser-verification.md # Web 浏览器验证方法与实测结论（五类 37 断言实测 + 人工步骤 + 复验清单，人工验收验证载体）
 │
 ├── CLAUDE.md                         # AI 编程助手指引
