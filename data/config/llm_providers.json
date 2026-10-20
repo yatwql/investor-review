@@ -1,7 +1,7 @@
 {
-  // LLM Provider 多链配置（顺序即 priority 升序）
-  // 主：DeepSeek（按量付费端点）
-  // 备：Kimi K3（OpenCode Go 订阅中转，Anthropic 兼容端点；api_key 在 llm_key.json 的
+  // LLM Provider 多链配置（链序按 priority 升序，数值小者靠前，与数组项顺序无关）
+  // 线路：DeepSeek（按量付费端点）
+  // 线路：Kimi K3（OpenCode Go 订阅中转，Anthropic 兼容端点；api_key 在 llm_key.json 的
   //     kimi-opencode-go 块，未填时该条目轮空失败不影响主源）
 
   "strategy": "priority",
@@ -11,17 +11,19 @@
       "name": "deepseek-main",
       "provider": "claude",
       "credentials_ref": "deepseek-main",
-      "priority": 20,
+      "priority": 10,
       "timeout": 120
     },
     {
       "name": "opencode-go",
       "provider": "claude",
       "credentials_ref": "opencode-go",
-      "priority": 30,
+      "priority": 20,
       "timeout": 120,
-      // 订阅制端点收紧节流（与按量端点放开相对）：最小间隔 5s + 在途并发 1
-      "pacing": { "min_interval": 5, "max_concurrency": 1 }
+      "pacing": {
+        "min_interval": 5,
+        "max_concurrency": 1
+      }
     }
   ]
 }
