@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from collections.abc import Callable, Collection
 
@@ -143,6 +144,31 @@ MODES: dict[str, dict] = {
 }
 
 
+def default_jobs() -> int:
+    """多档采集自适应并行度：4 核+ 取 2；弱机、缺核信息或核数采集异常一律取 1（保守不超订）。"""
+    try:
+        cpu = os.cpu_count()
+    except Exception:  # 采集失败按弱机处理（用户口径：异常退 1，不并行）
+        cpu = None
+    return 2 if (cpu or 0) >= 4 else 1
+
+
+def resolve_jobs(cli_value: int | None) -> int:
+    """并行度解析：CLI ``--jobs`` > ``TEST_RUNNER_JOBS`` 环境变量 > ``default_jobs()`` 自适应。
+
+    环境变量非整数时忽略并提示；非正数钳制为 1。
+    """
+    if cli_value is not None:
+        return max(1, cli_value)
+    raw = os.environ.get("TEST_RUNNER_JOBS", "").strip()
+    if raw:
+        try:
+            return max(1, int(raw))
+        except ValueError:
+            print(f"[!] TEST_RUNNER_JOBS={raw!r} 非整数，忽略并按自适应并行度")
+    return default_jobs()
+
+
 def mode_marker_expr(mode: str) -> str:
     """模式的 pytest `-m` 表达式（顶层 ``marker`` 缺省时回落到首个阶段的 marker）。
 
@@ -205,7 +231,7 @@ _HELP_TEXT = """测试驱动脚本 — 统一运行 pytest 并输出结构化 HT
   python scripts/test-runner.py --coverage               # 全量 + 覆盖率报告
   python scripts/test-runner.py --mode bench --machine-info  # 跨机器耗时采集（环境 + 各模式实测表格）
   python scripts/test-runner.py --mode bench --update-docs   # 采集并自动回填环境耗时对照表
-  python scripts/test-runner.py --jobs 4            # 多模式并行度（默认 1 串行，N>1 才并行；单模式忽略，环境表记「采集并行度」）
+  python scripts/test-runner.py --jobs 4            # 多模式并行度（优先级 CLI > TEST_RUNNER_JOBS 环境变量 > 自适应：4 核+ 为 2、弱机/采集失败为 1；单模式忽略）
   python scripts/test-runner.py --help                   # 本帮助
 
 模式说明:
