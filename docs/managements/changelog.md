@@ -9,6 +9,9 @@
 
 ## [0.13.11-dev] - 开发中（未发布）
 
+### Added
+
+- `check-doc-drift` 新增第二十项检查「迁档占位↔归档节」：review-findings 每个「已随 vX.Y.Z 发布迁入」占位，对应 `archived_review-findings.{X.Y}.x.md` 必须存在含该版本号的二级标题归档节——占位已写、归档正文缺失（发布归档迁移只删不写）即当场报出；doc-drift 项目清单五处文档同步（自审 rf-756）
 
 （本次发布内容见下方归档索引）
 

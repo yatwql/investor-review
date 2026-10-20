@@ -6,7 +6,7 @@
 逐条比对，使漂移在提交前暴露（与 check-doc-traces 的「历史痕迹」检查互补：
 那边管「不该写的内容」，这边管「写了但与实现不符的内容」）。
 
-十九项检查（权威源 → 受检文档）：
+二十项检查（权威源 → 受检文档）：
   1.  报告章节表        core/report_section_registry.py `_REPORT_SECTION_DEFAULT` → manuals/reports-instruction.md
   2.  章节数量断言      同上（`页签编号 1~N` / `默认顺序（N 项` / `返回 result（N 项` / `N 个报告章节`）→ 全库文档
   3.  功能开关表        config/features.py `feature_switch_registry`    → manuals/how-to-config.md
@@ -27,12 +27,13 @@
   18. 手册菜单块一致性  双手册主菜单 code block（键集合/标签头）→ tui/tui_menu.py MENU_ITEMS；
       全文档「返回主菜单」行键=0 不变量（返回键全局统一，结构化行校验/prose 豁免）
   19. 需求菜单表        requirements.md §3.2 菜单表（键集合/分组标题/组内顺序）→ tui/tui_menu.py MENU_ITEMS + MENU_GROUPS（历史漂移：组重排未跟、M/Q 整行缺失、缓存编号错）
+  20. 迁档占位↔归档节    review-findings「已随 vX.Y.Z 发布迁入」占位 ↔ archived_review-findings.{X.Y}.x.md 含该版本二级标题归档节（防占位已写、归档正文缺失）
 
 按设计豁免的历史记录文档：`changelog.md` / `review-findings.md`（会如实引用旧数字作为变更记录）
 与 `docs/archive/**`（版本快照）不参与第 2/4/5 项扫描。
 
 用法：
-  python scripts/check-doc-drift.py                  # 十九项全查
+  python scripts/check-doc-drift.py                  # 二十项全查
   python scripts/check-doc-drift.py -v               # 详细输出（打印解析明细）
   python scripts/check-doc-drift.py --ci             # CI 模式：仅输出 文件:描述，退出码 2；
                                                       结论缓存：全集输入与逻辑指纹未变时逐字回放
@@ -157,6 +158,7 @@ from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc
     _PLAN_DONE_HEADING_ID,
     _ARCHIVE_INDEX_PAIRS,
     check_archive_index,
+    check_migration_placeholders,
     audit_management_partitions,
     check_management_partitions,
     _THINKING_MANUAL,
@@ -199,6 +201,7 @@ def run_checks(with_test_count: bool = False, docs: dict | None = None) -> list[
     findings += check_dir_tree(docs[_FOLDERS_MD])
     findings += check_chain_table(docs[_RELIABILITY_MD])
     findings += check_archive_index()
+    findings += check_migration_placeholders()
     findings += check_management_partitions()
     findings += check_thinking_support_matrix(docs.get(_THINKING_MANUAL))
     findings += check_guard_parity()
@@ -257,7 +260,7 @@ def _run_checks_phase(args: argparse.Namespace) -> int:
 
     return report(
         findings,
-        "[OK] 文档与实现一致性校验通过（章节/开关/默认值/面板编号/目录树/统计表/归档索引/分区纪律/Thinking 支持矩阵/章节-区块矩阵/手册菜单块均与代码一致）",
+        "[OK] 文档与实现一致性校验通过（章节/开关/默认值/面板编号/目录树/统计表/归档索引/分区纪律/占位归档节/Thinking 支持矩阵/章节-区块矩阵/手册菜单块均与代码一致）",
         ci=args.ci,
         fail_message="[!] 发现 {n} 处文档与实现不一致，须修正后提交",
     )
@@ -265,7 +268,7 @@ def _run_checks_phase(args: argparse.Namespace) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="校验文档中的章节/开关/默认值/目录树/统计断言/归档索引/分区纪律/Thinking 支持矩阵/章节-区块矩阵/手册菜单块与代码、配置文件、文件系统的一致性",
+        description="校验文档中的章节/开关/默认值/目录树/统计断言/归档索引/分区纪律/占位归档节/Thinking 支持矩阵/章节-区块矩阵/手册菜单块与代码、配置文件、文件系统的一致性",
     )
     add_common_args(parser)
     parser.add_argument(

@@ -74,6 +74,7 @@ from _doc_drift._ledger import (  # noqa: F401
     _PLAN_DONE_HEADING_ID,
     _ARCHIVE_INDEX_PAIRS,
     check_archive_index,
+    check_migration_placeholders,
     audit_management_partitions,
     check_management_partitions,
     _THINKING_MANUAL,

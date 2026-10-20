@@ -28,6 +28,9 @@ _CHANGELOG_HEADER = re.compile(r"^## \[([^\]]+)\]", re.M)
 _RF_ROW_ID = re.compile(r"^\|\s*\*\*(rf-\d+)\*\*", re.M)
 
 
+_MIGRATION_PLACEHOLDER = re.compile(r"已随\s*v(\d+\.\d+\.\d+)\s*发布迁入")
+
+
 _PLAN_HEADING_ID = re.compile(r"^\s*#{2,4}\s*(?:🔲|✅)\s*`?(plan-\d+)", re.M)
 
 
@@ -241,5 +244,36 @@ def check_thinking_support_matrix(doc_text: str | None = None) -> list[str]:
             findings.append(
                 f"{rel(_THINKING_MANUAL)}: 默认开思考族 `{family}` 缺少「默认开思考」提示"
                 "（该族未传思考参数会自动思考，须告知用户）"
+            )
+    return findings
+
+
+def check_migration_placeholders(review_findings: str | None = None, archive_root: Path | None = None) -> list[str]:
+    """迁档占位↔归档节断言：台账每个「已随 vX.Y.Z 发布迁入」占位，对应归档文件须含该版本二级标题（``## `` 开头）归档节。
+
+    防「占位已写、归档正文缺失」类脱钩——占位声明与归档正文两动作无一致性校验时，
+    只删不写会静默通过（占位照写、归档头部照声明覆盖）。``review_findings`` /
+    ``archive_root`` 供用例直测；None 时读真实台账与归档目录。
+    """
+    text = review_findings if review_findings is not None else _REVIEW_FINDINGS_MD.read_text(encoding="utf-8")
+    root = archive_root if archive_root is not None else REPO_ROOT / "docs" / "archive"
+    findings: list[str] = []
+    for version in sorted(set(_MIGRATION_PLACEHOLDER.findall(text))):
+        major_minor = ".".join(version.split(".")[:2])
+        archive = root / f"v{major_minor}.x" / f"archived_review-findings.{major_minor}.x.md"
+        if not archive.exists():
+            findings.append(
+                f"{rel(_REVIEW_FINDINGS_MD)}: 占位「已随 v{version} 发布迁入」的归档文件 {rel(archive)} 不存在"
+            )
+            continue
+        headings = [
+            line
+            for line in archive.read_text(encoding="utf-8").splitlines()
+            if line.startswith("## ") and version in line
+        ]
+        if not headings:
+            findings.append(
+                f"{rel(_REVIEW_FINDINGS_MD)}: 占位「已随 v{version} 发布迁入」在 {rel(archive)}"
+                " 无对应版本归档节——占位已写、归档正文缺失（发布归档迁移须同步写入归档节）"
             )
     return findings

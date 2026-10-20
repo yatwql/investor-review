@@ -12,6 +12,7 @@
   - 目录树解析（按缩进还原仓库相对路径）
   - 项目统计表比对（文件数 / 行数）
   - 归档索引完整性（管理文档 ↔ `docs/archive/` 双向对齐）
+  - 迁档占位↔归档节（「已随 vX.Y.Z 发布迁入」占位 ↔ 归档文件含该版本二级标题节；缺节/缺文件报出）
   - 管理文档分区纪律（未完成/已解决/已归档错置、现行 changelog 只允许开发段头）
   - 章节-区块矩阵（technical.md §4.22：文档行 ↔ 区块注册表逐列 / 键集双向 / 双端实现提取集合三向对账）
   - 手册主菜单 code block ↔ MENU_ITEMS（键集合/标签头/多列与光标前缀解析/无块报错）
@@ -769,6 +770,62 @@ class TestMenuBlockConsistency:
         p = tmp_path / "faq.md"
         findings = drift.check_menu_blocks({p: "# 无菜单块\n\n普通段落。\n"})
         assert any("未找到主菜单 code block" in f for f in findings)
+
+
+class TestMigrationPlaceholders:
+    """迁档占位↔归档节：占位声明与归档文件对应版本二级标题节的一致性。"""
+
+    def test_real_repo_passes(self, drift):
+        """真实仓库当前占位与归档节一致（结构关系断言，不写死版本清单）。"""
+        assert drift.check_migration_placeholders() == []
+
+    def test_no_placeholder_no_findings(self, drift, tmp_path):
+        """台账无占位 → 无 finding（占位是断言的触发前提）。"""
+        assert drift.check_migration_placeholders("无占位文本", archive_root=tmp_path) == []
+
+    def test_reports_placeholder_without_version_section(self, drift, tmp_path):
+        """占位存在但归档文件缺该版本二级标题节 → 报出（占位已写、归档正文缺失）。"""
+        archive_dir = tmp_path / "v9.9.x"
+        archive_dir.mkdir()
+        (archive_dir / "archived_review-findings.9.9.x.md").write_text(
+            "## 开发期已修复（9.8-dev）\n\n内容\n", encoding="utf-8"
+        )
+        findings = drift.check_migration_placeholders(
+            "（本版开发期已修复项已随 v9.9.9 发布迁入上方归档档案）", archive_root=tmp_path
+        )
+        assert any("v9.9.9" in f and "无对应版本归档节" in f for f in findings)
+
+    def test_accepts_version_section(self, drift, tmp_path):
+        """归档节标题含该版本（v 前缀式）→ 通过。"""
+        archive_dir = tmp_path / "v9.9.x"
+        archive_dir.mkdir()
+        (archive_dir / "archived_review-findings.9.9.x.md").write_text(
+            "## v9.9.9 开发期已修复（2026-10-20）\n\n- **rf-x**：条目\n", encoding="utf-8"
+        )
+        assert drift.check_migration_placeholders("已随 v9.9.9 发布迁入", archive_root=tmp_path) == []
+
+    def test_accepts_legacy_dev_heading(self, drift, tmp_path):
+        """旧式节标题（`## 开发期已修复（X.Y.Z-dev）`）同样视为该版本归档节。"""
+        archive_dir = tmp_path / "v9.9.x"
+        archive_dir.mkdir()
+        (archive_dir / "archived_review-findings.9.9.x.md").write_text(
+            "## 开发期已修复（9.9.9-dev）\n\n内容\n", encoding="utf-8"
+        )
+        assert drift.check_migration_placeholders("已随 v9.9.9 发布迁入", archive_root=tmp_path) == []
+
+    def test_reports_missing_archive_file(self, drift, tmp_path):
+        """占位存在但对应归档文件不存在 → 报出。"""
+        findings = drift.check_migration_placeholders("已随 v8.8.8 发布迁入", archive_root=tmp_path)
+        assert any("archived_review-findings.8.8.x.md" in f and "不存在" in f for f in findings)
+
+    def test_duplicate_placeholders_single_finding(self, drift, tmp_path):
+        """同一版本多处占位只断言一次（去重后单条 finding）。"""
+        archive_dir = tmp_path / "v9.9.x"
+        archive_dir.mkdir()
+        findings = drift.check_migration_placeholders(
+            "已随 v9.9.9 发布迁入\n已随 v9.9.9 发布迁入", archive_root=tmp_path
+        )
+        assert len(findings) == 1
 
 
 class TestReturnKeyInvariant:
