@@ -11,6 +11,7 @@
 
 ### Fixed
 
+- 需求文档核查修正：R-OUT-12 删除行内重复的「覆盖章节」残留清单（与实现折叠章节全集不一致）、R-LLM-01 触发范围更新为三渠道完整报告口径（原「仅菜单 L」过时）、R-CON-07 补充 R-CCH-08 联网必需模块例外边界
 - `market_hours`：`is_market_open()` 增加进程内分钟级 memo，「市场时段」DEBUG 日志仅在判定结果变化时输出——消除 TUI 常驻轮询下 7 天 12 万行重复 DEBUG（占 app.log 总量 60%）
 - 数据源重试：解析/数据形状类异常与 perf 基准禁网桩不再走传输级退避重试——`core/retry.py` 新增 `is_parse_failure_exception` / `is_deterministic_failure` 判据，`with_connect_retry` / `run_with_timeout` / `tencent` K 线与价格 / `financial_indicator` 多期直连同口径接入（前者是确定性数据缺陷，重试必然重复；后者是设计使然的禁网）
 - `chain_incremental`：历史修正全量刷新增加连续触发冷却——检出重叠达到阈值后判定为源结构性回看，跳过全量刷新沿用按日合并结果；无重叠合并成功即重置计数（消除每运行多拉一次全量 260 天）
