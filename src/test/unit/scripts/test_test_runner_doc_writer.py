@@ -67,6 +67,7 @@ _ENV_LABELS = [
     "Python 版本",
     "并行级别",
     "worker 数",
+    "采集并行度",
     "采集日期",
 ]
 
@@ -90,7 +91,7 @@ _DURATION_MODES = [
 
 
 def _env_table(col2: str = "旧值", header: str = "dragonball（2026-08-04 实测）", col3: str = "未知") -> list[str]:
-    """构造环境属性表（14 数据行；col2 为当前机器列，col3 为历史参考列）。"""
+    """构造环境属性表（逐标签数据行；col2 为当前机器列，col3 为历史参考列）。"""
     lines = [f"| 环境属性 | {header} | 旧慢笔记本（早期标注） |"]
     lines.append("|:---------|:---------------------------|:----------------------|")
     lines.extend(f"| {label} | {col2} | {col3} |" for label in _ENV_LABELS)
@@ -225,11 +226,12 @@ class TestEnvTableUpdate:
         assert "| 操作系统 | Linux | 未知 |" in updated
         assert "| 系统版本 | 6.18.25-x64v3-xanmod1 | 未知 |" in updated
         env_lines = runner_script._extract_table_region(updated, runner_script._DOC_ENV_TABLE_MARKERS)
-        assert len(env_lines) == 16  # 表头 + 分隔行 + 14 数据行
-        # stdout 渲染表同样 14 行（跳过表头）
+        n_labels = len(runner_script._ENV_ATTR_LABELS)
+        assert len(env_lines) == 2 + n_labels  # 表头 + 分隔行 + 逐标签数据行
+        # stdout 渲染表行数同标签集（跳过表头）
         rendered = runner_script._render_env_table(_MACHINE_INFO)
         data_lines = [ln for ln in rendered.splitlines() if ln.startswith("| ")][1:]
-        assert len(data_lines) == 14
+        assert len(data_lines) == n_labels
         assert "| 操作系统 | Linux |" in rendered
         assert "| 系统版本 | 6.18.25-x64v3-xanmod1 |" in rendered
 

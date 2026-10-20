@@ -494,20 +494,73 @@ class TestGate:
 
 
 class TestRefresh:
-    def test_three_steps_in_order(self, rel):
-        runner = FakeRunner()
+    """refresh 条件化：自上一 release tag 起仅文档变更 → 跳过 bench/collect
+    （doc-drift --sync 恒跑）；有程序/测试变更或 --force-refresh → 三步全跑。"""
+
+    _TAG = (["describe"], (0, "v0.13.9", ""))
+    _PROGRAM_CHANGE = (["diff", "--name-only"], (0, "src/python/x.py\n", ""))
+    _DOCS_ONLY = (["diff", "--name-only"], (0, "README.md\ndocs/plan/y.md\n", ""))
+
+    def test_three_steps_in_order_when_program_changed(self, rel):
+        runner = FakeRunner(responses=[self._TAG, self._PROGRAM_CHANGE])
         rc = rel.cmd_refresh(ns(), runner=runner)
         assert rc == 0
-        assert len(runner.calls) == 3
+        steps = runner.calls[3:]  # 前 3 个调用：describe / diff / ls-files
+        assert len(steps) == 3
+        assert any("bench" in p for p in steps[0])
+        assert any("collect-test-coverage" in p for p in steps[1])
+        assert any("check-doc-drift" in p for p in steps[2])
+
+    def test_docs_only_skips_bench_and_collect(self, rel):
+        runner = FakeRunner(responses=[self._TAG, self._DOCS_ONLY])
+        rc = rel.cmd_refresh(ns(), runner=runner)
+        assert rc == 0
+        steps = runner.calls[3:]
+        assert len(steps) == 1  # 仅 sync
+        assert any("check-doc-drift" in p for p in steps[0])
+
+    def test_force_refresh_runs_all_steps(self, rel):
+        runner = FakeRunner()
+        rc = rel.cmd_refresh(ns(force_refresh=True), runner=runner)
+        assert rc == 0
+        assert len(runner.calls) == 3  # 无 git 判定，直接三步
         assert any("bench" in p for p in runner.calls[0])
         assert any("collect-test-coverage" in p for p in runner.calls[1])
-        assert any("check-doc-drift" in p for p in runner.calls[2])
+
+    def test_missing_tag_conservatively_refreshes(self, rel):
+        runner = FakeRunner(responses=[(["describe"], (128, "", "no tag here"))])
+        rc = rel.cmd_refresh(ns(), runner=runner)
+        assert rc == 0
+        steps = runner.calls[1:]
+        assert len(steps) == 3  # 无 tag → 保守全刷
+        assert any("bench" in p for p in steps[0])
+
+    def test_untracked_program_file_triggers_refresh(self, rel):
+        """未跟踪程序文件（git diff 不含）也计入变更 → 必跑。"""
+        runner = FakeRunner(
+            responses=[
+                self._TAG,
+                (["diff", "--name-only"], (0, "README.md\n", "")),
+                (["ls-files", "--others"], (0, "src/python/new_mod.py\n", "")),
+            ]
+        )
+        rc = rel.cmd_refresh(ns(), runner=runner)
+        assert rc == 0
+        steps = runner.calls[3:]
+        assert len(steps) == 3
+        assert any("bench" in p for p in steps[0])
 
     def test_first_step_failure_stops_chain(self, rel):
-        runner = FakeRunner(responses=[(["scripts/test-runner.py"], (5, "", "x"))])
+        runner = FakeRunner(
+            responses=[
+                self._TAG,
+                self._PROGRAM_CHANGE,
+                (["scripts/test-runner.py"], (5, "", "x")),
+            ]
+        )
         rc = rel.cmd_refresh(ns(), runner=runner)
         assert rc == 5
-        assert len(runner.calls) == 1
+        assert len(runner.calls) == 4  # 3 git + 首步即止
 
 
 class _ToolRepoFixture:

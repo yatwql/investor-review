@@ -140,9 +140,11 @@ def _mem_gib_windows() -> float | None:
     return None
 
 
-def _collect_machine_info(parallel_level: str = "medium") -> dict:
+def _collect_machine_info(parallel_level: str = "medium", bench_jobs: int = 1) -> dict:
     """采集机器硬件与环境信息，供耗时对照标注。
 
+    bench_jobs：本次多模式采集并行度（写入环境表「采集并行度」行，
+    使墙钟口径可追溯——jobs>1 的耗时含模式间轻微争抢）。
     各字段尽力采集，失败回退 None；None 在展示时以"未知"占位。
     """
     system = platform.system()
@@ -160,6 +162,7 @@ def _collect_machine_info(parallel_level: str = "medium") -> dict:
         "python_version": platform.python_version(),
         "parallel_level": parallel_level,
         "parallel_workers": _calc_parallel_workers(parallel_level),
+        "bench_jobs": bench_jobs,
         "date": datetime.now().strftime("%Y-%m-%d"),
     }
     if system == "Linux":
@@ -223,6 +226,7 @@ _ENV_ATTR_LABELS: tuple[str, ...] = (
     "Python 版本",
     "并行级别",
     "worker 数",
+    "采集并行度",
     "采集日期",
 )
 
@@ -258,6 +262,8 @@ def _env_value(label: str, info: dict) -> str | None:
         return str(info.get("parallel_level") or "未知")
     if label == "worker 数":
         return str(info.get("parallel_workers") or "未知")
+    if label == "采集并行度":
+        return str(info.get("bench_jobs") or 1)
     if label == "采集日期":
         return info.get("date") or "未知"
     return None
