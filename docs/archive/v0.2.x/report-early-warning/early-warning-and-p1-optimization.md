@@ -257,6 +257,6 @@ def write_early_warning_sheet(ws, early_warnings: dict) -> None:
    - LLM 新闻分析未开启 = 情绪聚合部分显示"开启 LLM 新闻关联分析后可用"
    - 无新闻数据 = 情绪聚合显示"暂无新闻数据"
 5. **优化验证**：
-   - `_sanitize_endpoint` 不再从 `prompts.py` 导入（grep 确认）
+   - `_sanitize_endpoint` 不从 `prompts.py` 导入（grep 确认）
    - `cache.py` 写入逻辑去重（diff 确认）
    - `fetch_market_data` 已委托给 `_fetch_with_fallback`（功能测试通过）

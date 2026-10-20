@@ -580,7 +580,7 @@ def batch_fetch_industry_data(codes: list[str], max_workers: int = 8) -> dict[st
 
 #### 验收标准
 
-- [x] 返回结果与重构前 1:1 一致（41 tests ✅）
+- [x] 返回结果与基线 1:1 一致（41 tests ✅）
 - [x] 缓存优先 + 熔断预检 + 非 A 股过滤 + 重试逻辑全部保留
 - [x] 函数签名不变（`batch_fetch_industry_data(codes, max_workers=8)`）
 

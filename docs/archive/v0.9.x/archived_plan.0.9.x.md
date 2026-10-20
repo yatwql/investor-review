@@ -23,11 +23,11 @@
 - [`plan-portfolio-evolution.md`](portfolio-evolution/plan-portfolio-evolution.md) — plan-6 多快照趋势追踪/组合演进设计（原 `plan-advanced-analysis.md` §3）
 - [`plan-fix-deepseek-thinking-exhaustion.md`](fix-deepseek-thinking/plan-fix-deepseek-thinking-exhaustion.md) — rf-200 DeepSeek thinking 思考耗尽修复设计
 - [`plan-fix-qa-concentration-and-chart-optimization.md`](qa-concentration-chart-optimization/plan-fix-qa-concentration-and-chart-optimization.md) — rf-150 集中度问答输出 + 穿透柱状图区分/布局优化修复设计
-- [`plan-11-dark-mode-plan.md`](html-dark-mode/plan-11-dark-mode-plan.md) — plan-11 HTML 报告暗色模式设计
+- [`dark-mode-plan.md`](html-dark-mode/dark-mode-plan.md) — plan-11 HTML 报告暗色模式设计
 - [`dark-mode-implementation.md`](html-dark-mode/dark-mode-implementation.md) — plan-11 HTML 报告暗色模式实施记录
 
 > 已完成项设计文档均已归档至本目录（2026-08-03）：plan-2/3（`correlation-drawdown/`）、plan-9（`first-run-wizard/`）、plan-5（`whatif-simulation/`）、plan-6（`portfolio-evolution/`）、rf-200（`fix-deepseek-thinking/`）、rf-150（`qa-concentration-chart-optimization/`）、plan-11（`html-dark-mode/`）。plan-16（TOC）/ plan-15（组合演进可选配置）无独立设计文档（直接实现），不涉及归档。
-> 未完成项（plan-4 已放弃 / plan-8/10）：plan-4 放弃设计文档已归档至 `abandoned-design/`（原 `plan-advanced-analysis.md` 更名 `plan-4-brinson-attribution-abandoned.md`）；plan-8/10 设计文档保留在 `docs/plan/plan-web-ui.md`；`plan-engineering.md`（rf-1 已随 v0.8.x 归档，文件为 stub）。
+> 未完成项（plan-4 已放弃 / plan-8/10）：plan-4 放弃设计文档已归档至 `abandoned-design/`（原 `plan-advanced-analysis.md` 更名 `brinson-attribution-abandoned.md`）；plan-8/10 设计文档保留在 `docs/plan/plan-web-ui.md`；`plan-engineering.md`（rf-1 已随 v0.8.x 归档，文件为 stub）。
 
 ## v0.9.x 已完成项
 

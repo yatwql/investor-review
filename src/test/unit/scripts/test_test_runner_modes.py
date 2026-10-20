@@ -23,6 +23,52 @@ pytestmark = [pytest.mark.unit]
 
 
 @pytest.mark.unit_scripts
+def test_default_jobs_adapts_to_cpu(monkeypatch):
+    """默认并行度随核数自适应：4 核+ 取 2，弱机与缺核信息取 1。"""
+    mod = load_script("test-runner.py", module_name="test_runner_default_jobs_probe")
+    os_mod = mod.default_jobs.__globals__["os"]
+    monkeypatch.setattr(os_mod, "cpu_count", lambda: 8)
+    assert mod.default_jobs() == 2
+    monkeypatch.setattr(os_mod, "cpu_count", lambda: 4)
+    assert mod.default_jobs() == 2
+    monkeypatch.setattr(os_mod, "cpu_count", lambda: 2)
+    assert mod.default_jobs() == 1
+    monkeypatch.setattr(os_mod, "cpu_count", lambda: None)
+    assert mod.default_jobs() == 1
+
+
+@pytest.mark.unit_scripts
+def test_default_jobs_cpu_probe_failure_treated_as_weak(monkeypatch):
+    """核数采集异常按弱机处理：自适应退回 1，不并行。"""
+    mod = load_script("test-runner.py", module_name="test_runner_default_jobs_probe")
+
+    def _boom():
+        raise OSError("cpu probe unavailable")
+
+    os_mod = mod.default_jobs.__globals__["os"]
+    monkeypatch.setattr(os_mod, "cpu_count", _boom)
+    assert mod.default_jobs() == 1
+
+
+@pytest.mark.unit_scripts
+def test_resolve_jobs_priority_chain(monkeypatch, capsys):
+    """优先级：CLI > TEST_RUNNER_JOBS 环境变量 > 自适应；非法环境变量忽略并提示，非正数钳 1。"""
+    mod = load_script("test-runner.py", module_name="test_runner_default_jobs_probe")
+    os_mod = mod.resolve_jobs.__globals__["os"]
+    monkeypatch.delenv("TEST_RUNNER_JOBS", raising=False)
+    monkeypatch.setattr(os_mod, "cpu_count", lambda: 2)  # 弱机自适应 = 1
+    assert mod.resolve_jobs(None) == 1
+    monkeypatch.setenv("TEST_RUNNER_JOBS", "3")
+    assert mod.resolve_jobs(None) == 3  # 环境变量生效
+    assert mod.resolve_jobs(5) == 5  # CLI 覆盖环境变量
+    monkeypatch.setenv("TEST_RUNNER_JOBS", "abc")
+    assert mod.resolve_jobs(None) == 1  # 非法值忽略 → 自适应
+    assert "TEST_RUNNER_JOBS" in capsys.readouterr().out  # 提示可见
+    monkeypatch.setenv("TEST_RUNNER_JOBS", "0")
+    assert mod.resolve_jobs(None) == 1  # 非正数钳制 1
+
+
+@pytest.mark.unit_scripts
 class TestDevVerifyPreflightDedup:
     """dev-verify preflight 只允许轻量编号快检（与 pre-commit 钩子去重）。"""
 

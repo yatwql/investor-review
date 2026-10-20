@@ -33,7 +33,7 @@
 | 原则 | 含义 | 验收标准 |
 |:-----|:------|:---------|
 | **实验性** | 缺省关闭，显式启用 | features.json 所有新 Flag 默认 false |
-| **非侵入** | 启用模式下，现有功能 0 行为变更 | 修改前/后的 basic/both/full 三路径 diff 仅新增项变动 |
+| **非侵入** | 启用模式下，现有功能 0 行为变更 | 改动前/后的 basic/both/full 三路径 diff 仅新增项变动 |
 | **可回退** | 每轮迭代可独立上线/回退 | 每轮有独立的 feature flag 开关 |
 | **Token 不膨胀** | 启用辩论模式时总 token ≤ 关闭模式时的 3 倍 | 单次 LLM 调用 ≤ 显式配置的 max_tokens |
 | **降级不打断** | 辩论模式中部分模块失败不影响报告生成 | 遵循 C6 降级体系 |
@@ -357,7 +357,7 @@ Mode 3: 集中度反问引导（Concentration Q&A）
   
   **synthesis temperature 覆盖**：synthesis 调用前读取 `get_llm_config()["debate"]["mode_1_procon"]["synthesis_temperature"]`（缺省 0.5），覆盖 expert_review 默认 temperature=0.8。pro/con 调用保留 expert_review 的原始 temperature 配置。
   
-  **max_tokens 修正**：不再强行减半。新增 `debate.mode_1_procon.per_call_max_tokens` 配置项，默认 null 表示使用 expert_review 的完整 max_tokens 值。
+  **max_tokens 修正**：不强行减半。新增 `debate.mode_1_procon.per_call_max_tokens` 配置项，默认 null 表示使用 expert_review 的完整 max_tokens 值。
   
   **C4 会话级缓存**：`generate_debate_procon()` 接受可选的 `session_cache` 参数（dict），同 session 内对相同 fingerprint 的白脸/黑脸结果直接返回缓存值，避免重复 LLM 调用。
   ⚠ 线程安全：session_cache 的所有读写操作必须用 `threading.Lock` 包裹——`generate_all_llm()` 使用 ThreadPoolExecutor，多个 worker 可能同时读写 session_cache。建议在 `generate_debate_procon()` 内部独立加锁（声明 `_cache_lock = threading.Lock()` 作为函数内部变量），不依赖调用方传入锁。
@@ -370,7 +370,7 @@ Mode 3: 集中度反问引导（Concentration Q&A）
 - **文件变更**: `src/python/llm/generators.py`、`src/python/llm/skeleton.py`、`src/python/llm/__init__.py`
 - **依赖**: I-02（Prompt 模板就绪）、I-01（配置读取就绪，用于 per_call_max_tokens）
 - **风险**: 中。
-  - skeleton.py 修改可能影响现有 5 个 LLM 模块 → **缓解**：`system_prompt` 参数默认 None，走原路径，修改前补回归测试
+  - skeleton.py 修改可能影响现有 5 个 LLM 模块 → **缓解**：`system_prompt` 参数默认 None，走原路径，改动前补回归测试
   - 三次顺序调用增加 wall-clock → **缓解**：白脸/黑脸各限制 max_tokens，合成阶段配置独立 timeout
 - **回退**: `system_prompt_override` 参数不影响默认行为（None 时原路径）；debate 函数不注册即不启用
 - **验收标准**:
@@ -379,7 +379,7 @@ Mode 3: 集中度反问引导（Concentration Q&A）
   3. pro 失败时返回 `(None, None, None)`，调用方回退普通模式
   4. `_filter_hallucinated_codes()` 移除所有内容时（全部虚构）返回 `(None, None, None)`（回退普通模式）
   5. `_filter_hallucinated_codes()` 正确移除虚构代码并日志 WARNING，且合法持仓代码不被移除
-  6. skeleton.py 的 `system_prompt` 参数默认 None 时，现有 5 个 LLM 模块的调用路径零变更（先记录修改前 test_skeleton.py 基线 pass，修改后对比无差异）
+  6. skeleton.py 的 `system_prompt` 参数默认 None 时，现有 5 个 LLM 模块的调用路径零变更（先记录改动前 test_skeleton.py 基线 pass，改动后对比无差异）
   7. 运行 `python -m pytest src/test/unit/llm/test_debate_generators.py -x --tb=short -q`（新增文件）全部通过
   8. 运行 `python -m pytest src/test/unit/llm/test_skeleton.py -x --tb=short -q` 全部通过（保障 skeleton 零行为变更）
 - **K.O. 条件**: 验收标准 1、4、6 任一失败 → 不可进入下一轮
@@ -544,7 +544,7 @@ _generate_all_llm() 内部流程扩展：
 - **依赖**: I-03（Mode 1 生成函数）、I-04（Mode 2 配置）、I-05（Mode 3 QA 片段）
 - **风险**: 高。核心编排修改
   - **缓解**: 所有模式在 `is_feature_enabled()` 为 false 时零代码路径变更
-  - **缓解**: 修改前拍一份 `_MODULE_FNS` 确认现有 5 个模块的注册不受影响
+  - **缓解**: 改动前拍一份 `_MODULE_FNS` 确认现有 5 个模块的注册不受影响
 - **回退**: 恢复 `_MODULE_FNS` 的 `expert_review` 条目（删除模式路由逻辑）
 - **验收标准**:
   1. 所有 Feature Flag 为 false → `generate_all_llm()` 在 mock LLM 下对相同输入输出字符串 diff 为空（换行符可接受）
@@ -553,14 +553,14 @@ _generate_all_llm() 内部流程扩展：
   4. 仅 M3 启用 + 高集中度持仓 → 输出包含"### 思考"段落
   5. M1 启用 + synthesis 返回 None → WARNING 日志 + 结果=普通 expert_review
   6. M1 启用 + synthesis 超时 → 结果=pro+con 拼接，日志 WARNING
-  7. `include_debate_info=False` 时返回值长度=8，与修改前完全一致（mock 下字符串 diff 为空）
+  7. `include_debate_info=False` 时返回值长度=8，与改动前完全一致（mock 下字符串 diff 为空）
   8. 运行 `python scripts/test_runner.py --mode dev-verify` 通过（**仅 LLM 管线相关测试失败阻断**，非 LLM 测试失败 SKIP 不影响本迭代）
 - **K.O. 条件**: 验收标准 1（向后兼容失败）或 8（测试门禁失败）→ 不可进入下一轮
 - **测试范围说明**: 
   - 本轮的 `dev-verify` 是核心验证——确认现有 5 个模块的编排不受影响
   - 之后每轮都要过 `dev-verify` 才能进入
     
-    原因：`generators_orchestrator.py` 是 5 个 LLM 模块的共同编排入口，修改后必须验证所有模块的功能完整性。
+    原因：`generators_orchestrator.py` 是 5 个 LLM 模块的共同编排入口，改动后必须验证所有模块的功能完整性。
 - **C11 测试标记**: `@pytest.mark.integration_llm`
   - ⚠ **I-06 模式路由测试**：新增 `test_debate_routing.py` 单元测试，专门覆盖 `_MODULE_FNS["expert_review"]` 替换/回退逻辑（见 I-10 测试文件清单）
 - **C13 测试隔离**: 必须 mock 所有 LLM 调用
@@ -647,7 +647,7 @@ _generate_all_llm() 内部流程扩展：
   在 LLM API 用量页（包括 HTML 和 Excel）中标识辩论模式状态：
   
   **HTML 汇总页（`report_template.html` sec-llm_usage）**：
-  - 在"各模块明细"表格的 `expert_review` 行，状态列不再仅显示"成功"/"缓存"，而是显示 `"🧪 辩论模式"` 或 `"🧪 实验模式"`（与 A 段标签逻辑一致）
+  - 在"各模块明细"表格的 `expert_review` 行，状态列不仅显示"成功"/"缓存"，而是显示 `"🧪 辩论模式"` 或 `"🧪 实验模式"`（与 A 段标签逻辑一致）
   - 在汇总数据区（`kv-table`）底部增加一行：`<tr><td>实验模式</td><td>辩论模式/条件推理/反问引导</td></tr>`
 
   **llm_module_info.py 修改（统一入口）**：
@@ -675,7 +675,7 @@ _generate_all_llm() 内部流程扩展：
 - **风险**: 低。仅在辩论模式启用时影响渲染路径；普通模式通过 `debate_mode_label is None` 走完全相同的原路径
 - **回退**: 注释掉 `debate_section` 宏和实验模式 badge，复用 `llm_content` 渲染
 - **验收标准**:
-  1. 普通模式（所有 Flag 关闭）→ HTML 报告在 mock LLM 下与修改前 diff 为空（仅换行符可接受）
+  1. 普通模式（所有 Flag 关闭）→ HTML 报告在 mock LLM 下与改动前 diff 为空（仅换行符可接受）
   2. 仅 M1 启用 → expert_review 标题旁显示"🧪 辩论模式"橙色标记
   3. 仅 M2 或 M3 启用 → expert_review 标题旁显示"🧪 实验模式"橙色标记
   4. 辩论模式 → HTML 中 expert_review 区块显示"白脸观点"和"黑脸观点"两个子区块，白脸绿色调、黑脸红色调
@@ -796,7 +796,7 @@ _generate_all_llm() 内部流程扩展：
   4. `conftest.py` 不新增 marker（复用已有 `unit_llm`/`integration`/`edge` marker）
   5. `test_debate_edge.py` 中所有用例标记 `@pytest.mark.edge`
   6. 边缘文件与普通文件分离且在同一目录下和平共存
-- **K.O. 条件**: 验收标准 1（regression 门禁不通过）→ 必须修复后才能提交
+- **K.O. 条件**: 验收标准 1（regression 门禁不通过）→ 必须闭环后才能提交
 - **测试范围说明**: 
   - `regression` = 核心场景快速验证（~10min），`verify` = 场景+核心模块（~8min）
   - 先跑 `regression`，通过后再跑一次 `verify`（为后续合入 master 做准备）

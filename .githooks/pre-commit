@@ -4,11 +4,13 @@
 # 结构（设计意图与质量兜底见文末「分域原则」）：
 #   1) 无读写竞态守护先行后台启动——快集（code-traces / task-numbering /
 #      semantic-index / requirement-trace）+ py 域（ruff 探针 + file-length）+
-#      测试域 test-redundancy，它们不读 folders.md，与第 2 步 doc-drift 串行段并行执行。
-#   2) check-doc-drift 串行段——唯一会写文件的守护（涉及 docs/managements/
-#      或 src/test/ 时 --sync 回写 folders.md 并 git add），必须先完成。
+#      测试域 test-redundancy，它们不读 folders.md，与第 2 步 doc-drift 段并行执行。
+#   2) check-doc-drift——涉及 docs/managements/ 或 src/test/ 时为 --sync 写路径
+#      （回写 folders.md 并 git add）串行先行；其余提交纯 --ci 校验，无写竞态
+#      改为后台，与第 1 步并行（结论缓存未变时回放秒过）。
 #   3) 读 folders.md 的守护（version-consistency + doc 域 doc-traces/doc-links）
-#      在 doc-drift 完成后启动，避免 --sync 写读竞态；随后统一 wait。
+#      在 doc-drift 串行段（--sync 场景）完成后启动，避免写读竞态；--ci 场景
+#      folders 未被写、无依赖；随后统一 wait。
 #   任一 finding 即中止提交。
 #
 # 分域原则（质量 × 时间平衡）：本地分域只省「结果不可能变化」的重复触发；CI guards
@@ -105,21 +107,22 @@ if in_changed '^src/test/|scripts/check-test-redundancy\.py|scripts/_checklib\.p
     run_bg check-test-redundancy scripts/check-test-redundancy.py --ci
 fi
 
-# ── 2) 统计快照同步 + 文档漂移（串行先行：涉及 managements/ 或 src/test/ 时
-#      --sync 回写并由脚本自行 git add；其余提交纯 --ci 校验，README/手册漂移同样拦截）
+# ── 2) 统计快照同步 + 文档漂移 ──
+#      --sync 写路径（涉及 managements/src/test）串行先行：回写并 git add 后
+#      段 3 才能安全读 folders.md；其余提交纯 --ci 校验（README/手册漂移同样
+#      拦截）无写竞态 → 后台与段 1 并行，统一 wait 后回放
 if printf '%s\n' "$CHANGED" | grep -qE '^docs/managements/|^src/test/'; then
     echo "[..] pre-commit: 统计快照同步 + 文档漂移（check-doc-drift --sync）"
     if ! "$PY_CMD" scripts/check-doc-drift.py --sync --ci; then
         GUARD_FAILED="$GUARD_FAILED check-doc-drift"
     fi
 else
-    echo "[..] pre-commit: 文档与实现一致性（check-doc-drift）"
-    if ! "$PY_CMD" scripts/check-doc-drift.py --ci; then
-        GUARD_FAILED="$GUARD_FAILED check-doc-drift"
-    fi
+    echo "[..] pre-commit: 文档与实现一致性（check-doc-drift --ci，与快集并行）"
+    run_bg check-doc-drift scripts/check-doc-drift.py --ci
 fi
 
-# ── 3) 读 folders.md 的守护：doc-drift 完成后启动（拿 --sync 回写后的最新内容）──
+# ── 3) 读 folders.md 的守护：--sync 场景在串行段完成后启动（拿回写后的最新
+#      内容）；--ci 场景 folders 未被写、无依赖，同样后台并行 ──
 echo "[..] pre-commit: 版本一致性守护"
 run_bg check-version-consistency scripts/check-version-consistency.py --ci
 if in_changed '\.md$'; then
@@ -136,6 +139,8 @@ show_guard check-code-traces
 show_guard check-task-numbering
 show_guard check-semantic-index
 show_guard check-requirement-trace
+# --ci 场景的后台 doc-drift（--sync 场景为同步执行，无 rc 文件此处自动跳过）
+show_guard check-doc-drift
 show_guard check-version-consistency
 show_guard check-doc-traces
 show_guard check-doc-links

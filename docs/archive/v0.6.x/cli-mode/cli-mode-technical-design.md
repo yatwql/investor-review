@@ -643,7 +643,7 @@ def get_cache_stats(reporter: ProgressReporter) -> CacheStats:
 3. `print()` → `reporter.*()`，颜色表格留在 handlers_cache.py
 4. `press_any_key()` 不属于共享层
 5. 线程池在 operations 内部管理，不依赖 handlers_cache._POOL
-6. **★ v2.4 — `clear_by_group` 归属权统一**：`update_basic_cache()` / `update_position_cache()` 内部调用 `clear_by_group()`。TUI 外壳 `_read_holdings_and_clear_cache()` **不再主动清除缓存**，避免双重清除。
+6. **★ v2.4 — `clear_by_group` 归属权统一**：`update_basic_cache()` / `update_position_cache()` 内部调用 `clear_by_group()`。TUI 外壳 `_read_holdings_and_clear_cache()` **不主动清除缓存**，避免双重清除。
 7. **★ v2.4 — `_refresh_common_caches()` 的 print 在 `as_completed` 循环内**，替换为 reporter.* 时需重构循环体：先收集结果→再用 reporter 输出→最后返回结构化数据。
 
 ### 2.3 `cli.py` — argparse 主入口
@@ -878,7 +878,7 @@ def _should_color() -> bool:
 #### 设计决策
 
 **① 日志前缀策略（避免冗余）**
-`logger.py` 的 `_ColoredFormatter` 已输出 `[%(levelname)s]`（如 `[INFO]`, `[WARNING]`, `[ERROR]`），因此 CliProgressReporter 的日志输出**不再加** `[OK]`/`[!]`/`[ERR]`/`[..]` 前缀，避免日志行出现 `[INFO] [OK] ...` 的冗余。verbose stderr 输出保留前缀，因 stderr 无日志等级信息。
+`logger.py` 的 `_ColoredFormatter` 已输出 `[%(levelname)s]`（如 `[INFO]`, `[WARNING]`, `[ERROR]`），因此 CliProgressReporter 的日志输出**不加** `[OK]`/`[!]`/`[ERR]`/`[..]` 前缀，避免日志行出现 `[INFO] [OK] ...` 的冗余。verbose stderr 输出保留前缀，因 stderr 无日志等级信息。
 
 ```python
 # 日志输出（进入日志文件）— 不加前缀
@@ -1238,7 +1238,7 @@ P1 完成后以下接口进入冻结状态，P2 实现不得修改其签名。�
 | `_process_llm_news_futures` | 未在计划中提及 + LLM-only 分支 ~33 行重复代码 | **统一**：`_fetch_llm_and_news()` 封装全部 4 分支 |
 | TUI 专属函数处理 | 未明确标注 orchestrator 禁区 | **追加**：check_network_available / print_llm_session_usage / get_config_cache 列为 TUI-only |
 | `reporter._output_dir` | 伪代码中通过私有属性获取 output_dir | **修正**：output_dir 作为参数传入 |
-| `clear_by_group` 归属 | TUI 外壳 + operations 双重清除 | **统一归 operations**：TUI 外壳不再主动清除 |
+| `clear_by_group` 归属 | TUI 外壳 + operations 双重清除 | **统一归 operations**：TUI 外壳不主动清除 |
 | `ProgressReporter.print_timing_summary()` | 基类无此方法 | **追加**：基类增加空壳方法，子类覆盖 |
 | `init_config(config_path)` | 未分析波及范围 | **分析**：向后兼容，TUI 调用方无需改动 |
 | `_refresh_common_caches` print→reporter | 简单替换描述 | **更正**：print 在 as_completed 循环内，需重构循环体 |

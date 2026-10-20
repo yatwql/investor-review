@@ -65,7 +65,7 @@ CLAUDE.md 语义命名纪律规定：代码标识符（函数/变量/类名）�
 3. **`scripts/check-doc-traces.py`**（一致性，廉价）：CODE 段加 `[A-Za-z]系列`、单字母 `_series` 两条（docs 正文同样禁用任务代号）
 
 4. **文档**（per CLAUDE.md）：
-   - `docs/managements/review-findings.md`：记 rf-208（门禁缺口：任务编号标识符/注释未强制）→ 修复后移入已修复摘要，`rf-next` 递增
+   - `docs/managements/review-findings.md`：记 rf-208（门禁缺口：任务编号标识符/注释未强制）→ 闭环后移入已修复摘要，`rf-next` 递增
    - `docs/managements/changelog.md`：补 rf-208 变更记录
    - `CLAUDE.md` 语义化命名段：补一句「check-code-traces 强制校验标识符+注释任务代号」
 

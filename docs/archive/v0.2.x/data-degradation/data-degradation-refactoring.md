@@ -1294,7 +1294,7 @@ C11 要求 `pytestmark` 模块级变量 + 新 marker 注册到 `conftest.py:pyte
 
 **不可接受债务（必须修复）：**
 1. ⚠️ **C7 注册表遗漏** — "数据源状态"直接写进 Excel/HTML 而不走 registry → 将来改排序/重命名时遗漏。**每引入一个新页签都必须先注册**
-2. ⚠️ **C4 约束过时** — 完成 _ext_memo → registry 迁移后，technical.md 中的约束仍引用 `_ext_memo` 模式，新开发者会困惑
+2. ⚠️ **C4 约束过时** — 完成 _ext_memo → registry 改动后，technical.md 中的约束仍引用 `_ext_memo` 模式，新开发者会困惑
 3. ⚠️ **Round 4 分类逻辑不信任 `classify_holdings`** — 如果 `_generate_details` 自己分类而 `classify_holdings` 被更新但未同步，两者不一致 → 数据丢失
 
 **建议积极处理的债务：**

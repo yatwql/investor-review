@@ -454,7 +454,7 @@ Step A0 ──→ Step A1 ──→ Step A2 ──→ Step A2a ──→ Step A3
                                      Δ ≤ 5 OK? ──→ ⛔ 暂停/改道
 ```
 
-#### Step A0：录制变更前基线
+#### Step A0：录制基线
 
 | 字段 | 值 |
 |:-----|:----|
@@ -503,7 +503,7 @@ Step A0 ──→ Step A1 ──→ Step A2 ──→ Step A2a ──→ Step A3
 | **操作** | (1) 统计 A2 审核清单中标记为 `Δ`（需改 scope）的问题数量<br>(2) **Δ ≤ 5** → ✅ 继续 A3 并行逻辑<br>(3) **Δ > 5** → ⛔ 暂停，输出评估报告：逐一列出需重构的 fixture、预期工作量、推荐方案（彻底重构 / 不完全依赖并行 / 跳过 Phase 1 直接到 Phase 3 增量测试）<br>(4) 决策结果写入 `docs/plan/notes/a5-fixture-gate.md` |
 | **验证** | 决策记录明确（继续/暂停/改道），fixture 评估报告完整 |
 | **预期产出** | commit: "docs: A5 A2a 检查点 — fixture 不兼容 {Δ} 项，决策{继续|暂停|改道}" |
-| **回滚** | 文档仅作记录，无代码影响；可在重构后重新进入 A3 |
+| **回滚** | 文档仅作记录，无代码影响；可在改动后重新进入 A3 |
 
 #### Step A3：test_runner.py 并行逻辑
 
@@ -761,7 +761,7 @@ Week 1                          Week 2
 | A0 | 录制各模式耗时基线（3 次取中位数） | test-coverage.md 数据完整 | `git revert` A0 commit |
 | A1 | pyproject.toml 声明 xdist 依赖 | `pip install -e .` + `pytest -n auto --collect-only` 不报错 | `git revert` A1 commit |
 | A2 | 所有 fixture scope + tmpdir 路径确认并行安全 | `pytest -n 2` 0 failed | 逐条 `git revert` |
-| A2a | fixture 检查点：Δ ≤ 5 才继续 Phase 1 | 决策记录明确（继续/暂停/改道）| 文档回退无代码影响；暂停后可在重构后重新进入 |
+| A2a | fixture 检查点：Δ ≤ 5 才继续 Phase 1 | 决策记录明确（继续/暂停/改道）| 文档回退无代码影响；暂停后可在改动后重新进入 |
 | A3 | `unit`/`verify`/`all` 使用并行；支持 `parallel: N` | 日志含 `-n N`（N = cpu_count//2）；`-n 4` 手动指定有效 | `git revert`；无 xdist 自动降级 |
 | A3b | 并行与单线程结果一致 | F1（并行 failed） = F2（单线程 failed）| 有差异时定位 fixture 修复 |
 | A3c | verify 加速比 ≥ 2.5x 才进拆分 | 决策记录明确（继续/暂停分析）| 暂停分析时提交 profiling 报告后退回决策 |

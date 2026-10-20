@@ -278,12 +278,12 @@ P2 — CLI 实现（基于共享层，不经过 handlers_*）
   4. 均关闭（`:542-547`，~6 行）
   
   `_fetch_llm_and_news()` 内部用 if-elif 覆盖全部 4 分支，消除重复代码。返回统一的 (llm_content, news_data, news_llm_meta, news_ok) 四元组。
-- ★ `_process_llm_news_futures()` 和 LLM-only 分支的 ok/disabled/failed 计数逻辑（`LLM_MODULE_FAILURE` / `FAIL_REASON_DISABLED` / `get_llm_module_name` 判定）统一归入 `_fetch_llm_and_news()`，TUI 外壳不再含此判定
+- ★ `_process_llm_news_futures()` 和 LLM-only 分支的 ok/disabled/failed 计数逻辑（`LLM_MODULE_FAILURE` / `FAIL_REASON_DISABLED` / `get_llm_module_name` 判定）统一归入 `_fetch_llm_and_news()`，TUI 外壳不含此判定
 - ★ `check_network_available()` 出现在 `_prepare_report_data()` 中（handlers_report.py:347），TUI 专属，orchestrator 不调用。orchestrator 的 `prepare_report_data()` 调用 `_generate_details()` 后直接返回
 - ★ `print_llm_session_usage()`（handlers_report.py:549）是 TUI 专属函数（位于 `tui_handlers.py`），CLI 通过 logging 间接记录 LLM 用量。orchestrator 不调用
 - `_prompt_force_llm()` 的 `input()` 留在 TUI 外壳
 - `history_mode="prompt"` 由 TUI 外壳处理
-- S6 完成后，`handlers_report._POOL` 和 `_get_pool()` 不再被任何代码引用（S7 清理）
+- S6 完成后，`handlers_report._POOL` 和 `_get_pool()` 不被任何代码引用（S7 清理）
 
 ```python
 # orchestrator.py — S6 后 prepare_report_data 使用内部池
@@ -496,7 +496,7 @@ grep -rn "get_config_cache\|get_config" src/python/handlers_report.py --include=
 
 #### print→reporter 映射
 
-| 原代码 | 替换后 | 说明 |
+| 原代码 | 改动后 | 说明 |
 |:-------|:-------|:------|
 | `print(f"  [..] 正在获取: ...")` | `reporter.info(f"正在获取: ...")` | TUI 显示 CYAN，CLI 写日志 |
 | `print(f"  [OK] ... 完成")` | `reporter.ok(f"... 完成")` | TUI 显示 GREEN |
@@ -773,7 +773,7 @@ P2 实现时若发现冻结接口需要变更，**不得直接修改**，需按�
 `_core.py` 的 `init_config()` 当前签名 `def init_config() -> None` 无参数（`_core.py:125`）。
 改为 `def init_config(config_path: str | None = None) -> None` 后波及以下调用方：
 
-| 调用方 | 位置 | 当前调用 | 修改后 |
+| 调用方 | 位置 | 当前调用 | 改动后 |
 |:-------|:------|:---------|:-------|
 | `tui_menu.py` 菜单初始化 | `from src.python.config import init_config; init_config()` | 无参数 | 向后兼容：`config_path=None` → 走默认路径 `_config_defaults.get_config_path()` |
 | `handlers_config.py` 配置页签 | 同上 | 无参数 | 同上 |

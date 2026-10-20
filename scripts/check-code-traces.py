@@ -35,7 +35,9 @@ _magic_excludes() / _dash_excludes() / _under_excludes() 行豁免。
 用法：
   python scripts/check-code-traces.py           # 检查全部
   python scripts/check-code-traces.py -v        # 详细输出
-  python scripts/check-code-traces.py --ci      # CI 模式（仅输出 文件名:行号，非零退出码）
+  python scripts/check-code-traces.py --ci      # CI 模式（仅输出 文件名:行号，非零退出码；
+                                                 结论缓存：输入与逻辑指纹未变时逐字回放，
+                                                 按域提交命中省全仓重扫）
 
 退出码：
   0 — 全部通过（无可报痕迹）
@@ -55,11 +57,14 @@ _magic_excludes() / _dash_excludes() / _under_excludes() 行豁免。
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享包（_traces_code / _checklib）
 from _checklib import add_common_args  # noqa: E402
+from _checklib import conclusion_cache_load, conclusion_cache_save  # noqa: E402
 from _checklib import rel as rel_path  # noqa: E402,F401  # 统一相对路径展示（原面 re-export）
 from _traces_code import (  # noqa: E402
     EXCLUDE_LINE,  # noqa: F401
@@ -103,6 +108,78 @@ __all__ = [
 ]
 
 
+def _collect_scan_files() -> list[Path]:
+    """收集扫描面文件清单（与扫描同源；同时作为结论缓存的输入指纹集）。"""
+    supported = {".py", ".js", ".mjs", ".html", ".sh", ".ps1", ".bat", ".cmd"}
+    files: list[Path] = []
+    for scan_dir in SCAN_DIRS:
+        if not scan_dir.exists():
+            continue
+        for fpath in sorted(scan_dir.rglob("*")):
+            if not fpath.is_file() or fpath.suffix.lower() not in supported:
+                continue
+            if fpath.name in ("chart.min.js",):
+                continue
+            files.append(fpath)
+    return files
+
+
+def _scan_all(args: argparse.Namespace) -> int:
+    """全量扫描并打印，返回分级退出码（0/1/2/3，语义见模块 docstring）。"""
+    total_hits = 0
+    high_count = 0
+    code_count = 0
+    low_count = 0
+    summary: dict[str, int] = {}
+
+    for fpath in _collect_scan_files():
+        file_ref = rel_path(fpath)
+        hits = scan_file(fpath, args.verbose)
+        if not hits:
+            continue
+
+        if not args.ci:
+            print(f"\n  {file_ref}")
+
+        for lineno, cat, desc, text in hits:
+            total_hits += 1
+            summary[cat] = summary.get(cat, 0) + 1
+            is_high = cat in ("HIGH", "ORIGIN", "VERSION")
+            if is_high:
+                high_count += 1
+            elif cat in ("CODE", "IDENT", "CHAPTER", "ROUND", "MAGIC", "DASHTASK", "UNDERSCORE"):
+                code_count += 1
+            else:
+                low_count += 1
+
+            if args.ci:
+                print(f"{file_ref}:{lineno} [{cat}] {desc} — {text}")
+            else:
+                marker = "[ERR]" if is_high else "[!]"
+                print(f"    {marker} L{lineno:>4} [{cat}] {desc}")
+                if args.verbose:
+                    print(f"           {text}")
+
+    # ── 汇总输出 ──────────────────────────────────────────────
+    print()
+    if total_hits == 0:
+        print("[OK] 未发现历史变更痕迹，注释干净")
+        return 0
+
+    cat_stats = ", ".join(f"{k}={v}" for k, v in sorted(summary.items()))
+    print(f"[!] 发现 {total_hits} 处可疑痕迹（{cat_stats}）")
+    if high_count > 0:
+        print(f"    {high_count} 处高置信度（HIGH/ORIGIN/VERSION），建议优先审查")
+        return 1
+
+    if code_count > 0:
+        print(f"    {code_count} 处任务编号/章节编号引用（CODE/IDENT/CHAPTER/ROUND），应从注释/标识符中移除")
+        return 2
+
+    print(f"[!] 仅 {low_count} 处 LOW 级别痕迹（TODO/CHANGE/DEPR），建议人工复核")
+    return 3
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="扫描代码注释中的历史变更痕迹",
@@ -112,67 +189,29 @@ def main() -> None:
     add_common_args(parser)
     args = parser.parse_args()
 
-    total_hits = 0
-    high_count = 0
-    code_count = 0
-    low_count = 0
-    summary: dict[str, int] = {}
-
-    supported = {".py", ".js", ".mjs", ".html", ".sh", ".ps1", ".bat", ".cmd"}
-    for scan_dir in SCAN_DIRS:
-        if not scan_dir.exists():
-            continue
-        for fpath in sorted(scan_dir.rglob("*")):
-            if not fpath.is_file() or fpath.suffix.lower() not in supported:
-                continue
-            if fpath.name in ("chart.min.js",):
-                continue
-            file_ref = rel_path(fpath)
-            hits = scan_file(fpath, args.verbose)
-            if not hits:
-                continue
-
-            if not args.ci:
-                print(f"\n  {file_ref}")
-
-            for lineno, cat, desc, text in hits:
-                total_hits += 1
-                summary[cat] = summary.get(cat, 0) + 1
-                is_high = cat in ("HIGH", "ORIGIN", "VERSION")
-                if is_high:
-                    high_count += 1
-                elif cat in ("CODE", "IDENT", "CHAPTER", "ROUND", "MAGIC", "DASHTASK", "UNDERSCORE"):
-                    code_count += 1
-                else:
-                    low_count += 1
-
-                if args.ci:
-                    print(f"{file_ref}:{lineno} [{cat}] {desc} — {text}")
-                else:
-                    marker = "[ERR]" if is_high else "[!]"
-                    print(f"    {marker} L{lineno:>4} [{cat}] {desc}")
-                    if args.verbose:
-                        print(f"           {text}")
-
-    # ── 汇总输出 ──────────────────────────────────────────────
-    print()
-    if total_hits == 0:
-        print("[OK] 未发现历史变更痕迹，注释干净")
-        sys.exit(0)
-
-    cat_stats = ", ".join(f"{k}={v}" for k, v in sorted(summary.items()))
-    print(f"[!] 发现 {total_hits} 处可疑痕迹（{cat_stats}）")
-    if high_count > 0:
-        print(f"    {high_count} 处高置信度（HIGH/ORIGIN/VERSION），建议优先审查")
-        sys.exit(1)
-
-    if code_count > 0:
-        print(f"    {code_count} 处任务编号/章节编号引用（CODE/IDENT/CHAPTER/ROUND），应从注释/标识符中移除")
-        sys.exit(2)
-
-    if low_count > 0:
-        print(f"[!] 仅 {low_count} 处 LOW 级别痕迹（TODO/CHANGE/DEPR），建议人工复核")
-        sys.exit(3)
+    # 结论缓存（仅 --ci）：输入指纹（扫描面全集内容）与逻辑指纹（薄 CLI
+    # 自身 + _traces_code 实现模块）均未变时逐字回放上次输出（通过与发现
+    # 都缓存）——按域提交（只动文档不动源码）时命中，省全仓正则/AST 重扫
+    if args.ci:
+        inputs = _collect_scan_files()
+        logic = [Path(__file__), *sorted((Path(__file__).resolve().parent / "_traces_code").glob("*.py"))]
+        cached = conclusion_cache_load("code_traces", logic, inputs)
+        if cached is not None:
+            print("\n".join(cached["lines"]))
+            sys.exit(int(cached["rc"]))
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = _scan_all(args)
+        out = buf.getvalue()
+        print(out, end="")
+        conclusion_cache_save(
+            "code_traces",
+            logic,
+            inputs,
+            {"findings": [] if rc == 0 else out.splitlines(), "lines": out.splitlines(), "rc": rc},
+        )
+        sys.exit(rc)
+    sys.exit(_scan_all(args))
 
 
 if __name__ == "__main__":

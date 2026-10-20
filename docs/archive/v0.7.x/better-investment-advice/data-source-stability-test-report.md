@@ -31,7 +31,7 @@
 | `RPT_ECONOMY_CPI` / `GDP` / `PMI` | ✅ 成功 | API 本身可用，但无债券收益率报告名 |
 | 其余 25+ 个 bond/yield 相关 report name | ❌ 全部参数配置不对 | |
 
-**结论**：东方财富 datacenter API **不再提供债券收益率数据**，该 API 端点在原规划中为错误假设。
+**结论**：东方财富 datacenter API **不提供债券收益率数据**，该 API 端点在原规划中为错误假设。
 
 ### 1.3 worldgovernmentbonds.com 测试
 

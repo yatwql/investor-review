@@ -236,7 +236,7 @@ akshare 指标源无需凭据；DataSinking 解析支路不新增请求，仅消
 
 | 文件 | 改动 |
 |:--|:--|
-| `src/python/fetcher/financial_indicator.py` | **不需要**：取数编排已由「适配器 + 链路」承担，不再另建模块（避免第二份获取路径） |
+| `src/python/fetcher/financial_indicator.py` | **不需要**：取数编排已由「适配器 + 链路」承担，不另建模块（避免第二份获取路径） |
 | `src/python/providers/akshare_financial.py` | 新增。akshare 财务指标封装（超时保护、字段命名） |
 | `src/python/analysis/financial_indicator_extract.py` | 新增。压平正文 → 标准指标的纯解析层（锚点 + 取值窗口 + 精度模式 + 校验） |
 | `src/test/data/fixtures/` | 新增。上游真实正文夹具（DataSinking 指标章节），供解析层回归 |

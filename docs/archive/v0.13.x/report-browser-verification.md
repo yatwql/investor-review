@@ -44,7 +44,7 @@ node docs/tmp/rf113/run-rf113.mjs
 | 前置 | 说明 | 本次状态 |
 |:-----|:-----|:---------|
 | 生成入口 | 菜单 **L**（HTML 单文件）或 **B**；本次**未生成**，直接使用 `reports/` 下最新报告 `个人投资分析报告.html` | ✅ |
-| `enable_interactive_charts` | `src/python/config/features.py` 常规开关，默认 **True**（Chart.js 交互图；关即回退 Canvas+表格且 HTML 不再单文件自包含） | ✅ 默认开 |
+| `enable_interactive_charts` | `src/python/config/features.py` 常规开关，默认 **True**（Chart.js 交互图；关即回退 Canvas+表格且 HTML 不单文件自包含） | ✅ 默认开 |
 | 调试页 | `src/static/test-chart.html?s=ok\|degraded\|empty\|offline`，注入列表含 `chart-common.js`（rf-159 后 chart-init.js 依赖 `window.ChartCommon`） | ✅ |
 | 图表规模 | 报告共 **10 个 canvas**：核心 6 图 + 组合演进 3 图（evolution_total/hhi/top）+ 调仓回放 1 图（schedule_replay）；回撤图历史 span ≥60 交易日时渲染 | ✅ 10/10 初始化 |
 
@@ -145,18 +145,18 @@ node docs/tmp/rf113/run-rf113.mjs
   - 溢出诊断里的 3203 个「超视口元素」全部是滚动容器内的宽表格节点，属容器内滚动，不产生文档级横向滚动条（以 `scrollWidth<=clientWidth` 为判据）
 - **证据**：`docs/tmp/rf113/results/⑤-report-375px.json`、`screenshots/03-report-375.png`、`03b-report-375-chart.png`、`03c-report-375-line.png`、`03d-report-375-bar.png`
 
-**（b）调试页 `test-chart.html?s=ok` → ✅ 修复后通过（原 ❌ 5.1 不过，根因与修复见 §4 发现 1 / rf-645）**
+**（b）调试页 `test-chart.html?s=ok` → ✅ 闭环后通过（原 ❌ 5.1 不过，根因与修复见 §4 发现 1 / rf-645）**
 
-- **原实测（修复前取证）**：375px 下 `documentElement.scrollWidth **436** > clientWidth **375**`（`body.scrollWidth=420`），出现文档级横向滚动；6 图本身渲染正常（6/6 ok badge）、console error 0。
+- **原实测（首测取证）**：375px 下 `documentElement.scrollWidth **436** > clientWidth **375**`（`body.scrollWidth=420`），出现文档级横向滚动；6 图本身渲染正常（6/6 ok badge）、console error 0。
 - **根因**：调试页 `.grid { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)) }` → 图卡最小 420px + 左右 16px 边距 = 436px，放不进 375px 视口。
 - **影响面**：仅调试页布局，**不涉及报告产物**；rf-113 ⑤ 的验证对象是报告 → ⑤ 按报告判过，调试页问题单列并已登记修复（rf-645）。
-- **修复后复跑**：grid 列下限改 `minmax(min(420px, 100%), 1fr)` 后复跑场景 `⑤-testchart-375px` → **PASS**（375px 无横向滚动）。
+- **闭环后复跑**：grid 列下限改 `minmax(min(420px, 100%), 1fr)` 后复跑场景 `⑤-testchart-375px` → **PASS**（375px 无横向滚动）。
 - **证据**：`docs/tmp/rf113/results/⑤-testchart-375px.json`、`screenshots/02-testchart-375.png`、`02b-testchart-375-chart.png`（截图可见卡片右侧被裁）
 
 ### ⑥ 禁用 Canvas 后 fallback — 自动化实测（表现记录型）+ 人工步骤
 
 - **方法（自动化模拟）**：`Page.addScriptToEvaluateOnNewDocument` 注入 `HTMLCanvasElement.prototype.getContext = () => null`（现代浏览器无「禁用 Canvas」开关时的标准模拟），打开真实报告并展开全部章节，逐条记录实际表现。
-- **实际表现（按实测写，修复后口径复核成立）**：
+- **实际表现（按实测写，闭环后口径复核成立）**：
 
 | 观察点 | 实测结果 |
 |:-------|:---------|
@@ -188,7 +188,7 @@ node docs/tmp/rf113/run-rf113.mjs
 | ⑤ | 移动端 375px 不溢出（A4） | ✅ **通过（报告产物）** | **自动化**：报告 375px `scrollWidth==clientWidth==375` 无横向滚动、10/10 图初始化、轴标签 45° 不重叠、表格容器内滚动不撑破页面。**附带发现**：调试页 `test-chart.html` 375px 自身溢出 61px（`minmax(420px,1fr)`）→ **已修复（rf-645：列下限改 `minmax(min(420px,100%),1fr)`），复跑转 PASS**（§4 发现 1）。`results/⑤-report-375px.json` / `⑤-testchart-375px.json` |
 | ⑥ | 禁用 Canvas 后 fallback（A1） | ⚠️ **实测完成（断言口径已修正）** | **自动化**：原断言「canvas 显示 fallback 文本」**不成立**（文本在 DOM 但不渲染，口径复核）；实际表现 = 0/10 图初始化 + 图表区空白 + **41 张明细表格兜底可读** + 页面其余交互正常 + console 10 条（模拟所致）。6.2 因文本不渲染不适用，浅色兜底可读 ✅。可选人工 DevTools 复核步骤见 §2⑥。`results/⑥-report-no-canvas.json` |
 
-**自动化断言合计**：修复后复跑 **5 场景 PASS**（① / ⑤-testchart（修复后转 PASS）/ ⑤-report / ② / ③）+ 1 场景表现记录（⑥，`pass:false` 为模拟 `getContext→null` 的已知口径，见 §2⑥/记录 3）；**人工余项**：无——六项全部完成（Safari 90+ iPad 抽验 ✅、真实 `Ctrl+P` 分页抽验 ✅、④ 微信真机 4.3 + 4.4 过 / 4.1 豁免）。
+**自动化断言合计**：闭环后复跑 **5 场景 PASS**（① / ⑤-testchart（闭环后转 PASS）/ ⑤-report / ② / ③）+ 1 场景表现记录（⑥，`pass:false` 为模拟 `getContext→null` 的已知口径，见 §2⑥/记录 3）；**人工余项**：无——六项全部完成（Safari 90+ iPad 抽验 ✅、真实 `Ctrl+P` 分页抽验 ✅、④ 微信真机 4.3 + 4.4 过 / 4.1 豁免）。
 
 ---
 

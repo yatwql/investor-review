@@ -75,16 +75,24 @@ def _code_hit(mod, line: str) -> str | None:
     return None
 
 
-def _doc_hit(mod, line: str) -> str | None:
+def _doc_hit(mod, line: str, task_record: bool = False) -> str | None:
     """返回 check-doc-traces 命中的 desc；未命中返回 None。
 
-    对 CHAPTER（章节编号）模式先应用 _is_chapter_excluded 计数/序数豁免，
-    对 ROUND（迭代轮次）模式先应用 _is_round_excluded 计数/运行时豁免，
-    与 scan_file 行为一致（"共 19 章"/"共 12 轮"等计数表述不误报）。
+    与 scan_file 行为一致：对 CHAPTER/ROUND 应用计数/序数豁免；
+    目录树行（│ ├ └ 开头）跳过通用豁免且仅 ARCHIVE 类豁免、STATUS
+    仅在目录树行检出（正文当前状态叙述不检）；NARRATIVE 复盘叙事
+    仅任务记录域检出（task_record=True）。
     """
-    if mod._is_excluded(line):
+    is_tree = bool(mod._TREE_LINE.match(line))
+    if not is_tree and mod._is_excluded(line):
         return None
     for pat, cat, desc in mod._DOC_PATTERNS:
+        if is_tree and cat == "ARCHIVE":
+            continue
+        if cat == "STATUS" and not is_tree:
+            continue
+        if cat == "NARRATIVE" and not task_record:
+            continue
         if cat == "CHAPTER" and mod._is_chapter_excluded(line):
             continue
         if cat == "ROUND" and mod._is_round_excluded(line):

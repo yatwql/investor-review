@@ -65,9 +65,9 @@
 | 影响点 | 位置 | 动作 |
 |:--|:--|:--|
 | 注册表 `type` 值 | `core/registry.py::_REPORT_SECTION_DEFAULT` | `financial_report` 类型**删除**（其唯一使用方为财报摘要条目）；`financial_indicator` 类型名改为 `fundamental_snapshot`；`always` / `fund_deep_analysis` 等**语义未变的类型不改** |
-| board 层映射（Excel 侧） | `report/excel_sheet_factory.py::create_sheets` 的 `board_flags` 字典 | 删除 `"financial_report": enable_financial_report_digest` 项；`"financial_indicator"` 改为 `"fundamental_snapshot"`；合并后财报摘要区块不再走 board 层（改由功能开关在区块渲染层判定） |
+| board 层映射（Excel 侧） | `report/excel_sheet_factory.py::create_sheets` 的 `board_flags` 字典 | 删除 `"financial_report": enable_financial_report_digest` 项；`"financial_indicator"` 改为 `"fundamental_snapshot"`；合并后财报摘要区块不走 board 层（改由功能开关在区块渲染层判定） |
 | board 层映射（HTML 侧） | `report/html_writer_nav.py::_compute_section_visibility` 的 `board_flags` 字典 | 同上（含 `enable_*` 形参） |
-| `enable_*` 形参链 | `report/html_writer.py` / `report/excel_generator.py` / `report/_report_generation.py` | 章节被合并后**不再存在**的形参删除（如 `enable_financial_report_digest`）；仍存在的条目沿用既有 `enable_<条目键>` 命名规则，键改名则形参改名 |
+| `enable_*` 形参链 | `report/html_writer.py` / `report/excel_generator.py` / `report/_report_generation.py` | 章节被合并后**不存在**的形参删除（如 `enable_financial_report_digest`）；仍存在的条目沿用既有 `enable_<条目键>` 命名规则，键改名则形参改名 |
 | 可见性旗标名的类型集合 | `config/_validation.py` 的已知类型集合 | 删除 `financial_report`、将 `financial_indicator` 改为 `fundamental_snapshot`（与注册表 `type` 严格一致，防配置校验放行失效类型） |
 | 配置编辑面 | `web/config_edit.py` 的 `sections` 负载与白名单 | 按新条目键同步（该面由注册表派生者无需改，硬编码处须改） |
 | 前端标签字典 | `static/web/main.js` | **无需改**（显示名由服务端按注册表下发；第 2 轮已核实前端无硬编码字典） |

@@ -49,6 +49,8 @@ from _test_runner.modes import (  # noqa: F401
     _MODE_TABLE_ORDER,
     _HELP_TEXT,
     _resolve_modes,
+    default_jobs,
+    resolve_jobs,
 )
 from _test_runner.pytest_env import (  # noqa: F401
     _PARALLEL_FACTOR,
@@ -140,6 +142,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="自动更新 docs/managements/test-coverage.md 环境耗时对照（隐含 --machine-info）",
     )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=None,
+        help="多模式并行度（每模式独立 pytest 进程，单模式忽略；优先级 CLI > TEST_RUNNER_JOBS 环境变量 > 自适应——4 核+ 为 2、弱机/核数采集失败为 1。墙钟含轻微争抢，环境表「采集并行度」行记录本次口径，同并行度才可比）",
+    )
     parser.add_argument("--help", action="store_true", help="显示帮助")
     args = parser.parse_args()
     if args.update_docs:
@@ -176,10 +184,13 @@ def main() -> None:
     if args.update_docs:
         print("  [..] 文档更新: 开启（结束后自动回填 test-coverage.md 环境耗时对照）")
 
+    # 多档并行度：CLI --jobs > TEST_RUNNER_JOBS 环境变量 > 自适应（见 resolve_jobs）
+    jobs = resolve_jobs(args.jobs)
+
     # 机器信息采集（--machine-info 时启用）
     machine_info: dict | None = None
     if args.machine_info:
-        machine_info = _collect_machine_info(args.parallel or "medium")
+        machine_info = _collect_machine_info(args.parallel or "medium", bench_jobs=jobs)
         print(_format_machine_info(machine_info))
 
     # 归档现有报告
@@ -190,17 +201,29 @@ def main() -> None:
 
     # 运行各模式
     results: list[dict] = []
+    run_one = dict(
+        coverage=args.coverage,
+        parallel_level=args.parallel,
+        timeout_override=args.timeout,
+        no_timeout=args.no_timeout,
+        phased=args.phased,
+    )
     try:
-        for mode_key in modes_to_run:
-            result = run_mode(
-                mode_key,
-                coverage=args.coverage,
-                parallel_level=args.parallel,
-                timeout_override=args.timeout,
-                no_timeout=args.no_timeout,
-                phased=args.phased,
-            )
-            results.append(result)
+        if jobs > 1 and len(modes_to_run) > 1:
+            # 多模式并行（每模式独立 pytest 进程，报告按模式目录隔离）：
+            # 省的是模式间串行衔接与收集段，实际收益随机器核数与负载浮动，
+            # 环境表「采集并行度」行记录本次口径，同并行度才可比。按计划序收集
+            # 结果，与串行版 results 顺序一致（写表/汇总不依赖完成序）。
+            from concurrent.futures import ThreadPoolExecutor
+
+            print(f"  [..] 并行度 jobs={jobs}（多模式独立进程并发）")
+            with ThreadPoolExecutor(max_workers=min(jobs, len(modes_to_run))) as pool:
+                futs = [pool.submit(run_mode, mode_key, **run_one) for mode_key in modes_to_run]
+                for fut in futs:
+                    results.append(fut.result())
+        else:
+            for mode_key in modes_to_run:
+                results.append(run_mode(mode_key, **run_one))
     except KeyboardInterrupt:
         print("\n  [!] 手动中断，输出已完成模式的结果")
         _print_machine_report(machine_info, results)

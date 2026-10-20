@@ -478,7 +478,7 @@ report_section_order = {"fund_manager": 1, ...}
 - `create_sheets()` 签名新增 `enable_history: bool = True`、`enable_news: bool = True`
 - `should_create_sheet()` 保持现有 data_flag 逻辑不变
 - 在 `should_create_sheet()` 之前用内联 board_flags dict 做 board 层预过滤
-- **连续重新编号**（见 §2.10）：不再调用 `set_sheet_title()`，改为在创建每个可见模块时按过滤后的可见顺序分配连续序号。`llm_usage` 强制末位（先创建其他可见页签，最后再创建 llm_usage 并赋予最大号）
+- **连续重新编号**（见 §2.10）：不调用 `set_sheet_title()`，改为在创建每个可见模块时按过滤后的可见顺序分配连续序号。`llm_usage` 强制末位（先创建其他可见页签，最后再创建 llm_usage 并赋予最大号）
 
 **实施前必须先确认所有引用点：**
 - 执行 `grep -rn "include_b_series" src/python/ src/test/` 确认无遗漏，再改类型签名
@@ -487,7 +487,7 @@ report_section_order = {"fund_manager": 1, ...}
 - `generate_excel_report()` 移除 `include_b_series` 跟随旧 `include_news` 的联动逻辑（`excel_generator.py:62`）
 - 签名新增 `enable_b_series`、`enable_news`、`enable_history` 三个独立参数
 - ⚠️ `include_b_series` 参数类型从 `bool|None` 改为 `bool`，移除 None 分支。调用方必须传入决定值
-- 内部 `enable_b_series = include_b_series`（不再与旧 `include_news` 联动）
+- 内部 `enable_b_series = include_b_series`（不与旧 `include_news` 联动）
 
 **C. handlers 联动（**此轮只做参数传递，不做数据获取条件判断**）：**
 - `_cmd_generate_excel()`、`_cmd_generate_both()`、`_cmd_generate_full()` 调用 `is_enable_b_series()`、`is_enable_news()`、`is_enable_history()` 读取配置
@@ -509,7 +509,7 @@ report_section_order = {"fund_manager": 1, ...}
 - [ ] `"enable_b_series": false` 时，#6~9 不在 Excel 中创建
 - [ ] `"enable_news": false` 时，#10~11 不在 Excel 中创建
 - [ ] `"enable_history": false` 时，#16~17 不在 Excel 中创建
-- [ ] B 系列不再跟随旧 `include_news`：`enable_news=False`（旧 `include_news=False`）→ 不影响 B 系列页签创建，验证 `enable_b_series=True` 时 B 系列仍创建
+- [ ] B 系列不跟随旧 `include_news`：`enable_news=False`（旧 `include_news=False`）→ 不影响 B 系列页签创建，验证 `enable_b_series=True` 时 B 系列仍创建
 - [ ] 旧 `include_b_series` 参数兼容：仍然接受 `bool`，但不接受 `None`
 - [ ] 各字段缺省时默认开启（向后兼容，行为不变）
 - [ ] E 菜单不受 3 个新字段影响（它原本就不含这些板块；H 已取消）

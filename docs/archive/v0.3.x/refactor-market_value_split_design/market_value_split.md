@@ -178,7 +178,7 @@ I-1 ─→ I-2 ─→ I-3 ─→ I-4 ─→ I-5 ─→ I-6 ─→ I-7 ─→ I-8
 
 ### I-2：测试覆盖加固
 
-**为写入函数补测，确保迁移后行为不变。**
+**为写入函数补测，确保改动后行为不变。**
 
 | 项 | 内容 |
 |:---|:------|
@@ -201,7 +201,7 @@ I-1 ─→ I-2 ─→ I-3 ─→ I-4 ─→ I-5 ─→ I-6 ─→ I-7 ─→ I-8
 
 ### I-3：`market_value_sheet.py` 骨架 + `_resolve_market_data` 预计算改造
 
-**关键变化（相对 V2）**：此步不再仅仅创建骨架，同时做 `_resolve_market_data` 改造，使 `market_value_sheet` 在后续步骤中无需 `_generate_details` 跨导入。
+**关键变化（相对 V2）**：此步不仅仅创建骨架，同时做 `_resolve_market_data` 改造，使 `market_value_sheet` 在后续步骤中无需 `_generate_details` 跨导入。
 
 | 项 | 内容 |
 |:---|:------|
@@ -243,7 +243,7 @@ else:
 - [ ] `market_value_sheet.py` 可被导入无报错
 - [ ] `from market_value import write_market_value_sheet` 桥接生效
 - [ ] `_import_report_modules` 注册了 `_generate_details`
-- [ ] `_resolve_market_data` 改造后调用 `gen_details()` 预计算，不依赖 `write_market_value_sheet` 内部回退
+- [ ] `_resolve_market_data` 改为调用 `gen_details()` 预计算，不依赖 `write_market_value_sheet` 内部回退
 - [ ] 循环 import 验证命令通过
 - [ ] `regression` 门禁通过
 
@@ -382,7 +382,7 @@ sed -i '/class TestWriteMarketValueSheet/,/^class /s/market_value\./market_value
 
 ### I-8：清理 `market_value.py` 的 import + `__pycache__` + 测试重组
 
-**移除了写入函数后，`market_value.py` 不再需要三组导入。**
+**移除了写入函数后，`market_value.py` 无需三组导入。**
 
 | 项 | 内容 |
 |:---|:------|
@@ -599,7 +599,7 @@ grep -n 'market_value_sheet\.\(write_\|_apply_\|freeze_\|auto_\|_generate_\|_det
 | 迭代 | 失败场景 | 根因 | 检测 | 严重 | 概率 | 恢复 |
 |:----:|:---------|:-----|:-----|:----:|:----:|:-----|
 | I-2 | 新增测试暴露了现有 bug | 现有代码潜藏分支条件缺失 | 测试失败 | 中 | 低 | 修复 bug |
-| I-3 | `_resolve_market_data` 改造后预计算 details 与 `write_market_value_sheet` 内部分歧 | 算法不一致 | regression 验证 | 高 | 低 | 调式 |
+| I-3 | `_resolve_market_data` 现预计算 details 与 `write_market_value_sheet` 内部分歧 | 算法不一致 | regression 验证 | 高 | 低 | 调式 |
 | I-6 | **12 处 mock 路径遗漏 1 处未更新** | 手动更新遗漏 | regression 失败 | **高** | **中** | `git checkout` 该步 |
 | I-6 | **`_generate_details` 路径在 `market_value_sheet` 命名空间未定义** | `write_market_value_sheet` 搬迁后调用 `_generate_details()` 但 sheet 未导入 | `AttributeError` | **高** | **低** | `market_value_sheet` 补导入 `_generate_details`（注意此步已移除 details=None 回退 → 不应触发此路径） |
 | I-7 | `_import_report_modules` 拆分后 ImportError 处理不一致 | try/except 拆分错误 | regression | 中 | 低 | 调整异常处理 |
@@ -654,7 +654,7 @@ R-197 I-10: 全量回归验证
 | TD-2 | `test_market_value.py:TestIsQdii` 测试 `code_utils` 而非 `market_value` | test/ | 🟢 | 委派测试重复，增加脆性 |
 | TD-3 | **`_generate_details` 违反 C4/C6：混合计算编排与数据转换，未使用 `session_cache`，未全程通过 Provider Chain** | `market_value.py` | 🟡 | 分拆后仍在计算模块。混合职责（注册表交互 + HTTP 编排 + 数据转换）。违反约束 **C4**（会话级复用）和 **C6**（Provider Chain 必经）。属下一轮重构主题 |
 | TD-4 | `premium` 字段已升级为真实计算（v0.3.4），但测试中仍有大量"premium=--"占位符断言 | test/ | 🟢 | 测试速度与真实行为的不匹配 |
-| TD-5 | **残留桥接清理（已消除 ✅）** | — | — | V3 采用方案 E 移除 `details=None` 回退后，`market_value.py` 终态零桥接。此 TD 已不复存在 |
+| TD-5 | **残留桥接清理（已消除 ✅）** | — | — | V3 采用方案 E 移除 `details=None` 回退分支，`market_value.py` 终态零桥接。此 TD 已不复存在 |
 | TD-6 | **`_generate_details` 跨模块私有调用**：`html_renderers.py` 和 `handlers_report.py` 跨模块调用私有函数 | 多个 | 🟢 | 架构边界模糊，本次不处理 |
 
 ---

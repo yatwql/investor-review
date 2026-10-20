@@ -329,7 +329,7 @@ app.add_url_rule(
 | `src/python/config/_llm_settings.py` | **在现有文件新增公开函数** `write_llm_settings(settings, path)`（自 `tui/handlers_config.py:_write_llm_settings` 抽取：注释保留 + 原子写 + `get_llm_config()` 刷新） |
 | `src/python/tui/handlers_config.py` | `_write_llm_settings` 改为委托共享 `write_llm_settings`（行为零变化） |
 | `src/python/tui/tui_menu.py` | `_show_privacy_and_security_status` 匿名化读路径改顶层（`get_anonymization_mode()`） |
-| `src/static/web/index.html`（并行重构后前端资源新位置，原 `src/python/web/templates/`） | 新增「配置编辑」card（7 组控件），编号顺延 |
+| `src/static/web/index.html`（并行改动后前端资源新位置，原 `src/python/web/templates/`） | 新增「配置编辑」card（7 组控件），编号顺延 |
 | `src/static/web/main.js`（原 `src/python/web/static/main.js`） | `loadConfigEdit`/渲染/即改即存/重新加载/error_code 分支（BAD_PARAM/CONFIG_WRITE_FAILED） |
 | `src/static/web/style.css`（原 `src/python/web/static/style.css`） | 配置分组样式 |
 | `src/test/unit/web/test_config_edit.py` | **新建**：白名单校验、值校验、写入分派、备份、同源守卫、error_code（见 §12） |

@@ -9,6 +9,8 @@
                rf 已解决条目 / plan 已完成任务 / docs/plan 已完成任务设计文件三项归档迁移为
                人工强制项（未完成不得继续 gate/publish）
     refresh    数据刷新：bench --update-docs + collect-test-coverage + doc-drift --sync
+               （自上一 release tag 起仅文档变更时跳过 bench 与 collect，
+                 --force-refresh 强制刷新；同步恒跑）
     evolution  版本演进对照快照：git 清单 + 逐文件行数口径；默认只滚「当前开发版」列，
                `--release` 时发布列与增长比一并写入（发布期在 prepare 之后执行）
     gate       P2 门禁：`--mode regression` + 十守护 `--ci`（清单与门禁文档同源）
@@ -32,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import os
 import re
 import sys
 from pathlib import Path
@@ -233,6 +236,70 @@ def cmd_prepare(args: argparse.Namespace, runner=None) -> int:
 
 # ─────────────────────────── refresh ───────────────────────────
 
+#: 判定「纯文档变更」的后缀白名单：文档正文 + 文档配图；其余后缀
+#: （含 .py/.html/.ps1/.toml/.ini/.xlsx 等）一律视为程序/测试变更 → 必跑刷新
+_DOC_ONLY_SUFFIXES = (".md", ".png", ".jpg", ".jpeg", ".gif", ".svg")
+
+
+def _last_release_tag(runner=None) -> str | None:
+    """最近的发布 tag（v*）；无则 None（调用方保守地视为需刷新）。"""
+    rc, out, _ = _git_ok(["describe", "--tags", "--abbrev=0", "--match", "v*"], REPO_ROOT, runner)
+    tag = out.strip() if rc == 0 else ""
+    return tag or None
+
+
+def _docs_only_changes_since(tag: str, runner=None) -> tuple[bool, list[str]]:
+    """自 tag 起（含未提交/未跟踪）的变更是否纯文档。
+
+    Returns:
+        (是否纯文档, 非文档后缀文件清单——空即纯文档)
+        git 查询失败返回 (False, [])（保守：视同有程序变更，必跑刷新）。
+    """
+    rc1, out1, _ = _git_ok(["diff", "--name-only", tag], REPO_ROOT, runner)
+    rc2, out2, _ = _git_ok(["ls-files", "--others", "--exclude-standard"], REPO_ROOT, runner)
+    if rc1 != 0:
+        return False, []
+    changed = [ln.strip() for ln in out1.splitlines() if ln.strip()]
+    if rc2 == 0:
+        changed += [ln.strip() for ln in out2.splitlines() if ln.strip()]
+    non_doc = sorted({f for f in changed if not f.endswith(_DOC_ONLY_SUFFIXES)})
+    return (not non_doc), non_doc
+
+
+def cmd_refresh(args: argparse.Namespace, runner=None) -> int:
+    force = bool(getattr(args, "force_refresh", False))
+    snapshot_steps: list[tuple[str, list[str]]] = [
+        (
+            "测试量与耗时快照回填",
+            [sys.executable, "scripts/test-runner.py", "--mode", "bench", "--update-docs"],
+        ),
+        ("测试收集计数回填", [sys.executable, "scripts/collect-test-coverage.py"]),
+    ]
+    if force:
+        print("[..] --force-refresh：bench 与 collect 强制刷新")
+        steps = list(snapshot_steps)
+    else:
+        tag = _last_release_tag(runner)
+        if tag is None:
+            print("[!] 未找到发布 tag，保守执行 bench 与 collect")
+            pure_docs, non_doc = False, []
+        else:
+            pure_docs, non_doc = _docs_only_changes_since(tag, runner)
+        if pure_docs:
+            print(f"[OK] 自 {tag} 起仅文档变更，跳过 bench 与 collect（--force-refresh 强制）")
+            steps = []
+        else:
+            shown = ", ".join(non_doc[:5]) + (" …" if len(non_doc) > 5 else "")
+            print(f"[..] 自 {tag} 起存在程序/测试变更（{shown}），执行 bench 与 collect")
+            steps = list(snapshot_steps)
+    steps.append(("文档统计快照回写", [sys.executable, "scripts/check-doc-drift.py", "--sync"]))
+    for label, cmd in steps:
+        rc = _run_step(label, cmd, REPO_ROOT, runner)
+        if rc != 0:
+            return rc
+    print("[OK] refresh 完成")
+    return 0
+
 
 def _run_step(label: str, cmd: list[str], root: Path, runner=None) -> int:
     print(f"[..] {label}")
@@ -245,20 +312,6 @@ def _run_step(label: str, cmd: list[str], root: Path, runner=None) -> int:
         print(f"[ERR] {label} 退出码 {rc}（按输出处理后重跑本子命令）")
         return rc
     print(f"[OK] {label}")
-    return 0
-
-
-def cmd_refresh(args: argparse.Namespace, runner=None) -> int:
-    steps = [
-        ("测试量与耗时快照回填", [sys.executable, "scripts/test-runner.py", "--mode", "bench", "--update-docs"]),
-        ("测试收集计数回填", [sys.executable, "scripts/collect-test-coverage.py"]),
-        ("文档统计快照回写", [sys.executable, "scripts/check-doc-drift.py", "--sync"]),
-    ]
-    for label, cmd in steps:
-        rc = _run_step(label, cmd, REPO_ROOT, runner)
-        if rc != 0:
-            return rc
-    print("[OK] refresh 完成")
     return 0
 
 
@@ -310,6 +363,11 @@ def cmd_evolution(args: argparse.Namespace, runner=None) -> int:
 # ─────────────────────────── gate ───────────────────────────
 
 
+def _gate_workers() -> int:
+    """十守护并行度：4 路封顶、随核数收敛——弱机器（如 2 核）自动降路，避免 CPU 超订反而拖慢总墙钟。"""
+    return max(1, min(4, os.cpu_count() or 4))
+
+
 def cmd_gate(args: argparse.Namespace, runner=None) -> int:
     print("[..] P2 门禁：场景回归")
     rc, out, err = _exec([sys.executable, "scripts/test-runner.py", "--mode", "regression"], REPO_ROOT, runner)
@@ -322,19 +380,30 @@ def cmd_gate(args: argparse.Namespace, runner=None) -> int:
         return rc if rc != 0 else 1
     print("[OK] 场景回归通过\n")
 
-    print("[..] P2 门禁：十守护 --ci")
+    workers = _gate_workers()
+    print(f"[..] P2 门禁：十守护 --ci（{workers} 路并行）")
+    from concurrent.futures import ThreadPoolExecutor
+
     worst = 0
-    for script in GUARD_SCRIPTS:
-        rc, out, err = _exec([sys.executable, script, "--ci"], REPO_ROOT, runner)
-        if rc == 0:
-            print(f"  [OK] {Path(script).name}")
-        else:
-            print(f"  [ERR] {Path(script).name}（退出码 {rc}）")
-            if out.strip():
-                print("    " + out.strip().replace("\n", "\n    "))
-            if err.strip():
-                print("    " + err.strip().replace("\n", "\n    "))
-            worst = max(worst, rc) if rc in (1, 2, 3) else 1
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        # 全部守护为 --ci 只读子进程（不写业务文件；结论缓存为每 namespace 独立
+        # 文件、事实缓存为单文件，均原子 temp+rename 写，并行无互踩），按清单序
+        # 收集结果，与串行版输出顺序一致，便于门禁日志对拍；并发度见 _gate_workers
+        futures = [
+            (script, pool.submit(_exec, [sys.executable, script, "--ci"], REPO_ROOT, runner))
+            for script in GUARD_SCRIPTS
+        ]
+        for script, fut in futures:
+            rc, out, err = fut.result()
+            if rc == 0:
+                print(f"  [OK] {Path(script).name}")
+            else:
+                print(f"  [ERR] {Path(script).name}（退出码 {rc}）")
+                if out.strip():
+                    print("    " + out.strip().replace("\n", "\n    "))
+                if err.strip():
+                    print("    " + err.strip().replace("\n", "\n    "))
+                worst = max(worst, rc) if rc in (1, 2, 3) else 1
     if worst:
         print("[ERR] P2 守护存在 finding，先修复再发布")
         return worst
@@ -498,7 +567,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_prepare.add_argument("--version", help="目标发布版（默认按 APP_VERSION 推导）")
     p_prepare.add_argument("--date", help="发布日期 YYYY-MM-DD（默认今天）")
 
-    sub.add_parser("refresh", help="数据刷新：bench --update-docs + collect + doc-drift --sync")
+    p_refresh = sub.add_parser(
+        "refresh", help="数据刷新：bench --update-docs + collect + doc-drift --sync（纯文档变更自动跳过前两者）"
+    )
+    p_refresh.add_argument("--force-refresh", action="store_true", help="忽略纯文档变更判定，强制刷新 bench 与 collect")
 
     p_evolution = sub.add_parser("evolution", help="版本演进对照快照（默认只滚当前开发版列）")
     p_evolution.add_argument("--release", action="store_true", help="发布期使用：发布列与增长比一并写入")

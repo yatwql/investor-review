@@ -574,7 +574,7 @@ Canvas + 表格            Flag ON: Chart.js 交互图        Chart.js 唯一渲
 - 预处理器 `build_chart_datasets()` **仍全量执行**（~5ms，R7 确认），仅 context 不注入 `chart_datasets`——保证 Flag 切换零延迟、无状态残留
 
 **回退验证清单**（汇总 Iter 1/7，作为发布前门禁项）：
-- ✅ Flag OFF 渲染 HTML 与改造前结构一致（无 chart.min.js script、无 canvas 容器）
+- ✅ Flag OFF 渲染 HTML 与基线结构一致（无 chart.min.js script、无 canvas 容器）
 - ✅ 三级降级：`ok` 实线 / `degraded` 虚线 / `unavailable` 占位
 - ✅ 本地 bundle 加载失败（防御）→ Canvas 回退 → fallback 文本（A1）
 - ✅ 打印（2x DPI 快照 + 浅色 + 防跨页）、移动端（375px）不退化

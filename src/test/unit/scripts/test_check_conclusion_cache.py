@@ -1,4 +1,7 @@
-"""测试：三守护结论缓存（doc-traces / semantic-index / doc-links）— 输入未变复用结论。
+"""测试：守护结论缓存机制（_checklib conclusion_cache_*）— 输入未变复用结论。
+
+当前接入 namespace：doc-traces / semantic-index / doc-links / code-traces /
+requirement-trace / doc-drift（各守护自身的回放接线用例见对应守护测试文件）。
 
 设计边界（质量前提：本地降频不降级）：
   - 通过与发现都缓存——输入字节未变 ⇒ 结论必然相同；

@@ -146,7 +146,7 @@
   - **P2-18**: 指标集成测试（test_metrics.py，8 指标正+边界，24 tests）
   - 合计 42 tests，全部通过
 
-### Added
+
 - **P3-01~P3-06: 再平衡六项任务全部完成**：
   - **P3-01**: 目标配置 Schema——`rebalance.py` 支持大类+品种级目标配置，`compute_target_deviation()` 输出偏离度信号
   - **P3-02**: 阈值可配——三套预设集（保守 10%/3%、稳健 15%/5%、进取 25%/8%），`resolve_rebalance_config()` 解析，config 独立覆盖
@@ -325,21 +325,7 @@
 - **plan.md**: 恢复概述节与归档索引（v0.1.x ~ v0.7.x）
 - **review-findings.md**: 恢复历史审查记录链接 + 历史归档节
 
-### Added
-- **Task91 增强 LLM 策略（辩论模式 I-01~I-12）**：
-  - **辩论模式 M1（白脸/黑脸/综合）**：`generate_debate_procon()` 三段式辩论（pro→con→synthesis），两级 fallback（pro/con 失败→回退普通模式、synthesis 失败→返回 pro+con 拼接）
-  - **条件推理 M2**：场景注入用户提示词（自定义市场场景 → 条件化的 expert_review 分析）
-  - **集中度问答 M3**：阈值触发的持仓集中度问答块生成（单品种≥5%/前三≥60%/行业≥40%）
-  - **Token 预算守卫**：基于 char 计量的 token 预算控制（超过 1× 预算跳过 synthesis、超过 2× 预算跳过全部 debate）
-  - **虚构代码过滤**：`_filter_hallucinated_codes()` 基于正则的 LLM 输出行级幻觉过滤（兼容中文环境的 `\b` 替代方案）
-  - **缓存体系**：三段独立缓存（pro/con/synthesis），session 级线程安全缓存，指纹驱动的缓存键
-  - **HTML/Excel 渲染**：辩论实验模式标签、pro(绿)/con(红)/synthesis(金) 三色块渲染、棒棒糖式展开设计
-  - **配置文件**：`llm_settings.json` 新增 `debate` 配置段（per_call_max_tokens/synthesis_temperature/max_total_tokens_per_report 等）
-  - **Feature Flag**：`features.py` 新增 `llm_debate_procon`/`llm_debate_conditional`/`llm_debate_qa_concentration` 三开关
-  - **测试套件**：62 项单元测试 + 3 项集成测试覆盖（含边缘场景/Token 预算/管线集成/prompts/generators 等）
-  - **监视脚本**：`scripts/check_debate_architecture.py` 架构一致性巡检
 
-### Docs
 - **technical.md** — 内部核对修复（多轮）：
   - §5.1: "13 子模块" → "14 子模块"，新增辩论路由描述段
   - §5.3: 标准 5 模块表下方补充辩论模式路由注记
@@ -355,19 +341,33 @@
 - **how-to-start.md** — CLI 参数表 `--history` 默认值 `auto`→`off`（对齐 `cli.py` 实际默认值）；移除已过时的 `# (可选) colorama` 注释（已在 requirements.txt 硬依赖）
 - **全域文档清理历史痕迹**：technical.md 移除"原本内联在 orchestrator.py"等历史重组描述；how-to-config-llm.md 移除 4 处"旧版"/"不再使用"历史标签；review-findings.md 归档索引移除版本范围描述，"v0.6.x 历史审查记录"改为通用"审查记录归档"；plan.md 归档索引移除版本范围描述
 
-### Docs
+
 - **datasource.md**: 全面更新数据源表以对齐实际注册表——修正 7 个过时缓存前缀（`fund_nav_`→`price_`、`fund_holding_`→`fund_hold_`、`forecast_`→`profit_forecast_`、移除 `query_`/`index_us_`、`history_`→`history_stock_`、`fund_nav_history_`→`history_fund_otc_`，新闻合并为单 `news_` 前缀），新增 5 个缺失数据源行（A股指数行情、基金经理数据、无风险利率、指数历史日线），新增 LLM 模块独立缓存表（13 段前缀），移除过时/合并的路由说明
 - **folders.md**: 目录树补全 7 个缺失文件（`features.py`、`fetcher/bond_yield.py`、`llm/cost_tracker.py`、`llm/fallback.py`、`llm/prompts_action.py`、`llm/prompts_core.py`、`llm/prompts_tables.py`），同步更新统计数据
 - **review-findings.md**: D16/D17 摘要行展开为详细修复表格，每项对应具体修复内容而非笼统计数
 - **archived_review-findings.0.7.x.md**: v0.7.5 摘要补充 Phase 4 批量交付详情（13 项任务清单）
 - **archived_plan.0.7.x.md**: v0.7.5 摘要补充 Phase 4 具体交付项（P4-01~P4-16 清单）
 
+### Added
+- **Task91 增强 LLM 策略（辩论模式 I-01~I-12）**：
+  - **辩论模式 M1（白脸/黑脸/综合）**：`generate_debate_procon()` 三段式辩论（pro→con→synthesis），两级 fallback（pro/con 失败→回退普通模式、synthesis 失败→返回 pro+con 拼接）
+  - **条件推理 M2**：场景注入用户提示词（自定义市场场景 → 条件化的 expert_review 分析）
+  - **集中度问答 M3**：阈值触发的持仓集中度问答块生成（单品种≥5%/前三≥60%/行业≥40%）
+  - **Token 预算守卫**：基于 char 计量的 token 预算控制（超过 1× 预算跳过 synthesis、超过 2× 预算跳过全部 debate）
+  - **虚构代码过滤**：`_filter_hallucinated_codes()` 基于正则的 LLM 输出行级幻觉过滤（兼容中文环境的 `\b` 替代方案）
+  - **缓存体系**：三段独立缓存（pro/con/synthesis），session 级线程安全缓存，指纹驱动的缓存键
+  - **HTML/Excel 渲染**：辩论实验模式标签、pro(绿)/con(红)/synthesis(金) 三色块渲染、棒棒糖式展开设计
+  - **配置文件**：`llm_settings.json` 新增 `debate` 配置段（per_call_max_tokens/synthesis_temperature/max_total_tokens_per_report 等）
+  - **Feature Flag**：`features.py` 新增 `llm_debate_procon`/`llm_debate_conditional`/`llm_debate_qa_concentration` 三开关
+  - **测试套件**：62 项单元测试 + 3 项集成测试覆盖（含边缘场景/Token 预算/管线集成/prompts/generators 等）
+  - **监视脚本**：`scripts/check_debate_architecture.py` 架构一致性巡检
+
 ### Fixed
 - **test_orchestrator.py** — `capture_snapshot` mock 缺少 `return_value` 导致 MagicMock 无法通过 `isinstance(x, dict)` 断言：`test_generate_report_full_news_only`、`test_generate_report_full_llm_only`、`test_generate_report_full_both_disabled` 3 个测试补上 `return_value=None`
 - **代码注释历史痕迹清理**：`cache/_paths.py:16`、`constants.py:32-33`、`test/integration/test_debate_pipeline.py:45` 共 3 处含历史重构/变更描述的注释修改为纯当前状态描述
 
 ### Plan
-- **task91-enhanced-llm-strategy.md D16 终轮一致性扫描修复**：
+- **enhanced-llm-strategy.md D16 终轮一致性扫描修复**：
   - 修复目录编号偏移（§6/§7/§8 锚点与实际标题对齐）
   - I-09 cost_tracker.py 误引用→改为 `generate_debate_procon()` 内建 output token 守卫（D9 发现落地）
   - I-06 闭包变量捕获→改为 list-container 模式（D14 发现落地）
@@ -388,7 +388,7 @@
 ## [0.7.9] - 2026-07-21
 
 ### Changed
-- **task91-enhanced-llm-strategy.md**：从 `docs/plan/` 迁移至 `docs/archive/v0.7.x/better-investment-advice/`，状态更新为"已交付"
+- **enhanced-llm-strategy.md**：从 `docs/plan/` 迁移至 `docs/archive/v0.7.x/better-investment-advice/`，状态更新为"已交付"
 - **review-findings.md/plan.md**：v0.7.x 已完成的审查记录和计划记录迁移合并至对应归档文件
 - **changelog.md**: v0.7.8 变更记录归档至 `archived_changelog.0.7.x.md`
 - **归档文件清理**：`archived_changelog.0.7.x.md` / `archived_plan.0.7.x.md` / `archived_review-findings.0.7.x.md` 移除元信息，仅保留变更记录本身

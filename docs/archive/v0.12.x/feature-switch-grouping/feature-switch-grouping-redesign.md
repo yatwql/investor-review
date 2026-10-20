@@ -161,7 +161,7 @@ def is_experimental_switch(flag: str) -> bool:
 
 - `--experiment` 取值域 = `experimental=True` 的项（现为 `decision_reflection`/`report_qa` 2 项），**取值域集合不变**，只是判定来源从 `group==GROUP_EXPERIMENTAL` 改为 `d.experimental`。
 - 页脚实验自述 `experimental_notice.py` 走 `enabled_experimental_features()`，**自述清单不变**。
-- **转正语义更新**（写回 `features.py` 顶部注释）：四组下「转正」= 把 `experimental` 置 `False`（移出实验身份）；若作用域也变（如从机制类转为章节类）则同时改 `group`。转正不再必然伴随「离开实验块、落进常规块」的跨块位移，因为实验身份与作用域解耦。
+- **转正语义更新**（写回 `features.py` 顶部注释）：四组下「转正」= 把 `experimental` 置 `False`（移出实验身份）；若作用域也变（如从机制类转为章节类）则同时改 `group`。转正不必然伴随「离开实验块、落进常规块」的跨块位移，因为实验身份与作用域解耦。
 
 ### 4.4 TUI 面板渲染（`handlers_config.py`）
 

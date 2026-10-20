@@ -121,9 +121,9 @@ _ENV.globals["section_visible_dict"] = section_visible_dict
 | 创建渲染闭包 | `html_writer.py` write_html_report 内 | `sv_fn = lambda key, _d=section_visible_dict: bool(_d.get(key, False))` |
 | 透传 context | `html_writer.py` render() 调用 | 在 render 参数中传入 `section_visible=sv_fn` |
 | 删除全局写入 | `html_writer.py` L319 | 删除 `_ENV.globals["section_visible_dict"] = ...` |
-| 同步 `technical.md` | `technical.md` L535-L537 | 将"该函数读取 `_ENV.globals['section_visible_dict']`"更新为"通过 render context 变量传递，不再写入 `_ENV.globals`" |
+| 同步 `technical.md` | `technical.md` L535-L537 | 将"该函数读取 `_ENV.globals['section_visible_dict']`"更新为"通过 render context 变量传递，不写入 `_ENV.globals`" |
 
-**grep 确认无残留**：在修改前后各 grep 一次 `_ENV\.globals\[` 全代码库 `src/ + test/`，确认只有 `html_jinja_env.py` 一处注册 L197（后改为 fallback）和 `html_writer.py` 一处写入 L319（后删除）。**不应有其他文件直接写入 `_ENV.globals`**。
+**grep 确认无残留**：在改动前后各 grep 一次 `_ENV\.globals\[` 全代码库 `src/ + test/`，确认只有 `html_jinja_env.py` 一处注册 L197（后改为 fallback）和 `html_writer.py` 一处写入 L319（后删除）。**不应有其他文件直接写入 `_ENV.globals`**。
 
 **Jinja2 解析顺序**：context 变量 > globals > builtins。模板中 `{{ section_visible("key") }}` 调用格式不变，context 变量自动覆盖 globals，**模板零修改**。
 
@@ -131,7 +131,7 @@ _ENV.globals["section_visible_dict"] = section_visible_dict
 
 | 用途 | 状态 |
 |:-----|:------|
-| 模板调用 | 不再使用（被 context 变量覆盖）|
+| 模板调用 | 不使用（被 context 变量覆盖）|
 | 测试导入 | **兼容性中断** — 详见 6.4 |
 | HTML 报告导航 | `html_jinja_env.py` 中保留（向后兼容 import）|
 
@@ -391,7 +391,7 @@ write_html_report(...)                 # ~85 行（保留显式命名参数）
 | ⑱ | **测试 import 计数 29→40**：`test_llm_scenarios.py` 实际 26 处（不是 22+3）| 代码脚本统计（§7）| → 修正数字 |
 | ⑲ | **Step 5 目标 ~120 太紧**：含 4 个辅助函数 ~60 行 + 入口 ~60 行 + import ~8 行 + docstring ~10 行 ≈ 140 | 行数模拟 | → 修正为 ~140（§9）|
 | ⑳ | **`_jinja_section_visible` 测试兼容性中断未覆盖**：`TestJinjaFiltersAndFunctions.setUp` 依赖 globals 写入的 `section_visible_dict`，PF 后为空 | 代码审查（§6.4）| → PF 步骤中同步修改 setUp |
-| ㉑ | **Step 3 Phase C "不再被外部引用"定义模糊**：哪些桥接可删、哪些必须保留没说清 | 内审 | → 列出明确清单（§7 Phase C）|
+| ㉑ | **Step 3 Phase C "不被外部引用"定义模糊**：哪些桥接可删、哪些必须保留没说清 | 内审 | → 列出明确清单（§7 Phase C）|
 | ㉒ | **模板 `section_visible` 调用 9→8 处**（导航 1 + section 7） | grep 计数 | → 微调，不影响方案 |
 | ㉓ | **`_ENV.globals` 两处写入的耦合关系**：L197 注册 + L319 赋值，PF 必须同时处理两者 | 内审 | → 明确 PF 改动范围（§6.2 表格）|
 

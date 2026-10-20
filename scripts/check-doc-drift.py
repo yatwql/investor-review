@@ -34,7 +34,10 @@
 用法：
   python scripts/check-doc-drift.py                  # 十九项全查
   python scripts/check-doc-drift.py -v               # 详细输出（打印解析明细）
-  python scripts/check-doc-drift.py --ci             # CI 模式：仅输出 文件:描述，退出码 2
+  python scripts/check-doc-drift.py --ci             # CI 模式：仅输出 文件:描述，退出码 2；
+                                                      结论缓存：全集输入与逻辑指纹未变时逐字回放
+                                                      （同树重复命中；--sync 写路径与
+                                                      --with-test-count 独立输出面不缓存）
   python scripts/check-doc-drift.py --with-test-count # 附带 pytest 收集，核对「测试用例数」与 test-coverage.md 计数表
 
 退出码：
@@ -50,12 +53,15 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_checklib）
 from _checklib import REPO_ROOT, add_common_args, rel, report  # noqa: E402,F401  # rel：单测直接访问 drift.rel
+from _checklib import conclusion_cache_load, conclusion_cache_save  # noqa: E402
 
 if str(REPO_ROOT) not in sys.path:  # 允许任意 cwd 下运行
     sys.path.insert(0, str(REPO_ROOT))
@@ -203,6 +209,60 @@ def run_checks(with_test_count: bool = False, docs: dict | None = None) -> list[
     return findings
 
 
+def _cache_inputs() -> list[Path] | None:
+    """结论缓存的输入指纹集：git tracked + 未跟踪（排除忽略）全集。
+
+    doc-drift 结论依赖全仓（目录树结构/统计行数/注册表内容），必须用
+    权威全集防漏；非 git 环境返回 None（跳过缓存，直接全量检查）。
+    """
+
+    def _ls(*extra: str) -> list[str] | None:
+        proc = subprocess.run(
+            ["git", "ls-files", *extra],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        if proc.returncode != 0:
+            return None
+        return [ln.strip() for ln in proc.stdout.splitlines() if ln.strip()]
+
+    tracked = _ls()
+    others = _ls("--others", "--exclude-standard")
+    if tracked is None or others is None:
+        return None
+    return [REPO_ROOT / p for p in dict.fromkeys([*tracked, *others])]
+
+
+def _run_checks_phase(args: argparse.Namespace) -> int:
+    """扫描 + verbose 详细段 + report 统一输出，返回退出码。"""
+    scanned_docs = _scan_docs() if args.verbose else None
+    findings = run_checks(with_test_count=args.with_test_count, docs=scanned_docs)
+
+    if args.verbose:
+        docs = scanned_docs
+        actual = _stats_actual()
+        print(f"  受检文档 {len(docs)} 份（历史记录类 changelog/review-findings 不参与计数扫描）")
+        print(
+            f"  报告章节 {len(_REPORT_SECTION_DEFAULT)} 章 / 功能开关 {len(feature_switch_registry)} 项 {_group_counts()}"
+        )
+        print(f"  开关表解析 {len(extract_switch_table(docs[_HOW_TO_CONFIG_MD]))} 行")
+        print(f"  目录树解析 {len(parse_tree_paths(docs[_FOLDERS_MD]))} 条 / 实测文件 {len(_actual_files())} 个")
+        for label, (files, lines) in actual.items():
+            print(f"    {label}: {files} 文件 / {lines} 行")
+        block_rows, _ = parse_block_matrix(docs[_TECHNICAL_MD])
+        print(f"  章节-区块矩阵解析 {len(block_rows)} 行")
+
+    return report(
+        findings,
+        "[OK] 文档与实现一致性校验通过（章节/开关/默认值/面板编号/目录树/统计表/归档索引/分区纪律/Thinking 支持矩阵/章节-区块矩阵/手册菜单块均与代码一致）",
+        ci=args.ci,
+        fail_message="[!] 发现 {n} 处文档与实现不一致，须修正后提交",
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="校验文档中的章节/开关/默认值/目录树/统计断言/归档索引/分区纪律/Thinking 支持矩阵/章节-区块矩阵/手册菜单块与代码、配置文件、文件系统的一致性",
@@ -233,31 +293,32 @@ def main() -> None:
         if applied:
             subprocess.run(["git", "add", str(_FOLDERS_MD)], cwd=REPO_ROOT, check=False)
 
-    scanned_docs = _scan_docs() if args.verbose else None
-    findings = run_checks(with_test_count=args.with_test_count, docs=scanned_docs)
-
-    if args.verbose:
-        docs = scanned_docs
-        actual = _stats_actual()
-        print(f"  受检文档 {len(docs)} 份（历史记录类 changelog/review-findings 不参与计数扫描）")
-        print(
-            f"  报告章节 {len(_REPORT_SECTION_DEFAULT)} 章 / 功能开关 {len(feature_switch_registry)} 项 {_group_counts()}"
-        )
-        print(f"  开关表解析 {len(extract_switch_table(docs[_HOW_TO_CONFIG_MD]))} 行")
-        print(f"  目录树解析 {len(parse_tree_paths(docs[_FOLDERS_MD]))} 条 / 实测文件 {len(_actual_files())} 个")
-        for label, (files, lines) in actual.items():
-            print(f"    {label}: {files} 文件 / {lines} 行")
-        block_rows, _ = parse_block_matrix(docs[_TECHNICAL_MD])
-        print(f"  章节-区块矩阵解析 {len(block_rows)} 行")
-
-    sys.exit(
-        report(
-            findings,
-            "[OK] 文档与实现一致性校验通过（章节/开关/默认值/面板编号/目录树/统计表/归档索引/分区纪律/Thinking 支持矩阵/章节-区块矩阵/手册菜单块均与代码一致）",
-            ci=args.ci,
-            fail_message="[!] 发现 {n} 处文档与实现不一致，须修正后提交",
-        )
-    )
+    # 结论缓存（仅 --ci 且非 verbose/非 sync/非 with-test-count）：全集输入与逻辑指纹未变时
+    # 逐字回放——同树重复（发布 gate → 提交钩子 / 重试）命中省全仓扫描；
+    # --sync 为写路径不缓存，verbose 详细段输出不入缓存；--with-test-count 含
+    # pytest 收集、输出面不同，不读不写缓存（防止跨模式回放丢核对段/污染结论）
+    if args.ci and not args.verbose and not args.sync and not args.with_test_count:
+        inputs = _cache_inputs()
+        logic = [Path(__file__), *sorted((Path(__file__).resolve().parent / "_doc_drift").glob("*.py"))]
+        if inputs is not None:
+            cached = conclusion_cache_load("doc_drift", logic, inputs)
+            if cached is not None:
+                print("\n".join(cached["lines"]))
+                sys.exit(int(cached["rc"]))
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = _run_checks_phase(args)
+        out = buf.getvalue()
+        print(out, end="")
+        if inputs is not None:
+            conclusion_cache_save(
+                "doc_drift",
+                logic,
+                inputs,
+                {"findings": [] if rc == 0 else out.splitlines(), "lines": out.splitlines(), "rc": rc},
+            )
+        sys.exit(rc)
+    sys.exit(_run_checks_phase(args))
 
 
 if __name__ == "__main__":

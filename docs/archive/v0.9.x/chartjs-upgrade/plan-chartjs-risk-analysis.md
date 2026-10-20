@@ -89,8 +89,8 @@ report_template.html (1862 行 Jinja2 模板)
 | 收益 | 说明 |
 |:-----|:------|
 | **消除自制 Canvas 2D 维护负担** | `drawSimpleChart()` 265 行内联 JS（含 Canvas 原生 DPR 缩放、多数据集、tooltip 等）→ 代之以 Chart.js 成熟库，减少定制 JS 维护量 |
-| **一致性** | 6 张图统一使用 Chart.js API 风格、配色体系、交互行为，不再各自为政 |
-| **数据分离** | 当前 history_data 既用于 Excel 又用于 HTML Canvas JS 序列化（tojson），Chart.js 迁移后数据结构更明确 |
+| **一致性** | 6 张图统一使用 Chart.js API 风格、配色体系、交互行为，不各自为政 |
+| **数据分离** | 当前 history_data 既用于 Excel 又用于 HTML Canvas JS 序列化（tojson），Chart.js 改动后数据结构更明确 |
 | **Feature Flag 基础设施** | 为后续"报告模块可配置化"（§1.4.4）积累经验——`enable_interactive_charts` 作为首个**报告渲染**类开关，与既有 LLM 类（8 个）/基金类（4 个）/新闻类（5 个）/量化类（7 个）Flag 形成完整矩阵（R4 修正：features.py 共 28 个 flag，非"仅用于 LLM"） |
 
 ### 2.3 间接收益（对其他计划项的支撑）
@@ -188,7 +188,7 @@ plan-1 是 **plan-3**（最大回撤+净值曲线 Chart.js 双轴图增强）和
 | TD4 | **内联 JS 数据膨胀** | 模板体积 | 6 张图 × 序列化数据 = ~700KB 新增 | 数据预聚合/下采样（R8 缓解） |
 | TD5 | **测试覆盖缺口** | 测试 | Chart.js 渲染无法用 pytest 测试；双路径 × Feature Flag × 数据状态组合使测试用例翻倍（R5 修正：与 TD7 合并计数，不重复表述） | ① 新增 Python 端数据预处理器单元测试 ② JS 端浏览器截图对比测试（可选） |
 | TD6 | **数据隐私风险** | 数据安全 | `tojson` 将全量持仓嵌入 HTML 内联 script | ① 数据最小化传递 ② `anonymizer` 可选匿名 ③ 文档标注风险 |
-| TD7 | **双路径测试组合膨胀** | 测试成本 | Canvas + Chart.js + Feature Flag ON/OFF + 数据正常/降级/不可用 = 2×（双路径）× 2（Flag）× 3（数据状态）= 12 种组合（R5 修正：明确组合数，TD5 不再重复计数） | 分配额外 0.5d 测试时间（已在 §8.4 纳入） |
+| TD7 | **双路径测试组合膨胀** | 测试成本 | Canvas + Chart.js + Feature Flag ON/OFF + 数据正常/降级/不可用 = 2×（双路径）× 2（Flag）× 3（数据状态）= 12 种组合（R5 修正：明确组合数，TD5 不重复计数） | 分配额外 0.5d 测试时间（已在 §8.4 纳入） |
 | TD8 | **JS 调试设施空白** | 测试基础设施 | 当前项目无 JS 测试/调试工具链 | 建立独立 test HTML 调试页 + Python 预处理器降低 JS 复杂度 |
 
 ### 4.2 遗留技术债务（plan-1 不解决，留给后续迭代）
@@ -856,7 +856,7 @@ html_writer.py: _compute_section_visibility()
 > - 2026-08-01 v8（R2）：数据链路复盘 — 资产构成聚合键 `code_type`→`property`（附录 E 数据依赖矩阵）；行业分布聚合键明确 penetration `sector`（`classify_sector`/`sector_api`，无归属归"其他"）；§6.6 雷达图空值判断 `x or "N/A"`→`x is not None`（0.0 合法值不误判）；upgrade.md 新增 R2 数据契约明细
 > - 2026-08-01 v9（R3）：架构约束核对 — §5.5 合规总评补齐 C9/C11/C12/C13/C17/C18 六项实现 19 条全覆盖；附录 F 表补齐 C9/C17/C18 三行（原表遗漏）；C16 补充 `output_dir` 已绝对化依据；C19 补充 `risk_metrics` 键已在 Schema 定义的间接派生说明
 > - 2026-08-01 v10（R4）：收益验证 — §2.2 修正"config/features.py 仅用于 LLM"错误（实际 28 个 flag）；新增 §2.4 ROI 总判断（投入 5.25d vs 质变收益 + 双路径回退 + 超支裁剪方案）
-> - 2026-08-01 v11（R5）：技术债与降级体系 — TD5/TD7 测试组合数合并修正（2~4 倍 → 明确 12 种组合，TD5 不再重复计数）；TD-L3 更新为 JS 外部化已部分缓解模板膨胀（预估 1950-2050 行）；确认三级降级与 DegradationTracker 正交
+> - 2026-08-01 v11（R5）：技术债与降级体系 — TD5/TD7 测试组合数合并修正（2~4 倍 → 明确 12 种组合，TD5 不重复计数）；TD-L3 更新为 JS 外部化已部分缓解模板膨胀（预估 1950-2050 行）；确认三级降级与 DegradationTracker 正交
 > - 2026-08-01 v12（R6）：风险清单深化 — 新增 R11（预处理器单图异常隔离，独立 try/except + 顶层兜底）、R12（radar 与 history_data 耦合边界，radar 独立构建）；确认 Jinja2 3.1.6 `tojson` 自动转义 `<`/`>`（XSS 安全，R9 不升级）
 > - 2026-08-01 v13（R7）：与其他计划项交互 — 附录 B 重写为完整依赖图（B.1 总览 / B.2 依赖类型分类表 / B.3 实施次序）；补全 4 处遗漏：① plan-2→plan-1 Heatmap 数据配合（`correlation_data`，C19 新键，未完成降级占位不阻塞）② plan-7⇢plan-1 软依赖（方案 A 独立 / 方案 B 复用 Chart.js Bar）③ plan-11→plan-1 CSS 变量预留依赖 ④ 修正「plan-1→plan-3→plan-6 不可并行」为与 plan.md 推荐次序（plan-7→plan-2/3→plan-1→plan-6→plan-11）一致，plan-2 可与 plan-1 并行、plan-3 非图表部分可并行；§2.3 间接收益扩为跨计划交互表；§2.4 杠杆收益补 plan-7
 > - 2026-08-01 v14（R8）：MVP 范围收敛 — 新增图表优先级矩阵（P0 净值/回撤/资产构成/穿透 TOP10，P1 行业分布/量化雷达，P2 热力图框架）与超支裁剪顺序（Iter 7 跳过 → Iter 6 雷达降 3 轴 → Iter 4 行业分布减配单排序 → Iter 5 穿透减配单色）及三档交付判定标准；§2.4 ROI 结论引用 `upgrade.md §5.0`；upgrade.md 同步 v11

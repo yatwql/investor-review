@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
-"""文档历史变更痕迹检查脚本。
+"""文档历史变更痕迹与结构性冗余检查脚本。
 
-检查面向读者的仓库文档是否残留历史痕迹，保证正文只反映最新状态。
+检查面向读者的仓库文档是否残留历史痕迹，保证正文只反映最新状态；并拦截
+复制粘贴残留（同一标题/条目/区块在文档中出现两次）类结构性冗余。
 
-四条核心规则：
+本文件为薄 CLI（模式表/扫描/输出/退出码/结论缓存）：结构性冗余（DUPLICATE）
+扫描实现位于同目录 `_traces_doc/` 包（原面 re-export，行为不变）。
+
+七条核心规则：
   1. 文档正文内容不得带有历史痕迹和历史变更（版本号标记、来源叙述、
      原/旧实现、迁移/重命名、任务编号引用、迭代标记等），只描述
-     "当前是什么/做什么"。changelog.md / plan.md / review-findings.md
-     例外（它们是历史/计划记录）。
+     "当前是什么/做什么"。changelog.md 例外（变更日志的职责即记录变化，
+     版本号等历史痕迹合法）。
   2. 除上述三个例外文档外，其他管理文档与用户文档的正文内容不得引用
      归档文件（docs/archive/ 下的目录或 archived_*.md）。
      例外：folders.md 的目录树（│ ├ └ 行）可引用 archive 目录及其
@@ -30,20 +34,49 @@
      "C19 契约""C20 图下说明""C21 指纹同源"），须用语义描述（数据契约/图下
      说明/缓存指纹同源等）。
      约束定义处（technical.md / llm-technical.md，CIPHER_EXEMPT_FILES）
-     正文大量引用 C1~C25 属定义载体，豁免；其余文档（含 changelog.md /
-     plan.md / review-findings.md 与 docs/plan/）一律禁。
+     正文大量引用 C1~C25 属定义载体，豁免；其余受检文档（含 changelog.md /
+     plan.md / review-findings.md 与 docs/plan/）一律禁；docs/archive/
+     归档域不入本条（历史约束表属当时设计内容，见受检范围）。
+  6. 任务记录域复盘痕迹（NARRATIVE）：plan.md / review-findings.md /
+     docs/plan/*.md 的任务内容只反映最新状态，禁止历史复盘痕迹——
+     修复/改造/重构等前后对比、相对旧实现的否定句（"不再XX"）、
+     历史归因（"历史原因"/"之前版本"）。待处理任务的问题现状、已修复
+     任务的状态标记（已修复/待处理）、根因定位引用是内容不属复盘，
+     合法。仅任务记录域检出：常规手册的"修复后重启"是操作指引、
+     变更日志记录变化是其职责，均不适用（changelog 仍仅章节编号）。
+     迭代轮次（"轮 N"）是任务记录的正式载体，本条不适用；设计文档的
+     "旧格式兼容"等是合法设计内容（历史实现叙述类不入任务域）。
+     归档域 docs/archive/（changelog 归档除外）同样检出——归档设计/
+     迭代计划同样只表述最新状态，复盘痕迹不留存。
+  7. 结构性冗余（DUPLICATE）：标题去重全域适用且路径感知——同级+同标题
+     且处于同一父标题下才算重复（各版本块/各任务节下的同名小节属合法
+     结构，跨父级不报，第 2 次出现起报出）；重复长行与重复区块见于台账
+     三文件（plan.md / review-findings.md / changelog.md）与 docs/archive/
+     归档域——规范化后 ≥40 字符的重复内容行与连续 5 行、有效内容
+     ≥100 字符的逐字重复区块（同小节限定：跨小节共享行/表属结构，
+     同小节内第 2 次出现起报出），拦截「同一区块/条目粘贴两遍」类复制
+     粘贴残留与冗余信息。豁免：围栏代码块内 `#` 注释与示例、未围栏的
+     缩进代码/命令样本与命令续行、键值任务卡（- **键**: 值，跨条目
+     同构）、验证清单项（- [ ] 命令跨阶段复跑）、分隔/装饰行与短模板行
+     （重复长行豁免）；重复任务由同父标题判重兜底，整段清单/区块粘贴
+     由区块判重兜底。
 
 受检范围：
   - 项目根 README.md
   - docs/managements/（排除 changelog.md / review-findings.md / plan.md）
   - docs/manuals/
-  - 章节编号检查另覆盖 changelog.md / review-findings.md / plan.md 与
-    docs/plan/（仅章节编号模式，不检查其他历史痕迹）
+  - 章节编号检查另覆盖 changelog.md（仅章节编号模式）；
+    任务记录域检查覆盖 review-findings.md / plan.md 与 docs/plan/
+    （章节编号 + NARRATIVE 复盘痕迹 + CIPHER）
+  - 结构性冗余（DUPLICATE）：标题去重全域适用；重复长行与重复区块
+    于台账三文件（plan.md / review-findings.md / changelog.md）
+  - docs/archive/ 归档域（DUPLICATE + NARRATIVE；changelog 归档仅
+    DUPLICATE——变更日志记录变化是其职责，与 changelog.md 同口径）
 
-豁免范围（历史/计划记录性质，允许历史痕迹与归档引用）：
-  - docs/plan/ 中间计划文档（历史痕迹豁免，章节编号不豁免）
-  - docs/archive/ 归档文档
+豁免范围（运行时产物性质 / 归档历史引用）：
   - docs/tmp/ 运行时临时产物
+  - 归档域的 CIPHER（历史约束表属当时设计内容）、版本痕迹与章节/轮次
+    编号（历史文档性质）——该域仅查 DUPLICATE 与 NARRATIVE
 
 豁免内容（当前状态 / 流程描述 / 结构记录，非历史痕迹）：
   - 管理文档版本头（"文档版本：0.9.10-dev"，版本号一致性要求，仅行首锚定豁免）
@@ -51,9 +84,13 @@
     与日期同为随发布重跑刷新的滚动读数，上下文锚定豁免、行中叙述仍检出）
   - folders.md 版本演进对照「当前开发版」列（"当前开发版（0.12.1-dev · ..."，
     由 check-version-consistency 的 evolution_head 断言强制与 APP_VERSION 同步）
-  - Markdown 围栏代码块（``` 包裹）内命令/配置示例，非文档叙述
+  - Markdown 围栏代码块（``` 包裹）内命令/配置示例，非文档叙述；未围栏的
+    缩进代码/命令样本同理（重复行与重复区块豁免）
+  - 行内代码（`...`）内的技术令牌（如词表条目 `不再`）——NARRATIVE 匹配
+    前剔除行内代码段
   - 需求编号（requirements.md 的 R-LLM-ER-01 等需求条目 ID）
-  - folders.md 目录树行（│ ├ └ 开头，记录目录结构，可含 archive/ 指向）
+  - folders.md 目录树行（│ ├ └ 开头，记录目录结构，可含 archive/ 指向——仅
+    ARCHIVE 类豁免；任务编号（CODE）与进度状态词（STATUS）在树行照检）
   - folders.md 统计表行（如 | ├ archive/ | 版本归档 |，记录目录计数）
   - 当前能力描述（暂不支持 / 不再支持 / 不正式支持）
   - 运行时产物归档描述（"归档版" / "归档目录" / "历史归档至 YYYYMMDD/"——
@@ -62,6 +99,7 @@
   - 工具使用场景（pytest --ff 等）
   - 模型/环境名（Gemini 旧版 / 旧版 Python）
   - 工具自身说明（描述脚本跳过/豁免归档目录与归档引用）
+  - 分隔/装饰行与短模板行（重复长行豁免）
 
 用法：
   python scripts/check-doc-traces.py           # 检查全部
@@ -70,7 +108,7 @@
 
 退出码：
   0 — 全部通过（无可疑痕迹）
-  1 — 发现高置信度痕迹（HIGH/ARCHIVE/CODE/CIPHER/CHAPTER/ROUND），应修复后再提交
+  1 — 发现高置信度痕迹（HIGH/ARCHIVE/CODE/CIPHER/CHAPTER/ROUND/STATUS/NARRATIVE/DUPLICATE），应修复后再提交
   2 — 仅 LOW 级别痕迹，建议人工复核
 """
 
@@ -113,6 +151,10 @@ from _checklib import (  # noqa: E402
     rel,
 )
 
+#: 结构性冗余（DUPLICATE）扫描后端原面 re-export：实现位于 scripts/_traces_doc/，
+#: 测试与调用方仍按本脚本名访问——见 _traces_doc 包文档
+from _traces_doc import scan_structural_duplicates  # noqa: E402
+
 README_PATH = REPO_ROOT / "README.md"
 DOC_DIRS = [
     MANAGEMENTS_DIR,
@@ -150,6 +192,9 @@ CIPHER_EXEMPT_FILES = {"technical.md", "llm-technical.md"}
 #   HIGH      — 高置信度历史痕迹（来源叙述/历史实现/变更节点/迭代/版本号）
 #   CHAPTER   — 章节编号引用（"N 章"/"第 N 章"指代报告具体章节，须用语义章节名）
 #   ROUND     — 迭代轮次引用（"第 N 轮"/"N 轮"/"轮 N"指代开发迭代历史，须用语义描述）
+#   STATUS    — 进度状态痕迹（已实施/完成态/随任务完成移入/验收记录等）——
+#               仅在目录树行检出：目录树描述只讲文件内容简要，不记录进度状态；
+#               正文中的当前状态叙述（如"该功能已实施"）属合法用法不检
 #   LOW       — 需人工判断的变更/过渡/待办描述（可能是当前能力也可能是痕迹）
 
 
@@ -211,6 +256,10 @@ def _doc_patterns() -> list[tuple[str, str, str]]:
         ),
         (r"(?:拆分|拆出|提取|分离)(?:自|到|成)\s*[A-Za-z_][\w.-]*", "HIGH", "来源叙述（拆分自/拆出自/分离为XX）"),
         (r"(?:合并|迁移|提取)自\s*[`\w._-]+", "HIGH", "来源叙述（合并自/迁移自/提取自）"),
+        # 来源叙述补强：无后缀模块名的迁入/移出（如"自 generators 迁入"），
+        # 带后缀文件模式覆盖不到；正文合法当前面描述（如 re-export 兼容面）
+        # 不含迁入系动词不受影响
+        (r"(?:自|从)\s*[`\w./_-]+\s*(?:迁入|迁出|迁移|移入|移出)", "HIGH", "来源叙述（自/从 XX 迁入/移入）"),
         (r"已迁移", "HIGH", "迁移痕迹（已迁移）"),
         (r"原(?:逻辑|实现|方案|代码|写法|做法|设计)", "HIGH", "原逻辑/原实现（历史实现叙述）"),
         (
@@ -299,6 +348,35 @@ def _doc_patterns() -> list[tuple[str, str, str]]:
         (r"待[办做处补充修复]", "LOW", "待办/待处理"),
         (r"后续\s*(?:版本|迭代|优化|需要|再处理)", "LOW", "后续版本/迭代（未来计划）"),
         (r"过渡方案|过渡期|过渡性", "LOW", "过渡性方案说明"),
+        # ── STATUS：目录树描述域的进度状态痕迹（仅树行检出；正文中的当前
+        #    状态叙述如"该功能已实施"属合法用法不检，见 scan_file 分支） ──
+        #    注："已移除"不入表——测试标记脚本的违规类别枚举（未注册/已移除/
+        #    edge/目录期望）属语义名，树行合法
+        (
+            r"已(?:实施|评测|定稿|转正|验收|完成|归档|废弃|收口|核实|具备)",
+            "STATUS",
+            "进度状态词（已实施/已归档/已核实等）",
+        ),
+        (r"完成态", "STATUS", "完成态标注（进度状态痕迹）"),
+        (r"不再", "STATUS", "相对旧实现对比措辞（不再XX，描述只讲内容）"),
+        (r"随(?:任务|功能)(?:完成|落地)", "STATUS", "任务流转措辞（随任务完成/随功能落地移入）"),
+        (r"(?:验收|判定|实施|演练)记录", "STATUS", "验收/判定/实施记录指引（历史痕迹）"),
+        (r"迭代验收|门槛与验收", "STATUS", "验收措辞（目录树描述只讲内容）"),
+        (r"立项依据", "STATUS", "立项依据标注（流转痕迹）"),
+        (r"观察中", "STATUS", "观察状态标注（进度状态痕迹）"),
+        (r"§\s*\d", "STATUS", "章节验收指引（目录树描述不应含 § 章节引用）"),
+        (r"(?:设计)?(?:草案|初稿|终稿|草稿)", "STATUS", "稿态词（设计草案/初稿等，描述只讲内容）"),
+        # ── NARRATIVE：任务记录域（plan.md / review-findings.md / docs/plan/*）
+        #    的历史复盘痕迹——任务内容只反映最新状态，禁止修复/改造前后对比、
+        #    相对旧实现的否定句、历史归因（仅任务域检出：常规手册的「修复后
+        #    重启」是操作指引、变更日志记录变化是其职责，均不适用） ──
+        (
+            r"(?:修复|改造|重构|调整|修改|变更|上线|迁移|替换|回退|部署|发布)[前后]",
+            "NARRATIVE",
+            "修复/改造前后对比（任务内容只反映最新状态）",
+        ),
+        (r"不再", "NARRATIVE", "相对旧实现的否定句（不再XX，复盘痕迹）"),
+        (r"历史原因|之前版本", "NARRATIVE", "历史归因/版本对比（复盘痕迹）"),
     ]
 
 
@@ -347,8 +425,7 @@ def _exclude_lines() -> list[re.Pattern]:
         re.compile(r"^\s*R-[A-Z]+-\d+"),  # requirements 需求条目 ID（行首）
         re.compile(r"迭代计划"),  # README 导航项（指向 plan.md）
         re.compile(r"子文件"),  # 测试组织规范（拆分到子文件 test_xxx_partN.py）
-        # ── folders.md 目录结构记录（含 archive/ 属合法指向） ──
-        re.compile(r"^\s*[│├└]"),  # 目录树行
+        # ── folders.md 统计表行（如 | ├ archive/ | 版本归档 |）──
         re.compile(r"archive/\s*\|"),  # 统计表行（如 | ├ archive/ | 版本归档 |）
         # ── 工具自身说明（描述脚本跳过/豁免/禁止归档目录引用，而非引用归档内容） ──
         #  匹配"豁免/跳过/不扫描/排除/检查/不得/禁止 归档目录或归档引用"的工具说明行
@@ -381,6 +458,18 @@ _CHAPTER_PATTERNS = [(p, c, d) for p, c, d in _DOC_PATTERNS if c == "CHAPTER"]
 # 架构约束代号模式子集（独立于 trace-exempt 逻辑：除约束定义处豁免外，
 # 所有文档正文（含 plan.md/changelog.md 等历史/计划记录）均不得出现 C1~C25）
 _CIPHER_PATTERNS = [(p, c, d) for p, c, d in _DOC_PATTERNS if c == "CIPHER"]
+# 目录树行（│ ├ └ 开头）：仅 ARCHIVE 类豁免（目录结构记录含 archive/ 条目属
+# 合法指向），任务编号/进度状态词等照检——树行描述只讲文件内容简要
+_TREE_LINE = re.compile(r"^\s*[│├└]")
+# 文件名任务编号/系列代号（目录树比对 check-doc-drift 只管存在性，语义命名由本检查补位）：rf-N/plan-N、task\d、系列字母+数字（B1/A5/r198/D17 类）与 P3-04 全形；phase 词形（p1-optimization）不误伤
+_NAME_CODE = re.compile(
+    r"(?:^|[_-])(?:rf|plan)-\d+"
+    r"|(?:^|[_-])task\d+"
+    r"|(?:^|[_-])[BAGFD]\d+(?=[_-])"
+    r"|(?:^|[_-])r-?\d{2,3}(?=[_-])"
+    r"|(?:^|[_-])P\d-\d+",
+    re.IGNORECASE,
+)
 
 
 def _is_excluded(line: str) -> bool:
@@ -388,27 +477,51 @@ def _is_excluded(line: str) -> bool:
     return any(p.search(line) for p in _COMPILED_EXCLUDE)
 
 
-def scan_file(fpath: Path, verbose: bool, chapter_only: bool = False) -> list[tuple[int, str, str, str]]:
+def scan_file(
+    fpath: Path,
+    verbose: bool,
+    chapter_only: bool = False,
+    task_record: bool = False,
+    archive: bool = False,
+) -> list[tuple[int, str, str, str]]:
     """扫描单个文档，返回 [(行号, 分类, 模式说明, 行内容), ...]
 
     Markdown 围栏代码块（``` 包裹）内是命令/配置示例，非文档叙述，
     不参与历史痕迹匹配（避免 `git tag v0.9.9`、`APP_VERSION` 示例误报）。
 
-    chapter_only=True：仅应用 CHAPTER 章节编号模式（用于 changelog/plan/
-    review-findings 与 docs/plan/ 等 trace-exempt 文档——它们是历史/计划
-    记录，版本号等历史痕迹合法，但数字章节暗号仍影响可读性需检查；迭代轮次
-    "轮 N"是这些记录文档的正式载体，ROUND 不纳入 trace-exempt 扫描）。
-    架构约束代号（CIPHER）独立于 chapter_only：除约束定义处（technical.md /
-    llm-technical.md）豁免外，所有文档正文（含 trace-exempt 记录文档）均不得
-    出现 C1~C25——约束代号属"暗号"，与历史痕迹/章节暗号不同层，处处禁。
+    chapter_only=True：仅应用 CHAPTER 章节编号模式（用于 changelog——变更
+    日志记录变化是其职责，历史痕迹与复盘叙事均合法）。
+    task_record=True：任务记录域（plan.md / review-findings.md / docs/plan/*）
+    ——查 CHAPTER + NARRATIVE（复盘叙事：任务内容只反映最新状态）+ CIPHER；
+    不查 HIGH（设计文档的旧格式兼容等是合法内容）、不查 ROUND（迭代轮次
+    是记录文档的正式载体）、不查 STATUS（仅树行域）；不走 _is_excluded
+    表格豁免（任务表/断言表行内的复盘叙事必须检出）。
+    archive=True：归档域（docs/archive/*）——查 NARRATIVE 复盘痕迹（归档
+    设计/迭代计划同样只表述最新状态；走 _is_excluded 表豁免——发布流程等
+    描述合法）；不查 HIGH/CHAPTER/ROUND/STATUS/CIPHER（历史文档性质，
+    见模块 docstring 受检范围）。
+    架构约束代号（CIPHER）独立于模式选择：除约束定义处（technical.md /
+    llm-technical.md）与归档域豁免外，所有受检文档正文均不得出现 C1~C25——
+    约束代号属"暗号"，与历史痕迹/章节暗号不同层，受检域内处处禁。
     """
     hits: list[tuple[int, str, str, str]] = []
+    # 文件名任务编号（文件级 finding，line=0）：受检域 .md 文件名含 rf-N/plan-N
+    # 或系列代号（B1/r198/task91 类）即任务代号残留，须用语义命名（语义命名全域
+    # 适用，归档/中间计划文档历史文件名已改名，归档文件名同样入检）
+    if _NAME_CODE.search(fpath.name):
+        hits.append((0, "CODE", "文件名含任务编号（须用语义命名）", fpath.name))
     try:
         text = fpath.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return hits
 
-    if chapter_only:
+    if archive:
+        patterns = [p for p in _DOC_PATTERNS if p[1] == "NARRATIVE"]
+    elif task_record:
+        patterns = [p for p in _DOC_PATTERNS if p[1] in ("CHAPTER", "NARRATIVE")]
+        if fpath.name not in CIPHER_EXEMPT_FILES:
+            patterns += _CIPHER_PATTERNS
+    elif chapter_only:
         patterns = list(_CHAPTER_PATTERNS)
         if fpath.name not in CIPHER_EXEMPT_FILES:
             patterns += _CIPHER_PATTERNS
@@ -431,21 +544,30 @@ def scan_file(fpath: Path, verbose: bool, chapter_only: bool = False) -> list[tu
             if verbose:
                 print(f"    (codeblock) L{lineno}: {stripped[:60]}")
             continue
-        if not chapter_only and _is_excluded(stripped):
+        # 任务记录域不走 _is_excluded（表格/链接行豁免会吃掉任务表内的复盘叙事）
+        if not chapter_only and not task_record and not _TREE_LINE.match(stripped) and _is_excluded(stripped):
             if verbose:
                 print(f"    (excluded) L{lineno}: {stripped[:80]}")
             continue
         if _is_chapter_excluded(stripped):
             if verbose and chapter_only:
                 print(f"    (ch-excluded) L{lineno}: {stripped[:80]}")
-            if chapter_only:
+            if chapter_only or task_record:
                 continue
+        is_tree = bool(_TREE_LINE.match(stripped))
         for pat, cat, desc in patterns:
+            if is_tree and cat == "ARCHIVE":
+                continue  # 目录树行记录项目结构，archive/ 条目属合法指向
+            if cat == "STATUS" and not is_tree:
+                continue  # 进度状态词仅目录树描述域（正文当前状态叙述合法）
+            if cat == "NARRATIVE" and not (task_record or archive):
+                continue  # 复盘叙事仅任务记录域/归档域（手册操作指引/变更日志合法）
             if cat == "CHAPTER" and _is_chapter_excluded(stripped):
                 continue  # 计数/序数表述豁免，不影响其他模式
             if cat == "ROUND" and _is_round_excluded(stripped):
                 continue  # 轮次计数/运行时表述豁免，不影响其他模式
-            if re.search(pat, stripped):
+            subject = _INLINE_CODE_RE.sub(" ", stripped) if cat == "NARRATIVE" else stripped
+            if re.search(pat, subject):
                 hits.append((lineno, cat, desc, stripped[:120]))
                 break  # 每行仅报告首个匹配
 
@@ -487,6 +609,14 @@ def _iter_docs(trace_exempt: bool = False) -> list[Path]:
                 continue
             docs.append(fpath)
     return docs
+
+
+def _iter_archive_docs() -> list[Path]:
+    """收集归档域文档（docs/archive/**/*.md）——DUPLICATE + NARRATIVE 域。"""
+    archive_dir = REPO_ROOT / "docs" / "archive"
+    if not archive_dir.exists():
+        return []
+    return sorted(archive_dir.rglob("*.md"))
 
 
 #: 已删函数候选：反引号内总长 ≥8 的 snake_case（`name` / `name()` / `name(args)`
@@ -586,6 +716,10 @@ def scan_deleted_symbol_refs(
     return hits
 
 
+#: 行内代码段（技术令牌如词表条目 `不再`——NARRATIVE 匹配前剔除，非叙述）
+_INLINE_CODE_RE = re.compile(r"`[^`]+`")
+
+
 def _render_summary(total: int, high: int, low: int, summary: dict[str, int]) -> int:
     """结论汇总输出（全量与缓存回放两路共用，保证输出逐字一致）。"""
     print()
@@ -595,7 +729,9 @@ def _render_summary(total: int, high: int, low: int, summary: dict[str, int]) ->
     cat_stats = ", ".join(f"{k}={v}" for k, v in sorted(summary.items()))
     print(f"[!] 发现 {total} 处可疑痕迹（{cat_stats}）")
     if high > 0:
-        print(f"    {high} 处高置信度（HIGH/ARCHIVE/CODE/CIPHER/CHAPTER/ROUND），应从文档中移除")
+        print(
+            f"    {high} 处高置信度（HIGH/ARCHIVE/CODE/CIPHER/CHAPTER/ROUND/STATUS/NARRATIVE/DUPLICATE），应从文档中移除"
+        )
         return 1
     print(f"[!] 仅 {low} 处 LOW 级别痕迹（需人工判断），建议复核")
     return 2
@@ -627,7 +763,8 @@ def main() -> int:
     # 受检文档两态列表一次构造，指纹与扫描循环复用（避免同次运行 4 遍目录走查）
     regular_docs = _iter_docs(trace_exempt=False)
     exempt_docs = _iter_docs(trace_exempt=True)
-    cache_inputs = [*regular_docs, *exempt_docs]
+    archive_docs = _iter_archive_docs()
+    cache_inputs = [*regular_docs, *exempt_docs, *archive_docs]
     if args.ci:
         replay = _replay_conclusion(conclusion_cache_load("doc_traces", [Path(__file__)], cache_inputs))
         if replay is not None:
@@ -654,7 +791,17 @@ def main() -> int:
         for lineno, cat, desc, text in hits:
             total_hits += 1
             summary[cat] = summary.get(cat, 0) + 1
-            is_high = cat in ("HIGH", "ARCHIVE", "CODE", "CIPHER", "CHAPTER", "ROUND")
+            is_high = cat in (
+                "HIGH",
+                "ARCHIVE",
+                "CODE",
+                "CIPHER",
+                "CHAPTER",
+                "ROUND",
+                "STATUS",
+                "NARRATIVE",
+                "DUPLICATE",
+            )
             if is_high:
                 high_count += 1
             else:
@@ -673,14 +820,29 @@ def main() -> int:
     for doc in regular_docs:
         report_doc(doc, scan_file(doc, args.verbose, chapter_only=False))
 
-    # trace-exempt 文档（changelog/plan/review-findings + plan 目录）：
-    # 仅章节编号检查（版本号等历史痕迹合法，不检查）
+    # trace-exempt 文档分两域：
+    # · changelog（变更日志）：仅章节编号——记录变化是其职责，历史痕迹合法
+    # · 任务记录域（plan/review-findings/docs/plan）：章节编号 + NARRATIVE
+    #   复盘叙事——任务内容只反映最新状态，禁止修复前后对比/不再/历史归因
     for doc in exempt_docs:
-        report_doc(doc, scan_file(doc, args.verbose, chapter_only=True))
+        if doc.name == "changelog.md":
+            report_doc(doc, scan_file(doc, args.verbose, chapter_only=True))
+        else:
+            report_doc(doc, scan_file(doc, args.verbose, task_record=True))
 
     # 已删除函数残留：文档反引号引用的函数，当前代码无定义但 git 历史存在过（常规文档）
     for doc in regular_docs:
         report_doc(doc, scan_deleted_symbol_refs(doc))
+
+    # 归档域：非 changelog 归档查 NARRATIVE（归档设计/迭代计划只表述最新状态）；
+    # changelog 归档与 changelog.md 同口径不查复盘叙事（记录变化是其职责）
+    for doc in archive_docs:
+        if "changelog" not in doc.name:
+            report_doc(doc, scan_file(doc, args.verbose, archive=True))
+
+    # 结构性冗余（DUPLICATE）：重复标题全域 + 重复长行/区块（台账三文件 + 归档域）
+    for doc in [*regular_docs, *exempt_docs, *archive_docs]:
+        report_doc(doc, scan_structural_duplicates(doc))
 
     conclusion_cache_save(
         "doc_traces",

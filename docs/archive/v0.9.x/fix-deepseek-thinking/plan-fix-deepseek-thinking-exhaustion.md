@@ -81,4 +81,4 @@ provider deepseek-main 失败（api_error），切换下一 provider
 2. 相关 API 层测试：`.venv/bin/python -m pytest src/test/unit/llm/ -v --tb=short`
 3. P0 门禁：`.venv/bin/python scripts/test_runner.py --mode dev-verify`
 4. 历史痕迹：`.venv/bin/python scripts/check-history-traces.py --ci`
-5. 用户实测：重新生成报告，确认 DeepSeek 主链路 expert_review / health_check 不再出现"思考部分耗尽"→ 切 provider；正文正常产出
+5. 用户实测：重新生成报告，确认 DeepSeek 主链路 expert_review / health_check 不出现"思考部分耗尽"→ 切 provider；正文正常产出
