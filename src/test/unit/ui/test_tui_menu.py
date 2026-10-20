@@ -335,6 +335,39 @@ class TestFeatureGatedMenuItems:
 
         assert "T" in {item[0] for item in tm.MENU_ITEMS}
 
+    def test_gate_is_reversible_when_flag_reenabled(self):
+        """先关后开必须恢复（回归：门控曾就地删项，运行中开启开关后该项永不出现）。
+
+        用户实测路径：启动时 `report_qa` 关闭 → `[Q]` 被裁掉 → 在 `[S]` 里开启 →
+        回首页仍看不到 `[Q]`（必须重启）。根因是 `_apply_feature_gates` 用切片过滤
+        `MENU_ITEMS` 本体，被删项没有母本可恢复。
+        """
+        import src.python.tui.tui_menu as tm
+
+        full = {item[0] for item in tm.MENU_ITEMS}
+        self._apply(enabled=False)
+        assert "Q" not in {item[0] for item in tm.MENU_ITEMS}
+        self._apply(enabled=True)
+        assert {item[0] for item in tm.MENU_ITEMS} == full, "重新开启后菜单项未完全恢复"
+
+    def test_main_loop_reapplies_gates_each_frame(self):
+        """主循环必须在重绘点重建门控——否则 [S] 里改完开关返回首页仍是旧菜单。"""
+        from pathlib import Path as _Path
+
+        src = (_Path(__file__).resolve().parents[4] / "src" / "python" / "tui" / "tui.py").read_text(encoding="utf-8")
+        loop_head = src[src.index("    while True:\n") : src.index("    while True:\n") + 400]
+        assert "_apply_feature_gates()" in loop_head, "主循环重绘点须重新应用功能开关门控"
+        assert "nav.count = len(MENU_ITEMS)" in loop_head, "裁剪后须同步导航上界（防游标越界）"
+
+    def test_gate_keeps_list_object_identity(self):
+        """门控经切片赋值重建：列表对象不变（调用方持有的视图同步）。"""
+        import src.python.tui.tui_menu as tm
+
+        obj = tm.MENU_ITEMS
+        self._apply(enabled=False)
+        self._apply(enabled=True)
+        assert tm.MENU_ITEMS is obj
+
     def test_config_dir_info_unaffected_by_doctor_gate(self):
         """开关关闭只裁剪 [T] 自检，[D] 查看配置与目录信息（无门控）仍在菜单中。"""
         import src.python.tui.tui_menu as tm

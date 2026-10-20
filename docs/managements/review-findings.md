@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.13.8-dev
-> **编号源**：`rf-next = 739`（新增问题取此编号，完成后更新为 +1；已用最大 rf-733，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 740`（新增问题取此编号，完成后更新为 +1；已用最大 rf-733，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -71,3 +71,4 @@
 - **rf-736**：`_json_patch` 硬编码 `INNER_INDENT = 4` 致 2 空格风格文件重写后变 4 空格——新增 `_detect_indent_unit`（取首个缩进内容行前导空格数），`_replace_dict_block` 与 `_replace_array_block` 同修。回归：reorder 后条目 4 / 字段 6 缩进保持、嵌套 dict 子键 4 缩进保持。
 - **rf-737**：多链线路顺序两处相反——排序上提为共享 `config/_llm_providers.order_providers_by_chain`（priority 升序、同值保持数组原序），`llm_status()` 与 `[M]` 面板同经此函数，`chain_head` 恒等于 `providers[0]`。回归：数组序与链序相反时 llm_status 按链序输出、面板编号与之一致（跨渠道同序断言）、同 priority 保持数组原序、排序不修改入参。
 - **rf-738**：测试隔离缺口——`tui_menu.MENU_ITEMS` 为模块级可变列表，`_apply_feature_gates()` 用切片赋值原地裁剪且不恢复，任一用例关掉 `doctor_check`/`report_qa` 后，同进程后续用例看到项数不足的菜单；单进程顺序下通常不暴露，xdist 分片改变顺序后表现为随机失败（实测 `test_footer_documents_both_exit_keys`）。修复：`conftest.py` 新增 `_restore_menu_items` autouse fixture 逐例快照/还原；同时把页脚收敛到 80 列内，避免键名改「回车」后折行拆断退出提示。
+- **rf-739**：功能开关门控不可逆——`_apply_feature_gates()` 用切片过滤 `MENU_ITEMS` **本体**（无母本），且只在启动时调用一次。用户实测路径：启动时 `report_qa` 关 → `[Q]` 被裁掉 → 在 `[S]` 开启 → 回首页仍无 `[Q]`（须重启才能出现）；`doctor_check` 的 `[T]` 同病。修复：新增 `_ALL_MENU_ITEMS` 母本，门控改为**从母本重建**（幂等可逆、切片赋值保持列表对象），主循环重绘点每帧重建并同步 `nav.count`（裁剪后游标夹紧）。回归：先关后开完整恢复、列表对象同一、主循环重绘点接线断言。

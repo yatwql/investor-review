@@ -58,17 +58,25 @@ MENU_GROUPS: list[tuple[str, tuple[str, ...]]] = [
 ]
 
 
+# 菜单母本（定义时的完整清单）：门控裁剪**从母本重建**而不是就地过滤——
+# 就地过滤会把关闭过的项永久删除，运行中在 [S] 重新开启后该项仍不出现（只能重启）。
+_ALL_MENU_ITEMS: list[MenuItem] = list(MENU_ITEMS)
+
+
 def _apply_feature_gates() -> None:
-    """按功能开关就地裁剪 MENU_ITEMS（切片赋值保持列表对象不变，调用方视图同步）。"""
+    """按功能开关重建 MENU_ITEMS（幂等、可逆；切片赋值保持列表对象不变）。
+
+    幂等可逆是硬要求：主循环每帧调用一次（开关在 `[S]` 改完返回首页即刻生效），
+    所以必须每次从 `_ALL_MENU_ITEMS` 母本重新裁剪——否则「先关后开」的项回不来。
+    """
     from src.python.config.features import is_feature_enabled
 
     disabled = {
         key
         for key, flag in FEATURE_GATED_ITEMS.items()
-        if key in {item[0] for item in MENU_ITEMS} and not is_feature_enabled(flag)
+        if not is_feature_enabled(flag) and any(item[0] == key for item in _ALL_MENU_ITEMS)
     }
-    if disabled:
-        MENU_ITEMS[:] = [item for item in MENU_ITEMS if item[0] not in disabled]
+    MENU_ITEMS[:] = [item for item in _ALL_MENU_ITEMS if item[0] not in disabled]
 
 
 _config_cache: dict | None = None

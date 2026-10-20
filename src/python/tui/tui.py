@@ -289,6 +289,13 @@ def main() -> None:
     menu_filter = ""  # 主菜单关键词筛选（`/` 设定，`0` 清除；空=不筛选）
 
     while True:
+        # 每帧重建门控：功能开关在 [S] 面板改完返回首页即生效（含重新开启被裁剪的项），
+        # 无需重启；裁剪后项数变化 → 重新绑定回调并夹紧游标（防越界）
+        _apply_feature_gates()
+        _bind_callbacks()
+        nav.count = len(MENU_ITEMS)
+        if nav.cursor >= nav.count:
+            nav.sync(0)
         frame_lines = _render_menu_frame(nav.cursor, menu_filter)
         visible = match_menu_items(menu_filter)  # 当前可见项索引（未筛选=全部）
         hint_lines = 0  # 帧下方反馈行数（原地重绘时并入清除范围）

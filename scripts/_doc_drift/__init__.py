@@ -103,6 +103,7 @@ from _doc_drift._shared import (  # noqa: F401
     _PLAN_MD,
     _CHANGELOG_MD,
     _REVIEW_FINDINGS_MD,
+    _REQUIREMENTS_MD,
     _HISTORY_DOCS,
     _TREE_ROOTS,
     _GENERATED_DIRS,
@@ -126,6 +127,8 @@ from _doc_drift._menu_blocks import (  # noqa: F401
     parse_menu_block_lines,
 )
 
+from _doc_drift._requirements_menu import check_requirements_menu_table  # noqa: F401
+
 __all__ = [
     "_README",
     "_MANUALS",
@@ -141,6 +144,7 @@ __all__ = [
     "_PLAN_MD",
     "_CHANGELOG_MD",
     "_REVIEW_FINDINGS_MD",
+    "_REQUIREMENTS_MD",
     "_HISTORY_DOCS",
     "_TREE_ROOTS",
     "_GENERATED_DIRS",
