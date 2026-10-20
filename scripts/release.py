@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import os
 import re
 import sys
 from pathlib import Path
@@ -362,6 +363,11 @@ def cmd_evolution(args: argparse.Namespace, runner=None) -> int:
 # ─────────────────────────── gate ───────────────────────────
 
 
+def _gate_workers() -> int:
+    """十守护并行度：4 路封顶、随核数收敛——弱机器（如 2 核）自动降路，避免 CPU 超订反而拖慢总墙钟。"""
+    return max(1, min(4, os.cpu_count() or 4))
+
+
 def cmd_gate(args: argparse.Namespace, runner=None) -> int:
     print("[..] P2 门禁：场景回归")
     rc, out, err = _exec([sys.executable, "scripts/test-runner.py", "--mode", "regression"], REPO_ROOT, runner)
@@ -374,13 +380,15 @@ def cmd_gate(args: argparse.Namespace, runner=None) -> int:
         return rc if rc != 0 else 1
     print("[OK] 场景回归通过\n")
 
-    print("[..] P2 门禁：十守护 --ci（四路并行）")
+    workers = _gate_workers()
+    print(f"[..] P2 门禁：十守护 --ci（{workers} 路并行）")
     from concurrent.futures import ThreadPoolExecutor
 
     worst = 0
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        # 全部守护为只读子进程（--ci 不写文件），并行无竞态；按清单序收集结果，
-        # 与串行版输出顺序一致，便于门禁日志对拍
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        # 全部守护为 --ci 只读子进程（不写业务文件；结论缓存为每 namespace 独立
+        # 文件、事实缓存为单文件，均原子 temp+rename 写，并行无互踩），按清单序
+        # 收集结果，与串行版输出顺序一致，便于门禁日志对拍；并发度见 _gate_workers
         futures = [
             (script, pool.submit(_exec, [sys.executable, script, "--ci"], REPO_ROOT, runner))
             for script in GUARD_SCRIPTS

@@ -432,6 +432,17 @@ class TestEvolutionTable:
 
 
 class TestGate:
+    def test_gate_workers_converge_with_cpu(self, rel, monkeypatch):
+        """并行度随核数收敛：弱机器降路、4 核+ 封顶、缺核信息取封顶、单核不下 1 路。"""
+        monkeypatch.setattr(rel.os, "cpu_count", lambda: 2)
+        assert rel._gate_workers() == 2
+        monkeypatch.setattr(rel.os, "cpu_count", lambda: 8)
+        assert rel._gate_workers() == 4
+        monkeypatch.setattr(rel.os, "cpu_count", lambda: None)
+        assert rel._gate_workers() == 4
+        monkeypatch.setattr(rel.os, "cpu_count", lambda: 1)
+        assert rel._gate_workers() == 1
+
     def test_guard_scripts_exist_and_unique(self, rel):
         assert len(rel.GUARD_SCRIPTS) == len(set(rel.GUARD_SCRIPTS))
         for script in rel.GUARD_SCRIPTS:

@@ -143,8 +143,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--jobs",
         type=int,
-        default=2,
-        help="多模式并行度（每模式独立 pytest 进程，单模式忽略；默认 2。墙钟含轻微争抢，环境表「采集并行度」行记录本次口径，独跑参考约快 10~20%%）",
+        default=1,
+        help="多模式并行度（每模式独立 pytest 进程，单模式忽略；默认 1 串行——与历史行为一致，弱机器不超订，显式指定 N>1 才并行。墙钟含轻微争抢，环境表「采集并行度」行记录本次口径，同并行度才可比）",
     )
     parser.add_argument("--help", action="store_true", help="显示帮助")
     args = parser.parse_args()
@@ -207,8 +207,8 @@ def main() -> None:
     try:
         if jobs > 1 and len(modes_to_run) > 1:
             # 多模式并行（每模式独立 pytest 进程，报告按模式目录隔离）：
-            # 省的是单线程收集/调度串行段；墙钟含轻微争抢，环境表「采集
-            # 并行度」行记录本次口径，独跑参考约快 10~20%。按计划序收集
+            # 省的是模式间串行衔接与收集段，实际收益随机器核数与负载浮动，
+            # 环境表「采集并行度」行记录本次口径，同并行度才可比。按计划序收集
             # 结果，与串行版 results 顺序一致（写表/汇总不依赖完成序）。
             from concurrent.futures import ThreadPoolExecutor
 

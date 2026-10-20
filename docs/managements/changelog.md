@@ -17,7 +17,7 @@
 
 ### Changed
 
-- 发布编排提速：`release.py refresh` 条件化——上次发布 tag 以来的变更仅 `.md`/图片文件时自动跳过 bench + collect（测试计数无变化，下一含程序/测试变更的发布自动补齐；`--force-refresh` 强制恒跑，取不到 tag 或存在未跟踪程序文件时保守恒跑），docs-stats sync 恒跑；`gate` 十守护 4 路并行（均只读 `--ci`）；`test-runner` 新增 `--jobs`（默认 2）多档模式并行采集，环境表新增「采集并行度」行（同条件可比，跨采集并行度不直接比），`machine_info` 同步携带采集并行度
+- 发布编排提速：`release.py refresh` 条件化——上次发布 tag 以来的变更仅 `.md`/图片文件时自动跳过 bench + collect（测试计数无变化，下一含程序/测试变更的发布自动补齐；`--force-refresh` 强制恒跑，取不到 tag 或存在未跟踪程序文件时保守恒跑），docs-stats sync 恒跑；`gate` 十守护并行且并发度随核数收敛（4 路封顶、2 核机自动 2 路；守护均只读 `--ci`，结论缓存每 namespace 独立文件、事实缓存均为原子 temp+rename 写，无互踩）；`test-runner` 新增 `--jobs` 多档模式并行采集（**默认 1 串行**——与历史行为一致，弱机器不超订，显式 N>1 才并行；环境表新增「采集并行度」行，跨并行度不直接可比），`machine_info` 同步携带采集并行度
 - pre-commit 调度：`check-doc-drift` 纯 `--ci` 分支改为后台并行（与快集守护重叠，回放前统一等待），`--sync` 写路径保持串行先行避免 folders.md 写读竞态；回放段同步顺序不变
 - `folders.md` 目录树描述全面去任务号与历史痕迹（三轮共 60+ 处）：任务编号（plan-N/rf-N）改为语义描述；已实施/验收记录指引/阶段进度/随任务完成移入等状态与流转措辞全部移除，描述仅保留文件内容简要；归档设计文件语义化改名（`plan-4-brinson-attribution-abandoned.md` → `brinson-attribution-abandoned.md`、`plan-11-dark-mode-plan.md` → `dark-mode-plan.md`，引用同步）
 

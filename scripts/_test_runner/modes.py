@@ -205,7 +205,7 @@ _HELP_TEXT = """测试驱动脚本 — 统一运行 pytest 并输出结构化 HT
   python scripts/test-runner.py --coverage               # 全量 + 覆盖率报告
   python scripts/test-runner.py --mode bench --machine-info  # 跨机器耗时采集（环境 + 各模式实测表格）
   python scripts/test-runner.py --mode bench --update-docs   # 采集并自动回填环境耗时对照表
-  python scripts/test-runner.py --jobs 4            # 多模式并行度（默认 2；单模式忽略，环境表记「采集并行度」）
+  python scripts/test-runner.py --jobs 4            # 多模式并行度（默认 1 串行，N>1 才并行；单模式忽略，环境表记「采集并行度」）
   python scripts/test-runner.py --help                   # 本帮助
 
 模式说明:
