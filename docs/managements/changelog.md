@@ -9,6 +9,7 @@
 
 ## [0.13.8-dev] - 开发中（未发布）
 
+- **多链线路顺序三处统一**（review-findings rf-737）：排序上提为共享单一实现 `config/_llm_providers.order_providers_by_chain`（`priority` 升序、同值保持数组原序），`llm_status()` 与 TUI `[M]` 面板同经此函数，`chain_head` 恒等于 `providers[0]`。此前 `llm_status()` 按 `providers` 数组物理顺序输出、面板按 priority 排序，reorder 后首页显示 `[1] 优先级 20 / [2] 优先级 10` 而面板是反的，与状态行链首自相矛盾——现在首页配置块、状态行链首、`[M]` 面板编号、Web 配置面四处顺序一致。
 - **多链配置文件写回保真**（review-findings rf-735 / rf-736）：
   - 缩进不再漂移：`_json_patch` 新增 `_detect_indent_unit`，数组/对象整块重写沿用文件现有缩进单位（`_replace_dict_block` 与 `_replace_array_block` 同修）——此前硬编码 4 空格会把 2 空格风格的文件（`llm_providers.json` / `llm_settings.json`）写成 4 空格，字段值无损但版式跳变、diff 噪声大
   - 头注释不再说谎：`write_llm_providers` 写盘前经 `_neutralize_chain_labels` 把「主：/备：/辅：/次：」线路标注改写为中性「线路：」，并把「顺序即 priority 升序」归正为「链序按 priority 升序，数值小者靠前，与数组项顺序无关」（幂等，仅动注释行、括号内描述与其他注释原样保留）——此前 reorder 互换后注释仍称原主备，字段与注释相互矛盾；默认模板同步改为只写稳定事实（不含主/备标注）

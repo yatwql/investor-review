@@ -218,6 +218,33 @@ class TestLlmProviderReorder(_ProviderFileMixin, unittest.TestCase):
         self.assertIn("链序按 priority 升序，数值小者靠前，与数组项顺序无关", raw)
 
 
+class TestOrderProvidersByChain:
+    """展示/面板共用的唯一排序口径：priority 升序，同值保持数组原序。"""
+
+    def test_sorts_by_priority_value(self) -> None:
+        from src.python.config._llm_providers import order_providers_by_chain
+
+        entries = [
+            {"name": "a", "priority": 30},
+            {"name": "b", "priority": 10},
+            {"name": "c", "priority": 20},
+        ]
+        assert [p["name"] for p in order_providers_by_chain(entries)] == ["b", "c", "a"]
+
+    def test_keeps_array_order_on_tie(self) -> None:
+        from src.python.config._llm_providers import order_providers_by_chain
+
+        entries = [{"name": "x", "priority": 10}, {"name": "y", "priority": 10}]
+        assert [p["name"] for p in order_providers_by_chain(entries)] == ["x", "y"]
+
+    def test_does_not_mutate_input(self) -> None:
+        from src.python.config._llm_providers import order_providers_by_chain
+
+        entries = [{"name": "a", "priority": 20}, {"name": "b", "priority": 10}]
+        order_providers_by_chain(entries)
+        assert [p["name"] for p in entries] == ["a", "b"]
+
+
 class TestLlmProviderTemplateComment:
     """默认模板头注释只写稳定事实（链序由 priority 决定），不含会失效的主/备标注。"""
 

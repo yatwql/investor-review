@@ -205,9 +205,14 @@ def llm_status() -> dict:
 
     # ── credentials_ref 多链模式 ──
     if provider_list and not llm_config.get("api_key"):
+        from src.python.config._llm_providers import order_providers_by_chain
+
         all_creds = llm_config.get("_llm_credentials", {}) or {}
+        # 链序口径单一：按 priority 升序输出（与 [M] 面板 / 运行时 resolve_provider_chain 一致），
+        # 数组物理顺序不作数（reorder 只改 priority）——否则首页 [1] 可能是链尾。
+        ordered_entries = order_providers_by_chain(provider_list)
         providers = []
-        for entry in provider_list:
+        for entry in ordered_entries:
             model, endpoint = resolve_provider_credentials(entry, all_creds)
             providers.append(
                 {
@@ -226,12 +231,10 @@ def llm_status() -> dict:
         ]
         # 链首线路：仅顺序即链序的策略（priority/fallback_only）给出；
         # weighted/cost_first 实际链序由权重/成本决定，给 priority 首位会误导。
+        # 与上方 providers 列表同序：链首恒为 providers[0]（便于「一眼对上编号 1」）。
         chain_head = None
-        if llm_config.get("_strategy", "priority") in ("priority", "fallback_only") and provider_list:
-            chain_head = min(
-                provider_list,
-                key=lambda entry: (entry.get("priority", 99), str(entry.get("name", ""))),
-            ).get("name")
+        if llm_config.get("_strategy", "priority") in ("priority", "fallback_only") and ordered_entries:
+            chain_head = ordered_entries[0].get("name")
         return {
             "configured": True,
             "mode": "multi",

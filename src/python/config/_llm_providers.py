@@ -298,6 +298,23 @@ def _inject_provider_chain_data(config: dict) -> dict:
     return config
 
 
+def order_providers_by_chain(providers: list[dict]) -> list[dict]:
+    """按链序排列 provider 条目（``priority`` 升序，同值保持数组原序）。
+
+    展示与编辑面板共用的**唯一排序口径**：链序真值是 ``priority`` 数值（小者靠前），
+    数组物理顺序不作数（reorder 只改 priority 值、不改数组项位置）。TUI 首页配置块 /
+    ``[M]`` 面板 / CLI 状态表 / Web 配置面均经此函数，避免同一份数据在两处
+    呈现相反顺序（编号 ``[1]/[2]`` 隐含链序，口径不一即误导）。
+
+    Args:
+        providers: ``llm_providers.json`` 的 providers 条目列表。
+
+    Returns:
+        新列表（不修改入参），按链序排列。
+    """
+    return [p for _i, p in sorted(enumerate(providers), key=lambda kv: (kv[1].get("priority", 99), kv[0]))]
+
+
 def get_llm_providers() -> dict:
     """多链配置公开只读访问（TUI / Web 面板与编辑层共用单源）。
 

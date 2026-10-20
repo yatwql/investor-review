@@ -871,11 +871,13 @@ def _cmd_config_llm_providers() -> None:
     state: dict = {"ordered": [], "width": 80}
 
     def _load() -> tuple[str, list]:
+        from src.python.config._llm_providers import order_providers_by_chain
+
         cfg = get_llm_providers()
         strategy = str(cfg.get("strategy") or "priority")
         raw_providers = [p for p in (cfg.get("providers") or []) if isinstance(p, dict)]
-        # 展示顺序 = priority 升序（数值小 = 链序靠前），与运行时 priority 策略口径一致
-        ordered = sorted(enumerate(raw_providers), key=lambda t: (t[1].get("priority", 99), t[0]))
+        # 排序口径单一（共享 order_providers_by_chain）：与首页配置块 / 状态行链首 / 运行时一致
+        ordered = list(enumerate(order_providers_by_chain(raw_providers)))
         return strategy, ordered
 
     strategy, ordered = _load()

@@ -210,6 +210,24 @@ class TestLlmStatusSingleSource:
         )
         assert llm_status()["chain_head"] is None
 
+    def test_multi_chain_provider_order_follows_priority(self, monkeypatch):
+        """数组顺序与 priority 相反时，providers 仍按链序输出，链首 = providers[0]。"""
+        monkeypatch.setattr(
+            "src.python.config.get_llm_config",
+            lambda: {
+                "_provider_list": [
+                    {"name": "deepseek-main", "provider": "claude", "priority": 20},
+                    {"name": "opencode-go", "provider": "claude", "priority": 10},
+                ],
+                "_strategy": "priority",
+            },
+        )
+        from src.python.core.system_info import llm_status
+
+        llm = llm_status()
+        assert [p["name"] for p in llm["providers"]] == ["opencode-go", "deepseek-main"]
+        assert llm["chain_head"] == llm["providers"][0]["name"] == "opencode-go"
+
     def test_build_embeds_same_status(self, monkeypatch):
         """build_system_info 的 llm 段与 llm_status() 逐字相等（单源关系，非镜像组装）。"""
         monkeypatch.setattr("src.python.config.get_llm_config", lambda: {"api_key": "sk-x", "provider": "claude"})
