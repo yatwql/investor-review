@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.13.9-dev
-> **编号源**：`rf-next = 748`（新增问题取此编号，完成后更新为 +1；已用最大 rf-733，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 750`（新增问题取此编号，完成后更新为 +1；已用最大 rf-733，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -21,6 +21,8 @@
 
 | # | 问题 | 修复方向 |
 |---|------|----------|
+| **rf-748** | 设计护栏观察项无收口登记：`check-style-guardrails` 当前观察期内联色值 40 处（含 `llm_quality.py` 质量横幅内联琥珀三色、模板 partials 多处硬编码 hex）、字号档外 8 处、间距档外 172 处（多在 `web/style.css`）——DESIGN.md 护栏声明「待误报稳定后评估入域」，但 plan.md 与本表均无对应任务，观察期无死线 | 跑一次误报归类（W3 内联色中质量横幅与模板 partials 优先改为 token/组件类），据结果设定入域死线或登记批量清理任务至 plan.md |
+| **rf-749** | `config/_llm_providers.py` 写盘 `llm_providers.json`（含 api_key，凭据集中约束的指定承载文件）未收紧文件权限——cache 域对敏感缓存已有 0o600 先例（`cache/_io.py`），凭据文件反而同标准缺失（umask 022 下其他用户可读） | 写入成功后 `os.chmod(path, 0o600)`（try/except 兼容 Windows，同 `cache/_io.py` 模式），并补一个写后权限断言用例 |
 
 ### 开发期已修复（0.13.9-dev）
 
