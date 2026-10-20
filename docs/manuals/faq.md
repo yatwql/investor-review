@@ -192,7 +192,7 @@ A: 菜单 `C` 配置正确的持仓目录，或菜单 `F` 选择正确的文件�
 
 **Q: 修改配置文件后如何生效？**
 
-A: 菜单 `R` 刷新配置可重新加载 `config.json`、`llm_settings.json` 及 `llm_key.json`，立即生效无需重启程序。
+A: 菜单 `R` 刷新配置可重新加载 `config.json` 与 LLM 三文件合并配置（`llm_settings.json` / `llm_key.json` / `llm_providers.json`），立即生效无需重启程序。手工修改 LLM 配置文件（含多链优先级）后同样免重启——页头状态行 `LLM ●` 后会即时显示当前链首线路，一眼确认新配置已生效。
 
 **Q: 如何关闭某个不需要的新闻源？**
 

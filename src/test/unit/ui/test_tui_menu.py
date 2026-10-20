@@ -513,6 +513,16 @@ class TestStatusLine(unittest.TestCase):
         ):
             self.assertEqual(_llm_part(), "LLM —")
 
+    def test_llm_status_dot_shows_chain_head(self) -> None:
+        """多链时 LLM 段携带链首线路名（换序/手改后回首页即见新链首）。"""
+        from src.python.tui.status_line import _llm_part
+
+        with patch(
+            "src.python.core.system_info.llm_status",
+            return_value={"configured": True, "chain_head": "kimi-k3"},
+        ):
+            self.assertEqual(_llm_part(), "LLM ● kimi-k3")
+
     # ── 整行组装 ──
 
     def test_full_line_format_with_menu_hint(self) -> None:
@@ -539,6 +549,32 @@ class TestStatusLine(unittest.TestCase):
         self.assertIn("备用源 —", line)
         self.assertIn("LLM ●", line)
         self.assertIn("〔详情 [4][H][S]〕", line)
+
+    def test_full_line_drops_hint_when_narrow(self) -> None:
+        """窄终端弃「详情」指引，五个语义段保留（指引最先降级）。"""
+        from src.python.tui.status_line import reset_status_memo
+
+        reset_status_memo()
+        with (
+            patch("src.python.core.perf.load_history", return_value=[]),
+            patch(
+                "src.python.cache.operations.get_cache_stats",
+                return_value=SimpleNamespace(expired=5),
+            ),
+            patch("src.python.core.perf.summarize_health_history", return_value=[]),
+            patch(
+                "src.python.core.system_info.llm_status",
+                return_value={"configured": True},
+            ),
+            patch("src.python.tui.status_line.terminal_columns", return_value=60),
+            tempfile.TemporaryDirectory() as tmp,
+            patch("src.python.cache.get_cache_dir", return_value=tmp),
+        ):
+            line = build_status_line()
+            self.assertNotIn("〔详情", line)
+            self.assertIn("缓存过期 5", line)
+            self.assertIn("LLM ●", line)
+        reset_status_memo()  # 防窄版整行漏入后续用例的记忆
 
     def test_all_sources_fail_degrades_per_item(self) -> None:
         """五路取数全挂 → 逐项显示 —，不向调用方抛出。"""

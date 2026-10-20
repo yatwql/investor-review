@@ -62,6 +62,10 @@ def _apply_edit(payload: dict) -> bool:
 
     try:
         apply_config_edit(payload)
+        # 配置已变：清页头状态行记忆（否则 TTL 内回首页仍显示旧值）
+        from src.python.tui.status_line import reset_status_memo
+
+        reset_status_memo()
         return True
     except ConfigEditError as e:
         print(f"  {YELLOW}[!]{RESET} {e}")
@@ -760,14 +764,17 @@ def _cmd_config_report_boards() -> None:
 
 
 def _cmd_refresh_config() -> None:
-    """重新加载所有配置（config.json + llm_settings.json + llm_key.json）。"""
+    """重新加载所有配置（config.json + LLM 三文件合并缓存：llm_settings/llm_key/llm_providers）。"""
     from src.python.config import get_config, get_llm_config
     from src.python.config._core import invalidate_config_cache
     from src.python.config._llm_settings import invalidate_llm_config_cache
     from src.python.llm.pricing import reload_pricing
+    from src.python.tui.status_line import reset_status_memo
 
     invalidate_config_cache()
     invalidate_llm_config_cache()
+    # 页头状态行记忆一并清除（TTL 内不清则首页仍显旧状态）
+    reset_status_memo()
 
     config = get_config()
     llm_config = get_llm_config()
@@ -784,7 +791,7 @@ def _cmd_refresh_config() -> None:
     if config:
         print(f"  {GREEN}[OK]{RESET} config.json 已重新加载")
     if llm_config:
-        print(f"  {GREEN}[OK]{RESET} llm_settings.json + llm_key.json 已重新加载")
+        print(f"  {GREEN}[OK]{RESET} LLM 配置已重新加载（llm_settings + llm_key + llm_providers）")
     else:
         print(f"  {YELLOW}[!]{RESET} LLM 未配置（llm_key.json 或 llm_providers.json 缺失或无效）")
 

@@ -3147,9 +3147,11 @@ LLM API 调用支持多 Provider 链式容错，与数据获取层的 Provider C
 
 ```
 config.json (基础配置)       → get_config() 内存缓存，按 mtime 自动失效
-llm_settings.json (非敏感)    → get_llm_config() 合并读取，联合 mtime 失效
+llm_settings.json (非敏感)    → get_llm_config() 三文件合并读取，判据 = 三文件 mtime+size；
+                                 写原语写后主动失效 + TUI [R] 显式失效（手工改/互换免重启）
 llm_key.json (敏感凭据)       → 覆盖 llm_settings.json 的同名字段；多凭据块供 credentials_ref 引用
 llm_providers.json (链配置)   → _load_llm_providers() 读取，_inject_provider_chain_data 注入
+                                 （同入 get_llm_config 合并缓存判据；页头状态行显示链首线路）
 local_state.json (机器本地)   → get_flag()/set_flag() 读写
 ```
 

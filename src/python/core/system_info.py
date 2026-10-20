@@ -185,8 +185,10 @@ def llm_status() -> dict:
 
     Returns:
         dict：未配置 ``{"configured": False}``；多链含 ``mode="multi"`` /
-        strategy / providers / preferred；flat 含 ``mode="flat"`` / provider /
-        model / endpoint / endpoint_display / circuit / route。
+        strategy / providers / preferred / chain_head（链首线路名，仅
+        priority / fallback_only 策略给出，其余策略为 None）；flat 含
+        ``mode="flat"`` / provider / model / endpoint / endpoint_display /
+        circuit / route。
     """
     from src.python.config import get_llm_config
     from src.python.core.registry import get_llm_module_names
@@ -222,12 +224,21 @@ def llm_status() -> dict:
             f"{get_llm_module_names().get(mk, mk)} → {pname}"
             for mk, pname in (llm_config.get("_preferred_providers", {}) or {}).items()
         ]
+        # 链首线路：仅顺序即链序的策略（priority/fallback_only）给出；
+        # weighted/cost_first 实际链序由权重/成本决定，给 priority 首位会误导。
+        chain_head = None
+        if llm_config.get("_strategy", "priority") in ("priority", "fallback_only") and provider_list:
+            chain_head = min(
+                provider_list,
+                key=lambda entry: (entry.get("priority", 99), str(entry.get("name", ""))),
+            ).get("name")
         return {
             "configured": True,
             "mode": "multi",
             "strategy": strategy_label(llm_config.get("_strategy", "priority")),
             "providers": providers,
             "preferred": preferred,
+            "chain_head": chain_head,
         }
 
     # ── 传统 flat 模式：单 provider ──

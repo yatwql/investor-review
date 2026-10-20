@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.13.8-dev
-> **编号源**：`rf-next = 734`（新增问题取此编号，完成后更新为 +1；已用最大 rf-733，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 737`（新增问题取此编号，完成后更新为 +1；已用最大 rf-733，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -21,6 +21,8 @@
 
 | # | 问题 | 修复方向 |
 |---|------|----------|
+| **rf-735** | `llm_providers.json` 文件头「主：DeepSeek / 备：Kimi K3」注释在 reorder 互换后不更新（字段级替换设计：区块外注释字节级保留、不改写语义）——互换完成后头注释与实际 priority（数值小者链序靠前）相反，用户打开文件会被误导（当前盘上即此状态：头注释说主 DeepSeek，实际 opencode-go priority=10 为链首） | 择一：① reorder 动作同步改写头注释中「主：/备：」标注（需文本区定位，风险略高）；② 改为中性措辞「链序以下方 priority 升序为准」（改模板 `_DEFAULT_LLM_PROVIDERS` + 存量文件由下次 reorder 附带刷新或一次性迁移） |
+| **rf-736** | `_json_patch._replace_array_block` 硬编码 `INNER_INDENT = 4`：`llm_providers.json` 等 2 空格缩进风格的文件，数组整体重写后缩进变 4 空格（实测 reorder 后 `providers[].name` 由 6 空格变 10 空格），与文件其余部分风格不一致；字段值/注释/键序均无损，仅美观漂移（同文件重复 reorder 不再二次放大） | 写入前从原文探测缩进单位（首个缩进键行的前导空格数）并传入 `_replace_array_block`；该引擎为 settings/config/providers 共用，需连带回归 `test_config_llm_providers_priority` 注释保留断言与 `test_llm_settings` dict 块替换用例 |
 
 
 ### P3 — 持续监控：文件过长登记表（>500 行观察，脚本域 >400 即入观察 / **>1000 行为硬上限必须拆分**（主程序与脚本）；按距红线余量升序）
@@ -73,3 +75,4 @@
 
 - **rf-731**：LLM 费用预估接入重新生成范围——`forecast_run_cost(force_llm/force_modules)`（与 `POST /api/runs` 同源 `resolve_force_scope` 归一；范围内模块保证重新调用、按静态单价口径，范围外维持历史实际费用口径），摘要行新增「其中 N 个模块重新生成」拆行；TUI `[L]` 屏 `N`/选模块/全量后按所选范围重打更新预估行，Web `cost-preflight` 透传 `llm_modules` 查询参数（非法键 `ok:false` 数据面降级不 500）、确认弹层显示拆行，CLI `--yes` 确认透传 `--force-llm`/`--llm-module`。日预算硬闸维持「当日累计」判定不改为按次预测（按投影拦截会误伤「用已有结果」路径；本次费用预测由更新预估在展示层承担）。
 - **rf-733**：删除 `tui/prompt_text.confirm_prompt`（问句+选项+默认项单行模板，`src/python/` 零生产调用）——确认类屏已按「问句行 + 键位行」两行式落地（生成确认 Y/N 化），单行模板失去挂点；其专属用例与 prompt 契约清单 `_DISPLAY_CALLS` 中的登记同步删除，`panel_prompt`（列表面板四成分模板）保留。plan-159「剩余：input_choice 类提示迁移到 confirm_prompt」方向随之关闭（不迁，两行式为准）。
+- **rf-734**：LLM 配置热生效链路——`get_llm_config()` 合并缓存判据补入 `llm_providers.json`（mtime+size）；`write_llm_providers` 写后主动失效；`[M]` 换序/任意配置编辑成功与 `[R]` 刷新清页头状态行记忆（45s TTL 不再吞重绘）；`llm_status()` 新增 `chain_head` 且首页状态行 `LLM ●` 后显示链首线路（窄终端弃「详情」指引守宽）。手工改 LLM 三文件均免重启生效，同会话生成用新链序。

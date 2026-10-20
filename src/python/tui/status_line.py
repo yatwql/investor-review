@@ -7,13 +7,15 @@
   - 数据新鲜度    ← 最新价格缓存的 ``price_date``（数据日期 + 自然日龄；
     页头不引入交易日历取数——日历缓存未命中时会走 akshare 触网）
   - 备用源数      ← ``core/perf`` 的 ``datasource_health.jsonl`` 末条 ``fail_count``
-  - LLM 状态点    ← ``core/system_info.llm_status``（● 已配置 / ○ 未配置）
+  - LLM 状态点    ← ``core/system_info.llm_status``（● 已配置 / ○ 未配置；
+    多链时携带链首线路名——换序/手改优先级后回首页即见新链首）
 
 契约：
 
   - 逐项独立容错——单项取数异常降级为「—」，不影响其余项；
   - 整行组装异常降级为 ``状态 │ —``，永不向调用方抛出；
-  - TTL 记忆化（页头随主循环重绘，重取限频），``reset_status_memo`` 供测试。
+  - TTL 记忆化（页头随主循环重绘，重取限频），配置变更与 [R] 刷新时经
+    ``reset_status_memo`` 清记忆（回首页即重绘新值；亦供测试）。
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ from datetime import datetime
 from typing import Any
 
 from src.python.core.ansi_colors import DIM, GREEN, RESET, YELLOW
+from src.python.tui.text_layout import display_width, terminal_columns
 
 logger = logging.getLogger(__name__)
 
@@ -119,12 +122,18 @@ def _degraded_part() -> str:
 
 
 def _llm_part() -> str:
-    """LLM 状态点（● 已配置 / ○ 未配置，判定与 [S] 状态同源）。"""
+    """LLM 状态点（● 已配置 / ○ 未配置，判定与 [S] 状态同源）+ 多链链首线路名。
+
+    链首名来自 llm_status()["chain_head"]（单源，仅 priority/fallback_only
+    策略存在）——换序/手改优先级后回首页即见新链首，一眼验证配置已生效。
+    """
     try:
         from src.python.core.system_info import llm_status
 
-        if llm_status().get("configured"):
-            return f"LLM {GREEN}●{RESET}"
+        status = llm_status()
+        if status.get("configured"):
+            head = status.get("chain_head")
+            return f"LLM {GREEN}●{RESET}" + (f" {head}" if head else "")
         return f"LLM {YELLOW}○{RESET}"
     except Exception:
         logger.debug("状态行「LLM」取数失败，降级为 —", exc_info=True)
@@ -139,7 +148,8 @@ def build_status_line(*, now: float | None = None) -> str:
 
     Returns:
         形如 ``状态 │ 上次报告 10-07 09:55 · 缓存过期 3 · 新鲜度 最新 ·
-        备用源 0 · LLM ●〔详情 [4][H][S]〕`` 的单行文本。
+        备用源 0 · LLM ● kimi-k3〔详情 [4][H][S]〕`` 的单行文本（多链时
+        LLM 段携带链首线路名）；窄终端弃「详情」指引、五个语义段全保留。
     """
     ts = time.time() if now is None else float(now)
     cached = _memo.get("line")
@@ -154,6 +164,10 @@ def build_status_line(*, now: float | None = None) -> str:
             _llm_part(),
         ]
         line = "状态 │ " + " · ".join(parts) + f"{DIM}〔详情 [4][H][S]〕{RESET}"
+        # 宽度守卫：窄终端先弃「详情」指引（指引最先降级；五个语义段全保留）。
+        # 语义段不截断——ANSI 序列截断风险与语义损失均高于弃指引。
+        if display_width(line) > terminal_columns() - 2:
+            line = "状态 │ " + " · ".join(parts)
     except Exception:
         logger.debug("状态行组装失败，降级显示", exc_info=True)
         line = "状态 │ —"
@@ -163,5 +177,5 @@ def build_status_line(*, now: float | None = None) -> str:
 
 
 def reset_status_memo() -> None:
-    """清空状态行记忆（测试与手工刷新用）。"""
+    """清空状态行记忆（配置变更 / [R] 刷新后回首页即重绘；亦供测试用）。"""
     _memo.clear()

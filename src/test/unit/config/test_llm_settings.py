@@ -1,4 +1,7 @@
-"""LLM 设置共享写入原语 write_llm_settings 单元测试 — 注释保留 / 原子写 / 缓存刷新。
+"""LLM 设置单元测试 — write_llm_settings 注释保留 / 原子写 / 缓存刷新 + 合并缓存失效。
+
+合并缓存失效三面：判据覆盖三合并输入文件（含 llm_providers.json）、
+写原语写后主动失效、面板 reorder 同进程可见（手工改 / 互换后无需重启）。
 
 TUI 与 Web 配置编辑共用的 llm_settings.json 写入原语（自 tui/handlers_config 抽取）。
 """
@@ -7,6 +10,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import time
 
 import pytest
 
@@ -144,3 +149,116 @@ class TestFullFailRetryDelayDeclared:
         with caplog.at_level(logging.WARNING):
             _check_unknown_llm_keys({"llm_full_fail_retry_delay": 5})
         assert not [r for r in caplog.records if "未知配置项" in r.getMessage()]
+
+
+# ── 合并缓存失效（三合并输入文件判据 / 写原语写后失效 / 同进程可见） ──────
+
+
+def _seed_merged_inputs(tmp_path, monkeypatch):
+    """llm_settings/llm_key/llm_providers 三文件落临时目录并重定向读取器（隔离真实配置）。"""
+    import src.python.config._llm_providers as providers_mod
+    import src.python.config._llm_settings as settings_mod
+    from src.python.config._llm_providers_defaults import _DEFAULT_LLM_PROVIDERS
+
+    settings_path = tmp_path / "llm_settings.json"
+    key_path = tmp_path / "llm_key.json"
+    providers_path = tmp_path / "llm_providers.json"
+    settings_path.write_text('{"model": "claude"}', encoding="utf-8")
+    key_path.write_text('{"provider": "claude", "api_key": "test-key"}', encoding="utf-8")
+    providers_path.write_text(json.dumps(_DEFAULT_LLM_PROVIDERS, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    monkeypatch.setattr(settings_mod, "get_llm_settings_path", lambda: str(settings_path))
+    monkeypatch.setattr(providers_mod, "_get_llm_key_path", lambda: str(key_path))
+    monkeypatch.setattr(providers_mod, "_get_llm_providers_path", lambda: str(providers_path))
+    return providers_path
+
+
+@pytest.fixture(autouse=True)
+def _reset_merged_llm_cache():
+    """合并缓存状态隔离（本文件用例直读模块级缓存断言，前后清空防串扰）。"""
+    from src.python.config._llm_settings import invalidate_llm_config_cache
+
+    invalidate_llm_config_cache()
+    yield
+    invalidate_llm_config_cache()
+
+
+class TestMergedCacheInvalidation:
+    """合并缓存失效三面：判据覆盖三文件 / 写原语写后失效 / 面板重排同进程可见。"""
+
+    @staticmethod
+    def _first_two_swapped():
+        """模板前两条线路 priority 对换（模板保证 ≥2 条且数值互异）。"""
+        from src.python.config._llm_providers_defaults import _DEFAULT_LLM_PROVIDERS
+
+        entries = _DEFAULT_LLM_PROVIDERS["providers"]
+        assert entries[0]["priority"] != entries[1]["priority"]
+        return entries
+
+    def test_manual_providers_edit_bypasses_merge_cache(self, tmp_path, monkeypatch):
+        """手工改 providers（等长对换 priority）后，下一次合并读取立见新值。"""
+        from src.python.config._llm_settings import get_llm_config
+
+        providers_path = _seed_merged_inputs(tmp_path, monkeypatch)
+        entries = self._first_two_swapped()
+        before = {p["name"]: p["priority"] for p in entries}
+        after = {p["name"]: p["priority"] for p in entries}
+        after[entries[0]["name"]], after[entries[1]["name"]] = entries[1]["priority"], entries[0]["priority"]
+
+        first = get_llm_config()
+        assert first is not None
+        assert {p["name"]: p["priority"] for p in first["_provider_list"]} == before
+
+        # 等长对换（位数相同 → size 不变）+ 显式前移 mtime（不依赖文件系统时间粒度）
+        raw = json.loads(providers_path.read_text(encoding="utf-8"))
+        raw["providers"][0]["priority"], raw["providers"][1]["priority"] = (
+            entries[1]["priority"],
+            entries[0]["priority"],
+        )
+        providers_path.write_text(json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8")
+        future = time.time() + 2
+        os.utime(providers_path, (future, future))
+
+        second = get_llm_config()
+        assert second is not None
+        assert {p["name"]: p["priority"] for p in second["_provider_list"]} == after
+
+    def test_write_primitive_invalidates_merge_cache(self, tmp_path, monkeypatch):
+        """写原语落盘后合并缓存立即置空（主动失效，不等 mtime 判据追赶）。"""
+        import src.python.config._llm_settings as settings_mod
+        from src.python.config._llm_providers import write_llm_providers
+        from src.python.config._llm_settings import get_llm_config
+
+        providers_path = _seed_merged_inputs(tmp_path, monkeypatch)
+        get_llm_config()  # 预热合并缓存
+        assert settings_mod._llm_config_cache is not None
+
+        entries = self._first_two_swapped()
+        raw = json.loads(providers_path.read_text(encoding="utf-8"))
+        raw["providers"][0]["priority"], raw["providers"][1]["priority"] = (
+            entries[1]["priority"],
+            entries[0]["priority"],
+        )
+        write_llm_providers({"providers": raw["providers"]}, str(providers_path))
+
+        assert settings_mod._llm_config_cache is None  # 写后立即置空
+        refreshed = get_llm_config()
+        by_name = {p["name"]: p["priority"] for p in refreshed["_provider_list"]}
+        assert by_name[entries[0]["name"]] == entries[1]["priority"]
+        assert by_name[entries[1]["name"]] == entries[0]["priority"]
+
+    def test_reorder_action_visible_to_merged_read(self, tmp_path, monkeypatch):
+        """面板重排（共享编辑层 reorder）后，同进程合并读取立见归一化新链序。"""
+        from src.python.config._llm_providers_defaults import _DEFAULT_LLM_PROVIDERS
+        from src.python.config._llm_settings import get_llm_config
+        from src.python.config.edit_ops import apply_config_edit
+
+        _seed_merged_inputs(tmp_path, monkeypatch)
+        order = [p["name"] for p in reversed(_DEFAULT_LLM_PROVIDERS["providers"])]
+        expected = {name: 10 * (i + 1) for i, name in enumerate(order)}
+
+        apply_config_edit({"key": "llm_providers.priority", "action": "reorder", "order": order})
+
+        second = get_llm_config()
+        assert second is not None
+        assert {p["name"]: p["priority"] for p in second["_provider_list"]} == expected

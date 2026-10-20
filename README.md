@@ -61,7 +61,7 @@
 
 ## 🖥️ 界面实景
 
-**TUI 交互模式**——全键盘主菜单（18 项，方向键 + 字母直达，页头常驻状态行，页脚常驻键位提示；`0` 或 `X` 退出；窄屏/手机 SSH 自适应折行）：
+**TUI 交互模式**——全键盘主菜单（四个任务分组共 18 项，方向键 + 字母直达，`/` 关键词筛选，页头常驻状态行含 LLM 当前链首线路，页脚常驻键位提示；`0` 或 `X` 退出；窄屏/手机 SSH 自适应折行）：
 
 ![TUI 主菜单](src/static/tui-menu.png)
 
@@ -99,7 +99,7 @@ git clone https://github.com/yatwql/investor-util.git && cd investor-util
 ./scripts/launch.sh     # Linux
 ```
 
-全键盘菜单：方向键导航 + 字母/数字快捷键，`[D]` 等入口带二级子菜单。各菜单详解见 [TUI 菜单操作手册](docs/manuals/how-to-use-tui-menu.md)。
+全键盘菜单：按「生成报告 / 数据与查看 / 配置 / 诊断与排查」四组编排，方向键导航 + 字母/数字快捷键，`/` 按关键词筛选（按 Esc 或 `0` 清除）；`[D]` 等入口带二级子菜单。界面用色遵循一色一职责（橙色品牌行 · 蓝色分组标题 · 青色选中位 · 绿/黄/红状态色），无颜色终端与窄屏自动降级，语义不依赖颜色。改配置即改即存：`[M]` 互换 LLM 多链优先级、或手工编辑 `llm_settings.json` / `llm_key.json` / `llm_providers.json` 后免重启生效（页头 `LLM ●` 后即时显示新链首线路，`[R]` 为确定性全量重读入口）。各菜单详解见 [TUI 菜单操作手册](docs/manuals/how-to-use-tui-menu.md)。
 
 ### Web 浏览器模式
 

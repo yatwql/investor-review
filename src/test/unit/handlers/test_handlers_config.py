@@ -83,6 +83,20 @@ class TestApplyEdit:
         assert _apply_edit(payload) is True
         mock_apply.assert_called_once_with(payload)
 
+    @patch("src.python.config.edit_ops.apply_config_edit")
+    def test_success_clears_status_memo(self, mock_apply):
+        """写入成功即清页头状态行记忆（回首页立即重绘新值，不等 TTL）。"""
+        from src.python.tui import status_line
+        from src.python.tui.handlers_config import _apply_edit
+
+        status_line._memo["line"] = "旧状态"
+        status_line._memo["ts"] = 0.0
+        try:
+            assert _apply_edit({"key": "k", "value": "v"}) is True
+            assert status_line._memo.get("line") is None
+        finally:
+            status_line.reset_status_memo()
+
     @patch("src.python.config.edit_ops.apply_config_edit", side_effect=ValueError("非法值"))
     def test_shared_edit_failure_returns_false(self, mock_apply):
         """共享层拒绝（校验/写入失败）→ 返回 False 不抛出，交由错误行呈现。"""

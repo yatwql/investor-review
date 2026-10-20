@@ -185,6 +185,31 @@ class TestLlmStatusSingleSource:
         assert len(llm["providers"]) == 1
         assert {"strategy", "providers", "preferred"} <= set(llm)
 
+    def test_multi_chain_head_by_priority(self, monkeypatch):
+        """链首线路 = priority 最小者（顺序即链序的策略）；weighted 等不给链首防误导。"""
+        monkeypatch.setattr(
+            "src.python.config.get_llm_config",
+            lambda: {
+                "_provider_list": [
+                    {"name": "backup", "provider": "openai", "priority": 20},
+                    {"name": "primary", "provider": "claude", "priority": 10},
+                ],
+                "_strategy": "priority",
+            },
+        )
+        from src.python.core.system_info import llm_status
+
+        assert llm_status()["chain_head"] == "primary"
+
+        monkeypatch.setattr(
+            "src.python.config.get_llm_config",
+            lambda: {
+                "_provider_list": [{"name": "a", "provider": "claude", "priority": 10}],
+                "_strategy": "weighted",
+            },
+        )
+        assert llm_status()["chain_head"] is None
+
     def test_build_embeds_same_status(self, monkeypatch):
         """build_system_info 的 llm 段与 llm_status() 逐字相等（单源关系，非镜像组装）。"""
         monkeypatch.setattr("src.python.config.get_llm_config", lambda: {"api_key": "sk-x", "provider": "claude"})
