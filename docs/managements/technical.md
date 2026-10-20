@@ -402,7 +402,7 @@ TUI（Text User Interface）是系统**主要交互渠道**：桌面终端内的
 | 模块 | 职责 | 关键内容 |
 |:-----|:-----|:---------|
 | `tui/tui.py` | 主入口/主循环 | sys.path 注入、init_config、_bind_callbacks、启动清理/隐私提示/首次引导、方向键导航循环、LLM 会话统计 |
-| `tui/tui_menu.py` | 菜单定义与渲染 | MENU_ITEMS 列表、MENU_GROUPS（任务分组：生成报告/数据与查看/配置/诊断与排查）、render_menu/print_header/show_config、_apply_feature_gates（开关门控裁剪）、index_by_key、match_menu_items/next_matching（`/` 筛选与筛选内导航）、press_any_key/exit_app |
+| `tui/tui_menu.py` | 菜单定义与渲染 | MENU_ITEMS 列表、MENU_GROUPS（任务分组：生成报告 E/B/L/W · 数据与查看 Q/1/2/3 · 配置 D/P/I/A/S/M/R · 诊断与排查 V/H/T）、render_menu/print_header/show_config、_apply_feature_gates（开关门控裁剪）、index_by_key、match_menu_items/next_matching（`/` 筛选与筛选内导航）、press_any_key/exit_app |
 | `tui/tui_keys.py` | 键盘封装 | 跨平台（Windows msvcrt / Linux tty+termios+select），标准化键名 KEY_UP/DOWN/ENTER/CTRL_C |
 | `tui/handlers_report.py` | 报告生成外壳 | `_run_generate` 骨架、`_prompt_generate_confirm` 合并单屏一次确认（full：费用预估上屏 + 回车/`Y`/`N`/`q`/`h` 单问，默认侧 `Y`=用已有结果，`N`（同义 `f`）触发 `_select_force_modules` 模块多选，含日预算超限安全网）/`_prompt_history`（委托 resolve_fetch_history + 注入 y/N 询问，仅 both）、E/B/L 三命令 |
 | `tui/handlers_config.py` | 配置管理外壳 | 目录/文件名/输出目录/章节/指数池/匿名化/LLM 模块与功能开关/刷新等 8 项配置命令 |
