@@ -16,8 +16,11 @@ A 股市场当前是否在交易时段。
 from __future__ import annotations
 
 import logging
-from src.python.core.constants import BEIJING_TZ
+import threading
 from datetime import datetime
+from typing import Any
+
+from src.python.core.constants import BEIJING_TZ
 
 logger = logging.getLogger("invest")
 
@@ -39,6 +42,32 @@ _EM_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     "Referer": "https://www.eastmoney.com/",
 }
+
+# ── 进程内分钟级结果 memo ────────────────────────────
+# 开闭市判定在一个自然分钟内不会变化，而高频调用路径（缓存 TTL 判断、provider
+# 策略选择、取价方式）每秒可达数十次。按分钟粒度 memo（threadlocal，每 worker
+# 一份、无锁），把三层判断压到每 worker 每分钟一次；DEBUG 日志仅在判定结果
+# 变化时输出（_log_state 去重），避免连续相同结果把日志刷屏。
+_memo = threading.local()
+_log_state = threading.local()
+_STATE_UNSET = object()
+
+
+def reset_memo_state() -> None:
+    """清空本线程的分钟级 memo 与日志去重状态（测试与长驻进程手动失效用）。"""
+    _memo.minute = -1
+    _memo.result = None
+    _log_state.config = _STATE_UNSET
+    _log_state.api_cache = _STATE_UNSET
+    _log_state.api_live = _STATE_UNSET
+
+
+def _debug_on_change(state_key: str, message: str, *args: Any) -> None:
+    """仅状态变化时输出 DEBUG（state_key 记录上次已输出的取值，相同则不再打）。"""
+    value = args[-1] if args else None
+    if getattr(_log_state, state_key, _STATE_UNSET) != value:
+        setattr(_log_state, state_key, value)
+        logger.debug(message, *args)
 
 
 def _parse_time_to_minutes(time_str: str) -> int | None:
@@ -110,7 +139,7 @@ def _is_market_open_config(current_min: int) -> bool | None:
     in_range = start_min <= current_min <= end_min
     lunch = _MORNING_END < current_min < _AFTERNOON_START
     result = in_range and not lunch
-    logger.debug("市场时段(配置 %s-%s): %s", start_str, end_str, result)
+    _debug_on_change("config", "市场时段(配置 %s-%s): %s", start_str, end_str, result)
     return result
 
 
@@ -135,7 +164,7 @@ def _is_market_open_official(current_min: int) -> bool | None:
     cached = get(_CACHE_KEY_MARKET_HOURS, official_ttl)
     if cached is not None and isinstance(cached, dict):
         status = cached.get("status")
-        logger.debug("市场时段(API缓存): status=%s", status)
+        _debug_on_change("api_cache", "市场时段(API缓存): status=%s", status)
         if status == 1:
             return True
         if status == 2:
@@ -143,7 +172,7 @@ def _is_market_open_official(current_min: int) -> bool | None:
     status = _fetch_trading_status_from_official()
     if status is not None:
         set(_CACHE_KEY_MARKET_HOURS, {"status": status})
-        logger.debug("市场时段(API实时): status=%s", status)
+        _debug_on_change("api_live", "市场时段(API实时): status=%s", status)
         if status == 1:
             return True
         if status == 2:
@@ -190,26 +219,31 @@ def is_market_open() -> bool:
 
     非交易时段返回 ``False``，让 price / index 缓存使用长 TTL 保持收盘价。
 
+    进程内按分钟粒度 memo：同一分钟内的重复调用直接复用上次判定（三层判断与
+    DEBUG 日志都不重跑）；异常结果不入 memo（下次调用重新判断）。
+
     Returns:
         是否在交易时段内
     """
     try:
         now = datetime.now(_BJ_TZ)
+        minute = int(now.timestamp() // 60)
+        if getattr(_memo, "minute", None) == minute:
+            return bool(_memo.result)
         current_min = now.hour * 60 + now.minute
 
         # 第 1 层：config.json 手动覆盖
         result = _is_market_open_config(current_min)
-        if result is not None:
-            return result
-
-        # 第 2 层：官方 API 实时状态
-        result = _is_market_open_official(current_min)
-        if result is not None:
-            return result
-
-        # 第 3 层：内置默认值
-        return _is_market_open_fallback(current_min)
+        if result is None:
+            # 第 2 层：官方 API 实时状态
+            result = _is_market_open_official(current_min)
+        if result is None:
+            # 第 3 层：内置默认值
+            result = _is_market_open_fallback(current_min)
+        _memo.minute = minute
+        _memo.result = result
+        return result
 
     except Exception:
         logger.warning("is_market_open 异常，保守返回 False", exc_info=True)
-        return False  # 异常时保守处理：视为非交易时段
+        return False  # 异常时保守处理：视为非交易时段（不入 memo，下次重新判断）

@@ -66,7 +66,7 @@
             {% endif %}
             {% else %}
             <div class="data-status" style="margin-top:0;">
-                <div class="data-status-ok" style="border-left-color:#27ae60;padding-left:8px;">所有数据源运行正常</div>
+                <div class="data-status-ok" style="border-left-color: var(--success);padding-left:8px;">所有数据源运行正常</div>
             </div>
             {% endif %}
             <!-- 数据源说明表（实际使用清单：用途 / 计费 / 凭据要求） -->
@@ -93,7 +93,7 @@
                             {% if item.used %}
                             <span class="src-matrix-ok">&#10003; 已使用</span>
                             {% else %}
-                            <span style="color:#999;">&#9675; 未使用</span>
+                            <span style="color: var(--text-muted);">&#9675; 未使用</span>
                             {% endif %}
                         </td>
                     </tr>

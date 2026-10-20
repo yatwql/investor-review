@@ -335,8 +335,8 @@ class TestSwitchOffGoldenBaseline(unittest.TestCase):
     # 基线复核记录（2026-10-18，单图导出 CSV 批次）：字节差异仅来自 whatif 模板导出按钮
     # CSS 收敛（.chart-export-btn 绝对定位移入 .chart-export-actions 组容器，PNG/CSV 双按钮
     # 并排布局）与内联 chart-export.js 的 CSV 导出逻辑增补；关态业务字节面零变化。
-    _GOLDEN_BASE_SHA256 = "373265510d9422e92b934f1ba5433777983dd6bf5a069cd2a3dbd31d29b09f86"
-    _GOLDEN_FULL_SHA256 = "844d213ef19fb8f74ad8a3381607dada9479652102acc97f71cd8fc47945181a"
+    _GOLDEN_BASE_SHA256 = "f4457a5d07c00630175e08d8c8260824075d5f11bc5bebe57775c8b3fcd73d15"
+    _GOLDEN_FULL_SHA256 = "c3f6179600a387b9a557d1c508337d79282bd32c783a6f1517f1eca62404eb00"
 
     def _render(self, **extra) -> str:
         from unittest.mock import patch
@@ -426,3 +426,41 @@ class TestSwitchOffGoldenBaseline(unittest.TestCase):
         self.assertNotIn("whatif-cost-chart-data", html)
         self.assertNotIn("⑨ 说明", html)
         self.assertIn("⑧ 说明", html)
+
+
+class TestWhatifPrintButton(unittest.TestCase):
+    """打印/导出 PDF 入口与主报告同参（双页入口一致）。"""
+
+    def _render(self) -> str:
+        from src.python.report.whatif_writer import render_whatif_html
+
+        return render_whatif_html(_whatif_data(), "2026-08-03 12:00:00")
+
+    def test_print_button_element_rendered(self):
+        """按钮元素存在且与主报告同参（class/id/aria/title/onclick）。"""
+        import re
+
+        html = self._render()
+        self.assertIn('class="report-print-btn"', html)
+        self.assertIn('id="report-print-btn"', html)
+        self.assertIn('aria-label="打印或导出 PDF"', html)
+        self.assertIn('onclick="window.print()"', html)
+        m = re.search(r'<button[^>]*class="report-print-btn"[^>]*>', html)
+        self.assertIsNotNone(m, "应存在 report-print-btn 按钮元素")
+
+    def test_print_button_styles_and_print_hide(self):
+        """CSS 规则与主报告同参：44px 触控目标、语义 token、hover、打印稿自隐藏。"""
+        import re
+
+        html = self._render()
+        m = re.search(r"\.report-print-btn\s*\{[^}]*\}", html)
+        self.assertIsNotNone(m, "应存在 .report-print-btn 样式规则")
+        rule = m.group(0)
+        self.assertIn("44px", rule, "打印按钮应保持 44×44 触控目标")
+        self.assertIn("var(--primary)", rule, "背景应引用语义 token 而非裸色值")
+        self.assertIn(".report-print-btn:hover { background: var(--primary-hover); }", html)
+        self.assertRegex(
+            html,
+            r"@media print \{ \.report-print-btn \{ display: none !important; \} \}",
+            "打印稿应自隐藏按钮",
+        )

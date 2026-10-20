@@ -10,7 +10,15 @@ import threading
 import time
 
 from src.python.core.constants import BEIJING_TZ
-from src.python.core.retry import STRATEGY_FIXED, STRATEGY_LINEAR, RetryPolicy, is_transient_exception, retry_transient
+from src.python.core.retry import (
+    STRATEGY_FIXED,
+    STRATEGY_LINEAR,
+    RetryPolicy,
+    is_deterministic_failure,
+    is_parse_failure_exception,
+    is_transient_exception,
+    retry_transient,
+)
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from datetime import datetime
 from typing import Any, Callable
@@ -140,7 +148,10 @@ def with_connect_retry(
         )
 
     def _should_retry(exc: BaseException) -> bool:
-        """挂起型（耗时接近超时预算）不重试：再试只会线性放大等待。"""
+        """确定性失败与挂起型（耗时接近超时预算）不重试：再试只会白等。"""
+        if is_deterministic_failure(exc):
+            logger.info("[%s] 确定性失败（%s），不再重试：%s", log_tag, exc, label)
+            return False
         if not build_transient_retry_judge(elapsed["s"], timeout)(exc):
             if elapsed["s"] >= timeout * HANG_ELAPSED_RATIO:
                 logger.warning(
@@ -205,7 +216,9 @@ def run_with_timeout(
         return retry_transient(
             _attempt,
             policy=policy,
-            retry_on=lambda _e: True,  # akshare 异常种类不可枚举：一律重试（与原行为一致）
+            # akshare 异常种类不可枚举：超时/连接抖动一律重试；解析/数据形状类崩溃
+            # 与确定性失败（基准禁网桩）换时机重试必然重复，fail-fast 直接上抛/降级。
+            retry_on=lambda e: not is_parse_failure_exception(e) and not is_deterministic_failure(e),
             on_retry=_on_retry,
             sleep=time.sleep,
         )

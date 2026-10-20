@@ -42,6 +42,33 @@ STRATEGY_TABLE = "table"
 _STRATEGIES = frozenset({STRATEGY_FIXED, STRATEGY_LINEAR, STRATEGY_EXPONENTIAL, STRATEGY_TABLE})
 
 
+#: 「确定性失败」标记（异常消息子串）：失败原因与时机无关，对同一端点重试
+#: 必然重复同一失败并线性放大等待。当前来源：perf 基准门禁的传输层禁网桩
+#: （scripts/perf-test-report.py 抛 OSError）——禁网期间每个端点仍按连接级策略
+#: 退避重试只会白等退避（单次门禁实测千条级重试等待日志）。
+DETERMINISTIC_FAIL_MARKERS: tuple[str, ...] = ("perf-test-report: 基准运行按设计禁网",)
+
+#: 「解析/数据形状类」异常：响应形状不符合预期的解析崩溃（TypeError/KeyError/
+#: AttributeError/IndexError），与网络抖动无关——重试只会拿到同样的坏响应。
+PARSE_FAILURE_EXCEPTIONS: tuple[type[BaseException], ...] = (
+    TypeError,
+    KeyError,
+    AttributeError,
+    IndexError,
+)
+
+
+def is_deterministic_failure(exc: BaseException) -> bool:
+    """是否属于「确定性失败」——失败原因与时机无关，重试无信息量。"""
+    msg = str(exc)
+    return any(marker in msg for marker in DETERMINISTIC_FAIL_MARKERS)
+
+
+def is_parse_failure_exception(exc: BaseException) -> bool:
+    """是否属于「解析/数据形状类失败」——调用方应 fail-fast 转下一源而非退避重试。"""
+    return isinstance(exc, PARSE_FAILURE_EXCEPTIONS)
+
+
 def is_transient_exception(exc: BaseException) -> bool:
     """是否属于「值得重试」的传输级瞬时失败。"""
     return isinstance(exc, TRANSIENT_EXCEPTIONS)

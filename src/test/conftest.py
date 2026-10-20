@@ -300,6 +300,21 @@ def _auto_reset_last_reason():
 
 
 @pytest.fixture(autouse=True)
+def _auto_reset_market_hours_memo():
+    """自动复位 market_hours 的进程内分钟级 memo 与日志去重状态。
+
+    memo 按「进程内分钟」缓存开闭市判定：不复位时，前一个用例（常 mock
+    config/API 层）留在 memo 里的结果会让后一个用例直接命中旧值、跳过其
+    mock 路径，用例结果随执行顺序漂移。与 ``_auto_reset_last_reason`` 同习语。
+    """
+    from src.python.core import market_hours
+
+    market_hours.reset_memo_state()
+    yield
+    market_hours.reset_memo_state()
+
+
+@pytest.fixture(autouse=True)
 def _auto_reset_llm_failure_state():
     """自动复位 LLM 调用失败的模块级/线程局部状态，防止测试间污染。
 

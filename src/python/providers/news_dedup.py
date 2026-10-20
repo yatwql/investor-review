@@ -26,6 +26,7 @@ from src.python.providers.news_dedup_rules import (  # noqa: F401
     _CROSS_DIRECT_RATIO,
     _CROSS_SAFE_RATIO,
     _ENG_PLACEHOLDER,
+    _EVENT_GROUPS,
     _GENERIC_TOKENS,
     _OPPOSITE_PAIRS,
     _RATIO_CLEAN,
@@ -43,6 +44,7 @@ from src.python.providers.news_dedup_rules import (  # noqa: F401
     _pair_similarity,
     proper_noun_tokens,
     _ratio_of_norms,
+    share_event_group,
     _rules_fingerprint,
 )
 
@@ -305,6 +307,13 @@ def _dedup_by_title(
                 if overlap >= 1 and _has_opposite_direction(norm, existing):
                     _record_anchor(_make_anchor(item, existing_item, ratio, overlap, False, "cross_opposite"))
                 elif overlap >= _CROSS_BIGRAM_MIN:
+                    # bg=3 下限档加事件一致性：同主体不同事件对（公司名贡献多
+                    # 个 bigram 凑满 bg=3，如「暗盘跌 vs 资金抢筹」）不合并、
+                    # 落候选区保留（详见 news_dedup_rules._EVENT_GROUPS）；
+                    # 不转入下方 bg=2 梯度（专名判据对同主体对恒成立，会绕过）
+                    if overlap == _CROSS_BIGRAM_MIN and not share_event_group(norm, existing):
+                        _record_anchor(_make_anchor(item, existing_item, ratio, overlap, False, "cross_skip"))
+                        continue
                     is_dup = True
                     _record_anchor(_make_anchor(item, existing_item, ratio, overlap, True, "cross_merge"))
                     break

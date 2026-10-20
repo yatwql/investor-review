@@ -229,3 +229,15 @@ technical.md 新增 §6.9「实验项生命周期表」（功能语义命名表�
 
 **同步项**：`handlers_switch` 模块 docstring 改为「面板本体 + 辅助」（原写「主循环仍在 handlers_config」）；`test_handlers_config.py` 的结构断言（分组由 `GROUP_ORDER` 派生）随实现位置改读 `handlers_switch.py`；folders 目录树与 technical 模块表描述更新。
 
+
+## plan-128 调仓对比页无打印/PDF 入口 ✅
+
+**完成（2026-10-20，v0.13.9-dev）**：`whatif_template.html` 补 `.report-print-btn`（与主报告同参：fixed right 64px / 44×44 触控目标、`--primary`/`--primary-hover` 语义 token、`onclick="window.print()"`、`@media print` 自隐藏），按钮与主题切换并排位于页首右上；`test_whatif_html.py` 新增 `TestWhatifPrintButton`（元素同参 + CSS 规则/44px 触控/token 引用/hover/打印稿隐藏），关态黄金基线 sha256 随渲染产物更新。
+
+## plan-167 报告模板内联色值 token 化收口（W3 观察项） ✅
+
+**完成（2026-10-20，v0.13.9-dev）**：40 处内联 `style=` 色值全部 token 化归零——报告侧新增组件派生 token `--heat-*`（相关系数分档四档）/ `--corr-*`（相关性方向×强度六档 + 文字色）/ `--cell-na-bg` / `--alloc-*` / `--danger-text`（DESIGN.md Colors 组件派生面登记，暗色配对同步：饱和语义块小面积刻意保持、中性面与警示文字按暗色世界调整）；次级灰/占位/边框类改引 `--text-muted`/`--text-faint`/`--surface`/`--border-strong`/`--success`/`--warn-text` 既有 token。W3 由观察升为 E 级 finding（`check-style-guardrails` 收口，`TestInlineColors` 补 finding 断言用例；W4 字号/W5 间距保持观察）。
+
+## plan-168 跨源候选区 bg=3 档事件一致性判据（误合并治理） ✅
+
+**完成（2026-10-20，v0.13.9-dev）**：`news_dedup_rules` 新增 `_EVENT_GROUPS` 事件信号词组（17 组，组内互认：立案/调查/留置/被查同组；刻意排除职务/身份词与泛状态词）+ `share_event_group` 判定；`news_dedup` 主规则 bg=3 下限档要求事件组交集非空才合并（≥4 维持现状，不一致落 cross_skip 保留且不转入 bg=2 梯度防绕过）；词组表入规则指纹（改动自动分锚点时代）；校准工具 `classify_pair` 同步。锚点回放（104,012 对）：bg≥3 域仍合并 4,589 条，bg=3 下限档拦截 2,566 条——拦截样本 10/10 为同主体不同事件（中际旭创暗盘跌 vs 资金抢筹、可口可乐目标价 vs 股价新高、SK海力士盘前跌 vs 上调目标价），合并侧伊朗制裁组/兆易回购/Kimi 融资/熊本地震等真重复无误杀；测试 83 passed（生产判据用校准实证样本 + 工具分类同步用例）。

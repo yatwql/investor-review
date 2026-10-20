@@ -117,5 +117,27 @@ class TestUtcTimezoneConsistencyEdge(unittest.TestCase):
         self.assertFalse(self._call_midday_break_at_beijing_time(14, 0, system_offset=8))
 
 
+class TestMarketOpenMemoExceptionEdge(unittest.TestCase):
+    """memo 对异常结果的处理：保守返回 False 且不缓存（下次仍重新判断）。"""
+
+    def test_exception_not_cached_in_memo(self):
+        from src.python.core import market_hours
+        from src.python.core.market_hours import is_market_open
+
+        market_hours.reset_memo_state()
+        self.addCleanup(market_hours.reset_memo_state)
+        calls = {"n": 0}
+
+        def _boom(current_min):
+            calls["n"] += 1
+            raise RuntimeError("config broken")
+
+        with patch("src.python.core.market_hours._is_market_open_config", side_effect=_boom):
+            self.assertFalse(is_market_open())
+            self.assertFalse(is_market_open())
+
+        self.assertEqual(calls["n"], 2)  # 异常不入 memo：下次仍重新判断（不缓存保守值）
+
+
 if __name__ == "__main__":
     unittest.main()

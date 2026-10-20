@@ -187,16 +187,33 @@ def fetch_with_incremental_fallback(
             logger.warning("[%s] 连续性校验异常（不影响合并）", cache_key)
 
         if needs_refresh and cached:
-            # 检测到历史修正（如除权除息回溯调整）：旧缓存中非重叠部分已过时
-            # 自动全量刷新：删旧缓存，不带 start_from 重新获取完整历史
-            logger.info("[%s] 检测到历史修正 → 自动全量刷新", chain_name)
-            cache_clear(cache_key)
-            full_data = _try_providers(providers, registry, chain_name, code, days, None, diagnostics)
-            if full_data:
-                cache_set(cache_key, full_data)
-                return full_data[-days:]
-            logger.warning("[%s] 全量刷新失败，使用增量合并数据（仅修正重叠窗口）", chain_name)
+            streak_key = f"{cache_key}_correction_streak"
+            streak = int(cache_get(streak_key, CACHE_WEEKLY) or 0)
+            cache_set(streak_key, streak + 1)  # 每次检出都计数：若全量刷新无法根治，下次继续累计
+            if streak + 1 >= _CORRECTION_STREAK_SKIP:
+                # 结构性回看：全量刷新未能消除重叠（源对增量固定向前多看若干天），
+                # 按日合并的同日覆盖已能吸收窗口内修正——跳过多拉一次全量
+                logger.warning(
+                    "[%s] 连续 %d 次检出重叠，判定为源结构性回看：跳过全量刷新，沿用按日合并结果",
+                    cache_key,
+                    streak + 1,
+                )
+            else:
+                # 检测到历史修正（如除权除息回溯调整）：旧缓存中非重叠部分已过时
+                # 自动全量刷新：删旧缓存，不带 start_from 重新获取完整历史
+                logger.info("[%s] 检测到历史修正 → 自动全量刷新", chain_name)
+                cache_clear(cache_key)
+                full_data = _try_providers(providers, registry, chain_name, code, days, None, diagnostics)
+                if full_data:
+                    cache_set(cache_key, full_data)
+                    return full_data[-days:]
+                logger.warning("[%s] 全量刷新失败，使用增量合并数据（仅修正重叠窗口）", chain_name)
 
+            # 全量刷新失败或冷却跳过 → 降级：用合并结果继续（merged 已含重叠窗口新数据）
+        if not needs_refresh:
+            streak_key = f"{cache_key}_correction_streak"
+            if cache_get(streak_key, CACHE_WEEKLY):
+                cache_set(streak_key, 0)  # 正常合并（无重叠检出）→ 重置连续触发计数
         cache_set(cache_key, merged)
         return merged[-days:]
     elif cached:
@@ -241,6 +258,11 @@ def _history_provider_label(provider_name: str) -> str:
 
 # 新旧 K 线之间缺失的交易日数超过此值 → 判定数据跳空（部分历史不可达）
 _MAX_GAP_TRADING_DAYS: int = 5
+
+# 历史修正全量刷新冷却阈值：部分源对增量请求固定向前回看若干天（结构性重叠），
+# 全量刷新无法根治——连续检出重叠达到该阈值后判定为源结构性回看，跳过全量刷新
+# （_merge_by_date 的同日覆盖已能吸收窗口内修正），避免每次运行都多拉一次全量。
+_CORRECTION_STREAK_SKIP = 3
 
 
 def _call_history_provider(

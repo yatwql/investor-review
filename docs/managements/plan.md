@@ -1,6 +1,6 @@
 # 投资复盘助手 — 实现计划
-> 文档版本：0.13.8
-> **编号源**：`plan-next = 167`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-166，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> 文档版本：0.13.9
+> **编号源**：`plan-next = 169`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-168，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -45,12 +45,6 @@
 **现状与问题**：`html_save` 按日期归档到子目录但不生成 index；TUI 无「最近报告」菜单项（grep 历史报告/报告列表 = 0）；Web 有运行历史但 HTML 归档目录本身不可浏览——找上期报告靠翻文件系统
 
 **动作**：生成/刷新 `output_dir/index.html`（按日期列出 Excel/HTML 产物与打开链接），TUI 加「打开输出目录 / 最近报告」入口（与 rf-636 联动）；索引页不泄漏路径以外的本地信息，匿名化口径与报告一致
-
-#### `plan-128` 调仓对比页无打印/PDF 入口
-
-**现状与问题**：主报告已有右上角浮动「打印 / 导出 PDF」按钮，调仓 What-if 对比页（`whatif_template.html`）未同步——其打印 CSS（`@media print`/A4 版式/图表降级）本就齐备，但同样只能 Ctrl+P 发现，双页入口不一致
-
-**动作**：whatif 模板按主报告同参补 `.report-print-btn`（44×44 触控目标、`--primary`/`--primary-hover` 语义 token、`window.print()`、打印稿自隐藏），断言口径与主报告用例对齐（`test_whatif_html` 补对应用例）
 
 ### P3 — 预期实施，有空时安排
 

@@ -49,6 +49,7 @@ from src.python.providers.news_dedup import (  # noqa: E402
     _normalize_title,
     _pair_similarity,
     proper_noun_tokens,
+    share_event_group,
 )
 
 #: 默认锚点文件（与 news_dedup._ANCHOR_PATH 同源，不再各写一份路径）
@@ -192,6 +193,11 @@ def classify_pair(ratio: float, overlap: int, same_source: bool, title_a: str, t
         if overlap >= 1 and _has_opposite_direction(_normalize_title(title_a), _normalize_title(title_b)):
             return "cross_opposite"
         if overlap >= _CROSS_BIGRAM_MIN:
+            # 与生产同源：bg=3 下限档事件不一致 → 候选区保留（同主体不同事件）
+            if overlap == _CROSS_BIGRAM_MIN and not share_event_group(
+                _normalize_title(title_a), _normalize_title(title_b)
+            ):
+                return "cross_skip"
             return "cross_merge"
         if overlap >= 2 and ratio >= _CROSS_BG2_RATIO and _shared_carries_proper_noun(title_a, title_b):
             return "cross_merge_bg2"

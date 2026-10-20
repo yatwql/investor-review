@@ -26,7 +26,7 @@
 | 涨跌语义 | 涨（红）/ 跌（绿） | `--profit` / `--loss` | —（工作台无行情色） | **A 股口径域**：与状态域红绿语义**相反**，两域禁互换 |
 | 强调与焦点 | 品牌蓝 / 焦点环 | `--primary`(-hover) / `--focus` | `--primary`(-hover) / `--focus` / `--accent` | 单强调色；accent 仅用于次要正向标记（报告无专有豁免） |
 | Chart 专用 | 系列色 / 网格 / 图文字 | `--chart-primary` `--chart-secondary` `--chart-success` `--chart-danger` `--chart-warning` `--chart-grid` `--chart-text` `--chart-bg` | —（工作台无图） | 仅图表使用；`theme.js` 切主题时重读烘焙 |
-| 组件派生面 | 表格斑马/小计/合计、行警示、徽标、辩论、来源标签、空态底 | `--table-*` `--subtotal-bg` `--grand-total-bg` `--row-*` `--notice-*` `--debate-*` `--source-tag-*` `--empty-section-bg` 等 | — | 组件级派生色，必须引用基础角色而非裸值 |
+| 组件派生面 | 表格斑马/小计/合计、行警示、徽标、辩论、来源标签、空态底 | `--table-*` `--subtotal-bg` `--grand-total-bg` `--row-*` `--notice-*` `--debate-*` `--source-tag-*` `--empty-section-bg` `--heat-*`（相关系数分档）`--corr-*`（相关性方向×强度）`--cell-na-bg` `--alloc-*` `--danger-text` 等 | — | 组件级派生色，必须引用基础角色而非裸值 |
 
 **同名对齐（双面 token 统一）**：共享角色在两面 `:root` **同名定义**（验收见 `src/test/unit/report/test_design_tokens.py` 对表测试）；同名跨面允许按各自明暗世界取值（品牌蓝报告 `#2E75B6` / 工作台 `#1f6fb2`），对表**验名不验值**。工作台旧 `--color-*` 名 `var()` 兼容映射已到期删除（2026-10-17；`test_design_tokens.TestLegacyMappingRemoved` 负向锁防回填，新代码一律用角色名）。
 
@@ -126,7 +126,7 @@
 9. **DO** 类名与文案用中文语义（英文语义词亦可）；**DON'T** 把任务编号、内部代号写进类名/文案。
 10. **DO** 图表配色只走 `--chart-*` 并经 `theme.js` 烘焙链；**DON'T** 在图表配置里散写颜色字面量。
 
-> **机检落地**（`scripts/check-style-guardrails.py`，复用 `_checklib` 契约）：**E 级判 finding**（`--ci` 退出 2）——护栏 3 强调色越权（品牌蓝 hex 集从 `:root` 强调系 token 动态提取）、护栏 5 明暗同步（dark 覆盖变量根缺）、Colors「同名对齐」段双面 token 对表（表↔实现双向）；**W 级观察统计不判 finding**——护栏 1 裸色值存量、护栏 2 圆角档位（`-v` 明细）；**W3 内联色值 / W4 档外字号 / W5 档外间距**（2026-10-17 设计契约审计批次增设：W1 的引号整行豁免为 JS 图表配置设计，HTML 内联 `style=` 色值属盲区——W3 按位置级判定找回；W4/W5 把 Do-Don't「不发明新档」从自觉升级为可观察，均只判字面量、token 用法天然不命中）。**观察期**：未入 pre-commit 钩子域与 CI guards，待误报稳定后评估入域（护栏 4/6/7/9/10 由既有测试与 code-traces 等守护分担）。
+> **机检落地**（`scripts/check-style-guardrails.py`，复用 `_checklib` 契约）：**E 级判 finding**（`--ci` 退出 2）——护栏 3 强调色越权（品牌蓝 hex 集从 `:root` 强调系 token 动态提取）、护栏 5 明暗同步（dark 覆盖变量根缺）、Colors「同名对齐」段双面 token 对表（表↔实现双向）、**W3 内联色值**（2026-10-20 收口：观察期 40 处存量全部 token 化归零后由观察升为 E 级）；**W 级观察统计不判 finding**——护栏 1 裸色值存量、护栏 2 圆角档位（`-v` 明细）；**W4 档外字号 / W5 档外间距**（2026-10-17 设计契约审计批次增设：W1 的引号整行豁免为 JS 图表配置设计，HTML 内联 `style=` 色值属盲区——W3 按位置级判定找回；W4/W5 把 Do-Don't「不发明新档」从自觉升级为可观察，均只判字面量、token 用法天然不命中）。**观察期**：未入 pre-commit 钩子域与 CI guards，待误报稳定后评估入域（护栏 4/6/7/9/10 由既有测试与 code-traces 等守护分担）。
 
 ## Iteration Guide — 增量指引
 
@@ -138,4 +138,4 @@
 ## Known Gaps — 未覆盖面（随任务推进更新）
 
 - 报告 `--focus` token 已就位，应用点为组件状态矩阵（该项未覆盖）；工作台旧名 `--color-*` 兼容映射已到期删除（负向锁见 `test_design_tokens`）。
-- 样式护栏机检（`check-style-guardrails`）：E 级判 finding；W 级观察项经样式收敛批次（2026-10-13）归零（裸色值 132→0 / 圆角档外 8→0，含误报修复与豁免域精确化），存量白名单 15 条带理由登记于脚本 `_W1_EXEMPTIONS`。W1 归零口径含「引号内整行豁免」（为 JS 图表配置设计）——HTML 内联色值由增设的 W3 独立观察，存量登记：**W3 内联色值 40 处**（主要构成：相关性热力图色阶、数据源状态 #999/#27ae60、页脚注 #888 等）、**W4 档外字号 8 处**（工作台 `0.95rem≈15.2px` 非 15px 整值）、**W5 档外间距 175 处**（6/10/14/18px 存量），三维均只减不增（`TestBaselineNoGrowth` 2026-10-17 批次基线）；内联/档外新增一律走 token 或先入本段登记。**管控定档**：运行域=unit 测试快反馈（E 级+基线断言）+ 发布门禁 release.py gate（E 级拦/W 级统计留档，2026-10-13 纳入）；纳入 pre-commit/CI guards 须独立决策；白名单只减不增（腐化自动警告）；收敛优先于豁免。观察数只减不增由 `TestBaselineNoGrowth` 基线断言机制化。
+- 样式护栏机检（`check-style-guardrails`）：E 级判 finding；W 级观察项经样式收敛批次（2026-10-13）归零（裸色值 132→0 / 圆角档外 8→0，含误报修复与豁免域精确化），存量白名单 15 条带理由登记于脚本 `_W1_EXEMPTIONS`。W1 归零口径含「引号内整行豁免」（为 JS 图表配置设计）——HTML 内联色值由增设的 W3 独立观察，存量登记：**W3 已收口**（2026-10-20：40 处内联色全部 token 化归零——新增报告侧 `--heat-*`/`--corr-*`/`--cell-na-bg`/`--alloc-*`/`--danger-text` 组件派生 token（Colors 表登记，暗色配对同步），升为 E 级 finding）、**W4 档外字号 8 处**（工作台 `0.95rem≈15.2px` 非 15px 整值）、**W5 档外间距 172 处**（6/10/14/18px 存量），三维均只减不增（`TestBaselineNoGrowth` 2026-10-17 批次基线）；内联/档外新增一律走 token 或先入本段登记。**管控定档**：运行域=unit 测试快反馈（E 级+基线断言）+ 发布门禁 release.py gate（E 级拦/W 级统计留档，2026-10-13 纳入）；纳入 pre-commit/CI guards 须独立决策；白名单只减不增（腐化自动警告）；收敛优先于豁免。观察数只减不增由 `TestBaselineNoGrowth` 基线断言机制化。

@@ -599,11 +599,11 @@ class TestFlushAnchorsDedup(unittest.TestCase):
 
 
 class TestDedupGenericTokenVeto(unittest.TestCase):
-    """bg=2 梯度泛词否决表（ai/etf/cm/gb/ce/pcb 不作专名证据）。
+    """bg=2 梯度泛词否决表（ai/etf/cm/gb/ce/pcb/gdp 不作专名证据）。
 
     语料依据：锚点 7.8 万对实测——靠这些词过闸的 bg=2 合并绝大多数为跨主体
-    误合并（不同基金各自行情/不同指数/“20cm”俚语/CE 认证）；CPI/PPI/IPO/AMD
-    类真发布会与公司缩写不在表内、照常作专名证据。
+    误合并（不同基金各自行情/不同指数/“20cm”俚语/CE 认证/跨经济体 GDP 数据）；
+    CPI/PPI/IPO/AMD 类真发布会与公司缩写不在表内、照常作专名证据。
     """
 
     def _make_item(self, title: str, source: str = "东方财富") -> dict:
@@ -613,7 +613,7 @@ class TestDedupGenericTokenVeto(unittest.TestCase):
         """否决词全部无效；非否决短缩写（cpi 等）与混合集保留。"""
         from src.python.providers.news_dedup import has_proper_noun_token, proper_noun_tokens
 
-        for word in ("ai", "etf", "cm", "gb", "ce", "pcb"):
+        for word in ("ai", "etf", "cm", "gb", "ce", "pcb", "gdp"):
             self.assertEqual(proper_noun_tokens({word, "芯片"}), [], f"泛词应被否决: {word}")
         self.assertFalse(has_proper_noun_token({"ai", "芯片"}))
         self.assertTrue(has_proper_noun_token({"cpi", "芯片"}))
@@ -646,6 +646,32 @@ class TestDedupGenericTokenVeto(unittest.TestCase):
             self.assertEqual(len(_dedup_by_title([dict(i) for i in items])), 1)  # 否决表空 → 原证据合并
         self.assertEqual(len(_dedup_by_title([dict(i) for i in items])), 2)  # 现行否决 → 保留两条
 
+    def test_gdp_generic_veto_blocks_cross_economy_pair(self) -> None:
+        """校准实证样本：沙特与欧元区 GDP 数据发布——共享 gdp 不作专名证据，不合并。"""
+        from src.python.providers import news_dedup_rules
+        from src.python.providers.news_aggregator import _dedup_by_title
+        from src.python.providers.news_dedup import (
+            _CROSS_BG2_RATIO,
+            _extract_entity_bigrams,
+            _normalize_title,
+            _pair_similarity,
+        )
+
+        items = [
+            self._make_item("沙特阿拉伯第二季度GDP初值同比下降4.8%", "东方财富"),
+            self._make_item("欧元区二季度GDP季环比初值 0.4%，预期 0.2%，前值 -0.2%。", "华尔街见闻"),
+        ]
+        ratio, overlap = _pair_similarity(items[0]["title"], items[1]["title"])
+        self.assertGreaterEqual(ratio, _CROSS_BG2_RATIO)
+        self.assertGreaterEqual(overlap, 2)
+        shared = _extract_entity_bigrams(_normalize_title(items[0]["title"])) & _extract_entity_bigrams(
+            _normalize_title(items[1]["title"])
+        )
+        self.assertIn("gdp", shared)
+        with patch.object(news_dedup_rules, "_GENERIC_TOKENS", frozenset({"ai", "etf", "cm", "gb", "ce", "pcb"})):
+            self.assertEqual(len(_dedup_by_title([dict(i) for i in items])), 1)  # 旧表（无 gdp）→ 误合并
+        self.assertEqual(len(_dedup_by_title([dict(i) for i in items])), 2)  # 现行表 → 保留两条
+
     def test_rules_fingerprint_covers_generic_token_table(self) -> None:
         """泛词表入规则指纹：词表变动必须换锚点时代（分代依据不遗漏）。"""
         from src.python.providers import news_dedup_rules
@@ -656,6 +682,81 @@ class TestDedupGenericTokenVeto(unittest.TestCase):
             news_dedup_rules, "_GENERIC_TOKENS", frozenset({"ai", "etf", "cm", "gb", "ce", "pcb", "xyz"})
         ):
             self.assertNotEqual(_rules_fingerprint(), base)
+
+
+class TestDedupEventGroupGate(unittest.TestCase):
+    """bg=3 下限档事件一致性判据（同主体不同事件对不合并）。
+
+    语料依据：2026-10-20 锚点回放——中际旭创「暗盘跌 vs 资金抢筹 vs 成交额」
+    两两互并、SK海力士「盘前跌 vs 上调目标价」均为同主体不同事件的误合并；
+    同组词（立案/调查/留置/被查）互认保住真重复；职务/身份词（董事长/总经理）
+    不入词表（跨事件普遍命中，会把中投副总任命与卫通副总离任误连）。
+    """
+
+    def _make_item(self, title: str, source: str = "东方财富") -> dict:
+        return {"title": title, "_source": source, "url": "http://x.com/" + title[:10]}
+
+    def test_same_subject_different_event_not_merged(self) -> None:
+        """校准实证：中际旭创暗盘跌 vs 资金抢筹——共享 3 bigram 但事件不一致，不合并。"""
+        from src.python.providers.news_aggregator import _dedup_by_title
+        from src.python.providers.news_dedup import (
+            _CROSS_BIGRAM_MIN,
+            _CROSS_CANDIDATE_RATIO,
+            _extract_entity_bigrams,
+            _normalize_title,
+            _pair_similarity,
+        )
+
+        items = [
+            self._make_item("中际旭创港股暗盘跌1.84%", "财联社"),
+            self._make_item("中际旭创，18.89亿元资金抢筹，A股第一名", "东方财富"),
+        ]
+        ratio, overlap = _pair_similarity(items[0]["title"], items[1]["title"])
+        self.assertGreaterEqual(ratio, _CROSS_CANDIDATE_RATIO)
+        self.assertEqual(overlap, _CROSS_BIGRAM_MIN)  # 自证恰为 bg=3 下限档（判据适用面）
+        shared = _extract_entity_bigrams(_normalize_title(items[0]["title"])) & _extract_entity_bigrams(
+            _normalize_title(items[1]["title"])
+        )
+        self.assertGreaterEqual(len(shared), _CROSS_BIGRAM_MIN)
+        self.assertEqual(len(_dedup_by_title([dict(i) for i in items])), 2)  # 事件不一致 → 保留两条
+
+    def test_same_event_group_interchange_keeps_merge(self) -> None:
+        """同组词互认：立案调查留置 vs 被查——同事件类型，仍合并（不误杀）。"""
+        from src.python.providers.news_aggregator import _dedup_by_title
+        from src.python.providers.news_dedup import (
+            _CROSS_BIGRAM_MIN,
+            _CROSS_CANDIDATE_RATIO,
+            _pair_similarity,
+        )
+
+        items = [
+            self._make_item("华锦股份通报副总经理闫增辉被立案调查并留置", "证券时报"),
+            self._make_item("000059副总经理被查", "财联社"),
+        ]
+        ratio, overlap = _pair_similarity(items[0]["title"], items[1]["title"])
+        self.assertGreaterEqual(ratio, _CROSS_CANDIDATE_RATIO)
+        self.assertEqual(overlap, _CROSS_BIGRAM_MIN)
+        self.assertEqual(len(_dedup_by_title([dict(i) for i in items])), 1)  # 同事件 → 合并
+
+    def test_same_event_still_merged(self) -> None:
+        """共享回购事件词：兆易创新提议回购 vs 集体公告——真重复仍合并。"""
+        from src.python.providers.news_aggregator import _dedup_by_title
+
+        items = [
+            self._make_item("兆易创新：董事长朱一明提议回购10亿-20亿元A股股份用于注销", "证券时报"),
+            self._make_item("603986，董事长提议不超20亿元回购、注销！又一批A股公司，集体公告", "同花顺"),
+        ]
+        self.assertEqual(len(_dedup_by_title([dict(i) for i in items])), 1)
+
+    def test_event_group_membership(self) -> None:
+        """组内互认（立案/被查）；跨组不互认（袭击 vs 回购）；职务词不触发。"""
+        from src.python.providers.news_dedup import share_event_group
+
+        self.assertTrue(share_event_group("华锦副总被立案调查", "某公司副总被查"))
+        self.assertTrue(share_event_group("兆易创新提议回购", "又一批公司集体回购公告"))
+        self.assertFalse(share_event_group("以色列袭击加沙清真寺", "某公司拟回购股份"))
+        self.assertFalse(share_event_group("陈忠任中投公司副总经理", "中国卫通副总经理退休离任"))
+        self.assertFalse(share_event_group("苹果股价创历史新高", "可口可乐创历史新高"))  # 泛状态词不入表
 
 
 class TestDedupNumericTokenNotProperNoun(unittest.TestCase):

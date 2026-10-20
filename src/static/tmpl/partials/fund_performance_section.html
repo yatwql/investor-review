@@ -62,7 +62,7 @@
                     <tr>
                         <td class="text-left">{{ (c.get("name", c["code"])) | anon_code }}</td>
                         <td>{{ c["code"] | anon_code }}</td>
-                        <td colspan="9" class="text-left" style="font-size: var(--fs-table-sm); color: #b0413e;">数据获取失败（排名接口不可用），该候选跳过</td>
+                        <td colspan="9" class="text-left" style="font-size: var(--fs-table-sm); color: var(--danger-text);">数据获取失败（排名接口不可用），该候选跳过</td>
                     </tr>
                     {% endif %}
                     {% endfor %}
