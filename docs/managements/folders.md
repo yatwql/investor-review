@@ -20,8 +20,8 @@
 | ├ manuals/ | 用户手册分册 | 10 | 5,751 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
 | 项目文档 | Markdown | 177 | 64,428 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 11 + plan 5 + archive md 157），py/txt 不计行 |
 | ├ managements/ | 管理文档 | 12 | 12,204 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
-| ├ archive/ | 版本归档 | 159 | 51,371 | 各版本 changelog/plan/review-findings 与设计文档归档（157 md 50,492 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
-| ├ plan/ | 中间设计文件 | 5 | ~762 | 在办设计文档（扁平存放，完成后随完成态移入对应版本的归档子目录）：两份 Jev 新闻关联判定文档（对照评测方案 + 类型化判定通道接入设计）+ 决策跨期反思闭环设计 + Web 浏览器验证方法（浏览器真机验收回填载体，完成后随完成态移入归档）+ LLM 调用成本优化分析 |
+| ├ archive/ | 版本归档 | 160 | 51,431 | 各版本 changelog/plan/review-findings 与设计文档归档（157 md 50,492 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
+| ├ plan/ | 中间设计文件 | 4 | ~702 | 在办设计文档（扁平存放，完成后随完成态移入对应版本的归档子目录）：两份 Jev 新闻关联判定文档（对照评测方案 + 类型化判定通道接入设计）+ 决策跨期反思闭环设计 + Web 浏览器验证方法（浏览器真机验收回填载体，完成后随完成态移入归档）+ LLM 调用成本优化分析 |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
 
 ## 版本演进对照（最初版本 → 最新发布 → 当前开发版）
@@ -1408,6 +1408,7 @@ investor-util/
 │   │   │   ├── archived_changelog.0.13.x.md # 变更日志归档 v0.13.x（v0.13.0 ~ v0.13.4 已发布段）
 │   │   │   ├── archived_plan.0.13.x.md      # 实现计划归档 v0.13.x（plan-90/122~126 完成态，含设计文档索引）
 │   │   │   ├── archived_review-findings.0.13.x.md # 自审记录归档 v0.13.x（开发期已修复批次）
+│   │   │   ├── llm-cost-optimization.md # LLM 调用成本优化分析归档（实测画像 + 行动清单闭环：计费口径/闲时调度/模型映射已核实，output_brief 机制已具备）
 │   │   │   ├── holding-cost-position-design.md # 持仓成本相对历史价格区间位置设计（plan-90 完成态）
 │   │   │   ├── tui-panel-runtime-design.md # TUI 统一交互运行时设计（NavState/PanelItem/panel_loop 契约 + 13 面板清单 + 8 迭代，已完成）
 │   │   │   ├── tui-interaction-hci-design.md # TUI 交互 HCI 治理设计（HCI 原则对照 + 交互契约 v0 + M1~M10 措施与机检载体，已完成）
@@ -1515,8 +1516,7 @@ investor-util/
 │       ├── jev-news-correlation-evaluation.md # 评测方案（三方对照：关键词/现网生成/Jev；预注册阈值与 go-no-go 判定）
 │       ├── jev-news-correlation-design.md # 设计草案（独立于对话链的类型化判定通道/模板理由/降级矩阵）
 │       ├── decision-reflection-shadow-design.md # 决策跨期反思闭环设计（Vibe 影子账户参照/转正路径，plan-70）
-│       ├── web-browser-verification.md # Web 浏览器验证方法与实测结论（五类 37 断言实测 + 人工步骤 + 复验清单，rf-257 验证载体）
-│       └── llm-cost-optimization.md # LLM 调用成本优化分析（机制盘点 + 真实运行画像 + 三层优化空间评估与建议排序）
+│       └── web-browser-verification.md # Web 浏览器验证方法与实测结论（五类 37 断言实测 + 人工步骤 + 复验清单，rf-257 验证载体）
 │
 ├── CLAUDE.md                         # AI 编程助手指引
 ├── README.md                         # 用户文档总入口（三渠道交互 + 核心亮点总览）
