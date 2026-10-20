@@ -11,6 +11,11 @@
 4. 术语表左列（强刷 / 走缓存 / 降级 / 分档 / 游标 / 配置漂移 / 熔断 / 退避）
    不得出现在上屏文案里（见契约 Vocabulary 节）——CJK 术语扫全量字面量
    （排除 docstring 与日志消息），英文术语仅扫展示型调用，避免命中程序标识符。
+5. 键名口径统一：屏幕上只写「回车」，不写英文 `Enter`（同一按键两种叫法让用户
+   以为是两个键，见契约 Keys 节）——扫 TUI 全量字面量与启动向导；
+6. 回车必须带动作名：凡出现「回车」的字面量，须写成 `回车=<动作名>` 或
+   `回车跳过` / `回车/q` / `回车也返回` / `空回车=` 等声明形式；回车承担
+   取消/中止/跳过语义时，该分句必须位于句首（不得藏在末尾括注）。
 
 新增违反须改实现，不得加白名单；白名单只减不增。
 """
@@ -18,6 +23,7 @@
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 
 import pytest
@@ -242,3 +248,126 @@ class TestPressAnyKeyGateWhitelist:
         assert not missing, "白名单条目已无对应闸门（白名单只减不增，请删除失效项）：\n" + "\n".join(
             sorted(map(str, missing))
         )
+
+
+class TestEnterWordingUnified:
+    """规则 5：屏幕上只写「回车」，不写英文 `Enter`（同键异名会让用户以为是两个键）。"""
+
+    def test_no_english_enter_on_screen(self):
+        violations = []
+        for path in _tui_sources():
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            docstrings = {
+                id(node.body[0].value)
+                for node in ast.walk(tree)
+                if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.body
+                and isinstance(node.body[0], ast.Expr)
+                and isinstance(node.body[0].value, ast.Constant)
+            }
+            for node in ast.walk(tree):
+                if not (isinstance(node, ast.Constant) and isinstance(node.value, str)):
+                    continue
+                if id(node) in docstrings:
+                    continue
+                if "Enter" in node.value:
+                    violations.append(f"{path.name}:{node.lineno} {node.value.strip()[:60]}")
+        assert violations == [], "屏幕上应写「回车」而非 `Enter`（键名口径统一）：\n" + "\n".join(violations)
+
+
+class TestEnterDeclaresAction:
+    """规则 6：回车必须带动作名；取消类语义不得藏在末尾分句。"""
+
+    # 合法声明形态：回车 += 动作名 / 回车 + 紧凑动作词 / 回车 + 按键组合
+    _ENTER_DECLARED = re.compile(r"回车\s*[=＝]|回车[/或]|回车\s*[\u4e00-\u9fff]{1,4}")
+    _CANCEL_WORDS = ("取消", "中止", "跳过")
+
+    def _user_literals(self):
+        for path in _tui_sources():
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            docstrings = {
+                id(node.body[0].value)
+                for node in ast.walk(tree)
+                if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.body
+                and isinstance(node.body[0], ast.Expr)
+                and isinstance(node.body[0].value, ast.Constant)
+            }
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                    if id(node) in docstrings or "回车" not in node.value:
+                        continue
+                    yield path, node
+
+    def test_enter_declares_action_name(self):
+        violations = []
+        for path, node in self._user_literals():
+            text = node.value
+            if self._ENTER_DECLARED.search(text):
+                continue
+            violations.append(f"{path.name}:{node.lineno} {text.strip()[:70]}")
+        assert violations == [], (
+            "「回车」必须带动作名（写成 `回车=<动作名>` 等声明形式），否则用户读不出按键后果：\n"
+            + "\n".join(violations)
+        )
+
+    def test_enter_cancel_clause_leads(self):
+        """回车承担取消/中止/跳过时，该分句须是提示首句（不得放在末尾括注）。"""
+        violations = []
+        for path, node in self._user_literals():
+            text = node.value
+            if not any(w in text for w in self._CANCEL_WORDS):
+                continue
+            clauses = [c.strip() for c in text.split("/")]
+            enter_clause = next((i for i, c in enumerate(clauses) if "回车" in c), None)
+            if enter_clause is None:
+                continue  # 回车不承担动作
+            if not any(w in clauses[enter_clause] for w in self._CANCEL_WORDS):
+                continue  # 取消由其它键承担（如 q=取消），回车另有正动作
+            if enter_clause != 0:
+                violations.append(f"{path.name}:{node.lineno} {text.strip()[:70]}")
+        assert violations == [], (
+            "回车承担取消/中止/跳过语义时必须置于句首显式声明（如 `回车=取消 / 输入编号`）：\n" + "\n".join(violations)
+        )
+
+
+class TestPanelNumberingContiguous:
+    """面板内编号必须 1..N 连续（0=返回除外）——编号是面板第一入口，跳号即按到空号。
+
+    由 ``enumerate`` 生成的编号天然连续，本守卫只盯**手写数字字面量**的分组
+    （如某面板显式写 ``PanelItem("6", ...)``）：同一函数内手写数字键 ≥2 个时，
+    必须补齐 1..N。单个数字键不与字母键构成编号序列（如 ``[I]`` 的 ``A/D/R + 0``），
+    不参与连续性判定。
+    """
+
+    def _literal_numeric_keys_by_scope(self):
+        """{文件:函数名: [手写数字键…]} —— 只收 ``PanelItem("3", …)`` 这类字面量键。"""
+        scopes: dict[tuple[str, str], list[int]] = {}
+        for path in _tui_sources():
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for func in ast.walk(tree):
+                if not isinstance(func, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                for node in ast.walk(func):
+                    if not (isinstance(node, ast.Call) and _call_name(node) == "PanelItem"):
+                        continue
+                    if not node.args:
+                        continue
+                    key = node.args[0]
+                    if not (isinstance(key, ast.Constant) and isinstance(key.value, str)):
+                        continue
+                    if not key.value.isdigit():
+                        continue
+                    scopes.setdefault((path.name, func.name), []).append(int(key.value))
+        return scopes
+
+    def test_literal_panel_numbers_form_contiguous_range(self):
+        violations = []
+        for (filename, func), keys in self._literal_numeric_keys_by_scope().items():
+            numbers = sorted(n for n in keys if n != 0)  # 0 是返回项，不参与编号连续性
+            if len(numbers) < 2:
+                continue  # 字母型面板里的单个数字项不构成编号序列
+            expected = list(range(1, len(numbers) + 1))
+            if numbers != expected:
+                violations.append(f"{filename}:{func} 编号 {numbers} ≠ {expected}")
+        assert violations == [], "面板手写编号须 1..N 连续（0 为返回项）：\n" + "\n".join(violations)

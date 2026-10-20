@@ -97,12 +97,16 @@ class PanelItem:
       - ``action``：执行闭包后回到循环（重绘）；
       - ``return``：执行闭包（若有）后 `panel_loop` 返回（「0/B 返回」类）；
       - ``info``：只读提示项（闭包自打印），回到循环。
+
+    ``detail`` 供 ``?键`` 单项说明使用（面板各写各的业务含义，帮助渲染单源）。
     """
 
     key: str
     label: str
     kind: Literal["action", "return", "info"] = "action"
     action: Callable[[], None] | None = None
+    # ``?键`` 单项详情（补充说明：当前值/影响/操作方向）；None 时只显示键与名称
+    detail: str | None = None
 
 
 def panel_loop(
@@ -294,7 +298,7 @@ def _emit_help(
     if item is None:
         _emit_invalid()
         return
-    for line in item_detail_lines(item):
+    for line in item_detail_lines(item, hint=item.detail):
         print(line)
 
 

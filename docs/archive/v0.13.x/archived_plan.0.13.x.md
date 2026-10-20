@@ -164,3 +164,48 @@ technical.md 新增 §6.9「实验项生命周期表」（功能语义命名表�
 ## plan-156 TUI 交互契约文档化 + 契约结构测试 ✅
 
 **完成（2026-10-20，v0.13.8-dev）**：把设计稿 `docs/plan/tui-interaction-hci-design.md` §5 定稿为常驻管理文档 `docs/managements/DESIGN-TUI.md`——TUI 侧唯一判据，与 `DESIGN.md`（Web/报告视觉契约）对称：Overview 五原则（识别优于回忆 / 一键一义 / 屏幕自解释 / 专家快路不牺牲可发现性 / 可机检优先）、Keys 键分工总表（数字/回车/`?`/`0`/`Esc`/字母/`/`/方向键 + 每键「禁止用法」）、Prompts 提示三段式四成分模板、Defaults 默认项与取消标注语法（含「回车=取消须置句首」「危险操作默认安全侧」）、Colors 一色一职责角色表、Vocabulary 术语对照表 + 适用范围四档、Feedback 反馈与空态口径（含页头状态行与按键闸门白名单）、Do/Don't 护栏、Iteration Guide、Known Gaps。契约结构测试 `src/test/unit/ui/test_design_tui_doc.py` 由 9 例扩到 19 例：必需节（含 Colors）子集、键表必备键、四张表的列集合、关键口径句成句存在、护栏编号连续且 DO/DON'T 对偶、术语表覆盖内部词、Known Gaps 逐条带状态、契约内禁任务代号、闸门白名单文档与代码双向一致、引用实现文件存在。同步 CLAUDE.md「设计契约」条目（拆分为 Web/HTML 与 TUI 两份契约及其守卫）与 developer-guide「计划收尾：文档触点清单」（新增「TUI 交互改动」行）。
+
+## plan-157 回车语义唯一化 + 默认项标注 ✅
+
+**完成（2026-10-20，v0.13.8-dev）**：回车一键多义收敛为「回车 = 本行提示标注的默认项」，默认项必须带动作名。改造：追问屏问句「回车=结束追问返回主菜单」、报告选择屏「回车=最新报告 / 编号=指定报告 / q=取消」、What-if 生效日「回车=跳过，不做时序回测」、启动向导「回车=跳过」；**屏幕键名统一**——页脚与手册里的英文 `Enter` 全部改为「回车」（同键两名会让用户以为是两个键）。机检 `test_prompt_contract.py` 新增两条硬规则：规则 5「屏上禁英文 `Enter`」（扫 TUI 全量字面量、排除 docstring）、规则 6「回车必须带动作名」（`回车=<动作名>` / `回车跳过` / `回车/q` / `空回车=` 等声明形式）+「取消/中止/跳过类语义须置于首句」（按 `/` 分句定位回车所在分句）。契约 `DESIGN-TUI` Keys 表补「屏上不得写作英文 `Enter`」、Vocabulary 表补 `Enter → 回车`。回归：QA 选择屏与提问屏、What-if 生效日提示的声明断言 3 例 + 页脚断言同步。
+
+## plan-158 `?` 帮助全覆盖（下沉 `panel_runtime`）✅
+
+**完成（2026-10-20，v0.13.8-dev）**：`?`（无参=本面板可用键一览）与 `?键`（第 N 项详情）此前已下沉 `panel_runtime` 统一承接；本轮补齐**详情文案**——`PanelItem` 新增 `detail` 字段，`_emit_help` 以 `hint=item.detail` 渲染。各面板落文案：`[P]`（章节切换影响 + 增强子模块改由 `[S]` 配置的说明）、`[A]`（切换到该匿名化模式、立即写盘）、`[I]`（添加/删除/重置各自作用）、`[M]`（模型 + 优先级 + 端点）、缓存面板（清理只删过期项、清理后统计刷新）；`[S]` 保留 `on_help` 富详情。测试：`test_panel_runtime` 新增「`?键` 渲染 item.detail」，面板级新增 `[A] ?3`、`[M] ?1` 两例真实渲染断言。手册键盘操作表补 `?` 行（含全角 `？` 与各面板详情差异）。
+
+## plan-159 提示行模板化（禁裸提示）✅
+
+**完成（2026-10-20，v0.13.8-dev）**：`tui/prompt_text.py`（`panel_prompt` / `keys_help_lines` / `item_detail_lines`）建成后，7 处 `panel_loop` 提示全部由模板产出，机检（AST）断言「`panel_loop` 的 prompt 必须是 `panel_prompt` 调用」，裸字面量即红；模板自带 `wrap_prompt` 折行守住 40 列窄屏基准。「`input_choice` 提示迁移到单行确认模板」方向经评估关闭——确认屏已改为「问句行 + 键位行」两行式（生成确认 Y/N 化），单行模板失去挂点，`confirm_prompt` 随之删除（详见 review-findings 已解决条目）；`input_choice` 提示改由机检规则 3/6 约束（必须声明回车动作名），白名单只减不增。
+
+## plan-160 主菜单编号连续化 — 已评估不采纳（前提消失）❌
+
+**结论（2026-10-20，v0.13.8-dev）**：原问题「数字键为 `1/2/4`，没有 3」已不存在——现主菜单数字键为 `1/2/3`（1=基础缓存、2=行情缓存、3=缓存管理），连续无断层。更根本的是该任务把「首页」与「面板」当成同一种编号体系：首页 19 项中 16 个是字母键（主入口），`1/2/3` 只是数据类操作的别名，不构成序列；全量重编号为 `1..19` 会改约 200 处文档键位、放宽菜单块机检正则，且与 `DESIGN-TUI` Known Gaps 已作的「编号为主入口：已评估未采纳」结论直接冲突。**替代交付**（真正有价值的不变量）两条守卫：① `test_tui_menu.py::test_numeric_keys_are_contiguous`——首页数字键必须 1..N 连续区间（允许字母项任意，禁止跳号）；② `test_prompt_contract.py::TestPanelNumberingContiguous`——面板手写数字编号须补齐 1..N（0 为返回项，字母型面板的单个数字项不参与）+ `test_handlers_config_nav.py::TestPanelNumberingRendered`——`[P]/[S]/[M]` 渲染级编号前缀恰为 1..N、末项 0（按结构关系断言，不写死总数）。
+
+## plan-161 `press_any_key()` 收敛 ✅
+
+**完成（2026-10-20，v0.13.8-dev）**：强制闸门从 28 处收敛为 **5 处长输出闸门**（运行日志详情 / 数据源健康历史 / 系统自检结果 / 报告收尾摘要 / 缓存更新结果摘要），其余 22 处（配置面板收尾、缓存清理、What-if 完成、持仓读取错误、调度层取消与异常）一律直接回菜单——取消与错误反馈不再多按一次键。白名单由 `test_prompt_contract.py::TestPressAnyKeyGateWhitelist` 与代码实际调用点双向机检（新增闸门即红、失效条目即红），契约 `DESIGN-TUI` Feedback 节列明 5 处与理由。击键基线同步收紧：`[S]` 只读动线 5→4、缓存面板动线 4→3。
+
+## plan-162 术语改写 + 禁用词机检 ✅
+
+**完成（2026-10-20，v0.13.8-dev）**：上屏文案全量改写——强刷→「重新生成（会调用 AI，计费）」、走缓存→「用已有结果（免费，可能不是最新）」、降级源→「备用源」、配置漂移→「与出厂默认不一致」、降级顺序→「备用顺序」、熔断→「自动重试: 正常/暂时失败」。机检 `test_prompt_contract.py::TestForbiddenVocabulary` 三条：CJK 术语扫全量字面量（排除 docstring 与日志消息）、英文术语仅扫展示型调用（避免命中程序标识符）、内部值白名单须仍被需要（防挂账腐烂）。三渠道同词由 `core.system_info.circuit_display` 唯一归一，守卫 `integration/test_channel_vocabulary.py`；契约 `DESIGN-TUI` Vocabulary 节含四档适用范围（TUI 状态面 / Web-CLI 决策屏 / 报告数据降级 / 日志与机制文档）。存量清零。
+
+## plan-163 Esc 策略复核 — 已评估未采纳（维持双按确认）❌
+
+**结论（2026-10-20，v0.13.8-dev）**：读键层已由 `os.read` + 同 fd `select` 重写（rf-729），常规链路方向键不再拆包；但**极高延迟链路**（手机蜂窝 + SSH 多跳）下三字节序列仍可能跨读分节、超过 `_ESC_TIMEOUT` 后表现为孤 Esc，若恢复单按退出，一次方向键误按即退出程序（丢失当前面板上下文，比多按一次代价高）。故**维持「Esc 连按两次确认（3 秒窗口）」**，与 `0`/`X` 单次退出三通道并存。回归已齐：`test_tui_menu.py` 四例——`test_esc_single_press_shows_confirm_hint`（单按不退出，拆包残留场景）、`test_esc_double_press_exits`（连按退出）、`test_esc_armed_cancelled_by_navigation_key`（任何非 Esc 键解除确认态，挂起确认不被后续按键引爆）、`test_esc_exit_parity`（窄/宽两档同语义）。首按提示文案「再按一次 Esc 退出」。
+
+## plan-164 主菜单按任务重组 + `/` 过滤搜索 ✅
+
+**完成（2026-10-20，v0.13.8-dev）**：主菜单由 19 项平铺改为四组渲染（生成报告 E/B/L/W · 数据与查看 Q/D/1/2/3 · 配置 P/I/A/S/M/R · 诊断与排查 V/H/T，退出项单列），组标题只降低扫读成本、不改任何按键；新增 `/` 关键词筛选（先比按键再比标签文字；筛选态只渲染命中项、`↑↓` 在命中集内回绕、按到隐藏项给单行反馈、`0` 先清筛选）。机检：分组覆盖全项一次（退出项除外）、筛选命中与筛选内回绕、分组标题与筛选态渲染。**「编号为主入口」已评估未采纳**（键位已在三渠道文档与肌肉记忆中稳定，全量重编号需改约 200 处文档并放宽菜单块机检），理由记入 `DESIGN-TUI` Known Gaps；替代方案即分组 + 筛选。手册与 `check-doc-drift` 菜单块同步。
+
+## plan-165 击键数与屏幕语义纳入门禁 ✅
+
+**完成（2026-10-20，v0.13.8-dev）**：三条主路径 E2E 动线落地（`src/test/scenario/basic/test_tui_flow_semantics.py`）：①生成完整报告且只重新生成指定模块 ②改一个功能开关并确认生效 ③按级别筛日志——每条同时断言「击键数不增」与「关键用户词上屏」，契约快照 `src/test/data/fixtures/tui_flow_contract.json`。基线快照 `src/test/data/fixtures/tui_keystroke_baseline.json` 共 6 条动线（`exit_via_x` / `exit_via_zero` / `switch_panel_readonly` / `cache_panel_return` / `generate_full_default_path` / `filter_then_cache_panel`），分组与 `/` 筛选改造未改变任何既有动线击键数（1/1/4/3/3 保持），筛选动线新增 6 键。分层：P0 `dev-verify` 只跑生成主路径 1 条、P2 `regression` 跑全 3 条、P1 `verify` 覆盖击键基线；驱动器统一在 `src/test/_tui_flow.py`（两处断言共用同一动线定义）。
+
+## plan-155 TUI 统一交互运行时（panel_runtime）✅ 主体交付
+
+**完成（2026-10-20，v0.13.8-dev 归档）**：按 [`tui-panel-runtime-design.md`](../plan/tui-panel-runtime-design.md) 实施完成——新建 `tui/panel_runtime.py`（`NavState` / `PanelItem(key, label, kind, action, detail)` / `panel_loop`：导航态单源，语义真值取自主循环），`test_panel_runtime.py` 31 例；全部列表面板（`[P]/[A]/[D]/[I]/[S]/[M]` + 缓存管理）迁移到 `panel_loop`——方向键导航全面板生效、Enter 防误触 engaged 门控、直达键游标同步不置 engaged、`kind=return` 项不参与回绕；主循环 `sel` 亦 NavState 化。`[S]` 匹配/详情辅助抽出至 `handlers_switch.py`。文档触点同步（technical 模块表 + C29 升级为「构造性成立」、folders 目录树、requirements R-TUI-08、testplan §2.1、how-to 键位表、changelog）。
+
+**本轮补充**：`[M]` 多链优先级面板整体迁出为 `tui/handlers_llm_providers.py`（`handlers_config` 仅留菜单入口薄包装）——原文件曾达 1017 行、超单文件 1000 行硬上限（由 `check-file-length` 拦截），拆分后 899 行，红线恢复。
+
+**残值（转 plan-166）**：`[S]` 功能开关面板主循环仍在 `handlers_config`，「域拆分 <800 行」设计目标未达成——因几十处测试 patch 点耦合，单独立项推进。
+

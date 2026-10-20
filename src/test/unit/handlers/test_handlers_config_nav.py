@@ -5,6 +5,7 @@
   - 游标移动的可观察位置反馈（▸ 行）与 Enter 按选中项既有派发
   - 未导航裸回车保持原语义（不误触切换）
   - 子菜单（P/A/D）经 panel_loop 单源化后的导航
+  - 面板渲染编号 1..N 连续（编号是面板第一入口，跳号即按到空号）
 
 运行：
   pytest src/test/unit/handlers/test_handlers_config_nav.py -v
@@ -210,7 +211,7 @@ class TestInlineCursorRendering:
         buf = io.StringIO()
         with (
             patch("src.python.config.get_llm_providers", return_value=providers),
-            patch("src.python.tui.handlers_config.input_choice", side_effect=[KEY_DOWN, "0"]),
+            patch("src.python.tui.handlers_llm_providers.input_choice", side_effect=[KEY_DOWN, "0"]),
             patch("src.python.tui.handlers_config._apply_edit", return_value=True),
         ):
             with contextlib.redirect_stdout(buf):
@@ -245,3 +246,80 @@ class TestInlineCursorRendering:
             with contextlib.redirect_stdout(buf):
                 handlers_cache._cmd_cache_management()
         assert re.search(r"▸\s*3\s清理", buf.getvalue()), "缓存面板方向键移动后 ▸ 须落在可导航项（3 清理）"
+
+
+class TestPanelNumberingRendered:
+    """渲染级编号连续性：[P]/[S]/[M] 面板逐项编号必须 1..N 连续，末尾 0 为返回项。
+
+    首页不走编号体系（字母为主入口、`1/2/3` 是数据类别名，连续性由
+    `test_tui_menu.py::test_numeric_keys_are_contiguous` 单独守）；面板内编号才是
+    第一入口，出现 1/2/4 这类跳号会让用户按到空号并把「无效编号」当成自己的操作错。
+    断言按结构关系（前缀恰为 1..N、末项 0），不写死任何总数。
+    """
+
+    _NUMBERING = re.compile(r"(?:^|│)\s*(?:▸\s*)?(\d+)\.\s", re.M)
+
+    def _rendered_numbers(self, fn, target: str = "src.python.tui.handlers_config") -> list[int]:
+        buf = io.StringIO()
+        with patch(f"{target}.input_choice", return_value="0"):
+            with contextlib.redirect_stdout(buf):
+                fn()
+        return [int(n) for n in self._NUMBERING.findall(buf.getvalue())]
+
+    @staticmethod
+    def _assert_contiguous(numbers: list[int]) -> None:
+        assert numbers, "面板未渲染任何编号条目"
+        assert numbers[-1] == 0, f"末项应为 0（返回主菜单），实际 {numbers[-1]}"
+        body = numbers[:-1]
+        assert body == list(range(1, len(body) + 1)), f"面板编号跳号：{body}"
+
+    def test_report_boards_numbering(self):
+        from src.python.tui.handlers_config import _cmd_config_report_boards
+
+        self._assert_contiguous(self._rendered_numbers(_cmd_config_report_boards))
+
+    @patch("src.python.tui.handlers_config.refresh_config")
+    @patch("src.python.config.features.save_feature_overrides")
+    @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
+    @patch("src.python.core.registry.get_llm_module_names")
+    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
+    def test_llm_modules_numbering(self, *_mocks):
+        from src.python.tui.handlers_config import _cmd_config_llm_modules
+
+        self._assert_contiguous(self._rendered_numbers(_cmd_config_llm_modules))
+
+    def test_llm_providers_numbering(self):
+        from src.python.tui.handlers_config import _cmd_config_llm_providers
+
+        self._assert_contiguous(
+            self._rendered_numbers(_cmd_config_llm_providers, target="src.python.tui.handlers_llm_providers")
+        )
+
+    def test_anonymization_detail_shows_switch_effect(self, capsys):
+        """[A] 面板 `?3` 给出该项说明（不是只有键与名称）。"""
+        from src.python.tui.handlers_config import _cmd_config_anonymization_mode
+
+        with patch("src.python.tui.handlers_config.input_choice", side_effect=["?3", "0"]):
+            _cmd_config_anonymization_mode()
+        out = capsys.readouterr().out
+        assert "切换到该匿名化模式" in out
+
+    def test_providers_detail_shows_model_and_priority(self, capsys):
+        """[M] 面板 `?1` 给出模型与优先级（面板自带业务含义，不靠通用回落）。"""
+        from src.python.tui.handlers_config import _cmd_config_llm_providers
+
+        providers = {
+            "strategy": "priority",
+            "providers": [
+                {"name": "main", "provider": "claude", "priority": 10, "model": "m1", "endpoint": "https://api.x"},
+                {"name": "aux", "provider": "openai", "priority": 20},
+            ],
+        }
+        with (
+            patch("src.python.config.get_llm_providers", return_value=providers),
+            patch("src.python.tui.handlers_llm_providers.input_choice", side_effect=["?1", "0"]),
+        ):
+            _cmd_config_llm_providers()
+        out = capsys.readouterr().out
+        assert "模型 m1" in out
+        assert "优先级 10" in out

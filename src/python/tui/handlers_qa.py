@@ -23,7 +23,7 @@ from src.python.tui.tui_keys import input_choice
 logger = setup_logger()
 
 _QA_REPORT_LIST_MAX = 8  # 报告候选展示上限（输出目录顶层 .html，按修改时间倒序）
-_QA_PROMPT = "  请输入问题（回车/q 返回主菜单）: "
+_QA_PROMPT = "  请输入问题（回车=返回主菜单）: "
 #: 终止整个输入循环的错误码（会话上限/报告不可用——继续提问无意义）
 _EXIT_LOOP_CODES = frozenset({QA_SESSION_LIMIT, QA_INPUT_CAP_EXCEEDED, QA_REPORT_NOT_FOUND, QA_CONTEXT_INVALID})
 #: 输入级中止（已超会话轮数上限/单条输入超长——展示提示后退出本轮追问）
@@ -122,7 +122,7 @@ def _select_report(output_dir: str) -> str | None:
         print(f"    {i}. {name}  ({stamp})")
     while True:
         try:
-            raw = input_choice(wrap_prompt("  选择报告编号（直接回车 = 最新，q 取消）: "))
+            raw = input_choice(wrap_prompt("  选择报告编号（回车=最新报告 / 编号=指定报告 / q=取消）: "))
         except (EOFError, KeyboardInterrupt):
             print()
             return None

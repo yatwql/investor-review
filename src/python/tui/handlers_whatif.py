@@ -151,7 +151,7 @@ def _prompt_effective_date() -> str:
 
     while True:
         try:
-            raw = input_choice(wrap_prompt("  [..] 调仓生效日 YYYY-MM-DD（可选，回车跳过以启用时序回测）: "))
+            raw = input_choice(wrap_prompt("  [..] 调仓生效日 YYYY-MM-DD（回车=跳过，不做时序回测）: "))
         except (EOFError, KeyboardInterrupt):
             print()
             return ""

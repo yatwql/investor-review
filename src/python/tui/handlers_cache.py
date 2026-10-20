@@ -277,7 +277,12 @@ def _cmd_cache_management() -> None:
         state["draw_stats"] = True  # 清理后回统计刷新，动线闭环
 
     items = [
-        PanelItem("3", "清理过期缓存", action=_cleanup),
+        PanelItem(
+            "3",
+            "清理过期缓存",
+            action=_cleanup,
+            detail="删除已超过各自有效期的缓存文件（未过期的不动；清理后统计自动刷新）",
+        ),
         PanelItem("0", "返回主菜单", kind="return"),
     ]
 

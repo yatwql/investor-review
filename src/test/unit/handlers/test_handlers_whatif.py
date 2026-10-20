@@ -449,3 +449,18 @@ class TestEffectiveDateEscCancel(unittest.TestCase):
             pytest.raises(PromptCancelledError),
         ):
             _prompt_effective_date()
+
+    def test_effective_date_prompt_declares_skip(self) -> None:
+        """生效日提示：回车=跳过（写明动作名与后果），不是裸回车。"""
+        from src.python.tui import handlers_whatif
+
+        prompts: list[str] = []
+
+        def _capture(prompt):
+            prompts.append(prompt)
+            return ""
+
+        with patch.object(handlers_whatif, "input_choice", _capture):
+            assert handlers_whatif._prompt_effective_date() == ""
+        assert prompts, "未捕获到生效日提示"
+        assert "回车=跳过" in prompts[0]

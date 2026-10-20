@@ -41,7 +41,7 @@ class TestLlmProvidersPanel:
         """输入「2 1」→ apply_config_edit 收到逆序 order，输出 [OK]。"""
         with (
             patch("src.python.config.get_llm_providers", return_value=_PROVIDERS),
-            patch("src.python.tui.handlers_config.input_choice", side_effect=["2 1", "0"]),
+            patch("src.python.tui.handlers_llm_providers.input_choice", side_effect=["2 1", "0"]),
             patch("src.python.tui.handlers_config._apply_edit", return_value=True) as edited,
         ):
             _cmd_config_llm_providers()
@@ -56,7 +56,7 @@ class TestLlmProvidersPanel:
         """Esc（input_choice 返回 None）→ 即时返回，零写盘。"""
         with (
             patch("src.python.config.get_llm_providers", return_value=_PROVIDERS),
-            patch("src.python.tui.handlers_config.input_choice", return_value=None),
+            patch("src.python.tui.handlers_llm_providers.input_choice", return_value=None),
             patch("src.python.tui.handlers_config._apply_edit") as edited,
         ):
             _cmd_config_llm_providers()
@@ -67,7 +67,7 @@ class TestLlmProvidersPanel:
         """越界编号 → [!] 重提示，零写盘；随后 0 返回。"""
         with (
             patch("src.python.config.get_llm_providers", return_value=_PROVIDERS),
-            patch("src.python.tui.handlers_config.input_choice", side_effect=["9 9", "0"]),
+            patch("src.python.tui.handlers_llm_providers.input_choice", side_effect=["9 9", "0"]),
             patch("src.python.tui.handlers_config._apply_edit") as edited,
         ):
             _cmd_config_llm_providers()
@@ -81,7 +81,7 @@ class TestLlmProvidersPanel:
         single = {"strategy": "priority", "providers": [_PROVIDERS["providers"][0]]}
         with (
             patch("src.python.config.get_llm_providers", return_value=single),
-            patch("src.python.tui.handlers_config.input_choice") as prompted,
+            patch("src.python.tui.handlers_llm_providers.input_choice") as prompted,
         ):
             _cmd_config_llm_providers()
         prompted.assert_not_called()
@@ -92,7 +92,7 @@ class TestLlmProvidersPanel:
         weighted = {**_PROVIDERS, "strategy": "weighted"}
         with (
             patch("src.python.config.get_llm_providers", return_value=weighted),
-            patch("src.python.tui.handlers_config.input_choice", return_value=None),
+            patch("src.python.tui.handlers_llm_providers.input_choice", return_value=None),
         ):
             _cmd_config_llm_providers()
         assert "实际链序由权重/成本决定" in capsys.readouterr().out
@@ -104,7 +104,7 @@ class TestLlmProvidersPanel:
                 "src.python.config.get_llm_providers",
                 return_value=_PROVIDERS_ARRAY_ORDER_STALE,
             ),
-            patch("src.python.tui.handlers_config.input_choice", return_value=None),
+            patch("src.python.tui.handlers_llm_providers.input_choice", return_value=None),
         ):
             _cmd_config_llm_providers()
         out = capsys.readouterr().out

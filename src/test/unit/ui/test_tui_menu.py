@@ -44,6 +44,16 @@ class TestMenuItems(unittest.TestCase):
         for i, (key, label, _cb, is_exit) in enumerate(_tm.MENU_ITEMS):
             _tm.MENU_ITEMS[i] = (key, label, None, is_exit)
 
+    def test_numeric_keys_are_contiguous(self) -> None:
+        """首页数字键必须是 1..N 连续区间（允许字母项任意；禁止 1/3 这类跳号）。
+
+        数字键在首页是少数数据类操作的快捷别名（字母才是主入口），因此不要求
+        「全菜单编号化」；但一旦出现跳号，用户按空号会得到「未登记键」反馈，
+        属界面误导而非用户误操作。
+        """
+        numeric = sorted(int(key) for key, *_ in MENU_ITEMS if key.isdigit())
+        self.assertEqual(numeric, list(range(1, len(numeric) + 1)), f"首页数字键跳号：{numeric}")
+
     def test_key_set_complete(self) -> None:
         """菜单键集合完整（会话/报告/缓存/配置/诊断/退出各域齐备，逐键断言不写死条数）。"""
         expected = {
@@ -752,17 +762,17 @@ class TestRenderMenuNarrowDirect(unittest.TestCase):
         footer = " ".join(out.split("窄屏直达", 1)[1].split())
         self.assertIn("窄屏直达", out)
         self.assertIn("↑↓ 选择", footer)
-        self.assertIn("Enter 执行", footer)
+        self.assertIn("回车执行", footer)
         self.assertIn("Esc / 0 /", footer)
         self.assertIn("X 退出", footer)
         self.assertIn("Ctrl+C 退出", footer)
-        self.assertNotIn("方向键移动", out)
+        self.assertNotIn("↑↓ 移动", out)
 
     def test_wide_keeps_selection_indicator_and_nav_footer(self):
         """宽屏（100 列）保留 `>` 选中态与方向键页脚（导航主路径不变）。"""
         out = self._render(100)
         self.assertIn(">", out)
-        self.assertIn("方向键移动", out)
+        self.assertIn("↑↓ 移动", out)
         self.assertIn("Esc / 0 / X 退出", out)
 
 

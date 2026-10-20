@@ -268,6 +268,16 @@ class TestPanelLoopTextAndPick:
         assert handled == ["", "1"], f"on_help 应收到去问号目标: {handled}"
         assert "可用键：" in out, "on_help 返回 False 时回落通用一览"
 
+    def test_item_detail_rendered_by_help(self, capsys):
+        """``?键`` 渲染 PanelItem.detail（面板各写各的业务含义，渲染单源）。"""
+        items = [
+            PanelItem("1", "甲", detail="甲的补充说明：当前值 10，切换后立即写入"),
+            PanelItem("0", "返回", kind="return"),
+        ]
+        panel_loop(items, render=_render_blank, prompt="> ", read=_reader(["?1", "0"]))
+        out = capsys.readouterr().out
+        assert "甲的补充说明" in out, "?键 须显示 item.detail 而不是只给键与名称"
+
     def test_direct_false_routes_char_to_on_text(self):
         seen: list[str] = []
         items = [PanelItem("1", "甲"), PanelItem("0", "返回", kind="return")]

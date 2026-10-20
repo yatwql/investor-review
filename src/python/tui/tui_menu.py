@@ -188,9 +188,9 @@ def render_menu(sel: int, filter_text: str = "") -> None:
     print()
     # 页脚按终端宽度折行：窄屏（手机）上不硬折，键位提示也不会被右边界切掉
     footer = (
-        "窄屏直达：按菜单 [键] 执行 · ↑↓ 选择 · Enter 执行 | / 关键词筛选 | Esc / 0 / X 退出 | Ctrl+C 退出"
+        "窄屏直达 · ↑↓ 选择 · 回车执行 | / 筛选 | Esc / 0 / X 退出 | Ctrl+C 退出"
         if narrow
-        else "方向键移动 | Enter 确认 | 字母/数字键直达 | / 关键词筛选 | Esc / 0 / X 退出 | Ctrl+C 退出"
+        else "↑↓ 移动 | 回车执行 | 字母/数字键直达 | / 筛选 | Esc / 0 / X 退出 | Ctrl+C 退出"
     )
     print("\n".join(f"{DIM}{_line}{RESET}" for _line in wrap_with_prefix("  ", footer, terminal_columns())))
     print()
