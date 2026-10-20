@@ -242,3 +242,35 @@ class TestRunWithTimeoutRaiseOnFailure:
         with pytest.raises(TimeoutError):
             run_with_timeout(_boom, timeout=1.0, retries=1, raise_on_failure=True)
         assert calls["n"] == 2
+
+
+class TestRunWithTimeoutFailFast:
+    """run_with_timeout 对确定性失败快速失败（不退避重试）。
+
+    解析/数据形状类崩溃（如源返回 None 后的 TypeError）与 perf 基准禁网桩是
+    换时机重试不出结果的：前者重试只会拿到同样的坏响应，后者是设计使然的禁网。
+    """
+
+    def test_parse_failure_not_retried(self):
+        from src.python.providers._utils import run_with_timeout
+
+        calls = {"n": 0}
+
+        def _boom():
+            calls["n"] += 1
+            raise TypeError("'NoneType' object is not subscriptable")
+
+        assert run_with_timeout(_boom, timeout=1.0, retries=1) is None
+        assert calls["n"] == 1  # 解析崩溃重试必然重复 → fail-fast
+
+    def test_deterministic_block_not_retried(self):
+        from src.python.providers._utils import run_with_timeout
+
+        calls = {"n": 0}
+
+        def _boom():
+            calls["n"] += 1
+            raise OSError("perf-test-report: 基准运行按设计禁网")
+
+        assert run_with_timeout(_boom, timeout=1.0, retries=1) is None
+        assert calls["n"] == 1  # 基准禁网是确定性结果 → fail-fast

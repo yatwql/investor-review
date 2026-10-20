@@ -23,7 +23,13 @@ from src.python.cache import get as cache_get
 from src.python.cache import get_ttl
 from src.python.cache import set as cache_set
 from src.python.core.code_utils import is_a_share_code
-from src.python.core.retry import STRATEGY_EXPONENTIAL, RetryPolicy, retry_transient
+from src.python.core.retry import (
+    STRATEGY_EXPONENTIAL,
+    RetryPolicy,
+    is_deterministic_failure,
+    is_parse_failure_exception,
+    retry_transient,
+)
 from src.python.providers import akshare_financial, hithink
 from src.python.schemas.datasource_fields import DOMAIN_FINANCIAL_INDICATOR
 
@@ -100,7 +106,9 @@ def fetch_indicator_series(code: str, limit: int = DEFAULT_PERIODS) -> list[dict
         records = retry_transient(
             lambda: list(akshare_financial.fetch_financial_indicator_history(code, limit=limit)),
             policy=_SERIES_RETRY_POLICY,
-            retry_on=lambda _e: True,  # akshare 异常种类不可枚举：与 run_with_timeout 同口径
+            # 与 run_with_timeout 同口径：超时/连接抖动重试；解析/数据形状类崩溃与
+            # 确定性失败（基准禁网桩）换时机重试必然重复，fail-fast 转下一源。
+            retry_on=lambda e: not is_parse_failure_exception(e) and not is_deterministic_failure(e),
             on_retry=_on_series_retry,
         )
     except Exception as e:  # 重试耗尽 → 不中断，走后续同花顺/链路兜底

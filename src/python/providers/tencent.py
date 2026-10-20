@@ -24,6 +24,8 @@ from src.python.core.retry import (
     STRATEGY_FIXED,
     TRANSIENT_EXCEPTIONS,
     RetryPolicy,
+    is_deterministic_failure,
+    is_transient_exception,
     retry_transient,
 )
 
@@ -66,7 +68,13 @@ def _fetch_kline_json(full_code: str, days: int, start_from: str | None) -> dict
         )
 
     try:
-        return retry_transient(_attempt, policy=_KLINE_RETRY_POLICY, on_retry=_on_transient_retry)
+        return retry_transient(
+            _attempt,
+            policy=_KLINE_RETRY_POLICY,
+            # 确定性失败（基准禁网桩）换时机重试必然重复：fail-fast 直接上抛
+            retry_on=lambda e: is_transient_exception(e) and not is_deterministic_failure(e),
+            on_retry=_on_transient_retry,
+        )
     except TRANSIENT_EXCEPTIONS as e:
         logger.warning("Tencent K 线获取失败 %s（重试耗尽）: %s", full_code, e)
         return None
@@ -216,7 +224,13 @@ def fetch_price(code: str) -> dict[str, Any] | None:
         )
 
     try:
-        text = retry_transient(_attempt, policy=_PRICE_RETRY_POLICY, on_retry=_on_transient_retry)
+        text = retry_transient(
+            _attempt,
+            policy=_PRICE_RETRY_POLICY,
+            # 确定性失败（基准禁网桩）换时机重试必然重复：fail-fast 直接降级
+            retry_on=lambda e: is_transient_exception(e) and not is_deterministic_failure(e),
+            on_retry=_on_transient_retry,
+        )
     except TRANSIENT_EXCEPTIONS:
         return None
 

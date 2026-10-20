@@ -501,3 +501,25 @@ class TestSeriesTransientRetry:
         series = fi.fetch_indicator_series("600900")
         assert calls["n"] == 2  # 确实重试过（非仅一次即放弃）
         assert [r["source_api"] for r in series] == ["hithink"]
+
+    def test_parse_failure_fails_fast_to_fallback(self, monkeypatch):
+        """解析类异常（TypeError）不重试——确定性失败，直接转下一源兜底。"""
+        from src.python.fetcher import financial_indicator as fi
+        from src.python.providers import akshare_financial
+
+        calls = {"n": 0}
+
+        def _boom(code, limit=8):
+            calls["n"] += 1
+            raise TypeError("'NoneType' object is not subscriptable")
+
+        self._isolate_cache(monkeypatch, fi)
+        monkeypatch.setattr(akshare_financial, "fetch_financial_indicator_history", _boom)
+        monkeypatch.setattr(
+            fi,
+            "fetch_hithink_indicator_series",
+            lambda code, limit: [{"report_period": "2025-12-31", "source_api": "hithink"}],
+        )
+        series = fi.fetch_indicator_series("600900")
+        assert calls["n"] == 1  # 解析崩溃重试必然重复 → 未做注定失败的同源重试
+        assert [r["source_api"] for r in series] == ["hithink"]

@@ -534,3 +534,71 @@ class TestUtcTimezoneConsistency(unittest.TestCase):
     def test_utc_system_cross_date_line_weekend_beijing_saturday(self):
         """系统 UTC，北京时间周六 09:30（UTC 周五 01:30）→ False（周末）。"""
         self.assertFalse(self._call_is_market_open_at_beijing_time(9, 30, weekday=5, system_offset=0))
+
+
+class TestMarketOpenMemo(unittest.TestCase):
+    """is_market_open 的进程内分钟级 memo 与日志去重。
+
+    高频调用路径（缓存 TTL 判断 / provider 策略选择 / 取价方式）每秒可达数十次，
+    memo 把三层判断压到每 worker 每分钟一次；DEBUG 日志仅在判定结果变化时输出，
+    避免连续相同结果把日志刷屏。
+    """
+
+    def setUp(self):
+        from src.python.core import market_hours
+
+        market_hours.reset_memo_state()
+        self.addCleanup(market_hours.reset_memo_state)
+
+    def test_same_minute_reuses_judgement(self):
+        """同一分钟内重复调用只执行一次底层判断。"""
+        with patch("src.python.core.market_hours._is_market_open_config", return_value=True) as m:
+            self.assertTrue(is_market_open())
+            self.assertTrue(is_market_open())
+            m.assert_called_once()
+
+    def test_expired_minute_rejudges(self):
+        """跨分钟（memo 失效）→ 重新执行底层判断。"""
+        from src.python.core import market_hours
+
+        with patch("src.python.core.market_hours._is_market_open_config", return_value=True) as m:
+            self.assertTrue(is_market_open())
+            market_hours._memo.minute = -1  # 模拟跨分钟失效
+            self.assertTrue(is_market_open())
+            self.assertEqual(m.call_count, 2)
+
+    def test_debug_log_only_on_state_change(self):
+        """DEBUG 仅在判定结果变化时输出：同结果跨分钟不刷屏，状态切换打一次。"""
+        from datetime import timezone as _tz
+
+        from src.python.core import market_hours
+
+        bj = _tz(timedelta(hours=8))
+        fake_now = datetime(2026, 10, 21, 10, 0, 0, tzinfo=bj)  # 周三 10:00 北京（交易时段）
+
+        class _FakeDT:
+            @staticmethod
+            def now(_tz_arg=None):
+                return fake_now
+
+        cfg = {"market_hours": {"start": "09:30", "end": "15:00"}}
+        # 用真实 config 层（DEBUG 日志在层内）：只 mock 配置读取与时钟
+        with (
+            patch("src.python.core.market_hours.datetime", _FakeDT),
+            patch("src.python.config.get_config", return_value=cfg),
+        ):
+            with self.assertLogs("invest", level="DEBUG") as cm:
+                self.assertTrue(is_market_open())
+            self.assertEqual(len([r for r in cm.output if "市场时段(配置" in r]), 1)
+
+            # 跨分钟重判但结果不变 → 不再输出（只失效 memo，保留日志去重状态）
+            market_hours._memo.minute = -1
+            with self.assertNoLogs("invest", level="DEBUG"):
+                self.assertTrue(is_market_open())
+
+            # 状态切换（配置时段落到未来区间 → False）→ 输出一次
+            market_hours._memo.minute = -1
+            cfg["market_hours"] = {"start": "23:00", "end": "23:30"}
+            with self.assertLogs("invest", level="DEBUG") as cm2:
+                self.assertFalse(is_market_open())
+            self.assertEqual(len([r for r in cm2.output if "市场时段(配置" in r]), 1)

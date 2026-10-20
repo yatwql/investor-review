@@ -108,3 +108,37 @@ class TestLastReasonCarrier:
         """
         assert getattr(pu._last_reason, "value", "") == ""
         assert pu.take_last_reason() == ""
+
+
+class TestDeterministicFailFast:
+    """确定性失败（perf 基准禁网桩）快速失败——连接级重试对同一坏端点只白等退避。"""
+
+    def test_with_connect_retry_skips_deterministic_failure(self, monkeypatch):
+        calls = {"n": 0}
+        sleeps: list[float] = []
+
+        def _boom():
+            calls["n"] += 1
+            raise OSError("perf-test-report: 基准运行按设计禁网")
+
+        monkeypatch.setattr(pu.time, "sleep", sleeps.append)
+        with pytest.raises(OSError):
+            pu.with_connect_retry(_boom, timeout=5.0, log_tag="probe", label="/x")
+        assert calls["n"] == 1  # 确定性失败：一次即上抛，不退避重试
+        assert sleeps == []
+
+    def test_with_connect_retry_still_retries_transient(self, monkeypatch):
+        """瞬时连接失败仍按策略重试（既有行为不回归）。"""
+        import httpx
+
+        calls = {"n": 0}
+
+        def _flaky():
+            calls["n"] += 1
+            if calls["n"] < 2:
+                raise httpx.ConnectError("boom")
+            return "ok"
+
+        monkeypatch.setattr(pu.time, "sleep", lambda _s: None)
+        assert pu.with_connect_retry(_flaky, timeout=5.0, log_tag="probe", label="/x") == "ok"
+        assert calls["n"] == 2
