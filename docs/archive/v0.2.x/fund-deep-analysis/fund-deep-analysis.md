@@ -215,8 +215,6 @@ def fetch_fund_manager(code: str) -> dict[str, Any] | None:
 
 预研结果决定 Phase B5 的实施方案。预研产出写入 `docs/plan/notes/data-source-pre-study.md`。
 
-预研结果决定 Phase B5 的实施方案。预研产出写入 `docs/plan/notes/data-source-pre-study.md`。
-
 #### 3.2.3 缓存注册
 
 **关键设计原则**：历史快照类缓存使用独立缓存键（固定键名，无指纹后缀），

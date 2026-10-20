@@ -1135,7 +1135,7 @@ technical.md 的设计约束（C1~C14）中与本拆分相关的检查：
    ```
 2. [ ] 更新 `__init__.py` 中 generators 模块的 import 保持仅新闻相关：
    ```python
-   # generators 不再提供 generate_all_llm
+   # generators 不提供 generate_all_llm
    # 如果 generators 还有被 __init__ 直接使用的公开符号，保留
    # 但 generate_all_llm 已迁移到 orchestrator
    ```
@@ -1644,7 +1644,7 @@ grep -rn 'patch("src\.python\.llm\.generators\.ThreadPoolExecutor\|patch("src\.p
 # Phase 1（加法后）：验证旧路径仍然可用
 python -c "from src.python.llm.generators import generate_all_llm; print('[OK] 旧路径仍可用')"
 
-# Phase 2（迁移后）：验证新路径可用 + 旧路径仍可用
+# Phase 2（改动后）：验证新路径可用 + 旧路径仍可用
 python -c "from src.python.llm.generators_orchestrator import generate_all_llm; print('[OK] 新路径')"
 python -c "from src.python.llm.generators import generate_all_llm; print('[OK] 旧路径仍可用')"
 
@@ -1760,16 +1760,6 @@ R-198 I-14: 文档更新 + R-198 关闭
 | I-13 | 不变 | 不变 | — | — | 0 | **verify** | ★★☆☆☆ |
 | I-14 | 不变 | 不变 | — | 文档更新 | 0 | 无 | ★☆☆☆☆ |
 | **终态** | **~230 行** | **~220 行** | **+5 新模块文件 + 6 新测试文件** | **+6 新测试文件，~43 处 import 变更** | **~43 处** | — | — |
-
-### import 路径变更计数明细
-
-| 变更批次 | 迭代 | 变更来源 | 变更数量 | 累计 |
-|:--------|:----:|:---------|:--------:|:----:|
-| 测试 import → api_base | I-04 | api.py → api_base.py | ~15 | 15 |
-| 新闻 import → generators_news | I-06 | generators.py → generators_news.py | ~16 | 31 |
-| 编排 import → orchestrator | I-09 | generators.py → generators_orch.py | ~12 | 43 |
-
----
 
 ### import 路径变更计数明细
 

@@ -108,6 +108,23 @@
 - **TUI 菜单描述同步**：B/L 菜单标注「含基金深度分析」，[1] 菜单描述含基金经理缓存
 - **测试覆盖**：B 系列 6 个测试文件共 ~115 项（fetter fund_manager 14 项 + report 模块 101 项）
 
+
+
+- **R-159c：代码类型判定中心化 — code_utils.py**：
+  - 新增 `src/python/code_utils.py`：资产代码/名称类型识别唯一入口，集中管理所有前缀区间和名称关键词知识
+  - 新增函数：`is_a_share_code`、`is_fund_code`、`is_stock_like_code`、`is_exchange_fund_code`、`is_hk_stock_code`、`get_exchange_prefix`、`get_push2_secid`、`is_qdii_by_name`、`is_etf_by_name`、`is_bond_related_by_name`、`is_index_link_by_name`
+  - 全量迁移 12 个调用方：`fetcher/industry.py`、`providers/eastmoney_industry.py`、`providers/eastmoney_industry_rest.py`、`providers/tencent.py`、`providers/akshare_extras.py`、`report/penetration.py`、`report/category.py`、`report/market_value.py`、`report/fund_performance.py`、`report/penetration_sheet.py`、`llm/prompts.py`
+  - 删除 4 个重复的内部函数：`penetration._is_bond_fund`、`penetration._is_index_link`、`market_value._is_qdii`、`market_value._is_etf`
+  - `llm/prompts._is_qdii` 委托至 `code_utils.is_qdii_by_name`
+  - `CLAUDE.md` + `technical.md` 添加"代码类型判定中心化"约束
+
+- **R-157：push2 全线不可用时 fallback 链路 — eastmoney_industry_rest**：
+  - 新增 `src/python/providers/eastmoney_industry_rest.py`：行情页 HTML scraped 备用链路，解析 `quotedata.bk_name`（行业名称）/ `bk_id`（行业 BK 代码）
+  - `chain.py`：`industry` 链扩展为 `["eastmoney_industry", "eastmoney_industry_rest"]`
+  - `industry.py`：注册 `eastmoney_industry_rest` 到 provider 映射表
+  - 新增测试 13 项：`_quote_prefix`（5 类代码前缀）、`_extract_quotedata`（4 场景）、`fetch_industry_and_concepts`（3 场景，含 mock HTTP 异常）
+  - 注意：概念板块数据依赖 push2 XHR 动态加载，fallback 仅提供行业分类，概念列表留空（graceful degradation）
+
 ### Fixed
 
 - **R-158：Excel "LLM API 用量" 页签未显示模块明细**：
@@ -131,23 +148,6 @@
 - **R-159b：A 股代码判定修复 — 250361 基金代码误入行业链路**：
   - `industry._is_a_share_code`：从仅检查"6 位数字"升级为前缀区间检查（60/68/00/30/8），基金代码（250361 等）不再被误判为 A 股
   - 250361 不再触发东方财富 REST 行情页 404 错误
-
-### Added
-
-- **R-159c：代码类型判定中心化 — code_utils.py**：
-  - 新增 `src/python/code_utils.py`：资产代码/名称类型识别唯一入口，集中管理所有前缀区间和名称关键词知识
-  - 新增函数：`is_a_share_code`、`is_fund_code`、`is_stock_like_code`、`is_exchange_fund_code`、`is_hk_stock_code`、`get_exchange_prefix`、`get_push2_secid`、`is_qdii_by_name`、`is_etf_by_name`、`is_bond_related_by_name`、`is_index_link_by_name`
-  - 全量迁移 12 个调用方：`fetcher/industry.py`、`providers/eastmoney_industry.py`、`providers/eastmoney_industry_rest.py`、`providers/tencent.py`、`providers/akshare_extras.py`、`report/penetration.py`、`report/category.py`、`report/market_value.py`、`report/fund_performance.py`、`report/penetration_sheet.py`、`llm/prompts.py`
-  - 删除 4 个重复的内部函数：`penetration._is_bond_fund`、`penetration._is_index_link`、`market_value._is_qdii`、`market_value._is_etf`
-  - `llm/prompts._is_qdii` 委托至 `code_utils.is_qdii_by_name`
-  - `CLAUDE.md` + `technical.md` 添加"代码类型判定中心化"约束
-
-- **R-157：push2 全线不可用时 fallback 链路 — eastmoney_industry_rest**：
-  - 新增 `src/python/providers/eastmoney_industry_rest.py`：行情页 HTML scraped 备用链路，解析 `quotedata.bk_name`（行业名称）/ `bk_id`（行业 BK 代码）
-  - `chain.py`：`industry` 链扩展为 `["eastmoney_industry", "eastmoney_industry_rest"]`
-  - `industry.py`：注册 `eastmoney_industry_rest` 到 provider 映射表
-  - 新增测试 13 项：`_quote_prefix`（5 类代码前缀）、`_extract_quotedata`（4 场景）、`fetch_industry_and_concepts`（3 场景，含 mock HTTP 异常）
-  - 注意：概念板块数据依赖 push2 XHR 动态加载，fallback 仅提供行业分类，概念列表留空（graceful degradation）
 
 ## [0.2.86] - 2026-07-05
 
@@ -194,6 +194,11 @@
 - **CLAUDE.md/plan.md/test-coverage.md 门禁耗时同步**：P1 verify 从~12min→~49s，P0 regression/~30s 不变，P2 all/~待测
 - **A5 实施决策**：Phase 2 文件拆分跳过（unit 20s 无需拆分）、Phase 3 增量测试延期（全量够快无需增量复杂度）
 
+
+
+- **pyproject.toml 版本同步**：`version` 0.2.52→0.2.83，与 `constants.py` APP_VERSION 对齐（修复 31 个小版本脱节）
+- **review-findings.md**：新增 R-148~R-153 审计项，R-148/R-153 已修复摘要留表，明细移入 changelog
+
 ### Fixed
 
 - **资产穿透TOP10 基金伪穿透垃圾数据污染**（#O15）：天天基金 API 对华安黄金ETF(518880)返回了无效持仓数据——3 只财通基金代码以 ratio=401%/399%/359%（>100%）作为黄金 ETF 的"持仓"出现。穿透模块未验证 ratio 合法性，照单全收导致：
@@ -206,6 +211,18 @@
   2. 若某基金的所有持仓条目均被过滤，计入 `unknown_mv`（统计信息）而非加入 merged 污染 TOP10（上一轮 fix 保留）
 
   新增回归测试 4 条（含精确复现 518880 场景的测试用例）。
+
+
+
+
+
+- **12 处 `except Exception` 补充异常追踪**：`market_hours.py`（新增 `logger.warning`+`exc_info=True`）、`tui_handlers.py`、`providers/akshare_extras.py`（3 处）、`report/category.py`、`report/fund_performance.py`、`report/market_value.py`、`report/penetration_sheet.py`（2 处）、`report/penetration.py` — 确保非预期异常有完整 traceback
+
+### Style
+
+- **模板数字格式化统一**：`report_template.html` 中 8 处 `{{ "{:,}".format(value) }}` 替换为 `{{ value | thousands }}`，统一使用已有自定义 Jinja2 filter
+
+---
 
 ## [0.2.83] - 2026-07-04
 
@@ -231,27 +248,14 @@
 
 ---
 
-## [0.2.84] - 2026-07-04
-
-### Changed
-
-- **pyproject.toml 版本同步**：`version` 0.2.52→0.2.83，与 `constants.py` APP_VERSION 对齐（修复 31 个小版本脱节）
-- **review-findings.md**：新增 R-148~R-153 审计项，R-148/R-153 已修复摘要留表，明细移入 changelog
-
-### Fixed
-
-- **12 处 `except Exception` 补充异常追踪**：`market_hours.py`（新增 `logger.warning`+`exc_info=True`）、`tui_handlers.py`、`providers/akshare_extras.py`（3 处）、`report/category.py`、`report/fund_performance.py`、`report/market_value.py`、`report/penetration_sheet.py`（2 处）、`report/penetration.py` — 确保非预期异常有完整 traceback
-
-### Style
-
-- **模板数字格式化统一**：`report_template.html` 中 8 处 `{{ "{:,}".format(value) }}` 替换为 `{{ value | thousands }}`，统一使用已有自定义 Jinja2 filter
-
----
-
 ## [0.2.63] - 2026-07-02
 
 ### Added
 - **边缘场景测试增补（迭代 V）**：在执行已有 conftest.py 和测试框架基础上新增 6 个 `_edge.py` 文件和增强 2 个已有 `_edge.py`，共 19 个新测试用例，覆盖 cache 损坏恢复、API 异常数据、市场时段边界等边缘场景。
+
+
+- **冒烟测试 `smoke` 标记（24 项）**：从核心数据模型、入口读取、分类计算、报告输出、启动依赖、数据获取 6 个关键节点各选 4 项最快基础测试，分配 `@pytest.mark.smoke`。`-m "smoke"` 可在 ~2s 内验证核心通路。涉及文件：`test_models.py`、`test_reader.py`、`test_category.py`、`test_excel_generator.py`、`test_config.py`、`test_eastmoney.py`。
+- **LLM 测试 API Key 审计**：确认全部 350 项 `llm` 标记测试（unit_llm 331 + scenario_llm 19）均为 mock 测试，无需真实 API key。`how-to-test-my-code.md` 新增逐文件 mock 分析表。
 
 ### Changed
 - **错误提示优化**：所有直接暴露原始异常堆栈给用户的 `print(str(e))` 替换为友好中文提示，引导用户查看日志文件，避免恐慌
@@ -262,7 +266,7 @@
 - **`constants.py`**：`APP_VERSION` 0.2.61 → 0.2.62
 - **`README.md`**：用户文档表增加"如何测试我的代码"链接
 
-### Changed
+
 - **pytest 标记层级体系**：原有 6 个扁平 marker 扩展为 15 个分层 marker
   - 场景测试：`scenario` 父标记 → `scenario_basic`（S1-S5, 9 项）/ `scenario_extended`（S6-S10, 18 项）/ `scenario_llm`（S11-S20, 19 项）/ `scenario_datetime`（T1-T16, 61 项）— 子标记总和 = 107，父标记匹配全部
   - 单元测试：`unit` 父标记 → `unit_providers`（166 项）/ `unit_fetcher`（118 项）/ `unit_llm`（331 项）/ `unit_news`（176 项）/ `unit_report`（558 项）/ `unit_config`（42 项）/ `unit_core`（277 项）/ `unit_ui`（142 项）— 子标记总和 = 1810，父标记匹配全部
@@ -280,11 +284,7 @@
 - **`testplan.md`**：示例命令路径同步更新
 - **`plan.md`**：新增 T. 测试标记与目录分组已完成迭代条目
 
-### Added
-- **冒烟测试 `smoke` 标记（24 项）**：从核心数据模型、入口读取、分类计算、报告输出、启动依赖、数据获取 6 个关键节点各选 4 项最快基础测试，分配 `@pytest.mark.smoke`。`-m "smoke"` 可在 ~2s 内验证核心通路。涉及文件：`test_models.py`、`test_reader.py`、`test_category.py`、`test_excel_generator.py`、`test_config.py`、`test_eastmoney.py`。
-- **LLM 测试 API Key 审计**：确认全部 350 项 `llm` 标记测试（unit_llm 331 + scenario_llm 19）均为 mock 测试，无需真实 API key。`how-to-test-my-code.md` 新增逐文件 mock 分析表。
 
-### Changed
 - **`test_runner.py` MODES 字典 order 修复**：scenario/regression 重复 order=3 修复为各模式唯一值（regression=4→verify=5→integration=6→edge=7→data=8→all=9）；新增 `smoke` 模式（order=10，marker="smoke"）
 - **全量文档一致性审阅**：`datasource-and-folders.md` 标记数 15→19、`cls_news`→`cls` 配置修正；`faq.md` 过时引用修正；`how-to-test-my-code.md` 完整更新（三级流水线、10 模式表、smoke 明细、LLM mock 分析）；`plan.md`/`technical.md`/`review-findings.md` 标记计数 15→19；`plan.md` S 节模式列表同步
 
@@ -347,36 +347,28 @@
   - §4"57 文件"硬编码 → `pytest --collect-only` 动态统计
 - **`scripts/validate_coverage_map.py`**（新建）：场景-测试文件覆盖率映射验证脚本，支持 `--summary` / `--update`
 
-### Added
-- **`docs/plan/test-coverage-map.md`**（新建）：详细场景-测试文件覆盖率映射（从 testplan.md §1.7 拆分）
-- **`scripts/validate_coverage_map.py`**：覆盖率映射验证脚本，扫描 `src/test/` 所有 Test 类并对比映射文件准确性
 
-### Tests
-- 全量测试文件数：59，测试类数：327
-- `test_datetime_scenarios.py` 61 项（已计入 v0.2.59，此处仅确认）
-
-### Fixed
-- **🐛 `_handle_truncation` 丢弃 usage（R-145）**：`skeleton.py:171` 非截断路径下 `return result, None` 应改为 `return result, usage`。导致 `_finalize_and_cache` 中 `if usage:` 整个块被跳过，`_record_per_module()` 和 HTML 页脚 Token 信息均未执行。影响：LLM API 用量模块明细全部显示 `—`，各章节底部无"模型：X | Token 用量：..." 信息。修复：增加 `usage` 参数透传。
-- **🐛 `news_correlation` 遗漏在 LLM 模块明细表（R-146）**：`excel_generator.py:281` / `html_writer.py:497` / `summary.py:325` 三处硬编码 `MODULE_KEYS = [4个模块]`，漏了 `"news_correlation"`。修复：三处均添加 `"news_correlation"`。同步修复 `html_writer.py:564` `module_disabled` 字典循环。
-- **🐛 缓存模块 Token 显示为 `—`（R-147）**：HTML 模板 `report_template.html:893-896` 使用 `{% if _mi.total_tokens %}`，Jinja2 中 `0` 为 falsy，缓存模块 Token=0 时显示 `—`。修复：改为 `{% if _mi.status == "unknown" %}—{% else %}{{ ... }}{% endif %}`。
-- **🐛 基金业绩"较差"评级颜色错误（深绿→浅绿）**：`fund_performance.py` 中"较差"评级误用 `GREEN_FONT`（#009900），与 footnote 承诺的"深绿"不符。HTML 模板 `report_template.html` 第 536 行**遗漏"较差"条件分支**，导致该评级单元格无任何颜色样式，保持默认黑色。修复：`styles.py` 新增 `DARK_GREEN_FONT`（#006400）；`fund_performance.py` 改为 `DARK_GREEN_FONT`；HTML 模板补齐 `{{ ' color: #006400; font-weight: 600;' if p['rating_tag'] == '较差' }}`。
-- **🐛 `_write_module_data_rows` 缺少 `Border`/`Side` 导入**：函数内使用 `Border()` / `Side()` 但未导入，正常执行因 `write_llm_module_status_block` 先执行导入了这些符号而掩盖。独立调用时抛出 `NameError`。修复：函数内添加 `from openpyxl.styles import Border, Side`。
-- **🐛 `test_mixed_cached_and_success` 断言错误**：测试 `assertNotIn("Extended Thinking", all_text)` 但 "智囊团深度复盘" 模块启用了 Thinking，`Extended Thinking` 正确出现在输出中。修复：改为 `assertEqual(all_text.count("Extended Thinking"), 1)` 精确计数。
-
-### Added
-- **`test_skeleton.py::TestHandleTruncation`**（3 项新测试）：非截断保留 usage、None 保留 usage、空字符串保留 usage。直接验证 `_handle_truncation` 的核心契约。
-- **`test_summary.py::TestWriteModuleDataRows`**（6 项新测试）：缓存命中行渲染、成功+Thinking 行渲染、禁用行渲染、失败行渲染、空 status_label 跳过、4 状态混合行序列验证。覆盖 Excel 单元格级渲染逻辑（Token 格式化、费用展示、✓/— 标记）。
-- **`test_llm_scenarios.py`**（33 项新测试）：LLM 全场景组合 + 异常/Edge Case + 输出格式一致性 + HTML 模板分支巡检。
-- **`styles.py::DARK_GREEN_FONT`**：深绿色字体常量 `Font(color="006400")`，用于基金业绩"较差"评级标色。
-
-### Changed
 - **`logger.py`：测试日志写入 `logs/test.log`** — 通过 `sys.argv` 检测 pytest 环境，测试期间日志写入独立文件，避免与运行时 `logs/app.log` 混淆。
 - **`test_html_writer.py` 测试隔离增强** — `TestWriteHtmlReportLlmType.setUp/tearDown` 保存并清理 `_LLM_MODULE_FAILURE` 全局状态，消除前序测试跨类残留。模块明细计数断言从 `4` 更新为 `5`。
 - **`_finalize_news_token_usage` 记录增强** — 新增 `all_cached` 参数，全缓存场景也调用 `_record_per_module`；新增 `_estimate_cost` 计算费用；传递 `endpoint` 字段。
 - **`plan.md`**：新增 P. 业务场景测试增强迭代方向（S11-S17 LLM 全场景组合 + 异常/Edge Case + 输出格式一致性验证）；新增 Q. 日期/时间数据获取场景测试方向；P 节已完成并移至待实现方向 → 已完成迭代。
 - **`testplan.md`**：业务场景表扩展 S11-S17（LLM 混合缓存/失败/Thinking/禁用/断网/部分超期）；新增 1.6 日期/时间数据获取场景测试 T1-T16；新增 1.7 场景-测试文件覆盖率映射；迭代列表新增 v0.2.59。
 
+### Added
+- **`docs/plan/test-coverage-map.md`**（新建）：详细场景-测试文件覆盖率映射（从 testplan.md §1.7 拆分）
+- **`scripts/validate_coverage_map.py`**：覆盖率映射验证脚本，扫描 `src/test/` 所有 Test 类并对比映射文件准确性
+
+
+- **`test_skeleton.py::TestHandleTruncation`**（3 项新测试）：非截断保留 usage、None 保留 usage、空字符串保留 usage。直接验证 `_handle_truncation` 的核心契约。
+- **`test_summary.py::TestWriteModuleDataRows`**（6 项新测试）：缓存命中行渲染、成功+Thinking 行渲染、禁用行渲染、失败行渲染、空 status_label 跳过、4 状态混合行序列验证。覆盖 Excel 单元格级渲染逻辑（Token 格式化、费用展示、✓/— 标记）。
+- **`test_llm_scenarios.py`**（33 项新测试）：LLM 全场景组合 + 异常/Edge Case + 输出格式一致性 + HTML 模板分支巡检。
+- **`styles.py::DARK_GREEN_FONT`**：深绿色字体常量 `Font(color="006400")`，用于基金业绩"较差"评级标色。
+
 ### Tests
+- 全量测试文件数：59，测试类数：327
+- `test_datetime_scenarios.py` 61 项（已计入 v0.2.59，此处仅确认）
+
+
 - 全量 **1854 passed**（12 skipped，65 subtests passed）。
 - **新增 `test_llm_scenarios.py`**（33 项），覆盖 S11-S17 LLM 混合缓存+全部失败+Thinking+禁用+断网+部分超期+全缓存、空持仓+LLM、HTML/Excel/Summary 输出一致性、模板分支审计。
 - **新增 `test_datetime_scenarios.py`**（61 项），覆盖 T1-T16 日期/时间数据获取场景：
@@ -387,6 +379,14 @@
 - `test_html_writer.py` 模块计数 4→5，隔离修复
 
 ---
+
+### Fixed
+- **🐛 `_handle_truncation` 丢弃 usage（R-145）**：`skeleton.py:171` 非截断路径下 `return result, None` 应改为 `return result, usage`。导致 `_finalize_and_cache` 中 `if usage:` 整个块被跳过，`_record_per_module()` 和 HTML 页脚 Token 信息均未执行。影响：LLM API 用量模块明细全部显示 `—`，各章节底部无"模型：X | Token 用量：..." 信息。修复：增加 `usage` 参数透传。
+- **🐛 `news_correlation` 遗漏在 LLM 模块明细表（R-146）**：`excel_generator.py:281` / `html_writer.py:497` / `summary.py:325` 三处硬编码 `MODULE_KEYS = [4个模块]`，漏了 `"news_correlation"`。修复：三处均添加 `"news_correlation"`。同步修复 `html_writer.py:564` `module_disabled` 字典循环。
+- **🐛 缓存模块 Token 显示为 `—`（R-147）**：HTML 模板 `report_template.html:893-896` 使用 `{% if _mi.total_tokens %}`，Jinja2 中 `0` 为 falsy，缓存模块 Token=0 时显示 `—`。修复：改为 `{% if _mi.status == "unknown" %}—{% else %}{{ ... }}{% endif %}`。
+- **🐛 基金业绩"较差"评级颜色错误（深绿→浅绿）**：`fund_performance.py` 中"较差"评级误用 `GREEN_FONT`（#009900），与 footnote 承诺的"深绿"不符。HTML 模板 `report_template.html` 第 536 行**遗漏"较差"条件分支**，导致该评级单元格无任何颜色样式，保持默认黑色。修复：`styles.py` 新增 `DARK_GREEN_FONT`（#006400）；`fund_performance.py` 改为 `DARK_GREEN_FONT`；HTML 模板补齐 `{{ ' color: #006400; font-weight: 600;' if p['rating_tag'] == '较差' }}`。
+- **🐛 `_write_module_data_rows` 缺少 `Border`/`Side` 导入**：函数内使用 `Border()` / `Side()` 但未导入，正常执行因 `write_llm_module_status_block` 先执行导入了这些符号而掩盖。独立调用时抛出 `NameError`。修复：函数内添加 `from openpyxl.styles import Border, Side`。
+- **🐛 `test_mixed_cached_and_success` 断言错误**：测试 `assertNotIn("Extended Thinking", all_text)` 但 "智囊团深度复盘" 模块启用了 Thinking，`Extended Thinking` 正确出现在输出中。修复：改为 `assertEqual(all_text.count("Extended Thinking"), 1)` 精确计数。
 
 ## [0.2.58] - 2026-07-02
 
@@ -411,6 +411,11 @@
 - **🐛 `industry` Provider Chain 缺失（R-138）**：`fetcher/chain.py` 的 `_DEFAULT_CHAINS` 无 `"industry"` 条目，导致 `_fetch_with_fallback("industry", ...)` 的 Provider Chain 永不会执行。由于 `industry.py` 回调了独立的 `eastmoney_industry.fetch_industry_and_concepts()`（不经 Chain），该缺陷未暴露为数据异常。修复：补充 `"industry": ["eastmoney_industry"]` 到 `_DEFAULT_CHAINS`。
 - **🐛 `claude-fable-5` 缺失 Extended Thinking 名单（R-141）**：`llm/api.py` 的 `_THINKING_SUPPORTED_PREFIXES` 未包含 `claude-fable-5`，新模型使用时自动降级跳过 Extended Thinking。修复：补入名单。
 
+
+- **P0: 指数 `market_hour_aware` 不生效**（R-136）：`fetcher/index.py` 硬编码 `CACHE_DAILY` 代替 `get_ttl("index")`，盘中 30s 短 TTL 对指数无效。修复后指数在交易时段内自动使用短 TTL 刷新实时行情。
+- **P1: 多处硬编码 TTL 绕过 `get_ttl()`（R-137）**：`fund.py` 基金排名/基金持仓/基准、`industry.py` 行业分类、`market_value.py` 交易日历共 5 处硬编码常量改为 `get_ttl("type")`，确保 `config.json` 中的 `cache_ttl.*` 配置变更对所有读缓存路径生效。
+- **P1: `test_fund.py` 双重检查锁用例锁外竞态**：`_call_no` 非线程安全的 RMW 竞态在 `get_ttl()` 微耗时变化后暴露。改为 `threading.Event` 精确控制缓存状态，消除时序依赖。
+
 ### Removed（死代码 / 向后兼容代码）
 - **R-138: `_PROVIDER_REGISTRY` 死字典**：`fetcher/chain.py` 废弃的旧版 Provider 注册字典，无任何引用。
 - **R-140: `_strip_token_line()` 向后兼容函数**：`llm/api.py` 的 `_TOKEN_LINE_RE` 正则及 `_strip_token_line()` 函数（R-131 移除旧版 Token 行格式后遗留），以及 `generators.py`/`skeleton.py` 中的调用处、`test_api.py` 中的导入和测试类。
@@ -422,17 +427,7 @@
 - **`fetcher/index.py` docstring**：更新新浪备用链路描述（"仅有主链路，无可用备用"）。
 - **文件标题更新**：review-findings.md 最后更新 v0.2.57。
 
-### Tests
-- `test_api.py`：移除 `_strip_token_line` 导入和 3 项测试 → 41 passed（-3 项），全量测试 1708 passed。[^1]
 
-[^1]: 原 1711 passed - 3 项移除 = 1708 passed，12 skipped，31 subtests passed。  
-
-### Fixed
-- **P0: 指数 `market_hour_aware` 不生效**（R-136）：`fetcher/index.py` 硬编码 `CACHE_DAILY` 代替 `get_ttl("index")`，盘中 30s 短 TTL 对指数无效。修复后指数在交易时段内自动使用短 TTL 刷新实时行情。
-- **P1: 多处硬编码 TTL 绕过 `get_ttl()`（R-137）**：`fund.py` 基金排名/基金持仓/基准、`industry.py` 行业分类、`market_value.py` 交易日历共 5 处硬编码常量改为 `get_ttl("type")`，确保 `config.json` 中的 `cache_ttl.*` 配置变更对所有读缓存路径生效。
-- **P1: `test_fund.py` 双重检查锁用例锁外竞态**：`_call_no` 非线程安全的 RMW 竞态在 `get_ttl()` 微耗时变化后暴露。改为 `threading.Event` 精确控制缓存状态，消除时序依赖。
-
-### Changed
 - **P2: `llm_health_check` TTL 7200→86400**（注册表 + config.json + 用户文档同步）：持仓体检报告基于组合结构（行业集中度/流动性/成本结构），持仓不变时无需每小时重新生成，24h + 持仓指纹变化自动失效更合理。
 - **P3: 交易日历 TTL 不一致消除**：`registry.py` 注册 14 天 + `market_value.py` 读缓存统一使用 `get_ttl("calendar")`，与 `cleanup_expired()` 清理周期一致。
 - **scripts/launch.ps1 / launch.sh**：`pip install -q` → `-qq`，抑制 `.venv` 内 pip 版本更新通知（venv 继承 Python 3.13.0 捆绑的 pip 24.2，而系统 pip 已升级至 26.1.2）。
@@ -440,6 +435,11 @@
 - **technical.md 缓存分组计数修正**：preload 组 5→6 模块（llm_health_check 加入后未更新）、refresh 组 10→9 模块（列表实际只有 9 项）。
 
 ### Tests
+- `test_api.py`：移除 `_strip_token_line` 导入和 3 项测试 → 41 passed（-3 项），全量测试 1708 passed。[^1]
+
+[^1]: 原 1711 passed - 3 项移除 = 1708 passed，12 skipped，31 subtests passed。  
+
+
 - 全量 1711 passed, 12 skipped, 31 subtests passed。
 
 ---
@@ -555,6 +555,9 @@
   - `cache.py:cleanup_expired()` 77→35 行，提取 `_scan_cache_files`/`_filter_expired`
   - `report/html_writer.py:_render_llm_module_info()` 76→32 行，提取 `_build_llm_section_html`/`_build_footer_line`
 
+
+- **`config.py:validate_config()` 新增 early_warning 段校验（R-054 续）**：补充 `sentiment_top_n` 正整型验证。
+
 ### Added
 - **`src/test/test_akshare_news.py`（R-071 ✅）**：16 项测试覆盖 `_fetch_from_caixin`（9 项纯函数 + mock 含未安装/异常/空数据/正常解析/去重/截断/过滤）+ `_fetch_cctv_news`（4 项）+ `fetch_news`（3 项聚合）。
 - **`src/test/test_cls_news.py`（R-072 ✅）**：21 项测试覆盖 `_ts_to_str`（3 项）+ `_parse_news_item`（10 项纯函数）+ `fetch_news`（8 项 HTTP/异常/缺字段）。
@@ -568,9 +571,6 @@
 - **R-080 ✅ 旧式 typing 泛型 → 内置泛型**：13 个文件的 `List[X]`/`Dict[X,Y]`/`Optional[X]`/`Tuple[X,Y]` 全部替换为 `list[X]`/`dict[X,Y]`/`X | None`/`tuple[X,Y]`。涉及：reader.py、category.py、excel_writer.py、fund_performance.py、html_builders.py、html_writer.py、market_value.py、news_correlation.py、penetration.py、penetration_sheet.py、llm/api.py、news_aggregator.py、news_keywords.py。
 - **R-082 ✅ `.format()` → f-string（3 处）**：`generators.py`/`skeleton.py` 中模板 `.format()` 改为函数调用 `_cache_line_model_tpl()`；`html_writer.py` 中存档文件名改为 f-string。
 - **R-083 ✅ pyproject.toml 同步**：版本号 0.2.36→0.2.52，依赖 `>=`→`==` 精确版本（与 requirements.txt 一致），补充 `lxml==6.1.1` 和 pytest 插件。
-
-### Changed
-- **`config.py:validate_config()` 新增 early_warning 段校验（R-054 续）**：补充 `sentiment_top_n` 正整型验证。
 
 ### Tests
 - 9 个新测试文件 + 140 项新增测试（全量 1535 passed, 11 skipped）。
@@ -588,6 +588,10 @@
 - **`src/test/test_sina_news.py`（R-048 ✅）**：17 项测试覆盖 `_ts_to_str`（2 项）+ `_parse_news_item`（9 项纯函数）+ `fetch_news`（8 项 HTTP/异常/参数验证）。
 - **`src/test/test_wallstreetcn_news.py`（R-049 ✅）**：15 项测试覆盖 `_ts_to_str`（2 项）+ `_parse_news_item`（12 项纯函数，含标题回退/HTML 剥离/URI 处理/截断）+ `fetch_news`（9 项 HTTP/异常/limit 上限）。
 
+
+- **`src/test/test_http_client.py`（R-033 ✅）**：17 项测试覆盖 `_should_verify`（8 种 env 值）+ `make_http_client`（6 种 kwargs 组合 + context manager）。
+- **`src/test/test_market_hours.py`（R-034 ✅）**：41 项测试覆盖 `_parse_time_to_minutes`（10 项）/ `_fetch_trading_status_from_official`（7 项）/ `_is_market_open_fallback`（14 项）/ `_is_market_open_config`（6 项）/ `is_market_open`（5 项三层编排）。
+
 ### Changed
 - **`llm/__init__.py` 过度导出清理（R-050 ✅）**：从 6 个子模块 re-export 的 ~60 个私有符号仅保留公有接口（FAIL_REASON_* 常量 + 6 个公开函数）。`_LLM_MODULE_FAILURE`/`_CACHE_PREFIX_LLM` 等私有符号改为从子模块直接导入。同步修复 `test_llm.py` 中 26 处 import 路径。
 - **`llm/skeleton.py` 全局 max_tokens 回退路径清理**：`llm_config.get(f"max_tokens_{module_key}") or llm_config.get("max_tokens", max_tokens_default)` → `llm_config.get(f"max_tokens_{module_key}", max_tokens_default)`。移除旧版全局 `max_tokens` 幽灵字段兜底。
@@ -595,6 +599,16 @@
 - **`llm/circuit_breaker.py`（R-043 ✅ 无需加测）**：熔断器逻辑已由 test_api.py 7 项测试间接充分覆盖，无需单独测试文件。
 - **`llm/pricing.py`（R-045 ✅ 无需加测）**：定价计算已由 test_pricing.py 8 项测试覆盖。
 - **`llm/markdown.py`（R-046 ✅ 无需加测）**：Markdown→HTML 转换已由 test_markdown.py 11 项测试覆盖。
+
+
+- **`report/news_correlation.py:_build_keyword_lookup()` 拆分（R-035 ✅）**：119→28 行，提取 5 个辅助函数（`_extract_terms`/`_index_holdings`/`_index_penetrated_assets`/`_index_industry_concepts`/`_enrich_with_industry_data`）。
+- **`report/category.py:write_category_sheet()` 拆分（R-036 ✅）**：124→58 行，提取 3 个辅助函数（`_load_dividend_data`/`_yield_text`/`_write_category_group`）。修复 subtotal/total 值数组元素数与 API 签名一致（10→9）。
+- **`llm/generators.py:enhance_news_correlation()` 拆分（R-037 ✅）**：128→35 行，提取 5 个辅助函数（`_select_top_news`/`_build_news_hooks`/`_map_llm_results`/`_merge_llm_analysis`/`_finalize_news_token_usage`）。
+- **`llm/api.py:_call_llm_with_retry()` 拆分（R-038 ✅）**：114→75 行，提取 `_check_circuit_breaker`/`_process_success_response`。
+- **`report/news_correlation.py:write_news_sheet()` 拆分（R-039 ✅）**：113→48 行，提取 3 个辅助函数（`_build_news_footer`/`_write_news_token_footer`/`_set_news_column_widths`）。
+- **`report/html_writer.py:_build_perf_data()` 拆分（R-040 ✅）**：107→27 行，提取 `_build_single_perf_item`。
+- **`providers/news_aggregator.py:aggregate_news()` 拆分（R-041 ✅）**：106→27 行，提取 4 个辅助函数（`_compute_cache_key`/`_check_news_cache`/`_save_news_cache`/`_fetch_from_all_sources`/`_log_source_status`/`_finalize_news_results`）。
+- **`report/penetration.py:write_penetration_sheet()` 拆分（R-042 ✅）**：105→40 行，提取 3 个辅助函数（`_load_profit_forecast_safe`/`_load_dividend_data_safe`/`_write_penetration_footer`）。
 
 ### Changed（续）
 - **`requirements.txt` 版本锁定（R-053 ✅）**：从未锁定范围（`>=`）改为精确版本锁定（`==`），新增 `lxml==6.1.1` 和 `pytest==9.1.1`/`pytest-mock==3.15.1` 测试依赖。
@@ -614,20 +628,6 @@
 ### Fixed
 - **缓存 TTL 市场时段感知逻辑缺陷（🐛 561910 价格偏差根因）**：`cache.py:get_ttl()` 中 `market_hour_aware` 检查位于显式 `cache_ttl` 配置之后导致死代码，盘中 30s 短 TTL 永不生效。交换判断顺序：交易时段内对 `market_hour_aware` 声明类型优先使用短 TTL，确保实时价格更新。
 - **HTML 报告：B 模式下不应展示 LLM 分析章节占位符**：`report_template.html` 中八～十二节（全球政经局势/智囊团深度复盘/持仓体检报告/穿透深度分析/LLM API 用量）在 `llm_enabled=False` 时仍渲染"本节内容待生成"占位内容。包裹 `{% if llm_enabled %}` 条件，B 模式下完全隐藏。
-
-### Changed
-- **`report/news_correlation.py:_build_keyword_lookup()` 拆分（R-035 ✅）**：119→28 行，提取 5 个辅助函数（`_extract_terms`/`_index_holdings`/`_index_penetrated_assets`/`_index_industry_concepts`/`_enrich_with_industry_data`）。
-- **`report/category.py:write_category_sheet()` 拆分（R-036 ✅）**：124→58 行，提取 3 个辅助函数（`_load_dividend_data`/`_yield_text`/`_write_category_group`）。修复 subtotal/total 值数组元素数与 API 签名一致（10→9）。
-- **`llm/generators.py:enhance_news_correlation()` 拆分（R-037 ✅）**：128→35 行，提取 5 个辅助函数（`_select_top_news`/`_build_news_hooks`/`_map_llm_results`/`_merge_llm_analysis`/`_finalize_news_token_usage`）。
-- **`llm/api.py:_call_llm_with_retry()` 拆分（R-038 ✅）**：114→75 行，提取 `_check_circuit_breaker`/`_process_success_response`。
-- **`report/news_correlation.py:write_news_sheet()` 拆分（R-039 ✅）**：113→48 行，提取 3 个辅助函数（`_build_news_footer`/`_write_news_token_footer`/`_set_news_column_widths`）。
-- **`report/html_writer.py:_build_perf_data()` 拆分（R-040 ✅）**：107→27 行，提取 `_build_single_perf_item`。
-- **`providers/news_aggregator.py:aggregate_news()` 拆分（R-041 ✅）**：106→27 行，提取 4 个辅助函数（`_compute_cache_key`/`_check_news_cache`/`_save_news_cache`/`_fetch_from_all_sources`/`_log_source_status`/`_finalize_news_results`）。
-- **`report/penetration.py:write_penetration_sheet()` 拆分（R-042 ✅）**：105→40 行，提取 3 个辅助函数（`_load_profit_forecast_safe`/`_load_dividend_data_safe`/`_write_penetration_footer`）。
-
-### Added
-- **`src/test/test_http_client.py`（R-033 ✅）**：17 项测试覆盖 `_should_verify`（8 种 env 值）+ `make_http_client`（6 种 kwargs 组合 + context manager）。
-- **`src/test/test_market_hours.py`（R-034 ✅）**：41 项测试覆盖 `_parse_time_to_minutes`（10 项）/ `_fetch_trading_status_from_official`（7 项）/ `_is_market_open_fallback`（14 项）/ `_is_market_open_config`（6 项）/ `is_market_open`（5 项三层编排）。
 
 ## [0.2.49] - 2026-07-01
 
@@ -744,6 +744,10 @@
 - **`tui_handlers.py` 提取 5 个共享函数**：`_prepare_holdings()`（持仓选择/读取/预热一体化）、`_finish_report()`（收尾收拢）、`_fetch_prices_and_indices()`（并行价格+指数）、`_read_llm_settings()` / `_write_llm_settings()`（配置读写分离），4 个 `_cmd_generate_*` 函数前置/后置逻辑复用，`_cmd_config_llm_modules` 读写职责分离。
 - **`cache.py` 提取 `_read_cache_data()`**：统一处理 gzip/非 gzip 缓存文件读取、损坏自动删除，`get()` 从 67 行精简至 33 行，`cleanup_expired()` 复用同一辅助函数。
 
+
+- **akshare_extras.py 延迟导入统一**：3 处函数内 `import akshare as ak` 提至模块级统一导入，失败时 `ak = None` 兜底。
+- **`verify=False` 统一治理**：`make_http_client()` 工厂函数替换 11 个模块共 14 处 `verify=False` 调用。
+
 ### Added
 - **`src/test/test_chain.py` — Provider Chain 单元测试**：23 项测试覆盖 `_get_chain`（默认顺序、preferred_provider 前置、异常安全）和 `_fetch_with_fallback`（缓存命中、Provider 遍历回退、验证通过/拒绝、转换函数、per-provider 转换字典、过期缓存降级、未知 Provider 跳过、参数传递）。
 - **`src/test/test_progress.py` — ProgressReporter 单元测试**：33 项测试覆盖基类、静默报告器、TUI 格式化输出、错误跟踪、耗时排行、_Timer 计时器。
@@ -758,10 +762,6 @@
 ### Removed
 - **`fetcher/__init__.py` 向后兼容转发层**：曾为 `fetcher.py` → `fetcher/` 子包迁移保留约 40 项私有符号 + 7 个公有函数的 re-export。所有消费者改为直接从子模块导入。
 - **`report/llm_content.py` 旧版页脚兼容代码**：移除 `from_cache`、`model_name`、`thinking_enabled` 参数及对应回退逻辑。
-
-### Changed
-- **akshare_extras.py 延迟导入统一**：3 处函数内 `import akshare as ak` 提至模块级统一导入，失败时 `ak = None` 兜底。
-- **`verify=False` 统一治理**：`make_http_client()` 工厂函数替换 11 个模块共 14 处 `verify=False` 调用。
 
 ### Docs
 - **how-to-config.md 新增「缓存分组」章节**：说明 `preload` / `refresh` 两个分组与菜单 `[1]`/`[2]` 的对应关系。
@@ -909,7 +909,7 @@
   `基金业绩`→`基金业绩分析`、`新闻数据`/`新闻页`→`财经新闻热点与持仓关联分析`、
   `LLM增补`→`LLM 分析章节`
 
-### Changed
+
 - **`_generate_excel_report` Import 隔离** — 7 个报告模块改为逐个 try/except 懒导入，
   缺失模块不会拖垮整个报告，仅跳过该页签并记录错误。
 - **`_generate_excel_report` Sheet 写入隔离** — 6 个 Sheet 写入步骤使用 `_call_sheet()`
@@ -940,31 +940,7 @@
   新文章加入时仅新文章的缓存缺失，已缓存的老文章在 TTL 内直接复用，不再触发整批重分析。
   单篇缓存存储 `(relevance, sentiment, analysis)` 元组
 
-### Fixed
-- **场外基金本日盈亏修复** — 仅净值日期等于当前交易日（T）时计算本日盈亏。
-  此前 T-1 净值也参与计算，导致净值未发布时误将昨日变动标为"本日盈亏"。
-  涵盖 QDII 与非 QDII 所有场外基金。
-- **DeepSeek V4 Flash 定价修正** — `_MODEL_PRICING` 中
-	- **how-to-start.md — 报告内容表/B/L 菜单说明/菜单 1 补全 B 模块（3 处同步修正）**：
-	  - 报告内容对照表：新增基金深度分析列（B 系列 4 模块），B/L 标注 ✅
-	  - 菜单 B/L 说明：追加 B 系列基金深度分析（与 requirements.md §2 已修内容对齐）
-	  - 菜单 1 说明：补充 /基金经理/持仓重合度（refresh 组 11 模块）
-  `deepseek-v4-flash` 从 `$0.50/$2.00` 更正为 `$0.14/$0.28`（每百万 token
-  input/output），与官方 2026 年定价一致。
 
-### Tests
-- **`TestGenerateFunctionsAcceptLlmConfig`** — 4 条用例验证 `llm_config` 参数透传
-- **`TestEnhanceNewsCorrelationUsesLlmConfig`** — 1 条用例验证 `enhance_news_correlation`
-  的 `llm_config` 参数透传
-- **`TestGenerateAllLlmCachePrecheck`** — 4 条用例验证缓存预检：全部命中/全部未命中/
-  force 跳过/部分命中
-- **`TestEnhanceNewsCorrelationGranularCache`** — 3 条用例验证逐条缓存：
-  全部缓存/全部未缓存/部分混合
-- **回归测试 — 场外基金本日盈亏** — 3 条用例：T-1 净值→today_profit=0、
-  T-2 净值→price_type="官方净值(T-2)"、T 净值→today_profit 正常计算
-- 全量 800 项测试通过（移除 11 个 `_date_within_days` 测试）
-
-### Changed
 - **`_estimate_cost` 改为从 `_PRICING_MERGED` 读取** — 新增模块级 `_PRICING_MERGED` 字典，
   初始化时从 `llm_settings.json` 的 `pricing` 段与 `_MODEL_PRICING` 合并（文件配置优先级更高）。
   `_reload_pricing()` 支持运行时重新加载定价配置。
@@ -992,6 +968,30 @@
 - **会话级 Token 用量累计跟踪** — 新增 `_session_usage` 模块全局累积器（input/output/cache_hit/cost/call_count），`_track_session_usage()` 在每次 `_call_llm_with_retry` 成功后同步累计。导出 `get_session_usage()` / `reset_session_usage()` 供外部读取
 - **汇总页签「LLM 用量」** — `write_summary_sheet` 新增 `llm_session_usage` 参数，报告汇总页底部显示本会话 LLM 调用次数、模型、输入/输出 token、缓存命中、累计费用
 - **TUI 会话统计** — 报告生成完成后终端输出 `本会话 LLM 累计：N 次调用，X tokens，费用 ¥X.XX`
+
+### Fixed
+- **场外基金本日盈亏修复** — 仅净值日期等于当前交易日（T）时计算本日盈亏。
+  此前 T-1 净值也参与计算，导致净值未发布时误将昨日变动标为"本日盈亏"。
+  涵盖 QDII 与非 QDII 所有场外基金。
+- **DeepSeek V4 Flash 定价修正** — `_MODEL_PRICING` 中
+	- **how-to-start.md — 报告内容表/B/L 菜单说明/菜单 1 补全 B 模块（3 处同步修正）**：
+	  - 报告内容对照表：新增基金深度分析列（B 系列 4 模块），B/L 标注 ✅
+	  - 菜单 B/L 说明：追加 B 系列基金深度分析（与 requirements.md §2 已修内容对齐）
+	  - 菜单 1 说明：补充 /基金经理/持仓重合度（refresh 组 11 模块）
+  `deepseek-v4-flash` 从 `$0.50/$2.00` 更正为 `$0.14/$0.28`（每百万 token
+  input/output），与官方 2026 年定价一致。
+
+### Tests
+- **`TestGenerateFunctionsAcceptLlmConfig`** — 4 条用例验证 `llm_config` 参数透传
+- **`TestEnhanceNewsCorrelationUsesLlmConfig`** — 1 条用例验证 `enhance_news_correlation`
+  的 `llm_config` 参数透传
+- **`TestGenerateAllLlmCachePrecheck`** — 4 条用例验证缓存预检：全部命中/全部未命中/
+  force 跳过/部分命中
+- **`TestEnhanceNewsCorrelationGranularCache`** — 3 条用例验证逐条缓存：
+  全部缓存/全部未缓存/部分混合
+- **回归测试 — 场外基金本日盈亏** — 3 条用例：T-1 净值→today_profit=0、
+  T-2 净值→price_type="官方净值(T-2)"、T 净值→today_profit 正常计算
+- 全量 800 项测试通过（移除 11 个 `_date_within_days` 测试）
 
 ## [0.2.31] - 2026-06-29
 
@@ -1467,6 +1467,13 @@
 - 菜单 [1] 更新基础类缓存：新增 `industry_*` 前缀清除
 - 新增 `src/test_eastmoney_industry.py`（10 项测试）
 
+
+- 关键词富化：`_build_keyword_lookup()` / `_enrich_keywords_for_item()` / `_format_enriched_keywords()` 三个新函数，自动标注每个关联关键词的来源类型（持仓/穿透/行业）
+- 关键词富化集成到 `build_news_data()`，每条新闻新增 `enriched_keywords` 字段
+- Excel 新闻页签格式优化：B 列（标题）宽 40、C 列（摘要）宽 50，启用文本换行 + 左对齐
+- HTML 模板关键词列改用 `enriched_keywords`，按类型着色（持仓→蓝、穿透→紫、行业→灰）
+- CLAUDE.md 新增缺陷自测规则：修复缺陷时优先编写测试用例，新增功能时主动研究能否自测
+
 ### Changed
 - 数据源表：行业分类/概念板块从"规划中"更新为"已实现"
 - NEWS_COLS 财经新闻热点与持仓关联分析 运行流程：在 `aggregate_news()` 前先获取行业/概念数据并扩展关键词
@@ -1476,6 +1483,11 @@
 - `_enrich_keywords_for_item()`：新增 `concept` 类型处理逻辑
 - type_order 扩展：holding(0) → penetration(1) → concept(2) → industry(3)
 
+
+- **菜单 [1] 更新基础类缓存**：清除范围新增 `news_*` 和 `llm_news_corr_*`（补全缓存清理覆盖）
+- `write_news_sheet()`：关联关键词列使用 `_format_enriched_keywords()` 替代纯 `", ".join(matched_keywords)`，优先显示富化文本
+- `_build_keyword_lookup()` 中文名称索引策略：从 4 字或更长名称中生成 2 字滑动窗口片段（如"长江电力"→"长江""电力"），提高短关键词匹配率
+
 ### Docs
 - requirements.md：数据源表、缓存文件清单、TTL 表、菜单 [1] 范围、资产穿透 TOP10 板块分类增强、财经新闻热点与持仓关联分析 关键词来源同步
 - README.md：版本 v0.2.11、数据源表、缓存文件清单、菜单表、财经新闻热点与持仓关联分析 概念类型、缓存覆盖矩阵（菜单 [1]/[2] 矩阵表）
@@ -1484,24 +1496,7 @@
 - review-findings.md：新增审查记录
 - technical.md：新增技术文档
 
-### Tests
-- 新增 `src/test_eastmoney_industry.py`：10 项测试覆盖正常返回（含/不含概念）、data 为空、响应为空、超时异常、基金代码
-- `src/test_news_correlation.py`：新增 3 项测试覆盖概念类型 lookup 构建、概念类型优先于行业、混合类型排序
-- 全量 607 passed, 30 subtests passed
 
-### Added
-- 关键词富化：`_build_keyword_lookup()` / `_enrich_keywords_for_item()` / `_format_enriched_keywords()` 三个新函数，自动标注每个关联关键词的来源类型（持仓/穿透/行业）
-- 关键词富化集成到 `build_news_data()`，每条新闻新增 `enriched_keywords` 字段
-- Excel 新闻页签格式优化：B 列（标题）宽 40、C 列（摘要）宽 50，启用文本换行 + 左对齐
-- HTML 模板关键词列改用 `enriched_keywords`，按类型着色（持仓→蓝、穿透→紫、行业→灰）
-- CLAUDE.md 新增缺陷自测规则：修复缺陷时优先编写测试用例，新增功能时主动研究能否自测
-
-### Changed
-- **菜单 [1] 更新基础类缓存**：清除范围新增 `news_*` 和 `llm_news_corr_*`（补全缓存清理覆盖）
-- `write_news_sheet()`：关联关键词列使用 `_format_enriched_keywords()` 替代纯 `", ".join(matched_keywords)`，优先显示富化文本
-- `_build_keyword_lookup()` 中文名称索引策略：从 4 字或更长名称中生成 2 字滑动窗口片段（如"长江电力"→"长江""电力"），提高短关键词匹配率
-
-### Docs
 - requirements.md：同步菜单 [1] 缓存范围、缓存文件清单新增 `llm_news_corr_*`、TTL 表新增 `news_corr`、财经新闻热点与持仓关联分析 新增关键词富化/LLM 关联分析/Excel 格式优化描述、数据源表新增东方财富行业/概念板块
 - README.md：版本 v0.2.9，同步菜单/缓存/财经新闻热点与持仓关联分析 描述
 - testplan.md：新增关键词富化函数/Excel 格式/HTML 同步测试类别
@@ -1509,6 +1504,11 @@
 - CLAUDE.md：新增缺陷自测规则要求
 
 ### Tests
+- 新增 `src/test_eastmoney_industry.py`：10 项测试覆盖正常返回（含/不含概念）、data 为空、响应为空、超时异常、基金代码
+- `src/test_news_correlation.py`：新增 3 项测试覆盖概念类型 lookup 构建、概念类型优先于行业、混合类型排序
+- 全量 607 passed, 30 subtests passed
+
+
 - 新增 3 个测试类：TestBuildKeywordLookup、TestEnrichKeywordsForItem、TestWriteNewsSheetFormatting
 - 新增 15 项测试：覆盖 lookup 构建（持仓/穿透/去重/空）、富化逻辑（三种类型、排序、空兜底）、格式断言（wrap_text、列宽、对齐）
 - 全量 592 passed, 30 subtests passed
@@ -1673,18 +1673,7 @@
 - README.md：多源新闻特性、缓存策略重写、基金业绩评价标准、目录结构更新（新增 3 个 provider 文件）
 - plan.md：Iter 3.2 文件清单更新
 
-### Changed
-- build_news_data() 新增 `penetrated_assets` 参数，传入穿透列表自动扩展关键词
-- html_writer.py：新闻获取改为使用 news_aggregator 聚合器，传入穿透资产数据
-- main.py：Excel 报告新闻页签生成前先计算穿透 TOP10，传递资产列表到新闻关联
-- eastmoney_news.py：从 HTML 爬取重写为 JSON push API，删除废弃的 `_parse_list_html`/`_fallback_fetch`/`fetch_and_correlate`
-- 缓存清理模块 `cleanup_expired()` 增加 `llm_` 前缀映射
 
-### Docs
-- requirements.md：全面重写缓存策略章节（用途/命名规则/TTL 对照/引擎接口/降级规则）；基金业绩评价标准增加三层计算逻辑说明；数据源表补充 3 源新闻和美股指数
-- README.md：同步缓存说明、数据源、业绩评价标准；目录结构新增 providers 文件清单
-
-### Added
 - 穿透模块新增板块分类（消费/科技/医药/新能源/金融等），Excel + HTML 均显示板块列
 - 穿透模块底部标注新增无法获取穿透数据的基金明细（名称+代码）
 - 穿透模块关键词映射表覆盖 10+ 板块、100+ 关键词
@@ -1717,6 +1706,13 @@
 - report_template.html: 新增全球政经局势（全球政经局势）和智囊团深度复盘（智囊团深度复盘）占位区域，`{% if llm_enabled %}` 条件渲染
 
 ### Changed
+- build_news_data() 新增 `penetrated_assets` 参数，传入穿透列表自动扩展关键词
+- html_writer.py：新闻获取改为使用 news_aggregator 聚合器，传入穿透资产数据
+- main.py：Excel 报告新闻页签生成前先计算穿透 TOP10，传递资产列表到新闻关联
+- eastmoney_news.py：从 HTML 爬取重写为 JSON push API，删除废弃的 `_parse_list_html`/`_fallback_fetch`/`fetch_and_correlate`
+- 缓存清理模块 `cleanup_expired()` 增加 `llm_` 前缀映射
+
+
 - main.py: TUI 菜单扩展为 13 选项，新增 [3] 清理过期缓存 / [4] 查看缓存统计
 - main.py: TUI 菜单重构，E=核心 Excel（5 模块），N=Excel+新闻增补（6 模块）
 - main.py: TUI 菜单 E→生 EXCEL 分析报告，N→生成包含新闻的 EXCEL 分析报告
@@ -1734,6 +1730,10 @@
 - html_writer.py: 增加 `_test_writable()` 目录可写性检查辅助函数
 - excel_writer.py: `save_workbook` 存档路径增加 PermissionError/OSError try/except 保护
 - plan.md: 更新 TOP 20→TOP N；移除 A→B 旧注释
+
+### Docs
+- requirements.md：全面重写缓存策略章节（用途/命名规则/TTL 对照/引擎接口/降级规则）；基金业绩评价标准增加三层计算逻辑说明；数据源表补充 3 源新闻和美股指数
+- README.md：同步缓存说明、数据源、业绩评价标准；目录结构新增 providers 文件清单
 
 ### Bug Fixes
 - tiantian.py: ETF 收益率正则不匹配负号的问题（`[\d.]+` → `-?[\d.]+`），影响 159222/518880 等 ETF 的近 3 月/近 6 月数据显示

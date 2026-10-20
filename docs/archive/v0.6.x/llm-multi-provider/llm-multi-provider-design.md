@@ -53,7 +53,7 @@
 - 支持**成本优先路由**（自动选最便宜的模型）
 - 支持**每模块指定偏好 provider**
 - 支持**代理环境自动切换**（有代理时优先使用可正常通过代理的 provider）
-- **抛弃历史负担**：不再兼容旧 `llm_key.json`，`config.json` 中移除 `llm_key_file`
+- **抛弃历史负担**：不兼容旧 `llm_key.json`，`config.json` 中移除 `llm_key_file`
 
 ### 1.3 非目标
 
@@ -233,8 +233,8 @@ def _validate_provider_entry(entry: dict, index: int) -> list[str]:
 **移除**：
 - **`get_llm_key_path()` 彻底移除**：从 `config/_core.py` 删除定义，`config/__init__.py` 删除导出；4 处测试 mock 在 R12 中更新为 `llm_providers.json` 路径或不需 mock
 - `_config_defaults.py` 中移除 `llm_key_file` 默认值（`_PATH_KEYS` 同步清理）
-- `config.json` 不再包含 `llm_key_file` 字段（C16 路径键列表同步移除）
-- 旧 `llm_key.json` 不再被读取
+- `config.json` 不包含 `llm_key_file` 字段（C16 路径键列表同步移除）
+- 旧 `llm_key.json` 不被读取
 
 ### 3.3 llm/api.py 变更 — Provider Chain
 
@@ -299,7 +299,7 @@ _LLM_MODULE_FAILURE[module_key] = {
 
 ### 4.1 priority（优先级顺序）
 
-**默认策略**。按 `priority` 升序尝试，成功后不再尝试其他。
+**默认策略**。按 `priority` 升序尝试，成功后不尝试其他。
 
 ```
 A(pri=1) → 成功 → 返回 ✓

@@ -74,7 +74,7 @@
 
 ## 文档
 
-- `docs/managements/review-findings.md`：新增自审问题 `rf-150`（集中度问答设计/需求不一致：反问引导"无需回答"导致无输出 + synthesis 阶段缺失 + threshold 硬编码）。修复后移除详细说明（仅留摘要行）。
+- `docs/managements/review-findings.md`：新增自审问题 `rf-150`（集中度问答设计/需求不一致：反问引导"无需回答"导致无输出 + synthesis 阶段缺失 + threshold 硬编码）。闭环后移除详细说明（仅留摘要行）。
 - `docs/managements/changelog.md`：记录集中度问答修复 + 柱状图优化。
 - 需求文档 `R-LLM-DB-QA-CONCENTRATION-*` 本身正确，不改；实现对齐需求即可。
 

@@ -201,7 +201,7 @@ def run_doctor_checks(*, include_network: bool = True) -> list[dict]
 | 约束 | 遵从说明 |
 |:-----|:---------|
 | 分层依赖 | `core/num_utils.py` 零项目内依赖（纯 stdlib），可被 `providers/`/`analysis/`/`report/`/`fetcher/` 任一侧安全导入——这也是不放进 `analysis/_math_utils.py` 的原因（该模块是统计专用，且 `analysis` 已依赖 `core`，反向导入会成环） |
-| 单一事实来源 | 数值归一只有 `core/num_utils.py` 一处实现；既有 8 个私有解析器改为委托，不再各写一份 |
+| 单一事实来源 | 数值归一只有 `core/num_utils.py` 一处实现；既有 8 个私有解析器改为委托，不各写一份 |
 | 降级治理 | A2 复用既有 `DegradationTracker` 通道与 `detail` 槽位，**不新建**第二套降级记录体系；不新增持久化文件 |
 | 开关纪律 | 唯一新增开关 `doctor_check` 进 `EXPERIMENTAL_FEATURES` 注册表，默认关、默认零行为变更 |
 | 渲染分层 | `core/doctor.py` 只返回结构化结果；CLI/TUI/Web 各自渲染（与 `check_sources.run_health_checks` 的既有分工一致） |
@@ -219,7 +219,7 @@ def run_doctor_checks(*, include_network: bool = True) -> list[dict]
 | `src/test/unit/core/test_doctor.py` | 各检查组返回结构、`include_network=False` 不联网、密钥检查**不回显内容** |
 | `src/test/unit/fetcher/test_chain_diagnostics.py` | 诊断收集：逐 provider 原因、全链失败 `summary()` 可读、未传 `diagnostics` 时零采集、`record_failure` 收到可读原因 |
 | `src/test/unit/report/test_data_status_message.py` | `record(message=...)` 进 `detail`、不传时 `detail=None`（向后兼容）、矩阵条目渲染可读原因 / 无 message 时回落机器串 |
-| `src/test/unit/report/test_numeric_guard_regression.py` | **缺陷回归**：NaN 价格不再污染 `market_value` 的 `mv`/`profit`；NaN 份额行被 `reader` 拒绝；provider NaN 净值被兜底 |
+| `src/test/unit/report/test_numeric_guard_regression.py` | **缺陷回归**：NaN 价格不污染 `market_value` 的 `mv`/`profit`；NaN 份额行被 `reader` 拒绝；provider NaN 净值被兜底 |
 | `src/test/unit/report/test_numeric_guard_regression_edge.py` | `±inf` 价格、全 NaN 组合、NaN 与真实值混合列的聚合输出 |
 | `src/test/unit/llm/…`（若无则并入 cli/ui） | CLI `doctor` 子命令开关门控：关闭时提示、开启时执行；TUI 菜单项显隐 |
 

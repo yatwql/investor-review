@@ -344,7 +344,7 @@ excel_generator.py → summary.py (re-export)       # 通过 re-export 导入 wr
 
 ### 3.10 I-08：清理 + 线数验证
 
-**目标**：最终检查 — summary.py 不再包含 LLM 用量函数定义（仅保留 re-export）。
+**目标**：最终检查 — summary.py 不包含 LLM 用量函数定义（仅保留 re-export）。
 
 **步骤**：
 1. 确认以下函数已在 `summary.py` 中删除定义（仅保留 re-export）：
@@ -464,8 +464,8 @@ python -m pytest src/test/scenario/basic/test_integration.py -x --tb=short -q
 
 ### 5.2 间接收益
 
-- **变异隔离**：LLM 定价表、状态颜色、列格式等高频变更不再影响稳定的汇总页签
-- **`html_writer.py` 不再依赖 summary 的私有函数**（`_build_index_data_status` 虽未移动，但 LLM 相关引用被消除）
+- **变异隔离**：LLM 定价表、状态颜色、列格式等高频变更不影响稳定的汇总页签
+- **`html_writer.py` 不依赖 summary 的私有函数**（`_build_index_data_status` 虽未移动，但 LLM 相关引用被消除）
 - **测试定位**：LLM 用量测试集中在 `test_summary_llm_usage.py`
 
 ### 5.3 技术债务（明确遗留）

@@ -139,7 +139,7 @@ src/python/
 
 | 缺口 | 当前状态 | 未来变更成本 | 建议补救 | 对应迭代 |
 |:-----|:---------|:-----------|:---------|:--------|
-| **存储后端抽象** | `_io.py` 接口暴露 `fpath`/`fd`/`tmp_path`/`final_path` 等文件系统细节；`_store.py` 直接调用文件系统特定函数 | 替换 Redis/S3 需修改 `_store.py` + `_io.py` + `_paths.py` | 当实际需要替换后端时，定义 `StorageBackend` Protocol 并实现 `FileStorageBackend` 类 | 已淘汰（YAGNI） |
+| **存储后端抽象** | `_io.py` 接口暴露 `fpath`/`fd`/`tmp_path`/`final_path` 等文件系统细节；`_store.py` 直接调用文件系统特定函数 | 替换 Redis/S3 需修改 `_store.py` + `_io.py` + `_paths.py` | 当实际需要更换后端时，定义 `StorageBackend` Protocol 并实现 `FileStorageBackend` 类 | 已淘汰（YAGNI） |
 | **缓存格式版本化** | `{"_ts": ..., "_data": ...}` 无版本字段；`_read_cache_data` 无格式检测 | 更换 envelope 结构时无法区分新旧格式 | 当实际需要变更格式时，在 payload 中增加 `_version` 字段并实现兼容性校验 | 已淘汰（YAGNI） |
 | **TTL 接口扩展性** | `get_ttl(data_type)` 仅接受数据类型，不支持逐 key 或自适应 TTL | 增加滑动窗口 TTL 需修改 `_store.py`（get 热路径）和 `_ttl.py`（接口和实现） | ~~将 `get_ttl` 接口扩展为 `get_ttl(data_type, key=None, context=None)`~~ → **YAGNI 淘汰**：无当前需求，接口扩展留到实际需要时按真实场景设计 | 已淘汰 |
 | **异步兼容路径** | `threading.Lock` + 同步文件 I/O；无 asyncio 路径 | 整体切换 async 需改造 `_io.py` + `_store.py` + 所有 `from cache import` 的外部模块 | 当前拆分不阻塞异步化，但需注意 `_cache_lock` 在 `_store.py` 中的类型（`threading.Lock`）后续需切换为 `asyncio.Lock` | 非本轮范围 |
@@ -226,7 +226,7 @@ Python 3 不允许同名的 `.py` 模块文件和包目录在同一个目录中�
    find src/python/ -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
    ```
 
-7. **前置安全验证**（mock 路径迁移前必检）：
+7. **前置安全验证**（mock 路径搬移前必检）：
 
    - **验证 registry 模块级 cache 导入安全**：确保 I-03 `_store.py` 和 I-05 `_cleanup.py`/`_groups.py` 在模块级导入 registry 函数时不会触发循环导入：
      ```bash
@@ -314,10 +314,10 @@ Python 3 不允许同名 `.py` 模块文件和包目录在 `sys.path` 同一入�
    `patch("src.python.cache._CACHE_DIR")` 仅修改 `__init__._CACHE_DIR` 而不影响 `_paths._CACHE_DIR`，
    遗留函数查找的仍是原始值。改为 `patch("src.python.cache._paths._CACHE_DIR")` 直接对定义模块打补丁（此路径从 I-01 到 I-07 均有效）。
 
-**注意**：替换后可能因 patch 目标的变化导致部分测试行为差异（例如全局 `time.time` patch 会影响测试中其他模块的 `time.time` 调用）。对于测试中调用了 `time.sleep`、`time.time` 等函数的场景，建议在测试执行窗口内通过 `importlib.reload()` 或函数内 `import` 确保加载顺序正确。如有冲突，可改为对具体子模块打补丁（如 `patch("src.python.cache._legacy.time.time")` 在 I-01~I-09 短期兼容）。确认全部迁移完毕且回归通过后再进入下一步。
+**注意**：改动后可能因 patch 目标的变化导致部分测试行为差异（例如全局 `time.time` patch 会影响测试中其他模块的 `time.time` 调用）。对于测试中调用了 `time.sleep`、`time.time` 等函数的场景，建议在测试执行窗口内通过 `importlib.reload()` 或函数内 `import` 确保加载顺序正确。如有冲突，可改为对具体子模块打补丁（如 `patch("src.python.cache._legacy.time.time")` 在 I-01~I-09 短期兼容）。确认全部迁移完毕且回归通过后再进入下一步。
 
 **风险**：**高**（更新为实际评估）。原计划标注 I-01 风险为"中"，但实际约 60 个测试 mock 路径需同时迁移，遗漏任一都会导致回归失败：
-1. 替换后运行 `pytest src/test/ -m "unit_core" --collect-only` 确认收集项数未减少
+1. 改动后运行 `pytest src/test/ -m "unit_core" --collect-only` 确认收集项数未减少
 2. 再运行完整 `pytest src/test/ -m "unit_core or scenario or scenario_basic"` 全通过
 3. 兼容方案：如有冲突测试，可临时补丁到 `src.python.cache._legacy.X` 路径（I-01~I-07 期内有效 — I-07 删除 `_legacy.py` 后此路径失效，必须在此之前切换为永久路径）
 
@@ -440,7 +440,7 @@ I-05 后 `get()`/`set()`/`clear()` 所在的 `_store.py` 具备独立的 `import
 如果 I-01 阶段已将 mock 路径改为全局 `patch("time.time")` / `patch("os.remove")` / `patch("tempfile.mkstemp")`，
 则此迭代无需调整——全局 patch 对 `_store.py` 的 `time`/`os`/`tempfile` 同样生效。
 如果有未迁移的残留 mock 路径（如 `patch("src.python.cache._legacy.time.time")`），此迭代**必须**修复，
-因为 `_legacy.py` 不再包含 `get`/`set`/`clear` 且不再 `import time` 用于缓存操作，
+因为 `_legacy.py` 不包含 `get`/`set`/`clear` 且不 `import time` 用于缓存操作，
 `_legacy.time.time` 因 `_legacy` 中无 import 而不可访问（或指向无关的时间调用）。
 验证方式：运行 `pytest src/test/ -m "unit_core" -k "TestCacheGet or TestCacheSet or TestCacheClear"` 确认全部通过。
 
@@ -493,7 +493,7 @@ I-05 后 `get()`/`set()`/`clear()` 所在的 `_store.py` 具备独立的 `import
 如果 I-01 阶段已将测试中的 `patch("src.python.cache._is_market_open")` 迁移为 `patch("src.python.market_hours.is_market_open")`，
 则此迭代无需额外测试变更。如果 I-01 采取了临时兼容方案（如 `patch("src.python.cache._legacy._is_market_open")`），
 则此迭代**必须**将其更新为 `patch("src.python.market_hours.is_market_open")`，
-因为 `_legacy.py` 不再导入 `_is_market_open`（已移至 `_ttl.py`），`cache._legacy._is_market_open` 不再存在。
+因为 `_legacy.py` 不导入 `_is_market_open`（已移至 `_ttl.py`），`cache._legacy._is_market_open` 不存在。
 验证方式：运行 `pytest src/test/ -m "unit_core" -k "TTL or ttl or get_ttl"` 确认全部通过。
 
 **验收**：
@@ -593,7 +593,7 @@ I-05 后 `get()`/`set()`/`clear()` 所在的 `_store.py` 具备独立的 `import
 
 **`_legacy.py` 变更**：
 - 删除 `compute_holdings_fingerprint()`, `compute_holdings_codes()`, `_read_holdings_tracking()`, `_clear_holdings_related_caches()`, `check_and_refresh_caches()`
-- 新增 `from src.python.services.holdings_tracker import check_and_refresh_caches, compute_holdings_fingerprint, compute_holdings_codes`
+- 同步新增 `from src.python.services.holdings_tracker import check_and_refresh_caches, compute_holdings_fingerprint, compute_holdings_codes`
 
 **架构决策理由**：
 - 持仓跟踪是**业务逻辑**（持仓变更检测），而非缓存基础设施。将其放入 `cache/` 包会混合架构层次
@@ -802,9 +802,9 @@ print('E2E smoke OK')
   - 新增 1 个模块（`_protocol.py`）和 3 处修改（`_io.py`→`_file_io.py`, `_store.py`, `__init__.py`）
 - **抽象若错误则成本更高**：没有第二个实现来验证 Protocol 设计的合理性，提取的接口很可能不符合未来实际需求
 - **收益远低于成本**：~25min 编码 + ~10min 测试 = 35min 投入，产出 0 个用户可见功能
-- **未来重构成本低**：移除代码经拆分后更加模块化，当真正需要替换后端时，提取 Protocol 的成本不会比现在更高
+- **未来重构成本低**：移除代码经拆分后更加模块化，当真正需要更换后端时，提取 Protocol 的成本不会比现在更高
 
-**替代方案**：保持 `_io.py` 的简单函数接口。如需替换后端，届时定义 Protocol 并实现即可（成本与现在相当，但接口基于真实需求）。
+**替代方案**：保持 `_io.py` 的简单函数接口。如需更换后端，届时定义 Protocol 并实现即可（成本与现在相当，但接口基于真实需求）。
 
 #### ~~缓存格式版本化（原 I-16）~~（淘汰 — YAGNI）
 
@@ -841,7 +841,7 @@ print('E2E smoke OK')
 | **循环依赖（registry）**：cache 子模块导入 registry，registry 导入 cache | 低 | 高 | `get_ttl`/`get_cache_age_by_data_type` 等函数内 lazy import；registry 已验证不导入 cache | I-04, I-05 |
 | **循环依赖（_store ↔ _legacy）**：`_store.py` 需 `_record_cache_hit/miss` 若从 `_legacy` 导入，而 `_legacy` 又导入 `_store`，形成双向循环 | 中 | 高 | `_stats.py` **先于** `_store.py` 提取（I-02 → I-03 顺序），`_store.py` 从 `_stats` 而非 `_legacy` 导入 | I-02, I-03 |
 | **lock 状态不一致**：多个子模块共享 `_cache_lock` 但导入路径不同 | 低 | 中 | `_cache_lock` 从 `_store` 集中导出，其他模块 `from ._store import _cache_lock` | I-03, I-05 |
-| **标准库 mock 路径失效**：`patch("src.python.cache.time.time")` 等约 45 处因 `cache.py`→`cache/` 包转换后 `time` 不再是包属性而不可访问 | **高** | **高** | I-01 执行前先更新所有此类 mock 路径：标准库改用 `patch("time.time")`/`patch("os.remove")`/`patch("tempfile.mkstemp")` 全局补丁（测试已隔离临时目录）；详见 I-01「测试 mock 路径迁移」子步骤 | I-01 |
+| **标准库 mock 路径失效**：`patch("src.python.cache.time.time")` 等约 45 处因 `cache.py`→`cache/` 包转换后 `time` 不是包属性而不可访问 | **高** | **高** | I-01 执行前先更新所有此类 mock 路径：标准库改用 `patch("time.time")`/`patch("os.remove")`/`patch("tempfile.mkstemp")` 全局补丁（测试已隔离临时目录）；详见 I-01「测试 mock 路径迁移」子步骤 | I-01 |
 | **私有引用 mock 路径失效**：`patch("src.python.cache._is_market_open")` 约 20 处因 `_is_market_open` 未被 `__init__.py` re-export 而不可访问，且 I-04 后 `get_ttl` 移至 `_ttl.py`，`_is_market_open` 的存在位置也随之变更 | **高** | **中** | 改用 `patch("src.python.market_hours.is_market_open")` 直接为目标模块打补丁 | I-01, I-04 |
 | **文件残留**：`_legacy.py` 在 I-07 删除时可能残留未提取函数 | 低 | 中 | 执行「`_legacy.py` 空壳验证」(`grep -n "^def \|^class " _legacy.py`) 确认无残余函数/类定义后方可删除；`pytest --collect-only` 验证 | I-07 |
 | **文件名冲突**：`_store` 等模块名与第三方库重名 | 低 | 低 | 使用 `_` 前缀缩小作用域 | 全局 |
@@ -853,7 +853,7 @@ print('E2E smoke OK')
 | **部分迁移状态检查**：中间提交（如 I-01~I-03 已提交但 I-04 未完成）被他人 checkout 后，`_legacy.py` 中 get_ttl 等功能仍在，但新模块开发（如 I-05 `_cleanup.py` 依赖 `_ttl`）会因 `_ttl.py` 不存在而失败 | 低 | **高** | 每轮迭代必须是**完整可工作的**：`__init__.py` 和 `_legacy.py` 的 re-export 链完整 | I-01 ~ I-07 |
 | **`__pycache__` 残留字节码**：`git mv cache.py → cache/_legacy.py` 后旧字节码被意外使用 | 低 | 中 | I-01 执行 `find ... -name "__pycache__" -exec rm -rf` 清理；`git clean -fdX` 防遗漏 | I-01 |
 | **`CACHE_DAILY` 公共常量未 re-export**：`test_cache.py` 中 3 处使用 `from src.python.cache import CACHE_DAILY`，但各版 `__init__.py` 均未导入此常量 | **高** | **高** | I-01 `__init__.py` 中追加 `CACHE_DAILY` 导入和 `__all__` 条目；I-07 改用 `from src.python.constants import CACHE_DAILY` | I-01, I-07 |
-| **`_CACHE_DIR` 模块引用语义变更后测试 patch 静默失效**：路径提取后 `from ._paths import _CACHE_DIR` 创建本地引用，`patch("src.python.cache._CACHE_DIR")` 仅修改 `__init__._CACHE_DIR` | **高** | **高** | I-01 中将测试中所有 `patch("src.python.cache._CACHE_DIR", ...)` 迁移为 `patch("src.python.cache._paths._CACHE_DIR", ...)` | I-01 |
+| **`_CACHE_DIR` 模块引用语义变动后测试 patch 静默失效**：路径提取后 `from ._paths import _CACHE_DIR` 创建本地引用，`patch("src.python.cache._CACHE_DIR")` 仅修改 `__init__._CACHE_DIR` | **高** | **高** | I-01 中将测试中所有 `patch("src.python.cache._CACHE_DIR", ...)` 迁移为 `patch("src.python.cache._paths._CACHE_DIR", ...)` | I-01 |
 | **`_read_cache_data`/`_write_atomic` I-07 后不可访问**：`test_cache_edge.py:235` 和 `test_security_edge.py:259` 从 `src.python.cache` 导入这两个私有函数 | 中 | 中 | I-07 `__init__.py` 添加 `from ._io import _read_cache_data, _write_atomic` | I-07 |
 | **`_record_cache_hit/miss` I-07 后不可访问**：`_store.py` 通过 `from ._stats import` 使用这两个函数，但 I-07 `__init__.py` 未 re-export | 低 | 中 | 经 grep 确认（`grep -rn "from src\.python\.cache import.*_record_cache" src/`），无外部代码直接导入 `_record_cache_hit/miss`，无需加入 `__init__.py`；I-07 执行前再次 grep 确认 | I-07 |
 | **`__dir__` 不完整（如启用 __getattr__ 延迟加载）**：`dir(cache)` 缺失低频操作名，影响 IDE 自动补全 | 低 | 低 | `__dir__` 实现返回 `sorted(set(__all__) | {标准模块属性集合})` | I-07 |
@@ -974,7 +974,7 @@ C2 约束要求"所有持久化缓存必须通过 `cache.py` 的 `get()`/`set()`
 | 维度 | 评估 |
 |:-----|:------|
 | **风险等级** | 🟡 **中** — 7 轮中最关键的提取（130 行），影响 ~20 个调用方 |
-| **核心风险** | ① `set()` 三路径：正常写入 / FileNotFoundError → `os.makedirs` 重试 / PermissionError 降级；② `get()` 双路径：gzip 文件与非 gzip 文件透明回退；③ `_cache_lock` 从此路由到 `_store` 导出，后续 `_groups`/`_cleanup` 均 `from ._store import _cache_lock`（`services/holdings_tracker.py` 通过 `set`/`clear` 间接使用，无需直接引用）；④ 如果 I-01 有残留的 `_legacy.time.time` mock 路径未迁完，此轮必须一并清理（因为 `_legacy` 不再 `import time` 用于缓存操作）|
+| **核心风险** | ① `set()` 三路径：正常写入 / FileNotFoundError → `os.makedirs` 重试 / PermissionError 降级；② `get()` 双路径：gzip 文件与非 gzip 文件透明回退；③ `_cache_lock` 从此路由到 `_store` 导出，后续 `_groups`/`_cleanup` 均 `from ._store import _cache_lock`（`services/holdings_tracker.py` 通过 `set`/`clear` 间接使用，无需直接引用）；④ 如果 I-01 有残留的 `_legacy.time.time` mock 路径未迁完，此轮必须一并清理（因为 `_legacy` 不 `import time` 用于缓存操作）|
 | **直接收益** | 核心 get/set/clear 从 667 行单体脱离，热路径代码独立可维护。影响面最大（~20 调用方），但 re-export 保证调用方零改动 |
 | **验收标准** | ✅ `from cache import get` 正常、get 三种状态(命中/过期/不存在)、set 三路径(普通/gzip/重试)、clear 双后缀(json/json.gz)、导入冒烟、回归全通过 |
 | **约束对齐** | C2(保留 `from cache import get/set/clear`，调用方完全透明)、C3(原子写入继承自 `_io.py`)、C8(`invest` logger) |
@@ -988,7 +988,7 @@ C2 约束要求"所有持久化缓存必须通过 `cache.py` 的 `get()`/`set()`
 | 维度 | 评估 |
 |:-----|:------|
 | **风险等级** | 🟢 **低** — 纯查询函数，无状态修改 |
-| **核心风险** | ① `get_ttl()` 内部 lazy import `from src.python.config import get_config`（防循环依赖）— 移动后必须保持函数内导入；② 如果 I-01 采取了临时 mock 方案 `patch("cache._legacy._is_market_open")`，此轮**必须**改为 `patch("src.python.market_hours.is_market_open")`（`_legacy` 不再导入 `_is_market_open`） |
+| **核心风险** | ① `get_ttl()` 内部 lazy import `from src.python.config import get_config`（防循环依赖）— 移动后必须保持函数内导入；② 如果 I-01 采取了临时 mock 方案 `patch("cache._legacy._is_market_open")`，此轮**必须**改为 `patch("src.python.market_hours.is_market_open")`（`_legacy` 不导入 `_is_market_open`） |
 | **直接收益** | TTL 逻辑从核心文件分离，I-05 的 `cleanup_expired()` 依赖 `get_ttl()` |
 | **验收标准** | ✅ `from cache import get_ttl` 正常、盘中/盘后 TTL 正确、`profit_forecast` 特殊处理保留、导入冒烟、回归全通过 |
 | **约束对齐** | C8(`invest` logger)、C2(get_ttl 仍从 `cache` 导出) |

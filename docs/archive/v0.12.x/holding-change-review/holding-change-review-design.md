@@ -43,7 +43,7 @@
 | `holding_change_review` | config | 开关（`config/features.py` 唯一登记，实验组默认关） |
 
 原手工日志路线的语义名（`trade_journal`/`journal_loader`/`journal_metrics` 等）随路线
-废弃，不再使用。
+废弃，不使用。
 
 ## 4. 数据源约定
 
@@ -57,7 +57,7 @@
 | 差异引擎 | `fetcher/history_diff.py::HistoryDiff.compute`（新增/清仓/加仓/减仓分类直接复用，不自写 diff） |
 | 去重 | `analysis/portfolio_evolution._dedup_by_date`（按日去重；同期重复报告环比恒 0 的教训见 `fund_concentration`） |
 | 事件方向 | 按时间排序后**逐对快照差分**展开为事件序列，事件携带区间 `[t_prev, t_now]`（区间即事件的时间精度） |
-| 保留策略 | `HISTORY_SNAPSHOT_RETENTION_DAYS` / `MAX_COUNT=365` 为**滚动窗口**，超期快照被清理——**迭代 1 已定稿 60 → 180 天**（`core/constants.py` + `_config_defaults.py` + `_snapshot.py` + `config.json` 四处同步），长周期复盘不再被 60 天截断 |
+| 保留策略 | `HISTORY_SNAPSHOT_RETENTION_DAYS` / `MAX_COUNT=365` 为**滚动窗口**，超期快照被清理——**迭代 1 已定稿 60 → 180 天**（`core/constants.py` + `_config_defaults.py` + `_snapshot.py` + `config.json` 四处同步），长周期复盘不被 60 天截断 |
 | 设计边界 | 快照不含成交日期/单价/费用/出场价 → **不派生**逐笔指标（沿用 `snapshot_diff` 边界先例，不虚构） |
 | 手工日志 | 原 `data/trade_journal/` xlsx 路线**废弃**，不建目录、不留兼容读取 |
 

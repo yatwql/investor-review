@@ -159,7 +159,7 @@ C19 契约（进入 technical.md 附录 H）：
 - `test_registry.py` L250 `len==19` → **20**；新增 correlation 注册测试
 - `test_scenario_section_order.py`：L79 `fund_deep_analysis==5` → **6**；L122 `b_series==5` → **6**
 - `test_html_report_structure_edge.py` `test_section_count` 19 → **20**
-- 若 factor_exposure 页签标题断言依赖回退路径，同步校验（`_REPORT_SHEET_NAMES` 修复后应为 "因子暴露分析"）
+- 若 factor_exposure 页签标题断言依赖回退路径，同步校验（`_REPORT_SHEET_NAMES` 闭环后应为 "因子暴露分析"）
 
 ---
 

@@ -131,24 +131,7 @@
 
 - **R-198 LLM 模块横向拆分（14 步迭代）**：`generators.py`（750 行）拆分为 `generators.py`（190 行，4 单例函数）+ `generators_orchestrator.py`（~340 行，编排/预检/线程池）+ `generators_news.py`（306 行，新闻 LLM 关联）。`api.py`（337 行，原 702 行）拆出 `api_base.py`（基础常量/重试/截断/失败追踪），移除 24 个基础设施 re-export，`__init__.py` 直链新模块。采用 Add→Re-export→Remove 三阶段过渡策略，mock 路径同步更新原则已验证。clean 增量：-949 行（拆分前 ~1452 行 → 拆分后 ~503 行跨 6 文件）。
 
-### Docs
 
-- **计划文档 v5 终版**：`r200_verify_mode_optimization.md` 同步迭代更新（已完成，归档至 `docs/archive/test-verify-mode-optimization/`）
-- **测试模式文档同步**：`how-to-test-my-code.md`、`testplan.md`、`datasource-and-folders.md` 更新 scenario_extreme 文件位置和 dev-verify 模式说明
-- **review-findings.md R-200 → ✅**：已修复转归档
-
-### Added
-
-- **测试隔离 autouse fixture**：`conftest.py` 新增 `_isolate_sensitive_paths` autouse fixture，自动将 `_defaults._CONFIG_FILE` 和 `cache._CACHE_DIR` 重定向到 `tmp_path`，防止测试污染用户真实配置文件/缓存。配合 `_clear_config_cache()` 确保 `get_config()` 从临时路径读取后回退到默认值。
-- **测试标记遗漏自动检查**：`conftest.py` 的 `pytest_collection_modifyitems` 新增标记遗漏检查，新测试文件若缺少 `pytestmark` 变量则发出 `PytestWarning` 提醒。`_KNOWN_MARKERS` 全集与 `pytest_configure` 注册的 31 个标记保持同步。
-
-- **R-177 核心模块单元测试覆盖**：为 `llm/generators.py`、`llm/prompts.py`、`handlers_cache.py`、`handlers_report.py` 四个模块编写 97 个单元测试，覆盖 JSON 解析、提示词构建、缓存预检、报告编排等关键逻辑。测试 mock 路径修正、`_press_any_key` 阻塞问题修复等实战经验已沉淀。
-
-- **DataSourceRegistry 数据源注册中心（Step A）**：`provider_registry.py` 新增 `DataSourceRegistry` 单例，统一管理熔断器（3 次失败 / 300s 冷却）、会话级缓存（OrderedDict O(1) 淘汰、2000 条阈值）、获取策略选择（`LIVE_FETCH`/`CACHE_ONLY`/`PLACEHOLDER`）及审计报告生成。双锁设计（`_provider_lock` + `_cache_lock`）保证并发安全。新增 45 项单元测试（`test_provider_registry.py` 37 + `test_phase_timeout.py` 8）。
-
-- **`all_no_unit` 快捷测试模式**：`scripts/test_runner.py` 新增 `all_no_unit` 模式（`-m "not unit"`），排除单元测试运行其余全部场景/集成/边缘测试（306 项），方便快速验证非单元逻辑。
-
-### Changed
 
 - **`config.py` → `config/` 子包拆分（R-179）**：原单文件 817 行/30+ 模块导入的 `config.py` 拆分为 `_defaults.py`（默认配置 & 模板）、`_comments.py`（JSON 注释剥离）、`_core.py`（配置读写/校验/LLM 配置）三个独立子模块。`__init__.py` 统一导出，保持外部导入兼容。
 
@@ -168,6 +151,33 @@
 - **tencent_style 显式注册（M-004）**：`fund_style_analysis.py` 模块级新增 `get_registry().register_provider("tencent_style", tier=4, timeout=15.0)`，消除 `record_failure` 隐式最低优先级注册行为。`_tencent_extended()` 在成功/异常时调用 `record_success`/`record_failure` 通知注册表。
 
 - **集成审计报告（Step E）**：`report/data_status.py` 的 `DegradationTracker` 集成 `DataSourceRegistry.generate_status_report()`，在报告中输出数据源注册与熔断状态。TUI 的 `[!]` 降级提示信息包含策略来源（CACHE_ONLY / PLACEHOLDER）。
+
+### Docs
+
+- **计划文档 v5 终版**：`verify_mode_optimization.md` 同步迭代更新（已完成，归档至 `docs/archive/test-verify-mode-optimization/`）
+- **测试模式文档同步**：`how-to-test-my-code.md`、`testplan.md`、`datasource-and-folders.md` 更新 scenario_extreme 文件位置和 dev-verify 模式说明
+- **review-findings.md R-200 → ✅**：已修复转归档
+
+
+
+- **文档引用层级规范化**：requirements.md 自包含 + technical.md 仅引 requirements.md
+- **用户文档交叉优化**：how-to-config/how-to-use-registry/faq/README 修正同步
+- **目录归档与同步**：数据降级文档归档至 `archive/data-degradation/`，datasource-and-folders.md 同步
+- **`test_security_edge.py` mock 路径修正**：`patch("src.python.config._defaults._CONFIG_FILE")`
+- **文档版本号统一更新**：constants.py、README.md、how-to-test-my-code.md、plan.md、changelog.md 同步至 v0.3.3
+
+---
+
+### Added
+
+- **测试隔离 autouse fixture**：`conftest.py` 新增 `_isolate_sensitive_paths` autouse fixture，自动将 `_defaults._CONFIG_FILE` 和 `cache._CACHE_DIR` 重定向到 `tmp_path`，防止测试污染用户真实配置文件/缓存。配合 `_clear_config_cache()` 确保 `get_config()` 从临时路径读取后回退到默认值。
+- **测试标记遗漏自动检查**：`conftest.py` 的 `pytest_collection_modifyitems` 新增标记遗漏检查，新测试文件若缺少 `pytestmark` 变量则发出 `PytestWarning` 提醒。`_KNOWN_MARKERS` 全集与 `pytest_configure` 注册的 31 个标记保持同步。
+
+- **R-177 核心模块单元测试覆盖**：为 `llm/generators.py`、`llm/prompts.py`、`handlers_cache.py`、`handlers_report.py` 四个模块编写 97 个单元测试，覆盖 JSON 解析、提示词构建、缓存预检、报告编排等关键逻辑。测试 mock 路径修正、`_press_any_key` 阻塞问题修复等实战经验已沉淀。
+
+- **DataSourceRegistry 数据源注册中心（Step A）**：`provider_registry.py` 新增 `DataSourceRegistry` 单例，统一管理熔断器（3 次失败 / 300s 冷却）、会话级缓存（OrderedDict O(1) 淘汰、2000 条阈值）、获取策略选择（`LIVE_FETCH`/`CACHE_ONLY`/`PLACEHOLDER`）及审计报告生成。双锁设计（`_provider_lock` + `_cache_lock`）保证并发安全。新增 45 项单元测试（`test_provider_registry.py` 37 + `test_phase_timeout.py` 8）。
+
+- **`all_no_unit` 快捷测试模式**：`scripts/test_runner.py` 新增 `all_no_unit` 模式（`-m "not unit"`），排除单元测试运行其余全部场景/集成/边缘测试（306 项），方便快速验证非单元逻辑。
 
 ### Fixed
 
@@ -212,16 +222,6 @@
 - **R-204 html_renderers.py fund_hold 三函数会话缓存**：`_render_overlap_matrix`/`_render_concentration`/`_render_style_analysis` 通过 `DataSourceRegistry.session_cache`（域名 `"fund_hold"`）消除同报告生成内对 `fetch_fund_holdings` 的重复文件缓存读取，~20 只基金从 3×disk 降为 1×disk
 - **R-205 cache.py `_CACHE_DIR` cwd 依赖消除**：`_CACHE_DIR` 从相对路径 `"data/cache"` 改为 `os.path.join(_PROJECT_ROOT, "data/cache")`，以 `cache.py` 文件位置（`src/python/cache.py`）推导项目根目录绝对路径。消除 cwd 依赖后，`DegradationTracker` 的 `.degradation_state.json` 持久化文件始终写入正确目录，跨会话降级记忆恢复生效。同时 `os.path.abspath(_CACHE_DIR)` 对已绝对路径无影响
 - **R-197/R-198 审计修复（5 项技术债）**：代码复盘发现并修复 5 项低/中优先级代码质量问题。MEDIUM：`market_value_sheet.py` 移除重复的 `_FUND_PREMIUM_PLACEHOLDER` 常量定义（已由 `market_value.py` 提供），更新过期注释。LOW：`market_value.py` + `market_value_sheet.py` 新增 `__all__`，明确公共 API 边界。LOW：`generators_news.py` 移除未使用的 `_is_llm_module_enabled` 导入。LOW：`generators_orchestrator.py` 惰性导入（Phase 1+2 临时措施）改为模块级导入，同步修正 3 处 mock 路径。
-
-### Docs
-
-- **文档引用层级规范化**：requirements.md 自包含 + technical.md 仅引 requirements.md
-- **用户文档交叉优化**：how-to-config/how-to-use-registry/faq/README 修正同步
-- **目录归档与同步**：数据降级文档归档至 `archive/data-degradation/`，datasource-and-folders.md 同步
-- **`test_security_edge.py` mock 路径修正**：`patch("src.python.config._defaults._CONFIG_FILE")`
-- **文档版本号统一更新**：constants.py、README.md、how-to-test-my-code.md、plan.md、changelog.md 同步至 v0.3.3
-
----
 
 ## [0.3.4] - 2026-07-09
 

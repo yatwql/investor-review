@@ -221,7 +221,7 @@
 | `src/python/tmpl/report_template.html` | **回撤图调用点**（line 1551）：`drawSimpleChart('drawdownChart', labels, drawdowns, {...})` → `drawSimpleChart('drawdownChart', datasets=[组合回撤dataset, 指数回撤dataset])` |
 | `src/python/tmpl/report_template.html` | 移除 Chart.js CDN `<script src="...">` 行及其轮询加载逻辑（`_p_poll`、`_d_poll`） |
 | `src/python/report/html_writer.py` | 已有 `history_data` 包含 `benchmarks`（来自 Iter 6a），通过 context 透传到模板 |
-| `src/test/unit/report/test_html_report_structure.py` | 新增 ≥8 项测试（走势图 canvas 多 dataset、回撤图 canvas 多 dataset、CDN 不再加载、打印样式、无基准回退） |
+| `src/test/unit/report/test_html_report_structure.py` | 新增 ≥8 项测试（走势图 canvas 多 dataset、回撤图 canvas 多 dataset、CDN 不加载、打印样式、无基准回退） |
 | `src/test/unit/report/test_html_template.py` | 新增 `TestDrawSimpleChartMultiDataset` ≥15 项（旧签名兼容、图例渲染、tooltip 双值、色板循环、回撤虚线、离线可用、CDN 已移除） |
 
 ### 验收标准
@@ -233,7 +233,7 @@
 5. 图例 `.chart-legend` 元素存在，`innerText` 含配置中指定的基准名称（如"沪深300"）
 6. tooltip 容器 `.chart-tooltip` 渲染 N 条 `<div>`，走势图组合线显示绝对数值、指数线显示归一化值（格式 `#,##0.00`），回撤图均显示百分比
 7. `#drawdownChart` canvas 有基准时 `data-datasets[1].dash == [4, 2]` 且 `color == "#9CA3AF"`
-8. 渲染后 HTML 中 `grep "<script.*chart.js"` 返回空（Chart.js CDN 不再加载）
+8. 渲染后 HTML 中 `grep "<script.*chart.js"` 返回空（Chart.js CDN 不加载）
 9. 离线打开生成的 HTML 报告，走势图和回撤图均渲染正常（`data-datasets` 非空，JS 无报错）
 10. 打印媒体中 `#historyChart` 和 `#drawdownChart` 的 `display != "none"`
 11. `python -m pytest src/test/unit/report/test_html_template.py src/test/unit/report/test_html_report_structure.py -x -q -k "MultiDataset or legend or tooltip or benchmark or drawdown or cdn or offline or single"` 通过（预计耗时 < 15s）

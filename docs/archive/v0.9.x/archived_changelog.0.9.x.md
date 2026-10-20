@@ -161,7 +161,7 @@
 
 ### Docs
 
-- **技术文档残留 B 系列编号清理（基金深度分析章节不再加编号）** — 全量排查管理/用户文档，清除 `technical.md` §4.8 及 data_flag 表中残留的展示型 B 编号（B2~B6）：`#### B2 基金经理变更监控` → `#### 基金经理变更监控` 等 5 个章节标题、data_flag 表「说明」列（B2 基金经理→基金经理变更监控…B6 因子暴露→因子暴露分析）、§4.8 ASCII 架构图节点、B5/B6 差异化说明文案、`§4.8 B6` 交叉引用 → `§4.8 因子暴露分析`。保留 `type=b_series` 代码类型标识符、`b_series_fund_manager` 等配置键、归档文件名（`B1-fund-deep-analysis.md`）与计划文档实现步骤标签（B1/B2/B3）。报告展示编号以 1~19 数字为准（基金深度分析 5 模块即 §6~§10），不再使用 B 前缀
+- **技术文档残留 B 系列编号清理（基金深度分析章节不再加编号）** — 全量排查管理/用户文档，清除 `technical.md` §4.8 及 data_flag 表中残留的展示型 B 编号（B2~B6）：`#### B2 基金经理变更监控` → `#### 基金经理变更监控` 等 5 个章节标题、data_flag 表「说明」列（B2 基金经理→基金经理变更监控…B6 因子暴露→因子暴露分析）、§4.8 ASCII 架构图节点、B5/B6 差异化说明文案、`§4.8 B6` 交叉引用 → `§4.8 因子暴露分析`。保留 `type=b_series` 代码类型标识符、`b_series_fund_manager` 等配置键、归档文件名（`fund-deep-analysis.md`）与计划文档实现步骤标签（B1/B2/B3）。报告展示编号以 1~19 数字为准（基金深度分析 5 模块即 §6~§10），不再使用 B 前缀
 - **计划归档边界 + 已完成任务文档同步（核对 review-findings / plan.md 已实现任务）** — ① 归档边界明确：plan-1/plan-7 设计文档已归档（`archive/v0.9.x/`）；未完成项（plan-2/3/5/6/8/9/10/11）与完成但仍在开发版本（0.9.7-dev）的修复设计文档（`plan-fix-qa` rf-150 / `plan-fix-deepseek` rf-200 / `plan-engineering` rf-1）**保留在 `docs/plan/` 不归档**，`archived_plan.0.9.x.md` 补充保留说明与版本号。② 已实现任务核对 9 份管理/用户文档：`requirements.md` R-LLM-DB-QA-CONCENTRATION-06 补充辩论 synthesis 嵌入路径（rf-150）；`how-to-config-llm.md` / `how-to-config.md` §M / `how-to-menu.md` 集中度问答描述补充「标准模式嵌入专家复盘、辩论模式嵌入综合权衡、要求回答」；`reports-instruction.md` 交互图表特性补充「导出PNG 按钮」（rf-199）。其余核对项（priority 默认 99、穿透/行业垂直柱状图、去重阈值 0.40、修正明细、因子暴露章节/开关/注册项）均已一致，无需改动。`folders.md` 目录树核对无误（plan/ 6 文件 + archive/v0.9.x 结构未变）
 - **技术文档新增 C20 架构约束（HTML 图表图下说明强制）** — 用户需求：HTML 报告中所有图表下必须有相应说明，说明该图表用途。`technical.md` §8.3 报告层约束新增 **C20**（HTML 图表图下说明强制）：每张图表下方必须渲染 `.chart-caption` 图下说明、明确标注该图表是什么及用途，说明必须跟随对应 chart canvas 渲染分支一同出现（图表有数据 → 说明出现，图表空数据 → 说明不出现）。该约束由既有实现满足（此前已为 6 张 Chart.js 图表添加图注：净值趋势/回撤分析/资产构成环形/持仓行业分布/穿透 TOP10/量化指标雷达），并被 2 个既有回归用例锁定（`test_all_charts_have_captions` 6 图图注齐全 + `test_caption_not_rendered_when_chart_empty` 空数据不渲染图注）。同步更新 `CLAUDE.md` 与 `review-findings.md` 的约束范围引用：C1~C19 → C1~C20（19 条 → 20 条）
 
@@ -275,6 +275,12 @@
 - **rf-195 回归测试** — `test_html_report_structure.py` 新增 `TestHtmlInteractiveCharts::test_all_chart_canvases_have_a11y_attrs`：6 图全部渲染（Flag ON + 数据存在）时断言各 canvas 含 `aria-label`（含"悬停查看"）/`role="img"`/内嵌 fallback 文本非空，防 A1 属性回退
 - **rf-200 回归测试** — `test_llm_api.py` `TestCallClaudeThinkingDegradation` 新增 3 例：①思考耗尽（stop_reason=max_tokens 无正文）→ 自动关闭 thinking 重试一次且恢复 temperature（断言 2 次调用、第二次 payload 无 thinking、返回第二次结果）；②flag False（非思考耗尽空内容）→ 不重试；③未注入 thinking → 即使 flag True 也不重试（短路由不误触）
 
+
+
+- **`test_write_settings` 测试隔离补全** — mock 了 `open`/`json.dump` 但 `_write_llm_settings` 还调用真实 `os.makedirs('/fake/path')` + `tempfile.mkstemp` + `os.replace`，非 root 环境下 `/fake` 不可建 → `PermissionError` 使 P0 dev-verify 门禁失败（rf-189）。修复：补全 fs 写路径 4 个 mock（`os.makedirs`/`tempfile.mkstemp`/`os.fdopen`/`os.replace`）+ `assert_called_once()` 断言，测试隔离完备且不依赖根目录可写权限
+
+---
+
 ### Docs
 
 - **文档全量一致性审计（模块序号/分组/归档引用）** — 按用户要求对全部管理文档+用户文档做最新状态核验：① 修正 README 过期计数——"最多 18 个条件页签"→"最多 19 个条件页签"、"基金深度分析（4 个）"→"（5 个）"补因子暴露分析；② 补 README 基金评价功能清单 + reports-instruction §10 因子暴露分析 功能↔报告位置对照行（此前缺失该模块）；③ testplan.md 场景文件表补 3 个管线测试文件（`test_pipeline_smoke.py`/`test_pipeline_metrics_injection.py`/`test_pipeline_factor_exposure.py`，C19 契约/全失败 source_failed/空持仓 insufficient）；④ folders.md 清理 plan-advanced-analysis.md 目录注释中的历史痕迹（"plan-7 已归档"→"模拟/趋势"）；⑤ 确认非豁免文档正文（technical/requirements/llm-technical/testplan/test-coverage/manuals/README）已无 archive 文件引用与历史变更描述，最新状态自包含。门禁 dev-verify 1198 通过 + check-history-traces --ci 通过 + check-version-consistency 13 项 [OK]
@@ -295,12 +301,6 @@
 - **`src/js/` 更名 `src/static/`（前端静态资产目录）** — 目录实际承载 Chart.js 引擎 + 自有 JS + 独立 HTML 调试页 + README，`js/` 名不副实，更名反映"前端静态资产"语义（为未来承接 HTML/CSS/图片预留，行业惯例 static/）。同步：`html_writer.py` `_copy_js_assets` 复制源路径 `src/js` → `src/static`（运行时唯一代码引用）；4 份管理/设计文档 `src/js` 引用全量替换；`src/static/README.md` 标题 + 职责描述更新；`folders.md` 目录树 `js/` → `static/`。模板与调试页走相对路径，运行时不受影响。report 套件 1153 passed + dev-verify 1181 passed 确认复制逻辑正常
 - **rf-113 验证清单备妥** — 新增 `docs/plan/iter7-verification-checklist.md`（plan-1 Iter 7 浏览器人工验证勾选清单，rf-113）：对照 upgrade.md §5 Iter 7 验收标准 2/3/4/6 + §4.8 A1/A4，6 项 × 具体操作步骤（Chrome/Edge 主验、Firefox/Safari 抽验）+ 结果汇总 + 通过后回填 changelog/review-findings 处理流程；`review-findings.md` rf-113 修复方向引用清单；`folders.md` plan/ 子树补条目
 - **plan-1/plan-7 完成项设计文档归档至 `archive/v0.9.x/`** — 按用户要求将已实现任务的设计文档从 `docs/plan/` 归档：① 新增 `archive/v0.9.x/archived_plan.0.9.x.md`（已完成项索引表 + 设计文档清单）；② plan-1 三个设计文档（`plan-chartjs-report-upgrade.md`/`plan-chartjs-risk-analysis.md`/`iter7-verification-checklist.md`）`git mv` 至 `archive/v0.9.x/chartjs-upgrade/`（rf-113 清单随文档归档，review-findings/technical 引用路径同步）；③ plan-7 设计内容（原 `plan-advanced-analysis.md` §4 因子暴露分析）抽取为独立文件 `archive/v0.9.x/factor-exposure/plan-factor-exposure.md` 归档，`plan-advanced-analysis.md` 同步裁剪（仅保留 plan-4 已放弃/plan-5/plan-6 待办），目录与标题更新；④ 内部交叉引用修正（factor-exposure↔chartjs-upgrade 相对路径、`plan-chartjs-risk-analysis.md` 指向 `plan.md` 的路径、`technical.md` C7 注册引用）；⑤ plan.md 更新——已完成项移出"推荐实施顺序"，剩余项重新编号（①plan-9 ②plan-2/3 ③plan-6 ④plan-5 ⑤plan-11 ⑥plan-10 ⑦plan-8），P2 预排 ~20d→~12.5d，归档区补 v0.9.x 索引；⑥ folders.md 目录树同步（plan/ 移除 3 文件、archive/v0.9.x 子树补 5 条目、统计数 69/8→78/5）
-
-### Test
-
-- **`test_write_settings` 测试隔离补全** — mock 了 `open`/`json.dump` 但 `_write_llm_settings` 还调用真实 `os.makedirs('/fake/path')` + `tempfile.mkstemp` + `os.replace`，非 root 环境下 `/fake` 不可建 → `PermissionError` 使 P0 dev-verify 门禁失败（rf-189）。修复：补全 fs 写路径 4 个 mock（`os.makedirs`/`tempfile.mkstemp`/`os.fdopen`/`os.replace`）+ `assert_called_once()` 断言，测试隔离完备且不依赖根目录可写权限
-
----
 
 ## [0.9.4] - 2026-08-01
 

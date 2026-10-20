@@ -212,7 +212,7 @@
 
 ## 7.5 风险补充（第 5 轮发现）
 
-- **`_weighted_avg_cost` 迁移致渲染链 ImportError**：`html_writer_display.py` 反向导入章节写入器模块内的计算函数——迁移时若只删模块不搬函数，HTML 显示层直接崩。**处置**：迁移前先跑 `.venv/bin/python -m pytest src/test/unit/report/test_html_writer.py -v` 建立基线，迁移后必须仍绿。
+- **`_weighted_avg_cost` 迁移致渲染链 ImportError**：`html_writer_display.py` 反向导入章节写入器模块内的计算函数——迁移时若只删模块不搬函数，HTML 显示层直接崩。**处置**：搬移前先跑 `.venv/bin/python -m pytest src/test/unit/report/test_html_writer.py -v` 建立基线，改动后必须仍绿。
 - **`excel_module_loader` 模块键与分派调用不同步**：该 loader 用字符串键装配模块，改名遗漏会在 **Excel 生成期**才报「模块缺失」而非导入期。**处置**：批次② 收尾用 `grep -rn "write_category_sheet\|write_market_value_sheet" src/` 确认零命中。
 - **图表归属变化而图注未改**：`category_doughnut` 图随合并章移动，图下说明文案若写「分类表」需同步为合并章语义。
 

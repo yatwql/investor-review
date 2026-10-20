@@ -10,7 +10,7 @@
 >
 > **关键决策更新（v5）**：
 > - S0c 已移出 `scenario` 至 `scenario_extreme`，scenario 模式已不含最慢测试（321s 已接近 committed 300s）
-> - **B-2a（S0c 持仓缩减）不再需要** — 优化门禁已由标记拆分达成，降级为低优先级
+> - **B-2a（S0c 持仓缩减）无需** — 优化门禁已由标记拆分达成，降级为低优先级
 > - 当前门槛：321s - 300s = 仅差 21s，环境波动可自然消除
 
 ---
@@ -31,7 +31,7 @@
 
 > [^2]: 原始 21min 是 `TestS0cLargeHoldings` 叠加 push2 API 调用的 profiling 峰值。用户下午实测 verify ~6min，与当前 scenario 321s + unit 开销吻合。21min 不作为基线参考。
 
-**瓶颈已被打破**：S0c 的 856s 和 push2 API 调用均已移除，scenario 当前最慢测试仅 ~17s，不再有单个异常项。
+**瓶颈已被打破**：S0c 的 856s 和 push2 API 调用均已移除，scenario 当前最慢测试仅 ~17s，无单个异常项。
 
 ### 0.2 实证瓶颈（2026-07-09 profiling）
 
@@ -54,7 +54,7 @@
 | 决策 | 版本 | 结论 |
 |:-----|:----:|:------|
 | Phase A 根因定位 | v4 | 删除 — 受益 50s vs B-2b 受益 942s，40% 概率无结论 |
-| B-2a（S0c 优化） | **v5** | **降级为低优先级** — S0c 已移出 scenario，不再影响门禁 |
+| B-2a（S0c 优化） | **v5** | **降级为低优先级** — S0c 已移出 scenario，不影响门禁 |
 | scenario_extreme 文件位置 | v5 | **放 resilience/ 目录下**（S10 属于容错子集，物理结构紧凑）|
 | S0c 标记 | v5 | 仅保留 `@pytest.mark.scenario_extreme`，去掉 `@pytest.mark.scenario_basic` |
 
@@ -106,11 +106,11 @@
 | scenario_extreme 耗时 | ~15min（含 push2）| **~56s** | 94% |
 
 **完成的操作**：
-1. 标记变更：`test_scenario_holdings_quality.py` 模块级去掉 `scenario`，S0c 标注 `scenario_extreme` 不再有 `scenario`/`scenario_basic`
+1. 标记变更：`test_scenario_holdings_quality.py` 模块级去掉 `scenario`，S0c 标注 `scenario_extreme` 无 `scenario`/`scenario_basic`
 2. 文件搬迁：`TestS0cLargeHoldings(3项)` + `TestScenarioExtreme(5项)` → **`resilience/test_scenario_extreme.py`**
 3. 标记隔离：新文件仅有 `@pytest.mark.scenario_extreme`，不继承 `scenario`/`scenario_resilience`
 4. `test_runner.py` 已更新 scenario/regression/verify 模式排除 `scenario_extreme`
-5. `test_integration_scenarios.py` 不再包含 `scenario_extreme` 类
+5. `test_integration_scenarios.py` 不包含 `scenario_extreme` 类
 
 ---
 
@@ -319,4 +319,4 @@ Phase A（根因定位）已被删除，基于以下评估：
 | H5: akshare API | ⭐ 可能性低 | B-2b 移出 942s 后还剩 ~280s |
 | H6: push2 API | ✅ 已修复 | Step 0 mock |
 | H7: 环境因素 | ⭐⭐ 可能 | 不具可复现性，放弃调查 |
-| **26× 差距根因** | **不深入** | 单次数据，不一定可复现；不再阻塞优化进程 |
+| **26× 差距根因** | **不深入** | 单次数据，不一定可复现；不阻塞优化进程 |

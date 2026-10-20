@@ -45,14 +45,14 @@
 - rf-697 已修复（2026-10-17）：P1（`verify`）/P2（`regression`）/P0 预检均按 `unit` 通配或 `unit_*` 域集筛选，conftest 的 `pytest_configure` 曾漏注册 `unit`——10,136 条 unit 用例全部不在任何门禁收集范围（P0/P1 实跑数与 test-coverage 台账 6,969/9,800 吻合即为实证；`unit` 档单跑 10,136 为对照实证）。conftest 注册行补齐，域选择器与期望表经测试锁死同源；dev-verify 6,969→6,978、verify 9,800→10,145（P1 +345，≈+1s）。
 - rf-697 登记待决（2026-10-17，rf-694 处置调研附带发现）：`verify`（P1 合入门禁）与 `dev-verify`（P0）选择器均不含 `unit_cli`（137 用例）与 `unit_ui`（187 用例）——若属「交互层不进快速门禁」的既定口径应在 testplan 显式登记；若非故意即 P1 覆盖缺口（典型：TUI/CLI 改动可绕 P1 入 master）。与 rf-694 同批定口径。
 - rf-113 已修复（2026-10-16）：Iter 7 全链路浏览器人工验证六项全部完成——headless 自动化回归（① 6 图 badge / ② 2.4 afterprint / ③ 3.1 断网渲染 / ⑤ 375px 报告+调试页 / ⑥ 禁 Canvas 兜底，复跑 5 PASS + ⑥ 表现记录口径）+ 人工抽验（② 真实 Ctrl+P 打印预览、④ 微信真机 4.3+4.4、Safari 90+ iPad 抽验、Windows Chrome/Firefox；4.1 链接访问维护者豁免）；附带发现两处已由 rf-645 修复并复跑确认（⑤-testchart 转 PASS）。方法与证据见 `docs/plan/report-browser-verification.md`，勾选清单归档留存；rf-114 前置随之满足。
-- rf-698 已处置（2026-10-17，用户裁决口径清理）：按「不再对旧配置项/旧缓存文件/旧数据结构做兼容」移除 5 处残留兼容分支——① `config/anonymizer.py` 的 `profit_rate_pct`「旧键兼容」注释修正（经核该键实为汇总取数/渲染的现役键，同步分支保留防残留原精度，仅删误导口径）；② `core/perf.py` `_phase_seconds` 早期 list 形状死分支（ETA 仅采样最近 20 条，旧形状自然出窗）；③ `fetcher/industry.py` 缓存载荷 schema 迁移清理链全删（函数 + 3 处调用，迁移窗口≤两周已过）；④ `datasource_credential._read_key_file` 顶层平铺回退（生产调用点恒传非空 section，旧单源文件形态失效）；⑤ `deepseek-chat`/`deepseek-reasoner` 停用别名全部兼容移除（价目两条目 + thinking 三名单；旧名历史费用改显 `-`、存量旧配置不再获思考安全网，均经用户确认）。手册与 `llm-technical.md` 价目/峰谷枚举/effort 名单同源刷新；别名价格锁改负向锁（锁定移除行为防回填）、删 3 个旧形状/旧载荷正测、凭据测试改写节结构；dev-verify 6,975 通过。
+- rf-698 已处置（2026-10-17，用户裁决口径清理）：按「不对旧配置项/旧缓存文件/旧数据结构做兼容」移除 5 处残留兼容分支——① `config/anonymizer.py` 的 `profit_rate_pct`「旧键兼容」注释修正（经核该键实为汇总取数/渲染的现役键，同步分支保留防残留原精度，仅删误导口径）；② `core/perf.py` `_phase_seconds` 早期 list 形状死分支（ETA 仅采样最近 20 条，旧形状自然出窗）；③ `fetcher/industry.py` 缓存载荷 schema 迁移清理链全删（函数 + 3 处调用，迁移窗口≤两周已过）；④ `datasource_credential._read_key_file` 顶层平铺回退（生产调用点恒传非空 section，旧单源文件形态失效）；⑤ `deepseek-chat`/`deepseek-reasoner` 停用别名全部兼容移除（价目两条目 + thinking 三名单；旧名历史费用改显 `-`、存量旧配置不获思考安全网，均经用户确认）。手册与 `llm-technical.md` 价目/峰谷枚举/effort 名单同源刷新；别名价格锁改负向锁（锁定移除行为防回填）、删 3 个旧形状/旧载荷正测、凭据测试改写节结构；dev-verify 6,975 通过。
 - rf-699 已处置（2026-10-17，设计契约审计）：全量 UI/报告样式人工比对 DESIGN.md，按基线对拍（契约落稿 commit a17b26f5 → HEAD）定位新增违规仅 3 行（均在 `summary_section.html`：市场温度两行内联 `#888` 裸色值 + QDII 注 `opacity:0.75` 档外），已修（→`var(--text-muted)`/0.7 档内，顺手消同模式存量 1 行）；护栏盲区增设 W3 内联色值/W4 档外字号/W5 档外间距三维观察（W1 引号整行豁免为 JS 图表配置设计、测试钉死不可收窄，W3 按位置级找回 HTML 内联色值盲区——原「裸色值 0」对内联域属假零），实测存量 40/8/175 入 `TestBaselineNoGrowth` 只减不增基线并入契约 Known Gaps；DESIGN.md 基线数字刷新（700 存量 3→9、600 25→63、工作台旧 `--color-*` 描述改角色名体系），`--color-*` 兼容映射到期删除（实测零消费者）并由 `TestLegacyMappingRemoved` 负向锁防回填；新增护栏测试 5 用例，unit_report/unit_web/scenario_basic 全绿。
 
 ## 开发期已修复（0.13.6-dev）
 
 > 完整复盘见 `changelog.md` 0.13.6-dev 段；此处仅摘要行。
 
-> rf-708 已修复（2026-10-18）：完成通知 Web 渠道接线——`_run_generation` 改薄包装器（委托 `_run_generation_impl` + `result_box` 回传产物标志），收尾经 `_notify_web_completion` 按 `notify` 配置门控派发（Web 手动生成 + 内置定时调度共用，无人值守定时失败不再静默）；降级摘要单源下沉 `report/data_status.degradation_summary()`，CLI `_collect_degradation_summary` 改委托
+> rf-708 已修复（2026-10-18）：完成通知 Web 渠道接线——`_run_generation` 改薄包装器（委托 `_run_generation_impl` + `result_box` 回传产物标志），收尾经 `_notify_web_completion` 按 `notify` 配置门控派发（Web 手动生成 + 内置定时调度共用，无人值守定时失败不静默）；降级摘要单源下沉 `report/data_status.degradation_summary()`，CLI `_collect_degradation_summary` 改委托
 >
 > rf-709 已修复（2026-10-18）：报告模板 tooltip XSS 纪律——`drawSimpleChart` hover 内容改 DOM API 构建（`createElement` + `textContent`/`createTextNode`，色点走 `style.backgroundColor` 属性赋值），全文 `innerHTML` 清零，模板源结构测试断言防回归
 >
@@ -60,21 +60,21 @@
 > rf-712 已修复（2026-10-18）：`prosperity_framework` 转正后未迁组——作用域复核为行动章内嵌评分卡区块，注册表分组机制与诊断 → 分析增强（面板编号/手册分组表/文档归属随迁同步）；requirements R-PF-01 引用的已废弃 `GROUP_STANDARD` 常量改现行 `GROUP_ANALYSIS`，how-to-config 分组计数残留同步修正（详见 changelog）
 > rf-713 已修复（2026-10-18）：technical.md「写入分派」段残留 `GROUP_REPORT` 分组名与「三组同一路径」过期表述——改写为「注册表四组同一路径」并删已废弃分组名（详见 changelog）
 > rf-718 已修复（2026-10-18）：`[S]` 窄屏（手机）仍引导用户输入键名，而键名放不进行、打起来也费劲——改为**编号为主路径**、`k` 按需展开键名行，键名输入保留但不作引导（详见 changelog）
-> rf-717 已修复（2026-10-18）：`[S]` 面板「开启/关闭」失去着色（重构排版时状态标签退化为纯文本，关闭项不再醒目标红）——恢复 GREEN/RED 着色（含窄档短标签），3 单测锁定（详见 changelog）
+> rf-717 已修复（2026-10-18）：`[S]` 面板「开启/关闭」失去着色（重构排版时状态标签退化为纯文本，关闭项不醒目标红）——恢复 GREEN/RED 着色（含窄档短标签），3 单测锁定（详见 changelog）
 > rf-716 已修复（2026-10-18）：`[S]` 面板「键名」只出现在提示语里、用户无从得知（人机交互缺陷），且窄终端（手机 SSH）下 98 列面板被硬折——键名改为行内淡色列显式展示，排版抽 `tui/switch_panel.py` 做宽/中/窄三档响应式（附不越界不变式单测），另修编号两位数错位与页脚超宽（详见 changelog）
 > rf-715 已修复（2026-10-18）：渠道层私引配置私有符号——`[S]` 只读详情与写路径三通道直引 `_DEFAULT_LLM_SETTINGS` / `_SWITCH_TRUE_TOKENS` / `_SWITCH_FALSE_TOKENS`（`test_channel_layering` 红）→ 新增公开面 `config.default_enabled_llm()` 与 `features.SWITCH_*_TOKENS` + `features.parse_switch_value()`，渠道改走公开 API（详见 changelog）
 > rf-714 已修复（2026-10-18）：`[S]` 面板页脚/帮助/报错含开发者术语「slug」用户不可理解——用户可见文案统一改「键名」（与手册既有术语一致，提示行同步去 CLI 字样），源码级回归断言禁回潮（详见 changelog）
 > rf-114 已修复（2026-10-18）：双渲染路径收敛——删除 Canvas `drawSimpleChart` 定义块与全部 Feature Flag 条件分支（主模板 + 5 个 partial），Chart.js 成唯一渲染器；`enable_interactive_charts` 开关随消费者消失一并摘除（面板 31 项、其后编号前移）；滚动超额与持仓重合度滚动相关两张 Canvas-only 存活图移植 Chart.js（`excess_rolling`/`corr_rolling` 数据集 + 初始化器，对齐与降级语义不变）；单渲染器结构回归锚点已补（详见 changelog）
 >
-> rf-706 已修复（2026-10-18）：Web 进度事件通道完整性——`pollOnce` 增在途互斥（pollBusy，成功/异常/同步抛三路复位）+ 按 `seq > lastSeq` 过滤重复回放；服务端 events 载荷补 `first_seq`（`RunState.oldest_seq`），前端缺口时渲染「中间已省略 N 条」占位行，不再静默跳号
+> rf-706 已修复（2026-10-18）：Web 进度事件通道完整性——`pollOnce` 增在途互斥（pollBusy，成功/异常/同步抛三路复位）+ 按 `seq > lastSeq` 过滤重复回放；服务端 events 载荷补 `first_seq`（`RunState.oldest_seq`），前端缺口时渲染「中间已省略 N 条」占位行，不静默跳号
 >
 > rf-707 已修复（2026-10-18）：Web 生成进度断点续传——活动 run 写 sessionStorage（提交成功/流程重置/轮询完成/任务失效四点闭环清理），页面加载 `resumeActiveRun()` 重建进度视图从 `after=0` 续轮询；run 已随服务重启消失时走既有任务不存在终态收口，不空转重试
 >
-> rf-704 已修复（2026-10-18）：过期缓存生成路径自动清理——`cache.auto_cleanup_expired()` 尽力而为包装（任何异常吞掉返回 0，绝不影响主流程），`report/orchestrator.generate_report` 入口调用（CLI/TUI/Web 三渠道共用入口）；无人值守 CLI 定时任务不再只增不减地堆积过期缓存
+> rf-704 已修复（2026-10-18）：过期缓存生成路径自动清理——`cache.auto_cleanup_expired()` 尽力而为包装（任何异常吞掉返回 0，绝不影响主流程），`report/orchestrator.generate_report` 入口调用（CLI/TUI/Web 三渠道共用入口）；无人值守 CLI 定时任务不只增不减地堆积过期缓存
 >
-> rf-705 已修复（2026-10-18）：Web 进度轮询任务丢失终态——`main.js pollOnce` catch 识别 404/`NOT_FOUND` 为终态：停止轮询 + 复用 `restoreGenerateBtn()` 单源复位生成按钮 + 进度阶段落「任务已失效」+ 结果区渲染失败态提示刷新，不再被当瞬时错误无限重试；其余瞬时错误保持静默重试
+> rf-705 已修复（2026-10-18）：Web 进度轮询任务丢失终态——`main.js pollOnce` catch 识别 404/`NOT_FOUND` 为终态：停止轮询 + 复用 `restoreGenerateBtn()` 单源复位生成按钮 + 进度阶段落「任务已失效」+ 结果区渲染失败态提示刷新，不被当瞬时错误无限重试；其余瞬时错误保持静默重试
 >
-> rf-702 已修复（2026-10-17）：LLM 计费口径统一——归一层把 claude 协议 `input_tokens` 补 `cache_read_input_tokens` 归一为总输入（兼容端点命中大于未命中不再产生负费用），`estimate_cost` 补 `max(…, 0)` 下限（详见 changelog）
+> rf-702 已修复（2026-10-17）：LLM 计费口径统一——归一层把 claude 协议 `input_tokens` 补 `cache_read_input_tokens` 归一为总输入（兼容端点命中大于未命中不产生负费用），`estimate_cost` 补 `max(…, 0)` 下限（详见 changelog）
 >
 > rf-703 已修复（2026-10-17）：会话/报告费用统计与单次估算口径统一——报告页脚、批处理汇总、新闻相关性估值均改走 `_normalize_usage_tokens` 归一层，会话累计费用与单次 `estimate_cost` 同参等值
 >
@@ -87,7 +87,7 @@
 > > 完整复盘见 `changelog.md` 0.13.7-dev 段；此处仅摘要行。
 >
 > rf-719 已修复（2026-10-18）：用户文档残留不存在的交互图表开关 `enable_interactive_charts` 与静态回退描述（FAQ 图表空白排查建议、CLI 手册 `--feature` 示例注释），与「Chart.js 唯一渲染、单文件自包含」口径自相矛盾——FAQ 排查项改按文件完整性/单文件自包含口径，示例注释改按实际开关（数据质量仪表盘）
-> rf-720 已修复（2026-10-19）：窄屏直达改造重写首页主循环时宽/中档 `KEY_ENTER` 分支被静默丢弃（Enter 不再执行选中项，宽屏回归）——自审 diff 当场捕获并补回分支；`TestNarrowMainLoopDirectNav` 的宽/窄两档驱动用例锁住重绘次数，同类分派遗漏不再可能静默过审
+> rf-720 已修复（2026-10-19）：窄屏直达改造重写首页主循环时宽/中档 `KEY_ENTER` 分支被静默丢弃（Enter 不执行选中项，宽屏回归）——自审 diff 当场捕获并补回分支；`TestNarrowMainLoopDirectNav` 的宽/窄两档驱动用例锁住重绘次数，同类分派遗漏不可能静默过审
 > rf-721 已修复（2026-10-19）：用户实测报告三连——[S] 面板按数字切换后窄屏不重绘（须再按 `p` 才见结果）、`?4` 说明被写反的重绘标志立刻顶走（宽屏还误提示「状态已更新」）、提示语「? 编号 看说明」占位符写法无示例看不懂；改版为写路径所有宽度即时重绘+反馈带编号、`?` 只读查询窄屏留屏、提示语一句话教主路径（如 3 / ?3 / 0 返回），rf-595「一行反馈」收敛为只读/失败路径
 > rf-722 已修复（2026-10-19）：峰谷计价用例 `test_llm_token_usage` 未声明离线——`pricing._is_holiday` 周末短路、仅工作日触达交易日历（缓存空时 akshare 联网），此前 CI 隐式编码探针恰逢北京时间周末从未点燃，周一夜间（7e77c913）首燃被网络守卫拦截（表现为 CI 单点失败、与当批改动无关）；该文件测计量口径而非节假日判定，按「不依赖外部数据的用例显式声明离线」补文件级 `offline_external_sources`
 > rf-723 已修复（2026-10-19）：用户实测反馈「主菜单按方向键直接退出程序」——终端把 `ESC [ A` 拆包分节到达时首段 0.3s 窗口超时即判孤 Esc，而孤 Esc 是首页退出别名；首段共聚窗口独立加大为 `_ESC_FIRST_TIMEOUT=0.5s`（续读仍 0.3s），并补 SS3 应用光标序列（`OA`/`OB`）映射（此前落未知键），回归用例锁两窗口下限与 SS3 解析
@@ -104,7 +104,7 @@
 
 - **rf-731**：LLM 费用预估接入重新生成范围——`forecast_run_cost(force_llm/force_modules)`（与 `POST /api/runs` 同源 `resolve_force_scope` 归一；范围内模块保证重新调用、按静态单价口径，范围外维持历史实际费用口径），摘要行新增「其中 N 个模块重新生成」拆行；TUI `[L]` 屏 `N`/选模块/全量后按所选范围重打更新预估行，Web `cost-preflight` 透传 `llm_modules` 查询参数（非法键 `ok:false` 数据面降级不 500）、确认弹层显示拆行，CLI `--yes` 确认透传 `--force-llm`/`--llm-module`。日预算硬闸维持「当日累计」判定不改为按次预测（按投影拦截会误伤「用已有结果」路径；本次费用预测由更新预估在展示层承担）。
 - **rf-733**：删除 `tui/prompt_text.confirm_prompt`（问句+选项+默认项单行模板，`src/python/` 零生产调用）——确认类屏已按「问句行 + 键位行」两行式落地（生成确认 Y/N 化），单行模板失去挂点；其专属用例与 prompt 契约清单 `_DISPLAY_CALLS` 中的登记同步删除，`panel_prompt`（列表面板四成分模板）保留。plan-159「剩余：input_choice 类提示迁移到 confirm_prompt」方向随之关闭（不迁，两行式为准）。
-- **rf-734**：LLM 配置热生效链路——`get_llm_config()` 合并缓存判据补入 `llm_providers.json`（mtime+size）；`write_llm_providers` 写后主动失效；`[M]` 换序/任意配置编辑成功与 `[R]` 刷新清页头状态行记忆（45s TTL 不再吞重绘）；`llm_status()` 新增 `chain_head` 且首页状态行 `LLM ●` 后显示链首线路（窄终端弃「详情」指引守宽）。手工改 LLM 三文件均免重启生效，同会话生成用新链序。
+- **rf-734**：LLM 配置热生效链路——`get_llm_config()` 合并缓存判据补入 `llm_providers.json`（mtime+size）；`write_llm_providers` 写后主动失效；`[M]` 换序/任意配置编辑成功与 `[R]` 刷新清页头状态行记忆（45s TTL 不吞重绘）；`llm_status()` 新增 `chain_head` 且首页状态行 `LLM ●` 后显示链首线路（窄终端弃「详情」指引守宽）。手工改 LLM 三文件均免重启生效，同会话生成用新链序。
 - **rf-735**：`llm_providers.json` 头注释「主：/备：」在 reorder 互换后不更新——新增 `write_llm_providers` 写盘前 `_neutralize_chain_labels`（标注改写为中性「线路：」+「顺序即 priority 升序」归正为链序口径；幂等、仅动注释行），默认模板改为只写稳定事实；存量文件已一次性迁移。回归：中性化 / 幂等 / 无关注释不动 / 模板无主备标注 / 顺序误称归正。
 - **rf-736**：`_json_patch` 硬编码 `INNER_INDENT = 4` 致 2 空格风格文件重写后变 4 空格——新增 `_detect_indent_unit`（取首个缩进内容行前导空格数），`_replace_dict_block` 与 `_replace_array_block` 同修。回归：reorder 后条目 4 / 字段 6 缩进保持、嵌套 dict 子键 4 缩进保持。
 - **rf-737**：多链线路顺序两处相反——排序上提为共享 `config/_llm_providers.order_providers_by_chain`（priority 升序、同值保持数组原序），`llm_status()` 与 `[M]` 面板同经此函数，`chain_head` 恒等于 `providers[0]`。回归：数组序与链序相反时 llm_status 按链序输出、面板编号与之一致（跨渠道同序断言）、同 priority 保持数组原序、排序不修改入参。

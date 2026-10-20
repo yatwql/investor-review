@@ -57,7 +57,7 @@
 9. HTML 条件可见性通过 **Jinja2 宏**统一维护：定义一个 `section_visible(key, sv_dict)` 宏，导航栏和正文 14 个 `{% if %}` 都调用同一个宏
 10. **不配置时 100% 保持现状**（回归安全）
 11. HTML 正文 section 排序使用 **CSS `order` 属性**方案：.container 改为 flex 列布局，每个 section 加 `style="order: N;"`，实现视觉重排而不改变 DOM 结构和模板结构
-12. **注册表加 `type` 字段统一可见性规则**：`_REPORT_SECTION_DEFAULT` 每项新增 `type` 字段（`always` / `b_series` / `news` / `llm`），`_should_create_sheet()` 和 `section_visible` 宏都基于 `type` 做通用判断，不再硬编码列举 key 列表。具体映射：
+12. **注册表加 `type` 字段统一可见性规则**：`_REPORT_SECTION_DEFAULT` 每项新增 `type` 字段（`always` / `b_series` / `news` / `llm`），`_should_create_sheet()` 和 `section_visible` 宏都基于 `type` 做通用判断，不硬编码列举 key 列表。具体映射：
     - `always`（5 个）：summary, market_value, category, penetration, fund_performance
     - `b_series`（4 个）：fund_manager, fund_overlap, fund_concentration, fund_style
     - `news`（2 个）：news_correlation, early_warning
@@ -168,10 +168,10 @@
 |------|----------|
 | `excel_generator.py` | 引入 `_create_sheets(wb, section_order, ...)` 函数按序预创建页签，返回 `{key: ws}` 字典；内部函数通过 `sheets.get(key)` 索引；删除 `wb.move_sheet(ws13–ws16)` 后置逻辑；删除 `_write_fund_deep_sheets` 中的 `fund_deep` → `enable_b_series`；将预创建的 LLM ws 列表传入 `write_llm_sheets()` |
 | 11 个 sheet 文件 | `ws.title = f"X.{name}"` → `set_sheet_title(ws, "模块标识")` 一行改动 |
-| `llm_content.py` | `write_llm_sheets()` 接收预创建的 `ws_list` 参数，不再调用 `wb.create_sheet()`；`_get_module_key_map()` 从 `get_report_section_order()` 读取，删除硬编码 `idx = 8` |
-| `summary.py` | `_init_llm_usage_sheet()` 使用配置序号，不再硬编码标题；**删除 `wb.move_sheet(title, offset=...)`**（新设计下 llm_usage 页签已在末尾） |
+| `llm_content.py` | `write_llm_sheets()` 接收预创建的 `ws_list` 参数，不调用 `wb.create_sheet()`；`_get_module_key_map()` 从 `get_report_section_order()` 读取，删除硬编码 `idx = 8` |
+| `summary.py` | `_init_llm_usage_sheet()` 使用配置序号，不硬编码标题；**删除 `wb.move_sheet(title, offset=...)`**（新设计下 llm_usage 页签已在末尾） |
 
-**关键设计 —— `_create_sheets()` 函数**（基于注册表 `type` 字段，不再硬编码 key 列表）：
+**关键设计 —— `_create_sheets()` 函数**（基于注册表 `type` 字段，不硬编码 key 列表）：
 
 ```python
 # ── 类型驱动的可见性判断（唯一规则源，HTML 端也使用同一逻辑）──
@@ -197,7 +197,7 @@ def _create_sheets(wb, section_order, enable_b_series=False, include_news=False,
     return sheets
 ```
 
-> 此方案消除了技术债务 (D)：**零重复**——新增模块只需在注册表加一行并指定 `type`，`_should_create_sheet` 和 HTML `section_visible` 宏自动继承，不用两处改。同时消除了 (E)：模块 key 不再散落在 5 个消费点，注册表是唯一枚举 key 的地方。
+> 此方案消除了技术债务 (D)：**零重复**——新增模块只需在注册表加一行并指定 `type`，`_should_create_sheet` 和 HTML `section_visible` 宏自动继承，不用两处改。同时消除了 (E)：模块 key 不散落在 5 个消费点，注册表是唯一枚举 key 的地方。
 
 > **LLM 禁用模块处理**：采用 Option A——`_create_sheets` 预创建所有 LLM 页签（含禁用的），禁用模块由 `write_llm_sheets()` 写入占位符文本。
 

@@ -436,7 +436,7 @@ _write_data_status_foot(ws, data_status, row)
 {% endif %}
 ```
 
-> **无 `label`/`detail` 拼接：** `message` 字段承载最终展示文本（来自 `STATUS_MESSAGES` 常量或动态构造），模板只做前缀补全和类名选择，不做文案拼接。这消除了 `item.label` 已含"数据"二字而模板又追加"数据不可用"的双重语义 bug。模板中也不再区分 `detail`——所有信息已内聚在 `message` 中。
+> **无 `label`/`detail` 拼接：** `message` 字段承载最终展示文本（来自 `STATUS_MESSAGES` 常量或动态构造），模板只做前缀补全和类名选择，不做文案拼接。这消除了 `item.label` 已含"数据"二字而模板又追加"数据不可用"的双重语义 bug。模板中也不区分 `detail`——所有信息已内聚在 `message` 中。
 
 ### 4.5 文件影响范围
 

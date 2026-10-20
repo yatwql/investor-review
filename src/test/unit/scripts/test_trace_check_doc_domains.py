@@ -99,8 +99,9 @@ class TestDocTreeLineNarrowing:
 
 
 class TestDocFileNameTaskId:
-    """文件名任务编号：受检域 .md 文件名含 rf-N/plan-N 即检出（语义命名
-    补位——目录树比对只管存在性不管命名语义）。"""
+    """文件名任务编号：受检域 .md 文件名含 rf-N/plan-N 或系列代号（系列
+    字母加序号、task 加序号形态）即检出（语义命名补位——目录树比对只管
+    存在性不管命名语义）。"""
 
     def test_plan_id_in_filename_flagged(self, doc_traces):
         import tempfile
@@ -120,6 +121,17 @@ class TestDocFileNameTaskId:
             fpath.write_text("# 记录\n", encoding="utf-8")
             hits = doc_traces.scan_file(fpath, verbose=False)
         assert any(h[1] == "CODE" and h[0] == 0 for h in hits), f"未检出: {hits}"
+
+    def test_series_code_in_filename_flagged(self, doc_traces):
+        """系列代号文件名（系列字母/task 加序号形态）同属任务代号，须语义改名。"""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            for name in ("B1-fund-design.md", "r198_split_design.md", "task91-strategy.md"):
+                fpath = Path(tmp) / name
+                fpath.write_text("# 设计\n", encoding="utf-8")
+                hits = doc_traces.scan_file(fpath, verbose=False)
+                assert any(h[1] == "CODE" and h[0] == 0 for h in hits), (name, hits)
 
     def test_semantic_filename_clean(self, doc_traces):
         """语义文件名（含 archived_plan.0.13.x.md 等含 plan 但非任务号形式）不检。"""
@@ -235,11 +247,31 @@ class TestDocStructuralDuplicates:
         assert doc_traces.scan_structural_duplicates(regular) == []
 
     def test_repeated_block_flagged(self, doc_traces, tmp_path):
-        """连续 5 行窗口逐字重复且内容 ≥100 字符，第 2 块报出。"""
-        block = "## 节\n\n| # | 摘要 |\n|---|---|\n| **rf-9** | " + "内容" * 40 + " |\n"
-        doc = self._write(tmp_path, block + "\n" + block, name="review-findings.md")
+        """连续 5 行窗口逐字重复且内容 ≥100 字符，第 2 块报出（同小节内，
+        窗口期 5 行对齐）。"""
+        body = "| # | 摘要 |\n|---|---|\n" + ("| **rf-9** | " + "内容" * 40 + " |\n") * 3
+        doc = self._write(tmp_path, "## 节\n\n" + body + body, name="review-findings.md")
         hits = doc_traces.scan_structural_duplicates(doc)
         assert any(h[1] == "DUPLICATE" and "重复区块" in h[2] for h in hits), hits
+
+    def test_cross_section_duplicate_line_exempt(self, doc_traces, tmp_path):
+        """跨小节共享长行属结构（表行/清单复用），同小节限定不报。"""
+        row = "| **rf-1** | " + "跨节共享的冗长描述内容" * 4 + " |"
+        doc = self._write(tmp_path, f"### A\n\n{row}\n\n### B\n\n{row}\n", name="plan.md")
+        assert doc_traces.scan_structural_duplicates(doc) == []
+
+    def test_same_section_duplicate_line_flagged(self, doc_traces, tmp_path):
+        """同小节内第 2 次出现起报出（同小节限定后的正向检出）。"""
+        row = "| **rf-2** | " + "同节内粘贴的冗长描述内容" * 4 + " |"
+        doc = self._write(tmp_path, f"### 节\n\n{row}\n{row}\n", name="plan.md")
+        hits = doc_traces.scan_structural_duplicates(doc)
+        assert any("重复内容行" in h[2] for h in hits), hits
+
+    def test_command_continuation_line_exempt(self, doc_traces, tmp_path):
+        """命令续行（上一行以 \\ 结尾）是同一命令的延续，长行判重豁免。"""
+        cmd = "pytest -q src/test/unit/report/test_whatif_html.py --durations=10 \\"
+        doc = self._write(tmp_path, f"执行\n\n{cmd}\n{cmd}\n", name="plan.md")
+        assert doc_traces.scan_structural_duplicates(doc) == []
 
     def test_short_template_and_separator_lines_excluded(self, doc_traces, tmp_path):
         """短模板行与分隔行重复是正常结构，不报。"""
@@ -282,9 +314,8 @@ class TestDocStructuralDuplicates:
         doc = self._write(tmp_path, f"```text\n{inner}```\n说明\n\n```text\n{inner}```\n", name="plan.md")
         assert doc_traces.scan_structural_duplicates(doc) == []
 
-    def test_archive_scope_line_dedup(self, doc_traces, tmp_path, monkeypatch):
-        """归档域路径纳入长行/区块判重（REPO_ROOT 指向临时根）。"""
-        monkeypatch.setattr(doc_traces, "REPO_ROOT", tmp_path)
+    def test_archive_scope_line_dedup(self, doc_traces, tmp_path):
+        """归档域路径（尾含 docs/archive 段）纳入长行/区块判重。"""
         row = "| **rf-1** | " + "冗长条目内容" * 8 + " |"
         doc = self._write(tmp_path / "docs" / "archive", f"说明段\n\n{row}\n{row}\n", name="old.md")
         hits = doc_traces.scan_structural_duplicates(doc)

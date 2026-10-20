@@ -23,7 +23,7 @@
 
 ### 1.2 核心原则
 
-- **抛弃历史负担**：不再兼容旧 `llm_key.json`，`config.json` 中移除 `llm_key_file`
+- **抛弃历史负担**：不兼容旧 `llm_key.json`，`config.json` 中移除 `llm_key_file`
 - **测试随代码提交**：每轮新增测试 ≤ 10 个，runtime 增量 ≤ 3s
 - **P0 门禁**：每轮提交前 `regression` 模式全绿
 - **新增 marker**：`unit_config`（配置解析）/ `unit_llm`（策略+API），边缘场景在 `*_edge.py`
@@ -57,7 +57,7 @@
 - 必填字段缺失/类型非法 → WARNING + 跳过该 entry
 - **C8 遵守**：所有 WARNING 使用 `logging.getLogger("invest").warning("...")`
 - `_config_defaults.py` 移除 `llm_key_file` 默认值，同时从 `_PATH_KEYS` 中移除 `"llm_key_file"`
-- `config.json` 不再包含 `llm_key_file`
+- `config.json` 不包含 `llm_key_file`
 
 #### 涉及文件
 
@@ -361,7 +361,7 @@ resolve_provider_chain()
 | 风险 | 影响 | 概率 | 缓解 |
 |:-----|:------|:----|:------|
 | `call_llm()` 重构导致全部 LLM 功能失效 | 高 | 低 | 6 项全 mock 测试 + 480 回归 |
-| 旧 fallback 字段移除后外部调用方编译错误 | 中 | 低 | 确保 `fallback_provider` 等不再被任何模块引用 |
+| 旧 fallback 字段移除后外部调用方编译错误 | 中 | 低 | 确保 `fallback_provider` 等不被任何模块引用 |
 | `_infer_module_key()` 正则匹配遗漏 | 低 | 中 | 测试覆盖已知 config_field |
 
 #### 验收标准

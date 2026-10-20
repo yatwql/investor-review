@@ -200,7 +200,7 @@ excel_generator.py (编排器)            # < 80 行，纯编排
 
 **验收标准**：
 - [ ] `excel_module_loader.py` 存在，包含 `load_report_modules()`
-- [ ] `excel_generator.py` 不再定义 `_import_report_modules`
+- [ ] `excel_generator.py` 不定义 `_import_report_modules`
 - [ ] 三步验证全部通过
 - [ ] 文件行数减少 ≈126 行
 
@@ -382,7 +382,7 @@ excel_generator.py (编排器)            # < 80 行，纯编排
 **目标**：确认所有 inline import 已被消除或正确保留 + 新增提取模块的冒烟测试。
 
 **步骤**：
-1. **全局 grep 验证** — 确认 `excel_generator.py` 中不再包含 `try: from ... except ImportError`（除 `_write_news_and_early_warning` 和 `_write_b_series_sheets` 保留的惰性加载）
+1. **全局 grep 验证** — 确认 `excel_generator.py` 中不包含 `try: from ... except ImportError`（除 `_write_news_and_early_warning` 和 `_write_b_series_sheets` 保留的惰性加载）
 2. **grep 残留检查**：
    ```bash
    grep -rn "from src.python.report.excel_generator import _" src/ --include="*.py"
@@ -398,7 +398,7 @@ excel_generator.py (编排器)            # < 80 行，纯编排
 5. 运行所有新测试验证
 
 **验收标准**：
-- [ ] `excel_generator.py` 不再导入任何残留的私有函数
+- [ ] `excel_generator.py` 不导入任何残留的私有函数
 - [ ] 全局 grep 无残留 `from src.python.report.excel_generator import _`
 - [ ] 5 个新冒烟测试文件创建并通过
 - [ ] `test_excel_generator.py` 剩余测试全部通过（旧 mock 路径不变）

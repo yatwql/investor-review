@@ -26,14 +26,14 @@
   experiment_flags = [(flag, name) for flag, (name, _desc) in EXPERIMENTAL_FEATURES.items()]
   ```
 - 渲染循环 `enumerate(experiment_flags, len(module_names) + 1)`，编号自动 6→9；item 的 kind 由 `"debate"` 改为 `"experiment"`（切换分支仍是 `set_feature_enabled` + `save_feature_overrides`，逻辑不变）。
-- 泛化底部提示两行（现为「实验性辩论模式默认关闭，开启后智囊团深度复盘输出含辩论内容」）→ 不再辩论专属，改为实验功能通用措辞（如「⚗ 实验性功能默认关闭，开启后按各自说明增强输出」+ 保留「⚠ 当前为实验阶段，输出质量可能不稳定」）。
+- 泛化底部提示两行（现为「实验性辩论模式默认关闭，开启后智囊团深度复盘输出含辩论内容」）→ 不辩论专属，改为实验功能通用措辞（如「⚗ 实验性功能默认关闭，开启后按各自说明增强输出」+ 保留「⚠ 当前为实验阶段，输出质量可能不稳定」）。
 - 同步更新函数 docstring（现描述「辩论模式增强（6-8）」）。
 
 ### 2. Web 后端 — `src/python/web/config_edit.py`
 
 - 模块顶部 import `from src.python.config.features import EXPERIMENTAL_FEATURES`（features.py 仅依赖 `core.constants`，无循环依赖）。
 - 删除 `_DEBATE_FLAG_KEYS`。
-- 白名单第 7 组由注册表生成（白名单仍是唯一事实来源，只是不再手抄）：
+- 白名单第 7 组由注册表生成（白名单仍是唯一事实来源，只是不手抄）：
   ```python
   # ── 7 实验性功能开关（features.json，来源 features.EXPERIMENTAL_FEATURES）──
   **{flag: {"kind": "bool", "target": "features", "writer": "features"} for flag in EXPERIMENTAL_FEATURES},

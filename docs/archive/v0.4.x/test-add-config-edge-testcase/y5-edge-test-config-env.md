@@ -23,7 +23,7 @@ Y5 来自 plan.md § [P2-2] Y 迭代（Edge Case 纵深覆盖增补），是 Y �
 
 > ⚠ 但需注意：`cache.py` 的 `_read_cache_data()` 也处理 gzip 文件（`gzip.open(fpath, "rt", encoding="utf-8")` 第 112 行）。gzip 文件不应加 BOM。仅影响普通 JSON 读取路径。
 
-**测试：** 在每个修改后的读取路径验证 BOM 文件能正常解析。
+**测试：** 在每个改动后的读取路径验证 BOM 文件能正常解析。
 
 ### 2. 0 字节配置文件（已有覆盖，补充 1 项）
 

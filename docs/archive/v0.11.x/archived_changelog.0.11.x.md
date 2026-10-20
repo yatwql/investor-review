@@ -677,7 +677,7 @@ plan-45（报告章节整合，注册表 21 → 17）四批全部实施完成，
 
 ## 归档
 
-- [`archived_changelog.0.11.x.md`](../archive/v0.11.x/archived_changelog.0.11.x.md) — v0.11.0（2026-09-15，0.11 系列首份）
+- [`archived_changelog.0.11.x.md`](../archive/v0.11.x/archived_changelog.0.11.x.md) — v0.11.0 ~ v0.11.11（2026-09-15 ~ 2026-10-02）
 - [`archived_changelog.0.10.x.md`](../archive/v0.10.x/archived_changelog.0.10.x.md) — v0.10.1 ~ v0.10.19（2026-08-04 ~ 2026-09-13）
 - [`archived_changelog.0.9.x.md`](../archive/v0.9.x/archived_changelog.0.9.x.md) — v0.9.0 ~ v0.9.12（2026-07-30 ~ 2026-08-03）
 - [`archived_changelog.0.8.x.md`](../archive/v0.8.x/archived_changelog.0.8.x.md) — v0.8.0 ~ v0.8.11（2026-07-21 ~ 2026-07-30）
@@ -689,6 +689,9 @@ plan-45（报告章节整合，注册表 21 → 17）四批全部实施完成，
 - [`archived_changelog.0.2.x.md`](../archive/v0.2.x/archived_changelog.0.2.x.md) — v0.2.0 ~ v0.2.91（2026-06-27 ~ 2026-07-08）
 - [`archived_changelog.0.1.x.md`](../archive/v0.1.x/archived_changelog.0.1.x.md) — 早期版本记录
 
+- [`archived_changelog.0.11.x.md`](../archive/v0.11.x/archived_changelog.0.11.x.md) — v0.11.0（2026-09-15，0.11 系列首份）
+- [`archived_changelog.0.11.x.md`](../archive/v0.11.x/archived_changelog.0.11.x.md) — v0.11.0 ~ v0.11.1（2026-09-15 ~ 2026-09-18）
+---
 ## [0.11.0] - 2026-09-15
 
 ### 明确 TUI 菜单 [P] 与 [S] 的分工（2026-09-15）
@@ -1322,22 +1325,6 @@ Excel 穿透页签与景气度评分读 `ratio_pct`，不受影响。既有测�
 - `CLAUDE.md`（目录结构同步条）与 `folders.md`（目录树条目）注明「`test-reports/` 只应在仓库根」
 
 **验证**：`check-doc-drift --with-test-count` → [OK]（含误落检测用例）；`dev-verify` 3098+ passed / 0 failed；`ruff check` + `format --check` 全绿；八个 `--ci` 检查脚本全 [OK]；复跑 `test-runner` 确认不再于 `scripts/` 下生成 test-reports。
-
-## 归档
-
-- [`archived_changelog.0.11.x.md`](../archive/v0.11.x/archived_changelog.0.11.x.md) — v0.11.0 ~ v0.11.1（2026-09-15 ~ 2026-09-18）
-- [`archived_changelog.0.10.x.md`](../archive/v0.10.x/archived_changelog.0.10.x.md) — v0.10.1 ~ v0.10.19（2026-08-04 ~ 2026-09-13）
-- [`archived_changelog.0.9.x.md`](../archive/v0.9.x/archived_changelog.0.9.x.md) — v0.9.0 ~ v0.9.12（2026-07-30 ~ 2026-08-03）
-- [`archived_changelog.0.8.x.md`](../archive/v0.8.x/archived_changelog.0.8.x.md) — v0.8.0 ~ v0.8.11（2026-07-21 ~ 2026-07-30）
-- [`archived_changelog.0.7.x.md`](../archive/v0.7.x/archived_changelog.0.7.x.md) — v0.7.0 ~ v0.7.9（2026-07-18 ~ 2026-07-21）
-- [`archived_changelog.0.6.x.md`](../archive/v0.6.x/archived_changelog.0.6.x.md) — v0.6.0 ~ v0.6.10（2026-07-15 ~ 2026-07-18）
-- [`archived_changelog.0.5.x.md`](../archive/v0.5.x/archived_changelog.0.5.x.md) — v0.5.0 ~ v0.5.12（2026-07-14 ~ 2026-07-15）
-- [`archived_changelog.0.4.x.md`](../archive/v0.4.x/archived_changelog.0.4.x.md) — v0.4.0 ~ v0.4.5（2026-07-12 ~ 2026-07-14）
-- [`archived_changelog.0.3.x.md`](../archive/v0.3.x/archived_changelog.0.3.x.md) — v0.3.0 ~ v0.3.10（2026-07-08 ~ 2026-07-12）
-- [`archived_changelog.0.2.x.md`](../archive/v0.2.x/archived_changelog.0.2.x.md) — v0.2.0 ~ v0.2.91（2026-06-27 ~ 2026-07-08）
-- [`archived_changelog.0.1.x.md`](../archive/v0.1.x/archived_changelog.0.1.x.md) — 早期版本记录
-
----
 
 ## [0.11.3] - 2026-09-24
 
@@ -2191,11 +2178,7 @@ job 为**非阻塞**（只报告不阻断合并/发布），该漂移长期未�
 - **CLI 收尾资源摘要行**：报告生成完成后输出两行运行资源摘要——LLM 成本（`print_llm_cost_summary`：调用次数 / 输入输出 token / 模型名）与缓存命中率（`print_cache_hit_summary`：命中/总数/百分比，0% 亦输出）。无 LLM 调用/无缓存读写时各自静默；常规模式进 logging，`--verbose` 同步到 stderr。二者为 `CliProgressReporter` 公开方法（与 `print_timing_summary` 同形），并在同一完成点接入；回归 6 例（含 0% 不静默、无观测静默、`_handle_report` 接线）。
 - **akshare 新闻源内接口降级**：`providers/akshare_news.py::fetch_news` 在聚合点对财新（主）/ 央视（补充）两个接口各自隔离异常——单接口异常降级为仅另一接口结果并记 WARNING 日志（可观测，非静默降级），双接口均失败返回空列表而非抛出，由新闻聚合器按源记录失败。回归 4 例（主接口降级 / 补充接口降级 / 双失败空返回 / 降级日志）。
 
-### 修复
 
-- **cassette 回放的日期时移假红（既有缺陷）**：季报取数的回溯窗口按「当前日期」向前循环（`_recent_quarters`），而 cassette 录制内容固定在录制当日——时间跨过一个季度后，回放会先去请求**未录制**的新季度并报 `CassetteMissError`，导致 `test_cassette_replay.py` 三项与 P0 门禁变红（与上游是否漂移无关）。修复：新增 `providers/tiantian_holdings.py::quarter_walk_anchor` 时间锚点上下文（回放时把窗口锚定到 cassette 的 `recorded_at`）——① pytest 侧由 `conftest.py::_install_cassette_replay` 统一施加（取所声明 cassette 中最新的录制时点）；② CLI `cassettes --verify` 侧由 `fetcher/cassette_checks.py` 的 `_anchored_to_recording` 施加。**锚定后请求形状仍须与录制逐字一致，上游漂移照样报 miss**（信号不弱化，仅去掉时间依赖）；新增回归用例（冻结模块时钟到下一年，断言回放仍解析出录制内容；已实测：去掉锚定即变红）。
-
-### 新增
 
 - **报告深度档位（`llm_report_depth`）**：新增三值 config 键（`brief` / `standard` / `deep`，缺省 `standard`），一次选择即同时约束**参与模块集合**与**新闻采集规模**。形态选择：不用布尔开关（注册表语义是布尔+分组表达生命周期，无法表达互斥三档），而用 config 键；**档位不进提示词正文**——只作用于「哪些模块参与」与「新闻条数」，因此既有四个模块的提示词承载入参不变、`llm/module_fingerprint.py` 的指纹构造无需并入档位（否则两侧键不同源：预检永不命中或档位形同虚设）。
   - 档位表唯一事实来源 `llm/depth_profile.py`（模块集合从 `core/registry.py` 派生，不另写清单）；`depth_gate()` 保证档位只**收窄**、不得打开用户已关模块；`effective_news_limit()` 仅 `deep` 档设下界 500。
@@ -2210,6 +2193,10 @@ job 为**非阻塞**（只报告不阻断合并/发布），该漂移长期未�
   - 全排除 → 空链（与「链上全部失败」同语义）；未知首选告警忽略。回归 16 例。
 
 ### 修复
+
+- **cassette 回放的日期时移假红（既有缺陷）**：季报取数的回溯窗口按「当前日期」向前循环（`_recent_quarters`），而 cassette 录制内容固定在录制当日——时间跨过一个季度后，回放会先去请求**未录制**的新季度并报 `CassetteMissError`，导致 `test_cassette_replay.py` 三项与 P0 门禁变红（与上游是否漂移无关）。修复：新增 `providers/tiantian_holdings.py::quarter_walk_anchor` 时间锚点上下文（回放时把窗口锚定到 cassette 的 `recorded_at`）——① pytest 侧由 `conftest.py::_install_cassette_replay` 统一施加（取所声明 cassette 中最新的录制时点）；② CLI `cassettes --verify` 侧由 `fetcher/cassette_checks.py` 的 `_anchored_to_recording` 施加。**锚定后请求形状仍须与录制逐字一致，上游漂移照样报 miss**（信号不弱化，仅去掉时间依赖）；新增回归用例（冻结模块时钟到下一年，断言回放仍解析出录制内容；已实测：去掉锚定即变红）。
+
+
 
 - **TUI 菜单测试写死模块逐条清单**（既有测试写法问题）：`test_filter_hides_legacy_debate_modules` 原写死 5 个模块名集合，新增一个 LLM 模块即变红。已改为结构导出断言「注册表全集 ⊖ 菜单隐藏集」，并补「隐藏集成员必须仍在注册表内」的结构约束（新增模块不再需要改此用例）。
 - **模板结构回归在实现中发挥作用**：新增 HTML 自检区块时曾误加未闭合 Jinja `{% if %}`，被 `test_html_report_structure*` 整体报错捕获并修复；自检区块最终以「附录区块」形态落地（不占报告章节号、不参与目录导航），故既有章节结构约束与计数保持不变。
@@ -2319,20 +2306,6 @@ job 为**非阻塞**（只报告不阻断合并/发布），该漂移长期未�
 
 - **rf-539（probe 统一入口 + 幻觉率采样拆包）**：新增 `scripts/probe.py`（registry 分发统一入口）+ `scripts/probes/`（`__init__` 注册表 / csi / push2，target 实现 PROBE_TARGET/build_parser/run 契约面，新探针登记即用）；旧入口两脚本保留为薄委托垫片（旧命令用法不变），`csi` 状态改「因子分析已实施 → 周期性复核」。`llm-hallucination-sampler.py` 634 行拆为入口薄 CLI（239 行）+ `scripts/_halluc_sampler/`（holdings/llm_call/fact_check/report），顺带修复三处随 fact_checker 拆包失效的坏 import（工具此前已静默坏掉）。测试：`test_probe_entry.py` 8 例。
 - **rf-541（测试路径注入单点化）**：`test_probe_entry.py` 两处 `sys.path.insert(scripts/)` 重复注入（fixture 内那次必然多余——`probe.py` 加载时自插入同一路径），且无幂等保护会向 `sys.path` 头部累积重复条目。处置：合并为模块级单点 `_ensure_scripts_on_path()`（幂等 guard），fixture 内重复注入删除；补 `TestScriptsPathInjection` 2 例回归（路径已注入 / 重复调用不增条目），文件 10 例全通。
-
-## 归档
-
-- [`archived_changelog.0.11.x.md`](../archive/v0.11.x/archived_changelog.0.11.x.md) — v0.11.0 ~ v0.11.11（2026-09-15 ~ 2026-10-02）
-- [`archived_changelog.0.10.x.md`](../archive/v0.10.x/archived_changelog.0.10.x.md) — v0.10.1 ~ v0.10.19（2026-08-04 ~ 2026-09-13）
-- [`archived_changelog.0.9.x.md`](../archive/v0.9.x/archived_changelog.0.9.x.md) — v0.9.0 ~ v0.9.12（2026-07-30 ~ 2026-08-03）
-- [`archived_changelog.0.8.x.md`](../archive/v0.8.x/archived_changelog.0.8.x.md) — v0.8.0 ~ v0.8.11（2026-07-21 ~ 2026-07-30）
-- [`archived_changelog.0.7.x.md`](../archive/v0.7.x/archived_changelog.0.7.x.md) — v0.7.0 ~ v0.7.9（2026-07-18 ~ 2026-07-21）
-- [`archived_changelog.0.6.x.md`](../archive/v0.6.x/archived_changelog.0.6.x.md) — v0.6.0 ~ v0.6.10（2026-07-15 ~ 2026-07-18）
-- [`archived_changelog.0.5.x.md`](../archive/v0.5.x/archived_changelog.0.5.x.md) — v0.5.0 ~ v0.5.12（2026-07-14 ~ 2026-07-15）
-- [`archived_changelog.0.4.x.md`](../archive/v0.4.x/archived_changelog.0.4.x.md) — v0.4.0 ~ v0.4.5（2026-07-12 ~ 2026-07-14）
-- [`archived_changelog.0.3.x.md`](../archive/v0.3.x/archived_changelog.0.3.x.md) — v0.3.0 ~ v0.3.10（2026-07-08 ~ 2026-07-12）
-- [`archived_changelog.0.2.x.md`](../archive/v0.2.x/archived_changelog.0.2.x.md) — v0.2.0 ~ v0.2.91（2026-06-27 ~ 2026-07-08）
-- [`archived_changelog.0.1.x.md`](../archive/v0.1.x/archived_changelog.0.1.x.md) — 早期版本记录
 
 ## [0.12.0] - 2026-10-03
 
