@@ -94,7 +94,7 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 |:-----|:-------|:-----|:-----|
 | **P0** | 提交前 | `.venv/bin/python scripts/test-runner.py --mode dev-verify` + 十守护（`--ci` 全套，钩子自动执行） | 阻塞提交，不得 commit |
 | **P1** | 合入 master 前 | `.venv/bin/python scripts/test-runner.py --mode verify`（全部 `unit_*` 目录域，含 TUI/CLI——归域即进门禁，`technical.md` §4.23） | 阻塞合入，不得 merge |
-| **P2** | 发布前 | `.venv/bin/python scripts/release.py gate`（= regression + 十守护 `--ci` 全套〔并行执行，并发度随核数收敛 ≤4 路〕+ 设计护栏，gate 自动编排） | 阻塞发布，不得 release |
+| **P2** | 发布前 | `.venv/bin/python scripts/release.py gate`（= 演进对照新鲜度断言〔当前开发版列头日期须为当日〕+ regression + 十守护 `--ci` 全套〔并行执行，并发度随核数收敛 ≤4 路〕+ 设计护栏，gate 自动编排） | 阻塞发布，不得 release |
 
 **P0 提交前门禁**（全部通过才可 commit；手动项 = dev-verify，下列十守护由 pre-commit 钩子在 `git commit` 时自动执行、CI guards job 同源兜底，本地不手动重复——清单为五处同源引用）：
 

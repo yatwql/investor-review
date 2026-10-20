@@ -74,6 +74,7 @@ from _release._changelog_archive import (  # noqa: E402, F401 — _SECTION_NOTE 
 from _release._common import ReleaseError, exec_command as _exec  # noqa: E402
 from _release._evolution import (  # noqa: E402, F401 — _line_count 供测试经入口模块引用
     build_evolution_stats,
+    check_evolution_freshness,
     fmt_pair as _fmt_pair,
     line_count as _line_count,
     update_case_note,
@@ -369,6 +370,15 @@ def _gate_workers() -> int:
 
 
 def cmd_gate(args: argparse.Namespace, runner=None) -> int:
+    print("[..] P2 门禁：演进对照新鲜度（当前开发版列头须今日刷新）")
+    findings = check_evolution_freshness(FOLDERS_FILE.read_text(encoding="utf-8"), _dt.date.today().isoformat())
+    if findings:
+        for item in findings:
+            print(f"[ERR] {item}")
+        print("[ERR] 演进对照过期，先执行 scripts/release.py evolution 刷新后重跑 gate")
+        return 2
+    print("[OK] 演进对照新鲜度通过\n")
+
     print("[..] P2 门禁：场景回归")
     rc, out, err = _exec([sys.executable, "scripts/test-runner.py", "--mode", "regression"], REPO_ROOT, runner)
     if out.strip():
@@ -421,7 +431,7 @@ def cmd_gate(args: argparse.Namespace, runner=None) -> int:
         return rc if rc in (1, 2, 3) else 1
     print("[OK] 设计护栏通过\n")
 
-    print("[OK] P2 门禁全绿（regression + 十守护 + 设计护栏）")
+    print("[OK] P2 门禁全绿（演进新鲜度 + regression + 十守护 + 设计护栏）")
     return 0
 
 
@@ -575,7 +585,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_evolution = sub.add_parser("evolution", help="版本演进对照快照（默认只滚当前开发版列）")
     p_evolution.add_argument("--release", action="store_true", help="发布期使用：发布列与增长比一并写入")
 
-    sub.add_parser("gate", help="P2 门禁：regression + 十守护 --ci + 设计护栏")
+    sub.add_parser("gate", help="P2 门禁：演进新鲜度 + regression + 十守护 --ci + 设计护栏")
 
     p_publish = sub.add_parser("publish", help="release 提交 + P1 verify + --no-ff 合并 + tag")
     p_publish.add_argument("--title", required=True, help="release 提交主题（changelog 摘要式短描述）")

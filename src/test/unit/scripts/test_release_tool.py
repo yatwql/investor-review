@@ -621,6 +621,25 @@ def _ok_runner(overrides: list | None = None) -> FakeRunner:
     return FakeRunner(responses=pairs)
 
 
+class TestEvolutionFreshness:
+    """演进对照新鲜度断言（gate 前置）：当前开发版列头日期须为今日。"""
+
+    def test_fresh_when_header_date_is_today(self, rel):
+        """列头日期 = 当日 → 无 finding。"""
+        assert rel.check_evolution_freshness(_EVOLUTION_SAMPLE, "2026-10-07") == []
+
+    def test_stale_date_reported(self, rel):
+        """列头日期早于今日 → 报出并给出重跑指引。"""
+        findings = rel.check_evolution_freshness(_EVOLUTION_SAMPLE, "2026-10-09")
+        assert any("2026-10-07" in f and "2026-10-09" in f and "evolution" in f for f in findings)
+
+    def test_missing_header_pattern_reported(self, rel):
+        """列头模式缺失（格式漂移）→ 报出而非静默放行。"""
+        mangled = _EVOLUTION_SAMPLE.replace("本次重跑时的工作区", "工作区")
+        findings = rel.check_evolution_freshness(mangled, "2026-10-07")
+        assert any("列头日期模式缺失" in f for f in findings)
+
+
 class TestEvolutionCommand:
     def test_command_updates_folders_snapshot(self, rel, tmp_path, capsys):
         fx = _ToolRepoFixture(rel, tmp_path)

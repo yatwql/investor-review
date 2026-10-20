@@ -187,6 +187,27 @@ def update_evolution_table(text: str, stats: dict[str, int], with_release: bool,
     return result
 
 
+_CURRENT_DEV_DATE = re.compile(r"当前开发版（[^）]*?· 本次重跑时的工作区 · (\d{4}-\d{2}-\d{2})")
+
+
+def check_evolution_freshness(text: str, today: str) -> list[str]:
+    """演进对照新鲜度：「当前开发版」列头日期须为今日（gate 前置断言，防跳过 evolution 步骤发布过期快照）。
+
+    evolution 为发布链人工步骤，无断言时跳过即以过期快照发布。该列语义为
+    「本次重跑时的工作区」滚动读数；表头日期与数据行由同一命令原子刷新，
+    故列头日期一致即传递性覆盖数据行新鲜度。表头格式变化时随
+    ``update_evolution_table`` 的同源模式同步。
+    """
+    m = _CURRENT_DEV_DATE.search(text)
+    if not m:
+        return ["folders.md 演进对照表「当前开发版」列头日期模式缺失（列头格式变化时先同步本工具）"]
+    if m.group(1) != today:
+        return [
+            f"演进对照「当前开发版」列日期为 {m.group(1)}，非今日 {today}——先执行 release.py evolution 刷新后再 gate"
+        ]
+    return []
+
+
 def update_ratio_note(text: str, stats: dict[str, int], with_release: bool) -> str:
     """测试/主程序行数比注释：`--release` 时最新发布点一并改写，否则只滚当前工作区。
 
