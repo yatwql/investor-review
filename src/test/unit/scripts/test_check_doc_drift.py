@@ -13,6 +13,7 @@
   - 项目统计表比对（文件数 / 行数）
   - 归档索引完整性（管理文档 ↔ `docs/archive/` 双向对齐）
   - 迁档占位↔归档节（「已随 vX.Y.Z 发布迁入」占位 ↔ 归档文件含该版本二级标题节；缺节/缺文件报出）
+  - 树描述计数禁令（目录树描述禁写「阿拉伯数字+量词」易漂移计数；docs/archive 记录域豁免）
   - 管理文档分区纪律（未完成/已解决/已归档错置、现行 changelog 只允许开发段头）
   - 章节-区块矩阵（technical.md §4.22：文档行 ↔ 区块注册表逐列 / 键集双向 / 双端实现提取集合三向对账）
   - 手册主菜单 code block ↔ MENU_ITEMS（键集合/标签头/多列与光标前缀解析/无块报错）
@@ -826,6 +827,36 @@ class TestMigrationPlaceholders:
             "已随 v9.9.9 发布迁入\n已随 v9.9.9 发布迁入", archive_root=tmp_path
         )
         assert len(findings) == 1
+
+
+class TestTreeDescCounts:
+    """folders.md 树描述计数禁令：阿拉伯数字+量词禁写（docs/archive 记录域豁免）。"""
+
+    def test_flags_arabic_count(self, drift):
+        """文件条目描述含数字+量词 → 报出。"""
+        doc = "```\nroot/\n├── a.py # 工具（3 项检查）\n```\n"
+        findings = drift.check_tree_desc_counts(doc)
+        assert any("a.py" in f and "3 项" in f for f in findings)
+
+    def test_flags_dir_line_count(self, drift):
+        """目录条目行同样入检（目录描述也会写文件计数）。"""
+        doc = "```\nroot/\n├── llm/ # 场景测试（9 个测试文件）\n```\n"
+        assert any("`llm`" in f for f in drift.check_tree_desc_counts(doc))
+
+    def test_archive_domain_exempt(self, drift):
+        """docs/archive/ 记录域描述豁免（归档文档的固有数字属记录内容）。"""
+        doc = "```\nroot/\n├── docs/\n│   └── archive/\n│       └── x.md # 记录（10 项分析）\n```\n"
+        assert drift.check_tree_desc_counts(doc) == []
+
+    def test_chinese_numeral_allowed(self, drift):
+        """中文数词形态（设计常量/分类名）不在扫描面。"""
+        doc = "```\nroot/\n├── b.py # 合成（三因子/四类路由/多层防御）\n```\n"
+        assert drift.check_tree_desc_counts(doc) == []
+
+    def test_real_repo_passes(self, drift):
+        """真实仓库树描述无违规计数（结构关系断言，不写死条数）。"""
+        text = drift._FOLDERS_MD.read_text(encoding="utf-8")
+        assert drift.check_tree_desc_counts(text) == []
 
 
 class TestReturnKeyInvariant:

@@ -55,8 +55,10 @@ from _doc_drift._format import (  # noqa: F401
 from _doc_drift._tree import (  # noqa: F401
     _TREE_ENTRY,
     parse_tree_paths,
+    _iter_tree_entries,
     _actual_files,
     check_dir_tree,
+    check_tree_desc_counts,
     _STATS_ROW,
     _stats_actual,
     check_project_stats,

@@ -28,9 +28,8 @@ from _doc_drift._shared import (
 _TREE_ENTRY = re.compile(r"──\s+([^#]+?)\s*(?:#.*)?$")
 
 
-def parse_tree_paths(doc_text: str) -> set[str]:
-    """按缩进层级把 folders.md 的目录树还原为仓库相对路径集合。"""
-    paths: set[str] = set()
+def _iter_tree_entries(doc_text: str):
+    """按缩进层级遍历目录树条目，产出 ``(仓库相对路径, 描述, 是否目录)``。"""
     stack: list[tuple[int, str]] = []
     in_tree = False
     for line in doc_text.splitlines():
@@ -41,17 +40,50 @@ def parse_tree_paths(doc_text: str) -> set[str]:
             continue
         prefix = line.split("── ", 1)[0]
         depth = len(re.findall(r"│|    ", prefix))
-        name = line.split("── ", 1)[1].split("#")[0].strip()
+        tail = line.split("── ", 1)[1]
+        name, _, desc = tail.partition("#")
+        name = name.strip()
         if not name:
             continue
+        parents = [p for d, p in stack if d < depth]
         if name.endswith("/"):
             dirname = name.rstrip("/")
             while stack and stack[-1][0] >= depth:
                 stack.pop()
             stack.append((depth, dirname))
+            yield "/".join(parents + [dirname]), desc.strip(), True
         else:
-            paths.add("/".join([p for d, p in stack if d < depth] + [name]))
-    return paths
+            yield "/".join(parents + [name]), desc.strip(), False
+
+
+def parse_tree_paths(doc_text: str) -> set[str]:
+    """按缩进层级把 folders.md 的目录树还原为仓库相对路径集合（仅文件，不含目录）。"""
+    return {path for path, _desc, is_dir in _iter_tree_entries(doc_text) if not is_dir}
+
+
+_DESC_COUNT = re.compile(r"\d+\s*(?:项|个|组|类|种|条|函数|因子|文件|例|端|层|步|轮|次|份|篇)")
+
+_ARCHIVE_TREE_PREFIX = "docs/archive/"
+
+
+def check_tree_desc_counts(doc_text: str) -> list[str]:
+    """树描述计数禁令：folders.md 目录树描述禁写「阿拉伯数字+量词」的易漂移计数（docs/archive 记录域豁免）。
+
+    与「测试真值单一来源」同源纪律：描述里的 N 项/个/组/文件是实现的派生量，
+    实现演进（加开关/菜单/文件）时无任何检查项覆盖、必然静默过时；中文数词形态
+    （三因子/四组等）多为设计常量/分类名，不在本项扫描面（人工复核兑底）。
+    """
+    findings: list[str] = []
+    for path, desc, _is_dir in _iter_tree_entries(doc_text):
+        if path.startswith(_ARCHIVE_TREE_PREFIX):
+            continue
+        m = _DESC_COUNT.search(desc)
+        if m:
+            findings.append(
+                f"{rel(_FOLDERS_MD)}: 目录树条目 `{path}` 描述含易漂移计数「{m.group(0)}」"
+                "——描述禁写实现派生量（数字），改用定性措辞"
+            )
+    return findings
 
 
 def _actual_files() -> set[str]:
