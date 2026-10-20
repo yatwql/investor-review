@@ -63,12 +63,12 @@ def _cmd_view_logs() -> None:
         print(f"  {YELLOW}[!]{RESET} 无匹配日志条目")
         return
 
-    from src.python.tui.switch_panel import inner_width, use_panel_box
+    from src.python.tui.switch_panel import inner_width, narrow_rule, use_panel_box
 
     columns = terminal_columns()
     inner = inner_width(columns)
     narrow = not use_panel_box(columns)
-    rule = "  " + "=" * max(10, min(40, inner - 2))
+    rule = narrow_rule(columns)
 
     level_label = level or "全部"
     print()
@@ -106,12 +106,12 @@ def _cmd_view_health_history() -> None:
         print(f"  {YELLOW}[!]{RESET} 暂无数据源健康历史记录")
         return
 
-    from src.python.tui.switch_panel import inner_width, use_panel_box
+    from src.python.tui.switch_panel import inner_width, narrow_rule, use_panel_box
 
     columns = terminal_columns()
     inner = inner_width(columns)
     narrow = not use_panel_box(columns)
-    rule = "  " + "=" * max(10, min(40, inner - 2))
+    rule = narrow_rule(columns)
 
     print()
     print(rule)

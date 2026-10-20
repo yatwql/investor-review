@@ -360,12 +360,10 @@ class TestConfigPanelsAreRectangular:
 class TestReportGroupMovedToSwitchPanel:
     """报告章节与增强子模块已并入功能开关注册表：P 面板不再另设入口，S 面板新增一块。"""
 
-    def _source(self) -> str:
+    def _source(self, module: str = "handlers_config.py") -> str:
         from pathlib import Path
 
-        return (Path(__file__).resolve().parents[4] / "src" / "python" / "tui" / "handlers_config.py").read_text(
-            encoding="utf-8"
-        )
+        return (Path(__file__).resolve().parents[4] / "src" / "python" / "tui" / module).read_text(encoding="utf-8")
 
     def test_p_subpanel_removed(self):
         src = self._source()
@@ -379,8 +377,11 @@ class TestReportGroupMovedToSwitchPanel:
         assert "报告增强子模块 / LLM 分析章节 — 请在菜单 S 配置" in src
 
     def test_switch_panel_renders_report_group(self):
-        """面板分组由注册表 GROUP_ORDER 派生（渠道层不得另写清单）。"""
-        src = self._source()
+        """面板分组由注册表 GROUP_ORDER 派生（渠道层不得另写清单）。
+
+        面板本体已迁至 `handlers_switch`（域拆分），断言随实现位置同步。
+        """
+        src = self._source("handlers_switch.py")
         assert "GROUP_ORDER" in src
         assert "for group in GROUP_ORDER" in src
         assert "GROUP_EXPERIMENTAL" not in src and "GROUP_REPORT" not in src

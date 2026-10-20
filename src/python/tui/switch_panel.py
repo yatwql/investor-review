@@ -59,6 +59,16 @@ _STATUS_SHORT = {True: "开", False: "关"}
 _STATUS_LONG = {True: "开启", False: "关闭"}
 
 
+def narrow_rule(columns: int | None = None) -> str:
+    """窄档分隔线：宽度随内宽自适应（不硬折成两截）。
+
+    长输出面板（日志/健康历史/缓存统计）在窄屏上共用同一分隔线口径，
+    避免各处手写 ``"=" * 40`` 在 40 列终端上正好溢出。
+    """
+    cols = columns or terminal_columns()
+    return "  " + "=" * max(10, min(40, inner_width(cols) - 2))
+
+
 def render_titled_panel(title: str, rows, *, columns: int | None = None) -> list[str]:  # noqa: ANN001
     """按档位渲染「标题 + 行」面板：宽/中档画盒线，窄档退化为无边框 + 行内截断。
 
@@ -245,6 +255,7 @@ __all__ = [
     "inner_width",
     "layout_tier",
     "legend_lines",
+    "narrow_rule",
     "render_titled_panel",
     "use_panel_box",
     "wrap_hanging",

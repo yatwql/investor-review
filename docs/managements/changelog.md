@@ -20,6 +20,8 @@
 
 ### 变更
 
+- **`handlers_config` 域拆分收尾**（plan-166）：`[S]` 功能开关面板主循环（343 行）迁入 `handlers_switch.run_llm_modules_panel`，`handlers_config` 只留菜单入口薄包装——**911 → 567 行**（<800 目标达成）、`handlers_switch` 107 → 468 行（<600 目标达成）。迁出代码对 `handlers_config` 内部符号走函数内局部导入 + 模块属性访问（`hc._apply_edit` 等），142 处既有 patch 点零改动继续有效
+- **窄屏口径单源化**（技术债）：`text_layout.MIN_TERMINAL_COLUMNS = 40` 取代 3 处魔法数字（契约与两个机检都引用同一基准）；`switch_panel.narrow_rule(columns)` 收拢长输出面板的分隔线口径（`[V]`/`[H]`/`[3]` 三处各写一遍 → 单源），顺带清掉缓存面板一处 `if False else` 死表达式
 - **提示行模板化**（plan-159）：`tui/prompt_text.py`（`panel_prompt` / `keys_help_lines` / `item_detail_lines`）建成后，7 处 `panel_loop` 提示全部由模板产出——「选择 > 」「缓存管理> 」这类连返回键都不说的裸提示消失，提示恒含「动作+示例 · 默认项 · 帮助入口 · 返回键」；机检（AST）断言 `panel_loop` 的 prompt 必须是 `panel_prompt` 调用，模板自带 `wrap_prompt` 折行守住窄屏基准。确认屏维持「问句行 + 键位行」两行式，单行确认模板方向关闭
 - **回车语义唯一化 + 屏上键名统一**（plan-157）：回车收敛为「执行本行提示标注的默认项」且必须带动作名——追问屏「回车=结束追问返回主菜单」、报告选择屏「回车=最新报告 / 编号=指定报告 / q=取消」、What-if 生效日「回车=跳过，不做时序回测」、启动向导「回车=跳过」；屏幕上英文 `Enter` 全部改「回车」（同键两名会让用户以为是两个键）。机检新增两条硬规则：屏上禁英文 `Enter`、回车必须带动作名且取消/中止/跳过类语义须置于首句
 - **术语改写 + 三渠道同词**（plan-162）：上屏文案去工程内部词——强刷→「重新生成（会调用 AI，计费）」、走缓存→「用已有结果（免费，可能不是最新）」、降级源→「备用源」、配置漂移→「与出厂默认不一致」、降级顺序→「备用顺序」、熔断→「自动重试: 正常/暂时失败」；端点状态由 `core.system_info.circuit_display` 唯一归一，TUI/CLI/Web 共用同一词；日预算超限确认三渠道统一「用已有结果继续」。机检 `TestForbiddenVocabulary`（CJK 术语扫全量字面量剔除 docstring/日志、英文术语仅扫展示型调用、内部值白名单须仍被需要）+ `integration/test_channel_vocabulary.py`。契约写明边界：报告/Web 的「数据降级」指数据质量，日志/注释/FAQ 保留技术词

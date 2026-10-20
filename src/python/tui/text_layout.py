@@ -42,6 +42,9 @@ def style_heading(text: str) -> str:
 _WIDE = ("W", "F")
 
 # 内容行可用列数的下限——面板至少这么宽，窄面板不至于缩成一条
+MIN_TERMINAL_COLUMNS = 40
+"""终端列数下限（同时是全部上屏文案的窄屏设计基准与机检口径）。"""
+
 MIN_FIELD_WIDTH = 41
 
 # 标题与边框之间的固定装饰：`┌── ` + 标题 + ` `，即标题占 4 列外框
@@ -72,17 +75,17 @@ def terminal_columns(default: int = 100) -> int:
         default: 探测不到时的兜底列数。
 
     Returns:
-        终端列数（≥ 40）。
+        终端列数（≥ ``MIN_TERMINAL_COLUMNS``）。
     """
     for fd in (1, 2):
         try:
-            return max(40, os.get_terminal_size(fd).columns)
+            return max(MIN_TERMINAL_COLUMNS, os.get_terminal_size(fd).columns)
         except OSError:
             continue
     env = os.environ.get("COLUMNS")
     if env and env.isdigit() and int(env) > 0:
-        return max(40, int(env))
-    return max(40, default)
+        return max(MIN_TERMINAL_COLUMNS, int(env))
+    return max(MIN_TERMINAL_COLUMNS, default)
 
 
 def pad_right(text: str, columns: int) -> str:

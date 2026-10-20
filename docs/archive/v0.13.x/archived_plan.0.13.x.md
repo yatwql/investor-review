@@ -221,3 +221,11 @@ technical.md 新增 §6.9「实验项生命周期表」（功能语义命名表�
 
 **完成（2026-10-20，v0.13.8-dev）**：FAQ 新增「手机与移动端」章节（目录同步）：①**分工动线**——完整报告交给定时任务（`scheduler`）在电脑生成、手机上用 Web/HTML 查看，TUI 只做轻操作（开关/清缓存/自检/追问）；②**客户端建议**（Termux / Termius / JuiceSSH / Blink）与三个落地要点（窄屏自动换版面、方向键在部分客户端失效改用快捷键 + `Esc` 双按退出、复制模式）；③**断线后果**（生成中断、已完成报告与缓存不受影响，故推荐重活交给定时任务）；④**窄屏是否看得全**（三档版面 + 40 列底线机检）。TUI 手册窄屏节加互链指向该章节。
 
+## plan-166 `handlers_config` 域拆分收尾（[S] 主循环迁出 + <800 行）✅
+
+**完成（2026-10-20，v0.13.8-dev）**：`[S]` 功能开关面板主循环（343 行，原 `handlers_config.py:242-584`）整体迁入 `handlers_switch.py` 为 `run_llm_modules_panel()`，`handlers_config` 仅留菜单入口薄包装。行数：`handlers_config` **911 → 567 行**（目标 <800 ✓，距 1000 硬上限 433 余量）、`handlers_switch` **107 → 468 行**（目标 <600 ✓）——一次迁移同时命中两条验收阈值。
+
+**Patch 点零改动的关键手法**：迁出代码对 `handlers_config` 的内部符号统一走**函数内局部导入 + 模块属性访问**（`hc._read_llm_settings` / `hc.filter_menu_llm_modules` / `hc._apply_edit` / `hc.refresh_config` / `hc.input_choice`），因此 `src/test/` 里 142 处 `handlers_config.<符号>` 的 patch 目标继续有效，无需像 `[M]` 拆分那样逐用例改指新模块；`handlers_config` 侧显式保留 `filter_menu_llm_modules` 兼容再导出（`# noqa: F401` 并注明用途）。
+
+**同步项**：`handlers_switch` 模块 docstring 改为「面板本体 + 辅助」（原写「主循环仍在 handlers_config」）；`test_handlers_config.py` 的结构断言（分组由 `GROUP_ORDER` 派生）随实现位置改读 `handlers_switch.py`；folders 目录树与 technical 模块表描述更新。
+

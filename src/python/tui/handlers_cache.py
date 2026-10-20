@@ -224,11 +224,13 @@ def _render_cache_stats() -> None:
 
     def _rule(title: str) -> None:
         """分隔标题：宽度自适应内宽（窄屏不硬折）。"""
-        fill = max(6, inner - len(title) - 4)
-        print(f"  {title} " + "═" * fill)
+        from src.python.tui.switch_panel import narrow_rule
+
+        print(f"  {title}")
+        print(narrow_rule(terminal_columns()))
 
     # ── 1. data/cache 缓存文件 ──
-    _rule("════ data/cache ════" if False else "data/cache")
+    _rule("data/cache")
     _emit(f"  目录: {cache_dir}")
     _emit(f"  文件: {stats.total_files} 个 | 大小: {stats.total_size_bytes / 1024:.0f} KB")
     if stats.hit_total > 0:
