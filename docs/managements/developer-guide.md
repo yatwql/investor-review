@@ -94,7 +94,7 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 |:-----|:-------|:-----|:-----|
 | **P0** | 提交前 | `.venv/bin/python scripts/test-runner.py --mode dev-verify` + 十守护（`--ci` 全套，钩子自动执行） | 阻塞提交，不得 commit |
 | **P1** | 合入 master 前 | `.venv/bin/python scripts/test-runner.py --mode verify`（全部 `unit_*` 目录域，含 TUI/CLI——归域即进门禁，`technical.md` §4.23） | 阻塞合入，不得 merge |
-| **P2** | 发布前 | `.venv/bin/python scripts/release.py gate`（= regression + 十守护 `--ci` 全套 + 设计护栏，gate 自动编排） | 阻塞发布，不得 release |
+| **P2** | 发布前 | `.venv/bin/python scripts/release.py gate`（= regression + 十守护 `--ci` 全套〔并行执行，并发度随核数收敛 ≤4 路〕+ 设计护栏，gate 自动编排） | 阻塞发布，不得 release |
 
 **P0 提交前门禁**（全部通过才可 commit；手动项 = dev-verify，下列十守护由 pre-commit 钩子在 `git commit` 时自动执行、CI guards job 同源兜底，本地不手动重复——清单为五处同源引用）：
 
@@ -567,8 +567,9 @@ def test_tencent_quote_parses(self):
 ```
 
 - **`--mode bench`** 是 14 个对照表模式的聚合别名（`_MODE_TABLE_ORDER` 除 `live` 外全部），按对照表顺序运行；结果去重保序，非 bench 模式原样透传。
-- **`--machine-info`** 采集 14 项环境属性（操作系统/系统版本/架构/主机名/CPU 型号/物理核数/逻辑线程/内存/磁盘类型/文件系统/Python 版本/并行级别/worker 数/采集日期，跨平台容错）并输出两张 Markdown 表格。
+- **`--machine-info`** 采集 15 项环境属性（操作系统/系统版本/架构/主机名/CPU 型号/物理核数/逻辑线程/内存/磁盘类型/文件系统/Python 版本/并行级别/worker 数/采集并行度/采集日期，跨平台容错）并输出两张 Markdown 表格。
 - **`--update-docs`** 在跑完后**自动写入** `test-coverage.md` 的两张表（按主机名匹配列：同机覆盖刷新日期、新机器追加列；历史参考列不受影响）。默认**永不写文档**，仅在显式传入该标志时更新；内容未变化则跳过写入（幂等）。
+- **`--jobs N`** 多模式并行采集（每档独立 pytest 进程、报告按模式目录隔离）：默认 **1 串行**——与历史行为一致、弱机器不超订 CPU；显式 N>1 并行提速但含模式间争抢，环境表「采集并行度」行记录本次口径，**跨并行度不与串行基线直接可比**。单模式忽略。
 - **采集时机（不是提交门禁）**：`bench` 会**跑完全部 14 个模式**（全量套件多轮），耗时以分钟计。它**不进 P0/P1/P2 门禁**，也不必每次提交都重采——仅在两种时机采集：① **发布前**刷新 `test-coverage.md` 数据快照（见 CLAUDE.md「发布数据文档刷新」）；② 换机器 / 需本机耗时参考时。日常提交只需 P0 `dev-verify` + 守护脚本。
 - 中断保护：bench 中途 `Ctrl+C` 先打印已采集部分并回填已完成模式，慢机器不丢数据。
 - 典型耗时与对照说明见 `test-coverage.md` 顶部注 + 「环境耗时对照」表。
@@ -908,7 +909,7 @@ A: 运行 `.venv/bin/python scripts/check-test-markers.py`，脚本会静态扫�
 | `check-version-consistency.py` | 质量 | 版本号全局一致性检查（P0/P2 守护脚本 + 发布流程必跑） |
 | `check-style-guardrails.py` | 质量 | 设计护栏机检（DESIGN.md 护栏样式面；E 级：强调色越权/明暗同步/双面 token 对表判 finding，W 级：裸色值/圆角档位观察统计——未入 pre-commit 钩子与 CI guards；**发布门禁**（release.py gate）已纳入，开发期快反馈由 unit 测试承担） |
 | `check-script-contract.py` | 质量 | scripts 顶层脚本契约机检（退出码声明 ⊆ {0,2} 白名单、check-* 统一 `add_common_args` CLI 面、文本 I/O 显式 encoding、脚本↔测试覆盖映射，四条规则——**观察期**未入钩子与 CI） |
-| `release.py` | 发布 | 发布流程分步编排（check/prepare/refresh/evolution/gate/publish/devbump，每步独立可审阅、失败即停） |
+| `release.py` | 发布 | 发布流程分步编排（check/prepare/refresh/evolution/gate/publish/devbump，每步独立可审阅、失败即停；refresh 纯文档变更跳过 bench+collect（`--force-refresh` 强制）、gate 十守护并行且随核数收敛 ≤4 路） |
 | `perf-test-report.py` | 诊断 | 端到端报告生成管线性能基准（独立脚本，mock 外部数据源） |
 | `perf-view.py` | 诊断 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 时段聚合（耗时与费用合计/环比）/机读输出（llm_cost、by_period 费用字段）） |
 | `probe.py` | 诊断 | 探测统一入口（按 target 分发到 `probes/` 子模块；新探针实现契约面登记即用） |
@@ -943,6 +944,9 @@ pytest 的 `-m` 标记表达式封装层，按 `--mode` 选择预定义组合。
 
 # 发布门禁（P2）
 .venv/bin/python scripts/test-runner.py --mode verify,regression
+
+# 多档并行采集（可选；默认 1 串行，弱机器不超订）
+.venv/bin/python scripts/test-runner.py --mode dev-verify,regression --jobs 2
 
 # 跨机器耗时采集 + 自动更新 test-coverage.md 环境耗时对照（含机器信息采集）
 .venv/bin/python scripts/test-runner.py --mode bench --update-docs
@@ -1908,7 +1912,7 @@ registry 的测试在 `src/test/unit/core/test_registry.py`，验证 TTL 默认�
 
 发布版本时，按以下六步顺序执行：
 
-> 可用 `scripts/release.py` 分步编排（发布流程的可执行封装，每步独立可审阅、失败即停）：`check`（预检）→ `prepare`（版本全链、changelog 发布段归档**并自动重写归档头部「涵盖版本 / 归档时间」（区间与并入记录由归档内各发布段标题派生，无需人工维护）**、一致性 `--fix`，收尾自动 `doc-drift --sync`）→ `refresh` + `evolution --release`（数据刷新与演进快照，evolution 收尾同样自动 sync）→ `gate`（P2 门禁）→ `publish --title`（release 提交 + P1 verify + `--no-ff` 合并 + tag）→ `devbump`（切开发版）；rf/plan/docs-plan 归档迁移保留人工（需判断归档段语义）且必须在 `gate`/`publish` 前完成（见下方步骤③）；**分层纪律**：归档迁移或任何涉及管理文档/代码注释的改动完成后，进 `gate` 前先跑秒级便宜守护（至少 `check-doc-traces --ci` + `check-doc-links --ci`，改动面大时十守护全跑）——守护发现前置，避免 P2 门禁的全量 regression 因文档级 finding 白跑第二轮。下列手动命令为底层口径，脚本失败时按手动步骤排查。
+> 可用 `scripts/release.py` 分步编排（发布流程的可执行封装，每步独立可审阅、失败即停）：`check`（预检）→ `prepare`（版本全链、changelog 发布段归档**并自动重写归档头部「涵盖版本 / 归档时间」（区间与并入记录由归档内各发布段标题派生，无需人工维护）**、一致性 `--fix`，收尾自动 `doc-drift --sync`）→ `refresh` + `evolution --release`（数据刷新——纯文档变更〔仅 `.md`/图片〕自动跳过 bench+collect，`--force-refresh` 强制；演进快照，evolution 收尾同样自动 sync）→ `gate`（P2 门禁，十守护并行且并发度随核数收敛 ≤4 路）→ `publish --title`（release 提交 + P1 verify + `--no-ff` 合并 + tag）→ `devbump`（切开发版）；rf/plan/docs-plan 归档迁移保留人工（需判断归档段语义）且必须在 `gate`/`publish` 前完成（见下方步骤③）；**分层纪律**：归档迁移或任何涉及管理文档/代码注释的改动完成后，进 `gate` 前先跑秒级便宜守护（至少 `check-doc-traces --ci` + `check-doc-links --ci`，改动面大时十守护全跑）——守护发现前置，避免 P2 门禁的全量 regression 因文档级 finding 白跑第二轮。下列手动命令为底层口径，脚本失败时按手动步骤排查。
 
 **① 版本号一致**
 
@@ -1922,7 +1926,7 @@ registry 的测试在 `src/test/unit/core/test_registry.py`，验证 TTL 默认�
 
 **② 发布数据文档刷新**
 
-发布版本前，必须运行：
+发布版本前，必须运行（**纯文档变更例外**：上次发布 tag 以来仅 `.md`/图片变更时，`release.py refresh` 自动跳过 bench + collect——测试计数无变化，`--force-refresh` 强制恒跑；doc-drift stats sync 与下列人工核对始终执行）：
 
 ```bash
 .venv/bin/python scripts/collect-test-coverage.py --update-docs
