@@ -189,10 +189,11 @@ class TestDocTaskRecordDomain:
 
 
 class TestDocStructuralDuplicates:
-    """结构性冗余（DUPLICATE）：重复标题全域、重复长行/区块仅台账三文件。
+    """结构性冗余（DUPLICATE）：重复标题全域（路径感知）、重复长行/区块
+    台账三文件 + 归档域。
 
-    拦「同一区块/条目粘贴两遍」类复制粘贴残留（任务域小节整块重复）；
-    Keep-a-Changelog 通用小节与代码围栏豁免。
+    拦「同一区块/条目粘贴两遍」类复制粘贴残留（任务域小节整块重复、
+    归档合并的重复版本节）；代码样本/键值任务卡/验证清单/围栏豁免。
     """
 
     def _write(self, tmp_path: Path, content: str, name: str = "doc.md") -> Path:
@@ -207,10 +208,16 @@ class TestDocStructuralDuplicates:
         hits = doc_traces.scan_structural_duplicates(doc)
         assert [(h[0], h[1]) for h in hits] == [(5, "DUPLICATE")]
 
-    def test_keep_a_changelog_sections_excluded(self, doc_traces, tmp_path):
-        """Added 等通用小节在每个版本块下合法重复，标题去重豁免。"""
+    def test_cross_parent_repeated_subsection_ok(self, doc_traces, tmp_path):
+        """路径感知判重：不同父标题下的同名小节（各版本块 Added）合法。"""
         doc = self._write(tmp_path, "## [1.0.0]\n\n### Added\n\n- a\n\n## [1.1.0]\n\n### Added\n\n- b\n")
         assert doc_traces.scan_structural_duplicates(doc) == []
+
+    def test_same_parent_repeated_subsection_flagged(self, doc_traces, tmp_path):
+        """同父标题下同名小节复现（版本节两波 Added）即真重复，报出。"""
+        doc = self._write(tmp_path, "## [1.0.0]\n\n### Added\n\n- a\n\n### Fixed\n\n- x\n\n### Added\n\n- b\n")
+        hits = doc_traces.scan_structural_duplicates(doc)
+        assert any(h[0] == 11 and "重复标题" in h[2] for h in hits), hits
 
     def test_heading_in_code_fence_excluded(self, doc_traces, tmp_path):
         """围栏代码块内 `#` 注释非标题，不得误报。"""
@@ -242,3 +249,73 @@ class TestDocStructuralDuplicates:
             name="changelog.md",
         )
         assert doc_traces.scan_structural_duplicates(doc) == []
+
+    def test_checklist_lines_excluded_from_line_dedup(self, doc_traces, tmp_path):
+        """验证清单命令跨阶段复跑属结构，长行判重豁免。"""
+        cmd = "- [ ] `[全] python scripts/test_runner.py --mode regression --jobs 1`"
+        doc = self._write(tmp_path, f"步骤\n\n{cmd}\n\n后续\n\n{cmd}\n", name="plan.md")
+        assert doc_traces.scan_structural_duplicates(doc) == []
+
+    def test_task_card_window_excluded_from_block_dedup(self, doc_traces, tmp_path):
+        """键值任务卡（- **键**: 值）跨任务同构，行与区块判重均豁免。"""
+        card = (
+            "- **估时**: 8h\n- **文件**: `src/python/analysis/rebalance.py`\n- **阻塞**: 否\n"
+            "- **依赖**: P3-02（阈值系统）\n- **状态**: ✅ 已完成（2026-07-20）\n"
+        )
+        doc = self._write(tmp_path, f"### A\n\n{card}\n### B\n\n{card}", name="plan.md")
+        assert doc_traces.scan_structural_duplicates(doc) == []
+
+    def test_code_sample_window_excluded_from_block_dedup(self, doc_traces, tmp_path):
+        """未围栏代码样本跨节重复属图示，行与区块判重均豁免。"""
+        sample = (
+            "   from src.python.llm.api_base import (\n"
+            "       _AUTO_INCREASE_FACTOR, _CACHE_LINE_HTML,\n"
+            "   )\n   __all__ = [\n"
+            '       "get", "set", "clear",\n'
+        )
+        doc = self._write(tmp_path, f"方案\n\n{sample}\n结果\n\n{sample}", name="plan.md")
+        assert doc_traces.scan_structural_duplicates(doc) == []
+
+    def test_fenced_repeated_block_excluded(self, doc_traces, tmp_path):
+        """围栏内容置空不入窗，两段相同围栏块不报。"""
+        inner = "| # | 摘要 |\n|---|---|\n| **x** | " + "内容" * 40 + " |\n"
+        doc = self._write(tmp_path, f"```text\n{inner}```\n说明\n\n```text\n{inner}```\n", name="plan.md")
+        assert doc_traces.scan_structural_duplicates(doc) == []
+
+    def test_archive_scope_line_dedup(self, doc_traces, tmp_path, monkeypatch):
+        """归档域路径纳入长行/区块判重（REPO_ROOT 指向临时根）。"""
+        monkeypatch.setattr(doc_traces, "REPO_ROOT", tmp_path)
+        row = "| **rf-1** | " + "冗长条目内容" * 8 + " |"
+        doc = self._write(tmp_path / "docs" / "archive", f"说明段\n\n{row}\n{row}\n", name="old.md")
+        hits = doc_traces.scan_structural_duplicates(doc)
+        assert any("重复内容行" in h[2] for h in hits), hits
+
+
+class TestDocArchiveDomain:
+    """归档域（archive=True）：NARRATIVE 复盘痕迹检出，模式面收窄。"""
+
+    def _scan(self, doc_traces, tmp_path, content: str):
+        p = tmp_path / "doc.md"
+        p.write_text(content, encoding="utf-8")
+        return doc_traces.scan_file(p, False, archive=True)
+
+    def test_archive_narrative_flagged(self, doc_traces, tmp_path):
+        """归档设计/迭代文档的前后对比与否定句报出（只表述最新状态）。"""
+        hits = self._scan(doc_traces, tmp_path, "回归清单：修复后全过。\n")
+        assert any(h[1] == "NARRATIVE" for h in hits), hits
+
+    def test_archive_not_scanning_history_ciphers(self, doc_traces, tmp_path):
+        """归档域不查 CIPHER/章节/轮次（历史文档性质，仅 DUPLICATE+NARRATIVE）。"""
+        assert self._scan(doc_traces, tmp_path, "按 C20 约束设计，详见第 3 章与第 2 轮。\n") == []
+
+    def test_archive_current_capability_exclusion(self, doc_traces, tmp_path):
+        """当前能力描述豁免（支持类否定前缀）在归档域生效；变体仍报出。"""
+        assert self._scan(doc_traces, tmp_path, "该源不再支持增量拉取。\n") == []
+        hits = self._scan(doc_traces, tmp_path, "峰谷价不再区分。\n")
+        assert any(h[1] == "NARRATIVE" for h in hits), hits
+
+    def test_inline_code_token_not_flagged(self, doc_traces, tmp_path):
+        """行内代码技术令牌（词表条目 `不再`）不误报；裸词仍报。"""
+        assert self._scan(doc_traces, tmp_path, "词表条目 `不再` 属技术令牌。\n") == []
+        hits = self._scan(doc_traces, tmp_path, "词表含不再条目。\n")
+        assert any(h[1] == "NARRATIVE" for h in hits), hits

@@ -31,8 +31,9 @@
      "C19 契约""C20 图下说明""C21 指纹同源"），须用语义描述（数据契约/图下
      说明/缓存指纹同源等）。
      约束定义处（technical.md / llm-technical.md，CIPHER_EXEMPT_FILES）
-     正文大量引用 C1~C25 属定义载体，豁免；其余文档（含 changelog.md /
-     plan.md / review-findings.md 与 docs/plan/）一律禁。
+     正文大量引用 C1~C25 属定义载体，豁免；其余受检文档（含 changelog.md /
+     plan.md / review-findings.md 与 docs/plan/）一律禁；docs/archive/
+     归档域不入本条（历史约束表属当时设计内容，见受检范围）。
   6. 任务记录域复盘痕迹（NARRATIVE）：plan.md / review-findings.md /
      docs/plan/*.md 的任务内容只反映最新状态，禁止历史复盘痕迹——
      修复/改造/重构等前后对比、相对旧实现的否定句（"不再XX"）、
@@ -42,13 +43,18 @@
      变更日志记录变化是其职责，均不适用（changelog 仍仅章节编号）。
      迭代轮次（"轮 N"）是任务记录的正式载体，本条不适用；设计文档的
      "旧格式兼容"等是合法设计内容（历史实现叙述类不入任务域）。
-  7. 结构性冗余（DUPLICATE）：同一文档内相同级别+文本的 ATX 标题出现
-     ≥2 次（第 2 次起报出）；台账文件（plan.md / review-findings.md /
-     changelog.md）另检规范化后 ≥40 字符的重复内容行与连续 5 行、有效
-     内容 ≥100 字符的逐字重复区块——拦截「同一区块/条目粘贴两遍」类
-     复制粘贴残留与冗余信息。豁免：Keep-a-Changelog 通用小节名
-     （Added/Changed/Fixed 等在每个版本块下合法重复）、围栏代码块内
-     `#` 注释与示例、分隔/装饰行与短模板行（重复长行豁免）。
+     归档域 docs/archive/（changelog 归档除外）同样检出——归档设计/
+     迭代计划同样只表述最新状态，复盘痕迹不留存。
+  7. 结构性冗余（DUPLICATE）：标题去重全域适用且路径感知——同级+同标题
+     且处于同一父标题下才算重复（各版本块/各任务节下的同名小节属合法
+     结构，跨父级不报，第 2 次出现起报出）；重复长行与重复区块见于台账
+     三文件（plan.md / review-findings.md / changelog.md）与 docs/archive/
+     归档域——规范化后 ≥40 字符的重复内容行与连续 5 行、有效内容
+     ≥100 字符的逐字重复区块，拦截「同一区块/条目粘贴两遍」类复制粘贴
+     残留与冗余信息。豁免：围栏代码块内 `#` 注释与示例、未围栏的缩进
+     代码/命令样本、键值任务卡（- **键**: 值，跨条目同构）、验证清单项
+     （- [ ] 命令跨阶段复跑）、分隔/装饰行与短模板行（重复长行豁免）；
+     重复任务由同父标题判重兜底，整段清单/区块粘贴由区块判重兜底。
 
 受检范围：
   - 项目根 README.md
@@ -58,11 +64,14 @@
     任务记录域检查覆盖 review-findings.md / plan.md 与 docs/plan/
     （章节编号 + NARRATIVE 复盘痕迹 + CIPHER）
   - 结构性冗余（DUPLICATE）：标题去重全域适用；重复长行与重复区块
-    仅台账三文件（plan.md / review-findings.md / changelog.md）
+    于台账三文件（plan.md / review-findings.md / changelog.md）
+  - docs/archive/ 归档域（DUPLICATE + NARRATIVE；changelog 归档仅
+    DUPLICATE——变更日志记录变化是其职责，与 changelog.md 同口径）
 
-豁免范围（归档/运行时产物性质，允许历史痕迹与归档引用）：
-  - docs/archive/ 归档文档
+豁免范围（运行时产物性质 / 归档历史引用）：
   - docs/tmp/ 运行时临时产物
+  - 归档域的 CIPHER（历史约束表属当时设计内容）、版本痕迹与章节/轮次
+    编号（历史文档性质）——该域仅查 DUPLICATE 与 NARRATIVE
 
 豁免内容（当前状态 / 流程描述 / 结构记录，非历史痕迹）：
   - 管理文档版本头（"文档版本：0.9.10-dev"，版本号一致性要求，仅行首锚定豁免）
@@ -70,7 +79,10 @@
     与日期同为随发布重跑刷新的滚动读数，上下文锚定豁免、行中叙述仍检出）
   - folders.md 版本演进对照「当前开发版」列（"当前开发版（0.12.1-dev · ..."，
     由 check-version-consistency 的 evolution_head 断言强制与 APP_VERSION 同步）
-  - Markdown 围栏代码块（``` 包裹）内命令/配置示例，非文档叙述
+  - Markdown 围栏代码块（``` 包裹）内命令/配置示例，非文档叙述；未围栏的
+    缩进代码/命令样本同理（重复行与重复区块豁免）
+  - 行内代码（`...`）内的技术令牌（如词表条目 `不再`）——NARRATIVE 匹配
+    前剔除行内代码段
   - 需求编号（requirements.md 的 R-LLM-ER-01 等需求条目 ID）
   - folders.md 目录树行（│ ├ └ 开头，记录目录结构，可含 archive/ 指向——仅
     ARCHIVE 类豁免；任务编号（CODE）与进度状态词（STATUS）在树行照检）
@@ -82,8 +94,7 @@
   - 工具使用场景（pytest --ff 等）
   - 模型/环境名（Gemini 旧版 / 旧版 Python）
   - 工具自身说明（描述脚本跳过/豁免归档目录与归档引用）
-  - Keep-a-Changelog 通用小节名（Added/Changed/Fixed 等——每个版本块下
-    合法重复，标题去重豁免）；分隔/装饰行与短模板行（重复长行豁免）
+  - 分隔/装饰行与短模板行（重复长行豁免）
 
 用法：
   python scripts/check-doc-traces.py           # 检查全部
@@ -451,7 +462,11 @@ def _is_excluded(line: str) -> bool:
 
 
 def scan_file(
-    fpath: Path, verbose: bool, chapter_only: bool = False, task_record: bool = False
+    fpath: Path,
+    verbose: bool,
+    chapter_only: bool = False,
+    task_record: bool = False,
+    archive: bool = False,
 ) -> list[tuple[int, str, str, str]]:
     """扫描单个文档，返回 [(行号, 分类, 模式说明, 行内容), ...]
 
@@ -465,14 +480,18 @@ def scan_file(
     不查 HIGH（设计文档的旧格式兼容等是合法内容）、不查 ROUND（迭代轮次
     是记录文档的正式载体）、不查 STATUS（仅树行域）；不走 _is_excluded
     表格豁免（任务表/断言表行内的复盘叙事必须检出）。
-    架构约束代号（CIPHER）独立于两种模式：除约束定义处（technical.md /
-    llm-technical.md）豁免外，所有文档正文均不得出现 C1~C25——约束代号
-    属"暗号"，与历史痕迹/章节暗号不同层，处处禁。
+    archive=True：归档域（docs/archive/*）——查 NARRATIVE 复盘痕迹（归档
+    设计/迭代计划同样只表述最新状态；走 _is_excluded 表豁免——发布流程等
+    描述合法）；不查 HIGH/CHAPTER/ROUND/STATUS/CIPHER（历史文档性质，
+    见模块 docstring 受检范围）。
+    架构约束代号（CIPHER）独立于模式选择：除约束定义处（technical.md /
+    llm-technical.md）与归档域豁免外，所有受检文档正文均不得出现 C1~C25——
+    约束代号属"暗号"，与历史痕迹/章节暗号不同层，受检域内处处禁。
     """
     hits: list[tuple[int, str, str, str]] = []
     # 文件名任务编号（文件级 finding，line=0）：受检域 .md 文件名含 rf-N/plan-N
-    # 即任务代号残留，须用语义命名（docs/archive/ 与 docs/plan/ 域已跳过，历史
-    # 归档文件名不入检）
+    # 即任务代号残留，须用语义命名（语义命名全域适用，归档/中间计划文档
+    # 历史文件名已改名，归档文件名同样入检）
     if _NAME_CODE.search(fpath.name):
         hits.append((0, "CODE", "文件名含任务编号（须用语义命名）", fpath.name))
     try:
@@ -480,7 +499,9 @@ def scan_file(
     except (OSError, UnicodeDecodeError):
         return hits
 
-    if task_record:
+    if archive:
+        patterns = [p for p in _DOC_PATTERNS if p[1] == "NARRATIVE"]
+    elif task_record:
         patterns = [p for p in _DOC_PATTERNS if p[1] in ("CHAPTER", "NARRATIVE")]
         if fpath.name not in CIPHER_EXEMPT_FILES:
             patterns += _CIPHER_PATTERNS
@@ -523,13 +544,14 @@ def scan_file(
                 continue  # 目录树行记录项目结构，archive/ 条目属合法指向
             if cat == "STATUS" and not is_tree:
                 continue  # 进度状态词仅目录树描述域（正文当前状态叙述合法）
-            if cat == "NARRATIVE" and not task_record:
-                continue  # 复盘叙事仅任务记录域（手册操作指引/变更日志合法）
+            if cat == "NARRATIVE" and not (task_record or archive):
+                continue  # 复盘叙事仅任务记录域/归档域（手册操作指引/变更日志合法）
             if cat == "CHAPTER" and _is_chapter_excluded(stripped):
                 continue  # 计数/序数表述豁免，不影响其他模式
             if cat == "ROUND" and _is_round_excluded(stripped):
                 continue  # 轮次计数/运行时表述豁免，不影响其他模式
-            if re.search(pat, stripped):
+            subject = _INLINE_CODE_RE.sub(" ", stripped) if cat == "NARRATIVE" else stripped
+            if re.search(pat, subject):
                 hits.append((lineno, cat, desc, stripped[:120]))
                 break  # 每行仅报告首个匹配
 
@@ -571,6 +593,14 @@ def _iter_docs(trace_exempt: bool = False) -> list[Path]:
                 continue
             docs.append(fpath)
     return docs
+
+
+def _iter_archive_docs() -> list[Path]:
+    """收集归档域文档（docs/archive/**/*.md）——DUPLICATE + NARRATIVE 域。"""
+    archive_dir = REPO_ROOT / "docs" / "archive"
+    if not archive_dir.exists():
+        return []
+    return sorted(archive_dir.rglob("*.md"))
 
 
 #: 已删函数候选：反引号内总长 ≥8 的 snake_case（`name` / `name()` / `name(args)`
@@ -672,22 +702,62 @@ def scan_deleted_symbol_refs(
 
 # ── DUPLICATE：结构性冗余（重复标题/长行/区块，防复制粘贴残留） ──
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
-#: Keep-a-Changelog 通用小节名（每个版本块下合法重复，标题去重豁免）
-_KEEP_A_CHANGELOG_SECTIONS = {"added", "changed", "removed", "deprecated", "security", "fixed", "unreleased"}
-#: 分隔/装饰行（表格分隔、分割线等，重复属正常结构，长行去重豁免）
-_SEPARATOR_LINE_RE = re.compile(r"^[\s|:\-=_*#>]+$")
-#: 台账三文件：重复长行/区块仅对其检查（任务/自审/变更记录最易出现复制粘贴残留）
+#: 分隔/装饰行（表格分隔、分割线、制表线 ─ 等，重复属正常结构，长行去重豁免）
+_SEPARATOR_LINE_RE = re.compile(r"^[\s|:\-=_*#>─━═]+$")
+#: 行内代码段（技术令牌如词表条目 `不再`——NARRATIVE 匹配前剔除，非叙述）
+_INLINE_CODE_RE = re.compile(r"`[^`]+`")
+#: 验证清单项（- [ ] 命令——迭代计划各阶段复跑同一命令属结构性重复，
+#: 不入长行判重；整段清单/区块粘贴仍由区块判重兑底）
+_CHECKLIST_LINE_RE = re.compile(r"^- \[[ xX]\]\s", re.IGNORECASE)
+#: 未围栏代码/命令样本的 ASCII 代码形态（缩进样本见 _is_codeish_sample）
+_CODEISH_RE = re.compile(
+    r"^(?:from\s|import\s|def\s|class\s|return\s|elif\s|except\s|"
+    r"[A-Za-z_][\w.]*\s*=[^=]|\w+\s*\(|__\w+__|[\"'`(\[{])"
+)
+#: 键值任务卡行（- **键**: 值——卡片跨条目必然同构，结构性重复豁免）
+_CARD_LINE_RE = re.compile(r"^- \*\*[^*]+\*\*\s*[:：]")
+#: 台账三文件：重复长行/区块基础域（任务/自审/变更记录最易出现复制粘贴残留）；
+#: 归档域 docs/archive/ 与其并集，见 _in_dup_strict_scope
 _LEDGER_DOCS = {"plan.md", "review-findings.md", "changelog.md"}
 _DUP_MIN_LINE_LEN = 40  # 长行去重的最小长度（短模板行如归档索引提示行豁免）
 _DUP_BLOCK_WINDOW = 5  # 区块去重滑窗行数
 _DUP_BLOCK_MIN_CHARS = 100  # 区块有效内容下限（纯结构行/空窗不检）
 
 
+def _in_dup_strict_scope(doc: Path) -> bool:
+    """重复长行/区块判重适用域：台账三文件 + docs/archive/ 归档域。"""
+    if doc.name in _LEDGER_DOCS:
+        return True
+    try:
+        return "archive" in doc.relative_to(REPO_ROOT).parts
+    except ValueError:
+        return False
+
+
+def _is_codeish_sample(line: str) -> bool:
+    """未围栏代码/命令样本行（缩进非结构内容或 ASCII 代码形态；中文叙述不匹配）。"""
+    s = line.strip()
+    if not s or s[0] in "-*>|#" or re.match(r"^\d+[.)]\s", s):
+        return False  # 列表/表格/标题/引用/有序编号 = 结构行
+    if line[:1] in (" ", "\t"):
+        return True  # 缩进非结构 = 代码/命令样本
+    return bool(_CODEISH_RE.match(s))
+
+
+def _window_is_structural(win: list[str]) -> bool:
+    """滑窗是否为结构性重复（键值任务卡 / 代码样本）——是则豁免区块判重。"""
+    if sum(1 for x in win if _CARD_LINE_RE.match(x.strip())) >= _DUP_BLOCK_WINDOW - 1:
+        return True
+    return sum(1 for x in win if x.strip() and _is_codeish_sample(x)) >= 3
+
+
 def scan_structural_duplicates(doc: Path) -> list[tuple[int, str, str, str]]:
-    """结构性冗余检查：重复标题（全部受检文档）+ 重复长行/区块（台账三文件）。
+    """结构性冗余检查：重复标题（全部受检文档，路径感知）+ 重复长行/区块
+    （台账三文件 + 归档域）。
 
     防「同一区块/条目在文档中出现两次」类复制粘贴残留（如任务域小节
-    整块重复、条目行粘贴两遍）。豁免与阈值见模块 docstring 规则 7。
+    整块重复、条目行粘贴两遍、归档合并产生的重复版本节/索引节）。豁免
+    与阈值见模块 docstring 规则 7。
     """
     try:
         text = doc.read_text(encoding="utf-8")
@@ -696,8 +766,10 @@ def scan_structural_duplicates(doc: Path) -> list[tuple[int, str, str, str]]:
     lines = text.splitlines()
     hits: list[tuple[int, str, str, str]] = []
 
-    # 标题去重（全域；代码围栏内 `#` 注释非标题，跳过）
-    seen_titles: dict[tuple[int, str], int] = {}
+    # 标题去重（全域；路径感知——同级+同文本+同父标题才算重复；代码围栏内
+    # `#` 注释非标题，跳过。跨父级同名小节（各版本块/各任务节下）合法）
+    seen_titles: dict[tuple[int, str, str], int] = {}
+    parents: dict[int, str] = {}
     in_code = False
     for lineno, raw in enumerate(lines, 1):
         s = raw.rstrip()
@@ -709,28 +781,54 @@ def scan_structural_duplicates(doc: Path) -> list[tuple[int, str, str, str]]:
         m = _HEADING_RE.match(s)
         if not m:
             continue
-        key = (len(m.group(1)), m.group(2).strip())
-        if key[1].lower() in _KEEP_A_CHANGELOG_SECTIONS:
-            continue
+        lvl, heading = len(m.group(1)), m.group(2).strip()
+        parent = ""
+        for pl in range(lvl - 1, 0, -1):
+            if pl in parents:
+                parent = parents[pl]
+                break
+        key = (lvl, heading, parent)
         if key in seen_titles:
-            hits.append((lineno, "DUPLICATE", f"重复标题（同文首现于 L{seen_titles[key]}，疑似复制粘贴残留）", s[:120]))
+            hits.append(
+                (
+                    lineno,
+                    "DUPLICATE",
+                    f"重复标题（同父标题「{parent or '文首'}」下同级同名，同文首现于 L{seen_titles[key]}）",
+                    s[:120],
+                )
+            )
         else:
             seen_titles[key] = lineno
+        parents[lvl] = heading
+        for dl in list(parents):
+            if dl > lvl:
+                del parents[dl]
 
-    if doc.name not in _LEDGER_DOCS:
+    if not _in_dup_strict_scope(doc):
         return sorted(hits, key=lambda h: h[0])
 
-    # 长行去重（台账三文件）
+    # 长行去重（台账三文件 + 归档域；围栏内容不入窗、代码样本/键值卡行豁免）
     seen_lines: dict[str, int] = {}
     in_code = False
     norm: list[str] = []
     for lineno, raw in enumerate(lines, 1):
         s = raw.rstrip()
-        norm.append(s)
         if s.startswith("```"):
             in_code = not in_code
+            norm.append("")
             continue
-        if in_code or not s.strip() or _HEADING_RE.match(s) or _SEPARATOR_LINE_RE.match(s):
+        if in_code:
+            norm.append("")
+            continue
+        norm.append(s)
+        if (
+            not s.strip()
+            or _HEADING_RE.match(s)
+            or _SEPARATOR_LINE_RE.match(s)
+            or _CARD_LINE_RE.match(s.strip())
+            or _CHECKLIST_LINE_RE.match(s.strip())
+            or _is_codeish_sample(s)
+        ):
             continue
         if len(s.strip()) >= _DUP_MIN_LINE_LEN:
             if s in seen_lines:
@@ -740,11 +838,14 @@ def scan_structural_duplicates(doc: Path) -> list[tuple[int, str, str, str]]:
             else:
                 seen_lines[s] = lineno
 
-    # 区块去重（台账三文件；滑窗含空行占位，逐字比对）
+    # 区块去重（台账三文件 + 归档域；滑窗含空行占位，逐字比对；围栏内容已
+    # 置空不入窗，代码样本/键值任务卡窗口豁免——结构性重复非粘贴残留）
     seen_blocks: dict[tuple[str, ...], int] = {}
     for start in range(len(norm) - _DUP_BLOCK_WINDOW + 1):
         win = norm[start : start + _DUP_BLOCK_WINDOW]
         if sum(len(x.strip()) for x in win) < _DUP_BLOCK_MIN_CHARS:
+            continue
+        if _window_is_structural(win):
             continue
         key = tuple(win)
         if key in seen_blocks:
@@ -805,7 +906,8 @@ def main() -> int:
     # 受检文档两态列表一次构造，指纹与扫描循环复用（避免同次运行 4 遍目录走查）
     regular_docs = _iter_docs(trace_exempt=False)
     exempt_docs = _iter_docs(trace_exempt=True)
-    cache_inputs = [*regular_docs, *exempt_docs]
+    archive_docs = _iter_archive_docs()
+    cache_inputs = [*regular_docs, *exempt_docs, *archive_docs]
     if args.ci:
         replay = _replay_conclusion(conclusion_cache_load("doc_traces", [Path(__file__)], cache_inputs))
         if replay is not None:
@@ -875,8 +977,14 @@ def main() -> int:
     for doc in regular_docs:
         report_doc(doc, scan_deleted_symbol_refs(doc))
 
-    # 结构性冗余（DUPLICATE）：重复标题全域 + 重复长行/区块（台账三文件）
-    for doc in [*regular_docs, *exempt_docs]:
+    # 归档域：非 changelog 归档查 NARRATIVE（归档设计/迭代计划只表述最新状态）；
+    # changelog 归档与 changelog.md 同口径不查复盘叙事（记录变化是其职责）
+    for doc in archive_docs:
+        if "changelog" not in doc.name:
+            report_doc(doc, scan_file(doc, args.verbose, archive=True))
+
+    # 结构性冗余（DUPLICATE）：重复标题全域 + 重复长行/区块（台账三文件 + 归档域）
+    for doc in [*regular_docs, *exempt_docs, *archive_docs]:
         report_doc(doc, scan_structural_duplicates(doc))
 
     conclusion_cache_save(
