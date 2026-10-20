@@ -428,7 +428,7 @@ investor-util/
 │   │   │   ├── trading_calendar.py   #   交易日历原语（唯一实现：交易日判定/最近及前一交易日/交易日区间计数，akshare 日历缓存；各层共用，report/market_value.py 按原公共名重新导出）
 │   │   │   ├── reader.py             #   持仓 xlsx 文件读取
 │   │   │   ├── computation_registry.py #   计算模块注册表（纯计算/分析模块元信息，registry.py re-export 保持访问面）
-│   │   │   ├── section_block_registry.py #   章节区块注册表（双端章内区块清单单源：html/excel 归一化名 + 载体，rf-616 区块契约真值）
+│   │   │   ├── section_block_registry.py #   章节区块注册表（双端章内区块清单单源：html/excel 归一化名 + 载体，区块契约真值）
 │   │   │   ├── data_registry.py     #   数据模块注册表（配置键/缓存前缀/默认 TTL/LLM 设置键派生，registry.py 门面再导出）
 │   │   │   ├── report_section_registry.py # 报告章节注册表（章节目录序/导航分组/页签名称派生，registry.py 门面再导出）
 │   │   │   └── registry.py           #   中央注册表门面（两域子模块 + 计算/区块注册表单入口再导出，导入面不变）
@@ -725,7 +725,7 @@ investor-util/
 │       │   │   ├── test_quote_adapter_hithink.py # 行情域同花顺适配器与第三槽链路顺序（别名归一/契约自检/历史 provider 映射）
 │       │   │   ├── test_source_adapter.py       # 数据源适配契约（注册表/三段式/声明式归一）
 │       │   │   ├── test_source_adapter_edge.py  # 适配契约边缘场景（非映射响应/不可用取值/别名冲突）
-│       │   │   ├── test_stale_cache_helper.py   #  rf-529 HHI 收敛 + rf-531 过期缓存降级回写助手（盖语义版本戳/准入判据/链路过期段路由）
+│       │   │   ├── test_stale_cache_helper.py   #   HHI 收敛与过期缓存降级回写助手（盖语义版本戳/准入判据/链路过期段路由）
 │       │   │   └── test_credential_gate.py       # 链路凭据预检（缺凭据跳过 provider 落到下一链路、不计入熔断、历史遍历循环同样受控）
 │       │   ├── handlers/            #   命令处理器单元测试
 │       │   │   ├── __init__.py      #       子包标记
@@ -1378,7 +1378,7 @@ investor-util/
 │   │   │   ├── archived_changelog.0.9.x.md     # 变更日志归档 v0.9.x
 │   │   │   ├── archived_review-findings.0.9.x.md # 自审记录归档 v0.9.x
 │   │   │   ├── abandoned-design/               #   已放弃设计决策归档区（业绩归因）
-│   │   │   │   └── plan-4-brinson-attribution-abandoned.md # 业绩归因（Brinson）放弃设计
+│   │   │   │   └── brinson-attribution-abandoned.md # 业绩归因（Brinson）放弃设计
 │   │   │   ├── chartjs-upgrade/               #   交互式 HTML 报告升级设计（8 迭代）
 │   │   │   │   ├── plan-chartjs-report-upgrade.md   # Chart.js 升级实施方案
 │   │   │   │   ├── plan-chartjs-risk-analysis.md    # Chart.js 升级风险/收益/架构分析
@@ -1399,64 +1399,64 @@ investor-util/
 │   │   │   │   └── plan-portfolio-evolution.md  #     多快照趋势追踪设计
 │   │   │   ├── html-dark-mode/                  #   HTML 暗色模式实施归档
 │   │   │   │   ├── dark-mode-implementation.md  #     暗色模式实施记录
-│   │   │   │   └── plan-11-dark-mode-plan.md    #     暗色模式实施计划
+│   │   │   │   └── dark-mode-plan.md    #     暗色模式实施计划
 │   │   │   ├── fix-deepseek-thinking/           #   DeepSeek thinking 思考耗尽修复设计
 │   │   │   │   └── plan-fix-deepseek-thinking-exhaustion.md # 思考耗尽修复方案
 │   │   │   └── qa-concentration-chart-optimization/ # 集中度问答 + 穿透柱状图优化修复设计
 │   │   │       └── plan-fix-qa-concentration-and-chart-optimization.md # 集中度问答 + 柱状图优化修复
 │   │   ├── v0.13.x/                         # v0.13.x 版本归档（changelog/plan/review-findings + 设计文档）
 │   │   │   ├── archived_changelog.0.13.x.md # 变更日志归档 v0.13.x（v0.13.0 ~ v0.13.4 已发布段）
-│   │   │   ├── archived_plan.0.13.x.md      # 实现计划归档 v0.13.x（plan-90/122~126 完成态，含设计文档索引）
+│   │   │   ├── archived_plan.0.13.x.md      # 实现计划归档 v0.13.x（完成态，含设计文档索引）
 │   │   │   ├── archived_review-findings.0.13.x.md # 自审记录归档 v0.13.x（开发期已修复批次）
 │   │   │   ├── llm-cost-optimization.md # LLM 调用成本优化分析归档（实测画像 + 行动清单闭环：计费口径/闲时调度/模型映射已核实，output_brief 机制已具备）
-│   │   │   ├── holding-cost-position-design.md # 持仓成本相对历史价格区间位置设计（plan-90 完成态）
+│   │   │   ├── holding-cost-position-design.md # 持仓成本相对历史价格区间位置设计（完成态）
 │   │   │   ├── tui-panel-runtime-design.md # TUI 统一交互运行时设计（NavState/PanelItem/panel_loop 契约 + 13 面板清单 + 8 迭代，已完成）
 │   │   │   ├── tui-interaction-hci-design.md # TUI 交互 HCI 治理设计（HCI 原则对照 + 交互契约 v0 + M1~M10 措施与机检载体，已完成）
-│   │   │   ├── perf-observability-design.md # 运行观测与性能归因设计（perf_history 观测面：细分/计数/上下文维度/对比门禁，plan-123~126 完成态）
-│   │   │   └── report-browser-verification.md # 报告浏览器验证方法与实测结论（六项拆分：CDP 自动化子项实测 + 人工步骤 + 复验清单，rf-113 验证载体，自 docs/plan/ 随完成态移入）
+│   │   │   ├── perf-observability-design.md # 运行观测与性能归因设计（perf_history 观测面：细分/计数/上下文维度/对比门禁，完成态）
+│   │   │   └── report-browser-verification.md # 报告浏览器验证方法与实测结论（六项拆分：CDP 自动化子项实测 + 人工步骤 + 复验清单，自 docs/plan/ 随完成态移入）
 │   │   ├── v0.12.x/                         # v0.12.x 版本归档（0.12 系列首份）
 │   │   │   ├── archived_changelog.0.12.x.md # v0.12.1 已发布变更记录
-│   │   │   ├── archived_plan.0.12.x.md       # v0.12.x 已完成计划项（plan-72 限购信息接入·持仓展示面）
-│   │   │   ├── archived_review-findings.0.12.x.md # rf-557 ~ rf-562 已修复记录
-│   │   │   ├── awesome-design-md-borrow-candidates-research.md # Web 展示借鉴研究（awesome-design-md 73 份 DESIGN.md 骨架与样板要点 + 我方两面样式差距映射 → 6 立项 plan-103~108 / 5 不采纳，立项依据，自 docs/plan/ 随完成态移入）
-│   │   │   ├── gs-quant-borrow-candidates-research.md # gs-quant 借鉴候选研究（高盛量化库剖析 + 2 立项/1 参照/10 不采纳，plan-79/80 立项依据，自 docs/plan/ 随完成态移入）
-│   │   │   ├── llm-token-optimization-research.md # LLM token 消耗优化空间调研（真实运行画像 + 共享前缀前移评估 + provider/pacing 差异 → 维持现状，行动项 rf-596，自 docs/plan/ 随完成态移入）
-│   │   │   ├── vibe-trading-borrow-candidates-research.md # Vibe-Trading 借鉴候选研究（项目剖析 + 4 立项/6 不采纳清单，plan-76/77/78 立项依据，自 docs/plan/ 随完成态移入）
-│   │   │   ├── fund-purchase-limit/          # plan-72/73/74 基金申购限购三份设计归档（随任务完成移入）
-│   │   │   │   ├── fund-purchase-limit-design.md # 申购限购接入设计（天天基金单口径/四层稳定性保障/持仓展示/合并联动二期，plan-72）
-│   │   │   │   ├── fund-purchase-limit-llm-context-design.md # 限购信息接入 LLM 分析维度设计（全章节单源块/统一附录注入/指纹与降级矩阵，plan-73）
-│   │   │       └── fund-purchase-limit-advice-design.md # 限购接入调仓/建议可行性设计（三真实面重定位/受限索引单源/四迭代验收，plan-74）
-│   │   │   ├── holding-change-review/         # plan-76 持仓变动复盘设计归档（随任务完成移入）
+│   │   │   ├── archived_plan.0.12.x.md       # v0.12.x 已完成计划项（含限购信息接入与持仓展示面设计）
+│   │   │   ├── archived_review-findings.0.12.x.md # v0.12.x 开发期已修复记录
+│   │   │   ├── awesome-design-md-borrow-candidates-research.md # Web 展示借鉴研究（awesome-design-md 73 份 DESIGN.md 骨架与样板要点 + 我方两面样式差距映射 → 6 立项 / 5 不采纳，立项依据，自 docs/plan/ 随完成态移入）
+│   │   │   ├── gs-quant-borrow-candidates-research.md # gs-quant 借鉴候选研究（高盛量化库剖析 + 2 立项/1 参照/10 不采纳，立项依据，自 docs/plan/ 随完成态移入）
+│   │   │   ├── llm-token-optimization-research.md # LLM token 消耗优化空间调研（真实运行画像 + 共享前缀前移评估 + provider/pacing 差异 → 维持现状，自 docs/plan/ 随完成态移入）
+│   │   │   ├── vibe-trading-borrow-candidates-research.md # Vibe-Trading 借鉴候选研究（项目剖析 + 4 立项/6 不采纳清单，立项依据，自 docs/plan/ 随完成态移入）
+│   │   │   ├── fund-purchase-limit/          # 基金申购限购三份设计归档（随任务完成移入）
+│   │   │   │   ├── fund-purchase-limit-design.md # 申购限购接入设计（天天基金单口径/四层稳定性保障/持仓展示/合并联动二期）
+│   │   │   │   ├── fund-purchase-limit-llm-context-design.md # 限购信息接入 LLM 分析维度设计（全章节单源块/统一附录注入/指纹与降级矩阵）
+│   │   │       └── fund-purchase-limit-advice-design.md # 限购接入调仓/建议可行性设计（三真实面重定位/受限索引单源/四迭代验收）
+│   │   │   ├── holding-change-review/         # 持仓变动复盘设计归档（随任务完成移入）
 │   │   │   │   └── holding-change-review-design.md # 持仓变动复盘设计（快照事件级：change_event 契约/先决门槛/四迭代，已实施，§15 验收记录）
-│   │   │   └── whatif-cost-benchmark/          # plan-77 What-if 交易成本与基准设计归档（随任务完成移入）
+│   │   │   └── whatif-cost-benchmark/          # What-if 交易成本与基准设计归档（随任务完成移入）
 │   │   │       ├── whatif-cost-benchmark-design.md # What-if 回放成本建模与基准对比设计（FIFO 成本模型/费率三级可得/基准三线，已实施，§14 门槛与验收记录）
-│   │   │   ├── factor-zoo-catalog/             # plan-78 因子动物园目录评测设计归档（随任务完成移入）
+│   │   │   ├── factor-zoo-catalog/             # 因子动物园目录评测设计归档（随任务完成移入）
 │   │   │       ├── factor-zoo-catalog-design.md    # 因子动物园目录评测设计（25 因子五族 × A/B/C 三指标 go-no-go，已评测·判定转正立项，§13 判定记录）
-│   │   │   ├── event-window-impact/                # plan-79 事件窗量化对照设计归档（随任务完成移入）
+│   │   │   ├── event-window-impact/                # 事件窗量化对照设计归档（随任务完成移入）
 │   │   │       ├── event-window-impact-design.md # 事件窗量化对照设计（event_study 参照/先决门槛/四迭代，已实施，§14 判定记录）
-│   │   │   └── rebalance-schedule-replay/         # plan-80 调仓纪律回放设计归档（随任务完成移入）
+│   │   │   └── rebalance-schedule-replay/         # 调仓纪律回放设计归档（随任务完成移入）
 │   │   │       └── rebalance-schedule-replay-design.md # 调仓纪律回放设计（规则契约/成本软依赖/四迭代，已实施，§14 实施与门槛判定记录）
 │   │   ├── v0.11.x/                         # v0.11.x 版本归档（0.11 系列首份）
 │   │   │   ├── archived_changelog.0.11.x.md # v0.11.0 ~ v0.11.10 已发布变更记录
-│   │   │   ├── archived_plan.0.11.x.md    # plan-42 ~ plan-69 完成态记录（含设计文档索引）
-│   │   │   ├── archived_review-findings.0.11.x.md # rf-380 ~ rf-478 已修复记录（v0.11.0 ~ v0.11.9 批次）
-│   │   │   ├── section-consolidation/     # plan-45 报告章节整合设计归档（设计层 + 实施层）
+│   │   │   ├── archived_plan.0.11.x.md    # v0.11.x 完成态记录（含设计文档索引）
+│   │   │   ├── archived_review-findings.0.11.x.md # v0.11.x 开发期已修复记录
+│   │   │   ├── section-consolidation/     # 报告章节整合设计归档（设计层 + 实施层）
 │   │   │   │   ├── section-consolidation-design.md    # 设计层：四项合并/可见性模型扩展/约束对照/验收标准
 │   │   │   │   └── section-consolidation-iteration.md # 实施层：命名统一总表/接缝地图/逐批施工单/十轮复盘记录
-│   │   │   ├── prosperity-framework/      # plan-46 景气度框架诊断设计归档（投资分析方法引入，实验性功能）
+│   │   │   ├── prosperity-framework/      # 景气度框架诊断设计归档（投资分析方法引入，实验性功能）
 │   │   │   │   └── prosperity-framework-design.md # 上游归属与许可/数据可得性映射/六维口径（含两轮修订）/契约/约束对照/验收
-│   │   │   ├── hithink-data-source/       # plan-51 同花顺官方数据接入设计归档（五阶段完成态）
+│   │   │   ├── hithink-data-source/       # 同花顺官方数据接入设计归档（五阶段完成态）
 │   │   │       └── hithink-financial-data-design.md # 覆盖边界/四域接入方案/实测字段与限流/验证计划/架构约束自查标准
-│   │   │   ├── dedup-anchor-calibration/  # plan-53 新闻去重锚点校准复核归档
+│   │   │   ├── dedup-anchor-calibration/  # 新闻去重锚点校准复核归档
 │   │   │   │   └── dedup-anchor-calibration.md # 锚点混代证据/当前规则重判分布/原建议逐条核对与处置
-│   │   │   ├── tradingagents-cn-borrow-research/ # plan-59~68 借鉴批候选研究归档（现状比对 + 终态标注）
-│   │   │   │   └── tradingagents-cn-borrow-candidates-research.md # 10 项候选借鉴分析（立项 plan-59~68/终态 6 落地 3 未采纳/共性教训）
-│   │   │   └── llm-depth-selfreview-source-override/ # plan-63/64/65 整体设计归档（实施完成态）
+│   │   │   ├── tradingagents-cn-borrow-research/ # 借鉴批候选研究归档（现状比对 + 终态标注）
+│   │   │   │   └── tradingagents-cn-borrow-candidates-research.md # 10 项候选借鉴分析（6 落地 / 3 未采纳 / 共性教训）
+│   │   │   └── llm-depth-selfreview-source-override/ # LLM 深度自审来源覆盖整体设计归档（实施完成态）
 │   │   │       └── report-depth-selfreview-source-override-design.md # 报告深度档位/LLM 生成后自检/调用级源指定设计（形态/分层不重叠/运行作用域/约束对照）
 │   │   └── v0.10.x/                         # v0.10.x 版本归档（changelog/plan/review-findings + 设计文档）
 │   │   │   ├── archived_plan.0.10.x.md      #    实现计划归档 v0.10.x（含设计文档索引）
 │   │   │   ├── archived_changelog.0.10.x.md #    变更日志归档 v0.10.x
-│   │   │   ├── archived_review-findings.0.10.x.md # rf-204 ~ rf-378 自审记录归档（v0.10.x 含 v0.10.20-dev 批次）
+│   │   │   ├── archived_review-findings.0.10.x.md # v0.10.x 自审记录归档（含 v0.10.20-dev 批次）
 │   │   │   ├── investment-features/         #   投资功能优化 + 章节归并设计文档
 │   │   │   │   ├── plan-investment-features.md  #     投资分析功能优化设计（需求×数据源×章节归并）
 │   │   │   │   └── plan-investment-iteration.md #     投资功能优化 21 轮迭代实施计划（每轮量化验收）
@@ -1504,18 +1504,18 @@ investor-util/
 │   │   │   │   └── llm-fingerprint-prompt-coverage-design.md # 指纹覆盖判据/一次渲染两侧共享/辩论三键口径
 │   │   │   ├── feature-switch-registry/ #   功能开关注册表统一设计归档（面板可见性/默认值/产物自述解耦）
 │   │   │   │   └── feature-switch-registry-unification-design.md # 单条开关声明 + 分组属性 + 三渠道入口派生
-│   │   │   ├── feature-switch-grouping/ #   功能开关面板分组重构设计归档（作用域四分组换轴，随 plan-120 完成移入）
+│   │   │   ├── feature-switch-grouping/ #   功能开关面板分组重构设计归档（作用域四分组换轴，随功能落地移入）
 │   │   │   │   └── feature-switch-grouping-redesign.md # 作用域四分组 + 生命周期 experimental 字段解耦（守护先行/4 迭代验收/§8 转正迁移演练记录）
 │   │   │   ├── feeder-fund-penetration/ #   联接基金穿透与基金持仓取数通道修正设计归档
 │   │   │   │   └── feeder-penetration-and-holdings-fetch-design.md # 取数阶梯次序修正 + 目标 ETF 代理底层暴露
 │   │   │   ├── financial-indicator-source/ #   基本面数据源主备与财务指标提取设计归档
 │   │   │   │   └── financial-indicator-source-design.md # 标准字段契约/全文解析支路/真实估值分位(TTM)/底座门禁/LLM 注入
-│   │   │   ├── report-followup-qa/ #   报告对话式追问设计归档（qa 独立子包设计定稿，随 plan-102/118/119 完成移入）
+│   │   │   ├── report-followup-qa/ #   报告对话式追问设计归档（qa 独立子包设计定稿，随功能落地移入）
 │   │   │   │   └── report-followup-qa-design.md # 报告对话式追问设计定稿（上下文从报告 HTML 提取/会话服务/报告页区块/TUI [Q] 入口/转正路径，阶段 0-4 已完成）
 │   └── plan/                          #   中间设计文件（在办设计文档，扁平存放）；完成后随完成态移入对应版本的归档子目录
 │       ├── jev-news-correlation-evaluation.md # 评测方案（三方对照：关键词/现网生成/Jev；预注册阈值与 go-no-go 判定）
 │       ├── jev-news-correlation-design.md # 设计草案（独立于对话链的类型化判定通道/模板理由/降级矩阵）
-│       ├── decision-reflection-shadow-design.md # 决策跨期反思闭环设计（Vibe 影子账户参照/转正路径，plan-70）
+│       ├── decision-reflection-shadow-design.md # 决策跨期反思闭环设计（Vibe 影子账户参照/转正路径，观察中）
 │       └── web-browser-verification.md # Web 浏览器验证方法与实测结论（五类 37 断言实测 + 人工步骤 + 复验清单，rf-257 验证载体）
 │
 ├── CLAUDE.md                         # AI 编程助手指引
