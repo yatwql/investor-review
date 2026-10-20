@@ -20,7 +20,8 @@
 用法：
   python scripts/check-requirement-trace.py       # 检查全部已补域
   python scripts/check-requirement-trace.py -v    # 详细输出（打印每项解析结果）
-  python scripts/check-requirement-trace.py --ci  # CI 模式：仅输出 文件名:描述，退出码 2
+  python scripts/check-requirement-trace.py --ci  # CI 模式：仅输出 文件名:描述，退出码 2；
+                                                   结论缓存：输入与逻辑指纹未变时逐字回放
 
 退出码：
   0 — 全部通过
@@ -30,12 +31,15 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_checklib）
 from _checklib import MANAGEMENTS_DIR, REPO_ROOT, add_common_args, extract_region, rel, report  # noqa: E402
+from _checklib import conclusion_cache_load, conclusion_cache_save  # noqa: E402
 
 _REQUIREMENTS_MD = MANAGEMENTS_DIR / "requirements.md"
 _TESTPLAN_MD = MANAGEMENTS_DIR / "testplan.md"
@@ -236,11 +240,26 @@ def check_requirement_trace(
     return findings
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="需求 ID ↔ 验证载体追溯校验（requirements.md ↔ testplan.md §2.1）")
-    add_common_args(parser)
-    args = parser.parse_args()
+def _cache_inputs() -> list[Path]:
+    """结论缓存的输入指纹集：两份受检文档 + testplan 引用的载体文件。
 
+    结论依赖 = 文档内容 + 载体路径存在性（carrier_paths 解析）——载体
+    被删/改名或文档变更均改变指纹，不存在的载体不入集（其后续创建会
+    使集合并改变而失效）。
+    """
+    files = [p for p in (_REQUIREMENTS_MD, _TESTPLAN_MD) if p.exists()]
+    if _TESTPLAN_MD.exists():
+        plan_text = _TESTPLAN_MD.read_text(encoding="utf-8")
+        for _rid, carrier, _lineno in trace_rows(plan_text):
+            for rel_path in carrier_paths(carrier):
+                p = REPO_ROOT / rel_path
+                if p.exists():
+                    files.append(p)
+    return files
+
+
+def _run(args: argparse.Namespace) -> int:
+    """执行校验并返回退出码（verbose 详细段 + report 统一输出）。"""
     findings = check_requirement_trace()
     if args.verbose:
         plan_text = _TESTPLAN_MD.read_text(encoding="utf-8")
@@ -251,14 +270,41 @@ def main() -> None:
         for domain in _COVERED_DOMAINS:
             covered = sum(1 for rid in known_ids if rid.startswith(f"{domain}-"))
             print(f"    {domain}: {covered}/{covered} 已映射")
-    sys.exit(
-        report(
-            findings,
-            f"[OK] 需求追溯校验通过（已补全域 {len(_COVERED_DOMAINS)}/{len(_ALL_DOMAINS)}：{', '.join(_COVERED_DOMAINS)}）",
-            ci=args.ci,
-            fail_message="[!] 发现 {n} 处需求追溯不一致，须修正 testplan.md §2.1 后提交",
-        )
+    return report(
+        findings,
+        f"[OK] 需求追溯校验通过（已补全域 {len(_COVERED_DOMAINS)}/{len(_ALL_DOMAINS)}：{', '.join(_COVERED_DOMAINS)}）",
+        ci=args.ci,
+        fail_message="[!] 发现 {n} 处需求追溯不一致，须修正 testplan.md §2.1 后提交",
     )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="需求 ID ↔ 验证载体追溯校验（requirements.md ↔ testplan.md §2.1）")
+    add_common_args(parser)
+    args = parser.parse_args()
+
+    # 结论缓存（仅 --ci 且非 verbose）：输入与逻辑指纹未变时逐字回放——
+    # 改动源码/其他文档（不碰 requirements/testplan/载体）时命中省重扫
+    if args.ci and not args.verbose:
+        inputs = _cache_inputs()
+        logic = [Path(__file__)]
+        cached = conclusion_cache_load("requirement_trace", logic, inputs)
+        if cached is not None:
+            print("\n".join(cached["lines"]))
+            sys.exit(int(cached["rc"]))
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = _run(args)
+        out = buf.getvalue()
+        print(out, end="")
+        conclusion_cache_save(
+            "requirement_trace",
+            logic,
+            inputs,
+            {"findings": [] if rc == 0 else out.splitlines(), "lines": out.splitlines(), "rc": rc},
+        )
+        sys.exit(rc)
+    sys.exit(_run(args))
 
 
 if __name__ == "__main__":

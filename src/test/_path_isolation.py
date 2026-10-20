@@ -46,7 +46,9 @@ def seed_sensitive_path_isolation(monkeypatch, tmp_path, _doctor_probe_targets) 
     monkeypatch.setenv("DOC_DRIFT_SNAPSHOT_CACHE", str(tmp_path / "data/cache/test_coverage_snapshot.json"))
     # check-test-redundancy 按文件事实缓存（同上：data/cache 持久化 JSON，环境变量重定向）
     monkeypatch.setenv("TEST_REDUNDANCY_CACHE", str(tmp_path / "data/cache/test_redundancy_facts.json"))
-    # 三守护结论缓存目录（同上：data/cache 持久化目录，环境变量整目录重定向）
+    # 结论缓存目录（同上：data/cache 持久化目录，环境变量整目录重定向；
+    # 当前接入 doc-traces / semantic-index / doc-links / code-traces /
+    # requirement-trace / doc-drift，namespace 分文件互不影响）
     monkeypatch.setenv("CHECK_CONCLUSION_CACHE_DIR", str(tmp_path / "data/cache/guard_conclusions"))
     # data/state/ 运行时状态目录隔离（从 cache_dir 推导，显式 patch 确保清晰）
     monkeypatch.setattr(

@@ -198,7 +198,8 @@ def _isolate_sensitive_paths(tmp_path, monkeypatch, _doctor_probe_targets):
     - 设置 TEST_REDUNDANCY_CACHE → tmp_path/data/cache/test_redundancy_facts.json
       （check-test-redundancy 按文件事实缓存，同上重定向）
     - 设置 CHECK_CONCLUSION_CACHE_DIR → tmp_path/data/cache/guard_conclusions
-      （三守护结论缓存目录——doc-traces / semantic-index / doc-links，同上重定向）
+      （结论缓存目录，同上重定向；当前接入：doc-traces / semantic-index / doc-links /
+       code-traces / requirement-trace / doc-drift）
     - 替换 HISTORY_SNAPSHOT_DIR → tmp_path/data/history/snapshots
     - 清除 config 内存缓存，使 get_config() 从临时路径读取
     （无文件时自动回退到 _DEFAULT_CONFIG 默认值）
