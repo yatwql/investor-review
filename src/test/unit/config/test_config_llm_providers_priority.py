@@ -1,7 +1,8 @@
 """llm_providers.json 多链线路优先级写入（共享编辑层 llm_providers.priority / reorder）测试。
 
 覆盖：置换校验（缺名/重名/未知名拒绝）/ priority 归一化 10,20,30 且其余字段原样保留 /
-注释保留写回 / 写前 .bak 备份 / 文件缺失回退内置模板并物化 / get_llm_providers 访问器回退。
+注释保留写回 / 写前 .bak 备份 / 文件缺失回退内置模板并物化 / get_llm_providers 访问器回退 /
+重写后沿用文件原有缩进（2 空格风格不被拉成 4 空格）/ 头注释「主：/备：」标注写盘时中性化。
 """
 
 from __future__ import annotations
@@ -158,6 +159,81 @@ class TestLlmProviderReorder(_ProviderFileMixin, unittest.TestCase):
     def _read_missing(path: str) -> dict:
         with open(path, encoding="utf-8") as f:
             return json.load(f)
+
+    def test_reorder_keeps_file_indent_style(self) -> None:
+        """重写数组后沿用原有 2 空格缩进（条目 4 / 字段 6），不拉成 4 空格风格。"""
+        self._reorder(["last", "aux", "main"])
+        lines = open(self.providers_path, encoding="utf-8").read().splitlines()
+        field_line = next(line for line in lines if '"name": "last"' in line)
+        entry_line = next(line for line in lines if line.strip() == "{" and line.startswith(" "))
+        self.assertEqual(len(entry_line) - len(entry_line.lstrip()), 4)
+        self.assertEqual(len(field_line) - len(field_line.lstrip()), 6)
+
+    def test_reorder_neutralizes_primary_backup_labels(self) -> None:
+        """头注释「主：/备：」在写盘时中性化为「线路：」，其余注释与描述原样保留。"""
+        with open(self.providers_path, "w", encoding="utf-8") as f:
+            f.write(
+                _CONFIG_WITH_COMMENTS.replace(
+                    "// llm_providers 多链配置：优先级数字越小越优先",
+                    "// llm_providers 多链配置：优先级数字越小越优先\n"
+                    "// 主：main（按量付费端点）\n"
+                    "// 备：aux（订阅中转）",
+                )
+            )
+        self._reorder(["aux", "main", "last"])
+        raw = open(self.providers_path, encoding="utf-8").read()
+        self.assertNotIn("// 主：", raw)
+        self.assertNotIn("// 备：", raw)
+        self.assertIn("// 线路：main（按量付费端点）", raw)
+        self.assertIn("// 线路：aux（订阅中转）", raw)
+        self.assertIn("// 降级策略", raw)  # 无关注释不动
+
+    def test_reorder_label_neutralization_is_idempotent(self) -> None:
+        """重复写盘不叠加改写（第二次仍只剩「线路：」，无二次替换痕迹）。"""
+        with open(self.providers_path, "w", encoding="utf-8") as f:
+            f.write(
+                _CONFIG_WITH_COMMENTS.replace(
+                    "// llm_providers 多链配置：优先级数字越小越优先",
+                    "// 主：main（端点 A）",
+                )
+            )
+        self._reorder(["aux", "main", "last"])
+        self._reorder(["main", "aux", "last"])
+        raw = open(self.providers_path, encoding="utf-8").read()
+        self.assertIn("// 线路：main（端点 A）", raw)
+        self.assertNotIn("线路：线路：", raw)
+
+    def test_reorder_fixes_array_order_misstatement(self) -> None:
+        """注释把数组物理顺序误当链序时，写盘一并归正为 priority 升序口径。"""
+        with open(self.providers_path, "w", encoding="utf-8") as f:
+            f.write(
+                _CONFIG_WITH_COMMENTS.replace(
+                    "// llm_providers 多链配置：优先级数字越小越优先",
+                    "// LLM Provider 多链配置（顺序即 priority 升序）",
+                )
+            )
+        self._reorder(["last", "aux", "main"])
+        raw = open(self.providers_path, encoding="utf-8").read()
+        self.assertNotIn("顺序即 priority 升序", raw)
+        self.assertIn("链序按 priority 升序，数值小者靠前，与数组项顺序无关", raw)
+
+
+class TestLlmProviderTemplateComment:
+    """默认模板头注释只写稳定事实（链序由 priority 决定），不含会失效的主/备标注。"""
+
+    def test_template_has_neutral_chain_guidance(self) -> None:
+        from src.python.config._llm_providers_defaults import _get_default_llm_providers_template
+
+        template = _get_default_llm_providers_template()
+        assert "链序真值" in template
+        assert "priority 升序" in template
+
+    def test_template_has_no_primary_backup_labels(self) -> None:
+        from src.python.config._llm_providers_defaults import _get_default_llm_providers_template
+
+        template = _get_default_llm_providers_template()
+        assert "// 主：" not in template
+        assert "// 备：" not in template
 
 
 class TestGetLlmProvidersAccessor(_ProviderFileMixin, unittest.TestCase):

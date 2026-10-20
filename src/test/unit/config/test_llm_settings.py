@@ -56,6 +56,20 @@ class TestWriteLlmSettingsShared:
         assert data["model"] == "claude"
         assert data["enabled_llm"] == {"global_macro": True, "news_correlation": False}
 
+    def test_dict_change_keeps_file_indent_style(self, tmp_path):
+        """嵌套 dict 重写沿用原文件缩进单位（2 空格风格 → 子键 4 空格，不拉成 6）。"""
+        path = tmp_path / "llm_settings.json"
+        path.write_text(
+            '{\n  "model": "claude",\n  "enabled_llm": {\n    "global_macro": false\n  }\n}\n',
+            encoding="utf-8",
+        )
+
+        write_llm_settings({"enabled_llm": {"global_macro": True, "news_correlation": False}}, str(path))
+
+        lines = path.read_text(encoding="utf-8").splitlines()
+        sub_key = next(line for line in lines if '"global_macro"' in line)
+        assert len(sub_key) - len(sub_key.lstrip()) == 4
+
     def test_create_when_missing(self, tmp_path):
         """文件不存在：创建目录并写入完整 settings。"""
         path = tmp_path / "nested" / "llm_settings.json"

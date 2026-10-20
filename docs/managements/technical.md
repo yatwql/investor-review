@@ -3164,7 +3164,7 @@ config/
 ├── _config_defaults.py           # config.json 默认值定义 + 模板生成
 ├── _core.py                      # 核心读写：get_config()、set_config()、del_config()、init_config()
 ├── _local_state.py               # 机器本地状态读写（get_flag/set_flag，data/state/local_state.json）
-├── _json_patch.py                # JSON 字段级文本替换（_update_json_raw_text/_replace_dict_block）
+├── _json_patch.py                # JSON 字段级文本替换（_update_json_raw_text/_replace_dict_block；缩进单位经 _detect_indent_unit 沿用文件风格）
 ├── _validation.py                # 配置校验：validate_config()、_absolutize_paths()
 ├── _llm_settings.py              # llm_settings.json 读取/合并/缓存与 LLM 配置入口
 ├── _llm_settings_defaults.py     # llm_settings.json 默认模板生成

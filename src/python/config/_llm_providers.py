@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 
 from src.python.core.constants import PROJECT_ROOT
 
@@ -21,6 +22,11 @@ _LLM_PROVIDERS_FILE_DEFAULT = os.path.join(PROJECT_ROOT, "data/config/llm_provid
 _LLM_KEY_FILE_DEFAULT = os.path.join(PROJECT_ROOT, "data/config/llm_key.json")
 
 _VALID_LLM_PROVIDER_TYPES = frozenset({"claude", "openai", "gemini"})
+
+# 文件头注释里的「主：/备：/辅：/次：」线路标注（仅注释行生效，见 _neutralize_chain_labels）：
+# 链序真值是 providers[].priority 升序，标注是一次性快照，reorder 后不再成立，故写盘时中性化。
+_CHAIN_LABEL_RE = re.compile(r"^(\s*//\s*)(主|备|辅|次)(\s*[：:])")
+
 _VALID_STRATEGIES = frozenset({"priority", "weighted", "cost_first", "fallback_only"})
 
 
@@ -311,6 +317,34 @@ def get_llm_providers() -> dict:
     return raw if raw is not None else {}  # 文件存在但损坏 → {}（不静默顶替默认模板）
 
 
+def _neutralize_chain_labels(text: str) -> str:
+    """把注释里的「主：/备：/辅：/次：」线路标注改写为中性「线路：」。
+
+    背景：链序的真值是 ``providers[].priority`` 升序（数值小者靠前），
+    而文件头注释里的「主：X / 备：Y」是**一次性快照**——reorder 互换后
+    字段级替换按设计不改写区块外注释，于是注释就一直与真实链序相反
+    （字段与 priority 都对，人读却得到错的结论）。
+
+    本函数只动注释行且只改标注词（括号内描述、其余注释、字段全部保留），
+    幂等：已中性化的行不再命中。在 ``write_llm_providers`` 写盘前应用，
+    存量文件由下一次写（面板换序 / Web 配置面 / CLI 排序）自动刷新。
+
+    Args:
+        text: JSON 原始文本（可含 ``//`` 注释）。
+
+    Returns:
+        改写后的文本（无此类标注时逐字节不变）。
+    """
+    out: list[str] = []
+    for line in text.splitlines(keepends=True):
+        if line.lstrip().startswith("//"):
+            line = _CHAIN_LABEL_RE.sub(r"\1线路\3", line, count=1)
+            # 「（顺序即 priority 升序）」把数组物理顺序误当成链序，一并归正（文案不含括号，避免嵌套）
+            line = line.replace("顺序即 priority 升序", "链序按 priority 升序，数值小者靠前，与数组项顺序无关")
+        out.append(line)
+    return "".join(out)
+
+
 def write_llm_providers(config: dict, path: str) -> None:
     """写入 llm_providers.json（保留注释与未变更字段；原子写）。
 
@@ -336,7 +370,7 @@ def write_llm_providers(config: dict, path: str) -> None:
     if raw.strip():
         current = json.loads(_comments._strip_json_comments(raw))
         updated_raw = _update_json_raw_text(raw, current, config)
-        _atomic_write(path, updated_raw)
+        _atomic_write(path, _neutralize_chain_labels(updated_raw))
     else:
         _atomic_write(path, json.dumps(config, ensure_ascii=False, indent=2))
 
