@@ -163,7 +163,7 @@ technical.md 新增 §6.9「实验项生命周期表」（功能语义命名表�
 
 ## plan-156 TUI 交互契约文档化 + 契约结构测试 ✅
 
-**完成（2026-10-20，v0.13.8-dev）**：把设计稿 `docs/plan/tui-interaction-hci-design.md` §5 定稿为常驻管理文档 `docs/managements/DESIGN-TUI.md`——TUI 侧唯一判据，与 `DESIGN.md`（Web/报告视觉契约）对称：Overview 五原则（识别优于回忆 / 一键一义 / 屏幕自解释 / 专家快路不牺牲可发现性 / 可机检优先）、Keys 键分工总表（数字/回车/`?`/`0`/`Esc`/字母/`/`/方向键 + 每键「禁止用法」）、Prompts 提示三段式四成分模板、Defaults 默认项与取消标注语法（含「回车=取消须置句首」「危险操作默认安全侧」）、Colors 一色一职责角色表、Vocabulary 术语对照表 + 适用范围四档、Feedback 反馈与空态口径（含页头状态行与按键闸门白名单）、Do/Don't 护栏、Iteration Guide、Known Gaps。契约结构测试 `src/test/unit/ui/test_design_tui_doc.py` 由 9 例扩到 19 例：必需节（含 Colors）子集、键表必备键、四张表的列集合、关键口径句成句存在、护栏编号连续且 DO/DON'T 对偶、术语表覆盖内部词、Known Gaps 逐条带状态、契约内禁任务代号、闸门白名单文档与代码双向一致、引用实现文件存在。同步 CLAUDE.md「设计契约」条目（拆分为 Web/HTML 与 TUI 两份契约及其守卫）与 developer-guide「计划收尾：文档触点清单」（新增「TUI 交互改动」行）。
+**完成（2026-10-20，v0.13.8-dev）**：把设计稿 `docs/archive/v0.13.x/tui-interaction-hci-design.md` §5 定稿为常驻管理文档 `docs/managements/DESIGN-TUI.md`——TUI 侧唯一判据，与 `DESIGN.md`（Web/报告视觉契约）对称：Overview 五原则（识别优于回忆 / 一键一义 / 屏幕自解释 / 专家快路不牺牲可发现性 / 可机检优先）、Keys 键分工总表（数字/回车/`?`/`0`/`Esc`/字母/`/`/方向键 + 每键「禁止用法」）、Prompts 提示三段式四成分模板、Defaults 默认项与取消标注语法（含「回车=取消须置句首」「危险操作默认安全侧」）、Colors 一色一职责角色表、Vocabulary 术语对照表 + 适用范围四档、Feedback 反馈与空态口径（含页头状态行与按键闸门白名单）、Do/Don't 护栏、Iteration Guide、Known Gaps。契约结构测试 `src/test/unit/ui/test_design_tui_doc.py` 由 9 例扩到 19 例：必需节（含 Colors）子集、键表必备键、四张表的列集合、关键口径句成句存在、护栏编号连续且 DO/DON'T 对偶、术语表覆盖内部词、Known Gaps 逐条带状态、契约内禁任务代号、闸门白名单文档与代码双向一致、引用实现文件存在。同步 CLAUDE.md「设计契约」条目（拆分为 Web/HTML 与 TUI 两份契约及其守卫）与 developer-guide「计划收尾：文档触点清单」（新增「TUI 交互改动」行）。
 
 ## plan-157 回车语义唯一化 + 默认项标注 ✅
 
@@ -203,7 +203,7 @@ technical.md 新增 §6.9「实验项生命周期表」（功能语义命名表�
 
 ## plan-155 TUI 统一交互运行时（panel_runtime）✅ 主体交付
 
-**完成（2026-10-20，v0.13.8-dev 归档）**：按 [`tui-panel-runtime-design.md`](../plan/tui-panel-runtime-design.md) 实施完成——新建 `tui/panel_runtime.py`（`NavState` / `PanelItem(key, label, kind, action, detail)` / `panel_loop`：导航态单源，语义真值取自主循环），`test_panel_runtime.py` 31 例；全部列表面板（`[P]/[A]/[D]/[I]/[S]/[M]` + 缓存管理）迁移到 `panel_loop`——方向键导航全面板生效、Enter 防误触 engaged 门控、直达键游标同步不置 engaged、`kind=return` 项不参与回绕；主循环 `sel` 亦 NavState 化。`[S]` 匹配/详情辅助抽出至 `handlers_switch.py`。文档触点同步（technical 模块表 + C29 升级为「构造性成立」、folders 目录树、requirements R-TUI-08、testplan §2.1、how-to 键位表、changelog）。
+**完成（2026-10-20，v0.13.8-dev 归档）**：按 [`tui-panel-runtime-design.md`](tui-panel-runtime-design.md) 实施完成——新建 `tui/panel_runtime.py`（`NavState` / `PanelItem(key, label, kind, action, detail)` / `panel_loop`：导航态单源，语义真值取自主循环），`test_panel_runtime.py` 31 例；全部列表面板（`[P]/[A]/[D]/[I]/[S]/[M]` + 缓存管理）迁移到 `panel_loop`——方向键导航全面板生效、Enter 防误触 engaged 门控、直达键游标同步不置 engaged、`kind=return` 项不参与回绕；主循环 `sel` 亦 NavState 化。`[S]` 匹配/详情辅助抽出至 `handlers_switch.py`。文档触点同步（technical 模块表 + C29 升级为「构造性成立」、folders 目录树、requirements R-TUI-08、testplan §2.1、how-to 键位表、changelog）。
 
 **本轮补充**：`[M]` 多链优先级面板整体迁出为 `tui/handlers_llm_providers.py`（`handlers_config` 仅留菜单入口薄包装）——原文件曾达 1017 行、超单文件 1000 行硬上限（由 `check-file-length` 拦截），拆分后 899 行，红线恢复。
 

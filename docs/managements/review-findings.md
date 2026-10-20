@@ -47,7 +47,7 @@
 
 ### 归档档案
 
-- [`archived_review-findings.0.13.x.md`](../archive/v0.13.x/archived_review-findings.0.13.x.md) — v0.13.x 开发期已修复批次（2026-10-14 ~ 2026-10-19）
+- [`archived_review-findings.0.13.x.md`](../archive/v0.13.x/archived_review-findings.0.13.x.md) — v0.13.x 开发期已修复批次（2026-10-14 ~ 2026-10-20）
 - [`archived_review-findings.0.12.x.md`](../archive/v0.12.x/archived_review-findings.0.12.x.md) — v0.12.x 已修复批次与开发期追加（2026-10-03 ~ 2026-10-12）
 - [`archived_review-findings.0.11.x.md`](../archive/v0.11.x/archived_review-findings.0.11.x.md) — v0.11.0 ~ v0.11.11  （2026-09-18 ~ 2026-10-02）
 - [`archived_review-findings.0.10.x.md`](../archive/v0.10.x/archived_review-findings.0.10.x.md) — v0.10.1 ~ v0.10.20（2026-08-04 ~ 2026-09-15）
@@ -64,11 +64,4 @@
 
 ### 开发期已修复（0.13.8-dev）
 
-- **rf-731**：LLM 费用预估接入重新生成范围——`forecast_run_cost(force_llm/force_modules)`（与 `POST /api/runs` 同源 `resolve_force_scope` 归一；范围内模块保证重新调用、按静态单价口径，范围外维持历史实际费用口径），摘要行新增「其中 N 个模块重新生成」拆行；TUI `[L]` 屏 `N`/选模块/全量后按所选范围重打更新预估行，Web `cost-preflight` 透传 `llm_modules` 查询参数（非法键 `ok:false` 数据面降级不 500）、确认弹层显示拆行，CLI `--yes` 确认透传 `--force-llm`/`--llm-module`。日预算硬闸维持「当日累计」判定不改为按次预测（按投影拦截会误伤「用已有结果」路径；本次费用预测由更新预估在展示层承担）。
-- **rf-733**：删除 `tui/prompt_text.confirm_prompt`（问句+选项+默认项单行模板，`src/python/` 零生产调用）——确认类屏已按「问句行 + 键位行」两行式落地（生成确认 Y/N 化），单行模板失去挂点；其专属用例与 prompt 契约清单 `_DISPLAY_CALLS` 中的登记同步删除，`panel_prompt`（列表面板四成分模板）保留。plan-159「剩余：input_choice 类提示迁移到 confirm_prompt」方向随之关闭（不迁，两行式为准）。
-- **rf-734**：LLM 配置热生效链路——`get_llm_config()` 合并缓存判据补入 `llm_providers.json`（mtime+size）；`write_llm_providers` 写后主动失效；`[M]` 换序/任意配置编辑成功与 `[R]` 刷新清页头状态行记忆（45s TTL 不再吞重绘）；`llm_status()` 新增 `chain_head` 且首页状态行 `LLM ●` 后显示链首线路（窄终端弃「详情」指引守宽）。手工改 LLM 三文件均免重启生效，同会话生成用新链序。
-- **rf-735**：`llm_providers.json` 头注释「主：/备：」在 reorder 互换后不更新——新增 `write_llm_providers` 写盘前 `_neutralize_chain_labels`（标注改写为中性「线路：」+「顺序即 priority 升序」归正为链序口径；幂等、仅动注释行），默认模板改为只写稳定事实；存量文件已一次性迁移。回归：中性化 / 幂等 / 无关注释不动 / 模板无主备标注 / 顺序误称归正。
-- **rf-736**：`_json_patch` 硬编码 `INNER_INDENT = 4` 致 2 空格风格文件重写后变 4 空格——新增 `_detect_indent_unit`（取首个缩进内容行前导空格数），`_replace_dict_block` 与 `_replace_array_block` 同修。回归：reorder 后条目 4 / 字段 6 缩进保持、嵌套 dict 子键 4 缩进保持。
-- **rf-737**：多链线路顺序两处相反——排序上提为共享 `config/_llm_providers.order_providers_by_chain`（priority 升序、同值保持数组原序），`llm_status()` 与 `[M]` 面板同经此函数，`chain_head` 恒等于 `providers[0]`。回归：数组序与链序相反时 llm_status 按链序输出、面板编号与之一致（跨渠道同序断言）、同 priority 保持数组原序、排序不修改入参。
-- **rf-738**：测试隔离缺口——`tui_menu.MENU_ITEMS` 为模块级可变列表，`_apply_feature_gates()` 用切片赋值原地裁剪且不恢复，任一用例关掉 `doctor_check`/`report_qa` 后，同进程后续用例看到项数不足的菜单；单进程顺序下通常不暴露，xdist 分片改变顺序后表现为随机失败（实测 `test_footer_documents_both_exit_keys`）。修复：`conftest.py` 新增 `_restore_menu_items` autouse fixture 逐例快照/还原；同时把页脚收敛到 80 列内，避免键名改「回车」后折行拆断退出提示。
-- **rf-739**：功能开关门控不可逆——`_apply_feature_gates()` 用切片过滤 `MENU_ITEMS` **本体**（无母本），且只在启动时调用一次。用户实测路径：启动时 `report_qa` 关 → `[Q]` 被裁掉 → 在 `[S]` 开启 → 回首页仍无 `[Q]`（须重启才能出现）；`doctor_check` 的 `[T]` 同病。修复：新增 `_ALL_MENU_ITEMS` 母本，门控改为**从母本重建**（幂等可逆、切片赋值保持列表对象），主循环重绘点每帧重建并同步 `nav.count`（裁剪后游标夹紧）。回归：先关后开完整恢复、列表对象同一、主循环重绘点接线断言。
+（本版开发期已修复项已随 v0.13.8 发布迁入上方归档档案）

@@ -3,7 +3,7 @@
 > **适用对象**：`src/python/tui/` 下一切交互改动——提示语、键位、面板版式、反馈与空态文案。
 > **定位**：TUI 侧**唯一判据**，与 [`DESIGN.md`](DESIGN.md)（Web/报告视觉契约）对称：一个守「看什么」，一个守「怎么按、按了会怎样」。
 > **守卫**：`src/test/unit/ui/test_design_tui_doc.py`（骨架 / 键表 / 表格列 / 口径句 / 护栏 / 术语表 / 闸门白名单交叉校验） + `src/test/unit/ui/test_prompt_contract.py`（上屏提示成分、禁用词、闸门白名单机检）。
-> **设计依据**：[`tui-interaction-hci-design.md`](../plan/tui-interaction-hci-design.md)（在办设计文档：HCI 原则对照、措施分批与验收载体）。
+> **设计依据**：TUI 人机工程治理设计（HCI 原则对照、措施分批与验收载体）——该设计稿已随 v0.13.x 治理批次完成并归档，本契约为其定稿判据。
 
 ---
 
