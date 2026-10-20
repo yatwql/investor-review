@@ -292,7 +292,7 @@
                 <div style="margin-top:8px;font-size: var(--fs-table);">
                     <div style="font-weight:600;color:var(--text-tertiary);margin-bottom:4px;">⬇ 以下持仓无历史走势数据（不含/不支持/获取失败）：</div>
                     {% for h in history_data.failed_holdings %}
-                    <div class="data-status-warn" style="border-left-color:#95a5a6;">✗ {{ h }}</div>
+                    <div class="data-status-warn" style="border-left-color: var(--border-strong);">✗ {{ h }}</div>
                     {% endfor %}
                 </div>
                 {% endif %}
@@ -316,7 +316,7 @@
                     回溯计算组合的模拟走势与回撤，包括累计收益率、最大回撤、年化波动率等关键指标，
                     并标注历史上 A 股主要危机时段。
                 </p>
-                <p style="margin-top:12px;font-size: var(--fs-table-sm);color:#aaa;">
+                <p style="margin-top:12px;font-size: var(--fs-table-sm);color: var(--text-faint);">
                     功能入口：菜单 L（生成全系列完整版报告）将自动获取历史数据 |
                     可在 config.json 的 history.fetch_mode 中设为 "auto" 自动获取
                 </p>

@@ -9,6 +9,14 @@
 
 ## [0.13.9-dev] - 开发中（未发布）
 
+### Added
+
+- 调仓 What-if 对比页右上角「打印 / 导出 PDF」按钮：与主报告同参（44×44 触控、语义 token、打印稿自隐藏），双页入口一致（plan-128）
+
+### Changed
+
+- 报告模板 40 处内联 `style=` 色值全部 token 化归零：新增组件派生 token `--heat-*`/`--corr-*`/`--cell-na-bg`/`--alloc-*`/`--danger-text`（DESIGN.md Colors 登记，暗色配对同步）；设计护栏 W3 内联色值归零并由观察升为 E 级 finding（W4 字号/W5 间距保持观察）（plan-167）
+
 ### Fixed
 
 - `write_llm_providers` 写盘后将 `llm_providers.json` 权限收紧为 0o600（含 api_key 的凭据文件与 cache 域敏感文件同标准；Windows 静默跳过），补新写/重写收紧两用例

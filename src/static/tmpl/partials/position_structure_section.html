@@ -45,14 +45,14 @@
                     <tr>
                         <td style="font-weight: bold; font-size: var(--fs-footnote); max-width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
                             title="{{ _fund_names.get(_funds[i], _funds[i]) }}">{{ _fund_names.get(_funds[i], _funds[i]) }}</td>
-                        <td style="font-size: var(--fs-footnote); color: #888;">({{ _funds[i] }})</td>
+                        <td style="font-size: var(--fs-footnote); color: var(--text-muted);">({{ _funds[i] }})</td>
                         {% for j in range(_funds | length) %}
                         {% set val = _matrix[i][j] %}
                         <td style="text-align: center; font-size: var(--fs-table-sm);
-                            {% if val >= 0.50 %}background-color: #FF4444; color: white; font-weight: bold;
-                            {% elif val >= 0.30 %}background-color: #FF8C00; color: white;
-                            {% elif val >= 0.15 %}background-color: #FFD700;
-                            {% elif val > 0 %}background-color: #CCFFCC;
+                            {% if val >= 0.50 %}background-color: var(--heat-strong); color: white; font-weight: bold;
+                            {% elif val >= 0.30 %}background-color: var(--heat-mid); color: white;
+                            {% elif val >= 0.15 %}background-color: var(--heat-weak);
+                            {% elif val > 0 %}background-color: var(--heat-faint);
                             {% endif %}">
                             {{ "%.2f"|format(val * 100) }}%
                         </td>
@@ -138,30 +138,30 @@
                     <tr>
                         <td style="font-weight: bold; font-size: var(--fs-footnote); max-width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
                             title="{{ _corr_names.get(_corr_codes[i], _corr_codes[i]) }}">{{ _corr_names.get(_corr_codes[i], _corr_codes[i]) }}</td>
-                        <td style="font-size: var(--fs-footnote); color: #888;">({{ _corr_codes[i] }})</td>
+                        <td style="font-size: var(--fs-footnote); color: var(--text-muted);">({{ _corr_codes[i] }})</td>
                         {% for j in range(_corr_codes | length) %}
                         {% if j == i %}
-                        <td style="background-color: #f5f5f5; color: #bbb;" title="自相关">1.00</td>
+                        <td style="background-color: var(--row-first-check-bg); color: var(--text-faint);" title="自相关">1.00</td>
                         {% elif j < i %}
                         {% set _corr_r = _corr_matrix[i][j] %}
                         {% if _corr_r is none %}
-                        <td style="background-color: #eeeeee; color: var(--text-faint);" title="重叠样本不足，未计算">N/A</td>
+                        <td style="background-color: var(--cell-na-bg); color: var(--text-faint);" title="重叠样本不足，未计算">N/A</td>
                         {% else %}
                         {% set _corr_p = _corr_pvals[i][j] %}
                         {% if _corr_p is not none and _corr_p >= 0.05 %}
-                        <td style="background-color: #ffffff; color: var(--text-faint);" title="p={{ "%.4f"|format(_corr_p) }}，不显著">{{ "%.2f"|format(_corr_r) }}</td>
+                        <td style="background-color: var(--surface); color: var(--text-faint);" title="p={{ "%.4f"|format(_corr_p) }}，不显著">{{ "%.2f"|format(_corr_r) }}</td>
                         {% elif _corr_r >= 0.5 %}
-                        <td style="background-color: #C00000; color: white; font-weight: bold;" title="r={{ "%.2f"|format(_corr_r) }}，p={{ "%.4f"|format(_corr_p) }}">强正</td>
+                        <td style="background-color: var(--corr-pos-strong); color: white; font-weight: bold;" title="r={{ "%.2f"|format(_corr_r) }}，p={{ "%.4f"|format(_corr_p) }}">强正</td>
                         {% elif _corr_r >= 0.3 %}
-                        <td style="background-color: #FF7F7F; color: #333;" title="r={{ "%.2f"|format(_corr_r) }}，p={{ "%.4f"|format(_corr_p) }}">{{ "%.2f"|format(_corr_r) }}</td>
+                        <td style="background-color: var(--corr-pos); color: var(--text);" title="r={{ "%.2f"|format(_corr_r) }}，p={{ "%.4f"|format(_corr_p) }}">{{ "%.2f"|format(_corr_r) }}</td>
                         {% elif _corr_r > 0 %}
-                        <td style="background-color: #FFE0E0; color: #333;" title="r={{ "%.2f"|format(_corr_r) }}，p={{ "%.4f"|format(_corr_p) }}">{{ "%.2f"|format(_corr_r) }}</td>
+                        <td style="background-color: var(--corr-pos-weak); color: var(--text);" title="r={{ "%.2f"|format(_corr_r) }}，p={{ "%.4f"|format(_corr_p) }}">{{ "%.2f"|format(_corr_r) }}</td>
                         {% elif _corr_r <= -0.5 %}
-                        <td style="background-color: #1F4E79; color: white; font-weight: bold;" title="r={{ "%.2f"|format(_corr_r) }}，p={{ "%.4f"|format(_corr_p) }}">强负</td>
+                        <td style="background-color: var(--corr-neg-strong); color: white; font-weight: bold;" title="r={{ "%.2f"|format(_corr_r) }}，p={{ "%.4f"|format(_corr_p) }}">强负</td>
                         {% elif _corr_r <= -0.3 %}
-                        <td style="background-color: #8DB4E2; color: #333;" title="r={{ "%.2f"|format(_corr_r) }}，p={{ "%.4f"|format(_corr_p) }}">{{ "%.2f"|format(_corr_r) }}</td>
+                        <td style="background-color: var(--corr-neg); color: var(--text);" title="r={{ "%.2f"|format(_corr_r) }}，p={{ "%.4f"|format(_corr_p) }}">{{ "%.2f"|format(_corr_r) }}</td>
                         {% else %}
-                        <td style="background-color: #E0ECF7; color: #333;" title="r={{ "%.2f"|format(_corr_r) }}，p={{ "%.4f"|format(_corr_p) }}">{{ "%.2f"|format(_corr_r) }}</td>
+                        <td style="background-color: var(--corr-neg-weak); color: var(--text);" title="r={{ "%.2f"|format(_corr_r) }}，p={{ "%.4f"|format(_corr_p) }}">{{ "%.2f"|format(_corr_r) }}</td>
                         {% endif %}
                         {% endif %}
                         {% else %}
@@ -177,14 +177,14 @@
             <!-- 图例 -->
             <div class="penetration-notes" style="margin-top: 8px;">
                 <div>
-                    图例：<span style="display:inline-block; width:16px; height:12px; background:#C00000; margin-right:3px; vertical-align:middle;"></span> 强正相关(r≥0.5)
-                    <span style="display:inline-block; width:16px; height:12px; background:#FF7F7F; margin:0 3px 0 10px; vertical-align:middle;"></span> 正相关
-                    <span style="display:inline-block; width:16px; height:12px; background:#FFE0E0; margin:0 3px 0 10px; vertical-align:middle;"></span> 弱正相关
-                    <span style="display:inline-block; width:16px; height:12px; background:#1F4E79; margin:0 3px 0 10px; vertical-align:middle;"></span> 强负相关(r≤-0.5)
-                    <span style="display:inline-block; width:16px; height:12px; background:#8DB4E2; margin:0 3px 0 10px; vertical-align:middle;"></span> 负相关
-                    <span style="display:inline-block; width:16px; height:12px; background:#E0ECF7; margin:0 3px 0 10px; vertical-align:middle;"></span> 弱负相关
-                    <span style="display:inline-block; width:16px; height:12px; background:#ffffff; border:1px solid #ccc; margin:0 3px 0 10px; vertical-align:middle;"></span> 不显著(p≥0.05)
-                    <span style="display:inline-block; width:16px; height:12px; background:#eeeeee; margin:0 3px 0 10px; vertical-align:middle;"></span> 数据不足
+                    图例：<span style="display:inline-block; width:16px; height:12px; background: var(--corr-pos-strong); margin-right:3px; vertical-align:middle;"></span> 强正相关(r≥0.5)
+                    <span style="display:inline-block; width:16px; height:12px; background: var(--corr-pos); margin:0 3px 0 10px; vertical-align:middle;"></span> 正相关
+                    <span style="display:inline-block; width:16px; height:12px; background: var(--corr-pos-weak); margin:0 3px 0 10px; vertical-align:middle;"></span> 弱正相关
+                    <span style="display:inline-block; width:16px; height:12px; background: var(--corr-neg-strong); margin:0 3px 0 10px; vertical-align:middle;"></span> 强负相关(r≤-0.5)
+                    <span style="display:inline-block; width:16px; height:12px; background: var(--corr-neg); margin:0 3px 0 10px; vertical-align:middle;"></span> 负相关
+                    <span style="display:inline-block; width:16px; height:12px; background: var(--corr-neg-weak); margin:0 3px 0 10px; vertical-align:middle;"></span> 弱负相关
+                    <span style="display:inline-block; width:16px; height:12px; background: var(--surface); border:1px solid var(--border-strong); margin:0 3px 0 10px; vertical-align:middle;"></span> 不显著(p≥0.05)
+                    <span style="display:inline-block; width:16px; height:12px; background: var(--cell-na-bg); margin:0 3px 0 10px; vertical-align:middle;"></span> 数据不足
                 </div>
             </div>
 
@@ -210,7 +210,7 @@
                         <td>{{ loop.index }}</td>
                         <td class="text-left">{{ p.name_a }}({{ p.code_a | anon_code }})</td>
                         <td class="text-left">{{ p.name_b }}({{ p.code_b | anon_code }})</td>
-                        <td style="color: {% if p.pearson >= 0.5 %}#C00000{% elif p.pearson > 0 %}#E65C00{% elif p.pearson <= -0.5 %}#1F4E79{% else %}var(--primary){% endif %}; font-weight: 600;">
+                        <td style="color: {% if p.pearson >= 0.5 %}var(--corr-pos-strong){% elif p.pearson > 0 %}var(--corr-pos-mid){% elif p.pearson <= -0.5 %}var(--corr-neg-strong){% else %}var(--primary){% endif %}; font-weight: 600;">
                             {{ "%.2f"|format(p.pearson) }}
                         </td>
                         <td>{{ "%.4f"|format(p.p_value) }}</td>
@@ -303,7 +303,7 @@
                     <tr class="{% if _alert == '紧急' %}row-danger{% elif _alert == '关注' %}row-warning{% endif %}">
                         <td class="text-left">{{ r["name"] }}</td>
                         <td>{{ r["code"] | anon_code }}</td>
-                        <td style="font-size: var(--fs-table-sm); {{ 'color: #b06a00;' if r.get('report_stale') }}">
+                        <td style="font-size: var(--fs-table-sm); {{ 'color: var(--warn-text);' if r.get('report_stale') }}">
                             {{ r.get("report_period", "") }}{% if r.get("report_stale") %}（陈旧）{% endif %}
                         </td>
                         <td>{{ "%.2f"|format(r["top3_pct"]) }}%</td>
@@ -312,7 +312,7 @@
                         {% if r.get("prev_top10_pct") is not none %}
                         <td>{{ "%.2f"|format(r["prev_top10_pct"]) }}%</td>
                         {% else %}
-                        <td style="color: #888;">—</td>
+                        <td style="color: var(--text-muted);">—</td>
                         {% endif %}
                         {% if r.get("is_first_check") %}
                         <td><span class="gray-text">基线已记录</span></td>

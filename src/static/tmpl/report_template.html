@@ -68,6 +68,22 @@
             --profit: #CC0000;              /* 盈利/上涨红 */
             --loss: #007a00;                /* 亏损/下跌绿 */
             --success: #2e7d32;             /* 已恢复/正常态绿 */
+            /* 相关性/热力分档与状态派生（DESIGN.md Colors 组件派生面；内联色 token 化） */
+            --heat-strong: #FF4444;       /* 相关系数分档：强（≥0.50）背景 */
+            --heat-mid: #FF8C00;          /* 相关系数分档：中（≥0.30）背景 */
+            --heat-weak: #FFD700;         /* 相关系数分档：弱（≥0.15）背景 */
+            --heat-faint: #CCFFCC;        /* 相关系数分档：微（>0）背景 */
+            --corr-pos-strong: #C00000;   /* 相关性方向×强度：强正背景/文字 */
+            --corr-pos-mid: #E65C00;      /* 相关性：正（文字） */
+            --corr-pos: #FF7F7F;          /* 相关性：正背景 */
+            --corr-pos-weak: #FFE0E0;     /* 相关性：弱正背景 */
+            --corr-neg-strong: #1F4E79;   /* 相关性：强负背景/文字 */
+            --corr-neg: #8DB4E2;          /* 相关性：负背景 */
+            --corr-neg-weak: #E0ECF7;     /* 相关性：弱负背景 */
+            --cell-na-bg: #eeeeee;        /* 表格不可计算/未命中单元格底 */
+            --alloc-mid: #70AD47;         /* 配置分布条：中配绿 */
+            --alloc-low: #C00000;         /* 配置分布条：低配红 */
+            --danger-text: #b0413e;       /* 数据获取失败提示文字（danger 派生域） */
             --rating-excellent: #CC0000;
             --rating-poor: #006400;
             --rating-deviation: #009900;
@@ -136,6 +152,23 @@
             --profit: #ff6b6b;              /* 暗色下提亮，红涨绿跌惯例保持 */
             --loss: #4caf50;
             --success: #4caf50;
+            /* 相关性/热力分档与状态派生：饱和语义块小面积、字面对比仍达标，刻意保持原值；
+               中性面与警示文字按暗色世界调整 */
+            --heat-strong: #FF4444;
+            --heat-mid: #FF8C00;
+            --heat-weak: #FFD700;
+            --heat-faint: #CCFFCC;
+            --corr-pos-strong: #C00000;
+            --corr-pos-mid: #E65C00;
+            --corr-pos: #FF7F7F;
+            --corr-pos-weak: #FFE0E0;
+            --corr-neg-strong: #1F4E79;
+            --corr-neg: #8DB4E2;
+            --corr-neg-weak: #E0ECF7;
+            --cell-na-bg: #2a2a2a;
+            --alloc-mid: #70AD47;
+            --alloc-low: #C00000;
+            --danger-text: #ff8a80;
             --rating-excellent: #ff6b6b;
             --rating-poor: #81c784;
             --rating-deviation: #81c784;
@@ -768,7 +801,7 @@
         {% if data_quality_enabled and data_freshness and data_freshness.available and data_freshness.abnormal_count > 0 %}
         <div class="data-status" style="margin-top:10px;">
             <span class="src-matrix-failed">&#9888; {{ data_freshness.summary }}</span>
-            <span style="margin-left:8px;color:#888;">含净值滞后/行情缺失/疑似跳变，详见第 {{ section_numbers["data_source_status"] }} 章</span>
+            <span style="margin-left:8px;color: var(--text-muted);">含净值滞后/行情缺失/疑似跳变，详见第 {{ section_numbers["data_source_status"] }} 章</span>
         </div>
         {% endif %}
     </div>

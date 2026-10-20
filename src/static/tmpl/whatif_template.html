@@ -137,7 +137,17 @@
             display: flex; align-items: center; justify-content: center;
         }
         .theme-toggle-btn:hover { background: var(--primary-hover); }
+        /* ── 打印/导出 PDF 按钮（与主报告同参，主题切换左侧）── */
+        .report-print-btn {
+            position: fixed; right: 64px; top: 12px; z-index: 101;
+            width: 44px; height: 44px; border-radius: 50%;
+            background: var(--primary); color: #fff; border: none; cursor: pointer;
+            font-size: var(--fs-h2); line-height: 1; box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .report-print-btn:hover { background: var(--primary-hover); }
         @media print { .theme-toggle-btn { display: none !important; } thead th:first-child, tbody td:first-child { position: static; } }
+        @media print { .report-print-btn { display: none !important; } }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: var(--font-stack); background: var(--bg); color: var(--text); font-size: var(--fs-body); line-height: var(--lh-body); }
         .container { max-width: 1200px; margin: 0 auto; padding: 20px; display: flex; flex-direction: column; }
@@ -233,6 +243,7 @@
 <body id="report-top">
 <!-- 主题切换（暗色模式（主题切换））：浮动右上角，theme.js 接管 icon/aria-label -->
 <button type="button" class="theme-toggle-btn" id="theme-toggle-btn" aria-label="切换深色模式" title="切换深色模式">🌙</button>
+<button type="button" class="report-print-btn" id="report-print-btn" aria-label="打印或导出 PDF" title="打印 / 导出 PDF" onclick="window.print()">🖨️</button>
 <div class="container">
     <div class="report-header">
         <h1>调仓 What-if 模拟</h1>

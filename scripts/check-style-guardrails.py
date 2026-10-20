@@ -584,7 +584,10 @@ def run_checks(
             findings += check_dark_sync(path)
         observations["raw_colors"] += observe_raw_colors(path)
         observations["radius"] += observe_radius(path)
-        observations["inline_colors"] += observe_inline_colors(path)
+        inline_hits = observe_inline_colors(path)
+        # W3 内联色值已收口（观察期 40 处存量全部 token 化归零）：升为 E 级 finding
+        findings += [f"内联 style 色值（应改用语义 token）: {h}" for h in inline_hits]
+        observations["inline_colors"] += inline_hits
         observations["type_scale"] += observe_type_scale(path)
         observations["spacing_scale"] += observe_spacing_scale(path)
 

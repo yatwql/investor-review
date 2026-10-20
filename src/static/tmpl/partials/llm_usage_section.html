@@ -69,7 +69,7 @@
                             {% if _mi.cached %}
                             <span style="color: var(--llm-status-cached);">✓</span>
                             {% elif _mi.status == "success" %}
-                            <span style="color: #ccc;">—</span>
+                            <span style="color: var(--text-faint);">—</span>
                             {% else %}
                             —
                             {% endif %}
@@ -78,7 +78,7 @@
                             {% if _mi.thinking %}
                             <span style="color: var(--llm-status-thinking);">✓</span>
                             {% elif _mi.status == "success" or _mi.status == "cached" %}
-                            <span style="color: #ccc;">—</span>
+                            <span style="color: var(--text-faint);">—</span>
                             {% else %}
                             —
                             {% endif %}

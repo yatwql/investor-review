@@ -251,9 +251,15 @@ class TestInlineColors:
 
     def test_inline_style_hex_observed(self, guard, tmp_path):
         f = _write(tmp_path, "i.html", '<td style="color: #888;">x</td>\n')
-        _, obs = guard.run_checks(files=[f], design_text=_MINIMAL_DESIGN)
+        findings, obs = guard.run_checks(files=[f], design_text=_MINIMAL_DESIGN)
         assert len(obs["inline_colors"]) == 1, "内联 style 色值应进 W3"
         assert obs["raw_colors"] == [], "W1 引号豁免口径保持不变"
+
+    def test_inline_style_hex_is_finding(self, guard, tmp_path):
+        """W3 收口后内联 style 色值同时进 E 级 findings（不再是纯观察项）。"""
+        f = _write(tmp_path, "i2.html", '<td style="color: #888;">x</td>\n')
+        findings, _ = guard.run_checks(files=[f], design_text=_MINIMAL_DESIGN)
+        assert any("内联 style 色值" in item for item in findings), "内联色值应升为 E 级 finding"
 
     def test_script_region_not_inline(self, guard, tmp_path):
         """<script> 域 JS 字符串色值属绘制/图表配置域，不归 W3。"""
