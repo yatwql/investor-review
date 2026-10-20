@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""文档历史变更痕迹检查脚本。
+"""文档历史变更痕迹与结构性冗余检查脚本。
 
-检查面向读者的仓库文档是否残留历史痕迹，保证正文只反映最新状态。
+检查面向读者的仓库文档是否残留历史痕迹，保证正文只反映最新状态；并拦截
+复制粘贴残留（同一标题/条目/区块在文档中出现两次）类结构性冗余。
 
-四条核心规则：
+七条核心规则：
   1. 文档正文内容不得带有历史痕迹和历史变更（版本号标记、来源叙述、
      原/旧实现、迁移/重命名、任务编号引用、迭代标记等），只描述
      "当前是什么/做什么"。changelog.md 例外（变更日志的职责即记录变化，
@@ -41,6 +42,13 @@
      变更日志记录变化是其职责，均不适用（changelog 仍仅章节编号）。
      迭代轮次（"轮 N"）是任务记录的正式载体，本条不适用；设计文档的
      "旧格式兼容"等是合法设计内容（历史实现叙述类不入任务域）。
+  7. 结构性冗余（DUPLICATE）：同一文档内相同级别+文本的 ATX 标题出现
+     ≥2 次（第 2 次起报出）；台账文件（plan.md / review-findings.md /
+     changelog.md）另检规范化后 ≥40 字符的重复内容行与连续 5 行、有效
+     内容 ≥100 字符的逐字重复区块——拦截「同一区块/条目粘贴两遍」类
+     复制粘贴残留与冗余信息。豁免：Keep-a-Changelog 通用小节名
+     （Added/Changed/Fixed 等在每个版本块下合法重复）、围栏代码块内
+     `#` 注释与示例、分隔/装饰行与短模板行（重复长行豁免）。
 
 受检范围：
   - 项目根 README.md
@@ -49,6 +57,8 @@
   - 章节编号检查另覆盖 changelog.md（仅章节编号模式）；
     任务记录域检查覆盖 review-findings.md / plan.md 与 docs/plan/
     （章节编号 + NARRATIVE 复盘痕迹 + CIPHER）
+  - 结构性冗余（DUPLICATE）：标题去重全域适用；重复长行与重复区块
+    仅台账三文件（plan.md / review-findings.md / changelog.md）
 
 豁免范围（归档/运行时产物性质，允许历史痕迹与归档引用）：
   - docs/archive/ 归档文档
@@ -72,6 +82,8 @@
   - 工具使用场景（pytest --ff 等）
   - 模型/环境名（Gemini 旧版 / 旧版 Python）
   - 工具自身说明（描述脚本跳过/豁免归档目录与归档引用）
+  - Keep-a-Changelog 通用小节名（Added/Changed/Fixed 等——每个版本块下
+    合法重复，标题去重豁免）；分隔/装饰行与短模板行（重复长行豁免）
 
 用法：
   python scripts/check-doc-traces.py           # 检查全部
@@ -80,7 +92,7 @@
 
 退出码：
   0 — 全部通过（无可疑痕迹）
-  1 — 发现高置信度痕迹（HIGH/ARCHIVE/CODE/CIPHER/CHAPTER/ROUND/STATUS/NARRATIVE），应修复后再提交
+  1 — 发现高置信度痕迹（HIGH/ARCHIVE/CODE/CIPHER/CHAPTER/ROUND/STATUS/NARRATIVE/DUPLICATE），应修复后再提交
   2 — 仅 LOW 级别痕迹，建议人工复核
 """
 
@@ -658,6 +670,98 @@ def scan_deleted_symbol_refs(
     return hits
 
 
+# ── DUPLICATE：结构性冗余（重复标题/长行/区块，防复制粘贴残留） ──
+_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+#: Keep-a-Changelog 通用小节名（每个版本块下合法重复，标题去重豁免）
+_KEEP_A_CHANGELOG_SECTIONS = {"added", "changed", "removed", "deprecated", "security", "fixed", "unreleased"}
+#: 分隔/装饰行（表格分隔、分割线等，重复属正常结构，长行去重豁免）
+_SEPARATOR_LINE_RE = re.compile(r"^[\s|:\-=_*#>]+$")
+#: 台账三文件：重复长行/区块仅对其检查（任务/自审/变更记录最易出现复制粘贴残留）
+_LEDGER_DOCS = {"plan.md", "review-findings.md", "changelog.md"}
+_DUP_MIN_LINE_LEN = 40  # 长行去重的最小长度（短模板行如归档索引提示行豁免）
+_DUP_BLOCK_WINDOW = 5  # 区块去重滑窗行数
+_DUP_BLOCK_MIN_CHARS = 100  # 区块有效内容下限（纯结构行/空窗不检）
+
+
+def scan_structural_duplicates(doc: Path) -> list[tuple[int, str, str, str]]:
+    """结构性冗余检查：重复标题（全部受检文档）+ 重复长行/区块（台账三文件）。
+
+    防「同一区块/条目在文档中出现两次」类复制粘贴残留（如任务域小节
+    整块重复、条目行粘贴两遍）。豁免与阈值见模块 docstring 规则 7。
+    """
+    try:
+        text = doc.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    lines = text.splitlines()
+    hits: list[tuple[int, str, str, str]] = []
+
+    # 标题去重（全域；代码围栏内 `#` 注释非标题，跳过）
+    seen_titles: dict[tuple[int, str], int] = {}
+    in_code = False
+    for lineno, raw in enumerate(lines, 1):
+        s = raw.rstrip()
+        if s.startswith("```"):
+            in_code = not in_code
+            continue
+        if in_code:
+            continue
+        m = _HEADING_RE.match(s)
+        if not m:
+            continue
+        key = (len(m.group(1)), m.group(2).strip())
+        if key[1].lower() in _KEEP_A_CHANGELOG_SECTIONS:
+            continue
+        if key in seen_titles:
+            hits.append((lineno, "DUPLICATE", f"重复标题（同文首现于 L{seen_titles[key]}，疑似复制粘贴残留）", s[:120]))
+        else:
+            seen_titles[key] = lineno
+
+    if doc.name not in _LEDGER_DOCS:
+        return sorted(hits, key=lambda h: h[0])
+
+    # 长行去重（台账三文件）
+    seen_lines: dict[str, int] = {}
+    in_code = False
+    norm: list[str] = []
+    for lineno, raw in enumerate(lines, 1):
+        s = raw.rstrip()
+        norm.append(s)
+        if s.startswith("```"):
+            in_code = not in_code
+            continue
+        if in_code or not s.strip() or _HEADING_RE.match(s) or _SEPARATOR_LINE_RE.match(s):
+            continue
+        if len(s.strip()) >= _DUP_MIN_LINE_LEN:
+            if s in seen_lines:
+                hits.append(
+                    (lineno, "DUPLICATE", f"重复内容行（同文首现于 L{seen_lines[s]}，疑似复制粘贴残留）", s[:120])
+                )
+            else:
+                seen_lines[s] = lineno
+
+    # 区块去重（台账三文件；滑窗含空行占位，逐字比对）
+    seen_blocks: dict[tuple[str, ...], int] = {}
+    for start in range(len(norm) - _DUP_BLOCK_WINDOW + 1):
+        win = norm[start : start + _DUP_BLOCK_WINDOW]
+        if sum(len(x.strip()) for x in win) < _DUP_BLOCK_MIN_CHARS:
+            continue
+        key = tuple(win)
+        if key in seen_blocks:
+            hits.append(
+                (
+                    start + 1,
+                    "DUPLICATE",
+                    f"重复区块（{_DUP_BLOCK_WINDOW} 行窗口，同文首现于 L{seen_blocks[key]}）",
+                    win[0][:120],
+                )
+            )
+        else:
+            seen_blocks[key] = start + 1
+
+    return sorted(hits, key=lambda h: h[0])
+
+
 def _render_summary(total: int, high: int, low: int, summary: dict[str, int]) -> int:
     """结论汇总输出（全量与缓存回放两路共用，保证输出逐字一致）。"""
     print()
@@ -667,7 +771,9 @@ def _render_summary(total: int, high: int, low: int, summary: dict[str, int]) ->
     cat_stats = ", ".join(f"{k}={v}" for k, v in sorted(summary.items()))
     print(f"[!] 发现 {total} 处可疑痕迹（{cat_stats}）")
     if high > 0:
-        print(f"    {high} 处高置信度（HIGH/ARCHIVE/CODE/CIPHER/CHAPTER/ROUND/NARRATIVE），应从文档中移除")
+        print(
+            f"    {high} 处高置信度（HIGH/ARCHIVE/CODE/CIPHER/CHAPTER/ROUND/STATUS/NARRATIVE/DUPLICATE），应从文档中移除"
+        )
         return 1
     print(f"[!] 仅 {low} 处 LOW 级别痕迹（需人工判断），建议复核")
     return 2
@@ -726,7 +832,17 @@ def main() -> int:
         for lineno, cat, desc, text in hits:
             total_hits += 1
             summary[cat] = summary.get(cat, 0) + 1
-            is_high = cat in ("HIGH", "ARCHIVE", "CODE", "CIPHER", "CHAPTER", "ROUND", "NARRATIVE")
+            is_high = cat in (
+                "HIGH",
+                "ARCHIVE",
+                "CODE",
+                "CIPHER",
+                "CHAPTER",
+                "ROUND",
+                "STATUS",
+                "NARRATIVE",
+                "DUPLICATE",
+            )
             if is_high:
                 high_count += 1
             else:
@@ -758,6 +874,10 @@ def main() -> int:
     # 已删除函数残留：文档反引号引用的函数，当前代码无定义但 git 历史存在过（常规文档）
     for doc in regular_docs:
         report_doc(doc, scan_deleted_symbol_refs(doc))
+
+    # 结构性冗余（DUPLICATE）：重复标题全域 + 重复长行/区块（台账三文件）
+    for doc in [*regular_docs, *exempt_docs]:
+        report_doc(doc, scan_structural_duplicates(doc))
 
     conclusion_cache_save(
         "doc_traces",

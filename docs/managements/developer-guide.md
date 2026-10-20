@@ -1007,20 +1007,21 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 
 | 域 | 文档 | 检查内容 |
 |:---|:-----|:---------|
-| 常规域 | README + managements（除 changelog/plan/review-findings）+ manuals | 历史痕迹（HIGH）+ 章节/轮次编号 + 归档引用 + 约束代号 + 目录树纪律（folders.md 树行：任务编号 CODE、进度状态词 STATUS，仅 archive 引用豁免）+ 受检域 .md 文件名任务编号 |
-| 任务记录域 | `plan.md` / `review-findings.md` / `docs/plan/*.md` | 章节编号 + 复盘痕迹（NARRATIVE：任务内容只反映最新状态）+ 约束代号；不走表格豁免（任务表/断言表行内叙事必检） |
-| 变更日志 | `changelog.md` | 仅章节编号（记录变化是其职责，历史痕迹与复盘叙事均合法） |
+| 常规域 | README + managements（除 changelog/plan/review-findings）+ manuals | 历史痕迹（HIGH）+ 章节/轮次编号 + 归档引用 + 约束代号 + 目录树纪律（folders.md 树行：任务编号 CODE、进度状态词 STATUS，仅 archive 引用豁免）+ 受检域 .md 文件名任务编号 + 重复标题（DUPLICATE 冗余检查） |
+| 任务记录域 | `plan.md` / `review-findings.md` / `docs/plan/*.md` | 章节编号 + 复盘痕迹（NARRATIVE：任务内容只反映最新状态）+ 约束代号 + 结构性冗余（DUPLICATE：重复标题/长行/区块）；不走表格豁免（任务表/断言表行内叙事必检） |
+| 变更日志 | `changelog.md` | 仅章节编号（记录变化是其职责，历史痕迹与复盘叙事均合法）+ 结构性冗余（DUPLICATE：重复标题/长行/区块） |
 
 
 恒不入检：归档目录与运行时临时目录（脚本跳过范围）。此类文档只应描述“当前是什么/做什么”，不应记录“从哪里来、怎么变的”。
 
-六条核心规则：
+七条核心规则：
 1. **正文不得带历史痕迹**：文档正文不得包含历史变更信息（来源叙述、原/旧实现、迁移/重命名、任务编号、版本号、Iter 迭代标记等），只反映“当前是什么/做什么”。例外：`changelog.md`（变更日志的职责即记录变化）
 2. **正文不得引用归档文件**：除 changelog 外，常规域文档正文不得引用 `docs/archive/` 下目录或 `archived_*.md`。例外：`folders.md` 的目录树（`│ ├ └` 行）与统计表行——目录树记录项目结构，archive/ 条目是结构的一部分
 3. **章节编号引用**：任何受检文档不得用数字章节号（“N 章”）指代报告章节，用语义章节名；计数表述（共 N 章等）豁免。三域均检
 4. **迭代轮次引用**：常规文档不得用数字轮次（“第 N 轮”）指代开发迭代；任务记录域与 changelog 豁免（“轮 N”是正式记录载体）
 5. **架构约束代号（C 系列，以 technical.md 约束表为准）**：除约束定义处（technical.md / llm-technical.md）外，所有受检文档一律禁（约束代号属暗号，处处禁）
 6. **任务记录域复盘痕迹（NARRATIVE）**：plan/review-findings/docs/plan 的任务内容只反映最新状态，禁时间对比叙事、以“不再”领起的对既有行为的否定句、历史归因类表述；任务状态标记、根因定位引用、迭代轮次、设计文档旧格式兼容是内容合法。仅任务域检出（手册操作指引与 changelog 记录变化均不适用）
+7. **结构性冗余（DUPLICATE）**：同文内相同级别+文本的标题、台账文件（plan/review-findings/changelog）中 ≥40 字符的重复内容行与连续 5 行重复区块均视为复制粘贴残留/冗余信息，第 2 次出现起报出。豁免：Keep-a-Changelog 通用小节（Added/Changed/Fixed 等每版本块下合法重复）、围栏代码块、分隔行与短模板行。标题去重全域适用，长行/区块仅台账三文件
 
 目录树与文件名纪律（folders.md 等树行）：
 - **树行豁免仅 archive 引用类**：目录树行不走通用行豁免，任务编号（CODE）与进度状态词（STATUS：已实施/完成态/随任务完成移入/验收·判定记录指引/§N 指引/已归档/稿态词/树行“不再”等）在树行照检；描述只讲文件内容，不写进度/流转/任务号
@@ -1050,7 +1051,7 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 | 退出码 | 含义 | 行动 |
 |:------:|:-----|:-----|
 | 0 | 全部通过 | 无需处理 |
-| 1 | HIGH/ARCHIVE/CODE/CIPHER/CHAPTER/ROUND/STATUS/NARRATIVE 痕迹 | 应从文档中移除 |
+| 1 | HIGH/ARCHIVE/CODE/CIPHER/CHAPTER/ROUND/STATUS/NARRATIVE/DUPLICATE 痕迹 | 应从文档中移除 |
 | 2 | 仅 LOW 级别痕迹（需人工判断的变更/过渡类描述） | 建议人工复核 |
 
 **`check-test-markers.py` — 标记合规性检查**

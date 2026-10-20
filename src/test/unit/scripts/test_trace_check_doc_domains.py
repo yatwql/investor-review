@@ -1,5 +1,5 @@
 """check-doc-traces 文档域专项测试：目录树行豁免收窄、文件名任务编号、
-任务记录域复盘痕迹（NARRATIVE）。
+任务记录域复盘痕迹（NARRATIVE）、结构性冗余（DUPLICATE）。
 
 与 test_trace_check_scripts.py 同源（doc_traces fixture），按检查域拆分
 文件——单测试文件行数红线 1200 行。
@@ -186,3 +186,59 @@ class TestDocTaskRecordDomain:
     def test_regular_doc_narrative_not_scanned(self, doc_traces):
         """常规文档正文不检 NARRATIVE（手册操作指引语境）。"""
         assert _doc_hit(doc_traces, "变更后请重启服务再验证") is None
+
+
+class TestDocStructuralDuplicates:
+    """结构性冗余（DUPLICATE）：重复标题全域、重复长行/区块仅台账三文件。
+
+    拦「同一区块/条目粘贴两遍」类复制粘贴残留（任务域小节整块重复）；
+    Keep-a-Changelog 通用小节与代码围栏豁免。
+    """
+
+    def _write(self, tmp_path: Path, content: str, name: str = "doc.md") -> Path:
+        p = tmp_path / name
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content, encoding="utf-8")
+        return p
+
+    def test_repeated_heading_flagged_at_second_occurrence(self, doc_traces, tmp_path):
+        """同级同文标题出现两次，第 2 次报出（首现行为合法不报）。"""
+        doc = self._write(tmp_path, "## 开发期已修复\n\n正文\n\n## 开发期已修复\n\n重复节\n")
+        hits = doc_traces.scan_structural_duplicates(doc)
+        assert [(h[0], h[1]) for h in hits] == [(5, "DUPLICATE")]
+
+    def test_keep_a_changelog_sections_excluded(self, doc_traces, tmp_path):
+        """Added 等通用小节在每个版本块下合法重复，标题去重豁免。"""
+        doc = self._write(tmp_path, "## [1.0.0]\n\n### Added\n\n- a\n\n## [1.1.0]\n\n### Added\n\n- b\n")
+        assert doc_traces.scan_structural_duplicates(doc) == []
+
+    def test_heading_in_code_fence_excluded(self, doc_traces, tmp_path):
+        """围栏代码块内 `#` 注释非标题，不得误报。"""
+        doc = self._write(tmp_path, "# 查看帮助\n\n```bash\n# 检查全部\n# 检查全部\n```\n")
+        assert doc_traces.scan_structural_duplicates(doc) == []
+
+    def test_repeated_long_line_flagged_only_in_ledger_docs(self, doc_traces, tmp_path):
+        """≥40 字符重复行仅台账文件检出；常规手册同内容不检（域限定防误报）。"""
+        row = "| **rf-1** | " + "冗长条目内容" * 8 + " |"
+        body = f"| # | 摘要 |\n|---|---|\n{row}\n{row}\n"
+        ledger = self._write(tmp_path / "ledgers", body, name="plan.md")
+        hits = doc_traces.scan_structural_duplicates(ledger)
+        assert any(h[1] == "DUPLICATE" and "重复内容行" in h[2] for h in hits), hits
+        regular = self._write(tmp_path, f"说明段\n\n{row}\n{row}\n", name="manual.md")
+        assert doc_traces.scan_structural_duplicates(regular) == []
+
+    def test_repeated_block_flagged(self, doc_traces, tmp_path):
+        """连续 5 行窗口逐字重复且内容 ≥100 字符，第 2 块报出。"""
+        block = "## 节\n\n| # | 摘要 |\n|---|---|\n| **rf-9** | " + "内容" * 40 + " |\n"
+        doc = self._write(tmp_path, block + "\n" + block, name="review-findings.md")
+        hits = doc_traces.scan_structural_duplicates(doc)
+        assert any(h[1] == "DUPLICATE" and "重复区块" in h[2] for h in hits), hits
+
+    def test_short_template_and_separator_lines_excluded(self, doc_traces, tmp_path):
+        """短模板行与分隔行重复是正常结构，不报。"""
+        doc = self._write(
+            tmp_path,
+            "|---|------|----------|\n\n（本次发布内容见下方归档索引）\n\n|---|------|----------|\n\n（本次发布内容见下方归档索引）\n",
+            name="changelog.md",
+        )
+        assert doc_traces.scan_structural_duplicates(doc) == []
