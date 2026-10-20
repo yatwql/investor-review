@@ -1,6 +1,6 @@
 # 投资复盘助手 — 实现计划
 > 文档版本：0.13.9-dev
-> **编号源**：`plan-next = 167`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-166，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`plan-next = 168`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-167，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -67,6 +67,14 @@
 **落地设计**：若判定转正，按 [`decision-reflection-shadow-design.md`](../plan/decision-reflection-shadow-design.md) 四迭代执行（决策条目结构化 → 到期结算器 → doctor 概览增强 → 报告内反思块），该设计以 Vibe-Trading `shadow_account`（extract→backtest→render）为参照；死线未过前不实施。plan-76 持仓变动复盘已落地，与其构成「意图 vs 成交」对账（只读，不互写）。
 
 **当前状态**：撤销与转正条件均不满足，**维持观察**（不撤销、不转正、不实施设计）。下个观察点：下个发布周期重跑 `fold_ledger`——已结算 ≥10 → 据 doctor 账本概览评估转正（正式命中率另需 `directional_total ≥ 20`，flat 占比高时可信度由人工裁定）；仍 <10 且无新增结算 → 撤销（含 `decision_llm_capture`、行动章复盘块注入与对应需求条目）。
+
+#### `plan-167` 报告模板内联色值 token 化收口（W3 观察项）
+
+**动机**：设计护栏 W3（内联 `style=` 色值）观察期当前 40 处全为真实存量（误报归类结果 0 处——`_HEX` 正则已带 `(?<!&)` 排除 `&#数字;` 实体），其中 26 处集中在 `partials/position_structure_section.html`（涨跌/分档色阶内联），其余 14 处分散于 11 个模板（次级灰 `#888/#999/#aaa/#ccc`、正常绿 `#27ae60`、警示红 `#C00000/#b0413e` 等语义色未 token 化）。W1 裸色值已归零，内联属性是同病根漏网面；DESIGN.md 护栏声明「待误报稳定后评估入域」，需本任务给出收口路径。
+
+**动作**：① DESIGN.md Colors 补登缺失语义 token（负值/警示/次级文字档）并同步暗色覆盖；② 模板内联色值按语义替换为 `var(--token)`（`position_structure_section` 优先，其余模板随后）；③ 替换完成后 `check-style-guardrails` W3 计数归零即满足入域条件，评估把 W3 从观察改为 finding 并入 pre-commit 钩子域与 CI guards。
+
+**当前状态**：未开工；观察期数据已归类（40 处分布清单可由 `check-style-guardrails.py -v` 复现）。
 
 ### P4 — 实验候选（先决门槛未过，暂缓）
 

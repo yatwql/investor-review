@@ -276,3 +276,38 @@ class TestMergedCacheInvalidation:
         second = get_llm_config()
         assert second is not None
         assert {p["name"]: p["priority"] for p in second["_provider_list"]} == expected
+
+
+class TestWriteLlmProvidersFilePermission:
+    """write_llm_providers 写盘后凭据文件权限收紧为仅所有者可读写（0o600）。
+
+    llm_providers.json 含 api_key，与 cache 域敏感文件同标准；
+    非 POSIX 平台不支持完整 chmod，跳过断言。
+    """
+
+    @pytest.mark.skipif(os.name != "posix", reason="POSIX 文件权限语义")
+    def test_written_file_restricted_to_owner_only(self, tmp_path):
+        """新写文件权限为 0o600（组/其他位全部剥离）。"""
+        import stat
+
+        from src.python.config._llm_providers import write_llm_providers
+
+        path = tmp_path / "llm_providers.json"
+        write_llm_providers({"providers": []}, str(path))
+
+        assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+
+    @pytest.mark.skipif(os.name != "posix", reason="POSIX 文件权限语义")
+    def test_rewrite_tightens_existing_broad_mode(self, tmp_path):
+        """已存在的宽权限文件重写后同样收紧（chmod 在写盘后执行）。"""
+        import stat
+
+        from src.python.config._llm_providers import write_llm_providers
+
+        path = tmp_path / "llm_providers.json"
+        path.write_text(json.dumps({"providers": []}), encoding="utf-8")
+        os.chmod(path, 0o644)
+
+        write_llm_providers({"providers": []}, str(path))
+
+        assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
