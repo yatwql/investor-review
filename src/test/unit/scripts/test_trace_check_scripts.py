@@ -479,8 +479,21 @@ class TestDocTreeLineNarrowing:
             "│   ├── foo.py # 设计（4 迭代验收）",
             "│   ├── foo.py # 设计（立项依据）",
             "│   ├── foo.py # 设计（观察中）",
+            "│   ├── foo.py # 设计（已归档）",
+            "│   ├── foo.py # 设计（已核实，机制已具备）",
+            "│   ├── foo.py # 设计（NaN 不再经 or 0.0 渗入）",
         ):
             assert _doc_hit(doc_traces, line) is not None, f"树行进度状态词未检出: {line}"
+
+    def test_marker_enum_in_tree_line_exempt(self, doc_traces):
+        """测试标记违规类别枚举（未注册/已移除/edge）属语义名，树行合法不检。"""
+        line = "│   ├── test_check.py # 测试标记脚本测试（未注册·已移除·edge·目录期望四类违规）"
+        assert _doc_hit(doc_traces, line) is None
+
+    def test_migration_source_in_prose_flagged(self, doc_traces):
+        """来源叙述补强：无后缀模块名的迁入/移入（带后缀文件模式覆盖不到）。"""
+        assert _doc_hit(doc_traces, "归因生成器（自 generators 迁入，彼处 re-export）") is not None
+        assert _doc_hit(doc_traces, "从 analysis 移入 core 的判定原语") is not None
 
     def test_archive_in_tree_line_exempt(self, doc_traces):
         """目录树行的 archive/ 与归档文件名指向仍豁免（结构记录合法指向）。"""
