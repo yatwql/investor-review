@@ -20,9 +20,9 @@ pytestmark = [
 ]
 
 
-def _main_ci(mod, monkeypatch, capsys) -> tuple[int, str]:
-    """monkeypatch argv 为 --ci 并执行 mod.main()，返回 (退出码, stdout)。"""
-    monkeypatch.setattr(sys, "argv", [Path(mod.__file__).name, "--ci"])
+def _main_ci(mod, monkeypatch, capsys, *extra_args) -> tuple[int, str]:
+    """monkeypatch argv 为 --ci（可附加参数）并执行 mod.main()，返回 (退出码, stdout)。"""
+    monkeypatch.setattr(sys, "argv", [Path(mod.__file__).name, "--ci", *extra_args])
     with pytest.raises(SystemExit) as excinfo:
         mod.main()
     out = capsys.readouterr().out
@@ -147,6 +147,26 @@ class TestDocDriftConclusionReplay:
         monkeypatch.setattr(mod, "_run_checks_phase", _run_ok)  # 失效后重扫回装正常桩
         _main_ci(mod, monkeypatch, capsys)
         assert calls["run"] == 2  # 输入变化失效
+
+    def test_with_test_count_bypasses_cache(self, monkeypatch, capsys, tmp_path):
+        """--with-test-count 是含 pytest 收集的独立输出面：不读不写缓存，也不污染普通 --ci 缓存。"""
+        mod = load_script("check-doc-drift.py")
+        probe = tmp_path / "probe.md"
+        probe.write_text("v1", encoding="utf-8")
+        monkeypatch.setattr(mod, "_cache_inputs", lambda: [probe])
+        calls = {"run": 0}
+
+        def _run_ok(args):
+            calls["run"] += 1
+            return 0
+
+        monkeypatch.setattr(mod, "_run_checks_phase", _run_ok)
+        _main_ci(mod, monkeypatch, capsys)  # 普通 --ci：真扫并写缓存
+        assert calls["run"] == 1
+        _main_ci(mod, monkeypatch, capsys, "--with-test-count")  # 独立输出面：绕过缓存重扫
+        assert calls["run"] == 2
+        _main_ci(mod, monkeypatch, capsys)  # 缓存未被 with_test_count 覆盖：仍命中首跑结论
+        assert calls["run"] == 2
 
     def test_none_inputs_skips_cache_entirely(self, monkeypatch, capsys):
         """非 git 环境（inputs=None）直接全量检查，不读不写缓存。"""

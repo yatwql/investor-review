@@ -36,7 +36,8 @@
   python scripts/check-doc-drift.py -v               # 详细输出（打印解析明细）
   python scripts/check-doc-drift.py --ci             # CI 模式：仅输出 文件:描述，退出码 2；
                                                       结论缓存：全集输入与逻辑指纹未变时逐字回放
-                                                      （同树重复命中；--sync 写路径不缓存）
+                                                      （同树重复命中；--sync 写路径与
+                                                      --with-test-count 独立输出面不缓存）
   python scripts/check-doc-drift.py --with-test-count # 附带 pytest 收集，核对「测试用例数」与 test-coverage.md 计数表
 
 退出码：
@@ -292,10 +293,11 @@ def main() -> None:
         if applied:
             subprocess.run(["git", "add", str(_FOLDERS_MD)], cwd=REPO_ROOT, check=False)
 
-    # 结论缓存（仅 --ci 且非 verbose/非 sync）：全集输入与逻辑指纹未变时
+    # 结论缓存（仅 --ci 且非 verbose/非 sync/非 with-test-count）：全集输入与逻辑指纹未变时
     # 逐字回放——同树重复（发布 gate → 提交钩子 / 重试）命中省全仓扫描；
-    # --sync 为写路径不缓存，verbose 详细段输出不入缓存
-    if args.ci and not args.verbose and not args.sync:
+    # --sync 为写路径不缓存，verbose 详细段输出不入缓存；--with-test-count 含
+    # pytest 收集、输出面不同，不读不写缓存（防止跨模式回放丢核对段/污染结论）
+    if args.ci and not args.verbose and not args.sync and not args.with_test_count:
         inputs = _cache_inputs()
         logic = [Path(__file__), *sorted((Path(__file__).resolve().parent / "_doc_drift").glob("*.py"))]
         if inputs is not None:
