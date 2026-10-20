@@ -53,7 +53,8 @@
     由 check-version-consistency 的 evolution_head 断言强制与 APP_VERSION 同步）
   - Markdown 围栏代码块（``` 包裹）内命令/配置示例，非文档叙述
   - 需求编号（requirements.md 的 R-LLM-ER-01 等需求条目 ID）
-  - folders.md 目录树行（│ ├ └ 开头，记录目录结构，可含 archive/ 指向）
+  - folders.md 目录树行（│ ├ └ 开头，记录目录结构，可含 archive/ 指向——仅
+    ARCHIVE 类豁免；任务编号（CODE）与进度状态词（STATUS）在树行照检）
   - folders.md 统计表行（如 | ├ archive/ | 版本归档 |，记录目录计数）
   - 当前能力描述（暂不支持 / 不再支持 / 不正式支持）
   - 运行时产物归档描述（"归档版" / "归档目录" / "历史归档至 YYYYMMDD/"——
@@ -70,7 +71,7 @@
 
 退出码：
   0 — 全部通过（无可疑痕迹）
-  1 — 发现高置信度痕迹（HIGH/ARCHIVE/CODE/CIPHER/CHAPTER/ROUND），应修复后再提交
+  1 — 发现高置信度痕迹（HIGH/ARCHIVE/CODE/CIPHER/CHAPTER/ROUND/STATUS），应修复后再提交
   2 — 仅 LOW 级别痕迹，建议人工复核
 """
 
@@ -150,6 +151,9 @@ CIPHER_EXEMPT_FILES = {"technical.md", "llm-technical.md"}
 #   HIGH      — 高置信度历史痕迹（来源叙述/历史实现/变更节点/迭代/版本号）
 #   CHAPTER   — 章节编号引用（"N 章"/"第 N 章"指代报告具体章节，须用语义章节名）
 #   ROUND     — 迭代轮次引用（"第 N 轮"/"N 轮"/"轮 N"指代开发迭代历史，须用语义描述）
+#   STATUS    — 进度状态痕迹（已实施/完成态/随任务完成移入/验收记录等）——
+#               仅在目录树行检出：目录树描述只讲文件内容简要，不记录进度状态；
+#               正文中的当前状态叙述（如"该功能已实施"）属合法用法不检
 #   LOW       — 需人工判断的变更/过渡/待办描述（可能是当前能力也可能是痕迹）
 
 
@@ -299,6 +303,16 @@ def _doc_patterns() -> list[tuple[str, str, str]]:
         (r"待[办做处补充修复]", "LOW", "待办/待处理"),
         (r"后续\s*(?:版本|迭代|优化|需要|再处理)", "LOW", "后续版本/迭代（未来计划）"),
         (r"过渡方案|过渡期|过渡性", "LOW", "过渡性方案说明"),
+        # ── STATUS：目录树描述域的进度状态痕迹（仅树行检出；正文中的当前
+        #    状态叙述如"该功能已实施"属合法用法不检，见 scan_file 分支） ──
+        (r"已(?:实施|评测|定稿|转正|验收|完成)", "STATUS", "进度状态词（已实施/已评测/已完成等）"),
+        (r"完成态", "STATUS", "完成态标注（进度状态痕迹）"),
+        (r"随(?:任务|功能)(?:完成|落地)", "STATUS", "任务流转措辞（随任务完成/随功能落地移入）"),
+        (r"(?:验收|判定|实施|演练)记录", "STATUS", "验收/判定/实施记录指引（历史痕迹）"),
+        (r"迭代验收|门槛与验收", "STATUS", "验收措辞（目录树描述只讲内容）"),
+        (r"立项依据", "STATUS", "立项依据标注（流转痕迹）"),
+        (r"观察中", "STATUS", "观察状态标注（进度状态痕迹）"),
+        (r"§\s*\d", "STATUS", "章节验收指引（目录树描述不应含 § 章节引用）"),
     ]
 
 
@@ -347,8 +361,7 @@ def _exclude_lines() -> list[re.Pattern]:
         re.compile(r"^\s*R-[A-Z]+-\d+"),  # requirements 需求条目 ID（行首）
         re.compile(r"迭代计划"),  # README 导航项（指向 plan.md）
         re.compile(r"子文件"),  # 测试组织规范（拆分到子文件 test_xxx_partN.py）
-        # ── folders.md 目录结构记录（含 archive/ 属合法指向） ──
-        re.compile(r"^\s*[│├└]"),  # 目录树行
+        # ── folders.md 统计表行（如 | ├ archive/ | 版本归档 |）──
         re.compile(r"archive/\s*\|"),  # 统计表行（如 | ├ archive/ | 版本归档 |）
         # ── 工具自身说明（描述脚本跳过/豁免/禁止归档目录引用，而非引用归档内容） ──
         #  匹配"豁免/跳过/不扫描/排除/检查/不得/禁止 归档目录或归档引用"的工具说明行
@@ -381,6 +394,11 @@ _CHAPTER_PATTERNS = [(p, c, d) for p, c, d in _DOC_PATTERNS if c == "CHAPTER"]
 # 架构约束代号模式子集（独立于 trace-exempt 逻辑：除约束定义处豁免外，
 # 所有文档正文（含 plan.md/changelog.md 等历史/计划记录）均不得出现 C1~C25）
 _CIPHER_PATTERNS = [(p, c, d) for p, c, d in _DOC_PATTERNS if c == "CIPHER"]
+# 目录树行（│ ├ └ 开头）：仅 ARCHIVE 类豁免（目录结构记录含 archive/ 条目属
+# 合法指向），任务编号/进度状态词等照检——树行描述只讲文件内容简要
+_TREE_LINE = re.compile(r"^\s*[│├└]")
+# 文件名任务编号（目录树比对 check-doc-drift 只管存在性，语义命名由本检查补位）
+_NAME_CODE = re.compile(r"(?:^|[_-])(?:rf|plan)-\d+", re.IGNORECASE)
 
 
 def _is_excluded(line: str) -> bool:
@@ -403,6 +421,11 @@ def scan_file(fpath: Path, verbose: bool, chapter_only: bool = False) -> list[tu
     出现 C1~C25——约束代号属"暗号"，与历史痕迹/章节暗号不同层，处处禁。
     """
     hits: list[tuple[int, str, str, str]] = []
+    # 文件名任务编号（文件级 finding，line=0）：受检域 .md 文件名含 rf-N/plan-N
+    # 即任务代号残留，须用语义命名（docs/archive/ 与 docs/plan/ 域已跳过，历史
+    # 归档文件名不入检）
+    if _NAME_CODE.search(fpath.name):
+        hits.append((0, "CODE", "文件名含任务编号（须用语义命名）", fpath.name))
     try:
         text = fpath.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
@@ -431,7 +454,7 @@ def scan_file(fpath: Path, verbose: bool, chapter_only: bool = False) -> list[tu
             if verbose:
                 print(f"    (codeblock) L{lineno}: {stripped[:60]}")
             continue
-        if not chapter_only and _is_excluded(stripped):
+        if not chapter_only and not _TREE_LINE.match(stripped) and _is_excluded(stripped):
             if verbose:
                 print(f"    (excluded) L{lineno}: {stripped[:80]}")
             continue
@@ -440,7 +463,12 @@ def scan_file(fpath: Path, verbose: bool, chapter_only: bool = False) -> list[tu
                 print(f"    (ch-excluded) L{lineno}: {stripped[:80]}")
             if chapter_only:
                 continue
+        is_tree = bool(_TREE_LINE.match(stripped))
         for pat, cat, desc in patterns:
+            if is_tree and cat == "ARCHIVE":
+                continue  # 目录树行记录项目结构，archive/ 条目属合法指向
+            if cat == "STATUS" and not is_tree:
+                continue  # 进度状态词仅目录树描述域（正文当前状态叙述合法）
             if cat == "CHAPTER" and _is_chapter_excluded(stripped):
                 continue  # 计数/序数表述豁免，不影响其他模式
             if cat == "ROUND" and _is_round_excluded(stripped):

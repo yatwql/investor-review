@@ -78,13 +78,18 @@ def _code_hit(mod, line: str) -> str | None:
 def _doc_hit(mod, line: str) -> str | None:
     """返回 check-doc-traces 命中的 desc；未命中返回 None。
 
-    对 CHAPTER（章节编号）模式先应用 _is_chapter_excluded 计数/序数豁免，
-    对 ROUND（迭代轮次）模式先应用 _is_round_excluded 计数/运行时豁免，
-    与 scan_file 行为一致（"共 19 章"/"共 12 轮"等计数表述不误报）。
+    与 scan_file 行为一致：对 CHAPTER/ROUND 应用计数/序数豁免；
+    目录树行（│ ├ └ 开头）跳过通用豁免且仅 ARCHIVE 类豁免、STATUS
+    仅在目录树行检出（正文当前状态叙述不检）。
     """
-    if mod._is_excluded(line):
+    is_tree = bool(mod._TREE_LINE.match(line))
+    if not is_tree and mod._is_excluded(line):
         return None
     for pat, cat, desc in mod._DOC_PATTERNS:
+        if is_tree and cat == "ARCHIVE":
+            continue
+        if cat == "STATUS" and not is_tree:
+            continue
         if cat == "CHAPTER" and mod._is_chapter_excluded(line):
             continue
         if cat == "ROUND" and mod._is_round_excluded(line):
@@ -453,6 +458,73 @@ class TestDocTraceDetection:
         ]
         for line in legit:
             assert _doc_hit(doc_traces, line) is None, f"非约束 C+数字被误伤: {line}"
+
+
+class TestDocTreeLineNarrowing:
+    """目录树行豁免收窄：仅 ARCHIVE 类豁免；任务编号（CODE）与进度状态
+    词（STATUS）在树行照检，正文状态叙述不检（全类别树行豁免曾使目录
+    树描述中的任务号与进度痕迹整体过闸）。"""
+
+    def test_task_id_in_tree_line_flagged(self, doc_traces):
+        assert _doc_hit(doc_traces, "│   ├── foo.py # 设计（plan-123）") is not None
+        assert _doc_hit(doc_traces, "│   ├── foo.py # 设计（rf-456 关联）") is not None
+
+    def test_status_word_in_tree_line_flagged(self, doc_traces):
+        for line in (
+            "│   ├── foo.py # 设计（已实施，验收记录）",
+            "│   ├── foo.py # 设计（完成态）",
+            "│   ├── foo.py # 设计（随任务完成移入）",
+            "│   ├── foo.py # 设计（随功能落地移入）",
+            "│   ├── foo.py # 设计（§8 转正迁移演练记录）",
+            "│   ├── foo.py # 设计（4 迭代验收）",
+            "│   ├── foo.py # 设计（立项依据）",
+            "│   ├── foo.py # 设计（观察中）",
+        ):
+            assert _doc_hit(doc_traces, line) is not None, f"树行进度状态词未检出: {line}"
+
+    def test_archive_in_tree_line_exempt(self, doc_traces):
+        """目录树行的 archive/ 与归档文件名指向仍豁免（结构记录合法指向）。"""
+        assert _doc_hit(doc_traces, "│   ├── archived_x.md # 归档文件") is None
+        assert _doc_hit(doc_traces, "│   ├── v0.9.x/ # 归档目录") is None
+
+    def test_status_in_prose_not_flagged(self, doc_traces):
+        """正文当前状态叙述（已实施/完成态）不检——进度词仅目录树域。"""
+        assert _doc_hit(doc_traces, "因子暴露分析已实施，现为周期性复核工具") is None
+        assert _doc_hit(doc_traces, "页面完成态按钮复位") is None
+
+
+class TestDocFileNameTaskId:
+    """文件名任务编号：受检域 .md 文件名含 rf-N/plan-N 即检出（语义命名
+    补位——目录树比对只管存在性不管命名语义）。"""
+
+    def test_plan_id_in_filename_flagged(self, doc_traces):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fpath = Path(tmp) / "plan-123-design.md"
+            fpath.write_text("# 设计\n", encoding="utf-8")
+            hits = doc_traces.scan_file(fpath, verbose=False)
+        code = [h for h in hits if h[1] == "CODE" and h[0] == 0]
+        assert len(code) == 1, f"文件名任务编号未检出: {hits}"
+
+    def test_rf_id_in_filename_flagged(self, doc_traces):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fpath = Path(tmp) / "rf-456-notes.md"
+            fpath.write_text("# 记录\n", encoding="utf-8")
+            hits = doc_traces.scan_file(fpath, verbose=False)
+        assert any(h[1] == "CODE" and h[0] == 0 for h in hits), f"未检出: {hits}"
+
+    def test_semantic_filename_clean(self, doc_traces):
+        """语义文件名（含 archived_plan.0.13.x.md 等含 plan 但非任务号形式）不检。"""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            for name in ("design-notes.md", "archived_plan.0.13.x.md"):
+                fpath = Path(tmp) / name
+                fpath.write_text("# 说明\n", encoding="utf-8")
+                assert doc_traces.scan_file(fpath, verbose=False) == [], name
 
 
 class TestDocCipherExemptFiles:
