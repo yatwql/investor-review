@@ -28,6 +28,7 @@ from src.python.tui.switch_panel import (
     layout_tier,
     legend_lines,
     terminal_columns,
+    render_titled_panel,
     use_panel_box,
     wrap_hanging,
 )
@@ -176,12 +177,23 @@ _CONFIG_ENTRY_MAP: tuple[tuple[str, str, str], ...] = (
 
 def _render_config_entry_map() -> None:
     """渲染配置入口地图（只读索引，不写配置、不等待按键）。"""
+    columns = terminal_columns()
+    inner = inner_width(columns)
     print()
-    print(style_heading("  ── 配置入口地图（哪个配置在哪个菜单）──"))
-    width = max(display_width(label) for label, _key, _hint in _CONFIG_ENTRY_MAP)
-    for label, key, hint in _CONFIG_ENTRY_MAP:
-        print(f"   {pad_right(label, width)}  →  {pad_right(key, 9)} {hint}")
-    print("  （仅索引导流，不修改任何配置；config.json 手工键说明见手册 how-to-config）")
+    print(style_heading(truncate_display("  ── 配置入口地图（哪个配置在哪个菜单）──", inner)))
+    if use_panel_box(columns):
+        width = max(display_width(label) for label, _key, _hint in _CONFIG_ENTRY_MAP)
+        for label, key, hint in _CONFIG_ENTRY_MAP:
+            print(f"   {pad_right(label, width)}  →  {pad_right(key, 9)} {hint}")
+    else:
+        # 窄档：表格放不下 → 两项一组（菜单键 + 标签 + 悬挂缩进说明），不硬折成锯齿
+        for label, key, hint in _CONFIG_ENTRY_MAP:
+            for line in wrap_hanging(f"   [{key}] {label}", inner):
+                print(line)
+            for line in wrap_hanging(f"     {hint}", inner, indent="     "):
+                print(line)
+    for line in wrap_hanging("  （仅索引导流，不修改任何配置；config.json 手工键说明见手册 how-to-config）", inner):
+        print(line)
 
 
 def _cmd_config_dir_info() -> None:
@@ -595,7 +607,7 @@ def _cmd_config_comparison_indices() -> None:
             f"{nav.marker(3)}0. 返回主菜单",
         ]
         print()
-        print("\n".join(render_panel("管理对比指数池", rows)))
+        print("\n".join(render_titled_panel("管理对比指数池", rows)))
         print()
         return []
 
@@ -748,8 +760,8 @@ def _cmd_config_report_boards() -> None:
         rows.append(f"{nav.marker(6)}0. 返回主菜单")
         return [
             None,
-            *render_panel("配置报告可选章节", rows),
-            "  提示：报告章节与增强、LLM 分析章节请在菜单 [S] 配置",
+            *render_titled_panel("配置报告可选章节", rows),
+            *wrap_hanging("  提示：报告章节与增强、LLM 分析章节请在菜单 [S] 配置", inner_width(terminal_columns())),
             None,
         ]
 
@@ -850,7 +862,7 @@ def _cmd_config_anonymization_mode() -> None:
             rows.append(f"{nav.marker(i)}{mode_marker} {i + 1}. {pad_right(desc, desc_column)}")
         rows += [None, f"{nav.marker(4)}0. 返回主菜单"]
         print()
-        print("\n".join(render_panel("配置持仓匿名化", rows)))
+        print("\n".join(render_titled_panel("配置持仓匿名化", rows)))
         print()
         return []
 

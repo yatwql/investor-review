@@ -212,47 +212,62 @@ def _render_cache_stats() -> None:
 
     cache_dir = get_cache_dir()
 
+    from src.python.tui.switch_panel import inner_width
+    from src.python.tui.text_layout import terminal_columns, wrap_hanging
+
+    inner = inner_width(terminal_columns())
+
+    def _emit(text: str) -> None:
+        """按内宽折行输出（窄终端上路径/统计不撑出边界；短行原样）。"""
+        for line in wrap_hanging(text, inner):
+            print(line)
+
+    def _rule(title: str) -> None:
+        """分隔标题：宽度自适应内宽（窄屏不硬折）。"""
+        fill = max(6, inner - len(title) - 4)
+        print(f"  {title} " + "═" * fill)
+
     # ── 1. data/cache 缓存文件 ──
-    print("  ════════════════ data/cache ════════════════")
-    print(f"  目录: {cache_dir}")
-    print(f"  文件: {stats.total_files} 个 | 大小: {stats.total_size_bytes / 1024:.0f} KB")
+    _rule("════ data/cache ════" if False else "data/cache")
+    _emit(f"  目录: {cache_dir}")
+    _emit(f"  文件: {stats.total_files} 个 | 大小: {stats.total_size_bytes / 1024:.0f} KB")
     if stats.hit_total > 0:
-        print(f"  命中率:   {stats.hit_rate:.1f}% ({stats.hit_total} 次请求)")
+        _emit(f"  命中率: {stats.hit_rate:.1f}% ({stats.hit_total} 次请求)")
     if stats.top_by_size:
         print("  最大文件:")
         for key, size in stats.top_by_size[:3]:
             size_kb = size / 1024
             disp = f"{size_kb / 1024:.1f} MB" if size_kb >= 1024 else f"{size_kb:.0f} KB"
-            print(f"    {key}.json  ({disp})")
+            _emit(f"    {key}.json  ({disp})")
     print("  前缀分布:")
     for prefix, count in sorted(stats.by_prefix.items()):
-        print(f"    {prefix}_*: {count} 个文件")
+        _emit(f"    {prefix}_*: {count} 个文件")
     print()
-    print(f"  过期文件: {stats.expired} 个（输入 3 可清理）")
+    _emit(f"  过期文件: {stats.expired} 个（输入 3 可清理）")
 
     # ── 2. data/history/snapshots 快照文件 ──
     if stats.snapshot_files > 0:
         print()
-        print("  ════════ data/history/snapshots ════════")
+        _rule("data/history/snapshots")
         _hist_dir = os.path.join(PROJECT_ROOT, "data", "history", "snapshots")
-        print(f"  目录: {os.path.abspath(_hist_dir)}")
-        print(f"  文件: {stats.snapshot_files} 个 | 大小: {stats.snapshot_size_bytes / 1024:.0f} KB")
+        _emit(f"  目录: {os.path.abspath(_hist_dir)}")
+        _emit(f"  文件: {stats.snapshot_files} 个 | 大小: {stats.snapshot_size_bytes / 1024:.0f} KB")
         _latest = max(
             (os.path.getmtime(os.path.join(_hist_dir, _f)) for _f in os.listdir(_hist_dir) if _f.endswith(".json")),
             default=0,
         )
         if _latest:
-            print(f"  最新: {datetime.fromtimestamp(_latest).strftime('%Y-%m-%d %H:%M')}")
-        print("  （持仓快照，超期自动删除，不随缓存清理）")
+            _emit(f"  最新: {datetime.fromtimestamp(_latest).strftime('%Y-%m-%d %H:%M')}")
+        _emit("  （持仓快照，超期自动删除，不随缓存清理）")
 
     # ── 3. data/state 运行时状态文件 ──
     if stats.state_files > 0:
         print()
-        print("  ═══════════════ data/state ═══════════════")
+        _rule("data/state")
         _state_dir = os.path.join(PROJECT_ROOT, "data", "state")
-        print(f"  目录: {os.path.abspath(_state_dir)}")
-        print(f"  文件: {stats.state_files} 个 | 大小: {stats.state_size_bytes / 1024:.1f} KB")
-        print("  （运行时状态，跨会话持久化，不随缓存清理）")
+        _emit(f"  目录: {os.path.abspath(_state_dir)}")
+        _emit(f"  文件: {stats.state_files} 个 | 大小: {stats.state_size_bytes / 1024:.1f} KB")
+        _emit("  （运行时状态，跨会话持久化，不随缓存清理）")
 
 
 def _cmd_cache_management() -> None:

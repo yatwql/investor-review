@@ -59,6 +59,34 @@ _STATUS_SHORT = {True: "开", False: "关"}
 _STATUS_LONG = {True: "开启", False: "关闭"}
 
 
+def render_titled_panel(title: str, rows, *, columns: int | None = None) -> list[str]:  # noqa: ANN001
+    """按档位渲染「标题 + 行」面板：宽/中档画盒线，窄档退化为无边框 + 行内截断。
+
+    为什么需要：``text_layout.render_panel`` 的宽度是**内容驱动**的（下限 41 列内容 +
+    边框），它不看终端宽度——直接在窄终端画盒线会撑出 49~57 列，被终端硬折成锯齿，
+    违背「窄档不画盒线、先让装饰再让信息」的既有约定（见模块 docstring 约定 1）。
+
+    Args:
+        title: 面板标题（窄档渲染为 ``── 标题 ──`` 结构标题行）。
+        rows: 内容行；``None`` 表示盒线版式下的内区分隔线，窄档渲染为空行。
+        columns: 终端列数；``None`` 取实时值。
+
+    Returns:
+        待逐行打印的文本（已按档位决定盒线/截断；每行显示宽度 ≤ ``inner_width(columns)``）。
+    """
+    from src.python.tui.text_layout import render_panel
+
+    cols = columns or terminal_columns()
+    body = list(rows)
+    if use_panel_box(cols):
+        return render_panel(title, body)
+    width = inner_width(cols)
+    lines = [style_heading(truncate_display(f"  ── {title} ──", width))]
+    for row in body:
+        lines.append("" if row is None else truncate_display(f"  {row}", width))
+    return lines
+
+
 def use_panel_box(columns: int) -> bool:
     """是否画盒线面板（窄终端不画：把边框与分隔线的列宽/行数让给内容）。"""
     return layout_tier(columns) != "narrow"
@@ -217,6 +245,7 @@ __all__ = [
     "inner_width",
     "layout_tier",
     "legend_lines",
+    "render_titled_panel",
     "use_panel_box",
     "wrap_hanging",
     "terminal_columns",
