@@ -482,6 +482,7 @@ class TestDocTreeLineNarrowing:
             "│   ├── foo.py # 设计（已归档）",
             "│   ├── foo.py # 设计（已核实，机制已具备）",
             "│   ├── foo.py # 设计（NaN 不再经 or 0.0 渗入）",
+            "│   ├── foo.py # 设计草案（判定通道/降级矩阵）",
         ):
             assert _doc_hit(doc_traces, line) is not None, f"树行进度状态词未检出: {line}"
 
