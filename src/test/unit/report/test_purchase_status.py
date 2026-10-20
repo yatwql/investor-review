@@ -469,13 +469,13 @@ class TestPurchaseStatusTemplate:
         assert ps.PURCHASE_STATUS_FOOTNOTE in html
         assert self._render(frag, purchase_status_display=None).strip() == ""
 
-    def test_footnote_stale_level_uses_warning_style(self):
-        """stale 档脚注用告警色（黄标；文案本身仍为单源同一条）。"""
+    def test_footnote_stale_level_uses_warning_style(self) -> None:
+        """stale 档脚注用告警色 token（黄标；文案本身仍为单源同一条）。"""
         frag = self._extract(
             '{% if purchase_status_display %}\n            <div style="padding: 4px 8px; font-size: var(--fs-table-sm); color:'
         )
         html = self._render(frag, purchase_status_display={"footnote": "x", "level": "stale"})
-        assert "#B8860B" in html
+        assert "var(--warn-text)" in html
 
 
 class TestRestrictedIndex:
