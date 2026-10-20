@@ -1516,7 +1516,7 @@ investor-util/
 │       ├── jev-news-correlation-evaluation.md # 评测方案（三方对照：关键词/现网生成/Jev；预注册阈值与 go-no-go 判定）
 │       ├── jev-news-correlation-design.md # 设计草案（独立于对话链的类型化判定通道/模板理由/降级矩阵）
 │       ├── decision-reflection-shadow-design.md # 决策跨期反思闭环设计（Vibe 影子账户参照/转正路径，观察中）
-│       └── web-browser-verification.md # Web 浏览器验证方法与实测结论（五类 37 断言实测 + 人工步骤 + 复验清单，rf-257 验证载体）
+│       └── web-browser-verification.md # Web 浏览器验证方法与实测结论（五类 37 断言实测 + 人工步骤 + 复验清单，人工验收验证载体）
 │
 ├── CLAUDE.md                         # AI 编程助手指引
 ├── README.md                         # 用户文档总入口（三渠道交互 + 核心亮点总览）
