@@ -16,7 +16,7 @@
 ### P2 — 中优先：价值明确、成本可控（下批排期）
 | # | 问题 | 修复方向 |
 |---|------|----------|
-| **rf-790** | 时间戳helper三份拷贝：`core/decision_ledger.py::_now_iso` 与 `core/signal_ledger.py::_now_iso` 逐字相同（2 行），`scripts/_release/_timing.py::now_iso` 语义略异（带时区偏移，供发布台账跨时区对拍）——与 `core/jsonl_store.py` 当时抽出「避免第三份拷贝」的动机同类 | **维持现状**（记录理由）：两处均为 1 行表达式，且 `_timing` 那份**不能**合并（偏移有无是有意区分）；为 1 行表达式新开 `core/timeutil.py` 会引入新模块与目录树/文档改动，收益低于成本。若将来出现第三份 naive 版本再统一 |
+| **rf-790**（已决策） | 时间戳helper三份拷贝：`core/decision_ledger.py::_now_iso` 与 `core/signal_ledger.py::_now_iso` 逐字相同（2 行），`scripts/_release/_timing.py::now_iso` 语义略异（带时区偏移，供发布台账跨时区对拍）——与 `core/jsonl_store.py` 当时抽出「避免第三份拷贝」的动机同类 | **维持现状**（**已决策，不排期**；理由如下）：两处均为 1 行表达式，且 `_timing` 那份**不能**合并（偏移有无是有意区分）；为 1 行表达式新开 `core/timeutil.py` 会引入新模块与目录树/文档改动，收益低于成本。若将来出现第三份 naive 版本再统一 |
 
 ### P3 — 持续监控：文件膨胀登记（逼近红线档：主程序 ≥700 / 脚本 ≥600 / 测试 ≥1000；按距红线余量升序）
 
