@@ -14,9 +14,8 @@
 | **rf-257** | plan-8 **Web 模式浏览器真机人工验收余 4 类人工项**：真实 basic/full 进度观察（3.1c/3.2/3.3/3.4）、结果区按钮 4.5、提交即禁用 5.3、2.5/2.6 真实拖拽与 Tab/Enter 抽验；其余断言已自动化复跑通过 | 验证方法与判定标准见 [`docs/plan/web-browser-verification.md`](../plan/web-browser-verification.md)（§1.1 启动/收尾命令 + §5 复验清单）；复跑：`.venv/bin/python scripts/smoke-web.py` + `node docs/tmp/rf257/cdp-check.mjs`，收尾必做 kill 服务/浏览器 + 清空 `data/holdings/uploads/`；全部完成后本表移至已解决 |
 
 ### P2 — 中优先：价值明确、成本可控（下批排期）
-| # | 问题 | 修复方向 |
-|---|------|----------|
-| **rf-790**（已决策） | 时间戳helper三份拷贝：`core/decision_ledger.py::_now_iso` 与 `core/signal_ledger.py::_now_iso` 逐字相同（2 行），`scripts/_release/_timing.py::now_iso` 语义略异（带时区偏移，供发布台账跨时区对拍）——与 `core/jsonl_store.py` 当时抽出「避免第三份拷贝」的动机同类 | **维持现状**（**已决策，不排期**；理由如下）：两处均为 1 行表达式，且 `_timing` 那份**不能**合并（偏移有无是有意区分）；为 1 行表达式新开 `core/timeutil.py` 会引入新模块与目录树/文档改动，收益低于成本。若将来出现第三份 naive 版本再统一 |
+
+> 当前无待办项（rf-790 已决策「维持现状」并归档至已解决）。
 
 ### P3 — 持续监控：文件膨胀登记（逼近红线档：主程序 ≥700 / 脚本 ≥600 / 测试 ≥1000；按距红线余量升序）
 
@@ -57,6 +56,7 @@
 
 | # | 问题 | 处理 |
 |---|------|------|
+| **rf-790**（已决策） | 时间戳 helper 三份拷贝：`core/decision_ledger.py::_now_iso` 与 `core/signal_ledger.py::_now_iso` 逐字相同（均为 `return datetime.now().isoformat(timespec="seconds")`），`scripts/_release/_timing.py::now_iso` 语义略异（`.astimezone()`，带时区偏移，供发布台账跨机器/跨时区对拍） | **决策：维持现状（不排期）**。复核（2026-10-21）：① naive 版本仍只有这两处 1 行表达式，未达「出现第三份 naive 版本即统一」的重访条件（全仓 `isoformat(timespec=` 13 处中无语义相同的第三份 naive 实现）；② `_timing` 那份的时区偏移是有意区分，不能合并；③ 为 1 行表达式新开 `core/timeutil.py` 需同步目录树/文档，收益低于成本。另有 aware 实现各自服务不同语义（`cassette` 录制时刻 / `completion_notify` 通知时刻 / 两位基金 provider 的北京时区 `fetched_at`），不属本条范围。**重访条件**：出现第三份 naive 拷贝，或任一处需改精度/格式（届时统一到 `core/timeutil.py`） |
 | **rf-807** | `prepare --version` 跨版本发布不可用且提示误导：要求 changelog 开发段 == `X.Y.Z-dev`，而失败前打印的是入参而非推导值（两次都显示同一版本号），执行者读不出该做什么；旧行为还「按推导执行」继续跑到中途才报错 | 已修复：与开发链推导值不一致时**立即中止**（exit 2），并给出四步可执行指引（改 `APP_VERSION` → `check-version-consistency --fix` → 同步 changelog 段头与 rf 节头 → archive-init/check/prepare）；回归用例 `test_release_tool_gate.py::TestPrepareVersionMismatchGuidance`（中止 + 指引关键词 + 零写入） |
 | **rf-808** | 新小版本首发缺归档骨架且构建知识隐含：需手工建三份归档 + folders 目录树块 + plan/rf/changelog 三处索引行，每补一处都要重跑 `check`（实测一次发布 4 次 check、4 次 prepare）；索引行还需区间口径，格式不符时只在 prepare 阶段报错且不附期望格式 | 已修复：新增 `release.py archive-init [--version] [--date] [--dry]`（`_release/_archive_init.py`），一次建齐三类空位并幂等；建完自动跑 `check-doc-drift --sync`；回归用例 `test_release_tool_gate.py::TestArchiveInit` 2 例（建齐文件/目录树/索引且前置就绪 / 二次运行零改动） |
 | **rf-809** | 真实仓库契约测试断言了「随开发周期变化」的仓库状态：`test_real_rf_sections_are_migrated_or_absent` 要求主台账「至少有一节开发期已修复」，而 `devbump` 清空占位后新周期台账为空 → v0.14.0 发版当日的 `dev` 提交 CI 全红（test 3.11/3.12/3.13 + portability；本地因已补 rf-806 节而侥幸通过） | 已修复：该用例只约束「存在的每一节」（当前开发版待迁/已迁、更早批次只允许已迁档），空台账合法；同批把 `TestCliSurface` 的处理器集合改为从 `cmd_*` 派生（新增子命令无需改测试） |
