@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.13.12
+> 文档版本：0.14.0
 
 ## 概述
 
@@ -113,6 +113,10 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 ```
 
 > **`--sync` 统计快照口径（CI 分叉坑）**：`check-doc-drift --sync`（及 pre-commit 自动回写）按**工作区**实测写入 `folders.md` 行数，而 CI 的 `check-doc-drift` 按 **committed** 树实测——若受检目录存在**长期不提交的修改**（本地游离改动），本地已同步的数字会在 CI 上判「不一致」，连带 guards / test / portability 三个 job 同时红。提交前确认受检文件全部纳入本次提交；有长期游离修改时先提交它们、再 `--sync`。
+>
+> **写者顺序（`--sync` 必须是收尾的最后一个写者）**：统计表数字是「行数 × 用例数」派生量，**任何改文件的步骤都会让刚同步的数字重归陈旧**。因此 `ruff format` / `ruff check --fix` / `collect-test-coverage.py --update-docs` / 批量编辑等写者**全部在 `--sync` 之前**完成，`--sync` 之后只做**只读**校验（`dev-verify` / 守护回放 / `--ci`）。典型踩坑：先 sync → 再 `collect-test-coverage --update-docs`（改写 `test-coverage.md`，managements 行数又变）→ 跑 `dev-verify` 时 `test_check_doc_drift_crosscheck` 报「行数与实测不一致」。真跑反了也不要紧：重新 sync 一次即可，不是代码问题。
+>
+> **钩子触发面 = 全部被统计的域**：`docs/managements/`（文档行数）、`src/test/`（测试行数 + 用例数）、`src/python/`（主程序行数）、`scripts/`（脚本行数）任一变更，`git commit` 即走 `--sync` 写路径自动回写并 `git add`。只覆盖部分域时，纯 `src/python`/`scripts` 改动会以「行数不一致」finding 拦下提交、逼人工 sync 再重提（多一轮往返）。
 
 **P1 合入门禁**：`test-runner.py --mode verify`（全部 `unit_*` 目录域单元测试，含 TUI/CLI；目录归域以 `check-test-markers.py` 期望表为准且全部入门禁），否则不得 merge。
 
@@ -194,7 +198,7 @@ PYTHONWARNDEFAULTENCODING=1 .venv/bin/python -m pytest src/test/unit -q
 2. **批量修复**：按上表 + 触点一次性修完，同一文件多处改动合并为一次 edit。
 3. **单次复核**：手动只跑 `dev-verify` 测试门禁；ruff 探针（错误类阻塞 + format 非阻塞提示）与十守护一并交由 `git commit` 的 pre-commit 钩子一次收集（失败即中止）→ 批量修复 → 重新提交，不手动重复跑守护。
 
-**红线**：编辑批次与 `--sync`/检查类脚本**永不同批**（sync 写文件，与编辑并行会竞态）；`check-file-length` 随每批代码改动跑，ruff 由钩子在提交时把关（批内可提前手跑），不留到收尾才爆。
+**红线**：编辑批次与 `--sync`/检查类脚本**永不同批**（sync 写文件，与编辑并行会竞态）；**所有写者（编辑 / `ruff format` / `collect-test-coverage --update-docs`）必须在 `--sync` 之前完成，sync 之后再无写入**（否则刚回写的统计数字又变陈旧，`dev-verify` 报「行数与实测不一致」）；`check-file-length` 随每批代码改动跑，ruff 由钩子在提交时把关（批内可提前手跑），不留到收尾才爆。
 
 ## 任务编号规范与自动保障
 
@@ -238,7 +242,7 @@ PYTHONWARNDEFAULTENCODING=1 .venv/bin/python -m pytest src/test/unit -q
 | **P0/P2 门禁** | 提交/发布前 10 个 `--ci` 守护脚本全量（清单见 P0/P2 门禁条款）；P2 另含设计护栏段（gate 内置 `check-style-guardrails`，E 级拦 / W 级观察统计） | ✅ 零配置 |
 | **dev-verify preflight** | `test-runner.py --mode dev-verify` 自动运行（仅 `check-task-numbering` 快检；重量守护不入预检，由钩子唯一执行防同树重复） | ✅ 零配置 |
 | **Claude Code hook** | 编辑 `plan.md`/`review-findings.md` 后实时校验 | ⚠️ clone 后运行 `.venv/bin/python scripts/install-claude-hook.py` |
-| **git pre-commit** | `git commit` 执行十守护（与 P0/CI guards 同源）：**读写分层调度**——不读 folders.md 的守护（快集 code-traces/task-numbering/semantic-index/requirement-trace + py 域 file-length + 测试域 test-redundancy）先行后台启动，与 `check-doc-drift` 段并行执行（跨域守护恒跑；涉及 `docs/managements/` 或 `src/test/` 时 `--sync` 写路径串行先行并自动回写统计快照，其中暂存含 `src/test/` 时追加 `--with-test-count` 校验 `test-coverage.md` 的收集派生计数——否则新增用例后计数静默陈旧、只在 CI master 档才红；其余提交纯 `--ci` 后台并行）；读 folders.md 的 version-consistency 与 doc 域（doc-traces/doc-links）在 doc-drift 完成后启动（避 --sync 写读竞态）；域条件不变（doc 域仅 `*.md`、py 域仅 `*.py`、测试域仅 `src/test/` 变更触发），典型提交约 1~4 秒；六守护另有结论缓存（doc-traces/semantic-index/doc-links/code-traces/requirement-trace/doc-drift，输入与逻辑指纹未变回放上次结论，冷/热 --ci 输出逐字一致）；CI guards job 恒全量兜底 | ⚠️ clone 后运行 `sh .githooks/install-hooks.sh` |
+| **git pre-commit** | `git commit` 执行十守护（与 P0/CI guards 同源）：**读写分层调度**——不读 folders.md 的守护（快集 code-traces/task-numbering/semantic-index/requirement-trace + py 域 file-length + 测试域 test-redundancy）先行后台启动，与 `check-doc-drift` 段并行执行（跨域守护恒跑；涉及**任一被统计域**（`docs/managements/` / `src/test/` / `src/python/` / `scripts/`）时 `--sync` 写路径串行先行并自动回写统计快照，其中暂存含 `src/test/` 时追加 `--with-test-count` 校验 `test-coverage.md` 的收集派生计数——否则新增用例后计数静默陈旧、只在 CI master 档才红；其余提交纯 `--ci` 后台并行）；读 folders.md 的 version-consistency 与 doc 域（doc-traces/doc-links）在 doc-drift 完成后启动（避 --sync 写读竞态）；域条件不变（doc 域仅 `*.md`、py 域仅 `*.py`、测试域仅 `src/test/` 变更触发），典型提交约 1~4 秒；六守护另有结论缓存（doc-traces/semantic-index/doc-links/code-traces/requirement-trace/doc-drift，输入与逻辑指纹未变回放上次结论，冷/热 --ci 输出逐字一致）；CI guards job 恒全量兜底 | ⚠️ clone 后运行 `sh .githooks/install-hooks.sh` |
 | **CI guards job** | push / PR / tag 时自动校验（10 个 `--ci` 脚本之一） | ✅ 零配置 |
 
 > `core.hooksPath` 与 `.claude/settings.json` 均为本地配置、不随仓库同步，新机器 clone 后运行上方激活命令一次即可；hook 脚本本体（`.githooks/`、`scripts/`）随仓库同步。
@@ -464,6 +468,7 @@ P0 问题必须在 commit 前解决，否则代码不应进入版本控制。P1 
   3. `_block_external_network` 阻断 fixture 对非 live 项一律拦死真实网络。
 - **非 live 用例的断网机制（2026-09-26 收紧）**：守卫只阻断**建连**（`socket.socket.connect`/`connect_ex`、`create_connection`、`getaddrinfo`），**不阻断 `socket.socket()` 构造**——否则会误伤第三方库的**导入期**探测（urllib3 导入期构造 socket 且仅被 `except Exception` 包住，硬化后会直接使库导入失败）。抛出的 `NetworkBlockedInTests` 继承 `BaseException`（而非 `RuntimeError`）：provider/fetcher 普遍用 `except Exception` 降级，用 `Exception` 子类会被静静吞掉，使漏 mock 退化成“验证网络被阻断后的降级”并白等链路瞬时重试退避（实测 unit 模式 1072 次未 mock 尝试 / 300 次退避睡眠 / 累计 149.3s 空等）。
 - **不依赖外部数据的文件写 `offline_external_sources`**：报告/编排/集成类用例的**附带依赖**（交易日历/行业数据/行情/健康探针/akshare 直连路径）常在未被 mock 时被真实访问。这类文件在模块级加 `pytest.mark.usefixtures("offline_external_sources")`，由 `src/test/_network_guard.py::apply_offline_stubs` 把仓内 HTTP 出口（`httpx.Client`）、交易日历、akshare（`sys.modules` 级）换成“即时取不到”，并把 `fetcher.chain._TRANSIENT_RETRY_BACKOFF`（链路级）与 provider 级重试策略（腾讯/东方财富 K 线、财务指标多期）退避一并置 0（仓内既有测试惯例）——链路口径仍为“源不可用→降级”，但零网络、零等待。需要验证某源真实行为的用例**必须自行 mock**，不得用本 fixture 遮掩。
+- **等待型 `sleep` 由离线桩统一接管（2026-10-21）**：同 fixture 另把 `core.throttle` / `core.retry` / `providers.cninfo` / `providers.datasink` 的**模块级 `time`** 换成 `_NoWaitClock` 代理——`sleep()` 变空操作（间隔节流、多策略退避、429 限速重试窗口不再白等），`monotonic`/`perf_counter` 原样透传（间隔判定与超时判据仍用真实时钟，零等待不等于零判据）。作用域只有这四个模块对象，因此**测试自身的 `time.sleep`**、以及**验证等待语义的用例**（`test_throttle` / `test_phase_timeout` / `test_batch::TestRateLimiter` / `test_handlers::test_queue_full_429` / provider 的退避断言）完全不受影响；未声明离线的文件等待语义原样保留。实测 `dev-verify` 墙钟中位 37.3s → 24.0s（−36%），用例数与断言强度不变。
 - **内容**：覆盖行情（A 股/ETF/场外基金/中美指数）、新闻源（东方财富/财联社/新浪/华尔街见闻）、基金（历史净值/排名/基准）、akshare 交易日历共 **14 个用例**（行情 5 / 新闻 4 / 基金 3 / 交易日历 2）。
 - **断言原则**：只校验返回「结构」（字段存在、类型、非空），**不校验具体数值**，容忍真实行情波动（休市、涨跌、数据源改字段）。
 - **不含 LLM 真实调用**（防费用）——LLM 连通性由运行时数据源健康检查覆盖。
@@ -1627,7 +1632,7 @@ sym |= set(re.findall(r'^\s{0,8}["\']([a-z][a-z0-9_]{2,})["\']\s*:', src, re.M))
 
 | 步骤 | 自动完成的部分 | 仍需人工判定 |
 |:-----|:---------------|:-------------|
-| rf 已解决表 | 表格块**整块原样搬入**归档新增批次节（含原分隔行；表外散文留主台账）、主台账留迁档占位、归档头部「涵盖版本」区间尾延展与「归档时间」追加本批、主文件归档索引区间延展 | 条目是否确属本版、是否需要另写摘要 |
+| rf 已解决表 | 表格块**整块原样搬入**归档新增批次节（含原分隔行；表外散文留主台账）、主台账留迁档占位（**只保留本版占位节——更早批次占位随本次迁档收敛，节内若还有人工备注则保节保散文只摘占位行**）、归档头部「涵盖版本」区间尾延展与「归档时间」追加本批、主文件归档索引区间延展 | 条目是否确属本版、是否需要另写摘要 |
 | plan 完成任务 | 标题含完成标记（`✅`/`已完成`，可带后缀如「✅ 主体交付」）的节整节搬入计划归档，沿用既有扁平 `## plan-N … ✅` 结构 | 标记是否打对（在办项被打标会被搬走） |
 | `docs/plan` 设计文件 | 引用编号**全部已归档**者判定为候选（强信号）、`git mv` 到该版本归档子目录 `<stem>/`、改写 changelog/plan/rf/folders/README/CLAUDE 与同级设计文档引用、folders 目录树条目搬迁 | 候选是否真完成；未引用任何任务编号的设计文件只列提示、不自动迁档 |
 

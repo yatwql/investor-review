@@ -125,6 +125,55 @@ class TestOfflineExternalSources:
         assert akshare_news.fetch_news() == []
         assert akshare_extras._fetch_all_dividends(["600900"]) == {}
 
+    def test_interval_throttle_wait_is_zeroed(self) -> None:
+        """间隔节流等待不再占用墙钟（分支照走：仍返回实际请求序列一个许可）。"""
+        from src.python.core.throttle import RateLimiter
+
+        limiter = RateLimiter()
+        start = time.perf_counter()
+        waited = limiter.acquire_interval("offline-endpoint", 1.5)
+        limiter.acquire_interval("offline-endpoint", 1.5)  # 第二次本应等满 1.5s
+        elapsed = time.perf_counter() - start
+
+        assert waited >= 0.0  # 算式仍返回等待量（语义未变），只是没真的睡
+        assert elapsed < 0.5, f"离线桩下间隔节流仍在等待：{elapsed:.2f}s"
+
+    def test_retry_backoff_wait_is_zeroed(self) -> None:
+        """多策略退避不再白等，但重试次数与最终结果不受影响。"""
+        from src.python.core.retry import STRATEGY_LINEAR, RetryPolicy, retry_transient
+
+        calls: list[int] = []
+
+        def _always_fail() -> None:
+            calls.append(1)
+            raise ConnectionError("瞬时失败")
+
+        start = time.perf_counter()
+        with pytest.raises(ConnectionError):
+            retry_transient(
+                _always_fail,
+                policy=RetryPolicy(attempts=3, strategy=STRATEGY_LINEAR, base_backoff=1.0),
+                retry_on=lambda exc: isinstance(exc, ConnectionError),
+            )
+        elapsed = time.perf_counter() - start
+
+        assert len(calls) == 3  # 重试分支照常覆盖（线性退避本应 1+2=3s）
+        assert elapsed < 0.5, f"离线桩下退避仍在等待：{elapsed:.2f}s"
+
+    def test_no_wait_clock_keeps_real_monotonic(self) -> None:
+        """只接管 sleep：monotonic / perf_counter 必须仍是真实时钟。"""
+        from src.python.core import throttle
+
+        clock = throttle.time
+        before = time.monotonic()
+        slept = clock.sleep(2.0)
+        after = time.monotonic()
+
+        assert slept is None
+        assert after - before < 0.5
+        assert abs(clock.monotonic() - time.monotonic()) < 0.5
+        assert clock.perf_counter() > 0.0
+
 
 class TestOfflineFixtureIsOptIn:
     """桩是显式 opt-in：未声明时不得改变 httpx 行为（由全局守卫负责兜底）。"""
@@ -134,25 +183,34 @@ class TestOfflineFixtureIsOptIn:
 
         assert httpx.Client is not OfflineHTTPClient
 
+    def test_wait_clock_not_applied_by_default(self) -> None:
+        """未声明离线时等待语义原样保留（否则会伤到验证退避/节流的用例）。"""
+        from src.python.core import retry, throttle
+
+        assert throttle.time is time
+        assert retry.time is time
+
 
 class TestOfflineStubTargets:
     """桩清单完整性：被 monkeypatch 的模块/属性必须仍然存在。
 
     桩以「模块路径字符串」写死（``httpx.Client`` / ``trading_calendar._get_trading_calendar`` /
-    ``chain._TRANSIENT_RETRY_BACKOFF`` / ``akshare_extras.ak``）；上游重命名或搬迁会让
-    ``monkeypatch.setattr`` 在用例运行时直接报 AttributeError（不会静默失效）。本用例把
-    这一层提前为可独立发现的断言，避免"改一处名字、跑全套才炸"。
+    ``chain._TRANSIENT_RETRY_BACKOFF`` / ``akshare_extras.ak`` / 四个模块的 ``time``）；上游
+    重命名或搬迁会让``monkeypatch.setattr`` 在用例运行时直接报 AttributeError（不会静默
+    失效）。本用例把这一层提前为可独立发现的断言，避免"改一处名字、跑全套才炸"。
     """
 
     def test_stub_targets_exist(self) -> None:
         import httpx
 
-        from src.python.core import trading_calendar
+        from src.python.core import retry, throttle, trading_calendar
         from src.python.fetcher import chain
-        from src.python.providers import akshare_extras
+        from src.python.providers import akshare_extras, cninfo, datasink
 
         assert callable(getattr(httpx, "Client", None))
         assert callable(getattr(httpx, "AsyncClient", None))
         assert callable(getattr(trading_calendar, "_get_trading_calendar", None))
         assert isinstance(getattr(chain, "_TRANSIENT_RETRY_BACKOFF", None), float)
         assert hasattr(akshare_extras, "ak")
+        for module in (throttle, retry, cninfo, datasink):
+            assert callable(getattr(module, "time", None).sleep), f"{module.__name__} 缺 time.sleep"

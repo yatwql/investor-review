@@ -109,6 +109,8 @@ from _release._ledger_archive import (  # noqa: E402, F401 — 纯函数面经�
     _RF_ARCHIVE_HEAD_FMT,
     RF_PLACEHOLDER,
     _bump_index_range,
+    _collapse_superseded_placeholders,
+    drop_migration_placeholders,
     apply_rf_archive,
     archive_header_findings,
     count_rf_rows,
@@ -378,7 +380,7 @@ def cmd_prepare(args: argparse.Namespace, runner=None) -> int:
         print(status_out.rstrip())
     print("\n[OK] prepare 完成。后续人工项：")
     print("  1. 审阅 git diff（重点：changelog 指针/归档索引、演进列头）")
-    print("  2. 复核上方归档迁移结果（台账原表搬运 / 设计文件迁档判定——机械部分已自动完成）")
+    print("  2. 复核归档迁移结果（台账原表搬运 / 设计文件迁档判定——机械部分已自动完成）")
     print("  3. 按序继续：refresh → evolution --release → gate → publish → devbump")
     return 0
 
@@ -756,6 +758,14 @@ def cmd_devbump(args: argparse.Namespace, runner=None) -> int:
         print("[ERR] 切版后版本一致性未收敛")
         return rc
     print(f"[OK] 版本全链 → {next_dev}")
+
+    # 新开发周期：上一版的迁档占位节属过期信息（「本版已迁入归档档案」只对刚结束的
+    # 发布周期有意义），连同空节一并清掉——归档正文与下方「归档档案」索引已记录全部版本
+    rf_text = RF_FILE.read_text(encoding="utf-8")
+    cleaned = drop_migration_placeholders(rf_text)
+    if cleaned != rf_text:
+        RF_FILE.write_text(cleaned, encoding="utf-8")
+        print("[OK] review-findings：已清掉上一版迁档占位节（新周期台账从空开始）")
 
     _, staged, _ = _git_ok(["status", "--porcelain"], REPO_ROOT, runner)
     if staged.strip():

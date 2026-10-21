@@ -48,7 +48,13 @@ _INDEX_RANGE_RE = re.compile(
     re.M,
 )
 
-RF_PLACEHOLDER = "（本版开发期已修复项已随 v{version} 发布迁入上方归档档案）"
+RF_PLACEHOLDER = "（本版开发期已修复项已随 v{version} 发布迁入归档档案）"
+#: 迁档占位行（任意批次）——收敛时按版本号识别需收敛的占位
+_PLACEHOLDER_LINE_RE = re.compile(
+    r"^（本版开发期已修复项已随 v(?P<version>\d+\.\d+\.\d+) 发布迁入(?:上方)?归档档案）[ \t]*$"
+)
+#: 占位节的节头（仅当节内只剩占位时才随占位一起删除）
+_PLACEHOLDER_HEAD_RE = re.compile(r"^### 开发期已修复（(?P<dev>\d+\.\d+\.\d+)-dev）[ \t]*$")
 RF_SECTION_NOTE = "> 完整复盘见 `changelog.md` {version}-dev 段；此处为台账原表搬运（无损），本批发布日 {date}。"
 
 
@@ -134,7 +140,69 @@ def apply_rf_archive(main_text: str, archive_text: str, version: str, date: str)
     new_archive = archive_text.rstrip("\n") + "\n\n" + section
     new_archive = _bump_archive_header(new_archive, version, date)
     new_main = _bump_index_range(new_main, date)
+    new_main = _collapse_superseded_placeholders(new_main, keep_version=version)
     return new_main, new_archive, moved
+
+
+def _collapse_superseded_placeholders(text: str, keep_version: str | None) -> str:
+    """只保留最近一次迁档占位节，收敛更早版本的同类占位节。
+
+    占位节是「本版表已搬走」的路标，只对本版有意义：归档正文与主文件
+    「归档档案」索引已各自记录全部版本，非本版占位节仅余一行同构文案。若每次
+    迁档都新增一节而不收敛，台账会稳定长出 N 段单行占位（近重复节，结构化
+    冗余検査因「标题路径不同 + 单行不足区块下限」而无法拦截）。
+
+    收敛粒度保守：
+      - 只删**非本版占位行**（本就指向已归档内容）；
+      - 该节标题下若只剩占位与空行，则节头一并删除；若节内还有表外散文
+        （如人工补的备注），保留节与散文，只摘掉占位行；
+      - 保留版本的占位行与所在节原样不动。
+    """
+    lines = text.splitlines()
+    drop: set[int] = set()
+    head_at = None  # 当前所在占位节标题的行号；None = 不在占位节内
+    for idx, line in enumerate(lines):
+        if _PLACEHOLDER_HEAD_RE.match(line):
+            head_at = idx
+            continue
+        if line.startswith("### ") or line.startswith("## "):
+            head_at = None  # 其它节：占位节已结束
+            continue
+        m = _PLACEHOLDER_LINE_RE.match(line)
+        if not m or m.group("version") == keep_version:
+            continue
+        drop.add(idx)
+        if head_at is None:
+            continue
+        # 本节范围 = 节头之后到下一个节头之前；只剩空行与已删占位则连节头一起删
+        section_end = next(
+            (
+                cand
+                for cand in range(head_at + 1, len(lines))
+                if lines[cand].startswith("### ") or lines[cand].startswith("## ")
+            ),
+            len(lines),
+        )
+        if all(not lines[i].strip() or i in drop for i in range(head_at + 1, section_end)):
+            drop.add(head_at)
+            head_at = None
+    if not drop:
+        return text
+
+    kept: list[str] = []
+    for idx, line in enumerate(lines):
+        if idx in drop:
+            continue
+        kept.append(line)
+    # 删除节头/占位行后可能留下的连续空行：折叠为最多一个空行
+    out: list[str] = []
+    for line in kept:
+        if not line.strip() and out and not out[-1].strip():
+            continue
+        out.append(line)
+    while out and not out[-1].strip():
+        out.pop()
+    return "\n".join(out) + "\n"
 
 
 def _bump_archive_header(text: str, version: str, date: str) -> str:
@@ -198,12 +266,23 @@ def _bump_index_range(text: str, date: str) -> str:
 
 # ─────────────────────────── plan 台账 ───────────────────────────
 
-#: 已完成任务节标题：`## plan-N 标题 ✅`（既有归档格式）/ `## ✅ plan-N 标题`（表格口径兼容）
+#: 已完成任务节标题：`## plan-N 标题 ✅`（归档扁平格式，入档后统一降为二级）/ `#### plan-N … ✅`
+#: （当前台账实际层级——任务节嵌在 `### P1~P4` 分组下）。标题层级 2~4 均识别，
+#: 否则台账里的完成项永远不会被搬走（清单只认二级时，`####` 任务节积压在主台账）。
 _PLAN_DONE_HEAD_RE = re.compile(
-    r"^##\s*(?:`?plan-\d+[^\n]*(?:✅|已完成)|(?:✅|已完成)[^\n]*`?plan-\d+)",
+    r"^#{2,4}\s*(?:`?plan-\d+[^\n]*(?:✅|已完成)|(?:✅|已完成)[^\n]*`?plan-\d+)",
     re.M,
 )
-_PLAN_ANY_HEAD_RE = re.compile(r"^## (?P<title>.+?)\s*$", re.M)
+#: 节尾 = 其后任一级标题（任务节内可能有更深层小标题，故不限层级）
+_PLAN_ANY_HEAD_RE = re.compile(r"^#{1,4} (?P<title>.+?)\s*$", re.M)
+
+
+def _flatten_heading(chunk: str) -> str:
+    """把节头降为二级标题（`#### plan-N …` → `## plan-N …`），其余行原样。"""
+    head, sep, rest = chunk.partition("\n")
+    if re.match(r"^#{2,4}\s", head):
+        head = "## " + head.lstrip("#").lstrip()
+    return head + sep + rest
 
 
 def plan_completed_sections(text: str) -> list[tuple[int, int, str]]:
@@ -217,11 +296,16 @@ def plan_completed_sections(text: str) -> list[tuple[int, int, str]]:
 
 
 def apply_plan_archive(main_text: str, archive_text: str, version: str, date: str) -> tuple[str, str, int]:
-    """把 plan.md 已完成任务节整节搬入计划归档（沿用扁平 `## plan-N … ✅` 结构）。"""
+    """把 plan.md 已完成任务节整节搬入计划归档（统一降为扁平 `## plan-N … ✅`）。
+
+    台账里任务节嵌在 `### P1~P4` 分组下（`####`），归档一律扁平为 `##`——
+    归档只按版本批次堆叠，不需要优先级分层；入档时把节头系数归一，
+    保持同一归档文件内标题层级一致。
+    """
     sections = plan_completed_sections(main_text)
     if not sections:
         return main_text, archive_text, 0
-    chunks = [main_text[s:e].strip("\n") for s, e, _t in sections]
+    chunks = [_flatten_heading(main_text[s:e].strip("\n")) for s, e, _t in sections]
     for s, e, _t in reversed(sections):  # 从后往前删，避免位移
         main_text = main_text[:s] + main_text[e:]
     main_text = re.sub(r"\n{3,}", "\n\n", main_text)
@@ -382,3 +466,14 @@ def move_tree_entry(text: str, stem: str, minor: str) -> str:
     new_lines[p_start:p_end] = plan_out
     new_lines[ver_head + 1 : a_end] = arch_out
     return "\n".join(new_lines) + ("\n" if text.endswith("\n") else "")
+
+
+def drop_migration_placeholders(text: str) -> str:
+    """清空全部迁档占位节（切开发版时用）。
+
+    占位是「本版已搬走」的路标，只对刚结束的那个发布周期有意义；`devbump` 之后
+    台账已属于新周期，留着的上一版占位属过期信息（还会在「已解决问题」区顶部
+    显示一个空节）。归档正文与主文件「归档档案」索引已各自记录全部版本，清掉占位
+    不丢信息，doc-drift 的「占位↔归档节」断言随之自然收敛（无占位即无需断言）。
+    """
+    return _collapse_superseded_placeholders(text, keep_version=None)

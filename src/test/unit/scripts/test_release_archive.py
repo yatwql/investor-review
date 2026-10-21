@@ -138,10 +138,65 @@ class TestLedgerArchive:
         _main, arch, _n = rel.apply_rf_archive(_SAMPLE_RF, _SAMPLE_RF_ARCHIVE, "0.12.6", "2026-10-08")
         assert "## 开发期已修复（0.12.6-dev）" in arch
         assert "> 完整复盘见 `changelog.md` 0.12.6-dev 段" in arch
-        assert "本批发布日 2026-10-08" in arch
-        assert "v0.12.6）" in arch  # 涵盖版本区间尾
-        assert "；2026-10-08 v0.12.6 本批原表搬运" in arch  # 归档时间追加（既有叙述保留）
-        assert "v0.12.5 发布" in arch  # 既有历史叙述未被改写
+
+
+class TestPlaceholderCollapse:
+    """迁档占位节只保留本版，更早批次占位随迁档收敛（防单行同构节累积）。"""
+
+    @staticmethod
+    def _ledger(*versions: str) -> str:
+        sections = [
+            f"### 开发期已修复（{v}-dev）\n\n（本版开发期已修复项已随 v{v} 发布迁入上方归档档案）\n" for v in versions
+        ]
+        return "# 台账\n\n## 已解决问题\n\n" + "\n".join(sections) + "\n### 归档档案\n- 索引行\n"
+
+    def test_only_latest_placeholder_survives(self, rel):
+        text = self._ledger("1.0.1", "1.0.2", "1.0.3")
+        out = rel._collapse_superseded_placeholders(text, keep_version="1.0.3")
+
+        assert out.count("发布迁入上方归档档案") == 1
+        assert "### 开发期已修复（1.0.3-dev）" in out
+        for older in ("1.0.1", "1.0.2"):
+            assert f"（{older}-dev）" not in out  # 更早批次节头随空占位节一并删除
+        assert "### 归档档案" in out  # 归档索引不受影响
+
+    def test_section_with_prose_keeps_heading(self, rel):
+        """节内还有表外散文时只摘占位行，节与散文均保留（不丢人工备注）。"""
+        text = (
+            "# 台账\n\n## 已解决问题\n\n"
+            "### 开发期已修复（1.0.1-dev）\n\n> 人工备注：本节已人工复核\n\n"
+            "（本版开发期已修复项已随 v1.0.1 发布迁入上方归档档案）\n\n"
+            "### 开发期已修复（1.0.2-dev）\n\n"
+            "（本版开发期已修复项已随 v1.0.2 发布迁入上方归档档案）\n"
+        )
+        out = rel._collapse_superseded_placeholders(text, keep_version="1.0.2")
+
+        assert "### 开发期已修复（1.0.1-dev）" in out
+        assert "> 人工备注：本节已人工复核" in out
+        assert "v1.0.1 发布迁入" not in out
+        assert "v1.0.2 发布迁入" in out
+
+    def test_single_placeholder_is_noop(self, rel):
+        text = self._ledger("1.0.1")
+        assert rel._collapse_superseded_placeholders(text, keep_version="1.0.1") == text
+
+    def test_apply_rf_archive_collapses_previous_release(self, rel):
+        """接线：迁档后更早批次的占位节被收敛（只留本次版本）。"""
+        main = _SAMPLE_RF.replace(
+            "### 开发期已修复（0.12.6-dev）",
+            "### 开发期已修复（0.12.5-dev）\n\n（本版开发期已修复项已随 v0.12.5 发布迁入上方归档档案）\n\n"
+            "### 开发期已修复（0.12.6-dev）",
+        )
+        new_main, _arch, moved = rel.apply_rf_archive(main, _SAMPLE_RF_ARCHIVE, "0.12.6", "2026-10-08")
+
+        assert moved == 2
+        assert len(re.findall(r"（本版开发期已修复项已随[^）]*）", new_main)) == 1
+        assert "（0.12.5-dev）" not in new_main
+        assert "（0.12.6-dev）" in new_main
+        assert "本批发布日 2026-10-08" in _arch
+        assert "v0.12.6）" in _arch  # 涵盖版本区间尾
+        assert "；2026-10-08 v0.12.6 本批原表搬运" in _arch  # 归档时间追加（既有叙述保留）
+        assert "v0.12.5 发布" in _arch  # 既有历史叙述未被改写
 
     def test_pending_rows_and_archive_section_detection(self, rel):
         assert rel.pending_rf_rows(_SAMPLE_RF, "0.12.6") == 2
@@ -268,10 +323,16 @@ class TestRealArchiveContract:
             assert re.fullmatch(fmt_pattern, heading), f"{name}: {heading}"
 
     def test_placeholder_template_matches_real_ledger(self, real):
-        """主台账既有占位句与脚本模板同形（脚本生成的占位不引入第二种写法）。"""
+        """主台账若存在占位句，必须与脚本模板同形（不引入第二种写法）。
+
+        新开发周期台账**允许没有占位**（`devbump` 会清掉上一版的占位）——
+        因此这里断言的是「有则同形」，而非「必须有」。
+        """
         rel = real["rel"]
         pattern = re.escape(rel.RF_PLACEHOLDER).replace(r"\{version\}", r"\d+\.\d+\.\d+")
-        assert re.search(pattern, real["rf_main"]), "真实台账应有与模板同形的迁档占位句"
+        found = re.findall(r"（本版开发期已修复项已随[^）]*）", real["rf_main"])
+        for line in found:
+            assert re.fullmatch(pattern, line), f"真实台账占位句与模板不同形：{line}"
 
     def test_active_archive_headers_parseable(self, real):
         """脚本会写入的两份归档头部两行齐备（区间/日期派生有落点）。"""
@@ -312,3 +373,63 @@ class TestRealArchiveContract:
         for heading in done:
             matched = rel.plan_completed_sections(heading + "\n\n正文\n")
             assert matched, heading
+
+
+class TestPlaceholderLifecycle:
+    """切开发版即清空迁档占位（上一版提示属过期信息）+ 文案不带方向词。"""
+
+    @staticmethod
+    def _ledger(*versions: str) -> str:
+        sections = [
+            f"### 开发期已修复（{v}-dev）\n\n（本版开发期已修复项已随 v{v} 发布迁入归档档案）\n" for v in versions
+        ]
+        return "# 台账\n\n## 已解决问题\n\n" + "\n".join(sections) + "\n### 归档档案\n- 索引行\n"
+
+    def test_placeholder_has_no_direction_word(self, rel):
+        """占位文案不写「上方/下方」——版面变化不该让提示失准。"""
+        text = rel.RF_PLACEHOLDER.format(version="1.2.3")
+        assert "归档档案" in text
+        assert "上方" not in text and "下方" not in text
+
+    def test_drop_clears_every_placeholder_section(self, rel):
+        out = rel.drop_migration_placeholders(self._ledger("1.0.1", "1.0.2"))
+        assert "发布迁入归档档案" not in out
+        for version in ("1.0.1", "1.0.2"):
+            assert f"（{version}-dev）" not in out  # 空占位节的节头一并删除
+        assert "### 归档档案" in out  # 归档索引不受影响
+
+    def test_drop_keeps_prose_sections(self, rel):
+        text = (
+            "# 台账\n\n## 已解决问题\n\n### 开发期已修复（1.0.1-dev）\n\n"
+            "> 人工备注：本版已人工复核\n\n"
+            "（本版开发期已修复项已随 v1.0.1 发布迁入归档档案）\n\n### 归档档案\n- 索引行\n"
+        )
+        out = rel.drop_migration_placeholders(text)
+        assert "> 人工备注：本版已人工复核" in out
+        assert "发布迁入归档档案" not in out
+
+
+class TestPlanArchiveHeadingLevels:
+    """plan 已完成节可能嵌在 `### P1~P4` 分组下（`####`）——须同样被搬入并扁平为 `##`。
+
+    否则台账里的完成项永远搬不走（清单只认二级时，`####` 节在主台账积压）。
+    """
+
+    _LEDGER = (
+        "# 计划\n\n### P1 — 当前待办\n\n"
+        "#### `plan-201` 某已完成任务 ✅\n\n**完成（2026-10-21）**：已做\n\n"
+        "#### `plan-202` 在办任务\n\n- [ ] 待做\n"
+    )
+
+    def test_nested_completed_section_detected(self, rel):
+        sections = rel.plan_completed_sections(self._LEDGER)
+        assert len(sections) == 1
+        assert "plan-201" in sections[0][2]
+
+    def test_moved_and_flattened_to_level_two(self, rel):
+        main, archive, moved = rel.apply_plan_archive(self._LEDGER, "> 涵盖版本：v0.14.x\n", "0.14.0", "2026-10-21")
+        assert moved == 1
+        assert "plan-201" not in main  # 已搬离主台账
+        assert "plan-202" in main  # 在办节不外溢
+        assert "## `plan-201` 某已完成任务 ✅" in archive  # 入档统一降为二级
+        assert "#### `plan-201`" not in archive

@@ -36,8 +36,14 @@ from src.python.report.styles import FMT_MONEY, FMT_PERCENT
 
 logger = logging.getLogger("invest")
 
+
 # 模块级降级阈值控制器（单例工厂共享，统一管理）
-_tracker = get_tracker()
+# 降级跟踪器**不缓存引用**：单例工厂是唯一事实源，缓存实例会让 reset_tracker()
+# （测试隔离/运行期重置）失效——模块继续写旧实例，计数与事件落不到当前单例。
+def _tracker():
+    """当前降级跟踪器（每次经单例工厂取，不缓存）。"""
+    return get_tracker()
+
 
 _FEEDER_SOURCE_TEMPLATE = "（穿透自目标 ETF {code} {name}，未折算持有比例）"
 """联接基金的穿透来源标注。
@@ -221,7 +227,7 @@ def build_penetration_data_status(
             )
             cache_age = get_cache_age_by_data_type("industry", _first_code) if _first_code else None
             _ind_ttl = get_ttl("industry")
-            degraded, _, _ = _tracker.record(
+            degraded, _, _ = _tracker().record(
                 "penetration_industry",
                 "T3",
                 success=False,
@@ -238,7 +244,7 @@ def build_penetration_data_status(
 
     # 盈利预测（T4，akshare）
     if not profit_success:
-        degraded, _, _ = _tracker.record(
+        degraded, _, _ = _tracker().record(
             "penetration_profit_forecast",
             "T4",
             success=False,
@@ -252,7 +258,7 @@ def build_penetration_data_status(
 
     # 分红数据（T4，akshare）
     if not dividend_success:
-        degraded, _, _ = _tracker.record(
+        degraded, _, _ = _tracker().record(
             "penetration_dividend",
             "T4",
             success=False,

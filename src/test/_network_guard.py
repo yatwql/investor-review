@@ -12,10 +12,14 @@
    :func:`apply_offline_stubs` —— ``offline_external_sources`` fixture 的实现：
    把仓内 HTTP 出口（``httpx.Client``）与若干非 httpx 外部入口换成“即时取不到”，
    链路口径仍为“源不可用 → 降级”，但零网络、零退避等待。
+3. :class:`_NoWaitClock` —— 等待型 ``time.sleep`` 的接管家（间隔节流 / 多策略退避 /
+   限速 429 重试窗口）：离线桩下这些等待等的是“注定取不到的源”，白等不产生任何
+   覆盖增量；换成空 sleep 后分支照常走，只是不再占用墙钟。
 """
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 BLOCKED_NETWORK_MSG = (
@@ -87,6 +91,26 @@ class OfflineAsyncHTTPClient(OfflineHTTPClient):
     stream = _afail
 
 
+class _NoWaitClock:
+    """``time`` 模块代理：``sleep`` 变空操作，其余属性原样透传。
+
+    只接管 sleep 是刻意的：``monotonic`` / ``perf_counter`` 必须保持真实时钟——
+    间隔节流的“距上次调用已过多久”与超时判据都依赖它，替换掉会改变语义
+    （否则“本应等待”的分支会变成“不必等”，零等待会误伤判据）。
+
+    作用域限于被替换的那个模块对象（``setattr(module, "time", proxy)``），因此
+    测试自身的 ``time.sleep``、其它模块的等待、以及 ``test_throttle`` /
+    ``test_phase_timeout`` 这类**验证等待语义**的用例都不受影响。
+    """
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(time, name)
+
+    def sleep(self, seconds: float) -> None:  # noqa: ARG002 — 签名对齐 time.sleep
+        """空操作（不等待、不抛错）。"""
+        return None
+
+
 class _OfflineAkshareModule:
     """akshare 的离线桩：任意函数调用返回 ``None``。
 
@@ -119,9 +143,9 @@ def apply_offline_stubs(monkeypatch: Any) -> None:
 
     import httpx
 
-    from src.python.core import trading_calendar
+    from src.python.core import retry, throttle, trading_calendar
     from src.python.fetcher import chain
-    from src.python.providers import akshare_extras
+    from src.python.providers import akshare_extras, cninfo, datasink
 
     akshare_stub = _OfflineAkshareModule()
 
@@ -144,3 +168,12 @@ def apply_offline_stubs(monkeypatch: Any) -> None:
     monkeypatch.setitem(sys.modules, "akshare", akshare_stub)
     if getattr(akshare_extras, "ak", None) is not None:
         monkeypatch.setattr(akshare_extras, "ak", akshare_stub)
+
+    # 5. 等待型 sleep 接管（与上面链路口径一致：即时失败后不再白等）——
+    #    ``core.throttle`` 的间隔节流（LLM 端点 pacing / provider qps / 批量调度）、
+    #    ``core.retry`` 的多策略退避（provider 连接重试、K 线/财务多期重试等，
+    #    含函数内就地构造的策略，无需逐个登记）、``cninfo`` / ``datasink`` 的 429
+    #    限速重试窗口（两处自用模块级 ``time.sleep``）。
+    no_wait = _NoWaitClock()
+    for module in (throttle, retry, cninfo, datasink):
+        monkeypatch.setattr(module, "time", no_wait)

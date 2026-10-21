@@ -1,0 +1,475 @@
+"""test_chain 兄弟分片（fallback）：取数回退（全失败 / 陈旧缓存 / 熔断跳过）。"""
+
+from __future__ import annotations
+import unittest
+from unittest.mock import MagicMock, patch
+from src.python.fetcher import chain
+from src.python.fetcher.chain import (
+    fetch_with_fallback,
+    reset_provider_skip,
+)
+import pytest
+
+pytestmark = [pytest.mark.unit, pytest.mark.unit_fetcher]
+
+
+class TestFetchWithFallback(unittest.TestCase):
+    """Provider Chain 通用 Fallback 获取器测试。"""
+
+    @patch("src.python.fetcher.chain.cache_get")
+    @patch("src.python.fetcher.chain.cache_set")
+    @patch("src.python.fetcher.chain._get_chain")
+    def test_transient_retry_succeeds_without_falling_through(self, mock_chain, mock_set, mock_get):
+        """传输级失败后同源重试成功 → 不落到下一槽（避免过早降级/触发熔断）。"""
+        mock_chain.return_value = ["p1", "p2"]
+        mock_get.return_value = None
+        fn1 = MagicMock(side_effect=[Exception("Server disconnected"), {"data": "retry_ok"}])
+        fn2 = MagicMock(return_value={"data": "from_p2"})
+        provider_map = {"p1": ("P1", fn1), "p2": ("P2", fn2)}
+
+        with patch.object(chain, "_TRANSIENT_RETRY_BACKOFF", 0.0):
+            result = fetch_with_fallback("industry", provider_map, "k", 3600)
+
+        self.assertEqual(result, {"data": "retry_ok"})
+        self.assertEqual(fn1.call_count, 2)
+        fn2.assert_not_called()
+
+    @patch("src.python.fetcher.chain.cache_get")
+    @patch("src.python.fetcher.chain.cache_set")
+    @patch("src.python.fetcher.chain._get_chain")
+    def test_code_level_empty_result_not_retried(self, mock_chain, mock_set, mock_get):
+        """代码级空结果（Provider 返回 None）不重试：重试会白耗配额且结果不变。"""
+        mock_chain.return_value = ["p1", "p2"]
+        mock_get.return_value = None
+        fn1 = MagicMock(return_value=None)
+        fn2 = MagicMock(return_value={"data": "from_p2"})
+        provider_map = {"p1": ("P1", fn1), "p2": ("P2", fn2)}
+
+        with patch.object(chain, "_TRANSIENT_RETRY_BACKOFF", 0.0):
+            result = fetch_with_fallback("financial_report", provider_map, "k", 3600)
+
+        self.assertEqual(result, {"data": "from_p2"})
+        fn1.assert_called_once()
+        fn2.assert_called_once()
+
+    @patch("src.python.fetcher.chain.cache_get")
+    @patch("src.python.fetcher.chain.cache_set")
+    @patch("src.python.fetcher.chain._get_chain")
+    def test_transient_retry_is_bounded(self, mock_chain, mock_set, mock_get):
+        """持续传输级失败 → 重试次数有界（1 + _TRANSIENT_RETRY_ATTEMPTS），不无限重试。"""
+        mock_chain.return_value = ["p1"]
+        mock_get.return_value = None
+        fn1 = MagicMock(side_effect=Exception("timeout"))
+        provider_map = {"p1": ("P1", fn1)}
+
+        with patch.object(chain, "_TRANSIENT_RETRY_BACKOFF", 0.0):
+            assert fetch_with_fallback("price", provider_map, "k", 3600) is None
+
+        self.assertEqual(fn1.call_count, 1 + chain._TRANSIENT_RETRY_ATTEMPTS)
+
+    def setUp(self):
+        reset_provider_skip()  # 清除前序测试的熔断状态
+        self.provider_fn_map = {
+            "p1": ("Provider1", None),
+            "p2": ("Provider2", None),
+        }
+
+    # ── 缓存命中 ─────────────────────────────────────────
+
+    @patch("src.python.fetcher.chain.cache_get")
+    def test_cache_hit_returns_cached(self, mock_cache_get):
+        """缓存命中 → 直接返回缓存数据。"""
+        mock_cache_get.return_value = {"cached": True}
+        result = fetch_with_fallback("price", self.provider_fn_map, "test_key", 3600)
+        self.assertEqual(result, {"cached": True})
+
+    # ── 缓存载荷准入判据（cache_validate） ────────────────
+
+    @patch("src.python.fetcher.chain.cache_get")
+    def test_cache_validate_accepts_current_payload(self, mock_cache_get):
+        """cache_validate 通过 → 直接返回缓存，不调用 provider。"""
+        mock_cache_get.return_value = {"hold_schema": 2, "holdings": []}
+        fn1 = MagicMock()
+        provider_map = {"p1": ("P1", fn1)}
+
+        result = fetch_with_fallback(
+            "price", provider_map, "k", 3600, cache_validate=lambda p: p.get("hold_schema") == 2
+        )
+
+        self.assertEqual(result, {"hold_schema": 2, "holdings": []})
+        fn1.assert_not_called()
+
+    @patch("src.python.fetcher.chain.cache_get")
+    @patch("src.python.fetcher.chain.cache_clear")
+    @patch("src.python.fetcher.chain.cache_set")
+    @patch("src.python.fetcher.chain._get_chain")
+    def test_cache_validate_rejects_legacy_payload(self, mock_chain, mock_set, mock_clear, mock_get):
+        """cache_validate 拒收旧语义载荷 → 清掉旧缓存并重取。
+
+        回归防线：只改载荷语义、不改键结构的修复，旧条目在 TTL 内会持续遮蔽修复；
+        准入判据不符时必须视为未命中（并清缓存，避免降级路径又把它捞回来）。
+        """
+        mock_chain.return_value = ["p1"]
+        mock_get.return_value = {"hold_schema": 1, "holdings": [{"name": "旧快照"}]}
+        fn1 = MagicMock(return_value={"hold_schema": 2, "holdings": []})
+        provider_map = {"p1": ("P1", fn1)}
+
+        result = fetch_with_fallback(
+            "price", provider_map, "k", 3600, cache_validate=lambda p: p.get("hold_schema") == 2
+        )
+
+        mock_clear.assert_called_once_with("k")
+        fn1.assert_called_once()
+        self.assertEqual(result, {"hold_schema": 2, "holdings": []})
+        mock_set.assert_called_once_with("k", {"hold_schema": 2, "holdings": []})
+
+    @patch("src.python.fetcher.chain.cache_get")
+    @patch("src.python.fetcher.chain._get_chain")
+    def test_cache_validate_rejects_legacy_stale(self, mock_chain, mock_get):
+        """过期降级条目同样须过准入判据；旧语义 → 不可用。"""
+        mock_chain.return_value = ["p1"]
+        # 第一次 cache_get（最新缓存）→ None；第二次（过期降级）→ 旧语义载荷
+        mock_get.side_effect = [None, {"hold_schema": 1}]
+        fn1 = MagicMock(side_effect=Exception("fail"))
+        provider_map = {"p1": ("P1", fn1)}
+
+        result = fetch_with_fallback(
+            "price", provider_map, "k", 3600, cache_validate=lambda p: p.get("hold_schema") == 2
+        )
+
+        self.assertIsNone(result)
+
+    # ── Provider 成功路径 ────────────────────────────────
+
+    @patch("src.python.fetcher.chain.cache_get")
+    @patch("src.python.fetcher.chain.cache_set")
+    @patch("src.python.fetcher.chain._get_chain")
+    def test_first_provider_succeeds(self, mock_chain, mock_set, mock_get):
+        """第一个 Provider 成功 → 返回其数据并写入缓存。"""
+        mock_chain.return_value = ["p1", "p2"]
+        mock_get.return_value = None  # 缓存未命中
+        fn1 = MagicMock(return_value={"data": "from_p1"})
+        fn2 = MagicMock(return_value={"data": "from_p2"})
+        provider_map = {"p1": ("P1", fn1), "p2": ("P2", fn2)}
+
+        result = fetch_with_fallback("price", provider_map, "test_key", 3600)
+
+        self.assertEqual(result, {"data": "from_p1"})
+        fn1.assert_called_once()
+        fn2.assert_not_called()
+        mock_set.assert_called_once_with("test_key", {"data": "from_p1"})
+
+    # ── Provider 回退 ────────────────────────────────────
+
+    @patch("src.python.fetcher.chain.cache_get")
+    @patch("src.python.fetcher.chain.cache_set")
+    @patch("src.python.fetcher.chain._get_chain")
+    def test_fallback_on_failure(self, mock_chain, mock_set, mock_get):
+        """第一个 Provider 传输级失败 → 同源重试一次后回退到第二个。"""
+        mock_chain.return_value = ["p1", "p2"]
+        mock_get.return_value = None
+        fn1 = MagicMock(side_effect=Exception("timeout"))
+        fn2 = MagicMock(return_value={"data": "from_p2"})
+        provider_map = {"p1": ("P1", fn1), "p2": ("P2", fn2)}
+
+        with patch.object(chain, "_TRANSIENT_RETRY_BACKOFF", 0.0):
+            result = fetch_with_fallback("price", provider_map, "test_key", 3600)
+
+        self.assertEqual(result, {"data": "from_p2"})
+        self.assertEqual(fn1.call_count, 2, "传输级失败应同源重试一次")
+        fn2.assert_called_once()
+
+    # ── 全部 Provider 失败 + 过期缓存降级 ────────────────
+
+    # ── 特定 HTTP 错误触发回退 ──────────────────────────
+
+    @patch("src.python.fetcher.chain.cache_get")
+    @patch("src.python.fetcher.chain.cache_set")
+    @patch("src.python.fetcher.chain._get_chain")
+    def test_all_fail_stale_cache(self, mock_chain, mock_set, mock_get):
+        """全部 Provider 失败 + 有过期缓存 → 降级使用过期缓存。"""
+        mock_chain.return_value = ["p1", "p2"]
+        # 第一次 cache_get（最新缓存）→ None
+        # 第二次 cache_get（过期缓存降级）→ stale data
+        mock_get.side_effect = [None, {"stale": True}]
+        fn1 = MagicMock(side_effect=Exception("fail"))
+        fn2 = MagicMock(side_effect=Exception("fail"))
+        provider_map = {"p1": ("P1", fn1), "p2": ("P2", fn2)}
+
+        result = fetch_with_fallback("price", provider_map, "test_key", 3600)
+
+        self.assertEqual(result, {"stale": True})
+
+    @patch("src.python.fetcher.chain.cache_get")
+    @patch("src.python.fetcher.chain._get_chain")
+    def test_all_fail_no_stale(self, mock_chain, mock_get):
+        """全部 Provider 失败 + 无过期缓存 → 返回 None。"""
+        mock_chain.return_value = ["p1"]
+        mock_get.return_value = None  # 最新 + 过期全都 None
+        fn1 = MagicMock(side_effect=Exception("fail"))
+        provider_map = {"p1": ("P1", fn1)}
+
+        result = fetch_with_fallback("price", provider_map, "test_key", 3600)
+
+        self.assertIsNone(result)
+
+    # ── Provider 返回 None ───────────────────────────────
+
+    @patch("src.python.fetcher.chain.cache_get")
+    @patch("src.python.fetcher.chain._get_chain")
+    def test_provider_returns_none(self, mock_chain, mock_get):
+        """Provider 返回 None → 尝试下一个。"""
+        mock_chain.return_value = ["p1", "p2"]
+        mock_get.return_value = None
+        fn1 = MagicMock(return_value=None)
+        fn2 = MagicMock(return_value={"data": "from_p2"})
+        provider_map = {"p1": ("P1", fn1), "p2": ("P2", fn2)}
+
+        result = fetch_with_fallback("price", provider_map, "test_key", 3600)
+
+        self.assertEqual(result, {"data": "from_p2"})
+
+    # ── 未知 Provider ────────────────────────────────────
+
+    @patch("src.python.fetcher.chain.cache_get")
+    @patch("src.python.fetcher.chain._get_chain")
+    def test_unknown_provider_skipped(self, mock_chain, mock_get):
+        """chain 中有未注册的 provider → 跳过，尝试下一个。"""
+        mock_chain.return_value = ["unknown", "p1"]
+        mock_get.return_value = None
+        fn1 = MagicMock(return_value={"data": "ok"})
+        provider_map = {"p1": ("P1", fn1)}
+
+        result = fetch_with_fallback("price", provider_map, "test_key", 3600)
+
+        self.assertEqual(result, {"data": "ok"})
+
+    # ── 未注册 fetch 函数 ────────────────────────────────
+
+    @patch("src.python.fetcher.chain.cache_get")
+    @patch("src.python.fetcher.chain._get_chain")
+    def test_provider_without_fn_skipped(self, mock_chain, mock_get):
+        """provider 注册了但 fetch_fn 为 None → 跳过。"""
+        mock_chain.return_value = ["p1", "p2"]
+        mock_get.return_value = None
+        fn2 = MagicMock(return_value={"data": "from_p2"})
+        provider_map = {"p1": ("P1", None), "p2": ("P2", fn2)}
+
+        result = fetch_with_fallback("price", provider_map, "test_key", 3600)
+
+        self.assertEqual(result, {"data": "from_p2"})
+
+    # ── 数据验证 ─────────────────────────────────────────
+
+    @patch("src.python.fetcher.chain.cache_get")
+    @patch("src.python.fetcher.chain._get_chain")
+    def test_validate_rejects_then_next(self, mock_chain, mock_get):
+        """验证函数拒绝 p1 数据 → 尝试 p2。"""
+        mock_chain.return_value = ["p1", "p2"]
+        mock_get.return_value = None
+        fn1 = MagicMock(return_value={"invalid": True})
+        fn2 = MagicMock(return_value={"data": "ok"})
+        provider_map = {"p1": ("P1", fn1), "p2": ("P2", fn2)}
+
+        def validate(raw, provider):
+            return provider == "p2" or raw.get("data") is not None
+
+        result = fetch_with_fallback("price", provider_map, "test_key", 3600, validate=validate)
+
+        self.assertEqual(result, {"data": "ok"})
+
+    @patch("src.python.fetcher.chain.cache_get")
+    @patch("src.python.fetcher.chain._get_chain")
+    def test_validate_passes_first(self, mock_chain, mock_get):
+        """验证函数通过 p1 数据 → 使用 p1。"""
+        mock_chain.return_value = ["p1", "p2"]
+        mock_get.return_value = None
+        fn1 = MagicMock(return_value={"data": "good"})
+        fn2 = MagicMock()
+        provider_map = {"p1": ("P1", fn1), "p2": ("P2", fn2)}
+
+        def validate(raw, provider):
+            return True
+
+        result = fetch_with_fallback("price", provider_map, "test_key", 3600, validate=validate)
+
+        self.assertEqual(result, {"data": "good"})
+        fn2.assert_not_called()
+
+    @patch("src.python.fetcher.chain.cache_get")
+    @patch("src.python.fetcher.chain._get_chain")
+    def test_validate_exception_caught(self, mock_chain, mock_get):
+        """验证函数抛出异常 → 跳过当前 provider 尝试下一个。"""
+        mock_chain.return_value = ["p1", "p2"]
+        mock_get.return_value = None
+        fn1 = MagicMock(return_value={"data": "bad"})
+        fn2 = MagicMock(return_value={"data": "ok"})
+        provider_map = {"p1": ("P1", fn1), "p2": ("P2", fn2)}
+
+        def validate(raw, provider):
+            if provider == "p1":
+                raise ValueError("validation error")
+            return True
+
+        result = fetch_with_fallback("price", provider_map, "test_key", 3600, validate=validate)
+
+        self.assertEqual(result, {"data": "ok"})
+
+    # ── 数据转换 ─────────────────────────────────────────
+
+    @patch("src.python.fetcher.chain.cache_get")
+    @patch("src.python.fetcher.chain.cache_set")
+    @patch("src.python.fetcher.chain._get_chain")
+    def test_transform_function(self, mock_chain, mock_set, mock_get):
+        """传入 transform 函数 → 对结果应用转换。"""
+        mock_chain.return_value = ["p1"]
+        mock_get.return_value = None
+        fn1 = MagicMock(return_value={"price": "100"})
+        provider_map = {"p1": ("P1", fn1)}
+
+        def transform(raw, source_label):
+            return {"price": float(raw["price"]), "source": source_label}
+
+        result = fetch_with_fallback("price", provider_map, "test_key", 3600, transform=transform)
+
+        self.assertEqual(result, {"price": 100.0, "source": "P1"})
+
+    @patch("src.python.fetcher.chain.cache_get")
+    @patch("src.python.fetcher.chain.cache_set")
+    @patch("src.python.fetcher.chain._get_chain")
+    def test_transform_dict_per_provider(self, mock_chain, mock_set, mock_get):
+        """transform 为 dict → 按 provider 名选择转换函数。"""
+        mock_chain.return_value = ["p1", "p2"]
+        mock_get.return_value = None
+        fn1 = MagicMock(return_value={"price": "100"})
+        fn2 = MagicMock(return_value={"price": "200"})
+        provider_map = {"p1": ("P1", fn1), "p2": ("P2", fn2)}
+
+        def t1(raw, label):
+            return {"price": int(raw["price"]) * 2, "from": label}
+
+        def t2(raw, label):
+            return {"price": int(raw["price"]) * 3, "from": label}
+
+        result = fetch_with_fallback("price", provider_map, "test_key", 3600, transform={"p1": t1, "p2": t2})
+
+        # p1 成功，使用 t1 转换
+        self.assertEqual(result, {"price": 200, "from": "P1"})
+
+    @patch("src.python.fetcher.chain.cache_get")
+    @patch("src.python.fetcher.chain._get_chain")
+    def test_transform_no_match_in_dict(self, mock_chain, mock_get):
+        """transform dict 中没有对应的 provider 转换函数 → 用原始数据。"""
+        mock_chain.return_value = ["p1"]
+        mock_get.return_value = None
+        fn1 = MagicMock(return_value={"data": "raw"})
+        provider_map = {"p1": ("P1", fn1)}
+
+        result = fetch_with_fallback(
+            "price", provider_map, "test_key", 3600, transform={"p_other": lambda _r, _l: None}
+        )
+
+        self.assertEqual(result, {"data": "raw"})
+
+    @patch("src.python.fetcher.chain.cache_get")
+    @patch("src.python.fetcher.chain._get_chain")
+    def test_transform_exception_falls_through(self, mock_chain, mock_get):
+        """单 provider 转换失败 → 跳过当前，尝试下一个（不同 provider 走不同 transform）。"""
+        mock_chain.return_value = ["p1", "p2"]
+        mock_get.return_value = None
+        fn1 = MagicMock(return_value={"data": "bad"})
+        fn2 = MagicMock(return_value={"data": "good"})
+        provider_map = {"p1": ("P1", fn1), "p2": ("P2", fn2)}
+
+        def t1(raw, label):
+            raise ValueError("p1 transform failed")
+
+        def t2(raw, label):
+            return {"data": raw["data"], "transformed": True}
+
+        result = fetch_with_fallback("price", provider_map, "test_key", 3600, transform={"p1": t1, "p2": t2})
+
+        self.assertEqual(result, {"data": "good", "transformed": True})
+
+    # ── 参数传递 ─────────────────────────────────────────
+
+    @patch("src.python.fetcher.chain.cache_get")
+    @patch("src.python.fetcher.chain._get_chain")
+    def test_fn_kwargs_passed(self, mock_chain, mock_get):
+        """fn_kwargs 正确传递给 fetch 函数。"""
+        mock_chain.return_value = ["p1"]
+        mock_get.return_value = None
+        fn1 = MagicMock(return_value={"ok": True})
+        provider_map = {"p1": ("P1", fn1)}
+
+        fetch_with_fallback("price", provider_map, "test_key", 3600, fn_kwargs={"code": "600900"})
+
+        fn1.assert_called_once_with(code="600900")
+
+    # ── 会话级 Provider 熔断 ─────────────────────────────
+
+    @patch("src.python.fetcher.chain.cache_get")
+    @patch("src.python.fetcher.chain._get_chain")
+    def test_skip_after_three_consecutive_failures(self, mock_chain, mock_get):
+        """同一 provider 连续失败 3 次 → 第 4 次被跳过。"""
+        mock_chain.return_value = ["p1", "p2"]
+        mock_get.return_value = None  # 缓存未命中
+        fn1 = MagicMock(side_effect=RuntimeError("transport error"))  # 传输级异常
+        fn2 = MagicMock(return_value={"data": "p2_ok"})
+        provider_map = {"p1": ("P1", fn1), "p2": ("P2", fn2)}
+
+        # 前 3 次：p1 都失败，p2 兜底
+        for i in range(3):
+            with self.subTest(fail_count=i + 1):
+                result = fetch_with_fallback("price", provider_map, f"key_{i}", 3600)
+                self.assertEqual(result, {"data": "p2_ok"})
+                fn1.assert_called()  # p1 每次都尝试了
+
+        fn1.reset_mock()
+        fn2.reset_mock()
+
+        # 第 4 次：p1 被熔断跳过，直接走 p2
+        result = fetch_with_fallback("price", provider_map, "key_4", 3600)
+        self.assertEqual(result, {"data": "p2_ok"})
+        fn1.assert_not_called()  # p1 未尝试
+
+    @patch("src.python.fetcher.chain.cache_get")
+    @patch("src.python.fetcher.chain._get_chain")
+    def test_success_resets_failure_counter(self, mock_chain, mock_get):
+        """连续 2 次失败后第 3 次成功 → 计数器重置，后续不会跳过。
+
+        注意：每次 `fetch_with_fallback` 调用在传输级失败时会先同源重试一次，
+        故 2 次调用共触发 4 次 provider 调用；第 5 次（第 3 次 fetch）成功。
+        """
+        mock_chain.return_value = ["p1"]
+        mock_get.return_value = None
+        call_count = [0]  # 用 list 引用可跟踪
+
+        def fn1_side_effect(**kwargs):
+            call_count[0] += 1
+            if call_count[0] > 4:
+                return {"data": "success"}
+            raise RuntimeError("transport error")  # 传输级异常
+
+        fn1 = MagicMock(side_effect=fn1_side_effect)
+        provider_map = {"p1": ("P1", fn1)}
+
+        with patch.object(chain, "_TRANSIENT_RETRY_BACKOFF", 0.0):
+            # 第 1 次：异常（含重试，provider 计数 +1）
+            self.assertIsNone(fetch_with_fallback("price", provider_map, "k1", 3600))
+            # 第 2 次：异常（含重试，provider 计数 +1）
+            self.assertIsNone(fetch_with_fallback("price", provider_map, "k2", 3600))
+            # 第 3 次：成功（计数器应重置）
+            self.assertEqual(
+                fetch_with_fallback("price", provider_map, "k3", 3600),
+                {"data": "success"},
+            )
+
+        # 第 4 次：用全新 mock 验证熔断已被重置，p1 不会被跳过
+        fn2 = MagicMock(return_value={"data": "ok"})
+        provider_map2 = {"p1": ("P1", fn2)}
+        self.assertEqual(
+            fetch_with_fallback("price", provider_map2, "k4", 3600),
+            {"data": "ok"},
+        )
+        fn2.assert_called_once()
