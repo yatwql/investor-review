@@ -138,10 +138,65 @@ class TestLedgerArchive:
         _main, arch, _n = rel.apply_rf_archive(_SAMPLE_RF, _SAMPLE_RF_ARCHIVE, "0.12.6", "2026-10-08")
         assert "## 开发期已修复（0.12.6-dev）" in arch
         assert "> 完整复盘见 `changelog.md` 0.12.6-dev 段" in arch
-        assert "本批发布日 2026-10-08" in arch
-        assert "v0.12.6）" in arch  # 涵盖版本区间尾
-        assert "；2026-10-08 v0.12.6 本批原表搬运" in arch  # 归档时间追加（既有叙述保留）
-        assert "v0.12.5 发布" in arch  # 既有历史叙述未被改写
+
+
+class TestPlaceholderCollapse:
+    """迁档占位节只保留本版，更早批次占位随迁档收敛（防单行同构节累积）。"""
+
+    @staticmethod
+    def _ledger(*versions: str) -> str:
+        sections = [
+            f"### 开发期已修复（{v}-dev）\n\n（本版开发期已修复项已随 v{v} 发布迁入上方归档档案）\n" for v in versions
+        ]
+        return "# 台账\n\n## 已解决问题\n\n" + "\n".join(sections) + "\n### 归档档案\n- 索引行\n"
+
+    def test_only_latest_placeholder_survives(self, rel):
+        text = self._ledger("1.0.1", "1.0.2", "1.0.3")
+        out = rel._collapse_superseded_placeholders(text, keep_version="1.0.3")
+
+        assert out.count("发布迁入上方归档档案") == 1
+        assert "### 开发期已修复（1.0.3-dev）" in out
+        for older in ("1.0.1", "1.0.2"):
+            assert f"（{older}-dev）" not in out  # 更早批次节头随空占位节一并删除
+        assert "### 归档档案" in out  # 归档索引不受影响
+
+    def test_section_with_prose_keeps_heading(self, rel):
+        """节内还有表外散文时只摘占位行，节与散文均保留（不丢人工备注）。"""
+        text = (
+            "# 台账\n\n## 已解决问题\n\n"
+            "### 开发期已修复（1.0.1-dev）\n\n> 人工备注：本节已人工复核\n\n"
+            "（本版开发期已修复项已随 v1.0.1 发布迁入上方归档档案）\n\n"
+            "### 开发期已修复（1.0.2-dev）\n\n"
+            "（本版开发期已修复项已随 v1.0.2 发布迁入上方归档档案）\n"
+        )
+        out = rel._collapse_superseded_placeholders(text, keep_version="1.0.2")
+
+        assert "### 开发期已修复（1.0.1-dev）" in out
+        assert "> 人工备注：本节已人工复核" in out
+        assert "v1.0.1 发布迁入" not in out
+        assert "v1.0.2 发布迁入" in out
+
+    def test_single_placeholder_is_noop(self, rel):
+        text = self._ledger("1.0.1")
+        assert rel._collapse_superseded_placeholders(text, keep_version="1.0.1") == text
+
+    def test_apply_rf_archive_collapses_previous_release(self, rel):
+        """接线：迁档后更早批次的占位节被收敛（只留本次版本）。"""
+        main = _SAMPLE_RF.replace(
+            "### 开发期已修复（0.12.6-dev）",
+            "### 开发期已修复（0.12.5-dev）\n\n（本版开发期已修复项已随 v0.12.5 发布迁入上方归档档案）\n\n"
+            "### 开发期已修复（0.12.6-dev）",
+        )
+        new_main, _arch, moved = rel.apply_rf_archive(main, _SAMPLE_RF_ARCHIVE, "0.12.6", "2026-10-08")
+
+        assert moved == 2
+        assert new_main.count("发布迁入上方归档档案") == 1
+        assert "（0.12.5-dev）" not in new_main
+        assert "（0.12.6-dev）" in new_main
+        assert "本批发布日 2026-10-08" in _arch
+        assert "v0.12.6）" in _arch  # 涵盖版本区间尾
+        assert "；2026-10-08 v0.12.6 本批原表搬运" in _arch  # 归档时间追加（既有叙述保留）
+        assert "v0.12.5 发布" in _arch  # 既有历史叙述未被改写
 
     def test_pending_rows_and_archive_section_detection(self, rel):
         assert rel.pending_rf_rows(_SAMPLE_RF, "0.12.6") == 2

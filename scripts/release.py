@@ -109,6 +109,7 @@ from _release._ledger_archive import (  # noqa: E402, F401 — 纯函数面经�
     _RF_ARCHIVE_HEAD_FMT,
     RF_PLACEHOLDER,
     _bump_index_range,
+    _collapse_superseded_placeholders,
     apply_rf_archive,
     archive_header_findings,
     count_rf_rows,

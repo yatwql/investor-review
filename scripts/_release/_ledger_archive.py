@@ -49,6 +49,12 @@ _INDEX_RANGE_RE = re.compile(
 )
 
 RF_PLACEHOLDER = "（本版开发期已修复项已随 v{version} 发布迁入上方归档档案）"
+#: 迁档占位行（任意批次）——收敛时按版本号识别需收敛的占位
+_PLACEHOLDER_LINE_RE = re.compile(
+    r"^（本版开发期已修复项已随 v(?P<version>\d+\.\d+\.\d+) 发布迁入上方归档档案）[ \t]*$"
+)
+#: 占位节的节头（仅当节内只剩占位时才随占位一起删除）
+_PLACEHOLDER_HEAD_RE = re.compile(r"^### 开发期已修复（(?P<dev>\d+\.\d+\.\d+)-dev）[ \t]*$")
 RF_SECTION_NOTE = "> 完整复盘见 `changelog.md` {version}-dev 段；此处为台账原表搬运（无损），本批发布日 {date}。"
 
 
@@ -134,7 +140,69 @@ def apply_rf_archive(main_text: str, archive_text: str, version: str, date: str)
     new_archive = archive_text.rstrip("\n") + "\n\n" + section
     new_archive = _bump_archive_header(new_archive, version, date)
     new_main = _bump_index_range(new_main, date)
+    new_main = _collapse_superseded_placeholders(new_main, keep_version=version)
     return new_main, new_archive, moved
+
+
+def _collapse_superseded_placeholders(text: str, keep_version: str) -> str:
+    """只保留最近一次迁档占位节，收敛更早版本的同类占位节。
+
+    占位节是「本版表已搬走」的路标，只对本版有意义：归档正文与主文件
+    「归档档案」索引已各自记录全部版本，非本版占位节仅余一行同构文案。若每次
+    迁档都新增一节而不收敛，台账会稳定长出 N 段单行占位（近重复节，结构化
+    冗余検査因「标题路径不同 + 单行不足区块下限」而无法拦截）。
+
+    收敛粒度保守：
+      - 只删**非本版占位行**（本就指向已归档内容）；
+      - 该节标题下若只剩占位与空行，则节头一并删除；若节内还有表外散文
+        （如人工补的备注），保留节与散文，只摘掉占位行；
+      - 保留版本的占位行与所在节原样不动。
+    """
+    lines = text.splitlines()
+    drop: set[int] = set()
+    head_at = None  # 当前所在占位节标题的行号；None = 不在占位节内
+    for idx, line in enumerate(lines):
+        if _PLACEHOLDER_HEAD_RE.match(line):
+            head_at = idx
+            continue
+        if line.startswith("### ") or line.startswith("## "):
+            head_at = None  # 其它节：占位节已结束
+            continue
+        m = _PLACEHOLDER_LINE_RE.match(line)
+        if not m or m.group("version") == keep_version:
+            continue
+        drop.add(idx)
+        if head_at is None:
+            continue
+        # 本节范围 = 节头之后到下一个节头之前；只剩空行与已删占位则连节头一起删
+        section_end = next(
+            (
+                cand
+                for cand in range(head_at + 1, len(lines))
+                if lines[cand].startswith("### ") or lines[cand].startswith("## ")
+            ),
+            len(lines),
+        )
+        if all(not lines[i].strip() or i in drop for i in range(head_at + 1, section_end)):
+            drop.add(head_at)
+            head_at = None
+    if not drop:
+        return text
+
+    kept: list[str] = []
+    for idx, line in enumerate(lines):
+        if idx in drop:
+            continue
+        kept.append(line)
+    # 删除节头/占位行后可能留下的连续空行：折叠为最多一个空行
+    out: list[str] = []
+    for line in kept:
+        if not line.strip() and out and not out[-1].strip():
+            continue
+        out.append(line)
+    while out and not out[-1].strip():
+        out.pop()
+    return "\n".join(out) + "\n"
 
 
 def _bump_archive_header(text: str, version: str, date: str) -> str:
