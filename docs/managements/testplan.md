@@ -689,7 +689,7 @@
 | **LLM 缓存提示** | 缓存命中显示灰字"本次使用LLM缓存" | ✅ |
 | **报告文件管理** | 按日期归档、文件名含时间戳、不覆盖旧报告，自动清理 180 天前归档 | ✅ |
 | **首次运行引导** | 配置缺失时提示操作步骤而非直接报错 | ✅ | `test_config_firstrun_edge.py` |
-| **Web 配置编辑** | 配置面板 8 块可编辑项（7 个可编辑面，功能开关面拆成「实验性功能」「常规开关」两块）与 TUI 全集一致、即改即存、写前 `.bak` 备份、非法键 400 / 非同一来源 403、极端输入不落盘 | ✅ | `test_config_edit.py` / `test_config_edit_edge.py` / `smoke-web.py` 配置编辑检查（11 项断言） |
+| **Web 配置编辑** | 配置面板 10 块可编辑项（7 个可编辑面：路径/章节/匿名化/指数池/LLM 开关/LLM 多链线路/功能开关面；该面按作用域四组下发展示）与 TUI 全集一致、即改即存、写前 `.bak` 备份、非法键 400 / 非同一来源 403、极端输入不落盘 | ✅ | `test_config_edit.py` / `test_config_edit_edge.py` / `smoke-web.py` 配置编辑检查（11 项断言） |
 | **Web 标签页工作台** | 五区页签（生成 / 调仓 / 配置 / 状态 / 日志）↔ 面板配对、默认选中生成区、What-if 表单与缓存卡控件齐备、main.js 接线齐 | ✅ | `test_web_static_serving.py::TestTabWorkbenchStructure` |
 | **Web 调仓 What-if** | 文件来源校验（过期 404）、生效日格式归一、同源 403、互斥 429、错误信封分支、产物 basename 归一 | ✅ | `test_whatif_api.py` / `test_whatif_api_edge.py` |
 | **Web 缓存管理** | 统计面只读（dry_run 预扫描）、前缀降序保序下发、清理 dry_run=False + 计数透传、同源 403 不执行 | ✅ | `test_cache_api.py` |

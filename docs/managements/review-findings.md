@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.13.11-dev
-> **编号源**：`rf-next = 783`（新增问题取此编号，完成后更新为 +1；已用最大 rf-782，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 785`（新增问题取此编号，完成后更新为 +1；已用最大 rf-784，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -94,6 +94,8 @@
 | **rf-780** | 同一个缓存分组（`preload`：价格 + 指数）三种称呼并存：TUI 菜单标签「行情类缓存」、TUI 上屏输出「持仓缓存更新完成」与函数名 `update_position_cache`、FAQ 与 LLM 手册「持仓缓存」、CLI 选项 `--update position`——菜单说 A、按下后打印 B，用户无从判断是否同一动作 | 上屏词与 docstring（`handlers_cache.py` / `cache/operations.py`）统一为「行情类缓存」；FAQ 4 处、`how-to-config-llm.md` 2 处、CLI 手册 `position` 说明与 requirements 菜单表 1 处同改，`position` 选项名作为历史命名在图注说明（自审 rf-780） |
 | **rf-781** | 配置类文档四处与实现不符：①`how-to-config-llm.md` pricing 示例两块都缺 `holiday_always_idle`（代码默认 `true`，正文却提到）；②faq 称 `.gitignore` 仅 `config.json`/`llm_settings.json` 特例放行，实际还有 `llm_providers.json` 与 `data/knowledge/`；③`how-to-use-cli-mode.md`「Provider Chain 已内置三次重试 / 自动重试（3 次）」——`fetcher/chain.py::_TRANSIENT_RETRY_ATTEMPTS = 1`（同源额外 1 次），整链源数 1~4 不等；④`config/features.py` 分组注释「呈现与体验（2 项全默认开）」，摘除 `enable_interactive_charts` 后该组仅 `metrics_enabled` 一项 | ①②③④ 逐项改正（示例补 `holiday_always_idle`、gitignore 描述补全、重试语义按代码表述、注释改「1 项」）（自审 rf-781） |
 | **rf-782** | 定价表口径缺一句兜底说明：文档称「内置所有支持模型的定价」，而 `core/constants.py::MODEL_PRICING` 另有 6 条模型族前缀价（`claude-sonnet-4-` / `gemini-2.5-` 等）供带日期后缀的未列变体自动计价——读者按表核价遇未列模型会以为无定价 | 定价表后补一句族前缀兜底说明（不单列、不覆盖具体模型价）（自审 rf-782） |
+| **rf-783** | Web「配置编辑」面板分组数三处说法互不相同且漏一组：`how-to-use-web-mode.md` 写「9 组」（表内只有 9 行、缺「LLM 多链线路」组，而后端 `web/config_edit.py` 实际下发 `llm_providers` 面、前端 `main.js` 也渲染该组）、`how-to-start.md` 写「8 组」并仍按「实验性功能/常规开关」两分（开关面按作用域四组下发后该二分已不存在）、`testplan.md` 写「8 块可编辑项（7 个可编辑面，功能开关面拆成两块）」。用户照文档找多链线路排序组会找不到 | 三处统一为「10 组 = 7 个可编辑面（路径/章节/匿名化/指数池/LLM 开关/LLM 多链线路/功能开关面）+ 功能开关面的作用域四组」，web 手册分组表补「LLM 多链线路 ↔ `[M]`」行（自审 rf-783） |
+| **rf-784** | `requirements.md` §3.2 菜单表 P 行称「报告章节与增强的 **8 项**开关归菜单 `[S]`」——分析增强 16 + 独立章节与回放 5，实为 21 项（TUI 手册同一处写 21），8 是两组拆分前的口径 | 改为「21 项（分析增强 16 + 独立章节与回放 5）」，与 TUI 手册同步（自审 rf-784） |
 
 ### 开发期已修复（0.13.10-dev）
 

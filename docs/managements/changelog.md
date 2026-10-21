@@ -35,6 +35,8 @@
 
 ### Fixed
 
+- Web「配置编辑」面板分组表述统一为「10 组 = 7 个可编辑面 + 功能开关面作用域四组」，web 手册分组表补「LLM 多链线路 ↔ `[M]`」行（原 9 组漏该组、how-to-start 的 8 组仍按已不存在的「实验性功能/常规开关」二分、testplan 的 8 块同源）（自审 rf-783）
+- `requirements.md` 菜单表 P 行「报告章节与增强的 8 项开关」改为 21 项（分析增强 16 + 独立章节与回放 5），与 TUI 手册同口径（自审 rf-784）
 - 正文菜单键引用 16 处改正：`[4]`→`[3]`（faq 6 / how-to-config / cli / web-mode 2 / technical / testplan / requirements，区间写作 `[1]~[3]`）、持仓目录·文件名·输出目录三项改「菜单 `D` → `C`/`F`/`O`」、faq 机制与诊断块序号「第 37 项」→ 34（自审 rf-776）
 - 报告可见性规则总览表重写：`financial_report`/`financial_indicator` 两行并非 `type`，合并为 `fundamental_snapshot` 一行并补 `schedule_replay` 行（自审 rf-777）
 - `how-to-config.md` §O 缓存分组表按 `core/data_registry.py` 补齐：`preload` 组补「生成后自检」「持仓变动复盘归因」，`refresh` 组补「基金申赎费率」「指数估值历史」（自审 rf-778）
