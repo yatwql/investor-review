@@ -914,7 +914,7 @@ A: 运行 `.venv/bin/python scripts/check-test-markers.py`，脚本会静态扫�
 | `check-version-consistency.py` | 发布 | 版本号全局一致性检查（P0/P2 守护脚本 + 发布流程必跑） |
 | `check-style-guardrails.py` | 质量 | 设计护栏机检（DESIGN.md 护栏样式面；E 级：强调色越权/明暗同步/双面 token 对表判 finding，W 级：裸色值/圆角档位观察统计——未入 pre-commit 钩子与 CI guards；**发布门禁**（release.py gate）已纳入，开发期快反馈由 unit 测试承担） |
 | `check-script-contract.py` | 质量 | scripts 顶层脚本契约机检（退出码声明 ⊆ {0,2} 白名单、check-* 统一 `add_common_args` CLI 面、文本 I/O 显式 encoding、脚本↔测试覆盖映射，四条规则——**观察期**未入钩子与 CI） |
-| `release.py` | 发布 | 发布流程分步编排（check/prepare/refresh/evolution/gate/publish/devbump，每步独立可审阅、失败即停；refresh 纯文档变更跳过 bench+collect（`--force-refresh` 强制）、bench 默认只测发布子集四档（`--full-bench` 全量）、gate 十守护并行且随核数收敛 ≤4 路；每命令耗时入 `logs/release.jsonl` 台账） |
+| `release.py` | 发布 | 发布流程分步编排（check / prepare〔含台账与设计文件归档迁移〕/ refresh / evolution / gate / publish / devbump，每步独立可审阅、失败即停；prepare 内含台账与设计文件归档迁移、refresh 纯文档变更跳过 bench+collect（`--force-refresh` 强制）、bench 默认只测发布子集四档（`--full-bench` 全量）、gate 十守护并行且随核数收敛 ≤4 路并断言归档已迁完；每命令耗时入 `logs/release.jsonl` 台账） |
 | `perf-test-report.py` | 诊断 | 端到端报告生成管线性能基准（独立脚本，mock 外部数据源） |
 | `perf-view.py` | 诊断 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 时段聚合（耗时与费用合计/环比）/机读输出（llm_cost、by_period 费用字段）） |
 | `probe.py` | 诊断 | 探测统一入口（按 target 分发到 `probes/` 子模块；新探针实现契约面登记即用） |
@@ -1588,13 +1588,16 @@ sym |= set(re.findall(r'^\s{0,8}["\']([a-z][a-z0-9_]{2,})["\']\s*:', src, re.M))
 
 **设计逻辑**（为什么分步 / 边界）
 
-把「版本发布流程」固化为可执行子命令：每步独立可审阅、失败即停不连锁，避免一次跑完才发现中途出错；数据刷新按变更面条件跳过（纯文档变更不跑 bench/collect），发布会话墙钟与分步耗时进台账可对拍。rf/plan 归档迁移保留人工（需判断归档段语义），必须在 `gate`/`publish` 前完成。
+把「版本发布流程」固化为可执行子命令：每步独立可审阅、失败即停不连锁，避免一次跑完才发现中途出错；数据刷新按变更面条件跳过（纯文档变更不跑 bench/collect），发布会话墙钟与分步耗时进台账可对拍。
+
+归档迁移按「机械 / 判定」切分：**搬什么、搬去哪、头两行怎么写、引用怎么改、目录树怎么摆**都是机械动作，固化进脚本（`_ledger_archive.py`）；**条目是否真属于本版、设计文件是否真完成、摘要要不要精简**仍需人判断，脚本不改语义。由此过去每次发布最耗时的四项人工迁移降为「自动 + 复核」，并且 `gate` 增加前置断言（该版本 rf 已解决表须已搬空 + 归档须有对应批次节）——漏做不再靠人记，而是门禁在跑 regression 前就拦下（省掉一次 20s 白跑）。
 
 **使用逻辑**（分步命令 / 失败处理）
 
 ```bash
 .venv/bin/python scripts/release.py check     # 预检：分支/工作树/版本形态/tag/版本一致性
-.venv/bin/python scripts/release.py prepare   # 版本全链 + changelog 发布段归档 + 一致性 --fix + 收尾 doc-drift --sync
+.venv/bin/python scripts/release.py prepare   # 版本全链 + changelog 发布段归档 + 一致性 --fix + 台账/设计文件归档迁移 + 收尾 doc-drift --sync
+.venv/bin/python scripts/release.py archive   # 单独重跑归档迁移（--dry-run 只报告、--skip-design-docs 只做台账）；prepare 已内置，通常无需单独执行
 .venv/bin/python scripts/release.py refresh   # bench --update-docs（发布子集四档，--full-bench 全量）+ collect + doc-drift --sync
 .venv/bin/python scripts/release.py evolution --release   # 演进对照快照（默认只滚当前开发版列）+ 收尾 doc-drift --sync
 .venv/bin/python scripts/release.py gate      # P2：regression + 十守护 --ci + 设计护栏（gate 内置）
@@ -1602,7 +1605,17 @@ sym |= set(re.findall(r'^\s{0,8}["\']([a-z][a-z0-9_]{2,})["\']\s*:', src, re.M))
 .venv/bin/python scripts/release.py devbump    # 切下一开发版并提交
 ```
 
-`publish` / `devbump` 默认不推送（只打印推送命令），`--push` 才执行；rf 归档迁移保留人工（需判断归档段语义）。
+`publish` / `devbump` 默认不推送（只打印推送命令），`--push` 才执行。
+
+**归档迁移的自动 / 人工边界（`prepare` 内置，可 `--no-archive` 跳过）**：
+
+| 步骤 | 自动完成的部分 | 仍需人工判定 |
+|:-----|:---------------|:-------------|
+| rf 已解决表 | 该版本「开发期已修复」表**原表逐行搬入**归档新增节、主台账留迁档占位、归档头部「涵盖版本/归档时间」与主文件索引区间延展 | 条目是否确属本版、是否需要另写摘要 |
+| plan 完成任务 | 标题带完成标记（✅/已完成）的节整节搬入计划归档 | 标记是否打对（在办项被打标会被搬走） |
+| `docs/plan` 设计文件 | 引用编号**全部已归档**者判定为候选（强信号）、`git mv` 到对应版本的归档子目录 `vX.Y.x/<stem>/`、改写 changelog/plan/rf/folders/README/CLAUDE 引用、folders 目录树条目搬迁 | 候选是否真完成；未引用任何任务编号的设计文件只列提示、不自动迁档 |
+
+脚本收尾自动跑 `doc-drift --sync` + `check-doc-traces --ci` + `check-doc-links --ci`（把文档面 finding 留在本地），`--dry-run` 可先看动作清单。
 
 **bench 范围（refresh）**：默认只测发布口径关心的四档 `unit` / `dev-verify` / `regression` / `integration`——全量十四档串行约 5.5 min（2 路采集 3.2 min），占单次发布机器时间约 75%，其余模式与这四档高度重叠；未测模式的耗时与计数按 `--update-docs` 口径「保留上次实测值」不写脏，需要全量复测时加 `--full-bench`（或直接 `test-runner.py --mode bench --update-docs`）。
 
@@ -2216,7 +2229,7 @@ registry 的测试在 `src/test/unit/core/test_registry.py`，验证 TTL 默认�
 
 发布版本时，按以下六步顺序执行：
 
-> 可用 `scripts/release.py` 分步编排（发布流程的可执行封装，每步独立可审阅、失败即停）：`check`（预检）→ `prepare`（版本全链、changelog 发布段归档**并自动重写归档头部「涵盖版本 / 归档时间」（区间与并入记录由归档内各发布段标题派生，无需人工维护）**、一致性 `--fix`，收尾自动 `doc-drift --sync`）→ `refresh` + `evolution --release`（数据刷新——纯文档变更〔仅 `.md`/图片〕自动跳过 bench+collect，`--force-refresh` 强制；演进快照，evolution 收尾同样自动 sync）→ `gate`（P2 门禁，十守护并行且并发度随核数收敛 ≤4 路）→ `publish --title`（release 提交 + P1 verify + `--no-ff` 合并 + tag）→ `devbump`（切开发版）；bench 默认只测发布子集四档（`--full-bench` 全量）、每命令耗时入 `logs/release.jsonl` 台账（发布墙钟可跳版本对拍）；rf/plan/docs-plan 归档迁移保留人工（需判断归档段语义）且必须在 `gate`/`publish` 前完成（见下方步骤③）；**分层纪律**：归档迁移或任何涉及管理文档/代码注释的改动完成后，进 `gate` 前先跑秒级便宜守护（至少 `check-doc-traces --ci` + `check-doc-links --ci`，改动面大时十守护全跑）——守护发现前置，避免 P2 门禁的全量 regression 因文档级 finding 白跑第二轮。下列手动命令为底层口径，脚本失败时按手动步骤排查。
+> 可用 `scripts/release.py` 分步编排（发布流程的可执行封装，每步独立可审阅、失败即停）：`check`（预检）→ `prepare`（版本全链、changelog 发布段归档**并自动重写归档头部「涵盖版本 / 归档时间」（区间与并入记录由归档内各发布段标题派生，无需人工维护）**、一致性 `--fix`，收尾自动 `doc-drift --sync`）→ `refresh` + `evolution --release`（数据刷新——纯文档变更〔仅 `.md`/图片〕自动跳过 bench+collect，`--force-refresh` 强制；演进快照，evolution 收尾同样自动 sync）→ `gate`（P2 门禁，十守护并行且并发度随核数收敛 ≤4 路）→ `publish --title`（release 提交 + P1 verify + `--no-ff` 合并 + tag）→ `devbump`（切开发版）；bench 默认只测发布子集四档（`--full-bench` 全量）、每命令耗时入 `logs/release.jsonl` 台账（发布墙钟可跳版本对拍）；rf/plan/docs-plan 归档迁移的**机械部分已由 `prepare` 自动完成**（人工只复核条目归属与设计文件判定，见下方步骤③），`gate` 会断言该版本台账已迁完、未迁则前置中止；**分层纪律**：归档迁移或任何涉及管理文档/代码注释的改动完成后，进 `gate` 前先跑秒级便宜守护（至少 `check-doc-traces --ci` + `check-doc-links --ci`，改动面大时十守护全跑）——守护发现前置，避免 P2 门禁的全量 regression 因文档级 finding 白跑第二轮。下列手动命令为底层口径，脚本失败时按手动步骤排查。
 
 **① 版本号一致**
 
@@ -2247,10 +2260,10 @@ registry 的测试在 `src/test/unit/core/test_registry.py`，验证 TTL 默认�
 
 **③ 发布归档迁移（四项强制，未完成不得继续 `gate`/`publish`）**
 
-- ① `review-findings.md`「已解决问题」区**全部**条目迁入对应版本的自审归档（同步更新归档头部涵盖版本/追加行与主文件「归档档案」索引行）
-- ② `plan.md` 不得残留 ✅/已完成任务节（完成态移入对应版本的 plan 归档）
+- ① `review-findings.md`「已解决问题」区**全部**条目迁入对应版本的自审归档（同步更新归档头部涵盖版本/追加行与主文件「归档档案」索引行）——`release.py prepare` 自动：原表逐行搬运 + 占位 + 头部/索引延展，人工复核归属
+- ② `plan.md` 不得残留 ✅/已完成任务节（完成态移入对应版本的 plan 归档）——`release.py prepare` 自动搬已完成节，人工复核完成标记是否打对
 - ③ changelog 已发布段移入对应版本的 changelog 归档 + 归档头部「涵盖版本」「归档时间」两行重写（`release.py prepare` 全部自动执行：段追加与头部区间/并入记录均由归档内 `## [版本] - 日期` 段列表派生；人工只需核对 diff 中主文件指针与归档索引行）
-- ④ `docs/plan/` 中**已完成任务**的迭代设计文件移入对应版本归档子目录（在办任务的设计文件保留，按其关联 plan/rf 任务状态判定），同步更新 plan.md/folders.md 引用链接与目录树
+- ④ `docs/plan/` 中**已完成任务**的迭代设计文件移入对应版本归档子目录（在办任务的设计文件保留，按其关联 plan/rf 任务状态判定），同步更新 plan.md/folders.md 引用链接与目录树——`release.py prepare` 按「引用编号均已归档」判定候选并自动 `git mv` + 改写引用 + 搬目录树，人工复核候选是否真完成（无任务编号引用者也会列出待确认）
 
 **④ 版本标签**
 

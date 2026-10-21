@@ -9,6 +9,15 @@
 
 ## [0.13.12-dev] - 开发中（未发布）
 
+### 新增
+
+- **发布归档迁移固化进脚本**：新增 `scripts/_release/_ledger_archive.py`（台账与设计文档归档的纯文本变换），`release.py` 增加 `archive` 子命令并**内置于 `prepare`**——① review-findings 该版本「开发期已修复」表**原表逐行搬入**归档新节（不做摘要改写）+ 主台账留迁档占位 + 归档头部「涵盖版本 / 归档时间」与主文件归档索引区间派生；② plan.md 标题带完成标记的节整节搬入计划归档；③ `docs/plan/` 中引用编号**全部已归档**的设计文件（强信号才自动判）`git mv` 迁入版本归档子目录 `<stem>/`，并改写 changelog/plan/rf/folders/README/CLAUDE 引用与 folders 目录树条目；收尾自动 `doc-drift --sync` + `check-doc-traces` + `check-doc-links`。`--dry-run` 只报告动作、`--skip-design-docs` 只做台账、`--no-archive` 跳过。**分工**：机械动作归脚本，条目归属 / 完成标记 / 设计文件是否真完成仍由人复核（未引用任何任务编号的设计文件只列提示、不自动迁档；本版无自审条目时归档步自动放行）
+- **`gate` 归档前置断言**：P2 门禁在跑 regression **之前**断言「该版本 rf 已解决表已搬空 + 归档存在对应批次节 + 版本已切发布形态」，漏做归档即刻中止（不再靠人记，也省掉一次 20s 白跑）
+
+### 测试
+
+- 新增 `src/test/unit/scripts/test_release_archive.py`（台账归档纯函数：原表搬运无损与幂等、占位/头部/索引派生、plan 完成节判定与在办节不外溢、docs-plan 完成判定三分支、目录树搬迁与未知条目拒绝）
+- `test_release_tool.py` 扩展：prepare 自动归档端到端（台账/计划/设计文件/目录树）、`--no-archive` 跳过、`archive` 子命令（迁移+收尾守护、dry-run 零写入、开发版拒绝）、gate 归档前置三类拦截（未迁档 / 缺归档节 / 仍是开发版）
 
 （本次发布内容见下方归档索引）
 

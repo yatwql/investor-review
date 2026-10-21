@@ -439,13 +439,22 @@ class TestEvolutionTable:
 
 class TestGate:
     @pytest.fixture(autouse=True)
-    def _fresh_evolution(self, rel, monkeypatch):
+    def _fresh_evolution(self, rel, monkeypatch, tmp_path):
         """门禁编排用例不读真实 folders.md 新鲜度：新鲜度断言依赖「列头日期 =
         运行当日」（墙钟 + 仓库文件状态），用例在不同时区/日期的 CI 上会因
         本地未重跑 evolution 而随机红——编排用例将其视为通过，新鲜度拦截
         行为由 TestEvolutionFreshness（纯函数）与 test_gate_stops_on_stale_
         evolution（门禁中止）单独覆盖。"""
         monkeypatch.setattr(rel, "check_evolution_freshness", lambda *_a, **_k: [])
+        rf = tmp_path / "review-findings.md"
+        rf.write_text("", encoding="utf-8")
+        archived = tmp_path / "archived_review-findings.x.md"
+        archived.write_text("", encoding="utf-8")
+        monkeypatch.setattr(rel, "RF_FILE", rf)
+        monkeypatch.setattr(rel, "read_app_version", lambda _t: "0.13.12")
+        monkeypatch.setattr(rel, "ledger_archive_paths", lambda _v: (archived, tmp_path / "archived_plan.md"))
+        monkeypatch.setattr(rel, "rf_archive_status", lambda *_a, **_k: ("archived", 0))
+        monkeypatch.setattr(rel, "has_archive_section", lambda *_a, **_k: True)
 
     def test_gate_workers_converge_with_cpu(self, rel, monkeypatch):
         """并行度随核数收敛：弱机器降路、4 核+ 封顶、缺核信息取封顶、单核不下 1 路。"""
@@ -702,6 +711,58 @@ class TestTimingTelemetry:
         assert "耗时记录未写入" in capsys.readouterr().out
 
 
+def _sample_review_findings() -> str:
+    """主台账最小样本：一节本版已解决表 + 归档档案索引行。"""
+    return (
+        "# 自审记录\n\n## 已解决问题\n\n"
+        "### 开发期已修复（0.12.6-dev）\n\n"
+        "| # | 问题 | 处理 |\n|---|------|------|\n"
+        "| **rf-901** | 问题甲 | 处理甲 |\n"
+        "| **rf-902** | 问题乙 | 处理乙 |\n\n"
+        "### 归档档案\n\n"
+        "- [`archived_review-findings.0.12.x.md`](../archive/v0.12.x/archived_review-findings.0.12.x.md)"
+        " — v0.12.x 开发期已修复批次（2026-09-01 ~ 2026-10-05）\n"
+    )
+
+
+def _sample_rf_archive() -> str:
+    """归档文件最小样本：头两行 + 一个既有批次节。"""
+    return (
+        "# 自审记录归档 — v0.12.x\n\n"
+        "> 归档时间：2026-10-05（v0.12.5 发布）\n"
+        "> 涵盖版本：v0.12.x 开发期已修复项（v0.12.1 → v0.12.5）\n\n---\n\n"
+        "## v0.12.5 开发期已修复（2026-10-05）\n\n- **rf-900**：旧条目\n"
+    )
+
+
+def _sample_plan() -> str:
+    """计划样本：一个在办节（无完成标记）+ 两个已完成节（标题带 ✅）。"""
+    return (
+        "# 计划\n\n"
+        "## plan-77 在办任务\n\n- [ ] 待做\n\n"
+        "## plan-42 已完成任务 ✅\n\n**完成（2026-09-20，v0.12.3）**：已做\n\n"
+        "## plan-43 另一完成项 ✅\n\n**完成（2026-09-25，v0.12.4）**：已做\n"
+    )
+
+
+_TREE_SAMPLE = """
+````
+├── docs/
+│   ├── archive/
+│   │   └── v0.12.x/                          # 版本归档
+│   │       ├── archived_changelog.0.12.x.md # 变更日志归档
+│   │       └── tui-runtime/                  # 某设计归档
+│   │           └── tui-runtime.md # 设计
+│   ├── managements/
+│   │   └── plan.md # 计划
+│   └── plan/                                 # 中间设计文件（在办）
+│       ├── design-done.md # 已完成设计
+│       └── design-open.md # 在办设计
+└── README.md
+````
+"""
+
+
 class _ToolRepoFixture:
     """把 release 模块的输出路径重定向到临时目录，并构造最小文件集。"""
 
@@ -720,7 +781,17 @@ class _ToolRepoFixture:
         )
         (docs / "changelog.md").write_text(_sample_changelog(), encoding="utf-8")
         (archive / "archived_changelog.0.12.x.md").write_text("# 归档\n", encoding="utf-8")
-        (docs / "folders.md").write_text(_EVOLUTION_SAMPLE, encoding="utf-8")
+        (docs / "folders.md").write_text(_EVOLUTION_SAMPLE + _TREE_SAMPLE, encoding="utf-8")
+        (docs / "review-findings.md").write_text(_sample_review_findings(), encoding="utf-8")
+        (docs / "plan.md").write_text(_sample_plan(), encoding="utf-8")
+        plan_docs = tmp_path / "docs" / "plan"
+        plan_docs.mkdir(parents=True)
+        (plan_docs / "design-done.md").write_text("# 已完成设计\n\n依据 plan-42 落地。\n", encoding="utf-8")
+        (plan_docs / "design-open.md").write_text("# 在办设计\n\n依据 plan-77 展开。\n", encoding="utf-8")
+        (archive / "archived_review-findings.0.12.x.md").write_text(_sample_rf_archive(), encoding="utf-8")
+        (archive / "archived_plan.0.12.x.md").write_text(
+            "# 计划归档 — v0.12.x\n\n> 涵盖版本：v0.12.x（v0.12.1 → v0.12.5）\n\n---\n", encoding="utf-8"
+        )
         paths = {
             "REPO_ROOT": tmp_path,
             "CONSTANTS_FILE": core / "constants.py",
@@ -729,6 +800,9 @@ class _ToolRepoFixture:
             "FOLDERS_FILE": docs / "folders.md",
             "_MANAGEMENTS_DIR": docs,
             "_ARCHIVE_DOCS_DIR": tmp_path / "docs" / "archive",
+            "RF_FILE": docs / "review-findings.md",
+            "PLAN_FILE": docs / "plan.md",
+            "PLAN_DOCS_DIR": plan_docs,
         }
         for name, value in paths.items():
             setattr(rel_mod, name, value)
@@ -808,6 +882,44 @@ class TestPrepare:
         # 回归：prepare 改写多处文档后必须立即 sync folders.md 统计表，否则后续 refresh 的
         # bench（含 doc-drift crosscheck 单测）会因统计过期而红
         assert any(any("check-doc-drift.py" in p for p in c) and any("--sync" in p for p in c) for c in runner.calls)
+
+    def test_archive_step_runs_inside_prepare(self, rel, tmp_path):
+        """归档迁移已固化进 prepare：台账原表搬入归档、主台账留占位、计划完成节搬走、
+        已完成设计文件迁档（引用改写 + 目录树搬迁）——过去发布返工的最大来源。"""
+        fx = _ToolRepoFixture(rel, tmp_path)
+        runner = _ok_runner()
+        assert rel.cmd_prepare(ns(version=None, date="2026-10-08"), runner=runner) == 0
+
+        rf_main = fx.RF_FILE.read_text(encoding="utf-8")
+        assert "rf-901" not in rf_main
+        assert "本版开发期已修复项已随 v0.12.6 发布迁入上方归档档案" in rf_main
+        rf_arch = (fx.root / "docs" / "archive" / "v0.12.x" / "archived_review-findings.0.12.x.md").read_text(
+            encoding="utf-8"
+        )
+        assert "## v0.12.6 开发期已修复（2026-10-08）" in rf_arch
+        assert "| **rf-901** | 问题甲 | 处理甲 |" in rf_arch  # 原表逐行无损
+        assert "（v0.12.1 → v0.12.6）" in rf_arch  # 归档头部涵盖版本延展
+        assert "2026-09-01 ~ 2026-10-08" in rf_main  # 归档档案索引区间延展
+        assert "## v0.12.5 开发期已修复（2026-10-05）" in rf_arch  # 既有批次保留
+
+        plan_main = fx.PLAN_FILE.read_text(encoding="utf-8")
+        assert "plan-42" not in plan_main and "plan-77" in plan_main  # 只搬已完成节
+        plan_arch = (fx.root / "docs" / "archive" / "v0.12.x" / "archived_plan.0.12.x.md").read_text(encoding="utf-8")
+        assert "## plan-42 已完成任务 ✅" in plan_arch and "## plan-43 另一完成项 ✅" in plan_arch
+
+        assert any("mv" in call for call in runner.calls)  # 设计文件经 git mv 迁档
+        folders = fx.FOLDERS_FILE.read_text(encoding="utf-8")
+        assert "design-done/ #" in folders  # 新目录组出现在归档子树
+        assert "design-done.md # 已完成设计" not in folders  # 已从 plan 子树摘除
+        assert "design-open.md # 在办设计" in folders  # 在办设计留在 plan 子树
+
+    def test_no_archive_flag_skips_migration(self, rel, tmp_path):
+        """--no-archive：台账保持原样（供分批提交/人工迁档场景），gate 仍会兜底拦截。"""
+        fx = _ToolRepoFixture(rel, tmp_path)
+        rc = rel.cmd_prepare(ns(version=None, date="2026-10-08", no_archive=True), runner=_ok_runner())
+        assert rc == 0
+        assert "rf-901" in fx.RF_FILE.read_text(encoding="utf-8")
+        assert "plan-42" in fx.PLAN_FILE.read_text(encoding="utf-8")
 
     def test_preflight_failure_leaves_files_untouched(self, rel, tmp_path):
         fx = _ToolRepoFixture(rel, tmp_path)
@@ -914,6 +1026,87 @@ class TestCliSurface:
         parser = rel.build_parser()
         sub_actions = [a for a in parser._subparsers._group_actions if hasattr(a, "choices")]
         parser_cmds = set(sub_actions[0].choices) if sub_actions else set()
-        handlers = {"check", "prepare", "refresh", "evolution", "gate", "publish", "devbump"}
+        handlers = {"check", "prepare", "archive", "refresh", "evolution", "gate", "publish", "devbump"}
         assert parser_cmds == handlers  # 两张内部表双向一致（结构断言，不写死条数）
         assert all(hasattr(rel, f"cmd_{name}") for name in handlers)
+
+
+# ─────────────────────────── archive 子命令 ───────────────────────────
+
+
+class TestArchiveCommand:
+    def test_archive_command_migrates_and_reports(self, rel, tmp_path, capsys):
+        fx = _ToolRepoFixture(rel, tmp_path)
+        fx.CONSTANTS_FILE.write_text('APP_VERSION = "0.12.6"\n', encoding="utf-8")
+        runner = _ok_runner()
+        rc = rel.cmd_archive(ns(date="2026-10-08"), runner=runner)
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "review-findings" in out and "人工复核" in out
+        assert "本版开发期已修复项已随 v0.12.6 发布" in fx.RF_FILE.read_text(encoding="utf-8")
+        # 收尾跑了 doc-drift --sync + 两台便宜守护（文档痕迹 / 死链），把文档面问题留在本地而非 gate
+        assert any(any("check-doc-drift.py" in p for p in c) and "--sync" in c for c in runner.calls)
+        assert any(any("check-doc-traces.py" in p for p in c) for c in runner.calls)
+        assert any(any("check-doc-links.py" in p for p in c) for c in runner.calls)
+        assert "plan-42" not in fx.PLAN_FILE.read_text(encoding="utf-8")
+
+    def test_dry_run_writes_nothing(self, rel, tmp_path):
+        fx = _ToolRepoFixture(rel, tmp_path)
+        fx.CONSTANTS_FILE.write_text('APP_VERSION = "0.12.6"\n', encoding="utf-8")
+        before = (fx.RF_FILE.read_text(encoding="utf-8"), fx.PLAN_FILE.read_text(encoding="utf-8"))
+        assert rel.cmd_archive(ns(date="2026-10-08", dry_run=True), runner=_ok_runner()) == 0
+        assert (fx.RF_FILE.read_text(encoding="utf-8"), fx.PLAN_FILE.read_text(encoding="utf-8")) == before
+        assert (
+            not (fx.root / "docs" / "archive" / "v0.12.x" / "archived_plan.0.12.x.md")
+            .read_text(encoding="utf-8")
+            .count("plan-42")
+        )
+
+    def test_dev_version_refused(self, rel, tmp_path):
+        """开发版上跑归档会被拒（版本全链须先切到发布形态，否则归档目录推导不出）。"""
+        _ToolRepoFixture(rel, tmp_path)
+        assert rel.cmd_archive(ns(date=None), runner=_ok_runner()) == 2
+
+
+# ─────────────────────────── gate 归档前置 ───────────────────────────
+
+
+class TestGateArchivePrecondition:
+    @pytest.fixture(autouse=True)
+    def _sandbox(self, rel, monkeypatch, tmp_path):
+        rf = tmp_path / "review-findings.md"
+        rf.write_text("", encoding="utf-8")
+        archived = tmp_path / "archived_review-findings.x.md"
+        archived.write_text("", encoding="utf-8")
+        monkeypatch.setattr(rel, "check_evolution_freshness", lambda *_a, **_k: [])
+        monkeypatch.setattr(rel, "RF_FILE", rf)
+        monkeypatch.setattr(rel, "read_app_version", lambda _t: "0.13.12")
+        monkeypatch.setattr(rel, "ledger_archive_paths", lambda _v: (archived, tmp_path / "archived_plan.md"))
+        monkeypatch.setattr(rel, "has_archive_section", lambda *_a, **_k: True)
+        return archived
+
+    def test_pending_rows_block_gate(self, rel, monkeypatch):
+        """该版本仍有未迁档条目 → gate 在跑 regression 前即中止（不浪费 20s 门禁墙钟）。"""
+        monkeypatch.setattr(rel, "rf_archive_status", lambda *_a, **_k: ("pending", 3))
+        runner = FakeRunner()
+        assert rel.cmd_gate(ns(), runner=runner) == 2
+        assert runner.calls == []  # 前置拦截：未触发任何子进程
+
+    def test_missing_archive_section_blocks_gate(self, rel, monkeypatch):
+        """主台账已留占位但归档缺本版批次节 → 同样前置中止（防半迁移）。"""
+        monkeypatch.setattr(rel, "rf_archive_status", lambda *_a, **_k: ("archived", 0))
+        monkeypatch.setattr(rel, "has_archive_section", lambda *_a, **_k: False)
+        runner = FakeRunner()
+        assert rel.cmd_gate(ns(), runner=runner) == 2
+        assert runner.calls == []
+
+    def test_dev_version_blocks_gate(self, rel, monkeypatch):
+        monkeypatch.setattr(rel, "read_app_version", lambda _t: "0.13.12-dev")
+        monkeypatch.setattr(rel, "rf_archive_status", lambda *_a, **_k: ("archived", 0))
+        assert rel.cmd_gate(ns(), runner=FakeRunner()) == 2
+
+    def test_absent_section_passes_gate(self, rel, monkeypatch, capsys):
+        """本版无自审条目（缺节）不得拦截发布——只留提示，其余门禁照跑。"""
+        monkeypatch.setattr(rel, "rf_archive_status", lambda *_a, **_k: ("absent", 0))
+        assert rel.cmd_gate(ns(), runner=FakeRunner()) == 0
+        assert "无「开发期已修复」节" in capsys.readouterr().out
