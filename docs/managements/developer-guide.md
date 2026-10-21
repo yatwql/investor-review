@@ -1604,7 +1604,8 @@ sym |= set(re.findall(r'^\s{0,8}["\']([a-z][a-z0-9_]{2,})["\']\s*:', src, re.M))
 
 **④ 流程把控（三个时点各有一道闸）**：
 - **入口（`check`）**：除分支/工作树/版本形态/tag 外，提前校验「该发布版的归档前置」——两份台账归档文件与 folders.md 的 `vX.Y.x/` 归档子树块；新小版本首份归档缺件在此报出，而不是等 `prepare` 改完版本全链后中途撞上（那时需回滚）。
-- **中途（`prepare` 内置 archive）**：**先算后写**——纯函数先在内存算出全部结果，设计文件先迁（目录树 → `git mv` → 引用改写，`git mv` 失败回滚目录树），台账最后落盘；任一步失败即中止且台账原样，不留「表已搬走、归档没写成」的半迁移。收尾自动 `doc-drift --sync` + `check-doc-traces --ci` + `check-doc-links --ci`，把文档面 finding 留在本地。
+- **中途（`prepare` 内置 archive）**：**先算后写 + 整体回滚**——纯函数先在内存算出全部结果；设计文件迁档三连为「**引用改写 → 目录树 → `git mv`**」，三处落盘前对全部目标文件（changelog / plan / rf / folders / CLAUDE.md / README / 同级设计文档）拍文本快照，任一步失败即**整体回滚**，不会留下「引用已改指新路径、文件却没搬」或「树已改、文件没动」的错位状态；台账最后落盘，此时仍原样。收尾自动 `doc-drift --sync` + `check-doc-traces --ci` + `check-doc-links --ci`，把文档面 finding 留在本地。
+- **历史归档不改写（快照原则）**：`docs/archive/**` 内的旧路径引用**不随迁档改写**——那是历史记录，改写即篡改当时事实。脚本改为在 `archive` 输出里列 `[!] 历史归档仍按快照保留旧路径引用，涉及：…`，由人判断是否处理（通常不需要）。
 - **出口（`gate`）**：断言该版本 rf 已解决表已搬空 + 归档存在对应批次节，不满足即在 regression 前中止（省掉一次 20s 白跑，也不靠人记）。
 
 **使用逻辑**（分步命令 / 自动人工边界 / 格式契约 / 何时跑）
@@ -1642,10 +1643,11 @@ sym |= set(re.findall(r'^\s{0,8}["\']([a-z][a-z0-9_]{2,})["\']\s*:', src, re.M))
 | 台账想分开提交 / 人工迁档 | `prepare --no-archive`；`gate` 会拦截未迁档 |
 | 新小版本（`vX.Y.0`）首份发布 | 先为该小版本建两份台账归档文件（自审 / 计划各一份，头部五行照抄同 train 既有文件并更新日期/涵盖版本）并在 folders.md 目录树补 `vX.Y.x/` 块；`check` 会直接报出缺哪件（文件名与路径照上方 `ledger_archive_paths` 推导规则） |
 | 归档步失败 | `[ERR]` 已给出具体原因与「台账未改写」状态：补好前置（目录树块/归档文件/头部行）后**重跑同一条命令**即可（变换幂等，重复执行不会二次搬运） |
+| 首次实战 / 大改后复验 | 在 `git clone --no-hardlinks` 的副本里跑 `prepare --date <日>` 全链演练（副本自带 `.venv` 或复用主仓解释器），按上表逐项核对产出后再在真仓执行——不污染工作树、不产生 tag |
 
 **bench 范围（refresh）**：默认只测发布口径关心的四档 `unit` / `dev-verify` / `regression` / `integration`——全量十四档串行约 5.5 min（2 路采集 3.2 min），占单次发布机器时间约 75%，其余模式与这四档高度重叠；未测模式的耗时与计数按 `--update-docs` 口径「保留上次实测值」不写脏，需要全量复测时加 `--full-bench`（或直接 `test-runner.py --mode bench --update-docs`）。
 
-**耗时台账（`logs/release.jsonl`）**：每个子命令结束追加一行 JSON——`command` / `ok` / `elapsed_s` / `version` / `steps[]`（gate 的 `P2 场景回归`·`P2 十守护`·`P2 设计护栏`、refresh 的 bench·collect·sync、publish 的 `P1 verify`、evolution 的快照统计·统计同步）；终端尾行同步打印摘要。`logs/` 属 git 忽略域，台账不入仓库、不参与门禁，写入失败只打 `[!]` 且不改退出码（观测面不阻断发布）。跨版本对拍：`tail -n 20 logs/release.jsonl`（发布墙钟的变化归因到此，不再靠现场重测）。
+**耗时台账（`logs/release.jsonl`）**：每个子命令结束追加一行 JSON——`command` / `ok` / `elapsed_s` / `version` / `steps[]`（gate 的 `P2 场景回归`·`P2 十守护`·`P2 设计护栏`、refresh 的 bench·collect·sync、publish 的 `P1 verify`、evolution 的快照统计·统计同步、prepare 的 `台账归档迁移`）；终端尾行同步打印摘要。`logs/` 属 git 忽略域，台账不入仓库、不参与门禁，写入失败只打 `[!]` 且不改退出码（观测面不阻断发布）。跨版本对拍：`tail -n 20 logs/release.jsonl`（发布墙钟的变化归因到此，不再靠现场重测）。
 
 ### 诊断类
 
