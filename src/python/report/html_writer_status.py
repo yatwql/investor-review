@@ -1,0 +1,901 @@
+"""HTML 报告的数据状态块装配：自述块、降级状态安全构建、时间串与三处状态区块。
+
+从 :mod:`report.html_writer` 拆出——这些是「把 DataStatus 组装成模板可渲染结构」的
+纯装配逻辑，与模板渲染/落盘无关；单向依赖：渲染 → 状态装配。
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import datetime
+
+from src.python.cache import get_cache_hit_rate
+from src.python.core.constants import APP_NAME, APP_VERSION
+from src.python.core.models import Holding
+from src.python.core.registry import get_llm_module_names, get_report_section_order
+from src.python.analysis.drawdown_events import MIN_SPAN as DRAW_DOWN_MIN_SPAN
+from src.python.report.category import build_category_data_status
+from src.python.report.data_status import STATUS_MESSAGES, DataStatus, DataStatusItem
+from src.python.report.fund_performance import build_perf_data_status, is_fund
+from src.python.report.market_value import get_last_trading_day
+from src.python.report.penetration_sheet import build_penetration_data_status
+from src.python.report.progress import ProgressReporter, SilentProgressReporter
+from src.python.report.summary import build_index_data_status
+
+# ── 子模块 re-export ────────────────────────────────────
+from src.python.report.html_writer_assets import _copy_js_assets, _inline_js_assets  # noqa: F401
+from src.python.report.html_writer_display import (  # noqa: F401
+    _attach_valuation_to_penetration,
+    _build_flow_display,
+    _build_purchase_status_display,
+    _build_temperature_display,
+)
+from src.python.report.html_writer_nav import (  # noqa: F401
+    _LLM_SUPPORTED_SECTIONS,
+    _NAV_GROUP_LABELS,
+    _build_section_nav_groups,
+    _compute_section_visibility,
+)
+
+logger = logging.getLogger("invest")
+
+# ═══════════════════════════════════════════════════════════════
+#  文件导览
+# ═══════════════════════════════════════════════════════════════
+#
+#   _ENV + 过滤器                  → html_jinja_env.py
+#   14 渲染函数 + LLM 模块信息    → html_renderers.py
+#   章节可见性/目录导航           → html_writer_nav.py
+#   数据契约展示映射              → html_writer_display.py
+#   Chart.js JS 资产复制          → html_writer_assets.py
+#   _save_html_report              → html_save.py
+#   辅助函数                      _safe_build_data_status, _time_strings,
+#                                  _build_data_status_sections,
+#                                  _build_history_data_status
+#   模板渲染函数                  _render_template()
+#   核心生成函数                  write_html_report()
+#
+# ═══════════════════════════════════════════════════════════════
+
+# ── 桥接 import：_ENV + 过滤器已在 html_jinja_env.py ────────
+from src.python.report.html_jinja_env import _ENV  # noqa: E402
+
+# ── 辅助函数 ──────────────────────────────────────────────
+
+
+def _self_review_block() -> str | None:
+    """取本轮生成后自检区块 HTML（零参 pull；无产出返回 None）。"""
+    from src.python.llm.self_review import get_self_review_block
+
+    return get_self_review_block()
+
+
+def _safe_build_data_status(builder, *args, label: str = "", **kwargs) -> DataStatus:
+    """安全构建数据状态，异常时返回空字典并记录日志。
+
+    统一处理 data_status 构建中的 try/except/log 三步骤，
+    避免 3 个 try 块重复此模式。
+
+    Args:
+        builder: 状态构建函数（如 build_index_data_status）
+        label: 模块名称（用于日志消息），如 "指数"/"穿透"/"基金业绩"
+        *args, **kwargs: 透传给 builder 的参数
+
+    Returns:
+        构建成功返回 DataStatus 字典，异常返回 {}
+    """
+    try:
+        result = builder(*args, **kwargs)
+        return result if isinstance(result, dict) else {}
+    except Exception:
+        logger.debug("HTML 报告构建%s数据状态失败（非关键）", label, exc_info=True)
+        return {}
+
+
+def _time_strings() -> tuple[str, str, str]:
+    """返回 (now_str, today_str, trading_day)。"""
+    return (
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        datetime.now().strftime("%Y-%m-%d"),
+        get_last_trading_day(),
+    )
+
+
+def _build_data_status_sections(
+    a_indices: dict,
+    us_indices: dict,
+    penetration: dict | None,
+    penetration_profit_ok: bool,
+    penetration_dividend_ok: bool,
+    perf_data: list[dict] | None,
+    holdings: list[Holding],
+    cat_dividend_ok: bool,
+) -> tuple[DataStatus, DataStatus, DataStatus, DataStatus]:
+    """构建 4 个 data_status 摘要字典（指数/穿透/基金业绩/持仓分类）。
+
+    各模块的 data_status 构建互相独立，任一模块失败不影响其他。
+    """
+    data_status_summary: DataStatus = _safe_build_data_status(
+        build_index_data_status, a_indices, us_indices, label="指数"
+    )
+    data_status_penetration: DataStatus = {}
+    if penetration:
+        data_status_penetration = _safe_build_data_status(
+            build_penetration_data_status, penetration, penetration_profit_ok, penetration_dividend_ok, label="穿透"
+        )
+    # 从 perf_data 提取真实 adjusted_ratings（无异常风险，放外面不吞）
+    _adj_ratings: dict[str, str] = {}
+    if perf_data:
+        for _entry in perf_data:
+            _code = _entry.get("code")
+            _tag = _entry.get("rating_tag")
+            if _code and _tag:
+                _adj_ratings[_code] = _tag
+    data_status_perf: DataStatus = _safe_build_data_status(
+        build_perf_data_status, _adj_ratings, sum(1 for h in holdings if is_fund(h)), label="基金业绩"
+    )
+    data_status_category: DataStatus = _safe_build_data_status(
+        build_category_data_status, cat_dividend_ok, label="持仓分类"
+    )
+    return data_status_summary, data_status_penetration, data_status_perf, data_status_category
+
+
+def _build_history_data_status(history_data: dict | None) -> DataStatus:
+    """从 history_data 构建历史走势数据状态字典。"""
+    data_status_history: DataStatus = {}
+    if not history_data:
+        return data_status_history
+    status = history_data.get("status", "unavailable")
+    warnings = history_data.get("warnings", [])
+    if status == "unavailable":
+        data_status_history["history_source"] = DataStatusItem(
+            available=False,
+            tier="T3",
+            message=STATUS_MESSAGES.get("history_price_unavailable", "历史走势数据暂不可用"),
+        )
+    else:
+        if status == "degraded":
+            data_status_history["history_degraded"] = DataStatusItem(
+                available=True,
+                tier="T3",
+                message=STATUS_MESSAGES.get("history_degraded", "历史走势部分数据来自降级链路"),
+            )
+        for w in warnings:
+            if "收盘价为 0" in w or "零收盘" in w:
+                key = "history_zero_value"
+            elif "修正" in w or "重叠" in w:
+                key = "history_correction"
+            else:
+                continue
+            data_status_history[key] = DataStatusItem(
+                available=True,
+                tier="T3",
+                message=STATUS_MESSAGES.get(key, w),
+            )
+    return data_status_history
+
+
+def _render_template(
+    *,
+    now_str: str,
+    today_str: str,
+    trading_day: str,
+    # 匿名化：{真码: 显示掩码}，供模板 | anon_code 在代码列渲染点结构化折叠（None/空 = 不掩）
+    anon_code_map: dict | None = None,
+    # 生成后自检区块 HTML（与其余 LLM 内容同层传入）
+    self_review_block: str | None = None,
+    total_mv: float,
+    total_cost: float,
+    total_profit: float,
+    total_profit_rate: float,
+    total_today_profit: float,
+    today_profit_rate: float,
+    cat_counts: dict,
+    update_status_dict: dict,
+    a_indices_list: list,
+    us_indices_list: list,
+    accounts: list,
+    account_totals: list,
+    cat_data: list,
+    penetration: dict,
+    perf_data: list,
+    candidate_data: dict | None,
+    news_data: list,
+    _news_llm_meta: dict | None,
+    has_llm_analysis: bool,
+    manager_analysis: dict,
+    overlap_matrix: dict,
+    concentration_analysis: dict,
+    style_analysis: dict,
+    llm_enabled_flag: bool,
+    global_macro_content: str | None,
+    expert_review_content: str | None,
+    health_check_content: str | None,
+    penetration_deep_content: str | None,
+    _llm_session_usage: dict,
+    _llm_module_info: list,
+    llm_endpoint: str | None,
+    module_disabled: list,
+    _debate_mode_label: str,
+    debate_info: dict | None,
+    _debate_mode_combination: str,
+    order: list,
+    section_numbers: dict,
+    section_visible_dict: dict,
+    _sv_fn,
+    data_status_summary: DataStatus,
+    data_status_penetration: DataStatus,
+    data_status_perf: DataStatus,
+    data_status_category: DataStatus,
+    history_data: dict | None,
+    data_status_history: DataStatus,
+    data_source_matrix: dict,
+    chart_datasets: dict | None = None,
+    style_factor_data: dict | None = None,
+    factor_catalog_data: dict | None = None,
+    factor_names: dict | None = None,
+    industry_beta: dict | None = None,
+    position_relationship_data: dict | None = None,
+    evolution_data: dict | None = None,
+    drawdown_min_span: int = DRAW_DOWN_MIN_SPAN,
+    data_quality_enabled: bool = False,  # 子模块：数据质量仪表盘开关
+    position_status: dict | None = None,  # 品种覆盖诊断 position_status
+    data_freshness: dict | None = None,  # 可信度摘要 data_freshness
+    action_data: dict | None = None,  # 行动建议单一数据源 action_data（行动板块 + 智囊团深度复盘行动摘要）
+    prosperity_framework_data: dict
+    | None = None,  # 景气度框架诊断契约（实验性功能 prosperity_framework，None=开关关闭）
+    market_sentiment_data: dict | None = None,  # 市场情绪与持仓热点契约（报告增强开关 market_sentiment，None=开关关闭）
+    risk_adjusted_excess_data: dict | None = None,  # 风险调整超额契约（开关 risk_adjusted_excess，None=开关关闭）
+    crisis_annotation_data: dict | None = None,  # 危机区间标注 crisis_annotation_data
+    tail_risk_data: dict | None = None,  # 尾部风险统计 tail_risk_data（指标卡）
+    snapshot_diff_data: dict | None = None,  # 快照差异摘要 snapshot_diff_data（组合演进章顶部）
+    fund_flow_data: dict | None = None,  # 成本流水数据 fund_flow_data（三页签 HTML 渲染数据源）
+    valuation_data: dict | None = None,  # 估值分位数据契约 valuation_data（穿透估值列，None=开关关闭）
+    market_temperature_data: dict
+    | None = None,  # 市场温度数据契约 market_temperature_data（汇总温度行，None=开关关闭）
+    decision_review_data: dict | None = None,  # 历史决策复盘 decision_review_data（行动章内嵌块，None=开关关闭）
+    holding_change_view: dict | None = None,  # 持仓变动复盘双端单源视图（预格式化行；None=章隐藏）
+    event_impact_view: dict | None = None,  # 事件窗量化对照双端单源视图（预格式化行；None=新闻章内区块隐藏）
+    schedule_replay_view: dict | None = None,  # 调仓纪律回放双端单源视图（预格式化行；None=章隐藏）
+    financial_report_digest_data: dict | None = None,  # 持仓个股财报摘要契约（None=开关关闭/无数据）
+    financial_indicator_data: dict | None = None,  # 财务指标契约（None=开关关闭/无数据）
+    purchase_status_data: dict | None = None,  # 申购限购状态契约（None=开关关闭/无数据，申购状态列隐藏）
+    data_source_catalog: list | None = None,  # 数据源说明表（实际使用清单 / 计费 / 凭据）
+    summary_highlights_data: dict
+    | None = None,  # 本期要点与环比对照契约（报告增强开关 summary_highlights，None=首屏块隐藏）
+) -> str:
+    """渲染 Jinja2 模板并返回 HTML。"""
+    from src.python.config.features import enabled_experimental_features, is_feature_enabled
+    from src.python.report.chart_data_builder import build_evolution_chart_data
+
+    # 实验功能清单：产物须自述生成条件（页脚）；零开关时为空列表，页脚不出现该行
+    enabled_experiments = [name for _flag, name in enabled_experimental_features()]
+    # 报告追问区块开关态：经 render context 传递（不写模板 globals）；关态模板分支不渲染，报告字节不变
+    report_qa_enabled = is_feature_enabled("report_qa")
+
+    # 估值分位 + 市场温度：开关关闭时为 None（模板保持既有输出）
+    valuation_enabled = valuation_data is not None
+    # 真实分位口径是否生效（未生效时页脚保持引入前的原始免责语）
+    valuation_real_basis = (valuation_data or {}).get("basis_mode") == "real_ttm"
+    penetration_display = _attach_valuation_to_penetration(penetration, valuation_data)
+    market_temperature = _build_temperature_display(market_temperature_data)
+    purchase_status_display = _build_purchase_status_display(purchase_status_data, accounts)
+    # 目录分组导航：按「基础信息/基金深度分析/行动建议/历史/LLM/附录」六组折叠（_sv_fn 闭包过滤不可见章节）
+    section_groups = _build_section_nav_groups(order, _sv_fn, section_numbers)
+
+    return _ENV.get_template("report_template.html").render(
+        flow_display=_build_flow_display(fund_flow_data),
+        purchase_status_display=purchase_status_display,
+        section_groups=section_groups,
+        anon_code_map=anon_code_map,
+        llm_supported_sections=_LLM_SUPPORTED_SECTIONS,
+        valuation_enabled=valuation_enabled,
+        valuation_real_basis=valuation_real_basis,
+        market_temperature=market_temperature,
+        now=now_str,
+        today=today_str,
+        trading_day=trading_day,
+        total_mv=total_mv,
+        total_cost=total_cost,
+        total_profit=total_profit,
+        total_profit_rate=total_profit_rate,
+        total_today_profit=total_today_profit,
+        today_profit_rate=today_profit_rate,
+        categories=cat_counts,
+        update_status=update_status_dict,
+        a_indices=a_indices_list,
+        us_indices=us_indices_list,
+        accounts=accounts,
+        account_totals=account_totals,
+        cat_data=cat_data,
+        penetration=penetration_display,
+        perf_data=perf_data,
+        candidate_data=candidate_data,
+        # SAC: news_data[*].enriched_keywords[*].display 来自外部 API
+        # 模板中已禁用 |safe 过滤器，依赖 autoescape 防 XSS —— 勿加 |safe
+        news_data=news_data,
+        news_llm_meta=_news_llm_meta,
+        has_llm_analysis=has_llm_analysis,
+        manager_analysis=manager_analysis,
+        overlap_matrix=overlap_matrix,
+        concentration_analysis=concentration_analysis,
+        style_analysis=style_analysis,
+        llm_enabled=llm_enabled_flag,
+        global_macro=global_macro_content,
+        expert_review=expert_review_content,
+        health_check=health_check_content,
+        penetration_deep=penetration_deep_content,
+        # 生成后自检区块：零参 pull（产物由 llm/self_review 运行作用域载体承载），
+        # 开关关闭或无产出时为 None，模板整段不渲染（零噪声）
+        self_review_block=_self_review_block(),
+        llm_session_usage=_llm_session_usage,
+        module_labels=get_llm_module_names(),
+        module_disabled=module_disabled,
+        llm_module_info=_llm_module_info,
+        llm_endpoint=llm_endpoint,
+        cache_stats=get_cache_hit_rate(),
+        app_name=APP_NAME,
+        app_version=APP_VERSION,
+        debate_mode_label=_debate_mode_label,
+        debate_info=debate_info,
+        debate_mode_combination=_debate_mode_combination,
+        enabled_experiments=enabled_experiments,
+        report_qa_enabled=report_qa_enabled,
+        section_order=order,
+        section_numbers=section_numbers,
+        section_visible_dict=section_visible_dict,
+        section_visible=_sv_fn,
+        data_status_summary=data_status_summary,
+        data_status_penetration=data_status_penetration,
+        data_status_perf=data_status_perf,
+        data_status_category=data_status_category,
+        history_data=history_data,
+        data_status_history=data_status_history,
+        data_source_matrix=data_source_matrix,
+        data_source_catalog=data_source_catalog,
+        report_year=datetime.now().year,
+        data_unavailable=bool(total_mv == 0 and total_cost > 0),
+        chart_datasets=chart_datasets,
+        style_factor_data=style_factor_data,
+        factor_catalog_data=factor_catalog_data,
+        factor_names=factor_names or {},
+        industry_beta=industry_beta,
+        position_relationship_data=position_relationship_data,
+        evolution_data=evolution_data,
+        evolution_chart_data=build_evolution_chart_data(evolution_data, code_map=anon_code_map),
+        drawdown_min_span=drawdown_min_span,
+        data_quality_enabled=data_quality_enabled,
+        position_status=position_status,
+        data_freshness=data_freshness,
+        action_data=action_data,
+        prosperity_framework_data=prosperity_framework_data,
+        market_sentiment_data=market_sentiment_data,
+        crisis_annotation_data=crisis_annotation_data,
+        risk_adjusted_excess_data=risk_adjusted_excess_data,
+        tail_risk_data=tail_risk_data,
+        snapshot_diff_data=snapshot_diff_data,
+        decision_review_data=decision_review_data,
+        holding_change_view=holding_change_view,
+        event_impact_view=event_impact_view,
+        schedule_replay_view=schedule_replay_view,
+        financial_report_digest_data=financial_report_digest_data,
+        financial_indicator_data=financial_indicator_data,
+        summary_highlights_data=summary_highlights_data,
+    )
+
+
+# ── 核心生成函数 ────────────────────────────────────────────
+
+
+def write_html_report(
+    holdings: list[Holding],
+    output_dir: str = "reports",
+    news_top_count: int = 100,
+    enable_llm: bool = False,
+    include_news: bool = True,
+    force_llm: bool = False,
+    llm_content: tuple[str | None, str | None, str | None, str | None] | None = None,
+    details: list | None = None,
+    news_data: list | None = None,
+    news_llm_meta: dict | None = None,
+    sector_flow: list | None = None,
+    progress: ProgressReporter | None = None,
+    section_order: list[dict] | None = None,
+    history_data: dict | None = None,
+    a_indices: dict | None = None,
+    us_indices: dict | None = None,
+    enable_fund_deep_analysis: bool = True,
+    enable_news: bool = True,
+    enable_history: bool = True,
+    enable_portfolio_evolution: bool = True,
+    enable_action: bool = False,  # 行动建议独立章（enable_action config 默认开）
+    enable_data_quality: bool = False,  # 子模块：数据质量仪表盘（功能开关 `data_quality`）
+    position_status: dict | None = None,  # 品种覆盖诊断 position_status（品种覆盖区块）
+    data_freshness: dict | None = None,  # 可信度摘要 data_freshness（可信度区块 + 头部摘要行）
+    action_data: dict | None = None,  # 行动建议单一数据源 action_data（行动板块 + 智囊团深度复盘行动摘要）
+    prosperity_framework_data: dict
+    | None = None,  # 景气度框架诊断契约（实验性功能 prosperity_framework，None=开关关闭）
+    market_sentiment_data: dict | None = None,  # 市场情绪与持仓热点契约（报告增强开关 market_sentiment，None=开关关闭）
+    debate_info: dict | None = None,
+    chart_datasets: dict | None = None,
+    style_factor_data: dict | None = None,
+    factor_catalog_data: dict | None = None,
+    position_relationship_data: dict | None = None,
+    evolution_data: dict | None = None,
+    drawdown_min_span: int = DRAW_DOWN_MIN_SPAN,
+    risk_adjusted_excess_data: dict | None = None,  # 风险调整超额契约（开关 risk_adjusted_excess，None=开关关闭）
+    crisis_annotation_data: dict | None = None,  # 危机区间标注 crisis_annotation_data
+    tail_risk_data: dict | None = None,  # 尾部风险统计 tail_risk_data（指标卡）
+    snapshot_diff_data: dict | None = None,  # 快照差异摘要 snapshot_diff_data（组合演进章顶部变化摘要）
+    fund_flow_data: dict | None = None,  # 成本流水数据 fund_flow_data（三页签 HTML 渲染数据源，None=开关关闭）
+    valuation_data: dict | None = None,  # 估值分位数据契约 valuation_data（「资产穿透TOP10」估值分位列，None=开关关闭）
+    market_temperature_data: dict
+    | None = None,  # 市场温度数据契约 market_temperature_data（「投资分析汇总」温度行，None=开关关闭）
+    enable_fundamental_snapshot: bool = False,  # board 层：持仓基本面章（两功能开关任一开启）
+    financial_report_digest_data: dict | None = None,  # data 层：财报摘要契约（None=无数据，章节隐藏）
+    financial_indicator_data: dict | None = None,  # data 层：财务指标契约（None=无数据，章节隐藏）
+    purchase_status_data: dict | None = None,  # data 层：申购限购状态契约（None=无数据，申购状态列隐藏）
+    decision_review_data: dict | None = None,  # 历史决策复盘 decision_review_data（行动章内嵌块，None=开关关闭）
+    holding_change_data: dict
+    | None = None,  # data 层：持仓变动复盘契约（报告章节与增强开关 `holding_change_review`，None=键缺席→整章隐藏）
+    event_impact_data: dict
+    | None = None,  # data 层：事件窗量化对照契约（报告章节与增强开关 `event_window_impact`，None=键缺席→整章隐藏）
+    schedule_replay_data: dict
+    | None = None,  # data 层：调仓纪律回放契约（实验开关 `rebalance_schedule_replay`，None=键缺席→整章隐藏）
+    summary_highlights_data: dict
+    | None = None,  # data 层：本期要点与环比对照契约（报告章节与增强开关 `summary_highlights`，None=键缺席→首屏块隐藏）
+) -> str:
+    """生成 HTML 分析报告并保存到文件。
+
+    通过各子函数获取分析数据，渲染 Jinja2 模板，
+    写入 {output_dir}/ 目录（最新版 + 归档版）。
+
+    Args:
+        llm_content: 可选预生成内容 (global_macro_html, expert_review_html, health_check_html, penetration_deep_html)，
+            传入时跳过内部 LLM 生成直接使用此内容。
+        details: 可选预计算市值核算明细，传入时跳过内部行情获取。
+        news_data: 可选预获取新闻数据，传入时跳过内部新闻获取。
+        news_llm_meta: 与 news_data 对应的 LLM 元数据字典。
+        sector_flow: 行业资金流向数据（可选），注入全球政经局势 LLM prompt
+        history_data: 组合历史走势数据（来自 PortfolioHistoryCalculator），
+            包含 bars、max_drawdown、annualized_volatility、total_return、warnings 等。
+            None 时历史章节显示占位文本。
+        a_indices: 可选预获取 A 股指数数据，传入时跳过 HTTP 请求。
+        us_indices: 可选预获取美股指数数据，传入时跳过 HTTP 请求。
+        chart_datasets: Chart.js 数据集（chart_data_builder 输出），经 context 传递。
+            默认 None → 图表容器显示占位文案（数据表格照常渲染）。
+
+    Returns:
+        最新版报告的绝对路径
+    """
+    prog = progress if progress is not None else SilentProgressReporter()
+    now_str, today_str, trading_day = _time_strings()
+
+    # ── 1) 市值核算 ──
+    details, totals = _render_market_value_section(holdings, details, today_str, prog)
+    total_mv, total_cost, total_profit, total_today_profit = totals[:4]
+    total_profit_rate, today_profit_rate = totals[4:]
+
+    # ── 2) 按账户分组 ──
+    accounts, account_totals = _render_account_grouping(details, prog)
+
+    # ── 3) 分类信息 + 指数 ──
+    cat_counts, update_status_dict = _render_category_info(holdings, details, trading_day)
+
+    # ── 4) 市场指数 ──
+    a_indices, us_indices, a_indices_list, us_indices_list = _render_index_section(prog, a_indices, us_indices)
+
+    # ── 5~7) 分类表 / 穿透 / 基金业绩 ──
+    cat_data, cat_dividend_ok = _render_category_table(holdings, details, prog)
+    penetration, penetration_profit_ok, penetration_dividend_ok = _render_penetration_section(holdings, details, prog)
+    perf_data, candidate_data = _render_fund_performance_section(holdings, details, prog)
+
+    # ── 5b) Chart.js 数据集补齐：category_doughnut / industry_bar / penetration_bar ──
+    # 这三张图的数据源（cat_data / penetration）只在 write_html_report 内计算，
+    # 调用侧传入的 chart_datasets 拿不到它们，导致图表误显示"暂不可用"。
+    # 此处用权威数据重建并覆盖，保证图表与表格同源（单图失败仅跳过该图）。
+    if chart_datasets is not None:
+        from src.python.report.chart_data_builder import (
+            _build_category_doughnut_dataset,
+            _build_corr_rolling_dataset,
+            _build_excess_rolling_dataset,
+            _build_industry_bar_dataset,
+            _build_penetration_bar_dataset,
+        )
+
+        try:
+            chart_datasets["category_doughnut"] = _build_category_doughnut_dataset(None, cat_data)
+        except Exception:
+            logger.warning("[chart] category_doughnut 数据补齐失败，保留原数据集", exc_info=True)
+        try:
+            chart_datasets["industry_bar"] = _build_industry_bar_dataset(penetration)
+        except Exception:
+            logger.warning("[chart] industry_bar 数据补齐失败，保留原数据集", exc_info=True)
+        try:
+            chart_datasets["penetration_bar"] = _build_penetration_bar_dataset(penetration)
+        except Exception:
+            logger.warning("[chart] penetration_bar 数据补齐失败，保留原数据集", exc_info=True)
+        try:
+            chart_datasets["excess_rolling"] = _build_excess_rolling_dataset(risk_adjusted_excess_data)
+        except Exception:
+            logger.warning("[chart] excess_rolling 数据补齐失败，保留原数据集", exc_info=True)
+        try:
+            chart_datasets["corr_rolling"] = _build_corr_rolling_dataset(position_relationship_data)
+        except Exception:
+            logger.warning("[chart] corr_rolling 数据补齐失败，保留原数据集", exc_info=True)
+
+    # ── 13) 基金经理变更监控 ──
+    manager_analysis = _render_manager_analysis(holdings, enable_fund_deep_analysis, prog)
+
+    # ── 14) 持仓关系矩阵·重合度区块 ──
+    overlap_matrix = _render_overlap_matrix(holdings, details, enable_fund_deep_analysis, prog)
+
+    # ── 15) 持仓集中度监控 ──
+    concentration_analysis = _render_concentration(holdings, enable_fund_deep_analysis, prog)
+
+    # ── 16) 风格与因子分析 ──
+    style_analysis = _render_style_analysis(holdings, enable_fund_deep_analysis, prog)
+
+    # ── 8) 财经新闻 ──
+    news_data, _news_llm_meta = _render_news_section(
+        include_news, news_data, news_llm_meta, holdings, news_top_count, penetration, prog
+    )
+
+    # ── 9) LLM 智能分析内容 ──
+    llm_enabled_flag, global_macro_content, expert_review_content, health_check_content, penetration_deep_content = (
+        _render_llm_content_section(
+            enable_llm,
+            llm_content,
+        )
+    )
+
+    # ── LLM 模块状态收集 ──
+    llm_module_info, llm_endpoint, module_disabled, _llm_session_usage = _render_llm_module_info(llm_enabled_flag)
+
+    # ── 辩论模式标签 ──
+    from src.python.report._debate_utils import detect_debate_mode
+
+    _debate_mode_label, _debate_mode_combination = detect_debate_mode(debate_info)
+
+    # 辩论模式启用时覆盖 llm_module_info 中 expert_review 的状态标签
+    if _debate_mode_label:
+        for _mi in llm_module_info:
+            if _mi.get("key") == "expert_review" and _mi.get("status") in ("success", "cached"):
+                _mi["status_label"] = _debate_mode_label
+
+    # ── 10) 渲染模板 ──
+    prog.info("正在渲染 HTML...")
+    has_llm_analysis = any(item.get("llm_analysis") for item in (news_data or []))
+
+    # ── 10a) 报告模块序号 & 可见性 ──
+    order = section_order or get_report_section_order()
+    # 持仓变动复盘视图（双端单源）：与 Excel 页签消费同一份预格式化字符串；
+    # 契约缺席（开关关闭）→ None → 章隐藏，逐字节回退既有输出
+    holding_change_view = None
+    if holding_change_data:
+        from src.python.report.holding_change_panel import build_holding_change_view
+
+        holding_change_view = build_holding_change_view(holding_change_data)
+    # 事件窗量化对照视图（双端单源）：与 Excel 新闻页签尾部区块消费同一份预格式化字符串；
+    # 契约缺席（开关关闭/未注入）→ None → 新闻章内区块隐藏，逐字节回退既有输出
+    event_impact_view = None
+    if event_impact_data:
+        from src.python.report.event_impact_panel import build_event_impact_view
+
+        event_impact_view = build_event_impact_view(event_impact_data)
+    # 调仓纪律回放视图（双端单源）：与 Excel 页签消费同一份预格式化字符串；
+    # 契约缺席（开关关闭/未注入）→ None → 章隐藏，逐字节回退既有输出
+    schedule_replay_view = None
+    if schedule_replay_data:
+        from src.python.report.schedule_replay_panel import build_schedule_replay_view
+
+        schedule_replay_view = build_schedule_replay_view(schedule_replay_data)
+    # 章级：enabled_llm 模块禁用的 LLM 分析章整章隐藏（与 Excel 端同函数同配置推导）
+    from src.python.llm.skeleton import get_llm_chapter_disabled
+
+    llm_module_disabled = get_llm_chapter_disabled() if enable_llm else None
+    section_numbers, section_visible_dict, _sv_fn = _compute_section_visibility(
+        order,
+        manager_analysis,
+        overlap_matrix,
+        concentration_analysis,
+        style_analysis,
+        include_news,
+        llm_enabled_flag,
+        llm_module_disabled=llm_module_disabled,
+        enable_news=enable_news,
+        enable_fund_deep_analysis=enable_fund_deep_analysis,
+        enable_history=enable_history,
+        enable_portfolio_evolution=enable_portfolio_evolution,
+        enable_action=enable_action,
+        enable_llm=enable_llm,  # enable_llm is the board param for LLM
+        style_factor_data=style_factor_data,
+        position_relationship_data=position_relationship_data,
+        evolution_data=evolution_data,
+        holding_change_data=holding_change_data,
+        schedule_replay_data=schedule_replay_data,
+        enable_fundamental_snapshot=enable_fundamental_snapshot,
+        financial_report_digest_data=financial_report_digest_data,
+        financial_indicator_data=financial_indicator_data,
+    )
+
+    # ── 10b) 数据源状态摘要 ──
+    (data_status_summary, data_status_penetration, data_status_perf, data_status_category) = (
+        _build_data_status_sections(
+            a_indices,
+            us_indices,
+            penetration,
+            penetration_profit_ok,
+            penetration_dividend_ok,
+            perf_data,
+            holdings,
+            cat_dividend_ok,
+        )
+    )
+
+    # ── 10c) 组合历史走势数据状态 ──
+    data_status_history = _build_history_data_status(history_data)
+
+    # ── 10d) 数据源可用性矩阵 ──
+    from src.python.report.data_source_matrix import build_data_source_catalog, build_data_source_matrix
+
+    data_source_matrix = build_data_source_matrix()
+    data_source_catalog = build_data_source_catalog()
+
+    # 因子中文名映射（单一数据源：analysis 层常量，经 context 传递）
+    _factor_names: dict = {}
+    if style_factor_data:
+        try:
+            from src.python.analysis.style_factor_regression import FACTOR_NAMES
+
+            _factor_names = FACTOR_NAMES
+        except Exception:
+            _factor_names = {}
+
+    # 匿名化：代码列渲染点掩码映射（真码 → 显示掩码）。渲染前一次性构造，
+    # 经模板全局变量注入，各章节以 {{ x | anon_code }} 精确键控折叠代码。
+    from src.python.config.anonymizer import build_code_display_map, get_anonymization_mode
+
+    _code_display_map = build_code_display_map(details if details is not None else holdings, get_anonymization_mode())
+
+    html = _render_template(
+        now_str=now_str,
+        today_str=today_str,
+        trading_day=trading_day,
+        anon_code_map=_code_display_map,
+        total_mv=total_mv,
+        total_cost=total_cost,
+        total_profit=total_profit,
+        total_profit_rate=total_profit_rate,
+        total_today_profit=total_today_profit,
+        today_profit_rate=today_profit_rate,
+        cat_counts=cat_counts,
+        update_status_dict=update_status_dict,
+        a_indices_list=a_indices_list,
+        us_indices_list=us_indices_list,
+        accounts=accounts,
+        account_totals=account_totals,
+        cat_data=cat_data,
+        penetration=penetration,
+        perf_data=perf_data,
+        candidate_data=candidate_data,
+        news_data=news_data,
+        _news_llm_meta=_news_llm_meta,
+        has_llm_analysis=has_llm_analysis,
+        manager_analysis=manager_analysis,
+        overlap_matrix=overlap_matrix,
+        concentration_analysis=concentration_analysis,
+        style_analysis=style_analysis,
+        style_factor_data=style_factor_data,
+        factor_catalog_data=factor_catalog_data,
+        factor_names=_factor_names,
+        industry_beta=(style_factor_data or {}).get("industry_beta"),
+        position_relationship_data=position_relationship_data,
+        evolution_data=evolution_data,
+        financial_report_digest_data=financial_report_digest_data,
+        financial_indicator_data=financial_indicator_data,
+        purchase_status_data=purchase_status_data,
+        drawdown_min_span=drawdown_min_span,
+        llm_enabled_flag=llm_enabled_flag,
+        global_macro_content=global_macro_content,
+        expert_review_content=expert_review_content,
+        health_check_content=health_check_content,
+        penetration_deep_content=penetration_deep_content,
+        self_review_block=_self_review_block(),
+        _llm_session_usage=_llm_session_usage,
+        _llm_module_info=llm_module_info,
+        llm_endpoint=llm_endpoint,
+        module_disabled=module_disabled,
+        _debate_mode_label=_debate_mode_label,
+        debate_info=debate_info,
+        _debate_mode_combination=_debate_mode_combination,
+        order=order,
+        section_numbers=section_numbers,
+        section_visible_dict=section_visible_dict,
+        _sv_fn=_sv_fn,
+        data_status_summary=data_status_summary,
+        data_status_penetration=data_status_penetration,
+        data_status_perf=data_status_perf,
+        data_status_category=data_status_category,
+        history_data=history_data,
+        data_status_history=data_status_history,
+        data_source_matrix=data_source_matrix,
+        data_source_catalog=data_source_catalog,
+        chart_datasets=chart_datasets,
+        data_quality_enabled=enable_data_quality,
+        position_status=position_status,
+        data_freshness=data_freshness,
+        action_data=action_data,
+        prosperity_framework_data=prosperity_framework_data,
+        market_sentiment_data=market_sentiment_data,
+        crisis_annotation_data=crisis_annotation_data,
+        risk_adjusted_excess_data=risk_adjusted_excess_data,
+        tail_risk_data=tail_risk_data,
+        snapshot_diff_data=snapshot_diff_data,
+        fund_flow_data=fund_flow_data,
+        valuation_data=valuation_data,
+        market_temperature_data=market_temperature_data,
+        decision_review_data=decision_review_data,
+        holding_change_view=holding_change_view,
+        event_impact_view=event_impact_view,
+        schedule_replay_view=schedule_replay_view,
+        summary_highlights_data=summary_highlights_data,
+    )
+
+    _copy_js_assets(output_dir)
+    # 内嵌 Chart.js 资产 → HTML 单文件自包含（下载/移动/单发移动端浏览
+    # 不再依赖同目录松散 JS；_copy_js_assets 仍保留以兼容既有产物布局）
+    html = _inline_js_assets(html)
+
+    # 产物文本清扫（匿名化）：字段层未覆盖的派生面（分类/业绩/管理人等从
+    # holdings 直取名称的区块）在最终 HTML 文本统一真名→代号；明细区块已
+    # 在字段层替换，重复命中无副作用。仅名称（中文串）全局安全，自由文本
+    # 清扫因此**不含代码**——代码是纯数字串，全文子串替换会误伤金额与
+    # JSON 数值；代码面由渲染点结构化掩码（模板 | anon_code）与
+    # mask_code_text 边界安全替换兑底。off → 恒等零开销。
+    from src.python.config.anonymizer import (
+        build_code_display_map,
+        build_report_alias_map,
+        get_anonymization_mode,
+        mask_code_text,
+        mask_display_text,
+    )
+
+    _anon_mode = get_anonymization_mode()
+    if _anon_mode != "off":
+        html = mask_display_text(html, build_report_alias_map(holdings, _anon_mode, include_codes=False))
+        html = mask_code_text(html, _code_display_map)
+
+    return _save_html_report(html, output_dir, total_mv, total_profit, prog)
+
+
+# ── 桥接 import：外部子模块 ─────────────────────────────────
+from src.python.report.html_renderers import (  # noqa: E402, F401
+    _render_account_grouping,
+    _render_category_info,
+    _render_category_table,
+    _render_concentration,
+    _render_fund_performance_section,
+    _render_index_section,
+    _render_llm_content_section,
+    _render_llm_module_info,
+    _render_manager_analysis,
+    _render_market_value_section,
+    _render_news_section,
+    _render_overlap_matrix,
+    _render_penetration_section,
+    _render_style_analysis,
+)
+from src.python.report.html_save import _save_html_report  # noqa: E402, F401
+
+
+def _self_review_block() -> str | None:
+    """取本轮生成后自检区块 HTML（零参 pull；无产出返回 None）。"""
+    from src.python.llm.self_review import get_self_review_block
+
+    return get_self_review_block()
+
+
+def _safe_build_data_status(builder, *args, label: str = "", **kwargs) -> DataStatus:
+    """安全构建数据状态，异常时返回空字典并记录日志。
+
+    统一处理 data_status 构建中的 try/except/log 三步骤，
+    避免 3 个 try 块重复此模式。
+
+    Args:
+        builder: 状态构建函数（如 build_index_data_status）
+        label: 模块名称（用于日志消息），如 "指数"/"穿透"/"基金业绩"
+        *args, **kwargs: 透传给 builder 的参数
+
+    Returns:
+        构建成功返回 DataStatus 字典，异常返回 {}
+    """
+    try:
+        result = builder(*args, **kwargs)
+        return result if isinstance(result, dict) else {}
+    except Exception:
+        logger.debug("HTML 报告构建%s数据状态失败（非关键）", label, exc_info=True)
+        return {}
+
+
+def _time_strings() -> tuple[str, str, str]:
+    """返回 (now_str, today_str, trading_day)。"""
+    return (
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        datetime.now().strftime("%Y-%m-%d"),
+        get_last_trading_day(),
+    )
+
+
+def _build_data_status_sections(
+    a_indices: dict,
+    us_indices: dict,
+    penetration: dict | None,
+    penetration_profit_ok: bool,
+    penetration_dividend_ok: bool,
+    perf_data: list[dict] | None,
+    holdings: list[Holding],
+    cat_dividend_ok: bool,
+) -> tuple[DataStatus, DataStatus, DataStatus, DataStatus]:
+    """构建 4 个 data_status 摘要字典（指数/穿透/基金业绩/持仓分类）。
+
+    各模块的 data_status 构建互相独立，任一模块失败不影响其他。
+    """
+    data_status_summary: DataStatus = _safe_build_data_status(
+        build_index_data_status, a_indices, us_indices, label="指数"
+    )
+    data_status_penetration: DataStatus = {}
+    if penetration:
+        data_status_penetration = _safe_build_data_status(
+            build_penetration_data_status, penetration, penetration_profit_ok, penetration_dividend_ok, label="穿透"
+        )
+    # 从 perf_data 提取真实 adjusted_ratings（无异常风险，放外面不吞）
+    _adj_ratings: dict[str, str] = {}
+    if perf_data:
+        for _entry in perf_data:
+            _code = _entry.get("code")
+            _tag = _entry.get("rating_tag")
+            if _code and _tag:
+                _adj_ratings[_code] = _tag
+    data_status_perf: DataStatus = _safe_build_data_status(
+        build_perf_data_status, _adj_ratings, sum(1 for h in holdings if is_fund(h)), label="基金业绩"
+    )
+    data_status_category: DataStatus = _safe_build_data_status(
+        build_category_data_status, cat_dividend_ok, label="持仓分类"
+    )
+    return data_status_summary, data_status_penetration, data_status_perf, data_status_category
+
+
+def _build_history_data_status(history_data: dict | None) -> DataStatus:
+    """从 history_data 构建历史走势数据状态字典。"""
+    data_status_history: DataStatus = {}
+    if not history_data:
+        return data_status_history
+    status = history_data.get("status", "unavailable")
+    warnings = history_data.get("warnings", [])
+    if status == "unavailable":
+        data_status_history["history_source"] = DataStatusItem(
+            available=False,
+            tier="T3",
+            message=STATUS_MESSAGES.get("history_price_unavailable", "历史走势数据暂不可用"),
+        )
+    else:
+        if status == "degraded":
+            data_status_history["history_degraded"] = DataStatusItem(
+                available=True,
+                tier="T3",
+                message=STATUS_MESSAGES.get("history_degraded", "历史走势部分数据来自降级链路"),
+            )
+        for w in warnings:
+            if "收盘价为 0" in w or "零收盘" in w:
+                key = "history_zero_value"
+            elif "修正" in w or "重叠" in w:
+                key = "history_correction"
+            else:
+                continue
+            data_status_history[key] = DataStatusItem(
+                available=True,
+                tier="T3",
+                message=STATUS_MESSAGES.get(key, w),
+            )
+    return data_status_history

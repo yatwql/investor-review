@@ -11,6 +11,8 @@
 
 ### Changed
 
+- **报告域两模块拆分（`rf-626`）**：`report/html_writer.py` 799 → **689 行**（数据状态块装配 → `html_writer_status.py`）；`analysis/rebalance.py` 751 → **243 行**（偏离度信号族 → `_rebalance_deviation.py`，含分类权重与误报保护、四个常量随迁）。依赖方向单向：渲染 → 状态装配、信号 → 分类/配置（后者函数内延迟导入，避免与入口 re-export 成环）；门面 re-export 保持导入面，测试 patch 目标按调用点改指。
+
 - **功能开关注册表下沉（`rf-665`）**：`config/features.py` 840 → **574 行**，注册表与定义（分组常量 / `FeatureSwitchDef` / `feature_switch_registry` / 纯注册表视图 / `_FEATURE_FLAGS_DEFAULT` / `EXPERIMENT_ALL`）下沉 `config/_feature_registry.py`（298 行）；原模块只留运行时状态（features.json 覆写读写、合并键迁移、开关解析与日志）并 re-export 注册表符号，既有导入面与开关语义不变。注册表仍是唯一事实来源（`is` 同一对象，无副本）。
 
 - **发布台账补 token 采集与统计（`plan-171`）**：`logs/release.jsonl` 每行新增 `session_usage`（agent 会话累计 in/out/cache read/cache write/total/cost，取自 `PI_SESSION_FILE` 的 assistant 消息 + 非消息用量 + compaction，与 pi 统计同口径；非 agent 环境省略、旧行形状不变），命令尾行打印「本次发布累计 token」，窗口以「上一次 devbump」为界、跨会话按正增量分段累加；同时记录**执行环境身份**（`agent`：provider/model/thinking/session_id，取自 `PI_PROVIDER`/`PI_MODEL`/`PI_REASONING_LEVEL`/`PI_SESSION_ID`，非 agent 环境省略）并打印「执行环境：provider/model（thinking=…）」。采集全容错不阻断发布。回归 6 + 4 例。
