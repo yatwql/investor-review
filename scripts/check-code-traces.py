@@ -28,6 +28,11 @@ _magic_excludes() / _dash_excludes() / _under_excludes() 行豁免。
   - 标识符扫描：IDENTIFIER_PATTERNS 匹配代码中的完整标识符 token
     （.py 用 ast 提取，.js/.mjs 用正则提取声明）
 
+三类 AST 级架构守卫（与注释无关，直接看语法树）：
+  - core 分层：core 层禁止反向 import 上层包
+  - 日志统一：print() 仅限交互呈现层（TUI/CLI 目录 + 逐文件列举的交互输出
+    模块），其余生产模块须走 logging 落盘（LOG）
+
 本文件为**薄 CLI**：模式表/扫描/守卫实现均在 `scripts/_traces_code/` 包
 （config / patterns / exemptions / extract / scan / layers 六模块），
 下方 re-export 保持「按原脚本名访问符号」的原面不破（测试与守护引用）。
@@ -43,7 +48,8 @@ _magic_excludes() / _dash_excludes() / _under_excludes() 行豁免。
   0 — 全部通过（无可报痕迹）
   1 — 发现高置信度痕迹（HIGH/ORIGIN/VERSION）
   2 — 发现任务编号/章节编号/架构约束代号/语义命名暗号引用
-      （CODE/IDENT/CHAPTER/ROUND/MAGIC/DASHTASK/UNDERSCORE），应从注释/标识符中移除
+      （CODE/IDENT/CHAPTER/ROUND/MAGIC/DASHTASK/UNDERSCORE）或日志统一违规（LOG），
+      应从注释/标识符中移除 / 改用 logging 落盘
       （CHAPTER：注释中用数字章节号"N 章"/"第 N 章"指代报告具体章节，
       章节合并/重排后数字即失效，须改用语义章节名「X」章；
       ROUND：注释中用"第 N 轮"/"经 N 轮"/"N 轮"/"轮 N"指代开发迭代
@@ -51,6 +57,7 @@ _magic_excludes() / _dash_excludes() / _under_excludes() 行豁免。
       MAGIC/DASHTASK/UNDERSCORE：注释中"字母+数字/字母-数字/字母_数字"
       组合（如 R11/F-1/F_1）属无语义魔法编号/疑似任务编号/疑似无意义
       代码，须改用语义名）
+      LOG：非交互呈现层调用 print()，绕过日志级别/落盘/格式，须改用 logging
   3 — 仅 LOW 级别痕迹，建议人工复核
 """
 
@@ -147,7 +154,16 @@ def _scan_all(args: argparse.Namespace) -> int:
             is_high = cat in ("HIGH", "ORIGIN", "VERSION")
             if is_high:
                 high_count += 1
-            elif cat in ("CODE", "IDENT", "CHAPTER", "ROUND", "MAGIC", "DASHTASK", "UNDERSCORE"):
+            elif cat in (
+                "CODE",
+                "IDENT",
+                "CHAPTER",
+                "ROUND",
+                "MAGIC",
+                "DASHTASK",
+                "UNDERSCORE",
+                "LOG",
+            ):
                 code_count += 1
             else:
                 low_count += 1
@@ -173,7 +189,10 @@ def _scan_all(args: argparse.Namespace) -> int:
         return 1
 
     if code_count > 0:
-        print(f"    {code_count} 处任务编号/章节编号引用（CODE/IDENT/CHAPTER/ROUND），应从注释/标识符中移除")
+        print(
+            f"    {code_count} 处任务编号/章节编号引用或日志统一违规"
+            "（CODE/IDENT/CHAPTER/ROUND/LOG），应改写为语义描述 / 改用 logging"
+        )
         return 2
 
     print(f"[!] 仅 {low_count} 处 LOW 级别痕迹（TODO/CHANGE/DEPR），建议人工复核")

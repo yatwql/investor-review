@@ -100,7 +100,7 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 
 ```bash
 .venv/bin/python scripts/test-runner.py --mode dev-verify   # 核心单元 + 基础场景快速验证
-.venv/bin/python scripts/check-code-traces.py --ci          # 代码注释历史痕迹 + 任务编号标识符检查
+.venv/bin/python scripts/check-code-traces.py --ci          # 代码注释历史痕迹 + 任务编号标识符 + 日志统一检查
 .venv/bin/python scripts/check-doc-traces.py --ci           # 文档历史痕迹 + 结构性冗余检查
 .venv/bin/python scripts/check-task-numbering.py --ci       # 任务编号全局一致性检查
 .venv/bin/python scripts/check-semantic-index.py --ci       # 语义命名索引正反向校验
@@ -992,13 +992,21 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 .venv/bin/python scripts/check-code-traces.py --ci
 ```
 
+除注释痕迹外，另有三条 **AST 级架构守卫**（直接看语法树，与注释格式无关）：
+
+| 守卫 | 检出内容 | 实现 |
+|:-----|:---------|:-----|
+| core 分层 | core 层反向 `import` 上层包（`fetcher`/`analysis`/`report`/`llm`/`providers`/`web`/`tui`/`cli`） | `_traces_code/layers.py`（豁免文件在 technical.md 声明） |
+| 日志统一 | 非交互呈现层调用 `print()`（诊断输出应走 `logging` 落盘） | `_traces_code/logging_discipline.py`（豁免域：`tui/`、`cli/` 整目录 + 进度/一次性检查报告/向导六个模块） |
+| 语义命名 | 标识符/注释夹带任务编号、系列代号、字母数字暗号 | `_traces_code/extract.py` + `patterns.py` |
+
 **退出码含义**：
 
 | 退出码 | 含义 | 行动 |
 |:------:|:-----|:-----|
 | 0 | 全部通过 | 无需处理 |
 | 1 | HIGH/ORIGIN/VERSION 痕迹 | 必须修复后再提交 |
-| 2 | CODE/IDENT/CHAPTER/ROUND（任务编号/标识符/章节编号引用） | 应从注释/标识符中移除 |
+| 2 | CODE/IDENT/CHAPTER/ROUND/LOG（任务编号/标识符/章节编号引用/日志统一违规） | 应改用语义描述，`print()` 改用 `logging` |
 | 3 | 仅 TODO/CHANGE/DEPR 级别 | 建议人工复核 |
 
 **`check-doc-traces.py` — 文档历史痕迹 + 结构性冗余检查**

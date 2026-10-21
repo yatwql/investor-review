@@ -15,6 +15,11 @@ from __future__ import annotations
 #   8xxxxx（北交所）
 _A_SHARE_PREFIXES = ("60", "68", "00", "30")
 
+# 交易所代码前缀（证券代码口径的唯一真值来源）：沪 sh / 深 sz / 北 bj。
+# 前缀识别一律复用本常量经 strip_exchange_prefix()，不得在各模块自建元组
+# ——自建表在新增交易所时会漏改一处，导致同一代码在两处判定口径分叉。
+EXCHANGE_PREFIXES = ("sh", "sz", "bj")
+
 # 场内基金 / ETF 前缀（1 开头含深市 ETF/LOF/Reits/可转债，5 开头含沪市 ETF）
 _EXCHANGE_FUND_PREFIXES = ("5", "1")
 
@@ -104,7 +109,7 @@ def to_fmp_symbol(code: str) -> str:
         return ""
     if "." in raw:
         return raw
-    if raw.startswith(("sh", "sz", "bj")) and len(raw) == 8:
+    if raw.lower().startswith(EXCHANGE_PREFIXES) and len(raw) == 8:
         return raw
     if not (len(raw) == 6 and raw.isdigit()):
         return ""
@@ -697,8 +702,31 @@ def estimate_market_cap_by_prefix(code: str) -> str:
     return "其他"
 
 
+def strip_exchange_prefix(code: str) -> str:
+    """去除交易所前缀（sh/sz/bj，大小写不敏感），返回去前缀后的原串。
+
+    与 :func:`_strip_prefix` 的分工：本函数**只剥离前缀、不校验代码位数**，
+    供需要自行判定代码形态的调用方（如按 5/6 位区分境内外、容忍 ``.0`` 尾、
+    需原样保留非法码以便报错的场景）复用前缀知识，避免各模块自建前缀表。
+
+    Args:
+        code: 可带前缀的证券代码（None/空串安全）
+
+    Returns:
+        去前缀后的原串（未带前缀时原样返回，不做 trim 以外的规范化）
+    """
+    raw = (code or "").strip()
+    if not raw:
+        return ""
+    lower = raw.lower()
+    for prefix in EXCHANGE_PREFIXES:
+        if lower.startswith(prefix):
+            return raw[len(prefix) :]
+    return raw
+
+
 def _strip_prefix(code: str) -> str:
-    """去除 sh/sz/bj 前缀，返回纯净 6 位数字代码。
+    """去除交易所前缀，返回纯净 6 位数字代码。
 
     Args:
         code: 可带前缀的代码
@@ -706,13 +734,7 @@ def _strip_prefix(code: str) -> str:
     Returns:
         纯净 6 位数字代码，或空字符串（非 6 位数字时）
     """
-    raw = code.strip()
-    if not raw:
-        return ""
-    for prefix in ("sh", "sz", "bj"):
-        if raw.startswith(prefix):
-            raw = raw[len(prefix) :]
-            break
+    raw = strip_exchange_prefix(code)
     if len(raw) == 6 and raw.isdigit():
         return raw
     return ""

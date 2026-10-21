@@ -30,6 +30,7 @@ from typing import Any
 
 from src.python.core.constants import APP_NAME, APP_VERSION
 from src.python.report.excel_writer import _cleanup_old_archives, _ensure_reports_dir
+from src.python.report.html_save import _write_html_atomic
 from src.python.report.html_writer import _copy_js_assets, _inline_js_assets
 from src.python.report.whatif_sheet import (
     write_whatif_backtest_sheet,
@@ -373,13 +374,11 @@ def write_whatif_html(whatif_data: dict[str, Any], output_dir: str = "reports") 
     date_str = now.strftime("%Y%m%d")
     time_str = now.strftime("%H%M%S")
     latest = os.path.join(output_dir, "调仓模拟.html")
-    with open(latest, "w", encoding="utf-8") as f:
-        f.write(html)
+    _write_html_atomic(html, latest)
     archive_dir = os.path.join(output_dir, date_str)
     os.makedirs(archive_dir, exist_ok=True)
     archive = os.path.join(archive_dir, f"调仓模拟-{date_str}-{time_str}.html")
-    with open(archive, "w", encoding="utf-8") as f:
-        f.write(html)
+    _write_html_atomic(html, archive)
     _cleanup_old_archives(output_dir)
     logger.info("调仓模拟 HTML 已保存: %s", latest)
     return os.path.abspath(latest)

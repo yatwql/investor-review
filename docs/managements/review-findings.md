@@ -19,8 +19,6 @@
 
 | # | 问题 | 修复方向 |
 |---|------|----------|
-| **rf-763** | 代码类型判定中心化约束违反：`core/holding_status.py::classify_code_format` 自建 `("sh", "sz", "bj")` 前缀元组剻交易所前缀（约束明令「不得自建前缀表或白名单」，该元组与 `code_utils.py` 的 `_strip_prefix`/`get_exchange_prefix` 前缀知识重复；当前两处口径一致故无行为缺陷，新增交易所前缀时必漏改一处） | `code_utils.py` 新增公开剻前缀函数（如 `strip_exchange_prefix(code) -> str`，含 bj 口径），`holding_status.py` 改为复用；反向机检（守护或单测钉住「前缀元组唯一定义点」）可与 plan-169 同批评估 |
-| **rf-764** | 原子写入边界外的健壮性缺口：`report/whatif_writer.py` 写「调仓模拟.html」最新版与归档版均直写（`open("w")`），未复用同包 `html_save.py` 的 `_write_html_atomic` 原语——进程中断会留下半写截断的 HTML（html_save 域自身合规，whatif_writer 属同风险面的漏网点） | whatif_writer 改用 `_write_html_atomic`（或等价 tmp + `os.replace`），与 html_save 的中断收口（note_temp/note_artifact 登记）对齐；补中断场景回归用例 |
 
 ### 开发期已修复（0.13.11-dev）
 
@@ -28,6 +26,8 @@
 |---|------|------|
 | **rf-756** | 发布归档迁移（人工步骤）无机检：占位声明「已随 vX.Y.Z 发布迁入」与归档正文脱钩（rf-755 即由此漏掉第八批 11 条），删台账行与写归档两动作零一致性校验 | `_ledger` 族（check-doc-drift）新增迁档占位↔归档节断言（第二十项）：review-findings 每个 `已随 vN.N.N 发布迁入` 占位，对应 archived_review-findings.{N.N}.x.md 必须存在含该版本号的二级标题归档节——占位已写而归档正文缺失即当场报出；用例覆盖缺节/缺归档文件/旧式 -dev 节标题/同版本多占位去重/真实仓库一致性 |
 | **rf-757** | folders.md 树描述写死易漂移计数（开关项数/菜单项数/测试文件数等 14 处）且无机检——实现演进（加开关/菜单/文件）时描述静默过时 | 已改定性措辞；`check-doc-drift` 新增第二十一项「树描述计数禁令」（阿拉伯数字+量词入检、docs/archive 记录域豁免、中文数词设计常量不入检），用例覆盖文件行/目录行/豁免域/中文数词放行/真实仓库一致性 |
+| **rf-763** | 代码类型判定中心化约束违反：`core/holding_status.py::classify_code_format` 自建 `("sh", "sz", "bj")` 前缀元组剥离交易所前缀——与 `code_utils.py` 前缀知识重复，新增交易所前缀时必漏改一处（两处口径一致故无行为缺陷） | `code_utils.py` 新增 `EXCHANGE_PREFIXES` 常量与公开 `strip_exchange_prefix()`（只剥前缀不校验码位，供需自行判定形态的调用方复用），`_strip_prefix` / `to_fmp_symbol` / `holding_status` 三处改为复用；反向机检由 `TestExchangePrefixCentralized` 钉住「前缀元组唯一定义点」（全仓扫描非 code_utils 模块不得自建该元组） |
+| **rf-764** | 原子写入边界外的健壮性缺口：`report/whatif_writer.py` 写「调仓模拟.html」最新版与归档版均直写 `open("w")`，未复用同包原子写原语——进程中断会留下半写截断的 HTML | whatif_writer 双产物改用 `html_save._write_html_atomic`（tmp + `os.replace` + 中断收口登记），与主报告口径对齐；新增中断场景回归用例（替换抛 `KeyboardInterrupt` 时既有最新版不被截断、只残留 `.tmp`）与「两次落盘均经原子原语」断言 |
 | **rf-758** | 演进对照「当前开发版」列新鲜度无机检：数据行与列头日期均无校验（evolution 为发布链人工步骤，跳过即以过期快照发布——会话内两次标记为已知缺口） | `release.py gate` 前置断言：列头「本次重跑时的工作区」日期须等于当日——evolution 原子同写表头与数据行，日期一致即传递性关闭数据行新鲜度缺口；过期报出并指路重跑 evolution；纯函数 + 三用例（当日放行/过期报出/列头模式缺失报出），CLAUDE/testplan/developer-guide 发布编排描述同步 |
 | **rf-759** | rf-758 的 gate 新鲜度断言直读真实 folders.md + 墙钟，TestGate 编排用例在不同时区/日期的 CI 上随机红（本地 UTC+8 已过零点、CI UTC 仍是前一日 → 新鲜度先行拦截返回 2，回归/守护一个不跑）——测试未与仓库文件状态/时钟隔离 | TestGate 增加 autouse 夹具将新鲜度视为通过（编排用例只验序列）；新增 `test_gate_stops_on_stale_evolution` 单独覆盖新鲜度失败即中止且不触发子进程；新鲜度纯函数行为仍由 TestEvolutionFreshness 覆盖 |
 | **rf-760** | folders.md 目录树描述残留架构约束代号（新闻召回解耦/pipeline_data 契约两类共 4 处）/来源叙述（从 X 拆出共 6 处）/§ 引用/第三方版本号与体积计数共 14 处；根因是机检盲区——目录树整块在围栏代码块内，`scan_file` 先跳过围栏再判树行，声称「树行照检」的规则从未生效 | `check-doc-traces` 围栏内 folders.md 树行照检（围栏跳过仅针对非树行内容）；树行按路径分域（docs/archive/ 子树=归档记录域仅复盘叙事、docs/plan/ 子树=任务记录域照检章节+约束代号）；树行专属无后缀来源叙述补强（「从 framework 拆出」类）；14 处描述改语义化（只讲文件职责）；单测覆盖围栏树行检出/非 folders.md 围栏维持跳过/两子树分域/来源叙述补强，developer-guide 同步 |

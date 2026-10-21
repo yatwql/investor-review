@@ -5,8 +5,9 @@
   - patterns   模式表（PATTERNS/IDENTIFIER_PATTERNS/EXCLUDE_LINE）+ 行级豁免
   - exemptions 章节/轮次计数豁免（与 check-doc-traces 共用，原 _traces_common）
   - extract    注释抽取（per-language）与标识符提取
-  - scan       scan_file 调度（三支路汇聚）
+  - scan       scan_file 调度（四支路汇聚）
   - layers     core 反向依赖 AST 守卫
+  - logging_discipline 日志统一 AST 守卫（print() 仅限交互呈现层）
 """
 
 from __future__ import annotations
@@ -39,6 +40,12 @@ from _traces_code.layers import (  # noqa: F401
     _CORE_LAYERING_EXEMPT_FILES,
     _UPPER_PACKAGES,
     _scan_core_layering,
+)
+from _traces_code.logging_discipline import (  # noqa: F401
+    _PRINT_EXEMPT_DIR_PREFIXES,
+    _PRINT_EXEMPT_FILES,
+    _is_print_exempt,
+    _scan_print_calls,
 )
 from _traces_code.patterns import (  # noqa: F401
     _COMPILED_DASH_EXCLUDE,

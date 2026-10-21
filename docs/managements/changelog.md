@@ -13,15 +13,20 @@
 
 - `check-doc-drift` 新增第二十项检查「迁档占位↔归档节」：review-findings 每个「已随 vX.Y.Z 发布迁入」占位，对应 `archived_review-findings.{X.Y}.x.md` 必须存在含该版本号的二级标题归档节——占位已写、归档正文缺失（发布归档迁移只删不写）即当场报出；doc-drift 项目清单五处文档同步（自审 rf-756）
 - `check-doc-drift` 新增第二十一项「树描述计数禁令」：folders.md 目录树描述禁写「阿拉伯数字+量词」的易漂移计数（开关项数/菜单项数/文件数类，与「测试真值单一来源」同源纪律）；docs/archive 记录域豁免、中文数词设计常量不入检；现存 6 处 src 域违规改定性措辞（自审 rf-757）
+- `check-code-traces` 新增「日志统一」AST 级守卫（`_traces_code/logging_discipline.py`）：生产层 `print()` 白名单制——豁免域为 `tui/`、`cli/` 整目录（终端交互即其输出本体）与进度反馈 / 一次性终端检查报告 / 首启向导六个模块，白名单外调用即报 LOG 并返回退出码 2；developer-guide 退出码表与三家 AST 守卫说明同步，technical.md 日志统一约束登记机检载体；用例覆盖检出（函数体内嵌套/多行/报告层）、豁免（目录/文件）、不误伤（`sys.stdout.write`/`obj.print()`/字符串字面量/测试层/非 py）、语法错误容错与白名单完整性（条目存在 + 现存 print 全部落在豁免域）
+
 ### Changed
 
 - `release.py gate` 新增演进对照新鲜度断言（P2 前置）：「当前开发版」列头「本次重跑时的工作区」日期须为当日——evolution 为发布链人工步骤，跳过即以过期快照发布的缺口由此闭合（表头与数据行同命令原子刷新，日期一致即数据行同步）；发布编排描述三处文档同步（自审 rf-758）
 - `check-doc-traces` 围栏内 folders.md 目录树行照检（围栏代码块跳过仅针对非树行内容——目录树整块位于围栏内，原跳过逻辑使「树行照检」规则从未生效）；树行按路径分域（docs/archive/ 子树=归档记录域仅复盘叙事检出、docs/plan/ 子树=任务记录域照检章节+约束代号）；树行专属无后缀来源叙述补强（「从 framework 拆出」类带后缀模式覆盖不到）；folders.md 现存 14 处违规描述改语义化；developer-guide 树行纪律描述同步（自审 rf-760）
+- 交易所代码前缀改为 `code_utils` 单点定义：新增 `EXCHANGE_PREFIXES` 常量与公开 `strip_exchange_prefix()`（只剥前缀、不校验码位，供 5/6 位形态自判等场景复用），`_strip_prefix` / `to_fmp_symbol` / `holding_status.classify_code_format` 三处自建前缀表或元组字面量收编复用；`to_fmp_symbol` 带前缀输入的透传分支此前因大小写不匹配而不可达，随常量复用一并修正；反向机检由单测钉住「前缀元组唯一定义点」（自审 rf-763）
 - folders.md 归档子树版本目录块重排为版本升序（0.9.x 后原接 0.13→0.12→0.11→0.10 倒序——归档落盘三次均插入同一锚点且 `check_dir_tree` 仅集合双向比对、顺序零机检）；`check-doc-drift` 目录树检查新增「版本目录块升序」断言（自审 rf-761）
 - developer-guide「check-doc-drift」项清单补齐至 21 项（16 项陈旧：17~21 五项缺列）并改与脚本 docstring 同源措辞；technical.md 约束外参照句「十项逐条对账」改「逐项对账」（自审 rf-762）
-- 架构设计约束（代码类型判定/缓存/原子写入/HTTP 工厂/日志统一/开关注册表等全部编号约束）与设计契约（DESIGN.md / DESIGN-TUI.md）全量审计：机械扫描 + 逐约束对照适用范围裁决——无直连 `requests`（统一 httpx 工厂）、报告层无 `call_llm` 直调、开关单源派生、DESIGN.md 护栏 E 级通过且 W 基线（字号 8/间距 172/W1 白名单 15）与契约声明一致、DESIGN-TUI 无 hex 字面量与 GitHub 系色残留；登记 rf-763（holding_status 自建 sh/sz/bj 前缀元组，判定中心化约束违反）/ rf-764（whatif_writer HTML 直写未复用原子写原语）与 plan-169（日志统一约束无机检守护）（自审 rf-763/rf-764）
+- 架构设计约束（代码类型判定/缓存/原子写入/HTTP 工厂/日志统一/开关注册表等全部编号约束）与设计契约（DESIGN.md / DESIGN-TUI.md）全量审计：机械扫描 + 逐约束对照适用范围裁决——无直连 `requests`（统一 httpx 工厂）、报告层无 `call_llm` 直调、开关单源派生、DESIGN.md 护栏 E 级通过且 W 基线（字号 8/间距 172/W1 白名单 15）与契约声明一致、DESIGN-TUI 无 hex 字面量与 GitHub 系色残留；登记 rf-763（holding_status 自建 sh/sz/bj 前缀元组，判定中心化约束违反）/ rf-764（whatif_writer HTML 直写未复用原子写原语）与日志统一约束无机检守护（该缺口已由同期新增的日志统一支路闭合）（自审 rf-763/rf-764）
 
 ### Fixed
+
+- 调仓模拟报告 HTML 双产物（最新版 + 归档版）改经 `_write_html_atomic` 原子落盘（tmp + `os.replace` + 中断收口登记），与主报告口径对齐——原直写 `open("w")` 在进程中断时留下半写截断的 HTML；补中断场景与原子原语调用面回归用例（自审 rf-764）
 
 - TestGate 门禁编排用例与演进新鲜度断言隔离：新鲜度直读真实 folders.md + 墙钟，编排用例在不同时区/日期的 CI 上随机红（本地已过零点、CI 仍是前一日 → 先行拦截返回 2，回归/守护一个不跑）；新增 autouse 夹具将新鲜度视为通过（编排用例只验序列），并新增新鲜度失败即中止且不触发子进程的专项用例（自审 rf-759）
 
