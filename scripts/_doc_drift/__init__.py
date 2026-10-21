@@ -59,6 +59,7 @@ from _doc_drift._tree import (  # noqa: F401
     _actual_files,
     check_dir_tree,
     check_tree_desc_counts,
+    check_tree_version_order,
     _STATS_ROW,
     _stats_actual,
     check_project_stats,

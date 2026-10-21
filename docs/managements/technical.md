@@ -3716,7 +3716,7 @@ web/ (Web 服务层，薄入口)
 
 > **约束外参照（语义命名纪律）**：除上表 C1~C29 编号约束外，**语义命名纪律**以 [「功能语义命名表」](#67-功能语义命名表) 为唯一现状基准——代码/配置标识符（函数/变量/模块/config 键）必须与表中语义 slug 一致，禁止用任务代号（`plan-N`/`rf-N`/系列代号）命名；新增功能先定语义名再设计。该纪律属全局代码卫生，与编号约束并列遵守，由双脚本强制：`scripts/check-code-traces.py --ci`（负面禁止 IDENT/CODE）+ `scripts/check-semantic-index.py --ci`（正面双向校验本表与代码一致）。
 
-> **约束外参照（文档与实现一致性纪律）**：除上表 C1~C29 编号约束外，**文档中的事实断言**（章节表与数量、功能开关表与分组计数、默认值表、TUI 面板编号、目录树、项目统计表）必须与代码/配置文件/文件系统一致，由 `scripts/check-doc-drift.py --ci` 强制（十项逐条对账，`changelog.md`/`review-findings.md` 与版本快照类文档按设计豁免）；历史痕迹类约束另由 `scripts/check-doc-traces.py --ci` 强制。
+> **约束外参照（文档与实现一致性纪律）**：除上表 C1~C29 编号约束外，**文档中的事实断言**（章节表与数量、功能开关表与分组计数、默认值表、TUI 面板编号、目录树、项目统计表）必须与代码/配置文件/文件系统一致，由 `scripts/check-doc-drift.py --ci` 强制（逐项对账，`changelog.md`/`review-findings.md` 与版本快照类文档按设计豁免）；历史痕迹类约束另由 `scripts/check-doc-traces.py --ci` 强制。
 
 > **约束外参照（脚本 CLI 契约）**：`scripts/` 下的检查脚本统一 `-v/--verbose` + `--ci`（仅输出 `文件:描述`）与退出码语义（0=通过 / 2=发现 finding，`check-code-traces.py` 保留 HIGH=1、LOW=3 分级）；共享设施集中在 `scripts/_checklib.py`（CLI/输出/路径/文档区间解析）；历史痕迹检查内部实现拆在 `scripts/_traces_code/` 包内（共享排除模式在 `exemptions.py`，`_traces_common.py` 已并入其中删除）；检查脚本内部实现普遍拆 `前置横线包`pattern（`_doc_drift/` / `_traces_code/` / `_traces_doc/` / `_test_runner/` / `_halluc_sampler/`，入口仅留 CLI 与原面 re-export）；连通性探测统一入口 `scripts/probe.py`（target registry，实现在 `scripts/probes/`，新探针登记即用）；发布编排分步 CLI `scripts/release.py`（check/prepare/refresh/evolution/gate/publish/devbump，每步独立可审阅、失败即停，内部实现同为入口薄 CLI + 单模块）。
 

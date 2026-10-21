@@ -10,6 +10,7 @@
   - LLM 默认参数表（max_tokens / timeout / TTL 三方比对）
   - TUI [S] 面板编号连续性、分组边界与报告块编号枚举
   - 目录树解析（按缩进还原仓库相对路径）
+  - 版本目录块升序（同父目录 vN.N.x/ 按版本号升序；数值序非字典序；集合比对不看先后的盲区）
   - 项目统计表比对（文件数 / 行数）
   - 归档索引完整性（管理文档 ↔ `docs/archive/` 双向对齐）
   - 迁档占位↔归档节（「已随 vX.Y.Z 发布迁入」占位 ↔ 归档文件含该版本二级标题节；缺节/缺文件报出）
@@ -857,6 +858,53 @@ class TestTreeDescCounts:
         """真实仓库树描述无违规计数（结构关系断言，不写死条数）。"""
         text = drift._FOLDERS_MD.read_text(encoding="utf-8")
         assert drift.check_tree_desc_counts(text) == []
+
+
+class TestTreeVersionOrder:
+    """版本目录块升序禁令：同父目录 vN.N.x/ 条目按版本号升序（集合比对不看先后的盲区补位）。"""
+
+    def test_ascending_passes(self, drift):
+        """升序版本块 → 无 finding。"""
+        doc = (
+            "```\nroot/\n├── archive/\n│   ├── v0.1.x/\n│   │   └── a.md # 记录\n"
+            "│   ├── v0.9.x/\n│   │   └── b.md # 记录\n"
+            "│   └── v0.10.x/\n│       └── c.md # 记录\n```\n"
+        )
+        assert drift.check_tree_version_order(doc) == []
+
+    def test_descending_reported(self, drift):
+        """新块插到组首（真实缺陷形态：0.9 后接 0.13→0.10 倒序）→ 报出乱序。"""
+        doc = (
+            "```\nroot/\n├── archive/\n│   ├── v0.9.x/\n│   │   └── a.md # 记录\n"
+            "│   ├── v0.13.x/\n│   │   └── b.md # 记录\n"
+            "│   └── v0.10.x/\n│       └── c.md # 记录\n```\n"
+        )
+        findings = drift.check_tree_version_order(doc)
+        assert any("v0.10.x" in f and "v0.13.x" in f and "乱序" in f for f in findings)
+
+    def test_lexicographic_trap_numeric_order(self, drift):
+        """数值序而非字典序：v0.9.x → v0.10.x 合法（字典序会误报）。"""
+        doc = (
+            "```\nroot/\n├── archive/\n│   ├── v0.9.x/\n│   │   └── a.md # 记录\n"
+            "│   └── v0.10.x/\n│       └── b.md # 记录\n```\n"
+        )
+        assert drift.check_tree_version_order(doc) == []
+
+    def test_independent_parents(self, drift):
+        """不同父目录独立判定（a 乱序报出、b 升序不牵连）。"""
+        doc = (
+            "```\nroot/\n├── a/\n│   ├── v0.2.x/\n│   │   └── x.md # 记录\n"
+            "│   └── v0.1.x/\n│       └── y.md # 记录\n└── b/\n"
+            "    ├── v0.1.x/\n    │   └── p.md # 记录\n"
+            "    └── v0.2.x/\n        └── q.md # 记录\n```\n"
+        )
+        findings = drift.check_tree_version_order(doc)
+        assert len(findings) == 1 and "a/v0.1.x" in findings[0]
+
+    def test_real_repo_passes(self, drift):
+        """真实仓库版本块升序（结构关系断言，不写死条数）。"""
+        text = drift._FOLDERS_MD.read_text(encoding="utf-8")
+        assert drift.check_tree_version_order(text) == []
 
 
 class TestReturnKeyInvariant:

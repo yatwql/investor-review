@@ -15,7 +15,7 @@
   6.  配置标量默认值表   config/_config_defaults.py `_DEFAULT_CONFIG`   → manuals/how-to-config.md
   7.  LLM 默认参数表     config/_llm_settings_defaults.py + 缓存 TTL 注册表 → managements/llm-technical.md
   8.  TUI 面板编号       `tui/handlers_config.py` 的派生规则（LLM 可见模块 + 作用域四组顺序连续编号）→ manuals/how-to-use-tui-menu.md
-  9.  目录树           文件系统实测（src/、scripts/、docs/{managements,manuals,plan}）→ managements/folders.md
+  9.  目录树           文件系统实测（src/、scripts/、docs/{managements,manuals,plan}）+ 版本目录块升序 → managements/folders.md
   10. 项目统计表        文件系统实测（文件数/行数）+ 可选 pytest 收集数 → managements/folders.md
   11. 测试覆盖计数表    `scripts/collect-test-coverage.py` 快照 → managements/test-coverage.md（仅 `--with-test-count`）
   12. 归档索引完整性    changelog / plan / review-findings 的「归档」索引 ↔ 归档目录 `archived_*` 文件（双向）
@@ -145,6 +145,7 @@ from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc
     _actual_files,
     check_dir_tree,
     check_tree_desc_counts,
+    check_tree_version_order,
     _STATS_ROW,
     _stats_actual,
     check_project_stats,
@@ -201,6 +202,7 @@ def run_checks(with_test_count: bool = False, docs: dict | None = None) -> list[
     findings += check_return_key_invariant(docs)
     findings += check_requirements_menu_table(docs[_REQUIREMENTS_MD])
     findings += check_dir_tree(docs[_FOLDERS_MD])
+    findings += check_tree_version_order(docs[_FOLDERS_MD])
     findings += check_tree_desc_counts(docs[_FOLDERS_MD])
     findings += check_chain_table(docs[_RELIABILITY_MD])
     findings += check_archive_index()

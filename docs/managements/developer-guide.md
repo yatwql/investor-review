@@ -1114,7 +1114,7 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
 使漂移在提交前暴露。与 `check-doc-traces.py` 互补：那边管「不该写的内容」（历史痕迹），这边管
 「写了但与实现不符的内容」。
 
-十六项检查（权威源 → 受检文档）：
+二十一项检查（权威源 → 受检文档）：
 
 1. 报告章节表（`reports-instruction.md`）↔ 章节注册表 `_REPORT_SECTION_DEFAULT`（行数/序号/名称）
 2. 章节数量断言（`页签编号 1~N` / `默认顺序（N 项` / `返回 result（N 项` / `N 个报告章节`）↔ 注册表章节数
@@ -1124,7 +1124,7 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
 6. 配置标量默认值表（`how-to-config.md`）↔ `_DEFAULT_CONFIG`
 7. LLM 默认参数表（`llm-technical.md`）↔ `_DEFAULT_LLM_SETTINGS` + 缓存 TTL 注册表
 8. TUI `[S]` 面板编号连续性与分组边界（`how-to-use-tui-menu.md`）↔ `handlers_config.py` 的派生编号规则
-9. 目录树（`folders.md`）↔ 文件系统实测（`src/`、`scripts/`、`docs/{managements,manuals,plan}`）
+9. 目录树（`folders.md`）↔ 文件系统实测（`src/`、`scripts/`、`docs/{managements,manuals,plan}`）；同父目录 `vN.N.x/` 版本目录块按版本号升序
 10. 项目统计表（`folders.md`）↔ 实测文件数/行数（加 `--with-test-count` 再核「测试用例」行）
 11. 测试覆盖计数表（`test-coverage.md`）↔ `scripts/collect-test-coverage.py` 快照（仅 `--with-test-count`）
 12. 归档索引完整性：changelog / plan / review-findings 三份管理文档的「归档」索引 ↔ 归档目录下
@@ -1137,9 +1137,15 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
     `datasource-reliability.md` §4.2 表逐链**双向**比对（漏链 → 「缺少链路」；幽灵行 → 「无此链」）
 16. 守护清单同源：developer-guide 的 P0/P2 门禁代码块、`ci.yml` guards steps、CLAUDE.md P0/P2 条款、
     testplan P0/P2 清单行与 `.githooks/pre-commit` 执行体，五处的 `scripts/check-*.py --ci` 引用集合两两一致（新增守护脚本漏改任一处即报）
+17. 章节-区块矩阵（`technical.md` §4.22）：文档行 ↔ 区块注册表逐列 / 键集双向 / 两端实现提取集合三向对账
+18. 手册菜单块一致性：双手册主菜单 code block（键集合/标签头）↔ `tui/tui_menu.py` MENU_ITEMS；
+    全文档「返回主菜单」行键=0 不变量（返回键全局统一）
+19. 需求菜单表（`requirements.md` §3.2）：键集合/分组标题/组内顺序 ↔ MENU_ITEMS + MENU_GROUPS
+20. 迁档占位↔归档节：review-findings「已随 vX.Y.Z 发布迁入」占位 ↔ 对应版本归档正文含该版本二级标题归档节
+21. 树描述计数禁令：folders.md 目录树描述禁写「阿拉伯数字+量词」易漂移计数（docs/archive 记录域豁免；中文数词设计常量不入检）
 
 ```bash
-.venv/bin/python scripts/check-doc-drift.py                   # 十六项全查
+.venv/bin/python scripts/check-doc-drift.py                   # 二十一项全查
 .venv/bin/python scripts/check-doc-drift.py -v                # 详细输出（打印解析结果与实测统计）
 .venv/bin/python scripts/check-doc-drift.py --ci              # CI 模式（只输出 文件:描述，退出码 2）
 .venv/bin/python scripts/check-doc-drift.py --with-test-count # 附带 pytest 收集，核对「测试用例」与 test-coverage.md 计数表

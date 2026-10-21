@@ -86,6 +86,37 @@ def check_tree_desc_counts(doc_text: str) -> list[str]:
     return findings
 
 
+_VERSION_DIR_NAME = re.compile(r"^v(\d+)\.(\d+)\.x$")
+
+
+def check_tree_version_order(doc_text: str) -> list[str]:
+    """版本目录块升序：目录树中同父目录下的 ``vN.N.x/`` 条目须按 (major, minor) 升序排列。
+
+    版本归档块随发布逐份追加，插入锚点漂移会把新块落在组首/组中形成乱序——
+    条目集合比对（``check_dir_tree``）只验齐缺、不看先后，顺序错误不在其扫描面。
+    同父目录内按文档出现顺序要求版本号严格升序（兼出重复版本目录）。
+    """
+    findings: list[str] = []
+    last_by_parent: dict[str, tuple[tuple[int, int], str]] = {}
+    for path, _desc, is_dir in _iter_tree_entries(doc_text):
+        if not is_dir:
+            continue
+        name = path.rsplit("/", 1)[-1]
+        m = _VERSION_DIR_NAME.match(name)
+        if not m:
+            continue
+        parent = path.rsplit("/", 1)[0] if "/" in path else ""
+        version = (int(m.group(1)), int(m.group(2)))
+        prev = last_by_parent.get(parent)
+        if prev is not None and version <= prev[0]:
+            findings.append(
+                f"{rel(_FOLDERS_MD)}: 目录树版本目录块乱序：`{path}` 排在 `{prev[1]}` 之后"
+                "——同父目录版本目录须按版本号升序"
+            )
+        last_by_parent[parent] = (version, path)
+    return findings
+
+
 def _actual_files() -> set[str]:
     files: set[str] = set()
     for root in _TREE_ROOTS:
