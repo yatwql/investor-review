@@ -1640,7 +1640,7 @@ sym |= set(re.findall(r'^\s{0,8}["\']([a-z][a-z0-9_]{2,})["\']\s*:', src, re.M))
 | 想先看动作再落盘 | `archive --dry-run`（只报告将搬迁的条目/文件与目标位置，不写任何文件） |
 | 只想搬台账、暂不动设计文件 | `archive --skip-design-docs` |
 | 台账想分开提交 / 人工迁档 | `prepare --no-archive`；`gate` 会拦截未迁档 |
-| 新小版本（`vX.Y.0`）首份发布 | 先为该小版本建两份台账归档文件（自审 / 计划各一份）并在 folders.md 目录树补 `vX.Y.x/` 块；`check` 会直接报出缺哪件（文件名与路径照上方 `ledger_archive_paths` 推导规则） |
+| 新小版本（`vX.Y.0`）首份发布 | 先为该小版本建两份台账归档文件（自审 / 计划各一份，头部五行照抄同 train 既有文件并更新日期/涵盖版本）并在 folders.md 目录树补 `vX.Y.x/` 块；`check` 会直接报出缺哪件（文件名与路径照上方 `ledger_archive_paths` 推导规则） |
 | 归档步失败 | `[ERR]` 已给出具体原因与「台账未改写」状态：补好前置（目录树块/归档文件/头部行）后**重跑同一条命令**即可（变换幂等，重复执行不会二次搬运） |
 
 **bench 范围（refresh）**：默认只测发布口径关心的四档 `unit` / `dev-verify` / `regression` / `integration`——全量十四档串行约 5.5 min（2 路采集 3.2 min），占单次发布机器时间约 75%，其余模式与这四档高度重叠；未测模式的耗时与计数按 `--update-docs` 口径「保留上次实测值」不写脏，需要全量复测时加 `--full-bench`（或直接 `test-runner.py --mode bench --update-docs`）。
