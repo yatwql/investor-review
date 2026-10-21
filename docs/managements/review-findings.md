@@ -17,38 +17,36 @@
 
 > 当前无待办项（rf-790 已决策「维持现状」并归档至已解决）。
 
-### P3 — 持续监控：文件膨胀登记（逼近红线档：主程序 ≥700 / 脚本 ≥600 / 测试 ≥1000；按距红线余量升序）
+### P3 — 持续监控：文件膨胀登记（按任务号组织；逼近红线档 主程序 ≥700 / 脚本 ≥600 / 测试 ≥1000）
 
 > **单一事实源**：行数以 `scripts/check-file-length.py -v` 输出为真值（该输出列出全部 >500 行主程序 / >400 行脚本 / >800 行测试）。本表是**逼近红线档的处置登记**——主程序 ≥700、脚本 ≥600、测试 ≥1000（余量 ≤30% 才入表），行数快照随复核刷新；警告级全集不逐项登记，复核以 `-v` 为准。
+> **组织方式**：按**任务号（`rf-N`）**分组——一个处置任务涉及多个文件时归在同一行，文件与行数/余量列在该行的「涉及文件」列里（同一文件只出现一次，行内按任务清单顺序）。行内余量取该任务内**最紧**那个文件，表按此升序——即「哪个任务最先触线」排最前，与逐文件排序给出的先后判断一致。
 > **红线体系**：主程序警告 >500 / 硬上限 >1000；`scripts/` 同域（警告 >400 / 红线 >1000）；测试 >800 警告 / >1200 红线。体系调整决策与理由见 `docs/managements/technical.md`「大文件拆分」。
 > **测试文件口径**：阈值见 `developer-guide.md`「文件膨胀阈值」表（行数 >800 警告 / >1200 红线；测试项 >80 警告 / >120 红线）；≥1000 行即入本表。
 > **破线豁免**：无（`check-file-length.py --ci` 豁免在列 0 项）。
 
-| # | 文件 | 行数 | 距红线 | 状态与处置 |
-|---|------|------|--------|-------------|
-| 1 | `scripts/perf-view.py` | 983 | 17 | **最先触线**（脚本域）：采集 / 渲染 / CLI 三段下沉，逼近 1000 前必须拆（rf-774） |
-| 2 | `scripts/check-test-redundancy.py` | 934 | 66 | 八类检查各成子模块（与 finding 分类同构），入口只留编排（rf-774） |
-| 3 | `src/python/web/handlers.py` | 910 | 90 | 生成执行体可下沉 `web/run_generation.py`，逼近 980 行启动（rf-711） |
-| 4 | `scripts/release.py` | 865 | 135 | 已拆 `_release/` 包；入口为 CLI 壳 + 命令编排，维持（rf-774） |
-| 5 | `src/test/unit/scripts/test_check_doc_drift.py` | 1061 | 139 | 按机检项族切兄弟分片（trace / redundancy / crosscheck 已有先例：本章节测试与实现模块同源拆分）（rf-787） |
-| 6 | `src/python/config/features.py` | 840 | 160 | 注册表逐开关增长（每项约十行）；逼近 980 时把注册表条目与定义下沉（rf-665） |
-| 7 | `src/python/report/html_writer.py` | 799 | 201 | 域下沉 + 门面 re-export（测试 patch 改指持有子模块）（rf-626） |
-| 8 | `src/python/core/code_utils.py` | 788 | 212 | 非核心判定函数（`estimate_market_cap_by_prefix` 等）可移出；当前维持（rf-79） |
-| 9 | `src/python/llm/api_base.py` | 770 | 230 | 端点构造 / 请求发送 / 响应解析三段，逼近 900 首选下沉端点族（rf-773） |
-| 10 | `src/python/analysis/rebalance.py` | 751 | 249 | 按「成本分档 / 偏离度 / 告警」下沉（rf-626） |
-| 11 | `src/python/report/_report_generation.py` | 751 | 249 | 按「数据装配 / Excel 落盘 / HTML 落盘」下沉（rf-773） |
-| 12 | `src/python/cache/operations.py` | 739 | 261 | 五职责待下沉（数据结构 / 基金刷新 / 公共缓存 / 持仓缓存 / 清理）（rf-86） |
-| 13 | `src/python/report/orchestrator.py` | 734 | 266 | 按「章节调度 / LLM 编排 / 产物落盘」下沉（rf-773） |
-| 14 | `src/python/report/fund_performance.py` | 728 | 272 | 按「评级 / 业绩计算 / 持久化」下沉（rf-773） |
-| 15 | `src/python/config/_validation.py` | 723 | 277 | 校验规则族按「标量 / LLM / 章节」三域分文件（rf-773） |
-| 16 | `src/python/report/holdings_detail_sheet.py` | 716 | 284 | 页签写入器，按分区块下沉（rf-773） |
-| 17 | `src/python/analysis/prosperity_scoring.py` | 711 | 289 | 按「阈值表 / 评分 / 诊断」下沉（rf-773） |
-| 18 | `src/python/providers/news_dedup_rules.py` | 710 | 290 | 去重规则表按来源分文件（rf-773） |
-| 19 | `scripts/check-doc-traces.py` | 692 | 308 | 入口已薄（实现拆 `_traces_doc/`），再增检查按族下沉（rf-774） |
-| 20 | `scripts/check-style-guardrails.py` | 636 | 364 | E / W 两级检查可分层（rf-774） |
-| 21 | `scripts/perf-test-report.py` | 635 | 365 | 场景构造 / 指标计算 / 报告渲染三段（rf-774） |
+| # | 任务 | 涉及文件（行数 / 距红线） | 处置与备注 |
+|---|------|--------------------------|-------------|
+| 1 | **rf-774** 脚本域：入口拆分与职责下沉 | `scripts/perf-view.py` 983/17、`scripts/check-test-redundancy.py` 934/66、`scripts/release.py` 913/87、`scripts/check-doc-traces.py` 692/308、`scripts/check-style-guardrails.py` 636/364、`scripts/perf-test-report.py` 635/365 | 采集 / 渲染 / CLI 三段下沉；八类检查各成子模块（与 finding 分类同构）；`release.py` 已拆 `_release/` 包、入口只留 CLI 壳与命令编排（维持）；`check-doc-traces` 实现已拆 `_traces_doc/`，再增检查按族下沉；`check-style-guardrails` E/W 两级可分；`perf-test-report` 场景构造 / 指标计算 / 渲染三段 |
+| 2 | **rf-711** `web/handlers.py` 生成执行体下沉 | `src/python/web/handlers.py` 910/90 | 生成执行体下沉 `web/run_generation.py`，逼近 980 行启动 |
+| 3 | **rf-787** `test_check_doc_drift.py` 按机检项族切分 | `src/test/unit/scripts/test_check_doc_drift.py` 1061/139 | 按机检项族切兄弟分片（trace / redundancy / crosscheck 已有先例：测试与实现模块同源拆分） |
+| 4 | **rf-665** `config/features.py` 注册表下沉 | `src/python/config/features.py` 840/160 | 注册表逐开关增长（每项约十行）；逼近 980 时把注册表条目与定义下沉（同族：`tui/handlers_config.py`、`scripts/_doc_drift/_format.py` 各自域内聚，维持） |
+| 5 | **rf-626** 报告域按职责下沉（含已决策维持的两处） | `src/python/report/html_writer.py` 799/201、`src/python/analysis/rebalance.py` 751/249 | `html_writer`：域下沉 + 门面 re-export（测试 patch 改指持有子模块）；`analysis/rebalance`：按「成本分档 / 偏离度 / 告警」下沉 |
+| 6 | **rf-79** `core/code_utils.py` 非核心判定函数外移 | `src/python/core/code_utils.py` 788/212 | 非核心判定函数（`estimate_market_cap_by_prefix` 等）可移出；当前维持 |
+| 7 | **rf-773** 模块内三段/多域拆分（LLM · 报告 · 配置 · 分析 · 数据源） | `src/python/llm/api_base.py` 770/230、`src/python/report/_report_generation.py` 751/249、`src/python/report/orchestrator.py` 734/266、`src/python/config/_validation.py` 723/277、`src/python/report/fund_performance.py` 728/272、`src/python/report/holdings_detail_sheet.py` 716/284、`src/python/analysis/prosperity_scoring.py` 711/289、`src/python/providers/news_dedup_rules.py` 710/290 | `llm/api_base`：端点构造 / 请求发送 / 响应解析三段，逼近 900 首选下沉端点族；`report/_report_generation`：数据装配 / Excel 落盘 / HTML 落盘；`report/orchestrator`：章节调度 / LLM 编排 / 产物落盘；`config/_validation`：校验规则按标量 / LLM / 章节三域分文件；`report/fund_performance`：评级 / 业绩计算 / 持久化；`report/holdings_detail_sheet`：页签按分区块下沉；`analysis/prosperity_scoring`：阈值表 / 评分 / 诊断；`providers/news_dedup_rules`：去重规则表按来源分文件 |
+| 8 | **rf-86** `cache/operations.py` 五职责下沉 | `src/python/cache/operations.py` 739/261 | 五职责待下沉（数据结构 / 基金刷新 / 公共缓存 / 持仓缓存 / 清理） |
 
-> **已决策「维持现状」（已降到逼近档以下，不拆理由保留，行数随 `-v` 复核）**：`report/excel_generator.py`（rf-89，页签编排后续可下沉）、`report/data_status.py`（rf-80，DegradationTracker 单类内聚）、`report/html_renderers.py`（rf-81，渲染域同源）、`fetcher/fund.py`（rf-85，排名 / 持仓 / 基准三职责择机拆）、`fetcher/batch.py`（rf-78，BatchDispatcher 内聚）、`tui/handlers_config.py` 与 `scripts/_doc_drift/_format.py`（rf-665，随 `features.py` 注册表增长但各自域内聚）、`llm/prompts_core.py`、`llm/generators.py`（rf-626，提示词/生成器按模块分文件）。
+**已决策「维持现状」（已降到逼近档以下，不拆理由保留，行数随 `-v` 复核）**：
+
+| 任务 | 文件 | 行数 | 决策依据 |
+|------|------|------|----------|
+| **rf-89** | `src/python/report/excel_generator.py` | 659 | 维持现状：页签编排后续可下沉 |
+| **rf-80** | `src/python/report/data_status.py` | 649 | 维持现状：DegradationTracker 单类内聚 |
+| **rf-81** | `src/python/report/html_renderers.py` | 577 | 维持现状：渲染域同源 |
+| **rf-85** | `src/python/fetcher/fund.py` | 553 | 维持现状：排名 / 持仓 / 基准三职责择机拆 |
+| **rf-78** | `src/python/fetcher/batch.py` | 520 | 维持现状：BatchDispatcher 内聚 |
+| **rf-665** | `src/python/tui/handlers_config.py`、`scripts/_doc_drift/_format.py` | 593 / 595 | 维持现状：随 `features.py` 注册表增长但各自域内聚 |
+| **rf-626** | `src/python/llm/prompts_core.py`、`src/python/llm/generators.py` | 350 / 444 | 维持现状：提示词 / 生成器按模块分文件 |
 
 ## 已解决问题
 
