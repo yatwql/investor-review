@@ -510,9 +510,11 @@ class TestCliSurface:
         parser = rel.build_parser()
         sub_actions = [a for a in parser._subparsers._group_actions if hasattr(a, "choices")]
         parser_cmds = set(sub_actions[0].choices) if sub_actions else set()
-        handlers = {"check", "prepare", "archive", "refresh", "evolution", "gate", "publish", "devbump"}
+        # 处理表由模块内的 `cmd_*` 函数集合派生（不写死命令清单：新增子命令时只改实现）
+        # `cmd_archive_init` ↔ 子命令 `archive-init`（下划线→连字符）
+        handlers = {name[4:].replace("_", "-") for name in dir(rel) if name.startswith("cmd_")}
         assert parser_cmds == handlers  # 两张内部表双向一致（结构断言，不写死条数）
-        assert all(hasattr(rel, f"cmd_{name}") for name in handlers)
+        assert all(hasattr(rel, f"cmd_{name.replace(chr(45), chr(95))}") for name in handlers)
 
 
 # ─────────────────────────── archive 子命令 ───────────────────────────

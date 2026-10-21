@@ -465,3 +465,68 @@ class TestTimingTelemetry:
         rel._reset_timer()
         rel._finish_timing("gate", 0)  # 不抛即通过
         assert "耗时记录未写入" in capsys.readouterr().out
+
+
+class TestArchiveInit:
+    """新小版本归档骨架一次建齐（三份归档 + 目录树块 + 三处索引行，幂等）。"""
+
+    def _ctx(self, rel, tmp_path):
+        fx = _ToolRepoFixture(rel, tmp_path)
+        # 模拟「上一个 train 已归档」的初始态：去掉 0.12.x 之外的索引与树块，再清空 0.13 骨架
+        fx.RF_FILE.write_text(
+            "# 台账\n\n## 已解决问题\n\n### 归档档案\n"
+            "- [`archived_review-findings.0.12.x.md`](../archive/v0.12.x/archived_review-findings.0.12.x.md)"
+            " — v0.12.x（2026-09-01 ~ 2026-10-05）\n",
+            encoding="utf-8",
+        )
+        fx.PLAN_FILE.write_text(
+            "# 计划\n\n## 归档档案\n"
+            "- [`archived_plan.0.12.x.md`](../archive/v0.12.x/archived_plan.0.12.x.md) — v0.12.x（2026-09-01 ~ 2026-10-05）\n",
+            encoding="utf-8",
+        )
+        fx.CHANGELOG_FILE.write_text(
+            "# 变更日志\n\n> **最近发布 [0.12.5]**（2026-10-07）——已发布版本段随发布移入 "
+            "[`archived_changelog.0.12.x.md`](../archive/v0.12.x/archived_changelog.0.12.x.md)；本文件只保留当前开发版本段与归档索引。\n\n"
+            "## 归档\n\n- [`archived_changelog.0.12.x.md`](../archive/v0.12.x/archived_changelog.0.12.x.md)"
+            " — v0.12.1 ~ v0.12.5（2026-10-03 ~ 2026-10-07）\n",
+            encoding="utf-8",
+        )
+        fx.FOLDERS_FILE.write_text(
+            "````\n└── docs/\n    └── archive/                         # 归档\n"
+            "        └── v0.12.x/                     # v0.12.x 归档\n"
+            "            └── archived_plan.0.12.x.md # 计划\n````\n",
+            encoding="utf-8",
+        )
+        return fx
+
+    def test_creates_files_tree_and_indexes(self, rel, tmp_path):
+        fx = self._ctx(rel, tmp_path)
+        actions = rel.init_archive(rel._archive_ctx("0.13.0"), "0.13.0", "2026-10-21")
+
+        assert len(actions) >= 5  # 三份文件 + 目录树块 + 三处索引（允许合并计数）
+        assert rel.archive_prerequisites("0.13.0") == []  # check 前置就绪
+        for text in (fx.RF_FILE.read_text(encoding="utf-8"), fx.PLAN_FILE.read_text(encoding="utf-8")):
+            assert "archived_" in text and "0.13.x.md" in text
+        assert "v0.13.x/" in fx.FOLDERS_FILE.read_text(encoding="utf-8")
+        rf_archive = fx.root / "docs" / "archive" / "v0.13.x" / "archived_review-findings.0.13.x.md"
+        assert rel.archive_header_findings(rf_archive.read_text(encoding="utf-8")) == []
+
+    def test_idempotent_second_run(self, rel, tmp_path):
+        self._ctx(rel, tmp_path)
+        rel.init_archive(rel._archive_ctx("0.13.0"), "0.13.0", "2026-10-21")
+        assert rel.init_archive(rel._archive_ctx("0.13.0"), "0.13.0", "2026-10-21") == []
+
+
+class TestPrepareVersionMismatchGuidance:
+    """`prepare --version` 与开发链推导值不一致时须中止并给出可执行指引（不中途报错）。"""
+
+    def test_mismatch_aborts_with_guidance(self, rel, tmp_path, capsys):
+        _ToolRepoFixture(rel, tmp_path)
+        rel.CONSTANTS_FILE.write_text('APP_VERSION = "0.13.13-dev"\n', encoding="utf-8")
+        rc = rel.cmd_prepare(ns(version="0.14.0", date="2026-10-21", no_archive=True), runner=_ok_runner())
+        out = capsys.readouterr().out
+        assert rc == 2
+        assert "推导的发布版 0.13.13" in out
+        assert "check-version-consistency.py --fix" in out
+        # 未写入任何文件（版本链保持开发态）
+        assert rel.read_app_version(rel.CONSTANTS_FILE.read_text(encoding="utf-8")) == "0.13.13-dev"

@@ -97,6 +97,7 @@ from _release._changelog_archive import (  # noqa: E402, F401 — _SECTION_NOTE 
     render_archive_header,
     write_archive_release,
 )
+from _release._archive_init import init_archive  # noqa: E402
 from _release._common import ReleaseError, exec_command as _exec  # noqa: E402
 from _release._archive_flow import (  # noqa: E402
     ArchiveContext,
@@ -318,15 +319,54 @@ def cmd_check(args: argparse.Namespace, runner=None) -> int:
     return 0
 
 
+# ─────────────────────────── archive-init ───────────────────────────
+
+
+def cmd_archive_init(args: argparse.Namespace, runner=None) -> int:
+    """新小版本归档骨架初始化：三份归档文件 + 目录树块 + 三处索引行（幂等）。"""
+    dev_version = read_app_version(CONSTANTS_FILE.read_text(encoding="utf-8"))
+    version = args.version or (release_version_of(dev_version) if dev_version.endswith("-dev") else dev_version)
+    date = args.date or _dt.date.today().isoformat()
+    if not _RELEASE_VERSION_RE.match(version):
+        print(f"[ERR] 目标版本 {version} 不是 X.Y.Z 发布版形态")
+        return 2
+    print(f"[..] 归档骨架初始化（v{version}）{'——试运行' if args.dry else ''}")
+    try:
+        actions = init_archive(_archive_ctx(version), version, date, dry=args.dry)
+    except ReleaseError as exc:
+        print(f"[ERR] {exc}")
+        return 2
+    for action in actions:
+        print(f"  [OK] {action}")
+    if not actions:
+        print("  [OK] 无需改动（骨架已就绪，幂等）")
+    if not args.dry:
+        rc, out, err = _exec([sys.executable, "scripts/check-doc-drift.py", "--sync"], REPO_ROOT, runner)
+        print((out or err).rstrip())
+        if rc != 0:
+            print("[ERR] 文档统计同步未通过，按上方提示处理后重跑")
+            return rc
+    print("[OK] 归档骨架就绪——下一步：release.py check")
+    return 0
+
+
 # ─────────────────────────── prepare ───────────────────────────
 
 
 def cmd_prepare(args: argparse.Namespace, runner=None) -> int:
     constants_text = CONSTANTS_FILE.read_text(encoding="utf-8")
     dev_version = read_app_version(constants_text)
-    release_version = args.version or release_version_of(dev_version)
-    if args.version and args.version != release_version_of(dev_version):
-        print(f"[!] --version {args.version} 与当前 {dev_version} 推导结果 {release_version} 不一致，按推导执行")
+    derived = release_version_of(dev_version) if dev_version.endswith("-dev") else dev_version
+    release_version = args.version or derived
+    if args.version and args.version != derived:
+        print(f"[ERR] --version {args.version} 与当前 {dev_version} 推导的发布版 {derived} 不一致")
+        print(f"      prepare 不跨版本发布：发布版恒等于开发链推导值（{dev_version} → {derived}）。")
+        print(f"      要发 {args.version}，先把开发链切到 {args.version}-dev，再跑不带 --version 的 prepare：")
+        print(f"      ① 改 src/python/core/constants.py 的 APP_VERSION 为 {args.version}-dev")
+        print("      ② 跑 .venv/bin/python scripts/check-version-consistency.py --fix（收口 15 处版本头）")
+        print(f"      ③ 把 changelog 开发段头与 rf 台账「开发期已修复」节头改为 {args.version}-dev")
+        print("      ④ 提交后依次跑 archive-init（首次进新小版本）→ check → prepare")
+        return 2
     date = args.date or _dt.date.today().isoformat()
 
     print("[..] prepare 预检（发布形态前的开发态条件）")
@@ -814,6 +854,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_archive.add_argument("--dry-run", action="store_true", help="只报告动作，不写任何文件")
     p_archive.add_argument("--skip-design-docs", action="store_true", help="跳过 docs/plan 设计文件迁档（只做台账）")
 
+    p_archive_init = sub.add_parser(
+        "archive-init", help="新小版本归档骨架初始化（三份归档 + 目录树块 + 三处索引行，幂等）"
+    )
+    p_archive_init.add_argument("--version", default=None, help="目标发布版（默认按 APP_VERSION 推导）")
+    p_archive_init.add_argument("--date", default=None, help="发布日期 YYYY-MM-DD（默认今天）")
+    p_archive_init.add_argument("--dry", action="store_true", help="只报告将做的改动，不落盘")
+
     p_refresh = sub.add_parser(
         "refresh",
         help="数据刷新：bench（发布子集）--update-docs + collect + doc-drift --sync（纯文档变更自动跳过前两者）",
@@ -845,6 +892,7 @@ def main(argv: list[str] | None = None) -> int:
         "check": cmd_check,
         "prepare": cmd_prepare,
         "archive": cmd_archive,
+        "archive-init": cmd_archive_init,
         "refresh": cmd_refresh,
         "evolution": cmd_evolution,
         "gate": cmd_gate,
