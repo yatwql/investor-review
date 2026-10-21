@@ -784,6 +784,7 @@ test-reports/latest/
   - ❌ 硬编码总数：`assert len(req_ids) == 276`、`assert len(sections) == 17`
   - 需要「条数」语义时用「域覆盖 + 序号连续」等价表达（强度不低于写死条数，且能发现跳号/重号）
   - 由此守：`scripts/check-test-redundancy.py` 第 5 类 `check_hardcoded_evolving_totals`
+- **勿断言「随周期/环境变化的仓库状态」**：读**真实仓库**的契约测试（如 `TestRealArchiveContract`）只能约束「结构的 invariant」，不能要求「某种状态必须存在」——例如「主台账至少有一节开发期已修复」在新开发周期开张时必然不成立（`devbump` 会清空上一版占位），本地恰巧有节、CI 上却是空台账，于是出现「本地全绿、CI 三版本 + portability 全红」。写这类断言时穷举状态并给出各自的合法判据；**能空的状态就要允许空**。同理：新增子命令/新条目的测试优先从实现集合派生（如 `cmd_*` 函数集合），不写死清单。
 - 新增文件后运行 `.venv/bin/python scripts/check-test-markers.py` 验证标记合规性
 
 ### 新增测试指南
@@ -919,7 +920,7 @@ A: 运行 `.venv/bin/python scripts/check-test-markers.py`，脚本会静态扫�
 | `check-version-consistency.py` | 发布 | 版本号全局一致性检查（P0/P2 守护脚本 + 发布流程必跑） |
 | `check-style-guardrails.py` | 质量 | 设计护栏机检（DESIGN.md 护栏样式面；E 级：强调色越权/明暗同步/双面 token 对表判 finding，W 级：裸色值/圆角档位观察统计——未入 pre-commit 钩子与 CI guards；**发布门禁**（release.py gate）已纳入，开发期快反馈由 unit 测试承担） |
 | `check-script-contract.py` | 质量 | scripts 顶层脚本契约机检（退出码声明 ⊆ {0,2} 白名单、check-* 统一 `add_common_args` CLI 面、文本 I/O 显式 encoding、脚本↔测试覆盖映射，四条规则——**观察期**未入钩子与 CI） |
-| `release.py` | 发布 | 发布流程分步编排（check / prepare〔含台账与设计文件归档迁移〕/ refresh / evolution / gate / publish / devbump，每步独立可审阅、失败即停；prepare 内含台账与设计文件归档迁移、refresh 纯文档变更跳过 bench+collect（`--force-refresh` 强制）、bench 默认只测发布子集四档（`--full-bench` 全量）、gate 十守护并行且随核数收敛 ≤4 路并断言归档已迁完；每命令耗时入 `logs/release.jsonl` 台账） |
+| `release.py` | 发布 | 发布流程分步编排（check / archive-init〔新小版本归档骨架：三份归档 + 目录树块 + 三处索引行，幂等〕/ prepare〔含台账与设计文件归档迁移；不跨版本发布，`--version` 与推导值不一致即中止并给指引〕/ refresh / evolution / gate / publish / devbump，每步独立可审阅、失败即停；refresh 纯文档变更跳过 bench+collect（`--force-refresh` 强制）、bench 默认只测发布子集四档（`--full-bench` 全量）、gate 十守护并行且随核数收敛 ≤4 路并断言归档已迁完；devbump 切版后清空上一版迁档占位节；每命令耗时入 `logs/release.jsonl` 台账） |
 | `perf-test-report.py` | 诊断 | 端到端报告生成管线性能基准（独立脚本，mock 外部数据源） |
 | `perf-view.py` | 诊断 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 时段聚合（耗时与费用合计/环比）/机读输出（llm_cost、by_period 费用字段）） |
 | `probe.py` | 诊断 | 探测统一入口（按 target 分发到 `probes/` 子模块；新探针实现契约面登记即用） |
@@ -1608,7 +1609,7 @@ sym |= set(re.findall(r'^\s{0,8}["\']([a-z][a-z0-9_]{2,})["\']\s*:', src, re.M))
 三层之外，**人工只复核语义**：迁入条目是否确属本版、`docs/plan` 候选是否真完成、要不要另写摘要。
 
 **④ 流程把控（三个时点各有一道闸）**：
-- **入口（`check`）**：除分支/工作树/版本形态/tag 外，提前校验「该发布版的归档前置」——两份台账归档文件与 folders.md 的 `vX.Y.x/` 归档子树块；新小版本首份归档缺件在此报出，而不是等 `prepare` 改完版本全链后中途撞上（那时需回滚）。
+- **入口（`check`）**：除分支/工作树/版本形态/tag 外，提前校验「该发布版的归档前置」——三份归档文件与 folders.md 的 `vX.Y.x/` 归档子树块；新小版本首份归档缺件在此报出（另可直接跑 `archive-init` 一次补齐），而不是等 `prepare` 改完版本全链后中途撞上（那时需回滚）。
 - **中途（`prepare` 内置 archive）**：**先算后写 + 整体回滚**——纯函数先在内存算出全部结果；设计文件迁档三连为「**引用改写 → 目录树 → `git mv`**」，三处落盘前对全部目标文件（changelog / plan / rf / folders / CLAUDE.md / README / 同级设计文档）拍文本快照，任一步失败即**整体回滚**，不会留下「引用已改指新路径、文件却没搬」或「树已改、文件没动」的错位状态；台账最后落盘，此时仍原样。收尾自动 `doc-drift --sync` + `check-doc-traces --ci` + `check-doc-links --ci`，把文档面 finding 留在本地。
 - **历史归档不改写（快照原则）**：`docs/archive/**` 内的旧路径引用**不随迁档改写**——那是历史记录，改写即篡改当时事实。脚本改为在 `archive` 输出里列 `[!] 历史归档仍按快照保留旧路径引用，涉及：…`，由人判断是否处理（通常不需要）。
 - **出口（`gate`）**：断言该版本 rf 已解决表已搬空 + 归档存在对应批次节，不满足即在 regression 前中止（省掉一次 20s 白跑，也不靠人记）。
@@ -1617,6 +1618,7 @@ sym |= set(re.findall(r'^\s{0,8}["\']([a-z][a-z0-9_]{2,})["\']\s*:', src, re.M))
 
 ```bash
 .venv/bin/python scripts/release.py check     # 预检：分支/工作树/版本形态/tag/版本一致性 + 归档前置
+.venv/bin/python scripts/release.py archive-init  # 新小版本首发：三份归档 + folders 目录树块 + 三处索引行一次建齐（幂等，--dry 只报告）
 .venv/bin/python scripts/release.py prepare   # 版本全链 + changelog 发布段归档 + 一致性 --fix + 台账/设计文件归档迁移 + 收尾 doc-drift --sync
 .venv/bin/python scripts/release.py archive   # 单独重跑归档迁移（--dry-run 只报告、--skip-design-docs 只做台账）；prepare 已内置，通常无需单独执行
 .venv/bin/python scripts/release.py refresh   # bench --update-docs（发布子集四档，--full-bench 全量）+ collect + doc-drift --sync
@@ -1628,13 +1630,16 @@ sym |= set(re.findall(r'^\s{0,8}["\']([a-z][a-z0-9_]{2,})["\']\s*:', src, re.M))
 
 `publish` / `devbump` 默认不推送（只打印推送命令），`--push` 才执行。
 
+**`prepare` 不跨版本发布**：发布版恒等于开发链推导值（`0.14.1-dev` → `0.14.1`）。带 `--version` 且与推导值不一致时**立即中止（exit 2）**并打印四步指引（改 `APP_VERSION` → `check-version-consistency --fix` → 同步 changelog 开发段头与 rf 台账节头 → 提交后重跑），不再「按推导执行」跑到中途才报错。
+
 **归档迁移的自动 / 人工边界（`prepare` 内置，可 `--no-archive` 跳过）**：
 
 | 步骤 | 自动完成的部分 | 仍需人工判定 |
 |:-----|:---------------|:-------------|
 | rf 已解决表 | 表格块**整块原样搬入**归档新增批次节（含原分隔行；表外散文留主台账）、主台账留迁档占位（**只保留本版占位节——更早批次占位随本次迁档收敛，节内若还有人工备注则保节保散文只摘占位行**）、归档头部「涵盖版本」区间尾延展与「归档时间」追加本批、主文件归档索引区间延展 | 条目是否确属本版、是否需要另写摘要 |
-| plan 完成任务 | 标题含完成标记（`✅`/`已完成`，可带后缀如「✅ 主体交付」）的节整节搬入计划归档，沿用既有扁平 `## plan-N … ✅` 结构 | 标记是否打对（在办项被打标会被搬走） |
+| plan 完成任务 | 标题含完成标记（`✅`/`已完成`，可带后缀如「✅ 主体交付」）的节整节搬入计划归档——台账里的任务节嵌在 `### P1~P4` 分组下（`####`），归档侧一律降为扁平 `## plan-N … ✅`（归档按版本批次堆叠，不分优先级层） | 标记是否打对（在办项被打标会被搬走） |
 | `docs/plan` 设计文件 | 引用编号**全部已归档**者判定为候选（强信号）、`git mv` 到该版本归档子目录 `<stem>/`、改写 changelog/plan/rf/folders/README/CLAUDE 与同级设计文档引用、folders 目录树条目搬迁 | 候选是否真完成；未引用任何任务编号的设计文件只列提示、不自动迁档 |
+| changelog 发布段 + 主文件指针 | 发布段正文整段迁入该版本 changelog 归档、归档头部两行由段列表派生、主文件「最近发布」指针的**版本号 / 日期 / 归档文件名三者同步改写**（跨小版本时文件名会变，如 `0.13.x → 0.14.x`） | 发布段正文是否确实属于本版（摘要与措辞） |
 
 **格式随既有归档走（不另立一套）**：批次标题 `## 开发期已修复（X.Y.Z-dev）`、说明行 `> 完整复盘见 changelog.md X.Y.Z-dev 段；此处为台账原表搬运（无损），本批发布日 DATE。`、plan 归档扁平 `## plan-N … ✅`、归档头部 `涵盖版本` 只延展区间尾（`vA → vB`）、`归档时间` **只追加**本批戳记（既有逐批叙述只读）。头部缺行（无 `> 涵盖版本：` / `> 归档时间：`）时脚本报 `[!]` 提示补，不静默放行。
 
@@ -1646,7 +1651,7 @@ sym |= set(re.findall(r'^\s{0,8}["\']([a-z][a-z0-9_]{2,})["\']\s*:', src, re.M))
 | 想先看动作再落盘 | `archive --dry-run`（只报告将搬迁的条目/文件与目标位置，不写任何文件） |
 | 只想搬台账、暂不动设计文件 | `archive --skip-design-docs` |
 | 台账想分开提交 / 人工迁档 | `prepare --no-archive`；`gate` 会拦截未迁档 |
-| 新小版本（`vX.Y.0`）首份发布 | 先为该小版本建两份台账归档文件（自审 / 计划各一份，头部五行照抄同 train 既有文件并更新日期/涵盖版本）并在 folders.md 目录树补 `vX.Y.x/` 块；`check` 会直接报出缺哪件（文件名与路径照上方 `ledger_archive_paths` 推导规则） |
+| 新小版本（`vX.Y.0`）首份发布 | 先跑 `archive-init`（幂等）——一次建齐该小版本的三份版本归档文件（changelog / plan / review-findings，头部按既有格式写全）、folders.md 目录树的 `vX.Y.x/` 子树块、以及 plan / rf / changelog 三处「归档档案」索引行（区间口径），收尾自动 `doc-drift --sync`；完成后 `check` 即可通过。`archive-init --dry` 只报告将做什么 |
 | 归档步失败 | `[ERR]` 已给出具体原因与「台账未改写」状态：补好前置（目录树块/归档文件/头部行）后**重跑同一条命令**即可（变换幂等，重复执行不会二次搬运） |
 | 首次实战 / 大改后复验 | 在 `git clone --no-hardlinks` 的副本里跑 `prepare --date <日>` 全链演练（副本自带 `.venv` 或复用主仓解释器），按上表逐项核对产出后再在真仓执行——不污染工作树、不产生 tag |
 
@@ -2262,7 +2267,7 @@ registry 的测试在 `src/test/unit/core/test_registry.py`，验证 TTL 默认�
 
 发布版本时，按以下六步顺序执行：
 
-> 可用 `scripts/release.py` 分步编排（发布流程的可执行封装，每步独立可审阅、失败即停）：`check`（预检）→ `prepare`（版本全链、changelog 发布段归档**并自动重写归档头部「涵盖版本 / 归档时间」（区间与并入记录由归档内各发布段标题派生，无需人工维护）**、一致性 `--fix`，收尾自动 `doc-drift --sync`）→ `refresh` + `evolution --release`（数据刷新——纯文档变更〔仅 `.md`/图片〕自动跳过 bench+collect，`--force-refresh` 强制；演进快照，evolution 收尾同样自动 sync）→ `gate`（P2 门禁，十守护并行且并发度随核数收敛 ≤4 路）→ `publish --title`（release 提交 + P1 verify + `--no-ff` 合并 + tag）→ `devbump`（切开发版）；bench 默认只测发布子集四档（`--full-bench` 全量）、每命令耗时入 `logs/release.jsonl` 台账（发布墙钟可跳版本对拍）；rf/plan/docs-plan 归档迁移的**机械部分已由 `prepare` 自动完成**（人工只复核条目归属与设计文件判定，见下方步骤③），`gate` 会断言该版本台账已迁完、未迁则前置中止；**分层纪律**：归档迁移或任何涉及管理文档/代码注释的改动完成后，进 `gate` 前先跑秒级便宜守护（至少 `check-doc-traces --ci` + `check-doc-links --ci`，改动面大时十守护全跑）——守护发现前置，避免 P2 门禁的全量 regression 因文档级 finding 白跑第二轮。下列手动命令为底层口径，脚本失败时按手动步骤排查。
+> 可用 `scripts/release.py` 分步编排（发布流程的可执行封装，每步独立可审阅、失败即停）：`check`（预检）→ `archive-init`（**仅新小版本首发需要**：三份归档 + 目录树块 + 三处索引行一次建齐，幂等）→ `prepare`（版本全链、changelog 发布段归档**并自动重写归档头部「涵盖版本 / 归档时间」（区间与并入记录由归档内各发布段标题派生，无需人工维护）与主文件指针的版本号/日期/归档文件名**、一致性 `--fix`，收尾自动 `doc-drift --sync`）→ `refresh` + `evolution --release`（数据刷新——纯文档变更〔仅 `.md`/图片〕自动跳过 bench+collect，`--force-refresh` 强制；演进快照，evolution 收尾同样自动 sync）→ `gate`（P2 门禁，十守护并行且并发度随核数收敛 ≤4 路）→ `publish --title`（release 提交 + P1 verify + `--no-ff` 合并 + tag）→ `devbump`（切开发版，并清空上一版迁档占位节）；bench 默认只测发布子集四档（`--full-bench` 全量）、每命令耗时入 `logs/release.jsonl` 台账（发布墙钟可跳版本对拍）；rf/plan/docs-plan 归档迁移的**机械部分已由 `prepare` 自动完成**（人工只复核条目归属与设计文件判定，见下方步骤③），`gate` 会断言该版本台账已迁完、未迁则前置中止；`prepare` 不跨版本发布（`--version` 与开发链推导值不一致时立即中止并给四步指引）；**分层纪律**：归档迁移或任何涉及管理文档/代码注释的改动完成后，进 `gate` 前先跑秒级便宜守护（至少 `check-doc-traces --ci` + `check-doc-links --ci`，改动面大时十守护全跑）——守护发现前置，避免 P2 门禁的全量 regression 因文档级 finding 白跑第二轮。下列手动命令为底层口径，脚本失败时按手动步骤排查。
 
 **① 版本号一致**
 
@@ -2294,8 +2299,8 @@ registry 的测试在 `src/test/unit/core/test_registry.py`，验证 TTL 默认�
 **③ 发布归档迁移（四项强制，未完成不得继续 `gate`/`publish`）**
 
 - ① `review-findings.md`「已解决问题」区**全部**条目迁入对应版本的自审归档（同步更新归档头部涵盖版本/追加行与主文件「归档档案」索引行）——`release.py prepare` 自动：原表逐行搬运 + 占位 + 头部/索引延展，人工复核归属
-- ② `plan.md` 不得残留 ✅/已完成任务节（完成态移入对应版本的 plan 归档）——`release.py prepare` 自动搬已完成节，人工复核完成标记是否打对
-- ③ changelog 已发布段移入对应版本的 changelog 归档 + 归档头部「涵盖版本」「归档时间」两行重写（`release.py prepare` 全部自动执行：段追加与头部区间/并入记录均由归档内 `## [版本] - 日期` 段列表派生；人工只需核对 diff 中主文件指针与归档索引行）
+- ② `plan.md` 不得残留 ✅/已完成任务节（完成态移入对应版本的 plan 归档）——`release.py prepare` 自动搬已完成节（**支持 `##`~`####` 各级标题**：台账任务节嵌在 `### P1~P4` 下，归档侧统一降为扁平 `## plan-N … ✅`），人工复核完成标记是否打对
+- ③ changelog 已发布段移入对应版本的 changelog 归档 + 归档头部「涵盖版本」「归档时间」两行重写 + 主文件「最近发布」指针的版本号/日期/归档文件名同步（`release.py prepare` 全部自动执行：段追加与头部区间/并入记录均由归档内 `## [版本] - 日期` 段列表派生；跨小版本时指针链接自动换名到新 train；人工只需核对 diff 中指针与归档索引行）
 - ④ `docs/plan/` 中**已完成任务**的迭代设计文件移入对应版本归档子目录（在办任务的设计文件保留，按其关联 plan/rf 任务状态判定），同步更新 plan.md/folders.md 引用链接与目录树——`release.py prepare` 按「引用编号均已归档」判定候选并自动 `git mv` + 改写引用 + 搬目录树，人工复核候选是否真完成（无任务编号引用者也会列出待确认）
 
 **④ 版本标签**
@@ -2312,6 +2317,8 @@ git push origin --tags
 **⑤ 开发版本切换**
 
 发布版本并打 tag 后，**立即**将 `APP_VERSION` 和所有管理文档版本头改为**下一个版本的 `-dev`**（如发布 v0.6.8 后即改为 v0.6.9-dev），运行 `check-version-consistency.py` 验证全链 `[OK]` 后提交，然后继续开发。开发期间版本号始终标识为下一个预期发布版本的 `-dev`。
+
+`release.py devbump` 会把这条链一次走完（版本号 + 文档版本头 + 提交），并在同一提交里**清空上一版的迁档占位节**（`### 开发期已修复（X-dev）` 只余一行「本版已随 vX 发布迁入归档档案」）——新开发周期的台账从空开始，上一版的归档信息只在归档文件与「归档档案」索引里。
 
 **⑥ 合并入 master**
 
