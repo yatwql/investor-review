@@ -186,6 +186,7 @@ def _categorize_holdings(
         {大类名称: [持仓条目, ...]}
     """
     from src.python.analysis.rebalance import classify_holding  # 延迟导入：避免模块级环
+
     categorized: dict[str, list[dict[str, Any]]] = {cat: [] for cat in _CATEGORY_ORDER}
     for h in holdings_details:
         name = h.get("name", "")
@@ -530,6 +531,7 @@ def compute_rebalance_signals(
       5. 静默期过滤（_filter_silenced_signals）
     """
     from src.python.analysis.rebalance import resolve_rebalance_config  # 延迟导入：避免模块级环
+
     if not holdings_details or total_mv <= 0:
         return []
 

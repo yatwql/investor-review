@@ -467,7 +467,9 @@ class TestWriteHtmlReportFundDeepAnalysisEmpty(unittest.TestCase):
         )
         # data_status 构建（标准）
         stack.enter_context(patch("src.python.report.html_writer_status.build_index_data_status", return_value={}))
-        stack.enter_context(patch("src.python.report.html_writer_status.build_penetration_data_status", return_value={}))
+        stack.enter_context(
+            patch("src.python.report.html_writer_status.build_penetration_data_status", return_value={})
+        )
         stack.enter_context(patch("src.python.report.html_writer_status.build_perf_data_status", return_value={}))
         # 模板
         tmpl = MagicMock()

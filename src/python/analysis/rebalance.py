@@ -240,4 +240,3 @@ def classify_holding(name: str, code: str) -> str:
 
 
 # ── 再平衡信号入口（整合单品超限 + 目标偏离 + 权益/固收偏离） ─
-
