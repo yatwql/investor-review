@@ -432,6 +432,15 @@ class TestEvolutionTable:
 
 
 class TestGate:
+    @pytest.fixture(autouse=True)
+    def _fresh_evolution(self, rel, monkeypatch):
+        """门禁编排用例不读真实 folders.md 新鲜度：新鲜度断言依赖「列头日期 =
+        运行当日」（墙钟 + 仓库文件状态），用例在不同时区/日期的 CI 上会因
+        本地未重跑 evolution 而随机红——编排用例将其视为通过，新鲜度拦截
+        行为由 TestEvolutionFreshness（纯函数）与 test_gate_stops_on_stale_
+        evolution（门禁中止）单独覆盖。"""
+        monkeypatch.setattr(rel, "check_evolution_freshness", lambda *_a, **_k: [])
+
     def test_gate_workers_converge_with_cpu(self, rel, monkeypatch):
         """并行度随核数收敛：弱机器降路、4 核+ 封顶、缺核信息取封顶、单核不下 1 路。"""
         monkeypatch.setattr(rel.os, "cpu_count", lambda: 2)
@@ -449,6 +458,15 @@ class TestGate:
             path = _REPO_ROOT / script
             assert path.is_file(), script
             assert script.startswith("scripts/check-"), script
+
+    def test_gate_stops_on_stale_evolution(self, rel):
+        """演进对照新鲜度过期 → gate 返回 2 且不触发任何子进程（前置拦截）。"""
+        stale = ["当前开发版列头 2026-10-20 ≠ 今日，先执行 scripts/release.py evolution 刷新"]
+        rel.check_evolution_freshness = lambda *_a, **_k: list(stale)
+        runner = FakeRunner()
+        rc = rel.cmd_gate(ns(), runner=runner)
+        assert rc == 2
+        assert runner.calls == []  # 新鲜度失败即中止，回归/守护一个不跑
 
     def test_gate_runs_regression_then_guards(self, rel):
         runner = FakeRunner()
