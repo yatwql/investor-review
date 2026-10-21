@@ -510,9 +510,11 @@ class TestCliSurface:
         parser = rel.build_parser()
         sub_actions = [a for a in parser._subparsers._group_actions if hasattr(a, "choices")]
         parser_cmds = set(sub_actions[0].choices) if sub_actions else set()
-        handlers = {"check", "prepare", "archive", "refresh", "evolution", "gate", "publish", "devbump"}
+        # 处理表由模块内的 `cmd_*` 函数集合派生（不写死命令清单：新增子命令时只改实现）
+        # `cmd_archive_init` ↔ 子命令 `archive-init`（下划线→连字符）
+        handlers = {name[4:].replace("_", "-") for name in dir(rel) if name.startswith("cmd_")}
         assert parser_cmds == handlers  # 两张内部表双向一致（结构断言，不写死条数）
-        assert all(hasattr(rel, f"cmd_{name}") for name in handlers)
+        assert all(hasattr(rel, f"cmd_{name.replace(chr(45), chr(95))}") for name in handlers)
 
 
 # ─────────────────────────── archive 子命令 ───────────────────────────
@@ -589,3 +591,23 @@ class TestArchiveCommand:
         """开发版上跑归档会被拒（版本全链须先切到发布形态，否则归档目录推导不出）。"""
         _ToolRepoFixture(rel, tmp_path)
         assert rel.cmd_archive(ns(date=None), runner=_ok_runner()) == 2
+
+
+class TestChangelogPointerLinkFollowsArchive:
+    """指针行的归档文件名须与目标版本、日期三者同步改写（跨系列时换名）。"""
+
+    def test_link_rewritten_to_target_archive(self, rel):
+        """指针链接指向「上一系列」时，发布后必须改指本次目标归档（跨小版本换名）。"""
+        sample = _sample_changelog().replace(
+            "已发布版本段随发布移入 [`archived_changelog.0.12.x.md`]",
+            "已发布版本段随发布移入 [`archived_changelog.0.11.x.md`]",
+        )
+        out, _ = rel.apply_changelog_release(sample, "0.12.6", "2026-10-08")
+        pointer = next(ln for ln in out.splitlines() if ln.startswith("> **最近发布"))
+        assert "[`archived_changelog.0.12.x.md`]" in pointer
+        assert "archived_changelog.0.11.x.md" not in pointer
+
+    def test_pointer_link_format_violation_rejected(self, rel):
+        broken = _sample_changelog().replace("已发布版本段随发布移入", "已发布版本段见")
+        with pytest.raises(rel.ReleaseError, match="指针行"):
+            rel.apply_changelog_release(broken, "0.12.6", "2026-10-08")

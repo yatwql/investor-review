@@ -217,7 +217,7 @@ class TestPrepareInjection:
         mock_us.return_value = {}
         # 约束块构建期用真实名称渲染 → 注入后须按同一映射脱敏
         with patch(
-            "src.python.report.orchestrator.compute_purchase_status_data",
+            "src.python.report._orchestrator_data.compute_purchase_status_data",
             return_value={"constraint_block": "贵州茅台(600519) 限购 100 份/日", "available": True},
         ):
             from src.python.report.orchestrator import prepare_report_data

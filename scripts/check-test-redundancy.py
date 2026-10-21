@@ -50,832 +50,98 @@
 from __future__ import annotations
 
 import argparse
-import ast
-import hashlib
-import json
+import ast  # noqa: F401 — 测试按 redundancy.ast 打桩（与原单文件行为一致）
 import os
-import re
 import sys
-from collections import Counter, defaultdict
-from pathlib import Path
-from typing import NamedTuple
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_checklib）
-from _checklib import REPO_ROOT, add_common_args, rel, report  # noqa: E402
-
-_TEST_ROOT = REPO_ROOT / "src" / "test"
-_LIVE_DIR = REPO_ROOT / "src" / "test" / "live"
-
-#: mock 断言方法（`mock.assert_called_once*` 等）
-_MOCK_ASSERT = re.compile(r"^assert_(called|any_call|has_calls|not_called)")
-#: pytest 断言式调用（raises/warns 等，视为等价于 assert）
-_PYTEST_ASSERT = frozenset({"raises", "warns", "fail", "deprecated_call"})
-#: 常见的「被测对象句柄」类间接调用名（函数体内出现且无法解析时跳过重复比对）
-_SUT_ATTRS = frozenset({"_call", "_run", "fn", "r", "sut", "proc", "target", "_target"})
-
-
-class TestCase(NamedTuple):
-    """一个测试用例（AST 视角）。"""
-
-    path: Path
-    class_name: str
-    name: str
-    lineno: int
-    node: ast.FunctionDef | ast.AsyncFunctionDef
-    cls: ast.ClassDef | None = None
-    module: ast.Module | None = None
-
-
-def _iter_test_files(include_live: bool) -> list[Path]:
-    files = sorted(_TEST_ROOT.rglob("test_*.py"))
-    if not include_live:
-        files = [p for p in files if _LIVE_DIR not in p.parents]
-    return files
-
-
-def _strip_docstring(body: list[ast.stmt]) -> list[ast.stmt]:
-    if (
-        body
-        and isinstance(body[0], ast.Expr)
-        and isinstance(body[0].value, ast.Constant)
-        and isinstance(body[0].value.value, str)
-    ):
-        return body[1:]
-    return body
-
-
-def _dump(node: ast.AST) -> str:
-    return ast.dump(node, annotate_fields=False, include_attributes=False)
-
-
-def _class_attr_binding(cls: ast.ClassDef | None, attr: str) -> str | None:
-    """解析类内 ``self.<attr>`` 的绑定目标（赋值式 / 方法返回式 / setUp 赋值式 / staticmethod）。
-
-    第 3 档 setUp 解析：类体内无绑定、也无同名方法时，扫 ``setUp``/``setUpClass`` 里的
-    ``self.<attr> = <值>`` 赋值，取其值的归一化 dump。这是 62 个盲区里最大的一类
-    （``self.r``/``self.fn`` 在 setUp 里构造），解析后才能参与重复比对而非被跳过。
-    """
-    if cls is None:
-        return None
-    for stmt in cls.body:
-        if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1 and isinstance(stmt.targets[0], ast.Name):
-            if stmt.targets[0].id == attr:
-                return _dump(stmt.value)
-        if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)) and stmt.name == attr:
-            for inner in stmt.body:
-                if isinstance(inner, ast.Return) and inner.value is not None:
-                    return _dump(inner.value)
-            return None
-    # 第 3 档：setUp / setUpClass 里的 self.<attr> = <值>
-    for stmt in cls.body:
-        if not isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)) or stmt.name not in ("setUp", "setUpClass"):
-            continue
-        for sub in ast.walk(stmt):
-            if (
-                isinstance(sub, ast.Assign)
-                and len(sub.targets) == 1
-                and isinstance(sub.targets[0], ast.Attribute)
-                and isinstance(sub.targets[0].value, ast.Name)
-                and sub.targets[0].value.id == "self"
-                and sub.targets[0].attr == attr
-            ):
-                return _dump(sub.value)
-    return None
-
-
-def _method_body_hash(cls: ast.ClassDef | None, attr: str) -> str | None:
-    """类内定义但无单一 return 的分支型 helper（如 ``_run``/``_call``）→ 方法体哈希。
-
-    分支型 helper 的行为由整个方法体决定，无法压成单个 return 表达式。取「去掉
-    docstring 后的方法体 AST dump 的 sha1」作为其绑定指纹：同名 helper 不同实现 →
-    不同哈希 → 不误判为重复；同名同实现（继承或复制）→ 相同哈希 → 正常比对。
-    """
-    if cls is None:
-        return None
-    for stmt in cls.body:
-        if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)) and stmt.name == attr:
-            core = _strip_docstring(stmt.body)
-            payload = _dump(ast.Module(body=core, type_ignores=[]))
-            return f"method-body:{hashlib.sha1(payload.encode('utf-8')).hexdigest()[:16]}"
-    return None
-
-
-def _self_attrs(node: ast.AST) -> set[str]:
-    return {
-        n.attr
-        for n in ast.walk(node)
-        if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.value.id == "self"
-    }
-
-
-def _call_name(call: ast.Call) -> str:
-    func = call.func
-    return func.attr if isinstance(func, ast.Attribute) else (func.id if isinstance(func, ast.Name) else "")
-
-
-def _assertion_in(node: ast.AST) -> tuple[bool, bool]:
-    """本节点（含嵌套语句）内是否含断言式证据 / mock 断言。"""
-    has_assert = False
-    has_mock = False
-    for sub in ast.walk(node):
-        if isinstance(sub, ast.Assert):
-            has_assert = True
-        elif isinstance(sub, ast.Call):
-            name = _call_name(sub)
-            if _MOCK_ASSERT.match(name):
-                has_assert = True
-                has_mock = True
-            elif name.startswith("assert") or name in _PYTEST_ASSERT:
-                # unittest/numpy/mock 风格：assertEqual/assertTrue/assertIsNone/assert_called_* 与 fail/raises 等
-                has_assert = True
-    return has_assert, has_mock
-
-
-def _same_scope_helpers(case: TestCase) -> dict[str, ast.AST]:
-    """本文件/本类（含模块内基类）可解析的同名辅助函数：``name -> 函数节点``。"""
-    helpers: dict[str, ast.AST] = {}
-    if case.module is not None:
-        for stmt in case.module.body:
-            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                helpers[stmt.name] = stmt
-        for cls in [n for n in ast.walk(case.module) if isinstance(n, ast.ClassDef)]:
-            if (
-                case.cls is None
-                or cls is case.cls
-                or any((isinstance(b, ast.Name) and b.id == cls.name) for b in case.cls.bases)
-            ):
-                for stmt in cls.body:
-                    if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                        helpers.setdefault(stmt.name, stmt)
-    return helpers
-
-
-def _assertions(case: TestCase) -> tuple[bool, bool]:
-    """返回 (是否有断言式证据, 是否有 mock 断言)。
-
-    断言可以落在被测用例本体，也可以落在同文件/同类（含模块内基类）的辅助方法里
-    （如 ``self._assert_pairs_contain(...)`` / ``self.fail(...)``）——两种情况都算有断言。
-    """
-    has_assert, has_mock = _assertion_in(case.node)
-    if not has_assert:
-        helpers = _same_scope_helpers(case)
-        for name in {_call_name(c) for c in ast.walk(case.node) if isinstance(c, ast.Call)}:
-            helper = helpers.get(name)
-            if helper is not None and helper is not case.node:
-                helper_assert, helper_mock = _assertion_in(helper)
-                if helper_assert:
-                    has_assert = True
-                    has_mock = has_mock or helper_mock
-                    break
-    return has_assert, has_mock
-
-
-def _patch_targets(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[tuple[str, str]]:
-    """装饰器里的 ``@patch("a.b.c")`` → [(mock 参数名, 目标点分路径)]（按装饰器顺序对应参数尾）。"""
-    targets: list[tuple[str, str]] = []
-    params = [a.arg for a in node.args.args if a.arg != "self"]
-    for dec in node.decorator_list:
-        if not isinstance(dec, ast.Call) or not dec.args:
-            continue
-        func = dec.func
-        fname = func.attr if isinstance(func, ast.Attribute) else (func.id if isinstance(func, ast.Name) else "")
-        if fname != "patch":
-            continue
-        arg = dec.args[0]
-        if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-            targets.append(("", arg.value))
-    # patch 装饰器自下而上注入 → 参数表末尾起倒序对应
-    for idx, (_, target) in enumerate(targets):
-        param_index = len(params) - 1 - idx
-        targets[idx] = (params[param_index] if 0 <= param_index < len(params) else "", target)
-    return targets
-
-
-def _called_names(node: ast.AST) -> set[str]:
-    names: set[str] = set()
-    for sub in ast.walk(node):
-        if isinstance(sub, ast.Call):
-            func = sub.func
-            if isinstance(func, ast.Name):
-                names.add(func.id)
-            elif isinstance(func, ast.Attribute):
-                names.add(func.attr)
-    return names
-
-
-def _mock_return_literals(node: ast.AST, mock_name: str) -> set[str]:
-    """``<mock>.return_value = <字面量>`` 收集（只认单层，``mock.now.return_value`` 不算）。"""
-    values: set[str] = set()
-    for sub in ast.walk(node):
-        if not isinstance(sub, ast.Assign) or len(sub.targets) != 1:
-            continue
-        tgt = sub.targets[0]
-        if (
-            isinstance(tgt, ast.Attribute)
-            and tgt.attr == "return_value"
-            and isinstance(tgt.value, ast.Name)
-            and tgt.value.id == mock_name
-            and isinstance(sub.value, ast.Constant)
-        ):
-            values.add(repr(sub.value.value))
-    return values
-
-
-def _asserted_literals(node: ast.AST) -> set[str]:
-    """断言里出现的字面量（assert x == lit / assertEqual(x, lit)）。"""
-    literals: set[str] = set()
-    for sub in ast.walk(node):
-        if isinstance(sub, ast.Assert) and isinstance(sub.test, ast.Compare):
-            for comp in sub.test.comparators:
-                if isinstance(comp, ast.Constant):
-                    literals.add(repr(comp.value))
-        if (
-            isinstance(sub, ast.Call)
-            and isinstance(sub.func, ast.Attribute)
-            and sub.func.attr
-            in (
-                "assertEqual",
-                "assertEquals",
-            )
-        ):
-            for arg in sub.args[1:]:
-                if isinstance(arg, ast.Constant):
-                    literals.add(repr(arg.value))
-    return literals
-
-
-def cases_in_module(path: Path, tree: ast.Module) -> list[TestCase]:
-    """从单个已解析模块中提取全部测试用例（含所在类）。
-
-    单次 BFS：`ast.walk` 层序保证类先于其直属语句被访问，类登记与用例提取合并为一遍。
-    """
-    cls_of: dict[ast.AST, ast.ClassDef] = {}
-    cases: list[TestCase] = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ClassDef):
-            for stmt in node.body:
-                cls_of[stmt] = node
-            continue
-        if not (isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test")):
-            continue
-        cls = cls_of.get(node)
-        cases.append(
-            TestCase(
-                path=path,
-                class_name=cls.name if cls else "",
-                name=node.name,
-                lineno=node.lineno,
-                node=node,
-                cls=cls,
-                module=tree,
-            )
-        )
-    return cases
-
-
-# ═══════════════════════════════════════════════════════════════
-#  A. 死用例
-# ═══════════════════════════════════════════════════════════════
-
-
-def check_dead_tests(cases: list[TestCase], modules: dict[Path, ast.Module]) -> list[str]:
-    findings: list[str] = []
-    per_file: dict[Path, Counter[tuple[str, str]]] = defaultdict(Counter)
-    for case in cases:
-        per_file[case.path][(case.class_name, case.name)] += 1
-    for case in cases:
-        key = (case.class_name, case.name)
-        if per_file[case.path][key] > 1 or case.class_name.startswith("非Test"):
-            continue
-        if case.class_name and not case.class_name.startswith("Test"):
-            findings.append(
-                f"{rel(case.path)}:{case.lineno}: 用例 {case.class_name}::{case.name} 所在类名不以 Test 开头，pytest 不会收集（死用例）"
-            )
-    # 同名重复（后者覆盖前者）
-    for path, counter in per_file.items():
-        for (cls, name), n in counter.items():
-            if n > 1:
-                findings.append(
-                    f"{rel(path)}: {cls + '::' if cls else ''}{name} 在同一文件重复定义 {n} 次，仅最后一次会执行（其余为死用例）"
-                )
-    # Test* 类带 __init__
-    for path, tree in modules.items():
-        for cls in [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name.startswith("Test")]:
-            has_init = any(
-                isinstance(b, (ast.FunctionDef, ast.AsyncFunctionDef)) and b.name == "__init__" for b in cls.body
-            )
-            n_tests = sum(
-                1
-                for b in cls.body
-                if isinstance(b, (ast.FunctionDef, ast.AsyncFunctionDef)) and b.name.startswith("test")
-            )
-            if has_init and n_tests:
-                findings.append(
-                    f"{rel(path)}: Test 类 {cls.name} 定义了 __init__，pytest 整类跳过（{n_tests} 个用例为死用例）"
-                )
-    return findings
-
-
-# ═══════════════════════════════════════════════════════════════
-#  B. 无断言
-# ═══════════════════════════════════════════════════════════════
-
-
-def check_assertion_free(cases: list[TestCase]) -> list[str]:
-    findings: list[str] = []
-    for case in cases:
-        has_assert, _ = _assertions(case)
-        if not has_assert:
-            findings.append(
-                f"{rel(case.path)}:{case.lineno}: 用例 {case.name} 无任何断言（assert / pytest.raises / mock 断言均无）"
-            )
-    return findings
-
-
-# ═══════════════════════════════════════════════════════════════
-#  C. 完全重复
-# ═══════════════════════════════════════════════════════════════
-
-
-def body_signature(case: TestCase) -> str | None:
-    """归一化指纹；含无法解析的 self 间接调用时返回 None（跳过比对，避免并行覆盖误报）。
-
-    三档绑定解析：类体赋值 / 方法返回值 / setUp 赋值（第 1、3 档）；无单一 return
-    的分支型 helper 取方法体哈希（第 2 档扩展）。三档均失败才返回 None 跳过。
-    """
-    attrs = _self_attrs(case.node) & _SUT_ATTRS
-    bindings: list[str] = []
-    for attr in sorted(attrs):
-        resolved = _class_attr_binding(case.cls, attr)
-        if resolved is None:
-            resolved = _method_body_hash(case.cls, attr)
-        if resolved is None:
-            return None
-        bindings.append(f"{attr}={resolved}")
-    core = _strip_docstring(case.node.body)
-    params = [a.arg for a in case.node.args.args]
-    decorators = [_dump(d) for d in case.node.decorator_list]
-    payload = f"{_dump(ast.Module(body=core, type_ignores=[]))}||{params}||{decorators}||{bindings}"
-    return hashlib.sha1(payload.encode()).hexdigest()
-
-
-def _group_duplicate_entries(entries: list[tuple[str, int, str, str | None]]) -> tuple[list[str], int]:
-    """跨全集按指纹归并重复用例：entries = [(rel_path, lineno, name, sig|None)] → (findings, skipped)。
-
-    冷路径（新增/变更文件）从 AST 用例构造 entries，命中缓存的文件直接复用缓存指纹——
-    归并始终跨全集，重复比对质量不降。
-    """
-    findings: list[str] = []
-    groups: dict[str, list[tuple[str, int, str]]] = defaultdict(list)
-    skipped = 0
-    for rel_path, lineno, name, sig in entries:
-        if sig is None:
-            skipped += 1
-            continue
-        groups[sig].append((rel_path, lineno, name))
-    for members in groups.values():
-        if len(members) < 2:
-            continue
-        head_path, head_lineno, head_name = members[0]
-        others = "、".join(f"{p}:{ln} {n}" for p, ln, n in members[1:])
-        findings.append(
-            f"{head_path}:{head_lineno}: 用例 {head_name} 与 {len(members) - 1} 个用例完全重复"
-            f"（函数体/参数/装饰器归一化后一致）：{others}"
-        )
-    return findings, skipped
-
-
-def check_duplicate_bodies(cases: list[TestCase]) -> tuple[list[str], int]:
-    """返回（findings, 被跳过的用例数）。"""
-    return _group_duplicate_entries([(rel(c.path), c.lineno, c.name, body_signature(c)) for c in cases])
-
-
-# ═══════════════════════════════════════════════════════════════
-#  D. 自证用例（mock 替代被测对象）
-# ═══════════════════════════════════════════════════════════════
-
-
-def check_self_fulfilling(cases: list[TestCase]) -> list[str]:
-    findings: list[str] = []
-    for case in cases:
-        targets = _patch_targets(case.node)
-        if not targets:  # 绝大多数用例无 @patch 装饰器：早退，免两次全量 walk
-            continue
-        called = _called_names(case.node)
-        asserted = _asserted_literals(case.node)
-        if not called or not asserted:
-            continue
-        for mock_name, target in targets:
-            short = target.split(".")[-1]
-            if short not in called:
-                continue
-            mock_returns = _mock_return_literals(case.node, mock_name) if mock_name else set()
-            if mock_returns & asserted:
-                findings.append(
-                    f"{rel(case.path)}:{case.lineno}: 用例 {case.name} patch 了被测函数 {target} 又把其 return_value 断言回原值（{sorted(mock_returns & asserted)}），断言恒真"
-                )
-    return findings
-
-
-def check_hardcoded_evolving_totals(cases: list[TestCase]) -> list[str]:
-    """E. **硬编码「会演进的总数」** —— 把需求/章节/开关等**可增长集合的条数**写死在断言里。
-
-    为何是缺陷：这类总数是**文档真值来源的派生量**，随正常开发（新增一条需求/章节/开关）
-    必然变化。写死后，良性变更会把测试打红（而它捕捉不到任何真实缺陷），反而阻碍演进；
-    且它与门禁脚本（如 `check-requirement-trace` 的全域覆盖断言）**职责重复**。
-    正确写法是断言**结构关系**（集合双向相等 / 域覆盖 / 序号连续），而非绝对条数。
-
-    判定（保守，宁少报不误报）：
-      - 仅看 `assert` 语句中形如 ``len(<x>) == <数字>`` 或 ``len(<x>) > <大数>`` 的比较；
-      - 仅当**同一文件**内该 `len()` 实参名与需求 ID / 总数类语义相关时报告：
-        实参名含 ``req_ids`` / ``requirement`` / ``section`` / ``switch`` / ``chapter`` 等，
-        或断言所在文件路径含 ``requirement`` / ``registry`` / ``section``；
-      - 忽略小数字（<= 3）：小集合的精确条数常为有意断言（如「两个 provider」）。
-    """
-    _SEMANTIC = (
-        "requirement",
-        "req_ids",
-        "reqs",
-        "section",
-        "sections",
-        "switch",
-        "switches",
-        "chapter",
-        "chapters",
-        "module",
-        "modules",
-        "domain",
-        "domains",
-        "panel",
-        "panels",
-    )
-    findings: list[str] = []
-    for case in cases:
-        path_hint = "requirement" in str(case.path).lower() or "registry" in str(case.path).lower()
-        for node in ast.walk(case.node):
-            if not isinstance(node, ast.Assert):
-                continue
-            for cmp_node in ast.walk(node.test):
-                if not isinstance(cmp_node, ast.Compare):
-                    continue
-                left = cmp_node.left
-                if not (
-                    isinstance(left, ast.Call)
-                    and isinstance(left.func, ast.Name)
-                    and left.func.id == "len"
-                    and left.args
-                ):
-                    continue
-                arg = left.args[0]
-                arg_name = arg.id if isinstance(arg, ast.Name) else ast.unparse(arg)
-                lowered = arg_name.lower()
-                if not (path_hint or any(tok in lowered for tok in _SEMANTIC)):
-                    continue
-                for op, right in zip(cmp_node.ops, cmp_node.comparators):
-                    if not isinstance(op, (ast.Eq, ast.Gt, ast.GtE)):
-                        continue
-                    if not isinstance(right, ast.Constant) or not isinstance(right.value, int):
-                        continue
-                    if right.value <= 3:
-                        continue
-                    findings.append(
-                        f"{rel(case.path)}:{node.lineno}: 用例 {case.name} 断言硬编码会演进的总数 "
-                        f"`len({arg_name}) {type(op).__name__.replace('GtE', '>=').replace('Gt', '>').replace('Eq', '==')} {right.value}`"
-                        "——应改为结构关系断言（集合双向相等 / 域覆盖 / 序号连续），否则新增条目必红且职责与门禁重复"
-                    )
-    return findings
-
-
-# ═══════════════════════════════════════════════════════════════
-#  增量事实缓存（性能层，不改判定口径）
-# ═══════════════════════════════════════════════════════════════
-
-# ═════════════════════════════════════════════════════════════
-#  F/G/H. 恒真断言 / 死 fixture / 弱 mock 断言
-# ═════════════════════════════════════════════════════════════
-
-
-def check_trivially_true(cases: list[TestCase]) -> list[str]:
-    """F：恒真断言——`assert True` / `assert x == x`，不验证任何行为。"""
-    findings: list[str] = []
-    for case in cases:
-        for sub in ast.walk(case.node):
-            if not isinstance(sub, ast.Assert):
-                continue
-            t = sub.test
-            if isinstance(t, ast.Constant) and t.value is True:
-                findings.append(
-                    f"{rel(case.path)}:{case.lineno}: 用例 {case.name} 恒真断言（assert True，不验证任何行为）"
-                )
-            elif (
-                isinstance(t, ast.Compare)
-                and len(t.ops) == 1
-                and isinstance(t.left, ast.Name)
-                and any(isinstance(c, ast.Name) and c.id == t.left.id for c in t.comparators)
-            ):
-                findings.append(
-                    f"{rel(case.path)}:{case.lineno}: 用例 {case.name} 恒真断言（x == x 恒真，不验证任何行为）"
-                )
-    return findings
-
-
-def _is_mock_name(node: ast.AST) -> bool:
-    """变量名是否 mock 形态（含 mock / m_ 前缀）。"""
-    if not isinstance(node, ast.Name):
-        return False
-    low = node.id.lower()
-    return "mock" in low or low.startswith("m_")
-
-
-def check_weak_mock_assertions(cases: list[TestCase]) -> list[str]:
-    """H：弱 mock 断言——`assert <mock>.<属性>` 真值 / `assertIsNotNone(<mock>)`（含 unittest 方法形态）。"""
-    findings: list[str] = []
-    for case in cases:
-        for sub in ast.walk(case.node):
-            if isinstance(sub, ast.Assert):
-                t = sub.test
-                if (
-                    isinstance(t, ast.Attribute)
-                    and _is_mock_name(t.value)
-                    and not t.attr.startswith(("called", "call_", "assert_", "reset"))
-                ):
-                    findings.append(
-                        f"{rel(case.path)}:{case.lineno}: 用例 {case.name} 弱 mock 断言（assert {t.value.id}.{t.attr} 真值"
-                        "——Mock 恒真，应改断言具体值/调用参数）"
-                    )
-            elif (
-                isinstance(sub, ast.Call)
-                and isinstance(sub.func, ast.Attribute)
-                and sub.func.attr in ("assertIsNotNone", "assertTrue")
-                and len(sub.args) == 1
-                and _is_mock_name(sub.args[0])
-            ):
-                findings.append(
-                    f"{rel(case.path)}:{case.lineno}: 用例 {case.name} 弱 mock 断言（{sub.func.attr}(<mock>)"
-                    "——Mock 恒真且不为 None，应改断言具体值/调用参数）"
-                )
-    return findings
-
-
-def _fixture_exposed_name(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str | None:
-    """fixture 暴露名（`name=` 别名优先于函数名）；非 fixture / autouse（机制消费）返回 None。"""
-    is_fixture = False
-    exposed = node.name
-    for deco in node.decorator_list:
-        target = deco.func if isinstance(deco, ast.Call) else deco
-        if isinstance(target, ast.Attribute) and target.attr == "fixture":
-            pass
-        elif isinstance(target, ast.Name) and target.id == "fixture":
-            pass
-        else:
-            continue
-        if isinstance(deco, ast.Call):
-            if any(kw.arg == "autouse" and getattr(kw.value, "value", None) is True for kw in deco.keywords):
-                return None  # autouse 由 pytest 机制自动消费，无参数引用，不判死
-            for kw in deco.keywords:
-                if kw.arg == "name" and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
-                    exposed = kw.value.value  # @pytest.fixture(name="别名")：用例参数引用的是别名
-        is_fixture = True
-    return exposed if is_fixture else None
-
-
-def check_dead_fixtures(facts: dict[str, dict]) -> list[str]:
-    """G：死 fixture——test 文件内定义且暴露名未被本文件任何函数参数 / usefixtures 引用（conftest 定义不判死）。"""
-    findings: list[str] = []
-    for key, item in facts.items():
-        local = set(item.get("params", [])) | set(item.get("usefix", []))
-        for name, lineno in item.get("fixtures", []):
-            if name not in local:
-                findings.append(f"{rel(Path(key))}:{lineno}: fixture {name} 定义后无引用（死 fixture，删除或接入用例）")
-    return findings
-
-
-# ═════════════════════════════════════════════════════════════
-#  I. 骨架审计（--audit 建议性，不参与守护退出码）
-# ═════════════════════════════════════════════════════════════
-
-
-class _Skeletonizer(ast.NodeTransformer):
-    """骨架归一：字面量→占位（True/False/None 保留种类）、参数名→A、私有名→N。"""
-
-    def visit_Constant(self, node: ast.Constant):
-        if node.value is True or node.value is False or node.value is None:
-            return node
-        return ast.copy_location(ast.Constant("<V>"), node)
-
-    def visit_arg(self, node: ast.arg):
-        node.arg = "A"
-        return node
-
-    def visit_Name(self, node: ast.Name):
-        if node.id.startswith("_"):
-            node.id = "N"
-        return node
-
-
-def _skeleton_hash(case: TestCase) -> str | None:
-    """骨架哈希：同名同骨架 = 复制粘贴嫌疑（仅字面量/局部私有名不同）。"""
-    try:
-        node = ast.parse(ast.unparse(case.node)).body[0]
-    except (ValueError, SyntaxError, MemoryError):
-        return None
-    node = _Skeletonizer().visit(node)
-    fn = ast.FunctionDef(
-        name="t", args=node.args, body=_strip_docstring(node.body), decorator_list=[], returns=None, type_comment=None
-    )
-    return hashlib.sha1(ast.dump(ast.fix_missing_locations(fn), include_attributes=False).encode("utf-8")).hexdigest()[
-        :10
-    ]
-
-
-def audit_similar_bodies(include_live: bool = False, include_intra: bool = False) -> tuple[list[str], dict[str, int]]:
-    """同名同骨架分组（建议性审计）：默认仅跨文件组（复制粘贴高信号），``include_intra`` 连带文件内组。"""
-    groups: dict[tuple[str, str], list[str]] = defaultdict(list)
-    for path in _iter_test_files(include_live):
-        try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-        except (OSError, SyntaxError):
-            continue
-        for case in cases_in_module(path, tree):
-            sk = _skeleton_hash(case)
-            if sk is None:
-                continue
-            cls_name = case.cls.name if case.cls is not None else "(module)"
-            groups[(case.name, sk)].append(f"{rel(path)}::{cls_name}")
-    lines: list[str] = []
-    n_intra = 0
-    for (name, sk), members in sorted(groups.items()):
-        if len(members) < 2:
-            continue
-        if len({m.split("::")[0] for m in members}) < 2:
-            n_intra += 1
-            if not include_intra:
-                continue
-        lines.append(f"[{name} / {sk}] " + " ; ".join(members))
-    return lines, {"groups": len(lines), "intra_groups_total": n_intra}
-
-
-_CACHE_ENV = "TEST_REDUNDANCY_CACHE"
-_CACHE_FILE = "test_redundancy_facts.json"
-
-
-def _facts_cache_path() -> Path:
-    override = os.environ.get(_CACHE_ENV)
-    return Path(override) if override else REPO_ROOT / "data" / "cache" / _CACHE_FILE
-
-
-def _cache_version() -> str:
-    """缓存格式/判定逻辑版本：本脚本 + 同目录 _checklib + 解释器大版本，任一变化全量失效。"""
-    parts = [f"{sys.version_info[0]}.{sys.version_info[1]}"]
-    for src in (Path(__file__), Path(__file__).with_name("_checklib.py")):
-        try:
-            parts.append(hashlib.sha1(src.read_bytes()).hexdigest())
-        except OSError:
-            parts.append("?")
-    return hashlib.sha1("|".join(parts).encode("utf-8")).hexdigest()
-
-
-def _file_signature(path: Path) -> str:
-    st = path.stat()
-    return f"{st.st_size}:{st.st_mtime_ns}"
-
-
-def _load_facts_cache(path: Path) -> dict[str, dict]:
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-    if not isinstance(data, dict) or data.get("version") != _cache_version():
-        return {}
-    files = data.get("files")
-    return files if isinstance(files, dict) else {}
-
-
-def _save_facts_cache(path: Path, files: dict[str, dict]) -> None:
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(
-            json.dumps({"version": _cache_version(), "files": files}, ensure_ascii=False),
-            encoding="utf-8",
-        )
-        os.replace(tmp, path)
-    except OSError:  # 缓存只影响速度不影响结论：写失败静默降级为下次全量
-        pass
-
-
-def _file_facts(path: Path, tree: ast.Module, cases: list[TestCase]) -> dict:
-    """单文件冷路径事实：各类文件内检查结果 + fixture 消费面 + 跨文件重复比对所需指纹。
-
-    检查函数本体不改（单测契约不变），仅把调用从「全集两遍」变为「每文件一遍、命中缓存零遍」。
-    """
-    fixtures: list[list] = []
-    params: list[str] = []
-    usefix: list[str] = []
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            args = node.args
-            params.extend(a.arg for a in (*args.posonlyargs, *args.args, *args.kwonlyargs))
-            for extra in (args.vararg, args.kwarg):
-                if extra is not None:
-                    params.append(extra.arg)
-            exposed = _fixture_exposed_name(node)
-            if exposed is not None:
-                fixtures.append([exposed, node.lineno])
-        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "usefixtures":
-            usefix.extend(a.value for a in node.args if isinstance(a, ast.Constant) and isinstance(a.value, str))
-    return {
-        "count": len(cases),
-        "dead": check_dead_tests(cases, {path: tree}),
-        "assertion": check_assertion_free(cases),
-        "self": check_self_fulfilling(cases),
-        "hard": check_hardcoded_evolving_totals(cases),
-        "trivial": check_trivially_true(cases),
-        "weak": check_weak_mock_assertions(cases),
-        "fixtures": fixtures,
-        "params": params,
-        "usefix": usefix,
-        "entries": [{"sig": body_signature(c), "lineno": c.lineno, "name": c.name} for c in cases],
-    }
-
-
-def _collect_facts(include_live: bool) -> tuple[dict[str, dict], list[str]]:
-    """逐文件取事实：签名未变直接复用缓存（免解析免检查），变更文件仅增量重算。
-
-    返回（{绝对路径: 事实}, parse_errors）。已删除文件的陈旧条目随写回自动剔除。
-    """
-    cache_path = _facts_cache_path()
-    cached = _load_facts_cache(cache_path)
-    facts: dict[str, dict] = {}
-    parse_errors: list[str] = []
-    for path in _iter_test_files(include_live):
-        key = str(path)
-        sig = _file_signature(path)
-        old = cached.get(key)
-        if isinstance(old, dict) and old.get("sig") == sig:
-            facts[key] = old
-            continue
-        try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-        except SyntaxError as exc:  # 语法错误由 pytest 自己报，这里不重复报
-            parse_errors.append(f"{rel(path)}: 无法解析（{exc.msg}）")
-            continue
-        facts[key] = {"sig": sig, **_file_facts(path, tree, cases_in_module(path, tree))}
-    if facts != cached:
-        _save_facts_cache(cache_path, facts)
-    return facts, parse_errors
-
-
-def run_checks(include_live: bool = False) -> tuple[list[str], dict[str, int]]:
-    """跑全部检查，返回（findings, 统计）。
-
-    判定逐文件调用同一组 check_*（冷路径才算），跨文件只做事实归并与重复比对归并。
-    """
-    facts, parse_errors = _collect_facts(include_live)
-    dead_fixtures = check_dead_fixtures(facts)  # per-file 事实聚合判定（零额外解析，不污染缓存热路径）
-    dead: list[str] = []
-    assertion_free: list[str] = []
-    self_fulfilling: list[str] = []
-    hardcoded: list[str] = []
-    trivial: list[str] = []
-    weak: list[str] = []
-    entries: list[tuple[str, int, str, str | None]] = []
-    n_cases = 0
-    for key, item in facts.items():
-        rel_path = rel(Path(key))
-        dead += item["dead"]
-        assertion_free += item["assertion"]
-        self_fulfilling += item["self"]
-        hardcoded += item["hard"]
-        trivial += item["trivial"]
-        weak += item["weak"]
-        n_cases += item["count"]
-        entries.extend((rel_path, e["lineno"], e["name"], e["sig"]) for e in item["entries"])
-    dup_findings, skipped = _group_duplicate_entries(entries)
-    findings: list[str] = []
-    findings += parse_errors
-    findings += dead
-    findings += assertion_free
-    findings += dup_findings
-    findings += self_fulfilling
-    findings += hardcoded
-    findings += trivial
-    findings += dead_fixtures
-    findings += weak
-    stats = {
-        "files": len(facts),
-        "cases": n_cases,
-        "duplicate_skipped": skipped,
-        "dead": len(dead),
-        "assertion_free": len(assertion_free),
-        "duplicate": len(dup_findings),
-        "self_fulfilling": len(self_fulfilling),
-        "hardcoded_totals": len(hardcoded),
-        "trivial": len(trivial),
-        "dead_fixtures": len(dead_fixtures),
-        "weak_mock": len(weak),
-    }
-    return findings, stats
+# 入口与实现包分开后，需要把 scripts/ 放进 sys.path（load_script 只加载入口文件）
+_SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIR)
+
+# 八类检查已按 finding 分类拆到 scripts/_test_redundancy/（各检查一个模块，共用
+# _common 的 AST 原语，runner 负责编排）；入口只保留 CLI 与兼容 re-export，
+# 使 load_script 的既有直调面（run_checks / check_* / cases_in_module …）不变。
+from _test_redundancy._common import (  # noqa: F401 — 兼容 load_script 直调面
+    TestCase,
+    _iter_test_files,
+    _strip_docstring,
+    _dump,
+    _class_attr_binding,
+    _method_body_hash,
+    _self_attrs,
+    _call_name,
+    _assertion_in,
+    _same_scope_helpers,
+    _assertions,
+    _patch_targets,
+    _called_names,
+    _mock_return_literals,
+    _asserted_literals,
+    cases_in_module,
+    _TEST_ROOT,
+    _LIVE_DIR,
+    _MOCK_ASSERT,
+    _PYTEST_ASSERT,
+    _SUT_ATTRS,
+)
+
+from _test_redundancy.cases import (  # noqa: F401 — 兼容 load_script 直调面
+    check_dead_tests,
+    check_assertion_free,
+)
+
+from _test_redundancy.duplicates import (  # noqa: F401 — 兼容 load_script 直调面
+    body_signature,
+    _group_duplicate_entries,
+    check_duplicate_bodies,
+)
+
+from _test_redundancy.similar import (  # noqa: F401 — 兼容 load_script 直调面
+    _Skeletonizer,
+    _skeleton_hash,
+    audit_similar_bodies,
+)
+
+from _test_redundancy.self_fulfilling import (  # noqa: F401 — 兼容 load_script 直调面
+    check_self_fulfilling,
+)
+
+from _test_redundancy.hardcoded import (  # noqa: F401 — 兼容 load_script 直调面
+    check_hardcoded_evolving_totals,
+)
+
+from _test_redundancy.trivial import (  # noqa: F401 — 兼容 load_script 直调面
+    check_trivially_true,
+)
+
+from _test_redundancy.weak_mock import (  # noqa: F401 — 兼容 load_script 直调面
+    _is_mock_name,
+    check_weak_mock_assertions,
+)
+
+from _test_redundancy.dead_fixtures import (  # noqa: F401 — 兼容 load_script 直调面
+    _fixture_exposed_name,
+    check_dead_fixtures,
+)
+
+from _test_redundancy.facts_cache import (  # noqa: F401 — 兼容 load_script 直调面
+    _facts_cache_path,
+    _cache_version,
+    _file_signature,
+    _load_facts_cache,
+    _save_facts_cache,
+    _file_facts,
+    _collect_facts,
+    _CACHE_ENV,
+    _CACHE_FILE,
+)
+
+from _test_redundancy.runner import (  # noqa: F401 — 兼容 load_script 直调面
+    run_checks,
+)
+
+from _checklib import add_common_args, report  # noqa: E402
 
 
 def main() -> None:

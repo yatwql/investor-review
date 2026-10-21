@@ -1,5 +1,13 @@
 # 快速开始
 
+## 目录
+
+- [方式一：启动脚本（推荐）](#方式一启动脚本推荐) · [方式二：手动运行](#方式二手动运行)
+- [方式三：CLI 命令行模式](#方式三cli-命令行模式) · [方式四：Web 浏览器模式](#方式四web-浏览器模式)（[Web 生成用途：临时试算 / 正式更新](#web-生成用途临时试算--正式更新)）
+- [持仓文件格式](#持仓文件格式)（[持仓数据处理流程](#持仓数据处理流程)） · [首次运行会生成什么](#首次运行会生成什么)
+- [菜单操作速览](#菜单操作速览) · [（可选）启用开发协作自动校验 hooks](#可选启用开发协作自动校验-hooks)
+- [下一步](#下一步)
+
 ## 方式一：启动脚本（推荐）
 
 ```bash
@@ -49,62 +57,23 @@ pip install -r requirements.txt
 
 ## 方式三：CLI 命令行模式
 
-CLI 模式无需 TUI 界面，通过参数驱动，适合定时任务和脚本化使用：
+无需界面，一条命令跑完，适合定时任务与脚本化。三条最常用的：
 
 ```bash
-# 查看帮助
-.venv/bin/python -m src.python.cli --help
-
-# 基础 Excel 报告
+# 基础 Excel 报告（约 1 分钟）
 .venv/bin/python -m src.python.cli report --type basic
 
-# 全量报告（含 LLM）
+# 全量报告（含 LLM 章节，约 5 分钟）
 .venv/bin/python -m src.python.cli report --type full --history auto
 
-# 更新缓存
-.venv/bin/python -m src.python.cli cache --update all
-
-# 查看缓存状态
-.venv/bin/python -m src.python.cli cache --stats
-
-# 调仓 What-if 模拟（对比两份持仓，生成独立 diff 报告）
-.venv/bin/python -m src.python.cli whatif --base data/holdings/调仓前.xlsx --candidate data/holdings/调仓后.xlsx
-
-# 详细模式（终端显示彩色进度前缀）
-.venv/bin/python -m src.python.cli --verbose report --type basic
+# 系统自检（环境/配置/数据源，配置损坏时也能跑）
+.venv/bin/python -m src.python.cli doctor
 ```
 
-> **便捷入口**：除直调 Python 模块外，也可用包装脚本 `scripts/cli.sh`（Linux/macOS）或 `scripts/cli.ps1`（Windows PowerShell）——**无参数调用时默认生成报告**（`report --type both`，Excel+HTML 双格式、不含 LLM、全部页签有数据），传入参数时原样透传给 CLI：
+> 包装脚本 `scripts/cli.sh`（Windows `cli.ps1`）可省掉解释器前缀，例如 `./scripts/cli.sh report --type both`。
+> 报告类型差异：`basic` 核心 Excel 页签 / `both` Excel+HTML 含新闻与基金深度 / `full` 再加 LLM 章节；历史走势默认按配置自动获取（`--history off` 可跳过本次）。
 >
-> ```bash
-> # Linux/macOS
-> ./scripts/cli.sh                        # 无参数 -> 默认生成报告（both，Excel+HTML）
-> ./scripts/cli.sh report --type full     # 生成全量报告（含 LLM）
-> ./scripts/cli.sh cache --stats          # 查看缓存状态
-> ```
->
-> ```powershell
-> # Windows PowerShell
-> .\scripts\cli.ps1                        # 无参数 -> 默认生成报告（both，Excel+HTML）
-> .\scripts\cli.ps1 report --type full     # 生成全量报告（含 LLM）
-> .\scripts\cli.ps1 cache --stats          # 查看缓存状态
-> ```
->
-> 包装脚本自动定位项目虚拟环境解释器（`.venv/bin/python` / `.venv\Scripts\python.exe`）并切换到项目根目录；完整参数同下方「CLI 命令参考」，脚本速查见 [开发者指南](../managements/developer-guide.md#辅助脚本速查)。
->
-> **只要完整报告（含 LLM）**：`scripts/llm.sh`（Linux/macOS）或 `scripts/llm.ps1`（Windows）是任务类型写死的快捷入口，等价于 TUI 菜单的「生成完整报告」——固定 `report --type full`，追加参数即为其报告级参数：
->
-> ```bash
-> ./scripts/llm.sh                  # 生成完整报告（含 LLM）
-> ./scripts/llm.sh --force-llm      # 强制重新调用 LLM，跳过缓存
-> ./scripts/llm.sh --history off    # 本次不获取组合历史走势
-> ```
->
-> 需要全局参数（`--config` / `--output` / `--experiment` / `--feature`）时仍用 `cli.sh` / `cli.ps1`——它们必须写在 `report` 子命令之前。
->
-> **关于报告类型**：`basic`（CLI 默认，约 1 分钟）只生成核心 Excel 页签（汇总/市值/分类/穿透/基金业绩），新闻、历史、LLM 相关页签为降级占位；`both`（包装脚本无参数默认，约 2 分钟）生成 Excel+HTML 双格式且含新闻/基金深度/演进等全部非 LLM 页签；`full`（约 5 分钟）在 both 基础上再含 LLM 全球政经/智囊团等章节。组合历史走势默认自动获取（按配置 `history.fetch_mode`，默认 `auto`）；如需跳过可在 `both`/`full` 时加 `--history off`。
->
-> CLI 模式与 TUI 模式共享同一套缓存和配置文件，两种模式可交替使用。
+> **完整命令参考**（全局参数、`cache` / `whatif` / `check-sources` / `view-logs` / `doctor` 子命令、退出码、定时任务、完成通知）见 **[CLI 命令行模式使用指南](how-to-use-cli-mode.md)**。
 
 ## 方式四：Web 浏览器模式
 
@@ -163,22 +132,6 @@ CLI 模式无需 TUI 界面，通过参数驱动，适合定时任务和脚本�
 
 > **提示**：历史走势/快照演进基于快照时间线。试算的快照在隔离域内环比，不影响 TUI / CLI 的正式历史；正式更新才写入共享历史。
 
-## CLI 使用指南
-
-CLI 模式的完整命令参考（全局参数 / `report` / `cache` / `whatif` / `check-sources` / `view-logs` / `doctor` 子命令、使用示例、常用命令速查、退出码、最佳实践）见 [CLI 命令行模式使用指南](how-to-use-cli-mode.md)。
-
-```bash
-# 查看帮助
-.venv/bin/python -m src.python.cli --help
-
-# 基础 Excel 报告
-.venv/bin/python -m src.python.cli report --type basic
-```
-
-定时任务配置详见[CLI 命令行模式使用指南](how-to-use-cli-mode.md) §13「定时任务」。
-
----
-
 ## 持仓文件格式
 
 支持 `.xlsx` 格式，每页工作表为一个独立账户（页签名即账户名）：
@@ -212,6 +165,23 @@ CLI 模式的完整命令参考（全局参数 / `report` / `cache` / `whatif` /
 当持仓文件新增了代码（如新买了一只股票），程序会自动触发该代码的行情预热缓存（首次使用时自动获取并缓存行情数据），后续操作即复用缓存。
 
 > 提示：如果需要同时维护多份不同的持仓方案，可在 `holdings_dir` 目录下放置多个 `.xlsx` 文件，程序会列出所有文件供选择。典型的方案包含以下账户示例：**证券账户**（场内股票/ETF）、**支付宝-基金投资账户**（场外基金）、**微信-基金投资账户**（债券基金）、**银行-基金投资账户**（QDII 基金）。
+
+---
+
+## 首次运行会生成什么
+
+第一次跑完报告后，项目根目录会多出这些东西（都属于「你的数据」，与代码无关）：
+
+| 位置 | 内容 | 说明 |
+|---|---|---|
+| `data/config/` | `config.json`、`features.json`、`llm_settings.json`… | 首次启动自动生成默认配置 |
+| `data/holdings/` | 你放入的持仓 Excel | 唯一无法重建的数据，**务必定期备份** |
+| `data/history/snapshots/` | 每次生成报告后写一份快照 | 报告环比 / 组合演进的数据来源 |
+| `data/cache/` | 行情、新闻、LLM 等缓存 | 可随时删，删了只是下次慢一点 |
+| `reports/` | 最新报告 + 按日期存档子目录 | Excel / HTML 产物 |
+| `logs/app.log` | 运行日志（自动轮转） | 出问题先看这里最近的 ERROR |
+
+> 备份怎么备、换电脑怎么迁、升级要核对什么、想清空重来该删哪些——都在 **[数据与备份](data-and-backup.md)**（5 分钟读完，能省很多麻烦）。
 
 ---
 
@@ -293,3 +263,8 @@ sh .githooks/install-hooks.sh --off   # 停用
 - [配置指南](how-to-config.md) — 调整数据源、缓存、预警等参数
 - [LLM 配置指引](how-to-config-llm.md) — 接入 LLM 分析
 - [常见问题解答](faq.md) — 使用中的高频问题
+
+---
+
+**相关手册**：[← 手册总索引](README.md) · [数据与备份 →](data-and-backup.md)
+同主题：[常规配置指引](how-to-config.md) · [常见问题解答](faq.md)

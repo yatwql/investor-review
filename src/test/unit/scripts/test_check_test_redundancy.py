@@ -348,8 +348,10 @@ class TestFactsCache:
     def tmp_tree(self, redundancy, tmp_path, monkeypatch):
         root = tmp_path / "src" / "test"
         (root / "unit").mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr(redundancy, "_TEST_ROOT", root)
-        monkeypatch.setattr(redundancy, "_LIVE_DIR", root / "live")
+        from _test_redundancy import _common  # 扫描根在实现模块，patch 须指向调用点
+
+        monkeypatch.setattr(_common, "_TEST_ROOT", root)
+        monkeypatch.setattr(_common, "_LIVE_DIR", root / "live")
         monkeypatch.setenv("TEST_REDUNDANCY_CACHE", str(tmp_path / "data/cache/facts.json"))
         return root
 
@@ -412,8 +414,10 @@ def quality_tree(redundancy, tmp_path, monkeypatch):
     monkeypatch.setenv("TEST_REDUNDANCY_CACHE", str(tmp_path / "data" / "cache" / "facts.json"))
     root = tmp_path / "src" / "test"
     (root / "unit").mkdir(parents=True, exist_ok=True)
-    monkeypatch.setattr(redundancy, "_TEST_ROOT", root)
-    monkeypatch.setattr(redundancy, "_LIVE_DIR", root / "live")
+    from _test_redundancy import _common  # 扫描根在实现模块，patch 须指向调用点
+
+    monkeypatch.setattr(_common, "_TEST_ROOT", root)
+    monkeypatch.setattr(_common, "_LIVE_DIR", root / "live")
     return root
 
 

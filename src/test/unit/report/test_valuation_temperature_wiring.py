@@ -377,7 +377,7 @@ class TestComputeValuationData(unittest.TestCase):
             "sample_count": 200,
             "percentile_available": True,
         }
-        with patch("src.python.report.orchestrator._fetch_valuation_for_code", return_value=fetched):
+        with patch("src.python.report._orchestrator_data._fetch_valuation_for_code", return_value=fetched):
             result = compute_valuation_data([detail], config, MagicMock())
         assert result["available"] is True
         assert result["status"] == "ok"
@@ -394,7 +394,7 @@ class TestComputeValuationData(unittest.TestCase):
         detail = MagicMock()
         detail.code = "600001"
         detail.name = "测试股票"
-        with patch("src.python.report.orchestrator._fetch_valuation_for_code", return_value=None):
+        with patch("src.python.report._orchestrator_data._fetch_valuation_for_code", return_value=None):
             result = compute_valuation_data([detail], config, MagicMock())
         assert result["available"] is False
         assert result["status"] == "source_failed"
@@ -418,7 +418,7 @@ class TestRealValuationWiring(unittest.TestCase):
         with (
             patch("src.python.config.datasink_feature_ready", return_value=True),
             patch("src.python.fetcher.industry.fetch_valuation_fields", return_value={"pe": 10.5, "pb": 2.1}),
-            patch("src.python.report.orchestrator._fetch_holding_bars", return_value=self._bars()),
+            patch("src.python.report._orchestrator_data._fetch_holding_bars", return_value=self._bars()),
             patch("src.python.fetcher.financial_indicator.fetch_indicator_series", return_value=records),
         ):
             out = _fetch_valuation_for_code("600001", "测试股票")
@@ -435,7 +435,7 @@ class TestRealValuationWiring(unittest.TestCase):
         with (
             patch("src.python.config.datasink_feature_ready", return_value=True),
             patch("src.python.fetcher.industry.fetch_valuation_fields", return_value={"pe": 10.5, "pb": 2.1}),
-            patch("src.python.report.orchestrator._fetch_holding_bars", return_value=self._bars()),
+            patch("src.python.report._orchestrator_data._fetch_holding_bars", return_value=self._bars()),
             patch("src.python.fetcher.financial_indicator.fetch_indicator_series", return_value=[]),
         ):
             out = _fetch_valuation_for_code("600001", "测试股票")
@@ -456,7 +456,7 @@ class TestRealValuationWiring(unittest.TestCase):
         with (
             patch("src.python.config.datasink_feature_ready", return_value=False),
             patch("src.python.fetcher.industry.fetch_valuation_fields", return_value={"pe": 10.5, "pb": 2.1}),
-            patch("src.python.report.orchestrator._fetch_holding_bars", return_value=self._bars()),
+            patch("src.python.report._orchestrator_data._fetch_holding_bars", return_value=self._bars()),
             patch("src.python.fetcher.financial_indicator.fetch_indicator_series", side_effect=_series),
         ):
             out = _fetch_valuation_for_code("600001", "测试股票")
@@ -471,7 +471,7 @@ class TestRealValuationWiring(unittest.TestCase):
         with (
             patch("src.python.config.datasink_feature_ready", return_value=True),
             patch("src.python.fetcher.industry.fetch_valuation_fields", return_value={"pe": 10.5, "pb": 2.1}),
-            patch("src.python.report.orchestrator._fetch_holding_bars", return_value=self._bars()),
+            patch("src.python.report._orchestrator_data._fetch_holding_bars", return_value=self._bars()),
             patch(
                 "src.python.fetcher.financial_indicator.fetch_indicator_series",
                 side_effect=RuntimeError("boom"),

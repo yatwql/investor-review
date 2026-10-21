@@ -115,7 +115,7 @@ class RunManager:
     """单 worker 串行任务队列。
 
     ``executor`` 为任务执行体 ``(run_state, params) -> exit_code``，由
-    app 工厂注入（默认绑定 ``handlers._run_generation``）；worker 线程
+    app 工厂注入（默认绑定 ``run_generation._run_generation``）；worker 线程
     出队逐个执行，异常兜底为 run failed 状态 + 日志（不崩溃服务）。
     """
 

@@ -22,7 +22,8 @@ from uuid import uuid4
 from flask import Flask, g, request
 
 from src.python.core.constants import PROJECT_ROOT
-from src.python.web.handlers import _err, _run_generation, create_handlers
+from src.python.web.handlers import _err, create_handlers
+from src.python.web.run_generation import _run_generation
 from src.python.web.upload import _MAX_BYTES
 
 logger = logging.getLogger("invest")

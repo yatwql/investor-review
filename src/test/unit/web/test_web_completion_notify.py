@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.python.core.completion_notify import LATEST_HTML_NAME, LATEST_XLSX_NAME
-from src.python.web.handlers import _notify_web_completion, _run_generation
+from src.python.web.run_generation import _notify_web_completion, _run_generation
 from src.python.web.runs import RunState
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_web, pytest.mark.usefixtures("offline_external_sources")]
@@ -96,7 +96,7 @@ class TestNotifyWebCompletion:
                 "src.python.core.completion_notify.dispatch_completion_notification",
                 side_effect=RuntimeError("boom"),
             ),
-            patch("src.python.web.handlers.logger.debug") as mock_log,
+            patch("src.python.web.run_generation.logger.debug") as mock_log,
         ):
             # 不抛出即通过（异常若上抛会改变 run 状态机），且必须留 DEBUG 痕迹
             _notify_web_completion(_state(), {"report_type": "basic"}, 2, None)
@@ -128,8 +128,8 @@ class TestNotifyWebCompletion:
 class TestRunGenerationNotifyWiring:
     """_run_generation 包装器：委托执行体 + 收尾通知派发。"""
 
-    @patch("src.python.web.handlers._notify_web_completion")
-    @patch("src.python.web.handlers._run_generation_impl")
+    @patch("src.python.web.run_generation._notify_web_completion")
+    @patch("src.python.web.run_generation._run_generation_impl")
     def test_delegates_and_notifies_with_result(self, mock_impl, mock_notify):
         """执行体 result 经 result_box 回传给通知（excel_ok/html_ok 载荷来源）。"""
         state = _state()
@@ -148,8 +148,8 @@ class TestRunGenerationNotifyWiring:
         mock_impl.assert_called_once()
         mock_notify.assert_called_once_with(state, params, 1, fake_result)
 
-    @patch("src.python.web.handlers._notify_web_completion")
-    @patch("src.python.web.handlers._run_generation_impl", return_value=2)
+    @patch("src.python.web.run_generation._notify_web_completion")
+    @patch("src.python.web.run_generation._run_generation_impl", return_value=2)
     def test_severe_path_still_notifies(self, mock_impl, mock_notify):
         """早期严重失败（无 result）→ 通知仍派发（无人值守失败提醒是核心价值）。"""
         state = _state()

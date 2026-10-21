@@ -158,7 +158,7 @@ class TestRunImplBudgetBackstop:
         return RunState("budget-test-run", base), base
 
     def test_exceeded_without_ack_fails_run(self, tmp_path):
-        from src.python.web.handlers import _run_generation_impl
+        from src.python.web.run_generation import _run_generation_impl
 
         state, params = self._state()
         with patch(
@@ -171,7 +171,7 @@ class TestRunImplBudgetBackstop:
 
     def test_ack_skips_gate_then_runs_normal_flow(self, tmp_path):
         """ack 放行后进入正常流（此处以持仓缺失错误证明已越过硬闸）。"""
-        from src.python.web.handlers import _run_generation_impl
+        from src.python.web.run_generation import _run_generation_impl
 
         state, params = self._state(budget_ack=True)
         cfg = {"holdings_dir": str(tmp_path), "holdings_filename": "missing.xlsx"}
@@ -188,7 +188,7 @@ class TestRunImplBudgetBackstop:
         assert any("正式持仓文件不存在" in e for e in state.errors), "已越过硬闸进入正常持仓校验流"
 
     def test_non_full_params_untouched_by_gate(self, tmp_path):
-        from src.python.web.handlers import _run_generation_impl
+        from src.python.web.run_generation import _run_generation_impl
 
         state, params = self._state(report_type="basic")
         cfg = {"holdings_dir": str(tmp_path), "holdings_filename": "missing.xlsx"}

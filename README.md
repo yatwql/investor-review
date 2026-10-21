@@ -32,7 +32,7 @@
 - 🔁 **决策有闭环** — 建议 → 登记 → 真实行情结算命中率 → 教训回灌提示词，越用越懂你的组合
 - 🔒 **隐私优先** — 数据全部本地处理，支持 4 档匿名化，凭据永不落日志与报告
 
-> 当前版本：0.14.0（[版本历史](docs/managements/changelog.md)）
+> 当前版本：0.14.1（[版本历史](docs/managements/changelog.md)）
 
 ## ✨ 核心亮点
 
@@ -86,7 +86,7 @@ git clone https://github.com/yatwql/investor-util.git && cd investor-util
 # Windows： .\scripts\launch.ps1
 ```
 
-启动后按提示放入持仓 Excel（格式：每张工作表一个账户，固定 4 列——名称/代码/份额/成本），几分钟内拿到双格式报告。更完整的首次使用指引见 [快速开始](docs/manuals/how-to-start.md)。
+启动后按提示放入持仓 Excel（格式：每张工作表一个账户，固定 4 列——名称/代码/份额/成本），几分钟内拿到双格式报告。更完整的首次使用指引见 [快速开始](docs/manuals/how-to-start.md)；**不确定该看哪篇**？按场景查 [手册总索引](docs/manuals/README.md)（手机 SSH / 每天自动跑 / LLM 报错 / 数据取不到 / 备份迁移…）。
 
 ## 启动方式
 
@@ -159,11 +159,12 @@ git clone https://github.com/yatwql/investor-util.git && cd investor-util
 
 ## 📖 用户指南
 
-建议按以下顺序阅读：
+**先按场景**查 [手册总索引](docs/manuals/README.md)（手机 SSH / 每天自动跑 / LLM 报错 / 数据取不到 / 备份迁移），或按下面顺序从头读：
 
 | # | 文档 | 说明 |
 |:-:|:-----|:------|
-| 1 | [快速开始](docs/manuals/how-to-start.md) | 启动方式、持仓格式、首次使用指引 |
+| 0 | [手册总索引](docs/manuals/README.md) | **按场景导航**（我想……→ 看哪篇 → 直达章节）、阅读路径、界面用词对照 |
+| 1 | [快速开始](docs/manuals/how-to-start.md) | 三种启动方式、持仓格式、首次运行会生成什么 |
 | 2 | [TUI 菜单操作手册](docs/manuals/how-to-use-tui-menu.md) | 各菜单详解（含 `[D]` 配置与目录信息子菜单）、报告内容对照、缓存管理 |
 | 3 | [CLI 命令行模式使用指南](docs/manuals/how-to-use-cli-mode.md) | 命令结构、全局参数（`--experiment` / `--feature`）、各子命令、退出码、定时任务 |
 | 4 | [Web 浏览器模式使用指南](docs/manuals/how-to-use-web-mode.md) | 五区标签页工作台：生成报告 / 调仓模拟 / 配置 / 运行状态（含缓存管理）/ 日志 |
@@ -172,7 +173,8 @@ git clone https://github.com/yatwql/investor-util.git && cd investor-util
 | 7 | [报告文件结构](docs/manuals/reports-instruction.md) | Excel/HTML 报告逐章说明、基金业绩评价、投资知识点 |
 | 8 | [数据源一览](docs/manuals/datasource.md) | 数据源、缓存前缀、数据质量与常见问题 |
 | 9 | [数据源可靠性文档](docs/manuals/datasource-reliability.md) | 运维视角：可靠度评级、降级策略、限流规则、已知问题 |
-| 10 | [常见问题解答](docs/manuals/faq.md) | 使用中的高频问题，按类别组织 |
+| 10 | [数据与备份](docs/manuals/data-and-backup.md) | 目录用途、备份清单、换机迁移、版本升级核对、重置与卸载 |
+| 11 | [常见问题解答](docs/manuals/faq.md) | 使用中的高频问题，按类别组织 |
 
 ## 🤝 参与贡献
 
@@ -180,7 +182,7 @@ git clone https://github.com/yatwql/investor-util.git && cd investor-util
 
 **这是一个把工程质量当真的一人项目**，对贡献者意味着：
 
-- ✅ **10,000+ 测试用例**（dev-verify 门禁 6,700+ 项）+ 场景化回归套件，改动有底气
+- ✅ **上万条测试用例**（提交门禁 dev-verify 覆盖其中七千余项）+ 场景化回归套件，改动有底气（实时数字见 [测试覆盖率文档](docs/managements/test-coverage.md)）
 - ✅ **10 个 CI 守护脚本**把历史教训变成硬门禁：代码/文档痕迹、任务编号、语义命名、文档一致性、测试冗余、需求追溯、版本号、文档链接、行数红线——文档与代码永不漂移
 - ✅ **P0/P1/P2 三级门禁**：提交、合并、发布各有明确的通过标准，CI 矩阵覆盖 Python 3.11/3.12/3.13 + Windows 可移植性 + 非 UTF-8 locale 探测
 - ✅ **清晰的协作契约**：[开发者指南](docs/managements/developer-guide.md) 写明了工作流、任务编号规范与发布流程；[需求文档](docs/managements/requirements.md) 与 [测试标准](docs/managements/testplan.md) 让每个需求可追溯、每个缺陷有回归用例
@@ -191,7 +193,8 @@ git clone https://github.com/yatwql/investor-util.git && cd investor-util
 
 | 文档 | 说明 |
 |:-----|:------|
-| [开发者指南](docs/managements/developer-guide.md) | 开发环境与工作流、三级门禁（P0/P1/P2）、任务编号规范、测试驱动、辅助脚本速查、注册表使用、版本发布流程 |
+| [开发者指南](docs/managements/developer-guide.md) | 文档地图、开发环境与工作流、三级门禁（P0/P1/P2）、测试驱动、调试与剖析、扩展清单、注册表使用、版本发布与 CI 排查 |
+| [辅助脚本参考](docs/managements/scripts-reference.md) | 60+ 辅助脚本字典（按用途分类，每条含设计逻辑与使用逻辑） |
 
 ## 📋 项目内部文档
 

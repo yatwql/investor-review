@@ -175,7 +175,7 @@ class TestFullPathInjection:
         """跑一遍 full 编排（外部依赖全替身），返回传给 HTML 生成器的关键字实参。"""
         from unittest.mock import MagicMock
 
-        import src.python.report._report_generation as rg
+        import src.python.report._generation_full as rg
 
         seen: dict = {}
         for _flag in (
@@ -235,7 +235,7 @@ class TestFullPathInjection:
         """`_generate_full_html_report` 须把契约透传给 `write_html_report`。"""
         from unittest.mock import MagicMock
 
-        import src.python.report._report_generation as rg
+        import src.python.report._generation_full as rg
         from src.python.report.orchestrator import ReportResult
 
         seen: dict = {}

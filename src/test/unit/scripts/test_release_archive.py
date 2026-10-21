@@ -350,17 +350,25 @@ class TestRealArchiveContract:
         assert line.endswith("2099-01-01）"), line
 
     def test_real_rf_sections_are_migrated_or_absent(self, real):
-        """除当前开发版外，主台账各批次节只能是「已迁档」——发布后不得残留待迁表格。"""
+        """主台账各批次节只能是「本版待迁」或「已迁档」；空台账（新周期首日）合法。
+
+        注意：新开发周期开张时「已解决问题」区可以**没有任何批次节**（`devbump` 会清掉
+        上一版占位），所以这里不能断言「至少有一节」——那是随周期变化的仓库状态，
+        不是脚本契约。契约只约束「存在的每一节」：当前开发版之外只允许已迁档/缺失。
+        """
         rel = real["rel"]
         versions = re.findall(r"^### 开发期已修复（(\d+\.\d+\.\d+)-dev）", real["rf_main"], re.M)
-        assert versions, "主台账应有开发期已修复节"
+        if not versions:
+            return  # 新周期台账为空：合法状态，无批次节可校验
 
         def _key(v: str) -> tuple[int, ...]:
             return tuple(int(n) for n in v.split("."))
 
         current = max(versions, key=_key)
         states = {v: rel.rf_archive_status(real["rf_main"], v)[0] for v in versions}
-        assert states.pop(current) in {"pending", "archived"}, current  # 当前开发版批次可待迁
+        # 当前开发版批次：待迁（有表格）或已迁（只有占位）都合法
+        assert states.pop(current) in {"pending", "archived"}, current
+        # 更早批次：只允许已迁档（发布后不得残留待迁表格）
         assert set(states.values()) <= {"archived", "absent"}, states
 
     def test_real_plan_headings_roundtrip(self, real):

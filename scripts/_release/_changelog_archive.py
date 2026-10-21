@@ -63,6 +63,17 @@ def apply_changelog_release(text: str, release_version: str, date: str) -> tuple
         raise ReleaseError("changelog 未找到「最近发布」指针行")
 
     archive_name = archive_name_for(release_version)
+    # 指针行的归档文件名也要一并改写：跨小版本发布时归档文件换名（0.13.x → 0.14.x），
+    # 只改版本号/日期会让指针继续指向上一系列的归档（链接失准且到下一系列才被发现）。
+    out, n_link = re.subn(
+        r"(^> \*\*最近发布 \[[\d.]+\]\*\*（[\d-]+）——已发布版本段随发布移入\s*\[`)[^`]+(`\])",
+        lambda m: m.group(1) + archive_name + m.group(2),
+        out,
+        count=1,
+        flags=re.M,
+    )
+    if n_link != 1:
+        raise ReleaseError("changelog 指针行的归档文件链接改写失败（格式与预期不符）")
     idx_pat = re.compile(
         rf"^(- \[`{re.escape(archive_name)}`\]\([^)]*\)\s*—\s*[^（]*?)"
         r"(v[\d.]+)( ~ v[\d.]+)?（(\d{4}-\d{2}-\d{2})( ~ \d{4}-\d{2}-\d{2})?）",

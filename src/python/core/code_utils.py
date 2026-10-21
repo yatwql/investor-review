@@ -1,12 +1,30 @@
-"""证券代码工具 — 资产代码类型识别唯一入口。
+"""证券代码工具 — 资产类型识别唯一入口。
 
 集中管理 A 股/基金/债券/港股等资产类型的代码前缀和名称关键词知识，
-避免多个模块各自维护一套判定规则。
+避免多个模块各自维护一套判定规则。**只做「这个代码是什么」的判断**。
 
-所有与资产类型判定相关的逻辑都应收敛于此，而非散落在各模块中。
+派生量（交易所前后缀归一、FMP/东财/cninfo 符号与参数、市值规模粗估）已拆到
+:mod:`src.python.core.code_symbols`；本模块 re-export 其公开符号，既有导入面不变。
+前缀常量（``EXCHANGE_PREFIXES`` / ``_INDEX_EXCHANGE_PREFIXES``）的唯一真值也在
+该模块，此处引用以免两处各建一张表。
 """
 
 from __future__ import annotations
+
+# 派生量在 code_symbols 单一实现；此处 re-export 保持既有导入面
+from src.python.core.code_symbols import (  # noqa: F401 — 兼容既有导入面
+    EXCHANGE_PREFIXES,
+    _INDEX_EXCHANGE_PREFIXES,
+    estimate_market_cap_by_prefix,
+    get_exchange_category,
+    get_exchange_prefix,
+    get_index_exchange_prefix,
+    get_push2_secid,
+    strip_exchange_prefix,
+    strip_to_digits,
+    to_exchange_symbol,
+    to_fmp_symbol,
+)
 
 # ── 已知代码前缀区间 ────────────────────────────────────────
 # A 股股票：
@@ -15,10 +33,6 @@ from __future__ import annotations
 #   8xxxxx（北交所）
 _A_SHARE_PREFIXES = ("60", "68", "00", "30")
 
-# 交易所代码前缀（证券代码口径的唯一真值来源）：沪 sh / 深 sz / 北 bj。
-# 前缀识别一律复用本常量经 strip_exchange_prefix()，不得在各模块自建元组
-# ——自建表在新增交易所时会漏改一处，导致同一代码在两处判定口径分叉。
-EXCHANGE_PREFIXES = ("sh", "sz", "bj")
 
 # 场内基金 / ETF 前缀（1 开头含深市 ETF/LOF/Reits/可转债，5 开头含沪市 ETF）
 _EXCHANGE_FUND_PREFIXES = ("5", "1")
@@ -46,8 +60,6 @@ MONEY_KEYWORDS = ("货币", "现金", "增利", "宝")
 
 # ── 指数代码相关常量 ──────────────────────────────────────────
 
-# A 股指数交易所前缀
-_INDEX_EXCHANGE_PREFIXES = ("sh", "sz")
 # 美股指数代码前缀
 _US_INDEX_PREFIX = "gb_"
 # A 股指数原始 6 位码起始数字
@@ -70,7 +82,7 @@ def is_a_share_code(code: str) -> bool:
     Returns:
         True 为 A 股代码
     """
-    raw = _strip_prefix(code)
+    raw = strip_to_digits(code)
     if not raw:
         return False
     return raw.startswith(_A_SHARE_PREFIXES) or raw.startswith("8")
@@ -88,38 +100,10 @@ def is_exchange_fund_code(code: str) -> bool:
     Returns:
         True 为场内基金/ETF 代码
     """
-    raw = _strip_prefix(code)
+    raw = strip_to_digits(code)
     if not raw:
         return False
     return raw.startswith(_EXCHANGE_FUND_PREFIXES)
-
-
-def to_fmp_symbol(code: str) -> str:
-    """A 股 6 位代码 → FMP 风格符号；非 A 股代码返回空串。
-
-    沪市（600/601/603/605/688/689）→ ``.SS``；深市（000/001/002/003/300/301）
-    → ``.SZ``；北交所（43x/83x/87x/920）→ ``.BJ``。带后缀或前缀的输入原样
-    返回（已是符号格式）。
-
-    放在 code_utils 而非某个 provider 内：多个数据源（财报全文、财务指标）
-    都需要同一个符号口径，复制两份必然漂移。
-    """
-    raw = (code or "").strip().upper()
-    if not raw:
-        return ""
-    if "." in raw:
-        return raw
-    if raw.lower().startswith(EXCHANGE_PREFIXES) and len(raw) == 8:
-        return raw
-    if not (len(raw) == 6 and raw.isdigit()):
-        return ""
-    if raw.startswith(("600", "601", "603", "605", "688", "689")):
-        return f"{raw}.SS"
-    if raw.startswith(("000", "001", "002", "003", "300", "301")):
-        return f"{raw}.SZ"
-    if raw.startswith(("43", "83", "87", "92")):
-        return f"{raw}.BJ"
-    return ""
 
 
 def is_hk_stock_code(code: str) -> bool:
@@ -150,7 +134,7 @@ def is_six_digit_code(code: str) -> bool:
     Returns:
         True 为 6 位纯数字代码
     """
-    raw = _strip_prefix(code)
+    raw = strip_to_digits(code)
     if not raw:
         return False
     return len(raw) == 6 and raw.isdigit()
@@ -252,7 +236,7 @@ def is_etf_by_name_or_code(name: str, code: str = "") -> bool:
     if "ETF" in name.upper():
         return True
     if code:
-        raw = _strip_prefix(code)
+        raw = strip_to_digits(code)
         if raw.startswith(("5", "1")):
             return True
     return False
@@ -385,7 +369,7 @@ def is_otc_fund_by_name(name: str, code: str) -> bool:
     Returns:
         True 表示确认为场外基金
     """
-    raw = _strip_prefix(code) if code else ""
+    raw = strip_to_digits(code) if code else ""
     if not raw or not raw.startswith("00"):
         return False
     return any(kw in name for kw in _OTC_FUND_NAME_KW)
@@ -519,7 +503,7 @@ def is_otc_code_overlap(code: str) -> bool:
     Returns:
         True 表示代码处于重叠区间（00 开头）
     """
-    raw = _strip_prefix(code)
+    raw = strip_to_digits(code)
     return bool(raw and raw.startswith("00"))
 
 
@@ -549,41 +533,6 @@ def is_fund_holding(name: str, code: str, account: str) -> bool:
 # ═══════════════════════════════════════════════════════════════
 #  交易所 / API 前缀
 # ═══════════════════════════════════════════════════════════════
-
-
-def get_exchange_prefix(code: str) -> str:
-    """根据 6 位代码返回东方财富行情页所需的交易所前缀。
-
-    Args:
-        code: 6 位证券代码
-
-    Returns:
-        "sh" | "sz" | "bj"
-    """
-    raw = code.strip()
-    if raw.startswith(("5", "6")):
-        return "sh"
-    if raw.startswith(("0", "1", "2", "3", "9")):
-        return "sz"
-    return "bj"
-
-
-def get_push2_secid(code: str) -> str:
-    """生成东方财富 push2 API 所需的 secid 参数。
-
-    - 沪市（6/5/8/4 开头）：1.{code}
-    - 深市（0/1/2/3 开头）：0.{code}
-
-    Args:
-        code: 6 位证券代码
-
-    Returns:
-        "0.xxx" 或 "1.xxx"
-    """
-    raw = code.strip()
-    if raw.startswith(("0", "1", "2", "3")):
-        return f"0.{raw}"
-    return f"1.{raw}"
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -633,24 +582,6 @@ def is_us_index_code(code: str) -> bool:
     return bool(code and code.strip().startswith(_US_INDEX_PREFIX))
 
 
-def get_index_exchange_prefix(code: str) -> str:
-    """获取 A 股指数代码的交易所前缀。
-
-    如 ``"sh000300"`` → ``"sh"``，非 A 股指数（如 ``"gb_inx"``）返回空字符串。
-
-    Args:
-        code: 指数代码
-
-    Returns:
-        ``"sh"`` | ``"sz"`` | ``""``
-    """
-    raw = code.strip()
-    for prefix in _INDEX_EXCHANGE_PREFIXES:
-        if raw.startswith(prefix):
-            return prefix
-    return ""
-
-
 # ═══════════════════════════════════════════════════════════════
 #  内部工具
 # ═══════════════════════════════════════════════════════════════
@@ -675,114 +606,3 @@ def get_currency_by_code(name: str, code: str) -> str:
     if is_qdii_extended(name):
         return "USD"
     return "CNY"
-
-
-def estimate_market_cap_by_prefix(code: str) -> str:
-    """按代码前缀粗略估算市值规模。
-
-    Args:
-        code: 6 位证券代码
-
-    Returns:
-        "大盘" | "中盘" | "中小盘" | "小盘" | "中大盘" | "其他"
-    """
-    raw = _strip_prefix(code)
-    if not raw:
-        return "其他"
-    if raw.startswith(("60",)):
-        return "大盘"
-    elif raw.startswith(("000",)) or raw.startswith(("002",)):
-        return "中盘"
-    elif raw.startswith(("300",)) or raw.startswith(("688",)):
-        return "中小盘"
-    elif raw.startswith(("4", "8")):
-        return "小盘"
-    elif raw.startswith(("001",)):
-        return "中大盘"
-    return "其他"
-
-
-def strip_exchange_prefix(code: str) -> str:
-    """去除交易所前缀（sh/sz/bj，大小写不敏感），返回去前缀后的原串。
-
-    与 :func:`_strip_prefix` 的分工：本函数**只剥离前缀、不校验代码位数**，
-    供需要自行判定代码形态的调用方（如按 5/6 位区分境内外、容忍 ``.0`` 尾、
-    需原样保留非法码以便报错的场景）复用前缀知识，避免各模块自建前缀表。
-
-    Args:
-        code: 可带前缀的证券代码（None/空串安全）
-
-    Returns:
-        去前缀后的原串（未带前缀时原样返回，不做 trim 以外的规范化）
-    """
-    raw = (code or "").strip()
-    if not raw:
-        return ""
-    lower = raw.lower()
-    for prefix in EXCHANGE_PREFIXES:
-        if lower.startswith(prefix):
-            return raw[len(prefix) :]
-    return raw
-
-
-def _strip_prefix(code: str) -> str:
-    """去除交易所前缀，返回纯净 6 位数字代码。
-
-    Args:
-        code: 可带前缀的代码
-
-    Returns:
-        纯净 6 位数字代码，或空字符串（非 6 位数字时）
-    """
-    raw = strip_exchange_prefix(code)
-    if len(raw) == 6 and raw.isdigit():
-        return raw
-    return ""
-
-
-#: 场内 ETF/LOF 交易所后缀（6 位代码段 → 交易所）；判定口径单点维护
-_EXCHANGE_FUND_SUFFIXES: tuple[tuple[str, str], ...] = (
-    ("5", ".SH"),  # 沪市场内基金/ETF
-    ("1", ".SZ"),  # 深市场内基金/ETF（159xxxLOF 等同段）
-)
-
-
-def to_exchange_symbol(code: str) -> str | None:
-    """场内 ETF/LOF 6 位代码 → 带交易所后缀符号（``5xxxxx``→``.SH``、``1xxxxx``→``.SZ``）。
-
-    :func:`to_fmp_symbol` 只覆盖 A 股股票段；场内基金段的判定同样需要单点维护，
-    供同花顺 thscode 转换与后缀候选解析复用。非该两段（或非 6 位纯数字）返回
-    ``None``，调用方继续走自己的降级路径。
-
-    Args:
-        code: 待判定的代码（可含前缀/后缀，带 ``.`` 视为已是符号格式直接返回自身）
-
-    Returns:
-        ``f"{code}.SH/.SZ"``；不属于场内基金段 → ``None``
-    """
-    raw = (code or "").strip().upper()
-    if not raw:
-        return None
-    if "." in raw:
-        return raw
-    if len(raw) != 6 or not raw.isdigit():
-        return None
-    for prefix, suffix in _EXCHANGE_FUND_SUFFIXES:
-        if raw.startswith(prefix):
-            return f"{raw}{suffix}"
-    return None
-
-
-def get_exchange_category(code: str) -> str:
-    """6 位 A 股代码 → cninfo 栏目参数（``sse``/``szse``/``third``）。
-
-    上交所（``6`` 开头）→ ``sse``；北交所（``4``/``8`` 开头）→ ``third``；
-    其余（深市主板/创业板）→ ``szse``。栏目映射原散落在 cninfo provider 内，
-    收敛到 code_utils 与其余代码类型判定同表维护。
-    """
-    raw = (code or "").strip()
-    if raw.startswith("6"):
-        return "sse"
-    if raw.startswith(("4", "8")):
-        return "third"
-    return "szse"
