@@ -24,6 +24,7 @@ from _release._ledger_archive import (
     move_tree_entry,
     open_ids,
     rewrite_doc_refs,
+    stale_reference_files,
     unreferenced_docs,
 )
 
@@ -117,30 +118,20 @@ def run_archive(
             if dry:
                 print(f"       将迁至 {rel_new} 并改写引用")
                 continue
-            # ① 目录树先搬（失败时尚未改动任何文件，直接中止）
-            folders_before = ctx.folders_file.read_text(encoding="utf-8")
-            try:
-                folders_moved = move_tree_entry(folders_before, stem, minor)
-            except ReleaseError as exc:
-                print(f"[ERR] 目录树搬迁失败：{exc}")
-                print("[ERR] 台账尚未改写（先算后写），按上方提示补好目录树后重跑 archive")
-                return 2
-            ctx.folders_file.write_text(folders_moved, encoding="utf-8")
-            # ② 移动文件本体（失败则回滚目录树，避免树指向不存在的位置）
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            rc, out, err = _exec(["git", "mv", str(ctx.plan_docs_dir / name), str(dest)], ctx.repo_root, runner)
-            if rc != 0:  # 文件没动成 → 目录树回滚（不指向不存在的位置）
-                ctx.folders_file.write_text(folders_before, encoding="utf-8")
-                print(f"[ERR] git mv 失败：{name} {(err or out).strip()}（目录树已回滚）")
-                return rc or 1
-            # ③ 改写引用：管理文档用 ../archive/…，根文档用 docs/archive/…，同级设计文档同样改
-            for target in (
+            # 落盘三连：引用改写 → 目录树搬迁 → 移动文件本体；任一步失败按快照整体回滚，
+            # 不留「树或引用已改、文件没动」的错位状态（台账在更后面落盘，此时仍原样）。
+            targets = [
                 ctx.changelog_file,
                 ctx.plan_file,
                 ctx.rf_file,
                 ctx.folders_file,
-                ctx.repo_root / "CLAUDE.md",
-            ):
+                ctx.claude_file,
+                ctx.readme_file,
+                *(p for p in sorted(ctx.plan_docs_dir.glob("*.md")) if p.name != name),
+            ]
+            snapshots = {path: path.read_text(encoding="utf-8") for path in targets if path.exists()}
+            # ① 引用改写：管理文档用 ../archive/…，根文档与同级设计文档用各自相对口径
+            for target in (ctx.changelog_file, ctx.plan_file, ctx.rf_file, ctx.folders_file, ctx.claude_file):
                 _rewrite_refs_in(
                     target, (f"../plan/{name}", f"docs/plan/{name}"), f"../archive/v{minor}.x/{stem}/{name}"
                 )
@@ -148,8 +139,30 @@ def run_archive(
             for sibling in sorted(ctx.plan_docs_dir.glob("*.md")):
                 if sibling.name != name:
                     _rewrite_refs_in(sibling, (name,), f"../archive/v{minor}.x/{stem}/{name}")
+            # ② 目录树搬迁（在引用改写之后：新插条目自带注释文本，不该再被改写一遍）
+            try:
+                ctx.folders_file.write_text(
+                    move_tree_entry(ctx.folders_file.read_text(encoding="utf-8"), stem, minor), encoding="utf-8"
+                )
+            except ReleaseError as exc:
+                for path, text in snapshots.items():
+                    path.write_text(text, encoding="utf-8")
+                print(f"[ERR] 目录树搬迁失败：{exc}")
+                print("[ERR] 已回滚到迁移前状态（台账未动），按上方提示补好目录树后重跑 archive")
+                return 2
+            # ③ 移动文件本体
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            rc, out, err = _exec(["git", "mv", str(ctx.plan_docs_dir / name), str(dest)], ctx.repo_root, runner)
+            if rc != 0:
+                for path, text in snapshots.items():
+                    path.write_text(text, encoding="utf-8")
+                print(f"[ERR] git mv 失败：{name} {(err or out).strip()}（已回滚到迁移前状态）")
+                return rc or 1
             moved_docs.append(rel_new)
             print(f"  [OK] 迁入 {rel_new}（引用已改写，目录树已搬）")
+            stale = stale_reference_files(ctx.repo_root / "docs" / "archive", f"plan/{name}")
+            if stale:
+                print("  [!] 历史归档仍按快照保留旧路径引用（按设计不改写），涉及：" + "、".join(stale))
 
     # 台账落盘（含头部/索引派生），失败面已收敛到「台账未动」
     if moved:

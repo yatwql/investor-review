@@ -1,29 +1,33 @@
 """测试：发布流程分步编排脚本 — release.py
 
-覆盖：
+覆盖（设备见同目录 `_release_fixtures.py`；门禁/refresh/publish/devbump 编排见
+`test_release_tool_gate.py`）：
   - 版本纯函数：开发版→发布版推导、补丁位递增、constants/README 行渲染、异常输入
   - changelog 发布段迁移：指针改写、归档索引区间延展、开发段清空与下一开发段生成、
     正文迁出（尾注不随迁）、版本不一致拒绝、索引缺失拒绝、归档文件追加
   - 预检：分支/工作树/版本形态/tag 条件与发布形态（publish 允许待提交改动）的行为
   - 版本演进：工作区口径统计（分类/行数/用例计数）、表两列写入与增长比、
     比值注释与用例口径注释、缺行拒绝、发布列仅在 --release 写入
-  - 门禁：守护清单与 scripts/ 实体同源且互异、regression 先行、失败即停、
-    最坏退出码传递
-  - refresh：三步顺序执行、首步失败即停
-  - publish：提交→verify→合并→tag 顺序与合并信息含 verify 项数、verify 失败中止、
-    已提交时跳过、--push 才执行推送
-  - prepare / devbump：文件手术落盘与预检失败中止（不落盘）
+  - prepare：文件手术落盘、预检失败中止（不落盘）、内置归档迁移端到端
+  - archive 子命令：迁移与收尾守护、dry-run 零写入、开发版拒绝、失败回滚
+  - 归档前置：归档文件/目录树缺件在 check 阶段报出
 """
 
 from __future__ import annotations
 
-import argparse
-import json
 import subprocess
 from pathlib import Path
 
 import pytest
 from src.test._script_loader import load_script
+from src.test.unit.scripts._release_fixtures import (
+    FakeRunner,
+    _EVOLUTION_SAMPLE,
+    _ok_runner,
+    _sample_changelog,
+    _ToolRepoFixture,
+    ns,
+)
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 
@@ -36,32 +40,6 @@ pytestmark = [
 @pytest.fixture(scope="module")
 def rel():
     return load_script("release.py", module_name="release_tool")
-
-
-def ns(**kwargs) -> argparse.Namespace:
-    return argparse.Namespace(**kwargs)
-
-
-class FakeRunner:
-    """脚本化子进程替身：按「命令片段全部出现」匹配应答，记录全部调用。"""
-
-    def __init__(self, responses=None, default=(0, "", "")):
-        self.responses = list(responses or [])
-        self.default = default
-        self.calls: list[list[str]] = []
-
-    def run(self, cmd, root, capture=True):
-        cmd = [str(c) for c in cmd]
-        self.calls.append(cmd)
-        for matcher, resp in self.responses:
-            if all(m in cmd for m in matcher):
-                return resp
-        return self.default
-
-
-def _mode_arg(cmd: list[str]) -> str:
-    """取命令中 `--mode` 的取值（无则空串）——bench 范围断言用。"""
-    return cmd[cmd.index("--mode") + 1] if "--mode" in cmd else ""
 
 
 # ─────────────────────────── 版本纯函数 ───────────────────────────
@@ -101,24 +79,6 @@ class TestVersionMath:
 
 
 # ─────────────────────────── changelog 发布段迁移 ───────────────────────────
-
-
-def _sample_changelog(archive_name: str = "archived_changelog.0.12.x.md") -> str:
-    return (
-        "# 变更日志\n\n"
-        "> **最近发布 [0.12.5]**（2026-10-07）——已发布版本段随发布移入 "
-        f"[`{archive_name}`](../archive/v0.12.x/{archive_name})；本文件只保留当前开发版本段与归档索引。\n\n"
-        "---\n\n\n"
-        "## [0.12.6-dev] - 开发中（未发布）\n\n"
-        "- **条目一**：内容甲 | rf-1\n"
-        "- **条目二**：内容乙\n\n"
-        "（本次发布内容见下方归档索引）\n\n"
-        "## 归档\n\n"
-        f"- [`{archive_name}`](../archive/v0.12.x/{archive_name}) — v0.12.1 ~ v0.12.5"
-        "（2026-10-03 ~ 2026-10-07）\n"
-        "- [`archived_changelog.0.11.x.md`](../archive/v0.11.x/archived_changelog.0.11.x.md)"
-        " — v0.11.0 ~ v0.11.12（2026-09-15 ~ 2026-10-03）\n"
-    )
 
 
 class TestChangelogRelease:
@@ -319,32 +279,6 @@ class TestEvolutionStats:
         assert rel._line_count(b"") == 1
 
 
-_EVOLUTION_SAMPLE = (
-    "| 指标 | 最初版本（首个提交 · 2026-06-27） | 最新发布（最近发布 tag v0.12.5 · 2026-10-07）"
-    " | 当前开发版（0.12.6-dev · 本次重跑时的工作区 · 2026-10-07） | 增长（最初 → 当前） |\n"
-    "| 主程序（`src/**/*.py`，不含测试） | 30 文件 / 7,258 行 | 335 文件 / 88,669 行"
-    " | 335 文件 / 88,669 行 | 12.2×\n"
-    "| 测试（`src/test/**/*.py`） | 13 文件 / 6,108 行 | 484 文件 / 140,058 行"
-    " | 484 文件 / 140,058 行 | 22.9×\n"
-    "| 辅助脚本（`scripts/*.py`） | 0（当时仅 `launch.sh` / `launch.ps1`） | 57 文件 / 13,990 行"
-    " | 57 文件 / 13,990 行 | 新增\n"
-    "| HTML 报告模板（`src/static/tmpl/*.html`） | 0（当时为 `src/tmpl/`：1 个 / 469 行）"
-    " | 22 文件 / 4,874 行 | 22 文件 / 4,874 行 | 1 → 22\n"
-    "| 架构图示（SVG） | 0 | 3 文件 / 337 行 | 3 文件 / 337 行 | 新增\n"
-    "| 文档（`.md`） | 7 文件 / 1,355 行 | 176 文件 / 66,469 行 | 176 文件 / 66,469 行 | 49.1×\n"
-    "| **代码文件合计**（前 5 项） | **43** | **901** | **901** | 21.0×\n"
-    "| **代码行合计**（前 5 项） | **13,366** | **247,928** | **247,928** | 18.5×\n"
-    "| **测试用例数**（`def test_` 行数口径） | **491** | **8,833** | **8,833** | 18.0×\n"
-    "| 仓库文件总数 | 56 | 1,126 | 1,126 | 20.1×\n"
-    "| 仓库总行数（全部跟踪文件） | 15,600 | 322,464 | 322,464 | 20.7×\n"
-    '> - **测试用例数**采 `git grep -c "def test_"` 的**行数口径**（含注释/文档串中的 `def test_` 提及）：'
-    "最初 491 → 当前 8,833；按更严格的「以 `def test_` 开头的定义行（含类方法缩进）」口径为 8,792；"
-    "按 pytest 实际收集（含参数化展开）为 **9,259** 项（另 20 项 opt-in live 反选，全量 9,279）。\n"
-    "> - **测试 / 主程序行数比**由 0.84:1（6,108 / 7,258）升至 **1.58:1**（140,058 / 88,669，最新发布点），"
-    "当前工作区为 **1.58:1**（140,058 / 88,669）。\n"
-)
-
-
 def _stats(**overrides) -> dict:
     base = {
         "main_files": 400,
@@ -432,396 +366,6 @@ class TestEvolutionTable:
         mangled = _EVOLUTION_SAMPLE.replace("· 本次重跑时的工作区 · 2026-10-07", "· 滚动读数")
         with pytest.raises(rel.ReleaseError, match="列头日期"):
             rel.update_evolution_table(mangled, _stats(), False, "2026-10-09")
-
-
-# ─────────────────────────── 门禁 ───────────────────────────
-
-
-class TestGate:
-    @pytest.fixture(autouse=True)
-    def _fresh_evolution(self, rel, monkeypatch, tmp_path):
-        """门禁编排用例不读真实 folders.md 新鲜度：新鲜度断言依赖「列头日期 =
-        运行当日」（墙钟 + 仓库文件状态），用例在不同时区/日期的 CI 上会因
-        本地未重跑 evolution 而随机红——编排用例将其视为通过，新鲜度拦截
-        行为由 TestEvolutionFreshness（纯函数）与 test_gate_stops_on_stale_
-        evolution（门禁中止）单独覆盖。"""
-        monkeypatch.setattr(rel, "check_evolution_freshness", lambda *_a, **_k: [])
-        rf = tmp_path / "review-findings.md"
-        rf.write_text("", encoding="utf-8")
-        archived = tmp_path / "archived_review-findings.x.md"
-        archived.write_text("", encoding="utf-8")
-        monkeypatch.setattr(rel, "RF_FILE", rf)
-        monkeypatch.setattr(rel, "read_app_version", lambda _t: "0.13.12")
-        monkeypatch.setattr(rel, "ledger_archive_paths", lambda _v: (archived, tmp_path / "archived_plan.md"))
-        monkeypatch.setattr(rel, "rf_archive_status", lambda *_a, **_k: ("archived", 0))
-        monkeypatch.setattr(rel, "has_archive_section", lambda *_a, **_k: True)
-
-    def test_gate_workers_converge_with_cpu(self, rel, monkeypatch):
-        """并行度随核数收敛：弱机器降路、4 核+ 封顶、缺核信息取封顶、单核不下 1 路。"""
-        monkeypatch.setattr(rel.os, "cpu_count", lambda: 2)
-        assert rel._gate_workers() == 2
-        monkeypatch.setattr(rel.os, "cpu_count", lambda: 8)
-        assert rel._gate_workers() == 4
-        monkeypatch.setattr(rel.os, "cpu_count", lambda: None)
-        assert rel._gate_workers() == 4
-        monkeypatch.setattr(rel.os, "cpu_count", lambda: 1)
-        assert rel._gate_workers() == 1
-
-    def test_guard_scripts_exist_and_unique(self, rel):
-        assert len(rel.GUARD_SCRIPTS) == len(set(rel.GUARD_SCRIPTS))
-        for script in rel.GUARD_SCRIPTS:
-            path = _REPO_ROOT / script
-            assert path.is_file(), script
-            assert script.startswith("scripts/check-"), script
-
-    def test_gate_records_step_timings(self, rel):
-        """门禁三步（回归 / 十守护 / 设计护栏）入计时器：发布耗时台账靠它们归因。"""
-        rel._reset_timer()
-        runner = FakeRunner()
-        rc = rel.cmd_gate(ns(), runner=runner)
-        assert rc == 0
-        labels = [entry["step"] for entry in rel._timer().steps]
-        assert labels == ["P2 场景回归", "P2 十守护", "P2 设计护栏"]
-        assert all(entry["elapsed_s"] >= 0 for entry in rel._timer().steps)
-
-    def test_gate_stops_on_stale_evolution(self, rel):
-        """演进对照新鲜度过期 → gate 返回 2 且不触发任何子进程（前置拦截）。"""
-        stale = ["当前开发版列头 2026-10-20 ≠ 今日，先执行 scripts/release.py evolution 刷新"]
-        rel.check_evolution_freshness = lambda *_a, **_k: list(stale)
-        runner = FakeRunner()
-        rc = rel.cmd_gate(ns(), runner=runner)
-        assert rc == 2
-        assert runner.calls == []  # 新鲜度失败即中止，回归/守护一个不跑
-
-    def test_gate_runs_regression_then_guards(self, rel):
-        runner = FakeRunner()
-        rc = rel.cmd_gate(ns(), runner=runner)
-        assert rc == 0
-        first = runner.calls[0]
-        assert "test-runner" in first[1]
-        assert "--mode" in first and "regression" in first
-        guard_calls = [
-            c
-            for c in runner.calls
-            if any("check-" in part for part in c) and not any("style-guardrails" in part for part in c)
-        ]
-        assert len(guard_calls) == len(rel.GUARD_SCRIPTS)
-        assert all("--ci" in c for c in guard_calls)
-
-    def test_gate_runs_style_guardrail(self, rel):
-        """发布门禁包含设计护栏（E 级拦 / W 级观察统计；不并入十守护清单）。"""
-        runner = FakeRunner()
-        rc = rel.cmd_gate(ns(), runner=runner)
-        assert rc == 0
-        guardrail_calls = [c for c in runner.calls if any("style-guardrails" in part for part in c)]
-        assert len(guardrail_calls) == 1
-        assert "--ci" in guardrail_calls[0]
-        # 护栏在十守护之后执行（守护清单语义独立）
-        guard_idx = max(i for i, c in enumerate(runner.calls) if any("check-doc-links" in part for part in c))
-        assert runner.calls.index(guardrail_calls[0]) > guard_idx
-
-    def test_gate_stops_on_style_guardrail_failure(self, rel):
-        """设计护栏 E 级 finding → gate 非零退出并中止。"""
-        responses = [
-            (["scripts/test-runner.py"], (0, "", "")),
-            (["scripts/check-style-guardrails.py"], (2, "强调色越权", "")),
-        ]
-        rc = rel.cmd_gate(ns(), runner=FakeRunner(responses=responses))
-        assert rc == 2
-
-    def test_gate_stops_on_regression_failure(self, rel):
-        runner = FakeRunner(responses=[(["scripts/test-runner.py"], (1, "", "boom"))])
-        rc = rel.cmd_gate(ns(), runner=runner)
-        assert rc == 1
-        assert len(runner.calls) == 1  # 回归失败 → 十守护一个不跑
-
-    def test_gate_returns_worst_guard_code(self, rel):
-        responses = [
-            (["scripts/test-runner.py"], (0, "", "")),
-            ([rel.GUARD_SCRIPTS[3]], (2, "finding: x", "")),
-        ]
-        rc = rel.cmd_gate(ns(), runner=FakeRunner(responses=responses))
-        assert rc == 2
-
-
-# ─────────────────────────── refresh / evolution 命令 ───────────────────────────
-
-
-class TestRefresh:
-    """refresh 条件化：自上一 release tag 起仅文档变更 → 跳过 bench/collect
-    （doc-drift --sync 恒跑）；有程序/测试变更或 --force-refresh → 三步全跑。"""
-
-    _TAG = (["describe"], (0, "v0.13.9", ""))
-    _PROGRAM_CHANGE = (["diff", "--name-only"], (0, "src/python/x.py\n", ""))
-    _DOCS_ONLY = (["diff", "--name-only"], (0, "README.md\ndocs/plan/y.md\n", ""))
-
-    def test_three_steps_in_order_when_program_changed(self, rel):
-        runner = FakeRunner(responses=[self._TAG, self._PROGRAM_CHANGE])
-        rc = rel.cmd_refresh(ns(), runner=runner)
-        assert rc == 0
-        steps = runner.calls[3:]  # 前 3 个调用：describe / diff / ls-files
-        assert len(steps) == 3
-        assert "--update-docs" in steps[0]
-        assert _mode_arg(steps[0]) == ",".join(rel.RELEASE_BENCH_MODES)
-        assert any("collect-test-coverage" in p for p in steps[1])
-        assert any("check-doc-drift" in p for p in steps[2])
-
-    def test_docs_only_skips_bench_and_collect(self, rel):
-        runner = FakeRunner(responses=[self._TAG, self._DOCS_ONLY])
-        rc = rel.cmd_refresh(ns(), runner=runner)
-        assert rc == 0
-        steps = runner.calls[3:]
-        assert len(steps) == 1  # 仅 sync
-        assert any("check-doc-drift" in p for p in steps[0])
-
-    def test_force_refresh_runs_all_steps(self, rel):
-        runner = FakeRunner()
-        rc = rel.cmd_refresh(ns(force_refresh=True), runner=runner)
-        assert rc == 0
-        assert len(runner.calls) == 3  # 无 git 判定，直接三步
-        assert "--update-docs" in runner.calls[0]
-        assert _mode_arg(runner.calls[0]) == ",".join(rel.RELEASE_BENCH_MODES)
-        assert any("collect-test-coverage" in p for p in runner.calls[1])
-
-    def test_missing_tag_conservatively_refreshes(self, rel):
-        runner = FakeRunner(responses=[(["describe"], (128, "", "no tag here"))])
-        rc = rel.cmd_refresh(ns(), runner=runner)
-        assert rc == 0
-        steps = runner.calls[1:]
-        assert len(steps) == 3  # 无 tag → 保守全刷
-        assert _mode_arg(steps[0]) == ",".join(rel.RELEASE_BENCH_MODES)
-
-    def test_untracked_program_file_triggers_refresh(self, rel):
-        """未跟踪程序文件（git diff 不含）也计入变更 → 必跑。"""
-        runner = FakeRunner(
-            responses=[
-                self._TAG,
-                (["diff", "--name-only"], (0, "README.md\n", "")),
-                (["ls-files", "--others"], (0, "src/python/new_mod.py\n", "")),
-            ]
-        )
-        rc = rel.cmd_refresh(ns(), runner=runner)
-        assert rc == 0
-        steps = runner.calls[3:]
-        assert len(steps) == 3
-        assert _mode_arg(steps[0]) == ",".join(rel.RELEASE_BENCH_MODES)
-
-    def test_full_bench_flag_runs_all_modes(self, rel):
-        """`--full-bench` 走 bench 别名（全量 14 档）——重测全表耗时的手动入口。"""
-        runner = FakeRunner()
-        rc = rel.cmd_refresh(ns(force_refresh=True, full_bench=True), runner=runner)
-        assert rc == 0
-        assert _mode_arg(runner.calls[0]) == "bench"
-
-    def test_release_bench_modes_are_real_modes(self, rel):
-        """子集模式必须是 test-runner 的真实模式键：拼错会让 bench 直接报错退出，
-        表不回填、发布链在 refresh 就断（结构与实现双向对齐）。"""
-        runner_mod = load_script("test-runner.py", module_name="test_runner_bench_modes")
-        assert set(rel.RELEASE_BENCH_MODES) <= set(runner_mod.MODES)
-        assert "bench" not in rel.RELEASE_BENCH_MODES  # 别名不得混入子集
-
-    def test_first_step_failure_stops_chain(self, rel):
-        runner = FakeRunner(
-            responses=[
-                self._TAG,
-                self._PROGRAM_CHANGE,
-                (["scripts/test-runner.py"], (5, "", "x")),
-            ]
-        )
-        rc = rel.cmd_refresh(ns(), runner=runner)
-        assert rc == 5
-        assert len(runner.calls) == 4  # 3 git + 首步即止
-
-
-class TestTimingTelemetry:
-    """发布耗时台账：`_finish_timing` 写 `logs/release.jsonl`（观测面，不得阻断发布）。"""
-
-    def _log(self, tmp_path: Path, rel, monkeypatch) -> Path:
-        log = tmp_path / "logs" / "release.jsonl"
-        monkeypatch.setattr(rel, "RELEASE_LOG_FILE", log)
-        constants = tmp_path / "constants.py"
-        constants.write_text('APP_VERSION = "1.2.3-dev"\n', encoding="utf-8")
-        monkeypatch.setattr(rel, "CONSTANTS_FILE", constants)
-        return log
-
-    def _last_record(self, log: Path) -> dict:
-        lines = [ln for ln in log.read_text(encoding="utf-8").splitlines() if ln.strip()]
-        return json.loads(lines[-1])
-
-    def test_record_carries_command_steps_and_version(self, rel, tmp_path, monkeypatch):
-        log = self._log(tmp_path, rel, monkeypatch)
-        timer = rel._reset_timer()
-        with timer.step("P2 场景回归"):
-            pass
-        rel._finish_timing("gate", 0)
-        record = self._last_record(log)
-        assert record["command"] == "gate"
-        assert record["ok"] is True
-        assert record["version"] == "1.2.3-dev"
-        assert [entry["step"] for entry in record["steps"]] == ["P2 场景回归"]
-        assert record["elapsed_s"] >= record["steps"][0]["elapsed_s"] >= 0
-        assert timer.step_seconds("P2 场景回归") is not None
-        assert "P2 场景回归" in timer.summary()
-        assert timer.steps_total >= 0
-
-    def test_failed_command_recorded_as_not_ok(self, rel, tmp_path, monkeypatch):
-        """非零退出码如实入账（发布链折在哪一步，台账能看出来）。"""
-        log = self._log(tmp_path, rel, monkeypatch)
-        rel._reset_timer()
-        rel._finish_timing("gate", 2)
-        assert self._last_record(log)["ok"] is False
-
-    def test_appends_one_line_per_command(self, rel, tmp_path, monkeypatch):
-        log = self._log(tmp_path, rel, monkeypatch)
-        rel._reset_timer()
-        rel._finish_timing("check", 0)
-        rel._reset_timer()
-        rel._finish_timing("gate", 0)
-        commands = [json.loads(ln)["command"] for ln in log.read_text(encoding="utf-8").splitlines() if ln.strip()]
-        assert commands == ["check", "gate"]
-
-    def test_log_is_bounded_and_atomic(self, rel, tmp_path, monkeypatch):
-        """台账有上限且走原子追加原语：不因长期反复发布无界增长，也不留半行。"""
-        from _release import _timing
-
-        log = tmp_path / "logs" / "release.jsonl"
-        for i in range(8):
-            _timing.append_record(log, {"command": f"cmd{i}"}, max_lines=5)
-        lines = [ln for ln in log.read_text(encoding="utf-8").splitlines() if ln.strip()]
-        assert len(lines) == 5
-        assert json.loads(lines[-1])["command"] == "cmd7"
-        assert all(ln.startswith("{") and ln.endswith("}") for ln in lines)
-
-    def test_log_write_failure_raises_for_caller_decision(self, rel, tmp_path):
-        """写盘失败以异常如实上报（调用方据以打 [!]），不静默当成已写入。"""
-        from _release import _timing
-
-        blocker = tmp_path / "logs"
-        blocker.write_text("占位文件", encoding="utf-8")
-        with pytest.raises(OSError):
-            _timing.append_record(blocker / "release.jsonl", {"command": "gate"})
-
-    def test_unwritable_log_does_not_break_release(self, rel, tmp_path, monkeypatch, capsys):
-        """台账写不进去（父路径被文件占位）只打 [!]，不得抛异常改写发布退出码。"""
-        blocker = tmp_path / "logs"
-        blocker.write_text("占位文件", encoding="utf-8")
-        monkeypatch.setattr(rel, "RELEASE_LOG_FILE", blocker / "release.jsonl")
-        rel._reset_timer()
-        rel._finish_timing("gate", 0)  # 不抛即通过
-        assert "耗时记录未写入" in capsys.readouterr().out
-
-
-def _sample_review_findings() -> str:
-    """主台账最小样本：一节本版已解决表 + 归档档案索引行。"""
-    return (
-        "# 自审记录\n\n## 已解决问题\n\n"
-        "### 开发期已修复（0.12.6-dev）\n\n"
-        "| # | 问题 | 处理 |\n|---|------|------|\n"
-        "| **rf-901** | 问题甲 | 处理甲 |\n"
-        "| **rf-902** | 问题乙 | 处理乙 |\n\n"
-        "### 归档档案\n\n"
-        "- [`archived_review-findings.0.12.x.md`](../archive/v0.12.x/archived_review-findings.0.12.x.md)"
-        " — v0.12.x 开发期已修复批次（2026-09-01 ~ 2026-10-05）\n"
-    )
-
-
-def _sample_rf_archive() -> str:
-    """归档文件最小样本：头两行 + 一个既有批次节。"""
-    return (
-        "# 自审记录归档 — v0.12.x\n\n"
-        "> 归档时间：2026-10-05（v0.12.5 发布）\n"
-        "> 涵盖版本：v0.12.x 开发期已修复项（v0.12.1 → v0.12.5）\n\n---\n\n"
-        "## 开发期已修复（0.12.5-dev）\n\n> 完整复盘见 `changelog.md` 0.12.5-dev 段；此处仅摘要行。\n\n"
-        "- rf-900 已修复（2026-10-05）：旧条目\n"
-    )
-
-
-def _sample_plan() -> str:
-    """计划样本：一个在办节（无完成标记）+ 两个已完成节（标题带 ✅）。"""
-    return (
-        "# 计划\n\n"
-        "## plan-77 在办任务\n\n- [ ] 待做\n\n"
-        "## plan-42 已完成任务 ✅\n\n**完成（2026-09-20，v0.12.3）**：已做\n\n"
-        "## plan-43 另一完成项 ✅\n\n**完成（2026-09-25，v0.12.4）**：已做\n"
-    )
-
-
-_TREE_SAMPLE = """
-````
-├── docs/
-│   ├── archive/
-│   │   └── v0.12.x/                          # 版本归档
-│   │       ├── archived_changelog.0.12.x.md # 变更日志归档
-│   │       └── tui-runtime/                  # 某设计归档
-│   │           └── tui-runtime.md # 设计
-│   ├── managements/
-│   │   └── plan.md # 计划
-│   └── plan/                                 # 中间设计文件（在办）
-│       ├── design-done.md # 已完成设计
-│       └── design-open.md # 在办设计
-└── README.md
-````
-"""
-
-
-class _ToolRepoFixture:
-    """把 release 模块的输出路径重定向到临时目录，并构造最小文件集。"""
-
-    def __init__(self, rel_mod, tmp_path: Path):
-        self.mod = rel_mod
-        self.root = tmp_path
-        core = tmp_path / "src" / "python" / "core"
-        core.mkdir(parents=True)
-        docs = tmp_path / "docs" / "managements"
-        docs.mkdir(parents=True)
-        archive = tmp_path / "docs" / "archive" / "v0.12.x"
-        archive.mkdir(parents=True)
-        (core / "constants.py").write_text('APP_VERSION = "0.12.6-dev"\n', encoding="utf-8")
-        (tmp_path / "README.md").write_text(
-            "> 当前版本：0.12.6-dev（[版本历史](docs/managements/changelog.md)）\n", encoding="utf-8"
-        )
-        (docs / "changelog.md").write_text(_sample_changelog(), encoding="utf-8")
-        (archive / "archived_changelog.0.12.x.md").write_text("# 归档\n", encoding="utf-8")
-        (docs / "folders.md").write_text(_EVOLUTION_SAMPLE + _TREE_SAMPLE, encoding="utf-8")
-        (docs / "review-findings.md").write_text(_sample_review_findings(), encoding="utf-8")
-        (docs / "plan.md").write_text(_sample_plan(), encoding="utf-8")
-        plan_docs = tmp_path / "docs" / "plan"
-        plan_docs.mkdir(parents=True)
-        (plan_docs / "design-done.md").write_text("# 已完成设计\n\n依据 plan-42 落地。\n", encoding="utf-8")
-        (plan_docs / "design-open.md").write_text("# 在办设计\n\n依据 plan-77 展开。\n", encoding="utf-8")
-        (archive / "archived_review-findings.0.12.x.md").write_text(_sample_rf_archive(), encoding="utf-8")
-        (archive / "archived_plan.0.12.x.md").write_text(
-            "# 计划归档 — v0.12.x\n\n> 涵盖版本：v0.12.x（v0.12.1 → v0.12.5）\n\n---\n", encoding="utf-8"
-        )
-        paths = {
-            "REPO_ROOT": tmp_path,
-            "CONSTANTS_FILE": core / "constants.py",
-            "README_FILE": tmp_path / "README.md",
-            "CHANGELOG_FILE": docs / "changelog.md",
-            "FOLDERS_FILE": docs / "folders.md",
-            "_MANAGEMENTS_DIR": docs,
-            "_ARCHIVE_DOCS_DIR": tmp_path / "docs" / "archive",
-            "RF_FILE": docs / "review-findings.md",
-            "PLAN_FILE": docs / "plan.md",
-            "PLAN_DOCS_DIR": plan_docs,
-        }
-        for name, value in paths.items():
-            setattr(rel_mod, name, value)
-            setattr(self, name, value)
-
-
-def _ok_runner(overrides: list | None = None) -> FakeRunner:
-    """预检/一致性/git 默认全过（工作树干净）；各测试按需覆写单条。"""
-    pairs: list[tuple] = [
-        (["git", "branch", "--show-current"], (0, "dev\n", "")),
-        (["git", "status", "--porcelain"], (0, "", "")),
-        (["git", "rev-parse"], (1, "", "")),
-        (["scripts/check-version-consistency.py"], (0, "[OK] 15/15\n", "")),
-        (["git", "status", "--short"], (0, " M docs/x.md\n", "")),
-    ]
-    for matcher, resp in overrides or []:
-        pairs = [p for p in pairs if p[0] != matcher] + [(matcher, resp)]
-    return FakeRunner(responses=pairs)
 
 
 class TestEvolutionFreshness:
@@ -931,97 +475,6 @@ class TestPrepare:
         assert "内容甲" in fx.CHANGELOG_FILE.read_text(encoding="utf-8")
 
 
-class TestPublish:
-    def _fixture(self, rel_mod, tmp_path, version: str):
-        fx = _ToolRepoFixture(rel_mod, tmp_path)
-        fx.CONSTANTS_FILE.write_text(f'APP_VERSION = "{version}"\n', encoding="utf-8")
-        return fx
-
-    @staticmethod
-    def _dirty_runner(verify_out="— 8,621 通过, 0 失败\n", verify_rc=0) -> FakeRunner:
-        return _ok_runner(
-            [
-                (["git", "status", "--porcelain"], (0, " M docs/x.md\n", "")),
-                (["scripts/test-runner.py"], (verify_rc, verify_out, "")),
-            ]
-        )
-
-    def test_normalize_release_title_variants(self, rel):
-        # 带前缀 / 单破折号前缀 → 纯描述；纯描述不变；剥离后为空回退原值
-        assert rel.normalize_release_title("release: v0.12.6 —— 发布主题") == "发布主题"
-        assert rel.normalize_release_title("release: v0.12.6 — 发布主题") == "发布主题"
-        assert rel.normalize_release_title("纯描述") == "纯描述"
-        assert rel.normalize_release_title("release: v0.12.6 ——") == "release: v0.12.6 ——"
-
-    def test_title_prefix_normalized_to_single_subject(self, rel, tmp_path):
-        self._fixture(rel, tmp_path, "0.12.6")
-        runner = self._dirty_runner()
-        rc = rel.cmd_publish(ns(title="release: v0.12.6 —— 发布主题", push=False), runner=runner)
-        assert rc == 0
-        commit = next(c for c in runner.calls if len(c) > 2 and c[1] == "commit")
-        assert commit[-1] == "release: v0.12.6 —— 发布主题"
-        assert commit[-1].count("release: v0.12.6 ——") == 1  # 不得双前缀
-
-    def test_commit_verify_merge_tag_order(self, rel, tmp_path):
-        self._fixture(rel, tmp_path, "0.12.6")
-        runner = self._dirty_runner()
-        rc = rel.cmd_publish(ns(title="主题", push=False), runner=runner)
-        assert rc == 0
-        commit_idx = next(i for i, c in enumerate(runner.calls) if len(c) > 2 and c[1] == "commit")
-        verify_idx = next(i for i, c in enumerate(runner.calls) if any("test-runner.py" in p for p in c))
-        merge_idx = next(i for i, c in enumerate(runner.calls) if len(c) > 2 and c[1] == "merge")
-        tag_idx = next(i for i, c in enumerate(runner.calls) if len(c) > 2 and c[1] == "tag")
-        assert "release: v0.12.6 —— 主题" in runner.calls[commit_idx][-1]
-        assert commit_idx < verify_idx < merge_idx < tag_idx
-        merge_msg = runner.calls[merge_idx][runner.calls[merge_idx].index("-m") + 1]
-        assert "8621 项已全绿" in merge_msg
-        assert not any("push" in c for c in runner.calls)  # 默认不推送
-
-    def test_verify_failure_aborts_before_merge(self, rel, tmp_path):
-        self._fixture(rel, tmp_path, "0.12.6")
-        runner = self._dirty_runner(verify_out="", verify_rc=1)
-        rc = rel.cmd_publish(ns(title="t", push=False), runner=runner)
-        assert rc == 1
-        heads = [c[1] for c in runner.calls if c[0] == "git"]
-        assert "merge" not in heads and "tag" not in heads and "checkout" not in heads
-
-    def test_skips_commit_when_tree_clean(self, rel, tmp_path):
-        self._fixture(rel, tmp_path, "0.12.6")
-        runner = _ok_runner([(["scripts/test-runner.py"], (0, "— 10 通过, 0 失败\n", ""))])
-        rc = rel.cmd_publish(ns(title="t", push=False), runner=runner)
-        assert rc == 0
-        assert not any(len(c) > 2 and c[1] in {"add", "commit"} for c in runner.calls)
-
-    def test_push_flag_gates_push_calls(self, rel, tmp_path):
-        self._fixture(rel, tmp_path, "0.12.6")
-        runner = _ok_runner([(["scripts/test-runner.py"], (0, "— 10 通过, 0 失败\n", ""))])
-        rc = rel.cmd_publish(ns(title="t", push=True), runner=runner)
-        assert rc == 0
-        pushed = [c for c in runner.calls if "push" in c]
-        assert len(pushed) == 3  # dev / master / --tags
-
-
-class TestDevBump:
-    def test_writes_next_dev_and_commits(self, rel, tmp_path):
-        fx = _ToolRepoFixture(rel, tmp_path)
-        fx.CONSTANTS_FILE.write_text('APP_VERSION = "0.12.6"\n', encoding="utf-8")
-        runner = _ok_runner([(["git", "status", "--porcelain"], (0, " M docs/x.md\n", ""))])
-        rc = rel.cmd_devbump(ns(push=False), runner=runner)
-        assert rc == 0
-        assert rel.read_app_version(fx.CONSTANTS_FILE.read_text(encoding="utf-8")) == "0.12.7-dev"
-        commit = next(c for c in runner.calls if len(c) > 2 and c[1] == "commit")
-        assert commit[-1] == "chore: 切 0.12.7-dev 开发版本（v0.12.6 发布后）"
-        assert not any("push" in c for c in runner.calls)
-
-    def test_rejects_non_dev_branch(self, rel, tmp_path):
-        fx = _ToolRepoFixture(rel, tmp_path)
-        fx.CONSTANTS_FILE.write_text('APP_VERSION = "0.12.6"\n', encoding="utf-8")
-        runner = _ok_runner([(["git", "branch", "--show-current"], (0, "master\n", ""))])
-        rc = rel.cmd_devbump(ns(push=False), runner=runner)
-        assert rc == 2
-        assert rel.read_app_version(fx.CONSTANTS_FILE.read_text(encoding="utf-8")) == "0.12.6"
-
-
 class TestArchivePrerequisites:
     """`check` 阶段提前暴露归档前置缺件（别等 prepare 改完版本全链才撞上）。"""
 
@@ -1116,51 +569,23 @@ class TestArchiveCommand:
         assert fx.FOLDERS_FILE.read_text(encoding="utf-8") == tree_before
         assert "rf-901" in fx.RF_FILE.read_text(encoding="utf-8")
 
+    def test_stale_archive_reference_is_reported(self, rel, tmp_path, capsys):
+        """历史归档残留指向被迁设计文件的旧路径 → 只提示不改写（历史快照原则）。"""
+        fx = _ToolRepoFixture(rel, tmp_path)
+        fx.CONSTANTS_FILE.write_text('APP_VERSION = "0.12.6"\n', encoding="utf-8")
+        hist = fx.root / "docs" / "archive" / "v0.11.x"
+        hist.mkdir(parents=True)
+        (hist / "archived_changelog.0.11.x.md").write_text(
+            "见 [`plan/design-done.md`](../plan/design-done.md)", encoding="utf-8"
+        )
+        assert rel.cmd_archive(ns(date="2026-10-08"), runner=_ok_runner()) == 0
+        out = capsys.readouterr().out
+        assert "历史归档仍按快照保留旧路径引用" in out
+        assert "v0.11.x/archived_changelog.0.11.x.md" in out
+        # 历史快照未被改写
+        assert "plan/design-done.md" in (hist / "archived_changelog.0.11.x.md").read_text(encoding="utf-8")
+
     def test_dev_version_refused(self, rel, tmp_path):
         """开发版上跑归档会被拒（版本全链须先切到发布形态，否则归档目录推导不出）。"""
         _ToolRepoFixture(rel, tmp_path)
         assert rel.cmd_archive(ns(date=None), runner=_ok_runner()) == 2
-
-
-# ─────────────────────────── gate 归档前置 ───────────────────────────
-
-
-class TestGateArchivePrecondition:
-    @pytest.fixture(autouse=True)
-    def _sandbox(self, rel, monkeypatch, tmp_path):
-        rf = tmp_path / "review-findings.md"
-        rf.write_text("", encoding="utf-8")
-        archived = tmp_path / "archived_review-findings.x.md"
-        archived.write_text("", encoding="utf-8")
-        monkeypatch.setattr(rel, "check_evolution_freshness", lambda *_a, **_k: [])
-        monkeypatch.setattr(rel, "RF_FILE", rf)
-        monkeypatch.setattr(rel, "read_app_version", lambda _t: "0.13.12")
-        monkeypatch.setattr(rel, "ledger_archive_paths", lambda _v: (archived, tmp_path / "archived_plan.md"))
-        monkeypatch.setattr(rel, "has_archive_section", lambda *_a, **_k: True)
-        return archived
-
-    def test_pending_rows_block_gate(self, rel, monkeypatch):
-        """该版本仍有未迁档条目 → gate 在跑 regression 前即中止（不浪费 20s 门禁墙钟）。"""
-        monkeypatch.setattr(rel, "rf_archive_status", lambda *_a, **_k: ("pending", 3))
-        runner = FakeRunner()
-        assert rel.cmd_gate(ns(), runner=runner) == 2
-        assert runner.calls == []  # 前置拦截：未触发任何子进程
-
-    def test_missing_archive_section_blocks_gate(self, rel, monkeypatch):
-        """主台账已留占位但归档缺本版批次节 → 同样前置中止（防半迁移）。"""
-        monkeypatch.setattr(rel, "rf_archive_status", lambda *_a, **_k: ("archived", 0))
-        monkeypatch.setattr(rel, "has_archive_section", lambda *_a, **_k: False)
-        runner = FakeRunner()
-        assert rel.cmd_gate(ns(), runner=runner) == 2
-        assert runner.calls == []
-
-    def test_dev_version_blocks_gate(self, rel, monkeypatch):
-        monkeypatch.setattr(rel, "read_app_version", lambda _t: "0.13.12-dev")
-        monkeypatch.setattr(rel, "rf_archive_status", lambda *_a, **_k: ("archived", 0))
-        assert rel.cmd_gate(ns(), runner=FakeRunner()) == 2
-
-    def test_absent_section_passes_gate(self, rel, monkeypatch, capsys):
-        """本版无自审条目（缺节）不得拦截发布——只留提示，其余门禁照跑。"""
-        monkeypatch.setattr(rel, "rf_archive_status", lambda *_a, **_k: ("absent", 0))
-        assert rel.cmd_gate(ns(), runner=FakeRunner()) == 0
-        assert "无「开发期已修复」节" in capsys.readouterr().out

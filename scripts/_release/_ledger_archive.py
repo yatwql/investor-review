@@ -25,6 +25,7 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 from _release._common import ReleaseError
 
@@ -266,6 +267,17 @@ def unreferenced_docs(files: dict[str, str]) -> list[str]:
     return [name for name, text in sorted(files.items()) if not referenced_ids(text)]
 
 
+def stale_reference_files(archive_root: Path, old_rel: str) -> list[str]:
+    """历史归档内仍指向 `old_rel` 的文件（按设计不改写历史快照，由调用方提示给人）。"""
+    if not archive_root.exists():
+        return []
+    return [
+        path.relative_to(archive_root.parent.parent).as_posix()
+        for path in sorted(archive_root.rglob("*.md"))
+        if old_rel in path.read_text(encoding="utf-8")
+    ]
+
+
 def rewrite_doc_refs(text: str, old_path: str, new_path: str) -> tuple[str, int]:
     """把引用从原路径指向迁档后的新路径：`](路径)` 链接与裸路径两种形态。"""
     count = text.count(old_path)
@@ -354,9 +366,10 @@ def move_tree_entry(text: str, stem: str, minor: str) -> str:
     a_start, a_end = _block_bounds(lines, ver_head)
     a_prefix = _child_prefix_of(lines, a_start, a_end) or "│   │   │   "
     a_groups = _split_entries(lines, a_start, a_end, a_prefix)
+    # 注释不带文件路径：该文本随后还会被「引用改写」扫一遍，含路径会被改指成归档相对路径
     new_group = [
         f"{a_prefix}├── {stem}/ # 设计文档归档（任务完成后由发布归档迁入）",
-        f"{a_prefix}    └── {stem}.md # 原 docs/plan/{stem}.md",
+        f"{a_prefix}    └── {stem}.md # 该文档的完整设计内容（迁档前位于在办设计目录）",
     ]
     names = [_entry_name(g[0]).rstrip("/") for g in a_groups]
     pos = next((i for i, n in enumerate(names) if n.lower() > stem.lower()), len(a_groups))

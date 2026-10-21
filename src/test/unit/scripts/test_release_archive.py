@@ -200,6 +200,27 @@ class TestLedgerArchive:
         assert "design-open.md # 在办设计" in moved  # 在办项不动
         assert moved.count("└──") >= _SAMPLE_TREE.count("└──")  # 新目录组保留末项连接符
 
+    def test_move_tree_entry_comment_survives_refs_rewrite(self, rel):
+        """新插目录树注释不带文件路径——否则随后的引用改写会把注释改指到归档路径（实测缺陷）。"""
+        moved = rel.move_tree_entry(_SAMPLE_TREE, "design-done", "0.12")
+        new_lines = [ln for ln in moved.splitlines() if "design-done" in ln]
+        assert new_lines
+        for line in new_lines:
+            assert "docs/plan/design-done.md" not in line, line  # 不含可被改写命中的路径
+        # 模拟引用改写：注释行不受影响（无命中）
+        rewritten, hits = rel.rewrite_doc_refs(moved, "docs/plan/design-done.md", "docs/archive/v0.12.x/x.md")
+        assert hits == 0 and rewritten == moved
+
+    def test_stale_reference_files_lists_archive_hits(self, rel, tmp_path):
+        """历史归档里仍指向旧路径的文件被列出（按设计不改写历史快照，只提示）。"""
+        archive = tmp_path / "docs" / "archive" / "v0.12.x"
+        archive.mkdir(parents=True)
+        (archive / "old.md").write_text("见 [设计](../../plan/design-done.md)", encoding="utf-8")
+        (archive / "other.md").write_text("无关内容", encoding="utf-8")
+        found = rel.stale_reference_files(tmp_path / "docs" / "archive", "plan/design-done.md")
+        assert found == ["docs/archive/v0.12.x/old.md"]
+        assert rel.stale_reference_files(tmp_path / "nope", "plan/design-done.md") == []
+
     def test_move_tree_entry_rejects_unknown_stem(self, rel):
         with pytest.raises(rel.ReleaseError):
             rel.move_tree_entry(_SAMPLE_TREE, "no-such-doc", "0.12")

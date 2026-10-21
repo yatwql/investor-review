@@ -121,6 +121,7 @@ from _release._ledger_archive import (  # noqa: E402, F401 — 纯函数面经�
     plan_completed_sections,
     rf_archive_status,
     rewrite_doc_refs,
+    stale_reference_files,  # noqa: F401 — 供测试经入口模块引用
     unreferenced_docs,
 )
 from _release._timing import StepTimer as _StepTimer, append_record as _append_record  # noqa: E402
