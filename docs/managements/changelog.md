@@ -23,6 +23,8 @@
 
 ### Changed
 
+- 检查脚本词表收敛为单一来源：31 条逐字节相同的「历史变更叙述」正则从两脚本模式表抽入 `scripts/_traces_common.py`（只登记字面量，分类/描述仍按域定义，`_multi_domain()` 支持同正则多域登记）；文档域模式表整体迁入 `_traces_doc/patterns.py`（`check-doc-traces.py` 981→708 行，保留原面 re-export 故调用方零改动）；`RULE_CARRIER_DIRS` 扩至 `_traces_doc` + 新增 `RULE_CARRIER_FILES`（词表/模式表属尺子本身，不被 code-traces 自查误报），结论缓存 `_LOGIC_FILES` 纳入两新文件防止判定面搬家后缓存假绿；新增 `test_trace_shared_vocabulary` 锁「两表交集==共享词表 / 两侧都引用每一条 / 源码内无写死字面量」，设计说明见 `docs/plan/trace-vocabulary-single-source.md`（自审 rf-791）
+
 - `logs/release.jsonl` 耗时台账改走 `core/jsonl_store` 原子追加原语并加保留上限（原为直接 append 写且无界增长；一次发布约 7 条，上限 500 条覆盖数十次发布）（自审 rf-788）
 - `check-doc-drift` 第 18 项扩「正文菜单键引用」分支：正文「菜单 `X`」须为主菜单键（`MENU_ITEMS` ∪ 返回键 `0`），`[D]` 二级选项（C/F/O/M）改由 `tui/handlers_config.py::CONFIG_DIR_INFO_KEYS` 单一登记、正文须写作「菜单 `D` → `C`」；裸键形态要求后接空白/标点，避免「主菜单 code block」里的英文词首字母误报（历史漂移：code block 校验护不住正文，`[4]`→`[3]` 与 `[D]` 二级化后十余处正文失效）（自审 rf-776）
 - 缓存分组术语统一为「行情类缓存」：TUI 上屏词与 `handlers_cache`/`cache/operations` docstring 对齐菜单标签，手册与需求菜单表同步（`--update position` 选项名作为历史命名在图注说明）（自审 rf-780）

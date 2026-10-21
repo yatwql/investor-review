@@ -1030,7 +1030,7 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 4. **迭代轮次引用**：常规文档不得用数字轮次（“第 N 轮”）指代开发迭代；任务记录域与 changelog 豁免（“轮 N”是正式记录载体）
 5. **架构约束代号（C 系列，以 technical.md 约束表为准）**：除约束定义处（technical.md / llm-technical.md）外，所有受检文档一律禁（约束代号属暗号，处处禁）
 6. **复盘痕迹（NARRATIVE）**：plan/review-findings/docs/plan 的任务内容与归档设计/迭代文档只反映最新状态，禁时间对比叙事、以“不再”领起的对既有行为的否定句、历史归因类表述；任务状态标记、根因定位引用、迭代轮次、设计文档旧格式兼容、行内代码令牌是内容合法。任务记录域与归档域检出（手册操作指引与 changelog 记录变化均不适用）
-7. **结构性冗余（DUPLICATE）**：重复标题路径感知判重（同级+同文本+同父标题才算重复，各版本块/任务节下同名小节跨父级合法，同父复现自第 2 次起报出）；≥40 字符重复内容行与连续 5 行重复区块（台账三文件 plan/review-findings/changelog 与归档域）**同小节限定**——跨小节共享行/表属结构，同小节内第 2 次出现起报出，拦截「同一区块/条目粘贴两遍」类残留。豁免：围栏代码块、未围栏缩进代码/命令样本与顶格 `#` 注释、命令续行（上一行以 `\` 结尾）、键值任务卡（- **键**: 值）、验证清单项（- [ ] 复跑）、分隔/装饰行与短模板行；围栏内容不入窗，整段粘贴由区块判重兜底
+7. **结构性冗余（DUPLICATE）**：重复标题路径感知判重（同级+同文本+同父标题才算重复，各版本块/任务节下同名小节跨父级合法，同父复现自第 2 次起报出）；≥40 字符重复内容行与连续 5 行重复区块（台账三文件 plan/review-findings/changelog 与归档域）**同小节限定**——跨小节共享行/表属结构，同小节内第 2 次出现起报出，拦截「同一区块/条目粘贴两遍」类残留；比对前空白归一（仅对齐/全角空白差异视为同一内容），同一重复块只报首个窗口（不按滑窗数重复计数）。豁免：围栏代码块、未围栏缩进代码/命令样本与顶格命令（python/pytest/git 等）、顶格 `#` 注释、命令续行（上一行以 `\` 结尾）、键值任务卡（- **键**: 值）、验证清单项（- [ ] 复跑）、分隔/装饰行与短模板行；围栏内容不入窗，整段粘贴由区块判重兜底
 
 目录树与文件名纪律（folders.md 等树行）：
 - **树行豁免仅 archive 引用类**：目录树行不走通用行豁免，任务编号（CODE）与进度状态词（STATUS：已实施/完成态/随任务完成移入/验收·判定记录指引/§N 指引/已归档/稿态词/树行“不再”等）在树行照检；描述只讲文件内容，不写进度/流转/任务号。目录树整块位于围栏内，围栏内树行同样照检（围栏跳过仅针对非树行内容）；folders.md 树行按路径分域：docs/archive/ 子树=归档记录域（仅复盘叙事检出）、docs/plan/ 子树=任务记录域（章节编号+约束代号照检）；树行专属来源叙述补强（无后缀模块名的「从 XX 拆出」）
@@ -1104,17 +1104,18 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
 .venv/bin/python scripts/check-semantic-index.py --ci  # CI 模式（只输出错误，退出码 2）
 ```
 
-**检查脚本的共享设施与统一契约（`_checklib.py` / `_traces_code/` / `_traces_doc/` / `_test_runner/`）**
+**检查脚本的共享设施与统一契约（`_checklib.py` / `_traces_common.py` / `_traces_code/` / `_traces_doc/` / `_test_runner/`）**
 
 `scripts/` 下的检查脚本共用一套 CLI 契约与设施，避免每个脚本各写一份：
 
 - **统一契约**（`_checklib.add_common_args()` / `report()`）：`-v/--verbose` 详细输出、`--ci` 仅输出 `文件:描述`；**通过退出 0，发现 finding 退出 2**（`check-code-traces.py` 另有 HIGH=1 / LOW=3 的分级语义，属其自身约定）；通过打印 `[OK] …`，失败逐条 `[ERR] file:desc`（`--ci` 下为裸行）+ 汇总行
 - **共享原语**：`REPO_ROOT` / `rel()`（仓库相对路径，非仓库内路径原样返回）、`extract_region()` / `replace_region()`（标记区间）、`extract_table_region()` / `replace_table_region()`（表区域，带结构校验）
-- **`_traces_code/`**：check-code-traces 内部实现包——`exemptions.py`（「章节计数豁免」与「迭代轮次豁免」，check-doc-traces 同共用）、`patterns.py`（模式表与行级豁免）、`extract.py`（注释/标识符抽取）、`scan.py`（扫描调度）、`layers.py`（core 反向依赖守卫）、`config.py`（扫描域配置）；check-code-traces.py 只留 CLI 与原面 re-export
-- **`_traces_doc/`**：check-doc-traces 结构性冗余（DUPLICATE）扫描后端包——`dedup.py`（重复标题路径感知判重、台账/归档域重复长行与区块同小节限定），入口薄 CLI 与原面 re-export
+- **`_traces_code/`**：check-code-traces 内部实现包——`exemptions.py`（「章节计数豁免」与「迭代轮次豁免」，check-doc-traces 同共用）、`patterns.py`（模式表与行级豁免；共享历史叙述正则引用 `_traces_common` 常量）、`extract.py`（注释/标识符抽取）、`scan.py`（扫描调度）、`layers.py`（core 反向依赖守卫）、`config.py`（扫描域配置与规则载体豁免：`RULE_CARRIER_DIRS` / `RULE_CARRIER_FILES`）；check-code-traces.py 只留 CLI 与原面 re-export
+- **`_traces_doc/`**：check-doc-traces 后端包——`patterns.py`（文档痕迹模式表 `DOC_PATTERNS` / 树行专属 `TREE_ONLY_PATTERNS` / 行级豁免 `EXCLUDE_PATTERNS`+`is_excluded`，共享历史叙述正则引用 `_traces_common` 常量）、`dedup.py`（结构性冗余扫描：单次遍历内完成标题路径感知判重、台账/归档域重复长行与区块同小节限定、空白归一与同块单报），入口薄 CLI 与原面 re-export
+- **`_traces_common.py`**：两脚本**逐字节相同**的历史叙述正则单一来源（31 条命名常量 + `SHARED_REGEXES` 元组）；只登记字面量，**分类与描述仍按各自域定义**，判定入口/域矩阵/豁免语义不在此模块——新增同源词汇先加此处再两侧引用，仅一域需要的词汇不进共享表（机检见 `test_trace_shared_vocabulary`：两表交集须恰等于词表、两侧须都引用、模式源码内不得写死字面量）
 - **`_test_runner/`**：`test-runner.py` 的内部实现包（paths / modes / pytest_env / machine_info / doc_writer / report_html / runner），入口仅保留 CLI 与主流程并原面 re-export —— 既有测试访问 `test_runner._env_value` 等名字仍有效；**注意**：monkeypatch 内部状态（如 `_LATEST_DIR` / `_DOC_COVERAGE_PATH`）须指向持有它的子模块（`_test_runner.report_html` / `_test_runner.doc_writer`）
 
-> 新增检查脚本时直接复用 `_checklib`，不要自建 argparse/输出/退出样板；新增共享模式放 `_traces_code/exemptions.py`。
+> 新增检查脚本时直接复用 `_checklib`，不要自建 argparse/输出/退出样板；**跨脚本共用**的历史变更叙述正则放 `_traces_common.py`（词表单一来源），单域模式放各自 `_traces_*/patterns.py`，两脚本共用的章节/轮次计数豁免放 `_traces_code/exemptions.py`。
 
 **`check-doc-drift.py` — 文档与实现一致性检查**
 

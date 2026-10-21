@@ -178,3 +178,18 @@ class TestDocDriftConclusionReplay:
         rc2, _ = _main_ci(mod, monkeypatch, capsys)
         assert rc1 == rc2 == 0
         assert calls["run"] == 2  # 每次都真跑
+
+
+class TestDocTracesCacheLogicSurface:
+    """doc-traces 结论缓存的逻辑指纹面必须覆盖扫描后端。
+
+    只把 CLI 自身当逻辑版本时，后端模块（结构性冗余扫描 / 共享章节轮次豁免）
+    的判定调整不会使旧结论失效——规则变化仍回放旧 findings，缓存从加速面变成
+    假绿面。本用例锁住「后端模块在指纹面内且文件真实存在」。
+    """
+
+    def test_logic_surface_covers_scan_backends(self):
+        mod = load_script("check-doc-traces.py")
+        names = {p.name for p in mod._LOGIC_FILES}
+        assert {"check-doc-traces.py", "patterns.py", "dedup.py", "_traces_common.py", "exemptions.py"} <= names
+        assert all(p.is_file() for p in mod._LOGIC_FILES)

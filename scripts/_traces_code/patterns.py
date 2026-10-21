@@ -10,6 +10,40 @@ from __future__ import annotations
 
 import re
 
+from _traces_common import (  # 共享历史叙述词表（与 check-doc-traces 同源，避免两侧漂移）
+    CHAPTER_CN_BARE,
+    CHAPTER_CN_NTH,
+    CHAPTER_DIGIT,
+    CIPHER_CONSTRAINT,
+    CODE_SERIES_CN,
+    CODE_SERIES_EN,
+    HISTORY_CONTRACT_RENAME,
+    HISTORY_DECISION_CONSIDERED,
+    HISTORY_FROM_LEGACY,
+    HISTORY_IMPLEMENTATION_PAST,
+    HISTORY_ITERATION_MARK,
+    HISTORY_LEGACY_LABEL,
+    HISTORY_MIGRATED,
+    HISTORY_PHYSICAL_MERGE,
+    HISTORY_REFACTOR_BEFORE,
+    HISTORY_REPLACE_LEGACY,
+    HISTORY_STATE_EARLY,
+    HISTORY_STATE_PREVIOUS,
+    HISTORY_VERSION_COMPARE,
+    LOW_DEPRECATED,
+    LOW_FUTURE_PLAN,
+    LOW_NOT_YET,
+    LOW_PASSIVE_PAST,
+    LOW_REFACTOR_TO,
+    LOW_TODO,
+    LOW_TRANSITIONAL,
+    ROUND_CN_PREFIX,
+    ROUND_N,
+    ROUND_NTH,
+    ROUND_NTH_CN,
+    ROUND_N_PREFIX,
+)
+
 
 # ═══════════════════════════════════════════════════════════════
 #  匹配模式定义
@@ -55,13 +89,13 @@ PATTERNS: list[tuple[str, str, str]] = [
     ),
     (r"已由\s*[`\w./_-]+\.py\s*(?:完整)?覆盖", "HIGH", "已由XX.py覆盖（测试覆盖来源叙述）"),
     (r"\b(?:Iter|Iteration)\s*\d+\b", "HIGH", "Iter/Iteration N 迭代标记（历史迭代信息）"),
-    (r"已迁移", "HIGH", "已迁移（迁移痕迹）"),
+    (HISTORY_MIGRATED, "HIGH", "已迁移（迁移痕迹）"),
     #   时序历史叙述——"之前/此前/以前/曾经/原始/历史版本/此前/旧逻辑"等高频
     #   历史实现叙述词（注：这是"自我进化"补强，堵住常见漏检）。
     #   "之前/此前/以前/曾经/历史/先前" 泛指历史时刻；仅时间词不足以判定
     #   是否为历史痕迹（"之前缓存过"是运行时描述），故需后接动作/状态动词。
     (
-        r"(?:之前|此前|以前|先前)\s*(?:是|为|直接|就|采用|使用|用|读取|实现|判断|属于|放在|在)",
+        HISTORY_STATE_PREVIOUS,
         "HIGH",
         "此前/之前是（历史状态叙述）",
     ),
@@ -70,21 +104,21 @@ PATTERNS: list[tuple[str, str, str]] = [
         "HIGH",
         "此前的逻辑/实现（历史实现叙述）",
     ),
-    (r"曾经的?[^\s。，;]{0,6}(?:实现|逻辑|方案|做法|版本|代码)", "HIGH", "曾经的实现/逻辑（历史实现叙述）"),
-    (r"曾考虑[过]?", "HIGH", "曾考虑（历史决策/备选方案叙述）"),
+    (HISTORY_IMPLEMENTATION_PAST, "HIGH", "曾经的实现/逻辑（历史实现叙述）"),
+    (HISTORY_DECISION_CONSIDERED, "HIGH", "曾考虑（历史决策/备选方案叙述）"),
     (r"原始(?:版本|实现|方案|逻辑)", "HIGH", "原始版本/实现（历史状态叙述）"),
     (r"历史(?:版本|实现|逻辑|方案|做法)", "HIGH", "历史版本/实现（历史实现叙述）"),
-    (r"(?:之前|此前|以前|旧|原|历史)(?:的)?版本\s*(?:为|号|是|中)", "HIGH", "旧/历史版本号（版本对比痕迹）"),
-    (r"由\s*旧(?:文件|版本|逻辑|方案|实现)", "HIGH", "由旧XX（历史来源/改造叙述）"),
+    (HISTORY_VERSION_COMPARE, "HIGH", "旧/历史版本号（版本对比痕迹）"),
+    (HISTORY_FROM_LEGACY, "HIGH", "由旧XX（历史来源/改造叙述）"),
     (r"改(?:为|成|过来|了)|由旧[^\s。，;]{0,8}(?:改|改来|改造)", "HIGH", "由旧XX改造/改来（历史变更叙述）"),
     (
         r"(?:迁移|移到|移至|搬到|转入)\s*(?:到|至)?\s*新(?:模块|文件|目录|位置|路径|函数|类)",
         "HIGH",
         "迁移/移到新位置（迁移痕迹）",
     ),
-    (r"重构\s*前", "HIGH", "重构前（重构历史叙述）"),
+    (HISTORY_REFACTOR_BEFORE, "HIGH", "重构前（重构历史叙述）"),
     (r"旧(?:逻辑|实现|方案|代码|写法|做法|设计|版本)", "HIGH", "旧逻辑/旧实现（历史实现叙述）"),
-    (r"替代(?:了|掉|原有|旧的)?旧|替换旧", "HIGH", "替代旧/替换旧（历史变更叙述）"),
+    (HISTORY_REPLACE_LEGACY, "HIGH", "替代旧/替换旧（历史变更叙述）"),
     (r"历史上|历次迭代", "HIGH", "历史迭代信息（历史上/历次迭代）"),
     (r"曾(?:经)?(?:用[于]?|作为|属于|采用|以)", "HIGH", "曾用/曾用于/曾作为（历史实现叙述）"),
     (r"(?:后来|之后|随后)\s*(?:改[为成]|换[为成]|引入|移除)", "HIGH", "后来改为/之后引入（变更痕迹）"),
@@ -103,7 +137,7 @@ PATTERNS: list[tuple[str, str, str]] = [
     (r"合并自\s*[`\w._\-()]+", "HIGH", "合并自XX（合并来源叙述）"),
     (r"原(?:逻辑|实现|方案|代码|写法|做法|设计)", "HIGH", "原逻辑/原实现（历史实现叙述）"),
     (
-        r"原\s*[`A-Za-z_][A-Za-z0-9_.]*(?:\s*(?:契约|dict|数据|结构|结果))?\s*(?:迁移|改称|并入)",
+        HISTORY_CONTRACT_RENAME,
         "HIGH",
         "原X迁移/改称（历史契约/命名变更叙述）",
     ),
@@ -125,13 +159,13 @@ PATTERNS: list[tuple[str, str, str]] = [
     #   注释侧仅捕获无歧义的系列代号形状（_series/系列）与 C1~C25 约束代号。
     #
     (r"(?:rf|plan|R)-\d+", "CODE", "任务编号引用（如 rf-117、R-086）"),
-    (r"(?<![A-Za-z])[A-Za-z]_series\b", "CODE", "任务批次系列别名英文形式（如 b_series）"),
-    (r"[A-Za-z]系列", "CODE", "任务批次系列别名（如 B系列/F系列/G系列）"),
+    (CODE_SERIES_EN, "CODE", "任务批次系列别名英文形式（如 b_series）"),
+    (CODE_SERIES_CN, "CODE", "任务批次系列别名（如 B系列/F系列/G系列）"),
     #  架构约束代号（C1~C25）：按约束表实际编号精确匹配，避免误伤十六进制色值
     #  （C00000）、C26+ 等；前限非 ASCII 字母/数字，避免 AB14/MC19 内嵌命中。
     #  约束表新增编号时必须同步放开此处范围，否则新约束代号成为检测盲区。
     (
-        r"(?<![A-Za-z0-9])C(?:[1-9]|1[0-9]|2[0-5])\b",
+        CIPHER_CONSTRAINT,
         "CODE",
         "架构约束代号（C1~C25，须用语义描述替代，如原子写入/会话缓存/数据契约）",
     ),
@@ -177,9 +211,9 @@ PATTERNS: list[tuple[str, str, str]] = [
     #  第 N 章、引号内"N 章"）由 _chapter_excludes() 豁免。负向前瞻 (?!节)
     #  排除"章节"一词；[1-9]\d? 限 1~99、[一二三四五六七八九十]{1,2} 限 1~20，
     #  小节号"4.2"（数字后非"章"）不匹配。
-    (r"第?\s*[1-9]\d?\s*章(?!节)", "CHAPTER", "章节编号引用（N 章/第 N 章，须用语义章节名）"),
-    (r"第\s*[一二三四五六七八九十]{1,2}\s*章(?!节)", "CHAPTER", "章节编号引用（第X章，中文数字，须用语义章节名）"),
-    (r"[二三四五六七八九十]{1,2}\s*章(?!节)", "CHAPTER", "章节编号引用（X章，中文数字，须用语义章节名）"),
+    (CHAPTER_DIGIT, "CHAPTER", "章节编号引用（N 章/第 N 章，须用语义章节名）"),
+    (CHAPTER_CN_NTH, "CHAPTER", "章节编号引用（第X章，中文数字，须用语义章节名）"),
+    (CHAPTER_CN_BARE, "CHAPTER", "章节编号引用（X章，中文数字，须用语义章节名）"),
     #
     # ═══ ROUND：迭代轮次暗号（用"第 N 轮"/"N 轮"/"轮 N"指代开发迭代轮次） ═══
     #  "第 N 轮" / "经 N 轮" / "轮 N" 是开发迭代痕迹（计划分轮实施，如
@@ -191,11 +225,11 @@ PATTERNS: list[tuple[str, str, str]] = [
     #  计数词汇）由 _round_excludes() 豁免；`[1-9]\d?` 限 1~99、
     #  [一二三四五六七八九十]{1,2} 限 1~20，中文"一轮/两轮/三轮/二十轮"为
     #  计数表述（一轮行情是业务表述，非迭代轮次），不纳入裸"X轮"模式。
-    (r"第\s*[1-9]\d?\s*轮", "ROUND", "迭代轮次引用（第 N 轮，属开发迭代痕迹）"),
-    (r"[1-9]\d?\s*轮", "ROUND", "迭代轮次引用（N 轮，属开发迭代痕迹）"),
-    (r"轮\s*[1-9]\d?\b", "ROUND", "迭代轮次引用（轮 N，属开发迭代痕迹）"),
-    (r"第\s*[三四五六七八九十]{1,2}\s*轮", "ROUND", "迭代轮次引用（第X轮，中文数字，属开发迭代痕迹）"),
-    (r"轮\s*[一二三四五六七八九十]{1,2}", "ROUND", "迭代轮次引用（轮X，中文数字，属开发迭代痕迹）"),
+    (ROUND_NTH, "ROUND", "迭代轮次引用（第 N 轮，属开发迭代痕迹）"),
+    (ROUND_N, "ROUND", "迭代轮次引用（N 轮，属开发迭代痕迹）"),
+    (ROUND_N_PREFIX, "ROUND", "迭代轮次引用（轮 N，属开发迭代痕迹）"),
+    (ROUND_NTH_CN, "ROUND", "迭代轮次引用（第X轮，中文数字，属开发迭代痕迹）"),
+    (ROUND_CN_PREFIX, "ROUND", "迭代轮次引用（轮X，中文数字，属开发迭代痕迹）"),
     #
     # ═══ VERSION：版本号 / 发布 / 迭代标记 ═══
     #   代码注释中不应出现版本号、迭代信息、项目编号等变更记录。
@@ -208,10 +242,10 @@ PATTERNS: list[tuple[str, str, str]] = [
     (r"(?<![\d.])0\.\d+\.\d+(?:-dev)?(?!\.\d)\b", "VERSION", "裸版本号标记（如 0.9.9）"),
     (r"版本\s*[:：]\s*\d+\.\d+", "VERSION", "版本号声明"),
     (r"(?:发版|发布|release)\s*(?:于|版本|v?\d)", "VERSION", "发布/发版标记"),
-    (r"迭代\s*(?:\d+|任务|计划)", "VERSION", "迭代/任务标记"),
+    (HISTORY_ITERATION_MARK, "VERSION", "迭代/任务标记"),
     (r"切[换至到]\s*(?:dev|master|main|分支)", "VERSION", "分支切换记录"),
-    (r"未升级版|旧版|老版", "VERSION", "旧版/未升级版（版本对比痕迹）"),
-    (r"(?:原先|最初|早期)(?:是|为|使用|采用|属于)", "VERSION", "原先/最初/早期（历史状态叙述）"),
+    (HISTORY_LEGACY_LABEL, "VERSION", "旧版/未升级版（版本对比痕迹）"),
+    (HISTORY_STATE_EARLY, "VERSION", "原先/最初/早期（历史状态叙述）"),
     #
     # ═══ ORIGIN：来源归属（通常也是痕迹） ═══
     #
@@ -226,27 +260,27 @@ PATTERNS: list[tuple[str, str, str]] = [
     #
     # ═══ DEPR：废弃/过时标记 ═══
     #
-    (r"已废弃|已弃用", "DEPR", "废弃标注（需判断是否为运行时行为）"),
-    (r"过渡方案|过渡期|过渡性", "DEPR", "过渡性方案说明"),
+    (LOW_DEPRECATED, "DEPR", "废弃标注（需判断是否为运行时行为）"),
+    (LOW_TRANSITIONAL, "DEPR", "过渡性方案说明"),
     (r"暂时保留|暂保留|暂不[处理修复实现支持]", "DEPR", "暂时保留/暂不处理"),
     (r"(?:不再[推荐使用支持保留需要]|不再建议)", "DEPR", "不再推荐/使用/支持"),
     (r"兼容过渡", "DEPR", "兼容过渡（过渡性方案说明）"),
     #
     # ═══ CHANGE：变更描述（需人工判断） ═══
     #
-    (r"重构[为成到]", "CHANGE", "重构为/重构到"),
+    (LOW_REFACTOR_TO, "CHANGE", "重构为/重构到"),
     (r"新.{0,4}(?:版本|方案).{0,8}(?:替代|替换)", "CHANGE", "新版本/方案替代旧的"),
     (r"替代原有的|替换旧|替代旧", "CHANGE", "替代原有/旧的"),
-    (r"曾(?:经)?被", "CHANGE", "曾被/曾经被（历史状态叙述）"),
+    (LOW_PASSIVE_PAST, "CHANGE", "曾被/曾经被（历史状态叙述）"),
     (r"(?<!最)新版", "CHANGE", "新版（版本变更描述，需判断）"),
-    (r"物理合并", "CHANGE", "物理合并（模块/章节合并历史痕迹，须用语义描述当前结构）"),
+    (HISTORY_PHYSICAL_MERGE, "CHANGE", "物理合并（模块/章节合并历史痕迹，须用语义描述当前结构）"),
     #
     # ═══ TODO：待办标记 ═══
     #
     (r"\b(?:TODO|FIXME|HACK|XXX|WORKAROUND)\b", "TODO", "待办/临时处理标记"),
-    (r"尚未[实现处理支持完成覆盖]", "TODO", "尚未完成/实现（需加 issue 跟踪）"),
-    (r"待[办做处补充修复]", "TODO", "待办/待处理"),
-    (r"后续\s*(?:版本|迭代|优化|需要|再处理)", "TODO", "后续版本/迭代（需加 issue 跟踪）"),
+    (LOW_NOT_YET, "TODO", "尚未完成/实现（需加 issue 跟踪）"),
+    (LOW_TODO, "TODO", "待办/待处理"),
+    (LOW_FUTURE_PLAN, "TODO", "后续版本/迭代（需加 issue 跟踪）"),
 ]
 
 #: 编译一次（89 个模式，避免逐行 re.search 反复查编译缓存）

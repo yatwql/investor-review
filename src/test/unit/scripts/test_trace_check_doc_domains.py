@@ -401,3 +401,76 @@ class TestDocArchiveDomain:
         assert self._scan(doc_traces, tmp_path, "词表条目 `不再` 属技术令牌。\n") == []
         hits = self._scan(doc_traces, tmp_path, "词表含不再条目。\n")
         assert any(h[1] == "NARRATIVE" for h in hits), hits
+
+
+class TestHistoryVocabularyCoverage:
+    """历史痕迹词表补强：重命名/迁移/旧结构/历史状态变体必须检出（漏检即回退）。"""
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            "该模块更名为 analysis_metrics.py。",
+            "组件改称「数据契约」面。",
+            "字段曾用名 symbol_code。",
+            "旧称 holdings_cache。",
+            "旧接口保留一个版本。",
+            "旧字段残留检测。",
+            "旧约定沿用。",
+            "旧架构与新架构并存。",
+            "原版本约定已失效。",
+            "历史上曾用 `_cache_read` 读取。",
+            "代码迁移到新包 core_utils。",
+            "该函数已废弃于 v0.9。",
+        ],
+    )
+    def test_extended_history_terms_flagged(self, doc_traces, line):
+        assert _doc_hit(doc_traces, line) is not None, line
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            "旧格式缓存数据按当前口径透明读取。",  # 当前兼容语义，不得误伤
+            "保留历史代码有效集，按语义命名登记。",  # 测试名语义，非历史叙述
+            "历史上未去重的重复行需体积治理。",  # 无状态动词，非历史叙述
+            "迁移到新版本后重跑一致性检查。",  # 新版本非“新位置”，不得误伤
+        ],
+    )
+    def test_current_semantics_not_flagged(self, doc_traces, line):
+        assert _doc_hit(doc_traces, line) is None, line
+
+    def test_english_deprecation_marker_is_low(self, doc_traces, tmp_path):
+        """英文废弃标记（deprecated）归 LOW：需人工判断，不作 HIGH 拦截。"""
+        doc = tmp_path / "doc.md"
+        doc.write_text("该配置项 deprecated 字段已收敛。\n", encoding="utf-8")
+        hits = doc_traces.scan_file(doc, False)
+        assert [h[1] for h in hits] == ["LOW"], hits
+
+
+class TestStructuralDuplicateComparison:
+    """重复比对算法：空白归一、同块只报一次、顶格命令样本豁免。"""
+
+    def _write(self, tmp_path: Path, content: str, name: str = "plan.md") -> Path:
+        p = tmp_path / name
+        p.write_text(content, encoding="utf-8")
+        return p
+
+    def test_whitespace_only_difference_is_duplicate(self, doc_traces, tmp_path):
+        """仅空白/对齐差异的同内容长行属同一粘贴残留（归一后比对）。"""
+        row = "| **rf-3** | " + "内容" * 30 + " |"
+        variant = row.replace(" | ", "    |   ")
+        doc = self._write(tmp_path, f"### 节\n\n{row}\n{variant}\n")
+        hits = doc_traces.scan_structural_duplicates(doc)
+        assert any("重复内容行" in h[2] for h in hits), hits
+
+    def test_repeated_block_reported_once(self, doc_traces, tmp_path):
+        """整块重复只报首个窗口，不再按滑窗数重复计数（同一残留一条 finding）。"""
+        block = "\n".join(f"| **rf-{i}** | " + "内容" * 30 + " |" for i in range(2, 7))
+        doc = self._write(tmp_path, f"### 节\n\n{block}\n\n{block}\n")
+        hits = [h for h in doc_traces.scan_structural_duplicates(doc) if "重复区块" in h[2]]
+        assert len(hits) == 1, hits
+
+    def test_top_level_command_sample_alignment_not_duplicate(self, doc_traces, tmp_path):
+        """顶格命令样本（含对齐空白差异）属命令而非叙述，长行判重豁免。"""
+        cmd = "python scripts/test_runner.py --mode regression"
+        doc = self._write(tmp_path, f"### 节\n\n{cmd}            # P0 门禁\n{cmd}  # P0 门禁\n")
+        assert doc_traces.scan_structural_duplicates(doc) == []

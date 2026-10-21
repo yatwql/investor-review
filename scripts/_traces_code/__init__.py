@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from _traces_code.config import (  # noqa: F401
     REPO_ROOT,
+    RULE_CARRIER_DIRS,
+    RULE_CARRIER_FILES,
     SCAN_DIRS,
     SKIP_FILES,
     _is_tool_self,
