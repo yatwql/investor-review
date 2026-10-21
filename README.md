@@ -193,7 +193,8 @@ git clone https://github.com/yatwql/investor-util.git && cd investor-util
 
 | 文档 | 说明 |
 |:-----|:------|
-| [开发者指南](docs/managements/developer-guide.md) | 开发环境与工作流、三级门禁（P0/P1/P2）、任务编号规范、测试驱动、辅助脚本速查、注册表使用、版本发布流程 |
+| [开发者指南](docs/managements/developer-guide.md) | 文档地图、开发环境与工作流、三级门禁（P0/P1/P2）、测试驱动、调试与剖析、扩展清单、注册表使用、版本发布与 CI 排查 |
+| [辅助脚本参考](docs/managements/scripts-reference.md) | 60+ 辅助脚本字典（按用途分类，每条含设计逻辑与使用逻辑） |
 
 ## 📋 项目内部文档
 
