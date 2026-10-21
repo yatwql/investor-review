@@ -11,6 +11,7 @@
 
 ### Added
 
+- `developer-guide.md` 新增「文档核对方法」段：核查按机械层/结构层/断言层/散文层四层分工，给出未绑定断言的抽取对码写法、散文层「反引号标识符 ↔ 代码符号索引」与豁免域、以及「同类漂移出现第二次即落成 `check-doc-drift` 子分支（挂现有编号不加项数）」与「台账唯一、`docs/tmp/` 底稿闭环即删」两条输出纪律（自审 rf-786）
 - `check-doc-drift` 第 1 项扩「可见性规则总览表 `type` 行 ↔ 注册表 `type` 集合」双向对账（缺行 / 多行 / 重复三型）：该表此前仅人工维护，注册表把财报两章合为 `fundamental_snapshot` 并新增 `schedule_replay` 后，表里仍写两个不存在的 type 且漏一行——行数恰好相等，任何计数断言都不露馅（自审 rf-777）
 
 - 发布链耗时埋点：新增 `scripts/_release/_timing.py`（分步计时 + JSON 记录），`release.py` 每命令尾行打印耗时摘要并追加 `logs/release.jsonl`（`command` / `ok` / `elapsed_s` / `version` / `steps[]`）——gate 的回归/十守护/设计护栏、refresh 的 bench/collect/sync、publish 的 P1 verify、evolution 的快照与统计同步均记为分步；`logs/` 为 git 忽略域，写入失败只打 `[!]` 且不改退出码（自审 rf-771）
@@ -35,6 +36,7 @@
 
 ### Fixed
 
+- 文档点名的代码符号按现行实现订正：`technical.md` 的报告章节与增强开关分组由已下线的 `GROUP_REPORT` 改为 `GROUP_ANALYSIS` / `GROUP_STANDALONE`，`DESIGN.md` 的样式护栏白名单常量由 `_W1_EXEMPTIONS` 改为 `_RAW_COLOR_EXEMPTIONS`（条目数 15 不变）（自审 rf-785）
 - Web「配置编辑」面板分组表述统一为「10 组 = 7 个可编辑面 + 功能开关面作用域四组」，web 手册分组表补「LLM 多链线路 ↔ `[M]`」行（原 9 组漏该组、how-to-start 的 8 组仍按已不存在的「实验性功能/常规开关」二分、testplan 的 8 块同源）（自审 rf-783）
 - `requirements.md` 菜单表 P 行「报告章节与增强的 8 项开关」改为 21 项（分析增强 16 + 独立章节与回放 5），与 TUI 手册同口径（自审 rf-784）
 - 正文菜单键引用 16 处改正：`[4]`→`[3]`（faq 6 / how-to-config / cli / web-mode 2 / technical / testplan / requirements，区间写作 `[1]~[3]`）、持仓目录·文件名·输出目录三项改「菜单 `D` → `C`/`F`/`O`」、faq 机制与诊断块序号「第 37 项」→ 34（自审 rf-776）
