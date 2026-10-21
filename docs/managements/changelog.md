@@ -11,6 +11,10 @@
 
 ### Changed
 
+- **脚本域拆分（`rf-774`）**：`scripts/perf-view.py` 983 → **102 行**（采集/渲染/CLI 三段下沉 `scripts/_perf_view/`：`data.py` 367 / `report.py` 562 / `cli.py` 113，入口只留 docstring、sys.path 引导与 re-export）；`scripts/check-test-redundancy.py` 934 → **150 行**（八类检查各成子模块 `scripts/_test_redundancy/`：`_common` 共用 AST 原语 + 8 类检查模块 + `facts_cache` + `runner` 编排）。两处均保持 `load_script` 直调面（re-export），测试 patch 目标改指实现模块。
+
+- **文档机检测试文件拆分（`rf-787`）**：`test_check_doc_drift.py` 1061 → 410 行，按机检项族切 `_partitions` / `_sections` / `_tree` 三个兄弟分片（118~289 行），用例数不变、共享夹具仍由基片提供。
+
 - **代码工具按职责拆分（`rf-79`）**：`core/code_utils.py` 788 → **608 行**——派生量（交易所前后缀归一、FMP 风格符号、东财 push2 secid、cninfo 栏目参数、市值粗估）下沉 `core/code_symbols.py`（227 行），前缀常量的真值随之迁入并由 `code_utils` 引用同一对象（`is` 断言守卫「只存一份」）。`_strip_prefix` 更名公开原语 `strip_to_digits`（`is_six_digit_code` 在其之上构建，避免互相递归）。既有导入面经 re-export 保持不变。
 
 - **Web 生成执行体下沉（`rf-711`）**：`src/python/web/handlers.py` 910 → **710 行**，生成链路（执行体 / 产物清单 / 完成通知 / 输入模式→快照域映射 / 退出码）拆到 `src/python/web/run_generation.py`（235 行）。`handlers.py` 保留同名 re-export 维持既有导入面，`app.py` 改为从新模块注入 `RunManager.executor`；测试 patch 目标按「调用点所在模块」改指新模块。纯结构调整，零行为变化（`unit/web` 347 passed）。

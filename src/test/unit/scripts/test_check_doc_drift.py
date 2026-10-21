@@ -23,18 +23,11 @@
 测试收集快照/生成产物/真实仓库冒烟/统计表回写同步/守护清单同源）。
 
 测试通过脚本 import 方式直接复用解析/校验函数，不运行真实 CLI（`run_checks` 的 pytest 收集项
-默认不跑，故冒烟测试只读文件、不触发 pytest 子进程）。
-"""
+默认不跑，故冒烟测试只读文件、不触发 pytest 子进程）。"""
 
 from __future__ import annotations
-
 import re
-from dataclasses import replace
 from pathlib import Path
-
-from src.python.core.section_block_registry import SECTION_BLOCK_SPECS
-from src.python.tui.tui_menu import MENU_ITEMS
-
 import pytest
 from src.test._script_loader import load_script
 
@@ -72,9 +65,6 @@ pytestmark = [
 ]
 
 
-# ═══ 章节表 ═══
-
-
 class TestSectionTable:
     def test_parses_rows(self, drift):
         doc = "| 1 | **1.投资分析汇总**（始终显示） |\n| 2 | **2.持仓明细与分类** |\n"
@@ -90,9 +80,6 @@ class TestSectionTable:
         monkeypatch.setattr(drift_parts._format, "_REPORT_SECTION_DEFAULT", full)
         findings = drift.check_section_table(doc)
         assert any("`2.持仓明细`" in f for f in findings)
-
-
-# ═══ 章节数量断言 ═══
 
 
 class TestSectionCounts:
@@ -117,9 +104,6 @@ class TestSectionCounts:
 
     def test_other_numbers_ignored(self, drift):
         assert drift.check_section_counts({Path("manual.md"): "共 30 项功能开关、19 个指标"}) == []
-
-
-# ═══ 功能开关表 ═══
 
 
 def drift_marker() -> str:
@@ -149,9 +133,6 @@ class TestSwitchTable:
         doc = drift_marker() + "\n| `data_quality` | `false` | 说明 |\n"
         findings = drift.check_switch_table(doc)
         assert any("默认值 False 与注册表 True" in f for f in findings)
-
-
-# ═══ 开关分组计数与默认值断言 ═══
 
 
 class TestSwitchCounts:
@@ -229,9 +210,6 @@ class TestDefaultClaims:
         assert drift.check_switch_default_claims({Path("m.md"): "`not_a_switch`（默认关）"}) == []
 
 
-# ═══ 配置标量默认值表 ═══
-
-
 class TestConfigDefaults:
     @pytest.mark.parametrize(
         ("shown", "code", "expected"),
@@ -260,9 +238,6 @@ class TestConfigDefaults:
         assert drift.check_config_defaults(doc) == []
 
 
-# ═══ LLM 默认参数表 ═══
-
-
 class TestLlmDefaults:
     def test_correct_row_passes(self, drift):
         doc = "| `expert_review` | 智囊团深度复盘 | 36000 | 120s | 2h（7200s） | 三阶段 |\n"
@@ -278,9 +253,6 @@ class TestLlmDefaults:
         doc = "| `news_correlation` | 60s (1m) | 说明 |\n"
         findings = drift.check_llm_defaults(doc)
         assert any("TTL 表 60s" in f for f in findings)
-
-
-# ═══ TUI 面板编号 ═══
 
 
 def _panel_doc(
@@ -341,31 +313,6 @@ class TestPanelNumbering:
         assert len(findings) == 1 and "未找到 [S] 面板编号表区段" in findings[0]
 
 
-# ═══ 目录树 / 统计表 ═══
-
-
-class TestTreeParsing:
-    def test_reconstructs_nested_paths(self, drift):
-        doc = (
-            "```\n"
-            "investor-util/\n"
-            "├── src/                              # 源代码\n"
-            "│   ├── __init__.py                   #   包标记\n"
-            "│   └── python/                       # 主程序\n"
-            "│       └── cache.py                  #   缓存\n"
-            "└── scripts/                          # 脚本\n"
-            "    └── test-runner.py                #   测试驱动\n"
-            "```\n"
-        )
-        paths = drift.parse_tree_paths(doc)
-        assert "src/__init__.py" in paths
-        assert "src/python/cache.py" in paths
-        assert "scripts/test-runner.py" in paths
-
-    def test_outside_code_fence_ignored(self, drift):
-        assert drift.parse_tree_paths("├── ghost.py  # 不在代码块内\n") == set()
-
-
 class TestProjectStats:
     def test_stats_rows_parsed(self, drift):
         actual = drift._stats_actual()
@@ -395,9 +342,6 @@ class TestProjectStats:
 
     def test_unknown_label_ignored(self, drift):
         assert drift.check_project_stats("| 不存在的行 | Python | 1 | 1 | — |\n") == []
-
-
-# ═══ 测试覆盖计数表 ═══
 
 
 class TestTestCoverageCounts:
@@ -477,585 +421,3 @@ class TestTestCoverageCounts:
 
         collect = load_script("collect-test-coverage.py")
         assert collect.UNIT_DOMAIN_LABELS is UNIT_DOMAIN_LABELS
-
-
-# ═══ 构建产物排除 ═══
-
-
-# ═══ 归档索引 ═══
-
-
-class TestArchiveIndex:
-    """归档索引完整性：管理文档须列全 ``docs/archive/`` 下对应归档文件。
-
-    历史缺口：changelog 的 `## 归档` 索引曾因「发布切换时整段重写已发布段」被一并删除，
-    当时无任何断言拦住；本类即该缺口的回归守卫。
-    """
-
-    def test_passes_on_real_repo(self, drift):
-        """真实仓库：当前三份管理文档的归档索引与磁盘双向一致。"""
-        assert drift.check_archive_index() == []
-
-    def test_detects_real_repo_violation(self, drift, tmp_path, monkeypatch, drift_parts):
-        """回归：索引被删时能报出（不依赖 `_scan_docs`——changelog 属历史记录类被其排除）。"""
-        doc = drift._MANAGEMENTS / "changelog.md"
-        broken = tmp_path / "changelog.md"
-        broken.write_text(
-            doc.read_text(encoding="utf-8").replace("archived_changelog.0.10.x.md", "（已删）"), encoding="utf-8"
-        )
-        monkeypatch.setattr(drift_parts._ledger, "_ARCHIVE_INDEX_PAIRS", ((broken, "archived_changelog."),))
-        findings = drift.check_archive_index()
-        assert any("archived_changelog.0.10.x.md" in f and "缺少" in f for f in findings)
-
-    def test_reports_missing_index_entry(self, drift, tmp_path, monkeypatch, drift_parts):
-        """索引缺失某归档文件 → 报 finding（正向）。"""
-        doc = drift._MANAGEMENTS / "changelog.md"
-        broken = tmp_path / "changelog.md"
-        broken.write_text(
-            doc.read_text(encoding="utf-8").replace("archived_changelog.0.10.x.md", "（已删）"), encoding="utf-8"
-        )
-        monkeypatch.setattr(drift_parts._ledger, "_ARCHIVE_INDEX_PAIRS", ((broken, "archived_changelog."),))
-        assert any("缺少" in f for f in drift.check_archive_index())
-
-    def test_reports_ghost_index_entry(self, drift, tmp_path, monkeypatch, drift_parts):
-        """索引引用了不存在的归档文件 → 报 finding（反向）。"""
-        doc = drift._MANAGEMENTS / "changelog.md"
-        ghost = tmp_path / "changelog.md"
-        ghost.write_text(
-            doc.read_text(encoding="utf-8") + "\n[x](docs/archive/v9.9.x/archived_changelog.9.9.x.md)\n",
-            encoding="utf-8",
-        )
-        monkeypatch.setattr(drift_parts._ledger, "_ARCHIVE_INDEX_PAIRS", ((ghost, "archived_changelog."),))
-        assert any("archived_changelog.9.9.x.md" in f and "不存在" in f for f in drift.check_archive_index())
-
-    def test_covers_three_management_docs(self, drift):
-        """三份带归档的管理文档均在被检面内（changelog / plan / review-findings）。"""
-        names = {p.name for p, _ in drift._ARCHIVE_INDEX_PAIRS}
-        assert names == {"changelog.md", "plan.md", "review-findings.md"}
-
-
-class TestManagementPartitions:
-    """管理文档分区纪律：未完成/已解决/已归档不得错置（含历史失误的可检特征）。"""
-
-    _CHANGELOG_OK = "## [0.11.3-dev] - 开发中（未发布）\n"
-
-    def test_passes_on_real_repo(self, drift):
-        """真实仓库：三份管理文档分区纪律无违规。"""
-        assert drift.check_management_partitions() == []
-
-    def test_pending_item_in_resolved_section(self, drift):
-        """未完成项被误置已解决区（无 changelog 修复记录）→ 报 finding。"""
-        rf = (
-            "## 当前待处理问题\n\n### P2C\n\n| # | 问题 |\n| **rf-999** | x |\n\n"
-            "## 已解决问题\n\n| # | 问题 |\n| **rf-999** | y |\n\n### 归档档案\n"
-        )
-        findings = drift.audit_management_partitions(review_findings=rf, plan="", changelog=self._CHANGELOG_OK)
-        assert any("分区互斥" in f for f in findings)
-        assert any("无修复记录" in f for f in findings)
-
-    def test_resolved_item_without_changelog_record(self, drift):
-        """仅已解决区一条、但 changelog 无记录 → 报 finding（对应「未完成项误置已解决区」类失误）。"""
-        rf = "## 已解决问题\n\n| # | 问题 |\n| **rf-998** | y |\n\n### 归档档案\n"
-        findings = drift.audit_management_partitions(review_findings=rf, plan="", changelog=self._CHANGELOG_OK)
-        assert any("rf-998" in f and "无修复记录" in f for f in findings)
-
-    def test_resolved_item_backed_by_archived_changelog(self, drift):
-        """修复记录在归档 changelog 中亦算有记录（不误报）。"""
-        rf = "## 已解决问题\n\n| # | 问题 |\n| **rf-997** | y |\n\n### 归档档案\n"
-        findings = drift.audit_management_partitions(
-            review_findings=rf,
-            plan="",
-            changelog=self._CHANGELOG_OK,
-            archived_changelogs=["### 修复 rf-997\n"],
-        )
-        assert findings == []
-
-    def test_fixed_section_inside_pending_area(self, drift):
-        """「开发期已修复」节落在待处理区 → 报 finding（已修复项被读成待办）。"""
-        rf = (
-            "## 当前待处理问题\n\n### P1 — 高优先\n\n| # | 问题 |\n"
-            "### 开发期已修复（1.2.3-dev）\n\n| # | 问题 |\n| **rf-996** | y |\n\n"
-            "## 已解决问题\n\n### 归档档案\n"
-        )
-        findings = drift.audit_management_partitions(
-            review_findings=rf, plan="", changelog=self._CHANGELOG_OK + "\n修复 rf-996\n"
-        )
-        assert any("开发期已修复" in f and "节归属错置" in f for f in findings)
-
-    def test_pending_tier_heading_inside_resolved_area(self, drift):
-        """P 档标题（P1/P2/P3）落在已解决区 → 报 finding。"""
-        rf = (
-            "## 当前待处理问题\n\n### P1 — 高优先\n\n## 已解决问题\n\n"
-            "### 开发期已修复（1.2.3-dev）\n\n| # | 问题 |\n\n"
-            "### P3 — 持续监控：文件膨胀登记\n\n| # | 文件 |\n\n### 归档档案\n"
-        )
-        findings = drift.audit_management_partitions(review_findings=rf, plan="", changelog=self._CHANGELOG_OK)
-        assert any("P3" in f and "节归属错置" in f for f in findings)
-
-    def test_correct_section_layout_passes(self, drift):
-        """待处理区只放 P 档、已解决区只放已修复节 → 无节归属 finding（不误报）。"""
-        rf = (
-            "## 当前待处理问题\n\n### P1 — 高优先\n\n| # | 问题 |\n| **rf-995** | x |\n\n"
-            "## 已解决问题\n\n### 开发期已修复（1.2.3-dev）\n\n| # | 问题 |\n\n### 归档档案\n"
-        )
-        findings = drift.audit_management_partitions(review_findings=rf, plan="", changelog=self._CHANGELOG_OK)
-        assert [f for f in findings if "节归属错置" in f] == []
-
-    def test_completed_plan_left_in_todo(self, drift):
-        """未完成区出现 ✅ 已完成项 → 报 finding。"""
-        plan = "## 当前迭代待办\n\n#### ✅ `plan-9` 已做完\n\n## 归档\n"
-        findings = drift.audit_management_partitions(review_findings="", plan=plan, changelog=self._CHANGELOG_OK)
-        assert any("plan-9" in f and "已完成项须移入归档" in f for f in findings)
-
-    def test_archived_plan_still_in_todo(self, drift):
-        """已归档项仍在未完成区 → 报 finding（分区互斥）。"""
-        plan = "## 当前迭代待办\n\n#### 🔲 `plan-9` 待做\n\n## 归档\n"
-        findings = drift.audit_management_partitions(
-            review_findings="",
-            plan=plan,
-            changelog=self._CHANGELOG_OK,
-            archived_plans=["#### ✅ `plan-9` 已完成\n"],
-        )
-        assert any("分区互斥" in f for f in findings)
-
-    def test_archive_prose_mention_is_not_archived_item(self, drift):
-        """归档文件正文里的提及不算已归档项（防误报：如「后续项：某某计划项 …」）。"""
-        plan = "## 当前迭代待办\n\n#### 🔲 `plan-49` 待做\n\n## 归档\n"
-        findings = drift.audit_management_partitions(
-            review_findings="",
-            plan=plan,
-            changelog=self._CHANGELOG_OK,
-            archived_plans=["**后续项（另行登记）**：`plan-47`、`plan-49` 转正评估。\n"],
-        )
-        assert findings == []
-
-    def test_released_section_still_in_live_changelog(self, drift):
-        """现行 changelog 段头非开发版本 → 报 finding（已发布段须归归档）。"""
-        findings = drift.audit_management_partitions(
-            review_findings="", plan="", changelog="## [0.11.2] - 2026-09-24\n"
-        )
-        assert any("非开发版本" in f for f in findings)
-
-    def test_multiple_version_headers_in_live_changelog(self, drift):
-        """现行 changelog 含多个版本段头 → 报 finding。"""
-        findings = drift.audit_management_partitions(
-            review_findings="", plan="", changelog="## [0.11.3-dev] - x\n\n## [0.11.2] - 2026-09-24\n"
-        )
-        assert any("个版本段头" in f for f in findings)
-
-    def test_missing_files_do_not_crash(self, drift):
-        """空文本（文件缺失）不抛异常，也不臆造 finding。"""
-        assert drift.audit_management_partitions(review_findings="", plan="", changelog="") == []
-
-
-# ═══ 章节-区块矩阵 ═══
-
-
-class TestBlockMatrix:
-    """§4.22 章节-区块矩阵三向对账：文档行 ↔ 区块注册表 ↔ 双端实现提取。"""
-
-    @staticmethod
-    def _doc(drift) -> str:
-        return drift._TECHNICAL_MD.read_text(encoding="utf-8")
-
-    def test_current_doc_passes(self, drift):
-        """真实 technical.md 矩阵与注册表/双端实现三向一致（零 finding）。"""
-        assert drift.check_block_matrix(self._doc(drift)) == []
-
-    def test_matrix_keys_match_registry_bidirectionally(self, drift):
-        """矩阵 key 集合与注册表双向相等且无重复（结构关系断言，不写死条数）。"""
-        rows, findings = drift.parse_block_matrix(self._doc(drift))
-        assert findings == []
-        assert {r["key"] for r in rows} == {sec["key"] for sec in drift._REPORT_SECTION_DEFAULT}
-        assert len({r["key"] for r in rows}) == len(rows)
-
-    def test_stale_html_count_reported(self, drift):
-        """改大某章 HTML 区块数 → 与 partial 实测重算不一致。"""
-        doc = self._doc(drift)
-        rows, _ = drift.parse_block_matrix(doc)
-        target = next(r for r in rows if r["count"].isdigit())
-        lines = doc.splitlines(keepends=True)
-        idx = int(target["line"]) - 1
-        old = f"| `{target['key']}` | {target['count']} |"
-        assert old in lines[idx]
-        lines[idx] = lines[idx].replace(old, f"| `{target['key']}` | {int(target['count']) + 1} |", 1)
-        findings = drift.check_block_matrix("".join(lines))
-        assert any("HTML 区块数" in f for f in findings)
-
-    def test_missing_row_reported(self, drift):
-        """删掉矩阵一行 → 注册表章节缺行被报出。"""
-        doc = self._doc(drift)
-        rows, _ = drift.parse_block_matrix(doc)
-        lines = doc.splitlines(keepends=True)
-        victim = lines.pop(int(rows[0]["line"]) - 1)
-        assert victim.startswith("|")
-        findings = drift.check_block_matrix("".join(lines))
-        assert any("缺少注册表章节" in f for f in findings)
-
-    def test_tampered_excel_list_reported(self, drift):
-        """篡改矩阵 Excel 区块清单单元格 → 与区块注册表逐列不一致被报出。"""
-        doc = self._doc(drift)
-        rows, _ = drift.parse_block_matrix(doc)
-        target = next(r for r in rows if r["markers"] != "—")
-        marker = target["markers"].split(" / ")[0]
-        lines = doc.splitlines(keepends=True)
-        idx = int(target["line"]) - 1
-        assert marker in lines[idx]
-        lines[idx] = lines[idx].replace(marker, "已改名的占位区块", 1)
-        findings = drift.check_block_matrix("".join(lines))
-        assert any("Excel 区块清单与区块注册表不一致" in f for f in findings)
-
-    def test_dash_row_not_counted(self, drift):
-        """「—」行不参与重算；计数行若写成「—」会被报出（双向而非单向放行）。"""
-        doc = self._doc(drift)
-        rows, _ = drift.parse_block_matrix(doc)
-        target = next(r for r in rows if r["count"].isdigit())
-        lines = doc.splitlines(keepends=True)
-        idx = int(target["line"]) - 1
-        old = f"| `{target['key']}` | {target['count']} |"
-        lines[idx] = lines[idx].replace(old, f"| `{target['key']}` | — |", 1)
-        findings = drift.check_block_matrix("".join(lines))
-        assert any("HTML 区块数" in f for f in findings)
-
-    def test_impl_html_drift_reported(self, drift, monkeypatch):
-        """注册表 html 清单多出一区块 → HTML 实现提取与注册表不一致被报出。"""
-        spec = SECTION_BLOCK_SPECS["holdings_detail"]
-        monkeypatch.setitem(SECTION_BLOCK_SPECS, "holdings_detail", replace(spec, html=spec.html + ("幽灵区块",)))
-        findings = drift.check_block_matrix(self._doc(drift))
-        assert any("HTML 区块实测" in f for f in findings)
-
-    def test_impl_excel_drift_reported(self, drift, monkeypatch):
-        """注册表 excel 清单多出一区块 → Excel 实现提取与注册表不一致被报出。"""
-        spec = SECTION_BLOCK_SPECS["holdings_detail"]
-        monkeypatch.setitem(SECTION_BLOCK_SPECS, "holdings_detail", replace(spec, excel=spec.excel + ("幽灵区块",)))
-        findings = drift.check_block_matrix(self._doc(drift))
-        assert any("Excel 区块实测" in f for f in findings)
-
-    def test_missing_block_contract_reported(self, drift, monkeypatch):
-        """删掉注册表某章区块契约 → 键集双向检查报缺契约。"""
-        monkeypatch.delitem(SECTION_BLOCK_SPECS, "llm_usage")
-        findings = drift.check_block_matrix(self._doc(drift))
-        assert any("缺区块契约" in f for f in findings)
-
-
-class TestMenuBlockConsistency:
-    """手册主菜单 code block ↔ tui_menu.MENU_ITEMS 一致性（doc-drift 第 18 项）。"""
-
-    @staticmethod
-    def _menu_doc(*, skip: str | None = None, relabel: tuple[str, str] | None = None, extra: str | None = None) -> str:
-        """按当前 MENU_ITEMS 动态生成主菜单块（真值派生，不写死清单与条数）。"""
-        lines = []
-        for key, label, _cb, _is_quit in MENU_ITEMS:
-            if key == skip:
-                continue
-            if relabel and key == relabel[0]:
-                label = relabel[1]
-            lines.append(f"    [{key}] {label}")
-        if extra:
-            lines.append(extra)
-        return "```text\n" + "\n".join(lines) + "\n```\n"
-
-    def test_consistent_block_passes(self, drift, tmp_path):
-        """与真值一致的主菜单块无 finding。"""
-        p = tmp_path / "how-to-use-tui-menu.md"
-        assert drift.check_menu_blocks({p: self._menu_doc()}) == []
-
-    def test_missing_key_reported(self, drift, tmp_path):
-        """块内缺某个菜单键 → 报「缺少」并带真值标签。"""
-        p = tmp_path / "how-to-start.md"
-        findings = drift.check_menu_blocks({p: self._menu_doc(skip="Q")})
-        assert any("[Q]" in f and "缺少" in f for f in findings)
-
-    def test_unknown_key_reported(self, drift, tmp_path):
-        """块内出现 MENU_ITEMS 不存在的键 → 报「未知按键」。"""
-        p = tmp_path / "how-to-start.md"
-        findings = drift.check_menu_blocks({p: self._menu_doc(extra="    [Z] 不存在的项")})
-        assert any("[Z]" in f and "未知按键" in f for f in findings)
-
-    def test_label_head_drift_reported(self, drift, tmp_path):
-        """标签头与真值不一致 → 报漂移。"""
-        p = tmp_path / "how-to-use-tui-menu.md"
-        findings = drift.check_menu_blocks({p: self._menu_doc(relabel=("E", "生成基础版报告（仅 Excel）"))})
-        assert any("[E]" in f and "标签头" in f for f in findings)
-
-    def test_parenthetical_clarification_allowed(self, drift, tmp_path):
-        """括号内补充手册说明（头一致）不误报。"""
-        p = tmp_path / "how-to-use-tui-menu.md"
-        findings = drift.check_menu_blocks(
-            {p: self._menu_doc(relabel=("4", "缓存管理（统计与清理）（二级：先统计后清理）"))}
-        )
-        assert findings == []
-
-    def test_multicolumn_and_cursor_prefix_parsed(self, drift):
-        """两列排版与 `> ` 光标前缀均能解析出完整键集。"""
-        items = list(MENU_ITEMS)
-        half = (len(items) + 1) // 2
-        left = [f"    [{k}] {lb}" for k, lb, _cb, _q in items[:half]]
-        left[0] = "  > " + left[0][4:]
-        right = [f"    [{k}] {lb}" for k, lb, _cb, _q in items[half:]]
-        rows = [left[i] + ("        " + right[i] if i < len(right) else "") for i in range(half)]
-        parsed = drift.parse_menu_block_lines("```text\n" + "\n".join(rows) + "\n```\n")
-        assert set(parsed) == {k for k, _lb, _cb, _q in MENU_ITEMS}
-        assert parsed[items[0][0]] == items[0][1]
-
-    def test_no_menu_block_reported(self, drift, tmp_path):
-        """无主菜单块（缺 [E]/[X] 识别标志）→ 报未找到。"""
-        p = tmp_path / "faq.md"
-        findings = drift.check_menu_blocks({p: "# 无菜单块\n\n普通段落。\n"})
-        assert any("未找到主菜单 code block" in f for f in findings)
-
-
-class TestMigrationPlaceholders:
-    """迁档占位↔归档节：占位声明与归档文件对应版本二级标题节的一致性。"""
-
-    def test_real_repo_passes(self, drift):
-        """真实仓库当前占位与归档节一致（结构关系断言，不写死版本清单）。"""
-        assert drift.check_migration_placeholders() == []
-
-    def test_no_placeholder_no_findings(self, drift, tmp_path):
-        """台账无占位 → 无 finding（占位是断言的触发前提）。"""
-        assert drift.check_migration_placeholders("无占位文本", archive_root=tmp_path) == []
-
-    def test_reports_placeholder_without_version_section(self, drift, tmp_path):
-        """占位存在但归档文件缺该版本二级标题节 → 报出（占位已写、归档正文缺失）。"""
-        archive_dir = tmp_path / "v9.9.x"
-        archive_dir.mkdir()
-        (archive_dir / "archived_review-findings.9.9.x.md").write_text(
-            "## 开发期已修复（9.8-dev）\n\n内容\n", encoding="utf-8"
-        )
-        findings = drift.check_migration_placeholders(
-            "（本版开发期已修复项已随 v9.9.9 发布迁入上方归档档案）", archive_root=tmp_path
-        )
-        assert any("v9.9.9" in f and "无对应版本归档节" in f for f in findings)
-
-    def test_accepts_version_section(self, drift, tmp_path):
-        """归档节标题含该版本（v 前缀式）→ 通过。"""
-        archive_dir = tmp_path / "v9.9.x"
-        archive_dir.mkdir()
-        (archive_dir / "archived_review-findings.9.9.x.md").write_text(
-            "## v9.9.9 开发期已修复（2026-10-20）\n\n- **rf-x**：条目\n", encoding="utf-8"
-        )
-        assert drift.check_migration_placeholders("已随 v9.9.9 发布迁入", archive_root=tmp_path) == []
-
-    def test_accepts_legacy_dev_heading(self, drift, tmp_path):
-        """旧式节标题（`## 开发期已修复（X.Y.Z-dev）`）同样视为该版本归档节。"""
-        archive_dir = tmp_path / "v9.9.x"
-        archive_dir.mkdir()
-        (archive_dir / "archived_review-findings.9.9.x.md").write_text(
-            "## 开发期已修复（9.9.9-dev）\n\n内容\n", encoding="utf-8"
-        )
-        assert drift.check_migration_placeholders("已随 v9.9.9 发布迁入", archive_root=tmp_path) == []
-
-    def test_reports_missing_archive_file(self, drift, tmp_path):
-        """占位存在但对应归档文件不存在 → 报出。"""
-        findings = drift.check_migration_placeholders("已随 v8.8.8 发布迁入", archive_root=tmp_path)
-        assert any("archived_review-findings.8.8.x.md" in f and "不存在" in f for f in findings)
-
-    def test_duplicate_placeholders_single_finding(self, drift, tmp_path):
-        """同一版本多处占位只断言一次（去重后单条 finding）。"""
-        archive_dir = tmp_path / "v9.9.x"
-        archive_dir.mkdir()
-        findings = drift.check_migration_placeholders(
-            "已随 v9.9.9 发布迁入\n已随 v9.9.9 发布迁入", archive_root=tmp_path
-        )
-        assert len(findings) == 1
-
-
-class TestTreeDescCounts:
-    """folders.md 树描述计数禁令：阿拉伯数字+量词禁写（docs/archive 记录域豁免）。"""
-
-    def test_flags_arabic_count(self, drift):
-        """文件条目描述含数字+量词 → 报出。"""
-        doc = "```\nroot/\n├── a.py # 工具（3 项检查）\n```\n"
-        findings = drift.check_tree_desc_counts(doc)
-        assert any("a.py" in f and "3 项" in f for f in findings)
-
-    def test_flags_dir_line_count(self, drift):
-        """目录条目行同样入检（目录描述也会写文件计数）。"""
-        doc = "```\nroot/\n├── llm/ # 场景测试（9 个测试文件）\n```\n"
-        assert any("`llm`" in f for f in drift.check_tree_desc_counts(doc))
-
-    def test_archive_domain_exempt(self, drift):
-        """docs/archive/ 记录域描述豁免（归档文档的固有数字属记录内容）。"""
-        doc = "```\nroot/\n├── docs/\n│   └── archive/\n│       └── x.md # 记录（10 项分析）\n```\n"
-        assert drift.check_tree_desc_counts(doc) == []
-
-    def test_chinese_numeral_allowed(self, drift):
-        """中文数词形态（设计常量/分类名）不在扫描面。"""
-        doc = "```\nroot/\n├── b.py # 合成（三因子/四类路由/多层防御）\n```\n"
-        assert drift.check_tree_desc_counts(doc) == []
-
-    def test_real_repo_passes(self, drift):
-        """真实仓库树描述无违规计数（结构关系断言，不写死条数）。"""
-        text = drift._FOLDERS_MD.read_text(encoding="utf-8")
-        assert drift.check_tree_desc_counts(text) == []
-
-
-class TestTreeVersionOrder:
-    """版本目录块升序禁令：同父目录 vN.N.x/ 条目按版本号升序（集合比对不看先后的盲区补位）。"""
-
-    def test_ascending_passes(self, drift):
-        """升序版本块 → 无 finding。"""
-        doc = (
-            "```\nroot/\n├── archive/\n│   ├── v0.1.x/\n│   │   └── a.md # 记录\n"
-            "│   ├── v0.9.x/\n│   │   └── b.md # 记录\n"
-            "│   └── v0.10.x/\n│       └── c.md # 记录\n```\n"
-        )
-        assert drift.check_tree_version_order(doc) == []
-
-    def test_descending_reported(self, drift):
-        """新块插到组首（真实缺陷形态：0.9 后接 0.13→0.10 倒序）→ 报出乱序。"""
-        doc = (
-            "```\nroot/\n├── archive/\n│   ├── v0.9.x/\n│   │   └── a.md # 记录\n"
-            "│   ├── v0.13.x/\n│   │   └── b.md # 记录\n"
-            "│   └── v0.10.x/\n│       └── c.md # 记录\n```\n"
-        )
-        findings = drift.check_tree_version_order(doc)
-        assert any("v0.10.x" in f and "v0.13.x" in f and "乱序" in f for f in findings)
-
-    def test_lexicographic_trap_numeric_order(self, drift):
-        """数值序而非字典序：v0.9.x → v0.10.x 合法（字典序会误报）。"""
-        doc = (
-            "```\nroot/\n├── archive/\n│   ├── v0.9.x/\n│   │   └── a.md # 记录\n"
-            "│   └── v0.10.x/\n│       └── b.md # 记录\n```\n"
-        )
-        assert drift.check_tree_version_order(doc) == []
-
-    def test_independent_parents(self, drift):
-        """不同父目录独立判定（a 乱序报出、b 升序不牵连）。"""
-        doc = (
-            "```\nroot/\n├── a/\n│   ├── v0.2.x/\n│   │   └── x.md # 记录\n"
-            "│   └── v0.1.x/\n│       └── y.md # 记录\n└── b/\n"
-            "    ├── v0.1.x/\n    │   └── p.md # 记录\n"
-            "    └── v0.2.x/\n        └── q.md # 记录\n```\n"
-        )
-        findings = drift.check_tree_version_order(doc)
-        assert len(findings) == 1 and "a/v0.1.x" in findings[0]
-
-    def test_real_repo_passes(self, drift):
-        """真实仓库版本块升序（结构关系断言，不写死条数）。"""
-        text = drift._FOLDERS_MD.read_text(encoding="utf-8")
-        assert drift.check_tree_version_order(text) == []
-
-
-class TestReturnKeyInvariant:
-    """全文档「返回主菜单」键=0 不变量（第 18 项扩展：返回键全局统一）。"""
-
-    def test_zero_forms_all_pass(self, drift, tmp_path):
-        """各合法 0 键形态（图块/列表/表格）无 finding。"""
-        p = tmp_path / "how-to-use-tui-menu.md"
-        text = (
-            "```text\n   [0] 返回主菜单\n```\n"
-            "- **0 返回主菜单**（回车同效）\n"
-            "| D | 聚合三项；`[0]` 返回主菜单，改完可继续改其它项 |\n"
-        )
-        assert drift.check_return_key_invariant({p: text}) == []
-
-    def test_block_b_key_reported(self, drift, tmp_path):
-        """图块 [B] 返回 → 报应为 0。"""
-        p = tmp_path / "how-to-use-tui-menu.md"
-        findings = drift.check_return_key_invariant({p: "```text\n   [B] 返回主菜单\n```\n"})
-        assert any("[B]" in f and "应为 0" in f for f in findings)
-
-    def test_list_bold_b_reported(self, drift, tmp_path):
-        """列表项「**B 返回主菜单**」→ 报应为 0。"""
-        p = tmp_path / "how-to-use-tui-menu.md"
-        findings = drift.check_return_key_invariant({p: "- **B 返回主菜单**（回车同效）\n"})
-        assert any("[B]" in f and "应为 0" in f for f in findings)
-
-    def test_table_backtick_key_reported(self, drift, tmp_path):
-        """表格内反引号包裹的 `[B]` 返回（真实残留形态，人工 grep 模式会漏）→ 报应为 0。"""
-        p = tmp_path / "requirements.md"
-        findings = drift.check_return_key_invariant(
-            {p: "| D | 聚合三项，另有配置入口地图；`[B]` 返回主菜单，改完可继续改其它项 |\n"}
-        )
-        assert any("[B]" in f and "应为 0" in f for f in findings)
-
-    def test_prose_exempt(self, drift, tmp_path):
-        """自由 prose 叙述豁免（FAQ 的 Ctrl+C 形态 / QA 流内 q 退出非面板导航）。"""
-        p = tmp_path / "faq.md"
-        text = "按 `Ctrl+C` 中断返回主菜单，检查 `logs/app.log`。\n\n3. 输入问题回车；输入回车或 `q` 返回主菜单。\n"
-        assert drift.check_return_key_invariant({p: text}) == []
-
-    def test_distant_key_and_tail_chinese_exempt(self, drift, tmp_path):
-        """行内远处非返回键与行尾中文（changelog 式列表/表格叙述）不误报。"""
-        p = tmp_path / "technical.md"
-        text = (
-            "- **优化**：`[L]` 生成确认合并，Esc 即时取消（返回主菜单）语义不变\n"
-            "| **Esc** | 子菜单：按 Esc 即时取消返回主菜单，无需找「0 返回」 |\n"
-        )
-        assert drift.check_return_key_invariant({p: text}) == []
-
-
-# ═══ 正文菜单键引用（第 18 项扩展）═══
-
-
-class TestMenuKeyReferences:
-    """正文「菜单 `X`」引用须为主菜单键；`[D]` 二级键须写作 `D` → `X`。"""
-
-    def test_legal_forms_pass(self, drift, tmp_path):
-        """主菜单键各书写形态（裸键/反引号/方括号/加粗）均无 finding。"""
-        p = tmp_path / "faq.md"
-        text = (
-            "菜单 `L` 会先检查缓存。\n"
-            "在菜单 **[S]** 的机制与诊断块切换。\n"
-            "菜单 `[3]` 清理过期缓存。\n"
-            "菜单 `D` → `C` 可改持仓目录。\n"
-            "菜单 P 的五个章节组相互独立。\n"
-        )
-        assert drift.check_menu_key_references({p: text}) == []
-
-    def test_stale_main_key_reported(self, drift, tmp_path):
-        """缓存管理编号迁移后遗留的旧主菜单键 `[4]` → 报出（历史真实残留）。"""
-        p = tmp_path / "faq.md"
-        findings = drift.check_menu_key_references({p: "也可通过菜单 `[4]` → `3` 清理过期缓存。\n"})
-        assert any("[4]" in f and "不是主菜单键" in f for f in findings)
-
-    def test_submenu_key_needs_d_prefix(self, drift, tmp_path):
-        """[D] 的二级键裸写为「菜单 `C`」→ 报出并提示 `D` → `C` 写法。"""
-        p = tmp_path / "how-to-config.md"
-        findings = drift.check_menu_key_references({p: "| `holdings_dir` | 持仓目录 | 菜单 `C` |\n"})
-        assert any("`D` → `C`" in f for f in findings)
-
-    def test_bare_word_not_captured(self, drift, tmp_path):
-        """「主菜单 code block」里的英文词首字母不当作键（裸键形态须跟空白/标点）。"""
-        p = tmp_path / "developer-guide.md"
-        text = "| 新增菜单项 | 同步两本手册的主菜单 code block |\n"
-        assert drift.check_menu_key_references({p: text}) == []
-
-
-# ═══ 可见性规则总览表 ═══
-
-
-class TestVisibilityTypeRows:
-    """`reports-instruction.md` 可见性表 type 行 ↔ 章节注册表 type 集合双向对账。"""
-
-    @staticmethod
-    def _doc(*types: str) -> str:
-        rows = "".join(f"| `{t}` | 控制 | 条件 | E / B / L |\n" for t in types)
-        return f"### 可见性规则总览\n\n| type | board | data | 菜单 |\n|:--|:--|:--|:--|\n{rows}\n---\n"
-
-    def _patch(self, drift_parts, monkeypatch, types: tuple[str, ...]):
-        registry = [{"number": i + 1, "name": f"章{i}", "type": t} for i, t in enumerate(types)]
-        monkeypatch.setattr(drift_parts._format, "_REPORT_SECTION_DEFAULT", registry)
-
-    def test_matching_set_passes(self, drift, drift_parts, monkeypatch):
-        self._patch(drift_parts, monkeypatch, ("always", "llm"))
-        assert drift.check_visibility_type_rows(self._doc("always", "llm")) == []
-
-    def test_missing_type_reported(self, drift, drift_parts, monkeypatch):
-        """注册表有而表里没有（`schedule_replay` 漏行即此型）→ 报出。"""
-        self._patch(drift_parts, monkeypatch, ("always", "schedule_replay"))
-        findings = drift.check_visibility_type_rows(self._doc("always"))
-        assert any("缺少 type `schedule_replay`" in f for f in findings)
-
-    def test_unknown_type_reported(self, drift, drift_parts, monkeypatch):
-        """表里写了注册表没有的 type（`financial_report` 混入即此型）→ 报出。"""
-        self._patch(drift_parts, monkeypatch, ("always", "fundamental_snapshot"))
-        findings = drift.check_visibility_type_rows(self._doc("always", "financial_report"))
-        assert any("没有的 type `financial_report`" in f for f in findings)
-
-    def test_duplicate_type_reported(self, drift, drift_parts, monkeypatch):
-        self._patch(drift_parts, monkeypatch, ("always",))
-        findings = drift.check_visibility_type_rows(self._doc("always", "always"))
-        assert any("重复" in f for f in findings)
