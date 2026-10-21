@@ -706,7 +706,7 @@ sym |= set(re.findall(r'^\s{0,8}["\']([a-z][a-z0-9_]{2,})["\']\s*:', src, re.M))
 
 - `pyproject.toml`（`version` 字段，`--fix` 可自动同步）
 - `README.md`
-- 管理文档 10 份：`plan.md`、`technical.md`、`requirements.md`、`testplan.md`、`review-findings.md`、`llm-technical.md`、`folders.md`、`test-coverage.md`、`changelog.md`、`developer-guide.md`
+- 版本受检管理文档 10 份：`plan.md`、`technical.md`、`requirements.md`、`testplan.md`、`review-findings.md`、`llm-technical.md`、`folders.md`、`test-coverage.md`、`changelog.md`、`developer-guide.md`
 - `folders.md` 另含一条 `evolution_head` 断言：版本演进对照表「当前开发版（」列头版本号与 `APP_VERSION` 同步（与文档版本头双点校验，发版漏改即报错，`--fix` 可自动同步）；断言只锚列头文本，表内统计数据行的刷新义务在「版本发布流程 ② 发布数据文档刷新」
 
 **使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
