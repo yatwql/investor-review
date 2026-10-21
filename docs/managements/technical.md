@@ -143,7 +143,7 @@
 |:-----|:-----|:---------|:----------|:----------|:---------|
 | TUI | 交互菜单 | `tui/tui.py` | `tui/tui_menu.py` + `tui/handlers_*.py` | `report/orchestrator.py` + `cache/operations.py` | `TuiProgressReporter` |
 | CLI | 命令行参数 | `cli/cli.py` | argparse（不经过 tui/handlers_*） | `report/orchestrator.py` + `cache/operations.py` | `CliProgressReporter` |
-| Web | 浏览器界面 | `web/server.py` | `web/handlers.py` + `web/upload.py` + `web/progress.py` + `web/runs.py` | `report/orchestrator.py` + `cache/operations.py` | `WebProgressReporter` |
+| Web | 浏览器界面 | `web/server.py` | `web/handlers.py` + `web/run_generation.py` + `web/upload.py` + `web/progress.py` + `web/runs.py` | `report/orchestrator.py` + `cache/operations.py` | `WebProgressReporter` |
 
 **共享模块**（三种入口均直接使用）：
 
@@ -225,7 +225,7 @@ llm/generators_orchestrator.py ──→ cache/（可选）
 | **用户交互** | Handler 命令 | TUI 命令 → 委托编排层或共享层 | `tui/handlers_*.py` |
 | **用户交互** | 进度报告 | ProgressReporter 解耦进度输出 | `report/progress.py` |
 | **用户交互** | CLI 进度报告 | CliProgressReporter（logging 输出 / verbose stderr） | `report/cli_progress.py` |
-| **用户交互** | Web 服务层 | Flask 工厂/路由、单 worker 串行队列、上传安全、报告格式与选项选择 | `web/server.py` / `web/app.py` / `web/handlers.py` / `web/upload.py` / `web/runs.py` |
+| **用户交互** | Web 服务层 | Flask 工厂/路由、生成执行体、单 worker 串行队列、上传安全、报告格式与选项选择 | `web/server.py` / `web/app.py` / `web/handlers.py` / `web/run_generation.py` / `web/upload.py` / `web/runs.py` |
 | **用户交互** | Web 进度报告 | WebProgressReporter（事件缓冲、进度查询） | `web/progress.py` |
 | **输入** | 持仓读取 | xlsx 解析、列校验、多账户 | `core/reader.py` |
 | **配置** | 配置管理层 | 三文件分层配置 | `config/` |
@@ -567,6 +567,7 @@ Web 渠道是第三种交互入口：**浏览器内完成「上传持仓 Excel �
 | `web/server.py` | 启动入口 | sys.path 注入、参数解析、端口检测、output_dir 写锁检测、init_config、app.run |
 | `web/app.py` | Flask 应用工厂 | 统一 JSON 错误处理、request_id 访问日志、注入 run_manager |
 | `web/handlers.py` | API 路由 | 页面/上传/生成/轮询/预览/下载/历史/健康/日志/缓存统计与清理/What-if/报告追问/配置编辑；`_run_generation` 薄包装器（委托 `_run_generation_impl` + `result_box` 回传产物标志，收尾经 `_notify_web_completion` 按 `notify` 配置门控派发完成通知——Web 手动 + 内置定时调度共用，与 CLI 同构尽力而为不改退出码）；`_build_system_info` 委托 `core/system_info.build_system_info` 单源组装状态区系统信息（版本/本机 IP/持仓输出摘要/LLM 含多链/自检卡片可见性，与 TUI 同组展示原语）；`_handle_logs`/`_handle_health_history` 薄展示（委托 `core/log_reader.py` + `core/perf.py`，无解析逻辑）；`_handle_doctor` 薄展示（委托 `core/doctor.py`）；`_handle_config_edit` 同源守卫（`_is_same_origin`）；`_build_artifacts` 委托 `orchestrator.artifacts_for_report_type` 类型语义与 `core/constants` 最新产物名（不镜像 CLI --type 规则与文件名字面量）；空持仓门经 `core/reader.require_holdings` 单源（HTTP 端不带服务端路径） |
+| `web/run_generation.py` | Web 生成执行体 | `_run_generation` 薄入口（委托 `_run_generation_impl` + `result_box` 回传产物标志，收尾经 `_notify_web_completion` 按 `notify` 配置门控派发完成通知——Web 手动 + 内置定时调度共用，与 CLI 同构尽力而为不改退出码）；`_run_generation_impl` 读持仓/输入模式分派（试算→`web/` 隔离域、正式→共享主目录）/LLM 日预算硬闸/`generate_report` 调用/退出码映射/上传临时文件清理；`_build_artifacts` 委托 `orchestrator.artifacts_for_report_type` 类型语义与 `core/constants` 最新产物名；`_web_input_mode_snapshot_domain` 模式↔隔离域唯一事实来源 |
 | `web/upload.py` | 上传安全 | 服务端 uuid 重命名、扩展名白名单、大小上限、PK 魔数、原子落盘、TTL 清理 |
 | `web/config_edit.py` | 配置编辑 | 薄外观：再导出共享层 `config/edit_ops.py` 符号（`apply_config_edit`/`config_edit_whitelist`/`config_backup_file`）+ `get_config_edit_surface` 组装呈现面；规则与写入单源在共享层，与 TUI 同一函数 |
 | `web/runs.py` | 运行管理 | RunManager 单 worker 串行队列 + run 状态/事件注册表（Lock 保护） |

@@ -18,7 +18,7 @@ from src.python.config import _config_defaults
 from src.python.config._core import invalidate_config_cache
 from src.python.report.orchestrator import ReportResult
 from src.python.web.app import create_app
-from src.python.web.handlers import _build_artifacts, _run_generation
+from src.python.web.run_generation import _build_artifacts, _run_generation
 from src.python.web.runs import RunManager, RunState
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_web, pytest.mark.usefixtures("offline_external_sources")]
