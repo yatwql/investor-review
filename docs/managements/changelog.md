@@ -9,6 +9,10 @@
 
 ## [0.14.2-dev] - 开发中（未发布）
 
+### Changed
+
+- **模块内拆分收尾（`rf-773` 剩余 5 个）**：`llm/api_base.py` 770 → **501**（响应解析 → `_api_responses.py`）、`config/_validation.py` 723 → **119**（标量/章节/LLM 三域 + 共用原语 `_validation_common.py`）、`report/holdings_detail_sheet.py` 716 → **171**（分区块写入器 → `_holdings_detail_blocks.py`）、`analysis/prosperity_scoring.py` 711 → **476**（输入与权重 → `_prosperity_inputs.py`）、`providers/news_dedup_rules.py` 710 → **331**（纯词表 → `_news_dedup_tables.py`）。至此 rf-773 的 8 个模块全部拆完（前批 3 个已随 v0.14.1 发布）；门面 re-export 保持导入面，区块注册表与章节-区块矩阵的载体列同步更新。
+
 
 （本次发布内容见下方归档索引）
 

@@ -232,7 +232,7 @@ class TestCallLlmWithRetry(unittest.TestCase):
 
     @patch("src.python.llm.api_base._cb_is_open", return_value=False)
     @patch("src.python.llm.api_base._cb_record_success")
-    @patch("src.python.llm.api_base._log_token_usage")  # avoid formatting magic mock
+    @patch("src.python.llm._api_responses._log_token_usage")  # avoid formatting magic mock
     def test_success_first_try(self, mock_log_usage, mock_record_success, mock_cb_open) -> None:
         """首次成功 → (content, usage)。"""
         from src.python.llm.api_base import call_llm_with_retry

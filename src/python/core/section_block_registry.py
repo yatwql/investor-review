@@ -77,7 +77,7 @@ SECTION_BLOCK_SPECS: dict[str, SectionBlockSpec] = {
     "holdings_detail": SectionBlockSpec.both(
         ("市值核算明细", "持仓分类汇总"),
         partials=("holdings_detail_section.html",),
-        modules=("holdings_detail_sheet.py",),
+        modules=("holdings_detail_sheet.py", "_holdings_detail_blocks.py"),
     ),
     "penetration": SectionBlockSpec.none(
         partials=("penetration_section.html",),

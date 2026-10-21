@@ -27,10 +27,9 @@
 
 | # | 任务 | 涉及文件（行数 / 距红线） | 处置与备注 |
 |---|------|--------------------------|-------------|
-| 2 | **rf-665** `config/features.py` 注册表下沉 | `src/python/config/features.py` 840/160 | 注册表逐开关增长（每项约十行）；逼近 980 时把注册表条目与定义下沉（同族：`tui/handlers_config.py`、`scripts/_doc_drift/_format.py` 各自域内聚，维持） |
-| 3 | **rf-626** 报告域按职责下沉（含已决策维持的两处） | `src/python/report/html_writer.py` 799/201、`src/python/analysis/rebalance.py` 751/249 | `html_writer`：域下沉 + 门面 re-export（测试 patch 改指持有子模块）；`analysis/rebalance`：按「成本分档 / 偏离度 / 告警」下沉 |
-| 4 | **rf-773** 模块内三段/多域拆分（**进行中：3/8 完成**） | 已拆：`report/orchestrator.py` 734→255（数据装配与派生计算 → `_orchestrator_data.py` 519）、`report/_report_generation.py` 751→52（both/full 两路径 → `_generation_both.py` 356 / `_generation_full.py` 368 / 共用步骤 `_generation_shared.py` 85）、`report/fund_performance.py` 728→595（评级内核 → `_fund_rating.py` 166）。**剩余 5 个**：`llm/api_base.py` 770（端点构造/请求发送/响应解析三段）、`config/_validation.py` 723（标量/LLM/章节三域）、`report/holdings_detail_sheet.py` 716（页签分区块）、`analysis/prosperity_scoring.py` 711（阈值表/评分/诊断）、`providers/news_dedup_rules.py` 710（去重规则表按来源） |
-| 5 | **rf-86** `cache/operations.py` 五职责下沉 | `src/python/cache/operations.py` 739/261 | 五职责待下沉（数据结构 / 基金刷新 / 公共缓存 / 持仓缓存 / 清理） |
+| 1 | **rf-665** `config/features.py` 注册表下沉 | `src/python/config/features.py` 840/160 | 注册表逐开关增长（每项约十行）；逼近 980 时把注册表条目与定义下沉（同族：`tui/handlers_config.py`、`scripts/_doc_drift/_format.py` 各自域内聚，维持） |
+| 2 | **rf-626** 报告域按职责下沉（含已决策维持的两处） | `src/python/report/html_writer.py` 799/201、`src/python/analysis/rebalance.py` 751/249 | `html_writer`：域下沉 + 门面 re-export（测试 patch 改指持有子模块）；`analysis/rebalance`：按「成本分档 / 偏离度 / 告警」下沉 |
+| 3 | **rf-86** `cache/operations.py` 五职责下沉 | `src/python/cache/operations.py` 739/261 | 五职责待下沉（数据结构 / 基金刷新 / 公共缓存 / 持仓缓存 / 清理） |
 
 **已决策「维持现状」（已降到逼近档以下，不拆理由保留，行数随 `-v` 复核）**：
 
@@ -46,6 +45,11 @@
 
 ## 已解决问题
 
+### 开发期已修复（0.14.2-dev）
+
+| # | 问题 | 处理 |
+|---|------|------|
+| **rf-773**（完成） | 8 个模块内职责混杂、逼近 700 行登记线（LLM / 配置 / 报告 / 分析 / 数据源五域） | 已全部拆分：`llm/api_base` 770→**501**（响应解析 → `_api_responses.py` 314）、`config/_validation` 723→**119**（三域 `_validation_scalars/sections/llm` + 共用原语 `_validation_common`）、`report/holdings_detail_sheet` 716→**171**（分区块写入器 → `_holdings_detail_blocks.py` 632）、`analysis/prosperity_scoring` 711→**476**（输入与权重 → `_prosperity_inputs.py` 270）、`providers/news_dedup_rules` 710→**331**（纯词表 → `_news_dedup_tables.py` 404）。另前一批已拆 `orchestrator` 734→255 / `_report_generation` 751→52 / `fund_performance` 728→595。全部保留门面 re-export；测试 patch 与结构断言按「调用点所在模块」改指（含区块注册表载体列、章节-区块矩阵同步）。 |
 ### 归档档案
 - [`archived_review-findings.0.14.x.md`](../archive/v0.14.x/archived_review-findings.0.14.x.md) — v0.14.x（2026-10-21 ~ 2026-10-22）
 - [`archived_review-findings.0.13.x.md`](../archive/v0.13.x/archived_review-findings.0.13.x.md) — v0.13.x 开发期已修复批次（2026-10-14 ~ 2026-10-21）
