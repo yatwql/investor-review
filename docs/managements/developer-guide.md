@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.13.10
+> 文档版本：0.13.11
 
 ## 概述
 
@@ -94,17 +94,17 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 |:-----|:-------|:-----|:-----|
 | **P0** | 提交前 | `.venv/bin/python scripts/test-runner.py --mode dev-verify` + 十守护（`--ci` 全套，钩子自动执行） | 阻塞提交，不得 commit |
 | **P1** | 合入 master 前 | `.venv/bin/python scripts/test-runner.py --mode verify`（全部 `unit_*` 目录域，含 TUI/CLI——归域即进门禁，`technical.md` §4.23） | 阻塞合入，不得 merge |
-| **P2** | 发布前 | `.venv/bin/python scripts/release.py gate`（= regression + 十守护 `--ci` 全套〔并行执行，并发度随核数收敛 ≤4 路〕+ 设计护栏，gate 自动编排） | 阻塞发布，不得 release |
+| **P2** | 发布前 | `.venv/bin/python scripts/release.py gate`（= 演进对照新鲜度断言〔当前开发版列头日期须为当日〕+ regression + 十守护 `--ci` 全套〔并行执行，并发度随核数收敛 ≤4 路〕+ 设计护栏，gate 自动编排） | 阻塞发布，不得 release |
 
 **P0 提交前门禁**（全部通过才可 commit；手动项 = dev-verify，下列十守护由 pre-commit 钩子在 `git commit` 时自动执行、CI guards job 同源兜底，本地不手动重复——清单为五处同源引用）：
 
 ```bash
 .venv/bin/python scripts/test-runner.py --mode dev-verify   # 核心单元 + 基础场景快速验证
-.venv/bin/python scripts/check-code-traces.py --ci          # 代码注释历史痕迹 + 任务编号标识符检查
+.venv/bin/python scripts/check-code-traces.py --ci          # 代码注释历史痕迹 + 任务编号标识符 + 日志统一检查
 .venv/bin/python scripts/check-doc-traces.py --ci           # 文档历史痕迹 + 结构性冗余检查
 .venv/bin/python scripts/check-task-numbering.py --ci       # 任务编号全局一致性检查
 .venv/bin/python scripts/check-semantic-index.py --ci       # 语义命名索引正反向校验
-.venv/bin/python scripts/check-doc-drift.py --ci            # 文档与实现一致性（章节/开关/默认值/面板编号/目录树/统计表/归档索引/分区纪律/Thinking 支持矩阵/章节-区块矩阵/需求菜单表/手册菜单块）
+.venv/bin/python scripts/check-doc-drift.py --ci            # 文档与实现一致性（章节/开关/默认值/面板编号/目录树/统计表/归档索引/分区纪律/占位归档节/树描述计数/Thinking 支持矩阵/章节-区块矩阵/需求菜单表/手册菜单块）
 .venv/bin/python scripts/check-test-redundancy.py --ci      # 测试用例冗余与无效（死用例/无断言/完全重复/自证用例/硬编码演进总数/恒真断言/死 fixture/弱 mock 断言）
 .venv/bin/python scripts/check-requirement-trace.py --ci   # 需求 ID ↔ 验证载体追溯（已补全域全覆盖 + 载体文件存在）
 .venv/bin/python scripts/check-version-consistency.py --ci   # 版本号全局一致性（APP_VERSION ↔ README/pyproject/管理文档 10 份）
@@ -238,7 +238,7 @@ PYTHONWARNDEFAULTENCODING=1 .venv/bin/python -m pytest src/test/unit -q
 | **P0/P2 门禁** | 提交/发布前 10 个 `--ci` 守护脚本全量（清单见 P0/P2 门禁条款）；P2 另含设计护栏段（gate 内置 `check-style-guardrails`，E 级拦 / W 级观察统计） | ✅ 零配置 |
 | **dev-verify preflight** | `test-runner.py --mode dev-verify` 自动运行（仅 `check-task-numbering` 快检；重量守护不入预检，由钩子唯一执行防同树重复） | ✅ 零配置 |
 | **Claude Code hook** | 编辑 `plan.md`/`review-findings.md` 后实时校验 | ⚠️ clone 后运行 `.venv/bin/python scripts/install-claude-hook.py` |
-| **git pre-commit** | `git commit` 执行十守护（与 P0/CI guards 同源）：**读写分层调度**——不读 folders.md 的守护（快集 code-traces/task-numbering/semantic-index/requirement-trace + py 域 file-length + 测试域 test-redundancy）先行后台启动，与 `check-doc-drift` 段并行执行（跨域守护恒跑；涉及 `docs/managements/` 或 `src/test/` 时 `--sync` 写路径串行先行并自动回写统计快照，其余提交纯 `--ci` 后台并行）；读 folders.md 的 version-consistency 与 doc 域（doc-traces/doc-links）在 doc-drift 完成后启动（避 --sync 写读竞态）；域条件不变（doc 域仅 `*.md`、py 域仅 `*.py`、测试域仅 `src/test/` 变更触发），典型提交约 1~4 秒；六守护另有结论缓存（doc-traces/semantic-index/doc-links/code-traces/requirement-trace/doc-drift，输入与逻辑指纹未变回放上次结论，冷/热 --ci 输出逐字一致）；CI guards job 恒全量兜底 | ⚠️ clone 后运行 `sh .githooks/install-hooks.sh` |
+| **git pre-commit** | `git commit` 执行十守护（与 P0/CI guards 同源）：**读写分层调度**——不读 folders.md 的守护（快集 code-traces/task-numbering/semantic-index/requirement-trace + py 域 file-length + 测试域 test-redundancy）先行后台启动，与 `check-doc-drift` 段并行执行（跨域守护恒跑；涉及 `docs/managements/` 或 `src/test/` 时 `--sync` 写路径串行先行并自动回写统计快照，其中暂存含 `src/test/` 时追加 `--with-test-count` 校验 `test-coverage.md` 的收集派生计数——否则新增用例后计数静默陈旧、只在 CI master 档才红；其余提交纯 `--ci` 后台并行）；读 folders.md 的 version-consistency 与 doc 域（doc-traces/doc-links）在 doc-drift 完成后启动（避 --sync 写读竞态）；域条件不变（doc 域仅 `*.md`、py 域仅 `*.py`、测试域仅 `src/test/` 变更触发），典型提交约 1~4 秒；六守护另有结论缓存（doc-traces/semantic-index/doc-links/code-traces/requirement-trace/doc-drift，输入与逻辑指纹未变回放上次结论，冷/热 --ci 输出逐字一致）；CI guards job 恒全量兜底 | ⚠️ clone 后运行 `sh .githooks/install-hooks.sh` |
 | **CI guards job** | push / PR / tag 时自动校验（10 个 `--ci` 脚本之一） | ✅ 零配置 |
 
 > `core.hooksPath` 与 `.claude/settings.json` 均为本地配置、不随仓库同步，新机器 clone 后运行上方激活命令一次即可；hook 脚本本体（`.githooks/`、`scripts/`）随仓库同步。
@@ -881,7 +881,12 @@ A: 运行 `.venv/bin/python scripts/check-test-markers.py`，脚本会静态扫�
 
 ## 辅助脚本速查
 
-项目 `scripts/` 目录下的所有工具脚本用法速查，按分类组织。
+`scripts/` 下的工具脚本按**用途分类**组织：测试类 / 文档类 / 代码与文件质量类 / 发布类 / 诊断类 / 启动类。检查类条目统一按两个视角记录：
+
+- **设计逻辑**——为什么存在、判什么、怎么判定、边界与取舍（改规则前先读这段）。
+- **使用逻辑**——怎么跑、退出码怎么读、finding 怎么处置、什么时候会自动跑。
+
+所有检查脚本共用的契约、设施与处置流程集中在「检查脚本的公共部分」，各条目不再重复。哪些脚本属于阻塞门禁的十守护、各在 P0 还是 P2，以「三级门禁」章节的五处同源清单为准。
 
 ### 一览
 
@@ -890,15 +895,15 @@ A: 运行 `.venv/bin/python scripts/check-test-markers.py`，脚本会静态扫�
 | `test-runner.py` | 测试 | pytest 标记模式封装驱动，支持 17 种 `--mode` |
 | `extract-test-failures.py` | 测试 | 从 pytest-html 报告提取失败用例详情 |
 | `find-order-dependent-test.py` | 测试 | 单跑绿合跑红的顺序依赖污染源二分定位 |
-| `check-code-traces.py` | 测试 | 代码注释/文档字符串中历史变更痕迹检查 |
-| `check-doc-traces.py` | 测试 | 面向读者文档（.md）历史变更痕迹 + 结构性冗余（DUPLICATE）检查 |
+| `check-code-traces.py` | 质量 | 代码注释/文档字符串中历史变更痕迹检查 |
+| `check-doc-traces.py` | 文档 | 面向读者文档（.md）历史变更痕迹 + 结构性冗余（DUPLICATE）检查 |
 | `check-test-markers.py` | 测试 | AST 静态扫描验证测试标记合规性 |
 | `check-task-numbering.py` | 测试 | 任务编号（plan-/rf-）全局一致性检查，防新增编号与历史归档冲突 |
 | `check-task-numbering-hook.py` | 测试 | Claude Code PostToolUse hook——编辑编号管理文档后自动校验编号一致性 |
-| `check-semantic-index.py` | 测试 | 功能语义命名表正反向一致性校验（功能开关注册表表外键 / 僵尸条目 / 合并章 key 缺失） |
-| `check-doc-drift.py` | 测试 | 文档与实现一致性校验（章节表/章节数量、开关表/分组计数/默认值断言、配置与 LLM 默认值表、TUI 面板编号、目录树、项目统计表；`--sync` 自动回写统计快照） |
-| `check-doc-links.py` | 测试 | 文档链接与结构一致性校验（死链/死锚点/重复标题/层级/编号序列/§引用） |
-| `check-file-length.py` | 测试 | 单文件行数红线守护（主程序/脚本 >1000 行 / 测试 >1200 行；豁免登记与 review-findings 挂账同步，`-v` 输出可选优化区间清单供登记表派生） |
+| `check-semantic-index.py` | 文档 | 功能语义命名表正反向一致性校验（功能开关注册表表外键 / 僵尸条目 / 合并章 key 缺失） |
+| `check-doc-drift.py` | 文档 | 文档与实现一致性校验（章节表/章节数量、开关表/分组计数/默认值断言、配置与 LLM 默认值表、TUI 面板编号、目录树、项目统计表；`--sync` 自动回写统计快照） |
+| `check-doc-links.py` | 文档 | 文档链接与结构一致性校验（死链/死锚点/重复标题/层级/编号序列/§引用） |
+| `check-file-length.py` | 质量 | 单文件行数红线守护（主程序/脚本 >1000 行 / 测试 >1200 行；豁免登记与 review-findings 挂账同步，`-v` 输出可选优化区间清单供登记表派生） |
 | `check-test-redundancy.py` | 测试 | 测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言） |
 | `check-requirement-trace.py` | 测试 | 需求 ID ↔ 验证载体追溯（单段 ID 全域覆盖 / 载体文件存在 / ID 双向一致） |
 | `install-claude-hook.py` | 测试 | 安装/卸载 Claude Code PostToolUse hook（任务编号一致性自动校验） |
@@ -906,10 +911,10 @@ A: 运行 `.venv/bin/python scripts/check-test-markers.py`，脚本会静态扫�
 | `calibrate-dedup-threshold.py` | 测试 | 新闻去重阈值校准分析 |
 | `collect-test-coverage.py` | 测试 | 测试覆盖计数收集（`--collect-only` 快照；`--update-docs` 回写 test-coverage/folders 计数行） |
 | `smoke-web.py` | 测试 | Web 模式 HTTP 冒烟脚本（test_client 进程内全链路断言，可独立运行） |
-| `check-version-consistency.py` | 质量 | 版本号全局一致性检查（P0/P2 守护脚本 + 发布流程必跑） |
+| `check-version-consistency.py` | 发布 | 版本号全局一致性检查（P0/P2 守护脚本 + 发布流程必跑） |
 | `check-style-guardrails.py` | 质量 | 设计护栏机检（DESIGN.md 护栏样式面；E 级：强调色越权/明暗同步/双面 token 对表判 finding，W 级：裸色值/圆角档位观察统计——未入 pre-commit 钩子与 CI guards；**发布门禁**（release.py gate）已纳入，开发期快反馈由 unit 测试承担） |
 | `check-script-contract.py` | 质量 | scripts 顶层脚本契约机检（退出码声明 ⊆ {0,2} 白名单、check-* 统一 `add_common_args` CLI 面、文本 I/O 显式 encoding、脚本↔测试覆盖映射，四条规则——**观察期**未入钩子与 CI） |
-| `release.py` | 发布 | 发布流程分步编排（check/prepare/refresh/evolution/gate/publish/devbump，每步独立可审阅、失败即停；refresh 纯文档变更跳过 bench+collect（`--force-refresh` 强制）、gate 十守护并行且随核数收敛 ≤4 路） |
+| `release.py` | 发布 | 发布流程分步编排（check/prepare/refresh/evolution/gate/publish/devbump，每步独立可审阅、失败即停；refresh 纯文档变更跳过 bench+collect（`--force-refresh` 强制）、bench 默认只测发布子集四档（`--full-bench` 全量）、gate 十守护并行且随核数收敛 ≤4 路；每命令耗时入 `logs/release.jsonl` 台账） |
 | `perf-test-report.py` | 诊断 | 端到端报告生成管线性能基准（独立脚本，mock 外部数据源） |
 | `perf-view.py` | 诊断 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 时段聚合（耗时与费用合计/环比）/机读输出（llm_cost、by_period 费用字段）） |
 | `probe.py` | 诊断 | 探测统一入口（按 target 分发到 `probes/` 子模块；新探针实现契约面登记即用） |
@@ -926,7 +931,72 @@ A: 运行 `.venv/bin/python scripts/check-test-markers.py`，脚本会静态扫�
 | `whatif` | 诊断 | cli.py 子命令：调仓 What-if 模拟（对比两份持仓生成独立 diff 报告，见 [快速开始](../manuals/how-to-start.md)） |
 | `cassettes` | 诊断 | cli.py 子命令：数据源记录-回放维护（列表 / `--verify` 离线回放校验，见下文「CLI 子命令」） |
 
+### 检查脚本的公共部分
+
+以下四块适用于所有检查脚本，条目里只写各自的差异。
+
+**检查脚本的共享设施与统一契约（`_checklib.py` / `_traces_common.py` / `_traces_code/` / `_traces_doc/` / `_test_runner/`）**
+
+`scripts/` 下的检查脚本共用一套 CLI 契约与设施，避免每个脚本各写一份：
+
+- **统一契约**（`_checklib.add_common_args()` / `report()`）：`-v/--verbose` 详细输出、`--ci` 仅输出 `文件:描述`；**通过退出 0，发现 finding 退出 2**（`check-code-traces.py` 另有 HIGH=1 / LOW=3 的分级语义，属其自身约定）；通过打印 `[OK] …`，失败逐条 `[ERR] file:desc`（`--ci` 下为裸行）+ 汇总行
+- **共享原语**：`REPO_ROOT` / `rel()`（仓库相对路径，非仓库内路径原样返回）、`extract_region()` / `replace_region()`（标记区间）、`extract_table_region()` / `replace_table_region()`（表区域，带结构校验）
+- **`_traces_code/`**：check-code-traces 内部实现包——`exemptions.py`（「章节计数豁免」与「迭代轮次豁免」，check-doc-traces 同共用）、`patterns.py`（模式表与行级豁免；共享历史叙述正则引用 `_traces_common` 常量）、`extract.py`（注释/标识符抽取）、`scan.py`（扫描调度）、`layers.py`（core 反向依赖守卫）、`config.py`（扫描域配置与规则载体豁免：`RULE_CARRIER_DIRS` / `RULE_CARRIER_FILES`）；check-code-traces.py 只留 CLI 与原面 re-export
+- **`_traces_doc/`**：check-doc-traces 后端包——`patterns.py`（文档痕迹模式表 `DOC_PATTERNS` / 树行专属 `TREE_ONLY_PATTERNS` / 行级豁免 `EXCLUDE_PATTERNS`+`is_excluded`，共享历史叙述正则引用 `_traces_common` 常量）、`dedup.py`（结构性冗余扫描：单次遍历内完成标题路径感知判重、台账/归档域重复长行与区块同小节限定、空白归一与同块单报），入口薄 CLI 与原面 re-export
+- **`_traces_common.py`**：两脚本**逐字节相同**的历史叙述正则单一来源（命名常量 + `SHARED_REGEXES` 元组）；只登记字面量，**分类与描述仍按各自域定义**，判定入口/域矩阵/豁免语义不在此模块——新增同源词汇先加此处再两侧引用，仅一域需要的词汇不进共享表（机检见 `test_trace_shared_vocabulary`：两表交集须恰等于词表、两侧须都引用、模式源码内不得写死字面量）
+- **`_test_runner/`**：`test-runner.py` 的内部实现包（paths / modes / pytest_env / machine_info / doc_writer / report_html / runner），入口仅保留 CLI 与主流程并原面 re-export —— 既有测试访问 `test_runner._env_value` 等名字仍有效；**注意**：monkeypatch 内部状态（如 `_LATEST_DIR` / `_DOC_COVERAGE_PATH`）须指向持有它的子模块（`_test_runner.report_html` / `_test_runner.doc_writer`）
+
+**跨脚本口径：共性 / 差异（`_traces_common` 的边界）**
+
+两守护共享的是**词汇**，不是判定：`_traces_common.py` 只登记正则字面量，分类、严重度、豁免策略、文档类型矩阵、扫描通道（文本 / AST）全部留在各自域内。因此同一正则在两域的分类可以不同，这是**有意保留**的差异：
+
+| 共享常量 | 代码域分类（退出码） | 文档域分类（退出码） | 关系 |
+|:---|:---|:---|:---|
+| `CIPHER_CONSTRAINT` | `CODE`（2，硬禁止） | `CIPHER`（1） | 两侧均阻塞，域内治理层级不同 |
+| `HISTORY_LEGACY_LABEL` / `HISTORY_ITERATION_MARK` / `HISTORY_STATE_EARLY` | `VERSION`（1） | `HIGH`（1） | 同为阻塞，仅分类标签不同 |
+| `HISTORY_PHYSICAL_MERGE` | `CHANGE`（3，仅提示复核） | `HIGH`（1，阻塞） | **唯一严重度分歧**：文档面向读者须改写为当前结构，代码注释里该叙述只提示 |
+| `LOW_*` 七条（`LOW_REFACTOR_TO` / `LOW_DEPRECATED` / `LOW_PASSIVE_PAST` / `LOW_NOT_YET` / `LOW_TODO` / `LOW_FUTURE_PLAN` / `LOW_TRANSITIONAL`） | `TODO` / `CHANGE` / `DEPR`（3） | `LOW`（2） | 均非阻塞（差异只在"仅复核"档位与退出码数值） |
+
+维护规则：新增共享词条时**两域各自定分类与描述**（不得为了"统一"而改另一域的分类——那会改变退出码乃至阻塞与否）；只在一域需要的词条不进共享表。分域矩阵与严重度分桶均有常量承载（`check-doc-traces.py` 的 `DOMAIN_*`、`check-code-traces.py` 的 `HIGH/CODE/LOW_CATEGORIES`），由 `test_trace_shared_vocabulary` 的域矩阵 / 分桶用例机检。
+
+**通用设计逻辑（痕迹类检查的共同取舍）**
+
+两脚本各自的扫描面、规则与退出码见上两节；本节讲**共同的设计取舍与处置流程**，作为规则变更时的判断依据。
+
+这两支检查不做语义判定，只做**痕迹召回**：纪律本身（"文档只描述当前是什么/做什么"）不可机检，但违反它留下的语言形态相当稳定——时间前缀、来源归属、对比结构、进度状态词。检查器认定的是这些**形态**，所以命中不等于一定违规：误报靠豁免与分级压住，漏报靠域矩阵与词表覆盖压住。理解这一点，后面每条规则才有解释力。
+
+1. **为什么是逐行正则而非 AST**：两侧需求相反。代码侧要查的是注释与文档串里的**叙述**——AST 只能给出"这有一段注释"，给不出内容语义，故注释按语言抽成行后走正则；而标识符命名、core 反向依赖、交互层外 `print()` 是**语法结构**，走 AST。同一脚本内两条通道各管一半，互不替代。文档侧 Markdown 没有统一 AST（表格/围栏/目录树的意义在渲染层），"当前状态"与"历史叙述"的差别是措辞，正则正好对上。
+2. **为什么不用 LLM 判定**：成本（每次提交数十万字）、不可回放（同输入不同结论）、不可解释（finding 指不到规则）。规则命中能回答"哪条模式、为什么命中"，这是它能进阻塞门禁的前提。
+3. **判定链（一行如何变成 finding）**：并集预筛（一次扫描判断"可能命中"，普通行直通）→ 逐模式精确匹配（**首个命中**决定分类与描述）→ 域门禁（该文档类型 / 该扫描通道是否查这个分类）→ 行级豁免（合法当前状态与流程描述）→ 定级（阻塞 / 仅提示）。
+   - **预筛只加速、不改结论**：命中后仍走逐条精确分支。
+   - **门禁与豁免只能减不能加**：都发生在"已命中"之后。
+   - **顺序即语义**：模式表内的先后决定首个命中的分类，调整顺序属行为变更（非必要不动）。
+4. **误报的四个泄压阀**（缺一个就会被天天误报，进而被整条绕过）：行级豁免（"当前不支持""门禁流程""运行时按日期归档"等合法表述）、结构性豁免（围栏代码块、行内代码令牌、常规域的表格行）、域矩阵（按文档类型决定查什么）、分级（拿不准的进 LOW，不阻塞）。
+5. **尺子怎么量自己**：规则的模式与描述字面量必然长得像被查对象，故按**结构**豁免——工具自身文件（`check-*traces.py` 文件名模式）、规则载体目录（`_traces_code` / `_traces_doc`）与载体单文件（`_traces_common.py`）。按结构而非清单识别，新增同类工具或后端包自动生效，不会漏登记。
+6. **可回放的前提**：结论缓存有两面——输入面（受检文件内容与清单）与逻辑面（CLI + 扫描后端 + 共享词表）。判定面搬家而指纹不带过去，就会出现"规则变了、结论还是上次的"假绿，故逻辑面文件清单本身有机检。
+7. **明确的取舍**：不追求零误报（追求"高置信必真、低置信不阻塞"）；不做跨语言语义理解（中英文各登记形态，生僻说法宁可漏）；两脚本不合并（退出码、文档类型域、扫描通道都不同）；共享层只放字面量（分类/严重度/域矩阵归各域）。
+
+**通用使用逻辑（finding 处置与流程）**
+
+- **怎么跑**：`--ci` 给机器（只输出 `文件:描述`，无前缀与汇总），人读用默认输出，排查豁免或跳过原因加 `-v`；两脚本都是全仓扫描（不接路径参数），聚焦单个文件用 `--ci | grep <路径>`。
+- **退出码怎么读**：文档侧 0 通过 / 1 必须改 / 2 仅提示（LOW）；代码侧 0 通过 / 1 高置信 / 2 任务编号·标识符·章节轮次·日志违规 / 3 仅提示。
+- **一条 finding 的四种处置**（按优先级）：
+  1. **改表述**（首选）：去掉时间、来源、对比，只写当前是什么——比加豁免便宜，也不会削弱检查。
+  2. **判为合法 → 加最窄豁免**：优先收窄正则，其次行级白名单，最后才是域矩阵；**禁止整文件/整目录豁免**（该文件从此永久失去检查）。加豁免须在提交说明里写清"为什么这段叙述属于当前状态"。
+  3. **判为应检出但漏了 → 加词条**：先定语义名与分类，再按"共享词表 → 两域引用 → 正向用例"落地；只在一域需要的词条不进共享表。
+  4. **判为误伤当前语义 → 加负向用例**：先把"有意不检"锁进测试，再收窄正则——否则下次扩词会把它扫回来。
+- **改检查项的标准顺序**（固定，跳过任一步都会留下单侧漂移）：词条 → 分类/分桶 → 域矩阵 → 正向+负向用例 → 三处文档（脚本 docstring / 本指南 / 门禁清单）→ 全仓 `--ci` 对拍（改动前后 findings 必须能逐条解释）。
+- **何时跑**：`git commit` 时钩子按暂存域自动执行，**不要手动重复**；提交前手动只需跑测试门禁；发布门禁（P2）里它属十守护之一，CI 的 `guards` job 恒跑全量兜底。
+- **缓存**：输入或逻辑面变化自动失效；排查"改了规则结论没变"时**不要删缓存**，用 `CHECK_CONCLUSION_CACHE_DIR=$(mktemp -d)` 隔离跑一次对照——这样能区分"缓存未失效（缺陷）"与"规则确实没覆盖（漏报）"。
+- **报误报的最小信息集**：finding 原文 + 你的判定（合法 / 应改）+ 处置（豁免 / 词条）+ 用例名。四项齐了，一次提交即可落地，不用来回确认。
+
+> 新增检查脚本时直接复用 `_checklib`，不要自建 argparse/输出/退出样板；**跨脚本共用**的历史变更叙述正则放 `_traces_common.py`（词表单一来源），单域模式放各自 `_traces_*/patterns.py`，两脚本共用的章节/轮次计数豁免放 `_traces_code/exemptions.py`。
+
 ### 测试类
+
+测试驱动、覆盖率采集、失败定位、冒烟与采样工具，以及测试质量机检（冗余 / 标记 / 需求追溯，其中部分属十守护——以「三级门禁」清单为准）。
+
+**测试驱动与覆盖率**
 
 **`test-runner.py` — 测试模式驱动**
 
@@ -955,6 +1025,23 @@ pytest 的 `-m` 标记表达式封装层，按 `--mode` 选择预定义组合。
 .venv/bin/python scripts/test-runner.py --mode unit --coverage
 ```
 
+**`collect-test-coverage.py` — 测试覆盖计数收集**
+
+只做 `.venv/bin/python -m pytest --collect-only`（收集测试项，**不执行测试**，耗时约 2s），模式计数谓词由 `_test_runner/modes.py::MODES` 的 marker 表达式现场编译，输出各模式 / unit 子标记 / scenario 分组 / 跨类标记 / 功能域 / 文件分布的项数，供 `docs/managements/test-coverage.md` 快照更新使用。
+
+```bash
+.venv/bin/python scripts/collect-test-coverage.py                 # 仅输出（人工对照改文档）
+.venv/bin/python scripts/collect-test-coverage.py --update-docs   # 按本次快照回写计数行
+```
+
+**说明**：
+- 只收集不执行——测试体不会运行，不影响测试结果，也不会触发真实数据源 / LLM 调用
+- 项数随版本迭代变化，属撰写时快照，精确计数以本脚本实时输出为准
+- **`--update-docs` 回写**：按本次快照改写 `test-coverage.md` 计数行（反引号标记行 + 能映射到标记的加粗标签行，比对域与 `check-doc-drift` 的计数核对同构、复用其行匹配原语，写后必然通过 `--with-test-count` 核对）与 `folders.md` 项目统计表「测试用例」行；只改数字、粗体/千分位/后缀原样保留，内容一致则零变更（幂等）；收集退出码非 0/5（如收集期校验中断）时**跳过回写**并告警，错数不落盘。与 `test-runner --mode bench --update-docs`（写耗时对照表）互不重叠
+- 计数口径直接取自 `MODES` 的 marker 表达式（复用 pytest 自身的 `-m` 求值器，`verify` / `dev-verify` 等组合模式与阶段 marker 回落同源），表达式只在 `modes.py` 定义一处、模式增删自动跟随；`all`（已由「总收集: N」表达）与 `live`（默认收集宇宙排除，计数恒 0）为显式豁免并在脚本内注记理由
+
+**失败定位**
+
 **`extract-test-failures.py` — 失败用例提取**
 
 见上文「快速定位失败用例」章节。
@@ -962,6 +1049,8 @@ pytest 的 `-m` 标记表达式封装层，按 `--mode` 选择预定义组合。
 **`find-order-dependent-test.py` — 顺序依赖污染源二分**
 
 见上文「定位顺序依赖失败」章节。
+
+**冒烟与采样**
 
 **`smoke-web.py` — Web 模式 HTTP 冒烟脚本**
 
@@ -977,187 +1066,32 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 
 退出码：0 = 全部通过；2 = 存在失败项。同款断言已由 `src/test/unit/web/test_smoke_web.py`（`unit_web` 标记）纳入 `dev-verify`/`verify` 门禁，本脚本用于手动快速复跑。
 
-**`check-code-traces.py` — 代码注释历史痕迹检查**
+**`llm-hallucination-sampler.py` — LLM 幻觉率采样**
 
-扫描 `src/python/`、`src/test/`、`src/static/`、`scripts/` 下所有 `.py` / `.js` / `.mjs` / `.html` / `.sh` / `.ps1` / `.bat` / `.cmd` 文件的注释和文档字符串，检查是否含有代码历史迭代信息（来源拆分、版本号、任务编号、历史迭代叙述等）。代码注释只应描述"当前是什么"，不应记录"从哪里来、怎么变的"。
+见下文「LLM 幻觉率采样测试」章节。
 
-```bash
-# 检查全部
-.venv/bin/python scripts/check-code-traces.py
+**`calibrate-dedup-threshold.py` — 新闻去重阈值校准**
 
-# 详细输出（含排除行信息）
-.venv/bin/python scripts/check-code-traces.py -v
-
-# CI 模式（仅输出 文件名:行号，非零退出码）
-.venv/bin/python scripts/check-code-traces.py --ci
-```
-
-**退出码含义**：
-
-| 退出码 | 含义 | 行动 |
-|:------:|:-----|:-----|
-| 0 | 全部通过 | 无需处理 |
-| 1 | HIGH/ORIGIN/VERSION 痕迹 | 必须修复后再提交 |
-| 2 | CODE/IDENT/CHAPTER/ROUND（任务编号/标识符/章节编号引用） | 应从注释/标识符中移除 |
-| 3 | 仅 TODO/CHANGE/DEPR 级别 | 建议人工复核 |
-
-**`check-doc-traces.py` — 文档历史痕迹 + 结构性冗余检查**
-
-扫描项目根 `README.md` 与 `docs/managements/`、`docs/manuals/` 下所有 `.md` 文件，按三个域分流：
-
-| 域 | 文档 | 检查内容 |
-|:---|:-----|:---------|
-| 常规域 | README + managements（除 changelog/plan/review-findings）+ manuals | 历史痕迹（HIGH）+ 章节/轮次编号 + 归档引用 + 约束代号 + 目录树纪律（folders.md 树行：任务编号 CODE、进度状态词 STATUS，仅 archive 引用豁免）+ 受检域 .md 文件名任务编号 + 重复标题（DUPLICATE 冗余检查） |
-| 任务记录域 | `plan.md` / `review-findings.md` / `docs/plan/*.md` | 章节编号 + 复盘痕迹（NARRATIVE：任务内容只反映最新状态）+ 约束代号 + 结构性冗余（DUPLICATE：重复标题 + 同小节内重复长行/区块）；不走表格豁免（任务表/断言表行内叙事必检） |
-| 变更日志 | `changelog.md` | 仅章节编号（记录变化是其职责，历史痕迹与复盘叙事均合法）+ 结构性冗余（DUPLICATE：重复标题 + 同小节内重复长行/区块） |
-| 归档域 | 各版本归档目录 | 复盘痕迹（NARRATIVE：设计/迭代文档只表述最新状态）+ 结构性冗余（DUPLICATE：重复标题全域、长行/区块归档域）；changelog 归档仅 DUPLICATE（记录变化是其职责）；CIPHER/版本痕迹/章节/轮次属历史文档性质不入检 |
-
-
-恒不入检：运行时临时目录（脚本跳过范围）。此类文档只应描述“当前是什么/做什么”，不应记录“从哪里来、怎么变的”。
-
-七条核心规则：
-1. **正文不得带历史痕迹**：文档正文不得包含历史变更信息（来源叙述、原/旧实现、迁移/重命名、任务编号、版本号、Iter 迭代标记等），只反映“当前是什么/做什么”。例外：`changelog.md`（变更日志的职责即记录变化）
-2. **正文不得引用归档文件**：除 changelog 外，常规域文档正文不得引用 `docs/archive/` 下目录或 `archived_*.md`。例外：`folders.md` 的目录树（`│ ├ └` 行）与统计表行——目录树记录项目结构，archive/ 条目是结构的一部分
-3. **章节编号引用**：任何受检文档不得用数字章节号（“N 章”）指代报告章节，用语义章节名；计数表述（共 N 章等）豁免。三域均检
-4. **迭代轮次引用**：常规文档不得用数字轮次（“第 N 轮”）指代开发迭代；任务记录域与 changelog 豁免（“轮 N”是正式记录载体）
-5. **架构约束代号（C 系列，以 technical.md 约束表为准）**：除约束定义处（technical.md / llm-technical.md）外，所有受检文档一律禁（约束代号属暗号，处处禁）
-6. **复盘痕迹（NARRATIVE）**：plan/review-findings/docs/plan 的任务内容与归档设计/迭代文档只反映最新状态，禁时间对比叙事、以“不再”领起的对既有行为的否定句、历史归因类表述；任务状态标记、根因定位引用、迭代轮次、设计文档旧格式兼容、行内代码令牌是内容合法。任务记录域与归档域检出（手册操作指引与 changelog 记录变化均不适用）
-7. **结构性冗余（DUPLICATE）**：重复标题路径感知判重（同级+同文本+同父标题才算重复，各版本块/任务节下同名小节跨父级合法，同父复现自第 2 次起报出）；≥40 字符重复内容行与连续 5 行重复区块（台账三文件 plan/review-findings/changelog 与归档域）**同小节限定**——跨小节共享行/表属结构，同小节内第 2 次出现起报出，拦截「同一区块/条目粘贴两遍」类残留。豁免：围栏代码块、未围栏缩进代码/命令样本与顶格 `#` 注释、命令续行（上一行以 `\` 结尾）、键值任务卡（- **键**: 值）、验证清单项（- [ ] 复跑）、分隔/装饰行与短模板行；围栏内容不入窗，整段粘贴由区块判重兜底
-
-目录树与文件名纪律（folders.md 等树行）：
-- **树行豁免仅 archive 引用类**：目录树行不走通用行豁免，任务编号（CODE）与进度状态词（STATUS：已实施/完成态/随任务完成移入/验收·判定记录指引/§N 指引/已归档/稿态词/树行“不再”等）在树行照检；描述只讲文件内容，不写进度/流转/任务号
-- **文件名任务编号/系列代号**：受检域 .md 文件名含 `rf-N`/`plan-N`、`task\d`、系列字母+数字（`B1-`/`A5-`/`r198_`/`D17-` 类）与 `P3-04` 全形即报（语义命名；phase 词形如 `p1-optimization` 与带版本号区间形式的归档文件名不误伤）
-
-细节规则：
-- **Markdown 围栏代码块**（``` 包裹）内为命令/配置示例，非文档叙述，自动跳过（避免 `git tag`、`APP_VERSION` 等示例误报）
-- **版本头豁免仅行首锚定**：只豁免 `> 文档版本：vX.Y.Z` 这类版本头行；行中叙述（如"该功能于版本 `vX.Y.Z` 中引入"）仍会命中版本号痕迹
-- **当前能力描述豁免**：暂不支持 / 不再支持 / 不正式支持 / 发布版本前 / 门禁流程等合法当前状态描述不报（常规域）
-- **运行时产物归档描述豁免**：报告按日期归档属当前功能描述（"归档版报告" / "历史归档至 `YYYYMMDD/` 日期子目录" / "报告已归档到 `reports/`" 等），不视为仓库归档引用
-- **任务记录域不走行级豁免**：表格/链接行豁免不适用任务域（任务表、断言表行内的复盘叙事必须检出）；代码块仍跳过
-- **LOW 级别**：命中需人工判断的变更/过渡类描述时提示复核，不阻塞提交
+新闻标题去重（同源/跨源安全区分级 + 候选区阶梯 + 方向对立防护，阈值见 `news_dedup.py` 校准常量）在每次报告运行时自动记录"边界案例"到 `data/cache/dedup_anchors.jsonl`。积累足够锚点后，用此脚本分析当前阈值是否合理。
 
 ```bash
-# 检查全部
-.venv/bin/python scripts/check-doc-traces.py
+# 分析全部锚点，输出建议
+.venv/bin/python scripts/calibrate-dedup-threshold.py
 
-# 详细输出（含豁免行信息）
-.venv/bin/python scripts/check-doc-traces.py -v
+# 仅看汇总统计（不展开详细列表）
+.venv/bin/python scripts/calibrate-dedup-threshold.py --summary
 
-# CI 模式（仅输出 文件名:行号，非零退出码）
-.venv/bin/python scripts/check-doc-traces.py --ci
+# 指定锚点文件
+.venv/bin/python scripts/calibrate-dedup-threshold.py --file data/cache/dedup_anchors.jsonl
 ```
 
-**退出码含义**：
+**校准时机**：建议锚点文件积累 **100 条以上**（约 5~10 次报告运行）后校准一次。脚本只分析不自动修改阈值，是否需要调整由开发者判断。
 
-| 退出码 | 含义 | 行动 |
-|:------:|:-----|:-----|
-| 0 | 全部通过 | 无需处理 |
-| 1 | HIGH/ARCHIVE/CODE/CIPHER/CHAPTER/ROUND/STATUS/NARRATIVE/DUPLICATE 痕迹 | 应从文档中移除 |
-| 2 | 仅 LOW 级别痕迹（需人工判断的变更/过渡类描述） | 建议人工复核 |
-
-**`check-test-markers.py` — 标记合规性检查**
-
-AST 静态扫描所有 `test_*.py` 文件，检查：
-- 标记完整性（是否有 `unit_*` 子标记）
-- 拼写错误（未注册的 marker 名）
-- `_edge.py` 是否漏标 `edge`，或非 `_edge.py` 文件是否误标 `edge`
-
-```bash
-.venv/bin/python scripts/check-test-markers.py
-```
-
-无报错输出即合规。新增/修改测试文件后必须运行此脚本。
-
-**`check-task-numbering.py` — 任务编号全局一致性检查**
-
-校验 `plan-` / `rf-` 两类任务编号与各管理文档头部的「编号源」标记（`plan-next` / `rf-next`）是否一致，防止新增编号与历史归档冲突。
-
-新增任务时，编号取管理文档头部 `plan-next` / `rf-next` 当前值，用后将其递增更新；若标记遗漏递增或初值写小，本脚本会扫描当前文档 + 全部历史归档并报错提示修正值。
-
-```bash
-.venv/bin/python scripts/check-task-numbering.py            # 检查全部（plan + rf）
-.venv/bin/python scripts/check-task-numbering.py --kind rf  # 仅检查 rf
-.venv/bin/python scripts/check-task-numbering.py --ci       # CI 模式（只输出错误）
-```
-
-自动保障机制（四层，跨机器同步策略见「任务编号规范与自动保障」章节）：P0 门禁、dev-verify preflight、Claude Code hook、git pre-commit。
-
-**`check-semantic-index.py` — 语义命名索引正反向一致性检查**
-
-校验技术设计文档（`technical.md`）「功能语义命名表」章节（`<!-- semantic-index:start/end -->` 标记区间）与代码的**正面一致性**，与 `check-code-traces.py` 的负面禁止互补：
-
-1. **正向**：功能开关注册表（`feature_switch_registry`）的**每个键**（作用域四组全量，不限分组）必须已登记在「功能语义命名表」中（防新增开关绕过登记）
-2. **反向**：表中每个语义 slug 在 `src/python/` 下至少一处非注释代码引用（防僵尸条目——功能删除后表行残留）
-3. **合并章**：表下「合并章代码标识符」注声明的 sheet key 必须存在于 `core/registry.py` 的 `_REPORT_SECTION_DEFAULT` 注册表
-
-```bash
-.venv/bin/python scripts/check-semantic-index.py       # 检查全部
-.venv/bin/python scripts/check-semantic-index.py -v    # 详细输出（打印每项解析结果）
-.venv/bin/python scripts/check-semantic-index.py --ci  # CI 模式（只输出错误，退出码 2）
-```
-
-**检查脚本的共享设施与统一契约（`_checklib.py` / `_traces_code/` / `_traces_doc/` / `_test_runner/`）**
-
-`scripts/` 下的检查脚本共用一套 CLI 契约与设施，避免每个脚本各写一份：
-
-- **统一契约**（`_checklib.add_common_args()` / `report()`）：`-v/--verbose` 详细输出、`--ci` 仅输出 `文件:描述`；**通过退出 0，发现 finding 退出 2**（`check-code-traces.py` 另有 HIGH=1 / LOW=3 的分级语义，属其自身约定）；通过打印 `[OK] …`，失败逐条 `[ERR] file:desc`（`--ci` 下为裸行）+ 汇总行
-- **共享原语**：`REPO_ROOT` / `rel()`（仓库相对路径，非仓库内路径原样返回）、`extract_region()` / `replace_region()`（标记区间）、`extract_table_region()` / `replace_table_region()`（表区域，带结构校验）
-- **`_traces_code/`**：check-code-traces 内部实现包——`exemptions.py`（「章节计数豁免」与「迭代轮次豁免」，check-doc-traces 同共用）、`patterns.py`（模式表与行级豁免）、`extract.py`（注释/标识符抽取）、`scan.py`（扫描调度）、`layers.py`（core 反向依赖守卫）、`config.py`（扫描域配置）；check-code-traces.py 只留 CLI 与原面 re-export
-- **`_traces_doc/`**：check-doc-traces 结构性冗余（DUPLICATE）扫描后端包——`dedup.py`（重复标题路径感知判重、台账/归档域重复长行与区块同小节限定），入口薄 CLI 与原面 re-export
-- **`_test_runner/`**：`test-runner.py` 的内部实现包（paths / modes / pytest_env / machine_info / doc_writer / report_html / runner），入口仅保留 CLI 与主流程并原面 re-export —— 既有测试访问 `test_runner._env_value` 等名字仍有效；**注意**：monkeypatch 内部状态（如 `_LATEST_DIR` / `_DOC_COVERAGE_PATH`）须指向持有它的子模块（`_test_runner.report_html` / `_test_runner.doc_writer`）
-
-> 新增检查脚本时直接复用 `_checklib`，不要自建 argparse/输出/退出样板；新增共享模式放 `_traces_code/exemptions.py`。
-
-**`check-doc-drift.py` — 文档与实现一致性检查**
-
-把文档里的「事实断言」（计数、清单、默认值、面板编号、目录树、统计表）与权威源逐条对账，
-使漂移在提交前暴露。与 `check-doc-traces.py` 互补：那边管「不该写的内容」（历史痕迹），这边管
-「写了但与实现不符的内容」。
-
-十六项检查（权威源 → 受检文档）：
-
-1. 报告章节表（`reports-instruction.md`）↔ 章节注册表 `_REPORT_SECTION_DEFAULT`（行数/序号/名称）
-2. 章节数量断言（`页签编号 1~N` / `默认顺序（N 项` / `返回 result（N 项` / `N 个报告章节`）↔ 注册表章节数
-3. 功能开关表（`how-to-config.md` 四组区段）↔ `feature_switch_registry`（成员/默认值/无表外键）
-4. 开关分组计数断言（`呈现与体验 A / 分析增强 B / 独立章节与回放 C / 机制与诊断 D` 连写、`<组名>（N 项`、`共 N 项开关`、旧三组名残留检测）↔ 分组计数
-5. 开关默认值断言（`` `flag` `` 后紧随「默认开/关」）↔ 注册表默认值
-6. 配置标量默认值表（`how-to-config.md`）↔ `_DEFAULT_CONFIG`
-7. LLM 默认参数表（`llm-technical.md`）↔ `_DEFAULT_LLM_SETTINGS` + 缓存 TTL 注册表
-8. TUI `[S]` 面板编号连续性与分组边界（`how-to-use-tui-menu.md`）↔ `handlers_config.py` 的派生编号规则
-9. 目录树（`folders.md`）↔ 文件系统实测（`src/`、`scripts/`、`docs/{managements,manuals,plan}`）
-10. 项目统计表（`folders.md`）↔ 实测文件数/行数（加 `--with-test-count` 再核「测试用例」行）
-11. 测试覆盖计数表（`test-coverage.md`）↔ `scripts/collect-test-coverage.py` 快照（仅 `--with-test-count`）
-12. 归档索引完整性：changelog / plan / review-findings 三份管理文档的「归档」索引 ↔ 归档目录下
-    `archived_*` 文件**双向**比对（漏列 → 「缺少」；幽灵引用 → 「不存在」）
-13. 管理文档分区纪律：review-findings 未完成/已解决分区互斥且已解决项须在 changelog 有修复记录；
-    plan 未完成区不得含 ✅/已归档项；现行 changelog 只允许一个 `-dev` 段头
-14. Extended Thinking 支持矩阵：手册对比表须覆盖代码支持的全部厂商族、「仅」式预算枚举句须列全、
-    默认开思考族须有提示（权威源为 `llm/api_base.py` 的前缀名单）
-15. Provider Chain 降级表：`fetcher/chain_config.py::_DEFAULT_CHAINS` 的 15 条链 ↔
-    `datasource-reliability.md` §4.2 表逐链**双向**比对（漏链 → 「缺少链路」；幽灵行 → 「无此链」）
-16. 守护清单同源：developer-guide 的 P0/P2 门禁代码块、`ci.yml` guards steps、CLAUDE.md P0/P2 条款、
-    testplan P0/P2 清单行与 `.githooks/pre-commit` 执行体，五处的 `scripts/check-*.py --ci` 引用集合两两一致（新增守护脚本漏改任一处即报）
-
-```bash
-.venv/bin/python scripts/check-doc-drift.py                   # 十六项全查
-.venv/bin/python scripts/check-doc-drift.py -v                # 详细输出（打印解析结果与实测统计）
-.venv/bin/python scripts/check-doc-drift.py --ci              # CI 模式（只输出 文件:描述，退出码 2）
-.venv/bin/python scripts/check-doc-drift.py --with-test-count # 附带 pytest 收集，核对「测试用例」与 test-coverage.md 计数表
-.venv/bin/python scripts/check-doc-drift.py --sync             # 统计快照自动同步（实测数字回写 folders.md 并 git add，幂等）
-```
-
-> **统计快照漂移的自动化治理**：第 10 项「项目统计表」的数字（文件数/行数/用例数）是随日常
-> 提交高频变化的派生量（changelog 每补一行、用例每增删即变），人工同步必漏，曾是 CI 最高频红源。
-> `--sync` 把实测值自动回写 `folders.md` 对应单元格（只改数字、保留千分位/粗体风格与说明文字，
-> 不触碰版本演进对照表），并把回写结果 `git add` 加入暂存区；git pre-commit 钩子在提交涉及
-> `docs/managements/` 或 `src/test/` 时自动调用（见「install-hooks.sh」条）。其余类目
-> （清单/默认值/目录树/归档索引）的漂移仍需人工按提示修正。
-
-> 按设计豁免的文档：`changelog.md` / `review-findings.md`（如实引用旧数字作为变更记录）与
-> 版本快照类文档（历次发布的归档快照）不参与计数与默认值断言扫描。修正提示：报告里的数字就是
-> 实测值，直接按提示改文档即可；目录树缺条目时按所属子包位置补一行（含简短职责说明）。
+**测试质量机检**
 
 **`check-test-redundancy.py` — 测试用例冗余与无效检查**
+
+**设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
 
 静态分析 `src/test/`（默认跳过 `pytest.ini` 刻意排除的 `live/` 真网套件），抓八类「看着有测试其实没测住」的问题：
 
@@ -1172,6 +1106,8 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
 6. **恒真断言**：`assert True` / `assert x == x`——形式上有断言、实际不验证任何行为
 7. **死 fixture**：test 文件内定义（排除 conftest 自身与 autouse）且全仓语料（测试 + conftest）无任何引用——定义后从未被消费的死代码
 8. **弱 mock 断言**：`assert <mock>.<属性>` 作真值 / `assertIsNotNone(<mock>)`——Mock 恒真且恒不为 None，断言恒成立不验证行为（`.called` / `assert_called*` 等专用断言不算弱）
+
+**使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
 
 ```bash
 .venv/bin/python scripts/check-test-redundancy.py                 # 八类全查
@@ -1188,9 +1124,34 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
 > 两处由 `check-doc-drift.py --with-test-count` 兜底核对。**修法优先级**：名实不符的用例应改成真正跑它名字
 > 声称的场景（补上原本空白的覆盖），而不是改名了事。
 
+> **何时跑**：`git commit` 时由 pre-commit 钩子按暂存域自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` job 恒跑全量兜底。
+
+**`check-test-markers.py` — 标记合规性检查**
+
+**设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
+
+AST 静态扫描所有 `test_*.py` 文件，检查：
+- 标记完整性（是否有 `unit_*` 子标记）
+- 拼写错误（未注册的 marker 名）
+- `_edge.py` 是否漏标 `edge`，或非 `_edge.py` 文件是否误标 `edge`
+
+**使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
+
+```bash
+.venv/bin/python scripts/check-test-markers.py
+```
+
+无报错输出即合规。新增/修改测试文件后必须运行此脚本。
+
+> **何时跑**：不入钩子与 CI——新增/修改测试文件后手动跑；`conftest.py` 的收集期校验是兜底。
+
 **`check-requirement-trace.py` — 需求 ID ↔ 验证载体追溯**
 
+**设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
+
 校验 `requirements.md` 的需求 ID 与 `testplan.md` §2.1 追溯表的双向一致：映射表格式齐备、ID 均存在于需求侧、ID 唯一、**已补全域全覆盖**（`_COVERED_DOMAINS` 中每个域的全部 ID 均有载体行）、载体文件真实存在于磁盘。
+
+**使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
 
 ```bash
 .venv/bin/python scripts/check-requirement-trace.py                 # 全量校验
@@ -1201,15 +1162,29 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
 > 覆盖口径：仅识别 `R-<域>-<序号>` 形式的**单段**需求 ID；`requirements.md` §7.2–§7.8.4 的双段子域 ID（如 `R-LLM-GM-01`）
 > 不在本脚本与追溯表范围内。
 
-**`check-doc-links.py` — 文档链接与结构一致性检查**
+> **何时跑**：`git commit` 时由 pre-commit 钩子按暂存域自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` job 恒跑全量兜底。
 
-校验当前文档集（`README.md` / `CLAUDE.md` / 管理 / 手册 / 计划；归档快照按设计豁免）六类问题：死文件链接、死锚点（GitHub slug 规则 + `<a id>` 显式锚点，行内代码等长遮罩、代码围栏跳过）、重复标题（锚点歧义）、标题层级跳变、编号序列跳变（数字按层级+父前缀分组，中文数字按层级分组）、`xxx.md §N` 跨文档章节引用失配（归属取同一行 § 前最近的 `.md` 记号；无文件名且文档使用编号章节时自归属）。
+**任务编号与自动化 hook**
+
+**`check-task-numbering.py` — 任务编号全局一致性检查**
+
+**设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
+
+校验 `plan-` / `rf-` 两类任务编号与各管理文档头部的「编号源」标记（`plan-next` / `rf-next`）是否一致，防止新增编号与历史归档冲突。
+
+新增任务时，编号取管理文档头部 `plan-next` / `rf-next` 当前值，用后将其递增更新；若标记遗漏递增或初值写小，本脚本会扫描当前文档 + 全部历史归档并报错提示修正值。
+
+**使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
 
 ```bash
-.venv/bin/python scripts/check-doc-links.py                          # 全量校验
-.venv/bin/python scripts/check-doc-links.py -v                       # 详细输出（打印扫描文档清单）
-.venv/bin/python scripts/check-doc-links.py --ci                     # CI 模式（只输出 文件:行:描述，退出码 2）
+.venv/bin/python scripts/check-task-numbering.py            # 检查全部（plan + rf）
+.venv/bin/python scripts/check-task-numbering.py --kind rf  # 仅检查 rf
+.venv/bin/python scripts/check-task-numbering.py --ci       # CI 模式（只输出错误）
 ```
+
+自动保障机制（四层，跨机器同步策略见「任务编号规范与自动保障」章节）：P0 门禁、dev-verify preflight、Claude Code hook、git pre-commit。
+
+> **何时跑**：`git commit` 时由 pre-commit 钩子按暂存域自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` job 恒跑全量兜底。
 
 **`check-task-numbering-hook.py` — Claude Code PostToolUse hook**
 
@@ -1235,45 +1210,361 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 与 `install-claude-hook.py`（Claude Code hook）配套；两条 hook 均调用 `check-task-numbering-hook.py` 校验编号文档。
 
-**`llm-hallucination-sampler.py` — LLM 幻觉率采样**
+### 文档类
 
-见下文「LLM 幻觉率采样测试」章节。
+面向读者文档的痕迹、链接、与实现的一致性，以及语义命名索引的正反向校验。
 
-**`calibrate-dedup-threshold.py` — 新闻去重阈值校准**
+**`check-doc-traces.py` — 文档历史痕迹 + 结构性冗余检查**
 
-新闻标题去重（同源/跨源安全区分级 + 候选区阶梯 + 方向对立防护，阈值见 `news_dedup.py` 校准常量）在每次报告运行时自动记录"边界案例"到 `data/cache/dedup_anchors.jsonl`。积累足够锚点后，用此脚本分析当前阈值是否合理。
+**设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
+
+扫描项目根 `README.md` 与 `docs/managements/`、`docs/manuals/` 下所有 `.md` 文件，按三个域分流：
+
+| 域 | 文档 | 检查内容 |
+|:---|:-----|:---------|
+| 常规域 | README + managements（除 changelog/plan/review-findings）+ manuals | 历史痕迹（HIGH）+ 章节/轮次编号 + 归档引用 + 约束代号 + 目录树纪律（folders.md 树行：任务编号 CODE、进度状态词 STATUS，仅 archive 引用豁免）+ 受检域 .md 文件名任务编号 + 重复标题（DUPLICATE 冗余检查） |
+| 任务记录域 | `plan.md` / `review-findings.md` / `docs/plan/*.md` | 章节编号 + 复盘痕迹（NARRATIVE：任务内容只反映最新状态）+ 约束代号 + 结构性冗余（DUPLICATE：重复标题 + 同小节内重复长行/区块）；不走表格豁免（任务表/断言表行内叙事必检） |
+| 变更日志 | `changelog.md` | 仅章节编号（记录变化是其职责，历史痕迹与复盘叙事均合法）+ 结构性冗余（DUPLICATE：重复标题 + 同小节内重复长行/区块） |
+| 归档域 | 各版本归档目录 | 复盘痕迹（NARRATIVE：设计/迭代文档只表述最新状态）+ 结构性冗余（DUPLICATE：重复标题全域、长行/区块归档域）；changelog 归档仅 DUPLICATE（记录变化是其职责）；CIPHER/版本痕迹/章节/轮次属历史文档性质不入检 |
+
+
+恒不入检：运行时临时目录（脚本跳过范围）。此类文档只应描述“当前是什么/做什么”，不应记录“从哪里来、怎么变的”。
+
+七条核心规则：
+1. **正文不得带历史痕迹**：文档正文不得包含历史变更信息（来源叙述、原/旧实现、迁移/重命名、任务编号、版本号、Iter 迭代标记等），只反映“当前是什么/做什么”。例外：`changelog.md`（变更日志的职责即记录变化）
+2. **正文不得引用归档文件**：除 changelog 外，常规域文档正文不得引用 `docs/archive/` 下目录或 `archived_*.md`。例外：`folders.md` 的目录树（`│ ├ └` 行）与统计表行——目录树记录项目结构，archive/ 条目是结构的一部分
+3. **章节编号引用**：任何受检文档不得用数字章节号（“N 章”）指代报告章节，用语义章节名；计数表述（共 N 章等）豁免。三域均检
+4. **迭代轮次引用**：常规文档不得用数字轮次（“第 N 轮”）指代开发迭代；任务记录域与 changelog 豁免（“轮 N”是正式记录载体）
+5. **架构约束代号（C 系列，以 technical.md 约束表为准）**：除约束定义处（technical.md / llm-technical.md）外，所有受检文档一律禁（约束代号属暗号，处处禁）
+6. **复盘痕迹（NARRATIVE）**：plan/review-findings/docs/plan 的任务内容与归档设计/迭代文档只反映最新状态，禁时间对比叙事、以“不再”领起的对既有行为的否定句、历史归因类表述；任务状态标记、根因定位引用、迭代轮次、设计文档旧格式兼容、行内代码令牌是内容合法。任务记录域与归档域检出（手册操作指引与 changelog 记录变化均不适用）
+7. **结构性冗余（DUPLICATE）**：重复标题路径感知判重（同级+同文本+同父标题才算重复，各版本块/任务节下同名小节跨父级合法，同父复现自第 2 次起报出）；≥40 字符重复内容行与连续 5 行重复区块（台账三文件 plan/review-findings/changelog 与归档域）**同小节限定**——跨小节共享行/表属结构，同小节内第 2 次出现起报出，拦截「同一区块/条目粘贴两遍」类残留；比对前空白归一（仅对齐/全角空白差异视为同一内容），同一重复块只报首个窗口（不按滑窗数重复计数）。豁免：围栏代码块、未围栏缩进代码/命令样本与顶格命令（python/pytest/git 等）、顶格 `#` 注释、命令续行（上一行以 `\` 结尾）、键值任务卡（- **键**: 值）、验证清单项（- [ ] 复跑）、分隔/装饰行与短模板行；围栏内容不入窗，整段粘贴由区块判重兜底
+
+目录树与文件名纪律（folders.md 等树行）：
+- **树行豁免仅 archive 引用类**：目录树行不走通用行豁免，任务编号（CODE）与进度状态词（STATUS：已实施/完成态/随任务完成移入/验收·判定记录指引/§N 指引/已归档/稿态词/树行“不再”等）在树行照检；描述只讲文件内容，不写进度/流转/任务号。目录树整块位于围栏内，围栏内树行同样照检（围栏跳过仅针对非树行内容）；folders.md 树行按路径分域：docs/archive/ 子树=归档记录域（仅复盘叙事检出）、docs/plan/ 子树=任务记录域（章节编号+约束代号照检）；树行专属来源叙述补强（无后缀模块名的「从 XX 拆出」）
+- **文件名任务编号/系列代号**：受检域 .md 文件名含 `rf-N`/`plan-N`、`task\d`、系列字母+数字（`B1-`/`A5-`/`r198_`/`D17-` 类）与 `P3-04` 全形即报（语义命名；phase 词形如 `p1-optimization` 与带版本号区间形式的归档文件名不误伤）
+
+细节规则：
+- **Markdown 围栏代码块**（``` 包裹）内为命令/配置示例，非文档叙述，自动跳过（避免 `git tag`、`APP_VERSION` 等示例误报）
+- **版本头豁免仅行首锚定**：只豁免 `> 文档版本：vX.Y.Z` 这类版本头行；行中叙述（如"该功能于版本 `vX.Y.Z` 中引入"）仍会命中版本号痕迹
+- **当前能力描述豁免**：暂不支持 / 不再支持 / 不正式支持 / 发布版本前 / 门禁流程等合法当前状态描述不报（常规域）
+- **运行时产物归档描述豁免**：报告按日期归档属当前功能描述（"归档版报告" / "历史归档至 `YYYYMMDD/` 日期子目录" / "报告已归档到 `reports/`" 等），不视为仓库归档引用
+- **任务记录域不走行级豁免**：表格/链接行豁免不适用任务域（任务表、断言表行内的复盘叙事必须检出）；代码块仍跳过
+- **LOW 级别**：命中需人工判断的变更/过渡类描述时提示复核，不阻塞提交
+
+**使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
 
 ```bash
-# 分析全部锚点，输出建议
-.venv/bin/python scripts/calibrate-dedup-threshold.py
+# 检查全部
+.venv/bin/python scripts/check-doc-traces.py
 
-# 仅看汇总统计（不展开详细列表）
-.venv/bin/python scripts/calibrate-dedup-threshold.py --summary
+# 详细输出（含豁免行信息）
+.venv/bin/python scripts/check-doc-traces.py -v
 
-# 指定锚点文件
-.venv/bin/python scripts/calibrate-dedup-threshold.py --file data/cache/dedup_anchors.jsonl
+# CI 模式（仅输出 文件名:行号，非零退出码）
+.venv/bin/python scripts/check-doc-traces.py --ci
 ```
 
-**校准时机**：建议锚点文件积累 **100 条以上**（约 5~10 次报告运行）后校准一次。脚本只分析不自动修改阈值，是否需要调整由开发者判断。
+**退出码含义**：
 
-**`collect-test-coverage.py` — 测试覆盖计数收集**
+| 退出码 | 含义 | 行动 |
+|:------:|:-----|:-----|
+| 0 | 全部通过 | 无需处理 |
+| 1 | HIGH/ARCHIVE/CODE/CIPHER/CHAPTER/ROUND/STATUS/NARRATIVE/DUPLICATE 痕迹 | 应从文档中移除 |
+| 2 | 仅 LOW 级别痕迹（需人工判断的变更/过渡类描述） | 建议人工复核 |
 
-只做 `.venv/bin/python -m pytest --collect-only`（收集测试项，**不执行测试**，耗时约 2s），模式计数谓词由 `_test_runner/modes.py::MODES` 的 marker 表达式现场编译，输出各模式 / unit 子标记 / scenario 分组 / 跨类标记 / 功能域 / 文件分布的项数，供 `docs/managements/test-coverage.md` 快照更新使用。
+> **何时跑**：`git commit` 时由 pre-commit 钩子按暂存域自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` job 恒跑全量兜底。
+
+**`check-doc-drift.py` — 文档与实现一致性检查**
+
+**设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
+
+把文档里的「事实断言」（计数、清单、默认值、面板编号、目录树、统计表）与权威源逐条对账，
+使漂移在提交前暴露。与 `check-doc-traces.py` 互补：那边管「不该写的内容」（历史痕迹），这边管
+「写了但与实现不符的内容」。
+
+二十一项检查（权威源 → 受检文档）：
+
+1. 报告章节表（`reports-instruction.md`）↔ 章节注册表 `_REPORT_SECTION_DEFAULT`（行数/序号/名称）；
+   含「可见性规则总览」表 `type` 行双向对账（文档 type 集合 ↔ 注册表 type 集合；历史漂移：注册表把财报两章合为
+   `fundamental_snapshot` 并新增 `schedule_replay` 后，表里仍写两个不存在的 type 名称且漏一行——行数恰好相等，计数断言全绿）
+2. 章节数量断言（`页签编号 1~N` / `默认顺序（N 项` / `返回 result（N 项` / `N 个报告章节`）↔ 注册表章节数
+3. 功能开关表（`how-to-config.md` 四组区段）↔ `feature_switch_registry`（成员/默认值/无表外键）
+4. 开关分组计数断言（`呈现与体验 A / 分析增强 B / 独立章节与回放 C / 机制与诊断 D` 连写、`<组名>（N 项`、`共 N 项开关`、旧三组名残留检测）↔ 分组计数
+5. 开关默认值断言（`` `flag` `` 后紧随「默认开/关」）↔ 注册表默认值
+6. 配置标量默认值表（`how-to-config.md`）↔ `_DEFAULT_CONFIG`
+7. LLM 默认参数表（`llm-technical.md`）↔ `_DEFAULT_LLM_SETTINGS` + 缓存 TTL 注册表
+8. TUI `[S]` 面板编号连续性与分组边界（`how-to-use-tui-menu.md`）↔ `handlers_config.py` 的派生编号规则
+9. 目录树（`folders.md`）↔ 文件系统实测（`src/`、`scripts/`、`docs/{managements,manuals,plan}`）；同父目录 `vN.N.x/` 版本目录块按版本号升序
+10. 项目统计表（`folders.md`）↔ 实测文件数/行数（加 `--with-test-count` 再核「测试用例」行）
+11. 测试覆盖计数表（`test-coverage.md`）↔ `scripts/collect-test-coverage.py` 快照（仅 `--with-test-count`）
+12. 归档索引完整性：changelog / plan / review-findings 三份管理文档的「归档」索引 ↔ 归档目录下
+    `archived_*` 文件**双向**比对（漏列 → 「缺少」；幽灵引用 → 「不存在」）
+13. 管理文档分区纪律：review-findings 未完成/已解决分区互斥且已解决项须在 changelog 有修复记录；
+    「开发期已修复」节只允许出现在已解决区、P 档标题只允许出现在未完成区（节归属，标题错位时
+    rf 标识比对完全静默）；plan 未完成区不得含 ✅/已归档项；现行 changelog 只允许一个 `-dev` 段头
+14. Extended Thinking 支持矩阵：手册对比表须覆盖代码支持的全部厂商族、「仅」式预算枚举句须列全、
+    默认开思考族须有提示（权威源为 `llm/api_base.py` 的前缀名单）
+15. Provider Chain 降级表：`fetcher/chain_config.py::_DEFAULT_CHAINS` 的 15 条链 ↔
+    `datasource-reliability.md` §4.2 表逐链**双向**比对（漏链 → 「缺少链路」；幽灵行 → 「无此链」）
+16. 守护清单同源：developer-guide 的 P0/P2 门禁代码块、`ci.yml` guards steps、CLAUDE.md P0/P2 条款、
+    testplan P0/P2 清单行与 `.githooks/pre-commit` 执行体，五处的 `scripts/check-*.py --ci` 引用集合两两一致（新增守护脚本漏改任一处即报）
+17. 章节-区块矩阵（`technical.md` §4.22）：文档行 ↔ 区块注册表逐列 / 键集双向 / 两端实现提取集合三向对账
+18. 手册菜单块一致性：双手册主菜单 code block（键集合/标签头）↔ `tui/tui_menu.py` MENU_ITEMS；
+   正文「菜单 `X`」引用须为主菜单键（历史漂移：缓存管理由 `[4]` 改为 `[3]`、持仓目录/文件名/输出目录收进 `[D]` 二级面板后，
+   十余处正文仍写旧主菜单键，读者按提示找不到入口——code block 校验护不住正文）；`[D]` 二级键（`CONFIG_DIR_INFO_KEYS`）须写作「菜单 `D` → `C`」；
+    全文档「返回主菜单」行键=0 不变量（返回键全局统一）
+19. 需求菜单表（`requirements.md` §3.2）：键集合/分组标题/组内顺序 ↔ MENU_ITEMS + MENU_GROUPS
+20. 迁档占位↔归档节：review-findings「已随 vX.Y.Z 发布迁入」占位 ↔ 对应版本归档正文含该版本二级标题归档节
+21. 树描述计数禁令：folders.md 目录树描述禁写「阿拉伯数字+量词」易漂移计数（docs/archive 记录域豁免；中文数词设计常量不入检）
+
+**使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
 
 ```bash
-.venv/bin/python scripts/collect-test-coverage.py                 # 仅输出（人工对照改文档）
-.venv/bin/python scripts/collect-test-coverage.py --update-docs   # 按本次快照回写计数行
+.venv/bin/python scripts/check-doc-drift.py                   # 二十一项全查
+.venv/bin/python scripts/check-doc-drift.py -v                # 详细输出（打印解析结果与实测统计）
+.venv/bin/python scripts/check-doc-drift.py --ci              # CI 模式（只输出 文件:描述，退出码 2）
+.venv/bin/python scripts/check-doc-drift.py --with-test-count # 附带 pytest 收集，核对「测试用例」与 test-coverage.md 计数表
+.venv/bin/python scripts/check-doc-drift.py --sync             # 统计快照自动同步（实测数字回写 folders.md 并 git add，幂等）
 ```
 
-**说明**：
-- 只收集不执行——测试体不会运行，不影响测试结果，也不会触发真实数据源 / LLM 调用
-- 项数随版本迭代变化，属撰写时快照，精确计数以本脚本实时输出为准
-- **`--update-docs` 回写**：按本次快照改写 `test-coverage.md` 计数行（反引号标记行 + 能映射到标记的加粗标签行，比对域与 `check-doc-drift` 的计数核对同构、复用其行匹配原语，写后必然通过 `--with-test-count` 核对）与 `folders.md` 项目统计表「测试用例」行；只改数字、粗体/千分位/后缀原样保留，内容一致则零变更（幂等）；收集退出码非 0/5（如收集期校验中断）时**跳过回写**并告警，错数不落盘。与 `test-runner --mode bench --update-docs`（写耗时对照表）互不重叠
-- 计数口径直接取自 `MODES` 的 marker 表达式（复用 pytest 自身的 `-m` 求值器，`verify` / `dev-verify` 等组合模式与阶段 marker 回落同源），表达式只在 `modes.py` 定义一处、模式增删自动跟随；`all`（已由「总收集: N」表达）与 `live`（默认收集宇宙排除，计数恒 0）为显式豁免并在脚本内注记理由
+> **统计快照漂移的自动化治理**：第 10 项「项目统计表」的数字（文件数/行数/用例数）是随日常
+> 提交高频变化的派生量（changelog 每补一行、用例每增删即变），人工同步必漏，曾是 CI 最高频红源。
+> `--sync` 把实测值自动回写 `folders.md` 对应单元格（只改数字、保留千分位/粗体风格与说明文字，
+> 不触碰版本演进对照表），并把回写结果 `git add` 加入暂存区；git pre-commit 钩子在提交涉及
+> `docs/managements/` 或 `src/test/` 时自动调用（见「install-hooks.sh」条）。其余类目
+> （清单/默认值/目录树/归档索引）的漂移仍需人工按提示修正。
 
-### 质量类
+> 按设计豁免的文档：`changelog.md` / `review-findings.md`（如实引用旧数字作为变更记录）与
+> 版本快照类文档（历次发布的归档快照）不参与计数与默认值断言扫描。修正提示：报告里的数字就是
+> 实测值，直接按提示改文档即可；目录树缺条目时按所属子包位置补一行（含简短职责说明）。
+
+> **何时跑**：`git commit` 时由 pre-commit 钩子按暂存域自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` job 恒跑全量兜底。
+
+**文档核对方法（一次完整核查的分层与手段）**
+
+机检只能护住「已绑定权威源的断言」。一份文档集要核到底，按四层分工做，各层手段不同：
+
+| 层 | 核什么 | 手段 | 能否机检 |
+|:--|:--|:--|:--|
+| 机械层 | 文件路径、需求 ID、任务编号、json 键、CLI 选项是否存在 | 跑六件套（doc-drift / doc-links / version-consistency / requirement-trace / task-numbering / doc-traces）+ 路径与 ID 存在性扫描 | 已全覆盖 |
+| 结构层 | 目录与章节顺序、TOC 层级、列表编号连续性、分区归属 | `check-doc-links` 编号/层级序列 + 人工对标题树 | 大部分 |
+| 断言层 | 计数、默认值、阈值、清单、菜单键、日期、单位 | 先按权威源统一对账（即上面二十一项），再对未绑定的断言做抽取对码（本节下文） | 需按类扩规则 |
+| 散文层 | 机制叙述、因果解释、操作步骤 | 标识符对码 + 人工通读 | 仅部分（见下文） |
+
+**断言层：未绑定断言的抽取对码。** 机检覆盖不到的数值散在散文里，用「抽取 → 对码」代替逐句读：
+
+```python
+# 抽出全部可证伪断言，再逐类去代码里找权威源
+pat = re.compile(r'(默认[^，。；]{0,10}\d|\d+\s*(项|天|秒|分钟|次|页签)|阈值|最多|至少|保留|重试)')
+hits = [(i, l) for i, l in enumerate(text.splitlines(), 1) if pat.search(l)]
+```
+
+对码表（高频四类，均已踩过）：定价/默认参数表 ↔ `MODEL_PRICING` / `_DEFAULT_LLM_SETTINGS`；
+保留期与上限 ↔ `core/constants.py`；阈值 ↔ `_DEFAULT_CONFIG` 对应小节；清单类 ↔ 注册表（功能开关 / 缓存分组 /
+章节 / 数据模块）。清单类**双向**比：文档多写一项和漏写一项都要报。
+
+**散文层：反引号标识符 ↔ 代码符号索引。** 散文里点名的函数/模块/常量若已不存在，读者找不到对应实现，
+但路径扫描与断言扫描都不管。做法是先从 `src/` + `scripts/` 建符号集（`def` / `class` /
+全大写常量 / 字典字面量键），再把文档反引号里的标识符逐个查存在性，**名不对与不存在都算**：
+
+```python
+sym |= set(re.findall(r'^\s*(?:def|class)\s+([A-Za-z_]\w*)', src, re.M))
+sym |= set(re.findall(r'^([A-Z_][A-Z0-9_]{2,})\s*[:=]', src, re.M))
+sym |= set(re.findall(r'^\s{0,8}["\']([a-z][a-z0-9_]{2,})["\']\s*:', src, re.M))
+```
+
+**豁免域**（否则误报会淹没真实信号）：环境变量名（`DATASINK_API_KEY` / `NO_COLOR` / `TEST_RUNNER_JOBS`）、
+模板占位（`X.Y.Z` / `XXXXXX` / `NAME` / `VALUE` / `YYYYMMDD`）、外部借鉴对象的文件名（引用的是别的
+仓库）、文件名后缀模式（`_edge.py` / `test_xxx_part1.py`）、协议字面量（错误码 / 事件名 / HTTP 头）。
+命中后必须**逐条人工判读**再定性，不能直接当缺陷改。
+
+**漂移类别出现第二次就落成机检。** 同一类漂移只要人工发现两次（或一次就是十余处），就该写成
+`check-doc-drift` 的子规则而非靠记性——**挂在现有项下扩展子分支，不新增项数与清单五处同源维护**。
+两个现成例子：第 1 项的「可见性表 `type` 行双向对账」（只人工维护的表格，行数凑巧相等时
+任何计数断言都不报）、第 18 项的「正文菜单键引用」（code block 校验护不住散文里的 `菜单 X` 引用）。
+
+**输出纪律：台账唯一，底稿即删。** 核查发现先登记 `review-findings.md`（带根因与处理），
+修复后同步 `changelog.md`；过程中的抽取清单/中间结果放 `docs/tmp/`（git 忽略域），
+**闭环后立即删除**——同一批发现不允许在两处各存一份，否则台账与底稿会互相漂移。
+
+**已知边界（不要宣称「已全核」）**：既无可证伪断言、也不点名代码符号的纯叙述段（设计理由、
+动机解释、抽象的步骤描述）只能人工通读；机检与两种对码都覆盖不到。报告核查结论时按层说明
+覆盖范围，不要笼统说「全部核过」。
+
+**`check-doc-links.py` — 文档链接与结构一致性检查**
+
+**设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
+
+校验当前文档集（`README.md` / `CLAUDE.md` / 管理 / 手册 / 计划；归档快照按设计豁免）六类问题：死文件链接、死锚点（GitHub slug 规则 + `<a id>` 显式锚点，行内代码等长遮罩、代码围栏跳过）、重复标题（锚点歧义）、标题层级跳变、编号序列跳变（数字按层级+父前缀分组，中文数字按层级分组）、`xxx.md §N` 跨文档章节引用失配（归属取同一行 § 前最近的 `.md` 记号；无文件名且文档使用编号章节时自归属）。
+
+**使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
+
+```bash
+.venv/bin/python scripts/check-doc-links.py                          # 全量校验
+.venv/bin/python scripts/check-doc-links.py -v                       # 详细输出（打印扫描文档清单）
+.venv/bin/python scripts/check-doc-links.py --ci                     # CI 模式（只输出 文件:行:描述，退出码 2）
+```
+
+> **何时跑**：`git commit` 时由 pre-commit 钩子按暂存域自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` job 恒跑全量兜底。
+
+**`check-semantic-index.py` — 语义命名索引正反向一致性检查**
+
+**设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
+
+校验技术设计文档（`technical.md`）「功能语义命名表」章节（`<!-- semantic-index:start/end -->` 标记区间）与代码的**正面一致性**，与 `check-code-traces.py` 的负面禁止互补：
+
+1. **正向**：功能开关注册表（`feature_switch_registry`）的**每个键**（作用域四组全量，不限分组）必须已登记在「功能语义命名表」中（防新增开关绕过登记）
+2. **反向**：表中每个语义 slug 在 `src/python/` 下至少一处非注释代码引用（防僵尸条目——功能删除后表行残留）
+3. **合并章**：表下「合并章代码标识符」注声明的 sheet key 必须存在于 `core/registry.py` 的 `_REPORT_SECTION_DEFAULT` 注册表
+
+**使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
+
+```bash
+.venv/bin/python scripts/check-semantic-index.py       # 检查全部
+.venv/bin/python scripts/check-semantic-index.py -v    # 详细输出（打印每项解析结果）
+.venv/bin/python scripts/check-semantic-index.py --ci  # CI 模式（只输出错误，退出码 2）
+```
+
+> **何时跑**：`git commit` 时由 pre-commit 钩子按暂存域自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` job 恒跑全量兜底。
+
+### 代码与文件质量类
+
+代码注释痕迹（含三条 AST 守卫）、文件行数红线，以及两条观察期契约检查。
+
+**`check-code-traces.py` — 代码注释历史痕迹检查**
+
+**设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
+
+扫描 `src/python/`、`src/test/`、`src/static/`、`scripts/` 下所有 `.py` / `.js` / `.mjs` / `.html` / `.sh` / `.ps1` / `.bat` / `.cmd` 文件的注释和文档字符串，检查是否含有代码历史迭代信息（来源拆分、版本号、任务编号、历史迭代叙述等）。代码注释只应描述"当前是什么"，不应记录"从哪里来、怎么变的"。
+
+除注释痕迹外，另有三条 **AST 级架构守卫**（直接看语法树，与注释格式无关）：
+
+| 守卫 | 检出内容 | 实现 |
+|:-----|:---------|:-----|
+| core 分层 | core 层反向 `import` 上层包（`fetcher`/`analysis`/`report`/`llm`/`providers`/`web`/`tui`/`cli`） | `_traces_code/layers.py`（豁免文件在 technical.md 声明） |
+| 日志统一 | 非交互呈现层调用 `print()`（诊断输出应走 `logging` 落盘） | `_traces_code/logging_discipline.py`（豁免域：`tui/`、`cli/` 整目录 + 进度/一次性检查报告/向导六个模块） |
+| 语义命名 | 标识符/注释夹带任务编号、系列代号、字母数字暗号 | `_traces_code/extract.py` + `patterns.py` |
+
+**使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
+
+```bash
+# 检查全部
+.venv/bin/python scripts/check-code-traces.py
+
+# 详细输出（含排除行信息）
+.venv/bin/python scripts/check-code-traces.py -v
+
+# CI 模式（仅输出 文件名:行号，非零退出码）
+.venv/bin/python scripts/check-code-traces.py --ci
+```
+
+除注释痕迹外，另有三条 **AST 级架构守卫**（直接看语法树，与注释格式无关）：
+
+| 守卫 | 检出内容 | 实现 |
+|:-----|:---------|:-----|
+| core 分层 | core 层反向 `import` 上层包（`fetcher`/`analysis`/`report`/`llm`/`providers`/`web`/`tui`/`cli`） | `_traces_code/layers.py`（豁免文件在 technical.md 声明） |
+| 日志统一 | 非交互呈现层调用 `print()`（诊断输出应走 `logging` 落盘） | `_traces_code/logging_discipline.py`（豁免域：`tui/`、`cli/` 整目录 + 进度/一次性检查报告/向导六个模块） |
+| 语义命名 | 标识符/注释夹带任务编号、系列代号、字母数字暗号 | `_traces_code/extract.py` + `patterns.py` |
+
+**退出码含义**：
+
+| 退出码 | 含义 | 行动 |
+|:------:|:-----|:-----|
+| 0 | 全部通过 | 无需处理 |
+| 1 | HIGH/ORIGIN/VERSION 痕迹 | 必须修复后再提交 |
+| 2 | CODE/IDENT/CHAPTER/ROUND/LOG（任务编号/标识符/章节编号引用/日志统一违规） | 应改用语义描述，`print()` 改用 `logging` |
+| 3 | 仅 TODO/CHANGE/DEPR 级别 | 建议人工复核 |
+
+> **何时跑**：`git commit` 时由 pre-commit 钩子按暂存域自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` job 恒跑全量兜底。
+
+**`check-file-length.py` — 单文件行数红线守护**
+
+**设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
+
+**类型阈值**：主程序（`src/python/**.py`）与脚本（`scripts/**.py`，含包内子模块）> 1000 行为 finding；测试（`src/test/**.py`）> 1200 行为 finding。主程序 500 / 脚本 400 / 测试 800 起为**可选优化区间**，不判 finding，仅 `-v` 列出，供 review-findings「文件过长」登记表派生（人肉快照退役，脚本输出即真值）。
+
+**豁免与挂账**：既有破线项须在 `EXEMPTIONS` 登记，**同时**在 review-findings 未完成分区挂账限期处理（约定而非机检，两处须一起改）；豁免文件回落到阈值内时 `-v` 提示「可移除豁免」，防豁免永久化。
+
+**取舍**：按文件类型分档而非统一值——测试文件要用例装配、天然更长；包内子模块与顶层脚本同档，避免「拆包即免检」。
+
+**使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
+
+```bash
+.venv/bin/python scripts/check-file-length.py        # 检查全部
+.venv/bin/python scripts/check-file-length.py -v     # 含可选优化区间清单与豁免状态
+.venv/bin/python scripts/check-file-length.py --ci   # CI 模式（只输出 文件:描述）
+```
+
+退出码：0 全部通过；2 存在非豁免破线文件。
+
+处置：先按「大文件拆分」策略拆模块或把实现迁入子包；确需保留则登记豁免 + 挂账，两处同时改。
+
+> **何时跑**：`git commit` 时钩子自动执行；发布门禁（P2）与 CI `guards` 全量兜底；新增文件或拆分后务必本地跑一次。
+
+**`check-script-contract.py` — scripts 顶层脚本契约机检（观察期）**
+
+**设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
+
+四条规则，把「靠人肉逐案发现」的契约偏离变成机检：
+
+1. **退出码声明**：`check-*` 与 `_checklib.report` 消费方的 docstring「退出码」节，声明码集须 ⊆ {0, 2}（`report()` 的返回值域）；分级退出码、环境缺失、事实源不可读等特例在 `_EXIT_CODE_WHITELIST` 显式登记并注理由。
+2. **CLI 面**：`check-*` 顶层脚本须调用 `_checklib.add_common_args`（统一 `-v/--verbose` + `--ci`），且**确实消费** `args.verbose`（防空开关）；钩子入口在 `_CLI_SURFACE_EXEMPT` 豁免。
+3. **显式编码**：`open()`（非二进制）、`Path.read_text/write_text`、`subprocess` 文本模式均须显式 `encoding=`——cp936 Windows 上隐式编码会静默写错或报错。
+4. **测试覆盖**：每个顶层脚本须被 `src/test/` 下至少一个测试按文件名引用；一次性工具在 `_UNTESTED_EXEMPT` 豁免。
+
+**观察期**：与样式护栏同模式——未入钩子与 CI，改动 `scripts/` 后本地跑，避免"新增脚本无人引用/无编码声明"沉淀。
+
+**使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
+
+```bash
+.venv/bin/python scripts/check-script-contract.py      # 检查全部
+.venv/bin/python scripts/check-script-contract.py -v   # 逐脚本打印通过项
+.venv/bin/python scripts/check-script-contract.py --ci # CI 模式（只输出 文件:描述）
+```
+
+退出码：0 全部通过；2 发现契约偏离。
+
+处置：按规则号补声明 / 补 `add_common_args` / 补 `encoding=` / 补测试引用或登记豁免；确属特例才加白名单，并在注释写清理由。
+
+> **何时跑**：观察期——未入钩子与 CI；新增或改动 `scripts/` 顶层脚本后手动跑。
+
+**`check-style-guardrails.py` — 设计护栏机检（DESIGN.md 样式面）**
+
+**设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
+
+规则与 `DESIGN.md` 护栏条目逐条同源（各函数 docstring 标注映射编号），**E 级拦截、W 级只观察**：
+
+| 级别 | 规则 | 判什么 |
+|:--|:--|:--|
+| E1 | 强调色越权（护栏 3） | 品牌蓝系 hex 字面量出现在 token 定义行与 JS 字符串之外；rgb/rgba 透明变体归 W1 观察 |
+| E2 | 明暗同步（护栏 5） | `[data-theme="dark"]` 覆盖的变量在 `:root` 缺定义 |
+| E3 | 双面 token 对表 | 正向：Colors 表两面具名 token 须在双面 `:root` 定义；反向：实现里「值为颜色」的两面同名变量须在 Colors 表登记 |
+| W1 | 裸色值存量（护栏 1） | 非定义行的 hex/rgb 字面量（**统计不判 finding**） |
+| W2 | 圆角档位（护栏 2） | `border-radius` 档外字面值（**统计不判 finding**） |
+
+**运行域定档**：W 级不阻塞、不入钩子与 CI；E 级进发布门禁（`release.py gate`：E 级拦截、W 级统计留档）。开发期快反馈由 unit 测试承担（真实仓库冒烟 + 观察数基线断言）。纳入 pre-commit / CI 阻塞域须另行独立决策，**不随脚本改动顺带发生**。
+
+**流程管控**：白名单只减不增（新增须带理由并复审，未命中任何现行行的条目会被告警点名，应及时删除）；收敛优先于豁免——能等值收敛到 token 的一律收敛，白名单只兜契约钦定值与恒定/派生域。
+
+**使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
+
+```bash
+.venv/bin/python scripts/check-style-guardrails.py       # 检查全部（E + W）
+.venv/bin/python scripts/check-style-guardrails.py -v    # 含 W 级观察清单与白名单腐化告警
+.venv/bin/python scripts/check-style-guardrails.py --ci  # CI 模式（只输出 finding）
+```
+
+退出码：0 通过（W 级只统计）；2 存在 E 级 finding。
+
+处置：E 级改回 token 引用；W 级按批次收敛，不逐个就地豁免。
+
+> **何时跑**：发布门禁 `release.py gate` 内置（E 级拦、W 级留档）；开发期由 unit 测试快反馈，不入 pre-commit 与 CI。
+
+### 发布类
 
 **`check-version-consistency.py` — 版本号一致性检查**
+
+**设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
 
 发布版本前必须运行。检查 `APP_VERSION`（`src/python/core/constants.py`）与以下文件的版本号是否一致：
 
@@ -1282,23 +1573,29 @@ sh .githooks/install-hooks.sh --off   # 停用
 - 管理文档 10 份：`plan.md`、`technical.md`、`requirements.md`、`testplan.md`、`review-findings.md`、`llm-technical.md`、`folders.md`、`test-coverage.md`、`changelog.md`、`developer-guide.md`
 - `folders.md` 另含一条 `evolution_head` 断言：版本演进对照表「当前开发版（」列头版本号与 `APP_VERSION` 同步（与文档版本头双点校验，发版漏改即报错，`--fix` 可自动同步）；断言只锚列头文本，表内统计数据行的刷新义务在「版本发布流程 ② 发布数据文档刷新」
 
+**使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
+
 ```bash
 # 无参数运行，逐项检查并报 [OK]/[ERR]
 .venv/bin/python scripts/check-version-consistency.py
 ```
 
-全部 `[OK]` 方可提交。如有 `[ERR]`，按提示逐个同步，然后重跑直到全部通过。版本切换工作流见下文「版本发布流程」章节。
+全部 `[OK]` 方可提交。如有 `[ERR]`，按提示逐个同步（或在发布准备阶段让 `--fix` 代劳），然后重跑直到全部通过。版本切换工作流见下文「版本发布流程」章节。
 
-### 发布类
+> **何时跑**：`git commit` 时钩子的版本一致性守护；发布门禁（P2）与 CI `guards` 兜底；`release.py prepare` 会带 `--fix` 把受检清单一次同步。
 
 **`release.py` — 发布流程分步编排**
 
-把「版本发布流程」固化为可执行子命令，每步独立可审阅、失败即停不连锁：
+**设计逻辑**（为什么分步 / 边界）
+
+把「版本发布流程」固化为可执行子命令：每步独立可审阅、失败即停不连锁，避免一次跑完才发现中途出错；数据刷新按变更面条件跳过（纯文档变更不跑 bench/collect），发布会话墙钟与分步耗时进台账可对拍。rf/plan 归档迁移保留人工（需判断归档段语义），必须在 `gate`/`publish` 前完成。
+
+**使用逻辑**（分步命令 / 失败处理）
 
 ```bash
 .venv/bin/python scripts/release.py check     # 预检：分支/工作树/版本形态/tag/版本一致性
 .venv/bin/python scripts/release.py prepare   # 版本全链 + changelog 发布段归档 + 一致性 --fix + 收尾 doc-drift --sync
-.venv/bin/python scripts/release.py refresh   # bench --update-docs + collect + doc-drift --sync
+.venv/bin/python scripts/release.py refresh   # bench --update-docs（发布子集四档，--full-bench 全量）+ collect + doc-drift --sync
 .venv/bin/python scripts/release.py evolution --release   # 演进对照快照（默认只滚当前开发版列）+ 收尾 doc-drift --sync
 .venv/bin/python scripts/release.py gate      # P2：regression + 十守护 --ci + 设计护栏（gate 内置）
 .venv/bin/python scripts/release.py publish --title "<发布主题>"   # release 提交 + P1 verify + --no-ff 合并 + tag
@@ -1306,6 +1603,10 @@ sh .githooks/install-hooks.sh --off   # 停用
 ```
 
 `publish` / `devbump` 默认不推送（只打印推送命令），`--push` 才执行；rf 归档迁移保留人工（需判断归档段语义）。
+
+**bench 范围（refresh）**：默认只测发布口径关心的四档 `unit` / `dev-verify` / `regression` / `integration`——全量十四档串行约 5.5 min（2 路采集 3.2 min），占单次发布机器时间约 75%，其余模式与这四档高度重叠；未测模式的耗时与计数按 `--update-docs` 口径「保留上次实测值」不写脏，需要全量复测时加 `--full-bench`（或直接 `test-runner.py --mode bench --update-docs`）。
+
+**耗时台账（`logs/release.jsonl`）**：每个子命令结束追加一行 JSON——`command` / `ok` / `elapsed_s` / `version` / `steps[]`（gate 的 `P2 场景回归`·`P2 十守护`·`P2 设计护栏`、refresh 的 bench·collect·sync、publish 的 `P1 verify`、evolution 的快照统计·统计同步）；终端尾行同步打印摘要。`logs/` 属 git 忽略域，台账不入仓库、不参与门禁，写入失败只打 `[!]` 且不改退出码（观测面不阻断发布）。跨版本对拍：`tail -n 20 logs/release.jsonl`（发布墙钟的变化归因到此，不再靠现场重测）。
 
 ### 诊断类
 
@@ -1915,7 +2216,7 @@ registry 的测试在 `src/test/unit/core/test_registry.py`，验证 TTL 默认�
 
 发布版本时，按以下六步顺序执行：
 
-> 可用 `scripts/release.py` 分步编排（发布流程的可执行封装，每步独立可审阅、失败即停）：`check`（预检）→ `prepare`（版本全链、changelog 发布段归档**并自动重写归档头部「涵盖版本 / 归档时间」（区间与并入记录由归档内各发布段标题派生，无需人工维护）**、一致性 `--fix`，收尾自动 `doc-drift --sync`）→ `refresh` + `evolution --release`（数据刷新——纯文档变更〔仅 `.md`/图片〕自动跳过 bench+collect，`--force-refresh` 强制；演进快照，evolution 收尾同样自动 sync）→ `gate`（P2 门禁，十守护并行且并发度随核数收敛 ≤4 路）→ `publish --title`（release 提交 + P1 verify + `--no-ff` 合并 + tag）→ `devbump`（切开发版）；rf/plan/docs-plan 归档迁移保留人工（需判断归档段语义）且必须在 `gate`/`publish` 前完成（见下方步骤③）；**分层纪律**：归档迁移或任何涉及管理文档/代码注释的改动完成后，进 `gate` 前先跑秒级便宜守护（至少 `check-doc-traces --ci` + `check-doc-links --ci`，改动面大时十守护全跑）——守护发现前置，避免 P2 门禁的全量 regression 因文档级 finding 白跑第二轮。下列手动命令为底层口径，脚本失败时按手动步骤排查。
+> 可用 `scripts/release.py` 分步编排（发布流程的可执行封装，每步独立可审阅、失败即停）：`check`（预检）→ `prepare`（版本全链、changelog 发布段归档**并自动重写归档头部「涵盖版本 / 归档时间」（区间与并入记录由归档内各发布段标题派生，无需人工维护）**、一致性 `--fix`，收尾自动 `doc-drift --sync`）→ `refresh` + `evolution --release`（数据刷新——纯文档变更〔仅 `.md`/图片〕自动跳过 bench+collect，`--force-refresh` 强制；演进快照，evolution 收尾同样自动 sync）→ `gate`（P2 门禁，十守护并行且并发度随核数收敛 ≤4 路）→ `publish --title`（release 提交 + P1 verify + `--no-ff` 合并 + tag）→ `devbump`（切开发版）；bench 默认只测发布子集四档（`--full-bench` 全量）、每命令耗时入 `logs/release.jsonl` 台账（发布墙钟可跳版本对拍）；rf/plan/docs-plan 归档迁移保留人工（需判断归档段语义）且必须在 `gate`/`publish` 前完成（见下方步骤③）；**分层纪律**：归档迁移或任何涉及管理文档/代码注释的改动完成后，进 `gate` 前先跑秒级便宜守护（至少 `check-doc-traces --ci` + `check-doc-links --ci`，改动面大时十守护全跑）——守护发现前置，避免 P2 门禁的全量 regression 因文档级 finding 白跑第二轮。下列手动命令为底层口径，脚本失败时按手动步骤排查。
 
 **① 版本号一致**
 

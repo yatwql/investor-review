@@ -16,6 +16,8 @@ from src.python.tui.tui_menu import filter_menu_llm_modules
 from src.python.fetcher.chain import _DEFAULT_CHAINS  # noqa: E402
 from _doc_drift._shared import (
     _RELIABILITY_MD,
+    _doc_section,
+    _split_table_row,
     _HOW_TO_CONFIG_MD,
     _LLM_TECHNICAL_MD,
     _REPORTS_MD,
@@ -77,6 +79,41 @@ def check_section_table(doc_text: str) -> list[str]:
                 f"{rel(_REPORTS_MD)}: 章节表第 {i + 1} 行 `{num}.{name}` 与注册表 "
                 f"`{exp['number']}.{exp['name']}` 不一致"
             )
+    return findings
+
+
+def check_visibility_type_rows(doc_text: str) -> list[str]:
+    """可见性规则总览表的 `type` 行 ↔ 章节注册表 `type` 集合（双向）。
+
+    该表只靠人工维护时极易失真：注册表把「财报摘要 / 财务指标」合为
+    `fundamental_snapshot` 一个 type、并含 `schedule_replay` 时，表里可能写着
+    两个并不存在的 type（`financial_report` / `financial_indicator`）且漏掉
+    `schedule_replay`——行数恰好相等，任何计数断言都不会露馅。故以注册表为准
+    逐集合对账。
+    """
+    findings: list[str] = []
+    section = _doc_section(doc_text, "### 可见性规则总览", "\n---")
+    if not section:
+        return [f"{rel(_REPORTS_MD)}: 未找到「可见性规则总览」章节"]
+    documented: list[str] = []
+    for line in section.splitlines():
+        cells = _split_table_row(line)
+        if not cells:
+            continue
+        m = re.fullmatch(r"`([a-z_]+)`", cells[0])
+        if m:
+            documented.append(m.group(1))
+    expected = list(dict.fromkeys(s["type"] for s in _REPORT_SECTION_DEFAULT))
+    if not documented:
+        return [f"{rel(_REPORTS_MD)}: 可见性规则总览表未解析出任何 type 行"]
+    for missing in expected:
+        if missing not in documented:
+            findings.append(f"{rel(_REPORTS_MD)}: 可见性规则总览表缺少 type `{missing}`（注册表有此分组）")
+    for extra in documented:
+        if extra not in expected:
+            findings.append(f"{rel(_REPORTS_MD)}: 可见性规则总览表出现注册表没有的 type `{extra}`")
+    if len(documented) != len(set(documented)):
+        findings.append(f"{rel(_REPORTS_MD)}: 可见性规则总览表 type 行有重复")
     return findings
 
 

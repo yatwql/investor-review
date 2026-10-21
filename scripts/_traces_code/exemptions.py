@@ -76,13 +76,24 @@ def _round_excludes() -> list[re.Pattern]:
 # 模块级缓存（模式列表固定，避免逐行重复构建）
 _COMPILED_CHAPTER_EXCLUDE: list[re.Pattern] = _chapter_excludes()
 _COMPILED_ROUND_EXCLUDE: list[re.Pattern] = _round_excludes()
+# 并集正则：任一豁免命中 ⇔ 并集命中，逐行只扫一遍而非 N 次（条款数随词表增长，
+# 逐条 any() 的固定开销是文档/注释扫描的主要耗时来源之一）。
+_CHAPTER_UNION = re.compile("|".join(f"(?:{p.pattern})" for p in _COMPILED_CHAPTER_EXCLUDE))
+_ROUND_UNION = re.compile("|".join(f"(?:{p.pattern})" for p in _COMPILED_ROUND_EXCLUDE))
 
 
 def _is_chapter_excluded(line: str) -> bool:
-    """检查该行是否命中章节计数/序数豁免（"N 章"为数量而非具体章节引用）。"""
-    return any(p.search(line) for p in _COMPILED_CHAPTER_EXCLUDE)
+    """检查该行是否命中章节计数/序数豁免（"N 章"为数量而非具体章节引用）。
+
+    先做字面量前置判定：全部豁免条款均含「章」，不含该字的行必然不命中，
+    可跳过整组正则（占比极高的普通行由此直通）。
+    """
+    return "章" in line and _CHAPTER_UNION.search(line) is not None
 
 
 def _is_round_excluded(line: str) -> bool:
-    """检查该行是否命中迭代轮次计数/运行时表述豁免（"N 轮"为数量而非迭代痕迹）。"""
-    return any(p.search(line) for p in _COMPILED_ROUND_EXCLUDE)
+    """检查该行是否命中迭代轮次计数/运行时表述豁免（"N 轮"为数量而非迭代痕迹）。
+
+    同 `_is_chapter_excluded`：全部条款均含「轮」，前置字面量判定即可直通。
+    """
+    return "轮" in line and _ROUND_UNION.search(line) is not None

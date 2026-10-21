@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.13.10
+> 文档版本：0.13.11
 
 ## 目录
 
@@ -406,7 +406,7 @@ TUI（Text User Interface）是系统**主要交互渠道**：桌面终端内的
 | `tui/tui_keys.py` | 键盘封装 | 跨平台（Windows msvcrt / Linux tty+termios+select），标准化键名 KEY_UP/DOWN/ENTER/CTRL_C |
 | `tui/handlers_report.py` | 报告生成外壳 | `_run_generate` 骨架、`_prompt_generate_confirm` 合并单屏一次确认（full：费用预估上屏 + 回车/`Y`/`N`/`q`/`h` 单问，默认侧 `Y`=用已有结果，`N`（同义 `f`）触发 `_select_force_modules` 模块多选，含日预算超限安全网）/`_prompt_history`（委托 resolve_fetch_history + 注入 y/N 询问，仅 both）、E/B/L 三命令 |
 | `tui/handlers_config.py` | 配置管理外壳 | 目录/文件名/输出目录/章节/指数池/匿名化/LLM 模块与功能开关/刷新等 8 项配置命令 |
-| `tui/handlers_cache.py` | 缓存管理外壳 | 更新基础/持仓缓存、清理过期、查看统计 4 项命令 |
+| `tui/handlers_cache.py` | 缓存管理外壳 | 更新基础/行情类缓存、清理过期、查看统计 4 项命令 |
 | `tui/handlers_whatif.py` | 调仓模拟外壳 | What-if 对话流程，委托 `report/whatif_operations.py`（§4.13） |
 | `tui/handlers_log.py` | 诊断外壳 | `[V]` 运行日志查看（按级别筛选）/ `[H]` 数据源健康历史 / `[T]` 系统自检（doctor，§4.17）三命令 |
 | `tui/handlers_qa.py` | 报告追问外壳 | `[Q]` 入口：输出目录报告选择 + 文本输入循环，委托 `qa/session.ask_report_qa`（§6.8）；`report_qa` 门控 |
@@ -693,7 +693,7 @@ Web 渠道是第三种交互入口：**浏览器内完成「上传持仓 Excel �
 配置编辑的职责边界：**「能改什么」由白名单唯一确定，「怎么改」由共享编辑层单源执行**——Web `POST /api/config/edit` 与 TUI 配置面板（`_apply_edit` 外壳）同走 `config/edit_ops.py::apply_config_edit`，两渠道同一函数、同一强度；不引入任何白名单之外的新配置项。核心实现 `config/edit_ops.py`（`web/config_edit.py` 仅保留 `get_config_edit_surface` 呈现面组装）：
 
 - **白名单 `config_edit_whitelist`**（定义于 `config/edit_ops.py`，小写模块级 dict，唯一事实来源）：点分键 → `{"kind", "target", "writer"}`。`kind` 取 `str`/`bool`/`enum`/`action`；`target` 取 `config`/`llm_settings`/`features`（落盘目标文件）；`writer` 取 `scalar`/`anonymization`/`llm`/`features`/`comparison_indices`（写入分派器）。全集 6 组 44 条键（前端把「功能开关」组按 surface 下发的 `groups` 渲染成四块，故界面共 9 块）：自由文本路径 3（holdings_dir / holdings_filename / output_dir）、报告章节开关 5、匿名化 1 键 4 档、对比指数池 1 键（增/删/重置默认）、LLM 分析章节开关 7（enabled_llm，键域=注册表 LLM 模块全集）、功能开关 27（features.json 全注册表：呈现与体验 1 + 分析增强 16 + 独立章节与回放 5 + 机制与诊断 5；分组、默认值与显示名同源，面板显示名与「影响报告」标记由 surface 下发，前端不写字典）。
-- **写入分派（共享层 `_dispatch_write` 单点，两渠道无各自实现）**：config.json 顶层标量 → `set_config`（`_PATH_CONFIG_KEYS` 路径键自动反绝对化）；嵌套 dict（comparison_indices）→ 读合并后 `set_config` 整块写；报告章节与增强开关（`GROUP_REPORT`）→ `save_feature_overrides`；`anonymization.mode` → `set_anonymization_mode`；`enabled_llm.*` → 共享 `write_llm_settings`（`config/_llm_settings.py` 公开原语，自 `tui/handlers_config.py` 抽取，TUI 改委托、行为零变化；保留注释 + mkstemp + `os.replace` 原子写 + `get_llm_config()` 缓存刷新）；功能开关（三组同一路径）→ `save_feature_overrides`（features.json）。
+- **写入分派（共享层 `_dispatch_write` 单点，两渠道无各自实现）**：config.json 顶层标量 → `set_config`（`_PATH_CONFIG_KEYS` 路径键自动反绝对化）；嵌套 dict（comparison_indices）→ 读合并后 `set_config` 整块写；报告章节与增强开关（`GROUP_ANALYSIS` / `GROUP_STANDALONE` 两组）→ `save_feature_overrides`；`anonymization.mode` → `set_anonymization_mode`；`enabled_llm.*` → 共享 `write_llm_settings`（`config/_llm_settings.py` 公开原语，自 `tui/handlers_config.py` 抽取，TUI 改委托、行为零变化；保留注释 + mkstemp + `os.replace` 原子写 + `get_llm_config()` 缓存刷新）；功能开关（三组同一路径）→ `save_feature_overrides`（features.json）。
 - **类型/枚举校验（共享层 `_apply_plain_value`/`_apply_comparison_action`，Web 400 / TUI 黄色提示行同一规则）**：`set_config` 不做值类型/模式验证，规则集中在共享编辑层——kind=str 须非空字符串（trim 后判空），`holdings_filename` 额外拒绝路径分隔符（防破坏文件定位）；kind=bool 仅接受 `True`/`False`（`1`/`"true"`/`0.0` 等一律拒绝）；kind=enum 严格匹配合法枚举值（大小写/空白/非字符串拒绝）；对比指数池 code 非空且长度 ≥3、拒绝路径分隔符（防 `../` 穿越）、拒绝重复入池，name 非空。校验失败 Web 统一 400 BAD_PARAM（服务端中文文案）。
 - **写前备份 `config_backup_file`**：写目标文件前单槽 `.bak` 备份（`core/atomic_write.copy_file_atomic` 原子复制），原文件不存在时返回 None（不备份）；单槽轮转——第二次写覆盖上一版 `.bak`，供手动还原（`.bak` 改回原名）。
 - **同源守卫**：`_handle_config_edit` POST 复用 `_is_same_origin()`（Sec-Fetch-Site + Origin 校验，同源或非浏览器放行）——Web 无内建认证/无 CSRF token，副作用写操作以此兜底跨站写请求，失败 403。
@@ -1458,7 +1458,7 @@ _write_atomic(fd, tmp_path, final_path)
 |:-----|:---------------------------|:-----|
 | `preload` | 股票价格、市场指数、LLM 全球政经局势、LLM 智囊团深度复盘、LLM 持仓体检报告、LLM 穿透深度分析、LLM 辩论三段（白脸 pro / 黑脸 con / 综合 synthesis） | 菜单 `[2]` |
 | `refresh` | 基金业绩排名、基金持仓、行业分类、市场情绪、财报索引、财报正文、财务指标、新闻聚合、LLM 新闻关联分析、机构盈利预测、行业资金流向、股票历史分红、基金业绩基准、基金经理、基金风格扩展数据、无风险利率 | 菜单 `[1]` |
-| 无分组 | 历史股票日线、历史基金净值、指数历史日线、集中度快照、风格快照、持仓跟踪、交易日历 | 不被菜单缓存命令误删（仅缓存管理子菜单 `[4]` → `3` 过期清理） |
+| 无分组 | 历史股票日线、历史基金净值、指数历史日线、集中度快照、风格快照、持仓跟踪、交易日历 | 不被菜单缓存命令误删（仅缓存管理子菜单 `[3]` → `3` 过期清理） |
 
 **缓存分组设计原则**：
 - **preload 组**：换持仓文件后应重取的基础行情和 LLM 分析
@@ -3716,7 +3716,7 @@ web/ (Web 服务层，薄入口)
 
 > **约束外参照（语义命名纪律）**：除上表 C1~C29 编号约束外，**语义命名纪律**以 [「功能语义命名表」](#67-功能语义命名表) 为唯一现状基准——代码/配置标识符（函数/变量/模块/config 键）必须与表中语义 slug 一致，禁止用任务代号（`plan-N`/`rf-N`/系列代号）命名；新增功能先定语义名再设计。该纪律属全局代码卫生，与编号约束并列遵守，由双脚本强制：`scripts/check-code-traces.py --ci`（负面禁止 IDENT/CODE）+ `scripts/check-semantic-index.py --ci`（正面双向校验本表与代码一致）。
 
-> **约束外参照（文档与实现一致性纪律）**：除上表 C1~C29 编号约束外，**文档中的事实断言**（章节表与数量、功能开关表与分组计数、默认值表、TUI 面板编号、目录树、项目统计表）必须与代码/配置文件/文件系统一致，由 `scripts/check-doc-drift.py --ci` 强制（十项逐条对账，`changelog.md`/`review-findings.md` 与版本快照类文档按设计豁免）；历史痕迹类约束另由 `scripts/check-doc-traces.py --ci` 强制。
+> **约束外参照（文档与实现一致性纪律）**：除上表 C1~C29 编号约束外，**文档中的事实断言**（章节表与数量、功能开关表与分组计数、默认值表、TUI 面板编号、目录树、项目统计表）必须与代码/配置文件/文件系统一致，由 `scripts/check-doc-drift.py --ci` 强制（逐项对账，`changelog.md`/`review-findings.md` 与版本快照类文档按设计豁免）；历史痕迹类约束另由 `scripts/check-doc-traces.py --ci` 强制。
 
 > **约束外参照（脚本 CLI 契约）**：`scripts/` 下的检查脚本统一 `-v/--verbose` + `--ci`（仅输出 `文件:描述`）与退出码语义（0=通过 / 2=发现 finding，`check-code-traces.py` 保留 HIGH=1、LOW=3 分级）；共享设施集中在 `scripts/_checklib.py`（CLI/输出/路径/文档区间解析）；历史痕迹检查内部实现拆在 `scripts/_traces_code/` 包内（共享排除模式在 `exemptions.py`，`_traces_common.py` 已并入其中删除）；检查脚本内部实现普遍拆 `前置横线包`pattern（`_doc_drift/` / `_traces_code/` / `_traces_doc/` / `_test_runner/` / `_halluc_sampler/`，入口仅留 CLI 与原面 re-export）；连通性探测统一入口 `scripts/probe.py`（target registry，实现在 `scripts/probes/`，新探针登记即用）；发布编排分步 CLI `scripts/release.py`（check/prepare/refresh/evolution/gate/publish/devbump，每步独立可审阅、失败即停，内部实现同为入口薄 CLI + 单模块）。
 
@@ -3766,7 +3766,7 @@ web/ (Web 服务层，薄入口)
 
 | # | 约束 | 设计目的 | 违反后果 | 适用范围 |
 |:---|:-----|:---------|:---------|:---------|
-| **C8** | **日志统一** — 所有模块必须使用 `logging.getLogger("invest")` 获取日志器，禁止直接使用 `print()` 输出运行时诊断信息 | 统一日志名称使日志过滤、级别控制、格式管理集中生效；`print()` 无法控制日志级别，污染 stdout | 日志碎片化、日志级别失控、`print()` 干扰输出流 | 全模块（交互式 print 如进度提示不受此限） |
+| **C8** | **日志统一** — 所有模块必须使用 `logging.getLogger("invest")` 获取日志器，禁止直接使用 `print()` 输出运行时诊断信息 | 统一日志名称使日志过滤、级别控制、格式管理集中生效；`print()` 无法控制日志级别，污染 stdout | 日志碎片化、日志级别失控、`print()` 干扰输出流 | 全模块（交互式 print 如进度提示不受此限）；机检：`check-code-traces.py` 日志统一支路（交互呈现层白名单） |
 | **C15** | **控制台日志着色** — WARNING 级别使用黄色输出、ERROR 级别使用红色输出；当 `NO_COLOR` 环境变量设置或输出非 TTY 时自动降级为无颜色 | 着色提升控制台日志的辨识度，便于快速定位告警和错误；降级保证日志导出、管道重定向时无转义字符污染输出 | 日志可读性降低、非 TTY 环境下转义字符污染 | `core/logger.py`（_ColoredFormatter） |
 | **C23** | **功能开关注册表唯一事实来源** — **全部**功能开关的枚举、显示名、说明、分组、默认值与产物影响必须来自 `config/features.py` 的 `feature_switch_registry`（`_FEATURE_FLAGS_DEFAULT` 是它的派生投影，非独立登记点）；TUI 功能开关面板、Web 配置面板、CLI `--experiment` / `--feature` 取值校验与提示文案、用户文档与管理文档的开关清单**一律由该注册表驱动**，禁止任何渠道层另写一份清单 | 渠道各写清单时，新增/改名/删除开关必漏改某渠道——用户在该渠道看不到、改不了，或文档与实际开关对不上；清单是静态字面量，编译期与运行期均无任何提示，只会在用户报障时暴露。**可见性若与「是否实验项」绑定**，则转正（默认值改 `true`）会连带摘掉面板入口，关闭途径只剩手改 `features.json`——可见性由**分组属性**表达，与默认值解耦 | 开关在部分渠道缺失或名称不一致；文档承诺的开关在界面中不存在（或反之）；新增开关的接入成本从「改一处」膨胀为「逐个渠道找清单」；转正即失去界面入口 | `config/features.py`（唯一注册点）、`tui/`（功能开关面板）、`web/`（配置面板）、`cli/`（`--experiment` / `--feature` 校验与报错提示）、`docs/manuals/` 与 `docs/managements/` 的开关清单 |
 | **C16** | **路径绝对化** — 配置层输出的路径型键（`holdings_dir`、`output_dir`、`llm_key_file`、`llm_providers_file`、`llm_settings_file`）必须为绝对路径，在 `get_config()` 返回前经 `_absolutize_paths()` 统一转换；下游消费者不得依赖 CWD | `tui/tui.py`/`cli/cli.py` 去掉了 `os.chdir`，相对路径无法被正确解析 | 路径查找失败、配置文件/持仓文件/报告输出找不到 | `config/_core.py`（转换点），所有消费路径型配置的模块 |

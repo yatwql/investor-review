@@ -2,7 +2,7 @@
 
 > **状态**：已实施（四迭代完成，先决门槛三段全过；判定与验收记录见 §14）。
 > **参照**：Vibe-Trading `agent/backtest/factor_costs.py`（成本因子）+ `benchmark.py`（基准对比面板）+ `constraints.py`；成本分层（Constant/Scaled/Aggregate）与 PnL 分解语义参照 gs-quant `backtests/backtest_objects.py`（`TransactionModel`/`PnlAttribute`，见 gs-quant 借鉴批研究文档）。
-> **研究背景**：见 `vibe-trading-borrow-candidates-research.md` §2.1。
+> **研究背景**：见 `../vibe-trading-borrow-research/vibe-trading-borrow-candidates-research.md` §2.1。
 
 ## 1. 动机与问题
 

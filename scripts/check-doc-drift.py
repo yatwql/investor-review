@@ -6,8 +6,9 @@
 逐条比对，使漂移在提交前暴露（与 check-doc-traces 的「历史痕迹」检查互补：
 那边管「不该写的内容」，这边管「写了但与实现不符的内容」）。
 
-十九项检查（权威源 → 受检文档）：
+二十一项检查（权威源 → 受检文档）：
   1.  报告章节表        core/report_section_registry.py `_REPORT_SECTION_DEFAULT` → manuals/reports-instruction.md
+      （含「可见性规则总览」表 `type` 行：文档 type 集合 ↔ 注册表 type 集合双向对账）
   2.  章节数量断言      同上（`页签编号 1~N` / `默认顺序（N 项` / `返回 result（N 项` / `N 个报告章节`）→ 全库文档
   3.  功能开关表        config/features.py `feature_switch_registry`    → manuals/how-to-config.md
   4.  开关分组计数断言  同上（四组连写链 `呈现与体验 A / 分析增强 B / 独立章节 C / 机制与诊断 D`、单组 `组名（N 项`（含加粗组名）、`共/提供 N 项开关`、`完整 N 项与分组清单`；另检旧三组名残留 `实验组/常规组/报告组/报告章节与增强组`，组名与残留名单以 `_GROUP_DOC_NAMES`/`_RETIRED_GROUP_NAMES` 注册表派生为真值）→ 全库文档
@@ -15,24 +16,27 @@
   6.  配置标量默认值表   config/_config_defaults.py `_DEFAULT_CONFIG`   → manuals/how-to-config.md
   7.  LLM 默认参数表     config/_llm_settings_defaults.py + 缓存 TTL 注册表 → managements/llm-technical.md
   8.  TUI 面板编号       `tui/handlers_config.py` 的派生规则（LLM 可见模块 + 作用域四组顺序连续编号）→ manuals/how-to-use-tui-menu.md
-  9.  目录树           文件系统实测（src/、scripts/、docs/{managements,manuals,plan}）→ managements/folders.md
+  9.  目录树           文件系统实测（src/、scripts/、docs/{managements,manuals,plan}）+ 版本目录块升序 → managements/folders.md
   10. 项目统计表        文件系统实测（文件数/行数）+ 可选 pytest 收集数 → managements/folders.md
   11. 测试覆盖计数表    `scripts/collect-test-coverage.py` 快照 → managements/test-coverage.md（仅 `--with-test-count`）
   12. 归档索引完整性    changelog / plan / review-findings 的「归档」索引 ↔ 归档目录 `archived_*` 文件（双向）
-  13. 管理文档分区纪律  未完成/已解决/已归档三分区互斥；现行 changelog 只允许一个 `-dev` 段头
+  13. 管理文档分区纪律  未完成/已解决/已归档三分区互斥 + 「开发期已修复」节须在已解决区（节归属）；现行 changelog 只允许一个 `-dev` 段头
   14. Extended Thinking 支持矩阵  手册对比表/「仅」式枚举/默认开思考提示 ↔ `llm/api_base` 前缀名单
   15. Provider Chain 降级表  `fetcher/chain.py` `_DEFAULT_CHAINS` → manuals/datasource-reliability.md（逐链双向）
   16. 守护清单同源        developer-guide P0/P2 门禁块 + ci.yml guards steps + CLAUDE.md/testplan.md 清单 + .githooks/pre-commit（五处）`check-*.py --ci` 引用集合两两一致
   17. 章节-区块矩阵      区块注册表三向对账（文档行 ↔ 注册表逐列 / 实现提取集合） → managements/technical.md §4.22
   18. 手册菜单块一致性  双手册主菜单 code block（键集合/标签头）→ tui/tui_menu.py MENU_ITEMS；
+      正文「菜单 `X`」引用须为主菜单键（`[D]` 二级选项 C/F/O/M 须写作「菜单 `D` → `C`」）；
       全文档「返回主菜单」行键=0 不变量（返回键全局统一，结构化行校验/prose 豁免）
   19. 需求菜单表        requirements.md §3.2 菜单表（键集合/分组标题/组内顺序）→ tui/tui_menu.py MENU_ITEMS + MENU_GROUPS（历史漂移：组重排未跟、M/Q 整行缺失、缓存编号错）
+  20. 迁档占位↔归档节    review-findings「已随 vX.Y.Z 发布迁入」占位 ↔ archived_review-findings.{X.Y}.x.md 含该版本二级标题归档节（防占位已写、归档正文缺失）
+  21. 树描述计数禁令    folders.md 目录树描述禁写「阿拉伯数字+量词」易漂移计数（docs/archive 记录域豁免；中文数词设计常量不入检）
 
 按设计豁免的历史记录文档：`changelog.md` / `review-findings.md`（会如实引用旧数字作为变更记录）
 与 `docs/archive/**`（版本快照）不参与第 2/4/5 项扫描。
 
 用法：
-  python scripts/check-doc-drift.py                  # 十九项全查
+  python scripts/check-doc-drift.py                  # 二十一项全查
   python scripts/check-doc-drift.py -v               # 详细输出（打印解析明细）
   python scripts/check-doc-drift.py --ci             # CI 模式：仅输出 文件:描述，退出码 2；
                                                       结论缓存：全集输入与逻辑指纹未变时逐字回放
@@ -105,6 +109,7 @@ from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc
     _SECTION_COUNT_PATTERNS,
     parse_section_rows,
     check_section_table,
+    check_visibility_type_rows,
     check_section_counts,
     _SWITCH_TABLE_START,
     _SWITCH_ROW,
@@ -142,6 +147,8 @@ from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc
     parse_tree_paths,
     _actual_files,
     check_dir_tree,
+    check_tree_desc_counts,
+    check_tree_version_order,
     _STATS_ROW,
     _stats_actual,
     check_project_stats,
@@ -157,6 +164,7 @@ from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc
     _PLAN_DONE_HEADING_ID,
     _ARCHIVE_INDEX_PAIRS,
     check_archive_index,
+    check_migration_placeholders,
     audit_management_partitions,
     check_management_partitions,
     _THINKING_MANUAL,
@@ -168,6 +176,7 @@ from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc
     check_guard_parity,
     guard_parity_sources,
     check_menu_blocks,
+    check_menu_key_references,
     check_return_key_invariant,
     check_requirements_menu_table,
     parse_menu_block_lines,
@@ -186,6 +195,7 @@ def run_checks(with_test_count: bool = False, docs: dict | None = None) -> list[
     snapshot = _collect_test_snapshot(full_buckets=True) if with_test_count else {}
     findings: list[str] = []
     findings += check_section_table(docs[_REPORTS_MD])
+    findings += check_visibility_type_rows(docs[_REPORTS_MD])
     findings += check_section_counts(docs)
     findings += check_switch_table(docs[_HOW_TO_CONFIG_MD])
     findings += check_switch_counts(docs)
@@ -194,11 +204,15 @@ def run_checks(with_test_count: bool = False, docs: dict | None = None) -> list[
     findings += check_llm_defaults(docs[_LLM_TECHNICAL_MD])
     findings += check_panel_numbering(docs[_TUI_MENU_MD])
     findings += check_menu_blocks({_HOW_TO_START_MD: docs[_HOW_TO_START_MD], _TUI_MENU_MD: docs[_TUI_MENU_MD]})
+    findings += check_menu_key_references(docs)
     findings += check_return_key_invariant(docs)
     findings += check_requirements_menu_table(docs[_REQUIREMENTS_MD])
     findings += check_dir_tree(docs[_FOLDERS_MD])
+    findings += check_tree_version_order(docs[_FOLDERS_MD])
+    findings += check_tree_desc_counts(docs[_FOLDERS_MD])
     findings += check_chain_table(docs[_RELIABILITY_MD])
     findings += check_archive_index()
+    findings += check_migration_placeholders()
     findings += check_management_partitions()
     findings += check_thinking_support_matrix(docs.get(_THINKING_MANUAL))
     findings += check_guard_parity()
@@ -257,7 +271,7 @@ def _run_checks_phase(args: argparse.Namespace) -> int:
 
     return report(
         findings,
-        "[OK] 文档与实现一致性校验通过（章节/开关/默认值/面板编号/目录树/统计表/归档索引/分区纪律/Thinking 支持矩阵/章节-区块矩阵/手册菜单块均与代码一致）",
+        "[OK] 文档与实现一致性校验通过（章节/开关/默认值/面板编号/目录树/统计表/归档索引/分区纪律/占位归档节/树描述计数/Thinking 支持矩阵/章节-区块矩阵/手册菜单块均与代码一致）",
         ci=args.ci,
         fail_message="[!] 发现 {n} 处文档与实现不一致，须修正后提交",
     )
@@ -265,7 +279,7 @@ def _run_checks_phase(args: argparse.Namespace) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="校验文档中的章节/开关/默认值/目录树/统计断言/归档索引/分区纪律/Thinking 支持矩阵/章节-区块矩阵/手册菜单块与代码、配置文件、文件系统的一致性",
+        description="校验文档中的章节/开关/默认值/目录树/统计断言/归档索引/分区纪律/占位归档节/树描述计数/Thinking 支持矩阵/章节-区块矩阵/手册菜单块与代码、配置文件、文件系统的一致性",
     )
     add_common_args(parser)
     parser.add_argument(

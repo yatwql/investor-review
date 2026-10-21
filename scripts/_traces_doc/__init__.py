@@ -15,6 +15,7 @@ from _traces_doc.dedup import (
     _SEPARATOR_LINE_RE,
     _in_dup_strict_scope,
     _is_codeish_sample,
+    _normalize,
     _window_is_structural,
     scan_structural_duplicates,
 )
@@ -30,6 +31,7 @@ __all__ = [
     "_SEPARATOR_LINE_RE",
     "_in_dup_strict_scope",
     "_is_codeish_sample",
+    "_normalize",
     "_window_is_structural",
     "scan_structural_duplicates",
 ]

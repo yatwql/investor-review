@@ -28,6 +28,20 @@ _CHANGELOG_HEADER = re.compile(r"^## \[([^\]]+)\]", re.M)
 _RF_ROW_ID = re.compile(r"^\|\s*\*\*(rf-\d+)\*\*", re.M)
 
 
+_MIGRATION_PLACEHOLDER = re.compile(r"已随\s*v(\d+\.\d+\.\d+)\s*发布迁入")
+
+
+#: review-findings 三级标题与「已修复节」标记（节归属纪律 D：已修复节只允许出现在已解决区）
+_H3_HEADING = re.compile(r"(?m)^###\s+(.+)$")
+
+
+_FIXED_SECTION_MARK = "开发期已修复"
+
+
+#: 未完成档标题（P1/P2/P3…）——出现在已解决区即属节归属错置
+_PENDING_HEADING = re.compile(r"^P\d+\s|^P\d+\s*—")
+
+
 _PLAN_HEADING_ID = re.compile(r"^\s*#{2,4}\s*(?:🔲|✅)\s*`?(plan-\d+)", re.M)
 
 
@@ -82,11 +96,25 @@ def audit_management_partitions(
          未完成/已归档条目均只认**条目标题**，正文提及不算。
       C. changelog：现行文件只允许一个版本段头且必须为开发段
          （正式版本段落须归档至 `archived_changelog.*.md`）。
+      D. review-findings 节归属：**「开发期已修复」节必须位于已解决区**、P 档标题必须位于待处理区——
+         两区标题混放会把已修复项读成未完成（三条已修复节夹在 P2 与 P3 之间、归档占位落到索引
+         之后即此型失误）；A 条按「rf 标识」比对，标题错位时完全静默，故单独成条。
     """
     findings: list[str] = []
 
     pending = _doc_section(review_findings, "## 当前待处理问题", "## 已解决问题")
     resolved = _doc_section(review_findings, "## 已解决问题", "### 归档档案")
+    for heading in _H3_HEADING.findall(pending):
+        if _FIXED_SECTION_MARK in heading:
+            findings.append(
+                f"{rel(_REVIEW_FINDINGS_MD)}: 待处理区出现「{heading.strip()}」"
+                "——已修复节须置于「## 已解决问题」区（节归属错置）"
+            )
+    for heading in _H3_HEADING.findall(resolved):
+        if _PENDING_HEADING.match(heading.strip()):
+            findings.append(
+                f"{rel(_REVIEW_FINDINGS_MD)}: 已解决区出现「{heading.strip()}」——未完成档位于已解决区（节归属错置）"
+            )
     pending_ids = set(_RF_ROW_ID.findall(pending))
     resolved_ids = set(_RF_ROW_ID.findall(resolved))
     for rid in sorted(pending_ids & resolved_ids):
@@ -241,5 +269,36 @@ def check_thinking_support_matrix(doc_text: str | None = None) -> list[str]:
             findings.append(
                 f"{rel(_THINKING_MANUAL)}: 默认开思考族 `{family}` 缺少「默认开思考」提示"
                 "（该族未传思考参数会自动思考，须告知用户）"
+            )
+    return findings
+
+
+def check_migration_placeholders(review_findings: str | None = None, archive_root: Path | None = None) -> list[str]:
+    """迁档占位↔归档节断言：台账每个「已随 vX.Y.Z 发布迁入」占位，对应归档文件须含该版本二级标题（``## `` 开头）归档节。
+
+    防「占位已写、归档正文缺失」类脱钩——占位声明与归档正文两动作无一致性校验时，
+    只删不写会静默通过（占位照写、归档头部照声明覆盖）。``review_findings`` /
+    ``archive_root`` 供用例直测；None 时读真实台账与归档目录。
+    """
+    text = review_findings if review_findings is not None else _REVIEW_FINDINGS_MD.read_text(encoding="utf-8")
+    root = archive_root if archive_root is not None else REPO_ROOT / "docs" / "archive"
+    findings: list[str] = []
+    for version in sorted(set(_MIGRATION_PLACEHOLDER.findall(text))):
+        major_minor = ".".join(version.split(".")[:2])
+        archive = root / f"v{major_minor}.x" / f"archived_review-findings.{major_minor}.x.md"
+        if not archive.exists():
+            findings.append(
+                f"{rel(_REVIEW_FINDINGS_MD)}: 占位「已随 v{version} 发布迁入」的归档文件 {rel(archive)} 不存在"
+            )
+            continue
+        headings = [
+            line
+            for line in archive.read_text(encoding="utf-8").splitlines()
+            if line.startswith("## ") and version in line
+        ]
+        if not headings:
+            findings.append(
+                f"{rel(_REVIEW_FINDINGS_MD)}: 占位「已随 v{version} 发布迁入」在 {rel(archive)}"
+                " 无对应版本归档节——占位已写、归档正文缺失（发布归档迁移须同步写入归档节）"
             )
     return findings

@@ -406,6 +406,31 @@ class TestConfigDirInfoSubmenu:
         mock_filename.assert_called_once_with()
         mock_out.assert_called_once_with()
 
+    def test_registry_is_single_source_for_panel_and_guard(self):
+        """[D] 子项登记表与机检键集同源：面板增删子项无需第二处登记。"""
+        from src.python.tui.handlers_config import CONFIG_DIR_INFO_KEYS, DIR_INFO_ITEMS
+
+        from src.python.tui.handlers_config import _dir_info_items
+
+        assert CONFIG_DIR_INFO_KEYS == tuple(DIR_INFO_ITEMS)
+        assert set(CONFIG_DIR_INFO_KEYS) == {"C", "F", "O", "M"}
+        resolved = {key: (label, fn) for key, label, fn in _dir_info_items()}
+        assert set(resolved) == set(DIR_INFO_ITEMS)
+        for key, (label, fn) in resolved.items():
+            assert label and callable(fn), f"子项 {key} 登记不完整"
+
+    @patch("builtins.input")
+    @patch("src.python.tui.handlers_config._render_config_entry_map")
+    def test_entry_map_sub_option_dispatches(self, mock_map, mock_input):
+        """`M` 二级选项路由到配置入口地图（只读索引），改完返回主菜单。"""
+        mock_input.side_effect = ["M", "0"]
+
+        from src.python.tui.handlers_config import _cmd_config_dir_info
+
+        _cmd_config_dir_info()
+
+        mock_map.assert_called_once_with()
+
     @patch("builtins.input")
     @patch("src.python.tui.handlers_config._cmd_config_dir")
     def test_lowercase_choice_accepted(self, mock_dir, mock_input):

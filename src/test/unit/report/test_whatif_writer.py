@@ -285,6 +285,55 @@ class TestWriteWhatifHtml:
         mock_cleanup.assert_called_once_with(output_dir)
 
 
+class TestWriteWhatifHtmlAtomicity:
+    """HTML 双产物原子落盘：复用主报告原子写入原语，中断不留半写截断件。"""
+
+    def test_both_writes_go_through_atomic_primitive(self, tmp_path) -> None:
+        """最新版与归档版均经 _write_html_atomic（不再直写 open）。"""
+        from src.python.report.whatif_writer import write_whatif_html
+
+        with (
+            patch(
+                "src.python.report.whatif_writer.render_whatif_html",
+                return_value="<html>atomic</html>",
+            ),
+            patch("src.python.report.whatif_writer._copy_js_assets"),
+            patch("src.python.report.whatif_writer._inline_js_assets", side_effect=lambda html: html),
+            patch("src.python.report.whatif_writer._cleanup_old_archives"),
+            patch("src.python.report.whatif_writer._write_html_atomic") as mock_atomic,
+        ):
+            write_whatif_html(_sample_data(), str(tmp_path))
+
+        assert mock_atomic.call_count == 2, "最新版 + 归档版各一次原子写"
+        written_targets = [call.args[1] for call in mock_atomic.call_args_list]
+        assert written_targets[0] == os.path.join(str(tmp_path), "调仓模拟.html")
+        assert written_targets[1].endswith(".html")
+        assert mock_atomic.call_args_list[0].args[0] == "<html>atomic</html>"
+
+    def test_interruption_leaves_no_truncated_target(self, tmp_path) -> None:
+        """落盘中断时目标文件不出现（只可能残留 .tmp），既有完整内容不被截断。"""
+        from src.python.report.whatif_writer import write_whatif_html
+
+        latest = tmp_path / "调仓模拟.html"
+        latest.write_text("<html>上一版完整内容</html>", encoding="utf-8")
+
+        with (
+            patch(
+                "src.python.report.whatif_writer.render_whatif_html",
+                return_value="<html>新一代内容</html>",
+            ),
+            patch("src.python.report.whatif_writer._copy_js_assets"),
+            patch("src.python.report.whatif_writer._inline_js_assets", side_effect=lambda html: html),
+            patch("src.python.report.whatif_writer._cleanup_old_archives"),
+            patch("src.python.report.html_save.os.replace", side_effect=KeyboardInterrupt),
+            pytest.raises(KeyboardInterrupt),
+        ):
+            write_whatif_html(_sample_data(), str(tmp_path))
+
+        assert latest.read_text(encoding="utf-8") == "<html>上一版完整内容</html>", "中断不得截断既有最新版"
+        assert list(tmp_path.glob("*.tmp")), "中断应只留临时文件（由中断收口清扫）"
+
+
 def _rich_data(with_cost: bool = False) -> dict:
     """可渲染 whatif_data（区段齐全），可选挂载 cost 面板。"""
     data = {

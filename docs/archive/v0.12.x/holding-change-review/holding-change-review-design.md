@@ -3,7 +3,7 @@
 > **状态**：**已实施**（四迭代完成；先决门槛 ①②③ 全部通过，实施与验收记录见 §15）。
 > **路线**：原「手工交易日志」路线经可行性评估改为**快照事件级**——持仓快照历史与差异引擎已内建，零手工；代价是结构级精度（不承诺逐笔胜率与精确持有期）。
 > **参照**：Vibe-Trading `agent/src/skills/trade-journal`（journal schema 与归因分析）+ `agent/src/shadow_account`（extract→render 闭环形态）。
-> **研究背景**：见 `vibe-trading-borrow-candidates-research.md` §2.1。
+> **研究背景**：见 `../vibe-trading-borrow-research/vibe-trading-borrow-candidates-research.md` §2.1。
 
 ## 1. 动机与价值
 

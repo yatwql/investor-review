@@ -2,7 +2,7 @@
 
 > **状态**：设计 + 待评测（先决门槛未过不实施）。
 > **参照**：gs-quant `timeseries/event_study.py`（`frame_timeseries_around_events` 事件×序列对齐切窗、`event_impact_analysis` 窗口影响度量的纯函数拆分）。
-> **研究背景**：见 `gs-quant-borrow-candidates-research.md` §2.1。
+> **研究背景**：见 `../gs-quant-borrow-research/gs-quant-borrow-candidates-research.md` §2.1。
 
 ## 1. 动机与价值
 

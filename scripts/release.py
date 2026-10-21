@@ -8,8 +8,9 @@
                发布段迁入归档、指针与归档索引改写（changelog 段由本步自动完成）；
                rf 已解决条目 / plan 已完成任务 / docs/plan 已完成任务设计文件三项归档迁移为
                人工强制项（未完成不得继续 gate/publish）
-    refresh    数据刷新：bench --update-docs + collect-test-coverage + doc-drift --sync
-               （自上一 release tag 起仅文档变更时跳过 bench 与 collect，
+    refresh    数据刷新：bench --update-docs（默认只测发布子集四档 unit / dev-verify /
+               regression / integration，`--full-bench` 跑全量模式）+ collect-test-coverage
+               + doc-drift --sync（自上一 release tag 起仅文档变更时跳过 bench 与 collect，
                  --force-refresh 强制刷新；同步恒跑）
     evolution  版本演进对照快照：git 清单 + 逐文件行数口径；默认只滚「当前开发版」列，
                `--release` 时发布列与增长比一并写入（发布期在 prepare 之后执行）
@@ -28,6 +29,11 @@
     .venv/bin/python scripts/release.py devbump
 
 退出码：0 = 通过；2 = 预检/门禁发现（与守护脚本 CLI 契约一致）；1 = 执行失败。
+
+耗时埋点：每命令的总墙钟与分步耗时（gate 的回归/十守护/护栏、refresh 的
+bench/collect/sync、publish 的 P1 verify）追加写入 `logs/release.jsonl`（git 忽略域，
+不入目录树、无门禁依赖），终端尾行同步打印摘要——跨版本对拍直接
+`tail -n 20 logs/release.jsonl`，无需现场重测。
 """
 
 from __future__ import annotations
@@ -37,6 +43,7 @@ import datetime as _dt
 import os
 import re
 import sys
+import time
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -63,7 +70,19 @@ GUARD_SCRIPTS = [
     "scripts/check-file-length.py",
 ]
 
+#: refresh 的 bench 模式子集——只测**门禁口径**关心的四档：P0 `dev-verify`、
+#: P1 `verify` 的 unit 总量面、P2 `regression`、CI 恒跑的 `integration`。全量 14 档
+#: 串行约 5.5 min（2 路采集 3.2 min），占单次发布机器时间约 75%，而其余模式与这四档
+#: 高度重叠（standard / scenario / edge / data / smoke / report / all_no_unit /
+#: scenario_extreme / all）；未实测模式的耗时与计数按 `--update-docs` 既有口径
+#: 「保留上次实测值」，不会写脏。需要全量复测时用 `--full-bench`。
+RELEASE_BENCH_MODES: tuple[str, ...] = ("unit", "dev-verify", "regression", "integration")
+
+#: 发布耗时台账（`logs/` 属 git 忽略域：不入目录树、不进门禁）
+RELEASE_LOG_FILE = REPO_ROOT / "logs" / "release.jsonl"
+
 # ── 内部实现拆分（_release/ 包）：入口保留 CLI 面与路径常量，测试引用的符号原名 re-export ──
+sys.path.insert(0, str(REPO_ROOT))  # 仓库根：耗时台账复用 core 层 JSONL 原子追加原语
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享设施（_release 包）
 from _release._changelog_archive import (  # noqa: E402, F401 — _SECTION_NOTE 供测试经入口模块引用
     SECTION_NOTE as _SECTION_NOTE,
@@ -72,8 +91,11 @@ from _release._changelog_archive import (  # noqa: E402, F401 — _SECTION_NOTE 
     write_archive_release,
 )
 from _release._common import ReleaseError, exec_command as _exec  # noqa: E402
+from _release._timing import StepTimer as _StepTimer, append_record as _append_record  # noqa: E402
+from _release._timing import build_record as _build_record  # noqa: E402
 from _release._evolution import (  # noqa: E402, F401 — _line_count 供测试经入口模块引用
     build_evolution_stats,
+    check_evolution_freshness,
     fmt_pair as _fmt_pair,
     line_count as _line_count,
     update_case_note,
@@ -90,6 +112,46 @@ from _release._versioning import (  # noqa: E402
     render_app_version,
     render_readme_version,
 )
+
+
+# ─────────────────────────── 耗时埋点 ───────────────────────────
+
+#: 当前命令的分步计时器（`main` 每命令重建；直接调 handler 的测试惰性创建）
+_TIMER: _StepTimer | None = None
+
+
+def _timer() -> _StepTimer:
+    """取当前命令的计时器（未初始化时新建，保证 handler 可独立调用）。"""
+    global _TIMER
+    if _TIMER is None:
+        _TIMER = _StepTimer()
+    return _TIMER
+
+
+def _reset_timer() -> _StepTimer:
+    """为下一条命令重置计时器（`main` 入口调用，避免进程内多次调用串味）。"""
+    global _TIMER
+    _TIMER = _StepTimer()
+    return _TIMER
+
+
+def _finish_timing(command: str, rc: int) -> None:
+    """尾行打印耗时摘要并追加 `logs/release.jsonl`——埋点是观测面，写失败只提示。"""
+    timer = _timer()
+    summary = timer.summary()
+    print(f"[..] {command} 耗时 {timer.total:.1f}s" + (f"（{summary}）" if summary else ""))
+    try:
+        version = read_app_version(CONSTANTS_FILE.read_text(encoding="utf-8"))
+    except (OSError, ReleaseError):
+        version = ""
+    record = _build_record(command=command, elapsed_s=timer.total, ok=(rc == 0), steps=timer.steps, version=version)
+    try:
+        path = _append_record(RELEASE_LOG_FILE, record)
+    except (OSError, ReleaseError, ValueError) as exc:
+        print(f"[!] 耗时记录未写入（{exc}）——不影响本次结果")
+        return
+    shown = path.relative_to(REPO_ROOT) if path.is_relative_to(REPO_ROOT) else path
+    print(f"[..] 耗时已记录到 {shown}")
 
 
 def archive_paths_for(release_version: str) -> tuple[Path, str]:
@@ -268,11 +330,15 @@ def _docs_only_changes_since(tag: str, runner=None) -> tuple[bool, list[str]]:
 
 def cmd_refresh(args: argparse.Namespace, runner=None) -> int:
     force = bool(getattr(args, "force_refresh", False))
+    full_bench = bool(getattr(args, "full_bench", False))
+    bench_scope = "bench" if full_bench else ",".join(RELEASE_BENCH_MODES)
+    bench_label = (
+        "测试量与耗时快照回填（全量模式）"
+        if full_bench
+        else f"测试量与耗时快照回填（发布子集 {len(RELEASE_BENCH_MODES)} 档，未测模式沿用上次实测）"
+    )
     snapshot_steps: list[tuple[str, list[str]]] = [
-        (
-            "测试量与耗时快照回填",
-            [sys.executable, "scripts/test-runner.py", "--mode", "bench", "--update-docs"],
-        ),
+        (bench_label, [sys.executable, "scripts/test-runner.py", "--mode", bench_scope, "--update-docs"]),
         ("测试收集计数回填", [sys.executable, "scripts/collect-test-coverage.py"]),
     ]
     if force:
@@ -294,9 +360,14 @@ def cmd_refresh(args: argparse.Namespace, runner=None) -> int:
             steps = list(snapshot_steps)
     steps.append(("文档统计快照回写", [sys.executable, "scripts/check-doc-drift.py", "--sync"]))
     for label, cmd in steps:
-        rc = _run_step(label, cmd, REPO_ROOT, runner)
+        with _timer().step(label):
+            rc = _run_step(label, cmd, REPO_ROOT, runner)
         if rc != 0:
             return rc
+    if not full_bench and any("scripts/test-runner.py" in " ".join(cmd) for _, cmd in steps):
+        print(
+            f"[..] bench 只测发布子集 {', '.join(RELEASE_BENCH_MODES)}（其余模式耗时沿用上次实测；--full-bench 全量复测）"
+        )
     print("[OK] refresh 完成")
     return 0
 
@@ -320,7 +391,9 @@ def _run_step(label: str, cmd: list[str], root: Path, runner=None) -> int:
 
 def cmd_evolution(args: argparse.Namespace, runner=None) -> int:
     print("[..] 版本演进快照（git 清单 + 逐文件行数）")
+    started = time.perf_counter()
     stats = build_evolution_stats(REPO_ROOT, runner)
+    _timer().mark_elapsed("演进快照统计", started)
     if stats["missing"]:
         print(f"[!] {stats['missing']} 个跟踪文件在工作区缺失（已跳过计数）")
     text = FOLDERS_FILE.read_text(encoding="utf-8")
@@ -336,7 +409,9 @@ def cmd_evolution(args: argparse.Namespace, runner=None) -> int:
 
     # evolution 改写了 folders.md（演进表/比率/注释），会改变其统计表所依据的行数 → 立即
     # 同步，否则后续 publish 的 verify（含 doc-drift crosscheck 单测）会因统计过期而红
+    started = time.perf_counter()
     rc, out, err = _exec([sys.executable, "scripts/check-doc-drift.py", "--sync"], REPO_ROOT, runner)
+    _timer().mark_elapsed("文档统计同步", started)
     print((out or err).rstrip())
     if rc != 0:
         print("[ERR] 文档统计快照同步失败，按上方输出处理后重跑本子命令")
@@ -369,8 +444,19 @@ def _gate_workers() -> int:
 
 
 def cmd_gate(args: argparse.Namespace, runner=None) -> int:
+    print("[..] P2 门禁：演进对照新鲜度（当前开发版列头须今日刷新）")
+    findings = check_evolution_freshness(FOLDERS_FILE.read_text(encoding="utf-8"), _dt.date.today().isoformat())
+    if findings:
+        for item in findings:
+            print(f"[ERR] {item}")
+        print("[ERR] 演进对照过期，先执行 scripts/release.py evolution 刷新后重跑 gate")
+        return 2
+    print("[OK] 演进对照新鲜度通过\n")
+
     print("[..] P2 门禁：场景回归")
+    started = time.perf_counter()
     rc, out, err = _exec([sys.executable, "scripts/test-runner.py", "--mode", "regression"], REPO_ROOT, runner)
+    _timer().mark_elapsed("P2 场景回归", started)
     if out.strip():
         print(out.rstrip())
     if rc != 0:
@@ -384,6 +470,7 @@ def cmd_gate(args: argparse.Namespace, runner=None) -> int:
     print(f"[..] P2 门禁：十守护 --ci（{workers} 路并行）")
     from concurrent.futures import ThreadPoolExecutor
 
+    started = time.perf_counter()
     worst = 0
     with ThreadPoolExecutor(max_workers=workers) as pool:
         # 全部守护为 --ci 只读子进程（不写业务文件；结论缓存为每 namespace 独立
@@ -404,6 +491,7 @@ def cmd_gate(args: argparse.Namespace, runner=None) -> int:
                 if err.strip():
                     print("    " + err.strip().replace("\n", "\n    "))
                 worst = max(worst, rc) if rc in (1, 2, 3) else 1
+    _timer().mark_elapsed("P2 十守护", started, workers=workers)
     if worst:
         print("[ERR] P2 守护存在 finding，先修复再发布")
         return worst
@@ -411,7 +499,9 @@ def cmd_gate(args: argparse.Namespace, runner=None) -> int:
     # 设计护栏（不入十守护清单——清单为 pre-commit/CI guards 五处同源硬约定；
     # 发布门禁域单独纳入：E 级拦 / W 级观察统计，开发期快反馈由 unit 测试承担）
     print("[..] P2 门禁：设计护栏（check-style-guardrails，E 级拦 / W 级观察统计）")
+    started = time.perf_counter()
     rc, out, err = _exec([sys.executable, "scripts/check-style-guardrails.py", "--ci"], REPO_ROOT, runner)
+    _timer().mark_elapsed("P2 设计护栏", started)
     if out.strip():
         print("  " + out.strip().replace("\n", "\n  "))
     if rc != 0:
@@ -421,7 +511,7 @@ def cmd_gate(args: argparse.Namespace, runner=None) -> int:
         return rc if rc in (1, 2, 3) else 1
     print("[OK] 设计护栏通过\n")
 
-    print("[OK] P2 门禁全绿（regression + 十守护 + 设计护栏）")
+    print("[OK] P2 门禁全绿（演进新鲜度 + regression + 十守护 + 设计护栏）")
     return 0
 
 
@@ -457,7 +547,9 @@ def cmd_publish(args: argparse.Namespace, runner=None) -> int:
         print("[OK] release 提交已存在，跳过")
 
     print("[..] P1 合入门禁：--mode verify")
+    started = time.perf_counter()
     rc, out, err = _exec([sys.executable, "scripts/test-runner.py", "--mode", "verify"], REPO_ROOT, runner)
+    _timer().mark_elapsed("P1 verify", started)
     if out.strip():
         print(out.rstrip())
     if rc != 0:
@@ -568,14 +660,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_prepare.add_argument("--date", help="发布日期 YYYY-MM-DD（默认今天）")
 
     p_refresh = sub.add_parser(
-        "refresh", help="数据刷新：bench --update-docs + collect + doc-drift --sync（纯文档变更自动跳过前两者）"
+        "refresh",
+        help="数据刷新：bench（发布子集）--update-docs + collect + doc-drift --sync（纯文档变更自动跳过前两者）",
     )
     p_refresh.add_argument("--force-refresh", action="store_true", help="忽略纯文档变更判定，强制刷新 bench 与 collect")
+    p_refresh.add_argument(
+        "--full-bench",
+        action="store_true",
+        help=f"bench 跑全量模式（默认只测发布子集 {', '.join(RELEASE_BENCH_MODES)}，未测模式耗时沿用上次实测）",
+    )
 
     p_evolution = sub.add_parser("evolution", help="版本演进对照快照（默认只滚当前开发版列）")
     p_evolution.add_argument("--release", action="store_true", help="发布期使用：发布列与增长比一并写入")
 
-    sub.add_parser("gate", help="P2 门禁：regression + 十守护 --ci + 设计护栏")
+    sub.add_parser("gate", help="P2 门禁：演进新鲜度 + regression + 十守护 --ci + 设计护栏")
 
     p_publish = sub.add_parser("publish", help="release 提交 + P1 verify + --no-ff 合并 + tag")
     p_publish.add_argument("--title", required=True, help="release 提交主题（changelog 摘要式短描述）")
@@ -597,11 +695,14 @@ def main(argv: list[str] | None = None) -> int:
         "publish": cmd_publish,
         "devbump": cmd_devbump,
     }
+    _reset_timer()
     try:
-        return handlers[args.command](args)
+        rc = handlers[args.command](args)
     except ReleaseError as exc:
         print(f"[ERR] {exc}")
-        return 2
+        rc = 2
+    _finish_timing(args.command, rc)
+    return rc
 
 
 if __name__ == "__main__":

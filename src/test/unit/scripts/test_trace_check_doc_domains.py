@@ -98,6 +98,57 @@ class TestDocTreeLineNarrowing:
         assert _doc_hit(doc_traces, "页面完成态按钮复位") is None
 
 
+class TestFencedTreeLineScan:
+    """围栏内目录树行照检（回归：目录树整块在围栏内，仅跳过围栏会使树行
+    检查整体失效）：folders.md 围栏内树行照检、非 folders.md 围栏内容维持
+    跳过、树行按路径分域（archive 子树=归档记录域/plan 子树=任务记录域）、
+    树行专属无后缀来源叙述补强。"""
+
+    @staticmethod
+    def _write_tree(tmp_path, body: str, name: str = "folders.md"):
+        fpath = tmp_path / name
+        fpath.write_text("# 目录\n```text\n" + body + "\n```\n", encoding="utf-8")
+        return fpath
+
+    def test_cipher_in_fenced_tree_line_flagged(self, doc_traces, tmp_path):
+        """folders.md 围栏内树行的约束代号照检（回归：围栏跳过会吞掉整棵目录树的检查）。"""
+        fpath = self._write_tree(tmp_path, "├── foo.py    # 数据装配（C19 契约）")
+        hits = doc_traces.scan_file(fpath, verbose=False)
+        assert any(h[1] == "CIPHER" and "foo.py" in h[3] for h in hits), hits
+
+    def test_origin_in_fenced_tree_line_flagged(self, doc_traces, tmp_path):
+        """树行专属补强：无后缀模块名的拆出叙述（带后缀模式覆盖不到）。"""
+        fpath = self._write_tree(tmp_path, "├── bar.py    # 评分内核（从 framework 拆出）")
+        hits = doc_traces.scan_file(fpath, verbose=False)
+        assert any(h[1] == "HIGH" and "拆出" in h[3] for h in hits), hits
+
+    def test_non_folders_fenced_tree_still_skipped(self, doc_traces, tmp_path):
+        """其他文档围栏内的树形内容（章节大纲图示）维持围栏跳过不检。"""
+        fpath = self._write_tree(tmp_path, "├── §1 系统概述", name="notes.md")
+        assert doc_traces.scan_file(fpath, verbose=False) == []
+
+    def test_archive_subtree_tree_line_is_record_domain(self, doc_traces, tmp_path):
+        """docs/archive/ 子树行按归档记录域：版本号/迭代轮次是归档文件的
+        当时记录，不检（仅复盘叙事检出）。"""
+        fpath = self._write_tree(
+            tmp_path,
+            "├── docs/\n"
+            "│   └── archive/\n"
+            "│       └── v9.9.x/\n"
+            "│           └── old-design.md # 设计文档 v9.9.0（迭代计划，21 轮）",
+        )
+        assert doc_traces.scan_file(fpath, verbose=False) == []
+
+    def test_plan_subtree_tree_line_checks_cipher(self, doc_traces, tmp_path):
+        """docs/plan/ 子树行按任务记录域：约束代号照检。"""
+        fpath = self._write_tree(
+            tmp_path,
+            "├── docs/\n│   └── plan/\n│       └── my-plan.md # 方案设计（引用 C10）",
+        )
+        hits = doc_traces.scan_file(fpath, verbose=False)
+        assert any(h[1] == "CIPHER" for h in hits), hits
+
+
 class TestDocFileNameTaskId:
     """文件名任务编号：受检域 .md 文件名含 rf-N/plan-N 或系列代号（系列
     字母加序号、task 加序号形态）即检出（语义命名补位——目录树比对只管
@@ -350,3 +401,76 @@ class TestDocArchiveDomain:
         assert self._scan(doc_traces, tmp_path, "词表条目 `不再` 属技术令牌。\n") == []
         hits = self._scan(doc_traces, tmp_path, "词表含不再条目。\n")
         assert any(h[1] == "NARRATIVE" for h in hits), hits
+
+
+class TestHistoryVocabularyCoverage:
+    """历史痕迹词表补强：重命名/迁移/旧结构/历史状态变体必须检出（漏检即回退）。"""
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            "该模块更名为 analysis_metrics.py。",
+            "组件改称「数据契约」面。",
+            "字段曾用名 symbol_code。",
+            "旧称 holdings_cache。",
+            "旧接口保留一个版本。",
+            "旧字段残留检测。",
+            "旧约定沿用。",
+            "旧架构与新架构并存。",
+            "原版本约定已失效。",
+            "历史上曾用 `_cache_read` 读取。",
+            "代码迁移到新包 core_utils。",
+            "该函数已废弃于 v0.9。",
+        ],
+    )
+    def test_extended_history_terms_flagged(self, doc_traces, line):
+        assert _doc_hit(doc_traces, line) is not None, line
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            "旧格式缓存数据按当前口径透明读取。",  # 当前兼容语义，不得误伤
+            "保留历史代码有效集，按语义命名登记。",  # 测试名语义，非历史叙述
+            "历史上未去重的重复行需体积治理。",  # 无状态动词，非历史叙述
+            "迁移到新版本后重跑一致性检查。",  # 新版本非“新位置”，不得误伤
+        ],
+    )
+    def test_current_semantics_not_flagged(self, doc_traces, line):
+        assert _doc_hit(doc_traces, line) is None, line
+
+    def test_english_deprecation_marker_is_low(self, doc_traces, tmp_path):
+        """英文废弃标记（deprecated）归 LOW：需人工判断，不作 HIGH 拦截。"""
+        doc = tmp_path / "doc.md"
+        doc.write_text("该配置项 deprecated 字段已收敛。\n", encoding="utf-8")
+        hits = doc_traces.scan_file(doc, False)
+        assert [h[1] for h in hits] == ["LOW"], hits
+
+
+class TestStructuralDuplicateComparison:
+    """重复比对算法：空白归一、同块只报一次、顶格命令样本豁免。"""
+
+    def _write(self, tmp_path: Path, content: str, name: str = "plan.md") -> Path:
+        p = tmp_path / name
+        p.write_text(content, encoding="utf-8")
+        return p
+
+    def test_whitespace_only_difference_is_duplicate(self, doc_traces, tmp_path):
+        """仅空白/对齐差异的同内容长行属同一粘贴残留（归一后比对）。"""
+        row = "| **rf-3** | " + "内容" * 30 + " |"
+        variant = row.replace(" | ", "    |   ")
+        doc = self._write(tmp_path, f"### 节\n\n{row}\n{variant}\n")
+        hits = doc_traces.scan_structural_duplicates(doc)
+        assert any("重复内容行" in h[2] for h in hits), hits
+
+    def test_repeated_block_reported_once(self, doc_traces, tmp_path):
+        """整块重复只报首个窗口，不再按滑窗数重复计数（同一残留一条 finding）。"""
+        block = "\n".join(f"| **rf-{i}** | " + "内容" * 30 + " |" for i in range(2, 7))
+        doc = self._write(tmp_path, f"### 节\n\n{block}\n\n{block}\n")
+        hits = [h for h in doc_traces.scan_structural_duplicates(doc) if "重复区块" in h[2]]
+        assert len(hits) == 1, hits
+
+    def test_top_level_command_sample_alignment_not_duplicate(self, doc_traces, tmp_path):
+        """顶格命令样本（含对齐空白差异）属命令而非叙述，长行判重豁免。"""
+        cmd = "python scripts/test_runner.py --mode regression"
+        doc = self._write(tmp_path, f"### 节\n\n{cmd}            # P0 门禁\n{cmd}  # P0 门禁\n")
+        assert doc_traces.scan_structural_duplicates(doc) == []

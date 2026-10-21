@@ -1,7 +1,7 @@
 """缓存操作共享层 — TUI 和 CLI 共用。
 
 公共缓存函数（盈利预测/行业资金流向/行业/分红）+ print→reporter 替换
-持仓缓存（价格+指数）+ 清理 + 统计
+行情类缓存（价格+指数）+ 清理 + 统计
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ class CacheUpdateResult:
 
 @dataclass
 class PositionCacheResult:
-    """持仓缓存更新结果。"""
+    """行情类缓存（价格+指数）更新结果。"""
 
     total: int = 0
     price_ok: int = 0
@@ -483,7 +483,7 @@ def update_basic_cache(holdings: list, reporter) -> CacheUpdateResult:
 
 
 # ═══════════════════════════════════════════════════════════════
-# 持仓缓存（价格+指数）
+# 行情类缓存（价格+指数）
 # ═══════════════════════════════════════════════════════════════
 
 
@@ -541,7 +541,7 @@ def _fetch_prices_and_indices(holdings: list, reporter) -> PositionCacheResult:
 
 
 def update_position_cache(holdings: list, reporter) -> PositionCacheResult:
-    """更新持仓类缓存（价格+指数）。
+    """更新行情类缓存（价格+指数）。
 
     内部管理线程池，使用 reporter.* 输出进度。
     """

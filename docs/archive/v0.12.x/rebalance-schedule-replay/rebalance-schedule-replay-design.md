@@ -1,8 +1,8 @@
 # 调仓纪律回放（schedule_replay）设计 —— plan-80
 
 > **状态**：设计 + 已实施（plan-80 四迭代落地，先决门槛三段全过；实施与门槛判定见 §14）。
-> **参照**：gs-quant `backtests/`（`RebalanceAction` 规则触发、`TransactionModel` 三件套成本分层、`PnlAttribute` 分期分解——只借语义不搬引擎，见 `gs-quant-borrow-candidates-research.md` §2.3）。
-> **研究背景**：见 `gs-quant-borrow-candidates-research.md` §2.1。
+> **参照**：gs-quant `backtests/`（`RebalanceAction` 规则触发、`TransactionModel` 三件套成本分层、`PnlAttribute` 分期分解——只借语义不搬引擎，见 `../gs-quant-borrow-research/gs-quant-borrow-candidates-research.md` §2.3）。
+> **研究背景**：见 `../gs-quant-borrow-research/gs-quant-borrow-candidates-research.md` §2.1。
 
 ## 1. 动机与缺口
 

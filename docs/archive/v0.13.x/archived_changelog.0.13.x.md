@@ -1,8 +1,8 @@
 # 变更日志归档 — v0.13.x
 
-> 归档时间：2026-10-20（v0.13.10 发布并入；已并入 11 段：v0.13.0（10-13）、v0.13.1（10-14）、v0.13.2（10-15）、v0.13.3（10-15）、v0.13.4（10-16）、v0.13.5（10-17）、v0.13.6（10-18）、v0.13.7（10-19）、v0.13.8（10-20）、v0.13.9（10-20）、v0.13.10（10-20））
+> 归档时间：2026-10-21（v0.13.11 发布并入；已并入 12 段：v0.13.0（10-13）、v0.13.1（10-14）、v0.13.2（10-15）、v0.13.3（10-15）、v0.13.4（10-16）、v0.13.5（10-17）、v0.13.6（10-18）、v0.13.7（10-19）、v0.13.8（10-20）、v0.13.9（10-20）、v0.13.10（10-20）、v0.13.11（10-21））
 > 原始文件：`docs/managements/changelog.md`
-> 涵盖版本：v0.13.0 ~ v0.13.10（2026-10-13 ~ 2026-10-20）
+> 涵盖版本：v0.13.0 ~ v0.13.11（2026-10-13 ~ 2026-10-21）
 > 归档内容：由 `release.py prepare` 自动迁入各发布段
 
 ---
@@ -41,7 +41,7 @@
 
 ### Added
 
-- **持仓成本区间位置列（plan-90）**：「持仓明细与分类」页签市值明细与分类汇总两区块末列追加「成本区间位置」两列（近 20 / 260 交易日价格区间百分位，≈1 追涨嫌疑、≈0 低位布局），填补只维护持仓、无流水时「买入时机相对历史区间」的量化空白。纯计算 `analysis/cost_position.py`（clamp/中性值/窗口切片）+ 编排 `report/cost_position.py`（复用既有行情历史链，不新增数据源；长窗口一次取数、短窗口同源切片）；功能开关 `cost_position`（默认开，`GROUP_ANALYSIS`），行情缺失静默隐列不阻断报告；口径脚注随呈现（成本均价近似买入价 + 窗口参数 + 公式）。新增 44 例（纯计算/契约/渲染 + 边缘退化序列/非有限值）。落地设计 `docs/archive/v0.13.x/holding-cost-position-design.md`（随本次发布归档迁入）。
+- **持仓成本区间位置列（plan-90）**：「持仓明细与分类」页签市值明细与分类汇总两区块末列追加「成本区间位置」两列（近 20 / 260 交易日价格区间百分位，≈1 追涨嫌疑、≈0 低位布局），填补只维护持仓、无流水时「买入时机相对历史区间」的量化空白。纯计算 `analysis/cost_position.py`（clamp/中性值/窗口切片）+ 编排 `report/cost_position.py`（复用既有行情历史链，不新增数据源；长窗口一次取数、短窗口同源切片）；功能开关 `cost_position`（默认开，`GROUP_ANALYSIS`），行情缺失静默隐列不阻断报告；口径脚注随呈现（成本均价近似买入价 + 窗口参数 + 公式）。新增 44 例（纯计算/契约/渲染 + 边缘退化序列/非有限值）。落地设计 `docs/archive/v0.13.x/holding-cost-position/holding-cost-position-design.md`（随本次发布归档迁入）。
 
 ### Fixed
 
@@ -73,7 +73,7 @@
 ### Changed
 
 - **perf-view 读数体验升级（--version / 阶段降序与占比 / 数据新鲜度 / 缺数据提示）**：① 新增 `--version` 前缀过滤（`0.13.4` 命中 `0.13.4-dev`，头部明示「版本筛选」行，可与 `--report-type`/`--last` 组合，`_filter_records`/`_group_records`/机读输出同口径）；② 组详情**阶段表按中位降序**（最慢阶段在前，同分按名保持可 diff）并新增**占比**列（阶段均值 ÷ 组平均总耗时，附并行可超 100% 说明），阶段细分子项同改平均耗时降序；③ 头部新增**数据新鲜度**行（最新记录时间戳 + 距今时长，解析失败降级显示原值）——先判断数据是否新鲜再读数；④ **缺数据明示**：完整报告范围无 `breakdown` 时显示「暂无阶段细分」提示行（不再静默省表），无 `llm` 字段时显示「暂无 LLM 上下文」提示段（basic/both 范围不渲染），区分「无数据」与「不适用」。测试 +6（版本过滤/新鲜度/降序语义/占比/双提示正反向）。
-- **perf-view 拆分子包与管理文档最新状态同步**：① `perf-view.py` 拆出 `scripts/_perf_view/`（`stats.py` 承载分位/离群/稳健统计与记录过滤分组纯函数，主入口 re-export 保 `load_script` 直调测试可达）——主文件回落 1000 行红线内，`check-file-length` 的 `EXEMPTIONS` 豁免与 review-findings rf-688 挂账同步移除；② **管理文档对齐最新状态**：plan.md 移除已完成的 plan-123~126 四个待办块与概述计数（11→7 项），四项完成摘要迁入 `archived_plan.0.13.x.md`；review-findings P3 文件过长登记表按 `check-file-length -v` 真值刷新 6 处行数（html_writer/code_utils/features/excel_generator/operations 等）；`perf-observability-design.md` 头部与 §7 标注四步已实施（保留为现行口径参考）。
+- **perf-view 拆分子包与管理文档最新状态同步**：① `perf-view.py` 拆出 `scripts/_perf_view/`（`stats.py` 承载分位/离群/稳健统计与记录过滤分组纯函数，主入口 re-export 保 `load_script` 直调测试可达）——主文件回落 1000 行红线内，`check-file-length` 的 `EXEMPTIONS` 豁免与 review-findings rf-688 挂账同步移除；② **管理文档对齐最新状态**：plan.md 移除已完成的 plan-123~126 四个待办块与概述计数（11→7 项），四项完成摘要迁入 `archived_plan.0.13.x.md`；review-findings P3 文件过长登记表按 `check-file-length -v` 真值刷新 6 处行数（html_writer/code_utils/features/excel_generator/operations 等）；`perf-observability/perf-observability-design.md` 头部与 §7 标注四步已实施（保留为现行口径参考）。
 - **perf-view 分组节排序改为真实时间序**：逐版本分组详情（`## 版本 / 类型` 各节）原按版本号**字符串字典序**——`0.9.9` 会排在 `0.13.4` 之后、最新开发版卡在中间，与真实先后不符；改为按各组**首次运行时间**升序（与版本演进总表同口径），最新版本组在最末；组内明细行仍按时间戳升序，同时首次运行时间相同时按组键稳定排序（可复现）。
 - **perf-view 视图输出增强（版本演进 / 漂移检测 / 归一化 / 机读信封）**：① **版本演进总表**——每个（版本, 报告类型）一行（同类型按该版本首现时间排序）：样本数 / 中位 / P95 / **中位秒每品种**（总耗时 ÷ 持仓数，跨持仓规模可比）/ 较上一版中位 delta（|变化| ≥10% 标注 ⚠变慢/变快），一眼看出哪个版本开始变慢；② **机读输出升级**——`--json` 改为信封 `{record_count, records, summary}`（summary 与 Markdown 段同源：分位/按类型/离群/异常/演进/漂移；原为裸记录数组，仓库内无程序化消费方，语义变更安全），`--csv` 增 `per_holding_seconds`/`outlier`/`slowest_phase`/`interrupted_stage`/`errors_count` 列；③ **归一化与小样本提示**——总体分位概览增「中位秒/品种」列，n<20 的口径/分组附「最近秩分位趋近最大值，参考性有限」提示（不改分位算法，保历史可比）；④ **异常运行专区**——中断（`interrupted_stage`）/非完成状态/带错误的运行单独成表（状态/中断阶段/错误数/首条摘要；当前历史无此类记录时整段省略），离群表同增错误数列；⑤ **同版本漂移检测**——同（版本, 类型）按时间对半比较前后半中位（样本 ≥6 参与），显著性与版本对比同噪声带口径（两半变异系数之和 × 较大中位），检出同版本内渐进劣化且不受换版混杂，与演进总表（看换版跳变）互补。
 - **性能门禁可靠性：压测脚本网络无关性与状态隔离**：`perf-test-report.py` 两层离线——① 传输层 `_install_offline_network()`：socket 出口瞬时抛 `OSError`（各抓取器按常规失败类型走既有降级，不崩溃）+ `time.sleep` 置零（同源重试/退避不再真等；全仓无 `from time import sleep`，一处补丁全覆盖），对一切外部抓取（穿透/基金经理/分红/情绪/财报/新闻等，随配置开关增减）兜底；② 咽喉桩保留热点路径真实计算：行情（`fetch_market_data` 两处绑定）、K 线历史链（`chain`/`chain_incremental.fetch_with_incremental_fallback`，流动性/风格因子/事件面板逐仓拉历史都经它）、交易日历（`trading_calendar._get_trading_calendar`，模块唯一网络出口）。使基准与「网络状况/冷热缓存/配置开关组合」无关——冷缓存断网下全流程 58s→2.8s（此前 CI 门禁红正是因为冷缓存下重试退避拖过 60s 阈值，测成了网络状况而非代码性能）。同时 `_isolate_state_writes()` 把 perf 历史/数据源健康快照/熔断状态一并重定向到临时目录，不再污染 `perf-view` 的统计样本与真实运行的供应商熔断状态。
@@ -86,7 +86,7 @@
 
 - **性能视图稳健统计与归因（plan-124）**：`perf-view.py` 新增离群运行段（总耗时 > 中位 + 3.5 × 1.4826 × MAD 判离群，MAD 为 0 时不判；显式列出而非静默剔除）、稳健均值（剔除离群后均值，与普通均值并列）、阶段级分位（阶段表增中位与 P95）、尾部归因（最慢一次运行逐阶段 z 分数与相对历史中位倍数，直给哪一步超常）、时段聚合（`--by day|week|hour`）；新增 `--exclude-outlier` 按稳健口径剔除离群后重算全部统计。实测：126 条历史中自动标出 6636s 那条服务端超时运行，尾部归因定位到 `LLM+新闻` 22.37× / z=+6.14，剔除后均值由 519.7s 降至 362.9s。
 
-- **运行观测面扩充（plan-123）：LLM 模块级细分 + full 埋点补回 + 诊断落盘**：`perf_history.jsonl` 记录新增 `breakdown`（父阶段下的子项自身耗时）与 `counters`（运行期诊断计数）两个旁路观测面，**不参与 `total_seconds`**（保历史可比与 ETA 口径稳定）。`core/perf.py` 新增线程安全 `PhaseBreakdownRecorder`（`PerfCollector.recorder(父阶段)` 取用，四模块在线程池并发写不丢计数）；`LLM+新闻` 阶段细分到四个 LLM 模块与新闻获取（`_llm_dispatch` 逐模块计时、`_llm_news` 新闻获取计时，`span_recorder` 为可选参数，None 时行为零变化）；full 路径 `_report_output.py` 两个 helper 经 `run_integrity.current_perf()` 补回 `HTML 生成`/`Excel 生成` 阶段计时（此前 full 运行丢失这两个阶段，实测 126 条历史中二者各仅 6 条且均早期版本）；`errors`/`warnings_count` 由「恒空」改为自动采集——首个阶段计时时挂只计数日志 handler、`save()` 摘除，WARNING/ERROR 自动入 `counters`（错误消息封顶保留，计数照常累加）。`perf-view.py` 分组段新增「阶段细分」表（旧记录无 `breakdown` 时不渲染空表）。方案与口径见 [`perf-observability-design.md`](perf-observability-design.md)。
+- **运行观测面扩充（plan-123）：LLM 模块级细分 + full 埋点补回 + 诊断落盘**：`perf_history.jsonl` 记录新增 `breakdown`（父阶段下的子项自身耗时）与 `counters`（运行期诊断计数）两个旁路观测面，**不参与 `total_seconds`**（保历史可比与 ETA 口径稳定）。`core/perf.py` 新增线程安全 `PhaseBreakdownRecorder`（`PerfCollector.recorder(父阶段)` 取用，四模块在线程池并发写不丢计数）；`LLM+新闻` 阶段细分到四个 LLM 模块与新闻获取（`_llm_dispatch` 逐模块计时、`_llm_news` 新闻获取计时，`span_recorder` 为可选参数，None 时行为零变化）；full 路径 `_report_output.py` 两个 helper 经 `run_integrity.current_perf()` 补回 `HTML 生成`/`Excel 生成` 阶段计时（此前 full 运行丢失这两个阶段，实测 126 条历史中二者各仅 6 条且均早期版本）；`errors`/`warnings_count` 由「恒空」改为自动采集——首个阶段计时时挂只计数日志 handler、`save()` 摘除，WARNING/ERROR 自动入 `counters`（错误消息封顶保留，计数照常累加）。`perf-view.py` 分组段新增「阶段细分」表（旧记录无 `breakdown` 时不渲染空表）。方案与口径见 [`perf-observability/perf-observability-design.md`](perf-observability/perf-observability-design.md)。
 
 - **perf-view 新增 P95/P99 分位概览**：`scripts/perf-view.py` 输出新增「总体分位概览（跨版本）」表（口径 / 样本数 / 平均 / 中位 / **P95** / **P99** / 最长），并在每个版本分组段直给「95% 的报告在 Xs 内完成，99% 的报告在 Ys 内完成」。分位采**最近秩**（`ceil(pct% × n)` 位样本值）口径，含义即 95% 的报告在该耗时内完成，99% 的报告在该耗时内完成。新增 `_percentile()` / `_total_summary()` / `_overview_lines()`，过滤逻辑抽为 `_filter_records()` 与分组共用（`--report-type` / `--last` 对概览同步生效）；单一报告类型时只渲染合计行，不重复出类型行。同步文档：developer-guide「perf-view」段（分位口径说明 + 脚本清单）与 how-to-use-cli-mode 性能历史小节。回归 = `test_perf_view.py` 新增分位口径 / 汇总字段 / 概览表结构 / 分组完成时间四组用例。
 
@@ -117,7 +117,7 @@
 
 - **环比 QDII 口径可见（R-OUT-15 增强）**：QDII 官方净值滞后一个交易日，其市值差实际是上一交易日的净值变动，与当日 A 股涨跌混在同一个「总市值环比」里易被误读（用户实测：本日盈亏 −808.44 与环比 −530.73 差额中 +557.29 来自 QDII 口径差）。摘要区「本期要点」总市值环比行下新增 QDII 口径注：显示环比含有的 QDII 官方净值变动金额，滞后一日时标注「T-1 口径，滞后一个交易日」；无 QDII 或变动为 0 时省略。`_snapshot.capture_snapshot` 经 `_classify_qdii_value_diff` 注入 `qdii_value_diff`/`qdii_lagged`，`summary_highlights` 透传，`summary_section.html` 渲染；新增 `test_summary_highlights.py` 6 个回归用例。
 - **发布流程分层纪律补充（rf-689）**：developer-guide 发布流程段增加「归档迁移/管理文档改动后、进 `gate` 前必跑便宜守护（`check-doc-traces` 等）」——守护发现前置，防止 P2 门禁因文档级 finding 双跑全量 regression（v0.13.4 发布时实际发生一次：管理文档引用归档路径触发 ARCHIVE 痕迹拦截，gate 第二轮才过）。
-- **报告浏览器验证六项收口（rf-113）**：Iter 7 全链路浏览器人工验证全部完成并移入已解决——自动化回归（headless Chrome 148 一键复跑 `node docs/tmp/rf113/run-rf113.mjs`：① 6 图 badge、② afterprint 快照恢复、③ 断网渲染、⑤ 375px 报告+调试页、⑥ 禁 Canvas 兜底，5 PASS + ⑥ 已知表现记录口径）+ 人工抽验（真实 `Ctrl+P` 打印预览 2x/浅色/不跨页、微信 X5 file:// 表格兜底 + 横竖屏、iPad Safari 90+ 抽验、Windows Chrome/Firefox）；附带发现两处已由 rf-645 修复并复跑确认（⑤-testchart 转 PASS）。方法与结论见 `docs/plan/report-browser-verification.md`，勾选清单归档 `docs/archive/v0.9.x/chartjs-upgrade/iter7-verification-checklist.md`；rf-114 前置解锁
+- **报告浏览器验证六项收口（rf-113）**：Iter 7 全链路浏览器人工验证全部完成并移入已解决——自动化回归（headless Chrome 148 一键复跑 `node docs/tmp/rf113/run-rf113.mjs`：① 6 图 badge、② afterprint 快照恢复、③ 断网渲染、⑤ 375px 报告+调试页、⑥ 禁 Canvas 兜底，5 PASS + ⑥ 已知表现记录口径）+ 人工抽验（真实 `Ctrl+P` 打印预览 2x/浅色/不跨页、微信 X5 file:// 表格兜底 + 横竖屏、iPad Safari 90+ 抽验、Windows Chrome/Firefox）；附带发现两处已由 rf-645 修复并复跑确认（⑤-testchart 转 PASS）。方法与结论见 `docs/archive/v0.13.x/report-browser-verification/report-browser-verification.md`，勾选清单归档 `docs/archive/v0.9.x/chartjs-upgrade/iter7-verification-checklist.md`；rf-114 前置解锁
 
 ## [0.13.6] - 2026-10-18
 
@@ -276,3 +276,57 @@
 ### Fixed
 
 - 发布归档迁移补录：v0.13.9 批 rf-740~751 十一条此前仅从台账删除、摘要未落归档（自审 rf-755），已从迁移提交父本恢复补录；防复发的占位↔归档节机检已登记（rf-756，随下一工作批实施）
+
+## [0.13.11] - 2026-10-21
+
+### Added
+
+- `developer-guide.md` 新增「文档核对方法」段：核查按机械层/结构层/断言层/散文层四层分工，给出未绑定断言的抽取对码写法、散文层「反引号标识符 ↔ 代码符号索引」与豁免域、以及「同类漂移出现第二次即落成 `check-doc-drift` 子分支（挂现有编号不加项数）」与「台账唯一、`docs/tmp/` 底稿闭环即删」两条输出纪律（自审 rf-786）
+- `check-doc-drift` 第 1 项扩「可见性规则总览表 `type` 行 ↔ 注册表 `type` 集合」双向对账（缺行 / 多行 / 重复三型）：该表此前仅人工维护，注册表把财报两章合为 `fundamental_snapshot` 并新增 `schedule_replay` 后，表里仍写两个不存在的 type 且漏一行——行数恰好相等，任何计数断言都不露馅（自审 rf-777）
+
+- 发布链耗时埋点：新增 `scripts/_release/_timing.py`（分步计时 + JSON 记录），`release.py` 每命令尾行打印耗时摘要并追加 `logs/release.jsonl`（`command` / `ok` / `elapsed_s` / `version` / `steps[]`）——gate 的回归/十守护/设计护栏、refresh 的 bench/collect/sync、publish 的 P1 verify、evolution 的快照与统计同步均记为分步；`logs/` 为 git 忽略域，写入失败只打 `[!]` 且不改退出码（自审 rf-771）
+- `release.py refresh` 新增 `--full-bench`：bench 默认只测发布口径四档 `unit` / `dev-verify` / `regression` / `integration`（未测模式按 `--update-docs` 既有口径保留上次实测，不写脏），全量十四档降为显式入口（自审 rf-772）
+
+- `check-doc-drift` 新增第二十项检查「迁档占位↔归档节」：review-findings 每个「已随 vX.Y.Z 发布迁入」占位，对应 `archived_review-findings.{X.Y}.x.md` 必须存在含该版本号的二级标题归档节——占位已写、归档正文缺失（发布归档迁移只删不写）即当场报出；doc-drift 项目清单五处文档同步（自审 rf-756）
+- `check-doc-drift` 新增第二十一项「树描述计数禁令」：folders.md 目录树描述禁写「阿拉伯数字+量词」的易漂移计数（开关项数/菜单项数/文件数类，与「测试真值单一来源」同源纪律）；docs/archive 记录域豁免、中文数词设计常量不入检；现存 6 处 src 域违规改定性措辞（自审 rf-757）
+- `check-code-traces` 新增「日志统一」AST 级守卫（`_traces_code/logging_discipline.py`）：生产层 `print()` 白名单制——豁免域为 `tui/`、`cli/` 整目录（终端交互即其输出本体）与进度反馈 / 一次性终端检查报告 / 首启向导六个模块，白名单外调用即报 LOG 并返回退出码 2；developer-guide 退出码表与三家 AST 守卫说明同步，technical.md 日志统一约束登记机检载体；用例覆盖检出（函数体内嵌套/多行/报告层）、豁免（目录/文件）、不误伤（`sys.stdout.write`/`obj.print()`/字符串字面量/测试层/非 py）、语法错误容错与白名单完整性（条目存在 + 现存 print 全部落在豁免域）
+
+### Changed
+
+- developer-guide「辅助脚本速查」重组为**按用途分类**（测试类 / 文档类 / 代码与文件质量类 / 发布类 / 诊断类 / 启动类），并统一每条检查脚本的写法：**设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）+ **使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）；把原先散落在条目之间的共享契约、跨脚本差异、通用设计逻辑与通用使用逻辑收进「检查脚本的公共部分」集中一处；补齐此前只在一览表出现的 `check-file-length` / `check-style-guardrails` / `check-script-contract` 三条详情（含阈值口径、E/W 分级与观察期定档、四条契约规则）
+- 检查脚本词表收敛为单一来源：31 条逐字节相同的「历史变更叙述」正则从两脚本模式表抽入 `scripts/_traces_common.py`（只登记字面量，分类/描述仍按域定义，`_multi_domain()` 支持同正则多域登记）；文档域模式表整体迁入 `_traces_doc/patterns.py`（`check-doc-traces.py` 981→708 行，保留原面 re-export 故调用方零改动）；`RULE_CARRIER_DIRS` 扩至 `_traces_doc` + 新增 `RULE_CARRIER_FILES`（词表/模式表属尺子本身，不被 code-traces 自查误报），结论缓存 `_LOGIC_FILES` 纳入两新文件防止判定面搬家后缓存假绿；新增 `test_trace_shared_vocabulary` 锁「两表交集==共享词表 / 两侧都引用每一条 / 源码内无写死字面量」，设计说明见 `docs/archive/v0.13.x/trace-vocabulary-single-source/trace-vocabulary-single-source.md`（自审 rf-791）
+
+- `logs/release.jsonl` 耗时台账改走 `core/jsonl_store` 原子追加原语并加保留上限（原为直接 append 写且无界增长；一次发布约 7 条，上限 500 条覆盖数十次发布）（自审 rf-788）
+- `check-doc-drift` 第 18 项扩「正文菜单键引用」分支：正文「菜单 `X`」须为主菜单键（`MENU_ITEMS` ∪ 返回键 `0`），`[D]` 二级选项（C/F/O/M）改由 `tui/handlers_config.py::CONFIG_DIR_INFO_KEYS` 单一登记、正文须写作「菜单 `D` → `C`」；裸键形态要求后接空白/标点，避免「主菜单 code block」里的英文词首字母误报（历史漂移：code block 校验护不住正文，`[4]`→`[3]` 与 `[D]` 二级化后十余处正文失效）（自审 rf-776）
+- 缓存分组术语统一为「行情类缓存」：TUI 上屏词与 `handlers_cache`/`cache/operations` docstring 对齐菜单标签，手册与需求菜单表同步（`--update position` 选项名作为历史命名在图注说明）（自审 rf-780）
+- `check-doc-drift` 分区纪律检查新增第 D 条「节归属」：「开发期已修复」节只允许出现在已解决区、P 档标题只允许出现在待处理区——原第 A 条按 rf 标识比对，标题（节）错位时完全静默（rf-765 即由此产生）（自审 rf-765）
+
+- `release.py gate` 新增演进对照新鲜度断言（P2 前置）：「当前开发版」列头「本次重跑时的工作区」日期须为当日——evolution 为发布链人工步骤，跳过即以过期快照发布的缺口由此闭合（表头与数据行同命令原子刷新，日期一致即数据行同步）；发布编排描述三处文档同步（自审 rf-758）
+- `check-doc-traces` 围栏内 folders.md 目录树行照检（围栏代码块跳过仅针对非树行内容——目录树整块位于围栏内，原跳过逻辑使「树行照检」规则从未生效）；树行按路径分域（docs/archive/ 子树=归档记录域仅复盘叙事检出、docs/plan/ 子树=任务记录域照检章节+约束代号）；树行专属无后缀来源叙述补强（「从 framework 拆出」类带后缀模式覆盖不到）；folders.md 现存 14 处违规描述改语义化；developer-guide 树行纪律描述同步（自审 rf-760）
+- 交易所代码前缀改为 `code_utils` 单点定义：新增 `EXCHANGE_PREFIXES` 常量与公开 `strip_exchange_prefix()`（只剥前缀、不校验码位，供 5/6 位形态自判等场景复用），`_strip_prefix` / `to_fmp_symbol` / `holding_status.classify_code_format` 三处自建前缀表或元组字面量收编复用；`to_fmp_symbol` 带前缀输入的透传分支此前因大小写不匹配而不可达，随常量复用一并修正；反向机检由单测钉住「前缀元组唯一定义点」（自审 rf-763）
+- folders.md 归档子树版本目录块重排为版本升序（0.9.x 后原接 0.13→0.12→0.11→0.10 倒序——归档落盘三次均插入同一锚点且 `check_dir_tree` 仅集合双向比对、顺序零机检）；`check-doc-drift` 目录树检查新增「版本目录块升序」断言（自审 rf-761）
+- developer-guide「check-doc-drift」项清单补齐至 21 项（16 项陈旧：17~21 五项缺列）并改与脚本 docstring 同源措辞；technical.md 约束外参照句「十项逐条对账」改「逐项对账」（自审 rf-762）
+- 架构设计约束（代码类型判定/缓存/原子写入/HTTP 工厂/日志统一/开关注册表等全部编号约束）与设计契约（DESIGN.md / DESIGN-TUI.md）全量审计：机械扫描 + 逐约束对照适用范围裁决——无直连 `requests`（统一 httpx 工厂）、报告层无 `call_llm` 直调、开关单源派生、DESIGN.md 护栏 E 级通过且 W 基线（字号 8/间距 172/W1 白名单 15）与契约声明一致、DESIGN-TUI 无 hex 字面量与 GitHub 系色残留；登记 rf-763（holding_status 自建 sh/sz/bj 前缀元组，判定中心化约束违反）/ rf-764（whatif_writer HTML 直写未复用原子写原语）与日志统一约束无机检守护（该缺口已由同期新增的日志统一支路闭合）（自审 rf-763/rf-764）
+
+### Fixed
+
+- `test-coverage.md` 覆盖项数按收集快照回写（8 例差：dev-verify 7394→7402 / unit 10797→10805 / 总收集 11139→11147 / unit_scripts 1226→1234）；git pre-commit 在暂存含 `src/test/` 时对 `check-doc-drift` 追加 `--with-test-count`，测试变更未刷计数在提交期即拦（此前只由 CI master 档兜底）（自审 rf-787）
+- `[D]` 查看配置与目录信息 面板二级键收敛为单一登记表 `DIR_INFO_ITEMS`（键 → 显示名 + 处理器属性名）并派生 `CONFIG_DIR_INFO_KEYS`，消除面板与 doc-drift 校验的两处手工同步；处理器按名分发以保持模块属性打桩有效（自审 rf-789）
+- 文档点名的代码符号按现行实现订正：`technical.md` 的报告章节与增强开关分组由已下线的 `GROUP_REPORT` 改为 `GROUP_ANALYSIS` / `GROUP_STANDALONE`，`DESIGN.md` 的样式护栏白名单常量由 `_W1_EXEMPTIONS` 改为 `_RAW_COLOR_EXEMPTIONS`（条目数 15 不变）（自审 rf-785）
+- Web「配置编辑」面板分组表述统一为「10 组 = 7 个可编辑面 + 功能开关面作用域四组」，web 手册分组表补「LLM 多链线路 ↔ `[M]`」行（原 9 组漏该组、how-to-start 的 8 组仍按已不存在的「实验性功能/常规开关」二分、testplan 的 8 块同源）（自审 rf-783）
+- `requirements.md` 菜单表 P 行「报告章节与增强的 8 项开关」改为 21 项（分析增强 16 + 独立章节与回放 5），与 TUI 手册同口径（自审 rf-784）
+- 正文菜单键引用 16 处改正：`[4]`→`[3]`（faq 6 / how-to-config / cli / web-mode 2 / technical / testplan / requirements，区间写作 `[1]~[3]`）、持仓目录·文件名·输出目录三项改「菜单 `D` → `C`/`F`/`O`」、faq 机制与诊断块序号「第 37 项」→ 34（自审 rf-776）
+- 报告可见性规则总览表重写：`financial_report`/`financial_indicator` 两行并非 `type`，合并为 `fundamental_snapshot` 一行并补 `schedule_replay` 行（自审 rf-777）
+- `how-to-config.md` §O 缓存分组表按 `core/data_registry.py` 补齐：`preload` 组补「生成后自检」「持仓变动复盘归因」，`refresh` 组补「基金申赎费率」「指数估值历史」（自审 rf-778）
+- 历史快照保留期 60 天 / 12 个 → 180 天 / 365 个（`reports-instruction.md` 生命周期行、`how-to-use-tui-menu.md` 快照说明、`history_snapshot.py` 参数 docstring 三处与 `constants` 对齐）（自审 rf-779）
+- `how-to-config-llm.md` pricing 示例两块补 `holiday_always_idle`、faq `.gitignore` 特例描述补 `llm_providers.json` 与 `data/knowledge/`、`how-to-use-cli-mode.md` 重试语义改按 `_TRANSIENT_RETRY_ATTEMPTS = 1`（同源额外 1 次）+ 落槽说明、`config/features.py` 分组注释「2 项」→「1 项」（自审 rf-781）
+- 定价表补模型族前缀兜底价说明（`MODEL_PRICING` 六条前缀供带日期后缀变体计价，表内不单列、不覆盖具体模型价）（自审 rf-782）
+- review-findings 分区顺序恢复：三个「开发期已修复」节（0.13.11 / 0.13.10 / 0.13.9）原夹在待处理区 P2 与 P3 之间、0.13.8 占位落在归档索引之后——重排为 待处理（P1→P2→P3）→ 已解决（开发期已修复 0.13.11→0.13.8，再归档档案）；同时去掉 P3 表头与首行间的空行（该表原在渲染上断裂为「空表头 + 裸行」）（自审 rf-765）
+- P3 文件膨胀登记表与 `check-file-length.py -v` 真值对齐：登记口径改为逼近红线档（主程序 ≥700 / 脚本 ≥600 / 测试 ≥1000，余量 ≤30%），警告级全集明确指向 `-v` 不逐项登记；表改为逐文件、按距红线余量升序，行数按 `-v` 快照刷新，并补登主程序八文件（rf-773）/ 脚本四文件（rf-774）/ 测试十三文件（rf-775）；原表 10 行中 5 个行数陈旧且声称的「全登记」实际只覆盖 10/58（自审 rf-766）
+- `plan-169`（日志统一约束机检守护）补归档：已完成并从 plan.md 移除但 `archived_plan.0.13.x.md` 无该条，编号已消耗却无从追溯（自审 rf-767）
+- plan-92 现状句「17 页签」改为 19（与报告章节注册表及 README 对齐）（自审 rf-768）
+- testplan §6.4「补充自动化门禁」列表编号重复（`15.` 出现两次，16~18 连带错位）重排为 15~19 连续编号（自审 rf-769）
+- llm-technical.md 目录层级修正：附录 A/B/C 原错缩进挂在「13. 集成点」下且缺「附录」父项，改为与章同名同级的「附录」父项 + 回退一级缩进（自审 rf-770）
+- 调仓模拟报告 HTML 双产物（最新版 + 归档版）改经 `_write_html_atomic` 原子落盘（tmp + `os.replace` + 中断收口登记），与主报告口径对齐——原直写 `open("w")` 在进程中断时留下半写截断的 HTML；补中断场景与原子原语调用面回归用例（自审 rf-764）
+
+- TestGate 门禁编排用例与演进新鲜度断言隔离：新鲜度直读真实 folders.md + 墙钟，编排用例在不同时区/日期的 CI 上随机红（本地已过零点、CI 仍是前一日 → 先行拦截返回 2，回归/守护一个不跑）；新增 autouse 夹具将新鲜度视为通过（编排用例只验序列），并新增新鲜度失败即中止且不触发子进程的专项用例（自审 rf-759）

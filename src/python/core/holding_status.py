@@ -25,7 +25,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from src.python.core.code_utils import is_fund_holding
+from src.python.core.code_utils import is_fund_holding, strip_exchange_prefix
 
 logger = logging.getLogger("invest")
 
@@ -84,10 +84,7 @@ def classify_code_format(code: str | None) -> str:
     Returns:
         ``STATUS_OK`` 或 ``STATUS_BAD_CODE_FORMAT``
     """
-    raw = (code or "").strip()
-    lower = raw.lower()
-    if lower.startswith(("sh", "sz", "bj")):
-        raw = raw[2:]
+    raw = strip_exchange_prefix((code or "").strip())
     if raw.endswith(".0") and raw[:-2].isdigit():
         raw = raw[:-2]
     if raw.isdigit() and len(raw) in (5, 6):
