@@ -731,7 +731,8 @@ def _sample_rf_archive() -> str:
         "# 自审记录归档 — v0.12.x\n\n"
         "> 归档时间：2026-10-05（v0.12.5 发布）\n"
         "> 涵盖版本：v0.12.x 开发期已修复项（v0.12.1 → v0.12.5）\n\n---\n\n"
-        "## v0.12.5 开发期已修复（2026-10-05）\n\n- **rf-900**：旧条目\n"
+        "## 开发期已修复（0.12.5-dev）\n\n> 完整复盘见 `changelog.md` 0.12.5-dev 段；此处仅摘要行。\n\n"
+        "- rf-900 已修复（2026-10-05）：旧条目\n"
     )
 
 
@@ -896,11 +897,11 @@ class TestPrepare:
         rf_arch = (fx.root / "docs" / "archive" / "v0.12.x" / "archived_review-findings.0.12.x.md").read_text(
             encoding="utf-8"
         )
-        assert "## v0.12.6 开发期已修复（2026-10-08）" in rf_arch
+        assert "## 开发期已修复（0.12.6-dev）" in rf_arch
         assert "| **rf-901** | 问题甲 | 处理甲 |" in rf_arch  # 原表逐行无损
         assert "（v0.12.1 → v0.12.6）" in rf_arch  # 归档头部涵盖版本延展
         assert "2026-09-01 ~ 2026-10-08" in rf_main  # 归档档案索引区间延展
-        assert "## v0.12.5 开发期已修复（2026-10-05）" in rf_arch  # 既有批次保留
+        assert "## 开发期已修复（0.12.5-dev）" in rf_arch  # 既有批次保留
 
         plan_main = fx.PLAN_FILE.read_text(encoding="utf-8")
         assert "plan-42" not in plan_main and "plan-77" in plan_main  # 只搬已完成节
@@ -1021,6 +1022,36 @@ class TestDevBump:
         assert rel.read_app_version(fx.CONSTANTS_FILE.read_text(encoding="utf-8")) == "0.12.6"
 
 
+class TestArchivePrerequisites:
+    """`check` 阶段提前暴露归档前置缺件（别等 prepare 改完版本全链才撞上）。"""
+
+    def test_ready_train_reports_nothing(self, rel, tmp_path):
+        fx = _ToolRepoFixture(rel, tmp_path)
+        assert rel.archive_prerequisites("0.12.6") == []
+        assert fx.FOLDERS_FILE.exists()
+
+    def test_missing_archive_files_reported(self, rel, tmp_path):
+        fx = _ToolRepoFixture(rel, tmp_path)
+        (fx.root / "docs" / "archive" / "v0.12.x" / "archived_plan.0.12.x.md").unlink()
+        findings = rel.archive_prerequisites("0.12.6")
+        assert findings and any("archived_plan.0.12.x.md" in f for f in findings)
+
+    def test_missing_tree_block_reported(self, rel, tmp_path):
+        fx = _ToolRepoFixture(rel, tmp_path)
+        fx.FOLDERS_FILE.write_text(
+            "\n".join(ln for ln in fx.FOLDERS_FILE.read_text(encoding="utf-8").splitlines() if "v0.12.x/" not in ln),
+            encoding="utf-8",
+        )
+        findings = rel.archive_prerequisites("0.12.6")
+        assert findings and any("目录树缺 `v0.12.x/`" in f for f in findings)
+
+    def test_check_blocks_on_prerequisite_gap(self, rel, tmp_path, capsys):
+        fx = _ToolRepoFixture(rel, tmp_path)
+        (fx.root / "docs" / "archive" / "v0.12.x" / "archived_review-findings.0.12.x.md").unlink()
+        assert rel.cmd_check(ns(), runner=_ok_runner()) == 2
+        assert "归档前置未就绪" in capsys.readouterr().out
+
+
 class TestCliSurface:
     def test_parser_and_handler_tables_agree(self, rel):
         parser = rel.build_parser()
@@ -1061,6 +1092,29 @@ class TestArchiveCommand:
             .read_text(encoding="utf-8")
             .count("plan-42")
         )
+
+    def test_missing_tree_block_aborts_before_ledger_writes(self, rel, tmp_path):
+        """目录树缺该小版本归档块 → 中止且台账原样（先算后写：不留半迁移）。"""
+        fx = _ToolRepoFixture(rel, tmp_path)
+        fx.CONSTANTS_FILE.write_text('APP_VERSION = "0.12.6"\n', encoding="utf-8")
+        # 去掉目录树里的 v0.12.x 归档块（模拟新小版本首份归档尚未补树）
+        tree_wo_block = "\n".join(
+            line for line in fx.FOLDERS_FILE.read_text(encoding="utf-8").splitlines() if "v0.12.x/" not in line
+        )
+        fx.FOLDERS_FILE.write_text(tree_wo_block + "\n", encoding="utf-8")
+        before = (fx.RF_FILE.read_text(encoding="utf-8"), fx.PLAN_FILE.read_text(encoding="utf-8"))
+        assert rel.cmd_archive(ns(date="2026-10-08"), runner=_ok_runner()) == 2
+        assert (fx.RF_FILE.read_text(encoding="utf-8"), fx.PLAN_FILE.read_text(encoding="utf-8")) == before
+
+    def test_git_mv_failure_rolls_back_tree(self, rel, tmp_path):
+        """git mv 失败 → 目录树回滚到搬迁前（不指向未移动的位置），台账也保持原样。"""
+        fx = _ToolRepoFixture(rel, tmp_path)
+        fx.CONSTANTS_FILE.write_text('APP_VERSION = "0.12.6"\n', encoding="utf-8")
+        tree_before = fx.FOLDERS_FILE.read_text(encoding="utf-8")
+        runner = _ok_runner([(["git", "mv"], (128, "", "fatal: 无法移动"))])
+        assert rel.cmd_archive(ns(date="2026-10-08"), runner=runner) != 0
+        assert fx.FOLDERS_FILE.read_text(encoding="utf-8") == tree_before
+        assert "rf-901" in fx.RF_FILE.read_text(encoding="utf-8")
 
     def test_dev_version_refused(self, rel, tmp_path):
         """开发版上跑归档会被拒（版本全链须先切到发布形态，否则归档目录推导不出）。"""
