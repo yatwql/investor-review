@@ -21,14 +21,7 @@ from src.python.analysis.prosperity_signals import (
 )
 from src.python.core.num_utils import finite_or
 
-logger = logging.getLogger("invest")
-
-
-# ── 默认配置（可经 config.json 的 `prosperity_framework` 段覆盖） ─────────
-
-
-# 默认配置：单一事实来源为配置层（`config/_config_defaults`），本模块只做读取
-from ._prosperity_inputs import (  # noqa: E402, F401 — 兼容既有导入面
+from ._prosperity_inputs import (  # noqa: F401 — 兼容既有导入面
     _FALLBACK_CONFIG,
     _boom_weights,
     _config_defaults_for_module,
@@ -38,6 +31,14 @@ from ._prosperity_inputs import (  # noqa: E402, F401 — 兼容既有导入面
     estimated_fund_codes,
     roe_by_code_from_rows,
 )
+
+logger = logging.getLogger("invest")
+
+
+# ── 默认配置（可经 config.json 的 `prosperity_framework` 段覆盖） ─────────
+
+
+# 默认配置：单一事实来源为配置层（`config/_config_defaults`），本模块只做读取
 
 DEFAULT_CONFIG: dict[str, Any] = _config_defaults_for_module()
 # 评级阈值（对齐上游评分卡口径：≥80 高度契合 / 60–79 较契合 / 40–59 部分契合 / <40 不契合）

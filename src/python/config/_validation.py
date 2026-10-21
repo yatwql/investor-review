@@ -14,6 +14,42 @@ from ._validation_common import (  # noqa: F401 — 共用原语
 
 import logging
 
+from ._validation_llm import (  # noqa: F401 — 兼容既有导入面
+    _validate_enable_boards,
+    _validate_enable_llm,
+    _validate_llm_report_depth,
+)
+from ._validation_sections import (  # noqa: F401 — 兼容既有导入面
+    _validate_benchmark_indices,
+    _validate_comparison_candidates,
+    _validate_comparison_indices,
+    _validate_discipline_config,
+    _validate_fund_fee_fallback,
+    _validate_history_fetch_mode,
+    _validate_history_lookback_days,
+    _validate_rebalance_config,
+    _validate_report_section_order,
+    _validate_user_fund_benchmarks,
+    _validate_whatif_benchmark_index,
+)
+from ._validation_scalars import (  # noqa: F401 — 兼容既有导入面
+    _KNOWN_NEWS_SOURCES,
+    _KNOWN_PROVIDER_NAMES,
+    _KNOWN_PROVIDER_TYPES,
+    _PATH_CONFIG_KEYS,
+    _STRING_CONFIG_KEYS,
+    _absolutize_paths,
+    _deabsolutize_paths,
+    _is_abs,
+    _validate_cache_ttl,
+    _validate_holdings_start_date,
+    _validate_market_hours,
+    _validate_news_sources,
+    _validate_news_top_count,
+    _validate_preferred_provider,
+    _validate_string_configs,
+)
+
 
 logger = logging.getLogger("invest")
 
@@ -38,45 +74,6 @@ logger = logging.getLogger("invest")
 # ═══════════════════════════════════════════════════════════════════
 # 配置校验入口
 # ═══════════════════════════════════════════════════════════════════
-
-
-from ._validation_llm import (  # noqa: E402, F401 — 兼容既有导入面
-    _validate_enable_boards,
-    _validate_enable_llm,
-    _validate_llm_report_depth,
-)
-
-from ._validation_sections import (  # noqa: E402, F401 — 兼容既有导入面
-    _validate_benchmark_indices,
-    _validate_comparison_candidates,
-    _validate_comparison_indices,
-    _validate_discipline_config,
-    _validate_fund_fee_fallback,
-    _validate_history_fetch_mode,
-    _validate_history_lookback_days,
-    _validate_rebalance_config,
-    _validate_report_section_order,
-    _validate_user_fund_benchmarks,
-    _validate_whatif_benchmark_index,
-)
-
-from ._validation_scalars import (  # noqa: E402, F401 — 兼容既有导入面
-    _KNOWN_NEWS_SOURCES,
-    _KNOWN_PROVIDER_NAMES,
-    _KNOWN_PROVIDER_TYPES,
-    _PATH_CONFIG_KEYS,
-    _STRING_CONFIG_KEYS,
-    _absolutize_paths,
-    _deabsolutize_paths,
-    _is_abs,
-    _validate_cache_ttl,
-    _validate_holdings_start_date,
-    _validate_market_hours,
-    _validate_news_sources,
-    _validate_news_top_count,
-    _validate_preferred_provider,
-    _validate_string_configs,
-)
 
 
 def validate_config(config: dict | None = None) -> int:

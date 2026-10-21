@@ -59,8 +59,8 @@ class TestGenerateReport:
             patch("src.python.fetcher.index.fetch_indices", return_value={}),
             patch("src.python.fetcher.index.fetch_us_indices", return_value={}),
             # 后台数据源健康检查（全量 HTTP 连通性探测）
-            patch("src.python.report._report_generation._spawn_health_checks", return_value=None),
-            patch("src.python.report._report_generation._collect_health_checks"),
+            patch("src.python.report._report_health._spawn_health_checks", return_value=None),
+            patch("src.python.report._report_health._collect_health_checks"),
         ):
             result = generate_report(holdings=[], config={}, reporter=mock_reporter)
         assert isinstance(result, ReportResult)
@@ -175,8 +175,8 @@ class TestAutoCleanupOnGenerate:
             patch("src.python.core.trading_calendar._get_trading_calendar", return_value=set()),
             patch("src.python.fetcher.index.fetch_indices", return_value={}),
             patch("src.python.fetcher.index.fetch_us_indices", return_value={}),
-            patch("src.python.report._report_generation._spawn_health_checks", return_value=None),
-            patch("src.python.report._report_generation._collect_health_checks"),
+            patch("src.python.report._report_health._spawn_health_checks", return_value=None),
+            patch("src.python.report._report_health._collect_health_checks"),
         ):
             generate_report(holdings=[], config={}, reporter=mock_reporter, report_type="basic")
         assert calls == [1], "生成入口须触发一次过期缓存自动清理"

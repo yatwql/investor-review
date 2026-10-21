@@ -406,7 +406,7 @@ class TestGenerateReportInterruption(_RunContextBase):
                     side_effect=KeyboardInterrupt,
                 ),
                 patch(
-                    "src.python.report._report_generation._spawn_health_checks",
+                    "src.python.report._report_health._spawn_health_checks",
                     return_value=None,
                 ),
             ):

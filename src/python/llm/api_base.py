@@ -32,6 +32,25 @@ from src.python.llm.prompts import (
 )
 from src.python.llm.session import record_per_module
 
+from ._api_responses import (  # noqa: F401 — 兼容既有导入面
+    TRUNCATION_MARKER,
+    _check_claude_truncation,
+    _check_gemini_truncation,
+    _check_openai_truncation,
+    _extract_content,
+    _extract_content_from_gemini,
+    _extract_ctx_local,
+    _get_extract_ctx,
+    _log_token_usage,
+    _process_success_response,
+    _server_error_local,
+    _set_extract_ctx,
+    _set_last_server_error,
+    _set_last_thinking_exhausted,
+    _thinking_exhausted_local,
+    _truncation_warning,
+)
+
 logger = logging.getLogger("invest")
 
 __all__ = [
@@ -75,24 +94,6 @@ __all__ = [
 
 # ── 上次失败的详细原因（供调用方区分失败类型，不改变函数签名） ──
 
-from ._api_responses import (  # noqa: E402, F401 — 兼容既有导入面
-    TRUNCATION_MARKER,
-    _check_claude_truncation,
-    _check_gemini_truncation,
-    _check_openai_truncation,
-    _extract_content,
-    _extract_content_from_gemini,
-    _extract_ctx_local,
-    _get_extract_ctx,
-    _log_token_usage,
-    _process_success_response,
-    _server_error_local,
-    _set_extract_ctx,
-    _set_last_server_error,
-    _set_last_thinking_exhausted,
-    _thinking_exhausted_local,
-    _truncation_warning,
-)
 
 _RATE_LIMIT_RECOVERY = 600  # 429 首试熔断的端点冷却（秒）：限速属配额/风控终态，
 # 常规 60s 冷却会在下一批调用时再次撞限速并重复整段重试，长冷却消除无效先试

@@ -11,6 +11,15 @@
 
 ### Changed
 
+- **近 36 小时变更的技术债核查与修复**：① 拆分时 `re-export` 块被追加在代码下方（`# noqa: E402` 豁免
+  掩盖了「导入不在顶部」）——5 个文件（`llm/api_base`、`config/_validation`、`report/holdings_detail_sheet`、
+  `report/fund_performance`、`analysis/prosperity_scoring`）的 re-export 归位到 import 区，豁免减为 `F401`；
+  ② 审计出 **3 处拆分后静默失效的打桩**（`_spawn/_collect_health_checks` 的调用已随生成路径迁到
+  `_generation_both` / `_generation_full`，测试仍 patch 门面 → 实际未拦截）：basic 分支改为从定义处
+  `_report_health` 导入、三路径统一打桩到定义处，`test_run_integrity` 与 orchestrator 生成报告测试同步。
+  核查结论：死符号 0（新模块私有符号全仓有引用）、完全同体函数 0、377 个模块导入全通过且无反向依赖、
+  门面 re-export 无死面。
+
 - **模块内拆分收尾（`rf-773` 剩余 5 个）**：`llm/api_base.py` 770 → **501**（响应解析 → `_api_responses.py`）、`config/_validation.py` 723 → **119**（标量/章节/LLM 三域 + 共用原语 `_validation_common.py`）、`report/holdings_detail_sheet.py` 716 → **171**（分区块写入器 → `_holdings_detail_blocks.py`）、`analysis/prosperity_scoring.py` 711 → **476**（输入与权重 → `_prosperity_inputs.py`）、`providers/news_dedup_rules.py` 710 → **331**（纯词表 → `_news_dedup_tables.py`）。至此 rf-773 的 8 个模块全部拆完（前批 3 个已随 v0.14.1 发布）；门面 re-export 保持导入面，区块注册表与章节-区块矩阵的载体列同步更新。
 
 

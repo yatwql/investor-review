@@ -44,20 +44,7 @@ from src.python.report.excel_writer import (
 )
 from src.python.report.market_value import DetailRow
 
-logger = logging.getLogger("invest")
-
-__all__ = [
-    "write_holdings_detail_sheet",
-    "_weighted_avg_cost",
-    "_detail_to_row_values",
-    "_apply_profit_colors",
-    "_apply_price_type_colors",
-]
-
-# ── 区块① 市值核算明细 ──────────────────────────────────────
-# 15 列表头（由 sheet 层维护）
-# 成本流水子列（功能开关 `cost_lots` 开启时追加，默认关不渲染）
-from ._holdings_detail_blocks import (  # noqa: E402, F401 — 兼容既有导入面
+from ._holdings_detail_blocks import (  # noqa: F401 — 兼容既有导入面
     _BLOCK_TITLE_CATEGORY,
     _BLOCK_TITLE_MARKET_VALUE,
     _CAT_COST_POS_HEADERS,
@@ -86,6 +73,20 @@ from ._holdings_detail_blocks import (  # noqa: E402, F401 — 兼容既有导�
     _write_category_group,
     _write_market_value_block,
 )
+
+logger = logging.getLogger("invest")
+
+__all__ = [
+    "write_holdings_detail_sheet",
+    "_weighted_avg_cost",
+    "_detail_to_row_values",
+    "_apply_profit_colors",
+    "_apply_price_type_colors",
+]
+
+# ── 区块① 市值核算明细 ──────────────────────────────────────
+# 15 列表头（由 sheet 层维护）
+# 成本流水子列（功能开关 `cost_lots` 开启时追加，默认关不渲染）
 
 _MV_NCOLS_WITH_FLOW = _MV_NCOLS + len(_MV_EXTRA_HEADERS)
 # 申购限购状态列（功能开关 `fund_purchase_limit`）：追加于市值明细区块末列
