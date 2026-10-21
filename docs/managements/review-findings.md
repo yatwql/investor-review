@@ -64,6 +64,7 @@
 | **rf-804** | 降级跟踪器在模块级缓存单例实例（`report/{fund_performance,penetration_sheet,summary}.py` 的 `_tracker = get_tracker()`）——`reset_tracker()` 只销毁工厂内的当前实例，缓存引用仍指向旧对象，测试隔离失效、运行期重置同样失效；表现：切分后重排执行顺序，`test_all_funds_fail` 因前序用例累计的降级计数而写出状态脚注（原断言 `ws.cell.call_count == 0` 失败 2≠0） | 已修复：三处改为 `_tracker()` 惰性取当前单例（不缓存引用）；回归用例 `report/test_data_status.py::TestTrackerNotCachedAtModuleLevel` 2 例（全仓 AST 扫描禁止模块级 `= get_tracker()` 缓存 + 三模块取用点必须落在 reset 后的新单例） |
 
 ### 归档档案
+- [`archived_review-findings.0.14.x.md`](../archive/v0.14.x/archived_review-findings.0.14.x.md) — v0.14.x 归档（2026-10-21 起）
 - [`archived_review-findings.0.13.x.md`](../archive/v0.13.x/archived_review-findings.0.13.x.md) — v0.13.x 开发期已修复批次（2026-10-14 ~ 2026-10-21）
 - [`archived_review-findings.0.12.x.md`](../archive/v0.12.x/archived_review-findings.0.12.x.md) — v0.12.0 ~ v0.12.13  （2026-10-03 ~ 2026-10-12）
 - [`archived_review-findings.0.11.x.md`](../archive/v0.11.x/archived_review-findings.0.11.x.md) — v0.11.0 ~ v0.11.11  （2026-09-18 ~ 2026-10-02）
