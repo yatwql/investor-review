@@ -467,7 +467,7 @@ class TestFacadeWiringOrder:
     """挂载点接线守卫 —— ``_SEAM_ORDER`` 全部挂载点被调用，且相对次序与顺序约束一致。"""
 
     def _seam_call_order(self) -> list[str]:
-        source = (Path(PROJECT_ROOT) / "src" / "python" / "report" / "_report_generation.py").read_text(
+        source = (Path(PROJECT_ROOT) / "src" / "python" / "report" / "_generation_full.py").read_text(
             encoding="utf-8"
         )
         tree = ast.parse(source)

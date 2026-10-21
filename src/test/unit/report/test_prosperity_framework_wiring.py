@@ -311,7 +311,7 @@ class TestHtmlCallSiteSeam:
         # 输出包装层已从编排模块拆出，两文件都要扫——否则守卫只盯旧文件、漏掉真正的调用点
         return "\n".join(
             Path(f).read_text(encoding="utf-8")
-            for f in ("src/python/report/_report_generation.py", "src/python/report/_report_output.py")
+            for f in ("src/python/report/_generation_both.py", "src/python/report/_generation_full.py", "src/python/report/_report_output.py")
         )
 
     def test_every_write_html_report_call_passes_contract(self):

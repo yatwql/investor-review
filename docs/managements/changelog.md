@@ -11,6 +11,8 @@
 
 ### Changed
 
+- **报告域模块内拆分（`rf-773` 首批 3/8）**：`report/orchestrator.py` 734 → **255 行**（数据装配与派生计算 → `_orchestrator_data.py`）；`report/_report_generation.py` 751 → **52 行**（both/full 双路径 → `_generation_both.py` / `_generation_full.py`，共用步骤 → `_generation_shared.py`）；`report/fund_performance.py` 728 → **595 行**（评级内核 → `_fund_rating.py`）。全部保留门面 re-export 维持既有导入面；测试 patch 目标与结构断言按「调用点所在模块」改指新模块。剩余 5 个模块（api_base / _validation / holdings_detail_sheet / prosperity_scoring / news_dedup_rules）登记在 P3。
+
 - **脚本域拆分（`rf-774`）**：`scripts/perf-view.py` 983 → **102 行**（采集/渲染/CLI 三段下沉 `scripts/_perf_view/`：`data.py` 367 / `report.py` 562 / `cli.py` 113，入口只留 docstring、sys.path 引导与 re-export）；`scripts/check-test-redundancy.py` 934 → **150 行**（八类检查各成子模块 `scripts/_test_redundancy/`：`_common` 共用 AST 原语 + 8 类检查模块 + `facts_cache` + `runner` 编排）。两处均保持 `load_script` 直调面（re-export），测试 patch 目标改指实现模块。
 
 - **文档机检测试文件拆分（`rf-787`）**：`test_check_doc_drift.py` 1061 → 410 行，按机检项族切 `_partitions` / `_sections` / `_tree` 三个兄弟分片（118~289 行），用例数不变、共享夹具仍由基片提供。
