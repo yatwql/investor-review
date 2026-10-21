@@ -32,6 +32,22 @@ _traces_code/patterns.py   _traces_doc/patterns.py
 4. **规则载体豁免扩面**：`_traces_code/config.py` 的 `RULE_CARRIER_DIRS` 增加 `_traces_doc`，并新增 `RULE_CARRIER_FILES = {"_traces_common.py"}`——词表与模式表属「尺子本身」，与 `check-*traces.py` 同等待遇，否则新文件里的示例字面量会被 code-traces 自己扫出来。
 5. **结论缓存指纹扩面**：`check-doc-traces.py` 的 `_LOGIC_FILES` 加入 `_traces_doc/patterns.py` 与 `_traces_common.py`——判定面搬家后，缓存键必须跟着走，否则改模式仍回放旧结论（假绿）。
 
+### 2.1 两域分类差异（有意保留，不得"统一"）
+
+31 条共享正则中 12 条在两域分类不同——这是**设计**而非遗漏：分类决定退出码与报告桶，两域治理层级本就不同。
+
+| 共享词条组 | 代码域（退出码） | 文档域（退出码） | 关系 |
+|:---|:---|:---|:---|
+| 架构约束代号 | `CODE`（2 硬禁止） | `CIPHER`（1） | 两侧阻塞，治理层级不同 |
+| 旧版标签 / 迭代标记 / 曾经的实现 | `VERSION`（1） | `HIGH`（1） | 同为阻塞 |
+| 物理合并叙述 | `CHANGE`（3 仅复核） | `HIGH`（1 阻塞） | 唯一严重度分歧（文档面向读者须改写；代码注释合并叙述只提示） |
+| 待办 / 过渡 / 弃用 7 条 | `TODO` / `CHANGE` / `DEPR`（3） | `LOW`（2） | 均非阻塞 |
+
+配套的**矩阵单一来源**：
+
+- `check-doc-traces.py` 的 `DOMAIN_ARCHIVE` / `DOMAIN_TASK_RECORD` / `DOMAIN_CHANGELOG` / `DOMAIN_TREE_ARCHIVE` / `DOMAIN_TREE_PLAN`——文档类型 → 启用分类（CIPHER 另由 `include_cipher` 开关叠加，避免"入集又要 discard"的口径打架）。
+- `check-code-traces.py` 的 `HIGH_CATEGORIES` / `CODE_CATEGORIES` / `LOW_CATEGORIES`——分类 → 退出码分桶（划分：互斥且覆盖全部模式分类，未登记分类会静默落进 LOW 兜底，故机检双向钉住）。
+
 ## 3. 契约
 
 - 公开面不变：`check-doc-traces.py` 仍可按脚本名访问 `_DOC_PATTERNS`（`(pattern, category, description)` 字符串元组）、`_is_excluded`；测试与 `check-doc-drift` 等调用方无需改动。
@@ -49,6 +65,9 @@ _traces_code/patterns.py   _traces_doc/patterns.py
 | 两表交集恰等于共享词表 | 新增同源模式未收编，就地复制第二份 |
 | 两模式源码内不出现共享字面量 | 「图省事」重新写死，漂移面回归 |
 | `不再` 在 STATUS/NARRATIVE 各一条 | 多域登记的语义不被「去重」掉 |
+| 各 `DOMAIN_*` 分类已声明且有模式 | 分域启用一个不存在的分类 → 该域静默停检 |
+| 常规域不含 NARRATIVE/STATUS、归档域仅 NARRATIVE | 「顺手统一」抹掉文档类型管控差异 |
+| 代码三桶互斥且覆盖模式表分类 | 分类漏登记 → 静默降级为 LOW（高置信痕迹被吞） |
 
 另：`TestDocTracesCacheLogicSurface` 断言 `_LOGIC_FILES` 覆盖 `patterns.py` / `_traces_common.py` 且文件真实存在。
 

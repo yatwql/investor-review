@@ -1115,6 +1115,19 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
 - **`_traces_common.py`**：两脚本**逐字节相同**的历史叙述正则单一来源（31 条命名常量 + `SHARED_REGEXES` 元组）；只登记字面量，**分类与描述仍按各自域定义**，判定入口/域矩阵/豁免语义不在此模块——新增同源词汇先加此处再两侧引用，仅一域需要的词汇不进共享表（机检见 `test_trace_shared_vocabulary`：两表交集须恰等于词表、两侧须都引用、模式源码内不得写死字面量）
 - **`_test_runner/`**：`test-runner.py` 的内部实现包（paths / modes / pytest_env / machine_info / doc_writer / report_html / runner），入口仅保留 CLI 与主流程并原面 re-export —— 既有测试访问 `test_runner._env_value` 等名字仍有效；**注意**：monkeypatch 内部状态（如 `_LATEST_DIR` / `_DOC_COVERAGE_PATH`）须指向持有它的子模块（`_test_runner.report_html` / `_test_runner.doc_writer`）
 
+**跨脚本口径：共性 / 差异（`_traces_common` 的边界）**
+
+两守护共享的是**词汇**，不是判定：`_traces_common.py` 只登记正则字面量，分类、严重度、豁免策略、文档类型矩阵、扫描通道（文本 / AST）全部留在各自域内。因此同一正则在两域的分类可以不同，这是**有意保留**的差异：
+
+| 共享常量 | 代码域分类（退出码） | 文档域分类（退出码） | 关系 |
+|:---|:---|:---|:---|
+| `CIPHER_CONSTRAINT` | `CODE`（2，硬禁止） | `CIPHER`（1） | 两侧均阻塞，域内治理层级不同 |
+| `HISTORY_LEGACY_LABEL` / `HISTORY_ITERATION_MARK` / `HISTORY_STATE_EARLY` | `VERSION`（1） | `HIGH`（1） | 同为阻塞，仅分类标签不同 |
+| `HISTORY_PHYSICAL_MERGE` | `CHANGE`（3，仅提示复核） | `HIGH`（1，阻塞） | **唯一严重度分歧**：文档面向读者须改写为当前结构，代码注释里该叙述只提示 |
+| `LOW_*` 七条（`LOW_REFACTOR_TO` / `LOW_DEPRECATED` / `LOW_PASSIVE_PAST` / `LOW_NOT_YET` / `LOW_TODO` / `LOW_FUTURE_PLAN` / `LOW_TRANSITIONAL`） | `TODO` / `CHANGE` / `DEPR`（3） | `LOW`（2） | 均非阻塞（差异只在"仅复核"档位与退出码数值） |
+
+维护规则：新增共享词条时**两域各自定分类与描述**（不得为了"统一"而改另一域的分类——那会改变退出码乃至阻塞与否）；只在一域需要的词条不进共享表。分域矩阵与严重度分桶均有常量承载（`check-doc-traces.py` 的 `DOMAIN_*`、`check-code-traces.py` 的 `HIGH/CODE/LOW_CATEGORIES`），由 `test_trace_shared_vocabulary` 的域矩阵 / 分桶用例机检。
+
 > 新增检查脚本时直接复用 `_checklib`，不要自建 argparse/输出/退出样板；**跨脚本共用**的历史变更叙述正则放 `_traces_common.py`（词表单一来源），单域模式放各自 `_traces_*/patterns.py`，两脚本共用的章节/轮次计数豁免放 `_traces_code/exemptions.py`。
 
 **`check-doc-drift.py` — 文档与实现一致性检查**

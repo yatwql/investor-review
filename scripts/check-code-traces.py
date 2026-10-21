@@ -115,6 +115,25 @@ __all__ = [
 ]
 
 
+# ── 分类 → 退出码分桶（严重度矩阵单一来源）──
+# 退出码取最高档：HIGH 桶=1 / CODE 桶=2 / 其余（LOW）=3（语义见模块 docstring）。
+# 三桶是**划分**（互斥且覆盖模式表全部分类）：新增分类必须且只能登记一处；
+# 未登记分类会落进 LOW 兜底（静默降级）—— 由 test_trace_shared_vocabulary 的
+# 分桶用例双向钉住（模式表分类 ⊆ 三桶之和、三桶两两不交）。
+HIGH_CATEGORIES = ("HIGH", "ORIGIN", "VERSION")
+CODE_CATEGORIES = (
+    "CODE",
+    "IDENT",
+    "CHAPTER",
+    "ROUND",
+    "MAGIC",
+    "DASHTASK",
+    "UNDERSCORE",
+    "LOG",
+)
+LOW_CATEGORIES = ("TODO", "CHANGE", "DEPR")
+
+
 def _collect_scan_files() -> list[Path]:
     """收集扫描面文件清单（与扫描同源；同时作为结论缓存的输入指纹集）。"""
     supported = {".py", ".js", ".mjs", ".html", ".sh", ".ps1", ".bat", ".cmd"}
@@ -151,21 +170,12 @@ def _scan_all(args: argparse.Namespace) -> int:
         for lineno, cat, desc, text in hits:
             total_hits += 1
             summary[cat] = summary.get(cat, 0) + 1
-            is_high = cat in ("HIGH", "ORIGIN", "VERSION")
+            is_high = cat in HIGH_CATEGORIES
             if is_high:
                 high_count += 1
-            elif cat in (
-                "CODE",
-                "IDENT",
-                "CHAPTER",
-                "ROUND",
-                "MAGIC",
-                "DASHTASK",
-                "UNDERSCORE",
-                "LOG",
-            ):
+            elif cat in CODE_CATEGORIES:
                 code_count += 1
-            else:
+            else:  # LOW 桶（含未登记分类兜底；划分完整性由机检钉住）
                 low_count += 1
 
             if args.ci:

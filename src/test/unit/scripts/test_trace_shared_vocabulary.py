@@ -78,3 +78,80 @@ class TestMultiDomainPattern:
         """模式表内不得出现完全重复条目（同正则+分类+描述写两遍）。"""
         assert len(set(doc_traces._DOC_PATTERNS)) == len(doc_traces._DOC_PATTERNS)
         assert len(set(code_traces.PATTERNS)) == len(code_traces.PATTERNS)
+
+
+class TestDocDomainMatrix:
+    """文档类型 → 检查分类矩阵：**管控差异**必须显式且不空转。
+
+    共享词表只统一"词汇"，不同类型文档查哪些分类是各自口径（常规域禁复盘叙事/
+    进度词、任务记录域查章节+叙事、归档域只查叙事…）。这里钉住矩阵的两端：
+    启用的分类必须已声明且至少有一条模式（否则分域静默停检），以及最关键的
+    差异口径不被"顺手统一"掉。
+    """
+
+    _DOMAIN_NAMES = (
+        "DOMAIN_ARCHIVE",
+        "DOMAIN_TASK_RECORD",
+        "DOMAIN_CHANGELOG",
+        "DOMAIN_TREE_ARCHIVE",
+        "DOMAIN_TREE_PLAN",
+    )
+
+    def test_domain_categories_are_declared(self, doc_traces):
+        declared = set(doc_traces._ALL_CATEGORIES)
+        for name in self._DOMAIN_NAMES:
+            unknown = set(getattr(doc_traces, name)) - declared
+            assert unknown == set(), f"{name} 启用未声明分类 {sorted(unknown)}"
+
+    def test_domain_category_has_patterns(self, doc_traces):
+        pattern_categories = {cat for _pat, cat, _desc in doc_traces._DOC_PATTERNS}
+        for name in self._DOMAIN_NAMES:
+            empty = set(getattr(doc_traces, name)) - pattern_categories
+            assert empty == set(), f"{name} 启用了无模式的分类 {sorted(empty)}（该域静默停检）"
+
+    def test_regular_domain_excludes_narrative_and_status(self, doc_traces):
+        """常规文档不查复盘叙事/进度词（手册的当前状态叙述合法），差异口径不可统一。"""
+        assert "NARRATIVE" not in doc_traces._REGULAR_CATEGORIES
+        assert "STATUS" not in doc_traces._REGULAR_CATEGORIES
+
+    def test_archive_domain_is_narrative_only(self, doc_traces):
+        """归档文档的性质是历史记录：版本/章节/轮次/约束代号均不入检。"""
+        assert set(doc_traces.DOMAIN_ARCHIVE) == {"NARRATIVE"}
+
+
+class TestCodeSeverityBucket:
+    """代码域分类 → 退出码分桶：桶必须是**划分**，且覆盖模式表全部分类。
+
+    未登记的分类会落进 LOW 兜底（静默降级为"仅建议复核"），CI 仍绿而高置信度
+    痕迹被吞——故双向量化：三桶互斥、模式表分类 ⊆ 三桶之并。
+    """
+
+    def test_buckets_are_disjoint(self, code_traces):
+        high = set(code_traces.HIGH_CATEGORIES)
+        code = set(code_traces.CODE_CATEGORIES)
+        low = set(code_traces.LOW_CATEGORIES)
+        assert not (high & code)
+        assert not (high & low)
+        assert not (code & low)
+
+    def test_pattern_categories_are_all_bucketed(self, code_traces):
+        covered = set(code_traces.HIGH_CATEGORIES) | set(code_traces.CODE_CATEGORIES) | set(code_traces.LOW_CATEGORIES)
+        pattern_categories = {cat for _pat, cat, _desc in code_traces.PATTERNS}
+        assert pattern_categories - covered == set()
+
+    def test_scan_emitted_categories_are_bucketed(self, code_traces, tmp_path):
+        """标识符/分层/日志等非模式表通道产出的分类同样必须在桶内。"""
+        sample = tmp_path / "sample_bad.py"
+        sample.write_text(
+            "# 已迁移到新模块\n"
+            "# 第 3 章 与 第 2 轮\n"
+            "# B系列 批次代号与 C1 约束代号\n"
+            "r11_magic = 1\n"
+            "def f():\n"
+            "    print('诊断输出')\n",
+            encoding="utf-8",
+        )
+        hits = code_traces.scan_file(sample, verbose=False)
+        covered = set(code_traces.HIGH_CATEGORIES) | set(code_traces.CODE_CATEGORIES) | set(code_traces.LOW_CATEGORIES)
+        emitted = {cat for _line, cat, _desc, _text in hits}
+        assert emitted - covered == set()

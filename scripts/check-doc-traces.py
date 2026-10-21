@@ -300,6 +300,25 @@ def _read_doc(fpath: Path) -> str | None:
 #: 高置信度分类（命中即退出码 1）；LOW 仅建议复核（退出码 2）
 HIGH_CATEGORIES = ("HIGH", "ARCHIVE", "CODE", "CIPHER", "CHAPTER", "ROUND", "STATUS", "NARRATIVE", "DUPLICATE")
 
+# ── 文档类型 → 检查分类矩阵 ──
+# 管控差异的单一来源：文档类型决定「查哪些分类」，分类本身决定退出码
+# （HIGH_CATEGORIES 内=1）。各域逐个命名而非就地写元组——矩阵变更是"改管控口径"
+# 的事，应在一眼可见处发生；常量集由 test_trace_shared_vocabulary 的域矩阵用例
+# 钉住（分类必须存在且每个启用分类至少有一条模式，防止静默停检）。
+#: 归档文档（docs/archive/*）：只查复盘叙事；版本/章节/轮次是归档的当时记录
+DOMAIN_ARCHIVE = ("NARRATIVE",)
+#: 任务记录（plan.md / review-findings.md / docs/plan/*）：复盘叙事 + 章节编号
+#: （约束代号由 include_cipher 开关叠加）
+DOMAIN_TASK_RECORD = ("CHAPTER", "NARRATIVE")
+#: 变更日志：记录变化是其职责，只查章节编号
+DOMAIN_CHANGELOG = ("CHAPTER",)
+#: folders.md 归档子树：归档记录域口径（与 DOMAIN_ARCHIVE 同集，但树行不走
+#: 表格豁免、且不进 base 域，故各自命名以显式区分两种分歧）
+DOMAIN_TREE_ARCHIVE = ("NARRATIVE",)
+#: folders.md plan 子树：任务记录域口径（章节 + 叙事；约束代号同样由
+#: include_cipher 开关叠加，故不写进分类集，避免与开关口径打架）
+DOMAIN_TREE_PLAN = ("CHAPTER", "NARRATIVE")
+
 
 def scan_file(
     fpath: Path,
@@ -341,13 +360,13 @@ def scan_file(
     cipher_ok = fpath.name not in CIPHER_EXEMPT_FILES
     # 模式子集 + 并集预筛按域取一次（缓存），行内只做并集快筛 + 精确分支
     base_patterns: tuple[tuple[re.Pattern[str], str, str], ...]
-    base_prefilter: re.Pattern[str] | None
+    base_prefilter: re.Pattern[str]
     if archive:
-        base_patterns, base_prefilter = _pattern_bundle(("NARRATIVE",), False)
+        base_patterns, base_prefilter = _pattern_bundle(DOMAIN_ARCHIVE, False)
     elif task_record:
-        base_patterns, base_prefilter = _pattern_bundle(("CHAPTER", "NARRATIVE"), cipher_ok)
+        base_patterns, base_prefilter = _pattern_bundle(DOMAIN_TASK_RECORD, cipher_ok)
     elif chapter_only:
-        base_patterns, base_prefilter = _pattern_bundle(("CHAPTER",), cipher_ok)
+        base_patterns, base_prefilter = _pattern_bundle(DOMAIN_CHANGELOG, cipher_ok)
     else:
         # 常规域：非树行不用 NARRATIVE/STATUS（域门禁本就不放行，省掉预筛噪声）；
         # 树行用全集（folders.md 树描述照检 STATUS，子树另按路径分域）；folders.md
@@ -407,10 +426,10 @@ def scan_file(
             subtree = "".join(tree_stack)
             if subtree.startswith("docs/archive/"):
                 eff_archive = True
-                line_patterns, prefilter = _pattern_bundle(("NARRATIVE",), False)
+                line_patterns, prefilter = _pattern_bundle(DOMAIN_TREE_ARCHIVE, False)
             elif subtree.startswith("docs/plan/"):
                 eff_task = True
-                line_patterns, prefilter = _pattern_bundle(("CHAPTER", "NARRATIVE", "CIPHER"), True)
+                line_patterns, prefilter = _pattern_bundle(DOMAIN_TREE_PLAN, True)
             else:
                 line_patterns, prefilter = folders_tree_bundle
         if not prefilter.search(stripped):
