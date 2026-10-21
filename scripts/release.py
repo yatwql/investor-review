@@ -380,7 +380,7 @@ def cmd_prepare(args: argparse.Namespace, runner=None) -> int:
         print(status_out.rstrip())
     print("\n[OK] prepare 完成。后续人工项：")
     print("  1. 审阅 git diff（重点：changelog 指针/归档索引、演进列头）")
-    print("  2. 复核上方归档迁移结果（台账原表搬运 / 设计文件迁档判定——机械部分已自动完成）")
+    print("  2. 复核归档迁移结果（台账原表搬运 / 设计文件迁档判定——机械部分已自动完成）")
     print("  3. 按序继续：refresh → evolution --release → gate → publish → devbump")
     return 0
 

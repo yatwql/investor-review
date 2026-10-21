@@ -407,3 +407,29 @@ class TestPlaceholderLifecycle:
         out = rel.drop_migration_placeholders(text)
         assert "> 人工备注：本版已人工复核" in out
         assert "发布迁入归档档案" not in out
+
+
+class TestPlanArchiveHeadingLevels:
+    """plan 已完成节可能嵌在 `### P1~P4` 分组下（`####`）——须同样被搬入并扁平为 `##`。
+
+    否则台账里的完成项永远搬不走（清单只认二级时，`####` 节在主台账积压）。
+    """
+
+    _LEDGER = (
+        "# 计划\n\n### P1 — 当前待办\n\n"
+        "#### `plan-201` 某已完成任务 ✅\n\n**完成（2026-10-21）**：已做\n\n"
+        "#### `plan-202` 在办任务\n\n- [ ] 待做\n"
+    )
+
+    def test_nested_completed_section_detected(self, rel):
+        sections = rel.plan_completed_sections(self._LEDGER)
+        assert len(sections) == 1
+        assert "plan-201" in sections[0][2]
+
+    def test_moved_and_flattened_to_level_two(self, rel):
+        main, archive, moved = rel.apply_plan_archive(self._LEDGER, "> 涵盖版本：v0.14.x\n", "0.14.0", "2026-10-21")
+        assert moved == 1
+        assert "plan-201" not in main  # 已搬离主台账
+        assert "plan-202" in main  # 在办节不外溢
+        assert "## `plan-201` 某已完成任务 ✅" in archive  # 入档统一降为二级
+        assert "#### `plan-201`" not in archive

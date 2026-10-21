@@ -266,12 +266,23 @@ def _bump_index_range(text: str, date: str) -> str:
 
 # ─────────────────────────── plan 台账 ───────────────────────────
 
-#: 已完成任务节标题：`## plan-N 标题 ✅`（既有归档格式）/ `## ✅ plan-N 标题`（表格口径兼容）
+#: 已完成任务节标题：`## plan-N 标题 ✅`（归档扁平格式，入档后统一降为二级）/ `#### plan-N … ✅`
+#: （当前台账实际层级——任务节嵌在 `### P1~P4` 分组下）。标题层级 2~4 均识别，
+#: 否则台账里的完成项永远不会被搬走（清单只认二级时，`####` 任务节积压在主台账）。
 _PLAN_DONE_HEAD_RE = re.compile(
-    r"^##\s*(?:`?plan-\d+[^\n]*(?:✅|已完成)|(?:✅|已完成)[^\n]*`?plan-\d+)",
+    r"^#{2,4}\s*(?:`?plan-\d+[^\n]*(?:✅|已完成)|(?:✅|已完成)[^\n]*`?plan-\d+)",
     re.M,
 )
-_PLAN_ANY_HEAD_RE = re.compile(r"^## (?P<title>.+?)\s*$", re.M)
+#: 节尾 = 其后任一级标题（任务节内可能有更深层小标题，故不限层级）
+_PLAN_ANY_HEAD_RE = re.compile(r"^#{1,4} (?P<title>.+?)\s*$", re.M)
+
+
+def _flatten_heading(chunk: str) -> str:
+    """把节头降为二级标题（`#### plan-N …` → `## plan-N …`），其余行原样。"""
+    head, sep, rest = chunk.partition("\n")
+    if re.match(r"^#{2,4}\s", head):
+        head = "## " + head.lstrip("#").lstrip()
+    return head + sep + rest
 
 
 def plan_completed_sections(text: str) -> list[tuple[int, int, str]]:
@@ -285,11 +296,16 @@ def plan_completed_sections(text: str) -> list[tuple[int, int, str]]:
 
 
 def apply_plan_archive(main_text: str, archive_text: str, version: str, date: str) -> tuple[str, str, int]:
-    """把 plan.md 已完成任务节整节搬入计划归档（沿用扁平 `## plan-N … ✅` 结构）。"""
+    """把 plan.md 已完成任务节整节搬入计划归档（统一降为扁平 `## plan-N … ✅`）。
+
+    台账里任务节嵌在 `### P1~P4` 分组下（`####`），归档一律扁平为 `##`——
+    归档只按版本批次堆叠，不需要优先级分层；入档时把节头系数归一，
+    保持同一归档文件内标题层级一致。
+    """
     sections = plan_completed_sections(main_text)
     if not sections:
         return main_text, archive_text, 0
-    chunks = [main_text[s:e].strip("\n") for s, e, _t in sections]
+    chunks = [_flatten_heading(main_text[s:e].strip("\n")) for s, e, _t in sections]
     for s, e, _t in reversed(sections):  # 从后往前删，避免位移
         main_text = main_text[:s] + main_text[e:]
     main_text = re.sub(r"\n{3,}", "\n\n", main_text)
