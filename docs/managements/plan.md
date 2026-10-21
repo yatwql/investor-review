@@ -1,6 +1,6 @@
 # 投资复盘助手 — 实现计划
 > 文档版本：0.13.11-dev
-> **编号源**：`plan-next = 169`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-168，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`plan-next = 170`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-169，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -61,6 +61,12 @@
 **落地设计**：若判定转正，按 [`decision-reflection-shadow-design.md`](../plan/decision-reflection-shadow-design.md) 四迭代执行（决策条目结构化 → 到期结算器 → doctor 概览增强 → 报告内反思块），该设计以 Vibe-Trading `shadow_account`（extract→backtest→render）为参照；死线未过前不实施。plan-76 持仓变动复盘已落地，与其构成「意图 vs 成交」对账（只读，不互写）。
 
 **当前状态**：撤销与转正条件均不满足，**维持观察**（不撤销、不转正、不实施设计）。下个观察点：下个发布周期重跑 `fold_ledger`——已结算 ≥10 → 据 doctor 账本概览评估转正（正式命中率另需 `directional_total ≥ 20`，flat 占比高时可信度由人工裁定）；仍 <10 且无新增结算 → 撤销（含 `decision_llm_capture`、行动章复盘块注入与对应需求条目）。
+
+#### `plan-169` 「日志统一」约束无机检守护（print 禁令全域扫描）
+
+**动机**：架构设计约束中多数基础设施约束已有单源机检（大文件行数红线→check-file-length、HTTP 工厂/重试退避/间隔节流经架构评审+单测钉住、开关注册表单源→semantic-index 反向校验），唯「日志统一（禁止 print() 输出运行时诊断信息）」无任何机检：现存 47 处 print 分布在 6 个文件（progress/check_sources/privacy_notice/startup_wizard/cli_progress/doctor）均属「交互式 print」豁免域，但豁免清单未固化——新模块引入 print 无人拦截，只能靠人工评审发现
+
+**动作**：新增机检（并入 check-code-traces 或独立小脚本）：`src/python` 内 `print(` 调用白名单制（豁免清单 = 6 个现存交互式文件 + cli/tui/web 渠道层），白名单外即 finding；白名单登记在脚本常量并要求附豁免理由注释；与 rf-763 的「前缀元组唯一定义点」反向机检同批评估（同为「约束已有但无机检」类缺口）
 
 ### P4 — 实验候选（先决门槛未过，暂缓）
 

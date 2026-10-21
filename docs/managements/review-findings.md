@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.13.11-dev
-> **编号源**：`rf-next = 763`（新增问题取此编号，完成后更新为 +1；已用最大 rf-762，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 765`（新增问题取此编号，完成后更新为 +1；已用最大 rf-764，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -19,6 +19,8 @@
 
 | # | 问题 | 修复方向 |
 |---|------|----------|
+| **rf-763** | 代码类型判定中心化约束违反：`core/holding_status.py::classify_code_format` 自建 `("sh", "sz", "bj")` 前缀元组剻交易所前缀（约束明令「不得自建前缀表或白名单」，该元组与 `code_utils.py` 的 `_strip_prefix`/`get_exchange_prefix` 前缀知识重复；当前两处口径一致故无行为缺陷，新增交易所前缀时必漏改一处） | `code_utils.py` 新增公开剻前缀函数（如 `strip_exchange_prefix(code) -> str`，含 bj 口径），`holding_status.py` 改为复用；反向机检（守护或单测钉住「前缀元组唯一定义点」）可与 plan-169 同批评估 |
+| **rf-764** | 原子写入边界外的健壮性缺口：`report/whatif_writer.py` 写「调仓模拟.html」最新版与归档版均直写（`open("w")`），未复用同包 `html_save.py` 的 `_write_html_atomic` 原语——进程中断会留下半写截断的 HTML（html_save 域自身合规，whatif_writer 属同风险面的漏网点） | whatif_writer 改用 `_write_html_atomic`（或等价 tmp + `os.replace`），与 html_save 的中断收口（note_temp/note_artifact 登记）对齐；补中断场景回归用例 |
 
 ### 开发期已修复（0.13.11-dev）
 
