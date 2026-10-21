@@ -77,9 +77,21 @@ class StepTimer:
         return " · ".join(f"{entry['step']} {entry['elapsed_s']:.1f}s" for entry in self.steps)
 
 
-def build_record(command: str, elapsed_s: float, ok: bool, steps: list[dict] | None = None, version: str = "") -> dict:
-    """构造一条耗时记录（字段顺序固定，便于人工扫读与 jq 取值）。"""
-    return {
+def build_record(
+    command: str,
+    elapsed_s: float,
+    ok: bool,
+    steps: list[dict] | None = None,
+    version: str = "",
+    session_usage: dict | None = None,
+) -> dict:
+    """构造一条耗时记录（字段顺序固定，便于人工扫读与 jq 取值）。
+
+    ``session_usage``：该命令结束时 agent 会话的**累计** token 用量快照
+    （`session_usage()` 产出；非 agent 环境下为 None，字段省略）。累计值使
+    「发布窗口用量」= 末行 − 边界行，无需逐行记账。
+    """
+    record = {
         "ts": now_iso(),
         "command": command,
         "ok": bool(ok),
@@ -87,6 +99,9 @@ def build_record(command: str, elapsed_s: float, ok: bool, steps: list[dict] | N
         "version": version,
         "steps": list(steps or ()),
     }
+    if session_usage:
+        record["session_usage"] = dict(session_usage)
+    return record
 
 
 def append_record(path: Path, record: dict, *, max_lines: int = RELEASE_LOG_MAX_LINES) -> Path:
@@ -106,3 +121,115 @@ def append_record(path: Path, record: dict, *, max_lines: int = RELEASE_LOG_MAX_
     if not ok:
         raise OSError(f"写入失败：{path}")
     return Path(path)
+
+
+# ── 会话 token 用量采集（发布编排在同一 agent 会话内执行） ──────────────
+
+#: 会话 JSONL 里参与统计的条目类型（与 pi 的 session-format 一致）：
+#: assistant 消息、非消息用量（如 cache_warm）、压缩摘要用量 —— 三者都计入会话总量。
+_USAGE_ROLES = frozenset({"assistant"})
+
+
+def _zero_usage() -> dict:
+    return {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0, "total": 0, "cost": 0.0}
+
+
+def _add_usage(acc: dict, usage: dict) -> None:
+    """把一条 pi `Usage` 累加进聚合器（字段名 snake 化，缺项按 0）。"""
+    acc["input"] += int(usage.get("input") or 0)
+    acc["output"] += int(usage.get("output") or 0)
+    acc["cache_read"] += int(usage.get("cacheRead") or 0)
+    acc["cache_write"] += int(usage.get("cacheWrite") or 0)
+    acc["total"] += int(usage.get("totalTokens") or 0)
+    cost = usage.get("cost") or {}
+    acc["cost"] += float(cost.get("total") or 0.0)
+
+
+def session_usage(session_file: str | Path | None) -> dict:
+    """读取 agent 会话 JSONL，返回**累计** token 用量（无文件/不可读时返回空 dict）。
+
+    数据源是 pi 会话文件（`PI_SESSION_FILE`），三类条目都计入会话总量
+    （与 pi 自身的 session token 统计同口径）：
+
+    - ``message`` 且 ``message.role == "assistant"`` → ``message.usage``
+    - ``usage``（非消息用量，如 ``cache_warm``）→ ``usage``
+    - ``compaction``（摘要生成）→ ``usage``
+
+    实现刻意**容错**：文件缺失、单行 JSON 损坏、字段类型异常都只跳过该条——
+    埋点是观测面，采集失败绝不阻断发布。
+    """
+    if not session_file:
+        return {}
+    path = Path(session_file)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return {}
+    acc = _zero_usage()
+    seen = False
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(entry, dict):
+            continue
+        kind = entry.get("type")
+        usage = None
+        if kind == "message":
+            message = entry.get("message") or {}
+            if message.get("role") in _USAGE_ROLES:
+                usage = message.get("usage")
+        elif kind in ("usage", "compaction"):
+            usage = entry.get("usage")
+        if isinstance(usage, dict):
+            _add_usage(acc, usage)
+            seen = True
+    return acc if seen else {}
+
+
+def release_token_usage(records: list[dict]) -> dict:
+    """按台账记录推算「上一次 devbump 之后」的发布窗口 token 用量。
+
+    `records` 为 `logs/release.jsonl` 的行（按时间顺序）。算法：以最后一条
+    ``devbump`` 为窗口外边界，取其后各行的会话累计用量快照；窗口用量 =
+    末行累计 − 边界累计（无边界时以会话起点 0 计）。**跨会话**（agent 重启后
+    累计从 0 重新开始）按正增量分段累加，避免出现负数。
+    """
+    snaps = [(r.get("command"), r.get("session_usage") or {}) for r in records]
+    if not snaps:
+        return {}
+    boundary = -1
+    for idx, (command, _usage) in enumerate(snaps):
+        if command == "devbump":
+            boundary = idx
+    window = snaps[boundary + 1 :]
+    if not window:
+        return {}
+    base = _zero_usage() if boundary < 0 else {**_zero_usage(), **(snaps[boundary][1] or {})}
+    acc = _zero_usage()
+    prev = {**_zero_usage(), **base}
+    for _command, usage in window:
+        if not usage:
+            continue
+        cur = {**_zero_usage(), **usage}
+        for key in ("input", "output", "cache_read", "cache_write", "total"):
+            delta = cur[key] - prev[key]
+            acc[key] += delta if delta > 0 else cur[key]  # 负增量 = 会话重启
+        cost_delta = cur["cost"] - prev["cost"]
+        acc["cost"] += cost_delta if cost_delta > 0 else cur["cost"]
+        prev = cur
+    return acc
+
+
+def format_tokens(usage: dict) -> str:
+    """把 token 用量格式化为一行摘要（无数据时返回空串）。"""
+    if not usage or not usage.get("total"):
+        return ""
+    return (
+        f"{usage['total']:,} tok（in {usage['input']:,} / out {usage['output']:,} / "
+        f"cache r {usage['cache_read']:,} w {usage['cache_write']:,}，≈¥{usage['cost']:.2f}）"
+    )

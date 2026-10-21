@@ -11,6 +11,8 @@
 
 ### Changed
 
+- **发布台账补 token 采集与统计（`plan-171`）**：`logs/release.jsonl` 每行新增 `session_usage`（agent 会话累计 in/out/cache read/cache write/total/cost，取自 `PI_SESSION_FILE` 的 assistant 消息 + 非消息用量 + compaction，与 pi 统计同口径；非 agent 环境省略、旧行形状不变），命令尾行打印「本次发布累计 token」，窗口以「上一次 devbump」为界、跨会话按正增量分段累加；采集全容错不阻断发布。回归 6 例。
+
 - **近 36 小时变更的技术债核查与修复**：① 拆分时 `re-export` 块被追加在代码下方（`# noqa: E402` 豁免
   掩盖了「导入不在顶部」）——5 个文件（`llm/api_base`、`config/_validation`、`report/holdings_detail_sheet`、
   `report/fund_performance`、`analysis/prosperity_scoring`）的 re-export 归位到 import 区，豁免减为 `F401`；

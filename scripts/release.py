@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import json
 import os
 import re
 import sys
@@ -128,6 +129,15 @@ from _release._ledger_archive import (  # noqa: E402, F401 — 纯函数面经�
     unreferenced_docs,
 )
 from _release._timing import StepTimer as _StepTimer, append_record as _append_record  # noqa: E402
+from _release._timing import format_tokens as _format_tokens  # noqa: E402
+from _release._timing import release_token_usage as _release_token_usage  # noqa: E402
+from _release._timing import session_usage as _session_usage  # noqa: E402
+from _release._timing import (  # noqa: E402, F401 — 纯函数面经入口 re-export 供测试按脚本名访问
+    build_record,
+    format_tokens,
+    release_token_usage,
+    session_usage,
+)
 from _release._timing import build_record as _build_record  # noqa: E402
 from _release._evolution import (  # noqa: E402, F401 — _line_count 供测试经入口模块引用
     build_evolution_stats,
@@ -180,7 +190,15 @@ def _finish_timing(command: str, rc: int) -> None:
         version = read_app_version(CONSTANTS_FILE.read_text(encoding="utf-8"))
     except (OSError, ReleaseError):
         version = ""
-    record = _build_record(command=command, elapsed_s=timer.total, ok=(rc == 0), steps=timer.steps, version=version)
+    tokens = _session_usage(os.environ.get("PI_SESSION_FILE"))
+    record = _build_record(
+        command=command,
+        elapsed_s=timer.total,
+        ok=(rc == 0),
+        steps=timer.steps,
+        version=version,
+        session_usage=tokens,
+    )
     try:
         path = _append_record(RELEASE_LOG_FILE, record)
     except (OSError, ReleaseError, ValueError) as exc:
@@ -188,6 +206,15 @@ def _finish_timing(command: str, rc: int) -> None:
         return
     shown = path.relative_to(REPO_ROOT) if path.is_relative_to(REPO_ROOT) else path
     print(f"[..] 耗时已记录到 {shown}")
+    # 发布窗口 token 统计：以「上一次 devbump」为界，避免把开发期对话算进发布成本
+    try:
+        rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        used = _release_token_usage(rows)
+        text = _format_tokens(used)
+        if text:
+            print(f"[..] 本次发布累计 token：{text}")
+    except (OSError, ValueError, TypeError):
+        print("[!] token 统计读取失败（不影响本次结果）")
 
 
 def archive_paths_for(release_version: str) -> tuple[Path, str]:
