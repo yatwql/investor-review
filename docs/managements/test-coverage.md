@@ -12,13 +12,13 @@
 <!-- mode-count-table:start -->
 | `--mode` 值 | 覆盖项数 | 典型耗时 |
 |:------------|:--------:|:--------:|
-| `unit` | **10903** | ~27s |
+| `unit` | **10903** | ~34s |
 | `standard` | **9671** | ~28s |
 | `scenario` | **291** | ~6s |
-| `regression` | **291** | ~6s |
-| `dev-verify` | **7500** | ~24s |
+| `regression` | **291** | ~10s |
+| `dev-verify` | **7500** | ~32s |
 | `verify` | **10903** | ~29s |
-| `integration` | **342** | ~11s |
+| `integration` | **342** | ~12s |
 | `edge` | **1164** | ~12s |
 | `data` | **70** | ~5s |
 | `all` | **11245** | ~28s |
@@ -56,7 +56,7 @@
 | Python 版本 | 3.13.5 | 3.13.0 |
 | 并行级别 | medium | medium |
 | worker 数 | 8 | 4 |
-| 采集并行度 | 1 | 1 |
+| 采集并行度 | 2 | 1 |
 | 采集日期 | 2026-10-21 | 2026-10-02 |
 <!-- env-table:end -->
 
@@ -67,14 +67,14 @@
 <!-- duration-table:start -->
 | `--mode` | dragonball（2026-10-21 实测） | stallman-NB1（2026-10-02 实测） |
 |:---------|:---------------------------:|:---:|
-| `unit` | ~27s | ~3min |
+| `unit` | ~34s | ~3min |
 | `standard` | ~28s | ~3min |
 | `scenario` | ~6s | ~51s |
-| `regression` | ~6s | ~1min |
+| `regression` | ~10s | ~1min |
 | `verify,regression` | ~35s（verify+regression 顺序之和） | ~5min（verify+regression 顺序之和） |
-| `dev-verify` | ~24s | ~4min |
+| `dev-verify` | ~32s | ~4min |
 | `verify` | ~29s | ~4min |
-| `integration` | ~11s | ~2min |
+| `integration` | ~12s | ~2min |
 | `edge` | ~12s | ~1min |
 | `data` | ~5s | ~31s |
 | `all` | ~28s | ~4min |
