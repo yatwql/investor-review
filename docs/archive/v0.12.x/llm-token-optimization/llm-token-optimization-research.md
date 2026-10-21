@@ -1,7 +1,7 @@
 # LLM 调用链 token 消耗优化空间调研
 
 > 日期：2026-10-06。**前提：不降低任何调用效果**——只评估调度/记账/缓存语义层手段；效果敏感项（prompt 内容削减、thinking 预算调低、模块裁剪）一律排除在候选之外。
-> **结论：维持现状**。唯一行动项为计量正确性修复（[review-findings](../managements/review-findings.md) rf-596：把账算对，不改任何消耗与行为）。
+> **结论：维持现状**。唯一行动项为计量正确性修复（[review-findings](../../managements/review-findings.md) rf-596：把账算对，不改任何消耗与行为）。
 
 ## 1. 调用链现状
 

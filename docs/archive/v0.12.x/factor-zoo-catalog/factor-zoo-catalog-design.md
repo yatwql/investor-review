@@ -3,7 +3,7 @@
 > **状态**：**已评测 · 判定转正立项**（2026-10-06 实测 A 92% / B 82.6% / C 2.9% 三指标全过 → 实施转 plan-81；判定记录见 §13）。
 > **参照**：Vibe-Trading `agent/src/factors/zoo`（462 个预置 alpha 的目录与元数据：
 > qlib158 / alpha101 / gtja191 / academic / fundamental 五个来源族）。
-> **研究背景**：见 `vibe-trading-borrow-candidates-research.md` §2.1。
+> **研究背景**：见 `../vibe-trading-borrow-research/vibe-trading-borrow-candidates-research.md` §2.1。
 
 ## 1. 动机与边界
 

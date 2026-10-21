@@ -18,8 +18,8 @@
 | 测试用例 | — | — | 11,098 个 | `pytest --collect-only` 统计（`scripts/collect-test-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 11 | 5,962 | 含 README.md（211 行）；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 10 | 5,751 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 177 | 64,490 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 4 + archive md 160），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 12 | 12,252 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 177 | 64,494 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 4 + archive md 160），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 12 | 12,256 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 160 | 51,445 | 各版本 changelog/plan/review-findings 与设计文档归档（157 md 50,492 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 4 | ~702 | 在办设计文档（扁平存放，完成后迁入对应版本的归档子目录）：两份 Jev 新闻关联判定文档（对照评测方案 + 类型化判定通道接入设计）+ 决策跨期反思闭环设计 + Web 浏览器验证方法 |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -1489,10 +1489,14 @@ investor-util/
 │   │   │   ├── archived_changelog.0.12.x.md # v0.12.1 已发布变更记录
 │   │   │   ├── archived_plan.0.12.x.md       # 实现计划归档 v0.12.x（含限购信息接入与持仓展示面设计）
 │   │   │   ├── archived_review-findings.0.12.x.md # v0.12.x 开发期已修复记录
-│   │   │   ├── awesome-design-md-borrow-candidates-research.md # Web 展示借鉴研究（awesome-design-md 73 份 DESIGN.md 骨架与样板要点 + 我方两面样式差距映射，6 立项 / 5 不采纳）
-│   │   │   ├── gs-quant-borrow-candidates-research.md # gs-quant 借鉴候选研究（高盛量化库剖析，2 立项 / 1 参照 / 10 不采纳）
-│   │   │   ├── llm-token-optimization-research.md # LLM token 消耗优化空间调研（真实运行画像 + 共享前缀前移评估 + provider/pacing 差异，结论维持现状）
-│   │   │   ├── vibe-trading-borrow-candidates-research.md # Vibe-Trading 借鉴候选研究（项目剖析，4 立项 / 6 不采纳）
+│   │   │   ├── awesome-design-md-borrow-research/ # Web 展示借鉴研究归档
+│   │   │   │   └── awesome-design-md-borrow-candidates-research.md # 73 份 DESIGN.md 骨架与样板要点 + 我方两面样式差距映射（6 立项 / 5 不采纳）
+│   │   │   ├── gs-quant-borrow-research/      # gs-quant 借鉴研究归档
+│   │   │   │   └── gs-quant-borrow-candidates-research.md # 高盛量化库剖析与候选清单（2 立项 / 1 参照 / 10 不采纳）
+│   │   │   ├── llm-token-optimization/        # LLM token 消耗调研归档
+│   │   │   │   └── llm-token-optimization-research.md # 真实运行画像 + 共享前缀前移评估 + provider/pacing 差异（结论维持现状）
+│   │   │   ├── vibe-trading-borrow-research/  # Vibe-Trading 借鉴研究归档
+│   │   │   │   └── vibe-trading-borrow-candidates-research.md # 项目剖析与候选清单（4 立项 / 6 不采纳）
 │   │   │   ├── fund-purchase-limit/          # 基金申购限购三份设计归档
 │   │   │   │   ├── fund-purchase-limit-design.md # 申购限购接入设计（天天基金单口径/四层稳定性保障/持仓展示/合并联动二期）
 │   │   │   │   ├── fund-purchase-limit-llm-context-design.md # 限购信息接入 LLM 分析维度设计（全章节单源块/统一附录注入/指纹与降级矩阵）
