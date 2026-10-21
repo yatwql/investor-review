@@ -531,3 +531,43 @@ class TestReleaseTokenAccounting:
         rows = [{"command": "devbump", "session_usage": {"total": 10}}]
         assert rel.release_token_usage(rows) == {}
         assert rel.format_tokens({}) == ""
+
+
+class TestReleaseAgentIdentity:
+    """发布台账记录执行环境身份（provider / model / thinking / session）。
+
+    回答「这版是哪个模型、什么思考档发的」——跨模型对比发布成本与质量时需要它；
+    非 agent 环境（CI / 手动 shell）变量缺失时字段整体省略，台账形状不变。
+    """
+
+    def test_identity_from_env(self, rel):
+        env = {
+            "PI_PROVIDER": "deepseek",
+            "PI_MODEL": "deepseek-flash",
+            "PI_REASONING_LEVEL": "high",
+            "PI_SESSION_ID": "abc-123",
+        }
+        assert rel.agent_identity(env) == {
+            "provider": "deepseek",
+            "model": "deepseek-flash",
+            "thinking": "high",
+            "session_id": "abc-123",
+        }
+
+    def test_identity_absent_in_non_agent_env(self, rel):
+        assert rel.agent_identity({}) == {}
+        # 空白值同样视为缺失（不写空串进台账）
+        assert rel.agent_identity({"PI_MODEL": "   "}) == {}
+
+    def test_record_carries_agent_and_omits_when_absent(self, rel):
+        agent = {"provider": "p", "model": "m", "thinking": "low", "session_id": "s"}
+        record = rel.build_record(command="gate", elapsed_s=1.0, ok=True, version="1.0.0", agent=agent)
+        assert record["agent"] == agent
+        assert "agent" not in rel.build_record(command="gate", elapsed_s=1.0, ok=True, version="1.0.0")
+
+    def test_format_agent_label(self, rel):
+        assert rel.format_agent({"provider": "deepseek", "model": "deepseek-flash", "thinking": "high"}) == (
+            "deepseek/deepseek-flash（thinking=high）"
+        )
+        assert rel.format_agent({"model": "m"}) == "m"  # 无 provider/thinking 时的退化形态
+        assert rel.format_agent({}) == ""

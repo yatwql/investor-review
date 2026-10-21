@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
+import os
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -84,12 +85,17 @@ def build_record(
     steps: list[dict] | None = None,
     version: str = "",
     session_usage: dict | None = None,
+    agent: dict | None = None,
 ) -> dict:
     """构造一条耗时记录（字段顺序固定，便于人工扫读与 jq 取值）。
 
     ``session_usage``：该命令结束时 agent 会话的**累计** token 用量快照
     （`session_usage()` 产出；非 agent 环境下为 None，字段省略）。累计值使
     「发布窗口用量」= 末行 − 边界行，无需逐行记账。
+
+    ``agent``：执行本次发布的 agent 身份（`agent_identity()` 产出：provider /
+    model / thinking / session_id）——回答「这版是谁（哪个模型、什么思考档）发的」；
+    非 agent 环境下同样省略。
     """
     record = {
         "ts": now_iso(),
@@ -99,6 +105,8 @@ def build_record(
         "version": version,
         "steps": list(steps or ()),
     }
+    if agent:
+        record["agent"] = dict(agent)
     if session_usage:
         record["session_usage"] = dict(session_usage)
     return record
@@ -128,6 +136,25 @@ def append_record(path: Path, record: dict, *, max_lines: int = RELEASE_LOG_MAX_
 #: 会话 JSONL 里参与统计的条目类型（与 pi 的 session-format 一致）：
 #: assistant 消息、非消息用量（如 cache_warm）、压缩摘要用量 —— 三者都计入会话总量。
 _USAGE_ROLES = frozenset({"assistant"})
+
+
+def agent_identity(env: dict | None = None) -> dict:
+    """当前 agent 执行环境身份（provider / model / thinking / session）。
+
+    数据源为 pi 注入的环境变量（非配置文件）：``PI_PROVIDER`` / ``PI_MODEL`` /
+    ``PI_REASONING_LEVEL`` / ``PI_SESSION_ID``。非 agent 环境（CI、手动 shell）下这些
+    变量缺失 → 返回空 dict，调用方据此省略字段，台账形状保持不变。
+
+    ``env`` 参数只用于测试注入（缺省读 ``os.environ``）。
+    """
+    src = os.environ if env is None else env
+    identity = {
+        "provider": (src.get("PI_PROVIDER") or "").strip(),
+        "model": (src.get("PI_MODEL") or "").strip(),
+        "thinking": (src.get("PI_REASONING_LEVEL") or "").strip(),
+        "session_id": (src.get("PI_SESSION_ID") or "").strip(),
+    }
+    return {k: v for k, v in identity.items() if v}
 
 
 def _zero_usage() -> dict:
@@ -223,6 +250,15 @@ def release_token_usage(records: list[dict]) -> dict:
         acc["cost"] += cost_delta if cost_delta > 0 else cur["cost"]
         prev = cur
     return acc
+
+
+def format_agent(agent: dict) -> str:
+    """把 agent 身份格式化为 `provider/model（thinking=…）` 形式（无数据时返回空串）。"""
+    if not agent or not agent.get("model"):
+        return ""
+    label = f"{agent.get('provider', '')}/{agent.get('model')}".lstrip("/")
+    thinking = agent.get("thinking")
+    return f"{label}（thinking={thinking}）" if thinking else label
 
 
 def format_tokens(usage: dict) -> str:

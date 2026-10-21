@@ -132,11 +132,15 @@ from _release._timing import StepTimer as _StepTimer, append_record as _append_r
 from _release._timing import format_tokens as _format_tokens  # noqa: E402
 from _release._timing import release_token_usage as _release_token_usage  # noqa: E402
 from _release._timing import session_usage as _session_usage  # noqa: E402
+from _release._timing import agent_identity as _agent_identity  # noqa: E402
+from _release._timing import format_agent as _format_agent  # noqa: E402
 from _release._timing import (  # noqa: E402, F401 — 纯函数面经入口 re-export 供测试按脚本名访问
     build_record,
     format_tokens,
     release_token_usage,
     session_usage,
+    agent_identity,
+    format_agent,
 )
 from _release._timing import build_record as _build_record  # noqa: E402
 from _release._evolution import (  # noqa: E402, F401 — _line_count 供测试经入口模块引用
@@ -191,6 +195,7 @@ def _finish_timing(command: str, rc: int) -> None:
     except (OSError, ReleaseError):
         version = ""
     tokens = _session_usage(os.environ.get("PI_SESSION_FILE"))
+    agent = _agent_identity()
     record = _build_record(
         command=command,
         elapsed_s=timer.total,
@@ -198,6 +203,7 @@ def _finish_timing(command: str, rc: int) -> None:
         steps=timer.steps,
         version=version,
         session_usage=tokens,
+        agent=agent,
     )
     try:
         path = _append_record(RELEASE_LOG_FILE, record)
@@ -206,6 +212,9 @@ def _finish_timing(command: str, rc: int) -> None:
         return
     shown = path.relative_to(REPO_ROOT) if path.is_relative_to(REPO_ROOT) else path
     print(f"[..] 耗时已记录到 {shown}")
+    agent_text = _format_agent(agent)
+    if agent_text:
+        print(f"[..] 执行环境：{agent_text}")
     # 发布窗口 token 统计：以「上一次 devbump」为界，避免把开发期对话算进发布成本
     try:
         rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
