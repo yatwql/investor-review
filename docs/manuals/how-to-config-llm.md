@@ -26,18 +26,14 @@ LLM 配置由三个独立文件管理：
 
 ## 目录
 
-- [快速配置](#快速配置)
-- [多 Provider 链式服务（进阶）](#多-provider-链式服务进阶)（[文件分工](#文件分工) · [配置步骤](#配置步骤) · [Provider 条目字段](#provider-条目字段) · [端点级节流（`pacing`）](#端点级节流pacing) · [切换策略](#切换策略) · [模块级 Provider 偏好](#模块级-provider-偏好) · [配置检查](#配置检查) · [兼容性](#兼容性)）
-- [模块启停](#模块启停) · [缓存机制](#缓存机制) · [失败降级与占位](#失败降级与占位) · [`system_prompt` 配置覆盖链](#system_prompt-配置覆盖链)
-- [配置项总览](#配置项总览)（[模块级配置](#模块级配置) · [事实校验容差配置](#事实校验容差配置)）
-- [各模块推荐参数值](#各模块推荐参数值)
-- [Extended Thinking](#extended-thinking)（[配置方式](#配置方式) · [模型差异](#模型差异) · [`thinking_budget` 与 `max_tokens` 的关系](#thinking_budget-与-max_tokens-的关系) · [效果参考](#效果参考)）
-- [Prompt Caching（Anthropic 专属）](#prompt-cachinganthropic-专属)
-- [支持的 provider 及配置示例](#支持的-provider-及配置示例)
-- [HTTP 代理配置](#http-代理配置)（[Linux / macOS](#linux--macos) · [Windows PowerShell](#windows-powershell) · [注意事项](#注意事项)）
-- [Token 消耗参考](#token-消耗参考) · [完整模型定价表](#完整模型定价表) · [Token 用量统计](#token-用量统计)
-
----
+- [快速配置](#快速配置) · [多 Provider 链式服务（进阶）](#多-provider-链式服务进阶)（[文件分工](#文件分工) · [配置步骤](#配置步骤) · [Provider 条目字段](#provider-条目字段) · [调整多链线路优先级](#调整多链线路优先级) · [端点级节流（`pacing`）](#端点级节流pacing) · [切换策略](#切换策略) · [模块级 Provider 偏好](#模块级-provider-偏好) · [配置检查](#配置检查) · [兼容性](#兼容性)）
+- [模块启停](#模块启停) · [缓存机制](#缓存机制)
+- [失败降级与占位](#失败降级与占位) · [`system_prompt` 配置覆盖链](#system_prompt-配置覆盖链)
+- [配置项总览](#配置项总览)（[模块级配置](#模块级配置) · [事实校验容差配置](#事实校验容差配置)） · [各模块推荐参数值](#各模块推荐参数值)
+- [Extended Thinking](#extended-thinking)（[配置方式](#配置方式) · [模型差异](#模型差异) · [`thinking_budget` 与 `max_tokens` 的关系](#thinking_budget-与-max_tokens-的关系) · [效果参考](#效果参考)） · [Prompt Caching（Anthropic 专属）](#prompt-cachinganthropic-专属)
+- [支持的 provider 及配置示例](#支持的-provider-及配置示例) · [HTTP 代理配置](#http-代理配置)（[Linux / macOS](#linux--macos) · [Windows PowerShell](#windows-powershell) · [注意事项](#注意事项)）
+- [Token 消耗参考](#token-消耗参考) · [完整模型定价表](#完整模型定价表)
+- [Token 用量统计](#token-用量统计)
 
 ## 快速配置
 
@@ -1066,3 +1062,8 @@ $env:HTTPS_PROXY = "http://127.0.0.1:7890"
 - **汇总数据**：API 调用次数、模型名称、输入/输出 Token 总数、缓存命中 Token、累计费用
 - **模块明细**：每个 LLM 子模块的单独统计（状态、模型、Token 数、费用、是否缓存、是否开启 Thinking）
 - **缓存统计**：系统数据缓存命中/未命中/总请求数/命中率
+
+---
+
+**相关手册**：[← 常规配置指引](how-to-config.md) · [报告文件结构 →](reports-instruction.md) · [手册总索引](README.md)
+同主题：[常见问题解答](faq.md)
