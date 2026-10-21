@@ -122,7 +122,6 @@ import argparse
 import re
 import subprocess
 import sys
-from functools import lru_cache
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享包（_traces_code）
@@ -220,9 +219,9 @@ CIPHER_EXEMPT_FILES = {"technical.md", "llm-technical.md"}
 # ── 模式表 / 行级豁免 ──
 # 实现位于同目录 `_traces_doc/patterns.py`（原面 re-export：测试与调用方仍按本
 # 脚本名访问 _DOC_PATTERNS / _is_excluded；共享历史叙述词表见 `_traces_common`）。
-from _traces_doc.patterns import (  # noqa: E402
+from _traces_doc.patterns import (  # noqa: E402, F401  原面 re-export（测试按脚本名访问）
     DOC_PATTERNS as _DOC_PATTERNS,
-    EXCLUDE_PATTERNS as _COMPILED_EXCLUDE,  # noqa: F401  原面 re-export（测试按脚本名访问）
+    EXCLUDE_PATTERNS as _COMPILED_EXCLUDE,
     TREE_ONLY_PATTERNS,
     is_excluded as _is_excluded,
 )
@@ -244,49 +243,15 @@ _NAME_CODE = re.compile(
     re.IGNORECASE,
 )
 
-# ═══════════════════════════════════════════════════════════════
-#  编译镜像 / 模式子集（扫描热循环用）
-# ═══════════════════════════════════════════════════════════════
-#  公开面 `_DOC_PATTERNS` 仍保持 (pattern, category, description) 字符串元组
-#  （测试/调用方契约不变）；热循环用编译镜像，省掉 re.search(str) 每次的
-#  内部缓存查找。模式子集与并集预筛按（分类集, 是否含 CIPHER）缓存——同一
-#  文档内逐行复用，不重建。
-_COMPILED_DOC_PATTERNS = tuple((re.compile(p), c, d) for p, c, d in _DOC_PATTERNS)
-#: 目录树行专属补强（仅树行入检；视为附加分类域 "TREE" 由 bundle 拼入）
-_COMPILED_TREE_PATTERNS = tuple((re.compile(p), c, d) for p, c, d in TREE_ONLY_PATTERNS)
+# ── 编译镜像 / 模式子集（实现见 `_traces_doc/bundle.py`；原面 re-export）──
+from _traces_doc.bundle import (  # noqa: E402
+    ALL_CATEGORIES as _ALL_CATEGORIES,
+    REGULAR_CATEGORIES as _REGULAR_CATEGORIES,
+    pattern_bundle as _pattern_bundle,
+)
+
 #: 行内代码段（技术令牌如词表条目 `不再`——NARRATIVE 匹配前剔除，非叙述）
 _INLINE_CODE_RE = re.compile(r"`[^`]+`")
-_ALL_CATEGORIES = tuple(dict.fromkeys(c for _, c, _ in _DOC_PATTERNS))
-#: 常规文档非树行：NARRATIVE/STATUS 由域门禁逐行剔除（树行才用全集）
-_REGULAR_CATEGORIES = tuple(c for c in _ALL_CATEGORIES if c not in ("NARRATIVE", "STATUS"))
-
-
-@lru_cache(maxsize=None)
-def _pattern_bundle(
-    categories: tuple[str, ...], include_cipher: bool = True, include_tree_only: bool = False
-) -> tuple[tuple[tuple[re.Pattern[str], str, str], ...], re.Pattern[str]]:
-    """取分类子集的编译模式 + 并集预筛正则（缓存，模式表进程内固定）。
-
-    ``include_cipher``：CIPHER 独立于域模式选择（除约束定义处/归档域外处处禁），
-    故不写进各域分类列表，由本开关统一增删——避免“任务域/变更日志域额外拼
-    CIPHER”在调用处重复三份。
-    ``include_tree_only``：拼入目录树行专属补强模式（仅树行分支置 True）——
-    原先树行分支需特殊处理（单独拼表 + 跳过预筛），现统一进 bundle，预筛面
-    与精确面同源。
-
-    并集预筛不改变判定结果：命中后仍走逐一精确分支，未命中的行必然无 finding
-    ——大批普通行由此一次扫描直通，而非 N 条模式逐条试。
-    """
-    wanted = set(categories)
-    if include_cipher:
-        wanted.add("CIPHER")
-    else:
-        wanted.discard("CIPHER")
-    picked = tuple(pt for pt in _COMPILED_DOC_PATTERNS if pt[1] in wanted)
-    if include_tree_only:
-        picked += _COMPILED_TREE_PATTERNS
-    prefilter = re.compile("|".join(f"(?:{rx.pattern})" for rx, _c, _d in picked))
-    return picked, prefilter
 
 
 def _read_doc(fpath: Path) -> str | None:

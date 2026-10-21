@@ -941,8 +941,8 @@ A: 运行 `.venv/bin/python scripts/check-test-markers.py`，脚本会静态扫�
 
 - **统一契约**（`_checklib.add_common_args()` / `report()`）：`-v/--verbose` 详细输出、`--ci` 仅输出 `文件:描述`；**通过退出 0，发现 finding 退出 2**（`check-code-traces.py` 另有 HIGH=1 / LOW=3 的分级语义，属其自身约定）；通过打印 `[OK] …`，失败逐条 `[ERR] file:desc`（`--ci` 下为裸行）+ 汇总行
 - **共享原语**：`REPO_ROOT` / `rel()`（仓库相对路径，非仓库内路径原样返回）、`extract_region()` / `replace_region()`（标记区间）、`extract_table_region()` / `replace_table_region()`（表区域，带结构校验）
-- **`_traces_code/`**：check-code-traces 内部实现包——`exemptions.py`（「章节计数豁免」与「迭代轮次豁免」，check-doc-traces 同共用）、`patterns.py`（模式表与行级豁免；共享历史叙述正则引用 `_traces_common` 常量）、`extract.py`（注释/标识符抽取）、`scan.py`（扫描调度）、`layers.py`（core 反向依赖守卫）、`config.py`（扫描域配置与规则载体豁免：`RULE_CARRIER_DIRS` / `RULE_CARRIER_FILES`）；check-code-traces.py 只留 CLI 与原面 re-export
-- **`_traces_doc/`**：check-doc-traces 后端包——`patterns.py`（文档痕迹模式表 `DOC_PATTERNS` / 树行专属 `TREE_ONLY_PATTERNS` / 行级豁免 `EXCLUDE_PATTERNS`+`is_excluded`，共享历史叙述正则引用 `_traces_common` 常量）、`dedup.py`（结构性冗余扫描：单次遍历内完成标题路径感知判重、台账/归档域重复长行与区块同小节限定、空白归一与同块单报），入口薄 CLI 与原面 re-export
+- **`_traces_code/`**：check-code-traces 内部实现包——`patterns.py`（**匹配表**：历史痕迹/标识符/暗号模式与编译镜像；只管「命中了什么」，共享历史叙述正则引用 `_traces_common` 常量）、`exemptions.py`（**豁免表**：章节计数与迭代轮次豁免〔check-doc-traces 共用〕+ 代码侧行级豁免〔合法领域值/魔法编号领域值/测试回归元描述〕与 `_is_*_excluded` 判定——调漏检改前者、调误报改后者，不在一处相互淹没）、`extract.py`（注释/标识符抽取）、`scan.py`（扫描调度）、`layers.py`（core 反向依赖守卫）、`config.py`（扫描域配置与规则载体豁免：`RULE_CARRIER_DIRS` / `RULE_CARRIER_FILES`）；check-code-traces.py 只留 CLI 与原面 re-export
+- **`_traces_doc/`**：check-doc-traces 后端包——`patterns.py`（文档痕迹模式表 `DOC_PATTERNS` / 树行专属 `TREE_ONLY_PATTERNS` / 行级豁免 `EXCLUDE_PATTERNS`+`is_excluded`，共享历史叙述正则引用 `_traces_common` 常量）、`bundle.py`（编译镜像 + 按域取子集 + 树行拼表，`pattern_bundle` 按〔分类集, CIPHER 开关, 树行〕lru 缓存并集预筛——预筛面与精确面同源）、`dedup.py`（结构性冗余扫描：单次遍历内完成标题路径感知判重、台账/归档域重复长行与区块同小节限定、空白归一与同块单报），入口薄 CLI 与原面 re-export
 - **`_traces_common.py`**：两脚本**逐字节相同**的历史叙述正则单一来源（命名常量 + `SHARED_REGEXES` 元组）；只登记字面量，**分类与描述仍按各自域定义**，判定入口/域矩阵/豁免语义不在此模块——新增同源词汇先加此处再两侧引用，仅一域需要的词汇不进共享表（机检见 `test_trace_shared_vocabulary`：两表交集须恰等于词表、两侧须都引用、模式源码内不得写死字面量）
 - **`_test_runner/`**：`test-runner.py` 的内部实现包（paths / modes / pytest_env / machine_info / doc_writer / report_html / runner），入口仅保留 CLI 与主流程并原面 re-export —— 既有测试访问 `test_runner._env_value` 等名字仍有效；**注意**：monkeypatch 内部状态（如 `_LATEST_DIR` / `_DOC_COVERAGE_PATH`）须指向持有它的子模块（`_test_runner.report_html` / `_test_runner.doc_writer`）
 
@@ -990,7 +990,7 @@ A: 运行 `.venv/bin/python scripts/check-test-markers.py`，脚本会静态扫�
 - **缓存**：输入或逻辑面变化自动失效；排查"改了规则结论没变"时**不要删缓存**，用 `CHECK_CONCLUSION_CACHE_DIR=$(mktemp -d)` 隔离跑一次对照——这样能区分"缓存未失效（缺陷）"与"规则确实没覆盖（漏报）"。
 - **报误报的最小信息集**：finding 原文 + 你的判定（合法 / 应改）+ 处置（豁免 / 词条）+ 用例名。四项齐了，一次提交即可落地，不用来回确认。
 
-> 新增检查脚本时直接复用 `_checklib`，不要自建 argparse/输出/退出样板；**跨脚本共用**的历史变更叙述正则放 `_traces_common.py`（词表单一来源），单域模式放各自 `_traces_*/patterns.py`，两脚本共用的章节/轮次计数豁免放 `_traces_code/exemptions.py`。
+> 新增检查脚本时直接复用 `_checklib`，不要自建 argparse/输出/退出样板；**跨脚本共用**的历史变更叙述正则放 `_traces_common.py`（词表单一来源），单域模式放各自 `_traces_*/patterns.py`（只管「匹配什么」），豁免策略放 `_traces_code/exemptions.py` 与 `_traces_doc/patterns.py` 的 `EXCLUDE_PATTERNS`（只管「命中后哪些算合法」）；文档域的模式子集与预筛放 `_traces_doc/bundle.py`。
 
 ### 测试类
 

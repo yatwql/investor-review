@@ -30,6 +30,8 @@
 
 ### 重构
 
+- **痕迹检查「匹配表 / 豁免表」分离**：`_traces_code/patterns.py`（553 行）拆为 `patterns.py`（匹配表 338 行）+ `exemptions.py`（豁免表 346 行，含既有章节/轮次共用豁免）——调漏检改前者、调误报改后者，不再在同一文件里相互淹没；`_TASK_ID_RE` 归匹配表（硬禁止是匹配口径非豁免）
+- **文档域编译镜像下沉**：新增 `_traces_doc/bundle.py`（编译镜像 + 按域取子集 + 树行拼表，`pattern_bundle` lru 缓存），`check-doc-traces.py` 727 → 693 行；公开面 `_DOC_PATTERNS` / `_is_excluded` / `_pattern_bundle` 经入口原面 re-export 不变
 - **`release` 测试拆片**：`test_release_tool.py` 1182 → 591 行，门禁/refresh/publish/devbump 与归档前置拆入 `test_release_tool_gate.py`（450 行），共享设备（子进程替身 / 临时仓库夹具 / 台账与目录树样例）提为 `_release_fixtures.py`（195 行）——红线余量从 34 行恢复到 609 行，后续加用例不再受阻
 
 ### 测试
