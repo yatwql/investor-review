@@ -437,7 +437,7 @@ class TestPrepare:
 
         rf_main = fx.RF_FILE.read_text(encoding="utf-8")
         assert "rf-901" not in rf_main
-        assert "本版开发期已修复项已随 v0.12.6 发布迁入上方归档档案" in rf_main
+        assert "本版开发期已修复项已随 v0.12.6 发布迁入归档档案" in rf_main
         rf_arch = (fx.root / "docs" / "archive" / "v0.12.x" / "archived_review-findings.0.12.x.md").read_text(
             encoding="utf-8"
         )

@@ -50,8 +50,14 @@ from src.python.report.styles import BLUE_FONT, DARK_GREEN_FONT, GREEN_FONT, NOT
 
 logger = logging.getLogger("invest")
 
+
 # 模块级降级阈值控制器（单例工厂共享，统一管理）
-_tracker = get_tracker()
+# 降级跟踪器**不缓存引用**：单例工厂是唯一事实源，缓存实例会让 reset_tracker()
+# （测试隔离/运行期重置）失效——模块继续写旧实例，计数与事件落不到当前单例。
+def _tracker():
+    """当前降级跟踪器（每次经单例工厂取，不缓存）。"""
+    return get_tracker()
+
 
 _NCOLS = 11
 _CANDIDATE_HEADERS = [
@@ -392,7 +398,7 @@ def build_perf_data_status(
     if not adjusted_ratings and total_funds > 0:
         # 所有基金均未获取到排名数据（无代表性缓存年龄可查）
         ttl = get_ttl("fund_rank")
-        degraded, _, _ = _tracker.record(
+        degraded, _, _ = _tracker().record(
             "perf_rank",
             "T2",
             success=False,

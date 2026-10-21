@@ -190,7 +190,7 @@ class TestPlaceholderCollapse:
         new_main, _arch, moved = rel.apply_rf_archive(main, _SAMPLE_RF_ARCHIVE, "0.12.6", "2026-10-08")
 
         assert moved == 2
-        assert new_main.count("发布迁入上方归档档案") == 1
+        assert len(re.findall(r"（本版开发期已修复项已随[^）]*）", new_main)) == 1
         assert "（0.12.5-dev）" not in new_main
         assert "（0.12.6-dev）" in new_main
         assert "本批发布日 2026-10-08" in _arch
@@ -323,10 +323,16 @@ class TestRealArchiveContract:
             assert re.fullmatch(fmt_pattern, heading), f"{name}: {heading}"
 
     def test_placeholder_template_matches_real_ledger(self, real):
-        """主台账既有占位句与脚本模板同形（脚本生成的占位不引入第二种写法）。"""
+        """主台账若存在占位句，必须与脚本模板同形（不引入第二种写法）。
+
+        新开发周期台账**允许没有占位**（`devbump` 会清掉上一版的占位）——
+        因此这里断言的是「有则同形」，而非「必须有」。
+        """
         rel = real["rel"]
         pattern = re.escape(rel.RF_PLACEHOLDER).replace(r"\{version\}", r"\d+\.\d+\.\d+")
-        assert re.search(pattern, real["rf_main"]), "真实台账应有与模板同形的迁档占位句"
+        found = re.findall(r"（本版开发期已修复项已随[^）]*）", real["rf_main"])
+        for line in found:
+            assert re.fullmatch(pattern, line), f"真实台账占位句与模板不同形：{line}"
 
     def test_active_archive_headers_parseable(self, real):
         """脚本会写入的两份归档头部两行齐备（区间/日期派生有落点）。"""
@@ -367,3 +373,37 @@ class TestRealArchiveContract:
         for heading in done:
             matched = rel.plan_completed_sections(heading + "\n\n正文\n")
             assert matched, heading
+
+
+class TestPlaceholderLifecycle:
+    """切开发版即清空迁档占位（上一版提示属过期信息）+ 文案不带方向词。"""
+
+    @staticmethod
+    def _ledger(*versions: str) -> str:
+        sections = [
+            f"### 开发期已修复（{v}-dev）\n\n（本版开发期已修复项已随 v{v} 发布迁入归档档案）\n" for v in versions
+        ]
+        return "# 台账\n\n## 已解决问题\n\n" + "\n".join(sections) + "\n### 归档档案\n- 索引行\n"
+
+    def test_placeholder_has_no_direction_word(self, rel):
+        """占位文案不写「上方/下方」——版面变化不该让提示失准。"""
+        text = rel.RF_PLACEHOLDER.format(version="1.2.3")
+        assert "归档档案" in text
+        assert "上方" not in text and "下方" not in text
+
+    def test_drop_clears_every_placeholder_section(self, rel):
+        out = rel.drop_migration_placeholders(self._ledger("1.0.1", "1.0.2"))
+        assert "发布迁入归档档案" not in out
+        for version in ("1.0.1", "1.0.2"):
+            assert f"（{version}-dev）" not in out  # 空占位节的节头一并删除
+        assert "### 归档档案" in out  # 归档索引不受影响
+
+    def test_drop_keeps_prose_sections(self, rel):
+        text = (
+            "# 台账\n\n## 已解决问题\n\n### 开发期已修复（1.0.1-dev）\n\n"
+            "> 人工备注：本版已人工复核\n\n"
+            "（本版开发期已修复项已随 v1.0.1 发布迁入归档档案）\n\n### 归档档案\n- 索引行\n"
+        )
+        out = rel.drop_migration_placeholders(text)
+        assert "> 人工备注：本版已人工复核" in out
+        assert "发布迁入归档档案" not in out

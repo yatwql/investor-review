@@ -230,6 +230,23 @@ class TestDevBump:
         assert commit[-1] == "chore: 切 0.12.7-dev 开发版本（v0.12.6 发布后）"
         assert not any("push" in c for c in runner.calls)
 
+    def test_clears_previous_release_placeholder(self, rel, tmp_path):
+        """切开发版时清掉上一版迁档占位节（新周期台账从空开始）。"""
+        fx = _ToolRepoFixture(rel, tmp_path)
+        fx.CONSTANTS_FILE.write_text('APP_VERSION = "0.12.6"\n', encoding="utf-8")
+        fx.RF_FILE.write_text(
+            "# 台账\n\n## 已解决问题\n\n### 开发期已修复（0.12.6-dev）\n\n"
+            "（本版开发期已修复项已随 v0.12.6 发布迁入归档档案）\n\n### 归档档案\n- 索引行\n",
+            encoding="utf-8",
+        )
+        runner = _ok_runner([(["git", "status", "--porcelain"], (0, " M docs/x.md\n", ""))])
+        rc = rel.cmd_devbump(ns(push=False), runner=runner)
+        assert rc == 0
+        text = fx.RF_FILE.read_text(encoding="utf-8")
+        assert "发布迁入归档档案" not in text
+        assert "（0.12.6-dev）" not in text
+        assert "### 归档档案" in text
+
     def test_rejects_non_dev_branch(self, rel, tmp_path):
         fx = _ToolRepoFixture(rel, tmp_path)
         fx.CONSTANTS_FILE.write_text('APP_VERSION = "0.12.6"\n', encoding="utf-8")

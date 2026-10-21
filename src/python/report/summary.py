@@ -40,8 +40,14 @@ _INDEX_DOWN_FONT = Font(size=10, bold=True, color="009900")  # 跌→绿
 # 单元格对齐
 _CENTER_ALIGN = Alignment(horizontal="center", vertical="center")
 
+
 # 模块级降级阈值控制器（单例工厂共享，统一管理）
-_tracker = get_tracker()
+# 降级跟踪器**不缓存引用**：单例工厂是唯一事实源，缓存实例会让 reset_tracker()
+# （测试隔离/运行期重置）失效——模块继续写旧实例，计数与事件落不到当前单例。
+def _tracker():
+    """当前降级跟踪器（每次经单例工厂取，不缓存）。"""
+    return get_tracker()
+
 
 _NCOLS = 8
 _HEADERS = ["指标", "数值"]
@@ -409,7 +415,7 @@ def build_index_data_status(
         if has_degraded:
             cache_age = get_cache_age_by_data_type("index", "sh000001")
             ttl = get_ttl("index")
-            degraded, _, _ = _tracker.record(
+            degraded, _, _ = _tracker().record(
                 "index_a",
                 "T2",
                 success=False,
@@ -430,7 +436,7 @@ def build_index_data_status(
         if has_degraded:
             cache_age = get_cache_age_by_data_type("index", "gb_dji")
             ttl = get_ttl("index")
-            degraded, _, _ = _tracker.record(
+            degraded, _, _ = _tracker().record(
                 "index_us",
                 "T2",
                 success=False,

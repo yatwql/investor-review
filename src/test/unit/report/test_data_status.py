@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import pytest
 
+import src.python.report.data_status as ds
 from src.python.report.data_status import (
     STATUS_MESSAGES,
     TIER_PREFIX,
@@ -823,3 +824,44 @@ class TestDegradationSummary:
         monkeypatch.setattr(tracker, "get_log", lambda: [])
 
         assert ds.degradation_summary() == []
+
+
+class TestTrackerNotCachedAtModuleLevel:
+    """降级跟踪器不得在模块级缓存实例（单例工厂是唯一事实源）。
+
+    机制约束：`report/{fund_performance,penetration_sheet,summary}.py` 一律在用时经
+    `get_tracker()` 取当前单例，不得在导入期捕获实例——`reset_tracker()` 只销毁工厂内的
+    当前实例，模块若自持引用，重置对它即失效：测试间降级计数互相串味（表现为某用例
+    声称「首次失败未达阈值」，却因同批更早用例的累计计数而写出状态脚注），运行期重置
+    也同样失效。
+    """
+
+    def test_no_module_level_tracker_cache(self):
+        import ast
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parents[4] / "src" / "python"
+        offenders = []
+        for path in sorted(root.rglob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in tree.body:  # 只看模块级赋值（函数内 `_t = get_tracker()` 无缓存问题）
+                if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Call):
+                    continue
+                callee = ast.unparse(node.value.func)
+                if callee == "get_tracker" or callee.endswith(".get_tracker"):
+                    offenders.append(f"{path.relative_to(root)}:{node.lineno} {ast.unparse(node.targets[0])}")
+        assert offenders == [], "模块级缓存降级跟踪器实例会让 reset_tracker() 失效：\n" + "\n".join(offenders)
+
+    def test_module_accessor_follows_reset(self):
+        """模块取用点必须落在「当前」单例上（重置后即换新实例）。"""
+        from src.python.report import fund_performance, penetration_sheet, summary
+
+        ds.reset_tracker()
+        stale = ds.get_tracker()
+        ds.reset_tracker()
+        current = ds.get_tracker()
+
+        assert current is not stale
+        assert fund_performance._tracker() is current
+        assert penetration_sheet._tracker() is current
+        assert summary._tracker() is current

@@ -48,10 +48,10 @@ _INDEX_RANGE_RE = re.compile(
     re.M,
 )
 
-RF_PLACEHOLDER = "（本版开发期已修复项已随 v{version} 发布迁入上方归档档案）"
+RF_PLACEHOLDER = "（本版开发期已修复项已随 v{version} 发布迁入归档档案）"
 #: 迁档占位行（任意批次）——收敛时按版本号识别需收敛的占位
 _PLACEHOLDER_LINE_RE = re.compile(
-    r"^（本版开发期已修复项已随 v(?P<version>\d+\.\d+\.\d+) 发布迁入上方归档档案）[ \t]*$"
+    r"^（本版开发期已修复项已随 v(?P<version>\d+\.\d+\.\d+) 发布迁入(?:上方)?归档档案）[ \t]*$"
 )
 #: 占位节的节头（仅当节内只剩占位时才随占位一起删除）
 _PLACEHOLDER_HEAD_RE = re.compile(r"^### 开发期已修复（(?P<dev>\d+\.\d+\.\d+)-dev）[ \t]*$")
@@ -144,7 +144,7 @@ def apply_rf_archive(main_text: str, archive_text: str, version: str, date: str)
     return new_main, new_archive, moved
 
 
-def _collapse_superseded_placeholders(text: str, keep_version: str) -> str:
+def _collapse_superseded_placeholders(text: str, keep_version: str | None) -> str:
     """只保留最近一次迁档占位节，收敛更早版本的同类占位节。
 
     占位节是「本版表已搬走」的路标，只对本版有意义：归档正文与主文件
@@ -450,3 +450,14 @@ def move_tree_entry(text: str, stem: str, minor: str) -> str:
     new_lines[p_start:p_end] = plan_out
     new_lines[ver_head + 1 : a_end] = arch_out
     return "\n".join(new_lines) + ("\n" if text.endswith("\n") else "")
+
+
+def drop_migration_placeholders(text: str) -> str:
+    """清空全部迁档占位节（切开发版时用）。
+
+    占位是「本版已搬走」的路标，只对刚结束的那个发布周期有意义；`devbump` 之后
+    台账已属于新周期，留着的上一版占位属过期信息（还会在「已解决问题」区顶部
+    显示一个空节）。归档正文与主文件「归档档案」索引已各自记录全部版本，清掉占位
+    不丢信息，doc-drift 的「占位↔归档节」断言随之自然收敛（无占位即无需断言）。
+    """
+    return _collapse_superseded_placeholders(text, keep_version=None)
