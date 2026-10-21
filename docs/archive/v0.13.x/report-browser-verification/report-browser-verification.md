@@ -1,6 +1,6 @@
 # 报告浏览器验证方法与实测结论（rf-113 六项）
 
-> **关联**：`docs/managements/review-findings.md` → **rf-113**（全链路浏览器人工验证 6 项）；勾选清单 [`docs/archive/v0.9.x/chartjs-upgrade/iter7-verification-checklist.md`](../archive/v0.9.x/chartjs-upgrade/iter7-verification-checklist.md)（①~⑥、逐步操作与判定标准）。
+> **关联**：`docs/managements/review-findings.md` → **rf-113**（全链路浏览器人工验证 6 项）；勾选清单 [`docs/archive/v0.9.x/chartjs-upgrade/iter7-verification-checklist.md`](../../v0.9.x/chartjs-upgrade/iter7-verification-checklist.md)（①~⑥、逐步操作与判定标准）。
 > **目的**：把 6 项拆成「**可自动化的实测项**」与「**必须人工的项**」，留下可复现的验证方法与实测结论——后续报告模板 / `chart-*.js` / Chart.js 版本改动后直接复用本方法（脚本与产物在 `docs/tmp/rf113/`，git 忽略，重跑即重建）。
 > **实测环境**：本机 headless Chromium（`--headless=new`）· Node 全局 WebSocket 直连 CDP · 被测报告取 `reports/` 下既有单文件 HTML 产物。
 > **复跑红线**：不真实调用 LLM、不生成报告（仅打开既有产物）；不改 `data/config/`、`data/holdings/`。

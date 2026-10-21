@@ -115,7 +115,7 @@ technical.md 新增 §6.9「实验项生命周期表」（功能语义命名表�
 
 **完成（2026-10-15，v0.13.4-dev）**：`perf-view.py` 获得 `--compare A B`（阶段级中位 delta/倍数 + 变异系数判显著，噪声带内不判回归）、`--json`/`--csv` 机读输出、`--gate` 阈值判定（退出码 0/2）。**门禁归属修正**：CI `perf-gate` 门禁由主动压测 `perf-test-report.py --gate` 承担（同条件可比），历史视图不做门禁——样本不可控、不可复现、测环境不测代码。后续增强：`--json` 升级信封 `{record_count, records, summary}`（与 Markdown 各段同源）、CSV 增归一/离群/最慢阶段列。
 
-**落地设计**：[`perf-observability-design.md`](perf-observability-design.md) §9（门禁归属决策）· §10（输出增强）——设计文档已随 v0.13.4 发布归档于本目录。
+**落地设计**：[`perf-observability/perf-observability-design.md`](perf-observability/perf-observability-design.md) §9（门禁归属决策）· §10（输出增强）——设计文档已随 v0.13.4 发布归档于本目录。
 
 ## plan-125 运行上下文维度采集（provider/缓存/等待/用量） ✅
 
@@ -203,7 +203,7 @@ technical.md 新增 §6.9「实验项生命周期表」（功能语义命名表�
 
 ## plan-155 TUI 统一交互运行时（panel_runtime）✅ 主体交付
 
-**完成（2026-10-20，v0.13.8-dev 归档）**：按 [`tui-panel-runtime-design.md`](tui-panel-runtime-design.md) 实施完成——新建 `tui/panel_runtime.py`（`NavState` / `PanelItem(key, label, kind, action, detail)` / `panel_loop`：导航态单源，语义真值取自主循环），`test_panel_runtime.py` 31 例；全部列表面板（`[P]/[A]/[D]/[I]/[S]/[M]` + 缓存管理）迁移到 `panel_loop`——方向键导航全面板生效、Enter 防误触 engaged 门控、直达键游标同步不置 engaged、`kind=return` 项不参与回绕；主循环 `sel` 亦 NavState 化。`[S]` 匹配/详情辅助抽出至 `handlers_switch.py`。文档触点同步（technical 模块表 + C29 升级为「构造性成立」、folders 目录树、requirements R-TUI-08、testplan §2.1、how-to 键位表、changelog）。
+**完成（2026-10-20，v0.13.8-dev 归档）**：按 [`tui-panel-runtime/tui-panel-runtime-design.md`](tui-panel-runtime/tui-panel-runtime-design.md) 实施完成——新建 `tui/panel_runtime.py`（`NavState` / `PanelItem(key, label, kind, action, detail)` / `panel_loop`：导航态单源，语义真值取自主循环），`test_panel_runtime.py` 31 例；全部列表面板（`[P]/[A]/[D]/[I]/[S]/[M]` + 缓存管理）迁移到 `panel_loop`——方向键导航全面板生效、Enter 防误触 engaged 门控、直达键游标同步不置 engaged、`kind=return` 项不参与回绕；主循环 `sel` 亦 NavState 化。`[S]` 匹配/详情辅助抽出至 `handlers_switch.py`。文档触点同步（technical 模块表 + C29 升级为「构造性成立」、folders 目录树、requirements R-TUI-08、testplan §2.1、how-to 键位表、changelog）。
 
 **本轮补充**：`[M]` 多链优先级面板整体迁出为 `tui/handlers_llm_providers.py`（`handlers_config` 仅留菜单入口薄包装）——原文件曾达 1017 行、超单文件 1000 行硬上限（由 `check-file-length` 拦截），拆分后 899 行，红线恢复。
 

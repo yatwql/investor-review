@@ -230,7 +230,7 @@ Esc 复核的合法结果包含「实测无风险 → 维持现状」。判为�
 
 | 文档 | 关系 |
 |---|---|
-| `tui-panel-runtime-design.md`（plan-155） | 本设计是其在**文案层**的补齐：运行时收敛控制流，本设计收敛提示语义 |
+| `tui-panel-runtime/tui-panel-runtime-design.md`（plan-155） | 本设计是其在**文案层**的补齐：运行时收敛控制流，本设计收敛提示语义 |
 | `docs/managements/DESIGN.md` | Web/HTML 侧的设计语言契约；本设计的目标形态 `DESIGN-TUI.md` 与其对称（同样是「唯一判据 + 结构测试守卫」） |
 | `docs/managements/technical.md` 架构约束 C29 | 「分档只改版式不改语义」保持不变；本设计新增的模板化要求与之正交 |
 | `docs/managements/testplan.md` | 新增机检与任务脚本须按门禁分层登记（P0 快反馈 / P2 全量） |

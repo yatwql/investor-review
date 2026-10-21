@@ -18,8 +18,8 @@
 | 测试用例 | — | — | 11,098 个 | `pytest --collect-only` 统计（`scripts/collect-test-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 11 | 5,962 | 含 README.md（211 行）；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 10 | 5,751 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 177 | 64,494 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 4 + archive md 160），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 12 | 12,256 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 177 | 64,501 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 4 + archive md 160），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 12 | 12,263 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 160 | 51,445 | 各版本 changelog/plan/review-findings 与设计文档归档（157 md 50,492 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 4 | ~702 | 在办设计文档（扁平存放，完成后迁入对应版本的归档子目录）：两份 Jev 新闻关联判定文档（对照评测方案 + 类型化判定通道接入设计）+ 决策跨期反思闭环设计 + Web 浏览器验证方法 |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -1347,7 +1347,8 @@ investor-util/
 │   │   │   ├── archived_changelog.0.7.x.md        # 变更日志归档 v0.7.x
 │   │   │   ├── archived_plan.0.7.x.md             # 实现计划归档 v0.7.x
 │   │   │   ├── archived_review-findings.0.7.x.md  # 自审记录归档 v0.7.x
-│   │   │   ├── porting-to-rust-vs-java-analysis.md # Rust/Java 移植技术分析
+│   │   │   ├── porting-to-rust-vs-java/           # Rust/Java 移植评估归档
+│   │   │   │   └── porting-to-rust-vs-java-analysis.md # 移植技术分析（依赖替代风险 / 两方案成本对比）
 │   │   │   └── better-investment-advice/           # 投资建议改进分析讨论
 │   │   │       ├── discussion-better-investment-advice.md             # 可行性调研：6 层改进方向与实施路径
 │   │   │       ├── better-investment-task.md                          # 最小粒度工作任务分解（86 任务）
@@ -1515,12 +1516,18 @@ investor-util/
 │   │   │   ├── archived_changelog.0.13.x.md # 变更日志归档 v0.13.x（v0.13.0 ~ v0.13.4 已发布段）
 │   │   │   ├── archived_plan.0.13.x.md      # 实现计划归档 v0.13.x（含设计文档索引）
 │   │   │   ├── archived_review-findings.0.13.x.md # 自审记录归档 v0.13.x（开发期已修复批次）
-│   │   │   ├── llm-cost-optimization.md # LLM 调用成本优化分析归档（实测画像 + 行动清单：计费口径/闲时调度/模型映射/output_brief 机制）
-│   │   │   ├── holding-cost-position-design.md # 持仓成本相对历史价格区间位置设计
-│   │   │   ├── tui-panel-runtime-design.md # TUI 统一交互运行时设计（NavState/PanelItem/panel_loop 契约 + 13 面板清单 + 8 迭代）
-│   │   │   ├── tui-interaction-hci-design.md # TUI 交互 HCI 治理设计（HCI 原则对照 + 交互契约 v0 + M1~M10 措施与机检载体）
-│   │   │   ├── perf-observability-design.md # 运行观测与性能归因设计（perf_history 观测面：细分/计数/上下文维度/对比门禁）
-│   │   │   └── report-browser-verification.md # 报告浏览器验证方法与实测结论（六项拆分：CDP 自动化子项实测 + 人工步骤 + 复验清单）
+│   │   │   ├── holding-cost-position/      # 持仓成本历史价格区间位置设计归档
+│   │   │   │   └── holding-cost-position-design.md # 持仓成本相对历史价格区间位置设计
+│   │   │   ├── llm-cost-optimization/       # LLM 调用成本优化分析归档
+│   │   │   │   └── llm-cost-optimization.md # 实测画像 + 行动清单（计费口径/闲时调度/模型映射/output_brief 机制）
+│   │   │   ├── perf-observability/          # 运行观测与性能归因设计归档
+│   │   │   │   └── perf-observability-design.md # perf_history 观测面设计（细分/计数/上下文维度/对比门禁）
+│   │   │   ├── report-browser-verification/ # 报告浏览器验证归档
+│   │   │   │   └── report-browser-verification.md # 验证方法与实测结论（CDP 自动化子项实测 + 人工步骤 + 复验清单）
+│   │   │   ├── tui-interaction-hci/         # TUI 交互 HCI 治理设计归档
+│   │   │   │   └── tui-interaction-hci-design.md # HCI 原则对照 + 交互契约 v0 + M1~M10 措施与机检载体
+│   │   │   └── tui-panel-runtime/           # TUI 统一交互运行时设计归档
+│   │   │       └── tui-panel-runtime-design.md # NavState/PanelItem/panel_loop 契约 + 13 面板清单 + 8 迭代
 │   └── plan/                          #   中间设计文件（在办设计文档，扁平存放）；完成后迁入对应版本的归档子目录
 │       ├── jev-news-correlation-evaluation.md # 评测方案（三方对照：关键词/现网生成/Jev；预注册阈值与 go-no-go 判定）
 │       ├── jev-news-correlation-design.md # 新闻关联判定接入设计（独立于对话链的类型化判定通道/模板理由/降级矩阵）
