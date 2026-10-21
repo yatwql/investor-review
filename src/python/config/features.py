@@ -40,7 +40,7 @@ FEATURES_FILE = os.path.join(PROJECT_ROOT, "data/config/features.json")
 
 # ── 分组常量（作用域轴）───────────────────────────────────────
 # 分组表达**作用域**——用户决策心智是「开了长出什么」：
-#   GROUP_PRESENTATION —— 呈现与体验：只改呈现不改内容（2 项全默认开）
+#   GROUP_PRESENTATION —— 呈现与体验：只改呈现不改内容（1 项全默认开）
 #   GROUP_ANALYSIS     —— 分析增强：在既有章节内追加分析块/列/子表
 #   GROUP_STANDALONE   —— 独立章节与回放：新增整页签或多期回放（全默认关）
 #   GROUP_MECHANISM    —— 机制与诊断：内部机制 / 诊断接缝 / 待验证实验

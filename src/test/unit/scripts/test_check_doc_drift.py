@@ -985,3 +985,77 @@ class TestReturnKeyInvariant:
             "| **Esc** | 子菜单：按 Esc 即时取消返回主菜单，无需找「0 返回」 |\n"
         )
         assert drift.check_return_key_invariant({p: text}) == []
+
+
+# ═══ 正文菜单键引用（第 18 项扩展）═══
+
+
+class TestMenuKeyReferences:
+    """正文「菜单 `X`」引用须为主菜单键；`[D]` 二级键须写作 `D` → `X`。"""
+
+    def test_legal_forms_pass(self, drift, tmp_path):
+        """主菜单键各书写形态（裸键/反引号/方括号/加粗）均无 finding。"""
+        p = tmp_path / "faq.md"
+        text = (
+            "菜单 `L` 会先检查缓存。\n"
+            "在菜单 **[S]** 的机制与诊断块切换。\n"
+            "菜单 `[3]` 清理过期缓存。\n"
+            "菜单 `D` → `C` 可改持仓目录。\n"
+            "菜单 P 的五个章节组相互独立。\n"
+        )
+        assert drift.check_menu_key_references({p: text}) == []
+
+    def test_stale_main_key_reported(self, drift, tmp_path):
+        """缓存管理编号迁移后遗留的旧主菜单键 `[4]` → 报出（历史真实残留）。"""
+        p = tmp_path / "faq.md"
+        findings = drift.check_menu_key_references({p: "也可通过菜单 `[4]` → `3` 清理过期缓存。\n"})
+        assert any("[4]" in f and "不是主菜单键" in f for f in findings)
+
+    def test_submenu_key_needs_d_prefix(self, drift, tmp_path):
+        """[D] 的二级键裸写为「菜单 `C`」→ 报出并提示 `D` → `C` 写法。"""
+        p = tmp_path / "how-to-config.md"
+        findings = drift.check_menu_key_references({p: "| `holdings_dir` | 持仓目录 | 菜单 `C` |\n"})
+        assert any("`D` → `C`" in f for f in findings)
+
+    def test_bare_word_not_captured(self, drift, tmp_path):
+        """「主菜单 code block」里的英文词首字母不当作键（裸键形态须跟空白/标点）。"""
+        p = tmp_path / "developer-guide.md"
+        text = "| 新增菜单项 | 同步两本手册的主菜单 code block |\n"
+        assert drift.check_menu_key_references({p: text}) == []
+
+
+# ═══ 可见性规则总览表 ═══
+
+
+class TestVisibilityTypeRows:
+    """`reports-instruction.md` 可见性表 type 行 ↔ 章节注册表 type 集合双向对账。"""
+
+    @staticmethod
+    def _doc(*types: str) -> str:
+        rows = "".join(f"| `{t}` | 控制 | 条件 | E / B / L |\n" for t in types)
+        return f"### 可见性规则总览\n\n| type | board | data | 菜单 |\n|:--|:--|:--|:--|\n{rows}\n---\n"
+
+    def _patch(self, drift_parts, monkeypatch, types: tuple[str, ...]):
+        registry = [{"number": i + 1, "name": f"章{i}", "type": t} for i, t in enumerate(types)]
+        monkeypatch.setattr(drift_parts._format, "_REPORT_SECTION_DEFAULT", registry)
+
+    def test_matching_set_passes(self, drift, drift_parts, monkeypatch):
+        self._patch(drift_parts, monkeypatch, ("always", "llm"))
+        assert drift.check_visibility_type_rows(self._doc("always", "llm")) == []
+
+    def test_missing_type_reported(self, drift, drift_parts, monkeypatch):
+        """注册表有而表里没有（`schedule_replay` 漏行即此型）→ 报出。"""
+        self._patch(drift_parts, monkeypatch, ("always", "schedule_replay"))
+        findings = drift.check_visibility_type_rows(self._doc("always"))
+        assert any("缺少 type `schedule_replay`" in f for f in findings)
+
+    def test_unknown_type_reported(self, drift, drift_parts, monkeypatch):
+        """表里写了注册表没有的 type（`financial_report` 混入即此型）→ 报出。"""
+        self._patch(drift_parts, monkeypatch, ("always", "fundamental_snapshot"))
+        findings = drift.check_visibility_type_rows(self._doc("always", "financial_report"))
+        assert any("没有的 type `financial_report`" in f for f in findings)
+
+    def test_duplicate_type_reported(self, drift, drift_parts, monkeypatch):
+        self._patch(drift_parts, monkeypatch, ("always",))
+        findings = drift.check_visibility_type_rows(self._doc("always", "always"))
+        assert any("重复" in f for f in findings)

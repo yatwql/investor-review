@@ -17,6 +17,7 @@ import re
 from pathlib import Path
 
 from _checklib import rel
+from src.python.tui.handlers_config import CONFIG_DIR_INFO_KEYS
 from src.python.tui.tui_menu import MENU_ITEMS
 
 #: 主菜单项：(快捷键, 显示标签, 回调, 是否退出)
@@ -86,10 +87,47 @@ def check_menu_blocks(manual_texts: dict[Path, str]) -> list[str]:
 
 
 #: 返回键紧邻键记号：`[X]` 与「返回主菜单」间仅记号/空白（≤6 字符）——
-#: 排除行内远处 `[L]` 等非返回键（防 changelog 式列表行误报）
 _RET_NEAR_KEY_RE = re.compile(r"\[([A-Za-z0-9])\][`*\s]{0,6}返回主菜单")
 #: 返回前缀行尾裸键：列表/图块行「**0 返回」「0 返回」形态
 _RET_TAIL_KEY_RE = re.compile(r"([A-Za-z0-9])\s*(?:\*\*|\])?\s*$")
+#: 正文菜单引用：``菜单 `X` `` / ``菜单 `[X]` `` / ``菜单 [X]`` / ``菜单 **`[X]`**`` / 裸键 ``菜单 P 的…``
+#: 裸键形态必须紧跟空白/标点/句末，否则「主菜单 code block」的 ``c`` 会被误捕
+_MENU_REF_RE = re.compile(
+    r"菜单\s*(?:\*\*)?(?:"
+    r"`\[([A-Za-z0-9])\]`"
+    r"|`([A-Za-z0-9])`"
+    r"|\[([A-Za-z0-9])\]"
+    r"|([A-Za-z0-9])(?=[\s，。、；：（）]|$)"
+    r")"
+)
+
+
+def check_menu_key_references(docs: dict[Path, str]) -> list[str]:
+    """校验正文「菜单 `X`」引用均为主菜单键（第 18 项域）。
+
+    主菜单块校验只能护住 code block；正文里的「菜单 `C`」类引用无人看管——
+    菜单编号调整或把若干项收进 `[D]` 二级面板后，正文往往会留着已不存在的主
+    菜单键，读者按提示直接找不到入口。
+
+    合法域 = ``MENU_ITEMS`` 键 ∪ 返回键 ``0``；``[D]`` 的二级选项（C/F/O/M）
+    必须以「菜单 `D` → `C`」写法出现（写成裸「菜单 `C`」即发 finding）。
+    """
+    findings: list[str] = []
+    allowed = set(_MENU_LABEL_BY_KEY) | {"0"}
+    for path, text in docs.items():
+        for lineno, line in enumerate(text.splitlines(), 1):
+            for match in _MENU_REF_RE.finditer(line):
+                key = next(g for g in match.groups() if g)
+                if key.upper() in allowed:
+                    continue
+                hint = (
+                    f"（若指 [D] 的二级选项，请写作「菜单 `D` → `{key.upper()}`」）"
+                    if key.upper() in CONFIG_DIR_INFO_KEYS
+                    else "（MENU_ITEMS 无此项）"
+                )
+                shown = match.group(0).strip()
+                findings.append(f"{rel(path)}:{lineno}: 「{shown}」不是主菜单键{hint}")
+    return findings
 
 
 def check_return_key_invariant(manual_texts: dict[Path, str]) -> list[str]:

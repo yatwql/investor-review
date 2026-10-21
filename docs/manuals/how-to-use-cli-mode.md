@@ -87,7 +87,7 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 
 | 参数 | 说明 |
 |:-----|:-----|
-| `--update {basic,position,all}` | `basic`=更新基础类缓存（基金业绩、行业分类、新闻等）；`position`=更新持仓类缓存（价格行情、指数）；`all`=全部更新 |
+| `--update {basic,position,all}` | `basic`=更新基础类缓存（基金业绩、行业分类、新闻等）；`position`=更新行情类缓存（价格/指数；选项名沿用历史的 `position`）；`all`=全部更新 |
 | `--clean` | 按 TTL 删除过期缓存文件 |
 | `--stats` | 查看缓存状态统计（文件数、总大小、过期文件预览等） |
 
@@ -223,7 +223,7 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 | 生成全量完整报告 | `.venv/bin/python -m src.python.cli report --type full --history auto` |
 | 更新全部缓存 | `.venv/bin/python -m src.python.cli cache --update all` |
 | 更新基础类缓存 | `.venv/bin/python -m src.python.cli cache --update basic` |
-| 更新持仓类缓存 | `.venv/bin/python -m src.python.cli cache --update position` |
+| 更新行情类缓存 | `.venv/bin/python -m src.python.cli cache --update position` |
 | 清理过期缓存 | `.venv/bin/python -m src.python.cli cache --clean` |
 | 查看缓存状态 | `.venv/bin/python -m src.python.cli cache --stats` |
 | 数据源健康检查 | `.venv/bin/python -m src.python.cli check-sources` |
@@ -233,7 +233,7 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 
 ### 10.1 TUI 菜单 → CLI 命令对照
 
-TUI 菜单与 CLI 子命令落到**同一个业务编排函数**（`report/orchestrator.py::generate_report` 等），差别只在入参从哪来：TUI 在菜单里问，CLI 用参数传。下表对照**生成类菜单**（E/B/L/W）；缓存管理（`[1]`~`[4]`）、日志（`[V]`）、系统自检（`[T]`）的等价见上方「常用命令速查」，数据源健康历史（`[H]`）、配置类菜单（`[D]`/`[P]`/`[I]`/`[A]`/`[S]`/`[R]`）与报告追问（`[Q]`）暂无 CLI 等价（经 TUI / Web）。
+TUI 菜单与 CLI 子命令落到**同一个业务编排函数**（`report/orchestrator.py::generate_report` 等），差别只在入参从哪来：TUI 在菜单里问，CLI 用参数传。下表对照**生成类菜单**（E/B/L/W）；缓存管理（`[1]`~`[3]`）、日志（`[V]`）、系统自检（`[T]`）的等价见上方「常用命令速查」，数据源健康历史（`[H]`）、配置类菜单（`[D]`/`[P]`/`[I]`/`[A]`/`[S]`/`[R]`）与报告追问（`[Q]`）暂无 CLI 等价（经 TUI / Web）。
 
 | TUI 菜单 | CLI 等价命令 |
 |:---------|:-------------|
@@ -336,9 +336,9 @@ TUI 菜单与 CLI 子命令落到**同一个业务编排函数**（`report/orche
 
 ### 12.3 网络退避策略
 
-Provider Chain 已内置三次重试 + 熔断机制，网络临时故障时自动降级使用过期缓存：
+Provider Chain 内置同源瞬时失败重试 + 熔断机制，网络临时故障时自动降级使用过期缓存：
 
-- 短时网络抖动 → 自动重试（3 次）
+- 短时网络抖动 → 同源额外重试 1 次（退避 0.6s 起指数增长 + 抖动），仍失败才落下一槽
 - 数据源持续不可用 → 熔断器开启 → 使用过期缓存
 - 报告在无网络环境下降级生成（exit=1，部分数据为空）
 

@@ -190,6 +190,10 @@ def _render_config_entry_map() -> None:
         print(line)
 
 
+#: [D] 查看配置与目录信息 面板的二级选项键（与主菜单分离登记，供手册校验引用）
+CONFIG_DIR_INFO_KEYS: tuple[str, ...] = ("C", "F", "O", "M")
+
+
 def _cmd_config_dir_info() -> None:
     """查看配置与目录信息子菜单 — 对应主菜单 [D] 及其二级选项 [C]/[F]/[O]/[M]/[0]。
 
@@ -198,12 +202,13 @@ def _cmd_config_dir_info() -> None:
     子菜单循环直至 [0]（或空输入 / Ctrl+C）返回主菜单。
     子项在调用时从模块全局取函数（便于测试打桩与后续替换）。
     """
-    items = [
-        ("C", "持仓信息目录", _cmd_config_dir),
-        ("F", "持仓信息文件名", _cmd_config_filename),
-        ("O", "报告输出目录", _cmd_config_output_dir),
-        ("M", "配置入口地图（各配置项所在菜单）", _render_config_entry_map),
-    ]
+    _handlers = {
+        "C": ("持仓信息目录", _cmd_config_dir),
+        "F": ("持仓信息文件名", _cmd_config_filename),
+        "O": ("报告输出目录", _cmd_config_output_dir),
+        "M": ("配置入口地图（各配置项所在菜单）", _render_config_entry_map),
+    }
+    items = [(key, *_handlers[key]) for key in CONFIG_DIR_INFO_KEYS]
 
     def _render(nav: NavState) -> list[str]:
         print()

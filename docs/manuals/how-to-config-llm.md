@@ -77,7 +77,8 @@ LLM 配置由三个独立文件管理：
     "timezone": "Asia/Shanghai",
     "peak_periods": ["09:00-12:00", "14:00-18:00"],
     "idle_periods": [],
-    "weekend_always_idle": true
+    "weekend_always_idle": true,
+    "holiday_always_idle": true
   }
 }
 ```
@@ -315,7 +316,7 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
 
 - **缓存自动失效** — 持仓数据或指数数据变更时，对应的 LLM 缓存自动失效。无需手动操作
 - **缓存有效期** — 各模块独立配置（`cache_ttl` 中的 `llm_{module}` 条目），默认值见[配置指南](how-to-config.md#cache_ttl-可调参数)
-- **手动清除** — 菜单 **[2]** 更新持仓缓存 → 所有 LLM 缓存自动清除
+- **手动清除** — 菜单 **[2]** 更新行情类缓存 → 所有 LLM 缓存自动清除
 - **关闭缓存** — 在 `llm_settings.json` 中将 `cache_enabled_{module}` 设为 `false`，每次生成都重新调用 API
 
 ---
@@ -597,7 +598,8 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
     "timezone": "Asia/Shanghai",
     "peak_periods": ["09:00-12:00", "14:00-18:00"],
     "idle_periods": [],
-    "weekend_always_idle": true
+    "weekend_always_idle": true,
+    "holiday_always_idle": true
   }
 }
 ```
@@ -999,7 +1001,7 @@ $env:HTTPS_PROXY = "http://127.0.0.1:7890"
 
 - 仅菜单 **L** 触发 LLM 调用，E / B 不会
 - LLM 结果默认缓存，缓存有效期内反复按 L 不会重复扣费
-- 持仓或指数数据变更时，关联的 LLM 缓存自动失效；也可通过菜单 **[2]** 更新持仓缓存主动清除所有 LLM 缓存
+- 持仓或指数数据变更时，关联的 LLM 缓存自动失效；也可通过菜单 **[2]** 更新行情类缓存主动清除所有 LLM 缓存
 
 ---
 
@@ -1026,6 +1028,8 @@ $env:HTTPS_PROXY = "http://127.0.0.1:7890"
 | `gemini-2.0-flash` | 0.10 | 0.40 | 0.01 | Gemini 2.0 轻量（较早系列） |
 | `kimi-k2.6` | 6.50 | 27.00 | 1.10 | Kimi 通用主力（256k 上下文，支持思考模式） |
 | `kimi-k3` | 20.00 | 100.00 | 2.00 | Kimi 旗舰（1M 上下文） |
+
+> 表中为具体模型名；`core/constants.py::MODEL_PRICING` 另有 `claude-sonnet-4-` / `claude-opus-4-` / `claude-haiku-4-` / `gemini-3.5-` / `gemini-2.5-` / `gemini-2.0-` 六条**模型族前缀兜底价**，供带日期/小版本后缀的未列变体（如 `claude-sonnet-4-20250514`）按族价自动计价——表中不单列，也不会覆盖已有的具体模型价。
 
 > **峰谷定价（DeepSeek）**：`deepseek-flash` / `deepseek-v4-*` 采用 DeepSeek 官方峰谷定价（2026-08-17 起生效，2026-08-23 起优化周末规则，2026-09-10 起 flash 系列降价并补充法定节假日规则），表中「闲时/高峰」两列分别为非高峰与高峰时段的每百万 Token 单价。**高峰时段仅在高峰日（周一至周五，不含中国法定节假日）生效**，为**北京时间 09:00–12:00、14:00–18:00**；高峰日其余时间为闲时、**周末（周六/周日）与法定节假日全天一律按闲时价计费**（不区分峰谷，闲时价 = 高峰价的一半）。时段、判定时区与周末/法定节假日规则可在 `pricing` 段的 `peak_periods` / `idle_periods` / `timezone` / `weekend_always_idle` / `holiday_always_idle` 中覆盖；含 `"peak"` 子段的模型高峰日高峰时段按 `peak` 价计费，其余时段（含周末与法定节假日全天）按 base 价，无 `"peak"` 的模型始终按 base 价计费。
 >

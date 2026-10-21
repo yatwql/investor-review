@@ -11,6 +11,8 @@
 
 ### Added
 
+- `check-doc-drift` 第 1 项扩「可见性规则总览表 `type` 行 ↔ 注册表 `type` 集合」双向对账（缺行 / 多行 / 重复三型）：该表此前仅人工维护，注册表把财报两章合为 `fundamental_snapshot` 并新增 `schedule_replay` 后，表里仍写两个不存在的 type 且漏一行——行数恰好相等，任何计数断言都不露馅（自审 rf-777）
+
 - 发布链耗时埋点：新增 `scripts/_release/_timing.py`（分步计时 + JSON 记录），`release.py` 每命令尾行打印耗时摘要并追加 `logs/release.jsonl`（`command` / `ok` / `elapsed_s` / `version` / `steps[]`）——gate 的回归/十守护/设计护栏、refresh 的 bench/collect/sync、publish 的 P1 verify、evolution 的快照与统计同步均记为分步；`logs/` 为 git 忽略域，写入失败只打 `[!]` 且不改退出码（自审 rf-771）
 - `release.py refresh` 新增 `--full-bench`：bench 默认只测发布口径四档 `unit` / `dev-verify` / `regression` / `integration`（未测模式按 `--update-docs` 既有口径保留上次实测，不写脏），全量十四档降为显式入口（自审 rf-772）
 
@@ -20,6 +22,8 @@
 
 ### Changed
 
+- `check-doc-drift` 第 18 项扩「正文菜单键引用」分支：正文「菜单 `X`」须为主菜单键（`MENU_ITEMS` ∪ 返回键 `0`），`[D]` 二级选项（C/F/O/M）改由 `tui/handlers_config.py::CONFIG_DIR_INFO_KEYS` 单一登记、正文须写作「菜单 `D` → `C`」；裸键形态要求后接空白/标点，避免「主菜单 code block」里的英文词首字母误报（历史漂移：code block 校验护不住正文，`[4]`→`[3]` 与 `[D]` 二级化后十余处正文失效）（自审 rf-776）
+- 缓存分组术语统一为「行情类缓存」：TUI 上屏词与 `handlers_cache`/`cache/operations` docstring 对齐菜单标签，手册与需求菜单表同步（`--update position` 选项名作为历史命名在图注说明）（自审 rf-780）
 - `check-doc-drift` 分区纪律检查新增第 D 条「节归属」：「开发期已修复」节只允许出现在已解决区、P 档标题只允许出现在待处理区——原第 A 条按 rf 标识比对，标题（节）错位时完全静默（rf-765 即由此产生）（自审 rf-765）
 
 - `release.py gate` 新增演进对照新鲜度断言（P2 前置）：「当前开发版」列头「本次重跑时的工作区」日期须为当日——evolution 为发布链人工步骤，跳过即以过期快照发布的缺口由此闭合（表头与数据行同命令原子刷新，日期一致即数据行同步）；发布编排描述三处文档同步（自审 rf-758）
@@ -31,6 +35,12 @@
 
 ### Fixed
 
+- 正文菜单键引用 16 处改正：`[4]`→`[3]`（faq 6 / how-to-config / cli / web-mode 2 / technical / testplan / requirements，区间写作 `[1]~[3]`）、持仓目录·文件名·输出目录三项改「菜单 `D` → `C`/`F`/`O`」、faq 机制与诊断块序号「第 37 项」→ 34（自审 rf-776）
+- 报告可见性规则总览表重写：`financial_report`/`financial_indicator` 两行并非 `type`，合并为 `fundamental_snapshot` 一行并补 `schedule_replay` 行（自审 rf-777）
+- `how-to-config.md` §O 缓存分组表按 `core/data_registry.py` 补齐：`preload` 组补「生成后自检」「持仓变动复盘归因」，`refresh` 组补「基金申赎费率」「指数估值历史」（自审 rf-778）
+- 历史快照保留期 60 天 / 12 个 → 180 天 / 365 个（`reports-instruction.md` 生命周期行、`how-to-use-tui-menu.md` 快照说明、`history_snapshot.py` 参数 docstring 三处与 `constants` 对齐）（自审 rf-779）
+- `how-to-config-llm.md` pricing 示例两块补 `holiday_always_idle`、faq `.gitignore` 特例描述补 `llm_providers.json` 与 `data/knowledge/`、`how-to-use-cli-mode.md` 重试语义改按 `_TRANSIENT_RETRY_ATTEMPTS = 1`（同源额外 1 次）+ 落槽说明、`config/features.py` 分组注释「2 项」→「1 项」（自审 rf-781）
+- 定价表补模型族前缀兜底价说明（`MODEL_PRICING` 六条前缀供带日期后缀变体计价，表内不单列、不覆盖具体模型价）（自审 rf-782）
 - review-findings 分区顺序恢复：三个「开发期已修复」节（0.13.11 / 0.13.10 / 0.13.9）原夹在待处理区 P2 与 P3 之间、0.13.8 占位落在归档索引之后——重排为 待处理（P1→P2→P3）→ 已解决（开发期已修复 0.13.11→0.13.8，再归档档案）；同时去掉 P3 表头与首行间的空行（该表原在渲染上断裂为「空表头 + 裸行」）（自审 rf-765）
 - P3 文件膨胀登记表与 `check-file-length.py -v` 真值对齐：登记口径改为逼近红线档（主程序 ≥700 / 脚本 ≥600 / 测试 ≥1000，余量 ≤30%），警告级全集明确指向 `-v` 不逐项登记；表改为逐文件、按距红线余量升序，行数按 `-v` 快照刷新，并补登主程序八文件（rf-773）/ 脚本四文件（rf-774）/ 测试十三文件（rf-775）；原表 10 行中 5 个行数陈旧且声称的「全登记」实际只覆盖 10/58（自审 rf-766）
 - `plan-169`（日志统一约束机检守护）补归档：已完成并从 plan.md 移除但 `archived_plan.0.13.x.md` 无该条，编号已消耗却无从追溯（自审 rf-767）

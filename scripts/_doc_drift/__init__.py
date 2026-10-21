@@ -18,6 +18,7 @@ from _doc_drift._format import (  # noqa: F401
     _SECTION_COUNT_PATTERNS,
     parse_section_rows,
     check_section_table,
+    check_visibility_type_rows,
     check_section_counts,
     _SWITCH_TABLE_START,
     _SWITCH_ROW,
@@ -127,6 +128,7 @@ from _doc_drift._shared import (  # noqa: F401
 
 from _doc_drift._menu_blocks import (  # noqa: F401
     check_menu_blocks,
+    check_menu_key_references,
     check_return_key_invariant,
     parse_menu_block_lines,
 )
@@ -169,6 +171,7 @@ __all__ = [
     "check_chain_table",
     "parse_section_rows",
     "check_section_table",
+    "check_visibility_type_rows",
     "check_section_counts",
     "_SWITCH_TABLE_START",
     "_SWITCH_ROW",

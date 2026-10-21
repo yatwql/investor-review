@@ -125,12 +125,12 @@ def _print_cache_refresh_report(result) -> None:
 
 
 def _print_position_result(result) -> None:
-    """TUI 格式化输出持仓缓存更新结果（PositionCacheResult → 终端颜色）。"""
+    """TUI 格式化输出行情类缓存更新结果（PositionCacheResult → 终端颜色）。"""
     print()
     print(f"  {'=' * 40}")
     price_fail = result.total - result.price_ok
     total_idx = result.a_index_count + result.us_index_count
-    print(f"  持仓缓存更新完成 — 共 {result.total} 条持仓")
+    print(f"  行情类缓存更新完成 — 共 {result.total} 条持仓")
     print()
     if price_fail == 0:
         print(
@@ -182,10 +182,10 @@ def _cmd_update_basic_cache() -> None:
 
 
 def _cmd_update_position_cache() -> None:
-    """更新持仓类缓存。"""
+    """更新行情类缓存（价格 + 指数，缓存分组 preload）。"""
     from src.python.cache.operations import update_position_cache
 
-    _run_cache_update("preload", update_position_cache, _print_position_result, "持仓缓存")
+    _run_cache_update("preload", update_position_cache, _print_position_result, "行情类缓存")
 
 
 def _cmd_cleanup_cache() -> None:

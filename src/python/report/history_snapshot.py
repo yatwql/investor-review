@@ -355,8 +355,8 @@ def prune(
     多进程安全：删除基于逐个文件操作，不会因文件数突变而出错。
 
     Args:
-        retention_days: 保留天数，默认 HISTORY_SNAPSHOT_RETENTION_DAYS (60)
-        max_count: 最大保留数，默认 HISTORY_SNAPSHOT_MAX_COUNT (12)
+        retention_days: 保留天数，默认 HISTORY_SNAPSHOT_RETENTION_DAYS (180)
+        max_count: 最大保留数，默认 HISTORY_SNAPSHOT_MAX_COUNT (365)
         namespace: 隔离域标识（None=共享主目录，如 "web"=web 试算域）
 
     Returns:

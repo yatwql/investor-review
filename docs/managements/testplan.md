@@ -114,7 +114,7 @@
 | **S4: 新持仓无缓存** | — | `test_scenario_basic_flows.py` | 删除全部缓存后首次生成 | 菜单 L | 所有 API 正常获取、无缓存命中提示、生成时间 > 缓存命中场景 |
 | **S5: 缓存全命中** | **S4** | `test_scenario_basic_flows.py` | 连续两次执行菜单 L，间隔 < TTL | 菜单 L × 2 | 第二次所有 LLM 显示"缓存命中"页脚、总费用为 0 |
 | **S6: 纯债券基金组合** | — | `test_scenario_resilience_flows.py` | 持仓仅含债券基金（国债ETF + 场外债基） | 菜单 E | 穿透 TOP10 无股权覆盖或极小；债券基金正确分类 |
-| **S7: 网络中断降级** | — | `test_scenario_resilience_flows.py` | 持仓缓存存在但网络断开 | 菜单 B | 价格从缓存读取（过期缓存降级）；报告完整不含空白页签 |
+| **S7: 网络中断降级** | — | `test_scenario_resilience_flows.py` | 行情类缓存存在但网络断开 | 菜单 B | 价格从缓存读取（过期缓存降级）；报告完整不含空白页签 |
 | **S8: 单账户单持仓** | — | `test_scenario_resilience_flows.py` | 仅一个账户一只持仓 | 菜单 E | 分类表仅一行、穿透 TOP10 仅该持仓、总计 = 该持仓市值 |
 | **S9: 零成本持仓** | — | `test_scenario_resilience_flows.py` | 持仓成本=0（赠送/未记录买入价） | 菜单 B | 盈亏 = 市值 - 0、收益率不除零崩溃、显示合理占位 |
 | **S10: 极端值** | — | `test_scenario_extreme.py` | 超大市值/极小份额/极多小数位 | 菜单 E | 正确定标至万元/亿元单位，不溢出、不崩溃（标记 `scenario_extreme`）|
@@ -713,7 +713,7 @@
 | **P1** | 报告章节合并（同页签多区块 + 多契约 OR 可见性 + 块级开关） | 注册表条目 / 章节键 / 页签写入器 / HTML 模板或 partial / board_flags 变更 | `test_holdings_detail_sheet.py` / `test_holdings_detail_categories.py` / `test_position_structure_sheet.py` / `test_fundamental_snapshot_sheet.py`（各合并章：章名与区块小节标题同页签、区块行值与独立写入**逐格等价**、契约 None 的块级门控）+ `test_section_visibility.py`（`data_flag_any` 多契约 OR：单契约就绪即可见、两者皆无隐藏）+ `test_section_type_flag_consistency.py`（注册表 type ↔ 两侧 board_flags ↔ 写入器装配键一致，防旧 type/旧模块键残留）+ `test_report_chapter_consistency.py`（Excel 页签与 HTML 章节两侧可见集合一致）+ `test_fund_performance_manager_block.py`（经理变更块随基金深度分析门控）。**回归防线**：合并章若漏改任一侧可见性、装配键或 board_flags，两侧一致性/一致性守卫用例立刻失败（实施期即由此捕获 `rf-367`） |
 | **P1** | 景气度框架诊断（常规功能） | 分析框架/评分口径/关键词配置/行动建议章渲染变更 | `test_prosperity_framework.py`（六维计分、缺数据降级为未验证且不计分、总分口径与评级边界、配置覆盖）+ `test_prosperity_framework_edge.py`（空/None/零/异常类型/全防御/未知板块/极端集中度/负收益）+ `test_prosperity_framework_wiring.py`（开关关 → 契约缺席且双端无块；开 → 契约注入、Excel/HTML 块与契约一致）+ `test_fund_roe_estimate.py`（②维基金层扩展：重仓股 ROE 加权推演、报告期陈旧闸门、非 A 股过滤、known_roe 免重取）+ `test_liquidity_otc.py` 与 `test_code_utils.py::TestOtcRedemptionDaysDefault`（④维场外类型默认档：货币/短债 T+1、纯债 T+2、其他 T+3、QDII T+7，非实测标注与配置口径优先）。**回归防线**：开关关闭时报告必须逐字节不变；缺数据维度若被算成得分（臆造）立即失败 |
 | **P1** | HTML 报告渲染结构 | html_writer / template 变更 | `test_html_report_structure.py`（中文不乱码、章节锚点、LLM 条件消失/出现）+ `test_html_report_structure_toc.py`（返回顶部与目录）+ `test_html_report_structure_content.py`（交互图表/主题/数据质量块/页脚/期间标注） |
-| **P1** | 缓存刷新/清理/统计（菜单 [1][2][4]，其中 [4] 为缓存管理子菜单、内含过期清理） | cache / handlers / registry 变更 | `test_handlers_cache.py` / `test_tui_handlers.py`（刷新/清理/统计不崩溃） |
+| **P1** | 缓存刷新/清理/统计（菜单 [1][2][3]，其中 [3] 为缓存管理子菜单、内含过期清理） | cache / handlers / registry 变更 | `test_handlers_cache.py` / `test_tui_handlers.py`（刷新/清理/统计不崩溃） |
 | **P1** | Web 标签页工作台 / 调仓 What-if / 缓存卡 | `src/python/web/handlers.py`、`src/static/web/` 变更 | `test_whatif_api.py` / `test_whatif_api_edge.py` / `test_cache_api.py` / `test_web_static_serving.py`（页签配对、What-if 与缓存控件齐备、main.js 接线） |
 | **P1** | Provider 降级链路 | providers / fetcher 变更 | 熔断/回退/断网降级测试（S7/T15/T16 + provider edge 用例）；实际联通性由运行时 Provider Chain 回退 + 熔断治理，非门禁 |
 | **P1** | 基金持仓取数阶梯次序与联接基金穿透 | providers / fetcher / report 的持仓取数路径变更 | `test_tiantian.py` `TestFetchFundHoldingsLadder`（次序不变量：第 1 跳命中不发主页面请求、联接基金不可达第 3 跳）+ `test_fund_edge.py`（批量接缝幂等/异常不外抛）+ `test_penetration_report_periods.py`（穿透来源登记）。**次序回归防线**：把无年份兜底提回与年份域并列，联接基金会被最早可得报告遮蔽，本组用例立刻失败 |

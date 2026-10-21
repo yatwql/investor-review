@@ -273,11 +273,11 @@
 | `history` | `enable_history` | 历史走势数据可用（不可用时占位） | B / L |
 | `evolution` | `enable_portfolio_evolution` | 演进快照数据可用（不可用时占位） | E / B / L |
 | `action` | `enable_action`（默认开） | 无持仓数据时占位 | E / B / L |
-| `financial_report` | 功能开关 `stock_fundamentals`（默认关） | DataSinking 就绪（配置位 + 凭据）且有 A 股标的 | E / B / L |
-| `financial_indicator` | 功能开关 `stock_fundamentals`（默认关） | DataSinking 就绪（配置位 + 凭据）且有 A 股标的 | E / B / L |
+| `fundamental_snapshot` | 功能开关 `stock_fundamentals`（默认关） | DataSinking 就绪（配置位 + 凭据）且有 A 股标的；财报摘要 / 财务指标两章各自再按数据契约判定 | E / B / L |
 | `holding_change` | 功能开关 `holding_change_review`（默认关，无 board 章节开关） | 持仓变动复盘契约：快照准入（≥12 期且 ≥10 事件）不满足时占位 | E / B / L |
+| `schedule_replay` | 功能开关 `rebalance_schedule_replay`（默认关，实验项） | 回放窗口跨度 / 净值日不足或行情缺口越限时占位 | E / B / L |
 
-> `financial_report` 与 `financial_indicator` 两行是同一「持仓基本面」章节的两块（财报摘要 / 财务指标），由**同一个**功能开关 `stock_fundamentals` 同开同关——两块各自再按数据契约判定「有数据才渲染，无数据写占位」。
+> `fundamental_snapshot` 类型下有两章（财报摘要 / 财务指标），由**同一个**功能开关 `stock_fundamentals` 同开同关——两章各自再按数据契约判定「有数据才渲染，无数据写占位」。
 
 ---
 
@@ -325,7 +325,7 @@
 | **显示位置** | Excel 嵌入投资分析汇总页脚 — 环比对比区块（含「对比基准」标注行）；HTML 为「投资分析汇总」首屏「本期要点」执行摘要卡（功能开关 `summary_highlights`，默认关；关键指标环比行 + 关键变化 Top 5 + 标题下「对比基准」行，无上期快照时整块隐藏） |
 | **比对基线** | 上一个有报告的交易日的最新一份报告（基线时间戳不可解析时回退旧「上一份快照」口径；隔日未跑自然落到更早可用快照） |
 | **触发方式** | 菜单 E/B/L 均自动执行，无需配置 |
-| **生命周期** | 保留 60 天，最多 365 个，超限自动清理最旧快照 |
+| **生命周期** | 保留 180 天，最多 365 个，超限自动清理最旧快照 |
 | **首次生成** | 无历史快照时跳过对比，下次自动建立基线 |
 
 **适用场景**：想知道"和上次出报告时比，组合整体是赚是亏？哪些品种变动最大？"

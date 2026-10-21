@@ -8,6 +8,7 @@
 
 二十一项检查（权威源 → 受检文档）：
   1.  报告章节表        core/report_section_registry.py `_REPORT_SECTION_DEFAULT` → manuals/reports-instruction.md
+      （含「可见性规则总览」表 `type` 行：文档 type 集合 ↔ 注册表 type 集合双向对账）
   2.  章节数量断言      同上（`页签编号 1~N` / `默认顺序（N 项` / `返回 result（N 项` / `N 个报告章节`）→ 全库文档
   3.  功能开关表        config/features.py `feature_switch_registry`    → manuals/how-to-config.md
   4.  开关分组计数断言  同上（四组连写链 `呈现与体验 A / 分析增强 B / 独立章节 C / 机制与诊断 D`、单组 `组名（N 项`（含加粗组名）、`共/提供 N 项开关`、`完整 N 项与分组清单`；另检旧三组名残留 `实验组/常规组/报告组/报告章节与增强组`，组名与残留名单以 `_GROUP_DOC_NAMES`/`_RETIRED_GROUP_NAMES` 注册表派生为真值）→ 全库文档
@@ -25,6 +26,7 @@
   16. 守护清单同源        developer-guide P0/P2 门禁块 + ci.yml guards steps + CLAUDE.md/testplan.md 清单 + .githooks/pre-commit（五处）`check-*.py --ci` 引用集合两两一致
   17. 章节-区块矩阵      区块注册表三向对账（文档行 ↔ 注册表逐列 / 实现提取集合） → managements/technical.md §4.22
   18. 手册菜单块一致性  双手册主菜单 code block（键集合/标签头）→ tui/tui_menu.py MENU_ITEMS；
+      正文「菜单 `X`」引用须为主菜单键（`[D]` 二级选项 C/F/O/M 须写作「菜单 `D` → `C`」）；
       全文档「返回主菜单」行键=0 不变量（返回键全局统一，结构化行校验/prose 豁免）
   19. 需求菜单表        requirements.md §3.2 菜单表（键集合/分组标题/组内顺序）→ tui/tui_menu.py MENU_ITEMS + MENU_GROUPS（历史漂移：组重排未跟、M/Q 整行缺失、缓存编号错）
   20. 迁档占位↔归档节    review-findings「已随 vX.Y.Z 发布迁入」占位 ↔ archived_review-findings.{X.Y}.x.md 含该版本二级标题归档节（防占位已写、归档正文缺失）
@@ -107,6 +109,7 @@ from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc
     _SECTION_COUNT_PATTERNS,
     parse_section_rows,
     check_section_table,
+    check_visibility_type_rows,
     check_section_counts,
     _SWITCH_TABLE_START,
     _SWITCH_ROW,
@@ -173,6 +176,7 @@ from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc
     check_guard_parity,
     guard_parity_sources,
     check_menu_blocks,
+    check_menu_key_references,
     check_return_key_invariant,
     check_requirements_menu_table,
     parse_menu_block_lines,
@@ -191,6 +195,7 @@ def run_checks(with_test_count: bool = False, docs: dict | None = None) -> list[
     snapshot = _collect_test_snapshot(full_buckets=True) if with_test_count else {}
     findings: list[str] = []
     findings += check_section_table(docs[_REPORTS_MD])
+    findings += check_visibility_type_rows(docs[_REPORTS_MD])
     findings += check_section_counts(docs)
     findings += check_switch_table(docs[_HOW_TO_CONFIG_MD])
     findings += check_switch_counts(docs)
@@ -199,6 +204,7 @@ def run_checks(with_test_count: bool = False, docs: dict | None = None) -> list[
     findings += check_llm_defaults(docs[_LLM_TECHNICAL_MD])
     findings += check_panel_numbering(docs[_TUI_MENU_MD])
     findings += check_menu_blocks({_HOW_TO_START_MD: docs[_HOW_TO_START_MD], _TUI_MENU_MD: docs[_TUI_MENU_MD]})
+    findings += check_menu_key_references(docs)
     findings += check_return_key_invariant(docs)
     findings += check_requirements_menu_table(docs[_REQUIREMENTS_MD])
     findings += check_dir_tree(docs[_FOLDERS_MD])

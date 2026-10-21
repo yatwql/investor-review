@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.13.11-dev
-> **编号源**：`rf-next = 776`（新增问题取此编号，完成后更新为 +1；已用最大 rf-775，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 783`（新增问题取此编号，完成后更新为 +1；已用最大 rf-782，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -87,6 +87,13 @@
 | **rf-773** | 主程序逼近红线档（≥700 行）新增八文件未登记：`llm/api_base.py`、`report/_report_generation.py`、`report/orchestrator.py`、`config/_validation.py`、`report/fund_performance.py`、`report/holdings_detail_sheet.py`、`analysis/prosperity_scoring.py`、`providers/news_dedup_rules.py` | 入 P3 逐文件登记并给处置方向（域下沉口径），非立即拆分 |
 | **rf-774** | 脚本逼近红线档（≥600 行）四文件未登记：`perf-view.py`（983，距红线 17 行）、`check-test-redundancy.py`、`check-doc-traces.py`、`release.py` | 入 P3 逐文件登记；`perf-view.py` 标为最先触线、拆分前置 |
 | **rf-775** | 测试逼近红线档（≥1000 行）十三文件未登记，而 P3 原注称「当前无挂账项」——测试域已实际进入余量 ≤200 行区间 | 入 P3 逐文件登记（按职责/段落分片的拆分方向），并修正 P3 测试档口径说明 |
+| **rf-776** | 正文「菜单 `X`」引用与 `tui_menu.MENU_ITEMS` 脱钩（doc-drift #18 只校验手册 code block）：缓存管理由 `[4]` 改为 `[3]` 后 12 处正文仍写 `[4]`（faq 6 / how-to-config 1 / how-to-use-cli-mode 1 / how-to-use-web-mode 2 / technical 1 / testplan 1 / requirements 1）；持仓目录·文件名·输出目录三项收进 `[D]` 二级面板后 3 处仍写裸「菜单 `C`/`F`/`O`」；faq 机制与诊断块序号写「第 37 项」（真值 34，开关增删后静默过期）。读者按提示在主菜单找不到入口 | 12 处改 `[3]`（区间改 `[1]~[3]`）、3 处改「菜单 `D` → `C`」、序号改 34；`check-doc-drift` 第 18 项扩「正文菜单键引用」分支（合法域 `MENU_ITEMS` 键 ∪ `0`，`[D]` 二级键改由 `handlers_config.CONFIG_DIR_INFO_KEYS` 单一登记并要求 `D` → 写法），裸键形态须跟空白/标点以免误捕「主菜单 code block」的 `c`（自审 rf-776） |
+| **rf-777** | `reports-instruction.md` 可见性规则总览表 type 行错配：表中 `financial_report` / `financial_indicator` 并非 type（是 `fundamental_snapshot` 型下两个章节键），真正存在的 `schedule_replay` 反而漏行——行数恰好仍为 10，故「划分为 10 组」计数断言与注册表 10 个 type 都不露馅，doc-drift #1 只比章节表不碰此表 | 两行合并为一行 `fundamental_snapshot`（注明两章各自按数据契约判定）、补 `schedule_replay` 行、下注同步改写；`check-doc-drift` 第 1 项扩「可见性表 type 行 ↔ 注册表 type 集合」双向对账（缺行/多行/重复三型），新增 4 例单测（自审 rf-777） |
+| **rf-778** | `how-to-config.md` §O 缓存分组表两组清单均不全（真值 `core/data_registry.py`：`preload` 组实际 11 项、`refresh` 组 18 项）：`preload` 漏「生成后自检」「持仓变动复盘归因」两项 LLM 模块，`refresh` 漏「基金申赎费率」「指数估值历史」——按表清缓存会留下陈旧条目。该表无机检（项名为中文自由文本，与注册表名多有无害差异如「基金经理」↔「基金经理数据」） | 两组清单按注册表补齐；机检暂不引入（需中文名别名表，误报风险高于收益），在改表处与注册表键 `cache_groups` 双向核对，登记为下次动该表时的核对点（自审 rf-778） |
+| **rf-779** | 历史快照保留期在三处写成 60 天 / 12 个（`reports-instruction.md` 生命周期行、`how-to-use-tui-menu.md` B/L 快照说明、`report/history_snapshot.py` 参数 docstring），真值 `constants.HISTORY_SNAPSHOT_RETENTION_DAYS = 180` / `MAX_COUNT = 365`——文档承诺 60 天清理、实际保留 180 天，用户按文档会误判目录体积与清理时机 | 三处改 180 天 / 365 个，docstring 与常量对齐（自审 rf-779） |
+| **rf-780** | 同一个缓存分组（`preload`：价格 + 指数）三种称呼并存：TUI 菜单标签「行情类缓存」、TUI 上屏输出「持仓缓存更新完成」与函数名 `update_position_cache`、FAQ 与 LLM 手册「持仓缓存」、CLI 选项 `--update position`——菜单说 A、按下后打印 B，用户无从判断是否同一动作 | 上屏词与 docstring（`handlers_cache.py` / `cache/operations.py`）统一为「行情类缓存」；FAQ 4 处、`how-to-config-llm.md` 2 处、CLI 手册 `position` 说明与 requirements 菜单表 1 处同改，`position` 选项名作为历史命名在图注说明（自审 rf-780） |
+| **rf-781** | 配置类文档四处与实现不符：①`how-to-config-llm.md` pricing 示例两块都缺 `holiday_always_idle`（代码默认 `true`，正文却提到）；②faq 称 `.gitignore` 仅 `config.json`/`llm_settings.json` 特例放行，实际还有 `llm_providers.json` 与 `data/knowledge/`；③`how-to-use-cli-mode.md`「Provider Chain 已内置三次重试 / 自动重试（3 次）」——`fetcher/chain.py::_TRANSIENT_RETRY_ATTEMPTS = 1`（同源额外 1 次），整链源数 1~4 不等；④`config/features.py` 分组注释「呈现与体验（2 项全默认开）」，摘除 `enable_interactive_charts` 后该组仅 `metrics_enabled` 一项 | ①②③④ 逐项改正（示例补 `holiday_always_idle`、gitignore 描述补全、重试语义按代码表述、注释改「1 项」）（自审 rf-781） |
+| **rf-782** | 定价表口径缺一句兜底说明：文档称「内置所有支持模型的定价」，而 `core/constants.py::MODEL_PRICING` 另有 6 条模型族前缀价（`claude-sonnet-4-` / `gemini-2.5-` 等）供带日期后缀的未列变体自动计价——读者按表核价遇未列模型会以为无定价 | 定价表后补一句族前缀兜底说明（不单列、不覆盖具体模型价）（自审 rf-782） |
 
 ### 开发期已修复（0.13.10-dev）
 

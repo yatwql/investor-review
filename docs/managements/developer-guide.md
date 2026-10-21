@@ -1124,7 +1124,9 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
 
 二十一项检查（权威源 → 受检文档）：
 
-1. 报告章节表（`reports-instruction.md`）↔ 章节注册表 `_REPORT_SECTION_DEFAULT`（行数/序号/名称）
+1. 报告章节表（`reports-instruction.md`）↔ 章节注册表 `_REPORT_SECTION_DEFAULT`（行数/序号/名称）；
+   含「可见性规则总览」表 `type` 行双向对账（文档 type 集合 ↔ 注册表 type 集合；历史漂移：注册表把财报两章合为
+   `fundamental_snapshot` 并新增 `schedule_replay` 后，表里仍写两个不存在的 type 名称且漏一行——行数恰好相等，计数断言全绿）
 2. 章节数量断言（`页签编号 1~N` / `默认顺序（N 项` / `返回 result（N 项` / `N 个报告章节`）↔ 注册表章节数
 3. 功能开关表（`how-to-config.md` 四组区段）↔ `feature_switch_registry`（成员/默认值/无表外键）
 4. 开关分组计数断言（`呈现与体验 A / 分析增强 B / 独立章节与回放 C / 机制与诊断 D` 连写、`<组名>（N 项`、`共 N 项开关`、旧三组名残留检测）↔ 分组计数
@@ -1148,6 +1150,8 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
     testplan P0/P2 清单行与 `.githooks/pre-commit` 执行体，五处的 `scripts/check-*.py --ci` 引用集合两两一致（新增守护脚本漏改任一处即报）
 17. 章节-区块矩阵（`technical.md` §4.22）：文档行 ↔ 区块注册表逐列 / 键集双向 / 两端实现提取集合三向对账
 18. 手册菜单块一致性：双手册主菜单 code block（键集合/标签头）↔ `tui/tui_menu.py` MENU_ITEMS；
+   正文「菜单 `X`」引用须为主菜单键（历史漂移：缓存管理由 `[4]` 改为 `[3]`、持仓目录/文件名/输出目录收进 `[D]` 二级面板后，
+   十余处正文仍写旧主菜单键，读者按提示找不到入口——code block 校验护不住正文）；`[D]` 二级键（`CONFIG_DIR_INFO_KEYS`）须写作「菜单 `D` → `C`」；
     全文档「返回主菜单」行键=0 不变量（返回键全局统一）
 19. 需求菜单表（`requirements.md` §3.2）：键集合/分组标题/组内顺序 ↔ MENU_ITEMS + MENU_GROUPS
 20. 迁档占位↔归档节：review-findings「已随 vX.Y.Z 发布迁入」占位 ↔ 对应版本归档正文含该版本二级标题归档节

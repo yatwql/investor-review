@@ -406,7 +406,7 @@ TUI（Text User Interface）是系统**主要交互渠道**：桌面终端内的
 | `tui/tui_keys.py` | 键盘封装 | 跨平台（Windows msvcrt / Linux tty+termios+select），标准化键名 KEY_UP/DOWN/ENTER/CTRL_C |
 | `tui/handlers_report.py` | 报告生成外壳 | `_run_generate` 骨架、`_prompt_generate_confirm` 合并单屏一次确认（full：费用预估上屏 + 回车/`Y`/`N`/`q`/`h` 单问，默认侧 `Y`=用已有结果，`N`（同义 `f`）触发 `_select_force_modules` 模块多选，含日预算超限安全网）/`_prompt_history`（委托 resolve_fetch_history + 注入 y/N 询问，仅 both）、E/B/L 三命令 |
 | `tui/handlers_config.py` | 配置管理外壳 | 目录/文件名/输出目录/章节/指数池/匿名化/LLM 模块与功能开关/刷新等 8 项配置命令 |
-| `tui/handlers_cache.py` | 缓存管理外壳 | 更新基础/持仓缓存、清理过期、查看统计 4 项命令 |
+| `tui/handlers_cache.py` | 缓存管理外壳 | 更新基础/行情类缓存、清理过期、查看统计 4 项命令 |
 | `tui/handlers_whatif.py` | 调仓模拟外壳 | What-if 对话流程，委托 `report/whatif_operations.py`（§4.13） |
 | `tui/handlers_log.py` | 诊断外壳 | `[V]` 运行日志查看（按级别筛选）/ `[H]` 数据源健康历史 / `[T]` 系统自检（doctor，§4.17）三命令 |
 | `tui/handlers_qa.py` | 报告追问外壳 | `[Q]` 入口：输出目录报告选择 + 文本输入循环，委托 `qa/session.ask_report_qa`（§6.8）；`report_qa` 门控 |
@@ -1458,7 +1458,7 @@ _write_atomic(fd, tmp_path, final_path)
 |:-----|:---------------------------|:-----|
 | `preload` | 股票价格、市场指数、LLM 全球政经局势、LLM 智囊团深度复盘、LLM 持仓体检报告、LLM 穿透深度分析、LLM 辩论三段（白脸 pro / 黑脸 con / 综合 synthesis） | 菜单 `[2]` |
 | `refresh` | 基金业绩排名、基金持仓、行业分类、市场情绪、财报索引、财报正文、财务指标、新闻聚合、LLM 新闻关联分析、机构盈利预测、行业资金流向、股票历史分红、基金业绩基准、基金经理、基金风格扩展数据、无风险利率 | 菜单 `[1]` |
-| 无分组 | 历史股票日线、历史基金净值、指数历史日线、集中度快照、风格快照、持仓跟踪、交易日历 | 不被菜单缓存命令误删（仅缓存管理子菜单 `[4]` → `3` 过期清理） |
+| 无分组 | 历史股票日线、历史基金净值、指数历史日线、集中度快照、风格快照、持仓跟踪、交易日历 | 不被菜单缓存命令误删（仅缓存管理子菜单 `[3]` → `3` 过期清理） |
 
 **缓存分组设计原则**：
 - **preload 组**：换持仓文件后应重取的基础行情和 LLM 分析
