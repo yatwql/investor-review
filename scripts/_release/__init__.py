@@ -3,6 +3,7 @@
 - `_common`：ReleaseError 与子进程执行原语（各步骤共享）
 - `_versioning`：版本号解析/渲染纯函数（X.Y.Z-dev 推导与改写）
 - `_changelog_archive`：changelog 发布段迁出、归档追加与归档头部两行派生（纯文本变换）
+- `_archive_flow`：归档迁移的命令编排（显式 `ArchiveContext` 路径入参、先算后写、前置缺件清单）
 - `_ledger_archive`：台账与设计文档归档迁移（rf 已解决表原表搬运 + 占位/头部/索引派生、
   plan 已完成节搬入、docs/plan 完成判定与引用/目录树搬迁——纯文本变换，判定边界留人）
 - `_evolution`：版本演进快照统计与表格回写（纯函数）

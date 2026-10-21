@@ -98,23 +98,28 @@ from _release._changelog_archive import (  # noqa: E402, F401 — _SECTION_NOTE 
     write_archive_release,
 )
 from _release._common import ReleaseError, exec_command as _exec  # noqa: E402
-from _release._ledger_archive import (  # noqa: E402
+from _release._archive_flow import (  # noqa: E402
+    ArchiveContext,
+    prerequisite_findings,
+    run_archive as archive_flow,
+)
+from _release._ledger_archive import (  # noqa: E402, F401 — 纯函数面经入口 re-export 供测试按脚本名访问
     apply_plan_archive,
-    _INDEX_RANGE_RE,  # noqa: F401 — 格式契约用例经入口模块引用
-    _RF_ARCHIVE_HEAD_FMT,  # noqa: F401 — 格式契约用例经入口模块引用
-    RF_PLACEHOLDER,  # noqa: F401 — 格式契约用例经入口模块引用
-    _bump_index_range,  # noqa: F401 — 格式契约用例经入口模块引用
+    _INDEX_RANGE_RE,
+    _RF_ARCHIVE_HEAD_FMT,
+    RF_PLACEHOLDER,
+    _bump_index_range,
     apply_rf_archive,
     archive_header_findings,
-    count_rf_rows,  # noqa: F401 — 供测试经入口模块引用
+    count_rf_rows,
     design_doc_candidates,
-    extract_rf_table,  # noqa: F401 — 供测试经入口模块引用
+    extract_rf_table,
     has_archive_section,
     move_tree_entry,
     open_ids,
-    pending_rf_rows,  # noqa: F401 — 供测试经入口模块引用
-    plan_completed_sections,  # noqa: F401 — 供测试经入口模块引用
-    rf_archive_status,  # noqa: F401 — 供测试经入口模块引用
+    pending_rf_rows,
+    plan_completed_sections,
+    rf_archive_status,
     rewrite_doc_refs,
     unreferenced_docs,
 )
@@ -269,22 +274,26 @@ def _print_results(results: list[tuple[str, bool, str]]) -> bool:
     return all_ok
 
 
-def archive_prerequisites(release_version: str) -> list[str]:
-    """发布归档的前置条件：两份台账归档文件 + folders.md 的该小版本归档子树块。
+def _archive_ctx(version: str) -> ArchiveContext:
+    """按当前模块路径常量组装归档上下文（测试对模块属性的重定向在此生效）。"""
+    rf_archive, plan_archive = ledger_archive_paths(version)
+    return ArchiveContext(
+        repo_root=REPO_ROOT,
+        rf_file=RF_FILE,
+        plan_file=PLAN_FILE,
+        folders_file=FOLDERS_FILE,
+        changelog_file=CHANGELOG_FILE,
+        readme_file=README_FILE,
+        claude_file=REPO_ROOT / "CLAUDE.md",
+        plan_docs_dir=PLAN_DOCS_DIR,
+        rf_archive=rf_archive,
+        plan_archive=plan_archive,
+    )
 
-    新小版本（vX.Y.0）首份归档需先建文件与目录树块；在 `check` 阶段就报出，
-    避免发布跑到 `prepare` 中途才因缺件中止（那时版本全链已改、需回滚）。
-    """
-    findings: list[str] = []
-    rf_archive, plan_archive = ledger_archive_paths(release_version)
-    for path in (rf_archive, plan_archive):
-        if not path.exists():
-            findings.append(f"归档文件不存在：{path.relative_to(REPO_ROOT).as_posix()}（新小版本首份归档需先建）")
-    minor = release_version.rsplit(".", 1)[0]
-    folders = FOLDERS_FILE.read_text(encoding="utf-8") if FOLDERS_FILE.exists() else ""
-    if f"v{minor}.x/" not in folders:
-        findings.append(f"folders.md 目录树缺 `v{minor}.x/` 归档子树块（新小版本需先在归档子树补该目录块）")
-    return findings
+
+def archive_prerequisites(release_version: str) -> list[str]:
+    """发布归档前置（两份归档文件 + 目录树该小版本块）：`check` 阶段提前报缺件。"""
+    return prerequisite_findings(release_version, _archive_ctx(release_version))
 
 
 def cmd_check(args: argparse.Namespace, runner=None) -> int:
@@ -376,24 +385,10 @@ def cmd_prepare(args: argparse.Namespace, runner=None) -> int:
 # ─────────────────────────── archive ───────────────────────────
 
 
-def _rewrite_doc_refs_in(target: Path, old_bases: tuple[str, ...], new_ref: str) -> int:
-    """把 target 内对设计文件的引用改指新路径；返回改写次数。"""
-    if not target.exists():
-        return 0
-    text = target.read_text(encoding="utf-8")
-    total = 0
-    for base in old_bases:
-        text, n = rewrite_doc_refs(text, base, new_ref)
-        total += n
-    if total:
-        target.write_text(text, encoding="utf-8")
-    return total
-
-
 def cmd_archive(args: argparse.Namespace, runner=None) -> int:
     """发布归档迁移的机械部分（条目内容是否该归档仍由人复核）。"""
     return run_archive(
-        args.date or _dt.date.today().isoformat(),
+        date=args.date or _dt.date.today().isoformat(),
         runner=runner,
         dry=bool(getattr(args, "dry_run", False)),
         skip_design_docs=bool(getattr(args, "skip_design_docs", False)),
@@ -401,118 +396,19 @@ def cmd_archive(args: argparse.Namespace, runner=None) -> int:
 
 
 def run_archive(date: str, runner=None, dry: bool = False, skip_design_docs: bool = False) -> int:
-    """台账 + 设计文件归档迁移（prepare 自动执行、也可单独跑）。"""
+    """台账 + 设计文件归档迁移（`prepare` 内置步；实现见 `_release/_archive_flow.py`）。"""
     version = read_app_version(CONSTANTS_FILE.read_text(encoding="utf-8"))
-    if version.endswith("-dev"):
+    if version.endswith("-dev"):  # 版本形态校验先于路径推导（开发版推不出归档名）
         print(f"[ERR] 当前仍是开发版 {version} — 先跑 prepare 把版本全链切到发布形态，再归档")
         return 2
-    rf_archive, plan_archive = ledger_archive_paths(version)
-    for path in (rf_archive, plan_archive):
-        if not path.exists():
-            print(f"[ERR] 归档文件不存在：{path}（新小版本需先手工建归档文件）")
-            return 2
-    minor = version.rsplit(".", 1)[0]
-
-    print("[..] 归档迁移（机械部分；条目内容与设计文件判定仍须人工复核）")
-
-    # 顺序纪律：先做设计文件迁档（目录树 → git mv → 引用改写），再做台账落盘。
-    # 任一步失败即中止，此时台账仍原样——不会留下「表已搬走但归档没写成」的半迁移。
-    rf_text = RF_FILE.read_text(encoding="utf-8")
-    plan_text = PLAN_FILE.read_text(encoding="utf-8")
-    new_rf, new_arch, moved = apply_rf_archive(rf_text, rf_archive.read_text(encoding="utf-8"), version, date)
-    new_plan, new_plan_arch, n_plan = apply_plan_archive(
-        plan_text, plan_archive.read_text(encoding="utf-8"), version, date
+    return archive_flow(
+        version=version,
+        date=date,
+        ctx=_archive_ctx(version),
+        runner=runner,
+        dry=dry,
+        skip_design_docs=skip_design_docs,
     )
-    for label, text in (("review-findings", new_arch), ("plan", new_plan_arch)):
-        for finding in archive_header_findings(text):
-            print(f"  [!] {label} 归档头部：{finding}（人工补齐后再跑 gate）")
-
-    moved_docs: list[str] = []
-    if not skip_design_docs:
-        docs = {path.name: path.read_text(encoding="utf-8") for path in sorted(PLAN_DOCS_DIR.glob("*.md"))}
-        candidates = design_doc_candidates(docs, open_ids(new_plan, new_rf))
-        pending_review = unreferenced_docs(docs)
-        if not candidates:
-            print("  [OK] docs/plan：无引用编号已全部归档的设计文件（无可自动迁档项）")
-        if pending_review:
-            print("  [..] docs/plan 未引用任何任务编号（不自动迁档，人工确认是否完成）：" + "、".join(pending_review))
-        for name, reason in candidates:
-            stem = name.removesuffix(".md")
-            rel_new = f"docs/archive/v{minor}.x/{stem}/{name}"
-            dest = REPO_ROOT / rel_new
-            print(f"  [..] {name} — {reason}")
-            if dry:
-                print(f"       将迁至 {rel_new} 并改写引用")
-                continue
-            # ① 目录树先搬（失败时尚未改动任何文件，直接中止）
-            folders_before = FOLDERS_FILE.read_text(encoding="utf-8")
-            try:
-                folders_moved = move_tree_entry(folders_before, stem, minor)
-            except ReleaseError as exc:
-                print(f"[ERR] 目录树搬迁失败：{exc}")
-                print("[ERR] 台账尚未改写（先算后写），按上方提示补好目录树后重跑 archive")
-                return 2
-            FOLDERS_FILE.write_text(folders_moved, encoding="utf-8")
-            # ② 移动文件本体（失败则回滚目录树，避免树指向不存在的位置）
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            rc, out, err = _exec(["git", "mv", str(PLAN_DOCS_DIR / name), str(dest)], REPO_ROOT, runner)
-            if rc != 0:  # 文件没动成 → 目录树回滚（不指向不存在的位置）
-                FOLDERS_FILE.write_text(folders_before, encoding="utf-8")
-                print(f"[ERR] git mv 失败：{name} {(err or out).strip()}（目录树已回滚）")
-                return rc or 1
-            # ③ 改写引用：管理文档用 ../archive/…，根文档用 docs/archive/…，同级设计文档同样改
-            for target in (CHANGELOG_FILE, PLAN_FILE, RF_FILE, FOLDERS_FILE, REPO_ROOT / "CLAUDE.md"):
-                _rewrite_doc_refs_in(
-                    target, (f"../plan/{name}", f"docs/plan/{name}"), f"../archive/v{minor}.x/{stem}/{name}"
-                )
-            _rewrite_doc_refs_in(README_FILE, (f"docs/plan/{name}",), rel_new)
-            for sibling in sorted(PLAN_DOCS_DIR.glob("*.md")):
-                if sibling.name != name:
-                    _rewrite_doc_refs_in(sibling, (name,), f"../archive/v{minor}.x/{stem}/{name}")
-            moved_docs.append(rel_new)
-            print(f"  [OK] 迁入 {rel_new}（引用已改写，目录树已搬）")
-
-    # 台账落盘（含头部/索引派生），失败面已收敛到「台账未动」
-    if moved:
-        if not dry:
-            RF_FILE.write_text(new_rf, encoding="utf-8")
-            rf_archive.write_text(new_arch, encoding="utf-8")
-        print(f"  [OK] review-findings：{moved} 条原表搬入 {rf_archive.name}（主台账留迁档占位）")
-    else:
-        print("  [OK] review-findings：该版本已迁档（占位已在），跳过")
-    if n_plan:
-        if not dry:
-            PLAN_FILE.write_text(new_plan, encoding="utf-8")
-            plan_archive.write_text(new_plan_arch, encoding="utf-8")
-        print(f"  [OK] plan：{n_plan} 个已完成任务节搬入 {plan_archive.name}")
-    else:
-        print("  [OK] plan：无已完成任务节，跳过")
-
-    if dry:
-        print("\n[OK] dry-run 结束（未写入任何文件）")
-        return 0
-
-    # 归档改写了台账/目录树/索引 → 统计快照立即同步，再跑两台便宜守护兜住文档面
-    rc, out, err = _exec([sys.executable, "scripts/check-doc-drift.py", "--sync"], REPO_ROOT, runner)
-    print((out or err).rstrip())
-    if rc != 0:
-        print("[ERR] 文档统计快照同步失败，按上方输出处理后重跑 archive")
-        return rc
-    for script in ("scripts/check-doc-traces.py", "scripts/check-doc-links.py"):
-        rc, out, err = _exec([sys.executable, script, "--ci"], REPO_ROOT, runner)
-        if out.strip():
-            print(out.rstrip())
-        if rc != 0:
-            print(f"[ERR] {Path(script).name} 未通过，按上方输出修正后重跑 archive")
-            return rc
-
-    print("\n[OK] 归档迁移完成（机械部分）。人工复核项：")
-    print("  1. 迁入归档的条目是否确实属于本版已解决项（原表搬运，未做摘要改写）")
-    print("  2. 设计文件迁档判定是否正确（引用编号均已归档 ≠ 内容必然完成）")
-    if moved_docs:
-        print("  3. 本次迁档设计文件：" + "、".join(moved_docs))
-    print("  4. 复核后按序继续：refresh → evolution --release → gate → publish → devbump")
-    return 0
 
 
 # ─────────────────────────── refresh ───────────────────────────
