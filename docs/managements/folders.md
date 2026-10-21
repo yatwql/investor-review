@@ -12,14 +12,14 @@
 | 主程序代码 | Python | 363 | 99,449 | `src/` 下所有 `.py`（不含测试：`src/__init__.py` 顶层包标记 + `src/python/` 下 15 个 `__init__.py`，含 `web/` 服务层；近期新增 `providers/tiantian_purchase.py` 天天基金申购状态总表 provider + `fetcher/fund_purchase.py` 申购状态取数编排（双链路/准入/会话复用） + `core/jsonl_store.py` JSONL 原子原语 + `core/signal_ledger.py` 确定性信号账本 + `report/signal_record.py` 信号登记适配器 + `core/num_utils.py` 数值归一原语 + `core/doctor.py` 系统自检 + `core/cassette.py` 请求回放引擎 + `core/datasource_credential.py` 数据源凭据声明 + `fetcher/source_adapter.py` 适配契约 + `fetcher/quote_adapters.py` 行情域适配器 + `llm/module_fingerprint.py` 模块指纹唯一事实来源 + `report/_experimental_seams.py` 实验挂载点 + `report/holdings_freshness.py` 持仓报告期时效判定 + `report/experimental_notice.py` 实验功能清单语句单源 + `core/trading_calendar.py` 交易日历原语（时间距离一律以交易日计） + `providers/datasink.py` 全文本财报 provider（密钥/限速/配额） + `providers/hithink.py` 同花顺金融数据服务 provider（A 股行情/财务/基金/情绪面；凭据/qps 限速/信封错误码） + `fetcher/financial_report.py` 财报取数编排 + `fetcher/report_adapters.py` 财报域适配器 + `report/financial_report_digest.py` 财报摘要章节装配 + `providers/akshare_financial.py` 结构化财务指标主源 + `fetcher/financial_indicator_adapters.py` 财务指标域适配器 + `core/code_utils.py::to_fmp_symbol` 共享符号映射 + `providers/_utils.py::run_with_timeout` 共享取数超时原语 + `analysis/financial_indicator_extract.py` 财务指标全文解析（压平正文锚点提取，备用支路） + `fetcher/financial_indicator.py` 财务指标多期取数编排 + `analysis/financial_indicator.py` 财务指标派生（质量档/趋势/当前 PE·PB） + `report/financial_indicator.py` 财务指标章装配 + `report/holdings_detail_sheet.py` 持仓明细与分类 Excel 页签 + `report/position_structure_sheet.py` 持仓结构与集中度 Excel 页签 + `report/fundamental_snapshot_sheet.py` 持仓基本面 Excel 页签（三者均为章节合并写入器） + `llm/compliance.py` 合规声明集中注入（幂等叠加，单一漏斗覆盖全模块）） |
 | HTML 报告模板 | HTML | 23 | 5,173 | `src/static/tmpl/report_template.html` + `whatif_template.html`（调仓 What-if 独立 HTML 页）+ `partials/`（章节级/区块级 partial，主模板按 TOC 六组经 Jinja include 拆入，清单见目录树 `partials/` 节点） |
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 6 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`，不计入本行） |
-| 辅助脚本 | Python | 77 | 19,305 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评估、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
-| 源代码合计 | — | 467 | 124,323 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 561 | 164,552 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 11,087 个 | `pytest --collect-only` 统计（`scripts/collect-test-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 辅助脚本 | Python | 77 | 19,349 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评估、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
+| 源代码合计 | — | 467 | 124,367 | 主程序 + 模板 + 脚本 + SVG |
+| 测试代码 | Python | 561 | 164,621 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 11,093 个 | `pytest --collect-only` 统计（`scripts/collect-test-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 11 | 5,962 | 含 README.md（211 行）；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 10 | 5,751 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 177 | 64,464 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 4 + archive md 160），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 12 | 12,226 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 177 | 64,471 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 4 + archive md 160），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 12 | 12,233 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 160 | 51,445 | 各版本 changelog/plan/review-findings 与设计文档归档（157 md 50,492 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 4 | ~702 | 在办设计文档（扁平存放，完成后迁入对应版本的归档子目录）：两份 Jev 新闻关联判定文档（对照评测方案 + 类型化判定通道接入设计）+ 决策跨期反思闭环设计 + Web 浏览器验证方法 |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -196,7 +196,7 @@ investor-util/
 │   │   │   ├── benchmark_excess.py            #   风险调整超额计算（IR/TE/年化超额/12·24 月胜率/滚动 250 日超额 → risk_adjusted_excess_data）
 │   │   │   ├── crisis_annotation.py           #   危机区间标注（2015/2018/2020/2022/2025 静态表 + 区间回撤/恢复 + 回放态指数层 → crisis_annotation_data）
 │   │   │   ├── prosperity_framework.py        #   景气度框架诊断（六维评分卡：景气/ROE 弹性/全球比较/流动性/集中度与周期拼接/业绩回撤；常规功能）
-│   │   │   ├── prosperity_scoring.py     #   景气度评分内核（配置默认值 + 权重常量 + 六维打分器；从 framework 拆出）
+│   │   │   ├── prosperity_scoring.py     #   景气度评分内核（配置默认值 + 权重常量 + 六维打分器）
 │   │   │   ├── prosperity_signals.py   #   景气度框架本地信号提取原语（持仓/快照/基准 → 数值信号，零网络）
 │   │   │   ├── fx_exposure.py                 #   外汇敞口分析（港股/QDII 汇率风险）
 │   │   │   ├── financial_indicator_extract.py #   财务指标全文解析（DataSinking 压平正文 → 标准指标：锚点/取值窗口/精度模式/合理性校验）
@@ -262,7 +262,7 @@ investor-util/
 │   │   │   ├── generators_news.py    #   新闻分析提示词生成
 │   │   │   ├── generators_orchestrator.py # LLM 批量编排门面（缓存预检 + 主编排入口，re-export 分发子模块）
 │   │   │   ├── generators_singletons.py #   单例生成函数（global_macro/expert_review/health_check/penetration_deep，自 generators 域下沉，门面再导出；测试 patch 解析点）
-│   │   │   ├── _llm_dispatch.py        #   worker 装配与线程池并发分发（_MODULE_FNS 映射/进度回调/辩论路由，从 orchestrator 拆出）
+│   │   │   ├── _llm_dispatch.py        #   worker 装配与线程池并发分发（_MODULE_FNS 映射/进度回调/辩论路由）
 │   │   │   ├── _api_claude.py         #   Claude API 调用实现
 │   │   │   ├── _api_gemini.py         #   Gemini API 调用实现
 │   │   │   ├── _api_openai.py         #   OpenAI API 调用实现
@@ -343,8 +343,8 @@ investor-util/
 │   │   │   ├── holding_change_panel.py #   持仓变动复盘面板（契约装配 + 双端单源视图 + Excel 页签写入 + 提示词块渲染）
 │   │   │   ├── event_impact_panel.py #   事件窗对照表数据编排（新闻→event_item 组装/注入式取数/降级计数 → event_impact_data）
 │   │   │   ├── schedule_replay_panel.py #   调仓纪律回放面板（回放契约装配 + 双端单源视图 + Excel 页签写入 + 回放引用提示词块）
-│   │   │   ├── financial_indicator.py # 持仓基本面章区块①数据装配（多期指标 + 质量档 + 趋势 + 当前 PE/PB，C19 契约）
-│   │   │   ├── purchase_status.py # 申购限购状态展示装配与展示单源（契约构建/时效分档/单元格文案/口径脚注，C19 契约）
+│   │   │   ├── financial_indicator.py # 持仓基本面章区块①数据装配（多期指标 + 质量档 + 趋势 + 当前 PE/PB，pipeline_data 键契约登记）
+│   │   │   ├── purchase_status.py # 申购限购状态展示装配与展示单源（契约构建/时效分档/单元格文案/口径脚注，pipeline_data 键契约登记）
 │   │   │   ├── financial_report_digest.py # 持仓基本面章区块②数据装配（A 股标的 → 最新年报章节摘要）
 │   │   │   ├── market_sentiment.py       #   市场情绪取数与装配（开关 market_sentiment；缺口即降级契约；取数带 1h 缓存）
 │   │   │   ├── fundamental_snapshot_sheet.py # 持仓基本面 Excel 页签（区块①财务指标 + 区块②财报摘要）
@@ -369,7 +369,7 @@ investor-util/
 │   │   │   ├── _report_aux_metrics.py #  辅助指标编排（市场温度 + 持仓相关性矩阵）
 │   │   │   ├── _llm_news.py          #   LLM/新闻并行获取（线程池提交/收集/报告）
 │   │   │   ├── _report_generation.py #   报告生成实现（both/full 两种路径，聚合门面）
-│   │   │   ├── _report_output.py         #   full 路径 HTML/Excel 产物落盘包装（从 _report_generation 拆出）
+│   │   │   ├── _report_output.py         #   full 路径 HTML/Excel 产物落盘包装（章节顺序/开关透传/失败登记/标志位回填）
 │   │   │   ├── _experimental_seams.py #  管线实验挂载点（守护语义单份实现 + 按需导入被调子模块）
 │   │   │   ├── _report_health.py     #   数据源健康检查（后台并行启动/结果收集持久化）
 │   │   │   ├── _report_helpers.py    #   管线辅助函数（轻量行情/演进与快照差异注入/完整性校验/both 明细子集）
@@ -381,7 +381,7 @@ investor-util/
 │   │   │   ├── data_status.py        #   数据质量状态（缺失/过期/降级标记）
 │   │   │   ├── data_source_matrix.py #   数据源可用性矩阵 + 数据源说明表（实际链路/用途/计费/凭据）
 │   │   │   ├── data_quality_sheet.py #   数据质量仪表盘页签写入（源健康+品种覆盖，开关 data_quality）
-│   │   │   ├── downsample.py         #   P1 服务端下采样（日频→周/月聚合）
+│   │   │   ├── downsample.py         #   服务端下采样（日频→周/月聚合）
 │   │   │   ├── llm_content.py        #   LLM 分析结果写入报告（块级 HTML 分段 + 事实校验摘要分块着色）
 │   │   │   ├── llm_module_info.py    #   LLM 模块信息构建（共享函数）
 │   │   │   ├── llm_quality.py        #   LLM 输出侧质量分级（A~F 评级 + 低评级内容头部「内容质量提示」横幅，常规开关 module_quality_gate）
@@ -436,8 +436,8 @@ investor-util/
 │   │   ├── cli/                      # CLI 命令行模式入口
 │   │   │   ├── __init__.py           #   子包标记，re-export cli 符号
 │   │   │   ├── __main__.py           #   python -m 入口
-│   │   │   ├── _handlers.py          #   子命令处理器 + 持仓读入辅助 + 退出码契约（_EXIT_*，从 cli.py 拆出）
-│   │   │   ├── _parser.py            #   argparse 解析器构建与 type 回调（从 cli.py 拆出）
+│   │   │   ├── _handlers.py          #   子命令处理器 + 持仓读入辅助 + 退出码契约（_EXIT_*）
+│   │   │   ├── _parser.py            #   argparse 解析器构建与 type 回调
 │   │   │   └── cli.py                #   主入口门面：main/run_cli + 命令行功能开关应用 + re-export
 │   │   │
 │   │   ├── tui/                      # TUI 交互模式入口
@@ -475,7 +475,7 @@ investor-util/
 │   │   │   └── scheduler.py          #   内置定时生成调度（scheduler 块解析/触发窗评估/触发账本/daemon 线程）
 │   │
 │   ├── static/                       # 前端资产（报告图表 bundle + Web UI 前端 + 报告模板）
-│   │   ├── chart.min.js              #   Chart.js v4.4.3 UMD（本地 bundle，205KB，离线自包含）
+│   │   ├── chart.min.js              #   Chart.js UMD（本地 bundle，离线自包含）
 │   │   ├── chart-print.js            #   打印降级（beforeprint 快照 <img> / afterprint 恢复）
 │   │   ├── chart-config.js           #   Chart.js 全局配置（主题色/动画关闭/DPR 限制）
 │   │   ├── chart-export.js           #   单图导出 PNG/CSV 按钮（.chart-box 注入组容器；PNG 2x 分辨率 / CSV 屏显数据本地 Blob 下载）
@@ -731,7 +731,7 @@ investor-util/
 │       │   │   ├── __init__.py      #       子包标记
 │       │   │   ├── test_handlers_cache.py  #   缓存管理命令处理测试
 │       │   │   ├── test_handlers_config.py #   命令处理器配置测试
-│       │   │   ├── test_handlers_config_nav.py # 配置面板方向键导航测试（自 test_handlers_config 拆出）
+│       │   │   ├── test_handlers_config_nav.py # 配置面板方向键导航测试（方向键契约/游标反馈/子菜单导航/编号连续）
 │       │   │   ├── test_handlers_llm_providers.py#   [M] 多链线路优先级面板测试（交换写盘/Esc/重提示）
 │       │   │   ├── test_switch_panel_layout.py #   [S] 面板响应式排版（三档版面/不越界不变式/宽度探测）
 │       │   │   ├── test_handlers_qa.py #   报告对话式追问入口测试（选择/输入循环/会话续传/菜单门控）
@@ -800,7 +800,7 @@ investor-util/
 │       │   │   ├── test_cls_news.py           #   财联社新闻源测试
 │       │   │   ├── test_eastmoney_news.py     #   东方财富新闻源测试
 │       │   │   ├── test_news_aggregator.py    #   新闻聚合器测试
-│       │   │   ├── test_news_fetch_limits.py    #   新闻抓取预算单源算式测试（C10）
+│       │   │   ├── test_news_fetch_limits.py    #   新闻抓取预算单源算式测试（per_source 预算与最终截取数解耦算式）
 │       │   │   ├── test_news_correlator.py    #   新闻关联分析测试
 │       │   │   ├── test_news_keywords.py      #   新闻关键词测试
 │       │   │   ├── test_news_sources.py       #   新闻源注册测试
@@ -863,7 +863,7 @@ investor-util/
 │       │   │   ├── test_numeric_guard_regression_edge.py # 报告层数值归一边缘场景（全 NaN 列/档位判定边界/混合合法与脏值）
 │       │   │   ├── test_data_source_matrix.py     #   数据源可用性矩阵 + 数据源说明表（用途/计费/凭据/本次使用）测试
 │       │   │   ├── test_data_status.py            #   数据状态测试
-│       │   │   ├── test_downsample.py             #   P1 服务端下采样测试（§4.9）
+│       │   │   ├── test_downsample.py             #   服务端下采样测试（日频原样/周聚合/月聚合兜底/末点保留）
 │       │   │   ├── test_excel_fund_deep_analysis.py  #   Excel 基金深度分析页签测试
 │       │   │   ├── test_excel_format_edge.py      #   Excel 格式边缘场景
 │       │   │   ├── test_excel_generator.py        #   Excel 生成测试
@@ -903,7 +903,7 @@ investor-util/
 │       │   │   ├── test_schedule_replay_wiring.py #   调仓纪律回放接线（开关/seam/注册表/关态回退/双端单源/引用块/模板/契约装配）
 │       │   │   ├── test_holding_change_panel_edge.py #   持仓变动面板边缘（空快照/字段异常/数值边界）
 │       │   │   ├── test_financial_report_digest.py #   持仓个股财报摘要章节装配（降级契约/文种标签/披露日/失败清单）
-│       │   │   ├── test_financial_indicator.py #   财务指标章装配与接线（契约/C19 登记/质量档·趋势·PE·PB/开关/编排接缝）
+│       │   │   ├── test_financial_indicator.py #   财务指标章装配与接线（数据契约/质量档·趋势·PE·PB/开关/编排接缝）
 │       │   │   ├── test_action_html.py            #   行动建议章节 + 智囊团深度复盘「行动摘要」HTML 呈现（单源计算断言）
 │       │   │   ├── test_action_sheet.py           #   行动建议 Excel 页签呈现（含景气度框架诊断块）
 │       │   │   ├── test_fund_roe_estimate.py  #   基金重仓股 ROE 加权估算（加权纯计算/陈旧闸门/非 A 股过滤/known_roe 免取数）
@@ -1205,7 +1205,7 @@ investor-util/
 │   │   ├── _tree.py                  #       目录树与统计表检查（folders.md 双向比对 + 项目统计表核对）
 │   │   ├── _ledger.py                #       台账族检查（归档索引 / 分区纪律 / Thinking 支持矩阵）
 │   │   ├── _menu_blocks.py          #       手册菜单块检查（双手册主菜单 code block ↔ MENU_ITEMS 键集合/标签头）
-│   │   ├── _requirements_menu.py    #       需求菜单表检查（requirements §3.2 键集合/分组/组内顺序 ↔ MENU_GROUPS）
+│   │   ├── _requirements_menu.py    #       需求菜单表检查（键集合/分组/组内顺序 ↔ MENU_GROUPS）
 │   │   └── _guards.py                #       守护清单同源校验（developer-guide P0/P2 ↔ ci.yml guards ↔ CLAUDE/testplan 四处清单一致）
 │   ├── _traces_code/                 #   check-code-traces 内部实现包（入口保留 CLI 与原面 re-export）
 │   │   ├── __init__.py               #       子包标记（原面 re-export）

@@ -98,6 +98,57 @@ class TestDocTreeLineNarrowing:
         assert _doc_hit(doc_traces, "页面完成态按钮复位") is None
 
 
+class TestFencedTreeLineScan:
+    """围栏内目录树行照检（回归：目录树整块在围栏内，仅跳过围栏会使树行
+    检查整体失效）：folders.md 围栏内树行照检、非 folders.md 围栏内容维持
+    跳过、树行按路径分域（archive 子树=归档记录域/plan 子树=任务记录域）、
+    树行专属无后缀来源叙述补强。"""
+
+    @staticmethod
+    def _write_tree(tmp_path, body: str, name: str = "folders.md"):
+        fpath = tmp_path / name
+        fpath.write_text("# 目录\n```text\n" + body + "\n```\n", encoding="utf-8")
+        return fpath
+
+    def test_cipher_in_fenced_tree_line_flagged(self, doc_traces, tmp_path):
+        """folders.md 围栏内树行的约束代号照检（回归：围栏跳过会吞掉整棵目录树的检查）。"""
+        fpath = self._write_tree(tmp_path, "├── foo.py    # 数据装配（C19 契约）")
+        hits = doc_traces.scan_file(fpath, verbose=False)
+        assert any(h[1] == "CIPHER" and "foo.py" in h[3] for h in hits), hits
+
+    def test_origin_in_fenced_tree_line_flagged(self, doc_traces, tmp_path):
+        """树行专属补强：无后缀模块名的拆出叙述（带后缀模式覆盖不到）。"""
+        fpath = self._write_tree(tmp_path, "├── bar.py    # 评分内核（从 framework 拆出）")
+        hits = doc_traces.scan_file(fpath, verbose=False)
+        assert any(h[1] == "HIGH" and "拆出" in h[3] for h in hits), hits
+
+    def test_non_folders_fenced_tree_still_skipped(self, doc_traces, tmp_path):
+        """其他文档围栏内的树形内容（章节大纲图示）维持围栏跳过不检。"""
+        fpath = self._write_tree(tmp_path, "├── §1 系统概述", name="notes.md")
+        assert doc_traces.scan_file(fpath, verbose=False) == []
+
+    def test_archive_subtree_tree_line_is_record_domain(self, doc_traces, tmp_path):
+        """docs/archive/ 子树行按归档记录域：版本号/迭代轮次是归档文件的
+        当时记录，不检（仅复盘叙事检出）。"""
+        fpath = self._write_tree(
+            tmp_path,
+            "├── docs/\n"
+            "│   └── archive/\n"
+            "│       └── v9.9.x/\n"
+            "│           └── old-design.md # 设计文档 v9.9.0（迭代计划，21 轮）",
+        )
+        assert doc_traces.scan_file(fpath, verbose=False) == []
+
+    def test_plan_subtree_tree_line_checks_cipher(self, doc_traces, tmp_path):
+        """docs/plan/ 子树行按任务记录域：约束代号照检。"""
+        fpath = self._write_tree(
+            tmp_path,
+            "├── docs/\n│   └── plan/\n│       └── my-plan.md # 方案设计（引用 C10）",
+        )
+        hits = doc_traces.scan_file(fpath, verbose=False)
+        assert any(h[1] == "CIPHER" for h in hits), hits
+
+
 class TestDocFileNameTaskId:
     """文件名任务编号：受检域 .md 文件名含 rf-N/plan-N 或系列代号（系列
     字母加序号、task 加序号形态）即检出（语义命名补位——目录树比对只管

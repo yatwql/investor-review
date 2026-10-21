@@ -90,7 +90,11 @@
     前剔除行内代码段
   - 需求编号（requirements.md 的 R-LLM-ER-01 等需求条目 ID）
   - folders.md 目录树行（│ ├ └ 开头，记录目录结构，可含 archive/ 指向——仅
-    ARCHIVE 类豁免；任务编号（CODE）与进度状态词（STATUS）在树行照检）
+    ARCHIVE 类豁免；任务编号（CODE）与进度状态词（STATUS）在树行照检）。
+    目录树整块位于围栏代码块内，围栏内树行同样照检（围栏跳过仅针对非树行
+    内容）；树行按路径分域：docs/archive/ 子树行=归档记录域（仅复盘叙事
+    检出，版本号/迭代轮次是归档文件的当时记录）、docs/plan/ 子树行=任务
+    记录域（章节编号+约束代号照检，HIGH/STATUS 不入）
   - folders.md 统计表行（如 | ├ archive/ | 版本归档 |，记录目录计数）
   - 当前能力描述（暂不支持 / 不再支持 / 不正式支持）
   - 运行时产物归档描述（"归档版" / "归档目录" / "历史归档至 YYYYMMDD/"——
@@ -461,6 +465,20 @@ _CIPHER_PATTERNS = [(p, c, d) for p, c, d in _DOC_PATTERNS if c == "CIPHER"]
 # 目录树行（│ ├ └ 开头）：仅 ARCHIVE 类豁免（目录结构记录含 archive/ 条目属
 # 合法指向），任务编号/进度状态词等照检——树行描述只讲文件内容简要
 _TREE_LINE = re.compile(r"^\s*[│├└]")
+# 目录树条目：前导缩进（│/空格，每层 4 字符）+ ├──/└── + 名字——用于按路径
+# 分域（docs/archive/ 子树=归档记录域、docs/plan/ 子树=任务记录域）
+_TREE_ENTRY = re.compile(r"^([\s│]*)(?:├──|└──)\s+(\S+)")
+# 目录树行专属来源叙述补强：无文件后缀的模块名（"从 framework 拆出"类）
+# 带后缀模式覆盖不到。仅树行入检——正文的"从 X 提取"可为运行时数据流语义
+# （如"从 pipeline_data.diff 提取环比"），树行描述只讲文件职责、来源模块名
+# 一律属历史痕迹
+_TREE_ORIGIN = [
+    (
+        r"(?:自|从|由)\s*[`\w./_-]+\s*(?:拆出|拆分|提取|分离|合并|复用|迁移)",
+        "HIGH",
+        "来源叙述（从XX拆出/拆分——树行描述只讲文件职责）",
+    ),
+]
 # 文件名任务编号/系列代号（目录树比对 check-doc-drift 只管存在性，语义命名由本检查补位）：rf-N/plan-N、task\d、系列字母+数字（B1/A5/r198/D17 类）与 P3-04 全形；phase 词形（p1-optimization）不误伤
 _NAME_CODE = re.compile(
     r"(?:^|[_-])(?:rf|plan)-\d+"
@@ -530,6 +548,7 @@ def scan_file(
         if fpath.name in CIPHER_EXEMPT_FILES:
             patterns = [p for p in _DOC_PATTERNS if p[1] != "CIPHER"]
     in_code_block = False
+    tree_stack: list[str] = []  # folders.md 目录树目录栈（按深度维护，行分域用）
     for lineno, line in enumerate(text.splitlines(), 1):
         stripped = line.strip()
         if not stripped:
@@ -541,9 +560,13 @@ def scan_file(
                 print(f"    (codeblock) L{lineno}: {stripped[:60]}")
             continue
         if in_code_block:
-            if verbose:
-                print(f"    (codeblock) L{lineno}: {stripped[:60]}")
-            continue
+            # folders.md 目录树整块位于围栏内——围栏内树行仍照检（树行描述
+            # 只讲文件职责，属结构记录域）；其余文档围栏内容（命令/配置示例、
+            # 章节大纲图示）维持跳过
+            if not (fpath.name == "folders.md" and _TREE_LINE.match(stripped)):
+                if verbose:
+                    print(f"    (codeblock) L{lineno}: {stripped[:60]}")
+                continue
         # 任务记录域不走 _is_excluded（表格/链接行豁免会吃掉任务表内的复盘叙事）
         if not chapter_only and not task_record and not _TREE_LINE.match(stripped) and _is_excluded(stripped):
             if verbose:
@@ -555,12 +578,33 @@ def scan_file(
             if chapter_only or task_record:
                 continue
         is_tree = bool(_TREE_LINE.match(stripped))
-        for pat, cat, desc in patterns:
+        # folders.md 树行按路径分域：docs/archive/ 子树=归档记录域（仅复盘
+        # 叙事检出，版本号/迭代轮次是归档文件的当时记录）；docs/plan/ 子树=
+        # 任务记录域（章节编号+约束代号照检）；其余树行=常规域 + 树行专属
+        # 来源叙述补强（无后缀模块名的拆出/拆分）
+        line_patterns = patterns
+        eff_task, eff_archive = task_record, archive
+        if fpath.name == "folders.md" and is_tree:
+            entry = _TREE_ENTRY.match(stripped)
+            if entry:
+                depth = len(entry.group(1)) // 4
+                del tree_stack[depth:]
+                tree_stack.append(entry.group(2))
+            subtree = "".join(tree_stack)
+            if subtree.startswith("docs/archive/"):
+                eff_archive = True
+                line_patterns = [p for p in _DOC_PATTERNS if p[1] == "NARRATIVE"]
+            elif subtree.startswith("docs/plan/"):
+                eff_task = True
+                line_patterns = [p for p in _DOC_PATTERNS if p[1] in ("CHAPTER", "NARRATIVE", "CIPHER")]
+            else:
+                line_patterns = patterns + _TREE_ORIGIN
+        for pat, cat, desc in line_patterns:
             if is_tree and cat == "ARCHIVE":
                 continue  # 目录树行记录项目结构，archive/ 条目属合法指向
             if cat == "STATUS" and not is_tree:
                 continue  # 进度状态词仅目录树描述域（正文当前状态叙述合法）
-            if cat == "NARRATIVE" and not (task_record or archive):
+            if cat == "NARRATIVE" and not (eff_task or eff_archive):
                 continue  # 复盘叙事仅任务记录域/归档域（手册操作指引/变更日志合法）
             if cat == "CHAPTER" and _is_chapter_excluded(stripped):
                 continue  # 计数/序数表述豁免，不影响其他模式
