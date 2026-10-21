@@ -23,6 +23,7 @@
 
 ### Changed
 
+- developer-guide「辅助脚本速查」重组为**按用途分类**（测试类 / 文档类 / 代码与文件质量类 / 发布类 / 诊断类 / 启动类），并统一每条检查脚本的写法：**设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）+ **使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）；把原先散落在条目之间的共享契约、跨脚本差异、通用设计逻辑与通用使用逻辑收进「检查脚本的公共部分」集中一处；补齐此前只在一览表出现的 `check-file-length` / `check-style-guardrails` / `check-script-contract` 三条详情（含阈值口径、E/W 分级与观察期定档、四条契约规则）
 - 检查脚本词表收敛为单一来源：31 条逐字节相同的「历史变更叙述」正则从两脚本模式表抽入 `scripts/_traces_common.py`（只登记字面量，分类/描述仍按域定义，`_multi_domain()` 支持同正则多域登记）；文档域模式表整体迁入 `_traces_doc/patterns.py`（`check-doc-traces.py` 981→708 行，保留原面 re-export 故调用方零改动）；`RULE_CARRIER_DIRS` 扩至 `_traces_doc` + 新增 `RULE_CARRIER_FILES`（词表/模式表属尺子本身，不被 code-traces 自查误报），结论缓存 `_LOGIC_FILES` 纳入两新文件防止判定面搬家后缓存假绿；新增 `test_trace_shared_vocabulary` 锁「两表交集==共享词表 / 两侧都引用每一条 / 源码内无写死字面量」，设计说明见 `docs/plan/trace-vocabulary-single-source.md`（自审 rf-791）
 
 - `logs/release.jsonl` 耗时台账改走 `core/jsonl_store` 原子追加原语并加保留上限（原为直接 append 写且无界增长；一次发布约 7 条，上限 500 条覆盖数十次发布）（自审 rf-788）
