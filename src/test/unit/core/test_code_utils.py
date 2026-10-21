@@ -353,15 +353,19 @@ class TestIsLetterBasedCode:
 
 
 class TestSixDigitJudgementCentralized:
-    """回归守卫：生产模块不得再内联 6 位纯数字判定（判定收敛 code_utils 单源）。"""
+    """回归守卫：生产模块不得再内联 6 位纯数字判定（判定收敛 `is_six_digit_code` 单源）。"""
 
     _INLINE_PATTERN = re.compile(r"len\([a-z_]+\) == 6 and [a-z_]+\.isdigit\(\)")
+    #: 允许出现该判定的模块：`code_utils.py`（is_six_digit_code 的唯一入口）与
+    #: `code_symbols.py`（strip_to_digits 是其底层原语——上层判据反过来调用它，
+    #: 调用上层判据会互相递归）
+    _ALLOWED = {"code_utils.py", "code_symbols.py"}
 
     def test_no_inline_six_digit_checks_outside_code_utils(self):
         offenders = []
         src_root = Path(PROJECT_ROOT) / "src" / "python"
         for path in src_root.rglob("*.py"):
-            if path.name == "code_utils.py" or "__pycache__" in path.parts:
+            if path.name in self._ALLOWED or "__pycache__" in path.parts:
                 continue
             text = path.read_text(encoding="utf-8")
             if self._INLINE_PATTERN.search(text):
@@ -430,7 +434,7 @@ class TestExchangePrefixCentralized:
         offenders = []
         src_root = Path(PROJECT_ROOT) / "src" / "python"
         for path in src_root.rglob("*.py"):
-            if path.name == "code_utils.py" or "__pycache__" in path.parts:
+            if path.name in {"code_utils.py", "code_symbols.py"} or "__pycache__" in path.parts:
                 continue
             text = path.read_text(encoding="utf-8")
             if self._PREFIX_TUPLE.search(text):
@@ -438,10 +442,15 @@ class TestExchangePrefixCentralized:
         assert offenders == [], f"交易所前缀元组应复用 code_utils 的单点定义：{offenders}"
 
     def test_constant_is_single_source(self):
-        """判定用常量与剥离函数读同一份前缀表（新增前缀只改一处）。"""
-        from src.python.core import code_utils
+        """判定用常量与剥离函数读同一份前缀表（新增前缀只改一处）。
+
+        派生量拆分后真值在 `code_symbols.py`，`code_utils.py` 反向引用同一对象
+        （`is` 断言：不是各存一份等值元组）。
+        """
+        from src.python.core import code_symbols, code_utils
 
         assert code_utils.EXCHANGE_PREFIXES == ("sh", "sz", "bj")
+        assert code_utils.EXCHANGE_PREFIXES is code_symbols.EXCHANGE_PREFIXES
         for prefix in code_utils.EXCHANGE_PREFIXES:
             assert code_utils.strip_exchange_prefix(f"{prefix}600519") == "600519"
 

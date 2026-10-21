@@ -3364,7 +3364,7 @@ load_holdings(filepath)
 
 #### 内部工具
 
-`_strip_prefix(code)` — 去除 `sh/sz/bj` 前缀，返回纯净 6 位数字代码，非 6 位数字时返回空字符串。所有前缀型判定函数均先调用此函数再匹配。
+`strip_to_digits(code)`（派生量模块 `core/code_symbols.py`，旧名 _strip_prefix）— 去除 `sh/sz/bj` 前缀，返回纯净 6 位数字代码，非 6 位数字时返回空字符串。所有前缀型判定函数均先调用此函数再匹配。
 
 #### 关键词常量
 

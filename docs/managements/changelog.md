@@ -11,6 +11,8 @@
 
 ### Changed
 
+- **代码工具按职责拆分（`rf-79`）**：`core/code_utils.py` 788 → **608 行**——派生量（交易所前后缀归一、FMP 风格符号、东财 push2 secid、cninfo 栏目参数、市值粗估）下沉 `core/code_symbols.py`（227 行），前缀常量的真值随之迁入并由 `code_utils` 引用同一对象（`is` 断言守卫「只存一份」）。`_strip_prefix` 更名公开原语 `strip_to_digits`（`is_six_digit_code` 在其之上构建，避免互相递归）。既有导入面经 re-export 保持不变。
+
 - **Web 生成执行体下沉（`rf-711`）**：`src/python/web/handlers.py` 910 → **710 行**，生成链路（执行体 / 产物清单 / 完成通知 / 输入模式→快照域映射 / 退出码）拆到 `src/python/web/run_generation.py`（235 行）。`handlers.py` 保留同名 re-export 维持既有导入面，`app.py` 改为从新模块注入 `RunManager.executor`；测试 patch 目标按「调用点所在模块」改指新模块。纯结构调整，零行为变化（`unit/web` 347 passed）。
 
 - **时间戳 helper 三份拷贝维持现状（`rf-790`，已决策）**：`core/decision_ledger.py::_now_iso` 与 `core/signal_ledger.py::_now_iso` 逐字相同（各 1 行表达式），`scripts/_release/_timing.py::now_iso` 带时区偏移（跨机/跨时区对拍用，不能合并）。复核确认全仓无第三份语义相同的 naive 实现，为 1 行表达式新开 `core/timeutil.py` 需同步目录树与文档，收益低于成本 → **保持两处各写一行，不排期**；重访条件：出现第三份 naive 拷贝，或任一处要改精度/格式时统一。
