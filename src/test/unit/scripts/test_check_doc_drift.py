@@ -570,6 +570,37 @@ class TestManagementPartitions:
         )
         assert findings == []
 
+    def test_fixed_section_inside_pending_area(self, drift):
+        """「开发期已修复」节落在待处理区 → 报 finding（已修复项被读成待办）。"""
+        rf = (
+            "## 当前待处理问题\n\n### P1 — 高优先\n\n| # | 问题 |\n"
+            "### 开发期已修复（1.2.3-dev）\n\n| # | 问题 |\n| **rf-996** | y |\n\n"
+            "## 已解决问题\n\n### 归档档案\n"
+        )
+        findings = drift.audit_management_partitions(
+            review_findings=rf, plan="", changelog=self._CHANGELOG_OK + "\n修复 rf-996\n"
+        )
+        assert any("开发期已修复" in f and "节归属错置" in f for f in findings)
+
+    def test_pending_tier_heading_inside_resolved_area(self, drift):
+        """P 档标题（P1/P2/P3）落在已解决区 → 报 finding。"""
+        rf = (
+            "## 当前待处理问题\n\n### P1 — 高优先\n\n## 已解决问题\n\n"
+            "### 开发期已修复（1.2.3-dev）\n\n| # | 问题 |\n\n"
+            "### P3 — 持续监控：文件膨胀登记\n\n| # | 文件 |\n\n### 归档档案\n"
+        )
+        findings = drift.audit_management_partitions(review_findings=rf, plan="", changelog=self._CHANGELOG_OK)
+        assert any("P3" in f and "节归属错置" in f for f in findings)
+
+    def test_correct_section_layout_passes(self, drift):
+        """待处理区只放 P 档、已解决区只放已修复节 → 无节归属 finding（不误报）。"""
+        rf = (
+            "## 当前待处理问题\n\n### P1 — 高优先\n\n| # | 问题 |\n| **rf-995** | x |\n\n"
+            "## 已解决问题\n\n### 开发期已修复（1.2.3-dev）\n\n| # | 问题 |\n\n### 归档档案\n"
+        )
+        findings = drift.audit_management_partitions(review_findings=rf, plan="", changelog=self._CHANGELOG_OK)
+        assert [f for f in findings if "节归属错置" in f] == []
+
     def test_completed_plan_left_in_todo(self, drift):
         """未完成区出现 ✅ 已完成项 → 报 finding。"""
         plan = "## 当前迭代待办\n\n#### ✅ `plan-9` 已做完\n\n## 归档\n"

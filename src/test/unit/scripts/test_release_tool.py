@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 from pathlib import Path
 
@@ -56,6 +57,11 @@ class FakeRunner:
             if all(m in cmd for m in matcher):
                 return resp
         return self.default
+
+
+def _mode_arg(cmd: list[str]) -> str:
+    """取命令中 `--mode` 的取值（无则空串）——bench 范围断言用。"""
+    return cmd[cmd.index("--mode") + 1] if "--mode" in cmd else ""
 
 
 # ─────────────────────────── 版本纯函数 ───────────────────────────
@@ -459,6 +465,16 @@ class TestGate:
             assert path.is_file(), script
             assert script.startswith("scripts/check-"), script
 
+    def test_gate_records_step_timings(self, rel):
+        """门禁三步（回归 / 十守护 / 设计护栏）入计时器：发布耗时台账靠它们归因。"""
+        rel._reset_timer()
+        runner = FakeRunner()
+        rc = rel.cmd_gate(ns(), runner=runner)
+        assert rc == 0
+        labels = [entry["step"] for entry in rel._timer().steps]
+        assert labels == ["P2 场景回归", "P2 十守护", "P2 设计护栏"]
+        assert all(entry["elapsed_s"] >= 0 for entry in rel._timer().steps)
+
     def test_gate_stops_on_stale_evolution(self, rel):
         """演进对照新鲜度过期 → gate 返回 2 且不触发任何子进程（前置拦截）。"""
         stale = ["当前开发版列头 2026-10-20 ≠ 今日，先执行 scripts/release.py evolution 刷新"]
@@ -536,7 +552,8 @@ class TestRefresh:
         assert rc == 0
         steps = runner.calls[3:]  # 前 3 个调用：describe / diff / ls-files
         assert len(steps) == 3
-        assert any("bench" in p for p in steps[0])
+        assert "--update-docs" in steps[0]
+        assert _mode_arg(steps[0]) == ",".join(rel.RELEASE_BENCH_MODES)
         assert any("collect-test-coverage" in p for p in steps[1])
         assert any("check-doc-drift" in p for p in steps[2])
 
@@ -553,7 +570,8 @@ class TestRefresh:
         rc = rel.cmd_refresh(ns(force_refresh=True), runner=runner)
         assert rc == 0
         assert len(runner.calls) == 3  # 无 git 判定，直接三步
-        assert any("bench" in p for p in runner.calls[0])
+        assert "--update-docs" in runner.calls[0]
+        assert _mode_arg(runner.calls[0]) == ",".join(rel.RELEASE_BENCH_MODES)
         assert any("collect-test-coverage" in p for p in runner.calls[1])
 
     def test_missing_tag_conservatively_refreshes(self, rel):
@@ -562,7 +580,7 @@ class TestRefresh:
         assert rc == 0
         steps = runner.calls[1:]
         assert len(steps) == 3  # 无 tag → 保守全刷
-        assert any("bench" in p for p in steps[0])
+        assert _mode_arg(steps[0]) == ",".join(rel.RELEASE_BENCH_MODES)
 
     def test_untracked_program_file_triggers_refresh(self, rel):
         """未跟踪程序文件（git diff 不含）也计入变更 → 必跑。"""
@@ -577,7 +595,21 @@ class TestRefresh:
         assert rc == 0
         steps = runner.calls[3:]
         assert len(steps) == 3
-        assert any("bench" in p for p in steps[0])
+        assert _mode_arg(steps[0]) == ",".join(rel.RELEASE_BENCH_MODES)
+
+    def test_full_bench_flag_runs_all_modes(self, rel):
+        """`--full-bench` 走 bench 别名（全量 14 档）——重测全表耗时的手动入口。"""
+        runner = FakeRunner()
+        rc = rel.cmd_refresh(ns(force_refresh=True, full_bench=True), runner=runner)
+        assert rc == 0
+        assert _mode_arg(runner.calls[0]) == "bench"
+
+    def test_release_bench_modes_are_real_modes(self, rel):
+        """子集模式必须是 test-runner 的真实模式键：拼错会让 bench 直接报错退出，
+        表不回填、发布链在 refresh 就断（结构与实现双向对齐）。"""
+        runner_mod = load_script("test-runner.py", module_name="test_runner_bench_modes")
+        assert set(rel.RELEASE_BENCH_MODES) <= set(runner_mod.MODES)
+        assert "bench" not in rel.RELEASE_BENCH_MODES  # 别名不得混入子集
 
     def test_first_step_failure_stops_chain(self, rel):
         runner = FakeRunner(
@@ -590,6 +622,63 @@ class TestRefresh:
         rc = rel.cmd_refresh(ns(), runner=runner)
         assert rc == 5
         assert len(runner.calls) == 4  # 3 git + 首步即止
+
+
+class TestTimingTelemetry:
+    """发布耗时台账：`_finish_timing` 写 `logs/release.jsonl`（观测面，不得阻断发布）。"""
+
+    def _log(self, tmp_path: Path, rel, monkeypatch) -> Path:
+        log = tmp_path / "logs" / "release.jsonl"
+        monkeypatch.setattr(rel, "RELEASE_LOG_FILE", log)
+        constants = tmp_path / "constants.py"
+        constants.write_text('APP_VERSION = "1.2.3-dev"\n', encoding="utf-8")
+        monkeypatch.setattr(rel, "CONSTANTS_FILE", constants)
+        return log
+
+    def _last_record(self, log: Path) -> dict:
+        lines = [ln for ln in log.read_text(encoding="utf-8").splitlines() if ln.strip()]
+        return json.loads(lines[-1])
+
+    def test_record_carries_command_steps_and_version(self, rel, tmp_path, monkeypatch):
+        log = self._log(tmp_path, rel, monkeypatch)
+        timer = rel._reset_timer()
+        with timer.step("P2 场景回归"):
+            pass
+        rel._finish_timing("gate", 0)
+        record = self._last_record(log)
+        assert record["command"] == "gate"
+        assert record["ok"] is True
+        assert record["version"] == "1.2.3-dev"
+        assert [entry["step"] for entry in record["steps"]] == ["P2 场景回归"]
+        assert record["elapsed_s"] >= record["steps"][0]["elapsed_s"] >= 0
+        assert timer.step_seconds("P2 场景回归") is not None
+        assert "P2 场景回归" in timer.summary()
+        assert timer.steps_total >= 0
+
+    def test_failed_command_recorded_as_not_ok(self, rel, tmp_path, monkeypatch):
+        """非零退出码如实入账（发布链折在哪一步，台账能看出来）。"""
+        log = self._log(tmp_path, rel, monkeypatch)
+        rel._reset_timer()
+        rel._finish_timing("gate", 2)
+        assert self._last_record(log)["ok"] is False
+
+    def test_appends_one_line_per_command(self, rel, tmp_path, monkeypatch):
+        log = self._log(tmp_path, rel, monkeypatch)
+        rel._reset_timer()
+        rel._finish_timing("check", 0)
+        rel._reset_timer()
+        rel._finish_timing("gate", 0)
+        commands = [json.loads(ln)["command"] for ln in log.read_text(encoding="utf-8").splitlines() if ln.strip()]
+        assert commands == ["check", "gate"]
+
+    def test_unwritable_log_does_not_break_release(self, rel, tmp_path, monkeypatch, capsys):
+        """台账写不进去（父路径被文件占位）只打 [!]，不得抛异常改写发布退出码。"""
+        blocker = tmp_path / "logs"
+        blocker.write_text("占位文件", encoding="utf-8")
+        monkeypatch.setattr(rel, "RELEASE_LOG_FILE", blocker / "release.jsonl")
+        rel._reset_timer()
+        rel._finish_timing("gate", 0)  # 不抛即通过
+        assert "耗时记录未写入" in capsys.readouterr().out
 
 
 class _ToolRepoFixture:

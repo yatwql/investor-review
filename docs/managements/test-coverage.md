@@ -5,6 +5,8 @@
 
 按不同的 `--mode` / pytest 标记统计当前测试覆盖规模：
 
+> 发布期回填范围：`release.py refresh` 的 bench 默认只测发布口径四档（`unit` / `dev-verify` / `regression` / `integration`），其余行的覆盖项数与耗时沿用上次实测（`--update-docs` 未实测即保留原值，不会写脏）；需全量复测时用 `release.py refresh --full-bench` 或 `test-runner.py --mode bench --update-docs`。各模式的「覆盖项数」列另有 `collect-test-coverage.py --update-docs` 按收集快照回写，不受 bench 范围影响。
+
 ## 模式对应测试量
 
 <!-- mode-count-table:start -->

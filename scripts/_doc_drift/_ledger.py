@@ -31,6 +31,17 @@ _RF_ROW_ID = re.compile(r"^\|\s*\*\*(rf-\d+)\*\*", re.M)
 _MIGRATION_PLACEHOLDER = re.compile(r"已随\s*v(\d+\.\d+\.\d+)\s*发布迁入")
 
 
+#: review-findings 三级标题与「已修复节」标记（节归属纪律 D：已修复节只允许出现在已解决区）
+_H3_HEADING = re.compile(r"(?m)^###\s+(.+)$")
+
+
+_FIXED_SECTION_MARK = "开发期已修复"
+
+
+#: 未完成档标题（P1/P2/P3…）——出现在已解决区即属节归属错置
+_PENDING_HEADING = re.compile(r"^P\d+\s|^P\d+\s*—")
+
+
 _PLAN_HEADING_ID = re.compile(r"^\s*#{2,4}\s*(?:🔲|✅)\s*`?(plan-\d+)", re.M)
 
 
@@ -85,11 +96,25 @@ def audit_management_partitions(
          未完成/已归档条目均只认**条目标题**，正文提及不算。
       C. changelog：现行文件只允许一个版本段头且必须为开发段
          （正式版本段落须归档至 `archived_changelog.*.md`）。
+      D. review-findings 节归属：**「开发期已修复」节必须位于已解决区**、P 档标题必须位于待处理区——
+         两区标题混放会把已修复项读成未完成（三条已修复节夹在 P2 与 P3 之间、归档占位落到索引
+         之后即此型失误）；A 条按「rf 标识」比对，标题错位时完全静默，故单独成条。
     """
     findings: list[str] = []
 
     pending = _doc_section(review_findings, "## 当前待处理问题", "## 已解决问题")
     resolved = _doc_section(review_findings, "## 已解决问题", "### 归档档案")
+    for heading in _H3_HEADING.findall(pending):
+        if _FIXED_SECTION_MARK in heading:
+            findings.append(
+                f"{rel(_REVIEW_FINDINGS_MD)}: 待处理区出现「{heading.strip()}」"
+                "——已修复节须置于「## 已解决问题」区（节归属错置）"
+            )
+    for heading in _H3_HEADING.findall(resolved):
+        if _PENDING_HEADING.match(heading.strip()):
+            findings.append(
+                f"{rel(_REVIEW_FINDINGS_MD)}: 已解决区出现「{heading.strip()}」——未完成档位于已解决区（节归属错置）"
+            )
     pending_ids = set(_RF_ROW_ID.findall(pending))
     resolved_ids = set(_RF_ROW_ID.findall(resolved))
     for rid in sorted(pending_ids & resolved_ids):
