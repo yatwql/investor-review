@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """发布流程分步编排脚本 —— 把发布口径从文档散文固化为可执行子命令。
 
-七个分步子命令（每步独立可审阅、失败即停不连锁，按序执行）：
+八个分步子命令（每步独立可审阅、失败即停不连锁，按序执行）：
 
     check      预检：分支 / 工作树干净 / 版本形态 / tag 未占用 / 版本一致性
     prepare    文档手术：版本全链（constants + README + --fix 传播）+ changelog
-               发布段迁入归档、指针与归档索引改写（changelog 段由本步自动完成）；
-               rf 已解决条目 / plan 已完成任务 / docs/plan 已完成任务设计文件三项归档迁移为
-               人工强制项（未完成不得继续 gate/publish）
+               发布段迁入归档、指针与归档索引改写（changelog 段由本步自动完成）
+    archive    台账归档迁移（机械部分自动、判定仍人工复核）：review-findings 该版本
+               已解决表**原表搬运**入归档 + 主台账留占位 + 归档头部/索引日期派生；
+               plan 已完成任务节整节搬入计划归档；docs/plan 已完成设计文件（引用编号
+               均已归档）迁入版本归档并改写引用与目录树；收尾 doc-drift --sync + 两台
+               便宜守护。`--dry-run` 只报告动作；gate 会断言该版本表已搬空
     refresh    数据刷新：bench --update-docs（默认只测发布子集四档 unit / dev-verify /
                regression / integration，`--full-bench` 跑全量模式）+ collect-test-coverage
                + doc-drift --sync（自上一 release tag 起仅文档变更时跳过 bench 与 collect，
@@ -22,6 +25,7 @@
 典型发布序列：
     .venv/bin/python scripts/release.py check
     .venv/bin/python scripts/release.py prepare
+    .venv/bin/python scripts/release.py archive
     .venv/bin/python scripts/release.py refresh
     .venv/bin/python scripts/release.py evolution --release
     .venv/bin/python scripts/release.py gate
@@ -53,6 +57,9 @@ README_FILE = REPO_ROOT / "README.md"
 _MANAGEMENTS_DIR = REPO_ROOT / "docs" / "managements"
 _ARCHIVE_DOCS_DIR = REPO_ROOT / "docs" / "archive"
 CHANGELOG_FILE = _MANAGEMENTS_DIR / "changelog.md"
+RF_FILE = _MANAGEMENTS_DIR / "review-findings.md"
+PLAN_FILE = _MANAGEMENTS_DIR / "plan.md"
+PLAN_DOCS_DIR = REPO_ROOT / "docs" / "plan"
 FOLDERS_FILE = _MANAGEMENTS_DIR / "folders.md"
 TEST_COVERAGE_FILE = _MANAGEMENTS_DIR / "test-coverage.md"
 
@@ -91,6 +98,32 @@ from _release._changelog_archive import (  # noqa: E402, F401 — _SECTION_NOTE 
     write_archive_release,
 )
 from _release._common import ReleaseError, exec_command as _exec  # noqa: E402
+from _release._archive_flow import (  # noqa: E402
+    ArchiveContext,
+    prerequisite_findings,
+    run_archive as archive_flow,
+)
+from _release._ledger_archive import (  # noqa: E402, F401 — 纯函数面经入口 re-export 供测试按脚本名访问
+    apply_plan_archive,
+    _INDEX_RANGE_RE,
+    _RF_ARCHIVE_HEAD_FMT,
+    RF_PLACEHOLDER,
+    _bump_index_range,
+    apply_rf_archive,
+    archive_header_findings,
+    count_rf_rows,
+    design_doc_candidates,
+    extract_rf_table,
+    has_archive_section,
+    move_tree_entry,
+    open_ids,
+    pending_rf_rows,
+    plan_completed_sections,
+    rf_archive_status,
+    rewrite_doc_refs,
+    stale_reference_files,  # noqa: F401 — 供测试经入口模块引用
+    unreferenced_docs,
+)
 from _release._timing import StepTimer as _StepTimer, append_record as _append_record  # noqa: E402
 from _release._timing import build_record as _build_record  # noqa: E402
 from _release._evolution import (  # noqa: E402, F401 — _line_count 供测试经入口模块引用
@@ -164,6 +197,19 @@ def archive_paths_for(release_version: str) -> tuple[Path, str]:
     return _ARCHIVE_DOCS_DIR / f"v{minor}.x" / name, name
 
 
+def ledger_archive_paths(release_version: str) -> tuple[Path, Path]:
+    """按小版本推导台账归档文件（review-findings / plan 两份，同版本目录下）。"""
+    m = _RELEASE_VERSION_RE.match(release_version)
+    if not m:
+        raise ReleaseError(f"{release_version} 不是 X.Y.Z 发布版形态")
+    minor = f"{m.group(1)}.{m.group(2)}"
+    base = _ARCHIVE_DOCS_DIR / f"v{minor}.x"
+    return (
+        base / f"archived_review-findings.{minor}.x.md",
+        base / f"archived_plan.{minor}.x.md",
+    )
+
+
 # ─────────────────────────── changelog 发布段迁移 ───────────────────────────
 
 # ─────────────────────────── 预检 ───────────────────────────
@@ -229,12 +275,43 @@ def _print_results(results: list[tuple[str, bool, str]]) -> bool:
     return all_ok
 
 
+def _archive_ctx(version: str) -> ArchiveContext:
+    """按当前模块路径常量组装归档上下文（测试对模块属性的重定向在此生效）。"""
+    rf_archive, plan_archive = ledger_archive_paths(version)
+    return ArchiveContext(
+        repo_root=REPO_ROOT,
+        rf_file=RF_FILE,
+        plan_file=PLAN_FILE,
+        folders_file=FOLDERS_FILE,
+        changelog_file=CHANGELOG_FILE,
+        readme_file=README_FILE,
+        claude_file=REPO_ROOT / "CLAUDE.md",
+        plan_docs_dir=PLAN_DOCS_DIR,
+        rf_archive=rf_archive,
+        plan_archive=plan_archive,
+    )
+
+
+def archive_prerequisites(release_version: str) -> list[str]:
+    """发布归档前置（两份归档文件 + 目录树该小版本块）：`check` 阶段提前报缺件。"""
+    return prerequisite_findings(release_version, _archive_ctx(release_version))
+
+
 def cmd_check(args: argparse.Namespace, runner=None) -> int:
     print("[..] 发布预检")
     ok = _print_results(run_preflight(REPO_ROOT, expect_release=False, runner=runner))
     if not ok:
         print("[ERR] 预检未通过，先处理上述项再继续")
         return 2
+    dev_version = read_app_version(CONSTANTS_FILE.read_text(encoding="utf-8"))
+    release_version = dev_version if not dev_version.endswith("-dev") else release_version_of(dev_version)
+    findings = archive_prerequisites(release_version)
+    if findings:
+        for finding in findings:
+            print(f"[ERR] {finding}")
+        print(f"[ERR] v{release_version} 归档前置未就绪，先补齐再执行 prepare")
+        return 2
+    print(f"[OK] 归档前置就绪（v{release_version} 台账归档与目录树块）")
     print("[OK] 预检通过 — 可执行 prepare")
     return 0
 
@@ -283,17 +360,56 @@ def cmd_prepare(args: argparse.Namespace, runner=None) -> int:
         print("[ERR] 文档统计快照同步失败，按上方输出处理后重跑 prepare")
         return rc
 
+    # 归档迁移（台账 + 设计文件）紧随版本全链之后自动执行：它改写的台账/目录树/索引
+    # 与 changelog 同属「发布文档面」，人工漏做正是过去发布返工的最大来源（gate 断言兜底）
+    if getattr(args, "no_archive", False):
+        print("[!] 已跳过归档迁移（--no-archive）：gate 会拦截未迁档，需单独跑 scripts/release.py archive")
+    else:
+        started = time.perf_counter()
+        rc = run_archive(date, runner=runner)
+        _timer().mark_elapsed("台账归档迁移", started)
+        if rc != 0:
+            print("[ERR] 归档迁移未通过，按上方输出处理后重跑 prepare（或 --no-archive 跳过）")
+            return rc
+
     rc, status_out, _ = _exec(["git", "status", "--short"], REPO_ROOT, runner)
     if rc == 0 and status_out.strip():
         print("\n[..] 本次改动清单（请审阅 diff）：")
         print(status_out.rstrip())
     print("\n[OK] prepare 完成。后续人工项：")
     print("  1. 审阅 git diff（重点：changelog 指针/归档索引、演进列头）")
-    print(
-        "  2. 发布归档迁移（强制）：rf 已解决条目 + plan 已完成任务 + docs/plan 已完成任务设计文件迁档（changelog 段已由本步自动完成），未完成不得继续 gate/publish"
-    )
+    print("  2. 复核上方归档迁移结果（台账原表搬运 / 设计文件迁档判定——机械部分已自动完成）")
     print("  3. 按序继续：refresh → evolution --release → gate → publish → devbump")
     return 0
+
+
+# ─────────────────────────── archive ───────────────────────────
+
+
+def cmd_archive(args: argparse.Namespace, runner=None) -> int:
+    """发布归档迁移的机械部分（条目内容是否该归档仍由人复核）。"""
+    return run_archive(
+        date=args.date or _dt.date.today().isoformat(),
+        runner=runner,
+        dry=bool(getattr(args, "dry_run", False)),
+        skip_design_docs=bool(getattr(args, "skip_design_docs", False)),
+    )
+
+
+def run_archive(date: str, runner=None, dry: bool = False, skip_design_docs: bool = False) -> int:
+    """台账 + 设计文件归档迁移（`prepare` 内置步；实现见 `_release/_archive_flow.py`）。"""
+    version = read_app_version(CONSTANTS_FILE.read_text(encoding="utf-8"))
+    if version.endswith("-dev"):  # 版本形态校验先于路径推导（开发版推不出归档名）
+        print(f"[ERR] 当前仍是开发版 {version} — 先跑 prepare 把版本全链切到发布形态，再归档")
+        return 2
+    return archive_flow(
+        version=version,
+        date=date,
+        ctx=_archive_ctx(version),
+        runner=runner,
+        dry=dry,
+        skip_design_docs=skip_design_docs,
+    )
 
 
 # ─────────────────────────── refresh ───────────────────────────
@@ -452,6 +568,27 @@ def cmd_gate(args: argparse.Namespace, runner=None) -> int:
         print("[ERR] 演进对照过期，先执行 scripts/release.py evolution 刷新后重跑 gate")
         return 2
     print("[OK] 演进对照新鲜度通过\n")
+
+    print("[..] P2 门禁：归档迁移前置（该版本已解决表须已迁档且归档节存在）")
+    version = read_app_version(CONSTANTS_FILE.read_text(encoding="utf-8"))
+    if version.endswith("-dev"):
+        print(f"[ERR] 版本仍是开发版 {version} —— gate 须在 prepare 之后执行")
+        return 2
+    rf_archive, _ = ledger_archive_paths(version)
+    status, pending = rf_archive_status(RF_FILE.read_text(encoding="utf-8"), version)
+    if status == "pending":
+        print(f"[ERR] review-findings 该版本仍有 {pending} 条已解决条目未迁档")
+        print("[ERR] 先执行 scripts/release.py archive（或人工迁档）后重跑 gate")
+        return 2
+    if status == "archived":
+        archived_ok = rf_archive.exists() and has_archive_section(rf_archive.read_text(encoding="utf-8"), version)
+        if not archived_ok:
+            print(f"[ERR] 主台账已留迁档占位，但 {rf_archive.name} 缺 `## v{version} 开发期已修复` 批次节")
+            print("[ERR] 先执行 scripts/release.py archive（或人工迁档）后重跑 gate")
+            return 2
+    else:  # absent：本版没有自审条目，无待迁档内容
+        print("[!] 该版本无「开发期已修复」节（无自审条目），跳过归档断言")
+    print("[OK] 归档迁移前置通过\n")
 
     print("[..] P2 门禁：场景回归")
     started = time.perf_counter()
@@ -655,9 +792,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("check", help="预检：分支/工作树/版本形态/tag/版本一致性")
 
-    p_prepare = sub.add_parser("prepare", help="版本全链 + changelog 发布段归档 + 一致性 --fix")
+    p_prepare = sub.add_parser("prepare", help="版本全链 + changelog 发布段归档 + 一致性 --fix + 台账/设计文件归档迁移")
     p_prepare.add_argument("--version", help="目标发布版（默认按 APP_VERSION 推导）")
     p_prepare.add_argument("--date", help="发布日期 YYYY-MM-DD（默认今天）")
+    p_prepare.add_argument("--no-archive", action="store_true", help="跳过自动归档迁移（需单独跑 archive）")
+
+    p_archive = sub.add_parser(
+        "archive", help="台账归档迁移：rf 已解决表原表搬入归档 + plan 已完成节 + docs/plan 已完成设计文件"
+    )
+    p_archive.add_argument("--date", help="发布日（缺省今天）")
+    p_archive.add_argument("--dry-run", action="store_true", help="只报告动作，不写任何文件")
+    p_archive.add_argument("--skip-design-docs", action="store_true", help="跳过 docs/plan 设计文件迁档（只做台账）")
 
     p_refresh = sub.add_parser(
         "refresh",
@@ -689,6 +834,7 @@ def main(argv: list[str] | None = None) -> int:
     handlers = {
         "check": cmd_check,
         "prepare": cmd_prepare,
+        "archive": cmd_archive,
         "refresh": cmd_refresh,
         "evolution": cmd_evolution,
         "gate": cmd_gate,
