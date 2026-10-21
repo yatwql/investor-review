@@ -82,6 +82,7 @@ RELEASE_BENCH_MODES: tuple[str, ...] = ("unit", "dev-verify", "regression", "int
 RELEASE_LOG_FILE = REPO_ROOT / "logs" / "release.jsonl"
 
 # ── 内部实现拆分（_release/ 包）：入口保留 CLI 面与路径常量，测试引用的符号原名 re-export ──
+sys.path.insert(0, str(REPO_ROOT))  # 仓库根：耗时台账复用 core 层 JSONL 原子追加原语
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享设施（_release 包）
 from _release._changelog_archive import (  # noqa: E402, F401 — _SECTION_NOTE 供测试经入口模块引用
     SECTION_NOTE as _SECTION_NOTE,
@@ -146,7 +147,7 @@ def _finish_timing(command: str, rc: int) -> None:
     record = _build_record(command=command, elapsed_s=timer.total, ok=(rc == 0), steps=timer.steps, version=version)
     try:
         path = _append_record(RELEASE_LOG_FILE, record)
-    except OSError as exc:
+    except (OSError, ReleaseError, ValueError) as exc:
         print(f"[!] 耗时记录未写入（{exc}）——不影响本次结果")
         return
     shown = path.relative_to(REPO_ROOT) if path.is_relative_to(REPO_ROOT) else path

@@ -190,8 +190,29 @@ def _render_config_entry_map() -> None:
         print(line)
 
 
-#: [D] 查看配置与目录信息 面板的二级选项键（与主菜单分离登记，供手册校验引用）
-CONFIG_DIR_INFO_KEYS: tuple[str, ...] = ("C", "F", "O", "M")
+#: [D] 查看配置与目录信息 面板的二级选项登记表（键 → (显示名, 处理器属性名)）
+#:
+#: 单一登记点：面板渲染、按键分发与手册机检（`check-doc-drift` 第 18 项的
+#: 「正文菜单键引用」分支）均从此表派生键集合——增删子项只改这一处，
+#: 不会出现「面板上有、机检认为不存在」（或反过来）的双维护漂移。
+#:
+#: 处理器登记**属性名**而非函数对象：分发时按名从模块全局取（`_dir_info_items()`），
+#: 使 `@patch("...handlers_config._cmd_config_dir")` 这类模块属性打桩始终生效——
+#: 若在导入时就把函数对象存进表里，打桩会落空且不报错。
+DIR_INFO_ITEMS: dict[str, tuple[str, str]] = {
+    "C": ("持仓信息目录", "_cmd_config_dir"),
+    "F": ("持仓信息文件名", "_cmd_config_filename"),
+    "O": ("报告输出目录", "_cmd_config_output_dir"),
+    "M": ("配置入口地图（各配置项所在菜单）", "_render_config_entry_map"),
+}
+
+#: [D] 面板二级选项键（由 `DIR_INFO_ITEMS` 派生，供手册校验引用）
+CONFIG_DIR_INFO_KEYS: tuple[str, ...] = tuple(DIR_INFO_ITEMS)
+
+
+def _dir_info_items() -> list[tuple[str, str, Callable[[], None]]]:
+    """解析登记表为 `(键, 显示名, 处理器)`——处理器按名实时取，便于打桩与替换。"""
+    return [(key, label, globals()[handler_name]) for key, (label, handler_name) in DIR_INFO_ITEMS.items()]
 
 
 def _cmd_config_dir_info() -> None:
@@ -202,13 +223,7 @@ def _cmd_config_dir_info() -> None:
     子菜单循环直至 [0]（或空输入 / Ctrl+C）返回主菜单。
     子项在调用时从模块全局取函数（便于测试打桩与后续替换）。
     """
-    _handlers = {
-        "C": ("持仓信息目录", _cmd_config_dir),
-        "F": ("持仓信息文件名", _cmd_config_filename),
-        "O": ("报告输出目录", _cmd_config_output_dir),
-        "M": ("配置入口地图（各配置项所在菜单）", _render_config_entry_map),
-    }
-    items = [(key, *_handlers[key]) for key in CONFIG_DIR_INFO_KEYS]
+    items = _dir_info_items()
 
     def _render(nav: NavState) -> list[str]:
         print()

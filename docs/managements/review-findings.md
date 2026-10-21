@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.13.11-dev
-> **编号源**：`rf-next = 787`（新增问题取此编号，完成后更新为 +1；已用最大 rf-786，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 790`（新增问题取此编号，完成后更新为 +1；已用最大 rf-789，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -38,27 +38,28 @@
 | 10 | `src/test/unit/report/test_fund_performance.py` | 1091 | 109 | 按能力切分（评级 / 业绩 / 持仓）（rf-775） |
 | 11 | `src/test/unit/report/test_html_report_structure_content.py` | 1076 | 124 | 按章节段落切分（rf-775） |
 | 12 | `src/test/unit/core/test_reader.py` | 1064 | 136 | 按读取 / 列校验 / 异常分片（rf-775） |
-| 13 | `src/test/unit/report/test_summary.py` | 1057 | 143 | 按汇总块切分（rf-775） |
-| 14 | `src/test/unit/llm/test_fact_checker.py` | 1047 | 153 | 按校验规则族切分（rf-775） |
-| 15 | `src/python/config/features.py` | 840 | 160 | 注册表逐开关增长（每项约十行）；逼近 980 时把注册表条目与定义下沉（rf-665） |
-| 16 | `src/test/unit/analysis/test_rebalance.py` | 1039 | 161 | 按成本分档 / 偏离度 / 告警切分（rf-775） |
-| 17 | `src/test/unit/report/test_orchestrator_generate_report.py` | 1036 | 164 | 按管线阶段切分（rf-775） |
-| 18 | `src/test/unit/fetcher/test_chain.py` | 1025 | 175 | 按链路 / 熔断 / 回退切分（rf-775） |
-| 19 | `src/python/report/html_writer.py` | 799 | 201 | 域下沉 + 门面 re-export（测试 patch 改指持有子模块）（rf-626） |
-| 20 | `src/python/core/code_utils.py` | 788 | 212 | 非核心判定函数（`estimate_market_cap_by_prefix` 等）可移出；当前维持（rf-79） |
-| 21 | `src/python/llm/api_base.py` | 770 | 230 | 端点构造 / 请求发送 / 响应解析三段，逼近 900 首选下沉端点族（rf-773） |
-| 22 | `src/python/analysis/rebalance.py` | 751 | 249 | 按「成本分档 / 偏离度 / 告警」下沉（rf-626） |
-| 23 | `src/python/report/_report_generation.py` | 751 | 249 | 按「数据装配 / Excel 落盘 / HTML 落盘」下沉（rf-773） |
-| 24 | `src/python/cache/operations.py` | 739 | 261 | 五职责待下沉（数据结构 / 基金刷新 / 公共缓存 / 持仓缓存 / 清理）（rf-86） |
-| 25 | `src/python/report/orchestrator.py` | 734 | 266 | 按「章节调度 / LLM 编排 / 产物落盘」下沉（rf-773） |
-| 26 | `src/python/config/_validation.py` | 723 | 277 | 校验规则族按「标量 / LLM / 章节」三域分文件（rf-773） |
-| 27 | `src/python/report/fund_performance.py` | 722 | 278 | 按「评级 / 业绩计算 / 持久化」下沉（rf-773） |
-| 28 | `src/python/report/holdings_detail_sheet.py` | 716 | 284 | 页签写入器，按分区块下沉（rf-773） |
-| 29 | `src/python/analysis/prosperity_scoring.py` | 711 | 289 | 按「阈值表 / 评分 / 诊断」下沉（rf-773） |
-| 30 | `src/python/providers/news_dedup_rules.py` | 710 | 290 | 去重规则表按来源分文件（rf-773） |
-| 31 | `scripts/release.py` | 708 | 292 | 已拆 `_release/` 包；入口为 CLI 壳 + 命令编排，维持（rf-774） |
-| 32 | `scripts/check-style-guardrails.py` | 636 | 364 | E / W 两级检查可分层（rf-774） |
-| 33 | `scripts/perf-test-report.py` | 635 | 365 | 场景构造 / 指标计算 / 报告渲染三段（rf-774） |
+| 13 | `src/test/unit/scripts/test_check_doc_drift.py` | 1061 | 139 | 按机检项族切兄弟分片（trace / redundancy / crosscheck 已有先例：本章节测试与实现模块同源拆分）（rf-787） |
+| 14 | `src/test/unit/report/test_summary.py` | 1057 | 143 | 按汇总块切分（rf-775） |
+| 15 | `src/test/unit/llm/test_fact_checker.py` | 1047 | 153 | 按校验规则族切分（rf-775） |
+| 16 | `src/python/config/features.py` | 840 | 160 | 注册表逐开关增长（每项约十行）；逼近 980 时把注册表条目与定义下沉（rf-665） |
+| 17 | `src/test/unit/analysis/test_rebalance.py` | 1039 | 161 | 按成本分档 / 偏离度 / 告警切分（rf-775） |
+| 18 | `src/test/unit/report/test_orchestrator_generate_report.py` | 1036 | 164 | 按管线阶段切分（rf-775） |
+| 19 | `src/test/unit/fetcher/test_chain.py` | 1025 | 175 | 按链路 / 熔断 / 回退切分（rf-775） |
+| 20 | `src/python/report/html_writer.py` | 799 | 201 | 域下沉 + 门面 re-export（测试 patch 改指持有子模块）（rf-626） |
+| 21 | `src/python/core/code_utils.py` | 788 | 212 | 非核心判定函数（`estimate_market_cap_by_prefix` 等）可移出；当前维持（rf-79） |
+| 22 | `src/python/llm/api_base.py` | 770 | 230 | 端点构造 / 请求发送 / 响应解析三段，逼近 900 首选下沉端点族（rf-773） |
+| 23 | `src/python/analysis/rebalance.py` | 751 | 249 | 按「成本分档 / 偏离度 / 告警」下沉（rf-626） |
+| 24 | `src/python/report/_report_generation.py` | 751 | 249 | 按「数据装配 / Excel 落盘 / HTML 落盘」下沉（rf-773） |
+| 25 | `src/python/cache/operations.py` | 739 | 261 | 五职责待下沉（数据结构 / 基金刷新 / 公共缓存 / 持仓缓存 / 清理）（rf-86） |
+| 26 | `src/python/report/orchestrator.py` | 734 | 266 | 按「章节调度 / LLM 编排 / 产物落盘」下沉（rf-773） |
+| 27 | `src/python/config/_validation.py` | 723 | 277 | 校验规则族按「标量 / LLM / 章节」三域分文件（rf-773） |
+| 28 | `src/python/report/fund_performance.py` | 722 | 278 | 按「评级 / 业绩计算 / 持久化」下沉（rf-773） |
+| 29 | `src/python/report/holdings_detail_sheet.py` | 716 | 284 | 页签写入器，按分区块下沉（rf-773） |
+| 30 | `src/python/analysis/prosperity_scoring.py` | 711 | 289 | 按「阈值表 / 评分 / 诊断」下沉（rf-773） |
+| 31 | `src/python/providers/news_dedup_rules.py` | 710 | 290 | 去重规则表按来源分文件（rf-773） |
+| 32 | `scripts/release.py` | 709 | 291 | 已拆 `_release/` 包；入口为 CLI 壳 + 命令编排，维持（rf-774） |
+| 33 | `scripts/check-style-guardrails.py` | 636 | 364 | E / W 两级检查可分层（rf-774） |
+| 34 | `scripts/perf-test-report.py` | 635 | 365 | 场景构造 / 指标计算 / 报告渲染三段（rf-774） |
 
 > **已决策「维持现状」（已降到逼近档以下，不拆理由保留，行数随 `-v` 复核）**：`report/excel_generator.py`（rf-89，页签编排后续可下沉）、`report/data_status.py`（rf-80，DegradationTracker 单类内聚）、`report/html_renderers.py`（rf-81，渲染域同源）、`fetcher/fund.py`（rf-85，排名 / 持仓 / 基准三职责择机拆）、`fetcher/batch.py`（rf-78，BatchDispatcher 内聚）、`tui/handlers_config.py` 与 `scripts/_doc_drift/_format.py`（rf-665，随 `features.py` 注册表增长但各自域内聚）、`llm/prompts_core.py`、`llm/generators.py`（rf-626，提示词/生成器按模块分文件）。
 
@@ -98,6 +99,9 @@
 | **rf-784** | `requirements.md` §3.2 菜单表 P 行称「报告章节与增强的 **8 项**开关归菜单 `[S]`」——分析增强 16 + 独立章节与回放 5，实为 21 项（TUI 手册同一处写 21），8 是两组拆分前的口径 | 改为「21 项（分析增强 16 + 独立章节与回放 5）」，与 TUI 手册同步（自审 rf-784） |
 | **rf-785** | 文档点名了代码中已不存在的符号（散文层陈旧，断言扫描与路径扫描都不覆盖）：`technical.md` 把「报告章节与增强开关」的分组写作 `GROUP_REPORT`——该常量已随作用域四分组下线（单测 `test_handlers_config` 明确断言 `features.py` 不得含 `GROUP_REPORT`），现为 `GROUP_ANALYSIS` / `GROUP_STANDALONE` 两组；`DESIGN.md` 称样式护栏存量白名单登记于 `_W1_EXEMPTIONS`，实际常量为 `_RAW_COLOR_EXEMPTIONS`（条目数 15 与文档一致，仅名不符） | 两处符号名改按现行代码；以「文档反引号标识符 ↔ 代码符号索引」做一轮全量对码（23 份文档，53 个未解析候选逐条人工判读：环境变量/模板占位/外部项目引用属合法，其余 2 处即本条）（自审 rf-785） |
 | **rf-786** | 文档核对方法论缺口：一次完整核查该按什么层次分工、机检覆盖不到的部分用什么手段替代、发现该往哪记——均无成文，导致每次核查靠临场发挥，且中间底稿（`docs/tmp/` 抽取清单）与正式台账可能各存一份同一批发现，日后两边不一致 | `developer-guide.md`「check-doc-drift」节后新增「文档核对方法」段：四层分工表（机械/结构/断言/散文）、未绑定断言的抽取对码写法与四类对码表、散文层标识符对码与豁免域、两条输出纪律（同类漂移二次即落成 doc-drift 子分支且挂现有编号不加项数；台账唯一、`docs/tmp/` 底稿闭环即删）、以及「不得笼统宣称已全核，按层说明覆盖范围」的边界声明（自审 rf-786） |
+| **rf-787** | `test-coverage.md` 覆盖项数陈旧且无本地拦截：计数是 pytest 收集派生量，只有 `check-doc-drift --with-test-count` 会校验（CI master 档），而 pre-commit 的 `--sync` 只回写 folders 统计行——每次「加完测试就提交」都会把计数写旧，到 CI 才红（本次实测差 8：7394→7402 / 10797→10805）；该状态在本次核查前已存在 | 计数按收集快照回写（7 处）；pre-commit 分域调度补一条：暂存含 `src/test/` 时 `--sync` 追加 `--with-test-count`，把「测试变更加了用例没刷计数」变成提交期可读到 action 的 finding（热缓存 0.8s，仅在测试变更时付出）（自审 rf-787） |
+| **rf-788** | 发布耗时台账 `logs/release.jsonl` 三处不符既有约定：① **无界增长**（每跑一次 release 子命令追加一行，永不裁剪）；② 直接 `open(..., "a")` 写**违反原子写入约束**（崩溃可留半行，同类问题此前已在调仓报告落盘上修过）；③ 全仓已有 JSONL 原子追加单一原语 `core/jsonl_store.append_jsonl_atomic`（该模块 docstring 明确写「避免第三份拷贝」），此处却自写一份 | `append_record` 改为委托共享原语并加 `max_lines=500`（一次发布约 7 条，覆盖数十次发布），写盘失败如实抛出让调用方打 `[!]`；`_finish_timing` 捕获面补 `ValueError`（序列化失败同属观测面降级）；新增 2 例单测（有界+原子、失败上报）（自审 rf-788） |
+| **rf-789** | `[D]` 面板二级键双处登记：显示名/处理器写在函数内的 `_handlers` 字典，键集合另写成 `CONFIG_DIR_INFO_KEYS` 元组供 doc-drift 校验——增删子项只改一处即静默漂移（面板少一项，或机检认为某键不存在而误报正文） | 收敛为模块级单一登记表 `DIR_INFO_ITEMS`（键 → 显示名 + **处理器属性名**）并派生 `CONFIG_DIR_INFO_KEYS`；处理器按名在分发时从模块全局取（直接登记函数对象会让 `@patch` 对模块属性的打桩静默落空——本次重构首版即踩中，用例当场红）；新增 2 例单测（登记表单源 + `M` 只读索引入口分发）（自审 rf-789） |
 
 ### 开发期已修复（0.13.10-dev）
 

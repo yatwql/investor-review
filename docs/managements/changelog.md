@@ -23,6 +23,7 @@
 
 ### Changed
 
+- `logs/release.jsonl` 耗时台账改走 `core/jsonl_store` 原子追加原语并加保留上限（原为直接 append 写且无界增长；一次发布约 7 条，上限 500 条覆盖数十次发布）（自审 rf-788）
 - `check-doc-drift` 第 18 项扩「正文菜单键引用」分支：正文「菜单 `X`」须为主菜单键（`MENU_ITEMS` ∪ 返回键 `0`），`[D]` 二级选项（C/F/O/M）改由 `tui/handlers_config.py::CONFIG_DIR_INFO_KEYS` 单一登记、正文须写作「菜单 `D` → `C`」；裸键形态要求后接空白/标点，避免「主菜单 code block」里的英文词首字母误报（历史漂移：code block 校验护不住正文，`[4]`→`[3]` 与 `[D]` 二级化后十余处正文失效）（自审 rf-776）
 - 缓存分组术语统一为「行情类缓存」：TUI 上屏词与 `handlers_cache`/`cache/operations` docstring 对齐菜单标签，手册与需求菜单表同步（`--update position` 选项名作为历史命名在图注说明）（自审 rf-780）
 - `check-doc-drift` 分区纪律检查新增第 D 条「节归属」：「开发期已修复」节只允许出现在已解决区、P 档标题只允许出现在待处理区——原第 A 条按 rf 标识比对，标题（节）错位时完全静默（rf-765 即由此产生）（自审 rf-765）
@@ -36,6 +37,8 @@
 
 ### Fixed
 
+- `test-coverage.md` 覆盖项数按收集快照回写（8 例差：dev-verify 7394→7402 / unit 10797→10805 / 总收集 11139→11147 / unit_scripts 1226→1234）；git pre-commit 在暂存含 `src/test/` 时对 `check-doc-drift` 追加 `--with-test-count`，测试变更未刷计数在提交期即拦（此前只由 CI master 档兜底）（自审 rf-787）
+- `[D]` 查看配置与目录信息 面板二级键收敛为单一登记表 `DIR_INFO_ITEMS`（键 → 显示名 + 处理器属性名）并派生 `CONFIG_DIR_INFO_KEYS`，消除面板与 doc-drift 校验的两处手工同步；处理器按名分发以保持模块属性打桩有效（自审 rf-789）
 - 文档点名的代码符号按现行实现订正：`technical.md` 的报告章节与增强开关分组由已下线的 `GROUP_REPORT` 改为 `GROUP_ANALYSIS` / `GROUP_STANDALONE`，`DESIGN.md` 的样式护栏白名单常量由 `_W1_EXEMPTIONS` 改为 `_RAW_COLOR_EXEMPTIONS`（条目数 15 不变）（自审 rf-785）
 - Web「配置编辑」面板分组表述统一为「10 组 = 7 个可编辑面 + 功能开关面作用域四组」，web 手册分组表补「LLM 多链线路 ↔ `[M]`」行（原 9 组漏该组、how-to-start 的 8 组仍按已不存在的「实验性功能/常规开关」二分、testplan 的 8 块同源）（自审 rf-783）
 - `requirements.md` 菜单表 P 行「报告章节与增强的 8 项开关」改为 21 项（分析增强 16 + 独立章节与回放 5），与 TUI 手册同口径（自审 rf-784）

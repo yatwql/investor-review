@@ -29,6 +29,10 @@ def now_iso() -> str:
     return _dt.datetime.now().astimezone().isoformat(timespec="seconds")
 
 
+#: 台账保留条数上限（一次发布约 7 条，500 条覆盖数十次发布；防无界增长）
+RELEASE_LOG_MAX_LINES = 500
+
+
 class StepTimer:
     """分步计时器：收集命令内各步耗时，并提供总墙钟。"""
 
@@ -85,10 +89,20 @@ def build_record(command: str, elapsed_s: float, ok: bool, steps: list[dict] | N
     }
 
 
-def append_record(path: Path, record: dict) -> Path:
-    """追加一行 JSON 记录（自动建父目录）；返回实际写入路径。"""
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8", newline="\n") as fh:
-        fh.write(json.dumps(record, ensure_ascii=False) + "\n")
-    return path
+def append_record(path: Path, record: dict, *, max_lines: int = RELEASE_LOG_MAX_LINES) -> Path:
+    """追加一行耗时记录（有界 + 原子），返回目标路径。
+
+    实现委托 `core/jsonl_store.append_jsonl_atomic`（全仓 JSONL 原子追加的单一原语，
+    已被 perf_history / 各类账本采用）——不在这里另写一份写盘：直接 `open("a")` 既
+    违反原子写入约束（崩溃可留下半行），也无上限（每跑一次 release 子命令就多一行，
+    无界增长）。`max_lines` 只留最近若干条，足够跨版本对拍。
+    """
+    from src.python.core.jsonl_store import append_jsonl_atomic
+
+    line = json.dumps(record, ensure_ascii=False) + "\n"
+    ok = append_jsonl_atomic(
+        str(path), line, prefix=".release_log_", log_tag="release", noun="发布耗时台账", max_lines=max_lines
+    )
+    if not ok:
+        raise OSError(f"写入失败：{path}")
+    return Path(path)

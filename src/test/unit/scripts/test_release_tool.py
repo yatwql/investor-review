@@ -671,6 +671,27 @@ class TestTimingTelemetry:
         commands = [json.loads(ln)["command"] for ln in log.read_text(encoding="utf-8").splitlines() if ln.strip()]
         assert commands == ["check", "gate"]
 
+    def test_log_is_bounded_and_atomic(self, rel, tmp_path, monkeypatch):
+        """台账有上限且走原子追加原语：不因长期反复发布无界增长，也不留半行。"""
+        from _release import _timing
+
+        log = tmp_path / "logs" / "release.jsonl"
+        for i in range(8):
+            _timing.append_record(log, {"command": f"cmd{i}"}, max_lines=5)
+        lines = [ln for ln in log.read_text(encoding="utf-8").splitlines() if ln.strip()]
+        assert len(lines) == 5
+        assert json.loads(lines[-1])["command"] == "cmd7"
+        assert all(ln.startswith("{") and ln.endswith("}") for ln in lines)
+
+    def test_log_write_failure_raises_for_caller_decision(self, rel, tmp_path):
+        """写盘失败以异常如实上报（调用方据以打 [!]），不静默当成已写入。"""
+        from _release import _timing
+
+        blocker = tmp_path / "logs"
+        blocker.write_text("占位文件", encoding="utf-8")
+        with pytest.raises(OSError):
+            _timing.append_record(blocker / "release.jsonl", {"command": "gate"})
+
     def test_unwritable_log_does_not_break_release(self, rel, tmp_path, monkeypatch, capsys):
         """台账写不进去（父路径被文件占位）只打 [!]，不得抛异常改写发布退出码。"""
         blocker = tmp_path / "logs"
