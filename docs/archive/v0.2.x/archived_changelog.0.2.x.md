@@ -92,7 +92,7 @@
 
 ### Removed
 
-- `docs/plan/notes/data-source-pre-study.md`：已归档至 `docs/archive/archived-data-source-pre-study.md`
+- `docs/plan/notes/data-source-pre-study.md`：已归档至 `docs/archive/v0.2.x/data-source-pre-study/data-source-pre-study.md`
 
 ## [0.2.87] - 2026-07-06
 

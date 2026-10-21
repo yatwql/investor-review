@@ -3,7 +3,7 @@
 > **归档说明**：随 plan-1 设计文档一并归档（2026-08-02），清单跟踪的 rf-113 已完成（2026-10-16）并移入 review-findings.md 已解决。关联方案文档见同目录 [`plan-chartjs-report-upgrade.md`](./plan-chartjs-report-upgrade.md) 与 [`plan-chartjs-risk-analysis.md`](./plan-chartjs-risk-analysis.md)。
 >
 > 关联：`plan-chartjs-report-upgrade.md` §5 Iter 7 验收标准 2/3/4/6 + §4.8（A1/A4）+ §4.14（R17 浏览器矩阵）+ §4.15（R22 微信场景）
-> 状态：✅ 已完成（rf-113，2026-10-16 移入 review-findings.md 已解决）——①~⑥ 全部实测通过（2.4/3.1/⑤/⑥ 为 headless 自动化、④ 为真机人工、① 含 Safari 90+ iPad 抽验），明细行勾选与证据以 [`docs/plan/report-browser-verification.md`](../../../plan/report-browser-verification.md) §3 总表为准
+> 状态：✅ 已完成（rf-113，2026-10-16 移入 review-findings.md 已解决）——①~⑥ 全部实测通过（2.4/3.1/⑤/⑥ 为 headless 自动化、④ 为真机人工、① 含 Safari 90+ iPad 抽验），明细行勾选与证据以 [`docs/archive/v0.13.x/report-browser-verification/report-browser-verification.md`](../../v0.13.x/report-browser-verification/report-browser-verification.md) §3 总表为准
 > 目的：plan-1 代码与自动化测试已落地（dev-verify 1181 passed），以下为**只能真实浏览器/微信执行的验证项**——本清单提供可勾选的操作步骤，勾选完成后回填 `changelog.md` 并将 rf-113 从 review-findings.md 待处理移至已修复表。
 >
 > 文档版本：0.9.9-dev（rf-159 后更新资产清单：7 JS + chart-common.js 依赖说明）

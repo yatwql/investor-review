@@ -157,13 +157,13 @@ technical.md 新增 §6.9「实验项生命周期表」（功能语义命名表�
 - 功能开关 `cost_position`（`GROUP_ANALYSIS`，默认开，`affects_report`）；口径脚注随呈现（成本均价近似买入价 + 窗口参数 + 公式）
 - Excel 条件列接线 `holdings_detail_sheet`（`_MV_COST_POS_HEADERS`/`_CAT_COST_POS_HEADERS`/`FMT_PERCENT`）；44 例测试（纯计算/契约/渲染 + 边缘退化/非有限值）
 
-**落地设计**：`docs/archive/v0.13.x/holding-cost-position-design.md`（随本次归档迁入）
+**落地设计**：`docs/archive/v0.13.x/holding-cost-position/holding-cost-position-design.md`（随本次归档迁入）
 
 **自审去重（rf-685）**：`extract_closes` 收敛复用 `valuation_percentile.extract_closes` 共享单一事实来源，区间有效性过滤统一到 `compute_window_position`。
 
 ## plan-156 TUI 交互契约文档化 + 契约结构测试 ✅
 
-**完成（2026-10-20，v0.13.8-dev）**：把设计稿 `docs/archive/v0.13.x/tui-interaction-hci-design.md` §5 定稿为常驻管理文档 `docs/managements/DESIGN-TUI.md`——TUI 侧唯一判据，与 `DESIGN.md`（Web/报告视觉契约）对称：Overview 五原则（识别优于回忆 / 一键一义 / 屏幕自解释 / 专家快路不牺牲可发现性 / 可机检优先）、Keys 键分工总表（数字/回车/`?`/`0`/`Esc`/字母/`/`/方向键 + 每键「禁止用法」）、Prompts 提示三段式四成分模板、Defaults 默认项与取消标注语法（含「回车=取消须置句首」「危险操作默认安全侧」）、Colors 一色一职责角色表、Vocabulary 术语对照表 + 适用范围四档、Feedback 反馈与空态口径（含页头状态行与按键闸门白名单）、Do/Don't 护栏、Iteration Guide、Known Gaps。契约结构测试 `src/test/unit/ui/test_design_tui_doc.py` 由 9 例扩到 19 例：必需节（含 Colors）子集、键表必备键、四张表的列集合、关键口径句成句存在、护栏编号连续且 DO/DON'T 对偶、术语表覆盖内部词、Known Gaps 逐条带状态、契约内禁任务代号、闸门白名单文档与代码双向一致、引用实现文件存在。同步 CLAUDE.md「设计契约」条目（拆分为 Web/HTML 与 TUI 两份契约及其守卫）与 developer-guide「计划收尾：文档触点清单」（新增「TUI 交互改动」行）。
+**完成（2026-10-20，v0.13.8-dev）**：把设计稿 `docs/archive/v0.13.x/tui-interaction-hci/tui-interaction-hci-design.md` §5 定稿为常驻管理文档 `docs/managements/DESIGN-TUI.md`——TUI 侧唯一判据，与 `DESIGN.md`（Web/报告视觉契约）对称：Overview 五原则（识别优于回忆 / 一键一义 / 屏幕自解释 / 专家快路不牺牲可发现性 / 可机检优先）、Keys 键分工总表（数字/回车/`?`/`0`/`Esc`/字母/`/`/方向键 + 每键「禁止用法」）、Prompts 提示三段式四成分模板、Defaults 默认项与取消标注语法（含「回车=取消须置句首」「危险操作默认安全侧」）、Colors 一色一职责角色表、Vocabulary 术语对照表 + 适用范围四档、Feedback 反馈与空态口径（含页头状态行与按键闸门白名单）、Do/Don't 护栏、Iteration Guide、Known Gaps。契约结构测试 `src/test/unit/ui/test_design_tui_doc.py` 由 9 例扩到 19 例：必需节（含 Colors）子集、键表必备键、四张表的列集合、关键口径句成句存在、护栏编号连续且 DO/DON'T 对偶、术语表覆盖内部词、Known Gaps 逐条带状态、契约内禁任务代号、闸门白名单文档与代码双向一致、引用实现文件存在。同步 CLAUDE.md「设计契约」条目（拆分为 Web/HTML 与 TUI 两份契约及其守卫）与 developer-guide「计划收尾：文档触点清单」（新增「TUI 交互改动」行）。
 
 ## plan-157 回车语义唯一化 + 默认项标注 ✅
 

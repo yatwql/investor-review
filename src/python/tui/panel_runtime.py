@@ -8,7 +8,7 @@
 本模块只统一「怎么到达一次派发」，不改「派发什么」——面板仍自己渲染帧（`render(nav)`）
 与持有动作闭包（`PanelItem.action`），派发语义（编号/字母/默认项含义）全部保持。
 
-设计文档：`docs/plan/tui-panel-runtime-design.md`。
+设计文档：`docs/archive/v0.13.x/tui-panel-runtime/tui-panel-runtime-design.md`。
 
 架构约束遵从：
   - 单文件行数红线（≤1000 行）：运行时职责收敛，不塞版面/写路径；

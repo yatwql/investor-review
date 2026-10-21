@@ -15,7 +15,7 @@
 
 ### Changed
 - **test-coverage.md**: 全量测试统计更新（all: 3449→3616，edge: 366→469，llm: 518→584 等）
-- **folders.md**: 统计表刷新（主程序 141→143 文件，测试 168→177 文件，测试用例 3484→3616）；补 `llm_hallucination_sampler.py` 至 scripts 目录树、`porting-to-rust-vs-java/porting-to-rust-vs-java-analysis.md` 至 archive 根
+- **folders.md**: 统计表刷新（主程序 141→143 文件，测试 168→177 文件，测试用例 3484→3616）；补 `llm_hallucination_sampler.py` 至 scripts 目录树、`porting-to-rust-vs-java-analysis.md` 至 archive 根
 
 ### Docs
 - **how-to-config.md**: 补全 `comparison_indices` 字段说明；合并 `coverage_threshold` 溢出行
