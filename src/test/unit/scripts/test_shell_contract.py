@@ -191,3 +191,49 @@ class TestShellSyntax:
                 timeout=30,
             )
             assert proc.returncode == 0, f"{path.name} 语法错误：\n{proc.stderr}"
+
+
+@pytest.mark.unit
+@pytest.mark.unit_scripts
+class TestPreCommitSyncTriggerCoverage:
+    """pre-commit 的 `--sync` 触发面须覆盖**全部被统计的域**。
+
+    统计表（`folders.md`）的数字来自主程序 / 辅助脚本 / 测试代码 / 项目文档四类
+    行数与用例数——任一类变更都会让数字陈旧。触发面若只覆盖 docs 与 test，纯
+    `src/python`/`scripts` 改动会走 `--ci` 分支、以「行数不一致」finding 拦下提交，
+    逼开发者手动 sync 再重提（多一轮往返，而数字本该由钩子回写）。
+    """
+
+    #: 被统计的域 → 样例路径（与 folders.md 统计行同源：主程序/辅助脚本/测试/文档）
+    _MEASURED_DOMAINS = {
+        "src/python/": "src/python/core/throttle.py",
+        "scripts/": "scripts/check-doc-drift.py",
+        "src/test/": "src/test/unit/core/test_throttle.py",
+        "docs/managements/": "docs/managements/plan.md",
+    }
+
+    @staticmethod
+    def _sync_trigger_pattern() -> str:
+        hook = (_GITHOOKS_DIR / "pre-commit").read_text(encoding="utf-8")
+        match = re.search(r"^if printf .*grep -qE '([^']+)'", hook, re.M)
+        assert match, "pre-commit 未找到 --sync 触发条件（`if printf … | grep -qE '<pattern>'`）"
+        return match.group(1)
+
+    def test_trigger_covers_every_measured_domain(self):
+        pattern = self._sync_trigger_pattern()
+        missing = [domain for domain in self._MEASURED_DOMAINS if domain not in pattern]
+        assert missing == [], (
+            f"--sync 触发面缺被统计域 {missing}（纯这些目录的提交会以「行数不一致」拦下，"
+            "逼人工 sync 再重提）：当前 trigger = " + pattern
+        )
+
+    def test_sample_paths_of_measured_domains_trigger_sync(self):
+        pattern = re.compile(self._sync_trigger_pattern())
+        not_matching = [sample for sample in self._MEASURED_DOMAINS.values() if not pattern.search(sample)]
+        assert not_matching == [], f"这些被统计路径未触发 --sync：{not_matching}"
+
+    def test_unmeasured_paths_do_not_trigger_sync(self):
+        """不受统计影响的提交维持纯 --ci 校验（不为无关变更写 folders.md）。"""
+        pattern = re.compile(self._sync_trigger_pattern())
+        for sample in ("README.md", "docs/manuals/faq.md", "src/pythonx/whatever.py"):
+            assert not pattern.search(sample), f"{sample} 不应触发 --sync 写路径"

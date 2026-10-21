@@ -17,6 +17,8 @@
 
 - **台账迁档占位收敛（`rf-801`）**：`review-findings.md` 的「开发期已修复」占位节原来每版新增一节、旧版不收敛（已累积 5 段单行同构节），而三守护均拦不住——重复标题按路径感知判重（各节标题版本号不同）、长行阈值 40 字符 vs 占位行 33、区块需 5 行/100 字符。现 `_release/_ledger_archive.py` 新增 `_collapse_superseded_placeholders`，在 `apply_rf_archive` 末步只保留本版占位节：旧版占位行删除，节内若只剩占位与空行则节头一并删除，仍有表外散文（人工备注）则保节保散文只摘占位行；存量 5 节已一次性收敛为 1。回归用例 4 例（只留本版 / 散文节保留 / 单占位幂等 / `apply_rf_archive` 接线）。
 
+- **统计快照写者顺序与钩子触发面（`rf-802`）**：pre-commit 的 `--sync` 触发面扩到**全部被统计的域**（`docs/managements/` 文档行数 / `src/test/` 测试行数与用例数 / `src/python/` 主程序行数 / `scripts/` 脚本行数）——此前只覆盖前两域，纯 `src/python`/`scripts` 改动会以「行数不一致」finding 拦下提交、逼人工 sync 再重提。同时把「写者顺序」写进纪律：`--sync` 必须是**收尾的最后一个写者**，`ruff format` / `collect-test-coverage --update-docs` 等写者全部在它之前，sync 之后只做只读校验（`dev-verify`/守护回放），否则统计表数字会因后续写入重归陈旧。守护：`unit/scripts/test_shell_contract.py::TestPreCommitSyncTriggerCoverage` 3 例。
+
 
 ## 归档
 

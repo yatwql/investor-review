@@ -113,6 +113,10 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 ```
 
 > **`--sync` 统计快照口径（CI 分叉坑）**：`check-doc-drift --sync`（及 pre-commit 自动回写）按**工作区**实测写入 `folders.md` 行数，而 CI 的 `check-doc-drift` 按 **committed** 树实测——若受检目录存在**长期不提交的修改**（本地游离改动），本地已同步的数字会在 CI 上判「不一致」，连带 guards / test / portability 三个 job 同时红。提交前确认受检文件全部纳入本次提交；有长期游离修改时先提交它们、再 `--sync`。
+>
+> **写者顺序（`--sync` 必须是收尾的最后一个写者）**：统计表数字是「行数 × 用例数」派生量，**任何改文件的步骤都会让刚同步的数字重归陈旧**。因此 `ruff format` / `ruff check --fix` / `collect-test-coverage.py --update-docs` / 批量编辑等写者**全部在 `--sync` 之前**完成，`--sync` 之后只做**只读**校验（`dev-verify` / 守护回放 / `--ci`）。典型踩坑：先 sync → 再 `collect-test-coverage --update-docs`（改写 `test-coverage.md`，managements 行数又变）→ 跑 `dev-verify` 时 `test_check_doc_drift_crosscheck` 报「行数与实测不一致」。真跑反了也不要紧：重新 sync 一次即可，不是代码问题。
+>
+> **钩子触发面 = 全部被统计的域**：`docs/managements/`（文档行数）、`src/test/`（测试行数 + 用例数）、`src/python/`（主程序行数）、`scripts/`（脚本行数）任一变更，`git commit` 即走 `--sync` 写路径自动回写并 `git add`。只覆盖部分域时，纯 `src/python`/`scripts` 改动会以「行数不一致」finding 拦下提交、逼人工 sync 再重提（多一轮往返）。
 
 **P1 合入门禁**：`test-runner.py --mode verify`（全部 `unit_*` 目录域单元测试，含 TUI/CLI；目录归域以 `check-test-markers.py` 期望表为准且全部入门禁），否则不得 merge。
 
@@ -194,7 +198,7 @@ PYTHONWARNDEFAULTENCODING=1 .venv/bin/python -m pytest src/test/unit -q
 2. **批量修复**：按上表 + 触点一次性修完，同一文件多处改动合并为一次 edit。
 3. **单次复核**：手动只跑 `dev-verify` 测试门禁；ruff 探针（错误类阻塞 + format 非阻塞提示）与十守护一并交由 `git commit` 的 pre-commit 钩子一次收集（失败即中止）→ 批量修复 → 重新提交，不手动重复跑守护。
 
-**红线**：编辑批次与 `--sync`/检查类脚本**永不同批**（sync 写文件，与编辑并行会竞态）；`check-file-length` 随每批代码改动跑，ruff 由钩子在提交时把关（批内可提前手跑），不留到收尾才爆。
+**红线**：编辑批次与 `--sync`/检查类脚本**永不同批**（sync 写文件，与编辑并行会竞态）；**所有写者（编辑 / `ruff format` / `collect-test-coverage --update-docs`）必须在 `--sync` 之前完成，sync 之后再无写入**（否则刚回写的统计数字又变陈旧，`dev-verify` 报「行数与实测不一致」）；`check-file-length` 随每批代码改动跑，ruff 由钩子在提交时把关（批内可提前手跑），不留到收尾才爆。
 
 ## 任务编号规范与自动保障
 
@@ -238,7 +242,7 @@ PYTHONWARNDEFAULTENCODING=1 .venv/bin/python -m pytest src/test/unit -q
 | **P0/P2 门禁** | 提交/发布前 10 个 `--ci` 守护脚本全量（清单见 P0/P2 门禁条款）；P2 另含设计护栏段（gate 内置 `check-style-guardrails`，E 级拦 / W 级观察统计） | ✅ 零配置 |
 | **dev-verify preflight** | `test-runner.py --mode dev-verify` 自动运行（仅 `check-task-numbering` 快检；重量守护不入预检，由钩子唯一执行防同树重复） | ✅ 零配置 |
 | **Claude Code hook** | 编辑 `plan.md`/`review-findings.md` 后实时校验 | ⚠️ clone 后运行 `.venv/bin/python scripts/install-claude-hook.py` |
-| **git pre-commit** | `git commit` 执行十守护（与 P0/CI guards 同源）：**读写分层调度**——不读 folders.md 的守护（快集 code-traces/task-numbering/semantic-index/requirement-trace + py 域 file-length + 测试域 test-redundancy）先行后台启动，与 `check-doc-drift` 段并行执行（跨域守护恒跑；涉及 `docs/managements/` 或 `src/test/` 时 `--sync` 写路径串行先行并自动回写统计快照，其中暂存含 `src/test/` 时追加 `--with-test-count` 校验 `test-coverage.md` 的收集派生计数——否则新增用例后计数静默陈旧、只在 CI master 档才红；其余提交纯 `--ci` 后台并行）；读 folders.md 的 version-consistency 与 doc 域（doc-traces/doc-links）在 doc-drift 完成后启动（避 --sync 写读竞态）；域条件不变（doc 域仅 `*.md`、py 域仅 `*.py`、测试域仅 `src/test/` 变更触发），典型提交约 1~4 秒；六守护另有结论缓存（doc-traces/semantic-index/doc-links/code-traces/requirement-trace/doc-drift，输入与逻辑指纹未变回放上次结论，冷/热 --ci 输出逐字一致）；CI guards job 恒全量兜底 | ⚠️ clone 后运行 `sh .githooks/install-hooks.sh` |
+| **git pre-commit** | `git commit` 执行十守护（与 P0/CI guards 同源）：**读写分层调度**——不读 folders.md 的守护（快集 code-traces/task-numbering/semantic-index/requirement-trace + py 域 file-length + 测试域 test-redundancy）先行后台启动，与 `check-doc-drift` 段并行执行（跨域守护恒跑；涉及**任一被统计域**（`docs/managements/` / `src/test/` / `src/python/` / `scripts/`）时 `--sync` 写路径串行先行并自动回写统计快照，其中暂存含 `src/test/` 时追加 `--with-test-count` 校验 `test-coverage.md` 的收集派生计数——否则新增用例后计数静默陈旧、只在 CI master 档才红；其余提交纯 `--ci` 后台并行）；读 folders.md 的 version-consistency 与 doc 域（doc-traces/doc-links）在 doc-drift 完成后启动（避 --sync 写读竞态）；域条件不变（doc 域仅 `*.md`、py 域仅 `*.py`、测试域仅 `src/test/` 变更触发），典型提交约 1~4 秒；六守护另有结论缓存（doc-traces/semantic-index/doc-links/code-traces/requirement-trace/doc-drift，输入与逻辑指纹未变回放上次结论，冷/热 --ci 输出逐字一致）；CI guards job 恒全量兜底 | ⚠️ clone 后运行 `sh .githooks/install-hooks.sh` |
 | **CI guards job** | push / PR / tag 时自动校验（10 个 `--ci` 脚本之一） | ✅ 零配置 |
 
 > `core.hooksPath` 与 `.claude/settings.json` 均为本地配置、不随仓库同步，新机器 clone 后运行上方激活命令一次即可；hook 脚本本体（`.githooks/`、`scripts/`）随仓库同步。

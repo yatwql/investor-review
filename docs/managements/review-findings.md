@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.13.13-dev
-> **编号源**：`rf-next = 802`（新增问题取此编号，完成后更新为 +1；已用最大 rf-801，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 803`（新增问题取此编号，完成后更新为 +1；已用最大 rf-802，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -75,6 +75,7 @@
 | # | 问题 | 处理 |
 |---|------|------|
 | **rf-801** | 台账迁档占位节随发布累积（每版新增一节、旧版占位不收敛）：5 段单行同构占位节同时存在；三守护均拦不住（重复标题按路径感知判重；长行阈值 40 字符 vs 占位行 33；区块需 5 行/100 字符），占位↔归档节 1:1 由 doc-drift 只校验“存在”不校验“累积” | 已修复：`_release/_ledger_archive.py` 新增 `_collapse_superseded_placeholders`，在 `apply_rf_archive` 末步只保留本版占位节、收敛旧版（节内若还有表外散文则只摘占位行、保节与散文）；存量 5 节已一次性收敛为 1；详情见 changelog 0.13.13-dev |
+| **rf-802** | pre-commit 的 `--sync` 触发面只覆盖 `docs/managements/` 与 `src/test/`，而统计表同时统计 `src/python/`（主程序行数）与 `scripts/`（脚本行数）——纯这两域改动会走 `--ci` 分支、以「行数不一致」finding 拦下提交，逼人工 sync 再重提；另「`ruff format` / `collect-test-coverage --update-docs` 在 `--sync` 之后跑会把刚回写的数字重新写陈旧」这条写者顺序，文档只写了「编辑 vs sync」，未覆盖其它写者 | 已修复：钩子触发面扩到四个被统计域（任一变更即自动 `--sync` 回写并 `git add`）；developer-guide「`--sync` 统计快照口径」补「写者顺序：`--sync` 须为收尾最后一个写者」+「触发面 = 全部被统计域」，收尾红线与 CLAUDE.md 同步；新增 `test_shell_contract.py::TestPreCommitSyncTriggerCoverage` 3 例（触发面覆盖全部被统计域 / 样例路径命中 / 非统计路径不触发） |
 
 ### 归档档案
 - [`archived_review-findings.0.13.x.md`](../archive/v0.13.x/archived_review-findings.0.13.x.md) — v0.13.x 开发期已修复批次（2026-10-14 ~ 2026-10-21）

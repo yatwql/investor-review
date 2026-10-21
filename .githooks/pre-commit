@@ -5,10 +5,14 @@
 #   1) 无读写竞态守护先行后台启动——快集（code-traces / task-numbering /
 #      semantic-index / requirement-trace）+ py 域（ruff 探针 + file-length）+
 #      测试域 test-redundancy，它们不读 folders.md，与第 2 步 doc-drift 段并行执行。
-#   2) check-doc-drift——涉及 docs/managements/ 或 src/test/ 时为 --sync 写路径
-#      （回写 folders.md 并 git add）串行先行，且测试变更加 --with-test-count
-#      （校验 test-coverage.md 的收集派生计数）；其余提交纯 --ci 校验，无写竞态
-#      改为后台，与第 1 步并行（结论缓存未变时回放秒过）。
+#   2) check-doc-drift——涉及「会改变统计表数字的域」（docs/managements/ 文档
+#      行数、src/test/ 测试行数与用例数、src/python/ 主程序行数、scripts/ 脚本
+#      行数）时为 --sync 写路径（回写 folders.md 并 git add）串行先行，且测试
+#      变更加 --with-test-count（校验 test-coverage.md 的收集派生计数）；其余
+#      提交纯 --ci 校验，无写竞态改为后台，与第 1 步并行（结论缓存未变时回放秒过）。
+#      触发面必须覆盖**全部**被统计的域：只覆盖 docs/test 时，纯 src/python 或
+#      scripts 改动会走 --ci 分支、以「行数不一致」finding 拦下提交，逼开发者
+#      手动 sync 再重提（多一轮往返，而数字本该由钩子回写）。
 #   3) 读 folders.md 的守护（version-consistency + doc 域 doc-traces/doc-links）
 #      在 doc-drift 串行段（--sync 场景）完成后启动，避免写读竞态；--ci 场景
 #      folders 未被写、无依赖；随后统一 wait。
@@ -109,13 +113,13 @@ if in_changed '^src/test/|scripts/check-test-redundancy\.py|scripts/_checklib\.p
 fi
 
 # ── 2) 统计快照同步 + 文档漂移 ──
-#      --sync 写路径（涉及 managements/src/test）串行先行：回写并 git add 后
-#      段 3 才能安全读 folders.md；其余提交纯 --ci 校验（README/手册漂移同样
-#      拦截）无写竞态 → 后台与段 1 并行，统一 wait 后回放
+#      --sync 写路径（涉及 managements/src/test/src-python/scripts 四个被统计域）
+#      串行先行：回写并 git add 后段 3 才能安全读 folders.md；其余提交纯 --ci
+#      校验（README/手册漂移同样拦截）无写竞态 → 后台与段 1 并行，统一 wait 后回放
 #      测试变更额外加 --with-test-count：test-coverage.md 的覆盖项数是 pytest 收集
 #      派生量，只有该开关会校验（否则新增用例后计数静默陈旧，到 CI master 档
 #      才红）；收集耗时仅在测试变更时付出
-if printf '%s\n' "$CHANGED" | grep -qE '^docs/managements/|^src/test/'; then
+if printf '%s\n' "$CHANGED" | grep -qE '^docs/managements/|^src/test/|^src/python/|^scripts/'; then
     echo "[..] pre-commit: 统计快照同步 + 文档漂移（check-doc-drift --sync）"
     _drift_args="--sync --ci"
     if in_changed '^src/test/'; then
