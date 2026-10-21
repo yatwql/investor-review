@@ -59,12 +59,7 @@ class TestPrintCallDetection:
         assert hits[0][0] == 2, "行号应指向 print 调用所在行"
 
     def test_nested_print_inside_function_body_flagged(self, tmp_path, discipline) -> None:
-        body = (
-            "def outer():\n"
-            "    def inner():\n"
-            "        print('nested')\n"
-            "    return inner\n"
-        )
+        body = "def outer():\n    def inner():\n        print('nested')\n    return inner\n"
         path = _write_production(tmp_path, "src/python/core/deep.py", body)
         hits = discipline._scan_print_calls(path, tmp_path)
         assert len(hits) == 1
@@ -179,9 +174,7 @@ class TestWhitelistIntegrity:
             except SyntaxError:
                 continue
             has_print = any(
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and node.func.id == "print"
+                isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "print"
                 for node in ast.walk(tree)
             )
             if not has_print:

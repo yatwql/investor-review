@@ -50,11 +50,7 @@ def _is_print_exempt(rel_path: str) -> bool:
 
 def _is_print_call(node: ast.AST) -> bool:
     """是否为对内置 ``print`` 的直接调用（排除 ``obj.print()`` / 别名覆盖情形）。"""
-    return (
-        isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id == "print"
-    )
+    return isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "print"
 
 
 def _scan_print_calls(fpath: Path, repo_root: Path) -> list[tuple[int, str, str, str]]:

@@ -453,4 +453,3 @@ class TestFmpSymbolPrefixedInput:
         assert to_fmp_symbol("sh600519") == "SH600519"
         assert to_fmp_symbol("sz000001") == "SZ000001"
         assert to_fmp_symbol("bj430047") == "BJ430047"
-
