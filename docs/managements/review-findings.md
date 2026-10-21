@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.14.1-dev
-> **编号源**：`rf-next = 807`（新增问题取此编号，完成后更新为 +1；已用最大 rf-806，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 809`（新增问题取此编号，完成后更新为 +1；已用最大 rf-808，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -16,6 +16,8 @@
 ### P2 — 中优先：价值明确、成本可控（下批排期）
 | # | 问题 | 修复方向 |
 |---|------|----------|
+| **rf-807** | 发布目标版本与开发链耦合、提示误导：`prepare --version X.Y.Z` 不能跨版本发布（要求 changelog 开发段 == `X.Y.Z-dev`），而提示语打印的是 `--version` 入参而非推导值（`--version 0.14.0 与当前 0.13.13-dev 推导结果 0.14.0 不一致`——两次都显示 0.14.0，读者读不出「应先把 dev 链切到 0.14.0-dev」）→ 本次为此外加一次切链提交 | 二选一：① 提示语改为打印推导值 + 附可执行指引（先切 dev 链：改 `APP_VERSION` 为 `X.Y.Z-dev` 并跑 `check-version-consistency --fix`）；② 支持 `prepare --version` 真正跨版本（自动同步 changelog 开发段头与 rf 台账节头）。成本低，建议① |
+| **rf-808** | 新小版本首次发布缺归档骨架，且构建知识隐含：`check` 会逐条报缺（`vX.Y.x/` 三份归档 + folders 目录树块 + plan/rf/changelog 三处索引行），但每补齐一处都要重跑 `check`（本次 check 4 次、prepare 4 次）；索引行还要求区间口径（`— vX.Y.Z（YYYY-MM-DD）`），格式不符时只在 `prepare` 阶段报「归档索引行改写失败」且不附期望格式 | 新增 `release.py archive-init --version X.Y.Z`（或 `prepare --init-archive`）：按既有归档头格式生成三份文件 + folders 目录树块 + 三处索引行；并给 `apply_changelog_release` 的索引行/指针改写失败信息附期望格式样例 |
 | **rf-790**（已决策） | 时间戳helper三份拷贝：`core/decision_ledger.py::_now_iso` 与 `core/signal_ledger.py::_now_iso` 逐字相同（2 行），`scripts/_release/_timing.py::now_iso` 语义略异（带时区偏移，供发布台账跨时区对拍）——与 `core/jsonl_store.py` 当时抽出「避免第三份拷贝」的动机同类 | **维持现状**（**已决策，不排期**；理由如下）：两处均为 1 行表达式，且 `_timing` 那份**不能**合并（偏移有无是有意区分）；为 1 行表达式新开 `core/timeutil.py` 会引入新模块与目录树/文档改动，收益低于成本。若将来出现第三份 naive 版本再统一 |
 
 ### P3 — 持续监控：文件膨胀登记（逼近红线档：主程序 ≥700 / 脚本 ≥600 / 测试 ≥1000；按距红线余量升序）
