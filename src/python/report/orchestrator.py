@@ -44,8 +44,6 @@ logger = __import__("logging").getLogger("invest")
 # ── 数据结构 ───────────────────────────────────────────────
 
 
-
-
 @dataclass
 class ReportResult:
     """报告生成结果。"""
