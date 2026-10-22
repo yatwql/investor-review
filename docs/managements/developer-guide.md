@@ -1465,11 +1465,12 @@ CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` /
 
 | 域 | 代表脚本 | 什么时候用 |
 |:---|:---------|:-----------|
-| 测试 | `test-runner.py` / `collect-test-coverage.py` / `extract-test-failures.py` / `find-order-dependent-test.py` / `smoke-web.py` | 跑测试、统计覆盖、定位失败 |
-| 文档 | `check-doc-traces.py` / `check-doc-links.py` / `check-doc-drift.py` / `check-requirement-trace.py` / `check-semantic-index.py` / `make-social-preview.py` | 文档漂移、死链、需求追溯、语义命名、品牌社交预览图生成 |
-| 代码与文件质量 | `check-code-traces.py` / `check-test-redundancy.py` / `check-task-numbering.py` / `check-file-length.py` / `check-version-consistency.py` / `check-style-guardrails.py` / `check-script-contract.py` | 痕迹、用例冗余、编号、行数红线、版本、样式护栏 |
+| 测试 | `test-runner.py` / `collect-test-coverage.py` / `extract-test-failures.py` / `find-order-dependent-test.py` / `smoke-web.py` / `check-test-redundancy.py` / `check-test-markers.py` | 跑测试、统计覆盖、定位失败、用例质量机检 |
+| 文档 | `check-doc-traces.py` / `check-doc-links.py` / `check-doc-drift.py` / `check-semantic-index.py` / `check-svg.py` / `make-social-preview.py` | 文档漂移、死链、语义命名、架构图渲染检查、品牌社交预览图生成 |
+| 代码与文件质量 | `check-code-traces.py` / `check-requirement-trace.py` / `check-task-numbering.py` / `check-file-length.py` / `check-version-consistency.py` / `check-style-guardrails.py` / `check-script-contract.py` | 痕迹、需求追溯、编号、行数红线、版本、样式护栏 |
 | 发布 | `release.py`（分步编排）/ `collect-test-coverage.py` | 发版全流程 |
-| 诊断 | `perf-test-report.py` / `perf-view.py` / `probe.py` / `check-sources`（CLI 子命令） / `doctor`（CLI 子命令） | 性能与数据源体检 |
+| 运维观测 | `perf-view.py` / `probe.py` / `check-sources`（CLI 子命令）/ `doctor`（CLI 子命令）/ `view-logs`（CLI 子命令） / `cassettes`（CLI 子命令） | 性能历史查看、数据源链路探测、日志与系统自检 |
+| 评测与基准 | `perf-test-report.py` / `llm-hallucination-sampler.py` / `factor_zoo_eval.py` / `calibrate-dedup-threshold.py` | 性能门禁压测、LLM 幻觉率采样、能力评测与阈值校准（不参与提交门禁） |
 | 启动 | `launch.sh` / `launch.ps1`（TUI 与 `web` 子命令）/ `cli.sh` / `llm.sh` 及其 `.ps1` 版 | 免解释器前缀的常用入口 |
 | CLI 子命令 | `report` / `cache` / `whatif` / `check-sources` / `view-logs` / `doctor` / `cassettes` | 用户侧命令行入口（详见 [CLI 手册](../manuals/how-to-use-cli-mode.md)） |
 

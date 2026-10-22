@@ -12,12 +12,13 @@
 - [文档类](#文档类)
 - [代码与文件质量类](#代码与文件质量类)
 - [发布类](#发布类)
-- [诊断类](#诊断类)
+- [运维观测类](#运维观测类)
+- [评测与基准类](#评测与基准类)
 - [启动脚本](#启动脚本)
 - [CLI 子命令](#cli-子命令)
 - [LLM 幻觉率采样测试](#llm-幻觉率采样测试)
 
-`scripts/` 下的工具脚本按**用途分类**组织：测试类 / 文档类 / 代码与文件质量类 / 发布类 / 诊断类 / 启动类。检查类条目统一按两个视角记录：
+`scripts/` 下的工具脚本按**活动类型**组织成七个开发域（测试 / 文档 / 代码与文件质量 / 发布 / 运维观测 / 评测与基准 / 启动），另设「CLI 子命令」一节收纳 `cli.py` 的用户侧入口；一条脚本只归一个域，域内条目按主题分组。检查类条目统一按两个视角记录：
 
 - **设计逻辑**——为什么存在、判什么、怎么判定、边界与取舍（改规则前先读这段）。
 - **使用逻辑**——怎么跑、退出码怎么读、finding 怎么处置、什么时候会自动跑。
@@ -34,40 +35,40 @@
 | `check-code-traces.py` | 质量 | 代码注释/文档字符串中历史变更痕迹检查 |
 | `check-doc-traces.py` | 文档 | 面向读者文档（.md）历史变更痕迹 + 结构性冗余（DUPLICATE）检查 |
 | `check-test-markers.py` | 测试 | AST 静态扫描验证测试标记合规性 |
-| `check-task-numbering.py` | 测试 | 任务编号（plan-/rf-）全局一致性检查，防新增编号与历史归档冲突 |
-| `check-task-numbering-hook.py` | 测试 | Claude Code PostToolUse hook——编辑编号管理文档后自动校验编号一致性 |
+| `check-task-numbering.py` | 质量 | 任务编号（plan-/rf-）全局一致性检查，防新增编号与历史归档冲突 |
+| `check-task-numbering-hook.py` | 质量 | Claude Code PostToolUse hook——编辑编号管理文档后自动校验编号一致性 |
 | `check-semantic-index.py` | 文档 | 功能语义命名表正反向一致性校验（功能开关注册表表外键 / 僵尸条目 / 合并章 key 缺失） |
 | `check-doc-drift.py` | 文档 | 文档与实现一致性校验（章节表/章节数量、开关表/分组计数/默认值断言、配置与 LLM 默认值表、TUI 面板编号、目录树、项目统计表；`--sync` 自动回写统计快照） |
 | `check-doc-links.py` | 文档 | 文档链接与结构一致性校验（死链/死锚点/重复标题/层级/编号序列/§引用） |
 | `check-file-length.py` | 质量 | 单文件行数红线守护（主程序/脚本 >1000 行 / 测试 >1200 行；豁免登记与 review-findings 挂账同步，`-v` 输出可选优化区间清单供登记表派生） |
 | `check-test-redundancy.py` | 测试 | 测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言；实现拆在 `_test_redundancy/`——八类检查各一模块 + 共用 AST 原语 + 事实缓存 + 编排，入口只留 CLI） |
-| `check-requirement-trace.py` | 测试 | 需求 ID ↔ 验证载体追溯（单段 ID 全域覆盖 / 载体文件存在 / ID 双向一致） |
-| `install-claude-hook.py` | 测试 | 安装/卸载 Claude Code PostToolUse hook（任务编号一致性自动校验） |
-| `llm-hallucination-sampler.py` | 测试 | 10 组标准持仓 × LLM 幻觉率采样（薄 CLI，实现在 `_halluc_sampler/` 包） |
-| `calibrate-dedup-threshold.py` | 测试 | 新闻去重阈值校准分析 |
+| `check-requirement-trace.py` | 质量 | 需求 ID ↔ 验证载体追溯（单段 ID 全域覆盖 / 载体文件存在 / ID 双向一致） |
+| `install-claude-hook.py` | 质量 | 安装/卸载 Claude Code PostToolUse hook（任务编号一致性自动校验） |
+| `llm-hallucination-sampler.py` | 评测 | 10 组标准持仓 × LLM 幻觉率采样（薄 CLI，实现在 `_halluc_sampler/` 包） |
+| `calibrate-dedup-threshold.py` | 评测 | 新闻去重阈值校准分析 |
 | `collect-test-coverage.py` | 测试 | 测试覆盖计数收集（`--collect-only` 快照；`--update-docs` 回写 test-coverage/folders 计数行） |
 | `smoke-web.py` | 测试 | Web 模式 HTTP 冒烟脚本（test_client 进程内全链路断言，可独立运行） |
 | `check-version-consistency.py` | 发布 | 版本号全局一致性检查（P0/P2 守护脚本 + 发布流程必跑） |
 | `check-style-guardrails.py` | 质量 | 设计护栏机检（DESIGN.md 护栏样式面；E 级：强调色越权/明暗同步/双面 token 对表判 finding，W 级：裸色值/圆角档位观察统计——未入 pre-commit 钩子与 CI guards；**发布门禁**（release.py gate）已纳入，开发期快反馈由 unit 测试承担） |
 | `check-script-contract.py` | 质量 | scripts 顶层脚本契约机检（退出码声明 ⊆ {0,2} 白名单、check-* 统一 `add_common_args` CLI 面、文本 I/O 显式 encoding、脚本↔测试覆盖映射，四条规则——**观察期**未入钩子与 CI） |
 | `release.py` | 发布 | 发布流程分步编排（check / archive-init〔新小版本归档骨架：三份归档 + 目录树块 + 三处索引行，幂等〕/ prepare〔含台账与设计文件归档迁移；不跨版本发布，`--version` 与推导值不一致即中止并给指引〕/ refresh / evolution / gate / publish〔提交前按 pre-commit 钩子同源参数 `--sync --ci --with-test-count` 同步统计快照，失败即中止〕/ devbump，每步独立可审阅、失败即停；refresh 纯文档变更跳过 bench+collect（`--force-refresh` 强制）、bench 默认只测发布子集四档（`--full-bench` 全量）、gate 十守护并行且随核数收敛 ≤4 路并断言归档已迁完；devbump 切版后清空上一版迁档占位节；每命令耗时入 `logs/release.jsonl` 台账） |
-| `perf-test-report.py` | 诊断 | 端到端报告生成管线性能基准（独立脚本，mock 外部数据源） |
-| `perf-view.py` | 诊断 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 时段聚合（耗时与费用合计/环比）/机读输出（llm_cost、by_period 费用字段）；实现拆在 `_perf_view/`——`stats.py` 统计原语 / `data.py` 派生 / `report.py` 渲染 / `cli.py` 入口，主入口只留 docstring 与 re-export） |
-| `probe.py` | 诊断 | 探测统一入口（按 target 分发到 `probes/` 子模块；新探针实现契约面登记即用） |
-| `probe-csi-factor-indices.py` / `probe-push2.py` | 诊断 | 旧入口兼容垫片（薄委托到 `probes/csi.py` / `probes/push2.py`，用法不变） |
-| `factor_zoo_eval.py` | 诊断 | 因子动物园目录评测（非生产代码；五个来源族各抽 5 个因子，评测 A 字段可得率 / B 与既有信号族增量 / C 全量计算耗时占比三项指标，A/B/C 全过才转正立项；子命令 catalog / fields / signals / timing / verdict / all，产物只落 `docs/tmp/factor-zoo/`；实现拆在 `_factor_zoo/`） |
-| `check-svg.py` | 诊断 | README SVG 架构图检查（子命令 `geom` 几何 / `pixel` 像素 / `text-overflow` 文字色越界；像素子命令需 Pillow） |
+| `perf-test-report.py` | 评测 | 端到端报告生成管线性能基准（独立脚本，mock 外部数据源） |
+| `perf-view.py` | 运维 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 时段聚合（耗时与费用合计/环比）/机读输出（llm_cost、by_period 费用字段）；实现拆在 `_perf_view/`——`stats.py` 统计原语 / `data.py` 派生 / `report.py` 渲染 / `cli.py` 入口，主入口只留 docstring 与 re-export） |
+| `probe.py` | 运维 | 探测统一入口（按 target 分发到 `probes/` 子模块；新探针实现契约面登记即用） |
+| `probe-csi-factor-indices.py` / `probe-push2.py` | 运维 | 旧入口兼容垫片（薄委托到 `probes/csi.py` / `probes/push2.py`，用法不变） |
+| `factor_zoo_eval.py` | 评测 | 因子动物园目录评测（非生产代码；五个来源族各抽 5 个因子，评测 A 字段可得率 / B 与既有信号族增量 / C 全量计算耗时占比三项指标，A/B/C 全过才转正立项；子命令 catalog / fields / signals / timing / verdict / all，产物只落 `docs/tmp/factor-zoo/`；实现拆在 `_factor_zoo/`） |
+| `check-svg.py` | 文档 | README SVG 架构图检查（子命令 `geom` 几何 / `pixel` 像素 / `text-overflow` 文字色越界；像素子命令需 Pillow） |
 | `make-social-preview.py` | 文档 | GitHub Social Preview 图生成（1200×630 JPG；猫头鹰左卡 + 品牌文案右栏，需 `cairosvg` + Pillow，默认就地刷新入库资产 `src/static/social-preview.jpg`） |
 | `_checklib.py` | 内部 | 检查脚本共享设施（统一 `-v/--ci` 契约与 `[OK]`/`[ERR]` 输出、`rel()`、`report()`、文档区间与表格解析） |
 | `_test_runner/` | 内部 | 测试驱动内部实现包（paths / modes / pytest_env / machine_info / doc_writer / report_html / runner） |
 | `launch.sh` / `launch.ps1` | 启动 | Linux/macOS / Windows 一键启动脚本（无参数启动 TUI；`web` 子命令启动 Web 浏览器模式） |
 | `cli.sh` / `cli.ps1` | 启动 | Linux/macOS / Windows CLI 命令行包装（无参数默认生成报告） |
 | `llm.sh` / `llm.ps1` | 启动 | Linux/macOS / Windows 完整报告快捷入口（固定 `report --type full`，等价 TUI「生成完整报告」） |
-| `check-sources` | 诊断 | cli.py 子命令：数据源联通性检测 |
-| `doctor` | 诊断 | cli.py 子命令：系统自检（环境/配置/目录/开关/适配/凭据/数据源七组，`--offline`/`--timeout`，不受实验开关约束） |
-| `view-logs` | 诊断 | cli.py 子命令：查看结构化运行日志（`--level`/`--lines`/`--since`/`--until`，与 TUI `[V]` 同实现） |
-| `whatif` | 诊断 | cli.py 子命令：调仓 What-if 模拟（对比两份持仓生成独立 diff 报告，见 [快速开始](../manuals/how-to-start.md)） |
-| `cassettes` | 诊断 | cli.py 子命令：数据源记录-回放维护（列表 / `--verify` 离线回放校验，见下文「CLI 子命令」） |
+| `check-sources` | 运维 | cli.py 子命令：数据源联通性检测 |
+| `doctor` | 运维 | cli.py 子命令：系统自检（环境/配置/目录/开关/适配/凭据/数据源七组，`--offline`/`--timeout`，不受实验开关约束） |
+| `view-logs` | 运维 | cli.py 子命令：查看结构化运行日志（`--level`/`--lines`/`--since`/`--until`，与 TUI `[V]` 同实现） |
+| `whatif` | CLI | cli.py 子命令：调仓 What-if 模拟（对比两份持仓生成独立 diff 报告，见 [快速开始](../manuals/how-to-start.md)） |
+| `cassettes` | 运维 | cli.py 子命令：数据源记录-回放维护（列表 / `--verify` 离线回放校验，见下文「CLI 子命令」） |
 
 ## 检查脚本的公共部分
 
@@ -132,7 +133,7 @@
 
 ## 测试类
 
-测试驱动、覆盖率采集、失败定位、冒烟与采样工具，以及测试质量机检（冗余 / 标记 / 需求追溯，其中部分属十守护——以「三级门禁」清单为准）。
+测试驱动、覆盖率采集、失败定位与 Web 冒烟工具，以及测试质量机检（冗余 / 标记，其中部分属十守护——以「三级门禁」清单为准）。
 
 **测试驱动与覆盖率**
 
@@ -204,29 +205,6 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 
 退出码：0 = 全部通过；2 = 存在失败项。同款断言已由 `src/test/unit/web/test_smoke_web.py`（`unit_web` 标记）纳入 `dev-verify`/`verify` 门禁，本脚本用于手动快速复跑。
 
-**`llm-hallucination-sampler.py` — LLM 幻觉率采样**
-
-见下文「LLM 幻觉率采样测试」章节。
-
-**`calibrate-dedup-threshold.py` — 新闻去重阈值校准**
-
-新闻标题去重（同源/跨源安全区分级 + 候选区阶梯 + 方向对立防护，阈值见 `news_dedup.py` 校准常量）在每次报告运行时自动记录"边界案例"到 `data/cache/dedup_anchors.jsonl`。积累足够锚点后，用此脚本分析当前阈值是否合理。
-
-```bash
-# 分析全部锚点，输出建议
-.venv/bin/python scripts/calibrate-dedup-threshold.py
-
-# 仅看汇总统计（不展开详细列表）
-.venv/bin/python scripts/calibrate-dedup-threshold.py --summary
-
-# 指定锚点文件
-.venv/bin/python scripts/calibrate-dedup-threshold.py --file data/cache/dedup_anchors.jsonl
-```
-
-**校准时机**：建议锚点文件积累 **100 条以上**（约 5~10 次报告运行）后校准一次。脚本只分析不自动修改阈值，是否需要调整由开发者判断。
-
-**测试质量机检**
-
 **`check-test-redundancy.py` — 测试用例冗余与无效检查**
 
 **设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
@@ -283,74 +261,9 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
 
 > **何时跑**：不入钩子与 CI——新增/修改测试文件后手动跑；`conftest.py` 的收集期校验是兜底。
 
-**`check-requirement-trace.py` — 需求 ID ↔ 验证载体追溯**
-
-**设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
-
-校验 `requirements.md` 的需求 ID 与 `testplan.md` §2.1 追溯表的双向一致：映射表格式齐备、ID 均存在于需求侧、ID 唯一、**已补全域全覆盖**（`_COVERED_DOMAINS` 中每个域的全部 ID 均有载体行）、载体文件真实存在于磁盘。
-
-**使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
-
-```bash
-.venv/bin/python scripts/check-requirement-trace.py                 # 全量校验
-.venv/bin/python scripts/check-requirement-trace.py -v              # 详细输出（逐域覆盖进度）
-.venv/bin/python scripts/check-requirement-trace.py --ci            # CI 模式（只输出 文件:描述，退出码 2）
-```
-
-> 覆盖口径：仅识别 `R-<域>-<序号>` 形式的**单段**需求 ID；`requirements.md` §7.2–§7.8.4 的双段子域 ID（如 `R-LLM-GM-01`）
-> 不在本脚本与追溯表范围内。
-
-> **何时跑**：`git commit` 时由 pre-commit 钩子按暂存域自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` job 恒跑全量兜底。
-
-**任务编号与自动化 hook**
-
-**`check-task-numbering.py` — 任务编号全局一致性检查**
-
-**设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
-
-校验 `plan-` / `rf-` 两类任务编号与各管理文档头部的「编号源」标记（`plan-next` / `rf-next`）是否一致，防止新增编号与历史归档冲突。
-
-新增任务时，编号取管理文档头部 `plan-next` / `rf-next` 当前值，用后将其递增更新；若标记遗漏递增或初值写小，本脚本会扫描当前文档 + 全部历史归档并报错提示修正值。
-
-**使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
-
-```bash
-.venv/bin/python scripts/check-task-numbering.py            # 检查全部（plan + rf）
-.venv/bin/python scripts/check-task-numbering.py --kind rf  # 仅检查 rf
-.venv/bin/python scripts/check-task-numbering.py --ci       # CI 模式（只输出错误）
-```
-
-自动保障机制（四层，跨机器同步策略见「任务编号规范与自动保障」章节）：P0 门禁、dev-verify preflight、Claude Code hook、git pre-commit。
-
-> **何时跑**：`git commit` 时由 pre-commit 钩子按暂存域自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` job 恒跑全量兜底。
-
-**`check-task-numbering-hook.py` — Claude Code PostToolUse hook**
-
-Claude Code 编辑 `plan.md` / `review-findings.md` 后自动运行编号校验，失败返回非零退出码中断编辑。读取 `__INJECTED_OBJECT__`（环境变量或命令行参数）识别目标文件；无 hook 上下文或非编号文档时放行。由 `.claude/settings.json` 的 PostToolUse 钩子调用（不随仓库同步，需 `install-claude-hook.py` 接线）。
-
-**`install-claude-hook.py` — Claude Code hook 安装/卸载**
-
-`.claude/settings.json` 被 `.gitignore` 排除、不随仓库同步。本脚本将 `check-task-numbering-hook.py` 的 PostToolUse 钩子写入该文件，跨机器 clone 后运行一次即完成接线。
-
-```bash
-.venv/bin/python scripts/install-claude-hook.py             # 安装（幂等，保留已有配置）
-.venv/bin/python scripts/install-claude-hook.py --uninstall # 卸载
-```
-
-**`install-hooks.sh` — git pre-commit hook 激活脚本（`.githooks/`）**
-
-`.githooks/` 的 git pre-commit hook（10 个守护脚本全量校验 + 统计快照自动同步）默认**休眠**——`core.hooksPath` 是本机 git 配置、不随仓库同步。clone 后运行一次激活：
-
-```bash
-sh .githooks/install-hooks.sh          # 启用（写入本机 core.hooksPath）
-sh .githooks/install-hooks.sh --off   # 停用
-```
-
-与 `install-claude-hook.py`（Claude Code hook）配套；两条 hook 均调用 `check-task-numbering-hook.py` 校验编号文档。
-
 ## 文档类
 
-面向读者文档的痕迹、链接、与实现的一致性，语义命名索引的正反向校验，以及仓库展示资产（品牌社交预览图）的生成。
+面向读者文档的痕迹、链接、与实现的一致性，语义命名索引的正反向校验，README 架构图渲染检查，以及仓库展示资产（品牌社交预览图）的生成。
 
 **`check-doc-traces.py` — 文档历史痕迹 + 结构性冗余检查**
 
@@ -584,9 +497,93 @@ sym |= set(re.findall(r'^\s{0,8}["\']([a-z][a-z0-9_]{2,})["\']\s*:', src, re.M))
 依赖 `cairosvg`（SVG 栅格化，不入 requirements——无 cairo 系统库的环境装不上）+ `Pillow`（已为运行期依赖），
 故不进任何门禁；缺依赖或素材不可读时打印指引并以**退出码 1** 结束。
 
+**`check-svg.py` — README SVG 架构图检查（三合一）**
+
+README 首屏架构图（`src/static/architecture.svg` / `llm-chain.svg` / `capabilities.svg`）的渲染质量检查，改图后用于验证文本不越界/重叠。三个渲染质量检查（几何/像素越界/文字色越界）合并为一个带子命令的统一入口（注意：**均带 `--ci` 与退出码语义**，0=通过 / 1=缺 Pillow / 2=发现越界）。
+
+```bash
+# 几何审查：文本越界 / 贴边 / 文本重叠（估算字体宽度；矩形底部不齐仅作提示，不计入退出码）
+.venv/bin/python scripts/check-svg.py geom <svg路径…>
+
+# 像素审查：副标题行区域亮色像素是否越出卡片右缘（需 Pillow）
+.venv/bin/python scripts/check-svg.py pixel <png> <scale> <card_r> <row_y0> <row_y1> <margin>
+
+# 像素审查：精确匹配文字色像素越界（需 Pillow）
+.venv/bin/python scripts/check-svg.py text-overflow <png> <scale> <card_r> <y0> <y1> <margin>
+```
+
+参数含义：`scale` = px per svg unit；`card_r` = 卡片右缘 x（svg 单位）；`row_y*/y*` = 检测区 y 范围（svg 单位）；`margin` = 检测范围到卡片右缘的右扩量（svg 单位）。几何审查纯标准库；两个像素子命令需 Pillow（`pip install -e '.[svg]'`，缺失时给出可读指引并以退出码 1 结束）。
+
+> **当前状态**：三张 SVG 均通过 `geom`——卡片内文本按估宽模型的右余量 ≥10px（`capabilities.svg` ≥19px）。贴边阈值由 `_PADDING_WARN`（6px）定义，矩形底部不齐仅作提示项（流程图同列卡片高度本就允许不同）。**改图后请重跑本脚本**；本脚本不在提交前/发布前门禁清单内，按需运行。
+
 ## 代码与文件质量类
 
-代码注释痕迹（含三条 AST 守卫）、文件行数红线，以及两条观察期契约检查。
+代码注释痕迹（含三条 AST 守卫）、文件行数红线、需求追溯与任务编号一致性（含钩子接线），以及两条观察期契约检查。
+
+**`check-requirement-trace.py` — 需求 ID ↔ 验证载体追溯**
+
+**设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
+
+校验 `requirements.md` 的需求 ID 与 `testplan.md` §2.1 追溯表的双向一致：映射表格式齐备、ID 均存在于需求侧、ID 唯一、**已补全域全覆盖**（`_COVERED_DOMAINS` 中每个域的全部 ID 均有载体行）、载体文件真实存在于磁盘。
+
+**使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
+
+```bash
+.venv/bin/python scripts/check-requirement-trace.py                 # 全量校验
+.venv/bin/python scripts/check-requirement-trace.py -v              # 详细输出（逐域覆盖进度）
+.venv/bin/python scripts/check-requirement-trace.py --ci            # CI 模式（只输出 文件:描述，退出码 2）
+```
+
+> 覆盖口径：仅识别 `R-<域>-<序号>` 形式的**单段**需求 ID；`requirements.md` §7.2–§7.8.4 的双段子域 ID（如 `R-LLM-GM-01`）
+> 不在本脚本与追溯表范围内。
+
+> **何时跑**：`git commit` 时由 pre-commit 钩子按暂存域自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` job 恒跑全量兜底。
+
+**任务编号与自动化 hook**
+
+**`check-task-numbering.py` — 任务编号全局一致性检查**
+
+**设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
+
+校验 `plan-` / `rf-` 两类任务编号与各管理文档头部的「编号源」标记（`plan-next` / `rf-next`）是否一致，防止新增编号与历史归档冲突。
+
+新增任务时，编号取管理文档头部 `plan-next` / `rf-next` 当前值，用后将其递增更新；若标记遗漏递增或初值写小，本脚本会扫描当前文档 + 全部历史归档并报错提示修正值。
+
+**使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
+
+```bash
+.venv/bin/python scripts/check-task-numbering.py            # 检查全部（plan + rf）
+.venv/bin/python scripts/check-task-numbering.py --kind rf  # 仅检查 rf
+.venv/bin/python scripts/check-task-numbering.py --ci       # CI 模式（只输出错误）
+```
+
+自动保障机制（四层，跨机器同步策略见「任务编号规范与自动保障」章节）：P0 门禁、dev-verify preflight、Claude Code hook、git pre-commit。
+
+> **何时跑**：`git commit` 时由 pre-commit 钩子按暂存域自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` job 恒跑全量兜底。
+
+**`check-task-numbering-hook.py` — Claude Code PostToolUse hook**
+
+Claude Code 编辑 `plan.md` / `review-findings.md` 后自动运行编号校验，失败返回非零退出码中断编辑。读取 `__INJECTED_OBJECT__`（环境变量或命令行参数）识别目标文件；无 hook 上下文或非编号文档时放行。由 `.claude/settings.json` 的 PostToolUse 钩子调用（不随仓库同步，需 `install-claude-hook.py` 接线）。
+
+**`install-claude-hook.py` — Claude Code hook 安装/卸载**
+
+`.claude/settings.json` 被 `.gitignore` 排除、不随仓库同步。本脚本将 `check-task-numbering-hook.py` 的 PostToolUse 钩子写入该文件，跨机器 clone 后运行一次即完成接线。
+
+```bash
+.venv/bin/python scripts/install-claude-hook.py             # 安装（幂等，保留已有配置）
+.venv/bin/python scripts/install-claude-hook.py --uninstall # 卸载
+```
+
+**`install-hooks.sh` — git pre-commit hook 激活脚本（`.githooks/`）**
+
+`.githooks/` 的 git pre-commit hook（10 个守护脚本全量校验 + 统计快照自动同步）默认**休眠**——`core.hooksPath` 是本机 git 配置、不随仓库同步。clone 后运行一次激活：
+
+```bash
+sh .githooks/install-hooks.sh          # 启用（写入本机 core.hooksPath）
+sh .githooks/install-hooks.sh --off   # 停用
+```
+
+与 `install-claude-hook.py`（Claude Code hook）配套；两条 hook 均调用 `check-task-numbering-hook.py` 校验编号文档。
 
 **`check-code-traces.py` — 代码注释历史痕迹检查**
 
@@ -812,26 +809,9 @@ sym |= set(re.findall(r'^\s{0,8}["\']([a-z][a-z0-9_]{2,})["\']\s*:', src, re.M))
 
 **耗时与 token 台账（`logs/release.jsonl`）**：每个子命令结束追加一行 JSON——`command` / `ok` / `elapsed_s` / `version` / `steps[]` / `agent{}`（执行环境身份：`provider`/`model`/`thinking`/`session_id`，取自 `PI_PROVIDER`/`PI_MODEL`/`PI_REASONING_LEVEL`/`PI_SESSION_ID`；非 agent 环境省略）/ `session_usage{}`（agent 会话**累计** token 快照：`input`/`output`/`cache_read`/`cache_write`/`total`/`cost`，取自 `PI_SESSION_FILE` 会话 JSONL 的 assistant 消息 + 非消息用量（cache_warm 等）+ compaction 三类条目，与 pi 自身 token 统计同口径；非 agent 环境省略该字段，旧台账行形状不变）（gate 的 `P2 场景回归`·`P2 十守护`·`P2 设计护栏`、refresh 的 bench·collect·sync、publish 的 `P1 verify`、evolution 的快照统计·统计同步、prepare 的 `台账归档迁移`）；终端尾行同步打印摘要。`logs/` 属 git 忽略域，台账不入仓库、不参与门禁，写入失败只打 `[!]` 且不改退出码（观测面不阻断发布）。跨版本对拍：`tail -n 20 logs/release.jsonl`（发布墙钟的变化归因到此，不再靠现场重测）。**token 统计口径**：窗口 = 上一次 `devbump` 之后的行，用量 = 末行累计 − 边界行累计（跨会话按正增量分段累加，不会出现负数）；每条命令尾行自动打印「执行环境：provider/model（thinking=…）」与「本次发布累计 token：N tok（in/out/cache r/w，≈¥C）」，便于把发布成本按版本对拍。
 
-## 诊断类
+## 运维观测类
 
-**`perf-test-report.py` — 端到端性能基准**
-
-生成 20+ 品种 + 3 年模拟持仓，运行 basic/both 报告生成管线，测量各阶段耗时。
-
-```bash
-.venv/bin/python scripts/perf-test-report.py
-
-# 门禁模式：未达标退出码 2（供 CI 拦截性能回归）
-.venv/bin/python scripts/perf-test-report.py --gate
-```
-
-**输出**：`docs/tmp/better-investment-performance-test-report.md`
-
-**目标**：basic 模式总耗时 < 60s
-
-**门禁归属**：本脚本是**性能测试**（主动压测，同条件可比），故承担 CI 性能门禁（`perf-gate` job）；运行历史查看（`perf-view.py`，样本不可控、不可复现）不用于门禁。
-
-**可靠性保障**：**传输层离线**（`_install_offline_network()`：socket 出口瞬时 `OSError` 走既有降级 + `time.sleep` 置零消掉重试退避）对一切外部抓取兜底，行情/K线历史/交易日历三处咽喉另打桩让热点路径仍走真实计算——门禁测的是代码性能而非网络状况（冷缓存断网全流程 2.8s）；`_isolate_state_writes()` 把 perf 历史/健康快照/熔断状态重定向到临时目录，基准运行不污染 `perf-view` 统计样本与真实运行的供应商熔断状态。
+只读观测与连通性探测：看性能历史、探数据源链路、查运行日志与系统自检，不写业务状态、不参与门禁。
 
 **`perf-view.py` — 性能历史趋势查看**
 
@@ -937,24 +917,51 @@ sym |= set(re.findall(r'^\s{0,8}["\']([a-z][a-z0-9_]{2,})["\']\s*:', src, re.M))
 
 curl 对照命令：`curl -s "https://push2.eastmoney.com/api/qt/stock/get?secid=1.000001&fields=f58"`。纯只读探测，不写缓存/熔断/降级记录，无副作用。
 
-**`check-svg.py` — README SVG 架构图检查（三合一）**
+## 评测与基准类
 
-README 首屏架构图（`src/static/architecture.svg` / `llm-chain.svg` / `capabilities.svg`）的渲染质量检查，改图后用于验证文本不越界/重叠。三个渲染质量检查（几何/像素越界/文字色越界）合并为一个带子命令的统一入口（注意：**均带 `--ci` 与退出码语义**，0=通过 / 1=缺 Pillow / 2=发现越界）。
+离线评测 / 采样 / 基准工具：不参与门禁，产物落 `docs/tmp/` 或只输出计分结果，回答「这项能力值不值得转正」与「这次改动有没有变慢」。
+
+**`llm-hallucination-sampler.py` — LLM 幻觉率采样**
+
+见下文「LLM 幻觉率采样测试」章节。
+
+**`calibrate-dedup-threshold.py` — 新闻去重阈值校准**
+
+新闻标题去重（同源/跨源安全区分级 + 候选区阶梯 + 方向对立防护，阈值见 `news_dedup.py` 校准常量）在每次报告运行时自动记录"边界案例"到 `data/cache/dedup_anchors.jsonl`。积累足够锚点后，用此脚本分析当前阈值是否合理。
 
 ```bash
-# 几何审查：文本越界 / 贴边 / 文本重叠（估算字体宽度；矩形底部不齐仅作提示，不计入退出码）
-.venv/bin/python scripts/check-svg.py geom <svg路径…>
+# 分析全部锚点，输出建议
+.venv/bin/python scripts/calibrate-dedup-threshold.py
 
-# 像素审查：副标题行区域亮色像素是否越出卡片右缘（需 Pillow）
-.venv/bin/python scripts/check-svg.py pixel <png> <scale> <card_r> <row_y0> <row_y1> <margin>
+# 仅看汇总统计（不展开详细列表）
+.venv/bin/python scripts/calibrate-dedup-threshold.py --summary
 
-# 像素审查：精确匹配文字色像素越界（需 Pillow）
-.venv/bin/python scripts/check-svg.py text-overflow <png> <scale> <card_r> <y0> <y1> <margin>
+# 指定锚点文件
+.venv/bin/python scripts/calibrate-dedup-threshold.py --file data/cache/dedup_anchors.jsonl
 ```
 
-参数含义：`scale` = px per svg unit；`card_r` = 卡片右缘 x（svg 单位）；`row_y*/y*` = 检测区 y 范围（svg 单位）；`margin` = 检测范围到卡片右缘的右扩量（svg 单位）。几何审查纯标准库；两个像素子命令需 Pillow（`pip install -e '.[svg]'`，缺失时给出可读指引并以退出码 1 结束）。
+**校准时机**：建议锚点文件积累 **100 条以上**（约 5~10 次报告运行）后校准一次。脚本只分析不自动修改阈值，是否需要调整由开发者判断。
 
-> **当前状态**：三张 SVG 均通过 `geom`——卡片内文本按估宽模型的右余量 ≥10px（`capabilities.svg` ≥19px）。贴边阈值由 `_PADDING_WARN`（6px）定义，矩形底部不齐仅作提示项（流程图同列卡片高度本就允许不同）。**改图后请重跑本脚本**；本脚本不在提交前/发布前门禁清单内，按需运行。
+**测试质量机检**
+
+**`perf-test-report.py` — 端到端性能基准**
+
+生成 20+ 品种 + 3 年模拟持仓，运行 basic/both 报告生成管线，测量各阶段耗时。
+
+```bash
+.venv/bin/python scripts/perf-test-report.py
+
+# 门禁模式：未达标退出码 2（供 CI 拦截性能回归）
+.venv/bin/python scripts/perf-test-report.py --gate
+```
+
+**输出**：`docs/tmp/better-investment-performance-test-report.md`
+
+**目标**：basic 模式总耗时 < 60s
+
+**门禁归属**：本脚本是**性能测试**（主动压测，同条件可比），故承担 CI 性能门禁（`perf-gate` job）；运行历史查看（`perf-view.py`，样本不可控、不可复现）不用于门禁。
+
+**可靠性保障**：**传输层离线**（`_install_offline_network()`：socket 出口瞬时 `OSError` 走既有降级 + `time.sleep` 置零消掉重试退避）对一切外部抓取兜底，行情/K线历史/交易日历三处咽喉另打桩让热点路径仍走真实计算——门禁测的是代码性能而非网络状况（冷缓存断网全流程 2.8s）；`_isolate_state_writes()` 把 perf 历史/健康快照/熔断状态重定向到临时目录，基准运行不污染 `perf-view` 统计样本与真实运行的供应商熔断状态。
 
 **`factor_zoo_eval.py` — 因子动物园目录评测（非生产代码）**
 

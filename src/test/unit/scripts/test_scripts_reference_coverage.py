@@ -91,15 +91,17 @@ class TestGuideDomainIndexIsTruthful:
         )
 
     def test_domain_index_covers_every_script_family(self):
-        """七域索引须各自至少点名一个真实脚本（防整行被误删成空壳）。"""
+        """八域索引须各自至少点名一个真实脚本（防整行被误删成空壳）。"""
         section = re.search(r"(?ms)^### 按域索引\n(.*?)(?=^### |^## )", GUIDE.read_text(encoding="utf-8"))
         assert section, "developer-guide.md 缺少「### 按域索引」小节"
         rows = [
             line
             for line in section.group(1).splitlines()
-            if re.match(r"^\| (测试|文档|代码与文件质量|发布|诊断|启动|CLI 子命令) \|", line)
+            if re.match(r"^\| (测试|文档|代码与文件质量|发布|运维观测|评测与基准|启动|CLI 子命令) \|", line)
         ]
-        assert len(rows) == 7, f"「按域索引」应为 7 个域行（测试/文档/质量/发布/诊断/启动/CLI），实际 {len(rows)}"
+        assert len(rows) == 8, (
+            f"「按域索引」应为 8 个域行（测试/文档/质量/发布/运维观测/评测与基准/启动/CLI），实际 {len(rows)}"
+        )
         for row in rows:
             # 「代表脚本」列须至少点名一个条目（CLI 子命令行点名的是子命令名而非 .py 文件）
             assert re.findall(r"`[^`]+`", row), f"域行未点名任何条目：{row[:40]}"
