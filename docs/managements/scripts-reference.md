@@ -189,7 +189,7 @@ pytest 的 `-m` 标记表达式封装层，按 `--mode` 选择预定义组合。
 
 见上文「定位顺序依赖失败」章节。
 
-**冒烟与采样**
+**冒烟验证**
 
 **`smoke-web.py` — Web 模式 HTTP 冒烟脚本**
 
@@ -204,6 +204,8 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 ```
 
 退出码：0 = 全部通过；2 = 存在失败项。同款断言已由 `src/test/unit/web/test_smoke_web.py`（`unit_web` 标记）纳入 `dev-verify`/`verify` 门禁，本脚本用于手动快速复跑。
+
+**测试质量机检**
 
 **`check-test-redundancy.py` — 测试用例冗余与无效检查**
 
@@ -520,6 +522,52 @@ README 首屏架构图（`src/static/architecture.svg` / `llm-chain.svg` / `capa
 
 代码注释痕迹（含三条 AST 守卫）、文件行数红线、需求追溯与任务编号一致性（含钩子接线），以及两条观察期契约检查。
 
+**`check-code-traces.py` — 代码注释历史痕迹检查**
+
+**设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
+
+扫描 `src/python/`、`src/test/`、`src/static/`、`scripts/` 下所有 `.py` / `.js` / `.mjs` / `.html` / `.sh` / `.ps1` / `.bat` / `.cmd` 文件的注释和文档字符串，检查是否含有代码历史迭代信息（来源拆分、版本号、任务编号、历史迭代叙述等）。代码注释只应描述"当前是什么"，不应记录"从哪里来、怎么变的"。
+
+除注释痕迹外，另有三条 **AST 级架构守卫**（直接看语法树，与注释格式无关）：
+
+| 守卫 | 检出内容 | 实现 |
+|:-----|:---------|:-----|
+| core 分层 | core 层反向 `import` 上层包（`fetcher`/`analysis`/`report`/`llm`/`providers`/`web`/`tui`/`cli`） | `_traces_code/layers.py`（豁免文件在 technical.md 声明） |
+| 日志统一 | 非交互呈现层调用 `print()`（诊断输出应走 `logging` 落盘） | `_traces_code/logging_discipline.py`（豁免域：`tui/`、`cli/` 整目录 + 进度/一次性检查报告/向导六个模块） |
+| 语义命名 | 标识符/注释夹带任务编号、系列代号、字母数字暗号 | `_traces_code/extract.py` + `patterns.py` |
+
+**使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
+
+```bash
+# 检查全部
+.venv/bin/python scripts/check-code-traces.py
+
+# 详细输出（含排除行信息）
+.venv/bin/python scripts/check-code-traces.py -v
+
+# CI 模式（仅输出 文件名:行号，非零退出码）
+.venv/bin/python scripts/check-code-traces.py --ci
+```
+
+除注释痕迹外，另有三条 **AST 级架构守卫**（直接看语法树，与注释格式无关）：
+
+| 守卫 | 检出内容 | 实现 |
+|:-----|:---------|:-----|
+| core 分层 | core 层反向 `import` 上层包（`fetcher`/`analysis`/`report`/`llm`/`providers`/`web`/`tui`/`cli`） | `_traces_code/layers.py`（豁免文件在 technical.md 声明） |
+| 日志统一 | 非交互呈现层调用 `print()`（诊断输出应走 `logging` 落盘） | `_traces_code/logging_discipline.py`（豁免域：`tui/`、`cli/` 整目录 + 进度/一次性检查报告/向导六个模块） |
+| 语义命名 | 标识符/注释夹带任务编号、系列代号、字母数字暗号 | `_traces_code/extract.py` + `patterns.py` |
+
+**退出码含义**：
+
+| 退出码 | 含义 | 行动 |
+|:------:|:-----|:-----|
+| 0 | 全部通过 | 无需处理 |
+| 1 | HIGH/ORIGIN/VERSION 痕迹 | 必须修复后再提交 |
+| 2 | CODE/IDENT/CHAPTER/ROUND/LOG（任务编号/标识符/章节编号引用/日志统一违规） | 应改用语义描述，`print()` 改用 `logging` |
+| 3 | 仅 TODO/CHANGE/DEPR 级别 | 建议人工复核 |
+
+> **何时跑**：`git commit` 时由 pre-commit 钩子按暂存域自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` job 恒跑全量兜底。
+
 **`check-requirement-trace.py` — 需求 ID ↔ 验证载体追溯**
 
 **设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
@@ -584,52 +632,6 @@ sh .githooks/install-hooks.sh --off   # 停用
 ```
 
 与 `install-claude-hook.py`（Claude Code hook）配套；两条 hook 均调用 `check-task-numbering-hook.py` 校验编号文档。
-
-**`check-code-traces.py` — 代码注释历史痕迹检查**
-
-**设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
-
-扫描 `src/python/`、`src/test/`、`src/static/`、`scripts/` 下所有 `.py` / `.js` / `.mjs` / `.html` / `.sh` / `.ps1` / `.bat` / `.cmd` 文件的注释和文档字符串，检查是否含有代码历史迭代信息（来源拆分、版本号、任务编号、历史迭代叙述等）。代码注释只应描述"当前是什么"，不应记录"从哪里来、怎么变的"。
-
-除注释痕迹外，另有三条 **AST 级架构守卫**（直接看语法树，与注释格式无关）：
-
-| 守卫 | 检出内容 | 实现 |
-|:-----|:---------|:-----|
-| core 分层 | core 层反向 `import` 上层包（`fetcher`/`analysis`/`report`/`llm`/`providers`/`web`/`tui`/`cli`） | `_traces_code/layers.py`（豁免文件在 technical.md 声明） |
-| 日志统一 | 非交互呈现层调用 `print()`（诊断输出应走 `logging` 落盘） | `_traces_code/logging_discipline.py`（豁免域：`tui/`、`cli/` 整目录 + 进度/一次性检查报告/向导六个模块） |
-| 语义命名 | 标识符/注释夹带任务编号、系列代号、字母数字暗号 | `_traces_code/extract.py` + `patterns.py` |
-
-**使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
-
-```bash
-# 检查全部
-.venv/bin/python scripts/check-code-traces.py
-
-# 详细输出（含排除行信息）
-.venv/bin/python scripts/check-code-traces.py -v
-
-# CI 模式（仅输出 文件名:行号，非零退出码）
-.venv/bin/python scripts/check-code-traces.py --ci
-```
-
-除注释痕迹外，另有三条 **AST 级架构守卫**（直接看语法树，与注释格式无关）：
-
-| 守卫 | 检出内容 | 实现 |
-|:-----|:---------|:-----|
-| core 分层 | core 层反向 `import` 上层包（`fetcher`/`analysis`/`report`/`llm`/`providers`/`web`/`tui`/`cli`） | `_traces_code/layers.py`（豁免文件在 technical.md 声明） |
-| 日志统一 | 非交互呈现层调用 `print()`（诊断输出应走 `logging` 落盘） | `_traces_code/logging_discipline.py`（豁免域：`tui/`、`cli/` 整目录 + 进度/一次性检查报告/向导六个模块） |
-| 语义命名 | 标识符/注释夹带任务编号、系列代号、字母数字暗号 | `_traces_code/extract.py` + `patterns.py` |
-
-**退出码含义**：
-
-| 退出码 | 含义 | 行动 |
-|:------:|:-----|:-----|
-| 0 | 全部通过 | 无需处理 |
-| 1 | HIGH/ORIGIN/VERSION 痕迹 | 必须修复后再提交 |
-| 2 | CODE/IDENT/CHAPTER/ROUND/LOG（任务编号/标识符/章节编号引用/日志统一违规） | 应改用语义描述，`print()` 改用 `logging` |
-| 3 | 仅 TODO/CHANGE/DEPR 级别 | 建议人工复核 |
-
-> **何时跑**：`git commit` 时由 pre-commit 钩子按暂存域自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` job 恒跑全量兜底。
 
 **`check-file-length.py` — 单文件行数红线守护**
 
@@ -941,8 +943,6 @@ curl 对照命令：`curl -s "https://push2.eastmoney.com/api/qt/stock/get?secid
 ```
 
 **校准时机**：建议锚点文件积累 **100 条以上**（约 5~10 次报告运行）后校准一次。脚本只分析不自动修改阈值，是否需要调整由开发者判断。
-
-**测试质量机检**
 
 **`perf-test-report.py` — 端到端性能基准**
 

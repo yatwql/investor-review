@@ -25,6 +25,8 @@
 
 ### Fixed
 
+- **报告域重复实现清理（`rf-821`）**：`report/html_writer_status.py` 里与 `report/html_writer.py` 逐字相同的 `_render_template`/`write_html_report`（约 591 行）与文件内重复定义的状态构建辅助一并删除，模块回归「数据状态装配」单一职责（901 → 134 行）；核心渲染保持 `html_writer.py` 单实现，失效的 re-export/import 与失真导览注释同步清理。
+- **文档分类重整遗留漂移清理（`rf-820`）**：`scripts-reference.md` 组标题归位（「测试质量机检」误迁入评测类、「冒烟与采样」剩单条改「冒烟验证」）、质量类条目读序改为「痕迹 → 需求追溯 → 编号/钩子 → 行数/契约/护栏」；`README.md` 去掉会随开发演进的硬编码计数（22 项开关 → 全部开关含实验项、六个 LLM 模块 → 全部模块、10 张图表 → 实测 12 张）；删除 `docs/tmp/github/` 中与入库资产重复的预览图副本。
 - **Social Preview 脚本默认输出与装配修正（`rf-819`）**：`_load_render_deps` 仍按旧字段名 `image_cls` 构造 `RenderDeps`，真机执行即 `TypeError`（回归只走注入替身，未覆盖真实导入装配）——改为 `image_module` 并补「真实导入装配」用例；默认输出改为入库资产 `src/static/social-preview.jpg`（受 git 管控，重跑即就地刷新），`-o` 可改道；重跑产物与已提交图片逐字节一致。
 
 - **`publish` 提交前同步统计快照（`rf-816`）**：钩子对含 `src/test` 变更的提交走 `--sync --ci --with-test-count`，而 `publish` 原先不校验，只跑 `--sync` 时 `test-coverage.md` 收集计数陈旧不被发现——本地通过、钩子仍红，v0.14.2 连败两次 publish。现 `publish` 在提交前自动按同源参数同步，失败即中止；补 2 例回归。
