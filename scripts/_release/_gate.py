@@ -142,6 +142,17 @@ def run_gate(args, ctx, runner=None) -> int:
             return 2
     else:  # absent：本版没有自审条目，无待迁档内容
         print("[!] 该版本无「开发期已修复」节（无自审条目），跳过归档断言")
+    # changelog 归档段非空：prepare 已拦「占位句原样归档」，此处拦旁路/人工归档
+    # 写出的「只有标题、没有正文」段——发布记录一旦落盘就再也补不回来
+    changelog_archive, _changelog_name = ctx.changelog_archive_paths(version)
+    if not changelog_archive.exists():
+        print(f"[ERR] 缺少 changelog 归档文件 {changelog_archive.name}")
+        print("[ERR] 先执行 scripts/release.py prepare（或 archive）后重跑 gate")
+        return 2
+    if not ctx.changelog_section_has_entries(changelog_archive.read_text(encoding="utf-8"), version):
+        print(f"[ERR] {changelog_archive.name} 的 `## [{version}]` 段没有实际条目（只有标题/占位句）")
+        print("[ERR] 发布记录缺内容：先在 changelog 开发段写条目再重跑 prepare")
+        return 2
     print("[OK] 归档迁移前置通过\n")
 
     # P1 verify（全量单元，约 28s）与 P2 regression（场景，约 6s）并行。verify 在
@@ -256,7 +267,9 @@ def run_gate(args, ctx, runner=None) -> int:
             return rc if rc in (1, 2, 3) else 1
         print("[OK] portability 探针通过\n")
 
-    fingerprint = tree_fingerprint(ctx.exec_fn, ctx.root, runner)
+    # 用**代码指纹**（而非全树）：verify 的结论只取决于 src/scripts/ 等测试相关路径，
+    # 发布链里的文档统计同步不应让 gate 刚跑完的 verify 失效（否则 publish 必定重跑）
+    fingerprint = code_fingerprint(ctx.exec_fn, ctx.root, runner)
     write_gate_stamp(ctx.stamp_file, version, fingerprint, verify_passed, source=verify_source)
     suffix = " + portability" if getattr(args, "with_portability", False) else ""
     print(f"[OK] P2 门禁全绿（演进新鲜度 + verify + regression + 十守护 + 设计护栏{suffix}）")

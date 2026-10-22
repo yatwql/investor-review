@@ -102,6 +102,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享设�
 from _release._changelog_archive import (  # noqa: E402, F401 — _SECTION_NOTE 供测试经入口模块引用
     SECTION_NOTE as _SECTION_NOTE,
     apply_changelog_release,
+    release_section_has_entries,
     render_archive_header,
     write_archive_release,
 )
@@ -671,7 +672,7 @@ def _gate_workers() -> int:
 
 
 def _tree_fingerprint(runner=None) -> str:
-    """工作区树指纹（实现在 `_release/_gate.py`）。"""
+    """工作区全树指纹（保留：供需要「改动过任何文件」语义的调用方；发布戳用代码指纹）。"""
     return _gate.tree_fingerprint(_exec, REPO_ROOT, runner)
 
 
@@ -708,6 +709,8 @@ def cmd_gate(args: argparse.Namespace, runner=None) -> int:
         check_evolution_freshness=check_evolution_freshness,
         read_app_version=read_app_version,
         ledger_archive_paths=ledger_archive_paths,
+        changelog_archive_paths=archive_paths_for,
+        changelog_section_has_entries=release_section_has_entries,
         rf_archive_status=rf_archive_status,
         has_archive_section=has_archive_section,
         folders_file=FOLDERS_FILE,
@@ -767,7 +770,7 @@ def cmd_publish(args: argparse.Namespace, runner=None) -> int:
     else:
         print("[OK] release 提交已存在，跳过")
 
-    fingerprint = _tree_fingerprint(runner)
+    fingerprint = _code_fingerprint(runner)
     stamp = _gate_stamp_matches(release_version, fingerprint)
     if stamp:
         passed = str(stamp.get("verify_passed") or "")

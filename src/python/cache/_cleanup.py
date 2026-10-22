@@ -19,6 +19,20 @@ from ._ttl import get_ttl
 logger = logging.getLogger("invest")
 
 
+def _fmt_span(seconds: float) -> str:
+    """时长自适应单位（<60s 用 s、<60min 用 min、其余 h）。
+
+    盘中 price 类 TTL 为 30s（market_hour_ttl），统一按小时 двух位小数会印成
+    `ttl=0.0h`，配 `age=0.1h` 读起来像配置错误（实测日志复现）。
+    """
+    value = max(0.0, float(seconds))
+    if value < 60:
+        return f"{value:.1f}s"
+    if value < 3600:
+        return f"{value / 60:.1f}min"
+    return f"{value / 3600:.1f}h"
+
+
 def _process_cache_file(
     fname: str,
     dry_run: bool,
@@ -48,8 +62,20 @@ def _process_cache_file(
     if payload is None:
         return 1  # 损坏也算清理
 
+    raw_ts = payload.get("_ts")
+    try:
+        ts = float(raw_ts) if raw_ts is not None else 0.0
+    except (TypeError, ValueError):
+        ts = 0.0
+    if ts <= 0:
+        # 非缓存引擎写入的文件（无 `_ts` 包封）：不能拿 epoch 当写入时间，否则算出
+        # 「57 年陈货」每轮当过期删（实测脚本自管的性能缓存就因此白做）。
+        # 属托管边界之外，跳过 TTL 判定，只留 DEBUG 痕迹，不打 INFO 刷屏。
+        logger.debug("缓存清理跳过（无 _ts 包封，非缓存引擎托管）: %s", fname)
+        return 0
+
     now = time.time()
-    age = now - payload.get("_ts", 0)
+    age = now - ts
     if age <= ttl:
         return 0
 
@@ -58,7 +84,14 @@ def _process_cache_file(
             os.remove(fpath)
         except OSError:
             return 0
-    logger.info("缓存清理: %s %s (age=%.1fh > ttl=%.1fh)", "预览" if dry_run else "删除", fname, age / 3600, ttl / 3600)
+    # 逐文件明细降 DEBUG：单日数百行 INFO 只会把真正的告警冲走（汇总见 cleanup_expired）。
+    logger.debug(
+        "缓存清理%s %s (age=%s > ttl=%s)",
+        "预览" if dry_run else "删除",
+        fname,
+        _fmt_span(age),
+        _fmt_span(ttl),
+    )
     return 1
 
 
@@ -84,10 +117,27 @@ def cleanup_expired(dry_run: bool = False) -> int:
             return 0
 
         removed = 0
+        free_bytes = 0
         for fname in sorted(os.listdir(_CACHE_DIR)):
-            removed += _process_cache_file(fname, dry_run, prefix_type_map, exact_map)
+            fpath = os.path.join(_CACHE_DIR, fname)
+            try:
+                size = os.path.getsize(fpath)
+            except OSError:
+                size = 0
+            hit = _process_cache_file(fname, dry_run, prefix_type_map, exact_map)
+            removed += hit
+            free_bytes += size if hit else 0
 
-        logger.info("缓存清理%s: 共 %d 个文件", "预览" if dry_run else "完成", removed)
+        label = "预览" if dry_run else "完成"
+        if removed:
+            logger.info(
+                "缓存清理%s: 共 %d 个文件（释放 %.1f KB）——逐文件明细见 DEBUG",
+                label,
+                removed,
+                free_bytes / 1024,
+            )
+        else:
+            logger.info("缓存清理%s: 共 0 个文件", label)
         return removed
 
 

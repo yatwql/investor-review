@@ -4,7 +4,7 @@
   // ═══════════════════════════════════════════
   "max_retries": 2,
   "llm_max_concurrency": 3,
-  "llm_max_thinking_concurrency": 1,  // Extended Thinking 模块并发的最大请求数（信号量上限，默认 1，防止多 thinking 模块并发偶发空响应）
+  "llm_max_thinking_concurrency": 2,  // Extended Thinking 模块并发上限（默认 2：两个 thinking 模块并行；若端点偶发空响应改回 1 串行）
 
   // ═══════════════════════════════════════════
   // 模块开关 — 控制各 LLM 分析功能的启用/停用

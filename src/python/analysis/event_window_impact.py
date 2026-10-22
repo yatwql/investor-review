@@ -160,6 +160,8 @@ def compute_event_impact(
         "missing_ratio": None,
         "index_missing_ratio": None,
         "locf_filled": 0,
+        "window_after_actual": 0,
+        "window_partial": False,
     }
 
     def _fail(reason: str) -> dict[str, Any]:
@@ -184,16 +186,24 @@ def compute_event_impact(
         anchor_pos = axis.index(anchor)
     except ValueError:
         return _fail("映射交易日不在行情轴")
-    if anchor_pos - window_before < 0 or anchor_pos + window_after >= len(axis):
+    if anchor_pos - window_before < 0:
         return _fail("窗口超出行情范围")
     if anchor_pos < 1:
         return _fail("无事件日前基点")
 
-    window = axis[anchor_pos - window_before : anchor_pos + window_after + 1]
+    # 右界截断：行情轴止于当日（盘中运行是常态，新闻事件日就是当日/昨日），
+    # 若严格要求后窗满 5 个交易日，则盘中运行永远越界、事件表恒空。
+    # 按行情轴实际可用交易日计算，不足部分记入 window_partial 并在报告标注
+    # 「事件日后 N/5 日（未满窗）」——两侧都用同一段行情，超额比较的口径不变。
+    after_actual = min(window_after, len(axis) - 1 - anchor_pos)
+    if after_actual < 0:
+        return _fail("事件日后无可用交易日")
+
+    window = axis[anchor_pos - window_before : anchor_pos + after_actual + 1]
     asset_full = dict(zip(axis, _locf(axis, asset_map), strict=True))
     index_full = dict(zip(axis, _locf(axis, index_map), strict=True))
     prev_day = axis[anchor_pos - 1]
-    end_day = axis[anchor_pos + window_after]
+    end_day = axis[anchor_pos + after_actual]
 
     asset_prev, asset_end = asset_full[prev_day], asset_full[end_day]
     index_prev, index_end = index_full[prev_day], index_full[end_day]
@@ -227,6 +237,8 @@ def compute_event_impact(
             "missing_ratio": missing_ratio,
             "index_missing_ratio": round(sum(1 for day in window if day not in index_map) / len(window), 4),
             "locf_filled": missing,
+            "window_after_actual": after_actual,
+            "window_partial": after_actual < window_after,
         }
     )
     return result

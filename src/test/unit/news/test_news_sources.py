@@ -11,8 +11,10 @@
 
 from __future__ import annotations
 
+import json
 import os
 import unittest
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 from src.python.providers.news_sources import (
@@ -924,3 +926,129 @@ class TestPairSimilarityMatchesLinkDecision(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAnchorAppendAndRetention(unittest.TestCase):
+    """锚点文件：追加写不重写全文 + 压缩按保留期裁剪（体积有确定上限）。
+
+    背景：37.9 MB 的锚点文件在每次 flush 都被「读全文 → 整文件替换」，而单轮只
+    新增数十条；仅按 key 去重压不小（标题对高度唯一，实测压后仍 37.9 MB）。
+    """
+
+    pytestmark = [pytest.mark.unit, pytest.mark.unit_news]
+
+    def setUp(self) -> None:
+        import tempfile
+        from unittest.mock import patch
+
+        self._tmpdir = tempfile.mkdtemp()
+        self._anchor_path = os.path.join(self._tmpdir, "anchors.jsonl")
+        self._path_patch = patch("src.python.providers.news_dedup._ANCHOR_PATH", self._anchor_path)
+        self._path_patch.start()
+        from src.python.providers import news_dedup
+
+        news_dedup._WRITTEN_ANCHOR_KEYS = set()
+        news_dedup._ANCHOR_RECORDS = []
+        news_dedup._WRITTEN_KEYS_LOADED = False
+
+    def tearDown(self) -> None:
+        self._path_patch.stop()
+
+    def _record(self, title_a: str, title_b: str, ts: str = "") -> None:
+        from src.python.providers.news_dedup import _record_anchor
+
+        _record_anchor(
+            {
+                "source_a": "东方财富",
+                "source_b": "新浪财经",
+                "title_a": title_a,
+                "title_b": title_b,
+                "ratio": 0.312,
+                "bigram_overlap": 2,
+                "merged": False,
+                "rule": "cross_skip",
+                "ts": ts,
+            }
+        )
+
+    def test_flush_appends_without_replacing_file(self) -> None:
+        """追加写：文件 inode 不变、既有内容逐字节保留（不再整文件替换）。"""
+        from src.python.providers.news_dedup import _flush_anchors
+
+        self._record("新闻A", "新闻B")
+        _flush_anchors()
+        before_stat = os.stat(self._anchor_path)
+        before_bytes = open(self._anchor_path, "rb").read()
+
+        self._record("新闻C", "新闻D")
+        _flush_anchors()
+        after_stat = os.stat(self._anchor_path)
+
+        self.assertEqual(before_stat.st_ino, after_stat.st_ino, "追加写不应替换文件（inode 变化=整体重写）")
+        with open(self._anchor_path, "rb") as f:
+            after_bytes = f.read()
+        self.assertTrue(after_bytes.startswith(before_bytes), "既有内容必须原样保留在前")
+        self.assertGreater(len(after_bytes), len(before_bytes))
+
+    def test_compaction_drops_records_beyond_retention(self) -> None:
+        """压缩：超出保留期的记录被裁掉，保留期内的保留（体积才有上限）。"""
+        from unittest.mock import patch
+
+        from src.python.providers import news_dedup
+
+        old_ts = "2020-01-02 10:00"
+        recent_ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+        rows = [
+            news_dedup._make_anchor(
+                {"ctime": old_ts, "title": "旧新闻一", "_source": "A"},
+                {"ctime": old_ts, "title": "旧新闻二", "_source": "B"},
+                0.3,
+                2,
+                False,
+                "cross_skip",
+            ),
+            news_dedup._make_anchor(
+                {"ctime": recent_ts, "title": "新新闻一", "_source": "A"},
+                {"ctime": recent_ts, "title": "新新闻二", "_source": "B"},
+                0.3,
+                2,
+                False,
+                "cross_skip",
+            ),
+        ]
+        with open(self._anchor_path, "w", encoding="utf-8") as f:
+            for row in rows:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+        with patch.object(news_dedup, "_ANCHOR_SIZE_WARN_BYTES", 1):
+            news_dedup._auto_compact_anchor_file(os.path.getsize(self._anchor_path))
+
+        remaining = open(self._anchor_path, encoding="utf-8").read()
+        self.assertIn("新新闻一", remaining)
+        self.assertNotIn("旧新闻一", remaining, "超保留期记录应被裁掉")
+
+    def test_retention_zero_keeps_all(self) -> None:
+        """保留期设为 0 → 退回纯去重（不按时间裁剪），由运维显式选择。"""
+        from unittest.mock import patch
+
+        from src.python.providers import news_dedup
+
+        old_ts = "2020-01-02 10:00"
+        row = news_dedup._make_anchor(
+            {"ctime": old_ts, "title": "很老的新闻甲", "_source": "A"},
+            {"ctime": old_ts, "title": "很老的新闻乙", "_source": "B"},
+            0.3,
+            2,
+            False,
+            "cross_skip",
+        )
+        with open(self._anchor_path, "w", encoding="utf-8") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+        with (
+            patch.object(news_dedup, "_ANCHOR_SIZE_WARN_BYTES", 1),
+            patch.dict(os.environ, {news_dedup._ANCHOR_RETENTION_ENV: "0"}),
+        ):
+            news_dedup._auto_compact_anchor_file(os.path.getsize(self._anchor_path))
+
+        self.assertIn("很老的新闻甲", open(self._anchor_path, encoding="utf-8").read())

@@ -52,6 +52,8 @@ _MN = get_llm_module_name
 # news_correlation 安全直调入口在 `_llm_news_correlation.py` 中实现，此处 re-export。
 from src.python.llm._llm_dispatch import (  # noqa: F401  # 并发分发子模块（消费方在本门面）
     _dispatch_llm_workers,
+    reset_thinking_wait_total,
+    thinking_wait_total_seconds,
 )
 from src.python.llm._llm_news_correlation import (  # noqa: F401
     run_news_correlation_safe,

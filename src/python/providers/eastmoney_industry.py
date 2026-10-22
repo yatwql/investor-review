@@ -19,6 +19,8 @@ import logging
 import threading
 from typing import Any
 
+import httpx
+
 
 from src.python.core.code_utils import get_push2_secid
 from src.python.core.http_client import make_http_client
@@ -88,6 +90,23 @@ def _secid(code: str) -> str:
     return get_push2_secid(code)
 
 
+#: 服务端「主动断开」的特征（httpx 把 httpcore 的断连包装成不同异常类型，
+#: 类型判定之外再按消息兜底，避免底层库升级后静默退回长重试）
+_ABRUPT_DISCONNECT_HINTS = ("server disconnected", "remote end closed", "connection aborted")
+
+
+def _is_abrupt_disconnect(exc: BaseException) -> bool:
+    """是否为对端主动断开（值得重试吗：不值得——重试只会白等退避再断一次）。
+
+    实测东财 push2 在部分代码上稳定断连、而下一链路 `eastmoney_industry_rest` 秒回，
+    此时**立即回落**比睡 0.6s 再撞一次更快也更省日志。
+    """
+    if isinstance(exc, httpx.RemoteProtocolError):
+        return True
+    message = str(exc).lower()
+    return any(hint in message for hint in _ABRUPT_DISCONNECT_HINTS)
+
+
 def make_push2_request(code: str, retries: int = _MAX_RETRIES) -> dict | None:
     """执行 push2 行业/概念 API 请求，返回 data 内层字典或 None。
 
@@ -139,6 +158,7 @@ def make_push2_request(code: str, retries: int = _MAX_RETRIES) -> dict | None:
                 factor=2.0,
                 jitter=0.3,
             ),
+            retry_on=lambda exc: not _is_abrupt_disconnect(exc),
             on_retry=_on_transient_retry,
         )
     except TRANSIENT_EXCEPTIONS as e:

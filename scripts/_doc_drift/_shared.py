@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import time
 import re
 import subprocess
 import sys
@@ -233,7 +234,11 @@ def _write_snapshot_state(state: dict) -> None:
     tmp = path.with_name(path.name + ".tmp")
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+        # `_ts`：缓存引擎的写入时间包封（缺它会被当 epoch 写入→算出几十年陈龄→每轮删）
+        tmp.write_text(
+            json.dumps({**state, "_ts": time.time()}, ensure_ascii=False),
+            encoding="utf-8",
+        )
         os.replace(tmp, path)
     except OSError:
         try:

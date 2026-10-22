@@ -35,6 +35,9 @@ _HEADERS = {
     "Referer": "https://fund.eastmoney.com/",
 }
 _TIMEOUT = 15.0
+#: 档案页（回退链路）超时：实测 SSL 握手挂起单请求 17s，而它只是主页解析失败后的
+#: 尽力回退——长挂起会把单个代码的解析拖成十几秒（整批随之延长），故单独收紧。
+_ARCHIVE_TIMEOUT = 8.0
 
 # ── HTML 解析辅助函数 ─────────────────────────────────────────
 
@@ -236,7 +239,7 @@ def _parse_manager_from_archive_page(code: str) -> dict[str, Any] | None:
     url = f"https://fundf10.eastmoney.com/jjjl_{code.strip()}.html"
     logger.debug("请求基金经理档案页(回退): %s", url)
     try:
-        with make_http_client(timeout=_TIMEOUT, follow_redirects=True) as client:
+        with make_http_client(timeout=_ARCHIVE_TIMEOUT, follow_redirects=True) as client:
             resp = client.get(url, headers=_HEADERS)
             resp.encoding = "utf-8"
             html = resp.text

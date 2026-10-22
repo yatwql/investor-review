@@ -316,6 +316,40 @@ def _auto_reset_market_hours_memo():
 
 
 @pytest.fixture(autouse=True)
+def _auto_reset_trading_calendar_memo():
+    """自动复位交易日历的进程内 memo（与 market_hours memo 同习语）。
+
+    不复位时，前一个用例（常 monkeypatch cache.get / 临时缓存目录）留在 memo 里的
+    日历会让后一个用例绕过它自己的取数路径，用例结果随执行顺序漂移。
+    """
+    from src.python.core import trading_calendar
+
+    trading_calendar._reset_calendar_memo()
+    yield
+    trading_calendar._reset_calendar_memo()
+
+
+@pytest.fixture(autouse=True)
+def _auto_reset_thinking_wait_total():
+    """自动复位 thinking 串行等待累计（模块级累加器，跨用例不得串味）。"""
+    from src.python.llm._llm_dispatch import reset_thinking_wait_total
+
+    reset_thinking_wait_total()
+    yield
+    reset_thinking_wait_total()
+
+
+@pytest.fixture(autouse=True)
+def _auto_reset_fact_fix_counts():
+    """自动复位事实校验自动修正计数（模块级累加器，跨用例不得串味）。"""
+    from src.python.llm.fact_checker import reset_auto_correction_counts
+
+    reset_auto_correction_counts()
+    yield
+    reset_auto_correction_counts()
+
+
+@pytest.fixture(autouse=True)
 def _auto_reset_llm_failure_state():
     """自动复位 LLM 调用失败的模块级/线程局部状态，防止测试间污染。
 

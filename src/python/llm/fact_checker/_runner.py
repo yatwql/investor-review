@@ -14,6 +14,7 @@ from src.python.llm.fact_checker._corrections import (
     apply_numerical_corrections,
     detect_code_corrections,
 )
+from src.python.llm.fact_checker._corrections import note_auto_correction as _note_auto_correction
 from src.python.llm.fact_checker._numerical import check_numerical_consistency
 from src.python.llm.fact_checker._ranking import check_ranking_correctness
 from src.python.llm.fact_checker._symbols import check_symbol_existence
@@ -174,6 +175,8 @@ def run_fact_check(
             _auto_part,
             _corr_detail,
         )
+        # 修正次数跨模块累计（报告层汇入 perf_history.counters，供跨期趋势对拍）
+        _note_auto_correction(module_label, _num_n, _code_n)
         correction_lines = f'\n<span style="color:#888;font-size:11px">已修正明细: {_corr_detail}</span>'
 
     if total_checks == 0:

@@ -159,7 +159,7 @@ class TestGate:
         assert rc == 1
         assert not rel.GATE_STAMP_FILE.exists()
 
-    def test_gate_writes_stamp_with_tree_fingerprint(self, rel, monkeypatch, tmp_path):
+    def test_gate_writes_stamp_with_code_fingerprint(self, rel, monkeypatch, tmp_path):
         """gate 全绿后写「版本 + 树指纹 + verify 项数」戳，供 publish 复用。"""
         stamp = tmp_path / "stamp.json"
         monkeypatch.setattr(rel, "GATE_STAMP_FILE", stamp)
@@ -168,7 +168,7 @@ class TestGate:
         data = json.loads(stamp.read_text(encoding="utf-8"))
         assert data["version"] == "0.13.12"
         assert data["verify_passed"] == "9000"
-        assert data["fingerprint"] == rel._tree_fingerprint(runner)
+        assert data["fingerprint"] == rel._code_fingerprint(runner)
 
     @staticmethod
     def _write_bench_stamp(rel, path, runner, *, version="0.13.12", covers_unit=True, fingerprint=None):
@@ -279,11 +279,11 @@ class TestPublish:
         assert "8621 项已全绿" in merge_msg
         assert not any("push" in c for c in runner.calls)  # 默认不推送
 
-    def test_reuses_gate_stamp_when_tree_fingerprint_matches(self, rel, tmp_path):
+    def test_reuses_gate_stamp_when_code_fingerprint_matches(self, rel, tmp_path):
         """gate 已跑 verify 且树指纹一致 → publish 跳过 verify（不重复 28s）。"""
         fx = self._fixture(rel, tmp_path, "0.12.6")
         runner = self._dirty_runner()
-        fingerprint = rel._tree_fingerprint(runner)
+        fingerprint = rel._code_fingerprint(runner)
         fx.GATE_STAMP_FILE.parent.mkdir(parents=True, exist_ok=True)
         fx.GATE_STAMP_FILE.write_text(
             json.dumps({"version": "0.12.6", "fingerprint": fingerprint, "verify_passed": "9000"}),
@@ -294,6 +294,17 @@ class TestPublish:
         assert not any(any("test-runner.py" in p for p in c) for c in runner.calls)
         merge = next(c for c in runner.calls if len(c) > 2 and c[1] == "merge")
         assert "9000 项已全绿" in merge[merge.index("-m") + 1]
+
+    def test_code_fingerprint_ignores_docs_changes(self, rel):
+        """发布戳用代码指纹：文档统计同步不会让 gate 的 verify 失效（全树指纹会）。"""
+        runner = FakeRunner(
+            responses=[
+                (["git", "status", "--porcelain", "--", "src"], (0, "", "")),
+                (["git", "diff", "HEAD", "--", "src"], (0, "", "")),
+                (["git", "status", "--porcelain"], (0, " M docs/x.md\n", "")),
+            ]
+        )
+        assert rel._code_fingerprint(runner) != rel._tree_fingerprint(runner)
 
     def test_runs_verify_when_stamp_fingerprint_mismatches(self, rel, tmp_path):
         """指纹不一致（gate 后改过代码）→ 不盲信戳，实跑 verify。"""
@@ -413,6 +424,11 @@ class TestGateArchivePrecondition:
         monkeypatch.setattr(rel, "read_app_version", lambda _t: "0.13.12")
         monkeypatch.setattr(rel, "ledger_archive_paths", lambda _v: (archived, tmp_path / "archived_plan.md"))
         monkeypatch.setattr(rel, "has_archive_section", lambda *_a, **_k: True)
+        # changelog 归档段非空断言同样沙箱化（否则用例结论取决于仓库真实归档内容）
+        changelog_archive = tmp_path / "archived_changelog.x.md"
+        changelog_archive.write_text("## [0.13.12] - 2026-10-21\n\n- **条目**：内容\n", encoding="utf-8")
+        monkeypatch.setattr(rel, "archive_paths_for", lambda _v: (changelog_archive, changelog_archive.name))
+        monkeypatch.setattr(rel, "release_section_has_entries", lambda *_a, **_k: True)
         return archived
 
     def test_pending_rows_block_gate(self, rel, monkeypatch):
@@ -440,6 +456,27 @@ class TestGateArchivePrecondition:
         monkeypatch.setattr(rel, "rf_archive_status", lambda *_a, **_k: ("absent", 0))
         assert rel.cmd_gate(ns(), runner=FakeRunner()) == 0
         assert "无「开发期已修复」节" in capsys.readouterr().out
+
+    def test_empty_changelog_section_blocks_gate(self, rel, monkeypatch, capsys):
+        """归档里的发布段只有标题/占位句 → 发布记录缺内容，前置中止。
+
+        判定口径：prepare 已拦「占位句原样归档」，gate 侧兜旁路/人工归档写出的空段——
+        归档一旦落盘，正文缺失就再也补不回来。
+        """
+        monkeypatch.setattr(rel, "rf_archive_status", lambda *_a, **_k: ("archived", 0))
+        monkeypatch.setattr(rel, "release_section_has_entries", lambda *_a, **_k: False)
+        runner = FakeRunner()
+        assert rel.cmd_gate(ns(), runner=runner) == 2
+        assert runner.calls == []  # 未跑任何子进程（不浪费门禁墙钟）
+        assert "没有实际条目" in capsys.readouterr().out
+
+    def test_missing_changelog_archive_blocks_gate(self, rel, monkeypatch, tmp_path):
+        """缺 changelog 归档文件 → 前置中止（而不是跑到 regression 之后才失败）。"""
+        monkeypatch.setattr(rel, "rf_archive_status", lambda *_a, **_k: ("archived", 0))
+        monkeypatch.setattr(rel, "archive_paths_for", lambda _v: (tmp_path / "nope.md", "nope.md"))
+        runner = FakeRunner()
+        assert rel.cmd_gate(ns(), runner=runner) == 2
+        assert runner.calls == []
 
 
 # ─────────────────────────── refresh / evolution 命令 ───────────────────────────

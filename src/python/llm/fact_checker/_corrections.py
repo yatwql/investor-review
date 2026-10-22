@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import threading
+
 import re
 
 from src.python.llm.fact_checker._constants import (
@@ -21,6 +23,48 @@ from src.python.llm.fact_checker._utils import (
     _extract_holding_map,
     _strip_html,
 )
+
+
+# ── 自动修正计数（跨模块累计，由报告层汇入 perf_history.counters）──
+# 修正次数是「模型对指标口径理解偏差」的直接信号，单次只进日志便无法跨期对拍
+# （提示词一改就不知道有没有变好）。这里只做线程安全累加，不依赖 perf 模块。
+_AUTO_CORRECTION_LOCK = threading.Lock()
+_AUTO_CORRECTION_COUNTS: dict[str, int] = {}
+
+
+def note_auto_correction(module_label: str, numeric: int, code: int) -> None:
+    """记一次自动修正（按模块累计数值/代码两类）。
+
+    Args:
+        module_label: 模块展示名（如「智囊团深度复盘」），未知时用 "LLM"。
+        numeric: 本次修正的数值处数。
+        code: 本次修正的品种代码处数。
+    """
+    total = int(numeric) + int(code)
+    if total <= 0:
+        return
+    label = (module_label or "LLM").strip() or "LLM"
+    with _AUTO_CORRECTION_LOCK:
+        _AUTO_CORRECTION_COUNTS[f"fact_fix:{label}"] = _AUTO_CORRECTION_COUNTS.get(f"fact_fix:{label}", 0) + total
+        _AUTO_CORRECTION_COUNTS["fact_fix_total"] = _AUTO_CORRECTION_COUNTS.get("fact_fix_total", 0) + total
+        if numeric:
+            _AUTO_CORRECTION_COUNTS["fact_fix_numeric"] = _AUTO_CORRECTION_COUNTS.get("fact_fix_numeric", 0) + int(
+                numeric
+            )
+        if code:
+            _AUTO_CORRECTION_COUNTS["fact_fix_code"] = _AUTO_CORRECTION_COUNTS.get("fact_fix_code", 0) + int(code)
+
+
+def auto_correction_counts() -> dict[str, int]:
+    """当前累计的自动修正计数快照（副本）。"""
+    with _AUTO_CORRECTION_LOCK:
+        return dict(_AUTO_CORRECTION_COUNTS)
+
+
+def reset_auto_correction_counts() -> None:
+    """清空累计计数（每轮报告 LLM 阶段开始前调用，测试隔离同源）。"""
+    with _AUTO_CORRECTION_LOCK:
+        _AUTO_CORRECTION_COUNTS.clear()
 
 
 def apply_numerical_corrections(

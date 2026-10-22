@@ -543,6 +543,45 @@ class TestLatestPeriodAndSectionResolution:
         assert calls["n"] == 1
 
 
+class TestStaleSectionsCacheRecovery:
+    """章节清单缓存命中但正文全取不到 → 失效清单缓存（下次重取，恢复机会买回）。
+
+    判定口径：清单是 14 天缓存，命中后一直复用同一批章节名；源侧重新解析过文档
+    （章节改名/补齐）时，旧名字会持续 404，每次运行都在死名字上做无效探测且永不恢复。
+    """
+
+    def _wire(self, monkeypatch, sections, doc_result):
+        cleared: list[str] = []
+        monkeypatch.setattr(fr, "_fetch_sections", lambda doc_id, source=None: sections)
+        monkeypatch.setattr(fr, "_fetch_document", lambda doc_id, section, **kw: doc_result)
+        monkeypatch.setattr(fr, "cache_clear", lambda key: cleared.append(key))
+        return cleared
+
+    def test_all_sections_missing_invalidates_list_cache(self, monkeypatch):
+        cleared = self._wire(monkeypatch, ["第三节管理层讨论与分析"], None)
+        record, contents = fr._collect_doc_sections(810006, ["管理层讨论与分析"])
+        assert record is None and contents == []
+        assert cleared == [f"{fr.SECTIONS_PREFIX}810006"], "清单不可信时必须失效该文档的清单缓存"
+
+    def test_successful_fetch_keeps_list_cache(self, monkeypatch):
+        """取到正文时不得清缓存（每篇都清会让清单缓存形同虚设，多付一次 /sections 探测）。"""
+        cleared = self._wire(
+            monkeypatch,
+            ["第三节管理层讨论与分析"],
+            {"doc_id": 7, "content": "正文", "report_period": "2025-12-31", "doc_type": "annual"},
+        )
+        record, contents = fr._collect_doc_sections(7, ["管理层讨论与分析"])
+        assert record is not None and contents == ["正文"]
+        assert cleared == []
+
+    def test_no_list_available_skips_invalidation(self, monkeypatch):
+        """清单本就不存在（回退偏好名直取仍全空）→ 没有清单可清，不做多余动作。"""
+        cleared = self._wire(monkeypatch, None, None)
+        record, contents = fr._collect_doc_sections(7, ["管理层讨论与分析"])
+        assert record is None and contents == []
+        assert cleared == []
+
+
 class TestIndexSourceStatus:
     """索引来源归属与「两源皆失败」的降级登记（report_datasink_index 状态）。"""
 

@@ -183,3 +183,49 @@ def test_weekend_event_end_to_end():
 def test_assess_direction_match_table(direction, polarity, expected):
     """方向 × 极性 → 比对结论全表遍历。"""
     assert assess_direction_match(direction, polarity) == expected
+
+
+# ── 右界截断：盘中运行（行情轴止于当日）不再整条降级 ──────────────
+
+
+def test_incomplete_right_window_truncates_and_marks_partial():
+    """行情轴止于事件日（盘中运行常态）→ 按可用交易日截断出行，标注未满窗。
+
+    判定口径：事件日就是当日时，严格要求后窗满 5 日必然越界（实测单次运行
+    可出行 0 / 降级 14 全部因此），事件表恒空——故按可用交易日截断并标注。
+    """
+    axis = _dates("2026-08-24", "2026-09-15")
+    asset = _bars(axis, 100.0, {"2026-09-15": 103.0})
+    index = _bars(axis, 3000.0, {"2026-09-15": 3030.0})
+    res = compute_event_impact("2026-09-15", asset, index, text_polarity="利好")
+    assert res["available"] is True
+    assert res["window_partial"] is True
+    assert res["window_after_actual"] == 0
+    assert res["end_date"] == "2026-09-15"
+    # 手算：103/100−1 = 0.03；3030/3000−1 = 0.01；超额 0.02
+    assert res["asset_return"] == pytest.approx(0.03)
+    assert res["index_return"] == pytest.approx(0.01)
+    assert res["excess_return"] == pytest.approx(0.02)
+    assert res["direction"] == "上"
+    assert res["match"] == "一致"
+
+
+def test_partial_right_window_uses_available_span_only():
+    """轴仅多出 2 个交易日 → 窗口 5+1+2 = 8 天，end_date 落在第 2 日，仍标未满窗。"""
+    axis = _dates("2026-08-24", "2026-09-17")
+    asset = _bars(axis, 100.0, {"2026-09-17": 120.0})
+    index = _bars(axis, 3000.0, {"2026-09-17": 3300.0})
+    res = compute_event_impact("2026-09-15", asset, index, text_polarity="利好")
+    assert res["available"] is True
+    assert res["window_after_actual"] == 2
+    assert res["window_partial"] is True
+    assert res["end_date"] == "2026-09-17"
+    assert len(res["window_dates"]) == 8
+    assert res["asset_return"] == pytest.approx(0.2)
+
+
+def test_complete_window_not_marked_partial():
+    """完整窗口不误标未满窗（全量旁证，防截断逻辑恒判真）。"""
+    res = compute_event_impact("2026-09-15", _ASSET, _INDEX, text_polarity="利好")
+    assert res["window_partial"] is False
+    assert res["window_after_actual"] == 5

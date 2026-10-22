@@ -9,6 +9,7 @@ Endpoint: money.finance.sina.com.cn/getKLineData
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
@@ -20,6 +21,7 @@ from src.python.core.code_utils import (
     is_exchange_fund_code,
 )
 from src.python.core.num_utils import safe_num
+from src.python.providers._utils import looks_like_block_page
 
 logger = logging.getLogger("invest")
 
@@ -32,6 +34,17 @@ def _add_prefix(code: str) -> str:
     if len(code) != 6:
         return code
     return get_exchange_prefix(code) + code
+
+
+def _record_block_failure(full_code: str, body: str) -> None:
+    """风控/限流页按「源侧失败」记账（累计到 DataSourceRegistry，连续阈值后熔断冷却）。"""
+    from src.python.core.provider_registry import get_registry
+
+    preview = (body or "").strip().replace("\n", " ")[:60]
+    logger.warning(
+        "Sina K 线 %s 返回非 JSON（疑似风控/限流页）→ 记源失败并交下一链路：%s", full_code, preview or "空响应"
+    )
+    get_registry().record_failure("sina", f"kline:block_page:{full_code}")
 
 
 def fetch_kline(code: str, days: int = 30, start_from: str | None = None) -> list[dict]:  # noqa: ARG001 — 签名契约：chain 层经 getattr 无条件传 start_from=
@@ -76,7 +89,15 @@ def fetch_kline(code: str, days: int = 30, start_from: str | None = None) -> lis
         with _sina_mod.make_http_client(timeout=_KLINE_TIMEOUT) as client:
             resp = client.get(url, params=params, headers={"Referer": "https://finance.sina.com.cn"})
             resp.encoding = "utf-8"
-            data = resp.json()
+            text = resp.text
+        if not isinstance(text, str):
+            data = resp.json()  # 无文本体（流式/替身对象）：走原解析路径
+        elif looks_like_block_page(text):
+            # 200 + HTML/纯文本（风控页/限流提示）：不是瞬时抖动，记源失败并交下一链路
+            _record_block_failure(full_code, text)
+            return []
+        else:
+            data = json.loads(text)
     except (httpx.TimeoutException, httpx.RequestError, ValueError) as e:
         logger.warning("Sina K 线获取失败 %s: %s", full_code, e)
         return []

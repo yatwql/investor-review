@@ -594,16 +594,23 @@ def _check_perf_ledger_health() -> dict[str, Any]:
                 continue
         if len(records) < 3:
             return _item(GROUP_LOG_CACHE, "运行台账", True, f"仅 {len(records)} 条记录（样本不足，不作判断）")
-        warnings = sorted((r.get("counters") or {}).get("warnings", 0) for r in records)
+        counters = [r.get("counters") or {} for r in records]
+        warnings = sorted(int(c.get("warnings") or 0) for c in counters)
         median = warnings[len(warnings) // 2]
         errors = sum(len(r.get("errors") or []) for r in records)
         interrupted = sum(1 for r in records if r.get("status") == "interrupted")
+        # 事实校验自动修正数：模型对指标口径理解偏差的直接信号（非故障，但要看趋势）
+        fixes = sorted(int(c.get("fact_fix_total") or 0) for c in counters)
+        fix_median = fixes[len(fixes) // 2]
         ok = median <= 5 and errors == 0
+        message = f"近 {len(records)} 次运行：告警中位 {median}、累计错误 {errors}、中断 {interrupted}"
+        if fix_median:
+            message += f"；事实校验自动修正中位 {fix_median} 处（口径偏差信号，见 perf_history counters.fact_fix_*）"
         return _item(
             GROUP_LOG_CACHE,
             "运行台账",
             ok,
-            f"近 {len(records)} 次运行：告警中位 {median}、累计错误 {errors}、中断 {interrupted}",
+            message,
             hint=""
             if ok
             else "告警/错误偏高：先看 logs/app.log 对应时段与「数据源」组；预期缺失已降为 INFO，WARNING 应只剩真实降级",

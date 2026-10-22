@@ -523,3 +523,53 @@ class TestIndustryExtendedFields(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ── 断连快失败 + 档案页超时（数据准备硬等待回归） ──────────────
+
+
+class TestAbruptDisconnectFastFail:
+    """回归：服务端「主动断开」不再重试，直接回落下一链路。
+
+    实测单个代码断连＝失败 0.1s + 退避 0.6s + 再失败 ≈ 0.9s；一次运行 11 个代码
+    稳定断连，而 `eastmoney_industry_rest` 秒回——重试纯属白等。
+    """
+
+    def test_abrupt_disconnect_classified(self):
+        import httpx
+        from src.python.providers.eastmoney_industry import _is_abrupt_disconnect
+
+        assert _is_abrupt_disconnect(httpx.RemoteProtocolError("Server disconnected without sending a response."))
+        assert _is_abrupt_disconnect(httpx.ConnectError("Server disconnected"))
+        assert _is_abrupt_disconnect(TimeoutError("Remote end closed connection without response"))
+        # 超时不是「主动断开」：仍值得重试（多为瞬时拥塞）
+        assert not _is_abrupt_disconnect(httpx.ReadTimeout("read timed out"))
+        assert not _is_abrupt_disconnect(httpx.ConnectError("connection refused"))
+
+    @patch("src.python.core.http_client.httpx.Client")
+    def test_disconnect_not_retried(self, mock_client_cls):
+        """断连时 client.get 只调用一次（retries=1 也不重试），且仍回落 None。"""
+        import httpx
+        from src.python.providers.eastmoney_industry import make_push2_request
+
+        calls = {"n": 0}
+
+        class Socket:
+            def __init__(self, *a, **k):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a, **k):
+                pass
+
+            def get(self, *a, **k):
+                calls["n"] += 1
+                raise httpx.RemoteProtocolError("Server disconnected without sending a response.")
+
+        mock_client_cls.side_effect = Socket
+        result = make_push2_request("600900", retries=1)
+
+        assert result is None
+        assert calls["n"] == 1, f"断连不应重试（实际请求 {calls['n']} 次）"

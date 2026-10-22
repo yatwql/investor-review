@@ -6,6 +6,7 @@ Endpoint: qt.gtimg.cn
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
@@ -19,6 +20,7 @@ from src.python.core.code_utils import (
 )
 from src.python.core.http_client import make_http_client
 from src.python.core.num_utils import safe_num
+from src.python.providers._utils import looks_like_block_page
 from src.python.core.retry import (
     STRATEGY_EXPONENTIAL,
     STRATEGY_FIXED,
@@ -42,6 +44,29 @@ _KLINE_TIMEOUT = 30.0  # K 线超时（需等待更多数据）
 _KLINE_RETRY_POLICY = RetryPolicy(attempts=3, strategy=STRATEGY_EXPONENTIAL, base_backoff=0.5, factor=2.0, jitter=0.2)
 
 
+class _NonJsonBody(ValueError):
+    """K 线接口返回了非 JSON 载荷（通常是风控页/限流提示）。"""
+
+    def __init__(self, body: str) -> None:
+        super().__init__(f"non-json body ({len(body or '')} chars)")
+        self.body = body or ""
+
+
+def _record_block_failure(source: str, domain: str, code: str, body: str) -> None:
+    """风控页按「源侧失败」记账（不被 ``ValueError`` 吞成静默空结果）。
+
+    与 ``chain`` 的传输级失败同一条路：累计到 ``DataSourceRegistry``，连续阈值后
+    熔断冷却，后续请求直接跳过该源，避免每个代码都撞一次风控页。
+    """
+    from src.python.core.provider_registry import get_registry
+
+    preview = (body or "").strip().replace("\n", " ")[:60]
+    logger.warning(
+        "Tencent K 线 %s 返回非 JSON（疑似风控/限流页）→ 记源失败并交下一链路：%s", code, preview or "空响应"
+    )
+    get_registry().record_failure(source, f"{domain}:block_page:{code}")
+
+
 def _fetch_kline_json(full_code: str, days: int, start_from: str | None) -> dict | None:
     """带传输级退避重试的 K 线 JSON 拉取（股票/指数共用）。
 
@@ -55,7 +80,13 @@ def _fetch_kline_json(full_code: str, days: int, start_from: str | None) -> dict
         with make_http_client(timeout=_KLINE_TIMEOUT) as client:
             resp = client.get(url, params=params)
             resp.encoding = "utf-8"
-            return resp.json()
+            text = resp.text
+        if not isinstance(text, str):
+            return resp.json()  # 无文本体（流式/替身对象）：走原解析路径
+        if looks_like_block_page(text):
+            # 200 + HTML/纯文本（风控页/限流提示）：不是瞬时抖动，重试只会再撞一次
+            raise _NonJsonBody(text)
+        return json.loads(text)
 
     def _on_transient_retry(failed_attempt: int, delay: float, exc: BaseException | None) -> None:
         logger.warning(
@@ -77,6 +108,10 @@ def _fetch_kline_json(full_code: str, days: int, start_from: str | None) -> dict
         )
     except TRANSIENT_EXCEPTIONS as e:
         logger.warning("Tencent K 线获取失败 %s（重试耗尽）: %s", full_code, e)
+        return None
+    except _NonJsonBody as e:
+        # 风控/限流页：记该源失败（连续 N 次后熔断冷却，后续代码直接跳过）并交下一链路
+        _record_block_failure("tencent", "kline", full_code, e.body)
         return None
     except ValueError as e:  # JSON 解析失败（非瞬时）——不重试
         logger.warning("Tencent K 线响应解析失败 %s: %s", full_code, e)

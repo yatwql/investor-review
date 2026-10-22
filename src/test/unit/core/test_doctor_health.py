@@ -102,6 +102,24 @@ class TestPerfLedger:
         assert "样本不足" in item["message"]
 
 
+class TestPerfLedgerFactFix:
+    """事实校验自动修正中位可见：计数进得了 perf_history，也要看得见。"""
+
+    def test_fact_fix_median_surfaced(self, tmp_path):
+        rows = [
+            {"status": "completed", "counters": {"warnings": 1, "fact_fix_total": n}, "errors": []} for n in (2, 4, 9)
+        ]
+        (tmp_path / "perf_history.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        item = doctor._check_perf_ledger_health()
+        assert "事实校验自动修正中位 4 处" in item["message"]
+
+    def test_no_fact_fix_keeps_message_short(self, tmp_path):
+        rows = [{"status": "completed", "counters": {"warnings": 1}, "errors": []} for _ in range(5)]
+        (tmp_path / "perf_history.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        item = doctor._check_perf_ledger_health()
+        assert "事实校验自动修正" not in item["message"]
+
+
 class TestAnchorPathSource:
     """doctor 与采集侧必须指向同一个锚点文件（曾误指 data/cache 下的陈旧副本）。"""
 

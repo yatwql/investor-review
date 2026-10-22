@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -241,3 +242,38 @@ class TestProperNounVetoSource:
         assert "非泛词" in out
         for word in tool._GENERIC_TOKENS:
             assert word in out
+
+
+class TestCompactRetention:
+    """`--compact` 的保留期与生产读侧自动压缩同口径（仅按键去重压不动，时间裁剪才是上限）。"""
+
+    def test_expired_rows_dropped(self, tmp_path, tool):
+        old = _record("旧新闻A", "旧新闻B", 0.40, 2, "cross_skip")
+        old["ts"] = "2020-01-02 10:00"
+        fresh = _record("新新闻A", "新新闻B", 0.40, 2, "cross_skip")
+        fresh["ts"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+        path = _write(tmp_path, [old, fresh])
+
+        result = tool.compact_anchors(path, retention_days=120)
+
+        assert result["expired"] == 1
+        assert result["after_lines"] == 1
+        text = Path(path).read_text(encoding="utf-8")
+        assert "新新闻A" in text and "旧新闻A" not in text
+
+    def test_zero_retention_keeps_all_and_dedups_only(self, tmp_path, tool):
+        old = _record("旧新闻A", "旧新闻B", 0.40, 2, "cross_skip")
+        old["ts"] = "2020-01-02 10:00"
+        path = _write(tmp_path, [old, dict(old, ratio=0.41)])
+
+        result = tool.compact_anchors(path, retention_days=0)
+
+        assert result["expired"] == 0
+        assert result["after_lines"] == 1  # 仅按键去重
+        assert result["retention_days"] == 0
+
+    def test_missing_ts_rows_are_kept(self, tmp_path, tool):
+        """`ts` 缺失视为无法判定 → 保留（宁可留一条无用行，也不因格式演进静默丢历史）。"""
+        path = _write(tmp_path, [_record("无时间戳A", "无时间戳B", 0.4, 2, "cross_skip")])
+        result = tool.compact_anchors(path, retention_days=1)
+        assert result["after_lines"] == 1 and result["expired"] == 0

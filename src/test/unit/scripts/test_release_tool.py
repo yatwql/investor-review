@@ -119,6 +119,25 @@ class TestChangelogRelease:
         out, _ = rel.apply_changelog_release(text, "0.12.6", "2026-10-07")
         assert "v0.12.1 ~ v0.12.6（2026-10-07）" in out
 
+    def test_placeholder_only_section_rejected(self, rel):
+        """开发段只剩占位句时发布必须中止。
+
+        判定口径：占位句不是内容——原样归档会得到「只有标题、没有正文」的发布段，
+        而归档一旦落盘即无下游断言能发现正文缺失。
+        """
+        placeholder_only = _sample_changelog().replace("- **条目一**：内容甲 | rf-1\n- **条目二**：内容乙\n\n", "")
+        with pytest.raises(rel.ReleaseError, match="没有实际条目"):
+            rel.apply_changelog_release(placeholder_only, "0.12.6", "2026-10-08")
+
+    def test_classified_heading_counts_as_entry(self, rel):
+        """分类标题 + 条目（Keep a Changelog 形态）视为有内容，不误拦。"""
+        text = _sample_changelog().replace(
+            "- **条目一**：内容甲 | rf-1\n- **条目二**：内容乙\n",
+            "### Changed\n\n- **条目一**：内容甲\n",
+        )
+        _, body = rel.apply_changelog_release(text, "0.12.6", "2026-10-08")
+        assert "### Changed" in body and "内容甲" in body
+
     def test_version_mismatch_rejected(self, rel):
         with pytest.raises(rel.ReleaseError, match="不一致"):
             rel.apply_changelog_release(_sample_changelog(), "0.12.7", "2026-10-08")
@@ -668,3 +687,26 @@ class TestChangelogErrorMessagesCarryFormat:
         assert "期望：- [`archived_changelog.X.Y.x.md`]" in msg
         assert "vX.Y.Z（YYYY-MM-DD）" in msg
         assert "archive-init" in msg
+
+
+class TestReleasedSectionEntries:
+    """归档发布段非空判据（gate 侧兜底）：分类标题或条目行才算内容。"""
+
+    def test_section_with_entries_passes(self, rel):
+        text = (
+            "## [0.13.11] - 2026-10-20\n\n### Fixed\n\n- **条目**：内容\n\n"
+            "## [0.13.12] - 2026-10-21\n\n- **目标条目**：内容\n"
+        )
+        assert rel.release_section_has_entries(text, "0.13.12") is True
+
+    def test_title_only_section_rejected(self, rel):
+        text = "## [0.13.12] - 2026-10-21\n\n## [0.13.11] - 2026-10-20\n\n- **旧条目**：内容\n"
+        assert rel.release_section_has_entries(text, "0.13.12") is False
+
+    def test_placeholder_sentence_rejected(self, rel):
+        text = "## [0.13.12] - 2026-10-21\n\n（本次发布内容见下方归档索引）\n"
+        assert rel.release_section_has_entries(text, "0.13.12") is False
+
+    def test_absent_version_rejected(self, rel):
+        text = "## [0.13.11] - 2026-10-20\n\n- **条目**：内容\n"
+        assert rel.release_section_has_entries(text, "0.13.12") is False

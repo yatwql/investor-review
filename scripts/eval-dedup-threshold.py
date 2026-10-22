@@ -4,7 +4,8 @@
 用法：
   python scripts/eval-dedup-threshold.py             # 分析全部锚点
   python scripts/eval-dedup-threshold.py --summary   # 仅汇总统计
-  python scripts/eval-dedup-threshold.py --compact   # 压缩锚点文件（每个标题对保留最新一条）
+  python scripts/eval-dedup-threshold.py --compact   # 压缩锚点（每 key 最新 + 保留期裁剪，与生产同口径）
+  python scripts/eval-dedup-threshold.py --compact --retention-days 0   # 仅按键去重、不按时间裁剪
   python scripts/eval-dedup-threshold.py --file X    # 指定锚点文件
 
 **口径（关键）**：锚点文件 append-only、跨规则时代累积，故本工具**不信任记录里的
@@ -35,6 +36,9 @@ from src.python.providers.news_dedup import (  # noqa: E402
     ANCHOR_RULES_FIELD,
     _ANCHOR_RULES_VERSION,
     _ANCHOR_SIZE_WARN_BYTES,
+    _anchor_retention_cutoff,
+    _anchor_retention_days,
+    _anchor_ts_on_or_after,
     _CROSS_BG2_RATIO,
     _CROSS_BIGRAM_MIN,
     _CROSS_CANDIDATE_RATIO,
@@ -97,8 +101,24 @@ def load_anchors(path: str = _ANCHOR_PATH) -> list[dict[str, Any]]:
     return list(buckets.values())
 
 
-def compact_anchors(path: str = _ANCHOR_PATH, *, dry_run: bool = False) -> dict[str, Any]:
-    """压缩锚点文件：每个标题对只保留**最后一条**（append-only → 最后即最新）。
+def _retention_days_value(retention_days: int | None) -> int:
+    """展示用保留期天数（None = 生产默认值，便于输出里写清本次用了多少天）。"""
+    if retention_days is None:
+        return _anchor_retention_days()
+    return max(0, int(retention_days))
+
+
+def compact_anchors(
+    path: str = _ANCHOR_PATH,
+    *,
+    dry_run: bool = False,
+    retention_days: int | None = None,
+) -> dict[str, Any]:
+    """压缩锚点文件：每个标题对只保留**最后一条**（append-only → 最后即最新）+ 保留期裁剪。
+
+    保留期与生产读侧自动压缩**同一双条件**（`retention_days=None` 取
+    `news_dedup._anchor_retention_days()` 的默认值，`0` = 仅按键去重、不按时间裁剪）——
+    仅按键去重压不动（标题对高度唯一，实测压后仍 37.9 MB），时间裁剪才是体积上限。
 
     文件是 append-only 累积，写侧去重机制生效前的批量校准轮次留下了大量重复行
     （实测 456,546 行 / 152 MB 中仅 51,718 个唯一对）。重复行对校准无信息量，
@@ -120,11 +140,15 @@ def compact_anchors(path: str = _ANCHOR_PATH, *, dry_run: bool = False) -> dict[
             "after_bytes": 0,
             "unique_keys": 0,
             "legacy_era": 0,
+            "expired": 0,
+            "retention_days": _retention_days_value(retention_days),
         }
 
     before_bytes = os.path.getsize(path)
+    cutoff = _anchor_retention_cutoff(retention_days)
     last_line_of: dict[tuple[str, str, str, str], int] = {}
     before_lines = 0
+    expired = 0
     with open(path, encoding="utf-8") as f:
         for idx, line in enumerate(f):
             if not line.strip():
@@ -133,6 +157,9 @@ def compact_anchors(path: str = _ANCHOR_PATH, *, dry_run: bool = False) -> dict[
             try:
                 record = json.loads(line)
             except json.JSONDecodeError:
+                continue
+            if cutoff is not None and not _anchor_ts_on_or_after(record.get("ts"), cutoff):
+                expired += 1  # 超保留期：任一 key 均不保留（含最新一条）
                 continue
             last_line_of[_anchor_key(record)] = idx
 
@@ -155,6 +182,8 @@ def compact_anchors(path: str = _ANCHOR_PATH, *, dry_run: bool = False) -> dict[
         "after_bytes": len("".join(kept).encode("utf-8")),
         "unique_keys": len(last_line_of),
         "legacy_era": legacy_era,
+        "expired": expired,
+        "retention_days": _retention_days_value(retention_days),
     }
     if dry_run or not kept:
         return result
@@ -497,13 +526,19 @@ def main() -> None:
     parser.add_argument("--compact", action="store_true", help="压缩锚点文件（每个标题对保留最新一条）")
     parser.add_argument("--dry-run", action="store_true", help="兼容保留：本工具从不修改阈值，仅 --compact 会写盘")
     parser.add_argument("--file", default=_ANCHOR_PATH, help=f"锚点文件路径（默认 {_ANCHOR_PATH}）")
+    parser.add_argument(
+        "--retention-days",
+        type=int,
+        default=None,
+        help="--compact 的保留期天数（默认与生产自动压缩同值 _anchor_retention_days()；0 = 仅按键去重不裁剪）",
+    )
     args = parser.parse_args()
     global _ACTIVE_FILE
     _ACTIVE_FILE = args.file
 
     if args.compact:
         before = os.path.getsize(args.file) if os.path.exists(args.file) else 0
-        result = compact_anchors(args.file, dry_run=args.dry_run)
+        result = compact_anchors(args.file, dry_run=args.dry_run, retention_days=args.retention_days)
         if not result["before_lines"]:
             print(f"[!] 锚点文件不存在或为空: {args.file}")
             return
@@ -514,6 +549,7 @@ def main() -> None:
             f"（唯一标题对 {result['unique_keys']}）"
         )
         print(f"  丢弃重复行中被判为历史规则时代的: {result['legacy_era']} 条")
+        print(f"  超保留期（{result['retention_days']} 天，0=不裁剪）丢弃: {result['expired']} 条")
         print("  " + ("[..] --dry-run：未写盘" if args.dry_run else "[OK] 已原子替换（每个标题对保留最新一条）"))
         return
 
