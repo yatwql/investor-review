@@ -35,7 +35,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/ 共享模块（_checklib）
-from _checklib import add_common_args, rel, report  # noqa: E402
+from _shared.checklib import add_common_args, rel, report  # noqa: E402
 
 #: 文字色目标（README 架构图里的文本/强调色）
 _TEXT_COLORS: tuple[tuple[int, int, int], ...] = (

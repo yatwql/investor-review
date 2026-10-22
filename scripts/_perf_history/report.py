@@ -1,7 +1,7 @@
 """perf-history 渲染：Markdown 表格拼装、机读输出与趋势报告。
 
-依赖 :mod:`_perf_view.data` 的数据派生与 :mod:`_perf_view.stats` 的统计原语；
-CLI 入口见 :mod:`_perf_view.cli`。
+依赖 :mod:`_perf_history.data` 的数据派生与 :mod:`_perf_history.stats` 的统计原语；
+CLI 入口见 :mod:`_perf_history.cli`。
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-from _perf_view.data import (
+from _perf_history.data import (
     _slowest_phase,
     _version_evolution_data,
     _is_abnormal_record,
@@ -32,7 +32,7 @@ _SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
-from _perf_view.stats import (
+from _perf_history.stats import (
     _DRIFT_MIN_SAMPLES,
     _OUTLIER_K,
     _filter_records,

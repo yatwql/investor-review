@@ -15,7 +15,7 @@
 
 每次 prompt 重大修改后应重新运行此脚本，确保幻觉率 < 5%。
 
-本文件为薄 CLI：实现均在 `scripts/_halluc_sampler/` 包（holdings /
+本文件为薄 CLI：实现均在 `scripts/_eval_halluc_sampler/` 包（holdings /
 llm_call / fact_check / report 四模块），main() 下方 re-export 保持原面。
 """
 
@@ -32,8 +32,8 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # 同目录共享包（_halluc_sampler）
-from _halluc_sampler import (  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # 同目录共享包（_eval_halluc_sampler）
+from _eval_halluc_sampler import (  # noqa: E402
     _MODULE_FNS,
     _call_llm_module,
     _compute_categories,

@@ -144,7 +144,7 @@ __all__ = [
     "_round_excludes",
 ]
 
-from _checklib import (  # noqa: E402
+from _shared.checklib import (  # noqa: E402
     MANAGEMENTS_DIR,
     MANUALS_DIR,
     PLAN_DOCS_DIR,
@@ -164,14 +164,14 @@ README_PATH = REPO_ROOT / "README.md"
 #: 变更不使缓存失效（判定调整仍回放旧结论，缓存不降级反成"假绿"面）：
 #:   - `_traces_doc/patterns.py`：文档痕迹模式表与行级豁免（判定面）
 #:   - `_traces_doc/dedup.py`：结构性冗余（DUPLICATE）扫描实现
-#:   - `_traces_common.py`：两脚本共享历史叙述词表（正则单一来源）
+#:   - `_shared/traces_common.py`：两脚本共享历史叙述词表（正则单一来源）
 #:   - `_traces_code/exemptions.py`：章节/轮次计数豁免（两脚本共用）
 #: `_checklib` 由 `_logic_fingerprint` 内部固定纳入，无需重复列出。
 _LOGIC_FILES = [
     Path(__file__),
     Path(__file__).resolve().parent / "_traces_doc" / "patterns.py",
     Path(__file__).resolve().parent / "_traces_doc" / "dedup.py",
-    Path(__file__).resolve().parent / "_traces_common.py",
+    Path(__file__).resolve().parent / "_shared" / "traces_common.py",
     Path(__file__).resolve().parent / "_traces_code" / "exemptions.py",
 ]
 DOC_DIRS = [

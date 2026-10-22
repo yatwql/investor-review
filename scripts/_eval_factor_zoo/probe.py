@@ -6,7 +6,7 @@ from typing import Any
 from typing import Callable
 import time
 
-from _factor_zoo.catalog import (
+from _eval_factor_zoo.catalog import (
     BENCHMARK_INDEX,
     FIELD_BARS,
     FIELD_FIN,

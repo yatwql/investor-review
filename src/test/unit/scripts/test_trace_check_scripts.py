@@ -736,6 +736,6 @@ class TestSharedCliContract:
         assert "--ci" in out
 
     def test_add_common_args_is_shared_helper(self, code_traces):
-        shared = sys.modules.get("_checklib")
-        assert shared is not None, "check-code-traces 应从 _checklib 引入共享 CLI 助手"
+        shared = sys.modules.get("_shared.checklib")
+        assert shared is not None, "check-code-traces 应从 _shared.checklib 引入共享 CLI 助手"
         assert code_traces.add_common_args is shared.add_common_args

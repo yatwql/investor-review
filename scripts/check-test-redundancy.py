@@ -141,7 +141,7 @@ from _test_redundancy.runner import (  # noqa: F401 — 兼容 load_script 直�
     run_checks,
 )
 
-from _checklib import add_common_args, report  # noqa: E402
+from _shared.checklib import add_common_args, report  # noqa: E402
 
 
 def main() -> None:

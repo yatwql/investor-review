@@ -176,7 +176,7 @@ ls data/holdings/uploads/     # 应为空；有残留则删除本次测试产生
 
 - 现象：375px 设备模拟下 `documentElement.scrollWidth=421 > clientWidth=375`（`body.scrollWidth=404`；裸加载状态的 `overflow-debug.log` 为 `scrollWidth=404`，差异来自交互后 DOM 状态，两种口径均 > 375），生成页签整列表单控件被撑到 `right=404`，`select#report-type` 超出视口 29px → 出现横向滚动条（清单 4.1、4.3 不通过）。
 - 根因探针（`mincontent-debug.json` / `wrap-debug.json`）：
-  - `#generate-form` 的 `min-content=363px`，其中 `DIV.field-block > LABEL.radio-label > SPAN`（文本「正式更新 —— 覆盖 `/lzcapp/document/working/codebase/investor-util/data/holdings/个人投资持仓信息.xlsx`，快照共享生效」）`min-content=369px`；
+  - `#generate-form` 的 `min-content=363px`，其中 `DIV.field-block > LABEL.radio-label > SPAN`（文本「正式更新 —— 覆盖 `/lzcapp/document/working/codebase/investor-review/data/holdings/个人投资持仓信息.xlsx`，快照共享生效」）`min-content=369px`；
   - 断词规则对照：默认 `369px`、`overflow-wrap:break-word` **369px（无效）**、`overflow-wrap:anywhere` 16px、`word-break:break-all` 32px；
   - 溢出随**安装路径长度**变化：路径越长越容易溢出（本机路径较长），换一台路径短的机器可能暂时不复现——结构性风险仍存在。
   - 连带：调仓模拟页签 `用当前正式持仓文件（<路径>）` 的 `min-content=385px`，且原生 file input `#whatif-cand-input` 内在宽 **347px > 可用 293px**（与路径无关，任何机器 375px 打开该页签都会溢出）。

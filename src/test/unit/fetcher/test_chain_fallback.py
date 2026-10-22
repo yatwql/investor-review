@@ -473,3 +473,40 @@ class TestFetchWithFallback(unittest.TestCase):
             {"data": "ok"},
         )
         fn2.assert_called_once()
+
+
+class TestFullChainSeverity:
+    """全链路失败的分级：传输级故障才 WARNING，各源「空结果」属预期缺失记 INFO。
+
+    回归背景：DataSinking 404「该文档无章节」+ 巨潮异源拒绝被记成 WARNING，
+    单周 59 条预期缺失淹没真实故障（见日志审计）。
+    """
+
+    @patch("src.python.fetcher.chain.cache_get")
+    @patch("src.python.fetcher.chain.cache_set")
+    @patch("src.python.fetcher.chain._get_chain")
+    def test_all_empty_results_logged_as_expected_absence(self, mock_chain, mock_set, mock_get, caplog):
+        import logging
+
+        mock_chain.return_value = ["p1", "p2"]
+        mock_get.return_value = None
+        provider_map = {"p1": ("P1", MagicMock(return_value=None)), "p2": ("P2", MagicMock(return_value=None))}
+        with caplog.at_level(logging.INFO, logger="invest"):
+            assert fetch_with_fallback("financial_report", provider_map, "k", 3600) is None
+        messages = [r.getMessage() for r in caplog.records]
+        assert any("预期缺失" in m for m in messages)
+        assert not any("全链路失败" in m for m in messages)
+
+    @patch("src.python.fetcher.chain.cache_get")
+    @patch("src.python.fetcher.chain.cache_set")
+    @patch("src.python.fetcher.chain._get_chain")
+    def test_transport_failure_still_warns(self, mock_chain, mock_set, mock_get, caplog):
+        import logging
+
+        mock_chain.return_value = ["p1"]
+        mock_get.return_value = None
+        provider_map = {"p1": ("P1", MagicMock(side_effect=Exception("Server disconnected")))}
+        with patch.object(chain, "_TRANSIENT_RETRY_BACKOFF", 0.0), caplog.at_level(logging.INFO, logger="invest"):
+            assert fetch_with_fallback("financial_report", provider_map, "k", 3600) is None
+        warned = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
+        assert any("全链路失败" in m for m in warned)

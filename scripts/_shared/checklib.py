@@ -10,7 +10,7 @@
 显式调用时读写，写入原子、失败静默，见文末章节；**stdio 编码收敛**——import 即把
 非 UTF-8 的 stdout/stderr 收敛到 UTF-8，防 Windows 重定向落盘后回放乱码，见
 `_force_utf8_stream`）；脚本以
-``sys.path.insert(0, str(Path(__file__).resolve().parent))`` 后 ``from _checklib import …`` 引用
+``sys.path.insert(0, str(Path(__file__).resolve().parent))`` 后 ``from _shared.checklib import …`` 引用
 （`pyproject.toml` 对 `scripts/*.py` 声明了 E402 豁免，理由即此）。
 """
 
@@ -27,7 +27,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 #: 仓库根目录（`scripts/` 的上一级）
-REPO_ROOT: Path = Path(__file__).resolve().parent.parent
+REPO_ROOT: Path = Path(__file__).resolve().parents[2]  # scripts/_shared/ → 仓库根
 
 # 文档树基础路径（单源上收：文档移动/改名时各检查脚本零改动；
 # 各脚本的受检清单与豁免策略仍归各自持有，此处只提供路径锚点）

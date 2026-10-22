@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import re
 
-from _traces_common import (  # 共享词表（与 check-code-traces 同源）
+from _shared.traces_common import (  # 共享词表（与 check-code-traces 同源）
     CHAPTER_CN_BARE,
     CHAPTER_CN_NTH,
     CHAPTER_DIGIT,

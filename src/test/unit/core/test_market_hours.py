@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import unittest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import MagicMock, patch
@@ -602,3 +604,33 @@ class TestMarketOpenMemo(unittest.TestCase):
             with self.assertLogs("invest", level="DEBUG") as cm2:
                 self.assertFalse(is_market_open())
             self.assertEqual(len([r for r in cm2.output if "市场时段(配置" in r]), 1)
+
+
+class TestDebugLogDedup:
+    """市场时段 DEBUG 按「判定结果变化」记录，且对多 worker 是进程级去重。"""
+
+    def test_same_state_logged_once_across_threads(self, caplog):
+        from src.python.core.market_hours import _debug_on_change, reset_memo_state
+
+        reset_memo_state()
+        import threading
+
+        with caplog.at_level(logging.DEBUG, logger="invest"):
+            threads = [
+                threading.Thread(target=_debug_on_change, args=("config", "市场时段: %s", False)) for _ in range(8)
+            ]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+        assert sum(r.getMessage().startswith("市场时段") for r in caplog.records) == 1
+
+    def test_state_change_logs_again(self, caplog):
+        from src.python.core.market_hours import _debug_on_change, reset_memo_state
+
+        reset_memo_state()
+        with caplog.at_level(logging.DEBUG, logger="invest"):
+            _debug_on_change("config", "市场时段: %s", False)
+            _debug_on_change("config", "市场时段: %s", True)
+            _debug_on_change("config", "市场时段: %s", True)
+        assert sum(r.getMessage().startswith("市场时段") for r in caplog.records) == 2

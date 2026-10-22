@@ -38,8 +38,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_checklib）
-from _checklib import MANAGEMENTS_DIR, REPO_ROOT, add_common_args, extract_region, rel, report  # noqa: E402
-from _checklib import conclusion_cache_load, conclusion_cache_save  # noqa: E402
+from _shared.checklib import MANAGEMENTS_DIR, REPO_ROOT, add_common_args, extract_region, rel, report  # noqa: E402
+from _shared.checklib import conclusion_cache_load, conclusion_cache_save  # noqa: E402
 
 _REQUIREMENTS_MD = MANAGEMENTS_DIR / "requirements.md"
 _TESTPLAN_MD = MANAGEMENTS_DIR / "testplan.md"

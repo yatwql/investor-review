@@ -7,8 +7,8 @@ from typing import Any
 import json
 import time
 
-from _factor_zoo import PROJECT_ROOT
-from _factor_zoo.catalog import (
+from _eval_factor_zoo import PROJECT_ROOT
+from _eval_factor_zoo.catalog import (
     COLD_SAMPLE_CODES,
     FAMILIES,
     FAMILY_LABELS,
@@ -28,7 +28,7 @@ from _factor_zoo.catalog import (
     build_catalog,
     validate_catalog,
 )
-from _factor_zoo.metrics import (
+from _eval_factor_zoo.metrics import (
     build_family_series,
     compute_factor_values,
     cross_sectional_series,
@@ -40,7 +40,7 @@ from _factor_zoo.metrics import (
     _closes,
     _daily_returns,
 )
-from _factor_zoo.probe import (
+from _eval_factor_zoo.probe import (
     build_stock_pool,
     probe_bars,
     probe_fields,

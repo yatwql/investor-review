@@ -32,7 +32,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享设施（_checklib）
-from _checklib import REPO_ROOT, add_common_args, rel, report  # noqa: E402,F401
+from _shared.checklib import REPO_ROOT, add_common_args, rel, report  # noqa: E402,F401
 
 TEST_DIR = REPO_ROOT / "src" / "test"
 #: 标记注册的单一事实来源（`pytest_configure` 里的 `addinivalue_line("markers", …)`）
@@ -165,6 +165,12 @@ def check_file(filepath: Path, verbose: bool, ci_mode: bool) -> list[str]:
     unknown = markers - KNOWN_MARKERS - DEPRECATED_MARKERS
     for m in unknown:
         violations.append(f"{rel_path}: 使用了未注册的标记 '{m}'（是否拼写错误？）")
+
+    # 不变量：任何 unit_* 子标记必须同时带 bare `unit`——`-m unit` 因此恒覆盖
+    # P1 verify 的全部选择面（发布期 bench 复用 verify 判定的前提，见 release.py）
+    subunit = sorted(m for m in markers if m.startswith("unit_") and m != "unit")
+    if subunit and "unit" not in markers:
+        violations.append(f"{rel_path}: 含 unit_* 子标记 {subunit} 但缺 bare 'unit'（verify ⊆ unit 不变量被破坏）")
 
     # 检查 _edge.py 是否含 edge 标记
     if filepath.name.endswith("_edge.py") and "edge" not in markers:

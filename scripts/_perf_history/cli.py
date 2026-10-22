@@ -13,10 +13,10 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-from _perf_view.data import (
+from _perf_history.data import (
     _machine_readable,
 )
-from _perf_view.report import (
+from _perf_history.report import (
     build_trend_report,
 )
 import logging
@@ -27,7 +27,7 @@ _SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
-from _perf_view.stats import (
+from _perf_history.stats import (
     _OUTLIER_K,
     _filter_records,
     _group_records as _group_records,  # re-export：经 load_script 供测试直调

@@ -1,5 +1,5 @@
 # LLM 集成层技术设计
-> 文档版本：0.14.3
+> 文档版本：0.14.4
 
 本文档是 `technical.md` 的 LLM 集成层专项技术设计补充，对应 `technical.md` §5（LLM 集成层概要设计）。
 `technical.md` §5 提供 LLM 层的总体架构、模块清单、调用链概览、多 Provider 链模式概要及关键机制速览；
@@ -455,6 +455,8 @@ _LLM_CLIENT_SETTINGS = {
 `max_workers=llm_config.llm_max_concurrency`（config 默认 3）控制并行调用数。开启 Extended Thinking 的模块（`thinking_enabled_{suffix}=true`）受独立信号量 `llm_max_thinking_concurrency`（默认 1）串行化约束——多 thinking 模块并发涌向 DeepSeek 等强制推理端点时偶发返回空 content（HTTP 200 空响应），该信号量从源头降低并发（thinking 请求同时最多 N 个），非 thinking 模块不受此限。
 
 ### 4.2.1 端点级节流与并发治理（`llm/pacing.py`）
+
+**总时间预算**：`llm_total_time_budget_sec`（秒，`0`=不启用）在**每个模块启动前**检查已用时长，超预算不再提交新模块（已提交的不打断，避免半截内容与连接泄漏）；日志回显「已用/预算」，报告按已生成内容呈现。用于兜住「单模块卡住 + 重试叠加」把一次 full 拖成小时级（实测出现过 6,623s 的 LLM+新闻阶段）。
 
 **问题**：全局键 `llm_max_concurrency` 只能表达「所有模块合起来最多几个线程」，无法表达「同一程序、不同端点不同策略」。而同一次报告生成的调用会落在约束截然不同的端点上：订阅制编码端点在服务条款上要求**交互式**使用、带滚动频率窗口与风控型并发上限；按量付费端点有明确的分级 RPM/TPM，可放心高并发。
 
@@ -1271,6 +1273,7 @@ reload_pricing() → 合并 llm_settings.json → pricing
   llm_max_concurrency
   llm_max_thinking_concurrency
   llm_full_fail_retry_delay
+  llm_total_time_budget_sec
   news_correlation_top_n
   debate
   fact_check

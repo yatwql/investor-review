@@ -203,14 +203,6 @@ def parse_switch_override(token: str) -> tuple[str, bool]:
     name = name.strip()
     if not sep or not name:
         raise ValueError("应为 NAME=VALUE 形式（如 module_quality_gate=on）")
-    if name in _MERGED_SWITCH_KEYS:
-        mapped = _MERGED_SWITCH_KEYS[name]
-        logger.warning(
-            "[features] --feature 旧键 '%s' 已并入 '%s'（一版过渡，后续版本将不再识别）",
-            name,
-            mapped,
-        )
-        name = mapped
     if name not in feature_switch_registry:
         raise ValueError(f"未知功能开关 '{name}'；可选: {describe_switches()}")
 
@@ -369,55 +361,6 @@ def set_feature_enabled(flag_name: str, enabled: bool) -> None:
         logger.info("[features] 功能开关 '%s': %s → %s", flag_name, old, enabled)
 
 
-_MERGED_SWITCH_KEYS: dict[str, str] = {
-    "financial_report_digest": "stock_fundamentals",
-    "financial_indicator": "stock_fundamentals",
-}
-
-
-def _migrate_merged_switch_keys(raw: dict[str, Any], *, location: str) -> dict[str, Any]:
-    """已合并开关的旧键收敛到新键（读写同规则，一版过渡）。
-
-    规则：bool 旧键按**并集**并入（任一为 True 即 True——「曾开启过就开」，两章
-    本就同开同关）；新键已显式存在时以新键为准（旧键仅丢弃并告警）；迁移后旧键
-    不再入内存、不再落盘。
-
-    Args:
-        raw: 原始覆写字典（不修改入参）
-        location: 告警语境（features.json 读取 / 写入 / --feature）
-
-    Returns:
-        迁移后的字典；无旧键时原样返回
-    """
-    legacy = {k: v for k, v in raw.items() if k in _MERGED_SWITCH_KEYS and isinstance(v, bool)}
-    if not legacy:
-        return raw
-    merged = {k: v for k, v in raw.items() if k not in _MERGED_SWITCH_KEYS}
-    new_key = next(iter(dict.fromkeys(_MERGED_SWITCH_KEYS.values())))
-    values = list(legacy.values())
-    union_value = any(values)
-    conflict = any(v != union_value for v in values)
-    if isinstance(merged.get(new_key), bool):
-        logger.warning(
-            "[features] %s 含已合并旧键 %s，与新键 %s 并存——以新键为准（旧键已丢弃）",
-            location,
-            "、".join(sorted(legacy)),
-            new_key,
-        )
-    else:
-        merged[new_key] = union_value
-        suffix = "（新旧取值不一致，取并集）" if conflict else ""
-        logger.warning(
-            "[features] %s 旧键 %s 已并入新键 %s = %s%s；请更新 features.json / --feature 参数",
-            location,
-            "、".join(sorted(legacy)),
-            new_key,
-            union_value,
-            suffix,
-        )
-    return merged
-
-
 def load_feature_overrides() -> None:
     """从 features.json 加载覆写配置，合并到 FEATURE_FLAGS。
 
@@ -441,7 +384,6 @@ def load_feature_overrides() -> None:
     if not isinstance(overrides, dict):
         logger.warning("[features] 覆写文件格式异常（应为 JSON object），忽略")
         return
-    overrides = _migrate_merged_switch_keys(overrides, location="features.json 读取")
 
     valid_count = 0
     changed = 0
@@ -495,8 +437,6 @@ def save_feature_overrides(overrides: dict[str, bool], merge: bool = True) -> No
                 existing = json.load(f)
         except (json.JSONDecodeError, OSError):
             existing = {}
-    existing = _migrate_merged_switch_keys(existing, location="features.json 写入")
-    overrides = _migrate_merged_switch_keys(overrides, location="写入参数")
 
     existing.update(overrides)
 

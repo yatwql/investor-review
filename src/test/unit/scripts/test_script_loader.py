@@ -35,7 +35,7 @@ class TestLoadContract:
         assert load_script("test-perf-report.py").__name__ == "test_perf_report"
 
     def test_explicit_module_name_override(self):
-        mod = load_script("_checklib.py", module_name="_checklib_under_test")
+        mod = load_script("_shared/checklib.py", module_name="_checklib_under_test")
         assert mod.__name__ == "_checklib_under_test"
 
     def test_subpath_script_loadable(self):

@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.14.3
+> 文档版本：0.14.4
 
 ## 概述
 
@@ -129,7 +129,7 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 |:-----|:-------|:-----|:-----|
 | **P0** | 提交前 | `.venv/bin/python scripts/test-runner.py --mode dev-verify` + 十守护（`--ci` 全套，钩子自动执行） | 阻塞提交，不得 commit |
 | **P1** | 合入 master 前 | `.venv/bin/python scripts/test-runner.py --mode verify`（全部 `unit_*` 目录域，含 TUI/CLI——归域即进门禁，`technical.md` §4.23） | 阻塞合入，不得 merge |
-| **P2** | 发布前 | `.venv/bin/python scripts/release.py gate`（= 演进对照新鲜度断言〔当前开发版列头日期须为当日〕+ regression + 十守护 `--ci` 全套〔并行执行，并发度随核数收敛 ≤4 路〕+ 设计护栏，gate 自动编排） | 阻塞发布，不得 release |
+| **P2** | 发布前 | `.venv/bin/python scripts/release.py gate`（= 演进对照新鲜度断言〔当前开发版列头日期须为当日〕+ **verify 与 regression 并行**（verify 提前到合并前拦截）+ 十守护 `--ci` 全套〔并行执行，并发度随核数收敛 ≤4 路〕+ 设计护栏；`--with-portability` 追加 portability 探针，gate 自动编排） | 阻塞发布，不得 release |
 
 **P0 提交前门禁**（全部通过才可 commit；手动项 = dev-verify，下列十守护由 pre-commit 钩子在 `git commit` 时自动执行、CI guards job 同源兜底，本地不手动重复——清单为五处同源引用）：
 
@@ -205,7 +205,7 @@ PYTHONWARNDEFAULTENCODING=1 .venv/bin/python -m pytest src/test/unit -q
 
 > **CI 轮询纪律**：本地门禁（P0/P1/P2 + 必要时的 `--mode portability`）通过后，**不逐提交轮询 CI**——本地绿而 CI 红的来源本应只有环境差异（3.11/3.12/3.13 矩阵、`LC_ALL=C` locale 探针、系统库/可选依赖、`perf-gate`/`format` 等 CI 独有档）。为收口这类差集，portability 已可本地等价复现；其余档位仅在改动触及它们时才去看 CI 结果。
 
-> **钩子与守护输出的编码**：pre-commit 以 `export PYTHONUTF8=1` 统一守护子进程的日志编码，`scripts/_checklib.py` 导入时把非 UTF-8 的真实 stdout/stderr 收敛到 UTF-8（`_force_utf8_stream`，已 UTF-8 或 `StringIO` 桩零改写）——中文 Windows 上 stdout 重定向到文件按 locale ANSI（cp936）落盘，UTF-8 终端回放 `run_bg` 守护日志会成乱码；前台直打走控制台 `WriteConsoleW` 本就无损。
+> **钩子与守护输出的编码**：pre-commit 以 `export PYTHONUTF8=1` 统一守护子进程的日志编码，`scripts/_shared/checklib.py` 导入时把非 UTF-8 的真实 stdout/stderr 收敛到 UTF-8（`_force_utf8_stream`，已 UTF-8 或 `StringIO` 桩零改写）——中文 Windows 上 stdout 重定向到文件按 locale ANSI（cp936）落盘，UTF-8 终端回放 `run_bg` 守护日志会成乱码；前台直打走控制台 `WriteConsoleW` 本就无损。
 
 > P1/P2 的完整要求（含手动验证项）见 [testplan.md](testplan.md) → 回归测试清单 / 门禁章节。
 
@@ -228,7 +228,7 @@ PYTHONWARNDEFAULTENCODING=1 .venv/bin/python -m pytest src/test/unit -q
 |:---------|:-----------|
 | 新报告章节 | `registry.py` 注册表 → `reports-instruction.md`（目录/章节表/分组表/可见性总表/页签上限）→ `requirements.md` 章清单 → `technical.md`（结果区计数/`report_section_order`）→ `how-to-use-tui-menu.md`（面板编号段）→ `folders.md`（新 partial/模板）→ `report_template.html` include |
 | 新功能开关 | `features.py` 注册表 → `how-to-config.md`（开关表+计数+实验/常规分列+Web 面板行）→ `how-to-use-tui-menu.md`（开关区行与编号）→ `how-to-use-web-mode.md`（Web 面板分组行）→ `technical.md`（语义命名表/开关计数）→ **`experimental=True` 时 `technical.md` §6.9 生命周期表补行** → `testplan.md`（若涉门禁） |
-| 开关合并/内置化（删条目） | `features.py` 旧键迁移表（`_MERGED_SWITCH_KEYS`，一版过渡+告警）→ 注册表计数与四组分解（`how-to-config` / `how-to-use-tui-menu` / `how-to-use-web-mode` / `technical` 语义表与统计行）→ **面板编号单次重排**（`[S]` 各组分块区间在多处手册出现）→ 消费点门控收敛（`config/_core.py` helper 与调用点）→ 本地 `features.json` 迁移 → 关态用例退役 |
+| 开关合并/内置化（删条目） | 本地 `features.json` 旧键清理（本项目不保留跨版本兼容，直接删）→ 注册表计数与四组分解（`how-to-config` / `how-to-use-tui-menu` / `how-to-use-web-mode` / `technical` 语义表与统计行）→ **面板编号单次重排**（`[S]` 各组分块区间在多处手册出现）→ 消费点门控收敛（`config/_core.py` helper 与调用点）→ 关态用例退役 |
 | 菜单项增删/合并/重排 | `tui_menu.MENU_ITEMS` + `tui_menu.MENU_GROUPS`（任务分组：新增项必须入组，退出项除外；分组覆盖由用例守护；含页脚键位提示 `render_menu` 与退出别名文案）→ 双手册主菜单 code block（`how-to-start` + `how-to-use-tui-menu`，doc-drift 机检键集合与标签头）→ `how-to-config.md` 的 `default_menu_key` 快捷键清单 → `technical.md` 菜单表 + 项数（静态项数 / 默认门控后渲染项数两处）→ `testplan.md` 菜单清单与二级子菜单 → `status_line` 页脚指引 → README 界面描述 → 子菜单二级键集合（如 `[D]` 的 C/F/O/M/B） |
 | 新增终端打印文本（提示/面板/列表） | 一律用 `tui/text_layout.py` 原语折行（`wrap_display` / `wrap_hanging` / `wrap_with_prefix` / `truncate_display`）并按 `terminal_columns()` 取宽——手机窄屏（40~60 列）与笔记本宽屏同一份代码；盒线面板经 `switch_panel.render_titled_panel`（宽/中档画框、窄档无框截断），表格/日志/统计等长输出在窄档折行；**新增或改动任何面板渲染后，必须在 `test_narrow_panel_render.py` 登记同一面板**（`COLUMNS=40` 逐行断言不超宽）；提示语成分与上屏词先对 `DESIGN-TUI.md`（键分工总表 / 提示三段式 / 术语对照）；新增用例须覆盖窄宽两档与「不越界」不变式 |
 | 新增/改动 TUI 交互（键义、提示、反馈、配色） | `DESIGN-TUI.md`（唯一判据：键分工总表 / 提示模板 / 默认项标注 / 配色一色一职责 / 术语表）→ 契约结构测试 `test_design_tui_doc.py`（必备小节若扬则同步）→ 机检 `test_prompt_contract.py`（提示成分 / 禁用词 / 闸门白名单）→ `how-to-use-tui-menu.md` 对应面板章 → `test_keystroke_baseline.py` 击键基线（多一次按键即刷新快照）→ `requirements.md` R-TUI |
@@ -916,6 +916,33 @@ A: 运行 `.venv/bin/python scripts/check-test-markers.py`，脚本会静态扫�
 | 测试卡住不动 | 性能 | 见 §测试慢或挂住的诊断 |
 | Web 页面行为不对 | 浏览器 | `scripts/test-smoke-web.py` → CDP 脚本 |
 
+### 日志级别与告警语义
+
+**级别可配（默认 INFO）**：文件与控制台默认 INFO；需要逐次取数追踪时用环境变量单独放开，不改代码、不改配置：
+
+```bash
+INVEST_LOG_FILE_LEVEL=DEBUG .venv/bin/python -m src.python.cli report --type full   # 文件写 DEBUG
+INVEST_LOG_CONSOLE_LEVEL=DEBUG ...                                                # 控制台写 DEBUG
+```
+
+非法值回落 INFO 并提示一次。**默认不开 DEBUG** 的原因：日志审计（近一周 107,625 行）显示 DEBUG 占 91%，其中「市场时段」67%、缓存命中 17%，真实告警被埋在噪声里，10MB 轮转只能留约 6 天。
+
+**写日志时的三级语义（新增日志按此选级）**：
+
+| 级别 | 用在哪 | 例子 |
+|:-----|:-------|:-----|
+| `INFO` | 预期内的「没有数据」——各源都返回空结果、文档无该章节、异源候选拒服务 | 链路全失败但无传输级故障时记「各源均无可用结果（预期缺失，非链路故障）」 |
+| `WARNING` | 真实降级/故障——传输级失败、熔断、配置缺失导致的跳过 | 「全链路失败（无过期缓存可用）」「连续失败，熔断 N 秒」 |
+| `ERROR` | 需要人工介入的缺陷——输出截断、挂载点异常、数据写盘失败 | 「LLM 输出被截断（建议增大 max_tokens_…）」 |
+
+> 判定实现：链路用「是否出现过 `TRANSPORT_FAILURE`」区分（`fetcher/chain.py`），不靠文案匹配。基准跑（`perf-test-report` 主动禁网）的确定性失败在连接级重试处按 DEBUG 记录，避免把人为断网堆成 WARNING。
+
+**追踪类 DEBUG 的两条纪律**：① 同一状态不重复刷（市场时段判定按「结果变化」记，进程级去重）；② 同一 key 的命中/写入只记首见一次（其余由 `_stats` 命中率与报告「缓存命中率」行承担汇总），否则单周就能刷出万行。
+
+**LLM 总时间预算**：`llm_settings.json → llm_total_time_budget_sec`（秒，`0`=不启用）。超预算后**不再启动新模块**（已在跑的模块不打断），日志回显已用时与预算值，报告按已生成内容呈现。用于兜住「单模块卡住 + 重试叠加」把一次 full 拖成小时级（审计实测曾出现 6,623s 的 LLM+新闻阶段）。
+
+**去重锚点自动压缩**：`data/calibration/dedup_anchors.jsonl` 超过 32MB 时在读侧自动压缩（保留每个标题对最新一条，原文件备份 `.bak`，原子替换）；`INVEST_DEDUP_AUTO_COMPACT=0` 可关闭。手工统计口径仍用 `scripts/eval-dedup-threshold.py --compact`。
+
 ### 日志：先看日志再看代码
 
 - **logger 名**：项目统一 `logging.getLogger("invest")`，`setup_logger()` 落盘到 `logs/app.log`（按大小轮转），控制台同步 INFO/WARNING/ERROR。
@@ -1360,7 +1387,7 @@ registry 的测试在 `src/test/unit/core/test_registry.py`，验证 TTL 默认�
 
 发布版本时，按以下六步顺序执行：
 
-> 可用 `scripts/release.py` 分步编排（发布流程的可执行封装，每步独立可审阅、失败即停）：`check`（预检）→ `archive-init`（**仅新小版本首发需要**：三份归档 + 目录树块 + 三处索引行一次建齐，幂等）→ `prepare`（版本全链、changelog 发布段归档**并自动重写归档头部「涵盖版本 / 归档时间」（区间与并入记录由归档内各发布段标题派生，无需人工维护）与主文件指针的版本号/日期/归档文件名**、一致性 `--fix`，收尾自动 `doc-drift --sync`）→ `refresh` + `evolution --release`（数据刷新——纯文档变更〔仅 `.md`/图片〕自动跳过 bench+collect，`--force-refresh` 强制；演进快照，evolution 收尾同样自动 sync）→ `gate`（P2 门禁，十守护并行且并发度随核数收敛 ≤4 路）→ `publish --title`（**提交前按钩子同源参数 `--sync --ci --with-test-count` 同步统计快照**——只跑 `--sync` 时 `test-coverage.md` 收集计数不被校验，会「本地通过、钩子仍红」白跑一轮；同步失败即中止 + release 提交 + P1 verify + `--no-ff` 合并 + tag）→ `devbump`（切开发版，并清空上一版迁档占位节）；bench 默认只测发布子集四档（`--full-bench` 全量）、每命令耗时、执行环境（provider/model/thinking）与 agent 会话 token 累计入 `logs/release.jsonl` 台账（发布墙钟、token 成本与执行模型均可跳版本对拍）；rf/plan/docs-plan 归档迁移的**机械部分已由 `prepare` 自动完成**（人工只复核条目归属与设计文件判定，见下方步骤③），`gate` 会断言该版本台账已迁完、未迁则前置中止；`prepare` 不跨版本发布（`--version` 与开发链推导值不一致时立即中止并给四步指引）；**分层纪律**：归档迁移或任何涉及管理文档/代码注释的改动完成后，进 `gate` 前先跑秒级便宜守护（至少 `check-doc-traces --ci` + `check-doc-links --ci`，改动面大时十守护全跑）——守护发现前置，避免 P2 门禁的全量 regression 因文档级 finding 白跑第二轮。下列手动命令为底层口径，脚本失败时按手动步骤排查。
+> 可用 `scripts/release.py` 分步编排（发布流程的可执行封装，每步独立可审阅、失败即停）：`check`（预检）→ `archive-init`（**仅新小版本首发需要**：三份归档 + 目录树块 + 三处索引行一次建齐，幂等）→ `prepare`（版本全链、changelog 发布段归档**并自动重写归档头部「涵盖版本 / 归档时间」（区间与并入记录由归档内各发布段标题派生，无需人工维护）与主文件指针的版本号/日期/归档文件名**、一致性 `--fix`，收尾自动 `doc-drift --sync`）→ `refresh` + `evolution --release`（数据刷新——纯文档变更〔仅 `.md`/图片〕自动跳过 bench+collect，`--force-refresh` 强制；演进快照，evolution 收尾同样自动 sync）→ `gate`（P2 门禁：verify 与 regression 并行；若 `refresh` 的 bench **实跑过 `unit`** 且代码指纹未变，则复用该次结果替代 verify（`unit` 是 verify 的严格超集，由标记不变量保证），否则实跑；十守护并行且并发度随核数收敛 ≤4 路；`--with-portability` 加跑 portability 探针；全绿后写「版本+树指纹」通过戳）→ `publish --title`（**树指纹与 gate 戳一致时复用 P1 verify**；提交前按钩子同源参数 `--sync --ci --with-test-count` 同步统计快照——只跑 `--sync` 时 `test-coverage.md` 收集计数不被校验，会「本地通过、钩子仍红」白跑一轮；同步失败即中止 + release 提交 + P1 verify + `--no-ff` 合并 + tag）→ `devbump`（切开发版，并清空上一版迁档占位节）；bench 默认只测发布子集四档（`--full-bench` 全量；`--bench-jobs N` 调整采集并行度，改变并行度会改变耗时口径，环境表需同并行度可比）、每命令耗时、执行环境（provider/model/thinking）与 agent 会话 token 累计入 `logs/release.jsonl` 台账（发布墙钟、token 成本与执行模型均可跳版本对拍）；rf/plan/docs-plan 归档迁移的**机械部分已由 `prepare` 自动完成**（人工只复核条目归属与设计文件判定，见下方步骤③），`gate` 会断言该版本台账已迁完、未迁则前置中止；`prepare` 不跨版本发布（`--version` 与开发链推导值不一致时立即中止并给四步指引）；**分层纪律**：归档迁移或任何涉及管理文档/代码注释的改动完成后，进 `gate` 前先跑秒级便宜守护（至少 `check-doc-traces --ci` + `check-doc-links --ci`，改动面大时十守护全跑）——守护发现前置，避免 P2 门禁的全量 regression 因文档级 finding 白跑第二轮。下列手动命令为底层口径，脚本失败时按手动步骤排查。**publish 的 release 提交仍走 pre-commit 钩子全量守护**（不跳过）：与 gate 重复约 2~6s，换取「自动化提交也不旁路守护」的兜底——实测收益小于风险，故不做跳过。
 
 **① 版本号一致**
 
@@ -1500,6 +1527,10 @@ CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` /
 | 启动 | `launch.sh` / `launch.ps1`（TUI 与 `web` 子命令）/ `cli.sh` / `llm.sh` 及其 `.ps1` 版 | 免解释器前缀的常用入口 |
 | CLI 子命令 | `report` / `cache` / `whatif` / `check-sources` / `view-logs` / `doctor` / `cassettes` | 用户侧命令行入口（详见 [CLI 手册](../manuals/how-to-use-cli-mode.md)） |
 
+> 改名/合并脚本时按**五处同步**自查（本次改名的长尾教训）：① 同名测试文件；② `scripts-reference` 一览与详情小节；③ `folders.md` 目录树；④ CI/钩子/`release.py`/`test-runner` 等调用点；⑤ 文档与代码注释里的命令示例。机检覆盖 ②③④（一览覆盖、目录树双向、脚本存在性），①⑤ 靠本清单。
+>
+> **结构规则**：`scripts/` 顶层只放可直接运行的入口；共享库进 `_shared/`，单入口实现放 `_<语义名>/`，评测实现包用 `_eval_<x>/` 与 `eval-<x>.py` 对应——新增共享代码不得放顶层文件。
+>
 > 新增脚本时：先按 [scripts-reference.md](scripts-reference.md)「命名约定」选前缀（`check-` 仅限可入门禁的检查、`test-`/`eval-`/`perf-`/`probe-`/`hook-`/`make-` 各归其域），再入对应域小节，并在上表「按域索引」里确认该域已覆盖。
 ## 关键纪律来源
 

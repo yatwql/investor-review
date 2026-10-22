@@ -28,7 +28,7 @@ _SCRIPTS_DIR = Path(__file__).resolve().parents[4] / "scripts"
 @pytest.fixture(scope="module")
 def vocabulary():
     """共享词表模块（独立实例，避免与 CLI 加载时的模块状态耦合）。"""
-    return load_script("_traces_common.py", module_name="_traces_common_vocabulary")
+    return load_script("_shared/traces_common.py", module_name="_traces_common_vocabulary")
 
 
 @pytest.fixture(scope="module")

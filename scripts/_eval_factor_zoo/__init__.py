@@ -8,6 +8,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-#: 仓库根单一来源：`scripts/_factor_zoo/__init__.py` → `parents[2]`。层级固定勿改浅
+#: 仓库根单一来源：`scripts/_eval_factor_zoo/__init__.py` → `parents[2]`。层级固定勿改浅
 #: （改浅会静默扫错目录）；包内各模块统一从本模块取用，避免多处各算一次。
 PROJECT_ROOT = Path(__file__).resolve().parents[2]

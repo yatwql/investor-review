@@ -40,7 +40,7 @@ from _test_runner.modes import (  # noqa: E402
     compile_marker_expr,
     mode_marker_expr,
 )
-from _checklib import rel  # noqa: E402
+from _shared.checklib import rel  # noqa: E402
 from _doc_drift._format import (  # noqa: E402
     _COUNT_CELL,
     _COUNT_NAME_ALIAS,

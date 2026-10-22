@@ -169,6 +169,46 @@ def _build_module_fns(
     }
 
 
+def make_budget_guard(
+    budget_sec: float,
+    started: float,
+    skipped: list[str],
+    label_map: dict[str, str],
+    clock: Callable[[], float] = time.monotonic,
+) -> Callable[[str, Callable[[], Any]], Callable[[], Any]]:
+    """构造「总时间预算闸」：每个模块启动前检查已用时，超预算即跳过（不打断在跑的）。
+
+    Args:
+        budget_sec: 预算秒数（<=0 表示不启用，恒放行）
+        started: 预算起点（`time.monotonic()`）
+        skipped: 被跳过的模块键收集器（调用方用于收尾汇总日志）
+        label_map: 模块键 → 中文标签（日志可读性）
+        clock: 时钟注入（测试用；默认 monotonic）
+
+    Returns:
+        guard(key, runner) → 包装后的 runner
+    """
+
+    def _guard(key: str, runner: Callable[[], Any]) -> Callable[[], Any]:
+        def _wrapped() -> Any:
+            elapsed = clock() - started
+            if budget_sec > 0 and elapsed > budget_sec:
+                skipped.append(key)
+                logger.warning(
+                    "LLM 总时间预算已用尽（已用 %.0fs ≥ 预算 %.0fs），跳过模块 %s"
+                    "（可在 llm_settings.json 调整 llm_total_time_budget_sec）",
+                    elapsed,
+                    budget_sec,
+                    label_map.get(key, key),
+                )
+                return (None, False)
+            return runner()
+
+        return _wrapped
+
+    return _guard
+
+
 def _dispatch_llm_workers(
     needs: dict[str, bool],
     llm_config: dict | None,
@@ -367,9 +407,15 @@ def _dispatch_llm_workers(
         logger.info("[debate] 辩论模式已启用，expert_review 路由已替换")
 
     _max_workers = (llm_config or {}).get("llm_max_concurrency", 3)
+    # 总时间预算：每个模块**启动前**检查已用时长；超预算不再提交新模块（已提交的
+    # 模块不打断——强杀线程会留下半截内容与未释放连接）。预算 0/缺省 = 不启用。
+    _budget = float((llm_config or {}).get("llm_total_time_budget_sec") or 0)
+    _budget_skipped: list[str] = []
+    _budget_guard = make_budget_guard(_budget, time.monotonic(), _budget_skipped, _label_map)
+
     with ThreadPoolExecutor(max_workers=_max_workers) as executor:
         _futures: dict[Future, str] = {
-            executor.submit(_make_runner(k, fn)): k for k, fn in _MODULE_FNS.items() if needs.get(k)
+            executor.submit(_budget_guard(k, _make_runner(k, fn))): k for k, fn in _MODULE_FNS.items() if needs.get(k)
         }
 
         for future in as_completed(_futures):
@@ -381,4 +427,10 @@ def _dispatch_llm_workers(
             except Exception:  # noqa: PERF203
                 logger.warning("LLM 生成线程异常", exc_info=True)
 
+    if _budget_skipped:
+        logger.warning(
+            "本次 LLM 生成因总时间预算跳过 %d 个模块：%s（报告按已生成内容呈现）",
+            len(_budget_skipped),
+            "、".join(_label_map.get(k, k) for k in _budget_skipped),
+        )
     return results_dict

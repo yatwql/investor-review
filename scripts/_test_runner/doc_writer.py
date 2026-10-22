@@ -6,7 +6,10 @@ import os
 
 from _test_runner.paths import _PROJECT_ROOT
 from _test_runner.machine_info import _duration_mode_cells, _env_value, _format_approx_duration
-from _checklib import extract_table_region as _extract_table_region, replace_table_region as _replace_table_region
+from _shared.checklib import (
+    extract_table_region as _extract_table_region,
+    replace_table_region as _replace_table_region,
+)
 from typing import Callable
 
 

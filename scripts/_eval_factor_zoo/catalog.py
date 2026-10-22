@@ -7,7 +7,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from _factor_zoo import PROJECT_ROOT
+from _eval_factor_zoo import PROJECT_ROOT
+
+# 目录校验与生产加载器同源（禁止本地再拷一份，防校验口径漂移）
+from src.python.fetcher.factor_catalog_loader import validate_catalog  # noqa: F401
 
 
 # ── 常量（门槛与口径在判定书中预注册，改这里等于改门槛） ──────────────
@@ -308,30 +311,6 @@ COLD_SAMPLE_CODES = ["600519", "000858", "300750"]
 def build_catalog() -> list[dict[str, Any]]:
     """返回冻结因子目录（五族 × 5，确定性：同输入同输出）。"""
     return [dict(item) for item in CATALOG]
-
-
-def validate_catalog(catalog: list[dict[str, Any]]) -> list[str]:
-    """目录完整性校验：25 条、五族各 5、slug 唯一、字段类型合法、族名合法。"""
-    problems: list[str] = []
-    if len(catalog) != 25:
-        problems.append(f"目录条数 {len(catalog)} != 25")
-    slugs = [item.get("slug") for item in catalog]
-    if len(set(slugs)) != len(slugs):
-        problems.append("slug 存在重复")
-    for family in FAMILIES:
-        n = sum(1 for item in catalog if item.get("family") == family)
-        if n != 5:
-            problems.append(f"族 {family} 条数 {n} != 5")
-    for item in catalog:
-        fields = item.get("fields") or []
-        if not fields:
-            problems.append(f"{item.get('slug')}: fields 为空")
-        for field in fields:
-            if field not in FIELD_TYPES:
-                problems.append(f"{item.get('slug')}: 未知字段类型 {field}")
-        if not item.get("label") or not item.get("formula"):
-            problems.append(f"{item.get('slug')}: 缺 label/formula")
-    return problems
 
 
 # ═══════════════════════════════════════════════════════════════

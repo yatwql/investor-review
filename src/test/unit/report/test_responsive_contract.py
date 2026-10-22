@@ -22,7 +22,7 @@ _WORKBENCH = _ROOT / "src/static/web/style.css"
 _DESIGN = _ROOT / "docs" / "managements" / "DESIGN.md"
 
 
-_checklib = load_script("_checklib.py")
+_checklib = load_script("_shared/checklib.py")
 
 
 def _css(path: pathlib.Path) -> str:

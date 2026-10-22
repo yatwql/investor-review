@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import gzip
+import logging
 import json
 import os
 import tempfile
@@ -78,3 +79,33 @@ class TestCacheIo:
         with open(final_path, "rb") as f:
             decompressed = gzip.decompress(f.read()).decode("utf-8")
             assert json.loads(decompressed) == data
+
+
+class TestCacheDebugOnce:
+    """命中/写入的 DEBUG 追踪按 key 每进程首见一次（防日志被同一 key 刷屏）。"""
+
+    def test_repeated_hit_logs_once(self, tmp_path, monkeypatch, caplog):
+        from src.python.cache import _store
+
+        monkeypatch.setattr(_store, "_cache_path", lambda key: str(tmp_path / f"{key}.json"))
+        _store.reset_debug_log_state()
+        _store.set("k1", {"v": 1})
+        with caplog.at_level(logging.DEBUG, logger="invest"):
+            _store.get("k1", 60)
+            _store.get("k1", 60)
+            _store.get("k1", 60)
+        hits = [r for r in caplog.records if r.getMessage().startswith("缓存命中: k1")]
+        assert len(hits) == 1
+
+    def test_distinct_keys_each_logged(self, tmp_path, monkeypatch, caplog):
+        from src.python.cache import _store
+
+        monkeypatch.setattr(_store, "_cache_path", lambda key: str(tmp_path / f"{key}.json"))
+        _store.reset_debug_log_state()
+        _store.set("k2", 1)
+        _store.set("k3", 2)
+        with caplog.at_level(logging.DEBUG, logger="invest"):
+            _store.get("k2", 60)
+            _store.get("k3", 60)
+        keys = {r.args[0] for r in caplog.records if r.getMessage().startswith("缓存命中")}
+        assert keys == {"k2", "k3"}

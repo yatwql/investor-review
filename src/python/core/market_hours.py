@@ -47,9 +47,11 @@ _EM_HEADERS = {
 # 开闭市判定在一个自然分钟内不会变化，而高频调用路径（缓存 TTL 判断、provider
 # 策略选择、取价方式）每秒可达数十次。按分钟粒度 memo（threadlocal，每 worker
 # 一份、无锁），把三层判断压到每 worker 每分钟一次；DEBUG 日志仅在判定结果
-# 变化时输出（_log_state 去重），避免连续相同结果把日志刷屏。
+# 变化时输出。去重状态是**进程级**（dict + 锁）而非 threadlocal：判定结果与线程
+# 无关，threadlocal 会让每个新增 worker 首判都各记一条，实测同一毫秒重复 36 条。
 _memo = threading.local()
-_log_state = threading.local()
+_log_state: dict[str, Any] = {}
+_log_lock = threading.Lock()
 _STATE_UNSET = object()
 
 
@@ -57,16 +59,18 @@ def reset_memo_state() -> None:
     """清空本线程的分钟级 memo 与日志去重状态（测试与长驻进程手动失效用）。"""
     _memo.minute = -1
     _memo.result = None
-    _log_state.config = _STATE_UNSET
-    _log_state.api_cache = _STATE_UNSET
-    _log_state.api_live = _STATE_UNSET
+    with _log_lock:
+        _log_state.clear()
 
 
 def _debug_on_change(state_key: str, message: str, *args: Any) -> None:
-    """仅状态变化时输出 DEBUG（state_key 记录上次已输出的取值，相同则不再打）。"""
+    """仅在判定结果变化时输出 DEBUG（进程级去重，任一 worker 记录即可）。"""
     value = args[-1] if args else None
-    if getattr(_log_state, state_key, _STATE_UNSET) != value:
-        setattr(_log_state, state_key, value)
+    with _log_lock:
+        changed = _log_state.get(state_key, _STATE_UNSET) != value
+        if changed:
+            _log_state[state_key] = value
+    if changed:
         logger.debug(message, *args)
 
 

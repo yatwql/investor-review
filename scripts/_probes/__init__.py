@@ -2,7 +2,7 @@
 
 target 生命周期：
   - `register_targets()` 在模块导入时被调用（本子包导入即登记全量 target）
-  - 新 target：新增 `probes/<语义名>.py`，模块级声明 `PROBE_TARGET: str`、
+  - 新 target：新增 `_probes/<语义名>.py`，模块级声明 `PROBE_TARGET: str`、
     `build_parser() -> argparse.ArgumentParser`、`run(args) -> int`，
     并加入下方 `_TARGET_MODULES`
 
@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import importlib
 
-_MODULES = ("probes.csi", "probes.push2")
+_MODULES = ("_probes.csi", "_probes.push2")
 
 _REGISTRY: dict[str, object] = {}
 

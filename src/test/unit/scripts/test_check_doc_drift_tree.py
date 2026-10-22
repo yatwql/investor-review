@@ -21,7 +21,7 @@ class TestTreeParsing:
     def test_reconstructs_nested_paths(self, drift):
         doc = (
             "```\n"
-            "investor-util/\n"
+            "investor-review/\n"
             "├── src/                              # 源代码\n"
             "│   ├── __init__.py                   #   包标记\n"
             "│   └── python/                       # 主程序\n"

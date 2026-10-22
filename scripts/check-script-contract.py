@@ -3,10 +3,10 @@
 
 四条规则覆盖 2026-10-08 scripts 核查中靠人肉逐案发现的契约偏离：
 
-  ① [exit-code]  退出码声明：`check-*` 与 `_checklib.report` 消费方的 docstring「退出码」
-                  节声明码集须 ⊆ {0, 2}（`_checklib.report` 返回值域）；
+  ① [exit-code]  退出码声明：`check-*` 与 `_shared/checklib.report` 消费方的 docstring「退出码」
+                  节声明码集须 ⊆ {0, 2}（`_shared/checklib.report` 返回值域）；
                   分级/环境缺失/事实源不可读等特例见 `_EXIT_CODE_WHITELIST`
-  ② [cli-surface] 检查类 CLI 面：`check-*` 顶层脚本须调用 `_checklib.add_common_args`
+  ② [cli-surface] 检查类 CLI 面：`check-*` 顶层脚本须调用 `_shared.checklib.add_common_args`
                   （统一 `-v/--verbose` + `--ci`）且**消费** `args.verbose`（防空开关）；
                   钩子入口见 `_CLI_SURFACE_EXEMPT`
   ③ [encoding]   文本 I/O 显式 encoding：`open()`（非二进制模式）、`Path.read_text/write_text`、
@@ -21,7 +21,7 @@
 
 退出码：
   0 — 全部通过
-  2 — 发现契约偏离（与 _checklib.report 返回值域一致）
+  2 — 发现契约偏离（与 _shared/checklib.report 返回值域一致）
 """
 
 from __future__ import annotations
@@ -32,13 +32,13 @@ import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_checklib）
-from _checklib import REPO_ROOT, add_common_args, rel, report  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # 共享设施包（_shared/checklib）
+from _shared.checklib import REPO_ROOT, add_common_args, rel, report  # noqa: E402
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 TEST_DIR = REPO_ROOT / "src" / "test"
 
-#: `_checklib.report` 返回值域：0 = 通过，2 = 发现 finding
+#: `_shared/checklib.report` 返回值域：0 = 通过，2 = 发现 finding
 _REPORT_EXIT_CODES = frozenset({0, 2})
 
 #: 规则① 特例：声明码集超出返回值域但属设计内的脚本（键 = 脚本文件名，值 = 允许码集）
@@ -54,7 +54,7 @@ _CLI_SURFACE_EXEMPT = frozenset({"check-task-numbering-hook.py"})
 #: 规则④ 特例：一次性/人工运行的探测与采样工具，无对应测试
 _UNTESTED_EXEMPT = frozenset(
     {
-        "eval-llm-hallucination.py",  # 一次性 LLM 幻觉率采样（薄 CLI，实现在 `_halluc_sampler/` 包）
+        "eval-llm-hallucination.py",  # 一次性 LLM 幻觉率采样（薄 CLI，实现在 `_eval_halluc_sampler/` 包）
     }
 )
 
@@ -89,13 +89,13 @@ def declared_exit_codes(path: Path) -> set[int] | None:
 
 
 def uses_report_contract(path: Path) -> bool:
-    """是否从 `_checklib` 导入 `report`（退出码由 report() 返回值驱动的脚本）。"""
+    """是否从共享包 `_shared.checklib` 导入 `report`（退出码由 report() 返回值驱动）。"""
     try:
         tree = _parse(path)
     except SyntaxError:
         return False
     for node in tree.body:
-        if isinstance(node, ast.ImportFrom) and node.module == "_checklib":
+        if isinstance(node, ast.ImportFrom) and node.module in ("_shared.checklib", "_checklib"):
             if any(alias.name == "report" for alias in node.names):
                 return True
     return False
@@ -187,7 +187,7 @@ def script_findings(path: Path) -> list[str]:
                 findings.append(f"[exit-code] 声明码集 {sorted(codes)} 超出允许集 {sorted(allowed)}")
 
     if is_check and name not in _CLI_SURFACE_EXEMPT and not calls_function(path, "add_common_args"):
-        findings.append("[cli-surface] 未调用 _checklib.add_common_args（缺统一 -v/--ci 面）")
+        findings.append("[cli-surface] 未调用 _shared.checklib.add_common_args（缺统一 -v/--ci 面）")
     elif is_check and name not in _CLI_SURFACE_EXEMPT and not consumes_verbose(path):
         findings.append("[cli-surface] -v/--verbose 已注册但未消费 args.verbose（空开关）")
 

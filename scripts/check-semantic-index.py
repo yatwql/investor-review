@@ -38,7 +38,7 @@ import tokenize
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_checklib）
-from _checklib import (  # noqa: E402
+from _shared.checklib import (  # noqa: E402
     MANAGEMENTS_DIR,
     REPO_ROOT,
     add_common_args,

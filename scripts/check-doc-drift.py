@@ -64,8 +64,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_checklib）
-from _checklib import REPO_ROOT, add_common_args, rel, report  # noqa: E402,F401  # rel：单测直接访问 drift.rel
-from _checklib import conclusion_cache_load, conclusion_cache_save  # noqa: E402
+from _shared.checklib import REPO_ROOT, add_common_args, rel, report  # noqa: E402,F401  # rel：单测直接访问 drift.rel
+from _shared.checklib import conclusion_cache_load, conclusion_cache_save  # noqa: E402
 
 if str(REPO_ROOT) not in sys.path:  # 允许任意 cwd 下运行
     sys.path.insert(0, str(REPO_ROOT))

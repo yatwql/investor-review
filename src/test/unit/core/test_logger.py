@@ -83,3 +83,37 @@ class TestClosedStreamSilentHandler:
         # 清理，避免污染其他测试
         logger.handlers.clear()
         logger.setLevel(logging.NOTSET)
+
+
+class TestLogLevelConfig:
+    """日志级别可由环境变量配置：默认 INFO，DEBUG 按需放开；非法值回落默认。"""
+
+    @staticmethod
+    def _fresh(name: str, monkeypatch, tmp_path):
+        monkeypatch.setattr(log_mod, "_LOG_FILE", str(tmp_path / f"{name}.log"))
+        return log_mod.setup_logger(name)
+
+    @staticmethod
+    def _levels(logger):
+        file_levels = [h.level for h in logger.handlers if hasattr(h, "baseFilename")]
+        console_levels = [h.level for h in logger.handlers if not hasattr(h, "baseFilename")]
+        return file_levels[0], console_levels[0]
+
+    def test_default_levels_are_info(self, monkeypatch, tmp_path):
+        monkeypatch.delenv(log_mod._LOG_FILE_LEVEL_ENV, raising=False)
+        monkeypatch.delenv(log_mod._LOG_CONSOLE_LEVEL_ENV, raising=False)
+        file_level, console_level = self._levels(self._fresh("invest_lvl_default", monkeypatch, tmp_path))
+        assert (file_level, console_level) == (logging.INFO, logging.INFO)
+
+    def test_file_level_env_enables_debug(self, monkeypatch, tmp_path):
+        monkeypatch.setenv(log_mod._LOG_FILE_LEVEL_ENV, "debug")
+        logger = self._fresh("invest_lvl_debug", monkeypatch, tmp_path)
+        file_level, console_level = self._levels(logger)
+        assert file_level == logging.DEBUG
+        assert console_level == logging.INFO
+
+    def test_invalid_level_falls_back(self, monkeypatch, tmp_path):
+        monkeypatch.setenv(log_mod._LOG_FILE_LEVEL_ENV, "verbose-ish")
+        with pytest.warns(RuntimeWarning, match="不是合法日志级别"):
+            file_level, _ = self._levels(self._fresh("invest_lvl_bad", monkeypatch, tmp_path))
+        assert file_level == logging.INFO

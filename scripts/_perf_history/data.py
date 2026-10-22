@@ -1,7 +1,7 @@
 """perf-history 数据派生：从 perf_history 记录算出版本演进 / 漂移 / 对比 / 机读信封。
 
-纯数据层（不拼 Markdown 文本）——渲染见 :mod:`_perf_view.report`，统计原语见
-:mod:`_perf_view.stats`，CLI 见 :mod:`_perf_view.cli`。
+纯数据层（不拼 Markdown 文本）——渲染见 :mod:`_perf_history.report`，统计原语见
+:mod:`_perf_history.stats`，CLI 见 :mod:`_perf_history.cli`。
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ _SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
-from _perf_view.stats import (
+from _perf_history.stats import (
     _DRIFT_MIN_SAMPLES,
     _OUTLIER_K,
     _cv,

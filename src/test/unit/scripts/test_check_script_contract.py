@@ -97,7 +97,7 @@ class TestExitCodeRule:
         assert _rule(mod.script_findings(path), "[exit-code]") == []
 
     def test_report_consumer_scope(self, mod, tmp_path):
-        body = '"""说明。\n\n退出码：\n  0 — 通过\n  1 — 出错\n"""\nfrom _checklib import report\n'
+        body = '"""说明。\n\n退出码：\n  0 — 通过\n  1 — 出错\n"""\nfrom _shared.checklib import report\n'
         hits = _rule(mod.script_findings(_script(tmp_path, "tool_two.py", body)), "[exit-code]")
         assert len(hits) == 1
 
@@ -125,14 +125,14 @@ class TestCliSurfaceRule:
 
     def test_with_common_args_passes(self, mod, tmp_path):
         body = (
-            '"""说明。\n"""\nimport argparse\nfrom _checklib import add_common_args\n'
+            '"""说明。\n"""\nimport argparse\nfrom _shared.checklib import add_common_args\n'
             "parser = add_common_args()\nargs = parser.parse_args()\nif args.verbose:\n    pass\n"
         )
         assert _rule(mod.script_findings(_script(tmp_path, "check-y.py", body)), "[cli-surface]") == []
 
     def test_unconsumed_verbose_flagged(self, mod, tmp_path):
         """注册了 add_common_args 但不消费 args.verbose（空开关）→ 命中。"""
-        body = '"""说明。\n"""\nimport argparse\nfrom _checklib import add_common_args\nparser = add_common_args()\n'
+        body = '"""说明。\n"""\nimport argparse\nfrom _shared.checklib import add_common_args\nparser = add_common_args()\n'
         findings = _rule(mod.script_findings(_script(tmp_path, "check-z.py", body)), "[cli-surface]")
         assert len(findings) == 1
         assert "空开关" in findings[0]

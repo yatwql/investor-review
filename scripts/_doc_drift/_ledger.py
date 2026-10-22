@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from _checklib import REPO_ROOT, rel
+from _shared.checklib import REPO_ROOT, rel
 
 from _doc_drift._shared import (
     _CHANGELOG_MD,
