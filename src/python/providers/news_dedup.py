@@ -107,15 +107,17 @@ def _anchor_retention_days() -> int:
         return _ANCHOR_RETENTION_DAYS
 
 
-def _anchor_retention_cutoff() -> datetime | None:
+def _anchor_retention_cutoff(days: int | None = None) -> datetime | None:
     """保留期起点（None = 不裁剪）。
 
-    以「今天 − N 天」的 00:00 为界；压缩与读取都按此判定，使体积有确定上限。
+    以「今天 − N 天」为界；压缩与读取都按此判定，使体积有确定上限。
+    ``days`` 缺省取 :func:`_anchor_retention_days`（环境变量/默认值）；
+    显式传 0 表示不按时间裁剪（供校准脚本的 ``--retention-days 0``）。
     """
-    days = _anchor_retention_days()
-    if days <= 0:
+    effective = _anchor_retention_days() if days is None else max(0, int(days))
+    if effective <= 0:
         return None
-    return datetime.now() - timedelta(days=days)
+    return datetime.now() - timedelta(days=effective)
 
 
 def _anchor_ts_on_or_after(ts: Any, cutoff: datetime) -> bool:
