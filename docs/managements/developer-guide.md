@@ -772,6 +772,10 @@ test-reports/latest/
   - ❌ 硬编码总数：`assert len(req_ids) == 276`、`assert len(sections) == 17`
   - 需要「条数」语义时用「域覆盖 + 序号连续」等价表达（强度不低于写死条数，且能发现跳号/重号）
   - 由此守：`scripts/check-test-redundancy.py` 第 5 类 `check_hardcoded_evolving_totals`
+- **浮点断言容差化**：涉及浮点计算结果的断言用 `pytest.approx(...)`（或显式 `abs=`/`rel=`），**禁止 `==`/`!=` 比较两条计算路径**——「同一函数、不同输入长度或求和顺序」也算两条路径。
+  - ❌ `assert beta == portfolio_beta(portfolio[:200], benchmark)`（内部对齐 vs 显式截断，末位差 1 ulp：3.13 相等、3.11 不等）
+  - ✅ `assert beta == pytest.approx(portfolio_beta(portfolio[:200], benchmark), abs=1e-12)` + 长度敏感反例 `assert abs(portfolio_beta(portfolio[:100], benchmark) - beta) > 1e-6`
+  - 只有整数、`len`、set/list 结构、字符串/指纹等精确可表示的值才用 `==`；容差取「远大于 ulp、远小于真正区分的量级」
 - **勿断言「随周期/环境变化的仓库状态」**：读**真实仓库**的契约测试（如 `TestRealArchiveContract`）只能约束「结构的 invariant」，不能要求「某种状态必须存在」——例如「主台账至少有一节开发期已修复」在新开发周期开张时必然不成立（`devbump` 会清空上一版占位），本地恰巧有节、CI 上却是空台账，于是出现「本地全绿、CI 三版本 + portability 全红」。写这类断言时穷举状态并给出各自的合法判据；**能空的状态就要允许空**。同理：新增子命令/新条目的测试优先从实现集合派生（如 `cmd_*` 函数集合），不写死清单。
 - 新增文件后运行 `.venv/bin/python scripts/check-test-markers.py` 验证标记合规性
 
