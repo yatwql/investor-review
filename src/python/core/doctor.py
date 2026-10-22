@@ -73,7 +73,10 @@ _DEFAULT_OUTPUT_DIR = os.path.join(PROJECT_ROOT, "reports")
 
 # ── 日志与缓存健康探针（只读；路径挂常量便于测试重定向） ──────
 _APP_LOG_PATH = os.path.join(_LOGS_DIR, "app.log")
-_DEDUP_ANCHOR_PATH = os.path.join(_CACHE_DIR, "dedup_anchors.jsonl")
+# 与 providers/news_dedup._ANCHOR_PATH 同源（core 层不得反向 import providers，
+# 由 test_doctor_health 的路径一致性用例防漂移；相对段单列，便于测试不受路径重定向影响）
+_DEDUP_ANCHOR_REL = os.path.join("data", "calibration", "dedup_anchors.jsonl")
+_DEDUP_ANCHOR_PATH = os.path.join(PROJECT_ROOT, _DEDUP_ANCHOR_REL)
 _PERF_LEDGER_PATH = os.path.join(PROJECT_ROOT, "data", "state", "perf_history.jsonl")
 #: 去重锚点自动压缩阈值（与 providers/news_dedup._ANCHOR_SIZE_WARN_BYTES 同值）
 _ANCHOR_COMPACT_BYTES = 32 * 1024 * 1024

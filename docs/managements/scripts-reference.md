@@ -961,7 +961,7 @@ curl 对照命令：`curl -s "https://push2.eastmoney.com/api/qt/stock/get?secid
 .venv/bin/python scripts/eval-dedup-threshold.py --summary
 
 # 指定锚点文件
-.venv/bin/python scripts/eval-dedup-threshold.py --file data/cache/dedup_anchors.jsonl
+.venv/bin/python scripts/eval-dedup-threshold.py --file data/calibration/dedup_anchors.jsonl
 ```
 
 **校准时机**：建议锚点文件积累 **100 条以上**（约 5~10 次报告运行）后校准一次。脚本只分析不自动修改阈值，是否需要调整由开发者判断。

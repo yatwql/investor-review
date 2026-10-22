@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -99,6 +100,19 @@ class TestPerfLedger:
         item = doctor._check_perf_ledger_health()
         assert item["ok"] is True
         assert "样本不足" in item["message"]
+
+
+class TestAnchorPathSource:
+    """doctor 与采集侧必须指向同一个锚点文件（曾误指 data/cache 下的陈旧副本）。"""
+
+    def test_path_matches_producer(self):
+        import os
+
+        from src.python.providers import news_dedup
+
+        # 两边都可能被测试隔离重定向，比较相对尾部（data/calibration/dedup_anchors.jsonl）
+        tail = os.path.join(*Path(news_dedup._ANCHOR_PATH).parts[-3:])
+        assert doctor._DEDUP_ANCHOR_REL == tail
 
 
 class TestGroupWiring:

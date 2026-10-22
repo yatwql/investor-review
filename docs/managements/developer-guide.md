@@ -941,7 +941,7 @@ INVEST_LOG_CONSOLE_LEVEL=DEBUG ...                                              
 
 **LLM 总时间预算**：`llm_settings.json → llm_total_time_budget_sec`（秒，`0`=不启用）。超预算后**不再启动新模块**（已在跑的模块不打断），日志回显已用时与预算值，报告按已生成内容呈现。用于兜住「单模块卡住 + 重试叠加」把一次 full 拖成小时级（审计实测曾出现 6,623s 的 LLM+新闻阶段）。
 
-**去重锚点自动压缩**：`data/cache/dedup_anchors.jsonl` 超过 32MB 时在读侧自动压缩（保留每个标题对最新一条，原文件备份 `.bak`，原子替换）；`INVEST_DEDUP_AUTO_COMPACT=0` 可关闭。手工统计口径仍用 `scripts/eval-dedup-threshold.py --compact`。
+**去重锚点自动压缩**：`data/calibration/dedup_anchors.jsonl` 超过 32MB 时在读侧自动压缩（保留每个标题对最新一条，原文件备份 `.bak`，原子替换）；`INVEST_DEDUP_AUTO_COMPACT=0` 可关闭。手工统计口径仍用 `scripts/eval-dedup-threshold.py --compact`。
 
 ### 日志：先看日志再看代码
 
