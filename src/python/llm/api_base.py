@@ -15,6 +15,7 @@ import httpx
 
 from src.python.core.http_client import post_with_deadline
 from src.python.core.retry import STRATEGY_TABLE, RetryPolicy, retry_transient
+from src.python.core.text_safety import sanitize_llm_payload
 
 from src.python.llm.circuit_breaker import (
     _cb_endpoint,
@@ -424,6 +425,9 @@ def call_llm_with_retry(
         (content, usage) — content 为文本，usage 为 API 用量字典，失败时均为 None
     """
     global _last_llm_failure_reason
+    # 请求体净化：用户输入（stdin surrogateescape）与外部文本可能带无法编码的孤立
+    # 代理项，httpx 序列化时会抛 UnicodeEncodeError 并被误判为响应解析失败。
+    payload = sanitize_llm_payload(payload)
     if _check_circuit_breaker(url, label):
         _last_llm_failure_reason = FAIL_REASON_CIRCUIT_OPEN
         return (None, None)

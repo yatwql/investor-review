@@ -520,3 +520,83 @@ class TestServerErrorEnvelopeFlag(unittest.TestCase):
         out = _extract_content({"content": [{"type": "text", "text": "ok"}]})
         self.assertEqual(out, "ok")
         self.assertFalse(_get_last_server_error())
+
+
+class TestLoneSurrogateBoundary(unittest.TestCase):
+    """孤立代理项不得击穿请求/响应边界。
+
+    回归背景：TUI 追问经 ``input()``（stdin ``surrogateescape``）拿到的非法
+    UTF-8 字节会变成孤立代理项，httpx 以 ``ensure_ascii=False`` 序列化请求体时
+    ``.encode("utf-8")`` 抛 ``UnicodeEncodeError``，被误判为「响应解析失败」。
+    """
+
+    @patch("src.python.llm.api_base._cb_is_open", return_value=False)
+    @patch("src.python.llm.api_base._cb_record_success")
+    @patch("src.python.llm._api_responses._log_token_usage")
+    def test_request_payload_with_lone_surrogate_is_sanitized(
+        self, _mock_log_usage, _mock_record_success, _mock_cb_open
+    ) -> None:
+        import httpx
+
+        from src.python.llm.api_base import call_llm_with_retry
+
+        captured: dict[str, str] = {}
+
+        def _handler(request: httpx.Request) -> httpx.Response:
+            # 未净化时这一步就抛 UnicodeEncodeError（原始缺陷）
+            captured["body"] = request.content.decode("utf-8")
+            return httpx.Response(200, content=b'{"content":"ok","usage":{}}')
+
+        client = httpx.Client(transport=httpx.MockTransport(_handler))
+        result, usage = call_llm_with_retry(
+            "Test",
+            client,
+            "https://api.test.com",
+            {},
+            {"messages": [{"role": "user", "content": "\ud800本期汇率风险"}]},
+            30.0,
+            0,
+            1000,
+            "max_tokens",
+            extract_fn=lambda d: d.get("content"),
+            check_truncation_fn=lambda d, mt: False,
+            provider="claude",
+        )
+
+        self.assertEqual(result, "ok")
+        self.assertEqual(usage, {})
+        self.assertIn("\ufffd本期汇率风险", captured["body"])
+
+    @patch("src.python.llm.api_base._cb_is_open", return_value=False)
+    @patch("src.python.llm.api_base._cb_record_success")
+    @patch("src.python.llm._api_responses._log_token_usage")
+    def test_response_content_with_lone_surrogate_is_sanitized(
+        self, _mock_log_usage, _mock_record_success, _mock_cb_open
+    ) -> None:
+        import httpx
+
+        from src.python.llm.api_base import call_llm_with_retry
+
+        body = b'{"content":"\\ud800\\u6b63\\u6587","usage":{}}'
+
+        def _handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, content=body)
+
+        client = httpx.Client(transport=httpx.MockTransport(_handler))
+        result, _usage = call_llm_with_retry(
+            "Test",
+            client,
+            "https://api.test.com",
+            {},
+            {},
+            30.0,
+            0,
+            1000,
+            "max_tokens",
+            extract_fn=lambda d: d.get("content"),
+            check_truncation_fn=lambda d, mt: False,
+            provider="claude",
+        )
+
+        self.assertEqual(result, "\ufffd正文")
+        self.assertEqual(result.encode("utf-8"), b"\xef\xbf\xbd\xe6\xad\xa3\xe6\x96\x87")

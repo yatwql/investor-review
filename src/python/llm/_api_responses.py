@@ -11,6 +11,7 @@ import threading
 from collections.abc import Callable
 
 
+from src.python.core.text_safety import sanitize_lone_surrogates
 from src.python.llm.circuit_breaker import (
     _cb_record_failure,
 )
@@ -290,6 +291,7 @@ def _process_success_response(
         logger.warning("%s API 响应格式异常", label)
         _cb_record_failure(url)
         return (None, None)
+    content = sanitize_lone_surrogates(content)  # 响应中的 \udXXX 孤立代理项不可编码
     if not content.strip():
         logger.warning("%s API 返回空内容（可能被内容过滤机制拦截）", label)
         return ("", data.get("usage"))

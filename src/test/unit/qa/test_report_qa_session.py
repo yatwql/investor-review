@@ -316,3 +316,22 @@ class TestPromptUsage:
         assert set(second["usage"]) == {"input_tokens", "output_tokens", "provider"}
         assert second["usage"]["input_tokens"] == 14
         assert second["usage"]["output_tokens"] == 6
+
+
+class TestQuestionSurrogateSafety:
+    """用户问题中的孤立代理项（stdin surrogateescape 产物）不得击穿 LLM 请求。"""
+
+    def test_lone_surrogate_question_is_sanitized_before_llm(self, qa_report, monkeypatch):
+        report, _report2, output_dir = qa_report
+        recorder = _patch_llm(monkeypatch, _LlmRecorder())
+
+        result = _ask(output_dir, report, "\ud800本期汇率风险？")
+
+        assert result["ok"] is True
+        user_prompt = recorder.calls[0]["user"]
+        assert user_prompt.endswith("\ufffd本期汇率风险？")
+        assert "\ud800" not in user_prompt
+        user_prompt.encode("utf-8")  # 不再抛 UnicodeEncodeError
+        # 历史记录同样存净化后的文本，避免下一轮再次带出不可编码字符
+        session = qa_session._sessions[result["session_id"]]
+        assert session.history[0]["q"] == "\ufffd本期汇率风险？"
