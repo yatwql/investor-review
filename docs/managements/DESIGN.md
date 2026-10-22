@@ -5,7 +5,8 @@
 
 ## Overview — 基调与哲学
 
-- **功能面，非营销面**：这是投资复盘工具与其产物报告，价值在数据密度与可扫读性；拒绝 hero 大图、插画吉祥物、多色 CTA。
+- **功能面，非营销面**：这是投资复盘工具与其产物报告，价值在数据密度与可扫读性；拒绝 hero 大图、装饰性插画、多色 CTA。
+- **品牌标记（Brand Mark）**：吉祥物猫头鹰「守望」以**小尺寸标记**身份出现——页头 ≤40px、favicon 32px、Excel 首页 ≤48px；**只做身份识别，不做装饰**：不放大成 hero、不加动效、不重复出现在正文区块。标记用 `src/static/web/favicon.svg`（32px 头像版）或 `owl-mascot.svg`（完整插画版，仅 README 与 ≤48px 场景）。
 - **双面构成**：
   - **HTML 报告**（`src/static/tmpl/`，约 180 个 CSS 变量）——阅读产物，「长文 + 密集数字表」场景，明暗双主题完整（`[data-theme="dark"]` 68 变量覆盖 + `theme.js` 偏好持久化/图表重烘焙/打印协调）。
   - **Web 工作台**（`src/static/web/style.css`，18 个角色名 token；旧 `--color-*` 命名体系已于宽限期结束时删除映射）——操作台，五区标签页（生成报告/调仓模拟/配置/运行状态/日志），当前浅色单世界。
@@ -25,6 +26,7 @@
 | 状态语义 | 成功 / 警告 / 错误 | `--ok` `--success` / `--warn` `--warn-*` / `--info` `--row-danger-*` | `--ok` / `--warn` / `--error` | **健康状态域**：绿=ok、黄=warn、红=error；报告无通用 error 红，错误呈现走 danger 组件派生域（豁免对表） |
 | 涨跌语义 | 涨（红）/ 跌（绿） | `--profit` / `--loss` | —（工作台无行情色） | **A 股口径域**：与状态域红绿语义**相反**，两域禁互换 |
 | 强调与焦点 | 品牌蓝 / 焦点环 | `--primary`(-hover) / `--focus` | `--primary`(-hover) / `--focus` / `--accent` | 单强调色；accent 仅用于次要正向标记（报告无专有豁免） |
+| `--brand-mark-ink` | 品牌标记前景（猫头鹰脸盘/耳簇） | `#e8f1fb` | `#e8f1fb` | 页头恒为品牌蓝底，故明暗同值；仅用于品牌标记 |
 | Chart 专用 | 系列色 / 网格 / 图文字 | `--chart-primary` `--chart-secondary` `--chart-success` `--chart-danger` `--chart-warning` `--chart-grid` `--chart-text` `--chart-bg` | —（工作台无图） | 仅图表使用；`theme.js` 切主题时重读烘焙 |
 | 组件派生面 | 表格斑马/小计/合计、行警示、徽标、辩论、来源标签、空态底 | `--table-*` `--subtotal-bg` `--grand-total-bg` `--row-*` `--notice-*` `--debate-*` `--source-tag-*` `--empty-section-bg` `--heat-*`（相关系数分档）`--corr-*`（相关性方向×强度）`--cell-na-bg` `--alloc-*` `--danger-text` 等 | — | 组件级派生色，必须引用基础角色而非裸值 |
 
@@ -125,6 +127,7 @@
 8. **DO** 新组件过六态清单（含 focus-visible）；**DON'T** 交付只写 default 的组件。
 9. **DO** 类名与文案用中文语义（英文语义词亦可）；**DON'T** 把任务编号、内部代号写进类名/文案。
 10. **DO** 图表配色只走 `--chart-*` 并经 `theme.js` 烘焙链；**DON'T** 在图表配置里散写颜色字面量。
+11. **DO** 品牌标记（猫头鹰「守望」）只作身份识别、尺寸 ≤40px（favicon 32px / Excel 首页 ≤48px）；**DON'T** 把它放大成 hero、加动效、或塞进正文区块当装饰。
 
 > **机检落地**（`scripts/check-style-guardrails.py`，复用 `_checklib` 契约）：**E 级判 finding**（`--ci` 退出 2）——护栏 3 强调色越权（品牌蓝 hex 集从 `:root` 强调系 token 动态提取）、护栏 5 明暗同步（dark 覆盖变量根缺）、Colors「同名对齐」段双面 token 对表（表↔实现双向）、**W3 内联色值**（2026-10-20 收口：观察期 40 处存量全部 token 化归零后由观察升为 E 级）；**W 级观察统计不判 finding**——护栏 1 裸色值存量、护栏 2 圆角档位（`-v` 明细）；**W4 档外字号 / W5 档外间距**（2026-10-17 设计契约审计批次增设：W1 的引号整行豁免为 JS 图表配置设计，HTML 内联 `style=` 色值属盲区——W3 按位置级判定找回；W4/W5 把 Do-Don't「不发明新档」从自觉升级为可观察，均只判字面量、token 用法天然不命中）。**观察期**：未入 pre-commit 钩子域与 CI guards，待误报稳定后评估入域（护栏 4/6/7/9/10 由既有测试与 code-traces 等守护分担）。
 
@@ -133,6 +136,7 @@
 - **新增章节 partial**：读本文件 → 颜色/字号全部取既有角色与字阶 → 表格套行态族 → 无数据走三档空态口径 → 禁止内联新样式除非先在本文件登记 token。
 - **新增 CSS token**：先在 Colors/Typography/Layout 表登记角色 → 两面同时给值（含暗色）→ 护栏机检确认无裸值。
 - **新增组件**：六态全给 → 间距/圆角取档 → focus-visible 必给 → 窄屏断点行为想清楚。
+- **新增品牌标记位**：先确认是「身份识别」而非「装饰」→ 尺寸 ≤40px（Excel ≤48px）→ 用既有 SVG 资源不新画 → 暗色下标记底色随 `--primary` 走，不另立色值。
 - **改版式**：对照字阶表与间距阶，不发明新档；影响打印走打印管线回归；涉及报告观感的改动在 ≤480px 手机视口复核（移动阅读是一等场景，见 Responsive 节）。
 
 ## Known Gaps — 未覆盖面（随任务推进更新）

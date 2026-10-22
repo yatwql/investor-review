@@ -12,6 +12,8 @@
 
 ### Changed
 
+- **品牌标记补用（`rf-818`）**：猫头鹰「守望」此前只活在 README 与 Web favicon，报告与 Excel 首页没有标记。现 `DESIGN.md` 契约收窄为「拒绝 hero 大图、装饰性插画」并新增「品牌标记」条款（≤40px 身份识别、Excel ≤48px、不做装饰）+ 护栏 11；报告 favicon 由折线图换猫头鹰头像、页头加 32px 标记（窄屏 26px）、Web 工作台页头 36px、Excel 首页 40px（cairosvg 栅格化，失败静默跳过）；新增 `--brand-mark-ink` token 并登记 Colors 表。回归 5 例。
+
 - **仓库更名 `investor-util` → `investor-review`（`rf-817`）**：`util` 后缀与产品定位（完整工作流的应用，非脚本合集）矛盾，且与中文名「投资复盘助手」语义不对应。同步 14 个文件 47 处引用：README 徽章与 clone 命令、`pyproject.toml` 包名、目录树根名、四份用户手册路径示例、CLI/Web `prog` 显示名、三个 provider 的 HTTP `User-Agent`、通知邮件 `From` 兜底。GitHub 侧旧 URL 永久 301 重定向，外部引用不断。
 
 ### Fixed

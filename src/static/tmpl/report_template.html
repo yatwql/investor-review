@@ -4,13 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>个人投资分析报告 - {{ now }}</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='2' width='28' height='28' rx='6' fill='%232E75B6'/%3E%3Cpath d='M7 22 13.5 15.5 17.5 19 25 10.5' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M19.5 10.5H25V16' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+    <!-- 品牌标记：猫头鹰「守望」头像（与 Web 工作台 favicon 同源；内联 data URI 使报告单文件自足） -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='2' width='28' height='28' rx='7' fill='%232E75B6'/%3E%3Cpath d='M10 13 L9.2 7 L14.2 10.2 Z' fill='%23e8f1fb'/%3E%3Cpath d='M22 13 L22.8 7 L17.8 10.2 Z' fill='%23e8f1fb'/%3E%3Ccircle cx='16' cy='17.5' r='9.2' fill='%23e8f1fb'/%3E%3Ccircle cx='12.6' cy='16.6' r='3.3' fill='%23fff' stroke='%231d3557' stroke-width='1.2'/%3E%3Ccircle cx='19.4' cy='16.6' r='3.3' fill='%23fff' stroke='%231d3557' stroke-width='1.2'/%3E%3Ccircle cx='13.1' cy='17' r='1.5' fill='%231d3557'/%3E%3Ccircle cx='18.9' cy='17' r='1.5' fill='%231d3557'/%3E%3Cpath d='M16 19.4 L14.8 21.2 Q16 22.3 17.2 21.2 Z' fill='%23fbbf24'/%3E%3C/svg%3E">
     <style>
         /* 移动阅读：禁横屏/字号自动放大（iOS text-size-adjust） */
         html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
         :root {
             /* 设计 token — 跨面共享角色（DESIGN.md Colors；Web 工作台同名对齐） */
             --primary: #2E75B6;
+            /* 品牌标记前景（页头恒为品牌蓝底，故明暗同值；DESIGN.md Colors 登记） */
+            --brand-mark-ink: #e8f1fb;
             --primary-hover: #185a92;
             --focus: #0969da;
             --font-stack: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, sans-serif;
@@ -214,6 +217,9 @@
         .container { max-width: 1200px; margin: 0 auto; padding: 20px; display: flex; flex-direction: column; }
 
         .report-header { background: var(--primary); color: #fff; padding: 20px 30px; border-radius: 8px; margin-bottom: 24px; }
+        /* 品牌标记：猫头鹰「守望」32px 身份识别（DESIGN.md 护栏 11：≤40px、不做装饰） */
+        .report-brand { display: flex; align-items: center; gap: 8px; }
+        .report-brand-mark { width: 32px; height: 32px; flex: 0 0 32px; color: var(--brand-mark-ink); }
         .report-header h1 { font-size: var(--fs-h1); margin-bottom: 4px; }
         .report-header .subtitle { font-size: var(--fs-body); opacity: 0.85; }
 
@@ -524,6 +530,8 @@
         @media (max-width: 768px) {
             .container { padding: 8px; }
             .report-header { padding: 14px 16px; }
+            .report-brand { gap: 8px; }
+            .report-brand-mark { width: 26px; height: 26px; flex-basis: 26px; }
             .report-header h1 { font-size: var(--fs-h2); }
             .report-header .subtitle { font-size: var(--fs-table-sm); }
 
@@ -795,7 +803,19 @@
     <!--  HEADER                                                -->
     <!-- ═══════════════════════════════════════════════════════ -->
     <div class="report-header" id="report-top">
-        <h1>个人投资分析报告</h1>
+        <div class="report-brand">
+            <svg class="report-brand-mark" viewBox="0 0 32 32" role="img" aria-label="投资复盘助手" focusable="false">
+                <path d="M10 13 L9.2 7 L14.2 10.2 Z" fill="currentColor"/>
+                <path d="M22 13 L22.8 7 L17.8 10.2 Z" fill="currentColor"/>
+                <circle cx="16" cy="17.5" r="9.2" fill="currentColor"/>
+                <circle cx="12.6" cy="16.6" r="3.3" fill="#fff" stroke="#1d3557" stroke-width="1.2"/>
+                <circle cx="19.4" cy="16.6" r="3.3" fill="#fff" stroke="#1d3557" stroke-width="1.2"/>
+                <circle cx="13.1" cy="17" r="1.5" fill="#1d3557"/>
+                <circle cx="18.9" cy="17" r="1.5" fill="#1d3557"/>
+                <path d="M16 19.4 L14.8 21.2 Q16 22.3 17.2 21.2 Z" fill="#fbbf24"/>
+            </svg>
+            <h1>个人投资分析报告</h1>
+        </div>
         <div class="subtitle">统计时间: {{ now }} | 所属交易日: {{ trading_day }}</div>
         <div class="subtitle" style="font-size: var(--fs-table-sm); margin-top:2px;">由 {{ app_name }} v{{ app_version }} 生成</div>
         {% if data_quality_enabled and data_freshness and data_freshness.available and data_freshness.abnormal_count > 0 %}

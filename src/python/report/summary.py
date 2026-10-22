@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -114,6 +115,48 @@ def _write_index_row(ws, row: int, name: str, price: float, change_pct: float) -
 def _write_blanks(_ws, row: int, n: int = 1) -> int:
     """写入 n 行空白。"""
     return row + n
+
+
+#: 品牌标记（猫头鹰「守望」头像）SVG 源——与 Web 工作台 favicon 同源，Excel 侧转 PNG 嵌入
+_BRAND_MARK_SVG = Path(__file__).resolve().parents[2] / "static" / "web" / "favicon.svg"
+
+#: 嵌入尺寸（像素）——DESIGN.md 护栏 11：Excel 首页 ≤48px
+_BRAND_MARK_PX = 40
+
+
+def _embed_brand_mark(ws: Worksheet) -> None:
+    """在首页标题行左侧嵌入品牌标记（猫头鹰「守望」）。
+
+    身份识别用途（DESIGN.md 护栏 11：≤48px、不做装饰）。SVG 经 cairosvg 栅格化后
+    以 PNG 嵌入——openpyxl 不支持 SVG。资源缺失或 Pillow 不可用时**静默跳过**：
+    品牌标记是装饰性增强，不得让报告生成失败。
+    """
+    try:
+        from io import BytesIO
+
+        import cairosvg
+        from openpyxl.drawing.image import Image as XLImage
+
+        # SVG → PNG 栅格化（Pillow 不解析 SVG；cairosvg 已在依赖内，供 check-svg 使用）
+        png = BytesIO()
+        cairosvg.svg2png(
+            url=str(_BRAND_MARK_SVG),
+            write_to=png,
+            output_width=_BRAND_MARK_PX,
+            output_height=_BRAND_MARK_PX,
+        )
+        # openpyxl 的 `Image._data()` 每次调用都会 `fp.close()` 关掉底层流，而报告会
+        # 落盘两次（最新版 + 存档版）——第二次保存即抛 `I/O operation on closed file`。
+        # 故先物化 PNG 字节，再把 `_data` 换成「返回缓存字节」的闭包（不递归调用原方法）。
+        png.seek(0)
+        img = XLImage(png)
+        img.width = img.height = _BRAND_MARK_PX
+        img._brand_stream = png  # noqa: SLF001 — 保活底层流（openpyxl 无公开接口）
+        _png_bytes = img._data()  # noqa: SLF001 — 读一次即物化（此后流可被关闭）
+        img._data = lambda _b=_png_bytes: _b  # noqa: SLF001 — 两次保存都拿到同一份字节
+        ws.add_image(img, "A1")
+    except Exception as exc:  # noqa: BLE001 — 品牌标记失败不得影响报告产出
+        logger.debug("品牌标记嵌入跳过：%s", exc)
 
 
 def _write_basic_info(ws: Worksheet, row: int, now: datetime | None = None) -> int:
@@ -488,6 +531,7 @@ def write_summary_sheet(
             按可见章节序生成；None 时不渲染导航区，表头行位置与既有输出一致）
     """
     row = write_title_row(ws, 1, get_report_sheet_name("summary"), _NCOLS)
+    _embed_brand_mark(ws)
     # ── 章节导航区（与 HTML 左侧目录对应：可见章节 → 各页签内部超链接） ──
     if section_nav:
         row = _write_section(ws, row, "【章节导航】")

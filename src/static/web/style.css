@@ -95,6 +95,20 @@ body {
   margin: 0 auto;
 }
 
+/* 品牌标记：猫头鹰「守望」36px 身份识别（DESIGN.md 护栏 11：≤40px、不做装饰） */
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-brand-mark {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  color: var(--primary);
+}
+
 .app-header h1 {
   margin: 0;
   font-size: 1.65rem;

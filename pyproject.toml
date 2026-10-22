@@ -24,6 +24,7 @@ color = [
 # SVG 像素审查（scripts/check-svg.py pixel|text-overflow）需要；几何审查 geom 免依赖
 svg = [
     "Pillow>=10",
+    "cairosvg>=2.7",
 ]
 test = [
     "pytest>=9.1",
