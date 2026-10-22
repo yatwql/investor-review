@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from src.python.cache import clear as cache_clear
 from src.python.cache import get as cache_get
 from src.python.cache import get_ttl
 from src.python.cache import set as cache_set
@@ -286,6 +287,17 @@ def _fetch_sections(doc_id: int | str, source: str | None = None) -> list[str] |
     return None
 
 
+def _invalidate_sections_cache(doc_id: int | str) -> None:
+    """失效该文档的章节名清单缓存（下次重取 ``/sections``）。
+
+    动机：清单缓存（14 天）命中后一直复用同一批章节名；若源侧已重新解析过该文档
+    （章节改名/补齐），这套旧名字会持续 404——每次运行都在同一批死名字上做无效探测，
+    且**永不**恢复。取正文全空时清一次，把「恢复机会」买回来，代价只是下次多一次
+    ``/sections`` 探测（单请求、本身也带缓存）。
+    """
+    cache_clear(f"{SECTIONS_PREFIX}{doc_id}")
+
+
 def _pick_sections(available: list[str] | None, preferences: tuple[str, ...]) -> list[str]:
     """按偏好顺序在**实际章节名**中做子串匹配，返回精确章节名（去重保序）。
 
@@ -359,7 +371,8 @@ def _collect_doc_sections(
     Returns:
         ``(首个非空正文记录 | None, 正文列表)``
     """
-    resolved = _pick_sections(_fetch_sections(doc_id, source=source), tuple(preferences)) or list(preferences)
+    available = _fetch_sections(doc_id, source=source)
+    resolved = _pick_sections(available, tuple(preferences)) or list(preferences)
     record: dict[str, Any] | None = None
     contents: list[str] = []
     for section in resolved:
@@ -371,6 +384,9 @@ def _collect_doc_sections(
         text = str(got.get("content") or "").strip()
         if text:
             contents.append(text)
+    if not contents and available:
+        # 清单匹配出的章节全部取不到正文 → 该清单不可信，失效后由下次重取恢复
+        _invalidate_sections_cache(doc_id)
     return record, contents
 
 
