@@ -121,3 +121,97 @@ class TestInternalPackagesAreNamed:
             "以下内部实现包未在 scripts-reference.md 中点名（拆包后须在对应条目注明实现位置）：\n"
             + "\n".join(f"  - scripts/{name}/" for name in missing)
         )
+
+
+# ── 内容层：详情小节覆盖 + CLI 旗标真实性 ─────────────────────
+
+
+#: 允许「一览有条目、无独立详情小节」的条目（薄垫片：实现与用法已在其所属条目里说明）
+_SECTIONLESS_OK = {"probe-csi-factor-indices.py"}
+
+#: 文档会提到的**外部工具**旗标（pip / pytest / git / pi 等，不经本仓脚本解析器）
+_EXTERNAL_FLAGS = {
+    "--break-system-packages",
+    "--no-deps",
+    "--failed-first",
+    "--last-failed",
+    "--list-models",
+    "--is-ancestor",
+    "--no-hardlinks",
+    "--lf",
+    "--tb",
+    "--co",
+    "--durations",
+    "--pdb",
+    "--capture",
+    "--collect-only",
+    "--html",
+    "--run-live",
+    "--no-ff",
+    "--fix",
+    "--force-refresh",
+    "--full-bench",
+    "--with-test-count",
+    "--dry-run",
+    "--no-archive",
+    "--skip-design-docs",
+    "--record-cassettes",
+}
+
+
+def _doc_tokens(path: Path, pattern: str) -> set[str]:
+    return set(re.findall(pattern, path.read_text(encoding="utf-8")))
+
+
+def _ast_flags() -> set[str]:
+    """`scripts/**` 与 CLI 解析器里所有 `--flag` 字面量（静态 AST，不执行脚本）。"""
+    import ast
+
+    roots = [SCRIPTS_DIR, REPO_ROOT / "src" / "python" / "cli"]
+    flags: set[str] = set()
+    for root in roots:
+        for path in root.rglob("*.py"):
+            if "__pycache__" in path.parts:
+                continue
+            try:
+                tree = ast.parse(path.read_text(encoding="utf-8"))
+            except SyntaxError:
+                continue
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                    flags |= set(re.findall(r"^--[a-z][a-z0-9]*(?:-[a-z0-9]+)*$", node.value))
+    return flags
+
+
+class TestDetailSections:
+    """每条一览条目要么有独立详情小节（加粗脚本名标题），要么在豁免表里说明。"""
+
+    def test_every_entry_has_detail_section_or_exemption(self):
+        missing = sorted(
+            name
+            for name in _overview_names()
+            if name.endswith(".py")
+            and not name.startswith("_")
+            and name not in _SECTIONLESS_OK
+            and not re.search(rf"\*\*`{re.escape(name)}`", REFERENCE.read_text(encoding="utf-8"))
+        )
+        assert missing == [], (
+            "以下脚本在一览表里有条目，但缺独立详情小节（或加入 _SECTIONLESS_OK 并说明理由）：\n"
+            + "\n".join(f"  - {name}" for name in missing)
+        )
+
+
+class TestDocumentedFlagsExist:
+    """两份文档提到的 `--flag` 必须能在脚本/CLI 解析器里找到（防旗标改名/删除后文档滞留）。"""
+
+    def test_doc_flags_resolve_to_parser_or_external_tool(self):
+        known = _ast_flags() | _EXTERNAL_FLAGS
+        violations = []
+        for doc in (REFERENCE, GUIDE):
+            for flag in sorted(_doc_tokens(doc, r"--[a-z][a-z0-9]*(?:-[a-z0-9]+)+")):
+                if flag not in known:
+                    violations.append(f"{doc.name}: {flag}")
+        assert violations == [], (
+            "文档提到的旗标在脚本/CLI 解析器里找不到（可能已改名或删除），请同步文档或补白名单：\n"
+            + "\n".join(f"  - {v}" for v in violations)
+        )
