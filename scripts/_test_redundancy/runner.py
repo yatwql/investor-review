@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_checklib）
-from _checklib import rel  # noqa: E402
+from _shared.checklib import rel  # noqa: E402
 
 
 def run_checks(include_live: bool = False) -> tuple[list[str], dict[str, int]]:

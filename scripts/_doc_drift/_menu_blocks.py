@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from _checklib import rel
+from _shared.checklib import rel
 from src.python.tui.handlers_config import CONFIG_DIR_INFO_KEYS
 from src.python.tui.tui_menu import MENU_ITEMS
 

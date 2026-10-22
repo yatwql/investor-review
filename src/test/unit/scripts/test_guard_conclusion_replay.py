@@ -191,5 +191,5 @@ class TestDocTracesCacheLogicSurface:
     def test_logic_surface_covers_scan_backends(self):
         mod = load_script("check-doc-traces.py")
         names = {p.name for p in mod._LOGIC_FILES}
-        assert {"check-doc-traces.py", "patterns.py", "dedup.py", "_traces_common.py", "exemptions.py"} <= names
+        assert {"check-doc-traces.py", "patterns.py", "dedup.py", "traces_common.py", "exemptions.py"} <= names
         assert all(p.is_file() for p in mod._LOGIC_FILES)

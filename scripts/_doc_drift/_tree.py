@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 from typing import cast
-from _checklib import REPO_ROOT, rel
+from _shared.checklib import REPO_ROOT, rel
 from src.python.core.registry import _REPORT_SECTION_DEFAULT
 from src.python.core.section_block_registry import SECTION_BLOCK_SPECS
 from src.python.report.section_block_extraction import extract_excel_block_titles, extract_html_block_titles

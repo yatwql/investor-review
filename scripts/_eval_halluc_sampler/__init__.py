@@ -9,15 +9,15 @@
 
 from __future__ import annotations
 
-from _halluc_sampler.fact_check import _run_fact_check  # noqa: F401
-from _halluc_sampler.holdings import (  # noqa: F401
+from _eval_halluc_sampler.fact_check import _run_fact_check  # noqa: F401
+from _eval_halluc_sampler.holdings import (  # noqa: F401
     _compute_categories,
     _compute_portfolio_values,
     _load_datasets,
 )
-from _halluc_sampler.llm_call import (  # noqa: F401
+from _eval_halluc_sampler.llm_call import (  # noqa: F401
     _MODULE_FNS,
     _call_llm_module,
     _get_http_client,
 )
-from _halluc_sampler.report import _generate_report  # noqa: F401
+from _eval_halluc_sampler.report import _generate_report  # noqa: F401

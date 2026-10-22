@@ -15,7 +15,7 @@ from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_checklib）
-from _checklib import rel  # noqa: E402
+from _shared.checklib import rel  # noqa: E402
 
 
 class _Skeletonizer(ast.NodeTransformer):

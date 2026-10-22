@@ -20,7 +20,7 @@ from src.test._script_loader import load_script
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report, pytest.mark.edge]
 
 
-_checklib = load_script("_checklib.py")
+_checklib = load_script("_shared/checklib.py")
 
 _TEMPLATE_PATH = os.path.normpath(
     os.path.join(os.path.dirname(__file__), "..", "..", "..", "static", "tmpl", "report_template.html"),

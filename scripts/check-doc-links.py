@@ -41,7 +41,7 @@ from typing import Sequence
 from urllib.parse import unquote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享设施（_checklib）
-from _checklib import (  # noqa: E402
+from _shared.checklib import (  # noqa: E402
     REPO_ROOT,
     add_common_args,
     conclusion_cache_load,

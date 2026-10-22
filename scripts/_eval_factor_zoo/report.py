@@ -7,7 +7,7 @@ from typing import Any
 import json
 import time
 
-from _factor_zoo.catalog import (
+from _eval_factor_zoo.catalog import (
     B_MIN_DENOM,
     CORR_LOW,
     FAMILY_NAMES,
@@ -18,10 +18,10 @@ from _factor_zoo.catalog import (
     THRESH_C,
     TYPE_COVERAGE,
 )
-from _factor_zoo.metrics import (
+from _eval_factor_zoo.metrics import (
     judge,
 )
-from _factor_zoo.stages import (
+from _eval_factor_zoo.stages import (
     _read_json,
     _write_json,
 )

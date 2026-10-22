@@ -27,7 +27,7 @@ REFERENCE = REPO_ROOT / "docs" / "managements" / "scripts-reference.md"
 GUIDE = REPO_ROOT / "docs" / "managements" / "developer-guide.md"
 
 #: 内部共享模块（不是可独立运行的脚本，不入「一览」）
-_INTERNAL_MODULES = {"_checklib.py", "_traces_common.py"}
+_INTERNAL_MODULES: set[str] = set()  # 共享库已收进 scripts/_shared/ 包，顶层不再有库模块
 _SCRIPT_SUFFIXES = (".py", ".sh", ".ps1")
 
 

@@ -32,7 +32,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享设施（_checklib）
-from _checklib import REPO_ROOT, add_common_args, rel, report  # noqa: E402,F401
+from _shared.checklib import REPO_ROOT, add_common_args, rel, report  # noqa: E402,F401
 
 TEST_DIR = REPO_ROOT / "src" / "test"
 #: 标记注册的单一事实来源（`pytest_configure` 里的 `addinivalue_line("markers", …)`）

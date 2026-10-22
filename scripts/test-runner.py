@@ -30,7 +30,7 @@ if sys.stdout and hasattr(sys.stdout, "reconfigure"):
         pass
 
 # 原面 re-export：既有测试按本模块名访问（_checklib 提供）
-from _checklib import (  # noqa: F401
+from _shared.checklib import (  # noqa: F401
     extract_table_region as _extract_table_region,
     replace_table_region as _replace_table_region,
 )

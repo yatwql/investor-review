@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_checklib）
-from _checklib import REPO_ROOT  # noqa: E402
+from _shared.checklib import REPO_ROOT  # noqa: E402
 
 
 _TEST_ROOT = REPO_ROOT / "src" / "test"

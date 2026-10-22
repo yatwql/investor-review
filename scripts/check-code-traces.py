@@ -70,9 +70,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享包（_traces_code / _checklib）
-from _checklib import add_common_args  # noqa: E402
-from _checklib import conclusion_cache_load, conclusion_cache_save  # noqa: E402
-from _checklib import rel as rel_path  # noqa: E402,F401  # 统一相对路径展示（原面 re-export）
+from _shared.checklib import add_common_args  # noqa: E402
+from _shared.checklib import conclusion_cache_load, conclusion_cache_save  # noqa: E402
+from _shared.checklib import rel as rel_path  # noqa: E402,F401  # 统一相对路径展示（原面 re-export）
 from _traces_code import (  # noqa: E402
     EXCLUDE_LINE,  # noqa: F401
     IDENTIFIER_PATTERNS,  # noqa: F401

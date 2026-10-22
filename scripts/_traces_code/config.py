@@ -23,9 +23,9 @@ SKIP_FILES = {"chart.min.js"}
 #: 文件体内，由 _is_tool_self() 结构性豁免）。按目录识别，文件名无关。
 #: `_traces_doc` 自文档模式表（patterns.py）与结构冗余实现（dedup.py）迁入后
 #: 同样承载历史叙述词表与描述字面量，一并豁免；单文件载体见 RULE_CARRIER_FILES。
-RULE_CARRIER_DIRS = frozenset({"_traces_code", "_traces_doc"})
+RULE_CARRIER_DIRS = frozenset({"_traces_code", "_traces_doc", "_shared"})
 #: 规则定义载体单文件（两脚本共享词表）：词表本身就是历史痕迹字面量的集合。
-RULE_CARRIER_FILES = frozenset({"_traces_common.py"})
+RULE_CARRIER_FILES = frozenset({"traces_common.py", "checklib.py"})
 
 
 def _is_tool_self(name: str) -> bool:

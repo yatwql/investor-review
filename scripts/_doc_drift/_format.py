@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from _checklib import rel
+from _shared.checklib import rel
 from _test_runner.modes import UNIT_DOMAIN_LABELS
 from src.python.config._config_defaults import _DEFAULT_CONFIG
 from src.python.config._llm_settings_defaults import _DEFAULT_LLM_SETTINGS

@@ -27,7 +27,7 @@ def _ensure_scripts_on_path() -> None:
         sys.path.insert(0, str(_SCRIPTS_DIR))
 
 
-_ensure_scripts_on_path()  # 模块级唯一注入点：契约测试在测试体内直接 import _halluc_sampler
+_ensure_scripts_on_path()  # 模块级唯一注入点：契约测试在测试体内直接 import _eval_halluc_sampler
 pytestmark = [pytest.mark.unit, pytest.mark.unit_scripts]
 
 
@@ -108,7 +108,7 @@ class TestProbeTargetContracts:
 class TestSamplerContract:
     def test_run_fact_check_unpacks_scoring_tuple_and_exposes_corrections(self):
         """数值检查器 v3 返回 4 元组——拆包后正确解包并透出 corrections 键。"""
-        from _halluc_sampler import _run_fact_check
+        from _eval_halluc_sampler import _run_fact_check
 
         holdings = [
             {
@@ -133,7 +133,7 @@ class TestSamplerContract:
 
     def test_portfolio_values_delegates_to_utils_implementation(self):
         """组合核心数值委托 fact_checker._utils 的唯一实现（拆包前坏 import 已修）。"""
-        from _halluc_sampler import _compute_portfolio_values
+        from _eval_halluc_sampler import _compute_portfolio_values
 
         vals = _compute_portfolio_values(
             [{"code": "110011", "market_value": 10000.0, "cost": 9000.0, "profit": 1000.0}]

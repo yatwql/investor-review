@@ -18,7 +18,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from _checklib import MANAGEMENTS_DIR  # noqa: E402
+from _shared.checklib import MANAGEMENTS_DIR  # noqa: E402
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 

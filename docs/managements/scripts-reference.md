@@ -63,7 +63,7 @@
 | `check-test-redundancy.py` | 测试 | 测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言；实现拆在 `_test_redundancy/`——八类检查各一模块 + 共用 AST 原语 + 事实缓存 + 编排，入口只留 CLI） |
 | `check-requirement-trace.py` | 质量 | 需求 ID ↔ 验证载体追溯（单段 ID 全域覆盖 / 载体文件存在 / ID 双向一致） |
 | `hook-install-claude.py` | 质量 | 安装/卸载 Claude Code PostToolUse hook（任务编号一致性自动校验） |
-| `eval-llm-hallucination.py` | 评测 | 10 组标准持仓 × LLM 幻觉率采样（薄 CLI，实现在 `_halluc_sampler/` 包） |
+| `eval-llm-hallucination.py` | 评测 | 10 组标准持仓 × LLM 幻觉率采样（薄 CLI，实现在 `_eval_halluc_sampler/` 包） |
 | `eval-dedup-threshold.py` | 评测 | 新闻去重阈值校准分析 |
 | `test-collect-coverage.py` | 测试 | 测试覆盖计数收集（`--collect-only` 快照；`--update-docs` 回写 test-coverage/folders 计数行） |
 | `test-smoke-web.py` | 测试 | Web 模式 HTTP 冒烟脚本（test_client 进程内全链路断言，可独立运行） |
@@ -74,9 +74,9 @@
 | `test-perf-report.py` | 评测 | 端到端报告生成管线性能基准（独立脚本，mock 外部数据源） |
 | `perf-history.py` | 运维 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 时段聚合（耗时与费用合计/环比）/机读输出（llm_cost、by_period 费用字段）；实现拆在 `_perf_view/`——`stats.py` 统计原语 / `data.py` 派生 / `report.py` 渲染 / `cli.py` 入口，主入口只留 docstring 与 re-export） |
 | `probe.py` | 运维 | 探测统一入口（按 target 分发到 `probes/` 子模块；新探针实现契约面登记即用） |
-| `eval-factor-zoo.py` | 评测 | 因子动物园目录评测（非生产代码；五个来源族各抽 5 个因子，评测 A 字段可得率 / B 与既有信号族增量 / C 全量计算耗时占比三项指标，A/B/C 全过才转正立项；子命令 catalog / fields / signals / timing / verdict / all，产物只落 `docs/tmp/factor-zoo/`；实现拆在 `_factor_zoo/`） |
+| `eval-factor-zoo.py` | 评测 | 因子动物园目录评测（非生产代码；五个来源族各抽 5 个因子，评测 A 字段可得率 / B 与既有信号族增量 / C 全量计算耗时占比三项指标，A/B/C 全过才转正立项；子命令 catalog / fields / signals / timing / verdict / all，产物只落 `docs/tmp/factor-zoo/`；实现拆在 `_eval_factor_zoo/`） |
 | `_assets/` | 内部 | 视觉资产实现包（`social_preview.py` 预览图绘制与栅格化 / `svg_check.py` 架构图渲染体检） |
-| `_checklib.py` | 内部 | 检查脚本共享设施（统一 `-v/--ci` 契约与 `[OK]`/`[ERR]` 输出、`rel()`、`report()`、文档区间与表格解析） |
+| `_shared/` | 内部 | 跨脚本共享设施包（`checklib.py` CLI 契约与输出/路径/区间解析；`traces_common.py` 两域共用痕迹词表） |
 | `_test_runner/` | 内部 | 测试驱动内部实现包（paths / modes / pytest_env / machine_info / doc_writer / report_html / runner） |
 | `launch.sh` / `launch.ps1` | 启动 | Linux/macOS / Windows 一键启动脚本（无参数启动 TUI；`web` 子命令启动 Web 浏览器模式） |
 | `cli.sh` / `cli.ps1` | 启动 | Linux/macOS / Windows CLI 命令行包装（无参数默认生成报告） |
@@ -91,20 +91,20 @@
 
 以下四块适用于所有检查脚本，条目里只写各自的差异。
 
-**检查脚本的共享设施与统一契约（`_checklib.py` / `_traces_common.py` / `_traces_code/` / `_traces_doc/` / `_test_runner/`）**
+**检查脚本的共享设施与统一契约（`_shared/` / `_traces_code/` / `_traces_doc/` / `_test_runner/`）**
 
 `scripts/` 下的检查脚本共用一套 CLI 契约与设施，避免每个脚本各写一份：
 
-- **统一契约**（`_checklib.add_common_args()` / `report()`）：`-v/--verbose` 详细输出、`--ci` 仅输出 `文件:描述`；**通过退出 0，发现 finding 退出 2**（`check-code-traces.py` 另有 HIGH=1 / LOW=3 的分级语义，属其自身约定）；通过打印 `[OK] …`，失败逐条 `[ERR] file:desc`（`--ci` 下为裸行）+ 汇总行
+- **统一契约**（`checklib.add_common_args()` / `report()`）：`-v/--verbose` 详细输出、`--ci` 仅输出 `文件:描述`；**通过退出 0，发现 finding 退出 2**（`check-code-traces.py` 另有 HIGH=1 / LOW=3 的分级语义，属其自身约定）；通过打印 `[OK] …`，失败逐条 `[ERR] file:desc`（`--ci` 下为裸行）+ 汇总行
 - **共享原语**：`REPO_ROOT` / `rel()`（仓库相对路径，非仓库内路径原样返回）、`extract_region()` / `replace_region()`（标记区间）、`extract_table_region()` / `replace_table_region()`（表区域，带结构校验）
 - **`_traces_code/`**：check-code-traces 内部实现包——`patterns.py`（**匹配表**：历史痕迹/标识符/暗号模式与编译镜像；只管「命中了什么」，共享历史叙述正则引用 `_traces_common` 常量）、`exemptions.py`（**豁免表**：章节计数与迭代轮次豁免〔check-doc-traces 共用〕+ 代码侧行级豁免〔合法领域值/魔法编号领域值/测试回归元描述〕与 `_is_*_excluded` 判定——调漏检改前者、调误报改后者，不在一处相互淹没）、`extract.py`（注释/标识符抽取）、`scan.py`（扫描调度）、`layers.py`（core 反向依赖守卫）、`config.py`（扫描域配置与规则载体豁免：`RULE_CARRIER_DIRS` / `RULE_CARRIER_FILES`）；check-code-traces.py 只留 CLI 与原面 re-export
 - **`_traces_doc/`**：check-doc-traces 后端包——`patterns.py`（文档痕迹模式表 `DOC_PATTERNS` / 树行专属 `TREE_ONLY_PATTERNS` / 行级豁免 `EXCLUDE_PATTERNS`+`is_excluded`，共享历史叙述正则引用 `_traces_common` 常量）、`bundle.py`（编译镜像 + 按域取子集 + 树行拼表，`pattern_bundle` 按〔分类集, CIPHER 开关, 树行〕lru 缓存并集预筛——预筛面与精确面同源）、`dedup.py`（结构性冗余扫描：单次遍历内完成标题路径感知判重、台账/归档域重复长行与区块同小节限定、空白归一与同块单报），入口薄 CLI 与原面 re-export
-- **`_traces_common.py`**：两脚本**逐字节相同**的历史叙述正则单一来源（命名常量 + `SHARED_REGEXES` 元组）；只登记字面量，**分类与描述仍按各自域定义**，判定入口/域矩阵/豁免语义不在此模块——新增同源词汇先加此处再两侧引用，仅一域需要的词汇不进共享表（机检见 `test_trace_shared_vocabulary`：两表交集须恰等于词表、两侧须都引用、模式源码内不得写死字面量）
+- **`_shared/traces_common.py`**：两脚本**逐字节相同**的历史叙述正则单一来源（命名常量 + `SHARED_REGEXES` 元组）；只登记字面量，**分类与描述仍按各自域定义**，判定入口/域矩阵/豁免语义不在此模块——新增同源词汇先加此处再两侧引用，仅一域需要的词汇不进共享表（机检见 `test_trace_shared_vocabulary`：两表交集须恰等于词表、两侧须都引用、模式源码内不得写死字面量）
 - **`_test_runner/`**：`test-runner.py` 的内部实现包（paths / modes / pytest_env / machine_info / doc_writer / report_html / runner），入口仅保留 CLI 与主流程并原面 re-export —— 既有测试访问 `test_runner._env_value` 等名字仍有效；**注意**：monkeypatch 内部状态（如 `_LATEST_DIR` / `_DOC_COVERAGE_PATH`）须指向持有它的子模块（`_test_runner.report_html` / `_test_runner.doc_writer`）
 
-**跨脚本口径：共性 / 差异（`_traces_common` 的边界）**
+**跨脚本口径：共性 / 差异（`_shared/traces_common` 的边界）**
 
-两守护共享的是**词汇**，不是判定：`_traces_common.py` 只登记正则字面量，分类、严重度、豁免策略、文档类型矩阵、扫描通道（文本 / AST）全部留在各自域内。因此同一正则在两域的分类可以不同，这是**有意保留**的差异：
+两守护共享的是**词汇**，不是判定：`_shared/traces_common.py` 只登记正则字面量，分类、严重度、豁免策略、文档类型矩阵、扫描通道（文本 / AST）全部留在各自域内。因此同一正则在两域的分类可以不同，这是**有意保留**的差异：
 
 | 共享常量 | 代码域分类（退出码） | 文档域分类（退出码） | 关系 |
 |:---|:---|:---|:---|
@@ -146,7 +146,7 @@
 - **缓存**：输入或逻辑面变化自动失效；排查"改了规则结论没变"时**不要删缓存**，用 `CHECK_CONCLUSION_CACHE_DIR=$(mktemp -d)` 隔离跑一次对照——这样能区分"缓存未失效（缺陷）"与"规则确实没覆盖（漏报）"。
 - **报误报的最小信息集**：finding 原文 + 你的判定（合法 / 应改）+ 处置（豁免 / 词条）+ 用例名。四项齐了，一次提交即可落地，不用来回确认。
 
-> 新增检查脚本时直接复用 `_checklib`，不要自建 argparse/输出/退出样板；**跨脚本共用**的历史变更叙述正则放 `_traces_common.py`（词表单一来源），单域模式放各自 `_traces_*/patterns.py`（只管「匹配什么」），豁免策略放 `_traces_code/exemptions.py` 与 `_traces_doc/patterns.py` 的 `EXCLUDE_PATTERNS`（只管「命中后哪些算合法」）；文档域的模式子集与预筛放 `_traces_doc/bundle.py`。
+> 新增检查脚本时直接复用 `_shared.checklib`，不要自建 argparse/输出/退出样板；**跨脚本共用**的历史变更叙述正则放 `_traces_common.py`（词表单一来源），单域模式放各自 `_traces_*/patterns.py`（只管「匹配什么」），豁免策略放 `_traces_code/exemptions.py` 与 `_traces_doc/patterns.py` 的 `EXCLUDE_PATTERNS`（只管「命中后哪些算合法」）；文档域的模式子集与预筛放 `_traces_doc/bundle.py`。
 
 ## 测试类
 
@@ -689,7 +689,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 四条规则，把「靠人肉逐案发现」的契约偏离变成机检：
 
-1. **退出码声明**：`check-*` 与 `_checklib.report` 消费方的 docstring「退出码」节，声明码集须 ⊆ {0, 2}（`report()` 的返回值域）；分级退出码、环境缺失、事实源不可读等特例在 `_EXIT_CODE_WHITELIST` 显式登记并注理由。
+1. **退出码声明**：`check-*` 与 `checklib.report` 消费方的 docstring「退出码」节，声明码集须 ⊆ {0, 2}（`report()` 的返回值域）；分级退出码、环境缺失、事实源不可读等特例在 `_EXIT_CODE_WHITELIST` 显式登记并注理由。
 2. **CLI 面**：`check-*` 顶层脚本须调用 `_checklib.add_common_args`（统一 `-v/--verbose` + `--ci`），且**确实消费** `args.verbose`（防空开关）；钩子入口在 `_CLI_SURFACE_EXEMPT` 豁免。
 3. **显式编码**：`open()`（非二进制）、`Path.read_text/write_text`、`subprocess` 文本模式均须显式 `encoding=`——cp936 Windows 上隐式编码会静默写错或报错。
 4. **测试覆盖**：每个顶层脚本须被 `src/test/` 下至少一个测试按文件名引用；一次性工具在 `_UNTESTED_EXEMPT` 豁免。
@@ -1004,7 +1004,7 @@ curl 对照命令：`curl -s "https://push2.eastmoney.com/api/qt/stock/get?secid
 **纪律**：取数只经既有 Provider Chain / 网关（禁裸调 provider）；**不 import `report/` 与 `llm/`**、
 不向生产模块注入代码（生产侧零改动）；穿透股票池只读复用（不重算穿透）；相关性复用
 `analysis.correlation` 的共享 Pearson 原语（防评测口径漂移）；评测产物**只落 `docs/tmp/factor-zoo/`**
-（git 忽略）。实现拆在 `_factor_zoo/`（因子清单 / 指标计算 / 报告渲染）。
+（git 忽略）。实现拆在 `_eval_factor_zoo/`（因子清单 / 指标计算 / 报告渲染）。
 
 ## 启动脚本
 

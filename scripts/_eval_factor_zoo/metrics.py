@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Any
 import json
 
-from _factor_zoo import PROJECT_ROOT
-from _factor_zoo.catalog import (
+from _eval_factor_zoo import PROJECT_ROOT
+from _eval_factor_zoo.catalog import (
     BETA_WINDOW,
     B_MIN_DENOM,
     CORR_LOW,
@@ -25,7 +25,7 @@ from _factor_zoo.catalog import (
     THRESH_C,
     TYPE_COVERAGE,
 )
-from _factor_zoo.probe import (
+from _eval_factor_zoo.probe import (
     _field_coverage,
     _value_present,
 )

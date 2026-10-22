@@ -13,7 +13,7 @@ import subprocess
 import sys
 from importlib import metadata
 from pathlib import Path
-from _checklib import MANAGEMENTS_DIR, MANUALS_DIR, REPO_ROOT, rel
+from _shared.checklib import MANAGEMENTS_DIR, MANUALS_DIR, REPO_ROOT, rel
 
 
 _README = REPO_ROOT / "README.md"

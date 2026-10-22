@@ -76,7 +76,7 @@ class TestConclusionCacheHelper:
 
     def test_roundtrip_pass_conclusion_cached(self, monkeypatch, tmp_path):
         """空 findings（通过结论）保存后可原样回放。"""
-        mod = load_script("_checklib.py", module_name="_checklib_under_test")
+        mod = load_script("_shared/checklib.py", module_name="_checklib_under_test")
         monkeypatch.setenv("CHECK_CONCLUSION_CACHE_DIR", str(tmp_path / "cache"))
         doc, logic = self._inputs(tmp_path)
         mod.conclusion_cache_save("ns_pass", [logic], [doc], {"findings": []})
@@ -84,7 +84,7 @@ class TestConclusionCacheHelper:
 
     def test_roundtrip_findings_conclusion_cached(self, monkeypatch, tmp_path):
         """非空 findings（发现结论）与附带回放字段同样缓存——不只缓存通过。"""
-        mod = load_script("_checklib.py", module_name="_checklib_under_test")
+        mod = load_script("_shared/checklib.py", module_name="_checklib_under_test")
         monkeypatch.setenv("CHECK_CONCLUSION_CACHE_DIR", str(tmp_path / "cache"))
         doc, logic = self._inputs(tmp_path)
         mod.conclusion_cache_save("ns_fail", [logic], [doc], {"findings": ["a.md:1 痕迹", "b.md:2 痕迹"], "total": 2})
@@ -95,7 +95,7 @@ class TestConclusionCacheHelper:
 
     def test_input_content_change_misses(self, monkeypatch, tmp_path):
         """输入文件时间戳/内容变化 → 必失配（全量重算）。"""
-        mod = load_script("_checklib.py", module_name="_checklib_under_test")
+        mod = load_script("_shared/checklib.py", module_name="_checklib_under_test")
         monkeypatch.setenv("CHECK_CONCLUSION_CACHE_DIR", str(tmp_path / "cache"))
         doc, logic = self._inputs(tmp_path)
         mod.conclusion_cache_save("ns_a", [logic], [doc], {"findings": []})
@@ -105,7 +105,7 @@ class TestConclusionCacheHelper:
 
     def test_input_file_set_change_misses(self, monkeypatch, tmp_path):
         """输入文件集增删 → 必失配（新增/删除文件改变扫描面）。"""
-        mod = load_script("_checklib.py", module_name="_checklib_under_test")
+        mod = load_script("_shared/checklib.py", module_name="_checklib_under_test")
         monkeypatch.setenv("CHECK_CONCLUSION_CACHE_DIR", str(tmp_path / "cache"))
         doc, logic = self._inputs(tmp_path)
         mod.conclusion_cache_save("ns_b", [logic], [doc], {"findings": []})
@@ -116,7 +116,7 @@ class TestConclusionCacheHelper:
 
     def test_logic_change_misses(self, monkeypatch, tmp_path):
         """收集逻辑（脚本字节）变化 → 必失配（结论随逻辑版本失效）。"""
-        mod = load_script("_checklib.py", module_name="_checklib_under_test")
+        mod = load_script("_shared/checklib.py", module_name="_checklib_under_test")
         monkeypatch.setenv("CHECK_CONCLUSION_CACHE_DIR", str(tmp_path / "cache"))
         doc, logic = self._inputs(tmp_path)
         mod.conclusion_cache_save("ns_c", [logic], [doc], {"findings": []})
@@ -125,7 +125,7 @@ class TestConclusionCacheHelper:
 
     def test_corrupt_cache_is_miss(self, monkeypatch, tmp_path):
         """缓存文件损坏/结构非法 → 按未命中处理（全量重算），不得抛异常。"""
-        mod = load_script("_checklib.py", module_name="_checklib_under_test")
+        mod = load_script("_shared/checklib.py", module_name="_checklib_under_test")
         monkeypatch.setenv("CHECK_CONCLUSION_CACHE_DIR", str(tmp_path / "cache"))
         doc, logic = self._inputs(tmp_path)
         path = mod.conclusion_cache_dir() / "ns_d.json"

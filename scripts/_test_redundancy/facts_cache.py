@@ -37,7 +37,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_checklib）
-from _checklib import REPO_ROOT, rel  # noqa: E402
+from _shared.checklib import REPO_ROOT, rel  # noqa: E402
 
 
 _CACHE_ENV = "TEST_REDUNDANCY_CACHE"
@@ -54,7 +54,7 @@ def _facts_cache_path() -> Path:
 def _cache_version() -> str:
     """缓存格式/判定逻辑版本：本脚本 + 同目录 _checklib + 解释器大版本，任一变化全量失效。"""
     parts = [f"{sys.version_info[0]}.{sys.version_info[1]}"]
-    for src in (Path(__file__), Path(__file__).with_name("_checklib.py")):
+    for src in (Path(__file__), Path(__file__).resolve().parents[1] / "_shared" / "checklib.py"):
         try:
             parts.append(hashlib.sha1(src.read_bytes()).hexdigest())
         except OSError:

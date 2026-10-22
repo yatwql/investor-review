@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from _factor_zoo import PROJECT_ROOT
+from _eval_factor_zoo import PROJECT_ROOT
 
 # 目录校验与生产加载器同源（禁止本地再拷一份，防校验口径漂移）
 from src.python.fetcher.factor_catalog_loader import validate_catalog  # noqa: F401

@@ -1,4 +1,4 @@
-"""测试：scripts/_checklib.py 与 scripts/_traces_code/exemptions.py — 检查脚本共享设施
+"""测试：scripts/_shared/checklib.py 与 scripts/_traces_code/exemptions.py — 检查脚本共享设施
 
 覆盖：
   - `rel()`：仓库内路径取相对（POSIX 分隔符）、仓库外路径原样返回（仅归一为 POSIX）
@@ -30,7 +30,7 @@ pytestmark = [
 
 @pytest.fixture(scope="module")
 def checklib():
-    return load_script("_checklib.py")
+    return load_script("_shared/checklib.py")
 
 
 @pytest.fixture(scope="module")
@@ -83,8 +83,8 @@ class TestRel:
 
     def test_repo_path_uses_posix_separator(self, checklib):
         """仓库内路径恒用 `/`（与文档目录树/引用口径一致，Windows 下不得为 `\\`）。"""
-        got = checklib.rel(_REPO_ROOT / "scripts" / "_checklib.py")
-        assert got == "scripts/_checklib.py"
+        got = checklib.rel(_REPO_ROOT / "scripts" / "_shared" / "checklib.py")
+        assert got == "scripts/_shared/checklib.py"
         assert "\\" not in got
 
     def test_outside_path_returned_as_posix(self, checklib, tmp_path):

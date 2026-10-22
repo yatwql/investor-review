@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 
-from _traces_common import (  # 共享历史叙述词表（与 check-doc-traces 同源，避免两侧漂移）
+from _shared.traces_common import (  # 共享历史叙述词表（与 check-doc-traces 同源，避免两侧漂移）
     CHAPTER_CN_BARE,
     CHAPTER_CN_NTH,
     CHAPTER_DIGIT,

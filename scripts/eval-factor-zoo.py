@@ -34,7 +34,7 @@ for _p in (str(_PROJECT_ROOT), str(_SCRIPTS_DIR)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from _factor_zoo.catalog import (  # noqa: F401  原面 re-export（既有测试与调用方无需改动）
+from _eval_factor_zoo.catalog import (  # noqa: F401  原面 re-export（既有测试与调用方无需改动）
     BENCHMARK_INDEX,
     BETA_WINDOW,
     B_MIN_DENOM,
@@ -69,7 +69,7 @@ from _factor_zoo.catalog import (  # noqa: F401  原面 re-export（既有测试
     build_catalog,
     validate_catalog,
 )
-from _factor_zoo.probe import (  # noqa: F401  原面 re-export（既有测试与调用方无需改动）
+from _eval_factor_zoo.probe import (  # noqa: F401  原面 re-export（既有测试与调用方无需改动）
     build_stock_pool,
     probe_bars,
     probe_fields,
@@ -81,7 +81,7 @@ from _factor_zoo.probe import (  # noqa: F401  原面 re-export（既有测试�
     _required_value_key,
     _value_present,
 )
-from _factor_zoo.metrics import (  # noqa: F401  原面 re-export（既有测试与调用方无需改动）
+from _eval_factor_zoo.metrics import (  # noqa: F401  原面 re-export（既有测试与调用方无需改动）
     build_family_series,
     compute_factor_values,
     cross_sectional_series,
@@ -103,7 +103,7 @@ from _factor_zoo.metrics import (  # noqa: F401  原面 re-export（既有测试
     _rolling_beta,
     _std,
 )
-from _factor_zoo.stages import (  # noqa: F401  原面 re-export（既有测试与调用方无需改动）
+from _eval_factor_zoo.stages import (  # noqa: F401  原面 re-export（既有测试与调用方无需改动）
     json_cap_log,
     measure_cold_sample,
     stage_catalog,
@@ -114,7 +114,7 @@ from _factor_zoo.stages import (  # noqa: F401  原面 re-export（既有测试�
     _read_json,
     _write_json,
 )
-from _factor_zoo.report import (  # noqa: F401  原面 re-export（既有测试与调用方无需改动）
+from _eval_factor_zoo.report import (  # noqa: F401  原面 re-export（既有测试与调用方无需改动）
     stage_verdict,
     _write_verdict_md,
 )

@@ -3719,7 +3719,7 @@ web/ (Web 服务层，薄入口)
 
 > **约束外参照（文档与实现一致性纪律）**：除上表 C1~C29 编号约束外，**文档中的事实断言**（章节表与数量、功能开关表与分组计数、默认值表、TUI 面板编号、目录树、项目统计表）必须与代码/配置文件/文件系统一致，由 `scripts/check-doc-drift.py --ci` 强制（逐项对账，`changelog.md`/`review-findings.md` 与版本快照类文档按设计豁免）；历史痕迹类约束另由 `scripts/check-doc-traces.py --ci` 强制。
 
-> **约束外参照（脚本 CLI 契约）**：`scripts/` 下的检查脚本统一 `-v/--verbose` + `--ci`（仅输出 `文件:描述`）与退出码语义（0=通过 / 2=发现 finding，`check-code-traces.py` 保留 HIGH=1、LOW=3 分级）；共享设施集中在 `scripts/_checklib.py`（CLI/输出/路径/文档区间解析）；历史痕迹检查内部实现拆在 `scripts/_traces_code/` 包内（共享排除模式在 `exemptions.py`，`_traces_common.py` 已并入其中删除）；检查脚本内部实现普遍拆 `前置横线包`pattern（`_doc_drift/` / `_traces_code/` / `_traces_doc/` / `_test_runner/` / `_halluc_sampler/`，入口仅留 CLI 与原面 re-export）；连通性探测统一入口 `scripts/probe.py`（target registry，实现在 `scripts/probes/`，新探针登记即用）；发布编排分步 CLI `scripts/release.py`（check/prepare/refresh/evolution/gate/publish/devbump，每步独立可审阅、失败即停，内部实现同为入口薄 CLI + 单模块）。
+> **约束外参照（脚本 CLI 契约）**：`scripts/` 下的检查脚本统一 `-v/--verbose` + `--ci`（仅输出 `文件:描述`）与退出码语义（0=通过 / 2=发现 finding，`check-code-traces.py` 保留 HIGH=1、LOW=3 分级）；共享设施集中在 `scripts/_checklib.py`（CLI/输出/路径/文档区间解析）；历史痕迹检查内部实现拆在 `scripts/_traces_code/` 包内（共享排除模式在 `exemptions.py`，`_shared/traces_common.py` 已并入其中删除）；检查脚本内部实现普遍拆 `前置横线包`pattern（`_doc_drift/` / `_traces_code/` / `_traces_doc/` / `_test_runner/` / `_eval_halluc_sampler/`，入口仅留 CLI 与原面 re-export）；连通性探测统一入口 `scripts/probe.py`（target registry，实现在 `scripts/probes/`，新探针登记即用）；发布编排分步 CLI `scripts/release.py`（check/prepare/refresh/evolution/gate/publish/devbump，每步独立可审阅、失败即停，内部实现同为入口薄 CLI + 单模块）。
 
 > **约束外参照（测试有效性纪律）**：测试用例不得是「死用例 / 无断言 / 完全重复 / 自证用例」——分别指：pytest 永不收集或同名覆盖的用例、没有任何断言（也不经含断言的同类辅助方法）、函数体与参数装饰器归一化后彼此完全一致的用例、以及 patch 掉被测函数后又把其 `return_value` 断言回原值的用例。由 `scripts/check-test-redundancy.py --ci` 强制；删除/合并用例后须同步刷新 `test-coverage.md` 与 `folders.md` 计数（`check-doc-drift.py --with-test-count` 兜底）。
 
@@ -3778,7 +3778,7 @@ web/ (Web 服务层，薄入口)
 
 > **C14 例外：env 初始化期注册（非渲染期）** — `_ENV.globals` 与模板过滤器仅允许在 `report/html_jinja_env.py` 的**工厂初始化期**（进程/工厂单次建立）注册为**无状态纯函数**（如 `profit_color`、`price_type_color`、`money`、`fmt_bps`、`dt`——只依赖入参生成 CSS 变量表达式/格式化文本）。约束禁止的是**渲染期数据**（section 可见性、业务字典等随每次运行变化的值）写入全局；过滤器注册与 Jinja 环境构建属于模板基础设施装配，不构成渲染态状态污染（并发/多次渲染下各 `render()` 仍只经 context 传数据）。
 
-> **C28 阈值定档记录（2026-10-09）**：三域阈值一次定档——主程序 800 → 1000（实测 343 文件中位 226 / P90 535 / 最大 783，阈值须给内聚大文件留出拆分触发缓冲；警告线 500 维持观察密度）、`scripts/` 纳入守护（实测 P90 520，警戒 400 / 红线 1000，与主程序同值统一口径）、测试 800/1200 维持。同批把域内最大单文件 `eval-factor-zoo.py`（1595 行）按「评测核心 / 阶段编排 / 判定书」拆为 `scripts/_factor_zoo/` 包（入口仅留 CLI 与原面 re-export，既有测试零改动）；`EXEMPTIONS` 保持空集（拆分后无挂账破线）。
+> **C28 阈值定档记录（2026-10-09）**：三域阈值一次定档——主程序 800 → 1000（实测 343 文件中位 226 / P90 535 / 最大 783，阈值须给内聚大文件留出拆分触发缓冲；警告线 500 维持观察密度）、`scripts/` 纳入守护（实测 P90 520，警戒 400 / 红线 1000，与主程序同值统一口径）、测试 800/1200 维持。同批把域内最大单文件 `eval-factor-zoo.py`（1595 行）按「评测核心 / 阶段编排 / 判定书」拆为 `scripts/_eval_factor_zoo/` 包（入口仅留 CLI 与原面 re-export，既有测试零改动）；`EXEMPTIONS` 保持空集（拆分后无挂账破线）。
 
 ### 8.6 测试约束
 

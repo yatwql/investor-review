@@ -37,7 +37,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享设施（_checklib）
-from _checklib import (
+from _shared.checklib import (
     ARCHIVE_DOCS_DIR as _CK_ARCHIVE,
     MANAGEMENTS_DIR as _CK_MANAGEMENTS,
     add_common_args,
