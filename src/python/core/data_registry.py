@@ -412,6 +412,7 @@ def get_known_llm_settings_keys() -> set[str]:
         "llm_max_thinking_concurrency",
         "llm_full_fail_retry_delay",
         "daily_cost_limit",
+        "llm_total_time_budget_sec",
         "news_correlation_top_n",
         "debate",
         "fact_check",
