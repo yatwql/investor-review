@@ -243,7 +243,7 @@ llm/generators_orchestrator.py ──→ cache/（可选）
 | **贯穿** | 代码类型判定 | 资产识别原语 | `core/code_utils.py` |
 | **贯穿** | 交易时段判断 | A 股时段、午间休市 | `core/market_hours.py` |
 | **贯穿** | HTTP 客户端 | 统一工厂 | `core/http_client.py` |
-| **贯穿** | 性能收集 | PerfCollector 三路径计时 + perf_history.jsonl 持久化 + 数据源健康历史聚合 `summarize_health_history()` | `core/perf.py` |
+| **贯穿** | 性能收集 | PerfCollector 三路径计时 + perf_history.jsonl 持久化 + 数据源健康历史聚合 `summarize_health_history()`；`counters` 除 warnings/errors 外含**事实校验自动修正计数**（`fact_fix_total` / `fact_fix_numeric` / `fact_fix_code` / `fact_fix:<模块>`，由 `llm/fact_checker` 线程安全累加、报告层 LLM 阶段前清零后汇入——修正次数是模型口径偏差的直接信号，单次只进日志时无法跨期对拍） | `core/perf.py` + `llm/fact_checker/_corrections.py` |
 | **贯穿** | 运行一致性 | 生成中断收口（KeyboardInterrupt 安全落点：临时产物清扫 + `status=interrupted` 运行记录 + 已写盘/已丢弃明细）+ HTML/Excel 产物原子落盘登记 | `report/run_integrity.py` |
 | **贯穿** | 日志可视化 | 结构化日志读取（parse_log/tail_log/read_log），CLI/TUI/Web 三端共享 | `core/log_reader.py` |
 | **贯穿** | 系统自检 | 运行环境/配置/目录/日志与缓存/功能开关/数据源适配/数据源凭据/数据源八组一次性盘点（开关 `doctor_check`，默认开），CLI/TUI/Web 三端共享；自身永不抛异常、零重依赖 | `core/doctor.py` |
@@ -1296,7 +1296,7 @@ cache/
 | `clear(key)` | `(str) → None` | 同时删除 `.json` 和 `.json.gz` |
 | `get_ttl(data_type)` | `(str) → float` | TTL 分辨率（见下方流程图） |
 | `clear_by_group(group)` | `(str) → None` | 按 preload/refresh 分组清除 |
-| `cleanup_expired()` | `() → int` | 扫描全量缓存，删除超龄项 |
+| `cleanup_expired()` | `() → int` | 扫描全量缓存，删除超龄项（逐文件明细只进 DEBUG，INFO 留汇总行 + 释放字节；age/TTL 按量级自适应单位——盘中 30s 的 price TTL 不再印成 `ttl=0.0h`；**无 `_ts` 包封的文件跳过 TTL 判定**，见下） |
 
 #### TTL 分辨率流程
 
@@ -2463,12 +2463,16 @@ _dedup_by_title(items)
 区分时代，并拿标题用当前代码重算判定（详见下）。
 
 **体积治理**：文件 append-only 且历史上未被写侧去重覆盖的轮次留下大量重复行（实测
-456,546 行 / 152 MB 中仅 51,718 个唯一标题对，重复行占 89%），而 flush 与加载都是
-全文成本（`append_jsonl_atomic_many` 读全文 → 整文件替换）。故：① 加载时超过
-32 MB 告警并指向压缩入口；② `scripts/eval-dedup-threshold.py --compact` 按键
-压缩（每个标题对保留**最新**一条，两遍扫描 + 原子替换，实测 152 MB → 17 MB / 2.5 s，
-幂等）。写侧去重（`_WRITTEN_ANCHOR_KEYS`）已拦截新重复——存量的重复行来自写侧去重
-生效前的批量校准轮次。
+456,546 行 / 152 MB 中仅 51,718 个唯一标题对，重复行占 89%）。写侧去重
+（`_WRITTEN_ANCHOR_KEYS`）已拦截新重复——存量的重复行来自写侧去重生效前的批量校准轮次。
+故分层治理：① **写侧改真追加**（`_append_anchor_lines`：单次 `write` + `fsync`，
+写盘成本只与本次新增条数相关，与文件体积无关——锚点已 37.9 MB 而每轮只新增数十条；
+读侧本就逐行容错，崩溃留下的半行不污染既有记录）；
+② 加载时超过 32 MB 触发**就地压缩**，压缩按「每标题对保留最新一条 + **仅保留近
+120 天**」双条件（`INVEST_DEDUP_ANCHOR_RETENTION_DAYS` 可覆盖，0 = 退回纯去重）——
+实测仅按 key 去重压不动（标题对高度唯一，压后仍 37.9 MB），保留期才是体积上限，
+锚点只服务于「近期同对不重复追加」，过期记录无消费者；③
+`scripts/eval-dedup-threshold.py --compact` 供人工/校准侧压缩（同一双条件，幂等）。
 
 ##### 校准工具
 
@@ -3499,7 +3503,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `inject_event_impact_data` | 事件窗量化对照挂载点（分析增强组开关；守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供；新闻先行串行段内注入，供分歧例附录块同轮进 LLM） | 事件窗量化对照（财经新闻章内区块，随父章；注册表无独立条目） | 报告输出 | 报告章节与增强开关 `event_window_impact`（默认关） |
 | `inject_schedule_replay_data` | 调仓纪律回放挂载点（守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供；快照与持仓变动注入后串行装配，回放引用 `prompt_block` 经统一附录进 LLM） | 调仓纪律回放（报告独立章，type=schedule_replay） | 报告输出 | 功能开关 `rebalance_schedule_replay`（默认关，独立章节与回放组） |
 | `event_impact_panel` | 事件窗对照表数据编排与双端单源展示（事件行/降级/占位 + view 与页签同文 + 分歧例附录块） | 事件窗量化对照 | 报告输出 | 随 `event_window_impact` |
-| `event_window_impact` | 事件窗量化对照（新闻事件 → 交易日映射的严格 ±5 交易日窗收益 vs 文本极性方向比对，分歧例进 LLM 统一附录） | 事件窗量化对照 | 报告输出 | 报告章节与增强开关 `event_window_impact`（默认关） |
+| `event_window_impact` | 事件窗量化对照（新闻事件 → 交易日映射的 ±5 交易日窗收益 vs 文本极性方向比对；行情轴右端不足 5 日时按可用交易日截断并标未满窗，分歧例进 LLM 统一附录） | 事件窗量化对照 | 报告输出 | 报告章节与增强开关 `event_window_impact`（默认关） |
 | `schedule_replay_panel` | 调仓纪律回放数据装配与双端单源展示（回放契约 + view 与页签同文 + 回放引用 prompt_block） | 调仓纪律回放 | 报告输出 | 随 `rebalance_schedule_replay` |
 | `rebalance_schedule_replay` | 调仓纪律回放（月度定期/阈值偏离纪律多期回放 vs 买入持有，双线图与逐期成本表，回放结论进 LLM 统一附录） | 调仓纪律回放 | 报告输出 | 功能开关 `rebalance_schedule_replay`（默认关，独立章节与回放组） |
 | `factor_catalog` | 因子目录注册表（25 因子五来源族冻结清单：slug/族/类别/所需字段/中性点/出处，版本随代码；含中性点字典与字段类型路由常量） | 风格与因子分析（章内区块四） | 数据契约 | 功能开关 `factor_catalog`（默认关，分析增强组） |
@@ -3960,6 +3964,10 @@ investor-review/
 | `idx_valuation` | `idx_valuation_`（前缀，当前仅 sh000300） | 7 天 | — | — | refresh |
 
 > `—` 表示精确键名（无指纹后缀），TTL 到期后刷新。
+> **非缓存引擎托管的文件**：`data/cache/` 下还存在脚本自管的性能缓存（`scripts/_doc_drift` 的用例收集快照、`scripts/_test_redundancy` 的逐文件事实缓存）。它们由脚本直接写 JSON，历史上没有 `_ts` 包封 —— 而清理器按 `now - payload.get("_ts", 0)` 算龄，等于把它们算成 **57 年陈货**并每轮启动删掉（缓存优化白做，日志里还留下荒谬条目）。两侧同时修：脚本写入补 `_ts`（缓存引擎的写入时间包封），清理器对**仍无 `_ts` 的文件一律跳过**（托管边界之外，不按 epoch 虚龄删，只留 DEBUG 痕迹）。
+>
+> **交易日历进程内 memo**：`core/trading_calendar._get_trading_calendar()` 被逐事件/逐持仓高频调用（实测单次报告 600+ 次），每次都 `cache.get` 等于读盘 + JSON 解析 600 次。现按「缓存文件指纹（mtime_ns+size）不变且剩余 TTL 未到」进程内复用同一份日历；文件被重写/清理/到期即回落磁盘缓存，语义不变；与 `market_hours` memo 同习语（`reset` 由 conftest autouse fixture 复位，防跨用例串味）。
+
 
 ### 附录 D：降级层级与阈值定义
 

@@ -201,3 +201,66 @@ class TestElapsedTradingDaysWithNaturalFallback:
         monkeypatch.setattr(tc.cache, "get", lambda *a, **k: None)
         assert tc.elapsed_trading_days_with_natural_fallback("2024-12-20", "2024-12-27") == 5
         del trading_days
+
+
+class TestCalendarProcessMemo:
+    """进程内日历 memo：同一进程内高频调用不得重复读盘解析（回归实测 600+ 次）。"""
+
+    def test_second_call_reuses_memo_without_cache_read(self, monkeypatch, tmp_path):
+        from src.python.core import trading_calendar as tc
+
+        # 缓存文件真实存在（memo 的失效判据含文件指纹）
+        cache_file = tmp_path / "trading_calendar.json"
+        cache_file.write_text('{"_ts": 1, "_data": []}', encoding="utf-8")
+        monkeypatch.setattr(tc.cache, "_cache_path", lambda key: str(cache_file))
+        monkeypatch.setattr(tc.cache, "get_ttl", lambda *a, **k: 3600.0)
+
+        calls = {"n": 0}
+
+        def _fake_get(key, ttl):
+            calls["n"] += 1
+            return ["2026-09-17", "2026-09-18"]
+
+        monkeypatch.setattr(tc.cache, "get", _fake_get)
+        tc._reset_calendar_memo()
+
+        first = tc._get_trading_calendar()
+        second = tc._get_trading_calendar()
+
+        assert first == {"2026-09-17", "2026-09-18"}
+        assert second == first
+        assert calls["n"] == 1, "第二次调用应命中进程内 memo，不再读缓存文件"
+
+    def test_memo_invalidated_when_cache_file_rewritten(self, monkeypatch, tmp_path):
+        """缓存文件被重写（指纹变化）→ 必须回落磁盘，不得继续用旧日历。"""
+        from src.python.core import trading_calendar as tc
+
+        cache_file = tmp_path / "trading_calendar.json"
+        cache_file.write_text('{"_ts": 1, "_data": []}', encoding="utf-8")
+        monkeypatch.setattr(tc.cache, "_cache_path", lambda key: str(cache_file))
+        monkeypatch.setattr(tc.cache, "get_ttl", lambda *a, **k: 3600.0)
+
+        payload = {"dates": ["2026-09-17"]}
+        monkeypatch.setattr(tc.cache, "get", lambda *a, **k: payload["dates"])
+        tc._reset_calendar_memo()
+
+        assert tc._get_trading_calendar() == {"2026-09-17"}
+        payload["dates"] = ["2026-10-08"]
+        cache_file.write_text('{"_ts": 2, "_data": []}', encoding="utf-8")  # 指纹变化
+
+        assert tc._get_trading_calendar() == {"2026-10-08"}
+
+    def test_memo_returns_copy_so_callers_cannot_corrupt_it(self, monkeypatch, tmp_path):
+        """调用方拿到的必须是副本：改它不能污染后续调用（日历是共享只读事实）。"""
+        from src.python.core import trading_calendar as tc
+
+        cache_file = tmp_path / "trading_calendar.json"
+        cache_file.write_text("{}", encoding="utf-8")
+        monkeypatch.setattr(tc.cache, "_cache_path", lambda key: str(cache_file))
+        monkeypatch.setattr(tc.cache, "get_ttl", lambda *a, **k: 3600.0)
+        monkeypatch.setattr(tc.cache, "get", lambda *a, **k: ["2026-09-17"])
+        tc._reset_calendar_memo()
+
+        first = tc._get_trading_calendar()
+        first.discard("2026-09-17")
+        assert tc._get_trading_calendar() == {"2026-09-17"}

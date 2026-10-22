@@ -11,10 +11,10 @@ import json
 import logging
 import os
 import threading
+from datetime import datetime, timedelta
 from typing import Any
 
 from src.python.core.constants import PROJECT_ROOT
-from src.python.core.jsonl_store import append_jsonl_atomic_many
 
 from src.python.providers.news_dedup_rules import (  # noqa: F401
     # 规则原语全部再导出：既有 import 面（测试 / 校准工具 / 报告层）保持不变
@@ -70,6 +70,11 @@ _ANCHOR_SIZE_WARN_BYTES = 32 * 1024 * 1024
 #: 压缩保留每个标题对的**最新一条**（文件 append-only → 最后即最新），并先备份 .bak。
 #: 用 `INVEST_DEDUP_AUTO_COMPACT=0` 可关闭自动压缩（仅保留告警）。
 _ANCHOR_AUTO_COMPACT_ENV = "INVEST_DEDUP_AUTO_COMPACT"
+#: 压缩时的保留期（天）：锚点只服务于「近期同对新闻不重复追加」，过期记录无消费者。
+#: 仅按 key 去重无法压小文件（标题对高度唯一，实测压后仍 37.9 MB），保留期才是
+#: 真正的体积上限；`INVEST_DEDUP_ANCHOR_RETENTION_DAYS` 可覆盖（0 = 不限，退回纯去重）。
+_ANCHOR_RETENTION_DAYS = 120
+_ANCHOR_RETENTION_ENV = "INVEST_DEDUP_ANCHOR_RETENTION_DAYS"
 
 # 进程级"已写锚点 key"集合 — 防止同一对 (source,title) 在多轮运行中重复追加。
 # 背景：锚点文件 append-only，同一对新闻在每次真实抓取进入候选区时都会重新记录，
@@ -91,6 +96,73 @@ def _anchor_key(record: dict[str, Any]) -> str:
     return f"{sa[0]}|{sa[1]}|{ta[0]}|{ta[1]}"
 
 
+def _anchor_retention_days() -> int:
+    """保留期天数（环境变量覆盖；非法值回落默认，0 表示不按时间裁剪）。"""
+    raw = os.environ.get(_ANCHOR_RETENTION_ENV)
+    if raw is None or not str(raw).strip():
+        return _ANCHOR_RETENTION_DAYS
+    try:
+        return max(0, int(float(str(raw).strip())))
+    except (TypeError, ValueError):
+        return _ANCHOR_RETENTION_DAYS
+
+
+def _anchor_retention_cutoff() -> datetime | None:
+    """保留期起点（None = 不裁剪）。
+
+    以「今天 − N 天」的 00:00 为界；压缩与读取都按此判定，使体积有确定上限。
+    """
+    days = _anchor_retention_days()
+    if days <= 0:
+        return None
+    return datetime.now() - timedelta(days=days)
+
+
+def _anchor_ts_on_or_after(ts: Any, cutoff: datetime) -> bool:
+    """记录 `ts`（"YYYY-MM-DD" / "YYYY-MM-DD HH:MM"）是否在保留期内。
+
+    无法解析的记录**保留**（宁可留一条无用行，也不因格式演进静默丢历史）。
+    """
+    text = str(ts or "").strip()
+    if not text:
+        return True
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(text[: len(text)], fmt) >= cutoff
+        except ValueError:
+            continue
+    return True
+
+
+def _append_anchor_lines(lines: list[str]) -> bool:
+    """以**追加**方式写入锚点行（不读全文、不整文件替换）。
+
+    为什么不再走 ``append_jsonl_atomic_many``：该原语的原子性来自「读全文 → 整文件
+    替换」，锚点文件实测 37.9 MB 且每次 flush 只有数十条新记录，等于为几十行重写
+    几十 MB。单次 ``write`` + ``fsync`` 追加：
+
+      - 单次 write 提交整批行（不逐行 write，减少半写窗口）；
+      - 读侧本就逐行容错（``json.JSONDecodeError`` 跳过、压缩丢弃坏行），崩溃留下的
+        半行不会污染既有记录；
+      - 失败返回 False，由调用方撤回本次已登记的 key（与原子写语义一致）。
+
+    Returns:
+        是否落盘成功。
+    """
+    payload = "".join(line if line.endswith("\n") else line + "\n" for line in lines)
+    if not payload:
+        return True
+    try:
+        with open(_ANCHOR_PATH, "a", encoding="utf-8") as f:
+            f.write(payload)
+            f.flush()
+            os.fsync(f.fileno())
+        return True
+    except OSError as e:
+        logger.warning("[dedup] 锚点文件追加失败: %s", e)
+        return False
+
+
 def _auto_compact_anchor_file(size: int) -> None:
     """锚点文件超阈值时就地压缩（保留每个 key 最后一条），备份为 `.bak`。
 
@@ -101,6 +173,7 @@ def _auto_compact_anchor_file(size: int) -> None:
     if size <= _ANCHOR_SIZE_WARN_BYTES or not os.path.exists(_ANCHOR_PATH):
         return
     try:
+        cutoff = _anchor_retention_cutoff()
         last_line: dict[str, int] = {}
         with open(_ANCHOR_PATH, encoding="utf-8") as f:
             for lineno, line in enumerate(f):
@@ -108,7 +181,10 @@ def _auto_compact_anchor_file(size: int) -> None:
                 if not line:
                     continue
                 try:
-                    last_line[_anchor_key(json.loads(line))] = lineno
+                    record = json.loads(line)
+                    if cutoff and not _anchor_ts_on_or_after(record.get("ts"), cutoff):
+                        continue  # 超出保留期：直接丢弃（消费者只关心近期重复对）
+                    last_line[_anchor_key(record)] = lineno
                 except (json.JSONDecodeError, KeyError, TypeError):
                     continue
         if not last_line:
@@ -125,9 +201,10 @@ def _auto_compact_anchor_file(size: int) -> None:
         shutil.copy2(_ANCHOR_PATH, backup)
         os.replace(tmp_path, _ANCHOR_PATH)
         logger.info(
-            "[dedup] 锚点文件已自动压缩：%.1f MB → %.1f MB（保留每组最新一条，原文件备份 %s）",
+            "[dedup] 锚点文件已自动压缩：%.1f MB → %.1f MB（保留每组最新一条 + 近 %d 天，原文件备份 %s）",
             size / 1e6,
             os.path.getsize(_ANCHOR_PATH) / 1e6,
+            _anchor_retention_days(),
             os.path.basename(backup),
         )
     except OSError as e:  # 压缩失败不阻断报告：保留原文件与告警
@@ -141,8 +218,8 @@ def _load_written_keys() -> None:
     为空时静默返回空集合。
 
     **体积关注**：本文件 append-only 且历史累积（曾达数百 MB、重复行占近九成），
-    而 flush 走 ``append_jsonl_atomic_many``（读全文 → 整文件替换）——文件越大，
-    每轮报告写盘成本越高。超过 ``_ANCHOR_SIZE_WARN_BYTES`` 时告警并指向压缩入口。
+    而 flush 走追加写（单次 write + fsync，不再读全文重写）——但加载仍需解析全文件，
+    压缩仍需全量读一遍。超过 ``_ANCHOR_SIZE_WARN_BYTES`` 时告警并指向压缩入口。
     """
     global _WRITTEN_KEYS_LOADED
     with _WRITTEN_KEYS_LOCK:
@@ -228,7 +305,8 @@ def _flush_anchors() -> None:
     _WRITTEN_ANCHOR_KEYS），写后加入集合。防止同一对新闻多轮运行重复
     追加导致校准数字失真（见 _WRITTEN_ANCHOR_KEYS 注释）。
 
-    落盘走 ``core/jsonl_store.append_jsonl_atomic_many``（一次批量原子追加）。
+    落盘走 :func:`_append_anchor_lines`（单次追加写 + fsync；写入量只与本次新增条数
+    相关，与文件体积无关）。
     """
     global _ANCHOR_RECORDS
     if not _ANCHOR_RECORDS:
@@ -247,17 +325,9 @@ def _flush_anchors() -> None:
             new_records.append(r)
     if not new_records:
         return
-    # 一次性批量原子追加（`open(..., "a")` 逐行写在中途中断会留下半行，
-    # 而本文件的读取方要求逐行完整）。必须用批量入口：`append_jsonl_atomic`
-    # 的原子性来自「读全文 → 拼接 → 整文件替换」，逐行调用等价于每行重写一次
-    # 整个文件（锚点文件已达数万行，O(n²) 不可接受）。
-    if append_jsonl_atomic_many(
-        _ANCHOR_PATH,
-        [json.dumps(r, ensure_ascii=False) + "\n" for r in new_records],
-        prefix=".dedup_anchors_",
-        log_tag="dedup",
-        noun="锚点文件",
-    ):
+    # 追加写（单次 write + fsync，不读全文、不整文件替换）：锚点文件实测 37.9 MB，
+    # 每轮只新增数十条，走「读全文→替换」等于为几十行重写几十 MB。
+    if _append_anchor_lines([json.dumps(r, ensure_ascii=False) + "\n" for r in new_records]):
         return
     # 写盘失败：撤回本次登记的 key，否则这些锚点会被永久判为"已写"而丢失
     with _WRITTEN_KEYS_LOCK:

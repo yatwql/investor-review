@@ -459,3 +459,48 @@ class TestProfitRateUnitAndDailyChange:
         assert corr == html  # 内容不被篡改
         assert "3.41%" in corr
         assert "已修正明细" not in summ
+
+
+class TestAutoCorrectionCounters:
+    """自动修正次数跨模块累计（供 perf_history.counters 跨期对拍）。
+
+    判定口径：单次运行实测 5 处数值修正（智囊团/体检/穿透），只进日志时无法回答
+    「提示词改动后偏差是变好还是变坏」——计数必须可编程取用。
+    """
+
+    def test_run_fact_check_accumulates_counts(self, sample_holdings):
+        from src.python.llm.fact_checker import auto_correction_counts, reset_auto_correction_counts
+
+        reset_auto_correction_counts()
+        run_fact_check(
+            "<p>组合累计收益率为 5.0%，历史最大回撤 19.0%。</p>",
+            sample_holdings,
+            module_label="测试模块",
+            history_data={"max_drawdown_pct": 18.97},
+        )
+        counts = auto_correction_counts()
+        assert counts.get("fact_fix:测试模块") == 1
+        assert counts.get("fact_fix_total") == 1
+        assert counts.get("fact_fix_numeric") == 1
+        assert "fact_fix_code" not in counts
+
+    def test_no_correction_records_nothing(self, sample_holdings):
+        from src.python.llm.fact_checker import auto_correction_counts, reset_auto_correction_counts
+
+        reset_auto_correction_counts()
+        run_fact_check("<p>一切正常。</p>", sample_holdings, module_label="测试模块")
+        assert auto_correction_counts() == {}
+
+    def test_reset_clears_previous_run(self, sample_holdings):
+        """长驻进程 N 次生成不得跨轮累计（每轮从零开始）。"""
+        from src.python.llm.fact_checker import auto_correction_counts, reset_auto_correction_counts
+
+        run_fact_check(
+            "<p>组合累计收益率为 5.0%，历史最大回撤 19.0%。</p>",
+            sample_holdings,
+            module_label="测试模块",
+            history_data={"max_drawdown_pct": 18.97},
+        )
+        assert auto_correction_counts()
+        reset_auto_correction_counts()
+        assert auto_correction_counts() == {}

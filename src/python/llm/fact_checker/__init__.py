@@ -27,6 +27,10 @@
 
 from __future__ import annotations
 
+from src.python.llm.fact_checker._corrections import (  # noqa: F401
+    auto_correction_counts,
+    reset_auto_correction_counts,
+)
 from src.python.llm.fact_checker._numerical import (  # noqa: F401
     check_numerical_consistency,
 )
@@ -42,6 +46,8 @@ from src.python.llm.fact_checker._symbols import (  # noqa: F401
 
 __all__ = [
     "run_fact_check",
+    "auto_correction_counts",
+    "reset_auto_correction_counts",
     "check_numerical_consistency",
     "check_symbol_existence",
     "check_ranking_correctness",

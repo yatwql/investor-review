@@ -220,7 +220,8 @@ EVENT_TABLE_HEADER = (
 #: 口径常驻标注（视图与提示词块同源渲染，双端同现）
 LIMITATIONS_NOTE = (
     "口径：事件日为交易日取当日、否则顺延至其后首个交易日；窗口 = 映射交易日 ±5 交易日，"
-    "收益 = 前 1 日收盘 → 后 5 日收盘；窗口内停牌/缺失按 LOCF 前向填充（缺失超限该事件降级不出行）；"
+    "收益 = 前 1 日收盘 → 后 5 日收盘；行情轴右端不足 5 个交易日时（盘中运行常态）按实际可用"
+    "交易日截断计算并在行摘要标注「未满窗」；窗口内停牌/缺失按 LOCF 前向填充（缺失超限该事件降级不出行）；"
     "超额收益 = 品种收益 − 基准指数收益；文本极性取新闻 LLM 关联判定标记（利好/利空/中性），"
     "中性与未判定不参与方向比对。"
 )
@@ -256,8 +257,8 @@ def build_event_impact_view(contract: dict[str, Any] | None) -> dict[str, Any]:
         "degraded_line": "",
         "limitations_note": LIMITATIONS_NOTE,
         "hint_line": (
-            "开关开启且新闻获取成功后自动装配；新闻不足后窗 5 个交易日、行情或基准缺失、"
-            "无品种关联的事件会降级/跳过（摘要见本章口径行与降级清单）。"
+            "开关开启且新闻获取成功后自动装配；行情或基准缺失、"
+            "无品种关联的事件会降级/跳过；行情轴右端不足 5 个交易日时按实际可用日截断（摘要标注未满窗条数）。"
         ),
     }
     if not contract or not contract.get("available"):
@@ -289,6 +290,13 @@ def build_event_impact_view(contract: dict[str, Any] | None) -> dict[str, Any]:
             f"（跳过：无品种关联 {skipped.get('unmatched', 0)} 条）"
         ),
     ]
+    partial_events = [e for e in events if e.get("window_partial")]
+    if partial_events:
+        shortest = min(int(e.get("window_after_actual") or 0) for e in partial_events)
+        view["summary_lines"].append(
+            f"其中 {len(partial_events)} 条后窗未满（行情轴止于最近交易日，最短 {shortest}/{window.get('after', WINDOW_AFTER)} 日），"
+            "按实际可用交易日截断计算"
+        )
     for event in events:
         view["event_rows"].append(
             [

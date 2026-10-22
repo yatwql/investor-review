@@ -671,7 +671,7 @@ def _gate_workers() -> int:
 
 
 def _tree_fingerprint(runner=None) -> str:
-    """工作区树指纹（实现在 `_release/_gate.py`）。"""
+    """工作区全树指纹（保留：供需要「改动过任何文件」语义的调用方；发布戳用代码指纹）。"""
     return _gate.tree_fingerprint(_exec, REPO_ROOT, runner)
 
 
@@ -767,7 +767,7 @@ def cmd_publish(args: argparse.Namespace, runner=None) -> int:
     else:
         print("[OK] release 提交已存在，跳过")
 
-    fingerprint = _tree_fingerprint(runner)
+    fingerprint = _code_fingerprint(runner)
     stamp = _gate_stamp_matches(release_version, fingerprint)
     if stamp:
         passed = str(stamp.get("verify_passed") or "")

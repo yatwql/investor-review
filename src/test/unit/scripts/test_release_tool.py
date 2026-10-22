@@ -119,6 +119,25 @@ class TestChangelogRelease:
         out, _ = rel.apply_changelog_release(text, "0.12.6", "2026-10-07")
         assert "v0.12.1 ~ v0.12.6（2026-10-07）" in out
 
+    def test_placeholder_only_section_rejected(self, rel):
+        """开发段只剩占位句时发布必须中止。
+
+        判定口径：占位句不是内容——原样归档会得到「只有标题、没有正文」的发布段，
+        而归档一旦落盘即无下游断言能发现正文缺失。
+        """
+        placeholder_only = _sample_changelog().replace("- **条目一**：内容甲 | rf-1\n- **条目二**：内容乙\n\n", "")
+        with pytest.raises(rel.ReleaseError, match="没有实际条目"):
+            rel.apply_changelog_release(placeholder_only, "0.12.6", "2026-10-08")
+
+    def test_classified_heading_counts_as_entry(self, rel):
+        """分类标题 + 条目（Keep a Changelog 形态）视为有内容，不误拦。"""
+        text = _sample_changelog().replace(
+            "- **条目一**：内容甲 | rf-1\n- **条目二**：内容乙\n",
+            "### Changed\n\n- **条目一**：内容甲\n",
+        )
+        _, body = rel.apply_changelog_release(text, "0.12.6", "2026-10-08")
+        assert "### Changed" in body and "内容甲" in body
+
     def test_version_mismatch_rejected(self, rel):
         with pytest.raises(rel.ReleaseError, match="不一致"):
             rel.apply_changelog_release(_sample_changelog(), "0.12.7", "2026-10-08")

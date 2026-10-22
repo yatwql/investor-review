@@ -11,6 +11,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from src.python.report.event_impact_panel import (
+    build_event_impact_view,
     build_event_rows,
     extract_text_polarity,
     parse_event_date,
@@ -230,3 +231,66 @@ def test_no_index_code_skips_fetch():
     assert res["available"] is False
     fetch_index.assert_not_called()
     assert "基准行情不可得" in res["degraded"][0]["reason"]
+
+
+# ── 未满窗摘要（行情轴止于当日时的事件表不再整表为空） ───────────
+
+
+def test_partial_window_summary_line_rendered():
+    """事件行 window_partial → 视图摘要追加「后窗未满」条数与最短可用日数。"""
+    axis = _dates("2026-08-24", "2026-09-15")
+    asset = [{"date": d, "close": 100.0} for d in axis]
+    index = [{"date": d, "close": 3000.0} for d in axis]
+    fetch_bars, fetch_index, resolve = _providers(asset, index)
+    raw = build_event_rows(
+        _HOLDINGS,
+        [_news()],
+        _PENETRATED,
+        fetch_bars=fetch_bars,
+        fetch_index=fetch_index,
+        benchmark_code_for=resolve,
+    )
+    assert raw["available"] is True
+    view = build_event_impact_view(
+        {
+            **raw,
+            "window": {"before": 5, "after": 5},
+            "match_counts": {},
+            "news_total": 1,
+            "polarity_known": 1,
+            "benchmark": {},
+            "skipped": raw["skipped"],
+            "degraded_count": raw["degraded_count"],
+        }
+    )
+    assert view["available"] is True
+    joined = "\n".join(view["summary_lines"])
+    assert "后窗未满" in joined
+    assert "0/5 日" in joined
+    assert "按实际可用交易日截断计算" in joined
+
+
+def test_complete_window_summary_has_no_partial_line():
+    """完整窗口 → 摘要不出现未满窗行（防恒真标注）。"""
+    fetch_bars, fetch_index, resolve = _providers()
+    raw = build_event_rows(
+        _HOLDINGS,
+        [_news()],
+        _PENETRATED,
+        fetch_bars=fetch_bars,
+        fetch_index=fetch_index,
+        benchmark_code_for=resolve,
+    )
+    view = build_event_impact_view(
+        {
+            **raw,
+            "window": {"before": 5, "after": 5},
+            "match_counts": {},
+            "news_total": 1,
+            "polarity_known": 1,
+            "benchmark": {},
+            "skipped": raw["skipped"],
+            "degraded_count": raw["degraded_count"],
+        }
+    )
+    assert "后窗未满" not in "\n".join(view["summary_lines"])

@@ -529,3 +529,58 @@ class TestGetCacheAge(CacheTestBase):
         age = get_cache_age("gz_age")
         self.assertIsNotNone(age)
         self.assertGreaterEqual(age, 0)
+
+
+# ═══════════════════════════════════════════════════════════
+#  非缓存引擎托管文件 / 日志量级（回归）
+# ═══════════════════════════════════════════════════════════
+
+
+class TestCleanupUnmanagedAndLogNoise(CacheTestBase):
+    """无 `_ts` 包封的文件不得按 epoch 虚龄删除；逐文件明细不得刷 INFO。"""
+
+    @patch("src.python.cache._cleanup.time.time")
+    @patch("src.python.cache._cleanup.get_ttl")
+    def test_file_without_ts_is_skipped_not_deleted(self, mock_ttl, mock_time):
+        """脚本自管的性能缓存（裸 JSON，无 `_ts`）不得按虚龄删除。
+
+        判定口径：`_ts` 缺失时不能取 0 当写入时间——实测 `test_coverage_snapshot.json`
+        / `test_redundancy_facts.json` 会算出 `age=497959.4h`（57 年），缓存每轮被删、
+        优化形同虚设且日志留下荒谬条目。
+        """
+        mock_time.return_value = 10_000_000.0
+        mock_ttl.return_value = 100.0
+        path = os.path.join(self.cache_dir, "test_redundancy_facts.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"version": "x", "files": {}}, f)
+
+        from src.python.cache import cleanup_expired
+
+        assert cleanup_expired() == 0
+        assert os.path.exists(path), "无 _ts 的文件不属缓存引擎托管，不得删除"
+
+    @patch("src.python.cache._cleanup.time.time")
+    @patch("src.python.cache._cleanup.get_ttl")
+    def test_per_file_detail_is_debug_only(self, mock_ttl, mock_time):
+        """逐文件明细必须留在 DEBUG；INFO 只允许汇总行（单日 257 行刷屏回归）。"""
+        mock_time.return_value = 10000.0
+        mock_ttl.return_value = 100.0
+        for i in range(3):
+            self._write_cache(f"price_old_{i}", i, 9500.0)
+
+        from src.python.cache import cleanup_expired
+
+        with self.assertLogs("invest", level="DEBUG") as logs:
+            assert cleanup_expired() == 3
+        info_lines = [r.getMessage() for r in logs.records if r.levelname == "INFO"]
+        detail_lines = [m for m in info_lines if "price_old_" in m]
+        assert detail_lines == [], f"逐文件明细不应出现在 INFO: {detail_lines}"
+        assert any("缓存清理完成" in m for m in info_lines), "汇总行应保留在 INFO"
+
+    def test_span_format_uses_small_units(self):
+        """TTL 量级自适应：30s 不得印成 `0.0h`（读起来像配置错误）。"""
+        from src.python.cache._cleanup import _fmt_span
+
+        assert _fmt_span(30) == "30.0s"
+        assert _fmt_span(600) == "10.0min"
+        assert _fmt_span(7200) == "2.0h"

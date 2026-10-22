@@ -46,6 +46,9 @@ _LLM_CLIENT_SETTINGS: dict[str, Any] = {
     ),
 }
 
+#: thinking 并发槽等待超过该秒数即记一行 INFO（低于此值属正常抖动，不值得占日志）
+_THINKING_WAIT_LOG_SECONDS = 5.0
+
 
 def _build_module_fns(
     a_indices,
@@ -285,7 +288,19 @@ def _dispatch_llm_workers(
 
         def _run() -> tuple[str | None, bool]:
             if _is_thinking_module(label):
+                waited_from = time.monotonic()
                 with _thinking_sem:
+                    waited = time.monotonic() - waited_from
+                    # 信号量等待完全静默时，只有对时间轴才能发现「thinking 模块被串行」
+                    # （实测两个 thinking 模块各 37s/51s 被 llm_max_thinking_concurrency=1
+                    # 完全串行，白等 38s 却无任何日志线索）→ 超阈值即报一行 INFO。
+                    if waited >= _THINKING_WAIT_LOG_SECONDS:
+                        logger.info(
+                            "[llm/thinking] %s 等待 thinking 并发槽 %.1fs（上限 %d，已并发占满时串行化）",
+                            _label_map.get(label, label),
+                            waited,
+                            _thinking_limit,
+                        )
                     return _execute(label, fn)
             return _execute(label, fn)
 

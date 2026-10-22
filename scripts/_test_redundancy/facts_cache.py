@@ -34,6 +34,7 @@ import hashlib
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_checklib）
@@ -83,7 +84,12 @@ def _save_facts_cache(path: Path, files: dict[str, dict]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(".tmp")
         tmp.write_text(
-            json.dumps({"version": _cache_version(), "files": files}, ensure_ascii=False),
+            # `_ts` 是缓存引擎的写入时间包封：缺它时 cache.cleanup_expired 会把裸
+            # JSON 当「epoch 写入」算出几十年陈龄、每轮启动当过期删掉（缓存白做）。
+            json.dumps(
+                {"_ts": time.time(), "version": _cache_version(), "files": files},
+                ensure_ascii=False,
+            ),
             encoding="utf-8",
         )
         os.replace(tmp, path)

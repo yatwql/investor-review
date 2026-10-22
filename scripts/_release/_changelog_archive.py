@@ -49,6 +49,20 @@ def _find_section(text: str) -> tuple[int, int, str]:
     return header.start(), header.end() + next_header.start(), header.group(1)
 
 
+def _has_release_entries(body_core: str) -> bool:
+    """开发段是否含实际条目（分类标题 `###` 或 `- ` 条目行）。
+
+    纯白/只余占位句/只有 `##` 级空段 → 视为空段（发布会被拦）。
+    """
+    for line in body_core.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped == SECTION_NOTE:
+            continue
+        if stripped.startswith("### ") or stripped.startswith("- "):
+            return True
+    return False
+
+
 def apply_changelog_release(text: str, release_version: str, date: str) -> tuple[str, str]:
     """发布段迁出：改指针、改归档索引、清空开发段并生成下一开发段。
 
@@ -63,6 +77,16 @@ def apply_changelog_release(text: str, release_version: str, date: str) -> tuple
     body_core = body.split("\n", 1)[1] if "\n" in body else ""
     body_core = re.sub(rf"^\s*\n*{re.escape(SECTION_NOTE)}\s*$", "", body_core, flags=re.M)
     body_core = body_core.strip("\n")
+
+    # 空段拦截：开发期 changelog 停在占位句时，迁出结果就是「只有标题的空发布段」——
+    # 归档会永久缺失该版内容（实测已发生一次），而下游无任何断言。此处前置中止。
+    if not _has_release_entries(body_core):
+        raise ReleaseError(
+            f"changelog 开发段 {release_version}-dev 没有实际条目"
+            f"（当前内容只有占位句「{SECTION_NOTE}」）\n"
+            "      发布前必须先把本版变更写进该段（如 `### Changed` + 条目），否则归档会丢内容\n"
+            "      下一步：补写 changelog 开发段后重跑 `release.py prepare`"
+        )
 
     next_dev = next_dev_version_of(release_version)
     new_section = f"## [{next_dev}] - 开发中（未发布）\n\n\n{SECTION_NOTE}\n\n"

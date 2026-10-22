@@ -306,3 +306,22 @@ class TestParseManagerFromArchivePage(unittest.TestCase):
 
         result = _parse_manager_from_archive_page("110011")
         self.assertIsNone(result)
+
+
+class TestArchivePageTimeout:
+    """回归：档案页（回退链路）必须用收紧后的超时。
+
+    实测 SSL 握手挂起让单请求耗时 17s（默认 15s + 解析余量），而它只是主页解析
+    失败后的尽力回退——不收紧会把单个代码的解析拖成十几秒，整批随之延长。
+    """
+
+    def test_archive_page_uses_tighter_timeout(self):
+        from src.python.fetcher import fund_manager as fm
+
+        assert fm._ARCHIVE_TIMEOUT < fm._TIMEOUT, "回退页超时应小于主页超时"
+
+        with patch.object(fm, "make_http_client") as mock_client:
+            mock_client.return_value.__enter__.return_value.get.return_value.text = "<html></html>"
+            fm._parse_manager_from_archive_page("017730")
+
+        assert mock_client.call_args.kwargs["timeout"] == fm._ARCHIVE_TIMEOUT

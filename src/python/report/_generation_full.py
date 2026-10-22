@@ -209,6 +209,10 @@ def _generate_report_full(
 
     # ── 5. 并行获取 LLM + 新闻 ──
     _comparison_indices = config.get("comparison_indices", None)
+    # 事实校验自动修正计数：每轮从零开始累计（长驻进程/N 次生成不跨轮串味）
+    from src.python.llm.fact_checker import auto_correction_counts, reset_auto_correction_counts
+
+    reset_auto_correction_counts()
     perf.start("LLM+新闻")
     from src.python.llm.observation import LlmObservation, bind_llm_observation
 
@@ -259,6 +263,11 @@ def _generate_report_full(
     # 过早登记会漏采；适配器对缺失键逐项跳过，故不构成硬依赖。
     record_deterministic_signals(pipeline_data, prep, reporter)
     perf.stop()
+
+    # 事实校验自动修正计数入 perf_history.counters（跨期可看趋势；单次只进日志时
+    # 无法判断提示词/口径改动有没有效——实测单轮可修正 5 处数值）
+    for _fix_key, _fix_n in auto_correction_counts().items():
+        perf.count(_fix_key, _fix_n)
 
     # 景气度框架诊断（实验性功能 prosperity_framework）：经实验挂载点接入。
     # full 路径 prep 已含穿透重仓（`penetrated_assets`），基本面与历史走势亦已就绪。

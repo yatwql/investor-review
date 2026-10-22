@@ -15,6 +15,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import time
 
 from collections.abc import Callable
 from datetime import datetime, timedelta
@@ -38,6 +40,9 @@ _TRADING_CALENDAR_CACHE_KEY = "trading_calendar"
 # 必须在此串行化（V8 顺序初始化是安全的）。
 _TRADING_CALENDAR_AKSHARE_LOCK = threading.Lock()
 
+#: 进程内日历 memo：(缓存文件指纹, 到期 monotonic, 日期集合)；None = 未装载
+_CAL_MEMO: tuple[tuple[int, int] | None, float, frozenset[str]] | None = None
+
 __all__ = [
     "_count_trading_days_back",
     "_get_trading_calendar",
@@ -51,11 +56,66 @@ __all__ = [
 ]
 
 
+def _calendar_cache_signature() -> tuple[int, int] | None:
+    """交易日历缓存文件指纹（mtime_ns, size）；文件不在（json/gz 皆无）返回 None。
+
+    用于进程内 memo 的失效判据：缓存文件被重写、被清理、或被并发进程刷新即视为新值。
+    """
+    base = cache._cache_path(_TRADING_CALENDAR_CACHE_KEY)
+    for path in (base, base + cache._GZIP_SUFFIX):
+        try:
+            st = os.stat(path)
+        except OSError:
+            continue
+        return (st.st_mtime_ns, st.st_size)
+    return None
+
+
+def _calendar_memo_lookup() -> set[str] | None:
+    """命中进程内 memo 则返回日历副本，否则 None（需回落到磁盘缓存）。"""
+    entry = _CAL_MEMO
+    if entry is None:
+        return None
+    signature, expires_at, dates = entry
+    if time.monotonic() >= expires_at:
+        return None
+    if signature != _calendar_cache_signature():
+        return None
+    return set(dates)
+
+
+def _calendar_memo_store(dates: set[str]) -> None:
+    """写入进程内 memo（TTL 取缓存剩余有效期，留 60s 余量防提前过期读）。"""
+    global _CAL_MEMO
+    try:
+        ttl = float(cache.get_ttl("calendar"))
+    except (TypeError, ValueError):
+        ttl = 0.0
+    if ttl <= 0:
+        _CAL_MEMO = None
+        return
+    _CAL_MEMO = (
+        _calendar_cache_signature(),
+        time.monotonic() + max(1.0, ttl - 60.0),
+        frozenset(dates),
+    )
+
+
+def _reset_calendar_memo() -> None:
+    """清空进程内 memo（测试隔离与长驻进程手动复位用）。"""
+    global _CAL_MEMO
+    _CAL_MEMO = None
+
+
 def _get_trading_calendar() -> set[str]:
     """获取 A 股交易日历（YYYY-MM-DD 字符串集合）。
 
     通过 akshare 获取全年交易日数据并缓存。若获取失败，返回空集合，
     由调用方（get_last_trading_day）回退到简易周度判断。
+
+    进程内 memo：交易日判定会被逐事件/逐持仓高频调用（实测单次报告 600+ 次），
+    每次都走 ``cache.get`` 等于读盘 + JSON 解析 600 次——memo 按「缓存文件指纹 +
+    剩余 TTL」失效，文件被重写或到期即回落磁盘缓存，不改变语义。
 
     线程安全：缓存未命中分支用模块级锁串行化 akshare(V8) 调用（见
     _TRADING_CALENDAR_AKSHARE_LOCK），避免并发初始化 py_mini_racer 触发
@@ -64,15 +124,23 @@ def _get_trading_calendar() -> set[str]:
     Returns:
         交易日日期字符串集合
     """
+    memo = _calendar_memo_lookup()
+    if memo is not None:
+        return memo
+
     cached = cache.get(_TRADING_CALENDAR_CACHE_KEY, cache.get_ttl("calendar"))
     if cached is not None and isinstance(cached, list):
-        return set(cached)
+        dates = set(cached)
+        _calendar_memo_store(dates)
+        return dates
 
     with _TRADING_CALENDAR_AKSHARE_LOCK:
         # 双重检查：等待锁期间其他线程可能已写入缓存
         cached = cache.get(_TRADING_CALENDAR_CACHE_KEY, cache.get_ttl("calendar"))
         if cached is not None and isinstance(cached, list):
-            return set(cached)
+            dates = set(cached)
+            _calendar_memo_store(dates)
+            return dates
         try:
             import akshare as ak
 
@@ -80,6 +148,7 @@ def _get_trading_calendar() -> set[str]:
             dates: set[str] = set(df["trade_date"].dropna().astype(str).tolist())
             if dates:
                 cache.set(_TRADING_CALENDAR_CACHE_KEY, sorted(dates))
+                _calendar_memo_store(dates)
                 logger.info("交易日历已更新（%d 个交易日）", len(dates))
                 return dates
         except Exception as exc:

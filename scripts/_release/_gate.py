@@ -256,7 +256,9 @@ def run_gate(args, ctx, runner=None) -> int:
             return rc if rc in (1, 2, 3) else 1
         print("[OK] portability 探针通过\n")
 
-    fingerprint = tree_fingerprint(ctx.exec_fn, ctx.root, runner)
+    # 用**代码指纹**（而非全树）：verify 的结论只取决于 src/scripts/ 等测试相关路径，
+    # 发布链里的文档统计同步不应让 gate 刚跑完的 verify 失效（否则 publish 必定重跑）
+    fingerprint = code_fingerprint(ctx.exec_fn, ctx.root, runner)
     write_gate_stamp(ctx.stamp_file, version, fingerprint, verify_passed, source=verify_source)
     suffix = " + portability" if getattr(args, "with_portability", False) else ""
     print(f"[OK] P2 门禁全绿（演进新鲜度 + verify + regression + 十守护 + 设计护栏{suffix}）")

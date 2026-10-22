@@ -454,6 +454,8 @@ _LLM_CLIENT_SETTINGS = {
 
 `max_workers=llm_config.llm_max_concurrency`（config 默认 3）控制并行调用数。开启 Extended Thinking 的模块（`thinking_enabled_{suffix}=true`）受独立信号量 `llm_max_thinking_concurrency`（默认 1）串行化约束——多 thinking 模块并发涌向 DeepSeek 等强制推理端点时偶发返回空 content（HTTP 200 空响应），该信号量从源头降低并发（thinking 请求同时最多 N 个），非 thinking 模块不受此限。
 
+**信号量等待必须可观测**：默认 1 时两个 thinking 模块（`expert_review` / `health_check`）是完全串行的——实测 51s + 37s 两段，后者在前者释放前无法起跑（线程池空槽也救不了），占单次报告总墙钟约 20%，而日志里只有时间轴能看出来。现 `_dispatch_llm_workers` 在**等待超 5s** 时记一条 INFO（模块名 / 已等待秒数 / 上限），用于区分「端点慢」与「被信号量排队」。是否把默认值提到 2 需真机实测：判据是并发两个 thinking 模块是否仍出现 HTTP 200 空响应（空 content 会触发「关 thinking 同 provider 重试」，成本与降级都会上升）。
+
 ### 4.2.1 端点级节流与并发治理（`llm/pacing.py`）
 
 **总时间预算**：`llm_total_time_budget_sec`（秒，`0`=不启用）在**每个模块启动前**检查已用时长，超预算不再提交新模块（已提交的不打断，避免半截内容与连接泄漏）；日志回显「已用/预算」，报告按已生成内容呈现。用于兜住「单模块卡住 + 重试叠加」把一次 full 拖成小时级（实测出现过 6,623s 的 LLM+新闻阶段）。

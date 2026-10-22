@@ -755,6 +755,41 @@ class TestThinkingConcurrencyLimit(unittest.TestCase):
         # 总并发不超 llm_max_concurrency
         self.assertLessEqual(_tracking["max_active"], 3)
 
+    def test_thinking_wait_over_threshold_logged(self) -> None:
+        """thinking 槽等待超阈值必须留下日志线索。
+
+        判定口径：`llm_max_thinking_concurrency=1` 时第二个 thinking 模块的等待时间
+        等于第一个的执行时长（实测两个模块 51s / 37s 完全串行），若等待静默，日志里
+        只有时间轴能看出「被信号量排队」与「端点慢」的区别。
+        """
+        from src.python.llm.generators_orchestrator import _dispatch_llm_workers
+
+        def _slow_fn(_client, _cfg):
+            time.sleep(0.06)
+            return "<p>x</p>", False
+
+        fns = {"health_check": _slow_fn, "expert_review": _slow_fn}
+        needs = {"health_check": True, "expert_review": True}
+        llm_config = {
+            "llm_max_concurrency": 2,
+            "llm_max_thinking_concurrency": 1,
+            "thinking_enabled_health_check": True,
+            "thinking_enabled_expert_review": True,
+        }
+
+        with (
+            patch("src.python.llm._llm_dispatch._build_module_fns", return_value=fns),
+            patch("src.python.llm.generators_orchestrator._build_competitive_context_block", return_value=""),
+            patch("src.python.llm._llm_dispatch.make_http_client", return_value=MagicMock()),
+            patch("src.python.llm._llm_dispatch._THINKING_WAIT_LOG_SECONDS", 0.02),
+            self.assertLogs("invest", level="INFO") as logs,
+        ):
+            _dispatch_llm_workers(needs, llm_config, False, {}, {}, 0, 0, 0, 0, 0, {}, None, None, None)
+
+        wait_lines = [line for line in logs.output if "等待 thinking 并发槽" in line]
+        self.assertEqual(len(wait_lines), 1, f"应恰有一条等待日志（实际 {logs.output}）")
+        self.assertIn("上限 1", wait_lines[0])
+
 
 class TestDispatchModuleSpans(unittest.TestCase):
     """逐模块耗时记录：模块自身耗时入 recorder，None 时零行为变化。"""
