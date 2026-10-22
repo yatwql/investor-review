@@ -1,7 +1,7 @@
-"""perf-view 统计工具 — 分位 / 离群 / 分组的纯函数。
+"""perf-history 统计工具 — 分位 / 离群 / 分组的纯函数。
 
-perf-view 报告编排的统计实现层；主入口以 re-export 保持
-``load_script("perf-view.py")`` 后 ``mod._percentile`` 等符号可访问。
+perf-history 报告编排的统计实现层；主入口以 re-export 保持
+``load_script("perf-history.py")`` 后 ``mod._percentile`` 等符号可访问。
 """
 
 from __future__ import annotations

@@ -53,7 +53,7 @@ _BASE_URL = "https://api.datasink.ing"
 #: 429 限速退避策略（重试一次；免费档 3 请求/秒）
 _RATE_LIMIT_POLICY = RetryPolicy(attempts=2, strategy=STRATEGY_FIXED, base_backoff=1.0)
 _TIMEOUT = 20.0
-_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; investor-util)"}
+_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; investor-review)"}
 
 SOURCE_ID = "datasink"
 DISPLAY_NAME = "DataSinking 财报"

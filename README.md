@@ -1,7 +1,7 @@
 # 投资复盘助手
 
-[![Release](https://img.shields.io/github/v/release/yatwql/investor-util)](https://github.com/yatwql/investor-util/releases)
-[![CI](https://github.com/yatwql/investor-util/actions/workflows/ci.yml/badge.svg)](https://github.com/yatwql/investor-util/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/yatwql/investor-review)](https://github.com/yatwql/investor-review/releases)
+[![CI](https://github.com/yatwql/investor-review/actions/workflows/ci.yml/badge.svg)](https://github.com/yatwql/investor-review/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.11-3776AB?logo=python&logoColor=white)](https://www.python.org)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -32,7 +32,7 @@
 - 🔁 **决策有闭环** — 建议 → 登记 → 真实行情结算命中率 → 教训回灌提示词，越用越懂你的组合
 - 🔒 **隐私优先** — 数据全部本地处理，支持 4 档匿名化，凭据永不落日志与报告
 
-> 当前版本：0.14.2（[版本历史](docs/managements/changelog.md)）
+> 当前版本：0.14.3（[版本历史](docs/managements/changelog.md)）
 
 ## ✨ 核心亮点
 
@@ -41,7 +41,7 @@
 | 亮点 | 说明 |
 |:---|:---|
 | **一次持仓，三种用法** | 同一套引擎、三种入口，产物与配置完全一致：**TUI**（全键盘菜单，19 项含退出 + 二级子菜单；`[Q]`/`[T]` 按功能开关显示）· **CLI**（参数驱动，Windows 任务计划 / cron 无人值守）· **Web**（浏览器上传 → 选格式 → 看进度 → 预览/下载 + 配置编辑面板） |
-| **全量专业报告，双格式** | **Excel** 最多 19 个页签（条件页签按开关自动显隐，不留空壳）；**HTML** 单页自包含、响应式布局、**最多 10 张 Chart.js 交互图表**（悬停看精确值、可缩放、一键导出 PNG / CSV）+ 深浅色主题切换——手机上看也不翻车 |
+| **全量专业报告，双格式** | **Excel** 最多 19 个页签（条件页签按开关自动显隐，不留空壳）；**HTML** 单页自包含、响应式布局、**最多 12 张 Chart.js 交互图表**（悬停看精确值、可缩放、一键导出 PNG / CSV）+ 深浅色主题切换——手机上看也不翻车 |
 | **穿透到真实持仓** | 基金/ETF 拆解为底层标的合并排序（TOP10），**ETF 联接基金按目标 ETF 穿透**；标注各基金报告期与「未折算持有比例」，不做精确性误导 |
 | **量化风控成体系** | Beta 置信区间 + t/p 检验、6 种涨跌情景回撤推演（CI 传播）、尾部风险（VaR 95/99、最长连跌、恢复天数）、再平衡超限告警、流动性变现天数、币种敞口——机构风控的个人版 |
 | **真正把 LLM 用成智囊团** | 三阶段圆桌复盘（召集令→辩论→定音锤）+ 可选正反辩论/条件推理/集中度问答；输出自动附**事实校验**（数值/品种/排名回查）与**质量分级** A~F；多 Provider 链式分发（priority / weighted / cost_first / fallback_only），失败自动递补；分析先核对申购限购可执行性（限大额 / 暂停申购不进不实建议） |
@@ -51,13 +51,13 @@
 
 ## 📸 实际报告效果
 
-由**全新虚构样例持仓**（两账户 · 10 只多资产混合：个股 / 场外基金 / ETF / 债基 / 货基，纯编造份额成本，本机真实行情）生成的 HTML 报告实景，全量报告（全部功能开关 + 六个 LLM 模块全开）：
+由**全新虚构样例持仓**（两账户 · 10 只多资产混合：个股 / ETF / 场外基金 / 债券基金 / 货币 ETF，纯编造份额成本，本机真实行情）生成的 HTML 报告实景，全量报告（全部功能开关与 LLM 模块开启，含实验项）：
 
-![报告首屏：完整目录导航与章节入口](src/static/report-overview.png)
+![报告首屏：品牌标记、完整目录导航与章节入口](src/static/report-overview.png)
 
-![盈亏汇总与组合持仓概况](src/static/report-toc.png)
+![盈亏汇总与市场指数](src/static/report-toc.png)
 
-![交互图表：资产构成与穿透行业分布](src/static/report-charts.png)
+![交互图表：穿透行业分布与 TOP10 持仓资产](src/static/report-charts.png)
 
 ## 🖥️ 界面实景
 
@@ -73,6 +73,10 @@
 
 ![Web 配置编辑](src/static/web-config.png)
 
+**CLI 命令行模式**——参数驱动（`report --type basic|both|full`），产物路径、总盈亏与模块耗时排行直接回显，适合 cron / Windows 任务计划无人值守：
+
+![CLI 生成报告：产物路径、盈亏汇总与耗时排行](src/static/cli-report.png)
+
 ## 环境要求
 
 - **Python ≥ 3.11**（3.10 已于 2026‑10 终止支持）
@@ -81,7 +85,7 @@
 ## 三分钟上手
 
 ```bash
-git clone https://github.com/yatwql/investor-util.git && cd investor-util
+git clone https://github.com/yatwql/investor-review.git && cd investor-review
 ./scripts/launch.sh        # Linux/macOS（首次自动建 venv、装依赖）
 # Windows： .\scripts\launch.ps1
 ```

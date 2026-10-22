@@ -198,7 +198,7 @@ def check_project_stats(
                 continue
             if got_lines != str(test_count):
                 findings.append(
-                    f"{rel(_FOLDERS_MD)}:{line_no}: 测试用例数 {got_lines} 与 collect-test-coverage 快照 {test_count} 不一致"
+                    f"{rel(_FOLDERS_MD)}:{line_no}: 测试用例数 {got_lines} 与 test-collect-coverage 快照 {test_count} 不一致"
                 )
             continue
         if label not in actual:

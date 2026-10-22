@@ -1,4 +1,4 @@
-"""测试：顺序依赖二分工具 — find-order-dependent-test.py
+"""测试：顺序依赖二分工具 — test-find-order-dependent.py
 
 覆盖：
   - `smallest_failing_prefix` 二分正确性（对多组单调失败阈值与线性 oracle 对齐）
@@ -18,13 +18,13 @@ from pathlib import Path
 import pytest
 from src.test._script_loader import load_script
 
-_REPO_ROOT = Path(__file__).resolve().parents[4]  # investor-util 仓库根目录
+_REPO_ROOT = Path(__file__).resolve().parents[4]  # investor-review 仓库根目录
 _SCRIPTS_DIR = _REPO_ROOT / "scripts"
 
 
 @pytest.fixture(scope="module")
 def order_script():
-    return load_script("find-order-dependent-test.py")
+    return load_script("test-find-order-dependent.py")
 
 
 pytestmark = [
@@ -175,7 +175,7 @@ class TestEndToEndCli:
 
     def _run_main(self, dirpath: Path, argv: list[str]) -> tuple[int, str]:
         proc = subprocess.run(
-            [sys.executable, str(_SCRIPTS_DIR / "find-order-dependent-test.py"), *argv],
+            [sys.executable, str(_SCRIPTS_DIR / "test-find-order-dependent.py"), *argv],
             capture_output=True,
             text=True,
             encoding="utf-8",

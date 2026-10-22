@@ -141,6 +141,13 @@ MODES: dict[str, dict] = {
         "order": 16,
         "parallel": False,
     },
+    "portability": {
+        "desc": "CI portability 等价复现：隐式编码严格档 + 需求文件 locale 解码（探针项数计，非 pytest 模式）",
+        "probes": True,
+        "timeout_sec": 900,
+        "order": 17,
+        "parallel": False,
+    },
 }
 
 
@@ -197,7 +204,7 @@ def compile_marker_expr(expr: str) -> Callable[[Collection[str]], bool]:
     复用 pytest 自带的表达式求值器（``_pytest.mark.expression``，即 ``-m``
     过滤走的同一实现），使「收集侧按集合计数」与「test-runner 按 ``-m``
     实跑」两侧共用一份语义——表达式本身只在 ``MODES`` 定义一处，其它地方
-    （如 ``collect-test-coverage.py``）一律由本函数现场编译，不再抄写。
+    （如 ``test-collect-coverage.py``）一律由本函数现场编译，不再抄写。
 
     Args:
         expr: pytest `-m` 布尔表达式（``and`` / ``or`` / ``not`` / 括号 / 标识符）
@@ -228,6 +235,7 @@ _HELP_TEXT = """测试驱动脚本 — 统一运行 pytest 并输出结构化 HT
   python scripts/test-runner.py --mode unit              # 仅单元测试
   python scripts/test-runner.py --mode edge              # 仅边缘测试
   python scripts/test-runner.py --mode scenario,edge     # 多模式组合
+  python scripts/test-runner.py --mode portability       # CI portability 等价复现（隐式编码 + locale 解码探针）
   python scripts/test-runner.py --coverage               # 全量 + 覆盖率报告
   python scripts/test-runner.py --mode bench --machine-info  # 跨机器耗时采集（环境 + 各模式实测表格）
   python scripts/test-runner.py --mode bench --update-docs   # 采集并自动回填环境耗时对照表
@@ -256,10 +264,12 @@ _MODE_TABLE_ORDER: tuple[str, ...] = (
 )
 
 
-_BENCH_MODES: tuple[str, ...] = tuple(m for m in _MODE_TABLE_ORDER if m != "all") + ("all",)
+_BENCH_MODES: tuple[str, ...] = tuple(m for m in _MODE_TABLE_ORDER if m != "all" and not MODES[m].get("probes")) + (
+    "all",
+)
 
 
-#: 功能域中文标签 ↔ unit 子标记（单一来源）：collect-test-coverage 的功能域聚合
+#: 功能域中文标签 ↔ unit 子标记（单一来源）：test-collect-coverage 的功能域聚合
 #: 与 check-doc-drift 的 test-coverage.md 功能域表核对共用同一张表，增删 unit
 #: 子标记时两边自动跟随，不得各自维护副本。
 UNIT_DOMAIN_LABELS: dict[str, str] = {

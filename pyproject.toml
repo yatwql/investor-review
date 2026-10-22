@@ -3,8 +3,8 @@ requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "investor-util"
-version = "0.14.2"
+name = "investor-review"
+version = "0.14.3"
 description = "投资复盘助手：读取持仓 Excel，生成 Excel/HTML 投资分析报告（含行情、穿透、基金业绩、财经新闻热点关联分析与 LLM 深度复盘）"
 requires-python = ">=3.11"
 dependencies = [
@@ -21,7 +21,7 @@ dependencies = [
 color = [
     "colorama==0.4.6",
 ]
-# SVG 像素审查（scripts/check-svg.py pixel|text-overflow）需要；几何审查 geom 免依赖
+# SVG 像素审查（make-assets.py svg-pixel|svg-text-overflow）需要；几何审查 svg-geom 免依赖
 svg = [
     "Pillow>=10",
 ]
@@ -57,7 +57,6 @@ select = ["E4", "E7", "E9", "F"]
 "src/python/tui/tui.py" = ["E402"]
 "src/python/cli/cli.py" = ["E402"]
 "src/python/web/server.py" = ["E402"]
-"scripts/perf-view.py" = ["E402"]
 "scripts/check-doc-drift.py" = ["E402"]
 # E402：子模块 re-export 块置于模块级代码之后（规避循环依赖）
 "src/python/llm/generators_orchestrator.py" = ["E402"]

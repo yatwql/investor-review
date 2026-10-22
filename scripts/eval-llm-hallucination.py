@@ -2,9 +2,9 @@
 """LLM 幻觉率采样测试 — 对标准持仓数据调用 LLM 生成报告，统计幻觉率。
 
 用法:
-  python scripts/llm-hallucination-sampler.py
-  python scripts/llm-hallucination-sampler.py --module expert_review --dry-run
-  python scripts/llm-hallucination-sampler.py --dataset 1,2,3 --force
+  python scripts/eval-llm-hallucination.py
+  python scripts/eval-llm-hallucination.py --module expert_review --dry-run
+  python scripts/eval-llm-hallucination.py --dataset 1,2,3 --force
 
 选项:
   --module MODULE     LLM 模块名: expert_review（默认）, global_macro, health_check, penetration_deep

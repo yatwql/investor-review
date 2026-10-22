@@ -1,4 +1,4 @@
-"""测试：失败用例提取脚本 — extract-test-failures.py
+"""测试：失败用例提取脚本 — test-extract-failures.py
 
 覆盖：
   - `_find_json_blob` 对含 HTML 实体引号的 data-jsonblob 能完整提取（回归场景：
@@ -18,7 +18,7 @@ from src.test._script_loader import load_script
 
 @pytest.fixture(scope="module")
 def extract_script():
-    return load_script("extract-test-failures.py")
+    return load_script("test-extract-failures.py")
 
 
 pytestmark = [

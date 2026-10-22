@@ -127,7 +127,7 @@ snapshot 阶段（一次性，可重复执行）
 ## 8. 脚本落点
 
 - 目录：`scripts/`（沿用扁平语义命名）
-- 拟名：`jev-news-correlation-eval.py`——与既有 `calibrate-dedup-threshold.py`、`llm-hallucination-sampler.py` 同类，属离线评测/校准脚本
+- 拟名：`jev-news-correlation-eval.py`——与既有 `eval-dedup-threshold.py`、`eval-llm-hallucination.py` 同类，属离线评测/校准脚本
 - 子命令：`snapshot`（取数冻结）/ `run`（三方案跑分）/ `report`（指标汇总与判定）
 - 必须复用 `scripts/_checklib.py` 的 CLI 契约（`-v/--verbose` + `--ci`；通过退出 0，发现 finding 退出 2）
 - 该脚本是**离线工具**，不得被 pytest 收集：不放在 `src/test/` 下，也不得在其中真实调用 LLM 而进入测试套件

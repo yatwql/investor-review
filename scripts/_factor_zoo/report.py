@@ -127,7 +127,7 @@ def _write_verdict_md(
         "## 复算说明",
         "",
         "判定输入（目录/股票池/字段快照/信号报告/耗时报告）冻结于本目录；"
-        "`factor_zoo_eval.py all` 重跑后 A/B 的分子分母与判定须逐字段一致；"
+        "`eval-factor-zoo.py all` 重跑后 A/B 的分子分母与判定须逐字段一致；"
         "C 的秒数为实测快照（网络波动允许漂移），复算以判定结论一致为准。",
     ]
     (out_dir / "verdict.md").write_text("\n".join(lines) + "\n", encoding="utf-8")

@@ -5,7 +5,7 @@
 
 调用方：
   - ``providers/news_dedup.py`` —— 去重主流程与锚点采集（本模块名称在其 re-export）
-  - ``scripts/calibrate-dedup-threshold.py`` —— 校准工具按当前口径重算锚点样本
+  - ``scripts/eval-dedup-threshold.py`` —— 校准工具按当前口径重算锚点样本
 
 拆出理由（可维护性）：规则数据（模板词表等）与纯原语聚在一处，主流程模块只留
 锚点采集与比较循环；两者合计增长曾使单模块越过多文件的可维护行数上限。规则调整

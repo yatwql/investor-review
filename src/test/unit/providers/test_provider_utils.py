@@ -119,7 +119,7 @@ class TestDeterministicFailFast:
 
         def _boom():
             calls["n"] += 1
-            raise OSError("perf-test-report: 基准运行按设计禁网")
+            raise OSError("test-perf-report: 基准运行按设计禁网")
 
         monkeypatch.setattr(pu.time, "sleep", sleeps.append)
         with pytest.raises(OSError):

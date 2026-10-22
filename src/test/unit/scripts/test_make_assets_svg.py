@@ -1,4 +1,4 @@
-"""check-svg.py 几何审查测试（字符宽度估算 / 元素包围盒 / 容器归属 / 越界·贴边·重叠判定）。
+"""`make-assets.py svg-geom` 几何审查测试（字符宽度估算 / 元素包围盒 / 容器归属 / 越界·贴边·重叠判定）。
 
 覆盖 `geom` 子命令的纯标准库路径：坏元素跳过不中断、越界/贴边/无容器越画布/文本重叠
 四类 finding、同列底部提示不计入退出码，以及 `geom` 子命令的退出码契约。
@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -19,10 +18,10 @@ SVG_NS = 'xmlns="http://www.w3.org/2000/svg" width="1000" height="600"'
 
 @pytest.fixture(name="mod")
 def fixture_mod():
-    """加载 `scripts/check-svg.py` 为可测模块。"""
+    """加载 `scripts/_assets/svg_check.py` 为可测模块。"""
     from src.test._script_loader import load_script
 
-    return load_script("check-svg.py")
+    return load_script("_assets/svg_check.py", module_name="_assets_svg_check_under_test")
 
 
 def _svg(tmp_path: Path, name: str, body: str) -> Path:
@@ -218,7 +217,7 @@ class TestGeomNotes:
 
 
 class TestGeomExitCode:
-    """`check-svg.py geom` 通过 0 / 发现 2。"""
+    """`make-assets.py svg-geom` 通过 0 / 发现 2。"""
 
     def test_exit_0_when_clean(self, mod, monkeypatch, tmp_path):
         path = _svg(
@@ -226,20 +225,37 @@ class TestGeomExitCode:
             "ok.svg",
             '<rect x="0" y="0" width="1000" height="200" fill="#eee"/><text x="100" y="100" font-size="14">OK</text>',
         )
-        monkeypatch.setattr(sys, "argv", ["check-svg.py", "--ci", "geom", str(path)])
-        with pytest.raises(SystemExit) as exc:
-            mod.main()
-        assert int(exc.value.code) == 0
+        assert mod.main(["--ci", "geom", str(path)]) == 0
 
     def test_exit_2_when_finding(self, mod, monkeypatch, tmp_path):
         path = _svg(tmp_path, "bad.svg", '<text x="990" y="30" font-size="20">AAAA</text>')
-        monkeypatch.setattr(sys, "argv", ["check-svg.py", "--ci", "geom", str(path)])
-        with pytest.raises(SystemExit) as exc:
-            mod.main()
-        assert int(exc.value.code) == 2
+        assert mod.main(["--ci", "geom", str(path)]) == 2
 
     def test_exit_2_when_file_missing(self, mod, monkeypatch, tmp_path):
-        monkeypatch.setattr(sys, "argv", ["check-svg.py", "--ci", "geom", str(tmp_path / "absent.svg")])
-        with pytest.raises(SystemExit) as exc:
-            mod.main()
-        assert int(exc.value.code) == 2
+        assert mod.main(["--ci", "geom", str(tmp_path / "absent.svg")]) == 2
+
+
+class TestMakeAssetsEntry:
+    """入口 `make-assets.py` 的子命令分发与退出码口径。"""
+
+    @pytest.fixture(name="entry")
+    def fixture_entry(self):
+        from src.test._script_loader import load_script
+
+        return load_script("make-assets.py", module_name="_make_assets_entry_under_test")
+
+    def test_svg_subcommands_forward_stripped_name(self, entry, monkeypatch):
+        seen = {}
+        monkeypatch.setattr(entry.svg_check, "main", lambda argv: seen.setdefault("argv", argv) and 0)
+        assert entry.main(["--ci", "svg-geom", "a.svg"]) == 0
+        assert seen["argv"] == ["--ci", "geom", "a.svg"]
+
+    def test_social_preview_subcommand_drops_command_token(self, entry, monkeypatch):
+        seen = {}
+        monkeypatch.setattr(entry.social_preview, "main", lambda argv: seen.setdefault("argv", argv) and 0)
+        assert entry.main(["social-preview", "-o", "/tmp/x.jpg"]) == 0
+        assert seen["argv"] == ["-o", "/tmp/x.jpg"]
+
+    def test_unknown_subcommand_returns_two(self, entry, capsys):
+        assert entry.main(["bogus"]) == 2
+        assert "未知子命令" in capsys.readouterr().out

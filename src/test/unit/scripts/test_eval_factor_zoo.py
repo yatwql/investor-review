@@ -1,9 +1,9 @@
-"""factor_zoo_eval（因子动物园目录评测）脚本单元测试。
+"""`eval-factor-zoo.py`（因子动物园目录评测）脚本单元测试。
 
 覆盖：目录冻结校验与结构关系、指标 A/B/C 阈值边界（恰等过 / 差一点不过 /
 fail-closed）、判定书三态、报告耗时基线读取、相关性口径（比例同向不计低相关 /
 独立计低相关 / 阶跃口径 / 空族不通过）、截面序列降维、对数市值字段、注入探针
-（网络无关）。边界/异常场景见 test_factor_zoo_eval_edge.py。
+（网络无关）。边界/异常场景见 test_eval_factor_zoo_edge.py。
 """
 
 from pathlib import Path
@@ -14,7 +14,7 @@ from src.test._script_loader import load_script
 
 @pytest.fixture(scope="module")
 def ev():
-    return load_script("factor_zoo_eval.py")
+    return load_script("eval-factor-zoo.py")
 
 
 pytestmark = [

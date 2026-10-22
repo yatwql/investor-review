@@ -1,4 +1,4 @@
-"""perf-view 渲染：Markdown 表格拼装、机读输出与趋势报告。
+"""perf-history 渲染：Markdown 表格拼装、机读输出与趋势报告。
 
 依赖 :mod:`_perf_view.data` 的数据派生与 :mod:`_perf_view.stats` 的统计原语；
 CLI 入口见 :mod:`_perf_view.cli`。

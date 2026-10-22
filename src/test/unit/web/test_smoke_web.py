@@ -1,4 +1,4 @@
-"""测试：scripts/smoke-web.py 可复跑 Web 冒烟脚本。
+"""测试：scripts/test-smoke-web.py 可复跑 Web 冒烟脚本。
 
 对齐「沉淀 Web 冒烟脚本」修复方向：以 pytest 为载体调用脚本的
 ``run_smoke()``，验证 11 项 HTTP 全链路断言全部通过（含正式-用存量模式、
@@ -23,7 +23,7 @@ pytestmark = [pytest.mark.unit, pytest.mark.unit_web]
 
 def test_smoke_web_run_smoke_all_pass():
     """run_smoke() 11 项断言全部通过。"""
-    mod = load_script("smoke-web.py")
+    mod = load_script("test-smoke-web.py")
     results = mod.run_smoke()
 
     assert len(results) == 11
@@ -48,20 +48,20 @@ class _FakePollClient:
 
 def test_smoke_web_poll_run_finished_waits_for_done():
     """_poll_run_finished 轮询至终态：queued→running→done 返回 done（不提前返回）。"""
-    mod = load_script("smoke-web.py")
+    mod = load_script("test-smoke-web.py")
     status = mod._poll_run_finished(_FakePollClient(["queued", "running", "done"]), "r1")
     assert status == "done"
 
 
 def test_smoke_web_poll_run_finished_returns_failed():
     """_poll_run_finished 到 failed 也返回终态 failed。"""
-    mod = load_script("smoke-web.py")
+    mod = load_script("test-smoke-web.py")
     status = mod._poll_run_finished(_FakePollClient(["queued", "failed"]), "r1")
     assert status == "failed"
 
 
 def test_smoke_web_poll_run_finished_never_finishes_returns_last():
     """_poll_run_finished 始终不到终态时返回最后 status（不崩溃）。"""
-    mod = load_script("smoke-web.py")
+    mod = load_script("test-smoke-web.py")
     status = mod._poll_run_finished(_FakePollClient(["running", "running"]), "r1", max_iters=2)
     assert status == "running"

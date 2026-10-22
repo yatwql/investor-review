@@ -1,4 +1,4 @@
-"""perf-view.py 性能趋势查看测试（阶段统计合并 / 分组聚合 / 分位概览 / 趋势报告渲染）。
+"""perf-history.py 性能趋势查看测试（阶段统计合并 / 分组聚合 / 分位概览 / 趋势报告渲染）。
 
 覆盖 `_mean`/`_min_max`/`_percentile` 的空输入降级与最近秩口径、`_total_summary`
 的汇总字段、`_merge_phase_stats` 的跨记录聚合、`_group_records` 的类型过滤 + 截尾
@@ -15,10 +15,10 @@ pytestmark = [pytest.mark.unit, pytest.mark.unit_scripts, pytest.mark.usefixture
 
 @pytest.fixture(name="mod")
 def fixture_mod():
-    """加载 `scripts/perf-view.py` 为可测模块。"""
+    """加载 `scripts/perf-history.py` 为可测模块。"""
     from src.test._script_loader import load_script
 
-    return load_script("perf-view.py")
+    return load_script("perf-history.py")
 
 
 def _records(count: int = 3, version: str = "0.1.0", report_type: str = "full", start: int = 0) -> list[dict]:

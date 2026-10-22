@@ -1,4 +1,4 @@
-"""测试：端到端性能基准 — perf-test-report.py
+"""测试：端到端性能基准 — test-perf-report.py
 
 覆盖：
   - `_generate_holdings`：股票按请求量取样、场外基金全量追加；样本池覆盖 Phase3 目标量
@@ -35,7 +35,7 @@ pytestmark = [
 
 @pytest.fixture(scope="module")
 def perf_test_report():
-    return load_script("perf-test-report.py")
+    return load_script("test-perf-report.py")
 
 
 @pytest.fixture()
@@ -285,7 +285,7 @@ class TestGateMode:
             "run_perf_test",
             lambda: ({"phase1_basic_excel": basic_time}, None, None),
         )
-        argv = ["perf-test-report.py"] + (["--gate"] if gate else [])
+        argv = ["test-perf-report.py"] + (["--gate"] if gate else [])
         monkeypatch.setattr("sys.argv", argv)
         return perf_test_report.main()
 

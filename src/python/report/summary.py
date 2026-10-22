@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -114,6 +115,42 @@ def _write_index_row(ws, row: int, name: str, price: float, change_pct: float) -
 def _write_blanks(_ws, row: int, n: int = 1) -> int:
     """写入 n 行空白。"""
     return row + n
+
+
+#: 品牌标记（猫头鹰「守望」头像）PNG 资源——与 Web 工作台 favicon.svg 同源，
+#: 由该 SVG 栅格化而来（80×80，嵌入时缩到 40px）。用 PNG 而非运行时栅格化：
+#: 避免引入系统级 cairo 依赖，也不让报告生成依赖 SVG 渲染器。
+_BRAND_MARK_PNG = Path(__file__).resolve().parents[2] / "static" / "web" / "favicon-mark.png"
+
+#: 嵌入尺寸（像素）——DESIGN.md 护栏 11：Excel 首页 ≤48px
+_BRAND_MARK_PX = 40
+
+
+def _embed_brand_mark(ws: Worksheet) -> None:
+    """在首页标题行左侧嵌入品牌标记（猫头鹰「守望」）。
+
+    身份识别用途（DESIGN.md 护栏 11：≤48px、不做装饰）。资源缺失或 openpyxl
+    不可用时**静默跳过**：品牌标记是增强项，不得让报告生成失败。
+
+    注意 openpyxl 的两处坑（均有回归用例）：
+    - `Image._data()` 每次调用都会 `fp.close()` 关流，而报告会落盘两次
+      （最新版 + 存档版）——故先物化 PNG 字节，再把 `_data` 换成返回缓存的闭包；
+    - 直接传路径时 openpyxl 自己开流，故统一走 BytesIO 并保活引用。
+    """
+    try:
+        from io import BytesIO
+
+        from openpyxl.drawing.image import Image as XLImage
+
+        png_bytes = _BRAND_MARK_PNG.read_bytes()
+        stream = BytesIO(png_bytes)
+        img = XLImage(stream)
+        img.width = img.height = _BRAND_MARK_PX
+        img._brand_stream = stream  # noqa: SLF001 — 保活底层流（openpyxl 无公开接口）
+        img._data = lambda _b=png_bytes: _b  # noqa: SLF001 — 两次保存都返回同一份字节
+        ws.add_image(img, "A1")
+    except Exception as exc:  # noqa: BLE001 — 品牌标记失败不得影响报告产出
+        logger.debug("品牌标记嵌入跳过：%s", exc)
 
 
 def _write_basic_info(ws: Worksheet, row: int, now: datetime | None = None) -> int:
@@ -488,6 +525,7 @@ def write_summary_sheet(
             按可见章节序生成；None 时不渲染导航区，表头行位置与既有输出一致）
     """
     row = write_title_row(ws, 1, get_report_sheet_name("summary"), _NCOLS)
+    _embed_brand_mark(ws)
     # ── 章节导航区（与 HTML 左侧目录对应：可见章节 → 各页签内部超链接） ──
     if section_nav:
         row = _write_section(ws, row, "【章节导航】")

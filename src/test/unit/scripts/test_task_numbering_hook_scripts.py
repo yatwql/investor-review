@@ -8,7 +8,7 @@
       - 校验脚本失败 → 非零退出码（拦截编辑）
       - 校验脚本不可运行（OSError）→ 放行
       - 同时兼容环境变量与命令行参数两种注入方式
-  - install-claude-hook.py
+  - hook-install-claude.py
       - 幂等安装（重复安装不重复写）
       - 合并式安装（保留已有配置，仅追加 hook）
       - 卸载（移除本 hook，保留其他配置）
@@ -36,7 +36,7 @@ def hook():
 
 @pytest.fixture(scope="module")
 def installer():
-    return load_script("install-claude-hook.py")
+    return load_script("hook-install-claude.py")
 
 
 pytestmark = [
@@ -182,7 +182,7 @@ def test_hook_main_argv_injection(hook, tmp_path: Path, monkeypatch):
                 assert hook.main() == 1
 
 
-# ── install-claude-hook.py: 幂等/合并/卸载 ──────────────────────────
+# ── hook-install-claude.py: 幂等/合并/卸载 ──────────────────────────
 
 
 def test_install_idempotent(installer, tmp_path: Path, monkeypatch):

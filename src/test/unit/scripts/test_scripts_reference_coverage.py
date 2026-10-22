@@ -91,15 +91,17 @@ class TestGuideDomainIndexIsTruthful:
         )
 
     def test_domain_index_covers_every_script_family(self):
-        """七域索引须各自至少点名一个真实脚本（防整行被误删成空壳）。"""
+        """八域索引须各自至少点名一个真实脚本（防整行被误删成空壳）。"""
         section = re.search(r"(?ms)^### 按域索引\n(.*?)(?=^### |^## )", GUIDE.read_text(encoding="utf-8"))
         assert section, "developer-guide.md 缺少「### 按域索引」小节"
         rows = [
             line
             for line in section.group(1).splitlines()
-            if re.match(r"^\| (测试|文档|代码与文件质量|发布|诊断|启动|CLI 子命令) \|", line)
+            if re.match(r"^\| (测试|文档|代码与文件质量|发布|运维观测|评测与基准|启动|CLI 子命令) \|", line)
         ]
-        assert len(rows) == 7, f"「按域索引」应为 7 个域行（测试/文档/质量/发布/诊断/启动/CLI），实际 {len(rows)}"
+        assert len(rows) == 8, (
+            f"「按域索引」应为 8 个域行（测试/文档/质量/发布/运维观测/评测与基准/启动/CLI），实际 {len(rows)}"
+        )
         for row in rows:
             # 「代表脚本」列须至少点名一个条目（CLI 子命令行点名的是子命令名而非 .py 文件）
             assert re.findall(r"`[^`]+`", row), f"域行未点名任何条目：{row[:40]}"
@@ -125,9 +127,6 @@ class TestInternalPackagesAreNamed:
 
 # ── 内容层：详情小节覆盖 + CLI 旗标真实性 ─────────────────────
 
-
-#: 允许「一览有条目、无独立详情小节」的条目（薄垫片：实现与用法已在其所属条目里说明）
-_SECTIONLESS_OK = {"probe-csi-factor-indices.py"}
 
 #: 文档会提到的**外部工具**旗标（pip / pytest / git / pi 等，不经本仓脚本解析器）
 _EXTERNAL_FLAGS = {
@@ -192,12 +191,10 @@ class TestDetailSections:
             for name in _overview_names()
             if name.endswith(".py")
             and not name.startswith("_")
-            and name not in _SECTIONLESS_OK
             and not re.search(rf"\*\*`{re.escape(name)}`", REFERENCE.read_text(encoding="utf-8"))
         )
-        assert missing == [], (
-            "以下脚本在一览表里有条目，但缺独立详情小节（或加入 _SECTIONLESS_OK 并说明理由）：\n"
-            + "\n".join(f"  - {name}" for name in missing)
+        assert missing == [], "以下脚本在一览表里有条目，但缺独立详情小节：\n" + "\n".join(
+            f"  - {name}" for name in missing
         )
 
 

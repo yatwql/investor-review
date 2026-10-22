@@ -167,7 +167,7 @@ class TestThinkingSupportMatrix:
 class TestCollectTestSnapshot:
     """`_collect_test_snapshot` 快照解析、退出码拒收与编码降级（回归：Windows cp936 下快照崩溃）。
 
-    背景：`collect-test-coverage.py` 曾在中文 Windows 上按 GBK 写出中文分组名，
+    背景：`test-collect-coverage.py` 曾在中文 Windows 上按 GBK 写出中文分组名，
     消费方按 UTF-8 解码 → reader 线程 `UnicodeDecodeError` → `proc.stdout` 为 None
     → `re.search(..., None)` 抛 `TypeError`，`check-doc-drift.py --sync` 直接堆栈退出。
     另回归：收集期校验出错（exit=4）时 stdout 是未过滤的错数（conftest 标记纪律校验

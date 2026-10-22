@@ -95,7 +95,7 @@ jobs:
 
   perf-gate:
     # 性能门禁（阻塞）：主动压测脚本自造模拟持仓、mock 外部数据源，同条件可比——
-    # 管线退化即回归。与运行历史查看（perf-view.py，样本不可控、不可复现）分工不同，
+    # 管线退化即回归。与运行历史查看（perf-history.py，样本不可控、不可复现）分工不同，
     # 后者**不用于门禁**。阈值见脚本 _TARGET_SECONDS（basic 模式 ≤ 60s）。
     runs-on: ubuntu-latest
     steps:
@@ -113,13 +113,13 @@ jobs:
           pip install --retries 5 --timeout 60 -e ".[test]"
 
       - name: 端到端性能门禁（basic 模式 ≤ 60s）
-        run: python scripts/perf-test-report.py --gate
+        run: python scripts/test-perf-report.py --gate
 
       - name: 上传性能报告
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: perf-test-report
+          name: test-perf-report
           path: docs/tmp/better-investment-performance-test-report.md
           if-no-files-found: warn
           retention-days: 7

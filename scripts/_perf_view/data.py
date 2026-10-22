@@ -1,4 +1,4 @@
-"""perf-view 数据派生：从 perf_history 记录算出版本演进 / 漂移 / 对比 / 机读信封。
+"""perf-history 数据派生：从 perf_history 记录算出版本演进 / 漂移 / 对比 / 机读信封。
 
 纯数据层（不拼 Markdown 文本）——渲染见 :mod:`_perf_view.report`，统计原语见
 :mod:`_perf_view.stats`，CLI 见 :mod:`_perf_view.cli`。

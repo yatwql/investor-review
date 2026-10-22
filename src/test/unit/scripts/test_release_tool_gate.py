@@ -209,6 +209,35 @@ class TestPublish:
         assert rc == 0
         assert not any(len(c) > 2 and c[1] in {"add", "commit"} for c in runner.calls)
 
+    def test_syncs_stats_before_commit_with_hook_parity_args(self, rel, tmp_path):
+        """提交前必须按 pre-commit 钩子同源参数同步统计快照。
+
+        回归：钩子对含 `src/test` 变更的提交走 `--sync --ci --with-test-count`，
+        而只跑 `--sync` 时 test-coverage.md 的收集派生计数不被校验——本地「通过」、
+        钩子里仍红，publish 白跑一轮（实测曾连败两次）。
+        """
+        self._fixture(rel, tmp_path, "0.12.6")
+        runner = self._dirty_runner()
+        assert rel.cmd_publish(ns(title="t", push=False), runner=runner) == 0
+        sync_idx = next(i for i, c in enumerate(runner.calls) if any("check-doc-drift.py" in p for p in c))
+        sync_call = runner.calls[sync_idx]
+        assert {"--sync", "--ci", "--with-test-count"} <= set(sync_call)
+        commit_idx = next(i for i, c in enumerate(runner.calls) if len(c) > 2 and c[1] == "commit")
+        assert sync_idx < commit_idx  # 同步必须先于提交，否则钩子仍会拦
+
+    def test_stats_sync_failure_aborts_before_commit(self, rel, tmp_path):
+        """统计同步失败即中止：不得带着陈旧计数去撞钩子。"""
+        self._fixture(rel, tmp_path, "0.12.6")
+        runner = _ok_runner(
+            [
+                (["git", "status", "--porcelain"], (0, " M docs/x.md\n", "")),
+                (["scripts/check-doc-drift.py"], (2, "test-coverage.md:16 覆盖项数不一致\n", "")),
+            ]
+        )
+        rc = rel.cmd_publish(ns(title="t", push=False), runner=runner)
+        assert rc == 2
+        assert not any(len(c) > 2 and c[1] in {"add", "commit", "merge", "tag"} for c in runner.calls)
+
     def test_push_flag_gates_push_calls(self, rel, tmp_path):
         self._fixture(rel, tmp_path, "0.12.6")
         runner = _ok_runner([(["scripts/test-runner.py"], (0, "— 10 通过, 0 失败\n", ""))])
@@ -319,7 +348,7 @@ class TestRefresh:
         assert len(steps) == 3
         assert "--update-docs" in steps[0]
         assert _mode_arg(steps[0]) == ",".join(rel.RELEASE_BENCH_MODES)
-        assert any("collect-test-coverage" in p for p in steps[1])
+        assert any("test-collect-coverage" in p for p in steps[1])
         assert any("check-doc-drift" in p for p in steps[2])
 
     def test_docs_only_skips_bench_and_collect(self, rel):
@@ -337,7 +366,7 @@ class TestRefresh:
         assert len(runner.calls) == 3  # 无 git 判定，直接三步
         assert "--update-docs" in runner.calls[0]
         assert _mode_arg(runner.calls[0]) == ",".join(rel.RELEASE_BENCH_MODES)
-        assert any("collect-test-coverage" in p for p in runner.calls[1])
+        assert any("test-collect-coverage" in p for p in runner.calls[1])
 
     def test_missing_tag_conservatively_refreshes(self, rel):
         runner = FakeRunner(responses=[(["describe"], (128, "", "no tag here"))])

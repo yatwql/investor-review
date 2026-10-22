@@ -6,10 +6,10 @@
 本脚本把候选前缀缩到最小复现集并给出污染源文件与最小复现命令。
 
 用法：
-  .venv/bin/python scripts/find-order-dependent-test.py <目标用例节点ID>
-  .venv/bin/python scripts/find-order-dependent-test.py <目标> \\
+  .venv/bin/python scripts/test-find-order-dependent.py <目标用例节点ID>
+  .venv/bin/python scripts/test-find-order-dependent.py <目标> \\
       --candidates "src/test/unit/report/test_event_impact_wiring.py"   # 只在候选内搜（大幅提速）
-  .venv/bin/python scripts/find-order-dependent-test.py <目标> --collect-root src/test --max-runs 40
+  .venv/bin/python scripts/test-find-order-dependent.py <目标> --collect-root src/test --max-runs 40
 
 流程：
   1) 单跑目标 → 必须通过（否则非顺序依赖，退出 1）

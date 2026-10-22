@@ -1,4 +1,4 @@
-"""collect-test-coverage.py 收集与分组计数测试（退出码传递 / 目标展开 / 模式计数口径 / --update-docs 回写）。
+"""test-collect-coverage.py 收集与分组计数测试（退出码传递 / 目标展开 / 模式计数口径 / --update-docs 回写）。
 
 覆盖 `_collect` 对 pytest 退出码的原样传递（含收集期失败 4 与空收集 5）、
 `CollectPlugin` 的 nodeid+标记记录、`_target_files` 的目录展开与 live 套件排除、
@@ -21,10 +21,10 @@ pytestmark = [pytest.mark.unit, pytest.mark.unit_scripts, pytest.mark.usefixture
 
 @pytest.fixture(name="mod")
 def fixture_mod():
-    """加载 `scripts/collect-test-coverage.py` 为可测模块。"""
+    """加载 `scripts/test-collect-coverage.py` 为可测模块。"""
     from src.test._script_loader import load_script
 
-    return load_script("collect-test-coverage.py")
+    return load_script("test-collect-coverage.py")
 
 
 class _StdoutStub(io.StringIO):
@@ -36,7 +36,7 @@ class _StdoutStub(io.StringIO):
 
 def _run_main(mod, monkeypatch, records, targets, extra_args=()) -> str:
     """以注入的收集结果跑一次 `main()`，返回其完整标准输出。"""
-    monkeypatch.setattr(sys, "argv", ["collect-test-coverage.py", *extra_args, *targets])
+    monkeypatch.setattr(sys, "argv", ["test-collect-coverage.py", *extra_args, *targets])
     monkeypatch.setattr(mod, "_collect", lambda _targets: 0)
     mod.collected.clear()
     mod.collected.extend(records)
@@ -185,7 +185,7 @@ class TestMainExitCode:
 
     @pytest.mark.parametrize("code", [0, 5])
     def test_zero_and_no_tests_collected_return_normally(self, mod, monkeypatch, code):
-        monkeypatch.setattr(sys, "argv", ["collect-test-coverage.py", str(mod.REPO_ROOT / "src" / "test")])
+        monkeypatch.setattr(sys, "argv", ["test-collect-coverage.py", str(mod.REPO_ROOT / "src" / "test")])
         monkeypatch.setattr(mod, "_collect", lambda _targets: code)
         mod.collected.clear()
         monkeypatch.setattr(sys, "stdout", _StdoutStub())
@@ -193,7 +193,7 @@ class TestMainExitCode:
 
     @pytest.mark.parametrize("code", [1, 4])
     def test_collection_failure_exits_with_same_code(self, mod, monkeypatch, code):
-        monkeypatch.setattr(sys, "argv", ["collect-test-coverage.py", str(mod.REPO_ROOT / "src" / "test")])
+        monkeypatch.setattr(sys, "argv", ["test-collect-coverage.py", str(mod.REPO_ROOT / "src" / "test")])
         monkeypatch.setattr(mod, "_collect", lambda _targets: code)
         mod.collected.clear()
         monkeypatch.setattr(sys, "stdout", _StdoutStub())
@@ -342,7 +342,7 @@ class TestUpdateDocs:
         before = cov.read_text(encoding="utf-8")
         calls: list[dict] = []
         monkeypatch.setattr(mod, "update_docs", lambda snap: calls.append(snap) or [])
-        monkeypatch.setattr(sys, "argv", ["collect-test-coverage.py", "--update-docs"])
+        monkeypatch.setattr(sys, "argv", ["test-collect-coverage.py", "--update-docs"])
         monkeypatch.setattr(mod, "_collect", lambda _targets: 2)
         mod.collected.clear()
         with pytest.raises(SystemExit) as exc:
@@ -355,7 +355,7 @@ class TestUpdateDocs:
     def test_update_docs_allowed_on_empty_collection(self, mod, monkeypatch, docs):
         calls: list[dict] = []
         monkeypatch.setattr(mod, "update_docs", lambda snap: calls.append(snap) or [])
-        monkeypatch.setattr(sys, "argv", ["collect-test-coverage.py", "--update-docs"])
+        monkeypatch.setattr(sys, "argv", ["test-collect-coverage.py", "--update-docs"])
         monkeypatch.setattr(mod, "_collect", lambda _targets: 5)  # NO_TESTS_COLLECTED 合法
         mod.collected.clear()
         mod.main()  # 不应 sys.exit

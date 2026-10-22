@@ -361,9 +361,10 @@ class TestPortfolioBetaEdge:
         portfolio = [0.001 + (i % 3 - 1) * 0.005 for i in range(252)]
         benchmark = [0.002 + (i % 5 - 2) * 0.003 for i in range(200)]
         beta = portfolio_beta(portfolio, benchmark)
-        # 「用较短者」的判据：与显式截断到 200 的计算结果逐位相等（而非仅「非 None」）
-        assert beta == portfolio_beta(portfolio[:200], benchmark)
-        assert portfolio_beta(portfolio[:100], benchmark) != beta
+        # 「用较短者」的判据：与显式截断到 200 的结果在浮点容差内一致（对齐后的和式
+        # 顺序不同会有末位 ulp 差异，逐位相等在 3.11 上即假），且对长度敏感
+        assert beta == pytest.approx(portfolio_beta(portfolio[:200], benchmark), abs=1e-12)
+        assert abs(portfolio_beta(portfolio[:100], benchmark) - beta) > 1e-6
 
     def test_perfectly_correlated_returns_beta(self):
         """完全正相关 → Beta≈Cov/Var。"""

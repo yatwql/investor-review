@@ -2,10 +2,10 @@
 """从 pytest-html 报告中提取失败/错误测试用例的详细信息。
 
 用法：
-  python scripts/extract-test-failures.py              # 读取 test-reports/latest/all/report.html
-  python scripts/extract-test-failures.py path/to/report.html  # 指定报告路径
-  python scripts/extract-test-failures.py --summary    # 仅输出汇总（不打印每条日志）
-  python scripts/extract-test-failures.py --json       # 输出 JSON 格式
+  python scripts/test-extract-failures.py              # 读取 test-reports/latest/all/report.html
+  python scripts/test-extract-failures.py path/to/report.html  # 指定报告路径
+  python scripts/test-extract-failures.py --summary    # 仅输出汇总（不打印每条日志）
+  python scripts/test-extract-failures.py --json       # 输出 JSON 格式
 """
 
 from __future__ import annotations

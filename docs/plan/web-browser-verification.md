@@ -19,7 +19,7 @@ SERVER_PID=$!                      # 记录 PID，验证结束必须 kill
 echo "$PORT" > docs/tmp/rf257/port.txt; echo "$SERVER_PID" > docs/tmp/rf257/server.pid
 
 # ② HTTP 层证据（Flask test_client 进程内链路，不占端口、不发外网、mock 管线）
-.venv/bin/python scripts/smoke-web.py           # 预期 11/11，退出码 0
+.venv/bin/python scripts/test-smoke-web.py           # 预期 11/11，退出码 0
 
 # ③ 启动无头 Chromium（独立 user-data-dir，避免污染日常浏览器）
 CHROME=$HOME/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome
@@ -48,7 +48,7 @@ ls data/holdings/uploads/     # 应为空；有残留则删除本次测试产生
 | 前置 | 判定 | 本次结果 |
 |:-----|:-----|:--------|
 | `GET /`、`/static/style.css`、`/static/main.js` 均 200 | curl 三条均为 200 | ✅ |
-| `scripts/smoke-web.py` 11/11 | 退出码 0 | ✅ 11/11（证据 `docs/tmp/rf257/smoke-web.log`） |
+| `scripts/test-smoke-web.py` 11/11 | 退出码 0 | ✅ 11/11（证据 `docs/tmp/rf257/test-smoke-web.log`） |
 | 未触发报告生成 | 浏览器侧 `Network.requestWillBeSent` 统计 `POST /api/runs`=0；服务端日志 `grep -c "POST /api/runs" server.log`=0 | ✅ 双侧均为 0 |
 
 ### 1.3 自动化脚本覆盖的检查点
@@ -73,7 +73,7 @@ ls data/holdings/uploads/     # 应为空；有残留则删除本次测试产生
 | `cdp-check.mjs` / `cdp-report.json` / `cdp-run.log` | 自动化实测脚本 / 结构化结论 / 逐项输出 |
 | `cdp-hover-debug.mjs` / `hover-debug.json` | ⑤ 真实鼠标 hover 复核（4 个按钮 + 375px 复测） |
 | `cdp-overflow-debug.mjs`、`cdp-mincontent-debug.mjs`、`cdp-wrap-debug.mjs`（`overflow-debug.log`、`mincontent-debug.json`、`wrap-debug.json`） | ④ 375px 溢出的根因定位探针 |
-| `smoke-web.log`、`server.log`、`chrome.log` | HTTP 层冒烟 / 服务端日志（含 0 次 `POST /api/runs` 佐证）/ 浏览器日志 |
+| `test-smoke-web.log`、`server.log`、`chrome.log` | HTTP 层冒烟 / 服务端日志（含 0 次 `POST /api/runs` 佐证）/ 浏览器日志 |
 
 ---
 
@@ -115,13 +115,13 @@ ls data/holdings/uploads/     # 应为空；有残留则删除本次测试产生
 | 3.1a 初始隐藏 | 自动化 | **过**。首屏 `#progress-section`、`#result-section` 均带 `hidden`（未提交前不出现）。证据 `cdp-run.log` 3.1a |
 | 3.1b 静态初始态 | 自动化 | **过**。`#progress-bar`：`role=progressbar`、`aria-valuenow=0`、`aria-valuemin/max=0/100`；`#progress-phase` =「准备中...」；`#progress-events` 空 `<ol>`。证据 `cdp-run.log` 3.1b |
 | 3.3a 显隐逻辑 | 自动化 | **过（DOM 口径）**。脚本移除 `hidden` 后卡片真实可见（高度 139.9px、进度轨宽 = 容器宽、可渲染进度条），恢复 `hidden` 后回到隐藏。证据 `cdp-run.log` 3.3a |
-| 3.1c/3.2/3.3 提交后进度推进与事件追加 | **人工** | 需真实 `POST /api/runs`（本次红线禁止）。**已有证据**：`scripts/smoke-web.py` 第 4/5/6 项断言 `202 → GET events 非空且 status 可达 done → GET run 完成态 exit_code=0`（`docs/tmp/rf257/smoke-web.log`）。**完整进度观察需人工跑一次 basic** |
+| 3.1c/3.2/3.3 提交后进度推进与事件追加 | **人工** | 需真实 `POST /api/runs`（本次红线禁止）。**已有证据**：`scripts/test-smoke-web.py` 第 4/5/6 项断言 `202 → GET events 非空且 status 可达 done → GET run 完成态 exit_code=0`（`docs/tmp/rf257/test-smoke-web.log`）。**完整进度观察需人工跑一次 basic** |
 | 3.4 full 全程可观察 | **人工** | 同上，需人工跑一次 full（约 5 分钟） |
 | 3.5 生成期间按钮禁用 | **人工** | 与 5.3 同一代码路径（`onSubmit` 同步置 `disabled + aria-busy`），本次不实际提交 |
 
 **【人工验证步骤】**：① 首页上传合法 `.xlsx` → 报告格式选「仅 Excel（约 1 分钟）」→ 点「生成报告」；② 判定：**进度卡自动出现且可见**、进度条从 0% 起步、阶段文案实时变化（「当前阶段（第 N 步）：…」）、事件流 `<ol>` 逐条追加且可滚动、`aria-valuenow` 递增；③ 判定：生成期间「生成报告」按钮灰显禁用（文案「正在提交…/生成中...」），完成后恢复、结果卡出现「报告生成成功」+ 预览/下载按钮；④ 抽验 full：进度持续可观察、非「转圈后直接跳结果」。
 
-**③ 判定：部分自动化**（静态初始态 + 显隐逻辑自动化过；真实生成过程以 smoke-web 事件流断言为已有证据，完整视觉观察待人工跑一次 basic/full）。
+**③ 判定：部分自动化**（静态初始态 + 显隐逻辑自动化过；真实生成过程以 test-smoke-web 事件流断言为已有证据，完整视觉观察待人工跑一次 basic/full）。
 
 ### ④ 375px 响应式
 
@@ -162,7 +162,7 @@ ls data/holdings/uploads/     # 应为空；有残留则删除本次测试产生
 |:--:|:-----|:----:|:----------|
 | ① | 页面渲染（JS/CSS 加载） | ✅ **通过（全自动化）** | 5/5；`/static/main.js`、`/static/style.css` 均 200、171 条规则、Console 0 error → **无 404 回归闭合**。`docs/tmp/rf257/cdp-run.log` 1.1a~1.5b |
 | ② | 上传表单 UX | ✅ **通过（2.1~2.4 全自动化；2.5/2.6 合成事件+可达性口径）** | accept 断言 + 合法/非法/空文件三路径状态文案；真实拖拽、真实 Tab/Enter 留人工抽验。`cdp-run.log` 2.1~2.6 |
-| ③ | 进度事件可视化 | 🟡 **部分自动化** | 静态初始态 + 显隐逻辑过（3.1a/3.1b/3.3a）；真实进度以 smoke-web 第 4/5/6 项为已有证据，**完整进度观察需人工跑一次 basic**（full 抽验）。`cdp-run.log` 3.1a~3.3a + `smoke-web.log` |
+| ③ | 进度事件可视化 | 🟡 **部分自动化** | 静态初始态 + 显隐逻辑过（3.1a/3.1b/3.3a）；真实进度以 test-smoke-web 第 4/5/6 项为已有证据，**完整进度观察需人工跑一次 basic**（full 抽验）。`cdp-run.log` 3.1a~3.3a + `test-smoke-web.log` |
 | ④ | 375px 响应式 | ✅ **通过（4.5 留人工）** | 4.1~4.4 自动化全过（`scrollWidth=375`、控件 `溢出=[]`、状态网格单列）；根因与处置见 §4 发现 1 / rf-644；4.5 结果区按钮待人工。`cdp-run.log` 4.1~4.4 + `overflow-debug.log` |
 | ⑤ | 按钮态 | ✅ **通过（5.3 留人工）** | 5.1/5.2/5.4/5.5/5.6 自动化过（真实鼠标 hover 4/4 按钮命中 + `forcePseudoState` 双口径，含 375px 复测）；5.3 提交即禁用需人工跑一次生成。`cdp-run.log` 5.1~5.6 + `hover-debug.json` |
 
@@ -191,7 +191,7 @@ ls data/holdings/uploads/     # 应为空；有残留则删除本次测试产生
 
 ## 5. 复验清单（Web UI 改动后）
 
-1. 跑 §1.1 启动 → `scripts/smoke-web.py` 11/11 → `node docs/tmp/rf257/cdp-check.mjs`。
+1. 跑 §1.1 启动 → `scripts/test-smoke-web.py` 11/11 → `node docs/tmp/rf257/cdp-check.mjs`。
 2. 对照 §3 总表：①②⑤ 应保持全过；③ 静态项应过（真实进度人工抽验 basic）；④ 应全过（重点看 4.1/4.3 的 `scrollWidth` 与控件 `right` 值）。
 3. 结论回填 `review-findings.md` rf-257 行与归档清单状态行；本文件仅维护方法与实测数据，不承载台账状态。
 4. 收尾必做：`kill` 服务与浏览器 PID、清空 `data/holdings/uploads/`、确认 `server.log` 无 `POST /api/runs`。

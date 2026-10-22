@@ -13,7 +13,7 @@
 项目根目录下这些位置和你的数据有关（`reports/`、`logs/`、`data/cache/`、`.venv/` 均为 git 忽略目录，不进版本库）：
 
 ```
-investor-util/
+investor-review/
 ├── data/
 │   ├── holdings/      ← 你的持仓 Excel（每张工作表 = 一个账户）
 │   ├── config/        ← 配置文件（含密钥，见 §2.3）

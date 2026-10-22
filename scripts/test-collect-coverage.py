@@ -7,8 +7,8 @@
 输出各模式/子标记的项数，供 docs/managements/test-coverage.md 更新使用。
 
 用法：
-  python scripts/collect-test-coverage.py                    # 收集并输出全部分组统计
-  python scripts/collect-test-coverage.py --update-docs      # 追加：按本次快照回写 test-coverage.md / folders.md 的计数行
+  python scripts/test-collect-coverage.py                    # 收集并输出全部分组统计
+  python scripts/test-collect-coverage.py --update-docs      # 追加：按本次快照回写 test-coverage.md / folders.md 的计数行
 
 说明：
   - 本脚本只收集不执行，测试体不会运行，耗时 ~2s（取决于套件规模）
@@ -60,6 +60,7 @@ from _doc_drift._shared import (  # noqa: E402
 _OMITTED_MODES: dict[str, str] = {
     "all": "全量已由『总收集: N』行表达",
     "live": '默认收集宇宙排除 live（pytest.ini addopts = -m "not live"），计数恒为 0',
+    "portability": "非 pytest 模式（CI portability 探针），无标记计数",
 }
 
 # 模式 → 谓词：由 MODES 的 marker 表达式现场编译（表达式无第二份定义）

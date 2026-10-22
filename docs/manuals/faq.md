@@ -59,16 +59,16 @@ A: 可以。项目启动脚本（`launch.ps1` / `launch.sh`）已原生支持外
 
 ```bash
 # Linux / macOS
-ln -s /path/to/venvs/investor-util .venv
+ln -s /path/to/venvs/investor-review .venv
 
 # Windows (Git Bash / WSL)
-ln -s /path/to/venvs/investor-util .venv
+ln -s /path/to/venvs/investor-review .venv
 
 # Windows (cmd，管理员)
-mklink /J .venv D:\path\to\venvs\investor-util
+mklink /J .venv D:\path\to\venvs\investor-review
 
 # Windows (PowerShell 7+，无需管理员)
-New-Item -ItemType SymbolicLink -Path .venv -Target D:\path\to\venvs\investor-util
+New-Item -ItemType SymbolicLink -Path .venv -Target D:\path\to\venvs\investor-review
 ```
 
 创建后，Python、pip、pytest、VSCode 全部自动跟随到实际目录，无需环境变量、无需 `activate`。`.gitignore` 已有 `.venv/`，不污染仓库。多个项目可指向同一个外部 `.venv` 节省磁盘空间。
@@ -81,17 +81,17 @@ New-Item -ItemType SymbolicLink -Path .venv -Target D:\path\to\venvs\investor-ut
 
 ```bash
 # Windows PowerShell（一次性）
-$env:VENV_PATH = "D:\path\to\venvs\investor-util"
+$env:VENV_PATH = "D:\path\to\venvs\investor-review"
 .\scripts\launch.ps1
 
 # Windows（用户环境变量，永久）
-[System.Environment]::SetEnvironmentVariable("VENV_PATH", "D:\path\to\venvs\investor-util", "User")
+[System.Environment]::SetEnvironmentVariable("VENV_PATH", "D:\path\to\venvs\investor-review", "User")
 
 # Linux（一次性）
-VENV_PATH=/path/to/venvs/investor-util ./scripts/launch.sh
+VENV_PATH=/path/to/venvs/investor-review ./scripts/launch.sh
 
 # Linux（~/.bashrc，永久）
-echo 'export VENV_PATH=/path/to/venvs/investor-util' >> ~/.bashrc && source ~/.bashrc
+echo 'export VENV_PATH=/path/to/venvs/investor-review' >> ~/.bashrc && source ~/.bashrc
 ```
 
 原理（`launch.sh` 第 51~64 行 / `launch.ps1` 第 67~81 行）：
@@ -105,18 +105,18 @@ echo 'export VENV_PATH=/path/to/venvs/investor-util' >> ~/.bashrc && source ~/.b
 
 ```bash
 # Linux（Docker / Jenkins / GitHub Actions）
-/path/to/venvs/investor-util/bin/python scripts/test-runner.py --mode regression
-/path/to/venvs/investor-util/bin/python -m src.python.tui.tui
+/path/to/venvs/investor-review/bin/python scripts/test-runner.py --mode regression
+/path/to/venvs/investor-review/bin/python -m src.python.tui.tui
 
 # Windows（部署脚本）
-& "D:\path\to\venvs\investor-util\Scripts\python.exe" scripts\test-runner.py --mode regression
-& "D:\path\to\venvs\investor-util\Scripts\python.exe" src\python\tui\tui.py
+& "D:\path\to\venvs\investor-review\Scripts\python.exe" scripts\test-runner.py --mode regression
+& "D:\path\to\venvs\investor-review\Scripts\python.exe" src\python\tui\tui.py
 ```
 
 原理：**PEP 405** 规定 Python 解释器启动时会自动读取同级目录下的 `pyvenv.cfg`，知道自己在虚拟环境中。使用 `.venv/bin/python` 直接执行等效于先 `activate` 再运行——自动使用 venv 内的 site-packages，无需任何环境变量。pip 安装也同理：
 
 ```bash
-/path/to/venvs/investor-util/bin/pip install -r requirements.txt
+/path/to/venvs/investor-review/bin/pip install -r requirements.txt
 ```
 
 **方案对比：**
@@ -129,10 +129,10 @@ echo 'export VENV_PATH=/path/to/venvs/investor-util' >> ~/.bashrc && source ~/.b
 
 **Q: Git clone 后运行脚本报错"项目不在正确的目录结构中"？**
 
-A: 确保 clone 后直接在项目根目录（`investor-util/`）下运行启动脚本，不要手动移动子目录。目录结构应保持：
+A: 确保 clone 后直接在项目根目录（`investor-review/`）下运行启动脚本，不要手动移动子目录。目录结构应保持：
 
 ```
-investor-util/
+investor-review/
 ├── scripts/
 ├── src/
 ├── data/
@@ -410,7 +410,7 @@ A: 可以。在 `llm_settings.json` 中设置对应模块的 `output_brief_{模�
 
 **Q: 如何评估 LLM 输出的准确性，防止幻觉？**
 
-A: 使用 `scripts/llm-hallucination-sampler.py` 对 10 组标准化持仓数据进行采样测试。脚本调用当前 prompt 配置生成 LLM 分析，通过事实校验器自动验证数值一致性、品种存在性和排名正确性，生成幻觉率报告到 `docs/tmp/hallucination-report.md`。目标幻觉率 < 5%，每次 prompt 重大修改后应重新采样。详见 [`辅助脚本参考`](../managements/scripts-reference.md#llm-幻觉率采样测试)。
+A: 使用 `scripts/eval-llm-hallucination.py` 对 10 组标准化持仓数据进行采样测试。脚本调用当前 prompt 配置生成 LLM 分析，通过事实校验器自动验证数值一致性、品种存在性和排名正确性，生成幻觉率报告到 `docs/tmp/hallucination-report.md`。目标幻觉率 < 5%，每次 prompt 重大修改后应重新采样。详见 [`辅助脚本参考`](../managements/scripts-reference.md#llm-幻觉率采样测试)。
 
 **Q: 调用 LLM 大概需要多少费用？**
 
@@ -704,14 +704,14 @@ A: `data/state/` 存放跨会话持久化的运行时状态文件，目前包含
 - `.degradation_state.json` — 降级状态（各数据源上次成功获取的时间戳）
 - `circuit_breaker.json` — 熔断器状态（Provider 级熔断记忆，跨会话恢复）
 - `rebalance_silence.json` — 再平衡告警静默期
-- `perf_history.jsonl` — **每次报告生成的阶段耗时记录**（供 `scripts/perf-view.py` 做跨版本趋势分析；自动保留最近 5000 条，超出丢弃最旧）
+- `perf_history.jsonl` — **每次报告生成的阶段耗时记录**（供 `scripts/perf-history.py` 做跨版本趋势分析；自动保留最近 5000 条，超出丢弃最旧）
 - `datasource_health.jsonl` — **每次报告生成时自动执行的数据源健康检查结果**（HTTP 连通性+延迟；自动保留最近 2000 条，超出丢弃最旧）
 
 该目录与 `data/cache/` 隔离，**不会被缓存管理子菜单（`[3]` → `3` 清理过期）删除**，也不会被 `cleanup_expired()` 扫描。菜单 `[3]`（缓存管理）统计首屏会单独列出该目录的文件数量和大小。如手动删除该目录，程序会自动重建，但会丢失降级记忆（熔断从零开始）和性能历史数据。
 
 **Q: data/state/perf_history.jsonl 有何用途？如何查看？**
 
-A: 每次通过菜单 E/B/L 或 CLI 生成报告时，程序自动记录各阶段耗时（行情获取、数据准备、快照对比、历史走势、LLM+新闻、Excel 生成、HTML 生成等）到该文件。运行 `.venv/bin/python scripts/perf-view.py` 即可查看按版本和报告类型分组的耗时趋势对比表格，以及版本演进总表（每版中位与较上一版变化）和同版本漂移段（同一版本内的渐进劣化）。可用于发现版本间性能退化。
+A: 每次通过菜单 E/B/L 或 CLI 生成报告时，程序自动记录各阶段耗时（行情获取、数据准备、快照对比、历史走势、LLM+新闻、Excel 生成、HTML 生成等）到该文件。运行 `.venv/bin/python scripts/perf-history.py` 即可查看按版本和报告类型分组的耗时趋势对比表格，以及版本演进总表（每版中位与较上一版变化）和同版本漂移段（同一版本内的渐进劣化）。可用于发现版本间性能退化。
 
 **Q: data/state/datasource_health.jsonl 有何用途？**
 

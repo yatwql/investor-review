@@ -122,6 +122,6 @@ def _generate_report(
 
     lines.append("---")
     lines.append("")
-    lines.append("*由 `scripts/llm-hallucination-sampler.py` 自动生成*")
+    lines.append("*由 `scripts/eval-llm-hallucination.py` 自动生成*")
 
     return "\n".join(lines)
