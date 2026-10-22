@@ -744,6 +744,25 @@ def cmd_publish(args: argparse.Namespace, runner=None) -> int:
         return 2
     release_version = read_app_version(CONSTANTS_FILE.read_text(encoding="utf-8"))
 
+    # 提交前先按 pre-commit 钩子同源参数同步统计快照：钩子对「含 src/test 变更」的提交走
+    # `--sync --ci --with-test-count`，而只跑 `--sync` 时 test-coverage.md 的收集派生计数
+    # 不会被校验——本地「通过」、钩子里仍红，publish 白跑一轮（实测曾连败两次）。
+    print("[..] 提交前统计快照同步（与 pre-commit 钩子同源参数）")
+    started = time.perf_counter()
+    rc, out, err = _exec(
+        [sys.executable, "scripts/check-doc-drift.py", "--sync", "--ci", "--with-test-count"],
+        REPO_ROOT,
+        runner,
+    )
+    _timer().mark_elapsed("统计快照同步", started)
+    if out.strip():
+        print(out.rstrip())
+    if rc != 0:
+        if err.strip():
+            print(err.rstrip())
+        print("[ERR] 统计快照同步未通过 —— 先按上方提示修复（多为 test-coverage.md 收集计数陈旧）")
+        return rc
+
     rc, staged, _ = _git_ok(["status", "--porcelain"], REPO_ROOT, runner)
     if rc != 0:
         return 1

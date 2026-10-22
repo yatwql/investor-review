@@ -12,6 +12,8 @@
 
 ### Fixed
 
+- **`publish` 提交前同步统计快照（`rf-816`）**：钩子对含 `src/test` 变更的提交走 `--sync --ci --with-test-count`，而 `publish` 原先不校验，只跑 `--sync` 时 `test-coverage.md` 收集计数陈旧不被发现——本地通过、钩子仍红，v0.14.2 连败两次 publish。现 `publish` 在提交前自动按同源参数同步，失败即中止；补 2 例回归。
+
 - **浮点断言容差化（`rf-815`）**：v0.14.2 的 `test_unequal_lengths_uses_shorter` 用逐位相等比较「对齐到较短者」与「显式截断」两条路径（末位差 1.6e-17，3.13 恰好相等、3.11 不等）→ 改 `pytest.approx(abs=1e-12)`，长度敏感反例改 `> 1e-6`。同时把纪律落进三处文档：根 `CLAUDE.md` 测试纪律、`developer-guide.md` 测试写作规范（正反例）、`testplan.md` 的「浮点比较边界」边界行——判据是「语义等价就带容差，精确可表示值才用 `==`」，容差取「远大于 ulp、远小于真正区分的量级」。
 
 （本次发布内容见下方归档索引）

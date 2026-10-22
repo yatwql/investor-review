@@ -757,7 +757,7 @@ sym |= set(re.findall(r'^\s{0,8}["\']([a-z][a-z0-9_]{2,})["\']\s*:', src, re.M))
 .venv/bin/python scripts/release.py refresh   # bench --update-docs（发布子集四档，--full-bench 全量）+ collect + doc-drift --sync
 .venv/bin/python scripts/release.py evolution --release   # 演进对照快照（默认只滚当前开发版列）+ 收尾 doc-drift --sync
 .venv/bin/python scripts/release.py gate      # P2：regression + 十守护 --ci + 设计护栏（gate 内置）
-.venv/bin/python scripts/release.py publish --title "<发布主题>"   # release 提交 + P1 verify + --no-ff 合并 + tag
+.venv/bin/python scripts/release.py publish --title "<发布主题>"   # 提交前同步统计快照 + release 提交 + P1 verify + --no-ff 合并 + tag
 .venv/bin/python scripts/release.py devbump    # 切下一开发版并提交
 ```
 
