@@ -19,6 +19,8 @@
 | 备份、换电脑、升级、清空重来 | [数据与备份](data-and-backup.md) | 全文 |
 | 报错了、装不上、界面不正常 | [常见问题解答](faq.md) | §故障排查 |
 | 想跑一次自检看哪里坏了 | [CLI 命令行模式](how-to-use-cli-mode.md) | §`doctor` 子命令 |
+| 想知道最近几次数据源为什么降级 | [数据源可靠性](datasource-reliability.md) | §5.2 健康历史（TUI `[H]` / Web / CLI `health-history`） |
+| 报告生成完了，产物在哪 | [CLI 命令行模式](how-to-use-cli-mode.md) | §3 `report`（生成结束打印产物路径；TUI 收尾可按 `y` 直接打开） |
 
 ## 怎么读
 

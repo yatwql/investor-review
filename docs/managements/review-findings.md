@@ -30,12 +30,12 @@
 | 任务 | 文件 | 行数 / 余量 | 处置方向 |
 |------|------|------------|----------|
 | **rf-829** | `scripts/release.py` | 992 / **8**（红线 1000） | **优先**：把 `build_parser()`（约 77 行）+ `main()` 的 argparse 装配抽到 `_release/_cli.py`，常量随之下沉并 re-export；在拆分前**禁止**再向该文件加逻辑（任何新增都可能直接破线） |
-| **rf-829** | `src/python/core/doctor.py` | 734 / 266 | 日志与缓存探针（§`_check_logs_and_cache`）可独立成 `core/doctor_logs.py`，主模块只保留分组与渲染 |
+| **rf-829** | `src/python/core/doctor.py` | 734 / 266 | 日志与缓存探针（`_check_logs_and_cache`）可独立成 `core/doctor_logs.py`，主模块只保留分组与渲染 |
 | **rf-829** | `src/python/web/handlers.py` | 709 / 291 | 路由按域拆分（`handlers_health.py`：health/doctor/logs；`handlers_reports.py`：生成/下载/历史），蓝图注册保持单源 |
 | **rf-829** | `src/test/unit/news/test_news_sources.py` | 477 / 723 | 已分片出 `test_news_dedup.py`（本次完成）；后续按「源元数据 / 抓取行为 / 标题判定」继续切 |
 | **rf-829** | `scripts/check-doc-traces.py` | 692 / 308 | 结构性冗余扫描已下沉 `_traces_doc/`，CLI 侧再收薄（参数与输出归 `_checklib`） |
 | **rf-829** | `scripts/check-style-guardrails.py` | 636 / 364 | 规则表与渲染分离（规则声明 → `_guardrails/rules.py`） |
-| **rf-829** | `scripts/test-perf-report.py` | 635 / 365 | 采样/统计/上屏三段拆分，采样复用 `core/perf` |。
+| **rf-829** | `scripts/test-perf-report.py` | 635 / 365 | 采样/统计/上屏三段拆分，采样复用 `core/perf` |
 
 **已决策「维持现状」（已降到逼近档以下，不拆理由保留，行数随 `-v` 复核）**：
 
