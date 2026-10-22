@@ -128,8 +128,8 @@ class TestInternalPackagesAreNamed:
 # ── 内容层：详情小节覆盖 + CLI 旗标真实性 ─────────────────────
 
 
-#: 允许「一览有条目、无独立详情小节」的条目（薄垫片：实现与用法已在其所属条目里说明）
-_SECTIONLESS_OK = {"probe-csi-factor-indices.py"}
+#: 允许「一览有条目、无独立详情小节」的条目（当前为空：所有脚本均有独立小节）
+_SECTIONLESS_OK: set[str] = set()
 
 #: 文档会提到的**外部工具**旗标（pip / pytest / git / pi 等，不经本仓脚本解析器）
 _EXTERNAL_FLAGS = {

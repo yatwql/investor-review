@@ -12,7 +12,7 @@
                均已归档）迁入版本归档并改写引用与目录树；收尾 doc-drift --sync + 两台
                便宜守护。`--dry-run` 只报告动作；gate 会断言该版本表已搬空
     refresh    数据刷新：bench --update-docs（默认只测发布子集四档 unit / dev-verify /
-               regression / integration，`--full-bench` 跑全量模式）+ collect-test-coverage
+               regression / integration，`--full-bench` 跑全量模式）+ test-collect-coverage
                + doc-drift --sync（自上一 release tag 起仅文档变更时跳过 bench 与 collect，
                  --force-refresh 强制刷新；同步恒跑）
     evolution  版本演进对照快照：git 清单 + 逐文件行数口径；默认只滚「当前开发版」列，
@@ -533,7 +533,7 @@ def cmd_refresh(args: argparse.Namespace, runner=None) -> int:
     )
     snapshot_steps: list[tuple[str, list[str]]] = [
         (bench_label, [sys.executable, "scripts/test-runner.py", "--mode", bench_scope, "--update-docs"]),
-        ("测试收集计数回填", [sys.executable, "scripts/collect-test-coverage.py"]),
+        ("测试收集计数回填", [sys.executable, "scripts/test-collect-coverage.py"]),
     ]
     if force:
         print("[..] --force-refresh：bench 与 collect 强制刷新")

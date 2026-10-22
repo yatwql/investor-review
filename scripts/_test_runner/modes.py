@@ -204,7 +204,7 @@ def compile_marker_expr(expr: str) -> Callable[[Collection[str]], bool]:
     复用 pytest 自带的表达式求值器（``_pytest.mark.expression``，即 ``-m``
     过滤走的同一实现），使「收集侧按集合计数」与「test-runner 按 ``-m``
     实跑」两侧共用一份语义——表达式本身只在 ``MODES`` 定义一处，其它地方
-    （如 ``collect-test-coverage.py``）一律由本函数现场编译，不再抄写。
+    （如 ``test-collect-coverage.py``）一律由本函数现场编译，不再抄写。
 
     Args:
         expr: pytest `-m` 布尔表达式（``and`` / ``or`` / ``not`` / 括号 / 标识符）
@@ -269,7 +269,7 @@ _BENCH_MODES: tuple[str, ...] = tuple(m for m in _MODE_TABLE_ORDER if m != "all"
 )
 
 
-#: 功能域中文标签 ↔ unit 子标记（单一来源）：collect-test-coverage 的功能域聚合
+#: 功能域中文标签 ↔ unit 子标记（单一来源）：test-collect-coverage 的功能域聚合
 #: 与 check-doc-drift 的 test-coverage.md 功能域表核对共用同一张表，增删 unit
 #: 子标记时两边自动跟随，不得各自维护副本。
 UNIT_DOMAIN_LABELS: dict[str, str] = {

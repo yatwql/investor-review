@@ -32,7 +32,7 @@ class TestLoadContract:
         assert hasattr(mod, "geom_findings")
 
     def test_module_name_derived_from_filename(self):
-        assert load_script("perf-test-report.py").__name__ == "perf_test_report"
+        assert load_script("test-perf-report.py").__name__ == "test_perf_report"
 
     def test_explicit_module_name_override(self):
         mod = load_script("_checklib.py", module_name="_checklib_under_test")
@@ -44,14 +44,14 @@ class TestLoadContract:
 
     def test_registered_in_sys_modules(self):
         """`@dataclass` 按 `cls.__module__` 回查命名空间，未注册会解析失败。"""
-        mod = load_script("perf-test-report.py")
+        mod = load_script("test-perf-report.py")
         assert sys.modules[mod.__name__] is mod
         assert hasattr(mod, "PerfSample")  # 模块内 @dataclass 定义成功即为注册生效
 
     def test_fresh_instance_each_call(self):
         """每次调用重新执行脚本，用例之间模块状态互不串扰。"""
-        first = load_script("perf-test-report.py")
-        second = load_script("perf-test-report.py")
+        first = load_script("test-perf-report.py")
+        second = load_script("test-perf-report.py")
         assert first is not second
 
 

@@ -1,4 +1,4 @@
-"""校准工具（scripts/calibrate-dedup-threshold.py）单元测试。
+"""校准工具（scripts/eval-dedup-threshold.py）单元测试。
 
 覆盖：
   - 分支重判 classify_pair 与 news_dedup 常量同源（阈值变化不产生漂移）
@@ -32,7 +32,7 @@ pytestmark = [pytest.mark.unit, pytest.mark.unit_scripts]
 
 @pytest.fixture()
 def tool():
-    return load_script("calibrate-dedup-threshold.py")
+    return load_script("eval-dedup-threshold.py")
 
 
 def _record(

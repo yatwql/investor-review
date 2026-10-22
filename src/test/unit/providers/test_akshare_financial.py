@@ -270,7 +270,7 @@ class TestRunWithTimeoutFailFast:
 
         def _boom():
             calls["n"] += 1
-            raise OSError("perf-test-report: 基准运行按设计禁网")
+            raise OSError("test-perf-report: 基准运行按设计禁网")
 
         assert run_with_timeout(_boom, timeout=1.0, retries=1) is None
         assert calls["n"] == 1  # 基准禁网是确定性结果 → fail-fast

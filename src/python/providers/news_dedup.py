@@ -111,7 +111,7 @@ def _load_written_keys() -> None:
         if size > _ANCHOR_SIZE_WARN_BYTES:
             logger.warning(
                 "[dedup] 锚点文件已 %.1f MB（超过 %.0f MB 建议线）：flush 需读写全文、加载需解析全文件。"
-                "建议运行 `python scripts/calibrate-dedup-threshold.py --compact` 压缩（保留每个标题对最新一条）：%s",
+                "建议运行 `python scripts/eval-dedup-threshold.py --compact` 压缩（保留每个标题对最新一条）：%s",
                 size / 1e6,
                 _ANCHOR_SIZE_WARN_BYTES / 1e6,
                 _ANCHOR_PATH,

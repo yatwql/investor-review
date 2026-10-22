@@ -457,7 +457,7 @@ _COUNT_NAME_ALIAS = {"all": "_总收集"}
 _DOMAIN_SECTION_TITLE = "功能域对应测试源"
 
 #: 功能域表行（中文加粗标签，形如 `| **数据源 Provider** | … | 545 |`）：标签 →
-#: unit 子标记映射与 collect-test-coverage 功能域聚合单一来源
+#: unit 子标记映射与 test-collect-coverage 功能域聚合单一来源
 #: （`_test_runner.modes.UNIT_DOMAIN_LABELS`）。另收表内非 unit 域的聚合行别名
 #: （`端到端业务场景` 行取 scenario 父标记计数，与 unit 功能域共表但不属映射集）。
 #: 功能域章内标签未登记 / 映射中的功能域缺行一律报出，不得静默跳过。
@@ -469,7 +469,7 @@ _DOMAIN_LABEL_TO_MARKER = {
 
 
 def check_test_coverage_counts(doc_text: str, snapshot: dict[str, int]) -> list[str]:
-    """test-coverage.md 各计数行 ↔ collect-test-coverage 快照。
+    """test-coverage.md 各计数行 ↔ test-collect-coverage 快照。
 
     两类行：反引号标记行（模式/unit/场景/跨类表，按标记名比对），以及功能域章
     内的中文加粗标签行（经共享映射反查标记）。功能域章内出现未登记标签、或映射
@@ -514,7 +514,7 @@ def check_test_coverage_counts(doc_text: str, snapshot: dict[str, int]) -> list[
                 break
         if got is not None and got != snapshot[name]:
             findings.append(
-                f"{rel(_TEST_COVERAGE_MD)}:{line_no}: 标记 `{name}` 覆盖项数 {got} 与 collect-test-coverage 快照 {snapshot[name]} 不一致"
+                f"{rel(_TEST_COVERAGE_MD)}:{line_no}: 标记 `{name}` 覆盖项数 {got} 与 test-collect-coverage 快照 {snapshot[name]} 不一致"
             )
     if domain_section_seen:  # 表存在才做完整性反查（单行输入的既有用例不适用）
         for marker, label in UNIT_DOMAIN_LABELS.items():

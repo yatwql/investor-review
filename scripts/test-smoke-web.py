@@ -30,8 +30,8 @@
   - 服务进程内（test_client），不建真实 socket
 
 用法：
-  .venv/bin/python scripts/smoke-web.py          # 全量 11 项
-  .venv/bin/python scripts/smoke-web.py --quiet  # 仅打印失败项
+  .venv/bin/python scripts/test-smoke-web.py          # 全量 11 项
+  .venv/bin/python scripts/test-smoke-web.py --quiet  # 仅打印失败项
 
 退出码：0 全部通过；2 存在失败项。
 """
@@ -408,7 +408,7 @@ def run_smoke() -> list[dict]:
     saved_defaults = dict(_config_defaults._DEFAULT_CONFIG)
 
     results: list[dict] = []
-    with tempfile.TemporaryDirectory(prefix="smoke-web-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="test-smoke-web-") as tmp:
         tmp_root = Path(tmp)
         try:
             upload._UPLOAD_DIR = str(tmp_root / "uploads")

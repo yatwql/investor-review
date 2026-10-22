@@ -6,8 +6,8 @@
 仓库同步）。
 
 用法:
-  python scripts/install-claude-hook.py            # 安装（幂等：已存在则更新）
-  python scripts/install-claude-hook.py --uninstall # 卸载（移除本 hook，保留其他配置）
+  python scripts/hook-install-claude.py            # 安装（幂等：已存在则更新）
+  python scripts/hook-install-claude.py --uninstall # 卸载（移除本 hook，保留其他配置）
 
 写入的 hook：编辑 plan.md / review-findings.md 后自动运行
 `scripts/check-task-numbering-hook.py` 校验编号一致性（失败中断编辑）。

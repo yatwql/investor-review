@@ -1,4 +1,4 @@
-"""llm-hallucination-sampler 实现包（入口脚本仅留 CLI 主流程）。
+"""eval-llm-hallucination 实现包（入口脚本仅留 CLI 主流程）。
 
 模块划分：
   - holdings.py    品种分类 / 组合核心数值 / 标准数据集加载

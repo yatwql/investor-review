@@ -194,7 +194,7 @@ class TestCoverageRule:
     def test_exempt_script_not_flagged(self, mod, tmp_path, monkeypatch):
         """豁免优先于引用：一次性工具即使无测试也不报（用 mock 避开本文件自引用）。"""
         monkeypatch.setattr(mod, "has_test_reference", lambda _name: False)
-        path = _script(tmp_path, "probe-push2.py", '"""说明。\n"""\n')
+        path = _script(tmp_path, "eval-llm-hallucination.py", '"""说明。\n"""\n')
         assert _rule(mod.script_findings(path), "[test-coverage]") == []
 
     def test_reference_lookup(self, mod):

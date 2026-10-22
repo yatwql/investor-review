@@ -14,7 +14,7 @@ from src.test._script_loader import load_script
 
 @pytest.fixture(scope="module")
 def ev():
-    return load_script("factor_zoo_eval.py")
+    return load_script("eval-factor-zoo.py")
 
 
 pytestmark = [

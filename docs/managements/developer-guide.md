@@ -149,7 +149,7 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 
 > **`--sync` 统计快照口径（CI 分叉坑）**：`check-doc-drift --sync`（及 pre-commit 自动回写）按**工作区**实测写入 `folders.md` 行数，而 CI 的 `check-doc-drift` 按 **committed** 树实测——若受检目录存在**长期不提交的修改**（本地游离改动），本地已同步的数字会在 CI 上判「不一致」，连带 guards / test / portability 三个 job 同时红。提交前确认受检文件全部纳入本次提交；有长期游离修改时先提交它们、再 `--sync`。
 >
-> **写者顺序（`--sync` 必须是收尾的最后一个写者）**：统计表数字是「行数 × 用例数」派生量，**任何改文件的步骤都会让刚同步的数字重归陈旧**。因此 `ruff format` / `ruff check --fix` / `collect-test-coverage.py --update-docs` / 批量编辑等写者**全部在 `--sync` 之前**完成，`--sync` 之后只做**只读**校验（`dev-verify` / 守护回放 / `--ci`）。典型踩坑：先 sync → 再 `collect-test-coverage --update-docs`（改写 `test-coverage.md`，managements 行数又变）→ 跑 `dev-verify` 时 `test_check_doc_drift_crosscheck` 报「行数与实测不一致」。真跑反了也不要紧：重新 sync 一次即可，不是代码问题。
+> **写者顺序（`--sync` 必须是收尾的最后一个写者）**：统计表数字是「行数 × 用例数」派生量，**任何改文件的步骤都会让刚同步的数字重归陈旧**。因此 `ruff format` / `ruff check --fix` / `test-collect-coverage.py --update-docs` / 批量编辑等写者**全部在 `--sync` 之前**完成，`--sync` 之后只做**只读**校验（`dev-verify` / 守护回放 / `--ci`）。典型踩坑：先 sync → 再 `test-collect-coverage --update-docs`（改写 `test-coverage.md`，managements 行数又变）→ 跑 `dev-verify` 时 `test_check_doc_drift_crosscheck` 报「行数与实测不一致」。真跑反了也不要紧：重新 sync 一次即可，不是代码问题。
 >
 > **钩子触发面 = 全部被统计的域**：`docs/managements/`（文档行数）、`src/test/`（测试行数 + 用例数）、`src/python/`（主程序行数）、`scripts/`（脚本行数）任一变更，`git commit` 即走 `--sync` 写路径自动回写并 `git add`。只覆盖部分域时，纯 `src/python`/`scripts` 改动会以「行数不一致」finding 拦下提交、逼人工 sync 再重提（多一轮往返）。
 
@@ -234,7 +234,7 @@ PYTHONWARNDEFAULTENCODING=1 .venv/bin/python -m pytest src/test/unit -q
 | 新增/改动 TUI 交互（键义、提示、反馈、配色） | `DESIGN-TUI.md`（唯一判据：键分工总表 / 提示模板 / 默认项标注 / 配色一色一职责 / 术语表）→ 契约结构测试 `test_design_tui_doc.py`（必备小节若扬则同步）→ 机检 `test_prompt_contract.py`（提示成分 / 禁用词 / 闸门白名单）→ `how-to-use-tui-menu.md` 对应面板章 → `test_keystroke_baseline.py` 击键基线（多一次按键即刷新快照）→ `requirements.md` R-TUI |
 | 新配置入口（新增面板/子菜单项） | `_CONFIG_ENTRY_MAP`（`[D]` 配置入口地图，键位真实性由单测对 `MENU_ITEMS` 兜底）→ 对应手册章节 → `requirements.md` 菜单表行 |
 | 新文件/目录 | `folders.md` 目录树（`check-doc-drift --sync` 回写统计表）→ 若为 `scripts/*`：[scripts-reference.md](scripts-reference.md) 的一览与分类段 |
-| 新测试 | `conftest.py` marker 注册（若需）→ `.venv/bin/python scripts/collect-test-coverage.py --update-docs` 回写 `test-coverage.md`/`folders.md` 计数行（不带标志仅输出供人工对照）→ 边缘用例入 `*_edge.py` |
+| 新测试 | `conftest.py` marker 注册（若需）→ `.venv/bin/python scripts/test-collect-coverage.py --update-docs` 回写 `test-coverage.md`/`folders.md` 计数行（不带标志仅输出供人工对照）→ 边缘用例入 `*_edge.py` |
 | 新 LLM 模块/seam | `registry.py` + 统一附录（`skeleton._build_prompt_appendix`）+ `technical.md`（语义命名表/seam 表/附录 H）→ 指纹条件并入用例 |
 | 每个计划收尾（通用） | `plan.md`（状态翻转+归档 note）→ 当期计划归档文档（归档段+设计文档索引，入 0.12 期归档）→ `review-findings.md`（rf 登记，rf-next 递增）→ `changelog.md`（含 rf token）→ `test-coverage.md`/`folders.md` 计数刷新 → 涉版本时 `check-version-consistency` |
 
@@ -244,7 +244,7 @@ PYTHONWARNDEFAULTENCODING=1 .venv/bin/python -m pytest src/test/unit -q
 2. **批量修复**：按上表 + 触点一次性修完，同一文件多处改动合并为一次 edit。
 3. **单次复核**：手动只跑 `dev-verify` 测试门禁；ruff 探针（错误类阻塞 + format 非阻塞提示）与十守护一并交由 `git commit` 的 pre-commit 钩子一次收集（失败即中止）→ 批量修复 → 重新提交，不手动重复跑守护。
 
-**红线**：编辑批次与 `--sync`/检查类脚本**永不同批**（sync 写文件，与编辑并行会竞态）；**所有写者（编辑 / `ruff format` / `collect-test-coverage --update-docs`）必须在 `--sync` 之前完成，sync 之后再无写入**（否则刚回写的统计数字又变陈旧，`dev-verify` 报「行数与实测不一致」）；`check-file-length` 随每批代码改动跑，ruff 由钩子在提交时把关（批内可提前手跑），不留到收尾才爆。
+**红线**：编辑批次与 `--sync`/检查类脚本**永不同批**（sync 写文件，与编辑并行会竞态）；**所有写者（编辑 / `ruff format` / `test-collect-coverage --update-docs`）必须在 `--sync` 之前完成，sync 之后再无写入**（否则刚回写的统计数字又变陈旧，`dev-verify` 报「行数与实测不一致」）；`check-file-length` 随每批代码改动跑，ruff 由钩子在提交时把关（批内可提前手跑），不留到收尾才爆。
 
 ## 测试指南
 
@@ -632,22 +632,22 @@ test-reports/latest/
 
 **打开方式**：直接用浏览器打开 `test-reports/latest/index.html`
 
-### 快速定位失败用例 — `extract-test-failures.py`
+### 快速定位失败用例 — `test-extract-failures.py`
 
 运行 `test-runner.py --mode verify,regression` 等全量测试后，直接从 HTML 报告中提取失败/错误用例的详细信息，无需手动翻浏览器：
 
 ```bash
 # 自动查找 test-reports/latest/ 下的报告
-.venv/bin/python scripts/extract-test-failures.py
+.venv/bin/python scripts/test-extract-failures.py
 
 # 指定报告路径
-.venv/bin/python scripts/extract-test-failures.py test-reports/latest/all/report.html
+.venv/bin/python scripts/test-extract-failures.py test-reports/latest/all/report.html
 
 # 仅输出汇总统计（不打印日志）
-.venv/bin/python scripts/extract-test-failures.py --summary
+.venv/bin/python scripts/test-extract-failures.py --summary
 
 # 输出 JSON 格式（便于管道处理）
-.venv/bin/python scripts/extract-test-failures.py --json
+.venv/bin/python scripts/test-extract-failures.py --json
 ```
 
 **典型工作流**：
@@ -657,10 +657,10 @@ test-reports/latest/
 .venv/bin/python scripts/test-runner.py --mode verify,regression
 
 # 2. 快速查看哪些用例失败
-.venv/bin/python scripts/extract-test-failures.py --summary
+.venv/bin/python scripts/test-extract-failures.py --summary
 
 # 3. 查看失败详情（含错误堆栈最后 500 字符）
-.venv/bin/python scripts/extract-test-failures.py
+.venv/bin/python scripts/test-extract-failures.py
 
 # 4. 修复后，只重跑之前失败的用例
 .venv/bin/python -m pytest src/test/ -m "<对应标记>" --lf
@@ -668,19 +668,19 @@ test-reports/latest/
 
 > 脚本自动定位 `test-reports/latest/all/report.html` 等常用路径，无需每次指定路径。
 
-### 定位顺序依赖失败 — `find-order-dependent-test.py`
+### 定位顺序依赖失败 — `test-find-order-dependent.py`
 
 当某个用例**单跑通过、与全套一起跑却失败**（典型：fixture / 模块级 patch 泄漏到后续用例，如日历注入与离线桩的装配栈序错误），手工二分需要 10+ 轮 pytest 往返。本脚本自动完成：单跑确认 → 收集参考顺序 → 复现门（前置合跑必须让目标失败，含无关失败即中止）→ 最小失败前缀二分 → 单文件配对确认（不成立则预算内精简）→ 输出污染源与最小复现命令。
 
 ```bash
 # 默认在 src/test 收集顺序，对目标之前的全部文件做二分
-.venv/bin/python scripts/find-order-dependent-test.py "src/test/unit/report/test_market_value.py::TestClass::test_name"
+.venv/bin/python scripts/test-find-order-dependent.py "src/test/unit/report/test_market_value.py::TestClass::test_name"
 
 # 已知大概范围时限定候选（大幅提速，推荐）
-.venv/bin/python scripts/find-order-dependent-test.py "<目标>" --candidates "src/test/unit/report/test_event_impact_wiring.py"
+.venv/bin/python scripts/test-find-order-dependent.py "<目标>" --candidates "src/test/unit/report/test_event_impact_wiring.py"
 
 # 只做单跑确认与候选枚举（不执行二分）
-.venv/bin/python scripts/find-order-dependent-test.py "<目标>" --dry-run
+.venv/bin/python scripts/test-find-order-dependent.py "<目标>" --dry-run
 ```
 
 退出码：0 = 已定位；1 = 目标单跑即失败（非顺序依赖，请直接调试该用例）；2 = 无法复现/前置含无关失败/用法错误。前置条件：全套除目标外全绿；`--max-runs`（默认 40）限制 pytest 运行次数硬上限。定位后优先修**泄漏方**（fixture 栈序 / 未恢复的 patch），而非给受害用例加隔离。
@@ -914,7 +914,7 @@ A: 运行 `.venv/bin/python scripts/check-test-markers.py`，脚本会静态扫�
 | 单个用例偶发失败 | 交互式 | `--lf` 重跑 + `-p no:randomly` 排除顺序影响 |
 | 全套慢 / 某档耗时涨了 | 性能 | `--durations=20` → `perf_history` 对拍 |
 | 测试卡住不动 | 性能 | 见 §测试慢或挂住的诊断 |
-| Web 页面行为不对 | 浏览器 | `scripts/smoke-web.py` → CDP 脚本 |
+| Web 页面行为不对 | 浏览器 | `scripts/test-smoke-web.py` → CDP 脚本 |
 
 ### 日志：先看日志再看代码
 
@@ -943,15 +943,15 @@ A: 运行 `.venv/bin/python scripts/check-test-markers.py`，脚本会静态扫�
 .venv/bin/python -m pytest <case> -q -p no:randomly
 ```
 
-- **顺序依赖失败**用 `scripts/find-order-dependent-test.py`（单跑绿/合跑红时二分定位污染源，见上文测试指南）。
+- **顺序依赖失败**用 `scripts/test-find-order-dependent.py`（单跑绿/合跑红时二分定位污染源，见上文测试指南）。
 - **测试里不要用 print 调试**：pytest 会捕获输出，失败时用 `-s` 或 `--capture=no` 才看得到；临时排查完记得删。
 
 ### 性能剖析
 
 | 关注点 | 工具 | 说明 |
 |:-------|:-----|:-----|
-| 单次运行时各阶段耗时 | `perf_history.jsonl` + `scripts/perf-view.py` | 每次运行落一条（含 status/阶段/品种数），`perf-view` 出趋势表、P95/P99、离群归因 |
-| 端到端报告耗时门禁 | `scripts/perf-test-report.py --gate` | 主动压测 mock 管线，basic ≤60s（CI `perf-gate` job 阻塞） |
+| 单次运行时各阶段耗时 | `perf_history.jsonl` + `scripts/perf-history.py` | 每次运行落一条（含 status/阶段/品种数），`perf-history` 出趋势表、P95/P99、离群归因 |
+| 端到端报告耗时门禁 | `scripts/test-perf-report.py --gate` | 主动压测 mock 管线，basic ≤60s（CI `perf-gate` job 阻塞） |
 | 阶段级耗时 | `PerfCollector.stage_progress` / `reporter.print_timing_summary()` | TUI 报告收尾会打印耗时排行 |
 | 测试档位耗时 | `scripts/test-runner.py --mode bench --update-docs` | 14 档实测回填 `test-coverage.md`（发布子集四档见 §refresh） |
 | CPU 侧归因 | `time` 的 user/sys + `/proc/loadavg` | **先记环境再采信数字**：loadavg 1 分钟 > 核数/2 时该轮作废 |
@@ -989,7 +989,7 @@ time.sleep = _sleep
 
 ### Web 端排查
 
-- **HTTP 层**：`scripts/smoke-web.py`（Flask test_client 进程内全链路，不占端口、不发外网、mock 管线）先确认接口契约没破；
+- **HTTP 层**：`scripts/test-smoke-web.py`（Flask test_client 进程内全链路，不占端口、不发外网、mock 管线）先确认接口契约没破；
 - **浏览器行为**：headless Chromium + CDP 直连（`docs/plan/web-browser-verification.md` 给了可复跑的启动/断言/收尾命令与「0 次真实 POST /api/runs」红线）；
 - **前端调试**：页面所有动态内容用 `textContent`（防 XSS），改 DOM 后先在浏览器 devtools 看 console 与 network；
 - **服务端日志**：自行 `nohup … > server.log` 启动时，除 `logs/app.log`（应用日志）外还要看该访问日志（WSGI 层，含 4xx/5xx）；排查脚本与产物建议放 `docs/tmp/`（git 忽略）。
@@ -1045,7 +1045,7 @@ time.sleep = _sleep
 | 2 | 安全边界 | 写操作校验同源（`Origin`/`Referer`）；上传走既有校验（类型/大小）；**不得**在接口里接受任意路径（防目录穿越） |
 | 3 | 单 worker 纪律 | 触发生成/模拟的接口必须走同一串行队列与互斥锁（忙碌返回 429 `*_BUSY`） |
 | 4 | 前端 | `src/static/` 下的模板/JS：动态内容一律 `textContent`；图表走 chart 封装（主题切换/打印/导出同步） |
-| 5 | 测试 | `src/test/unit/web/`：成功/非法参数/错误信封/同源拒绝；契约测试与 `scripts/smoke-web.py` 同步 |
+| 5 | 测试 | `src/test/unit/web/`：成功/非法参数/错误信封/同源拒绝；契约测试与 `scripts/test-smoke-web.py` 同步 |
 | 6 | 文档 | 手册 [how-to-use-web-mode.md](../manuals/how-to-use-web-mode.md)（五区工作台对应位置）+ `requirements.md` §3.4（`R-WEB-*`）+ `technical.md` 接口表 |
 
 ### 新增功能开关 / LLM 模块
@@ -1350,7 +1350,7 @@ registry 的测试在 `src/test/unit/core/test_registry.py`，验证 TTL 默认�
 |:-----|:-----|:------|
 | **P0/P2 门禁** | 提交/发布前 10 个 `--ci` 守护脚本全量（清单见 P0/P2 门禁条款）；P2 另含设计护栏段（gate 内置 `check-style-guardrails`，E 级拦 / W 级观察统计） | ✅ 零配置 |
 | **dev-verify preflight** | `test-runner.py --mode dev-verify` 自动运行（仅 `check-task-numbering` 快检；重量守护不入预检，由钩子唯一执行防同树重复） | ✅ 零配置 |
-| **Claude Code hook** | 编辑 `plan.md`/`review-findings.md` 后实时校验 | ⚠️ clone 后运行 `.venv/bin/python scripts/install-claude-hook.py` |
+| **Claude Code hook** | 编辑 `plan.md`/`review-findings.md` 后实时校验 | ⚠️ clone 后运行 `.venv/bin/python scripts/hook-install-claude.py` |
 | **git pre-commit** | `git commit` 执行十守护（与 P0/CI guards 同源）：**读写分层调度**——不读 folders.md 的守护（快集 code-traces/task-numbering/semantic-index/requirement-trace + py 域 file-length + 测试域 test-redundancy）先行后台启动，与 `check-doc-drift` 段并行执行（跨域守护恒跑；涉及**任一被统计域**（`docs/managements/` / `src/test/` / `src/python/` / `scripts/`）时 `--sync` 写路径串行先行并自动回写统计快照，其中暂存含 `src/test/` 时追加 `--with-test-count` 校验 `test-coverage.md` 的收集派生计数——否则新增用例后计数静默陈旧、只在 CI master 档才红；其余提交纯 `--ci` 后台并行）；读 folders.md 的 version-consistency 与 doc 域（doc-traces/doc-links）在 doc-drift 完成后启动（避 --sync 写读竞态）；域条件不变（doc 域仅 `*.md`、py 域仅 `*.py`、测试域仅 `src/test/` 变更触发），典型提交约 1~4 秒；六守护另有结论缓存（doc-traces/semantic-index/doc-links/code-traces/requirement-trace/doc-drift，输入与逻辑指纹未变回放上次结论，冷/热 --ci 输出逐字一致）；CI guards job 恒全量兜底 | ⚠️ clone 后运行 `sh .githooks/install-hooks.sh` |
 | **CI guards job** | push / PR / tag 时自动校验（10 个 `--ci` 脚本之一） | ✅ 零配置 |
 
@@ -1377,7 +1377,7 @@ registry 的测试在 `src/test/unit/core/test_registry.py`，验证 TTL 默认�
 发布版本前，必须运行（**纯文档变更例外**：上次发布 tag 以来仅 `.md`/图片变更时，`release.py refresh` 自动跳过 bench + collect——测试计数无变化，`--force-refresh` 强制恒跑；doc-drift stats sync 与下列人工核对始终执行）：
 
 ```bash
-.venv/bin/python scripts/collect-test-coverage.py --update-docs
+.venv/bin/python scripts/test-collect-coverage.py --update-docs
 ```
 
 按实时收集结果回写/核对以下文档的数据快照（非版本号），保证统计与目录结构时效性：
@@ -1436,7 +1436,7 @@ CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` /
 | `test` ×3 | 本地绿、CI 红 | **仓库状态相关断言**（见下） | `git stash` 后跑，或 `git clean -xdf` 后重跑 |
 | `guards` | 单守护非零退出 | 守护名 + finding 行 | 本地跑同名 `--ci` |
 | `portability` | `EncodingWarning`/`UnicodeDecodeError` | 哪个文件的哪次 IO | `scripts/test-runner.py --mode portability`（等价复现两道探针；单看编码档可 `PYTHONWARNDEFAULTENCODING=1 pytest src/test/unit -q`） |
-| `perf-gate` | basic 模式 >60s | 阶段耗时排行 | `scripts/perf-test-report.py --gate` |
+| `perf-gate` | basic 模式 >60s | 阶段耗时排行 | `scripts/test-perf-report.py --gate` |
 | `format` | `ruff format --check` 有差异（**非阻塞**） | 文件列表 | `ruff format .` |
 
 **「本地绿、CI 红」的三类常见根因**（都踩过）：
@@ -1464,7 +1464,7 @@ CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` /
 1. 改 `requirements.txt`（**必须保持 UTF-8 BOM**，否则 cp936 的旧 pip 解析会 `UnicodeDecodeError`）与 `pyproject.toml` 的对应字段；
 2. 重建虚拟环境或 `pip install -r requirements.txt` 验证可装；
 3. 跑 `pytest src/test/unit -q` + `PYTHONWARNDEFAULTENCODING=1 pytest src/test/unit -q`（本地模拟 `portability` job）；
-4. 若升级涉及数据源库（如 openpyxl/httpx/pandas）：跑一次 `--mode dev-verify` 与 `scripts/smoke-web.py`；
+4. 若升级涉及数据源库（如 openpyxl/httpx/pandas）：跑一次 `--mode dev-verify` 与 `scripts/test-smoke-web.py`；
 5. 记录到 `changelog.md`（写清版本号与已知行为变化），必要时在 [datasource-reliability.md](../manuals/datasource-reliability.md) 更新兼容性说明。
 ## 辅助脚本速查
 `scripts/` 下**全部顶层辅助脚本**（按用途分类、含设计逻辑与使用逻辑；实现拆包的条目在各节注明内部模块）已独立成文：
@@ -1480,23 +1480,23 @@ CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` /
 | 合入前门禁（P1） | `.venv/bin/python scripts/test-runner.py --mode verify` |
 | 发布门禁（P2） | `.venv/bin/python scripts/release.py gate` |
 | 只重跑失败用例 | `.venv/bin/python -m pytest src/test/ -q --lf` |
-| 提取失败用例清单 | `.venv/bin/python scripts/extract-test-failures.py` |
-| 顺序依赖定位 | `.venv/bin/python scripts/find-order-dependent-test.py <合跑红的用例…>` |
+| 提取失败用例清单 | `.venv/bin/python scripts/test-extract-failures.py` |
+| 顺序依赖定位 | `.venv/bin/python scripts/test-find-order-dependent.py <合跑红的用例…>` |
 | 文档统计快照回写 | `.venv/bin/python scripts/check-doc-drift.py --sync` |
-| 测试计数回写 | `.venv/bin/python scripts/collect-test-coverage.py --update-docs` |
+| 测试计数回写 | `.venv/bin/python scripts/test-collect-coverage.py --update-docs` |
 | 版本号一致 | `.venv/bin/python scripts/check-version-consistency.py [--fix]` |
-| 端到端性能门禁 | `.venv/bin/python scripts/perf-test-report.py --gate` |
+| 端到端性能门禁 | `.venv/bin/python scripts/test-perf-report.py --gate` |
 
 ### 按域索引
 
 | 域 | 代表脚本 | 什么时候用 |
 |:---|:---------|:-----------|
-| 测试 | `test-runner.py` / `collect-test-coverage.py` / `extract-test-failures.py` / `find-order-dependent-test.py` / `smoke-web.py` / `check-test-redundancy.py` / `check-test-markers.py` | 跑测试、统计覆盖、定位失败、用例质量机检 |
+| 测试 | `test-runner.py` / `test-collect-coverage.py` / `test-extract-failures.py` / `test-find-order-dependent.py` / `test-smoke-web.py` / `check-test-redundancy.py` / `check-test-markers.py` | 跑测试、统计覆盖、定位失败、用例质量机检 |
 | 文档 | `check-doc-traces.py` / `check-doc-links.py` / `check-doc-drift.py` / `check-semantic-index.py` / `check-svg.py` / `make-social-preview.py` | 文档漂移、死链、语义命名、架构图渲染检查、品牌社交预览图生成 |
 | 代码与文件质量 | `check-code-traces.py` / `check-requirement-trace.py` / `check-task-numbering.py` / `check-file-length.py` / `check-version-consistency.py` / `check-style-guardrails.py` / `check-script-contract.py` | 痕迹、需求追溯、编号、行数红线、版本、样式护栏 |
-| 发布 | `release.py`（分步编排）/ `collect-test-coverage.py` | 发版全流程 |
-| 运维观测 | `perf-view.py` / `probe.py` / `check-sources`（CLI 子命令）/ `doctor`（CLI 子命令）/ `view-logs`（CLI 子命令） / `cassettes`（CLI 子命令） | 性能历史查看、数据源链路探测、日志与系统自检 |
-| 评测与基准 | `perf-test-report.py` / `llm-hallucination-sampler.py` / `factor_zoo_eval.py` / `calibrate-dedup-threshold.py` | 性能门禁压测、LLM 幻觉率采样、能力评测与阈值校准（不参与提交门禁） |
+| 发布 | `release.py`（分步编排）/ `test-collect-coverage.py` | 发版全流程 |
+| 运维观测 | `perf-history.py` / `probe.py` / `check-sources`（CLI 子命令）/ `doctor`（CLI 子命令）/ `view-logs`（CLI 子命令） / `cassettes`（CLI 子命令） | 性能历史查看、数据源链路探测、日志与系统自检 |
+| 评测与基准 | `test-perf-report.py` / `eval-llm-hallucination.py` / `eval-factor-zoo.py` / `eval-dedup-threshold.py` | 性能门禁压测、LLM 幻觉率采样、能力评测与阈值校准（不参与提交门禁） |
 | 启动 | `launch.sh` / `launch.ps1`（TUI 与 `web` 子命令）/ `cli.sh` / `llm.sh` 及其 `.ps1` 版 | 免解释器前缀的常用入口 |
 | CLI 子命令 | `report` / `cache` / `whatif` / `check-sources` / `view-logs` / `doctor` / `cassettes` | 用户侧命令行入口（详见 [CLI 手册](../manuals/how-to-use-cli-mode.md)） |
 

@@ -2,8 +2,8 @@
 
 三层体系：
     Layer 1 — 本模块（PerfCollector）+ orchestrator.py 埋点
-    Layer 2 — scripts/perf-test-report.py（独立基准，mock 外部数据源）
-    Layer 3 — scripts/perf-view.py（历史趋势可视化）
+    Layer 2 — scripts/test-perf-report.py（独立基准，mock 外部数据源）
+    Layer 3 — scripts/perf-history.py（历史趋势可视化）
 
 设计约束遵从（详见 technical.md §8）：
     缓存原子写入  — 原子写入：tempfile.mkstemp + os.replace
@@ -51,7 +51,7 @@ _PERF_HISTORY_DIR = os.path.join(PROJECT_ROOT, "data", "state")
 _PERF_HISTORY_FILE = os.path.join(_PERF_HISTORY_DIR, "perf_history.jsonl")
 # 遥测保留上限（防只增文件无界增长；超出后追加时丢最旧行，
 # 见 core/jsonl_store.append_jsonl_atomic_many 的 max_lines——
-# 5000 条 ≈ 每日 4 次生成的三年余，远超 perf-view 趋势分析所需）
+# 5000 条 ≈ 每日 4 次生成的三年余，远超 perf-history 趋势分析所需）
 _PERF_HISTORY_KEEP_LINES = 5000
 
 

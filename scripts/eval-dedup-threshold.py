@@ -2,10 +2,10 @@
 """去重阈值校准工具 — 基于锚点数据分析**当前规则**的判定分布与边界风险。
 
 用法：
-  python scripts/calibrate-dedup-threshold.py             # 分析全部锚点
-  python scripts/calibrate-dedup-threshold.py --summary   # 仅汇总统计
-  python scripts/calibrate-dedup-threshold.py --compact   # 压缩锚点文件（每个标题对保留最新一条）
-  python scripts/calibrate-dedup-threshold.py --file X    # 指定锚点文件
+  python scripts/eval-dedup-threshold.py             # 分析全部锚点
+  python scripts/eval-dedup-threshold.py --summary   # 仅汇总统计
+  python scripts/eval-dedup-threshold.py --compact   # 压缩锚点文件（每个标题对保留最新一条）
+  python scripts/eval-dedup-threshold.py --file X    # 指定锚点文件
 
 **口径（关键）**：锚点文件 append-only、跨规则时代累积，故本工具**不信任记录里的
 ``ratio`` / ``bigram_overlap`` / ``rule``**，而是拿 ``title_a`` / ``title_b`` 用当前代码
@@ -463,7 +463,7 @@ def _print_advice(branches: dict[str, list[dict[str, Any]]]) -> None:
     if os.path.exists(_ACTIVE_FILE) and os.path.getsize(_ACTIVE_FILE) > _ANCHOR_SIZE_WARN_BYTES:
         print(
             f"[!] 锚点文件超过 {_ANCHOR_SIZE_WARN_BYTES / 1e6:.0f} MB："
-            f"运行 `python scripts/calibrate-dedup-threshold.py --compact` 压缩"
+            f"运行 `python scripts/eval-dedup-threshold.py --compact` 压缩"
         )
     print()
 

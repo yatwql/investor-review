@@ -183,7 +183,7 @@ def _snapshot_signature(
     """测试收集快照的树指纹：`src/test` 全树 + 收集链路依赖文件 + 解释器大版本。
 
     指纹不变 → 收集结果必然不变（pytest 只收集 `src/test/`，分类逻辑由
-    `collect-test-coverage.py` 承载，`pytest.ini`/`pyproject.toml` 影响收集行为），
+    `test-collect-coverage.py` 承载，`pytest.ini`/`pyproject.toml` 影响收集行为），
     可直接复用磁盘快照、免跑 3~4s 的 pytest 收集；任一输入变化（路径+大小+mtime_ns
     粒度）即失效重收集——失效方向永远偏向真收集，宁可多跑不陈旧。
     """
@@ -194,7 +194,7 @@ def _snapshot_signature(
         else [
             REPO_ROOT / "pytest.ini",
             REPO_ROOT / "pyproject.toml",
-            REPO_ROOT / "scripts" / "collect-test-coverage.py",
+            REPO_ROOT / "scripts" / "test-collect-coverage.py",
         ]
     )
     entries: list[str] = []
@@ -281,7 +281,7 @@ def _logic_key() -> str:
         parts.append(metadata.version("pytest"))
     except Exception:  # noqa: BLE001 — 元数据缺失只降级为不等，偏向全量
         parts.append("?")
-    for src_file in (REPO_ROOT / "scripts" / "collect-test-coverage.py", Path(__file__)):
+    for src_file in (REPO_ROOT / "scripts" / "test-collect-coverage.py", Path(__file__)):
         try:
             parts.append(hashlib.sha1(src_file.read_bytes()).hexdigest())
         except OSError:
@@ -334,7 +334,7 @@ def _parse_collect_stdout(stdout: str) -> tuple[dict[str, int], dict[str, int]]:
 def _run_collect(file_args: list[str]) -> tuple[dict[str, int], dict[str, int]] | None:
     """跑收集脚本（``file_args``=限定文件，空 = 整树）。失败/空输出/非零退出 → None。"""
     proc = subprocess.run(
-        [sys.executable, str(REPO_ROOT / "scripts" / "collect-test-coverage.py"), *file_args],
+        [sys.executable, str(REPO_ROOT / "scripts" / "test-collect-coverage.py"), *file_args],
         cwd=REPO_ROOT,
         capture_output=True,
         encoding="utf-8",  # 显式编码（cp936 Windows/locale 假设 + EncodingWarning 严格档）
@@ -362,7 +362,7 @@ def _shadow_active(cache: dict) -> bool:
 
 
 def _collect_test_snapshot(full_buckets: bool = False) -> dict[str, int]:
-    """`collect-test-coverage.py` 快照 → ``{标记/名称: 数量}``（含 ``_总收集``）。
+    """`test-collect-coverage.py` 快照 → ``{标记/名称: 数量}``（含 ``_总收集``）。
 
     **按文件增量（质量前提：只省「输入字节未变」的重复）**：
       - 共享语境（conftest / pytest 配置 / 业务代码 / 收集逻辑）未变且测试文件无增删改

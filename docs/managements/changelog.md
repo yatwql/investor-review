@@ -17,6 +17,8 @@
 
 ### Changed
 
+- **`scripts/` 顶层脚本命名规范化**：非 `check-*` 脚本按活动类型统一前缀，看文件名即知归属——`test-`（测试执行与测试工程：`test-collect-coverage` / `test-extract-failures` / `test-find-order-dependent` / `test-smoke-web` / `test-perf-report`）、`eval-`（评测与校准：`eval-llm-hallucination` / `eval-factor-zoo` / `eval-dedup-threshold`）、`perf-`（运行性能观测：`perf-history`）、`hook-`（钩子接线：`hook-install-claude`）；`check-*` 专门指「可入门禁的检查脚本」，`factor_zoo_eval.py` 的下划线命名一并修正为连字符。同步改名 10 个文件与全部引用（文档/CI/钩子/测试/sentinel 字符串），历史归档与 changelog 已发布段保持原名。
+
 - **脚本分类重整（七域 + CLI 入口）**：原「诊断」是杂物袋（连通性探针 / 性能基准 / 能力评测 / 渲染检查 / 用户子命令混坐），且同族脚本分落不同域（`llm-hallucination-sampler` 在测试、`factor_zoo_eval` 在诊断，sampler 另有独立章节）。现按**活动类型**重划：拆出「运维观测」（`probe*` / `perf-view` / CLI 的 `check-sources`·`doctor`·`view-logs`·`cassettes`）与「评测与基准」（`perf-test-report` / `llm-hallucination-sampler` / `factor_zoo_eval` / `calibrate-dedup-threshold`）；`check-svg` 归「文档」（检 README 架构图）、`whatif` 归「CLI 子命令」（用户功能，非维护工具）、需求追溯与任务编号四件归「代码与文件质量」（门禁职责）。`scripts-reference.md` 一览/小节/目录与 `developer-guide.md` 按域索引（7→8 行）同步，域行数断言同源更新。
 
 - **README 实景截图全面刷新**：报告三图（首屏品牌标记与目录导航 / 盈亏汇总与市场指数 / 穿透行业分布与 TOP10 持仓交互图表）与 TUI 主菜单、Web 工作台、Web 配置三图按当前版本（v0.14.3-dev）重拍，并新增 **CLI 渠道回显图**（产物路径 / 盈亏汇总 / 模块耗时排行）；样例持仓为虚构两账户 10 只（个股 / ETF / 场外基金 / 债券基金 / 货币 ETF），在隔离目录内生成，真实持仓、缓存与报告目录零接触；README 图说与 folders 目录树/统计行同步（截图 6→7 张）。
@@ -24,6 +26,10 @@
 - **品牌标记补用（`rf-818`）**：猫头鹰「守望」此前只活在 README 与 Web favicon，报告与 Excel 首页没有标记。现 `DESIGN.md` 契约收窄为「拒绝 hero 大图、装饰性插画」并新增「品牌标记」条款（≤40px 身份识别、Excel ≤48px、不做装饰）+ 护栏 11；报告 favicon 由折线图换猫头鹰头像、页头加 32px 标记（窄屏 26px）、Web 工作台页头 36px、Excel 首页 40px（cairosvg 栅格化，失败静默跳过）；新增 `--brand-mark-ink` token 并登记 Colors 表。回归 5 例。
 
 - **仓库更名 `investor-util` → `investor-review`（`rf-817`）**：`util` 后缀与产品定位（完整工作流的应用，非脚本合集）矛盾，且与中文名「投资复盘助手」语义不对应。同步 14 个文件 47 处引用：README 徽章与 clone 命令、`pyproject.toml` 包名、目录树根名、四份用户手册路径示例、CLI/Web `prog` 显示名、三个 provider 的 HTTP `User-Agent`、通知邮件 `From` 兜底。GitHub 侧旧 URL 永久 301 重定向，外部引用不断。
+
+### Removed
+
+- **`scripts/` 旧探测入口垫片移除**：`probe-csi-factor-indices.py` / `probe-push2.py`（各 12 行薄委托）删除——统一入口 `probe.py csi` / `probe.py push2` 已稳定多版，脚本非安装型入口（无外部调用方、无发布契约），兼容垫片只剩维护面。用法改由参考文档「`probe.py` — 探测统一入口」一节承载。
 
 ### Fixed
 

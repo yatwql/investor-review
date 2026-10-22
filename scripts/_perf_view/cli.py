@@ -1,6 +1,6 @@
-"""perf-view 命令行入口：参数解析 → build_trend_report → 输出。
+"""perf-history 命令行入口：参数解析 → build_trend_report → 输出。
 
-完整用法见入口文件 ``scripts/perf-view.py`` 的模块 docstring。
+完整用法见入口文件 ``scripts/perf-history.py`` 的模块 docstring。
 """
 
 from __future__ import annotations

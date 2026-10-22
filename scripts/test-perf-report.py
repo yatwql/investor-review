@@ -6,8 +6,8 @@
 输出性能报告 Markdown。
 
 用法：
-  python scripts/perf-test-report.py
-  python scripts/perf-test-report.py --gate          # 门禁模式：未达标退出码 2（供 CI 拦截）
+  python scripts/test-perf-report.py
+  python scripts/test-perf-report.py --gate          # 门禁模式：未达标退出码 2（供 CI 拦截）
 
 输出：
   docs/tmp/better-investment-performance-test-report.md
@@ -17,7 +17,7 @@
 
 定位说明：本脚本是**性能测试**（主动压测）——自造模拟持仓、外部数据源**全离线**
 （传输层按设计禁网，断网/冷缓存同样可复现），同条件可比，故适合做 CI 门禁（退化即回归）。运行历史查看（被动统计既有记录、
-样本不可控）由 `perf-view.py` 承担，**不用于门禁**。
+样本不可控）由 `perf-history.py` 承担，**不用于门禁**。
 """
 
 from __future__ import annotations
@@ -325,7 +325,7 @@ def _isolate_state_writes() -> str:
     """状态隔离：把 perf 历史/数据源健康快照/熔断状态重定向到临时目录。
 
     基准运行不得写进真实 `perf_history.jsonl` / `datasource_health.jsonl`（污染
-    运行历史视图的统计样本，perf-view 的分位/离群分析直接受此影响）与
+    运行历史视图的统计样本，perf-history 的分位/离群分析直接受此影响）与
     `circuit_breaker.json`（离线按设计全失败会记熔断，会污染到用户真实运行误
     跳过供应商）。路径均为模块级变量（perf.py 文件头注明「测试时可通过 setattr
     重定向」；熔断文件名传绝对路径时 ``os.path.join`` 会丢弃前面的目录段），
@@ -358,7 +358,7 @@ def _install_offline_network() -> None:
     import time as _time
 
     def _blocked(*_args: object, **_kwargs: object) -> None:
-        raise OSError("perf-test-report: 基准运行按设计禁网")
+        raise OSError("test-perf-report: 基准运行按设计禁网")
 
     _socket.socket.connect = _blocked
     _socket.socket.connect_ex = _blocked

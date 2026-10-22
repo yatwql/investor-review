@@ -348,7 +348,7 @@ class TestRefresh:
         assert len(steps) == 3
         assert "--update-docs" in steps[0]
         assert _mode_arg(steps[0]) == ",".join(rel.RELEASE_BENCH_MODES)
-        assert any("collect-test-coverage" in p for p in steps[1])
+        assert any("test-collect-coverage" in p for p in steps[1])
         assert any("check-doc-drift" in p for p in steps[2])
 
     def test_docs_only_skips_bench_and_collect(self, rel):
@@ -366,7 +366,7 @@ class TestRefresh:
         assert len(runner.calls) == 3  # 无 git 判定，直接三步
         assert "--update-docs" in runner.calls[0]
         assert _mode_arg(runner.calls[0]) == ",".join(rel.RELEASE_BENCH_MODES)
-        assert any("collect-test-coverage" in p for p in runner.calls[1])
+        assert any("test-collect-coverage" in p for p in runner.calls[1])
 
     def test_missing_tag_conservatively_refreshes(self, rel):
         runner = FakeRunner(responses=[(["describe"], (128, "", "no tag here"))])

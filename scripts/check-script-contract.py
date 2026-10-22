@@ -55,9 +55,7 @@ _CLI_SURFACE_EXEMPT = frozenset({"check-task-numbering-hook.py"})
 #: 规则④ 特例：一次性/人工运行的探测与采样工具，无对应测试
 _UNTESTED_EXEMPT = frozenset(
     {
-        "llm-hallucination-sampler.py",  # 一次性 LLM 幻觉率采样（薄 CLI，实现在 `_halluc_sampler/` 包）
-        "probe-csi-factor-indices.py",  # 旧入口兼容垫片（委托 `probes/csi.py`）
-        "probe-push2.py",  # 旧入口兼容垫片（委托 `probes/push2.py`）
+        "eval-llm-hallucination.py",  # 一次性 LLM 幻觉率采样（薄 CLI，实现在 `_halluc_sampler/` 包）
     }
 )
 

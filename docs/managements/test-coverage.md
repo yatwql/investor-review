@@ -1,11 +1,11 @@
 # 测试覆盖统计
 > 文档版本：0.14.3-dev
 
-> ⚠ 以下测试项数为撰写时的快照值，实际计数随版本迭代而变化。`模式对应测试量` 表由 `--mode bench --update-docs` 自动回填本机实测；功能域/分组等子表精确统计请运行 `scripts/collect-test-coverage.py`（或 `pytest src/test/ --collect-only -q`）获取实时计数。
+> ⚠ 以下测试项数为撰写时的快照值，实际计数随版本迭代而变化。`模式对应测试量` 表由 `--mode bench --update-docs` 自动回填本机实测；功能域/分组等子表精确统计请运行 `scripts/test-collect-coverage.py`（或 `pytest src/test/ --collect-only -q`）获取实时计数。
 
 按不同的 `--mode` / pytest 标记统计当前测试覆盖规模：
 
-> 发布期回填范围：`release.py refresh` 的 bench 默认只测发布口径四档（`unit` / `dev-verify` / `regression` / `integration`），其余行的覆盖项数与耗时沿用上次实测（`--update-docs` 未实测即保留原值，不会写脏）；需全量复测时用 `release.py refresh --full-bench` 或 `test-runner.py --mode bench --update-docs`。各模式的「覆盖项数」列另有 `collect-test-coverage.py --update-docs` 按收集快照回写，不受 bench 范围影响。
+> 发布期回填范围：`release.py refresh` 的 bench 默认只测发布口径四档（`unit` / `dev-verify` / `regression` / `integration`），其余行的覆盖项数与耗时沿用上次实测（`--update-docs` 未实测即保留原值，不会写脏）；需全量复测时用 `release.py refresh --full-bench` 或 `test-runner.py --mode bench --update-docs`。各模式的「覆盖项数」列另有 `test-collect-coverage.py --update-docs` 按收集快照回写，不受 bench 范围影响。
 
 ## 模式对应测试量
 
@@ -30,7 +30,7 @@
 
 > 注：典型耗时按 开发机实测（Linux x86_64，Intel i5-13500H，12 核 16 线程，46.8 GiB 内存；pytest-xdist worker=8，即 medium 级别 = 50% 核数）。**耗时与硬件/操作系统/并行度强相关**——OS（调度器/文件系统/进程创建开销/电源管理）、CPU 或并行度不同时各模式耗时可能数倍于此，仅作相对量级参考。跨机器回填可用 `--mode bench --update-docs` 自动更新模式对应测试量 + 下方两张环境耗时对照表。
 >
-> 注：`模式对应测试量` 表覆盖项数为 pytest 实测执行计数（含参数化展开），由 `--mode bench --update-docs` 自动回填；功能域/场景分组/单元分组/跨类等子表为 `scripts/collect-test-coverage.py` 收集快照（仅收集不执行，需在项目 `.venv` 环境运行以包含 pandas 依赖的测试文件）。`perf`/`security` 为定向 mode（`scenario_perf`/`scenario_security` 独立标记，手工/发布前运行）**不进 bench**，故不在本表，计数见 `collect-test-coverage.py` 输出（perf: 5 / security: 16）。
+> 注：`模式对应测试量` 表覆盖项数为 pytest 实测执行计数（含参数化展开），由 `--mode bench --update-docs` 自动回填；功能域/场景分组/单元分组/跨类等子表为 `scripts/test-collect-coverage.py` 收集快照（仅收集不执行，需在项目 `.venv` 环境运行以包含 pandas 依赖的测试文件）。`perf`/`security` 为定向 mode（`scenario_perf`/`scenario_security` 独立标记，手工/发布前运行）**不进 bench**，故不在本表，计数见 `test-collect-coverage.py` 输出（perf: 5 / security: 16）。
 
 ### 环境耗时对照
 

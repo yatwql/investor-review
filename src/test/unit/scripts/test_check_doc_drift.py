@@ -335,7 +335,7 @@ class TestProjectStats:
         """「测试用例」行的形状（`| — | — | **N 个** |`）须能解析并核对。"""
         monkeypatch.setattr(drift_parts._tree, "_collect_test_count", lambda: 12345)
         findings = drift.check_project_stats("| **测试用例** | — | — | **7,579 个** | 说明 |", with_test_count=True)
-        assert any("测试用例数 7579 与 collect-test-coverage 快照 12345" in f for f in findings)
+        assert any("测试用例数 7579 与 test-collect-coverage 快照 12345" in f for f in findings)
 
     def test_test_count_skipped_without_flag(self, drift):
         assert drift.check_project_stats("| **测试用例** | — | — | **1 个** | 说明 |") == []
@@ -416,8 +416,8 @@ class TestTestCoverageCounts:
                 assert any(label in f and marker in f for f in findings), label
 
     def test_domain_labels_single_source_with_collect(self, drift):
-        """功能域标签映射与 collect-test-coverage 同一对象（防双处定义漂移）。"""
+        """功能域标签映射与 test-collect-coverage 同一对象（防双处定义漂移）。"""
         from _test_runner.modes import UNIT_DOMAIN_LABELS
 
-        collect = load_script("collect-test-coverage.py")
+        collect = load_script("test-collect-coverage.py")
         assert collect.UNIT_DOMAIN_LABELS is UNIT_DOMAIN_LABELS
