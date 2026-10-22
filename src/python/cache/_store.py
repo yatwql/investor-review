@@ -22,6 +22,29 @@ logger = logging.getLogger("invest")
 
 _cache_lock = threading.Lock()
 
+# 命中/写入的 DEBUG 追踪按 key **每进程首见一次**：同一 key 反复命中是常态
+# （实测单周 1.8 万行），全量逐条记录只会挤掉真正有用的日志；命中率汇总另有
+# `_stats` 计数与报告「缓存命中率」行，追踪粒度不受影响。
+_log_seen: set[str] = set()
+_log_seen_lock = threading.Lock()
+
+
+def _debug_once(kind: str, key: str, *args: Any) -> None:
+    """同一 (kind, key) 每进程只记一条 DEBUG。"""
+    marker = f"{kind}:{key}"
+    with _log_seen_lock:
+        if marker in _log_seen:
+            return
+        _log_seen.add(marker)
+    template = f"{kind}: %s" + (" (age=%.1fs, max=%.1fs)" if kind == "缓存命中" else "")
+    logger.debug(template, key, *args)
+
+
+def reset_debug_log_state() -> None:
+    """清空 DEBUG 首见记录（测试与长驻进程手动复位用）。"""
+    with _log_seen_lock:
+        _log_seen.clear()
+
 
 def get(key: str, max_age_seconds: float) -> Any | None:
     """读取缓存，过期或不存在时返回 None。
@@ -49,7 +72,7 @@ def get(key: str, max_age_seconds: float) -> Any | None:
             _record_cache_miss()
             return None
 
-        logger.debug("缓存命中: %s (age=%.1fs, max=%.1fs)", key, age, max_age_seconds)
+        _debug_once("缓存命中", key, age, max_age_seconds)
         _record_cache_hit()
         return data.get("_data")
 
@@ -87,7 +110,7 @@ def set(key: str, data: Any) -> None:
 
     try:
         _write_atomic(fd, tmp_path, final_path, path, json_str, raw_bytes, use_gzip)
-        logger.debug("缓存已写入: %s", key)
+        _debug_once("缓存已写入", key)
     except FileNotFoundError:
         # 目录可能在 makedirs 后被外部删除，重试一次
         with contextlib.suppress(OSError):
@@ -97,7 +120,7 @@ def set(key: str, data: Any) -> None:
             fd2, tmp_path2 = tempfile.mkstemp(dir=os.path.dirname(path), suffix=".tmp")
             try:
                 _write_atomic(fd2, tmp_path2, final_path, path, json_str, raw_bytes, use_gzip)
-                logger.debug("缓存已写入(重试成功): %s", key)
+                _debug_once("缓存已写入(重试成功)", key)
             except OSError as e2:
                 logger.warning("缓存写入失败(重试后) %s: %s", key, e2)
                 with contextlib.suppress(OSError):

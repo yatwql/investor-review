@@ -182,6 +182,7 @@ def fetch_with_fallback(
 
     # 2) 遍历 chain 尝试（熔断委托 registry）
     reg = get_registry()
+    transport_failures = 0  # 用于把「链路故障」与「各源都没有该标的/章节」分开告警
     for provider_name in chain:
         entry = provider_fn_map.get(provider_name)
         # 展示名优先（用户看得懂「腾讯财经」而非 "tencent"）
@@ -265,6 +266,7 @@ def fetch_with_fallback(
             diagnostics.add(source_label or provider_name, reason or "无结果")
 
         if result is TRANSPORT_FAILURE:
+            transport_failures += 1
             # 传输级异常（超时/断连/DNS/5xx）→ 累计连续失败计数
             # 原因带上可读短句，让 DataSourceRegistry.last_failure_context 首次有实义
             reg.record_failure(provider_name, f"{data_type}: {reason}")
@@ -278,7 +280,12 @@ def fetch_with_fallback(
         logger.info("[%s]%s 全部 Provider 不可用，降级使用过期缓存", data_type, _code_tag)
         return stale
 
-    logger.warning("[%s]%s 全链路失败（无过期缓存可用），数据不可用", data_type, _code_tag)
+    if transport_failures:
+        logger.warning("[%s]%s 全链路失败（无过期缓存可用），数据不可用", data_type, _code_tag)
+    else:
+        # 各源都返回「代码级空结果」（无该标的/章节、异源拒绝）且无传输级故障 →
+        # 属预期缺失，不是链路故障；按 INFO 记录，避免把预期缺失堆成告警（实测单周 59 条）
+        logger.info("[%s]%s 各源均无可用结果（预期缺失，非链路故障）", data_type, _code_tag)
     return None
 
 

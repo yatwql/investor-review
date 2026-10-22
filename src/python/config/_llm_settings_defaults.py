@@ -23,6 +23,9 @@ _DEFAULT_LLM_SETTINGS: dict[str, Any] = {
     # LLM 日费用预算上限（货币数值，0 = 不启用）：与事前费用预估同页展示，
     # 超限时交互渠道询问「用已有结果继续 / 中止」，非交互渠道直接中止
     "daily_cost_limit": 0,
+    # LLM 总时间预算（秒，0 = 不启用）：超预算后不再启动新模块（已在跑的模块不打断），
+    # 报告按「已生成/因预算跳过」如实呈现。防「单模块卡住 + 重试叠加」把一次报告拖成小时级
+    "llm_total_time_budget_sec": 0,
     "enabled_llm": {
         "global_macro": True,
         "expert_review": True,
@@ -209,6 +212,12 @@ def _get_default_llm_settings_template() -> str:
     )
     lines.append(
         _kv("daily_cost_limit", "// LLM 日费用预算上限（货币数值，0=不启用）：超限交互询问降级/中止，非交互中止")
+    )
+    lines.append(
+        _kv(
+            "llm_total_time_budget_sec",
+            "// LLM 总时间预算（秒，0=不启用）：超预算不再启动新模块（已跑的模块不打断），防单次报告被卡成小时级",
+        )
     )
 
     # ── 模块开关 ──

@@ -137,7 +137,11 @@ def with_connect_retry(
             elapsed["s"] = time.monotonic() - started
 
     def _on_retry(failed_attempt: int, delay: float, exc: BaseException | None) -> None:
-        logger.warning(
+        # 基准跑（perf-test-report）主动禁网属设计内失败：按 DEBUG 记，避免把人为断网
+        # 的重试堆成 WARNING（实测单周 988 条），污染运维日志与性能台账的告警计数
+        level = logging.DEBUG if exc is not None and is_deterministic_failure(exc) else logging.WARNING
+        logger.log(
+            level,
             "[%s] 连接失败 %s（%s），%.1fs 后重试（第 %d/%d 次尝试）",
             log_tag,
             label,

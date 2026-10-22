@@ -916,6 +916,33 @@ A: 运行 `.venv/bin/python scripts/check-test-markers.py`，脚本会静态扫�
 | 测试卡住不动 | 性能 | 见 §测试慢或挂住的诊断 |
 | Web 页面行为不对 | 浏览器 | `scripts/test-smoke-web.py` → CDP 脚本 |
 
+### 日志级别与告警语义
+
+**级别可配（默认 INFO）**：文件与控制台默认 INFO；需要逐次取数追踪时用环境变量单独放开，不改代码、不改配置：
+
+```bash
+INVEST_LOG_FILE_LEVEL=DEBUG .venv/bin/python -m src.python.cli report --type full   # 文件写 DEBUG
+INVEST_LOG_CONSOLE_LEVEL=DEBUG ...                                                # 控制台写 DEBUG
+```
+
+非法值回落 INFO 并提示一次。**默认不开 DEBUG** 的原因：日志审计（近一周 107,625 行）显示 DEBUG 占 91%，其中「市场时段」67%、缓存命中 17%，真实告警被埋在噪声里，10MB 轮转只能留约 6 天。
+
+**写日志时的三级语义（新增日志按此选级）**：
+
+| 级别 | 用在哪 | 例子 |
+|:-----|:-------|:-----|
+| `INFO` | 预期内的「没有数据」——各源都返回空结果、文档无该章节、异源候选拒服务 | 链路全失败但无传输级故障时记「各源均无可用结果（预期缺失，非链路故障）」 |
+| `WARNING` | 真实降级/故障——传输级失败、熔断、配置缺失导致的跳过 | 「全链路失败（无过期缓存可用）」「连续失败，熔断 N 秒」 |
+| `ERROR` | 需要人工介入的缺陷——输出截断、挂载点异常、数据写盘失败 | 「LLM 输出被截断（建议增大 max_tokens_…）」 |
+
+> 判定实现：链路用「是否出现过 `TRANSPORT_FAILURE`」区分（`fetcher/chain.py`），不靠文案匹配。基准跑（`perf-test-report` 主动禁网）的确定性失败在连接级重试处按 DEBUG 记录，避免把人为断网堆成 WARNING。
+
+**追踪类 DEBUG 的两条纪律**：① 同一状态不重复刷（市场时段判定按「结果变化」记，进程级去重）；② 同一 key 的命中/写入只记首见一次（其余由 `_stats` 命中率与报告「缓存命中率」行承担汇总），否则单周就能刷出万行。
+
+**LLM 总时间预算**：`llm_settings.json → llm_total_time_budget_sec`（秒，`0`=不启用）。超预算后**不再启动新模块**（已在跑的模块不打断），日志回显已用时与预算值，报告按已生成内容呈现。用于兜住「单模块卡住 + 重试叠加」把一次 full 拖成小时级（审计实测曾出现 6,623s 的 LLM+新闻阶段）。
+
+**去重锚点自动压缩**：`data/cache/dedup_anchors.jsonl` 超过 32MB 时在读侧自动压缩（保留每个标题对最新一条，原文件备份 `.bak`，原子替换）；`INVEST_DEDUP_AUTO_COMPACT=0` 可关闭。手工统计口径仍用 `scripts/eval-dedup-threshold.py --compact`。
+
 ### 日志：先看日志再看代码
 
 - **logger 名**：项目统一 `logging.getLogger("invest")`，`setup_logger()` 落盘到 `logs/app.log`（按大小轮转），控制台同步 INFO/WARNING/ERROR。

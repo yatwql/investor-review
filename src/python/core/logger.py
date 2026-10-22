@@ -31,6 +31,37 @@ _LOG_FORMAT = "%(asctime)s [%(levelname)s] %(message)s"
 _LOG_MAX_BYTES = 10 * 1024 * 1024  # 单文件最大 10 MB
 _LOG_BACKUP_COUNT = 5  # 保留 5 个备份
 
+# ── 级别可配（默认 INFO；排障时按需开 DEBUG） ──────────────
+# 背景：文件 handler 长期固定 DEBUG，逐次取数的追踪行（市场时段/缓存命中）占日志
+# 九成以上，10MB 轮转只能留约 6 天，真正告警被埋。默认收敛到 INFO，需要追踪时
+# 用环境变量单独放开，不改代码、不改配置：
+#   INVEST_LOG_FILE_LEVEL=DEBUG      （文件）
+#   INVEST_LOG_CONSOLE_LEVEL=DEBUG   （控制台）
+_LOG_FILE_LEVEL_ENV = "INVEST_LOG_FILE_LEVEL"
+_LOG_CONSOLE_LEVEL_ENV = "INVEST_LOG_CONSOLE_LEVEL"
+_DEFAULT_FILE_LEVEL = "INFO"
+_DEFAULT_CONSOLE_LEVEL = "INFO"
+
+
+def _resolve_level(env_name: str, default_name: str) -> int:
+    """环境变量指定的级别；缺省/非法一律回落默认档（非法值只提示一次）。"""
+    raw = os.environ.get(env_name, "").strip().upper()
+    default = getattr(logging, default_name)
+    if not raw:
+        return default
+    level = getattr(logging, raw, None)
+    if isinstance(level, int):
+        return level
+    import warnings
+
+    warnings.warn(
+        f"{env_name}={raw!r} 不是合法日志级别（DEBUG/INFO/WARNING/ERROR），按 {default_name} 处理",
+        RuntimeWarning,
+        stacklevel=2,
+    )
+    return default
+
+
 # ── 控制台彩色日志格式器 ────────────────────────────────────
 # 仅控制台 handler 应用颜色，文件 handler 保持纯文本
 
@@ -91,6 +122,10 @@ def setup_logger(name: str = "invest") -> logging.Logger:
     if logger.handlers:
         return logger
 
+    file_level = _resolve_level(_LOG_FILE_LEVEL_ENV, _DEFAULT_FILE_LEVEL)
+    console_level = _resolve_level(_LOG_CONSOLE_LEVEL_ENV, _DEFAULT_CONSOLE_LEVEL)
+    # 根 logger 保持 DEBUG，由两个 handler 各自过滤：这样显式设置 handler/根级别的
+    # 调试工具（caplog、临时 handler）仍能拿到 DEBUG 记录，默认落盘范围不受影响
     logger.setLevel(logging.DEBUG)
 
     # 创建日志格式器
@@ -100,7 +135,7 @@ def setup_logger(name: str = "invest") -> logging.Logger:
     # 用 _ClosedStreamSilentHandler：进程退出阶段（atexit）流可能已关闭，
     # 对 "closed file" 静默降级，避免 `--- Logging error ---` 噪声。
     console_handler = _ClosedStreamSilentHandler()
-    console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(console_level)
     console_handler.setFormatter(_ColoredFormatter(_LOG_FORMAT))
     logger.addHandler(console_handler)
 
@@ -114,7 +149,7 @@ def setup_logger(name: str = "invest") -> logging.Logger:
         backupCount=_LOG_BACKUP_COUNT,
         encoding="utf-8",
     )
-    file_handler.setLevel(logging.DEBUG)
+    file_handler.setLevel(file_level)
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
 

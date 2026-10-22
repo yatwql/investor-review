@@ -66,6 +66,10 @@ _ANCHOR_PATH = os.path.join(
 )
 #: 体积告警线：超过此值在加载时提醒压缩（flush 写全文、加载解析全文件，均是全文成本）
 _ANCHOR_SIZE_WARN_BYTES = 32 * 1024 * 1024
+#: 自动压缩阈值（与告警线同值）：超过即就地压缩，避免每轮报告都全量读写几十 MB。
+#: 压缩保留每个标题对的**最新一条**（文件 append-only → 最后即最新），并先备份 .bak。
+#: 用 `INVEST_DEDUP_AUTO_COMPACT=0` 可关闭自动压缩（仅保留告警）。
+_ANCHOR_AUTO_COMPACT_ENV = "INVEST_DEDUP_AUTO_COMPACT"
 
 # 进程级"已写锚点 key"集合 — 防止同一对 (source,title) 在多轮运行中重复追加。
 # 背景：锚点文件 append-only，同一对新闻在每次真实抓取进入候选区时都会重新记录，
@@ -85,6 +89,49 @@ def _anchor_key(record: dict[str, Any]) -> str:
     # 排序使 (A,B) 与 (B,A) 视为同一对，避免来源顺序不同产生重复
     sa, ta = (a, b) if a <= b else (b, a)
     return f"{sa[0]}|{sa[1]}|{ta[0]}|{ta[1]}"
+
+
+def _auto_compact_anchor_file(size: int) -> None:
+    """锚点文件超阈值时就地压缩（保留每个 key 最后一条），备份为 `.bak`。
+
+    只在读侧首次加载时触发一次；任何失败都只告警、不阻断报告（原文件保持不动）。
+    """
+    if os.environ.get(_ANCHOR_AUTO_COMPACT_ENV, "1").strip() == "0":
+        return
+    if size <= _ANCHOR_SIZE_WARN_BYTES or not os.path.exists(_ANCHOR_PATH):
+        return
+    try:
+        last_line: dict[str, int] = {}
+        with open(_ANCHOR_PATH, encoding="utf-8") as f:
+            for lineno, line in enumerate(f):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    last_line[_anchor_key(json.loads(line))] = lineno
+                except (json.JSONDecodeError, KeyError, TypeError):
+                    continue
+        if not last_line:
+            return
+        keep = set(last_line.values())
+        tmp_path = f"{_ANCHOR_PATH}.compact.tmp"
+        with open(_ANCHOR_PATH, encoding="utf-8") as src, open(tmp_path, "w", encoding="utf-8") as dst:
+            for lineno, line in enumerate(src):
+                if lineno in keep:
+                    dst.write(line if line.endswith("\n") else line + "\n")
+        backup = f"{_ANCHOR_PATH}.bak"
+        import shutil
+
+        shutil.copy2(_ANCHOR_PATH, backup)
+        os.replace(tmp_path, _ANCHOR_PATH)
+        logger.info(
+            "[dedup] 锚点文件已自动压缩：%.1f MB → %.1f MB（保留每组最新一条，原文件备份 %s）",
+            size / 1e6,
+            os.path.getsize(_ANCHOR_PATH) / 1e6,
+            os.path.basename(backup),
+        )
+    except OSError as e:  # 压缩失败不阻断报告：保留原文件与告警
+        logger.warning("[dedup] 锚点文件自动压缩失败（继续使用原文件）：%s", e)
 
 
 def _load_written_keys() -> None:
@@ -108,6 +155,12 @@ def _load_written_keys() -> None:
             size = os.path.getsize(_ANCHOR_PATH)
         except OSError:
             size = 0
+        if size > _ANCHOR_SIZE_WARN_BYTES:
+            _auto_compact_anchor_file(size)
+            try:
+                size = os.path.getsize(_ANCHOR_PATH)
+            except OSError:
+                size = 0
         if size > _ANCHOR_SIZE_WARN_BYTES:
             logger.warning(
                 "[dedup] 锚点文件已 %.1f MB（超过 %.0f MB 建议线）：flush 需读写全文、加载需解析全文件。"
