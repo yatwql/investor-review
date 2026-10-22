@@ -1,5 +1,5 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.14.3-dev
+> 文档版本：0.14.3
 > **编号源**：`rf-next = 822`（新增问题取此编号，完成后更新为 +1；已用最大 rf-821，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
@@ -42,15 +42,7 @@
 
 ### 开发期已修复（0.14.3-dev）
 
-| # | 问题 | 处理 |
-|---|------|------|
-| **rf-821** | 上一轮「报告域拆分」留下的重复实现：`report/html_writer_status.py` 内嵌了一份与 `report/html_writer.py` **逐字相同**的 `_render_template` + `write_html_report`（约 591 行），同时文件内 `_build_data_status_sections` / `_build_history_data_status` 各定义两次（前一份被后一份遮蔽，成死代码），模块导览注释与 re-export 也随之失真——两份核心渲染逻辑需人工同步，属高危维护债 | 已修复：`html_writer_status.py` 回归单一职责（仅数据状态装配 4 个辅助 + logger，901 → 134 行），删除重复核心函数、死重复定义与失效 re-export/import；`html_writer.py` 仍是核心生成唯一实现。复核：report 单测 2637 通过、全仓重复函数体扫描归零、`check-script-contract`/ruff 无告警 |
-| **rf-820** | 上一轮「脚本分类重整 + 截图刷新」遗留三类漂移：① `scripts-reference` 组标题失准（「冒烟与采样」在采样/校准移出后只剩冒烟一条；「测试质量机检」标题被误随块迁入「评测与基准类」；质量类内「需求追溯/编号」四块排在「代码痕迹」之前，读序倒置）；② `README` 计数失真（写「22 项功能开关全开」而注册表实为 27 项、写「六个 LLM 模块」而注册表 7 个、写「最多 10 张 Chart.js 图表」而报告模板 12 张）；③ `docs/tmp/github/` 残留已入库资产的重复副本（`src/static/social-preview.jpg` 已受管控） | 已修复：组标题归位（补回「测试质量机检」、改「冒烟验证」）、质量类按「痕迹 → 需求追溯 → 编号/钩子 → 行数/契约/护栏」重排；README 三处计数改为不依赖演进总数的表述（「全部功能开关与 LLM 模块开启，含实验项」）与实测值（12 张图表）；删除 `docs/tmp/` 重复图。核对方法：`check-script-contract` / `check-style-guardrails` 两观察期脚本零偏离，README 计数逐项对注册表与模板实测 |
-| **rf-819** | Social Preview 脚本真机跑不通：`_load_render_deps` 仍按旧字段名 `image_cls` 构造 `RenderDeps`（字段已改为 `image_module`），直接执行即 `TypeError`；原回归均走「注入替身」路径，未覆盖真实导入装配，故提交时全绿 | 已修复：改回正确关键字，并补「真实导入装配」回归 1 例（`sys.modules` 替身 cairosvg + 真实 Pillow），构造错配即红；重跑脚本产物与入库资产 md5 一致（62.6 KB / 1200×630），默认输出改为 `src/static/social-preview.jpg` 受 git 管控 |
-| **rf-818** | 品牌资产「欠用」：猫头鹰「守望」只活在 README 与 Web favicon，**产品最核心的交付物（HTML 报告 / Excel 首页）身上没有标记**；且 `DESIGN.md` Overview 写「拒绝插画吉祥物」，与「报告里放标记」直接冲突，导致该资产长期无法进入产物 | 已修复：① 契约收窄——「拒绝 hero 大图、装饰性插画」+ 新增「品牌标记（Brand Mark）」条款（≤40px 身份识别、不做装饰、Excel ≤48px）+ 护栏 11 + 迭代指引一条；② 报告 favicon 由折线图换猫头鹰头像（与 Web 同源）、页头加 32px 标记（窄屏 26px）；③ Web 工作台页头加 36px 标记；④ Excel 首页标题行嵌入 40px 标记（cairosvg 栅格化，失败静默跳过不阻断报告）；⑤ 新增 `--brand-mark-ink` token 并登记 Colors 表（裸色值 0）；⑥ 回归 5 例（三面标记存在 + 尺寸上限 + favicon 不退回折线图 + 失败静默）。反向验证：把标记放大到 200px 能红。实施中另踩一坑并已修：openpyxl 的 `Image._data()` 每次调用都 `fp.close()` 关流，而报告落盘两次（最新版 + 存档版）→ 第二次 `save()` 抛 `I/O operation on closed file`；改为先物化 PNG 字节再把 `_data` 换成返回缓存字节的闭包，并补「二次保存」回归用例。另一坑（CI 三版本 + portability 全红）：运行时用 cairosvg 栅格化 SVG → CI 无 cairo 系统库/包装不上，`_embed_brand_mark` 按设计静默跳过、标记断言即 red。改为**离线栅格化一次入库** `src/static/web/favicon-mark.png`（80×80，3.4KB），运行时只读 PNG 字节——报告生成与 SVG 渲染器解耦，cairosvg 依赖已撤销 |
-| **rf-817** | 仓库更名 `investor-util` → `investor-review`（`util` 后缀与产品定位矛盾、与中文名「投资复盘助手」语义不对应）：仓库内 51 处引用需同步——README 徽章与 clone 命令、`pyproject.toml` 包名、`folders.md`/`technical.md` 目录树根名、四份用户手册的路径示例、CLI/Web 的 `prog` 显示名、三个 provider 的 HTTP `User-Agent`、通知邮件 `From` 兜底 | 已修复：14 个文件 47 处 + 4 处测试注释同步；`git remote set-url` 指向新仓库并 `fetch` 验证；测试夹具里的假目录树字符串（`check_dir_tree` 用例）与 `docs/plan` 里的真实绝对路径**不改**（前者是任意根名夹具、后者是当时实测路径记录）。复核：cli/providers/web 三域 1060 例通过 |
-| **rf-816** | 发布流程缺陷：`publish` 提交前不校验统计快照，而 pre-commit 钩子对含 `src/test` 变更的提交走 `--sync --ci --with-test-count`——只跑 `--sync` 时 `test-coverage.md` 的收集派生计数不被校验，本地「通过」、钩子里仍红，v0.14.2 因此连败两次 publish（多耗 34s 间隙 + 2 轮脚本） | 已修复：`publish` 在 `git add/commit` 之前自动执行 `check-doc-drift.py --sync --ci --with-test-count`（与钩子同源参数），失败即中止并提示；补 2 例回归（参数同源 + 先于提交、失败不提交/不合并/不打 tag）；CLAUDE.md / developer-guide / scripts-reference 三处流程描述同步（参考文档补一览行、命令注释与「publish 提交前先同步统计快照」说明段） |
-| **rf-815** | v0.14.2 master 档 CI 在 `test (3.11)` 红 1 例：`test_unequal_lengths_uses_shorter` 用**逐位相等**断言`beta == portfolio_beta(portfolio[:200], benchmark)`，而两条路径的对齐和式顺序不同，末位差 1.6e-17 —— 本机 3.13 恰好相等、3.11 不等（跨实现浮点不可依赖逐位相等）。该断言是本轮 `rf-813` 强化时引入的 | 已修复：改 `pytest.approx(..., abs=1e-12)` 保留「对齐到较短者」语义，长度敏感反例改 `> 1e-6`；本地 3.11 解释器实测差值 1.6e-17、长度敏感 1.25e-2，两侧都稳。教训：浮点断言一律容差，禁 `==`（含「同一算式不同输入长度」这类看似等价的比较）——该纪律已落到三处：CLAUDE.md 测试纪律条目、`developer-guide.md` 测试写作规范（正反例）、`testplan.md` §1.2 边界清单「浮点比较边界」行 |
+（本版开发期已修复项已随 v0.14.3 发布迁入归档档案）
 
 ### 归档档案
 - [`archived_review-findings.0.14.x.md`](../archive/v0.14.x/archived_review-findings.0.14.x.md) — v0.14.x（2026-10-21 ~ 2026-10-22）
