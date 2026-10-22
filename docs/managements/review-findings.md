@@ -17,36 +17,35 @@
 
 > 当前无待办项（rf-790 已决策「维持现状」并归档至已解决）。
 
-### P3 — 持续监控：文件膨胀登记（按任务号组织；逼近红线档 主程序 ≥700 / 脚本 ≥600 / 测试 ≥1000）
+### P3 — 持续监控：文件膨胀登记（按任务号组织；登记线 = 警告线：主程序 >700 / 脚本 >600 / 测试 >900 / 薄壳 >200）
 
-> **单一事实源**：行数以 `scripts/check-file-length.py -v` 输出为真值（该输出列出全部 >500 行主程序 / >400 行脚本 / >800 行测试）。本表是**逼近红线档的处置登记**——主程序 ≥700、脚本 ≥600、测试 ≥1000（余量 ≤30% 才入表），行数快照随复核刷新；警告级全集不逐项登记，复核以 `-v` 为准。
-> **组织方式**：按**任务号（`rf-N`）**分组——一个处置任务涉及多个文件时归在同一行，文件与行数/余量列在该行的「涉及文件」列里（同一文件只出现一次，行内按任务清单顺序）。行内余量取该任务内**最紧**那个文件，表按此升序——即「哪个任务最先触线」排最前，与逐文件排序给出的先后判断一致。
-> **红线体系**：主程序警告 >500 / 硬上限 >1000；`scripts/` 同域（警告 >400 / 红线 >1000）；测试 >800 警告 / >1200 红线。体系调整决策与理由见 `docs/managements/technical.md`「大文件拆分」。
-> **测试文件口径**：阈值见 `developer-guide.md`「文件膨胀阈值」表（行数 >800 警告 / >1200 红线；测试项 >80 警告 / >120 红线）；≥1000 行即入本表。
+> **单一事实源**：行数与优先级以 `scripts/check-file-length.py -v` 输出为真值（清单 = 主程序 >700 / 脚本 >600 / 测试 >900、薄壳 >200，并按「行数 × 近 90 天改动次数」给出拆分优先级）。本表是**逼近红线档的处置登记**，**入表线 = 警告线**（单一「警告 = 登记」口径，避免「警告 / 登记 / 红线」三套数字），行数快照随复核刷新。
+> **组织方式**：按**任务号（`rf-N`）**分组；同一任务涉及多个文件时每文件一行，**按「行数 × 近 90 天改动次数」降序**——改得越勤、体量越大越先拆。
+> **红线体系**：主程序警告 >700 / 硬上限 >1000；`scripts/` 警告 >600 / 红线 >1000；测试 >900 警告 / >1200 红线；`__init__.py` 薄壳 >200 警告（同域红线）。体系调整决策与理由见 `docs/managements/technical.md` C28（大文件红线体系）。
+> **测试文件口径**：行数 >900 警告 / >1200 红线；测试项 >80 警告 / >120 红线；≥900 行即入本表。
 > **破线豁免**：无（`check-file-length.py --ci` 豁免在列 0 项）。
 
-**逼近红线档处置登记**（余量 ≤30% 才入表；按「哪个任务最先触线」排序）：
+**逼近红线档处置登记**（按「行数 × 近 90 天改动次数」降序）：
 
-| 任务 | 文件 | 行数 / 余量 | 处置方向 |
-|------|------|------------|----------|
-| **rf-829** | `scripts/release.py` | 906 / 94（红线 1000） | argparse 装配已下沉 `_release/_cli.py`（`build_parser` + `run_cli`，`RELEASE_BENCH_MODES` 随之下沉并 re-export）；距红线余量 8 → 94，退出「随时破线」优先处置，但仍在警告档（脚本 >400）与逼近红线登记范围内，后续按本表继续拆分 |
-| **rf-829** | `src/python/core/doctor.py` | 734 / 266 | 日志与缓存探针（`_check_logs_and_cache`）可独立成 `core/doctor_logs.py`，主模块只保留分组与渲染 |
-| **rf-829** | `src/python/web/handlers.py` | 709 / 291 | 路由按域拆分（`handlers_health.py`：health/doctor/logs；`handlers_reports.py`：生成/下载/历史），蓝图注册保持单源 |
-| **rf-829** | `src/test/unit/news/test_news_sources.py` | 477 / 723 | 已分片出 `test_news_dedup.py`（本次完成）；后续按「源元数据 / 抓取行为 / 标题判定」继续切 |
-| **rf-829** | `scripts/check-doc-traces.py` | 692 / 308 | 结构性冗余扫描已下沉 `_traces_doc/`，CLI 侧再收薄（参数与输出归 `_checklib`） |
-| **rf-829** | `scripts/check-style-guardrails.py` | 636 / 364 | 规则表与渲染分离（规则声明 → `_guardrails/rules.py`） |
-| **rf-829** | `scripts/test-perf-report.py` | 635 / 365 | 采样/统计/上屏三段拆分，采样复用 `core/perf` |
+| 任务 | 文件 | 行数 / 余量 | 90 天改动 / 优先级分 | 处置方向 |
+|------|------|------------|--------------------|----------|
+| **rf-829** | `src/test/unit/report/test_html_report_structure.py` | 928 / 272 | 49 次 / **45472** | 按「HTML 结构断言 / 响应式契约 / 章节-区块矩阵」拆子文件 |
+| **rf-829** | `src/test/unit/report/test_orchestrator.py` | 999 / 201 | 43 次 / **42957** | 按「数据准备 / 生成编排 / 降级分支」拆子文件 |
+| **rf-829** | `scripts/release.py` | 906 / 94 | 37 次 / **33522** | argparse 已下沉 `_release/_cli.py`；剩余命令编排按 check·prepare·refresh 与 publish·devbump 分域下沉 |
+| **rf-829** | `scripts/check-doc-traces.py` | 692 / 308 | 39 次 / **26988** | 扫描规则已下沉 `_traces_doc/`，CLI 侧再收薄（参数/输出归 `_checklib`） |
+| **rf-829** | `src/python/web/handlers.py` | 709 / 291 | 27 次 / **19143** | 路由按域拆分（`handlers_health.py`：health/doctor/logs；`handlers_reports.py`：生成/下载/历史），蓝图注册保持单源 |
+| **rf-829** | `src/test/unit/report/test_excel_generator.py` | 995 / 205 | 18 次 / **17910** | 按「页签写入 / 编排 / 降级」拆子文件 |
+| **rf-829** | `src/python/core/doctor.py` | 734 / 266 | 19 次 / **13946** | 日志与缓存探针（`_check_logs_and_cache`）独立成 `core/doctor_logs.py`，主模块只保留分组与渲染 |
+| **rf-829** | `src/test/unit/llm/test_generate_all_llm.py` | 926 / 274 | 12 次 / **11112** | 按「编排 / 模块分派 / 预算闸」拆子文件 |
+| **rf-829** | `src/test/unit/report/test_holdings_detail_sheet.py` | 982 / 218 | 10 次 / **9820** | 按区块写入器拆子文件 |
+| **rf-829** | `src/python/config/__init__.py` | 269（薄壳线 200） | 27 次 / **7263** | 包标记面收薄：实现已在子模块，只保留 re-export 与注册表视图 |
+| **rf-829** | `scripts/check-style-guardrails.py` | 636 / 364 | 8 次 / **5088** | 规则表与渲染分离（规则声明 → `_guardrails/rules.py`） |
+| **rf-829** | `scripts/_doc_drift/__init__.py` | 237（薄壳线 200） | 15 次 / **3555** | 包标记聚合面收薄为纯 re-export，或收敛到显式 `api.py` |
+| **rf-829** | `src/test/unit/report/test_market_value_premium.py` | 974 / 226 | 1 次 / **974** | 低频改动，按被测函数择机拆子文件 |
+| **rf-829** | `src/test/unit/scripts/test_perf_history.py` | 950 / 250 | 1 次 / **950** | 低频改动，按「采样 / 统计 / 渲染」择机拆子文件 |
+| **rf-829** | `scripts/test-perf-report.py` | 635 / 365 | 1 次 / **635** | 采样/统计/上屏三段拆分，采样复用 `core/perf` |
 
-**已决策「维持现状」（已降到逼近档以下，不拆理由保留，行数随 `-v` 复核）**：
-
-| 任务 | 文件 | 行数 | 决策依据 |
-|------|------|------|----------|
-| **rf-89** | `src/python/report/excel_generator.py` | 659 | 维持现状：页签编排后续可下沉 |
-| **rf-80** | `src/python/report/data_status.py` | 649 | 维持现状：DegradationTracker 单类内聚 |
-| **rf-81** | `src/python/report/html_renderers.py` | 577 | 维持现状：渲染域同源 |
-| **rf-85** | `src/python/fetcher/fund.py` | 553 | 维持现状：排名 / 持仓 / 基准三职责择机拆 |
-| **rf-78** | `src/python/fetcher/batch.py` | 520 | 维持现状：BatchDispatcher 内聚 |
-| —（同批决策） | `src/python/llm/prompts_core.py`、`src/python/llm/generators.py` | 350 / 444 | 维持现状：提示词 / 生成器按模块分文件 |
+**已移出登记（降回登记线以下，维持现有模块边界）**：rf-89 `src/python/report/excel_generator.py` 659、rf-80 `src/python/report/data_status.py` 649、rf-81 `src/python/report/html_renderers.py` 577、rf-85 `src/python/fetcher/fund.py` 553、rf-78 `src/python/fetcher/batch.py` 520、`src/python/llm/prompts_core.py` 350 / `src/python/llm/generators.py` 444 —— 均在主程序登记线（700 行）以下，移出逐项登记；行数复核以 `-v` 为准。
 
 ## 已解决问题
 

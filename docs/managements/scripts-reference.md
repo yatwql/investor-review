@@ -35,7 +35,7 @@
 | `check-semantic-index.py` | 文档 | 功能语义命名表正反向一致性校验（功能开关注册表表外键 / 僵尸条目 / 合并章 key 缺失） |
 | `check-doc-drift.py` | 文档 | 文档与实现一致性校验（章节表/章节数量、开关表/分组计数/默认值断言、配置与 LLM 默认值表、TUI 面板编号、目录树、项目统计表；`--sync` 自动回写统计快照） |
 | `check-doc-links.py` | 文档 | 文档链接与结构一致性校验（死链/死锚点/重复标题/层级/编号序列/§引用） |
-| `check-file-length.py` | 质量 | 单文件行数红线守护（主程序/脚本 >1000 行 / 测试 >1200 行；豁免登记与 review-findings 挂账同步，`-v` 输出可选优化区间清单供登记表派生） |
+| `check-file-length.py` | 质量 | 单文件行数红线守护（主程序/脚本 >1000 行 / 测试 >1200 行；豁免登记与 review-findings 挂账同步，`-v` 输出可选优化区间清单与「行数 × 近 90 天改动」优先级，供登记表派生） |
 | `check-test-redundancy.py` | 测试 | 测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言；实现拆在 `_test_redundancy/`——八类检查各一模块 + 共用 AST 原语 + 事实缓存 + 编排，入口只留 CLI） |
 | `check-requirement-trace.py` | 质量 | 需求 ID ↔ 验证载体追溯（单段 ID 全域覆盖 / 载体文件存在 / ID 双向一致） |
 | `hook-install-claude.py` | 质量 | 安装/卸载 Claude Code PostToolUse hook（任务编号一致性自动校验） |
@@ -669,7 +669,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 **设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
 
-**类型阈值**：主程序（`src/python/**.py`）与脚本（`scripts/**.py`，含包内子模块）> 1000 行为 finding；测试（`src/test/**.py`）> 1200 行为 finding。主程序 500 / 脚本 400 / 测试 800 起为**可选优化区间**，不判 finding，仅 `-v` 列出，供 review-findings「文件过长」登记表派生（人肉快照退役，脚本输出即真值）。
+**类型阈值**：主程序（`src/python/**.py`）与脚本（`scripts/**.py`，含包内子模块）> 1000 行为 finding；测试（`src/test/**.py`）> 1200 行为 finding。主程序 700 / 脚本 600 / 测试 900、`__init__.py` 薄壳 200 起为**可选优化区间**（即 review-findings 登记线），不判 finding，仅 `-v` 列出；`-v` 另按「行数 × 近 90 天改动次数」输出拆分优先级（git 不可用时静默跳过）。
 
 **豁免与挂账**：既有破线项须在 `EXEMPTIONS` 登记，**同时**在 review-findings 未完成分区挂账限期处理（约定而非机检，两处须一起改）；豁免文件回落到阈值内时 `-v` 提示「可移除豁免」，防豁免永久化。
 
@@ -679,7 +679,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 ```bash
 .venv/bin/python scripts/check-file-length.py        # 检查全部
-.venv/bin/python scripts/check-file-length.py -v     # 含可选优化区间清单与豁免状态
+.venv/bin/python scripts/check-file-length.py -v     # 含可选优化清单、拆分优先级与豁免状态
 .venv/bin/python scripts/check-file-length.py --ci   # CI 模式（只输出 文件:描述）
 ```
 
