@@ -26,6 +26,9 @@ from typing import Any
 
 from src.python.core.num_utils import finite_or
 
+#: 页头偏旧阈值的兜底值（与 degradation 出厂 T2 档一致：3 天）
+_DEFAULT_T2_STALE_DAYS = 3
+
 logger = logging.getLogger("invest")
 
 # ── 新鲜度常量 ───────────────────────────────────────────────
@@ -92,6 +95,88 @@ def _normalize_date(date_str: Any) -> str | None:
         return text
     except ValueError:
         return None
+
+
+# ── 页头新鲜度摘要（TUI 状态行）──────────────────────────────
+
+
+def header_freshness(date_str: Any, *, config: dict | None = None, calendar: list | None = None) -> dict | None:
+    """页头「新鲜度」摘要：自然日龄 + **交易日口径**的偏旧判定。
+
+    与 :func:`classify_freshness` 同一事实（数据日期 vs 最近/前一交易日）：
+    - 日历**仅用已缓存**的交易日历（``calendar`` 参数用于测试注入）；未命中时
+      绝不为页头去触发 akshare——回落「自然日龄 ≥ 配置阈值」；
+    - 阈值取 ``degradation.<tier>.stale_days`` 的**最严一档**（默认 T2=3 天），
+      与数据状态告警同一配置源，替代此前 TUI 自定的 ``_STALE_DAYS = 7``（自然日）。
+
+    Args:
+        date_str: 数据日期（净值/行情日期，``YYYY-MM-DD`` 前缀即可）。
+        config: 可选配置（读 ``degradation`` 分层阈值）；缺省读全局配置。
+        calendar: 已缓存的交易日列表（测试注入）；None 时读缓存。
+
+    Returns:
+        ``{"date", "age_days", "trading_day", "prev_trading_day", "stale", "threshold_days"}``；
+        日期非法返回 None（调用方显示占位）。
+    """
+    normalized = _normalize_date(str(date_str or "")[:10])
+    if normalized is None:
+        return None
+    today = datetime.now().date()
+    date_obj = datetime.strptime(normalized, "%Y-%m-%d").date()
+    age_days = max((today - date_obj).days, 0)
+    threshold_days = header_stale_threshold_days(config)
+
+    trading_day = prev_trading_day = None
+    stale = age_days >= threshold_days
+    trading_days = _cached_trading_days(calendar)
+    if trading_days:
+        past = [day for day in trading_days if day <= today.isoformat()]
+        if past:
+            trading_day = past[-1]
+            prev_trading_day = past[-2] if len(past) >= 2 else None
+            # 与 classify_freshness 一致：早于前一交易日才算过期（T-1 属正常缓存）
+            stale = prev_trading_day is not None and normalized < prev_trading_day
+
+    return {
+        "date": normalized,
+        "age_days": age_days,
+        "trading_day": trading_day,
+        "prev_trading_day": prev_trading_day,
+        "stale": bool(stale),
+        "threshold_days": threshold_days,
+    }
+
+
+def _cached_trading_days(calendar: list | None = None) -> list[str]:
+    """已缓存的交易日列表（升序）；未缓存返回空列表（**不触网**）。"""
+    if calendar is None:
+        try:
+            from src.python import cache
+
+            calendar = cache.get("trading_calendar", cache.get_ttl("calendar"))
+        except Exception:  # 缓存不可用时按「无日历」处理，回落自然日阈值
+            calendar = None
+    if not isinstance(calendar, list):
+        return []
+    return sorted({str(day)[:10] for day in calendar if day})
+
+
+def header_stale_threshold_days(config: dict | None = None) -> int:
+    """页头偏旧阈值：``degradation`` 各档 ``stale_days`` 的最严值（默认 T2=3 天）。"""
+    try:
+        if config is None:
+            from src.python.config import get_config
+
+            config = get_config() or {}
+        degradation = (config or {}).get("degradation") or {}
+        values = [
+            int(tier.get("stale_days"))
+            for tier in degradation.values()
+            if isinstance(tier, dict) and str(tier.get("stale_days", "")).strip().isdigit()
+        ]
+        return min(values) if values else _DEFAULT_T2_STALE_DAYS
+    except Exception:
+        return _DEFAULT_T2_STALE_DAYS
 
 
 # ── 单品种新鲜度分类 ─────────────────────────────────────────

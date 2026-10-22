@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.14.5
+> 文档版本：0.14.6
 
 ## 概述
 
@@ -852,6 +852,15 @@ mod = load_script("_test_runner/modes.py", module_name="modes_under_test")   # �
 
 > 唯一实现为 `src/test/_script_loader.py`：按文件名/子路径加载 `scripts/` 下脚本、每次调用重新执行返回新实例、注册进 `sys.modules`（`@dataclass` 按 `cls.__module__` 回查命名空间依赖它）。**禁止**在测试文件里再手写 `importlib.util.spec_from_file_location` 样板或自定义 _load_script 同名加载器——`unit/scripts/test_script_loader.py` 的样板唯一性机检会检出（除 loader 自身外出现动态加载样板、或定义同名本地加载器均判失败）。
 
+**测试文件分片与共享夹具**：
+
+单文件超测试红线（>1200 行）或逼近档（>900 行）时按**被测职责**分片，不按行数机械切。约定：
+
+- 兄弟分片共用 `test_<模块>_<域>.py` 命名（如 `test_excel_generator_llm_usage.py`），并在主分片 docstring 的「兄弟分片」行互相点名——读者从任一文件都能找到全貌；
+- **共享构造器（模板路径 / 注册表常量 / 最小渲染数据 / mock 工厂）放 `<包>/_<模块>_fixtures.py`**（下划线前缀，不含 `test_*` 故不被收集），各分片 `from ... import ...` 引用，禁止复制一份到每个分片——改模板契约时漏改分片副本是最常见的静默漂移；
+- **分片后 patch 目标须重定向**：实现下沉到子模块（如 `_perf_report/report.py`、`_traces_doc/deleted_refs.py`）后，`monkeypatch.setattr(入口模块, "_常量", ...)` 对写入无效——必须 patch **调用点所在子模块**，并同步迁移该模块的进程级缓存重置点（`_HIST_DEFS = None` 一类）；
+- 分片不新增/删除用例：原文件的 `def test_` 总数须等于各分片之和，收尾用 `grep -c 'def test_'` 对拍，并同步 `folders.md` 目录树与 `test-coverage.md` 计数。
+
 **新增后必须更新的文件**：
 
 1. **`test-coverage.md` 场景测试分组表** — 新增 S/T/D 场景时补充条目（含测试类参考列）
@@ -874,14 +883,15 @@ mod = load_script("_test_runner/modes.py", module_name="modes_under_test")   # �
 
 | 指标 | 警告线 | 红线 | 措施 |
 |:-----|:------:|:----:|:-----|
-| 主程序单文件行数（`src/python/`） | > 500 行 | > 1000 行 | 按职责域下沉拆分（域下沉 + 门面 re-export，消费方导入面不变） |
-| 脚本单文件行数（`scripts/` 递归含包内子模块） | > 400 行 | > 1000 行 | 按职责拆包（评测核心 / 阶段编排 / CLI 等），入口仅留 CLI 与原面 re-export |
-| 测试单文件行数（`src/test/`） | > 800 行 | > 1200 行 | 考虑按被测函数 / 场景类型拆分 |
+| 主程序单文件行数（`src/python/`） | > 700 行 | > 1000 行 | 按职责域下沉拆分（域下沉 + 门面 re-export，消费方导入面不变） |
+| 脚本单文件行数（`scripts/` 递归含包内子模块） | > 600 行 | > 1000 行 | 按职责拆包（评测核心 / 阶段编排 / CLI 等），入口仅留 CLI 与原面 re-export |
+| 测试单文件行数（`src/test/`） | > 900 行 | > 1200 行 | 考虑按被测函数 / 场景类型拆分 |
+| 薄壳文件（`__init__.py` 包标记 / 纯门面） | > 200 行 | 同域红线 | 包标记与 re-export 应收薄，逻辑下沉子模块 |
 | 单文件测试数 | > 80 项 | > 120 项 | 拆分到子文件 `test_xxx_part1.py` / `test_xxx_part2.py` |
 | 单类方法数 | > 15 项 | > 25 项 | 拆为多个 Test 类或拆分文件 |
 | 单方法 mock 数 | > 5 个 patch | > 8 个 patch | 重构被测函数以降低耦合 |
 
-> **门禁**：红线列由 `scripts/check-file-length.py --ci` 强制——**主程序 >1000 行**（硬上限，review-findings 文件过长登记区）、**脚本 >1000 行**与**测试 >1200 行**即 finding 退出 2；豁免路径须与 review-findings 挂账同步（拆分后自动提示移除豁免）。`-v` 另输出可选优化区间清单（主程序 >500 / 脚本 >400 / 测试 >800），review-findings「文件过长」登记表以该清单为派生源。
+> **门禁**：红线列由 `scripts/check-file-length.py --ci` 强制——**主程序 >1000 行**（硬上限，review-findings 文件膨胀登记区）、**脚本 >1000 行**与**测试 >1200 行**即 finding 退出 2；豁免路径须与 review-findings 挂账同步（拆分后自动提示移除豁免）。警告线即**登记线**（不再维护第三套数字）：`-v` 输出的可选优化区间清单（主程序 >700 / 脚本 >600 / 测试 >900、薄壳 >200）就是 review-findings P3 登记表的派生源；`-v` 同时按「行数 × 近 90 天改动次数」给出拆分优先级，回答「先拆哪个」。
 
 ### 常见问题
 
@@ -1273,7 +1283,7 @@ DataModuleDef("我的 LLM 分析", "llm_my_analysis",
 
 > **生命周期单一事实位**：全部 `experimental=True` 开关的「实验目的 / 判据来源 / 转正条件 / 撤销条件 / 观察数据源 / 当前态」以 `technical.md` §6.9「实验项生命周期表」为**单一事实位**——立项（新增实验项）、转正（摘 `experimental`）、撤销（删注册表条目与机制）任一发生时**必须同步刷新该表**；判据详文仍留在 `plan.md` 死线条目与版本归档的评估记录（两者回链 `technical.md` §6.9「实验项生命周期表」，表内不复制全文，避免两处口径漂移）。上文的转正判据分类学讲「怎么判」，`technical.md` §6.9 记录「当前每个实验项处在哪一步」。
 
-> **诊断类命令不得依赖 config 初始化**：`doctor` / `view-logs` / `check-sources` 三个子命令在 `main()` 中**先于 `init_config` 分派**——配置损坏正是它们要定位的场景，若先初始化配置再分派，用户会在最需要诊断能力时被配置错误挡在门外（死锁）。新增诊断类命令遵循同一模式：**先分派、后初始化**，并把「命令失败」（退出码 2）与「命令跑完但结论不佳」（退出码 1）用 `_EXIT_SUCCESS` / `_EXIT_PARTIAL` / `_EXIT_SEVERE` 常量区分开，不得写裸字面量。**诊断类命令自身永不抛异常**——任何内部异常都转成一条结果行，否则等于在最需要它的时刻失效（`core/doctor.py`）。
+> **诊断类命令不得依赖 config 初始化**：`doctor` / `view-logs` / `check-sources` / `health-history` / `cassettes` 在 `main()` 中**先于 `init_config` 分派**——配置损坏正是它们要定位的场景，若先初始化配置再分派，用户会在最需要诊断能力时被配置错误挡在门外（死锁）。新增诊断类命令遵循同一模式：**先分派、后初始化**，并把「命令失败」（退出码 2）与「命令跑完但结论不佳」（退出码 1）用 `_EXIT_SUCCESS` / `_EXIT_PARTIAL` / `_EXIT_SEVERE` 常量区分开，不得写裸字面量。**诊断类命令自身永不抛异常**——任何内部异常都转成一条结果行，否则等于在最需要它的时刻失效（`core/doctor.py`）。
 
 > **新增数值解析一律委托 `core/num_utils.py`，禁止自写 `try: float(x) / except`**：`float("nan")` / `float("±inf")` **不抛异常**，该形态的兜底对它们完全无效，脏值会一路穿透到聚合、绘图与 JSON 序列化；`value or 0.0` 同样是**假兜底**（NaN 是真值，`or` 不会短路）。按语义选入口：宽容解析（含数值字符串）用 `safe_num`、类型契约敏感场景用 `strict_num`、替代 `or 0.0` 惯用法用 `finite_or`、判定谓词用 `is_finite_number`。**不改变既有失败口径**（`0.0` 还是 `None` 由调用方契约决定），只保证「返回的数值一定有限」。
 
@@ -1387,7 +1397,7 @@ registry 的测试在 `src/test/unit/core/test_registry.py`，验证 TTL 默认�
 
 发布版本时，按以下六步顺序执行：
 
-> 可用 `scripts/release.py` 分步编排（发布流程的可执行封装，每步独立可审阅、失败即停）：`check`（预检）→ `archive-init`（**仅新小版本首发需要**：三份归档 + 目录树块 + 三处索引行一次建齐，幂等）→ `prepare`（版本全链、changelog 发布段归档**并自动重写归档头部「涵盖版本 / 归档时间」（区间与并入记录由归档内各发布段标题派生，无需人工维护）与主文件指针的版本号/日期/归档文件名**、一致性 `--fix`，收尾自动 `doc-drift --sync`）→ `refresh` + `evolution --release`（数据刷新——纯文档变更〔仅 `.md`/图片〕自动跳过 bench+collect，`--force-refresh` 强制；演进快照，evolution 收尾同样自动 sync）→ `gate`（P2 门禁：verify 与 regression 并行；若 `refresh` 的 bench **实跑过 `unit`** 且代码指纹未变，则复用该次结果替代 verify（`unit` 是 verify 的严格超集，由标记不变量保证），否则实跑；十守护并行且并发度随核数收敛 ≤4 路；`--with-portability` 加跑 portability 探针；全绿后写「版本+代码指纹」通过戳）→ `publish --title`（**代码指纹与 gate 戳一致时复用 P1 verify**；提交前按钩子同源参数 `--sync --ci --with-test-count` 同步统计快照——只跑 `--sync` 时 `test-coverage.md` 收集计数不被校验，会「本地通过、钩子仍红」白跑一轮；同步失败即中止 + release 提交 + P1 verify + `--no-ff` 合并 + tag）→ `devbump`（切开发版，并清空上一版迁档占位节）；bench 默认只测发布子集四档（`--full-bench` 全量；`--bench-jobs N` 调整采集并行度，改变并行度会改变耗时口径，环境表需同并行度可比）、每命令耗时、执行环境（provider/model/thinking）与 agent 会话 token 累计入 `logs/release.jsonl` 台账（发布墙钟、token 成本与执行模型均可跳版本对拍）；rf/plan/docs-plan 归档迁移的**机械部分已由 `prepare` 自动完成**（人工只复核条目归属与设计文件判定，见下方步骤③），`gate` 会断言该版本台账已迁完、changelog 归档段非空，未迁/为空则前置中止；`prepare` 不跨版本发布（`--version` 与开发链推导值不一致时立即中止并给四步指引）；**分层纪律**：归档迁移或任何涉及管理文档/代码注释的改动完成后，进 `gate` 前先跑秒级便宜守护（至少 `check-doc-traces --ci` + `check-doc-links --ci`，改动面大时十守护全跑）——守护发现前置，避免 P2 门禁的全量 regression 因文档级 finding 白跑第二轮。下列手动命令为底层口径，脚本失败时按手动步骤排查。**publish 的 release 提交仍走 pre-commit 钩子全量守护**（不跳过）：与 gate 重复约 2~6s，换取「自动化提交也不旁路守护」的兜底——实测收益小于风险，故不做跳过。
+> 可用 `scripts/release.py` 分步编排（发布流程的可执行封装，每步独立可审阅、失败即停）：`check`（预检）→ `archive-init`（**仅新小版本首发需要**：三份归档 + 目录树块 + 三处索引行一次建齐，幂等）→ `prepare`（版本全链、changelog 发布段归档**并自动重写归档头部「涵盖版本 / 归档时间」（区间与并入记录由归档内各发布段标题派生，无需人工维护）与主文件指针的版本号/日期/归档文件名**、一致性 `--fix`，收尾自动 `doc-drift --sync`）→ `refresh` + `evolution --release`（数据刷新——纯文档变更〔仅 `.md`/图片〕自动跳过 bench+collect，`--force-refresh` 强制；演进快照，evolution 收尾同样自动 sync）→ `gate`（P2 门禁：verify 与 regression 并行；若 `refresh` 的 bench **实跑过 `unit`** 且代码指纹未变，则复用该次结果替代 verify（`unit` 是 verify 的严格超集，由标记不变量保证），否则实跑；十守护并行且并发度随核数收敛 ≤4 路；`--with-portability` 加跑 portability 探针；全绿后写「版本+代码指纹」通过戳——**指纹 = `CODE_PATHS` 下文件内容的 sha256（与是否已提交无关）**：gate 打戳时 prepare 的改动尚未提交、publish 提交后再算，两者仍相等）→ `publish --title`（**代码指纹与 gate 戳一致时复用 P1 verify**；提交前按钩子同源参数 `--sync --ci --with-test-count` 同步统计快照——只跑 `--sync` 时 `test-coverage.md` 收集计数不被校验，会「本地通过、钩子仍红」白跑一轮；同步失败即中止 + release 提交 + P1 verify + `--no-ff` 合并 + tag）→ `devbump`（切开发版 + 默认 `git push origin dev`（`--no-push` 跳过），并清空上一版迁档占位节）；bench 默认只测发布子集四档（`--full-bench` 全量；`--bench-jobs N` 调整采集并行度，改变并行度会改变耗时口径，环境表需同并行度可比）、每命令耗时、执行环境（provider/model/thinking）与 agent 会话 token 累计入 `logs/release.jsonl` 台账（发布墙钟、token 成本与执行模型均可跳版本对拍）；rf/plan/docs-plan 归档迁移的**机械部分已由 `prepare` 自动完成**（含 plan.md「当前迭代」概述行按剩余任务重算在办项数与 P1~P4 分档编号；人工只复核条目归属与设计文件判定，见下方步骤③），`gate` 会断言该版本台账已迁完、changelog 归档段非空，未迁/为空则前置中止；`prepare` 不跨版本发布（`--version` 与开发链推导值不一致时立即中止并给四步指引）；**分层纪律**：归档迁移或任何涉及管理文档/代码注释的改动完成后，进 `gate` 前先跑秒级便宜守护（至少 `check-doc-traces --ci` + `check-doc-links --ci`，改动面大时十守护全跑）——守护发现前置，避免 P2 门禁的全量 regression 因文档级 finding 白跑第二轮。下列手动命令为底层口径，脚本失败时按手动步骤排查。**publish 的 release 提交仍走 pre-commit 钩子全量守护**（不跳过）：与 gate 重复约 2~6s，换取「自动化提交也不旁路守护」的兜底——实测收益小于风险，故不做跳过。
 
 **① 版本号一致**
 
@@ -1525,7 +1535,7 @@ CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` /
 | 运维观测 | `perf-history.py` / `probe.py` / `check-sources`（CLI 子命令）/ `doctor`（CLI 子命令）/ `view-logs`（CLI 子命令） / `cassettes`（CLI 子命令） | 性能历史查看、数据源链路探测、日志与系统自检 |
 | 评测与基准 | `test-perf-report.py` / `eval-llm-hallucination.py` / `eval-factor-zoo.py` / `eval-dedup-threshold.py` | 性能门禁压测、LLM 幻觉率采样、能力评测与阈值校准（不参与提交门禁） |
 | 启动 | `launch.sh` / `launch.ps1`（TUI 与 `web` 子命令）/ `cli.sh` / `llm.sh` 及其 `.ps1` 版 | 免解释器前缀的常用入口 |
-| CLI 子命令 | `report` / `cache` / `whatif` / `check-sources` / `view-logs` / `doctor` / `cassettes` | 用户侧命令行入口（详见 [CLI 手册](../manuals/how-to-use-cli-mode.md)） |
+| CLI 子命令 | `report` / `cache` / `whatif` / `check-sources` / `health-history` / `view-logs` / `doctor` / `cassettes` | 用户侧命令行入口（详见 [CLI 手册](../manuals/how-to-use-cli-mode.md)） |
 
 > 改名/合并脚本时按**五处同步**自查（本次改名的长尾教训）：① 同名测试文件；② `scripts-reference` 一览与详情小节；③ `folders.md` 目录树；④ CI/钩子/`release.py`/`test-runner` 等调用点；⑤ 文档与代码注释里的命令示例。机检覆盖 ②③④（一览覆盖、目录树双向、脚本存在性），①⑤ 靠本清单。
 >

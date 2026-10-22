@@ -551,6 +551,11 @@ class TestCliSurface:
         assert parser_cmds == handlers  # 两张内部表双向一致（结构断言，不写死条数）
         assert all(hasattr(rel, f"cmd_{name.replace(chr(45), chr(95))}") for name in handlers)
 
+    def test_cli_assembly_lives_in_internal_package(self, rel):
+        """argparse 装配与分派下沉 _release/_cli（入口只 re-export，防 release.py 再逼近红线）。"""
+        assert rel.build_parser.__module__ == "_release._cli"
+        assert rel.run_cli.__module__ == "_release._cli"
+
 
 # ─────────────────────────── archive 子命令 ───────────────────────────
 

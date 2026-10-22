@@ -20,6 +20,8 @@ from __future__ import annotations
 import logging
 import os
 
+from src.python.config import resolve_output_dir
+
 logger = logging.getLogger("invest")
 
 # ── 退出码（对齐 cli.py）──────────────────────────────
@@ -161,9 +163,8 @@ def _run_generation_impl(state, params: dict, result_box: dict | None = None) ->
             dividends=parsed.dividends,
             snapshot_namespace=snapshot_namespace,
         )
-        from src.python.config import get_default
 
-        state.output_dir = config.get("output_dir") or get_default("output_dir")
+        state.output_dir = resolve_output_dir(config)
         state.errors = list(result.errors)
         if result_box is not None:
             result_box["result"] = result
@@ -200,7 +201,7 @@ def _notify_web_completion(state, params: dict, exit_code: int, result: object) 
         notify_cfg = config.get("notify") or {}
         if not should_notify(notify_cfg, ok=exit_code == 0):
             return
-        output_dir = state.output_dir or config.get("output_dir") or "reports"
+        output_dir = state.output_dir or resolve_output_dir(config)
         event = build_completion_event(
             report_type=str(params.get("report_type", "basic") or "basic"),
             exit_code=exit_code,

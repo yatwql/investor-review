@@ -11,7 +11,7 @@ CLI 命令行模式无需 TUI 菜单界面，通过命令行参数驱动，适�
 
 - [1. 命令结构](#1-命令结构) · [2. 全局参数](#2-全局参数)
 - [3. `report` 子命令（生成报告）](#3-report-子命令生成报告) · [4. `cache` 子命令（缓存管理）](#4-cache-子命令缓存管理)
-- [5. `whatif` 子命令（调仓 What-if 模拟）](#5-whatif-子命令调仓-what-if-模拟) · [6. `check-sources` 子命令（数据源健康检查）](#6-check-sources-子命令数据源健康检查)
+- [5. `whatif` 子命令（调仓 What-if 模拟）](#5-whatif-子命令调仓-what-if-模拟) · [6. `check-sources` 子命令（数据源健康检查）](#6-check-sources-子命令数据源健康检查) · [6.1 `health-history` 子命令（数据源健康历史）](#61-health-history-子命令数据源健康历史)
 - [7. `view-logs` 子命令（结构化日志查看）](#7-view-logs-子命令结构化日志查看) · [8. `doctor` 子命令（系统自检）](#8-doctor-子命令系统自检)
 - [9. 使用示例](#9-使用示例) · [10. 常用命令速查](#10-常用命令速查)（[10.1 TUI 菜单 → CLI 命令对照](#101-tui-菜单--cli-命令对照) · [10.2 一键快捷入口](#102-一键快捷入口)）
 - [11. 退出码含义](#11-退出码含义) · [12. 最佳实践](#12-最佳实践)（[12.1 缓存预热](#121-缓存预热) · [12.2 报告输出路径](#122-报告输出路径) · [12.3 网络退避策略](#123-网络退避策略) · [12.4 性能历史自动收集](#124-性能历史自动收集) · [12.5 日志轮转](#125-日志轮转)）
@@ -19,7 +19,7 @@ CLI 命令行模式无需 TUI 菜单界面，通过命令行参数驱动，适�
 
 ## 1. 命令结构
 
-CLI 命令分两层：**全局参数**（位于子命令之前）+ **子命令**（`report` / `cache` / `whatif` / `check-sources` / `view-logs` / `doctor` / `cassettes`）。
+CLI 命令分两层：**全局参数**（位于子命令之前）+ **子命令**（`report` / `cache` / `whatif` / `check-sources` / `health-history` / `view-logs` / `doctor` / `cassettes`）。
 
 > 其中 `cassettes` 是**开发维护命令**（列出/校验已录制的数据源真实响应，供离线回归使用），日常使用报告功能不需要它——详见 [开发者指南](../managements/developer-guide.md) → CLI 子命令。
 
@@ -91,6 +91,8 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 | `--prefer-source NAME` | 本次运行优先使用某数据源（可重复；仅排到该数据源链首，**不绕过熔断与凭据就绪预检**，不写配置） |
 | `--exclude-source NAME` | 本次运行排除某数据源（可重复；用于排障复现，如「排除新浪看是否仍取到数据」）。未知名即报错并列出可用源名 |
 
+> **生成结束会打印产物路径**：`产物目录: …` + 每个产物一行绝对路径（只列真实存在的文件），便于复制到文件管理器或交给后续脚本。**严重失败时不打印**——目录里留下的可能是上一次的产物，列出来会被误认为本次结果。
+
 ---
 
 ## 4. `cache` 子命令（缓存管理）
@@ -125,6 +127,26 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 .venv/bin/python -m src.python.cli check-sources
 ```
 
+### 6.1 `health-history` 子命令（数据源健康历史）
+
+查看**最近 N 次采集**的数据源健康记录（与 TUI `[H]`、Web `/api/health/history` 同一份聚合，字段一致）；无需配置，只读 `data/state/` 下的健康快照。
+
+| 参数 | 说明 |
+|:-----|:-----|
+| `--limit N` | 显示最近多少次（默认 10，最小 1） |
+| `--json` | 以 JSON 输出，供脚本消费（字段：`timestamp` / `report_type` / `holdings_count` / `total` / `ok_count` / `fail_count` / `failed_sources`） |
+
+```bash
+# 最近 10 次
+.venv/bin/python -m src.python.cli health-history
+
+# 最近 30 次，失败源一起看
+.venv/bin/python -m src.python.cli health-history --limit 30
+
+# 脚本消费
+.venv/bin/python -m src.python.cli health-history --json | jq '.[-1].failed_sources'
+```
+
 ---
 
 ## 7. `view-logs` 子命令（结构化日志查看）
@@ -155,7 +177,7 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 
 ## 8. `doctor` 子命令（系统自检）
 
-一键盘点运行环境，分组报告 **环境 / 配置 / 目录 / 日志与缓存 / 功能开关 / 数据源适配 / 数据源凭据 / 数据源** 七类检查结果，**失败项附可执行修复建议**。适合新机部署、报告跑不起来、怀疑配置损坏时先跑一遍。
+一键盘点运行环境，分组报告 **环境 / 配置 / 目录 / 日志与缓存 / 功能开关 / 数据源适配 / 数据源凭据 / 数据源** 八组检查结果，**失败项附可执行修复建议**。适合新机部署、报告跑不起来、怀疑配置损坏时先跑一遍。
 
 ```bash
 .venv/bin/python -m src.python.cli doctor

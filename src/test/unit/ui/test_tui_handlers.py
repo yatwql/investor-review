@@ -416,9 +416,7 @@ class TestExecuteItem(unittest.TestCase):
         """KeyboardInterrupt 被捕获并新增操作提示（不设按键闸门，即时回主菜单）。"""
         callback = MagicMock(side_effect=KeyboardInterrupt)
         mock_menu.__getitem__.return_value = ("T", "Test", callback, False)
-        with patch("src.python.tui.tui_handlers.press_any_key") as mock_pak:
-            execute_item(0)
-            mock_pak.assert_not_called()
+        execute_item(0)
         self.assertFalse(_th_module._busy)
 
     @patch("src.python.tui.tui_handlers.MENU_ITEMS")
@@ -617,11 +615,10 @@ if __name__ == "__main__":
 class TestPrepareHoldingsGate(unittest.TestCase):
     """prepare_holdings — 空持仓门（读取域单源 require_holdings）。"""
 
-    @patch("src.python.tui.tui_handlers.press_any_key")
     @patch("src.python.tui.tui_handlers.read_holdings_with_flows")
     @patch("src.python.tui.tui_handlers.select_holdings_file", return_value="/tmp/holdings.xlsx")
     @patch("src.python.tui.tui_handlers.refresh_config")
-    def test_empty_holdings_returns_none(self, mock_refresh, mock_select, mock_read, mock_press):
+    def test_empty_holdings_returns_none(self, mock_refresh, mock_select, mock_read):
         from types import SimpleNamespace
 
         from src.python.tui.tui_handlers import prepare_holdings
@@ -633,7 +630,6 @@ class TestPrepareHoldingsGate(unittest.TestCase):
         self.assertIsNone(result)
         out = buf.getvalue()
         self.assertIn("持仓文件为空", out)
-        mock_press.assert_not_called()  # 短错误反馈不设闸门
 
 
 class TestPromptEscCancel(unittest.TestCase):
@@ -654,13 +650,9 @@ class TestPromptEscCancel(unittest.TestCase):
             raise PromptCancelledError
 
         mock_menu.__getitem__.return_value = ("T", "Test", _cancel, False)
-        with (
-            patch("sys.stdout", new_callable=io.StringIO) as out,
-            patch("src.python.tui.tui_handlers.press_any_key") as mock_wait,
-        ):
+        with patch("sys.stdout", new_callable=io.StringIO) as out:
             execute_item(0)
         assert "已取消，返回主菜单" in out.getvalue()
-        mock_wait.assert_not_called()
 
     def test_select_holdings_file_esc_returns_none(self):
         """持仓文件编号选择处按 Esc → 返回 None（取消选择）。"""

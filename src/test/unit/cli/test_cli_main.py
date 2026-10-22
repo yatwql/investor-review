@@ -284,3 +284,20 @@ class TestModuleEntryPoint:
         )
 
         assert proc.returncode == 7, f"退出码未传递（stdout={proc.stdout!r} stderr={proc.stderr!r})"
+
+
+@pytest.mark.unit
+class TestRunCliErrorHint:
+    """未处理异常的用户提示与 TUI 同源（core.error_hints），堆栈只进日志。"""
+
+    def test_hint_printed_to_stderr(self, capsys):
+        with (
+            patch("src.python.cli.cli.main", side_effect=ConnectionError("Connection reset by peer")),
+            patch("src.python.core.logger.log_app_boundary"),
+        ):
+            with pytest.raises(SystemExit):
+                run_cli()
+
+        err = capsys.readouterr().err
+        assert "网络连接异常" in err
+        assert "Traceback" not in err

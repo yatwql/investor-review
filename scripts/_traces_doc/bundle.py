@@ -28,6 +28,19 @@ ALL_CATEGORIES: tuple[str, ...] = tuple(dict.fromkeys(c for _, c, _ in DOC_PATTE
 #: 常规文档非树行：NARRATIVE/STATUS 由域门禁逐行剔除（树行才用全集）
 REGULAR_CATEGORIES: tuple[str, ...] = tuple(c for c in ALL_CATEGORIES if c not in ("NARRATIVE", "STATUS"))
 
+#: 高置信度分类（命中即退出码 1）；LOW 仅建议复核（退出码 2，见 findings 汇总）
+HIGH_CATEGORIES: tuple[str, ...] = (
+    "HIGH",
+    "ARCHIVE",
+    "CODE",
+    "CIPHER",
+    "CHAPTER",
+    "ROUND",
+    "STATUS",
+    "NARRATIVE",
+    "DUPLICATE",
+)
+
 
 @lru_cache(maxsize=None)
 def pattern_bundle(

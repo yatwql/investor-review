@@ -40,9 +40,16 @@ def perf_test_report():
 
 @pytest.fixture()
 def report_path(tmp_path, monkeypatch, perf_test_report):
-    """把报告输出重定向到临时目录，测试不得写入 docs/tmp。"""
+    """把报告输出重定向到临时目录，测试不得写入 docs/tmp。
+
+    渲染实现已下沉 `_perf_report/report.py`（写入点在彼），故 patch 指向该模块；
+    入口模块只 re-export 函数，patch 入口常量对写入无效。
+    """
+    import importlib
+
+    report_mod = importlib.import_module("_perf_report.report")
     path = tmp_path / "perf.md"
-    monkeypatch.setattr(perf_test_report, "_PERF_REPORT_PATH", str(path))
+    monkeypatch.setattr(report_mod, "_PERF_REPORT_PATH", str(path))
     return path
 
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from src.python.config.anonymizer import mask_holding_code
 from src.python.core.code_utils import is_qdii_extended
+from src.python.llm.rate_caliber import LABEL_INTERVAL, LABEL_POSITION_SHORT
 
 
 # ── 上下文构建块 ──────────────────────────────────────────
@@ -252,7 +253,7 @@ def _build_competitive_context_block(
                 benchmark_returns[-1] * 100 if isinstance(benchmark_returns, list) and benchmark_returns else None
             )
             if p_return is not None and b_return is not None:
-                lines.append(f"【区间对比】组合累计 {p_return:+.2f}% vs 沪深300 {b_return:+.2f}%")
+                lines.append(f"【区间对比】组合累计 {p_return:+.2f}% vs 沪深300 {b_return:+.2f}% —— {LABEL_INTERVAL}")
 
     # ── 指标对比（组合级） ──
     if metrics and isinstance(metrics, dict):
@@ -328,11 +329,14 @@ def _fmt_holding_line(h: dict, show_cost: bool = False, compact: bool = False) -
     name = h.get("name", "")
     qdii_suffix = "(QDII滞后1日)" if is_qdii_extended(name) else ""
 
+    # 括号内百分比带口径标签：避免模型把「持仓收益率」当成区间/累计收益率引用
     if show_cost:
         cost = h.get("cost", 0)
-        base = f"{code} 成本{_fmt_wan(cost)} 市值{_fmt_wan(mv)} 盈亏{_fmt_wan(profit)}({rate_str})"
+        base = (
+            f"{code} 成本{_fmt_wan(cost)} 市值{_fmt_wan(mv)} 盈亏{_fmt_wan(profit)}（{LABEL_POSITION_SHORT}{rate_str}）"
+        )
     else:
-        base = f"{code} 市值{_fmt_wan(mv)} 盈亏{_fmt_wan(profit)}({rate_str})"
+        base = f"{code} 市值{_fmt_wan(mv)} 盈亏{_fmt_wan(profit)}（{LABEL_POSITION_SHORT}{rate_str}）"
 
     if source_api != "tencent" and nav_date:
         return f"{base} 净值:{nav_date}{qdii_suffix}"

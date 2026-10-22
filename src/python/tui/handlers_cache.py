@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 
+from src.python.core.num_utils import format_size
 from src.python.core.logger import setup_logger
 from src.python.core.reader import read_holdings, require_holdings
 from src.python.tui.tui_handlers import print_error_with_hint, select_holdings_file
@@ -232,15 +233,13 @@ def _render_cache_stats() -> None:
     # ── 1. data/cache 缓存文件 ──
     _rule("data/cache")
     _emit(f"  目录: {cache_dir}")
-    _emit(f"  文件: {stats.total_files} 个 | 大小: {stats.total_size_bytes / 1024:.0f} KB")
+    _emit(f"  文件: {stats.total_files} 个 | 大小: {format_size(stats.total_size_bytes)}")
     if stats.hit_total > 0:
         _emit(f"  命中率: {stats.hit_rate:.1f}% ({stats.hit_total} 次请求)")
     if stats.top_by_size:
         print("  最大文件:")
         for key, size in stats.top_by_size[:3]:
-            size_kb = size / 1024
-            disp = f"{size_kb / 1024:.1f} MB" if size_kb >= 1024 else f"{size_kb:.0f} KB"
-            _emit(f"    {key}.json  ({disp})")
+            _emit(f"    {key}.json  ({format_size(size)})")
     print("  前缀分布:")
     for prefix, count in sorted(stats.by_prefix.items()):
         _emit(f"    {prefix}_*: {count} 个文件")
@@ -253,7 +252,7 @@ def _render_cache_stats() -> None:
         _rule("data/history/snapshots")
         _hist_dir = os.path.join(PROJECT_ROOT, "data", "history", "snapshots")
         _emit(f"  目录: {os.path.abspath(_hist_dir)}")
-        _emit(f"  文件: {stats.snapshot_files} 个 | 大小: {stats.snapshot_size_bytes / 1024:.0f} KB")
+        _emit(f"  文件: {stats.snapshot_files} 个 | 大小: {format_size(stats.snapshot_size_bytes)}")
         _latest = max(
             (os.path.getmtime(os.path.join(_hist_dir, _f)) for _f in os.listdir(_hist_dir) if _f.endswith(".json")),
             default=0,
@@ -268,7 +267,7 @@ def _render_cache_stats() -> None:
         _rule("data/state")
         _state_dir = os.path.join(PROJECT_ROOT, "data", "state")
         _emit(f"  目录: {os.path.abspath(_state_dir)}")
-        _emit(f"  文件: {stats.state_files} 个 | 大小: {stats.state_size_bytes / 1024:.1f} KB")
+        _emit(f"  文件: {stats.state_files} 个 | 大小: {format_size(stats.state_size_bytes)}")
         _emit("  （运行时状态，跨会话持久化，不随缓存清理）")
 
 

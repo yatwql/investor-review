@@ -12,7 +12,8 @@ import os
 import shutil
 from datetime import datetime
 
-from src.python.config import get_config, get_default
+from src.python.core.num_utils import format_size
+from src.python.config import get_config, get_default, resolve_output_dir
 from src.python.core.logger import setup_logger
 from src.python.core.reader import get_xlsx_info, list_xlsx_files, read_holdings
 from src.python.report.progress import TuiProgressReporter
@@ -45,8 +46,7 @@ def _select_candidate_file(base_file: str) -> str | None:
     for i, f in enumerate(files, 1):
         basename = os.path.basename(f)
         name_disp = basename if len(basename) <= 38 else basename[:35] + "..."
-        size = os.path.getsize(f)
-        size_str = f"{size / 1024:.0f} KB" if size < 1024 * 1024 else f"{size / 1024 / 1024:.1f} MB"
+        size_str = format_size(os.path.getsize(f))
         mtime = datetime.fromtimestamp(os.path.getmtime(f)).strftime("%Y-%m-%d %H:%M")
         info = get_xlsx_info(f)
         acct_str = f"{info.get('accounts', '?')}" if "error" not in info else "err"
@@ -176,7 +176,7 @@ def _cmd_whatif() -> None:
 
     reporter = TuiProgressReporter()
     config = get_config_cache() or get_config()
-    output_dir = config.get("output_dir") or get_default("output_dir")
+    output_dir = resolve_output_dir(config)
 
     print("  [..] 调仓 What-if 模拟：先选择基准持仓（调仓前）")
     base_file = select_holdings_file()

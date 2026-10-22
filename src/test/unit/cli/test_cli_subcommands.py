@@ -396,3 +396,71 @@ class TestMainCassettes:
         args = mock_handle.call_args[0][0]
         assert args.command == "cassettes"
         assert args.verify is True
+
+
+class TestHealthHistorySubcommand:
+    """CLI 数据源健康历史：与 TUI `[H]` / Web `/api/health/history` 同源聚合。"""
+
+    _ROWS = [
+        {
+            "timestamp": "2026-10-22T13:23:56",
+            "report_type": "full",
+            "holdings_count": 12,
+            "total": 4,
+            "ok_count": 3,
+            "fail_count": 1,
+            "failed_sources": ["东方财富 push2"],
+        }
+    ]
+
+    def _args(self, **kw):
+        from types import SimpleNamespace
+
+        base = {"limit": 10, "json": False}
+        base.update(kw)
+        return SimpleNamespace(**base)
+
+    def test_prints_summary_lines(self, capsys):
+        from src.python.cli._handlers import _handle_health_history
+
+        with patch("src.python.core.perf.summarize_health_history", return_value=self._ROWS):
+            rc = _handle_health_history(self._args())
+
+        out = capsys.readouterr().out
+        assert rc == 0
+        assert "3/4 正常" in out and "full" in out
+        assert "失败源: 东方财富 push2" in out
+        assert self._ROWS[0]["timestamp"].replace("T", " ") in out
+
+    def test_json_output_matches_web_fields(self, capsys):
+        import json as _json
+
+        from src.python.cli._handlers import _handle_health_history
+
+        with patch("src.python.core.perf.summarize_health_history", return_value=self._ROWS):
+            assert _handle_health_history(self._args(json=True)) == 0
+
+        payload = _json.loads(capsys.readouterr().out)
+        assert payload == self._ROWS
+        assert {"timestamp", "ok_count", "fail_count", "failed_sources"} <= set(payload[0])
+
+    def test_empty_history_is_not_an_error(self, capsys):
+        from src.python.cli._handlers import _handle_health_history
+
+        with patch("src.python.core.perf.summarize_health_history", return_value=[]):
+            assert _handle_health_history(self._args()) == 0
+        assert "暂无数据源健康历史记录" in capsys.readouterr().out
+
+    def test_read_failure_returns_severe(self, capsys):
+        from src.python.cli._handlers import _handle_health_history
+
+        with patch("src.python.core.perf.summarize_health_history", side_effect=OSError("boom")):
+            assert _handle_health_history(self._args()) == 2
+        assert "读取数据源健康历史失败" in capsys.readouterr().out
+
+    def test_limit_is_clamped_to_at_least_one(self):
+        from src.python.cli._handlers import _handle_health_history
+
+        with patch("src.python.core.perf.summarize_health_history", return_value=[]) as mock_history:
+            _handle_health_history(self._args(limit=0))
+        assert mock_history.call_args.kwargs["limit"] == 1

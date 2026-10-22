@@ -34,6 +34,7 @@ import time
 import uuid
 
 from src.python.config import get_llm_config
+from src.python.core.text_safety import sanitize_lone_surrogates
 from src.python.llm.api import call_llm
 from src.python.llm.fact_checker import run_fact_check
 from src.python.llm.markdown import markdown_to_html
@@ -201,7 +202,9 @@ def ask_report_qa(
         失败 ``{"ok": False, "error_code", "error", ...}``（错误码见模块 docstring
         与 Web 路由状态码映射表）。
     """
-    question = (question or "").strip()
+    # stdin 的 surrogateescape 会把非法 UTF-8 字节解成孤立代理项，先净化为 U+FFFD：
+    # 否则请求体编码失败会被误报为「服务暂不可用」。
+    question = sanitize_lone_surrogates(question or "").strip()
     if not question:
         return _fail(QA_BAD_QUESTION, "问题不能为空")
     if len(question) > _QA_QUESTION_MAX_CHARS:

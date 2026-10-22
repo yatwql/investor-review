@@ -24,6 +24,12 @@ def doc_traces():
     return load_script("check-doc-traces.py")
 
 
+@pytest.fixture(scope="module")
+def deleted_refs():
+    """已删函数残留检查的实现模块（缓存与 git 调用点在此，patch 必须指向它）。"""
+    return load_script("_traces_doc/deleted_refs.py", module_name="doc_traces_deleted_refs")
+
+
 pytestmark = [
     pytest.mark.unit,
     pytest.mark.unit_scripts,
@@ -91,22 +97,22 @@ class TestScanDeletedSymbolRefs:
 class TestHistoricalDefsEnvironment:
     """历史 def 全集的环境防护（浅克隆不静默假绿）。"""
 
-    def test_shallow_clone_skips_with_warning(self, doc_traces):
+    def test_shallow_clone_skips_with_warning(self, deleted_refs):
         """浅克隆 → 空集 + stderr 告警（防 CI 浅克隆下历史集≈当前集全漏报）。"""
-        doc_traces._HIST_DEFS = None
+        deleted_refs._HIST_DEFS = None
         try:
-            with patch.object(doc_traces, "subprocess") as msub:
+            with patch.object(deleted_refs, "subprocess") as msub:
                 msub.run.return_value = SimpleNamespace(returncode=0, stdout="true\n", stderr="")
                 err = io.StringIO()
                 with contextlib.redirect_stderr(err):
-                    assert doc_traces._historical_defs() == set()
+                    assert deleted_refs._historical_defs() == set()
             assert "浅克隆" in err.getvalue()
         finally:
-            doc_traces._HIST_DEFS = None  # 复位进程级缓存防污染后续用例
+            deleted_refs._HIST_DEFS = None  # 复位进程级缓存防污染后续用例
 
-    def test_full_clone_parses_added_defs(self, doc_traces):
+    def test_full_clone_parses_added_defs(self, deleted_refs):
         """全历史 → 解析 +def 新增行（含 async）。"""
-        doc_traces._HIST_DEFS = None
+        deleted_refs._HIST_DEFS = None
         shallow = SimpleNamespace(returncode=0, stdout="false\n", stderr="")
         log = SimpleNamespace(
             returncode=0,
@@ -114,10 +120,10 @@ class TestHistoricalDefsEnvironment:
             stderr="",
         )
         try:
-            with patch.object(doc_traces, "subprocess") as msub:
+            with patch.object(deleted_refs, "subprocess") as msub:
                 msub.run.side_effect = [shallow, log]
-                hist = doc_traces._historical_defs()
+                hist = deleted_refs._historical_defs()
             assert "_sample_added_fn" in hist
             assert "_sample_async_fn" in hist
         finally:
-            doc_traces._HIST_DEFS = None
+            deleted_refs._HIST_DEFS = None

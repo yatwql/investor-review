@@ -14,6 +14,7 @@ import pytest
 
 from src.python.core.num_utils import (
     finite_or,
+    format_size,
     is_finite_number,
     safe_num,
     strict_num,
@@ -209,3 +210,28 @@ class TestMsToDateStr:
         from src.python.core.num_utils import ms_to_date_str
 
         assert ms_to_date_str("1767225600000") == "2026-01-01"
+
+
+@pytest.mark.unit
+@pytest.mark.unit_core
+class TestFormatSize:
+    """`format_size` —— 三渠道唯一的尺寸格式化（此前 TUI 三处 + CLI 一处各写一份）。"""
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            (0, "0 B"),
+            (512, "512 B"),
+            (1023, "1023 B"),
+            (1024, "1 KB"),
+            (12288, "12 KB"),
+            (1024 * 1024, "1.0 MB"),
+            (1572864, "1.5 MB"),
+        ],
+    )
+    def test_units(self, value, expected):
+        assert format_size(value) == expected
+
+    @pytest.mark.parametrize("bad", [None, "abc", float("nan"), float("inf"), -1])
+    def test_invalid_values_degrade_to_zero(self, bad):
+        assert format_size(bad) == "0 B"

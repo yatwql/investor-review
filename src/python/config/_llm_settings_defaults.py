@@ -167,6 +167,15 @@ _DEFAULT_LLM_SETTINGS: dict[str, Any] = {
 _MODULE_LABELS = get_llm_module_names()
 
 
+def get_llm_setting_default(key: str):
+    """读取 llm_settings 的出厂默认值（唯一来源 `_DEFAULT_LLM_SETTINGS`）。
+
+    供编辑白名单/配置面板取默认值——调用方不得另写一份字面量：两处默认值在改出厂值
+    时必然漂移，且没有任何机检能发现（只能靠人记得同步）。
+    """
+    return _DEFAULT_LLM_SETTINGS.get(key)
+
+
 def _get_default_llm_settings_template() -> str:
     """返回带分组注释的默认 llm_settings.json 模板字符串。
 

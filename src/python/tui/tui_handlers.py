@@ -9,17 +9,17 @@
 
 from __future__ import annotations
 
-import json
 import os
 import threading
 from datetime import datetime
 
+from src.python.core.num_utils import format_size
 from src.python.llm.pricing import CURRENCY_SYMBOLS
 from src.python.core.logger import setup_logger
 from src.python.core.reader import get_xlsx_info, list_xlsx_files, read_holdings_with_flows, require_holdings
 from src.python.report.progress import TuiProgressReporter
 from src.python.tui.tui_keys import PromptCancelledError, input_choice
-from src.python.tui.tui_menu import MENU_ITEMS, get_config_cache, press_any_key, refresh_config
+from src.python.tui.tui_menu import MENU_ITEMS, get_config_cache, refresh_config
 
 logger = setup_logger()
 
@@ -60,44 +60,19 @@ def print_timing_summary() -> None:
 
 
 def print_error_with_hint(e: Exception, prefix: str = "操作失败") -> None:
-    """输出带友好提示的错误信息。"""
+    """输出带友好提示的错误信息（映射单源于 `core.error_hints`，Web/CLI 取同一句）。"""
+    from src.python.core.error_hints import hint_for
+
+    hint = hint_for(e)
     msg = str(e)
-    is_network = any(
-        kw in msg.lower()
-        for kw in (
-            "connect",
-            "timeout",
-            "dns",
-            "resolve",
-            "network",
-            "connection",
-            "read timed out",
-            "eof",
-            "reset",
-        )
-    )
-    if is_network:
-        print(f"  [ERR] {prefix}: 网络连接异常，请检查网络后重试")
+    if hint.log_detail:
+        logger.warning("%s: %s", prefix, msg, exc_info=True)
+    print(f"  [ERR] {prefix}: {hint.message}")
+    if hint.advice:
+        print(f"        {hint.advice}")
+    elif "网络" in hint.message and msg:
+        # 网络类保留详情行，便于用户核对具体超时/断连；其余不暴露原始异常串
         print(f"        详情: {msg}")
-    elif isinstance(e, PermissionError):
-        print(f"  [ERR] {prefix}: 文件读取/写入权限不足")
-        print("        请检查文件或目录的权限设置")
-    elif isinstance(e, FileNotFoundError):
-        print(f"  [ERR] {prefix}: 文件未找到，请检查路径是否正确")
-        print(f"        详情: {msg}")
-    elif isinstance(e, json.JSONDecodeError):
-        print(f"  [ERR] {prefix}: 配置文件格式错误（JSON 语法错误）")
-        print("        请检查配置文件是否为有效 JSON 格式")
-    elif isinstance(e, (KeyError, ValueError, AttributeError, TypeError)):
-        logger.warning("%s: %s", prefix, msg, exc_info=True)
-        print(f"  [ERR] {prefix}: 数据处理异常，详情请查看日志文件 logs/app.log")
-    elif isinstance(e, ImportError):
-        logger.warning("%s: %s", prefix, msg, exc_info=True)
-        print(f"  [ERR] {prefix}: 模块加载失败，请检查依赖是否完整安装")
-        print("        pip install -r requirements.txt")
-    else:
-        logger.warning("%s: %s", prefix, msg, exc_info=True)
-        print(f"  [ERR] {prefix}: 操作异常，详情请查看日志文件 logs/app.log")
 
 
 # ── 持仓准备 / 收尾 ────────────────────────────────────────
@@ -135,10 +110,16 @@ def prepare_holdings() -> "tuple[list, list, list] | None":
 
 
 def finish_report(reporter: TuiProgressReporter) -> None:
-    """报告生成收尾：错误摘要 → 耗时排行 → 按任意键。"""
+    """报告生成收尾：错误摘要 → 耗时排行 → 产物清单 + 是否打开（默认 N）。
+
+    单键作答即返回菜单：长输出仍停在一屏（先读完再重绘），用户看完顺手按 y 打开、
+    直接回车或按其它键则跳过——只按一次，不多一步。
+    """
     reporter.print_error_summary()
     reporter.print_timing_summary()
-    press_any_key()
+    from src.python.tui.report_artifacts import collect_artifacts, prompt_open_artifacts
+
+    prompt_open_artifacts(collect_artifacts(get_config_cache() or {}))
 
 
 # ── 文件选择 ──────────────────────────────────────────────
@@ -168,8 +149,7 @@ def select_holdings_file() -> str | None:
     for i, f in enumerate(files, 1):
         basename = os.path.basename(f)
         name_disp = basename if len(basename) <= 38 else basename[:35] + "..."
-        size = os.path.getsize(f)
-        size_str = f"{size / 1024:.0f} KB" if size < 1024 * 1024 else f"{size / 1024 / 1024:.1f} MB"
+        size_str = format_size(os.path.getsize(f))
         mtime = datetime.fromtimestamp(os.path.getmtime(f)).strftime("%Y-%m-%d %H:%M")
         info = get_xlsx_info(f)
         acct_str = f"{info.get('accounts', '?')}" if "error" not in info else "err"

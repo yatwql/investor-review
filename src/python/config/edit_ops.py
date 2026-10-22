@@ -45,6 +45,69 @@ class ConfigEditError(ValueError):
 # ═══════════════════════════════════════════════════════════════
 # 设计约束：本数据字典为模块级小写名（check-semantic-index 反向校验
 # 用大小写敏感子串匹配，UPPER_SNAKE 会匹配不过）。
+# ── LLM 调优参数（llm_settings.json 顶层标量）─────────────────────
+# 这些键是「用户可以合理调整」的运行参数：默认值有依据（见 _llm_settings_defaults），
+# 但端点抖动/费用考量时需要能改。此前只能手改 JSON（无校验、无面板入口）。
+# 范围（min/max）即校验边界——超出直接拒绝并说明，不静默裁剪。
+LLM_TUNING_SPECS: dict[str, dict] = {
+    "llm_max_thinking_concurrency": {
+        "kind": "int",
+        "min": 1,
+        "max": 4,
+        "label": "thinking 模块并发上限",
+        "hint": "默认 2（两个 thinking 模块并行）；端点偶发空内容重试时改回 1（串行）",
+    },
+    "llm_max_concurrency": {
+        "kind": "int",
+        "min": 1,
+        "max": 8,
+        "label": "LLM 模块并发线程数",
+        "hint": "默认 3；调高可提速但更易触发端点限速（429）",
+    },
+    "max_retries": {
+        "kind": "int",
+        "min": 0,
+        "max": 5,
+        "label": "单请求重试次数",
+        "hint": "默认 2（503/超时/网络异常）；429/403 归配额不重试",
+    },
+    "llm_full_fail_retry_delay": {
+        "kind": "int",
+        "min": 0,
+        "max": 600,
+        "label": "整链失败后的重试等待（秒）",
+        "hint": "默认 30；0 表示不等待",
+    },
+    "llm_total_time_budget_sec": {
+        "kind": "int",
+        "min": 0,
+        "max": 7200,
+        "label": "LLM 总时间预算（秒）",
+        "hint": "默认 0（不启用）；超预算不再启动新模块，防单次报告拖成小时级",
+    },
+    "daily_cost_limit": {
+        "kind": "float",
+        "min": 0,
+        "max": 10000,
+        "label": "LLM 日费用上限",
+        "hint": "默认 0（不启用）；超限时交互渠道询问「用已有结果继续 / 中止」",
+    },
+}
+
+
+#: 调优项 → 编辑白名单条目（同一份 spec 派生，避免范围/说明两处维护）
+def _tuning_default(key: str):
+    """调优项默认值（唯一来源：`_llm_settings_defaults._DEFAULT_LLM_SETTINGS`）。"""
+    from src.python.config._llm_settings_defaults import get_llm_setting_default
+
+    return get_llm_setting_default(key)
+
+
+_LLM_TUNING_WHITELIST = {
+    key: {**spec, "default": _tuning_default(key), "target": "llm_settings", "writer": "llm_scalar"}
+    for key, spec in LLM_TUNING_SPECS.items()
+}
+
 config_edit_whitelist = {
     # ── 1 自由文本路径（config.json 顶层标量）──
     "holdings_dir": {"kind": "str", "target": "config", "writer": "scalar"},
@@ -85,6 +148,8 @@ config_edit_whitelist = {
     # ── 7 功能开关（features.json；清单取自 features.feature_switch_registry 全注册表，
     #      实验项与常规开关同表同写入路径，分组只影响前端分块渲染）──
     **{flag: {"kind": "bool", "target": "features", "writer": "features"} for flag in feature_switch_registry},
+    # ── 8 LLM 调优参数（llm_settings.json 顶层标量；范围/说明见 LLM_TUNING_SPECS）──
+    **_LLM_TUNING_WHITELIST,
 }
 
 
@@ -145,6 +210,8 @@ def _dispatch_write(entry: dict, key: str, value) -> None:
         set_anonymization_mode(value)
     elif writer == "llm":
         _write_llm_enabled(key, value)
+    elif writer == "llm_scalar":
+        _write_llm_scalar(key, value)
     elif writer == "features":
         from src.python.config.features import save_feature_overrides
 
@@ -173,6 +240,34 @@ def _write_llm_enabled(key: str, value: bool) -> None:
     write_llm_settings(settings, settings_path)
 
 
+def _write_llm_scalar(key: str, value) -> None:
+    """写 llm_settings.json 的顶层标量（读原始落盘 → 合并 → 保留注释写回）。"""
+    from src.python.config._llm_settings import get_llm_settings_path, read_llm_settings_file, write_llm_settings
+
+    snapshot = read_llm_settings_file()
+    settings, path = snapshot if snapshot else ({}, get_llm_settings_path())
+    settings[key] = value
+    write_llm_settings(settings, path)
+
+
+def _coerce_number(key: str, value, kind: str, entry: dict) -> int | float:
+    """数值型编辑：接受数字或数字字符串，校验类型与范围（超范围明确报错，不静默裁剪）。"""
+    if isinstance(value, bool):  # bool 是 int 子类，必须先拒
+        raise ConfigEditError(f"配置项 {key} 应为{'整数' if kind == 'int' else '数值'}")
+    try:
+        number = int(value) if kind == "int" else float(value)
+    except (TypeError, ValueError):
+        raise ConfigEditError(f"配置项 {key} 应为{'整数' if kind == 'int' else '数值'}: {value!r}") from None
+    if kind == "int" and isinstance(value, float) and value != int(value):
+        raise ConfigEditError(f"配置项 {key} 应为整数: {value!r}")
+    low, high = entry.get("min"), entry.get("max")
+    if low is not None and number < low:
+        raise ConfigEditError(f"配置项 {key} 不得小于 {low}（当前 {number}）")
+    if high is not None and number > high:
+        raise ConfigEditError(f"配置项 {key} 不得大于 {high}（当前 {number}）")
+    return number
+
+
 def _apply_plain_value(key: str, value, entry: dict):
     """标量/布尔/枚举编辑：先校验，再按 writer 分派写入。"""
     kind = entry["kind"]
@@ -189,6 +284,8 @@ def _apply_plain_value(key: str, value, entry: dict):
     elif kind == "enum":
         if value not in entry["options"]:
             raise ConfigEditError(f"配置项 {key} 取值不在允许范围内: {value}")
+    elif kind in ("int", "float"):
+        value = _coerce_number(key, value, kind, entry)
     else:
         raise ConfigEditError(f"配置项 {key} 不支持的值类型: {kind}")
 

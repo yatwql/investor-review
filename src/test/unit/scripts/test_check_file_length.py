@@ -178,38 +178,73 @@ class TestCliContract:
 
 
 class TestVerboseInventory:
-    """`-v` 清单：可选优化区间（主程序 >500 / 脚本 >400 / 测试 >800）派生输出。"""
+    """`-v` 清单：可选优化区间（主程序 >700 / 脚本 >600 / 测试 >900、薄壳 >200）派生输出。"""
 
     def test_scripts_source_warn_zone_boundary(self, length_script, tmp_path):
-        _make_file(tmp_path, "scripts/at_warn.py", 400)
-        _make_file(tmp_path, "scripts/over_warn.py", 401)
+        warn = length_script._WARN_BY_KIND["脚本"]
+        _make_file(tmp_path, "scripts/at_warn.py", warn)
+        _make_file(tmp_path, "scripts/over_warn.py", warn + 1)
         records = length_script.collect_line_counts(tmp_path)
         inventory = length_script.over_limit_inventory(records)
         assert any("over_warn.py" in line for line in inventory)
         assert not any("at_warn.py" in line for line in inventory)
 
     def test_main_source_warn_zone_boundary(self, length_script, tmp_path):
-        _make_file(tmp_path, "src/python/at_warn.py", 500)
-        _make_file(tmp_path, "src/python/over_warn.py", 501)
+        warn = length_script._WARN_BY_KIND["主程序"]
+        _make_file(tmp_path, "src/python/at_warn.py", warn)
+        _make_file(tmp_path, "src/python/over_warn.py", warn + 1)
         records = length_script.collect_line_counts(tmp_path)
         inventory = length_script.over_limit_inventory(records)
         assert any("over_warn.py" in line for line in inventory)
         assert not any("at_warn.py" in line for line in inventory)
 
     def test_test_source_warn_zone_boundary(self, length_script, tmp_path):
-        _make_file(tmp_path, "src/test/test_at_warn.py", 800)
-        _make_file(tmp_path, "src/test/test_over_warn.py", 801)
+        warn = length_script._WARN_BY_KIND["测试"]
+        _make_file(tmp_path, "src/test/test_at_warn.py", warn)
+        _make_file(tmp_path, "src/test/test_over_warn.py", warn + 1)
         records = length_script.collect_line_counts(tmp_path)
         inventory = length_script.over_limit_inventory(records)
         assert any("test_over_warn.py" in line for line in inventory)
         assert not any("test_at_warn.py" in line for line in inventory)
 
+    def test_thin_shell_init_warn_zone(self, length_script, tmp_path):
+        """`__init__.py` 走薄壳独立警告线，不占域警告线的名额。"""
+        warn = length_script.THIN_SHELL_WARN_LINES
+        _make_file(tmp_path, "src/python/pkg/at_warn/__init__.py", warn)
+        _make_file(tmp_path, "src/python/pkg2/__init__.py", warn + 1)
+        records = length_script.collect_line_counts(tmp_path)
+        inventory = length_script.over_limit_inventory(records)
+        assert any("pkg2/__init__.py" in line and "[薄壳]" in line for line in inventory)
+        assert not any("pkg/at_warn/__init__.py" in line for line in inventory)
+
     def test_inventory_sorted_descending(self, length_script, tmp_path):
-        _make_file(tmp_path, "src/python/lower.py", 600)
-        _make_file(tmp_path, "src/python/higher.py", 700)
+        warn = length_script._WARN_BY_KIND["主程序"]
+        _make_file(tmp_path, "src/python/lower.py", warn + 50)
+        _make_file(tmp_path, "src/python/higher.py", warn + 200)
         records = length_script.collect_line_counts(tmp_path)
         inventory = length_script.over_limit_inventory(records)
         assert len(inventory) == 2
         first_num = int(inventory[0].split("]")[1].split("行")[0].strip())
         second_num = int(inventory[1].split("]")[1].split("行")[0].strip())
-        assert first_num >= second_num
+        assert first_num > second_num
+
+
+class TestPriorityInventory:
+    """拆分优先级：行数 × 近 90 天改动次数（churn 由调用方注入，纯函数可测）。"""
+
+    def test_higher_churn_size_product_first(self, length_script):
+        records = [
+            ("主程序", "src/python/a.py", 800),
+            ("主程序", "src/python/b.py", 900),
+            ("主程序", "src/python/c.py", 0),
+        ]
+        rows = length_script.priority_inventory(records, {"src/python/a.py": 10, "src/python/b.py": 2})
+        assert "a.py" in rows[0]
+        assert "b.py" in rows[1]
+        assert all("c.py" not in row for row in rows)  # 低于警告线不入优先级清单
+
+    def test_zero_churn_kept_at_tail(self, length_script):
+        records = [("主程序", "src/python/a.py", 800), ("主程序", "src/python/b.py", 900)]
+        rows = length_script.priority_inventory(records, {})
+        assert len(rows) == 2
+        assert all("0 次" in row for row in rows)

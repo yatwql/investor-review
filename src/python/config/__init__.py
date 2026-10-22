@@ -28,6 +28,7 @@ from src.python.config import _llm_settings as _llm_settings
 from src.python.config import _llm_settings_defaults as _llm_settings_defaults
 from src.python.config import _validation as _validation
 from src.python.config._llm_providers import get_llm_providers, write_llm_providers  # noqa: F401
+from src.python.config._llm_settings import read_llm_settings_file  # noqa: F401
 
 # ── JSON 注释剥离 ──
 from src.python.config._comments import _strip_json_comments
@@ -165,6 +166,7 @@ __all__ = [
     "get_llm_settings_path",
     # 渠道共享：默认值 / 持仓路径 / 本地状态 / 注释解析（公开 API）
     "get_default",
+    "resolve_output_dir",
     "resolve_holdings_path",
     "get_local_flag",
     "strip_json_comments",
@@ -178,65 +180,15 @@ __all__ = [
 ]
 
 
-# ── 渠道共享：默认值与持仓路径解析（单一事实来源，渠道层禁止字面量回退） ──
-
-
-def get_default(key: str):
-    """返回配置默认值表中的默认值（``_DEFAULT_CONFIG`` 单一来源）。"""
-    return _DEFAULT_CONFIG.get(key)
-
-
-def resolve_holdings_path(config: dict | None = None) -> str:
-    """解析持仓文件路径：``holdings_dir`` + ``holdings_filename``（未配置项回退默认值表）。
-
-    三渠道（CLI/TUI/Web）持仓定位的唯一入口——渠道层不得自行拼接或字面量回退。
-
-    Args:
-        config: 可选显式配置（渠道上下文传入其缓存配置）；不传时读全局配置。
-    """
-    import os
-
-    if config is None:
-        config = get_config()
-    holdings_dir = config.get("holdings_dir") or _DEFAULT_CONFIG.get("holdings_dir", "")
-    holdings_filename = config.get("holdings_filename") or _DEFAULT_CONFIG.get("holdings_filename", "")
-    return os.path.join(holdings_dir, holdings_filename)
-
-
-def is_formal_holdings_source(config: dict | None = None) -> bool:
-    """持仓源是否为正式持仓目录（``data/holdings/``）下的持仓文件。
-
-    持仓快照是用户的长期历史状态（快照对比/组合演进/持仓变动复盘的数据底座），
-    只应由正式持仓源写入与比对。demo/试算/临时持仓（路径不在正式目录下，含
-    ``data/holdings/uploads/`` 上传暂存区）判定为非正式源——调用方据此跳过快照
-    捕获与历史对比，防止幻影持仓污染真实快照历史（症状：未持有品种被报成清仓）。
-
-    解析异常按非正式源处理（fail-closed：宁可少写、不误写用户历史）。
-
-    Args:
-        config: 配置字典；None 时读全局配置（与 ``resolve_holdings_path`` 同源解析）。
-    """
-    import os
-
-    from src.python.core.constants import PROJECT_ROOT
-
-    try:
-        source = os.path.abspath(resolve_holdings_path(config))
-        formal_dir = os.path.abspath(os.path.join(PROJECT_ROOT, "data", "holdings"))
-        if source != formal_dir and not source.startswith(formal_dir + os.sep):
-            return False
-        # 上传暂存区虽在正式目录下，但内容为外部上传的试算/覆盖文件，非正式存量
-        uploads_dir = os.path.abspath(os.path.join(formal_dir, "uploads"))
-        return source != uploads_dir and not source.startswith(uploads_dir + os.sep)
-    except Exception:
-        return False
-
-
-def get_local_flag(key: str) -> bool:
-    """读取机器本地状态标记（公开 API，替代 ``config._local_state`` 私有模块直引）。"""
-    from src.python.config._local_state import get_flag
-
-    return get_flag(key)
+# ── 渠道共享 API（默认值 / 持仓与输出路径 / 正式源判定 / 本地状态标记）──
+# 实现下沉 `_config_api`（包入口只留 re-export 面）
+from src.python.config._config_api import (  # noqa: F401 — 原面 re-export
+    get_default,
+    get_local_flag,
+    is_formal_holdings_source,
+    resolve_holdings_path,
+    resolve_output_dir,
+)
 
 
 # 评论解析公开别名（原私有名保留供包内既有引用）

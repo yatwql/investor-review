@@ -120,7 +120,6 @@ from __future__ import annotations
 
 import argparse
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -246,8 +245,22 @@ _NAME_CODE = re.compile(
 # ── 编译镜像 / 模式子集（实现见 `_traces_doc/bundle.py`；原面 re-export）──
 from _traces_doc.bundle import (  # noqa: E402
     ALL_CATEGORIES as _ALL_CATEGORIES,
+    HIGH_CATEGORIES,
     REGULAR_CATEGORIES as _REGULAR_CATEGORIES,
     pattern_bundle as _pattern_bundle,
+)
+from _traces_doc import _read_doc_impl  # noqa: E402
+from _traces_doc.findings import (  # noqa: E402, F401 — 结论输出下沉，原面 re-export
+    _replay_conclusion,
+    _render_summary,
+)
+from _traces_doc.deleted_refs import (  # noqa: E402, F401 — 原面 re-export（测试按脚本名访问）
+    _CUR_DEFS,
+    _DELETED_CAND_RE,
+    _HIST_DEFS,
+    _current_defs,
+    _historical_defs,
+    scan_deleted_symbol_refs,
 )
 
 #: 行内代码段（技术令牌如词表条目 `不再`——NARRATIVE 匹配前剔除，非叙述）
@@ -255,15 +268,9 @@ _INLINE_CODE_RE = re.compile(r"`[^`]+`")
 
 
 def _read_doc(fpath: Path) -> str | None:
-    """文档正文（进程内缓存）：历史痕迹/已删函数/结构冗余三次扫描共用一次读取。"""
-    try:
-        return fpath.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        return None
+    """文档正文：历史痕迹与结构冗余两次扫描共用（实现见 `_traces_doc`）。"""
+    return _read_doc_impl(fpath)
 
-
-#: 高置信度分类（命中即退出码 1）；LOW 仅建议复核（退出码 2）
-HIGH_CATEGORIES = ("HIGH", "ARCHIVE", "CODE", "CIPHER", "CHAPTER", "ROUND", "STATUS", "NARRATIVE", "DUPLICATE")
 
 # ── 文档类型 → 检查分类矩阵 ──
 # 管控差异的单一来源：文档类型决定「查哪些分类」，分类本身决定退出码
@@ -473,132 +480,6 @@ def _iter_archive_docs() -> list[Path]:
 
 #: 已删函数候选：反引号内总长 ≥8 的 snake_case（`name` / `name()` / `name(args)`
 #: 三种引用形态；过滤 join/read_text 等单段常用词）
-_DELETED_CAND_RE = re.compile(r"`([a-z_][a-z0-9_]{7,})(?:\([^)`]*\)|`)")
-_HIST_DEFS: set[str] | None = None
-_CUR_DEFS: set[str] | None = None
-
-
-def _historical_defs() -> set[str]:
-    """git 历史中曾定义过的 def 名全集（单 pass `git log -p` 新增行提取，约 1s）。
-
-    仅 src/ 与 scripts/（文档引用的都是生产/脚本函数）。git 不可用或**浅克隆**
-    （fetch-depth=1：HEAD 被视作根提交，输出全部现存代码，历史集≈当前集导致
-    全漏报）时返回空集并 stderr 告警（不静默假绿）。模块级缓存，同次进程只算一次。
-    """
-    global _HIST_DEFS
-    if _HIST_DEFS is None:
-        shallow = subprocess.run(
-            ["git", "rev-parse", "--is-shallow-repository"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            cwd=REPO_ROOT,
-        )
-        if shallow.returncode != 0 or shallow.stdout.strip() == "true":
-            print("[!] 浅克隆/git 不可用环境：已删函数残留检查跳过（需 fetch-depth=0 全历史）", file=sys.stderr)
-            _HIST_DEFS = set()
-        else:
-            result = subprocess.run(
-                ["git", "log", "--format=", "-p", "--unified=0", "--", "src", "scripts"],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                cwd=REPO_ROOT,
-            )
-            _HIST_DEFS = (
-                {
-                    m.group(1)
-                    for line in result.stdout.splitlines()
-                    if (m := re.match(r"^\+ *(?:async )?def ([a-z_]\w*)\(", line))
-                }
-                if result.returncode == 0
-                else set()
-            )
-    return _HIST_DEFS
-
-
-def _current_defs() -> set[str]:
-    """当前代码 def 名全集（src/ 与 scripts/，含缩进方法）。模块级缓存。"""
-    global _CUR_DEFS
-    if _CUR_DEFS is None:
-        defs: set[str] = set()
-        for root in (REPO_ROOT / "src", REPO_ROOT / "scripts"):
-            for p in root.rglob("*.py"):
-                try:
-                    defs.update(
-                        re.findall(
-                            r"^[ \t]*(?:async )?def (\w+)\(", p.read_text(encoding="utf-8", errors="replace"), re.M
-                        )
-                    )
-                except OSError:
-                    continue
-        _CUR_DEFS = defs
-    return _CUR_DEFS
-
-
-def scan_deleted_symbol_refs(
-    doc: Path, *, historical_defs: set[str] | None = None, current_defs: set[str] | None = None
-) -> list[tuple[int, str, str, str]]:
-    """单文档已删除函数残留：反引号引用的函数名当前无 def 但 git 历史有 → CODE。
-
-    覆盖「函数删除后文档未同步」类残留。候选须含下划线且总长 ≥8（文档引用函数
-    必为多段蛇形；`append`/`read_text` 类单段常用词不误伤）。仅常规文档适用
-    （历史记录类文档由调用方限定，天然豁免）。
-    结论缓存仅随文档/脚本变更失效——纯代码提交中删除的函数，其残留可能延至下次
-    文档变更才被检出（自愈窗口，可接受）。
-
-    ``historical_defs`` / ``current_defs``：测试注入（默认走 git 与全仓扫描，进程级缓存）。
-    """
-    hist = historical_defs if historical_defs is not None else _historical_defs()
-    if not hist:
-        return []  # git 不可用/历史为空 → 静默跳过
-    cur = current_defs if current_defs is not None else _current_defs()
-    text = _read_doc(doc)
-    if text is None:
-        return []
-    hits: list[tuple[int, str, str, str]] = []
-    for lineno, line in enumerate(text.splitlines(), 1):
-        for name in set(_DELETED_CAND_RE.findall(line)):
-            if "_" not in name or name in cur or name not in hist:
-                continue
-            hits.append((lineno, "CODE", "已删除函数残留（当前代码无定义，函数删除后文档未同步）", line.strip()[:120]))
-    return hits
-
-
-def _render_summary(total: int, high: int, low: int, summary: dict[str, int]) -> int:
-    """结论汇总输出（全量与缓存回放两路共用，保证输出逐字一致）。"""
-    print()
-    if total == 0:
-        print("[OK] 未发现历史变更痕迹，文档干净")
-        return 0
-    cat_stats = ", ".join(f"{k}={v}" for k, v in sorted(summary.items()))
-    print(f"[!] 发现 {total} 处可疑痕迹（{cat_stats}）")
-    if high > 0:
-        print(f"    {high} 处高置信度（{'/'.join(HIGH_CATEGORIES)}），应从文档中移除")
-        return 1
-    print(f"[!] 仅 {low} 处 LOW 级别痕迹（需人工判断），建议复核")
-    return 2
-
-
-def _replay_conclusion(conclusion: dict | None) -> tuple[list[str], int, int, int, dict] | None:
-    """校验缓存结论结构 → 回放元组；结构不完整 → None（全量重算）。"""
-    if not isinstance(conclusion, dict):
-        return None
-    lines = conclusion.get("findings")
-    try:
-        total = int(conclusion["total"])
-        high = int(conclusion["high"])
-        low = int(conclusion["low"])
-        cat_summary = conclusion["summary"]
-    except (KeyError, TypeError, ValueError):
-        return None
-    if not isinstance(lines, list) or not isinstance(cat_summary, dict):
-        return None
-    return lines, total, high, low, cat_summary
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description="扫描文档中的历史变更痕迹")
     add_common_args(parser)

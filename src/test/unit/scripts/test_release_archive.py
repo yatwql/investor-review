@@ -571,3 +571,59 @@ class TestReleaseAgentIdentity:
         )
         assert rel.format_agent({"model": "m"}) == "m"  # 无 provider/thinking 时的退化形态
         assert rel.format_agent({}) == ""
+
+
+class TestCurrentIterationRecompute:
+    """归档后「当前迭代」概述行自动重算（在办项数 + P1~P4 分档编号）。
+
+    回归背景：归档搬走已完成节后该行必然过期（实测每版都写「在办 15 项…已实施待归档」），
+    且 doc-drift 不校验这句——按**现存任务节**重算，口径自愈。
+    """
+
+    _PLAN = (
+        "# 计划\n\n"
+        "**当前迭代**：在办 9 项——P1 9 项（**plan-1/2/3/128**）。\n\n"
+        "---\n\n"
+        "### P1 — 当前待办（立即执行）\n\n"
+        "#### `plan-1` 甲任务 ✅\n\n- 已完成\n\n"
+        "#### `plan-2` 乙任务\n\n- 在做\n\n"
+        "### P2 — 下一阶段就绪\n\n"
+        "#### `plan-3` 丙任务\n\n- 在做\n\n"
+        "#### `plan-4` 丁任务 ✅\n\n- 已完成\n\n"
+        "### P3 — 预期实施\n\n"
+        "### P4 — 实验候选\n\n"
+        "#### `plan-5` 戊任务\n\n- 在做\n"
+    )
+
+    def test_recomputed_after_archive(self, rel):
+        main, _arch, n = rel.apply_plan_archive(self._PLAN, "> 涵盖版本：v1.0.x\n", "1.0.1", "2026-10-21")
+        assert n == 2
+        line = next(ln for ln in main.splitlines() if ln.startswith("**当前迭代**"))
+        assert line == "**当前迭代**：在办 3 项——P1 1 项（**plan-2**）、P2 1 项（**plan-3**）、P4 1 项（**plan-5**）。"
+
+    def test_done_marked_sections_not_counted(self, rel):
+        """已完成待归档（标题带 ✅）不计入「在办」——归档前后同一口径。"""
+        line = next(
+            ln for ln in rel.recompute_current_iteration(self._PLAN).splitlines() if ln.startswith("**当前迭代**")
+        )
+        # 样例共 5 节，其中两节已标 ✅ → 在办 3
+        assert "在办 3 项" in line
+        assert "plan-1/2" not in line and "plan-1、" not in line
+
+    def test_phantom_id_in_summary_dropped(self, rel):
+        """概述里残留的已归档/不存在编号随重算消失。"""
+        line = next(
+            ln for ln in rel.recompute_current_iteration(self._PLAN).splitlines() if ln.startswith("**当前迭代**")
+        )
+        assert "plan-128" not in line
+        assert "在办 3 项" in line  # 5 节中 2 节已标 ✅
+
+    def test_no_items_left(self, rel):
+        text = "**当前迭代**：在办 2 项——P1 2 项（**plan-1/2**）。\n\n### P1 — 当前待办\n\n### P2 — 下一阶段就绪\n"
+        line = next(ln for ln in rel.recompute_current_iteration(text).splitlines() if ln.startswith("**当前迭代**"))
+        assert line == "**当前迭代**：当前无在办任务（新任务取 `plan-next` 编号登记）。"
+
+    def test_flat_plan_without_tiers_untouched(self, rel):
+        """无 `### P1~P4` 分层时不动该行（保守：无法判档就不猜）。"""
+        text = "**当前迭代**：在办 1 项（plan-9）。\n\n## plan-9 在做\n"
+        assert rel.recompute_current_iteration(text) == text

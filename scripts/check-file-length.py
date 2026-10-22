@@ -5,9 +5,12 @@
   - 主程序（``src/python/**.py``） > 1000 行 → finding（硬上限，必须拆分）
   - 脚本（``scripts/**.py``）       > 1000 行 → finding（脚本红线，含包内子模块）
   - 测试（``src/test/**.py``）      > 1200 行 → finding（测试文件红线）
-  - 主程序 500-1000 / 脚本 400-1000 / 测试 800-1200 为可选优化区间，不判 finding，
-    仅 ``-v`` 输出清单，供 review-findings「文件过长」登记表派生刷新
+  - 主程序 700-1000 / 脚本 600-1000 / 测试 900-1200 为可选优化区间，不判 finding，
+    仅 ``-v`` 输出清单，供 review-findings「文件膨胀」登记表派生刷新
     （人肉快照退役，脚本输出即真值）。
+  - ``__init__.py`` 包标记按「薄壳」独立警告线 200 行（门面/包标记应收薄）。
+  - ``-v`` 另按「行数 × 近 90 天改动次数」输出拆分优先级排序（git 不可用时
+    静默跳过），回答「先拆哪个」而不是只看绝对行数。
 
 豁免登记：既有破线项须同时在 review-findings 挂账限期处理，二者同步存在——
   - 豁免文件超限 → 不报 finding，``-v`` 列为「豁免」状态；
@@ -28,7 +31,9 @@
 """
 
 import argparse
+import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_checklib）
@@ -53,7 +58,15 @@ TEST_SOURCE_ROOT = "src/test"
 _LIMIT_BY_KIND = {"主程序": MAIN_SOURCE_LIMIT, "脚本": SCRIPTS_SOURCE_LIMIT, "测试": TEST_SOURCE_LIMIT}
 _HINT_BY_KIND = {"主程序": "硬上限必须拆分", "脚本": "脚本红线须拆分", "测试": "测试文件红线须拆分"}
 #: 各检查域可选优化区间下界（``-v`` 清单只列区间内文件；超上限者已直接判 finding）
-_WARN_BY_KIND = {"主程序": 500, "脚本": 400, "测试": 800}
+#: 该下界同时是 review-findings P3 登记的入表线（警告 = 登记，不再维护第三套数字）
+_WARN_BY_KIND = {"主程序": 700, "脚本": 600, "测试": 900}
+
+#: 薄壳文件（``__init__.py`` 包标记/门面）的独立警告线：不计入域警告线，收薄即可
+THIN_SHELL_WARN_LINES = 200
+_THIN_SHELL_NAME = "__init__.py"
+
+#: 拆分优先级的改动频度窗口（天）
+CHURN_WINDOW_DAYS = 90
 
 #: 既有破线豁免：相对路径 → 挂账说明（review-findings 待处理区须有对应条目）。
 #: 空 = 当前无挂账破线项；新破线须先拆分，无法立即拆分时在此登记并同步挂账。
@@ -103,15 +116,61 @@ def split_findings(
     return violations, exempted, removable
 
 
+def warn_threshold(kind: str, path: str) -> int:
+    """返回该文件的可选优化区间下界（薄壳 ``__init__.py`` 用独立线）。"""
+    if path.endswith(_THIN_SHELL_NAME):
+        return THIN_SHELL_WARN_LINES
+    return _WARN_BY_KIND[kind]
+
+
 def over_limit_inventory(records: list[tuple[str, str, int]]) -> list[str]:
-    """可选优化区间清单：主程序 >500 / 脚本 >400 / 测试 >800 行（review-findings 文件过长登记表派生源）。"""
-    rows = []
+    """可选优化区间清单（主程序 >700 / 脚本 >600 / 测试 >900；薄壳 >200）。"""
+    rows: list[tuple[int, str]] = []
     for kind, path, lines in records:
-        warn_at = _WARN_BY_KIND[kind]
+        warn_at = warn_threshold(kind, path)
         if lines > warn_at:
-            rows.append(f"  [{kind}] {lines:>5} 行  {path}")
-    rows.sort(key=lambda s: -int(s.split("]")[1].split("行")[0].strip()))
-    return rows
+            label = "薄壳" if path.endswith(_THIN_SHELL_NAME) else kind
+            rows.append((lines, f"  [{label}] {lines:>5} 行  {path}"))
+    rows.sort(key=lambda item: -item[0])
+    return [line for _lines, line in rows]
+
+
+def churn_counts(root: Path, days: int = CHURN_WINDOW_DAYS) -> dict[str, int]:
+    """近 ``days`` 天各文件改动次数（best-effort：git 缺失/失败返回空映射）。"""
+    try:
+        proc = subprocess.run(
+            ["git", "log", f"--since={days}.days", "--name-only", "--pretty=format:"],
+            cwd=str(root),
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return {}
+    if proc.returncode != 0:
+        return {}
+    return Counter(line.strip() for line in proc.stdout.splitlines() if line.strip())
+
+
+def priority_inventory(records: list[tuple[str, str, int]], churn: dict[str, int]) -> list[str]:
+    """按「行数 × 近 90 天改动次数」排序的可选优化区间清单（只在 ``-v`` 输出）。"""
+    rows: list[tuple[int, int, int, str]] = []
+    for kind, path, lines in records:
+        if lines <= warn_threshold(kind, path):
+            continue
+        commits = int(churn.get(path, 0))
+        label = "薄壳" if path.endswith(_THIN_SHELL_NAME) else kind
+        rows.append(
+            (
+                lines * commits,
+                lines,
+                commits,
+                f"  {lines * commits:>8} 分（{lines} 行 × {commits} 次）  [{label}] {path}",
+            )
+        )
+    rows.sort(key=lambda item: (-item[0], -item[1], item[3]))
+    return [line for _score, _lines, _commits, line in rows]
 
 
 def main() -> int:
@@ -130,6 +189,11 @@ def main() -> int:
         )
         for line in over_limit_inventory(records):
             print(line)
+        churn = churn_counts(REPO_ROOT)
+        if churn:
+            print("按「行数 × 近 90 天改动次数」的拆分优先级：")
+            for line in priority_inventory(records, churn):
+                print(line)
         for line in exempted:
             print(f"[豁免] {line}")
         for line in removable:

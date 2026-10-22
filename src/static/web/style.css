@@ -1252,3 +1252,11 @@ a:hover {
   color: var(--text-secondary);
   font-size: 0.9rem;
 }
+
+/* 产物路径（可点击复制）：弱化色 + 等宽，取既有令牌，不引入新色值/圆角 */
+.artifact-path {
+  color: var(--text-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  align-self: center;
+}

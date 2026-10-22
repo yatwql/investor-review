@@ -21,11 +21,14 @@ class TestFormalHoldingsSourceJudgeEdge:
     def test_resolve_failure_fails_closed(self, monkeypatch):
         """路径解析抛异常 → 按非正式源处理（不写用户历史）。"""
         import src.python.config as config_pkg
+        from src.python.config import _config_api
 
         def _boom(_cfg=None):
             raise RuntimeError("配置不可读")
 
-        monkeypatch.setattr(config_pkg, "resolve_holdings_path", _boom)
+        # 判定实现下沉 `_config_api`（调用点在该模块），patch 必须指向它——
+        # patch 包入口的同名符号不会改变已绑定的模块内引用
+        monkeypatch.setattr(_config_api, "resolve_holdings_path", _boom)
         assert config_pkg.is_formal_holdings_source({}) is False
 
     def test_empty_dir_and_filename_fall_back_to_defaults(self):

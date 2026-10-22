@@ -35,7 +35,7 @@
 | `check-semantic-index.py` | 文档 | 功能语义命名表正反向一致性校验（功能开关注册表表外键 / 僵尸条目 / 合并章 key 缺失） |
 | `check-doc-drift.py` | 文档 | 文档与实现一致性校验（章节表/章节数量、开关表/分组计数/默认值断言、配置与 LLM 默认值表、TUI 面板编号、目录树、项目统计表；`--sync` 自动回写统计快照） |
 | `check-doc-links.py` | 文档 | 文档链接与结构一致性校验（死链/死锚点/重复标题/层级/编号序列/§引用） |
-| `check-file-length.py` | 质量 | 单文件行数红线守护（主程序/脚本 >1000 行 / 测试 >1200 行；豁免登记与 review-findings 挂账同步，`-v` 输出可选优化区间清单供登记表派生） |
+| `check-file-length.py` | 质量 | 单文件行数红线守护（主程序/脚本 >1000 行 / 测试 >1200 行；豁免登记与 review-findings 挂账同步，`-v` 输出可选优化区间清单与「行数 × 近 90 天改动」优先级，供登记表派生） |
 | `check-test-redundancy.py` | 测试 | 测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言；实现拆在 `_test_redundancy/`——八类检查各一模块 + 共用 AST 原语 + 事实缓存 + 编排，入口只留 CLI） |
 | `check-requirement-trace.py` | 质量 | 需求 ID ↔ 验证载体追溯（单段 ID 全域覆盖 / 载体文件存在 / ID 双向一致） |
 | `hook-install-claude.py` | 质量 | 安装/卸载 Claude Code PostToolUse hook（任务编号一致性自动校验） |
@@ -71,7 +71,7 @@
 **结构约定（顶层 vs 子目录）**：`scripts/` 顶层只放**可直接运行的入口**（`python scripts/x.py …`）；
 共享库与实现细节一律放内部包——跨脚本共用进 `_shared/`（`checklib.py` / `traces_common.py`），
 单入口实现包用 `_<语义名>/`（`_probes/` / `_assets/` / `_release/` / `_test_runner/` / `_doc_drift/` /
-`_traces_code/` / `_traces_doc/` / `_test_redundancy/`），评测实现包用 `_eval_<x>/` 与入口
+`_traces_code/` / `_traces_doc/` / `_test_redundancy/` / `_guardrails/` / `_perf_report/`），评测实现包用 `_eval_<x>/` 与入口
 `eval-<x>.py` 同名对应。新增共享代码**不得**再放顶层文件。
 
 | 前缀 | 域 | 判据 / 契约 |
@@ -104,7 +104,7 @@
 - **统一契约**（`checklib.add_common_args()` / `report()`）：`-v/--verbose` 详细输出、`--ci` 仅输出 `文件:描述`；**通过退出 0，发现 finding 退出 2**（`check-code-traces.py` 另有 HIGH=1 / LOW=3 的分级语义，属其自身约定）；通过打印 `[OK] …`，失败逐条 `[ERR] file:desc`（`--ci` 下为裸行）+ 汇总行
 - **共享原语**：`REPO_ROOT` / `rel()`（仓库相对路径，非仓库内路径原样返回）、`extract_region()` / `replace_region()`（标记区间）、`extract_table_region()` / `replace_table_region()`（表区域，带结构校验）
 - **`_traces_code/`**：check-code-traces 内部实现包——`patterns.py`（**匹配表**：历史痕迹/标识符/暗号模式与编译镜像；只管「命中了什么」，共享历史叙述正则引用 `_traces_common` 常量）、`exemptions.py`（**豁免表**：章节计数与迭代轮次豁免〔check-doc-traces 共用〕+ 代码侧行级豁免〔合法领域值/魔法编号领域值/测试回归元描述〕与 `_is_*_excluded` 判定——调漏检改前者、调误报改后者，不在一处相互淹没）、`extract.py`（注释/标识符抽取）、`scan.py`（扫描调度）、`layers.py`（core 反向依赖守卫）、`config.py`（扫描域配置与规则载体豁免：`RULE_CARRIER_DIRS` / `RULE_CARRIER_FILES`）；check-code-traces.py 只留 CLI 与原面 re-export
-- **`_traces_doc/`**：check-doc-traces 后端包——`patterns.py`（文档痕迹模式表 `DOC_PATTERNS` / 树行专属 `TREE_ONLY_PATTERNS` / 行级豁免 `EXCLUDE_PATTERNS`+`is_excluded`，共享历史叙述正则引用 `_traces_common` 常量）、`bundle.py`（编译镜像 + 按域取子集 + 树行拼表，`pattern_bundle` 按〔分类集, CIPHER 开关, 树行〕lru 缓存并集预筛——预筛面与精确面同源）、`dedup.py`（结构性冗余扫描：单次遍历内完成标题路径感知判重、台账/归档域重复长行与区块同小节限定、空白归一与同块单报），入口薄 CLI 与原面 re-export
+- **`_traces_doc/`**：check-doc-traces 后端包——`patterns.py`（文档痕迹模式表 `DOC_PATTERNS` / 树行专属 `TREE_ONLY_PATTERNS` / 行级豁免 `EXCLUDE_PATTERNS`+`is_excluded`，共享历史叙述正则引用 `_traces_common` 常量）、`bundle.py`（编译镜像 + 按域取子集 + 树行拼表 + 高置信度分类 `HIGH_CATEGORIES`，`pattern_bundle` 按〔分类集, CIPHER 开关, 树行〕lru 缓存并集预筛——预筛面与精确面同源）、`dedup.py`（结构性冗余扫描：单次遍历内完成标题路径感知判重、台账/归档域重复长行与区块同小节限定、空白归一与同块单报）、`deleted_refs.py`（已删除函数残留：git 历史 def 全集 × 当前 def 全集差集比对，浅克隆告警不假绿）、`findings.py`（结论汇总行与退出码 + 缓存结论结构校验，全量与回放两路共用），入口薄 CLI 与原面 re-export
 - **`_shared/traces_common.py`**：两脚本**逐字节相同**的历史叙述正则单一来源（命名常量 + `SHARED_REGEXES` 元组）；只登记字面量，**分类与描述仍按各自域定义**，判定入口/域矩阵/豁免语义不在此模块——新增同源词汇先加此处再两侧引用，仅一域需要的词汇不进共享表（机检见 `test_trace_shared_vocabulary`：两表交集须恰等于词表、两侧须都引用、模式源码内不得写死字面量）
 - **`_test_runner/`**：`test-runner.py` 的内部实现包（paths / modes / pytest_env / machine_info / doc_writer / report_html / runner），入口仅保留 CLI 与主流程并原面 re-export —— 既有测试访问 `test_runner._env_value` 等名字仍有效；**注意**：monkeypatch 内部状态（如 `_LATEST_DIR` / `_DOC_COVERAGE_PATH`）须指向持有它的子模块（`_test_runner.report_html` / `_test_runner.doc_writer`）
 
@@ -300,6 +300,8 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
 **`check-doc-traces.py` — 文档历史痕迹 + 结构性冗余检查**
 
 **设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
+
+**实现分包**（入口只留 CLI 与扫描编排）：`_traces_doc/patterns.py`（模式表）· `bundle.py`（分类全集与高置信度分类、按域子集与并集预筛）· `dedup.py`（结构性冗余）· `deleted_refs.py`（已删除函数残留）· `findings.py`（结论汇总行/退出码与缓存结论校验）。
 
 扫描项目根 `README.md` 与 `docs/managements/`、`docs/manuals/` 下所有 `.md` 文件，按三个域分流：
 
@@ -669,7 +671,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 **设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
 
-**类型阈值**：主程序（`src/python/**.py`）与脚本（`scripts/**.py`，含包内子模块）> 1000 行为 finding；测试（`src/test/**.py`）> 1200 行为 finding。主程序 500 / 脚本 400 / 测试 800 起为**可选优化区间**，不判 finding，仅 `-v` 列出，供 review-findings「文件过长」登记表派生（人肉快照退役，脚本输出即真值）。
+**类型阈值**：主程序（`src/python/**.py`）与脚本（`scripts/**.py`，含包内子模块）> 1000 行为 finding；测试（`src/test/**.py`）> 1200 行为 finding。主程序 700 / 脚本 600 / 测试 900、`__init__.py` 薄壳 200 起为**可选优化区间**（即 review-findings 登记线），不判 finding，仅 `-v` 列出；`-v` 另按「行数 × 近 90 天改动次数」输出拆分优先级（git 不可用时静默跳过）。
 
 **豁免与挂账**：既有破线项须在 `EXEMPTIONS` 登记，**同时**在 review-findings 未完成分区挂账限期处理（约定而非机检，两处须一起改）；豁免文件回落到阈值内时 `-v` 提示「可移除豁免」，防豁免永久化。
 
@@ -679,7 +681,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 ```bash
 .venv/bin/python scripts/check-file-length.py        # 检查全部
-.venv/bin/python scripts/check-file-length.py -v     # 含可选优化区间清单与豁免状态
+.venv/bin/python scripts/check-file-length.py -v     # 含可选优化清单、拆分优先级与豁免状态
 .venv/bin/python scripts/check-file-length.py --ci   # CI 模式（只输出 文件:描述）
 ```
 
@@ -720,7 +722,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 **设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
 
-规则与 `DESIGN.md` 护栏条目逐条同源（各函数 docstring 标注映射编号），**E 级拦截、W 级只观察**：
+规则与 `DESIGN.md` 护栏条目逐条同源（各函数 docstring 标注映射编号），**E 级拦截、W 级只观察**。**规则声明与判定分离**：检查域 / 圆角·字阶·间距档位 / 正则 / 存量豁免表（只减不增白名单）全部声明在 `_guardrails/rules.py`，入口只留判定流程与渲染——加一条豁免或调一档口径只改声明处，不碰判定代码：
 
 | 级别 | 规则 | 判什么 |
 |:--|:--|:--|
@@ -778,7 +780,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 **① 分步不连锁**：把「版本发布流程」固化为可执行子命令，每步独立可审阅、失败即停——避免一次跑完才发现中途出错；数据刷新按变更面条件跳过（纯文档变更不跑 bench/collect），发布会话墙钟与分步耗时进台账可对拍。
 
-**② 归档按「机械 / 判定」切分**：**搬什么、搬去哪、批次标题怎么写、头部怎么派生、引用怎么改、目录树怎么摆**都是机械动作，固化进脚本（纯变换在 `_ledger_archive.py`，命令编排与落盘顺序在 `_archive_flow.py`，入口 `release.py` 只留 CLI 壳与路径常量）；**条目是否真属于本版、完成标记是否打对、设计文件是否真完成、摘要要不要精简**仍需人判断，脚本不改语义。由此过去每次发布最耗时的四项人工迁移降为「自动 + 复核」。
+**② 归档按「机械 / 判定」切分**：**搬什么、搬去哪、批次标题怎么写、头部怎么派生、引用怎么改、目录树怎么摆**都是机械动作，固化进脚本（纯变换在 `_ledger_archive.py`，命令编排与落盘顺序在 `_archive_flow.py`，入口 `release.py` 只留**路径常量 + `env` 投影 + 薄包装 + `main`**（argparse 装配在 `_release/_cli.py`；命令实现在 `_commands_prep.py` / `_commands_ship.py`；共用原语在 `_commands_base.py`））；**条目是否真属于本版、完成标记是否打对、设计文件是否真完成、摘要要不要精简**仍需人判断，脚本不改语义。由此过去每次发布最耗时的四项人工迁移降为「自动 + 复核」。
 
 **③ 归档质量的三层把控**（缺一层都不算把住）：
 
@@ -810,7 +812,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 .venv/bin/python scripts/release.py devbump    # 切下一开发版并提交
 ```
 
-`publish` / `devbump` 默认不推送（只打印推送命令），`--push` 才执行。
+`publish` 默认不推送（只打印推送命令），`--push` 才执行；`devbump` **默认推送 `origin dev`**（发布闭环收尾即同步远端），需要本地先复核时用 `--no-push`。
 
 **`publish` 提交前先同步统计快照**：`git add/commit` 之前自动跑 `check-doc-drift.py --sync --ci --with-test-count`（与 pre-commit 钩子对含 `src/test` 变更的提交**同源参数**）。只跑 `--sync` 时 `test-coverage.md` 的收集派生计数不被校验，会出现「本地通过、钩子里仍红」——`publish` 白跑一轮（实测曾连败两次）。同步失败即中止，不提交、不合并、不打 tag。
 
@@ -989,6 +991,8 @@ curl 对照命令：`curl -s "https://push2.eastmoney.com/api/qt/stock/get?secid
 
 **输出**：`docs/tmp/better-investment-performance-test-report.md`
 
+**实现分包**：报告渲染（Markdown 组装 / 达标判定 / `PerfSample` 样本规模契约）在 `_perf_report/report.py`，入口只留采样、离线桩与门禁判定——改报告版式只动 `_perf_report/`，改压测口径只动入口。
+
 **目标**：basic 模式总耗时 < 60s
 
 **门禁归属**：本脚本是**性能测试**（主动压测，同条件可比），故承担 CI 性能门禁（`perf-gate` job）；运行历史查看（`perf-history.py`，样本不可控、不可复现）不用于门禁。
@@ -1122,6 +1126,19 @@ CLI 模式的便捷入口，跳过 TUI 界面，直接以命令行模式运行�
 **检查覆盖范围**：腾讯财经行情、新浪财经行情、东方财富净值、天天基金持仓/排名、东方财富行业分类、新浪财经新闻、东方财富新闻、华尔街见闻、财联社、腾讯 K 线——共 **10 个端点**。
 
 **退出码**：0=全部正常，1=有告警（部分源慢），2=有失败。
+
+**`health-history` — 数据源健康历史**
+
+查看最近 N 次采集的健康记录（聚合单源 `core.perf.summarize_health_history`，与 TUI `[H]`、Web `/api/health/history` 同字段）；无需 config（只读 `data/state/`）。
+
+```bash
+.venv/bin/python -m src.python.cli health-history              # 最近 10 次
+.venv/bin/python -m src.python.cli health-history --limit 30   # 最近 30 次
+.venv/bin/python -m src.python.cli health-history --json       # 脚本消费
+```
+
+退出码：0=读取成功（含「暂无记录」空态），2=历史文件读取失败。
+
 
 **`cassettes` — 数据源记录-回放维护**
 
