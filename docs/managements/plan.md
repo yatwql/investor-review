@@ -1,5 +1,5 @@
 # 投资复盘助手 — 实现计划
-> 文档版本：0.14.2-dev
+> 文档版本：0.14.2
 > **编号源**：`plan-next = 172`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-171，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
@@ -23,10 +23,6 @@
 ### P1 — 当前待办（立即执行）
 
 > 入选标准：立即可执行且价值/风险最高——数据完整性与费用风险、核心量化缺口与报告首屏呈现。
-
-#### `plan-171` 发布编排补 token 采集与统计（成本可对拍）✅
-
-**完成（2026-10-22，v0.14.2-dev）**：发布台账此前只记墙钟，回答不了「这次发布烧了多少 token」。现每条命令记录执行环境身份（`agent`：provider/model/thinking/session_id，取自 `PI_*` 变量）与 agent 会话**累计** token 快照（`session_usage`：in/out/cache read/cache write/total/cost，取自 `PI_SESSION_FILE` 会话 JSONL 的 assistant 消息 + 非消息用量（cache_warm 等）+ compaction 三类条目，与 pi 自身统计同口径；非 agent 环境省略字段、旧台账行形状不变），命令尾行打印「本次发布累计 token」。窗口口径 = 上一次 `devbump` 之后的行，用量 = 末行累计 − 边界累计，跨会话（agent 重启归零）按正增量分段累加；采集全程容错（文件缺失/坏行只跳过），不阻断发布。测试：`test_release_archive.py::TestReleaseTokenAccounting` 6 例 + `TestReleaseAgentIdentity` 4 例。
 
 #### `plan-95` 生成完成后无一键打开
 

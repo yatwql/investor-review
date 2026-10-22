@@ -109,9 +109,13 @@ def apply_changelog_release(text: str, release_version: str, date: str) -> tuple
             m.group(4),
             m.group(5),
         )
-        end_v = f" ~ v{release_version}" if tail_v else ""
-        end_d = f" ~ {date}" if tail_d else ""
-        return f"{head}{start_v}{end_v}（{start_d}{end_d}）"
+        # 区间化：首次出现的单版本行（无 `~ v…` 尾巴）在第二次发布后必须变成区间，
+        # 否则索引永远停在首个版本（连续两次发布后仍是首版单版本形态）。
+        # 真值口径：起止都取发布实参，与归档文件头（按归档自身段标题派生）保持一致。
+        span_v = f"{start_v} ~ v{release_version}" if release_version.lstrip("v") not in start_v else start_v
+        span_d = f"{start_d} ~ {date}" if start_d != date else start_d
+        _ = (tail_v, tail_d)  # 既有区间形态由 span_* 重算，无需区分
+        return f"{head}{span_v}（{span_d}）"
 
     out, n_idx = idx_pat.subn(_idx_repl, out, count=1)
     if n_idx != 1:

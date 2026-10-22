@@ -103,6 +103,22 @@ class TestChangelogRelease:
         assert "v0.12.1 ~ v0.12.6（2026-10-03 ~ 2026-10-08）" in out
         assert "v0.11.0 ~ v0.11.12（2026-09-15 ~ 2026-10-03）" in out  # 其余索引不动
 
+    def test_single_version_index_line_becomes_range(self, rel):
+        """索引行还是单版本形态（无 `~ v…` 尾巴）时，下一次发布必须区间化。
+
+        回归：`end_v` 只在「已有区间」时才追加，导致首版行永远停在单版本形态
+        （连续多次发布都不扩成区间，索引与归档文件头不一致）。
+        """
+        text = _sample_changelog().replace("— v0.12.1 ~ v0.12.5（2026-10-03 ~ 2026-10-07）", "— v0.12.5（2026-10-03）")
+        out, _ = rel.apply_changelog_release(text, "0.12.6", "2026-10-08")
+        assert "v0.12.5 ~ v0.12.6（2026-10-03 ~ 2026-10-08）" in out
+
+    def test_same_day_release_keeps_single_date(self, rel):
+        """同日多版：日期不重复展开成 `a ~ a`，版本仍区间化。"""
+        text = _sample_changelog().replace("— v0.12.1 ~ v0.12.5（2026-10-03 ~ 2026-10-07）", "— v0.12.1（2026-10-07）")
+        out, _ = rel.apply_changelog_release(text, "0.12.6", "2026-10-07")
+        assert "v0.12.1 ~ v0.12.6（2026-10-07）" in out
+
     def test_version_mismatch_rejected(self, rel):
         with pytest.raises(rel.ReleaseError, match="不一致"):
             rel.apply_changelog_release(_sample_changelog(), "0.12.7", "2026-10-08")
