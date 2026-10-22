@@ -25,9 +25,7 @@
 > **测试文件口径**：阈值见 `developer-guide.md`「文件膨胀阈值」表（行数 >800 警告 / >1200 红线；测试项 >80 警告 / >120 红线）；≥1000 行即入本表。
 > **破线豁免**：无（`check-file-length.py --ci` 豁免在列 0 项）。
 
-| # | 任务 | 涉及文件（行数 / 距红线） | 处置与备注 |
-|---|------|--------------------------|-------------|
-| 1 | **rf-86** `cache/operations.py` 五职责下沉 | `src/python/cache/operations.py` 739/261 | 五职责待下沉（数据结构 / 基金刷新 / 公共缓存 / 持仓缓存 / 清理） |
+> 当前无逼近红线档的文件（主程序 ≥700 / 脚本 ≥600 / 测试 ≥1000 均无在册项；警告级全集以 `check-file-length.py -v` 为准）。
 
 **已决策「维持现状」（已降到逼近档以下，不拆理由保留，行数随 `-v` 复核）**：
 
@@ -46,6 +44,7 @@
 
 | # | 问题 | 处理 |
 |---|------|------|
+| **rf-86** | `src/python/cache/operations.py` 739 行：五职责混在一处——数据结构（3 个 dataclass）、缓存刷新族（公共缓存/新闻/基金经理/扩展缓存，13 个私有函数）、更新编排（basic/position/all）、清理、统计与预热 | 已修复：刷新族下沉 `cache/_cache_refresh.py`（282 行）——`_get_pool`、基金/行业/分红/盈利预测/行业资金流各刷新器与提示、`_refresh_common_caches`、新闻与基金经理/扩展缓存；`operations.py` **489 行**，只留数据类、更新编排（`update_basic_cache`/`update_position_cache`/`update_all_cache`）、清理、统计、预热。单向依赖：编排 → 刷新（`CacheUpdateResult` 用 TYPE_CHECKING + 函数内延迟导入避免与入口成环）；测试 patch 按调用点区分：直接调用刷新器的用例指向 `_cache_refresh`，经 `update_basic_cache` 的用例留在 `operations`。P3 登记表随之清空（无逼近红线档文件） |
 | **rf-626** | 报告域两模块内职责混杂：`report/html_writer.py` 799 行（模板渲染 + 落盘 + 数据状态块装配）、`analysis/rebalance.py` 751 行（配置解析/分类入口 + 偏离度信号族） | 已修复：① `html_writer` 799 → **689 行**（数据状态块装配 → `html_writer_status.py` 901 行：自述块 / 降级状态安全构建 / 时间串 / 三处状态区块）；② `rebalance` 751 → **243 行**（偏离度信号族 → `_rebalance_deviation.py` 565 行：目标偏离 / 股债偏离 / 单品种超限 / 信号汇总 + 分类权重与误报保护，常量 `MIN_NEW_POSITION_TRADING_DAYS` / `_CATEGORY_ORDER` / `_CATEGORY_LABELS` / `_EQUITY_FI_GROUPS` 随迁）。依赖方向单向（渲染 → 状态装配；信号 → 分类/配置，后者用**函数内延迟导入**避免与入口 re-export 成环）；测试 patch 目标按「调用点所在模块」改指（`build_*_data_status` 系列 → `html_writer_status`）。同族两文件维持（`llm/prompts_core.py` / `llm/generators.py` 按模块分文件） |
 | **rf-665** | `src/python/config/features.py` 840 行：功能开关注册表（`feature_switch_registry` 206 行 + `FeatureSwitchDef` + 分组常量 + 纯注册表视图）与运行时状态（features.json 读写/迁移/日志）混在一处，每个新开关约十行、持续挤压余量 | 已修复：注册表与定义下沉 `config/_feature_registry.py`（298 行）——分组常量 / `GROUP_LABELS` / `GROUP_ORDER` / `FeatureSwitchDef` / `feature_switch_registry` / `_FEATURE_FLAGS_DEFAULT` / `switches_in_group` / `experimental_flags` / `is_experimental_switch` / `EXPERIMENT_ALL`；`features.py` **574 行**，只留运行时状态（覆写读写、合并键迁移、开关解析与日志）并 re-export 注册表符号。单向依赖：运行时 → 注册表，`feature_switch_registry is ...` 同一对象（无副本）。同族两文件维持（`tui/handlers_config.py` / `scripts/_doc_drift/_format.py` 各自域内聚） |
 | **rf-773**（完成） | 8 个模块内职责混杂、逼近 700 行登记线（LLM / 配置 / 报告 / 分析 / 数据源五域） | 已全部拆分：`llm/api_base` 770→**501**（响应解析 → `_api_responses.py` 314）、`config/_validation` 723→**119**（三域 `_validation_scalars/sections/llm` + 共用原语 `_validation_common`）、`report/holdings_detail_sheet` 716→**171**（分区块写入器 → `_holdings_detail_blocks.py` 632）、`analysis/prosperity_scoring` 711→**476**（输入与权重 → `_prosperity_inputs.py` 270）、`providers/news_dedup_rules` 710→**331**（纯词表 → `_news_dedup_tables.py` 404）。另前一批已拆 `orchestrator` 734→255 / `_report_generation` 751→52 / `fund_performance` 728→595。全部保留门面 re-export；测试 patch 与结构断言按「调用点所在模块」改指（含区块注册表载体列、章节-区块矩阵同步）。 |

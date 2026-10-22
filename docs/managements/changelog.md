@@ -11,6 +11,8 @@
 
 ### Changed
 
+- **缓存操作五职责拆分（`rf-86`）**：`cache/operations.py` 739 → **489 行**，缓存刷新族（公共缓存 / 新闻 / 基金经理 / 扩展缓存，13 个私有函数）下沉 `cache/_cache_refresh.py`（282 行）；原模块只留数据类、更新编排、清理、统计与预热。依赖单向（编排 → 刷新），`CacheUpdateResult` 用 TYPE_CHECKING + 函数内延迟导入避免环；测试 patch 按调用点区分（直接调刷新器 → `_cache_refresh`，经 `update_basic_cache` → `operations`）。P3 登记表清空。
+
 - **报告域两模块拆分（`rf-626`）**：`report/html_writer.py` 799 → **689 行**（数据状态块装配 → `html_writer_status.py`）；`analysis/rebalance.py` 751 → **243 行**（偏离度信号族 → `_rebalance_deviation.py`，含分类权重与误报保护、四个常量随迁）。依赖方向单向：渲染 → 状态装配、信号 → 分类/配置（后者函数内延迟导入，避免与入口 re-export 成环）；门面 re-export 保持导入面，测试 patch 目标按调用点改指。
 
 - **功能开关注册表下沉（`rf-665`）**：`config/features.py` 840 → **574 行**，注册表与定义（分组常量 / `FeatureSwitchDef` / `feature_switch_registry` / 纯注册表视图 / `_FEATURE_FLAGS_DEFAULT` / `EXPERIMENT_ALL`）下沉 `config/_feature_registry.py`（298 行）；原模块只留运行时状态（features.json 覆写读写、合并键迁移、开关解析与日志）并 re-export 注册表符号，既有导入面与开关语义不变。注册表仍是唯一事实来源（`is` 同一对象，无副本）。

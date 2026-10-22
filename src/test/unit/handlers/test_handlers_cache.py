@@ -479,9 +479,9 @@ class TestRefreshExtendedCaches(unittest.TestCase):
 
         return CacheUpdateResult()
 
-    @patch("src.python.cache.operations._refresh_extended_cache", return_value=2)
-    @patch("src.python.cache.operations._refresh_fund_manager_cache", return_value=1)
-    @patch("src.python.cache.operations._refresh_news_cache", return_value=3)
+    @patch("src.python.cache._cache_refresh._refresh_extended_cache", return_value=2)
+    @patch("src.python.cache._cache_refresh._refresh_fund_manager_cache", return_value=1)
+    @patch("src.python.cache._cache_refresh._refresh_news_cache", return_value=3)
     def test_all_refreshed(self, mock_news, mock_mgr, mock_ext):
         """有持仓且有基金 → 新闻/基金经理/风格扩展全部执行并写入结果。"""
         from src.python.cache.operations import _refresh_extended_caches
@@ -495,9 +495,9 @@ class TestRefreshExtendedCaches(unittest.TestCase):
         mock_mgr.assert_called_once_with(["f1"])
         mock_ext.assert_called_once_with(["h1"])
 
-    @patch("src.python.cache.operations._refresh_extended_cache", return_value=2)
-    @patch("src.python.cache.operations._refresh_fund_manager_cache", return_value=1)
-    @patch("src.python.cache.operations._refresh_news_cache", return_value=3)
+    @patch("src.python.cache._cache_refresh._refresh_extended_cache", return_value=2)
+    @patch("src.python.cache._cache_refresh._refresh_fund_manager_cache", return_value=1)
+    @patch("src.python.cache._cache_refresh._refresh_news_cache", return_value=3)
     def test_no_funds_skips_manager(self, mock_news, mock_mgr, mock_ext):
         """无基金 → 跳过基金经理刷新，其余照常执行。"""
         from src.python.cache.operations import _refresh_extended_caches
@@ -509,9 +509,9 @@ class TestRefreshExtendedCaches(unittest.TestCase):
         self.assertEqual(result.ext_ok, 2)
         mock_mgr.assert_not_called()
 
-    @patch("src.python.cache.operations._refresh_extended_cache", side_effect=Exception("boom"))
-    @patch("src.python.cache.operations._refresh_fund_manager_cache", return_value=1)
-    @patch("src.python.cache.operations._refresh_news_cache", return_value=3)
+    @patch("src.python.cache._cache_refresh._refresh_extended_cache", side_effect=Exception("boom"))
+    @patch("src.python.cache._cache_refresh._refresh_fund_manager_cache", return_value=1)
+    @patch("src.python.cache._cache_refresh._refresh_news_cache", return_value=3)
     def test_exception_recorded(self, mock_news, mock_mgr, mock_ext):
         """单个任务异常 → 记录 errors，其余任务正常写入。"""
         from src.python.cache.operations import _refresh_extended_caches
