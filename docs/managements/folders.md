@@ -1253,7 +1253,7 @@ investor-review/
 │   │   ├── data.py                 #   数据派生（版本演进 / 漂移 / 版本对比 / 机读信封 / 成本时段）
 │   │   ├── report.py               #   渲染（概览·离群·尾部归因·演进·异常·漂移·时段·对比 + build_trend_report）
 │   │   └── cli.py                  #   命令行入口（argparse → build_trend_report → 输出）
-│   ├── probe.py                     #   探测统一入口（按 target 分发到 probes/ 子模块；新探针登记即用）
+│   ├── probe.py                     #   探测统一入口（按 target 分发到 _probes/ 子模块；新探针登记即用）
 │   ├── test-extract-failures.py      #   pytest-html 报告失败用例提取
 │   ├── test-find-order-dependent.py  #   顺序依赖失败污染源二分定位（单跑绿合跑红 → 前缀二分+配对确认）
 │   ├── make-assets.py                #   视觉资产维护入口（social-preview 生成 + svg-geom/svg-pixel/svg-text-overflow 渲染体检）
@@ -1284,7 +1284,7 @@ investor-review/
 │   │   ├── patterns.py               #       文档痕迹模式表与行级豁免（含目录树行专属补强）
 │   │   ├── bundle.py                 #       模式子集与并集预筛（编译镜像 + 按域取子集 + 树行拼表，lru 缓存）
 │   │   └── dedup.py                  #       重复标题路径感知判重 + 台账/归档域重复长行/区块（同小节限定）
-│   ├── probes/                       #   探测子模块包（target 登记处 + 各探测实现；纯只读无副作用）
+│   ├── _probes/                       #   探测子模块包（target 登记处 + 各探测实现；纯只读无副作用）
 │   │   ├── __init__.py               #       子包标记（target 注册表：available_targets/get）
 │   │   ├── csi.py                    #       CSI 风格指数可用性探测（因子分析周期性复核，条数+新鲜度双维度）
 │   │   └── push2.py                  #       东方财富 push2 连通性诊断（区分网络拦截/程序缺陷/WAF 拦指纹）

@@ -2,7 +2,7 @@
 
 覆盖：
   - probe 入口：空参列出 target、未知 target 退出 2、分发到子模块 run()
-  - probes/csi 与 probes/push2 子模块契约面（PROBE_TARGET / build_parser）
+  - _probes/csi 与 _probes/push2 子模块契约面（PROBE_TARGET / build_parser）
   - sampler 拆包后对 fact_checker 真实模块的契约（4 元组解包、corrections 键、
     组合核心数值委托 _utils 唯一实现）
 """
@@ -82,12 +82,12 @@ class TestProbeEntry:
 
 class TestProbeTargetContracts:
     def test_registered_targets(self):
-        from probes import available_targets
+        from _probes import available_targets
 
         assert {"csi", "push2"} <= available_targets()
 
     def test_csi_submodule_surface(self):
-        from probes import get
+        from _probes import get
 
         csi = get("csi")
         assert csi.PROBE_TARGET == "csi"
@@ -95,7 +95,7 @@ class TestProbeTargetContracts:
         assert "--days" in help_text and "--stale" in help_text
 
     def test_push2_submodule_surface(self):
-        from probes import get
+        from _probes import get
 
         push2 = get("push2")
         assert push2.PROBE_TARGET == "push2"
