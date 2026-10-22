@@ -22,7 +22,13 @@
 ## 命名约定
 
 顶层脚本名以**活动类型前缀**表意，看到文件名即知归属与该不该进门禁。新增脚本先按此表定前缀，
-再入下方对应域小节与 `developer-guide.md`「按域索引」：
+再入下方对应域小节与 `developer-guide.md`「按域索引」。
+
+**结构约定（顶层 vs 子目录）**：`scripts/` 顶层只放**可直接运行的入口**（`python scripts/x.py …`）；
+共享库与实现细节一律放内部包——跨脚本共用进 `_shared/`（`checklib.py` / `traces_common.py`），
+单入口实现包用 `_<语义名>/`（`_probes/` / `_assets/` / `_release/` / `_test_runner/` / `_doc_drift/` /
+`_traces_code/` / `_traces_doc/` / `_test_redundancy/`），评测实现包用 `_eval_<x>/` 与入口
+`eval-<x>.py` 同名对应。新增共享代码**不得**再放顶层文件。
 
 | 前缀 | 域 | 判据 / 契约 |
 |:-----|:---|:------------|
