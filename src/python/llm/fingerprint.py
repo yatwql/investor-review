@@ -7,6 +7,8 @@ import json
 import logging
 from typing import Any
 
+from src.python.llm.rate_caliber import PROMPT_SCHEMA_VERSION
+
 logger = logging.getLogger("invest")
 
 __all__ = [
@@ -115,6 +117,8 @@ def build_llm_fingerprint(
         _details,
         _pen,
         _risk_signals,
+        # 提示词文本版本：标签/表头等静态文案改动也须换键（否则复用按旧口径生成的结论）
+        PROMPT_SCHEMA_VERSION,
     )
 
 

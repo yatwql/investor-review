@@ -20,6 +20,7 @@ from src.python.config.anonymizer import code_masking_enabled, mask_holding_code
 from src.python.core.code_utils import get_currency_by_code
 from src.python.core.data_freshness import FRESHNESS_DEGRADED, FRESHNESS_STALE
 from src.python.llm.prompts_core import _fmt_holding_line, _fmt_wan
+from src.python.llm.rate_caliber import CALIBER_NOTE, LABEL_PORTFOLIO, LABEL_POSITION_SHORT
 
 logger = logging.getLogger("invest")
 
@@ -456,7 +457,9 @@ def _build_top3_block(
         weight = (mv / total_mv * 100) if total_mv else 0
         rate = h.get("profit_rate")
         rate_str = f"{rate:+.2f}%" if rate is not None else "--"
-        top_lines.append(f"  {i}. {name}（{mask_holding_code(code)}）市值{mv:,.0f} 占比{weight:.1f}% 收益率{rate_str}")
+        top_lines.append(
+            f"  {i}. {name}（{mask_holding_code(code)}）市值{mv:,.0f} 占比{weight:.1f}% {LABEL_POSITION_SHORT}{rate_str}"
+        )
     return "\n【持仓TOP3】\n" + "\n".join(top_lines) if top_lines else ""
 
 
@@ -485,7 +488,9 @@ def _build_data_slot_block(
     total_rate = (total_profit / total_cost * 100) if total_cost else 0.0
 
     lines = ["\n【你必须直接使用的数据】"]
-    lines.append(f"- 组合累计收益率: {total_rate:+.2f}%")
+    # 组合层是「成本口径的持仓收益率」，不是「累计收益率」——原标签会诱导模型按累计口径叙述
+    lines.append(f"- {LABEL_PORTFOLIO}: {total_rate:+.2f}%")
+    lines.append(f"- {CALIBER_NOTE}")
 
     # 最大持仓（按市值降序）
     sorted_h = sorted(
@@ -501,14 +506,14 @@ def _build_data_slot_block(
         top1_weight = (top1_mv / total_mv * 100) if total_mv else 0
         lines.append(f"- 最大持仓: {top1_name}（{mask_holding_code(top1_code)}）占比 {top1_weight:.1f}%")
 
-    # 各品种收益率 TOP10
+    # 各品种持仓收益率 TOP10
     rate_lines = []
     for h in sorted_h[:10]:
         code = h.get("code", "")
         name = h.get("name", "")
         rate = h.get("profit_rate")
         if rate is not None:
-            rate_lines.append(f"  {name}（{mask_holding_code(code)}）: 收益率 {rate:+.2f}%")
+            rate_lines.append(f"  {name}（{mask_holding_code(code)}）: {LABEL_POSITION_SHORT} {rate:+.2f}%")
     if rate_lines:
         lines.append("- 各品种盈亏比例:")
         lines.extend(rate_lines)

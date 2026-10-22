@@ -322,3 +322,70 @@ class TestBuildNewsSummary(unittest.TestCase):
         news = [{"title": long_title, "intro": "简介", "matched_keywords": []}]
         result = _build_news_correlation_summary(news)
         self.assertTrue(len(result) < 500)
+
+
+class TestRateCaliberLabelsInPrompts:
+    """收益率必须在提示词里带口径标签（本次修正：模型把持仓收益率当区间/累计收益率引用）。"""
+
+    _HOLDINGS = [
+        {
+            "name": "工商银行",
+            "code": "601398",
+            "market_value": 1000.0,
+            "cost": 500.0,
+            "profit": 500.0,
+            "profit_rate": 100.0,
+            "change_pct": 1.5,
+        }
+    ]
+
+    def test_holdings_line_labels_rate(self):
+        from src.python.llm.prompts_tables import _format_holdings_block
+
+        text = _format_holdings_block(self._HOLDINGS, show_cost=True)
+        assert "持仓收益率" in text
+        # 不得出现不带口径的裸百分比括注（旧形态：盈亏500(+100.00%)）
+        assert f"({'+'}100.00%)" not in text
+
+    def test_top3_labels_rate(self):
+        from src.python.llm.prompts_tables import _build_top3_block
+
+        assert "持仓收益率" in _build_top3_block(self._HOLDINGS, 1000.0)
+
+    def test_data_slot_labels_portfolio_and_note(self):
+        from src.python.llm.prompts_tables import _build_data_slot_block
+
+        text = _build_data_slot_block(self._HOLDINGS, 1000.0, 500.0, 500.0)
+        assert "组合持仓收益率（成本口径，未年化）" in text
+        assert "口径说明" in text and ("不可" in text or "不得" in text)
+
+    def test_interval_comparison_labels_rate_without_nested_parens(self):
+        """区间对比块的百分比必须带口径标签，且不得出现嵌套括号（`（…（…）…）`）。"""
+        from src.python.llm.prompts_data_blocks import _build_competitive_context_block
+
+        text = _build_competitive_context_block(
+            a_indices=None,
+            total_mv=1000.0,
+            total_today_profit=10.0,
+            history_data={"portfolio_returns": [0.1, 0.12], "benchmark_returns": [0.05, 0.06]},
+        )
+        assert "【区间对比】" in text
+        assert "区间收益率（窗口内，未年化）" in text
+        assert "（区间收益率（" not in text  # 防止再次套一层括号
+
+    def test_action_prompt_labels_rate(self):
+        """操作建议提示词（专家复盘同源）里的组合收益率与数值约束均带标签。"""
+        from src.python.llm.prompts_action import _build_expert_review_prompt
+
+        text = _build_expert_review_prompt(
+            total_mv=1000.0,
+            total_cost=500.0,
+            total_profit=500.0,
+            total_today_profit=10.0,
+            holdings_count=1,
+            categories={"股票": 1000.0},
+            holdings_details=self._HOLDINGS,
+            penetrated_assets=None,
+        )
+        assert "持仓收益率" in text
+        assert "口径说明" in text or "未年化" in text

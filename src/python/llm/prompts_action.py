@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import logging
 
+from src.python.llm.rate_caliber import CALIBER_NOTE, LABEL_POSITION_SHORT
+
 from src.python.core.constants import BEIJING_TZ
 from datetime import datetime
 from typing import Any
@@ -90,7 +92,7 @@ def _build_global_macro_prompt(
     return (
         f"【当前时间】{now_bj}（北京时间）\n"
         f"【指数】{idx_text}\n"
-        f"【持仓】总市值{total_mv:,.0f} 总盈亏{total_profit:+,.0f}（收益率{total_rate:+.2f}%）\n"
+        f"【持仓】总市值{total_mv:,.0f} 总盈亏{total_profit:+,.0f}（{LABEL_POSITION_SHORT}{total_rate:+.2f}%）\n"
         f"【分布】{' '.join(cat_parts)}\n"
         f"{flow_text}"
         f"{comp_text}"
@@ -233,7 +235,7 @@ def _build_expert_review_prompt(
     parts = [
         f"【当前时间】{now_bj}（北京时间）",
         f"【持仓概况】{holdings_count}只 市值{total_mv:,.0f} "
-        f"成本{total_cost:,.0f} 盈亏{total_profit:+,.0f}（收益率{total_rate:+.2f}%）今日{total_today_profit:+,.0f}",
+        f"成本{total_cost:,.0f} 盈亏{total_profit:+,.0f}（{LABEL_POSITION_SHORT}{total_rate:+.2f}%）今日{total_today_profit:+,.0f}",
         f"【分布】{' '.join(cat_parts)}{pen_text}",
     ]
     # 算法评级信号置顶：先给结论再看明细，避免模型从裸数值另行推断方向
@@ -286,8 +288,9 @@ def _build_expert_review_prompt(
         "只引用我实际持有的品种代码（上面列出的），"
         "不要虚构任何持仓代码。每个建议必须引用具体品种的名称和代码。\n"
         "【数值精度约束】\n"
-        "1. 持仓明细中每只品种已经标注了盈亏比例（如 +6.00% 或 -3.50%），"
-        "请直接引用这些数据，不要自行计算或虚构收益率、涨幅等百分比数值。\n"
+        f"1. 持仓明细中每只品种已标注「{LABEL_POSITION_SHORT}」（如 +6.00%），"
+        "请直接引用这些数据，不要自行计算或虚构收益率、涨幅等百分比数值；"
+        f"{CALIBER_NOTE}\n"
         "2. 如果需要引用收益归因数据，请参考【收益归因】段落中的占比数据，"
         "并明确标注为「贡献占比」而非收益率。\n"
         "3. 如果对某个数值不确定，请使用定性描述（如「表现较好」、「有盈利」、「亏损」等）"
@@ -408,7 +411,7 @@ def _build_health_check_prompt(
     parts = [
         f"【当前时间】{now_bj}（北京时间）",
         f"【持仓概况】{holdings_count}只 市值{total_mv:,.0f} "
-        f"成本{total_cost:,.0f} 盈亏{total_profit:+,.0f}（收益率{total_rate:+.2f}%）今日{total_today_profit:+,.0f}",
+        f"成本{total_cost:,.0f} 盈亏{total_profit:+,.0f}（{LABEL_POSITION_SHORT}{total_rate:+.2f}%）今日{total_today_profit:+,.0f}",
         f"【分布】{' '.join(cat_parts)}{pen_text}",
     ]
     # 算法评级信号置顶：先给结论再看明细，避免模型从裸数值另行推断方向
@@ -436,7 +439,7 @@ def _build_health_check_prompt(
         "按要求的输出格式给出评分和改进建议。",
         "",
         "【数值精度约束】",
-        "1. 持仓明细已标注每只品种的盈亏比例（如 +6.00%），请直接引用，不得虚构、推算或编造任何百分比数值。",
+        f"1. 持仓明细已标注每只品种的「{LABEL_POSITION_SHORT}」（如 +6.00%），请直接引用，不得虚构、推算或编造任何百分比数值；{CALIBER_NOTE}",
         "2. 如果需要引用收益归因，请参考【收益归因】段落，并标注为「贡献占比」而非收益率。",
         "3. 不确定具体数字时使用定性描述（如「表现较好」「有盈利」「亏损」）而非虚构具体百分比。",
         "4. 持仓排名已通过【持仓TOP3】段明确给出，不得自行推测「最大持仓」或「第一重仓」。",
@@ -493,7 +496,7 @@ def _build_penetration_deep_prompt(
 
     return (
         f"【当前时间】{now_bj}（北京时间）\n"
-        f"【持仓概况】{holdings_count}只 市值{total_mv:,.0f} 成本{total_cost:,.0f} 盈亏{total_profit:+,.0f}（收益率{total_rate:+.2f}%）\n"
+        f"【持仓概况】{holdings_count}只 市值{total_mv:,.0f} 成本{total_cost:,.0f} 盈亏{total_profit:+,.0f}（{LABEL_POSITION_SHORT}{total_rate:+.2f}%）\n"
         f"【分布】{' '.join(cat_parts)}\n"
         f"\n"
         f"【持仓明细】\n"
