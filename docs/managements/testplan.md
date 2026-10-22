@@ -395,6 +395,8 @@
 | R-DIAG-05 | `src/test/unit/ui/test_tui_menu.py` + `src/test/unit/config/test_features.py` | 批 2 |
 | R-DIAG-06 | `src/test/unit/web/test_handlers.py` + `src/test/unit/core/test_doctor.py` | 批 2 |
 | R-DIAG-07 | `src/test/unit/core/test_doctor.py` + `src/test/unit/config/test_features.py` | 批 2 |
+| R-DIAG-08 | `src/test/unit/core/test_logger.py` + `src/test/unit/core/test_market_hours.py` + `src/test/unit/cache/test_cache_io.py` | 批 6 |
+| R-DIAG-09 | `src/test/unit/core/test_doctor_health.py` | 批 6 |
 | R-BRK-01 | `src/test/unit/core/test_provider_registry.py` | 批 2 |
 | R-BRK-02 | `src/test/unit/core/test_provider_registry.py` + `src/test/unit/fetcher/test_fetcher_industry.py` | 批 2 |
 | R-BRK-03 | `src/test/unit/core/test_provider_registry.py` | 批 2 |
@@ -541,7 +543,9 @@
 | R-LLM-12 | `src/test/unit/llm/test_self_review.py` + `src/test/unit/report/test_llm_module_info.py` | 批 5 |
 | R-LLM-13 | `src/test/unit/llm/test_cost_forecast.py` + `src/test/unit/cli/test_cli_cost_forecast.py` + `src/test/unit/web/test_cost_forecast_flow.py` + `src/test/unit/handlers/test_handlers_report.py` | 批 5 |
 | R-LLM-14 | `src/test/unit/config/test_config_llm_providers_priority.py`（CLI/面板/Web 同源用例：`test_cli_llm_provider_order.py` / `test_handlers_llm_providers.py` / `test_config_edit.py::TestLlmProvidersBlock`） | 批 5 |
+| R-LLM-15 | `src/test/unit/llm/test_llm_budget.py` | 批 6 |
 | R-DATA-08 | `src/test/unit/fetcher/test_chain_overrides.py` | 批 5 |
+| R-DATA-09 | `src/test/unit/news/test_news_dedup_compact.py` | 批 6 |
 | R-LLM-10 | `src/test/unit/llm/test_llm_pacing.py`（策略解析/容错/注册/惰性装载兜底/零开销直通/间隔/抖动/并发上限/异常释放/403 不重试）+ `src/test/unit/config/test_config_llm_multi.py`（pacing 透传/缺省不注入/非对象忽略）+ `src/test/unit/llm/test_llm_api_multi.py`（`endpoint_key` 逐层下传并到达重试骨架——漏传则 `PacingGate` 拿空键、端点节流空转） | 批 5 |
 | R-LLM-08 | `src/test/unit/llm/test_llm_api.py` + `src/test/unit/report/test_llm_module_info.py` | 批 5 |
 | R-PF-01 | `src/test/unit/config/test_features.py` + `src/test/unit/report/test_section_visibility.py` | 批 5 |
@@ -888,6 +892,7 @@ def test_get_ttl_closed(self, mock_open):
 17. **whatif 生效日时序回测**：① 过去生效日→出「时序回测」页签/区 → `test_effective_date_merges_backtest` + `test_backtest_sheet_full` + `test_backtest_section_rendered`；② 缺省→维持现状（无回测）→ `test_no_effective_date_no_backtest_call` + `test_full_rendering_sections_without_backtest`；③ 未来/非法日期→降级占位、主报告正常 → `test_compute_backtest_days_invalid_format` / `test_compute_backtest_days_future_or_today_none` + `test_effective_date_exception_degrades` + `test_backtest_sheet_unavailable_reason_placeholder`；④ 断网/空缓存→回测不可用但报告仍生成 → `test_unavailable_returns_reason` / `test_unavailable_without_reason_falls_back` + `test_effective_date_bt_none_no_key`
 18. **编码/locale 可移植性**（CI `portability` job，阻塞；常规三道测试均跑在 UTF-8 locale 上，该类缺陷在它们上面结构性不可见；本地等价复现：`scripts/test-runner.py --mode portability`，发布期可 `release.py gate --with-portability`）：① 需求文件与 locale 无关——固定 `pip==24.3.1`（最后一版按「BOM → PEP263 cookie → locale 编码」解码）在 `LC_ALL=C` 下真实解析 `requirements.txt`，由 `test_script_encoding.py::TestRequirementsFileEncoding` 在本机同源守护（复刻旧 pip 解码次序 + 强制 cp936）；② 隐式编码严格档 —— `PYTHONWARNDEFAULTENCODING=1` 下任何未显式 `encoding=` 的文本 I/O 立即失败（`pytest.ini` 置 `error::EncodingWarning`，`openpyxl.worksheet._writer` 上游豁免就地声明），验载体为 `src/test/unit/` 全量（禁止 `open`/`Path.read_text`/`write_text`/`NamedTemporaryFile`/`subprocess.run(text=True)` 等隐式编码调用）；本地复现命令见 `developer-guide.md` → 编码/locale 自检
 19. **性能门禁**（CI `perf-gate` job，阻塞；`test-perf-report.py --gate` 主动压测——自造模拟持仓，行情/K线历史/交易日历咽喉打桩 + 传输层 socket 离线兜底与 sleep 置零，基准与网络状况/冷热缓存无关，basic 模式 ≤60s，未达标退出码 2；与运行历史查看 `perf-history.py`（样本不可控，不用于门禁）的分工见 `developer-guide.md`「定位边界（重要）」；验载体 `test_perf_report.py`（含离线化与状态隔离回归））
+20. **日志与缓存健康与卫生**：`doctor` 第八组只读体检（日志级别/DEBUG 占比/锚点体积/运行台账告警，`test_doctor_health.py`）；日志默认 `INFO`、预期缺失 `INFO` 与传输级故障 `WARNING` 分离（`test_logger.py` / `test_chain_fallback.py`）；锚点超 32MB 自动压缩（`test_news_dedup_compact.py`）；陈旧字节码清理（`test_release_hygiene.py`）
 
 ---
 

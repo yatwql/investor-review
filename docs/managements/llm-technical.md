@@ -1273,6 +1273,7 @@ reload_pricing() → 合并 llm_settings.json → pricing
   llm_max_concurrency
   llm_max_thinking_concurrency
   llm_full_fail_retry_delay
+  llm_total_time_budget_sec
   news_correlation_top_n
   debate
   fact_check

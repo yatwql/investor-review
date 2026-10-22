@@ -18,8 +18,8 @@
 | 测试用例 | — | — | 11,352 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 13 | 6,240 | 含 README.md（211 行）；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 12 | 6,022 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 182 | 65,769 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 4 + archive md 160），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 13,093 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 182 | 65,781 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 4 + archive md 160），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 13,105 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 164 | 51,882 | 各版本 changelog/plan/review-findings 与设计文档归档（157 md 50,492 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 4 | ~702 | 在办设计文档（扁平存放，完成后迁入对应版本的归档子目录）：两份 Jev 新闻关联判定文档（对照评测方案 + 类型化判定通道接入设计）+ 决策跨期反思闭环设计 + Web 浏览器验证方法 |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -516,7 +516,7 @@ investor-review/
 │   │   ├── web-workbench.png         #   README 界面实景：Web 工作台生成报告页签（上传→选格式→生成）
 │   │   ├── web-config.png            #   README 界面实景：Web 配置编辑面板（与 TUI 菜单同源）
 │   │   ├── cli-report.png            #   README 界面实景：CLI 生成报告回显（产物路径 / 盈亏汇总 / 耗时排行）
-│   │   ├── social-preview.jpg        #   GitHub 社交预览图 1200×630（猫头鹰左卡 + 品牌文案；make-social-preview.py 生成）
+│   │   ├── social-preview.jpg        #   GitHub 社交预览图 1200×630（猫头鹰左卡 + 品牌文案；make-assets.py social-preview 生成）
 │   │   ├── web/                      #   Web UI 前端（Jinja 模板 + 静态资产，Flask template/static 目录指向此处）
 │   │   │   ├── favicon.svg           #   标签页图标（品牌蓝底 + 猫头鹰头像「守望」，link 声明免 /favicon.ico 404）
 │   │   │   ├── favicon-mark.png      #   猫头鹰头像 80×80（favicon.svg 栅格化，Excel 首页品牌标记嵌入源）
@@ -1307,7 +1307,7 @@ investor-review/
 │   │   ├── trivial.py               #       检查 6：恒真断言
 │   │   ├── weak_mock.py             #       检查 7：弱 mock 断言
 │   │   ├── dead_fixtures.py         #       检查 8：死 fixture
-│   │   ├── facts_cache.py           #       文件事实缓存（脚本+_checklib+解释器版本+逐文件 size:mtime）
+│   │   ├── facts_cache.py           #       文件事实缓存（脚本+_shared/checklib+解释器版本+逐文件 size:mtime）
 │   │   └── runner.py                #       编排（八类检查依次执行 + finding 汇总 + 退出码）
 │   ├── _test_runner/                 #   测试驱动内部实现包（入口 test-runner.py 仅留 CLI 与编排）
 │   │   ├── __init__.py               #       子包标记（并注入仓库根到 sys.path）
