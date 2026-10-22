@@ -44,7 +44,7 @@
 
 | # | 问题 | 处理 |
 |---|------|------|
-| **rf-816** | 发布流程缺陷：`publish` 提交前不校验统计快照，而 pre-commit 钩子对含 `src/test` 变更的提交走 `--sync --ci --with-test-count`——只跑 `--sync` 时 `test-coverage.md` 的收集派生计数不被校验，本地「通过」、钩子里仍红，v0.14.2 因此连败两次 publish（多耗 34s 间隙 + 2 轮脚本） | 已修复：`publish` 在 `git add/commit` 之前自动执行 `check-doc-drift.py --sync --ci --with-test-count`（与钩子同源参数），失败即中止并提示；补 2 例回归（参数同源 + 先于提交、失败不提交/不合并/不打 tag）；CLAUDE.md / developer-guide / scripts-reference 三处流程描述同步 |
+| **rf-816** | 发布流程缺陷：`publish` 提交前不校验统计快照，而 pre-commit 钩子对含 `src/test` 变更的提交走 `--sync --ci --with-test-count`——只跑 `--sync` 时 `test-coverage.md` 的收集派生计数不被校验，本地「通过」、钩子里仍红，v0.14.2 因此连败两次 publish（多耗 34s 间隙 + 2 轮脚本） | 已修复：`publish` 在 `git add/commit` 之前自动执行 `check-doc-drift.py --sync --ci --with-test-count`（与钩子同源参数），失败即中止并提示；补 2 例回归（参数同源 + 先于提交、失败不提交/不合并/不打 tag）；CLAUDE.md / developer-guide / scripts-reference 三处流程描述同步（参考文档补一览行、命令注释与「publish 提交前先同步统计快照」说明段） |
 | **rf-815** | v0.14.2 master 档 CI 在 `test (3.11)` 红 1 例：`test_unequal_lengths_uses_shorter` 用**逐位相等**断言`beta == portfolio_beta(portfolio[:200], benchmark)`，而两条路径的对齐和式顺序不同，末位差 1.6e-17 —— 本机 3.13 恰好相等、3.11 不等（跨实现浮点不可依赖逐位相等）。该断言是本轮 `rf-813` 强化时引入的 | 已修复：改 `pytest.approx(..., abs=1e-12)` 保留「对齐到较短者」语义，长度敏感反例改 `> 1e-6`；本地 3.11 解释器实测差值 1.6e-17、长度敏感 1.25e-2，两侧都稳。教训：浮点断言一律容差，禁 `==`（含「同一算式不同输入长度」这类看似等价的比较）——该纪律已落到三处：CLAUDE.md 测试纪律条目、`developer-guide.md` 测试写作规范（正反例）、`testplan.md` §1.2 边界清单「浮点比较边界」行 |
 
 ### 归档档案
