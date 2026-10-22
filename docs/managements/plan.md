@@ -66,7 +66,12 @@
 
 **落地设计**：若判定转正，按 [`decision-reflection-shadow-design.md`](../plan/decision-reflection-shadow-design.md) 四迭代执行（决策条目结构化 → 到期结算器 → doctor 概览增强 → 报告内反思块），该设计以 Vibe-Trading `shadow_account`（extract→backtest→render）为参照；死线未过前不实施。plan-76 持仓变动复盘已落地，与其构成「意图 vs 成交」对账（只读，不互写）。
 
-**当前状态**：撤销与转正条件均不满足，**维持观察**（不撤销、不转正、不实施设计）。下个观察点：下个发布周期重跑 `fold_ledger`——已结算 ≥10 → 据 doctor 账本概览评估转正（正式命中率另需 `directional_total ≥ 20`，flat 占比高时可信度由人工裁定）；仍 <10 且无新增结算 → 撤销（含 `decision_llm_capture`、行动章复盘块注入与对应需求条目）。
+**当前状态（2026-10-23 观测，v0.14.7 发布周期）**：
+
+- **撤销条件不满足**：① `experiment_stats` 记录启用 **63 次**、最近启用 2026-10-22（仍在真实使用）；② 账本已结算 **11 条**（≥10 门槛）。
+- **转正条件未满足**：已结算 11 ≥ 10 的下限已过，但命中率不可采信——`fold_ledger` 报 `directional_total = 9`（正式命中率需 ≥20）、`sample_sufficient = False`；现有 11 条**全部来自 `discipline`（确定性再平衡触发）**，`expert_review`（LLM 建议）尚无一条到期，即「LLM 决策闭环」尚未被真实数据验证过。
+- **待观察的存量**：37 条 pending 全为 `expert_review`（2026-10-17 ~ 10-22 的报告日，25 A 股 / 12 基金），距满 `MIN_SETTLE_BARS = 5` 个交易日尚差数日；行情路由已覆盖 A 股 kline 与场外基金 nav，到期即由 `settle_pending_decisions` 自动结算，非结构死锁。
+- **判定**：维持观察（不撤销、不转正、不实施设计）。下个观察点：这批 pending 到期重跑 `fold_ledger`，`directional_total` 有望从 9 升至 40+，届时据 doctor 账本概览评估转正；若届时 `directional_total` 仍 <20 且无新增，按撤销条件第 ② 条处置。
 
 ### P4 — 实验候选（先决门槛未过，暂缓）
 

@@ -9,6 +9,10 @@
 
 ## [0.14.8-dev] - 开发中（未发布）
 
+### Changed
+
+- **`decision_reflection` 生命周期观测（plan-70）**：按死线重跑 `fold_ledger` + `experiment_stats` + doctor 账本概览——启用 63 次（最近 2026-10-22）、已结算 11 条、`directional_total` 9、`sample_sufficient=False`。撤销两条件均不满足（仍在用 / 已结算 ≥10），转正下限（已结算 ≥10）已过但命中率样本未达可信阈值；且已结算 11 条全部来自确定性 `discipline` 载体，`expert_review`（LLM 建议）尚无一条到期——「LLM 决策闭环」仍未获真实数据验证。判定：维持观察，37 条 pending（10-17~10-22，满 5 个交易日后到期）为下个观察点；同步刷新 technical §6.9 生命周期表该行「当前态」。
+
 
 （本次发布内容见下方归档索引）
 
