@@ -11,7 +11,7 @@
 
 ### Added
 
-- **Social Preview 生成脚本入库**：`scripts/make-social-preview.py` 把 1200×630 品牌预览图的画布模板（猫头鹰「守望」左卡 + 品牌文案右栏 + 夜空渐变）与渲染流程固化进仓库——素材复用 `src/static/owl-mascot.svg`，改文案/换色后重跑即复现同一张图；产物落 `docs/tmp/github/`（git 忽略）供人工上传仓库 Settings。`cairosvg` 为维护期可选依赖（不入 requirements：无 cairo 系统库的环境装不上），缺依赖或素材不可读时打印指引并以退出码 1 结束。回归 10 例（画布尺寸/品牌文案/素材内嵌一致/宽高比/栅格化参数/中间 PNG 去留/两条退出码路径）。
+- **Social Preview 生成脚本入库**：`scripts/make-social-preview.py` 把 1200×630 品牌预览图的画布模板（猫头鹰「守望」左卡 + 品牌文案右栏 + 夜空渐变）与渲染流程固化进仓库——素材复用 `src/static/owl-mascot.svg`，改文案/换色后重跑即就地刷新入库资产 `src/static/social-preview.jpg`（默认输出，`-o` 可改道临时目录），提交后由人工上传到仓库 Settings。`cairosvg` 为维护期可选依赖（不入 requirements：无 cairo 系统库的环境装不上），缺依赖或素材不可读时打印指引并以退出码 1 结束。回归 12 例（画布尺寸/品牌文案/素材内嵌一致/宽高比/入库资产定位/成品尺寸/栅格化参数/中间 PNG 去留/两条退出码路径）。
 
 ### Changed
 
@@ -22,6 +22,8 @@
 - **仓库更名 `investor-util` → `investor-review`（`rf-817`）**：`util` 后缀与产品定位（完整工作流的应用，非脚本合集）矛盾，且与中文名「投资复盘助手」语义不对应。同步 14 个文件 47 处引用：README 徽章与 clone 命令、`pyproject.toml` 包名、目录树根名、四份用户手册路径示例、CLI/Web `prog` 显示名、三个 provider 的 HTTP `User-Agent`、通知邮件 `From` 兜底。GitHub 侧旧 URL 永久 301 重定向，外部引用不断。
 
 ### Fixed
+
+- **Social Preview 脚本默认输出与装配修正（`rf-819`）**：`_load_render_deps` 仍按旧字段名 `image_cls` 构造 `RenderDeps`，真机执行即 `TypeError`（回归只走注入替身，未覆盖真实导入装配）——改为 `image_module` 并补「真实导入装配」用例；默认输出改为入库资产 `src/static/social-preview.jpg`（受 git 管控，重跑即就地刷新），`-o` 可改道；重跑产物与已提交图片逐字节一致。
 
 - **`publish` 提交前同步统计快照（`rf-816`）**：钩子对含 `src/test` 变更的提交走 `--sync --ci --with-test-count`，而 `publish` 原先不校验，只跑 `--sync` 时 `test-coverage.md` 收集计数陈旧不被发现——本地通过、钩子仍红，v0.14.2 连败两次 publish。现 `publish` 在提交前自动按同源参数同步，失败即中止；补 2 例回归。
 

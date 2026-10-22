@@ -57,7 +57,7 @@
 | `probe-csi-factor-indices.py` / `probe-push2.py` | 诊断 | 旧入口兼容垫片（薄委托到 `probes/csi.py` / `probes/push2.py`，用法不变） |
 | `factor_zoo_eval.py` | 诊断 | 因子动物园目录评测（非生产代码；五个来源族各抽 5 个因子，评测 A 字段可得率 / B 与既有信号族增量 / C 全量计算耗时占比三项指标，A/B/C 全过才转正立项；子命令 catalog / fields / signals / timing / verdict / all，产物只落 `docs/tmp/factor-zoo/`；实现拆在 `_factor_zoo/`） |
 | `check-svg.py` | 诊断 | README SVG 架构图检查（子命令 `geom` 几何 / `pixel` 像素 / `text-overflow` 文字色越界；像素子命令需 Pillow） |
-| `make-social-preview.py` | 诊断 | GitHub Social Preview 图生成（1200×630 JPG；猫头鹰左卡 + 品牌文案右栏，备 `cairosvg` + Pillow，产物落 `docs/tmp/github/`） |
+| `make-social-preview.py` | 诊断 | GitHub Social Preview 图生成（1200×630 JPG；猫头鹰左卡 + 品牌文案右栏，需 `cairosvg` + Pillow，默认就地刷新入库资产 `src/static/social-preview.jpg`） |
 | `_checklib.py` | 内部 | 检查脚本共享设施（统一 `-v/--ci` 契约与 `[OK]`/`[ERR]` 输出、`rel()`、`report()`、文档区间与表格解析） |
 | `_test_runner/` | 内部 | 测试驱动内部实现包（paths / modes / pytest_env / machine_info / doc_writer / report_html / runner） |
 | `launch.sh` / `launch.ps1` | 启动 | Linux/macOS / Windows 一键启动脚本（无参数启动 TUI；`web` 子命令启动 Web 浏览器模式） |
@@ -946,12 +946,13 @@ README 首屏架构图（`src/static/architecture.svg` / `llm-chain.svg` / `capa
 模板与素材都在仓库内，改文案或换色后重跑即复现同一张图。
 
 ```bash
-.venv/bin/python scripts/make-social-preview.py                 # 默认落 docs/tmp/github/social-preview.jpg
-.venv/bin/python scripts/make-social-preview.py -o /tmp/x.jpg   # 自定义输出
+.venv/bin/python scripts/make-social-preview.py                 # 默认写入 src/static/social-preview.jpg（入库资产）
+.venv/bin/python scripts/make-social-preview.py -o /tmp/x.jpg   # 自定义输出（不碰入库资产）
 .venv/bin/python scripts/make-social-preview.py --keep-svg      # 保留中间 PNG 便于排查
 ```
 
-产物属维护期素材，只落 `docs/tmp/`（git 忽略域），由人工上传到仓库 Settings → Social preview。
+产物即仓库资产 `src/static/social-preview.jpg`（受 git 管控，重跑即就地刷新），需改图时跑脚本后提交，
+再由人工上传到仓库 Settings → Social preview（GitHub API 不提供该上传接口）。
 依赖 `cairosvg`（SVG 栅格化，不入 requirements——无 cairo 系统库的环境装不上）+ `Pillow`（已为运行期依赖），
 故不进任何门禁；缺依赖或素材不可读时打印指引并以**退出码 1** 结束。
 

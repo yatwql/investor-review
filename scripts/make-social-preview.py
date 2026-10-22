@@ -6,15 +6,15 @@
 `docs/managements/DESIGN.md` 的暗色语义色同源（背景渐变 `#0b1524→#122036→#16283f`、
 强调色 `#2E75B6`）。
 
-产物属维护期素材，只落 `docs/tmp/`（git 忽略域），由人工上传到仓库 Settings →
-Social preview。模板与素材都在仓库内，改文案/换色后重跑即可复现同一张图。
+产物即仓库资产 `src/static/social-preview.jpg`（入库受 git 管控）：改动文案/配色后重跑脚本
+即就地刷新该图，提交后由人工上传到仓库 Settings → Social preview。
 
 依赖：`cairosvg`（SVG 栅格化，不入 requirements）与 `Pillow`（JPG 编码，运行期已依赖）。
 cairosvg 在无 cairo 系统库的环境装不上，故只在本机手工运行，不进任何门禁。
 
 用法：
-  .venv/bin/python scripts/make-social-preview.py                  # 默认落 docs/tmp/github/social-preview.jpg
-  .venv/bin/python scripts/make-social-preview.py -o /tmp/x.jpg    # 自定义输出路径
+  .venv/bin/python scripts/make-social-preview.py                  # 默认写入 src/static/social-preview.jpg
+  .venv/bin/python scripts/make-social-preview.py -o /tmp/x.jpg    # 自定义输出路径（不碰入库资产）
   .venv/bin/python scripts/make-social-preview.py --keep-svg       # 保留中间 PNG（同名 .png）
 
 退出码：
@@ -33,7 +33,7 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 OWL_SVG = REPO_ROOT / "src" / "static" / "owl-mascot.svg"
-DEFAULT_OUTPUT = REPO_ROOT / "docs" / "tmp" / "github" / "social-preview.jpg"
+DEFAULT_OUTPUT = REPO_ROOT / "src" / "static" / "social-preview.jpg"
 
 WIDTH = 1200
 HEIGHT = 630
@@ -64,7 +64,7 @@ def _load_render_deps() -> RenderDeps:
         from PIL import Image
     except ImportError as e:  # pragma: no cover - 依赖齐备的环境走不到
         raise RenderDependencyError(f"{_INSTALL_HINT}（{e}）") from e
-    return RenderDeps(cairosvg=cairosvg, image_cls=Image)
+    return RenderDeps(cairosvg=cairosvg, image_module=Image)
 
 
 def build_svg(owl_b64: str) -> str:

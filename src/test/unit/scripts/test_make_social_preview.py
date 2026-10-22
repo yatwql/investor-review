@@ -79,6 +79,22 @@ class TestCanvasTemplate:
         assert (box["w"] / box["h"]) == pytest.approx(vb_w / vb_h, rel=0.03)
 
 
+class TestTrackedAsset:
+    """入库资产定位：默认输出指向 git 管控的 `src/static/` 品牌图。"""
+
+    def test_default_output_is_tracked_static_asset(self, mod):
+        rel = mod.DEFAULT_OUTPUT.relative_to(mod.REPO_ROOT)
+        assert rel.parts[:2] == ("src", "static")
+        assert mod.DEFAULT_OUTPUT.suffix == ".jpg"
+
+    def test_committed_preview_matches_canvas_size(self, mod):
+        from PIL import Image
+
+        with Image.open(mod.DEFAULT_OUTPUT) as image:
+            assert image.size == (mod.WIDTH, mod.HEIGHT)
+            assert image.format == "JPEG"
+
+
 class TestRender:
     """渲染面：栅格化参数、JPG 产物与中间文件去留。"""
 
@@ -109,6 +125,20 @@ class TestRender:
         out = tmp_path / "preview.jpg"
         mod.render_jpeg(mod.build_svg(""), out, self._deps(mod), keep_png=True)
         assert out.with_suffix(".png").is_file()
+
+
+class TestDependencyLoader:
+    """依赖装载面：字段名与真实导入路径一致（构造替身即暴露关键字错配）。"""
+
+    def test_load_render_deps_wires_module_kwargs(self, mod, monkeypatch):
+        import sys
+        import types
+
+        stub = types.SimpleNamespace(svg2png=None)
+        monkeypatch.setitem(sys.modules, "cairosvg", stub)
+        deps = mod._load_render_deps()
+        assert deps.cairosvg is stub
+        assert callable(deps.image_module.open)
 
 
 class TestMainExitCodes:
