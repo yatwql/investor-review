@@ -826,7 +826,7 @@
 
 ### Q. Web 模式配置编辑
 
-Web 模式（浏览器界面）提供「配置编辑」面板，可修改的配置项与 TUI 主菜单**完全一致**（完整镜像），共 9 组（功能开关按与 TUI `[S]` 相同的四组分块渲染）：
+Web 模式（浏览器界面）提供「配置编辑」面板，可修改的配置项与 TUI 主菜单**完全一致**（完整镜像），共 11 组（功能开关按与 TUI `[S]` 相同的四组分块渲染）：
 
 | 组 | 配置项 | 对应 TUI 菜单 |
 |:--|:--|:--|
@@ -837,7 +837,9 @@ Web 模式（浏览器界面）提供「配置编辑」面板，可修改的配�
 | 独立章节与回放 | `rebalance_schedule_replay`（默认关）/ `holding_change_review`（默认关）/ `whatif_trade_cost`（默认关）/ `stock_fundamentals` / `crisis_replay` | `[S]` 独立章节与回放块（25-29） |
 | 持仓匿名化 | `anonymization.mode`（off / code_display / full_anonymous / summary） | `[A]` |
 | 对比指数池 | `comparison_indices`（增 / 删 / 重置默认） | `[I]` |
-| LLM 分析章节 | `enabled_llm.global_macro` / `expert_review` / `health_check` / `penetration_deep` / `news_correlation` | `[S]` 标准模块 |
+| LLM 多链线路优先级 | `llm_providers.providers[].priority`（各条目 ▲▼ 调序） | `[M]` |
+| LLM 调优参数 | `llm_max_thinking_concurrency` / `llm_max_concurrency` / `max_retries` / `llm_full_fail_retry_delay` / `llm_total_time_budget_sec` / `daily_cost_limit` | `[D]` 二级 `[L]` |
+| LLM 分析章节 | `enabled_llm.global_macro` / `expert_review` / `health_check` / `penetration_deep` / `news_correlation` / `self_review` / `holding_change` | `[S]` 标准模块 |
 | 机制与诊断 | `decision_reflection`（默认关）/ `report_qa`（默认关）/ `deterministic_signal` / `module_quality_gate` / `doctor_check` | `[S]` 机制与诊断块（30-34） |
 
 **写入行为**：

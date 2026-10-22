@@ -180,6 +180,7 @@ skeleton.py:generate_llm_content()
 | `prompts_review.py` | 工具 | 自审与持仓变动复盘提示词（`_SYSTEM_SELF_REVIEW`/`_SYSTEM_HOLDING_CHANGE_REVIEW` + 构建器与摘要辅助，自 prompts_core 下沉） | `_build_self_review_prompt()` |
 | `prompts_tables.py` | 工具 | 持仓/穿透/指标/情景/数据质量/汇率等数据块格式化为 Markdown | `_format_holdings_block()` / `_build_holdings_summary()` |
 | `prompts_action.py` | 工具 | 各模块 User Prompt 构建（global_macro / expert_review / health_check / penetration_deep / debate_synthesis）+ 集中度问答块 | `_build_expert_review_prompt()` / `_build_concentration_qa_block()` |
+| `rate_caliber.py` | 工具 | 收益率口径标签的唯一声明点（持仓 / 组合 / 区间标签 + 口径说明）；`PROMPT_SCHEMA_VERSION` 为提示词文本版本，并入 `build_llm_fingerprint()`，静态文案改动也换缓存键 | `LABEL_POSITION` / `LABEL_PORTFOLIO` / `LABEL_INTERVAL` / `CALIBER_NOTE` / `PROMPT_SCHEMA_VERSION` |
 | `prompts_signals.py` | 工具 | 信号预消化：行业资金流向段方向标注与分方向排名（无开关，默认路径）+ 算法评级信号块（市场温度/估值分位/尾部风险/持仓基本面/叙事与数字背离 → `信号：…` 行，`deterministic_signal` 开关（读侧注入面），判定收敛于缓存后缀函数保证读写键同源） | `_build_sector_flow_block()` / `_build_signal_digest_block()` / `_signal_digest_cache_suffix()` |
 | `fingerprint.py` | 工具 | LLM 缓存指纹计算、稳定性字段提取、TTL 查询 | `compute_fingerprint()` / `build_llm_fingerprint()` |
 | `force_scope.py` | 工具 | 模块级强刷范围：可强刷键清单（注册表 settings_suffix 子集）+ `resolve_force_scope` 粒度优先归一与未知键校验 + `is_module_forced`；全局 force 与模块子集在 `generate_all_llm` 入口归一为模块键集合，不改缓存键构造 | `resolve_force_scope()` / `is_module_forced()` |
@@ -873,6 +874,8 @@ penetrated_assets ──→ extract_stable_penetration()
 | `pipeline_data` 派生的【环比变化】【数据质量降级】两段 | `expert_review` / `health_check` / 辩论三键 | `prompts_core._build_difpipeline_data_block()` / `_build_data_degradation_block()` | 由 `_pipeline_block_cache_suffix()` 调用**提示词侧同一构建器**取文本再哈希——「进键的文本」与「进提示词的文本」同源 |
 | `purchase_constraint_block`（申购限购约束块） | 标准四模块 + 辩论三键 + `self_review` | `prompts_tables._build_prompt_appendix()` 第 4 段 |
 | `holding_change_block`（持仓变动复盘提示词块） | 标准四模块 + 辩论三键 + `self_review`（附录形态与 purchase 块平行） | `prompts_tables._build_prompt_appendix()` 第 5 段 | 由 `extract_holding_change_block(pipeline_data)` **唯一提取点**取契约字段 `prompt_block`（report 构建期经展示视图同源渲染一次），同一实例交预检侧 `holding_change_block` 与写侧附录；块空不进提示词也不进键（关态逐字节回退）；章内归因块另走 `holding_change_review_fingerprint` 内容寻址 | 由 `extract_purchase_constraint_block(pipeline_data)` **唯一提取点**取契约字段 `constraint_block`（report 构建期渲染一次），同一实例交预检侧 `purchase_block` 与写侧附录；块空不进提示词也不进键（接线前录制四模块基线，断言空块 == 引入前黄金值，防「空串+分隔符」换哈希）；新闻批量路径 `_batch_prompt` 拼块 + `_batch_preparer` 并入 `context_fp` 同源 |
+
+**提示词文本版本（`rate_caliber.PROMPT_SCHEMA_VERSION`）**：标签、表头、口径说明等**静态文案**改动不改变持仓/行情数据，哪怕提示词内容变了，结构化输入的指纹也可能不变——预检会命中按旧口径生成的缓存，静默复用错口径结论。故 `build_llm_fingerprint()` 把该版本号并入哈希输入：改文案即递增版本（一次性换键，旧缓存自动重算）。标签本身收敛在 `llm/rate_caliber.py` 单一声明点，供 `prompts_action` / `prompts_tables` / `prompts_data_blocks` 共同引用。
 
 **两个结构性保证**：
 

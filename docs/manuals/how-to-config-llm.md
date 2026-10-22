@@ -357,7 +357,7 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
 
 > 以下为 `llm_settings.json` 的全部配置项。`{module}` 占位符替换为具体的模块后缀（global_macro / expert_review / health_check / penetration_deep / news_correlation / self_review / holding_change）。
 
-配置分为**全局配置**和**模块级配置**两类。全局配置共有 10 项：
+配置分为**全局配置**和**模块级配置**两类。全局配置项如下：
 
 - `llm_total_time_budget_sec`（秒，默认 `0`=不启用）：整段 LLM 生成的时间预算；超预算后不再启动新模块（已在跑的模块不打断），日志回显已用时长与预算值，报告按已生成内容呈现。用于兜住「单模块卡住 + 重试叠加」把一次完整报告拖成小时级（实测曾出现 LLM+新闻阶段 6,623s）。
 - `max_retries`（int，默认 `2`）：**503**/超时/网络异常最多重试次数（**429/403 归 quota 不重试**——429 首试即 600s 长冷却熔断）
