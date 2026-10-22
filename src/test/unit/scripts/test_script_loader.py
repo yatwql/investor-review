@@ -25,10 +25,10 @@ class TestLoadContract:
 
     def test_scripts_dir_points_at_repo_scripts(self):
         assert SCRIPTS_DIR.is_dir()
-        assert (SCRIPTS_DIR / "check-svg.py").is_file()
+        assert (SCRIPTS_DIR / "test-runner.py").is_file()
 
     def test_load_by_filename(self):
-        mod = load_script("check-svg.py")
+        mod = load_script("_assets/svg_check.py")
         assert hasattr(mod, "geom_findings")
 
     def test_module_name_derived_from_filename(self):

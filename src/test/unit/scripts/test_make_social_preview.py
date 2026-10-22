@@ -1,4 +1,4 @@
-"""`scripts/make-social-preview.py`（GitHub Social Preview 生成）测试。
+"""`scripts/make-assets.py social-preview`（GitHub Social Preview 生成）测试。
 
 覆盖画布模板（尺寸/品牌文案/吉祥物素材内嵌）与渲染面（栅格化参数、JPG 落盘、
 中间 PNG 去留、依赖缺失与素材不可读的退出码口径）。渲染依赖以替身注入，
@@ -21,10 +21,10 @@ XLINK_HREF = "{http://www.w3.org/1999/xlink}href"
 
 @pytest.fixture(name="mod")
 def fixture_mod():
-    """加载 `scripts/make-social-preview.py` 为可测模块。"""
+    """加载 `scripts/_assets/social_preview.py` 为可测模块。"""
     from src.test._script_loader import load_script
 
-    return load_script("make-social-preview.py")
+    return load_script("_assets/social_preview.py", module_name="_assets_social_preview_under_test")
 
 
 class _FakeCairosvg:

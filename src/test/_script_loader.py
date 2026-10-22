@@ -6,7 +6,7 @@
 派生规则）时需逐文件同步。此处收敛为单一实现：
 
     from src.test._script_loader import load_script
-    mod = load_script("check-svg.py")
+    mod = load_script("test-runner.py")
 
 新测试一律复用本模块，不再自带样板（样板唯一性由
 `src/test/unit/scripts/test_script_loader.py` 机检）。
@@ -27,10 +27,10 @@ def load_script(name: str, *, module_name: str | None = None) -> ModuleType:
     """加载 `scripts/` 下的脚本为模块。
 
     Args:
-        name: 相对 `scripts/` 的脚本路径，如 ``"check-svg.py"``、
+        name: 相对 `scripts/` 的脚本路径，如 ``"test-runner.py"``、
             ``"_test_runner/modes.py"``。
         module_name: 注册进 ``sys.modules`` 的模块名。缺省由文件名派生
-            （``check-svg.py`` → ``check_svg``）；需与真实模块名区隔
+            （``test-runner.py`` → ``test_runner``）；需与真实模块名区隔
             （测试期补丁不外溢到同名真实导入）时显式指定。
 
     Returns:

@@ -7,15 +7,16 @@
 强调色 `#2E75B6`）。
 
 产物即仓库资产 `src/static/social-preview.jpg`（入库受 git 管控）：改动文案/配色后重跑脚本
-即就地刷新该图，提交后由人工上传到仓库 Settings → Social preview。
+即就地刷新该图，提交后由人工上传到仓库 Settings → Social preview。入口见
+`scripts/make-assets.py social-preview`（本模块保留命令行解析，供入口转发与测试直调）。
 
 依赖：`cairosvg`（SVG 栅格化，不入 requirements）与 `Pillow`（JPG 编码，运行期已依赖）。
 cairosvg 在无 cairo 系统库的环境装不上，故只在本机手工运行，不进任何门禁。
 
 用法：
-  .venv/bin/python scripts/make-social-preview.py                  # 默认写入 src/static/social-preview.jpg
-  .venv/bin/python scripts/make-social-preview.py -o /tmp/x.jpg    # 自定义输出路径（不碰入库资产）
-  .venv/bin/python scripts/make-social-preview.py --keep-svg       # 保留中间 PNG（同名 .png）
+  .venv/bin/python scripts/make-assets.py social-preview                  # 默认写入 src/static/social-preview.jpg
+  .venv/bin/python scripts/make-assets.py social-preview -o /tmp/x.jpg    # 自定义输出路径（不碰入库资产）
+  .venv/bin/python scripts/make-assets.py social-preview --keep-svg       # 保留中间 PNG（同名 .png）
 
 退出码：
   0 — 生成成功
@@ -31,7 +32,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 OWL_SVG = REPO_ROOT / "src" / "static" / "owl-mascot.svg"
 DEFAULT_OUTPUT = REPO_ROOT / "src" / "static" / "social-preview.jpg"
 

@@ -32,6 +32,7 @@
 | `test-runner.py` | 测试 | pytest 标记模式封装驱动，支持 18 种 `--mode`（含非 pytest 的 `portability` 探针模式） |
 | `test-extract-failures.py` | 测试 | 从 pytest-html 报告提取失败用例详情 |
 | `test-find-order-dependent.py` | 测试 | 单跑绿合跑红的顺序依赖污染源二分定位 |
+| `make-assets.py` | 文档 | 仓库视觉资产维护：社交预览图生成 + README 架构图渲染体检（几何/像素/文字越界；需 cairosvg / Pillow） |
 | `check-code-traces.py` | 质量 | 代码注释/文档字符串中历史变更痕迹检查 |
 | `check-doc-traces.py` | 文档 | 面向读者文档（.md）历史变更痕迹 + 结构性冗余（DUPLICATE）检查 |
 | `check-test-markers.py` | 测试 | AST 静态扫描验证测试标记合规性 |
@@ -56,8 +57,7 @@
 | `perf-history.py` | 运维 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 时段聚合（耗时与费用合计/环比）/机读输出（llm_cost、by_period 费用字段）；实现拆在 `_perf_view/`——`stats.py` 统计原语 / `data.py` 派生 / `report.py` 渲染 / `cli.py` 入口，主入口只留 docstring 与 re-export） |
 | `probe.py` | 运维 | 探测统一入口（按 target 分发到 `probes/` 子模块；新探针实现契约面登记即用） |
 | `eval-factor-zoo.py` | 评测 | 因子动物园目录评测（非生产代码；五个来源族各抽 5 个因子，评测 A 字段可得率 / B 与既有信号族增量 / C 全量计算耗时占比三项指标，A/B/C 全过才转正立项；子命令 catalog / fields / signals / timing / verdict / all，产物只落 `docs/tmp/factor-zoo/`；实现拆在 `_factor_zoo/`） |
-| `check-svg.py` | 文档 | README SVG 架构图检查（子命令 `geom` 几何 / `pixel` 像素 / `text-overflow` 文字色越界；像素子命令需 Pillow） |
-| `make-social-preview.py` | 文档 | GitHub Social Preview 图生成（1200×630 JPG；猫头鹰左卡 + 品牌文案右栏，需 `cairosvg` + Pillow，默认就地刷新入库资产 `src/static/social-preview.jpg`） |
+| `_assets/` | 内部 | 视觉资产实现包（`social_preview.py` 预览图绘制与栅格化 / `svg_check.py` 架构图渲染体检） |
 | `_checklib.py` | 内部 | 检查脚本共享设施（统一 `-v/--ci` 契约与 `[OK]`/`[ERR]` 输出、`rel()`、`report()`、文档区间与表格解析） |
 | `_test_runner/` | 内部 | 测试驱动内部实现包（paths / modes / pytest_env / machine_info / doc_writer / report_html / runner） |
 | `launch.sh` / `launch.ps1` | 启动 | Linux/macOS / Windows 一键启动脚本（无参数启动 TUI；`web` 子命令启动 Web 浏览器模式） |
@@ -488,41 +488,43 @@ sym |= set(re.findall(r'^\s{0,8}["\']([a-z][a-z0-9_]{2,})["\']\s*:', src, re.M))
 
 > **何时跑**：`git commit` 时由 pre-commit 钩子按暂存域自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` job 恒跑全量兜底。
 
-**`make-social-preview.py` — GitHub Social Preview 图生成**
+**`make-assets.py` — 仓库视觉资产维护（社交预览图 + 架构图渲染体检）**
 
-品牌社交预览图（1200×630 JPG）：左卡内嵌 `src/static/owl-mascot.svg`（猫头鹰「守望」），
-右栏中文品牌名 / 英文名 / 定位句 / 能力关键词，强调色取 `DESIGN.md` 的暗色语义色。
-模板与素材都在仓库内，改文案或换色后重跑即复现同一张图。
-
-```bash
-.venv/bin/python scripts/make-social-preview.py                 # 默认写入 src/static/social-preview.jpg（入库资产）
-.venv/bin/python scripts/make-social-preview.py -o /tmp/x.jpg   # 自定义输出（不碰入库资产）
-.venv/bin/python scripts/make-social-preview.py --keep-svg      # 保留中间 PNG 便于排查
-```
-
-产物即仓库资产 `src/static/social-preview.jpg`（受 git 管控，重跑即就地刷新），需改图时跑脚本后提交，
-再由人工上传到仓库 Settings → Social preview（GitHub API 不提供该上传接口）。
-依赖 `cairosvg`（SVG 栅格化，不入 requirements——无 cairo 系统库的环境装不上）+ `Pillow`（已为运行期依赖），
-故不进任何门禁；缺依赖或素材不可读时打印指引并以**退出码 1** 结束。
-
-**`check-svg.py` — README SVG 架构图检查（三合一）**
-
-README 首屏架构图（`src/static/architecture.svg` / `llm-chain.svg` / `capabilities.svg`）的渲染质量检查，改图后用于验证文本不越界/重叠。三个渲染质量检查（几何/像素越界/文字色越界）合并为一个带子命令的统一入口（注意：**均带 `--ci` 与退出码语义**，0=通过 / 1=缺 Pillow / 2=发现越界）。
+`src/static/` 视觉资产的「造」与「检」共用一个入口——两者都不参与门禁，只在本机手工运行，
+依赖同类可选包（`cairosvg` 栅格化 / `Pillow` 像素审查）。四个子命令：
 
 ```bash
-# 几何审查：文本越界 / 贴边 / 文本重叠（估算字体宽度；矩形底部不齐仅作提示，不计入退出码）
-.venv/bin/python scripts/check-svg.py geom <svg路径…>
+# 生成 GitHub 社交预览图（1200×630 JPG）：就地刷新入库资产 src/static/social-preview.jpg
+.venv/bin/python scripts/make-assets.py social-preview
+.venv/bin/python scripts/make-assets.py social-preview -o /tmp/x.jpg   # 自定义输出（不碰入库资产）
+.venv/bin/python scripts/make-assets.py social-preview --keep-svg      # 保留中间 PNG 便于排查
+
+# 几何审查：文本越界 / 贴边 / 文本重叠（估算字体宽度；矩形底部不齐仅作提示，纯标准库）
+.venv/bin/python scripts/make-assets.py svg-geom src/static/*.svg
 
 # 像素审查：副标题行区域亮色像素是否越出卡片右缘（需 Pillow）
-.venv/bin/python scripts/check-svg.py pixel <png> <scale> <card_r> <row_y0> <row_y1> <margin>
+.venv/bin/python scripts/make-assets.py svg-pixel <png> <scale> <card_r> <row_y0> <row_y1> <margin>
 
 # 像素审查：精确匹配文字色像素越界（需 Pillow）
-.venv/bin/python scripts/check-svg.py text-overflow <png> <scale> <card_r> <y0> <y1> <margin>
+.venv/bin/python scripts/make-assets.py svg-text-overflow <png> <scale> <card_r> <y0> <y1> <margin>
 ```
 
-参数含义：`scale` = px per svg unit；`card_r` = 卡片右缘 x（svg 单位）；`row_y*/y*` = 检测区 y 范围（svg 单位）；`margin` = 检测范围到卡片右缘的右扩量（svg 单位）。几何审查纯标准库；两个像素子命令需 Pillow（`pip install -e '.[svg]'`，缺失时给出可读指引并以退出码 1 结束）。
+**`social-preview`**：左卡内嵌 `src/static/owl-mascot.svg`（猫头鹰「守望」），右栏中文品牌名 /
+英文名 / 定位句 / 能力关键词，强调色取 `DESIGN.md` 的暗色语义色；产物即仓库资产
+`src/static/social-preview.jpg`（受 git 管控，重跑即就地刷新），提交后由人工上传到仓库
+Settings → Social preview（GitHub API 不提供该上传接口）。依赖 `cairosvg`（不入 requirements：
+无 cairo 系统库的环境装不上）。
 
-> **当前状态**：三张 SVG 均通过 `geom`——卡片内文本按估宽模型的右余量 ≥10px（`capabilities.svg` ≥19px）。贴边阈值由 `_PADDING_WARN`（6px）定义，矩形底部不齐仅作提示项（流程图同列卡片高度本就允许不同）。**改图后请重跑本脚本**；本脚本不在提交前/发布前门禁清单内，按需运行。
+**`svg-*`**：README 首屏架构图（`architecture.svg` / `llm-chain.svg` / `capabilities.svg`）的渲染质量
+检查。参数含义：`scale` = px per svg unit；`card_r` = 卡片右缘 x（svg 单位）；`row_y*/y*` = 检测区
+y 范围（svg 单位）；`margin` = 检测范围到卡片右缘的右扩量（svg 单位）。
+
+> **当前状态**：三张 SVG 均通过 `svg-geom`——卡片内文本按估宽模型的右余量 ≥10px（`capabilities.svg` ≥19px）。
+> 贴边阈值由 `_PADDING_WARN`（6px）定义，矩形底部不齐仅作提示项（流程图同列卡片高度本就允许不同）。
+> **改图后请重跑 `svg-geom`**；本脚本不在提交前/发布前门禁清单内，按需运行。
+
+**退出码（全子命令统一）**：`0` 通过 / 生成成功；`1` 环境缺失（`svg-pixel`·`svg-text-overflow` 需 Pillow，
+`social-preview` 需 cairosvg）；`2` 发现越界/重叠/对齐问题（`--ci` 模式仅输出 `文件:描述`）。
 
 ## 代码与文件质量类
 

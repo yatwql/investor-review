@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""README SVG 架构图检查（三件套合并：几何审查 / 像素越界 / 文字色越界）。
+"""README 架构图 SVG 的渲染体检（几何审查 / 像素越界 / 文字色越界）。
+
+入口见 `scripts/make-assets.py svg-geom|svg-pixel|svg-text-overflow`；本模块保留原三合一
+子命令解析（geom / pixel / text-overflow），供入口转发与测试直调。
 
 原为三个各自独立的脚本（`check-svg-geom.py` / `check-svg-pixel.py` /
 `check-svg-text-overflow.py`）：都没有退出码、靠位置参数调用、无法作为门禁，且三者都在做
@@ -13,9 +16,9 @@
                                                  像素审查：精确匹配文字色像素越出卡片右缘（需 Pillow）
 
 用法：
-  python scripts/check-svg.py geom src/static/architecture.svg …        # 几何审查
-  python scripts/check-svg.py pixel out.png 2.0 320 60 80 20            # 像素审查（需 Pillow）
-  python scripts/check-svg.py --ci geom src/static/*.svg                # CI 模式：仅输出 文件:描述，退出码 2
+  python scripts/make-assets.py svg-geom src/static/architecture.svg …       # 几何审查
+  python scripts/make-assets.py svg-pixel out.png 2.0 320 60 80 20           # 像素审查（需 Pillow）
+  python scripts/make-assets.py --ci svg-geom src/static/*.svg               # CI 模式：仅输出 文件:描述，退出码 2
 
 退出码：
   0 — 通过
@@ -31,7 +34,7 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_checklib）
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/ 共享模块（_checklib）
 from _checklib import add_common_args, rel, report  # noqa: E402
 
 #: 文字色目标（README 架构图里的文本/强调色）
@@ -260,7 +263,7 @@ def text_overflow_findings(path: Path, scale: float, card_r: float, y0: float, y
 # ═══════════════════════════════════════════════════════════════
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="README SVG 架构图检查（几何 / 像素越界 / 文字色越界）")
     add_common_args(parser)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -284,7 +287,7 @@ def main() -> None:
     overflow.add_argument("y1", type=float, help="检测区 y 下界（svg 单位）")
     overflow.add_argument("margin", type=float, help="检测范围到卡片右缘的右扩量（svg 单位）")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     findings: list[str] = []
 
     if args.command == "geom":
@@ -312,8 +315,8 @@ def main() -> None:
         findings = text_overflow_findings(Path(args.path), args.scale, args.card_r, args.y0, args.y1, args.margin)
         ok_message = f"[OK] 无文字色像素越出卡片右缘（{args.card_r:g} 外 {args.margin:g}px 干净）"
 
-    sys.exit(report(findings, ok_message, ci=args.ci, fail_message="[!] 发现 {n} 处 SVG 问题，须修正后提交"))
+    return report(findings, ok_message, ci=args.ci, fail_message="[!] 发现 {n} 处 SVG 问题，须修正后提交")
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

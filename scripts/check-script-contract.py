@@ -45,7 +45,6 @@ _REPORT_EXIT_CODES = frozenset({0, 2})
 _EXIT_CODE_WHITELIST: dict[str, frozenset[int]] = {
     "check-code-traces.py": frozenset({0, 1, 2, 3}),  # 分级退出码：1 = HIGH，3 = 仅 LOW
     "check-doc-traces.py": frozenset({0, 1, 2}),  # 分级退出码：1 = HIGH，2 = 仅 LOW
-    "check-svg.py": frozenset({0, 1, 2}),  # 1 = 环境缺失（像素子命令需 Pillow）
     "check-version-consistency.py": frozenset({0, 1, 2}),  # 1 = 事实源不可读
 }
 

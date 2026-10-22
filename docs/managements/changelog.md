@@ -17,6 +17,8 @@
 
 ### Changed
 
+- **视觉资产工具收口为 `make-assets.py`**：`check-svg.py`（架构图渲染体检）与 `make-social-preview.py`（社交预览图生成）合并为单一入口 `scripts/make-assets.py`（子命令 `social-preview` / `svg-geom` / `svg-pixel` / `svg-text-overflow`，实现拆 `scripts/_assets/` 包）。`check-*` 前缀此后专指**可入门禁的检查脚本**，不再混入按需资产工具；退出码统一 0/1/2（1=环境缺失、2=发现越界），`social-preview` 重跑与入库图逐字节一致。
+
 - **`scripts/` 顶层脚本命名规范化**：非 `check-*` 脚本按活动类型统一前缀，看文件名即知归属——`test-`（测试执行与测试工程：`test-collect-coverage` / `test-extract-failures` / `test-find-order-dependent` / `test-smoke-web` / `test-perf-report`）、`eval-`（评测与校准：`eval-llm-hallucination` / `eval-factor-zoo` / `eval-dedup-threshold`）、`perf-`（运行性能观测：`perf-history`）、`hook-`（钩子接线：`hook-install-claude`）；`check-*` 专门指「可入门禁的检查脚本」，`factor_zoo_eval.py` 的下划线命名一并修正为连字符。同步改名 10 个文件与全部引用（文档/CI/钩子/测试/sentinel 字符串），历史归档与 changelog 已发布段保持原名。
 
 - **脚本分类重整（七域 + CLI 入口）**：原「诊断」是杂物袋（连通性探针 / 性能基准 / 能力评测 / 渲染检查 / 用户子命令混坐），且同族脚本分落不同域（`llm-hallucination-sampler` 在测试、`factor_zoo_eval` 在诊断，sampler 另有独立章节）。现按**活动类型**重划：拆出「运维观测」（`probe*` / `perf-view` / CLI 的 `check-sources`·`doctor`·`view-logs`·`cassettes`）与「评测与基准」（`perf-test-report` / `llm-hallucination-sampler` / `factor_zoo_eval` / `calibrate-dedup-threshold`）；`check-svg` 归「文档」（检 README 架构图）、`whatif` 归「CLI 子命令」（用户功能，非维护工具）、需求追溯与任务编号四件归「代码与文件质量」（门禁职责）。`scripts-reference.md` 一览/小节/目录与 `developer-guide.md` 按域索引（7→8 行）同步，域行数断言同源更新。

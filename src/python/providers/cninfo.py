@@ -17,7 +17,7 @@
   - 全部失败路径返回 None/空（不抛异常），交由链路/编排按空结果降级
 
 依赖：``pdfplumber``（主依赖已声明）。**惰性导入**：环境缺库时解析环节返回空文本，
-该源优雅降级（不拖垮链路）；与 check-svg 的 Pillow 先例同模式。
+该源优雅降级（不拖垮链路）；与 make-assets svg 像素检查的 Pillow 先例同模式。
 """
 
 from __future__ import annotations
