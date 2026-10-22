@@ -1,5 +1,5 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.14.3
+> 文档版本：0.14.4-dev
 > **编号源**：`rf-next = 822`（新增问题取此编号，完成后更新为 +1；已用最大 rf-821，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
@@ -39,10 +39,6 @@
 | —（同批决策） | `src/python/llm/prompts_core.py`、`src/python/llm/generators.py` | 350 / 444 | 维持现状：提示词 / 生成器按模块分文件 |
 
 ## 已解决问题
-
-### 开发期已修复（0.14.3-dev）
-
-（本版开发期已修复项已随 v0.14.3 发布迁入归档档案）
 
 ### 归档档案
 - [`archived_review-findings.0.14.x.md`](../archive/v0.14.x/archived_review-findings.0.14.x.md) — v0.14.x（2026-10-21 ~ 2026-10-22）
