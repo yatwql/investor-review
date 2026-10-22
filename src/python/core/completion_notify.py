@@ -187,7 +187,7 @@ def _send_email(email_cfg: dict, subject: str, body: str, timeout: float) -> Non
 
     msg = MIMEText(body, "plain", "utf-8")
     msg["Subject"] = subject
-    msg["From"] = username or "investor-util"
+    msg["From"] = username or "investor-review"
     msg["To"] = ", ".join(recipients)
 
     if bool(email_cfg.get("use_ssl", True)):

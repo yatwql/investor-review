@@ -51,7 +51,7 @@ DISPLAY_NAME = "同花顺金融数据"
 
 _BASE_URL = "https://fuyao.aicubes.cn"
 _TIMEOUT = 20.0
-_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; investor-util)"}
+_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; investor-review)"}
 
 #: 通用数据源密钥文件默认相对路径——单一事实来源见 ``core/datasource_credential``
 #: （配置键 ``data_key_file`` 可覆盖为绝对路径）；本模块保留同名别名以维持既有引用面

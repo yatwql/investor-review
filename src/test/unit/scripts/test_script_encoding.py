@@ -29,7 +29,7 @@ from pathlib import Path
 
 import pytest
 
-_REPO_ROOT = Path(__file__).resolve().parents[4]  # investor-util 仓库根目录
+_REPO_ROOT = Path(__file__).resolve().parents[4]  # investor-review 仓库根目录
 _SCRIPTS_DIR = _REPO_ROOT / "scripts"
 _REQ_FILE = _REPO_ROOT / "requirements.txt"
 _BOM = b"\xef\xbb\xbf"

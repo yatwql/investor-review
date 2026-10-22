@@ -28,11 +28,11 @@
 > 方便多个项目共享或集中管理虚拟环境：
 > ```bash
 > # Windows PowerShell
-> $env:VENV_PATH = "D:\path\to\venvs\investor-util"
+> $env:VENV_PATH = "D:\path\to\venvs\investor-review"
 > .\scripts\launch.ps1
 >
 > # Linux
-> VENV_PATH=/path/to/venvs/investor-util ./scripts/launch.sh
+> VENV_PATH=/path/to/venvs/investor-review ./scripts/launch.sh
 > ```
 > 首次运行自动创建并链接，再次运行直接复用。
 

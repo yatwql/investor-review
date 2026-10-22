@@ -1,7 +1,7 @@
 # 投资复盘助手
 
-[![Release](https://img.shields.io/github/v/release/yatwql/investor-util)](https://github.com/yatwql/investor-util/releases)
-[![CI](https://github.com/yatwql/investor-util/actions/workflows/ci.yml/badge.svg)](https://github.com/yatwql/investor-util/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/yatwql/investor-review)](https://github.com/yatwql/investor-review/releases)
+[![CI](https://github.com/yatwql/investor-review/actions/workflows/ci.yml/badge.svg)](https://github.com/yatwql/investor-review/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.11-3776AB?logo=python&logoColor=white)](https://www.python.org)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -81,7 +81,7 @@
 ## 三分钟上手
 
 ```bash
-git clone https://github.com/yatwql/investor-util.git && cd investor-util
+git clone https://github.com/yatwql/investor-review.git && cd investor-review
 ./scripts/launch.sh        # Linux/macOS（首次自动建 venv、装依赖）
 # Windows： .\scripts\launch.ps1
 ```

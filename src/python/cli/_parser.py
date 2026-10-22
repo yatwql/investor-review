@@ -69,7 +69,7 @@ def _effective_date_arg(value: str) -> str:
 def _build_parser() -> argparse.ArgumentParser:
     """构建 argparse 参数解析器。"""
     parser = argparse.ArgumentParser(
-        prog="investor-util",
+        prog="investor-review",
         description=f"{APP_NAME} — 命令行模式",
         epilog="示例: python -m src.python.cli report --type full --history auto",
     )

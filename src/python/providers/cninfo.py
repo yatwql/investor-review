@@ -54,7 +54,7 @@ _TIMEOUT = 20.0
 #: 慢链路下触发「挂起 → 不重试 → 失败」，且**从未成功过**（白等 N × 超时）。
 #: 单独放宽到 60s，配合下方「本会话主机不可达短路」避免反复白等。
 _PDF_TIMEOUT = 60.0
-_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; investor-util)"}
+_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; investor-review)"}
 #: 公开 API 礼貌间隔（秒）：限速器单例的固定档（数据源免费且无配置套餐，不引入配置键）
 _MIN_INTERVAL = 1.0
 #: 429 限速退避策略（重试一次）

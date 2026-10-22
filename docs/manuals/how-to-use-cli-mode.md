@@ -372,8 +372,8 @@ Provider Chain 内置同源瞬时失败重试 + 熔断机制，网络临时故�
 定时任务的 cron/stderr 日志建议自行配置 logrotate：
 
 ```bash
-# /etc/logrotate.d/investor-util
-/home/user/investor-util/logs/cron.log {
+# /etc/logrotate.d/investor-review
+/home/user/investor-review/logs/cron.log {
     monthly
     rotate 6
     compress
@@ -396,10 +396,10 @@ CLI 模式配合操作系统定时任务可实现无人值守的自动报告生�
 
 ```batch
 :: 每日 16:00 生成全量报告（盘后）
-schtasks /CREATE /SC DAILY /TN "InvestReport" /TR "D:\path\to\investor-util\.venv\Scripts\python.exe D:\path\to\investor-util\src\python\cli\cli.py report --type full --history auto" /ST 16:00 /F
+schtasks /CREATE /SC DAILY /TN "InvestReport" /TR "D:\path\to\investor-review\.venv\Scripts\python.exe D:\path\to\investor-review\src\python\cli\cli.py report --type full --history auto" /ST 16:00 /F
 
 :: 每周一早 9:00 更新全部缓存
-schtasks /CREATE /SC WEEKLY /D MON /TN "InvestCacheUpdate" /TR "D:\path\to\investor-util\.venv\Scripts\python.exe D:\path\to\investor-util\src\python\cli\cli.py cache --update all" /ST 09:00 /F
+schtasks /CREATE /SC WEEKLY /D MON /TN "InvestCacheUpdate" /TR "D:\path\to\investor-review\.venv\Scripts\python.exe D:\path\to\investor-review\src\python\cli\cli.py cache --update all" /ST 09:00 /F
 ```
 
 #### PowerShell 包装脚本（推荐）
@@ -412,7 +412,7 @@ param(
     [string]$OutputDir = "reports"
 )
 
-$ProjectRoot = "D:\path\to\investor-util"
+$ProjectRoot = "D:\path\to\investor-review"
 $LogFile = Join-Path $ProjectRoot "logs\cron.log"
 $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
 
@@ -438,7 +438,7 @@ try {
 
 ```batch
 :: 锁文件 + 超时退避
-schtasks /CREATE /SC DAILY /TN "InvestReport" /TR "powershell -NoProfile -Command \"if (-not (Test-Path '$env:TEMP\invest.lock')) { New-Item '$env:TEMP\invest.lock' -Force | Out-Null; try { D:\path\to\investor-util\.venv\Scripts\python.exe -m src.python.cli report --type full --history auto } finally { Remove-Item '$env:TEMP\invest.lock' -ErrorAction SilentlyContinue } }\"" /ST 16:00
+schtasks /CREATE /SC DAILY /TN "InvestReport" /TR "powershell -NoProfile -Command \"if (-not (Test-Path '$env:TEMP\invest.lock')) { New-Item '$env:TEMP\invest.lock' -Force | Out-Null; try { D:\path\to\investor-review\.venv\Scripts\python.exe -m src.python.cli report --type full --history auto } finally { Remove-Item '$env:TEMP\invest.lock' -ErrorAction SilentlyContinue } }\"" /ST 16:00
 ```
 
 ### 13.2 Linux crontab
@@ -450,13 +450,13 @@ schtasks /CREATE /SC DAILY /TN "InvestReport" /TR "powershell -NoProfile -Comman
 crontab -e
 
 # 每日 16:00 生成全量报告
-0 16 * * * cd /home/user/investor-util && .venv/bin/python -m src.python.cli report --type full --history auto >> logs/cron.log 2>&1
+0 16 * * * cd /home/user/investor-review && .venv/bin/python -m src.python.cli report --type full --history auto >> logs/cron.log 2>&1
 
 # 每周一早 9:00 更新全部缓存
-0 9 * * 1 cd /home/user/investor-util && .venv/bin/python -m src.python.cli cache --update all >> logs/cron.log 2>&1
+0 9 * * 1 cd /home/user/investor-review && .venv/bin/python -m src.python.cli cache --update all >> logs/cron.log 2>&1
 
 # 每月 1 号清理缓存
-0 10 1 * * cd /home/user/investor-util && .venv/bin/python -m src.python.cli cache --clean >> logs/cron.log 2>&1
+0 10 1 * * cd /home/user/investor-review && .venv/bin/python -m src.python.cli cache --clean >> logs/cron.log 2>&1
 ```
 
 #### flock 防重入
@@ -465,7 +465,7 @@ crontab -e
 
 ```bash
 # 使用 flock 锁文件防重入
-0 16 * * * cd /home/user/investor-util && flock -n /tmp/invest.lock .venv/bin/python -m src.python.cli report --type full --history auto >> logs/cron.log 2>&1
+0 16 * * * cd /home/user/investor-review && flock -n /tmp/invest.lock .venv/bin/python -m src.python.cli report --type full --history auto >> logs/cron.log 2>&1
 ```
 
 ### 13.3 定时任务排障
@@ -495,7 +495,7 @@ tail -20 logs/cron.log
 | 定时任务未执行 | 检查任务计划程序历史记录 / cron 服务状态 |
 | 报告为空 | 检查持仓文件路径和格式 |
 | 缓存未更新 | 检查网络连接，`cache --stats` 查看缓存状态 |
-| Python 找不到模块 | 确保工作目录为项目根目录（`cd` 到 `investor-util/`） |
+| Python 找不到模块 | 确保工作目录为项目根目录（`cd` 到 `investor-review/`） |
 
 ---
 

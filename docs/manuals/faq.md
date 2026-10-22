@@ -59,16 +59,16 @@ A: 可以。项目启动脚本（`launch.ps1` / `launch.sh`）已原生支持外
 
 ```bash
 # Linux / macOS
-ln -s /path/to/venvs/investor-util .venv
+ln -s /path/to/venvs/investor-review .venv
 
 # Windows (Git Bash / WSL)
-ln -s /path/to/venvs/investor-util .venv
+ln -s /path/to/venvs/investor-review .venv
 
 # Windows (cmd，管理员)
-mklink /J .venv D:\path\to\venvs\investor-util
+mklink /J .venv D:\path\to\venvs\investor-review
 
 # Windows (PowerShell 7+，无需管理员)
-New-Item -ItemType SymbolicLink -Path .venv -Target D:\path\to\venvs\investor-util
+New-Item -ItemType SymbolicLink -Path .venv -Target D:\path\to\venvs\investor-review
 ```
 
 创建后，Python、pip、pytest、VSCode 全部自动跟随到实际目录，无需环境变量、无需 `activate`。`.gitignore` 已有 `.venv/`，不污染仓库。多个项目可指向同一个外部 `.venv` 节省磁盘空间。
@@ -81,17 +81,17 @@ New-Item -ItemType SymbolicLink -Path .venv -Target D:\path\to\venvs\investor-ut
 
 ```bash
 # Windows PowerShell（一次性）
-$env:VENV_PATH = "D:\path\to\venvs\investor-util"
+$env:VENV_PATH = "D:\path\to\venvs\investor-review"
 .\scripts\launch.ps1
 
 # Windows（用户环境变量，永久）
-[System.Environment]::SetEnvironmentVariable("VENV_PATH", "D:\path\to\venvs\investor-util", "User")
+[System.Environment]::SetEnvironmentVariable("VENV_PATH", "D:\path\to\venvs\investor-review", "User")
 
 # Linux（一次性）
-VENV_PATH=/path/to/venvs/investor-util ./scripts/launch.sh
+VENV_PATH=/path/to/venvs/investor-review ./scripts/launch.sh
 
 # Linux（~/.bashrc，永久）
-echo 'export VENV_PATH=/path/to/venvs/investor-util' >> ~/.bashrc && source ~/.bashrc
+echo 'export VENV_PATH=/path/to/venvs/investor-review' >> ~/.bashrc && source ~/.bashrc
 ```
 
 原理（`launch.sh` 第 51~64 行 / `launch.ps1` 第 67~81 行）：
@@ -105,18 +105,18 @@ echo 'export VENV_PATH=/path/to/venvs/investor-util' >> ~/.bashrc && source ~/.b
 
 ```bash
 # Linux（Docker / Jenkins / GitHub Actions）
-/path/to/venvs/investor-util/bin/python scripts/test-runner.py --mode regression
-/path/to/venvs/investor-util/bin/python -m src.python.tui.tui
+/path/to/venvs/investor-review/bin/python scripts/test-runner.py --mode regression
+/path/to/venvs/investor-review/bin/python -m src.python.tui.tui
 
 # Windows（部署脚本）
-& "D:\path\to\venvs\investor-util\Scripts\python.exe" scripts\test-runner.py --mode regression
-& "D:\path\to\venvs\investor-util\Scripts\python.exe" src\python\tui\tui.py
+& "D:\path\to\venvs\investor-review\Scripts\python.exe" scripts\test-runner.py --mode regression
+& "D:\path\to\venvs\investor-review\Scripts\python.exe" src\python\tui\tui.py
 ```
 
 原理：**PEP 405** 规定 Python 解释器启动时会自动读取同级目录下的 `pyvenv.cfg`，知道自己在虚拟环境中。使用 `.venv/bin/python` 直接执行等效于先 `activate` 再运行——自动使用 venv 内的 site-packages，无需任何环境变量。pip 安装也同理：
 
 ```bash
-/path/to/venvs/investor-util/bin/pip install -r requirements.txt
+/path/to/venvs/investor-review/bin/pip install -r requirements.txt
 ```
 
 **方案对比：**
@@ -129,10 +129,10 @@ echo 'export VENV_PATH=/path/to/venvs/investor-util' >> ~/.bashrc && source ~/.b
 
 **Q: Git clone 后运行脚本报错"项目不在正确的目录结构中"？**
 
-A: 确保 clone 后直接在项目根目录（`investor-util/`）下运行启动脚本，不要手动移动子目录。目录结构应保持：
+A: 确保 clone 后直接在项目根目录（`investor-review/`）下运行启动脚本，不要手动移动子目录。目录结构应保持：
 
 ```
-investor-util/
+investor-review/
 ├── scripts/
 ├── src/
 ├── data/

@@ -122,7 +122,7 @@ def main() -> int:
     from src.python.core.logger import log_app_boundary, setup_logger
 
     parser = argparse.ArgumentParser(
-        prog="investor-util-web",
+        prog="investor-review-web",
         description=f"{APP_NAME} — 轻量 Web 模式",
         epilog="示例: python -m src.python.web --host 127.0.0.1 --port 8000",
     )
