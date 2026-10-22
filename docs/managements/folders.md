@@ -12,14 +12,14 @@
 | 主程序代码 | Python | 382 | 100,525 | `src/` 下所有 `.py`（不含测试：`src/__init__.py` 顶层包标记 + `src/python/` 下 15 个 `__init__.py`，含 `web/` 服务层；近期新增 `providers/tiantian_purchase.py` 天天基金申购状态总表 provider + `fetcher/fund_purchase.py` 申购状态取数编排（双链路/准入/会话复用） + `core/jsonl_store.py` JSONL 原子原语 + `core/signal_ledger.py` 确定性信号账本 + `report/signal_record.py` 信号登记适配器 + `core/num_utils.py` 数值归一原语 + `core/doctor.py` 系统自检 + `core/cassette.py` 请求回放引擎 + `core/datasource_credential.py` 数据源凭据声明 + `fetcher/source_adapter.py` 适配契约 + `fetcher/quote_adapters.py` 行情域适配器 + `llm/module_fingerprint.py` 模块指纹唯一事实来源 + `report/_experimental_seams.py` 实验挂载点 + `report/holdings_freshness.py` 持仓报告期时效判定 + `report/experimental_notice.py` 实验功能清单语句单源 + `core/trading_calendar.py` 交易日历原语（时间距离一律以交易日计） + `providers/datasink.py` 全文本财报 provider（密钥/限速/配额） + `providers/hithink.py` 同花顺金融数据服务 provider（A 股行情/财务/基金/情绪面；凭据/qps 限速/信封错误码） + `fetcher/financial_report.py` 财报取数编排 + `fetcher/report_adapters.py` 财报域适配器 + `report/financial_report_digest.py` 财报摘要章节装配 + `providers/akshare_financial.py` 结构化财务指标主源 + `fetcher/financial_indicator_adapters.py` 财务指标域适配器 + `core/code_utils.py::to_fmp_symbol` 共享符号映射 + `providers/_utils.py::run_with_timeout` 共享取数超时原语 + `analysis/financial_indicator_extract.py` 财务指标全文解析（压平正文锚点提取，备用支路） + `fetcher/financial_indicator.py` 财务指标多期取数编排 + `analysis/financial_indicator.py` 财务指标派生（质量档/趋势/当前 PE·PB） + `report/financial_indicator.py` 财务指标章装配 + `report/holdings_detail_sheet.py` 持仓明细与分类 Excel 页签 + `report/position_structure_sheet.py` 持仓结构与集中度 Excel 页签 + `report/fundamental_snapshot_sheet.py` 持仓基本面 Excel 页签（三者均为章节合并写入器） + `llm/compliance.py` 合规声明集中注入（幂等叠加，单一漏斗覆盖全模块）） |
 | HTML 报告模板 | HTML | 23 | 5,193 | `src/static/tmpl/report_template.html` + `whatif_template.html`（调仓 What-if 独立 HTML 页）+ `partials/`（章节级/区块级 partial，主模板按 TOC 六组经 Jinja include 拆入，清单见目录树 `partials/` 节点） |
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
-| 辅助脚本 | Python | 104 | 22,564 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
-| 源代码合计 | — | 513 | 128,678 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 598 | 167,969 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 11,347 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 辅助脚本 | Python | 105 | 22,661 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
+| 源代码合计 | — | 514 | 128,775 | 主程序 + 模板 + 脚本 + SVG |
+| 测试代码 | Python | 600 | 168,075 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 11,352 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 13 | 6,240 | 含 README.md（211 行）；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 12 | 6,022 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 182 | 65,766 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 4 + archive md 160），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 13,090 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 182 | 65,769 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 4 + archive md 160），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 13,093 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 164 | 51,882 | 各版本 changelog/plan/review-findings 与设计文档归档（157 md 50,492 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 4 | ~702 | 在办设计文档（扁平存放，完成后迁入对应版本的归档子目录）：两份 Jev 新闻关联判定文档（对照评测方案 + 类型化判定通道接入设计）+ 决策跨期反思闭环设计 + Web 浏览器验证方法 |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -1055,6 +1055,8 @@ investor-review/
 │       │   │   ├── _release_fixtures.py     #   发布编排测试共享设备（子进程替身/临时仓库夹具/台账与目录树样例，非测试模块不收集）
 │       │   │   ├── test_release_tool.py     #   发布流程分步编排单测（版本纯函数/changelog 迁移/预检/演进/prepare 与 archive 编排）
 │       │   │   ├── test_release_tool_gate.py #  发布门禁与编排子命令单测（gate/refresh/publish/devbump + 归档前置三类拦截）
+│       │   │   ├── test_release_hygiene.py #   陈旧字节码清理（只删无源 .pyc / dry-run / 空目录回收 / 幂等）
+│       │   │   ├── test_no_legacy_software_name.py #   旧软件名残留守卫（运行面不得出现旧仓库名）
 │       │   │   ├── test_release_archive.py  #   台账归档迁移纯函数单测（rf 表块无损搬运与幂等/头部追加与索引延展/plan 扁平搬入/docs-plan 完成判定/目录树搬迁/头部缺行报错）
 │       │   │   ├── test_check_doc_links.py  #   文档链接与结构一致性检查脚本测试（死链/死锚点/重复标题/层级/编号序列/§引用）
 │       │   │   ├── test_check_conclusion_cache.py #   守护结论缓存机制测试（冷热 --ci 输出逐字一致/输入·逻辑·结构失配矩阵/通过与发现都缓存/隔离重定向；接入 namespace 见测试文件头）
@@ -1247,7 +1249,7 @@ investor-review/
 │   ├── eval-llm-hallucination.py #   LLM 幻觉率采样 CLI（标准持仓集+事实校验器验证；实现在 _eval_halluc_sampler/）
 │   ├── test-perf-report.py          #   端到端性能基准测试（独立脚本，mock 外部数据源）
 │   ├── perf-history.py                 #   性能历史趋势查看（perf_history.jsonl -> 分位/演进/漂移 Markdown + 机读）
-│   ├── _perf_view/                  #   perf-history 实现包（入口 perf-history.py 仅留 docstring/sys.path 引导与 re-export）
+│   ├── _perf_history/                  #   perf-history 实现包（入口 perf-history.py 仅留 docstring/sys.path 引导与 re-export）
 │   │   ├── __init__.py              #   子包标记（空文件）
 │   │   ├── stats.py                 #   分位/离群/稳健统计纯函数 + 记录过滤与分组（入口 re-export 保测试可达）
 │   │   ├── data.py                 #   数据派生（版本演进 / 漂移 / 版本对比 / 机读信封 / 成本时段）
@@ -1331,6 +1333,7 @@ investor-review/
 │   │   ├── _ledger_archive.py        #       台账/设计文档归档迁移（rf 表块整块搬运+占位/头部追加/索引延展 / plan 完成节扁平搬入 / docs/plan 强信号候选+引用与目录树搬迁 / 三态门禁判定）
 │   │   ├── _timing.py                #       发布耗时埋点（分步计时 + logs/release.jsonl 追加记录）
 │   │   ├── _gate.py                  #       P2 门禁编排（verify+regression 并行 / 十守护 / 设计护栏 / gate 通过戳）
+│   │   ├── _hygiene.py              #       开发期本地卫生（陈旧 .pyc 统计与清理，refresh 收尾最佳努力调用）
 │   │   └── _evolution.py             #       版本演进快照统计与表格回写（git 清单 + 逐文件行数）
 │   └── test-smoke-web.py                 #   Web 模式 HTTP 冒烟脚本（test_client 全链路验证，可独立运行）
 ├── docs/                         # 项目文档

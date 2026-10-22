@@ -40,10 +40,10 @@ _SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
-# 实现按职责拆在 scripts/_perf_view/：data（派生）/ report（渲染）/ cli（入口）；
+# 实现按职责拆在 scripts/_perf_history/：data（派生）/ report（渲染）/ cli（入口）；
 # 此处 re-export 既有符号，保持 load_script 的测试直调面不变。
-from _perf_view.cli import main  # noqa: E402
-from _perf_view.data import (  # noqa: E402, F401
+from _perf_history.cli import main  # noqa: E402
+from _perf_history.data import (  # noqa: E402, F401
     _bucket_key,
     _compare_versions,
     _cost_period_data,
@@ -56,7 +56,7 @@ from _perf_view.data import (  # noqa: E402, F401
     _version_evolution_data,
     _version_records,
 )
-from _perf_view.report import (  # noqa: E402, F401
+from _perf_history.report import (  # noqa: E402, F401
     _TREND_REPORT_PATH,
     _TMP_DIR,
     _abnormal_lines,
@@ -71,7 +71,7 @@ from _perf_view.report import (  # noqa: E402, F401
     _version_evolution_lines,
     build_trend_report,
 )
-from _perf_view.stats import (  # noqa: E402, F401
+from _perf_history.stats import (  # noqa: E402, F401
     _DRIFT_MIN_SAMPLES,
     _OUTLIER_K,
     _cv,

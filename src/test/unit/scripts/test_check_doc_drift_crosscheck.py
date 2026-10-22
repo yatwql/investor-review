@@ -574,11 +574,11 @@ class TestGeneratedArtifacts:
     @pytest.mark.parametrize(
         ("rel", "expected"),
         [
-            ("src/investor_util.egg-info/PKG-INFO", True),
-            ("src/investor_util.egg-info/SOURCES.txt", True),
+            ("src/investor_review.egg-info/PKG-INFO", True),
+            ("src/investor_review.egg-info/SOURCES.txt", True),
             ("src/python/__pycache__/mod.cpython-313.pyc", True),
             ("build/lib/python/mod.py", True),
-            ("pkg/investor_util.dist-info/METADATA", True),
+            ("pkg/investor_review.dist-info/METADATA", True),
             (".coverage", True),
             ("docs/tmp/scratch.py", True),
             # test-reports 规范位置在仓库根（不在受检根内）→ 受检目录下出现属误落，须报出
@@ -606,7 +606,7 @@ class TestGeneratedArtifacts:
         monkeypatch.setattr(drift_parts._tree, "REPO_ROOT", tmp_path)
         monkeypatch.setattr(drift_parts._tree, "rel", _fake_rel)
         monkeypatch.setattr(drift_parts._tree, "_TREE_ROOTS", ("scripts",))
-        findings = drift.check_dir_tree("```\ninvestor-util/\n```\n")
+        findings = drift.check_dir_tree("```\ninvestor-review/\n```\n")
         assert len(findings) == 1 and "scripts/test-reports/index.html" in findings[0]
 
     def test_tree_check_ignores_generated(self, drift, monkeypatch, tmp_path, drift_parts):
@@ -627,7 +627,7 @@ class TestGeneratedArtifacts:
 
         monkeypatch.setattr(drift_parts._tree, "rel", _fake_rel)
         monkeypatch.setattr(drift_parts._tree, "_TREE_ROOTS", ("src",))
-        doc = "```\ninvestor-util/\n├── src/              # 源代码\n│   └── pkg/\n│       └── mod.py  # 模块\n```\n"
+        doc = "```\ninvestor-review/\n├── src/              # 源代码\n│   └── pkg/\n│       └── mod.py  # 模块\n```\n"
         assert drift.check_dir_tree(doc) == []
 
         (tmp_path / "src/pkg/extra.py").write_text("y = 1\n", encoding="utf-8")

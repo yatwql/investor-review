@@ -141,7 +141,7 @@ class TestActiveRunResumeOnLoad:
     def test_resume_rebuilds_progress_and_polls_on_init(self) -> None:
         """init 调用 resumeActiveRun；恢复路径重建进度视图并启动轮询。"""
         src = _main_js()
-        assert "var RUN_ID_KEY = 'investor_util_active_run_id'" in src
+        assert "var RUN_ID_KEY = 'investor_review_active_run_id'" in src
         init = _block(r"function init\(\)\s*\{.*?\n  \}", src)
         assert "resumeActiveRun();" in init
         resume = _block(r"function resumeActiveRun\(\)\s*\{.*?\n  \}", src)

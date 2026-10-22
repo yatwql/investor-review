@@ -107,6 +107,7 @@ from _release._changelog_archive import (  # noqa: E402, F401 — _SECTION_NOTE 
 )
 from _release import _gate  # noqa: E402
 from _release._archive_init import init_archive  # noqa: E402
+from _release._hygiene import clean_stale_bytecode  # noqa: E402
 from _release._common import ReleaseError, exec_command as _exec  # noqa: E402
 from _release._archive_flow import (  # noqa: E402
     ArchiveContext,
@@ -587,6 +588,14 @@ def cmd_refresh(args: argparse.Namespace, runner=None) -> int:
         print(
             f"[..] bench 只测发布子集 {', '.join(RELEASE_BENCH_MODES)}（其余模式耗时沿用上次实测；--full-bench 全量复测）"
         )
+    # 本地卫生（最佳努力）：模块改名/删除后遗留的陈旧 .pyc 不会被 Python 回收，
+    # 会让 rg / traceback 里出现旧文件名与旧路径；清掉后下次导入自动重建。
+    hygiene = clean_stale_bytecode(REPO_ROOT)
+    if hygiene["files"]:
+        print(f"[OK] 陈旧字节码清理：删除 {hygiene['files']} 个 .pyc、{hygiene['dirs']} 个空 __pycache__ 目录")
+    else:
+        print("[OK] 陈旧字节码：无（__pycache__ 与源文件一致）")
+
     print("[OK] refresh 完成")
     return 0
 

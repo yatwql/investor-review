@@ -31,7 +31,7 @@
 
   var POLL_INTERVAL_MS = 2000;
   // 活动 run 会话标记（sessionStorage）：刷新/误关重开页面据此重建进度视图续轮询
-  var RUN_ID_KEY = 'investor_util_active_run_id';
+  var RUN_ID_KEY = 'investor_review_active_run_id';
 
   var state = {
     fileId: null,
