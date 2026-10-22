@@ -38,6 +38,19 @@ def rel():
     return load_script("release.py", module_name="release_tool_gate")
 
 
+@pytest.fixture(autouse=True)
+def _isolate_release_runtime_paths(rel, monkeypatch, tmp_path):
+    """发布运行态文件（通过戳/bench 戳/耗时台账）一律重定向到 tmp。
+
+    回归背景：`TestGateArchivePrecondition` 曾未隔离 `GATE_STAMP_FILE`——gate 成功
+    用例走完尾部写入，把仓库真实的 `logs/release-gate-stamp.json` 写成夹具版本
+    夹具版本号（发布时间戳也被改写），使「门禁通过戳」不可信；且每次跑单测都会再污染一次。
+    """
+    monkeypatch.setattr(rel, "GATE_STAMP_FILE", tmp_path / "release-gate-stamp.json")
+    monkeypatch.setattr(rel, "BENCH_STAMP_FILE", tmp_path / "release-bench-stamp.json")
+    monkeypatch.setattr(rel, "RELEASE_LOG_FILE", tmp_path / "release.jsonl")
+
+
 # ─────────────────────────── 门禁 ───────────────────────────
 
 
@@ -306,6 +319,36 @@ class TestPublish:
         )
         assert rel._code_fingerprint(runner) != rel._tree_fingerprint(runner)
 
+    def test_code_fingerprint_independent_of_commit_state(self, rel, tmp_path):
+        """回归：指纹必须与「改动是否已提交」无关（publish 会先提交再算指纹）。
+
+        判定口径：用 `git diff HEAD` + `git status` 哈希会把「同一份代码」在提交前后
+        算成两个指纹（gate 打戳时 prepare 的改动未提交，publish 先提交再算），
+        复用分支按构造永不命中——故指纹必须取文件内容哈希。
+        """
+        from _release._gate import code_fingerprint
+
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "a.py").write_text("x = 1\n", encoding="utf-8")
+        listing = "src/a.py\0"
+
+        def _exec_before_commit(cmd, root, runner=None):
+            if cmd[:2] == ["git", "ls-files"]:
+                return (0, listing, "")
+            return (0, " M src/a.py\n", "")  # 未提交态：diff/status 有内容
+
+        def _exec_after_commit(cmd, root, runner=None):
+            if cmd[:2] == ["git", "ls-files"]:
+                return (0, listing, "")
+            return (0, "", "")  # 已提交：diff/status 干净
+
+        before = code_fingerprint(_exec_before_commit, str(tmp_path))
+        after = code_fingerprint(_exec_after_commit, str(tmp_path))
+        assert before and before == after, "同一份代码在提交前后必须得到同一指纹"
+
+        (tmp_path / "src" / "a.py").write_text("x = 2\n", encoding="utf-8")
+        assert code_fingerprint(_exec_before_commit, str(tmp_path)) != before, "代码内容变化必须改变指纹"
+
     def test_runs_verify_when_stamp_fingerprint_mismatches(self, rel, tmp_path):
         """指纹不一致（gate 后改过代码）→ 不盲信戳，实跑 verify。"""
         fx = self._fixture(rel, tmp_path, "0.12.6")
@@ -457,6 +500,20 @@ class TestGateArchivePrecondition:
         assert rel.cmd_gate(ns(), runner=FakeRunner()) == 0
         assert "无「开发期已修复」节" in capsys.readouterr().out
 
+    def test_gate_success_leaves_repo_stamp_untouched(self, rel, monkeypatch, capsys):
+        """回归：gate 成功用例不得改写仓库 `logs/` 下的真实通过戳。
+
+        缺陷现场：本类沙箱曾漏隔离 `GATE_STAMP_FILE`，`test_absent_section_passes_gate`
+        走完 gate 尾部写入，把真实戳写成夹具版本号（时间戳也被刷新），
+        使「门禁通过戳」不可信——且每次跑单测都再污染一次。
+        """
+        real = Path(rel.__file__).resolve().parent.parent / "logs" / "release-gate-stamp.json"
+        before = real.read_bytes() if real.exists() else None
+        monkeypatch.setattr(rel, "rf_archive_status", lambda *_a, **_k: ("absent", 0))
+        assert rel.cmd_gate(ns(), runner=FakeRunner()) == 0
+        after = real.read_bytes() if real.exists() else None
+        assert after == before, "单测不得改写仓库 logs/release-gate-stamp.json"
+
     def test_empty_changelog_section_blocks_gate(self, rel, monkeypatch, capsys):
         """归档里的发布段只有标题/占位句 → 发布记录缺内容，前置中止。
 
@@ -488,14 +545,15 @@ class TestRefresh:
 
     @staticmethod
     def _steps(runner, skip: int = 0) -> list[list[str]]:
-        """去掉「代码指纹」的 git 探测（`git diff HEAD -- …` / `git status --porcelain -- …`）。"""
+        """去掉「代码指纹」的 git 探测。
+
+        指纹口径是**内容哈希**（`git ls-files --cached --others --exclude-standard -z`），
+        与提交状态无关；refresh 自身的变更检测仍走 `git diff --name-only` /
+        `git ls-files`（用于「有无未跟踪程序文件」）。
+        """
 
         def _is_fingerprint(cmd: list[str]) -> bool:
-            return (
-                cmd[:2] == ["git", "diff"]
-                and "HEAD" in cmd
-                or (cmd[:3] == ["git", "status", "--porcelain"] and "--" in cmd)
-            )
+            return cmd[:2] == ["git", "ls-files"] and "-z" in cmd
 
         return [c for c in runner.calls if not _is_fingerprint(c)][skip:]
 

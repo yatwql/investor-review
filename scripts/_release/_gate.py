@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import hashlib
+import os
 import json
 import re
 import sys
@@ -34,17 +35,35 @@ CODE_PATHS: tuple[str, ...] = ("src", "scripts", "pyproject.toml", "pytest.ini",
 
 
 def code_fingerprint(exec_fn, root, runner=None) -> str:
-    """测试相关代码路径的指纹（`CODE_PATHS` 的 diff + 状态，sha256）。
+    """测试相关代码路径的**内容**指纹（sha256，与提交状态无关）。
 
     与 `tree_fingerprint` 的分工：本指纹只关心「会不会改变测试结论」的文件，
     故 evolution / 统计回写这类文档写入不会使其失效——否则发布流程里必然
     出现「刚 bench 完就被文档改写打回」的无谓返工。
+
+    必须取**内容**而非「相对 HEAD 的差异」：publish 会先把 prepare 的改动提交再算
+    指纹，若按 `git diff HEAD` / `git status` 哈希，HEAD 一变同一份代码就得到两个指纹，
+    gate 的戳必然对不上、复用路径按构造永不命中。内容哈希（tracked + 未忽略的未跟踪
+    文件逐个哈希）使「提交前」与「提交后」同一工作区得到同一指纹。
     """
-    rc_diff, diff, _ = exec_fn(["git", "diff", "HEAD", "--", *CODE_PATHS], root, runner)
-    rc_status, status, _ = exec_fn(["git", "status", "--porcelain", "--", *CODE_PATHS], root, runner)
-    if rc_diff != 0 or rc_status != 0:
+    rc, out, _ = exec_fn(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", *CODE_PATHS],
+        root,
+        runner,
+    )
+    if rc != 0:
         return ""
-    return hashlib.sha256((diff + "\n---\n" + status).encode("utf-8")).hexdigest()
+    digest = hashlib.sha256()
+    for rel in sorted(name for name in out.split("\0") if name):
+        try:
+            with open(os.path.join(root, rel), "rb") as handle:
+                body = handle.read()
+        except OSError:
+            continue  # 文件在列举与读取之间消失（构建产物等）：跳过即可，不改变口径
+        digest.update(rel.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(hashlib.sha256(body).digest())
+    return digest.hexdigest()
 
 
 def write_bench_stamp(path, version: str, modes: list[str], fingerprint: str, covers_unit: bool) -> None:

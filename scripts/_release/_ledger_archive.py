@@ -295,6 +295,44 @@ def plan_completed_sections(text: str) -> list[tuple[int, int, str]]:
     return hits
 
 
+_PLAN_TIER_RE = re.compile(r"^### (P[1-4])\b", re.M)
+_PLAN_ITEM_RE = re.compile(r"^#### `(plan-\d+)`", re.M)
+_CURRENT_ITER_RE = re.compile(r"^\*\*当前迭代\*\*：.*$", re.M)
+
+
+def recompute_current_iteration(text: str) -> str:
+    """按 plan.md 现存任务节重算「当前迭代」概述行（在办项数 + 分档编号）。
+
+    为何要重算：归档搬走已完成节后，概述行的条数与编号清单必然过期（实测每版都要
+    人工改「在办 15 项」），且 doc-drift 不校验这句——自动重算把这类漂移变成零。
+    口径只认**文件里真实存在的 `#### plan-N` 节**（概述里残留已归档编号的一并纠正）。
+    分档取节头所在 `### P1~P4` 段；P4 为实验候选档，同样计入「在办」。
+    """
+    tiers = [(m.start(), m.group(1)) for m in _PLAN_TIER_RE.finditer(text)]
+    if not tiers:
+        return text
+    grouped: dict[str, list[str]] = {f"P{i}": [] for i in range(1, 5)}
+    for idx, (start, tier) in enumerate(tiers):
+        end = tiers[idx + 1][0] if idx + 1 < len(tiers) else len(text)
+        for m in _PLAN_ITEM_RE.finditer(text, start, end):
+            grouped[tier].append(m.group(1))
+    total = sum(len(ids) for ids in grouped.values())
+    if total == 0:
+        line = "**当前迭代**：当前无在办任务（新任务取 `plan-next` 编号登记）。"
+    else:
+        parts = []
+        for tier in ("P1", "P2", "P3", "P4"):
+            ids = grouped[tier]
+            if not ids:
+                continue
+            listing = "/".join(item.removeprefix("plan-") for item in ids)
+            parts.append(f"{tier} {len(ids)} 项（**plan-{listing}**）")
+        line = f"**当前迭代**：在办 {total} 项——" + "、".join(parts) + "。"
+    if _CURRENT_ITER_RE.search(text):
+        return _CURRENT_ITER_RE.sub(line, text, count=1)
+    return text
+
+
 def apply_plan_archive(main_text: str, archive_text: str, version: str, date: str) -> tuple[str, str, int]:
     """把 plan.md 已完成任务节整节搬入计划归档（统一降为扁平 `## plan-N … ✅`）。
 
@@ -309,6 +347,8 @@ def apply_plan_archive(main_text: str, archive_text: str, version: str, date: st
     for s, e, _t in reversed(sections):  # 从后往前删，避免位移
         main_text = main_text[:s] + main_text[e:]
     main_text = re.sub(r"\n{3,}", "\n\n", main_text)
+    # 概述行的在办项数/编号随归档一起失效 → 按剩余任务节重算（含 P1~P4 分档清单）
+    main_text = recompute_current_iteration(main_text)
 
     new_archive = archive_text.rstrip("\n") + "\n\n" + "\n\n".join(chunks) + "\n"
     # 头部沿用同一套追加口径（涵盖版本补「含 vX.Y.Z」/ 归档时间补本批）
