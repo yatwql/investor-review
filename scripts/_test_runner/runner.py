@@ -143,7 +143,10 @@ def run_mode(
         stripped = line.strip()
         if not stripped:
             continue
-        if any(kw in stripped for kw in ("passed", "failed", "error", "warning", "===", "short test summary")):
+        if any(
+            kw in stripped
+            for kw in ("passed", "failed", "FAILED", "ERROR", "error", "warning", "===", "short test summary")
+        ):
             print(f"    {stripped}")
 
     # 结果概览
