@@ -92,6 +92,9 @@ RELEASE_LOG_FILE = REPO_ROOT / "logs" / "release.jsonl"
 #: gate 通过戳：记录「版本 + 工作区树指纹 + verify 项数」，publish 指纹一致时复用
 #: gate 已跑的 P1 verify（避免 28s 重复；指纹不一致则照常重跑，绝不盲信）
 GATE_STAMP_FILE = REPO_ROOT / "logs" / "release-gate-stamp.json"
+#: refresh bench 通过戳：记录「实际跑过 unit（verify 超集）+ 代码指纹」，
+#: gate 据此跳过重复的 P1 verify；任一条件不满足即回落实跑
+BENCH_STAMP_FILE = REPO_ROOT / "logs" / "release-bench-stamp.json"
 
 # ── 内部实现拆分（_release/ 包）：入口保留 CLI 面与路径常量，测试引用的符号原名 re-export ──
 sys.path.insert(0, str(REPO_ROOT))  # 仓库根：耗时台账复用 core 层 JSONL 原子追加原语
@@ -572,6 +575,14 @@ def cmd_refresh(args: argparse.Namespace, runner=None) -> int:
             rc = _run_step(label, cmd, REPO_ROOT, runner)
         if rc != 0:
             return rc
+    bench_cmd = next((cmd for label, cmd in steps if "scripts/test-runner.py" in " ".join(cmd)), None)
+    if bench_cmd is not None:
+        # bench 实跑（含 unit 档 = verify 严格超集）且全部退出 0 → 写通过戳，
+        # 供 gate 跳过重复 verify；纯文档跳过 bench 时无戳，gate 照常实跑
+        modes = list(RELEASE_BENCH_MODES) if not full_bench else ["bench"]
+        _write_bench_stamp(_code_fingerprint(runner), modes, covers_unit=full_bench or "unit" in modes)
+        print("[OK] bench 通过戳已写入（gate 可凭代码指纹复用该次 unit 结果替代 P1 verify）")
+
     if not full_bench and any("scripts/test-runner.py" in " ".join(cmd) for _, cmd in steps):
         print(
             f"[..] bench 只测发布子集 {', '.join(RELEASE_BENCH_MODES)}（其余模式耗时沿用上次实测；--full-bench 全量复测）"
@@ -655,9 +666,26 @@ def _tree_fingerprint(runner=None) -> str:
     return _gate.tree_fingerprint(_exec, REPO_ROOT, runner)
 
 
-def _write_gate_stamp(version: str, fingerprint: str, verify_passed: str) -> None:
+def _write_gate_stamp(version: str, fingerprint: str, verify_passed: str, source: str = "run") -> None:
     """写 gate 通过戳（实现在 `_release/_gate.py`）。"""
-    _gate.write_gate_stamp(GATE_STAMP_FILE, version, fingerprint, verify_passed)
+    _gate.write_gate_stamp(GATE_STAMP_FILE, version, fingerprint, verify_passed, source)
+
+
+def _code_fingerprint(runner=None) -> str:
+    """测试相关代码路径指纹（实现在 `_release/_gate.py`）。"""
+    return _gate.code_fingerprint(_exec, REPO_ROOT, runner)
+
+
+def _write_bench_stamp(fingerprint: str, modes: list[str], covers_unit: bool) -> None:
+    """写 refresh bench 通过戳（实现在 `_release/_gate.py`）。"""
+    version = read_app_version(CONSTANTS_FILE.read_text(encoding="utf-8"))
+    _gate.write_bench_stamp(BENCH_STAMP_FILE, version, modes, fingerprint, covers_unit)
+
+
+def _bench_covers_verify(runner=None) -> dict | None:
+    """bench 戳是否可替代 P1 verify（实现在 `_release/_gate.py`）。"""
+    version = read_app_version(CONSTANTS_FILE.read_text(encoding="utf-8"))
+    return _gate.bench_covers_verify(BENCH_STAMP_FILE, version, _code_fingerprint(runner))
 
 
 def _gate_stamp_matches(version: str, fingerprint: str) -> dict | None:
@@ -682,6 +710,7 @@ def cmd_gate(args: argparse.Namespace, runner=None) -> int:
         gate_workers=_gate_workers,
         exec_fn=_exec,
         stamp_file=GATE_STAMP_FILE,
+        bench_stamp_file=BENCH_STAMP_FILE,
     )
     return _gate.run_gate(args, ctx, runner=runner)
 

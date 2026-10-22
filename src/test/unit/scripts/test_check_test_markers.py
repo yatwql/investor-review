@@ -167,6 +167,25 @@ class TestCheckFile:
         )
         assert mod.check_file(path, verbose=False, ci_mode=True) == []
 
+    def test_subunit_without_bare_unit_reported(self, mod, isolated_dir):
+        """不变量：带 unit_* 子标记必须同时带 bare `unit`（保证 `-m unit` ⊇ P1 verify）。"""
+        path = _write(
+            isolated_dir,
+            "unit/core/test_cache.py",
+            "import pytest\npytestmark = [pytest.mark.unit_core]\n",
+        )
+        violations = mod.check_file(path, verbose=False, ci_mode=True)
+        assert any("verify ⊆ unit" in v for v in violations)
+
+    def test_real_repo_satisfies_subunit_invariant(self, mod):
+        """真实仓库全量满足不变量（发布期 bench 复用 verify 判定的结构性前提）。"""
+        offenders = []
+        for path in sorted(mod.TEST_DIR.rglob("test_*.py")):
+            markers = mod._extract_markers_from_file(path)
+            if any(m.startswith("unit_") for m in markers) and "unit" not in markers:
+                offenders.append(str(path.relative_to(mod.TEST_DIR)))
+        assert offenders == []
+
     def test_dir_without_expectation_skips_that_check(self, mod, isolated_dir):
         """未登记目录期望时不产生缺标记误报（期望表只约束已登记目录）。"""
         path = _write(

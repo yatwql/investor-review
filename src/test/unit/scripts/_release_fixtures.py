@@ -176,6 +176,7 @@ class _ToolRepoFixture:
             "PLAN_FILE": docs / "plan.md",
             "PLAN_DOCS_DIR": plan_docs,
             "GATE_STAMP_FILE": tmp_path / "logs" / "release-gate-stamp.json",
+            "BENCH_STAMP_FILE": tmp_path / "logs" / "release-bench-stamp.json",
         }
         for name, value in paths.items():
             setattr(rel_mod, name, value)

@@ -166,6 +166,12 @@ def check_file(filepath: Path, verbose: bool, ci_mode: bool) -> list[str]:
     for m in unknown:
         violations.append(f"{rel_path}: 使用了未注册的标记 '{m}'（是否拼写错误？）")
 
+    # 不变量：任何 unit_* 子标记必须同时带 bare `unit`——`-m unit` 因此恒覆盖
+    # P1 verify 的全部选择面（发布期 bench 复用 verify 判定的前提，见 release.py）
+    subunit = sorted(m for m in markers if m.startswith("unit_") and m != "unit")
+    if subunit and "unit" not in markers:
+        violations.append(f"{rel_path}: 含 unit_* 子标记 {subunit} 但缺 bare 'unit'（verify ⊆ unit 不变量被破坏）")
+
     # 检查 _edge.py 是否含 edge 标记
     if filepath.name.endswith("_edge.py") and "edge" not in markers:
         violations.append(f"{rel_path}: _edge.py 文件缺少 'edge' 标记")

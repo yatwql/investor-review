@@ -55,6 +55,7 @@ class TestGate:
         archived = tmp_path / "archived_review-findings.x.md"
         archived.write_text("", encoding="utf-8")
         monkeypatch.setattr(rel, "RF_FILE", rf)
+        monkeypatch.setattr(rel, "BENCH_STAMP_FILE", tmp_path / "release-bench-stamp.json")
         monkeypatch.setattr(rel, "read_app_version", lambda _t: "0.13.12")
         monkeypatch.setattr(rel, "ledger_archive_paths", lambda _v: (archived, tmp_path / "archived_plan.md"))
         monkeypatch.setattr(rel, "rf_archive_status", lambda *_a, **_k: ("archived", 0))
@@ -168,6 +169,53 @@ class TestGate:
         assert data["version"] == "0.13.12"
         assert data["verify_passed"] == "9000"
         assert data["fingerprint"] == rel._tree_fingerprint(runner)
+
+    @staticmethod
+    def _write_bench_stamp(rel, path, runner, *, version="0.13.12", covers_unit=True, fingerprint=None):
+        path.write_text(
+            json.dumps(
+                {
+                    "version": version,
+                    "modes": ["unit", "dev-verify", "regression", "integration"],
+                    "covers_unit": covers_unit,
+                    "code_fingerprint": fingerprint if fingerprint is not None else rel._code_fingerprint(runner),
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    def test_gate_reuses_bench_unit_instead_of_verify(self, rel, monkeypatch, tmp_path):
+        """bench 已跑 unit（verify 超集）且代码指纹一致 → gate 不再重复跑 verify。"""
+        stamp = tmp_path / "bench.json"
+        monkeypatch.setattr(rel, "BENCH_STAMP_FILE", stamp)
+        monkeypatch.setattr(rel, "GATE_STAMP_FILE", tmp_path / "gate.json")
+        runner = FakeRunner()
+        self._write_bench_stamp(rel, stamp, runner)
+        assert rel.cmd_gate(ns(), runner=runner) == 0
+        modes = {_mode_arg(c) for c in runner.calls if any("test-runner.py" in p for p in c)}
+        assert "verify" not in modes
+        assert "regression" in modes
+        gate_data = json.loads((tmp_path / "gate.json").read_text(encoding="utf-8"))
+        assert gate_data["verify_source"] == "bench-unit"
+
+    def test_gate_runs_verify_when_bench_stamp_stale(self, rel, monkeypatch, tmp_path):
+        """代码指纹不一致或 covers_unit=False → 回落实跑 verify（绝不盲信）。"""
+        stamp = tmp_path / "bench.json"
+        monkeypatch.setattr(rel, "BENCH_STAMP_FILE", stamp)
+        monkeypatch.setattr(rel, "GATE_STAMP_FILE", tmp_path / "gate.json")
+        runner = FakeRunner()
+        self._write_bench_stamp(rel, stamp, runner, fingerprint="stale")
+        assert rel.cmd_gate(ns(), runner=runner) == 0
+        modes = {_mode_arg(c) for c in runner.calls if any("test-runner.py" in p for p in c)}
+        assert "verify" in modes
+
+        stamp.write_text(
+            json.dumps({"version": "0.13.12", "covers_unit": False, "code_fingerprint": "x"}), encoding="utf-8"
+        )
+        runner2 = FakeRunner()
+        assert rel.cmd_gate(ns(), runner=runner2) == 0
+        modes2 = {_mode_arg(c) for c in runner2.calls if any("test-runner.py" in p for p in c)}
+        assert "verify" in modes2
 
     def test_gate_with_portability_runs_probe(self, rel, monkeypatch, tmp_path):
         monkeypatch.setattr(rel, "GATE_STAMP_FILE", tmp_path / "stamp.json")
@@ -401,6 +449,19 @@ class TestRefresh:
     """refresh 条件化：自上一 release tag 起仅文档变更 → 跳过 bench/collect
     （doc-drift --sync 恒跑）；有程序/测试变更或 --force-refresh → 三步全跑。"""
 
+    @staticmethod
+    def _steps(runner, skip: int = 0) -> list[list[str]]:
+        """去掉「代码指纹」的 git 探测（`git diff HEAD -- …` / `git status --porcelain -- …`）。"""
+
+        def _is_fingerprint(cmd: list[str]) -> bool:
+            return (
+                cmd[:2] == ["git", "diff"]
+                and "HEAD" in cmd
+                or (cmd[:3] == ["git", "status", "--porcelain"] and "--" in cmd)
+            )
+
+        return [c for c in runner.calls if not _is_fingerprint(c)][skip:]
+
     _TAG = (["describe"], (0, "v0.13.9", ""))
     _PROGRAM_CHANGE = (["diff", "--name-only"], (0, "src/python/x.py\n", ""))
     _DOCS_ONLY = (["diff", "--name-only"], (0, "README.md\ndocs/plan/y.md\n", ""))
@@ -409,7 +470,7 @@ class TestRefresh:
         runner = FakeRunner(responses=[self._TAG, self._PROGRAM_CHANGE])
         rc = rel.cmd_refresh(ns(), runner=runner)
         assert rc == 0
-        steps = runner.calls[3:]  # 前 3 个调用：describe / diff / ls-files
+        steps = self._steps(runner, skip=3)  # 前 3 个调用：describe / diff / ls-files
         assert len(steps) == 3
         assert "--update-docs" in steps[0]
         assert _mode_arg(steps[0]) == ",".join(rel.RELEASE_BENCH_MODES)
@@ -420,7 +481,7 @@ class TestRefresh:
         runner = FakeRunner(responses=[self._TAG, self._DOCS_ONLY])
         rc = rel.cmd_refresh(ns(), runner=runner)
         assert rc == 0
-        steps = runner.calls[3:]
+        steps = self._steps(runner, skip=3)
         assert len(steps) == 1  # 仅 sync
         assert any("check-doc-drift" in p for p in steps[0])
 
@@ -428,16 +489,17 @@ class TestRefresh:
         runner = FakeRunner()
         rc = rel.cmd_refresh(ns(force_refresh=True), runner=runner)
         assert rc == 0
-        assert len(runner.calls) == 3  # 无 git 判定，直接三步
-        assert "--update-docs" in runner.calls[0]
-        assert _mode_arg(runner.calls[0]) == ",".join(rel.RELEASE_BENCH_MODES)
-        assert any("test-collect-coverage" in p for p in runner.calls[1])
+        calls = self._steps(runner)  # 无 git 判定，直接三步（+ 代码指纹探测）
+        assert len(calls) == 3
+        assert "--update-docs" in calls[0]
+        assert _mode_arg(calls[0]) == ",".join(rel.RELEASE_BENCH_MODES)
+        assert any("test-collect-coverage" in p for p in calls[1])
 
     def test_missing_tag_conservatively_refreshes(self, rel):
         runner = FakeRunner(responses=[(["describe"], (128, "", "no tag here"))])
         rc = rel.cmd_refresh(ns(), runner=runner)
         assert rc == 0
-        steps = runner.calls[1:]
+        steps = self._steps(runner, skip=1)
         assert len(steps) == 3  # 无 tag → 保守全刷
         assert _mode_arg(steps[0]) == ",".join(rel.RELEASE_BENCH_MODES)
 
@@ -452,7 +514,7 @@ class TestRefresh:
         )
         rc = rel.cmd_refresh(ns(), runner=runner)
         assert rc == 0
-        steps = runner.calls[3:]
+        steps = self._steps(runner, skip=3)
         assert len(steps) == 3
         assert _mode_arg(steps[0]) == ",".join(rel.RELEASE_BENCH_MODES)
 
@@ -462,6 +524,25 @@ class TestRefresh:
         rc = rel.cmd_refresh(ns(force_refresh=True, full_bench=True), runner=runner)
         assert rc == 0
         assert _mode_arg(runner.calls[0]) == "bench"
+
+    def test_bench_run_writes_stamp_for_gate_reuse(self, rel, tmp_path, monkeypatch):
+        """bench 实跑且全绿 → 写 bench 戳（含 covers_unit 与代码指纹），供 gate 复用。"""
+        stamp = tmp_path / "bench.json"
+        monkeypatch.setattr(rel, "BENCH_STAMP_FILE", stamp)
+        runner = FakeRunner(responses=[self._TAG, self._PROGRAM_CHANGE])
+        assert rel.cmd_refresh(ns(), runner=runner) == 0
+        data = json.loads(stamp.read_text(encoding="utf-8"))
+        assert data["covers_unit"] is True
+        assert set(data["modes"]) == set(rel.RELEASE_BENCH_MODES)
+        assert data["code_fingerprint"]
+
+    def test_docs_only_refresh_writes_no_bench_stamp(self, rel, tmp_path, monkeypatch):
+        """纯文档 → bench 跳过 → 不得写戳（gate 必须实跑 verify）。"""
+        stamp = tmp_path / "bench.json"
+        monkeypatch.setattr(rel, "BENCH_STAMP_FILE", stamp)
+        runner = FakeRunner(responses=[self._TAG, self._DOCS_ONLY])
+        assert rel.cmd_refresh(ns(), runner=runner) == 0
+        assert not stamp.exists()
 
     def test_release_bench_modes_are_real_modes(self, rel):
         """子集模式必须是 test-runner 的真实模式键：拼错会让 bench 直接报错退出，
