@@ -9,6 +9,9 @@
 
 ## [0.14.3-dev] - 开发中（未发布）
 
+### Added
+
+- **Social Preview 生成脚本入库**：`scripts/make-social-preview.py` 把 1200×630 品牌预览图的画布模板（猫头鹰「守望」左卡 + 品牌文案右栏 + 夜空渐变）与渲染流程固化进仓库——素材复用 `src/static/owl-mascot.svg`，改文案/换色后重跑即复现同一张图；产物落 `docs/tmp/github/`（git 忽略）供人工上传仓库 Settings。`cairosvg` 为维护期可选依赖（不入 requirements：无 cairo 系统库的环境装不上），缺依赖或素材不可读时打印指引并以退出码 1 结束。回归 10 例（画布尺寸/品牌文案/素材内嵌一致/宽高比/栅格化参数/中间 PNG 去留/两条退出码路径）。
 
 ### Changed
 
