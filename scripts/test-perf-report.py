@@ -42,18 +42,13 @@ logging.basicConfig(level=logging.WARNING, format="%(levelname)s:%(name)s:%(mess
 
 # ── 常量 ─────────────────────────────────────────
 
-_TARGET_SECONDS = 60  # 性能基准目标
+#: 性能基准目标秒数与报告路径由渲染模块单一声明（本文件按名引用，避免两处各写一份）
 _PHASE1_STOCK_COUNT = 20  # Phase1/2 股票取样数（场外基金另见 SAMPLE_FUNDS）
 _PHASE3_STOCK_COUNT = 50  # Phase3 压力股票取样数（须 ≤ len(SAMPLE_STOCKS)，否则被样本池截断）
-_REPORT_OUTPUT_DIR = os.path.join(
-    _PROJECT_ROOT,
-    "docs",
-    "tmp",
-)
-_PERF_REPORT_PATH = os.path.join(_REPORT_OUTPUT_DIR, "better-investment-performance-test-report.md")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享包（_perf_report）
 from _perf_report.report import (  # noqa: E402, F401 — 报告渲染下沉，原面 re-export
+    _TARGET_SECONDS,
     PerfSample,
     _size_text,
     _test_time_text,

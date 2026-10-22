@@ -20,7 +20,8 @@ bench/collect/sync、publish 的 P1 verify）追加写入 `logs/release.jsonl`�
 `tail -n 20 logs/release.jsonl`，无需现场重测。
 
 **分层**：命令实现与其共用原语（预检/耗时/发布戳/归档路径推导）在
-`_release/_commands.py`；argparse 装配与分派在 `_release/_cli.py`；纯文本变换在
+`_release/_commands_prep.py`（准备阶段）与 `_release/_commands_ship.py`（交付阶段），
+二者共用的原语在 `_release/_commands_base.py`；argparse 装配与分派在 `_release/_cli.py`；纯文本变换在
 `_release/_ledger_archive.py` / `_changelog_archive.py` / `_evolution.py`。本文件
 只保留**路径常量**（测试重定向锚点）、`_Env` 投影、命令薄包装与 `main`。
 """
@@ -156,14 +157,13 @@ class _Env:
 
     全部可重定向路径常量（`REPO_ROOT` / `CONSTANTS_FILE` / `*_STAMP_FILE` …）与
     入口侧原语（`_archive_ctx` / `archive_paths_for` / `run_preflight` …）经此
-    投影读取，故单测对入口模块做 `setattr` 重定向时，`_release/_commands.py` 里的
-    命令实现同步生效（无需 patch 到内部包）。
+    投影读取，故单测对入口模块做 `setattr` 重定向时，`_commands_prep` /
+    `_commands_ship` 里的命令实现同步生效（无需 patch 到内部包）。
     """
 
     #: 外部名 → 入口模块属性名（仅名称不同者需要；其余同名直取）
     _ALIAS = {
         "archive_ctx": "_archive_ctx",
-        "MANAGEMENTS_DIR": "_MANAGEMENTS_DIR",
         "ARCHIVE_DOCS_DIR": "_ARCHIVE_DOCS_DIR",
     }
 
@@ -206,11 +206,11 @@ def _finish_timing(command: str, rc: int) -> None:
     return _cmd_base._finish_timing(command, rc, _env())
 
 
-def archive_paths_for(release_version: str):
+def archive_paths_for(release_version: str) -> tuple[Path, str]:
     return _cmd_base.archive_paths_for(release_version, _env())
 
 
-def ledger_archive_paths(release_version: str):
+def ledger_archive_paths(release_version: str) -> tuple[Path, Path]:
     return _cmd_base.ledger_archive_paths(release_version, _env())
 
 
@@ -226,7 +226,7 @@ def _code_fingerprint(runner=None) -> str:
     return _cmd_base._code_fingerprint(_env(), runner)
 
 
-def _bench_covers_verify(runner=None):
+def _bench_covers_verify(runner=None) -> dict | None:
     return _cmd_base._bench_covers_verify(_env(), runner)
 
 
@@ -238,7 +238,7 @@ def _write_bench_stamp(fingerprint: str, modes: list[str], covers_unit: bool) ->
     return _cmd_base._write_bench_stamp(fingerprint, modes, covers_unit, _env())
 
 
-def _gate_stamp_matches(version: str, fingerprint: str):
+def _gate_stamp_matches(version: str, fingerprint: str) -> dict | None:
     return _cmd_base._gate_stamp_matches(version, fingerprint, _env())
 
 
