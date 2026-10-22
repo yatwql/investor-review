@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.14.6-dev
-> **编号源**：`rf-next = 831`（新增问题取此编号，完成后更新为 +1；已用最大 rf-830，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 832`（新增问题取此编号，完成后更新为 +1；已用最大 rf-831，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -56,6 +56,7 @@
 
 | # | 问题 | 处理 |
 |---|------|------|
+| **rf-831** | 近 12h 实施变更技术债核查（40 次提交 / 266 文件）发现 5 类：① `scripts/_eval_factor_zoo/metrics.py` 在「因子公式与生产层同源」接线下仍自留 `_pearson`/`_ema` 本地副本，遮蔽同文件从 `analysis._factor_formulas` 导入的同源符号；② `core/holding_status.py` 与 `core/data_freshness.py` 各持一份 `_detail_value` / `_has_effective_quote`；③ `TuiProgressReporter.call_sheet` 与 `WebProgressReporter.call_sheet` 逐字重复约 20 行；④ README「报告与行情」行写「HTML 10 图」，与同文件「最多 12 张」及模板实测 12 个 canvas 矛盾；⑤ `d65c638a` 把 `plan-181` 从 plan.md 删除且未归档（changelog 仍记有该任务条目），同时把其正文留成孤儿段挂在新的 plan-185 节下 | 已修复：① 改从 `analysis._factor_formulas` 导入 `_pearson`/`_ema`，删本地副本（`eval-factor-zoo` 原面 re-export 不变）；② `holding_status` 改为从 `data_freshness` 导入两个行情明细辅助；③ 新增 `AnnouncingProgressReporter` 承载唯一实现，TUI/Web 同时继承，并补结构断言「两渠道 `call_sheet` 为同一函数对象」；④ README 10→12；⑤ plan.md 恢复 `plan-181` ✅ 节并删除孤儿正文。复核：全仓重复函数体扫描 0 组、`pytest src/test/unit/{core,report,web,scripts}` 相关域通过、`check-style-guardrails` E 级 / `check-test-markers` / `check-script-contract` 均无新增 finding。 |
 | **rf-830** | TUI 按 `Q` 追问稳定返回「服务暂不可用」：日志为 `'utf-8' codec can't encode characters … surrogates not allowed`，且两个 provider 的失败位置只差模型名长度（`55414` / `55410`）→ 失败发生在建连前的请求体序列化，**不是**网络/配额。根因：POSIX 下 `sys.stdin.errors == 'surrogateescape'`，终端送入的非法 UTF-8 字节被 `input()` 解成孤立代理项（U+D800~U+DFFF），问题首字命中时 httpx 以 `ensure_ascii=False` 序列化请求体，`.encode("utf-8")` 抛 `UnicodeEncodeError`；该异常是 `ValueError` 子类，被 `_attempt_api_call` 的 `except (ValueError, KeyError)` 归为「响应解析失败 / api_error」，导致整条 provider 链无谓失败 | 已修复：新增 `core/text_safety.py`（合法代理对折叠为星平面字符、孤立代理项→U+FFFD，与 UTF-8 `errors="replace"` 同口径），在 **LLM 请求体**（`call_llm_with_retry` 入口递归净化全部字符串）、**LLM 响应正文**（`_process_success_response`，防响应 `\udXXX` 写 HTML 时再炸）与**追问入口**（`qa.session` 问题入库/入日志前净化）三处过关。回归用例：`test_text_safety`（净化口径/递归载荷）+ `TestLoneSurrogateBoundary`（真实 `httpx.MockTransport` 下带孤立代理项的请求体能发出、响应正文可编码）+ `TestQuestionSurrogateSafety`（问题与历史存净化后文本） |
 
 ### 归档档案

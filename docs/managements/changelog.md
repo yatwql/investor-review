@@ -26,6 +26,7 @@
 
 ### Fixed
 
+- **近 12h 实施变更技术债核查（rf-831）**：清掉两处重复实现与一处渠道层重复模板——评测工具 `_eval_factor_zoo/metrics.py` 的 `_pearson`/`_ema` 改为直接导入生产 `analysis._factor_formulas`（不再本地留副本遮蔽「同源」导入）；`core/holding_status` 的 `_detail_value`/`_has_effective_quote` 改为复用 `core.data_freshness` 单一实现；`TuiProgressReporter` / `WebProgressReporter` 的 `call_sheet` 上提为 `AnnouncingProgressReporter` 唯一实现（补结构断言两渠道同一函数对象）。另修两处台账/文档漂移：README「HTML 10 图」→ 12 图（与模板实测一致）；恢复被误删的已完成 `plan-181` 节并清掉其孤儿正文。复核：全仓重复函数体 0 组、`check-style-guardrails` E 级与 `check-test-markers` / `check-script-contract` 无新增 finding。
 - **TUI 报告追问首字为孤立代理项→整条 provider 链误判失败（rf-830）**（实机复现：按 `Q` 提问返回「服务暂不可用」）：POSIX 下 `sys.stdin` 的 `errors=surrogateescape` 会把终端传入的非法 UTF-8 字节解成 U+D800~U+DFFF，问题首字恰好命中时，httpx 以 `ensure_ascii=False` 序列化请求体在 `.encode("utf-8")` 抛 `UnicodeEncodeError`，又被 `_attempt_api_call` 的 `ValueError` 分支归为「响应解析失败/api_error」——所有 provider 同败，与实际网络/配额无关。新增 `core.text_safety` 统一口径（合法代理对折叠为星平面字符、孤立项→U+FFFD），并在 LLM 请求体（`call_llm_with_retry` 入口递归净化）、LLM 响应正文（`_process_success_response`）与追问问题入口（`qa.session`）三处过关；回归用例锁「带孤立代理项的请求体能正常发出」「响应正文能落 HTML」「问题/历史存净化后文本」。
 
 - **`gate → publish` 的 verify 复用按构造永不命中**（v0.14.5 发版实测，等于每次白跑约 27s）：`code_fingerprint` 原用 `git diff HEAD` + `git status` 哈希，而 publish 会先提交 prepare 的改动再算指纹——HEAD 一变，同一份代码就得到两个指纹。改为 `CODE_PATHS`（`src` / `scripts` / `pyproject.toml` / `pytest.ini` / `requirements.txt`）下 **tracked + 未忽略未跟踪文件的内容 sha256**，提交前后一致；回归用例锁「提交前后同指纹 / 内容变化变指纹」。

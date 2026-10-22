@@ -450,5 +450,17 @@ class TestStageProgress(unittest.TestCase):
         self.assertIn("「行情获取」· 已耗时 1s · 预计剩余 ~49s", out)
 
 
+class TestCallSheetSingleSource(unittest.TestCase):
+    """TUI / Web 两渠道的页签安全调用共用同一实现（防重复实现漂移）。"""
+
+    def test_tui_and_web_inherit_same_call_sheet(self) -> None:
+        from src.python.report.progress import AnnouncingProgressReporter
+        from src.python.web.progress import WebProgressReporter
+
+        self.assertIs(TuiProgressReporter.call_sheet, AnnouncingProgressReporter.call_sheet)
+        self.assertIs(WebProgressReporter.call_sheet, AnnouncingProgressReporter.call_sheet)
+        self.assertIs(WebProgressReporter.call_sheet, TuiProgressReporter.call_sheet)
+
+
 if __name__ == "__main__":
     unittest.main()

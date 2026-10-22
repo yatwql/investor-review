@@ -34,6 +34,8 @@ from src.python.analysis.correlation import _pearson_pvalue  # 共享 Pearson + 
 # 因子公式与生产层同源（原先各拷一份，改一处忘另一处会导致评测口径漂移）
 from src.python.analysis._factor_formulas import (  # noqa: F401 — 供评测与测试按原面引用
     _aligned_index_returns,
+    _ema,
+    _pearson,
     _std,
     compute_factor_values,
     cross_sectional_series,
@@ -85,30 +87,6 @@ def _closes(bars: list[dict]) -> list[float]:
 def _mean(values: list[float]) -> float | None:
     vals = [v for v in values if v == v]
     return sum(vals) / len(vals) if vals else None
-
-
-def _pearson(values_x: list[float], values_y: list[float]) -> float | None:
-    """共享 Pearson（复用 correlation 原语，退化返回 0.0）。"""
-    pairs = [(x, y) for x, y in zip(values_x, values_y) if x == x and y == y]
-    if len(pairs) < 3:
-        return None
-    r, _p = _pearson_pvalue([p[0] for p in pairs], [p[1] for p in pairs])
-    return r
-
-
-def _ema(values: list[float], span: int) -> list[float | None]:
-    alpha = 2.0 / (span + 1)
-    out: list[float | None] = []
-    prev: float | None = None
-    for i, value in enumerate(values):
-        if i == 0:
-            prev = value
-        elif prev is None:
-            prev = value
-        else:
-            prev = alpha * value + (1 - alpha) * prev
-        out.append(prev if i >= span - 1 else None)
-    return out
 
 
 def _rolling_beta(rets: list[float], mkt: list[float], window: int) -> list[float | None]:

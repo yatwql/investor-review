@@ -26,6 +26,7 @@ import logging
 from typing import Any
 
 from src.python.core.code_utils import is_fund_holding, strip_exchange_prefix
+from src.python.core.data_freshness import _detail_value, _has_effective_quote
 
 logger = logging.getLogger("invest")
 
@@ -140,47 +141,8 @@ def names_match(holding_name: str | None, market_name: str | None) -> bool:
 
 
 # ── 数据信号：行情明细读取 ──────────────────────────────────
-
-
-def _detail_value(detail: Any, field: str, default: Any = None) -> Any:
-    """从行情明细读取字段（兼容 dict 或含属性对象，如 DetailRow）。
-
-    Args:
-        detail: 单条行情明细；None 时返回 default
-        field: 字段名（如 "code"/"name"/"price"/"price_type"）
-        default: 缺失时的默认值
-
-    Returns:
-        字段值
-    """
-    if detail is None:
-        return default
-    if isinstance(detail, dict):
-        return detail.get(field, default)
-    return getattr(detail, field, default)
-
-
-def _has_effective_quote(detail: Any) -> bool:
-    """判断该品种是否取到有效行情。
-
-    行情明细缺失、price 缺失/≤0、或 price_type 明确「暂无行情」，
-    均视为未取到有效行情。
-
-    Args:
-        detail: 单条行情明细（可为 None）
-
-    Returns:
-        True 表示有有效行情
-    """
-    if detail is None:
-        return False
-    price = _detail_value(detail, "price", 0.0)
-    if price is None or price <= 0:
-        return False
-    price_type = _detail_value(detail, "price_type", "") or ""
-    if price_type == "暂无行情":
-        return False
-    return True
+# 与数据质量仪表盘的「可信度」判定共用同一实现（避免两处漂移）：
+# 单份实现位于 core/data_freshness.py。
 
 
 # ── 单品种状态判定 ─────────────────────────────────────────

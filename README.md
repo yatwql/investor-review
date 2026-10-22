@@ -147,7 +147,7 @@ git clone https://github.com/yatwql/investor-review.git && cd investor-review
 
 | 能力域 | 一句话介绍 | 深入阅读 |
 |:---|:---|:---|
-| 📄 报告与行情 | 多账户核算、双格式报告（Excel 19 页签 + HTML 10 图）、智能缓存、主备链路与「命中源」可追溯 | [报告文件结构](docs/manuals/reports-instruction.md) · [数据源一览](docs/manuals/datasource.md) |
+| 📄 报告与行情 | 多账户核算、双格式报告（Excel 19 页签 + HTML 12 图）、智能缓存、主备链路与「命中源」可追溯 | [报告文件结构](docs/manuals/reports-instruction.md) · [数据源一览](docs/manuals/datasource.md) |
 | 📰 新闻增强 | 5 源财经新闻并行采集、去重、按持仓关键词关联；盈利预测、分红历史、市场情绪热点 | [报告文件结构](docs/manuals/reports-instruction.md) |
 | 🤖 LLM 智囊团 | 圆桌复盘 + 正反辩论、事实校验、质量分级 A~F、多 Provider 链式分发、深度档位、幻觉率评估 | [LLM 配置指引](docs/manuals/how-to-config-llm.md) · [LLM 技术要点](docs/managements/llm-technical.md) |
 | 📈 量化风控 | Beta 置信区间 + 统计检验、情景回撤推演、VaR 尾部风险、再平衡告警、流动性变现天数、币种敞口 | [报告文件结构](docs/manuals/reports-instruction.md) |

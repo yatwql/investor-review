@@ -137,7 +137,31 @@ class SilentProgressReporter(ProgressReporter):
     pass
 
 
-class TuiProgressReporter(ProgressReporter):
+class AnnouncingProgressReporter(ProgressReporter):
+    """带「开始/完成」播报的进度报告器 — TUI 与 Web 两渠道共用的页签滑轨语义。
+
+    与基类实现的区别仅在文案：调用前 ``info("正在生成…")``、成功后
+    ``ok("…生成完成")``、失败走 ``add_error``。文案逐字同源，避免两个
+    渠道各写一份后漂移（原先 TUI / Web 各持一份逐字相同的实现）。
+    """
+
+    def call_sheet(self, label: str, fn: Callable | None, *args: Any, **kwargs: Any) -> bool:
+        if fn is None:
+            self.add_error(f"{label}模块缺失，跳过")
+            return False
+        self.info(f"正在生成{label}...")
+        try:
+            with self.timer(label):
+                fn(*args, **kwargs)
+        except Exception:
+            self.add_error(f"{label}生成失败（详情请查看日志）")
+            logger.exception("%s写入异常", label)
+            return False
+        self.ok(f"{label}生成完成")
+        return True
+
+
+class TuiProgressReporter(AnnouncingProgressReporter):
     """终端进度报告器 — 将进度消息格式化为 [..]/[OK]/[ERR]/[!] 前缀输出。"""
 
     def __init__(self) -> None:
@@ -162,22 +186,6 @@ class TuiProgressReporter(ProgressReporter):
 
     def get_errors(self) -> list[str]:
         return list(self._errors)
-
-    def call_sheet(self, label: str, fn: Callable | None, *args: Any, **kwargs: Any) -> bool:
-        """终端风格的安全页签写入调用。"""
-        if fn is None:
-            self.add_error(f"{label}模块缺失，跳过")
-            return False
-        self.info(f"正在生成{label}...")
-        try:
-            with self.timer(label):
-                fn(*args, **kwargs)
-        except Exception:
-            self.add_error(f"{label}生成失败（详情请查看日志）")
-            logger.exception("%s写入异常", label)
-            return False
-        self.ok(f"{label}生成完成")
-        return True
 
     def print_timing_summary(self) -> None:
         """输出本次运行时各模块耗时排行。"""
