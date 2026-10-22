@@ -211,8 +211,13 @@ class TestConfigDirInfoSubmenu:
 
         from src.python.tui.handlers_config import _dir_info_items
 
+        # 断言「结构关系」而非逐项清单：新增子项（如 L=LLM 调优）不应把测试打红，
+        # 但键必须是单大写字母、互不重复、彼此可解析，且入口地图键 M 始终在册
         assert CONFIG_DIR_INFO_KEYS == tuple(DIR_INFO_ITEMS)
-        assert set(CONFIG_DIR_INFO_KEYS) == {"C", "F", "O", "M"}
+        keys = list(DIR_INFO_ITEMS)
+        assert len(keys) == len(set(keys)), "子项键不得重复"
+        assert all(len(k) == 1 and k.isupper() for k in keys), f"子项键须为单大写字母: {keys}"
+        assert "M" in DIR_INFO_ITEMS, "配置入口地图（M）不得下线"
         resolved = {key: (label, fn) for key, label, fn in _dir_info_items()}
         assert set(resolved) == set(DIR_INFO_ITEMS)
         for key, (label, fn) in resolved.items():

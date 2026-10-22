@@ -30,6 +30,7 @@ _project_root = os.path.dirname(os.path.dirname(os.path.dirname(_src_dir)))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
+from src.python.config import resolve_output_dir
 from src.python.core.constants import APP_NAME
 
 logger = logging.getLogger("invest")
@@ -134,7 +135,7 @@ def main() -> int:
     setup_logger()
     log_app_boundary("启动", "Web模式")
 
-    from src.python.config import get_config, init_config
+    from src.python.config import init_config
 
     init_config(config_path=args.config)
 
@@ -144,9 +145,8 @@ def main() -> int:
         return 2
 
     # output_dir 写锁：被其他入口占用则警告（防止多进程共享输出目录互相覆盖产物）
-    from src.python.config import get_default
 
-    output_dir = get_config().get("output_dir") or get_default("output_dir")
+    output_dir = resolve_output_dir()
     output_lock = ensure_output_dir_lock(output_dir)
 
     try:

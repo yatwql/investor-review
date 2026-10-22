@@ -8,10 +8,9 @@
 
 from __future__ import annotations
 
-import json
 import logging
-import os
 
+from src.python.config import read_llm_settings_file, resolve_output_dir
 from src.python.config.edit_ops import (  # noqa: F401  # 公开再导出
     ANON_MODES,
     ConfigEditError,
@@ -31,6 +30,28 @@ logger = logging.getLogger("invest")
 
 # LLM 分析章节可编辑开关 = 模块注册表全集（共享单源；辩论三段不在其内，缓存登记在缓存域）
 from src.python.core.registry import get_llm_module_names  # noqa: E402
+
+
+def _llm_tuning_surface() -> list[dict]:
+    """LLM 调优项（并发/预算/重试）：清单、范围与说明全部取自共享白名单 ``edit_ops``。"""
+    from src.python.config._llm_settings import get_llm_config
+    from src.python.config.edit_ops import LLM_TUNING_SPECS
+
+    settings = get_llm_config() or {}
+    rows = []
+    for key, spec in LLM_TUNING_SPECS.items():
+        rows.append(
+            {
+                "key": key,
+                "label": spec["label"],
+                "value": settings.get(key, spec.get("default")),
+                "min": spec.get("min"),
+                "max": spec.get("max"),
+                "hint": spec.get("hint", ""),
+                "step": 1 if spec["kind"] == "int" else 0.1,
+            }
+        )
+    return rows
 
 
 def _llm_providers_surface() -> dict:
@@ -69,9 +90,8 @@ def get_config_edit_surface() -> dict:
         is_enable_history,
         is_enable_news,
         is_enable_portfolio_evolution,
-        strip_json_comments,
     )
-    from src.python.config._llm_settings import get_llm_settings_path
+    
     from src.python.config.anonymizer import get_anonymization_mode
     from src.python.config.features import is_feature_enabled
 
@@ -79,7 +99,7 @@ def get_config_edit_surface() -> dict:
     paths = {
         "holdings_dir": config.get("holdings_dir") or "",
         "holdings_filename": config.get("holdings_filename") or "",
-        "output_dir": config.get("output_dir") or get_default("output_dir"),
+        "output_dir": resolve_output_dir(config),
     }
     sections = {
         "enable_fund_deep_analysis": is_enable_fund_deep_analysis(config),
@@ -91,17 +111,15 @@ def get_config_edit_surface() -> dict:
     anon_mode = get_anonymization_mode()
     indices = config.get("comparison_indices") or get_default("comparison_indices")
 
-    # LLM enabled_llm：直接读 llm_settings.json（未配置 LLM 时 get_llm_config 返回
-    # None，面板独立读源文件仍可展示开关）；缺失键默认开（对齐 TUI enabled_map.get(sfx, True)）
-    settings_path = get_llm_settings_path()
-    enabled_map: dict = {}
-    if os.path.exists(settings_path):
-        try:
-            with open(settings_path, encoding="utf-8-sig") as f:
-                raw = f.read()
-            enabled_map = json.loads(strip_json_comments(raw)).get("enabled_llm") or {}
-        except (OSError, json.JSONDecodeError) as e:
-            logger.warning("读取 llm_settings.json 失败，LLM 开关按默认展示: %s", e)
+    # LLM enabled_llm：读 llm_settings.json 的**原始落盘值**（配置层唯一读取入口；
+    # 未配置 LLM 时 get_llm_config 返回 None，但面板仍要能展示开关）；
+    # 缺失键默认开，与 TUI 面板同口径
+    snapshot = read_llm_settings_file()
+    if snapshot is None:
+        logger.warning("读取 llm_settings.json 失败，LLM 开关按默认展示")
+        enabled_map: dict = {}
+    else:
+        enabled_map = snapshot[0].get("enabled_llm") or {}
     surface_enabled = {sfx: bool(enabled_map.get(sfx, True)) for sfx in get_llm_module_names()}
     # 功能开关：按 GROUP_ORDER 四组动态下发（组键/组标题/清单皆由注册表派生，
     # 不硬编码组名，下次分组调整零改动）；显示名、「影响报告」标记与实验项清单
@@ -127,6 +145,7 @@ def get_config_edit_surface() -> dict:
         "comparison_indices": dict(indices),
         "comparison_indices_defaults": dict(get_default("comparison_indices") or {}),
         "llm": {"enabled_llm": surface_enabled},
+        "llm_tuning": _llm_tuning_surface(),
         "llm_providers": _llm_providers_surface(),
         "features": features_surface,
     }

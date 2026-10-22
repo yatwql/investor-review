@@ -5,11 +5,9 @@
 
 from __future__ import annotations
 
-import json
 import os
 from collections.abc import Callable
 
-from src.python.core.constants import PROJECT_ROOT
 from src.python.core.logger import setup_logger
 from src.python.core.reader import list_xlsx_files
 from src.python.tui.tui_menu import (
@@ -77,20 +75,13 @@ def _read_llm_settings() -> tuple[dict, str] | None:
     Returns:
         (settings_dict, path) 成功时；失败时返回 None（已输出错误提示）
     """
-    from src.python.config import get_config, strip_json_comments
+    from src.python.config import read_llm_settings_file
 
-    config_path = get_config().get(
-        "llm_settings_file",
-        os.path.join(PROJECT_ROOT, "data/config/llm_settings.json"),
-    )
-    try:
-        with open(config_path, encoding="utf-8-sig") as f:
-            raw = f.read()
-        settings = json.loads(strip_json_comments(raw))
-        return settings, config_path
-    except (FileNotFoundError, json.JSONDecodeError):
+    snapshot = read_llm_settings_file()
+    if snapshot is None:
         print(f"  {RED}[ERR]{RESET} 无法读取 llm_settings.json")
         return None
+    return snapshot
 
 
 def _edit_single_config(key: str, label: str, default: str = "", *, pre_hook=None) -> None:
@@ -203,6 +194,7 @@ DIR_INFO_ITEMS: dict[str, tuple[str, str]] = {
     "C": ("持仓信息目录", "_cmd_config_dir"),
     "F": ("持仓信息文件名", "_cmd_config_filename"),
     "O": ("报告输出目录", "_cmd_config_output_dir"),
+    "L": ("LLM 调优参数（并发/预算/重试）", "_cmd_config_llm_tuning"),
     "M": ("配置入口地图（各配置项所在菜单）", "_render_config_entry_map"),
 }
 
@@ -253,6 +245,67 @@ def _cmd_config_dir_info() -> None:
 # 持仓变动复盘双入口互指标注（只读行尾提示，行为零变化）：章本体（独立章节组
 # `holding_change_review`）与归因内容（LLM 区 `holding_change` 模块）为解耦的有意
 # 设计、默认态相反，面板相邻两行命名近似易误判——两侧行尾互相指出对方入口位置。
+def _cmd_config_llm_tuning() -> None:
+    """LLM 调优参数（thinking 并发 / 总并发 / 重试 / 时间与费用预算）。
+
+    清单、取值范围与说明全部来自 ``config.edit_ops.LLM_TUNING_SPECS``（与 Web 面板、
+    编辑 API 同一白名单）；保存经 ``_apply_edit`` → 共享编辑层，校验强度与 Web 一致。
+    """
+    from src.python.config import get_llm_config
+    from src.python.config.edit_ops import LLM_TUNING_SPECS
+    from src.python.tui.panel_runtime import PanelItem, panel_loop
+    from src.python.tui.prompt_text import panel_prompt
+
+    llm = get_llm_config() or {}
+    keys = list(LLM_TUNING_SPECS)
+
+    def _edit(key: str):
+        spec = LLM_TUNING_SPECS[key]
+
+        def _run() -> None:
+            current = llm.get(key, spec.get("default"))
+            print(f"  当前 {spec['label']}: {current}（范围 {spec['min']}~{spec['max']}）")
+            if spec.get("hint"):
+                print(f"  {spec['hint']}")
+            try:
+                new_val = input_choice("  输入新值（回车=不修改）> ")
+            except (EOFError, KeyboardInterrupt):
+                print()
+                return
+            if not new_val:
+                print("  未修改")
+                return
+            if _apply_edit({"key": key, "value": new_val}):
+                refresh_config()
+                print(f"  {GREEN}[OK]{RESET} {spec['label']}已更新为: {new_val}")
+
+        return _run
+
+    def _render(nav: NavState) -> list[str]:
+        print()
+        print(style_heading("  ── LLM 调优参数 ──"))
+        for i, key in enumerate(keys, 1):
+            spec = LLM_TUNING_SPECS[key]
+            print(f" {nav.marker(i - 1)} {i}. {spec['label']}（当前 {llm.get(key, spec.get('default'))}）")
+        print(f" {nav.marker(len(keys))} 0. 返回")
+        print()
+        return []
+
+    items = [PanelItem(str(i), spec["label"], action=_edit(key)) for i, (key, spec) in enumerate(LLM_TUNING_SPECS.items(), 1)]
+    items.append(PanelItem("0", "返回", kind="return"))
+    try:
+        panel_loop(
+            items,
+            render=_render,
+            prompt=panel_prompt("输入编号修改", example="1 改 thinking 并发", help_hint=None),
+            read=input_choice,
+            on_text=lambda _t: print("  [!] 无效选择，请输入编号或 0"),
+            default_key="0",
+        )
+    except (EOFError, KeyboardInterrupt):
+        print()
+
+
 def _cmd_config_llm_modules() -> None:
     """配置各 LLM 报告的启用/停用，以及全部功能开关——实现见 ``handlers_switch``。
 

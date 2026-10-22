@@ -327,3 +327,46 @@ class TestInferLatestNavDate(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestHeaderFreshness:
+    """页头新鲜度：阈值取配置分层值、偏旧判定取交易日口径（日历只读缓存，不触网）。"""
+
+    _CAL = ["2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22"]
+
+    def test_t_minus_one_is_not_stale(self, monkeypatch):
+        """T-1 数据属正常缓存（与报告内 classify_freshness 同口径），不标黄。"""
+        from src.python.core.data_freshness import header_freshness
+
+        monkeypatch.setattr("src.python.core.trading_calendar.datetime", __import__("datetime").datetime)
+        summary = header_freshness("2026-10-21", config={}, calendar=self._CAL)
+        # 以测试当天为界取日历尾部；只要日期早于「前一交易日」才偏旧
+        assert summary["stale"] is (summary["prev_trading_day"] is not None and "2026-10-21" < summary["prev_trading_day"])
+
+    def test_older_than_prev_trading_day_is_stale(self):
+        from src.python.core.data_freshness import header_freshness
+
+        summary = header_freshness("2026-10-10", config={}, calendar=self._CAL)
+        assert summary["stale"] is True
+        assert summary["trading_day"] == self._CAL[-1]
+
+    def test_fallback_without_calendar_uses_config_threshold(self, monkeypatch):
+        from src.python.core.data_freshness import header_freshness
+
+        today = __import__("datetime").date.today()
+        old = (today - __import__("datetime").timedelta(days=5)).isoformat()
+        summary = header_freshness(old, config={"degradation": {"t2": {"stale_days": 3}}}, calendar=[])
+        assert summary["trading_day"] is None
+        assert summary["stale"] is True
+        assert summary["threshold_days"] == 3
+
+    def test_threshold_takes_strictest_tier(self):
+        from src.python.core.data_freshness import header_stale_threshold_days
+
+        cfg = {"degradation": {"t2": {"stale_days": 3}, "t3": {"stale_days": 14}, "t4": {"stale_days": 7}}}
+        assert header_stale_threshold_days(cfg) == 3
+
+    def test_invalid_date_returns_none(self):
+        from src.python.core.data_freshness import header_freshness
+
+        assert header_freshness("bad-date", config={}, calendar=[]) is None

@@ -17,55 +17,28 @@
 from __future__ import annotations
 
 import logging
-import os
-import subprocess
 import sys
 from pathlib import Path
 from typing import Callable
-
-from src.python.core.constants import LATEST_HTML_NAME, LATEST_XLSX_NAME
 
 logger = logging.getLogger("invest")
 
 #: 打开动作的键（单键读取；大写一侧为默认 N —— 与提示 `(y/N)` 同源）
 _YES_KEYS = frozenset({"Y", "y"})
 
-#: 子进程打开动作的超时（秒）：守卫系统命令缺失/挂起，失败按「未打开」降级
-_OPEN_TIMEOUT = 5.0
-
 
 def collect_artifacts(config: dict | None) -> tuple[Path, ...]:
-    """收集 ``output_dir`` 下已存在的最新产物（先 HTML 后 Excel，缺失者跳过）。
+    """产物定位委托 core（三渠道同一事实）：``output_dir`` 下存在的最新 HTML / Excel。"""
+    from src.python.core.artifacts import collect_artifacts as core_collect
 
-    Returns:
-        存在的产物路径元组；一个都没有时为空元组（调用方据此跳过询问）。
-    """
-    output_dir = Path(str((config or {}).get("output_dir") or "reports"))
-    candidates = (output_dir / LATEST_HTML_NAME, output_dir / LATEST_XLSX_NAME)
-    return tuple(path for path in candidates if path.is_file())
-
-
-def _default_opener(path: Path) -> bool:
-    """用系统默认程序打开路径；成功返回 True，任何失败（含命令缺失）返回 False。"""
-    try:
-        if sys.platform == "win32":
-            os.startfile(str(path))  # type: ignore[attr-defined]  # Windows 专用
-            return True
-        command = ["open", str(path)] if sys.platform == "darwin" else ["xdg-open", str(path)]
-        return subprocess.run(command, check=False, timeout=_OPEN_TIMEOUT).returncode == 0
-    except (OSError, subprocess.SubprocessError) as e:  # 无图形环境/命令缺失/超时
-        logger.debug("[report_artifacts] 打开失败 %s: %s", path, e)
-        return False
+    return core_collect(config)
 
 
 def open_artifacts(paths: tuple[Path, ...], *, opener: Callable[[Path], bool] | None = None) -> list[Path]:
-    """逐个打开路径，返回**成功**打开的清单（失败者由调用方提示手动访问）。"""
-    open_one = opener or _default_opener
-    opened: list[Path] = []
-    for path in paths:
-        if open_one(path):
-            opened.append(path)
-    return opened
+    """打开动作委托 core（平台分派与失败降级同源）。"""
+    from src.python.core.artifacts import open_artifacts as core_open
+
+    return core_open(paths, opener=opener)
 
 
 def _ask_open(key_reader: Callable[[], str]) -> bool:

@@ -33,7 +33,6 @@ logger = logging.getLogger(__name__)
 
 _STATUS_TTL = 45.0  # 页头重绘频繁，缓存/健康历史等重取限频（秒）
 # 数据新鲜度告警阈值（自然日）：超过则在页头用黄色提示「数据偏旧」
-_STALE_DAYS = 7
 
 _memo: dict[str, Any] = {}
 
@@ -97,10 +96,16 @@ def _freshness_part() -> str:
         raw_date = detail.get("nav_date") or detail.get("price_date")
         if not raw_date:
             return "新鲜度 —"
-        date_obj = datetime.strptime(str(raw_date)[:10], "%Y-%m-%d").date()
-        age = max((datetime.now().date() - date_obj).days, 0)
-        text = f"新鲜度 {date_obj:%m-%d}（{age}天）"
-        return f"{YELLOW}{text}{RESET}" if age >= _STALE_DAYS else text
+        # 阈值与「偏旧」判定单源在 core.data_freshness（配置分层阈值 + 交易日口径）：
+        # 页头与报告内数据质量对同一份数据给出同一结论；日历只读缓存，不触发联网
+        from src.python.core.data_freshness import header_freshness
+
+        summary = header_freshness(raw_date)
+        if summary is None:
+            return "新鲜度 —"
+        date_obj = datetime.strptime(summary["date"], "%Y-%m-%d").date()
+        text = f"新鲜度 {date_obj:%m-%d}（{summary['age_days']}天）"
+        return f"{YELLOW}{text}{RESET}" if summary["stale"] else text
     except Exception:
         logger.debug("状态行「新鲜度」取数失败，降级为 —", exc_info=True)
         return "新鲜度 —"

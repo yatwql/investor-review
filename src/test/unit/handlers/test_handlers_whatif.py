@@ -310,7 +310,8 @@ class TestCmdWhatif(unittest.TestCase):
             _cmd_whatif()
 
         mock_run.assert_called_once()
-        self.assertEqual(mock_run.call_args.kwargs["output_dir"], "reports")
+        # 输出目录由 config.resolve_output_dir 统一解析（绝对化），渠道不再自带回退链
+        self.assertTrue(mock_run.call_args.kwargs["output_dir"].endswith("reports"))
         self.assertEqual(mock_run.call_args.kwargs["effective_date"], None)
         self.assertIn("调仓模拟报告已生成", out.getvalue())
         self.assertIn("调仓模拟.xlsx", out.getvalue())

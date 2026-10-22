@@ -20,6 +20,7 @@ from urllib.parse import urlparse
 
 from flask import request, send_from_directory
 
+from src.python.config import resolve_output_dir
 from src.python.qa.error_codes import (
     QA_CONTEXT_INVALID,
     QA_DISABLED,
@@ -330,7 +331,6 @@ def _handle_whatif():
     全程同步执行（本地计算，与 CLI/TUI 同链 run_whatif_simulation），
     成功返回产物 basename，前端经 /api/reports/<filename> 预览下载。
     """
-    from src.python.config import get_config
     from src.python.core.reader import read_holdings
     from src.python.report.whatif_operations import run_whatif_simulation
     from src.python.web.upload import resolve_file
@@ -389,9 +389,8 @@ def _handle_whatif():
     if not _whatif_lock.acquire(blocking=False):
         return _err("WHATIF_BUSY", "已有调仓模拟在执行，请稍后再试"), 429
     try:
-        from src.python.config import get_default
 
-        output_dir = get_config().get("output_dir") or get_default("output_dir")
+        output_dir = resolve_output_dir()
         result = run_whatif_simulation(
             base_holdings,
             cand_holdings,
@@ -522,13 +521,13 @@ def _handle_serve_report(filename: str):
     扩展名白名单先拦（防 .HTML/.XLSX 大小写绕过）；``send_from_directory``
     内置 ``..`` 净化（§6.2 防路径穿越）。
     """
-    from src.python.config import get_default, get_config
+    from src.python.config import get_config
 
     ext = os.path.splitext(filename)[1].lstrip(".").lower()
     if ext not in _ALLOWED_REPORT_EXT:
         return _err("BAD_PARAM", "不支持的文件类型"), 400
     config = get_config()
-    output_dir = config.get("output_dir") or get_default("output_dir")
+    output_dir = resolve_output_dir(config)
     return send_from_directory(output_dir, filename)
 
 
@@ -543,10 +542,11 @@ def _handle_health():
         with _render_cache_lock:
             if _health_cache["data"] is not None and now - _health_cache["ts"] < 60:
                 return _ok(_health_cache["data"])
-    # 整体预算必须低于前端 /api/health 的 15s abort（留余量）。
-    # 12s 覆盖正常网络下的全量检查（实测 ~10s），仅切断真正挂起的检查项，
-    # 未完成项由 run_health_checks 标记"超时"返回，避免整接口超时被前端判失败。
-    results = run_health_checks(max_timeout=12.0)
+    # 预算取 core.doctor 的 Web 档（低于前端 /api/health 的 15s abort 留余量；
+    # 未完成项由 run_health_checks 标记"超时"返回，避免整接口超时被前端判失败）
+    from src.python.core.doctor import NETWORK_TIMEOUT_WEB
+
+    results = run_health_checks(max_timeout=NETWORK_TIMEOUT_WEB)
     with _render_cache_lock:
         _health_cache["ts"] = now
         _health_cache["data"] = results
@@ -570,14 +570,14 @@ def _handle_doctor():
     from src.python.core.doctor import run_doctor_checks, summarize_doctor_results
 
     include_network = request.args.get("network", "1") != "0"
-    _MAX_TIMEOUT_CEILING = 15.0
-    try:
-        timeout = min(float(request.args.get("timeout", 12.0)), _MAX_TIMEOUT_CEILING)
-    except (TypeError, ValueError):
-        timeout = 12.0
+    from src.python.core.doctor import NETWORK_TIMEOUT_CEILING, NETWORK_TIMEOUT_WEB, normalize_network_timeout
 
+    # 预算默认/下限/上限口径全部来自 core.doctor（渠道不另立数字）
+    timeout = normalize_network_timeout(
+        request.args.get("timeout"), default=NETWORK_TIMEOUT_WEB, ceiling=NETWORK_TIMEOUT_CEILING
+    )
     # 整体预算低于前端 abort 阈值（留余量），未完成项由 run_health_checks 标"超时"
-    results = run_doctor_checks(include_network=include_network, max_timeout=max(timeout, 1.0))
+    results = run_doctor_checks(include_network=include_network, max_timeout=timeout)
     ok_count, bad_count = summarize_doctor_results(results)
     return _ok({"results": results, "ok_count": ok_count, "bad_count": bad_count})
 

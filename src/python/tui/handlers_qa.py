@@ -14,6 +14,7 @@ import os
 from datetime import datetime
 from html.parser import HTMLParser
 
+from src.python.config import resolve_output_dir
 from src.python.core.logger import setup_logger
 from src.python.qa.error_codes import QA_CONTEXT_INVALID, QA_INPUT_CAP_EXCEEDED, QA_REPORT_NOT_FOUND, QA_SESSION_LIMIT
 from src.python.qa.session import ask_report_qa
@@ -76,10 +77,10 @@ def _html_to_text(html: str) -> str:
 
 def _resolve_output_dir() -> str:
     """当前报告输出目录（config 覆写优先，缺省取默认值，与 Web 路由同口径）。"""
-    from src.python.config import get_config, get_default
+    from src.python.config import get_config
 
     config = get_config()
-    return config.get("output_dir") or get_default("output_dir")
+    return resolve_output_dir(config)
 
 
 def _list_reports(output_dir: str) -> list[str]:

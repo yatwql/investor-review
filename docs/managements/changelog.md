@@ -11,6 +11,9 @@
 
 ### Added
 
+- **CLI 收尾打印产物路径（plan-183）**：报告生成后输出「产物目录 + 各产物绝对路径」（定位下沉 `core/artifacts`，与 TUI 同一事实；不做交互，脚本不被阻塞）。
+- **Web 产物路径可复制（plan-183）**：结果区每个产物旁显示服务端绝对路径，点击即复制（浏览器与报告不同机，「打开目录」无意义）。
+- **LLM 调优参数面板（plan-184）**：`config/edit_ops.LLM_TUNING_SPECS` 声明 6 个可调键（thinking 并发 / 模块并发 / 重试 / 整链重试等待 / 总时间预算 / 日费用上限）及范围与说明；Web 配置面板新增「LLM 调优参数」组、TUI 新增 `[D]→[L]` 子项，保存走同一编辑层（超范围明确拒绝）；此前只能手改 JSON。
 - **报告收尾列出产物并支持一键打开**：E/B/L 生成完成后打印报告目录与已生成的 HTML / Excel，问一句「是否打开报告目录与报告？(y/N)」——`y`/`Y` 打开，**默认 N**（其余任何键含 `n`/回车/`Esc`/未知键均按 N），`Esc` 只跳过回菜单、`Ctrl+C` 沿用 TUI 约定退出，非 TTY 只列清单不询问。打开动作平台分派（`startfile`/`open`/`xdg-open`），失败不报错、降级为手动路径提示。取代原「按任意键返回菜单」：同样是按一下回菜单，但键义明确、不多一步（`R-TUI-09`）。
 
 ### Fixed
@@ -18,9 +21,17 @@
 - **`gate → publish` 的 verify 复用按构造永不命中**（v0.14.5 发版实测，等于每次白跑约 27s）：`code_fingerprint` 原用 `git diff HEAD` + `git status` 哈希，而 publish 会先提交 prepare 的改动再算指纹——HEAD 一变，同一份代码就得到两个指纹。改为 `CODE_PATHS`（`src` / `scripts` / `pyproject.toml` / `pytest.ini` / `requirements.txt`）下 **tracked + 未忽略未跟踪文件的内容 sha256**，提交前后一致；回归用例锁「提交前后同指纹 / 内容变化变指纹」。
 - **单测改写仓库真实发布戳**（v0.14.5 发版期间发现 `logs/release-gate-stamp.json` 被写成夹具版本 `0.13.12`）：`TestGateArchivePrecondition` 沙箱漏隔离 `GATE_STAMP_FILE`，gate 成功用例走完尾部写入真实路径；现该测试模块统一 autouse 重定向「通过戳 / bench 戳 / 耗时台账」，并加回归断言「跑完 gate 成功用例后仓库真实戳字节不变」。
 - **`prepare` 归档后「当前迭代」概述行失准**：归档搬走 ✅ 节后该行仍写「在办 15 项…已实施待归档」（doc-drift 不校验这句，每版都要人工改）。`apply_plan_archive` 现按**现存 `#### plan-N` 节**重算在办项数与 P1~P4 分档编号，残留/幻影编号（如已不存在的 `plan-128`）一并纠正；无分层标题时保守不动。
+- **渠道层常量/回退链/展示规则单源化（rf-823~828）**：
+  - `config.resolve_output_dir(config, override)` 取代 12 处各自为政的 `output_dir` 回退链（含 3 处 `"reports"` 字面量），统一绝对化；
+  - `core.num_utils.format_size` 取代 TUI 三处 + CLI 一处的 KB/MB 格式化（此前取整位数已不一致）；
+  - `core.error_hints.hint_for` 成为「异常→用户提示」唯一映射：TUI 上屏、CLI 未处理异常行取同一句话（Web 可并入信封），类型判定优先于关键词、内部异常标 `log_detail` 记堆栈；
+  - `config.read_llm_settings_file` 成为「原始落盘值」唯一读取入口（TUI 配置面板 / Web 配置面板共用），不再各自 open+strip+parse；
+  - doctor 网络检查预算收敛到 `core.doctor`（`NETWORK_TIMEOUT_DEFAULT`/`NETWORK_TIMEOUT_WEB`/`CEILING` + `normalize_network_timeout`），CLI/TUI 用默认档、Web 用 Web 档，渠道不再写数字；CLI 查询串超上限按 15s 截断；
+  - TUI 页头「新鲜度」改用 `core.data_freshness.header_freshness`：阈值取 `degradation` 分层最严档（默认 3 天）、偏旧判定取交易日口径（日历只读缓存、不触网），与报告内数据质量同一结论（此前 TUI 自定 `_STALE_DAYS=7` 且用自然日）。
 
 ### Changed
 
+- **plan-182 决策不做**：CLI 的「一次命令 + 管道」形态不适合多轮追问，保留 TUI `[Q]` / Web `/api/qa/ask` 两个自然入口；脚本化场景走 Web API。
 - **`devbump` 默认推送 `origin dev`**：发布闭环的收尾就是「切版 + 同步远端」两步——上一版（v0.14.5）实测需人工补 `git push origin dev`，漏做会让本地领先远端一个提交。现 `devbump` 默认执行推送，需要本地先复核时用 `--no-push`（`--push` 保留为兼容别名、与省略等效）；推送失败**不回滚**已落盘的切版提交，但会报错并给出重试命令。CLI 默认值由用例锁定（`devbump` ⇒ push=True / `--no-push` ⇒ False）。
 
 （本次发布内容见下方归档索引）

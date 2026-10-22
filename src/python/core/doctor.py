@@ -57,6 +57,42 @@ GROUP_ORDER = [
 # 支持的最低 Python 版本（项目依赖的语法特性下限）
 MIN_PYTHON = (3, 10)
 
+# ── 数据源网络检查的耗时预算（三渠道唯一取值来源）──────────────
+# 此前 CLI 默认 8s、Web 12s、TUI 6s 各写一份字面量：同一台机器同一批数据源，
+# 三渠道会给出不同结论（慢源在 6s 判超时、在 12s 通过），改预算还要改三处。
+# 取值差异只在「交互场景与浏览器 abort 约束」，故保留两档、但都由本模块声明：
+#: 默认预算（CLI / TUI 交互）：足够覆盖正常网络下的全量检查
+NETWORK_TIMEOUT_DEFAULT = 8.0
+#: Web 预算：低于前端 /api/health 的 15s abort 留余量，覆盖实测 ~10s 的全量检查
+NETWORK_TIMEOUT_WEB = 12.0
+#: 下限：0/负值/非法输入一律按此处理（避免「不检查」被当成健康）
+NETWORK_TIMEOUT_MIN = 1.0
+#: 上限：低于前端 /api/health 的 15s abort（留余量），防单次自检拖垮接口
+NETWORK_TIMEOUT_CEILING = 15.0
+
+
+def normalize_network_timeout(
+    value,
+    *,
+    default: float = NETWORK_TIMEOUT_DEFAULT,
+    ceiling: float | None = NETWORK_TIMEOUT_CEILING,
+) -> float:
+    """把外部传入的预算归一为可用秒数（非法/缺失用 ``default``，夹在 ``[MIN, ceiling]``）。
+
+    Args:
+        value: 外部输入（查询串/命令行/配置），可为 None/非法类型。
+        default: 非法或缺失时采用的默认预算（Web 传 ``NETWORK_TIMEOUT_WEB``）。
+        ceiling: 上限；None 表示不封顶（显式传入超大值时应被截断）。
+    """
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        seconds = float(default)
+    if seconds != seconds or seconds <= 0:  # NaN / 0 / 负数
+        seconds = float(default)
+    seconds = max(NETWORK_TIMEOUT_MIN, seconds)
+    return min(seconds, ceiling) if ceiling is not None else seconds
+
 # 探测目录可写性时写入的哨兵文件名（写完立即删除，不留残留）
 _WRITE_PROBE = ".doctor_write_probe"
 

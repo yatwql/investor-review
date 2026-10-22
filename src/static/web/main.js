@@ -823,6 +823,24 @@
       download.href = url;
       download.download = a.path;
       els.resultActions.appendChild(download);
+
+      // 服务端绝对路径可复制（Web 与报告不一定同机，「打开目录」无意义；
+      // 给路径让用户在本机文件管理器/终端里定位，三渠道信息面一致）
+      if (a.path) {
+        var pathText = document.createElement('code');
+        pathText.className = 'artifact-path';
+        pathText.textContent = a.path;
+        pathText.title = '点击复制路径';
+        pathText.style.cursor = 'pointer';
+        pathText.addEventListener('click', function () {
+          if (navigator.clipboard) {
+            navigator.clipboard.writeText(a.path);
+            pathText.textContent = '已复制: ' + a.path;
+            setTimeout(function () { pathText.textContent = a.path; }, 1500);
+          }
+        });
+        els.resultActions.appendChild(pathText);
+      }
     });
   }
 
@@ -1219,12 +1237,76 @@
     if (provGroup) {
       els.configPanel.appendChild(provGroup);
     }
+    if (surface.llm_tuning && surface.llm_tuning.length) {
+      els.configPanel.appendChild(renderTuningGroup(surface.llm_tuning));
+    }
     els.configPanel.appendChild(
       renderBoolGroup('llm', 'LLM 分析章节', surface.llm.enabled_llm, {
         prefix: 'enabled_llm.',
         note: '辩论三段（白脸/黑脸/综合）不占模块清单位，输出由上方「分析增强」组的正反辩论开关控制'
       })
     );
+  }
+
+  /**
+   * LLM 调优参数（并发/预算/重试）：清单、范围、说明全部由服务端按共享白名单下发。
+   * 保存走同一 POST /api/config/edit（校验在 config.edit_ops，三渠道同一强度）。
+   */
+  function renderTuningGroup(items) {
+    var group = document.createElement('div');
+    group.className = 'config-group';
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-label', 'LLM 调优参数');
+    var heading = document.createElement('h3');
+    heading.className = 'config-group-title';
+    heading.textContent = 'LLM 调优参数';
+    group.appendChild(heading);
+
+    items.forEach(function (item) {
+      var row = document.createElement('div');
+      row.className = 'config-path-row';
+      var label = document.createElement('label');
+      label.className = 'check-label';
+      label.textContent = item.label;
+      label.htmlFor = 'config-tuning-' + item.key;
+      var input = document.createElement('input');
+      input.type = 'number';
+      input.id = 'config-tuning-' + item.key;
+      input.value = item.value;
+      input.min = item.min;
+      input.max = item.max;
+      input.step = item.step;
+      input.dataset.configKey = item.key;
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-secondary';
+      btn.textContent = '保存';
+      btn.addEventListener('click', function () {
+        var key = item.key;
+        var prev = item.value;
+        clearGroupError(group);
+        postConfigEdit({ key: key, value: input.value })
+          .then(function (data) {
+            item.value = data.value;
+            input.value = data.value;
+          })
+          .catch(function (err) {
+            input.value = prev;
+            showGroupError(group, err);
+          });
+      });
+      row.appendChild(label);
+      row.appendChild(input);
+      row.appendChild(btn);
+      if (item.hint) {
+        var hint = document.createElement('p');
+        hint.className = 'config-note-sub';
+        hint.textContent = item.hint;
+        row.appendChild(hint);
+      }
+      group.appendChild(row);
+    });
+    return group;
   }
 
   function renderPathsGroup(paths) {

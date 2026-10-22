@@ -47,14 +47,15 @@ class TestOpenArtifacts:
         assert opened == [second]
 
     def test_default_opener_failure_is_swallowed(self, tmp_path, monkeypatch):
-        """系统命令缺失/无图形环境 → 返回 False，不抛异常。"""
+        """系统命令缺失/无图形环境 → 返回 False，不抛异常（平台分派在 core.artifacts）。"""
+        from src.python.core import artifacts as core_artifacts
 
         def _boom(*_a, **_k):
             raise FileNotFoundError("xdg-open")
 
-        monkeypatch.setattr(ra.subprocess, "run", _boom)
-        monkeypatch.setattr(ra.sys, "platform", "linux")
-        assert ra._default_opener(tmp_path) is False
+        monkeypatch.setattr(core_artifacts.subprocess, "run", _boom)
+        monkeypatch.setattr(core_artifacts.sys, "platform", "linux")
+        assert core_artifacts.open_path(tmp_path) is False
 
 
 class TestPromptOpenArtifacts:

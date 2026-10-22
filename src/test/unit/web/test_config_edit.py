@@ -419,3 +419,19 @@ class TestLlmProvidersBlock:
         with open(providers_path, encoding="utf-8") as f:
             by_name = {p["name"]: p for p in json.load(f)["providers"]}
         assert by_name["main"]["priority"] == 10
+
+
+class TestLlmTuningSurface:
+    """LLM 调优项下发：清单/范围/说明来自共享白名单 `edit_ops.LLM_TUNING_SPECS`。"""
+
+    def test_surface_lists_all_tuning_keys(self):
+        from src.python.config.edit_ops import LLM_TUNING_SPECS
+        from src.python.web.config_edit import _llm_tuning_surface
+
+        rows = _llm_tuning_surface()
+        assert [row["key"] for row in rows] == list(LLM_TUNING_SPECS)
+        for row in rows:
+            spec = LLM_TUNING_SPECS[row["key"]]
+            assert row["min"] == spec["min"] and row["max"] == spec["max"]
+            assert row["label"] and row["hint"]
+            assert isinstance(row["value"], (int, float))

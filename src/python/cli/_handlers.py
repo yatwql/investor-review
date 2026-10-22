@@ -11,6 +11,9 @@ import argparse
 import os
 import sys
 
+from src.python.core.num_utils import format_size
+from src.python.config import resolve_output_dir
+
 # ── 退出码 ───────────────────────────────────────────────
 
 _EXIT_SUCCESS = 0
@@ -294,10 +297,25 @@ def _handle_report(args: argparse.Namespace, config: dict) -> int:
     reporter.print_llm_cost_summary()
     reporter.print_cache_hit_summary()
 
+    # 产物清单（与 TUI 收尾同一 core 定位）：CLI 不弹「是否打开」，只给出可复制的绝对路径
+    _print_artifact_paths(config, args.output)
+
     # 任务完成/失败通知（尽力而为：未配置静默跳过，任何异常不影响退出码）
     exit_code = result.exit_code
     _notify_report_completion(args, config, exit_code, result)
     return exit_code
+
+
+def _print_artifact_paths(config: dict, output_override: str | None) -> None:
+    """打印本次已生成的报告产物路径（存在才列；无产物静默跳过）。"""
+    from src.python.core.artifacts import collect_artifacts
+
+    artifacts = collect_artifacts(dict(config or {}, output_dir=resolve_output_dir(config, output_override)))
+    if not artifacts:
+        return
+    print(f"产物目录: {resolve_output_dir(config, output_override)}")
+    for path in artifacts:
+        print(f"  {path}")
 
 
 def _collect_degradation_summary(max_items: int = 10) -> list[str]:
@@ -326,7 +344,7 @@ def _notify_report_completion(args: argparse.Namespace, config: dict, exit_code:
         notify_cfg = (config or {}).get("notify") or {}
         if not should_notify(notify_cfg, ok=exit_code == 0):
             return
-        output_dir = args.output or (config or {}).get("output_dir") or "reports"
+        output_dir = resolve_output_dir(config, args.output)
         event = build_completion_event(
             report_type=str(getattr(args, "type", "") or ""),
             exit_code=exit_code,
@@ -409,7 +427,7 @@ def _handle_whatif(args: argparse.Namespace, config: dict) -> int:
     业务链（build→校验→输出）委托共享层 run_whatif_simulation，
     本函数仅保留文件来源解析与退出码映射。
     """
-    from src.python.config import get_default, resolve_holdings_path
+    from src.python.config import resolve_holdings_path
     from src.python.core.reader import read_holdings
     from src.python.report.cli_progress import CliProgressReporter
     from src.python.report.whatif_operations import run_whatif_simulation
@@ -434,7 +452,7 @@ def _handle_whatif(args: argparse.Namespace, config: dict) -> int:
         reporter.error(f"目标持仓读取失败或为空: {cand_file}")
         return _EXIT_SEVERE
 
-    output_dir = args.output or (config.get("output_dir") or get_default("output_dir"))
+    output_dir = resolve_output_dir(config, args.output)
     result = run_whatif_simulation(
         base_holdings,
         cand_holdings,
@@ -551,7 +569,7 @@ def _handle_cassettes(args: argparse.Namespace) -> int:
                 continue
             print(
                 f"  {entry['name']}  来源={entry['source'] or '-'}  录制于={entry['recorded_at'] or '-'}"
-                f"  交互={entry['interactions']}  大小={entry['size_bytes'] / 1024:.1f} KB"
+                f"  交互={entry['interactions']}  大小={format_size(entry['size_bytes'])}"
             )
         return _EXIT_SUCCESS
 

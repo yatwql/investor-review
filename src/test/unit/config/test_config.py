@@ -561,3 +561,59 @@ class TestValidateConfig(unittest.TestCase):
         """user_fund_benchmarks 不是 dict → 告警。"""
         n = cfg.validate_config({"user_fund_benchmarks": ["600519", "沪深300"]})
         self.assertEqual(n, 1)
+
+
+class TestResolveOutputDir:
+    """`resolve_output_dir` —— 三渠道唯一的报告输出目录解析（override > config > 默认，统一绝对化）。"""
+
+    def test_override_wins_and_is_absolute(self):
+        from src.python.config import resolve_output_dir
+
+        resolved = resolve_output_dir({"output_dir": "/data/reports"}, "rel-out")
+        assert resolved == os.path.abspath("rel-out")
+
+    def test_config_value_used_when_no_override(self, tmp_path):
+        from src.python.config import resolve_output_dir
+
+        assert resolve_output_dir({"output_dir": str(tmp_path)}) == str(tmp_path)
+
+    def test_empty_override_falls_back_to_config(self, tmp_path):
+        from src.python.config import resolve_output_dir
+
+        assert resolve_output_dir({"output_dir": str(tmp_path)}, "   ") == str(tmp_path)
+
+    def test_missing_everything_uses_default_directory(self):
+        from src.python.config import resolve_output_dir
+
+        resolved = resolve_output_dir({})
+        assert os.path.isabs(resolved) and resolved.endswith("reports")
+
+
+class TestReadLlmSettingsFile:
+    """配置层唯一的「原始落盘值」读取（TUI/Web 面板共用，不再各自 open+strip+parse）。"""
+
+    def test_reads_jsonc_and_path(self, tmp_path, monkeypatch):
+        from src.python.config import _llm_settings, read_llm_settings_file
+
+        target = tmp_path / "llm_settings.json"
+        target.write_text('{\n  // 注释行\n  "llm_max_thinking_concurrency": 2\n}\n', encoding="utf-8")
+        monkeypatch.setattr(_llm_settings, "get_llm_settings_path", lambda: str(target))
+
+        snapshot = read_llm_settings_file()
+
+        assert snapshot is not None
+        settings, path = snapshot
+        assert settings["llm_max_thinking_concurrency"] == 2
+        assert path == str(target)
+
+    def test_missing_or_broken_returns_none(self, tmp_path, monkeypatch):
+        from src.python.config import _llm_settings, read_llm_settings_file
+
+        missing = tmp_path / "nope.json"
+        monkeypatch.setattr(_llm_settings, "get_llm_settings_path", lambda: str(missing))
+        assert read_llm_settings_file() is None
+
+        broken = tmp_path / "broken.json"
+        broken.write_text("{not json", encoding="utf-8")
+        monkeypatch.setattr(_llm_settings, "get_llm_settings_path", lambda: str(broken))
+        assert read_llm_settings_file() is None

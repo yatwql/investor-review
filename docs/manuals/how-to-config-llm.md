@@ -363,7 +363,7 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
 - `max_retries`（int，默认 `2`）：**503**/超时/网络异常最多重试次数（**429/403 归 quota 不重试**——429 首试即 600s 长冷却熔断）
 - `llm_full_fail_retry_delay`（int，默认 `30`）：整链全挂后的延迟重试等待秒数（`0`=不等待）——网络/超时/单次 API 错误等**瞬时类**失败在整链失败后等待该秒数重试 1 次；配额（429/403）与熔断终态不重试
 - `llm_max_concurrency`（int，默认 `3`）：LLM 模块并发生成的最大线程数。设为 1 时完全串行，设为 4 及以上可提升速度但可能触发 API 限速（429）。建议值 2-3
-- `llm_max_thinking_concurrency`（int，默认 `2`）：开启 Extended Thinking 的模块（health_check / expert_review 等 `thinking_enabled_{module}=true`）并发的最大请求数。默认 `2` 让两个 thinking 模块并行——实测串行时「等待并发槽」占单次报告墙钟约 44%（智囊团 68.7s + 体检 28.5s，体检全程排队）。多 thinking 模块同时涌向 DeepSeek 等强制推理端点时偶发返回空 content（HTTP 200 空响应），若日志出现空内容重试（会关闭 thinking 同 provider 重试一次）或内容质量下降，改回 `1` 恢复串行。非 thinking 模块不受此限
+- `llm_max_thinking_concurrency`（int，默认 `2`；**TUI `[D]→[L]` / Web 配置面板「LLM 调优参数」可改，范围 1~4**）：开启 Extended Thinking 的模块（health_check / expert_review 等 `thinking_enabled_{module}=true`）并发的最大请求数。默认 `2` 让两个 thinking 模块并行——实测串行时「等待并发槽」占单次报告墙钟约 44%（智囊团 68.7s + 体检 28.5s，体检全程排队）。多 thinking 模块同时涌向 DeepSeek 等强制推理端点时偶发返回空 content（HTTP 200 空响应），若日志出现空内容重试（会关闭 thinking 同 provider 重试一次）或内容质量下降，改回 `1` 恢复串行。非 thinking 模块不受此限
 
 > **全局并发 vs 端点级节流**：`llm_max_concurrency` 是**全局**上限（所有模块合起来最多几个线程）；若需对**某个具体端点**单独限速/限并发（例如同一个程序里，订阅制编码端点要低频串行、按量付费端点可以放开），用 `llm_providers.json` 各 provider 条目内的 `pacing` 段——两者叠加生效，见下方「端点级节流」。
 - `enabled_llm`（dict，默认除 `news_correlation` 与 `self_review` 为 `false` 外均为 `true`）：各模块独立启停开关。`self_review`（生成后自检）为实验能力：开启后每次报告额外调用一次 LLM，对四个分析模块产出做一致性复核并输出【自检清单】附录（与确定性事实校验分层不重叠，失败不影响主内容）

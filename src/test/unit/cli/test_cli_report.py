@@ -411,3 +411,25 @@ class TestLlmStatusLogging:
         text = self._records(caplog)
         assert "多链服务: 1 provider" in text
         assert "alpha" in text
+
+
+class TestArtifactPathsPrinted:
+    """报告收尾打印产物路径（与 TUI 同一 core 定位；CLI 不做「是否打开」交互）。"""
+
+    def test_prints_existing_artifacts(self, tmp_path, capsys):
+        from src.python.cli._handlers import _print_artifact_paths
+
+        html = tmp_path / "个人投资分析报告.html"
+        html.write_text("x", encoding="utf-8")
+        with patch("src.python.core.artifacts.collect_artifacts", return_value=(html,)):
+            _print_artifact_paths({"output_dir": str(tmp_path)}, None)
+
+        out = capsys.readouterr().out
+        assert "产物目录" in out and str(html) in out
+
+    def test_silent_when_no_artifacts(self, tmp_path, capsys):
+        from src.python.cli._handlers import _print_artifact_paths
+
+        with patch("src.python.core.artifacts.collect_artifacts", return_value=()):
+            _print_artifact_paths({"output_dir": str(tmp_path)}, None)
+        assert capsys.readouterr().out == ""

@@ -365,6 +365,8 @@ section_visible = board_enabled(section.type) AND data_available(section.data_fl
 - **进度抽象**：`report/progress.py` 定义 `ProgressReporter` 基类（info/ok/warn/error/add_error/timer），三渠道各实现子类：`TuiProgressReporter`（菜单区刷新）、`CliProgressReporter`（logging + verbose stderr）、`WebProgressReporter`（事件缓冲 → 浏览器轮询）。
 - **配置快照**：生成任务执行时取一次 `get_config()` 快照，run 期间不受外部配置修改影响（Web 侧在任务**出队时**取快照，见 §1.8.5）。
 
+**渠道共性规则的单源清单**（渠道层不得各写一份）：报告输出目录 `config.resolve_output_dir`、尺寸格式化 `core.num_utils.format_size`、异常→用户提示 `core.error_hints.hint_for`、原始 `llm_settings.json` 读取 `config.read_llm_settings_file`、doctor 网络预算 `core.doctor.NETWORK_TIMEOUT_*`、产物定位/打开 `core.artifacts`、页头新鲜度 `core.data_freshness.header_freshness`。
+
 #### 1.5.3 渠道差异对照
 
 | 维度 | TUI | CLI | Web |

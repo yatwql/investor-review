@@ -141,3 +141,33 @@ class TestGroupWiring:
         results = doctor.run_doctor_checks(include_network=False)
         groups = {r["group"] for r in results}
         assert doctor.GROUP_LOG_CACHE in groups
+
+
+class TestNetworkTimeoutSingleSource:
+    """网络检查预算三渠道同源（此前 CLI 8s / Web 12s / TUI 6s 各写一份字面量）。"""
+
+    def test_defaults_declared_in_core(self):
+        from src.python.core import doctor
+
+        assert doctor.NETWORK_TIMEOUT_DEFAULT > 0
+        assert doctor.NETWORK_TIMEOUT_WEB >= doctor.NETWORK_TIMEOUT_DEFAULT
+        assert doctor.NETWORK_TIMEOUT_MIN > 0
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [(None, 8.0), ("", 8.0), ("abc", 8.0), (0, 8.0), (-3, 8.0), (0.2, 1.0), (12, 12.0), ("6.5", 6.5)],
+    )
+    def test_normalize(self, value, expected):
+        from src.python.core.doctor import normalize_network_timeout
+
+        assert normalize_network_timeout(value) == pytest.approx(expected)
+
+    def test_web_and_cli_budgets_come_from_core(self):
+        """CLI 默认与 TUI 预算都取 core 常量（改预算只改一处）。"""
+        from src.python.cli._parser import _build_parser
+        from src.python.core import doctor
+        from src.python.tui import handlers_log
+
+        args = _build_parser().parse_args(["doctor"])
+        assert args.timeout == pytest.approx(doctor.NETWORK_TIMEOUT_DEFAULT)
+        assert handlers_log._DOCTOR_NETWORK_TIMEOUT == pytest.approx(doctor.NETWORK_TIMEOUT_DEFAULT)

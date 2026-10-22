@@ -16,7 +16,7 @@ import sys
 from collections.abc import Callable
 
 from src.python.core.ansi_colors import CYAN, DIM, GREEN, RED, RESET, YELLOW
-from src.python.config import get_config
+from src.python.config import get_config, resolve_output_dir
 
 # 每个菜单项：(快捷键, 显示标签, 回调函数, 是否退出项)
 MenuItem = tuple[str, str, Callable[[], None] | None, bool]
@@ -206,13 +206,13 @@ def render_menu(sel: int, filter_text: str = "") -> None:
 
 def show_config() -> None:
     """显示当前配置及 LLM 配置状态。"""
-    from src.python.config import get_default, resolve_holdings_path
+    from src.python.config import resolve_holdings_path
 
     config = _config_cache if _config_cache is not None else refresh_config()
     holdings_path = resolve_holdings_path(config)
     print(f"  持仓目录: {config.get('holdings_dir', '未设置')}")
     print(f"  持仓文件: {config.get('holdings_filename', '未设置')}")
-    print(f"  输出目录: {config.get('output_dir') or get_default('output_dir')}")
+    print(f"  输出目录: {resolve_output_dir(config)}")
     print(f"  新闻抓取上限: {config.get('news_top_count', '300')} 条")
     if os.path.exists(holdings_path):
         print(f"  状态: {GREEN}[OK]{RESET} 文件就绪")

@@ -305,7 +305,7 @@ def recompute_current_iteration(text: str) -> str:
 
     为何要重算：归档搬走已完成节后，概述行的条数与编号清单必然过期（实测每版都要
     人工改「在办 15 项」），且 doc-drift 不校验这句——自动重算把这类漂移变成零。
-    口径只认**文件里真实存在且未标完成（无 ✅）的 `#### plan-N` 节**（概述里残留已归档编号
+    口径只认**文件里真实存在且未标完成/决策（无 ✅ / ❌）的 `#### plan-N` 节**（概述里残留已归档编号
     与「已完成待归档」项一并排除），因此归档前后调用都得到同一口径。
     分档取节头所在 `### P1~P4` 段；P4 为实验候选档，同样计入「在办」。
     """
@@ -316,8 +316,8 @@ def recompute_current_iteration(text: str) -> str:
     for idx, (start, tier) in enumerate(tiers):
         end = tiers[idx + 1][0] if idx + 1 < len(tiers) else len(text)
         for m in _PLAN_ITEM_RE.finditer(text, start, end):
-            if "✅" in m.group(2):
-                continue  # 已完成待归档：不计入「在办」
+            if any(mark in m.group(2) for mark in ("✅", "❌")):
+                continue  # 已完成待归档 / 已决策不做：都不计入「在办」
             grouped[tier].append(m.group(1))
     total = sum(len(ids) for ids in grouped.values())
     if total == 0:

@@ -15,14 +15,7 @@
 
 ### P2 — 中优先：价值明确、成本可控（下批排期）
 
-| # | 问题 | 修复方向 |
-|---|------|----------|
-| **rf-823** | **TUI 页头「新鲜度」阈值自定且用自然日**：`tui/status_line.py:36` `_STALE_DAYS = 7`、`:101-103` 用 `(now.date() - date).days` 判黄——既绕过配置（`report/data_status.py:113` 默认 T2=3 / T3=14 / T4=7，可按 `degradation.*.stale_days` 覆盖），也绕过交易日口径（架构约束要求「数据新鲜度/观察期」以交易日计，自然日在长假处会被放大）。后果：页头显示「正常」而报告内数据质量已判「延迟」，同一份数据两处结论不一致 | 下沉 core：新增 `core/data_freshness`（或既有模块）的「页头新鲜度摘要」函数——阈值取配置分层值、距离取交易日（`get_last_trading_day`/`count_trading_days_elapsed`），TUI 只负责着色；补「T2=3 天已告警时页头同样告警」与「长假不误报」两例回归 |
-| **rf-824** | **同一 doctor 检查在三渠道各有不同耗时预算**（渠道层字面量）：CLI `--timeout` 默认 8（`cli/_parser.py:248-251`）、Web `run_health_checks(max_timeout=12.0)` 与 `run_doctor_checks(...)`（`web/handlers.py:549/580`）、TUI `_DOCTOR_NETWORK_TIMEOUT = 6.0`（`tui/handlers_log.py`）。同一环境同一检查，三渠道结论可能不同（慢源在 6s 判超时、在 12s 通过），且改预算要改三处 | 预算单源：在 `core/doctor.py`（或 `config` 默认值）声明 `doctor_network_timeout` 默认与下限，三渠道只允许「覆盖」不允许「另立默认」；Web 前端 abort 余量由同一常量推导。补「三渠道默认预算一致」的结构回归 |
-| **rf-825** | **`output_dir` 回退链在渠道层重复 12 处**：`cli/_handlers.py:329/437`、`web/handlers.py:394/531`、`web/run_generation.py:166/203`、`web/server.py:149`、`web/config_edit.py:82`、`tui/handlers_qa.py:82`、`tui/handlers_whatif.py:179`、`tui/tui_menu.py:215`、`tui/report_artifacts.py:43`——其中 `"reports"` 字面量 3 处（`cli/_handlers.py:329`、`web/run_generation.py:203`、`tui/report_artifacts.py:43`）与 `get_default("output_dir")` 混用，改出厂默认或加「相对路径转绝对」规则时必漏改 | 下沉 config 层唯一解析器（如 `config.resolve_output_dir(config, override=None)`，内部含默认值 + 绝对化），三渠道一律调用；补「缺键/相对路径/CLI 覆盖」三例回归 |
-| **rf-826** | **`llm_settings.json` 原始读取在渠道层有两份**：`tui/handlers_config._read_llm_settings`（自行解析 JSONC 供面板展示）与 `web/config_edit.py` 内联读文件（`enabled_llm` 直读源文件，缺失键当默认开）。配置层已有 `get_llm_config()`（合并默认）与 `config/edit_ops`（编辑面读取）——渠道各读一份易与默认合并规则分叉（如新增键后某渠道仍显示旧值） | 由 config 层提供唯一「原始值 + 有效值」读取入口（如 `load_llm_settings_raw()` / `get_llm_config()` 明确分工），渠道只消费；补「缺键时三渠道展示一致」回归 |
-| **rf-827** | **KB/MB 尺寸格式化 4 处重复**：`tui/handlers_whatif.py:49`、`tui/tui_handlers.py:178`、`tui/handlers_cache.py:235-271`（另含 `1024` 多份判定）、`cli/_handlers.py:554`——同一「KB/MB 取整规则」各写一遍，改精度或单位要改四处（且四处的取整位数已不一致：`:.0f` vs `:.1f`） | 收敛到 core 单函数（如 `core/num_utils.format_size(bytes, *, unit_hint="auto")`），三渠道共用；补边界（1023.9B / 1.0MB / 0B）回归 |
-| **rf-828** | **TUI「异常→用户提示」映射在渠道层**：`tui/tui_handlers.py:62 print_error_with_hint` 用关键词（connect/timeout/permission/config…）把异常翻成「检查网络/检查权限」提示——属共性诊断规则，Web/CLI 无同等能力（Web 走 error_code 信封、CLI 直接打印异常串），同一故障三渠道说法不一 | 下沉 `core/error_hints.py`（纯函数 `hint_for(exception/text) -> str|None`），TUI 只负责上屏、Web 可并入信封 message、CLI 可用于 stderr 提示；补映射表全表用例（每条关键词 → 提示语） |
+> 当前无待办项（rf-790 已决策「维持现状」并归档至已解决）。
 
 ### P3 — 持续监控：文件膨胀登记（按任务号组织；逼近红线档 主程序 ≥700 / 脚本 ≥600 / 测试 ≥1000）
 

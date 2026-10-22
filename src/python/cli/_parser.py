@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 
 from src.python.core.constants import APP_NAME, APP_VERSION
+from src.python.core.doctor import NETWORK_TIMEOUT_DEFAULT
 
 # ── argparse 解析器 ─────────────────────────────────────
 
@@ -247,8 +248,8 @@ def _build_parser() -> argparse.ArgumentParser:
     doctor_p.add_argument(
         "--timeout",
         type=float,
-        default=8.0,
-        help="网络检查整体耗时预算秒数（默认 8，防止慢速数据源拖住自检）",
+        default=NETWORK_TIMEOUT_DEFAULT,
+        help=f"网络检查整体耗时预算秒数（默认 {NETWORK_TIMEOUT_DEFAULT:g}，防止慢速数据源拖住自检）",
     )
     doctor_p.epilog = (
         "示例:\n"

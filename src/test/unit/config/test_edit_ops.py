@@ -142,3 +142,43 @@ class TestApplyAndBackup:
         self._seed_config()
         apply_config_edit({"key": "comparison_indices", "action": "reset"})
         assert _read_config_json()["comparison_indices"] == get_default("comparison_indices")
+
+
+class TestLlmTuningEdits:
+    """LLM 调优参数（llm_settings.json 顶层标量）走共享白名单：范围校验 + 同源写入。"""
+
+    def _patch_io(self, monkeypatch):
+        from src.python.config import _llm_settings, edit_ops
+
+        written: dict = {}
+        monkeypatch.setattr(
+            _llm_settings, "read_llm_settings_file", lambda: ({"enabled_llm": {"expert_review": True}}, "/tmp/x.json")
+        )
+        monkeypatch.setattr(_llm_settings, "write_llm_settings", lambda settings, path: written.update(settings))
+        monkeypatch.setattr(edit_ops, "config_backup_file", lambda _p: None)
+        return written
+
+    def test_accepts_numeric_string_within_range(self, monkeypatch):
+        from src.python.config.edit_ops import apply_config_edit
+
+        written = self._patch_io(monkeypatch)
+        result = apply_config_edit({"key": "llm_max_thinking_concurrency", "value": "3"})
+        assert result["value"] == 3
+        assert written["llm_max_thinking_concurrency"] == 3
+        # 同文件其它键不得被覆盖
+        assert written["enabled_llm"] == {"expert_review": True}
+
+    @pytest.mark.parametrize("value", ["0", "9", True, "abc"])
+    def test_rejects_out_of_range_or_wrong_type(self, monkeypatch, value):
+        from src.python.config.edit_ops import ConfigEditError, apply_config_edit
+
+        self._patch_io(monkeypatch)
+        with pytest.raises(ConfigEditError):
+            apply_config_edit({"key": "llm_max_thinking_concurrency", "value": value})
+
+    def test_float_key_accepts_decimal(self, monkeypatch):
+        from src.python.config.edit_ops import apply_config_edit
+
+        written = self._patch_io(monkeypatch)
+        assert apply_config_edit({"key": "daily_cost_limit", "value": "1.5"})["value"] == pytest.approx(1.5)
+        assert written["daily_cost_limit"] == pytest.approx(1.5)

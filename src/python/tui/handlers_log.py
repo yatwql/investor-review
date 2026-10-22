@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+from src.python.core.doctor import NETWORK_TIMEOUT_DEFAULT
 from src.python.core.logger import setup_logger
 from src.python.tui.text_layout import terminal_columns, wrap_hanging, wrap_prompt
 from src.python.tui.tui_keys import PromptCancelledError, input_choice
@@ -139,8 +140,8 @@ def _cmd_view_health_history() -> None:
 
 # ── 系统自检（doctor_check 开关门控）────────────────────────
 
-# TUI 内网络检查的整体耗时预算（短于 CLI——交互场景不能让用户干等）
-_DOCTOR_NETWORK_TIMEOUT = 6.0
+# 网络检查预算：三渠道共享同一默认值（core.doctor），TUI 不再本地另立一档
+_DOCTOR_NETWORK_TIMEOUT = NETWORK_TIMEOUT_DEFAULT
 
 
 def _cmd_run_doctor() -> None:

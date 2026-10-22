@@ -258,10 +258,14 @@ def run_cli() -> NoReturn:
         logging.getLogger("invest").info("CLI 操作被用户中断")
         log_app_boundary("关闭", "CLI模式")
         sys.exit(130)
-    except Exception:
+    except Exception as exc:
         import logging
 
+        from src.python.core.error_hints import hint_for
+
         logging.getLogger("invest").exception("CLI 未处理异常")
+        # 与 TUI 同一句用户提示（映射单源 core.error_hints）；堆栈只进日志
+        print(f"[ERR] {hint_for(exc).message}", file=sys.stderr)
         log_app_boundary("关闭", "CLI模式")
         sys.exit(2)
 

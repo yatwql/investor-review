@@ -3,8 +3,7 @@
 面板渲染部分锁定「盒线边框四边对齐」这条不变式——补白按显示宽度而非码点数。"""
 
 from __future__ import annotations
-import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 import pytest
 from src.python.tui.text_layout import display_width
 
@@ -22,49 +21,21 @@ def _deterministic_panel_width(monkeypatch):
 
 
 class TestReadLlmSettings:
-    """_read_llm_settings: JSON 注释支持 + 文件不存在处理。"""
+    """`_read_llm_settings`：读取委派给 config 层唯一入口（JSONC 容错由该层负责）。"""
 
-    @patch("src.python.config._strip_json_comments")
-    @patch("src.python.tui.handlers_config.open")
-    @patch("src.python.tui.handlers_config.json.loads")
-    def test_normal_read(self, mock_json_loads, mock_open, mock_strip):
-        """正常读取带注释的 JSON。"""
-        mock_strip.return_value = '{"enabled_llm": {"news_correlation": true}}'
-        mock_json_loads.return_value = {"enabled_llm": {"news_correlation": True}}
-        mock_file = MagicMock()
-        mock_file.__enter__.return_value.read.return_value = "raw content"
-        mock_open.return_value = mock_file
-
+    def test_delegates_to_config_layer(self):
         from src.python.tui.handlers_config import _read_llm_settings
 
-        result = _read_llm_settings()
-        assert result is not None
-        settings, path = result
-        assert settings["enabled_llm"]["news_correlation"] is True
-        assert "llm_settings.json" in path
+        snapshot = ({"enabled_llm": {"news_correlation": True}}, "/tmp/llm_settings.json")
+        with patch("src.python.config.read_llm_settings_file", return_value=snapshot):
+            assert _read_llm_settings() == snapshot
 
-    @patch("src.python.tui.handlers_config.open", side_effect=FileNotFoundError)
-    def test_file_not_found(self, mock_open):
-        """文件不存在时返回 None。"""
+    def test_none_prints_error_and_returns_none(self, capsys):
         from src.python.tui.handlers_config import _read_llm_settings
 
-        result = _read_llm_settings()
-        assert result is None
-
-    @patch("src.python.config._strip_json_comments")
-    @patch("src.python.tui.handlers_config.open")
-    @patch("src.python.tui.handlers_config.json.loads", side_effect=json.JSONDecodeError("x", "", 1))
-    def test_json_decode_error(self, mock_json_loads, mock_open, mock_strip):
-        """JSON 解析错误时返回 None。"""
-        mock_strip.return_value = "bad json"
-        mock_file = MagicMock()
-        mock_file.__enter__.return_value.read.return_value = "bad json"
-        mock_open.return_value = mock_file
-
-        from src.python.tui.handlers_config import _read_llm_settings
-
-        result = _read_llm_settings()
-        assert result is None
+        with patch("src.python.config.read_llm_settings_file", return_value=None):
+            assert _read_llm_settings() is None
+        assert "无法读取 llm_settings.json" in capsys.readouterr().out
 
 
 class TestApplyEdit:

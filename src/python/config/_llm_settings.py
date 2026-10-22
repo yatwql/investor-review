@@ -227,6 +227,26 @@ def get_llm_settings_path() -> str:
     return config.get("llm_settings_file") or os.path.join(PROJECT_ROOT, "data/config/llm_settings.json")
 
 
+def read_llm_settings_file() -> tuple[dict, str] | None:
+    """读取 llm_settings.json 的**原始落盘值**（JSONC 容错）。
+
+    与 :func:`get_llm_config` 的分工：后者是「合并默认值 + providers/key」后的运行期
+    有效配置；本函数只回文件里真实写了什么（配置面板展示「当前落盘值」、写前合并用）。
+    三渠道（TUI 配置面板 / Web 配置面板 / 编辑层）共用——此前 TUI 与 Web 各自
+    open + strip + parse 一份，新增键或改合并规则时容易分叉。
+
+    Returns:
+        ``(settings, path)``；文件缺失/解析失败返回 None（调用方决定提示方式）。
+    """
+    path = get_llm_settings_path()
+    try:
+        with open(path, encoding="utf-8-sig") as f:
+            raw = f.read()
+        return json.loads(_comments._strip_json_comments(raw)), path
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
 def write_llm_settings(settings: dict, path: str) -> None:
     """写入 llm_settings.json 并刷新 LLM 配置缓存，保留文件中的注释。
 

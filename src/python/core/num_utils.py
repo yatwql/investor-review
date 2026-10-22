@@ -29,6 +29,33 @@ from datetime import datetime
 from src.python.core.constants import BEIJING_TZ
 from typing import Any
 
+
+def format_size(num_bytes: float) -> str:
+    """字节数 → 人类可读尺寸（B / KB / MB），三渠道唯一实现。
+
+    取值口径（与既有展示一致）：<1 KiB 显示整数字节；<1 MiB 显示整数 KB；
+    其余显示 1 位小数的 MB。此前 TUI 三处 + CLI 一处各写一份，取整位数已不一致
+    （``:.0f`` 与 ``:.1f`` 混用）。
+
+    Args:
+        num_bytes: 字节数（负数/非法值按 0 处理）。
+
+    Returns:
+        形如 ``"0 B"`` / ``"512 B"`` / ``"12 KB"`` / ``"1.5 MB"``。
+    """
+    try:
+        size = float(num_bytes)
+    except (TypeError, ValueError):
+        return "0 B"
+    if size != size or size in (float("inf"), float("-inf")) or size < 0:  # NaN/±inf/负数
+        return "0 B"
+    if size < 1024:
+        return f"{size:.0f} B"
+    if size < 1024 * 1024:
+        return f"{size / 1024:.0f} KB"
+    return f"{size / 1024 / 1024:.1f} MB"
+
+
 __all__ = ["finite_or", "is_finite_number", "ms_to_date_str", "safe_num", "strict_num"]
 
 

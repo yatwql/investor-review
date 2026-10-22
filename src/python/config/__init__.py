@@ -28,6 +28,7 @@ from src.python.config import _llm_settings as _llm_settings
 from src.python.config import _llm_settings_defaults as _llm_settings_defaults
 from src.python.config import _validation as _validation
 from src.python.config._llm_providers import get_llm_providers, write_llm_providers  # noqa: F401
+from src.python.config._llm_settings import read_llm_settings_file  # noqa: F401
 
 # ── JSON 注释剥离 ──
 from src.python.config._comments import _strip_json_comments
@@ -165,6 +166,7 @@ __all__ = [
     "get_llm_settings_path",
     # 渠道共享：默认值 / 持仓路径 / 本地状态 / 注释解析（公开 API）
     "get_default",
+    "resolve_output_dir",
     "resolve_holdings_path",
     "get_local_flag",
     "strip_json_comments",
@@ -201,6 +203,30 @@ def resolve_holdings_path(config: dict | None = None) -> str:
     holdings_dir = config.get("holdings_dir") or _DEFAULT_CONFIG.get("holdings_dir", "")
     holdings_filename = config.get("holdings_filename") or _DEFAULT_CONFIG.get("holdings_filename", "")
     return os.path.join(holdings_dir, holdings_filename)
+
+
+def resolve_output_dir(config: dict | None = None, override: str | None = None) -> str:
+    """解析报告输出目录：``override`` > ``config.output_dir`` > 出厂默认，统一绝对化。
+
+    三渠道（CLI/TUI/Web）报告产物定位的唯一入口——渠道层不得自行写
+    ``config.get("output_dir") or get_default(...) or "reports"`` 这类回退链
+    （曾在 12 处各写一份：改默认值或加绝对化规则时必然漏改）。
+
+    Args:
+        config: 可选显式配置（渠道上下文传入其缓存配置）；不传时读全局配置。
+        override: 调用方显式覆盖（如 CLI ``--output``）；空串视为未覆盖。
+
+    Returns:
+        绝对路径字符串（相对路径按当前工作目录解析）。
+    """
+    import os
+
+    if config is None:
+        config = get_config()
+    raw = str(override or "").strip() or str((config or {}).get("output_dir") or "").strip()
+    if not raw:
+        raw = str(_DEFAULT_CONFIG.get("output_dir") or "reports")
+    return os.path.abspath(os.path.expanduser(raw))
 
 
 def is_formal_holdings_source(config: dict | None = None) -> bool:
