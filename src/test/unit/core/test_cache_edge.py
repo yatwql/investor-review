@@ -265,12 +265,12 @@ class TestGzipCacheEdge(unittest.TestCase, _CacheTestBase):
         self.assertFalse(os.path.exists(gz_path))
 
 
-# ── BOM 缓存文件 ──────────────────────────────────────────────
+# ── 旧缓存文件不兼容（带 BOM 一律按损坏清理） ────────────────
 
 
 @pytest.mark.edge
 class TestBomCacheFile(unittest.TestCase):
-    """UTF-8 BOM 头的缓存文件可读性测试。"""
+    """不再兼容带 BOM 的旧缓存文件：写侧从不写 BOM，读到即按损坏清除并重取。"""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -278,19 +278,16 @@ class TestBomCacheFile(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def test_bom_cache_file_readable(self):
-        """含 UTF-8 BOM 头的 .json 缓存文件 → _read_cache_data() 正常解析。"""
+    def test_bom_cache_file_discarded(self):
         from src.python.cache import _read_cache_data
 
-        # 用 utf-8-sig 写入产生 BOM
         fpath = os.path.join(self.tmp.name, "bom_test.json")
         payload = '{"_ts": 1000.0, "_data": {"price": 10.5}}'
         with open(fpath, "w", encoding="utf-8-sig") as f:
             f.write(payload)
 
-        result = _read_cache_data(fpath, "bom_test")
-        self.assertIsNotNone(result)
-        self.assertEqual(result["_data"]["price"], 10.5)
+        self.assertIsNone(_read_cache_data(fpath, "bom_test"))
+        self.assertFalse(os.path.exists(fpath))  # 损坏文件被清理，下次重新生成
 
 
 if __name__ == "__main__":

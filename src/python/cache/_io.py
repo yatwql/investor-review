@@ -19,8 +19,9 @@ logger = logging.getLogger("invest")
 def _read_cache_data(fpath: str, key: str, dry_run: bool = False) -> dict | None:
     """读取并解析单个缓存文件，返回载荷字典（含 _ts 和 _data 键）。
 
-    自动识别 .json.gz（gzip 压缩）和 .json（纯文本）格式。
-    文件损坏时自动删除并返回 None。
+    自动识别 .json.gz（gzip 压缩）和 .json（纯文本）两种**现行**格式。
+    不含 BOM 容错：写侧从不写 BOM，带 BOM 的文件一律按损坏清理后重取
+    （本项目不保留旧缓存文件的兼容）。文件损坏时自动删除并返回 None。
 
     Args:
         fpath: 缓存文件路径
@@ -37,7 +38,7 @@ def _read_cache_data(fpath: str, key: str, dry_run: bool = False) -> dict | None
         if is_gz:
             with open(fpath, "rb") as f:
                 return json.loads(gzip.decompress(f.read()).decode("utf-8"))
-        with open(fpath, encoding="utf-8-sig") as f:
+        with open(fpath, encoding="utf-8") as f:
             return json.load(f)
     except (json.JSONDecodeError, OSError, UnicodeDecodeError) as e:
         if dry_run:

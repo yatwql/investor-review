@@ -246,7 +246,7 @@ llm/generators_orchestrator.py ──→ cache/（可选）
 | **贯穿** | 性能收集 | PerfCollector 三路径计时 + perf_history.jsonl 持久化 + 数据源健康历史聚合 `summarize_health_history()` | `core/perf.py` |
 | **贯穿** | 运行一致性 | 生成中断收口（KeyboardInterrupt 安全落点：临时产物清扫 + `status=interrupted` 运行记录 + 已写盘/已丢弃明细）+ HTML/Excel 产物原子落盘登记 | `report/run_integrity.py` |
 | **贯穿** | 日志可视化 | 结构化日志读取（parse_log/tail_log/read_log），CLI/TUI/Web 三端共享 | `core/log_reader.py` |
-| **贯穿** | 系统自检 | 运行环境/配置/目录/功能开关/数据源适配/数据源凭据/数据源七组一次性盘点（开关 `doctor_check`，默认开），CLI/TUI/Web 三端共享；自身永不抛异常、零重依赖 | `core/doctor.py` |
+| **贯穿** | 系统自检 | 运行环境/配置/目录/日志与缓存/功能开关/数据源适配/数据源凭据/数据源八组一次性盘点（开关 `doctor_check`，默认开），CLI/TUI/Web 三端共享；自身永不抛异常、零重依赖 | `core/doctor.py` |
 | **贯穿** | 数值归一 | 非有限值（NaN/±inf）防线收敛点：`safe_num` / `strict_num` / `finite_or` / `is_finite_number`；纯 stdlib、零项目内依赖，providers/analysis/report 任一侧可安全导入 | `core/num_utils.py` |
 | **贯穿** | 任务完成通知 | CLI/Web 报告收尾按 `notify` 配置分发 webhook/邮件/桌面三通道（失败必发、成功需 `on_success`；尽力而为：单通道失败隔离、永不改退出码、未配置静默跳过；降级摘要单源 `report/data_status.degradation_summary()`） | `core/completion_notify.py` |
 
@@ -2820,7 +2820,7 @@ llm/skeleton.py            # 摘要注入 expert_review 提示词（开关门控
 
 #### 4.17.3 B1 系统自检（开关 `doctor_check`，默认开）
 
-`core/doctor.py` 一次性盘点运行环境，输出分组结果（`环境` / `配置` / `目录` / `功能开关` / `数据源适配` / `数据源凭据` / `数据源` 七组，分组顺序由 `GROUP_ORDER` 锁定），**失败项附可执行修复建议**（`hint`）。
+`core/doctor.py` 一次性盘点运行环境，输出分组结果（`环境` / `配置` / `目录` / `日志与缓存` / `功能开关` / `数据源适配` / `数据源凭据` / `数据源` 八组，分组顺序由 `GROUP_ORDER` 锁定），**失败项附可执行修复建议**（`hint`）。
 
 **两条不可让步的设计约束**：
 
@@ -3532,7 +3532,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `throttle` | 按名最小间隔节流唯一原语（`RateLimiter` + `interval_delay` 抖动算式；数据层限速/批量调度/LLM 端点节流三层共用） | 诊断 | 数据获取 | 无（模块级） |
 | `completion_notify` | 任务完成通知（CLI/Web 报告收尾按 `notify` 配置分发 webhook/邮件/桌面三通道事件——失败必发、成功需 `on_success`；无配置静默跳过；单通道失败隔离、永不抛出不改退出码；webhook URL 日志只记域名；降级摘要单源 `report/data_status.degradation_summary()`） | 诊断 | 报告 | 随 `notify` 配置节 |
 | `degradation_summary` | 通知降级摘要单源（数据状态跟踪器事件日志 → 摘要行，最新在前按源去重；CLI/Web 收尾共用，渠道层不再各自镜像） | 诊断 | 报告 | 随 `notify` 配置节 |
-| `doctor` | 系统自检（环境/配置/目录/功能开关/数据源适配/数据源凭据/数据源七组，失败项附可执行建议，自身永不抛异常） | 诊断 | 诊断 | 开关 `doctor_check`（默认开；CLI `doctor` 子命令不受开关约束） |
+| `doctor` | 系统自检（环境/配置/目录/日志与缓存/功能开关/数据源适配/数据源凭据/数据源八组，失败项附可执行建议，自身永不抛异常） | 诊断 | 诊断 | 开关 `doctor_check`（默认开；CLI `doctor` 子命令不受开关约束） |
 | `doctor_check` | 自检功能上屏门控（TUI 菜单 [T] 与 Web 状态区自检卡片可见性） | 诊断 | 诊断 | 开关 `doctor_check`（默认开，非实验项） |
 | `datasource_fields` | 数据域标准字段记录（`schemas/datasource_fields.py`，类型注解即缺省语义） | 数据源适配 | 数据获取 | 随 `adapter_chain_slots` |
 | `source_adapter` | 数据源适配契约（`SourceAdapter` 基类 + 注册表 + 自检报告 `survey_adapters`） | 数据源适配 | 数据获取 | 已内置（适配契约） |
