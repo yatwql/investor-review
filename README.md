@@ -51,13 +51,13 @@
 
 ## 📸 实际报告效果
 
-由**全新虚构样例持仓**（两账户 · 10 只多资产混合：个股 / 场外基金 / ETF / 债基 / 货基，纯编造份额成本，本机真实行情）生成的 HTML 报告实景，全量报告（全部功能开关 + 六个 LLM 模块全开）：
+由**全新虚构样例持仓**（两账户 · 10 只多资产混合：个股 / ETF / 场外基金 / 债券基金 / 货币 ETF，纯编造份额成本，本机真实行情）生成的 HTML 报告实景，全量报告（22 项功能开关全开 + 六个 LLM 模块全开）：
 
-![报告首屏：完整目录导航与章节入口](src/static/report-overview.png)
+![报告首屏：品牌标记、完整目录导航与章节入口](src/static/report-overview.png)
 
-![盈亏汇总与组合持仓概况](src/static/report-toc.png)
+![盈亏汇总与市场指数](src/static/report-toc.png)
 
-![交互图表：资产构成与穿透行业分布](src/static/report-charts.png)
+![交互图表：穿透行业分布与 TOP10 持仓资产](src/static/report-charts.png)
 
 ## 🖥️ 界面实景
 
@@ -72,6 +72,10 @@
 **Web 配置编辑面板**（与 TUI 菜单同源，即改即存）：
 
 ![Web 配置编辑](src/static/web-config.png)
+
+**CLI 命令行模式**——参数驱动（`report --type basic|both|full`），产物路径、总盈亏与模块耗时排行直接回显，适合 cron / Windows 任务计划无人值守：
+
+![CLI 生成报告：产物路径、盈亏汇总与耗时排行](src/static/cli-report.png)
 
 ## 环境要求
 
