@@ -163,15 +163,36 @@ def _append_anchor_lines(lines: list[str]) -> bool:
         return False
 
 
-def _auto_compact_anchor_file(size: int) -> None:
-    """锚点文件超阈值时就地压缩（保留每个 key 最后一条），备份为 `.bak`。
+#: 压缩后是否保留 `.bak`（`INVEST_DEDUP_KEEP_BACKUP=1` 打开）。默认不保留：
+#: 新文件经解析校验 + ``os.replace`` 原子替换后才删备份，安全性由原子替换与本目录
+#: 「可重建」语义保证；常驻备份会白占与主文件相当的磁盘（实测 37.9 MB）。
+_ANCHOR_KEEP_BACKUP_ENV = "INVEST_DEDUP_KEEP_BACKUP"
+
+
+def _compact_verified(path: str) -> bool:
+    """压缩产物自检：非空且首/末行可解析（防写出半截文件后删掉备份）。"""
+    try:
+        if os.path.getsize(path) == 0:
+            return False
+        with open(path, encoding="utf-8") as f:
+            first = f.readline().strip()
+        if not first:
+            return False
+        json.loads(first)
+        return True
+    except (OSError, json.JSONDecodeError):
+        return False
+
+
+def _auto_compact_anchor_file(size: int) -> bool:
+    """锚点文件超阈值时就地压缩（每 key 最新 + 保留期），成功返回 True。
 
     只在读侧首次加载时触发一次；任何失败都只告警、不阻断报告（原文件保持不动）。
     """
     if os.environ.get(_ANCHOR_AUTO_COMPACT_ENV, "1").strip() == "0":
-        return
+        return False
     if size <= _ANCHOR_SIZE_WARN_BYTES or not os.path.exists(_ANCHOR_PATH):
-        return
+        return False
     try:
         cutoff = _anchor_retention_cutoff()
         last_line: dict[str, int] = {}
@@ -188,7 +209,7 @@ def _auto_compact_anchor_file(size: int) -> None:
                 except (json.JSONDecodeError, KeyError, TypeError):
                     continue
         if not last_line:
-            return
+            return False
         keep = set(last_line.values())
         tmp_path = f"{_ANCHOR_PATH}.compact.tmp"
         with open(_ANCHOR_PATH, encoding="utf-8") as src, open(tmp_path, "w", encoding="utf-8") as dst:
@@ -200,15 +221,26 @@ def _auto_compact_anchor_file(size: int) -> None:
 
         shutil.copy2(_ANCHOR_PATH, backup)
         os.replace(tmp_path, _ANCHOR_PATH)
+        new_size = os.path.getsize(_ANCHOR_PATH)
+        keep_backup = os.environ.get(_ANCHOR_KEEP_BACKUP_ENV, "0").strip() not in ("0", "", "false")
+        if not keep_backup and _compact_verified(_ANCHOR_PATH):
+            try:
+                os.remove(backup)
+            except OSError:
+                keep_backup = True
         logger.info(
-            "[dedup] 锚点文件已自动压缩：%.1f MB → %.1f MB（保留每组最新一条 + 近 %d 天，原文件备份 %s）",
+            "[dedup] 锚点文件已自动压缩：%.1f MB → %.1f MB（每 key 最新 + 近 %d 天；%s）",
             size / 1e6,
-            os.path.getsize(_ANCHOR_PATH) / 1e6,
+            new_size / 1e6,
             _anchor_retention_days(),
-            os.path.basename(backup),
+            f"已清理备份释放 {(size - new_size) / 1e6:.1f} MB"
+            if not keep_backup
+            else f"备份保留 {os.path.basename(backup)}",
         )
+        return True
     except OSError as e:  # 压缩失败不阻断报告：保留原文件与告警
         logger.warning("[dedup] 锚点文件自动压缩失败（继续使用原文件）：%s", e)
+        return False
 
 
 def _load_written_keys() -> None:
@@ -232,19 +264,26 @@ def _load_written_keys() -> None:
             size = os.path.getsize(_ANCHOR_PATH)
         except OSError:
             size = 0
+        compacted = False
         if size > _ANCHOR_SIZE_WARN_BYTES:
-            _auto_compact_anchor_file(size)
+            compacted = _auto_compact_anchor_file(size)
             try:
                 size = os.path.getsize(_ANCHOR_PATH)
             except OSError:
                 size = 0
         if size > _ANCHOR_SIZE_WARN_BYTES:
-            logger.warning(
-                "[dedup] 锚点文件已 %.1f MB（超过 %.0f MB 建议线）：flush 需读写全文、加载需解析全文件。"
-                "建议运行 `python scripts/eval-dedup-threshold.py --compact` 压缩（保留每个标题对最新一条）：%s",
+            # 成本口径：写侧为追加（与体积无关），只有**加载**（逐行解析）与**压缩**
+            # （全量读一遍）随体积增长。压缩已按策略执行仍超线属正常（锚点本身多），
+            # 记 INFO；压缩被禁用/失败才升级为 WARNING（那才是需要人工介入的情形）。
+            level = logging.INFO if compacted else logging.WARNING
+            logger.log(
+                level,
+                "[dedup] 锚点文件 %.1f MB（建议线 %.0f MB）：加载与压缩成本随体积增长（写侧为追加）。%s",
                 size / 1e6,
                 _ANCHOR_SIZE_WARN_BYTES / 1e6,
-                _ANCHOR_PATH,
+                "已按保留期自动压缩；如需更小可调小 INVEST_DEDUP_ANCHOR_RETENTION_DAYS"
+                if compacted
+                else "自动压缩未执行（被禁用或失败），建议运行 `python scripts/eval-dedup-threshold.py --compact`",
             )
         try:
             with open(_ANCHOR_PATH, encoding="utf-8") as f:

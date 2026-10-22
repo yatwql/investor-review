@@ -700,7 +700,7 @@ class TestThinkingConcurrencyLimit(unittest.TestCase):
     health_check / expert_review 等开启 Extended Thinking 的模块并发涌向
     DeepSeek 时偶发返回空 content（HTTP 200 + 空响应），整章降级占位。
     约束：thinking 请求（thinking_enabled_{label}=true）受 BoundedSemaphore
-    限制，同时最多 llm_max_thinking_concurrency 个（默认 1）；非 thinking
+    限制，同时最多 llm_max_thinking_concurrency 个（默认 2）；非 thinking
     模块不受限。
     """
 

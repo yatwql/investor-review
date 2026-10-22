@@ -17,7 +17,9 @@ from src.python.core.registry import get_llm_module_names
 _DEFAULT_LLM_SETTINGS: dict[str, Any] = {
     "max_retries": 2,
     "llm_max_concurrency": 3,
-    "llm_max_thinking_concurrency": 1,
+    # thinking 模块并发上限：2 让 expert_review 与 health_check 并行（实测串行等待
+    # 占单次报告墙钟 ~44%，提到 2 即省该时长）；端点出现空内容重试时改回 1
+    "llm_max_thinking_concurrency": 2,
     # 全链路失败（网络/超时/接口异常）后整链重试 1 次的等待秒数（0 = 不等待）
     "llm_full_fail_retry_delay": 30,
     # LLM 日费用预算上限（货币数值，0 = 不启用）：与事前费用预估同页展示，
@@ -206,7 +208,12 @@ def _get_default_llm_settings_template() -> str:
     _section("全局设置")
     lines.append(f'  "max_retries": {d["max_retries"]},')
     lines.append(f'  "llm_max_concurrency": {d["llm_max_concurrency"]},')
-    lines.append(f'  "llm_max_thinking_concurrency": {d["llm_max_thinking_concurrency"]},')
+    lines.append(
+        _kv(
+            "llm_max_thinking_concurrency",
+            "// Extended Thinking 模块并发上限（默认 2：两个 thinking 模块并行；若端点偶发空响应改回 1 串行）",
+        )
+    )
     lines.append(
         _kv("llm_full_fail_retry_delay", "// 全链路失败（网络/超时/接口异常）后整链重试 1 次的等待秒数（0=不等待）")
     )

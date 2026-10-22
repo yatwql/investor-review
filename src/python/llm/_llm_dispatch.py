@@ -287,10 +287,10 @@ def _dispatch_llm_workers(
 
     # ── thinking 并发限制：开启 Extended Thinking 的模块（health_check / expert_review
     #    ）并发涌向 DeepSeek 时偶发返回空 content（HTTP 200 + 空响应）。用信号量限制
-    #    thinking 请求同时最多 llm_max_thinking_concurrency 个（默认 1），从源头降低
+    #    thinking 请求同时最多 llm_max_thinking_concurrency 个（默认 2），从源头降低
     #    偶发概率；非 thinking 模块不受限，保持原有并发。 ──
     try:
-        _thinking_limit = max(1, int((llm_config or {}).get("llm_max_thinking_concurrency", 1)))
+        _thinking_limit = max(1, int((llm_config or {}).get("llm_max_thinking_concurrency", 2)))
     except (TypeError, ValueError):
         _thinking_limit = 1
     _thinking_sem = threading.BoundedSemaphore(_thinking_limit)

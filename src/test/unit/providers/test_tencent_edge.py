@@ -133,3 +133,77 @@ class TestFetchIndexKlineEdge(unittest.TestCase):
         param = call_kwargs["params"]["param"]
         self.assertIn(",,2000,qfq", param)
         self.assertNotIn(",,3650,qfq", param)
+
+
+class TestBlockPageDetection:
+    """回归：K 线接口返回 200 + HTML/风控页时，必须记该源失败并交下一链路。
+
+    判定口径：`resp.json()` 抛 ValueError 被当「解析失败」既不解决问题、又白等退避，
+    也不推动熔断——同一批代码会逐个再撞一次风控页（实测腾讯/新浪各 4 次/轮）。
+    """
+
+    def _factory(self, text, monkeypatch):
+        from unittest.mock import MagicMock
+
+        from src.python.providers import tencent as tc
+
+        mock_client = MagicMock()
+        mock_client.__enter__.return_value = mock_client
+        resp = MagicMock()
+        resp.text = text
+        mock_client.get.return_value = resp
+        monkeypatch.setattr(tc, "make_http_client", lambda **kw: mock_client)
+        return mock_client
+
+    def test_tencent_html_block_page_records_failure(self, monkeypatch):
+        from src.python.core.provider_registry import get_registry
+        from src.python.providers import tencent as tc
+
+        reg = get_registry()
+        reg.reset()
+        self._factory("<html><body>429 Too Many Requests</body></html>", monkeypatch)
+        attempts = {"n": 0}
+        orig_get = self._factory("<html>访问过于频繁</html>", monkeypatch).get
+
+        def _counting_get(*a, **k):
+            attempts["n"] += 1
+            return orig_get(*a, **k)
+
+        monkeypatch.setattr(
+            tc,
+            "make_http_client",
+            lambda **kw: type(
+                "C",
+                (),
+                {
+                    "__enter__": lambda s: type(
+                        "M", (), {"get": staticmethod(_counting_get), "text": "<html>访问过于频繁</html>"}
+                    )(),
+                    "__exit__": lambda s, *a: False,
+                },
+            )(),
+        )
+
+        assert tc.fetch_index_kline("sh000300", 30) == []
+        assert attempts["n"] == 1, "风控页不应重试（白等退避）"
+
+    def test_sina_block_page_returns_empty_and_marks_source(self, monkeypatch):
+        from unittest.mock import MagicMock
+
+        from src.python.core.provider_registry import get_registry
+        from src.python.providers import sina as sina_mod
+        from src.python.providers import sina_kline
+
+        reg = get_registry()
+        reg.reset()
+        mock_client = MagicMock()
+        mock_client.__enter__.return_value = mock_client
+        resp = MagicMock()
+        resp.text = "<html>请稍后再试</html>"
+        mock_client.get.return_value = resp
+        monkeypatch.setattr(sina_mod, "make_http_client", lambda **kw: mock_client)
+
+        assert sina_kline.fetch_kline("600900", 30) == []
+        status = reg.generate_status_report().get("sina") or {}
+        assert status.get("consecutive_failures", 0) >= 1, "风控页必须计入该源失败（驱动熔断冷却）"
+        assert "block_page" in str(status.get("last_failure_context") or "")

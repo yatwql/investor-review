@@ -22,13 +22,16 @@
 - **gate 兜底 changelog 归档段非空**（plan-174 收尾）：`prepare` 已拦「占位句原样归档」，`gate` 再加一道——归档文件缺该版本段、或该段只有标题/占位句即前置中止（未跑任何子进程），防旁路/人工归档写出的空发布记录。
 - **事实校验修正数上屏**（plan-180 收尾）：`doctor` 运行台账行在最近运行存在修正时追加「事实校验自动修正中位 N 处」，把 `fact_fix_*` 从「写进台账但没人看」变成自检可见。
 
+- **K 线风控页不再当「解析失败」重试**：被限流时上游返回 200 + HTML/纯文本 → 今按「非 JSON 载荷」判定，记该源失败（驱动熔断冷却）并立即交下一链路，不重试。实测腾讯/新浪每轮各 4 条 `Expecting value` 的无效重试与退避等待由此消除；判定收敛于 `providers/_utils.looks_like_block_page`（两源共用）。
+- **去重锚点告警文案与备份策略**：警告不再声称「flush 需读写全文」（写侧已是追加、成本与体积无关，只有加载与压缩随体积增长）；压缩已执行仍超线记 INFO（锚点本身多属正常），压缩被禁用/失败才 WARNING；压缩成功后 `.bak` 默认清理（校验 + 原子替换后删除），`INVEST_DEDUP_KEEP_BACKUP=1` 可保留。
+
 ### Changed
 
 - **新闻去重锚点改真追加写**：flush 原走「读全文 → 整文件替换」，而锚点已 37.9 MB、每轮只新增数十条 —— 写盘成本与文件体积成正比、与新增量无关。改单次 `write` + `fsync` 追加（读侧本就逐行容错）；压缩条件从「仅每 key 最新」扩为「每 key 最新 + **仅保留近 120 天**」（`INVEST_DEDUP_ANCHOR_RETENTION_DAYS` 可覆盖，0 = 纯去重）——仅按 key 去重压不动（标题对高度唯一，压后仍 37.9 MB），保留期才是体积上限。
 - **缓存清理日志降噪**：逐文件明细 INFO → DEBUG（单日 257 行、占全天日志 7.2%），INFO 只留汇总行 + 释放字节；age/TTL 按量级自适应单位，盘中 30s 的 price TTL 不再印成 `ttl=0.0h`。
 - **交易日历进程内 memo**：`_get_trading_calendar()` 单次报告被调用 600+ 次、每次都读盘解析 JSON；改为按「缓存文件指纹 + 剩余 TTL」进程内复用，文件重写/到期即回落磁盘（语义不变），conftest 加 autouse 复位。
 - **事实校验自动修正计数入 `perf_history.counters`**：新增 `fact_fix_total` / `fact_fix_numeric` / `fact_fix_code` / `fact_fix:<模块>`（LLM 阶段前清零、结束后汇入）——单次实测 5 处修正，此前只进日志无法跨期判断提示词改动是否有效。
-- **thinking 并发槽等待可观测**：`llm_max_thinking_concurrency=1` 下两个 thinking 模块（实测 51s / 37s）被完全串行却全无日志线索；现等待超过 5s 即记 INFO（模块名 / 等待秒数 / 上限）。默认值是否提到 2 待真机实测（配置注释所述「多 thinking 并发偶发空响应」需复现验证）。
+- **thinking 模块默认并行（`llm_max_thinking_concurrency` 1 → 2）**：上限 1 时两个 thinking 模块完全串行——两次实测分别等待 38s 与 **68.7s（占该次墙钟 154s 的 44%）**，体检全程排在智囊团之后。默认值提到 2（代码默认 + 配置生成器注释 + `requirements`/`how-to-config-llm`/`llm-technical` 同步），回滚条件是端点出现空内容重试或内容质量下降（改回 1 即可，配置侧生效）。同时保留可观测性：单模块等待超 5s 记 INFO、累计毫秒数进 `perf_history.counters.llm_thinking_wait_ms`、上限 <2 且累计 ≥20s 时给出「提到 2 约可省该时长」提示。
 
 （本次发布内容见下方归档索引）
 

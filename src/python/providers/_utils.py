@@ -34,6 +34,31 @@ logger = logging.getLogger("invest")
 HANG_ELAPSED_RATIO = 0.5
 
 
+#: 风控/异常页特征词（响应体被限流页替换时的常见文案；大小写不敏感）
+_BLOCK_PAGE_HINTS = ("too many requests", "rate limit", "访问过于频繁", "请求过于频繁", "验证码", "captcha")
+
+
+def looks_like_block_page(text: str | None) -> bool:
+    """响应体是否是「非 JSON 载荷」（HTML/风控页/纯文本限流提示）。
+
+    用途：K 线这类 JSON 接口被限流时，上游常返回 200 + HTML 风控页或纯文本提示，
+    ``resp.json()`` 抛 ValueError，被当成「解析失败」重试——既不解决问题，又浪费
+    退避时间，也不推动该源冷却。判定「不是 JSON 载荷」即可按源侧限流处理：
+    记录该源失败（驱动熔断冷却）+ 立即交下一链路。
+    """
+    if not isinstance(text, str):
+        return False  # 非文本响应（测试替身/流式对象）：交给解析层报错，不在判定层抛
+    body = text.strip()
+    if not body:
+        return False
+    if body[0] in "{[":
+        return False  # 正常 JSON 载荷（结构问题交给解析层）
+    lowered = body[:2000].lower()
+    if "<" in lowered:
+        return True  # HTML（风控页/错误页）
+    return any(hint in lowered for hint in _BLOCK_PAGE_HINTS) or not lowered.startswith(("ok", "{"))
+
+
 #: 连接级瞬时失败重试策略（线性退避 1s、2s；总尝试 3 次）—— datasink / hithink / cninfo
 #: 三处连接级重试**共用同一策略实例**（差异只用 ``with_connect_retry`` 的 log_tag/label 表达）。
 #: 瞬时常量判据与退避算式取自 ``core/retry``（重试与退避唯一原语）。

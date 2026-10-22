@@ -452,11 +452,11 @@ _LLM_CLIENT_SETTINGS = {
 
 **缺省兜底（串行后置模块）**：客户端装配只发生在分发层（`_llm_dispatch._execute` 为并行 worker 装配）；**编排层串行后置调用**（`run_self_review` / `run_holding_change_review`）不注入 `http_client`，None 会直达 provider 层 `assert client is not None` 秒败，且 AssertionError 被 `call_llm` 的 per-provider `except Exception` 吞成「provider 异常，切换下一 provider」整链连环失败（归因整章静默丢失）。因此兜底收口在多链与 legacy 两路的**唯一汇聚点** `api.call_single_provider`：`http_client is None` 且 provider 受支持（claude/openai/gemini）时经 `core.http_client.make_http_client`（HTTP 客户端统一工厂约束）自建一次性客户端，`with` 块内完成调用后关闭；不支持的 provider 不建（避免浪费连接），调用方自备客户端则原样透传、漏斗不代为关闭。
 
-`max_workers=llm_config.llm_max_concurrency`（config 默认 3）控制并行调用数。开启 Extended Thinking 的模块（`thinking_enabled_{suffix}=true`）受独立信号量 `llm_max_thinking_concurrency`（默认 1）串行化约束——多 thinking 模块并发涌向 DeepSeek 等强制推理端点时偶发返回空 content（HTTP 200 空响应），该信号量从源头降低并发（thinking 请求同时最多 N 个），非 thinking 模块不受此限。
+`max_workers=llm_config.llm_max_concurrency`（config 默认 3）控制并行调用数。开启 Extended Thinking 的模块（`thinking_enabled_{suffix}=true`）受独立信号量 `llm_max_thinking_concurrency`（默认 2）约束——多 thinking 模块并发涌向 DeepSeek 等强制推理端点时偶发返回空 content（HTTP 200 空响应），该信号量从源头降低并发（thinking 请求同时最多 N 个），非 thinking 模块不受此限。
 
-**信号量等待必须可观测**：默认 1 时两个 thinking 模块（`expert_review` / `health_check`）是完全串行的——实测 51s + 37s 两段，后者在前者释放前无法起跑（线程池空槽也救不了），占单次报告总墙钟约 20%，而日志里只有时间轴能看出来。现 `_dispatch_llm_workers` 在**等待超 5s** 时记一条 INFO（模块名 / 已等待秒数 / 上限），用于区分「端点慢」与「被信号量排队」。
+**信号量等待必须可观测**：上限 1 时两个 thinking 模块（`expert_review` / `health_check`）是完全串行的——两次实测分别为 51s + 37s（等待 38s）与 68.7s + 28.5s（等待 68.7s，占该次总墙钟 154s 的 44%），后者在前者释放前无法起跑（线程池空槽也救不了）。现 `_dispatch_llm_workers` 在**等待超 5s** 时记一条 INFO（模块名 / 已等待秒数 / 上限），用于区分「端点慢」与「被信号量排队」。
 
-**量化与决策（保持默认 1）**：等待总量另有两条出口——① 段末若累计等待 ≥20s 且上限 <2，记一条含「提到 2 约可省该时长」的可执行提示（含配置键路径）；② 累计毫秒数进 `perf_history.counters` 的 `llm_thinking_wait_ms`（每轮 LLM 阶段前清零），跨期可对拍。**默认值仍为 1**：提到 2 的前提是端点并发两个 thinking 请求不出现 HTTP 200 空响应（空 content 会触发「关 thinking 同 provider 重试」，成本与降级同时上升），而本机无该端点的稳定性样本；把结论留在配置侧而非代码默认值，是为了让「省 20% 墙钟」与「空响应风险」由数据决定——判据是连续数轮 `llm_thinking_wait_ms` 明显大于 0 且改配置后 `空内容重试` 计数仍为 0。
+**量化与决策（默认 2）**：默认值已由 1 提到 2（依据：第二组实测串行等待 68.7s = 该次墙钟 44%，提到 2 直接省该时长）。风险控制靠三层：① 端点返回空 content 时既有链路会**关闭 thinking 同 provider 重试一次**，最坏代价是一次重试而非内容缺失；② 等待总量仍可观测——单模块等待超 5s 记 INFO，段末累计 ≥20s 且上限 <2 时给出「提到 2 约可省该时长」提示（用户手动设 1 时才会触发）；③ 累计毫秒数进 `perf_history.counters.llm_thinking_wait_ms`。**回滚条件**：日志出现空内容重试或内容质量下降 → 该端点把 `llm_max_thinking_concurrency` 改回 1（配置侧即可，无需改代码）。
 
 ### 4.2.1 端点级节流与并发治理（`llm/pacing.py`）
 
