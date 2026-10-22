@@ -30,7 +30,7 @@ pytestmark = [pytest.mark.scenario, pytest.mark.scenario_basic, pytest.mark.usef
 
 @pytest.mark.scenario_basic
 @pytest.mark.scenario
-class TestSP9MixedAllTypes(unittest.TestCase):
+class TestPenetrationMixedAllTypes(unittest.TestCase):
     """S-P9：全类型混合场景 — 多类型持仓合并、排序、占比验证。
 
     场景：同时持有股票、ETF、主动权益基金、QDII、联接基金。
@@ -503,7 +503,7 @@ class TestSP9MixedAllTypes(unittest.TestCase):
 
 @pytest.mark.scenario_basic
 @pytest.mark.scenario
-class TestSP10CrossHoldingMerge(unittest.TestCase):
+class TestPenetrationCrossHoldingMerge(unittest.TestCase):
     """S-P10：交叉持股合并 — 同一底层标的被多只基金持有时归一。
 
     场景：三只不同类型基金同时持有贵州茅台。

@@ -109,7 +109,8 @@ class TestScriptSyntaxWarnings:
         with warnings.catch_warnings():
             warnings.simplefilter("error", SyntaxWarning)
             code = compile(path.read_text(encoding="utf-8"), str(path), "exec")
-        assert code is not None
+        # 编译产物指向该脚本（`is not None` 恒真，无验证力）
+        assert code.co_filename.endswith("check-version-consistency.py")
 
 
 class TestDocHeaderRegistration:

@@ -549,6 +549,8 @@ class TestTaskCodeIdentifierCheck:
             "rf_205_fix = 1",
             "plan18_hack = 1",
             "def rf_100_helper():\n    pass",
+            "class TestSP5QDII:\n    pass",  # 测试类名内嵌系列编号
+            "class TestSP10CrossHoldingMerge:\n    pass",
         ]
         for src in flagged:
             assert _ident_hit(code_traces, src) is not None, f"应命中: {src}"
@@ -561,6 +563,9 @@ class TestTaskCodeIdentifierCheck:
             "p50 = 1",
             "drawdown_series = []",
             "def test_provider(x1, y1):\n    pass",
+            "class TestPenetrationQdii:\n    pass",  # 纯语义名
+            "class TestDegradationSignal1:\n    pass",  # 语义词 + 变体号
+            "class TestHTTP2Support:\n    pass",  # 协议名（连续大写后接数字再接大写）待评估形状
         ]
         for src in legit:
             assert _ident_hit(code_traces, src) is None, f"不应命中: {src}"

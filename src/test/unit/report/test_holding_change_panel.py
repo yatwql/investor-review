@@ -348,7 +348,7 @@ class TestLLMReviewRendering:
 class TestOffStateVisibility:
     """开关关闭（契约缺席）→ 章隐藏且不消耗连续编号，两端缺省口径锁定。"""
 
-    def test_hidden_section_consumes_no_visible_number(self):
+    def test_hidden_holding_change_consumes_no_visible_number(self):
         from src.python.core.registry import get_report_section_order
         from src.python.report.html_writer_nav import _compute_section_visibility
 

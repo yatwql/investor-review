@@ -300,6 +300,8 @@ _PATTERNS_PREFILTER: re.Pattern[str] = re.compile("|".join(f"(?:{p})" for p, _c,
 #   - 单字母 + _series（b_series）——多字母词+series（drawdown_series）合法
 #   - 单字母 + 系列（G系列）——Python 3 允许 unicode 标识符
 #   - 嵌入 rf/plan + 数字（rf_205_fix、plan18_hack）——任务编号混入语义名
+#   - 测试类名内嵌系列编号（TestSP5QDII、TestSP10CrossHoldingMerge）——批次编号替代语义词
+#     （`TestDegradationSignal1` 这类「语义词+变体号」不受影响：[A-Z]{2,3} 需连续大写）
 IDENTIFIER_PATTERNS: list[tuple[str, str, str]] = [
     (r"^[A-Z]{1,4}[0-9]{1,3}$", "IDENT", "短大写字母+数字独立标识符（如 F4、HH6、TASK22），无语义"),
     (r"^[A-Z][A-Za-z]*_[0-9]+$", "IDENT", "大写字母+_数字标识符（如 F_1、MINE_22），无意义"),
@@ -307,6 +309,7 @@ IDENTIFIER_PATTERNS: list[tuple[str, str, str]] = [
     (r"^[A-Za-z]系列$", "IDENT", "单字母+系列 标识符（如 G系列）"),
     (r"rf[_-]?\d+", "IDENT", "任务编号嵌入标识符（如 rf_205_fix）"),
     (r"plan[_-]?\d+", "IDENT", "任务编号嵌入标识符（如 plan18_hack）"),
+    (r"^Test[A-Z]{2,3}[0-9]+[A-Z]", "IDENT", "测试类名内嵌系列编号（如 TestSP5QDII），应以语义词命名"),
 ]
 
 #: 任务编号硬禁止：注释/docstring 中出现 rf-/plan-/R- 编号一律检出，

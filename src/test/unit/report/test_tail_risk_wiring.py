@@ -131,27 +131,30 @@ class TestPipelineInjection:
         assert tr["var95"] is None
         assert tr["sample_size"] == 4
 
-    def test_inject_skipped_when_pipeline_none(self):
-        """pipeline_data=None → 不注入、不抛异常。"""
+    def test_pipeline_none_still_injects_prep_risk_metrics(self):
+        """pipeline_data=None → 只跳过 pipeline_data 写入，prep.risk_metrics 照常注入。"""
         from src.python.report._report_generation import _prepare_full_risk_metrics
 
+        prep: dict = {}
         with (
             patch(
                 "src.python.report._snapshot.fetch_history_data",
                 return_value=_mock_history(_bars_from_returns(FIXED_RETURNS)),
             ),
         ):
-            history, metrics = _prepare_full_risk_metrics(
+            history, _metrics = _prepare_full_risk_metrics(
                 [MagicMock(code="SH600001")],
                 config={},
                 reporter=MagicMock(),
                 perf=MagicMock(),
                 fetch_history=False,
                 enable_history=True,
-                prep={},
+                prep=prep,
                 pipeline_data=None,
             )
+        # 判据落在「注入到哪」：prep 侧照常写、pipeline_data 缺席时不报错
         assert history is not None
+        assert prep["risk_metrics"]["annualized_volatility"] is not None
 
 
 class TestExcelTailRiskRows:
