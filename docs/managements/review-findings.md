@@ -20,7 +20,7 @@
 ### P3 — 持续监控：文件膨胀登记（按任务号组织；登记线 = 警告线：主程序 >700 / 脚本 >600 / 测试 >900 / 薄壳 >200）
 
 > **单一事实源**：行数与优先级以 `scripts/check-file-length.py -v` 输出为真值（清单 = 主程序 >700 / 脚本 >600 / 测试 >900、薄壳 >200，并按「行数 × 近 90 天改动次数」给出拆分优先级）。本表是**逼近红线档的处置登记**，**入表线 = 警告线**（单一「警告 = 登记」口径，避免「警告 / 登记 / 红线」三套数字），行数快照随复核刷新。
-> **组织方式**：按**任务号（`rf-N`）**分组；同一任务涉及多个文件时每文件一行，**按「行数 × 近 90 天改动次数」降序**——改得越勤、体量越大越先拆。
+> **组织方式**：按**任务号（`rf-N`）**分组；同一任务涉及多个文件时每文件一行，按「行数 × 近 90 天改动次数」降序——改得越勤、体量越大越先拆。
 > **红线体系**：主程序警告 >700 / 硬上限 >1000；`scripts/` 警告 >600 / 红线 >1000；测试 >900 警告 / >1200 红线；`__init__.py` 薄壳 >200 警告（同域红线）。体系调整决策与理由见 `docs/managements/technical.md` C28（大文件红线体系）。
 > **测试文件口径**：行数 >900 警告 / >1200 红线；测试项 >80 警告 / >120 红线；≥900 行即入本表。
 > **破线豁免**：无（`check-file-length.py --ci` 豁免在列 0 项）。
@@ -29,21 +29,13 @@
 
 | 任务 | 文件 | 行数 / 余量 | 90 天改动 / 优先级分 | 处置方向 |
 |------|------|------------|--------------------|----------|
-| **rf-829** | `src/test/unit/report/test_html_report_structure.py` | 928 / 272 | 49 次 / **45472** | 按「HTML 结构断言 / 响应式契约 / 章节-区块矩阵」拆子文件 |
-| **rf-829** | `src/test/unit/report/test_orchestrator.py` | 999 / 201 | 43 次 / **42957** | 按「数据准备 / 生成编排 / 降级分支」拆子文件 |
-| **rf-829** | `scripts/release.py` | 906 / 94 | 37 次 / **33522** | argparse 已下沉 `_release/_cli.py`；剩余命令编排按 check·prepare·refresh 与 publish·devbump 分域下沉 |
-| **rf-829** | `scripts/check-doc-traces.py` | 692 / 308 | 39 次 / **26988** | 扫描规则已下沉 `_traces_doc/`，CLI 侧再收薄（参数/输出归 `_checklib`） |
-| **rf-829** | `src/python/web/handlers.py` | 709 / 291 | 27 次 / **19143** | 路由按域拆分（`handlers_health.py`：health/doctor/logs；`handlers_reports.py`：生成/下载/历史），蓝图注册保持单源 |
-| **rf-829** | `src/test/unit/report/test_excel_generator.py` | 995 / 205 | 18 次 / **17910** | 按「页签写入 / 编排 / 降级」拆子文件 |
-| **rf-829** | `src/python/core/doctor.py` | 734 / 266 | 19 次 / **13946** | 日志与缓存探针（`_check_logs_and_cache`）独立成 `core/doctor_logs.py`，主模块只保留分组与渲染 |
-| **rf-829** | `src/test/unit/llm/test_generate_all_llm.py` | 926 / 274 | 12 次 / **11112** | 按「编排 / 模块分派 / 预算闸」拆子文件 |
-| **rf-829** | `src/test/unit/report/test_holdings_detail_sheet.py` | 982 / 218 | 10 次 / **9820** | 按区块写入器拆子文件 |
-| **rf-829** | `src/python/config/__init__.py` | 269（薄壳线 200） | 27 次 / **7263** | 包标记面收薄：实现已在子模块，只保留 re-export 与注册表视图 |
-| **rf-829** | `scripts/check-style-guardrails.py` | 636 / 364 | 8 次 / **5088** | 规则表与渲染分离（规则声明 → `_guardrails/rules.py`） |
-| **rf-829** | `scripts/_doc_drift/__init__.py` | 237（薄壳线 200） | 15 次 / **3555** | 包标记聚合面收薄为纯 re-export，或收敛到显式 `api.py` |
-| **rf-829** | `src/test/unit/report/test_market_value_premium.py` | 974 / 226 | 1 次 / **974** | 低频改动，按被测函数择机拆子文件 |
-| **rf-829** | `src/test/unit/scripts/test_perf_history.py` | 950 / 250 | 1 次 / **950** | 低频改动，按「采样 / 统计 / 渲染」择机拆子文件 |
-| **rf-829** | `scripts/test-perf-report.py` | 635 / 365 | 1 次 / **635** | 采样/统计/上屏三段拆分，采样复用 `core/perf` |
+| **rf-829** | `scripts/release.py` | 906 / 94 | 37 次 / **33522** | argparse 已下沉 `_release/_cli.py`；剩余命令编排可按 check·prepare·refresh 与 publish·devbump 分域下沉（本文件是全域最后一个高于脚本警告线的文件） |
+
+**已出登记（拆至警告线以下，行数随 `-v` 复核）**：本轮按优先级逐项处置后，三域全部回落到警告线以内，共拆出 12 个子模块与 8 个测试分片——
+
+- **主程序**：`web/handlers.py` 709 → 616（只读观测路由 → `handlers_health.py`）、`core/doctor.py` 734 → 608（日志与缓存探针 → `doctor_logs.py`）、`config/__init__.py` 269 → 195（薄壳线内；渠道共享 API → `_config_api.py`）
+- **脚本**：`check-doc-traces.py` 692 → 575（已删函数残留 → `_traces_doc/deleted_refs.py`、结论输出 → `findings.py`）、`check-style-guardrails.py` 636 → 543（规则声明装 → `_guardrails/rules.py`）、`test-perf-report.py` 635 → 544（报告渲染 → `_perf_report/report.py`）、`_doc_drift/__init__.py` 237 → 136（薄壳线内；冗余 `__all__` 清单退役，re-export 即为面）
+- **测试**：`test_html_report_structure.py` 928 → 783（共享夹具 → `_html_report_fixtures.py`）、`test_orchestrator.py` 999 → 560（快照/历史 → `test_orchestrator_snapshot.py`）、`test_excel_generator.py` 995 → 697（LLM 用量页签 → `test_excel_generator_llm_usage.py`）、`test_holdings_detail_sheet.py` 982 → 744（加权成本/申购状态 → `test_holdings_detail_sheet_cost.py`）、`test_market_value_premium.py` 974 → 767（今日盈亏分支 → `test_market_value_premium_branches.py`）、`test_perf_history.py` 950 → 507（报告段落渲染 → `test_perf_history_sections.py`）、`test_generate_all_llm.py` 926 → 696（并发治理 → `test_generate_all_llm_concurrency.py`）
 
 **已移出登记（降回登记线以下，维持现有模块边界）**：rf-89 `src/python/report/excel_generator.py` 659、rf-80 `src/python/report/data_status.py` 649、rf-81 `src/python/report/html_renderers.py` 577、rf-85 `src/python/fetcher/fund.py` 553、rf-78 `src/python/fetcher/batch.py` 520、`src/python/llm/prompts_core.py` 350 / `src/python/llm/generators.py` 444 —— 均在主程序登记线（700 行）以下，移出逐项登记；行数复核以 `-v` 为准。
 

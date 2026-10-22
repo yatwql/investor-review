@@ -11,18 +11,22 @@ from pathlib import Path
 
 import pytest
 
-from src.python.core import doctor
+from src.python.core import doctor, doctor_logs
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
 
 
 @pytest.fixture(autouse=True)
 def _redirect_paths(tmp_path, monkeypatch):
-    """全部探针路径重定向到临时目录（自检读的是真实日志/台账，测试不得读用户数据）。"""
-    monkeypatch.setattr(doctor, "_APP_LOG_PATH", str(tmp_path / "app.log"))
-    monkeypatch.setattr(doctor, "_DEDUP_ANCHOR_PATH", str(tmp_path / "dedup_anchors.jsonl"))
-    monkeypatch.setattr(doctor, "_PERF_LEDGER_PATH", str(tmp_path / "perf_history.jsonl"))
-    monkeypatch.setattr(doctor, "_LOGS_DIR", str(tmp_path))
+    """全部探针路径重定向到临时目录（自检读的是真实日志/台账，测试不得读用户数据）。
+
+    探针实现已下沉 `core/doctor_logs`（调用点即该模块），故 patch 指向 `doctor_logs`；
+    仅断言「入口仍可经 doctor 引用」时才用 doctor 名。
+    """
+    monkeypatch.setattr(doctor_logs, "_APP_LOG_PATH", str(tmp_path / "app.log"))
+    monkeypatch.setattr(doctor_logs, "_DEDUP_ANCHOR_PATH", str(tmp_path / "dedup_anchors.jsonl"))
+    monkeypatch.setattr(doctor_logs, "_PERF_LEDGER_PATH", str(tmp_path / "perf_history.jsonl"))
+    monkeypatch.setattr(doctor_logs, "_LOGS_DIR", str(tmp_path))
     return tmp_path
 
 
@@ -70,9 +74,9 @@ class TestDedupAnchor:
     def test_oversized_anchor_flagged_with_compact_hint(self, monkeypatch):
         import pathlib
 
-        tmp = pathlib.Path(doctor._DEDUP_ANCHOR_PATH)
+        tmp = pathlib.Path(doctor_logs._DEDUP_ANCHOR_PATH)
         tmp.write_text("{}\n" * 10, encoding="utf-8")
-        monkeypatch.setattr(doctor, "_ANCHOR_COMPACT_BYTES", 10)
+        monkeypatch.setattr(doctor_logs, "_ANCHOR_COMPACT_BYTES", 10)
         item = doctor._check_dedup_anchor()
         assert item["ok"] is False
         assert "eval-dedup-threshold.py --compact" in item["hint"]

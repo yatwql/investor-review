@@ -71,7 +71,7 @@
 **结构约定（顶层 vs 子目录）**：`scripts/` 顶层只放**可直接运行的入口**（`python scripts/x.py …`）；
 共享库与实现细节一律放内部包——跨脚本共用进 `_shared/`（`checklib.py` / `traces_common.py`），
 单入口实现包用 `_<语义名>/`（`_probes/` / `_assets/` / `_release/` / `_test_runner/` / `_doc_drift/` /
-`_traces_code/` / `_traces_doc/` / `_test_redundancy/`），评测实现包用 `_eval_<x>/` 与入口
+`_traces_code/` / `_traces_doc/` / `_test_redundancy/` / `_guardrails/` / `_perf_report/`），评测实现包用 `_eval_<x>/` 与入口
 `eval-<x>.py` 同名对应。新增共享代码**不得**再放顶层文件。
 
 | 前缀 | 域 | 判据 / 契约 |
@@ -104,7 +104,7 @@
 - **统一契约**（`checklib.add_common_args()` / `report()`）：`-v/--verbose` 详细输出、`--ci` 仅输出 `文件:描述`；**通过退出 0，发现 finding 退出 2**（`check-code-traces.py` 另有 HIGH=1 / LOW=3 的分级语义，属其自身约定）；通过打印 `[OK] …`，失败逐条 `[ERR] file:desc`（`--ci` 下为裸行）+ 汇总行
 - **共享原语**：`REPO_ROOT` / `rel()`（仓库相对路径，非仓库内路径原样返回）、`extract_region()` / `replace_region()`（标记区间）、`extract_table_region()` / `replace_table_region()`（表区域，带结构校验）
 - **`_traces_code/`**：check-code-traces 内部实现包——`patterns.py`（**匹配表**：历史痕迹/标识符/暗号模式与编译镜像；只管「命中了什么」，共享历史叙述正则引用 `_traces_common` 常量）、`exemptions.py`（**豁免表**：章节计数与迭代轮次豁免〔check-doc-traces 共用〕+ 代码侧行级豁免〔合法领域值/魔法编号领域值/测试回归元描述〕与 `_is_*_excluded` 判定——调漏检改前者、调误报改后者，不在一处相互淹没）、`extract.py`（注释/标识符抽取）、`scan.py`（扫描调度）、`layers.py`（core 反向依赖守卫）、`config.py`（扫描域配置与规则载体豁免：`RULE_CARRIER_DIRS` / `RULE_CARRIER_FILES`）；check-code-traces.py 只留 CLI 与原面 re-export
-- **`_traces_doc/`**：check-doc-traces 后端包——`patterns.py`（文档痕迹模式表 `DOC_PATTERNS` / 树行专属 `TREE_ONLY_PATTERNS` / 行级豁免 `EXCLUDE_PATTERNS`+`is_excluded`，共享历史叙述正则引用 `_traces_common` 常量）、`bundle.py`（编译镜像 + 按域取子集 + 树行拼表，`pattern_bundle` 按〔分类集, CIPHER 开关, 树行〕lru 缓存并集预筛——预筛面与精确面同源）、`dedup.py`（结构性冗余扫描：单次遍历内完成标题路径感知判重、台账/归档域重复长行与区块同小节限定、空白归一与同块单报），入口薄 CLI 与原面 re-export
+- **`_traces_doc/`**：check-doc-traces 后端包——`patterns.py`（文档痕迹模式表 `DOC_PATTERNS` / 树行专属 `TREE_ONLY_PATTERNS` / 行级豁免 `EXCLUDE_PATTERNS`+`is_excluded`，共享历史叙述正则引用 `_traces_common` 常量）、`bundle.py`（编译镜像 + 按域取子集 + 树行拼表 + 高置信度分类 `HIGH_CATEGORIES`，`pattern_bundle` 按〔分类集, CIPHER 开关, 树行〕lru 缓存并集预筛——预筛面与精确面同源）、`dedup.py`（结构性冗余扫描：单次遍历内完成标题路径感知判重、台账/归档域重复长行与区块同小节限定、空白归一与同块单报）、`deleted_refs.py`（已删除函数残留：git 历史 def 全集 × 当前 def 全集差集比对，浅克隆告警不假绿）、`findings.py`（结论汇总行与退出码 + 缓存结论结构校验，全量与回放两路共用），入口薄 CLI 与原面 re-export
 - **`_shared/traces_common.py`**：两脚本**逐字节相同**的历史叙述正则单一来源（命名常量 + `SHARED_REGEXES` 元组）；只登记字面量，**分类与描述仍按各自域定义**，判定入口/域矩阵/豁免语义不在此模块——新增同源词汇先加此处再两侧引用，仅一域需要的词汇不进共享表（机检见 `test_trace_shared_vocabulary`：两表交集须恰等于词表、两侧须都引用、模式源码内不得写死字面量）
 - **`_test_runner/`**：`test-runner.py` 的内部实现包（paths / modes / pytest_env / machine_info / doc_writer / report_html / runner），入口仅保留 CLI 与主流程并原面 re-export —— 既有测试访问 `test_runner._env_value` 等名字仍有效；**注意**：monkeypatch 内部状态（如 `_LATEST_DIR` / `_DOC_COVERAGE_PATH`）须指向持有它的子模块（`_test_runner.report_html` / `_test_runner.doc_writer`）
 
@@ -300,6 +300,8 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
 **`check-doc-traces.py` — 文档历史痕迹 + 结构性冗余检查**
 
 **设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
+
+**实现分包**（入口只留 CLI 与扫描编排）：`_traces_doc/patterns.py`（模式表）· `bundle.py`（分类全集与高置信度分类、按域子集与并集预筛）· `dedup.py`（结构性冗余）· `deleted_refs.py`（已删除函数残留）· `findings.py`（结论汇总行/退出码与缓存结论校验）。
 
 扫描项目根 `README.md` 与 `docs/managements/`、`docs/manuals/` 下所有 `.md` 文件，按三个域分流：
 
@@ -720,7 +722,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 **设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
 
-规则与 `DESIGN.md` 护栏条目逐条同源（各函数 docstring 标注映射编号），**E 级拦截、W 级只观察**：
+规则与 `DESIGN.md` 护栏条目逐条同源（各函数 docstring 标注映射编号），**E 级拦截、W 级只观察**。**规则声明与判定分离**：检查域 / 圆角·字阶·间距档位 / 正则 / 存量豁免表（只减不增白名单）全部声明在 `_guardrails/rules.py`，入口只留判定流程与渲染——加一条豁免或调一档口径只改声明处，不碰判定代码：
 
 | 级别 | 规则 | 判什么 |
 |:--|:--|:--|
@@ -988,6 +990,8 @@ curl 对照命令：`curl -s "https://push2.eastmoney.com/api/qt/stock/get?secid
 ```
 
 **输出**：`docs/tmp/better-investment-performance-test-report.md`
+
+**实现分包**：报告渲染（Markdown 组装 / 达标判定 / `PerfSample` 样本规模契约）在 `_perf_report/report.py`，入口只留采样、离线桩与门禁判定——改报告版式只动 `_perf_report/`，改压测口径只动入口。
 
 **目标**：basic 模式总耗时 < 60s
 

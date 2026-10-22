@@ -852,6 +852,15 @@ mod = load_script("_test_runner/modes.py", module_name="modes_under_test")   # �
 
 > 唯一实现为 `src/test/_script_loader.py`：按文件名/子路径加载 `scripts/` 下脚本、每次调用重新执行返回新实例、注册进 `sys.modules`（`@dataclass` 按 `cls.__module__` 回查命名空间依赖它）。**禁止**在测试文件里再手写 `importlib.util.spec_from_file_location` 样板或自定义 _load_script 同名加载器——`unit/scripts/test_script_loader.py` 的样板唯一性机检会检出（除 loader 自身外出现动态加载样板、或定义同名本地加载器均判失败）。
 
+**测试文件分片与共享夹具**：
+
+单文件超测试红线（>1200 行）或逼近档（>900 行）时按**被测职责**分片，不按行数机械切。约定：
+
+- 兄弟分片共用 `test_<模块>_<域>.py` 命名（如 `test_excel_generator_llm_usage.py`），并在主分片 docstring 的「兄弟分片」行互相点名——读者从任一文件都能找到全貌；
+- **共享构造器（模板路径 / 注册表常量 / 最小渲染数据 / mock 工厂）放 `<包>/_<模块>_fixtures.py`**（下划线前缀，不含 `test_*` 故不被收集），各分片 `from ... import ...` 引用，禁止复制一份到每个分片——改模板契约时漏改分片副本是最常见的静默漂移；
+- **分片后 patch 目标须重定向**：实现下沉到子模块（如 `_perf_report/report.py`、`_traces_doc/deleted_refs.py`）后，`monkeypatch.setattr(入口模块, "_常量", ...)` 对写入无效——必须 patch **调用点所在子模块**，并同步迁移该模块的进程级缓存重置点（`_HIST_DEFS = None` 一类）；
+- 分片不新增/删除用例：原文件的 `def test_` 总数须等于各分片之和，收尾用 `grep -c 'def test_'` 对拍，并同步 `folders.md` 目录树与 `test-coverage.md` 计数。
+
 **新增后必须更新的文件**：
 
 1. **`test-coverage.md` 场景测试分组表** — 新增 S/T/D 场景时补充条目（含测试类参考列）
@@ -1526,7 +1535,7 @@ CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` /
 | 运维观测 | `perf-history.py` / `probe.py` / `check-sources`（CLI 子命令）/ `doctor`（CLI 子命令）/ `view-logs`（CLI 子命令） / `cassettes`（CLI 子命令） | 性能历史查看、数据源链路探测、日志与系统自检 |
 | 评测与基准 | `test-perf-report.py` / `eval-llm-hallucination.py` / `eval-factor-zoo.py` / `eval-dedup-threshold.py` | 性能门禁压测、LLM 幻觉率采样、能力评测与阈值校准（不参与提交门禁） |
 | 启动 | `launch.sh` / `launch.ps1`（TUI 与 `web` 子命令）/ `cli.sh` / `llm.sh` 及其 `.ps1` 版 | 免解释器前缀的常用入口 |
-| CLI 子命令 | `report` / `cache` / `whatif` / `check-sources` / `view-logs` / `doctor` / `cassettes` | 用户侧命令行入口（详见 [CLI 手册](../manuals/how-to-use-cli-mode.md)） |
+| CLI 子命令 | `report` / `cache` / `whatif` / `check-sources` / `health-history` / `view-logs` / `doctor` / `cassettes` | 用户侧命令行入口（详见 [CLI 手册](../manuals/how-to-use-cli-mode.md)） |
 
 > 改名/合并脚本时按**五处同步**自查（本次改名的长尾教训）：① 同名测试文件；② `scripts-reference` 一览与详情小节；③ `folders.md` 目录树；④ CI/钩子/`release.py`/`test-runner` 等调用点；⑤ 文档与代码注释里的命令示例。机检覆盖 ②③④（一览覆盖、目录树双向、脚本存在性），①⑤ 靠本清单。
 >

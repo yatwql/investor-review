@@ -4,6 +4,15 @@
 访问（实现见 _traces_doc.dedup）；独立成包保证单文件行数守红线与内聚。
 """
 
+
+def _read_doc_impl(fpath):
+    """文档正文（进程内缓存由调用方/入口自行决定）：解码失败返回 None。"""
+    try:
+        return fpath.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
 from _traces_doc.dedup import (
     _CARD_LINE_RE,
     _CHECKLIST_LINE_RE,
@@ -34,4 +43,5 @@ __all__ = [
     "_normalize",
     "_window_is_structural",
     "scan_structural_duplicates",
+    "_read_doc_impl",
 ]
