@@ -9,6 +9,10 @@
 
 ## [0.14.6-dev] - 开发中（未发布）
 
+### Added
+
+- **报告收尾列出产物并支持一键打开**：E/B/L 生成完成后打印报告目录与已生成的 HTML / Excel，问一句「是否打开报告目录与报告？(y/N)」——`y`/`Y` 打开，**默认 N**（其余任何键含 `n`/回车/`Esc`/未知键均按 N），`Esc` 只跳过回菜单、`Ctrl+C` 沿用 TUI 约定退出，非 TTY 只列清单不询问。打开动作平台分派（`startfile`/`open`/`xdg-open`），失败不报错、降级为手动路径提示。取代原「按任意键返回菜单」：同样是按一下回菜单，但键义明确、不多一步（`R-TUI-09`）。
+
 ### Fixed
 
 - **`gate → publish` 的 verify 复用按构造永不命中**（v0.14.5 发版实测，等于每次白跑约 27s）：`code_fingerprint` 原用 `git diff HEAD` + `git status` 哈希，而 publish 会先提交 prepare 的改动再算指纹——HEAD 一变，同一份代码就得到两个指纹。改为 `CODE_PATHS`（`src` / `scripts` / `pyproject.toml` / `pytest.ini` / `requirements.txt`）下 **tracked + 未忽略未跟踪文件的内容 sha256**，提交前后一致；回归用例锁「提交前后同指纹 / 内容变化变指纹」。

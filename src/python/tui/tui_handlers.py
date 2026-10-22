@@ -19,7 +19,7 @@ from src.python.core.logger import setup_logger
 from src.python.core.reader import get_xlsx_info, list_xlsx_files, read_holdings_with_flows, require_holdings
 from src.python.report.progress import TuiProgressReporter
 from src.python.tui.tui_keys import PromptCancelledError, input_choice
-from src.python.tui.tui_menu import MENU_ITEMS, get_config_cache, press_any_key, refresh_config
+from src.python.tui.tui_menu import MENU_ITEMS, get_config_cache, refresh_config
 
 logger = setup_logger()
 
@@ -135,10 +135,16 @@ def prepare_holdings() -> "tuple[list, list, list] | None":
 
 
 def finish_report(reporter: TuiProgressReporter) -> None:
-    """报告生成收尾：错误摘要 → 耗时排行 → 按任意键。"""
+    """报告生成收尾：错误摘要 → 耗时排行 → 产物清单 + 是否打开（默认 N）。
+
+    单键作答即返回菜单：长输出仍停在一屏（先读完再重绘），用户看完顺手按 y 打开、
+    直接回车或按其它键则跳过——只按一次，不多一步。
+    """
     reporter.print_error_summary()
     reporter.print_timing_summary()
-    press_any_key()
+    from src.python.tui.report_artifacts import collect_artifacts, prompt_open_artifacts
+
+    prompt_open_artifacts(collect_artifacts(get_config_cache() or {}))
 
 
 # ── 文件选择 ──────────────────────────────────────────────

@@ -601,13 +601,22 @@ class TestCurrentIterationRecompute:
         line = next(ln for ln in main.splitlines() if ln.startswith("**当前迭代**"))
         assert line == "**当前迭代**：在办 3 项——P1 1 项（**plan-2**）、P2 1 项（**plan-3**）、P4 1 项（**plan-5**）。"
 
+    def test_done_marked_sections_not_counted(self, rel):
+        """已完成待归档（标题带 ✅）不计入「在办」——归档前后同一口径。"""
+        line = next(
+            ln for ln in rel.recompute_current_iteration(self._PLAN).splitlines() if ln.startswith("**当前迭代**")
+        )
+        # 样例共 5 节，其中两节已标 ✅ → 在办 3
+        assert "在办 3 项" in line
+        assert "plan-1/2" not in line and "plan-1、" not in line
+
     def test_phantom_id_in_summary_dropped(self, rel):
         """概述里残留的已归档/不存在编号随重算消失。"""
         line = next(
             ln for ln in rel.recompute_current_iteration(self._PLAN).splitlines() if ln.startswith("**当前迭代**")
         )
         assert "plan-128" not in line
-        assert "在办 5 项" in line
+        assert "在办 3 项" in line  # 5 节中 2 节已标 ✅
 
     def test_no_items_left(self, rel):
         text = "**当前迭代**：在办 2 项——P1 2 项（**plan-1/2**）。\n\n### P1 — 当前待办\n\n### P2 — 下一阶段就绪\n"

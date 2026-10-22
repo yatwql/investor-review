@@ -579,6 +579,7 @@
 | R-TUI-01 | `src/test/unit/ui/test_tui_menu.py` | 批 6 |
 | R-TUI-02 | `src/test/unit/ui/test_tui_menu.py` + `src/test/unit/ui/test_tui_keys.py` | 批 6 |
 | R-TUI-08 | `src/test/unit/ui/test_panel_runtime.py` + `src/test/unit/handlers/test_handlers_config_nav.py` | 批 6 |
+| R-TUI-09 | `src/test/unit/ui/test_report_artifacts.py` + `src/test/unit/ui/test_tui_handlers.py` | 批 6 |
 | R-TUI-06 | `src/test/unit/ui/test_tui_menu.py` + `src/test/unit/config/test_config.py` | 批 6 |
 | R-TUI-07 | `src/test/unit/ui/test_tui_menu.py::TestMainLoopExitKeys` | 批 6 |
 | R-TUI-03 | `src/test/unit/ui/test_tui_handlers.py` | 批 6 |
