@@ -29,7 +29,7 @@
 
 | 脚本 | 分类 | 一句话 |
 |:-----|:-----|:-------|
-| `test-runner.py` | 测试 | pytest 标记模式封装驱动，支持 17 种 `--mode` |
+| `test-runner.py` | 测试 | pytest 标记模式封装驱动，支持 18 种 `--mode`（含非 pytest 的 `portability` 探针模式） |
 | `extract-test-failures.py` | 测试 | 从 pytest-html 报告提取失败用例详情 |
 | `find-order-dependent-test.py` | 测试 | 单跑绿合跑红的顺序依赖污染源二分定位 |
 | `check-code-traces.py` | 质量 | 代码注释/文档字符串中历史变更痕迹检查 |
@@ -162,7 +162,14 @@ pytest 的 `-m` 标记表达式封装层，按 `--mode` 选择预定义组合。
 
 # 带行覆盖率
 .venv/bin/python scripts/test-runner.py --mode unit --coverage
+
+# CI portability job 的本地等价复现（隐式编码严格档 + 需求文件 locale 解码）
+.venv/bin/python scripts/test-runner.py --mode portability
 ```
+
+`--mode portability` 是唯一的**非 pytest 模式**：它跑两道探针（`PYTHONWARNDEFAULTENCODING=1` 单元套件、
+需求文件 BOM/PEP263 判定 + `LC_ALL=C` 下 `pip install --dry-run` 烟测），计数量按**探针项数**而非用例数；
+不进 bench 与门禁清单，需手动触发（本地通即与 CI `portability` job 同档）。
 
 **`collect-test-coverage.py` — 测试覆盖计数收集**
 

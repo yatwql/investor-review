@@ -177,7 +177,16 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 
 ### 编码/locale 自检（旧 pip 回退解码 / 隐式编码）
 
-本机与 CI 的常规三道测试全跑在 **UTF-8 locale** 上，因此「旧 pip 对含非 ASCII 的需求文件回退 locale 解码」与「未显式 `encoding=` 的文本 I/O」这两类缺陷在常规门禁上**结构性不可见**（中文 Windows cp936 用户首启就装不上依赖、报告写盘时静默变 GBK）。两道精确探针已入 CI `portability` job（阻塞），且都能在任意平台本地复现：
+本机与 CI 的常规三道测试全跑在 **UTF-8 locale** 上，因此「旧 pip 对含非 ASCII 的需求文件回退 locale 解码」与「未显式 `encoding=` 的文本 I/O」这两类缺陷在常规门禁上**结构性不可见**（中文 Windows cp936 用户首启就装不上依赖、报告写盘时静默变 GBK）。两道精确探针已入 CI `portability` job（阻塞），且都能在任意平台本地复现——**一条命令等价复现**：
+
+```bash
+# CI portability 等价复现：①隐式编码严格档（单元套件）+ ②需求文件 BOM/PEP263 判定 + LC_ALL=C 解析烟测
+.venv/bin/python scripts/test-runner.py --mode portability
+```
+
+> 该模式非 pytest 模式，计数量是**探针项数**；不进 bench/门禁清单，按需手动跑（改编码相关代码、动 `requirements.txt` 或 `pytest.ini` 编码选项后建议跑一次）。当前 pip ≥25 起默认按 UTF-8 解码需求文件，`LC_ALL=C` 烟测不再经过旧 pip 的 locale 回退分支，故模式内以**确定性判定（BOM/PEP263）**承担该缺陷类，并提示「完整判定需 pip ≤24.x」。
+
+如需逐条手工复现（排查探针本身是否失效时）：
 
 ```bash
 # ① 旧 pip（最后一版按「BOM → PEP263 cookie → locale 编码」解码）在非 UTF-8 locale 下真实解析需求文件：
@@ -193,6 +202,8 @@ PYTHONWARNDEFAULTENCODING=1 .venv/bin/python -m pytest src/test/unit -q
 > ①号命令在受 PEP 668（externally-managed-environment）系统级管理的解释器上会被拒：装进临时 venv 复现，或追加 `--break-system-packages`（`--dry-run` 不做实际安装，无风险）；CI 的 setup-python 环境不受此限。
 
 > 为何不直接跑 Windows runner：GitHub 的 `windows-latest` 是 en-US/cp1252（单字节，只会乱码不会报错），装不住 GBK 类 locale 回退；为何不在 ubuntu 上装 GB18030 跑全套件：中文**文件名**在 POSIX `fsencoding=ascii` 下会失败（18 处中文报表文件名），而 cp936 Windows 反而正常——那是探测方法的伪影，不是缺陷。两道探针因此取「精确模拟消费方」而非「换整个 locale 跑全套件」。
+
+> **CI 轮询纪律**：本地门禁（P0/P1/P2 + 必要时的 `--mode portability`）通过后，**不逐提交轮询 CI**——本地绿而 CI 红的来源本应只有环境差异（3.11/3.12/3.13 矩阵、`LC_ALL=C` locale 探针、系统库/可选依赖、`perf-gate`/`format` 等 CI 独有档）。为收口这类差集，portability 已可本地等价复现；其余档位仅在改动触及它们时才去看 CI 结果。
 
 > **钩子与守护输出的编码**：pre-commit 以 `export PYTHONUTF8=1` 统一守护子进程的日志编码，`scripts/_checklib.py` 导入时把非 UTF-8 的真实 stdout/stderr 收敛到 UTF-8（`_force_utf8_stream`，已 UTF-8 或 `StringIO` 桩零改写）——中文 Windows 上 stdout 重定向到文件按 locale ANSI（cp936）落盘，UTF-8 终端回放 `run_bg` 守护日志会成乱码；前台直打走控制台 `WriteConsoleW` 本就无损。
 
@@ -505,6 +516,21 @@ def test_tencent_quote_parses(self):
 - 录制产物进 git（每份几 KB ~ 百 KB），**不入门禁的 live 套件**；夹具刷新须走上面的显式开关。
 - 维护入口：`cassettes`（列出）/ `cassettes --verify`（离线回放 + 交当前解析器解析，失败退出码 2），见下节「CLI 子命令」。
 - 与「HTTP 客户端统一」约束的关系：回放寄生于「所有 HTTP 请求必须经 `core/http_client.py` 工厂」；绕过工厂自建客户端的 provider 不受回放替换，其用例会真实联网且静默通过。设计细节见 `technical.md` §2.6。
+
+##### 可移植性探针（`portability`，非 pytest 模式，不入门禁）
+
+`--mode portability` 复现 CI `portability` job 的两道探针（不是 pytest 套件，故**计数量是探针项数**，不进 bench 与三档门禁清单）：
+
+```bash
+.venv/bin/python scripts/test-runner.py --mode portability
+```
+
+| 探针 | 做什么 | 判定 |
+|:-----|:-------|:-----|
+| 隐式编码严格档 | `PYTHONWARNDEFAULTENCODING=1` 跑 `src/test/unit` | 任何缺 `encoding=` 的文本 I/O 立即失败（`pytest.ini` 把 `EncodingWarning` 升 error） |
+| 需求文件 locale 解码 | `requirements.txt` 的 BOM/PEP263 判定 + `LC_ALL=C` 下 `pip install --dry-run --no-deps -r` 烟测 | 无 BOM/cookie 即判失败；解析异常即判失败 |
+
+> 改编码相关代码、动 `requirements.txt` 或 `pytest.ini` 编码选项后建议跑一次——本地通即与 CI 该 job 同档；当前 pip ≥25 默认 UTF-8 解码需求文件，模式会提示「完整判定需 pip ≤24.x」，确定性判定（BOM/PEP263）始终生效。
 
 ##### 全量（`all`）
 
@@ -1409,7 +1435,7 @@ CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` /
 | `test` ×3 | 只在 3.11/3.12 红 | `SyntaxError`/新语法/`match` 特性 | 换版本跑（见 `pyproject` 的 `requires-python`） |
 | `test` ×3 | 本地绿、CI 红 | **仓库状态相关断言**（见下） | `git stash` 后跑，或 `git clean -xdf` 后重跑 |
 | `guards` | 单守护非零退出 | 守护名 + finding 行 | 本地跑同名 `--ci` |
-| `portability` | `EncodingWarning`/`UnicodeDecodeError` | 哪个文件的哪次 IO | `PYTHONWARNDEFAULTENCODING=1 pytest src/test/unit -q` |
+| `portability` | `EncodingWarning`/`UnicodeDecodeError` | 哪个文件的哪次 IO | `scripts/test-runner.py --mode portability`（等价复现两道探针；单看编码档可 `PYTHONWARNDEFAULTENCODING=1 pytest src/test/unit -q`） |
 | `perf-gate` | basic 模式 >60s | 阶段耗时排行 | `scripts/perf-test-report.py --gate` |
 | `format` | `ruff format --check` 有差异（**非阻塞**） | 文件列表 | `ruff format .` |
 

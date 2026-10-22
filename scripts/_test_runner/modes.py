@@ -141,6 +141,13 @@ MODES: dict[str, dict] = {
         "order": 16,
         "parallel": False,
     },
+    "portability": {
+        "desc": "CI portability 等价复现：隐式编码严格档 + 需求文件 locale 解码（探针项数计，非 pytest 模式）",
+        "probes": True,
+        "timeout_sec": 900,
+        "order": 17,
+        "parallel": False,
+    },
 }
 
 
@@ -228,6 +235,7 @@ _HELP_TEXT = """测试驱动脚本 — 统一运行 pytest 并输出结构化 HT
   python scripts/test-runner.py --mode unit              # 仅单元测试
   python scripts/test-runner.py --mode edge              # 仅边缘测试
   python scripts/test-runner.py --mode scenario,edge     # 多模式组合
+  python scripts/test-runner.py --mode portability       # CI portability 等价复现（隐式编码 + locale 解码探针）
   python scripts/test-runner.py --coverage               # 全量 + 覆盖率报告
   python scripts/test-runner.py --mode bench --machine-info  # 跨机器耗时采集（环境 + 各模式实测表格）
   python scripts/test-runner.py --mode bench --update-docs   # 采集并自动回填环境耗时对照表
@@ -256,7 +264,9 @@ _MODE_TABLE_ORDER: tuple[str, ...] = (
 )
 
 
-_BENCH_MODES: tuple[str, ...] = tuple(m for m in _MODE_TABLE_ORDER if m != "all") + ("all",)
+_BENCH_MODES: tuple[str, ...] = tuple(
+    m for m in _MODE_TABLE_ORDER if m != "all" and not MODES[m].get("probes")
+) + ("all",)
 
 
 #: 功能域中文标签 ↔ unit 子标记（单一来源）：collect-test-coverage 的功能域聚合

@@ -74,6 +74,13 @@ def run_mode(
     """
     mode_cfg = MODES.get(mode_key, {})
 
+    # 探针模式（非 pytest）：CI portability 的两道等价探针
+    if mode_cfg.get("probes"):
+        from _test_runner.portability import run_portability
+
+        return run_portability(mode_key, timeout_override=timeout_override, no_timeout=no_timeout,
+                               desc=mode_cfg.get("desc", ""))
+
     # 分阶段模式：若模式定义了 phases 则自动启用分阶段运行
     if "phases" in mode_cfg:
         return _run_phased(mode_cfg["phases"], mode_key, coverage, parallel_level, timeout_override, no_timeout)
