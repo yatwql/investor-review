@@ -37,6 +37,7 @@ from src.python.cli._handlers import (
     _handle_cassettes,
     _handle_check_sources,
     _handle_doctor,
+    _handle_health_history,
     _handle_report,
     _handle_view_logs,
     _handle_whatif,
@@ -70,6 +71,7 @@ __all__ = [
     "_handle_cassettes",
     "_handle_check_sources",
     "_handle_doctor",
+    "_handle_health_history",
     "_handle_report",
     "_handle_view_logs",
     "_handle_whatif",
@@ -188,7 +190,7 @@ def main() -> int:
     from src.python.config import get_config, init_config
 
     # 以下命令不初始化 config（配置损坏时仍须可用），命令行开关需单独应用
-    if args.command in ("check-sources", "view-logs", "doctor", "cassettes"):
+    if args.command in ("check-sources", "view-logs", "doctor", "cassettes", "health-history"):
         _prepare_early_exit_switches(args.experiment, args.feature)
 
     # cassettes 同样无需 config 且只读离线：维护已录制响应，不碰用户配置
@@ -197,6 +199,10 @@ def main() -> int:
 
     if args.command == "check-sources":
         return _handle_check_sources()
+
+    # health-history 无需 config：只读 data/state 下的健康历史快照
+    if args.command == "health-history":
+        return _handle_health_history(args)
 
     # view-logs 无需 config：配置损坏时仍可查看日志诊断
     if args.command == "view-logs":

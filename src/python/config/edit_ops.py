@@ -54,7 +54,6 @@ LLM_TUNING_SPECS: dict[str, dict] = {
         "kind": "int",
         "min": 1,
         "max": 4,
-        "default": 2,
         "label": "thinking 模块并发上限",
         "hint": "默认 2（两个 thinking 模块并行）；端点偶发空内容重试时改回 1（串行）",
     },
@@ -62,7 +61,6 @@ LLM_TUNING_SPECS: dict[str, dict] = {
         "kind": "int",
         "min": 1,
         "max": 8,
-        "default": 3,
         "label": "LLM 模块并发线程数",
         "hint": "默认 3；调高可提速但更易触发端点限速（429）",
     },
@@ -70,7 +68,6 @@ LLM_TUNING_SPECS: dict[str, dict] = {
         "kind": "int",
         "min": 0,
         "max": 5,
-        "default": 2,
         "label": "单请求重试次数",
         "hint": "默认 2（503/超时/网络异常）；429/403 归配额不重试",
     },
@@ -78,7 +75,6 @@ LLM_TUNING_SPECS: dict[str, dict] = {
         "kind": "int",
         "min": 0,
         "max": 600,
-        "default": 30,
         "label": "整链失败后的重试等待（秒）",
         "hint": "默认 30；0 表示不等待",
     },
@@ -86,7 +82,6 @@ LLM_TUNING_SPECS: dict[str, dict] = {
         "kind": "int",
         "min": 0,
         "max": 7200,
-        "default": 0,
         "label": "LLM 总时间预算（秒）",
         "hint": "默认 0（不启用）；超预算不再启动新模块，防单次报告拖成小时级",
     },
@@ -94,15 +89,23 @@ LLM_TUNING_SPECS: dict[str, dict] = {
         "kind": "float",
         "min": 0,
         "max": 10000,
-        "default": 0,
         "label": "LLM 日费用上限",
         "hint": "默认 0（不启用）；超限时交互渠道询问「用已有结果继续 / 中止」",
     },
 }
 
+
 #: 调优项 → 编辑白名单条目（同一份 spec 派生，避免范围/说明两处维护）
+def _tuning_default(key: str):
+    """调优项默认值（唯一来源：`_llm_settings_defaults._DEFAULT_LLM_SETTINGS`）。"""
+    from src.python.config._llm_settings_defaults import get_llm_setting_default
+
+    return get_llm_setting_default(key)
+
+
 _LLM_TUNING_WHITELIST = {
-    key: {**spec, "target": "llm_settings", "writer": "llm_scalar"} for key, spec in LLM_TUNING_SPECS.items()
+    key: {**spec, "default": _tuning_default(key), "target": "llm_settings", "writer": "llm_scalar"}
+    for key, spec in LLM_TUNING_SPECS.items()
 }
 
 config_edit_whitelist = {

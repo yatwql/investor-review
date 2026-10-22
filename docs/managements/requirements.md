@@ -142,7 +142,7 @@
 
 | 需求标识 | 需求描述 |
 |:---------|:---------|
-| R-DIAG-01 | CLI 提供 `view-logs` 子命令查看结构化运行日志：`--level`（最小级别阈值）、`--lines`（读取末尾行数上限，默认 5000）、`--since/--until`（时间前缀过滤）；无需 config（配置损坏时仍可查日志诊断）；输出每条 `time [LEVEL] message` |
+| R-DIAG-01 | CLI 提供 `view-logs` 子命令查看结构化运行日志：`--level`（最小级别阈值）、`--lines`（读取末尾行数上限，默认 5000）、`--since/--until`（时间前缀过滤）；无需 config（配置损坏时仍可查日志诊断）；输出每条 `time [LEVEL] message`；另提供 `health-history` 子命令查看数据源健康历史（`--limit` 默认 10、最小 1；`--json` 直出，字段与 Web `/api/health/history` 同源聚合一致；无记录为友好空态、读取失败退出码 2） |
 | R-DIAG-02 | TUI 主菜单提供「V 查看最近运行日志（可按级别筛选）」「H 查看数据源健康历史」两项：级别筛选、ERROR/WARNING 着色（NO_COLOR/TTY 检测自动降级无着色）、traceback 折叠为「⤷ 堆栈详情 +N 行」 |
 | R-DIAG-03 | Web 提供 `GET /api/logs` 与 `GET /api/health/history` 接口及「⑦ 日志查看」卡：级别校验（非法 400）、`lines` clamp [1,5000]、`since/until` 透传、读取失败 500；前端手动加载不自动轮询，`<details>` 原生折叠 + 级别配色，全程 `textContent`（防 XSS） |
 

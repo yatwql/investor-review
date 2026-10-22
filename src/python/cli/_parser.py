@@ -214,6 +214,22 @@ def _build_parser() -> argparse.ArgumentParser:
     check_p = sub.add_parser("check-sources", help="数据源健康检查（无需 config）")
     check_p.epilog = "示例:\n  check-sources    测试各数据源联通性"
 
+    # ── health-history 子命令 ──
+    health_p = sub.add_parser("health-history", help="数据源健康历史（最近 N 次采集，无需 config）")
+    health_p.add_argument(
+        "--limit",
+        type=int,
+        default=10,
+        help="显示最近多少次采集记录（默认 10）",
+    )
+    health_p.add_argument("--json", action="store_true", help="以 JSON 输出（供脚本消费）")
+    health_p.epilog = (
+        "示例:\n"
+        "  health-history             查看最近 10 次数据源健康历史\n"
+        "  health-history --limit 30  查看最近 30 次\n"
+        "  health-history --json      输出 JSON（与 Web /api/health/history 同字段）"
+    )
+
     # ── view-logs 子命令 ──
     logs_p = sub.add_parser("view-logs", help="查看结构化运行日志（无需 config）")
     logs_p.add_argument(

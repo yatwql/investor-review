@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.14.6-dev
-> **编号源**：`rf-next = 829`（新增问题取此编号，完成后更新为 +1；已用最大 rf-828，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 830`（新增问题取此编号，完成后更新为 +1；已用最大 rf-829，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -25,7 +25,17 @@
 > **测试文件口径**：阈值见 `developer-guide.md`「文件膨胀阈值」表（行数 >800 警告 / >1200 红线；测试项 >80 警告 / >120 红线）；≥1000 行即入本表。
 > **破线豁免**：无（`check-file-length.py --ci` 豁免在列 0 项）。
 
-> 当前无逼近红线档的文件（主程序 ≥700 / 脚本 ≥600 / 测试 ≥1000 均无在册项；警告级全集以 `check-file-length.py -v` 为准）。
+**逼近红线档处置登记**（余量 ≤30% 才入表；按「哪个任务最先触线」排序）：
+
+| 任务 | 文件 | 行数 / 余量 | 处置方向 |
+|------|------|------------|----------|
+| **rf-829** | `scripts/release.py` | 992 / **8**（红线 1000） | **优先**：把 `build_parser()`（约 77 行）+ `main()` 的 argparse 装配抽到 `_release/_cli.py`，常量随之下沉并 re-export；在拆分前**禁止**再向该文件加逻辑（任何新增都可能直接破线） |
+| **rf-829** | `src/python/core/doctor.py` | 734 / 266 | 日志与缓存探针（§`_check_logs_and_cache`）可独立成 `core/doctor_logs.py`，主模块只保留分组与渲染 |
+| **rf-829** | `src/python/web/handlers.py` | 709 / 291 | 路由按域拆分（`handlers_health.py`：health/doctor/logs；`handlers_reports.py`：生成/下载/历史），蓝图注册保持单源 |
+| **rf-829** | `src/test/unit/news/test_news_sources.py` | 477 / 723 | 已分片出 `test_news_dedup.py`（本次完成）；后续按「源元数据 / 抓取行为 / 标题判定」继续切 |
+| **rf-829** | `scripts/check-doc-traces.py` | 692 / 308 | 结构性冗余扫描已下沉 `_traces_doc/`，CLI 侧再收薄（参数与输出归 `_checklib`） |
+| **rf-829** | `scripts/check-style-guardrails.py` | 636 / 364 | 规则表与渲染分离（规则声明 → `_guardrails/rules.py`） |
+| **rf-829** | `scripts/test-perf-report.py` | 635 / 365 | 采样/统计/上屏三段拆分，采样复用 `core/perf` |。
 
 **已决策「维持现状」（已降到逼近档以下，不拆理由保留，行数随 `-v` 复核）**：
 

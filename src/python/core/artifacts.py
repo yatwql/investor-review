@@ -26,15 +26,19 @@ logger = logging.getLogger("invest")
 OPEN_TIMEOUT = 5.0
 
 
-def collect_artifacts(config: dict | None) -> tuple[Path, ...]:
-    """收集 ``output_dir`` 下已存在的最新产物（先 HTML 后 Excel，缺失者跳过）。
+def collect_artifacts(config: dict | None, output_dir: str | None = None) -> tuple[Path, ...]:
+    """收集输出目录下已存在的最新产物（先 HTML 后 Excel，缺失者跳过）。
+
+    Args:
+        config: 配置快照（读 ``output_dir``）。
+        output_dir: 显式覆盖（如 CLI ``--output``）；None/空串按配置解析。
 
     Returns:
         存在的产物路径元组；一个都没有时为空元组（调用方据此跳过展示）。
     """
     from src.python.config import resolve_output_dir
 
-    output_dir = Path(resolve_output_dir(config))
+    output_dir = Path(resolve_output_dir(config, output_dir))
     candidates = (output_dir / LATEST_HTML_NAME, output_dir / LATEST_XLSX_NAME)
     return tuple(path for path in candidates if path.is_file())
 

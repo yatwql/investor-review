@@ -44,7 +44,7 @@ def _llm_tuning_surface() -> list[dict]:
             {
                 "key": key,
                 "label": spec["label"],
-                "value": settings.get(key, spec.get("default")),
+                "value": settings.get(key, config_edit_whitelist[key].get("default")),
                 "min": spec.get("min"),
                 "max": spec.get("max"),
                 "hint": spec.get("hint", ""),

@@ -1108,7 +1108,19 @@ CLI 模式的便捷入口，跳过 TUI 界面，直接以命令行模式运行�
 .venv/bin/python -m src.python.cli check-sources
 ```
 
-**输出示例**：
+**`health-history` — 数据源健康历史**
+
+查看最近 N 次采集的健康记录（聚合单源 `core.perf.summarize_health_history`，与 TUI `[H]`、Web `/api/health/history` 同字段）；无需 config（只读 `data/state/`）。
+
+```bash
+.venv/bin/python -m src.python.cli health-history              # 最近 10 次
+.venv/bin/python -m src.python.cli health-history --limit 30   # 最近 30 次
+.venv/bin/python -m src.python.cli health-history --json       # 脚本消费
+```
+
+退出码：0=读取成功（含「暂无记录」空态），2=历史文件读取失败。
+
+**`check-sources` 输出示例**：
 
 ```
 数据源健康检查结果 (YYYY-MM-DD)

@@ -8,11 +8,15 @@
 from __future__ import annotations
 
 import argparse
+import json
+import logging
 import os
 import sys
 
-from src.python.core.num_utils import format_size
 from src.python.config import resolve_output_dir
+from src.python.core.num_utils import format_size
+
+logger = logging.getLogger("invest")
 
 # ── 退出码 ───────────────────────────────────────────────
 
@@ -297,11 +301,13 @@ def _handle_report(args: argparse.Namespace, config: dict) -> int:
     reporter.print_llm_cost_summary()
     reporter.print_cache_hit_summary()
 
-    # 产物清单（与 TUI 收尾同一 core 定位）：CLI 不弹「是否打开」，只给出可复制的绝对路径
-    _print_artifact_paths(config, args.output)
+    exit_code = result.exit_code
+    # 产物清单（与 TUI 收尾同一 core 定位）：CLI 不弹「是否打开」，只给出可复制的绝对路径。
+    # 严重失败时不列——目录里留的是上一次的产物，列出来会被误认为本次结果
+    if exit_code != _EXIT_SEVERE:
+        _print_artifact_paths(config, args.output)
 
     # 任务完成/失败通知（尽力而为：未配置静默跳过，任何异常不影响退出码）
-    exit_code = result.exit_code
     _notify_report_completion(args, config, exit_code, result)
     return exit_code
 
@@ -310,7 +316,7 @@ def _print_artifact_paths(config: dict, output_override: str | None) -> None:
     """打印本次已生成的报告产物路径（存在才列；无产物静默跳过）。"""
     from src.python.core.artifacts import collect_artifacts
 
-    artifacts = collect_artifacts(dict(config or {}, output_dir=resolve_output_dir(config, output_override)))
+    artifacts = collect_artifacts(config, output_override)
     if not artifacts:
         return
     print(f"产物目录: {resolve_output_dir(config, output_override)}")
@@ -467,6 +473,45 @@ def _handle_whatif(args: argparse.Namespace, config: dict) -> int:
         return _EXIT_SEVERE
 
     reporter.print_timing_summary()
+    return _EXIT_SUCCESS
+
+
+def _handle_health_history(args: argparse.Namespace) -> int:
+    """处理 health-history 子命令——数据源健康历史（最近 N 次采集）。
+
+    聚合逻辑单源在 `core.perf.summarize_health_history`（TUI `[H]` / Web
+    `/api/health/history` 同源），本函数只负责纯文本呈现与 `--json` 直出。
+
+    Returns:
+        int 退出码（0=读取成功，2=历史文件读取失败）
+    """
+    from src.python.core.perf import summarize_health_history
+
+    raw_limit = getattr(args, "limit", None)
+    limit = 10 if raw_limit is None else max(1, int(raw_limit))
+    try:
+        summaries = summarize_health_history(limit=limit)
+    except OSError as e:
+        logger.exception("读取数据源健康历史失败")
+        print(f"[ERR] 读取数据源健康历史失败: {e}")
+        return _EXIT_SEVERE
+
+    if getattr(args, "json", False):
+        print(json.dumps(summaries, ensure_ascii=False, indent=2))
+        return _EXIT_SUCCESS
+
+    if not summaries:
+        print("[!] 暂无数据源健康历史记录（生成一次报告后自动记录）")
+        return _EXIT_SUCCESS
+
+    print(f"数据源健康历史（最近 {len(summaries)} 次采集）")
+    for summary in summaries:
+        ts = str(summary.get("timestamp") or "").replace("T", " ")
+        ok_count, total, fail_count = summary["ok_count"], summary["total"], summary["fail_count"]
+        report_type = f"  |  {summary['report_type']}" if summary.get("report_type") else ""
+        print(f"  {ts}  {ok_count}/{total} 正常{report_type}  |  失败 {fail_count}")
+        if summary["failed_sources"]:
+            print(f"      失败源: {', '.join(summary['failed_sources'])}")
     return _EXIT_SUCCESS
 
 

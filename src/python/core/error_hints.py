@@ -9,6 +9,7 @@ Web 的信封 message 都取同一句话，避免同一故障在三个渠道三�
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 
 #: 网络类关键字（大小写不敏感）：命中即按「网络连接异常」提示
@@ -56,7 +57,7 @@ def hint_for(exc: BaseException | str | None) -> ErrorHint:
         return ErrorHint("文件未找到，请检查路径是否正确")
     if isinstance(exc, ImportError):
         return ErrorHint("模块加载失败，请检查依赖是否完整安装", "pip install -r requirements.txt", log_detail=True)
-    if isinstance(exc, ValueError) and "json" in type(exc).__name__.lower():
+    if isinstance(exc, json.JSONDecodeError):
         return ErrorHint("配置文件格式错误（JSON 语法错误）", "请检查配置文件是否为有效 JSON 格式")
     # 网络关键字先于泛型 ValueError：``ValueError("cannot connect to host")`` 是网络故障，
     # 说成「数据处理异常」会把用户引向错误方向

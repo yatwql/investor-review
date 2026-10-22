@@ -8,7 +8,7 @@
 
 本文档记录项目的实现计划。已完成的版本计划已归档，此处仅跟踪当前迭代中的工作。
 
-**当前迭代**：在办 5 项——P2 3 项（**plan-92/93/181**）、P3 1 项（**plan-70**）、P4 1 项（**plan-55**）。
+**当前迭代**：在办 4 项——P2 2 项（**plan-92/93**）、P3 1 项（**plan-70**）、P4 1 项（**plan-55**）。
 
 > **命名纪律（强制）**：重构/新增的变量名、函数名、注释与文档表述必须与新章节语义相关（如 `position_relationship`/`portfolio_history_drawdown`/`style_factor`/`action`），**绝对禁止用任务编号命名**（F 系列、plan-N、rf-N 等）。任务编号仅在本表作链接锚点，不进入实现层。
 
@@ -46,11 +46,11 @@
 
 **动作**：生成/刷新 `output_dir/index.html`（按日期列出 Excel/HTML 产物与打开链接），TUI 加「打开输出目录 / 最近报告」入口（与 rf-636 联动）；索引页不泄漏路径以外的本地信息，匿名化口径与报告一致
 
-#### `plan-181` CLI 缺「数据源健康历史」视图（TUI `[H]` / Web `/api/health/history` 已有）
+#### `plan-181` CLI 缺「数据源健康历史」视图（TUI `[H]` / Web `/api/health/history` 已有） ✅
 
 **现状与问题**：健康历史（最近 10 次采集的成功/失败源与降级原因）在 TUI 是 `[H]`、Web 是 `GET /api/health/history`，CLI 只有 `check-sources`（当前态快照）——同一事实在 CLI 侧不可得，排查「昨天那次为什么降级」只能靠翻 `data/state/` JSON 或日志。
 
-**动作**：CLI 增 `health-history` 子命令（或 `check-sources --history N`），输出委托 `core/perf.summarize_health_history`（TUI/Web 同源，不新写聚合）；支持 `--json` 便于脚本消费；补「同一份历史在三渠道字段一致」契约用例
+**动作**：CLI 增 `health-history` 子命令（`--limit` 默认 10、`--json`），渲染委托 `core/perf.summarize_health_history`（TUI/Web 同源，不新写聚合）；无需 config（配置损坏仍可查）
 
 #### `plan-182` CLI 缺「报告对话式追问」入口 ❌ 决策不做
 

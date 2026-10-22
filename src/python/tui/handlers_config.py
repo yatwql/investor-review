@@ -252,7 +252,7 @@ def _cmd_config_llm_tuning() -> None:
     编辑 API 同一白名单）；保存经 ``_apply_edit`` → 共享编辑层，校验强度与 Web 一致。
     """
     from src.python.config import get_llm_config
-    from src.python.config.edit_ops import LLM_TUNING_SPECS
+    from src.python.config.edit_ops import LLM_TUNING_SPECS, config_edit_whitelist
     from src.python.tui.panel_runtime import PanelItem, panel_loop
     from src.python.tui.prompt_text import panel_prompt
 
@@ -263,7 +263,7 @@ def _cmd_config_llm_tuning() -> None:
         spec = LLM_TUNING_SPECS[key]
 
         def _run() -> None:
-            current = llm.get(key, spec.get("default"))
+            current = llm.get(key, config_edit_whitelist[key].get("default"))
             print(f"  当前 {spec['label']}: {current}（范围 {spec['min']}~{spec['max']}）")
             if spec.get("hint"):
                 print(f"  {spec['hint']}")
@@ -286,7 +286,10 @@ def _cmd_config_llm_tuning() -> None:
         print(style_heading("  ── LLM 调优参数 ──"))
         for i, key in enumerate(keys, 1):
             spec = LLM_TUNING_SPECS[key]
-            print(f" {nav.marker(i - 1)} {i}. {spec['label']}（当前 {llm.get(key, spec.get('default'))}）")
+            print(
+                f" {nav.marker(i - 1)} {i}. {spec['label']}"
+                f"（当前 {llm.get(key, config_edit_whitelist[key].get('default'))}）"
+            )
         print(f" {nav.marker(len(keys))} 0. 返回")
         print()
         return []

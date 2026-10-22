@@ -9,12 +9,20 @@
 
 ## [0.14.6-dev] - 开发中（未发布）
 
+- **CLI `health-history` 子命令（plan-181）**：查看最近 N 次数据源健康记录（`--limit` 默认 10、`--json`），聚合单源 `core.perf.summarize_health_history`（与 TUI `[H]` / Web `/api/health/history` 同字段）；无需 config（配置损坏也能查），无记录为友好空态、读取失败退出码 2。至此 CLI/Web/TUI 的健康历史信息面一致。
+- **LLM 调优项默认值单源**：`LLM_TUNING_SPECS` 不再各写一份默认值，改为构造时从 `_DEFAULT_LLM_SETTINGS` 取（新增 `config.get_llm_setting_default`）——避免改出厂默认时两处漂移。
+
 ### Added
 
 - **CLI 收尾打印产物路径（plan-183）**：报告生成后输出「产物目录 + 各产物绝对路径」（定位下沉 `core/artifacts`，与 TUI 同一事实；不做交互，脚本不被阻塞）。
 - **Web 产物路径可复制（plan-183）**：结果区每个产物旁显示服务端绝对路径，点击即复制（浏览器与报告不同机，「打开目录」无意义）。
 - **LLM 调优参数面板（plan-184）**：`config/edit_ops.LLM_TUNING_SPECS` 声明 6 个可调键（thinking 并发 / 模块并发 / 重试 / 整链重试等待 / 总时间预算 / 日费用上限）及范围与说明；Web 配置面板新增「LLM 调优参数」组、TUI 新增 `[D]→[L]` 子项，保存走同一编辑层（超范围明确拒绝）；此前只能手改 JSON。
 - **报告收尾列出产物并支持一键打开**：E/B/L 生成完成后打印报告目录与已生成的 HTML / Excel，问一句「是否打开报告目录与报告？(y/N)」——`y`/`Y` 打开，**默认 N**（其余任何键含 `n`/回车/`Esc`/未知键均按 N），`Esc` 只跳过回菜单、`Ctrl+C` 沿用 TUI 约定退出，非 TTY 只列清单不询问。打开动作平台分派（`startfile`/`open`/`xdg-open`），失败不报错、降级为手动路径提示。取代原「按任意键返回菜单」：同样是按一下回菜单，但键义明确、不多一步（`R-TUI-09`）。
+
+- **CLI 产物清单不再在失败时误导**：仅在非严重失败（有产物可交付）时打印；`core.artifacts.collect_artifacts` 增加显式 `output_dir` 入参，CLI 不再靠「复制 config 字典改键」传覆盖值（`--output` 语义直连）。
+- **异常提示的 JSON 判定改类型判断**：`core.error_hints` 不再用异常类名字符串匹配 JSON 解析错误（类名一改即静默失效），改用 `isinstance(exc, json.JSONDecodeError)`。
+- **测试文件分片**：`test_news_sources.py` 1054 行 → 拆分出 `test_news_dedup.py`（标题判定算法/锚点写入去重/追加写与保留期），两文件均回落到红线以下；同步 folders 目录树。
+- **文件膨胀登记**：`scripts/release.py`（992 行，距 1000 红线仅 8 行）与其余超警告档文件登记 rf-829，写明优先拆分方案（grep/parse 装配下沉 `_release/_cli.py`），拆分前禁止再向该文件加逻辑。
 
 ### Fixed
 
