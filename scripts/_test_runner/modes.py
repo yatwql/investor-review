@@ -264,9 +264,9 @@ _MODE_TABLE_ORDER: tuple[str, ...] = (
 )
 
 
-_BENCH_MODES: tuple[str, ...] = tuple(
-    m for m in _MODE_TABLE_ORDER if m != "all" and not MODES[m].get("probes")
-) + ("all",)
+_BENCH_MODES: tuple[str, ...] = tuple(m for m in _MODE_TABLE_ORDER if m != "all" and not MODES[m].get("probes")) + (
+    "all",
+)
 
 
 #: 功能域中文标签 ↔ unit 子标记（单一来源）：collect-test-coverage 的功能域聚合
