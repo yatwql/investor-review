@@ -135,8 +135,9 @@ class TestBrandMark:
         """Excel 首页标题行嵌入标记（≤48px）；资源缺失时静默跳过不阻断报告。"""
         from openpyxl import Workbook
 
-        from src.python.report.summary import _BRAND_MARK_PX, _embed_brand_mark
+        from src.python.report.summary import _BRAND_MARK_PNG, _BRAND_MARK_PX, _embed_brand_mark
 
+        assert _BRAND_MARK_PNG.exists(), "品牌标记 PNG 资源缺失（应由 favicon.svg 栅格化后入库）"
         assert _BRAND_MARK_PX <= self.LIMITS["excel"], f"Excel 标记 {_BRAND_MARK_PX}px 超契约上限"
         wb = Workbook()
         ws = wb.active
@@ -162,12 +163,12 @@ class TestBrandMark:
         assert len(load_workbook(second).active._images) == 1
 
     def test_brand_mark_failure_is_silent(self, monkeypatch):
-        """栅格化失败不得让报告生成失败（品牌标记是增强，不是依赖）。"""
+        """资源缺失不得让报告生成失败（品牌标记是增强，不是依赖）——CI 无 cairo 也能出报告。"""
         from openpyxl import Workbook
 
         from src.python.report import summary
 
-        monkeypatch.setattr(summary, "_BRAND_MARK_SVG", REPO_ROOT / "no-such-file.svg")
+        monkeypatch.setattr(summary, "_BRAND_MARK_PNG", REPO_ROOT / "no-such-file.png")
         wb = Workbook()
         ws = wb.active
         summary._embed_brand_mark(ws)  # 不应抛出
