@@ -11,6 +11,8 @@
 
 ### Changed
 
+- **开发者指南 / 辅助脚本参考核对梳理（`rf-811`）**：修正 4 类不一致——① 指南启动行去掉不存在的 `dev-verify.sh` / `web.sh`（改为实际包装脚本）；② 顶层脚本 `factor_zoo_eval.py` 补一览行 + 诊断类详情（三指标判据 / 六个子命令 / 四条纪律 / `_factor_zoo/`）；③ 拆包实现点名（`_perf_view` / `_test_redundancy` / `_factor_zoo` / `_doc_drift`）；④ CLI 子命令行补 `cassettes`。另把「60+ 个辅助脚本」改为非数字表述，避免计数漂移。复核口径：一览表 ↔ 实际顶层脚本双向零差集。
+
 - **发布归档报错附期望格式（`rf-810`，补齐 `rf-808` 后半）**：`prepare` 的 changelog 归一步四类格式失败（缺开发段 / 缺归档章节 / 缺指针行 / 索引行改写失败）原本只报「格式与预期不符」，现统一附「期望：<样例行>」+「下一步：先跑 `release.py archive-init`」——指针行、索引行、开发段三种样例都写进提示，不翻代码即可改对。回归 3 例。
 
 - **缓存操作五职责拆分（`rf-86`）**：`cache/operations.py` 739 → **489 行**，缓存刷新族（公共缓存 / 新闻 / 基金经理 / 扩展缓存，13 个私有函数）下沉 `cache/_cache_refresh.py`（282 行）；原模块只留数据类、更新编排、清理、统计与预热。依赖单向（编排 → 刷新），`CacheUpdateResult` 用 TYPE_CHECKING + 函数内延迟导入避免环；测试 patch 按调用点区分（直接调刷新器 → `_cache_refresh`，经 `update_basic_cache` → `operations`）。P3 登记表清空。

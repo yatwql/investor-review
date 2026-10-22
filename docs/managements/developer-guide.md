@@ -1437,7 +1437,7 @@ CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` /
 4. 若升级涉及数据源库（如 openpyxl/httpx/pandas）：跑一次 `--mode dev-verify` 与 `scripts/smoke-web.py`；
 5. 记录到 `changelog.md`（写清版本号与已知行为变化），必要时在 [datasource-reliability.md](../manuals/datasource-reliability.md) 更新兼容性说明。
 ## 辅助脚本速查
-`scripts/` 下 60+ 个辅助脚本的**全量字典**（按用途分类、含设计逻辑与使用逻辑）已拆到独立文档：
+`scripts/` 下**全部顶层辅助脚本**（按用途分类、含设计逻辑与使用逻辑；实现拆包的条目在各节注明内部模块）已独立成文：
 **[辅助脚本参考（scripts-reference.md）](scripts-reference.md)** —— 需要查「某脚本干什么 / 怎么跑 / 何时跑」时看它。
 
 本指南只保留**最常用的十条**与按域索引。
@@ -1466,8 +1466,8 @@ CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` /
 | 代码与文件质量 | `check-code-traces.py` / `check-test-redundancy.py` / `check-task-numbering.py` / `check-file-length.py` / `check-version-consistency.py` / `check-style-guardrails.py` / `check-script-contract.py` | 痕迹、用例冗余、编号、行数红线、版本、样式护栏 |
 | 发布 | `release.py`（分步编排）/ `collect-test-coverage.py` | 发版全流程 |
 | 诊断 | `perf-test-report.py` / `perf-view.py` / `probe.py` / `check-sources`（CLI 子命令） / `doctor`（CLI 子命令） | 性能与数据源体检 |
-| 启动 | `launch.sh` / `launch.ps1` / `dev-verify.sh` / `cli.sh` / `web.sh` 等包装脚本 | 免解释器前缀的常用入口 |
-| CLI 子命令 | `report` / `cache` / `whatif` / `check-sources` / `view-logs` / `doctor` | 用户侧命令行入口（详见 [CLI 手册](../manuals/how-to-use-cli-mode.md)） |
+| 启动 | `launch.sh` / `launch.ps1`（TUI 与 `web` 子命令）/ `cli.sh` / `llm.sh` 及其 `.ps1` 版 | 免解释器前缀的常用入口 |
+| CLI 子命令 | `report` / `cache` / `whatif` / `check-sources` / `view-logs` / `doctor` / `cassettes` | 用户侧命令行入口（详见 [CLI 手册](../manuals/how-to-use-cli-mode.md)） |
 
 > 新增脚本时：同域分组入 [scripts-reference.md](scripts-reference.md) 的对应小节，并在上表「按域索引」里确认该域已覆盖。
 ## 关键纪律来源
