@@ -128,9 +128,6 @@ class TestInternalPackagesAreNamed:
 # ── 内容层：详情小节覆盖 + CLI 旗标真实性 ─────────────────────
 
 
-#: 允许「一览有条目、无独立详情小节」的条目（当前为空：所有脚本均有独立小节）
-_SECTIONLESS_OK: set[str] = set()
-
 #: 文档会提到的**外部工具**旗标（pip / pytest / git / pi 等，不经本仓脚本解析器）
 _EXTERNAL_FLAGS = {
     "--break-system-packages",
@@ -194,12 +191,10 @@ class TestDetailSections:
             for name in _overview_names()
             if name.endswith(".py")
             and not name.startswith("_")
-            and name not in _SECTIONLESS_OK
             and not re.search(rf"\*\*`{re.escape(name)}`", REFERENCE.read_text(encoding="utf-8"))
         )
-        assert missing == [], (
-            "以下脚本在一览表里有条目，但缺独立详情小节（或加入 _SECTIONLESS_OK 并说明理由）：\n"
-            + "\n".join(f"  - {name}" for name in missing)
+        assert missing == [], "以下脚本在一览表里有条目，但缺独立详情小节：\n" + "\n".join(
+            f"  - {name}" for name in missing
         )
 
 
