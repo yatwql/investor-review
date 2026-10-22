@@ -16,7 +16,7 @@
 | `standard` | **9696** | ~28s |
 | `scenario` | **291** | ~6s |
 | `regression` | **291** | ~10s |
-| `dev-verify` | **7525** | ~39s |
+| `dev-verify` | **7756** | ~39s |
 | `verify` | **10928** | ~29s |
 | `integration` | **342** | ~11s |
 | `edge` | **1164** | ~12s |

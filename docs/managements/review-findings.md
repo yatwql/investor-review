@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.14.2-dev
-> **编号源**：`rf-next = 812`（新增问题取此编号，完成后更新为 +1；已用最大 rf-811，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 813`（新增问题取此编号，完成后更新为 +1；已用最大 rf-812，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -44,6 +44,7 @@
 
 | # | 问题 | 处理 |
 |---|------|------|
+| **rf-812** | CI 自 `rf-86` 起连续 5 次红（仅 `portability` job）：`unit/news/test_news_fetch_limits.py` 的接线守卫把调用方路径写死为 `src/python/cache/operations.py`，而新闻刷新已随拆分迁到 `cache/_cache_refresh.py` → 断言恒假；同时 **P0 `dev-verify` 不覆盖 `unit_news`**，本地全绿而 CI 全红（test job 跑 dev-verify 亦绿，只有 portability 全量单元暴露） | 已修复：① 守卫改判据——按 **AST 调用关系**扫描「调用 `aggregate_news` 的模块必须引用 `news_fetch_limits`」，豁免定义体（`fetcher/news.py` 包装器 / `providers/news_aggregator.py`），并对「一个调用点都没找到」也断言（防判据失效变空壳）；② P0 `dev-verify` 组合纳入 `unit_news`（9 个 unit 子模块），关闭「news 域改动本地不拦」的盲区；③ 组合自检用例 `test_test_runner_modes.py` 的域清单同步补 `unit_news`（否则布尔等价对拍会 NameError）；④ 文档同步（指南两处构成表述）。复核：P0 `dev-verify` 7756 passed（含 unit_news 231 例，墙钟 +~1s）、全量 `pytest src/test/unit` 10912 passed |
 | **rf-811** | 开发者指南与辅助脚本参考核对出 4 类不一致：① 指南「按域索引」启动行列了**不存在的** `dev-verify.sh` / `web.sh`（实际包装脚本仅 `launch.sh`/`launch.ps1`/`cli.sh`/`llm.sh` 及 `.ps1` 版）；② `factor_zoo_eval.py`（顶层脚本）在两份文档中**零提及**（一览缺行、无详情小节）；③ 拆包实现未点名（`_perf_view` / `_test_redundancy` / `_factor_zoo` 未提，`_doc_drift` 在脚本参考里缺失）；④ 指南 CLI 子命令行漏 `cassettes`（脚本参考的 CLI 分节有） | 已修复：启动行改为实际包装脚本；`factor_zoo_eval.py` 补一览行 + 诊断类详情小节（三指标判据 / 六个子命令 / 四条纪律 / `_factor_zoo/` 实现包）；`check-test-redundancy` / `perf-view` 一览行点名 `_test_redundancy/` 与 `_perf_view/` 拆分，`check-doc-drift` 条目点名 `_doc_drift/`，`probe.py` 小节补旧入口垫片说明；CLI 子命令行补 `cassettes`；「60+ 个辅助脚本」改为非数字表述（顶层 33 个 + 内部实现包）。**复核口径已机检化**：新增 `unit/scripts/test_scripts_reference_coverage.py` 5 例——一览覆盖全部顶层脚本（含 .ps1 变体）/ 一览无虚指 / 指南按域索引点名的脚本必须存在 / 七域行各自点名条目 / 内部实现包逐个被参考文档点名（包清单从文件系统派生，不写死）+ 详情小节覆盖（每条须有加粗小节标题，垫片入白名单）= 7 例；另加「文档旗标真实性」——两文档提到的 `--flag` 必须能在 `scripts/**`/CLI 解析器的 AST 字面量里找到（否则多为改名/删除后文档滞留），外部工具旗标走白名单 |
 | **rf-810** | `rf-808` 的修复方向只落了前半（`archive-init` 骨架生成），后半「报错附期望格式样例」未做：`prepare` 的 changelog 归一步四类格式失败（缺开发段 / 缺归档章节 / 缺指针行 / 索引行改写失败）原本只报「格式与预期不符」，执行者须去读正则才能猜出正确写法 | 已修复：`_release/_changelog_archive.py` 新增 `_fmt_hint()` 与三个格式样例常量（指针行 / 索引行 / 开发段），四处报错统一附「期望：<样例>」+「下一步：先跑 `release.py archive-init`」；回归 3 例 （缺开发段 / 缺指针行 / 索引行格式不符各自断言样例与提示文案） |
 | **rf-86** | `src/python/cache/operations.py` 739 行：五职责混在一处——数据结构（3 个 dataclass）、缓存刷新族（公共缓存/新闻/基金经理/扩展缓存，13 个私有函数）、更新编排（basic/position/all）、清理、统计与预热 | 已修复：刷新族下沉 `cache/_cache_refresh.py`（282 行）——`_get_pool`、基金/行业/分红/盈利预测/行业资金流各刷新器与提示、`_refresh_common_caches`、新闻与基金经理/扩展缓存；`operations.py` **489 行**，只留数据类、更新编排（`update_basic_cache`/`update_position_cache`/`update_all_cache`）、清理、统计、预热。单向依赖：编排 → 刷新（`CacheUpdateResult` 用 TYPE_CHECKING + 函数内延迟导入避免与入口成环）；测试 patch 按调用点区分：直接调用刷新器的用例指向 `_cache_refresh`，经 `update_basic_cache` 的用例留在 `operations`。P3 登记表随之清空（无逼近红线档文件） |

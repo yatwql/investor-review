@@ -388,7 +388,7 @@ P0 问题必须在 commit 前解决，否则代码不应进入版本控制。P1 
 
 项目推荐的四道质量门禁，按开发阶段逐级收紧：
 
-- **提交前门禁（`--mode dev-verify` / P0）** — commit 前必须执行。组合 8 个 unit 子模块（unit_core/unit_providers/unit_fetcher/unit_analysis/unit_scripts/unit_web/unit_qa/unit_report，并行）+ 基础业务场景（`scenario_basic`），排除 edge/data 和极限场景。是编辑-验证循环中的正式屏障。
+- **提交前门禁（`--mode dev-verify` / P0）** — commit 前必须执行。组合 9 个 unit 子模块（unit_core/unit_providers/unit_fetcher/unit_news/unit_analysis/unit_scripts/unit_web/unit_qa/unit_report，并行）+ 基础业务场景（`scenario_basic`），排除 edge/data 和极限场景。是编辑-验证循环中的正式屏障。
 - **全场景回归（`--mode regression`）** — commit 前可选的全场景补充验证。覆盖全部 `scenario` 业务场景测试（S0a/S0b/S0d + S1-S33 + T1-T21），确保端到端用户路径不被破坏。推荐在改动了跨模块路径或数据流后补充运行。
 - **合入验证（`--mode verify` / P1）** — 准备合并到 master 前必须执行。覆盖 `unit_core`（核心基础设施：缓存引擎、数据模型、注册表）、`unit_providers`（数据源 Provider：腾讯、东方财富、天天基金等）、`unit_fetcher`（数据获取调度：价格、指数、行业分类）、`unit_config`（配置管理）、`unit_news`（新闻聚合）、`unit_llm`（LLM 模块）、`unit_analysis`（分析计算：流动性/再平衡/汇率/债券收益率等）、`unit_scripts`（工程脚本：历史痕迹/版本一致性/任务编号检查）、`unit_web`（Web 入口：上传/运行/进度/产物）、`unit_qa`（报告对话式追问：上下文提取/会话服务/报告页路由门）、`unit_report`（报告生成：Excel/HTML/模板/管线）十一个单元模块。确保数据从抓取→缓存→计算的整条管道通畅且正确。并行执行。场景测试已在 P0 dev-verify（基础场景）和 P2 verify,regression（全场景）中覆盖，P1 不重复。
 - **发布验证（`--mode regression`）** — 发布版本（打 tag/release）前必须执行。覆盖全部场景回归测试。
@@ -439,7 +439,7 @@ P0 问题必须在 commit 前解决，否则代码不应进入版本控制。P1 
 
 - **`--mode regression`** 与 `--mode scenario` 完全相同，但语义定位为"提交前回归验证"。建议在 git hook 或 CI 前置检查中使用此名称，使流水线意图更加清晰。
 - **`--mode integration`** 覆盖场景测试 + 集成测试（`scenario or integration`）。在全部业务场景基础上，增加模块间验证：接口契约、错误隔离、新闻流水线、缓存一致性、TUI 路由。用于修改了跨模块调用关系后的定向回归。CI test job 以 `pytest -m integration` 恒跑纯集成契约档（42 例 / 5.5s，不依赖分支条件），本地改跨模块时仍建议先行 `--mode integration`。
-- **`--mode dev-verify`** 提交前门禁模式（P0），组合 8 个 unit 子模块（unit_core/unit_providers/unit_fetcher/unit_analysis/unit_scripts/unit_web/unit_qa/unit_report，排除 edge/data）并行 + 基础业务场景（`scenario_basic`）。约 20s，适合开发者改完代码后随时跑。不包含极限场景（scenario_extreme）和 LLM/日期/容错等专项场景。
+- **`--mode dev-verify`** 提交前门禁模式（P0），组合 9 个 unit 子模块（unit_core/unit_providers/unit_fetcher/unit_news/unit_analysis/unit_scripts/unit_web/unit_qa/unit_report，排除 edge/data）并行 + 基础业务场景（`scenario_basic`）。约 20s，适合开发者改完代码后随时跑。不包含极限场景（scenario_extreme）和 LLM/日期/容错等专项场景。
 - **`--mode verify`** 合入门禁模式（`unit_core or unit_providers or unit_fetcher or unit_config or unit_news or unit_llm or unit_analysis or unit_scripts or unit_web or unit_qa or unit_report`），包含核心基础设施 + 数据源 Provider + 数据获取调度 + 配置管理 + 新闻聚合 + LLM 模块 + 分析计算 + 工程脚本 + Web 入口 + 报告对话式追问 + 报告生成的单元测试，共约 10s（并行执行）。场景测试由 P0 dev-verify（基础场景）和 P2 verify,regression（全场景）覆盖。
 
 ##### 专项验证系列（`edge` / `data` / `smoke`）

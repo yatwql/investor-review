@@ -11,6 +11,8 @@
 
 ### Changed
 
+- **修 CI 连红（`rf-812`）**：`unit/news/test_news_fetch_limits.py` 的接线守卫写死调用方路径（`cache/operations.py`），`rf-86` 拆分后新闻刷新移到 `cache/_cache_refresh.py` → 断言恒假，`portability` job 连红 5 次；而 P0 `dev-verify` 不含 `unit_news`，本地与 test job 均未拦住。现守卫改为 **AST 调用关系判据**（调用 `aggregate_news` 的模块必须引用 `news_fetch_limits`，定义体豁免，且「零调用点」也断言以防判据失效），并把 `unit_news` 纳入 `dev-verify` 组合（9 个子模块）。
+
 - **文档↔脚本清单覆盖机检化（`rf-811` 复核口径固化）**：新增 `unit/scripts/test_scripts_reference_coverage.py` 5 例，把「核对」变成可重跑的断言——① 一览覆盖全部顶层脚本（`.py`/`.sh`/`.ps1`，排除内部共享模块）；② 一览无虚指（指向的脚本必须存在）；③《开发者指南》「按域索引」点名的脚本必须存在（专防 `dev-verify.sh`/`web.sh` 这类幽灵条目）；④ 七域行各自至少点名一个条目；⑤ `scripts/_*/` 每个实现包须在参考文档点名（包清单从文件系统派生）。另补两例内容层检查：**详情小节覆盖**（每条一览条目须有加粗小节标题，薄垫片入白名单）与**旗标真实性**（两份文档提到的 `--flag` 必须能在 `scripts/**` 或 CLI 解析器的 AST 字面量里找到，外部工具旗标走白名单——防旗标改名后文档滞留）。反向验证：删一览行 / 写不存在的脚本 / 去掉包点名 / 注入幽灵旗标四处均能红。
 
 - **开发者指南 / 辅助脚本参考核对梳理（`rf-811`）**：修正 4 类不一致——① 指南启动行去掉不存在的 `dev-verify.sh` / `web.sh`（改为实际包装脚本）；② 顶层脚本 `factor_zoo_eval.py` 补一览行 + 诊断类详情（三指标判据 / 六个子命令 / 四条纪律 / `_factor_zoo/`）；③ 拆包实现点名（`_perf_view` / `_test_redundancy` / `_factor_zoo` / `_doc_drift`）；④ CLI 子命令行补 `cassettes`。另把「60+ 个辅助脚本」改为非数字表述，避免计数漂移。复核口径：一览表 ↔ 实际顶层脚本双向零差集。
