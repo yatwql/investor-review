@@ -1,6 +1,7 @@
-"""发布编排内部实现拆分（入口与 CLI 面保留在 `scripts/release.py`）。
+"""发布编排内部实现拆分（入口 `scripts/release.py` 保留命令实现与路径常量，CLI 装配在 `_cli`）。
 
 - `_common`：ReleaseError 与子进程执行原语（各步骤共享）
+- `_cli`：argparse 装配（`build_parser`）与命令分派（`run_cli`），bench 模式子集常量的声明点
 - `_versioning`：版本号解析/渲染纯函数（X.Y.Z-dev 推导与改写）
 - `_changelog_archive`：changelog 发布段迁出、归档追加与归档头部两行派生（纯文本变换）
 - `_archive_flow`：归档迁移的命令编排（显式 `ArchiveContext` 路径入参、先算后写、前置缺件清单）

@@ -42,6 +42,7 @@
 
 ### Changed
 
+- **`release.py` 逼近红线拆分（rf-829）**：argparse 装配下沉 `scripts/_release/_cli.py`——`build_parser()`（全部子命令与选项）与 `run_cli()`（解析/分派/计时/错误码），`RELEASE_BENCH_MODES` 随之下沉并由入口 re-export；`release.py` 992 → **906 行**（红线 1000，余量 8 → 94）。CLI 面与测试引用面不变（`release.build_parser` / `cmd_*` 仍在入口），`_release` 包说明与目录树同步。
 - **plan-182 决策不做**：CLI 的「一次命令 + 管道」形态不适合多轮追问，保留 TUI `[Q]` / Web `/api/qa/ask` 两个自然入口；脚本化场景走 Web API。
 - **`devbump` 默认推送 `origin dev`**：发布闭环的收尾就是「切版 + 同步远端」两步——上一版（v0.14.5）实测需人工补 `git push origin dev`，漏做会让本地领先远端一个提交。现 `devbump` 默认执行推送，需要本地先复核时用 `--no-push`（`--push` 保留为兼容别名、与省略等效）；推送失败**不回滚**已落盘的切版提交，但会报错并给出重试命令。CLI 默认值由用例锁定（`devbump` ⇒ push=True / `--no-push` ⇒ False）。
 

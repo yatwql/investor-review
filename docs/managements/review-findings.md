@@ -29,7 +29,7 @@
 
 | 任务 | 文件 | 行数 / 余量 | 处置方向 |
 |------|------|------------|----------|
-| **rf-829** | `scripts/release.py` | 992 / **8**（红线 1000） | **优先**：把 `build_parser()`（约 77 行）+ `main()` 的 argparse 装配抽到 `_release/_cli.py`，常量随之下沉并 re-export；在拆分前**禁止**再向该文件加逻辑（任何新增都可能直接破线） |
+| **rf-829** | `scripts/release.py` | 906 / 94（红线 1000） | argparse 装配已下沉 `_release/_cli.py`（`build_parser` + `run_cli`，`RELEASE_BENCH_MODES` 随之下沉并 re-export）；余量回到安全档，后续按常规红线约束 |
 | **rf-829** | `src/python/core/doctor.py` | 734 / 266 | 日志与缓存探针（`_check_logs_and_cache`）可独立成 `core/doctor_logs.py`，主模块只保留分组与渲染 |
 | **rf-829** | `src/python/web/handlers.py` | 709 / 291 | 路由按域拆分（`handlers_health.py`：health/doctor/logs；`handlers_reports.py`：生成/下载/历史），蓝图注册保持单源 |
 | **rf-829** | `src/test/unit/news/test_news_sources.py` | 477 / 723 | 已分片出 `test_news_dedup.py`（本次完成）；后续按「源元数据 / 抓取行为 / 标题判定」继续切 |
