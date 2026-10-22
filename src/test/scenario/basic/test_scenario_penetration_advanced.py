@@ -31,7 +31,7 @@ pytestmark = [pytest.mark.scenario, pytest.mark.scenario_basic, pytest.mark.usef
 
 @pytest.mark.scenario_basic
 @pytest.mark.scenario
-class TestSP5QDII(unittest.TestCase):
+class TestPenetrationQdii(unittest.TestCase):
     """S-P5：QDII 基金穿透 — 美股持仓穿透与板块映射。
 
     场景：持有纳指 QDII 基金，穿透为美股科技股。
@@ -210,7 +210,7 @@ class TestSP5QDII(unittest.TestCase):
 
 @pytest.mark.scenario_basic
 @pytest.mark.scenario
-class TestSP7QDIIIndexFund(unittest.TestCase):
+class TestPenetrationQdiiIndexFund(unittest.TestCase):
     """S-P7：基于国外指数的 QDII 基金穿透。
 
     场景：场外 QDII 指数基金（如标普500 QDII），穿透为美股成分股。
@@ -362,7 +362,7 @@ class TestSP7QDIIIndexFund(unittest.TestCase):
 
 @pytest.mark.scenario_basic
 @pytest.mark.scenario
-class TestSP8IndexLink(unittest.TestCase):
+class TestPenetrationIndexLink(unittest.TestCase):
     """S-P8：国内指数联接基金穿透。
 
     场景：持有沪深300 ETF 联接基金，穿透为指数前 10 大成分股。

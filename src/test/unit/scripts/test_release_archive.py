@@ -441,3 +441,133 @@ class TestPlanArchiveHeadingLevels:
         assert "plan-202" in main  # 在办节不外溢
         assert "## `plan-201` 某已完成任务 ✅" in archive  # 入档统一降为二级
         assert "#### `plan-201`" not in archive
+
+
+class TestReleaseTokenAccounting:
+    """发布台账 token 采集与统计：会话 JSONL 累计用量 → 台账字段 → 发布窗口增量。
+
+    口径（与 pi 的 session token 统计一致）：assistant 消息、非消息 usage（如
+    cache_warm）、compaction 摘要三类条目都计入会话累计；窗口用量以「上一次
+    devbump」为界，跨会话（agent 重启、累计归零）按正增量分段累加。
+    """
+
+    @staticmethod
+    def _session_file(tmp_path, entries):
+        import json
+
+        path = tmp_path / "session.jsonl"
+        path.write_text("\n".join(json.dumps(e, ensure_ascii=False) for e in entries) + "\n", encoding="utf-8")
+        return path
+
+    def test_sums_three_entry_kinds(self, rel, tmp_path):
+        path = self._session_file(
+            tmp_path,
+            [
+                {
+                    "type": "message",
+                    "message": {
+                        "role": "assistant",
+                        "usage": {
+                            "input": 100,
+                            "output": 20,
+                            "cacheRead": 300,
+                            "cacheWrite": 10,
+                            "totalTokens": 420,
+                            "cost": {"total": 0.05},
+                        },
+                    },
+                },
+                {"type": "message", "message": {"role": "user"}},  # 用户消息无 usage，跳过
+                {
+                    "type": "usage",
+                    "kind": "cache_warm",
+                    "usage": {"input": 0, "output": 0, "cacheRead": 50, "totalTokens": 50, "cost": {"total": 0.001}},
+                },
+                {"type": "compaction", "usage": {"input": 5, "output": 5, "totalTokens": 10, "cost": {"total": 0.002}}},
+            ],
+        )
+        usage = rel.session_usage(path)
+        assert usage["input"] == 105 and usage["output"] == 25
+        assert usage["cache_read"] == 350 and usage["cache_write"] == 10
+        assert usage["total"] == 480
+        assert abs(usage["cost"] - 0.053) < 1e-9
+
+    def test_missing_file_and_bad_lines_are_tolerated(self, rel, tmp_path):
+        assert rel.session_usage(None) == {}
+        assert rel.session_usage(tmp_path / "nope.jsonl") == {}
+        bad = tmp_path / "bad.jsonl"
+        bad.write_text("{not json}\n\n[1,2]\n", encoding="utf-8")
+        assert rel.session_usage(bad) == {}  # 无可解析用量 → 空（调用方据此省略字段）
+
+    def test_record_carries_cumulative_usage(self, rel):
+        usage = {"input": 1, "output": 2, "cache_read": 3, "cache_write": 4, "total": 10, "cost": 0.01}
+        record = rel.build_record(command="gate", elapsed_s=1.0, ok=True, version="1.0.0", session_usage=usage)
+        assert record["session_usage"] == usage
+        bare = rel.build_record(command="gate", elapsed_s=1.0, ok=True, version="1.0.0")
+        assert "session_usage" not in bare  # 非 agent 环境下省略，保持旧台账形状
+
+    def test_window_usage_uses_last_devbump_as_boundary(self, rel):
+        rows = [
+            {"command": "devbump", "session_usage": {"input": 100, "output": 10, "total": 110, "cost": 0.1}},
+            {"command": "check", "session_usage": {"input": 300, "output": 50, "total": 350, "cost": 0.5}},
+            {"command": "publish", "session_usage": {"input": 600, "output": 90, "total": 690, "cost": 0.9}},
+        ]
+        used = rel.release_token_usage(rows)
+        assert used["input"] == 500 and used["output"] == 80
+        assert used["total"] == 580
+        assert abs(used["cost"] - 0.8) < 1e-9
+
+    def test_window_usage_handles_session_reset(self, rel):
+        """agent 重启后累计归零：按正增量分段累加，不出现负数。"""
+        rows = [
+            {"command": "devbump", "session_usage": {"input": 100, "output": 10, "total": 110, "cost": 0.1}},
+            {"command": "check", "session_usage": {"input": 40, "output": 5, "total": 45, "cost": 0.04}},
+            {"command": "publish", "session_usage": {"input": 70, "output": 9, "total": 79, "cost": 0.07}},
+        ]
+        used = rel.release_token_usage(rows)
+        assert used["input"] == 70 and used["total"] == 79
+
+    def test_no_window_after_latest_devbump(self, rel):
+        rows = [{"command": "devbump", "session_usage": {"total": 10}}]
+        assert rel.release_token_usage(rows) == {}
+        assert rel.format_tokens({}) == ""
+
+
+class TestReleaseAgentIdentity:
+    """发布台账记录执行环境身份（provider / model / thinking / session）。
+
+    回答「这版是哪个模型、什么思考档发的」——跨模型对比发布成本与质量时需要它；
+    非 agent 环境（CI / 手动 shell）变量缺失时字段整体省略，台账形状不变。
+    """
+
+    def test_identity_from_env(self, rel):
+        env = {
+            "PI_PROVIDER": "deepseek",
+            "PI_MODEL": "deepseek-flash",
+            "PI_REASONING_LEVEL": "high",
+            "PI_SESSION_ID": "abc-123",
+        }
+        assert rel.agent_identity(env) == {
+            "provider": "deepseek",
+            "model": "deepseek-flash",
+            "thinking": "high",
+            "session_id": "abc-123",
+        }
+
+    def test_identity_absent_in_non_agent_env(self, rel):
+        assert rel.agent_identity({}) == {}
+        # 空白值同样视为缺失（不写空串进台账）
+        assert rel.agent_identity({"PI_MODEL": "   "}) == {}
+
+    def test_record_carries_agent_and_omits_when_absent(self, rel):
+        agent = {"provider": "p", "model": "m", "thinking": "low", "session_id": "s"}
+        record = rel.build_record(command="gate", elapsed_s=1.0, ok=True, version="1.0.0", agent=agent)
+        assert record["agent"] == agent
+        assert "agent" not in rel.build_record(command="gate", elapsed_s=1.0, ok=True, version="1.0.0")
+
+    def test_format_agent_label(self, rel):
+        assert rel.format_agent({"provider": "deepseek", "model": "deepseek-flash", "thinking": "high"}) == (
+            "deepseek/deepseek-flash（thinking=high）"
+        )
+        assert rel.format_agent({"model": "m"}) == "m"  # 无 provider/thinking 时的退化形态
+        assert rel.format_agent({}) == ""

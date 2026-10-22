@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.14.1
+> 文档版本：0.14.2
 
 ## 概述
 
@@ -388,7 +388,7 @@ P0 问题必须在 commit 前解决，否则代码不应进入版本控制。P1 
 
 项目推荐的四道质量门禁，按开发阶段逐级收紧：
 
-- **提交前门禁（`--mode dev-verify` / P0）** — commit 前必须执行。组合 8 个 unit 子模块（unit_core/unit_providers/unit_fetcher/unit_analysis/unit_scripts/unit_web/unit_qa/unit_report，并行）+ 基础业务场景（`scenario_basic`），排除 edge/data 和极限场景。是编辑-验证循环中的正式屏障。
+- **提交前门禁（`--mode dev-verify` / P0）** — commit 前必须执行。组合 9 个 unit 子模块（unit_core/unit_providers/unit_fetcher/unit_news/unit_analysis/unit_scripts/unit_web/unit_qa/unit_report，并行）+ 基础业务场景（`scenario_basic`），排除 edge/data 和极限场景。是编辑-验证循环中的正式屏障。
 - **全场景回归（`--mode regression`）** — commit 前可选的全场景补充验证。覆盖全部 `scenario` 业务场景测试（S0a/S0b/S0d + S1-S33 + T1-T21），确保端到端用户路径不被破坏。推荐在改动了跨模块路径或数据流后补充运行。
 - **合入验证（`--mode verify` / P1）** — 准备合并到 master 前必须执行。覆盖 `unit_core`（核心基础设施：缓存引擎、数据模型、注册表）、`unit_providers`（数据源 Provider：腾讯、东方财富、天天基金等）、`unit_fetcher`（数据获取调度：价格、指数、行业分类）、`unit_config`（配置管理）、`unit_news`（新闻聚合）、`unit_llm`（LLM 模块）、`unit_analysis`（分析计算：流动性/再平衡/汇率/债券收益率等）、`unit_scripts`（工程脚本：历史痕迹/版本一致性/任务编号检查）、`unit_web`（Web 入口：上传/运行/进度/产物）、`unit_qa`（报告对话式追问：上下文提取/会话服务/报告页路由门）、`unit_report`（报告生成：Excel/HTML/模板/管线）十一个单元模块。确保数据从抓取→缓存→计算的整条管道通畅且正确。并行执行。场景测试已在 P0 dev-verify（基础场景）和 P2 verify,regression（全场景）中覆盖，P1 不重复。
 - **发布验证（`--mode regression`）** — 发布版本（打 tag/release）前必须执行。覆盖全部场景回归测试。
@@ -439,7 +439,7 @@ P0 问题必须在 commit 前解决，否则代码不应进入版本控制。P1 
 
 - **`--mode regression`** 与 `--mode scenario` 完全相同，但语义定位为"提交前回归验证"。建议在 git hook 或 CI 前置检查中使用此名称，使流水线意图更加清晰。
 - **`--mode integration`** 覆盖场景测试 + 集成测试（`scenario or integration`）。在全部业务场景基础上，增加模块间验证：接口契约、错误隔离、新闻流水线、缓存一致性、TUI 路由。用于修改了跨模块调用关系后的定向回归。CI test job 以 `pytest -m integration` 恒跑纯集成契约档（42 例 / 5.5s，不依赖分支条件），本地改跨模块时仍建议先行 `--mode integration`。
-- **`--mode dev-verify`** 提交前门禁模式（P0），组合 8 个 unit 子模块（unit_core/unit_providers/unit_fetcher/unit_analysis/unit_scripts/unit_web/unit_qa/unit_report，排除 edge/data）并行 + 基础业务场景（`scenario_basic`）。约 20s，适合开发者改完代码后随时跑。不包含极限场景（scenario_extreme）和 LLM/日期/容错等专项场景。
+- **`--mode dev-verify`** 提交前门禁模式（P0），组合 9 个 unit 子模块（unit_core/unit_providers/unit_fetcher/unit_news/unit_analysis/unit_scripts/unit_web/unit_qa/unit_report，排除 edge/data）并行 + 基础业务场景（`scenario_basic`）。约 20s，适合开发者改完代码后随时跑。不包含极限场景（scenario_extreme）和 LLM/日期/容错等专项场景。
 - **`--mode verify`** 合入门禁模式（`unit_core or unit_providers or unit_fetcher or unit_config or unit_news or unit_llm or unit_analysis or unit_scripts or unit_web or unit_qa or unit_report`），包含核心基础设施 + 数据源 Provider + 数据获取调度 + 配置管理 + 新闻聚合 + LLM 模块 + 分析计算 + 工程脚本 + Web 入口 + 报告对话式追问 + 报告生成的单元测试，共约 10s（并行执行）。场景测试由 P0 dev-verify（基础场景）和 P2 verify,regression（全场景）覆盖。
 
 ##### 专项验证系列（`edge` / `data` / `smoke`）
@@ -1330,7 +1330,7 @@ registry 的测试在 `src/test/unit/core/test_registry.py`，验证 TTL 默认�
 
 发布版本时，按以下六步顺序执行：
 
-> 可用 `scripts/release.py` 分步编排（发布流程的可执行封装，每步独立可审阅、失败即停）：`check`（预检）→ `archive-init`（**仅新小版本首发需要**：三份归档 + 目录树块 + 三处索引行一次建齐，幂等）→ `prepare`（版本全链、changelog 发布段归档**并自动重写归档头部「涵盖版本 / 归档时间」（区间与并入记录由归档内各发布段标题派生，无需人工维护）与主文件指针的版本号/日期/归档文件名**、一致性 `--fix`，收尾自动 `doc-drift --sync`）→ `refresh` + `evolution --release`（数据刷新——纯文档变更〔仅 `.md`/图片〕自动跳过 bench+collect，`--force-refresh` 强制；演进快照，evolution 收尾同样自动 sync）→ `gate`（P2 门禁，十守护并行且并发度随核数收敛 ≤4 路）→ `publish --title`（release 提交 + P1 verify + `--no-ff` 合并 + tag）→ `devbump`（切开发版，并清空上一版迁档占位节）；bench 默认只测发布子集四档（`--full-bench` 全量）、每命令耗时入 `logs/release.jsonl` 台账（发布墙钟可跳版本对拍）；rf/plan/docs-plan 归档迁移的**机械部分已由 `prepare` 自动完成**（人工只复核条目归属与设计文件判定，见下方步骤③），`gate` 会断言该版本台账已迁完、未迁则前置中止；`prepare` 不跨版本发布（`--version` 与开发链推导值不一致时立即中止并给四步指引）；**分层纪律**：归档迁移或任何涉及管理文档/代码注释的改动完成后，进 `gate` 前先跑秒级便宜守护（至少 `check-doc-traces --ci` + `check-doc-links --ci`，改动面大时十守护全跑）——守护发现前置，避免 P2 门禁的全量 regression 因文档级 finding 白跑第二轮。下列手动命令为底层口径，脚本失败时按手动步骤排查。
+> 可用 `scripts/release.py` 分步编排（发布流程的可执行封装，每步独立可审阅、失败即停）：`check`（预检）→ `archive-init`（**仅新小版本首发需要**：三份归档 + 目录树块 + 三处索引行一次建齐，幂等）→ `prepare`（版本全链、changelog 发布段归档**并自动重写归档头部「涵盖版本 / 归档时间」（区间与并入记录由归档内各发布段标题派生，无需人工维护）与主文件指针的版本号/日期/归档文件名**、一致性 `--fix`，收尾自动 `doc-drift --sync`）→ `refresh` + `evolution --release`（数据刷新——纯文档变更〔仅 `.md`/图片〕自动跳过 bench+collect，`--force-refresh` 强制；演进快照，evolution 收尾同样自动 sync）→ `gate`（P2 门禁，十守护并行且并发度随核数收敛 ≤4 路）→ `publish --title`（release 提交 + P1 verify + `--no-ff` 合并 + tag）→ `devbump`（切开发版，并清空上一版迁档占位节）；bench 默认只测发布子集四档（`--full-bench` 全量）、每命令耗时、执行环境（provider/model/thinking）与 agent 会话 token 累计入 `logs/release.jsonl` 台账（发布墙钟、token 成本与执行模型均可跳版本对拍）；rf/plan/docs-plan 归档迁移的**机械部分已由 `prepare` 自动完成**（人工只复核条目归属与设计文件判定，见下方步骤③），`gate` 会断言该版本台账已迁完、未迁则前置中止；`prepare` 不跨版本发布（`--version` 与开发链推导值不一致时立即中止并给四步指引）；**分层纪律**：归档迁移或任何涉及管理文档/代码注释的改动完成后，进 `gate` 前先跑秒级便宜守护（至少 `check-doc-traces --ci` + `check-doc-links --ci`，改动面大时十守护全跑）——守护发现前置，避免 P2 门禁的全量 regression 因文档级 finding 白跑第二轮。下列手动命令为底层口径，脚本失败时按手动步骤排查。
 
 **① 版本号一致**
 
@@ -1437,7 +1437,7 @@ CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` /
 4. 若升级涉及数据源库（如 openpyxl/httpx/pandas）：跑一次 `--mode dev-verify` 与 `scripts/smoke-web.py`；
 5. 记录到 `changelog.md`（写清版本号与已知行为变化），必要时在 [datasource-reliability.md](../manuals/datasource-reliability.md) 更新兼容性说明。
 ## 辅助脚本速查
-`scripts/` 下 60+ 个辅助脚本的**全量字典**（按用途分类、含设计逻辑与使用逻辑）已拆到独立文档：
+`scripts/` 下**全部顶层辅助脚本**（按用途分类、含设计逻辑与使用逻辑；实现拆包的条目在各节注明内部模块）已独立成文：
 **[辅助脚本参考（scripts-reference.md）](scripts-reference.md)** —— 需要查「某脚本干什么 / 怎么跑 / 何时跑」时看它。
 
 本指南只保留**最常用的十条**与按域索引。
@@ -1466,8 +1466,8 @@ CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` /
 | 代码与文件质量 | `check-code-traces.py` / `check-test-redundancy.py` / `check-task-numbering.py` / `check-file-length.py` / `check-version-consistency.py` / `check-style-guardrails.py` / `check-script-contract.py` | 痕迹、用例冗余、编号、行数红线、版本、样式护栏 |
 | 发布 | `release.py`（分步编排）/ `collect-test-coverage.py` | 发版全流程 |
 | 诊断 | `perf-test-report.py` / `perf-view.py` / `probe.py` / `check-sources`（CLI 子命令） / `doctor`（CLI 子命令） | 性能与数据源体检 |
-| 启动 | `launch.sh` / `launch.ps1` / `dev-verify.sh` / `cli.sh` / `web.sh` 等包装脚本 | 免解释器前缀的常用入口 |
-| CLI 子命令 | `report` / `cache` / `whatif` / `check-sources` / `view-logs` / `doctor` | 用户侧命令行入口（详见 [CLI 手册](../manuals/how-to-use-cli-mode.md)） |
+| 启动 | `launch.sh` / `launch.ps1`（TUI 与 `web` 子命令）/ `cli.sh` / `llm.sh` 及其 `.ps1` 版 | 免解释器前缀的常用入口 |
+| CLI 子命令 | `report` / `cache` / `whatif` / `check-sources` / `view-logs` / `doctor` / `cassettes` | 用户侧命令行入口（详见 [CLI 手册](../manuals/how-to-use-cli-mode.md)） |
 
 > 新增脚本时：同域分组入 [scripts-reference.md](scripts-reference.md) 的对应小节，并在上表「按域索引」里确认该域已覆盖。
 ## 关键纪律来源

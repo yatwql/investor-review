@@ -40,7 +40,7 @@
 | `check-doc-drift.py` | 文档 | 文档与实现一致性校验（章节表/章节数量、开关表/分组计数/默认值断言、配置与 LLM 默认值表、TUI 面板编号、目录树、项目统计表；`--sync` 自动回写统计快照） |
 | `check-doc-links.py` | 文档 | 文档链接与结构一致性校验（死链/死锚点/重复标题/层级/编号序列/§引用） |
 | `check-file-length.py` | 质量 | 单文件行数红线守护（主程序/脚本 >1000 行 / 测试 >1200 行；豁免登记与 review-findings 挂账同步，`-v` 输出可选优化区间清单供登记表派生） |
-| `check-test-redundancy.py` | 测试 | 测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言） |
+| `check-test-redundancy.py` | 测试 | 测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言；实现拆在 `_test_redundancy/`——八类检查各一模块 + 共用 AST 原语 + 事实缓存 + 编排，入口只留 CLI） |
 | `check-requirement-trace.py` | 测试 | 需求 ID ↔ 验证载体追溯（单段 ID 全域覆盖 / 载体文件存在 / ID 双向一致） |
 | `install-claude-hook.py` | 测试 | 安装/卸载 Claude Code PostToolUse hook（任务编号一致性自动校验） |
 | `llm-hallucination-sampler.py` | 测试 | 10 组标准持仓 × LLM 幻觉率采样（薄 CLI，实现在 `_halluc_sampler/` 包） |
@@ -52,9 +52,10 @@
 | `check-script-contract.py` | 质量 | scripts 顶层脚本契约机检（退出码声明 ⊆ {0,2} 白名单、check-* 统一 `add_common_args` CLI 面、文本 I/O 显式 encoding、脚本↔测试覆盖映射，四条规则——**观察期**未入钩子与 CI） |
 | `release.py` | 发布 | 发布流程分步编排（check / archive-init〔新小版本归档骨架：三份归档 + 目录树块 + 三处索引行，幂等〕/ prepare〔含台账与设计文件归档迁移；不跨版本发布，`--version` 与推导值不一致即中止并给指引〕/ refresh / evolution / gate / publish / devbump，每步独立可审阅、失败即停；refresh 纯文档变更跳过 bench+collect（`--force-refresh` 强制）、bench 默认只测发布子集四档（`--full-bench` 全量）、gate 十守护并行且随核数收敛 ≤4 路并断言归档已迁完；devbump 切版后清空上一版迁档占位节；每命令耗时入 `logs/release.jsonl` 台账） |
 | `perf-test-report.py` | 诊断 | 端到端报告生成管线性能基准（独立脚本，mock 外部数据源） |
-| `perf-view.py` | 诊断 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 时段聚合（耗时与费用合计/环比）/机读输出（llm_cost、by_period 费用字段）） |
+| `perf-view.py` | 诊断 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 时段聚合（耗时与费用合计/环比）/机读输出（llm_cost、by_period 费用字段）；实现拆在 `_perf_view/`——`stats.py` 统计原语 / `data.py` 派生 / `report.py` 渲染 / `cli.py` 入口，主入口只留 docstring 与 re-export） |
 | `probe.py` | 诊断 | 探测统一入口（按 target 分发到 `probes/` 子模块；新探针实现契约面登记即用） |
 | `probe-csi-factor-indices.py` / `probe-push2.py` | 诊断 | 旧入口兼容垫片（薄委托到 `probes/csi.py` / `probes/push2.py`，用法不变） |
+| `factor_zoo_eval.py` | 诊断 | 因子动物园目录评测（非生产代码；五个来源族各抽 5 个因子，评测 A 字段可得率 / B 与既有信号族增量 / C 全量计算耗时占比三项指标，A/B/C 全过才转正立项；子命令 catalog / fields / signals / timing / verdict / all，产物只落 `docs/tmp/factor-zoo/`；实现拆在 `_factor_zoo/`） |
 | `check-svg.py` | 诊断 | README SVG 架构图检查（子命令 `geom` 几何 / `pixel` 像素 / `text-overflow` 文字色越界；像素子命令需 Pillow） |
 | `_checklib.py` | 内部 | 检查脚本共享设施（统一 `-v/--ci` 契约与 `[OK]`/`[ERR]` 输出、`rel()`、`report()`、文档区间与表格解析） |
 | `_test_runner/` | 内部 | 测试驱动内部实现包（paths / modes / pytest_env / machine_info / doc_writer / report_html / runner） |
@@ -411,6 +412,8 @@ sh .githooks/install-hooks.sh --off   # 停用
 > **何时跑**：`git commit` 时由 pre-commit 钩子按暂存域自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` job 恒跑全量兜底。
 
 **`check-doc-drift.py` — 文档与实现一致性检查**
+
+> 实现拆在 `_doc_drift/`（章节/开关/目录树/归档索引/分区纪律等各检查族一模块，入口只留 CLI 与编排）。
 
 **设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
 
@@ -787,7 +790,7 @@ sym |= set(re.findall(r'^\s{0,8}["\']([a-z][a-z0-9_]{2,})["\']\s*:', src, re.M))
 
 **bench 范围（refresh）**：默认只测发布口径关心的四档 `unit` / `dev-verify` / `regression` / `integration`——全量十四档串行约 5.5 min（2 路采集 3.2 min），占单次发布机器时间约 75%，其余模式与这四档高度重叠；未测模式的耗时与计数按 `--update-docs` 口径「保留上次实测值」不写脏，需要全量复测时加 `--full-bench`（或直接 `test-runner.py --mode bench --update-docs`）。
 
-**耗时台账（`logs/release.jsonl`）**：每个子命令结束追加一行 JSON——`command` / `ok` / `elapsed_s` / `version` / `steps[]`（gate 的 `P2 场景回归`·`P2 十守护`·`P2 设计护栏`、refresh 的 bench·collect·sync、publish 的 `P1 verify`、evolution 的快照统计·统计同步、prepare 的 `台账归档迁移`）；终端尾行同步打印摘要。`logs/` 属 git 忽略域，台账不入仓库、不参与门禁，写入失败只打 `[!]` 且不改退出码（观测面不阻断发布）。跨版本对拍：`tail -n 20 logs/release.jsonl`（发布墙钟的变化归因到此，不再靠现场重测）。
+**耗时与 token 台账（`logs/release.jsonl`）**：每个子命令结束追加一行 JSON——`command` / `ok` / `elapsed_s` / `version` / `steps[]` / `agent{}`（执行环境身份：`provider`/`model`/`thinking`/`session_id`，取自 `PI_PROVIDER`/`PI_MODEL`/`PI_REASONING_LEVEL`/`PI_SESSION_ID`；非 agent 环境省略）/ `session_usage{}`（agent 会话**累计** token 快照：`input`/`output`/`cache_read`/`cache_write`/`total`/`cost`，取自 `PI_SESSION_FILE` 会话 JSONL 的 assistant 消息 + 非消息用量（cache_warm 等）+ compaction 三类条目，与 pi 自身 token 统计同口径；非 agent 环境省略该字段，旧台账行形状不变）（gate 的 `P2 场景回归`·`P2 十守护`·`P2 设计护栏`、refresh 的 bench·collect·sync、publish 的 `P1 verify`、evolution 的快照统计·统计同步、prepare 的 `台账归档迁移`）；终端尾行同步打印摘要。`logs/` 属 git 忽略域，台账不入仓库、不参与门禁，写入失败只打 `[!]` 且不改退出码（观测面不阻断发布）。跨版本对拍：`tail -n 20 logs/release.jsonl`（发布墙钟的变化归因到此，不再靠现场重测）。**token 统计口径**：窗口 = 上一次 `devbump` 之后的行，用量 = 末行累计 − 边界行累计（跨会话按正增量分段累加，不会出现负数）；每条命令尾行自动打印「执行环境：provider/model（thinking=…）」与「本次发布累计 token：N tok（in/out/cache r/w，≈¥C）」，便于把发布成本按版本对拍。
 
 ## 诊断类
 
@@ -889,6 +892,8 @@ sym |= set(re.findall(r'^\s{0,8}["\']([a-z][a-z0-9_]{2,})["\']\s*:', src, re.M))
 - `csi` — CSI 风格指数可用性探测（因子暴露分析已实施，现为**周期性复核**工具：新机器/新窗口验证指数链路与停更预警，条数+新鲜度双维度判定）
 - `push2` — 东方财富 push2 连通性诊断（见下）
 
+旧入口 `probe-csi-factor-indices.py` / `probe-push2.py` 保留为**薄委托垫片**（用法不变，内部直接调用对应 target），新用法统一走 `probe.py <target>`。
+
 旧入口 `probe-csi-factor-indices.py` / `probe-push2.py` 保留为薄委托垫片，命令用法不变。
 
 **`csi` target — CSI 风格指数可用性**：判定全量 5 因子 / MVP 3 因子 / 不可行；建议数据回归前置运行一次。
@@ -930,6 +935,27 @@ README 首屏架构图（`src/static/architecture.svg` / `llm-chain.svg` / `capa
 参数含义：`scale` = px per svg unit；`card_r` = 卡片右缘 x（svg 单位）；`row_y*/y*` = 检测区 y 范围（svg 单位）；`margin` = 检测范围到卡片右缘的右扩量（svg 单位）。几何审查纯标准库；两个像素子命令需 Pillow（`pip install -e '.[svg]'`，缺失时给出可读指引并以退出码 1 结束）。
 
 > **当前状态**：三张 SVG 均通过 `geom`——卡片内文本按估宽模型的右余量 ≥10px（`capabilities.svg` ≥19px）。贴边阈值由 `_PADDING_WARN`（6px）定义，矩形底部不齐仅作提示项（流程图同列卡片高度本就允许不同）。**改图后请重跑本脚本**；本脚本不在提交前/发布前门禁清单内，按需运行。
+
+**`factor_zoo_eval.py` — 因子动物园目录评测（非生产代码）**
+
+「先评测后立项」的评测器：五个来源族各抽 5 个代表因子（共 25），判三项指标——**A** 字段可得率
+（≥20/25 因子可完整计算）、**B** 与既有信号族的增量（|ρ|<0.5 的因子占比 ≥30%、分母 ≥10）、
+**C** 全量计算耗时占比（÷ 基线报告耗时 ≤20%）。**A/B/C 全过 → 转正立项**（另起实现计划）；
+任一不过 → 归档「已评估未采纳」。
+
+```bash
+.venv/bin/python scripts/factor_zoo_eval.py catalog   # 25 因子清单冻结（字段需求/口径入 JSON）
+.venv/bin/python scripts/factor_zoo_eval.py fields    # 穿透股票池冻结 + 逐因子字段可得性 → 指标 A
+.venv/bin/python scripts/factor_zoo_eval.py signals   # 可计算因子近 1 年横截面信号 vs 既有信号族 → 指标 B
+.venv/bin/python scripts/factor_zoo_eval.py timing    # 取数/计算耗时与缓存命中 + 报告耗时基线 → 指标 C
+.venv/bin/python scripts/factor_zoo_eval.py verdict   # 三项指标汇总判定（阈值预注册于判定书）
+.venv/bin/python scripts/factor_zoo_eval.py all       # 依序执行全部阶段
+```
+
+**纪律**：取数只经既有 Provider Chain / 网关（禁裸调 provider）；**不 import `report/` 与 `llm/`**、
+不向生产模块注入代码（生产侧零改动）；穿透股票池只读复用（不重算穿透）；相关性复用
+`analysis.correlation` 的共享 Pearson 原语（防评测口径漂移）；评测产物**只落 `docs/tmp/factor-zoo/`**
+（git 忽略）。实现拆在 `_factor_zoo/`（因子清单 / 指标计算 / 报告渲染）。
 
 ## 启动脚本
 

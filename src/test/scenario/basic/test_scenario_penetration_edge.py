@@ -34,7 +34,7 @@ pytestmark = [
 @pytest.mark.scenario_basic
 @pytest.mark.scenario
 @pytest.mark.edge
-class TestSP6GoldETF(unittest.TestCase):
+class TestPenetrationGoldEtf(unittest.TestCase):
     """S-P6：黄金 ETF 无效比例过滤。
 
     场景：华安黄金 ETF（518880），天天基金 API 返回 >100% 的垃圾比例。

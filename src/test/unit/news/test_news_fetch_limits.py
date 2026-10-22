@@ -52,7 +52,35 @@ class TestNewsFetchLimits(unittest.TestCase):
         assert offenders == [], f"per_source 算式出现内联复制：{offenders}"
 
     def test_call_sites_use_single_source(self) -> None:
-        """接线守卫：两处调用方（缓存层/报告层）均经 news_fetch_limits 取参。"""
-        for rel in ("src/python/cache/operations.py", "src/python/report/news_correlation.py"):
-            text = (Path(PROJECT_ROOT) / rel).read_text(encoding="utf-8")
-            assert "news_fetch_limits" in text, f"{rel} 未接入抓取预算单源算式"
+        """接线守卫：凡是**调用** `aggregate_news` 的位置都必须经 `news_fetch_limits` 取预算。
+
+        判据按「AST 调用关系」派生而非写死文件路径——新闻刷新曾从 `cache/operations.py`
+        拆到 `cache/_cache_refresh.py`，写死路径的守卫会静默失效（CI portability 档才暴露）；
+        另按文本匹配会把注释里的 `aggregate_news()` 也误算成调用点，故改用 AST Call。
+        定义体模块（`fetcher/news.py` 包装器 / `providers/news_aggregator.py`）豁免：
+        预算由调用方解析后传入。
+        """
+        import ast
+
+        root = Path(PROJECT_ROOT) / "src" / "python"
+        call_sites: list[str] = []
+        for py in root.rglob("*.py"):
+            rel = py.relative_to(PROJECT_ROOT).as_posix()
+            text = py.read_text(encoding="utf-8")
+            if "def aggregate_news(" in text:  # 聚合器定义体：预算由调用方传入
+                continue
+            try:
+                tree = ast.parse(text)
+            except SyntaxError:  # pragma: no cover - 生产代码不应有语法错误
+                continue
+            calls = any(
+                isinstance(node, ast.Call)
+                and (node.func.attr if isinstance(node.func, ast.Attribute) else getattr(node.func, "id", ""))
+                in {"aggregate_news", "_aggregate_news"}
+                for node in ast.walk(tree)
+            )
+            if not calls:
+                continue
+            call_sites.append(rel)
+            assert "news_fetch_limits" in text, f"{rel} 调用聚合新闻但未接入抓取预算单源算式"
+        assert call_sites, "未发现任何聚合新闻调用点（判据可能已失效：检查 aggregate_news 是否改名）"

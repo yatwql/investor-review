@@ -23,46 +23,56 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from openpyxl.styles import Font
 from openpyxl.worksheet.worksheet import Worksheet
 
-from src.python.core.code_utils import is_qdii_extended
 from src.python.core.models import Holding
-from src.python.core.num_utils import finite_or
 from src.python.core.registry import get_report_sheet_name
-from src.python.analysis.cost_position import LONG_WINDOW_DAYS, SHORT_WINDOW_DAYS
-from src.python.report.category import (
-    _categorize_holding,
-    _load_dividend_data,
-    build_category_data_status,
-    calc_yield_text,
-)
 from src.python.report.purchase_status import (
-    format_purchase_status_cell,
     purchase_column_visible,
     purchase_status_footnote,
-    stale_level,
 )
 from src.python.report.cost_position import (
     cost_position_footnote,
     cost_position_visible,
-    format_cost_position_cell,
 )
 from src.python.report.excel_writer import (
-    write_block_title,
-    _write_data_status_foot,
     auto_width,
     freeze_header,
-    write_data_row,
-    write_header_row,
-    write_subtotal_row,
     write_title_row,
-    write_total_row,
 )
 from src.python.report.market_value import DetailRow
-from src.python.report.styles import BLUE_FONT, FMT_MONEY, FMT_PERCENT, FMT_PRICE, FMT_SHARES, profit_font
+
+from ._holdings_detail_blocks import (  # noqa: F401 — 兼容既有导入面
+    _BLOCK_TITLE_CATEGORY,
+    _BLOCK_TITLE_MARKET_VALUE,
+    _CAT_COST_POS_HEADERS,
+    _CAT_EXTRA_HEADERS,
+    _CAT_HEADERS,
+    _CAT_NCOLS,
+    _CAT_NCOLS_WITH_FLOW,
+    _CAT_PURCHASE_HEADERS,
+    _COST_POS_NCOLS,
+    _MV_COST_POS_HEADERS,
+    _MV_EXTRA_HEADERS,
+    _MV_HEADERS,
+    _MV_NCOLS,
+    _MV_PURCHASE_HEADERS,
+    _NAME_COL,
+    _PRICE_TYPE_COL,
+    _apply_category_profit_colors,
+    _apply_price_type_colors,
+    _apply_profit_colors,
+    _cat_num_formats,
+    _detail_to_row_values,
+    _mv_num_formats,
+    _weighted_avg_cost,
+    _write_account_groupings,
+    _write_category_block,
+    _write_category_group,
+    _write_market_value_block,
+)
 
 logger = logging.getLogger("invest")
 
@@ -76,576 +86,22 @@ __all__ = [
 
 # ── 区块① 市值核算明细 ──────────────────────────────────────
 # 15 列表头（由 sheet 层维护）
-_MV_HEADERS = [
-    "账户",
-    "名称",
-    "代码",
-    "最新价",
-    "净值日期",
-    "昨日价",
-    "取价方式",
-    "溢价率",
-    "份额",
-    "市值",
-    "成本",
-    "盈亏",
-    "收益率",
-    "本日盈亏",
-    "取价渠道",
-]
-_MV_NCOLS = len(_MV_HEADERS)
 # 成本流水子列（功能开关 `cost_lots` 开启时追加，默认关不渲染）
-_MV_EXTRA_HEADERS = ["资金加权成本"]
+
 _MV_NCOLS_WITH_FLOW = _MV_NCOLS + len(_MV_EXTRA_HEADERS)
 # 申购限购状态列（功能开关 `fund_purchase_limit`）：追加于市值明细区块末列
-_MV_PURCHASE_HEADERS = ["申购状态"]
 # 持仓成本区间位置列（功能开关 `cost_position`）：追加于市值明细区块末列，
 # 两窗口百分位并列（窗口数字由 analysis/cost_position 常量单源派生）
-_MV_COST_POS_HEADERS = [
-    f"成本区间位置({SHORT_WINDOW_DAYS}日)",
-    f"成本区间位置({LONG_WINDOW_DAYS}日)",
-]
-_COST_POS_NCOLS = len(_MV_COST_POS_HEADERS)
 
-_PRICE_TYPE_COL = 7
-_NAME_COL = 2
 
 # ── 区块② 持仓分类汇总 ──────────────────────────────────────
-_CAT_NCOLS = 10
-_CAT_HEADERS = [
-    "资产属性",
-    "投资分类",
-    "名称",
-    "代码",
-    "市值",
-    "成本",
-    "盈亏",
-    "收益率",
-    "本日盈亏",
-    "年均股息率",
-]
 # 成本流水子列（功能开关 `cost_lots` 开启时追加，默认关不渲染）
-_CAT_EXTRA_HEADERS = ["成本分档", "分红累计"]
-_CAT_NCOLS_WITH_FLOW = _CAT_NCOLS + len(_CAT_EXTRA_HEADERS)
 # 申购限购状态列（功能开关 `fund_purchase_limit`）：追加于分类汇总区块末列，
 # 与区块① `_MV_PURCHASE_HEADERS` 同开关同判据（`purchase_column_visible`）
-_CAT_PURCHASE_HEADERS = ["申购状态"]
 # 持仓成本区间位置列（功能开关 `cost_position`）：追加于分类汇总区块末列，
 # 与区块① `_MV_COST_POS_HEADERS` 同开关同判据（`cost_position_visible`）
-_CAT_COST_POS_HEADERS = list(_MV_COST_POS_HEADERS)
 
 # 区块小节标题
-_BLOCK_TITLE_MARKET_VALUE = "一、市值核算明细"
-_BLOCK_TITLE_CATEGORY = "二、持仓分类汇总"
-
-
-def _weighted_avg_cost(buckets: dict | None) -> float | None:
-    """资金加权成本（批次成本价按份额加权，含费用摊薄）。
-
-    Args:
-        buckets: cost_tiers.per_code 中某代码的分档桶 dict，缺码时为 None
-
-    Returns:
-        加权成本价浮点（无批次数据返回 None，渲染层写空）
-    """
-    if not isinstance(buckets, dict):
-        return None
-    shares = 0.0
-    cost = 0.0
-    for bucket in ("low", "high", "unpriced"):
-        b = buckets.get(bucket) or {}
-        shares += finite_or(b.get("shares", 0.0))
-        cost += finite_or(b.get("cost", 0.0))
-    if shares <= 0:
-        return None
-    return cost / shares
-
-
-def _detail_to_row_values(d: DetailRow) -> list[Any]:
-    """将 DetailRow 转为 Excel 行值列表。"""
-    return [
-        d.account,
-        d.name,
-        d.code,
-        d.price,
-        d.nav_date,
-        d.yesterday_close,
-        d.price_type,
-        d.premium,
-        d.shares,
-        d.market_value,
-        d.cost,
-        d.profit,
-        d.profit_rate,
-        d.today_profit,
-        d.source,
-    ]
-
-
-def _mv_num_formats(has_flow: bool = False, has_purchase: bool = False, has_cost_pos: bool = False) -> list[str | None]:
-    """区块①每列的 Excel 数字格式（15 列 + 可选资金加权成本/申购状态/成本区间位置）。"""
-    fmt = [
-        "",  # 1  账户
-        "",  # 2  名称
-        "",  # 3  代码
-        FMT_PRICE,  # 4  最新价
-        "",  # 5  净值日期
-        FMT_PRICE,  # 6  昨日价
-        "",  # 7  取价方式
-        "",  # 8  溢价率
-        FMT_SHARES,  # 9  份额
-        FMT_MONEY,  # 10 市值
-        FMT_MONEY,  # 11 成本
-        FMT_MONEY,  # 12 盈亏
-        FMT_PERCENT,  # 13 收益率
-        FMT_MONEY,  # 14 本日盈亏
-        "",  # 15 取价渠道
-    ]
-    if has_flow:
-        fmt += [FMT_PRICE]  # 16 资金加权成本（批次成本价按份额加权）
-    if has_purchase:
-        fmt += [""]  # 申购状态（文本列，无数字格式）
-    if has_cost_pos:
-        fmt += [FMT_PERCENT] * _COST_POS_NCOLS  # 成本区间位置（百分位）
-    return fmt
-
-
-def _cat_num_formats(
-    has_flow: bool = False, has_purchase: bool = False, has_cost_pos: bool = False
-) -> list[str | None]:
-    """区块②每列的 Excel 数字格式（10 列 + 可选成本流水子列/申购状态/成本区间位置）。"""
-    fmt = [
-        "",  # 1  资产属性
-        "",  # 2  投资分类
-        "",  # 3  名称
-        "",  # 4  代码
-        FMT_MONEY,  # 5  市值
-        FMT_MONEY,  # 6  成本
-        FMT_MONEY,  # 7  盈亏
-        FMT_PERCENT,  # 8  收益率
-        FMT_MONEY,  # 9  本日盈亏
-        "",  # 10 年均股息率（字符串格式）
-    ]
-    if has_flow:
-        fmt += ["", FMT_MONEY]  # 11 成本分档（文本）、12 分红累计（金额）
-    if has_purchase:
-        fmt += [""]  # 申购状态（文本列，无数字格式）
-    if has_cost_pos:
-        fmt += [FMT_PERCENT] * _COST_POS_NCOLS  # 成本区间位置（百分位）
-    return fmt
-
-
-def _apply_profit_colors(ws, start_row: int, end_row: int, profit_col: int, rate_col: int, today_col: int) -> None:
-    """对区块①盈亏列（12）、收益率列（13）、本日盈亏列（14）着色。"""
-    for r in range(start_row, end_row + 1):
-        for col in (profit_col, today_col):
-            cell = ws.cell(row=r, column=col)
-            if isinstance(cell.value, (int, float)):
-                cell.font = profit_font(cell.value)
-        rate_cell = ws.cell(row=r, column=rate_col)
-        if isinstance(rate_cell.value, float):
-            rate_cell.font = profit_font(rate_cell.value)
-
-
-def _apply_category_profit_colors(ws, start_row: int, end_row: int) -> None:
-    """对区块②盈亏列 (7)、收益率列 (8)、本日盈亏列 (9) 着色。"""
-    for r in range(start_row, end_row + 1):
-        for col in (7, 9):
-            cell = ws.cell(row=r, column=col)
-            if isinstance(cell.value, (int, float)):
-                cell.font = profit_font(cell.value)
-        rate_cell = ws.cell(row=r, column=8)
-        if isinstance(rate_cell.value, (int, float)):
-            rate_cell.font = profit_font(rate_cell.value)
-
-
-def _apply_price_type_colors(ws, start_row: int, end_row: int) -> None:
-    """对取价方式列（第 7 列）着色：蓝色代表价格来源可靠/时效性高。"""
-    for r in range(start_row, end_row + 1):
-        cell = ws.cell(row=r, column=_PRICE_TYPE_COL)
-        val = str(cell.value) if cell.value else ""
-        if val in ("场内收盘价(T)", "场内午市收盘(T)", "官方净值(T)"):
-            cell.font = BLUE_FONT
-        elif val == "官方净值(T-1)":
-            name_cell = ws.cell(row=r, column=_NAME_COL)
-            name = str(name_cell.value) if name_cell.value else ""
-            if is_qdii_extended(name):
-                cell.font = BLUE_FONT
-
-
-def _write_account_groupings(
-    ws,
-    details: list[DetailRow],
-    data_start: int,
-    fund_flow_data: dict | None = None,
-    purchase_status_data: dict | None = None,
-    cost_position_data: dict | None = None,
-) -> tuple[float, float, float, float, int]:
-    """按账户分组写入明细行和小计，返回汇总数据及最终行号。
-
-    fund_flow_data 非 None 时明细行追加「资金加权成本」列（数据契约）；
-    cost_position_data 经 `cost_position_visible` 判据开启时末列追加
-    「成本区间位置」两列（数据契约）。
-
-    Returns:
-        (grand_mv, grand_cost, grand_profit, grand_today, final_row)
-    """
-    has_flow = fund_flow_data is not None
-    show_purchase = purchase_column_visible(purchase_status_data)
-    show_cost_pos = cost_position_visible(cost_position_data)
-    purchase_level = stale_level((purchase_status_data or {}).get("fetched_at")) if show_purchase else None
-    base_ncols = _MV_NCOLS + (1 if has_flow else 0)
-    ncols = base_ncols + (1 if show_purchase else 0) + (_COST_POS_NCOLS if show_cost_pos else 0)
-    cost_map = (fund_flow_data or {}).get("cost_tiers", {}).get("per_code", {})
-
-    accounts: dict[str, list[DetailRow]] = {}
-    for d in details:
-        accounts.setdefault(d.account, []).append(d)
-
-    # 明细渲染层匿名化拦截点：summary 模式在账户组内折叠为大类聚合行
-    # （小计 = 各聚合行之和，口径不变；off/code_display/full 不折叠）
-    from src.python.config.anonymizer import get_anonymization_mode
-
-    if get_anonymization_mode() == "summary":
-        from src.python.report._report_helpers import fold_detail_rows_summary
-
-        accounts = {acc: fold_detail_rows_summary(rows) for acc, rows in accounts.items()}
-
-    row = data_start
-    grand_mv = grand_cost = grand_profit = grand_today = 0.0
-
-    for acc_name, acc_details in accounts.items():
-        for d in acc_details:
-            vals = _detail_to_row_values(d)
-            if has_flow:
-                vals += [_weighted_avg_cost(cost_map.get(d.code))]
-            if show_purchase:
-                # 补齐到申购状态列前的槽位（资金加权成本缺值时保持列对齐）
-                while len(vals) < base_ncols:
-                    vals.append(None)
-                vals += [format_purchase_status_cell(purchase_status_data, d.code, purchase_level)]
-            if show_cost_pos:
-                vals += [
-                    format_cost_position_cell(cost_position_data, d.code, "short"),
-                    format_cost_position_cell(cost_position_data, d.code, "long"),
-                ]
-            write_data_row(ws, row, vals, _mv_num_formats(has_flow, show_purchase, show_cost_pos))
-            row += 1
-
-        acc_mv = sum(d.market_value for d in acc_details)
-        acc_cost = sum(d.cost for d in acc_details)
-        acc_profit = sum(d.profit for d in acc_details)
-        acc_today = sum(d.today_profit for d in acc_details)
-        acc_rate = acc_profit / acc_cost if acc_cost > 0 else 0.0
-
-        subtotal_vals = [
-            f"{acc_name} 小计",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            sum(d.shares for d in acc_details),
-            acc_mv,
-            acc_cost,
-            acc_profit,
-            acc_rate,
-            acc_today,
-            "",
-        ]
-        if has_flow:
-            subtotal_vals += [""]  # 资金加权成本小计列留空（批次口径不跨账户聚合）
-        if show_purchase:
-            subtotal_vals += [""]  # 申购状态小计列留空（非可聚合指标）
-        if show_cost_pos:
-            subtotal_vals += [""] * _COST_POS_NCOLS  # 成本区间位置小计列留空（非可聚合指标）
-        write_subtotal_row(
-            ws,
-            row,
-            f"{acc_name} 小计",
-            subtotal_vals[1:],
-            ncols,
-            _mv_num_formats(has_flow, show_purchase, show_cost_pos),
-        )
-        row += 1
-
-        grand_mv += acc_mv
-        grand_cost += acc_cost
-        grand_profit += acc_profit
-        grand_today += acc_today
-
-    return grand_mv, grand_cost, grand_profit, grand_today, row
-
-
-def _write_market_value_block(
-    ws: Worksheet,
-    details: list[DetailRow] | None,
-    fund_flow_data: dict | None,
-    start_row: int,
-    purchase_status_data: dict | None = None,
-    cost_position_data: dict | None = None,
-) -> tuple[float, float, float, float, list[DetailRow], int]:
-    """写入区块①「市值核算明细」，返回 (汇总数据, 明细行, 下一可用行号)。"""
-    has_flow = fund_flow_data is not None
-    show_purchase = purchase_column_visible(purchase_status_data)
-    show_cost_pos = cost_position_visible(cost_position_data)
-    ncols = _MV_NCOLS + (1 if has_flow else 0) + (1 if show_purchase else 0) + (_COST_POS_NCOLS if show_cost_pos else 0)
-    headers = _MV_HEADERS
-    if has_flow:
-        headers = headers + _MV_EXTRA_HEADERS
-    if show_purchase:
-        headers = headers + _MV_PURCHASE_HEADERS
-    if show_cost_pos:
-        headers = headers + _MV_COST_POS_HEADERS
-    _details = details or []
-
-    row = write_block_title(ws, start_row, _BLOCK_TITLE_MARKET_VALUE, ncols)
-    row = write_header_row(ws, row, headers)
-
-    # 若所有行情数据全零，写一行醒目提示。注意：提示行**整行合并**（标题样式），
-    # 数据必须自其**下一行**开始写入 —— 往合并区写字会抛
-    # `AttributeError: 'MergedCell' object attribute 'value' is read-only`。
-    _all_zero = all(d.price == 0 for d in _details) if _details else False
-    if _all_zero:
-        _WARN_FONT = Font(size=10, bold=True, color="CC0000")
-        ws.cell(row=row, column=1).font = _WARN_FONT
-        ws.cell(row=row, column=1, value="⚠ 行情数据全部不可用（非交易时段/网络异常），以下市值/盈亏均为占位 —")
-        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=ncols)
-        row += 1
-
-    data_start = row  # 数据起始行（提示行之后）
-
-    # 按账户分组写入明细 + 小计
-    grand_mv, grand_cost, grand_profit, grand_today, row = _write_account_groupings(
-        ws, _details, data_start, fund_flow_data, purchase_status_data, cost_position_data
-    )
-
-    # 总计
-    grand_rate = grand_profit / grand_cost if grand_cost > 0 else 0.0
-    total_vals = [
-        "总计",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        sum(d.shares for d in _details) if _details else 0,
-        grand_mv,
-        grand_cost,
-        grand_profit,
-        grand_rate,
-        grand_today,
-        "",
-    ]
-    if has_flow:
-        total_vals += [""]  # 资金加权成本总计列留空（批次口径不跨账户聚合）
-    if show_purchase:
-        total_vals += [""]  # 申购状态总计列留空（非可聚合指标）
-    if show_cost_pos:
-        total_vals += [""] * _COST_POS_NCOLS  # 成本区间位置总计列留空（非可聚合指标）
-    write_total_row(ws, row, "总计", total_vals[1:], ncols, _mv_num_formats(has_flow, show_purchase, show_cost_pos))
-
-    # 对盈亏列着色
-    _apply_profit_colors(ws, data_start, row, profit_col=12, rate_col=13, today_col=14)
-
-    # 对取价方式列着色
-    _apply_price_type_colors(ws, data_start, row)
-
-    logger.info(
-        "%s 区块①写入完成，共 %d 个账户，%d 条持仓",
-        _BLOCK_TITLE_MARKET_VALUE,
-        len(set(d.account for d in _details)),
-        len(_details),
-    )
-    return grand_mv, grand_cost, grand_profit, grand_today, _details, row + 1
-
-
-def _write_category_group(
-    ws: Worksheet,
-    row: int,
-    group: list[Holding],
-    prop: str,
-    sub: str,
-    detail_map: dict,
-    dividend_data: dict,
-    fund_flow_data: dict | None = None,
-    purchase_status_data: dict | None = None,
-    cost_position_data: dict | None = None,
-) -> tuple[int, float, float, float, float, float]:
-    """写入一个分类分组的明细行和小计。
-
-    fund_flow_data 非 None 时追加「成本分档」「分红累计」子列（数据契约）；
-    purchase_status_data 经 `purchase_column_visible` 判据开启时末列追加「申购状态」；
-    cost_position_data 经 `cost_position_visible` 判据开启时末列追加
-    「成本区间位置」两列（数据契约，小计/总计留空）。
-
-    Returns:
-        (next_row, mv, cost, profit, today, div_sum)
-    """
-    has_flow = fund_flow_data is not None
-    show_purchase = purchase_column_visible(purchase_status_data)
-    show_cost_pos = cost_position_visible(cost_position_data)
-    purchase_level = stale_level((purchase_status_data or {}).get("fetched_at")) if show_purchase else None
-    tier_map = (fund_flow_data or {}).get("cost_tiers", {}).get("per_code", {})
-    div_map = (fund_flow_data or {}).get("dividends", {}).get("per_code", {})
-    div_sum = 0.0
-
-    for h in group:
-        d = detail_map.get(h.code)
-        if d:
-            vals = [
-                prop,
-                sub,
-                h.name,
-                h.code,
-                d.market_value,
-                d.cost,
-                d.profit,
-                d.profit_rate,
-                d.today_profit,
-                calc_yield_text(h.code, d, dividend_data),
-            ]
-        else:
-            vals = [prop, sub, h.name, h.code, 0.0, 0.0, 0.0, 0.0, 0.0, "--"]
-        if has_flow:
-            from src.python.report.category import _tier_label
-
-            vals += [_tier_label(tier_map.get(h.code)), div_map.get(h.code, 0.0)]
-            div_sum += div_map.get(h.code, 0.0)
-        if show_purchase:
-            vals += [format_purchase_status_cell(purchase_status_data, h.code, purchase_level)]
-        if show_cost_pos:
-            vals += [
-                format_cost_position_cell(cost_position_data, h.code, "short"),
-                format_cost_position_cell(cost_position_data, h.code, "long"),
-            ]
-        write_data_row(ws, row, vals, _cat_num_formats(has_flow, show_purchase, show_cost_pos))
-        row += 1
-
-    sub_mv = sum(detail_map.get(h.code, DetailRow()).market_value for h in group if h.code in detail_map)
-    sub_cost = sum(detail_map.get(h.code, DetailRow()).cost for h in group if h.code in detail_map)
-    sub_profit = sum(detail_map.get(h.code, DetailRow()).profit for h in group if h.code in detail_map)
-    sub_today = sum(detail_map.get(h.code, DetailRow()).today_profit for h in group if h.code in detail_map)
-    sub_rate = sub_profit / sub_cost if sub_cost > 0 else 0.0
-
-    subtotal_vals = ["", "", len(group), sub_mv, sub_cost, sub_profit, sub_rate, sub_today, "--"]
-    if has_flow:
-        subtotal_vals += ["", div_sum]
-    if show_purchase:
-        subtotal_vals += [""]  # 申购状态小计列留空（非可聚合指标，与区块①同语义）
-    if show_cost_pos:
-        subtotal_vals += [""] * _COST_POS_NCOLS  # 成本区间位置小计列留空（非可聚合指标）
-    ncols = _CAT_NCOLS_WITH_FLOW if has_flow else _CAT_NCOLS
-    ncols += (1 if show_purchase else 0) + (_COST_POS_NCOLS if show_cost_pos else 0)
-    write_subtotal_row(
-        ws, row, f"{prop} - {sub} 小计", subtotal_vals, ncols, _cat_num_formats(has_flow, show_purchase, show_cost_pos)
-    )
-    return row + 1, sub_mv, sub_cost, sub_profit, sub_today, div_sum
-
-
-def _write_category_block(
-    ws: Worksheet,
-    holdings: list[Holding],
-    details: list[DetailRow],
-    fund_flow_data: dict | None,
-    start_row: int,
-    purchase_status_data: dict | None = None,
-    cost_position_data: dict | None = None,
-) -> int:
-    """写入区块②「持仓分类汇总」，返回下一可用行号。
-
-    分类层级：资产属性 → 投资分类 → 持仓明细 → 小计 → 总计。
-    每行含市值、成本、盈亏、收益率、本日盈亏、年均股息率。
-    purchase_status_data 经 `purchase_column_visible` 判据开启时末列追加
-    「申购状态」；cost_position_data 经 `cost_position_visible` 判据开启时
-    末列追加「成本区间位置」两列（明细行渲染、小计/总计留空；列缺席时
-    逐字节回退既有输出）。
-    """
-    has_flow = fund_flow_data is not None
-    show_purchase = purchase_column_visible(purchase_status_data)
-    show_cost_pos = cost_position_visible(cost_position_data)
-    ncols = _CAT_NCOLS_WITH_FLOW if has_flow else _CAT_NCOLS
-    ncols += (1 if show_purchase else 0) + (_COST_POS_NCOLS if show_cost_pos else 0)
-    headers = _CAT_HEADERS + (_CAT_EXTRA_HEADERS if has_flow else [])
-    if show_purchase:
-        headers = headers + _CAT_PURCHASE_HEADERS
-    if show_cost_pos:
-        headers = headers + _CAT_COST_POS_HEADERS
-
-    detail_map: dict[str, DetailRow] = {d.code: d for d in details}
-
-    cat_groups: dict[tuple[str, str], list[Holding]] = {}
-    for h in holdings:
-        prop, sub = _categorize_holding(h)
-        cat_groups.setdefault((prop, sub), []).append(h)
-
-    _PROP_ORDER = {"股票": 0, "基金": 1, "债券": 2, "现金": 3, "其他": 4}
-    _SUB_ORDER = {"A股": 0, "QDII": 1, "主动": 2, "被动": 3, "指数": 4, "混合": 5, "纯债": 6, "货币": 7, "其他": 8}
-    sorted_groups = sorted(
-        cat_groups.items(),
-        key=lambda x: (_PROP_ORDER.get(x[0][0], 99), _SUB_ORDER.get(x[0][1], 99)),
-    )
-
-    row = write_block_title(ws, start_row, _BLOCK_TITLE_CATEGORY, ncols)
-    row = write_header_row(ws, row, headers)
-
-    # 若所有行情数据全零，写一行醒目提示（该行为单格写入、未合并，数据自其后开始）
-    _all_zero = all(d.market_value == 0 for d in details)
-    if _all_zero and details:
-        cell = ws.cell(row=row, column=1, value="⚠ 行情数据全部不可用（非交易时段/网络异常），以下市值/盈亏均为占位 —")
-        cell.font = Font(size=10, bold=True, color="CC0000")
-        row += 1
-
-    data_start = row
-
-    dividend_data, dividend_success = _load_dividend_data(holdings)
-    grand_mv = grand_cost = grand_profit = grand_today = grand_div = 0.0
-
-    for (prop, sub), group in sorted_groups:
-        row, smv, scost, sprofit, stoday, sdiv = _write_category_group(
-            ws,
-            row,
-            group,
-            prop,
-            sub,
-            detail_map,
-            dividend_data,
-            fund_flow_data,
-            purchase_status_data,
-            cost_position_data,
-        )
-        grand_mv += smv
-        grand_cost += scost
-        grand_profit += sprofit
-        grand_today += stoday
-        grand_div += sdiv
-
-    grand_rate = grand_profit / grand_cost if grand_cost > 0 else 0.0
-    total_vals = ["", "", "-", grand_mv, grand_cost, grand_profit, grand_rate, grand_today, "--"]
-    if has_flow:
-        total_vals += ["", grand_div]
-    if show_purchase:
-        total_vals += [""]  # 申购状态总计列留空（非可聚合指标）
-    if show_cost_pos:
-        total_vals += [""] * _COST_POS_NCOLS  # 成本区间位置总计列留空（非可聚合指标）
-    write_total_row(ws, row, "总计", total_vals, ncols, _cat_num_formats(has_flow, show_purchase, show_cost_pos))
-
-    _apply_category_profit_colors(ws, data_start, row)
-
-    logger.info(
-        "%s 区块②写入完成，共 %d 个分组，%d 条持仓",
-        _BLOCK_TITLE_CATEGORY,
-        len(sorted_groups),
-        len(holdings),
-    )
-
-    data_status = build_category_data_status(dividend_success)
-    _write_data_status_foot(ws, data_status, start_row=row + 1, max_cols=ncols)
-    return row + 1
 
 
 def write_holdings_detail_sheet(

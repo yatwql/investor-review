@@ -104,6 +104,7 @@ class TestDevVerifySinglePhaseMerge:
         "unit_core",
         "unit_providers",
         "unit_fetcher",
+        "unit_news",
         "unit_analysis",
         "unit_scripts",
         "unit_web",

@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.14.1
+> 文档版本：0.14.2
 
 ## 目录
 
@@ -2978,7 +2978,7 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
 | # | 章节（key） | HTML 区块数 | HTML 载体（`src/static/tmpl/partials/`） | Excel 区块清单 | Excel 载体（`src/python/report/`） | 备注 |
 |---|---|---|---|---|---|---|
 | 1 | `summary` | — | summary_section.html | 持仓概况 / 盈亏汇总 / 市场温度 / 市场指数 | summary.py | 流式章：HTML 端数字卡非区块；「本期要点」块随开关 `summary_highlights`（默认关，快照 diff 单源派生；无上期快照整块隐藏） |
-| 2 | `holdings_detail` | 2 | holdings_detail_section.html | 市值核算明细 / 持仓分类汇总 | holdings_detail_sheet.py | 双端对等 |
+| 2 | `holdings_detail` | 2 | holdings_detail_section.html | 市值核算明细 / 持仓分类汇总 | holdings_detail_sheet.py + _holdings_detail_blocks.py | 双端对等 |
 | 3 | `penetration` | — | penetration_section.html | — | penetration_sheet.py | 单表章 |
 | 4 | `fund_performance` | 2 | fund_performance_section.html | 候选基金比较 / 基金经理变更监控 | fund_performance.py | 候选比较为开关门控区块（两态标题去重后计 1） |
 | 5 | `position_structure` | 3 | position_structure_section.html | 持仓重合度矩阵 / 持仓相关性矩阵 / 持仓集中度监控 | position_structure_sheet.py | 双端对等 |

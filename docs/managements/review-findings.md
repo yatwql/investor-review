@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.14.1
-> **编号源**：`rf-next = 810`（新增问题取此编号，完成后更新为 +1；已用最大 rf-809，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> 文档版本：0.14.2
+> **编号源**：`rf-next = 815`（新增问题取此编号，完成后更新为 +1；已用最大 rf-814，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -25,12 +25,7 @@
 > **测试文件口径**：阈值见 `developer-guide.md`「文件膨胀阈值」表（行数 >800 警告 / >1200 红线；测试项 >80 警告 / >120 红线）；≥1000 行即入本表。
 > **破线豁免**：无（`check-file-length.py --ci` 豁免在列 0 项）。
 
-| # | 任务 | 涉及文件（行数 / 距红线） | 处置与备注 |
-|---|------|--------------------------|-------------|
-| 2 | **rf-665** `config/features.py` 注册表下沉 | `src/python/config/features.py` 840/160 | 注册表逐开关增长（每项约十行）；逼近 980 时把注册表条目与定义下沉（同族：`tui/handlers_config.py`、`scripts/_doc_drift/_format.py` 各自域内聚，维持） |
-| 3 | **rf-626** 报告域按职责下沉（含已决策维持的两处） | `src/python/report/html_writer.py` 799/201、`src/python/analysis/rebalance.py` 751/249 | `html_writer`：域下沉 + 门面 re-export（测试 patch 改指持有子模块）；`analysis/rebalance`：按「成本分档 / 偏离度 / 告警」下沉 |
-| 4 | **rf-773** 模块内三段/多域拆分（**进行中：3/8 完成**） | 已拆：`report/orchestrator.py` 734→255（数据装配与派生计算 → `_orchestrator_data.py` 519）、`report/_report_generation.py` 751→52（both/full 两路径 → `_generation_both.py` 356 / `_generation_full.py` 368 / 共用步骤 `_generation_shared.py` 85）、`report/fund_performance.py` 728→595（评级内核 → `_fund_rating.py` 166）。**剩余 5 个**：`llm/api_base.py` 770（端点构造/请求发送/响应解析三段）、`config/_validation.py` 723（标量/LLM/章节三域）、`report/holdings_detail_sheet.py` 716（页签分区块）、`analysis/prosperity_scoring.py` 711（阈值表/评分/诊断）、`providers/news_dedup_rules.py` 710（去重规则表按来源） |
-| 5 | **rf-86** `cache/operations.py` 五职责下沉 | `src/python/cache/operations.py` 739/261 | 五职责待下沉（数据结构 / 基金刷新 / 公共缓存 / 持仓缓存 / 清理） |
+> 当前无逼近红线档的文件（主程序 ≥700 / 脚本 ≥600 / 测试 ≥1000 均无在册项；警告级全集以 `check-file-length.py -v` 为准）。
 
 **已决策「维持现状」（已降到逼近档以下，不拆理由保留，行数随 `-v` 复核）**：
 
@@ -41,14 +36,13 @@
 | **rf-81** | `src/python/report/html_renderers.py` | 577 | 维持现状：渲染域同源 |
 | **rf-85** | `src/python/fetcher/fund.py` | 553 | 维持现状：排名 / 持仓 / 基准三职责择机拆 |
 | **rf-78** | `src/python/fetcher/batch.py` | 520 | 维持现状：BatchDispatcher 内聚 |
-| **rf-665** | `src/python/tui/handlers_config.py`、`scripts/_doc_drift/_format.py` | 593 / 595 | 维持现状：随 `features.py` 注册表增长但各自域内聚 |
-| **rf-626** | `src/python/llm/prompts_core.py`、`src/python/llm/generators.py` | 350 / 444 | 维持现状：提示词 / 生成器按模块分文件 |
+| —（同批决策） | `src/python/llm/prompts_core.py`、`src/python/llm/generators.py` | 350 / 444 | 维持现状：提示词 / 生成器按模块分文件 |
 
 ## 已解决问题
 
-### 开发期已修复（0.14.1-dev）
+### 开发期已修复（0.14.2-dev）
 
-（本版开发期已修复项已随 v0.14.1 发布迁入归档档案）
+（本版开发期已修复项已随 v0.14.2 发布迁入归档档案）
 
 ### 归档档案
 - [`archived_review-findings.0.14.x.md`](../archive/v0.14.x/archived_review-findings.0.14.x.md) — v0.14.x（2026-10-21 ~ 2026-10-22）

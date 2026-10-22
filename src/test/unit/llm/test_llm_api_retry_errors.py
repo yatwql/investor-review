@@ -97,8 +97,8 @@ class TestCallLlmWithRetryHttpErrors(unittest.TestCase):
         self.cb_patcher.stop()
 
     @patch("src.python.llm.api_base._cb_record_success")
-    @patch("src.python.llm.api_base._log_token_usage")
-    @patch("src.python.llm.api_base.track_session_usage")
+    @patch("src.python.llm._api_responses._log_token_usage")
+    @patch("src.python.llm._api_responses.track_session_usage")
     def test_success_first_try(self, mock_track, mock_log, mock_success):
         """首次调用成功。"""
         usage = {"input_tokens": 10, "output_tokens": 5}
@@ -400,8 +400,8 @@ class TestCallLlmWithRetryTruncation(unittest.TestCase):
         self.cb_patcher.stop()
 
     @patch("src.python.llm.api_base._cb_record_success")
-    @patch("src.python.llm.api_base._log_token_usage")
-    @patch("src.python.llm.api_base.track_session_usage")
+    @patch("src.python.llm._api_responses._log_token_usage")
+    @patch("src.python.llm._api_responses.track_session_usage")
     def test_truncation_appends_warning(self, mock_track, mock_log, mock_success):
         """截断 → 内容追加截断警告。"""
         from src.python.llm.api_base import TRUNCATION_MARKER, call_llm_with_retry

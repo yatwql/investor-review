@@ -134,7 +134,7 @@ class TestApplyProfitColors(unittest.TestCase):
         cell.value = value
         return cell
 
-    @patch("src.python.report.holdings_detail_sheet.profit_font")
+    @patch("src.python.report._holdings_detail_blocks.profit_font")
     def test_positive_profit(self, mock_pf):
         """正盈亏 → 调用 profit_font(正数)。"""
         mock_pf.side_effect = lambda v: f"font_for_{v}"
@@ -144,7 +144,7 @@ class TestApplyProfitColors(unittest.TestCase):
         mock_pf.assert_any_call(500.0)
         self.assertEqual(mock_pf.call_count, 3)
 
-    @patch("src.python.report.holdings_detail_sheet.profit_font")
+    @patch("src.python.report._holdings_detail_blocks.profit_font")
     def test_negative_profit(self, mock_pf):
         """负盈亏 → 调用 profit_font(负数)。"""
         mock_pf.side_effect = lambda v: f"font_for_{v}"
@@ -153,7 +153,7 @@ class TestApplyProfitColors(unittest.TestCase):
         hds._apply_profit_colors(ws, 3, 3, profit_col=12, rate_col=13, today_col=14)
         mock_pf.assert_any_call(-300.0)
 
-    @patch("src.python.report.holdings_detail_sheet.profit_font")
+    @patch("src.python.report._holdings_detail_blocks.profit_font")
     def test_zero_profit(self, mock_pf):
         """零盈亏 → 调用 profit_font(0)。"""
         mock_pf.side_effect = lambda v: f"font_for_{v}"
@@ -162,7 +162,7 @@ class TestApplyProfitColors(unittest.TestCase):
         hds._apply_profit_colors(ws, 3, 3, profit_col=12, rate_col=13, today_col=14)
         mock_pf.assert_any_call(0.0)
 
-    @patch("src.python.report.holdings_detail_sheet.profit_font")
+    @patch("src.python.report._holdings_detail_blocks.profit_font")
     def test_non_numeric_skipped(self, mock_pf):
         """非数字值（字符串）→ 不设置字体。"""
         ws = MagicMock()
@@ -177,7 +177,7 @@ class TestApplyProfitColors(unittest.TestCase):
         hds._apply_profit_colors(ws, 3, 4, profit_col=12, rate_col=13, today_col=14)
         mock_pf.assert_not_called()
 
-    @patch("src.python.report.holdings_detail_sheet.profit_font")
+    @patch("src.python.report._holdings_detail_blocks.profit_font")
     def test_none_value_skipped(self, mock_pf):
         """None 值 → 不设置字体。"""
         ws = MagicMock()
@@ -185,7 +185,7 @@ class TestApplyProfitColors(unittest.TestCase):
         hds._apply_profit_colors(ws, 3, 4, profit_col=12, rate_col=13, today_col=14)
         mock_pf.assert_not_called()
 
-    @patch("src.python.report.holdings_detail_sheet.profit_font")
+    @patch("src.python.report._holdings_detail_blocks.profit_font")
     def test_rate_col_float(self, mock_pf):
         """收益率列为 float → 调用 profit_font。"""
         mock_pf.side_effect = lambda v: f"font_for_{v}"
@@ -194,7 +194,7 @@ class TestApplyProfitColors(unittest.TestCase):
         hds._apply_profit_colors(ws, 3, 3, profit_col=12, rate_col=13, today_col=14)
         mock_pf.assert_called_with(0.05)
 
-    @patch("src.python.report.holdings_detail_sheet.profit_font")
+    @patch("src.python.report._holdings_detail_blocks.profit_font")
     def test_rate_col_not_float(self, mock_pf):
         """收益率列非 float（如字符串含 %）→ 不设置字体。"""
         ws = MagicMock()
@@ -202,7 +202,7 @@ class TestApplyProfitColors(unittest.TestCase):
         hds._apply_profit_colors(ws, 3, 4, profit_col=12, rate_col=13, today_col=14)
         mock_pf.assert_not_called()
 
-    @patch("src.python.report.holdings_detail_sheet.profit_font")
+    @patch("src.python.report._holdings_detail_blocks.profit_font")
     def test_multiple_rows(self, mock_pf):
         """多行数据 → 每行都着色。"""
         mock_pf.side_effect = lambda v: f"font_for_{v}"
@@ -224,14 +224,14 @@ class TestApplyProfitColors(unittest.TestCase):
         cell = MagicMock()
         cell.value = 100.0
         ws.cell.return_value = cell
-        with patch("src.python.report.holdings_detail_sheet.profit_font") as mock_pf:
+        with patch("src.python.report._holdings_detail_blocks.profit_font") as mock_pf:
             mock_pf.return_value = "red_font"
             hds._apply_profit_colors(ws, 3, 3, profit_col=12, rate_col=13, today_col=14)
         self.assertEqual(cell.font, "red_font")
 
     def test_int_rate_value(self):
         """收益率列为 int → 不调用 profit_font（仅 float 触发）。"""
-        with patch("src.python.report.holdings_detail_sheet.profit_font") as mock_pf:
+        with patch("src.python.report._holdings_detail_blocks.profit_font") as mock_pf:
             ws = MagicMock()
             # 仅 rate 列设为 int；profit/today 列 None（非数字）
             values = {13: 5}
@@ -241,7 +241,7 @@ class TestApplyProfitColors(unittest.TestCase):
 
     def test_empty_range_no_crash(self):
         """空范围（start > end）→ 不报错，且不访问任何单元格。"""
-        with patch("src.python.report.holdings_detail_sheet.profit_font"):
+        with patch("src.python.report._holdings_detail_blocks.profit_font"):
             ws = MagicMock()
             hds._apply_profit_colors(ws, 100, 50, profit_col=12, rate_col=13, today_col=14)
             ws.cell.assert_not_called()
@@ -368,10 +368,10 @@ class TestWriteAccountGroupings(unittest.TestCase):
             source_api="eastmoney",
         )
 
-    @patch("src.python.report.holdings_detail_sheet.write_data_row")
-    @patch("src.python.report.holdings_detail_sheet.write_subtotal_row")
-    @patch("src.python.report.holdings_detail_sheet._detail_to_row_values")
-    @patch("src.python.report.holdings_detail_sheet._mv_num_formats")
+    @patch("src.python.report._holdings_detail_blocks.write_data_row")
+    @patch("src.python.report._holdings_detail_blocks.write_subtotal_row")
+    @patch("src.python.report._holdings_detail_blocks._detail_to_row_values")
+    @patch("src.python.report._holdings_detail_blocks._mv_num_formats")
     def test_single_account(self, mock_fmts, mock_to_row, mock_sub, mock_data):
         """单账户 → 1 个小计行。"""
         mock_fmts.return_value = [""] * 15
@@ -381,10 +381,10 @@ class TestWriteAccountGroupings(unittest.TestCase):
         mock_sub.assert_called_once()
         self.assertGreater(final_row, 3)
 
-    @patch("src.python.report.holdings_detail_sheet.write_data_row")
-    @patch("src.python.report.holdings_detail_sheet.write_subtotal_row")
-    @patch("src.python.report.holdings_detail_sheet._detail_to_row_values")
-    @patch("src.python.report.holdings_detail_sheet._mv_num_formats")
+    @patch("src.python.report._holdings_detail_blocks.write_data_row")
+    @patch("src.python.report._holdings_detail_blocks.write_subtotal_row")
+    @patch("src.python.report._holdings_detail_blocks._detail_to_row_values")
+    @patch("src.python.report._holdings_detail_blocks._mv_num_formats")
     def test_multiple_accounts(self, mock_fmts, mock_to_row, mock_sub, mock_data):
         """多账户 → 每个账户 1 个小计行。"""
         mock_fmts.return_value = [""] * 15
@@ -393,10 +393,10 @@ class TestWriteAccountGroupings(unittest.TestCase):
         _, _, _, _, final_row = hds._write_account_groupings(ws, [self.detail_a, self.detail_b], 3)
         self.assertEqual(mock_sub.call_count, 2)
 
-    @patch("src.python.report.holdings_detail_sheet.write_data_row")
-    @patch("src.python.report.holdings_detail_sheet.write_subtotal_row")
-    @patch("src.python.report.holdings_detail_sheet._detail_to_row_values")
-    @patch("src.python.report.holdings_detail_sheet._mv_num_formats")
+    @patch("src.python.report._holdings_detail_blocks.write_data_row")
+    @patch("src.python.report._holdings_detail_blocks.write_subtotal_row")
+    @patch("src.python.report._holdings_detail_blocks._detail_to_row_values")
+    @patch("src.python.report._holdings_detail_blocks._mv_num_formats")
     def test_empty_details(self, mock_fmts, mock_to_row, mock_sub, mock_data):
         """空明细 → 无小计行。"""
         mock_fmts.return_value = [""] * 15
@@ -405,10 +405,10 @@ class TestWriteAccountGroupings(unittest.TestCase):
         mock_sub.assert_not_called()
         self.assertEqual(final_row, 3)
 
-    @patch("src.python.report.holdings_detail_sheet.write_data_row")
-    @patch("src.python.report.holdings_detail_sheet.write_subtotal_row")
-    @patch("src.python.report.holdings_detail_sheet._detail_to_row_values")
-    @patch("src.python.report.holdings_detail_sheet._mv_num_formats")
+    @patch("src.python.report._holdings_detail_blocks.write_data_row")
+    @patch("src.python.report._holdings_detail_blocks.write_subtotal_row")
+    @patch("src.python.report._holdings_detail_blocks._detail_to_row_values")
+    @patch("src.python.report._holdings_detail_blocks._mv_num_formats")
     def test_special_char_account(self, mock_fmts, mock_to_row, mock_sub, mock_data):
         """特殊字符账户名 → 不崩溃。"""
         mock_fmts.return_value = [""] * 15
@@ -430,10 +430,10 @@ class TestWriteAccountGroupings(unittest.TestCase):
         except Exception as e:
             self.fail(f"特殊字符账户名崩溃: {e}")
 
-    @patch("src.python.report.holdings_detail_sheet.write_data_row")
-    @patch("src.python.report.holdings_detail_sheet.write_subtotal_row")
-    @patch("src.python.report.holdings_detail_sheet._detail_to_row_values")
-    @patch("src.python.report.holdings_detail_sheet._mv_num_formats")
+    @patch("src.python.report._holdings_detail_blocks.write_data_row")
+    @patch("src.python.report._holdings_detail_blocks.write_subtotal_row")
+    @patch("src.python.report._holdings_detail_blocks._detail_to_row_values")
+    @patch("src.python.report._holdings_detail_blocks._mv_num_formats")
     def test_acc_cost_zero_rate(self, mock_fmts, mock_to_row, mock_sub, mock_data):
         """成本为 0 时收益率为 0.0 而非除零异常。"""
         mock_fmts.return_value = [""] * 15
@@ -509,17 +509,17 @@ class TestWriteMarketValueBlock(unittest.TestCase):
             ),
         ]
 
-    @patch("src.python.report.holdings_detail_sheet.write_total_row")
-    @patch("src.python.report.holdings_detail_sheet.write_subtotal_row")
-    @patch("src.python.report.holdings_detail_sheet.write_data_row")
-    @patch("src.python.report.holdings_detail_sheet.write_header_row")
-    @patch("src.python.report.holdings_detail_sheet.write_block_title")
-    @patch("src.python.report.holdings_detail_sheet._apply_price_type_colors")
-    @patch("src.python.report.holdings_detail_sheet._apply_profit_colors")
+    @patch("src.python.report._holdings_detail_blocks.write_total_row")
+    @patch("src.python.report._holdings_detail_blocks.write_subtotal_row")
+    @patch("src.python.report._holdings_detail_blocks.write_data_row")
+    @patch("src.python.report._holdings_detail_blocks.write_header_row")
+    @patch("src.python.report._holdings_detail_blocks.write_block_title")
+    @patch("src.python.report._holdings_detail_blocks._apply_price_type_colors")
+    @patch("src.python.report._holdings_detail_blocks._apply_profit_colors")
     @patch("src.python.report.holdings_detail_sheet.freeze_header")
     @patch("src.python.report.holdings_detail_sheet.auto_width")
-    @patch("src.python.report.holdings_detail_sheet._detail_to_row_values")
-    @patch("src.python.report.holdings_detail_sheet._mv_num_formats")
+    @patch("src.python.report._holdings_detail_blocks._detail_to_row_values")
+    @patch("src.python.report._holdings_detail_blocks._mv_num_formats")
     def test_basic_write(
         self,
         mock_fmts,
@@ -576,17 +576,17 @@ class TestWriteMarketValueBlock(unittest.TestCase):
         mock_aw.assert_not_called()
         self.assertEqual(ws.title, "fixture_title")
 
-    @patch("src.python.report.holdings_detail_sheet.write_total_row")
-    @patch("src.python.report.holdings_detail_sheet.write_subtotal_row")
-    @patch("src.python.report.holdings_detail_sheet.write_data_row")
-    @patch("src.python.report.holdings_detail_sheet.write_header_row")
+    @patch("src.python.report._holdings_detail_blocks.write_total_row")
+    @patch("src.python.report._holdings_detail_blocks.write_subtotal_row")
+    @patch("src.python.report._holdings_detail_blocks.write_data_row")
+    @patch("src.python.report._holdings_detail_blocks.write_header_row")
     @patch("src.python.report.holdings_detail_sheet.write_title_row")
-    @patch("src.python.report.holdings_detail_sheet._apply_price_type_colors")
-    @patch("src.python.report.holdings_detail_sheet._apply_profit_colors")
+    @patch("src.python.report._holdings_detail_blocks._apply_price_type_colors")
+    @patch("src.python.report._holdings_detail_blocks._apply_profit_colors")
     @patch("src.python.report.holdings_detail_sheet.freeze_header")
     @patch("src.python.report.holdings_detail_sheet.auto_width")
-    @patch("src.python.report.holdings_detail_sheet._detail_to_row_values")
-    @patch("src.python.report.holdings_detail_sheet._mv_num_formats")
+    @patch("src.python.report._holdings_detail_blocks._detail_to_row_values")
+    @patch("src.python.report._holdings_detail_blocks._mv_num_formats")
     def test_empty_holdings(
         self,
         mock_fmts,
@@ -616,17 +616,17 @@ class TestWriteMarketValueBlock(unittest.TestCase):
         mock_sub.assert_not_called()
         mock_total.assert_called_once()
 
-    @patch("src.python.report.holdings_detail_sheet.write_total_row")
-    @patch("src.python.report.holdings_detail_sheet.write_subtotal_row")
-    @patch("src.python.report.holdings_detail_sheet.write_data_row")
-    @patch("src.python.report.holdings_detail_sheet.write_header_row")
+    @patch("src.python.report._holdings_detail_blocks.write_total_row")
+    @patch("src.python.report._holdings_detail_blocks.write_subtotal_row")
+    @patch("src.python.report._holdings_detail_blocks.write_data_row")
+    @patch("src.python.report._holdings_detail_blocks.write_header_row")
     @patch("src.python.report.holdings_detail_sheet.write_title_row")
-    @patch("src.python.report.holdings_detail_sheet._apply_price_type_colors")
-    @patch("src.python.report.holdings_detail_sheet._apply_profit_colors")
+    @patch("src.python.report._holdings_detail_blocks._apply_price_type_colors")
+    @patch("src.python.report._holdings_detail_blocks._apply_profit_colors")
     @patch("src.python.report.holdings_detail_sheet.freeze_header")
     @patch("src.python.report.holdings_detail_sheet.auto_width")
-    @patch("src.python.report.holdings_detail_sheet._detail_to_row_values")
-    @patch("src.python.report.holdings_detail_sheet._mv_num_formats")
+    @patch("src.python.report._holdings_detail_blocks._detail_to_row_values")
+    @patch("src.python.report._holdings_detail_blocks._mv_num_formats")
     def test_subtotal_per_account(
         self,
         mock_fmts,
@@ -688,17 +688,17 @@ class TestWriteMarketValueBlock(unittest.TestCase):
         grand_mv = result[0]
         self.assertAlmostEqual(grand_mv, 3800.0)
 
-    @patch("src.python.report.holdings_detail_sheet.write_total_row")
-    @patch("src.python.report.holdings_detail_sheet.write_subtotal_row")
-    @patch("src.python.report.holdings_detail_sheet.write_data_row")
-    @patch("src.python.report.holdings_detail_sheet.write_header_row")
-    @patch("src.python.report.holdings_detail_sheet.write_block_title")
-    @patch("src.python.report.holdings_detail_sheet._apply_price_type_colors")
-    @patch("src.python.report.holdings_detail_sheet._apply_profit_colors")
+    @patch("src.python.report._holdings_detail_blocks.write_total_row")
+    @patch("src.python.report._holdings_detail_blocks.write_subtotal_row")
+    @patch("src.python.report._holdings_detail_blocks.write_data_row")
+    @patch("src.python.report._holdings_detail_blocks.write_header_row")
+    @patch("src.python.report._holdings_detail_blocks.write_block_title")
+    @patch("src.python.report._holdings_detail_blocks._apply_price_type_colors")
+    @patch("src.python.report._holdings_detail_blocks._apply_profit_colors")
     @patch("src.python.report.holdings_detail_sheet.freeze_header")
     @patch("src.python.report.holdings_detail_sheet.auto_width")
-    @patch("src.python.report.holdings_detail_sheet._detail_to_row_values")
-    @patch("src.python.report.holdings_detail_sheet._mv_num_formats")
+    @patch("src.python.report._holdings_detail_blocks._detail_to_row_values")
+    @patch("src.python.report._holdings_detail_blocks._mv_num_formats")
     def test_all_zero_price_show_warning(
         self,
         mock_fmts,

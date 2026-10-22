@@ -361,7 +361,9 @@ class TestPortfolioBetaEdge:
         portfolio = [0.001 + (i % 3 - 1) * 0.005 for i in range(252)]
         benchmark = [0.002 + (i % 5 - 2) * 0.003 for i in range(200)]
         beta = portfolio_beta(portfolio, benchmark)
-        assert beta is not None
+        # 「用较短者」的判据：与显式截断到 200 的计算结果逐位相等（而非仅「非 None」）
+        assert beta == portfolio_beta(portfolio[:200], benchmark)
+        assert portfolio_beta(portfolio[:100], benchmark) != beta
 
     def test_perfectly_correlated_returns_beta(self):
         """完全正相关 → Beta≈Cov/Var。"""

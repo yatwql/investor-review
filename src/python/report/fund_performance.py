@@ -47,13 +47,7 @@ from src.python.report.market_value import DetailRow
 from src.python.report.penetration import ACTIVE_EQUITY, BOND_FUND, ETF, INDEX_LINK, QDII, classify_penetration
 from src.python.report.styles import BLUE_FONT, DARK_GREEN_FONT, GREEN_FONT, NOTE_FONT, NORMAL_FONT, RED_FONT
 
-logger = logging.getLogger("invest")
-
-
-# 模块级降级阈值控制器（单例工厂共享，统一管理）
-# 降级跟踪器**不缓存引用**：单例工厂是唯一事实源，缓存实例会让 reset_tracker()
-# （测试隔离/运行期重置）失效——模块继续写旧实例，计数与事件落不到当前单例。
-from ._fund_rating import (  # noqa: E402, F401 — 兼容既有导入面
+from ._fund_rating import (  # noqa: F401 — 兼容既有导入面
     _DEFAULT_EXCESS_THRESHOLD_DOWN,
     _DEFAULT_EXCESS_THRESHOLD_UP,
     _RATING_COMMENT,
@@ -64,6 +58,13 @@ from ._fund_rating import (  # noqa: E402, F401 — 兼容既有导入面
     _format_return,
     _get_excess_thresholds,
 )
+
+logger = logging.getLogger("invest")
+
+
+# 模块级降级阈值控制器（单例工厂共享，统一管理）
+# 降级跟踪器**不缓存引用**：单例工厂是唯一事实源，缓存实例会让 reset_tracker()
+# （测试隔离/运行期重置）失效——模块继续写旧实例，计数与事件落不到当前单例。
 
 
 def _tracker():

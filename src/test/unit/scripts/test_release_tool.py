@@ -103,6 +103,22 @@ class TestChangelogRelease:
         assert "v0.12.1 ~ v0.12.6（2026-10-03 ~ 2026-10-08）" in out
         assert "v0.11.0 ~ v0.11.12（2026-09-15 ~ 2026-10-03）" in out  # 其余索引不动
 
+    def test_single_version_index_line_becomes_range(self, rel):
+        """索引行还是单版本形态（无 `~ v…` 尾巴）时，下一次发布必须区间化。
+
+        回归：`end_v` 只在「已有区间」时才追加，导致首版行永远停在单版本形态
+        （连续多次发布都不扩成区间，索引与归档文件头不一致）。
+        """
+        text = _sample_changelog().replace("— v0.12.1 ~ v0.12.5（2026-10-03 ~ 2026-10-07）", "— v0.12.5（2026-10-03）")
+        out, _ = rel.apply_changelog_release(text, "0.12.6", "2026-10-08")
+        assert "v0.12.5 ~ v0.12.6（2026-10-03 ~ 2026-10-08）" in out
+
+    def test_same_day_release_keeps_single_date(self, rel):
+        """同日多版：日期不重复展开成 `a ~ a`，版本仍区间化。"""
+        text = _sample_changelog().replace("— v0.12.1 ~ v0.12.5（2026-10-03 ~ 2026-10-07）", "— v0.12.1（2026-10-07）")
+        out, _ = rel.apply_changelog_release(text, "0.12.6", "2026-10-07")
+        assert "v0.12.1 ~ v0.12.6（2026-10-07）" in out
+
     def test_version_mismatch_rejected(self, rel):
         with pytest.raises(rel.ReleaseError, match="不一致"):
             rel.apply_changelog_release(_sample_changelog(), "0.12.7", "2026-10-08")
@@ -611,3 +627,44 @@ class TestChangelogPointerLinkFollowsArchive:
         broken = _sample_changelog().replace("已发布版本段随发布移入", "已发布版本段见")
         with pytest.raises(rel.ReleaseError, match="指针行"):
             rel.apply_changelog_release(broken, "0.12.6", "2026-10-08")
+
+
+class TestChangelogErrorMessagesCarryFormat:
+    """发布跑挂在格式不符时，报错须自带「期望格式样例 + 下一步」——不翻代码也能改对。
+
+    回归背景：`prepare` 的 changelog 归一步有四类格式失败（缺开发段 / 缺归档章节 /
+    缺指针行 / 索引行改写失败），原本只报「格式与预期不符」，人得去读正则猜写法。
+    """
+
+    def test_missing_dev_section_shows_expected_heading(self, rel):
+        with pytest.raises(rel.ReleaseError) as exc:
+            rel.apply_changelog_release("# 变更日志\n\n## 归档\n", "0.12.6", "2026-10-08")
+        msg = str(exc.value)
+        assert "期望：## [X.Y.Z-dev] - 开发中（未发布）" in msg
+        assert "archive-init" in msg
+
+    def test_missing_pointer_shows_expected_line(self, rel):
+        text = _sample_changelog().replace("> **最近发布 [0.12.5]**", "> 最近发布 [0.12.5]")
+        with pytest.raises(rel.ReleaseError) as exc:
+            rel.apply_changelog_release(text, "0.12.6", "2026-10-08")
+        msg = str(exc.value)
+        assert "期望：> **最近发布 [X.Y.Z]**" in msg
+        assert "archived_changelog.X.Y.x.md" in msg
+        assert "archive-init" in msg
+
+    def test_index_line_mismatch_shows_expected_line(self, rel):
+        text = (
+            "# 变更日志\n\n"
+            "> **最近发布 [0.12.5]**（2026-10-07）——已发布版本段随发布移入 "
+            "[`archived_changelog.0.12.x.md`](../archive/v0.12.x/archived_changelog.0.12.x.md)；"
+            "本文件只保留当前开发版本段与归档索引。\n\n"
+            "## [0.12.6-dev] - 开发中（未发布）\n\n- 条目\n\n"
+            "## 归档\n\n"
+            "- [`archived_changelog.0.12.x.md`](../archive/v0.12.x/archived_changelog.0.12.x.md) — 格式不符\n"
+        )
+        with pytest.raises(rel.ReleaseError) as exc:
+            rel.apply_changelog_release(text, "0.12.6", "2026-10-08")
+        msg = str(exc.value)
+        assert "期望：- [`archived_changelog.X.Y.x.md`]" in msg
+        assert "vX.Y.Z（YYYY-MM-DD）" in msg
+        assert "archive-init" in msg

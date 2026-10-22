@@ -32,7 +32,7 @@ pytestmark = [pytest.mark.scenario, pytest.mark.scenario_basic, pytest.mark.usef
 
 @pytest.mark.scenario_basic
 @pytest.mark.scenario
-class TestSP1DirectStocks(unittest.TestCase):
+class TestPenetrationDirectStocks(unittest.TestCase):
     """S-P1：纯股票组合 — 验证直接持有股票的穿透分类与板块识别。
 
     场景：持仓中全部为 A 股股票，无任何基金。
@@ -154,7 +154,7 @@ class TestSP1DirectStocks(unittest.TestCase):
 
 @pytest.mark.scenario_basic
 @pytest.mark.scenario
-class TestSP2BondFund(unittest.TestCase):
+class TestPenetrationBondFund(unittest.TestCase):
     """S-P2：债券基金穿透 — 验证债券品种穿透与来源标注。
 
     场景：持有纯债基金，穿透为具体债券品种。
@@ -337,7 +337,7 @@ class TestSP2BondFund(unittest.TestCase):
 
 @pytest.mark.scenario_basic
 @pytest.mark.scenario
-class TestSP3ETF(unittest.TestCase):
+class TestPenetrationEtf(unittest.TestCase):
     """S-P3：场内 ETF 穿透 — ETF 成分股穿透与排序验证。
 
     场景：持有场内 ETF，穿透为前 10 大成分股。
@@ -548,7 +548,7 @@ class TestSP3ETF(unittest.TestCase):
 
 @pytest.mark.scenario_basic
 @pytest.mark.scenario
-class TestSP4ActiveEquity(unittest.TestCase):
+class TestPenetrationActiveEquity(unittest.TestCase):
     """S-P4：场外主动权益基金穿透。
 
     场景：支付宝账户中的主动权益基金，穿透为具体股票持仓。
