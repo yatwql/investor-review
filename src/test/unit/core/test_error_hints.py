@@ -39,7 +39,9 @@ def test_type_based_mapping(exc, expected, log_detail):
     assert hint.log_detail is log_detail
 
 
-@pytest.mark.parametrize("keyword", ["connect", "timeout", "dns", "resolve", "network", "reset", "eof", "read timed out"])
+@pytest.mark.parametrize(
+    "keyword", ["connect", "timeout", "dns", "resolve", "network", "reset", "eof", "read timed out"]
+)
 def test_network_keywords_case_insensitive(keyword):
     assert "网络连接异常" in hint_for(ConnectionError(f"Some {keyword.upper()} problem")).message
 

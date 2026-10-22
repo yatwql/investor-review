@@ -91,7 +91,7 @@ def get_config_edit_surface() -> dict:
         is_enable_news,
         is_enable_portfolio_evolution,
     )
-    
+
     from src.python.config.anonymizer import get_anonymization_mode
     from src.python.config.features import is_feature_enabled
 

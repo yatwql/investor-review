@@ -150,8 +150,6 @@ config_edit_whitelist = {
 }
 
 
-
-
 def _target_path(target: str) -> str:
     """解析目标共享配置文件的绝对路径（写前备份用）。"""
     if target == "config":
@@ -244,7 +242,7 @@ def _write_llm_scalar(key: str, value) -> None:
     from src.python.config._llm_settings import get_llm_settings_path, read_llm_settings_file, write_llm_settings
 
     snapshot = read_llm_settings_file()
-    settings, path = (snapshot if snapshot else ({}, get_llm_settings_path()))
+    settings, path = snapshot if snapshot else ({}, get_llm_settings_path())
     settings[key] = value
     write_llm_settings(settings, path)
 

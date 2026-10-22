@@ -389,7 +389,6 @@ def _handle_whatif():
     if not _whatif_lock.acquire(blocking=False):
         return _err("WHATIF_BUSY", "已有调仓模拟在执行，请稍后再试"), 429
     try:
-
         output_dir = resolve_output_dir()
         result = run_whatif_simulation(
             base_holdings,

@@ -291,7 +291,9 @@ def _cmd_config_llm_tuning() -> None:
         print()
         return []
 
-    items = [PanelItem(str(i), spec["label"], action=_edit(key)) for i, (key, spec) in enumerate(LLM_TUNING_SPECS.items(), 1)]
+    items = [
+        PanelItem(str(i), spec["label"], action=_edit(key)) for i, (key, spec) in enumerate(LLM_TUNING_SPECS.items(), 1)
+    ]
     items.append(PanelItem("0", "返回", kind="return"))
     try:
         panel_loop(

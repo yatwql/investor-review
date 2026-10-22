@@ -93,6 +93,7 @@ def normalize_network_timeout(
     seconds = max(NETWORK_TIMEOUT_MIN, seconds)
     return min(seconds, ceiling) if ceiling is not None else seconds
 
+
 # 探测目录可写性时写入的哨兵文件名（写完立即删除，不留残留）
 _WRITE_PROBE = ".doctor_write_probe"
 

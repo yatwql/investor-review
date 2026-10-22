@@ -341,7 +341,9 @@ class TestHeaderFreshness:
         monkeypatch.setattr("src.python.core.trading_calendar.datetime", __import__("datetime").datetime)
         summary = header_freshness("2026-10-21", config={}, calendar=self._CAL)
         # 以测试当天为界取日历尾部；只要日期早于「前一交易日」才偏旧
-        assert summary["stale"] is (summary["prev_trading_day"] is not None and "2026-10-21" < summary["prev_trading_day"])
+        assert summary["stale"] is (
+            summary["prev_trading_day"] is not None and "2026-10-21" < summary["prev_trading_day"]
+        )
 
     def test_older_than_prev_trading_day_is_stale(self):
         from src.python.core.data_freshness import header_freshness
