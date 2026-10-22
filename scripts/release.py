@@ -102,6 +102,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享设�
 from _release._changelog_archive import (  # noqa: E402, F401 — _SECTION_NOTE 供测试经入口模块引用
     SECTION_NOTE as _SECTION_NOTE,
     apply_changelog_release,
+    release_section_has_entries,
     render_archive_header,
     write_archive_release,
 )
@@ -708,6 +709,8 @@ def cmd_gate(args: argparse.Namespace, runner=None) -> int:
         check_evolution_freshness=check_evolution_freshness,
         read_app_version=read_app_version,
         ledger_archive_paths=ledger_archive_paths,
+        changelog_archive_paths=archive_paths_for,
+        changelog_section_has_entries=release_section_has_entries,
         rf_archive_status=rf_archive_status,
         has_archive_section=has_archive_section,
         folders_file=FOLDERS_FILE,

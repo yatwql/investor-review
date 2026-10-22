@@ -687,3 +687,26 @@ class TestChangelogErrorMessagesCarryFormat:
         assert "期望：- [`archived_changelog.X.Y.x.md`]" in msg
         assert "vX.Y.Z（YYYY-MM-DD）" in msg
         assert "archive-init" in msg
+
+
+class TestReleasedSectionEntries:
+    """归档发布段非空判据（gate 侧兜底）：分类标题或条目行才算内容。"""
+
+    def test_section_with_entries_passes(self, rel):
+        text = (
+            "## [0.13.11] - 2026-10-20\n\n### Fixed\n\n- **条目**：内容\n\n"
+            "## [0.13.12] - 2026-10-21\n\n- **目标条目**：内容\n"
+        )
+        assert rel.release_section_has_entries(text, "0.13.12") is True
+
+    def test_title_only_section_rejected(self, rel):
+        text = "## [0.13.12] - 2026-10-21\n\n## [0.13.11] - 2026-10-20\n\n- **旧条目**：内容\n"
+        assert rel.release_section_has_entries(text, "0.13.12") is False
+
+    def test_placeholder_sentence_rejected(self, rel):
+        text = "## [0.13.12] - 2026-10-21\n\n（本次发布内容见下方归档索引）\n"
+        assert rel.release_section_has_entries(text, "0.13.12") is False
+
+    def test_absent_version_rejected(self, rel):
+        text = "## [0.13.11] - 2026-10-20\n\n- **条目**：内容\n"
+        assert rel.release_section_has_entries(text, "0.13.12") is False

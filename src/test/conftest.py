@@ -330,6 +330,16 @@ def _auto_reset_trading_calendar_memo():
 
 
 @pytest.fixture(autouse=True)
+def _auto_reset_thinking_wait_total():
+    """自动复位 thinking 串行等待累计（模块级累加器，跨用例不得串味）。"""
+    from src.python.llm._llm_dispatch import reset_thinking_wait_total
+
+    reset_thinking_wait_total()
+    yield
+    reset_thinking_wait_total()
+
+
+@pytest.fixture(autouse=True)
 def _auto_reset_fact_fix_counts():
     """自动复位事实校验自动修正计数（模块级累加器，跨用例不得串味）。"""
     from src.python.llm.fact_checker import reset_auto_correction_counts

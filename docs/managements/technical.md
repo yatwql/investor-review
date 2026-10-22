@@ -243,7 +243,7 @@ llm/generators_orchestrator.py ──→ cache/（可选）
 | **贯穿** | 代码类型判定 | 资产识别原语 | `core/code_utils.py` |
 | **贯穿** | 交易时段判断 | A 股时段、午间休市 | `core/market_hours.py` |
 | **贯穿** | HTTP 客户端 | 统一工厂 | `core/http_client.py` |
-| **贯穿** | 性能收集 | PerfCollector 三路径计时 + perf_history.jsonl 持久化 + 数据源健康历史聚合 `summarize_health_history()`；`counters` 除 warnings/errors 外含**事实校验自动修正计数**（`fact_fix_total` / `fact_fix_numeric` / `fact_fix_code` / `fact_fix:<模块>`，由 `llm/fact_checker` 线程安全累加、报告层 LLM 阶段前清零后汇入——修正次数是模型口径偏差的直接信号，单次只进日志时无法跨期对拍） | `core/perf.py` + `llm/fact_checker/_corrections.py` |
+| **贯穿** | 性能收集 | PerfCollector 三路径计时 + perf_history.jsonl 持久化 + 数据源健康历史聚合 `summarize_health_history()`；`counters` 除 warnings/errors 外含**事实校验自动修正计数**（`fact_fix_total` / `fact_fix_numeric` / `fact_fix_code` / `fact_fix:<模块>`，由 `llm/fact_checker` 线程安全累加、报告层 LLM 阶段前清零后汇入——修正次数是模型口径偏差的直接信号，单次只进日志时无法跨期对拍）；另有 `llm_thinking_wait_ms`（thinking 并发槽串行等待累计，量化「上限 1→2」的潜在收益） | `core/perf.py` + `llm/fact_checker/_corrections.py` |
 | **贯穿** | 运行一致性 | 生成中断收口（KeyboardInterrupt 安全落点：临时产物清扫 + `status=interrupted` 运行记录 + 已写盘/已丢弃明细）+ HTML/Excel 产物原子落盘登记 | `report/run_integrity.py` |
 | **贯穿** | 日志可视化 | 结构化日志读取（parse_log/tail_log/read_log），CLI/TUI/Web 三端共享 | `core/log_reader.py` |
 | **贯穿** | 系统自检 | 运行环境/配置/目录/日志与缓存/功能开关/数据源适配/数据源凭据/数据源八组一次性盘点（开关 `doctor_check`，默认开），CLI/TUI/Web 三端共享；自身永不抛异常、零重依赖 | `core/doctor.py` |

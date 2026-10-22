@@ -49,6 +49,25 @@ _LLM_CLIENT_SETTINGS: dict[str, Any] = {
 #: thinking 并发槽等待超过该秒数即记一行 INFO（低于此值属正常抖动，不值得占日志）
 _THINKING_WAIT_LOG_SECONDS = 5.0
 
+#: thinking 串行等待累计（秒）——进程级，报告层 LLM 阶段结束后汇入 perf counters
+#: 并清零；用于跨期量化「把 llm_max_thinking_concurrency 提到 2 能省多少」
+_THINKING_WAIT_TOTAL = {"seconds": 0.0}
+#: 串行等待累计达到该值才给「提到 2」的可执行提示（更小的等待不值得改配置）
+_THINKING_WAIT_HINT_SECONDS = 20.0
+_THINKING_WAIT_TOTAL_LOCK = threading.Lock()
+
+
+def reset_thinking_wait_total() -> None:
+    """清零 thinking 串行等待累计（每轮 LLM 阶段开始前调用；测试隔离同源）。"""
+    with _THINKING_WAIT_TOTAL_LOCK:
+        _THINKING_WAIT_TOTAL["seconds"] = 0.0
+
+
+def thinking_wait_total_seconds() -> float:
+    """本轮 thinking 串行等待累计秒数（快照）。"""
+    with _THINKING_WAIT_TOTAL_LOCK:
+        return round(_THINKING_WAIT_TOTAL["seconds"], 3)
+
 
 def _build_module_fns(
     a_indices,
@@ -291,6 +310,8 @@ def _dispatch_llm_workers(
                 waited_from = time.monotonic()
                 with _thinking_sem:
                     waited = time.monotonic() - waited_from
+                    with _THINKING_WAIT_TOTAL_LOCK:
+                        _THINKING_WAIT_TOTAL["seconds"] += waited
                     # 信号量等待完全静默时，只有对时间轴才能发现「thinking 模块被串行」
                     # （实测两个 thinking 模块各 37s/51s 被 llm_max_thinking_concurrency=1
                     # 完全串行，白等 38s 却无任何日志线索）→ 超阈值即报一行 INFO。
@@ -447,5 +468,15 @@ def _dispatch_llm_workers(
             "本次 LLM 生成因总时间预算跳过 %d 个模块：%s（报告按已生成内容呈现）",
             len(_budget_skipped),
             "、".join(_label_map.get(k, k) for k in _budget_skipped),
+        )
+
+    # 串行等待汇总：这是「把上限提到 2 能省多少」的直接量化（见 llm-technical 决策记录）
+    _wait_total = thinking_wait_total_seconds()
+    if _wait_total >= _THINKING_WAIT_HINT_SECONDS and _thinking_limit < 2:
+        logger.info(
+            "[llm/thinking] 本轮 thinking 模块串行等待合计 %.1fs（上限 %d）：提到 2 约可省该时长，"
+            "前提是端点并发两个 thinking 请求不出现空响应（改 llm_settings.json 的 llm_max_thinking_concurrency）",
+            _wait_total,
+            _thinking_limit,
         )
     return results_dict

@@ -424,6 +424,11 @@ class TestGateArchivePrecondition:
         monkeypatch.setattr(rel, "read_app_version", lambda _t: "0.13.12")
         monkeypatch.setattr(rel, "ledger_archive_paths", lambda _v: (archived, tmp_path / "archived_plan.md"))
         monkeypatch.setattr(rel, "has_archive_section", lambda *_a, **_k: True)
+        # changelog 归档段非空断言同样沙箱化（否则用例结论取决于仓库真实归档内容）
+        changelog_archive = tmp_path / "archived_changelog.x.md"
+        changelog_archive.write_text("## [0.13.12] - 2026-10-21\n\n- **条目**：内容\n", encoding="utf-8")
+        monkeypatch.setattr(rel, "archive_paths_for", lambda _v: (changelog_archive, changelog_archive.name))
+        monkeypatch.setattr(rel, "release_section_has_entries", lambda *_a, **_k: True)
         return archived
 
     def test_pending_rows_block_gate(self, rel, monkeypatch):
@@ -451,6 +456,27 @@ class TestGateArchivePrecondition:
         monkeypatch.setattr(rel, "rf_archive_status", lambda *_a, **_k: ("absent", 0))
         assert rel.cmd_gate(ns(), runner=FakeRunner()) == 0
         assert "无「开发期已修复」节" in capsys.readouterr().out
+
+    def test_empty_changelog_section_blocks_gate(self, rel, monkeypatch, capsys):
+        """归档里的发布段只有标题/占位句 → 发布记录缺内容，前置中止。
+
+        判定口径：prepare 已拦「占位句原样归档」，gate 侧兜旁路/人工归档写出的空段——
+        归档一旦落盘，正文缺失就再也补不回来。
+        """
+        monkeypatch.setattr(rel, "rf_archive_status", lambda *_a, **_k: ("archived", 0))
+        monkeypatch.setattr(rel, "release_section_has_entries", lambda *_a, **_k: False)
+        runner = FakeRunner()
+        assert rel.cmd_gate(ns(), runner=runner) == 2
+        assert runner.calls == []  # 未跑任何子进程（不浪费门禁墙钟）
+        assert "没有实际条目" in capsys.readouterr().out
+
+    def test_missing_changelog_archive_blocks_gate(self, rel, monkeypatch, tmp_path):
+        """缺 changelog 归档文件 → 前置中止（而不是跑到 regression 之后才失败）。"""
+        monkeypatch.setattr(rel, "rf_archive_status", lambda *_a, **_k: ("archived", 0))
+        monkeypatch.setattr(rel, "archive_paths_for", lambda _v: (tmp_path / "nope.md", "nope.md"))
+        runner = FakeRunner()
+        assert rel.cmd_gate(ns(), runner=runner) == 2
+        assert runner.calls == []
 
 
 # ─────────────────────────── refresh / evolution 命令 ───────────────────────────

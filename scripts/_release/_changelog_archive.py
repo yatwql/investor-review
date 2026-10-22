@@ -49,6 +49,23 @@ def _find_section(text: str) -> tuple[int, int, str]:
     return header.start(), header.end() + next_header.start(), header.group(1)
 
 
+def release_section_has_entries(text: str, release_version: str) -> bool:
+    """归档文件里 `## [X.Y.Z] - YYYY-MM-DD` 段是否含实际条目。
+
+    gate 侧兜底：prepare 已拦住「占位句被原样归档」，但归档文件仍可能被人工/旁路
+    写成只有标题的空段（实测已发生过一次，发布记录永久缺内容）。此处按段扫描，
+    与 `_has_release_entries` 同一判据（`### ` 分类标题或 `- ` 条目行）。
+    """
+    target = str(release_version).lstrip("v")
+    heads = list(_RELEASE_SECTION_RE.finditer(text))
+    for pos, match in enumerate(heads):
+        if match.group(1).lstrip("v") != target:
+            continue
+        end = heads[pos + 1].start() if pos + 1 < len(heads) else len(text)
+        return _has_release_entries(text[match.end() : end])
+    return False
+
+
 def _has_release_entries(body_core: str) -> bool:
     """开发段是否含实际条目（分类标题 `###` 或 `- ` 条目行）。
 

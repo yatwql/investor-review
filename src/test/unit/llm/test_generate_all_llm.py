@@ -791,6 +791,54 @@ class TestThinkingConcurrencyLimit(unittest.TestCase):
         self.assertIn("上限 1", wait_lines[0])
 
 
+class TestThinkingWaitQuantified(unittest.TestCase):
+    """thinking 串行等待要能跨期量化（本轮累计 + 可执行提示）。
+
+    判定口径：两个 thinking 模块在上限 1 下串行时，等待总量≈较短那段时长；
+    该数字进 perf counters（`llm_thinking_wait_ms`）并给出「提到 2 约可省该时长」提示，
+    否则「默认值该不该改」只能靠翻时间轴猜。
+    """
+
+    def _run(self, sleep_s: float, hint_threshold: float):
+        from src.python.llm import _llm_dispatch as disp
+        from src.python.llm.generators_orchestrator import _dispatch_llm_workers
+
+        def _slow_fn(_client, _cfg):
+            time.sleep(sleep_s)
+            return "<p>x</p>", False
+
+        fns = {"health_check": _slow_fn, "expert_review": _slow_fn}
+        needs = {"health_check": True, "expert_review": True}
+        llm_config = {
+            "llm_max_concurrency": 2,
+            "llm_max_thinking_concurrency": 1,
+            "thinking_enabled_health_check": True,
+            "thinking_enabled_expert_review": True,
+        }
+        disp.reset_thinking_wait_total()
+        with (
+            patch("src.python.llm._llm_dispatch._build_module_fns", return_value=fns),
+            patch("src.python.llm.generators_orchestrator._build_competitive_context_block", return_value=""),
+            patch("src.python.llm._llm_dispatch.make_http_client", return_value=MagicMock()),
+            patch("src.python.llm._llm_dispatch._THINKING_WAIT_HINT_SECONDS", hint_threshold),
+            self.assertLogs("invest", level="INFO") as logs,
+        ):
+            _dispatch_llm_workers(needs, llm_config, False, {}, {}, 0, 0, 0, 0, 0, {}, None, None, None)
+        return disp.thinking_wait_total_seconds(), logs.output
+
+    def test_wait_total_accumulated_and_hint_logged(self):
+        total, output = self._run(0.06, 0.02)
+        self.assertGreater(total, 0.0, "串行等待必须被累计（否则无法跨期量化）")
+        hints = [line for line in output if "串行等待合计" in line]
+        self.assertEqual(len(hints), 1, f"应恰有一条量化提示（实际 {output}）")
+        self.assertIn("提到 2", hints[0])
+
+    def test_no_hint_when_wait_below_threshold(self):
+        """等待很小时不打扰（阈值内属正常抖动）。"""
+        _total, output = self._run(0.02, 999.0)
+        self.assertFalse([line for line in output if "串行等待合计" in line])
+
+
 class TestDispatchModuleSpans(unittest.TestCase):
     """逐模块耗时记录：模块自身耗时入 recorder，None 时零行为变化。"""
 
