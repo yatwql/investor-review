@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.14.7-dev
-> **编号源**：`rf-next = 834`（新增问题取此编号，完成后更新为 +1；已用最大 rf-833，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 835`（新增问题取此编号，完成后更新为 +1；已用最大 rf-834，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -35,6 +35,12 @@
 **已移出登记（降回登记线以下，维持现有模块边界）**：rf-89 `src/python/report/excel_generator.py` 659、rf-80 `src/python/report/data_status.py` 649、rf-81 `src/python/report/html_renderers.py` 577、rf-85 `src/python/fetcher/fund.py` 553、rf-78 `src/python/fetcher/batch.py` 520、`src/python/llm/prompts_core.py` 350 / `src/python/llm/generators.py` 444 —— 均在主程序登记线（700 行）以下，移出逐项登记；行数复核以 `-v` 为准。
 
 ## 已解决问题
+
+### 开发期已修复（0.14.7-dev）
+
+| # | 问题 | 处理 |
+|---|------|------|
+| **rf-834** | `test-runner` 多档并行时一档失败仍要等其余各档跑完才返回（`refresh` 实测 53s 中约 40s 是白等），发版窗口需要「首个失败立刻回报」的能力 | 已修复：新增 `--fail-fast`——首个非零结果即取消**尚未启动**的档（已启动的不打断：强杀 pytest 子进程会留下半截报告并丢失败详情），被跳过的档在摘要中显式列出（静默跳过与「跑完了」不可区分）；串行/并行共用 `run_modes_concurrently` 调度器，行为只有一处实现；`refresh` 的 bench 步默认带该参数。回归 2 例（失败后即停止启动后续档且返回跳过清单 / 未启用时跑完全部且结果按计划序） | 已修复（同上）：`_test_runner/runner.py::run_modes_concurrently` + `--fail-fast` + help 文本 + `release.py refresh` 接线；`unit/scripts/test_test_runner_modes.py` 2 例 |
 
 ### 开发期已修复（0.14.6-dev）
 

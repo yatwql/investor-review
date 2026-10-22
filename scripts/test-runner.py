@@ -104,6 +104,7 @@ from _test_runner.runner import (  # noqa: F401
     _create_latest_structure,
     archive_existing,
     run_mode,
+    run_modes_concurrently,
     _run_phased,
 )
 
@@ -131,6 +132,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-timeout", action="store_true", help="禁用超时，等待测试自然结束")
     parser.add_argument(
         "--phased", action="store_true", help="分阶段运行（仅对支持分阶段的模式有效，前序失败则跳过后续）"
+    )
+    parser.add_argument(
+        "--fail-fast",
+        action="store_true",
+        help="多档运行首个失败即中止，取消尚未启动的档（发布前快速反馈；已启动的档不打断，被跳过的档在摘要中显式列出）",
     )
     parser.add_argument(
         "--machine-info",
@@ -208,22 +214,17 @@ def main() -> None:
         no_timeout=args.no_timeout,
         phased=args.phased,
     )
+    aborted_modes: list[str] = []
     try:
+        # 串行与并行共用同一调度器（jobs=1 即串行）：失败即停因此只有一处实现。
+        # 按计划序收集结果，与串行版顺序一致（写表/汇总不依赖完成序）。
         if jobs > 1 and len(modes_to_run) > 1:
-            # 多模式并行（每模式独立 pytest 进程，报告按模式目录隔离）：
-            # 省的是模式间串行衔接与收集段，实际收益随机器核数与负载浮动，
-            # 环境表「采集并行度」行记录本次口径，同并行度才可比。按计划序收集
-            # 结果，与串行版 results 顺序一致（写表/汇总不依赖完成序）。
-            from concurrent.futures import ThreadPoolExecutor
-
             print(f"  [..] 并行度 jobs={jobs}（多模式独立进程并发）")
-            with ThreadPoolExecutor(max_workers=min(jobs, len(modes_to_run))) as pool:
-                futs = [pool.submit(run_mode, mode_key, **run_one) for mode_key in modes_to_run]
-                for fut in futs:
-                    results.append(fut.result())
-        else:
-            for mode_key in modes_to_run:
-                results.append(run_mode(mode_key, **run_one))
+        if args.fail_fast:
+            print("  [..] 失败即停：首个失败后取消尚未启动的档")
+        results, aborted_modes = run_modes_concurrently(
+            modes_to_run, jobs, lambda mode_key: run_mode(mode_key, **run_one), fail_fast=args.fail_fast
+        )
     except KeyboardInterrupt:
         print("\n  [!] 手动中断，输出已完成模式的结果")
         _print_machine_report(machine_info, results)
@@ -239,6 +240,10 @@ def main() -> None:
         f.write(index_html)
 
     print("\n  [OK] 汇总页已生成: test-reports/latest/index.html")
+
+    # 失败即停时被跳过的档：显式列出（静默跳过与「跑完了」不可区分）
+    if aborted_modes:
+        print(f"  [!] 失败即停：已跳过 {', '.join(aborted_modes)}（--fail-fast；修复后重跑）")
 
     # 总体结果
     exit_codes = [r.get("exit_code", -1) for r in results]
