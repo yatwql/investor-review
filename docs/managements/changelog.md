@@ -11,6 +11,8 @@
 
 ### Changed
 
+- **发布归档报错附期望格式（`rf-810`，补齐 `rf-808` 后半）**：`prepare` 的 changelog 归一步四类格式失败（缺开发段 / 缺归档章节 / 缺指针行 / 索引行改写失败）原本只报「格式与预期不符」，现统一附「期望：<样例行>」+「下一步：先跑 `release.py archive-init`」——指针行、索引行、开发段三种样例都写进提示，不翻代码即可改对。回归 3 例。
+
 - **缓存操作五职责拆分（`rf-86`）**：`cache/operations.py` 739 → **489 行**，缓存刷新族（公共缓存 / 新闻 / 基金经理 / 扩展缓存，13 个私有函数）下沉 `cache/_cache_refresh.py`（282 行）；原模块只留数据类、更新编排、清理、统计与预热。依赖单向（编排 → 刷新），`CacheUpdateResult` 用 TYPE_CHECKING + 函数内延迟导入避免环；测试 patch 按调用点区分（直接调刷新器 → `_cache_refresh`，经 `update_basic_cache` → `operations`）。P3 登记表清空。
 
 - **报告域两模块拆分（`rf-626`）**：`report/html_writer.py` 799 → **689 行**（数据状态块装配 → `html_writer_status.py`）；`analysis/rebalance.py` 751 → **243 行**（偏离度信号族 → `_rebalance_deviation.py`，含分类权重与误报保护、四个常量随迁）。依赖方向单向：渲染 → 状态装配、信号 → 分类/配置（后者函数内延迟导入，避免与入口 re-export 成环）；门面 re-export 保持导入面，测试 patch 目标按调用点改指。

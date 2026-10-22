@@ -21,14 +21,31 @@ _HEADER_TIME_RE = re.compile(r"^> 归档时间：.*$", re.M)
 _RELEASE_SECTION_RE = re.compile(r"^## \[([^\]]+)\] - (\d{4}-\d{2}-\d{2})\s*$", re.M)
 
 
+#: 报错时附带的「期望格式」样例——发布跑挂在格式不符时，人不必翻代码猜写法
+_FMT_POINTER = (
+    "> **最近发布 [X.Y.Z]**（YYYY-MM-DD）——已发布版本段随发布移入 "
+    "[`archived_changelog.X.Y.x.md`](../archive/vX.Y.x/archived_changelog.X.Y.x.md)；"
+    "本文件只保留当前开发版本段与归档索引。"
+)
+_FMT_INDEX = "- [`archived_changelog.X.Y.x.md`](../archive/vX.Y.x/archived_changelog.X.Y.x.md) — vX.Y.Z（YYYY-MM-DD）"
+_FMT_SECTION = "## [X.Y.Z-dev] - 开发中（未发布）"
+_HINT_INIT = "新小版本首个版本：先跑 `release.py archive-init` 自动生成骨架（幂等，可 --dry）"
+
+
+def _fmt_hint(*lines: str) -> str:
+    """把「期望格式 + 下一步」拼成多行提示（缩进对齐，便于终端扫读）。"""
+    body = "\n".join(f"      期望：{ln}" for ln in lines)
+    return f"\n{body}\n      下一步：{_HINT_INIT}"
+
+
 def _find_section(text: str) -> tuple[int, int, str]:
     """定位当前开发段（含正文），返回 (起点, 终点, 段内版本号)；终点=下一 ## 行。"""
     header = re.search(r"^## \[([^\]]+)\] - 开发中（未发布）\s*$", text, re.M)
     if not header:
-        raise ReleaseError("changelog 未找到「开发中（未发布）」段")
+        raise ReleaseError("changelog 未找到「开发中（未发布）」段" + _fmt_hint(_FMT_SECTION))
     next_header = re.search(r"^## ", text[header.end() :], re.M)
     if not next_header:
-        raise ReleaseError("changelog 开发段之后没有归档章节")
+        raise ReleaseError("changelog 开发段之后没有归档章节（缺 `## 归档` 索引块）" + _fmt_hint("## 归档", _FMT_INDEX))
     return header.start(), header.end() + next_header.start(), header.group(1)
 
 
@@ -60,7 +77,7 @@ def apply_changelog_release(text: str, release_version: str, date: str) -> tuple
         flags=re.M,
     )
     if n_ptr != 1:
-        raise ReleaseError("changelog 未找到「最近发布」指针行")
+        raise ReleaseError("changelog 未找到「最近发布」指针行" + _fmt_hint(_FMT_POINTER))
 
     archive_name = archive_name_for(release_version)
     # 指针行的归档文件名也要一并改写：跨小版本发布时归档文件换名（0.13.x → 0.14.x），
@@ -73,14 +90,16 @@ def apply_changelog_release(text: str, release_version: str, date: str) -> tuple
         flags=re.M,
     )
     if n_link != 1:
-        raise ReleaseError("changelog 指针行的归档文件链接改写失败（格式与预期不符）")
+        raise ReleaseError("changelog 指针行的归档文件链接改写失败（格式与预期不符）" + _fmt_hint(_FMT_POINTER))
     idx_pat = re.compile(
         rf"^(- \[`{re.escape(archive_name)}`\]\([^)]*\)\s*—\s*[^（]*?)"
         r"(v[\d.]+)( ~ v[\d.]+)?（(\d{4}-\d{2}-\d{2})( ~ \d{4}-\d{2}-\d{2})?）",
         re.M,
     )
     if archive_name not in out:
-        raise ReleaseError(f"changelog 归档索引中没有 {archive_name} 行（新小版本需先手工建归档文件）")
+        raise ReleaseError(
+            f"changelog 归档索引中没有 {archive_name} 行（新小版本需先建归档文件）" + _fmt_hint(_FMT_INDEX)
+        )
 
     def _idx_repl(m: re.Match) -> str:
         head, start_v, tail_v, start_d, tail_d = (
@@ -96,7 +115,7 @@ def apply_changelog_release(text: str, release_version: str, date: str) -> tuple
 
     out, n_idx = idx_pat.subn(_idx_repl, out, count=1)
     if n_idx != 1:
-        raise ReleaseError("changelog 归档索引行改写失败（格式与预期不符）")
+        raise ReleaseError("changelog 归档索引行改写失败（格式与预期不符）" + _fmt_hint(_FMT_INDEX))
     return out, body_core
 
 

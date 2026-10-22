@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.14.2-dev
-> **编号源**：`rf-next = 810`（新增问题取此编号，完成后更新为 +1；已用最大 rf-809，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 811`（新增问题取此编号，完成后更新为 +1；已用最大 rf-810，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -44,6 +44,7 @@
 
 | # | 问题 | 处理 |
 |---|------|------|
+| **rf-810** | `rf-808` 的修复方向只落了前半（`archive-init` 骨架生成），后半「报错附期望格式样例」未做：`prepare` 的 changelog 归一步四类格式失败（缺开发段 / 缺归档章节 / 缺指针行 / 索引行改写失败）原本只报「格式与预期不符」，执行者须去读正则才能猜出正确写法 | 已修复：`_release/_changelog_archive.py` 新增 `_fmt_hint()` 与三个格式样例常量（指针行 / 索引行 / 开发段），四处报错统一附「期望：<样例>」+「下一步：先跑 `release.py archive-init`」；回归 3 例 （缺开发段 / 缺指针行 / 索引行格式不符各自断言样例与提示文案） |
 | **rf-86** | `src/python/cache/operations.py` 739 行：五职责混在一处——数据结构（3 个 dataclass）、缓存刷新族（公共缓存/新闻/基金经理/扩展缓存，13 个私有函数）、更新编排（basic/position/all）、清理、统计与预热 | 已修复：刷新族下沉 `cache/_cache_refresh.py`（282 行）——`_get_pool`、基金/行业/分红/盈利预测/行业资金流各刷新器与提示、`_refresh_common_caches`、新闻与基金经理/扩展缓存；`operations.py` **489 行**，只留数据类、更新编排（`update_basic_cache`/`update_position_cache`/`update_all_cache`）、清理、统计、预热。单向依赖：编排 → 刷新（`CacheUpdateResult` 用 TYPE_CHECKING + 函数内延迟导入避免与入口成环）；测试 patch 按调用点区分：直接调用刷新器的用例指向 `_cache_refresh`，经 `update_basic_cache` 的用例留在 `operations`。P3 登记表随之清空（无逼近红线档文件） |
 | **rf-626** | 报告域两模块内职责混杂：`report/html_writer.py` 799 行（模板渲染 + 落盘 + 数据状态块装配）、`analysis/rebalance.py` 751 行（配置解析/分类入口 + 偏离度信号族） | 已修复：① `html_writer` 799 → **689 行**（数据状态块装配 → `html_writer_status.py` 901 行：自述块 / 降级状态安全构建 / 时间串 / 三处状态区块）；② `rebalance` 751 → **243 行**（偏离度信号族 → `_rebalance_deviation.py` 565 行：目标偏离 / 股债偏离 / 单品种超限 / 信号汇总 + 分类权重与误报保护，常量 `MIN_NEW_POSITION_TRADING_DAYS` / `_CATEGORY_ORDER` / `_CATEGORY_LABELS` / `_EQUITY_FI_GROUPS` 随迁）。依赖方向单向（渲染 → 状态装配；信号 → 分类/配置，后者用**函数内延迟导入**避免与入口 re-export 成环）；测试 patch 目标按「调用点所在模块」改指（`build_*_data_status` 系列 → `html_writer_status`）。同族两文件维持（`llm/prompts_core.py` / `llm/generators.py` 按模块分文件） |
 | **rf-665** | `src/python/config/features.py` 840 行：功能开关注册表（`feature_switch_registry` 206 行 + `FeatureSwitchDef` + 分组常量 + 纯注册表视图）与运行时状态（features.json 读写/迁移/日志）混在一处，每个新开关约十行、持续挤压余量 | 已修复：注册表与定义下沉 `config/_feature_registry.py`（298 行）——分组常量 / `GROUP_LABELS` / `GROUP_ORDER` / `FeatureSwitchDef` / `feature_switch_registry` / `_FEATURE_FLAGS_DEFAULT` / `switches_in_group` / `experimental_flags` / `is_experimental_switch` / `EXPERIMENT_ALL`；`features.py` **574 行**，只留运行时状态（覆写读写、合并键迁移、开关解析与日志）并 re-export 注册表符号。单向依赖：运行时 → 注册表，`feature_switch_registry is ...` 同一对象（无副本）。同族两文件维持（`tui/handlers_config.py` / `scripts/_doc_drift/_format.py` 各自域内聚） |
