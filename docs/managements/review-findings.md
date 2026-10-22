@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.14.3-dev
-> **编号源**：`rf-next = 815`（新增问题取此编号，完成后更新为 +1；已用最大 rf-814，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 816`（新增问题取此编号，完成后更新为 +1；已用最大 rf-815，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -39,6 +39,12 @@
 | —（同批决策） | `src/python/llm/prompts_core.py`、`src/python/llm/generators.py` | 350 / 444 | 维持现状：提示词 / 生成器按模块分文件 |
 
 ## 已解决问题
+
+### 开发期已修复（0.14.3-dev）
+
+| # | 问题 | 处理 |
+|---|------|------|
+| **rf-815** | v0.14.2 master 档 CI 在 `test (3.11)` 红 1 例：`test_unequal_lengths_uses_shorter` 用**逐位相等**断言`beta == portfolio_beta(portfolio[:200], benchmark)`，而两条路径的对齐和式顺序不同，末位差 1.6e-17 —— 本机 3.13 恰好相等、3.11 不等（跨实现浮点不可依赖逐位相等）。该断言是本轮 `rf-813` 强化时引入的 | 已修复：改 `pytest.approx(..., abs=1e-12)` 保留「对齐到较短者」语义，长度敏感反例改 `> 1e-6`；本地 3.11 解释器实测差值 1.6e-17、长度敏感 1.25e-2，两侧都稳。教训：浮点断言一律容差，禁 `==`（含「同一算式不同输入长度」这类看似等价的比较） |
 
 ### 归档档案
 - [`archived_review-findings.0.14.x.md`](../archive/v0.14.x/archived_review-findings.0.14.x.md) — v0.14.x（2026-10-21 ~ 2026-10-22）
