@@ -1500,7 +1500,7 @@ CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` /
 | 启动 | `launch.sh` / `launch.ps1`（TUI 与 `web` 子命令）/ `cli.sh` / `llm.sh` 及其 `.ps1` 版 | 免解释器前缀的常用入口 |
 | CLI 子命令 | `report` / `cache` / `whatif` / `check-sources` / `view-logs` / `doctor` / `cassettes` | 用户侧命令行入口（详见 [CLI 手册](../manuals/how-to-use-cli-mode.md)） |
 
-> 新增脚本时：同域分组入 [scripts-reference.md](scripts-reference.md) 的对应小节，并在上表「按域索引」里确认该域已覆盖。
+> 新增脚本时：先按 [scripts-reference.md](scripts-reference.md)「命名约定」选前缀（`check-` 仅限可入门禁的检查、`test-`/`eval-`/`perf-`/`probe-`/`hook-`/`make-` 各归其域），再入对应域小节，并在上表「按域索引」里确认该域已覆盖。
 ## 关键纪律来源
 
 本指南为面向开发者的"入口版"。以下完整纪律以 [CLAUDE.md](../../CLAUDE.md) 为准：

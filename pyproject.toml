@@ -21,7 +21,7 @@ dependencies = [
 color = [
     "colorama==0.4.6",
 ]
-# SVG 像素审查（scripts/check-svg.py pixel|text-overflow）需要；几何审查 geom 免依赖
+# SVG 像素审查（make-assets.py svg-pixel|svg-text-overflow）需要；几何审查 svg-geom 免依赖
 svg = [
     "Pillow>=10",
 ]

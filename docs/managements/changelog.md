@@ -13,9 +13,11 @@
 
 - **`--mode portability`：CI portability job 本地等价复现**：新增非 pytest 探针模式（`scripts/_test_runner/portability.py`），一条命令跑 CI 的阻塞探针——①`PYTHONWARNDEFAULTENCODING=1` 隐式编码严格档（单元套件）；②需求文件 BOM/PEP263 **确定性判定** + `LC_ALL=C` 下 `pip install --dry-run` 烟测（pip ≥25 起默认 UTF-8，输出提示「完整判定需 pip ≤24.x」，确定性判定始终生效）。探针模式无 marker、不进 bench 与三档门禁，计数量按探针项数；配套纪律「本地门禁通过后不逐提交轮询 CI」写入 CLAUDE.md 与 developer-guide。回归 13 例（BOM/cookie 四态、两道探针环境与失败回传、聚合口径、注册表接线）。
 
-- **Social Preview 生成脚本入库**：`scripts/make-social-preview.py` 把 1200×630 品牌预览图的画布模板（猫头鹰「守望」左卡 + 品牌文案右栏 + 夜空渐变）与渲染流程固化进仓库——素材复用 `src/static/owl-mascot.svg`，改文案/换色后重跑即就地刷新入库资产 `src/static/social-preview.jpg`（默认输出，`-o` 可改道临时目录），提交后由人工上传到仓库 Settings。`cairosvg` 为维护期可选依赖（不入 requirements：无 cairo 系统库的环境装不上），缺依赖或素材不可读时打印指引并以退出码 1 结束。回归 12 例（画布尺寸/品牌文案/素材内嵌一致/宽高比/入库资产定位/成品尺寸/栅格化参数/中间 PNG 去留/两条退出码路径）。
+- **Social Preview 生成脚本入库**：`scripts/make-social-preview.py` 把 1200×630 品牌预览图的画布模板（猫头鹰「守望」左卡 + 品牌文案右栏 + 夜空渐变）与渲染流程固化进仓库——素材复用 `src/static/owl-mascot.svg`，改文案/换色后重跑即就地刷新入库资产 `src/static/social-preview.jpg`（默认输出，`-o` 可改道临时目录），提交后由人工上传到仓库 Settings。`cairosvg` 为维护期可选依赖（不入 requirements：无 cairo 系统库的环境装不上），缺依赖或素材不可读时打印指引并以退出码 1 结束。回归 13 例（画布尺寸/品牌文案/素材内嵌一致/宽高比/入库资产定位/成品尺寸/栅格化参数/中间 PNG 去留/真实导入装配/两条退出码路径）。
 
 ### Changed
+
+- **流程文档同步脚本命名规范（前缀 ↔ 域）**：`scripts-reference.md` 新增「命名约定」小节（前缀 ↔ 域 ↔ 契约的判定表，含「`check-` 仅限可入门禁的检查」这条硬边界），`developer-guide.md`「新增脚本时」与 `CLAUDE.md`「scripts 共享设施与契约」同步为「先选前缀再归域」；顺带清理陈旧引用（`pyproject.toml` 的 svg extra 注释、`eval-factor-zoo` 测试 docstring）。
 
 - **视觉资产工具收口为 `make-assets.py`**：`check-svg.py`（架构图渲染体检）与 `make-social-preview.py`（社交预览图生成）合并为单一入口 `scripts/make-assets.py`（子命令 `social-preview` / `svg-geom` / `svg-pixel` / `svg-text-overflow`，实现拆 `scripts/_assets/` 包）。`check-*` 前缀此后专指**可入门禁的检查脚本**，不再混入按需资产工具；退出码统一 0/1/2（1=环境缺失、2=发现越界），`social-preview` 重跑与入库图逐字节一致。
 

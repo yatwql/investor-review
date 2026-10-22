@@ -1,4 +1,4 @@
-"""factor_zoo_eval 评测脚本边缘场景（空输入/退化数据/极端值），全部离线。"""
+"""`eval-factor-zoo.py` 评测边缘场景（空输入/退化数据/极端值），全部离线。"""
 
 import pytest
 from src.test._script_loader import load_script
