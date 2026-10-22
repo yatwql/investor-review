@@ -236,7 +236,7 @@ def update_ratio_note(text: str, stats: dict[str, int], with_release: bool) -> s
 
 
 def update_case_note(text: str, stats: dict[str, int]) -> str:
-    """用例口径注释中的 grep / 严格定义行数；pytest 收集口径留人工核对提示。
+    """用例口径注释中的 grep / 严格定义行数（pytest 收集数由 check-doc-drift 计数行校验）。
 
     目标短语在真实文档中位于行中（非行首），不做行首锚定；模式缺失即抛
     `ReleaseError`（不静默漏更、不留滞留计数）。

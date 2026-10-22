@@ -129,7 +129,7 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 |:-----|:-------|:-----|:-----|
 | **P0** | 提交前 | `.venv/bin/python scripts/test-runner.py --mode dev-verify` + 十守护（`--ci` 全套，钩子自动执行） | 阻塞提交，不得 commit |
 | **P1** | 合入 master 前 | `.venv/bin/python scripts/test-runner.py --mode verify`（全部 `unit_*` 目录域，含 TUI/CLI——归域即进门禁，`technical.md` §4.23） | 阻塞合入，不得 merge |
-| **P2** | 发布前 | `.venv/bin/python scripts/release.py gate`（= 演进对照新鲜度断言〔当前开发版列头日期须为当日〕+ regression + 十守护 `--ci` 全套〔并行执行，并发度随核数收敛 ≤4 路〕+ 设计护栏，gate 自动编排） | 阻塞发布，不得 release |
+| **P2** | 发布前 | `.venv/bin/python scripts/release.py gate`（= 演进对照新鲜度断言〔当前开发版列头日期须为当日〕+ **verify 与 regression 并行**（verify 提前到合并前拦截）+ 十守护 `--ci` 全套〔并行执行，并发度随核数收敛 ≤4 路〕+ 设计护栏；`--with-portability` 追加 portability 探针，gate 自动编排） | 阻塞发布，不得 release |
 
 **P0 提交前门禁**（全部通过才可 commit；手动项 = dev-verify，下列十守护由 pre-commit 钩子在 `git commit` 时自动执行、CI guards job 同源兜底，本地不手动重复——清单为五处同源引用）：
 
@@ -1360,7 +1360,7 @@ registry 的测试在 `src/test/unit/core/test_registry.py`，验证 TTL 默认�
 
 发布版本时，按以下六步顺序执行：
 
-> 可用 `scripts/release.py` 分步编排（发布流程的可执行封装，每步独立可审阅、失败即停）：`check`（预检）→ `archive-init`（**仅新小版本首发需要**：三份归档 + 目录树块 + 三处索引行一次建齐，幂等）→ `prepare`（版本全链、changelog 发布段归档**并自动重写归档头部「涵盖版本 / 归档时间」（区间与并入记录由归档内各发布段标题派生，无需人工维护）与主文件指针的版本号/日期/归档文件名**、一致性 `--fix`，收尾自动 `doc-drift --sync`）→ `refresh` + `evolution --release`（数据刷新——纯文档变更〔仅 `.md`/图片〕自动跳过 bench+collect，`--force-refresh` 强制；演进快照，evolution 收尾同样自动 sync）→ `gate`（P2 门禁，十守护并行且并发度随核数收敛 ≤4 路）→ `publish --title`（**提交前按钩子同源参数 `--sync --ci --with-test-count` 同步统计快照**——只跑 `--sync` 时 `test-coverage.md` 收集计数不被校验，会「本地通过、钩子仍红」白跑一轮；同步失败即中止 + release 提交 + P1 verify + `--no-ff` 合并 + tag）→ `devbump`（切开发版，并清空上一版迁档占位节）；bench 默认只测发布子集四档（`--full-bench` 全量）、每命令耗时、执行环境（provider/model/thinking）与 agent 会话 token 累计入 `logs/release.jsonl` 台账（发布墙钟、token 成本与执行模型均可跳版本对拍）；rf/plan/docs-plan 归档迁移的**机械部分已由 `prepare` 自动完成**（人工只复核条目归属与设计文件判定，见下方步骤③），`gate` 会断言该版本台账已迁完、未迁则前置中止；`prepare` 不跨版本发布（`--version` 与开发链推导值不一致时立即中止并给四步指引）；**分层纪律**：归档迁移或任何涉及管理文档/代码注释的改动完成后，进 `gate` 前先跑秒级便宜守护（至少 `check-doc-traces --ci` + `check-doc-links --ci`，改动面大时十守护全跑）——守护发现前置，避免 P2 门禁的全量 regression 因文档级 finding 白跑第二轮。下列手动命令为底层口径，脚本失败时按手动步骤排查。
+> 可用 `scripts/release.py` 分步编排（发布流程的可执行封装，每步独立可审阅、失败即停）：`check`（预检）→ `archive-init`（**仅新小版本首发需要**：三份归档 + 目录树块 + 三处索引行一次建齐，幂等）→ `prepare`（版本全链、changelog 发布段归档**并自动重写归档头部「涵盖版本 / 归档时间」（区间与并入记录由归档内各发布段标题派生，无需人工维护）与主文件指针的版本号/日期/归档文件名**、一致性 `--fix`，收尾自动 `doc-drift --sync`）→ `refresh` + `evolution --release`（数据刷新——纯文档变更〔仅 `.md`/图片〕自动跳过 bench+collect，`--force-refresh` 强制；演进快照，evolution 收尾同样自动 sync）→ `gate`（P2 门禁：verify 与 regression 并行、十守护并行且并发度随核数收敛 ≤4 路；`--with-portability` 加跑 portability 探针；全绿后写「版本+树指纹」通过戳）→ `publish --title`（**树指纹与 gate 戳一致时复用 P1 verify**；提交前按钩子同源参数 `--sync --ci --with-test-count` 同步统计快照——只跑 `--sync` 时 `test-coverage.md` 收集计数不被校验，会「本地通过、钩子仍红」白跑一轮；同步失败即中止 + release 提交 + P1 verify + `--no-ff` 合并 + tag）→ `devbump`（切开发版，并清空上一版迁档占位节）；bench 默认只测发布子集四档（`--full-bench` 全量；`--bench-jobs N` 调整采集并行度，改变并行度会改变耗时口径，环境表需同并行度可比）、每命令耗时、执行环境（provider/model/thinking）与 agent 会话 token 累计入 `logs/release.jsonl` 台账（发布墙钟、token 成本与执行模型均可跳版本对拍）；rf/plan/docs-plan 归档迁移的**机械部分已由 `prepare` 自动完成**（人工只复核条目归属与设计文件判定，见下方步骤③），`gate` 会断言该版本台账已迁完、未迁则前置中止；`prepare` 不跨版本发布（`--version` 与开发链推导值不一致时立即中止并给四步指引）；**分层纪律**：归档迁移或任何涉及管理文档/代码注释的改动完成后，进 `gate` 前先跑秒级便宜守护（至少 `check-doc-traces --ci` + `check-doc-links --ci`，改动面大时十守护全跑）——守护发现前置，避免 P2 门禁的全量 regression 因文档级 finding 白跑第二轮。下列手动命令为底层口径，脚本失败时按手动步骤排查。**publish 的 release 提交仍走 pre-commit 钩子全量守护**（不跳过）：与 gate 重复约 2~6s，换取「自动化提交也不旁路守护」的兜底——实测收益小于风险，故不做跳过。
 
 **① 版本号一致**
 
@@ -1500,6 +1500,8 @@ CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` /
 | 启动 | `launch.sh` / `launch.ps1`（TUI 与 `web` 子命令）/ `cli.sh` / `llm.sh` 及其 `.ps1` 版 | 免解释器前缀的常用入口 |
 | CLI 子命令 | `report` / `cache` / `whatif` / `check-sources` / `view-logs` / `doctor` / `cassettes` | 用户侧命令行入口（详见 [CLI 手册](../manuals/how-to-use-cli-mode.md)） |
 
+> 改名/合并脚本时按**五处同步**自查（本次改名的长尾教训）：① 同名测试文件；② `scripts-reference` 一览与详情小节；③ `folders.md` 目录树；④ CI/钩子/`release.py`/`test-runner` 等调用点；⑤ 文档与代码注释里的命令示例。机检覆盖 ②③④（一览覆盖、目录树双向、脚本存在性），①⑤ 靠本清单。
+>
 > 新增脚本时：先按 [scripts-reference.md](scripts-reference.md)「命名约定」选前缀（`check-` 仅限可入门禁的检查、`test-`/`eval-`/`perf-`/`probe-`/`hook-`/`make-` 各归其域），再入对应域小节，并在上表「按域索引」里确认该域已覆盖。
 ## 关键纪律来源
 

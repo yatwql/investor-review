@@ -78,14 +78,15 @@ class TestGate:
             assert path.is_file(), script
             assert script.startswith("scripts/check-"), script
 
-    def test_gate_records_step_timings(self, rel):
-        """门禁三步（回归 / 十守护 / 设计护栏）入计时器：发布耗时台账靠它们归因。"""
+    def test_gate_records_step_timings(self, rel, monkeypatch, tmp_path):
+        """门禁三步（并行 verify+回归 / 十守护 / 设计护栏）入计时器。"""
+        monkeypatch.setattr(rel, "GATE_STAMP_FILE", tmp_path / "stamp.json")
         rel._reset_timer()
         runner = FakeRunner()
         rc = rel.cmd_gate(ns(), runner=runner)
         assert rc == 0
         labels = [entry["step"] for entry in rel._timer().steps]
-        assert labels == ["P2 场景回归", "P2 十守护", "P2 设计护栏"]
+        assert labels == ["P2 verify+regression（并行）", "P2 十守护", "P2 设计护栏"]
         assert all(entry["elapsed_s"] >= 0 for entry in rel._timer().steps)
 
     def test_gate_stops_on_stale_evolution(self, rel):
@@ -97,13 +98,17 @@ class TestGate:
         assert rc == 2
         assert runner.calls == []  # 新鲜度失败即中止，回归/守护一个不跑
 
-    def test_gate_runs_regression_then_guards(self, rel):
+    def test_gate_runs_verify_and_regression_before_guards(self, rel, monkeypatch, tmp_path):
+        """gate 同时跑 P1 verify 与 P2 regression（并行），且都在十守护之前。"""
+        monkeypatch.setattr(rel, "GATE_STAMP_FILE", tmp_path / "stamp.json")
         runner = FakeRunner()
         rc = rel.cmd_gate(ns(), runner=runner)
         assert rc == 0
-        first = runner.calls[0]
-        assert "test-runner" in first[1]
-        assert "--mode" in first and "regression" in first
+        mode_calls = {_mode_arg(c) for c in runner.calls if any("test-runner.py" in p for p in c)}
+        assert {"verify", "regression"} <= mode_calls
+        last_pytest = max(i for i, c in enumerate(runner.calls) if any("test-runner.py" in p for p in c))
+        first_guard = min(i for i, c in enumerate(runner.calls) if any("check-" in p for p in c))
+        assert last_pytest < first_guard
         guard_calls = [
             c
             for c in runner.calls
@@ -133,11 +138,43 @@ class TestGate:
         rc = rel.cmd_gate(ns(), runner=FakeRunner(responses=responses))
         assert rc == 2
 
-    def test_gate_stops_on_regression_failure(self, rel):
+    def test_gate_stops_on_regression_failure(self, rel, monkeypatch, tmp_path):
+        monkeypatch.setattr(rel, "GATE_STAMP_FILE", tmp_path / "stamp.json")
         runner = FakeRunner(responses=[(["scripts/test-runner.py"], (1, "", "boom"))])
         rc = rel.cmd_gate(ns(), runner=runner)
         assert rc == 1
-        assert len(runner.calls) == 1  # 回归失败 → 十守护一个不跑
+        assert not any(any("check-" in p for p in c) for c in runner.calls)  # 回归/verify 失败 → 十守护一个不跑
+
+    def test_gate_stops_on_verify_failure(self, rel, monkeypatch, tmp_path):
+        """P1 verify 失败同样在合并前中止（且不写通过戳）。"""
+        monkeypatch.setattr(rel, "GATE_STAMP_FILE", tmp_path / "stamp.json")
+        runner = FakeRunner(
+            responses=[
+                (["scripts/test-runner.py", "verify"], (1, "", "1 failed")),
+                (["scripts/test-runner.py", "regression"], (0, "291 passed", "")),
+            ]
+        )
+        rc = rel.cmd_gate(ns(), runner=runner)
+        assert rc == 1
+        assert not rel.GATE_STAMP_FILE.exists()
+
+    def test_gate_writes_stamp_with_tree_fingerprint(self, rel, monkeypatch, tmp_path):
+        """gate 全绿后写「版本 + 树指纹 + verify 项数」戳，供 publish 复用。"""
+        stamp = tmp_path / "stamp.json"
+        monkeypatch.setattr(rel, "GATE_STAMP_FILE", stamp)
+        runner = FakeRunner(responses=[(["scripts/test-runner.py"], (0, "— 9,000 通过, 0 失败\n", ""))])
+        assert rel.cmd_gate(ns(), runner=runner) == 0
+        data = json.loads(stamp.read_text(encoding="utf-8"))
+        assert data["version"] == "0.13.12"
+        assert data["verify_passed"] == "9000"
+        assert data["fingerprint"] == rel._tree_fingerprint(runner)
+
+    def test_gate_with_portability_runs_probe(self, rel, monkeypatch, tmp_path):
+        monkeypatch.setattr(rel, "GATE_STAMP_FILE", tmp_path / "stamp.json")
+        runner = FakeRunner()
+        assert rel.cmd_gate(ns(with_portability=True), runner=runner) == 0
+        modes = {_mode_arg(c) for c in runner.calls if any("test-runner.py" in p for p in c)}
+        assert "portability" in modes
 
     def test_gate_returns_worst_guard_code(self, rel):
         responses = [
@@ -193,6 +230,34 @@ class TestPublish:
         merge_msg = runner.calls[merge_idx][runner.calls[merge_idx].index("-m") + 1]
         assert "8621 项已全绿" in merge_msg
         assert not any("push" in c for c in runner.calls)  # 默认不推送
+
+    def test_reuses_gate_stamp_when_tree_fingerprint_matches(self, rel, tmp_path):
+        """gate 已跑 verify 且树指纹一致 → publish 跳过 verify（不重复 28s）。"""
+        fx = self._fixture(rel, tmp_path, "0.12.6")
+        runner = self._dirty_runner()
+        fingerprint = rel._tree_fingerprint(runner)
+        fx.GATE_STAMP_FILE.parent.mkdir(parents=True, exist_ok=True)
+        fx.GATE_STAMP_FILE.write_text(
+            json.dumps({"version": "0.12.6", "fingerprint": fingerprint, "verify_passed": "9000"}),
+            encoding="utf-8",
+        )
+        rc = rel.cmd_publish(ns(title="t", push=False), runner=runner)
+        assert rc == 0
+        assert not any(any("test-runner.py" in p for p in c) for c in runner.calls)
+        merge = next(c for c in runner.calls if len(c) > 2 and c[1] == "merge")
+        assert "9000 项已全绿" in merge[merge.index("-m") + 1]
+
+    def test_runs_verify_when_stamp_fingerprint_mismatches(self, rel, tmp_path):
+        """指纹不一致（gate 后改过代码）→ 不盲信戳，实跑 verify。"""
+        fx = self._fixture(rel, tmp_path, "0.12.6")
+        runner = self._dirty_runner()
+        fx.GATE_STAMP_FILE.parent.mkdir(parents=True, exist_ok=True)
+        fx.GATE_STAMP_FILE.write_text(
+            json.dumps({"version": "0.12.6", "fingerprint": "stale", "verify_passed": "1"}),
+            encoding="utf-8",
+        )
+        assert rel.cmd_publish(ns(title="t", push=False), runner=runner) == 0
+        assert any(any("test-runner.py" in p for p in c) for c in runner.calls)
 
     def test_verify_failure_aborts_before_merge(self, rel, tmp_path):
         self._fixture(rel, tmp_path, "0.12.6")

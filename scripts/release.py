@@ -50,6 +50,7 @@ import re
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONSTANTS_FILE = REPO_ROOT / "src" / "python" / "core" / "constants.py"
@@ -88,6 +89,9 @@ RELEASE_BENCH_MODES: tuple[str, ...] = ("unit", "dev-verify", "regression", "int
 
 #: 发布耗时台账（`logs/` 属 git 忽略域：不入目录树、不进门禁）
 RELEASE_LOG_FILE = REPO_ROOT / "logs" / "release.jsonl"
+#: gate 通过戳：记录「版本 + 工作区树指纹 + verify 项数」，publish 指纹一致时复用
+#: gate 已跑的 P1 verify（避免 28s 重复；指纹不一致则照常重跑，绝不盲信）
+GATE_STAMP_FILE = REPO_ROOT / "logs" / "release-gate-stamp.json"
 
 # ── 内部实现拆分（_release/ 包）：入口保留 CLI 面与路径常量，测试引用的符号原名 re-export ──
 sys.path.insert(0, str(REPO_ROOT))  # 仓库根：耗时台账复用 core 层 JSONL 原子追加原语
@@ -98,6 +102,7 @@ from _release._changelog_archive import (  # noqa: E402, F401 — _SECTION_NOTE 
     render_archive_header,
     write_archive_release,
 )
+from _release import _gate  # noqa: E402
 from _release._archive_init import init_archive  # noqa: E402
 from _release._common import ReleaseError, exec_command as _exec  # noqa: E402
 from _release._archive_flow import (  # noqa: E402
@@ -497,6 +502,10 @@ def run_archive(date: str, runner=None, dry: bool = False, skip_design_docs: boo
 _DOC_ONLY_SUFFIXES = (".md", ".png", ".jpg", ".jpeg", ".gif", ".svg")
 
 
+def _git_ok(args: list[str], root: Path, runner=None, capture: bool = True) -> tuple[int, str, str]:
+    return _exec(["git", *args], root, runner, capture=capture)
+
+
 def _last_release_tag(runner=None) -> str | None:
     """最近的发布 tag（v*）；无则 None（调用方保守地视为需刷新）。"""
     rc, out, _ = _git_ok(["describe", "--tags", "--abbrev=0", "--match", "v*"], REPO_ROOT, runner)
@@ -526,13 +535,18 @@ def cmd_refresh(args: argparse.Namespace, runner=None) -> int:
     force = bool(getattr(args, "force_refresh", False))
     full_bench = bool(getattr(args, "full_bench", False))
     bench_scope = "bench" if full_bench else ",".join(RELEASE_BENCH_MODES)
+    bench_jobs = getattr(args, "bench_jobs", None)
     bench_label = (
         "测试量与耗时快照回填（全量模式）"
         if full_bench
         else f"测试量与耗时快照回填（发布子集 {len(RELEASE_BENCH_MODES)} 档，未测模式沿用上次实测）"
     )
     snapshot_steps: list[tuple[str, list[str]]] = [
-        (bench_label, [sys.executable, "scripts/test-runner.py", "--mode", bench_scope, "--update-docs"]),
+        (
+            bench_label if not bench_jobs else f"{bench_label}，并行度 {bench_jobs}",
+            [sys.executable, "scripts/test-runner.py", "--mode", bench_scope, "--update-docs"]
+            + (["--jobs", str(bench_jobs)] if bench_jobs else []),
+        ),
         ("测试收集计数回填", [sys.executable, "scripts/test-collect-coverage.py"]),
     ]
     if force:
@@ -623,9 +637,8 @@ def cmd_evolution(args: argparse.Namespace, runner=None) -> int:
             ]
         )
     )
-    print("[..] 需人工核对的注释行（脚本不代写）：")
-    print("  - 用例口径注释中的 pytest 实际收集数与 opt-in live 项数（见 test-coverage.md）")
-    print("  - 「文档」注释行的目录分解数（根/管理/手册/计划/归档）")
+    print("[OK] 注释行核对：用例口径（grep/严格）已回写；pytest 收集数与「文档」目录分解数")
+    print("     分别由 check-doc-drift 的计数行校验与目录树双向比对兜底，不再人工核对")
     return 0
 
 
@@ -637,104 +650,40 @@ def _gate_workers() -> int:
     return max(1, min(4, os.cpu_count() or 4))
 
 
+def _tree_fingerprint(runner=None) -> str:
+    """工作区树指纹（实现在 `_release/_gate.py`）。"""
+    return _gate.tree_fingerprint(_exec, REPO_ROOT, runner)
+
+
+def _write_gate_stamp(version: str, fingerprint: str, verify_passed: str) -> None:
+    """写 gate 通过戳（实现在 `_release/_gate.py`）。"""
+    _gate.write_gate_stamp(GATE_STAMP_FILE, version, fingerprint, verify_passed)
+
+
+def _gate_stamp_matches(version: str, fingerprint: str) -> dict | None:
+    """读 gate 通过戳并按「版本 + 树指纹」校验（实现在 `_release/_gate.py`）。"""
+    return _gate.gate_stamp_matches(GATE_STAMP_FILE, version, fingerprint)
+
+
 def cmd_gate(args: argparse.Namespace, runner=None) -> int:
-    print("[..] P2 门禁：演进对照新鲜度（当前开发版列头须今日刷新）")
-    findings = check_evolution_freshness(FOLDERS_FILE.read_text(encoding="utf-8"), _dt.date.today().isoformat())
-    if findings:
-        for item in findings:
-            print(f"[ERR] {item}")
-        print("[ERR] 演进对照过期，先执行 scripts/release.py evolution 刷新后重跑 gate")
-        return 2
-    print("[OK] 演进对照新鲜度通过\n")
-
-    print("[..] P2 门禁：归档迁移前置（该版本已解决表须已迁档且归档节存在）")
-    version = read_app_version(CONSTANTS_FILE.read_text(encoding="utf-8"))
-    if version.endswith("-dev"):
-        print(f"[ERR] 版本仍是开发版 {version} —— gate 须在 prepare 之后执行")
-        return 2
-    rf_archive, _ = ledger_archive_paths(version)
-    status, pending = rf_archive_status(RF_FILE.read_text(encoding="utf-8"), version)
-    if status == "pending":
-        print(f"[ERR] review-findings 该版本仍有 {pending} 条已解决条目未迁档")
-        print("[ERR] 先执行 scripts/release.py archive（或人工迁档）后重跑 gate")
-        return 2
-    if status == "archived":
-        archived_ok = rf_archive.exists() and has_archive_section(rf_archive.read_text(encoding="utf-8"), version)
-        if not archived_ok:
-            print(f"[ERR] 主台账已留迁档占位，但 {rf_archive.name} 缺 `## v{version} 开发期已修复` 批次节")
-            print("[ERR] 先执行 scripts/release.py archive（或人工迁档）后重跑 gate")
-            return 2
-    else:  # absent：本版没有自审条目，无待迁档内容
-        print("[!] 该版本无「开发期已修复」节（无自审条目），跳过归档断言")
-    print("[OK] 归档迁移前置通过\n")
-
-    print("[..] P2 门禁：场景回归")
-    started = time.perf_counter()
-    rc, out, err = _exec([sys.executable, "scripts/test-runner.py", "--mode", "regression"], REPO_ROOT, runner)
-    _timer().mark_elapsed("P2 场景回归", started)
-    if out.strip():
-        print(out.rstrip())
-    if rc != 0:
-        if err.strip():
-            print(err.rstrip())
-        print("[ERR] 场景回归未通过，P2 中止")
-        return rc if rc != 0 else 1
-    print("[OK] 场景回归通过\n")
-
-    workers = _gate_workers()
-    print(f"[..] P2 门禁：十守护 --ci（{workers} 路并行）")
-    from concurrent.futures import ThreadPoolExecutor
-
-    started = time.perf_counter()
-    worst = 0
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        # 全部守护为 --ci 只读子进程（不写业务文件；结论缓存为每 namespace 独立
-        # 文件、事实缓存为单文件，均原子 temp+rename 写，并行无互踩），按清单序
-        # 收集结果，与串行版输出顺序一致，便于门禁日志对拍；并发度见 _gate_workers
-        futures = [
-            (script, pool.submit(_exec, [sys.executable, script, "--ci"], REPO_ROOT, runner))
-            for script in GUARD_SCRIPTS
-        ]
-        for script, fut in futures:
-            rc, out, err = fut.result()
-            if rc == 0:
-                print(f"  [OK] {Path(script).name}")
-            else:
-                print(f"  [ERR] {Path(script).name}（退出码 {rc}）")
-                if out.strip():
-                    print("    " + out.strip().replace("\n", "\n    "))
-                if err.strip():
-                    print("    " + err.strip().replace("\n", "\n    "))
-                worst = max(worst, rc) if rc in (1, 2, 3) else 1
-    _timer().mark_elapsed("P2 十守护", started, workers=workers)
-    if worst:
-        print("[ERR] P2 守护存在 finding，先修复再发布")
-        return worst
-
-    # 设计护栏（不入十守护清单——清单为 pre-commit/CI guards 五处同源硬约定；
-    # 发布门禁域单独纳入：E 级拦 / W 级观察统计，开发期快反馈由 unit 测试承担）
-    print("[..] P2 门禁：设计护栏（check-style-guardrails，E 级拦 / W 级观察统计）")
-    started = time.perf_counter()
-    rc, out, err = _exec([sys.executable, "scripts/check-style-guardrails.py", "--ci"], REPO_ROOT, runner)
-    _timer().mark_elapsed("P2 设计护栏", started)
-    if out.strip():
-        print("  " + out.strip().replace("\n", "\n  "))
-    if rc != 0:
-        if err.strip():
-            print("  " + err.strip().replace("\n", "\n  "))
-        print("[ERR] 设计护栏未通过，P2 中止")
-        return rc if rc in (1, 2, 3) else 1
-    print("[OK] 设计护栏通过\n")
-
-    print("[OK] P2 门禁全绿（演进新鲜度 + regression + 十守护 + 设计护栏）")
-    return 0
-
-
-# ─────────────────────────── publish / devbump ───────────────────────────
-
-
-def _git_ok(args: list[str], root: Path, runner=None, capture: bool = True) -> tuple[int, str, str]:
-    return _exec(["git", *args], root, runner, capture=capture)
+    """P2 门禁编排（实现在 `_release/_gate.py`；依赖按当前模块状态注入）。"""
+    ctx = SimpleNamespace(
+        check_evolution_freshness=check_evolution_freshness,
+        read_app_version=read_app_version,
+        ledger_archive_paths=ledger_archive_paths,
+        rf_archive_status=rf_archive_status,
+        has_archive_section=has_archive_section,
+        folders_file=FOLDERS_FILE,
+        constants_file=CONSTANTS_FILE,
+        rf_file=RF_FILE,
+        root=REPO_ROOT,
+        guard_scripts=GUARD_SCRIPTS,
+        timer=_timer,
+        gate_workers=_gate_workers,
+        exec_fn=_exec,
+        stamp_file=GATE_STAMP_FILE,
+    )
+    return _gate.run_gate(args, ctx, runner=runner)
 
 
 def cmd_publish(args: argparse.Namespace, runner=None) -> int:
@@ -780,20 +729,26 @@ def cmd_publish(args: argparse.Namespace, runner=None) -> int:
     else:
         print("[OK] release 提交已存在，跳过")
 
-    print("[..] P1 合入门禁：--mode verify")
-    started = time.perf_counter()
-    rc, out, err = _exec([sys.executable, "scripts/test-runner.py", "--mode", "verify"], REPO_ROOT, runner)
-    _timer().mark_elapsed("P1 verify", started)
-    if out.strip():
-        print(out.rstrip())
-    if rc != 0:
-        if err.strip():
-            print(err.rstrip())
-        print("[ERR] P1 verify 未通过 —— 已停在 release 提交，修复后重跑 publish（提交步骤会自动跳过）")
-        return rc
-    counts = re.findall(r"(\d[\d,]*) 通过", out)
-    passed = counts[-1].replace(",", "") if counts else ""
-    print(f"[OK] P1 verify 通过（{passed or '见报告'} 项）")
+    fingerprint = _tree_fingerprint(runner)
+    stamp = _gate_stamp_matches(release_version, fingerprint)
+    if stamp:
+        passed = str(stamp.get("verify_passed") or "")
+        print(f"[OK] 复用 gate 阶段的 P1 verify（树指纹一致 {fingerprint[:12]}…，{passed or '项数见 gate 输出'} 项）")
+    else:
+        print("[..] P1 合入门禁：--mode verify（无匹配的 gate 通过戳，实跑）")
+        started = time.perf_counter()
+        rc, out, err = _exec([sys.executable, "scripts/test-runner.py", "--mode", "verify"], REPO_ROOT, runner)
+        _timer().mark_elapsed("P1 verify", started)
+        if out.strip():
+            print(out.rstrip())
+        if rc != 0:
+            if err.strip():
+                print(err.rstrip())
+            print("[ERR] P1 verify 未通过 —— 已停在 release 提交，修复后重跑 publish（提交步骤会自动跳过）")
+            return rc
+        counts = re.findall(r"(\d[\d,]*) 通过", out)
+        passed = counts[-1].replace(",", "") if counts else ""
+        print(f"[OK] P1 verify 通过（{passed or '见报告'} 项）")
 
     rc, out, err = _git_ok(["checkout", "master"], REPO_ROOT, runner)
     if rc != 0:
@@ -922,6 +877,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_refresh.add_argument("--force-refresh", action="store_true", help="忽略纯文档变更判定，强制刷新 bench 与 collect")
     p_refresh.add_argument(
+        "--bench-jobs",
+        type=int,
+        default=None,
+        help="bench 采集并行度（透传 test-runner --jobs；改变并行度会改变实测耗时口径，"
+        "环境表「采集并行度」行需同口径才可比）",
+    )
+    p_refresh.add_argument(
         "--full-bench",
         action="store_true",
         help=f"bench 跑全量模式（默认只测发布子集 {', '.join(RELEASE_BENCH_MODES)}，未测模式耗时沿用上次实测）",
@@ -930,7 +892,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_evolution = sub.add_parser("evolution", help="版本演进对照快照（默认只滚当前开发版列）")
     p_evolution.add_argument("--release", action="store_true", help="发布期使用：发布列与增长比一并写入")
 
-    sub.add_parser("gate", help="P2 门禁：演进新鲜度 + regression + 十守护 --ci + 设计护栏")
+    p_gate = sub.add_parser("gate", help="P2 门禁：演进新鲜度 + verify + regression + 十守护 --ci + 设计护栏")
+    p_gate.add_argument(
+        "--with-portability",
+        action="store_true",
+        help="追加 CI portability 等价探针（隐式编码 + 需求文件 locale 解码，约 +110s）",
+    )
 
     p_publish = sub.add_parser("publish", help="release 提交 + P1 verify + --no-ff 合并 + tag")
     p_publish.add_argument("--title", required=True, help="release 提交主题（changelog 摘要式短描述）")

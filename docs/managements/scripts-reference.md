@@ -70,7 +70,7 @@
 | `check-version-consistency.py` | 发布 | 版本号全局一致性检查（P0/P2 守护脚本 + 发布流程必跑） |
 | `check-style-guardrails.py` | 质量 | 设计护栏机检（DESIGN.md 护栏样式面；E 级：强调色越权/明暗同步/双面 token 对表判 finding，W 级：裸色值/圆角档位观察统计——未入 pre-commit 钩子与 CI guards；**发布门禁**（release.py gate）已纳入，开发期快反馈由 unit 测试承担） |
 | `check-script-contract.py` | 质量 | scripts 顶层脚本契约机检（退出码声明 ⊆ {0,2} 白名单、check-* 统一 `add_common_args` CLI 面、文本 I/O 显式 encoding、脚本↔测试覆盖映射，四条规则——**观察期**未入钩子与 CI） |
-| `release.py` | 发布 | 发布流程分步编排（check / archive-init〔新小版本归档骨架：三份归档 + 目录树块 + 三处索引行，幂等〕/ prepare〔含台账与设计文件归档迁移；不跨版本发布，`--version` 与推导值不一致即中止并给指引〕/ refresh / evolution / gate / publish〔提交前按 pre-commit 钩子同源参数 `--sync --ci --with-test-count` 同步统计快照，失败即中止〕/ devbump，每步独立可审阅、失败即停；refresh 纯文档变更跳过 bench+collect（`--force-refresh` 强制）、bench 默认只测发布子集四档（`--full-bench` 全量）、gate 十守护并行且随核数收敛 ≤4 路并断言归档已迁完；devbump 切版后清空上一版迁档占位节；每命令耗时入 `logs/release.jsonl` 台账） |
+| `release.py` | 发布 | 发布流程分步编排（check / archive-init〔新小版本归档骨架：三份归档 + 目录树块 + 三处索引行，幂等〕/ prepare〔含台账与设计文件归档迁移；不跨版本发布，`--version` 与推导值不一致即中止并给指引〕/ refresh / evolution / gate / publish〔提交前按 pre-commit 钩子同源参数 `--sync --ci --with-test-count` 同步统计快照，失败即中止〕/ devbump，每步独立可审阅、失败即停；refresh 纯文档变更跳过 bench+collect（`--force-refresh` 强制）、bench 默认只测发布子集四档（`--full-bench` 全量、`--bench-jobs N` 调并行度）、gate 十守护并行且随核数收敛 ≤4 路并断言归档已迁完；devbump 切版后清空上一版迁档占位节；每命令耗时入 `logs/release.jsonl` 台账） |
 | `test-perf-report.py` | 评测 | 端到端报告生成管线性能基准（独立脚本，mock 外部数据源） |
 | `perf-history.py` | 运维 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 时段聚合（耗时与费用合计/环比）/机读输出（llm_cost、by_period 费用字段）；实现拆在 `_perf_view/`——`stats.py` 统计原语 / `data.py` 派生 / `report.py` 渲染 / `cli.py` 入口，主入口只留 docstring 与 re-export） |
 | `probe.py` | 运维 | 探测统一入口（按 target 分发到 `probes/` 子模块；新探针实现契约面登记即用） |
