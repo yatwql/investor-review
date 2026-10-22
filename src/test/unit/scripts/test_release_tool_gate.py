@@ -426,6 +426,43 @@ class TestDevBump:
         assert commit[-1] == "chore: 切 0.12.7-dev 开发版本（v0.12.6 发布后）"
         assert not any("push" in c for c in runner.calls)
 
+    def test_pushes_dev_by_default(self, rel, tmp_path):
+        """默认推送 dev：发布闭环的收尾要把切版提交同步到远端（上一版需人工补 push）。"""
+        fx = _ToolRepoFixture(rel, tmp_path)
+        fx.CONSTANTS_FILE.write_text('APP_VERSION = "0.12.6"\n', encoding="utf-8")
+        runner = _ok_runner([(["git", "status", "--porcelain"], (0, " M docs/x.md\n", ""))])
+        assert rel.cmd_devbump(ns(), runner=runner) == 0
+        pushes = [c for c in runner.calls if c[:3] == ["git", "push", "origin"]]
+        assert pushes == [["git", "push", "origin", "dev"]]
+
+    def test_no_push_skips_push(self, rel, tmp_path, capsys):
+        fx = _ToolRepoFixture(rel, tmp_path)
+        fx.CONSTANTS_FILE.write_text('APP_VERSION = "0.12.6"\n', encoding="utf-8")
+        runner = _ok_runner([(["git", "status", "--porcelain"], (0, " M docs/x.md\n", ""))])
+        assert rel.cmd_devbump(ns(push=False), runner=runner) == 0
+        assert not any("push" in c for c in runner.calls)
+        assert "git push origin dev" in capsys.readouterr().out
+
+    def test_push_failure_keeps_commit_and_reports(self, rel, tmp_path):
+        """推送失败不得回滚切版提交，但要明确报错并给出重试命令。"""
+        fx = _ToolRepoFixture(rel, tmp_path)
+        fx.CONSTANTS_FILE.write_text('APP_VERSION = "0.12.6"\n', encoding="utf-8")
+        runner = _ok_runner(
+            [
+                (["git", "status", "--porcelain"], (0, " M docs/x.md\n", "")),
+                (["git", "push"], (1, "", "network unreachable")),
+            ]
+        )
+        assert rel.cmd_devbump(ns(), runner=runner) == 1
+        assert rel.read_app_version(fx.CONSTANTS_FILE.read_text(encoding="utf-8")) == "0.12.7-dev"
+
+    def test_cli_defaults_to_push(self, rel):
+        """CLI 默认值即「推送」；`--no-push` 才关闭（文档口径与代码同一事实位）。"""
+        parser = rel.build_parser()
+        assert parser.parse_args(["devbump"]).push is True
+        assert parser.parse_args(["devbump", "--no-push"]).push is False
+        assert parser.parse_args(["devbump", "--push"]).push is True  # 兼容别名
+
     def test_clears_previous_release_placeholder(self, rel, tmp_path):
         """切开发版时清掉上一版迁档占位节（新周期台账从空开始）。"""
         fx = _ToolRepoFixture(rel, tmp_path)

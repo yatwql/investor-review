@@ -20,7 +20,7 @@
     gate       P2 门禁：`--mode regression` + 十守护 `--ci`（清单与门禁文档同源）
                + 设计护栏 `check-style-guardrails --ci`（E 级拦 / W 级观察统计）
     publish    release 提交 + P1 verify + --no-ff 合并 dev→master + tag（默认不推送）
-    devbump    切下一开发版 X.Y.(Z+1)-dev + chore 提交
+    devbump    切下一开发版 X.Y.(Z+1)-dev + chore 提交 + 推送 dev（默认；--no-push 跳过）
 
 典型发布序列：
     .venv/bin/python scripts/release.py check
@@ -871,14 +871,17 @@ def cmd_devbump(args: argparse.Namespace, runner=None) -> int:
             print(f"[ERR] 切版提交失败：{(err or out).strip()}")
             return rc
         print("[OK] 切版提交完成")
-    if args.push:
+    # 默认推送：发布闭环的收尾就是把切版提交同步到远端（本地领先会让下个发布周期
+    # 的 push/合并口径不一致）；需要本地先复核时用 `--no-push`
+    if getattr(args, "push", True):
         rc, out, err = _git_ok(["push", "origin", "dev"], REPO_ROOT, runner)
         if rc != 0:
             print(f"[ERR] push 失败：{(err or out).strip()}")
+            print("[..] 切版提交已落盘，网络恢复后重试：git push origin dev（或 --no-push 跳过）")
             return rc
         print("[OK] dev 已推送")
     else:
-        print("[..] 未推送（默认）。确认后执行：git push origin dev")
+        print("[..] 未推送（--no-push）。确认后执行：git push origin dev")
     return 0
 
 
@@ -946,7 +949,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_publish.add_argument("--push", action="store_true", help="完成后推送 dev/master/tags（默认只打印命令）")
 
     p_devbump = sub.add_parser("devbump", help="切下一开发版并提交")
-    p_devbump.add_argument("--push", action="store_true", help="完成后推送 dev（默认只打印命令）")
+    p_devbump.add_argument(
+        "--no-push",
+        dest="push",
+        action="store_false",
+        default=True,
+        help="切版后不推送 dev（默认推送 origin dev）",
+    )
+    p_devbump.add_argument(
+        "--push",
+        dest="push",
+        action="store_true",
+        help="兼容保留：默认已推送（显式写与省略等效）",
+    )
     return parser
 
 

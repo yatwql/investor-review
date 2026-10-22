@@ -15,6 +15,10 @@
 - **单测改写仓库真实发布戳**（v0.14.5 发版期间发现 `logs/release-gate-stamp.json` 被写成夹具版本 `0.13.12`）：`TestGateArchivePrecondition` 沙箱漏隔离 `GATE_STAMP_FILE`，gate 成功用例走完尾部写入真实路径；现该测试模块统一 autouse 重定向「通过戳 / bench 戳 / 耗时台账」，并加回归断言「跑完 gate 成功用例后仓库真实戳字节不变」。
 - **`prepare` 归档后「当前迭代」概述行失准**：归档搬走 ✅ 节后该行仍写「在办 15 项…已实施待归档」（doc-drift 不校验这句，每版都要人工改）。`apply_plan_archive` 现按**现存 `#### plan-N` 节**重算在办项数与 P1~P4 分档编号，残留/幻影编号（如已不存在的 `plan-128`）一并纠正；无分层标题时保守不动。
 
+### Changed
+
+- **`devbump` 默认推送 `origin dev`**：发布闭环的收尾就是「切版 + 同步远端」两步——上一版（v0.14.5）实测需人工补 `git push origin dev`，漏做会让本地领先远端一个提交。现 `devbump` 默认执行推送，需要本地先复核时用 `--no-push`（`--push` 保留为兼容别名、与省略等效）；推送失败**不回滚**已落盘的切版提交，但会报错并给出重试命令。CLI 默认值由用例锁定（`devbump` ⇒ push=True / `--no-push` ⇒ False）。
+
 （本次发布内容见下方归档索引）
 
 ## 归档

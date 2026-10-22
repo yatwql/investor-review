@@ -810,7 +810,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 .venv/bin/python scripts/release.py devbump    # 切下一开发版并提交
 ```
 
-`publish` / `devbump` 默认不推送（只打印推送命令），`--push` 才执行。
+`publish` 默认不推送（只打印推送命令），`--push` 才执行；`devbump` **默认推送 `origin dev`**（发布闭环收尾即同步远端），需要本地先复核时用 `--no-push`。
 
 **`publish` 提交前先同步统计快照**：`git add/commit` 之前自动跑 `check-doc-drift.py --sync --ci --with-test-count`（与 pre-commit 钩子对含 `src/test` 变更的提交**同源参数**）。只跑 `--sync` 时 `test-coverage.md` 的收集派生计数不被校验，会出现「本地通过、钩子里仍红」——`publish` 白跑一轮（实测曾连败两次）。同步失败即中止，不提交、不合并、不打 tag。
 
