@@ -53,6 +53,8 @@ RF_PLACEHOLDER = "（本版开发期已修复项已随 v{version} 发布迁入�
 _PLACEHOLDER_LINE_RE = re.compile(
     r"^（本版开发期已修复项已随 v(?P<version>\d+\.\d+\.\d+) 发布迁入(?:上方)?归档档案）[ \t]*$"
 )
+#: 迁档时保留的标准说明行（机器生成，非人工备注——空壳节收敛时一并删除）
+_PLACEHOLDER_NOTE_RE = re.compile(r"^> 完整复盘见 `changelog\.md` (?P<version>\d+\.\d+\.\d+)-dev 段；此处为台账原表.*$")
 #: 占位节的节头（仅当节内只剩占位时才随占位一起删除）
 _PLACEHOLDER_HEAD_RE = re.compile(r"^### 开发期已修复（(?P<dev>\d+\.\d+\.\d+)-dev）[ \t]*$")
 RF_SECTION_NOTE = "> 完整复盘见 `changelog.md` {version}-dev 段；此处为台账原表搬运（无损），本批发布日 {date}。"
@@ -145,20 +147,32 @@ def apply_rf_archive(main_text: str, archive_text: str, version: str, date: str)
 
 
 def _collapse_superseded_placeholders(text: str, keep_version: str | None) -> str:
-    """只保留最近一次迁档占位节，收敛更早版本的同类占位节。
+    """只保留最近一次迁档占位节，收敛更早版本的同类占位节与空壳批次节。
 
     占位节是「本版表已搬走」的路标，只对本版有意义：归档正文与主文件
     「归档档案」索引已各自记录全部版本，非本版占位节仅余一行同构文案。若每次
     迁档都新增一节而不收敛，台账会稳定长出 N 段单行占位（近重复节，结构化
     冗余検査因「标题路径不同 + 单行不足区块下限」而无法拦截）。
 
-    收敛粒度保守：
+    收敛粒度（「本版」= ``keep_version``）：
       - 只删**非本版占位行**（本就指向已归档内容）；
       - 该节标题下若只剩占位与空行，则节头一并删除；若节内还有表外散文
         （如人工补的备注），保留节与散文，只摘掉占位行；
-      - 保留版本的占位行与所在节原样不动。
+      - 保留版本的占位行与所在节原样不动；
+      - **空壳批次节整节删除**：``### 开发期已修复（X-dev）`` 节内若已无任何台账行
+        （``| **rf-N**``），说明该批表格全部迁出、节内只剩说明性散文——保留它会在
+        「已解决问题」区留下一个指向已归档版本的空节（``devbump`` 之后必然出现，
+        因为迁档时保留的散文不会随占位行一起消失）。非本版节才适用本条。
     """
     lines = text.splitlines()
+
+    def _section_bounds(head: int) -> tuple[int, int]:
+        """节头之后到下一个节头之前的行号区间 [start, end)。"""
+        for cand in range(head + 1, len(lines)):
+            if lines[cand].startswith("### ") or lines[cand].startswith("## "):
+                return head + 1, cand
+        return head + 1, len(lines)
+
     drop: set[int] = set()
     head_at = None  # 当前所在占位节标题的行号；None = 不在占位节内
     for idx, line in enumerate(lines):
@@ -168,33 +182,49 @@ def _collapse_superseded_placeholders(text: str, keep_version: str | None) -> st
         if line.startswith("### ") or line.startswith("## "):
             head_at = None  # 其它节：占位节已结束
             continue
+        note = _PLACEHOLDER_NOTE_RE.match(line)
+        if note is not None:
+            # 标准说明行同样指向某个已归档批次：非本版即过期，与本版节以外的占位行同路
+            if note.group("version") != keep_version:
+                drop.add(idx)
+            continue
         m = _PLACEHOLDER_LINE_RE.match(line)
         if not m or m.group("version") == keep_version:
             continue
         drop.add(idx)
         if head_at is None:
             continue
-        # 本节范围 = 节头之后到下一个节头之前；只剩空行与已删占位则连节头一起删
-        section_end = next(
-            (
-                cand
-                for cand in range(head_at + 1, len(lines))
-                if lines[cand].startswith("### ") or lines[cand].startswith("## ")
-            ),
-            len(lines),
-        )
-        if all(not lines[i].strip() or i in drop for i in range(head_at + 1, section_end)):
+        # 本节只剩空行与已删占位 → 连节头一起删
+        start, end = _section_bounds(head_at)
+        if all(not lines[i].strip() or i in drop for i in range(start, end)):
             drop.add(head_at)
             head_at = None
+
+    # 空壳批次节：节内已无台账行（表格全迁出）→ 整节删除（本版节除外）。
+    # 只把「空行 + 占位行 + 标准说明行」视为可删内容——非模板散文（人工备注）
+    # 仍按上一段规则保留节头，避免静默丢备注。
+    idx = 0
+    while idx < len(lines):
+        head = _PLACEHOLDER_HEAD_RE.match(lines[idx])
+        if idx in drop or head is None or head.group("dev") == keep_version:
+            idx += 1
+            continue
+        start, end = _section_bounds(idx)
+        residual = [
+            lines[i]
+            for i in range(start, end)
+            if i not in drop
+            and lines[i].strip()
+            and not _PLACEHOLDER_LINE_RE.match(lines[i])
+            and not _PLACEHOLDER_NOTE_RE.match(lines[i])
+        ]
+        if not residual:
+            drop.update(range(idx, end))
+        idx = end
+
     if not drop:
         return text
-
-    kept: list[str] = []
-    for idx, line in enumerate(lines):
-        if idx in drop:
-            continue
-        kept.append(line)
-    # 删除节头/占位行后可能留下的连续空行：折叠为最多一个空行
+    kept = [line for i, line in enumerate(lines) if i not in drop]
     out: list[str] = []
     for line in kept:
         if not line.strip() and out and not out[-1].strip():

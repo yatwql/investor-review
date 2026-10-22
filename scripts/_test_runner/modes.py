@@ -240,6 +240,7 @@ _HELP_TEXT = """测试驱动脚本 — 统一运行 pytest 并输出结构化 HT
   python scripts/test-runner.py --mode bench --machine-info  # 跨机器耗时采集（环境 + 各模式实测表格）
   python scripts/test-runner.py --mode bench --update-docs   # 采集并自动回填环境耗时对照表
   python scripts/test-runner.py --jobs 4            # 多模式并行度（优先级 CLI > TEST_RUNNER_JOBS 环境变量 > 自适应：4 核+ 为 2、弱机/采集失败为 1；单模式忽略）
+  python scripts/test-runner.py --mode unit,dev-verify --fail-fast  # 首个失败即中止（取消未启动的档；发布前快速反馈）
   python scripts/test-runner.py --help                   # 本帮助
 
 模式说明:

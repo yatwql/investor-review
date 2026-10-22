@@ -627,3 +627,36 @@ class TestCurrentIterationRecompute:
         """无 `### P1~P4` 分层时不动该行（保守：无法判档就不猜）。"""
         text = "**当前迭代**：在办 1 项（plan-9）。\n\n## plan-9 在做\n"
         assert rel.recompute_current_iteration(text) == text
+
+
+class TestEmptyBatchSectionAfterDevbump:
+    """devbump 后「已解决问题」区不得残留指向已归档版本的空节（回归）。
+
+    背景：迁档时批次节内的标准说明行（`> 完整复盘见 changelog.md X-dev 段…`）属散文，
+    占位行被摘掉后该节只剩这一行说明——`devbump` 之后主台账仍在已解决区顶部
+    显示一个空节，误导读者以为本周期还有已修复项待看。
+    """
+
+    _LEFTOVER = (
+        "# 台账\n\n## 已解决问题\n\n"
+        "### 开发期已修复（1.0.1-dev）\n\n"
+        "> 完整复盘见 `changelog.md` 1.0.1-dev 段；此处为台账原表（发布时随 `release.py prepare` 迁入版本归档）。\n\n"
+        "### 归档档案\n- 索引行\n"
+    )
+
+    def test_empty_batch_section_dropped_on_devbump(self, rel):
+        """只剩标准说明行的批次节 → 整节删除（说明已随归档记录）。"""
+        out = rel.drop_migration_placeholders(self._LEFTOVER)
+        assert "### 开发期已修复（1.0.1-dev）" not in out
+        assert "完整复盘见" not in out
+        assert "### 归档档案" in out
+
+    def test_human_remark_keeps_section(self, rel):
+        """非模板散文（人工备注）仍保留节头——收敛不得静默丢备注。"""
+        text = self._LEFTOVER.replace(
+            "> 完整复盘见",
+            "> 人工备注：本批已复核\n\n> 完整复盘见",
+        )
+        out = rel.drop_migration_placeholders(text)
+        assert "> 人工备注：本批已复核" in out
+        assert "完整复盘见" not in out

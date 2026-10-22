@@ -1,8 +1,8 @@
 # 自审记录归档 — v0.14.x
 
-> 归档时间：2026-10-21（v0.14.0 发布，0.14 系列首批开发期已修复批次并入）；2026-10-21 v0.14.0 本批原表搬运；2026-10-22 v0.14.1 本批原表搬运；2026-10-22 v0.14.2 本批原表搬运；2026-10-22 v0.14.3 本批原表搬运；2026-10-23 v0.14.6 本批原表搬运
+> 归档时间：2026-10-21（v0.14.0 发布，0.14 系列首批开发期已修复批次并入）；2026-10-21 v0.14.0 本批原表搬运；2026-10-22 v0.14.1 本批原表搬运；2026-10-22 v0.14.2 本批原表搬运；2026-10-22 v0.14.3 本批原表搬运；2026-10-23 v0.14.6 本批原表搬运；2026-10-23 v0.14.7 本批原表搬运
 > 原始文件：`docs/managements/review-findings.md`
-> 涵盖版本：v0.14.x 开发期已修复项（v0.14.0 → ）（含 v0.14.6）
+> 涵盖版本：v0.14.x 开发期已修复项（v0.14.0 → ）（含 v0.14.7）
 > 归档内容：台账表格经 `release.py prepare` 整块搬运（无损）；表外散文留主台账
 
 ---
@@ -75,3 +75,12 @@
 | **rf-831** | 近 12h 实施变更技术债核查（40 次提交 / 266 文件）发现 5 类：① `scripts/_eval_factor_zoo/metrics.py` 在「因子公式与生产层同源」接线下仍自留 `_pearson`/`_ema` 本地副本，遮蔽同文件从 `analysis._factor_formulas` 导入的同源符号；② `core/holding_status.py` 与 `core/data_freshness.py` 各持一份 `_detail_value` / `_has_effective_quote`；③ `TuiProgressReporter.call_sheet` 与 `WebProgressReporter.call_sheet` 逐字重复约 20 行；④ README「报告与行情」行写「HTML 10 图」，与同文件「最多 12 张」及模板实测 12 个 canvas 矛盾；⑤ `d65c638a` 把 `plan-181` 从 plan.md 删除且未归档（changelog 仍记有该任务条目），同时把其正文留成孤儿段挂在新的 plan-185 节下 | 已修复：① 改从 `analysis._factor_formulas` 导入 `_pearson`/`_ema`，删本地副本（`eval-factor-zoo` 原面 re-export 不变）；② `holding_status` 改为从 `data_freshness` 导入两个行情明细辅助；③ 新增 `AnnouncingProgressReporter` 承载唯一实现，TUI/Web 同时继承，并补结构断言「两渠道 `call_sheet` 为同一函数对象」；④ README 10→12；⑤ plan.md 恢复 `plan-181` ✅ 节并删除孤儿正文。复核：全仓重复函数体扫描 0 组、`pytest src/test/unit/{core,report,web,scripts}` 相关域通过、`check-style-guardrails` E 级 / `check-test-markers` / `check-script-contract` 均无新增 finding。 |
 | **rf-830** | TUI 按 `Q` 追问稳定返回「服务暂不可用」：日志为 `'utf-8' codec can't encode characters … surrogates not allowed`，且两个 provider 的失败位置只差模型名长度（`55414` / `55410`）→ 失败发生在建连前的请求体序列化，**不是**网络/配额。根因：POSIX 下 `sys.stdin.errors == 'surrogateescape'`，终端送入的非法 UTF-8 字节被 `input()` 解成孤立代理项（U+D800~U+DFFF），问题首字命中时 httpx 以 `ensure_ascii=False` 序列化请求体，`.encode("utf-8")` 抛 `UnicodeEncodeError`；该异常是 `ValueError` 子类，被 `_attempt_api_call` 的 `except (ValueError, KeyError)` 归为「响应解析失败 / api_error」，导致整条 provider 链无谓失败 | 已修复：新增 `core/text_safety.py`（合法代理对折叠为星平面字符、孤立代理项→U+FFFD，与 UTF-8 `errors="replace"` 同口径），在 **LLM 请求体**（`call_llm_with_retry` 入口递归净化全部字符串）、**LLM 响应正文**（`_process_success_response`，防响应 `\udXXX` 写 HTML 时再炸）与**追问入口**（`qa.session` 问题入库/入日志前净化）三处过关。回归用例：`test_text_safety`（净化口径/递归载荷）+ `TestLoneSurrogateBoundary`（真实 `httpx.MockTransport` 下带孤立代理项的请求体能发出、响应正文可编码）+ `TestQuestionSurrogateSafety`（问题与历史存净化后文本） |
 | **rf-833** | 发布期 `refresh` 连续失败且报不出失败用例名：`unit` 档 1 例失败（`test_snapshot_source_guard_edge::test_resolve_failure_fails_closed`），但 `test-runner` 摘要过滤只认小写 `failed`，pytest 的 `FAILED <用例>` 行被整行吞掉 → 只剩一行计数，定位须重跑全量单元。根因：`is_formal_holdings_source` 下沉 `config/_config_api.py` 后用例仍 patch 包入口同名符号，异常分支不触发 | 已修复：① `_test_runner/runner.py` 摘要过滤补 `FAILED` / `ERROR` 关键字（失败用例名直达输出）；② 用例 patch 目标改指调用点 `config._config_api.resolve_holdings_path`。复核：该边缘用例 3 例 + `unit/scripts` + `unit/config` 544 例通过 |
+
+## 开发期已修复（0.14.7-dev）
+
+> 完整复盘见 `changelog.md` 0.14.7-dev 段；此处为台账原表搬运（无损），本批发布日 2026-10-23。
+
+| # | 问题 | 处理 |
+|---|------|------|
+| **rf-835** | `devbump` 后主台账「已解决问题」区残留**空壳批次节**：`prepare` 迁档时保留的批次节内含标准说明行（`> 完整复盘见 changelog.md X-dev 段…`），占位行被清掉后该节只剩这行说明——`drop_migration_placeholders` 把任何非空行都当「人工备注」而保留节头，于是主台账长期挂着一个指向已归档版本的空节 | 已修复：① 标准说明行按正则识别为机器生成内容（`_PLACEHOLDER_NOTE_RE`），非本版即随占位一并摘除；② 批次节在摘除后若已无台账行（且只剩空行/占位/标准说明）则整节删除，人工备注仍保留节头不丢。回归 2 例（只剩标准说明 → 整节消失 / 含人工备注 → 备注保留、说明行摘除）；当前台账已按该函数清理 |
+| **rf-834** | `test-runner` 多档并行时一档失败仍要等其余各档跑完才返回（`refresh` 实测 53s 中约 40s 是白等），发版窗口需要「首个失败立刻回报」的能力 | 已修复：新增 `--fail-fast`——首个非零结果即取消**尚未启动**的档（已启动的不打断：强杀 pytest 子进程会留下半截报告并丢失败详情），被跳过的档在摘要中显式列出（静默跳过与「跑完了」不可区分）；串行/并行共用 `run_modes_concurrently` 调度器，行为只有一处实现；`refresh` 的 bench 步默认带该参数。回归 2 例（失败后即停止启动后续档且返回跳过清单 / 未启用时跑完全部且结果按计划序） |

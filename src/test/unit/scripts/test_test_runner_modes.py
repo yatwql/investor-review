@@ -207,3 +207,38 @@ class TestMarkerExprSingleSource:
         """语法错误在编译期暴露，不带病进入计数。"""
         with pytest.raises(SyntaxError):
             self._modes().compile_marker_expr("unit and")
+
+
+@pytest.mark.unit_scripts
+def test_fail_fast_cancels_pending_modes():
+    """失败即停：首个非零结果后取消尚未启动的档，并显式返回被跳过清单。"""
+    mod = load_script("test-runner.py", module_name="test_runner_failfast_probe")
+    ran: list[str] = []
+
+    def _run_one(mode_key):
+        ran.append(mode_key)
+        # 第一档失败，其余若被执行会返回 0
+        return {"mode": mode_key, "exit_code": 1 if mode_key == "a" else 0, "passed": 1, "failed": 0}
+
+    results, aborted = mod.run_modes_concurrently(["a", "b", "c", "d"], 1, _run_one, fail_fast=True)
+
+    assert [r["mode"] for r in results] == ["a"]
+    assert ran == ["a"], "失败后不得再启动后续档"
+    assert aborted == ["b", "c", "d"], "被跳过的档须显式返回（静默跳过与跑完不可区分）"
+
+
+@pytest.mark.unit_scripts
+def test_non_fail_fast_runs_every_mode_in_plan_order():
+    """不启用失败即停时跑完所有档，且结果按计划序排列（与完成序无关）。"""
+    mod = load_script("test-runner.py", module_name="test_runner_failfast_probe")
+    order: list[str] = []
+
+    def _run_one(mode_key):
+        order.append(mode_key)
+        return {"mode": mode_key, "exit_code": 1 if mode_key == "b" else 0, "passed": 1, "failed": 0}
+
+    results, aborted = mod.run_modes_concurrently(["a", "b", "c"], 2, _run_one, fail_fast=False)
+
+    assert sorted(order) == ["a", "b", "c"]
+    assert [r["mode"] for r in results] == ["a", "b", "c"], "结果须按计划序，不按完成序"
+    assert aborted == []

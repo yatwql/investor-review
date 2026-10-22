@@ -323,3 +323,53 @@ def _run_phased(
     print(f"\n  [{tag2}] {mode_key}{style}: {', '.join(parts)}  ({combined['duration']:.1f}s)")
 
     return combined
+
+
+def run_modes_concurrently(
+    modes: list[str],
+    jobs: int,
+    run_one,
+    *,
+    fail_fast: bool = False,
+) -> tuple[list[dict], list[str]]:
+    """按并行度跑多档，返回 (按计划序排列的已完成结果, 被中止的档名)。
+
+    每档是独立 pytest 进程（报告按模式目录隔离）。``jobs=1`` 即串行执行——
+    串行与并行共用本函数，失败即停的行为因此只有一处实现。
+
+    ``fail_fast=True`` 时首个非零结果即中止：**只取消尚未启动的档**，已启动的
+    不打断（强杀 pytest 子进程会留下半截报告并丢掉失败详情，比多等几秒更糟）。
+    被跳过的档进入返回的第二项，供调用方在摘要里显式列出——静默跳过会让
+    「跑完了」与「被跳过」看起来一样。
+
+    Args:
+        modes: 计划执行顺序（返回结果按此顺序排列，与完成序无关）。
+        jobs: 并行度（≤1 视为串行）。
+        run_one: 单档执行函数 ``(mode_key) -> dict``，返回含 ``exit_code`` 的结果。
+        fail_fast: 是否首个失败即中止。
+
+    Returns:
+        (results, aborted)：``aborted`` 为空表示没有档被跳过。
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    workers = max(1, min(jobs, len(modes)))
+    done: dict[str, dict] = {}
+    aborted: list[str] = []
+    pool = ThreadPoolExecutor(max_workers=workers)
+    try:
+        futures = {pool.submit(run_one, mode): mode for mode in modes}
+        for fut in as_completed(futures):
+            mode = futures[fut]
+            result = fut.result()
+            done[mode] = result
+            if fail_fast and result.get("exit_code", 0) != 0:
+                for queued, queued_mode in futures.items():
+                    if queued.cancel():
+                        aborted.append(queued_mode)
+                break
+    finally:
+        pool.shutdown(wait=True, cancel_futures=True)
+    results = [done[mode] for mode in modes if mode in done]
+    aborted.sort(key=modes.index)
+    return results, aborted

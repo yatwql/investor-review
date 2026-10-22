@@ -57,7 +57,15 @@ def cmd_refresh(args: argparse.Namespace, env, runner=None) -> int:
     snapshot_steps: list[tuple[str, list[str]]] = [
         (
             bench_label if not bench_jobs else f"{bench_label}，并行度 {bench_jobs}",
-            [sys.executable, "scripts/test-runner.py", "--mode", bench_scope, "--update-docs"]
+            [
+                sys.executable,
+                "scripts/test-runner.py",
+                "--mode",
+                bench_scope,
+                "--update-docs",
+                # 发布前快速反馈：首个失败即停，失败用例名随 runner 输出直达
+                "--fail-fast",
+            ]
             + (["--jobs", str(bench_jobs)] if bench_jobs else []),
         ),
         ("测试收集计数回填", [sys.executable, "scripts/test-collect-coverage.py"]),
