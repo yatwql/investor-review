@@ -1,6 +1,6 @@
 # 投资复盘助手 — 实现计划
 > 文档版本：0.14.6-dev
-> **编号源**：`plan-next = 181`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-180，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`plan-next = 185`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-184，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -8,7 +8,7 @@
 
 本文档记录项目的实现计划。已完成的版本计划已归档，此处仅跟踪当前迭代中的工作。
 
-**当前迭代**：在办 4 项——P2 2 项（**plan-92/93**）、P3 1 项（**plan-70**）、P4 1 项（**plan-55**）。
+**当前迭代**：在办 8 项——P2 6 项（**plan-92/93/181/182/183/184**）、P3 1 项（**plan-70**）、P4 1 项（**plan-55**）。
 
 > **命名纪律（强制）**：重构/新增的变量名、函数名、注释与文档表述必须与新章节语义相关（如 `position_relationship`/`portfolio_history_drawdown`/`style_factor`/`action`），**绝对禁止用任务编号命名**（F 系列、plan-N、rf-N 等）。任务编号仅在本表作链接锚点，不进入实现层。
 
@@ -45,6 +45,30 @@
 **现状与问题**：`html_save` 按日期归档到子目录但不生成 index；TUI 无「最近报告」菜单项（grep 历史报告/报告列表 = 0）；Web 有运行历史但 HTML 归档目录本身不可浏览——找上期报告靠翻文件系统
 
 **动作**：生成/刷新 `output_dir/index.html`（按日期列出 Excel/HTML 产物与打开链接），TUI 加「打开输出目录 / 最近报告」入口（与 rf-636 联动）；索引页不泄漏路径以外的本地信息，匿名化口径与报告一致
+
+#### `plan-181` CLI 缺「数据源健康历史」视图（TUI `[H]` / Web `/api/health/history` 已有）
+
+**现状与问题**：健康历史（最近 10 次采集的成功/失败源与降级原因）在 TUI 是 `[H]`、Web 是 `GET /api/health/history`，CLI 只有 `check-sources`（当前态快照）——同一事实在 CLI 侧不可得，排查「昨天那次为什么降级」只能靠翻 `data/state/` JSON 或日志。
+
+**动作**：CLI 增 `health-history` 子命令（或 `check-sources --history N`），输出委托 `core/perf.summarize_health_history`（TUI/Web 同源，不新写聚合）；支持 `--json` 便于脚本消费；补「同一份历史在三渠道字段一致」契约用例
+
+#### `plan-182` CLI 缺「报告对话式追问」入口（TUI `[Q]` / Web `/api/qa/ask` 已有）
+
+**现状与问题**：`report_qa` 的会话内多轮追问在 TUI（`[Q]` 文本循环）与 Web（`POST /api/qa/ask`）可用，CLI 无入口——自动化/脚本场景无法对当期报告提问，三渠道能力不一致（该功能默认关，开关与用量口径已在 `qa/session.py` 统一）。
+
+**动作**：CLI 增 `ask` 子命令（`--report` 选报告、`--session` 续会话、问题走参数或 stdin 多轮），传输层直接复用 `qa/session.ask`（与 TUI/Web 同一实现）；沿用既有错误码到退出码映射；补「CLI 与 TUI 同一会话同答」契约用例
+
+#### `plan-183` 报告产物「定位/打开」能力三渠道不一致
+
+**现状与问题**：TUI 生成后打印产物清单并支持 `y` 打开目录与报告（`tui/report_artifacts`）；CLI 生成完**不打印**产物路径（只有 `--output` 参数），用户需自行拼路径；Web 只有下载链接、无「打开输出目录」入口。三个渠道对「产物在哪、怎么看」说法不一。
+
+**动作**：① CLI 收尾打印产物清单（复用 `tui/report_artifacts.collect_artifacts` 的定位逻辑——把「定位」下沉到 core 供三渠道共用，打开动作仍留各渠道：CLI 可选 `--open` 调用同一 opener）；② Web 运行结果区补「产物路径 + 复制路径」（服务端与浏览器不同机，「打开目录」无意义，改为可复制的绝对路径）；③ 文档在 `reports-instruction.md` 补三渠道差异表
+
+#### `plan-184` `llm_settings.json` 关键调优项无任何渠道可编辑
+
+**现状与问题**：本轮把 `llm_max_thinking_concurrency` 默认改为 2，并把「端点偶发空内容 → 改回 1」写成回滚手段；但 Web 配置面板与 TUI `[S]` 只暴露 `enabled_llm` 与 features，**调优项（thinking 并发/总时间预算/日预算/重试/超时）只能手改 JSON**——用户按提示回滚时要开编辑器找键，且无校验。
+
+**动作**：把这批「用户可以合理调整」的键纳入 `config/edit_ops` 共享白名单（含取值范围与非法值提示），Web 面板与 TUI 配置面板同时出现（同一白名单驱动，与功能开关注册表的「唯一事实来源」纪律同源）；每项带一句「什么时候该改」的说明（如 thinking 并发：端点偶发空响应时改回 1）；补「三渠道都能改同一键且校验一致」用例
 
 ### P3 — 预期实施，有空时安排
 
