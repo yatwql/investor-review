@@ -1466,7 +1466,7 @@ CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` /
 | 域 | 代表脚本 | 什么时候用 |
 |:---|:---------|:-----------|
 | 测试 | `test-runner.py` / `collect-test-coverage.py` / `extract-test-failures.py` / `find-order-dependent-test.py` / `smoke-web.py` | 跑测试、统计覆盖、定位失败 |
-| 文档 | `check-doc-traces.py` / `check-doc-links.py` / `check-doc-drift.py` / `check-requirement-trace.py` / `check-semantic-index.py` | 文档漂移、死链、需求追溯、语义命名 |
+| 文档 | `check-doc-traces.py` / `check-doc-links.py` / `check-doc-drift.py` / `check-requirement-trace.py` / `check-semantic-index.py` / `make-social-preview.py` | 文档漂移、死链、需求追溯、语义命名、品牌社交预览图生成 |
 | 代码与文件质量 | `check-code-traces.py` / `check-test-redundancy.py` / `check-task-numbering.py` / `check-file-length.py` / `check-version-consistency.py` / `check-style-guardrails.py` / `check-script-contract.py` | 痕迹、用例冗余、编号、行数红线、版本、样式护栏 |
 | 发布 | `release.py`（分步编排）/ `collect-test-coverage.py` | 发版全流程 |
 | 诊断 | `perf-test-report.py` / `perf-view.py` / `probe.py` / `check-sources`（CLI 子命令） / `doctor`（CLI 子命令） | 性能与数据源体检 |

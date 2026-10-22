@@ -57,7 +57,7 @@
 | `probe-csi-factor-indices.py` / `probe-push2.py` | 诊断 | 旧入口兼容垫片（薄委托到 `probes/csi.py` / `probes/push2.py`，用法不变） |
 | `factor_zoo_eval.py` | 诊断 | 因子动物园目录评测（非生产代码；五个来源族各抽 5 个因子，评测 A 字段可得率 / B 与既有信号族增量 / C 全量计算耗时占比三项指标，A/B/C 全过才转正立项；子命令 catalog / fields / signals / timing / verdict / all，产物只落 `docs/tmp/factor-zoo/`；实现拆在 `_factor_zoo/`） |
 | `check-svg.py` | 诊断 | README SVG 架构图检查（子命令 `geom` 几何 / `pixel` 像素 / `text-overflow` 文字色越界；像素子命令需 Pillow） |
-| `make-social-preview.py` | 诊断 | GitHub Social Preview 图生成（1200×630 JPG；猫头鹰左卡 + 品牌文案右栏，需 `cairosvg` + Pillow，默认就地刷新入库资产 `src/static/social-preview.jpg`） |
+| `make-social-preview.py` | 文档 | GitHub Social Preview 图生成（1200×630 JPG；猫头鹰左卡 + 品牌文案右栏，需 `cairosvg` + Pillow，默认就地刷新入库资产 `src/static/social-preview.jpg`） |
 | `_checklib.py` | 内部 | 检查脚本共享设施（统一 `-v/--ci` 契约与 `[OK]`/`[ERR]` 输出、`rel()`、`report()`、文档区间与表格解析） |
 | `_test_runner/` | 内部 | 测试驱动内部实现包（paths / modes / pytest_env / machine_info / doc_writer / report_html / runner） |
 | `launch.sh` / `launch.ps1` | 启动 | Linux/macOS / Windows 一键启动脚本（无参数启动 TUI；`web` 子命令启动 Web 浏览器模式） |
@@ -350,7 +350,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 ## 文档类
 
-面向读者文档的痕迹、链接、与实现的一致性，以及语义命名索引的正反向校验。
+面向读者文档的痕迹、链接、与实现的一致性，语义命名索引的正反向校验，以及仓库展示资产（品牌社交预览图）的生成。
 
 **`check-doc-traces.py` — 文档历史痕迹 + 结构性冗余检查**
 
@@ -566,6 +566,23 @@ sym |= set(re.findall(r'^\s{0,8}["\']([a-z][a-z0-9_]{2,})["\']\s*:', src, re.M))
 ```
 
 > **何时跑**：`git commit` 时由 pre-commit 钩子按暂存域自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` job 恒跑全量兜底。
+
+**`make-social-preview.py` — GitHub Social Preview 图生成**
+
+品牌社交预览图（1200×630 JPG）：左卡内嵌 `src/static/owl-mascot.svg`（猫头鹰「守望」），
+右栏中文品牌名 / 英文名 / 定位句 / 能力关键词，强调色取 `DESIGN.md` 的暗色语义色。
+模板与素材都在仓库内，改文案或换色后重跑即复现同一张图。
+
+```bash
+.venv/bin/python scripts/make-social-preview.py                 # 默认写入 src/static/social-preview.jpg（入库资产）
+.venv/bin/python scripts/make-social-preview.py -o /tmp/x.jpg   # 自定义输出（不碰入库资产）
+.venv/bin/python scripts/make-social-preview.py --keep-svg      # 保留中间 PNG 便于排查
+```
+
+产物即仓库资产 `src/static/social-preview.jpg`（受 git 管控，重跑即就地刷新），需改图时跑脚本后提交，
+再由人工上传到仓库 Settings → Social preview（GitHub API 不提供该上传接口）。
+依赖 `cairosvg`（SVG 栅格化，不入 requirements——无 cairo 系统库的环境装不上）+ `Pillow`（已为运行期依赖），
+故不进任何门禁；缺依赖或素材不可读时打印指引并以**退出码 1** 结束。
 
 ## 代码与文件质量类
 
@@ -938,23 +955,6 @@ README 首屏架构图（`src/static/architecture.svg` / `llm-chain.svg` / `capa
 参数含义：`scale` = px per svg unit；`card_r` = 卡片右缘 x（svg 单位）；`row_y*/y*` = 检测区 y 范围（svg 单位）；`margin` = 检测范围到卡片右缘的右扩量（svg 单位）。几何审查纯标准库；两个像素子命令需 Pillow（`pip install -e '.[svg]'`，缺失时给出可读指引并以退出码 1 结束）。
 
 > **当前状态**：三张 SVG 均通过 `geom`——卡片内文本按估宽模型的右余量 ≥10px（`capabilities.svg` ≥19px）。贴边阈值由 `_PADDING_WARN`（6px）定义，矩形底部不齐仅作提示项（流程图同列卡片高度本就允许不同）。**改图后请重跑本脚本**；本脚本不在提交前/发布前门禁清单内，按需运行。
-
-**`make-social-preview.py` — GitHub Social Preview 图生成**
-
-品牌社交预览图（1200×630 JPG）：左卡内嵌 `src/static/owl-mascot.svg`（猫头鹰「守望」），
-右栏中文品牌名 / 英文名 / 定位句 / 能力关键词，强调色取 `DESIGN.md` 的暗色语义色。
-模板与素材都在仓库内，改文案或换色后重跑即复现同一张图。
-
-```bash
-.venv/bin/python scripts/make-social-preview.py                 # 默认写入 src/static/social-preview.jpg（入库资产）
-.venv/bin/python scripts/make-social-preview.py -o /tmp/x.jpg   # 自定义输出（不碰入库资产）
-.venv/bin/python scripts/make-social-preview.py --keep-svg      # 保留中间 PNG 便于排查
-```
-
-产物即仓库资产 `src/static/social-preview.jpg`（受 git 管控，重跑即就地刷新），需改图时跑脚本后提交，
-再由人工上传到仓库 Settings → Social preview（GitHub API 不提供该上传接口）。
-依赖 `cairosvg`（SVG 栅格化，不入 requirements——无 cairo 系统库的环境装不上）+ `Pillow`（已为运行期依赖），
-故不进任何门禁；缺依赖或素材不可读时打印指引并以**退出码 1** 结束。
 
 **`factor_zoo_eval.py` — 因子动物园目录评测（非生产代码）**
 
