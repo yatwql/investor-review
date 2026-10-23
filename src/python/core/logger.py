@@ -37,10 +37,104 @@ _LOG_BACKUP_COUNT = 5  # 保留 5 个备份
 # 用环境变量单独放开，不改代码、不改配置：
 #   INVEST_LOG_FILE_LEVEL=DEBUG      （文件）
 #   INVEST_LOG_CONSOLE_LEVEL=DEBUG   （控制台）
+_LOGGER_CONFIG_PATH = os.path.join(PROJECT_ROOT, "data/config/logger.json")
+_DEFAULT_ROTATION_BYTES = 10 * 1024 * 1024
+_DEFAULT_BACKUP_COUNT = 5
+_DEFAULT_CONSOLE_COLOR = True
+_DEFAULT_VIEWER_LEVEL = "INFO"
+_DEFAULT_TAIL_LINES = 500
+_VALID_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+
+
+def _read_logger_config_file() -> dict:
+    """读取 data/config/logger.json（JSONC）；缺失/损坏/版本不符 → 全默认。
+
+    本模块属 core 层，不得导入 config 包；这里内联读取 + 轻量校验，面板侧另有
+    ``config/_logging.py`` 提供同一范围表的保存拒绝与路径绝对化。
+    """
+    config = {
+        "path": os.path.join("logs", "app.log"),
+        "level": "INFO",
+        "max_bytes": _DEFAULT_ROTATION_BYTES,
+        "backup_count": _DEFAULT_BACKUP_COUNT,
+        "console_level": "INFO",
+        "console_color": _DEFAULT_CONSOLE_COLOR,
+        "viewer_level": _DEFAULT_VIEWER_LEVEL,
+        "tail_lines": _DEFAULT_TAIL_LINES,
+    }
+    if not os.path.exists(_LOGGER_CONFIG_PATH):
+        return config
+    try:
+        from src.python.core.json_comments import loads
+
+        with open(_LOGGER_CONFIG_PATH, encoding="utf-8-sig") as f:
+            doc = loads(f.read())
+    except Exception:  # noqa: BLE001 — 日志配置损坏不得阻断主流程
+        return config
+    if not isinstance(doc, dict):
+        return config
+    if doc.get("version") != 1:
+        # 版本不符：告警后全默认（面板侧会明确提示重新生成）
+        import warnings
+
+        warnings.warn(
+            f"logger.json 的 version={doc.get('version')!r} 不受支持（需 1），已使用默认日志配置；"
+            "请删除该文件后重新生成",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        return config
+
+    file_section = doc.get("file") or {}
+    console = doc.get("console") or {}
+    viewer = doc.get("viewer") or {}
+    if isinstance(file_section.get("path"), str) and file_section["path"].strip():
+        config["path"] = file_section["path"].strip()
+    for key, section_key in (("level", ("file", "level")), ("console_level", ("console", "level"))):
+        value = (doc.get(section_key[0]) or {}).get(section_key[1])
+        if isinstance(value, str) and value.upper() in _VALID_LEVELS:
+            config[key] = value.upper()
+    viewer_level = viewer.get("default_level")
+    if isinstance(viewer_level, str) and viewer_level.upper() in (*_VALID_LEVELS, "ALL"):
+        config["viewer_level"] = viewer_level.upper()
+    for key, value in (
+        ("max_bytes", file_section.get("max_bytes")),
+        ("backup_count", file_section.get("backup_count")),
+        ("tail_lines", viewer.get("tail_lines")),
+    ):
+        if isinstance(value, int) and not isinstance(value, bool):
+            config[key] = value
+    if isinstance(console.get("color"), bool):
+        config["console_color"] = console["color"]
+    return config
+
+
+def _apply_logger_config(config: dict) -> None:
+    """把配置写入模块级生效值（路径绝对化；测试进程固定 test.log）。"""
+    global _LOG_FILE, _LOG_MAX_BYTES, _LOG_BACKUP_COUNT, _CONSOLE_COLOR
+    global _CONFIG_FILE_LEVEL, _CONFIG_CONSOLE_LEVEL
+    path = config["path"]
+    if not os.path.isabs(path):
+        path = os.path.join(PROJECT_ROOT, path)
+    _LOG_FILE = os.path.join(_LOG_BASE, "test.log") if _is_pytest else path
+    _LOG_MAX_BYTES = int(config["max_bytes"])
+    _LOG_BACKUP_COUNT = int(config["backup_count"])
+    _CONSOLE_COLOR = bool(config["console_color"])
+    _CONFIG_FILE_LEVEL = str(config["level"])
+    _CONFIG_CONSOLE_LEVEL = str(config["console_level"])
+
+
+def reload_logger_config() -> dict:
+    """重新读取 logger.json 并刷新生效值（面板保存后调用）。返回配置副本。"""
+    config = _read_logger_config_file()
+    _apply_logger_config(config)
+    return dict(config)
+
+
 _LOG_FILE_LEVEL_ENV = "INVEST_LOG_FILE_LEVEL"
 _LOG_CONSOLE_LEVEL_ENV = "INVEST_LOG_CONSOLE_LEVEL"
-_DEFAULT_FILE_LEVEL = "INFO"
-_DEFAULT_CONSOLE_LEVEL = "INFO"
+_CONFIG_FILE_LEVEL = "INFO"
+_CONFIG_CONSOLE_LEVEL = "INFO"
 
 
 def _resolve_level(env_name: str, default_name: str) -> int:
@@ -67,7 +161,7 @@ def _resolve_level(env_name: str, default_name: str) -> int:
 
 
 class _ColoredFormatter(logging.Formatter):
-    """按日志级别着色消息内容的格式器（仅限控制台）。"""
+    """按日志级别着色消息内容的格式器（仅限控制台；``use_color=False`` 时纯文本）。"""
 
     _LEVEL_COLORS = {
         logging.WARNING: YELLOW,
@@ -75,8 +169,12 @@ class _ColoredFormatter(logging.Formatter):
         logging.CRITICAL: RED,
     }
 
+    def __init__(self, fmt: str | None = None, *, use_color: bool = True) -> None:
+        super().__init__(fmt)
+        self._use_color = use_color
+
     def format(self, record: logging.LogRecord) -> str:
-        color = self._LEVEL_COLORS.get(record.levelno, "")
+        color = self._LEVEL_COLORS.get(record.levelno, "") if self._use_color else ""
         if color:
             original = record.msg
             record.msg = f"{color}{record.msg}{RESET}"
@@ -102,6 +200,14 @@ class _ClosedStreamSilentHandler(logging.StreamHandler):
         super().handleError(record)
 
 
+#: 生效值（模块级；reload_logger_config 可刷新）
+_LOG_MAX_BYTES = _DEFAULT_ROTATION_BYTES
+_LOG_BACKUP_COUNT = _DEFAULT_BACKUP_COUNT
+_CONSOLE_COLOR = _DEFAULT_CONSOLE_COLOR
+_LOG_FILE = os.path.join(_LOG_BASE, "test.log") if _is_pytest else os.path.join(_LOG_BASE, "app.log")
+_apply_logger_config(_read_logger_config_file())
+
+
 def setup_logger(name: str = "invest") -> logging.Logger:
     """
     初始化并返回 logger。
@@ -122,8 +228,8 @@ def setup_logger(name: str = "invest") -> logging.Logger:
     if logger.handlers:
         return logger
 
-    file_level = _resolve_level(_LOG_FILE_LEVEL_ENV, _DEFAULT_FILE_LEVEL)
-    console_level = _resolve_level(_LOG_CONSOLE_LEVEL_ENV, _DEFAULT_CONSOLE_LEVEL)
+    file_level = _resolve_level(_LOG_FILE_LEVEL_ENV, _CONFIG_FILE_LEVEL)
+    console_level = _resolve_level(_LOG_CONSOLE_LEVEL_ENV, _CONFIG_CONSOLE_LEVEL)
     # 根 logger 保持 DEBUG，由两个 handler 各自过滤：这样显式设置 handler/根级别的
     # 调试工具（caplog、临时 handler）仍能拿到 DEBUG 记录，默认落盘范围不受影响
     logger.setLevel(logging.DEBUG)
@@ -136,22 +242,24 @@ def setup_logger(name: str = "invest") -> logging.Logger:
     # 对 "closed file" 静默降级，避免 `--- Logging error ---` 噪声。
     console_handler = _ClosedStreamSilentHandler()
     console_handler.setLevel(console_level)
-    console_handler.setFormatter(_ColoredFormatter(_LOG_FORMAT))
+    console_handler.setFormatter(_ColoredFormatter(_LOG_FORMAT, use_color=_CONSOLE_COLOR and bool(RESET)))
     logger.addHandler(console_handler)
 
-    # ---- 文件 Handler（自动轮转） ----
-    log_dir = os.path.dirname(_LOG_FILE)
-    os.makedirs(log_dir, exist_ok=True)
-
-    file_handler = RotatingFileHandler(
-        _LOG_FILE,
-        maxBytes=_LOG_MAX_BYTES,
-        backupCount=_LOG_BACKUP_COUNT,
-        encoding="utf-8",
-    )
-    file_handler.setLevel(file_level)
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+    # ---- 文件 Handler（自动轮转；目录不可写时降级为仅控制台） ----
+    try:
+        log_dir = os.path.dirname(_LOG_FILE)
+        os.makedirs(log_dir, exist_ok=True)
+        file_handler = RotatingFileHandler(
+            _LOG_FILE,
+            maxBytes=_LOG_MAX_BYTES,
+            backupCount=_LOG_BACKUP_COUNT,
+            encoding="utf-8",
+        )
+        file_handler.setLevel(file_level)
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+    except OSError as e:
+        logger.warning("日志文件不可写（%s），本次仅输出到控制台: %s", _LOG_FILE, e)
 
     return logger
 

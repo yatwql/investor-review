@@ -864,6 +864,35 @@ Web 模式（浏览器界面）提供「配置编辑」面板，可修改的配�
 
 ---
 
+### S. 日志配置（logger.json）
+
+日志是**运行诊断域**的独立配置，不与持仓/报告/数据源混在一起；文件缺失时全默认，不报错。
+
+| 键 | 类型 | 默认 | 范围 | 说明 |
+|:--|:--|:--|:--|:--|
+| `file.path` | str | `logs/app.log` | 非空、不含 `..` | 写盘目标（相对项目根或绝对路径；测试进程固定 `logs/test.log`） |
+| `file.level` | enum | `INFO` | DEBUG / INFO / WARNING / ERROR / CRITICAL | 写盘级别 |
+| `file.max_bytes` | int | `10485760` | 1024 ~ 1073741824 | 单文件上限（字节） |
+| `file.backup_count` | int | `5` | 0 ~ 50 | 备份份数（0 = 不轮转） |
+| `console.level` | enum | `INFO` | 同上 | 控制台级别 |
+| `console.color` | bool | `true` | — | 允许颜色（`NO_COLOR` / 非 TTY 自动降级） |
+| `viewer.default_level` | enum | `INFO` | 同上 + `ALL` | 日志查看器默认筛选级别 |
+| `viewer.tail_lines` | int | `500` | 50 ~ 10000 | 查看器首屏读取行数 |
+
+```jsonc
+{
+  "version": 1,
+  "file": {"path": "logs/app.log", "level": "INFO", "max_bytes": 10485760, "backup_count": 5},
+  "console": {"level": "INFO", "color": true},
+  "viewer": {"default_level": "INFO", "tail_lines": 500}
+}
+```
+
+> - **优先级**：环境变量 `INVEST_LOG_FILE_LEVEL` / `INVEST_LOG_CONSOLE_LEVEL` > `logger.json` > 内置默认（仅级别可被环境变量临时覆盖，其余键只由文件决定）。
+> - **校验**：非法级别/越界数值/含 `..` 的路径在**保存时拒绝**（文案含键名、当前值、合法范围）；加载时告警并回落默认，不阻断启动。
+> - `version` 不符 → 拒绝加载并提示删除后重新生成（不做旧结构转换）。
+> - 日志目录不可写 → 启动告警并降级为仅控制台输出，主流程继续。
+
 ### R. 任务完成通知（notify）
 
 无人值守（cron / 任务计划）运行只有退出码与日志，成功/失败都要人工翻日志。`notify` 节配置报告生成完成后的通知推送：**失败（退出码非 0）必发、成功需 `on_success: true`**；缺省全关 = 静默跳过（不配置该节完全不影响其他功能）。

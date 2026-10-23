@@ -1336,6 +1336,10 @@ LLM 五维度量化评分，每项满分 100：
 
 独立参考文件（不进编辑面）：`version`（当前 1，不符即拒绝加载并提示重新生成）+ 策略（`currency` / `timezone` / `peak_periods` / `idle_periods` / `weekend_always_idle` / `holiday_always_idle`）+ `models` 逐模型覆盖内置价；只覆盖出现的字段，缺失字段继承内置值；文件缺失时仅用内置价，单个模型条目非法时告警并跳过。
 
+### 11.1.2 logger.json（日志运行配置）
+
+独立文件：`version`（1）+ `file`（path/level/max_bytes/backup_count）+ `console`（level/color）+ `viewer`（default_level/tail_lines）。加载时非法值告警回落默认、保存时拒绝（含键名/当前值/范围）；级别支持 `INVEST_LOG_*_LEVEL` 环境变量临时覆盖（优先级高于文件）；日志目录不可写时降级为仅控制台。
+
 ### 11.2 llm_key.json（敏感凭据文件，建议纳入 .gitignore）
 
 多键凭据字典，支持按 `credentials_ref` 名称引用。

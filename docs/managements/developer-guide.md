@@ -931,6 +931,7 @@ A: 运行 `.venv/bin/python scripts/check-test-markers.py`，脚本会静态扫�
 **级别可配（默认 INFO）**：文件与控制台默认 INFO；需要逐次取数追踪时用环境变量单独放开，不改代码、不改配置：
 
 ```bash
+# 级别默认在 data/config/logger.json；下列环境变量仅临时覆盖（优先级更高）
 INVEST_LOG_FILE_LEVEL=DEBUG .venv/bin/python -m src.python.cli report --type full   # 文件写 DEBUG
 INVEST_LOG_CONSOLE_LEVEL=DEBUG ...                                                # 控制台写 DEBUG
 ```

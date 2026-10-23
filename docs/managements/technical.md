@@ -4138,6 +4138,7 @@ investor-review/
 | `llm_settings.json` | `_llm_settings.get_llm_config()` | `core/json_comments.strip_json_comments()` | **schema v2**（`defaults`/`modules`/`runtime`/`advanced`）：`_llm_settings._load_settings_document()` 版本校验 → `_llm_schema.merge_defaults()` 三层缺省 → `flatten()` 展平为消费方契约；写入经 `_llm_schema.apply_flat_updates()` + `_render_v2()`（值变化优先文本 patch 保注释） |
 | `llm_key.json` | `_llm_providers._load_llm_key_credentials()` | `_comments._strip_json_comments()` | 单凭据 flat 自动升级为 `_default` 块（自持）；`get_llm_config()` 内联读取合并覆盖同名字段 |
 | `llm_providers.json` | `_llm_providers._load_llm_providers()` | `_comments._strip_json_comments()` | 根非 object / 解析失败返回 None 判定（自持）；`_inject_provider_chain_data()` 链模式注入 |
+| `logger.json` | `core/logger.py::_read_logger_config_file()`（启动时）/ `config/_logging.read_logger_config()`（面板） | `core/json_comments.loads()` | 日志级别/路径/轮转/查看器；`core/logger.py` 不导入 config 包（内联读取），面板经 `config/_logging` 同表校验；级别可被 `INVEST_LOG_*_LEVEL` 覆盖 |
 | `llm_pricing_ref.json` | `_llm_pricing.load_pricing_config()` | `core/json_comments.loads()` | 参考数据：策略 + `models` 逐模型覆盖内置 `MODEL_PRICING`；缺失→内置价、版本不符→拒绝并回退、单条非法→告警跳过；不进编辑面 |
 | `features.json` | `features.load_feature_overrides()` | `core/json_comments.strip_json_comments()` | 模块导入时自动调用；文件仅存需覆写的子集，首次写入以中文注释模板为底 |
 
