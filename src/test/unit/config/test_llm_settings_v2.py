@@ -122,7 +122,6 @@ class TestFlattenContract:
             "daily_cost_limit",
             "debate",
             "fact_check",
-            "pricing",
         ):
             assert key in flat, key
 

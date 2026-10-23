@@ -406,7 +406,6 @@ def get_known_llm_settings_keys() -> set[str]:
     keys |= {
         "max_retries",
         "enabled_llm",
-        "pricing",
         "llm_max_concurrency",
         "llm_max_thinking_concurrency",
         "llm_full_fail_retry_delay",

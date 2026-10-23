@@ -89,7 +89,6 @@ class TestRegistryCompleteness:
         # 确认已知的全局键存在
         assert "max_retries" in keys
         assert "enabled_llm" in keys
-        assert "pricing" in keys
         assert "news_correlation_top_n" in keys
         assert "fact_check" in keys
         # 确认 per-module 键生成正确

@@ -42,11 +42,14 @@ class TestLlmSettingsKeyConsistency:
         if not os.path.exists(_path):
             return  # 无真实配置文件时跳过（CI/裸环境）
 
+        from src.python.config._llm_schema import flatten
+
         with open(_path, encoding="utf-8") as f:
             raw = f.read()
             llm = json.loads(_strip_json_comments(raw))
 
-        file_keys = set(llm.keys())
+        # v2 嵌套结构：按消费方扁平契约核对键名（顶层 sections 不是配置键）
+        file_keys = set(flatten(llm))
         untracked = file_keys - _KNOWN_LLM_SETTINGS_KEYS
         assert not untracked, f"llm_settings.json 中发现 {len(untracked)} 个未登记键名: {sorted(untracked)}"
 

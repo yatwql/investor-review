@@ -67,22 +67,15 @@ LLM 配置由三个独立文件管理：
   "temperature_global_macro": 0.3,
   "max_tokens_global_macro": 3072,
   "temperature_expert_review": 0.3,
-  "max_tokens_expert_review": 36000,
-  "pricing": {
-    "currency": "CNY",
-    "timezone": "Asia/Shanghai",
-    "peak_periods": ["09:00-12:00", "14:00-18:00"],
-    "idle_periods": [],
-    "weekend_always_idle": true,
-    "holiday_always_idle": true
-  }
+  "max_tokens_expert_review": 36000
 }
+
 ```
 
 > **注意**：
 > - `system_prompt_*` 默认值为 `null`，表示使用代码内置提示词。填入字符串可覆盖。
 > - 代码内置提示词定义在 `src/python/llm/prompts_core.py`（主 prompt）、`prompts_tables.py`（数据表格）、`prompts_action.py`（行动建议）中，更新代码时可自动升级。
-> - `pricing` 段可省略（使用代码内置定价），仅需自定义覆盖时添加，详见下方「完整模型定价表」章节。
+> - 计价策略与模型单价覆盖在独立参考文件 `llm_pricing_ref.json` 中，详见下方「完整模型定价表」章节。
 
 **Step 3**：启动程序，菜单选 **L** 生成包含 LLM 分析的完整版报告。
 
@@ -368,9 +361,9 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
 > **全局并发 vs 端点级节流**：`llm_max_concurrency` 是**全局**上限（所有模块合起来最多几个线程）；若需对**某个具体端点**单独限速/限并发（例如同一个程序里，订阅制编码端点要低频串行、按量付费端点可以放开），用 `llm_providers.json` 各 provider 条目内的 `pacing` 段——两者叠加生效，见下方「端点级节流」。
 - `enabled_llm`（dict，默认除 `news_correlation` 与 `self_review` 为 `false` 外均为 `true`）：各模块独立启停开关。`self_review`（生成后自检）为实验能力：开启后每次报告额外调用一次 LLM，对四个分析模块产出做一致性复核并输出【自检清单】附录（与确定性事实校验分层不重叠，失败不影响主内容）
 - `fact_check`（dict，默认 `{tolerance: 1.0}`）：LLM 输出数值一致性检测配置。详见下节「事实校验容差配置」
-- `pricing`（dict，默认 `{currency: "CNY", timezone: "Asia/Shanghai", peak_periods: ["09:00-12:00", "14:00-18:00"], idle_periods: [], weekend_always_idle: true, holiday_always_idle: true}`）：模型 Token 定价表 + 峰谷时段配置，可省略（使用代码内置定价），仅需覆盖时添加。除 `currency`（货币符号）、`timezone`（峰谷判定时区，IANA 名称）、`peak_periods` / `idle_periods`（高峰/闲时段，`"HH:MM-HH:MM"` 列表）、`weekend_always_idle`（周末全天闲时开关，默认 `true`）、`holiday_always_idle`（法定节假日全天闲时开关，默认 `true`）外，其余键按模型名合并覆盖价格。详见下方「完整模型定价表」章节
+- **计价策略与模型单价**：不在本文件，见独立参考数据 `data/config/llm_pricing_ref.json`（`version` + 策略 + `models` 逐模型覆盖；缺失时仅用内置价）。详见下方「完整模型定价表」章节
 - `news_correlation_top_n`（int，默认 `30`）：送 LLM 分析的新闻条数。仅 news_correlation 模块有效，值越大 Token 消耗越高
-- `daily_cost_limit`（数值，默认 `0`）：LLM **日费用预算上限**（货币单位与 `pricing.currency` 一致，`0`=不启用）。启用后 full 生成前展示**事前费用预估区间**（计划参与模块 × 模型单价；perf 历史逐模块实际费用优先、无历史静态兜底；TUI `N` 多选 / CLI `--force-llm`/`--llm-module` / Web 勾选的重新生成范围进入预估——范围内模块按静态单价、范围外维持历史口径，并以「其中 N 个模块重新生成」拆行显示）与今日已花费；达到上限时交互渠道（TUI / Web / CLI 终端）询问「用已有结果继续 / 中止」，非交互渠道（`--yes`、`--non-interactive`、非 TTY、Web 定时调度）直接中止。今日已花费 = perf 历史当日 `llm.total_cost` 汇总，与报告内 LLM 用量统计同源；与**报告级输入 Token 预警**（`cost_tracker`，默认 8K、仅告警不阻断）分层——本项是**生成前的日费用硬闸**
+- `daily_cost_limit`（数值，默认 `0`）：LLM **日费用预算上限**（货币单位与 `llm_pricing_ref.json` 的 `currency` 一致，`0`=不启用）。启用后 full 生成前展示**事前费用预估区间**（计划参与模块 × 模型单价；perf 历史逐模块实际费用优先、无历史静态兜底；TUI `N` 多选 / CLI `--force-llm`/`--llm-module` / Web 勾选的重新生成范围进入预估——范围内模块按静态单价、范围外维持历史口径，并以「其中 N 个模块重新生成」拆行显示）与今日已花费；达到上限时交互渠道（TUI / Web / CLI 终端）询问「用已有结果继续 / 中止」，非交互渠道（`--yes`、`--non-interactive`、非 TTY、Web 定时调度）直接中止。今日已花费 = perf 历史当日 `llm.total_cost` 汇总，与报告内 LLM 用量统计同源；与**报告级输入 Token 预警**（`cost_tracker`，默认 8K、仅告警不阻断）分层——本项是**生成前的日费用硬闸**
 - `debate`（dict，可选实验功能）：辩论模式配置。含 procon（三段式正反辩论，`per_call_max_tokens` 限定每阶段输出上限，默认 18432（null 时按代码兜底同值））、conditional（条件情景推理）、concentration_qa（集中度问答阈值，辩论流程内建段落的触发阈值），以及 `max_total_tokens_per_report`（单次报告辩论总 Token 预算上限，默认 72000，覆盖三段式真实成本）和 `per_call_timeout_override`（辩论单次 API 超时覆盖）。**本段仅控制辩论行为的参数，启停由 Feature Flag（`llm_debate_*`）决定，非配置直接启用**；决策跨期反思闭环（`decision_reflection`）同样由 Feature Flag 启停，无独立配置段
 
 ### 模块级配置
@@ -476,8 +469,7 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
   // 高级选项
   "advanced": {
     "fact_check": { "tolerance": 1.0, "tolerance_overrides": { "expert_review": 2.0 } },
-    "news_correlation": { "top_n": 10 },
-    "pricing": { /* 计价策略覆盖，模型基础价仍以 constants.py 为准 */ }
+    "news_correlation": { "top_n": 10 }
   }
 }
 ```
@@ -795,7 +787,7 @@ Kimi 开放平台提供 Anthropic API 兼容端点，`provider` 设为 `"claude"
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
-| 报告「LLM 用量」页签费用显示 **`-`** | `kimi-for-coding` 不在内置计价表，且订阅制**不按 token 计费**，费用无意义 | 可不处理（`-` 即「未计价」）。若要显示参考值，在 `llm_settings.json` 的 `pricing` 段自填等效单价 |
+| 报告「LLM 用量」页签费用显示 **`-`** | `kimi-for-coding` 不在内置计价表，且订阅制**不按 token 计费**，费用无意义 | 可不处理（`-` 即「未计价」）。若要显示参考值，在 `llm_pricing_ref.json` 的 `models` 中自填等效单价 |
 | 请求偶发较慢 | 订阅端点高峰时段（工作日 14:00–17:00）偶发 `429 The engine is currently overloaded`（服务端容量，与账号无关） | 程序首试即熔断该端点 600s 并降级下一 Provider（不退避重试）；避开高峰更稳，或为该条目配置 `pacing.min_interval` 降低请求频率 |
 </details>
 
@@ -904,7 +896,7 @@ $env:HTTPS_PROXY = "http://127.0.0.1:7890"
 
 ## 完整模型定价表
 
-代码内置所有支持模型的 Token 定价（货币单位 CNY，每百万 Token），`pricing` 段可自定义覆盖：
+代码内置所有支持模型的 Token 定价（货币单位 CNY，每百万 Token），`llm_pricing_ref.json` 可按模型覆盖：
 
 | 模型 | 输入 ¥/M | 输出 ¥/M | 缓存命中 ¥/M | 说明 |
 |------|:--------:|:--------:|:------------:|------|
@@ -928,23 +920,33 @@ $env:HTTPS_PROXY = "http://127.0.0.1:7890"
 
 > 表中为具体模型名；`core/constants.py::MODEL_PRICING` 另有 `claude-sonnet-4-` / `claude-opus-4-` / `claude-haiku-4-` / `gemini-3.5-` / `gemini-2.5-` / `gemini-2.0-` 六条**模型族前缀兜底价**，供带日期/小版本后缀的未列变体（如 `claude-sonnet-4-20250514`）按族价自动计价——表中不单列，也不会覆盖已有的具体模型价。
 
-> **峰谷定价（DeepSeek）**：`deepseek-flash` / `deepseek-v4-*` 采用 DeepSeek 官方峰谷定价（2026-08-17 起生效，2026-08-23 起优化周末规则，2026-09-10 起 flash 系列降价并补充法定节假日规则），表中「闲时/高峰」两列分别为非高峰与高峰时段的每百万 Token 单价。**高峰时段仅在高峰日（周一至周五，不含中国法定节假日）生效**，为**北京时间 09:00–12:00、14:00–18:00**；高峰日其余时间为闲时、**周末（周六/周日）与法定节假日全天一律按闲时价计费**（不区分峰谷，闲时价 = 高峰价的一半）。时段、判定时区与周末/法定节假日规则可在 `pricing` 段的 `peak_periods` / `idle_periods` / `timezone` / `weekend_always_idle` / `holiday_always_idle` 中覆盖；含 `"peak"` 子段的模型高峰日高峰时段按 `peak` 价计费，其余时段（含周末与法定节假日全天）按 base 价，无 `"peak"` 的模型始终按 base 价计费。
+> **峰谷定价（DeepSeek）**：`deepseek-flash` / `deepseek-v4-*` 采用 DeepSeek 官方峰谷定价（2026-08-17 起生效，2026-08-23 起优化周末规则，2026-09-10 起 flash 系列降价并补充法定节假日规则），表中「闲时/高峰」两列分别为非高峰与高峰时段的每百万 Token 单价。**高峰时段仅在高峰日（周一至周五，不含中国法定节假日）生效**，为**北京时间 09:00–12:00、14:00–18:00**；高峰日其余时间为闲时、**周末（周六/周日）与法定节假日全天一律按闲时价计费**（不区分峰谷，闲时价 = 高峰价的一半）。时段、判定时区与周末/法定节假日规则可在 `llm_pricing_ref.json` 的 `peak_periods` / `idle_periods` / `timezone` / `weekend_always_idle` / `holiday_always_idle` 中覆盖；含 `"peak"` 子段的模型高峰日高峰时段按 `peak` 价计费，其余时段（含周末与法定节假日全天）按 base 价，无 `"peak"` 的模型始终按 base 价计费。
 >
 > **计算方式**：单次调用费用 = `(输入 token × 输入单价 + 输出 token × 输出单价) / 1,000,000`。例如 DeepSeek-V4-Flash 高峰日闲时/周末/法定节假日：输入 3000 tokens × ¥1.0 + 输出 2000 tokens × ¥4.0 = ¥0.011/次（高峰日高峰时段则 ×2、×8）。缓存命中时输入部分按 `input_cache_hit` 计费。
 >
-> **覆盖方式**：在 `llm_settings.json` 中添加 `pricing` 段即可覆盖任意模型的定价，未覆盖的模型自动使用上方内置价格；含峰谷时段的模型可一并覆盖 `peak` 子段：
+> **覆盖方式**：编辑独立参考文件 `data/config/llm_pricing_ref.json`（JSONC，含中文注释）。`models` 逐模型覆盖，**只写要改的字段**，其余继承内置价；策略字段置顶：
 > ```json
-> "pricing": {
->   "claude-sonnet-4-6": {"input": 3, "output": 15},
->   "my-new-model": {"input": 5, "output": 10, "input_cache_hit": 0.5},
->   "deepseek-v4-flash": {
->     "input": 1.0, "output": 4.0, "input_cache_hit": 0.02,
->     "peak": {"input": 2.0, "output": 8.0, "input_cache_hit": 0.04}
->   },
->   "weekend_always_idle": false
+> {
+>   "version": 1,
+>   "currency": "CNY",
+>   "timezone": "Asia/Shanghai",
+>   "peak_periods": ["09:00-12:00", "14:00-18:00"],
+>   "idle_periods": [],
+>   "weekend_always_idle": true,
+>   "holiday_always_idle": true,
+>   "models": {
+>     "claude-sonnet-4-6": {"input_price": 3, "output_price": 15},
+>     "my-new-model": {"input_price": 5, "output_price": 10, "input_cache_hit": 0.5},
+>     "deepseek-v4-flash": {
+>       "input_price": 1.0, "output_price": 4.0, "input_cache_hit": 0.02,
+>       "peak": {"input_price": 2.0, "output_price": 8.0, "input_cache_hit": 0.04}
+>     }
+>   }
 > }
 > ```
-> `weekend_always_idle`（可选，默认 `true`）设为 `false` 时周末恢复按钟点区分峰谷。
+> - 文件缺失 → 仅用内置价；`version` 不符 → 拒绝加载并提示删除后重新生成（内置价兜底，报告仍可生成）；单个模型条目非法 → 告警并跳过该条。
+> - `weekend_always_idle=false` 时周末恢复按钟点区分峰谷；`holiday_always_idle=false` 同理。
+> - 参考数据不进 TUI/Web 配置面板；改价直接编辑本文件。
 
 ---
 

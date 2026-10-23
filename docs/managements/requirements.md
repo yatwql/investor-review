@@ -1332,6 +1332,10 @@ LLM 五维度量化评分，每项满分 100：
 
 > **config.json 跨机器同步**：config.json 受 git 跟踪，是可跨机器同步的配置文件，仅存放可共享的业务配置。机器个性化运行时标志（首次运行引导 `_startup_wizard_shown`、隐私提示已读 `_privacy_notice_shown`）**不存放于 config.json**，而是存于 `data/state/local_state.json`（git 忽略、仅本机可见），避免各机器写入差异导致 config.json 难以同步。这两个键只在 `data/state/local_state.json` 中读写，不做任何 config.json 旧键迁移。
 
+### 11.1.1 llm_pricing_ref.json（计价参考数据）
+
+独立参考文件（不进编辑面）：`version`（当前 1，不符即拒绝加载并提示重新生成）+ 策略（`currency` / `timezone` / `peak_periods` / `idle_periods` / `weekend_always_idle` / `holiday_always_idle`）+ `models` 逐模型覆盖内置价；只覆盖出现的字段，缺失字段继承内置值；文件缺失时仅用内置价，单个模型条目非法时告警并跳过。
+
 ### 11.2 llm_key.json（敏感凭据文件，建议纳入 .gitignore）
 
 多键凭据字典，支持按 `credentials_ref` 名称引用。
@@ -1356,7 +1360,6 @@ LLM 五维度量化评分，每项满分 100：
 | `llm_max_concurrency` | int | 3 | LLM 并发生成最大线程数 |
 | `llm_max_thinking_concurrency` | int | 2 | Extended Thinking 模块并发信号量上限（2 = 两个 thinking 模块并行，避免串行等待吃掉近半墙钟；端点偶发空响应时改回 1） |
 | `enabled_llm` | dict | 全局开启 | 各模块独立启停 |
-| `pricing` | dict | — | 模型定价表覆盖 + 货币设置 |
 
 **模块级配置**（`{key}` = global_macro / expert_review / health_check / penetration_deep / news_correlation）：
 

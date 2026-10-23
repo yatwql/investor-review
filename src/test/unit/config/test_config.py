@@ -68,7 +68,6 @@ class TestMergeLlmDefaults(unittest.TestCase):
         merged = self._merge({})
         self.assertEqual(merged["max_retries"], 2)
         self.assertEqual(merged["temperature_global_macro"], 0.3)
-        self.assertIn("pricing", merged)
         self.assertIn("fact_check", merged)
         self.assertIn("debate", merged)
 
@@ -90,9 +89,9 @@ class TestMergeLlmDefaults(unittest.TestCase):
         self.assertFalse(merged["enabled_llm"]["global_macro"])
         self.assertTrue(merged["enabled_llm"]["expert_review"])
 
-        merged2 = self._merge({"pricing": {"currency": "USD"}})
-        self.assertEqual(merged2["pricing"]["currency"], "USD")
-        self.assertIn("claude-sonnet-4-6", merged2["pricing"])
+        merged2 = self._merge({"fact_check": {"tolerance": 2.0}})
+        self.assertEqual(merged2["fact_check"]["tolerance"], 2.0)
+        self.assertIsNotNone(merged2["fact_check"].get("tolerance_overrides"))
 
     def test_unknown_key_passthrough(self):
         """默认中不存在的键原样透传（未知键透传）。"""

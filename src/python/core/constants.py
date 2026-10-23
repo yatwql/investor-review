@@ -73,7 +73,7 @@ HISTORY_SNAPSHOT_MAX_COUNT = 365
 
 MODEL_PRICING: dict[str, dict[str, float | dict[str, float]]] = {
     # 单一来源：此表为唯一默认定价。pricing.py 以此为基，从 llm_settings.json
-    # 的 "pricing" 段加载覆盖（若存在），运行时合并到 _PRICING_MERGED。
+    # 的 llm_pricing_ref.json 逐模型覆盖，运行时合并到 _PRICING_MERGED。
     # 新增模型请在此处添加，不要仅修改 llm_settings.json。
     # Per 1M token:
     #   input: 标准输入（缓存未命中）——含 "peak" 子段的模型即闲时价（默认价）

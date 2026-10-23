@@ -312,8 +312,8 @@ class TestConfigEnvEdge(unittest.TestCase):
 
     # ── 缺失嵌套键 ──
 
-    def test_missing_pricing_still_returns_config(self):
-        """llm_settings.json 缺失 pricing 段 → 运行时补默认值。"""
+    def test_pricing_not_part_of_llm_settings(self):
+        """pricing 已迁至 llm_pricing_ref.json：llm_settings 展平视图不应包含它。"""
         import src.python.config as cfg
 
         settings_path = os.path.join(self.tmp.name, "llm_settings.json")
@@ -335,9 +335,8 @@ class TestConfigEnvEdge(unittest.TestCase):
 
         self.assertIsNotNone(result)
         self.assertEqual(result.get("temperature_global_macro"), 0.3)
-        # pricing 缺失 → 运行时按 _DEFAULT_LLM_SETTINGS 补默认（消除两套默认值漂移）
-        self.assertIn("pricing", result)
-        self.assertEqual(result["pricing"]["currency"], "CNY")
+        # 计价参考独立成文件：llm_settings 不再承载 pricing（混入会被判未知键）
+        self.assertNotIn("pricing", result)
 
     def test_missing_system_prompt_still_works(self):
         """llm_settings.json 缺失所有 system_prompt_* → 运行时补默认 None。"""

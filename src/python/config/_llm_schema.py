@@ -118,8 +118,6 @@ def flatten(document: dict[str, Any]) -> dict[str, Any]:
     news = advanced.get("news_correlation") or {}
     if "top_n" in news:
         flat["news_correlation_top_n"] = news["top_n"]
-    if isinstance(advanced.get("pricing"), dict):
-        flat["pricing"] = copy.deepcopy(advanced["pricing"])
 
     known = {"schema_version", "defaults", "modules", "runtime", "advanced"}
     for key, value in document.items():
@@ -172,10 +170,6 @@ def apply_flat_updates(document: dict[str, Any], updates: dict[str, Any]) -> dic
             continue
         if key == "fact_check" and isinstance(value, dict):
             advanced["fact_check"] = copy.deepcopy(value)
-            handled.add(key)
-            continue
-        if key == "pricing" and isinstance(value, dict):
-            advanced["pricing"] = copy.deepcopy(value)
             handled.add(key)
             continue
         if key == "news_correlation_top_n":
@@ -252,7 +246,6 @@ _FLAT_TO_PATH: dict[str, tuple[str, ...]] = {
     "daily_cost_limit": ("runtime", "daily_cost_limit"),
     "news_correlation_top_n": ("advanced", "news_correlation", "top_n"),
     "fact_check": ("advanced", "fact_check"),
-    "pricing": ("advanced", "pricing"),
 }
 
 

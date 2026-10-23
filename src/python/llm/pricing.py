@@ -4,7 +4,7 @@
 （周一至周五，不含中国法定节假日）的高峰时段（默认北京时间 9:00–12:00、
 14:00–18:00）按高峰价计费，其余时段（闲时）按 base 价计费；周末（周六/周日）
 与法定节假日全天一律按闲时价计费，不区分峰谷（官方 2026-09-10 定价页口径）。
-时段、时区、周末与法定节假日规则可由 ``llm_settings.json → pricing`` 段覆盖。
+时段、时区、周末与法定节假日规则由独立参考文件 ``llm_pricing_ref.json`` 覆盖。
 """
 
 from __future__ import annotations
@@ -221,82 +221,33 @@ def _is_peak_minute(minute: int, idle_day: bool = False) -> bool:
 
 
 def reload_pricing() -> None:
-    """从 llm_settings.json 重新加载定价配置。
+    """从计价参考文件 ``llm_pricing_ref.json`` 重新加载定价配置。
 
-    - "currency" 字段（可选，默认 "CNY"）设定货币类型，影响费用显示的符号。
-    - "timezone" 字段（可选，默认 "Asia/Shanghai"）设定峰谷判定时区。
-    - "peak_periods" / "idle_periods" 字段（可选，"HH:MM-HH:MM" 列表）设定
-      高峰/闲时段，缺省沿用 constants.py 内置时段。
-    - "weekend_always_idle" 字段（可选，默认 True）设定周末（周六/周日）是否
-      全天按闲时价计费、不区分峰谷（DeepSeek 官方方案）。
-    - "holiday_always_idle" 字段（可选，默认 True）设定法定节假日（工作日但非
-      A 股交易日）是否全天按闲时价计费、不区分峰谷（复用 core.trading_calendar
-      判定，DeepSeek 官方 2026-09-10 定价页口径）。
-    - 其余字段按模型名合并到 PRICING_MERGED（文件配置优先级高于内置默认）。
-      文件中的 input_cache_hit 为可选字段，缺失时继承内置默认值（如内置也无则等于 input）。
-      含 "peak" 子段的模型支持峰谷定价：高峰日（工作日且非法定节假日）高峰时段
-      按 peak 子段价格，其余时段（含周末与法定节假日全天）按 base 价。
+    参考数据结构：顶层策略（currency / timezone / peak_periods / idle_periods /
+    weekend_always_idle / holiday_always_idle）+ ``models`` 逐模型单价覆盖。
+    合并口径：内置 ``MODEL_PRICING`` 为基础价，文件只覆盖出现的模型与字段。
+    文件缺失 → 仅用内置价；``version`` 不符 → 记录错误并回退内置价（报告仍可生成）；
+    单个模型条目非法 → 告警并跳过该条。
     """
     global PRICING_CURRENCY
     global PRICING_PEAK_PERIODS, PRICING_IDLE_PERIODS
     global PRICING_TIMEZONE_NAME, PRICING_TZ
     global PRICING_WEEKEND_ALWAYS_IDLE, PRICING_HOLIDAY_ALWAYS_IDLE
     try:
-        from src.python.config import get_llm_config
+        from src.python.config._llm_pricing import load_pricing_config
 
-        cfg = get_llm_config()
-        if cfg and "pricing" in cfg:
-            file_pricing = cfg["pricing"]
-            if isinstance(file_pricing, dict):
-                # 货币标识
-                if "currency" in file_pricing:
-                    PRICING_CURRENCY = str(file_pricing["currency"]).upper().strip()
-                # 峰谷时段 / 时区
-                tz_name = file_pricing.get("timezone")
-                if isinstance(tz_name, str) and tz_name.strip():
-                    PRICING_TIMEZONE_NAME = tz_name.strip()
-                    PRICING_TZ = _load_timezone(PRICING_TIMEZONE_NAME)
-                parsed_peak = _parse_periods(file_pricing.get("peak_periods"))
-                if parsed_peak is not None:
-                    # 就地替换（[:]），保持列表对象身份稳定——外部已持有的引用
-                    # （模块直接导入/测试恢复）不失效
-                    PRICING_PEAK_PERIODS[:] = parsed_peak
-                parsed_idle = _parse_periods(file_pricing.get("idle_periods"))
-                if parsed_idle is not None:
-                    PRICING_IDLE_PERIODS[:] = parsed_idle
-                # 周末全天按闲时价（可选，默认 True）
-                weekend_flag = file_pricing.get("weekend_always_idle")
-                if isinstance(weekend_flag, bool):
-                    PRICING_WEEKEND_ALWAYS_IDLE = weekend_flag
-                # 法定节假日全天按闲时价（可选，默认 True）
-                holiday_flag = file_pricing.get("holiday_always_idle")
-                if isinstance(holiday_flag, bool):
-                    PRICING_HOLIDAY_ALWAYS_IDLE = holiday_flag
-                # 模型定价合并（含高峰价子段 peak）
-                for model, prices in file_pricing.items():
-                    if model in _NON_MODEL_PRICING_KEYS or not isinstance(prices, dict):
-                        continue
-                    existing = dict(PRICING_MERGED.get(model, {"input": 0.0, "output": 0.0, "input_cache_hit": 0.0}))
-                    if "input" in prices:
-                        existing["input"] = float(prices["input"])
-                    if "output" in prices:
-                        existing["output"] = float(prices["output"])
-                    if "input_cache_hit" in prices:
-                        existing["input_cache_hit"] = float(prices["input_cache_hit"])
-                    peak = prices.get("peak")
-                    if isinstance(peak, dict):
-                        peak_input = float(peak.get("input", existing["input"]))
-                        peak_output = float(peak.get("output", existing["output"]))
-                        peak_cache_hit = float(peak.get("input_cache_hit", existing.get("input_cache_hit", peak_input)))
-                        existing["peak"] = {
-                            "input": peak_input,
-                            "output": peak_output,
-                            "input_cache_hit": peak_cache_hit,
-                        }
-                    # 文件未提供 peak 时保留已有（继承内置默认或用户上次覆盖）
-                    PRICING_MERGED[model] = existing
+        config = load_pricing_config()
+        PRICING_MERGED.clear()
+        PRICING_MERGED.update(config["models"])
+        PRICING_CURRENCY = str(config["currency"]).upper().strip()
+        PRICING_TIMEZONE_NAME = str(config["timezone"]).strip()
+        PRICING_TZ = _load_timezone(PRICING_TIMEZONE_NAME)
+        PRICING_PEAK_PERIODS[:] = config["peak_periods"]
+        PRICING_IDLE_PERIODS[:] = config["idle_periods"]
+        PRICING_WEEKEND_ALWAYS_IDLE = bool(config["weekend_always_idle"])
+        PRICING_HOLIDAY_ALWAYS_IDLE = bool(config["holiday_always_idle"])
     except Exception:
-        logger.debug("加载定价配置失败，使用默认定价", exc_info=True)
+        logger.debug("加载计价参考失败，使用内置定价", exc_info=True)
 
 
 def compute_cost_value(
