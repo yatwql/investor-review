@@ -122,7 +122,7 @@ class TestSaveFeatureOverridesEdge:
         更不能让"本次运行已生效"的内存态回退成旧值。
         """
         with (
-            patch("src.python.config.features.write_json_atomic", return_value=False),
+            patch("src.python.config.features.write_text_atomic", return_value=False),
             patch.dict(FEATURE_FLAGS, {"deterministic_signal": True}, clear=False),
         ):
             save_feature_overrides({"deterministic_signal": False}, merge=False)  # 不抛

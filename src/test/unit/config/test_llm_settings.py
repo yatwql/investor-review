@@ -23,72 +23,80 @@ pytestmark = [pytest.mark.unit, pytest.mark.unit_config]
 class TestWriteLlmSettingsShared:
     """write_llm_settings：字段级替换保留注释 + 原子写 + 刷新 LLM 配置缓存。"""
 
-    def test_scalar_change_preserves_comments(self, tmp_path):
-        """标量字段替换：保留文件内注释与未变更字段。"""
-        path = tmp_path / "llm_settings.json"
-        path.write_text(
-            '// 全局说明\n{\n  "model": "claude",\n  // 最大输出 tokens\n  "max_tokens": 8000\n}\n',
-            encoding="utf-8",
-        )
+    @staticmethod
+    def _v2_text() -> str:
+        from src.python.config._llm_settings_defaults import _get_default_llm_settings_template
 
-        write_llm_settings({"max_tokens": 9000}, str(path))
+        return _get_default_llm_settings_template()
+
+    def test_scalar_change_preserves_comments(self, tmp_path):
+        """标量字段替换：保留文件内的中文分类注释与未变更字段。"""
+        path = tmp_path / "llm_settings.json"
+        path.write_text("// 全局说明\n" + self._v2_text(), encoding="utf-8")
+
+        write_llm_settings({"llm_max_concurrency": 5}, str(path))
 
         raw = path.read_text(encoding="utf-8")
         assert "// 全局说明" in raw
-        assert "// 最大输出 tokens" in raw
-        assert '"model": "claude"' in raw
-        assert '"max_tokens": 9000' in raw
+        assert "运行约束" in raw  # 生成器分类注释仍在
+        assert '"max_concurrency": 5' in raw
+        assert '"max_tokens": 36000' in raw  # 未变更模块参数原样保留
 
     def test_dict_change_keeps_other_keys(self, tmp_path):
-        """dict 字段替换：整块重生成，其余顶层键保留。"""
+        """enabled_llm 更新只改模块启停，其余顶层键与未知键保留。"""
         path = tmp_path / "llm_settings.json"
         path.write_text(
-            '{\n  "model": "claude",\n  "enabled_llm": {"global_macro": false, "news_correlation": false}\n}\n',
+            self._v2_text().replace("{", '{\n  "model": "claude",', 1),
             encoding="utf-8",
         )
 
-        write_llm_settings(
-            {"enabled_llm": {"global_macro": True, "news_correlation": False}},
-            str(path),
-        )
+        write_llm_settings({"enabled_llm": {"global_macro": False}}, str(path))
 
-        data = json.loads(path.read_text(encoding="utf-8"))
+        from src.python.core.json_comments import loads
+
+        data = loads(path.read_text(encoding="utf-8"))
         assert data["model"] == "claude"
-        assert data["enabled_llm"] == {"global_macro": True, "news_correlation": False}
+        assert data["modules"]["global_macro"]["enabled"] is False
+        assert data["modules"]["expert_review"]["enabled"] is True
 
     def test_dict_change_keeps_file_indent_style(self, tmp_path):
-        """嵌套 dict 重写沿用原文件缩进单位（2 空格风格 → 子键 4 空格，不拉成 6）。"""
+        """文本 patch 不改动既有排版（模块字段缩进保持 6 空格）。"""
         path = tmp_path / "llm_settings.json"
-        path.write_text(
-            '{\n  "model": "claude",\n  "enabled_llm": {\n    "global_macro": false\n  }\n}\n',
-            encoding="utf-8",
-        )
+        path.write_text(self._v2_text(), encoding="utf-8")
+        before = next(line for line in path.read_text(encoding="utf-8").splitlines() if '"max_tokens"' in line)
+        indent_before = len(before) - len(before.lstrip())
 
-        write_llm_settings({"enabled_llm": {"global_macro": True, "news_correlation": False}}, str(path))
+        write_llm_settings({"enabled_llm": {"global_macro": False}}, str(path))
 
-        lines = path.read_text(encoding="utf-8").splitlines()
-        sub_key = next(line for line in lines if '"global_macro"' in line)
-        assert len(sub_key) - len(sub_key.lstrip()) == 4
+        after = next(line for line in path.read_text(encoding="utf-8").splitlines() if '"max_tokens"' in line)
+        assert len(after) - len(after.lstrip()) == indent_before
 
     def test_create_when_missing(self, tmp_path):
-        """文件不存在：创建目录并写入完整 settings。"""
+        """文件不存在：按 v2 模板创建（含中文注释），落盘值经展平可见。"""
         path = tmp_path / "nested" / "llm_settings.json"
 
         write_llm_settings({"enabled_llm": {"news_correlation": True}}, str(path))
 
-        assert json.loads(path.read_text(encoding="utf-8")) == {"enabled_llm": {"news_correlation": True}}
+        raw = path.read_text(encoding="utf-8")
+        from src.python.config._llm_schema import flatten
+        from src.python.core.json_comments import loads
+
+        doc = loads(raw)
+        assert doc["schema_version"] == 2
+        assert "//" in raw
+        assert flatten(doc)["enabled_llm"]["news_correlation"] is True
 
     def test_refreshes_llm_cache(self, tmp_path, monkeypatch):
         """写入完成后刷新 LLM 配置缓存（get_llm_config 被调用）。"""
         path = tmp_path / "llm_settings.json"
-        path.write_text('{"model": "claude"}\n', encoding="utf-8")
+        path.write_text(self._v2_text(), encoding="utf-8")
 
         import src.python.config._llm_settings as llm_mod
 
         calls = []
         monkeypatch.setattr(llm_mod, "get_llm_config", lambda: calls.append(1) or None)
 
-        write_llm_settings({"model": "claude"}, str(path))
+        write_llm_settings({"max_retries": 3}, str(path))
 
         assert calls == [1]
 
@@ -177,7 +185,9 @@ def _seed_merged_inputs(tmp_path, monkeypatch):
     settings_path = tmp_path / "llm_settings.json"
     key_path = tmp_path / "llm_key.json"
     providers_path = tmp_path / "llm_providers.json"
-    settings_path.write_text('{"model": "claude"}', encoding="utf-8")
+    from src.python.config._llm_settings_defaults import _get_default_llm_settings_template
+
+    settings_path.write_text(_get_default_llm_settings_template(), encoding="utf-8")
     key_path.write_text('{"provider": "claude", "api_key": "test-key"}', encoding="utf-8")
     providers_path.write_text(json.dumps(_DEFAULT_LLM_PROVIDERS, ensure_ascii=False, indent=2), encoding="utf-8")
 

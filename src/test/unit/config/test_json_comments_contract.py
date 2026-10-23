@@ -26,7 +26,8 @@ _LLM_PROVIDERS_SAMPLE = """// 多链线路
 
 _LLM_SETTINGS_SAMPLE = """// LLM 运行设置
 {
-  "enabled_llm": {"global_macro": false}   // 关掉全球政经
+  "schema_version": 2,   // 结构版本
+  "modules": {"global_macro": {"enabled": false}}   // 关掉全球政经
 }
 """
 

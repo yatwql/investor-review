@@ -441,167 +441,52 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
 ---
 
 <details>
-<summary><b>📄 llm_settings.json 完整参考</b>（点击展开）</summary>
+<summary><b>📄 llm_settings.json 结构参考（schema v2）</b>（点击展开）</summary>
 
-以下为 `llm_settings.json` 的完整配置范例，含中文注释分组：
+文件由程序生成（含每个键的中文说明注释），**不要手抄整份**；只需按需改值。结构骨架：
 
 ```json
 {
-  // ═══════════════════════════════════════════
-  // 全局设置
-  // ═══════════════════════════════════════════
-  "max_retries": 2,
-  "llm_max_concurrency": 3,
-  "llm_max_thinking_concurrency": 2,  // Extended Thinking 模块并发上限（默认 2；端点偶发空响应时改回 1）
+  "schema_version": 2,
 
-  // ═══════════════════════════════════════════
-  // 模块开关 — 控制各 LLM 分析功能的启用/停用
-  // ═══════════════════════════════════════════
-  "enabled_llm": {
-    "global_macro": true,
-    "expert_review": true,
-    "health_check": true,
-    "penetration_deep": true,
-    "news_correlation": false,
-    "self_review": false,
-    "holding_change": true
+  // 缺省：所有模块继承；模块内只写差异
+  "defaults": {
+    "model": null, "temperature": 0.3, "max_tokens": 3072, "timeout": 60,
+    "cache": true, "output_brief": false, "system_prompt": null,
+    "thinking": { "enabled": false, "budget": null, "effort": null }
   },
 
-  // ═══════════════════════════════════════════
-  // 全球政经局势 — global_macro
-  // ═══════════════════════════════════════════
-  "system_prompt_global_macro": null,
-  "model_global_macro": null,
-  "temperature_global_macro": 0.3,
-  "max_tokens_global_macro": 3072,
-  "timeout_global_macro": 60,
-  "cache_enabled_global_macro": true,
-  "output_brief_global_macro": false,
-  "thinking_enabled_global_macro": false,
-  "thinking_budget_global_macro": 6000,
-  "reasoning_effort_global_macro": "high",
-
-  // ═══════════════════════════════════════════
-  // 智囊团深度复盘 — expert_review
-  // ═══════════════════════════════════════════
-  "system_prompt_expert_review": null,
-  "model_expert_review": null,
-  "temperature_expert_review": 0.3,
-  "max_tokens_expert_review": 36000,
-  "timeout_expert_review": 120,
-  "cache_enabled_expert_review": true,
-  "output_brief_expert_review": false,
-  "thinking_enabled_expert_review": true,
-  "thinking_budget_expert_review": 24000,
-  "reasoning_effort_expert_review": "low",
-
-  // ═══════════════════════════════════════════
-  // 持仓体检报告 — health_check
-  // ═══════════════════════════════════════════
-  "system_prompt_health_check": null,
-  "model_health_check": null,
-  "temperature_health_check": 0.1,
-  "max_tokens_health_check": 24000,
-  "timeout_health_check": 120,
-  "cache_enabled_health_check": true,
-  "output_brief_health_check": false,
-  "thinking_enabled_health_check": true,
-  "thinking_budget_health_check": 18000,
-  "reasoning_effort_health_check": "medium",
-
-  // ═══════════════════════════════════════════
-  // 穿透深度分析 — penetration_deep
-  // ═══════════════════════════════════════════
-  "system_prompt_penetration_deep": null,
-  "model_penetration_deep": null,
-  "temperature_penetration_deep": 0.1,
-  "max_tokens_penetration_deep": 12288,
-  "timeout_penetration_deep": 90,
-  "cache_enabled_penetration_deep": true,
-  "output_brief_penetration_deep": false,
-  "thinking_enabled_penetration_deep": false,
-  "thinking_budget_penetration_deep": 12000,
-  "reasoning_effort_penetration_deep": "high",
-
-  // ═══════════════════════════════════════════
-  // 财经新闻热点与持仓关联分析 — news_correlation
-  // （注：news_correlation 不支持 output_brief 模式）
-  // ═══════════════════════════════════════════
-  "system_prompt_news_correlation": null,
-  "model_news_correlation": null,
-  "temperature_news_correlation": 0.1,
-  "max_tokens_news_correlation": 3000,
-  "timeout_news_correlation": 60,
-  "cache_enabled_news_correlation": true,
-  "thinking_enabled_news_correlation": false,
-  "thinking_budget_news_correlation": 6000,
-  "reasoning_effort_news_correlation": "high",
-  "news_correlation_top_n": 30,
-
-  // ═══════════════════════════════════════════
-  // 辩论模式（实验功能，缺省关闭）
-  // 通过 Feature Flag 控制启停，菜单 [S] 可交互开关
-  // ═══════════════════════════════════════════
-  "debate": {
-    // 正反辩论 — 三段式(白脸→黑脸→综合)
-    "procon": {
-      // 每阶段 max_tokens 覆盖（默认 18432；null=按代码兜底同值；经 max_tokens_override 优先于 max_tokens_expert_review）
-      "per_call_max_tokens": 18432,
-      "synthesis_model": null,
-      "synthesis_temperature": 0.5
-    },
-    // 条件推理 — 情景化分析
-    "conditional": {
-      // 情景列表：每条含 name(情景名)/change(涨跌幅)/desc(描述)
-      "scenarios": [
-        {"name": "上涨", "change": 0.20, "desc": "如果未来市场上涨 20%"},
-        {"name": "下跌", "change": -0.20, "desc": "如果未来市场下跌 20%"},
-        {"name": "震荡", "change": 0.05, "desc": "如果未来市场窄幅震荡±5%"}
-      ]
-    },
-    // 集中度问答阈值 — 辩论流程内建段落的触发线
-    "concentration_qa": {
-      "threshold": 0.20
-    },
-    // 单次报告辩论模式总 token 预算上限（超出后回退标准模式）
-    "max_total_tokens_per_report": 72000,
-    // 辩论模式单次 API 调用超时覆盖（秒）
-    "per_call_timeout_override": 90
+  // 模块：一个业务对象一段；enabled 必须显式声明（各模块出厂默认不同）
+  "modules": {
+    "global_macro":     { "enabled": true },
+    "expert_review":    { "enabled": true, "max_tokens": 36000,
+                          "thinking": { "enabled": true, "budget": 24000, "effort": "low" },
+                          "debate": { /* procon / conditional / concentration_qa */ } },
+    "news_correlation": { "enabled": false, "max_tokens": 3000, "timeout": 90 }
+    // …其余模块同理
   },
 
-  // ═══════════════════════════════════════════
-  // 事实校验（fact_check）— LLM 输出数值一致性检测
-  // ═══════════════════════════════════════════
-  "fact_check": {
-    // 全局数值偏差容差（百分点），默认 1.0
-    "tolerance": 1.0,
-    // 按模块覆盖容差（模块名 → 百分点）
-    "tolerance_overrides": {
-      "expert_review": 2.0,
-      "health_check": 1.0,
-      "global_macro": 1.0,
-      "penetration_deep": 1.0
-    }
+  // 运行约束（面板「LLM 调优参数」）
+  "runtime": {
+    "max_concurrency": 3, "thinking_concurrency": 2, "max_retries": 2,
+    "full_fail_retry_delay_sec": 30, "time_budget_sec": 0, "daily_cost_limit": 0,
+    "debate_limits": { "max_tokens_per_report": 72000, "call_timeout_override_sec": 90 }
   },
 
-  // ═══════════════════════════════════════════
-  // 计价配置（默认使用代码内置定价，此处仅需覆盖时添加）
-  // 峰谷时段（DeepSeek 官方方案，北京时间，2026-08-23 起）：timezone 为判定时区，
-  // peak_periods 为工作日高峰时段，idle_periods 为空时高峰之外的其余时间均按闲时价；
-  // weekend_always_idle=true 时周末（周六/周日）全天按闲时价计费，不区分峰谷。
-  // ═══════════════════════════════════════════
-  "pricing": {
-    "currency": "CNY",
-    "timezone": "Asia/Shanghai",
-    "peak_periods": ["09:00-12:00", "14:00-18:00"],
-    "idle_periods": [],
-    "weekend_always_idle": true,
-    "holiday_always_idle": true
+  // 高级选项
+  "advanced": {
+    "fact_check": { "tolerance": 1.0, "tolerance_overrides": { "expert_review": 2.0 } },
+    "news_correlation": { "top_n": 10 },
+    "pricing": { /* 计价策略覆盖，模型基础价仍以 constants.py 为准 */ }
   }
 }
 ```
 
-> 此文件支持 `//` 和 `/* */` 注释，可直接复制后按需修改。`enabled_llm.news_correlation` 与 `enabled_llm.self_review` 默认 `false`；如需新闻 LLM 分析或生成后自检可改为 `true`。
+> - 模块段**只写与 `defaults` 不同的项**；`enabled` 不参与继承，必须逐模块声明。
+> - `thinking.budget` / `thinking.effort` 在 `thinking.enabled=false` 时保留（临时关停不丢预算）。
+> - 本手册与面板里的 `model_<m>` / `temperature_<m>` / `enabled_llm` / `llm_max_*` / `debate` 等**扁平键仍是读写契约**：读取时展平注入 `get_llm_config()`，写入时反展平回本结构（`llm/` 包无感）。
+> - `schema_version` 缺失或不为 2 时**拒绝加载**并提示重新生成——不做旧结构转换，删掉文件后程序按模板重建。
+> - 注释只用于解释；写入保留既有注释（值变化走文本 patch）。
 </details>
 
 ---

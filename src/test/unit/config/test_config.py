@@ -596,7 +596,12 @@ class TestReadLlmSettingsFile:
         from src.python.config import _llm_settings, read_llm_settings_file
 
         target = tmp_path / "llm_settings.json"
-        target.write_text('{\n  // 注释行\n  "llm_max_thinking_concurrency": 2\n}\n', encoding="utf-8")
+        target.write_text(
+            '{\n  "schema_version": 2,\n  // 注释行\n'
+            '  "modules": {"global_macro": {"enabled": true}},\n'
+            '  "runtime": {"thinking_concurrency": 2}\n}\n',
+            encoding="utf-8",
+        )
         monkeypatch.setattr(_llm_settings, "get_llm_settings_path", lambda: str(target))
 
         snapshot = read_llm_settings_file()

@@ -4135,7 +4135,7 @@ investor-review/
 | 配置文件 | 解析协调者（入口） | 注释剥离 | 主要委托/依赖 |
 |:---------|:-------------------|:---------|:--------------|
 | `config.json` | `_core.get_config()` | `_comments._strip_json_comments()` | `_config_defaults._DEFAULT_CONFIG`（合并基准）；`_validation._absolutize_paths()`（相对→绝对）；null 过滤、嵌套 dict 子键浅合并由自身内联 |
-| `llm_settings.json` | `_llm_settings.get_llm_config()` | `_comments._strip_json_comments()` | 合并 settings+key+providers 三文件为单份 dict 下发给消费方；`_merge_llm_defaults()` 运行时补默认 |
+| `llm_settings.json` | `_llm_settings.get_llm_config()` | `core/json_comments.strip_json_comments()` | **schema v2**（`defaults`/`modules`/`runtime`/`advanced`）：`_llm_settings._load_settings_document()` 版本校验 → `_llm_schema.merge_defaults()` 三层缺省 → `flatten()` 展平为消费方契约；写入经 `_llm_schema.apply_flat_updates()` + `_render_v2()`（值变化优先文本 patch 保注释） |
 | `llm_key.json` | `_llm_providers._load_llm_key_credentials()` | `_comments._strip_json_comments()` | 单凭据 flat 自动升级为 `_default` 块（自持）；`get_llm_config()` 内联读取合并覆盖同名字段 |
 | `llm_providers.json` | `_llm_providers._load_llm_providers()` | `_comments._strip_json_comments()` | 根非 object / 解析失败返回 None 判定（自持）；`_inject_provider_chain_data()` 链模式注入 |
 | `features.json` | `features.load_feature_overrides()` | `core/json_comments.strip_json_comments()` | 模块导入时自动调用；文件仅存需覆写的子集，首次写入以中文注释模板为底 |

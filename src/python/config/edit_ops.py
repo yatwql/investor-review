@@ -18,11 +18,9 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 
-from src.python.config import strip_json_comments
 from src.python.config._config_defaults import _DEFAULT_CONFIG
 from src.python.config.features import (
     feature_switch_registry,
@@ -221,18 +219,12 @@ def _dispatch_write(entry: dict, key: str, value) -> None:
 
 
 def _write_llm_enabled(key: str, value: bool) -> None:
-    """写 llm_settings.json 的 enabled_llm.<模块>（读合并 → write_llm_settings）。"""
-    from src.python.config._llm_settings import get_llm_settings_path, write_llm_settings
+    """写 llm_settings.json 的 enabled_llm.<模块>（读扁平视图 → write_llm_settings）。"""
+    from src.python.config._llm_settings import get_llm_settings_path, read_llm_settings_file, write_llm_settings
 
-    settings_path = get_llm_settings_path()
-    settings = {}
-    if os.path.exists(settings_path):
-        try:
-            with open(settings_path, encoding="utf-8-sig") as f:
-                raw = f.read()
-            settings = json.loads(strip_json_comments(raw))
-        except (OSError, json.JSONDecodeError) as e:
-            logger.warning("读取 llm_settings.json 失败，按空配置合并: %s", e)
+    snapshot = read_llm_settings_file()
+    settings = dict(snapshot[0]) if snapshot else {}
+    settings_path = snapshot[1] if snapshot else get_llm_settings_path()
     sub_key = key.split(".", 1)[1]
     enabled_map = dict(settings.get("enabled_llm") or {})
     enabled_map[sub_key] = value

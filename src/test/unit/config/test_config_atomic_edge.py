@@ -206,7 +206,10 @@ class TestConfigEnvEdge(unittest.TestCase):
         key_path = os.path.join(self.tmp.name, "llm_key.json")
 
         # 用 utf-8-sig 写（自动添加 BOM），内容不含
-        settings_raw = '{"temperature": 0.7, "max_tokens": 2048}'
+        settings_raw = (
+            '{"schema_version": 2, "modules": {"global_macro": {"enabled": true, "temperature": 0.7}},'
+            ' "runtime": {"max_retries": 2}}'
+        )
         with open(settings_path, "w", encoding="utf-8-sig") as f:
             f.write(settings_raw)
         # llm_key.json 无 BOM
@@ -222,7 +225,7 @@ class TestConfigEnvEdge(unittest.TestCase):
             result = cfg.get_llm_config()
 
         self.assertIsNotNone(result)
-        self.assertEqual(result.get("temperature"), 0.7)
+        self.assertEqual(result.get("temperature_global_macro"), 0.7)
 
     # ── CRLF 行尾 ──
 
@@ -234,7 +237,11 @@ class TestConfigEnvEdge(unittest.TestCase):
         key_path = os.path.join(self.tmp.name, "llm_key.json")
 
         # CRLF 行尾 + 注释
-        settings_raw = '{\r\n  // 温度参数\r\n  "temperature": 0.7,\r\n  /* 注释块 */\r\n  "max_tokens": 2048\r\n}\r\n'
+        settings_raw = (
+            '{\r\n  "schema_version": 2,\r\n  // 模块\r\n'
+            '  "modules": {"global_macro": {"enabled": true, "temperature": 0.7, "max_tokens": 2048}},\r\n'
+            '  /* 注释块 */\r\n  "runtime": {"max_retries": 2}\r\n}\r\n'
+        )
         with open(settings_path, "w", encoding="utf-8", newline="") as f:
             f.write(settings_raw)
         with open(key_path, "w", encoding="utf-8") as f:
@@ -248,8 +255,8 @@ class TestConfigEnvEdge(unittest.TestCase):
             result = cfg.get_llm_config()
 
         self.assertIsNotNone(result)
-        self.assertEqual(result.get("temperature"), 0.7)
-        self.assertEqual(result.get("max_tokens"), 2048)
+        self.assertEqual(result.get("temperature_global_macro"), 0.7)
+        self.assertEqual(result.get("max_tokens_global_macro"), 2048)
 
     # ── api_key 空格 ──
 
@@ -262,7 +269,7 @@ class TestConfigEnvEdge(unittest.TestCase):
 
         # 写带空格的 api_key
         with open(settings_path, "w", encoding="utf-8") as f:
-            json.dump({"temperature": 0.7}, f)
+            json.dump({"schema_version": 2, "modules": {"global_macro": {"enabled": True}}}, f)
         with open(key_path, "w", encoding="utf-8") as f:
             json.dump({"api_key": "  sk-test-with-spaces  ", "provider": "claude"}, f)
 
@@ -313,7 +320,7 @@ class TestConfigEnvEdge(unittest.TestCase):
         key_path = os.path.join(self.tmp.name, "llm_key.json")
 
         # 无 pricing 段
-        min_settings = {"temperature": 0.5, "max_tokens": 1024}
+        min_settings = {"schema_version": 2, "modules": {"global_macro": {"enabled": True}}}
         with open(settings_path, "w", encoding="utf-8") as f:
             json.dump(min_settings, f)
         with open(key_path, "w", encoding="utf-8") as f:
@@ -327,7 +334,7 @@ class TestConfigEnvEdge(unittest.TestCase):
             result = cfg.get_llm_config()
 
         self.assertIsNotNone(result)
-        self.assertEqual(result.get("temperature"), 0.5)
+        self.assertEqual(result.get("temperature_global_macro"), 0.3)
         # pricing 缺失 → 运行时按 _DEFAULT_LLM_SETTINGS 补默认（消除两套默认值漂移）
         self.assertIn("pricing", result)
         self.assertEqual(result["pricing"]["currency"], "CNY")
@@ -340,7 +347,7 @@ class TestConfigEnvEdge(unittest.TestCase):
         key_path = os.path.join(self.tmp.name, "llm_key.json")
 
         with open(settings_path, "w", encoding="utf-8") as f:
-            json.dump({"temperature": 0.7}, f)
+            json.dump({"schema_version": 2, "modules": {"global_macro": {"enabled": True}}}, f)
         with open(key_path, "w", encoding="utf-8") as f:
             json.dump({"api_key": "sk-test", "provider": "claude"}, f)
 
