@@ -122,31 +122,31 @@ pre.tree { margin: 0 0 24px; padding: 14px 16px; background: #0f141b; border: 1p
 
 <span class="d">  ↑↓ 移动 | 回车执行 | 字母/数字键直达 | / 筛选 | Esc / 0 / X 退出 | Ctrl+C 退出</span></pre></section>
 <section class="screen" id="s-switches"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>功能开关面板（四组）</h2></div><p class="crumb">主菜单 › 配置 › [S]</p><p class="note">1-7 标准 LLM 模块 + 8-34 功能开关：呈现 / 分析 / 独立 / 机制</p><pre class="term">Traceback (most recent call last):
-  File "/lzcapp/document/working/codebase/investor-review/docs/plan/config-panel-mockup/tui_render.py", line 463, in &lt;module&gt;
+  File "&lt;项目根&gt;/docs/plan/config-panel-mockup/tui_render.py", line 463, in &lt;module&gt;
     raise SystemExit(main())
                      ~~~~^^
-  File "/lzcapp/document/working/codebase/investor-review/docs/plan/config-panel-mockup/tui_render.py", line 458, in main
+  File "&lt;项目根&gt;/docs/plan/config-panel-mockup/tui_render.py", line 458, in main
     MODES[args.mode]()
     ~~~~~~~~~~~~~~~~^^
-  File "/lzcapp/document/working/codebase/investor-review/docs/plan/config-panel-mockup/tui_render.py", line 425, in &lt;lambda&gt;
+  File "&lt;项目根&gt;/docs/plan/config-panel-mockup/tui_render.py", line 425, in &lt;lambda&gt;
     "switches": lambda: _switches(False),
                         ~~~~~~~~~^^^^^^^
-  File "/lzcapp/document/working/codebase/investor-review/docs/plan/config-panel-mockup/tui_render.py", line 115, in _switches
+  File "&lt;项目根&gt;/docs/plan/config-panel-mockup/tui_render.py", line 115, in _switches
     from src.python.tui.handlers_switch import run_llm_modules_panel
-ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.handlers_switch' (/lzcapp/document/working/codebase/investor-review/src/python/tui/handlers_switch.py)</pre></section>
+ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.handlers_switch' (&lt;项目根&gt;/src/python/tui/handlers_switch.py)</pre></section>
 <section class="screen" id="s-switch_detail"><div class="screen-head"><span class="lvl lvl-面板内">面板内</span><h2>功能开关 · 单项详情（`?10`，四组编号）</h2></div><p class="crumb">主菜单 › 配置 › [S] › ?10（面板内查询）</p><p class="note">面板内只读查询：回车后仍停在同一面板，不进入新层级；此处第 10 项＝辩论-条件推理</p><pre class="term">Traceback (most recent call last):
-  File "/lzcapp/document/working/codebase/investor-review/docs/plan/config-panel-mockup/tui_render.py", line 463, in &lt;module&gt;
+  File "&lt;项目根&gt;/docs/plan/config-panel-mockup/tui_render.py", line 463, in &lt;module&gt;
     raise SystemExit(main())
                      ~~~~^^
-  File "/lzcapp/document/working/codebase/investor-review/docs/plan/config-panel-mockup/tui_render.py", line 458, in main
+  File "&lt;项目根&gt;/docs/plan/config-panel-mockup/tui_render.py", line 458, in main
     MODES[args.mode]()
     ~~~~~~~~~~~~~~~~^^
-  File "/lzcapp/document/working/codebase/investor-review/docs/plan/config-panel-mockup/tui_render.py", line 425, in &lt;lambda&gt;
+  File "&lt;项目根&gt;/docs/plan/config-panel-mockup/tui_render.py", line 425, in &lt;lambda&gt;
     "switches": lambda: _switches(False),
                         ~~~~~~~~~^^^^^^^
-  File "/lzcapp/document/working/codebase/investor-review/docs/plan/config-panel-mockup/tui_render.py", line 115, in _switches
+  File "&lt;项目根&gt;/docs/plan/config-panel-mockup/tui_render.py", line 115, in _switches
     from src.python.tui.handlers_switch import run_llm_modules_panel
-ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.handlers_switch' (/lzcapp/document/working/codebase/investor-review/src/python/tui/handlers_switch.py)</pre></section>
+ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.handlers_switch' (&lt;项目根&gt;/src/python/tui/handlers_switch.py)</pre></section>
 <section class="screen" id="s-dmenu"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>[G] 全局设置（二级，7 项·数字主入口）</h2></div><p class="crumb">主菜单 › 配置 › [G]</p><p class="note">[H] 目录 / [F] 文件名 / [O] 输出目录 / [L] LLM 调优 / [M] 入口地图</p><pre class="term"><span class="bold"><span class="b">  ── 全局设置 ──</span></span>
 <span class="bold"><span class="b">  ── 目录与文件 ──</span></span>
    1. [H] 持仓信息目录
@@ -187,7 +187,7 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
    缓存管理（统计与清理）            →  [3]       统计首屏 + 子菜单内 3 清理过期缓存
    运行日志 / 健康历史 / 系统自检    →  [D]       诊断与排查 → V / H / T
   （仅索引导流，不修改任何配置；config.json 手工键说明见手册 how-to-config）</pre></section>
-<section class="screen" id="s-d_dir"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>持仓信息目录（[G]→[H]）</h2></div><p class="crumb">主菜单 › 配置 › [G] › [H]</p><p class="note">目录列表选择，取到首屏即中止</p><pre class="term">  当前目录: /lzcapp/document/working/codebase/investor-review/data/holdings
+<section class="screen" id="s-d_dir"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>持仓信息目录（[G]→[H]）</h2></div><p class="crumb">主菜单 › 配置 › [G] › [H]</p><p class="note">目录列表选择，取到首屏即中止</p><pre class="term">  当前目录: &lt;项目根&gt;/data/holdings
   请输入新目录（留空则不修改）:
   &gt;</pre></section>
 <section class="screen" id="s-d_file"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>持仓信息文件名（[G]→[F]）</h2></div><p class="crumb">主菜单 › 配置 › [G] › [F]</p><p class="note">目录内 .xlsx 列表选择</p><pre class="term">  当前目录中的 xlsx 文件:
@@ -196,7 +196,7 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
   当前文件名: 个人投资持仓信息.xlsx
   请输入新文件名（留空则不修改）:
   &gt;</pre></section>
-<section class="screen" id="s-d_out"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>报告输出目录（[G]→[O]）</h2></div><p class="crumb">主菜单 › 配置 › [D] › [O]</p><p class="note">输出目录切换（含恢复默认项）</p><pre class="term">  当前报告输出目录: /lzcapp/document/working/codebase/investor-review/reports
+<section class="screen" id="s-d_out"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>报告输出目录（[G]→[O]）</h2></div><p class="crumb">主菜单 › 配置 › [D] › [O]</p><p class="note">输出目录切换（含恢复默认项）</p><pre class="term">  当前报告输出目录: &lt;项目根&gt;/reports
   请输入新报告输出目录（留空则不修改）:
   &gt;</pre></section>
 <section class="screen" id="s-boards"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>报告章节取舍（[C]，含指路牌项）</h2></div><p class="crumb">主菜单 › 配置 › [C]</p><p class="note">5 个顶层章节 + 第 6 项跳转提示 + 底部一行提示</p><pre class="term">  ┌── 报告章节显隐 ────────────────────────────────────────────────────────────────────────────┐
@@ -208,15 +208,15 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
   │   5. 行动建议                   <span class="d">enable_action             </span> [<span class="g">开启</span>]                          │
   │                                                                                            │
   │ <span class="bold"><span class="b">── ── LLM 章节（0/7 开） ──</span></span>                                                                │
-  │   6. 全球政经局势               <span class="d">global_macro              </span> [<span class="r">关闭</span>]*<span class="d"> · 19次 ¥0.1232 均¥0.0065</span>│
-  │   7. 智囊团深度复盘             <span class="d">expert_review             </span> [<span class="r">关闭</span>]*<span class="d"> · 19次 ¥1.0390 均¥0.0547</span>│
+  │   6. 全球政经局势               <span class="d">global_macro              </span> [<span class="r">关闭</span>]*<span class="d"> · 18次 ¥1.2345 均¥0.0686</span>│
+  │   7. 智囊团深度复盘             <span class="d">expert_review             </span> [<span class="r">关闭</span>]*<span class="d"> · 18次 ¥1.2345 均¥0.0686</span>│
   │ <span class="d"> 7.1   辩论-正反辩论            <span class="d">llm_debate_procon         </span></span> [关闭]<span class="d">（启用本章节后可切换）</span>    │
   │ <span class="d"> 7.2   辩论-条件推理            <span class="d">llm_debate_conditional    </span></span> [开启]<span class="d">（启用本章节后可切换）</span>    │
-  │   8. 财经新闻热点与持仓关联分析 <span class="d">news_correlation          </span> [<span class="r">关闭</span>]<span class="d"> · 17次 ¥0.1579 均¥0.0093</span> │
-  │   9. 持仓体检报告               <span class="d">health_check              </span> [<span class="r">关闭</span>]*<span class="d"> · 19次 ¥0.5730 均¥0.0302</span>│
-  │  10. 穿透深度分析               <span class="d">penetration_deep          </span> [<span class="r">关闭</span>]*<span class="d"> · 19次 ¥0.2220 均¥0.0117</span>│
+  │   8. 财经新闻热点与持仓关联分析 <span class="d">news_correlation          </span> [<span class="r">关闭</span>]<span class="d"> · 18次 ¥1.2345 均¥0.0686</span> │
+  │   9. 持仓体检报告               <span class="d">health_check              </span> [<span class="r">关闭</span>]*<span class="d"> · 18次 ¥1.2345 均¥0.0686</span>│
+  │  10. 穿透深度分析               <span class="d">penetration_deep          </span> [<span class="r">关闭</span>]*<span class="d"> · 18次 ¥1.2345 均¥0.0686</span>│
   │  11. 生成后自检                 <span class="d">self_review               </span> [<span class="r">关闭</span>]                          │
-  │  12. 持仓变动复盘归因           <span class="d">holding_change            </span> [<span class="r">关闭</span>]*<span class="d"> · 19次 ¥0.0994 均¥0.0052</span>│
+  │  12. 持仓变动复盘归因           <span class="d">holding_change            </span> [<span class="r">关闭</span>]*<span class="d"> · 18次 ¥1.2345 均¥0.0686</span>│
   │                                                                                            │
   │ <span class="bold"><span class="b">── ── 默认关闭的整章（3/3 开） ──</span></span>                                                          │
   │  13. 调仓纪律回放               <span class="d">rebalance_schedule_replay </span> [<span class="g">开启</span>]*                         │
@@ -259,53 +259,53 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
 
   选择匿名化模式（如 1-4 选模式） · ? 看说明 · 0 返回: 0</pre></section>
 <section class="screen" id="s-providers"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>LLM 多链线路优先级（[M]）</h2></div><p class="crumb">主菜单 › 配置 › [G] › [L] › 7</p><p class="note">按 priority 排序的线路清单与调序操作；返回项「0. 返回主菜单」</p><pre class="term">  ── LLM 多链线路优先级（strategy: priority） ──
-   1. deepseek-main（claude）priority 10
-   2. opencode-go（claude）priority 20
+   1. 示例线路A（claude）priority 10
+   2. 示例线路B（claude）priority 20
    0. 返回主菜单
 
   输入两个编号交换优先级（如 3 1） · ? 看说明 · 0 返回: 0</pre></section>
-<section class="screen" id="s-cache"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>缓存管理（[3]）</h2></div><p class="crumb">主菜单 › 数据与查看 › [3]</p><p class="note">统计首屏 + 子项 3 清理过期缓存</p><pre class="term">  <span class="c">[..]</span> 缓存文件: 411 个 | 大小: 4490 KB
+<section class="screen" id="s-cache"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>缓存管理（[3]）</h2></div><p class="crumb">主菜单 › 数据与查看 › [3]</p><p class="note">统计首屏 + 子项 3 清理过期缓存</p><pre class="term">  <span class="c">[..]</span> 缓存文件: 100 个 | 大小: 1024 KB
   <span class="c">[..]</span> 正在检查过期文件...
   <span class="c">[..]</span> 过期文件: 0 个
   data/cache
   ========================================
-  目录: /lzcapp/document/working/codebase/investor-review/data/cache
-  文件: 411 个 | 大小: 4.4 MB
+  目录: &lt;项目根&gt;/data/cache
+  文件: 100 个 | 大小: 1.0 MB
   最大文件:
-    test_redundancy_facts.json  (1.5 MB)
-    report_datasink_doc_47990_full_v3.json  (335 KB)
-    report_datasink_doc_72336_第二章 董事会报告_v3.json  (91 KB)
+    示例缓存键.json  (1.0 MB)
+    示例缓存键.json  (1.0 MB)
+    示例缓存键.json  (1.0 MB)
   前缀分布:
-    bond_*: 1 个文件
-    dividend_*: 10 个文件
-    extended_*: 37 个文件
-    fin_*: 99 个文件
-    fund_*: 41 个文件
-    history_*: 32 个文件
-    holdings_*: 1 个文件
-    idx_*: 1 个文件
-    index_*: 10 个文件
-    industry_*: 40 个文件
+    bond_*: 12 个文件
+    dividend_*: 12 个文件
+    extended_*: 12 个文件
+    fin_*: 12 个文件
+    fund_*: 12 个文件
+    history_*: 12 个文件
+    holdings_*: 12 个文件
+    idx_*: 12 个文件
+    index_*: 12 个文件
+    industry_*: 12 个文件
     llm_*: 12 个文件
-    price_*: 49 个文件
-    profit_*: 2 个文件
-    report_*: 73 个文件
-    test_*: 2 个文件
-    trading_*: 1 个文件
+    price_*: 12 个文件
+    profit_*: 12 个文件
+    report_*: 12 个文件
+    test_*: 12 个文件
+    trading_*: 12 个文件
 
   过期文件: 0 个（输入 3 可清理）
 
   data/history/snapshots
   ========================================
-  目录: /lzcapp/document/working/codebase/investor-review/data/history/snapshots
-  文件: 136 个 | 大小: 556 KB
-  最新: 2026-10-24 00:18
+  目录: &lt;项目根&gt;/data/history/snapshots
+  文件: 100 个 | 大小: 1.0 MB
+  最新: 2026-01-01 00:00
   （持仓快照，超期自动删除，不随缓存清理）
 
   data/state
   ========================================
-  目录: /lzcapp/document/working/codebase/investor-review/data/state
-  文件: 11 个 | 大小: 425 KB
+  目录: &lt;项目根&gt;/data/state
+  文件: 100 个 | 大小: 1.0 MB
   （运行时状态，跨会话持久化，不随缓存清理）
   3 清理过期缓存
   0 返回主菜单（回车也返回）
@@ -320,65 +320,65 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
   ========================================
   最近日志（级别: 全部）
   ========================================
-  2026-10-24 00:20:14,805 [INFO] 基金风格表 [1/9]: 电池ETF招商 (561910)
-  2026-10-24 00:20:14,805 [INFO] 基金风格表 [2/9]: 建信高端装备股票A (011506)
-  2026-10-24 00:20:14,806 [INFO] 基金风格表 [3/9]: 嘉实全球产业升级股票发起式(QDII)A (017730)
-  2026-10-24 00:20:14,806 [INFO] 基金风格表 [4/9]: 永赢科技智选混合发起C (022365)
-  2026-10-24 00:20:14,806 [INFO] 基金风格表 [5/9]: 博时纳斯达克100ETF发起式联接 (016055)
-  2026-10-24 00:20:14,807 [INFO] 基金风格表 [6/9]: 大成标普500等权重指数(QDII)A人民币 (096001)
-  2026-10-24 00:20:14,807 [INFO] 基金风格表 [7/9]: 华宝增强收益债券A (240012)
-  2026-10-24 00:20:14,807 [INFO] 基金风格表 [8/9]: 兴全恒惠30天持有超短债C (012325)
-  2026-10-24 00:20:14,807 [INFO] 基金风格表 [9/9]: 华安纳斯达克100ETF联接 (040046)
-  2026-10-24 00:20:14,814 [INFO] 风格与因子分析页签写入完成
-  2026-10-24 00:20:14,819 [INFO] LLM 分析章节写入完成（含穿透深度分析）
-  2026-10-24 00:20:14,820 [INFO] LLM 分析章节已生成
-  2026-10-24 00:20:14,824 [INFO] LLM API 用量页签写入完成
-  2026-10-24 00:20:14,845 [INFO] 组合历史走势与回撤页签写入完成
-  2026-10-24 00:20:14,860 [INFO] 组合演进页签写入完成: 45 个观察日, TOP 10 持仓
-  2026-10-24 00:20:14,891 [INFO] [fundamental_snapshot] 区块①写入完成 7 行
-  2026-10-24 00:20:14,931 [INFO] [fundamental_snapshot] 区块②写入完成 7 只标的（失败 0）
-  2026-10-24 00:20:14,936 [INFO] 持仓基本面页签写入完成
-  2026-10-24 00:20:14,940 [INFO] 行动建议页签已写入
-  2026-10-24 00:20:14,946 [INFO] 数据质量仪表盘页签已写入
-  2026-10-24 00:20:14,946 [INFO] 环比对比摘要已写入 summary 页签
-  2026-10-24 00:20:15,021 [INFO] 最新报告已保存: /lzcapp/document/working/codebase/investor-review/reports/个人投资分析报告.xlsx
-  2026-10-24 00:20:15,093 [INFO] 存档报告已保存: /lzcapp/document/working/codebase/investor-review/reports/20261024/个人投资分析报告-20261024-002014.xlsx
-  2026-10-24 00:20:15,093 [INFO] Excel 报告已生成: /lzcapp/document/working/codebase/investor-review/reports/个人投资分析报告.xlsx
-  2026-10-24 00:20:15,093 [INFO] 总市值: 272628.52元, 总成本: 222483.03元, 总盈亏: 50145.49元, 本日盈亏: 705.54元
-  2026-10-24 00:20:15,094 [INFO] [perf] Excel 生成: 0.347s
-  2026-10-24 00:20:15,094 [INFO] [perf] 耗时已记录到 /lzcapp/document/working/codebase/investor-review/data/state/perf_history.jsonl
-  2026-10-24 00:20:15,095 [INFO] [health] 数据源健康检查结果已记录到 /lzcapp/document/working/codebase/investor-review/data/state/datasource_health.jsonl
-  2026-10-24 00:27:54,478 [INFO] [features] 已加载 22 项功能开关覆写
-  2026-10-24 00:27:57,012 [INFO] [features] 已加载 22 项功能开关覆写
-  2026-10-24 00:28:09,568 [INFO] [features] 已加载 22 项功能开关覆写
-  2026-10-24 00:28:09,620 [INFO] [llm/pacing] 已装载端点节流策略: {'opencode-go': 'PacingPolicy(min_interval=5.0, jitter=0.0, max_concurrency=1)'}
-  2026-10-24 00:28:27,263 [INFO] 缓存清理预览: 共 0 个文件
-  2026-10-24 00:28:37,101 [INFO] [features] 已加载 22 项功能开关覆写
-  2026-10-24 00:28:37,104 [INFO] [llm/pacing] 已装载端点节流策略: {'opencode-go': 'PacingPolicy(min_interval=5.0, jitter=0.0, max_concurrency=1)'}
-  2026-10-24 00:28:39,777 [INFO] [llm/pacing] 已装载端点节流策略: {'opencode-go': 'PacingPolicy(min_interval=5.0, jitter=0.0, max_concurrency=1)'}
-  2026-10-24 00:28:42,370 [INFO] [基准] 已加载 13 条内置基准对照
-  2026-10-24 00:28:43,645 [INFO] [features] 已加载 22 项功能开关覆写
-  2026-10-24 00:28:43,649 [INFO] [llm/pacing] 已装载端点节流策略: {'opencode-go': 'PacingPolicy(min_interval=5.0, jitter=0.0, max_concurrency=1)'}
-  2026-10-24 00:34:59,411 [INFO] [features] 已加载 22 项功能开关覆写
-  2026-10-24 00:35:01,979 [INFO] [features] 已加载 22 项功能开关覆写
-  2026-10-24 00:35:14,547 [INFO] [features] 已加载 22 项功能开关覆写
-  2026-10-24 00:35:14,600 [INFO] [llm/pacing] 已装载端点节流策略: {'opencode-go': 'PacingPolicy(min_interval=5.0, jitter=0.0, max_concurrency=1)'}
-  2026-10-24 00:35:32,346 [INFO] 缓存清理预览: 共 1 个文件（释放 18.1 KB）——逐文件明细见 DEBUG
-  2026-10-24 00:35:42,190 [INFO] [features] 已加载 22 项功能开关覆写
-  2026-10-24 00:35:42,194 [INFO] [llm/pacing] 已装载端点节流策略: {'opencode-go': 'PacingPolicy(min_interval=5.0, jitter=0.0, max_concurrency=1)'}</pre><p class="more">… 共 206 行，此处展示前 52 行</p></section>
+  2026-01-01 00:00:00,000 [INFO] 基金业绩 [2/5]: 示例基金B (000002)
+  2026-01-01 00:00:01,137 [INFO] 基金风格表 [3/5]: 示例基金C (000003)
+  2026-01-01 00:00:02,274 [INFO] [示例模块] 已加载 12 项功能开关覆写
+  2026-01-01 00:00:03,411 [INFO] 缓存清理预览: 共 0 个文件
+  2026-01-01 00:00:04,548 [INFO] 复用预取的示例数据，共 20 条
+  2026-01-01 00:00:05,685 [INFO] 基金业绩 [2/5]: 示例基金B (000002)
+  2026-01-01 00:00:06,822 [INFO] 基金风格表 [3/5]: 示例基金C (000003)
+  2026-01-01 00:00:07,959 [INFO] [示例模块] 已加载 12 项功能开关覆写
+  2026-01-01 00:00:08,096 [INFO] 缓存清理预览: 共 0 个文件
+  2026-01-01 00:00:09,233 [INFO] 复用预取的示例数据，共 20 条
+  2026-01-01 00:00:10,370 [INFO] 基金业绩 [2/5]: 示例基金B (000002)
+  2026-01-01 00:00:11,507 [INFO] 基金风格表 [3/5]: 示例基金C (000003)
+  2026-01-01 00:00:12,644 [INFO] [示例模块] 已加载 12 项功能开关覆写
+  2026-01-01 00:00:13,781 [INFO] 缓存清理预览: 共 0 个文件
+  2026-01-01 00:00:14,918 [INFO] 复用预取的示例数据，共 20 条
+  2026-01-01 00:00:15,055 [INFO] 基金业绩 [2/5]: 示例基金B (000002)
+  2026-01-01 00:00:16,192 [INFO] 基金风格表 [3/5]: 示例基金C (000003)
+  2026-01-01 00:00:17,329 [INFO] [示例模块] 已加载 12 项功能开关覆写
+  2026-01-01 00:00:18,466 [INFO] 缓存清理预览: 共 0 个文件
+  2026-01-01 00:00:19,603 [INFO] 复用预取的示例数据，共 20 条
+  2026-01-01 00:00:20,740 [INFO] 基金业绩 [2/5]: 示例基金B (000002)
+  2026-01-01 00:00:21,877 [INFO] 基金风格表 [3/5]: 示例基金C (000003)
+  2026-01-01 00:00:22,014 [INFO] [示例模块] 已加载 12 项功能开关覆写
+  2026-01-01 00:00:23,151 [INFO] 缓存清理预览: 共 0 个文件
+  2026-01-01 00:00:24,288 [INFO] 复用预取的示例数据，共 20 条
+  2026-01-01 00:00:25,425 [INFO] 基金业绩 [2/5]: 示例基金B (000002)
+  2026-01-01 00:00:26,562 [INFO] 基金风格表 [3/5]: 示例基金C (000003)
+  2026-01-01 00:00:27,699 [INFO] [示例模块] 已加载 12 项功能开关覆写
+  2026-01-01 00:00:28,836 [INFO] 缓存清理预览: 共 0 个文件
+  2026-01-01 00:00:29,973 [INFO] 复用预取的示例数据，共 20 条
+  2026-01-01 00:00:30,110 [INFO] 基金业绩 [2/5]: 示例基金B (000002)
+  2026-01-01 00:00:31,247 [INFO] 基金风格表 [3/5]: 示例基金C (000003)
+  2026-01-01 00:00:32,384 [INFO] [示例模块] 已加载 12 项功能开关覆写
+  2026-01-01 00:00:33,521 [INFO] 缓存清理预览: 共 0 个文件
+  2026-01-01 00:00:34,658 [INFO] 复用预取的示例数据，共 20 条
+  2026-01-01 00:00:35,795 [INFO] 基金业绩 [2/5]: 示例基金B (000002)
+  2026-01-01 00:00:36,932 [INFO] 基金风格表 [3/5]: 示例基金C (000003)
+  2026-01-01 00:00:37,069 [INFO] [示例模块] 已加载 12 项功能开关覆写
+  2026-01-01 00:00:38,206 [INFO] 缓存清理预览: 共 0 个文件
+  2026-01-01 00:00:39,343 [INFO] 复用预取的示例数据，共 20 条
+  2026-01-01 00:00:40,480 [INFO] 基金业绩 [2/5]: 示例基金B (000002)
+  2026-01-01 00:00:41,617 [INFO] 基金风格表 [3/5]: 示例基金C (000003)
+  2026-01-01 00:00:42,754 [INFO] [示例模块] 已加载 12 项功能开关覆写
+  2026-01-01 00:00:43,891 [INFO] 缓存清理预览: 共 0 个文件
+  2026-01-01 00:00:44,028 [INFO] 复用预取的示例数据，共 20 条
+  2026-01-01 00:00:45,165 [INFO] 基金业绩 [2/5]: 示例基金B (000002)</pre><p class="more">… 共 206 行，此处展示前 52 行</p></section>
 <section class="screen" id="s-health"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>数据源健康历史（[H]）</h2></div><p class="crumb">主菜单 › 诊断与排查 › [H]</p><p class="note">最近若干次采集的成功/失败源与降级原因</p><pre class="term">  ========================================
   数据源健康历史（最近 10 次检查）
   ========================================
-  2026-10-20 23:38:09  <span class="g">12/12 正常</span>  |  full  |  失败 0
-  2026-10-21 12:36:08  <span class="g">12/12 正常</span>  |  full  |  失败 0
-  2026-10-21 13:09:22  <span class="g">12/12 正常</span>  |  full  |  失败 0
-  2026-10-22 13:23:56  <span class="g">12/12 正常</span>  |  full  |  失败 0
-  2026-10-22 19:19:19  <span class="g">12/12 正常</span>  |  full  |  失败 0
-  2026-10-22 22:41:52  <span class="g">12/12 正常</span>  |  full  |  失败 0
-  2026-10-23 07:55:58  <span class="g">12/12 正常</span>  |  full  |  失败 0
-  2026-10-23 13:46:59  <span class="g">12/12 正常</span>  |  full  |  失败 0
-  2026-10-23 18:58:00  <span class="g">12/12 正常</span>  |  full  |  失败 0
-  2026-10-24 00:20:15  <span class="g">12/12 正常</span>  |  full  |  失败 0
+  2026-01-01 23:38:09  <span class="g">12/12 正常</span>  |  full  |  失败 0
+  2026-01-01 12:36:08  <span class="g">12/12 正常</span>  |  full  |  失败 0
+  2026-01-01 13:09:22  <span class="g">12/12 正常</span>  |  full  |  失败 0
+  2026-01-01 13:23:56  <span class="g">12/12 正常</span>  |  full  |  失败 0
+  2026-01-01 19:19:19  <span class="g">12/12 正常</span>  |  full  |  失败 0
+  2026-01-01 22:41:52  <span class="g">12/12 正常</span>  |  full  |  失败 0
+  2026-01-01 07:55:58  <span class="g">12/12 正常</span>  |  full  |  失败 0
+  2026-01-01 13:46:59  <span class="g">12/12 正常</span>  |  full  |  失败 0
+  2026-01-01 18:58:00  <span class="g">12/12 正常</span>  |  full  |  失败 0
+  2026-01-01 00:20:15  <span class="g">12/12 正常</span>  |  full  |  失败 0
   按任意键返回菜单...</pre></section>
 <section class="screen" id="s-doctor"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>系统自检（[T]）</h2></div><p class="crumb">主菜单 › 诊断与排查 › [T]</p><p class="note">环境/配置/目录/数据源一键体检；首屏含联网检查询问</p><pre class="term">  是否包含数据源网络检查？(y=联网 / 空回车=仅本地):
   <span class="y">[..]</span> 正在自检（仅本地）...
@@ -389,34 +389,34 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
 
 [环境]
   [OK] Python 版本 — 3.13.5（要求 ≥ 3.10）
-  [OK] 虚拟环境 — /lzcapp/document/working/codebase/investor-review/.venv
-  [OK] 项目根目录 — /lzcapp/document/working/codebase/investor-review
+  [OK] 虚拟环境 — &lt;虚拟环境&gt;
+  [OK] 项目根目录 — &lt;项目根&gt;
 
 [配置]
   [OK] 配置加载 — config.json 解析正常
   [OK] 关键路径字段 — holdings_dir / output_dir 均已配置
-  [OK] LLM 凭据 — 多链模式（策略 priority）：deepseek-main、opencode-go
+  [OK] LLM 凭据 — 多链模式（策略 priority）：示例线路A、示例线路B
 
 [目录]
   [OK] 持仓文件 — 1 个 .xlsx
-  [OK] 输出目录 — /lzcapp/document/working/codebase/investor-review/reports — 可读写
-  [OK] 缓存目录 — /lzcapp/document/working/codebase/investor-review/data/cache — 可读写
-  [OK] 日志目录 — /lzcapp/document/working/codebase/investor-review/logs — 可读写
+  [OK] 输出目录 — &lt;项目根&gt;/reports — 可读写
+  [OK] 缓存目录 — &lt;项目根&gt;/data/cache — 可读写
+  [OK] 日志目录 — &lt;项目根&gt;/logs — 可读写
 
 [日志与缓存]
   [OK] 日志级别 — 文件 INFO（默认 INFO）
-  [ERR] 日志体积 — app.log 8.9 MB + 轮转 3 份；DEBUG 占比 87%（采样 112372 行）
+  [ERR] 日志体积 — app.log 8.0 MB + 轮转 3 份；DEBUG 占比 85%（采样 120000 行）
         → DEBUG 占比过半：确认未设 INVEST_LOG_FILE_LEVEL=DEBUG；排障后可清理 logs/app.log*（旧日志可删）
-  [ERR] 去重锚点 — 37.3 MB / 111464 行（自动压缩阈值 32 MB）
+  [ERR] 去重锚点 — 37.0 MB / 110000 行（自动压缩阈值 32 MB）
         → 超过阈值：下次生成时自动压缩（保留每组最新 + .bak 备份）；也可手工 `python scripts/eval-dedup-threshold.py --compact`
-  [ERR] 运行台账 — 近 10 次运行：告警中位 15、累计错误 0、中断 0；事实校验自动修正中位 3 处（口径偏差信号，见 perf_history counters.fact_fix_*）
+  [ERR] 运行台账 — 近 10 次运行：告警中位 12、累计错误 0、中断 0；事实校验自动修正中位 3 处（口径偏差信号，见 perf_history counters.fact_fix_*）
         → 告警/错误偏高：先看 logs/app.log 对应时段与「数据源」组；预期缺失已降为 INFO，WARNING 应只剩真实降级
 
 [功能开关]
   [OK] 实验功能 — 已启用 2 项 — 决策跨期反思闭环（登记决策 → 真实行情结算命中率 → 教训回灌专家复盘提示词）；报告对话式追问（报告页内针对本期报告的会话式追问（零新增取数、轮数上限、用量独立记账））
-  [OK] 决策复盘账本 — 已结算 16 条 / 待结算 42 条 — 方向命中率 75%（样本未达可信阈值，仅供观察）
-  [OK] 确定性信号账本 — 累计 243 条（实时 239 / 非实时 4）— 统计窗口 2026-09-12 ~ 2026-10-24
-  [OK] 实验功能使用统计 — decision_reflection 启用 67 次（最近 2026-10-24）；event_window_impact 启用 4 次（最近 2026-10-09）；factor_catalog 启用 12 次（最近 2026-10-11）；holding_change_review 启用 4 次（最近 2026-10-09）；llm_debate_procon 启用 25 次（最近 2026-10-11）；prosperity_framework 启用 24 次（最近 2026-10-10）；rebalance_schedule_replay 启用 11 次（最近 2026-10-11）；report_qa 启用 12 次（最近 2026-10-24）；whatif_trade_cost 启用 4 次（最近 2026-10-09）
+  [OK] 决策复盘账本 — 已结算 16 条 / 待结算 40 条 — 方向命中率 75%（样本未达可信阈值，仅供观察）
+  [OK] 确定性信号账本 — 累计 240 条（实时 236 / 非实时 4）— 统计窗口 2026-01-01 ~ 2026-01-01
+  [OK] 实验功能使用统计 — decision_reflection 启用 60 次（最近 2026-01-01）；event_window_impact 启用 60 次（最近 2026-01-01）；factor_catalog 启用 60 次（最近 2026-01-01）；holding_change_review 启用 60 次（最近 2026-01-01）；llm_debate_procon 启用 60 次（最近 2026-01-01）；prosperity_framework 启用 60 次（最近 2026-01-01）；rebalance_schedule_replay 启用 60 次（最近 2026-01-01）；report_qa 启用 60 次（最近 2026-01-01）；whatif_trade_cost 启用 60 次（最近 2026-01-01）
 
 [数据源适配]
   [OK] 适配契约 — 适配器模块未加载（fetcher 未初始化），跳过适配契约自检
@@ -431,9 +431,9 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
   [..] 今日已花费 ¥0.0980（未设日预算上限）
   [?] 是否用已有的 AI 分析结果生成？（Y=用已有结果，免费但可能不是最新；N=重新生成，会产生费用）
   回车/Y=用已有结果生成 / N=重新生成（可选模块） / q=中止: </pre></section>
-<section class="screen" id="s-qa"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>报告追问 · 报告选择（[Q]）</h2></div><p class="crumb">主菜单 › 生成报告 › [Q]</p><p class="note">选择已生成 HTML 报告进入多轮追问</p><pre class="term">  可追问的报告（/lzcapp/document/working/codebase/investor-review/reports）：
-    1. 个人投资分析报告.html  (2026-10-24 00:20)  ← 回车默认
-    2. 调仓模拟.html  (2026-10-02 23:20)
+<section class="screen" id="s-qa"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>报告追问 · 报告选择（[Q]）</h2></div><p class="crumb">主菜单 › 生成报告 › [Q]</p><p class="note">选择已生成 HTML 报告进入多轮追问</p><pre class="term">  可追问的报告（&lt;项目根&gt;/reports）：
+    1. 个人投资分析报告.html  (2026-01-01 00:20)  ← 回车默认
+    2. 调仓模拟.html  (2026-01-01 23:20)
   选择报告编号（回车=本期主报告 / 编号=指定报告 / q=取消）:</pre></section>
 <section class="screen" id="s-whatif"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>调仓 What-if · 基准文件选择（[W]）</h2></div><p class="crumb">主菜单 › 生成报告 › [W]</p><p class="note">基准持仓选择，下一步为候选持仓</p><pre class="term">  [..] 调仓 What-if 模拟：先选择基准持仓（调仓前）
   [..] 选择目标持仓文件（调仓后/假设）

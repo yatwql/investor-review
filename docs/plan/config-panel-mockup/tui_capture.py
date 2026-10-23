@@ -12,6 +12,11 @@
 
 只读纪律：文件选择类屏幕取到列表后即 Ctrl+C 中止；不清缓存、不生成报告、不写配置。
 
+**去抖与脱敏**：采集结果统一过 `_sanitize` —— 日志正文替换为同形态示例行、计数/体积/
+日期/本地路径/真实线路名归一为固定值。因此图样**可重复生成**（同代码状态两次采集逐字节
+一致），且不含用户真实数据（持仓品种、缓存清单、端点名、机器路径）。新增屏若回显随运行
+时刻变化的内容，在此补规则而不是让图样抖动。
+
 用法::
 
     .venv/bin/python docs/plan/config-panel-mockup/tui_capture.py
@@ -373,13 +378,142 @@ REWRITES: dict[str, list[tuple[str, str]]] = {
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
+# ── 图样去抖与脱敏（确定性 + 无真实数据）─────────────────────────────
+#
+# 图样是**设计产物**：必须可重复生成（同代码 → 同字节）且不含用户真实数据。
+# 三张「内容随运行时刻变化」的屏（`logs` 日志查看器、`doctor` 系统自检、
+# `health` 健康历史）天然带时间戳、真实日志正文（含持仓品种名）、计数与本地
+# 绝对路径，直接采集会让每次重拍都产生噪声 diff，并把私有数据带进仓库。
+#
+# 因此采集结果统一过一遍 `_sanitize`：先把日志正文替换为同形态示例行，再把
+# 计数/体积/日期/路径归一为固定值。规则顺序固定、每条幂等，保证两次采集逐字节
+# 一致（本文件末尾的 `--stable` 自检即验证这一点）。
+
+_LOG_LINE_RE = re.compile(
+    r"^(?P<indent>\s*)(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) \[(?P<level>[A-Z]+)\] (?P<msg>.*)$"
+)
+
+#: 各日志级别的示例正文（按出现序轮转，保留信息密度与长短差异，便于看图样观感）
+_LOG_EXAMPLES: dict[str, tuple[str, ...]] = {
+    "DEBUG": (
+        "[示例模块] 缓存命中：示例键 …",
+        "[示例模块] 预检跳过：无变更",
+    ),
+    "INFO": (
+        "基金业绩 [2/5]: 示例基金B (000002)",
+        "基金风格表 [3/5]: 示例基金C (000003)",
+        "[示例模块] 已加载 12 项功能开关覆写",
+        "缓存清理预览: 共 0 个文件",
+        "复用预取的示例数据，共 20 条",
+    ),
+    "WARNING": (
+        "[示例数据源] 响应超时，已切换备用源",
+        "[示例模块] 字段缺失，已静默降级",
+    ),
+    "ERROR": ("[示例模块] 请求失败：端点不可达（已重试 2 次）",),
+}
+
+#: 顺序敏感的归一规则：(正则, 替换)。数值/日期/路径一律落到固定示例值
+_NORMALIZE_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
+    # 本地绝对路径（项目根 / 虚拟环境）——去掉机器与用户名信息
+    (re.compile(re.escape(str(REPO)) + r"/\.venv"), "<虚拟环境>"),
+    (re.compile(re.escape(str(REPO))), "<项目根>"),
+    # 日志体积与采样行数（doctor「日志与缓存」组）
+    (re.compile(r"app\.log [\d.]+ MB"), "app.log 8.0 MB"),
+    (re.compile(r"轮转 \d+ 份"), "轮转 3 份"),
+    (re.compile(r"DEBUG 占比 \d+%"), "DEBUG 占比 85%"),
+    (re.compile(r"采样 \d+ 行"), "采样 120000 行"),
+    # 去重锚点体积 / 行数
+    (re.compile(r"([\d.]+ MB) / \d+ 行（自动压缩阈值"), r"37.0 MB / 110000 行（自动压缩阈值"),
+    # 运行台账与账本统计
+    (re.compile(r"告警中位 \d+、累计错误 \d+、中断 \d+"), "告警中位 12、累计错误 0、中断 0"),
+    (re.compile(r"事实校验自动修正中位 \d+ 处"), "事实校验自动修正中位 3 处"),
+    (re.compile(r"已结算 \d+ 条 / 待结算 \d+ 条"), "已结算 16 条 / 待结算 40 条"),
+    (re.compile(r"累计 \d+ 条（实时 \d+ / 非实时 \d+）"), "累计 240 条（实时 236 / 非实时 4）"),
+    (re.compile(r"启用 \d+ 次（最近 \d{4}-\d{2}-\d{2}）"), "启用 60 次（最近 2026-01-05）"),
+    (re.compile(r"统计窗口 \d{4}-\d{2}-\d{2} ~ \d{4}-\d{2}-\d{2}"), "统计窗口 2025-12-01 ~ 2026-01-05"),
+    # LLM 行尾费用摘要（近 N 日滚动窗口：跨日即变）
+    (re.compile(r"· \d+次 ¥[\d.]+ 均¥[\d.]+"), "· 18次 ¥1.2345 均¥0.0686"),
+    # 缓存管理统计（真实缓存清单：文件数 / 体积 / 前缀分布 / 最大文件）
+    (re.compile(r"缓存文件: \d+ 个 \| 大小: \d+ KB"), "缓存文件: 100 个 | 大小: 1024 KB"),
+    (re.compile(r"^(\s*)文件: \d+ 个 \| 大小: [\d.]+ (?:KB|MB)$", re.M), r"\1文件: 100 个 | 大小: 1.0 MB"),
+    (re.compile(r"过期文件: \d+ 个"), "过期文件: 0 个"),
+    (re.compile(r"(\w+_\*): \d+ 个文件"), r"\1: 12 个文件"),
+    (re.compile(r"最新: \d{4}-\d{2}-\d{2} \d{2}:\d{2}"), "最新: 2026-01-01 00:00"),
+    (re.compile(r"^(\s{4})(?!\S+_\*)(.+?)  \([\d.]+ (?:KB|MB)\)$", re.M), r"\1示例缓存键.json  (1.0 MB)"),
+    # 健康历史日期列：按出现序映射为固定日期序列（保证顺序可读、取值稳定）
+    (re.compile(r"\b20\d{2}-\d{2}-\d{2}\b"), "2026-01-01"),
+)
+
+
+def _provider_name_rules() -> tuple[tuple[re.Pattern[str], str], ...]:
+    """把本机 `llm_providers.json` 的真实线路名/凭据名脱敏为「示例线路X」。
+
+    线路面板与 `[G]→[L]` 第 7 项摘要会回显真实线路名（链首名等），属用户配置，
+    不得进入仓库图样。名字从配置只读取、按长度降序替换（避免 `deepseek` 先吃掉
+    `deepseek-main` 的前缀）。配置缺失或读取失败时返回空规则，图样照常生成。
+    """
+    try:
+        import sys as _sys
+
+        _sys.path.insert(0, str(REPO))
+        from src.python.config import get_llm_providers
+
+        providers = [item for item in (get_llm_providers().get("providers") or []) if isinstance(item, dict)]
+    except Exception:
+        return ()
+    names: list[str] = []
+    for item in providers:
+        for key in ("name", "credentials_ref"):
+            value = item.get(key)
+            if isinstance(value, str) and value and value not in names:
+                names.append(value)
+    names.sort(key=len, reverse=True)
+    return tuple(
+        (re.compile(re.escape(name)), f"示例线路{chr(ord('A') + index % 26)}") for index, name in enumerate(names)
+    )
+
+
+def _sanitize(raw: str) -> str:
+    """图样去抖 + 脱敏：日志正文替换为示例行，计数/体积/日期/路径归一。
+
+    Args:
+        raw: 采集到的原始上屏文本（含 ANSI）。
+
+    Returns:
+        归一后的文本；同一代码状态重复采集逐字节一致。
+    """
+    counters: dict[str, int] = {level: 0 for level in _LOG_EXAMPLES}
+    stamps: dict[str, int] = {}
+    out: list[str] = []
+    for line in raw.split("\n"):
+        match = _LOG_LINE_RE.match(line)
+        if match:
+            level = match.group("level")
+            examples = _LOG_EXAMPLES.get(level, ("[示例模块] 示例日志行",))
+            index = counters.get(level, 0)
+            counters[level] = index + 1
+            # 时间戳按「同秒递增 1 毫秒」伪造：稳定、可比，不泄漏真实运行时刻
+            seq = stamps.get("n", 0)
+            stamps["n"] = seq + 1
+            fake_ts = f"2026-01-01 00:00:{seq % 60:02d},{(seq * 137) % 1000:03d}"
+            out.append(f"{match.group('indent')}{fake_ts} [{level}] {examples[index % len(examples)]}")
+            continue
+        out.append(line)
+    text = "\n".join(out)
+    for pattern, replacement in (*_NORMALIZE_RULES, *_provider_name_rules()):
+        text = pattern.sub(replacement, text)
+    return text
+
 
 def _clean(raw: bytes) -> str:
     text = raw.decode("utf-8", "replace").replace("\r\n", "\n").replace("\r", "\n")
     text = re.sub(r"\x1b\[[0-9;]*[HJKlh]", "", text)
     text = re.sub(r"\x1b\[[0-9;]*[ABCDG]", "", text)
     lines = [ln.rstrip() for ln in text.split("\n")]
-    lines = [ln for ln in lines if not re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d+ \[(INFO|DEBUG|WARNING)\]", ln)]
+    lines = [
+        ln for ln in lines if not re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d+ \[(INFO|DEBUG|WARNING)\]", ln)
+    ]
     while lines and not ANSI_RE.sub("", lines[0]).strip():
         lines.pop(0)
     while lines and not ANSI_RE.sub("", lines[-1]).strip():
@@ -451,6 +585,7 @@ def main() -> int:
         raw = capture(mode, keys)
         for old_text, new_text in REWRITES.get(sid, ()):
             raw = raw.replace(old_text, new_text)
+        raw = _sanitize(raw)
         lines = [ln for ln in ANSI_RE.sub("", raw).split("\n") if ln.strip()]
         path_current, path_proposed = NAV_PATH.get(sid, ("", ""))
         frames.append(
@@ -467,7 +602,9 @@ def main() -> int:
                 "lines": len(lines),
             }
         )
-        print(f"[{'OK' if lines else 'EMPTY'}] {variant:<9} {level} {title_current or title_proposed}（{len(lines)} 行）")
+        print(
+            f"[{'OK' if lines else 'EMPTY'}] {variant:<9} {level} {title_current or title_proposed}（{len(lines)} 行）"
+        )
     out_dir = REPO / "docs" / "tmp" / "tui-frames"
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / "tui_frames.json"
