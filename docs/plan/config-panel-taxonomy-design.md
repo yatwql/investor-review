@@ -1,47 +1,34 @@
-# 配置面板分类与描述重整设计
+# 配置面板分类与描述重整设计（TUI 主体 → Web 对齐）
 
-> **关联**：配置面板（Web「配置」页签 / TUI `[S]` 面板）的分类轴与文案来源；设计图样见 [`config-panel-mockup/index.html`](config-panel-mockup/index.html)（浏览器打开，可切换布局/说明密度/标记/主题四种视图）。
-> **范围**：呈现层与注册表元数据——新增域轴、组顺序调整与第 5 组、Web 面契约、TUI 编号派生。**不含**新增配置键、改写入语义（`config/edit_ops.py` 的白名单/校验/`.bak` 备份全部不动）、改配置文件落盘格式。
+> **关联**：[`llm-settings-nesting-design.md`](llm-settings-nesting-design.md)（`llm_settings.json` 纵切）；设计图样 [`config-panel-mockup/index.html`](config-panel-mockup/index.html)（Web）、[`tui.html`](config-panel-mockup/tui.html)（TUI 全层级）。
+> **范围**：TUI 菜单与面板层级、Web 配置面编排、两渠道共用的概念与文案来源。**不含**新增可编辑项、改写入语义、改配置文件结构（见纵切设计）。
+> **顺序**：TUI 定稿 → Web 按同一套概念对齐。两渠道表现形式不同（终端 vs 浏览器），但**域、组、显示名、标记口径、说明文案同源**。
 
 ---
 
 ## 1. 目标
 
-1. **一级分区回答「我要改什么」**：面板按域分区，改一个意图不必跨区找。
-2. **二级分组回答「开了长出什么」**：组表达作用域，与生命周期（`experimental`）正交不变。
-3. **文案与顺序单源在服务端**：块的顺序、显示名、一句话说明、出厂默认值全部由后端下发，前端不含任何中文文案表。
-4. **非开关项有明确归属**：报告章节、路径、指数池、线路、调优参数都进「域」，由声明表显式编排。
+1. **一套概念三渠道共用**：域、组、入口名、标记与说明只有一个来源，TUI 与 Web 只是排布不同。
+2. **TUI 先说清层级**：主菜单 → 二级 → 三级（→ 线路面板）逐层收敛，高频操作不超过两层。
+3. **Web 按业务域编排**：块的顺序、标题、说明、默认值全部由服务端下发，前端不持有中文文案表。
+4. **可增长**：新增开关/入口只改注册表与声明表，面板与文档自动跟随。
 
 ---
 
-## 2. 模型：域 + 组 + 项
+## 2. 共用概念（单一来源）
 
-```
-域 DOMAIN      —— 「我要改什么」：报告内容 / 呈现与机制 / 数据与线路 / LLM 运行
- └ 块 BLOCK    —— 一个可渲染单元：一个开关组，或一个非开关类面板
-     └ 项 ITEM —— 单个可编辑项（开关 / 数字 / 文本 / 枚举 / 动作）
-```
+### 2.1 域（一级分区，Web 用；TUI 以菜单分组体现）
 
-- **域** 常量在 `config/_feature_registry.py`：`DOMAIN_ORDER`、`DOMAIN_LABELS`、`DOMAIN_HINTS`、`GROUP_DOMAIN`。
-- **组** 在 `_feature_registry.py`：`GROUP_ORDER`；组的域归属由 `GROUP_DOMAIN` 决定。
-- **非开关类块**的域在 `web/config_edit.py::_BLOCK_DOMAIN` 声明，域内块顺序由 `_DAILY_BLOCKS` 声明；features 组按 `GROUP_ORDER` 追加到所属域（LLM 域的调优参数排在组之后）。
-
----
-
-## 3. 域与组
-
-### 3.1 四个域
-
-| 域 | 键 | 上屏标题 | 域说明（`DOMAIN_HINTS`） | 域内块 |
+| 域键 | 上屏标题 | 域说明 | 收纳内容 | TUI 对应入口 |
 |:--|:--|:--|:--|:--|
-| 报告内容 | `report_content` | 报告内容 | 改这里会改变报告里出现什么：顶层章节取舍、章内附加块、整章回放 | `sections` → `features.analysis` → `features.standalone` |
-| 呈现与机制 | `presentation_mechanism` | 呈现与机制 | 只改呈现口径、匿名化与内部机制/诊断接缝：内容主体不变或仅影响入口显隐 | `anonymization` → `features.presentation` → `features.mechanism` |
-| 数据与线路 | `data_and_routes` | 数据与线路 | 数据从哪读、跟什么基准比、LLM 走哪条线路 | `paths` → `indices` → `providers` |
-| LLM 运行 | `llm_run` | LLM 运行 | LLM 章节启停、调用内增强（辩论/情景）与运行参数（并发/重试/预算） | `llm` → `features.llm_enhance` → `tuning` |
+| `report_content` | 报告内容 | 改这里会改变报告里出现什么：顶层章节取舍、章内附加块、整章回放 | 顶层章节 + 分析增强组 + 独立章节与回放组 | `[P]`、`[S]`（前两组） |
+| `presentation_mechanism` | 呈现与机制 | 只改呈现口径、匿名化与内部机制/诊断接缝：内容主体不变或仅影响入口显隐 | 匿名化 + 呈现与体验组 + 机制与诊断组 | `[G]`→`[A]`、`[S]`（机制组） |
+| `data_and_routes` | 数据与线路 | 数据从哪读、跟什么基准比、LLM 走哪条线路 | 目录与文件名 + 对比基准指数 + 多链线路 | `[G]`→`[C]/[F]/[O]`、`[G]`→`[I]`、`[G]`→`[L]`（线路） |
+| `llm_run` | LLM 运行 | LLM 章节启停、调用内增强（辩论/情景）与运行参数（并发/重试/预算） | LLM 章节启停 + LLM 分析增强组 + 运行参数 | `[S]`（LLM 章节）、`[G]`→`[L]` |
 
-`DOMAIN_ORDER` 即面板分区顺序。「报告章节」（`enable_*`）与「独立章节与回放」同域相邻——两者同属「报告里出现什么」；LLM 章节启停、调用内增强、运行参数同域相邻。
+域与 TUI 菜单**不一一对应**：TUI 按"操作位置"（章节 / 开关 / 全局设置）组织，Web 按"意图域"组织；两者共用同一批**条目名**与**标记口径**，不共用排布。
 
-### 3.2 五个组
+### 2.2 组（二级，作用域轴）
 
 | 顺序 | 组键 | 上屏标题 | 域 | 项数 |
 |:--|:--|:--|:--|--:|
@@ -51,100 +38,104 @@
 | 4 | `mechanism` | ⚙ 机制与诊断（内部机制 / 诊断接缝 / 待验证实验） | 呈现与机制 | 5 |
 | 5 | `llm_enhance` | 🧠 LLM 分析增强（默认关闭 · 在 LLM 章节内追加辩论/情景段，无独立章节） | LLM 运行 | 2 |
 
-`GROUP_ORDER` 为「内容域 → 呈现与机制 → LLM 运行」的阅读顺序（机制收尾）。`llm_enhance` 收纳 `llm_debate_procon`（三段式白脸→黑脸→综合）与 `llm_debate_conditional`（情景化分析），二者在既有 LLM 调用内追加段落、不新增章节，故独立成组而不属「分析增强」的章内追加语义。
+组的域归属由 `GROUP_DOMAIN` 一处登记；`GROUP_ORDER` 即两渠道共同的组顺序。
 
-### 3.3 开关归属
+### 2.3 条目名（TUI 逐字等于 Web 标签）
 
-| 组 | 开关 |
+| 条目 | 统一名称 |
 |:--|:--|
-| `analysis` | `factor_catalog` / `event_window_impact` / `data_quality` / `industry_beta` / `candidate_compare` / `cost_lots` / `valuation_percentile` / `market_temperature` / `market_sentiment` / `fund_purchase_limit` / `cost_position` / `risk_adjusted_excess` / `summary_highlights` / `prosperity_framework` |
-| `standalone` | `rebalance_schedule_replay` / `holding_change_review` / `whatif_trade_cost` / `stock_fundamentals` / `crisis_replay` |
-| `presentation` | `metrics_enabled` |
-| `mechanism` | `decision_reflection` / `report_qa` / `deterministic_signal` / `module_quality_gate` / `doctor_check` |
-| `llm_enhance` | `llm_debate_procon` / `llm_debate_conditional` |
+| 顶层章节 | 基金深度分析 / 市场新闻 / 组合历史走势+回撤 / 组合演进 / 行动建议 |
+| 目录 | 持仓信息目录 / 持仓信息文件名 / 报告输出目录 |
+| 指数 | 对比基准指数 |
+| 匿名化 | 持仓匿名化（代码 / 名称脱敏） |
+| LLM | LLM 设置（运行参数 / 多链线路）、LLM 分析章节、多链线路优先级 |
+| 索引 | 配置入口地图 |
 
-显示名、说明、默认值、产物影响、实验身份仍由 `FeatureSwitchDef` 六字段承载，注册表是唯一登记点。
+### 2.4 标记口径（三渠道同义）
+
+| 标记 | 判定 | 呈现 |
+|:--|:--|:--|
+| 「影响报告」 | `affects_report` 为真（含报告章节、LLM 模块：关闭即整章隐藏） | Web 行末同列徽标；TUI 用「（影响报告）」纯文本 |
+| `⚗` | `experimental` 为真 | 两渠道行首/行尾固定位置 |
+| 「已改」 | 当前值 ≠ `defaults` | Web 行尾 `✻`；TUI 行尾 `*`（既有语义，两渠道同源比较对象） |
+| 顺序 | 固定为 `⚗ › 影响报告 › 已改` | 行末区右对齐、不随标签长度漂移 |
+
+### 2.5 文案来源
+
+- 组标题、组说明、条目显示名、一句话说明、出厂默认值：**注册表**（`FeatureSwitchDef` 六字段 + `needs_hint`）。
+- 域标题与域说明：`DOMAIN_LABELS` / `DOMAIN_HINTS`。
+- 路径 / 章节 / 调优项的说明：服务端声明表与 `LLM_TUNING_SPECS.hint`。
+- 前端与 TUI 渲染层**不持有**任何中文标签或说明表。
 
 ---
 
-## 4. Web 面板契约
+## 3. TUI 设计（主体）
 
-`GET /api/config/edit` 在既有键之外增加编排与文案四块（既有键保持不变）。
+### 3.1 主菜单：16 项，四组
 
-### 4.1 编排：`domains`
-
-```json
-"domains": [
-  {"key": "report_content", "title": "报告内容", "hint": "改这里会改变报告里出现什么…",
-   "blocks": ["sections", "features.analysis", "features.standalone"]}
-]
+```
+── 生成报告 ──          [E] [B] [L] [W]
+── 数据与查看 ──        [Q] [1] [2] [3]
+── 配置 ──              [P] [S] [G] [R]
+── 诊断与排查 ──        [V] [H] [T]
+                        [X] 退出（0 亦可）
 ```
 
-前端按顺序遍历 `domains` → `blocks`，按块 id 取渲染器：`features.<组键>` 查 `surface.features.groups`，其余查块渲染器表；渲染器返回 `null` 即跳过该块（多链线路为空时不渲染该块）。
+配置组四项（标签显示宽均 ≤ 48，80 列不折行）：
 
-### 4.2 文案：`labels` / `descriptions` / `defaults`
+```
+  [P] 报告章节（顶层章节取舍与顺序）              ← 30
+  [S] 分析增强与章节增补（五组 · 含 LLM 章节）    ← 40
+  [G] 全局设置（目录 / LLM / 指数 / 匿名化）      ← 38
+  [R] 刷新配置
+```
 
-| 键空间 | 覆盖 | 来源 |
+定位与边界：
+
+| 项 | 管什么 | 不管什么 |
 |:--|:--|:--|
-| `labels` | 路径 3 项、报告章节 5 项、功能开关 27 项、`enabled_llm.<模块>` 7 项 | 路径/章节文案表 + 注册表 `label` + `get_llm_module_names()` |
-| `descriptions` | 同上全覆盖（调优项不在其中：其说明随 `llm_tuning[].hint` 下发） | 路径/章节说明表 + 注册表 `desc` + LLM 章节说明模板 |
-| `defaults` | **仅布尔与数值可编辑项**：功能开关 27 项、报告章节 5 项、`enabled_llm` 7 项、调优参数 6 项 | `FeatureSwitchDef.default` / 章节与模块默认 `true` / `LLM_TUNING_SPECS` 默认值；枚举项（匿名化）由 `anonymization.mode` 表达"当前选中"，动作项（指数池增删、线路调序）本就没有默认值，不下发 |
-| `features.descriptions` / `features.defaults` / `features.needs_hint` | 27 项（组内渲染直接取，避免前端跨表拼键）；`needs_hint` 为「需显副行」的 flag 清单 | 注册表 |
-| `anonymization.labels` | 4 档 | `anonymizer.ANONYMIZATION_MODE_DESCRIPTIONS` |
-| `llm_providers.strategy_label` / `order_is_chain` | 4 种策略中文名 + 当前策略下顺序是否等于实际链序 | 策略中文表（`priority`→按优先级排序 / `weighted`→加权随机 / `cost_first`→价格最低优先 / `fallback_only`→仅回退） |
+| `[P]` | 顶层章节是否出现与其顺序（`config.json` 的 `enable_*`） | 章内增强块、整章增补（在 `[S]` 的组内） |
+| `[S]` | 27 项功能开关：章内增强、整章增补、呈现、机制、LLM 增强；以及 7 个 LLM 章节启停 | 顶层章节取舍（在 `[P]`） |
+| `[G]` | 目录与文件名、LLM 设置（运行参数 + 多链线路）、对比基准指数、持仓匿名化、配置入口地图 | 章节与开关 |
+| `[R]` | 重读全部配置文件 | — |
 
-前端职责边界：不含任何中文标签、说明、块顺序表；`main.js` 只保留渲染器与「按 id 取渲染器」的分发。
+`[P]` 面板只列 5 个顶层章节，不含跳转项；面板底部保留一行提示：`章内增强与整章增补见 [S]`。
 
-### 4.3 标记口径
+### 3.2 `[G]` 二级：7 项
 
-| 标记 | 判定 | 覆盖 |
-|:--|:--|:--|
-| 「影响报告」 | `affects_report` 为真；章节与 `enabled_llm` 模块按同一判据（关闭即整章隐藏） | 功能开关组 + 报告章节 5 项 + LLM 模块 7 项 |
-| ⚗ | `experimental` 为真 | 功能开关组 |
-| 说明副行 | `descriptions` 有值 | 全部组（密度见 4.4） |
+```
+  ── 全局设置 ──
+   [C] 持仓信息目录
+   [F] 持仓信息文件名
+   [O] 报告输出目录
+   [L] LLM 设置（运行参数 / 多链线路）
+   [I] 对比基准指数
+   [A] 持仓匿名化（代码 / 名称脱敏）
+   [M] 配置入口地图（各配置项所在菜单）
+   [0] 返回主菜单
+```
 
-**降噪规则**：「影响报告」标记会同时出现在 5 个章节、7 个 LLM 模块与功能开关组，为避免每行都挂着徽标——标记固定渲染在**行末同一列**（右对齐、不随标签长度漂移），组标题只保留分组语义、不重复"关闭即整章隐藏"的说明文字；只有 `affects_report` 为真的项才有标记，其余项该列留空。⚗ 与「已改」标记同处行尾区，顺序固定为 `⚗ › 影响报告 › 已改`。
+选择提示、无效输入提示与面板标题（「全局设置」）覆盖全部 7 键。`[I]` `[A]` 的面板本体与写路径（`edit_ops` 的 `comparison_indices` / `anonymization.mode`）保持不变，只改入口层级。
 
-### 4.4 说明密度
+### 3.3 `[G]` → `[L]` 三级：7 项
 
-默认「仅非常识项显副行」：解释成本高的项（路径、LLM 调优参数、`factor_catalog`、`event_window_impact`、`deterministic_signal` 等）渲染 12px 副行说明；常识项（`metrics_enabled`、`doctor_check`、`module_quality_gate`、`data_quality`、`market_temperature`、`fund_purchase_limit` 等）说明存 `title`，悬停可读。
+```
+  ── LLM 设置 ──
+   1. thinking 模块并发上限（当前 2）
+   2. LLM 模块并发线程数（当前 3）
+   3. 单请求重试次数（当前 2）
+   4. 整链失败后的重试等待（秒）（当前 30）
+   5. LLM 总时间预算（秒）（当前 0）
+   6. LLM 日费用上限（当前 0）
+   7. 多链线路优先级（2 条，当前链首 deepseek-main）
+   0. 返回
+```
 
-**"哪些算常识项"不下发给前端做字典**（否则又是第四份中文清单）：由注册表新增字段 `FeatureSwitchDef.needs_hint`（布尔，默认 `False` = 常识项不显副行，显式标注"需要副行"的项才显）承载，`features.needs_hint`（需要副行的 flag 清单）同源下发。路径/调优项固定显副行（项数少且解释成本高），不需要字段标记。切换为「全部显示」= 前端忽略该字段。
+1~6 沿用"输入新值"语义（范围校验不变）；7 为**入口**——进入既有线路面板（按链序展示 + 输入两个编号交换），返回后回到本面板。线路面板本体与写路径零改动。行尾摘要给出线路条数与链首，不进第四级即可判断链序。
 
-### 4.5 块 id ↔ 渲染器 ↔ 空数据行为
+### 3.4 `[S]` 面板与编号
 
-块 id 由服务端 `domains[].blocks` 给出，前端按 id 取渲染器；`features.<组键>` 单独走一组分支（查 `features.groups`）。**空数据不得渲染空壳标题**：
-
-| 块 id | 渲染器 | 数据为空时 |
-|:--|:--|:--|
-| `paths` | `renderPathsGroup` | 不出现（配置读取失败时整个面板已走错误态） |
-| `sections` | `renderBoolGroup` | 不出现 |
-| `features.<组键>` | `renderBoolGroup`（数据取 `features.groups[i]`） | 组内 0 项则不出现 |
-| `anonymization` | `renderAnonGroup` | 不出现 |
-| `indices` | `renderIndicesGroup` | 不出现（保留"添加"入口则至少渲染表单） |
-| `providers` | `renderProvidersGroup` | 不出现（多链线路为空时的既有行为） |
-| `llm` | `renderBoolGroup`（`enabled_llm.*`） | 不出现 |
-| `tuning` | `renderTuningGroup` | 不出现 |
-
-### 4.6 「已改」标记：与 TUI 同源
-
-TUI `[S]` 面板用行尾 `*` 标注"与出厂默认不一致"。Web 面板沿用同一语义与同一数据源（`defaults`），以行尾 `✻` 呈现，图例统一为「✻ 与出厂默认不同」。两侧都不新增判定逻辑——比较对象就是 `defaults`，因此 TUI 与 Web 的"已改"恒等。
-
-### 4.7 样式规格（`style.css`，须含暗色配对）
-
-| 元素 | 规格 | 取值 |
-|:--|:--|:--|
-| 域分区 | 相邻域之间 `border-top: 1px solid var(--border)` + 上间距 | `margin-top: 26px; padding-top: 22px` |
-| 域标题 | 字阶「卡片/小节标题」档，字重 600，左侧品牌蓝竖线（单强调色） | `16px / 1.4`，`padding-left: 10px; border-left: 3px solid var(--primary)` |
-| 域说明 | 脚注档，次要墨色 | `12px / 1.5`，`var(--text-secondary)`，`margin-left: 13px` |
-| 项说明副行 | 脚注档，次要墨色，与勾选框文字左对齐 | `12px / 1.5`，`margin-left: 22px` |
-| 「影响报告」标记 | 小徽标：1px 边框 + accent 色 | 亮色 `var(--accent)`；**暗色覆盖为 `#6ecf9f`**（`--accent` 在暗色面上对比不足，标记位单独取值） |
-
----
-
-## 5. TUI `[S]` 面板编号
-
-编号 = LLM 可见模块数（7）+ 按 `GROUP_ORDER` 连续派生，运行时由注册表计算，非硬编码：
+编号 = LLM 可见模块数（7）+ 按 `GROUP_ORDER` 连续派生，运行时计算：
 
 | 区间 | 内容 | 项数 |
 |:--|:--|--:|
@@ -155,67 +146,135 @@ TUI `[S]` 面板用行尾 `*` 标注"与出厂默认不一致"。Web 面板沿�
 | 28-32 | 机制与诊断 | 5 |
 | 33-34 | LLM 分析增强 | 2 |
 
-编号由注册表派生（运行时计算，非硬编码）。**稳定入口是键名**：面板与手册始终并列展示键名，`?` 详情、`?编号` 查询、`键名=on|off` 赋值三条通道均以键名为准，编号仅作当前版本的快捷定位。
+稳定入口是**键名**：`?` 详情、`?编号` 查询、`键名=on|off` 赋值均以键名为准，编号仅作当前版本的快捷定位。
 
-`?编号` 详情沿用注册表 `desc` / `GROUP_LABELS` / `default` 三源。手册 `[S]` 面板编号表、五个组块标题、features 键名→编号映射表按上表维护，`check-doc-drift` 第 8 项按注册表派生校验。
+### 3.5 键位纪律
+
+- 顶层字母是用户肌肉记忆：本次释放 `M`/`I`/`A`，`D`→`G`（Global），其余不动。
+- `default_menu_key` 取值域随之更新（出厂 `L` 不受影响）；失效键回落首项 `E`（既有回落逻辑）。
+- 二级键在 `[G]` 内唯一（C/F/O/L/I/A/M），与顶层键不冲突。
 
 ---
 
-## 6. 影响面
+## 4. Web 设计（对齐 TUI）
 
-### 6.1 代码
+### 4.1 编排：`domains`
+
+```json
+"domains": [
+  {"key": "report_content", "title": "报告内容", "hint": "改这里会改变报告里出现什么…",
+   "blocks": ["sections", "features.analysis", "features.standalone"]}
+]
+```
+
+前端按顺序遍历 `domains` → `blocks`，按块 id 取渲染器：`features.<组键>` 查 `surface.features.groups`，其余查块渲染器表；渲染器返回 `null` 即跳过该块。
+
+四个域与块的完整对应见 §2.1；域内块顺序：报告内容（章节 → 分析增强 → 独立章节）、呈现与机制（匿名化 → 呈现 → 机制）、数据与线路（目录 → 指数 → 线路）、LLM 运行（LLM 章节 → LLM 分析增强 → 运行参数）。
+
+### 4.2 文案：`labels` / `descriptions` / `defaults`
+
+| 键空间 | 覆盖 | 来源 |
+|:--|:--|:--|
+| `labels` | 目录 3 项、顶层章节 5 项、功能开关 27 项、`enabled_llm.<模块>` 7 项 | 声明表 + 注册表 `label` + 模块注册表（名称与 §2.3 逐字一致） |
+| `descriptions` | 同上全覆盖（调优项说明随 `llm_tuning[].hint` 下发） | 声明表 + 注册表 `desc` + 模块说明模板 |
+| `defaults` | 布尔与数值类：开关 27、章节 5、LLM 模块 7、调优 6 | `FeatureSwitchDef.default` / 默认 `true` / `LLM_TUNING_SPECS`；枚举与动作类无默认值 |
+| `features.descriptions` / `features.defaults` / `features.needs_hint` | 27 项 | 注册表 |
+| `anonymization.labels` | 4 档 | `anonymizer.ANONYMIZATION_MODE_DESCRIPTIONS` |
+| `llm_providers.strategy_label` / `order_is_chain` | 4 种策略中文名 + 顺序是否等于实际链序 | 策略中文表 |
+
+### 4.3 块 id 与渲染器
+
+| 块 id | 渲染器 | 数据为空时 |
+|:--|:--|:--|
+| `paths` | `renderPathsGroup` | 不出现 |
+| `sections` | `renderBoolGroup` | 不出现 |
+| `features.<组键>` | `renderBoolGroup`（取 `features.groups[i]`） | 组内 0 项则不出现 |
+| `anonymization` | `renderAnonGroup` | 不出现 |
+| `indices` | `renderIndicesGroup` | 不出现（保留"添加"表单则至少渲染表单） |
+| `providers` | `renderProvidersGroup` | 不出现（无多链线路） |
+| `llm` | `renderBoolGroup`（`enabled_llm.*`） | 不出现 |
+| `tuning` | `renderTuningGroup` | 不出现 |
+
+### 4.4 说明密度
+
+默认"仅需提示的项显副行"：路径、运行参数与解释成本高的开关（`factor_catalog`、`event_window_impact`、`deterministic_signal` 等）渲染 12px 副行；其余说明存 `title`，悬停可读。"哪些项需要副行"由注册表 `FeatureSwitchDef.needs_hint` 承载，`features.needs_hint` 同源下发——不在前端维护清单。切换为"全部显示"= 前端忽略该字段。
+
+### 4.5 样式规格（`style.css`，须含暗色配对）
+
+| 元素 | 规格 | 取值 |
+|:--|:--|:--|
+| 域分区 | 相邻域之间上间距 + 分隔线 | `margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--border)` |
+| 域标题 | 字阶「卡片/小节标题」，字重 600，左侧品牌蓝竖线 | `16px / 1.4`，`padding-left: 10px; border-left: 3px solid var(--primary)` |
+| 域说明 | 脚注档，次要墨色 | `12px / 1.5`，`var(--text-secondary)`，`margin-left: 13px` |
+| 项说明副行 | 脚注档，次要墨色，与勾选框文字左对齐 | `12px / 1.5`，`margin-left: 22px` |
+| 「影响报告」徽标 | 1px 边框 + accent 色 | 亮色 `var(--accent)`；暗色覆盖 `#6ecf9f`（`--accent` 在暗色面对比不足） |
+
+---
+
+## 5. 影响面
+
+### 5.1 代码
 
 | 文件 | 改动 |
 |:--|:--|
-| `config/_feature_registry.py` | 5 个域常量 + `DOMAIN_ORDER/LABELS/HINTS` + `GROUP_DOMAIN`；新增 `GROUP_LLM` 并确定 `GROUP_ORDER` 为五组顺序；辩论两项归入该组；`FeatureSwitchDef` 新增 `needs_hint` 字段（说明密度判定） |
-| `config/features.py` | 导入/导出面扩展（域常量 + `GROUP_DOMAIN`）；模块 docstring 分组说明 |
-| `web/config_edit.py` | `_BLOCK_DOMAIN` / `_DAILY_BLOCKS` / 路径与章节文案表 / `_panel_domains` / `_panel_labels` / `_panel_descriptions` / `_panel_defaults`；`_llm_providers_surface` 增 `strategy_label`、`order_is_chain`；surface 增四块 |
-| `static/web/main.js` | `renderConfigEdit` 按 `domains` 分区渲染；删除 `CONFIG_LABELS` / `ANON_LABELS`；`renderBoolGroup` 支持 `descriptions`/`defaults`/`fullKey` 查表；`renderPathsGroup` 用服务端文案；线路组用 `strategy_label` |
+| `config/_feature_registry.py` | 5 个域常量 + `DOMAIN_ORDER/LABELS/HINTS` + `GROUP_DOMAIN`；新增 `GROUP_LLM` 并确定五组顺序；辩论两项归入该组；`FeatureSwitchDef` 新增 `needs_hint` |
+| `config/features.py` | 导出面扩展（域常量、`GROUP_DOMAIN`） |
+| `tui/tui_menu.py` | `MENU_ITEMS` 移除 `M`/`I`/`A`、`D`→`G`、`P`/`S` 换标签；`MENU_GROUPS` 配置组改 `P/S/G/R` |
+| `tui/handlers_config.py` | 二级面板标题「全局设置」、7 键提示、`DIR_INFO_ITEMS` 增 `I`/`A` 并改 `L` 标题、`_cmd_config_llm_tuning` 增第 7 项入口、`_cmd_config_report_boards` 去掉指路牌项、`_CONFIG_ENTRY_MAP` 三行改 `[G]` 二级键 |
+| `web/config_edit.py` | `_BLOCK_DOMAIN` / `_DAILY_BLOCKS` / 声明表 / `_panel_domains` / `_panel_labels` / `_panel_descriptions` / `_panel_defaults`；`_llm_providers_surface` 增策略中文与链序标记；surface 增编排与文案块 |
+| `static/web/main.js` | 按 `domains` 分区渲染；删除前端中文表；块渲染支持 `descriptions`/`defaults`/`needs_hint`/`fullKey` |
 | `static/web/style.css` | §4.5 四个 class + 暗色配对 |
-| `tui/*` | 无需改：面板渲染与编号派生已按 `GROUP_ORDER` / `GROUP_LABELS` 跟随 |
 
-### 6.2 文档
+不改：`handlers_llm_providers.py`、指数池与匿名化面板本体、全部写路径、CLI 参数名。
+
+### 5.2 数据
+
+`config.json` 的 `default_menu_key` 取值域少 `M`/`I`/`A`、`D`→`G`；出厂 `L` 不受影响。
+
+### 5.3 文档
 
 | 文件 | 同步点 |
 |:--|:--|
-| `manuals/how-to-use-tui-menu.md` | `[S]` 面板编号表 + 五个组块标题 + features 键名映射表 + 「五块」措辞（编号见本文件第 5 节） |
-| `manuals/how-to-config.md` | 功能开关表（组内行序 + 新组两项迁入）；`[S]` 布局段与 Web 面板分组段的分组枚举 |
-| `manuals/how-to-config-llm.md` | `[S]` 面板分块与显式编号区间（呈现/分析/独立/机制四段）；辩论两项所在组名 |
-| `manuals/how-to-use-web-mode.md` | 配置面板分组表按四域/块重写；分组与顺序说明段改域轴口径 |
-| `manuals/how-to-start.md` | 首页「配置编辑」面板可编辑项枚举（组数与本组分组名） |
-| `manuals/how-to-use-cli-mode.md` | `--feature` / `--experiment` 说明中的分组措辞 |
-| `managements/requirements.md` | 功能开关分组说明（五组、组数与默认态）与菜单表 `[S]`/`[D]` 行 |
-| `managements/technical.md` | 菜单表 `[S]` 行、功能开关注册表章节 |
-| `managements/testplan.md` | `[S]` 面板与 features 覆盖描述 |
-| `managements/DESIGN.md` | 域标题（卡片/小节标题档 + 左侧品牌蓝竖线）与「影响报告」标记组件、域标题、说明行登记，含暗色取值（见本文件「样式规格」）；契约结构测试同步 |
-| 全库措辞 | 分组计数连写链与「四组」表述（`check-doc-drift` 第 4 项按 `GROUP_ORDER` 派生校验） |
+| `manuals/how-to-start.md` / `how-to-use-tui-menu.md` | 主菜单块（16 项）+ `[M]`/`[I]`/`[A]` 三节并入 `[G]` 节 + `[S]` 编号表与五个组块标题 |
+| `manuals/how-to-config.md` | 配置项索引（线路/指数/匿名化 → `[G]` 二级键）、`default_menu_key` 合法键清单、功能开关表行序 |
+| `manuals/how-to-config-llm.md` | `[S]` 分块与编号、辩论两项组名、`[G]`→`[L]` 入口 |
+| `manuals/how-to-use-web-mode.md` | 配置面分组表按四域/块重写、「对应 TUI 菜单」列三行 |
+| `manuals/how-to-use-cli-mode.md` | `--llm-provider-order` 的 TUI 入口说明、分组措辞 |
+| `managements/requirements.md` / `technical.md` | 菜单表（项数与键）、功能开关分组说明 |
+| `managements/testplan.md` | 菜单清单与二级键、`[S]` 面板覆盖 |
+| `managements/DESIGN.md` | 域标题、说明行、「影响报告」徽标与暗色取值登记 |
+| `README.md` | 界面描述与入口说明 |
 
-### 6.3 机检
+### 5.4 测试
 
-`check-doc-drift` 第 4 项（分组计数链）、第 8 项（面板编号）、第 18 项（菜单块）均按注册表派生，脚本侧无需改动，只需文档措辞对齐；`folders.md` 目录树与统计表随本次新增文件同步。
-
-### 6.4 测试
-
-| 用例文件 | 断言 |
+| 用例 | 断言 |
 |:--|:--|
-| `unit/web/test_config_edit.py` | `domains` 覆盖全部 features 组且每块 id 有渲染器；`labels`/`descriptions` 覆盖全部开关与章节键；匿名化标签来自服务端；策略中文映射 |
-| `unit/config/test_features.py` | `GROUP_DOMAIN` 键集 = `GROUP_ORDER`、值域 ⊆ `DOMAIN_ORDER`；每域至少一块；`llm_enhance` 组内为辩论两项；`needs_hint` 字段为布尔；`features.needs_hint` 清单 ⊆ `GROUP_ORDER` 全量键 |
-| `unit/handlers/test_handlers_config_switch.py` | `[S]` 渲染顺序 = `GROUP_ORDER`、编号连续（结构断言，不写死项数） |
+| `test_tui_menu` | 项数 16、配置组 `P/S/G/R`、标签宽度 ≤48 |
+| `test_tui_routing` | `G`→`L`/`I`/`A` 各自可达；`M`/`I`/`A` 顶层键无路由 |
+| `test_handlers_config` | 二级提示含 7 键；入口地图三行指向 `[G]`；`[P]` 面板无指路牌项 |
+| `test_handlers_llm_providers` | 入口经 `[G]`→`[L]` |
+| `config` / `features` | `GROUP_DOMAIN` 键集 = `GROUP_ORDER`、值域 ⊆ `DOMAIN_ORDER`；`llm_enhance` 组内为辩论两项；`needs_hint` 为布尔 |
+| `web/test_config_edit` | `domains` 覆盖全部组且每块有渲染器；`labels`/`descriptions`/`defaults` 覆盖全部键；匿名化与策略标签来自服务端 |
 
-断言遵守「测试真值单一来源」：用集合相等 / 覆盖 / 序号连续表达，不写死可增长集合的条数。
-
----
-
-## 7. 验证计划
-
-1. 单测：§6.4 三个文件 + `unit/ui/test_tui_menu.py`。
-2. 门禁：`scripts/test-runner.py --mode dev-verify`；提交时由 pre-commit 钩子跑十守护。
-3. 人工：Web 页签检查四域顺序、块内副行说明、章节/模块「影响报告」标记与 ⚗、线路策略中文、暗色主题下域标题与标记可读；TUI `[S]` 检查编号 8-34 连续与五个组块标题。
+断言用结构关系（集合相等 / 覆盖 / 序号连续），不写死可增长集合的条数。
 
 ---
 
-## 8. 设计图样
+## 6. 验证计划
 
-[`config-panel-mockup/index.html`](config-panel-mockup/index.html) 为自包含原型（数据内联，无外部依赖）：顶部四组开关切换「按文件编排 / 按域编排」「说明密度」「影响报告标记」「亮/暗主题」，底部给出 `[S]` 编号映射图与编号对照表。数据取自注册表与 `LLM_TUNING_SPECS` 真实条目，改注册表后可重新采集数据刷新。
+1. 单测：§5.4 全部用例。
+2. 门禁：`scripts/test-runner.py --mode dev-verify`；提交时由 pre-commit 钩子执行十守护（含 `check-doc-drift` 的分组计数与面板编号）。
+3. 人工 TUI：主菜单 16 项；`[G]` 七项可达；`[G]`→`[L]` 第 7 项进入线路面板并返回；`[S]` 编号 8-34 连续、五个组块标题正确；`[P]` 无指路牌项。
+4. 人工 Web：四域顺序与块内副行说明；章节与模块的「影响报告」徽标、`⚗`、`✻` 三标记同列；线路策略中文；暗色下域标题与徽标可读。
 
-配套的配置文件纵切设计见 [`llm-settings-nesting-design.md`](llm-settings-nesting-design.md)（图样 `config-panel-mockup/llm-config.html`）：`llm_settings.json` 的调优参数将落为 `runtime.*`、模块设置落为 `modules.<m>.*`。**对面板零影响**——面板读的是扁平视图与 `LLM_TUNING_SPECS`，对外键名不变。
+---
+
+## 7. 设计图样
+
+| 图样 | 内容 |
+|:--|:--|
+| [`config-panel-mockup/tui.html`](config-panel-mockup/tui.html) | TUI 全层级（主菜单当前/目标、`[S]` 四组/五组、`[G]` 二级当前/目标、`[G]`→`[L]` 当前/目标、`[P]`、`[I]`、`[A]`、缓存、日志、自检、报告选择等），真实处理器取样 |
+| [`config-panel-mockup/index.html`](config-panel-mockup/index.html) | Web 四域编排（按文件编排 / 按域编排、说明密度、标记、亮暗主题） |
+| [`config-panel-mockup/llm-config.html`](config-panel-mockup/llm-config.html) | `llm_settings.json` 扁平组织 ↔ 模块纵切对照 |
+
+图样数据取自注册表与真实配置文件；改注册表后可重跑 `tui_capture.py` / `tui_build.py` / `llm_config_mock.py` 刷新。

@@ -68,8 +68,112 @@ def _switches(proposed: bool) -> None:
     run_llm_modules_panel()
 
 
+
+#: 目标菜单标签（配置组四项；宽度均 ≤ 48，80 列不折行）
+PROPOSED_MENU_LABELS = {
+    "P": "报告章节（顶层章节取舍与顺序）",
+    "S": "分析增强与章节增补（五组 · 含 LLM 章节）",
+    "G": "全局设置（目录 / LLM / 指数 / 匿名化）",
+}
+
+#: 目标菜单中移出主菜单的键（收进 [G] 二级）
+RETIRED_MAIN_KEYS = frozenset({"M", "I", "A"})
+
+
+def _render_main_menu_proposed() -> None:
+    """主菜单目标结构：16 项；`M`/`I`/`A` 收进 `[G]`，`D` 改 `G`。"""
+    import src.python.tui.tui_menu as menu
+
+    items = []
+    for key, label, cb, is_exit in menu.MENU_ITEMS:
+        if key in RETIRED_MAIN_KEYS:
+            continue
+        new_key = "G" if key == "D" else key
+        items.append((new_key, PROPOSED_MENU_LABELS.get(new_key, label), cb, is_exit))
+    menu.MENU_ITEMS[:] = items
+    menu.MENU_GROUPS[:] = [
+        (
+            title,
+            tuple("G" if k == "D" else k for k in keys if k not in RETIRED_MAIN_KEYS),
+        )
+        for title, keys in menu.MENU_GROUPS
+    ]
+    menu.render_menu(0)
+
+
+def _g_menu_proposed() -> None:
+    """`[G]` 二级面板目标结构：标题「全局设置」、提示补全 `C/F/O/L/M`、`[L]` 改称「LLM 设置」。"""
+    import src.python.tui.handlers_config as hc
+    import src.python.tui.prompt_text as prompt_text
+    from src.python.tui.text_layout import style_heading as real_heading
+
+    hc.DIR_INFO_ITEMS.clear()
+    hc.DIR_INFO_ITEMS.update(
+        {
+            "C": ("持仓信息目录", "_cmd_config_dir"),
+            "F": ("持仓信息文件名", "_cmd_config_filename"),
+            "O": ("报告输出目录", "_cmd_config_output_dir"),
+            "L": ("LLM 设置（运行参数 / 多链线路）", "_cmd_config_llm_tuning"),
+            "I": ("对比基准指数", "_cmd_config_comparison_indices"),
+            "A": ("持仓匿名化（代码 / 名称脱敏）", "_cmd_config_anonymization_mode"),
+            "M": ("配置入口地图（各配置项所在菜单）", "_render_config_entry_map"),
+        }
+    )
+    hc.style_heading = lambda text: real_heading(text.replace("配置与目录信息", "全局设置"))
+    real_prompt = prompt_text.panel_prompt
+    hc.panel_prompt = lambda *a, **kw: real_prompt(*a, **kw).replace("C/F/O/M", "C/F/O/L/I/A/M")
+    hc._cmd_config_dir_info()
+
+
+def _d_llm_proposed() -> None:
+    """`[D]` → `[L]` 目标结构：6 个运行参数 + 「多链线路优先级」入口（第 7 项）。"""
+    from src.python.config import get_llm_config, get_llm_providers
+    from src.python.config.edit_ops import LLM_TUNING_SPECS
+    from src.python.tui.panel_runtime import NavState, PanelItem, panel_loop
+    from src.python.tui.prompt_text import panel_prompt
+    from src.python.tui.text_layout import style_heading
+    from src.python.tui.tui_keys import input_choice
+
+    llm = get_llm_config() or {}
+    providers = [
+        p
+        for p in (get_llm_providers().get("providers") or [])
+        if isinstance(p, dict)
+    ]
+    providers.sort(key=lambda p: p.get("priority", 99))
+    head = str(providers[0].get("name")) if providers else "—"
+    keys = list(LLM_TUNING_SPECS)
+    line_no = len(keys) + 1
+
+    def _render(nav: NavState) -> list[str]:
+        print()
+        print(style_heading("  ── LLM 设置 ──"))
+        for i, key in enumerate(keys, 1):
+            spec = LLM_TUNING_SPECS[key]
+            print(f" {nav.marker(i - 1)} {i}. {spec['label']}（当前 {llm.get(key, '—')}）")
+        print(f" {nav.marker(len(keys))} {line_no}. 多链线路优先级（{len(providers)} 条，当前链首 {head}）")
+        print(f" {nav.marker(len(keys) + 1)} 0. 返回")
+        print()
+        return []
+
+    items = [PanelItem(str(i), spec["label"], action=lambda: None) for i, spec in enumerate(LLM_TUNING_SPECS.values(), 1)]
+    items.append(PanelItem(str(line_no), "多链线路优先级", action=lambda: None))
+    items.append(PanelItem("0", "返回", kind="return"))
+    panel_loop(
+        items,
+        render=_render,
+        prompt=panel_prompt("输入编号修改", example="7 调多链线路", help_hint=None),
+        read=input_choice,
+        on_text=lambda _t: print("  [!] 无效选择，请输入编号或 0"),
+        default_key="0",
+    )
+
+
 MODES = {
     "main": _render_main_menu,
+    "main_proposed": _render_main_menu_proposed,
+    "g_menu_proposed": _g_menu_proposed,
+    "d_llm_proposed": _d_llm_proposed,
     "switches": lambda: _switches(False),
     "switches_proposed": lambda: _switches(True),
     "dmenu": lambda: _run("handlers_config", "_cmd_config_dir_info"),

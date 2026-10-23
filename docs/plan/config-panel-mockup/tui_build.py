@@ -188,7 +188,7 @@ pre.term {
 <body>
 <header class="top">
   <h1>TUI 面板图样 · 全层级</h1>
-  <span class="hint">{{COUNT}} 屏，均为真实处理器渲染取样（等宽字体 + 真实 ANSI 配色）；文件选择类屏幕取到列表即中止，不生成报告、不写配置。</span>
+  <span class="hint">{{COUNT}} 屏，均由真实处理器渲染（等宽字体 + 真实 ANSI 配色）；设计结构屏按设计项注入后渲染。文件选择类屏幕取到列表即中止，不生成报告、不写配置。</span>
 </header>
 <div class="wrap">
 <nav>
