@@ -80,16 +80,16 @@
 ]
 ```
 
-前端按顺序遍历 `domains` → `blocks`，按块 id 取渲染器：`features.<组键>` 查 `surface.features.groups`，其余查块渲染器表；渲染器返回 `null` 即跳过该块（多链线路为空时保持既有行为）。
+前端按顺序遍历 `domains` → `blocks`，按块 id 取渲染器：`features.<组键>` 查 `surface.features.groups`，其余查块渲染器表；渲染器返回 `null` 即跳过该块（多链线路为空时不渲染该块）。
 
 ### 4.2 文案：`labels` / `descriptions` / `defaults`
 
 | 键空间 | 覆盖 | 来源 |
 |:--|:--|:--|
 | `labels` | 路径 3 项、报告章节 5 项、功能开关 27 项、`enabled_llm.<模块>` 7 项 | 路径/章节文案表 + 注册表 `label` + `get_llm_module_names()` |
-| `descriptions` | 同上全覆盖 | 路径/章节说明表 + 注册表 `desc` + LLM 章节说明模板 |
-| `defaults` | 开关类全集 | `FeatureSwitchDef.default` / 章节与模块默认 `true` |
-| `features.descriptions` / `features.defaults` | 27 项（组内渲染直接取，避免前端跨表拼键） | 注册表 |
+| `descriptions` | 同上全覆盖（调优项不在其中：其说明随 `llm_tuning[].hint` 下发） | 路径/章节说明表 + 注册表 `desc` + LLM 章节说明模板 |
+| `defaults` | **仅布尔与数值可编辑项**：功能开关 27 项、报告章节 5 项、`enabled_llm` 7 项、调优参数 6 项 | `FeatureSwitchDef.default` / 章节与模块默认 `true` / `LLM_TUNING_SPECS` 默认值；枚举项（匿名化）由 `anonymization.mode` 表达"当前选中"，动作项（指数池增删、线路调序）本就没有默认值，不下发 |
+| `features.descriptions` / `features.defaults` / `features.needs_hint` | 27 项（组内渲染直接取，避免前端跨表拼键）；`needs_hint` 为「需显副行」的 flag 清单 | 注册表 |
 | `anonymization.labels` | 4 档 | `anonymizer.ANONYMIZATION_MODE_DESCRIPTIONS` |
 | `llm_providers.strategy_label` / `order_is_chain` | 4 种策略中文名 + 当前策略下顺序是否等于实际链序 | 策略中文表（`priority`→按优先级排序 / `weighted`→加权随机 / `cost_first`→价格最低优先 / `fallback_only`→仅回退） |
 
@@ -103,11 +103,34 @@
 | ⚗ | `experimental` 为真 | 功能开关组 |
 | 说明副行 | `descriptions` 有值 | 全部组（密度见 4.4） |
 
+**降噪规则**：「影响报告」标记会同时出现在 5 个章节、7 个 LLM 模块与功能开关组，为避免每行都挂着徽标——标记固定渲染在**行末同一列**（右对齐、不随标签长度漂移），组标题只保留分组语义、不重复"关闭即整章隐藏"的说明文字；只有 `affects_report` 为真的项才有标记，其余项该列留空。⚗ 与「已改」标记同处行尾区，顺序固定为 `⚗ › 影响报告 › 已改`。
+
 ### 4.4 说明密度
 
-默认「仅非常识项显副行」：路径、LLM 调优参数与生僻开关（如 `factor_catalog`、`event_window_impact`、`deterministic_signal`）渲染 12px 副行说明；常识项（如 `metrics_enabled`、`doctor_check`、`module_quality_gate`、`data_quality`、`market_temperature`、`fund_purchase_limit`）说明存 `title` 属性，悬停可读。两类共用同一 `descriptions` 数据源，密度差异只由前端一处过滤条件决定，切换为「全部显示」即放开过滤。
+默认「仅非常识项显副行」：解释成本高的项（路径、LLM 调优参数、`factor_catalog`、`event_window_impact`、`deterministic_signal` 等）渲染 12px 副行说明；常识项（`metrics_enabled`、`doctor_check`、`module_quality_gate`、`data_quality`、`market_temperature`、`fund_purchase_limit` 等）说明存 `title`，悬停可读。
 
-### 4.5 样式规格（`style.css`，须含暗色配对）
+**"哪些算常识项"不下发给前端做字典**（否则又是第四份中文清单）：由注册表新增字段 `FeatureSwitchDef.needs_hint`（布尔，默认 `False` = 常识项不显副行，显式标注"需要副行"的项才显）承载，`features.needs_hint`（需要副行的 flag 清单）同源下发。路径/调优项固定显副行（项数少且解释成本高），不需要字段标记。切换为「全部显示」= 前端忽略该字段。
+
+### 4.5 块 id ↔ 渲染器 ↔ 空数据行为
+
+块 id 由服务端 `domains[].blocks` 给出，前端按 id 取渲染器；`features.<组键>` 单独走一组分支（查 `features.groups`）。**空数据不得渲染空壳标题**：
+
+| 块 id | 渲染器 | 数据为空时 |
+|:--|:--|:--|
+| `paths` | `renderPathsGroup` | 不出现（配置读取失败时整个面板已走错误态） |
+| `sections` | `renderBoolGroup` | 不出现 |
+| `features.<组键>` | `renderBoolGroup`（数据取 `features.groups[i]`） | 组内 0 项则不出现 |
+| `anonymization` | `renderAnonGroup` | 不出现 |
+| `indices` | `renderIndicesGroup` | 不出现（保留"添加"入口则至少渲染表单） |
+| `providers` | `renderProvidersGroup` | 不出现（多链线路为空时的既有行为） |
+| `llm` | `renderBoolGroup`（`enabled_llm.*`） | 不出现 |
+| `tuning` | `renderTuningGroup` | 不出现 |
+
+### 4.6 「已改」标记：与 TUI 同源
+
+TUI `[S]` 面板用行尾 `*` 标注"与出厂默认不一致"。Web 面板沿用同一语义与同一数据源（`defaults`），以行尾 `✻` 呈现，图例统一为「✻ 与出厂默认不同」。两侧都不新增判定逻辑——比较对象就是 `defaults`，因此 TUI 与 Web 的"已改"恒等。
+
+### 4.7 样式规格（`style.css`，须含暗色配对）
 
 | 元素 | 规格 | 取值 |
 |:--|:--|:--|
@@ -128,9 +151,11 @@
 | 1-7 | LLM 分析章节 | 7 |
 | 8-21 | 分析增强·既有章内追加 | 14 |
 | 22-26 | 独立章节与回放 | 5 |
-| 27 | 呈现与体验 | 1 |
+| 27-27 | 呈现与体验 | 1 |
 | 28-32 | 机制与诊断 | 5 |
 | 33-34 | LLM 分析增强 | 2 |
+
+编号由注册表派生（运行时计算，非硬编码）。**稳定入口是键名**：面板与手册始终并列展示键名，`?` 详情、`?编号` 查询、`键名=on|off` 赋值三条通道均以键名为准，编号仅作当前版本的快捷定位。
 
 `?编号` 详情沿用注册表 `desc` / `GROUP_LABELS` / `default` 三源。手册 `[S]` 面板编号表、五个组块标题、features 键名→编号映射表按上表维护，`check-doc-drift` 第 8 项按注册表派生校验。
 
@@ -142,7 +167,7 @@
 
 | 文件 | 改动 |
 |:--|:--|
-| `config/_feature_registry.py` | 5 个域常量 + `DOMAIN_ORDER/LABELS/HINTS` + `GROUP_DOMAIN`；新增 `GROUP_LLM`；`GROUP_ORDER` 重排；辩论两项组归属迁移 |
+| `config/_feature_registry.py` | 5 个域常量 + `DOMAIN_ORDER/LABELS/HINTS` + `GROUP_DOMAIN`；新增 `GROUP_LLM` 并确定 `GROUP_ORDER` 为五组顺序；辩论两项归入该组；`FeatureSwitchDef` 新增 `needs_hint` 字段（说明密度判定） |
 | `config/features.py` | 导入/导出面扩展（域常量 + `GROUP_DOMAIN`）；模块 docstring 分组说明 |
 | `web/config_edit.py` | `_BLOCK_DOMAIN` / `_DAILY_BLOCKS` / 路径与章节文案表 / `_panel_domains` / `_panel_labels` / `_panel_descriptions` / `_panel_defaults`；`_llm_providers_surface` 增 `strategy_label`、`order_is_chain`；surface 增四块 |
 | `static/web/main.js` | `renderConfigEdit` 按 `domains` 分区渲染；删除 `CONFIG_LABELS` / `ANON_LABELS`；`renderBoolGroup` 支持 `descriptions`/`defaults`/`fullKey` 查表；`renderPathsGroup` 用服务端文案；线路组用 `strategy_label` |
@@ -162,7 +187,7 @@
 | `managements/requirements.md` | 功能开关分组说明（五组、组数与默认态）与菜单表 `[S]`/`[D]` 行 |
 | `managements/technical.md` | 菜单表 `[S]` 行、功能开关注册表章节 |
 | `managements/testplan.md` | `[S]` 面板与 features 覆盖描述 |
-| `managements/DESIGN.md` | 域标题（卡片/小节标题档 + 左侧品牌蓝竖线）与「影响报告」标记组件登记，含暗色取值（取值见本文件样式规格）；契约结构测试同步 |
+| `managements/DESIGN.md` | 域标题（卡片/小节标题档 + 左侧品牌蓝竖线）与「影响报告」标记组件、域标题、说明行登记，含暗色取值（见本文件「样式规格」）；契约结构测试同步 |
 | 全库措辞 | 分组计数连写链与「四组」表述（`check-doc-drift` 第 4 项按 `GROUP_ORDER` 派生校验） |
 
 ### 6.3 机检
@@ -174,7 +199,7 @@
 | 用例文件 | 断言 |
 |:--|:--|
 | `unit/web/test_config_edit.py` | `domains` 覆盖全部 features 组且每块 id 有渲染器；`labels`/`descriptions` 覆盖全部开关与章节键；匿名化标签来自服务端；策略中文映射 |
-| `unit/config/test_features.py` | `GROUP_DOMAIN` 键集 = `GROUP_ORDER`、值域 ⊆ `DOMAIN_ORDER`；每域至少一块；`llm_enhance` 组内为辩论两项 |
+| `unit/config/test_features.py` | `GROUP_DOMAIN` 键集 = `GROUP_ORDER`、值域 ⊆ `DOMAIN_ORDER`；每域至少一块；`llm_enhance` 组内为辩论两项；`needs_hint` 字段为布尔；`features.needs_hint` 清单 ⊆ `GROUP_ORDER` 全量键 |
 | `unit/handlers/test_handlers_config_switch.py` | `[S]` 渲染顺序 = `GROUP_ORDER`、编号连续（结构断言，不写死项数） |
 
 断言遵守「测试真值单一来源」：用集合相等 / 覆盖 / 序号连续表达，不写死可增长集合的条数。
@@ -192,3 +217,5 @@
 ## 8. 设计图样
 
 [`config-panel-mockup/index.html`](config-panel-mockup/index.html) 为自包含原型（数据内联，无外部依赖）：顶部四组开关切换「按文件编排 / 按域编排」「说明密度」「影响报告标记」「亮/暗主题」，底部给出 `[S]` 编号映射图与编号对照表。数据取自注册表与 `LLM_TUNING_SPECS` 真实条目，改注册表后可重新采集数据刷新。
+
+配套的配置文件纵切设计见 [`llm-settings-nesting-design.md`](llm-settings-nesting-design.md)（图样 `config-panel-mockup/llm-config.html`）：`llm_settings.json` 的调优参数将落为 `runtime.*`、模块设置落为 `modules.<m>.*`。**对面板零影响**——面板读的是扁平视图与 `LLM_TUNING_SPECS`，对外键名不变。
