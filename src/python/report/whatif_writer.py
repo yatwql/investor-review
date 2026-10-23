@@ -28,7 +28,13 @@ import os
 from datetime import datetime
 from typing import Any
 
-from src.python.core.constants import APP_NAME, APP_VERSION
+from src.python.core.constants import (
+    APP_NAME,
+    APP_VERSION,
+    LATEST_WHATIF_HTML_NAME,
+    LATEST_WHATIF_XLSX_NAME,
+    WHATIF_FILE_BASE,
+)
 from src.python.report.excel_writer import _cleanup_old_archives, _ensure_reports_dir
 from src.python.report.html_save import _write_html_atomic
 from src.python.report.html_writer import _copy_js_assets, _inline_js_assets
@@ -232,8 +238,8 @@ def write_whatif_excel(whatif_data: dict[str, Any], output_dir: str = "reports")
     now = datetime.now()
     date_str = now.strftime("%Y%m%d")
     time_str = now.strftime("%H%M%S")
-    latest = os.path.join(output_dir, "调仓模拟.xlsx")
-    archive = os.path.join(output_dir, date_str, f"调仓模拟-{date_str}-{time_str}.xlsx")
+    latest = os.path.join(output_dir, LATEST_WHATIF_XLSX_NAME)
+    archive = os.path.join(output_dir, date_str, f"{WHATIF_FILE_BASE}-{date_str}-{time_str}.xlsx")
     try:
         wb.save(latest)
     except PermissionError:
@@ -373,11 +379,11 @@ def write_whatif_html(whatif_data: dict[str, Any], output_dir: str = "reports") 
     now = datetime.now()
     date_str = now.strftime("%Y%m%d")
     time_str = now.strftime("%H%M%S")
-    latest = os.path.join(output_dir, "调仓模拟.html")
+    latest = os.path.join(output_dir, LATEST_WHATIF_HTML_NAME)
     _write_html_atomic(html, latest)
     archive_dir = os.path.join(output_dir, date_str)
     os.makedirs(archive_dir, exist_ok=True)
-    archive = os.path.join(archive_dir, f"调仓模拟-{date_str}-{time_str}.html")
+    archive = os.path.join(archive_dir, f"{WHATIF_FILE_BASE}-{date_str}-{time_str}.html")
     _write_html_atomic(html, archive)
     _cleanup_old_archives(output_dir)
     logger.info("调仓模拟 HTML 已保存: %s", latest)

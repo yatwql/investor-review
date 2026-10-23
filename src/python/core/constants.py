@@ -44,6 +44,10 @@ APP_VERSION = "0.14.9-dev"
 REPORT_FILE_BASE = "个人投资分析报告"
 LATEST_XLSX_NAME = f"{REPORT_FILE_BASE}.xlsx"
 LATEST_HTML_NAME = f"{REPORT_FILE_BASE}.html"
+# 调仓模拟（少数派产物：与主报告并列于输出目录顶层，产物清扫与 TUI/Web 列举按名识别）
+WHATIF_FILE_BASE = "调仓模拟"
+LATEST_WHATIF_XLSX_NAME = f"{WHATIF_FILE_BASE}.xlsx"
+LATEST_WHATIF_HTML_NAME = f"{WHATIF_FILE_BASE}.html"
 
 # ── 缓存频率常量（秒，用作代码内默认值） ──────────────────
 

@@ -103,8 +103,46 @@ class TestReportSelection:
         monkeypatch.setattr(handlers_qa, "input_choice", _capture)
         handlers_qa._select_report(str(tmp_path))
         assert prompts, "未捕获到选择提示"
-        assert "回车=最新报告" in prompts[0]
+        assert "回车=本期主报告" in prompts[0]
         assert "q=取消" in prompts[0]
+
+    def test_primary_report_ranks_above_newer_whatif(self, tmp_path, monkeypatch, capsys):
+        """本期主报告恒为列表首项（回车默认），即使模拟报告修改时间更新。"""
+        from src.python.core.constants import LATEST_HTML_NAME, LATEST_WHATIF_HTML_NAME
+        from src.python.tui import handlers_qa
+
+        # 先建主报告（较旧），再建模拟报告（较新）
+        (tmp_path / LATEST_HTML_NAME).write_text("x", encoding="utf-8")
+        (tmp_path / LATEST_WHATIF_HTML_NAME).write_text("x", encoding="utf-8")
+        os.utime(tmp_path / LATEST_HTML_NAME, (1_700_000_000, 1_700_000_000))
+        os.utime(tmp_path / LATEST_WHATIF_HTML_NAME, (1_800_000_000, 1_800_000_000))
+
+        listed = handlers_qa._list_reports(str(tmp_path))
+        assert listed[0] == LATEST_HTML_NAME
+        assert listed[-1] == LATEST_WHATIF_HTML_NAME
+
+        monkeypatch.setattr("builtins.input", _input_mock([""]))
+        assert handlers_qa._select_report(str(tmp_path)) == LATEST_HTML_NAME
+        assert "← 回车默认" in capsys.readouterr().out
+
+    def test_other_reports_sit_between_primary_and_whatif(self, tmp_path):
+        """自定义报告名居中（按修改时间倒序），调仓模拟固定末档。"""
+        from src.python.core.constants import LATEST_HTML_NAME, LATEST_WHATIF_HTML_NAME
+        from src.python.tui import handlers_qa
+
+        for name in ("组合复盘报告.html", "旧报告.html", LATEST_HTML_NAME, LATEST_WHATIF_HTML_NAME):
+            (tmp_path / name).write_text("x", encoding="utf-8")
+        os.utime(tmp_path / "旧报告.html", (1_600_000_000, 1_600_000_000))
+        os.utime(tmp_path / "组合复盘报告.html", (1_700_000_000, 1_700_000_000))
+        os.utime(tmp_path / LATEST_HTML_NAME, (1_500_000_000, 1_500_000_000))
+        os.utime(tmp_path / LATEST_WHATIF_HTML_NAME, (1_900_000_000, 1_900_000_000))
+
+        assert handlers_qa._list_reports(str(tmp_path)) == [
+            LATEST_HTML_NAME,
+            "组合复盘报告.html",
+            "旧报告.html",
+            LATEST_WHATIF_HTML_NAME,
+        ]
 
     def test_number_selection_and_revalidate(self, tmp_path, monkeypatch, capsys):
         _fake_reports(tmp_path, ["A.html", "B.html"])

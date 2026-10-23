@@ -15,6 +15,7 @@ from datetime import datetime
 from html.parser import HTMLParser
 
 from src.python.config import resolve_output_dir
+from src.python.core.constants import LATEST_HTML_NAME, LATEST_WHATIF_HTML_NAME, WHATIF_FILE_BASE
 from src.python.core.logger import setup_logger
 from src.python.qa.error_codes import QA_CONTEXT_INVALID, QA_INPUT_CAP_EXCEEDED, QA_REPORT_NOT_FOUND, QA_SESSION_LIMIT
 from src.python.qa.session import ask_report_qa
@@ -23,7 +24,10 @@ from src.python.tui.tui_keys import input_choice
 
 logger = setup_logger()
 
-_QA_REPORT_LIST_MAX = 8  # 报告候选展示上限（输出目录顶层 .html，按修改时间倒序）
+_QA_REPORT_LIST_MAX = 8  # 报告候选展示上限（输出目录顶层 .html，主报告优先 + 修改时间倒序）
+#: 调仓模拟产物名（固定名 + 归档式前缀），统一排到候选末档
+_WHATIF_HTML_NAMES = frozenset({LATEST_WHATIF_HTML_NAME})
+_WHATIF_HTML_PREFIX = f"{WHATIF_FILE_BASE}-"
 _QA_PROMPT = "  请输入问题（回车=返回主菜单）: "
 #: 终止整个输入循环的错误码（会话上限/报告不可用——继续提问无意义）
 _EXIT_LOOP_CODES = frozenset({QA_SESSION_LIMIT, QA_INPUT_CAP_EXCEEDED, QA_REPORT_NOT_FOUND, QA_CONTEXT_INVALID})
@@ -83,11 +87,26 @@ def _resolve_output_dir() -> str:
     return resolve_output_dir(config)
 
 
+def _report_rank(name: str) -> int:
+    """报告排序档位：0 = 本期主报告，1 = 其它报告，2 = 调仓模拟（少数派产物）。
+
+    追问的常态对象是「本期个人投资分析报告」，而调仓模拟每跑一次都会覆盖自己的
+    固定名产物、把 mtime 顶到最新——纯按修改时间排序会让回车默认项落到模拟报告上
+    （同目录并列产物，但语义上属少数派）。故按档位排序，档内仍按修改时间倒序。
+    """
+    if name == LATEST_HTML_NAME:
+        return 0
+    if name in _WHATIF_HTML_NAMES:
+        return 2
+    return 1
+
+
 def _list_reports(output_dir: str) -> list[str]:
-    """输出目录顶层的 HTML 报告文件名（修改时间倒序，截断至展示上限）。
+    """输出目录顶层的 HTML 报告文件名（档位优先 + 修改时间倒序，截断至展示上限）。
 
     只列顶层（最新版固定名产物）；日期归档子目录不入选——追问锚定「本期
     报告」，历史归档追问无入口（与 Web 报告页追问同一取材面）。
+    返回顺序即展示顺序，``reports[0]`` 为回车默认项（主报告优先）。
     """
     try:
         names = [
@@ -103,12 +122,12 @@ def _list_reports(output_dir: str) -> list[str]:
             entries.append((os.path.getmtime(os.path.join(output_dir, name)), name))
         except OSError:  # 并发删除等竞态：跳过该文件
             continue
-    entries.sort(reverse=True)
+    entries.sort(key=lambda item: (_report_rank(item[1]), -item[0]))
     return [name for _mtime, name in entries[:_QA_REPORT_LIST_MAX]]
 
 
 def _select_report(output_dir: str) -> str | None:
-    """编号选择报告（回车默认最新、q/EOF/Ctrl+C 取消）。"""
+    """编号选择报告（回车=列表首项：本期主报告优先，q/EOF/Ctrl+C 取消）。"""
     reports = _list_reports(output_dir)
     if not reports:
         print("  [!] 输出目录暂无 HTML 报告——先生成一份报告，或在 [D] 中核对输出目录")
@@ -120,10 +139,11 @@ def _select_report(output_dir: str) -> str | None:
             stamp = f"{mtime:%Y-%m-%d %H:%M}"
         except OSError:
             stamp = "时间未知"
-        print(f"    {i}. {name}  ({stamp})")
+        default_mark = "  ← 回车默认" if i == 1 else ""
+        print(f"    {i}. {name}  ({stamp}){default_mark}")
     while True:
         try:
-            raw = input_choice(wrap_prompt("  选择报告编号（回车=最新报告 / 编号=指定报告 / q=取消）: "))
+            raw = input_choice(wrap_prompt("  选择报告编号（回车=本期主报告 / 编号=指定报告 / q=取消）: "))
         except (EOFError, KeyboardInterrupt):
             print()
             return None
