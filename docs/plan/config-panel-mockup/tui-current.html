@@ -91,7 +91,7 @@ pre.tree { margin: 0 0 24px; padding: 14px 16px; background: #0f141b; border: 1p
 │   ├─ [I] 管理对比指数池      一级直达 · 增删 / 重置
 │   ├─ [A] 配置持仓匿名化      一级直达 · 数字 1-4 选档
 │   ├─ [D] 查看配置与目录信息  二级 · 字母键 C/F/O/L/M · 0 返回
-│   │   ├─ [C] 持仓信息目录     输入路径
+│   │   ├─ [H] 持仓信息目录     输入路径
 │   │   ├─ [F] 持仓信息文件名   输入名称
 │   │   ├─ [O] 报告输出目录     输入路径
 │   │   ├─ [L] LLM 调优参数     三级 · 数字 1-6 · 0 返回
@@ -148,7 +148,7 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
     from src.python.tui.handlers_switch import run_llm_modules_panel
 ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.handlers_switch' (/lzcapp/document/working/codebase/investor-review/src/python/tui/handlers_switch.py)</pre></section>
 <section class="screen" id="s-dmenu"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>[D] 目录信息（二级，5 个字母键）</h2></div><p class="crumb">主菜单 › 配置 › [D]</p><p class="note">[C] 目录 / [F] 文件名 / [O] 输出目录 / [L] LLM 调优 / [M] 入口地图</p><pre class="term"><span class="bold"><span class="b">  ── 配置与目录信息 ──</span></span>
-   [C] 持仓信息目录
+   [H] 持仓信息目录
    [F] 持仓信息文件名
    [O] 报告输出目录
    [M] 配置入口地图（各配置项所在菜单）
@@ -167,7 +167,7 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
 
   输入编号修改（如 1 改 thinking 并发） · 0 返回: 0</pre></section>
 <section class="screen" id="s-d_map"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>配置入口地图（[D]→[M]）</h2></div><p class="crumb">主菜单 › 配置 › [D] › [M]</p><p class="note">只读索引：各配置项在哪个菜单键下</p><pre class="term"><span class="bold"><span class="b">  ── 配置与目录信息 ──</span></span>
-   [C] 持仓信息目录
+   [H] 持仓信息目录
    [F] 持仓信息文件名
    [O] 报告输出目录
    [M] 配置入口地图（各配置项所在菜单）
@@ -188,7 +188,7 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
   （仅索引导流，不修改任何配置；config.json 手工键说明见手册 how-to-config）
 
 <span class="bold"><span class="b">  ── 配置与目录信息 ──</span></span>
-   [C] 持仓信息目录
+   [H] 持仓信息目录
    [F] 持仓信息文件名
    [O] 报告输出目录
    [M] 配置入口地图（各配置项所在菜单）
@@ -328,17 +328,6 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
   ========================================
   最近日志（级别: 全部）
   ========================================
-  2026-10-24 00:20:09,597 [INFO] [history_stock] 尝试 sina（code=600900, days=20）
-<span class="y">  2026-10-24 00:20:09,777 [WARNING] Sina K 线 sh600900 返回非 JSON（疑似风控/限流页）→ 记源失败并交下一链路：File not found.</span>
-  2026-10-24 00:20:09,777 [INFO] [history_stock] sina 返回空数据（无此品种历史数据），尝试下一链路
-  2026-10-24 00:20:09,777 [INFO] [history_stock] 尝试 hithink（code=600900, days=20）
-  2026-10-24 00:20:10,180 [INFO] [history_stock] hithink 返回空数据（无此品种历史数据），尝试下一链路
-  2026-10-24 00:20:10,181 [INFO] [history_stock] 尝试 tencent（code=601398, days=20）
-<span class="y">  2026-10-24 00:20:10,234 [WARNING] Tencent K 线 sh601398 返回非 JSON（疑似风控/限流页）→ 记源失败并交下一链路：&lt;!DOCTYPE html&gt;&lt;html&gt;&lt;head&gt;&lt;script&gt;var i=location.href;var v</span>
-  2026-10-24 00:20:10,234 [INFO] [history_stock] tencent 返回空数据（无此品种历史数据），尝试下一链路
-  2026-10-24 00:20:10,234 [INFO] [history_stock] 尝试 sina（code=601398, days=20）
-<span class="y">  2026-10-24 00:20:10,379 [WARNING] Sina K 线 sh601398 返回非 JSON（疑似风控/限流页）→ 记源失败并交下一链路：File not found.</span>
-  2026-10-24 00:20:10,379 [INFO] [history_stock] sina 返回空数据（无此品种历史数据），尝试下一链路
   2026-10-24 00:20:10,379 [INFO] [history_stock] 尝试 hithink（code=601398, days=20）
   2026-10-24 00:20:10,501 [INFO] [history_stock] hithink 返回空数据（无此品种历史数据），尝试下一链路
   2026-10-24 00:20:10,502 [INFO] [history_stock] 尝试 tencent（code=601939, days=20）
@@ -373,7 +362,18 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
   2026-10-24 00:20:14,472 [INFO] 获取基金业绩 [3/9]: 嘉实全球产业升级股票(QDII)A (017730)
   2026-10-24 00:20:14,472 [INFO] 获取基金业绩 [4/9]: 华安纳斯达克100ETF联接基金A (040046)
   2026-10-24 00:20:14,472 [INFO] 获取基金业绩 [5/9]: 永赢科技智选混合C (022365)
-  2026-10-24 00:20:14,472 [INFO] 获取基金业绩 [6/9]: 博时纳斯达克100ETF联接(QDII)A (016055)</pre><p class="more">… 共 206 行，此处展示前 52 行</p></section>
+  2026-10-24 00:20:14,472 [INFO] 获取基金业绩 [6/9]: 博时纳斯达克100ETF联接(QDII)A (016055)
+  2026-10-24 00:20:14,472 [INFO] 获取基金业绩 [7/9]: 招商中证电池主题ETF (561910)
+  2026-10-24 00:20:14,472 [INFO] 获取基金业绩 [8/9]: 华宝增强收益债券A (240012)
+  2026-10-24 00:20:14,472 [INFO] 获取基金业绩 [9/9]: 大成标普500等权重指数(QDII)A (096001)
+  2026-10-24 00:20:14,473 [INFO] 基金业绩分析完成，9 只基金获取成功
+  2026-10-24 00:20:14,474 [INFO] [穿透] 联接基金 016055 的底层资产穿透自目标 ETF 513390（纳指100ETF博时），报告期 2026-06-30
+  2026-10-24 00:20:14,474 [INFO] [穿透] 联接基金 040046 的底层资产穿透自目标 ETF 159632（纳斯达克ETF华安），报告期 2026-06-30
+  2026-10-24 00:20:14,475 [INFO] 基金风格表 [1/9]: 电池ETF招商 (561910)
+  2026-10-24 00:20:14,476 [INFO] 基金风格表 [2/9]: 建信高端装备股票A (011506)
+  2026-10-24 00:20:14,476 [INFO] 基金风格表 [3/9]: 嘉实全球产业升级股票发起式(QDII)A (017730)
+  2026-10-24 00:20:14,477 [INFO] 基金风格表 [4/9]: 永赢科技智选混合发起C (022365)
+  2026-10-24 00:20:14,477 [INFO] 基金风格表 [5/9]: 博时纳斯达克100ETF发起式联接 (016055)</pre><p class="more">… 共 206 行，此处展示前 52 行</p></section>
 <section class="screen" id="s-health"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>数据源健康历史（[H]）</h2></div><p class="crumb">主菜单 › 诊断与排查 › [H]</p><p class="note">最近若干次采集的成功/失败源与降级原因</p><pre class="term">  ========================================
   数据源健康历史（最近 10 次检查）
   ========================================
@@ -413,7 +413,7 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
 
 [日志与缓存]
   [OK] 日志级别 — 文件 INFO（默认 INFO）
-  [ERR] 日志体积 — app.log 8.9 MB + 轮转 3 份；DEBUG 占比 87%（采样 112283 行）
+  [ERR] 日志体积 — app.log 8.9 MB + 轮转 3 份；DEBUG 占比 87%（采样 112294 行）
         → DEBUG 占比过半：确认未设 INVEST_LOG_FILE_LEVEL=DEBUG；排障后可清理 logs/app.log*（旧日志可删）
   [ERR] 去重锚点 — 37.3 MB / 111464 行（自动压缩阈值 32 MB）
         → 超过阈值：下次生成时自动压缩（保留每组最新 + .bak 备份）；也可手工 `python scripts/eval-dedup-threshold.py --compact`

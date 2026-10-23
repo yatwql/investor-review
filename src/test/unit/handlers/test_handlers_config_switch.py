@@ -82,7 +82,7 @@ class TestConfigDirInfoSubmenu:
     @patch("src.python.tui.handlers_config._cmd_config_dir")
     def test_dispatches_three_sub_options_then_returns(self, mock_dir, mock_filename, mock_out, mock_input):
         """依次选 C/F/O 分别路由到三个处理器，0 返回。"""
-        mock_input.side_effect = ["C", "F", "O", "0"]
+        mock_input.side_effect = ["H", "F", "O", "0"]
 
         from src.python.tui.handlers_config import _cmd_config_dir_info
 
@@ -126,7 +126,7 @@ class TestConfigDirInfoSubmenu:
     @patch("src.python.tui.handlers_config._cmd_config_dir")
     def test_lowercase_choice_accepted(self, mock_dir, mock_input):
         """小写子键归一化为大写后分发。"""
-        mock_input.side_effect = ["c", "0"]
+        mock_input.side_effect = ["h", "0"]
 
         from src.python.tui.handlers_config import _cmd_config_dir_info
 

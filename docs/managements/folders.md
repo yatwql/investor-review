@@ -16,12 +16,12 @@
 | 源代码合计 | — | 538 | 132,851 | 主程序 + 模板 + 脚本 + SVG |
 | 测试代码 | Python | 622 | 171,427 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
 | 测试用例 | — | — | 11,643 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
-| 用户文档 | Markdown | 13 | 6,276 | 含 README.md（211 行）；行数为 README + manuals 之和 |
-| ├ manuals/ | 用户手册分册 | 12 | 6,058 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 186 | 67,710 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 6 + archive md 160），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 13,282 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 用户文档 | Markdown | 13 | 6,274 | 含 README.md（211 行）；行数为 README + manuals 之和 |
+| ├ manuals/ | 用户手册分册 | 12 | 6,056 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
+| 项目文档 | Markdown | 186 | 67,713 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 6 + archive md 160），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 13,283 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 164 | 52,115 | 各版本 changelog/plan/review-findings 与设计文档归档（157 md 50,492 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
-| ├ plan/ | 中间设计文件 | 8 | ~2,221 | 在办设计文档（文档扁平存放、附属原型就近建子目录，完成后迁入对应版本的归档子目录）：两份 Jev 新闻关联判定文档（对照评测方案 + 类型化判定通道接入设计）+ 决策跨期反思闭环设计 + Web 浏览器验证方法 + 配置面板分类与描述设计 + LLM 配置纵切设计 + 日志配置独立成文件设计（共用同目录 `config-panel-mockup/` 设计图样与复跑脚本） |
+| ├ plan/ | 中间设计文件 | 8 | ~2,223 | 在办设计文档（文档扁平存放、附属原型就近建子目录，完成后迁入对应版本的归档子目录）：两份 Jev 新闻关联判定文档（对照评测方案 + 类型化判定通道接入设计）+ 决策跨期反思闭环设计 + Web 浏览器验证方法 + 配置面板分类与描述设计 + LLM 配置纵切设计 + 日志配置独立成文件设计（共用同目录 `config-panel-mockup/` 设计图样与复跑脚本） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
 
 ## 版本演进对照（最初版本 → 最新发布 → 当前开发版）
@@ -473,7 +473,7 @@ investor-review/
 │   │   │   ├── __init__.py           #   子包标记
 │   │   │   ├── __main__.py           #   python -m 入口
 │   │   │   ├── handlers_cache.py     #   缓存管理命令处理器
-│   │   │   ├── handlers_config.py    #   配置管理命令处理器（含 [D] 查看配置与目录信息子菜单；[C]/[S] 只留菜单入口与共享写路径 _apply_edit）
+│   │   │   ├── handlers_config.py    #   配置管理命令处理器（含 [G]→[D] 查看配置与目录信息子菜单；[C]/[S] 面板只留菜单入口与共享写路径 _apply_edit）
 │   │   │   ├── handlers_qa.py       #   报告对话式追问入口（[Q] 菜单/文本输入循环，同源 qa/session）
 │   │   │   ├── handlers_log.py       #   日志可视化命令处理器（查看日志/数据源健康历史/系统自检）
 │   │   │   ├── handlers_report.py    #   报告生成命令处理器

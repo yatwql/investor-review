@@ -191,7 +191,7 @@ def _render_config_entry_map() -> None:
 #: 使 `@patch("...handlers_config._cmd_config_dir")` 这类模块属性打桩始终生效——
 #: 若在导入时就把函数对象存进表里，打桩会落空且不报错。
 DIR_INFO_ITEMS: dict[str, tuple[str, str]] = {
-    "C": ("持仓信息目录", "_cmd_config_dir"),
+    "H": ("持仓信息目录", "_cmd_config_dir"),
     "F": ("持仓信息文件名", "_cmd_config_filename"),
     "O": ("报告输出目录", "_cmd_config_output_dir"),
     "M": ("配置入口地图（各配置项所在菜单）", "_render_config_entry_map"),
@@ -207,7 +207,7 @@ def _dir_info_items() -> list[tuple[str, str, Callable[[], None]]]:
 
 
 def _cmd_config_dir_info() -> None:
-    """查看配置与目录信息子菜单 — 对应 [G]→D 及其二级选项 [C]/[F]/[O]/[M]/[0]。
+    """查看配置与目录信息子菜单 — 对应 [G]→D 及其二级选项 [H]/[F]/[O]/[M]/[0]。
 
     持仓目录 / 持仓文件名 / 报告输出目录三项聚合到 [G]→D 之下（主菜单不再单列）；
     ``[M]`` 打印配置入口地图（各配置项 → 所在菜单键，只读索引）；
