@@ -436,7 +436,9 @@ class TestSwitchPanelOperations:
 
     @staticmethod
     def _read(path) -> dict:
-        return json.loads(path.read_text(encoding="utf-8"))
+        from src.python.config._comments import strip_json_comments
+
+        return json.loads(strip_json_comments(path.read_text(encoding="utf-8")))
 
     @patch("src.python.tui.handlers_config.refresh_config")
     @patch("src.python.config.features.filter_menu_llm_modules", return_value=None, create=True)

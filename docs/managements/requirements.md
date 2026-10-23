@@ -1278,6 +1278,8 @@ LLM 五维度量化评分，每项满分 100：
 
 ## 11. 配置需求
 
+五份配置文件（config / llm_settings / llm_key / llm_providers / features）均为 JSONC：默认生成器输出中文分类注释与逐项说明，所有读取路径经统一注释剥离器（`core/json_comments.py`）解析，写回时保留既有注释；机器状态文件（缓存/账本/快照）保持纯 JSON。
+
 ### 11.1 config.json
 
 | 字段 | 类型 | 默认值 | 可 TUI 修改 | 说明 |

@@ -3168,7 +3168,7 @@ local_state.json (机器本地)   → get_flag()/set_flag() 读写
 ```
 config/
 ├── __init__.py                   # 公开 API 导出
-├── _comments.py                  # JSON 注释剥离（_strip_json_comments）
+├── _comments.py                  # 再导出 core/json_comments（配置包既有导入面）
 ├── _config_defaults.py           # config.json 默认值定义 + 模板生成
 ├── _core.py                      # 核心读写：get_config()、set_config()、del_config()、init_config()
 ├── _local_state.py               # 机器本地状态读写（get_flag/set_flag，data/state/local_state.json）
@@ -3186,7 +3186,7 @@ config/
 
 #### JSON 注释支持
 
-`_strip_json_comments()` 逐字符扫描，支持 `//` 单行注释和 `/* */` 多行注释，正确处理字符串内的转义引号，不会将字符串内的 `//` / `/*` 误伤。
+`core/json_comments.py` 是叶子模块（仅标准库）：`strip_json_comments()` 逐字符扫描，支持 `//` 单行注释和 `/* */` 多行注释，正确处理字符串内的转义引号，不会将字符串内的 `//` / `/*` 误伤；`loads()` / `load()` 是统一读取入口。`config/_comments.py` 再导出同一实现，`core/logger.py` 与计价层因此不必导入 `config` 包（依赖不成环）。
 
 #### 原子写入
 
@@ -4126,7 +4126,7 @@ investor-review/
 | `llm_settings.json`（非敏感 LLM 设置） | `_llm_settings_defaults._DEFAULT_LLM_SETTINGS`（全局 2 项 + 5 模块块 + 辩论 + 事实校验 + 计价） | `_llm_settings_defaults._get_default_llm_settings_template()`（逐行手拼，与 dict 深等，见一致性测试） | `_llm_settings.get_llm_config()`：合并 settings+key+providers 三文件，联合 mtime/size 失效；`_merge_llm_defaults()` 运行时按 `_DEFAULT_LLM_SETTINGS` 补齐缺失键 | `_ensure_llm_settings_file()` 自动创建（`init_config()` 级联） | 无程序化写入（用户手动编辑；`_ensure_llm_settings_file` 仅首次创建） | `llm/pricing.py`（计价覆盖）、`llm/generators.py`、`llm/generators_orchestrator.py`、`llm/prompts_action.py`、`llm/skeleton.py`、`report/news_correlation.py`、`cli/cli.py`、`tui/tui_menu.py` + `tui/handlers_config.py`、`config/_validation.py` |
 | `llm_key.json`（敏感凭据） | 无（**C18 凭据分离**，代码默认值禁止内置 api_key） | 无模板 | `_llm_providers._load_llm_key_credentials()`（多凭据块字典；单凭据 flat 自动升级为 `_default`）；`get_llm_config()` 内联读取并合并覆盖同名字段（provider/endpoint 合法性告警） | 不自动创建；缺失时 `get_llm_config()` 回退判断 providers 链模式，两者皆无则 LLM 不可用（`generators_orchestrator` 降级占位） | `startup_wizard._write_llm_key_flat()`（首次引导交互式写入，C3 原子写） | `get_llm_config()` 合并主体；`_load_llm_key_credentials()` → providers 链 `credentials_ref` 凭据注入 |
 | `llm_providers.json`（多 Provider 链） | `_llm_providers_defaults._DEFAULT_LLM_PROVIDERS`（strategy=priority + 2 条示例链） | `_llm_providers_defaults._get_default_llm_providers_template()` | `_llm_providers._load_llm_providers()`（原始 JSON，根非 object/解析失败返回 None）；`get_llm_config()` 链模式（无 llm_key.json 时直接注入链数据）；`_inject_provider_chain_data()` 注入多链路由结果 | `_core._ensure_llm_providers_file()` 自动创建（`init_config()` 级联） | 无程序化写入（用户手动编辑 / init 自动创建） | `get_llm_config()`（链模式无 key 依赖）；`startup_wizard.py`（就绪检查：key 存在 或 providers 有链）；`_inject_provider_chain_data` |
-| `features.json`（Feature Flag 覆写） | `features.feature_switch_registry`（26 项声明，每条含显示名 + 说明 + 作用域分组 + 默认值 + 是否改变产物 + 实验身份六项；`_FEATURE_FLAGS_DEFAULT` 是其**派生投影**，非独立登记点）。📊 呈现与体验（默认开启 · 只改呈现不改内容） 1（量化指标显示，1 项默认开） + 🔍 分析增强·既有章内追加（默认关闭 · 在既有章节内追加分析块/列/子表） 16（辩论-正反辩论 / 辩论-条件推理 / 因子目录 / 事件窗量化对照 / 数据质量仪表盘 / 行业Beta子表 / 候选基金比较子表 / 成本流水 / 估值分位 / 市场温度 / 市场情绪与资金热点 / 基金申购限购 / 持仓成本区间位置 / 风险调整超额 / 本期要点与环比对照 / 景气度框架诊断，6 项默认开） + 📑 独立章节与回放（默认关闭 · 新增整页签或多期回放） 5（调仓纪律回放 / 持仓变动复盘 / What-if 交易成本对比 / 个股基本面 / 危机回放，默认关） + ⚙ 机制与诊断（内部机制 / 诊断接缝 / 待验证实验） 5（决策跨期反思闭环 / 报告对话式追问 / 确定性信号模块 / 模块级质量分级 / 系统自检上屏，3 项默认开）（含默认关的实验项 2 项：decision_reflection / report_qa；联接基金穿透已内置恒开、无开关）；分组即面板分块，是否进产物自述由（`experimental` ∧ `affects_report`）决定；**只登记有消费者的开关**——LLM 模块启停与基金深度分析归 `llm_settings.json` 的 `enabled_llm`，新闻源 / 历史走势 / 匿名化归 `config.json`，这些能力不再在 features.json 另立同义开关，由 `test_features.py::TestRegistryLiveness` 逐项守住；命令行一次性开关见 `features.resolve_experiment_flags` / `describe_experiment_flags`（`--experiment`，只开全部实验项）与 `features.parse_switch_override` / `resolve_switch_values` / `describe_switches`（`--feature NAME=VALUE`，全域、双向），两者与注册表同源 | 无模板（缺省全量在代码内，文件仅存需覆写的子集） | `features.load_feature_overrides()`（模块导入时自动调用，覆写合并进内存 `FEATURE_FLAGS`；无消费者键仍加载、但合并为一条 WARNING 列出键名——这类配置不驱动任何行为，静默忽略会让用户以为已生效；非 bool 值忽略） | **惰性创建**：缺失不创建、直接走代码默认；仅 `save_feature_overrides()` 时才写盘 | `features.save_feature_overrides()`（原子写，`merge=True` 默认合并同名覆写）；TUI `handlers_config.py`（菜单开关持久化）+ Web `web/config_edit.py`（配置面板写入，白名单由注册表生成） | `is_feature_enabled()` 遍布：`llm/generators_singletons.py` + `generators_orchestrator.py`（辩论模式）、`report/_report_generation.py` + `report/_chart_dataset_factory.py`（量化指标总开关 / 本期要点与环比对照）、`report/_debate_utils.py`、`core/decision_ledger.py`（决策跨期反思闭环）、`llm/prompts_signals.py`（信号预消化，开关判定收敛于缓存后缀函数）、`report/llm_quality.py`（模块质量分级，§4.11）、`core/decision_header.py`（决策头结构化缓存后缀，§4.15）、`core/signal_ledger.py`（确定性信号沉淀，开关判定收敛于摘要函数，§4.16）、`core/doctor.py`（系统自检功能清单上屏，§4.17.3）、`web/handlers.py`（自检卡片可见性，§4.17.3 + 报告对话式追问路由门 `_handle_report_qa_ask`）、`analysis/circuit_breaker_wrapper.py`（量化指标总开关联动的熔断特性开关）、`tui/handlers_config.py`（菜单状态）、`tui/tui_menu.py`（菜单项门控）、`web/config_edit.py`（面板状态） |
+| `features.json`（Feature Flag 覆写） | `features.feature_switch_registry`（26 项声明，每条含显示名 + 说明 + 作用域分组 + 默认值 + 是否改变产物 + 实验身份六项；`_FEATURE_FLAGS_DEFAULT` 是其**派生投影**，非独立登记点）。八组：💼 持仓与交易 4（成本流水 / 基金申购限购 / 持仓成本区间位置 / 风险调整超额） + 📈 市场与估值 4（估值分位 / 市场温度 / 危机回放 / 景气度框架诊断） + 🧩 基金与风格 3（因子目录 / 行业Beta子表 / 候选基金比较子表） + 📰 事件与摘要 4（事件窗量化对照 / 数据质量仪表盘 / 市场情绪与资金热点 / 本期要点与环比对照） + 🧭 呈现与交互 2（报告对话式追问 / 量化指标显示） + ⚙ 机制与质量 3（决策跨期反思闭环 / 确定性信号模块 / 模块级质量分级） + 📑 独立章节与回放 4（调仓纪律回放 / 持仓变动复盘 / What-if 交易成本对比 / 个股基本面） + 🧩 章节内选项 2（辩论-正反辩论 / 辩论-条件推理，由 `[P]` 作章节子项渲染）；含默认关的实验项 2 项（decision_reflection / report_qa）；联接基金穿透已内置恒开、无开关；分组即面板分块，是否进产物自述由（`experimental` ∧ `affects_report`）决定；**只登记有消费者的开关**——LLM 模块启停与基金深度分析归 `llm_settings.json` 的 `enabled_llm`，新闻源 / 历史走势 / 匿名化归 `config.json`，这些能力不再在 features.json 另立同义开关，由 `test_features.py::TestRegistryLiveness` 逐项守住；命令行一次性开关见 `features.resolve_experiment_flags` / `describe_experiment_flags`（`--experiment`，只开全部实验项）与 `features.parse_switch_override` / `resolve_switch_values` / `describe_switches`（`--feature NAME=VALUE`，全域、双向），两者与注册表同源 | `features._FEATURES_TEMPLATE`（中文说明 + 空对象；首次写入时落盘，只存覆写子集） | `features.load_feature_overrides()`（模块导入时自动调用，经 `core/json_comments.strip_json_comments` 剥离注释后解析，覆写合并进内存 `FEATURE_FLAGS`；无消费者键仍加载、但合并为一条 WARNING 列出键名——这类配置不驱动任何行为，静默忽略会让用户以为已生效；非 bool 值忽略） | **惰性创建**：缺失不创建、直接走代码默认；仅 `save_feature_overrides()` 时才写盘（以 `_FEATURES_TEMPLATE` 为底，含中文注释） | `features.save_feature_overrides()`（文本 patch 保注释：改值替换、恢复默认删键；`merge=True` 默认合并同名覆写）；TUI `handlers_config.py`（菜单开关持久化）+ Web `web/config_edit.py`（配置面板写入，白名单由注册表生成） | `is_feature_enabled()` 遍布：`llm/generators_singletons.py` + `generators_orchestrator.py`（辩论模式）、`report/_report_generation.py` + `report/_chart_dataset_factory.py`（量化指标总开关 / 本期要点与环比对照）、`report/_debate_utils.py`、`core/decision_ledger.py`（决策跨期反思闭环）、`llm/prompts_signals.py`（信号预消化，开关判定收敛于缓存后缀函数）、`report/llm_quality.py`（模块质量分级，§4.11）、`core/decision_header.py`（决策头结构化缓存后缀，§4.15）、`core/signal_ledger.py`（确定性信号沉淀，开关判定收敛于摘要函数，§4.16）、`core/doctor.py`（系统自检功能清单上屏，§4.17.3）、`web/handlers.py`（自检卡片可见性，§4.17.3 + 报告对话式追问路由门 `_handle_report_qa_ask`）、`analysis/circuit_breaker_wrapper.py`（量化指标总开关联动的熔断特性开关）、`tui/handlers_config.py`（菜单状态）、`tui/tui_menu.py`（菜单项门控）、`web/config_edit.py`（面板状态） |
 
 ##### I.1.1 解析职责归属（协调者 vs 委托）
 
@@ -4138,9 +4138,9 @@ investor-review/
 | `llm_settings.json` | `_llm_settings.get_llm_config()` | `_comments._strip_json_comments()` | 合并 settings+key+providers 三文件为单份 dict 下发给消费方；`_merge_llm_defaults()` 运行时补默认 |
 | `llm_key.json` | `_llm_providers._load_llm_key_credentials()` | `_comments._strip_json_comments()` | 单凭据 flat 自动升级为 `_default` 块（自持）；`get_llm_config()` 内联读取合并覆盖同名字段 |
 | `llm_providers.json` | `_llm_providers._load_llm_providers()` | `_comments._strip_json_comments()` | 根非 object / 解析失败返回 None 判定（自持）；`_inject_provider_chain_data()` 链模式注入 |
-| `features.json` | `features.load_feature_overrides()` | **否**（纯 `json.load`，不剥注释） | 模块导入时自动调用；文件仅存需覆写的子集，无模板 |
+| `features.json` | `features.load_feature_overrides()` | `core/json_comments.strip_json_comments()` | 模块导入时自动调用；文件仅存需覆写的子集，首次写入以中文注释模板为底 |
 
-> **注意**：`features.json` 是唯一**不支持注释**的配置文件——由 `save_feature_overrides()` 程序化写入标准 JSON，人工编辑时不可加 `//`/`/* */` 注释；其余四个文件（config / llm_settings / llm_key / llm_providers）均支持注释（`_comments._strip_json_comments()` 统一剥离）。
+> **注释契约**：五份配置文件（config / llm_settings / llm_key / llm_providers / features）均支持 `//` 与 `/* */` 注释，读取一律经叶子模块 `core/json_comments.strip_json_comments()`（`config/_comments.py` 再导出）；写入走文本 patch（config 用 `_json_patch`、features 用键级 patch），保留既有分类注释与项说明。
 
 #### I.2 消费模式
 
@@ -4153,8 +4153,8 @@ investor-review/
 
 | 模式 | 说明 | 应用文件 |
 |:-----|:-----|:---------|
-| **dict 缺省 + 模板函数 双结构** | 缺省值定义在 dict，模板函数逐行手拼 `"key": value,  // comment`；模板经 `_strip_json_comments()` 剥离后 `json.loads` 与 dict **深等**（有一致性测试保证，防模板坏 JSON） | config / llm_settings / llm_providers 三家 `*_defaults.py` |
-| 注释友好 JSON | `_comments._strip_json_comments()` 剥离 `//` 与 `/* */`（正确处理字符串内转义），模板与真实文件均带中文分组注释 | 全部配置文件 |
+| **dict 缺省 + 模板函数 双结构** | 缺省值定义在 dict，模板函数逐行手拼 `"key": value,  // comment`；模板经 `strip_json_comments()` 剥离后 `json.loads` 与 dict **深等**（有一致性测试保证，防模板坏 JSON） | config / llm_settings / llm_providers 三家 `*_defaults.py` |
+| 注释友好 JSON | `core/json_comments.strip_json_comments()` 剥离 `//` 与 `/* */`（正确处理字符串内转义），模板与真实文件均带中文分组注释；写入保留注释 | 全部配置文件 |
 | 原子写入 | `tempfile.mkstemp` + `os.replace`，Windows 并发安全 | `set_config` / `save_feature_overrides` / `startup_wizard` / 缓存 `_write_atomic` |
 | 路径绝对化 | `_DEFAULT_CONFIG` 存绝对路径（不依赖 CWD），模板存相对路径；运行时 `_validation._absolutize_paths()` 相对→绝对（模板生成前 `_deabsolutize_paths()` 反绝对化） | config.json 路径键 |
 | 运行时补默认 | 读取时按缺省 dict 补齐缺失键，消除「消费端 `.get()` 兜底」与「模板默认值」两套默认值漂移 | llm_settings（`_merge_llm_defaults`）、config.json（`get_config` 合并） |

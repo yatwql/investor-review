@@ -11,8 +11,9 @@
 配置持久化：功能开关可通过 features.json 覆写默认值。
 全部开关在 :data:`feature_switch_registry` 一处登记（显示名/说明/作用域分组/
 默认值/产物影响/实验身份），TUI 面板、Web 配置面板、CLI 取值域与文档清单一律
-由它派生——渠道层不得另写开关清单。分组（呈现与体验 / 分析增强 / 独立章节与
-回放 / 机制与诊断）表达**作用域**——「开了长出什么」，是面板主分类轴；
+由它派生——渠道层不得另写开关清单。分组（持仓与交易 / 市场与估值 / 基金与
+风格 / 事件与摘要 / 呈现与交互 / 机制与质量 / 独立章节与回放 / 章节内选项）
+表达**作用域**——「开了长出什么」，是面板主分类轴；
 **生命周期**是独立字段 ``experimental``：``--experiment`` 取值域与页脚实验自述
 只看该字段，不看分组。「转正」= 把 ``experimental`` 置 False 摘除实验身份；
 若作用域同时变化则再改 ``group``。
@@ -28,9 +29,11 @@ import os
 import threading
 from typing import Any, Iterable
 
-from src.python.core.atomic_write import write_json_atomic
+from src.python.core.atomic_write import write_text_atomic
 from src.python.core.constants import PROJECT_ROOT
 
+from ._comments import strip_json_comments
+from ._json_patch import _find_top_level_value_span, _patch_config_key, _remove_top_level_key
 from ._feature_registry import (  # noqa: F401 — 兼容既有导入面
     DOMAIN_DATA_AND_ROUTES,
     DOMAIN_HINTS,
@@ -357,6 +360,93 @@ FEATURE_FLAGS: dict[str, bool] = dict(_FEATURE_FLAGS_DEFAULT)
 _FEATURES_LOCK = threading.Lock()
 
 
+#: 首次创建 features.json 时的模板（含中文说明；写入路径只改键值，不重写整份文本）
+_FEATURES_HEADER = """// 功能开关覆写（features.json）
+// 只写需要与默认值不同的项，未列出的保持注册表默认值。
+// 删除某项即恢复其默认值；合法值为 true / false。
+"""
+
+_FEATURES_TEMPLATE = (
+    _FEATURES_HEADER
+    + """{
+}
+"""
+)
+
+
+def _load_overrides_document() -> tuple[str, dict[str, Any]]:
+    """读取 features.json 原始文本与解析结果（统一经注释剥离器）。
+
+    文件不存在或损坏时返回带中文说明的空模板——写入路径据此创建首份文件，
+    损坏则按空覆写处理（与既有容错口径一致：开关文件坏了不应阻断启动）。
+    """
+    if not os.path.exists(FEATURES_FILE):
+        return _FEATURES_TEMPLATE, {}
+    try:
+        with open(FEATURES_FILE, encoding="utf-8-sig") as f:
+            raw = f.read()
+        loaded = json.loads(strip_json_comments(raw))
+        if not isinstance(loaded, dict):
+            logger.warning("[features] 覆写文件格式异常（应为 JSON object），按空覆写处理")
+            return raw, {}
+        return raw, loaded
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning("[features] 加载覆写文件失败: %s", e)
+        return _FEATURES_TEMPLATE, {}
+
+
+def _render_overrides(values: dict[str, bool]) -> str:
+    """按「一键一行」重排覆写文件（保留文件头说明注释）。
+
+    用于源文件是紧凑单行 JSON 的情况：按键区间删除会吞掉整行，故改以稳定
+    排版重建；单行文件本就没有可保留的逐项注释。
+    """
+    if not values:
+        body = ""
+    else:
+        entries = [f'  "{key}": {"true" if value else "false"}' for key, value in values.items()]
+        body = ",\n".join(entries) + "\n"
+    return _FEATURES_HEADER + "{\n" + body + "}\n"
+
+
+def _apply_override_patch(raw: str, before: dict[str, Any], after: dict[str, bool]) -> str:
+    """在原始文本上做键级 patch（保注释）：新增/改值用顶层键替换，删除用区间移除。
+
+    源文件按「一键一行」排版时才走文本 patch；紧凑单行（或键数多于行数）改用
+    稳定排版重建，避免区间删除误吞整行。
+    """
+    line_oriented = raw.count("\n") >= len(before) + 1
+    if not line_oriented:
+        return _render_overrides(after)
+    patched = raw
+    for key, value in after.items():
+        patched = _patch_config_key(patched, key, "true" if value else "false")
+    for key in before:
+        if key in after:
+            continue
+        span = _find_top_level_value_span(patched, key)
+        if span is not None:
+            vs, ve = span
+            patched = _remove_top_level_key(patched, key, vs, ve)
+    return patched
+
+
+def _persist_overrides(raw: str, noun: str) -> None:
+    """校验补丁结果仍为合法 JSON 后原子写盘；失败按尽力持久化处理。"""
+    try:
+        json.loads(strip_json_comments(raw))
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.error("[features] 覆写%s后结果非法，拒绝写入: %s", noun, e)
+        return
+    write_text_atomic(
+        FEATURES_FILE,
+        raw,
+        prefix=".features_",
+        log_tag="features",
+        noun="功能开关覆写",
+    )
+
+
 def get_feature_defaults() -> dict[str, bool]:
     """返回功能开关的出厂默认值（不受运行时覆写影响）。"""
     return dict(_FEATURE_FLAGS_DEFAULT)
@@ -408,16 +498,7 @@ def load_feature_overrides() -> None:
     """
     if not os.path.exists(FEATURES_FILE):
         return
-    try:
-        with open(FEATURES_FILE, encoding="utf-8") as f:
-            overrides = json.load(f)
-    except (json.JSONDecodeError, OSError) as e:
-        logger.warning("[features] 加载覆写文件失败: %s", e)
-        return
-
-    if not isinstance(overrides, dict):
-        logger.warning("[features] 覆写文件格式异常（应为 JSON object），忽略")
-        return
+    _raw, overrides = _load_overrides_document()
 
     valid_count = 0
     changed = 0
@@ -458,47 +539,33 @@ def load_feature_overrides() -> None:
 
 
 def save_feature_overrides(overrides: dict[str, bool], merge: bool = True) -> None:
-    """保存功能开关覆写到 features.json。
+    """保存功能开关覆写到 features.json（保留既有注释与分组说明）。
 
     Args:
         overrides: {flag_name: enabled} 字典
         merge: True = 合并到现有覆写（覆盖同名键），False = 完全替换
     """
-    existing: dict[str, Any] = {}
-    if merge and os.path.exists(FEATURES_FILE):
-        try:
-            with open(FEATURES_FILE, encoding="utf-8") as f:
-                existing = json.load(f)
-        except (json.JSONDecodeError, OSError):
-            existing = {}
+    with _FEATURES_LOCK:
+        raw, existing = _load_overrides_document()
+        base = existing if merge else {}
+        merged: dict[str, Any] = {**base, **overrides}
+        # 只保留值为 bool 的条目
+        cleaned = {k: v for k, v in merged.items() if isinstance(v, bool)}
+        patched = _apply_override_patch(raw, existing, cleaned)
+        _persist_overrides(patched, "保存")
 
-    existing.update(overrides)
+        # 同步运行时状态
+        for flag_name, enabled in cleaned.items():
+            FEATURE_FLAGS[flag_name] = enabled
 
-    # 只保留值为 bool 的条目
-    cleaned = {k: v for k, v in existing.items() if isinstance(v, bool)}
-
-    # 落盘委托 core/atomic_write（唯一原语，mkstemp + os.replace）。失败由原语记日志
-    # 并返回 False——开关覆写属尽力持久化：写不进盘不影响本次运行（内存态随后同步），
-    # 也不应因此中断调用链。
-    if write_json_atomic(
-        FEATURES_FILE,
-        cleaned,
-        prefix=".features_",
-        log_tag="features",
-        noun="功能开关覆写",
-    ):
-        logger.info("[features] 已保存 %d 项功能开关覆写", len(cleaned))
-
-    # 同步运行时状态
-    for flag_name, enabled in cleaned.items():
-        FEATURE_FLAGS[flag_name] = enabled
+    logger.info("[features] 已保存 %d 项功能开关覆写", len(cleaned))
 
 
 def clear_feature_overrides(flags: Iterable[str] | None = None) -> int:
     """移除功能开关覆写，使开关回到出厂默认（「恢复默认」= 删键而非写入同值）。
 
-    features.json 只存与代码默认的差异，恢复默认在语义上应删除键：批量原子写一份
-    剔除目标键后的覆写文件，并把运行时状态同步回 ``_FEATURE_FLAGS_DEFAULT``。
+    features.json 只存与代码默认的差异，恢复默认在语义上应删除键：在原文本上
+    按键移除条目（保留其余注释与键），并把运行时状态同步回 ``_FEATURE_FLAGS_DEFAULT``。
     单键不存在于文件时自然忽略（但运行时仍回默认——会话内 set_feature_enabled
     的临时切换同样被恢复）。
 
@@ -508,34 +575,24 @@ def clear_feature_overrides(flags: Iterable[str] | None = None) -> int:
     Returns:
         从覆写文件中实际移除的键数（文件不存在或无匹配键时为 0）。
     """
-    file_keys: dict[str, Any] = {}
-    if os.path.exists(FEATURES_FILE):
-        try:
-            with open(FEATURES_FILE, encoding="utf-8") as f:
-                loaded = json.load(f)
-            if isinstance(loaded, dict):
-                file_keys = {k: v for k, v in loaded.items() if isinstance(v, bool)}
-        except (json.JSONDecodeError, OSError):
-            file_keys = {}
-
-    if flags is None:
-        remaining: dict[str, Any] = {}
-    else:
-        targets = set(flags)
-        remaining = {k: v for k, v in file_keys.items() if k not in targets}
-    removed = len(file_keys) - len(remaining)
-
-    if len(remaining) != len(file_keys):
-        # 与 save_feature_overrides 同一原子写原语；只落 bool 条目（与保存路径口径一致）
-        write_json_atomic(
-            FEATURES_FILE,
-            remaining,
-            prefix=".features_",
-            log_tag="features",
-            noun="功能开关覆写",
-        )
-
     with _FEATURES_LOCK:
+        if not os.path.exists(FEATURES_FILE):
+            file_keys: dict[str, Any] = {}
+            raw = ""
+        else:
+            raw, loaded = _load_overrides_document()
+            file_keys = {k: v for k, v in loaded.items() if isinstance(v, bool)}
+
+        if flags is None:
+            targets = set(file_keys)
+        else:
+            targets = {key for key in flags if key in file_keys}
+
+        removed = len(targets)
+        if removed:
+            patched = _apply_override_patch(raw, file_keys, {k: v for k, v in file_keys.items() if k not in targets})
+            _persist_overrides(patched, "恢复默认")
+
         if flags is None:
             for key in list(FEATURE_FLAGS):
                 if key in _FEATURE_FLAGS_DEFAULT:
