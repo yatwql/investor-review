@@ -3,73 +3,42 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TUI 面板图样 · 全层级（真实渲染取样）</title>
+<title>TUI 面板图样 · 目标设计</title>
 <style>
 :root {
-  --bg: #0d1117;
-  --panel: #161b22;
-  --border: #30363d;
-  --text: #c9d1d9;
-  --text-dim: #8b949e;
-  --brand: #f0883e;
-  --blue: #79c0ff;
-  --green: #7ee787;
-  --red: #ff7b72;
-  --yellow: #ffd479;
-  --cyan: #76e3ea;
+  --bg: #0d1117; --panel: #161b22; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e;
+  --brand: #f0883e; --blue: #79c0ff; --green: #7ee787; --red: #ff7b72; --yellow: #ffd479; --cyan: #76e3ea;
   --font: ui-monospace, "SF Mono", Menlo, Consolas, "Noto Sans Mono CJK SC", monospace;
 }
 * { box-sizing: border-box; }
-body {
-  margin: 0; background: var(--bg); color: var(--text);
-  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
-  font-size: 14px; line-height: 1.7;
-}
-header.top {
-  position: sticky; top: 0; z-index: 5; background: var(--panel);
-  border-bottom: 1px solid var(--border); padding: 12px 20px;
-  display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap;
-}
+body { margin: 0; background: var(--bg); color: var(--text);
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; font-size: 14px; line-height: 1.7; }
+header.top { position: sticky; top: 0; z-index: 5; background: var(--panel);
+  border-bottom: 1px solid var(--border); padding: 12px 20px; display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; }
 header.top h1 { font-size: 15px; font-weight: 600; margin: 0; }
 header.top .hint { color: var(--text-dim); font-size: 12px; }
-.wrap { display: grid; grid-template-columns: 240px 1fr; gap: 0; }
-nav {
-  position: sticky; top: 52px; align-self: start; height: calc(100vh - 52px);
-  overflow-y: auto; padding: 14px 10px 40px; border-right: 1px solid var(--border);
-  background: var(--panel);
-}
+.wrap { display: grid; grid-template-columns: 240px 1fr; }
+nav { position: sticky; top: 52px; align-self: start; height: calc(100vh - 52px); overflow-y: auto;
+  padding: 14px 10px 40px; border-right: 1px solid var(--border); background: var(--panel); }
 nav .nav-title { font-size: 11px; color: var(--text-dim); margin: 12px 6px 6px; letter-spacing: .04em; }
-.nav-item {
-  display: flex; gap: 8px; align-items: baseline; padding: 4px 8px; border-radius: 6px;
-  color: var(--text); text-decoration: none; font-size: 12.5px;
-}
+.nav-item { display: flex; gap: 8px; align-items: baseline; padding: 4px 8px; border-radius: 6px;
+  color: var(--text); text-decoration: none; font-size: 12.5px; }
 .nav-item:hover { background: #21262d; }
 main { padding: 20px 24px 80px; max-width: 1100px; }
 .screen { margin: 0 0 34px; scroll-margin-top: 64px; }
 .screen-head { display: flex; gap: 10px; align-items: center; }
 .screen-head h2 { font-size: 16px; font-weight: 600; margin: 0; }
-.lvl {
-  font-size: 10.5px; padding: 0 5px; border-radius: 4px; white-space: nowrap;
-  border: 1px solid var(--border); color: var(--text-dim);
-}
+.lvl { font-size: 10.5px; padding: 0 5px; border-radius: 4px; white-space: nowrap; border: 1px solid var(--border); color: var(--text-dim); }
 .lvl-一级 { color: var(--brand); border-color: #6b3f18; }
 .lvl-二级 { color: var(--blue); border-color: #1f4a75; }
 .lvl-三级 { color: var(--cyan); border-color: #1d5a63; }
 .note { margin: 2px 0 10px; color: var(--text-dim); font-size: 12px; }
-pre.term {
-  margin: 0; padding: 14px 16px; background: #0b0f14;
-  border: 1px solid var(--border); border-radius: 8px; overflow-x: auto;
-  font-family: var(--font); font-size: 12.5px; line-height: 1.55; color: var(--text);
-}
+pre.term { margin: 0; padding: 14px 16px; background: #0b0f14; border: 1px solid var(--border); border-radius: 8px;
+  overflow-x: auto; font-family: var(--font); font-size: 12.5px; line-height: 1.55; color: var(--text); }
 .more { margin: 6px 0 0; font-size: 11.5px; color: var(--text-dim); }
-.g { color: var(--green); }
-.r { color: var(--red); }
-.y { color: var(--yellow); }
-.c { color: var(--cyan); }
-.b { color: var(--blue); }
-.o { color: var(--brand); }
-.d { color: var(--text-dim); }
-.bold { font-weight: 600; }
+.g { color: var(--green); } .r { color: var(--red); } .y { color: var(--yellow); }
+.c { color: var(--cyan); } .b { color: var(--blue); } .o { color: var(--brand); }
+.d { color: var(--text-dim); } .bold { font-weight: 600; }
 @media (max-width: 900px) {
   .wrap { grid-template-columns: 1fr; }
   nav { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--border); }
@@ -79,65 +48,36 @@ pre.term {
 </head>
 <body>
 <header class="top">
-  <h1>TUI 面板图样 · 全层级</h1>
-  <span class="hint">25 屏，均由真实处理器渲染（等宽字体 + 真实 ANSI 配色）；设计结构屏按设计项注入后渲染。文件选择类屏幕取到列表即中止，不生成报告、不写配置。</span>
+  <h1>TUI 面板图样 · 目标设计</h1>
+  <span class="hint">21 屏 · 本文件只含目标设计（五组开关 / 16 项主菜单 / [G] 七项 / [G]→[L] 七项）；现有实现见 tui-current.html。均由真实处理器渲染。</span>
 </header>
 <div class="wrap">
 <nav>
   <div class="nav-title">屏幕清单（一级 → 二级 → 三级）</div>
-  <a href="#s-main" class="nav-item" data-level="一级"><span class="lvl lvl-一级">一级</span>主菜单（19 项，配置组七项）</a>
-<a href="#s-main_proposed" class="nav-item" data-level="一级"><span class="lvl lvl-一级">一级</span>主菜单（16 项，配置组四项）</a>
-<a href="#s-switches" class="nav-item" data-level="二级"><span class="lvl lvl-二级">二级</span>功能开关面板 · 四组顺序</a>
-<a href="#s-switch_detail" class="nav-item" data-level="三级"><span class="lvl lvl-三级">三级</span>功能开关 · 单项详情（`?编号`）</a>
-<a href="#s-switches_proposed" class="nav-item" data-level="二级"><span class="lvl lvl-二级">二级</span>功能开关面板 · 五组顺序</a>
-<a href="#s-dmenu" class="nav-item" data-level="二级"><span class="lvl lvl-二级">二级</span>全局设置子菜单（[G]，五项）</a>
-<a href="#s-g_menu_proposed" class="nav-item" data-level="二级"><span class="lvl lvl-二级">二级</span>全局设置子菜单（[G]，七项含指数与匿名化）</a>
-<a href="#s-d_tuning" class="nav-item" data-level="三级"><span class="lvl lvl-三级">三级</span>LLM 设置（[G]→[L]，六项运行参数）</a>
-<a href="#s-d_llm_proposed" class="nav-item" data-level="三级"><span class="lvl lvl-三级">三级</span>LLM 设置（[G]→[L]，七项含线路入口）</a>
-<a href="#s-d_map" class="nav-item" data-level="三级"><span class="lvl lvl-三级">三级</span>配置入口地图（[G]→[M]）</a>
-<a href="#s-d_dir" class="nav-item" data-level="三级"><span class="lvl lvl-三级">三级</span>持仓信息目录（[G]→[C]）</a>
-<a href="#s-d_file" class="nav-item" data-level="三级"><span class="lvl lvl-三级">三级</span>持仓信息文件名（[G]→[F]）</a>
-<a href="#s-d_out" class="nav-item" data-level="三级"><span class="lvl lvl-三级">三级</span>报告输出目录（[G]→[O]）</a>
-<a href="#s-boards" class="nav-item" data-level="二级"><span class="lvl lvl-二级">二级</span>报告章节取舍（[P]）</a>
-<a href="#s-indices" class="nav-item" data-level="二级"><span class="lvl lvl-二级">二级</span>对比指数池（[I]）</a>
-<a href="#s-anon" class="nav-item" data-level="二级"><span class="lvl lvl-二级">二级</span>持仓匿名化（[A]）</a>
-<a href="#s-providers" class="nav-item" data-level="二级"><span class="lvl lvl-二级">二级</span>LLM 多链线路优先级（[M]）</a>
-<a href="#s-cache" class="nav-item" data-level="二级"><span class="lvl lvl-二级">二级</span>缓存管理（[3]）</a>
-<a href="#s-logs" class="nav-item" data-level="二级"><span class="lvl lvl-二级">二级</span>运行日志（[V]）</a>
-<a href="#s-health" class="nav-item" data-level="二级"><span class="lvl lvl-二级">二级</span>数据源健康历史（[H]）</a>
-<a href="#s-doctor" class="nav-item" data-level="二级"><span class="lvl lvl-二级">二级</span>系统自检（[T]）</a>
-<a href="#s-generate" class="nav-item" data-level="二级"><span class="lvl lvl-二级">二级</span>生成报告 · 持仓文件选择（[E]/[B]/[L]）</a>
-<a href="#s-qa" class="nav-item" data-level="二级"><span class="lvl lvl-二级">二级</span>报告追问 · 报告选择（[Q]）</a>
-<a href="#s-whatif" class="nav-item" data-level="二级"><span class="lvl lvl-二级">二级</span>调仓 What-if · 基准文件选择（[W]）</a>
-<a href="#s-refresh" class="nav-item" data-level="二级"><span class="lvl lvl-二级">二级</span>刷新配置（[R]）</a>
+  <a href="#s-main_proposed" class="nav-item"><span class="lvl lvl-一级">一级</span>主菜单（16 项，配置组四项）</a>
+<a href="#s-switches_proposed" class="nav-item"><span class="lvl lvl-二级">二级</span>功能开关面板（五组）</a>
+<a href="#s-switch_detail" class="nav-item"><span class="lvl lvl-三级">三级</span>功能开关 · 单项详情（`?编号`）</a>
+<a href="#s-g_menu_proposed" class="nav-item"><span class="lvl lvl-二级">二级</span>全局设置子菜单（[G] 二级，7 项）</a>
+<a href="#s-d_llm_proposed" class="nav-item"><span class="lvl lvl-三级">三级</span>LLM 设置（[G]→[L]，7 项）</a>
+<a href="#s-d_map" class="nav-item"><span class="lvl lvl-三级">三级</span>配置入口地图（[G]→[M]）</a>
+<a href="#s-d_dir" class="nav-item"><span class="lvl lvl-三级">三级</span>持仓信息目录（[G]→[C]）</a>
+<a href="#s-d_file" class="nav-item"><span class="lvl lvl-三级">三级</span>持仓信息文件名（[G]→[F]）</a>
+<a href="#s-d_out" class="nav-item"><span class="lvl lvl-三级">三级</span>报告输出目录（[G]→[O]）</a>
+<a href="#s-boards_proposed" class="nav-item"><span class="lvl lvl-二级">二级</span>报告章节取舍（[P]，仅 5 章）</a>
+<a href="#s-indices" class="nav-item"><span class="lvl lvl-二级">二级</span>对比基准指数（[G]→[I]）</a>
+<a href="#s-anon" class="nav-item"><span class="lvl lvl-二级">二级</span>持仓匿名化（[G]→[A]）</a>
+<a href="#s-providers" class="nav-item"><span class="lvl lvl-二级">二级</span>多链线路优先级（[G]→[L] 第 7 项）</a>
+<a href="#s-cache" class="nav-item"><span class="lvl lvl-二级">二级</span>缓存管理（[3]）</a>
+<a href="#s-logs" class="nav-item"><span class="lvl lvl-二级">二级</span>运行日志（[V]）</a>
+<a href="#s-health" class="nav-item"><span class="lvl lvl-二级">二级</span>数据源健康历史（[H]）</a>
+<a href="#s-doctor" class="nav-item"><span class="lvl lvl-二级">二级</span>系统自检（[T]）</a>
+<a href="#s-generate" class="nav-item"><span class="lvl lvl-二级">二级</span>生成报告 · 费用确认（[E]/[B]/[L]）</a>
+<a href="#s-qa" class="nav-item"><span class="lvl lvl-二级">二级</span>报告追问 · 报告选择（[Q]）</a>
+<a href="#s-whatif" class="nav-item"><span class="lvl lvl-二级">二级</span>调仓 What-if · 基准文件选择（[W]）</a>
+<a href="#s-refresh" class="nav-item"><span class="lvl lvl-二级">二级</span>刷新配置（[R]）</a>
 </nav>
 <main>
-<section class="screen" id="s-main" data-level="一级"><div class="screen-head"><span class="lvl lvl-一级">一级</span><h2>主菜单（19 项，配置组七项）</h2></div><p class="note">方向键/字母直达；页脚给出键位提示与开关门控说明</p><pre class="term"><span class="bold"><span class="b">  ── 生成报告 ──</span></span>
-  <span class="c">&gt;</span> [E] 生成基础报告（仅 Excel）
-    [B] 生成标准报告（Excel+HTML，按章节配置）
-    [L] 生成完整报告（Excel+HTML，含 LLM）
-    [W] 调仓 What-if 模拟（对比两份持仓，独立报告）
-<span class="bold"><span class="b">  ── 数据与查看 ──</span></span>
-    [Q] 报告对话式追问（对已生成 HTML 报告多轮提问）
-    [1] 更新基础类缓存（含基金业绩/持仓/经理/基准等）
-    [2] 更新行情类缓存（含价格/指数等）
-    [3] 缓存管理（统计与清理）
-<span class="bold"><span class="b">  ── 配置 ──</span></span>
-    [P] 配置报告可选章节（顺序与取舍）
-    [S] 配置功能开关（作用域四组，含 LLM 章节）
-    [M] 配置 LLM 多链线路优先级（备用顺序）
-    [I] 管理对比指数池（自定义基准指数）
-    [A] 配置持仓匿名化（代码/名称脱敏）
-    [D] 查看配置与目录信息（持仓目录/文件名/输出目录）
-    [R] 刷新配置
-<span class="bold"><span class="b">  ── 诊断与排查 ──</span></span>
-    [V] 查看最近运行日志（可按级别筛选）
-    [H] 查看数据源健康历史
-    [T] 系统自检（环境/配置/目录/数据源一键体检）
-    [X] 退出（0 亦可）
-
-<span class="d">  ↑↓ 移动 | 回车执行 | 字母/数字键直达 | / 筛选 | Esc / 0 / X 退出 | Ctrl+C 退出</span></pre></section>
-<section class="screen" id="s-main_proposed" data-level="一级"><div class="screen-head"><span class="lvl lvl-一级">一级</span><h2>主菜单（16 项，配置组四项）</h2></div><p class="note">配置组四项（P/S/G/R）；线路、运行参数、指数池、匿名化在 [G] 二级</p><pre class="term"><span class="bold"><span class="b">  ── 生成报告 ──</span></span>
+<section class="screen" id="s-main_proposed"><div class="screen-head"><span class="lvl lvl-一级">一级</span><h2>主菜单（16 项，配置组四项）</h2></div><p class="note">配置组 P/S/G/R；线路、运行参数、指数池、匿名化归于 [G] 二级</p><pre class="term"><span class="bold"><span class="b">  ── 生成报告 ──</span></span>
   <span class="c">&gt;</span> [E] 生成基础报告（仅 Excel）
     [B] 生成标准报告（Excel+HTML，按章节配置）
     [L] 生成完整报告（Excel+HTML，含 LLM）
@@ -159,111 +99,7 @@ pre.term {
     [X] 退出（0 亦可）
 
 <span class="d">  ↑↓ 移动 | 回车执行 | 字母/数字键直达 | / 筛选 | Esc / 0 / X 退出 | Ctrl+C 退出</span></pre></section>
-<section class="screen" id="s-switches" data-level="二级"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>功能开关面板 · 四组顺序</h2></div><p class="note">1-7 标准 LLM 模块 + 8-34 功能开关（呈现/分析/独立/机制 四组）</p><pre class="term">  ┌── 配置 LLM 报告章节与功能开关 ────────────────────────────────────────────────────────────────┐
-  │   1. 全球政经局势               <span class="d">global_macro    </span> [<span class="g">开启</span>]<span class="d"> · 19次 ¥0.1230 均¥0.0065</span>              │
-  │   2. 智囊团深度复盘             <span class="d">expert_review   </span> [<span class="g">开启</span>]<span class="d"> · 19次 ¥1.0500 均¥0.0553</span>              │
-  │   3. 财经新闻热点与持仓关联分析 <span class="d">news_correlation</span> [<span class="g">开启</span>]*<span class="d"> · 17次 ¥0.1574 均¥0.0093</span>             │
-  │   4. 持仓体检报告               <span class="d">health_check    </span> [<span class="g">开启</span>]<span class="d"> · 19次 ¥0.5850 均¥0.0308</span>              │
-  │   5. 穿透深度分析               <span class="d">penetration_deep</span> [<span class="g">开启</span>]<span class="d"> · 19次 ¥0.2230 均¥0.0117</span>              │
-  │   6. 生成后自检                 <span class="d">self_review     </span> [<span class="g">开启</span>]*                                      │
-  │   7. 持仓变动复盘归因           <span class="d">holding_change  </span> [<span class="g">开启</span>]<span class="d"> · 见独立组 · 19次 ¥0.0992 均¥0.0052</span>   │
-  │───────────────────────────────────────────────────────────────────────────────────────────────│
-  │ <span class="bold"><span class="b">📊 呈现与体验（1/1 开）</span></span>                                                                       │
-  │   8.   量化指标显示               <span class="d">metrics_enabled          </span> [<span class="g">开启</span>]                            │
-  │───────────────────────────────────────────────────────────────────────────────────────────────│
-  │ <span class="bold"><span class="b">🔍 分析增强·既有章内追加（14/16 开）</span></span>                                                          │
-  │   9.   辩论-正反辩论              <span class="d">llm_debate_procon        </span> [<span class="r">关闭</span>]                            │
-  │  10.   辩论-条件推理              <span class="d">llm_debate_conditional   </span> [<span class="g">开启</span>]                            │
-  │  11.   因子目录                   <span class="d">factor_catalog           </span> [<span class="g">开启</span>]*                           │
-  │  12.   事件窗量化对照             <span class="d">event_window_impact      </span> [<span class="g">开启</span>]*                           │
-  │  13.   数据质量仪表盘             <span class="d">data_quality             </span> [<span class="g">开启</span>]                            │
-  │  14.   行业Beta子表               <span class="d">industry_beta            </span> [<span class="g">开启</span>]*                           │
-  │  15.   候选基金比较子表           <span class="d">candidate_compare        </span> [<span class="r">关闭</span>]                            │
-  │  16.   成本流水                   <span class="d">cost_lots                </span> [<span class="g">开启</span>]*                           │
-  │  17.   估值分位                   <span class="d">valuation_percentile     </span> [<span class="g">开启</span>]*                           │
-  │  18.   市场温度                   <span class="d">market_temperature       </span> [<span class="g">开启</span>]                            │
-  │  19.   市场情绪与资金热点         <span class="d">market_sentiment         </span> [<span class="g">开启</span>]*                           │
-  │  20.   基金申购限购               <span class="d">fund_purchase_limit      </span> [<span class="g">开启</span>]                            │
-  │  21.   持仓成本区间位置           <span class="d">cost_position            </span> [<span class="g">开启</span>]                            │
-  │  22.   风险调整超额               <span class="d">risk_adjusted_excess     </span> [<span class="g">开启</span>]*                           │
-  │  23.   本期要点与环比对照         <span class="d">summary_highlights       </span> [<span class="g">开启</span>]*                           │
-  │  24.   景气度框架诊断             <span class="d">prosperity_framework     </span> [<span class="g">开启</span>]                            │
-  │───────────────────────────────────────────────────────────────────────────────────────────────│
-  │ <span class="bold"><span class="b">📑 独立章节与回放（4/5 开）</span></span>                                                                   │
-  │  25.   调仓纪律回放               <span class="d">rebalance_schedule_replay</span> [<span class="g">开启</span>]*                           │
-  │  26.   持仓变动复盘               <span class="d">holding_change_review    </span> [<span class="g">开启</span>]*<span class="d"> · 见 LLM 区</span>               │
-  │  27.   What-if 交易成本对比       <span class="d">whatif_trade_cost        </span> [<span class="r">关闭</span>]                            │
-  │  28.   个股基本面                 <span class="d">stock_fundamentals       </span> [<span class="g">开启</span>]*                           │
-  │  29.   危机回放                   <span class="d">crisis_replay            </span> [<span class="g">开启</span>]*                           │
-  │───────────────────────────────────────────────────────────────────────────────────────────────│
-  │ <span class="bold"><span class="b">⚙ 机制与诊断（4/5 开）</span></span>                                                                        │
-  │  30. ⚗ 决策跨期反思闭环           <span class="d">decision_reflection      </span> [<span class="g">开启</span>]*<span class="d">（启用 66 次 · 最近 10-23）</span>│
-  │  31. ⚗ 报告对话式追问             <span class="d">report_qa                </span> [<span class="g">开启</span>]*<span class="d">（启用 11 次 · 最近 10-23）</span>│
-  │  32.   确定性信号模块             <span class="d">deterministic_signal     </span> [<span class="g">开启</span>]                            │
-  │  33.   模块级质量分级             <span class="d">module_quality_gate      </span> [<span class="g">开启</span>]                            │
-  │  34.   系统自检上屏               <span class="d">doctor_check             </span> [<span class="r">关闭</span>]*                           │
-  │                                                                                               │
-  │  0. 返回主菜单                                                                                │
-  │───────────────────────────────────────────────────────────────────────────────────────────────│
-  │   ⚗ 实验项（默认关，质量可能不稳定） · * 与出厂默认不一致                                     │
-  │   键名即行内淡色列：可直接输入键名（也可 ? 键名 / 键名=on|off）代替编号，面板增删项后仍然稳定 │
-  │   行尾「N次 ¥X 均¥Y」= 近 7 日该模块调用次数 / 累计费用 / 单次均值                            │
-  │   ?编号 查看说明 · r 编号 恢复本组默认 · ra 恢复全部 · x 实验项全关 · 0 返回                  │
-  └───────────────────────────────────────────────────────────────────────────────────────────────┘
-  基础报告章节组（基金深度分析/市场新闻/历史走势+回撤/组合演进/行动建议）在菜单 [P] 配置</pre><p class="more">… 共 53 行，此处展示前 52 行</p></section>
-<section class="screen" id="s-switch_detail" data-level="三级"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>功能开关 · 单项详情（`?编号`）</h2></div><p class="note">只读信息面：说明 / 分组 / 存储位置 / 当前值 vs 出厂默认</p><pre class="term">  ┌── 配置 LLM 报告章节与功能开关 ────────────────────────────────────────────────────────────────┐
-  │   1. 全球政经局势               <span class="d">global_macro    </span> [<span class="g">开启</span>]<span class="d"> · 19次 ¥0.1230 均¥0.0065</span>              │
-  │   2. 智囊团深度复盘             <span class="d">expert_review   </span> [<span class="g">开启</span>]<span class="d"> · 19次 ¥1.0500 均¥0.0553</span>              │
-  │   3. 财经新闻热点与持仓关联分析 <span class="d">news_correlation</span> [<span class="g">开启</span>]*<span class="d"> · 17次 ¥0.1574 均¥0.0093</span>             │
-  │   4. 持仓体检报告               <span class="d">health_check    </span> [<span class="g">开启</span>]<span class="d"> · 19次 ¥0.5850 均¥0.0308</span>              │
-  │   5. 穿透深度分析               <span class="d">penetration_deep</span> [<span class="g">开启</span>]<span class="d"> · 19次 ¥0.2230 均¥0.0117</span>              │
-  │   6. 生成后自检                 <span class="d">self_review     </span> [<span class="g">开启</span>]*                                      │
-  │   7. 持仓变动复盘归因           <span class="d">holding_change  </span> [<span class="g">开启</span>]<span class="d"> · 见独立组 · 19次 ¥0.0992 均¥0.0052</span>   │
-  │───────────────────────────────────────────────────────────────────────────────────────────────│
-  │ <span class="bold"><span class="b">📊 呈现与体验（1/1 开）</span></span>                                                                       │
-  │   8.   量化指标显示               <span class="d">metrics_enabled          </span> [<span class="g">开启</span>]                            │
-  │───────────────────────────────────────────────────────────────────────────────────────────────│
-  │ <span class="bold"><span class="b">🔍 分析增强·既有章内追加（14/16 开）</span></span>                                                          │
-  │   9.   辩论-正反辩论              <span class="d">llm_debate_procon        </span> [<span class="r">关闭</span>]                            │
-  │  10.   辩论-条件推理              <span class="d">llm_debate_conditional   </span> [<span class="g">开启</span>]                            │
-  │  11.   因子目录                   <span class="d">factor_catalog           </span> [<span class="g">开启</span>]*                           │
-  │  12.   事件窗量化对照             <span class="d">event_window_impact      </span> [<span class="g">开启</span>]*                           │
-  │  13.   数据质量仪表盘             <span class="d">data_quality             </span> [<span class="g">开启</span>]                            │
-  │  14.   行业Beta子表               <span class="d">industry_beta            </span> [<span class="g">开启</span>]*                           │
-  │  15.   候选基金比较子表           <span class="d">candidate_compare        </span> [<span class="r">关闭</span>]                            │
-  │  16.   成本流水                   <span class="d">cost_lots                </span> [<span class="g">开启</span>]*                           │
-  │  17.   估值分位                   <span class="d">valuation_percentile     </span> [<span class="g">开启</span>]*                           │
-  │  18.   市场温度                   <span class="d">market_temperature       </span> [<span class="g">开启</span>]                            │
-  │  19.   市场情绪与资金热点         <span class="d">market_sentiment         </span> [<span class="g">开启</span>]*                           │
-  │  20.   基金申购限购               <span class="d">fund_purchase_limit      </span> [<span class="g">开启</span>]                            │
-  │  21.   持仓成本区间位置           <span class="d">cost_position            </span> [<span class="g">开启</span>]                            │
-  │  22.   风险调整超额               <span class="d">risk_adjusted_excess     </span> [<span class="g">开启</span>]*                           │
-  │  23.   本期要点与环比对照         <span class="d">summary_highlights       </span> [<span class="g">开启</span>]*                           │
-  │  24.   景气度框架诊断             <span class="d">prosperity_framework     </span> [<span class="g">开启</span>]                            │
-  │───────────────────────────────────────────────────────────────────────────────────────────────│
-  │ <span class="bold"><span class="b">📑 独立章节与回放（4/5 开）</span></span>                                                                   │
-  │  25.   调仓纪律回放               <span class="d">rebalance_schedule_replay</span> [<span class="g">开启</span>]*                           │
-  │  26.   持仓变动复盘               <span class="d">holding_change_review    </span> [<span class="g">开启</span>]*<span class="d"> · 见 LLM 区</span>               │
-  │  27.   What-if 交易成本对比       <span class="d">whatif_trade_cost        </span> [<span class="r">关闭</span>]                            │
-  │  28.   个股基本面                 <span class="d">stock_fundamentals       </span> [<span class="g">开启</span>]*                           │
-  │  29.   危机回放                   <span class="d">crisis_replay            </span> [<span class="g">开启</span>]*                           │
-  │───────────────────────────────────────────────────────────────────────────────────────────────│
-  │ <span class="bold"><span class="b">⚙ 机制与诊断（4/5 开）</span></span>                                                                        │
-  │  30. ⚗ 决策跨期反思闭环           <span class="d">decision_reflection      </span> [<span class="g">开启</span>]*<span class="d">（启用 66 次 · 最近 10-23）</span>│
-  │  31. ⚗ 报告对话式追问             <span class="d">report_qa                </span> [<span class="g">开启</span>]*<span class="d">（启用 11 次 · 最近 10-23）</span>│
-  │  32.   确定性信号模块             <span class="d">deterministic_signal     </span> [<span class="g">开启</span>]                            │
-  │  33.   模块级质量分级             <span class="d">module_quality_gate      </span> [<span class="g">开启</span>]                            │
-  │  34.   系统自检上屏               <span class="d">doctor_check             </span> [<span class="r">关闭</span>]*                           │
-  │                                                                                               │
-  │  0. 返回主菜单                                                                                │
-  │───────────────────────────────────────────────────────────────────────────────────────────────│
-  │   ⚗ 实验项（默认关，质量可能不稳定） · * 与出厂默认不一致                                     │
-  │   键名即行内淡色列：可直接输入键名（也可 ? 键名 / 键名=on|off）代替编号，面板增删项后仍然稳定 │
-  │   行尾「N次 ¥X 均¥Y」= 近 7 日该模块调用次数 / 累计费用 / 单次均值                            │
-  │   ?编号 查看说明 · r 编号 恢复本组默认 · ra 恢复全部 · x 实验项全关 · 0 返回                  │
-  └───────────────────────────────────────────────────────────────────────────────────────────────┘
-  基础报告章节组（基金深度分析/市场新闻/历史走势+回撤/组合演进/行动建议）在菜单 [P] 配置</pre><p class="more">… 共 111 行，此处展示前 52 行</p></section>
-<section class="screen" id="s-switches_proposed" data-level="二级"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>功能开关面板 · 五组顺序</h2></div><p class="note">设计目标态：分析增强 8-21 / 独立 22-26 / 呈现 27 / 机制 28-32 / LLM 增强 33-34</p><pre class="term">  ┌── 配置 LLM 报告章节与功能开关 ────────────────────────────────────────────────────────────────┐
+<section class="screen" id="s-switches_proposed"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>功能开关面板（五组）</h2></div><p class="note">分析增强 8-21 / 独立章节 22-26 / 呈现 27 / 机制 28-32 / LLM 增强 33-34</p><pre class="term">  ┌── 配置 LLM 报告章节与功能开关 ────────────────────────────────────────────────────────────────┐
   │   1. 全球政经局势               <span class="d">global_macro    </span> [<span class="g">开启</span>]<span class="d"> · 19次 ¥0.1230 均¥0.0065</span>              │
   │   2. 智囊团深度复盘             <span class="d">expert_review   </span> [<span class="g">开启</span>]<span class="d"> · 19次 ¥1.0500 均¥0.0553</span>              │
   │   3. 财经新闻热点与持仓关联分析 <span class="d">news_correlation</span> [<span class="g">开启</span>]*<span class="d"> · 17次 ¥0.1574 均¥0.0093</span>             │
@@ -315,16 +151,59 @@ pre.term {
   │   键名即行内淡色列：可直接输入键名（也可 ? 键名 / 键名=on|off）代替编号，面板增删项后仍然稳定 │
   │   行尾「N次 ¥X 均¥Y」= 近 7 日该模块调用次数 / 累计费用 / 单次均值                            │
   │   ?编号 查看说明 · r 编号 恢复本组默认 · ra 恢复全部 · x 实验项全关 · 0 返回                  │</pre><p class="more">… 共 55 行，此处展示前 52 行</p></section>
-<section class="screen" id="s-dmenu" data-level="二级"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>全局设置子菜单（[G]，五项）</h2></div><p class="note">[C] 持仓目录 / [F] 文件名 / [O] 输出目录 / [L] LLM 调优 / [M] 配置入口地图</p><pre class="term"><span class="bold"><span class="b">  ── 配置与目录信息 ──</span></span>
-   [C] 持仓信息目录
-   [F] 持仓信息文件名
-   [O] 报告输出目录
-   [L] LLM 调优参数（并发/预算/重试）
-   [M] 配置入口地图（各配置项所在菜单）
-   [0] 返回主菜单
-
-  选择（如 C/F/O/M） · 0 返回: 0</pre></section>
-<section class="screen" id="s-g_menu_proposed" data-level="二级"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>全局设置子菜单（[G]，七项含指数与匿名化）</h2></div><p class="note">标题「全局设置」、七项（含 [I] 对比基准指数、[A] 持仓匿名化）、提示覆盖 C/F/O/L/I/A/M</p><pre class="term"><span class="bold"><span class="b">  ── 全局设置 ──</span></span>
+<section class="screen" id="s-switch_detail"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>功能开关 · 单项详情（`?编号`）</h2></div><p class="note">只读信息面：说明 / 分组 / 存储位置 / 当前值 vs 出厂默认</p><pre class="term">  ┌── 配置 LLM 报告章节与功能开关 ────────────────────────────────────────────────────────────────┐
+  │   1. 全球政经局势               <span class="d">global_macro    </span> [<span class="g">开启</span>]<span class="d"> · 19次 ¥0.1230 均¥0.0065</span>              │
+  │   2. 智囊团深度复盘             <span class="d">expert_review   </span> [<span class="g">开启</span>]<span class="d"> · 19次 ¥1.0500 均¥0.0553</span>              │
+  │   3. 财经新闻热点与持仓关联分析 <span class="d">news_correlation</span> [<span class="g">开启</span>]*<span class="d"> · 17次 ¥0.1574 均¥0.0093</span>             │
+  │   4. 持仓体检报告               <span class="d">health_check    </span> [<span class="g">开启</span>]<span class="d"> · 19次 ¥0.5850 均¥0.0308</span>              │
+  │   5. 穿透深度分析               <span class="d">penetration_deep</span> [<span class="g">开启</span>]<span class="d"> · 19次 ¥0.2230 均¥0.0117</span>              │
+  │   6. 生成后自检                 <span class="d">self_review     </span> [<span class="g">开启</span>]*                                      │
+  │   7. 持仓变动复盘归因           <span class="d">holding_change  </span> [<span class="g">开启</span>]<span class="d"> · 见独立组 · 19次 ¥0.0992 均¥0.0052</span>   │
+  │───────────────────────────────────────────────────────────────────────────────────────────────│
+  │ <span class="bold"><span class="b">📊 呈现与体验（1/1 开）</span></span>                                                                       │
+  │   8.   量化指标显示               <span class="d">metrics_enabled          </span> [<span class="g">开启</span>]                            │
+  │───────────────────────────────────────────────────────────────────────────────────────────────│
+  │ <span class="bold"><span class="b">🔍 分析增强·既有章内追加（14/16 开）</span></span>                                                          │
+  │   9.   辩论-正反辩论              <span class="d">llm_debate_procon        </span> [<span class="r">关闭</span>]                            │
+  │  10.   辩论-条件推理              <span class="d">llm_debate_conditional   </span> [<span class="g">开启</span>]                            │
+  │  11.   因子目录                   <span class="d">factor_catalog           </span> [<span class="g">开启</span>]*                           │
+  │  12.   事件窗量化对照             <span class="d">event_window_impact      </span> [<span class="g">开启</span>]*                           │
+  │  13.   数据质量仪表盘             <span class="d">data_quality             </span> [<span class="g">开启</span>]                            │
+  │  14.   行业Beta子表               <span class="d">industry_beta            </span> [<span class="g">开启</span>]*                           │
+  │  15.   候选基金比较子表           <span class="d">candidate_compare        </span> [<span class="r">关闭</span>]                            │
+  │  16.   成本流水                   <span class="d">cost_lots                </span> [<span class="g">开启</span>]*                           │
+  │  17.   估值分位                   <span class="d">valuation_percentile     </span> [<span class="g">开启</span>]*                           │
+  │  18.   市场温度                   <span class="d">market_temperature       </span> [<span class="g">开启</span>]                            │
+  │  19.   市场情绪与资金热点         <span class="d">market_sentiment         </span> [<span class="g">开启</span>]*                           │
+  │  20.   基金申购限购               <span class="d">fund_purchase_limit      </span> [<span class="g">开启</span>]                            │
+  │  21.   持仓成本区间位置           <span class="d">cost_position            </span> [<span class="g">开启</span>]                            │
+  │  22.   风险调整超额               <span class="d">risk_adjusted_excess     </span> [<span class="g">开启</span>]*                           │
+  │  23.   本期要点与环比对照         <span class="d">summary_highlights       </span> [<span class="g">开启</span>]*                           │
+  │  24.   景气度框架诊断             <span class="d">prosperity_framework     </span> [<span class="g">开启</span>]                            │
+  │───────────────────────────────────────────────────────────────────────────────────────────────│
+  │ <span class="bold"><span class="b">📑 独立章节与回放（4/5 开）</span></span>                                                                   │
+  │  25.   调仓纪律回放               <span class="d">rebalance_schedule_replay</span> [<span class="g">开启</span>]*                           │
+  │  26.   持仓变动复盘               <span class="d">holding_change_review    </span> [<span class="g">开启</span>]*<span class="d"> · 见 LLM 区</span>               │
+  │  27.   What-if 交易成本对比       <span class="d">whatif_trade_cost        </span> [<span class="r">关闭</span>]                            │
+  │  28.   个股基本面                 <span class="d">stock_fundamentals       </span> [<span class="g">开启</span>]*                           │
+  │  29.   危机回放                   <span class="d">crisis_replay            </span> [<span class="g">开启</span>]*                           │
+  │───────────────────────────────────────────────────────────────────────────────────────────────│
+  │ <span class="bold"><span class="b">⚙ 机制与诊断（4/5 开）</span></span>                                                                        │
+  │  30. ⚗ 决策跨期反思闭环           <span class="d">decision_reflection      </span> [<span class="g">开启</span>]*<span class="d">（启用 66 次 · 最近 10-23）</span>│
+  │  31. ⚗ 报告对话式追问             <span class="d">report_qa                </span> [<span class="g">开启</span>]*<span class="d">（启用 11 次 · 最近 10-23）</span>│
+  │  32.   确定性信号模块             <span class="d">deterministic_signal     </span> [<span class="g">开启</span>]                            │
+  │  33.   模块级质量分级             <span class="d">module_quality_gate      </span> [<span class="g">开启</span>]                            │
+  │  34.   系统自检上屏               <span class="d">doctor_check             </span> [<span class="r">关闭</span>]*                           │
+  │                                                                                               │
+  │  0. 返回主菜单                                                                                │
+  │───────────────────────────────────────────────────────────────────────────────────────────────│
+  │   ⚗ 实验项（默认关，质量可能不稳定） · * 与出厂默认不一致                                     │
+  │   键名即行内淡色列：可直接输入键名（也可 ? 键名 / 键名=on|off）代替编号，面板增删项后仍然稳定 │
+  │   行尾「N次 ¥X 均¥Y」= 近 7 日该模块调用次数 / 累计费用 / 单次均值                            │
+  │   ?编号 查看说明 · r 编号 恢复本组默认 · ra 恢复全部 · x 实验项全关 · 0 返回                  │
+  └───────────────────────────────────────────────────────────────────────────────────────────────┘
+  基础报告章节组（基金深度分析/市场新闻/历史走势+回撤/组合演进/行动建议）在菜单 [P] 配置</pre><p class="more">… 共 111 行，此处展示前 52 行</p></section>
+<section class="screen" id="s-g_menu_proposed"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>全局设置子菜单（[G] 二级，7 项）</h2></div><p class="note">增 [I] 对比基准指数、[A] 持仓匿名化；提示覆盖 C/F/O/L/I/A/M</p><pre class="term"><span class="bold"><span class="b">  ── 全局设置 ──</span></span>
    [C] 持仓信息目录
    [F] 持仓信息文件名
    [O] 报告输出目录
@@ -335,17 +214,7 @@ pre.term {
    [0] 返回主菜单
 
   选择（如 C/F/O/L/I/A/M） · 0 返回: 0</pre></section>
-<section class="screen" id="s-d_tuning" data-level="三级"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>LLM 设置（[G]→[L]，六项运行参数）</h2></div><p class="note">6 个运行参数，取值范围与说明由共享白名单下发</p><pre class="term"><span class="bold"><span class="b">  ── LLM 调优参数 ──</span></span>
-   1. thinking 模块并发上限（当前 2）
-   2. LLM 模块并发线程数（当前 3）
-   3. 单请求重试次数（当前 2）
-   4. 整链失败后的重试等待（秒）（当前 30）
-   5. LLM 总时间预算（秒）（当前 0）
-   6. LLM 日费用上限（当前 0）
-   0. 返回
-
-  输入编号修改（如 1 改 thinking 并发） · 0 返回: 0</pre></section>
-<section class="screen" id="s-d_llm_proposed" data-level="三级"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>LLM 设置（[G]→[L]，七项含线路入口）</h2></div><p class="note">6 个运行参数 + 第 7 项「多链线路优先级」入口；行尾给出线路条数与链首</p><pre class="term"><span class="bold"><span class="b">  ── LLM 设置 ──</span></span>
+<section class="screen" id="s-d_llm_proposed"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>LLM 设置（[G]→[L]，7 项）</h2></div><p class="note">6 个运行参数 + 第 7 项「多链线路优先级」入口；行尾给线路条数与链首</p><pre class="term"><span class="bold"><span class="b">  ── LLM 设置 ──</span></span>
    1. thinking 模块并发上限（当前 2）
    2. LLM 模块并发线程数（当前 3）
    3. 单请求重试次数（当前 2）
@@ -356,7 +225,7 @@ pre.term {
    0. 返回
 
   输入编号修改（如 7 调多链线路） · 0 返回: 0</pre></section>
-<section class="screen" id="s-d_map" data-level="三级"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>配置入口地图（[G]→[M]）</h2></div><p class="note">只读索引：各配置项在哪个菜单键下</p><pre class="term"><span class="bold"><span class="b">  ── 配置与目录信息 ──</span></span>
+<section class="screen" id="s-d_map"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>配置入口地图（[G]→[M]）</h2></div><p class="note">只读索引：各配置项在哪个菜单键下</p><pre class="term"><span class="bold"><span class="b">  ── 配置与目录信息 ──</span></span>
    [C] 持仓信息目录
    [F] 持仓信息文件名
    [O] 报告输出目录
@@ -387,32 +256,29 @@ pre.term {
    [0] 返回主菜单
 
   选择（如 C/F/O/M） · 0 返回:</pre></section>
-<section class="screen" id="s-d_dir" data-level="三级"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>持仓信息目录（[G]→[C]）</h2></div><p class="note">目录列表选择，取到首屏即中止</p><pre class="term">  当前目录: /lzcapp/document/working/codebase/investor-review/data/holdings
+<section class="screen" id="s-d_dir"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>持仓信息目录（[G]→[C]）</h2></div><p class="note">目录列表选择，取到首屏即中止</p><pre class="term">  当前目录: /lzcapp/document/working/codebase/investor-review/data/holdings
   请输入新目录（留空则不修改）:
   &gt;</pre></section>
-<section class="screen" id="s-d_file" data-level="三级"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>持仓信息文件名（[G]→[F]）</h2></div><p class="note">目录内 .xlsx 列表选择</p><pre class="term">  当前目录中的 xlsx 文件:
+<section class="screen" id="s-d_file"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>持仓信息文件名（[G]→[F]）</h2></div><p class="note">目录内 .xlsx 列表选择</p><pre class="term">  当前目录中的 xlsx 文件:
     [1] 个人投资持仓信息.xlsx
 
   当前文件名: 个人投资持仓信息.xlsx
   请输入新文件名（留空则不修改）:
   &gt;</pre></section>
-<section class="screen" id="s-d_out" data-level="三级"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>报告输出目录（[G]→[O]）</h2></div><p class="note">输出目录切换（含恢复默认项）</p><pre class="term">  当前报告输出目录: /lzcapp/document/working/codebase/investor-review/reports
+<section class="screen" id="s-d_out"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>报告输出目录（[G]→[O]）</h2></div><p class="note">输出目录切换（含恢复默认项）</p><pre class="term">  当前报告输出目录: /lzcapp/document/working/codebase/investor-review/reports
   请输入新报告输出目录（留空则不修改）:
   &gt;</pre></section>
-<section class="screen" id="s-boards" data-level="二级"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>报告章节取舍（[P]）</h2></div><p class="note">5 个顶层章节的顺序与开关；面板底部一行提示指向 [S]</p><pre class="term">  ┌── 配置报告可选章节 ────────────────────────────────┐
-  │  1. 基金深度分析      [<span class="g">启用</span>]                       │
-  │  2. 市场新闻          [<span class="g">启用</span>]                       │
-  │  3. 组合历史走势+回撤 [<span class="g">启用</span>]                       │
-  │  4. 组合演进          [<span class="g">启用</span>]                       │
-  │  5. 行动建议          [<span class="g">启用</span>]                       │
-  │                                                    │
-  │  6. 报告增强子模块 / LLM 分析章节 — 请在菜单 S 配置│
-  │  0. 返回主菜单                                     │
-  └────────────────────────────────────────────────────┘
-  提示：报告章节与增强、LLM 分析章节请在菜单 [S] 配置
+<section class="screen" id="s-boards_proposed"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>报告章节取舍（[P]，仅 5 章）</h2></div><p class="note">5 个顶层章节；面板底部一行提示指向 [S]</p><pre class="term"><span class="bold"><span class="b">  ── 配置报告可选章节 ──</span></span>
+   1. 基金深度分析       [启用]
+   2. 市场新闻           [启用]
+   3. 组合历史走势+回撤  [启用]
+   4. 组合演进           [启用]
+   5. 行动建议           [启用]
+   0. 返回主菜单
+  提示：章内增强与整章增补见 [S]
 
-  输入编号切换 (0-6) · ? 看说明 · 0 返回: 0</pre></section>
-<section class="screen" id="s-indices" data-level="二级"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>对比指数池（[I]）</h2></div><p class="note">增删基准指数、恢复默认预设</p><pre class="term">  ┌── 管理对比指数池 ───────────────────────────┐
+  输入编号切换（如 1-5 切换） · ? 看说明 · 0 返回: 0</pre></section>
+<section class="screen" id="s-indices"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>对比基准指数（[G]→[I]）</h2></div><p class="note">增删基准指数、恢复默认预设</p><pre class="term">  ┌── 管理对比指数池 ───────────────────────────┐
   │ 自定义基准指数，用于报告中组合 vs 多指数对比│
   │ 当前指数 (3 个):                            │
   │   1. sh000300 (沪深300)                     │
@@ -426,7 +292,7 @@ pre.term {
   └─────────────────────────────────────────────┘
 
   选择操作（如 A 添加 / D 删除 / R 重置） · ? 看说明 · 0 返回: 0</pre></section>
-<section class="screen" id="s-anon" data-level="二级"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>持仓匿名化（[A]）</h2></div><p class="note">off / code_display / full_anonymous / summary 四档</p><pre class="term">  ┌── 配置持仓匿名化 ───────────────────────────────────┐
+<section class="screen" id="s-anon"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>持仓匿名化（[G]→[A]）</h2></div><p class="note">off / code_display / full_anonymous / summary 四档</p><pre class="term">  ┌── 配置持仓匿名化 ───────────────────────────────────┐
   │ 当前模式: off                                       │
   │─────────────────────────────────────────────────────│
   │  ► 1. 关闭 — 显示真实持仓名称和代码                 │
@@ -438,13 +304,13 @@ pre.term {
   └─────────────────────────────────────────────────────┘
 
   选择匿名化模式（如 1-4 选模式） · ? 看说明 · 0 返回: 0</pre></section>
-<section class="screen" id="s-providers" data-level="二级"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>LLM 多链线路优先级（[M]）</h2></div><p class="note">按 priority 排序的线路清单与调序操作</p><pre class="term">  ── LLM 多链线路优先级（strategy: priority） ──
+<section class="screen" id="s-providers"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>多链线路优先级（[G]→[L] 第 7 项）</h2></div><p class="note">按 priority 排序的线路清单与调序操作</p><pre class="term">  ── LLM 多链线路优先级（strategy: priority） ──
    1. deepseek-main（claude）priority 10
    2. opencode-go（claude）priority 20
    0. 返回主菜单
 
   输入两个编号交换优先级（如 3 1） · ? 看说明 · 0 返回: 0</pre></section>
-<section class="screen" id="s-cache" data-level="二级"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>缓存管理（[3]）</h2></div><p class="note">统计首屏 + 子项 3 清理过期缓存</p><pre class="term">  <span class="c">[..]</span> 缓存文件: 445 个 | 大小: 4729 KB
+<section class="screen" id="s-cache"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>缓存管理（[3]）</h2></div><p class="note">统计首屏 + 子项 3 清理过期缓存</p><pre class="term">  <span class="c">[..]</span> 缓存文件: 445 个 | 大小: 4729 KB
   <span class="c">[..]</span> 正在检查过期文件...
   <span class="c">[..]</span> 过期文件: 5 个
   data/cache
@@ -496,23 +362,12 @@ pre.term {
   3 清理过期缓存
   0 返回主菜单（回车也返回）
   输入编号执行（如 3 清理过期） · ? 看说明 · 0 返回:</pre></section>
-<section class="screen" id="s-logs" data-level="二级"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>运行日志（[V]）</h2></div><p class="note">按级别筛选的结构化日志视图</p><pre class="term">  按级别筛选 （留空=全部，可选: DEBUG/INFO/WARNING/ERROR/CRITICAL）（回车=全部级别 · Esc 取消）: 0
+<section class="screen" id="s-logs"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>运行日志（[V]）</h2></div><p class="note">按级别筛选的结构化日志视图</p><pre class="term">  按级别筛选 （留空=全部，可选: DEBUG/INFO/WARNING/ERROR/CRITICAL）（回车=全部级别 · Esc 取消）: 0
   <span class="y">[!]</span> 无效级别「0」，将显示全部日志
 
   ========================================
   最近日志（级别: 全部）
   ========================================
-  2026-10-23 18:56:50,098 [INFO] 财经新闻热点与持仓关联分析完成: 25 条 → 25 条含 LLM 分析（缓存 0 条 + 新处理 25 条）
-  2026-10-23 18:56:50,098 [INFO] 财经新闻热点与持仓关联分析生成完成
-  2026-10-23 18:56:50,514 [INFO] [基准] 012325 使用内置知识库
-  2026-10-23 18:56:50,515 [INFO] [history_stock] 尝试 tencent（code=300308, days=365）
-  2026-10-23 18:56:50,596 [INFO] [history_index] 尝试 tencent（code=sh000012, days=365）
-  2026-10-23 18:56:50,695 [INFO] [history_stock] 尝试 tencent（code=601398, days=365）
-  2026-10-23 18:56:50,789 [INFO] [history_stock] 尝试 tencent（code=600900, days=365）
-  2026-10-23 18:56:50,874 [INFO] [history_stock] 尝试 tencent（code=601939, days=365）
-  2026-10-23 18:56:50,964 [INFO] [history_stock] 尝试 tencent（code=300502, days=365）
-  2026-10-23 18:56:51,054 [INFO] 事件窗事件表: 可出行 19 条、降级 0 条、跳过 {'bad_date': 0, 'unmatched': 12, 'capped': 0}
-  2026-10-23 18:56:51,054 [INFO] [event_impact] 事件表装配完成: 可出行 19 / 降级 0 / 分歧例块 611 字符
   2026-10-23 18:56:51,060 [INFO] 正在生成：全球政经局势...
   2026-10-23 18:56:51,060 [INFO] 正在生成：智囊团深度复盘...
   2026-10-23 18:56:51,061 [INFO] 正在生成：持仓体检报告...
@@ -547,8 +402,19 @@ pre.term {
   2026-10-23 18:57:53,604 [INFO]   [LLM] Claude: 输入 2,053 + 输出 698 = 2,751 tokens | 模型: deepseek-v4-flash (缓存命中 384) | 估算费用: ¥0.0045
   2026-10-23 18:57:53,605 [INFO] provider 成功: deepseek-main(claude/deepseek-v4-flash) [https://api.deepseek.com/anthropic/v1/messages]
   2026-10-23 18:57:53,606 [INFO] LLM 内容生成完成: llm_holding_change_3899adde8589_deepseek-main
-  2026-10-23 18:57:53,606 [INFO] LLM 生成完成: 全球政经局势=OK, 智囊团深度复盘=OK, 持仓体检报告=OK, 穿透深度分析=OK</pre><p class="more">… 共 206 行，此处展示前 52 行</p></section>
-<section class="screen" id="s-health" data-level="二级"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>数据源健康历史（[H]）</h2></div><p class="note">最近若干次采集的成功/失败源与降级原因</p><pre class="term">  ========================================
+  2026-10-23 18:57:53,606 [INFO] LLM 生成完成: 全球政经局势=OK, 智囊团深度复盘=OK, 持仓体检报告=OK, 穿透深度分析=OK
+  2026-10-23 18:57:53,609 [INFO] [decision_llm_capture] 同日重复 LLM 决策跳过: 4 条
+  2026-10-23 18:57:53,609 [INFO] [decision_reflection] LLM 操作建议登记为空（无方向建议或同日已登记）
+  2026-10-23 18:57:53,612 [INFO] [llm_quality] 全球政经局势 评级 A（章节齐备、篇幅达标）
+  2026-10-23 18:57:53,612 [INFO] [llm_quality] 智囊团深度复盘 评级 A（章节齐备、篇幅达标）
+  2026-10-23 18:57:53,612 [INFO] [llm_quality] 持仓体检报告 评级 A（章节齐备、篇幅达标）
+  2026-10-23 18:57:53,612 [INFO] [llm_quality] 穿透深度分析 评级 A（章节齐备、篇幅达标）
+  2026-10-23 18:57:53,614 [INFO] [signal_ledger] 确定性信号登记为空（无可登记评级或同日已登记）
+  2026-10-23 18:57:53,614 [INFO] [perf] LLM+新闻: 89.662s
+  2026-10-23 18:57:53,615 [INFO] [history_stock] 尝试 tencent（code=600900, days=20）
+  2026-10-23 18:57:53,756 [INFO] [history_stock] 尝试 tencent（code=601398, days=20）
+  2026-10-23 18:57:53,864 [INFO] [history_stock] 尝试 tencent（code=601939, days=20）</pre><p class="more">… 共 206 行，此处展示前 52 行</p></section>
+<section class="screen" id="s-health"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>数据源健康历史（[H]）</h2></div><p class="note">最近若干次采集的成功/失败源与降级原因</p><pre class="term">  ========================================
   数据源健康历史（最近 10 次检查）
   ========================================
   2026-10-20 12:42:47  <span class="g">12/12 正常</span>  |  full  |  失败 0
@@ -562,7 +428,7 @@ pre.term {
   2026-10-23 13:46:59  <span class="g">12/12 正常</span>  |  full  |  失败 0
   2026-10-23 18:58:00  <span class="g">12/12 正常</span>  |  full  |  失败 0
   按任意键返回菜单...</pre></section>
-<section class="screen" id="s-doctor" data-level="二级"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>系统自检（[T]）</h2></div><p class="note">环境/配置/目录/数据源一键体检；首屏含联网检查询问</p><pre class="term">  是否包含数据源网络检查？(y=联网 / 空回车=仅本地):
+<section class="screen" id="s-doctor"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>系统自检（[T]）</h2></div><p class="note">环境/配置/目录/数据源一键体检；首屏含联网检查询问</p><pre class="term">  是否包含数据源网络检查？(y=联网 / 空回车=仅本地):
   <span class="y">[..]</span> 正在自检（仅本地）...
 
 投资复盘助手 系统自检 (v0.14.9-dev)
@@ -587,7 +453,7 @@ pre.term {
 
 [日志与缓存]
   [OK] 日志级别 — 文件 INFO（默认 INFO）
-  [ERR] 日志体积 — app.log 8.8 MB + 轮转 3 份；DEBUG 占比 88%（采样 111229 行）
+  [ERR] 日志体积 — app.log 8.8 MB + 轮转 3 份；DEBUG 占比 88%（采样 111240 行）
         → DEBUG 占比过半：确认未设 INVEST_LOG_FILE_LEVEL=DEBUG；排障后可清理 logs/app.log*（旧日志可删）
   [ERR] 去重锚点 — 36.9 MB / 110320 行（自动压缩阈值 32 MB）
         → 超过阈值：下次生成时自动压缩（保留每组最新 + .bak 备份）；也可手工 `python scripts/eval-dedup-threshold.py --compact`
@@ -609,22 +475,22 @@ pre.term {
   共 20 项 — [OK] 17 / [ERR] 3
   <span class="r">[!]</span> 有 3 项未通过——按上方 → 建议逐项处理
   按任意键返回菜单...</pre></section>
-<section class="screen" id="s-generate" data-level="二级"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>生成报告 · 持仓文件选择（[E]/[B]/[L]）</h2></div><p class="note">生成前选择持仓文件，取到列表即中止</p><pre class="term">  [..] 本次生成 LLM 费用预估 ¥0.0822 ~ ¥0.2410（计划 6 个模块，依据：近 20 次运行实际费用）
+<section class="screen" id="s-generate"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>生成报告 · 费用确认（[E]/[B]/[L]）</h2></div><p class="note">生成前的费用预估与「用已有结果 / 重新生成」确认</p><pre class="term">  [..] 本次生成 LLM 费用预估 ¥0.0822 ~ ¥0.2410（计划 6 个模块，依据：近 20 次运行实际费用）
   [..] 今日已花费 ¥0.3336（未设日预算上限）
   [?] 是否用已有的 AI 分析结果生成？（Y=用已有结果，免费但可能不是最新；N=重新生成，会产生费用）
   回车/Y=用已有结果生成 / N=重新生成（可选模块） / q=中止: </pre></section>
-<section class="screen" id="s-qa" data-level="二级"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>报告追问 · 报告选择（[Q]）</h2></div><p class="note">选择已生成 HTML 报告进入多轮追问</p><pre class="term">  可追问的报告（/lzcapp/document/working/codebase/investor-review/reports）：
+<section class="screen" id="s-qa"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>报告追问 · 报告选择（[Q]）</h2></div><p class="note">选择已生成 HTML 报告进入多轮追问</p><pre class="term">  可追问的报告（/lzcapp/document/working/codebase/investor-review/reports）：
     1. 个人投资分析报告.html  (2026-10-23 18:57)  ← 回车默认
     2. 调仓模拟.html  (2026-10-02 23:20)
   选择报告编号（回车=本期主报告 / 编号=指定报告 / q=取消）:</pre></section>
-<section class="screen" id="s-whatif" data-level="二级"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>调仓 What-if · 基准文件选择（[W]）</h2></div><p class="note">基准持仓选择，下一步为候选持仓</p><pre class="term">  [..] 调仓 What-if 模拟：先选择基准持仓（调仓前）
+<section class="screen" id="s-whatif"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>调仓 What-if · 基准文件选择（[W]）</h2></div><p class="note">基准持仓选择，下一步为候选持仓</p><pre class="term">  [..] 调仓 What-if 模拟：先选择基准持仓（调仓前）
   [..] 选择目标持仓文件（调仓后/假设）
   [ERR] 持仓目录下未找到基准之外的 xlsx 文件
      可复制基准持仓文件并修改后作为目标（调仓后/假设）
   [1] 自动复制基准文件为可编辑目标模板（调仓后）
   [2] 手动输入目标文件完整路径
   回车=取消 / 输入编号选择（1 或 2）:</pre></section>
-<section class="screen" id="s-refresh" data-level="二级"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>刷新配置（[R]）</h2></div><p class="note">重读 config/llm_settings/llm_key/llm_providers</p><pre class="term">  <span class="g">[OK]</span> config.json 已重新加载
+<section class="screen" id="s-refresh"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>刷新配置（[R]）</h2></div><p class="note">重读 config / llm_settings / llm_key / llm_providers</p><pre class="term">  <span class="g">[OK]</span> config.json 已重新加载
   <span class="g">[OK]</span> LLM 配置已重新加载（llm_settings + llm_key + llm_providers）</pre></section>
 </main>
 </div>

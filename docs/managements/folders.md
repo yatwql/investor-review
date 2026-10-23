@@ -18,10 +18,10 @@
 | 测试用例 | — | — | 11,522 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 13 | 6,293 | 含 README.md（211 行）；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 12 | 6,075 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 184 | 66,565 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 6 + archive md 160），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 13,196 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 184 | 66,570 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 6 + archive md 160），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 13,199 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 164 | 52,079 | 各版本 changelog/plan/review-findings 与设计文档归档（157 md 50,492 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
-| ├ plan/ | 中间设计文件 | 6 | ~1,198 | 在办设计文档（文档扁平存放、附属原型就近建子目录，完成后迁入对应版本的归档子目录）：两份 Jev 新闻关联判定文档（对照评测方案 + 类型化判定通道接入设计）+ 决策跨期反思闭环设计 + Web 浏览器验证方法 + 配置面板分类与描述设计 + LLM 配置纵切设计（两者共用同目录 `config-panel-mockup/` 设计图样原型与复跑脚本） |
+| ├ plan/ | 中间设计文件 | 6 | ~1,200 | 在办设计文档（文档扁平存放、附属原型就近建子目录，完成后迁入对应版本的归档子目录）：两份 Jev 新闻关联判定文档（对照评测方案 + 类型化判定通道接入设计）+ 决策跨期反思闭环设计 + Web 浏览器验证方法 + 配置面板分类与描述设计 + LLM 配置纵切设计（两者共用同目录 `config-panel-mockup/` 设计图样原型与复跑脚本） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
 
 ## 版本演进对照（最初版本 → 最新发布 → 当前开发版）
@@ -1664,9 +1664,12 @@ investor-review/
 │   └── plan/                          #   中间设计文件（在办设计文档，文档扁平存放、原型就近建子目录）；完成后迁入对应版本的归档子目录
 │       ├── config-panel-taxonomy-design.md # 配置面板分类与描述设计（域/组双轴、Web 面契约、TUI 编号派生）
 │       ├── config-panel-mockup/       #   设计图样原型目录（自包含 HTML，数据内联，浏览器直接打开）
-│       │   ├── index.html             #       配置面板四域编排原型（布局/说明密度/标记/主题可切换）
-│       │   ├── tui.html               #       TUI 全层级图样（主菜单/二级面板/三级子面板，真实渲染取样）
-│       │   ├── llm-config.html        #       LLM 配置纵切图样（扁平组织与模块纵切对照）
+│       │   ├── index.html             #       Web 配置面板目标设计（按业务域编排；说明密度/标记/主题可切换）
+│       │   ├── web-current.html       #       Web 配置面板现有实现（按存储文件编排）
+│       │   ├── tui.html               #       TUI 全层级图样 · 目标设计（五组开关/[G] 全局设置/[G]→[L] LLM 设置）
+│       │   ├── tui-current.html       #       TUI 全层级图样 · 现有实现（四组开关/[D] 目录信息/[D]→[L] 调优参数）
+│       │   ├── llm-config.html        #       LLM 配置目标设计（模块纵切结构 + 键位映射）
+│       │   ├── llm-config-current.html #      LLM 配置现有实现（扁平结构：参数 × 模块平铺）
 │       │   ├── tui_render.py          #       TUI 单屏渲染取样（真实处理器 + 伪终端）
 │       │   ├── tui_capture.py         #       TUI 逐屏采集（产出帧数据到 docs/tmp，git 忽略）
 │       │   ├── tui_build.py           #       ANSI 帧转 HTML 图样构建器

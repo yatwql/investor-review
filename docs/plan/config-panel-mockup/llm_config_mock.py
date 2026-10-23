@@ -166,32 +166,36 @@ def main() -> int:
     v2_html = render_v2(v2)
     v2_keys = 1 + len(v2["defaults"]) + len(v2["modules"]) + len(v2["runtime"]) + 4
     scatter = "　".join(f"{m} 占 {len(v)} 行" for m, v in line_of.items() if v)
-    page = TEMPLATE
+
+    current = PAGE_CURRENT
     for token, value in {
-        "{{V1}}": v1_html,
-        "{{V2}}": v2_html,
+        "{{FLAT}}": v1_html,
         "{{N_V1}}": str(len(flat)),
-        "{{N_V2}}": str(v2_keys),
+        "{{N_SCATTER}}": str(dup),
         "{{N_MOD}}": str(len(modules)),
-        "{{N_DUP}}": str(dup),
-        "{{DEFAULTS}}": html.escape(json.dumps(v2["defaults"], ensure_ascii=False)),
-        "{{RUN}}": html.escape(json.dumps(v2["runtime"], ensure_ascii=False)),
         "{{SCATTER}}": html.escape(scatter),
     }.items():
-        page = page.replace(token, value)
-    out = HERE / "llm-config.html"
-    out.write_text(page, encoding="utf-8")
-    print(f"写出 {out}（v1 {len(flat)} 键 → v2 约 {v2_keys} 键，重复同值键 {dup} 个）")
+        current = current.replace(token, value)
+    out_current = HERE / "llm-config-current.html"
+    out_current.write_text(current, encoding="utf-8")
+
+    target = PAGE_TARGET
+    for token, value in {
+        "{{V2}}": v2_html,
+        "{{N_V2}}": str(v2_keys),
+        "{{N_MOD}}": str(len(modules)),
+        "{{DEFAULTS}}": html.escape(json.dumps(v2["defaults"], ensure_ascii=False)),
+        "{{RUNTIME}}": html.escape(json.dumps(v2["runtime"], ensure_ascii=False)),
+    }.items():
+        target = target.replace(token, value)
+    out_target = HERE / "llm-config.html"
+    out_target.write_text(target, encoding="utf-8")
+    print(f"写出 {out_current}（现有：{len(flat)} 个顶层键，散落 {dup} 个）")
+    print(f"写出 {out_target}（目标：{v2_keys} 个一级键，模块 {len(modules)}）")
     return 0
 
 
-TEMPLATE = """<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LLM 配置纵切图样 · llm_settings.json</title>
-<style>
+TEMPLATE_CSS = """
 :root {
   --bg: #0d1117; --panel: #161b22; --border: #30363d; --text: #c9d1d9; --dim: #8b949e;
   --blue: #79c0ff; --green: #7ee787; --yellow: #ffd479; --red: #ff7b72; --orange: #f0883e;
@@ -207,102 +211,76 @@ header p { margin: 0; color: var(--dim); font-size: 12.5px; }
 .stat { font-size: 12.5px; color: var(--dim); }
 .stat b { display: block; font-size: 19px; color: var(--text); font-variant-numeric: tabular-nums; }
 .stat.warn b { color: var(--orange); }
-main { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 20px 24px 60px; max-width: 1500px; }
-.col h2 { font-size: 14px; margin: 0 0 2px; }
-.col .sub { margin: 0 0 10px; color: var(--dim); font-size: 12px; }
-pre { margin: 0; background: #0b0f14; border: 1px solid var(--border); border-radius: 8px;
+main { padding: 20px 24px 60px; max-width: 1100px; }
+h2 { font-size: 14px; margin: 0 0 8px; }
+.sub { margin: 0 0 10px; color: var(--dim); font-size: 12px; }
+pre { margin: 0 0 20px; background: #0b0f14; border: 1px solid var(--border); border-radius: 8px;
   padding: 14px 16px; font-family: var(--mono); font-size: 12.5px; line-height: 1.6; overflow-x: auto; }
 .side { color: var(--dim); font-size: 11.5px; }
-.dup { color: var(--orange); }
-.var { color: var(--green); }
-.feat { color: var(--blue); }
-.rt { color: var(--yellow); }
-.head { color: var(--blue); font-weight: 600; }
-.mod { color: var(--green); }
-.nest { color: var(--yellow); }
-.ln { color: var(--dim); }
+.dup { color: var(--orange); } .var { color: var(--green); } .feat { color: var(--blue); }
+.rt { color: var(--yellow); } .head { color: var(--blue); font-weight: 600; } .mod { color: var(--green); }
+.nest { color: var(--yellow); } .ln { color: var(--dim); }
 .c0 { color: #79c0ff; } .c1 { color: #7ee787; } .c2 { color: #ffd479; }
 .c3 { color: #ff9bce; } .c4 { color: #a5d6ff; } .c5 { color: #d2a8ff; } .c6 { color: #ffa657; }
-.full { grid-column: 1 / -1; }
-.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.table { border-collapse: collapse; width: 100%; font-size: 12.5px; margin-bottom: 18px; }
+.table th, .table td { border-bottom: 1px solid var(--border); padding: 5px 8px; text-align: left; }
+.table th { color: var(--dim); font-weight: 600; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
 .card { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; background: var(--panel); }
 .card h3 { margin: 0 0 6px; font-size: 13px; }
 .card p { margin: 4px 0; font-size: 12.5px; color: var(--dim); }
 .card code { font-family: var(--mono); font-size: 12px; color: var(--text); }
-table.map { border-collapse: collapse; width: 100%; font-size: 12.5px; }
-table.map th, table.map td { border-bottom: 1px solid var(--border); padding: 5px 8px; text-align: left; }
-table.map th { color: var(--dim); font-weight: 600; }
-@media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
-</style>
-</head>
-<body>
-<header>
-  <h1>LLM 配置纵切图样 · <code>llm_settings.json</code></h1>
-  <p>目标结构（右）与扁平组织（左）对照。仅展示结构，不改任何代码与文件；数值取自当前 <code>data/config/llm_settings.json</code>。</p>
-</header>
-
-<div class="stats">
-  <div class="stat">扁平组织顶层键<b>{{N_V1}}</b></div>
-  <div class="stat">纵切组织一级键<b>{{N_V2}}</b></div>
-  <div class="stat warn">同一模块散落的键<b>{{N_DUP}}</b></div>
-  <div class="stat">模块数<b>{{N_MOD}}</b></div>
-</div>
-
-<main>
-  <div class="col">
-    <h2>扁平组织 · 参数为横切轴</h2>
-    <p class="sub">{{SCATTER}}——改一个模块要在文件里跳着找。</p>
-    <pre>{{V1}}</pre>
-  </div>
-  <div class="col">
-    <h2>纵切组织 · 模块为第一层</h2>
-    <p class="sub">蓝=分区，绿=模块，黄=嵌套子对象；模块段只写与 <code>defaults</code> 不同的项。</p>
-    <pre>{{V2}}</pre>
-  </div>
-
-  <div class="full">
-    <h2 style="font-size:14px;margin:0 0 8px">映射规则（v1 → v2）</h2>
-    <table class="map">
-      <thead><tr><th>v1 键</th><th>v2 位置</th><th>说明</th></tr></thead>
-      <tbody>
-        <tr><td><code>temperature_&lt;模块&gt;</code> 等 6 项</td><td><code>modules.&lt;模块&gt;.&lt;参数&gt;</code></td><td>模型/温度/长度/超时/简报/提示词</td></tr>
-        <tr><td><code>cache_enabled_&lt;模块&gt;</code></td><td><code>modules.&lt;模块&gt;.cache</code></td><td>短名，段内已表达归属</td></tr>
-        <tr><td><code>thinking_enabled/budget/reasoning_effort_&lt;模块&gt;</code></td><td><code>modules.&lt;模块&gt;.thinking.{enabled,budget,effort}</code></td><td>三者同属一个业务概念</td></tr>
-        <tr><td><code>enabled_llm.&lt;模块&gt;</code></td><td><code>modules.&lt;模块&gt;.enabled</code></td><td>启停与参数同段</td></tr>
-        <tr><td><code>llm_max_thinking_concurrency</code> 等 6 项</td><td><code>runtime.*</code></td><td>对应面板「LLM 调优参数」组</td></tr>
-        <tr><td><code>debate</code> / <code>fact_check</code> / <code>pricing</code> / <code>news_correlation_top_n</code></td><td><code>advanced.*</code></td><td>高级选项（避免与 features.json 同名）</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <div class="full notes">
-    <div class="card">
-      <h3>代码侧改动面</h3>
-      <p><code>get_llm_config()</code> 仍返回<b>扁平视图</b>，因此 <code>llm/</code> 包 0 改动（实测 116 处逐键读取、18 处按 suffix 拼键全部不动）。</p>
-      <p>要改的只有 4 处：<code>config/_llm_settings.py</code>（v1/v2 判定 + 展平/反展平）、<code>_llm_settings_defaults.py</code>（模板）、<code>core/data_registry.py</code>（结构校验）、<code>config/edit_ops.py</code>（调优项写入路径）。</p>
-    </div>
-    <div class="card">
-      <h3>缺省继承（三层，确定性）</h3>
-      <p>模块值 → <code>defaults</code> → 代码内置默认。</p>
-      <p><code>defaults</code> 初值取程序内置默认，<b>不做众数推断</b>；迁移后用户可把共识值手工上提到 <code>defaults</code>。</p>
-      <p>当前 <code>defaults</code> 推导值：<br><code>{{DEFAULTS}}</code></p>
-    </div>
-    <div class="card">
-      <h3>运行约束段（＝面板「LLM 调优参数」）</h3>
-      <p><code>{{RUN}}</code></p>
-      <p>面板上 6 个调优项的标签与范围不变，只是落盘位置从顶层变成 <code>runtime.*</code>。</p>
-    </div>
-    <div class="card">
-      <h3>迁移与回滚</h3>
-      <p>v1 文件照常读；首次写入落为 v2，写前 <code>.bak</code>。</p>
-      <p>回滚 = 还原 <code>.bak</code>（程序同时支持读 v1）；<code>doctor</code> 增「结构版本」项。</p>
-    </div>
-  </div>
-</main>
-</body>
-</html>
 """
 
+PAGE_CURRENT = (
+    "<!DOCTYPE html>\n<html lang=\"zh-CN\"><head><meta charset=\"utf-8\">"
+    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+    "<title>LLM 配置 · 现有实现</title><style>" + TEMPLATE_CSS + "</style></head><body>"
+    "<header><h1>LLM 配置 · 现有实现</h1>"
+    "<p><code>data/config/llm_settings.json</code> 的扁平组织：顶层键按「参数 × 模块」平铺。</p></header>"
+    '<div class="stats"><div class="stat">顶层键<b>{{N_V1}}</b></div>'
+    '<div class="stat warn">同一模块散落的键<b>{{N_SCATTER}}</b></div>'
+    '<div class="stat">模块数<b>{{N_MOD}}</b></div></div>'
+    "<main><h2>扁平组织 · 参数为横切轴</h2>"
+    '<p class="sub">{{SCATTER}}——改一个模块要在文件里跳着找。</p>'
+    "<pre>{{FLAT}}</pre></main></body></html>"
+)
+
+PAGE_TARGET = (
+    "<!DOCTYPE html>\n<html lang=\"zh-CN\"><head><meta charset=\"utf-8\">"
+    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+    "<title>LLM 配置 · 目标设计</title><style>" + TEMPLATE_CSS + "</style></head><body>"
+    "<header><h1>LLM 配置 · 目标设计</h1>"
+    "<p><code>llm_settings.json</code> 以模块为第一层：<code>defaults</code> 声明缺省，"
+    "<code>modules</code> 只写差异，<code>runtime</code> 收运行参数，<code>advanced</code> 收高级选项。</p></header>"
+    '<div class="stats"><div class="stat">一级键<b>{{N_V2}}</b></div>'
+    '<div class="stat">模块数<b>{{N_MOD}}</b></div></div>'
+    "<main><h2>纵切组织 · 模块为第一层</h2>"
+    '<p class="sub">蓝=分区，绿=模块，黄=嵌套子对象；模块段只写与 <code>defaults</code> 不同的项。</p>'
+    "<pre>{{V2}}</pre>"
+    "<h2>键位映射（兼容读取用）</h2>"
+    '<table class="table"><thead><tr><th>扁平键</th><th>目标位置</th><th>说明</th></tr></thead><tbody>'
+    "<tr><td><code>temperature_&lt;模块&gt;</code> 等 6 项</td><td><code>modules.&lt;模块&gt;.&lt;参数&gt;</code></td><td>模型/温度/长度/超时/简报/提示词</td></tr>"
+    "<tr><td><code>cache_enabled_&lt;模块&gt;</code></td><td><code>modules.&lt;模块&gt;.cache</code></td><td>段内已表达归属</td></tr>"
+    "<tr><td><code>thinking_enabled/budget/reasoning_effort_&lt;模块&gt;</code></td><td><code>modules.&lt;模块&gt;.thinking.{enabled,budget,effort}</code></td><td>三者同属一个概念</td></tr>"
+    "<tr><td><code>enabled_llm.&lt;模块&gt;</code></td><td><code>modules.&lt;模块&gt;.enabled</code></td><td>启停与参数同段</td></tr>"
+    "<tr><td><code>llm_max_thinking_concurrency</code> 等 6 项</td><td><code>runtime.*</code></td><td>对应面板「LLM 调优参数」组</td></tr>"
+    "<tr><td><code>debate</code> / <code>fact_check</code> / <code>pricing</code> / <code>news_correlation_top_n</code></td><td><code>advanced.*</code></td><td>高级选项（避免与 features.json 同名）</td></tr>"
+    "</tbody></table>"
+    '<div class="cards">'
+    '<div class="card"><h3>缺省继承（三层，确定性）</h3>'
+    "<p>模块值 → <code>defaults</code> → 代码内置默认。<code>defaults</code> 初值取程序内置默认，不做统计推断。</p>"
+    "<p><code>{{DEFAULTS}}</code></p></div>"
+    '<div class="card"><h3>运行约束段（＝面板「LLM 调优参数」）</h3>'
+    "<p><code>{{RUNTIME}}</code></p>"
+    "<p>面板 6 个调优项的标签与范围不变，写入落 <code>runtime.*</code>。</p></div>"
+    '<div class="card"><h3>读写契约</h3>'
+    "<p><code>get_llm_config()</code> 仍返回扁平视图，<code>llm/</code> 包零改动；"
+    "写入反展平为纵切结构，写前 <code>.bak</code>。</p></div>"
+    '<div class="card"><h3>未知内容保留</h3>'
+    "<p>不认识的段与参数原样保留；<code>schema_version</code> 高于支持值时拒绝加载。</p></div>"
+    "</div></main></body></html>"
+)
 
 if __name__ == "__main__":
     raise SystemExit(main())

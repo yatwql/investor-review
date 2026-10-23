@@ -169,11 +169,66 @@ def _d_llm_proposed() -> None:
     )
 
 
+
+def _boards_proposed() -> None:
+    """`[P]` 目标结构：只列 5 个顶层章节，底部一行提示指向 `[S]`。"""
+    from src.python.config import (
+        get_config,
+        is_enable_action,
+        is_enable_fund_deep_analysis,
+        is_enable_history,
+        is_enable_news,
+        is_enable_portfolio_evolution,
+    )
+    from src.python.tui import handlers_config as hc
+    from src.python.tui.panel_runtime import NavState, PanelItem, panel_loop
+    from src.python.tui.prompt_text import panel_prompt
+    from src.python.tui.switch_panel import inner_width, terminal_columns, wrap_hanging
+    from src.python.tui.text_layout import display_width, style_heading
+    from src.python.tui.tui_keys import input_choice
+
+    config = get_config()
+    flags = [
+        ("基金深度分析", is_enable_fund_deep_analysis(config)),
+        ("市场新闻", is_enable_news(config)),
+        ("组合历史走势+回撤", is_enable_history(config)),
+        ("组合演进", is_enable_portfolio_evolution(config)),
+        ("行动建议", is_enable_action(config)),
+    ]
+    width = max(display_width(name) for name, _on in flags) + 2
+
+    def _render(nav: NavState) -> list[str]:
+        from src.python.tui.text_layout import pad_right
+
+        print()
+        print(style_heading("  ── 配置报告可选章节 ──"))
+        for i, (name, on) in enumerate(flags):
+            status = f"[{'启用' if on else '停用'}]"
+            print(f" {nav.marker(i)} {i + 1}. {pad_right(name, width)}{status}")
+        print(f" {nav.marker(len(flags))} 0. 返回主菜单")
+        for line in wrap_hanging("  提示：章内增强与整章增补见 [S]", inner_width(terminal_columns())):
+            print(line)
+        print()
+        return []
+
+    items = [PanelItem(str(i + 1), name, action=lambda: None) for i, (name, _on) in enumerate(flags)]
+    items.append(PanelItem("0", "返回主菜单", kind="return"))
+    panel_loop(
+        items,
+        render=_render,
+        prompt=panel_prompt("输入编号切换", example="1-5 切换", help_hint="? 看说明"),
+        read=input_choice,
+        on_text=lambda _t: print("  [!] 无效选择，请输入 0-5"),
+        default_key="0",
+    )
+
+
 MODES = {
     "main": _render_main_menu,
     "main_proposed": _render_main_menu_proposed,
     "g_menu_proposed": _g_menu_proposed,
     "d_llm_proposed": _d_llm_proposed,
+    "boards_proposed": _boards_proposed,
     "switches": lambda: _switches(False),
     "switches_proposed": lambda: _switches(True),
     "dmenu": lambda: _run("handlers_config", "_cmd_config_dir_info"),

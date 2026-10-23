@@ -271,10 +271,12 @@
 
 ## 7. 设计图样
 
-| 图样 | 内容 |
-|:--|:--|
-| [`config-panel-mockup/tui.html`](config-panel-mockup/tui.html) | TUI 全层级（主菜单当前/目标、`[S]` 四组/五组、`[G]` 二级当前/目标、`[G]`→`[L]` 当前/目标、`[P]`、`[I]`、`[A]`、缓存、日志、自检、报告选择等），真实处理器取样 |
-| [`config-panel-mockup/index.html`](config-panel-mockup/index.html) | Web 四域编排（按文件编排 / 按域编排、说明密度、标记、亮暗主题） |
-| [`config-panel-mockup/llm-config.html`](config-panel-mockup/llm-config.html) | `llm_settings.json` 扁平组织 ↔ 模块纵切对照 |
+图样按样式分为两组，**互不混排**——同一份文件里要么是目标设计，要么是现有实现。
 
-图样数据取自注册表与真实配置文件；改注册表后可重跑 `tui_capture.py` / `tui_build.py` / `llm_config_mock.py` 刷新。
+| 目标设计（建议方案） | 现有实现 |
+|:--|:--|
+| [`config-panel-mockup/tui.html`](config-panel-mockup/tui.html)：五组开关、16 项主菜单、`[G]` 七项、`[G]`→`[L]` 七项 | [`config-panel-mockup/tui-current.html`](config-panel-mockup/tui-current.html)：四组开关、19 项主菜单、`[D]` 五项、`[D]`→`[L]` 六项 |
+| [`config-panel-mockup/index.html`](config-panel-mockup/index.html)：Web 按业务域编排 | [`config-panel-mockup/web-current.html`](config-panel-mockup/web-current.html)：Web 按存储文件编排 |
+| [`config-panel-mockup/llm-config.html`](config-panel-mockup/llm-config.html)：模块纵切结构 + 键位映射 | [`config-panel-mockup/llm-config-current.html`](config-panel-mockup/llm-config-current.html)：扁平结构（参数 × 模块平铺） |
+
+TUI 两套图样均由真实处理器渲染（等宽字体 + 真实 ANSI 配色），文件选择类屏幕取到列表即中止；设计结构屏按设计项注入后渲染。Web 与配置文件图样的数据取自注册表与真实配置文件，改注册表后可重跑 `tui_capture.py` / `tui_build.py` / `llm_config_mock.py` 刷新。
