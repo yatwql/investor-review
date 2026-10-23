@@ -1,4 +1,4 @@
-"""[S] 配置面板 + [P]/[A]/[D] 子菜单方向键导航测试（面板主体测试见同目录相邻文件）。
+"""[S] 配置面板 + [C]/[A]/[D] 子菜单方向键导航测试（面板主体测试见同目录相邻文件）。
 
 覆盖：
   - 面板行输入 `arrows=True` 契约（↑/↓ 返回方向键键名）
@@ -75,7 +75,7 @@ def test_panel_arrow_down_shows_position_feedback(mock_save, mock_refresh, capsy
 
 
 class TestSubmenuArrowNav:
-    """[P]/[A]/[D] 子菜单方向键导航（导航控制流单源化后全列表面板可用）。
+    """[C]/[A]/[D] 子菜单方向键导航（导航控制流单源化后全列表面板可用）。
 
     锁定 panel_loop 迁移后子菜单的 ↑/↓ 导航 + Enter 按选中项派发，及空回车默认语义。
     """
@@ -85,7 +85,7 @@ class TestSubmenuArrowNav:
     @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
     @patch("src.python.config.get_config", return_value={})
     def test_report_boards_arrow_down_enter_toggles_selected(self, _mock_get, _mock_read, mock_apply, _mock_refresh):
-        """[P] ↓ 移到第 2 项（市场新闻）后 Enter 按其编号派发切换。"""
+        """[C] ↓ 移到第 2 项（市场新闻）后 Enter 按其编号派发切换。"""
         from src.python.tui.handlers_config import _cmd_config_report_boards
         from src.python.tui.tui_keys import KEY_DOWN
 
@@ -225,7 +225,7 @@ class TestInlineCursorRendering:
 
 
 class TestPanelNumberingRendered:
-    """渲染级编号连续性：[P]/[S]/[M] 面板逐项编号必须 1..N 连续，末尾 0 为返回项。
+    """渲染级编号连续性：[C]/[S]/[M] 面板逐项编号必须 1..N 连续，末尾 0 为返回项。
 
     首页不走编号体系（字母为主入口、`1/2/3` 是数据类别名，连续性由
     `test_tui_menu.py::test_numeric_keys_are_contiguous` 单独守）；面板内编号才是
@@ -252,7 +252,7 @@ class TestPanelNumberingRendered:
     @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
     @patch("src.python.config.get_config", return_value={})
     def test_report_boards_numbering(self, *_mocks):
-        """[P] 章节编号自 1 连续（子项不占章节编号），末项 0。"""
+        """[C] 章节编号自 1 连续（子项不占章节编号），末项 0。"""
         from src.python.tui.handlers_config import _cmd_config_report_boards
 
         numbers = self._rendered_numbers(_cmd_config_report_boards)

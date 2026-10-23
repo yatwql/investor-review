@@ -3,7 +3,7 @@
 
 ``[S]`` 只呈现 ``PANEL_GROUPS["[S]"]`` 的六组内容开关（持仓与交易 / 市场与估值 /
 基金与风格 / 事件与摘要 / 呈现与交互 / 机制与质量）；LLM 章节、默认关闭的整章与
-关联产物在 ``[P]``，本面板不再混排。编号由 :func:`config.features.panel_option_numbers`
+关联产物在 ``[C]``，本面板不再混排。编号由 :func:`config.features.panel_option_numbers`
 派生——增删开关后自动重排，渠道层不写死数字。
 
 写盘、读数、提示输入统一经 ``handlers_config`` **函数内局部导入**
@@ -219,7 +219,7 @@ def run_content_options_panel() -> None:
             print("\n".join(f"  {row}" if row else "" for row in panel_rows))
         if state["repaint"]:
             for _line in wrap_hanging(
-                "  章节显隐（顶层 / LLM / 整章 / 关联产物）在菜单 [P] 配置", inner_width(columns)
+                "  章节显隐（顶层 / LLM / 整章 / 关联产物）在菜单 [C] 配置", inner_width(columns)
             ):
                 print(_line)
             print()

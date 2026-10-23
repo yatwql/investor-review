@@ -1,4 +1,4 @@
-"""``[P]`` 报告章节显隐面板：四块渲染、编号派生、四来源写入与子项闸门。
+"""``[C]`` 报告章节显隐面板：四块渲染、编号派生、四来源写入与子项闸门。
 
 面板的章节清单/编号/来源全部来自 ``config.chapter_registry``，本文件按注册表
 **派生**编号驱动输入（不写死 1-16），并逐块断言写入落到正确文件的正确键：
@@ -32,7 +32,7 @@ def _sub_number(flag: str) -> str:
 
 
 def _run(monkeypatch, keys: list[str], columns: int = 120) -> str:
-    """驱动 ``[P]`` 面板（输入 keys 后退出），返回全部上屏文本。"""
+    """驱动 ``[C]`` 面板（输入 keys 后退出），返回全部上屏文本。"""
     from src.python.tui.handlers_config import _cmd_config_report_boards
 
     monkeypatch.setenv("COLUMNS", str(columns))

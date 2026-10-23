@@ -113,7 +113,7 @@ def _bind_callbacks() -> None:
         "1": _cmd_update_basic_cache,
         "2": _cmd_update_position_cache,
         "3": _cmd_cache_management,
-        "P": _cmd_config_report_boards,
+        "C": _cmd_config_report_boards,
         "S": _cmd_config_content_options,
         "G": _cmd_global_settings,
         "R": _cmd_refresh_config,

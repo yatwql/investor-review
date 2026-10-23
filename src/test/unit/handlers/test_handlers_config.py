@@ -130,7 +130,7 @@ class TestConfigPanelsAreRectangular:
     @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/tmp/llm_settings.json"))
     @patch("src.python.config.get_config", return_value={})
     def test_report_boards_panel_rectangular(self, mock_get, mock_read, mock_input, mock_refresh, capsys):
-        """[P] 章节显隐面板：四块章节、智囊团子项与块标题在同一右边框内。"""
+        """[C] 章节显隐面板：四块章节、智囊团子项与块标题在同一右边框内。"""
         from src.python.tui.handlers_config import _cmd_config_report_boards
 
         self._assert_rectangular(capsys, _cmd_config_report_boards)
@@ -146,7 +146,7 @@ class TestConfigPanelsAreRectangular:
 
 
 class TestChapterPanelsOwnTheirBlocks:
-    """两面板职责切分：``[P]`` 只放章节（含 LLM / 整章 / 关联产物），``[S]`` 只放章内内容。"""
+    """两面板职责切分：``[C]`` 只放章节（含 LLM / 整章 / 关联产物），``[S]`` 只放章内内容。"""
 
     def _source(self, module: str) -> str:
         from pathlib import Path
@@ -154,7 +154,7 @@ class TestChapterPanelsOwnTheirBlocks:
         return (Path(__file__).resolve().parents[4] / "src" / "python" / "tui" / module).read_text(encoding="utf-8")
 
     def test_p_panel_is_chapter_registry_driven(self):
-        """[P] 的清单、编号、分块与子项全部来自章节注册表（渠道层不另写清单）。"""
+        """[C] 的清单、编号、分块与子项全部来自章节注册表（渠道层不另写清单）。"""
         src = self._source("handlers_report_chapters.py")
         assert "chapter_numbers" in src and "chapters_in_block" in src
         assert "BLOCK_ORDER" in src
@@ -165,7 +165,7 @@ class TestChapterPanelsOwnTheirBlocks:
         src = self._source("handlers_switch.py")
         assert "PANEL_GROUPS" in src
         assert "panel_option_numbers" in src
-        assert "get_llm_module_names" not in src, "LLM 章节已归 [P]"
+        assert "get_llm_module_names" not in src, "LLM 章节已归 [C]"
         assert "enabled_llm" not in src, "[S] 不再读写 llm_settings"
 
     def test_panels_partition_feature_registry(self):
@@ -179,7 +179,7 @@ class TestChapterPanelsOwnTheirBlocks:
         assert content & chapter_backed == set()
         assert content & sub_items == set()
         assert content | chapter_backed | sub_items == set(feature_switch_registry)
-        assert set(PANEL_GROUPS) == {"[P]", "[S]"}
+        assert set(PANEL_GROUPS) == {"[C]", "[S]"}
 
 
 class TestPanelPlainLanguageCopy:

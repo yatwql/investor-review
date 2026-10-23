@@ -25,12 +25,12 @@ MENU_ITEMS: list[MenuItem] = [
     ("E", "生成基础报告（仅 Excel）", None, False),
     ("B", "生成标准报告（Excel+HTML）", None, False),
     ("L", "生成完整报告（含 LLM 分析）", None, False),
-    ("W", "调仓 What-if 模拟", None, False),
+    ("W", "调仓 What-if 模拟（独立报告）", None, False),
     ("Q", "报告对话式追问", None, False),
     ("1", "更新基础类缓存", None, False),
     ("2", "更新行情类缓存", None, False),
     ("3", "缓存管理（统计与清理）", None, False),
-    ("P", "配置报告章节显隐", None, False),
+    ("C", "配置报告章节显隐", None, False),
     ("S", "配置报告章节内容呈现", None, False),
     ("G", "全局设置", None, False),
     ("R", "刷新配置", None, False),
@@ -46,9 +46,9 @@ FEATURE_GATED_ITEMS: dict[str, str] = {"Q": "report_qa"}
 # 主菜单分组（按任务域编排）：组序即阅读序，组内保留 MENU_ITEMS 的原始次序。
 # 未列入任何组的项（退出）渲染在分组之后——组覆盖完整性由菜单用例守护。
 MENU_GROUPS: list[tuple[str, tuple[str, ...]]] = [
-    ("生成报告", ("E", "B", "L", "W")),
-    ("数据与查看", ("Q", "1", "2", "3")),
-    ("配置", ("P", "S", "G", "R")),
+    ("生成报告", ("E", "B", "L", "W", "Q")),
+    ("数据与查看", ("1", "2", "3")),
+    ("配置", ("C", "S", "G", "R")),
     ("诊断与排查", ("D",)),
 ]
 

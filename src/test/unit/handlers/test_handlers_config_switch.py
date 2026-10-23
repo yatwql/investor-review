@@ -1,7 +1,7 @@
 """test_handlers_config 兄弟分片（switch）：[S] 章节内容面板的只读信息 / 切换 / 实验开关。
 
 ``[S]`` 只呈现 ``PANEL_GROUPS["[S]"]`` 的六组（20 项）内容开关；LLM 章节 / 独立
-整章 / 关联产物在 ``[P]``，其面板用例见 ``test_handlers_report_chapters``。
+整章 / 关联产物在 ``[C]``，其面板用例见 ``test_handlers_report_chapters``。
 """
 
 from __future__ import annotations

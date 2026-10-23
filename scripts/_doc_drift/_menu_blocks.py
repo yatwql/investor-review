@@ -90,7 +90,7 @@ def check_menu_blocks(manual_texts: dict[Path, str]) -> list[str]:
 _RET_NEAR_KEY_RE = re.compile(r"\[([A-Za-z0-9])\][`*\s]{0,6}返回主菜单")
 #: 返回前缀行尾裸键：列表/图块行「**0 返回」「0 返回」形态
 _RET_TAIL_KEY_RE = re.compile(r"([A-Za-z0-9])\s*(?:\*\*|\])?\s*$")
-#: 正文菜单引用：``菜单 `X` `` / ``菜单 `[X]` `` / ``菜单 [X]`` / ``菜单 **`[X]`**`` / 裸键 ``菜单 P 的…``
+#: 正文菜单引用：``菜单 `X` `` / ``菜单 `[X]` `` / ``菜单 [X]`` / ``菜单 **`[X]`**`` / 裸键 ``菜单 C 的…``
 #: 裸键形态必须紧跟空白/标点/句末，否则「主菜单 code block」的 ``c`` 会被误捕
 _MENU_REF_RE = re.compile(
     r"菜单\s*(?:\*\*)?(?:"
@@ -109,8 +109,9 @@ def check_menu_key_references(docs: dict[Path, str]) -> list[str]:
     菜单编号调整或把若干项收进 `[D]` 二级面板后，正文往往会留着已不存在的主
     菜单键，读者按提示直接找不到入口。
 
-    合法域 = ``MENU_ITEMS`` 键 ∪ 返回键 ``0``；``[D]`` 的二级选项（C/F/O/M）
-    必须以「菜单 `D` → `C`」写法出现（写成裸「菜单 `C`」即发 finding）。
+    合法域 = ``MENU_ITEMS`` 键 ∪ 返回键 ``0``；``[G]`` 的二级选项（C/F/O/M）
+    必须以「菜单 `G` → `F`」写法出现（写成裸「菜单 `F`」即发 finding）——例外是
+    该字母本身已是主菜单键者（如 `C` 现为主菜单「章节显隐」，裸写合法）。
     """
     findings: list[str] = []
     allowed = set(_MENU_LABEL_BY_KEY) | {"0"}
@@ -121,7 +122,7 @@ def check_menu_key_references(docs: dict[Path, str]) -> list[str]:
                 if key.upper() in allowed:
                     continue
                 hint = (
-                    f"（若指 [D] 的二级选项，请写作「菜单 `D` → `{key.upper()}`」）"
+                    f"（若指 [G] 的二级选项，请写作「菜单 `G` → `{key.upper()}`」）"
                     if key.upper() in CONFIG_DIR_INFO_KEYS
                     else "（MENU_ITEMS 无此项）"
                 )

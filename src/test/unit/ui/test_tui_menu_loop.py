@@ -306,10 +306,10 @@ class TestTierSemanticParity(unittest.TestCase):
 
     def test_registered_letter_parity(self):
         """登记字母键：两档执行同一菜单项（语义不随宽度漂移）。"""
-        narrow = self._drive(["P", "0"], columns=40)
-        wide = self._drive(["P", "0"], columns=100)
+        narrow = self._drive(["C", "0"], columns=40)
+        wide = self._drive(["C", "0"], columns=100)
         self.assertEqual(narrow[2], wide[2], "执行同一选中项")
-        self.assertTrue(narrow[2], "确实执行了 [P]")
+        self.assertTrue(narrow[2], "确实执行了 [C]")
 
     def test_enter_and_nav_parity(self):
         """方向键 + Enter：两档执行同一选中项。"""

@@ -234,8 +234,8 @@ class TestMenuKeyReferences:
             "菜单 `L` 会先检查缓存。\n"
             "在菜单 **[S]** 的机制与诊断块切换。\n"
             "菜单 `[3]` 清理过期缓存。\n"
-            "菜单 `D` → `C` 可改持仓目录。\n"
-            "菜单 P 的五个章节组相互独立。\n"
+            "菜单 `G` → `C` 可改持仓目录。\n"
+            "菜单 C 的五个章节组相互独立。\n"
         )
         assert drift.check_menu_key_references({p: text}) == []
 
@@ -245,11 +245,15 @@ class TestMenuKeyReferences:
         findings = drift.check_menu_key_references({p: "也可通过菜单 `[4]` → `3` 清理过期缓存。\n"})
         assert any("[4]" in f and "不是主菜单键" in f for f in findings)
 
-    def test_submenu_key_needs_d_prefix(self, drift, tmp_path):
-        """[D] 的二级键裸写为「菜单 `C`」→ 报出并提示 `D` → `C` 写法。"""
+    def test_submenu_key_needs_g_prefix(self, drift, tmp_path):
+        """[G] 的二级键裸写为「菜单 `F`」→ 报出并提示 `G` → `F` 写法。
+
+        取 `F`（持仓文件名）作反例而不是 `C`：`C` 已是主菜单键（章节显隐），
+        裸写合法；二级键里与主菜单键重名者按设计文档「层级间互不冲突」放行。
+        """
         p = tmp_path / "how-to-config.md"
-        findings = drift.check_menu_key_references({p: "| `holdings_dir` | 持仓目录 | 菜单 `C` |\n"})
-        assert any("`D` → `C`" in f for f in findings)
+        findings = drift.check_menu_key_references({p: "| `holdings_filename` | 持仓文件名 | 菜单 `F` |\n"})
+        assert any("`G` → `F`" in f for f in findings)
 
     def test_bare_word_not_captured(self, drift, tmp_path):
         """「主菜单 code block」里的英文词首字母不当作键（裸键形态须跟空白/标点）。"""

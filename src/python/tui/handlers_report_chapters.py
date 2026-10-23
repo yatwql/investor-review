@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""TUI ``[P]`` 报告章节显隐面板：16 项四块 + 智囊团两个生成子项。
+"""TUI ``[C]`` 报告章节显隐面板：16 项四块 + 智囊团两个生成子项。
 
 清单、编号、分块、来源与子项全部取自 :mod:`config.chapter_registry`（唯一来源）；
 本模块只做「取值 → 渲染 → 派发」。写路径经 ``handlers_config._apply_edit``
@@ -127,7 +127,7 @@ def run_report_chapters_panel() -> None:
 
         cost_history = module_cost_summary(COST_HISTORY_DAYS)
     except Exception:
-        hc.logger.debug("[P] LLM 章节费用摘要读取失败，静默省略", exc_info=True)
+        hc.logger.debug("[C] LLM 章节费用摘要读取失败，静默省略", exc_info=True)
         cost_history = {}
 
     def _status(entry) -> bool:  # noqa: ANN001 — ChapterEntry（运行时取值，避免导入环）

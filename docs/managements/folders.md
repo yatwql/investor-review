@@ -12,14 +12,14 @@
 | 主程序代码 | Python | 396 | 103,906 | `src/` 下所有 `.py`（不含测试：`src/__init__.py` 顶层包标记 + `src/python/` 下 15 个 `__init__.py`，含 `web/` 服务层；近期新增 `providers/tiantian_purchase.py` 天天基金申购状态总表 provider + `fetcher/fund_purchase.py` 申购状态取数编排（双链路/准入/会话复用） + `core/jsonl_store.py` JSONL 原子原语 + `core/signal_ledger.py` 确定性信号账本 + `report/signal_record.py` 信号登记适配器 + `core/num_utils.py` 数值归一原语 + `core/doctor.py` 系统自检 + `core/cassette.py` 请求回放引擎 + `core/datasource_credential.py` 数据源凭据声明 + `fetcher/source_adapter.py` 适配契约 + `fetcher/quote_adapters.py` 行情域适配器 + `llm/module_fingerprint.py` 模块指纹唯一事实来源 + `report/_experimental_seams.py` 实验挂载点 + `report/holdings_freshness.py` 持仓报告期时效判定 + `report/experimental_notice.py` 实验功能清单语句单源 + `core/trading_calendar.py` 交易日历原语（时间距离一律以交易日计） + `providers/datasink.py` 全文本财报 provider（密钥/限速/配额） + `providers/hithink.py` 同花顺金融数据服务 provider（A 股行情/财务/基金/情绪面；凭据/qps 限速/信封错误码） + `fetcher/financial_report.py` 财报取数编排 + `fetcher/report_adapters.py` 财报域适配器 + `report/financial_report_digest.py` 财报摘要章节装配 + `providers/akshare_financial.py` 结构化财务指标主源 + `fetcher/financial_indicator_adapters.py` 财务指标域适配器 + `core/code_utils.py::to_fmp_symbol` 共享符号映射 + `providers/_utils.py::run_with_timeout` 共享取数超时原语 + `analysis/financial_indicator_extract.py` 财务指标全文解析（压平正文锚点提取，备用支路） + `fetcher/financial_indicator.py` 财务指标多期取数编排 + `analysis/financial_indicator.py` 财务指标派生（质量档/趋势/当前 PE·PB） + `report/financial_indicator.py` 财务指标章装配 + `report/holdings_detail_sheet.py` 持仓明细与分类 Excel 页签 + `report/position_structure_sheet.py` 持仓结构与集中度 Excel 页签 + `report/fundamental_snapshot_sheet.py` 持仓基本面 Excel 页签（三者均为章节合并写入器） + `llm/compliance.py` 合规声明集中注入（幂等叠加，单一漏斗覆盖全模块）） |
 | HTML 报告模板 | HTML | 23 | 5,193 | `src/static/tmpl/report_template.html` + `whatif_template.html`（调仓 What-if 独立 HTML 页）+ `partials/`（章节级/区块级 partial，主模板按 TOC 六组经 Jinja include 拆入，清单见目录树 `partials/` 节点） |
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
-| 辅助脚本 | Python | 115 | 23,355 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
-| 源代码合计 | — | 538 | 132,850 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 622 | 171,416 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 辅助脚本 | Python | 115 | 23,356 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
+| 源代码合计 | — | 538 | 132,851 | 主程序 + 模板 + 脚本 + SVG |
+| 测试代码 | Python | 622 | 171,427 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
 | 测试用例 | — | — | 11,643 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 13 | 6,276 | 含 README.md（211 行）；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 12 | 6,058 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 186 | 67,709 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 6 + archive md 160），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 13,281 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 186 | 67,710 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 6 + archive md 160），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 13,282 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 164 | 52,115 | 各版本 changelog/plan/review-findings 与设计文档归档（157 md 50,492 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 8 | ~2,221 | 在办设计文档（文档扁平存放、附属原型就近建子目录，完成后迁入对应版本的归档子目录）：两份 Jev 新闻关联判定文档（对照评测方案 + 类型化判定通道接入设计）+ 决策跨期反思闭环设计 + Web 浏览器验证方法 + 配置面板分类与描述设计 + LLM 配置纵切设计 + 日志配置独立成文件设计（共用同目录 `config-panel-mockup/` 设计图样与复跑脚本） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -125,7 +125,7 @@ investor-review/
 │   │   │   ├── edit_ops.py           #   配置编辑共享层（白名单+值规则+写入分派+写前备份，Web/TUI 唯一编辑通道）
 │   │   │   ├── features.py           #   功能开关注册表（唯一登记点：全量声明的显示名/说明/分组/默认值/产物影响；默认值字典为其派生投影；运行时覆写持久化到 data/config/features.json；按作用域八组划分）
 │   │   │   ├── _feature_registry.py #   功能开关注册表与定义（分组常量/FeatureSwitchDef/注册表条目/纯视图）
-│   │   │   ├── chapter_registry.py  #   报告章节注册表（[P] 面板唯一来源：四块章节与子项，编号/来源/写键/默认值派生）
+│   │   │   ├── chapter_registry.py  #   报告章节注册表（[C] 面板唯一来源：四块章节与子项，编号/来源/写键/默认值派生）
 │   │   │
 │   │   ├── fetcher/                  # 数据获取调度
 │   │   │   ├── __init__.py           #   子包标记
@@ -473,11 +473,11 @@ investor-review/
 │   │   │   ├── __init__.py           #   子包标记
 │   │   │   ├── __main__.py           #   python -m 入口
 │   │   │   ├── handlers_cache.py     #   缓存管理命令处理器
-│   │   │   ├── handlers_config.py    #   配置管理命令处理器（含 [D] 查看配置与目录信息子菜单；[P]/[S] 只留菜单入口与共享写路径 _apply_edit）
+│   │   │   ├── handlers_config.py    #   配置管理命令处理器（含 [D] 查看配置与目录信息子菜单；[C]/[S] 只留菜单入口与共享写路径 _apply_edit）
 │   │   │   ├── handlers_qa.py       #   报告对话式追问入口（[Q] 菜单/文本输入循环，同源 qa/session）
 │   │   │   ├── handlers_log.py       #   日志可视化命令处理器（查看日志/数据源健康历史/系统自检）
 │   │   │   ├── handlers_report.py    #   报告生成命令处理器
-│   │   │   ├── handlers_report_chapters.py # [P] 报告章节显隐面板本体（四块章节 + 智囊团生成子项）
+│   │   │   ├── handlers_report_chapters.py # [C] 报告章节显隐面板本体（四块章节 + 智囊团生成子项）
 │   │   │   ├── handlers_whatif.py    #   调仓 What-if 模拟命令处理器（对比两份持仓生成独立报告）
 │   │   │   ├── text_layout.py        #   终端排版原语（宽度/折行/截断/悬挂缩进/盒线面板/终端列数探测）
 │   │   │   ├── report_artifacts.py   #   报告产物定位与单键打开（收尾产物清单，默认 N）
@@ -784,7 +784,7 @@ investor-review/
 │       │   │   ├── test_handlers_cache.py  #   缓存管理命令处理测试
 │       │   │   ├── test_handlers_config.py #   命令处理器配置测试
 │       │   │   ├── test_handlers_config_switch.py                   #   [S] 章节内容面板（编号派生/只读信息/切换/实验开关/写路径三通道）
-│       │   │   ├── test_handlers_report_chapters.py                #   [P] 章节显隐面板（四块渲染/四来源写入/子项闸门/只读详情）
+│       │   │   ├── test_handlers_report_chapters.py                #   [C] 章节显隐面板（四块渲染/四来源写入/子项闸门/只读详情）
 │       │   │   ├── test_handlers_config_nav.py # 配置面板方向键导航测试（方向键契约/游标反馈/子菜单导航/编号连续）
 │       │   │   ├── test_handlers_llm_providers.py#   [M] 多链线路优先级面板测试（交换写盘/Esc/重提示）
 │       │   │   ├── test_switch_panel_layout.py #   [S] 面板响应式排版（三档版面/不越界不变式/宽度探测）
@@ -1682,7 +1682,7 @@ investor-review/
 │       ├── config-panel-mockup/       #   设计图样原型目录（自包含 HTML，数据内联，浏览器直接打开）
 │       │   ├── index.html             #       Web 配置面板目标设计（按业务域编排；说明密度/标记/主题可切换）
 │       │   ├── web-current.html       #       Web 配置面板现有实现（按存储文件编排）
-│       │   ├── tui.html               #       TUI 全层级图样 · 目标设计（[P] 章节总表/[S] 报告呈现与增强/[G] 全局设置）
+│       │   ├── tui.html               #       TUI 全层级图样 · 目标设计（[C] 章节总表/[S] 报告呈现与增强/[G] 全局设置）
 │       │   ├── tui-current.html       #       TUI 全层级图样 · 现有实现（四组开关/[D] 目录信息/[D]→[L] 调优参数）
 │       │   ├── llm-config.html        #       LLM 配置目标设计（模块纵切结构 + 键位映射）
 │       │   ├── llm-config-current.html #      LLM 配置现有实现（扁平结构：参数 × 模块平铺）

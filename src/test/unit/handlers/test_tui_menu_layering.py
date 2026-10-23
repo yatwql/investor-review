@@ -27,9 +27,9 @@ class TestMainMenuStructure:
     def test_group_keys_and_order(self):
         groups = dict(tui_menu.MENU_GROUPS)
         assert list(groups) == ["生成报告", "数据与查看", "配置", "诊断与排查"]
-        assert groups["生成报告"] == ("E", "B", "L", "W")
-        assert groups["数据与查看"] == ("Q", "1", "2", "3")
-        assert groups["配置"] == ("P", "S", "G", "R")
+        assert groups["生成报告"] == ("E", "B", "L", "W", "Q")
+        assert groups["数据与查看"] == ("1", "2", "3")
+        assert groups["配置"] == ("C", "S", "G", "R")
         assert groups["诊断与排查"] == ("D",)
 
     def test_every_item_grouped_once(self):

@@ -83,7 +83,7 @@ FEATURES_FILE = os.path.join(PROJECT_ROOT, "data/config/features.json")
 #   GROUP_PRESENTATION   —— 呈现与交互：图表轴值 / 报告页追问
 #   GROUP_MECHANISM      —— 机制与质量：提示词注入 / 输出评级
 #   GROUP_STANDALONE     —— 独立章节与回放：新增整页签或多期回放
-#   GROUP_CHAPTER_OPTIONS—— 章节内选项：由 [P] 作为章节子项渲染（辩论两项）
+#   GROUP_CHAPTER_OPTIONS—— 章节内选项：由 [C] 作为章节子项渲染（辩论两项）
 # **生命周期是另一根轴**：``FeatureSwitchDef.experimental``（末位默认 False 字段）。
 # 此前「默认值」「是否实验项」「分组」三者纠缠在一个 group 字段上：转正会连带
 # 摘掉面板入口、

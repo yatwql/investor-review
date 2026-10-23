@@ -51,7 +51,7 @@ class TestMenuItems(unittest.TestCase):
         expected = {
             "E", "B", "L", "W", "Q", "D",
             "1", "2", "3",
-            "P", "S", "G", "R",
+            "C", "S", "G", "R",
             "X",
         }  # fmt: skip
         self.assertSetEqual({item[0] for item in MENU_ITEMS}, expected)
@@ -133,8 +133,11 @@ class TestMenuItems(unittest.TestCase):
             self.assertIsNone(index_by_key(letter), f"顶层不应再有 {letter}")
 
     def test_config_dir_info_item(self) -> None:
-        """配置与目录信息已下沉为 [G] 子项，顶层不再单列。"""
-        self.assertIsNone(index_by_key("C"))
+        """配置与目录信息已下沉为 [G] 子项，顶层不单列（顶层 C 是章节显隐）。"""
+        key, label, _cb, _is_exit = MENU_ITEMS[index_by_key("C")]
+        self.assertEqual(key, "C")
+        self.assertIn("章节显隐", label)
+        self.assertNotIn("目录", label)
 
     def test_all_keys_unique(self) -> None:
         """所有快捷键不重复。"""
@@ -328,11 +331,15 @@ class TestMenuGroups(unittest.TestCase):
             assert expected in titles, f"缺少任务分组「{expected}」: {titles}"
 
     def test_generation_group_holds_all_report_actions(self) -> None:
-        """生成组收纳全部报告产出动线（含调仓模拟），用户不必在菜单里翻找。"""
+        """生成组收纳全部报告产出动线（含调仓模拟与报告追问），用户不必在菜单里翻找。
+
+        判据是「产生或消费报告产物的动作」同组：`Q` 消费已生成报告且消耗 LLM，
+        与零成本的缓存维护（`1`/`2`/`3`）不同族，故不留在「数据与查看」。
+        """
         from src.python.tui.tui_menu import MENU_GROUPS
 
         generation = next(keys for title, keys in MENU_GROUPS if title == "生成报告")
-        assert {"E", "B", "L", "W"} <= set(generation)
+        assert {"E", "B", "L", "W", "Q"} <= set(generation)
 
 
 class TestMatchMenuItems(unittest.TestCase):

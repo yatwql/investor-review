@@ -3,7 +3,7 @@
 为什么需要（对应契约「窄屏基准 40 列」与 `switch_panel` 的「窄档不画盒线」约定）：
 `text_layout.render_panel` 的宽度是**内容驱动**的（内容下限 41 列 + 边框），它不看终端
 宽度；只要某个面板无条件调用它，40~55 列的手机终端上就会撑出 49~57 列并被终端硬折成
-锯齿。历史缺陷（`[P]/[A]/[I]` 固定盒线、`[V]/[H]/[D]/[3]` 长表格/长路径）都属这一类，
+锯齿。历史缺陷（`[C]/[A]/[I]` 固定盒线、`[V]/[H]/[D]/[3]` 长表格/长路径）都属这一类，
 且只有真终端才能看出来——所以这里用 `COLUMNS=40` 驱动全部面板渲染路径逐行量宽。
 
 断言口径：每行 `display_width(line) <= terminal_columns()`（= 40）。不写死行数/盘符，
@@ -67,7 +67,7 @@ def test_main_menu_fits_narrow_floor():
 def test_report_boards_panel_fits_narrow_floor():
     from src.python.tui.handlers_config import _cmd_config_report_boards
 
-    _assert_fits("[P] 报告章节", _render(_cmd_config_report_boards, "src.python.tui.handlers_config"))
+    _assert_fits("[C] 报告章节", _render(_cmd_config_report_boards, "src.python.tui.handlers_config"))
 
 
 def test_content_options_panel_fits_narrow_floor():

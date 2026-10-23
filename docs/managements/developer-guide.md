@@ -1263,9 +1263,9 @@ DataModuleDef("我的 LLM 分析", "llm_my_analysis",
 | `GROUP_PRESENTATION` | 只改呈现与追问入口 | `True` | 实验项 `True` | 🧭 呈现与交互 |
 | `GROUP_MECHANISM` | 提示词注入 / 输出评级 | 机制项 `True`、实验项 `False` | 实验项 `True` | ⚙ 机制与质量 |
 | `GROUP_STANDALONE` | 新增整页签或多期回放 | `False` | `False` | 📑 独立章节与回放 |
-| `GROUP_CHAPTER_OPTIONS` | 不独立上屏，由 `[P]` 作章节子项渲染 | `False` | `False` | 🧩 章节内选项 |
+| `GROUP_CHAPTER_OPTIONS` | 不独立上屏，由 `[C]` 作章节子项渲染 | `False` | `False` | 🧩 章节内选项 |
 
-**域与面板派生**：`GROUP_DOMAIN`（组 → 五域：报告内容 / 呈现与机制 / 数据与线路 / LLM 运行 / 运行与诊断）、`DOMAIN_ORDER`/`DOMAIN_LABELS`/`DOMAIN_HINTS`（Web 五域编排与提示）、`PANEL_GROUPS`（`[S]` = 六个内容组；`[P]` = `standalone` + `chapter_options`）均由注册表派生，新增组须同时补齐这三处映射（`dev-verify` 的注册表不变式用例会拦截漏配）。
+**域与面板派生**：`GROUP_DOMAIN`（组 → 五域：报告内容 / 呈现与机制 / 数据与线路 / LLM 运行 / 运行与诊断）、`DOMAIN_ORDER`/`DOMAIN_LABELS`/`DOMAIN_HINTS`（Web 五域编排与提示）、`PANEL_GROUPS`（`[S]` = 六个内容组；`[C]` = `standalone` + `chapter_options`）均由注册表派生，新增组须同时补齐这三处映射（`dev-verify` 的注册表不变式用例会拦截漏配）。
 
 | ② | **定作用域与默认值** | 同上声明第 3、4 位（第 6 位 `experimental` 可选） | 作用域入八组之一（持仓与交易 / 市场与估值 / 基金与风格 / 事件与摘要 / 呈现与交互 / 机制与质量 / 独立章节与回放 / 章节内选项）；会改变产物且未验证 → `experimental=True` + `False`；常驻能力 → `False`（默认）+ `True`。作用域决定面板分块、`experimental` 决定实验身份与 `--experiment` 取值域、`default` 决定出厂取值——三者解耦，转正不会摘掉面板入口 |
 | ②′ | **回答产物影响** | 同上声明第 5 位 | 该开关**能否改变报告产物内容**——能则 `True`，仅影响入口可见性（菜单项/卡片显隐）则 `False`。答 `False` 者不进报告生成条件自述（`enabled_experimental_features()` 按此过滤）：报告是脱离本机流转的文件，列进一个不改任何字节的开关，读者会推断内容受其影响 |

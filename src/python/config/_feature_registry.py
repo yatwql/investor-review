@@ -34,7 +34,7 @@ GROUP_LABELS: dict[str, str] = {
     GROUP_PRESENTATION: "🧭 呈现与交互（图表轴值 / 报告页追问）",
     GROUP_MECHANISM: "⚙ 机制与质量（提示词注入 / 输出评级）",
     GROUP_STANDALONE: "📑 独立章节与回放（新增整页签或多期回放）",
-    GROUP_CHAPTER_OPTIONS: "🧩 章节内选项（由 [P] 作为章节子项渲染）",
+    GROUP_CHAPTER_OPTIONS: "🧩 章节内选项（由 [C] 作为章节子项渲染）",
 }
 
 GROUP_ORDER: tuple[str, ...] = (
@@ -98,7 +98,7 @@ PANEL_GROUPS: dict[str, tuple[str, ...]] = {
         GROUP_PRESENTATION,
         GROUP_MECHANISM,
     ),
-    "[P]": (GROUP_STANDALONE, GROUP_CHAPTER_OPTIONS),
+    "[C]": (GROUP_STANDALONE, GROUP_CHAPTER_OPTIONS),
 }
 
 
@@ -348,7 +348,7 @@ def panel_option_numbers(panel: str) -> tuple[tuple[int, str, FeatureSwitchDef],
     """按面板的组序派生编号：``((1, 开关名, 声明), (2, ...), ...)``（1 起连续）。
 
     面板编号的唯一派生入口——``[S]`` 只呈现 ``PANEL_GROUPS["[S]"]`` 的六组
-    （LLM 章节与独立章节在 ``[P]``）；增删开关后编号自动重排，渠道层与测试都
+    （LLM 章节与独立章节在 ``[C]``）；增删开关后编号自动重排，渠道层与测试都
     不得写死数字。
     """
     numbered: list[tuple[int, str, FeatureSwitchDef]] = []

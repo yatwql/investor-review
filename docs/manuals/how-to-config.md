@@ -23,8 +23,8 @@
   "enable_news": true,      // 市场新闻
   "enable_history": true,   // 组合历史走势与回撤
   "enable_portfolio_evolution": true,  // 组合演进
-  "enable_action": true,     // 行动建议（默认开，可在菜单 P 关闭）
-  // 报告章节与章内增强开关见 data/config/features.json（功能开关注册表；章内内容在菜单 [S]、独立整章与关联产物在菜单 [P]）
+  "enable_action": true,     // 行动建议（默认开，可在菜单 C 关闭）
+  // 报告章节与章内增强开关见 data/config/features.json（功能开关注册表；章内内容在菜单 [S]、独立整章与关联产物在菜单 [C]）
   "comparison_candidates": [],  // 候选基金比较子表候选（6 位基金代码列表，≤10；配合 candidate_compare）
 
   // ── C. 数据源与提供商 ──
@@ -188,11 +188,11 @@
 | `redemption_limits` | `{}` | 场外基金单日赎回上限，格式 `{基金代码: 金额}`。配置后程序可计算场外品种全量赎回所需天数（配置口径优先）；未配置品种按类型默认档估算（货币/短债 T+1、纯债 T+2、其他场外 T+3、QDII T+7，标「非实测」），类型无法识别才标记"需手动确认赎回上限" | 手动编辑 |
 | `fund_fee_fallback` | `{}` | 申赎费率配置兑底（键=6 位基金代码，值=`{purchase_rate: 0≤r<1 小数单档申购费率, redemption_tiers: [{"max_days": 上界交易日\|null, "rate": 0≤r<1 小数}]}`；档位按交易日上界严格递增、末档 `max_days` 为 `null`）。**仅当在线来源（F10 费用页/申购状态全量表）不可得时生效，不覆盖在线结果**；仅服务 What-if 交易成本估算（`whatif_trade_cost` 开关），条目非法时告警忽略 | 手动编辑 |
 | `anonymization.mode` | `"off"` | 匿名化模式：`off`（关闭，显示真实名称代码）/ `code_display`（名称→"品种X"，保留代码和盈亏）/ `full_anonymous`（名称→"品种X"，代码→"000XXX"（明细页/Excel 单元格），盈亏金额千位模糊）/ `summary`（明细按大类汇总折叠） | 菜单 `G` → `A` |
-| `enable_fund_deep_analysis` | `true` | 基金深度分析章节可见性，关闭后对应章节完全隐藏，不产生序号空缺 | 菜单 `P` |
-| `enable_news` | `true` | 市场新闻章节可见性，关闭后对应章节完全隐藏。与 `news_sources` 区别：前者控制章节在报告中的显示/隐藏，后者控制数据源启停 | 菜单 `P` |
-| `enable_history` | `true` | 历史走势章节可见性（组合历史走势与回撤，一章两区块：走势表 + 回撤矩阵 + 危机区间标注），关闭后对应章节完全隐藏。持仓快照不受影响，始终自动执行 | 菜单 `P` |
-| `enable_portfolio_evolution` | `true` | 组合演进章节可见性，关闭后对应章节完全隐藏。持仓快照仍照常记录，仅影响报告展示 | 菜单 `P` |
-| `enable_action` | `true` | 行动建议章节可见性，**默认开启**，关闭后隐藏 再平衡信号/交易纪律/调仓建议/收益归因 行动板块（纯算法，basic/both/full 均可见）。智囊团深度复盘同步隐藏「行动摘要」子块 | 菜单 `P` |
+| `enable_fund_deep_analysis` | `true` | 基金深度分析章节可见性，关闭后对应章节完全隐藏，不产生序号空缺 | 菜单 `C` |
+| `enable_news` | `true` | 市场新闻章节可见性，关闭后对应章节完全隐藏。与 `news_sources` 区别：前者控制章节在报告中的显示/隐藏，后者控制数据源启停 | 菜单 `C` |
+| `enable_history` | `true` | 历史走势章节可见性（组合历史走势与回撤，一章两区块：走势表 + 回撤矩阵 + 危机区间标注），关闭后对应章节完全隐藏。持仓快照不受影响，始终自动执行 | 菜单 `C` |
+| `enable_portfolio_evolution` | `true` | 组合演进章节可见性，关闭后对应章节完全隐藏。持仓快照仍照常记录，仅影响报告展示 | 菜单 `C` |
+| `enable_action` | `true` | 行动建议章节可见性，**默认开启**，关闭后隐藏 再平衡信号/交易纪律/调仓建议/收益归因 行动板块（纯算法，basic/both/full 均可见）。智囊团深度复盘同步隐藏「行动摘要」子块 | 菜单 `C` |
 | `comparison_candidates` | `[]` | 候选基金比较子表的候选基金代码列表（6 位基金代码，≤10 只）。需配合功能开关 `candidate_compare` 开启；非法代码自动忽略，超过 10 只仅比较前 10 只 | 手动编辑 |
 | `notify.on_success` | `false` | 任务完成通知：成功也发送（失败/部分失败必发，不受此开关影响）；缺省全关=静默跳过 | 手动编辑 |
 | `notify.webhook_url` | `""` | 任务完成通知 webhook 地址（HTTP POST JSON 事件），空=不启用；URL 常含路径凭据，日志只记域名 | 手动编辑 |
@@ -214,7 +214,7 @@
 
 `enable_fund_deep_analysis`、`enable_news`、`enable_history`、`enable_portfolio_evolution`、`enable_action` 五个配置项控制报告按章节组显示或隐藏对应的章节。LLM 分析章节的可见性由 `llm_settings.json` 的 `enabled_llm` 字典控制。关闭某个章节组后，该组涉及的所有章节完全隐藏，不留下序号空缺，剩余章节按顺序重新编号。
 
-TUI 主菜单 `[P]`「配置报告章节显隐」把**所有会决定「哪一章出现」的开关**收在一处，16 项四块（编号连续 1-16，另有智囊团生成子项 `7.1`/`7.2`）：
+TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一章出现」的开关**收在一处，16 项四块（编号连续 1-16，另有智囊团生成子项 `7.1`/`7.2`）：
 
 | 块 | 编号 | 内容 | 存放 |
 |:--|:--|:--|:--|
@@ -225,7 +225,7 @@ TUI 主菜单 `[P]`「配置报告章节显隐」把**所有会决定「哪一�
 
 面板只切换显隐：章节集合与顺序由注册表和 `report_section_order` 决定，不提供增删或排序；关闭后该章完全隐藏、其余章节自动连续编号。每行显式展示键名，`?编号` / `?键名` 可查来源文件与出厂默认。
 
-> **内容增强类开关（成本流水/估值分位/市场温度/事件窗量化对照/数据质量仪表盘/行业Beta子表/候选基金比较/市场情绪/申购状态等）不在 `[P]`**——它们不增删章节，只改变章内呈现，统一由功能开关注册表的「持仓与交易 / 市场与估值 / 基金与风格 / 事件与摘要」四组管理，在菜单 `[S]` 对应块配置（见 [N. 功能开关](#n-功能开关featuresjson)）。
+> **内容增强类开关（成本流水/估值分位/市场温度/事件窗量化对照/数据质量仪表盘/行业Beta子表/候选基金比较/市场情绪/申购状态等）不在 `[C]`**——它们不增删章节，只改变章内呈现，统一由功能开关注册表的「持仓与交易 / 市场与估值 / 基金与风格 / 事件与摘要」四组管理，在菜单 `[S]` 对应块配置（见 [N. 功能开关](#n-功能开关featuresjson)）。
 
 | 字段 | 默认值 | 配置来源 | 控制章节 | 说明 |
 |:-----|:------:|:---------|:---------|:-----|
@@ -738,14 +738,14 @@ TUI 主菜单 `[P]`「配置报告章节显隐」把**所有会决定「哪一�
 }
 ```
 
-> **文件不必须存在** — 全部使用代码默认值时无需此文件。首次在菜单 **[S]** / **[P]** 切换相关开关或手动创建后自动生效。
-> **功能开关的三个入口**：TUI 菜单（章内内容组在 **[S]**，独立整章/关联产物/章节内选项在 **[P]**）/ Web 配置面板（同名八组）/ CLI 全局参数——`--experiment NAME`（只开全部实验项的简写，取值支持开关名、显示名或 `all`）与 `--feature NAME=VALUE`（**全部**开关、双向可控，取值写 `on`/`off`）。两者均**仅本次运行生效、不写盘**，详见 [CLI 命令行模式使用指南](how-to-use-cli-mode.md) §2。三者同源同一注册表，新增开关自动三处可用。
+> **文件不必须存在** — 全部使用代码默认值时无需此文件。首次在菜单 **[S]** / **[C]** 切换相关开关或手动创建后自动生效。
+> **功能开关的三个入口**：TUI 菜单（章内内容组在 **[S]**，独立整章/关联产物/章节内选项在 **[C]**）/ Web 配置面板（同名八组）/ CLI 全局参数——`--experiment NAME`（只开全部实验项的简写，取值支持开关名、显示名或 `all`）与 `--feature NAME=VALUE`（**全部**开关、双向可控，取值写 `on`/`off`）。两者均**仅本次运行生效、不写盘**，详见 [CLI 命令行模式使用指南](how-to-use-cli-mode.md) §2。三者同源同一注册表，新增开关自动三处可用。
 >
 > **报告会自述生成条件**：生成报告时，已启用的实验功能随产物一并标注——HTML 报告页脚、Excel「LLM API 用量」页签各列一行开关清单与「输出质量可能不稳定」提示；**LLM 分析章节关闭时该页签不生成**，清单改落到 Excel「投资分析汇总」页脚（`include_llm=False` 下的兜底落点），故无论 LLM 章节开关与否，Excel 产物上都能看到清单；实验开关全关时各处均不出现，报告与默认配置下的产物一致。报告导出流转后，读者据此即可判断手中的内容是否为非默认开关下的产物。章节/页签类开关转正（摘除实验身份）后不再进入该自述——其开合改由所在作用域组的章节可见性表达（默认关，开启即出章）。
 > **注意**：features.json 支持 `//` 与 `/* */` 注释（读取时统一剥离；改—存后既有分类注释与项说明保留）。所有开关的默认值与完整说明见下表，或直接查看源码 `src/python/config/features.py` 的 `feature_switch_registry`（唯一登记点，每条含显示名/说明/分组/默认值/是否影响报告/实验身份）。
-> **本表只收录「有消费者」的开关**——每一项在本程序内都确有一处读取其取值。**LLM 模块启停、基金深度分析、新闻源、历史走势、匿名化、启动缓存清理不在此文件**，它们各有归属配置：LLM 模块与基金深度分析走 `llm_settings.json` 的 `enabled_llm`（TUI 菜单 **[P]** LLM 章节块、Web 面板「LLM 分析章节」组），新闻源走 `config.json` 的 `news_sources`，历史走势与回撤走 `config.json` 的 `enable_history`，匿名化模式走 `config.json` 的 `anonymization.mode`（两侧面板均已上屏）。写在这些开关上的覆写不产生任何效果——程序启动时会在日志中告警列出，请据告警核对。
+> **本表只收录「有消费者」的开关**——每一项在本程序内都确有一处读取其取值。**LLM 模块启停、基金深度分析、新闻源、历史走势、匿名化、启动缓存清理不在此文件**，它们各有归属配置：LLM 模块与基金深度分析走 `llm_settings.json` 的 `enabled_llm`（TUI 菜单 **[C]** LLM 章节块、Web 面板「LLM 分析章节」组），新闻源走 `config.json` 的 `news_sources`，历史走势与回撤走 `config.json` 的 `enable_history`，匿名化模式走 `config.json` 的 `anonymization.mode`（两侧面板均已上屏）。写在这些开关上的覆写不产生任何效果——程序启动时会在日志中告警列出，请据告警核对。
 
-全部 26 项开关分八组（持仓与交易 4 / 市场与估值 4 / 基金与风格 3 / 事件与摘要 4 / 呈现与交互 2 / 机制与质量 3 / 独立章节与回放 4 / 章节内选项 2）。**TUI 按「改了会怎样」分两个面板呈现**：前六组（章内内容）在 `[S]`（编号 1-20）；独立章节与回放、章节内选项在 `[P]`（整章 13-15 / 关联产物 16 / 智囊团子项 7.1-7.2）。Web 配置面板与 CLI 覆盖全部 26 项。
+全部 26 项开关分八组（持仓与交易 4 / 市场与估值 4 / 基金与风格 3 / 事件与摘要 4 / 呈现与交互 2 / 机制与质量 3 / 独立章节与回放 4 / 章节内选项 2）。**TUI 按「改了会怎样」分两个面板呈现**：前六组（章内内容）在 `[S]`（编号 1-20）；独立章节与回放、章节内选项在 `[C]`（整章 13-15 / 关联产物 16 / 智囊团子项 7.1-7.2）。Web 配置面板与 CLI 覆盖全部 26 项。
 
 **持仓与交易（4 项；成本、申赎状态、成本收益与风险调整）**：
 
@@ -797,7 +797,7 @@ TUI 主菜单 `[P]`「配置报告章节显隐」把**所有会决定「哪一�
 | `deterministic_signal` | **true** | 确定性信号模块（**实时注入 + 跨期沉淀双面**：①市场温度/估值分位/尾部风险预消化为 `信号：…` 方向行注入智囊团复盘与持仓体检提示词，减少模型读裸数值的误判；②同一批确定性评级（含风格因子/再平衡超限）沉淀为 `data/state/signal_ledger.jsonl` 账本，每条附**实时/非实时**来源标签，统计与摘要**默认只算实时记录**防降级行情冒充真实战绩，同日重跑不重复入账，摘要回灌提示词；`doctor` 自检上屏账本概览与各实验功能启用次数统计）。**默认开启**（读侧注入 + 跨期沉淀双面）；无可用信号时静默跳过、缓存键逐字节不变。features.json 写入的开关名以现行注册表为准 |
 | `module_quality_gate` | **true** | 模块级质量分级（对 4 个 LLM 模块输出按完整性/篇幅评 A~F，低评级中「内容在但存在缺陷」者随内容头部注入 `【内容质量提示】` 横幅——只标注、不阻断、不重试、不写回缓存）。**默认开启**——纯只读分级，A/B 级健康输出零噪音 |
 
-**独立章节与回放（4 项；新增整页签或多期回放）**——前 3 项在 `[P]`「默认关闭的整章」块（13-15），`whatif_trade_cost` 在 `[P]`「关联产物」块（16，仅调仓模拟报告）：
+**独立章节与回放（4 项；新增整页签或多期回放）**——前 3 项在 `[C]`「默认关闭的整章」块（13-15），`whatif_trade_cost` 在 `[C]`「关联产物」块（16，仅调仓模拟报告）：
 
 | 开关名 | 默认值 | 说明 |
 |:--|:--|:--|
@@ -806,7 +806,7 @@ TUI 主菜单 `[P]`「配置报告章节显隐」把**所有会决定「哪一�
 | `whatif_trade_cost` | **false** | 调仓 What-if「交易成本对比」（`调仓模拟.xlsx` 交易成本对比页签 + HTML⑧区）：回放计入申赎成本（申购按金额分档、赎回按 FIFO 快照批次的交易日持有期阶梯加权，费率 F10/全量表/配置兑底三级可得）+ 生效日 t0 一次性扣费的成本前/后收益差 + 业绩基准三线参照（配置覆盖→持仓基准文本→宽基默认映射）；费率未知/场内品种显式标注**不出成本后数字**；无回测时仅出成本块 |
 | `stock_fundamentals` | **false** | 持仓基本面章两块同开同关：区块① 个股基本面（指标/质量档/趋势/当前 PE·PB，需数据底座就绪）+ 区块② A 股标的财报章节摘要（需 DataSinking key）；原两开关并入本单一开关 |
 
-**章节内选项（2 项；由 [P] 作为章节子项渲染）**：
+**章节内选项（2 项；由 [C] 作为章节子项渲染）**：
 
 | 开关名 | 默认值 | 说明 |
 |:--|:--|:--|
@@ -844,25 +844,25 @@ TUI 主菜单 `[P]`「配置报告章节显隐」把**所有会决定「哪一�
 
 ### Q. Web 模式配置编辑
 
-Web 模式（浏览器界面）提供「配置编辑」面板，可修改的配置项与 TUI 主菜单**完全一致**（完整镜像），共 11 组（功能开关按与 TUI 相同的八组分块渲染；TUI 侧前六组在 `[S]`、后两组在 `[P]`）：
+Web 模式（浏览器界面）提供「配置编辑」面板，可修改的配置项与 TUI 主菜单**完全一致**（完整镜像），共 11 组（功能开关按与 TUI 相同的八组分块渲染；TUI 侧前六组在 `[S]`、后两组在 `[C]`）：
 
 | 组 | 配置项 | 对应 TUI 菜单 |
 |:--|:--|:--|
 | 路径与文件 | `holdings_dir` / `holdings_filename` / `output_dir` | `[G]` → `D` / `F` / `O` |
-| 报告章节 | `enable_fund_deep_analysis` / `enable_news` / `enable_history` / `enable_portfolio_evolution` / `enable_action` | `[P]` 1~5 |
+| 报告章节 | `enable_fund_deep_analysis` / `enable_news` / `enable_history` / `enable_portfolio_evolution` / `enable_action` | `[C]` 1~5 |
 | 持仓与交易 | `cost_lots`（默认关）/ `fund_purchase_limit` / `cost_position` / `risk_adjusted_excess`（默认关） | `[S]` 1-4 |
 | 市场与估值 | `valuation_percentile`（默认关）/ `market_temperature` / `crisis_replay`（默认关）/ `prosperity_framework` | `[S]` 5-8 |
 | 基金与风格 | `factor_catalog` / `industry_beta` / `candidate_compare`（默认关） | `[S]` 9-11 |
 | 事件与摘要 | `event_window_impact`（默认关）/ `data_quality` / `market_sentiment`（默认关）/ `summary_highlights`（默认关） | `[S]` 12-15 |
 | 呈现与交互 | `report_qa`（默认关）/ `metrics_enabled` | `[S]` 16-17 |
 | 机制与质量 | `decision_reflection`（默认关）/ `deterministic_signal` / `module_quality_gate` | `[S]` 18-20 |
-| 独立章节与回放 | `rebalance_schedule_replay`（默认关）/ `holding_change_review`（默认关）/ `whatif_trade_cost`（默认关）/ `stock_fundamentals`（默认关） | `[P]` 13-16（整章 13-15 / 关联产物 16） |
-| 章节内选项 | `llm_debate_procon`（默认关）/ `llm_debate_conditional` | `[P]` 7.1 / 7.2（智囊团复盘子项） |
+| 独立章节与回放 | `rebalance_schedule_replay`（默认关）/ `holding_change_review`（默认关）/ `whatif_trade_cost`（默认关）/ `stock_fundamentals`（默认关） | `[C]` 13-16（整章 13-15 / 关联产物 16） |
+| 章节内选项 | `llm_debate_procon`（默认关）/ `llm_debate_conditional` | `[C]` 7.1 / 7.2（智囊团复盘子项） |
 | 持仓匿名化 | `anonymization.mode`（off / code_display / full_anonymous / summary） | `[G]` → `A` |
 | 对比指数池 | `comparison_indices`（增 / 删 / 重置默认） | `[G]` → `I` |
 | LLM 多链线路优先级 | `llm_providers.providers[].priority`（各条目 ▲▼ 调序） | `[G]` → `M` |
 | LLM 调优参数 | `llm_max_thinking_concurrency` / `llm_max_concurrency` / `max_retries` / `llm_full_fail_retry_delay` / `llm_total_time_budget_sec` / `daily_cost_limit` | `[G]` → `L` |
-| LLM 分析章节 | `enabled_llm.global_macro` / `expert_review` / `health_check` / `penetration_deep` / `news_correlation` / `self_review` / `holding_change` | `[P]` 6-12 |
+| LLM 分析章节 | `enabled_llm.global_macro` / `expert_review` / `health_check` / `penetration_deep` / `news_correlation` / `self_review` / `holding_change` | `[C]` 6-12 |
 
 **写入行为**：
 - 面板修改**立即写入**共享配置文件（`config.json` / `llm_settings.json` / `features.json`），TUI / CLI 下次读取即生效（缓存按文件修改时间自动失效，无需手动刷新）。

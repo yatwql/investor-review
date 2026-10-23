@@ -262,7 +262,7 @@ def _panel_doc(
     wrong_range_idx: int | None = None,
     reverse_map: bool = False,
 ) -> str:
-    """按注册表现造两面板文档：``[S]`` 六组块标题 + 行号表、``[P]`` 四块 + 子项 + 键名映射表。
+    """按注册表现造两面板文档：``[S]`` 六组块标题 + 行号表、``[C]`` 四块 + 子项 + 键名映射表。
 
     drop_row 行号表抽掉一行；wrong_range_idx 指定 ``[S]`` 组的块标题区间写错；
     reverse_map 颠倒映射表顺序——三种破坏各对应一类 finding。
@@ -285,7 +285,7 @@ def _panel_doc(
             mapping.append(f"> | `{flag}` | `[S]` {number} | {name} |")
         lines.append("")
 
-    lines.append("#### [P] 配置报告章节显隐")
+    lines.append("#### [C] 配置报告章节显隐")
     lines.append("")
     for block in drift.BLOCK_ORDER:
         entries = drift.chapters_in_block(block)
@@ -299,13 +299,13 @@ def _panel_doc(
             lines.append(f"| {number} | 章节 {number} | `{entry.key}` |")
             if entry.source == drift.SOURCE_FEATURES:
                 mapping.append(
-                    f"> | `{entry.key}` | `[P]` {number} | {drift._group_doc_name(drift.feature_switch_registry[entry.key].group)} |"
+                    f"> | `{entry.key}` | `[C]` {number} | {drift._group_doc_name(drift.feature_switch_registry[entry.key].group)} |"
                 )
         lines.append("")
     for sub_number, flag in drift.sub_item_numbers().items():
         lines.append(f"| {sub_number} | 子项 {sub_number} | `{flag}` |")
         mapping.append(
-            f"> | `{flag}` | `[P]` {sub_number} | {drift._group_doc_name(drift.feature_switch_registry[flag].group)} |"
+            f"> | `{flag}` | `[C]` {sub_number} | {drift._group_doc_name(drift.feature_switch_registry[flag].group)} |"
         )
     lines.append("")
     lines.extend(reversed(mapping) if reverse_map else mapping)
@@ -331,12 +331,12 @@ class TestPanelNumbering:
     def test_missing_section_reported(self, drift):
         findings = drift.check_panel_numbering("无面板表\n")
         assert any("未找到 [S] 面板编号表区段" in f for f in findings)
-        assert any("未找到 [P] 面板编号表区段" in f for f in findings)
+        assert any("未找到 [C] 面板编号表区段" in f for f in findings)
 
     def test_sub_item_number_mismatch_reported(self, drift):
         """子项编号写错（`7.3`）→ 与注册表派生不一致即报出。"""
         doc = _panel_doc(drift).replace("| 7.2 | 子项 7.2 |", "| 7.3 | 子项 7.3 |")
-        doc = doc.replace("| `llm_debate_conditional` | `[P]` 7.2 |", "| `llm_debate_conditional` | `[P]` 7.3 |")
+        doc = doc.replace("| `llm_debate_conditional` | `[C]` 7.2 |", "| `llm_debate_conditional` | `[C]` 7.3 |")
         findings = drift.check_panel_numbering(doc)
         assert any("子项编号" in f for f in findings)
 

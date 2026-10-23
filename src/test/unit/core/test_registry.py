@@ -312,7 +312,7 @@ class TestReportSectionDefault:
     def test_non_always_type_has_data_flag(self):
         """非 always/history/action 类型必须有 data_flag。
 
-        action 类型（行动建议）由独立顶层开关 enable_action 控制（默认开，菜单 P 可切换），
+        action 类型（行动建议）由独立顶层开关 enable_action 控制（默认开，菜单 C 可切换），
         数据可视为纯算法产出，无 data_flag 依赖（data_flag=None），
         available=False 时展示层写占位（§1.4.5 数据降级治理）。
         """

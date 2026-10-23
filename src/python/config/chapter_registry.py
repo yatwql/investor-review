@@ -1,4 +1,4 @@
-"""报告章节注册表（配置面板视点）——``[P]`` 面板的唯一事实来源。
+"""报告章节注册表（配置面板视点）——``[C]`` 面板的唯一事实来源。
 
 与 :mod:`core.report_section_registry` 的分工：后者描述**报告产物**（章节顺序 /
 导航分组 / 页签名称），本模块描述**章节开关在配置面板中如何呈现**（分块 / 来源
@@ -54,7 +54,7 @@ class ChapterEntry:
     Attributes:
         key: 稳定键名（``config.json`` 键 / LLM 模块键 / 功能开关键）——面板
             ``?键名`` 查询与写路径都以它为锚，编号漂移不影响定位
-        block: 所属分块（``BLOCK_*``，决定 ``[P]`` 面板的四块排版）
+        block: 所属分块（``BLOCK_*``，决定 ``[C]`` 面板的四块排版）
         source: 取值来源（``SOURCE_*``，决定读写落到哪份配置文件）
         label: 显示名；空串表示由来源注册表派生（LLM 模块名 / 功能开关显示名）
         sub_items: 章节下的生成选项（功能开关键，按显示顺序；只影响章内内容）
@@ -69,7 +69,7 @@ class ChapterEntry:
     artifact_note: str = ""
 
 
-#: 章节清单（顺序即 ``[P]`` 编号序，四块按 ``BLOCK_ORDER`` 连续排列）
+#: 章节清单（顺序即 ``[C]`` 编号序，四块按 ``BLOCK_ORDER`` 连续排列）
 chapter_registry: tuple[ChapterEntry, ...] = (
     ChapterEntry("enable_fund_deep_analysis", BLOCK_TOP, SOURCE_CONFIG, "基金深度分析"),
     ChapterEntry("enable_news", BLOCK_TOP, SOURCE_CONFIG, "市场新闻"),

@@ -260,7 +260,7 @@ PROPOSED_DOMAINS = [
     {
         "title": "报告内容",
         "hint": "改这里会改变报告里出现什么：章节显隐（顶层 / LLM / 默认关闭的整章 / 关联产物）与章节内内容",
-        "tui": "TUI：[P] 报告章节显隐 + [S] 报告章节内容",
+        "tui": "TUI：[C] 报告章节显隐 + [S] 报告章节内容",
         "blocks": ["sections", "llm", "standalone_chapters", "standalone_related", "features.portfolio", "features.market", "features.fund_style", "features.event_summary"],
     },
     {

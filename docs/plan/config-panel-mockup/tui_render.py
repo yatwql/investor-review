@@ -17,7 +17,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 
-#: 辩论两项：作为 `[P]` 中智囊团章的子项（`7.1`/`7.2`），不入任何组
+#: 辩论两项：作为 `[C]` 中智囊团章的子项（`7.1`/`7.2`），不入任何组
 DEBATE_KEYS = ("llm_debate_procon", "llm_debate_conditional")
 
 
@@ -25,8 +25,8 @@ def apply_panel_grouping() -> None:
     """按设计的 `PANEL_GROUPS` 注入分组视图（仅内存态，不写任何配置文件）。
 
     - `[S]` 只渲染 analysis / presentation / mechanism 三组；
-    - 默认关闭的整章（standalone）归 `[P]`，不在 `[S]` 出现；
-    - 辩论两项作为 `[P]` 中智囊团章的子项，不入任何组。
+    - 默认关闭的整章（standalone）归 `[C]`，不在 `[S]` 出现；
+    - 辩论两项作为 `[C]` 中智囊团章的子项，不入任何组。
     """
     import dataclasses
 
@@ -76,8 +76,8 @@ def apply_panel_grouping() -> None:
     real_wrap = hs.wrap_hanging
     hs.wrap_hanging = lambda text, *a, **k: real_wrap(
         text.replace(
-            "基础报告章节组（基金深度分析/市场新闻/历史走势+回撤/组合演进/行动建议）在菜单 [P] 配置",
-            "章节显隐与整章开关见 [P]；本面板为报告内的呈现与增强内容",
+            "基础报告章节组（基金深度分析/市场新闻/历史走势+回撤/组合演进/行动建议）在菜单 [C] 配置",
+            "章节显隐与整章开关见 [C]；本面板为报告内的呈现与增强内容",
         ),
         *a,
         **k,
@@ -239,7 +239,7 @@ def _d_llm_proposed() -> None:
 
 
 def _boards_proposed() -> None:
-    """`[P]` 设计结构：16 项四块（顶层 5 / LLM 7 / 默认关闭的整章 3 / 关联产物 1）+ 智囊团下 7.1/7.2 子项。"""
+    """`[C]` 设计结构：16 项四块（顶层 5 / LLM 7 / 默认关闭的整章 3 / 关联产物 1）+ 智囊团下 7.1/7.2 子项。"""
     from src.python.config import (
         get_config,
         get_llm_config,
