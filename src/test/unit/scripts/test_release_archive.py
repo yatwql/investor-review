@@ -660,3 +660,29 @@ class TestEmptyBatchSectionAfterDevbump:
         out = rel.drop_migration_placeholders(text)
         assert "> 人工备注：本批已复核" in out
         assert "完整复盘见" not in out
+
+
+class TestDecisionNotDoIsArchivable:
+    """「❌ 决策不做」同属已关闭项：迁档口径与 ✅ 一致（否则永久滞留在在办清单）。
+
+    背景：判定不做的任务不算在办项，留在主台账会让「当前迭代」的条数与读者预期
+    长期错位；标记本身保留，归档里仍能区分「做完」与「决定不做」。
+    """
+
+    _TEXT = (
+        "## 当前迭代待办\n\n**当前迭代**：在办 9 项——P2 9 项（**plan-182/plan-200**）。\n\n### P2 — 下一阶段就绪\n\n"
+        "#### `plan-182` CLI 缺追问入口 ❌ 决策不做\n\n**决策（不做）**：形态不匹配，保留 TUI/Web 入口。\n\n"
+        "#### `plan-200` 仍在办的任务\n\n**动作**：待实施。\n\n## 归档\n"
+    )
+
+    def test_decision_not_do_section_is_collected(self, rel):
+        hits = rel.plan_completed_sections(self._TEXT)
+        assert len(hits) == 1
+        assert "plan-182" in hits[0][2]
+        assert "plan-200" not in hits[0][2]
+
+    def test_iteration_count_excludes_decision_not_do(self, rel):
+        out = rel.recompute_current_iteration(self._TEXT)
+        summary = next(line for line in out.splitlines() if line.startswith("**当前迭代**"))
+        assert "在办 1 项" in summary
+        assert "plan-200" in summary and "plan-182" not in summary
