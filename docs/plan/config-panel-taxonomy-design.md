@@ -23,11 +23,11 @@
 |:--|:--|:--|:--|:--|
 | `report_content` | 报告内容 | 改这里会改变报告里出现什么：哪些章出现、章内追加什么、整章回放是否启用 | 顶层章节 + LLM 章节（含辩论子项）+ 默认关闭的整章 + 关联产物 + 章节内容组（按报告位置分六组） | `[C]` 全部、`[S]`（六个内容组） |
 | `presentation_mechanism` | 呈现与机制 | 只改呈现口径、匿名化与内部机制/诊断接缝：内容主体不变或仅影响入口显隐 | 匿名化 + 呈现与交互组（含报告页追问）+ 机制与质量组 | `[G]`→`[A]`、`[S]`（后两组） |
-| `data_and_routes` | 数据与线路 | 数据从哪读、跟什么基准比、LLM 走哪条线路 | 目录与文件名 + 对比基准指数 + 多链线路 | `[G]`→`[D]/[F]/[O]`、`[G]`→`[I]`、`[G]`→`[L]`（线路） |
+| `data_and_routes` | 数据与线路 | 数据从哪读、跟什么基准比、LLM 走哪条线路 | 目录与文件名 + 对比基准指数 + 多链线路 | `[G]`→`[H]/[F]/[O]`、`[G]`→`[I]`、`[G]`→`[L]`（含第 7 项线路） |
 | `llm_run` | LLM 运行 | LLM 调用的运行约束（并发/重试/预算） | 运行参数 6 项 | `[G]`→`[L]`（1-6） |
 | `ops_diagnostics` | 运行与诊断 | 日志写盘与控制台输出、日志查看器默认筛选；级别与轮转在下次启动生效 | 日志设置 6 项（见 [`logging-config-design.md`](logging-config-design.md)） | `[D]`→`[L]` |
 
-域与 TUI 菜单**不一一对应**：TUI 按"操作位置"（章节 / 开关 / 全局设置）组织，Web 按"意图域"组织；两者共用同一批**条目名**与**标记口径**，不共用排布。
+域与 TUI 菜单**不一一对应**：TUI 按"操作位置"（章节 / 开关 / 全局设置）组织，Web 按"意图域"组织；两者共用同一批**条目名**与**标记口径**，不共用排布。典型跨域例：`[G]` 的「基准与脱敏」组，`对比基准指数` 落 `data_and_routes`、`持仓匿名化` 落 `presentation_mechanism`——组是终端的分组轴，域是浏览器的分区轴，二者不能互相推导。
 
 ### 2.2 组（按报告位置 / 章节类型）
 
@@ -311,6 +311,7 @@
 | **域即分区** | 一级分区 = 业务域（报告内容 / 呈现与机制 / 数据与线路 / LLM 运行 / 运行与诊断），与 TUI 的菜单入口同源不同排布 |
 | **控件即语义** | 布尔用勾选、互斥用单选、自由文本用输入框、数值用数字框、集合用列表 + 动作按钮；不把可编辑项塞进下拉或弹窗 |
 | **文案零硬编码** | 标签、说明、默认值、分组标题全部由服务端下发；前端只做渲染与交互 |
+| **结构色同源** | 域标题、块（分组）标题只取 `--primary`（结构色），与 TUI 的 `── 组名 ──` 同色调；状态色（绿/黄/红）不得用于标题 |
 | **改动可回滚** | 即时保存类失败自动回滚并就地报错；显式保存类保留输入值供重试 |
 | **无编号** | 数字编号是终端渠道的寻址方式；Web 用控件与筛选寻址 |
 | **可深链** | 每个域有锚点（`#domain-<key>`），可直接分享到某一分区 |
@@ -335,7 +336,19 @@
 "domains": [
   {"key": "report_content", "title": "报告内容", "hint": "改这里会改变报告里出现什么…",
    "tui": "TUI：[C] 报告章节显隐 + [S] 报告章节内容",
-   "blocks": ["sections", "llm", "standalone_chapters", "standalone_related", "features.analysis"]}
+   "blocks": ["sections", "llm", "standalone_chapters", "standalone_related", "features.analysis"]},
+  {"key": "presentation_mechanism", "title": "呈现与机制", "hint": "只改呈现口径、匿名化与机制接缝…",
+   "tui": "TUI：[G] 基准与脱敏（匿名化部分）+ [S] 呈现与交互 / 机制与质量",
+   "blocks": ["anonymization", "features.presentation", "features.mechanism"]},
+  {"key": "data_and_routes", "title": "数据与线路", "hint": "数据从哪读、跟什么基准比、LLM 走哪条线路",
+   "tui": "TUI：[G] 目录与文件 / 基准与脱敏（基准部分）/ LLM 调优第 7 项",
+   "blocks": ["paths", "indices", "providers"]},
+  {"key": "llm_run", "title": "LLM 运行", "hint": "LLM 调用的运行约束（并发 / 重试 / 预算）",
+   "tui": "TUI：[G]→[L] 运行参数 1-6",
+   "blocks": ["tuning"]},
+  {"key": "ops_diagnostics", "title": "运行与诊断", "hint": "日志写盘与控制台输出、查看器默认筛选",
+   "tui": "TUI：[D]→[L] 日志设置",
+   "blocks": ["logging", "reference"]}
 ]
 ```
 
@@ -432,11 +445,12 @@
 | 维度 | TUI | Web |
 |:--|:--|:--|
 | 寻址 | 数字编号 / 字母别名 | 域锚点 + 关键词筛选 |
-| 分区轴 | 按操作位置（P/S/G/D） | 按意图域（五个域） |
-| 开关控件 | 输入编号切换（持仓与交易 / 市场与估值 / 基金与风格 / 事件与摘要 / 呈现与交互 / 机制与质量） | 勾选即时保存 |
+| 分区轴 | 按操作位置（C/S/G/D） | 按意图域（五个域） |
+| 开关控件 | 输入编号切换（`[S]` 六组：持仓与交易 / 市场与估值 / 基金与风格 / 事件与摘要 / 呈现与交互 / 机制与质量；整章与子项在 `[C]`） | 勾选即时保存 |
 | 数值修改 | 输入编号 → 输入新值 | 数字框 + 保存 |
 | 失败反馈 | 面板内一行 `[!]` | 块级错误区 + 行内回滚 |
 | 导航 | 上级返回 | 域跳转 + 深链 |
+| 分组标题 | `── 组名 ──` + 结构色，组间空行 | 结构色文字 + 分隔线，无 `──` 装饰 |
 | 不共用 | 终端键位与配色 | 数字编号 |
 
 ### 4.11 明确不做
@@ -465,7 +479,7 @@
 | `core/logger.py` + `config/_logging.py` + `config/edit_ops.py` | 日志配置读取 / 校验 / 写入与 6 个白名单项（见 logging 设计文档） |
 | `web/config_edit.py` | `_BLOCK_DOMAIN` / `_DAILY_BLOCKS` / 声明表 / `_panel_domains` / `_panel_labels` / `_panel_descriptions` / `_panel_defaults`；`_llm_providers_surface` 增策略中文与链序标记；surface 增编排与文案块 |
 | `static/web/main.js` | 按 `domains` 分区渲染；删除前端中文表；块渲染支持 `descriptions`/`defaults`/`needs_hint`/`fullKey` |
-| `static/web/style.css` | §4.5 四个 class + 暗色配对 |
+| `static/web/style.css` | §4.5 四个 class + 暗色配对；域标题与 `.config-group-title` 取结构色 `--primary`（护栏 12） |
 | `tui/handlers_log.py` / `core/log_reader.py` | 读取 `viewer.default_level` / `tail_lines` 作为查看器初始值 |
 
 不改：`handlers_llm_providers.py`、指数池与匿名化面板本体、全部写路径、CLI 参数名。
