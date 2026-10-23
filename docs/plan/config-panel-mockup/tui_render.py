@@ -143,7 +143,7 @@ def _render_main_menu_proposed() -> None:
 
 
 def _g_menu_proposed() -> None:
-    """`[G]` 二级设计结构：按键位分组排版（目录与文件 / LLM 调优 / 基准与指数 / 索引）。"""
+    """`[G]` 二级设计结构：按键位分组排版（目录与文件 / LLM 调优 / 基准与脱敏 / 索引）。"""
     from src.python.tui import handlers_config as hc
     from src.python.tui.panel_runtime import NavState, PanelItem, panel_loop
     from src.python.tui.prompt_text import panel_prompt
@@ -160,7 +160,7 @@ def _g_menu_proposed() -> None:
             ],
         ),
         ("LLM 调优", [("L", "LLM 设置（运行参数 / 多链线路）")]),
-        ("基准与指数", [("I", "对比基准指数"), ("A", "持仓匿名化（代码 / 名称脱敏）")]),
+        ("基准与脱敏", [("I", "对比基准指数"), ("A", "持仓匿名化（代码 / 名称脱敏）")]),
         ("索引", [("M", "配置入口地图（各配置项所在菜单）")]),
     ]
     flat = [item for _title, items in groups for item in items]

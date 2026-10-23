@@ -196,8 +196,8 @@ GLOBAL_SETTINGS_ITEMS: tuple[tuple[str, str, str, str], ...] = (
     ("F", "持仓信息文件名", "_cmd_config_filename", "目录与文件"),
     ("O", "报告输出目录", "_cmd_config_output_dir", "目录与文件"),
     ("L", "LLM 设置（运行参数 / 多链线路）", "_cmd_config_llm_tuning", "LLM 调优"),
-    ("I", "对比基准指数", "_cmd_config_comparison_indices", "基准与指数"),
-    ("A", "持仓匿名化", "_cmd_config_anonymization_mode", "基准与指数"),
+    ("I", "对比基准指数", "_cmd_config_comparison_indices", "基准与脱敏"),
+    ("A", "持仓匿名化", "_cmd_config_anonymization_mode", "基准与脱敏"),
     ("M", "配置入口地图", "_render_config_entry_map", "索引"),
 )
 

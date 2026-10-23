@@ -49,12 +49,12 @@ class TestMainMenuStructure:
 @pytest.mark.unit
 class TestGlobalSettingsMenu:
     def test_seven_items_grouped(self):
-        """七项、四组：目录与文件（H/F/O）/ LLM（L）/ 基准与指数（I/A）/ 索引（M）。"""
+        """七项、四组：目录与文件（H/F/O）/ LLM（L）/ 基准与脱敏（I/A）/ 索引（M）。"""
         assert len(GLOBAL_SETTINGS_ITEMS) == 7
         assert {group for _l, _n, _h, group in GLOBAL_SETTINGS_ITEMS} == {
             "目录与文件",
             "LLM 调优",
-            "基准与指数",
+            "基准与脱敏",
             "索引",
         }
         assert [letter for letter, _n, _h, _g in GLOBAL_SETTINGS_ITEMS] == ["H", "F", "O", "L", "I", "A", "M"]
