@@ -93,6 +93,72 @@ LLM_TUNING_SPECS: dict[str, dict] = {
 }
 
 
+def _logging_specs() -> dict[str, dict]:
+    """日志设置可编辑项（枚举/整数 + 范围 + 中文标签与提示）。
+
+    与 TUI `[D]→[L]` 日志面板同一批键：写盘级别 / 控制台级别 / 单文件上限 / 备份份数 /
+    查看器默认级别 / 查看器首屏行数。``path`` 与 ``console_color`` 不进编辑面（路径属部署项、
+    颜色属终端能力探测，均留手动配置）。
+    """
+    from src.python.config._logging import DEFAULTS, LEVELS, RANGES, VIEWER_LEVELS
+
+    def _mb(value: int) -> int:
+        return int(value) // (1024 * 1024)
+
+    return {
+        "level": {
+            "kind": "enum",
+            "options": LEVELS,
+            "default": DEFAULTS["level"],
+            "label": "写盘级别",
+            "hint": "默认 INFO；DEBUG 仅排障时启用（体积与信噪比代价高），改动下次启动生效",
+        },
+        "console_level": {
+            "kind": "enum",
+            "options": LEVELS,
+            "default": DEFAULTS["console_level"],
+            "label": "控制台级别",
+            "hint": "默认 INFO；终端只看关键信息时可调到 WARNING，改动下次启动生效",
+        },
+        "max_bytes": {
+            "kind": "int",
+            "min": RANGES["max_bytes"][0],
+            "max": RANGES["max_bytes"][1],
+            "step": 1024 * 1024,
+            "unit": "bytes",
+            "default": DEFAULTS["max_bytes"],
+            "label": "单文件上限（MB）",
+            "hint": f"默认 {_mb(DEFAULTS['max_bytes'])} MB；超限轮转，改动下次启动生效",
+        },
+        "backup_count": {
+            "kind": "int",
+            "min": RANGES["backup_count"][0],
+            "max": RANGES["backup_count"][1],
+            "default": DEFAULTS["backup_count"],
+            "label": "备份份数",
+            "hint": "默认 5；0 表示不保留轮转文件，改动下次启动生效",
+        },
+        "viewer_level": {
+            "kind": "enum",
+            "options": VIEWER_LEVELS,
+            "default": DEFAULTS["viewer_level"],
+            "label": "查看器默认级别",
+            "hint": "默认 INFO；ALL 表示不预筛，即时生效",
+        },
+        "tail_lines": {
+            "kind": "int",
+            "min": RANGES["tail_lines"][0],
+            "max": RANGES["tail_lines"][1],
+            "default": DEFAULTS["tail_lines"],
+            "label": "查看器首屏行数",
+            "hint": "默认 500；即时生效",
+        },
+    }
+
+
+LOGGING_SPECS: dict[str, dict] = _logging_specs()
+
+
 #: 调优项 → 编辑白名单条目（同一份 spec 派生，避免范围/说明两处维护）
 def _tuning_default(key: str):
     """调优项默认值（唯一来源：`_llm_settings_defaults._DEFAULT_LLM_SETTINGS`）。"""
@@ -148,6 +214,8 @@ config_edit_whitelist = {
     **{flag: {"kind": "bool", "target": "features", "writer": "features"} for flag in feature_switch_registry},
     # ── 8 LLM 调优参数（llm_settings.json 顶层标量；范围/说明见 LLM_TUNING_SPECS）──
     **_LLM_TUNING_WHITELIST,
+    # ── 9 日志设置（logger.json；枚举/范围与 TUI 日志面板同源，清单见 _LOGGING_SPECS）──
+    **{f"logging.{key}": {**spec, "target": "logging", "writer": "logging"} for key, spec in LOGGING_SPECS.items()},
 }
 
 
@@ -169,6 +237,10 @@ def _target_path(target: str) -> str:
         from src.python.config.features import FEATURES_FILE
 
         return FEATURES_FILE
+    if target == "logging":
+        from src.python.config._logging import get_logger_config_path
+
+        return get_logger_config_path()
     raise ConfigEditError(f"未知配置目标文件: {target}")
 
 
@@ -210,12 +282,26 @@ def _dispatch_write(entry: dict, key: str, value) -> None:
         _write_llm_enabled(key, value)
     elif writer == "llm_scalar":
         _write_llm_scalar(key, value)
+    elif writer == "logging":
+        _write_logging(key, value)
     elif writer == "features":
         from src.python.config.features import save_feature_overrides
 
         save_feature_overrides({key: value})
     else:
         raise ConfigEditError(f"未知写入原语: {writer}")
+
+
+def _write_logging(key: str, value) -> None:
+    """写 logger.json 的单个扁平键（``logging.<键>`` → ``write_logger_config``）。
+
+    校验与写回（文本 patch 保注释、非法值不落盘）全部委托 ``config._logging``，
+    本函数只做键名映射——三渠道（TUI 日志面板 / Web 面板 / 手工）同一强度。
+    """
+    from src.python.config._logging import get_logger_config_path, write_logger_config
+
+    flat_key = key.split(".", 1)[1]
+    write_logger_config({flat_key: value}, get_logger_config_path())
 
 
 def _write_llm_enabled(key: str, value: bool) -> None:

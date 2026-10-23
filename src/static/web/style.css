@@ -821,6 +821,38 @@ select:focus,
   justify-content: flex-end;
 }
 
+/* 域分区（一级分区）：域之间以间距 + 分隔线分组；域标题为结构色（与 TUI 分组标题同色调） */
+.config-domain {
+  border-top: 1px solid var(--border);
+  padding: 16px 0 8px;
+}
+
+.config-domain:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.domain-title {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--primary);
+  padding-left: 8px;
+  border-left: 3px solid var(--primary);
+}
+
+.domain-hint {
+  margin: 0 0 4px 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.domain-tui {
+  margin: 0 0 12px 12px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
 .config-group {
   border-top: 1px dashed var(--border);
   padding: 12px 0 4px;
@@ -829,6 +861,19 @@ select:focus,
 .config-group:first-of-type {
   border-top: none;
   padding-top: 0;
+}
+
+/* 项说明副行：与控件文字左对齐，脚注档 */
+.config-desc {
+  margin: 0 0 8px 24px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+/* 表单类块的说明副行与字段左缘对齐（不缩进） */
+.config-desc-flush {
+  margin-left: 0;
 }
 
 .config-group-title {

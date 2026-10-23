@@ -573,7 +573,7 @@ Web 渠道是第三种交互入口：**浏览器内完成「上传持仓 Excel �
 | `web/handlers.py` | API 路由 | 页面/上传/生成/轮询/预览/下载/历史/健康/日志/缓存统计与清理/What-if/报告追问/配置编辑；`_run_generation` 薄包装器（委托 `_run_generation_impl` + `result_box` 回传产物标志，收尾经 `_notify_web_completion` 按 `notify` 配置门控派发完成通知——Web 手动 + 内置定时调度共用，与 CLI 同构尽力而为不改退出码）；`_build_system_info` 委托 `core/system_info.build_system_info` 单源组装状态区系统信息（版本/本机 IP/持仓输出摘要/LLM 含多链/自检卡片可见性，与 TUI 同组展示原语）；`_handle_logs`/`_handle_health_history` 薄展示（委托 `core/log_reader.py` + `core/perf.py`，无解析逻辑）；`_handle_doctor` 薄展示（委托 `core/doctor.py`）；`_handle_config_edit` 同源守卫（`_is_same_origin`）；`_build_artifacts` 委托 `orchestrator.artifacts_for_report_type` 类型语义与 `core/constants` 最新产物名（不镜像 CLI --type 规则与文件名字面量）；空持仓门经 `core/reader.require_holdings` 单源（HTTP 端不带服务端路径） |
 | `web/run_generation.py` | Web 生成执行体 | `_run_generation` 薄入口（委托 `_run_generation_impl` + `result_box` 回传产物标志，收尾经 `_notify_web_completion` 按 `notify` 配置门控派发完成通知——Web 手动 + 内置定时调度共用，与 CLI 同构尽力而为不改退出码）；`_run_generation_impl` 读持仓/输入模式分派（试算→`web/` 隔离域、正式→共享主目录）/LLM 日预算硬闸/`generate_report` 调用/退出码映射/上传临时文件清理；`_build_artifacts` 委托 `orchestrator.artifacts_for_report_type` 类型语义与 `core/constants` 最新产物名；`_web_input_mode_snapshot_domain` 模式↔隔离域唯一事实来源 |
 | `web/upload.py` | 上传安全 | 服务端 uuid 重命名、扩展名白名单、大小上限、PK 魔数、原子落盘、TTL 清理 |
-| `web/config_edit.py` | 配置编辑 | 薄外观：再导出共享层 `config/edit_ops.py` 符号（`apply_config_edit`/`config_edit_whitelist`/`config_backup_file`）+ `get_config_edit_surface` 组装呈现面；规则与写入单源在共享层，与 TUI 同一函数 |
+| `web/config_edit.py` | 配置编辑 | 薄外观：再导出共享层 `config/edit_ops.py` 符号（`apply_config_edit`/`config_edit_whitelist`/`config_backup_file`）+ `get_config_edit_surface` 组装呈现面：`domains`（五域 → 块清单，块 id 含 `features.<组键>`）、`labels`/`descriptions`/`defaults`/`needs_hint` 元数据（全部由注册表与共享白名单派生，前端零中文表）、`logging`（六项含枚举/范围）、`reference`（只读计价参考）；规则与写入单源在共享层，与 TUI 同一函数 |
 | `web/runs.py` | 运行管理 | RunManager 单 worker 串行队列 + run 状态/事件注册表（Lock 保护） |
 | `web/progress.py` | 进度报告 | WebProgressReporter（ProgressReporter 子类 → RunState 事件缓冲） |
 | `src/static/web/` | 前端单页 | 原生 ES6 无框架、上传表单/进度事件/状态区/历史记录/配置编辑面板 |
@@ -619,7 +619,7 @@ Web 渠道是第三种交互入口：**浏览器内完成「上传持仓 Excel �
 | GET | `/api/cache` | 缓存统计 | 只读：总量/前缀分布/命中率/过期预估（过期数以 dry_run 预扫描不删除） |
 | POST | `/api/cache/cleanup` | 清理过期缓存 | `_is_same_origin()` 同源守卫；删除 TTL 过期文件，有效缓存不受影响 |
 | POST | `/api/qa/ask` | 报告对话式追问 | 开关 `report_qa`（默认关，关闭时 403），见 §6.8 |
-| GET | `/api/config/edit` | 配置编辑面板 | 无守卫；返回 8 组可编辑面（路径 / 报告章节 / 匿名化 / 对比指数池 / LLM 多链线路 / LLM 调优参数 / LLM 开关 / 功能开关）+ 顶层 `features` 面（`groups` 四组分块 + `labels` + `experimental`（实验项清单）+ `report_affecting`）；前端把「功能开关」组按 `groups` 渲染成四块，故界面共 11 块 |
+| GET | `/api/config/edit` | 配置编辑面板 | 无守卫；返回 `domains` 编排契约（五域：报告内容 / 呈现与机制 / 数据与线路 / LLM 运行 / 运行与诊断，每域带 `title`/`hint`/`tui` 导引 + 有序块清单）+ 各块数据面（`paths` / `sections` / `standalone_chapters` / `standalone_related` / `anonymization`（含四档 `labels`）/ `comparison_indices` / `llm` / `llm_tuning` / `llm_providers` / `features`（`groups` + `labels` + `experimental` + `report_affecting`）/ `logging` / `reference`）+ 元数据面（`labels` / `descriptions` / `defaults` / `needs_hint`，覆盖白名单全部可编辑键）；块 id ↔ 渲染器契约由 `test_config_surface_contract.py` 双向断言 |
 | POST | `/api/config/edit` | 应用配置编辑 | `_is_same_origin()` 同源守卫（失败 403）；校验失败 400 BAD_PARAM；写共享配置异常 500 CONFIG_WRITE_FAILED |
 
 #### 1.8.5 RunManager 单 worker 串行队列
@@ -660,7 +660,7 @@ Web 渠道是第三种交互入口：**浏览器内完成「上传持仓 Excel �
 
 - **配置回填**：页面加载取一次 `get_config()`，报告格式/历史走势（`history.fetch_mode`）/强制 LLM 默认值跟随配置；强制模块多选候选由 `_handle_index` 经 `force_scope.FORCEABLE_LLM_MODULES` + 注册表中文名派生注入（渠道不自持副本），全选/全不选均归一为不传（后端等价全量）。
 - **进度事件**：事件按 seq 编号渲染，进度条显示「当前阶段（第 N 步）：消息」，完成置 100%；轮询节流（防刷接口）。
-- **配置编辑面板**：`loadConfigEdit()` 拉取 `/api/config/edit` 全量可编辑面，按 11 块渲染（「功能开关」组按 `features.groups` 四组分块；实验项 ⚗ 与「（影响报告）」后缀由 `features.experimental` / `report_affecting` 同源下发，前端不维护字典）；保存语义**即改即存**（与 TUI「改一项存一项」一致）——checkbox/radio 改动即 POST，自由文本路径经各自「保存」按钮提交，对比指数池经添加/删除/重置动作提交；提交期间控件禁用，成功回读该项最新值，失败恢复改动前值并显示错误。`error_code` 驱动分支（BAD_PARAM 400 / 同源 403 / CONFIG_WRITE_FAILED 500），中文文案直显服务端不前端硬编码。
+- **配置编辑面板**：`loadConfigEdit()` 拉取 `/api/config/edit` 全量可编辑面，按 `domains` **五域分区**渲染（域内按块清单顺序，块 id → `BLOCK_RENDERERS` 分派；`features.<组键>` 由统一分支承接，域内块全空则该域不出现）；域标题与块标题取结构色 `--primary`（`DESIGN.md` 护栏 12），块内每项说明取自 `descriptions`、`✻ 已改` 由 `defaults` 比较得出——文案与基准全部服务端下发，前端**零中文表**（实验项 ⚗ 与「（影响报告）」后缀由 `features.experimental` / `report_affecting` 同源下发）；保存语义**即改即存**（与 TUI「改一项存一项」一致）——checkbox/radio 改动即 POST，自由文本路径经各自「保存」按钮提交，对比指数池经添加/删除/重置动作提交；提交期间控件禁用，成功回读该项最新值，失败恢复改动前值并显示错误。`error_code` 驱动分支（BAD_PARAM 400 / 同源 403 / CONFIG_WRITE_FAILED 500），中文文案直显服务端不前端硬编码。
 - **状态区**：健康卡片（`/api/health` 60s 缓存 + 「重新检测」`?fresh=1` 强制重测）+ 历史运行记录卡片（最近 10 条，5s 短缓存）。
 - **日志查看卡**：⑦ 日志查看（级别 `<select>` + 「加载日志」按钮）——**手动加载不自动轮询**（对齐设计文档「自动刷新高 IO → 手动刷新」）；`loadLogs()` fetch `/api/logs`，每条 `<details class="log-entry log-{level}">` 原生折叠 + `<pre class="log-body">` 展开 body；`is_decorative` 置灰；**全程 `textContent`/DOM API**（XSS 纪律，日志 body 含外部数据源名不可信）。
 - **结果映射**：按 exit_code 映射展示（0 成功 / 1 部分失败黄色告警 + 通用建议 / 2 严重红色 + 提示看日志）；failed/exit_code=2 隐藏无效产物按钮；失败提供「重新生成」（上传文件已消费，引导重新上传）。
@@ -695,7 +695,7 @@ Web 渠道是第三种交互入口：**浏览器内完成「上传持仓 Excel �
 
 #### 1.8.11 Web 配置编辑（完整镜像 TUI 可编辑全集）
 
-配置编辑的职责边界：**「能改什么」由白名单唯一确定，「怎么改」由共享编辑层单源执行**——Web `POST /api/config/edit` 与 TUI 配置面板（`_apply_edit` 外壳）同走 `config/edit_ops.py::apply_config_edit`，两渠道同一函数、同一强度；不引入任何白名单之外的新配置项。核心实现 `config/edit_ops.py`（`web/config_edit.py` 仅保留 `get_config_edit_surface` 呈现面组装）：
+配置编辑的职责边界：**「能改什么」由白名单唯一确定，「怎么改」由共享编辑层单源执行**（含日志设置六项 `logging.*` → `write_logger_config`，与 TUI `[D]→[L]` 面板同一批键与同一校验）——Web `POST /api/config/edit` 与 TUI 配置面板（`_apply_edit` 外壳）同走 `config/edit_ops.py::apply_config_edit`，两渠道同一函数、同一强度；不引入任何白名单之外的新配置项。核心实现 `config/edit_ops.py`（`web/config_edit.py` 仅保留 `get_config_edit_surface` 呈现面组装）：
 
 - **白名单 `config_edit_whitelist`**（定义于 `config/edit_ops.py`，小写模块级 dict，唯一事实来源）：点分键 → `{"kind", "target", "writer"}`。`kind` 取 `str`/`bool`/`enum`/`action`；`target` 取 `config`/`llm_settings`/`features`（落盘目标文件）；`writer` 取 `scalar`/`anonymization`/`llm`/`llm_scalar`/`llm_providers`/`features`/`comparison_indices`（写入分派器）。全集 8 组 51 条键（前端把「功能开关」组按 surface 下发的 `groups` 渲染成四块，故界面共 11 块）：自由文本路径 3（holdings_dir / holdings_filename / output_dir）、报告章节开关 5、匿名化 1 键 4 档、对比指数池 1 键（增/删/重置默认）、LLM 多链线路优先级 1（llm_providers）、LLM 调优参数 6（`LLM_TUNING_SPECS`：thinking 并发 / 模块并发 / 重试 / 整链重试等待 / 总时间预算 / 日费用上限）、LLM 分析章节开关 7（enabled_llm，键域=注册表 LLM 模块全集）、功能开关 27（features.json 全注册表：呈现与体验 1 + 分析增强 16 + 独立章节与回放 5 + 机制与诊断 5；分组、默认值与显示名同源，面板显示名与「影响报告」标记由 surface 下发，前端不写字典）。
 - **写入分派（共享层 `_dispatch_write` 单点，两渠道无各自实现）**：config.json 顶层标量 → `set_config`（`_PATH_CONFIG_KEYS` 路径键自动反绝对化）；嵌套 dict（comparison_indices）→ 读合并后 `set_config` 整块写；`anonymization.mode` → `set_anonymization_mode`；`enabled_llm.*` → 共享 `write_llm_settings`（`config/_llm_settings.py` 公开原语，自 `tui/handlers_config.py` 抽取，TUI 改委托、行为零变化；保留注释 + mkstemp + `os.replace` 原子写 + `get_llm_config()` 缓存刷新）；功能开关全注册表（含独立整章与关联产物）→ `save_feature_overrides`（features.json）。`[C]` 四块来源不同但写路径同源——顶层 `config`、LLM `llm_settings`、整章/关联产物 `features`，目标键由 `chapter_registry.chapter_edit_key()` 派生。

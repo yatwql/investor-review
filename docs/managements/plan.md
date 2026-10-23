@@ -8,7 +8,7 @@
 
 本文档记录项目的实现计划。已完成项迁入版本归档，此处只保留在办任务的最新状态。
 
-**当前迭代**：在办 11 项——P2 9 项（**plan-92/93/185** 与配置体系重构剩余 6 轮 **plan-195~200**）、P3 1 项（**plan-70**）、P4 1 项（**plan-55**）。
+**当前迭代**：在办 10 项——P2 8 项（**plan-92/93/185** 与配置体系重构剩余 5 轮 **plan-196~200**；plan-195 已实施待归档）、P3 1 项（**plan-70**）、P4 1 项（**plan-55**）。
 
 > **命名纪律（强制）**：重构/新增的变量名、函数名、注释与文档表述必须与新章节语义相关（如 `position_relationship`/`portfolio_history_drawdown`/`style_factor`/`action`），**绝对禁止用任务编号命名**（F 系列、plan-N、rf-N 等）。任务编号仅在本表作链接锚点，不进入实现层。
 
@@ -46,11 +46,9 @@
 
 **动作（标签已落地，余验收）**：进提示词的收益率一律带口径标签并附口径说明，`PROMPT_SCHEMA_VERSION` 并入模块指纹。验收看可观测量：连跑数轮完整报告，`perf_history.counters.fact_fix_total` 中收益率类修正数应显著低于基线 10 处；最近一轮已降到 3 处（智囊团 / 体检 0 处）。达标即收口归档。
 
-#### `plan-195` Web 配置面契约（domains / labels / blocks）
+#### `plan-195` Web 配置面契约（domains / labels / blocks）——已实施，待发布归档
 
-**现状与问题**：Web 配置面板仍由前端持有中文标签与分块清单，与服务端注册表两处维护——新增开关要改两处，标签措辞会漂移；块与域没有机检覆盖，漏接的块在前端静默不渲染。
-
-**动作**：`web/config_edit.py` 下发改写面契约——`domains`（五域与块）、`labels` / `descriptions` / `defaults` / `needs_hint`、`logging`、`reference`；`static/web/main.js` 按域渲染、块渲染器分派，删除前端中文表。验收：每个块 id 都有渲染器、每个可编辑键都有 label 与 description、`domains` 覆盖全部块（契约测试）；前端不含中文标签字典；`main.js` 无 `innerHTML`、控件均有 `label for`。依据见 [迭代计划第 10 轮](../plan/config-rework-iteration-plan.md)。
+**状态**：已实施（2026-10-24）。`web/config_edit.py` 下发 `domains`（五域 → 有序块清单，含 `features.<组键>`）+ `labels`/`descriptions`/`defaults`/`needs_hint` 元数据 + `logging`（六项，枚举/范围）+ `reference`（只读）；`static/web/main.js` 改为按域分区渲染、块 id → `BLOCK_RENDERERS` 分派、删除 `CONFIG_LABELS`/`ANON_LABELS`；共享编辑层新增 `logging.*` 六键写入（`write_logger_config`，与 TUI 日志面板同源）。机检载体 `src/test/unit/web/test_config_surface_contract.py`（17 例：块↔渲染器双向相等 / 元数据覆盖白名单全部可编辑键 / 无中文表 / 无 `innerHTML` 赋值 / 日志写入与非法值拒绝 / 参考面只读）。
 
 #### `plan-196` Web 配置面交互与状态
 

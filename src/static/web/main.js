@@ -1156,34 +1156,9 @@
    */
   var configState = { surface: null };
 
-  // 控件中文标签（对齐 TUI 菜单 / 注册表中文名）
-  var CONFIG_LABELS = {
-    paths: { holdings_dir: '持仓目录', holdings_filename: '持仓文件名', output_dir: '输出目录' },
-    sections: {
-      enable_fund_deep_analysis: '基金深度分析',
-      enable_news: '市场新闻',
-      enable_history: '组合历史走势+回撤',
-      enable_portfolio_evolution: '组合演进',
-      enable_action: '行动建议'
-    },
-    llm: {
-      global_macro: '全球政经局势',
-      expert_review: '智囊团深度复盘',
-      health_check: '持仓体检报告',
-      penetration_deep: '穿透深度分析',
-      news_correlation: '财经新闻热点与持仓关联分析'
-    },
-    // 功能开关显示名不在此维护：服务端 surface.features.labels 按注册表下发，
-    // 渲染时经 opts.labels 传入（避免前端手写字典与 features.feature_switch_registry 漂移）
-  };
-
-  // 持仓匿名化枚举中文描述（对齐 config/anonymizer.ANONYMIZATION_MODE_DESCRIPTIONS）
-  var ANON_LABELS = {
-    off: '关闭 — 显示真实持仓名称和代码',
-    code_display: '代码显示 — 名称替换为\'品种X\'，保留代码和盈亏',
-    full_anonymous: '完全匿名 — 名称\'品种X\'，代码\'000XXX\'，盈亏±XX%',
-    summary: '汇总模式 — 仅显示大类汇总，不展示单条持仓'
-  };
+  // 文案零硬编码：控件标签 / 说明 / 默认值 / 匿名化档位描述全部由服务端
+  // /api/config/edit 的 labels / descriptions / defaults / anonymization.labels 下发，
+  // 前端不持有任何中文表（与 TUI 同一批条目名，避免两处漂移）。
 
   function loadConfigEdit() {
     els.configPanel.textContent = '';
@@ -1203,6 +1178,52 @@
       });
   }
 
+  // 块 id → 渲染器（`features.<组键>` 由 `renderFeatureBlock` 统一承接）。
+  // 契约：`domains[].blocks` 里出现的每个块都必须在此有渲染器（服务端契约测试双向断言）。
+  var BLOCK_RENDERERS = {
+    paths: function (surface) {
+      return renderPathsGroup(surface);
+    },
+    sections: function (surface) {
+      return renderBoolBlock(surface, 'sections', surface.sections);
+    },
+    llm: function (surface) {
+      return renderBoolBlock(surface, 'llm', surface.llm.enabled_llm, { prefix: 'enabled_llm.' });
+    },
+    standalone_chapters: function (surface) {
+      return renderBoolBlock(surface, 'standalone_chapters', surface.standalone_chapters);
+    },
+    standalone_related: function (surface) {
+      return renderBoolBlock(surface, 'standalone_related', surface.standalone_related);
+    },
+    anonymization: function (surface) {
+      return renderAnonGroup(surface.anonymization);
+    },
+    indices: function (surface) {
+      return renderIndicesGroup(surface);
+    },
+    providers: function (surface) {
+      return renderProvidersGroup(surface);
+    },
+    tuning: function (surface) {
+      return renderTuningGroup(surface.llm_tuning);
+    },
+    logging: function (surface) {
+      return renderLoggingBlock(surface);
+    },
+    reference: function (surface) {
+      return renderReferenceBlock(surface);
+    }
+  };
+
+  function rendererFor(block, surface) {
+    if (block.indexOf('features.') === 0) {
+      return renderFeatureBlock(surface, block.slice('features.'.length));
+    }
+    var fn = BLOCK_RENDERERS[block];
+    return fn ? fn(surface) : null;
+  }
+
   function renderConfigEdit(surface) {
     configState.surface = surface;
     els.configPanel.textContent = '';
@@ -1214,38 +1235,66 @@
     panelErr.hidden = true;
     els.configPanel.appendChild(panelErr);
 
-    els.configPanel.appendChild(renderPathsGroup(surface.paths));
-    els.configPanel.appendChild(
-      renderBoolGroup('sections', '报告章节', surface.sections, {})
-    );
-    // 功能开关四组（呈现与体验/分析增强/独立章节与回放/机制与诊断）：组清单、组标题、
-    // 显示名与「影响报告」「实验项」标记全部由服务端 surface.features 按 GROUP_ORDER 下发，
-    // 前端只负责按组渲染（服务端增组/改名零前端改动）
-    (surface.features.groups || []).forEach(function (grp, i) {
-      els.configPanel.appendChild(
-        renderBoolGroup('features_' + grp.key, grp.title, grp.switches, {
-          experimental: surface.features.experimental,
-          labels: surface.features.labels,
-          reportAffecting: surface.features.report_affecting,
-          note: i === 0 ? '关闭「影响报告」的开关会改变报告产物内容；其余开关只影响入口显隐' : null
-        })
-      );
+    // 域即分区：一级分区与块顺序全部由服务端 domains 决定，前端只做渲染与分派
+    (surface.domains || []).forEach(function (domain) {
+      var section = renderDomainSection(domain, surface);
+      if (section) {
+        els.configPanel.appendChild(section);
+      }
     });
-    els.configPanel.appendChild(renderAnonGroup(surface.anonymization));
-    els.configPanel.appendChild(renderIndicesGroup(surface));
-    var provGroup = renderProvidersGroup(surface);
-    if (provGroup) {
-      els.configPanel.appendChild(provGroup);
-    }
-    if (surface.llm_tuning && surface.llm_tuning.length) {
-      els.configPanel.appendChild(renderTuningGroup(surface.llm_tuning));
-    }
-    els.configPanel.appendChild(
-      renderBoolGroup('llm', 'LLM 分析章节', surface.llm.enabled_llm, {
-        prefix: 'enabled_llm.',
-        note: '辩论三段（白脸/黑脸/综合）不占模块清单位，输出由上方「分析增强」组的正反辩论开关控制'
+  }
+
+  /** 域分区（标题 + 说明 + TUI 导引 + 块）：域内块全空则该域不出现。 */
+  function renderDomainSection(domain, surface) {
+    var blocks = (domain.blocks || [])
+      .map(function (block) {
+        return rendererFor(block, surface);
       })
-    );
+      .filter(function (el) {
+        return !!el;
+      });
+    if (!blocks.length) {
+      return null;
+    }
+    var section = document.createElement('section');
+    section.className = 'config-domain';
+    section.id = 'domain-' + domain.key; // 深链锚点 #domain-<key>
+    var heading = document.createElement('h2');
+    heading.className = 'domain-title';
+    heading.textContent = domain.title || domain.key;
+    section.appendChild(heading);
+    if (domain.hint) {
+      var hint = document.createElement('p');
+      hint.className = 'domain-hint';
+      hint.textContent = domain.hint;
+      section.appendChild(hint);
+    }
+    if (domain.tui) {
+      var tui = document.createElement('p');
+      tui.className = 'domain-tui';
+      tui.textContent = domain.tui;
+      section.appendChild(tui);
+    }
+    blocks.forEach(function (el) {
+      section.appendChild(el);
+    });
+    return section;
+  }
+
+  /** 功能开关的章内内容组（`features.<组键>`）：组标题与「影响报告」标记由服务端下发。 */
+  function renderFeatureBlock(surface, groupKey) {
+    var group = (surface.features.groups || []).find(function (item) {
+      return item.key === groupKey;
+    });
+    if (!group) {
+      return null;
+    }
+    return renderBoolBlock(surface, 'features_' + groupKey, group.switches, {
+      title: group.title,
+      experimental: surface.features.experimental,
+      reportAffecting: surface.features.report_affecting,
+      note: groupKey === 'portfolio' ? '关闭「影响报告」的开关会改变报告产物内容；其余开关只影响入口显隐' : null
+    });
   }
 
   /**
@@ -1309,22 +1358,15 @@
     return group;
   }
 
-  function renderPathsGroup(paths) {
-    var group = document.createElement('div');
-    group.className = 'config-group';
-    group.setAttribute('role', 'group');
-    group.setAttribute('aria-label', '路径与文件');
-    var heading = document.createElement('h3');
-    heading.className = 'config-group-title';
-    heading.textContent = '路径与文件';
-    group.appendChild(heading);
-
+  function renderPathsGroup(surface) {
+    var paths = surface.paths || {};
+    var group = makeBlockGroup('paths', surface.labels.paths || '目录与文件');
     Object.keys(paths).forEach(function (key) {
       var row = document.createElement('div');
       row.className = 'config-path-row';
       var label = document.createElement('label');
       label.className = 'config-path-label';
-      label.textContent = (CONFIG_LABELS.paths[key] || key) + '：';
+      label.textContent = (surface.labels[key] || key) + '：';
       label.htmlFor = 'config-input-' + key;
       var input = document.createElement('input');
       input.type = 'text';
@@ -1345,34 +1387,58 @@
       row.appendChild(saveBtn);
       row.appendChild(status);
       group.appendChild(row);
+      var desc = surface.descriptions[key];
+      if (desc) {
+        group.appendChild(makeConfigDesc(desc, ''));
+      }
     });
-
     group.appendChild(makeGroupErrorEl());
     return group;
   }
 
-  function renderBoolGroup(groupKey, title, items, opts) {
-    var groupId = 'config-group-' + groupKey;
+  /** 块容器（标题 + role=group）：块标题取结构色（与 TUI 分组标题同色调）。 */
+  function makeBlockGroup(blockKey, title) {
     var group = document.createElement('div');
     group.className = 'config-group';
     group.setAttribute('role', 'group');
-    group.setAttribute('aria-labelledby', groupId);
+    group.id = 'config-block-' + blockKey;
     var heading = document.createElement('h3');
-    heading.id = groupId;
+    heading.id = 'config-group-' + blockKey;
     heading.className = 'config-group-title';
     heading.textContent = title;
     group.appendChild(heading);
+    group.setAttribute('aria-labelledby', heading.id);
+    return group;
+  }
+
+  /** 项说明副行（服务端 descriptions 下发；与控件文字左对齐）。 */
+  function makeConfigDesc(text, indent) {
+    var desc = document.createElement('p');
+    desc.className = indent === '0' ? 'config-desc config-desc-flush' : 'config-desc';
+    desc.textContent = text;
+    return desc;
+  }
+
+  function renderBoolBlock(surface, blockKey, items, opts) {
+    opts = opts || {};
+    var group = makeBlockGroup(blockKey, opts.title || surface.labels[blockKey] || blockKey);
+    var labels = surface.labels;
+    var descriptions = surface.descriptions || {};
+    var defaults = surface.defaults || {};
+    var needsHint = surface.needs_hint || [];
 
     Object.keys(items).forEach(function (key) {
-      var fullKey = opts && opts.prefix ? opts.prefix + key : key;
-      var labels = (opts && opts.labels) || CONFIG_LABELS[groupKey];
-      var label = (labels && labels[key]) || key;
-      if (opts && opts.experimental && opts.experimental.indexOf(key) !== -1) {
-        // 实验项逐行 ⚗ 标记：清单由服务端下发，实验身份与作用域分组正交（同组内可共存实验项与常规项）
+      var fullKey = opts.prefix ? opts.prefix + key : key;
+      var label = labels[fullKey] || labels[key] || key;
+      if (opts.experimental && opts.experimental.indexOf(fullKey) !== -1) {
+        // 实验项逐行 ⚗ 标记：清单由服务端下发，实验身份与作用域分组正交
         label = '⚗ ' + label;
-      } else if (opts && opts.reportAffecting && opts.reportAffecting.indexOf(fullKey) !== -1) {
-        // 「关闭即改变报告内容」与其「只影响入口显隐」的开关须可区分（标记清单由服务端下发）
+      } else if (opts.reportAffecting && opts.reportAffecting.indexOf(fullKey) !== -1) {
         label = label + '（影响报告）';
+      }
+      // 「已改」标记：当前值 ≠ 服务端下发的出厂默认（前端不自算基准）
+      if (Object.prototype.hasOwnProperty.call(defaults, fullKey) && !!items[key] !== !!defaults[fullKey]) {
+        label = label + ' ✻';
       }
       var row = document.createElement('label');
       row.className = 'check-label config-row';
@@ -1386,9 +1452,16 @@
       span.textContent = label;
       row.appendChild(span);
       group.appendChild(row);
+      // 说明副行：注册表标了「需提示」或本块强制展开时默认显示，其余悬停可见
+      var desc = descriptions[fullKey] || descriptions[key];
+      if (desc && (needsHint.indexOf(fullKey) !== -1 || opts.showDesc)) {
+        group.appendChild(makeConfigDesc(desc, '24px'));
+      } else if (desc) {
+        row.title = desc;
+      }
     });
 
-    if (opts && opts.note) {
+    if (opts.note) {
       var note = document.createElement('p');
       note.className = 'config-note-sub';
       note.textContent = opts.note;
@@ -1407,6 +1480,9 @@
     var heading = document.createElement('h3');
     heading.className = 'config-group-title';
     heading.textContent = '持仓匿名化';
+    heading.id = 'config-group-anonymization';
+    group.id = 'config-block-anonymization';
+    group.setAttribute('aria-labelledby', heading.id);
     group.appendChild(heading);
 
     (anon.options || []).forEach(function (mode) {
@@ -1421,7 +1497,7 @@
       radio.addEventListener('change', onConfigRadioChange);
       row.appendChild(radio);
       var span = document.createElement('span');
-      span.textContent = ANON_LABELS[mode] || mode;
+      span.textContent = (anon.labels && anon.labels[mode]) || mode;
       row.appendChild(span);
       group.appendChild(row);
     });
@@ -1665,6 +1741,31 @@
       });
   }
 
+  /** 显式保存类（下拉 / 数字框）：失败保留输入值并在块内报错。 */
+  function onFieldSave(e) {
+    var btn = e.target;
+    var row = btn.closest('.field');
+    var control = row.querySelector('select, input');
+    var key = control.dataset.configKey;
+    var group = btn.closest('.config-group');
+    var status = row.querySelector('.config-row-status');
+    btn.disabled = true;
+    status.textContent = '';
+    status.className = 'config-row-status';
+    clearGroupError(group);
+    postConfigEdit({ key: key, value: control.type === 'number' ? Number(control.value) : control.value })
+      .then(function () {
+        status.textContent = '已保存';
+        status.className = 'config-row-status status-ok';
+      })
+      .catch(function (err) {
+        showGroupError(group, err);
+      })
+      .then(function () {
+        btn.disabled = false;
+      });
+  }
+
   function onPathSave(e) {
     var btn = e.target;
     var row = btn.closest('.config-path-row');
@@ -1772,6 +1873,95 @@
   }
 
   /* ── 分组错误区辅助 ── */
+  /**
+   * 日志设置块：枚举用下拉、整数用数字框，逐项显式保存（与 TUI `[D]→[L]` 同一批键）。
+   * 服务端下发 labels/descriptions/取值范围；「下次启动生效」的键在块尾统一说明。
+   */
+  function renderLoggingBlock(surface) {
+    var data = surface.logging || { items: [], restart_keys: [] };
+    if (!data.items || !data.items.length) {
+      return null;
+    }
+    var group = makeBlockGroup('logging', surface.labels.logging || '日志设置');
+    var restart = data.restart_keys || [];
+    data.items.forEach(function (item) {
+      var row = document.createElement('div');
+      row.className = 'field';
+      var label = document.createElement('label');
+      label.textContent = item.label + '：';
+      label.htmlFor = 'config-logging-' + item.key.replace(/\./g, '-');
+      var control;
+      if (item.kind === 'enum') {
+        control = document.createElement('select');
+        (item.options || []).forEach(function (option) {
+          var opt = document.createElement('option');
+          opt.value = option;
+          opt.textContent = option;
+          if (option === item.value) {
+            opt.selected = true;
+          }
+          control.appendChild(opt);
+        });
+      } else {
+        control = document.createElement('input');
+        control.type = 'number';
+        control.min = item.min;
+        control.max = item.max;
+        control.step = item.step || 1;
+        control.value = item.value;
+      }
+      control.id = label.htmlFor;
+      control.dataset.configKey = item.key;
+      var saveBtn = document.createElement('button');
+      saveBtn.type = 'button';
+      saveBtn.className = 'btn btn-secondary btn-sm config-save';
+      saveBtn.textContent = '保存';
+      saveBtn.addEventListener('click', onFieldSave);
+      var status = document.createElement('span');
+      status.className = 'config-row-status';
+      status.setAttribute('role', 'status');
+      row.appendChild(label);
+      row.appendChild(control);
+      row.appendChild(saveBtn);
+      row.appendChild(status);
+      group.appendChild(row);
+      if (item.hint) {
+        group.appendChild(makeConfigDesc(item.hint, '0'));
+      }
+    });
+    if (restart.length) {
+      var note = document.createElement('p');
+      note.className = 'config-note-sub';
+      note.textContent = '级别与轮转改动在下次启动生效；查看器两项即时生效。';
+      group.appendChild(note);
+    }
+    group.appendChild(makeGroupErrorEl());
+    return group;
+  }
+
+  /** 只读参考块：计价参考等不进编辑面的信息行（固定渲染，不随数据为空消失）。 */
+  function renderReferenceBlock(surface) {
+    var ref = surface.reference;
+    if (!ref || !ref.pricing_path) {
+      return null;
+    }
+    var group = makeBlockGroup('reference', surface.labels.reference || '参考信息');
+    var row = document.createElement('div');
+    row.className = 'ref-row';
+    var label = document.createElement('span');
+    label.textContent = '计价参考：';
+    var path = document.createElement('span');
+    path.className = 'mono';
+    path.textContent = ref.pricing_path;
+    row.appendChild(label);
+    row.appendChild(path);
+    group.appendChild(row);
+    if (ref.note) {
+      group.appendChild(makeConfigDesc(ref.note, '0'));
+    }
+    return group;
+  }
+
   function makeGroupErrorEl() {
     var el = document.createElement('p');
     el.className = 'status-text config-error';
