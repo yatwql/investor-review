@@ -17,7 +17,7 @@ import re
 from pathlib import Path
 
 from _shared.checklib import rel
-from src.python.tui.handlers_config import CONFIG_DIR_INFO_KEYS
+from src.python.tui.handlers_config import GLOBAL_SETTINGS_ITEMS
 from src.python.tui.tui_menu import MENU_ITEMS
 
 #: 主菜单项：(快捷键, 显示标签, 回调, 是否退出)
@@ -90,7 +90,11 @@ def check_menu_blocks(manual_texts: dict[Path, str]) -> list[str]:
 _RET_NEAR_KEY_RE = re.compile(r"\[([A-Za-z0-9])\][`*\s]{0,6}返回主菜单")
 #: 返回前缀行尾裸键：列表/图块行「**0 返回」「0 返回」形态
 _RET_TAIL_KEY_RE = re.compile(r"([A-Za-z0-9])\s*(?:\*\*|\])?\s*$")
-#: 正文菜单引用：``菜单 `X` `` / ``菜单 `[X]` `` / ``菜单 [X]`` / ``菜单 **`[X]`**`` / 裸键 ``菜单 C 的…``
+#: 二级面板键集合（`[G]` 全局设置项 ∪ `[D]` 诊断项）：裸写这些字母时提示改写成
+#: 「菜单 `G` → `X`」/「菜单 `D` → `X`」，避免读者把二级键当主菜单键找。
+_SUBMENU_KEYS: frozenset[str] = frozenset({item[0] for item in GLOBAL_SETTINGS_ITEMS}) | frozenset({"V", "H", "T", "L"})
+
+#: 正文菜单引用：``菜单 `X` `` / ``菜单 `[X]` `` / ``菜单 [X]`` / ``菜单 **`[X]`**`` / 裸键 ``菜单 F 的…``
 #: 裸键形态必须紧跟空白/标点/句末，否则「主菜单 code block」的 ``c`` 会被误捕
 _MENU_REF_RE = re.compile(
     r"菜单\s*(?:\*\*)?(?:"
@@ -123,7 +127,7 @@ def check_menu_key_references(docs: dict[Path, str]) -> list[str]:
                     continue
                 hint = (
                     f"（若指 [G] 的二级选项，请写作「菜单 `G` → `{key.upper()}`」）"
-                    if key.upper() in CONFIG_DIR_INFO_KEYS
+                    if key.upper() in _SUBMENU_KEYS
                     else "（MENU_ITEMS 无此项）"
                 )
                 shown = match.group(0).strip()

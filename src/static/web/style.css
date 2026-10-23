@@ -835,7 +835,8 @@ select:focus,
   margin: 0 0 8px;
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--text);
+  /* 结构色：与 TUI 分组标题同色调（终端 `── 组名 ──` 的结构蓝），不承载状态语义 */
+  color: var(--primary);
 }
 
 .config-row {

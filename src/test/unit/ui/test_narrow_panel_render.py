@@ -94,10 +94,15 @@ def test_comparison_indices_panel_fits_narrow_floor():
     _assert_fits("[I] 指数池", _render(_cmd_config_comparison_indices, "src.python.tui.handlers_config"))
 
 
-def test_dir_info_panel_fits_narrow_floor():
-    from src.python.tui.handlers_config import _cmd_config_dir_info
+def test_global_settings_panel_fits_narrow_floor():
+    """`[G]` 七项四组在 40 列下不越界（分组标题同样按内宽折行）。"""
+    from src.python.tui.handlers_config import _cmd_global_settings
 
-    _assert_fits("[D] 目录信息", _render(_cmd_config_dir_info, "src.python.tui.handlers_config"))
+    buf = io.StringIO()
+    with patch("builtins.input", side_effect=["0"]):
+        with contextlib.redirect_stdout(buf):
+            _cmd_global_settings()
+    _assert_fits("[G] 全局设置", buf.getvalue())
 
 
 def test_config_entry_map_fits_narrow_floor():

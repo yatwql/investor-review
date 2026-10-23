@@ -100,7 +100,7 @@ class TestFormatItemTiers:
         for lines in (
             format_item(columns=columns, **_ITEM),
             format_item(columns=columns, **{**_ITEM, "number": 7, "label": "财经新闻热点与持仓关联分析"}),
-            [format_heading("🔍 分析增强·既有章内追加", 14, 16, columns)],
+            format_heading("🔍 分析增强·既有章内追加", 14, 16, columns),
             legend_lines(7, columns),
         ):
             for line in lines:
@@ -139,7 +139,7 @@ class TestLegendAndHeading:
         assert "恢复本组默认" in text
 
     def test_heading_carries_on_count(self):
-        assert format_heading("⚙ 机制与诊断", 4, 5, 120) == "⚙ 机制与诊断（4/5 开）"
+        assert "\n".join(format_heading("⚙ 机制与诊断", 4, 5, 120)) == "── ⚙ 机制与诊断（4/5 开） ──"
 
     def test_heading_bold_blue(self, monkeypatch):
         """结构色：分组标题 = 蓝 + 粗（与首页分组同源 style_heading，非 TTY 下常量为空故强制着色校验）。"""
@@ -148,13 +148,17 @@ class TestLegendAndHeading:
         monkeypatch.setattr(colors, "BLUE", "<U>", raising=True)
         monkeypatch.setattr(colors, "BOLD", "<B>", raising=True)
         monkeypatch.setattr(colors, "RESET", "</>", raising=True)
-        assert format_heading("⚙ 机制与诊断", 4, 5, 120) == "<B><U>⚙ 机制与诊断（4/5 开）</>"
+        assert "\n".join(format_heading("⚙ 机制与诊断", 4, 5, 120)) == "<B><U>── ⚙ 机制与诊断（4/5 开） ──</>"
 
-    def test_heading_truncated_on_narrow_terminal(self):
+    def test_heading_wraps_within_panel_width(self):
+        """窄档标题按面板内宽折行（不截断、不撑破右边框），组名信息不丢。"""
         long_head = "🔍 分析增强·既有章内追加与大量补充说明文字"
-        out = format_heading(long_head, 14, 16, 46)
-        assert display_width(out) <= inner_width(46)
-        assert out.endswith("…")
+        lines = format_heading(long_head, 14, 16, 46)
+        assert all(display_width(line) <= inner_width(46) for line in lines)
+        joined = "".join(lines)
+        # 折行在空白处断行（emoji 与组名之间可能断开），故按去空白后比对
+        assert long_head.replace(" ", "") in joined.replace(" ", "")
+        assert "14/16 开" in joined and "──" in joined
 
     def test_wrap_hanging_indents_continuation(self):
         """成段文字折行后，续行带悬挂缩进而非顶到左边框。"""

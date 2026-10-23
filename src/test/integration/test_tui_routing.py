@@ -34,15 +34,15 @@ class TestTuiRouting(unittest.TestCase):
                     f"菜单项 [{key}] {label} 未绑回调函数",
                 )
 
-    def test_config_dir_info_routes_to_submenu(self):
-        """D 键路由到查看配置与目录信息子菜单处理器。"""
+    def test_diagnose_routes_to_diagnose_menu(self):
+        """`[D]` 键路由到诊断与排查面板（目录项已归 `[G]` 二级，不再单独成面板）。"""
         from src.python.tui.tui import _bind_callbacks
         from src.python.tui.tui_menu import MENU_ITEMS
 
         _bind_callbacks()
         d_item = next(item for item in MENU_ITEMS if item[0] == "D")
         cb_name = d_item[2].__name__ if d_item[2] else ""
-        self.assertEqual(cb_name, "_cmd_config_dir_info")
+        self.assertEqual(cb_name, "_cmd_diagnose_menu")
 
     def test_cache_key_routes_to_cache_management(self):
         """[3] 键路由到缓存管理子菜单处理器（原 [3] 清理收敛为子菜单内命令）。"""
@@ -55,15 +55,16 @@ class TestTuiRouting(unittest.TestCase):
         self.assertEqual(cb_name, "_cmd_cache_management")
         self.assertEqual(c_item[1], "缓存管理（统计与清理）")
 
-    def test_doctor_key_routes_to_doctor(self):
-        """T 键路由到系统自检处理器。"""
+    def test_doctor_not_a_top_level_key(self):
+        """系统自检下沉为 `[D]` 二级项：顶层不得残留 `T`（防回退成两处入口）。
+
+        顶层取 `T` 会 StopIteration（该键已归 `[D]` 二级），故断言「顶层不得有 T」。
+        """
         from src.python.tui.tui import _bind_callbacks
         from src.python.tui.tui_menu import MENU_ITEMS
 
         _bind_callbacks()
-        t_item = next(item for item in MENU_ITEMS if item[0] == "T")
-        cb_name = t_item[2].__name__ if t_item[2] else ""
-        self.assertEqual(cb_name, "_cmd_run_doctor")
+        self.assertFalse([item for item in MENU_ITEMS if item[0] == "T"])
 
     def test_execute_item_dispatches_correct_handler(self):
         """_execute_item 根据选中项索引正确执行回调。

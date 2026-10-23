@@ -244,16 +244,16 @@ class TestConfigEntryMap:
             assert keys.startswith("[") and keys.endswith("]")
 
     @patch("builtins.input", side_effect=["M", "0"])
-    def test_d_submenu_renders_map_then_returns(self, mock_input, capsys):
-        """[D] → M 打印入口地图后回到子菜单，0 返回；全程不调用任何写入处理器。"""
-        from src.python.tui.handlers_config import _cmd_config_dir_info
+    def test_global_settings_renders_map_then_returns(self, mock_input, capsys):
+        """[G] → M 打印入口地图后回到全局设置，0 返回；全程不调用任何写入处理器。"""
+        from src.python.tui.handlers_config import _cmd_global_settings
 
         with (
             patch("src.python.tui.handlers_config._cmd_config_dir") as m_dir,
             patch("src.python.tui.handlers_config._cmd_config_filename") as m_fn,
             patch("src.python.tui.handlers_config._cmd_config_output_dir") as m_out,
         ):
-            _cmd_config_dir_info()
+            _cmd_global_settings()
         out = capsys.readouterr().out
         assert "配置入口地图" in out
         assert "功能开关 / LLM 模块启停 / 实验项" in out
@@ -261,12 +261,15 @@ class TestConfigEntryMap:
             handler.assert_not_called()
 
     @patch("builtins.input", side_effect=["Z", "0"])
-    def test_invalid_choice_lists_map_option(self, mock_input, capsys):
-        """无效选择提示含新增的 M 选项（C/F/O/M/0）。"""
-        from src.python.tui.handlers_config import _cmd_config_dir_info
+    def test_global_settings_invalid_choice_lists_keys(self, mock_input, capsys):
+        """无效选择提示「请输入编号或字母」，且面板列出全部七个字母。"""
+        from src.python.tui.handlers_config import GLOBAL_SETTINGS_ITEMS, _cmd_global_settings
 
-        _cmd_config_dir_info()
-        assert "请输入 C/F/O/M/0" in capsys.readouterr().out
+        _cmd_global_settings()
+        out = capsys.readouterr().out
+        assert "请输入编号或字母" in out
+        for letter, _label, _handler, _group in GLOBAL_SETTINGS_ITEMS:
+            assert f"[{letter}]" in out
 
     def test_map_rendering_is_readonly(self):
         """纯渲染无副作用：不调用配置写入/刷新入口。"""

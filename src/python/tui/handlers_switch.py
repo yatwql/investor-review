@@ -162,7 +162,7 @@ def run_content_options_panel() -> None:
         for group in groups:
             block = blocks[group]
             rows.append(None if use_panel_box(columns) else "")
-            rows.append(
+            rows.extend(
                 format_heading(
                     GROUP_LABELS[group].split("（", 1)[0],
                     sum(1 for _n, flag, _d in block if is_feature_enabled(flag)),

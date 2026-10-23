@@ -49,27 +49,34 @@ class TestMainMenuStructure:
 @pytest.mark.unit
 class TestGlobalSettingsMenu:
     def test_seven_items_grouped(self):
+        """七项、四组：目录与文件（H/F/O）/ LLM（L）/ 基准与呈现（I/A）/ 索引（M）。"""
         assert len(GLOBAL_SETTINGS_ITEMS) == 7
-        assert {group for _l, _n, _h, group in GLOBAL_SETTINGS_ITEMS} == {"目录与文件", "LLM", "基准与呈现"}
-        assert [letter for letter, _n, _h, _g in GLOBAL_SETTINGS_ITEMS] == ["D", "F", "O", "L", "I", "A", "M"]
+        assert {group for _l, _n, _h, group in GLOBAL_SETTINGS_ITEMS} == {
+            "目录与文件",
+            "LLM 调优",
+            "基准与呈现",
+            "索引",
+        }
+        assert [letter for letter, _n, _h, _g in GLOBAL_SETTINGS_ITEMS] == ["H", "F", "O", "L", "I", "A", "M"]
+        assert all(len(letter) == 1 and letter.isupper() for letter, *_ in GLOBAL_SETTINGS_ITEMS)
 
     def test_number_and_letter_dispatch_same_handler(self):
         calls: list[str] = []
         with patch.dict(
             "src.python.tui.handlers_config.__dict__",
             {
-                "_cmd_config_dir_info": lambda: calls.append("dir"),
+                "_cmd_config_dir": lambda: calls.append("dir"),
                 "_cmd_config_filename": lambda: calls.append("file"),
                 "_cmd_config_output_dir": lambda: calls.append("out"),
                 "_cmd_config_llm_tuning": lambda: calls.append("llm"),
                 "_cmd_config_comparison_indices": lambda: calls.append("idx"),
                 "_cmd_config_anonymization_mode": lambda: calls.append("anon"),
-                "_cmd_config_llm_providers": lambda: calls.append("prov"),
+                "_render_config_entry_map": lambda: calls.append("map"),
             },
         ):
-            with patch("builtins.input", side_effect=["3", "O", "0"]):
+            with patch("builtins.input", side_effect=["3", "O", "7", "M", "0"]):
                 _cmd_global_settings()
-        assert calls == ["out", "out"]
+        assert calls == ["out", "out", "map", "map"]
 
     def test_zero_returns(self):
         calls: list[str] = []
@@ -79,13 +86,13 @@ class TestGlobalSettingsMenu:
                 {
                     name: (lambda: calls.append(name))
                     for name in (
-                        "_cmd_config_dir_info",
+                        "_cmd_config_dir",
                         "_cmd_config_filename",
                         "_cmd_config_output_dir",
                         "_cmd_config_llm_tuning",
                         "_cmd_config_comparison_indices",
                         "_cmd_config_anonymization_mode",
-                        "_cmd_config_llm_providers",
+                        "_render_config_entry_map",
                     )
                 },
             ),

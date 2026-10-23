@@ -142,10 +142,10 @@
 
 | 字段 | 默认值 | 说明 | TUI 修改 |
 |------|--------|------|----------|
-| `holdings_dir` | `data/holdings` | 持仓 xlsx 文件所在目录 | 菜单 `G` → `D` → `H` |
-| `holdings_filename` | `个人投资持仓信息.xlsx` | 要读取的持仓文件名 | 菜单 `G` → `D` → `F` |
+| `holdings_dir` | `data/holdings` | 持仓 xlsx 文件所在目录 | 菜单 `G` → `H` |
+| `holdings_filename` | `个人投资持仓信息.xlsx` | 要读取的持仓文件名 | 菜单 `G` → `F` |
 | `holdings_start_date` | `""` | 组合建仓日期（YYYY-MM-DD，可选）。持仓 Excel 未录入交易/分红流水时，成本流水子模块按「建仓日一次性买入」近似年化；空=不计算近似年化，仅成本分档近似（每份成本 vs 市价）。须配合功能开关 `cost_lots` 开启 | 手动编辑 |
-| `output_dir` | `reports` | 报告输出目录（最新版+按日期存档） | 菜单 `G` → `D` → `O` |
+| `output_dir` | `reports` | 报告输出目录（最新版+按日期存档） | 菜单 `G` → `O` |
 | `llm_key_file` | `data/config/llm_key.json` | LLM 密钥文件路径（4 个必填字段 + 4 个可选回退字段） | 手动编辑 |
 | `llm_settings_file` | `data/config/llm_settings.json` | LLM 非敏感配置文件路径 | 手动编辑 |
 | `llm_providers_file` | `data/config/llm_providers.json` | LLM 多 Provider 链式服务配置文件路径，参见 [LLM 配置指引](how-to-config-llm.md) | 手动编辑 |

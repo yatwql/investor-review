@@ -128,10 +128,11 @@ def _status(enabled: bool, tier: str) -> str:
     return f"[{color}{label}{RESET}]" if color else f"[{label}]"
 
 
-def format_heading(head: str, enabled_count: int, total: int, columns: int) -> str:
-    """分组标题行（含该组开启数；窄终端先截断再上色——截断不吃转义序列）。"""
-    text = truncate_display(f"{head}（{enabled_count}/{total} 开）", inner_width(columns))
-    return style_heading(text)
+def format_heading(head: str, enabled_count: int, total: int, columns: int) -> list[str]:
+    """分组标题行（含该组开启数）——形态与配色统一走 `text_layout.group_heading`。"""
+    from src.python.tui.text_layout import group_heading
+
+    return group_heading(f"{head}（{enabled_count}/{total} 开）", inner_width(columns), prefix="")
 
 
 def format_item(

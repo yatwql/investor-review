@@ -407,7 +407,7 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 .domain-tui { margin: 0 0 14px 13px; font-size: 11.5px; color: var(--text-secondary); }
 .block { border-top: 1px solid var(--border); padding: 12px 0 6px; }
 .block:first-of-type { border-top: 0; }
-.block-title { margin: 0 0 2px; font-size: 13px; font-weight: 600; }
+.block-title { margin: 0 0 2px; font-size: 13px; font-weight: 600; color: var(--primary); }
 .block-meta { margin: 0 0 8px; font-size: 11.5px; color: var(--text-secondary); }
 .row { display: flex; gap: 8px; align-items: flex-start; padding: 3px 0; }
 .row input[type="checkbox"], .row input[type="radio"] { margin-top: 6px; }

@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Callable
 
 from src.python.core.logger import setup_logger
 from src.python.core.reader import list_xlsx_files
@@ -20,14 +19,21 @@ from src.python.tui.tui_menu import (
 )
 from src.python.tui.switch_panel import (
     inner_width,
-    terminal_columns,
     render_titled_panel,
     use_panel_box,
     wrap_hanging,
 )
+from src.python.tui.text_layout import wrap_with_prefix
 from src.python.tui.panel_runtime import NavState, PanelItem, panel_loop
 from src.python.tui.prompt_text import panel_prompt
-from src.python.tui.text_layout import display_width, pad_right, style_heading, truncate_display
+from src.python.tui.text_layout import (
+    display_width,
+    group_heading,
+    pad_right,
+    style_heading,
+    terminal_columns,
+    truncate_display,
+)
 from src.python.tui.tui_keys import input_choice
 
 # ── 兼容再导出（面板本体已迁至 handlers_switch）──────────────────────────
@@ -152,8 +158,8 @@ _CONFIG_ENTRY_MAP: tuple[tuple[str, str, str], ...] = (
     ("报告章节取舍（顺序与开关）", "[C]", "五个顶层章节组的可见性"),
     ("对比指数池（自定义基准）", "[G]", "全局设置 → I（增删指数、恢复默认）"),
     ("持仓匿名化（代码/名称脱敏）", "[G]", "全局设置 → A（四档）"),
-    ("配置文件与目录位置", "[G]", "全局设置 → D / F / O"),
-    ("LLM 运行参数 / 多链线路", "[G]", "全局设置 → L（运行参数）/ M（线路优先级）"),
+    ("配置文件与目录位置", "[G]", "全局设置 → H / F / O"),
+    ("LLM 运行参数 / 多链线路", "[G]", "全局设置 → L（运行参数与线路优先级同在 L 面板）"),
     ("重新加载配置", "[R]", "改完 config.json / llm_settings.json 手工项后刷新内存配置"),
     ("缓存管理（统计与清理）", "[3]", "统计首屏 + 子菜单内 3 清理过期缓存"),
     ("运行日志 / 健康历史 / 系统自检", "[D]", "诊断与排查 → V / H / T"),
@@ -181,78 +187,18 @@ def _render_config_entry_map() -> None:
         print(line)
 
 
-#: [D] 查看配置与目录信息 面板的二级选项登记表（键 → (显示名, 处理器属性名)）
-#:
-#: 单一登记点：面板渲染、按键分发与手册机检（`check-doc-drift` 第 18 项的
-#: 「正文菜单键引用」分支）均从此表派生键集合——增删子项只改这一处，
-#: 不会出现「面板上有、机检认为不存在」（或反过来）的双维护漂移。
-#:
-#: 处理器登记**属性名**而非函数对象：分发时按名从模块全局取（`_dir_info_items()`），
-#: 使 `@patch("...handlers_config._cmd_config_dir")` 这类模块属性打桩始终生效——
-#: 若在导入时就把函数对象存进表里，打桩会落空且不报错。
-DIR_INFO_ITEMS: dict[str, tuple[str, str]] = {
-    "H": ("持仓信息目录", "_cmd_config_dir"),
-    "F": ("持仓信息文件名", "_cmd_config_filename"),
-    "O": ("报告输出目录", "_cmd_config_output_dir"),
-    "M": ("配置入口地图（各配置项所在菜单）", "_render_config_entry_map"),
-}
-
-#: [D] 面板二级选项键（由 `DIR_INFO_ITEMS` 派生，供手册校验引用）
-CONFIG_DIR_INFO_KEYS: tuple[str, ...] = tuple(DIR_INFO_ITEMS)
-
-
-def _dir_info_items() -> list[tuple[str, str, Callable[[], None]]]:
-    """解析登记表为 `(键, 显示名, 处理器)`——处理器按名实时取，便于打桩与替换。"""
-    return [(key, label, globals()[handler_name]) for key, (label, handler_name) in DIR_INFO_ITEMS.items()]
-
-
-def _cmd_config_dir_info() -> None:
-    """查看配置与目录信息子菜单 — 对应 [G]→D 及其二级选项 [H]/[F]/[O]/[M]/[0]。
-
-    持仓目录 / 持仓文件名 / 报告输出目录三项聚合到 [G]→D 之下（主菜单不再单列）；
-    ``[M]`` 打印配置入口地图（各配置项 → 所在菜单键，只读索引）；
-    子菜单循环直至 [0]（或空输入 / Ctrl+C）返回主菜单。
-    子项在调用时从模块全局取函数（便于测试打桩与后续替换）。
-    """
-    items = _dir_info_items()
-
-    def _render(nav: NavState) -> list[str]:
-        print()
-        print(style_heading("  ── 配置与目录信息 ──"))
-        for i, (_key, label, _fn) in enumerate(items):
-            print(f" {nav.marker(i)} [{_key}] {label}")
-        print(f" {nav.marker(len(items))} [0] 返回全局设置")
-        print()
-        return []
-
-    panel_items = [PanelItem(key, label, action=fn) for key, label, fn in items]
-    panel_items.append(PanelItem("0", "返回全局设置", kind="return"))
-
-    try:
-        panel_loop(
-            panel_items,
-            render=_render,
-            prompt=panel_prompt("选择", example="C/F/O/M", help_hint=None),
-            read=input_choice,
-            on_text=lambda _t: print("  [!] 无效选择，请输入 C/F/O/M/0"),
-            default_key="0",
-        )
-    except (EOFError, KeyboardInterrupt):
-        print()
-
-
 # 持仓变动复盘双入口互指标注（只读行尾提示，行为零变化）：章本体（独立章节组
 # `holding_change_review`）与归因内容（LLM 区 `holding_change` 模块）为解耦的有意
 # 设计、默认态相反，面板相邻两行命名近似易误判——两侧行尾互相指出对方入口位置。
 #: [G] 全局设置七项（数字为主入口，字母为别名；分组只影响渲染）
 GLOBAL_SETTINGS_ITEMS: tuple[tuple[str, str, str, str], ...] = (
-    ("D", "查看配置与目录信息", "_cmd_config_dir_info", "目录与文件"),
-    ("F", "持仓文件名", "_cmd_config_filename", "目录与文件"),
+    ("H", "持仓信息目录", "_cmd_config_dir", "目录与文件"),
+    ("F", "持仓信息文件名", "_cmd_config_filename", "目录与文件"),
     ("O", "报告输出目录", "_cmd_config_output_dir", "目录与文件"),
-    ("L", "LLM 设置（运行参数 / 多链线路）", "_cmd_config_llm_tuning", "LLM"),
-    ("I", "对比指数池", "_cmd_config_comparison_indices", "基准与呈现"),
+    ("L", "LLM 设置（运行参数 / 多链线路）", "_cmd_config_llm_tuning", "LLM 调优"),
+    ("I", "对比基准指数", "_cmd_config_comparison_indices", "基准与呈现"),
     ("A", "持仓匿名化", "_cmd_config_anonymization_mode", "基准与呈现"),
-    ("M", "LLM 多链线路优先级", "_cmd_config_llm_providers", "LLM"),
+    ("M", "配置入口地图", "_render_config_entry_map", "索引"),
 )
 
 
@@ -264,14 +210,24 @@ def _cmd_global_settings() -> None:
         print()
         print(style_heading("  ── 全局设置 ──"))
         last_group = None
+        columns = terminal_columns()
         for number, (letter, label, _handler, group) in enumerate(GLOBAL_SETTINGS_ITEMS, 1):
             if group != last_group:
-                print(f"  {group}")
+                if last_group is not None:
+                    print()  # 组间空行：与首页分组同款呼吸感
+                for _line in group_heading(group, inner_width(columns)):
+                    print(_line)
                 last_group = group
-            print(f"   {number}. [{letter}] {label}")
+            # 长标签在手机窄屏折行：编号+键位前缀不参与断行，续行缩进到标签起始列
+            print("\n".join(wrap_with_prefix(f"   {number}. [{letter}] ", label, inner_width(columns))))
         print("   0. 返回主菜单")
         print()
-        raw = input_choice("  选择编号或字母（回车=返回 · 0=返回）: ")
+        try:
+            raw = input_choice("  选择编号或字母（回车=返回 · 0=返回）: ")
+        except (EOFError, KeyboardInterrupt):
+            # 管道输入耗尽（EOF）或 Ctrl+C：安静回主菜单，不抛到主循环
+            print()
+            return
         if raw is None or raw.strip() in ("", "0"):
             return
         token = raw.strip().upper()

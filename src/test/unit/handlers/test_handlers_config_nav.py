@@ -112,30 +112,6 @@ class TestSubmenuArrowNav:
             "↓ 后 Enter 命中第 2 项（代码显示）"
         )
 
-    @patch("src.python.tui.handlers_config._cmd_config_filename")
-    @patch("src.python.tui.handlers_config._cmd_config_dir")
-    def test_dir_info_arrow_down_enter_dispatches_submenu(self, mock_dir, mock_filename):
-        """[D] ↓ 移到第 2 项（F 持仓文件名）后 Enter 派发该项（engaged 不重置，与 S 一致）。"""
-        from src.python.tui.handlers_config import _cmd_config_dir_info
-        from src.python.tui.tui_keys import KEY_DOWN
-
-        with patch("src.python.tui.handlers_config.input_choice", side_effect=[KEY_DOWN, "", "0"]):
-            _cmd_config_dir_info()
-
-        assert not mock_dir.called, "↓ 后 Enter 不命中第 1 项（C）"
-        mock_filename.assert_called_once(), "↓ 后 Enter 命中第 2 项（F）"
-
-    @patch("src.python.tui.handlers_config._cmd_config_filename")
-    @patch("src.python.tui.handlers_config._cmd_config_dir")
-    def test_dir_info_empty_enter_returns(self, mock_dir, mock_filename):
-        """[D] 未导航空回车直接返回主菜单（default_key=0 保持原语义）。"""
-        from src.python.tui.handlers_config import _cmd_config_dir_info
-
-        with patch("src.python.tui.handlers_config.input_choice", side_effect=[""]):
-            _cmd_config_dir_info()
-
-        assert not mock_dir.called and not mock_filename.called, "空回车不派发任何子项"
-
 
 class TestInlineCursorRendering:
     """渲染级回归：方向键移动后 ▸ 必须落在行内编号/键名前。

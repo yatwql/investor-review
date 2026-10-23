@@ -73,102 +73,81 @@ class TestContentPanelToggles:
         assert [f for _n, f, _d in numbered] == expected
 
 
-class TestConfigDirInfoSubmenu:
-    """[D] 查看配置与目录信息子菜单：二级选项分发、返回与无效输入。"""
+class TestGlobalSettingsMenu:
+    """[G] 全局设置七项：数字/字母双通道、入口地图只读、无效输入与 EOF 兜底。
 
-    @patch("builtins.input")
-    @patch("src.python.tui.handlers_config._cmd_config_output_dir")
-    @patch("src.python.tui.handlers_config._cmd_config_filename")
-    @patch("src.python.tui.handlers_config._cmd_config_dir")
-    def test_dispatches_three_sub_options_then_returns(self, mock_dir, mock_filename, mock_out, mock_input):
-        """依次选 C/F/O 分别路由到三个处理器，0 返回。"""
-        mock_input.side_effect = ["H", "F", "O", "0"]
+    目录项（持仓信息目录 / 文件名 / 输出目录）与配置入口地图直接挂在 `[G]` 二级，
+    不再经中间子面板——同一配置只有一条入口路径。
+    """
 
-        from src.python.tui.handlers_config import _cmd_config_dir_info
+    @staticmethod
+    def _patch_handlers(calls: list[str]):
+        from unittest.mock import patch as _patch
 
-        _cmd_config_dir_info()
+        return _patch.dict(
+            "src.python.tui.handlers_config.__dict__",
+            {
+                "_cmd_config_dir": lambda: calls.append("dir"),
+                "_cmd_config_filename": lambda: calls.append("file"),
+                "_cmd_config_output_dir": lambda: calls.append("out"),
+                "_render_config_entry_map": lambda: calls.append("map"),
+            },
+        )
 
-        mock_dir.assert_called_once_with()
-        mock_filename.assert_called_once_with()
-        mock_out.assert_called_once_with()
+    def test_letters_dispatch_directly(self):
+        """H/F/O/M 四个目录与索引项直接派发（无中间层）。"""
+        from src.python.tui.handlers_config import _cmd_global_settings
 
-    def test_registry_is_single_source_for_panel_and_guard(self):
-        """[D] 子项登记表与机检键集同源：面板增删子项无需第二处登记。"""
-        from src.python.tui.handlers_config import CONFIG_DIR_INFO_KEYS, DIR_INFO_ITEMS
+        calls: list[str] = []
+        with self._patch_handlers(calls), patch("builtins.input", side_effect=["H", "F", "O", "M", "0"]):
+            _cmd_global_settings()
+        assert calls == ["dir", "file", "out", "map"]
 
-        from src.python.tui.handlers_config import _dir_info_items
+    def test_lowercase_letter_accepted(self):
+        """小写字母归一化为大写后派发。"""
+        from src.python.tui.handlers_config import _cmd_global_settings
 
-        # 断言「结构关系」而非逐项清单：新增子项（如 L=LLM 调优）不应把测试打红，
-        # 但键必须是单大写字母、互不重复、彼此可解析，且入口地图键 M 始终在册
-        assert CONFIG_DIR_INFO_KEYS == tuple(DIR_INFO_ITEMS)
-        keys = list(DIR_INFO_ITEMS)
-        assert len(keys) == len(set(keys)), "子项键不得重复"
-        assert all(len(k) == 1 and k.isupper() for k in keys), f"子项键须为单大写字母: {keys}"
-        assert "M" in DIR_INFO_ITEMS, "配置入口地图（M）不得下线"
-        resolved = {key: (label, fn) for key, label, fn in _dir_info_items()}
-        assert set(resolved) == set(DIR_INFO_ITEMS)
-        for key, (label, fn) in resolved.items():
-            assert label and callable(fn), f"子项 {key} 登记不完整"
+        calls: list[str] = []
+        with self._patch_handlers(calls), patch("builtins.input", side_effect=["h", "0"]):
+            _cmd_global_settings()
+        assert calls == ["dir"]
 
-    @patch("builtins.input")
-    @patch("src.python.tui.handlers_config._render_config_entry_map")
-    def test_entry_map_sub_option_dispatches(self, mock_map, mock_input):
-        """`M` 二级选项路由到配置入口地图（只读索引），改完返回主菜单。"""
-        mock_input.side_effect = ["M", "0"]
+    def test_number_equivalent_to_letter(self):
+        """编号与字母双通道等价（编号是第一入口）。"""
+        from src.python.tui.handlers_config import GLOBAL_SETTINGS_ITEMS, _cmd_global_settings
 
-        from src.python.tui.handlers_config import _cmd_config_dir_info
+        calls: list[str] = []
+        index = next(i for i, item in enumerate(GLOBAL_SETTINGS_ITEMS, 1) if item[0] == "M")
+        with self._patch_handlers(calls), patch("builtins.input", side_effect=[str(index), "0"]):
+            _cmd_global_settings()
+        assert calls == ["map"]
 
-        _cmd_config_dir_info()
+    def test_invalid_choice_reprompts(self):
+        """无效键提示后重新等待输入，不误触发任何处理器。"""
+        from src.python.tui.handlers_config import _cmd_global_settings
 
-        mock_map.assert_called_once_with()
+        calls: list[str] = []
+        with self._patch_handlers(calls), patch("builtins.input", side_effect=["Z", "0"]):
+            _cmd_global_settings()
+        assert calls == []
 
-    @patch("builtins.input")
-    @patch("src.python.tui.handlers_config._cmd_config_dir")
-    def test_lowercase_choice_accepted(self, mock_dir, mock_input):
-        """小写子键归一化为大写后分发。"""
-        mock_input.side_effect = ["h", "0"]
+    def test_zero_and_empty_return(self):
+        """`0` 与空回车都返回主菜单，不派发任何项。"""
+        from src.python.tui.handlers_config import _cmd_global_settings
 
-        from src.python.tui.handlers_config import _cmd_config_dir_info
+        calls: list[str] = []
+        with self._patch_handlers(calls), patch("builtins.input", side_effect=["0", ""]):
+            _cmd_global_settings()
+        assert calls == []
 
-        _cmd_config_dir_info()
+    def test_eof_returns_safely(self):
+        """EOF（非交互输入）不抛异常：读取一次即返回。"""
+        from src.python.tui.handlers_config import _cmd_global_settings
 
-        mock_dir.assert_called_once_with()
-
-    @patch("builtins.input")
-    @patch("src.python.tui.handlers_config._cmd_config_dir")
-    def test_back_returns_without_dispatch(self, mock_dir, mock_input):
-        """选 0 直接返回，不触发任何处理器。"""
-        mock_input.side_effect = ["0"]
-
-        from src.python.tui.handlers_config import _cmd_config_dir_info
-
-        _cmd_config_dir_info()
-
-        mock_dir.assert_not_called()
-
-    @patch("builtins.input")
-    @patch("src.python.tui.handlers_config._cmd_config_dir")
-    def test_unknown_choice_reprompts(self, mock_dir, mock_input, capsys):
-        """无效子键提示后重新等待输入，不误触发处理器。"""
-        mock_input.side_effect = ["Z", "0"]
-
-        from src.python.tui.handlers_config import _cmd_config_dir_info
-
-        _cmd_config_dir_info()
-
-        mock_dir.assert_not_called()
-        assert "无效选择" in capsys.readouterr().out
-
-    @patch("src.python.tui.handlers_config._cmd_config_dir")
-    @patch("builtins.input", side_effect=EOFError)
-    def test_eof_returns_safely(self, mock_input, mock_dir):
-        """EOF（非交互输入）不抛异常：读取一次即返回，不触发任何处理器。"""
-        from src.python.tui.handlers_config import _cmd_config_dir_info
-
-        _cmd_config_dir_info()
-
-        mock_input.assert_called_once()
-        mock_dir.assert_not_called()
+        calls: list[str] = []
+        with self._patch_handlers(calls), patch("builtins.input", side_effect=EOFError):
+            _cmd_global_settings()
+        assert calls == []
 
 
 class TestSwitchPanelReadonlyInfo:

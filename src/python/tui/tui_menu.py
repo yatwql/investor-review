@@ -151,7 +151,7 @@ def render_menu(sel: int, filter_text: str = "") -> None:
     并存：渲染 `>` 选中指示器；页脚提示两种入口（见 tui.main 内层循环）。
     """
     from src.python.tui.switch_panel import layout_tier
-    from src.python.tui.text_layout import style_heading, terminal_columns, wrap_with_prefix
+    from src.python.tui.text_layout import group_heading, terminal_columns, wrap_with_prefix
 
     columns = terminal_columns()
     narrow = layout_tier(columns) == "narrow"
@@ -180,8 +180,8 @@ def render_menu(sel: int, filter_text: str = "") -> None:
         members = [i for i in members if i is not None and i in visible_set]
         if not members:
             continue
-        for _line in wrap_with_prefix("  ", f"── {title} ──", columns):
-            print(style_heading(_line))
+        for _line in group_heading(title, columns):
+            print(_line)
         for index in members:
             _render_item(index)
     for index, (key, _label, _cb, _is_exit) in enumerate(MENU_ITEMS):

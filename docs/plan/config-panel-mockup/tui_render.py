@@ -154,12 +154,12 @@ def _g_menu_proposed() -> None:
         (
             "目录与文件",
             [
-                ("D", "持仓信息目录"),
+                ("H", "持仓信息目录"),
                 ("F", "持仓信息文件名"),
                 ("O", "报告输出目录"),
             ],
         ),
-        ("LLM", [("L", "LLM 设置（运行参数 / 多链线路）")]),
+        ("LLM 调优", [("L", "LLM 设置（运行参数 / 多链线路）")]),
         ("基准与呈现", [("I", "对比基准指数"), ("A", "持仓匿名化（代码 / 名称脱敏）")]),
         ("索引", [("M", "配置入口地图（各配置项所在菜单）")]),
     ]
@@ -424,7 +424,8 @@ MODES = {
     "boards_proposed": _boards_proposed,
     "switches": lambda: _switches(False),
     "switches_proposed": lambda: _switches(True),
-    "dmenu": lambda: _run("handlers_config", "_cmd_config_dir_info"),
+    "dmenu": lambda: _run("handlers_config", "_cmd_global_settings"),
+    "entrymap": lambda: _run("handlers_config", "_render_config_entry_map"),
     "boards": lambda: _run("handlers_config", "_cmd_config_report_boards"),
     "indices": lambda: _run("handlers_config", "_cmd_config_comparison_indices"),
     "anon": lambda: _run("handlers_config", "_cmd_config_anonymization_mode"),

@@ -62,12 +62,12 @@ pre.tree { margin: 0 0 24px; padding: 14px 16px; background: #0f141b; border: 1p
   <a href="#s-main" class="nav-item"><span class="lvl lvl-一级">一级</span>主菜单（19 项，配置组七项）</a>
 <a href="#s-switches" class="nav-item"><span class="lvl lvl-二级">二级</span>功能开关面板（四组）</a>
 <a href="#s-switch_detail" class="nav-item"><span class="lvl lvl-面板内">面板内</span>功能开关 · 单项详情（`?10`，四组编号）</a>
-<a href="#s-dmenu" class="nav-item"><span class="lvl lvl-二级">二级</span>[D] 目录信息（二级，5 个字母键）</a>
+<a href="#s-dmenu" class="nav-item"><span class="lvl lvl-二级">二级</span>[G] 全局设置（二级，7 项·数字主入口）</a>
 <a href="#s-d_tuning" class="nav-item"><span class="lvl lvl-三级">三级</span>[D]→[L] LLM 调优参数（三级，6 个数字项）</a>
-<a href="#s-d_map" class="nav-item"><span class="lvl lvl-三级">三级</span>配置入口地图（[D]→[M]）</a>
-<a href="#s-d_dir" class="nav-item"><span class="lvl lvl-三级">三级</span>持仓信息目录（[D]→[C]）</a>
-<a href="#s-d_file" class="nav-item"><span class="lvl lvl-三级">三级</span>持仓信息文件名（[D]→[F]）</a>
-<a href="#s-d_out" class="nav-item"><span class="lvl lvl-三级">三级</span>报告输出目录（[D]→[O]）</a>
+<a href="#s-d_map" class="nav-item"><span class="lvl lvl-三级">三级</span>配置入口地图（[G]→[M]）</a>
+<a href="#s-d_dir" class="nav-item"><span class="lvl lvl-三级">三级</span>持仓信息目录（[G]→[H]）</a>
+<a href="#s-d_file" class="nav-item"><span class="lvl lvl-三级">三级</span>持仓信息文件名（[G]→[F]）</a>
+<a href="#s-d_out" class="nav-item"><span class="lvl lvl-三级">三级</span>报告输出目录（[G]→[O]）</a>
 <a href="#s-boards" class="nav-item"><span class="lvl lvl-二级">二级</span>报告章节取舍（[C]，含指路牌项）</a>
 <a href="#s-indices" class="nav-item"><span class="lvl lvl-二级">二级</span>对比指数池（[I]）</a>
 <a href="#s-anon" class="nav-item"><span class="lvl lvl-二级">二级</span>持仓匿名化（[A]）</a>
@@ -122,10 +122,10 @@ pre.tree { margin: 0 0 24px; padding: 14px 16px; background: #0f141b; border: 1p
 
 <span class="d">  ↑↓ 移动 | 回车执行 | 字母/数字键直达 | / 筛选 | Esc / 0 / X 退出 | Ctrl+C 退出</span></pre></section>
 <section class="screen" id="s-switches"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>功能开关面板（四组）</h2></div><p class="crumb">主菜单 › 配置 › [S]</p><p class="note">1-7 标准 LLM 模块 + 8-34 功能开关：呈现 / 分析 / 独立 / 机制</p><pre class="term">Traceback (most recent call last):
-  File "/lzcapp/document/working/codebase/investor-review/docs/plan/config-panel-mockup/tui_render.py", line 462, in &lt;module&gt;
+  File "/lzcapp/document/working/codebase/investor-review/docs/plan/config-panel-mockup/tui_render.py", line 463, in &lt;module&gt;
     raise SystemExit(main())
                      ~~~~^^
-  File "/lzcapp/document/working/codebase/investor-review/docs/plan/config-panel-mockup/tui_render.py", line 457, in main
+  File "/lzcapp/document/working/codebase/investor-review/docs/plan/config-panel-mockup/tui_render.py", line 458, in main
     MODES[args.mode]()
     ~~~~~~~~~~~~~~~~^^
   File "/lzcapp/document/working/codebase/investor-review/docs/plan/config-panel-mockup/tui_render.py", line 425, in &lt;lambda&gt;
@@ -135,10 +135,10 @@ pre.tree { margin: 0 0 24px; padding: 14px 16px; background: #0f141b; border: 1p
     from src.python.tui.handlers_switch import run_llm_modules_panel
 ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.handlers_switch' (/lzcapp/document/working/codebase/investor-review/src/python/tui/handlers_switch.py)</pre></section>
 <section class="screen" id="s-switch_detail"><div class="screen-head"><span class="lvl lvl-面板内">面板内</span><h2>功能开关 · 单项详情（`?10`，四组编号）</h2></div><p class="crumb">主菜单 › 配置 › [S] › ?10（面板内查询）</p><p class="note">面板内只读查询：回车后仍停在同一面板，不进入新层级；此处第 10 项＝辩论-条件推理</p><pre class="term">Traceback (most recent call last):
-  File "/lzcapp/document/working/codebase/investor-review/docs/plan/config-panel-mockup/tui_render.py", line 462, in &lt;module&gt;
+  File "/lzcapp/document/working/codebase/investor-review/docs/plan/config-panel-mockup/tui_render.py", line 463, in &lt;module&gt;
     raise SystemExit(main())
                      ~~~~^^
-  File "/lzcapp/document/working/codebase/investor-review/docs/plan/config-panel-mockup/tui_render.py", line 457, in main
+  File "/lzcapp/document/working/codebase/investor-review/docs/plan/config-panel-mockup/tui_render.py", line 458, in main
     MODES[args.mode]()
     ~~~~~~~~~~~~~~~~^^
   File "/lzcapp/document/working/codebase/investor-review/docs/plan/config-panel-mockup/tui_render.py", line 425, in &lt;lambda&gt;
@@ -147,14 +147,24 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
   File "/lzcapp/document/working/codebase/investor-review/docs/plan/config-panel-mockup/tui_render.py", line 115, in _switches
     from src.python.tui.handlers_switch import run_llm_modules_panel
 ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.handlers_switch' (/lzcapp/document/working/codebase/investor-review/src/python/tui/handlers_switch.py)</pre></section>
-<section class="screen" id="s-dmenu"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>[D] 目录信息（二级，5 个字母键）</h2></div><p class="crumb">主菜单 › 配置 › [D]</p><p class="note">[C] 目录 / [F] 文件名 / [O] 输出目录 / [L] LLM 调优 / [M] 入口地图</p><pre class="term"><span class="bold"><span class="b">  ── 配置与目录信息 ──</span></span>
-   [H] 持仓信息目录
-   [F] 持仓信息文件名
-   [O] 报告输出目录
-   [M] 配置入口地图（各配置项所在菜单）
-   [0] 返回全局设置
+<section class="screen" id="s-dmenu"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>[G] 全局设置（二级，7 项·数字主入口）</h2></div><p class="crumb">主菜单 › 配置 › [G]</p><p class="note">[H] 目录 / [F] 文件名 / [O] 输出目录 / [L] LLM 调优 / [M] 入口地图</p><pre class="term"><span class="bold"><span class="b">  ── 全局设置 ──</span></span>
+<span class="bold"><span class="b">  ── 目录与文件 ──</span></span>
+   1. [H] 持仓信息目录
+   2. [F] 持仓信息文件名
+   3. [O] 报告输出目录
 
-  选择（如 C/F/O/M） · 0 返回: 0</pre></section>
+<span class="bold"><span class="b">  ── LLM 调优 ──</span></span>
+   4. [L] LLM 设置（运行参数 / 多链线路）
+
+<span class="bold"><span class="b">  ── 基准与呈现 ──</span></span>
+   5. [I] 对比基准指数
+   6. [A] 持仓匿名化
+
+<span class="bold"><span class="b">  ── 索引 ──</span></span>
+   7. [M] 配置入口地图
+   0. 返回主菜单
+
+  选择编号或字母（回车=返回 · 0=返回）: 0</pre></section>
 <section class="screen" id="s-d_tuning"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>[D]→[L] LLM 调优参数（三级，6 个数字项）</h2></div><p class="crumb">主菜单 › 配置 › [D] › [L]</p><p class="note">6 个运行参数，取值范围与说明由共享白名单下发</p><pre class="term"><span class="bold"><span class="b">  ── LLM 调优参数 ──</span></span>
    1. thinking 模块并发上限（当前 2）
    2. LLM 模块并发线程数（当前 3）
@@ -166,56 +176,38 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
    0. 返回全局设置
 
   输入编号修改（如 1 改 thinking 并发） · 0 返回: 0</pre></section>
-<section class="screen" id="s-d_map"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>配置入口地图（[D]→[M]）</h2></div><p class="crumb">主菜单 › 配置 › [D] › [M]</p><p class="note">只读索引：各配置项在哪个菜单键下</p><pre class="term"><span class="bold"><span class="b">  ── 配置与目录信息 ──</span></span>
-   [H] 持仓信息目录
-   [F] 持仓信息文件名
-   [O] 报告输出目录
-   [M] 配置入口地图（各配置项所在菜单）
-   [0] 返回全局设置
-
-  选择（如 C/F/O/M） · 0 返回: M
-
-<span class="bold"><span class="b">  ── 配置入口地图（哪个配置在哪个菜单）──</span></span>
+<section class="screen" id="s-d_map"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>配置入口地图（[G]→[M]）</h2></div><p class="crumb">主菜单 › 配置 › [G] › [M]</p><p class="note">只读索引：各配置项在哪个菜单键下</p><pre class="term"><span class="bold"><span class="b">  ── 配置入口地图（哪个配置在哪个菜单）──</span></span>
    功能开关 / LLM 模块启停 / 实验项  →  [S]       八组功能开关 + 7 个 LLM 标准模块，行尾费用摘要与启用统计
    报告章节取舍（顺序与开关）        →  [C]       五个顶层章节组的可见性
    对比指数池（自定义基准）          →  [G]       全局设置 → I（增删指数、恢复默认）
    持仓匿名化（代码/名称脱敏）       →  [G]       全局设置 → A（四档）
-   配置文件与目录位置                →  [G]       全局设置 → D / F / O
-   LLM 运行参数 / 多链线路           →  [G]       全局设置 → L（运行参数）/ M（线路优先级）
+   配置文件与目录位置                →  [G]       全局设置 → H / F / O
+   LLM 运行参数 / 多链线路           →  [G]       全局设置 → L（运行参数与线路优先级同在 L 面板）
    重新加载配置                      →  [R]       改完 config.json / llm_settings.json 手工项后刷新内存配置
    缓存管理（统计与清理）            →  [3]       统计首屏 + 子菜单内 3 清理过期缓存
    运行日志 / 健康历史 / 系统自检    →  [D]       诊断与排查 → V / H / T
-  （仅索引导流，不修改任何配置；config.json 手工键说明见手册 how-to-config）
-
-<span class="bold"><span class="b">  ── 配置与目录信息 ──</span></span>
-   [H] 持仓信息目录
-   [F] 持仓信息文件名
-   [O] 报告输出目录
-   [M] 配置入口地图（各配置项所在菜单）
-   [0] 返回全局设置
-
-  选择（如 C/F/O/M） · 0 返回:</pre></section>
-<section class="screen" id="s-d_dir"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>持仓信息目录（[D]→[C]）</h2></div><p class="crumb">主菜单 › 配置 › [D] › [C]</p><p class="note">目录列表选择，取到首屏即中止</p><pre class="term">  当前目录: /lzcapp/document/working/codebase/investor-review/data/holdings
+  （仅索引导流，不修改任何配置；config.json 手工键说明见手册 how-to-config）</pre></section>
+<section class="screen" id="s-d_dir"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>持仓信息目录（[G]→[H]）</h2></div><p class="crumb">主菜单 › 配置 › [G] › [H]</p><p class="note">目录列表选择，取到首屏即中止</p><pre class="term">  当前目录: /lzcapp/document/working/codebase/investor-review/data/holdings
   请输入新目录（留空则不修改）:
   &gt;</pre></section>
-<section class="screen" id="s-d_file"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>持仓信息文件名（[D]→[F]）</h2></div><p class="crumb">主菜单 › 配置 › [D] › [F]</p><p class="note">目录内 .xlsx 列表选择</p><pre class="term">  当前目录中的 xlsx 文件:
+<section class="screen" id="s-d_file"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>持仓信息文件名（[G]→[F]）</h2></div><p class="crumb">主菜单 › 配置 › [G] › [F]</p><p class="note">目录内 .xlsx 列表选择</p><pre class="term">  当前目录中的 xlsx 文件:
     [1] 个人投资持仓信息.xlsx
 
   当前文件名: 个人投资持仓信息.xlsx
   请输入新文件名（留空则不修改）:
   &gt;</pre></section>
-<section class="screen" id="s-d_out"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>报告输出目录（[D]→[O]）</h2></div><p class="crumb">主菜单 › 配置 › [D] › [O]</p><p class="note">输出目录切换（含恢复默认项）</p><pre class="term">  当前报告输出目录: /lzcapp/document/working/codebase/investor-review/reports
+<section class="screen" id="s-d_out"><div class="screen-head"><span class="lvl lvl-三级">三级</span><h2>报告输出目录（[G]→[O]）</h2></div><p class="crumb">主菜单 › 配置 › [D] › [O]</p><p class="note">输出目录切换（含恢复默认项）</p><pre class="term">  当前报告输出目录: /lzcapp/document/working/codebase/investor-review/reports
   请输入新报告输出目录（留空则不修改）:
   &gt;</pre></section>
 <section class="screen" id="s-boards"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>报告章节取舍（[C]，含指路牌项）</h2></div><p class="crumb">主菜单 › 配置 › [C]</p><p class="note">5 个顶层章节 + 第 6 项跳转提示 + 底部一行提示</p><pre class="term">  ┌── 报告章节显隐 ────────────────────────────────────────────────────────────────────────────┐
-  │ <span class="bold"><span class="b">── 顶层章节（5/5 开）</span></span>                                                                      │
+  │ <span class="bold"><span class="b">── ── 顶层章节（5/5 开） ──</span></span>                                                                │
   │   1. 基金深度分析               <span class="d">enable_fund_deep_analysis </span> [<span class="g">开启</span>]                          │
   │   2. 市场新闻                   <span class="d">enable_news               </span> [<span class="g">开启</span>]                          │
   │   3. 组合历史走势+回撤          <span class="d">enable_history            </span> [<span class="g">开启</span>]                          │
   │   4. 组合演进                   <span class="d">enable_portfolio_evolution</span> [<span class="g">开启</span>]                          │
   │   5. 行动建议                   <span class="d">enable_action             </span> [<span class="g">开启</span>]                          │
   │                                                                                            │
-  │ <span class="bold"><span class="b">── LLM 章节（0/7 开）</span></span>                                                                      │
+  │ <span class="bold"><span class="b">── ── LLM 章节（0/7 开） ──</span></span>                                                                │
   │   6. 全球政经局势               <span class="d">global_macro              </span> [<span class="r">关闭</span>]*<span class="d"> · 19次 ¥0.1232 均¥0.0065</span>│
   │   7. 智囊团深度复盘             <span class="d">expert_review             </span> [<span class="r">关闭</span>]*<span class="d"> · 19次 ¥1.0390 均¥0.0547</span>│
   │ <span class="d"> 7.1   辩论-正反辩论            <span class="d">llm_debate_procon         </span></span> [关闭]<span class="d">（启用本章节后可切换）</span>    │
@@ -226,12 +218,12 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
   │  11. 生成后自检                 <span class="d">self_review               </span> [<span class="r">关闭</span>]                          │
   │  12. 持仓变动复盘归因           <span class="d">holding_change            </span> [<span class="r">关闭</span>]*<span class="d"> · 19次 ¥0.0994 均¥0.0052</span>│
   │                                                                                            │
-  │ <span class="bold"><span class="b">── 默认关闭的整章（3/3 开）</span></span>                                                                │
+  │ <span class="bold"><span class="b">── ── 默认关闭的整章（3/3 开） ──</span></span>                                                          │
   │  13. 调仓纪律回放               <span class="d">rebalance_schedule_replay </span> [<span class="g">开启</span>]*                         │
   │  14. 持仓变动复盘               <span class="d">holding_change_review     </span> [<span class="g">开启</span>]*                         │
   │  15. 个股基本面                 <span class="d">stock_fundamentals        </span> [<span class="g">开启</span>]*                         │
   │                                                                                            │
-  │ <span class="bold"><span class="b">── 关联产物（0/1 开）</span></span>                                                                      │
+  │ <span class="bold"><span class="b">── ── 关联产物（0/1 开） ──</span></span>                                                                │
   │  16. What-if 交易成本对比       <span class="d">whatif_trade_cost         </span> [<span class="r">关闭</span>]<span class="d">（仅调仓模拟报告）</span>        │
   │                                                                                            │
   │  0. 返回主菜单                                                                             │
@@ -240,7 +232,7 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
   稳定入口是键名：?编号 / ?键名 查看说明（如 ?7 / ?7.1 / ?expert_review）
 
   输入章节编号切换（如 7 或 7.1） · ?7 查看说明 · 0 返回: 0</pre></section>
-<section class="screen" id="s-indices"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>对比指数池（[I]）</h2></div><p class="crumb">主菜单 › 配置 › [I]</p><p class="note">增删基准指数、恢复默认预设</p><pre class="term">  ┌── 管理对比指数池 ───────────────────────────┐
+<section class="screen" id="s-indices"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>对比指数池（[I]）</h2></div><p class="crumb">主菜单 › 配置 › [G] › [I]</p><p class="note">增删基准指数、恢复默认预设</p><pre class="term">  ┌── 管理对比指数池 ───────────────────────────┐
   │ 自定义基准指数，用于报告中组合 vs 多指数对比│
   │ 当前指数 (3 个):                            │
   │   1. sh000300 (沪深300)                     │
@@ -254,7 +246,7 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
   └─────────────────────────────────────────────┘
 
   选择操作（如 A 添加 / D 删除 / R 重置） · ? 看说明 · 0 返回: 0</pre></section>
-<section class="screen" id="s-anon"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>持仓匿名化（[A]）</h2></div><p class="crumb">主菜单 › 配置 › [A]</p><p class="note">off / code_display / full_anonymous / summary 四档</p><pre class="term">  ┌── 配置持仓匿名化 ───────────────────────────────────┐
+<section class="screen" id="s-anon"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>持仓匿名化（[A]）</h2></div><p class="crumb">主菜单 › 配置 › [G] › [A]</p><p class="note">off / code_display / full_anonymous / summary 四档</p><pre class="term">  ┌── 配置持仓匿名化 ───────────────────────────────────┐
   │ 当前模式: off                                       │
   │─────────────────────────────────────────────────────│
   │  ► 1. 关闭 — 显示真实持仓名称和代码                 │
@@ -266,7 +258,7 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
   └─────────────────────────────────────────────────────┘
 
   选择匿名化模式（如 1-4 选模式） · ? 看说明 · 0 返回: 0</pre></section>
-<section class="screen" id="s-providers"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>LLM 多链线路优先级（[M]）</h2></div><p class="crumb">主菜单 › 配置 › [M]</p><p class="note">按 priority 排序的线路清单与调序操作；返回项「0. 返回主菜单」</p><pre class="term">  ── LLM 多链线路优先级（strategy: priority） ──
+<section class="screen" id="s-providers"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>LLM 多链线路优先级（[M]）</h2></div><p class="crumb">主菜单 › 配置 › [G] › [L] › 7</p><p class="note">按 priority 排序的线路清单与调序操作；返回项「0. 返回主菜单」</p><pre class="term">  ── LLM 多链线路优先级（strategy: priority） ──
    1. deepseek-main（claude）priority 10
    2. opencode-go（claude）priority 20
    0. 返回主菜单
@@ -328,52 +320,52 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
   ========================================
   最近日志（级别: 全部）
   ========================================
-  2026-10-24 00:20:10,379 [INFO] [history_stock] 尝试 hithink（code=601398, days=20）
-  2026-10-24 00:20:10,501 [INFO] [history_stock] hithink 返回空数据（无此品种历史数据），尝试下一链路
-  2026-10-24 00:20:10,502 [INFO] [history_stock] 尝试 tencent（code=601939, days=20）
-<span class="y">  2026-10-24 00:20:10,563 [WARNING] Tencent K 线 sh601939 返回非 JSON（疑似风控/限流页）→ 记源失败并交下一链路：&lt;!DOCTYPE html&gt;&lt;html&gt;&lt;head&gt;&lt;script&gt;var i=location.href;var v</span>
-<span class="y">  2026-10-24 00:20:10,563 [WARNING] [registry] tencent 连续 3 次失败（最新: kline:block_page:sh601939），熔断 60s（退避级别 0）</span>
-  2026-10-24 00:20:10,563 [INFO] [history_stock] tencent 返回空数据（无此品种历史数据），尝试下一链路
-  2026-10-24 00:20:10,564 [INFO] [history_stock] 尝试 sina（code=601939, days=20）
-<span class="y">  2026-10-24 00:20:10,712 [WARNING] Sina K 线 sh601939 返回非 JSON（疑似风控/限流页）→ 记源失败并交下一链路：File not found.</span>
-<span class="y">  2026-10-24 00:20:10,712 [WARNING] [registry] sina 连续 3 次失败（最新: kline:block_page:sh601939），熔断 60s（退避级别 0）</span>
-  2026-10-24 00:20:10,712 [INFO] [history_stock] sina 返回空数据（无此品种历史数据），尝试下一链路
-  2026-10-24 00:20:10,712 [INFO] [history_stock] 尝试 hithink（code=601939, days=20）
-  2026-10-24 00:20:10,960 [INFO] [history_stock] hithink 返回空数据（无此品种历史数据），尝试下一链路
-  2026-10-24 00:20:10,961 [INFO] [history_stock] 尝试 hithink（code=561910, days=20）
-<span class="y">  2026-10-24 00:20:11,451 [WARNING] [hithink] 业务错误 code=1002（参数格式错误）/api/a-share/prices/historical：Unknown thscode: 561910.SH</span>
-  2026-10-24 00:20:11,451 [INFO] [history_stock] hithink 返回空数据（无此品种历史数据），尝试下一链路
-  2026-10-24 00:20:11,462 [INFO] [穿透] 联接基金 016055 的底层资产穿透自目标 ETF 513390（纳指100ETF博时），报告期 2026-06-30
-  2026-10-24 00:20:11,462 [INFO] [穿透] 联接基金 040046 的底层资产穿透自目标 ETF 159632（纳斯达克ETF华安），报告期 2026-06-30
-  2026-10-24 00:20:13,865 [INFO] [fund_roe_estimate] 基金重仓 ROE 估算完成：4/7 只基金有估算值
-  2026-10-24 00:20:13,866 [INFO] [prosperity_framework] 诊断完成：57/100（57%）评级=部分契合，未验证维度 0 个
-  2026-10-24 00:20:13,867 [INFO] [sentiment] 尝试 同花顺金融数据 (hithink)
-  2026-10-24 00:20:13,952 [INFO] [sentiment] hithink 成功
-  2026-10-24 00:20:13,953 [INFO] [sentiment] 尝试 同花顺金融数据 (hithink)
-  2026-10-24 00:20:14,440 [INFO] [sentiment] hithink 成功
-  2026-10-24 00:20:14,440 [INFO] [market_sentiment] 命中 0 条（龙虎榜/连板梯队 ∩ 持仓与穿透），交易日 2026-10-23
-  2026-10-24 00:20:14,457 [INFO] 复用外部传入的市值核算数据，共 12 条
-  2026-10-24 00:20:14,460 [INFO] 批量行业数据就绪: 3/3 个代码（含缓存命中）
-  2026-10-24 00:20:14,460 [INFO] [穿透] 联接基金 016055 的底层资产穿透自目标 ETF 513390（纳指100ETF博时），报告期 2026-06-30
-  2026-10-24 00:20:14,460 [INFO] [穿透] 联接基金 040046 的底层资产穿透自目标 ETF 159632（纳斯达克ETF华安），报告期 2026-06-30
-  2026-10-24 00:20:14,467 [INFO] 批量行业数据就绪: 37/37 个代码（含缓存命中）
-  2026-10-24 00:20:14,472 [INFO] 获取基金业绩 [1/9]: 兴全恒慧30天持有超短债C (012325)
-  2026-10-24 00:20:14,472 [INFO] 获取基金业绩 [2/9]: 建信高端装备股票A (011506)
-  2026-10-24 00:20:14,472 [INFO] 获取基金业绩 [3/9]: 嘉实全球产业升级股票(QDII)A (017730)
-  2026-10-24 00:20:14,472 [INFO] 获取基金业绩 [4/9]: 华安纳斯达克100ETF联接基金A (040046)
-  2026-10-24 00:20:14,472 [INFO] 获取基金业绩 [5/9]: 永赢科技智选混合C (022365)
-  2026-10-24 00:20:14,472 [INFO] 获取基金业绩 [6/9]: 博时纳斯达克100ETF联接(QDII)A (016055)
-  2026-10-24 00:20:14,472 [INFO] 获取基金业绩 [7/9]: 招商中证电池主题ETF (561910)
-  2026-10-24 00:20:14,472 [INFO] 获取基金业绩 [8/9]: 华宝增强收益债券A (240012)
-  2026-10-24 00:20:14,472 [INFO] 获取基金业绩 [9/9]: 大成标普500等权重指数(QDII)A (096001)
-  2026-10-24 00:20:14,473 [INFO] 基金业绩分析完成，9 只基金获取成功
-  2026-10-24 00:20:14,474 [INFO] [穿透] 联接基金 016055 的底层资产穿透自目标 ETF 513390（纳指100ETF博时），报告期 2026-06-30
-  2026-10-24 00:20:14,474 [INFO] [穿透] 联接基金 040046 的底层资产穿透自目标 ETF 159632（纳斯达克ETF华安），报告期 2026-06-30
-  2026-10-24 00:20:14,475 [INFO] 基金风格表 [1/9]: 电池ETF招商 (561910)
-  2026-10-24 00:20:14,476 [INFO] 基金风格表 [2/9]: 建信高端装备股票A (011506)
   2026-10-24 00:20:14,476 [INFO] 基金风格表 [3/9]: 嘉实全球产业升级股票发起式(QDII)A (017730)
   2026-10-24 00:20:14,477 [INFO] 基金风格表 [4/9]: 永赢科技智选混合发起C (022365)
-  2026-10-24 00:20:14,477 [INFO] 基金风格表 [5/9]: 博时纳斯达克100ETF发起式联接 (016055)</pre><p class="more">… 共 206 行，此处展示前 52 行</p></section>
+  2026-10-24 00:20:14,477 [INFO] 基金风格表 [5/9]: 博时纳斯达克100ETF发起式联接 (016055)
+  2026-10-24 00:20:14,478 [INFO] 基金风格表 [6/9]: 大成标普500等权重指数(QDII)A人民币 (096001)
+  2026-10-24 00:20:14,478 [INFO] 基金风格表 [7/9]: 华宝增强收益债券A (240012)
+  2026-10-24 00:20:14,478 [INFO] 基金风格表 [8/9]: 兴全恒惠30天持有超短债C (012325)
+  2026-10-24 00:20:14,478 [INFO] 基金风格表 [9/9]: 华安纳斯达克100ETF联接 (040046)
+  2026-10-24 00:20:14,479 [INFO] 复用调用方传入的新闻数据，共 28 条
+  2026-10-24 00:20:14,743 [INFO] 最新 HTML 报告已保存: /lzcapp/document/working/codebase/investor-review/reports/个人投资分析报告.html
+  2026-10-24 00:20:14,744 [INFO] 归档 HTML 报告已保存: /lzcapp/document/working/codebase/investor-review/reports/20261024/个人投资分析报告-20261024-002014.html
+  2026-10-24 00:20:14,746 [INFO] [perf] HTML 生成: 0.290s
+  2026-10-24 00:20:14,751 [INFO] 复用外部传入的市值核算数据，共 12 条
+  2026-10-24 00:20:14,760 [INFO] 投资分析汇总写入完成，共 57 行
+  2026-10-24 00:20:14,764 [INFO] 一、市值核算明细 区块①写入完成，共 4 个账户，12 条持仓
+  2026-10-24 00:20:14,767 [INFO] 二、持仓分类汇总 区块②写入完成，共 5 个分组，12 条持仓
+  2026-10-24 00:20:14,769 [INFO] 持仓明细与分类写入完成，共 4 个账户，12 条持仓
+  2026-10-24 00:20:14,770 [INFO] 批量行业数据就绪: 3/3 个代码（含缓存命中）
+  2026-10-24 00:20:14,771 [INFO] [穿透] 联接基金 016055 的底层资产穿透自目标 ETF 513390（纳指100ETF博时），报告期 2026-06-30
+  2026-10-24 00:20:14,771 [INFO] [穿透] 联接基金 040046 的底层资产穿透自目标 ETF 159632（纳斯达克ETF华安），报告期 2026-06-30
+  2026-10-24 00:20:14,777 [INFO] 批量行业数据就绪: 37/37 个代码（含缓存命中）
+  2026-10-24 00:20:14,780 [INFO] 资产穿透TOP10写入完成，合并 154 个标的
+  2026-10-24 00:20:14,781 [INFO] 获取基金业绩 [1/9]: 兴全恒慧30天持有超短债C (012325)
+  2026-10-24 00:20:14,781 [INFO] 获取基金业绩 [2/9]: 建信高端装备股票A (011506)
+  2026-10-24 00:20:14,781 [INFO] 获取基金业绩 [3/9]: 嘉实全球产业升级股票(QDII)A (017730)
+  2026-10-24 00:20:14,781 [INFO] 获取基金业绩 [4/9]: 华安纳斯达克100ETF联接基金A (040046)
+  2026-10-24 00:20:14,782 [INFO] 获取基金业绩 [5/9]: 永赢科技智选混合C (022365)
+  2026-10-24 00:20:14,782 [INFO] 获取基金业绩 [6/9]: 博时纳斯达克100ETF联接(QDII)A (016055)
+  2026-10-24 00:20:14,782 [INFO] 获取基金业绩 [7/9]: 招商中证电池主题ETF (561910)
+  2026-10-24 00:20:14,782 [INFO] 获取基金业绩 [8/9]: 华宝增强收益债券A (240012)
+  2026-10-24 00:20:14,782 [INFO] 获取基金业绩 [9/9]: 大成标普500等权重指数(QDII)A (096001)
+  2026-10-24 00:20:14,783 [INFO] 基金业绩分析写入完成，9/9 只基金获取成功
+  2026-10-24 00:20:14,783 [INFO] 复用预取的新闻数据，共 28 条
+  2026-10-24 00:20:14,788 [INFO] 财经新闻热点与持仓关联分析写入完成，其中 LLM 分析 28 条，共 28 条
+  2026-10-24 00:20:14,801 [INFO] 持仓集中度区块：无数据，写入占位
+  2026-10-24 00:20:14,804 [INFO] 持仓结构与集中度页签写入完成
+  2026-10-24 00:20:14,805 [INFO] 基金风格表 [1/9]: 电池ETF招商 (561910)
+  2026-10-24 00:20:14,805 [INFO] 基金风格表 [2/9]: 建信高端装备股票A (011506)
+  2026-10-24 00:20:14,806 [INFO] 基金风格表 [3/9]: 嘉实全球产业升级股票发起式(QDII)A (017730)
+  2026-10-24 00:20:14,806 [INFO] 基金风格表 [4/9]: 永赢科技智选混合发起C (022365)
+  2026-10-24 00:20:14,806 [INFO] 基金风格表 [5/9]: 博时纳斯达克100ETF发起式联接 (016055)
+  2026-10-24 00:20:14,807 [INFO] 基金风格表 [6/9]: 大成标普500等权重指数(QDII)A人民币 (096001)
+  2026-10-24 00:20:14,807 [INFO] 基金风格表 [7/9]: 华宝增强收益债券A (240012)
+  2026-10-24 00:20:14,807 [INFO] 基金风格表 [8/9]: 兴全恒惠30天持有超短债C (012325)
+  2026-10-24 00:20:14,807 [INFO] 基金风格表 [9/9]: 华安纳斯达克100ETF联接 (040046)
+  2026-10-24 00:20:14,814 [INFO] 风格与因子分析页签写入完成
+  2026-10-24 00:20:14,819 [INFO] LLM 分析章节写入完成（含穿透深度分析）</pre><p class="more">… 共 206 行，此处展示前 52 行</p></section>
 <section class="screen" id="s-health"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>数据源健康历史（[H]）</h2></div><p class="crumb">主菜单 › 诊断与排查 › [H]</p><p class="note">最近若干次采集的成功/失败源与降级原因</p><pre class="term">  ========================================
   数据源健康历史（最近 10 次检查）
   ========================================
@@ -413,7 +405,7 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
 
 [日志与缓存]
   [OK] 日志级别 — 文件 INFO（默认 INFO）
-  [ERR] 日志体积 — app.log 8.9 MB + 轮转 3 份；DEBUG 占比 87%（采样 112294 行）
+  [ERR] 日志体积 — app.log 8.9 MB + 轮转 3 份；DEBUG 占比 87%（采样 112337 行）
         → DEBUG 占比过半：确认未设 INVEST_LOG_FILE_LEVEL=DEBUG；排障后可清理 logs/app.log*（旧日志可删）
   [ERR] 去重锚点 — 37.3 MB / 111464 行（自动压缩阈值 32 MB）
         → 超过阈值：下次生成时自动压缩（保留每组最新 + .bak 备份）；也可手工 `python scripts/eval-dedup-threshold.py --compact`
@@ -439,7 +431,7 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
   [..] 今日已花费 ¥0.0980（未设日预算上限）
   [?] 是否用已有的 AI 分析结果生成？（Y=用已有结果，免费但可能不是最新；N=重新生成，会产生费用）
   回车/Y=用已有结果生成 / N=重新生成（可选模块） / q=中止: </pre></section>
-<section class="screen" id="s-qa"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>报告追问 · 报告选择（[Q]）</h2></div><p class="crumb">主菜单 › 数据与查看 › [Q]</p><p class="note">选择已生成 HTML 报告进入多轮追问</p><pre class="term">  可追问的报告（/lzcapp/document/working/codebase/investor-review/reports）：
+<section class="screen" id="s-qa"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>报告追问 · 报告选择（[Q]）</h2></div><p class="crumb">主菜单 › 生成报告 › [Q]</p><p class="note">选择已生成 HTML 报告进入多轮追问</p><pre class="term">  可追问的报告（/lzcapp/document/working/codebase/investor-review/reports）：
     1. 个人投资分析报告.html  (2026-10-24 00:20)  ← 回车默认
     2. 调仓模拟.html  (2026-10-02 23:20)
   选择报告编号（回车=本期主报告 / 编号=指定报告 / q=取消）:</pre></section>

@@ -24,7 +24,13 @@ from src.python.tui.switch_panel import (
     terminal_columns,
     wrap_hanging,
 )
-from src.python.tui.text_layout import display_width, pad_right, style_heading, truncate_display
+from src.python.tui.text_layout import (
+    display_width,
+    group_heading,
+    pad_right,
+    style_heading,
+    truncate_display,
+)
 
 COST_HISTORY_DAYS = 7
 """LLM 章节行尾历史费用摘要的回看窗口天数（与 ``perf.module_cost_summary`` 同口径）。"""
@@ -213,7 +219,6 @@ def run_report_chapters_panel() -> None:
     def _render(nav: NavState) -> list[str]:
         columns = terminal_columns()
         tier = layout_tier(columns)
-        width = inner_width(columns) - 2
         numbered = dict(chapter_numbers())
         sub_flags = [f for e in numbered.values() for f in e.sub_items]
         labels = {e.key: chapter_label(e, llm_names) for e in numbered.values()}
@@ -238,7 +243,7 @@ def run_report_chapters_panel() -> None:
                 continue
             enabled_count = sum(1 for e in entries if _status(e))
             heading = f"── {BLOCK_LABELS[block]}（{enabled_count}/{len(entries)} 开）"
-            rows.append(style_heading(truncate_display(heading, width)))
+            rows.extend(group_heading(heading, inner_width(columns), prefix=""))
             for entry in entries:
                 number = chapter_number(entry.key)
                 enabled = _status(entry)
