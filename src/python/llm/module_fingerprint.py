@@ -23,6 +23,9 @@
     （``competitive_context`` / ``metrics`` / ``data_quality_text`` /
     ``purchase_block`` / ``pipeline_data`` 派生的【环比变化】【数据质量降级】
     两段），不进提示词的段落不并入（纯成本失效）。
+  - **生成参数同样进键**：模块的温度 / 输出上限 / 思考开关、预算与强度由
+    ``generation_params_suffix()`` 统一并入；``cache`` 等与生成无关的项不参与，
+    避免无谓失效。``get_llm_config()`` 不可用时后缀为空（不使存量缓存整体失效）。
   - **一次渲染、两侧共享同一实例**：``competitive_context`` 与
     ``data_quality_text`` 由调用方（``generate_all_llm``）渲染一次后同时交给预检侧
     与写侧，两边不得各自渲染——两次渲染会让「进键的文本」与「进提示词的文本」
@@ -173,6 +176,30 @@ def _pipeline_block_cache_suffix(pipeline_data: dict | None) -> str:
     return "_" + compute_fingerprint(_block)
 
 
+def generation_params_suffix(module: str) -> str:
+    """模块级生成参数摘要（温度 / 输出上限 / 思考开关、预算、强度）→ 指纹后缀。
+
+    只并入会改变模型输出的参数：``cache`` 等与生成无关的项不参与，避免无谓失效。
+    预检侧与写侧都调用同一个模块指纹构造器，故两侧天然同源。
+
+    ``get_llm_config()`` 不可用（无凭据/未初始化）时返回空串——键与引入前一致，
+    不因读取失败使存量缓存整体失效。
+    """
+    from src.python.config import get_llm_config
+
+    config = get_llm_config()
+    if not config:
+        return ""
+    parts = (
+        f"t={config.get(f'temperature_{module}')}",
+        f"mt={config.get(f'max_tokens_{module}')}",
+        f"th={1 if config.get(f'thinking_enabled_{module}') else 0}",
+        f"tb={config.get(f'thinking_budget_{module}')}",
+        f"te={config.get(f'reasoning_effort_{module}')}",
+    )
+    return "_" + compute_fingerprint(*parts)
+
+
 def global_macro_fingerprint(inputs: ModuleFingerprintInputs) -> str:
     """全球政经局势：指数行情 / 总市值 / 盈亏 / 分类汇总 + 竞争语境块。
 
@@ -196,7 +223,7 @@ def global_macro_fingerprint(inputs: ModuleFingerprintInputs) -> str:
         _parts.append(inputs.event_impact_block)
     if inputs.schedule_replay_block:
         _parts.append(inputs.schedule_replay_block)
-    return compute_fingerprint(*_parts)
+    return compute_fingerprint(*_parts) + generation_params_suffix("global_macro")
 
 
 def expert_review_fingerprint(inputs: ModuleFingerprintInputs) -> str:
@@ -240,6 +267,7 @@ def expert_review_fingerprint(inputs: ModuleFingerprintInputs) -> str:
     _fp += _pipeline_block_cache_suffix(inputs.pipeline_data)
     _fp += signal_ledger.summary_cache_suffix()
     _fp += structured_header_cache_suffix()
+    _fp += generation_params_suffix("expert_review")
     return _fp
 
 
@@ -287,6 +315,7 @@ def debate_procon_fingerprint(inputs: ModuleFingerprintInputs) -> str:
         compute_fingerprint(*_parts)
         + debate_feature_cache_suffix()
         + _pipeline_block_cache_suffix(inputs.pipeline_data)
+        + generation_params_suffix("expert_review")
     )
 
 
@@ -309,7 +338,14 @@ def debate_synthesis_fingerprint(inputs: ModuleFingerprintInputs, synthesis_prom
             基础指纹承载）。
         synthesis_prompt: 已渲染的综合阶段 user prompt。
     """
-    return compute_fingerprint(debate_procon_fingerprint(inputs), synthesis_prompt)
+    suffix = generation_params_suffix("expert_review")
+    from src.python.config import get_llm_config
+
+    config = get_llm_config() or {}
+    procon = (config.get("debate") or {}).get("procon") or {}
+    if "synthesis_temperature" in procon:
+        suffix += "_" + compute_fingerprint(f"st={procon['synthesis_temperature']}")
+    return compute_fingerprint(debate_procon_fingerprint(inputs), synthesis_prompt) + suffix
 
 
 def health_check_fingerprint(inputs: ModuleFingerprintInputs) -> str:
@@ -351,6 +387,7 @@ def health_check_fingerprint(inputs: ModuleFingerprintInputs) -> str:
     _fp = compute_fingerprint(*_parts)
     _fp += _signal_digest_cache_suffix(inputs.pipeline_data)
     _fp += _pipeline_block_cache_suffix(inputs.pipeline_data)
+    _fp += generation_params_suffix("health_check")
     return _fp
 
 
@@ -379,8 +416,8 @@ def penetration_deep_fingerprint(inputs: ModuleFingerprintInputs) -> str:
     ]
     if _extra:
         # 条件并入：进提示词必进指纹；两块均空时不追加 part（逐字节回退）
-        return compute_fingerprint(_base, *_extra)
-    return _base
+        return compute_fingerprint(_base, *_extra) + generation_params_suffix("penetration_deep")
+    return _base + generation_params_suffix("penetration_deep")
 
 
 def self_review_fingerprint(
@@ -432,7 +469,7 @@ def self_review_fingerprint(
     if schedule_replay_block:
         # 条件并入：进提示词必进指纹；块空不追加 part（逐字节回退）
         _parts.append(schedule_replay_block)
-    return compute_fingerprint(*_parts)
+    return compute_fingerprint(*_parts) + generation_params_suffix("self_review")
 
 
 def holding_change_review_fingerprint(
@@ -461,7 +498,7 @@ def holding_change_review_fingerprint(
     if purchase_block:
         # 条件并入：进提示词必进指纹；块空不追加 part（逐字节回退）
         _parts.append(purchase_block)
-    return compute_fingerprint(*_parts)
+    return compute_fingerprint(*_parts) + generation_params_suffix("holding_change")
 
 
 # 模块标识 → 指纹构造器。预检侧按键取指纹建缓存键，写侧闭包按同一函数现算，

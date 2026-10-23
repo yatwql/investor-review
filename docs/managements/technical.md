@@ -2899,7 +2899,7 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
 
 **命中率与样本守门**：方向命中与超额 alpha 由真实后续行情对账得出；**命中率在小样本下不出结论**（样本数不足时只列明细、不报百分比），防「1 次命中 = 100%」的假精确。
 
-**缓存指纹同源**：开关影响专家复盘提示词，故教训区块经 `lessons_cache_suffix()`（内容 md5 前若干位）进入 `llm/module_fingerprint.py` 中写侧与预检侧**共用的同一个**构建函数，开关与内容判定收敛在函数内部（无教训时返回空后缀）。
+**缓存指纹同源**：开关影响专家复盘提示词，故教训区块经 `lessons_cache_suffix()`（内容 md5 前若干位）进入 `llm/module_fingerprint.py`（生成参数经 `generation_params_suffix()` 并入指纹；`cache` 等无关项不参与） 中写侧与预检侧**共用的同一个**构建函数，开关与内容判定收敛在函数内部（无教训时返回空后缀）。
 
 **报告挂载点**：结算与确定性登记经 `report/_experimental_seams.py::record_deterministic_decisions` 置于 LLM 拉取**之前**（当次教训含本批结算结果，须在 LLM 注入前落档，否则提示词读不到新结算）；LLM 登记与复盘装配经 `record_llm_decisions_and_review_block` 置于 LLM 回退**之后**。两处异常守护由挂载点统一提供，实验特性故障绝不打断报告主链路。
 
