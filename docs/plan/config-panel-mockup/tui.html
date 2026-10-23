@@ -332,17 +332,6 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
   ========================================
   最近日志（级别: 全部）
   ========================================
-  2026-10-24 00:20:14,781 [INFO] 获取基金业绩 [4/9]: 华安纳斯达克100ETF联接基金A (040046)
-  2026-10-24 00:20:14,782 [INFO] 获取基金业绩 [5/9]: 永赢科技智选混合C (022365)
-  2026-10-24 00:20:14,782 [INFO] 获取基金业绩 [6/9]: 博时纳斯达克100ETF联接(QDII)A (016055)
-  2026-10-24 00:20:14,782 [INFO] 获取基金业绩 [7/9]: 招商中证电池主题ETF (561910)
-  2026-10-24 00:20:14,782 [INFO] 获取基金业绩 [8/9]: 华宝增强收益债券A (240012)
-  2026-10-24 00:20:14,782 [INFO] 获取基金业绩 [9/9]: 大成标普500等权重指数(QDII)A (096001)
-  2026-10-24 00:20:14,783 [INFO] 基金业绩分析写入完成，9/9 只基金获取成功
-  2026-10-24 00:20:14,783 [INFO] 复用预取的新闻数据，共 28 条
-  2026-10-24 00:20:14,788 [INFO] 财经新闻热点与持仓关联分析写入完成，其中 LLM 分析 28 条，共 28 条
-  2026-10-24 00:20:14,801 [INFO] 持仓集中度区块：无数据，写入占位
-  2026-10-24 00:20:14,804 [INFO] 持仓结构与集中度页签写入完成
   2026-10-24 00:20:14,805 [INFO] 基金风格表 [1/9]: 电池ETF招商 (561910)
   2026-10-24 00:20:14,805 [INFO] 基金风格表 [2/9]: 建信高端装备股票A (011506)
   2026-10-24 00:20:14,806 [INFO] 基金风格表 [3/9]: 嘉实全球产业升级股票发起式(QDII)A (017730)
@@ -377,7 +366,18 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
   2026-10-24 00:28:09,620 [INFO] [llm/pacing] 已装载端点节流策略: {'opencode-go': 'PacingPolicy(min_interval=5.0, jitter=0.0, max_concurrency=1)'}
   2026-10-24 00:28:27,263 [INFO] 缓存清理预览: 共 0 个文件
   2026-10-24 00:28:37,101 [INFO] [features] 已加载 22 项功能开关覆写
-  2026-10-24 00:28:37,104 [INFO] [llm/pacing] 已装载端点节流策略: {'opencode-go': 'PacingPolicy(min_interval=5.0, jitter=0.0, max_concurrency=1)'}</pre><p class="more">… 共 206 行，此处展示前 52 行</p></section>
+  2026-10-24 00:28:37,104 [INFO] [llm/pacing] 已装载端点节流策略: {'opencode-go': 'PacingPolicy(min_interval=5.0, jitter=0.0, max_concurrency=1)'}
+  2026-10-24 00:28:39,777 [INFO] [llm/pacing] 已装载端点节流策略: {'opencode-go': 'PacingPolicy(min_interval=5.0, jitter=0.0, max_concurrency=1)'}
+  2026-10-24 00:28:42,370 [INFO] [基准] 已加载 13 条内置基准对照
+  2026-10-24 00:28:43,645 [INFO] [features] 已加载 22 项功能开关覆写
+  2026-10-24 00:28:43,649 [INFO] [llm/pacing] 已装载端点节流策略: {'opencode-go': 'PacingPolicy(min_interval=5.0, jitter=0.0, max_concurrency=1)'}
+  2026-10-24 00:34:59,411 [INFO] [features] 已加载 22 项功能开关覆写
+  2026-10-24 00:35:01,979 [INFO] [features] 已加载 22 项功能开关覆写
+  2026-10-24 00:35:14,547 [INFO] [features] 已加载 22 项功能开关覆写
+  2026-10-24 00:35:14,600 [INFO] [llm/pacing] 已装载端点节流策略: {'opencode-go': 'PacingPolicy(min_interval=5.0, jitter=0.0, max_concurrency=1)'}
+  2026-10-24 00:35:32,346 [INFO] 缓存清理预览: 共 1 个文件（释放 18.1 KB）——逐文件明细见 DEBUG
+  2026-10-24 00:35:42,190 [INFO] [features] 已加载 22 项功能开关覆写
+  2026-10-24 00:35:42,194 [INFO] [llm/pacing] 已装载端点节流策略: {'opencode-go': 'PacingPolicy(min_interval=5.0, jitter=0.0, max_concurrency=1)'}</pre><p class="more">… 共 206 行，此处展示前 52 行</p></section>
 <section class="screen" id="s-health"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>数据源健康历史（[H]）</h2></div><p class="crumb">主菜单 › 诊断与排查 › [D] › [H]</p><p class="note">最近若干次采集的成功/失败源与降级原因</p><pre class="term">  ========================================
   数据源健康历史（最近 10 次检查）
   ========================================
@@ -417,7 +417,7 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
 
 [日志与缓存]
   [OK] 日志级别 — 文件 INFO（默认 INFO）
-  [ERR] 日志体积 — app.log 8.9 MB + 轮转 3 份；DEBUG 占比 87%（采样 112361 行）
+  [ERR] 日志体积 — app.log 8.9 MB + 轮转 3 份；DEBUG 占比 87%（采样 112372 行）
         → DEBUG 占比过半：确认未设 INVEST_LOG_FILE_LEVEL=DEBUG；排障后可清理 logs/app.log*（旧日志可删）
   [ERR] 去重锚点 — 37.3 MB / 111464 行（自动压缩阈值 32 MB）
         → 超过阈值：下次生成时自动压缩（保留每组最新 + .bak 备份）；也可手工 `python scripts/eval-dedup-threshold.py --compact`
