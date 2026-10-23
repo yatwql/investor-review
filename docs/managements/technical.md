@@ -4140,6 +4140,12 @@ investor-review/
 | `llm_providers.json` | `_llm_providers._load_llm_providers()` | `_comments._strip_json_comments()` | 根非 object / 解析失败返回 None 判定（自持）；`_inject_provider_chain_data()` 链模式注入 |
 | `features.json` | `features.load_feature_overrides()` | `core/json_comments.strip_json_comments()` | 模块导入时自动调用；文件仅存需覆写的子集，首次写入以中文注释模板为底 |
 
+> **参数范围校验**：`config/_validation_llm.py::LLM_PARAM_RANGES` 是模块参数合法范围的唯一来源
+> （temperature 0–2 / max_tokens 1–200000 / timeout 5–600 / thinking.budget 1024–100000 / effort 枚举 /
+> debate 合成温度 0–2 / 辩论单报告预算 1024–500000 / 辩论单次超时 5–600）。加载路径经
+> `sanitize_document()` 越界回落到 `defaults` 或内置默认并逐条告警（只改内存视图，不改写用户文件）；
+> 面板写入经 `edit_ops` 拒绝（文案含键名/当前值/合法范围），非法值不落盘。
+
 > **注释契约**：五份配置文件（config / llm_settings / llm_key / llm_providers / features）均支持 `//` 与 `/* */` 注释，读取一律经叶子模块 `core/json_comments.strip_json_comments()`（`config/_comments.py` 再导出）；写入走文本 patch（config 用 `_json_patch`、features 用键级 patch），保留既有分类注释与项说明。
 
 #### I.2 消费模式

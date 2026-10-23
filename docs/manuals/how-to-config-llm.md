@@ -491,6 +491,21 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
 
 ---
 
+## 参数合法范围
+
+| 参数 | 合法范围 | 越界处理 |
+|:--|:--|:--|
+| `temperature` | 0–2 | 加载时回落 `defaults` / 内置默认并告警；面板写入直接拒绝 |
+| `max_tokens` | 1–200000 | 同上 |
+| `timeout` | 5–600 秒 | 同上 |
+| `thinking.budget` | 1024–100000（`enabled=false` 时保留但校验） | 同上 |
+| `thinking.effort` | `low` / `medium` / `high` | 同上 |
+| `debate.procon.synthesis_temperature` | 0–2 | 同上 |
+| `runtime.debate_limits.max_tokens_per_report` | 1024–500000 | 同上 |
+| `runtime.debate_limits.call_timeout_override_sec` | 5–600 秒 | 同上 |
+
+> 报错/告警文案统一含**键名、当前值、合法范围**；面板写入被拒时文件保持原值（不静默裁剪、不落盘半成品）。
+
 ## 各模块推荐参数值
 
 > 以下仅列出**有差异的调优参数**。其余参数所有模块统一：`cache_enabled=true`、`output_brief=false`、`system_prompt=null`（使用内置）、`reasoning_effort="high"`（expert_review / health_check 例外，见下表）。

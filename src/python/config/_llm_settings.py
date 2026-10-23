@@ -217,6 +217,11 @@ def _load_settings_document(raw: str, path: str) -> dict:
     """
     document = json.loads(_comments._strip_json_comments(raw))
     _llm_schema.validate_document(document, filename=os.path.basename(path))
+    from src.python.config._validation_llm import sanitize_document
+
+    document, issues = sanitize_document(document, _DEFAULTS_NESTED)
+    for issue in issues:
+        logger.warning("[!] llm_settings.json %s", issue)
     merged = _llm_schema.merge_defaults(document, _DEFAULTS_NESTED)
     return _llm_schema.flatten(merged)
 

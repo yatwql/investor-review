@@ -253,10 +253,8 @@ def _coerce_number(key: str, value, kind: str, entry: dict) -> int | float:
     if kind == "int" and isinstance(value, float) and value != int(value):
         raise ConfigEditError(f"配置项 {key} 应为整数: {value!r}")
     low, high = entry.get("min"), entry.get("max")
-    if low is not None and number < low:
-        raise ConfigEditError(f"配置项 {key} 不得小于 {low}（当前 {number}）")
-    if high is not None and number > high:
-        raise ConfigEditError(f"配置项 {key} 不得大于 {high}（当前 {number}）")
+    if (low is not None and number < low) or (high is not None and number > high):
+        raise ConfigEditError(f"配置项 {key} 取值 {number!r} 超出范围 [{low}, {high}]")
     return number
 
 
