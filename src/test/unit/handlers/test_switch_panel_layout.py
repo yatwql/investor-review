@@ -383,11 +383,11 @@ class TestNarrowKeyReveal:
 
     def test_key_input_still_accepted_without_reveal(self):
         """键名不显示但**不取消**键名输入：直接 `键名=on|off` 仍生效（兼容脚本/熟练用户）。"""
-        lines = self._rows(("doctor_check=off", "? doctor_check", "0"))
+        lines = self._rows(("deterministic_signal=off", "? deterministic_signal", "0"))
         text = "\n".join(lines)
         assert "system_failure" not in text
-        assert "系统自检上屏" in text  # `? doctor_check` 查到了说明
-        assert "存储  : features.json → doctor_check" in text
+        assert "确定性信号模块" in text  # `? deterministic_signal` 查到了说明
+        assert "存储  : features.json →" in text and "deterministic_signal" in text
 
     def test_k_is_noop_with_hint_on_wide_terminal(self):
         """宽/中档键名恒显，按 k 给出说明性提示且不改变版面。"""

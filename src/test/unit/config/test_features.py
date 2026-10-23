@@ -22,7 +22,6 @@ import pytest
 from src.python.config.features import (
     EXPERIMENT_ALL,
     FEATURE_FLAGS,
-    GROUP_ANALYSIS,
     GROUP_LABELS,
     GROUP_MECHANISM,
     GROUP_ORDER,
@@ -132,7 +131,6 @@ class TestResolveExperimentFlags:
     def test_experiment_group_excludes_standard_switches(self):
         """非实验开关不得混进实验清单——否则会被当实验项写进产物自述。"""
         assert "metrics_enabled" not in _experimental_flags()
-        assert "doctor_check" not in _experimental_flags()
         assert is_experimental_switch("metrics_enabled") is False
         # 转正后的读侧增强同理：混进实验清单会被当成「非默认产物」写进自述
         assert "deterministic_signal" not in _experimental_flags()
@@ -207,44 +205,37 @@ class TestReportAffectingClassification:
 
         assert flags == ["decision_reflection"]
 
-    def test_doctor_check_never_in_report_notice(self):
-        """系统自检开启时产物自述仍为空——它不改报告任何字节。"""
-        from src.python.config.features import get_feature_defaults, set_feature_enabled
+    def test_self_check_has_no_registry_switch(self):
+        """系统自检恒上屏后不再有开关条目——产物自述在默认态为空。"""
+        from src.python.config.features import feature_switch_registry
         from src.python.report.experimental_notice import enabled_notice_line
 
-        set_feature_enabled("doctor_check", True)
-
-        assert get_feature_defaults()["doctor_check"] is True
+        assert "doctor_check" not in feature_switch_registry
         assert enabled_notice_line() is None
 
 
 @pytest.mark.unit
-class TestDoctorCheckPromotion:
-    """系统自检的开关归类与默认值。
+class TestSelfCheckAlwaysOn:
+    """系统自检恒上屏（无功能开关）。
 
-    它曾是实验项（沿用「新增能力默认关」的发布惯例），但它是只读诊断——不改
-    产物、不写文件、联网检查每次显式确认。默认关的实际代价是：最需要它的人
-    （环境坏掉的那批）恰好看不到它。故转正为普通开关、默认开启；开关本身保留，
-    ``features.json`` 置 false 仍隐藏 TUI ``[D]`` 与 Web 卡片。
+    自检是只读诊断——不改产物、不写文件、联网检查每次显式确认；没有开关就没有
+    「诊断入口被配置关掉」的失效路径。TUI `[T]`、Web 自检卡与 CLI `doctor` 三面同源。
     """
 
-    def test_default_enabled(self):
-        from src.python.config.features import get_feature_defaults
+    def test_not_in_registry(self):
+        from src.python.config.features import feature_switch_registry
 
-        assert get_feature_defaults()["doctor_check"] is True
+        assert "doctor_check" not in feature_switch_registry
 
-    def test_not_in_experimental_registry(self):
-        """非实验项：不进产物自述（面板可见性由机制与诊断组承接，转正不丢入口）。"""
-        assert "doctor_check" not in _experimental_flags()
-        assert is_experimental_switch("doctor_check") is False
+    def test_menu_has_no_gate(self):
+        from src.python.tui import tui_menu
 
-    def test_switch_still_honored(self):
-        """转正不等于不可关。"""
-        from src.python.config.features import is_feature_enabled, set_feature_enabled
+        assert "T" not in tui_menu.FEATURE_GATED_ITEMS
 
-        set_feature_enabled("doctor_check", False)
+    def test_system_info_always_reports_enabled(self):
+        from src.python.core.system_info import build_system_info
 
-        assert is_feature_enabled("doctor_check") is False
+        assert build_system_info()["doctor_enabled"] is True
 
 
 @pytest.mark.unit
@@ -466,6 +457,30 @@ class TestFeatureSwitchRegistryInvariants:
         """每个分组都有面板标题（缺标题则分组块渲染为无名块）。"""
         assert set(GROUP_ORDER) <= set(GROUP_LABELS)
 
+    def test_domain_mapping_is_total_and_valid(self):
+        """组→域映射覆盖全部组，值域落在五域内（Web 五域编排的唯一取数口）。"""
+        from src.python.config.features import DOMAIN_HINTS, DOMAIN_LABELS, DOMAIN_ORDER, GROUP_DOMAIN
+
+        assert set(GROUP_DOMAIN) == set(GROUP_ORDER)
+        assert set(GROUP_DOMAIN.values()) <= set(DOMAIN_ORDER)
+        assert set(DOMAIN_ORDER) <= set(DOMAIN_LABELS) | set(DOMAIN_HINTS)
+
+    def test_panel_groups_partition_all_groups(self):
+        """面板编排覆盖全部组且每组恰属一个面板（漏组 = 该组没有入口）。"""
+        from src.python.config.features import PANEL_GROUPS
+
+        listed = [group for groups in PANEL_GROUPS.values() for group in groups]
+        assert sorted(listed) == sorted(GROUP_ORDER)
+
+    def test_needs_hint_is_boolean(self):
+        """``needs_hint`` 显式声明（默认 False），面板据此决定是否常显副行。"""
+        for flag, d in feature_switch_registry.items():
+            assert isinstance(d.needs_hint, bool), f"{flag} 的 needs_hint 须为布尔"
+
+    def test_no_retired_switch_remains(self):
+        """已退役的自检开关不得回到注册表（否则面板多出无消费者入口）。"""
+        assert "doctor_check" not in feature_switch_registry
+
 
 @pytest.mark.unit
 class TestSwitchOverrideParsing:
@@ -473,7 +488,7 @@ class TestSwitchOverrideParsing:
 
     def test_parse_off_and_on(self):
         """off/on 双向均可解析——这是与 ``--experiment``（只开）的关键差异。"""
-        assert parse_switch_override("doctor_check=off") == ("doctor_check", False)
+        assert parse_switch_override("metrics_enabled=off") == ("metrics_enabled", False)
         assert parse_switch_override("deterministic_signal=on") == ("deterministic_signal", True)
 
     def test_parse_value_case_insensitive(self):
@@ -489,25 +504,25 @@ class TestSwitchOverrideParsing:
 
     def test_parse_tolerates_surrounding_spaces(self):
         """``NAME = VALUE`` 两侧空白可容忍（手输命令行常见）。"""
-        assert parse_switch_override(" doctor_check = off ") == ("doctor_check", False)
+        assert parse_switch_override(" metrics_enabled = off ") == ("metrics_enabled", False)
 
     def test_unknown_name_raises_with_options(self):
         """未知开关名 → 报错并列出可选项，不静默失效。"""
         with pytest.raises(ValueError) as err:
             parse_switch_override("no_such_switch=on")
         assert "no_such_switch" in str(err.value)
-        assert "doctor_check" in str(err.value)
+        assert "metrics_enabled" in str(err.value)
 
     def test_missing_equals_raises(self):
         """缺 ``=`` → 报错（不把整个串当开关名而报「未知开关」）。"""
         with pytest.raises(ValueError) as err:
-            parse_switch_override("doctor_check")
+            parse_switch_override("metrics_enabled")
         assert "NAME=VALUE" in str(err.value)
 
     def test_unrecognized_value_raises(self):
-        """取值不在词表内 → 报错（如误传 ``doctor_check=maybe``）。"""
+        """取值不在词表内 → 报错（如误传 `metrics_enabled=maybe`）。"""
         with pytest.raises(ValueError) as err:
-            parse_switch_override("doctor_check=maybe")
+            parse_switch_override("metrics_enabled=maybe")
         assert "maybe" in str(err.value)
 
     def test_every_registry_flag_parsable(self):
@@ -630,11 +645,11 @@ class TestFactorCatalogSwitch:
 
     @pytest.mark.unit
     def test_registered_in_analysis_group_default_off(self):
-        """已转正：注册于分析增强组，出厂默认关，面板可见，开启影响产物自述。"""
-        from src.python.config.features import feature_switch_registry
+        """已转正：注册于基金与风格组，出厂默认关，面板可见，开启影响产物自述。"""
+        from src.python.config.features import GROUP_FUND_STYLE, feature_switch_registry
 
         switch = feature_switch_registry["factor_catalog"]
-        assert switch.group == GROUP_ANALYSIS
+        assert switch.group == GROUP_FUND_STYLE
         assert switch.default is False
         assert switch.affects_report is True
 
@@ -684,11 +699,13 @@ class TestBannerLogLevel:
 
 
 class TestProsperityFrameworkPromotion:
-    """景气度框架诊断实验转正锁定：摘除实验身份、作用域归机制与诊断组且默认开（评分口径不变）。"""
+    """景气度框架诊断实验转正锁定：摘除实验身份、作用域归市场与估值组且默认开（评分口径不变）。"""
 
     def test_promoted_to_analysis_default_on(self):
+        from src.python.config.features import GROUP_MARKET
+
         sw = feature_switch_registry["prosperity_framework"]
-        assert sw.group == GROUP_ANALYSIS
+        assert sw.group == GROUP_MARKET
         assert sw.default is True
         assert sw.affects_report is True
         assert not is_experimental_switch("prosperity_framework")
@@ -698,12 +715,12 @@ class TestHistoryAugmentedSwitches:
     """风险调整超额（risk_adjusted_excess）/ 危机回放（crisis_replay）注册断言。"""
 
     def test_registered_in_report_scope_groups_default_off(self):
-        """注册于报告产物作用域（分析增强 / 独立章两组）、出厂默认关、声明影响报告产物、标签说明非空。"""
+        """注册于报告产物作用域（持仓与交易 / 市场与估值等组）、出厂默认关、声明影响报告产物、标签说明非空。"""
         from src.python.config import features
 
         expected_group = {
-            "risk_adjusted_excess": features.GROUP_ANALYSIS,
-            "crisis_replay": features.GROUP_STANDALONE,
+            "risk_adjusted_excess": features.GROUP_PORTFOLIO,
+            "crisis_replay": features.GROUP_MARKET,
         }
         for flag, group in expected_group.items():
             definition = features.feature_switch_registry[flag]
@@ -746,8 +763,8 @@ class TestPublicSwitchVocabulary:
         from src.python.config.features import parse_switch_override, parse_switch_value
 
         for token in ("on", "yes", "0", "disable"):
-            name, value = parse_switch_override(f"doctor_check={token}")
-            assert name == "doctor_check"
+            name, value = parse_switch_override(f"metrics_enabled={token}")
+            assert name == "metrics_enabled"
             assert value is parse_switch_value(token)
 
 

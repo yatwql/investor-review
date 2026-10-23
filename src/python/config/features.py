@@ -32,13 +32,28 @@ from src.python.core.atomic_write import write_json_atomic
 from src.python.core.constants import PROJECT_ROOT
 
 from ._feature_registry import (  # noqa: F401 — 兼容既有导入面
+    DOMAIN_DATA_AND_ROUTES,
+    DOMAIN_HINTS,
+    DOMAIN_LABELS,
+    DOMAIN_LLM_RUN,
+    DOMAIN_OPS_DIAGNOSTICS,
+    DOMAIN_ORDER,
+    DOMAIN_PRESENTATION_MECHANISM,
+    DOMAIN_REPORT_CONTENT,
     EXPERIMENT_ALL,
     GROUP_ANALYSIS,
+    GROUP_CHAPTER_OPTIONS,
+    GROUP_DOMAIN,
+    GROUP_EVENT_SUMMARY,
+    GROUP_FUND_STYLE,
     GROUP_LABELS,
+    GROUP_MARKET,
     GROUP_MECHANISM,
     GROUP_ORDER,
+    GROUP_PORTFOLIO,
     GROUP_PRESENTATION,
     GROUP_STANDALONE,
+    PANEL_GROUPS,
     FeatureSwitchDef,
     experimental_flags,
     feature_switch_registry,
@@ -57,13 +72,17 @@ FEATURES_FILE = os.path.join(PROJECT_ROOT, "data/config/features.json")
 
 # ── 分组常量（作用域轴）───────────────────────────────────────
 # 分组表达**作用域**——用户决策心智是「开了长出什么」：
-#   GROUP_PRESENTATION —— 呈现与体验：只改呈现不改内容（1 项全默认开）
-#   GROUP_ANALYSIS     —— 分析增强：在既有章节内追加分析块/列/子表
-#   GROUP_STANDALONE   —— 独立章节与回放：新增整页签或多期回放（全默认关）
-#   GROUP_MECHANISM    —— 机制与诊断：内部机制 / 诊断接缝 / 待验证实验
+#   GROUP_PORTFOLIO      —— 持仓与交易：成本 / 申赎状态 / 成本收益 / 风险调整
+#   GROUP_MARKET         —— 市场与估值：温度 / 估值分位 / 景气度 / 危机回放
+#   GROUP_FUND_STYLE     —— 基金与风格：候选比较 / 行业 Beta / 因子目录
+#   GROUP_EVENT_SUMMARY  —— 事件与摘要：事件窗 / 情绪热点 / 数据质量 / 本期要点
+#   GROUP_PRESENTATION   —— 呈现与交互：图表轴值 / 报告页追问
+#   GROUP_MECHANISM      —— 机制与质量：提示词注入 / 输出评级
+#   GROUP_STANDALONE     —— 独立章节与回放：新增整页签或多期回放
+#   GROUP_CHAPTER_OPTIONS—— 章节内选项：由 [P] 作为章节子项渲染（辩论两项）
 # **生命周期是另一根轴**：``FeatureSwitchDef.experimental``（末位默认 False 字段）。
 # 此前「默认值」「是否实验项」「分组」三者纠缠在一个 group 字段上：转正会连带
-# 摘掉面板入口（doctor_check 转正后只剩手改 features.json 一条关闭途径）、
+# 摘掉面板入口、
 # 组内默认态混合时标签写不准。解耦后：作用域由 group 定、生命周期由
 # experimental 定、取值由 default 定——``--experiment`` 取值域与页脚实验自述
 # 只看 experimental，「转正」= experimental 置 False（作用域也变时再改 group）。
@@ -191,7 +210,7 @@ def parse_switch_override(token: str) -> tuple[str, bool]:
     可选项，而不是等到运行中途静默无效。
 
     Args:
-        token: 形如 ``module_quality_gate=on`` / ``doctor_check=off`` 的字符串
+        token: 形如 ``module_quality_gate=on`` / ``report_qa=off`` 的字符串
 
     Returns:
         ``(开关名, 取值)``
@@ -288,7 +307,22 @@ def log_experimental_features() -> None:
 
 
 __all__ = [
+    "DOMAIN_DATA_AND_ROUTES",
+    "DOMAIN_HINTS",
+    "DOMAIN_LABELS",
+    "DOMAIN_LLM_RUN",
+    "DOMAIN_OPS_DIAGNOSTICS",
+    "DOMAIN_ORDER",
+    "DOMAIN_PRESENTATION_MECHANISM",
+    "DOMAIN_REPORT_CONTENT",
     "EXPERIMENT_ALL",
+    "GROUP_CHAPTER_OPTIONS",
+    "GROUP_DOMAIN",
+    "GROUP_EVENT_SUMMARY",
+    "GROUP_FUND_STYLE",
+    "GROUP_MARKET",
+    "GROUP_PORTFOLIO",
+    "PANEL_GROUPS",
     "FEATURE_FLAGS",
     "GROUP_ANALYSIS",
     "GROUP_LABELS",

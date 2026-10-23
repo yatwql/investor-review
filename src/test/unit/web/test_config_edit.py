@@ -177,19 +177,6 @@ class TestApplyFeaturesWrite:
         raw = open(FEATURES_FILE, encoding="utf-8").read()
         assert '"metrics_enabled": false' in raw
 
-    def test_doctor_check_can_be_disabled_from_panel(self, app_client):
-        """系统自检转正后仍可从面板关闭——转正不再连入口一起摘掉（回归）。"""
-        from src.python.config.features import FEATURES_FILE, is_feature_enabled
-
-        assert is_feature_enabled("doctor_check") is True  # 默认开
-
-        resp = app_client.post("/api/config/edit", json={"key": "doctor_check", "value": False})
-        assert resp.status_code == 200
-        assert is_feature_enabled("doctor_check") is False
-
-        raw = open(FEATURES_FILE, encoding="utf-8").read()
-        assert '"doctor_check": false' in raw
-
 
 # ═══════════════════════════════════════════════════════════════
 # T9 校验与守卫

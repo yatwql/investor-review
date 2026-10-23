@@ -17,6 +17,12 @@
 | P1 合入门禁 | 合并 master 前 | `scripts/test-runner.py --mode verify` |
 | P2 发布门禁 | 打版本标签前 | `scripts/test-runner.py --mode regression` + `release.py gate`（含设计护栏、十守护并行、性能门禁） |
 
+### 0.1.1 每轮收尾三件事（缺一不可）
+
+1. **文档同步**：本轮若改动注册表/面板/菜单，必须同批更新 `how-to-config.md`（功能开关表）、`how-to-use-tui-menu.md`（`[S]` 面板编号表与组块标题）、`requirements.md` §11.5、`technical.md` 注册表段、`testplan.md` 对应描述——门禁脚本在提交时校验文档与实现一致，**文档不能留到第 12 轮**（第 12 轮只做最终扫尾与契约登记复核）。
+2. **changelog 记一笔**：`docs/managements/changelog.md` 增本轮变更条目（改了什么、为什么、验收证据）。
+3. **提交**：`dev-verify` 绿后提交（钩子跑十守护）；提交通过才进入下一轮，失败即停在本轮修复。
+
 ### 0.2 测试纪律（每轮必须满足）
 
 - 新增/修改用例标注 marker；edge 用例入 `*_edge.py`；不修改 `data/config/`、`data/holdings/`、`data/state/`（conftest 隔离）。
@@ -77,12 +83,14 @@
 **交付**
 - `config/_feature_registry.py`：组顺序（`portfolio` / `market` / `fund_style` / `event_summary` / `presentation` / `mechanism` / `standalone`，标题依次为「持仓与交易 / 市场与估值 / 基金与风格 / 事件与摘要 / 呈现与交互 / 机制与质量 / 独立章节与回放」）、`DOMAIN_ORDER`/`DOMAIN_LABELS`/`DOMAIN_HINTS`、`GROUP_DOMAIN`、`PANEL_GROUPS`、`FeatureSwitchDef.needs_hint`；开关集合不含 `doctor_check`；`report_qa` 归 `presentation`。
 - `config/features.py`：导出面扩展与文档串口径。
+- **文档同批**：`how-to-config.md` 功能开关表（26 项、8 组标题与计数）、`how-to-use-tui-menu.md` `[S]` 面板编号表（7 个 LLM 模块 + 26 项 = 1-33）与组块标题、`requirements.md` §11.5、`technical.md` 注册表段、`testplan.md` 对应描述。
 
 **验收标准**
 1. `GROUP_DOMAIN` 键集 = `GROUP_ORDER`；值域 ⊆ `DOMAIN_ORDER`；`PANEL_GROUPS` 覆盖全部组且每组恰属一个面板。
 2. 注册表中不存在 `doctor_check`：`grep -rn doctor_check src/python` 命中数为 0（日志与文档若提及须使用语义描述）。
 3. `needs_hint` 为布尔；`features.needs_hint` 清单 ⊆ 注册表键。
 4. `dev-verify` 绿；语义命名索引与开关注册表用例绿。
+5. `check-doc-drift --ci` 绿（开关表/面板编号/分组计数与注册表一致）。
 
 **依赖**：无。
 **约束/契约**：开关注册表唯一来源（见 `technical.md` 架构约束）；语义命名纪律。

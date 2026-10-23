@@ -163,14 +163,8 @@ def build_system_info() -> dict:
     info["anonymization"] = anon_mode_label(anon_mode)
     info["privacy_shown"] = bool(get_local_flag("_privacy_notice_shown"))
 
-    # 系统自检卡片可见性（doctor_check 开关，与 TUI 菜单 D 同一开关；默认开启）
-    try:
-        from src.python.config.features import is_feature_enabled
-
-        info["doctor_enabled"] = is_feature_enabled("doctor_check")
-    except Exception:
-        logger.warning("读取功能开关失败，系统自检卡片按隐藏处理", exc_info=True)
-        info["doctor_enabled"] = False
+    # 系统自检卡片恒显示（无开关；入口在 TUI [D]→[T] 与 Web「系统自检」卡）
+    info["doctor_enabled"] = True
 
     info["llm"] = llm_status()
     return info

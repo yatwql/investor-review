@@ -50,7 +50,7 @@ def _handle_health():
 
 
 def _handle_doctor():
-    """GET /api/doctor — 系统自检（doctor_check 开关门控，默认开启）。
+    """GET /api/doctor — 系统自检（恒上屏，无开关）。
 
     查询参数：
       network — ``0`` 跳过数据源联网检查（默认 1，含网络检查）

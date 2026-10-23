@@ -133,13 +133,14 @@ class TestConfigLlmModulesExperimentalFlags:
 
         mock_save_overrides.assert_called_once_with({"llm_debate_procon": True})
 
+    @pytest.mark.parametrize("flag", ["metrics_enabled", "deterministic_signal", "module_quality_gate"])
     @patch("src.python.tui.handlers_config.refresh_config")
-    @patch("builtins.input", side_effect=[str(_switch_menu_number("metrics_enabled")), "0"])
+    @patch("builtins.input")
     @patch("src.python.config.features.save_feature_overrides")
     @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
     @patch("src.python.core.registry.get_llm_module_names")
     @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
-    def test_menu_number_toggles_metrics_switch(
+    def test_derived_number_toggles_switch(
         self,
         mock_read,
         mock_names,
@@ -147,43 +148,20 @@ class TestConfigLlmModulesExperimentalFlags:
         mock_save_overrides,
         mock_input,
         mock_refresh,
+        flag,
     ):
-        """输入量化指标单开关的派生编号 → 持久化到 features.json。
+        """输入任一分组的派生编号 → 持久化该开关（块序与块内序均按注册表派生）。
 
-        面板块序（呈现与体验 → 分析增强 → 独立章节与回放 → 机制与诊断）与块内
-        顺序均按注册表声明序派生，任一组增项/挪项时编号自动跟随。
+        覆盖默认开启的常驻项与机制项：编号 = 标准模块数 + 八组块累计 + 块内序位，
+        任一组增项/挪项时编号自动跟随，不写死任何数字。
         """
         from src.python.tui.handlers_config import _cmd_config_llm_modules
 
-        _cmd_config_llm_modules()
-
-        mock_save_overrides.assert_called_once_with({"metrics_enabled": False})
-
-    @patch("src.python.tui.handlers_config.refresh_config")
-    @patch("builtins.input", side_effect=[str(_switch_menu_number("doctor_check")), "0"])
-    @patch("src.python.config.features.save_feature_overrides")
-    @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
-    @patch("src.python.core.registry.get_llm_module_names")
-    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
-    def test_standard_block_includes_promoted_switches(
-        self,
-        mock_read,
-        mock_names,
-        mock_filter,
-        mock_save_overrides,
-        mock_input,
-        mock_refresh,
-    ):
-        """系统自检（转正项）在机制与诊断块内可切换——转正不丢入口（回归）。
-
-        编号 = 标准模块数 + 四组块累计 + doctor_check 块内序位（派生，非写死）。
-        它此前只能靠手改 features.json 关闭；本用例锁定它在面板内仍可关。
-        """
-        from src.python.tui.handlers_config import _cmd_config_llm_modules
+        mock_input.side_effect = [str(_switch_menu_number(flag)), "0"]
 
         _cmd_config_llm_modules()
 
-        mock_save_overrides.assert_called_once_with({"doctor_check": False})
+        mock_save_overrides.assert_called_once_with({flag: False})
 
 
 class TestConfigDirInfoSubmenu:
@@ -472,17 +450,15 @@ class TestSwitchPanelOperations:
         from src.python.config.features import is_feature_enabled
         from src.python.tui.handlers_config import _cmd_config_llm_modules
 
-        path = self._seed(tmp_path, monkeypatch, {"doctor_check": False, "market_temperature": False})
+        path = self._seed(tmp_path, monkeypatch, {"deterministic_signal": False, "market_temperature": False})
         with patch(
             "builtins.input",
-            side_effect=[f"r {_switch_menu_number('doctor_check')}", "0"],
+            side_effect=[f"r {_switch_menu_number('deterministic_signal')}", "0"],
         ):
             _cmd_config_llm_modules()
 
-        out = capsys.readouterr().out
-        assert "已恢复「⚙ 机制与诊断" in out and "移除 1 项覆写" in out
-        assert self._read(path) == {"market_temperature": False}, "同组 doctor_check 覆写应删、跨组键保留"
-        assert is_feature_enabled("doctor_check") is True, "运行时应回出厂默认"
+        assert self._read(path) == {"market_temperature": False}, "同组 deterministic_signal 覆写应删、跨组键保留"
+        assert is_feature_enabled("deterministic_signal") is True, "运行时应回出厂默认"
         assert is_feature_enabled("market_temperature") is False
 
     @patch("src.python.tui.handlers_config.refresh_config")
@@ -496,7 +472,7 @@ class TestSwitchPanelOperations:
         from src.python.tui.handlers_config import _cmd_config_llm_modules
 
         path = self._seed(
-            tmp_path, monkeypatch, {"doctor_check": False, "market_temperature": False, "cost_lots": True}
+            tmp_path, monkeypatch, {"deterministic_signal": False, "market_temperature": False, "cost_lots": True}
         )
         with patch("builtins.input", side_effect=["ra", "0"]):
             _cmd_config_llm_modules()
@@ -539,13 +515,13 @@ class TestSwitchPanelOperations:
         from src.python.tui.handlers_config import _cmd_config_llm_modules
 
         path = self._seed(tmp_path, monkeypatch, {})
-        with patch("builtins.input", side_effect=["doctor_check", "0"]):
+        with patch("builtins.input", side_effect=["deterministic_signal", "0"]):
             _cmd_config_llm_modules()
 
         out = capsys.readouterr().out
-        assert "系统自检" in out and "已关闭" in out
-        assert is_feature_enabled("doctor_check") is False
-        assert self._read(path) == {"doctor_check": False}
+        assert "确定性信号模块" in out and "已关闭" in out
+        assert is_feature_enabled("deterministic_signal") is False
+        assert self._read(path) == {"deterministic_signal": False}
 
     @patch("src.python.tui.handlers_config.refresh_config")
     @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
@@ -558,12 +534,12 @@ class TestSwitchPanelOperations:
         from src.python.tui.handlers_config import _cmd_config_llm_modules
 
         path = self._seed(tmp_path, monkeypatch, {})
-        with patch("builtins.input", side_effect=["doctor_check=off", "doctor_check=on", "0"]):
+        with patch("builtins.input", side_effect=["deterministic_signal=off", "deterministic_signal=on", "0"]):
             _cmd_config_llm_modules()
 
         out = capsys.readouterr().out
         assert out.count("已关闭") >= 1 and out.count("已开启") >= 1
-        assert self._read(path) == {"doctor_check": True}
+        assert self._read(path) == {"deterministic_signal": True}
 
     @patch("src.python.tui.handlers_config.refresh_config")
     @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
@@ -576,7 +552,7 @@ class TestSwitchPanelOperations:
         from src.python.tui.handlers_config import _cmd_config_llm_modules
 
         path = self._seed(tmp_path, monkeypatch, {})
-        with patch("builtins.input", side_effect=["doctor_check=maybe", "0"]):
+        with patch("builtins.input", side_effect=["deterministic_signal=maybe", "0"]):
             _cmd_config_llm_modules()
 
         out = capsys.readouterr().out
@@ -593,13 +569,13 @@ class TestSwitchPanelOperations:
         """`r 1`（LLM 模块条目）被拒——恢复默认仅支持功能开关分组，且不写任何配置。"""
         from src.python.tui.handlers_config import _cmd_config_llm_modules
 
-        path = self._seed(tmp_path, monkeypatch, {"doctor_check": False})
+        path = self._seed(tmp_path, monkeypatch, {"deterministic_signal": False})
         with patch("builtins.input", side_effect=["r 1", "0"]):
             _cmd_config_llm_modules()
 
         out = capsys.readouterr().out
         assert "恢复默认仅支持功能开关分组" in out
-        assert self._read(path) == {"doctor_check": False}
+        assert self._read(path) == {"deterministic_signal": False}
 
     @patch("src.python.tui.handlers_config.refresh_config")
     @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
@@ -630,11 +606,11 @@ class TestSwitchPanelOperations:
         """`? slug` 与编号通道同源上屏详情，纯只读。"""
         from src.python.tui.handlers_config import _cmd_config_llm_modules
 
-        with patch("builtins.input", side_effect=["? doctor_check", "0"]):
+        with patch("builtins.input", side_effect=["? deterministic_signal", "0"]):
             _cmd_config_llm_modules()
 
         out = capsys.readouterr().out
-        assert "features.json → doctor_check" in out
+        assert "features.json → deterministic_signal" in out
         assert "出厂默认" in out
         mock_save.assert_not_called()
 

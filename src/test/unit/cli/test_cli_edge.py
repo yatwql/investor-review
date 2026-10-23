@@ -162,14 +162,14 @@ class TestCliEdge:
     def test_feature_blank_value_rejected(self):
         """--feature 取值空串 → argparse 报错，不静默按 false 处理。"""
         with pytest.raises(SystemExit) as exc:
-            _build_parser().parse_args(["--feature", "doctor_check=", "report"])
+            _build_parser().parse_args(["--feature", "report_qa=", "report"])
         assert exc.value.code == 2
 
     @pytest.mark.edge
     def test_feature_missing_equals_rejected(self):
         """--feature 缺 ``=`` → argparse 报错（不整个串当开关名报未知）。"""
         with pytest.raises(SystemExit) as exc:
-            _build_parser().parse_args(["--feature", "doctor_check", "report"])
+            _build_parser().parse_args(["--feature", "report_qa", "report"])
         assert exc.value.code == 2
 
     @pytest.mark.edge

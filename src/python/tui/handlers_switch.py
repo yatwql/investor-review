@@ -64,7 +64,7 @@ def show_switch_detail(choice: str, items: list[tuple[int, str, str, bool, str]]
     """``? 编号或键名`` 上屏面板单项说明与当前值/默认值（只读信息查询，不写配置）。
 
     Args:
-        choice: 用户输入（``?`` 后跟编号或条目键名，如 ``? 3`` / ``? doctor_check``）。
+        choice: 用户输入（``?`` 后跟编号或条目键名，如 ``? 3`` / ``? report_qa``）。
         items: 面板当前派发的条目 ``(编号, 键, 显示名, 当前状态, 类别)``。
     """
     from src.python.config import default_enabled_llm

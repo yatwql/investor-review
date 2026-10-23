@@ -107,7 +107,7 @@ def _apply_cli_experiments(groups: list[tuple[str, ...]] | None) -> None:
 def _apply_cli_switches(pairs: list[tuple[str, bool]] | None) -> None:
     """应用命令行指定的功能开关覆写（仅当前进程运行时，不写盘）。
 
-    与 ``_apply_cli_experiments`` 的差别是**双向**：``--feature doctor_check=off``
+    与 ``_apply_cli_experiments`` 的差别是**双向**：``--feature report_qa=off``
     可关闭常规开关，用于临时复现「关掉这一项会怎样」而无须改盘上配置（实验开关
     的关闭路径仍走 features.json / 面板）。同名重复以最后一次为准（见
     ``resolve_switch_values``）。取值已在 argparse type 回调中校验。

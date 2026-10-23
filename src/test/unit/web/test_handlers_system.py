@@ -461,7 +461,7 @@ class TestHealthHistoryEndpoint:
 
 
 class TestDoctorEndpoint:
-    """/api/doctor 系统自检（实验功能 doctor_check）。
+    """/api/doctor 系统自检（恒上屏，无开关）。
 
     Web 侧只做参数解析与 JSON 渲染，检查逻辑全在 core.doctor（其自身测试见
     test_doctor.py）——故此处 mock 掉 run_doctor_checks，只断言接口契约。
@@ -524,43 +524,22 @@ class TestDoctorEndpoint:
         assert any("配置文件损坏" in r["message"] for r in data["results"])
 
 
-class TestSystemInfoDoctorGate:
-    """status_grid /api/status 的 doctor_enabled 可见性开关。"""
+class TestSystemInfoDoctorAlwaysOn:
+    """status_grid /api/status 的自检卡恒可见（无功能开关）。"""
 
-    def test_enabled_reflects_flag_on(self, monkeypatch):
-        with patch("src.python.config.features.is_feature_enabled", return_value=True):
-            assert _build_system_info()["doctor_enabled"] is True
+    def test_always_enabled(self):
+        assert _build_system_info()["doctor_enabled"] is True
 
-    def test_disabled_reflects_flag_off(self, monkeypatch):
-        with patch("src.python.config.features.is_feature_enabled", return_value=False):
-            assert _build_system_info()["doctor_enabled"] is False
-
-    def test_flag_read_failure_hides_card(self, monkeypatch):
-        """开关读不出来时隐藏卡片（保守），而不是抛错毁掉整个状态区。"""
-        with patch("src.python.config.features.is_feature_enabled", side_effect=RuntimeError("坏了")):
-            assert _build_system_info()["doctor_enabled"] is False
-
-    def test_index_card_absent_when_disabled(self, app_client):
-        with patch("src.python.config.features.is_feature_enabled", return_value=False):
-            html = app_client.get("/").get_data(as_text=True)
-
-        assert 'id="doctor-list"' not in html
-
-    def test_index_card_present_when_enabled(self, app_client):
-        with patch("src.python.config.features.is_feature_enabled", return_value=True):
-            html = app_client.get("/").get_data(as_text=True)
+    def test_index_card_present(self, app_client):
+        html = app_client.get("/").get_data(as_text=True)
 
         assert 'id="doctor-list"' in html
         assert 'id="doctor-run"' in html
 
-    def test_card_present_under_defaults(self, app_client):
-        """默认配置下卡片即在，且不再标「实验性」（系统自检已转正）。
+    def test_no_feature_gate_remains(self):
+        """TUI 侧不再门控、注册表不再有自检开关——三面同源的可见性口径。"""
+        from src.python.config.features import feature_switch_registry
+        from src.python.tui import tui_menu
 
-        上面的 on/off 用例均以 patch 覆盖取值，默认值改回关闭时它们仍全绿。
-        """
-        assert _build_system_info()["doctor_enabled"] is True
-
-        html = app_client.get("/").get_data(as_text=True)
-
-        assert 'id="doctor-list"' in html
-        assert 'title="实验功能 doctor_check"' not in html
+        assert "doctor_check" not in feature_switch_registry
+        assert "T" not in tui_menu.FEATURE_GATED_ITEMS

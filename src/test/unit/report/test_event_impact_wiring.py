@@ -130,7 +130,7 @@ class TestFeatureSwitchRegistry:
     def test_switch_registered_in_analysis_group_off_by_default(self):
         sw = feature_switch_registry["event_window_impact"]
         assert sw.label == "事件窗量化对照"
-        assert sw.group == "analysis"
+        assert sw.group == "event_summary"
         assert sw.default is False
         assert sw.affects_report is True
         assert is_feature_enabled("event_window_impact") is False

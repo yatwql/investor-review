@@ -316,12 +316,12 @@ class TestMenuGating:
         from src.python.tui import tui_menu
 
         assert tui_menu.FEATURE_GATED_ITEMS.get("Q") == "report_qa"
-        # 开关开（含 doctor_check 开）→ Q 保留
-        visible = self._with_menu(monkeypatch, {"report_qa", "doctor_check"})
-        assert "Q" in {item[0] for item in visible} and "T" in {item[0] for item in visible}
-        # 开关关 → Q 与 T 一并就地裁剪
+        assert "T" not in tui_menu.FEATURE_GATED_ITEMS, "系统自检恒上屏，不得再受开关门控"
+        visible = self._with_menu(monkeypatch, {"report_qa"})
+        assert {"Q", "T"} <= {item[0] for item in visible}
         hidden = self._with_menu(monkeypatch, set())
-        assert "Q" not in {item[0] for item in hidden} and "T" not in {item[0] for item in hidden}
+        assert "Q" not in {item[0] for item in hidden}
+        assert "T" in {item[0] for item in hidden}
 
 
 # ── 错误码单一来源（同源断言） ──────────────────────────────────

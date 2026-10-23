@@ -1255,15 +1255,18 @@ DataModuleDef("我的 LLM 分析", "llm_my_analysis",
 
 | 作用域分组 | 成员特征 | `default` | `experimental` | 面板标题 |
 |:--|:--|:--|:--|:--|
-| `GROUP_PRESENTATION` | 只改呈现不改内容的常驻能力 | `True` | `False` | 📊 呈现与体验（默认开启 · 只改呈现不改内容） |
-| `GROUP_ANALYSIS` | 既有章节内追加分析块/列/子表 | 多数 `False` | `False` | 🔍 分析增强·既有章内追加（默认关闭 · 在既有章节内追加分析块/列/子表） |
-| `GROUP_STANDALONE` | 新增整页签或多期回放 | `False` | `False` | 📑 独立章节与回放（默认关闭 · 新增整页签或多期回放） |
-| `GROUP_MECHANISM` | 内部机制 / 诊断接缝 / 待验证实验 | 机制项 `True`、实验项 `False` | 实验项 `True` | ⚙ 机制与诊断（内部机制 / 诊断接缝 / 待验证实验） |
+| `GROUP_PORTFOLIO` | 成本 / 申赎状态 / 成本收益 / 风险调整 | 混合 | `False` | 💼 持仓与交易 |
+| `GROUP_MARKET` | 温度 / 估值分位 / 景气度 / 危机回放 | 混合 | `False` | 📈 市场与估值 |
+| `GROUP_FUND_STYLE` | 候选比较 / 行业 Beta / 因子目录 | 多数 `False` | `False` | 🧩 基金与风格 |
+| `GROUP_EVENT_SUMMARY` | 事件窗 / 情绪热点 / 数据质量 / 本期要点 | 混合 | `False` | 📰 事件与摘要 |
+| `GROUP_PRESENTATION` | 只改呈现与追问入口 | `True` | 实验项 `True` | 🧭 呈现与交互 |
+| `GROUP_MECHANISM` | 提示词注入 / 输出评级 | 机制项 `True`、实验项 `False` | 实验项 `True` | ⚙ 机制与质量 |
+| `GROUP_STANDALONE` | 新增整页签或多期回放 | `False` | `False` | 📑 独立章节与回放 |
+| `GROUP_CHAPTER_OPTIONS` | 不独立上屏，由 `[P]` 作章节子项渲染 | `False` | `False` | 🧩 章节内选项 |
 
-| # | 步骤 | 操作位置 | 产出 |
-|---|------|---------|------|
-| ① | **登记注册表** | `config/features.py` → `feature_switch_registry` | 追加 `"<flag>": FeatureSwitchDef("<显示名>", "<说明>", <分组>, <默认值>, <affects_report>)`；键名即 `features.json` 键名、`--experiment` / `--feature` 取值，显示名与说明自动下发三个面。`_FEATURE_FLAGS_DEFAULT` 是注册表的**派生投影**，不得单独在此另登记（新增开关只改注册表一处） |
-| ② | **定作用域与默认值** | 同上声明第 3、4 位（第 6 位 `experimental` 可选） | 作用域入四组之一（呈现与体验 / 分析增强 / 独立章节与回放 / 机制与诊断）；会改变产物且未验证 → `experimental=True` + `False`；常驻能力 → `False`（默认）+ `True`。作用域决定面板分块、`experimental` 决定实验身份与 `--experiment` 取值域、`default` 决定出厂取值——三者解耦，转正不会摘掉面板入口 |
+**域与面板派生**：`GROUP_DOMAIN`（组 → 五域：报告内容 / 呈现与机制 / 数据与线路 / LLM 运行 / 运行与诊断）、`DOMAIN_ORDER`/`DOMAIN_LABELS`/`DOMAIN_HINTS`（Web 五域编排与提示）、`PANEL_GROUPS`（`[S]` = 六个内容组；`[P]` = `standalone` + `chapter_options`）均由注册表派生，新增组须同时补齐这三处映射（`dev-verify` 的注册表不变式用例会拦截漏配）。
+
+| ② | **定作用域与默认值** | 同上声明第 3、4 位（第 6 位 `experimental` 可选） | 作用域入八组之一（持仓与交易 / 市场与估值 / 基金与风格 / 事件与摘要 / 呈现与交互 / 机制与质量 / 独立章节与回放 / 章节内选项）；会改变产物且未验证 → `experimental=True` + `False`；常驻能力 → `False`（默认）+ `True`。作用域决定面板分块、`experimental` 决定实验身份与 `--experiment` 取值域、`default` 决定出厂取值——三者解耦，转正不会摘掉面板入口 |
 | ②′ | **回答产物影响** | 同上声明第 5 位 | 该开关**能否改变报告产物内容**——能则 `True`，仅影响入口可见性（菜单项/卡片显隐）则 `False`。答 `False` 者不进报告生成条件自述（`enabled_experimental_features()` 按此过滤）：报告是脱离本机流转的文件，列进一个不改任何字节的开关，读者会推断内容受其影响 |
 | ③ | **消费开关** | 功能实现处 | 一律经 `is_feature_enabled()` 读取；开关判定若影响提示词，须收敛在缓存后缀函数内部（见上方「缓存指纹必须读写两侧同源」） |
 | ④ | **覆盖三面** | 自动 | TUI 菜单 `[S]`（四组分块取自 `GROUP_ORDER`）/ Web 配置面板（同构四组，服务端动态下发）/ CLI `--experiment`（只开全部实验项的简写）与 `--feature NAME=VALUE`（全域双向）均由注册表生成，无需改渠道代码 |
@@ -1277,7 +1280,7 @@ DataModuleDef("我的 LLM 分析", "llm_my_analysis",
 
 > **读侧增强类开关也应转正（第三类首例：`deterministic_signal` / `module_quality_gate` / `llm_debate_conditional`）**：判据落在「**开启的代价是否只在读侧**」——只在既有提示词或既有产物流水线上追加一段由**已算出的**数据派生的内容，不新增 LLM 调用次数、不写新的持久化文件、无隐式网络与耗时；且该段内容有确定的收益（方向性结论替代裸数值、结构化契约替代表格猜测、质量分级提示读者降级参考、缺凭据时给可读指引）。此类开关默认关的实际代价是**机制在生产路径从不执行**，用户手上的产物看不到这层增强；用户若逐项去 `features.json` 里打开它，等于用配置承担了本该由默认值表达的取舍（转正判据的可观测量：见 core/experiment_stats.py 的启用次数统计与 doctor 账本概览）。转正口径：① `experimental` 置 `False` 且 `default` 置 `True`（**两处字段改动**；作用域属机制与诊断，`group` 不变）；② `affects_report` **照实答 `True`**——它们确实改变产物内容（`deterministic_signal` 注入信号块、`module_quality_gate` 注入质量横幅、`llm_debate_conditional` 追加情景段），故 Web 面板照常带「（影响报告）」标记；③ 开关保留为关闭杠杆，`features.json` 置 false 即回到「未引入本机制」的行为；④ 凡开关改变提示词者，其缓存后缀函数（`structured_header_cache_suffix()` → `_dh`、`debate_feature_cache_suffix()` → `_c`、`prompts_signals._signal_digest_cache_suffix()`、`core.signal_ledger.summary_cache_suffix()` → `_sg`）随之由「默认返回空」变为「默认返回非空」——**升级后首次运行会换键重生成一次**，属预期行为，须在变更记录中写明；⑤ 测试补四向——默认值、非实验项（`--experiment` 取值域退出）、显式关闭仍走未引入前的路径（关闭基线必须**显式**置 false，不能再依赖 `reset_feature_flags()`，它现在返回的是已转正的默认值）、默认配置下走增强路径（见 `test_features.py::TestReadSidePromotion`）。
 >
-> **章节/页签类开关转正目标是独立章 / 分析增强组（第四类首例：`holding_change_review` / `whatif_trade_cost` / `event_window_impact` 已按此归入，default 保持 `False`）**：判据落在「产物形态」——独立章节/页签类能力验证通过后的归宿按作用域入独立章节与回放 / 分析增强组：`default` 保持 `False`（默认产物字节不因转正变化，读者拿到的报告不因转正多出章节），面板入口随分组自动延续，`--experiment` 取值域随 `experimental` 摘除同步退出，产物自述与启用统计随实验身份移除（「质量可能不稳定」警示只属于未验证功能，统计的观测使命随转正完成）。转正定义因此为「**摘除 experimental 身份，作用域变则同时改 group**」。
+> **章节/页签类开关转正目标是独立章 / 事件与摘要组（第四类首例：`holding_change_review` / `whatif_trade_cost` / `event_window_impact` 已按此归入，default 保持 `False`）**：判据落在「产物形态」——独立章节/页签类能力验证通过后的归宿按作用域入独立章节与回放 / 分析增强组：`default` 保持 `False`（默认产物字节不因转正变化，读者拿到的报告不因转正多出章节），面板入口随分组自动延续，`--experiment` 取值域随 `experimental` 摘除同步退出，产物自述与启用统计随实验身份移除（「质量可能不稳定」警示只属于未验证功能，统计的观测使命随转正完成）。转正定义因此为「**摘除 experimental 身份，作用域变则同时改 group**」。
 >
 > **刻意不转正的两类（判据的反面）**：**写盘积累型**——`decision_reflection` / `report_qa` 仍标 `experimental=True`（账本结算样本尚不足以判转正，撤销死线见 plan.md）。`signal_ledger`（确定性信号沉淀）不再单独设开关：其真实积累已验证（账本有存量数据、写盘幂等开销可忽略），并入 `deterministic_signal` 转正（摘除实验身份）。**调用次数放大型**——`llm_debate_procon` 把一次 `expert_review` 调用换成最多三次（pro → con → synthesis），默认开启直接改变费用与耗时量级，保持默认关、由用户按需开启。集中度问答不再受开关控制（原 `llm_debate_qa_concentration` 已撤销），改为辩论流程内建段落（阈值触发）。实验功能的真实使用情况可用 `core/experiment_stats.py`（启用计数）加 `doctor` 账本概览观测，作为转正/撤销的客观数据。
 

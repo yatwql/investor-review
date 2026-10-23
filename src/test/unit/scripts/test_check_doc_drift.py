@@ -107,7 +107,7 @@ class TestSectionCounts:
 
 
 def drift_marker() -> str:
-    return "**呈现与体验（默认开启 · 只改呈现不改内容）**：\n\n| 开关名 | 默认值 | 说明 |\n|:--|:--|:--|"
+    return "**持仓与交易（4 项；成本 / 申赎 / 成本收益 / 风险调整）**：\n\n| 开关名 | 默认值 | 说明 |\n|:--|:--|:--|"
 
 
 class TestSwitchTable:
@@ -165,7 +165,7 @@ class TestSwitchCounts:
         assert len(findings) == 1 and f"{wrong_total} 项功能开关" in findings[0]
 
     def test_bold_grouped_counts_from_requirements(self, drift):
-        """requirements §11.5 加粗组名写法（分**呈现与体验**（N 项…）等四组）同样受检。"""
+        """requirements §11.5 加粗组名写法（分**持仓与交易**（N 项…）等八组）同样受检。"""
         counts = drift._group_counts()
         names = drift._GROUP_DOC_NAMES
         keys = list(counts)

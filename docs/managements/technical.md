@@ -246,7 +246,7 @@ llm/generators_orchestrator.py ──→ cache/（可选）
 | **贯穿** | 性能收集 | PerfCollector 三路径计时 + perf_history.jsonl 持久化 + 数据源健康历史聚合 `summarize_health_history()`；`counters` 除 warnings/errors 外含**事实校验自动修正计数**（`fact_fix_total` / `fact_fix_numeric` / `fact_fix_code` / `fact_fix:<模块>`，由 `llm/fact_checker` 线程安全累加、报告层 LLM 阶段前清零后汇入——修正次数是模型口径偏差的直接信号，单次只进日志时无法跨期对拍）；另有 `llm_thinking_wait_ms`（thinking 并发槽串行等待累计——默认上限已为 2；配回 1 时据此量化串行代价） | `core/perf.py` + `llm/fact_checker/_corrections.py` |
 | **贯穿** | 运行一致性 | 生成中断收口（KeyboardInterrupt 安全落点：临时产物清扫 + `status=interrupted` 运行记录 + 已写盘/已丢弃明细）+ HTML/Excel 产物原子落盘登记 | `report/run_integrity.py` |
 | **贯穿** | 日志可视化 | 结构化日志读取（parse_log/tail_log/read_log），CLI/TUI/Web 三端共享 | `core/log_reader.py` |
-| **贯穿** | 系统自检 | 运行环境/配置/目录/日志与缓存/功能开关/数据源适配/数据源凭据/数据源八组一次性盘点（开关 `doctor_check`，默认开），CLI/TUI/Web 三端共享；自身永不抛异常、零重依赖 | `core/doctor.py` |
+| **贯穿** | 系统自检 | 运行环境/配置/目录/日志与缓存/功能开关/数据源适配/数据源凭据/数据源八组一次性盘点（恒上屏，无开关），CLI/TUI/Web 三端共享；自身永不抛异常、零重依赖 | `core/doctor.py` |
 | **贯穿** | 数值归一 | 非有限值（NaN/±inf）防线收敛点：`safe_num` / `strict_num` / `finite_or` / `is_finite_number`；纯 stdlib、零项目内依赖，providers/analysis/report 任一侧可安全导入 | `core/num_utils.py` |
 | **贯穿** | 文本安全边界 | 孤立代理项净化（合法代理对折叠为星平面字符、孤立项 → U+FFFD）：stdin 的 `surrogateescape` 与 JSON `\udXXX` 产物在进入 LLM 请求体 / 响应正文 / 追问输入前统一过关，避免 `UnicodeEncodeError` 被误分类为 provider 故障 | `core/text_safety.py` |
 | **贯穿** | 任务完成通知 | CLI/Web 报告收尾按 `notify` 配置分发 webhook/邮件/桌面三通道（失败必发、成功需 `on_success`；尽力而为：单通道失败隔离、永不改退出码、未配置静默跳过；降级摘要单源 `report/data_status.degradation_summary()`） | `core/completion_notify.py` |
@@ -465,7 +465,7 @@ while True:
 | | `[R]` | 刷新配置（config.json + llm_settings.json + llm_key.json，附带重载定价与批量限速器） |
 | 诊断 | `[V]` | 查看最近运行日志（可按级别筛选，`handlers_log.py::_cmd_view_logs`） |
 | | `[H]` | 查看数据源健康历史（`handlers_log.py::_cmd_view_health_history`） |
-| | `[T]` | 系统自检（环境/配置/目录/数据源一键体检，`handlers_log.py::_cmd_run_doctor`；`doctor_check` 门控） |
+| | `[T]` | 系统自检（环境/配置/目录/数据源一键体检，`handlers_log.py::_cmd_run_doctor`；恒上屏，无开关） |
 | 退出 | `[X]` | 退出程序 |
 
 面板交互运行时 `tui/panel_runtime.py`：`PanelItem(key, label, kind, action, detail)` + `panel_loop` 统一承接导航/派发/反馈/重绘与帮助——`?` 打印本面板可用键一览、`?键` 打印单项详情（详情文案取 `PanelItem.detail`，面板各写业务含义、渲染单源；`on_help` 可整面板接管）。菜单渲染层与状态面板：`print_header`（标题 + 页头常驻状态行 `status_line.build_status_line()`——上次报告时间/缓存过期数/数据新鲜度/备用源数/LLM 状态点五项，全本地取数、单项异常降级为 `—`、TTL 记忆化——+ 首次运行指引：缺持仓文件/缺 LLM 配置提示）、`show_config`（持仓目录/持仓文件、输出目录、新闻抓取上限、文件就绪状态 `[OK]`/`[!!]`、匿名化状态、隐私声明、LLM 配置状态单链/多链两视图）。LLM 状态面板支持多 Provider 链式模式（策略、各 provider 后端/模型/优先级/自动重试状态、模块级偏好）；上屏词按 `DESIGN-TUI` 术语表转用户词——端点状态由 `core.system_info.circuit_display` **唯一归一**（`熔断中`→`暂时失败`，未知上游文案透传），TUI/CLI/Web 三渠道共用同一词，各渠道不得自带映射表；面板数据消费 `core/system_info.llm_status()` 单源（configured 判定与多链/flat 分支唯一在共享层，渠道只做终端渲染）；多链 `providers` 出口按链序排列——排序口径唯一实现在 `config/_llm_providers.order_providers_by_chain`（`priority` 升序、同值保持数组原序），`llm_status()` 与 `[M]` 面板同经此函数，`chain_head` 恒等于 `providers[0]`，保证首页编号 / 状态行链首 / 面板编号三处不会出现相反顺序（数组物理顺序不作数：reorder 只改 priority 值、不改数组项位置）。**配色一色一职责**（角色表见 `DESIGN-TUI` Colors）：品牌橙=应用名与版本号、结构蓝粗=分组标题（`text_layout.style_heading` 单源，首页与 `[S]` 同步改色）、焦点青=选中标记/面板游标、状态色按值给（绿正常/黄注意/红错误）、DIM=分隔线与页脚图例；非 TTY 与 `NO_COLOR` 下全量退化无色。
@@ -529,7 +529,7 @@ CLI 渠道是**命令行参数**形态，面向脚本化与自动化场景：定
 - **`cassettes`**：数据源记录-回放维护（`core/cassette.py`），无参数列出已录制响应，`--verify` 逐条离线回放并交当前解析器解析（不联网）；**无需 config 且只读离线**（main() 中特殊前置分派）。
 - **`check-sources`**：数据源健康检查，**无需 config**（main() 中特殊前置分派）。
 - **`view-logs`**：结构化运行日志查看（`core/log_reader.py::read_log`），`--level {DEBUG,INFO,WARNING,ERROR,CRITICAL}`（最小级别阈值）、`--lines N`（默认 5000，读取末尾行数上限）、`--since/--until`（时间前缀过滤）；**无需 config**（main() 中特殊前置分派，配置损坏时仍可查日志诊断）。
-- **`doctor`**：系统自检（`core/doctor.py`，§4.17.3），`--offline`（跳过数据源联网检查）、`--timeout SECONDS`（默认 8.0，联网检查总预算）；**无需 config 且不受 `doctor_check` 开关约束**（main() 中特殊前置分派——配置损坏正是它要诊断的场景，若被开关拦住即成死锁）。
+- **`doctor`**：系统自检（`core/doctor.py`，§4.17.3），`--offline`（跳过数据源联网检查）、`--timeout SECONDS`（默认 8.0，联网检查总预算）；**无需 config**（main() 中特殊前置分派——配置损坏正是它要诊断的场景，若被开关拦住即成死锁）。
 
 #### 1.7.3 主流程
 
@@ -614,7 +614,7 @@ Web 渠道是第三种交互入口：**浏览器内完成「上传持仓 Excel �
 | GET | `/api/health` | 数据源健康 | 60s 结果缓存；`?fresh=1` 强制重测 |
 | GET | `/api/health/history` | 数据源健康历史 | `core/perf.py::summarize_health_history()` 最近 N 次运行摘要（含 ok/total、失败源）；读取失败 500 HEALTH_HISTORY_READ_FAILED |
 | GET | `/api/logs` | 结构化日志查看 | `core/log_reader.py::read_log()`；`?level=` 校验（非法 400 BAD_PARAM）、`?lines=` clamp [1,5000]、`?since/until` 透传；读取失败 500 LOG_READ_FAILED |
-| GET | `/api/doctor` | 系统自检（开关 `doctor_check`） | `core/doctor.py::run_doctor_checks()`，返回 `{results, ok_count, bad_count}`；`?network=0` 跳过联网检查、`?timeout=` clamp 上限 15s（非法值回落 12s 默认）；不与其它的健康缓存共享（预算不同） |
+| GET | `/api/doctor` | 系统自检（恒可用，无开关） | `core/doctor.py::run_doctor_checks()`，返回 `{results, ok_count, bad_count}`；`?network=0` 跳过联网检查、`?timeout=` clamp 上限 15s（非法值回落 12s 默认）；不与其它的健康缓存共享（预算不同） |
 | GET | `/api/cache` | 缓存统计 | 只读：总量/前缀分布/命中率/过期预估（过期数以 dry_run 预扫描不删除） |
 | POST | `/api/cache/cleanup` | 清理过期缓存 | `_is_same_origin()` 同源守卫；删除 TTL 过期文件，有效缓存不受影响 |
 | POST | `/api/qa/ask` | 报告对话式追问 | 开关 `report_qa`（默认关，关闭时 403），见 §6.8 |
@@ -2825,7 +2825,7 @@ llm/skeleton.py            # 摘要注入 expert_review 提示词（开关门控
 
 **展示名一致性**：熔断跳过与未注册两条分支原先写原始 provider id，与其它分支的展示名不一致；现统一把 `entry = provider_fn_map.get(provider_name)` 提到熔断检查之前，取 `label = entry[0] if entry else provider_name`，使同一条降级事件不因失败类型不同而时好时坏地不可读。
 
-#### 4.17.3 B1 系统自检（开关 `doctor_check`，默认开）
+#### 4.17.3 B1 系统自检（恒上屏，无开关）
 
 `core/doctor.py` 一次性盘点运行环境，输出分组结果（`环境` / `配置` / `目录` / `日志与缓存` / `功能开关` / `数据源适配` / `数据源凭据` / `数据源` 八组，分组顺序由 `GROUP_ORDER` 锁定），**失败项附可执行修复建议**（`hint`）。
 
@@ -2850,12 +2850,12 @@ llm/skeleton.py            # 摘要注入 expert_review 提示词（开关门控
 | 面 | 入口 | 是否受开关约束 |
 |:---|:-----|:---------------|
 | CLI | `doctor` 子命令（`--offline` 跳过联网、`--timeout` 预算秒数） | **否**（见下） |
-| TUI | 菜单 `[T]` 系统自检（`tui_menu.FEATURE_GATED_ITEMS` 门控，默认出现） | 是 |
-| Web | 运行状态区「系统自检」卡片 + `GET /api/doctor`（`network=0` / `timeout`，上限 15s） | 是（`system_info["doctor_enabled"]` 控制卡片渲染，默认显示） |
+| TUI | 菜单 `[T]` 系统自检（`MENU_ITEMS` 常驻，无门控） | 否（恒上屏） |
+| Web | 运行状态区「系统自检」卡片 + `GET /api/doctor`（`network=0` / `timeout`，上限 15s） | 否（`system_info["doctor_enabled"]` 恒为 True） |
 
-**开关默认开启**：本项是只读诊断，不改产物、不写文件，联网检查每次由调用方显式确认，开启对默认输出零代价；而默认关闭的代价是环境出故障的那批用户恰好看不到这条诊断路径。开关本身保留（`features.json` 置 `false` 即隐藏上述两个日常入口），但它不属于「实验性功能」——故不出现在实验面板，也**不进报告产物的生成条件自述**（自述只列可能改变报告内容的开关，列进一个不改报告任何字节的开关会误导读者）。
+**无开关**：本项是只读诊断，不改产物、不写文件，联网检查每次由调用方显式确认；三面恒可用，省去「诊断入口被开关关掉」的失效路径。
 
-**`doctor` 子命令不受开关约束**（有意为之）：它与 `view-logs` 同样在 `init_config` **之前**分派——配置损坏正是它要诊断的场景，若因开关未开而拒绝执行，用户就陷入「开开关要先读配置、读配置失败又要开开关」的死锁。开关只约束 TUI `[T]` 与 Web 卡片这两个「日常会看见」的入口。
+**`doctor` 子命令与 TUI/Web 同源**（有意为之）：它与 `view-logs` 同样在 `init_config` **之前**分派——配置损坏正是它要诊断的场景，若因开关未开而拒绝执行，用户就陷入「开开关要先读配置、读配置失败又要开开关」的死锁。开关只约束 TUI `[T]` 与 Web 卡片这两个「日常会看见」的入口。
 
 **退出码语义**：`_EXIT_SUCCESS`=全部通过、`_EXIT_PARTIAL`=命令跑完但有失败项（**不是** `_EXIT_SEVERE`——命令本身没失败，只是结论不佳），供 CI/脚本判定环境是否可用——脚本据以区分「命令本身失败」与「命令跑完但检查未通过」。
 
@@ -2867,9 +2867,9 @@ llm/skeleton.py            # 摘要注入 expert_review 提示词（开关门控
 | 不重复实现（DRY） | 约 10 个分散的私有解析器收敛到本项新建的 `core/num_utils.py` 单一实现；网络检查复用既有 `check_sources.run_health_checks`，不另写探测 |
 | 无静默默认值 | 每个检查项都带 `message`；失败项额外带 `hint`；开关清单逐项回显 |
 | 向后兼容 | A1 合法输入行为不变、A2 `message=None` 时矩阵输出逐字不变，均有显式测试 |
-| 开关默认开 | `doctor_check` 缺省 `True`（只读诊断，无产物影响、无隐式网络代价）；置 `false` 时 TUI 无 `[T]` 项、Web 不渲染该卡片 |
+| 无开关门控 | TUI `[T]` 与 Web 自检卡恒上屏，注册表中不含自检开关；诊断入口不会因配置错误而消失 |
 | 产物自述不含 | 不进 `enabled_experimental_features()`——它不改变报告任何字节，列进报告自述会误导读者 |
-| 三面同源 | 注册表 `feature_switch_registry` 一处新增即自动出现在 TUI 菜单 / Web 配置面板 / CLI `--experiment` / `--feature` |
+| 三面同源 | CLI `doctor` / TUI `[T]` / Web 卡与 `GET /api/doctor` 共用 `core/doctor.py` 一套检查 |
 | 只读诊断 | 写探测哨兵文件后立即删除；自检不改任何配置或缓存 |
 
 [↑ 回到顶部](#目录)
@@ -2948,7 +2948,7 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
 
 **配置**：顶层键 `prosperity_framework`（`boom_keywords` / `global_edge_keywords` / `defensive_keywords` / `concentration_target_pct`，手动编辑）。
 
-**开关**：分析增强组 `prosperity_framework`（默认开、`affects_report=True`；实验转正：降级矩阵/真实样本/口径认可判据达成，评分口径不变）；关闭时报告与未引入时逐字节一致。
+**开关**：市场与估值组 `prosperity_framework`（默认开、`affects_report=True`；实验转正：降级矩阵/真实样本/口径认可判据达成，评分口径不变）；关闭时报告与未引入时逐字节一致。
 
 ### 4.21 正文大块默认折叠（HTML 报告）
 
@@ -3501,9 +3501,9 @@ make_http_client(timeout=10.0) → httpx.Client
 | `_pair_similarity` | 标题相似度口径的唯一实现（归一化 → 日期剥离 → 英文分桶占位 → 双向 ratio + 实体 bigram 交集；链路判定与校准工具共用，防两套口径漂移） | 财经新闻热点与持仓关联分析 | 数据获取 | 随 `enable_news` |
 | `anchor_rules_version` | 锚点规则时代指纹字段（`_rules_fingerprint()` 由阈值/模板词表/方向词对/正则 + 行为探针派生，规则一改自动变，供校准工具区分时代） | 财经新闻热点与持仓关联分析 | 数据获取 | 随 `enable_news` |
 | `news_dedup_rules` | 去重规则原语模块（阈值常量 / 模板词表与掩码 / 标题归一化 / 实体 bigram / 相似度口径 / 方向词对 / 规则指纹的唯一实现） | 财经新闻热点与持仓关联分析 | 数据获取 | 随 `enable_news` |
-| `record_prosperity_diagnosis` | 景气度框架诊断挂载点（分析增强组开关；守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供） | 行动建议（章内嵌块） | 报告输出 | 分析增强开关 `prosperity_framework`（默认开） |
+| `record_prosperity_diagnosis` | 景气度框架诊断挂载点（市场与估值组开关；守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供） | 行动建议（章内嵌块） | 报告输出 | 分析增强开关 `prosperity_framework`（默认开） |
 | `inject_holding_change_data` | 持仓变动复盘挂载点（独立章节与回放组开关；守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供） | 持仓变动复盘（报告独立章，type=holding_change） | 报告输出 | 独立章节与回放开关 `holding_change_review`（默认关） |
-| `inject_event_impact_data` | 事件窗量化对照挂载点（分析增强组开关；守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供；新闻先行串行段内注入，供分歧例附录块同轮进 LLM） | 事件窗量化对照（财经新闻章内区块，随父章；注册表无独立条目） | 报告输出 | 报告章节与增强开关 `event_window_impact`（默认关） |
+| `inject_event_impact_data` | 事件窗量化对照挂载点（事件与摘要组开关；守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供；新闻先行串行段内注入，供分歧例附录块同轮进 LLM） | 事件窗量化对照（财经新闻章内区块，随父章；注册表无独立条目） | 报告输出 | 报告章节与增强开关 `event_window_impact`（默认关） |
 | `inject_schedule_replay_data` | 调仓纪律回放挂载点（守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供；快照与持仓变动注入后串行装配，回放引用 `prompt_block` 经统一附录进 LLM） | 调仓纪律回放（报告独立章，type=schedule_replay） | 报告输出 | 功能开关 `rebalance_schedule_replay`（默认关，独立章节与回放组） |
 | `event_impact_panel` | 事件窗对照表数据编排与双端单源展示（事件行/降级/占位 + view 与页签同文 + 分歧例附录块） | 事件窗量化对照 | 报告输出 | 随 `event_window_impact` |
 | `event_window_impact` | 事件窗量化对照（新闻事件 → 交易日映射的 ±5 交易日窗收益 vs 文本极性方向比对；行情轴右端不足 5 日时按可用交易日截断并标未满窗，分歧例进 LLM 统一附录） | 事件窗量化对照 | 报告输出 | 报告章节与增强开关 `event_window_impact`（默认关） |
@@ -3539,8 +3539,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `throttle` | 按名最小间隔节流唯一原语（`RateLimiter` + `interval_delay` 抖动算式；数据层限速/批量调度/LLM 端点节流三层共用） | 诊断 | 数据获取 | 无（模块级） |
 | `completion_notify` | 任务完成通知（CLI/Web 报告收尾按 `notify` 配置分发 webhook/邮件/桌面三通道事件——失败必发、成功需 `on_success`；无配置静默跳过；单通道失败隔离、永不抛出不改退出码；webhook URL 日志只记域名；降级摘要单源 `report/data_status.degradation_summary()`） | 诊断 | 报告 | 随 `notify` 配置节 |
 | `degradation_summary` | 通知降级摘要单源（数据状态跟踪器事件日志 → 摘要行，最新在前按源去重；CLI/Web 收尾共用，渠道层不再各自镜像） | 诊断 | 报告 | 随 `notify` 配置节 |
-| `doctor` | 系统自检（环境/配置/目录/日志与缓存/功能开关/数据源适配/数据源凭据/数据源八组，失败项附可执行建议，自身永不抛异常） | 诊断 | 诊断 | 开关 `doctor_check`（默认开；CLI `doctor` 子命令不受开关约束） |
-| `doctor_check` | 自检功能上屏门控（TUI 菜单 [T] 与 Web 状态区自检卡片可见性） | 诊断 | 诊断 | 开关 `doctor_check`（默认开，非实验项） |
+| `doctor` | 系统自检（环境/配置/目录/日志与缓存/功能开关/数据源适配/数据源凭据/数据源八组，失败项附可执行建议，自身永不抛异常） | 诊断 | 诊断 | 恒上屏（无开关） |
 | `datasource_fields` | 数据域标准字段记录（`schemas/datasource_fields.py`，类型注解即缺省语义） | 数据源适配 | 数据获取 | 随 `adapter_chain_slots` |
 | `source_adapter` | 数据源适配契约（`SourceAdapter` 基类 + 注册表 + 自检报告 `survey_adapters`） | 数据源适配 | 数据获取 | 已内置（适配契约） |
 | `quote_adapters` | 行情域适配器（腾讯/新浪/东方财富三源） | 数据源适配 | 数据获取 | 已内置（适配契约） |
@@ -4127,7 +4126,7 @@ investor-review/
 | `llm_settings.json`（非敏感 LLM 设置） | `_llm_settings_defaults._DEFAULT_LLM_SETTINGS`（全局 2 项 + 5 模块块 + 辩论 + 事实校验 + 计价） | `_llm_settings_defaults._get_default_llm_settings_template()`（逐行手拼，与 dict 深等，见一致性测试） | `_llm_settings.get_llm_config()`：合并 settings+key+providers 三文件，联合 mtime/size 失效；`_merge_llm_defaults()` 运行时按 `_DEFAULT_LLM_SETTINGS` 补齐缺失键 | `_ensure_llm_settings_file()` 自动创建（`init_config()` 级联） | 无程序化写入（用户手动编辑；`_ensure_llm_settings_file` 仅首次创建） | `llm/pricing.py`（计价覆盖）、`llm/generators.py`、`llm/generators_orchestrator.py`、`llm/prompts_action.py`、`llm/skeleton.py`、`report/news_correlation.py`、`cli/cli.py`、`tui/tui_menu.py` + `tui/handlers_config.py`、`config/_validation.py` |
 | `llm_key.json`（敏感凭据） | 无（**C18 凭据分离**，代码默认值禁止内置 api_key） | 无模板 | `_llm_providers._load_llm_key_credentials()`（多凭据块字典；单凭据 flat 自动升级为 `_default`）；`get_llm_config()` 内联读取并合并覆盖同名字段（provider/endpoint 合法性告警） | 不自动创建；缺失时 `get_llm_config()` 回退判断 providers 链模式，两者皆无则 LLM 不可用（`generators_orchestrator` 降级占位） | `startup_wizard._write_llm_key_flat()`（首次引导交互式写入，C3 原子写） | `get_llm_config()` 合并主体；`_load_llm_key_credentials()` → providers 链 `credentials_ref` 凭据注入 |
 | `llm_providers.json`（多 Provider 链） | `_llm_providers_defaults._DEFAULT_LLM_PROVIDERS`（strategy=priority + 2 条示例链） | `_llm_providers_defaults._get_default_llm_providers_template()` | `_llm_providers._load_llm_providers()`（原始 JSON，根非 object/解析失败返回 None）；`get_llm_config()` 链模式（无 llm_key.json 时直接注入链数据）；`_inject_provider_chain_data()` 注入多链路由结果 | `_core._ensure_llm_providers_file()` 自动创建（`init_config()` 级联） | 无程序化写入（用户手动编辑 / init 自动创建） | `get_llm_config()`（链模式无 key 依赖）；`startup_wizard.py`（就绪检查：key 存在 或 providers 有链）；`_inject_provider_chain_data` |
-| `features.json`（Feature Flag 覆写） | `features.feature_switch_registry`（27 项声明，每条含显示名 + 说明 + 作用域分组 + 默认值 + 是否改变产物 + 实验身份六项；`_FEATURE_FLAGS_DEFAULT` 是其**派生投影**，非独立登记点）。📊 呈现与体验（默认开启 · 只改呈现不改内容） 1（量化指标显示，1 项默认开） + 🔍 分析增强·既有章内追加（默认关闭 · 在既有章节内追加分析块/列/子表） 16（辩论-正反辩论 / 辩论-条件推理 / 因子目录 / 事件窗量化对照 / 数据质量仪表盘 / 行业Beta子表 / 候选基金比较子表 / 成本流水 / 估值分位 / 市场温度 / 市场情绪与资金热点 / 基金申购限购 / 持仓成本区间位置 / 风险调整超额 / 本期要点与环比对照 / 景气度框架诊断，6 项默认开） + 📑 独立章节与回放（默认关闭 · 新增整页签或多期回放） 5（调仓纪律回放 / 持仓变动复盘 / What-if 交易成本对比 / 个股基本面 / 危机回放，默认关） + ⚙ 机制与诊断（内部机制 / 诊断接缝 / 待验证实验） 5（决策跨期反思闭环 / 报告对话式追问 / 确定性信号模块 / 模块级质量分级 / 系统自检上屏，3 项默认开）（含默认关的实验项 2 项：decision_reflection / report_qa；联接基金穿透已内置恒开、无开关）；分组即面板分块，是否进产物自述由（`experimental` ∧ `affects_report`）决定；**只登记有消费者的开关**——LLM 模块启停与基金深度分析归 `llm_settings.json` 的 `enabled_llm`，新闻源 / 历史走势 / 匿名化归 `config.json`，这些能力不再在 features.json 另立同义开关，由 `test_features.py::TestRegistryLiveness` 逐项守住；命令行一次性开关见 `features.resolve_experiment_flags` / `describe_experiment_flags`（`--experiment`，只开全部实验项）与 `features.parse_switch_override` / `resolve_switch_values` / `describe_switches`（`--feature NAME=VALUE`，全域、双向），两者与注册表同源 | 无模板（缺省全量在代码内，文件仅存需覆写的子集） | `features.load_feature_overrides()`（模块导入时自动调用，覆写合并进内存 `FEATURE_FLAGS`；无消费者键仍加载、但合并为一条 WARNING 列出键名——这类配置不驱动任何行为，静默忽略会让用户以为已生效；非 bool 值忽略） | **惰性创建**：缺失不创建、直接走代码默认；仅 `save_feature_overrides()` 时才写盘 | `features.save_feature_overrides()`（原子写，`merge=True` 默认合并同名覆写）；TUI `handlers_config.py`（菜单开关持久化）+ Web `web/config_edit.py`（配置面板写入，白名单由注册表生成） | `is_feature_enabled()` 遍布：`llm/generators_singletons.py` + `generators_orchestrator.py`（辩论模式）、`report/_report_generation.py` + `report/_chart_dataset_factory.py`（量化指标总开关 / 本期要点与环比对照）、`report/_debate_utils.py`、`core/decision_ledger.py`（决策跨期反思闭环）、`llm/prompts_signals.py`（信号预消化，开关判定收敛于缓存后缀函数）、`report/llm_quality.py`（模块质量分级，§4.11）、`core/decision_header.py`（决策头结构化缓存后缀，§4.15）、`core/signal_ledger.py`（确定性信号沉淀，开关判定收敛于摘要函数，§4.16）、`core/doctor.py`（系统自检功能清单上屏，§4.17.3）、`web/handlers.py`（自检卡片可见性，§4.17.3 + 报告对话式追问路由门 `_handle_report_qa_ask`）、`analysis/circuit_breaker_wrapper.py`（量化指标总开关联动的熔断特性开关）、`tui/handlers_config.py`（菜单状态）、`tui/tui_menu.py`（菜单项门控）、`web/config_edit.py`（面板状态） |
+| `features.json`（Feature Flag 覆写） | `features.feature_switch_registry`（26 项声明，每条含显示名 + 说明 + 作用域分组 + 默认值 + 是否改变产物 + 实验身份六项；`_FEATURE_FLAGS_DEFAULT` 是其**派生投影**，非独立登记点）。📊 呈现与体验（默认开启 · 只改呈现不改内容） 1（量化指标显示，1 项默认开） + 🔍 分析增强·既有章内追加（默认关闭 · 在既有章节内追加分析块/列/子表） 16（辩论-正反辩论 / 辩论-条件推理 / 因子目录 / 事件窗量化对照 / 数据质量仪表盘 / 行业Beta子表 / 候选基金比较子表 / 成本流水 / 估值分位 / 市场温度 / 市场情绪与资金热点 / 基金申购限购 / 持仓成本区间位置 / 风险调整超额 / 本期要点与环比对照 / 景气度框架诊断，6 项默认开） + 📑 独立章节与回放（默认关闭 · 新增整页签或多期回放） 5（调仓纪律回放 / 持仓变动复盘 / What-if 交易成本对比 / 个股基本面 / 危机回放，默认关） + ⚙ 机制与诊断（内部机制 / 诊断接缝 / 待验证实验） 5（决策跨期反思闭环 / 报告对话式追问 / 确定性信号模块 / 模块级质量分级 / 系统自检上屏，3 项默认开）（含默认关的实验项 2 项：decision_reflection / report_qa；联接基金穿透已内置恒开、无开关）；分组即面板分块，是否进产物自述由（`experimental` ∧ `affects_report`）决定；**只登记有消费者的开关**——LLM 模块启停与基金深度分析归 `llm_settings.json` 的 `enabled_llm`，新闻源 / 历史走势 / 匿名化归 `config.json`，这些能力不再在 features.json 另立同义开关，由 `test_features.py::TestRegistryLiveness` 逐项守住；命令行一次性开关见 `features.resolve_experiment_flags` / `describe_experiment_flags`（`--experiment`，只开全部实验项）与 `features.parse_switch_override` / `resolve_switch_values` / `describe_switches`（`--feature NAME=VALUE`，全域、双向），两者与注册表同源 | 无模板（缺省全量在代码内，文件仅存需覆写的子集） | `features.load_feature_overrides()`（模块导入时自动调用，覆写合并进内存 `FEATURE_FLAGS`；无消费者键仍加载、但合并为一条 WARNING 列出键名——这类配置不驱动任何行为，静默忽略会让用户以为已生效；非 bool 值忽略） | **惰性创建**：缺失不创建、直接走代码默认；仅 `save_feature_overrides()` 时才写盘 | `features.save_feature_overrides()`（原子写，`merge=True` 默认合并同名覆写）；TUI `handlers_config.py`（菜单开关持久化）+ Web `web/config_edit.py`（配置面板写入，白名单由注册表生成） | `is_feature_enabled()` 遍布：`llm/generators_singletons.py` + `generators_orchestrator.py`（辩论模式）、`report/_report_generation.py` + `report/_chart_dataset_factory.py`（量化指标总开关 / 本期要点与环比对照）、`report/_debate_utils.py`、`core/decision_ledger.py`（决策跨期反思闭环）、`llm/prompts_signals.py`（信号预消化，开关判定收敛于缓存后缀函数）、`report/llm_quality.py`（模块质量分级，§4.11）、`core/decision_header.py`（决策头结构化缓存后缀，§4.15）、`core/signal_ledger.py`（确定性信号沉淀，开关判定收敛于摘要函数，§4.16）、`core/doctor.py`（系统自检功能清单上屏，§4.17.3）、`web/handlers.py`（自检卡片可见性，§4.17.3 + 报告对话式追问路由门 `_handle_report_qa_ask`）、`analysis/circuit_breaker_wrapper.py`（量化指标总开关联动的熔断特性开关）、`tui/handlers_config.py`（菜单状态）、`tui/tui_menu.py`（菜单项门控）、`web/config_edit.py`（面板状态） |
 
 ##### I.1.1 解析职责归属（协调者 vs 委托）
 

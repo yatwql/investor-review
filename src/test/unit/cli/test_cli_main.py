@@ -175,10 +175,10 @@ class TestMainEarlyExitExperiments:
     def test_feature_flag_effective_on_early_exit_command(self, command, patch_target):
         """--feature 在早返回命令分派前已生效（含关闭常规开关的反向取值）。"""
         seen = self._enabled_during_dispatch(
-            ["cli.py", "--feature", "doctor_check=off", command],
+            ["cli.py", "--feature", "report_qa=off", command],
             patch_target,
         )
-        assert seen["doctor_check"] is False
+        assert seen["report_qa"] is False
 
     def test_feature_flag_overrides_experiment_flag(self):
         """同名时显式取值覆盖 --experiment 的隐式「只开」（后者先应用）。"""

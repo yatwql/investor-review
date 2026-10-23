@@ -11,6 +11,7 @@
 
 ### Changed
 
+- **配置系统重构第 1 轮：注册表与域模型**：功能开关从「四组作用域」改为**八组内容位置**（持仓与交易 4 / 市场与估值 4 / 基金与风格 3 / 事件与摘要 4 / 呈现与交互 2 / 机制与质量 3 / 独立章节与回放 4 / 章节内选项 2，共 26 项），新增 `GROUP_DOMAIN`（组→五域）、`DOMAIN_ORDER`/`DOMAIN_LABELS`/`DOMAIN_HINTS`（Web 五域编排与提示）、`PANEL_GROUPS`（`[S]` 六内容组 / `[P]` 独立章＋章节选项）与 `FeatureSwitchDef.needs_hint`；`crisis_replay` 归市场与估值、`prosperity_framework` 归市场与估值、`report_qa` 归呈现与交互、辩论两项归 `chapter_options`（由 `[P]` 作章节子项渲染，不占 `[S]` 编号）。**系统自检转恒上屏**：移除 `doctor_check` 开关（TUI `[T]`、Web 自检卡与 `GET /api/doctor` 恒可用，`doctor` 子命令不变），`FEATURE_GATED_ITEMS` 只保留 `Q → report_qa`。同批同步 `how-to-config.md` 开关表与面板归属表、`how-to-use-tui-menu.md` 的 `[S]` 编号表（8-33）与键名映射、`requirements.md` §11.5/§3.6、`technical.md` 注册表与自检段、`developer-guide.md` 分组表、`scripts-reference.md`/`testplan.md` 描述。回归：注册表不变式/门控用例按 `GROUP_DOMAIN` 与八组重写。
 - **`plan-182`（决策不做）迁入归档 + `plan.md` 收敛为最新状态**：`release.py` 的「已完成任务节」识别口径扩到 `❌ 决策不做`（与 ✅ 同为「不再在办」，标记保留以区分做完/不做），plan-182 按机械规则迁入 `archived_plan.0.14.x.md`（标题降为二级）；`plan.md` 去掉流转叙述（「均已实施」「已落地」「已由」一类），plan-185 与 plan-70 的现状改写为可直接执行的态与判据（含 plan-185 实测验收数据），归档索引的 0.14.x 覆盖区间校正为实际日期。回归 2 例（决策不做节被收集 / 「当前迭代」不计入该节）。
 - **TUI 追问的报告选择默认项改为本期主报告**：候选列表按「档位优先 + 修改时间倒序」排序——`个人投资分析报告.html` 恒为第 1 项（回车默认），其它报告居中，`调仓模拟.html` 排末档；首项标注「← 回车默认」使默认目标可见，提示语同步为「回车=本期主报告」。根因：调仓模拟每跑一次即覆盖自己的固定名产物、把 mtime 顶到最新，纯按时间排序会把回车默认项落到模拟报告上（同目录并列产物，但语义上属少数派）。同批把 `调仓模拟.xlsx/.html` 与归档名前缀收敛为 `core/constants` 常量（`WHATIF_FILE_BASE` / `LATEST_WHATIF_*`），写入器不再写字面量。
 

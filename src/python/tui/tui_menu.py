@@ -46,7 +46,7 @@ MENU_ITEMS: list[MenuItem] = [
 # 受功能开关约束的菜单项：{快捷键: 开关名}。
 # 开关关闭时该菜单项整体不出现（在 _apply_feature_gates 中裁剪），
 # 避免用户点进去只得到一句「功能未启用」。
-FEATURE_GATED_ITEMS: dict[str, str] = {"T": "doctor_check", "Q": "report_qa"}
+FEATURE_GATED_ITEMS: dict[str, str] = {"Q": "report_qa"}
 
 # 主菜单分组（按任务域编排）：组序即阅读序，组内保留 MENU_ITEMS 的原始次序。
 # 未列入任何组的项（退出）渲染在分组之后——组覆盖完整性由菜单用例守护。

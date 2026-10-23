@@ -14,27 +14,92 @@ from dataclasses import dataclass
 logger = logging.getLogger("invest")
 
 
+GROUP_PORTFOLIO = "portfolio"
+GROUP_MARKET = "market"
+GROUP_FUND_STYLE = "fund_style"
+GROUP_EVENT_SUMMARY = "event_summary"
 GROUP_PRESENTATION = "presentation"
-
-
-GROUP_ANALYSIS = "analysis"
-
-
-GROUP_STANDALONE = "standalone"
-
-
 GROUP_MECHANISM = "mechanism"
+GROUP_STANDALONE = "standalone"
+GROUP_CHAPTER_OPTIONS = "chapter_options"
 
+#: 别名：GROUP_ANALYSIS ≡ GROUP_FUND_STYLE（供沿用该名字的导入方使用）
+GROUP_ANALYSIS = GROUP_FUND_STYLE
 
 GROUP_LABELS: dict[str, str] = {
-    GROUP_PRESENTATION: "📊 呈现与体验（默认开启 · 只改呈现不改内容）",
-    GROUP_ANALYSIS: "🔍 分析增强·既有章内追加（默认关闭 · 在既有章节内追加分析块/列/子表）",
-    GROUP_STANDALONE: "📑 独立章节与回放（默认关闭 · 新增整页签或多期回放）",
-    GROUP_MECHANISM: "⚙ 机制与诊断（内部机制 / 诊断接缝 / 待验证实验）",
+    GROUP_PORTFOLIO: "💼 持仓与交易（成本、申赎状态、成本收益、风险调整）",
+    GROUP_MARKET: "📈 市场与估值（温度、估值分位、景气度、危机回放）",
+    GROUP_FUND_STYLE: "🧩 基金与风格（候选比较、行业 Beta、因子目录）",
+    GROUP_EVENT_SUMMARY: "📰 事件与摘要（事件窗、情绪热点、数据质量、本期要点）",
+    GROUP_PRESENTATION: "🧭 呈现与交互（图表轴值 / 报告页追问）",
+    GROUP_MECHANISM: "⚙ 机制与质量（提示词注入 / 输出评级）",
+    GROUP_STANDALONE: "📑 独立章节与回放（新增整页签或多期回放）",
+    GROUP_CHAPTER_OPTIONS: "🧩 章节内选项（由 [P] 作为章节子项渲染）",
 }
 
+GROUP_ORDER: tuple[str, ...] = (
+    GROUP_PORTFOLIO,
+    GROUP_MARKET,
+    GROUP_FUND_STYLE,
+    GROUP_EVENT_SUMMARY,
+    GROUP_PRESENTATION,
+    GROUP_MECHANISM,
+    GROUP_STANDALONE,
+    GROUP_CHAPTER_OPTIONS,
+)
 
-GROUP_ORDER: tuple[str, ...] = (GROUP_PRESENTATION, GROUP_ANALYSIS, GROUP_STANDALONE, GROUP_MECHANISM)
+DOMAIN_REPORT_CONTENT = "report_content"
+DOMAIN_PRESENTATION_MECHANISM = "presentation_mechanism"
+DOMAIN_DATA_AND_ROUTES = "data_and_routes"
+DOMAIN_LLM_RUN = "llm_run"
+DOMAIN_OPS_DIAGNOSTICS = "ops_diagnostics"
+
+DOMAIN_LABELS: dict[str, str] = {
+    DOMAIN_REPORT_CONTENT: "报告内容",
+    DOMAIN_PRESENTATION_MECHANISM: "呈现与机制",
+    DOMAIN_DATA_AND_ROUTES: "数据与线路",
+    DOMAIN_LLM_RUN: "LLM 运行",
+    DOMAIN_OPS_DIAGNOSTICS: "运行与诊断",
+}
+
+DOMAIN_HINTS: dict[str, str] = {
+    DOMAIN_REPORT_CONTENT: "改这里会改变报告里出现什么：哪些章节出现、章节内多出什么",
+    DOMAIN_PRESENTATION_MECHANISM: "只改呈现口径、匿名化与机制接缝：内容主体不变或仅影响入口显隐",
+    DOMAIN_DATA_AND_ROUTES: "数据从哪读、跟什么基准比、LLM 走哪条线路",
+    DOMAIN_LLM_RUN: "LLM 调用的运行约束（并发 / 重试 / 预算）",
+    DOMAIN_OPS_DIAGNOSTICS: "日志写盘与控制台输出、查看器默认筛选",
+}
+
+DOMAIN_ORDER: tuple[str, ...] = (
+    DOMAIN_REPORT_CONTENT,
+    DOMAIN_PRESENTATION_MECHANISM,
+    DOMAIN_DATA_AND_ROUTES,
+    DOMAIN_LLM_RUN,
+    DOMAIN_OPS_DIAGNOSTICS,
+)
+
+GROUP_DOMAIN: dict[str, str] = {
+    GROUP_PORTFOLIO: DOMAIN_REPORT_CONTENT,
+    GROUP_MARKET: DOMAIN_REPORT_CONTENT,
+    GROUP_FUND_STYLE: DOMAIN_REPORT_CONTENT,
+    GROUP_EVENT_SUMMARY: DOMAIN_REPORT_CONTENT,
+    GROUP_PRESENTATION: DOMAIN_PRESENTATION_MECHANISM,
+    GROUP_MECHANISM: DOMAIN_PRESENTATION_MECHANISM,
+    GROUP_STANDALONE: DOMAIN_REPORT_CONTENT,
+    GROUP_CHAPTER_OPTIONS: DOMAIN_REPORT_CONTENT,
+}
+
+PANEL_GROUPS: dict[str, tuple[str, ...]] = {
+    "[S]": (
+        GROUP_PORTFOLIO,
+        GROUP_MARKET,
+        GROUP_FUND_STYLE,
+        GROUP_EVENT_SUMMARY,
+        GROUP_PRESENTATION,
+        GROUP_MECHANISM,
+    ),
+    "[P]": (GROUP_STANDALONE, GROUP_CHAPTER_OPTIONS),
+}
 
 
 @dataclass(frozen=True)
@@ -50,6 +115,7 @@ class FeatureSwitchDef:
         affects_report: 开启后报告产物内容是否可能不同——决定它是否进入产物自述
         experimental: 生命周期为实验项（``--experiment`` 取值域即此字段为真者；
             末位默认 False，仅实验项显式标注）
+        needs_hint: 说明是否默认以副行展示（默认 False = 常识项，悬停读取）
     """
 
     label: str
@@ -58,6 +124,7 @@ class FeatureSwitchDef:
     default: bool
     affects_report: bool
     experimental: bool = False
+    needs_hint: bool = False
 
 
 feature_switch_registry: dict[str, FeatureSwitchDef] = {
@@ -75,7 +142,7 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
     "report_qa": FeatureSwitchDef(
         "报告对话式追问",
         "报告页内针对本期报告的会话式追问（零新增取数、轮数上限、用量独立记账）",
-        GROUP_MECHANISM,
+        GROUP_PRESENTATION,
         False,
         True,
         experimental=True,
@@ -95,14 +162,18 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
     # 辩论-正反辩论（已转正，2026-10-11；三段式换调用次数，默认关）。
     # 集中度问答段为本流程内建段落（见 prompts_action._build_concentration_qa_block），
     # 其触发阈值配置在 llm_settings.json 的 debate.concentration_qa.threshold。
-    "llm_debate_procon": FeatureSwitchDef("辩论-正反辩论", "三段式(白脸→黑脸→综合)", GROUP_ANALYSIS, False, True),
+    "llm_debate_procon": FeatureSwitchDef(
+        "辩论-正反辩论", "三段式(白脸→黑脸→综合)", GROUP_CHAPTER_OPTIONS, False, True
+    ),
     # 辩论增强：条件推理（与正反辩论相邻；默认开不变，情景段仍在既有调用内产出）
-    "llm_debate_conditional": FeatureSwitchDef("辩论-条件推理", "情景化分析(涨/跌/震荡)", GROUP_ANALYSIS, True, True),
+    "llm_debate_conditional": FeatureSwitchDef(
+        "辩论-条件推理", "情景化分析(涨/跌/震荡)", GROUP_CHAPTER_OPTIONS, True, True
+    ),
     # 因子目录（已转正，2026-10-11；门槛评测三指标过审）
     "factor_catalog": FeatureSwitchDef(
         "因子目录",
         "25 因子五来源族横截面信号入账与风格与因子分析区「因子目录」区块",
-        GROUP_ANALYSIS,
+        GROUP_FUND_STYLE,
         False,
         True,
     ),
@@ -133,7 +204,7 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
     "event_window_impact": FeatureSwitchDef(
         "事件窗量化对照",
         "新闻事件映射交易日后 ±5 交易日窗口：品种收益/超额收益与文本极性同表对照，分歧例进 LLM 分析章",
-        GROUP_ANALYSIS,
+        GROUP_EVENT_SUMMARY,
         False,
         True,
     ),
@@ -157,53 +228,46 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         True,
     ),
     # ── 机制与诊断：只读诊断（不改产物、不写文件，默认关的代价是环境出故障者看不到它） ──
-    "doctor_check": FeatureSwitchDef(
-        "系统自检上屏",
-        "TUI 菜单 [T] 与 Web「系统自检」卡片可见性；CLI doctor 子命令不受本开关约束",
-        GROUP_MECHANISM,
-        True,
-        False,
-    ),
     # ── 分析增强与独立章节与回放（以下声明顺序即各组组内面板顺序）──
     "data_quality": FeatureSwitchDef(
         "数据质量仪表盘",
         "「数据源可用性矩阵」章渲染数据覆盖/时效/降级状态区块",
-        GROUP_ANALYSIS,
+        GROUP_EVENT_SUMMARY,
         True,
         True,
     ),
     "industry_beta": FeatureSwitchDef(
         "行业Beta子表",
         "「风格与因子分析」章渲染行业 Beta 子表（行业暴露 + 回归敏感性）",
-        GROUP_ANALYSIS,
+        GROUP_FUND_STYLE,
         False,
         True,
     ),
     "candidate_compare": FeatureSwitchDef(
         "候选基金比较子表",
         "「基金业绩分析」章渲染候选基金横向比较表（候选来自 comparison_candidates）",
-        GROUP_ANALYSIS,
+        GROUP_FUND_STYLE,
         False,
         True,
     ),
     "cost_lots": FeatureSwitchDef(
         "成本流水",
         "汇总/市值/分类页签渲染成本分档 + XIRR + 分红累计（需持仓 Excel 含交易/分红流水）",
-        GROUP_ANALYSIS,
+        GROUP_PORTFOLIO,
         False,
         True,
     ),
     "valuation_percentile": FeatureSwitchDef(
         "估值分位",
         "「资产穿透TOP10」章渲染估值分位列（真实历史 PE/PB 分位，无覆盖时回落价格分位代理）",
-        GROUP_ANALYSIS,
+        GROUP_MARKET,
         False,
         True,
     ),
     "market_temperature": FeatureSwitchDef(
         "市场温度",
         "「投资分析汇总」章渲染市场温度刻度行（三因子合成；数据不足时该行静默省略）",
-        GROUP_ANALYSIS,
+        GROUP_MARKET,
         True,
         True,
     ),
@@ -217,42 +281,42 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
     "market_sentiment": FeatureSwitchDef(
         "市场情绪与资金热点",
         "行动建议章内嵌块「市场情绪与持仓热点」：持仓/穿透标的当日上榜龙虎榜与进入连板梯队的事件行（需同花顺 key；零命中时写市场概览与说明行）",
-        GROUP_ANALYSIS,
+        GROUP_EVENT_SUMMARY,
         False,
         True,
     ),
     "fund_purchase_limit": FeatureSwitchDef(
         "基金申购限购",
         "「持仓明细与分类」市值明细追加「申购状态」列（天天基金渠道口径，含日限/下一开放日；数据不可用时静默隐列）",
-        GROUP_ANALYSIS,
+        GROUP_PORTFOLIO,
         True,
         True,
     ),
     "cost_position": FeatureSwitchDef(
         "持仓成本区间位置",
         "「持仓明细与分类」市值明细追加「成本区间位置」列（每份成本相对近 20/260 交易日价格区间百分位，≈1 追涨嫌疑；行情缺失时静默隐列）",
-        GROUP_ANALYSIS,
+        GROUP_PORTFOLIO,
         True,
         True,
     ),
     "risk_adjusted_excess": FeatureSwitchDef(
         "风险调整超额",
         "走势章新增「风险调整超额」子块：滚动 1Y 超额曲线 + 年化 IR/跟踪误差 + 近 12/24 月跑赢基准胜率（需配置业绩基准，独立拉长取数窗口）",
-        GROUP_ANALYSIS,
+        GROUP_PORTFOLIO,
         False,
         True,
     ),
     "crisis_replay": FeatureSwitchDef(
         "危机回放",
         "危机区间标注升级为双层回放：组合侧窗口内危机穿越表现（区间收益） + 指数侧历史危机区间表现（收益/最大回撤，长窗指数日线）",
-        GROUP_STANDALONE,
+        GROUP_MARKET,
         False,
         True,
     ),
     "summary_highlights": FeatureSwitchDef(
         "本期要点与环比对照",
         "摘要区首屏执行摘要卡：关键指标环比行（总市值/总收益率/持仓数/集中度） + 本期关键变化 Top N（快照 diff 单源派生，无上期快照时整块隐藏）",
-        GROUP_ANALYSIS,
+        GROUP_EVENT_SUMMARY,
         False,
         True,
     ),
@@ -261,7 +325,7 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
     "prosperity_framework": FeatureSwitchDef(
         "景气度框架诊断",
         "六维评分卡（景气方向/ROE 低位弹性/全球比较优势/流动性/集中度与周期拼接/业绩回撤印证）评估组合契合度，缺数据维度标记需核实",
-        GROUP_ANALYSIS,
+        GROUP_MARKET,
         True,
         True,
     ),
