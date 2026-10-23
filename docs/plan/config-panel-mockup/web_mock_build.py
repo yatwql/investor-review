@@ -163,29 +163,48 @@ def build_data() -> dict:
     providers.sort(key=lambda p: (p.get("priority", 99), 0))
 
     flags = {
-        flag: _flag_item(flag)
+        flag: {**_flag_item(flag), "group": feature_switch_registry[flag].group}
         for flag in feature_switch_registry
-        if flag != "doctor_check"  # 系统自检恒上屏，已取消该开关
+        if flag != "doctor_check"  # 系统自检恒上屏，无该开关
     }
     debate = [flags[k] for k in DEBATE_KEYS if k in flags]
     for item in debate:
         item["sub_of"] = "expert_review"
 
     def _group(name: str, exclude: tuple[str, ...] = ()) -> list[dict]:
-        return [
-            item
-            for flag, item in flags.items()
-            if feature_switch_registry[flag].group == name and flag not in exclude
-        ]
+        return [item for flag, item in flags.items() if item["group"] == name and flag not in exclude]
 
     # 现有实现：辩论仍在「分析增强」组，`doctor_check` 仍在「机制与诊断」组
     groups_current = {name: _group(name) for name in GROUP_ORDER}
-    # 目标设计：辩论作为 LLM 章节子项、`doctor_check` 单独成「入口与诊断」组
+    # 目标设计：辩论作为 LLM 章节子项；危机回放归市场与估值；报告页追问归呈现与交互
+    regroup = {
+        "cost_position": "portfolio", "fund_purchase_limit": "portfolio",
+        "cost_lots": "portfolio", "risk_adjusted_excess": "portfolio",
+        "market_temperature": "market", "valuation_percentile": "market",
+        "prosperity_framework": "market", "crisis_replay": "market",
+        "candidate_compare": "fund_style", "industry_beta": "fund_style",
+        "factor_catalog": "fund_style",
+        "event_window_impact": "event_summary", "market_sentiment": "event_summary",
+        "data_quality": "event_summary", "summary_highlights": "event_summary",
+    }
+    for key, grp in regroup.items():
+        if key in flags:
+            flags[key]["group"] = grp
+    standalone = _group("standalone")
+    related_keys = {"whatif_trade_cost"}
+    chapters = [item for item in standalone if item["key"] not in related_keys]
+    related = [item for item in standalone if item["key"] in related_keys]
+    presentation = _group("presentation") + [item for flag, item in flags.items() if flag == "report_qa"]
+    mechanism = _group("mechanism", exclude=("report_qa",))
     groups_proposed = {
-        "analysis": _group("analysis", exclude=DEBATE_KEYS),
-        "standalone": _group("standalone"),
-        "presentation": _group("presentation"),
-        "mechanism": _group("mechanism"),
+        "portfolio": _group("portfolio"),
+        "market": _group("market"),
+        "fund_style": _group("fund_style"),
+        "event_summary": _group("event_summary"),
+        "standalone_chapters": chapters,
+        "standalone_related": related,
+        "presentation": presentation,
+        "mechanism": mechanism,
     }
 
     paths = [
@@ -202,8 +221,18 @@ def build_data() -> dict:
     return {
         "config": config,
         "groupsCurrent": list(GROUP_ORDER),
-        "groupsProposed": ["analysis", "standalone", "presentation", "mechanism"],
-        "groupTitles": dict(GROUP_LABELS),
+        "groupsProposed": ["portfolio", "market", "fund_style", "event_summary", "presentation", "mechanism", "standalone_chapters", "standalone_related"],
+        "groupTitles": {
+            **GROUP_LABELS,
+            "portfolio": "💼 持仓与交易（成本、申赎状态、成本收益、风险调整）",
+            "market": "📈 市场与估值（温度、估值分位、景气度、危机回放）",
+            "fund_style": "🧩 基金与风格（候选比较、行业 Beta、因子目录）",
+            "event_summary": "📰 事件与摘要（事件窗、情绪热点、数据质量、本期要点）",
+            "presentation": "🧭 呈现与交互（图表轴值 / 报告页追问）",
+            "mechanism": "⚙ 机制与质量（提示词注入 / 输出评级）",
+            "standalone_chapters": "📑 默认关闭的整章（开启后出现）",
+            "standalone_related": "🔗 关联产物（仅调仓模拟报告）",
+        },
         "flags": flags,
         "groupsCurrent": groups_current,
         "groupsProposed": groups_proposed,
@@ -230,20 +259,20 @@ def build_data() -> dict:
 PROPOSED_DOMAINS = [
     {
         "title": "报告内容",
-        "hint": "改这里会改变报告里出现什么：顶层 / LLM / 整章增补的取舍、章内追加内容",
-        "tui": "TUI：[P] 报告章节 + [S] 分析增强",
-        "blocks": ["sections", "llm", "features.standalone", "features.analysis"],
+        "hint": "改这里会改变报告里出现什么：章节显隐（顶层 / LLM / 默认关闭的整章 / 关联产物）与章节内内容",
+        "tui": "TUI：[P] 报告章节显隐 + [S] 报告章节内容",
+        "blocks": ["sections", "llm", "standalone_chapters", "standalone_related", "features.portfolio", "features.market", "features.fund_style", "features.event_summary"],
     },
     {
         "title": "呈现与机制",
         "hint": "只改呈现口径、匿名化与机制接缝：内容主体不变或仅影响入口显隐",
-        "tui": "TUI：[S] 呈现与体验 / 机制与诊断 + [G]→[A]",
+        "tui": "TUI：[S] 呈现与交互 / 机制与质量 + [G]→[A]",
         "blocks": ["anonymization", "features.presentation", "features.mechanism"],
     },
     {
         "title": "数据与线路",
         "hint": "数据从哪读、跟什么基准比、LLM 走哪条线路",
-        "tui": "TUI：[G]→[C]/[F]/[O]、[G]→[I]、[G]→[L] 第 7 项",
+        "tui": "TUI：[G]→[D]/[F]/[O]、[G]→[I]、[G]→[L] 第 7 项",
         "blocks": ["paths", "indices", "providers"],
     },
     {
@@ -361,12 +390,16 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 .seg button + button { border-left: 1px solid var(--border); }
 .seg button[aria-pressed="true"] { background: var(--primary); color: #fff; }
 .filter { border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text);
-  font: inherit; font-size: 12px; padding: 4px 8px; min-width: 180px; }
+  font: inherit; font-size: 12px; padding: 4px 8px; flex: 1 1 200px; min-width: 160px; }
 .wrap { max-width: 1080px; margin: 0 auto; padding: 18px 20px 80px; }
 .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 16px; }
 .chips a { font-size: 12px; color: var(--text-secondary); text-decoration: none; border: 1px solid var(--border);
   border-radius: 999px; padding: 2px 10px; background: var(--surface); }
 .chips a:hover { color: var(--primary); border-color: var(--primary); }
+.chips a.active { color: #fff; background: var(--primary); border-color: var(--primary); }
+.saved { font-size: 12px; color: var(--ok); margin-left: 6px; }
+.ref-row { display: flex; gap: 8px; align-items: center; padding: 4px 0; font-size: 12.5px; color: var(--text-secondary); }
+.ref-row .mono { color: var(--text); }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px 24px; }
 .domain + .domain { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--border); }
 .domain-title { margin: 0 0 2px; font-size: 16px; font-weight: 600; padding-left: 10px; border-left: 3px solid var(--primary); }
@@ -382,7 +415,7 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 .desc { margin: 1px 0 6px 24px; font-size: 12px; line-height: 1.5; color: var(--text-secondary); }
 .subrow { padding-left: 26px; }
 .tag { font-size: 11px; border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; white-space: nowrap; }
-.tag.affects { color: var(--accent); }
+.tag.affects { color: var(--text-secondary); }
 .tag.exp { color: var(--warn); }
 .tag.changed { color: var(--primary); }
 .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
@@ -407,6 +440,7 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 <div class="toolbar">
   <h1>{{TITLE}}</h1>
   <span class="sub">{{SUBTITLE}}</span>
+  <span class="sub" id="counts" aria-live="polite"></span>
   <span class="seg" id="seg-desc">
     <button data-v="all">全部说明</button>
     <button data-v="hint" aria-pressed="true">仅需提示项</button>
@@ -456,16 +490,28 @@ function row(item, type, extra) {
   var id = 'c-' + esc(item.key);
   var control;
   if (type === 'radio') {
-    control = '<input type="radio" name="anon" ' + (item.on ? 'checked' : '') + '>';
+    control = '<input type="radio" id="' + id + '" name="anon" ' + (item.on ? 'checked' : '') + '>';
   } else {
-    control = '<input type="checkbox" ' + (item.on ? 'checked' : '') + '>';
+    control = '<input type="checkbox" id="' + id + '" ' + (item.on ? 'checked' : '') + '>';
   }
-  return '<div class="row' + (extra && extra.sub ? ' subrow' : '') + '" id="' + id + '">' + control +
-    '<div><div class="label"><span>' + esc(item.label) + '</span>' + marks(item) + '</div>' +
+  return '<div class="row' + (extra && extra.sub ? ' subrow' : '') + '">' + control +
+    '<div><div class="label"><label for="' + id + '">' + esc(item.label) + '</label>' + marks(item) + '</div>' +
     desc(item, extra && extra.always) + '</div></div>';
 }
 
 function blockHtml(id) {
+  if (id === 'standalone_chapters' || id === 'standalone_related') {
+    var items = currentGroups()[id] || [];
+    if (!items.length) return '';
+    var on = items.filter(function (i) { return i.on; }).length;
+    var rows = items.map(function (i) {
+      var r = row(i, 'bool');
+      if (id === 'standalone_related') { r = r.replace('</div></div>', '（仅调仓模拟报告）</div></div>'); }
+      return r;
+    }).join('');
+    return '<div class="block" data-block="' + id + '"><h3 class="block-title">' + esc(DATA.groupTitles[id]) +
+      '</h3><p class="block-meta">' + items.length + ' 项 · ' + on + ' 开</p>' + rows + '</div>';
+  }
   if (id.indexOf('features.') === 0) {
     var key = id.slice(9);
     var items = currentGroups()[key] || [];
@@ -539,7 +585,9 @@ function blockHtml(id) {
       '<div class="field"><label>查看器首屏行数</label><input type="number" value="' + g.tailLines + '" min="50" max="10000"></div>';
     return '<div class="block" data-block="logging"><h3 class="block-title">日志设置</h3>' +
       '<p class="block-meta">写入 logger.json · 级别与轮转下次启动生效</p>' + rows +
-      '<p class="note">环境变量 INVEST_LOG_FILE_LEVEL / INVEST_LOG_CONSOLE_LEVEL 可临时覆盖级别，优先级高于本文件。</p></div>';
+      '<p class="note">环境变量 INVEST_LOG_FILE_LEVEL / INVEST_LOG_CONSOLE_LEVEL 可临时覆盖级别，优先级高于本文件。</p>' +
+      '<div class="ref-row">计价参考（只读）：<span class="mono">data/config/llm_pricing_ref.json</span>' +
+      '<span>随供应商调价更新，本面板不提供编辑</span></div></div>';
   }
   if (id === 'tuning') {
     var rows = DATA.tuning.map(function (t) {
@@ -611,16 +659,42 @@ function applyFilter() {
   });
 }
 
+function countSummary() {
+  var total = 0, changed = 0;
+  Object.keys(currentGroups()).forEach(function (k) {
+    (currentGroups()[k] || []).forEach(function (i) {
+      total++; if (i.on !== i.default) changed++;
+    });
+  });
+  DATA.sections.forEach(function (i) { total++; if (i.on !== i.default) changed++; });
+  DATA.llm.forEach(function (i) { total++; if (i.on !== i.default) changed++; });
+  DATA.tuning.forEach(function (i) { total++; if (i.value !== i.default) changed++; });
+  return { total: total, changed: changed };
+}
+
+function markActiveDomain() {
+  var chips = document.querySelectorAll('#chips a[data-domain]');
+  if (!chips.length) return;
+  var current = null;
+  document.querySelectorAll('.domain').forEach(function (d) {
+    if (d.getBoundingClientRect().top < 160) current = d.id;
+  });
+  chips.forEach(function (a) { a.classList.toggle('active', a.dataset.domain === current); });
+}
+
 function render() {
   document.getElementById('panel').innerHTML = VIEW === 'proposed' ? renderProposed() : renderCurrent();
+  var c = countSummary();
+  document.getElementById('counts').textContent = '共 ' + c.total + ' 项 · 已改 ' + c.changed + ' 项';
   var chips = VIEW === 'proposed'
-    ? DATA.domains.map(function (d, i) { return '<a href="#domain-' + i + '">' + esc(d.title) + '</a>'; }).join('')
+    ? DATA.domains.map(function (d, i) { return '<a href="#domain-' + i + '" data-domain="domain-' + i + '">' + esc(d.title) + '</a>'; }).join('')
     : '<a href="#panel">按存储文件顺序</a>';
   document.getElementById('chips').innerHTML = chips;
   document.getElementById('footnote').textContent = VIEW === 'proposed'
-    ? '域为一级分区、块为可编辑项组；条目名与 TUI 逐字相同，TUI 的数字编号只属于终端渠道。'
+    ? '即时保存类失败自动回滚；目录/数值需点「保存」。日志级别与轮转下次启动生效，计价参考为只读文件。'
     : '块顺序按配置值所在文件排列；仅作现有实现的对照。';
   applyFilter();
+  markActiveDomain();
 }
 
 document.querySelectorAll('.seg').forEach(function (seg) {
@@ -640,12 +714,27 @@ document.querySelectorAll('.seg').forEach(function (seg) {
   });
 });
 
+document.addEventListener('click', function (e) {
+  var btn = e.target.closest('.btn');
+  if (!btn) return;
+  var host = btn.closest('.field, .list-row, .block');
+  if (!host) return;
+  var old = host.querySelector('.saved');
+  if (old) old.remove();
+  var tag = document.createElement('span');
+  tag.className = 'saved';
+  tag.textContent = '已保存';
+  btn.insertAdjacentElement('afterend', tag);
+  setTimeout(function () { tag.remove(); }, 1600);
+});
+
 document.getElementById('filter').addEventListener('input', function (e) {
   state.q = e.target.value;
   applyFilter();
 });
 
 render();
+window.addEventListener('scroll', markActiveDomain, { passive: true });
 </script>
 </body>
 </html>

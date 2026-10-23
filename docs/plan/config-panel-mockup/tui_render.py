@@ -25,7 +25,7 @@ def apply_panel_grouping() -> None:
     """按设计的 `PANEL_GROUPS` 注入分组视图（仅内存态，不写任何配置文件）。
 
     - `[S]` 只渲染 analysis / presentation / mechanism 三组；
-    - 整章增补（standalone）归 `[P]`，不在 `[S]` 出现；
+    - 默认关闭的整章（standalone）归 `[P]`，不在 `[S]` 出现；
     - 辩论两项作为 `[P]` 中智囊团章的子项，不入任何组。
     """
     import dataclasses
@@ -39,9 +39,33 @@ def apply_panel_grouping() -> None:
         for flag, d in registry_module.feature_switch_registry.items()
         if flag not in DEBATE_KEYS and flag != "doctor_check"
     }
+    regroup = {
+        "cost_position": "portfolio", "fund_purchase_limit": "portfolio",
+        "cost_lots": "portfolio", "risk_adjusted_excess": "portfolio",
+        "market_temperature": "market", "valuation_percentile": "market",
+        "prosperity_framework": "market", "crisis_replay": "market",
+        "candidate_compare": "fund_style", "industry_beta": "fund_style",
+        "factor_catalog": "fund_style",
+        "event_window_impact": "event_summary", "market_sentiment": "event_summary",
+        "data_quality": "event_summary", "summary_highlights": "event_summary",
+    }
+    for flag, group in regroup.items():
+        if flag in registry:
+            registry[flag] = dataclasses.replace(registry[flag], group=group)
+    if "report_qa" in registry:
+        registry["report_qa"] = dataclasses.replace(registry["report_qa"], group="presentation")
     registry_module.feature_switch_registry = registry
     features.feature_switch_registry = registry
-    order = ("analysis", "presentation", "mechanism")
+    order = ("portfolio", "market", "fund_style", "event_summary", "presentation", "mechanism")
+    registry_module.GROUP_LABELS = {
+        "portfolio": "💼 持仓与交易（成本、申赎状态、成本收益、风险调整）",
+        "market": "📈 市场与估值（温度、估值分位、景气度、危机回放）",
+        "fund_style": "🧩 基金与风格（候选比较、行业 Beta、因子目录）",
+        "event_summary": "📰 事件与摘要（事件窗、情绪热点、数据质量、本期要点）",
+        "presentation": "🧭 呈现与交互（图表轴值 / 报告页追问）",
+        "mechanism": "⚙ 机制与质量（提示词注入 / 输出评级）",
+    }
+    features.GROUP_LABELS = dict(registry_module.GROUP_LABELS)
     registry_module.GROUP_ORDER = order
     features.GROUP_ORDER = order
     # 面板内不再有 LLM 模块块
@@ -53,22 +77,22 @@ def apply_panel_grouping() -> None:
     hs.wrap_hanging = lambda text, *a, **k: real_wrap(
         text.replace(
             "基础报告章节组（基金深度分析/市场新闻/历史走势+回撤/组合演进/行动建议）在菜单 [P] 配置",
-            "章节显隐与整章增补见 [P]；本面板为报告内的呈现与增强内容",
+            "章节显隐与整章开关见 [P]；本面板为报告内的呈现与增强内容",
         ),
         *a,
         **k,
     )
     real_panel = hs.render_panel
     hs.render_panel = lambda title, rows=(), **kw: real_panel(
-        title.replace("配置 LLM 报告章节与功能开关", "报告呈现与增强"), rows, **kw
+        title.replace("配置 LLM 报告章节与功能开关", "报告章节内容呈现"), rows, **kw
     )
 
 
 
 #: 目标菜单标签（配置组四项）
 PROPOSED_MENU_LABELS = {
-    "P": "报告章节（顶层 / LLM / 增补）",
-    "S": "报告呈现与增强",
+    "P": "报告章节显隐（顶层 / LLM / 整章 / 关联产物）",
+    "S": "报告章节内容呈现",
     "G": "全局设置（目录 / LLM / 指数 / 匿名化 / 索引）",
 }
 
@@ -76,7 +100,7 @@ PROPOSED_MENU_LABELS = {
 RETIRED_MAIN_KEYS = frozenset({"M", "I", "A", "V", "H", "T"})
 
 #: 诊断与排查一级入口
-DIAG_ITEM = ("D", "诊断与排查（日志 / 健康历史 / 自检）", None, False)
+DIAG_ITEM = ("D", "诊断与排查（设置 / 日志 / 健康 / 自检）", None, False)
 
 
 def _render_main_menu() -> None:
@@ -94,7 +118,7 @@ def _switches(proposed: bool) -> None:
 
 
 def _render_main_menu_proposed() -> None:
-    """主菜单目标结构：16 项；`M`/`I`/`A` 收进 `[G]`，`D` 改 `G`。"""
+    """主菜单设计结构：16 项；`M`/`I`/`A` 收进 `[G]`，`D` 改 `G`。"""
     import src.python.tui.tui_menu as menu
 
     items = []
@@ -119,7 +143,7 @@ def _render_main_menu_proposed() -> None:
 
 
 def _g_menu_proposed() -> None:
-    """`[G]` 二级目标结构：按键位分组排版（目录与文件 / LLM / 基准与呈现 / 索引）。"""
+    """`[G]` 二级设计结构：按键位分组排版（目录与文件 / LLM / 基准与呈现 / 索引）。"""
     from src.python.tui import handlers_config as hc
     from src.python.tui.panel_runtime import NavState, PanelItem, panel_loop
     from src.python.tui.prompt_text import panel_prompt
@@ -130,7 +154,7 @@ def _g_menu_proposed() -> None:
         (
             "目录与文件",
             [
-                ("C", "持仓信息目录"),
+                ("D", "持仓信息目录"),
                 ("F", "持仓信息文件名"),
                 ("O", "报告输出目录"),
             ],
@@ -146,11 +170,11 @@ def _g_menu_proposed() -> None:
         print(style_heading("  ── 全局设置 ──"))
         idx = 0
         for title, items in groups:
-            print(f"     ── {title} ──")
+            print("     " + style_heading(f"── {title} ──"))
             for key, label in items:
-                print(f" {nav.marker(idx)}     [{key}] {label}")
+                print(f" {nav.marker(idx)}     {idx + 1} [{key}] {label}")
                 idx += 1
-        print(f" {nav.marker(idx)}     [0] 返回主菜单")
+        print(f" {nav.marker(idx)}     0 返回主菜单")
         print()
         return []
 
@@ -162,15 +186,15 @@ def _g_menu_proposed() -> None:
     panel_loop(
         items,
         render=_render,
-        prompt=panel_prompt("选择", example="C/F/O/L/I/A/M", help_hint=None),
+        prompt=panel_prompt("选择", example="1 或 C", help_hint=None),
         read=input_choice,
-        on_text=lambda _t: print("  [!] 无效选择，请输入 C/F/O/L/I/A/M/0"),
+        on_text=lambda _t: print("  [!] 无效选择，请输入编号 1-7 或字母 D/F/O/L/I/A/M（0 返回）"),
         default_key="0",
     )
 
 
 def _d_llm_proposed() -> None:
-    """`[D]` → `[L]` 目标结构：6 个运行参数 + 「多链线路优先级」入口（第 7 项）。"""
+    """`[D]` → `[L]` 设计结构：6 个运行参数 + 「多链线路优先级」入口（第 7 项）。"""
     from src.python.config import get_llm_config, get_llm_providers
     from src.python.config.edit_ops import LLM_TUNING_SPECS
     from src.python.tui.panel_runtime import NavState, PanelItem, panel_loop
@@ -215,7 +239,7 @@ def _d_llm_proposed() -> None:
 
 
 def _boards_proposed() -> None:
-    """`[P]` 目标结构：17 项三块（顶层 5 / LLM 7 / 整章增补 5）+ 智囊团下 7.1/7.2 子项。"""
+    """`[P]` 设计结构：16 项四块（顶层 5 / LLM 7 / 默认关闭的整章 3 / 关联产物 1）+ 智囊团下 7.1/7.2 子项。"""
     from src.python.config import (
         get_config,
         get_llm_config,
@@ -243,7 +267,10 @@ def _boards_proposed() -> None:
         ("行动建议", is_enable_action(config)),
     ]
     modules = [(name, bool(enabled_llm.get(sfx, True))) for sfx, name in get_llm_module_names().items()]
-    extra = [(d.label, is_feature_enabled(flag)) for flag, d in switches_in_group("standalone")]
+    standalone = [(flag, d.label, is_feature_enabled(flag)) for flag, d in switches_in_group("standalone")]
+    related_keys = {"whatif_trade_cost"}
+    chapters = [(label, on) for flag, label, on in standalone if flag not in related_keys]
+    related = [(label, on) for flag, label, on in standalone if flag in related_keys]
     from src.python.config.features import feature_switch_registry
 
     debate = [
@@ -251,7 +278,7 @@ def _boards_proposed() -> None:
         for flag in DEBATE_KEYS
     ]
     width = max(
-        display_width(name) for name, _on in top + modules + extra + debate
+        display_width(name) for name, _on in top + modules + chapters + related + debate
     ) + 2
     expert_on = bool(enabled_llm.get("expert_review", True))
 
@@ -269,13 +296,17 @@ def _boards_proposed() -> None:
         blocks = [
             ("顶层章节", top, 1),
             ("LLM 章节", modules, len(top) + 1),
-            ("整章增补", extra, len(top) + len(modules) + 1),
+            ("默认关闭的整章", chapters, len(top) + len(modules) + 1),
+            ("关联产物", related, len(top) + len(modules) + len(chapters) + 1),
         ]
         for title, items, start in blocks:
-            print(f"   ── {title} ──")
+            print("   " + style_heading(f"── {title} ──"))
             for offset, (name, on) in enumerate(items):
                 number = str(start + offset)
-                print(_row(nav, idx, number, name, on))
+                row_text = _row(nav, idx, number, name, on)
+                if title == "关联产物":
+                    row_text += "（仅调仓模拟报告）"
+                print(row_text)
                 idx += 1
                 if title == "LLM 章节" and name == "智囊团深度复盘":
                     for j, (dname, don) in enumerate(debate, 1):
@@ -289,7 +320,7 @@ def _boards_proposed() -> None:
 
     items: list[PanelItem] = [
         PanelItem(str(i), name, action=lambda: None)
-        for i, (name, _on) in enumerate(top + modules + extra, 1)
+        for i, (name, _on) in enumerate(top + modules + chapters + related, 1)
     ]
     items.append(PanelItem("7.1", "辩论-正反辩论", action=lambda: None))
     items.append(PanelItem("7.2", "辩论-条件推理", action=lambda: None))
@@ -305,25 +336,25 @@ def _boards_proposed() -> None:
 
 
 def _d_diag_proposed() -> None:
-    """`[D]` 二级目标结构：诊断入口聚合（运行日志 / 健康历史 / 系统自检）。"""
+    """`[D]` 二级设计结构：诊断入口聚合（运行日志 / 健康历史 / 系统自检）。"""
     from src.python.tui.panel_runtime import NavState, PanelItem, panel_loop
     from src.python.tui.prompt_text import panel_prompt
     from src.python.tui.text_layout import style_heading
     from src.python.tui.tui_keys import input_choice
 
     groups = [
+        ("L", "日志设置（级别 / 轮转 / 查看器）"),
         ("V", "运行日志（可按级别筛选）"),
         ("H", "数据源健康历史"),
         ("T", "系统自检（环境 / 配置 / 目录 / 数据源）"),
-        ("L", "日志设置（级别 / 轮转 / 查看器）"),
     ]
 
     def _render(nav: NavState) -> list[str]:
         print()
         print(style_heading("  ── 诊断与排查 ──"))
         for i, (key, label) in enumerate(groups):
-            print(f" {nav.marker(i)} [{key}] {label}")
-        print(f" {nav.marker(len(groups))} [0] 返回主菜单")
+            print(f" {nav.marker(i)} {i + 1} [{key}] {label}")
+        print(f" {nav.marker(len(groups))} 0 返回主菜单")
         print()
         return []
 
@@ -335,15 +366,15 @@ def _d_diag_proposed() -> None:
     panel_loop(
         items,
         render=_render,
-        prompt=panel_prompt("选择", example="V/H/T/L", help_hint=None),
+        prompt=panel_prompt("选择", example="1 或 L", default="4 系统自检", help_hint=None),
         read=input_choice,
-        on_text=lambda _t: print("  [!] 无效选择，请输入 V/H/T/L/0"),
+        on_text=lambda _t: print("  [!] 无效选择，请输入编号 1-4 或字母 L/V/H/T（0 返回）"),
         default_key="0",
     )
 
 
 def _d_log_proposed() -> None:
-    """`[D]`→`[L]` 三级目标结构：日志设置（6 项，数字编号）。"""
+    """`[D]`→`[L]` 三级设计结构：日志设置（6 项，数字编号）。"""
     from src.python.tui.panel_runtime import NavState, PanelItem, panel_loop
     from src.python.tui.prompt_text import panel_prompt
     from src.python.tui.text_layout import pad_right, style_heading
@@ -379,7 +410,7 @@ def _d_log_proposed() -> None:
         prompt=panel_prompt("输入编号修改", example="1 改写盘级别", help_hint=None),
         read=input_choice,
         on_text=lambda _t: print("  [!] 无效选择，请输入编号或 0"),
-        default_key="0",
+        default_key="T",
     )
 
 

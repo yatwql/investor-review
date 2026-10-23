@@ -93,10 +93,18 @@ def build_v2(flat: dict, modules: list[str]) -> dict:
         mods[m] = entry
 
     run = {new: flat.get(old, RUN_DEFAULTS[new]) for old, new in RUN_KEYS.items()}
+
+    # 设计归属：辩论的生成选项归智囊团模块，报告级预算归 runtime；计价表独立成文件
+    debate = dict(flat.get("debate") or {})
+    run["debate_limits"] = {
+        "max_tokens_per_report": debate.pop("max_total_tokens_per_report", 72000),
+        "call_timeout_override_sec": debate.pop("per_call_timeout_override", 90),
+    }
+    if debate:
+        mods.setdefault("expert_review", {})["debate"] = debate
+
     advanced = {
-        "debate": flat.get("debate") or {},
         "fact_check": flat.get("fact_check") or {},
-        "pricing": flat.get("pricing") or {},
         "news_correlation": {"top_n": flat.get("news_correlation_top_n", 10)},
     }
     return {"schema_version": 2, "defaults": defaults, "modules": mods, "runtime": run, "advanced": advanced}
@@ -252,7 +260,7 @@ PAGE_TARGET = (
     "<title>LLM 配置 · 目标设计</title><style>" + TEMPLATE_CSS + "</style></head><body>"
     "<header><h1>LLM 配置 · 目标设计</h1>"
     "<p><code>llm_settings.json</code> 以模块为第一层：<code>defaults</code> 声明缺省，"
-    "<code>modules</code> 只写差异，<code>runtime</code> 收运行参数，<code>advanced</code> 收高级选项。</p></header>"
+    "<code>modules</code> 只写差异，<code>runtime</code> 收运行参数，<code>advanced</code> 收高级选项；计价参考在独立的 <code>llm_pricing_ref.json</code>。</p></header>"
     '<div class="stats"><div class="stat">一级键<b>{{N_V2}}</b></div>'
     '<div class="stat">模块数<b>{{N_MOD}}</b></div></div>'
     "<main><h2>纵切组织 · 模块为第一层</h2>"
