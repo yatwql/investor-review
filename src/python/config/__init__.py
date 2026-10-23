@@ -30,6 +30,13 @@ from src.python.config import _validation as _validation
 from src.python.config._llm_providers import get_llm_providers, write_llm_providers  # noqa: F401
 from src.python.config._llm_settings import read_llm_settings_file  # noqa: F401
 
+# ── 日志配置（logger.json）──
+from src.python.config._logging import (  # noqa: F401
+    LoggerConfigError,
+    read_logger_config,
+    write_logger_config,
+)
+
 # ── JSON 注释剥离 ──
 from src.python.config._comments import _strip_json_comments
 

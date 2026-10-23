@@ -320,7 +320,7 @@
 
 | 渠道 | 入口 |
 |---|---|
-| TUI | 主菜单 `[H]` 查看数据源健康历史 |
+| TUI | 主菜单 `D` → `H` 查看数据源健康历史 |
 | Web | 「日志查看」区的健康历史接口 / 面板（`GET /api/health/history`） |
 | CLI | `python -m src.python.cli health-history`（`--limit N`、`--json`） |
 

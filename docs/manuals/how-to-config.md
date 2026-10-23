@@ -187,7 +187,7 @@
 | `discipline.silence_days` | `30` | 交易纪律信号静默期天数。同一品种触发纪律后 N 天内不再重复告警 | 手动编辑 |
 | `redemption_limits` | `{}` | 场外基金单日赎回上限，格式 `{基金代码: 金额}`。配置后程序可计算场外品种全量赎回所需天数（配置口径优先）；未配置品种按类型默认档估算（货币/短债 T+1、纯债 T+2、其他场外 T+3、QDII T+7，标「非实测」），类型无法识别才标记"需手动确认赎回上限" | 手动编辑 |
 | `fund_fee_fallback` | `{}` | 申赎费率配置兑底（键=6 位基金代码，值=`{purchase_rate: 0≤r<1 小数单档申购费率, redemption_tiers: [{"max_days": 上界交易日\|null, "rate": 0≤r<1 小数}]}`；档位按交易日上界严格递增、末档 `max_days` 为 `null`）。**仅当在线来源（F10 费用页/申购状态全量表）不可得时生效，不覆盖在线结果**；仅服务 What-if 交易成本估算（`whatif_trade_cost` 开关），条目非法时告警忽略 | 手动编辑 |
-| `anonymization.mode` | `"off"` | 匿名化模式：`off`（关闭，显示真实名称代码）/ `code_display`（名称→"品种X"，保留代码和盈亏）/ `full_anonymous`（名称→"品种X"，代码→"000XXX"（明细页/Excel 单元格），盈亏金额千位模糊）/ `summary`（明细按大类汇总折叠） | 菜单 `A` |
+| `anonymization.mode` | `"off"` | 匿名化模式：`off`（关闭，显示真实名称代码）/ `code_display`（名称→"品种X"，保留代码和盈亏）/ `full_anonymous`（名称→"品种X"，代码→"000XXX"（明细页/Excel 单元格），盈亏金额千位模糊）/ `summary`（明细按大类汇总折叠） | 菜单 `G` → `A` |
 | `enable_fund_deep_analysis` | `true` | 基金深度分析章节可见性，关闭后对应章节完全隐藏，不产生序号空缺 | 菜单 `P` |
 | `enable_news` | `true` | 市场新闻章节可见性，关闭后对应章节完全隐藏。与 `news_sources` 区别：前者控制章节在报告中的显示/隐藏，后者控制数据源启停 | 菜单 `P` |
 | `enable_history` | `true` | 历史走势章节可见性（组合历史走势与回撤，一章两区块：走势表 + 回撤矩阵 + 危机区间标注），关闭后对应章节完全隐藏。持仓快照不受影响，始终自动执行 | 菜单 `P` |
@@ -676,7 +676,7 @@
 
 **数值面**：明细层 full 千位模糊、summary 大类聚合；派生章节（财报摘要、估值分位、风格因子、基金业绩等）的数值全部来自公开市场与财报数据，与持仓身份/仓位无关，**保留原值**以维持指标口径可复核。
 
-通过 TUI 主菜单 `[A]` 配置持仓匿名化可交互切换。
+通过 TUI 主菜单 `G` → `A` 配置持仓匿名化可交互切换。
 
 ---
 ### M. 批量并行调度
@@ -839,7 +839,7 @@ Web 模式（浏览器界面）提供「配置编辑」面板，可修改的配�
 
 | 组 | 配置项 | 对应 TUI 菜单 |
 |:--|:--|:--|
-| 路径与文件 | `holdings_dir` / `holdings_filename` / `output_dir` | `[D]` 二级 `[C]` / `[F]` / `[O]` |
+| 路径与文件 | `holdings_dir` / `holdings_filename` / `output_dir` | `[G]` → `D` / `F` / `O` |
 | 报告章节 | `enable_fund_deep_analysis` / `enable_news` / `enable_history` / `enable_portfolio_evolution` / `enable_action` | `[P]` 1~5 |
 | 持仓与交易 | `cost_lots`（默认关）/ `fund_purchase_limit` / `cost_position` / `risk_adjusted_excess`（默认关） | `[S]` 持仓与交易块（8-11） |
 | 市场与估值 | `valuation_percentile`（默认关）/ `market_temperature` / `crisis_replay`（默认关）/ `prosperity_framework` | `[S]` 市场与估值块（12-15） |
@@ -849,10 +849,10 @@ Web 模式（浏览器界面）提供「配置编辑」面板，可修改的配�
 | 机制与质量 | `decision_reflection`（默认关）/ `deterministic_signal` / `module_quality_gate` | `[S]` 机制与质量块（25-27） |
 | 独立章节与回放 | `rebalance_schedule_replay`（默认关）/ `holding_change_review`（默认关）/ `whatif_trade_cost`（默认关）/ `stock_fundamentals`（默认关） | `[S]` 独立章节与回放块（28-31） |
 | 章节内选项 | `llm_debate_procon`（默认关）/ `llm_debate_conditional` | `[S]` 章节内选项块（32-33），由 `[P]` 智囊团复盘子项呈现 |
-| 持仓匿名化 | `anonymization.mode`（off / code_display / full_anonymous / summary） | `[A]` |
-| 对比指数池 | `comparison_indices`（增 / 删 / 重置默认） | `[I]` |
-| LLM 多链线路优先级 | `llm_providers.providers[].priority`（各条目 ▲▼ 调序） | `[M]` |
-| LLM 调优参数 | `llm_max_thinking_concurrency` / `llm_max_concurrency` / `max_retries` / `llm_full_fail_retry_delay` / `llm_total_time_budget_sec` / `daily_cost_limit` | `[D]` 二级 `[L]` |
+| 持仓匿名化 | `anonymization.mode`（off / code_display / full_anonymous / summary） | `[G]` → `A` |
+| 对比指数池 | `comparison_indices`（增 / 删 / 重置默认） | `[G]` → `I` |
+| LLM 多链线路优先级 | `llm_providers.providers[].priority`（各条目 ▲▼ 调序） | `[G]` → `M` |
+| LLM 调优参数 | `llm_max_thinking_concurrency` / `llm_max_concurrency` / `max_retries` / `llm_full_fail_retry_delay` / `llm_total_time_budget_sec` / `daily_cost_limit` | `[G]` → `L` |
 | LLM 分析章节 | `enabled_llm.global_macro` / `expert_review` / `health_check` / `penetration_deep` / `news_correlation` / `self_review` / `holding_change` | `[S]` 标准模块 |
 | 章节内选项 | `llm_debate_procon`（默认关）/ `llm_debate_conditional` | `[S]` 章节内选项块（32-33），由 `[P]` 智囊团复盘子项呈现 |
 

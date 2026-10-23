@@ -148,15 +148,15 @@ def _cmd_config_output_dir() -> None:
 # 本表只做「配置散在哪些键」的导流说明（零行为变化，不改任何配置）。新增配置入口时
 # 在此补一行；键位调整时由 test_handlers_config 的「入口地图键均存在于主菜单」用例兜底。
 _CONFIG_ENTRY_MAP: tuple[tuple[str, str, str], ...] = (
-    ("功能开关 / LLM 模块启停 / 实验项", "[S]", "四组功能开关 + 7 个 LLM 标准模块，行尾费用摘要与启用统计"),
-    ("报告章节取舍（顺序与开关）", "[P]", "基金深度分析 / 市场新闻 / 历史走势+回撤 / 组合演进 / 行动建议"),
-    ("对比指数池（自定义基准）", "[I]", "增删指数、恢复默认"),
-    ("持仓匿名化（代码/名称脱敏）", "[A]", "off / code_display / full_anonymous / summary 四档"),
-    ("配置文件与目录位置", "[D]", "持仓目录 / 持仓文件名 / 报告输出目录（子菜单 C/F/O）"),
+    ("功能开关 / LLM 模块启停 / 实验项", "[S]", "八组功能开关 + 7 个 LLM 标准模块，行尾费用摘要与启用统计"),
+    ("报告章节取舍（顺序与开关）", "[P]", "五个顶层章节组的可见性"),
+    ("对比指数池（自定义基准）", "[G]", "全局设置 → I（增删指数、恢复默认）"),
+    ("持仓匿名化（代码/名称脱敏）", "[G]", "全局设置 → A（四档）"),
+    ("配置文件与目录位置", "[G]", "全局设置 → D / F / O"),
+    ("LLM 运行参数 / 多链线路", "[G]", "全局设置 → L（运行参数）/ M（线路优先级）"),
     ("重新加载配置", "[R]", "改完 config.json / llm_settings.json 手工项后刷新内存配置"),
     ("缓存管理（统计与清理）", "[3]", "统计首屏 + 子菜单内 3 清理过期缓存"),
-    ("数据源健康历史 / 运行日志", "[H] / [V]", "近期数据源检查记录 / 结构化运行日志（可按级别筛选）"),
-    ("系统自检", "[T]", "环境/配置/目录/数据源一键体检（恒上屏）"),
+    ("运行日志 / 健康历史 / 系统自检", "[D]", "诊断与排查 → V / H / T"),
 )
 
 
@@ -194,7 +194,6 @@ DIR_INFO_ITEMS: dict[str, tuple[str, str]] = {
     "C": ("持仓信息目录", "_cmd_config_dir"),
     "F": ("持仓信息文件名", "_cmd_config_filename"),
     "O": ("报告输出目录", "_cmd_config_output_dir"),
-    "L": ("LLM 调优参数（并发/预算/重试）", "_cmd_config_llm_tuning"),
     "M": ("配置入口地图（各配置项所在菜单）", "_render_config_entry_map"),
 }
 
@@ -208,9 +207,9 @@ def _dir_info_items() -> list[tuple[str, str, Callable[[], None]]]:
 
 
 def _cmd_config_dir_info() -> None:
-    """查看配置与目录信息子菜单 — 对应主菜单 [D] 及其二级选项 [C]/[F]/[O]/[M]/[0]。
+    """查看配置与目录信息子菜单 — 对应 [G]→D 及其二级选项 [C]/[F]/[O]/[M]/[0]。
 
-    持仓目录 / 持仓文件名 / 报告输出目录三项聚合到 [D] 之下（主菜单不再单列）；
+    持仓目录 / 持仓文件名 / 报告输出目录三项聚合到 [G]→D 之下（主菜单不再单列）；
     ``[M]`` 打印配置入口地图（各配置项 → 所在菜单键，只读索引）；
     子菜单循环直至 [0]（或空输入 / Ctrl+C）返回主菜单。
     子项在调用时从模块全局取函数（便于测试打桩与后续替换）。
@@ -222,12 +221,12 @@ def _cmd_config_dir_info() -> None:
         print(style_heading("  ── 配置与目录信息 ──"))
         for i, (_key, label, _fn) in enumerate(items):
             print(f" {nav.marker(i)} [{_key}] {label}")
-        print(f" {nav.marker(len(items))} [0] 返回主菜单")
+        print(f" {nav.marker(len(items))} [0] 返回全局设置")
         print()
         return []
 
     panel_items = [PanelItem(key, label, action=fn) for key, label, fn in items]
-    panel_items.append(PanelItem("0", "返回主菜单", kind="return"))
+    panel_items.append(PanelItem("0", "返回全局设置", kind="return"))
 
     try:
         panel_loop(
@@ -245,6 +244,49 @@ def _cmd_config_dir_info() -> None:
 # 持仓变动复盘双入口互指标注（只读行尾提示，行为零变化）：章本体（独立章节组
 # `holding_change_review`）与归因内容（LLM 区 `holding_change` 模块）为解耦的有意
 # 设计、默认态相反，面板相邻两行命名近似易误判——两侧行尾互相指出对方入口位置。
+#: [G] 全局设置七项（数字为主入口，字母为别名；分组只影响渲染）
+GLOBAL_SETTINGS_ITEMS: tuple[tuple[str, str, str, str], ...] = (
+    ("D", "查看配置与目录信息", "_cmd_config_dir_info", "目录与文件"),
+    ("F", "持仓文件名", "_cmd_config_filename", "目录与文件"),
+    ("O", "报告输出目录", "_cmd_config_output_dir", "目录与文件"),
+    ("L", "LLM 设置（运行参数 / 多链线路）", "_cmd_config_llm_tuning", "LLM"),
+    ("I", "对比指数池", "_cmd_config_comparison_indices", "基准与呈现"),
+    ("A", "持仓匿名化", "_cmd_config_anonymization_mode", "基准与呈现"),
+    ("M", "LLM 多链线路优先级", "_cmd_config_llm_providers", "LLM"),
+)
+
+
+def _cmd_global_settings() -> None:
+    """[G] 全局设置：七项分组渲染，数字为主入口、字母为别名；0 返回主菜单。"""
+    from src.python.tui.tui_keys import input_choice
+
+    while True:
+        print()
+        print(style_heading("  ── 全局设置 ──"))
+        last_group = None
+        for number, (letter, label, _handler, group) in enumerate(GLOBAL_SETTINGS_ITEMS, 1):
+            if group != last_group:
+                print(f"  {group}")
+                last_group = group
+            print(f"   {number}. [{letter}] {label}")
+        print("   0. 返回主菜单")
+        print()
+        raw = input_choice("  选择编号或字母（回车=返回 · 0=返回）: ")
+        if raw is None or raw.strip() in ("", "0"):
+            return
+        token = raw.strip().upper()
+        letter = None
+        if token.isdigit() and 1 <= int(token) <= len(GLOBAL_SETTINGS_ITEMS):
+            letter = GLOBAL_SETTINGS_ITEMS[int(token) - 1][0]
+        elif token in {item[0] for item in GLOBAL_SETTINGS_ITEMS}:
+            letter = token
+        if letter is None:
+            print("  [!] 无效选择，请输入编号或字母")
+            continue
+        entry = next(item for item in GLOBAL_SETTINGS_ITEMS if item[0] == letter)
+        globals()[entry[2]]()
+
+
 def _cmd_config_llm_tuning() -> None:
     """LLM 调优参数（thinking 并发 / 总并发 / 重试 / 时间与费用预算）。
 
@@ -290,14 +332,22 @@ def _cmd_config_llm_tuning() -> None:
                 f" {nav.marker(i - 1)} {i}. {spec['label']}"
                 f"（当前 {llm.get(key, config_edit_whitelist[key].get('default'))}）"
             )
-        print(f" {nav.marker(len(keys))} 0. 返回")
+        print(f" {nav.marker(len(keys))} {len(keys) + 1}. LLM 多链线路优先级")
+        print(f" {nav.marker(len(keys) + 1)} 0. 返回全局设置")
         print()
         return []
 
     items = [
         PanelItem(str(i), spec["label"], action=_edit(key)) for i, (key, spec) in enumerate(LLM_TUNING_SPECS.items(), 1)
     ]
-    items.append(PanelItem("0", "返回", kind="return"))
+    items.append(
+        PanelItem(
+            str(len(keys) + 1),
+            "LLM 多链线路优先级",
+            action=lambda: globals()["_cmd_config_llm_providers"](),
+        )
+    )
+    items.append(PanelItem("0", "返回全局设置", kind="return"))
     try:
         panel_loop(
             items,

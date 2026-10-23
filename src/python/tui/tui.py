@@ -90,19 +90,12 @@ def _bind_callbacks() -> None:
         _cmd_update_position_cache,
     )
     from src.python.tui.handlers_config import (
-        _cmd_config_anonymization_mode,
-        _cmd_config_comparison_indices,
-        _cmd_config_dir_info,
         _cmd_config_llm_modules,
-        _cmd_config_llm_providers,
         _cmd_config_report_boards,
+        _cmd_global_settings,
         _cmd_refresh_config,
     )
-    from src.python.tui.handlers_log import (
-        _cmd_run_doctor,
-        _cmd_view_health_history,
-        _cmd_view_logs,
-    )
+    from src.python.tui.handlers_log import _cmd_diagnose_menu
     from src.python.tui.handlers_report import (
         _cmd_generate_both,
         _cmd_generate_excel,
@@ -117,19 +110,14 @@ def _bind_callbacks() -> None:
         "L": _cmd_generate_full,
         "W": _cmd_whatif,
         "Q": _cmd_report_qa,
-        "D": _cmd_config_dir_info,
         "1": _cmd_update_basic_cache,
         "2": _cmd_update_position_cache,
         "3": _cmd_cache_management,
-        "I": _cmd_config_comparison_indices,
-        "A": _cmd_config_anonymization_mode,
         "P": _cmd_config_report_boards,
         "S": _cmd_config_llm_modules,
-        "M": _cmd_config_llm_providers,
+        "G": _cmd_global_settings,
         "R": _cmd_refresh_config,
-        "V": _cmd_view_logs,
-        "H": _cmd_view_health_history,
-        "T": _cmd_run_doctor,
+        "D": _cmd_diagnose_menu,
     }
     for i, (key, _label, _cb, is_exit) in enumerate(MENU_ITEMS):
         MENU_ITEMS[i] = (key, _label, callbacks.get(key), is_exit)

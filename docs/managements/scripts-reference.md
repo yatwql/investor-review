@@ -1173,7 +1173,7 @@ CLI 模式的便捷入口，跳过 TUI 界面，直接以命令行模式运行�
 
 **无需配置**：与 `view-logs` / `cassettes` 同例，在 `init_config()` **之前**分派——配置损坏正是自检要定位的场景，若被配置初始化拦住即成死锁。
 
-**恒上屏**：TUI 菜单 `[T]` 与 Web 自检卡片无开关门控，CLI `doctor` 子命令同源可用
+**恒上屏**：TUI 菜单 `D` → `T` 与 Web 自检卡片无开关门控，CLI `doctor` 子命令同源可用
 
 **退出码**：0=全部通过，1=有失败项（`_EXIT_PARTIAL`）。自检有失败项不算命令本身失败——命令跑完了并给出了结论，故用 PARTIAL 而非 SEVERE。
 
@@ -1193,7 +1193,7 @@ CLI 模式的便捷入口，跳过 TUI 界面，直接以命令行模式运行�
 .venv/bin/python -m src.python.cli view-logs --lines 200
 ```
 
-级别/时间过滤与尾部读取逻辑全部委托 `core/log_reader.read_log()`（与 TUI 菜单 `[V]` 同一实现）。
+级别/时间过滤与尾部读取逻辑全部委托 `core/log_reader.read_log()`（与 TUI 菜单 `D` → `V` 同一实现）。
 
 ## LLM 幻觉率采样测试
 

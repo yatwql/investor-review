@@ -318,10 +318,9 @@ class TestMenuGating:
         assert tui_menu.FEATURE_GATED_ITEMS.get("Q") == "report_qa"
         assert "T" not in tui_menu.FEATURE_GATED_ITEMS, "系统自检恒上屏，不得再受开关门控"
         visible = self._with_menu(monkeypatch, {"report_qa"})
-        assert {"Q", "T"} <= {item[0] for item in visible}
+        assert "Q" in {item[0] for item in visible}
         hidden = self._with_menu(monkeypatch, set())
         assert "Q" not in {item[0] for item in hidden}
-        assert "T" in {item[0] for item in hidden}
 
 
 # ── 错误码单一来源（同源断言） ──────────────────────────────────

@@ -2850,7 +2850,7 @@ llm/skeleton.py            # 摘要注入 expert_review 提示词（开关门控
 | 面 | 入口 | 是否受开关约束 |
 |:---|:-----|:---------------|
 | CLI | `doctor` 子命令（`--offline` 跳过联网、`--timeout` 预算秒数） | **否**（见下） |
-| TUI | 菜单 `[T]` 系统自检（`MENU_ITEMS` 常驻，无门控） | 否（恒上屏） |
+| TUI | 菜单 `D` → `T` 系统自检（`MENU_ITEMS` 常驻，无门控） | 否（恒上屏） |
 | Web | 运行状态区「系统自检」卡片 + `GET /api/doctor`（`network=0` / `timeout`，上限 15s） | 否（`system_info["doctor_enabled"]` 恒为 True） |
 
 **无开关**：本项是只读诊断，不改产物、不写文件，联网检查每次由调用方显式确认；三面恒可用，省去「诊断入口被开关关掉」的失效路径。

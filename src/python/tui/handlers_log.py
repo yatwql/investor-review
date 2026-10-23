@@ -48,6 +48,93 @@ def _level_color(level: str) -> str:
     return ""
 
 
+def _cmd_diagnose_menu() -> None:
+    """[D] 诊断与排查：L 日志设置 / V 运行日志 / H 健康历史 / T 系统自检（缺省 T）。"""
+    from src.python.tui.tui_keys import input_choice
+    from src.python.tui.text_layout import style_heading
+
+    items = (
+        ("L", "日志设置（级别 / 轮转 / 查看器）", _cmd_log_settings),
+        ("V", "运行日志（可按级别筛选）", _cmd_view_logs),
+        ("H", "数据源健康历史", _cmd_view_health_history),
+        ("T", "系统自检（环境 / 配置 / 目录 / 数据源）", _cmd_run_doctor),
+    )
+    while True:
+        print()
+        print(style_heading("  ── 诊断与排查 ──"))
+        for letter, label, _fn in items:
+            mark = "→" if letter == "T" else " "
+            print(f"   [{letter}] {label} {mark}")
+        print("   [0] 返回主菜单")
+        print()
+        raw = input_choice("  选择（回车=系统自检 / 0=返回）: ")
+        token = "T" if raw is None or not raw.strip() else raw.strip().upper()
+        if token in ("0", ""):
+            return
+        entry = next((item for item in items if item[0] == token), None)
+        if entry is None:
+            print("  [!] 无效选择，请输入 L/V/H/T/0")
+            continue
+        entry[2]()
+
+
+def _cmd_log_settings() -> None:
+    """[D]→[L] 日志设置：级别 / 轮转 / 查看器（数字编号，0 返回诊断与排查）。"""
+    from src.python.config import LoggerConfigError, read_logger_config, write_logger_config
+    from src.python.tui.tui_keys import input_choice
+    from src.python.tui.text_layout import style_heading
+
+    specs = (
+        ("level", "写盘级别", None),
+        ("console_level", "控制台级别", None),
+        ("max_bytes", "单文件上限 MB", 1024 * 1024),
+        ("backup_count", "备份份数", None),
+        ("viewer_level", "查看器默认级别", None),
+        ("tail_lines", "查看器首屏行数", None),
+    )
+    while True:
+        try:
+            config = read_logger_config()
+        except LoggerConfigError as e:
+            print(f"  {RED}[ERR]{RESET} {e}")
+            return
+        print()
+        print(style_heading("  ── 日志设置 ──"))
+        for number, (key, label, scale) in enumerate(specs, 1):
+            shown = config[key] // scale if scale else config[key]
+            print(f"   {number}. {label}（当前 {shown}）")
+        print("   0. 返回诊断与排查")
+        print()
+        raw = input_choice("  选择编号修改（回车=返回 · 0=返回）: ")
+        if raw is None or raw.strip() in ("", "0"):
+            return
+        token = raw.strip()
+        if not token.isdigit() or not 1 <= int(token) <= len(specs):
+            print("  [!] 无效选择，请输入 1-6 或 0")
+            continue
+        key, label, scale = specs[int(token) - 1]
+        new_raw = input_choice(f"  {label}（回车=不修改）: ")
+        if new_raw is None or not new_raw.strip():
+            continue
+        value: object = new_raw.strip()
+        if key in ("level", "console_level", "viewer_level"):
+            value = str(value).upper()
+        else:
+            if not str(value).isdigit():
+                print(f"  {RED}[ERR]{RESET} {label} 应为整数")
+                continue
+            value = int(str(value)) * (scale or 1)
+        try:
+            write_logger_config({key: value})
+        except LoggerConfigError as e:
+            print(f"  {RED}[ERR]{RESET} {e}")
+            continue
+        from src.python.core.logger import reload_logger_config
+
+        reload_logger_config()
+        print(f"  {GREEN}[OK]{RESET} {label}已更新（重启程序后对日志文件生效）")
+
+
 def _cmd_view_logs() -> None:
     """查看最近运行日志（可按级别筛选，traceback 折叠为提示行）。"""
     from src.python.core.log_reader import read_log

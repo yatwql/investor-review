@@ -23,23 +23,18 @@ MenuItem = tuple[str, str, Callable[[], None] | None, bool]
 
 MENU_ITEMS: list[MenuItem] = [
     ("E", "生成基础报告（仅 Excel）", None, False),
-    ("B", "生成标准报告（Excel+HTML，按章节配置）", None, False),
-    ("L", "生成完整报告（Excel+HTML，含 LLM）", None, False),
-    ("W", "调仓 What-if 模拟（对比两份持仓，独立报告）", None, False),
-    ("Q", "报告对话式追问（对已生成 HTML 报告多轮提问）", None, False),
-    ("D", "查看配置与目录信息（持仓目录/文件名/输出目录）", None, False),
-    ("1", "更新基础类缓存（含基金业绩/持仓/经理/基准等）", None, False),
-    ("2", "更新行情类缓存（含价格/指数等）", None, False),
+    ("B", "生成标准报告（Excel+HTML）", None, False),
+    ("L", "生成完整报告（含 LLM 分析）", None, False),
+    ("W", "调仓 What-if 模拟", None, False),
+    ("Q", "报告对话式追问", None, False),
+    ("1", "更新基础类缓存", None, False),
+    ("2", "更新行情类缓存", None, False),
     ("3", "缓存管理（统计与清理）", None, False),
-    ("P", "配置报告可选章节（顺序与取舍）", None, False),
-    ("I", "管理对比指数池（自定义基准指数）", None, False),
-    ("A", "配置持仓匿名化（代码/名称脱敏）", None, False),
-    ("S", "配置功能开关（作用域四组，含 LLM 章节）", None, False),
-    ("M", "配置 LLM 多链线路优先级（备用顺序）", None, False),
+    ("P", "配置报告章节显隐", None, False),
+    ("S", "配置报告章节内容呈现", None, False),
+    ("G", "全局设置", None, False),
     ("R", "刷新配置", None, False),
-    ("V", "查看最近运行日志（可按级别筛选）", None, False),
-    ("H", "查看数据源健康历史", None, False),
-    ("T", "系统自检（环境/配置/目录/数据源一键体检）", None, False),
+    ("D", "诊断与排查", None, False),
     ("X", "退出（0 亦可）", None, True),
 ]
 
@@ -53,8 +48,8 @@ FEATURE_GATED_ITEMS: dict[str, str] = {"Q": "report_qa"}
 MENU_GROUPS: list[tuple[str, tuple[str, ...]]] = [
     ("生成报告", ("E", "B", "L", "W")),
     ("数据与查看", ("Q", "1", "2", "3")),
-    ("配置", ("P", "S", "M", "I", "A", "D", "R")),
-    ("诊断与排查", ("V", "H", "T")),
+    ("配置", ("P", "S", "G", "R")),
+    ("诊断与排查", ("D",)),
 ]
 
 
