@@ -361,15 +361,15 @@ def _cmd_config_llm_tuning() -> None:
         print()
 
 
-def _cmd_config_llm_modules() -> None:
-    """配置各 LLM 报告的启用/停用，以及全部功能开关——实现见 ``handlers_switch``。
+def _cmd_config_content_options() -> None:
+    """配置报告章节内容呈现（20 项六组）——实现见 ``handlers_switch``。
 
     本文件只保留菜单入口；面板本体（渲染/派发/重绘/帮助）在
-    ``handlers_switch.run_llm_modules_panel``（域拆分：本文件已接近单文件行数红线）。
+    ``handlers_switch.run_content_options_panel``（域拆分：本文件已接近单文件行数红线）。
     """
-    from src.python.tui.handlers_switch import run_llm_modules_panel
+    from src.python.tui.handlers_switch import run_content_options_panel
 
-    run_llm_modules_panel()
+    run_content_options_panel()
 
 
 def _cmd_config_comparison_indices() -> None:
@@ -501,92 +501,15 @@ def _remove_comparison_index(indices: dict[str, str]) -> None:
 
 
 def _cmd_config_report_boards() -> None:
-    """配置基础报告章节（基金深度分析 / 市场新闻 / 组合历史走势+回撤 / 组合演进 / 行动建议）。
+    """配置报告章节显隐（16 项四块 + 智囊团两个子项）——实现见 ``handlers_report_chapters``。
 
-    报告章节与增强子模块（数据质量/估值分位/市场温度/财报摘要/财务指标等）已在
-    功能开关注册表的「报告章节与增强」组，统一在菜单 [S] 配置（本面板不再另设入口）。
-    交互循环经 `panel_loop` 单源：方向键游标、Enter 防误触、直达同步、无效反馈。
+    章节清单/编号/来源/子项全部由 ``config.chapter_registry`` 派生，面板本体
+    （渲染/派发/帮助）在 ``handlers_report_chapters.run_report_chapters_panel``；
+    本文件只保留菜单入口（域拆分：本文件已接近单文件行数红线）。
     """
-    from src.python.config import (
-        get_config,
-        is_enable_action,
-        is_enable_fund_deep_analysis,
-        is_enable_history,
-        is_enable_news,
-        is_enable_portfolio_evolution,
-    )
+    from src.python.tui.handlers_report_chapters import run_report_chapters_panel
 
-    # 编号 → (配置键, 章节名, 状态读取器)：编号与派发键单源，渲染与动作共用
-    _flags: dict[str, tuple[str, str, Callable[[dict], bool]]] = {
-        "1": ("enable_fund_deep_analysis", "基金深度分析", is_enable_fund_deep_analysis),
-        "2": ("enable_news", "市场新闻", is_enable_news),
-        "3": ("enable_history", "组合历史走势+回撤", is_enable_history),
-        "4": ("enable_portfolio_evolution", "组合演进", is_enable_portfolio_evolution),
-        "5": ("enable_action", "行动建议", is_enable_action),
-    }
-
-    def _make_toggle(num: str) -> Callable[[], None]:
-        cfg_key, label, getter = _flags[num]
-
-        def _toggle() -> None:
-            current = getter(get_config())
-            if _apply_edit({"key": cfg_key, "value": not current}):
-                print(f"  {GREEN}[OK]{RESET} {label}已{'禁用' if current else '启用'}")
-
-        return _toggle
-
-    def _render(nav: NavState) -> list[str | None]:
-        config = get_config()
-        # 编号后的章节名补齐到同一列，使状态方括号纵向对齐
-        section_column = max(display_width(label) for _k, label, _g in _flags.values())
-        rows: list[str | None] = []
-        for i, num in enumerate(sorted(_flags)):
-            _key, label, getter = _flags[num]
-            enabled = getter(config)
-            status = f"{GREEN}启用{RESET}" if enabled else f"{RED}禁用{RESET}"
-            rows.append(f"{nav.marker(i)}{num}. {pad_right(label, section_column)} [{status}]")
-        rows.append("")
-        rows.append(f"{nav.marker(5)}6. 报告增强子模块 / LLM 分析章节 — 请在菜单 S 配置")
-        rows.append(f"{nav.marker(6)}0. 返回主菜单")
-        return [
-            None,
-            *render_titled_panel("配置报告可选章节", rows),
-            *wrap_hanging("  提示：报告章节与增强、LLM 分析章节请在菜单 [S] 配置", inner_width(terminal_columns())),
-            None,
-        ]
-
-    items = [
-        PanelItem(
-            num,
-            _flags[num][1],
-            action=_make_toggle(num),
-            detail="切换该章节是否出现在标准/完整报告中（当前启用状态见面板方括号）",
-        )
-        for num in sorted(_flags)
-    ]
-    items += [
-        PanelItem(
-            "6",
-            "报告增强子模块 / LLM 分析章节",
-            kind="info",
-            action=lambda: print(f"  {YELLOW}[!]{RESET} 报告增强子模块与 LLM 分析章节请使用菜单 [S] 配置"),
-            detail="报告增强子模块与 LLM 分析章节统一在菜单 [S] 的功能开关注册表中配置（本面板不重复设入口）",
-        ),
-        PanelItem("0", "返回主菜单", kind="return"),
-    ]
-
-    try:
-        panel_loop(
-            items,
-            render=_render,
-            prompt=panel_prompt("输入编号切换 (0-6)"),
-            read=input_choice,
-            on_text=lambda _t: print(f"  {YELLOW}[!]{RESET} 无效编号"),
-        )
-    except (EOFError, KeyboardInterrupt):
-        print()
-
-    refresh_config()
+    run_report_chapters_panel()
 
 
 def _cmd_refresh_config() -> None:

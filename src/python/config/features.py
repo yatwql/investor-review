@@ -61,6 +61,7 @@ from ._feature_registry import (  # noqa: F401 — 兼容既有导入面
     experimental_flags,
     feature_switch_registry,
     is_experimental_switch,
+    panel_option_numbers,
     switches_in_group,
 )
 

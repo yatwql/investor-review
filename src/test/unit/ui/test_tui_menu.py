@@ -304,6 +304,7 @@ class TestFeatureGatedMenuItems:
         assert "T" not in {item[0] for item in tm.MENU_ITEMS}
         assert "T" not in tm.FEATURE_GATED_ITEMS
 
+
 class TestMenuGroups(unittest.TestCase):
     """主菜单任务分组（生成 / 数据与查看 / 配置 / 诊断）：结构关系，不写死条数。"""
 

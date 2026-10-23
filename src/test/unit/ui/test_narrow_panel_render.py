@@ -70,10 +70,10 @@ def test_report_boards_panel_fits_narrow_floor():
     _assert_fits("[P] 报告章节", _render(_cmd_config_report_boards, "src.python.tui.handlers_config"))
 
 
-def test_llm_modules_panel_fits_narrow_floor():
-    from src.python.tui.handlers_config import _cmd_config_llm_modules
+def test_content_options_panel_fits_narrow_floor():
+    from src.python.tui.handlers_config import _cmd_config_content_options
 
-    _assert_fits("[S] 功能开关", _render(_cmd_config_llm_modules, "src.python.tui.handlers_config"))
+    _assert_fits("[S] 章节内容", _render(_cmd_config_content_options, "src.python.tui.handlers_config"))
 
 
 def test_llm_providers_panel_fits_narrow_floor():

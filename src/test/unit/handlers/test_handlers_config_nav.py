@@ -23,38 +23,24 @@ import pytest
 pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
 
 
-_STANDARD_LLM_MODULES = {
-    "global_macro": "全球政经局势",
-    "expert_review": "智囊团深度复盘",
-    "health_check": "持仓体检报告",
-    "penetration_deep": "穿透深度分析",
-    "news_correlation": "财经新闻热点与持仓关联分析",
-}
-
-
 def _panel_last_switch_flag() -> str:
-    """面板末项（末分组末块的末开关）：从注册表动态派生，不写死清单。"""
-    from src.python.config.features import GROUP_ORDER, switches_in_group
+    """``[S]`` 面板末项（六组末组末开关）：从注册表动态派生，不写死清单。"""
+    from src.python.config.features import panel_option_numbers
 
-    blocks = list(switches_in_group(list(GROUP_ORDER)[-1]))
-    assert blocks, "末分组必须有开关（结构断言）"
-    return blocks[-1][0]
+    numbered = panel_option_numbers("[S]")
+    assert numbered, "面板必须有开关（结构断言）"
+    return numbered[-1][1]
 
 
 @patch("src.python.tui.handlers_config.refresh_config")
 @patch("src.python.config.features.save_feature_overrides")
-@patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
-@patch("src.python.core.registry.get_llm_module_names")
-@patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
-def test_panel_arrow_up_wraps_to_last_switch_and_enter_toggles(
-    mock_read, mock_names, mock_filter, mock_save, mock_refresh
-):
+def test_panel_arrow_up_wraps_to_last_switch_and_enter_toggles(mock_save, mock_refresh):
     """面板以 arrows=True 调行输入：↑ 游标回绕到末项，Enter 按其编号走既有派发。"""
-    from src.python.tui.handlers_config import _cmd_config_llm_modules
+    from src.python.tui.handlers_config import _cmd_config_content_options
 
     last_flag = _panel_last_switch_flag()
     with patch("src.python.tui.handlers_config.input_choice", side_effect=["KEY_UP", "", "0"]) as mock_choice:
-        _cmd_config_llm_modules()
+        _cmd_config_content_options()
 
     assert mock_choice.call_args.kwargs.get("arrows") is True, "面板行输入须启用方向键"
     assert mock_save.called, "Enter 应按选中项（末开关）触发既有切换派发"
@@ -64,32 +50,24 @@ def test_panel_arrow_up_wraps_to_last_switch_and_enter_toggles(
 
 @patch("src.python.tui.handlers_config.refresh_config")
 @patch("src.python.config.features.save_feature_overrides")
-@patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
-@patch("src.python.core.registry.get_llm_module_names")
-@patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
-def test_panel_enter_without_navigation_keeps_original_semantics(
-    mock_read, mock_names, mock_filter, mock_save, mock_refresh
-):
+def test_panel_enter_without_navigation_keeps_original_semantics(mock_save, mock_refresh):
     """未用方向键时裸回车保持原语义（不误触任何切换）。"""
-    from src.python.tui.handlers_config import _cmd_config_llm_modules
+    from src.python.tui.handlers_config import _cmd_config_content_options
 
     with patch("src.python.tui.handlers_config.input_choice", side_effect=["", "0"]):
-        _cmd_config_llm_modules()
+        _cmd_config_content_options()
 
     assert not mock_save.called, "无导航姿态的回车不得触发切换"
 
 
 @patch("src.python.tui.handlers_config.refresh_config")
 @patch("src.python.config.features.save_feature_overrides")
-@patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
-@patch("src.python.core.registry.get_llm_module_names")
-@patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
-def test_panel_arrow_down_shows_position_feedback(mock_read, mock_names, mock_filter, mock_save, mock_refresh, capsys):
+def test_panel_arrow_down_shows_position_feedback(mock_save, mock_refresh, capsys):
     """↓ 移动游标给可观察位置反馈（▸ 行），不改任何开关状态。"""
-    from src.python.tui.handlers_config import _cmd_config_llm_modules
+    from src.python.tui.handlers_config import _cmd_config_content_options
 
     with patch("src.python.tui.handlers_config.input_choice", side_effect=["KEY_DOWN", "0"]):
-        _cmd_config_llm_modules()
+        _cmd_config_content_options()
 
     out = capsys.readouterr().out
     assert "▸" in out, "方向键移动须给位置反馈"
@@ -104,8 +82,9 @@ class TestSubmenuArrowNav:
 
     @patch("src.python.tui.handlers_config.refresh_config")
     @patch("src.python.tui.handlers_config._apply_edit", return_value=True)
+    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
     @patch("src.python.config.get_config", return_value={})
-    def test_report_boards_arrow_down_enter_toggles_selected(self, _mock_get, mock_apply, _mock_refresh):
+    def test_report_boards_arrow_down_enter_toggles_selected(self, _mock_get, _mock_read, mock_apply, _mock_refresh):
         """[P] ↓ 移到第 2 项（市场新闻）后 Enter 按其编号派发切换。"""
         from src.python.tui.handlers_config import _cmd_config_report_boards
         from src.python.tui.tui_keys import KEY_DOWN
@@ -168,18 +147,15 @@ class TestInlineCursorRendering:
 
     @patch("src.python.tui.handlers_config.refresh_config")
     @patch("src.python.config.features.save_feature_overrides")
-    @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
-    @patch("src.python.core.registry.get_llm_module_names")
-    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
     def test_s_panel_arrow_down_draws_inline_cursor(self, *_mocks):
         """[S] ↓后重绘：▸ 落在某行内编号前（非仅一闪而过的反馈行）。"""
-        from src.python.tui.handlers_config import _cmd_config_llm_modules
+        from src.python.tui.handlers_config import _cmd_config_content_options
         from src.python.tui.tui_keys import KEY_DOWN
 
         buf = io.StringIO()
         with patch("src.python.tui.handlers_config.input_choice", side_effect=[KEY_DOWN, "0"]):
             with contextlib.redirect_stdout(buf):
-                _cmd_config_llm_modules()
+                _cmd_config_content_options()
         assert re.search(r"▸\s*\d+\.", buf.getvalue()), "[S] 方向键移动后渲染须在行内编号前画 ▸"
 
     @patch("src.python.tui.handlers_config.refresh_config")
@@ -273,20 +249,23 @@ class TestPanelNumberingRendered:
         body = numbers[:-1]
         assert body == list(range(1, len(body) + 1)), f"面板编号跳号：{body}"
 
-    def test_report_boards_numbering(self):
+    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
+    @patch("src.python.config.get_config", return_value={})
+    def test_report_boards_numbering(self, *_mocks):
+        """[P] 章节编号自 1 连续（子项不占章节编号），末项 0。"""
         from src.python.tui.handlers_config import _cmd_config_report_boards
 
-        self._assert_contiguous(self._rendered_numbers(_cmd_config_report_boards))
+        numbers = self._rendered_numbers(_cmd_config_report_boards)
+        self._assert_contiguous(numbers)
+        assert numbers[:-1] == list(range(1, len(numbers)))
 
     @patch("src.python.tui.handlers_config.refresh_config")
     @patch("src.python.config.features.save_feature_overrides")
-    @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
-    @patch("src.python.core.registry.get_llm_module_names")
-    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
-    def test_llm_modules_numbering(self, *_mocks):
-        from src.python.tui.handlers_config import _cmd_config_llm_modules
+    def test_content_options_numbering(self, *_mocks):
+        """[S] 六组开关编号 1..N 连续、末项 0（N 由注册表派生）。"""
+        from src.python.tui.handlers_config import _cmd_config_content_options
 
-        self._assert_contiguous(self._rendered_numbers(_cmd_config_llm_modules))
+        self._assert_contiguous(self._rendered_numbers(_cmd_config_content_options))
 
     def test_llm_providers_numbering(self):
         from src.python.tui.handlers_config import _cmd_config_llm_providers

@@ -171,7 +171,7 @@ class TestPanelWidthSweep:
         import io
         from unittest.mock import patch
 
-        from src.python.tui.handlers_config import _cmd_config_llm_modules
+        from src.python.tui.handlers_config import _cmd_config_content_options
 
         buf = io.StringIO()
         with (
@@ -182,7 +182,7 @@ class TestPanelWidthSweep:
             patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json")),
         ):
             with contextlib.redirect_stdout(buf):
-                _cmd_config_llm_modules()
+                _cmd_config_content_options()
         return [ln for ln in buf.getvalue().splitlines() if ln.strip() and not ln.startswith("20")]
 
     @pytest.mark.parametrize("columns", [40, 44, 52, 60, 64, 80, 95, 96, 120, 160, 200])
@@ -190,7 +190,7 @@ class TestPanelWidthSweep:
         """任何宽度下（含 `?` 详情与错误提示）所有行都不超过终端列数。"""
         for lines in (
             self._render(columns),
-            self._render(columns, keys=("? 3", "? news_correlation", "r 3", "zzz=on", "0")),
+            self._render(columns, keys=("? 3", "? deterministic_signal", "r 3", "zzz=on", "0")),
         ):
             for line in lines:
                 assert display_width(line) <= columns, (columns, line)
@@ -199,18 +199,18 @@ class TestPanelWidthSweep:
         """窄终端不画盒线：省下边框列宽给内容，也避免右边框随换行错位。"""
         narrow = "\n".join(self._render(50))
         assert "┌──" not in narrow and "│" not in narrow
-        assert "功能开关（" in narrow
+        assert "章节内容（" in narrow
 
     def test_wide_keeps_box_and_key_column(self):
         wide = "\n".join(self._render(140))
         assert "┌──" in wide
-        assert "global_macro" in wide
+        assert "deterministic_signal" in wide
 
     def test_narrow_failed_write_stays_on_feedback_line(self):
         """窄终端失败路径（无效赋值）不重绘：一行报错即可，`p` 才重绘面板。"""
         lines = self._render(50, keys=("zzz=on", "0"))
         text = "\n".join(lines)
-        assert text.count("功能开关（") == 1, "失败路径不应整屏重绘"
+        assert text.count("章节内容（") == 1, "失败路径不应整屏重绘"
         assert "输入 p 重绘面板" in text
 
 
@@ -227,7 +227,7 @@ class TestRepaintAndHelpVisible:
         import io
         from unittest.mock import patch
 
-        from src.python.tui.handlers_config import _cmd_config_llm_modules
+        from src.python.tui.handlers_config import _cmd_config_content_options
 
         buf = io.StringIO()
         with (
@@ -239,7 +239,7 @@ class TestRepaintAndHelpVisible:
             patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json")),
         ):
             with contextlib.redirect_stdout(buf):
-                _cmd_config_llm_modules()
+                _cmd_config_content_options()
         return buf.getvalue()
 
     def test_narrow_write_repaints_with_numbered_feedback(self):
@@ -249,15 +249,15 @@ class TestRepaintAndHelpVisible:
         # 反馈长句在窄屏会折成多行（名称/状态词各占一行），只锚定「[OK] + 编号」前缀
         assert re.search(r"\[OK\] 3", plain), "反馈行应带被切换项的编号"
         assert "已关闭" in plain or "已开启" in plain
-        assert text.count("功能开关（") == 2, "写路径成功后应立即重绘面板"
+        assert text.count("章节内容（") == 2, "写路径成功后应立即重绘面板"
         assert "输入 p 重绘面板" not in text
 
     def test_narrow_question_mark_keeps_detail_on_screen(self):
         """窄终端 `?3` 说明：详情上屏后不被整屏重绘顶走，只给 `p` 重绘提示。"""
         text = self._run(40, ("?3", "0"))
-        assert text.count("功能开关（") == 1, "只读查询不应整屏重绘"
+        assert text.count("章节内容（") == 1, "只读查询不应整屏重绘"
         assert "输入 p 重绘面板" in text
-        assert text.index("出厂默认") > text.index("功能开关（"), "详情应出现在面板之后而非被顶走"
+        assert text.index("出厂默认") > text.index("章节内容（"), "详情应出现在面板之后而非被顶走"
 
     def test_esc_returns_to_main_menu_without_write(self):
         """子菜单 Esc（input_choice → None）即时返回主菜单：不重绘、不写配置。"""
@@ -265,7 +265,7 @@ class TestRepaintAndHelpVisible:
         import io
         from unittest.mock import patch
 
-        from src.python.tui.handlers_config import _cmd_config_llm_modules
+        from src.python.tui.handlers_config import _cmd_config_content_options
 
         buf = io.StringIO()
         with (
@@ -277,8 +277,8 @@ class TestRepaintAndHelpVisible:
             patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json")),
         ):
             with contextlib.redirect_stdout(buf):
-                _cmd_config_llm_modules()
-        assert buf.getvalue().count("功能开关（") == 1, "Esc 直接返回，不应重绘面板"
+                _cmd_config_content_options()
+        assert buf.getvalue().count("章节内容（") == 1, "Esc 直接返回，不应重绘面板"
         mock_apply.assert_not_called()
 
     def test_wide_question_mark_repaints_without_stale_hint(self):
@@ -347,7 +347,7 @@ class TestNarrowKeyReveal:
         import io
         from unittest.mock import patch
 
-        from src.python.tui.handlers_config import _cmd_config_llm_modules
+        from src.python.tui.handlers_config import _cmd_config_content_options
 
         buf = io.StringIO()
         with (
@@ -358,14 +358,14 @@ class TestNarrowKeyReveal:
             patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json")),
         ):
             with contextlib.redirect_stdout(buf):
-                _cmd_config_llm_modules()
+                _cmd_config_content_options()
         return [ln for ln in buf.getvalue().splitlines() if ln.strip() and not ln.startswith("20")]
 
     def test_narrow_default_hides_key_names(self):
         """窄屏默认不显示键名（手机屏幕窄、编号更好按），图例提示可按 k 展开。"""
         lines = self._rows(("0",))
         text = "\n".join(lines)
-        assert "global_macro" not in text
+        assert "deterministic_signal" not in text
         assert "k 显示键名" in text
         # 条目行只有「编号 名称 [状态]」，不出现英文键名
         item_rows = [ln for ln in lines if "[开]" in ln or "[关]" in ln]
@@ -375,11 +375,11 @@ class TestNarrowKeyReveal:
         """按 k 后以缩进行显示键名，供需要时抄写/粘贴（再按 k 收起）。"""
         lines = self._rows(("k", "0"))
         text = "\n".join(lines)
-        assert "global_macro" in text and "news_correlation" in text
+        assert "deterministic_signal" in text and "market_temperature" in text
         assert "k 隐藏键名" in text
         # 键名行缩进在名称行之下（不与编号行同列起始）
-        key_line = next(ln for ln in lines if "global_macro" in ln)
-        assert key_line.lstrip().startswith("global_macro")
+        key_line = next(ln for ln in lines if "deterministic_signal" in ln)
+        assert key_line.lstrip().startswith("deterministic_signal")
 
     def test_key_input_still_accepted_without_reveal(self):
         """键名不显示但**不取消**键名输入：直接 `键名=on|off` 仍生效（兼容脚本/熟练用户）。"""

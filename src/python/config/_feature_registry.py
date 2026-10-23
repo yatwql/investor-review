@@ -344,6 +344,20 @@ def switches_in_group(group: str) -> list[tuple[str, FeatureSwitchDef]]:
     return [(flag, d) for flag, d in feature_switch_registry.items() if d.group == group]
 
 
+def panel_option_numbers(panel: str) -> tuple[tuple[int, str, FeatureSwitchDef], ...]:
+    """按面板的组序派生编号：``((1, 开关名, 声明), (2, ...), ...)``（1 起连续）。
+
+    面板编号的唯一派生入口——``[S]`` 只呈现 ``PANEL_GROUPS["[S]"]`` 的六组
+    （LLM 章节与独立章节在 ``[P]``）；增删开关后编号自动重排，渠道层与测试都
+    不得写死数字。
+    """
+    numbered: list[tuple[int, str, FeatureSwitchDef]] = []
+    for group in PANEL_GROUPS.get(panel, ()):
+        for flag, definition in switches_in_group(group):
+            numbered.append((len(numbered) + 1, flag, definition))
+    return tuple(numbered)
+
+
 def experimental_flags() -> list[tuple[str, FeatureSwitchDef]]:
     """实验项清单 ``[(开关名, 声明), ...]``（顺序 = 注册表顺序）= ``experimental`` 为真者。
 

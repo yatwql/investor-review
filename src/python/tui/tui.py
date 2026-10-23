@@ -90,7 +90,7 @@ def _bind_callbacks() -> None:
         _cmd_update_position_cache,
     )
     from src.python.tui.handlers_config import (
-        _cmd_config_llm_modules,
+        _cmd_config_content_options,
         _cmd_config_report_boards,
         _cmd_global_settings,
         _cmd_refresh_config,
@@ -114,7 +114,7 @@ def _bind_callbacks() -> None:
         "2": _cmd_update_position_cache,
         "3": _cmd_cache_management,
         "P": _cmd_config_report_boards,
-        "S": _cmd_config_llm_modules,
+        "S": _cmd_config_content_options,
         "G": _cmd_global_settings,
         "R": _cmd_refresh_config,
         "D": _cmd_diagnose_menu,
