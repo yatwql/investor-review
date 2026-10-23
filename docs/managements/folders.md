@@ -18,10 +18,10 @@
 | 测试用例 | — | — | 11,522 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 13 | 6,293 | 含 README.md（211 行）；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 12 | 6,075 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 183 | 66,252 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 5 + archive md 160），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 13,189 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 182 | 66,059 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 4 + archive md 160），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 13,186 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 164 | 52,079 | 各版本 changelog/plan/review-findings 与设计文档归档（157 md 50,492 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
-| ├ plan/ | 中间设计文件 | 5 | ~892 | 在办设计文档（扁平存放，完成后迁入对应版本的归档子目录）：两份 Jev 新闻关联判定文档（对照评测方案 + 类型化判定通道接入设计）+ 决策跨期反思闭环设计 + Web 浏览器验证方法 + 配置面板分类与描述设计（含同目录 `config-panel-mockup/` 设计图样原型） |
+| ├ plan/ | 中间设计文件 | 4 | ~702 | 在办设计文档（扁平存放，完成后迁入对应版本的归档子目录）：两份 Jev 新闻关联判定文档（对照评测方案 + 类型化判定通道接入设计）+ 决策跨期反思闭环设计 + Web 浏览器验证方法 |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
 
 ## 版本演进对照（最初版本 → 最新发布 → 当前开发版）
@@ -1662,9 +1662,6 @@ investor-review/
 │   │       ├── archived_plan.0.14.x.md      # 实现计划归档 v0.14.x（已完成任务节）
 │   │       └── archived_review-findings.0.14.x.md # 自审记录归档 v0.14.x（开发期已修复批次）
 │   └── plan/                          #   中间设计文件（在办设计文档，扁平存放）；完成后迁入对应版本的归档子目录
-│       ├── config-panel-taxonomy-design.md # 配置面板分类与描述设计（域/组双轴、Web 面契约、TUI 编号派生）
-│       ├── config-panel-mockup/       #   设计图样原型目录（自包含 HTML，数据内联，浏览器直接打开）
-│       │   └── index.html             #       配置面板四域编排原型（布局/说明密度/标记/主题可切换）
 │       ├── jev-news-correlation-evaluation.md # 评测方案（三方对照：关键词/现网生成/Jev；预注册阈值与 go-no-go 判定）
 │       ├── jev-news-correlation-design.md # 新闻关联判定接入设计（独立于对话链的类型化判定通道/模板理由/降级矩阵）
 │       ├── decision-reflection-shadow-design.md # 决策跨期反思闭环设计（Vibe 影子账户参照/转正路径）
