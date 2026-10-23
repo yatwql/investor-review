@@ -157,7 +157,7 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
        3 [O] 报告输出目录
      <span class="bold"><span class="b">── LLM 调优 ──</span></span>
        4 [L] LLM 设置（运行参数 / 多链线路）
-     <span class="bold"><span class="b">── 基准与呈现 ──</span></span>
+     <span class="bold"><span class="b">── 基准与指数 ──</span></span>
        5 [I] 对比基准指数
        6 [A] 持仓匿名化（代码 / 名称脱敏）
      <span class="bold"><span class="b">── 索引 ──</span></span>
@@ -276,7 +276,7 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
    0. 返回 LLM 设置
 
   输入两个编号交换优先级（如 3 1） · ? 看说明 · 0 返回: 0</pre></section>
-<section class="screen" id="s-cache"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>缓存管理（[3]）</h2></div><p class="crumb">主菜单 › 数据与查看 › [3]</p><p class="note">统计首屏 + 子项 3 清理过期缓存</p><pre class="term">  <span class="c">[..]</span> 缓存文件: 411 个 | 大小: 4491 KB
+<section class="screen" id="s-cache"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>缓存管理（[3]）</h2></div><p class="crumb">主菜单 › 数据与查看 › [3]</p><p class="note">统计首屏 + 子项 3 清理过期缓存</p><pre class="term">  <span class="c">[..]</span> 缓存文件: 411 个 | 大小: 4490 KB
   <span class="c">[..]</span> 正在检查过期文件...
   <span class="c">[..]</span> 过期文件: 0 个
   data/cache
@@ -332,20 +332,6 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
   ========================================
   最近日志（级别: 全部）
   ========================================
-  2026-10-24 00:20:14,476 [INFO] 基金风格表 [3/9]: 嘉实全球产业升级股票发起式(QDII)A (017730)
-  2026-10-24 00:20:14,477 [INFO] 基金风格表 [4/9]: 永赢科技智选混合发起C (022365)
-  2026-10-24 00:20:14,477 [INFO] 基金风格表 [5/9]: 博时纳斯达克100ETF发起式联接 (016055)
-  2026-10-24 00:20:14,478 [INFO] 基金风格表 [6/9]: 大成标普500等权重指数(QDII)A人民币 (096001)
-  2026-10-24 00:20:14,478 [INFO] 基金风格表 [7/9]: 华宝增强收益债券A (240012)
-  2026-10-24 00:20:14,478 [INFO] 基金风格表 [8/9]: 兴全恒惠30天持有超短债C (012325)
-  2026-10-24 00:20:14,478 [INFO] 基金风格表 [9/9]: 华安纳斯达克100ETF联接 (040046)
-  2026-10-24 00:20:14,479 [INFO] 复用调用方传入的新闻数据，共 28 条
-  2026-10-24 00:20:14,743 [INFO] 最新 HTML 报告已保存: /lzcapp/document/working/codebase/investor-review/reports/个人投资分析报告.html
-  2026-10-24 00:20:14,744 [INFO] 归档 HTML 报告已保存: /lzcapp/document/working/codebase/investor-review/reports/20261024/个人投资分析报告-20261024-002014.html
-  2026-10-24 00:20:14,746 [INFO] [perf] HTML 生成: 0.290s
-  2026-10-24 00:20:14,751 [INFO] 复用外部传入的市值核算数据，共 12 条
-  2026-10-24 00:20:14,760 [INFO] 投资分析汇总写入完成，共 57 行
-  2026-10-24 00:20:14,764 [INFO] 一、市值核算明细 区块①写入完成，共 4 个账户，12 条持仓
   2026-10-24 00:20:14,767 [INFO] 二、持仓分类汇总 区块②写入完成，共 5 个分组，12 条持仓
   2026-10-24 00:20:14,769 [INFO] 持仓明细与分类写入完成，共 4 个账户，12 条持仓
   2026-10-24 00:20:14,770 [INFO] 批量行业数据就绪: 3/3 个代码（含缓存命中）
@@ -377,7 +363,21 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
   2026-10-24 00:20:14,807 [INFO] 基金风格表 [8/9]: 兴全恒惠30天持有超短债C (012325)
   2026-10-24 00:20:14,807 [INFO] 基金风格表 [9/9]: 华安纳斯达克100ETF联接 (040046)
   2026-10-24 00:20:14,814 [INFO] 风格与因子分析页签写入完成
-  2026-10-24 00:20:14,819 [INFO] LLM 分析章节写入完成（含穿透深度分析）</pre><p class="more">… 共 206 行，此处展示前 52 行</p></section>
+  2026-10-24 00:20:14,819 [INFO] LLM 分析章节写入完成（含穿透深度分析）
+  2026-10-24 00:20:14,820 [INFO] LLM 分析章节已生成
+  2026-10-24 00:20:14,824 [INFO] LLM API 用量页签写入完成
+  2026-10-24 00:20:14,845 [INFO] 组合历史走势与回撤页签写入完成
+  2026-10-24 00:20:14,860 [INFO] 组合演进页签写入完成: 45 个观察日, TOP 10 持仓
+  2026-10-24 00:20:14,891 [INFO] [fundamental_snapshot] 区块①写入完成 7 行
+  2026-10-24 00:20:14,931 [INFO] [fundamental_snapshot] 区块②写入完成 7 只标的（失败 0）
+  2026-10-24 00:20:14,936 [INFO] 持仓基本面页签写入完成
+  2026-10-24 00:20:14,940 [INFO] 行动建议页签已写入
+  2026-10-24 00:20:14,946 [INFO] 数据质量仪表盘页签已写入
+  2026-10-24 00:20:14,946 [INFO] 环比对比摘要已写入 summary 页签
+  2026-10-24 00:20:15,021 [INFO] 最新报告已保存: /lzcapp/document/working/codebase/investor-review/reports/个人投资分析报告.xlsx
+  2026-10-24 00:20:15,093 [INFO] 存档报告已保存: /lzcapp/document/working/codebase/investor-review/reports/20261024/个人投资分析报告-20261024-002014.xlsx
+  2026-10-24 00:20:15,093 [INFO] Excel 报告已生成: /lzcapp/document/working/codebase/investor-review/reports/个人投资分析报告.xlsx
+  2026-10-24 00:20:15,093 [INFO] 总市值: 272628.52元, 总成本: 222483.03元, 总盈亏: 50145.49元, 本日盈亏: 705.54元</pre><p class="more">… 共 206 行，此处展示前 52 行</p></section>
 <section class="screen" id="s-health"><div class="screen-head"><span class="lvl lvl-二级">二级</span><h2>数据源健康历史（[H]）</h2></div><p class="crumb">主菜单 › 诊断与排查 › [D] › [H]</p><p class="note">最近若干次采集的成功/失败源与降级原因</p><pre class="term">  ========================================
   数据源健康历史（最近 10 次检查）
   ========================================
@@ -417,7 +417,7 @@ ImportError: cannot import name 'run_llm_modules_panel' from 'src.python.tui.han
 
 [日志与缓存]
   [OK] 日志级别 — 文件 INFO（默认 INFO）
-  [ERR] 日志体积 — app.log 8.9 MB + 轮转 3 份；DEBUG 占比 87%（采样 112337 行）
+  [ERR] 日志体积 — app.log 8.9 MB + 轮转 3 份；DEBUG 占比 87%（采样 112351 行）
         → DEBUG 占比过半：确认未设 INVEST_LOG_FILE_LEVEL=DEBUG；排障后可清理 logs/app.log*（旧日志可删）
   [ERR] 去重锚点 — 37.3 MB / 111464 行（自动压缩阈值 32 MB）
         → 超过阈值：下次生成时自动压缩（保留每组最新 + .bak 备份）；也可手工 `python scripts/eval-dedup-threshold.py --compact`
