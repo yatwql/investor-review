@@ -1,7 +1,7 @@
 # LLM 配置纵切设计（模块为第一层）
 
 > **关联**：[`config-panel-taxonomy-design.md`](config-panel-taxonomy-design.md)（面板四域编排）；设计图样 [`config-panel-mockup/llm-config.html`](config-panel-mockup/llm-config.html)。
-> **范围**：`data/config/llm_settings.json` 的组织方式（文件名与读取路径不变）、内存视图契约、校验、升级与文档口径。
+> **范围**：`data/config/llm_settings.json` 的组织方式（文件名与读取路径固定）、内存视图契约、校验、升级与文档口径。
 > **不做**：改文件名/目录、改 `llm/` 包内任何调用、改写入语义（`.bak` 备份、范围校验、原子写）、改 `config.json` / `features.json` 的组织。
 
 ---
@@ -90,7 +90,7 @@
 
 ### 3.2 运行约束（6 项）
 
-| 扁平键（对外不变） | v2 位置 |
+| 扁平键（对外契约） | v2 位置 |
 |:--|:--|
 | `llm_max_concurrency` | `runtime.max_concurrency` |
 | `llm_max_thinking_concurrency` | `runtime.thinking_concurrency` |
@@ -101,7 +101,7 @@
 
 ### 3.3 高级选项（4 项）
 
-| 扁平键（对外不变） | v2 位置 |
+| 扁平键（对外契约） | v2 位置 |
 |:--|:--|
 | `debate` | `advanced.debate` |
 | `fact_check` | `advanced.fact_check` |
@@ -112,24 +112,24 @@
 
 ## 4. 读写契约
 
-### 4.1 读：扁平视图不变
+### 4.1 读：扁平视图契约
 
 1. **版本判定**：有 `schema_version` 取之为版本号；无版本号但出现 `modules` / `defaults` / `runtime` / `advanced` 任一段 → 按 2 载入并记一行 INFO；否则按 v1 载入。
 2. **展平**：无论磁盘结构，`get_llm_config()` 始终返回**扁平视图**（`model_expert_review`、`thinking_enabled_health_check`、`enabled_llm`、`llm_max_concurrency`、`debate` …）。`llm/` 包与面板全部按此契约消费，不感知磁盘结构。
 3. **三层取值**：`modules.<m>.<参数>` → `defaults.<参数>` → 内置默认。
-4. 展平对"`defaults` 与内置默认都没有"的参数**不生成键**，保持下游既有回落路径。
+4. 展平对"`defaults` 与内置默认都没有"的参数**不生成键**，保留下游回落路径。
 
 ### 4.2 写：反展平与幂等
 
 1. 收到扁平视图 → 反展平为 v2：与 `defaults` 等值的项不写进模块段；`defaults` 未覆盖的参数补入 `defaults`。
-2. 写前单槽 `.bak` 备份（沿用既有原语），文件直接落为 v2，不保留并存结构。
-3. `runtime` / `advanced` 的写入沿用既有白名单与范围校验；`edit_ops` 对外键名不变（仍是 `llm_max_thinking_concurrency` 等），写入层做 `扁平键 → runtime.<新名>` 与 `enabled_llm.<m> → modules.<m>.enabled` 的映射。
+2. 写前单槽 `.bak` 备份（`copy_file_atomic` 原语），文件直接落为 v2，不保留并存结构。
+3. `runtime` / `advanced` 的写入经共享白名单与范围校验；`edit_ops` 对外键名固定（仍是 `llm_max_thinking_concurrency` 等），写入层做 `扁平键 → runtime.<新名>` 与 `enabled_llm.<m> → modules.<m>.enabled` 的映射。
 4. **幂等**：读 → 写 → 读 → 写，第二次写出的内容与第一次逐字节相同。
 
 ### 4.3 `defaults` 的来源（唯一两条）
 
 1. **模板生成**：取 `_llm_settings_defaults` 的内置默认值；模块段写与之不同的项。
-2. **用户编辑**：用户改 `defaults`，所有未写差异的模块随之生效。
+2. **用户编辑**：用户改 `defaults`，所有未写差异的模块立即按新默认值生效。
 
 程序**不做**按各模块取值的众数/均值推断——那会让写回结果依赖数据分布与遍历顺序，破坏幂等与可 diff。
 
@@ -148,13 +148,13 @@
 
 ---
 
-## 5. 升级与回滚
+## 5. 结构升级与回滚
 
-- **升级**：由首次写入触发（任一面板保存或显式命令），写前自动 `.bak`；记 INFO：`[config] llm_settings 结构升级 v1 → v2（模块 7 个，写入 N 个键）`。
-- **单向性**：v2 的段名对 v1 程序全是不认识的键 → 参数全部回落默认，配置**静默失效**。因此：
-  - `how-to-config-llm.md` 显著提示：升级后不要用旧程序运行；确需回退先还原 `llm_settings.json.bak`。
-  - `doctor` 增加只读检查「llm_settings 结构版本 = v1 / v2」，v1 时提示"下次保存自动升级"。
-- **回滚**：还原 `.bak` 即回到 v1，程序两种结构都能载入。
+- **升级触发**：首次写入（任一面板保存或显式命令）即落为 v2，写前自动 `.bak`；记 INFO：`[config] llm_settings 结构升级 v1 → v2（模块 7 个，写入 N 个键）`。
+- **降级风险**：v2 的段名不在 v1 的键白名单内，降级运行会把这些段当作未知键、参数回落默认。因此：
+  - `how-to-config-llm.md` 提示：升级后如需回退，先还原 `llm_settings.json.bak` 再运行。
+  - `doctor` 只读检查「llm_settings 结构版本 = v1 / v2」，v1 时提示"下次保存自动升级"。
+- **回滚**：还原 `.bak` 即回到 v1；两种结构都能载入。
 
 ---
 
@@ -168,7 +168,7 @@
 | 未知段/未知键 | 保留 + WARNING |
 | `schema_version` 高于支持 | 拒绝加载并提示升级 |
 
-实现位置：`core/data_registry.get_known_llm_settings_keys()` 提供**结构白名单**（合法段名 + 模块名 ∈ 注册表 + 参数名 ∈ 参数白名单 + `runtime`/`advanced` 子键白名单）；`config/_validation_llm.py` 的模块子键校验改为 `modules` 子键校验，错误文案口径与面板一致。
+实现位置：`core/data_registry.get_known_llm_settings_keys()` 提供**结构白名单**（合法段名 + 模块名 ∈ 注册表 + 参数名 ∈ 参数白名单 + `runtime`/`advanced` 子键白名单）；`config/_validation_llm.py` 负责 `modules` 子键校验，错误文案口径与面板一致。
 
 ---
 
@@ -182,11 +182,11 @@
 | `config/_llm_settings_defaults.py` | 模板生成输出 v2（含注释与 `defaults` 段） |
 | `config/_validation_llm.py` | 模块子键校验改 `modules` |
 | `core/data_registry.py` | 已知键白名单 → 结构白名单 |
-| `config/edit_ops.py` | `llm_scalar` / `llm` 写入目标映射（对外键名不变） |
+| `config/edit_ops.py` | `llm_scalar` / `llm` 写入目标映射（对外键名固定） |
 | `core/doctor.py` | 新增「llm_settings 结构版本」只读检查 |
 | `config/__init__.py` | 若新增公开访问器（如 `get_llm_module_config`）在此 re-export |
 
-**不改**：`llm/` 包全部实现（扁平视图契约不变）、`config.json`、`features.json`、`llm_providers.json`、`llm_key.json`、面板渲染逻辑、CLI 参数名。
+**不改**：`llm/` 包全部实现（按扁平视图契约消费）、`config.json`、`features.json`、`llm_providers.json`、`llm_key.json`、面板渲染逻辑、CLI 参数名。
 
 **文档**
 

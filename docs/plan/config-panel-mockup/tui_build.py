@@ -30,16 +30,60 @@ MAX_LINES = 52
 OUTPUTS = {
     "tui.html": (
         "TUI 面板图样 · 目标设计",
-        "本文件只含目标设计（五组开关 / 16 项主菜单 / [G] 七项 / [G]→[L] 七项）；"
-        "现有实现见 tui-current.html。均由真实处理器渲染。",
+        "本文件只含目标设计（[P] 章节总表 / [S] 报告呈现与增强 / [G] 全局设置 / [G]→[L] LLM 设置），"
+        "专项详情为面板内 `?编号` 查询；现有实现见 tui-current.html。",
         ("proposed", "both"),
     ),
     "tui-current.html": (
         "TUI 面板图样 · 现有实现",
-        "本文件只含现有实现（四组开关 / 19 项主菜单 / [D] 五项 / [D]→[L] 六项）；"
-        "目标设计见 tui.html。均由真实处理器渲染。",
+        "本文件只含现有实现（四组开关 / 一级直达的指数池与匿名化 / [D] 目录信息 / [D]→[L] 调优参数）；"
+        "目标设计见 tui.html。",
         ("current", "both"),
     ),
+}
+
+#: 层级导航图（每份图样只放自己那一套）
+NAV_TREE = {
+    "proposed": """主菜单（一级 · 16 项）
+├─ 生成报告      [E] [B] [L] [W]
+├─ 数据与查看    [Q] [1] [2] [3]
+├─ 配置
+│   ├─ [P] 报告章节        二级 · 数字 1-5 切换 · 0 返回
+│   ├─ [S] 报告呈现与增强  二级 · 数字 1-20 切换；?编号 为面板内只读查询
+│   ├─ [G] 全局设置        二级 · 字母键 C/F/O/L/I/A/M/D（分组：目录与文件 / LLM / 基准与呈现 / 入口与诊断 / 索引）
+│   │   ├─ [C] 持仓信息目录     目录与文件 · 输入路径
+│   │   ├─ [F] 持仓信息文件名   输入名称
+│   │   ├─ [O] 报告输出目录     输入路径
+│   │   ├─ [L] LLM 设置         三级 · 数字 1-7 · 0 返回
+│   │   │     ├─ 1-6 运行参数        输入新值（范围校验）
+│   │   │     └─ 7 多链线路优先级    四级 · 输入两个编号交换
+│   │   ├─ [I] 对比基准指数     基准与呈现 · 增删 / 重置
+│   │   ├─ [A] 持仓匿名化       基准与呈现 · 数字 1-4 选档
+│   │   ├─ [D] 系统自检上屏     入口与诊断 · 开关
+│   │   └─ [M] 配置入口地图     索引 · 只读打印
+│   └─ [R] 刷新配置
+└─ 诊断与排查    [V] [H] [T]
+
+键语义：一级＝功能入口；二级＝菜单键（字母）或开关编号（数字）；三级＝可编辑项编号；?编号＝面板内只读查询（不换层级、不写配置）""",
+    "current": """主菜单（一级 · 19 项）
+├─ 生成报告      [E] [B] [L] [W]
+├─ 数据与查看    [Q] [1] [2] [3]
+├─ 配置
+│   ├─ [P] 配置报告可选章节    二级 · 数字 1-6（第 6 项为跳转提示）
+│   ├─ [S] 配置功能开关        二级 · 数字 1-34 切换；?编号 为面板内只读查询
+│   ├─ [I] 管理对比指数池      一级直达 · 增删 / 重置
+│   ├─ [A] 配置持仓匿名化      一级直达 · 数字 1-4 选档
+│   ├─ [D] 查看配置与目录信息  二级 · 字母键 C/F/O/L/M · 0 返回
+│   │   ├─ [C] 持仓信息目录     输入路径
+│   │   ├─ [F] 持仓信息文件名   输入名称
+│   │   ├─ [O] 报告输出目录     输入路径
+│   │   ├─ [L] LLM 调优参数     三级 · 数字 1-6 · 0 返回
+│   │   └─ [M] 配置入口地图     只读打印
+│   ├─ [M] 配置 LLM 多链线路优先级   一级直达 · 输入两个编号交换
+│   └─ [R] 刷新配置
+└─ 诊断与排查    [V] [H] [T]
+
+键语义：一级＝功能入口；二级＝菜单键（字母）或开关编号（数字）；三级＝可编辑项编号；?编号＝面板内只读查询（不换层级、不写配置）""",
 }
 
 SGR_CLASS = {
@@ -91,10 +135,15 @@ def build_frame(frame: dict, variant: str) -> str:
     total = len([ln for ln in lines if SGR_RE.sub("", ln).strip()])
     body = "\n".join(ansi_to_html(ln) for ln in lines[:MAX_LINES])
     more = f'<p class="more">… 共 {total} 行，此处展示前 {MAX_LINES} 行</p>' if total > MAX_LINES else ""
+    path = (frame["path_proposed"] if variant == "proposed" else frame["path_current"]) or frame[
+        "path_proposed"
+    ]
+    crumb = f'<p class="crumb">{_esc(path)}</p>' if path else ""
     return (
         f'<section class="screen" id="s-{frame["id"]}">'
         f'<div class="screen-head"><span class="lvl lvl-{frame["level"]}">{frame["level"]}</span>'
         f"<h2>{_esc(title)}</h2></div>"
+        f"{crumb}"
         f'<p class="note">{_esc(frame["note"])}</p>'
         f'<pre class="term">{body}</pre>{more}</section>'
     )
@@ -118,6 +167,7 @@ def main() -> int:
             TEMPLATE.replace("{{TITLE}}", title)
             .replace("{{SUBTITLE}}", subtitle)
             .replace("{{COUNT}}", str(len(selected)))
+            .replace("{{TREE}}", f'<pre class="tree">{NAV_TREE[variant]}</pre>')
             .replace("{{NAV}}", build_nav(selected, variant))
             .replace("{{BODY}}", body)
         )
@@ -161,10 +211,15 @@ main { padding: 20px 24px 80px; max-width: 1100px; }
 .lvl-一级 { color: var(--brand); border-color: #6b3f18; }
 .lvl-二级 { color: var(--blue); border-color: #1f4a75; }
 .lvl-三级 { color: var(--cyan); border-color: #1d5a63; }
+.lvl-面板内 { color: var(--text-dim); border-color: var(--border); }
+.lvl-四级 { color: var(--gold, #d2a8ff); border-color: #4a3a6b; }
 .note { margin: 2px 0 10px; color: var(--text-dim); font-size: 12px; }
 pre.term { margin: 0; padding: 14px 16px; background: #0b0f14; border: 1px solid var(--border); border-radius: 8px;
   overflow-x: auto; font-family: var(--font); font-size: 12.5px; line-height: 1.55; color: var(--text); }
 .more { margin: 6px 0 0; font-size: 11.5px; color: var(--text-dim); }
+.crumb { margin: 2px 0 2px; font-size: 12px; color: var(--blue); letter-spacing: .01em; }
+pre.tree { margin: 0 0 24px; padding: 14px 16px; background: #0f141b; border: 1px solid var(--border);
+  border-radius: 8px; font-family: var(--font); font-size: 12.5px; line-height: 1.6; color: var(--text); overflow-x: auto; }
 .g { color: var(--green); } .r { color: var(--red); } .y { color: var(--yellow); }
 .c { color: var(--cyan); } .b { color: var(--blue); } .o { color: var(--brand); }
 .d { color: var(--text-dim); } .bold { font-weight: 600; }
@@ -182,10 +237,11 @@ pre.term { margin: 0; padding: 14px 16px; background: #0b0f14; border: 1px solid
 </header>
 <div class="wrap">
 <nav>
-  <div class="nav-title">屏幕清单（一级 → 二级 → 三级）</div>
+  <div class="nav-title">屏幕清单（按层级）</div>
   {{NAV}}
 </nav>
 <main>
+{{TREE}}
 {{BODY}}
 </main>
 </div>

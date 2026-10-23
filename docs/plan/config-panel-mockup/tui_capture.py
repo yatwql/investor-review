@@ -37,6 +37,41 @@ REPO = HERE.parents[2]
 COLS = 108
 LINES = 60
 
+
+#: 每屏的入口路径（current, proposed）——图样顶部面包屑与层级导航图共用
+NAV_PATH: dict[str, tuple[str, str]] = {
+    "main": ("主菜单", ""),
+    "main_proposed": ("", "主菜单"),
+    "switches": ("主菜单 › 配置 › [S]", ""),
+    "switches_proposed": ("", "主菜单 › 配置 › [S]"),
+    "switch_detail": ("主菜单 › 配置 › [S] › ?10（面板内查询）", ""),
+    "switch_detail_proposed": ("", "主菜单 › 配置 › [S] › ?10（面板内查询）"),
+    "dmenu": ("主菜单 › 配置 › [D]", ""),
+    "g_menu_proposed": ("", "主菜单 › 配置 › [G]"),
+    "d_tuning": ("主菜单 › 配置 › [D] › [L]", ""),
+    "d_llm_proposed": ("", "主菜单 › 配置 › [G] › [L]"),
+    "d_map": ("主菜单 › 配置 › [D] › [M]", "主菜单 › 配置 › [G] › [M]"),
+    "d_dir": ("主菜单 › 配置 › [D] › [C]", "主菜单 › 配置 › [G] › [C]"),
+    "d_file": ("主菜单 › 配置 › [D] › [F]", "主菜单 › 配置 › [G] › [F]"),
+    "d_out": ("主菜单 › 配置 › [D] › [O]", "主菜单 › 配置 › [G] › [O]"),
+    "boards": ("主菜单 › 配置 › [P]", ""),
+    "boards_proposed": ("", "主菜单 › 配置 › [P]"),
+    "indices": ("主菜单 › 配置 › [I]", "主菜单 › 配置 › [G] › [I]"),
+    "anon": ("主菜单 › 配置 › [A]", "主菜单 › 配置 › [G] › [A]"),
+    "providers": ("主菜单 › 配置 › [M]", ""),
+    "providers_proposed": ("", "主菜单 › 配置 › [G] › [L] › 7"),
+    "cache": ("主菜单 › 数据与查看 › [3]", "主菜单 › 数据与查看 › [3]"),
+    "logs": ("主菜单 › 诊断与排查 › [V]", "主菜单 › 诊断与排查 › [D] › [V]"),
+    "health": ("主菜单 › 诊断与排查 › [H]", "主菜单 › 诊断与排查 › [D] › [H]"),
+    "doctor": ("主菜单 › 诊断与排查 › [T]", "主菜单 › 诊断与排查 › [D] › [T]"),
+    "d_diag_proposed": ("", "主菜单 › 诊断与排查 › [D]"),
+    "d_log_proposed": ("", "主菜单 › 诊断与排查 › [D] › [L]"),
+    "generate": ("主菜单 › 生成报告 › [E]/[B]/[L]", "主菜单 › 生成报告 › [E]/[B]/[L]"),
+    "qa": ("主菜单 › 数据与查看 › [Q]", "主菜单 › 数据与查看 › [Q]"),
+    "whatif": ("主菜单 › 生成报告 › [W]", "主菜单 › 生成报告 › [W]"),
+    "refresh": ("主菜单 › 配置 › [R]", "主菜单 › 配置 › [R]"),
+}
+
 #: (id, 层级, 变体, 现有标题, 目标标题, 取数模式, 送键, 说明)
 SCREENS: list[tuple[str, str, str, str, str, str, str, str]] = [
     # ── 一级主菜单 ──
@@ -55,10 +90,10 @@ SCREENS: list[tuple[str, str, str, str, str, str, str, str]] = [
         "一级",
         "proposed",
         "",
-        "主菜单（16 项，配置组四项）",
+        "主菜单（14 项，配置组四项 + 诊断组一项）",
         "main_proposed",
         "",
-        "配置组 P/S/G/R；线路、运行参数、指数池、匿名化归于 [G] 二级",
+        "配置组 P/S/G/R；线路、运行参数、指数池、匿名化归于 [G]；日志/健康/自检收进 [D]",
     ),
     # ── 功能开关面板 ──
     (
@@ -76,27 +111,37 @@ SCREENS: list[tuple[str, str, str, str, str, str, str, str]] = [
         "二级",
         "proposed",
         "",
-        "功能开关面板（五组）",
+        "[S] 报告呈现与增强（三块，19 项）",
         "switches_proposed",
         "0\r",
-        "分析增强 8-21 / 独立章节 22-26 / 呈现 27 / 机制 28-32 / LLM 增强 33-34",
+        "分析增强 1-14 / 呈现 15 / 机制与诊断 16-19；LLM 章节、整章增补在 [P]，入口与诊断在 [G]",
     ),
     (
         "switch_detail",
-        "三级",
-        "both",
-        "功能开关 · 单项详情（`?编号`）",
-        "功能开关 · 单项详情（`?编号`）",
+        "面板内",
+        "current",
+        "功能开关 · 单项详情（`?10`，四组编号）",
+        "",
         "switches",
         "?10\r\x03",
-        "只读信息面：说明 / 分组 / 存储位置 / 当前值 vs 出厂默认",
+        "面板内只读查询：回车后仍停在同一面板，不进入新层级；此处第 10 项＝辩论-条件推理",
+    ),
+    (
+        "switch_detail_proposed",
+        "面板内",
+        "proposed",
+        "",
+        "[S] 单项详情（`?3`，目标编号）",
+        "switches_proposed",
+        "?3\r\x03",
+        "面板内只读查询：回车后仍停在同一面板；目标结构下第 3 项＝数据质量仪表盘",
     ),
     # ── 配置分组二级 ──
     (
         "dmenu",
         "二级",
         "current",
-        "配置与目录信息子菜单（[D] 二级，5 项）",
+        "[D] 目录信息（二级，5 个字母键）",
         "",
         "dmenu",
         "0\r",
@@ -107,17 +152,37 @@ SCREENS: list[tuple[str, str, str, str, str, str, str, str]] = [
         "二级",
         "proposed",
         "",
-        "全局设置子菜单（[G] 二级，7 项）",
+        "[G] 全局设置（二级，7 个字母键）",
         "g_menu_proposed",
         "0\r",
-        "增 [I] 对比基准指数、[A] 持仓匿名化；提示覆盖 C/F/O/L/I/A/M",
+        "按 G 进入本层：C/F/O/L/I/A/M 为字母快捷键，按组显示；按 L 才进入 LLM 设置（下一层）",
+    ),
+    (
+        "d_diag_proposed",
+        "二级",
+        "proposed",
+        "",
+        "[D] 诊断与排查（V/H/T/L）",
+        "d_diag_proposed",
+        "0\r",
+        "入口聚合：运行日志 / 健康历史 / 系统自检 / 日志设置；前三项面板本体不变，自检恒上屏",
+    ),
+    (
+        "d_log_proposed",
+        "三级",
+        "proposed",
+        "",
+        "[D]→[L] 日志设置（6 项）",
+        "d_log_proposed",
+        "0\r",
+        "写盘/控制台级别、轮转上限与备份数、查看器默认级别与行数；级别与轮转下次启动生效",
     ),
     # ── LLM 设置三级 ──
     (
         "d_tuning",
         "三级",
         "current",
-        "LLM 调优参数（[D]→[L]，6 项）",
+        "[D]→[L] LLM 调优参数（三级，6 个数字项）",
         "",
         "tuning",
         "0\r0\r",
@@ -128,10 +193,10 @@ SCREENS: list[tuple[str, str, str, str, str, str, str, str]] = [
         "三级",
         "proposed",
         "",
-        "LLM 设置（[G]→[L]，7 项）",
+        "[G]→[L] LLM 设置（三级，7 个数字项）",
         "d_llm_proposed",
         "0\r",
-        "6 个运行参数 + 第 7 项「多链线路优先级」入口；行尾给线路条数与链首",
+        "1-6 输入新值修改运行参数；第 7 项为「多链线路优先级」入口（再进线路面板）；数字编号从属本层",
     ),
     # ── 目录与索引（版面一致，入口键不同）──
     (
@@ -190,10 +255,10 @@ SCREENS: list[tuple[str, str, str, str, str, str, str, str]] = [
         "二级",
         "proposed",
         "",
-        "报告章节取舍（[P]，仅 5 章）",
+        "[P] 报告章节（17 项三块 + 7.1/7.2）",
         "boards_proposed",
         "0\r",
-        "5 个顶层章节；面板底部一行提示指向 [S]",
+        "顶层 5 / LLM 7（智囊团下 7.1 正反辩论、7.2 条件推理）/ 整章增补 5；底部提示章内追加见 [S]",
     ),
     # ── 指数池 / 匿名化（版面一致，入口层级不同）──
     (
@@ -219,12 +284,22 @@ SCREENS: list[tuple[str, str, str, str, str, str, str, str]] = [
     (
         "providers",
         "二级",
-        "both",
+        "current",
         "LLM 多链线路优先级（[M]）",
+        "",
+        "providers",
+        "0\r",
+        "按 priority 排序的线路清单与调序操作；返回项「0. 返回主菜单」",
+    ),
+    (
+        "providers_proposed",
+        "四级",
+        "proposed",
+        "",
         "多链线路优先级（[G]→[L] 第 7 项）",
         "providers",
         "0\r",
-        "按 priority 排序的线路清单与调序操作",
+        "按 priority 排序的线路清单与调序操作；返回项「0. 返回 LLM 设置」",
     ),
     # ── 其余面板（两套一致）──
     ("cache", "二级", "both", "缓存管理（[3]）", "缓存管理（[3]）", "cache", "B\r", "统计首屏 + 子项 3 清理过期缓存"),
@@ -290,6 +365,11 @@ SCREENS: list[tuple[str, str, str, str, str, str, str, str]] = [
         "重读 config / llm_settings / llm_key / llm_providers",
     ),
 ]
+
+#: 目标态需要按"上一层"改写的返回项文案（真实实现会同步改字面量）
+REWRITES: dict[str, list[tuple[str, str]]] = {
+    "providers_proposed": [("0. 返回主菜单", "0. 返回 LLM 设置")],
+}
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
@@ -369,12 +449,17 @@ def main() -> int:
     frames = []
     for sid, level, variant, title_current, title_proposed, mode, keys, note in SCREENS:
         raw = capture(mode, keys)
+        for old_text, new_text in REWRITES.get(sid, ()):
+            raw = raw.replace(old_text, new_text)
         lines = [ln for ln in ANSI_RE.sub("", raw).split("\n") if ln.strip()]
+        path_current, path_proposed = NAV_PATH.get(sid, ("", ""))
         frames.append(
             {
                 "id": sid,
                 "level": level,
                 "variant": variant,
+                "path_current": path_current,
+                "path_proposed": path_proposed,
                 "title_current": title_current,
                 "title_proposed": title_proposed,
                 "note": note,

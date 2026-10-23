@@ -3,364 +3,298 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Web 配置面板 — 目标设计</title>
+<title>Web 配置面板 · 目标设计</title>
 <style>
-/* ── 真实工作台 token（与 src/static/web/style.css 同值）── */
 :root {
-  --bg: #f3f5f8;
-  --surface: #ffffff;
-  --border: #d9dce1;
-  --text: #1f2328;
-  --text-secondary: #57606a;
-  --primary: #1f6fb2;
-  --primary-hover: #185a92;
-  --accent: #0e7a5f;
-  --ok: #1a7f37;
-  --warn: #9a6700;
-  --error: #cf222e;
-  --focus: #0969da;
-  --radius: 8px;
-  --space-card: 24px;
-  --shadow-card: 0 1px 2px rgba(31, 35, 40, 0.05), 0 4px 16px rgba(31, 35, 40, 0.05);
-  --font-stack: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, sans-serif;
+  --bg: #f3f5f8; --surface: #fff; --surface-2: #f8fafc; --border: #d9dce1;
+  --text: #1f2328; --text-secondary: #57606a; --primary: #1f6fb2; --accent: #0e7a5f;
+  --warn: #9a6700; --focus: #0969da; --radius: 8px;
+  --shadow: 0 1px 2px rgba(31,35,40,.05), 0 4px 16px rgba(31,35,40,.05);
+  --font: "PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,-apple-system,sans-serif;
 }
 [data-theme="dark"] {
-  --bg: #121212;
-  --surface: #1e1e1e;
-  --border: #3a3a3a;
-  --text: #e0e0e0;
-  --text-secondary: #c0c0c0;
-  --ok: #66bb6a;
-  --warn: #f0a35e;
-  --error: #e74c3c;
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --bg: #121212; --surface: #1e1e1e; --surface-2: #191919; --border: #3a3a3a;
+  --text: #e0e0e0; --text-secondary: #c0c0c0; --accent: #6ecf9f; --warn: #f0a35e;
+  --shadow: 0 1px 2px rgba(0,0,0,.5);
 }
 * { box-sizing: border-box; }
-body {
-  margin: 0; background: var(--bg); color: var(--text);
-  font-family: var(--font-stack); font-size: 14px; line-height: 1.7;
-}
-
-/* ── 图样外壳（非产品 UI）── */
-.mock-bar {
-  position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: 18px;
-  align-items: center; padding: 12px 20px; background: var(--surface);
-  border-bottom: 1px solid var(--border); box-shadow: var(--shadow-card);
-}
-.mock-bar h1 { font-size: 15px; font-weight: 600; margin: 0 8px 0 0; }
-.mock-group { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; line-height: 1.7; }
+.toolbar { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: 16px; align-items: center;
+  padding: 10px 20px; background: var(--surface); border-bottom: 1px solid var(--border); box-shadow: var(--shadow); }
+.toolbar h1 { font-size: 15px; font-weight: 600; margin: 0 6px 0 0; }
+.toolbar .sub { color: var(--text-secondary); font-size: 12px; }
 .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
-.seg button {
-  border: 0; background: var(--surface); color: var(--text-secondary); font: inherit;
-  font-size: 12px; padding: 4px 10px; cursor: pointer;
-}
+.seg button { border: 0; background: var(--surface); color: var(--text-secondary); font: inherit; font-size: 12px; padding: 4px 10px; cursor: pointer; }
 .seg button + button { border-left: 1px solid var(--border); }
 .seg button[aria-pressed="true"] { background: var(--primary); color: #fff; }
-.mock-wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 80px; }
-.mock-section { margin: 0 0 36px; }
-.mock-section > h2 {
-  font-size: 22px; line-height: 1.3; font-weight: 600; margin: 0 0 4px;
-}
-.mock-section > p.lead { margin: 0 0 16px; color: var(--text-secondary); font-size: 13px; }
-
-/* ── 产品卡面（与工作台一致）── */
-.card {
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius); box-shadow: var(--shadow-card); padding: var(--space-card);
-}
-.card-narrow { max-width: 720px; }
-
-/* ── 配置面板：块与行样式（真实工作台）── */
-.config-group { border-top: 1px dashed var(--border); padding: 12px 0 4px; }
-.config-group:first-of-type { border-top: none; padding-top: 0; }
-.config-group-title { margin: 0 0 8px; font-size: 0.9rem; font-weight: 600; color: var(--text); }
-.config-row { padding: 3px 0; display: flex; align-items: flex-start; gap: 8px; }
-.config-row input { margin-top: 5px; }
-.config-path-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; flex-wrap: wrap; }
-.config-path-label { flex: none; min-width: 5.5em; font-size: 0.9rem; color: var(--text-secondary); }
-.config-path-row input[type="text"] {
-  flex: 1 1 220px; min-width: 0; padding: 5px 8px; font: inherit; font-size: 13px;
-  color: var(--text); background: var(--surface);
-  border: 1px solid var(--border); border-radius: 6px;
-}
-.config-index-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 13px; }
-.config-index-name { flex: 1; }
-.btn-mini {
-  border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary);
-  border-radius: 6px; font: inherit; font-size: 12px; padding: 2px 8px; cursor: pointer;
-}
-.config-note-sub { margin: 8px 0 0; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5; }
-
-/* ── 新增：域分区（本图样的提案） ── */
-.config-domain + .config-domain { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--border); }
-.config-domain-title {
-  margin: 0 0 2px; font-size: 16px; line-height: 1.4; font-weight: 600; color: var(--text);
-  padding-left: 10px; border-left: 3px solid var(--primary);
-}
-.config-domain-hint { margin: 0 0 14px 13px; font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
-.config-domain .config-group { border-top-color: transparent; border-top-style: solid; padding-top: 6px; }
-.config-item-desc {
-  margin: 1px 0 7px 22px; font-size: 12px; line-height: 1.5; color: var(--text-secondary);
-}
-.config-item-desc.inline-note { margin-left: 0; }
-.tag-affects {
-  font-size: 11px; color: var(--accent); border: 1px solid var(--accent);
-  border-radius: 4px; padding: 0 4px; margin-left: 4px; white-space: nowrap;
-}
-.tag-exp { font-size: 11px; color: var(--warn); margin-right: 2px; }
-
-[data-theme="dark"] .tag-affects { color: #6ecf9f; border-color: #6ecf9f; }
-
-/* ── TUI 图样 ── */
-.tui-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-@media (max-width: 860px) { .tui-grid { grid-template-columns: 1fr; } }
-pre.tui {
-  margin: 0; padding: 14px 16px; background: #1b1f23; color: #d8dee4;
-  border-radius: var(--radius); font-size: 12.5px; line-height: 1.65;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; overflow-x: auto;
-}
-pre.tui .h { color: #79c0ff; font-weight: 600; }
-pre.tui .new { color: #7ee787; }
-pre.tui .moved { color: #ffd479; }
-pre.tui .dim { color: #8b949e; }
-pre.tui .sel { background: #264f78; }
-
-/* ── 说明卡片 ── */
-.legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12px; color: var(--text-secondary); margin: 14px 0 0; }
-table.map { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 12px; }
-table.map th, table.map td { border-bottom: 1px solid var(--border); padding: 6px 8px; text-align: left; }
-table.map th { font-weight: 600; color: var(--text); font-size: 12px; }
-table.map td.num { font-variant-numeric: tabular-nums; }
-.hl { background: color-mix(in srgb, var(--primary) 10%, transparent); }
+.filter { border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text);
+  font: inherit; font-size: 12px; padding: 4px 8px; min-width: 180px; }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 18px 20px 80px; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 16px; }
+.chips a { font-size: 12px; color: var(--text-secondary); text-decoration: none; border: 1px solid var(--border);
+  border-radius: 999px; padding: 2px 10px; background: var(--surface); }
+.chips a:hover { color: var(--primary); border-color: var(--primary); }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px 24px; }
+.domain + .domain { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--border); }
+.domain-title { margin: 0 0 2px; font-size: 16px; font-weight: 600; padding-left: 10px; border-left: 3px solid var(--primary); }
+.domain-hint { margin: 0 0 4px 13px; font-size: 12px; color: var(--text-secondary); }
+.domain-tui { margin: 0 0 14px 13px; font-size: 11.5px; color: var(--text-secondary); }
+.block { border-top: 1px solid var(--border); padding: 12px 0 6px; }
+.block:first-of-type { border-top: 0; }
+.block-title { margin: 0 0 2px; font-size: 13px; font-weight: 600; }
+.block-meta { margin: 0 0 8px; font-size: 11.5px; color: var(--text-secondary); }
+.row { display: flex; gap: 8px; align-items: flex-start; padding: 3px 0; }
+.row input[type="checkbox"], .row input[type="radio"] { margin-top: 6px; }
+.row .label { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.desc { margin: 1px 0 6px 24px; font-size: 12px; line-height: 1.5; color: var(--text-secondary); }
+.subrow { padding-left: 26px; }
+.tag { font-size: 11px; border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; white-space: nowrap; }
+.tag.affects { color: var(--accent); }
+.tag.exp { color: var(--warn); }
+.tag.changed { color: var(--primary); }
+.mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+.field { display: flex; gap: 8px; align-items: center; padding: 4px 0; flex-wrap: wrap; }
+.field label { min-width: 8.5em; color: var(--text-secondary); font-size: 13px; }
+.field input[type="text"], .field input[type="number"] { flex: 0 1 260px; min-width: 120px; padding: 5px 8px;
+  border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font: inherit; font-size: 13px; }
+.field input[type="number"] { flex: 0 0 96px; }
+.field select { flex: 0 0 160px; padding: 5px 8px; border: 1px solid var(--border);
+  border-radius: 6px; background: var(--surface); color: var(--text); font: inherit; font-size: 13px; }
+.btn { border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--text-secondary);
+  font: inherit; font-size: 12px; padding: 3px 10px; cursor: pointer; }
+.list-row { display: flex; gap: 8px; align-items: center; padding: 3px 0; font-size: 13px; }
+.list-row .grow { flex: 1; }
+.empty { color: var(--text-secondary); font-size: 12px; padding: 4px 0 8px; }
+.note { margin: 8px 0 0; font-size: 12px; color: var(--text-secondary); }
+.hidden { display: none !important; }
+@media (max-width: 720px) { .wrap { padding: 14px 12px 60px; } .card { padding: 16px 14px; } }
 </style>
 </head>
 <body>
-
-<div class="mock-bar">
+<div class="toolbar">
   <h1>Web 配置面板 · 目标设计</h1>
-  
-  <div class="mock-group">说明密度
-    <div class="seg" id="seg-desc">
-      <button data-v="all">全部</button>
-      <button data-v="nonobvious" aria-pressed="true">仅非常识项</button>
-      <button data-v="off">关闭</button>
-    </div>
-  </div>
-  <div class="mock-group">「影响报告」标记
-    <div class="seg" id="seg-tag">
-      <button data-v="on" aria-pressed="true">显示</button>
-      <button data-v="off">不显示</button>
-    </div>
-  </div>
-  <div class="mock-group">主题
-    <div class="seg" id="seg-theme">
-      <button data-v="light" aria-pressed="true">亮</button>
-      <button data-v="dark">暗</button>
-    </div>
-  </div>
+  <span class="sub">四域编排：报告内容 / 呈现与机制 / 数据与线路 / LLM 运行</span>
+  <span class="seg" id="seg-desc">
+    <button data-v="all">全部说明</button>
+    <button data-v="hint" aria-pressed="true">仅需提示项</button>
+    <button data-v="off">关闭说明</button>
+  </span>
+  <span class="seg" id="seg-mark">
+    <button data-v="on" aria-pressed="true">标记</button>
+    <button data-v="off">无标记</button>
+  </span>
+  <span class="seg" id="seg-theme">
+    <button data-v="light" aria-pressed="true">亮</button>
+    <button data-v="dark">暗</button>
+  </span>
+  <input class="filter" id="filter" type="search" placeholder="筛选配置项（名称 / 说明 / 键名）">
 </div>
-
-<div class="mock-wrap">
-
-  <section class="mock-section">
-    <h2 id="panel-title">Web 配置面板</h2>
-    <p class="lead" id="panel-lead"></p>
-    <div class="card card-narrow" id="config-panel"></div>
-  </section>
-
-  <section class="mock-section">
-    <h2>TUI <code>[S]</code> 面板编号（重排 + 新增第 5 组）</h2>
-    <p class="lead">功能开关编号 = LLM 可见模块数（7）+ 按组顺序连续派生。上图为同一面板在两种组序下的编号映射，<code>how-to-use-tui-menu.md</code> 的编号表按目标编号维护。</p>
-    <div class="tui-grid">
-      <div>
-        <p class="lead" style="margin-bottom:6px">按文件编排（4 组）</p>
-        <pre class="tui"><span class="h">  ── 功能开关 ──</span>
- <span class="dim">1-7</span>   LLM 分析章节           <span class="dim">7 项</span>
-  <span class="sel">8</span>    呈现与体验             <span class="dim">1 项</span>
- <span class="sel">9-24</span>  分析增强               <span class="dim">16 项（含辩论两项）</span>
- <span class="sel">25-29</span>  独立章节与回放         <span class="dim">5 项</span>
- <span class="sel">30-34</span>  机制与诊断             <span class="dim">5 项</span></pre>
-      </div>
-      <div>
-        <p class="lead" style="margin-bottom:6px">按域编排（5 组，内容域在前）</p>
-        <pre class="tui"><span class="h">  ── 功能开关 ──</span>
- <span class="dim">1-7</span>   LLM 分析章节           <span class="dim">7 项（不变）</span>
-  <span class="new">8-21</span>   分析增强               <span class="dim">14 项（辩论迁出）</span>
- <span class="moved">22-26</span>  独立章节与回放         <span class="dim">5 项（25-29 → 22-26）</span>
- <span class="moved">27-27</span>  呈现与体验             <span class="dim">1 项（8 → 27）</span>
- <span class="moved">28-32</span>  机制与诊断             <span class="dim">5 项（30-34 → 28-32）</span>
- <span class="new">33-34</span>  🧠 LLM 分析增强         <span class="dim">2 项（新增）</span></pre>
-      </div>
-    </div>
-  </section>
-
-  <section class="mock-section">
-    <h2>编号位移对照表</h2>
-    <table class="map" id="map-table">
-      <thead><tr><th>组</th><th>项数</th><th>现有编号</th><th>目标编号</th><th>位移</th></tr></thead>
-      <tbody></tbody>
-    </table>
-    <p class="legend">
-      <span><b>影响文档：</b>how-to-use-tui-menu（面板编号表 + 组块标题 + 键名映射表）</span>
-      <span>· requirements §11.5（组数与默认态）</span>
-      <span>· how-to-config（开关表行序）</span>
-      <span>· how-to-use-web-mode（11 组 → 四域表）</span>
-    </p>
-  </section>
-
+<div class="wrap">
+  <div class="chips" id="chips"></div>
+  <div class="card" id="panel"></div>
+  <p class="note" id="footnote"></p>
 </div>
-
 <script>
-var DATA = {"switches": [{"key": "metrics_enabled", "label": "量化指标显示", "desc": "报告量化指标是否输出（雷达图各轴）；关闭即各轴显示 N/A、熔断器暂停指标失败计数（指标始终全量计算）", "group": "presentation", "on": true, "exp": false, "affects": true}, {"key": "llm_debate_procon", "label": "辩论-正反辩论", "desc": "三段式(白脸→黑脸→综合)", "group": "analysis", "on": false, "exp": false, "affects": true}, {"key": "llm_debate_conditional", "label": "辩论-条件推理", "desc": "情景化分析(涨/跌/震荡)", "group": "analysis", "on": true, "exp": false, "affects": true}, {"key": "factor_catalog", "label": "因子目录", "desc": "25 因子五来源族横截面信号入账与风格与因子分析区「因子目录」区块", "group": "analysis", "on": false, "exp": false, "affects": true}, {"key": "event_window_impact", "label": "事件窗量化对照", "desc": "新闻事件映射交易日后 ±5 交易日窗口：品种收益/超额收益与文本极性同表对照，分歧例进 LLM 分析章", "group": "analysis", "on": false, "exp": false, "affects": true}, {"key": "data_quality", "label": "数据质量仪表盘", "desc": "「数据源可用性矩阵」章渲染数据覆盖/时效/降级状态区块", "group": "analysis", "on": true, "exp": false, "affects": true}, {"key": "industry_beta", "label": "行业Beta子表", "desc": "「风格与因子分析」章渲染行业 Beta 子表（行业暴露 + 回归敏感性）", "group": "analysis", "on": false, "exp": false, "affects": true}, {"key": "candidate_compare", "label": "候选基金比较子表", "desc": "「基金业绩分析」章渲染候选基金横向比较表（候选来自 comparison_candidates）", "group": "analysis", "on": false, "exp": false, "affects": true}, {"key": "cost_lots", "label": "成本流水", "desc": "汇总/市值/分类页签渲染成本分档 + XIRR + 分红累计（需持仓 Excel 含交易/分红流水）", "group": "analysis", "on": false, "exp": false, "affects": true}, {"key": "valuation_percentile", "label": "估值分位", "desc": "「资产穿透TOP10」章渲染估值分位列（真实历史 PE/PB 分位，无覆盖时回落价格分位代理）", "group": "analysis", "on": false, "exp": false, "affects": true}, {"key": "market_temperature", "label": "市场温度", "desc": "「投资分析汇总」章渲染市场温度刻度行（三因子合成；数据不足时该行静默省略）", "group": "analysis", "on": true, "exp": false, "affects": true}, {"key": "market_sentiment", "label": "市场情绪与资金热点", "desc": "行动建议章内嵌块「市场情绪与持仓热点」：持仓/穿透标的当日上榜龙虎榜与进入连板梯队的事件行（需同花顺 key；零命中时写市场概览与说明行）", "group": "analysis", "on": false, "exp": false, "affects": true}, {"key": "fund_purchase_limit", "label": "基金申购限购", "desc": "「持仓明细与分类」市值明细追加「申购状态」列（天天基金渠道口径，含日限/下一开放日；数据不可用时静默隐列）", "group": "analysis", "on": true, "exp": false, "affects": true}, {"key": "cost_position", "label": "持仓成本区间位置", "desc": "「持仓明细与分类」市值明细追加「成本区间位置」列（每份成本相对近 20/260 交易日价格区间百分位，≈1 追涨嫌疑；行情缺失时静默隐列）", "group": "analysis", "on": true, "exp": false, "affects": true}, {"key": "risk_adjusted_excess", "label": "风险调整超额", "desc": "走势章新增「风险调整超额」子块：滚动 1Y 超额曲线 + 年化 IR/跟踪误差 + 近 12/24 月跑赢基准胜率（需配置业绩基准，独立拉长取数窗口）", "group": "analysis", "on": false, "exp": false, "affects": true}, {"key": "summary_highlights", "label": "本期要点与环比对照", "desc": "摘要区首屏执行摘要卡：关键指标环比行（总市值/总收益率/持仓数/集中度） + 本期关键变化 Top N（快照 diff 单源派生，无上期快照时整块隐藏）", "group": "analysis", "on": false, "exp": false, "affects": true}, {"key": "prosperity_framework", "label": "景气度框架诊断", "desc": "六维评分卡（景气方向/ROE 低位弹性/全球比较优势/流动性/集中度与周期拼接/业绩回撤印证）评估组合契合度，缺数据维度标记需核实", "group": "analysis", "on": true, "exp": false, "affects": true}, {"key": "rebalance_schedule_replay", "label": "调仓纪律回放", "desc": "月度定期/阈值偏离纪律多期回放 vs 买入持有（含成本），回放章双线与逐期成本表", "group": "standalone", "on": false, "exp": false, "affects": true}, {"key": "holding_change_review", "label": "持仓变动复盘", "desc": "快照差分出新增/加仓/减仓/清仓事件清单与频率/结构演变/意图对账（区间净额推断，结构级）+ LLM 归因块", "group": "standalone", "on": false, "exp": false, "affects": true}, {"key": "whatif_trade_cost", "label": "What-if 交易成本对比", "desc": "调仓回放计入申赎成本（FIFO 持有期阶梯）+ 成本前后收益差与业绩基准三线参照", "group": "standalone", "on": false, "exp": false, "affects": true}, {"key": "stock_fundamentals", "label": "个股基本面", "desc": "新增独立章：持仓个股基本面（财务指标 + 质量档/趋势/当前 PE-PB 与 A 股财报章节摘要两块；需数据底座与 DataSinking key）", "group": "standalone", "on": false, "exp": false, "affects": true}, {"key": "crisis_replay", "label": "危机回放", "desc": "危机区间标注升级为双层回放：组合侧窗口内危机穿越表现（区间收益） + 指数侧历史危机区间表现（收益/最大回撤，长窗指数日线）", "group": "standalone", "on": false, "exp": false, "affects": true}, {"key": "decision_reflection", "label": "决策跨期反思闭环", "desc": "登记决策 → 真实行情结算命中率 → 教训回灌专家复盘提示词", "group": "mechanism", "on": false, "exp": true, "affects": true}, {"key": "report_qa", "label": "报告对话式追问", "desc": "报告页内针对本期报告的会话式追问（零新增取数、轮数上限、用量独立记账）", "group": "mechanism", "on": false, "exp": true, "affects": true}, {"key": "deterministic_signal", "label": "确定性信号模块", "desc": "市场温度/估值分位/尾部风险等确定性评级的实时预消化信号行注入复盘与体检提示词，并跨期沉淀为带实时-非实时标签的账本（统计默认只算实时），教训与命中率随摘要回灌提示词", "group": "mechanism", "on": true, "exp": false, "affects": true}, {"key": "module_quality_gate", "label": "模块级质量分级", "desc": "按完整性/一致性给各 LLM 模块输出评 A~F 级，低评级随内容头部标注质量提示（不阻断不重试）", "group": "mechanism", "on": true, "exp": false, "affects": true}, {"key": "doctor_check", "label": "系统自检上屏", "desc": "TUI 菜单 [T] 与 Web「系统自检」卡片可见性；CLI doctor 子命令不受本开关约束", "group": "mechanism", "on": true, "exp": false, "affects": false}], "groupTitlesCurrent": {"presentation": "📊 呈现与体验（默认开启 · 只改呈现不改内容）", "analysis": "🔍 分析增强·既有章内追加（默认关闭 · 在既有章节内追加分析块/列/子表）", "standalone": "📑 独立章节与回放（默认关闭 · 新增整页签或多期回放）", "mechanism": "⚙ 机制与诊断（内部机制 / 诊断接缝 / 待验证实验）"}, "groupOrderCurrent": ["presentation", "analysis", "standalone", "mechanism"], "groupOrderProposed": ["analysis", "standalone", "presentation", "mechanism", "llm_enhance"], "groupTitlesProposed": {"presentation": "📊 呈现与体验（默认开启 · 只改呈现不改内容）", "analysis": "🔍 分析增强·既有章内追加（默认关闭 · 在既有章节内追加分析块/列/子表）", "standalone": "📑 独立章节与回放（默认关闭 · 新增整页签或多期回放）", "mechanism": "⚙ 机制与诊断（内部机制 / 诊断接缝 / 待验证实验）", "llm_enhance": "🧠 LLM 分析增强（默认关闭 · 在 LLM 章节内追加辩论/情景段，无独立章节）"}, "debateKeys": ["llm_debate_procon", "llm_debate_conditional"], "sections": [{"key": "enable_fund_deep_analysis", "label": "基金深度分析", "desc": "基金业绩分析章：基金业绩深挖、持仓基金穿透与组合归因（关闭即整章隐藏）", "on": true, "affects": true}, {"key": "enable_news", "label": "市场新闻", "desc": "市场新闻章：财经新闻热点抓取、摘要与持仓关联（关闭即整章隐藏）", "on": true, "affects": true}, {"key": "enable_history", "label": "组合历史走势+回撤", "desc": "组合历史走势+回撤章：多期净值曲线、回撤区间与区间收益（关闭即整章隐藏）", "on": true, "affects": true}, {"key": "enable_portfolio_evolution", "label": "组合演进", "desc": "组合演进章：多期持仓快照对比、变化摘要与结构演变（关闭即整章隐藏）", "on": true, "affects": true}, {"key": "enable_action", "label": "行动建议", "desc": "行动建议章：基于当前持仓、行情与估值的操作建议与理由（关闭即整章隐藏）", "on": true, "affects": true}], "paths": [{"key": "holdings_dir", "label": "持仓目录", "desc": "持仓 Excel 所在目录（相对项目根或绝对路径）", "value": "data/holdings"}, {"key": "holdings_filename", "label": "持仓文件名", "desc": "该目录下要读取的持仓文件名；每个工作表 = 一个账户", "value": "个人投资记录.xlsx"}, {"key": "output_dir", "label": "输出目录", "desc": "报告输出目录（相对项目根或绝对路径，留空回落默认 reports/）", "value": "reports"}], "anon": {"mode": "off", "items": [{"key": "off", "label": "关闭 — 显示真实持仓名称和代码"}, {"key": "code_display", "label": "代码显示 — 名称替换为'品种X'，保留代码和盈亏"}, {"key": "full_anonymous", "label": "完全匿名 — 名称'品种X'，代码'000XXX'，盈亏±XX%"}, {"key": "summary", "label": "汇总模式 — 仅显示大类汇总，不展示单条持仓"}]}, "indices": {"sh000300": "沪深300", "sh000905": "中证500", "sh000012": "中证全债"}, "providers": {"strategy_label": "按优先级排序", "order_is_chain": true, "items": [{"name": "deepseek-main", "provider": "claude", "priority": 10}, {"name": "opencode-go", "provider": "claude", "priority": 20}]}, "llmModules": [{"key": "global_macro", "label": "全球政经局势", "desc": "全球政经局势：宏观事件、地缘与政策面对持仓的传导", "on": true, "affects": true}, {"key": "expert_review", "label": "智囊团深度复盘", "desc": "智囊团深度复盘：多视角专家辩论后综合（含正反辩论开关影响）", "on": true, "affects": true}, {"key": "news_correlation", "label": "财经新闻热点与持仓关联分析", "desc": "财经新闻热点与持仓关联：热点抓取 + 与持仓映射", "on": true, "affects": true}, {"key": "health_check", "label": "持仓体检报告", "desc": "持仓体检报告：结构与风险体检、异常项定位", "on": true, "affects": true}, {"key": "penetration_deep", "label": "穿透深度分析", "desc": "穿透深度分析：穿透标的集中度、估值与行业暴露深挖", "on": true, "affects": true}, {"key": "self_review", "label": "生成后自检", "desc": "生成后自检：产出一致性与完整性复核", "on": true, "affects": true}, {"key": "holding_change", "label": "持仓变动复盘归因", "desc": "持仓变动复盘归因：多期变动事件的 LLM 归因", "on": true, "affects": true}], "tuning": [{"key": "llm_max_thinking_concurrency", "label": "thinking 模块并发上限", "hint": "默认 2（两个 thinking 模块并行）；端点偶发空内容重试时改回 1（串行）", "min": 1, "max": 4, "value": 2}, {"key": "llm_max_concurrency", "label": "LLM 模块并发线程数", "hint": "默认 3；调高可提速但更易触发端点限速（429）", "min": 1, "max": 8, "value": 3}, {"key": "max_retries", "label": "单请求重试次数", "hint": "默认 2（503/超时/网络异常）；429/403 归配额不重试", "min": 0, "max": 5, "value": 2}, {"key": "llm_full_fail_retry_delay", "label": "整链失败后的重试等待（秒）", "hint": "默认 30；0 表示不等待", "min": 0, "max": 600, "value": 30}, {"key": "llm_total_time_budget_sec", "label": "LLM 总时间预算（秒）", "hint": "默认 0（不启用）；超预算不再启动新模块，防单次报告拖成小时级", "min": 0, "max": 7200, "value": 0}, {"key": "daily_cost_limit", "label": "LLM 日费用上限", "hint": "默认 0（不启用）；超限时交互渠道询问「用已有结果继续 / 中止」", "min": 0, "max": 10000, "value": 0}], "domains": [{"key": "report_content", "title": "报告内容", "hint": "改这里会改变报告里出现什么：顶层章节取舍、章内附加块、整章回放", "blocks": ["sections", "features.analysis", "features.standalone"]}, {"key": "presentation_mechanism", "title": "呈现与机制", "hint": "只改呈现口径、匿名化与内部机制/诊断接缝：内容主体不变或仅影响入口显隐", "blocks": ["anonymization", "features.presentation", "features.mechanism"]}, {"key": "data_and_routes", "title": "数据与线路", "hint": "数据从哪读、跟什么基准比、LLM 走哪条线路", "blocks": ["paths", "indices", "providers"]}, {"key": "llm_run", "title": "LLM 运行", "hint": "LLM 章节启停、调用内增强（辩论/情景）与运行参数（并发/重试/预算）", "blocks": ["llm", "features.llm_enhance", "tuning"]}], "needs_hint": ["llm_debate_procon", "llm_debate_conditional", "factor_catalog", "event_window_impact", "industry_beta", "candidate_compare", "cost_lots", "valuation_percentile", "market_sentiment", "cost_position", "risk_adjusted_excess", "summary_highlights", "prosperity_framework", "rebalance_schedule_replay", "holding_change_review", "whatif_trade_cost", "stock_fundamentals", "crisis_replay", "decision_reflection", "report_qa", "deterministic_signal"]};
-</script>
-<script>
-var state = { view: 'proposed', desc: 'nonobvious', tag: 'on', theme: 'light' };
+var VIEW = "proposed";
+var DATA = {"groupsCurrent": {"presentation": [{"key": "metrics_enabled", "label": "量化指标显示", "desc": "报告量化指标是否输出（雷达图各轴）；关闭即各轴显示 N/A、熔断器暂停指标失败计数（指标始终全量计算）", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": true}], "analysis": [{"key": "llm_debate_procon", "label": "辩论-正反辩论", "desc": "三段式(白脸→黑脸→综合)", "on": false, "default": false, "affects": true, "exp": false, "needs_hint": false, "sub_of": "expert_review"}, {"key": "llm_debate_conditional", "label": "辩论-条件推理", "desc": "情景化分析(涨/跌/震荡)", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": false, "sub_of": "expert_review"}, {"key": "factor_catalog", "label": "因子目录", "desc": "25 因子五来源族横截面信号入账与风格与因子分析区「因子目录」区块", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "event_window_impact", "label": "事件窗量化对照", "desc": "新闻事件映射交易日后 ±5 交易日窗口：品种收益/超额收益与文本极性同表对照，分歧例进 LLM 分析章", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "data_quality", "label": "数据质量仪表盘", "desc": "「数据源可用性矩阵」章渲染数据覆盖/时效/降级状态区块", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": false}, {"key": "industry_beta", "label": "行业Beta子表", "desc": "「风格与因子分析」章渲染行业 Beta 子表（行业暴露 + 回归敏感性）", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "candidate_compare", "label": "候选基金比较子表", "desc": "「基金业绩分析」章渲染候选基金横向比较表（候选来自 comparison_candidates）", "on": false, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "cost_lots", "label": "成本流水", "desc": "汇总/市值/分类页签渲染成本分档 + XIRR + 分红累计（需持仓 Excel 含交易/分红流水）", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "valuation_percentile", "label": "估值分位", "desc": "「资产穿透TOP10」章渲染估值分位列（真实历史 PE/PB 分位，无覆盖时回落价格分位代理）", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "market_temperature", "label": "市场温度", "desc": "「投资分析汇总」章渲染市场温度刻度行（三因子合成；数据不足时该行静默省略）", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": true}, {"key": "market_sentiment", "label": "市场情绪与资金热点", "desc": "行动建议章内嵌块「市场情绪与持仓热点」：持仓/穿透标的当日上榜龙虎榜与进入连板梯队的事件行（需同花顺 key；零命中时写市场概览与说明行）", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "fund_purchase_limit", "label": "基金申购限购", "desc": "「持仓明细与分类」市值明细追加「申购状态」列（天天基金渠道口径，含日限/下一开放日；数据不可用时静默隐列）", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": true}, {"key": "cost_position", "label": "持仓成本区间位置", "desc": "「持仓明细与分类」市值明细追加「成本区间位置」列（每份成本相对近 20/260 交易日价格区间百分位，≈1 追涨嫌疑；行情缺失时静默隐列）", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": true}, {"key": "risk_adjusted_excess", "label": "风险调整超额", "desc": "走势章新增「风险调整超额」子块：滚动 1Y 超额曲线 + 年化 IR/跟踪误差 + 近 12/24 月跑赢基准胜率（需配置业绩基准，独立拉长取数窗口）", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "summary_highlights", "label": "本期要点与环比对照", "desc": "摘要区首屏执行摘要卡：关键指标环比行（总市值/总收益率/持仓数/集中度） + 本期关键变化 Top N（快照 diff 单源派生，无上期快照时整块隐藏）", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "prosperity_framework", "label": "景气度框架诊断", "desc": "六维评分卡（景气方向/ROE 低位弹性/全球比较优势/流动性/集中度与周期拼接/业绩回撤印证）评估组合契合度，缺数据维度标记需核实", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": true}], "standalone": [{"key": "rebalance_schedule_replay", "label": "调仓纪律回放", "desc": "月度定期/阈值偏离纪律多期回放 vs 买入持有（含成本），回放章双线与逐期成本表", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "holding_change_review", "label": "持仓变动复盘", "desc": "快照差分出新增/加仓/减仓/清仓事件清单与频率/结构演变/意图对账（区间净额推断，结构级）+ LLM 归因块", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "whatif_trade_cost", "label": "What-if 交易成本对比", "desc": "调仓回放计入申赎成本（FIFO 持有期阶梯）+ 成本前后收益差与业绩基准三线参照", "on": false, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "stock_fundamentals", "label": "个股基本面", "desc": "新增独立章：持仓个股基本面（财务指标 + 质量档/趋势/当前 PE-PB 与 A 股财报章节摘要两块；需数据底座与 DataSinking key）", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "crisis_replay", "label": "危机回放", "desc": "危机区间标注升级为双层回放：组合侧窗口内危机穿越表现（区间收益） + 指数侧历史危机区间表现（收益/最大回撤，长窗指数日线）", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}], "mechanism": [{"key": "decision_reflection", "label": "决策跨期反思闭环", "desc": "登记决策 → 真实行情结算命中率 → 教训回灌专家复盘提示词", "on": true, "default": false, "affects": true, "exp": true, "needs_hint": true}, {"key": "report_qa", "label": "报告对话式追问", "desc": "报告页内针对本期报告的会话式追问（零新增取数、轮数上限、用量独立记账）", "on": true, "default": false, "affects": true, "exp": true, "needs_hint": true}, {"key": "deterministic_signal", "label": "确定性信号模块", "desc": "市场温度/估值分位/尾部风险等确定性评级的实时预消化信号行注入复盘与体检提示词，并跨期沉淀为带实时-非实时标签的账本（统计默认只算实时），教训与命中率随摘要回灌提示词", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": true}, {"key": "module_quality_gate", "label": "模块级质量分级", "desc": "按完整性/一致性给各 LLM 模块输出评 A~F 级，低评级随内容头部标注质量提示（不阻断不重试）", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": true}]}, "groupsProposed": {"analysis": [{"key": "factor_catalog", "label": "因子目录", "desc": "25 因子五来源族横截面信号入账与风格与因子分析区「因子目录」区块", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "event_window_impact", "label": "事件窗量化对照", "desc": "新闻事件映射交易日后 ±5 交易日窗口：品种收益/超额收益与文本极性同表对照，分歧例进 LLM 分析章", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "data_quality", "label": "数据质量仪表盘", "desc": "「数据源可用性矩阵」章渲染数据覆盖/时效/降级状态区块", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": false}, {"key": "industry_beta", "label": "行业Beta子表", "desc": "「风格与因子分析」章渲染行业 Beta 子表（行业暴露 + 回归敏感性）", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "candidate_compare", "label": "候选基金比较子表", "desc": "「基金业绩分析」章渲染候选基金横向比较表（候选来自 comparison_candidates）", "on": false, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "cost_lots", "label": "成本流水", "desc": "汇总/市值/分类页签渲染成本分档 + XIRR + 分红累计（需持仓 Excel 含交易/分红流水）", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "valuation_percentile", "label": "估值分位", "desc": "「资产穿透TOP10」章渲染估值分位列（真实历史 PE/PB 分位，无覆盖时回落价格分位代理）", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "market_temperature", "label": "市场温度", "desc": "「投资分析汇总」章渲染市场温度刻度行（三因子合成；数据不足时该行静默省略）", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": true}, {"key": "market_sentiment", "label": "市场情绪与资金热点", "desc": "行动建议章内嵌块「市场情绪与持仓热点」：持仓/穿透标的当日上榜龙虎榜与进入连板梯队的事件行（需同花顺 key；零命中时写市场概览与说明行）", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "fund_purchase_limit", "label": "基金申购限购", "desc": "「持仓明细与分类」市值明细追加「申购状态」列（天天基金渠道口径，含日限/下一开放日；数据不可用时静默隐列）", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": true}, {"key": "cost_position", "label": "持仓成本区间位置", "desc": "「持仓明细与分类」市值明细追加「成本区间位置」列（每份成本相对近 20/260 交易日价格区间百分位，≈1 追涨嫌疑；行情缺失时静默隐列）", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": true}, {"key": "risk_adjusted_excess", "label": "风险调整超额", "desc": "走势章新增「风险调整超额」子块：滚动 1Y 超额曲线 + 年化 IR/跟踪误差 + 近 12/24 月跑赢基准胜率（需配置业绩基准，独立拉长取数窗口）", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "summary_highlights", "label": "本期要点与环比对照", "desc": "摘要区首屏执行摘要卡：关键指标环比行（总市值/总收益率/持仓数/集中度） + 本期关键变化 Top N（快照 diff 单源派生，无上期快照时整块隐藏）", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "prosperity_framework", "label": "景气度框架诊断", "desc": "六维评分卡（景气方向/ROE 低位弹性/全球比较优势/流动性/集中度与周期拼接/业绩回撤印证）评估组合契合度，缺数据维度标记需核实", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": true}], "standalone": [{"key": "rebalance_schedule_replay", "label": "调仓纪律回放", "desc": "月度定期/阈值偏离纪律多期回放 vs 买入持有（含成本），回放章双线与逐期成本表", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "holding_change_review", "label": "持仓变动复盘", "desc": "快照差分出新增/加仓/减仓/清仓事件清单与频率/结构演变/意图对账（区间净额推断，结构级）+ LLM 归因块", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "whatif_trade_cost", "label": "What-if 交易成本对比", "desc": "调仓回放计入申赎成本（FIFO 持有期阶梯）+ 成本前后收益差与业绩基准三线参照", "on": false, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "stock_fundamentals", "label": "个股基本面", "desc": "新增独立章：持仓个股基本面（财务指标 + 质量档/趋势/当前 PE-PB 与 A 股财报章节摘要两块；需数据底座与 DataSinking key）", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "crisis_replay", "label": "危机回放", "desc": "危机区间标注升级为双层回放：组合侧窗口内危机穿越表现（区间收益） + 指数侧历史危机区间表现（收益/最大回撤，长窗指数日线）", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}], "presentation": [{"key": "metrics_enabled", "label": "量化指标显示", "desc": "报告量化指标是否输出（雷达图各轴）；关闭即各轴显示 N/A、熔断器暂停指标失败计数（指标始终全量计算）", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": true}], "mechanism": [{"key": "decision_reflection", "label": "决策跨期反思闭环", "desc": "登记决策 → 真实行情结算命中率 → 教训回灌专家复盘提示词", "on": true, "default": false, "affects": true, "exp": true, "needs_hint": true}, {"key": "report_qa", "label": "报告对话式追问", "desc": "报告页内针对本期报告的会话式追问（零新增取数、轮数上限、用量独立记账）", "on": true, "default": false, "affects": true, "exp": true, "needs_hint": true}, {"key": "deterministic_signal", "label": "确定性信号模块", "desc": "市场温度/估值分位/尾部风险等确定性评级的实时预消化信号行注入复盘与体检提示词，并跨期沉淀为带实时-非实时标签的账本（统计默认只算实时），教训与命中率随摘要回灌提示词", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": true}, {"key": "module_quality_gate", "label": "模块级质量分级", "desc": "按完整性/一致性给各 LLM 模块输出评 A~F 级，低评级随内容头部标注质量提示（不阻断不重试）", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": true}]}, "groupTitles": {"presentation": "📊 呈现与体验（默认开启 · 只改呈现不改内容）", "analysis": "🔍 分析增强·既有章内追加（默认关闭 · 在既有章节内追加分析块/列/子表）", "standalone": "📑 独立章节与回放（默认关闭 · 新增整页签或多期回放）", "mechanism": "⚙ 机制与诊断（内部机制 / 诊断接缝 / 待验证实验）"}, "sections": [{"key": "enable_fund_deep_analysis", "label": "基金深度分析", "desc": "基金业绩分析章：基金深度、持仓穿透与归因（关闭即整章隐藏）", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": false}, {"key": "enable_news", "label": "市场新闻", "desc": "市场新闻章：热点抓取、摘要与持仓关联（关闭即整章隐藏）", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": false}, {"key": "enable_history", "label": "组合历史走势+回撤", "desc": "组合历史走势与回撤章：多期净值、回撤区间与区间收益", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": false}, {"key": "enable_portfolio_evolution", "label": "组合演进", "desc": "组合演进章：多期快照对比、变化摘要与结构演变", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": false}, {"key": "enable_action", "label": "行动建议", "desc": "行动建议章：基于持仓、行情与估值的操作建议与理由", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": false}], "llm": [{"key": "global_macro", "label": "全球政经局势", "desc": "LLM 分析章节：关闭即整章隐藏（写入 enabled_llm.global_macro）", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": false}, {"key": "expert_review", "label": "智囊团深度复盘", "desc": "LLM 分析章节：关闭即整章隐藏（写入 enabled_llm.expert_review）", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": false}, {"key": "news_correlation", "label": "财经新闻热点与持仓关联分析", "desc": "LLM 分析章节：关闭即整章隐藏（写入 enabled_llm.news_correlation）", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": false}, {"key": "health_check", "label": "持仓体检报告", "desc": "LLM 分析章节：关闭即整章隐藏（写入 enabled_llm.health_check）", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": false}, {"key": "penetration_deep", "label": "穿透深度分析", "desc": "LLM 分析章节：关闭即整章隐藏（写入 enabled_llm.penetration_deep）", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": false}, {"key": "self_review", "label": "生成后自检", "desc": "LLM 分析章节：关闭即整章隐藏（写入 enabled_llm.self_review）", "on": false, "default": false, "affects": true, "exp": false, "needs_hint": false}, {"key": "holding_change", "label": "持仓变动复盘归因", "desc": "LLM 分析章节：关闭即整章隐藏（写入 enabled_llm.holding_change）", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": false}], "debate": [{"key": "llm_debate_procon", "label": "辩论-正反辩论", "desc": "三段式(白脸→黑脸→综合)", "on": false, "default": false, "affects": true, "exp": false, "needs_hint": false, "sub_of": "expert_review"}, {"key": "llm_debate_conditional", "label": "辩论-条件推理", "desc": "情景化分析(涨/跌/震荡)", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": false, "sub_of": "expert_review"}], "paths": [{"key": "holdings_dir", "label": "持仓信息目录", "desc": "持仓 Excel 所在目录（相对项目根或绝对路径）", "value": "/lzcapp/document/working/codebase/investor-review/data/holdings", "needs_hint": true}, {"key": "holdings_filename", "label": "持仓信息文件名", "desc": "该目录下要读取的持仓文件名；每个工作表 = 一个账户", "value": "个人投资持仓信息.xlsx", "needs_hint": true}, {"key": "output_dir", "label": "报告输出目录", "desc": "报告输出目录（相对项目根或绝对路径）", "value": "/lzcapp/document/working/codebase/investor-review/reports", "needs_hint": true}], "anonymization": {"mode": "off", "options": [{"key": "off", "label": "关闭 — 显示真实持仓名称和代码"}, {"key": "code_display", "label": "代码显示 — 名称替换为'品种X'，保留代码和盈亏"}, {"key": "full_anonymous", "label": "完全匿名 — 名称'品种X'，代码'000XXX'，盈亏±XX%"}, {"key": "summary", "label": "汇总模式 — 仅显示大类汇总，不展示单条持仓"}]}, "indices": {"sh000300": "沪深300", "sh000905": "中证500", "sh000012": "中证全债"}, "providers": {"strategy": "priority", "items": [{"name": "deepseek-main", "provider": "claude", "priority": 10}, {"name": "opencode-go", "provider": "claude", "priority": 20}]}, "tuning": [{"key": "llm_max_thinking_concurrency", "label": "thinking 模块并发上限", "desc": "默认 2（两个 thinking 模块并行）；端点偶发空内容重试时改回 1（串行）", "value": 2, "default": 0, "min": 1, "max": 4, "step": 1, "needs_hint": true}, {"key": "llm_max_concurrency", "label": "LLM 模块并发线程数", "desc": "默认 3；调高可提速但更易触发端点限速（429）", "value": 3, "default": 0, "min": 1, "max": 8, "step": 1, "needs_hint": true}, {"key": "max_retries", "label": "单请求重试次数", "desc": "默认 2（503/超时/网络异常）；429/403 归配额不重试", "value": 2, "default": 0, "min": 0, "max": 5, "step": 1, "needs_hint": true}, {"key": "llm_full_fail_retry_delay", "label": "整链失败后的重试等待（秒）", "desc": "默认 30；0 表示不等待", "value": 30, "default": 0, "min": 0, "max": 600, "step": 1, "needs_hint": true}, {"key": "llm_total_time_budget_sec", "label": "LLM 总时间预算（秒）", "desc": "默认 0（不启用）；超预算不再启动新模块，防单次报告拖成小时级", "value": 0, "default": 0, "min": 0, "max": 7200, "step": 1, "needs_hint": true}, {"key": "daily_cost_limit", "label": "LLM 日费用上限", "desc": "默认 0（不启用）；超限时交互渠道询问「用已有结果继续 / 中止」", "value": 0, "default": 0, "min": 0, "max": 10000, "step": 0.1, "needs_hint": true}], "logging": {"levels": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], "viewerLevels": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL", "ALL"], "fileLevel": "INFO", "consoleLevel": "INFO", "maxMB": 10, "backupCount": 5, "viewerLevel": "INFO", "tailLines": 500}, "blockTitlesProposed": {"sections": "顶层章节（5 章）", "llm": "LLM 章节（7 章 · 智囊团下含辩论子项）", "paths": "目录与文件", "indices": "对比基准指数", "providers": "多链线路优先级", "tuning": "运行参数（6 项）", "anonymization": "持仓匿名化"}, "domains": [{"title": "报告内容", "hint": "改这里会改变报告里出现什么：顶层 / LLM / 整章增补的取舍、章内追加内容", "tui": "TUI：[P] 报告章节 + [S] 分析增强", "blocks": ["sections", "llm", "features.standalone", "features.analysis"]}, {"title": "呈现与机制", "hint": "只改呈现口径、匿名化与机制接缝：内容主体不变或仅影响入口显隐", "tui": "TUI：[S] 呈现与体验 / 机制与诊断 + [G]→[A]", "blocks": ["anonymization", "features.presentation", "features.mechanism"]}, {"title": "数据与线路", "hint": "数据从哪读、跟什么基准比、LLM 走哪条线路", "tui": "TUI：[G]→[C]/[F]/[O]、[G]→[I]、[G]→[L] 第 7 项", "blocks": ["paths", "indices", "providers"]}, {"title": "LLM 运行", "hint": "LLM 调用的运行约束（并发 / 重试 / 预算）", "tui": "TUI：[G]→[L] 1-6", "blocks": ["tuning"]}, {"title": "运行与诊断", "hint": "日志写盘与控制台输出；级别与轮转在下次启动生效，查看器默认项即时生效", "tui": "TUI：[D]→[L]", "blocks": ["logging"]}], "currentBlocks": [{"id": "paths", "title": "路径与文件"}, {"id": "sections", "title": "报告章节"}, {"id": "features.presentation", "title": null}, {"id": "features.analysis", "title": null}, {"id": "features.standalone", "title": null}, {"id": "features.mechanism", "title": null}, {"id": "anonymization", "title": "持仓匿名化"}, {"id": "indices", "title": "对比指数池"}, {"id": "providers", "title": "LLM 多链线路优先级"}, {"id": "tuning", "title": "LLM 调优参数"}, {"id": "llm", "title": "LLM 分析章节"}], "groupOrderCurrent": {"presentation": [{"key": "metrics_enabled", "label": "量化指标显示", "desc": "报告量化指标是否输出（雷达图各轴）；关闭即各轴显示 N/A、熔断器暂停指标失败计数（指标始终全量计算）", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": true}], "analysis": [{"key": "llm_debate_procon", "label": "辩论-正反辩论", "desc": "三段式(白脸→黑脸→综合)", "on": false, "default": false, "affects": true, "exp": false, "needs_hint": false, "sub_of": "expert_review"}, {"key": "llm_debate_conditional", "label": "辩论-条件推理", "desc": "情景化分析(涨/跌/震荡)", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": false, "sub_of": "expert_review"}, {"key": "factor_catalog", "label": "因子目录", "desc": "25 因子五来源族横截面信号入账与风格与因子分析区「因子目录」区块", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "event_window_impact", "label": "事件窗量化对照", "desc": "新闻事件映射交易日后 ±5 交易日窗口：品种收益/超额收益与文本极性同表对照，分歧例进 LLM 分析章", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "data_quality", "label": "数据质量仪表盘", "desc": "「数据源可用性矩阵」章渲染数据覆盖/时效/降级状态区块", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": false}, {"key": "industry_beta", "label": "行业Beta子表", "desc": "「风格与因子分析」章渲染行业 Beta 子表（行业暴露 + 回归敏感性）", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "candidate_compare", "label": "候选基金比较子表", "desc": "「基金业绩分析」章渲染候选基金横向比较表（候选来自 comparison_candidates）", "on": false, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "cost_lots", "label": "成本流水", "desc": "汇总/市值/分类页签渲染成本分档 + XIRR + 分红累计（需持仓 Excel 含交易/分红流水）", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "valuation_percentile", "label": "估值分位", "desc": "「资产穿透TOP10」章渲染估值分位列（真实历史 PE/PB 分位，无覆盖时回落价格分位代理）", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "market_temperature", "label": "市场温度", "desc": "「投资分析汇总」章渲染市场温度刻度行（三因子合成；数据不足时该行静默省略）", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": true}, {"key": "market_sentiment", "label": "市场情绪与资金热点", "desc": "行动建议章内嵌块「市场情绪与持仓热点」：持仓/穿透标的当日上榜龙虎榜与进入连板梯队的事件行（需同花顺 key；零命中时写市场概览与说明行）", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "fund_purchase_limit", "label": "基金申购限购", "desc": "「持仓明细与分类」市值明细追加「申购状态」列（天天基金渠道口径，含日限/下一开放日；数据不可用时静默隐列）", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": true}, {"key": "cost_position", "label": "持仓成本区间位置", "desc": "「持仓明细与分类」市值明细追加「成本区间位置」列（每份成本相对近 20/260 交易日价格区间百分位，≈1 追涨嫌疑；行情缺失时静默隐列）", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": true}, {"key": "risk_adjusted_excess", "label": "风险调整超额", "desc": "走势章新增「风险调整超额」子块：滚动 1Y 超额曲线 + 年化 IR/跟踪误差 + 近 12/24 月跑赢基准胜率（需配置业绩基准，独立拉长取数窗口）", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "summary_highlights", "label": "本期要点与环比对照", "desc": "摘要区首屏执行摘要卡：关键指标环比行（总市值/总收益率/持仓数/集中度） + 本期关键变化 Top N（快照 diff 单源派生，无上期快照时整块隐藏）", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "prosperity_framework", "label": "景气度框架诊断", "desc": "六维评分卡（景气方向/ROE 低位弹性/全球比较优势/流动性/集中度与周期拼接/业绩回撤印证）评估组合契合度，缺数据维度标记需核实", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": true}], "standalone": [{"key": "rebalance_schedule_replay", "label": "调仓纪律回放", "desc": "月度定期/阈值偏离纪律多期回放 vs 买入持有（含成本），回放章双线与逐期成本表", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "holding_change_review", "label": "持仓变动复盘", "desc": "快照差分出新增/加仓/减仓/清仓事件清单与频率/结构演变/意图对账（区间净额推断，结构级）+ LLM 归因块", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "whatif_trade_cost", "label": "What-if 交易成本对比", "desc": "调仓回放计入申赎成本（FIFO 持有期阶梯）+ 成本前后收益差与业绩基准三线参照", "on": false, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "stock_fundamentals", "label": "个股基本面", "desc": "新增独立章：持仓个股基本面（财务指标 + 质量档/趋势/当前 PE-PB 与 A 股财报章节摘要两块；需数据底座与 DataSinking key）", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}, {"key": "crisis_replay", "label": "危机回放", "desc": "危机区间标注升级为双层回放：组合侧窗口内危机穿越表现（区间收益） + 指数侧历史危机区间表现（收益/最大回撤，长窗指数日线）", "on": true, "default": false, "affects": true, "exp": false, "needs_hint": true}], "mechanism": [{"key": "decision_reflection", "label": "决策跨期反思闭环", "desc": "登记决策 → 真实行情结算命中率 → 教训回灌专家复盘提示词", "on": true, "default": false, "affects": true, "exp": true, "needs_hint": true}, {"key": "report_qa", "label": "报告对话式追问", "desc": "报告页内针对本期报告的会话式追问（零新增取数、轮数上限、用量独立记账）", "on": true, "default": false, "affects": true, "exp": true, "needs_hint": true}, {"key": "deterministic_signal", "label": "确定性信号模块", "desc": "市场温度/估值分位/尾部风险等确定性评级的实时预消化信号行注入复盘与体检提示词，并跨期沉淀为带实时-非实时标签的账本（统计默认只算实时），教训与命中率随摘要回灌提示词", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": true}, {"key": "module_quality_gate", "label": "模块级质量分级", "desc": "按完整性/一致性给各 LLM 模块输出评 A~F 级，低评级随内容头部标注质量提示（不阻断不重试）", "on": true, "default": true, "affects": true, "exp": false, "needs_hint": true}]}, "hintMinLen": 30};
+var state = { desc: 'hint', mark: 'on', theme: 'light', q: '' };
 
-function esc(s) {
-  return String(s).replace(/[&<>"]/g, function (c) {
-    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+function currentGroups() { return VIEW === "proposed" ? DATA.groupsProposed : DATA.groupsCurrent; }
+
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+  return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+function marks(item) {
+  if (state.mark !== 'on') return '';
+  var out = '';
+  if (item.exp) out += '<span class="tag exp">⚗</span>';
+  if (item.affects) out += '<span class="tag affects">影响报告</span>';
+  if (item.default !== undefined && item.on !== undefined && item.on !== item.default) out += '<span class="tag changed">✻</span>';
+  return out;
+}
+
+function desc(item, always) {
+  if (state.desc === 'off' || !item.desc) return '';
+  if (!always && state.desc === 'hint' && !item.needs_hint) return '';
+  return '<p class="desc">' + esc(item.desc) + '</p>';
+}
+
+function row(item, type, extra) {
+  var id = 'c-' + esc(item.key);
+  var control;
+  if (type === 'radio') {
+    control = '<input type="radio" name="anon" ' + (item.on ? 'checked' : '') + '>';
+  } else {
+    control = '<input type="checkbox" ' + (item.on ? 'checked' : '') + '>';
+  }
+  return '<div class="row' + (extra && extra.sub ? ' subrow' : '') + '" id="' + id + '">' + control +
+    '<div><div class="label"><span>' + esc(item.label) + '</span>' + marks(item) + '</div>' +
+    desc(item, extra && extra.always) + '</div></div>';
+}
+
+function blockHtml(id) {
+  if (id.indexOf('features.') === 0) {
+    var key = id.slice(9);
+    var items = currentGroups()[key] || [];
+    if (!items.length) return '';
+    var on = items.filter(function (i) { return i.on; }).length;
+    var rows = items.map(function (i) { return row(i, 'bool'); }).join('');
+    return '<div class="block" data-block="' + id + '"><h3 class="block-title">' + esc(DATA.groupTitles[key]) + '</h3>' +
+      '<p class="block-meta">' + items.length + ' 项 · ' + on + ' 开</p>' + rows + '</div>';
+  }
+  if (id === 'sections') {
+    return block('sections', '顶层章节（5 章）', DATA.sections.map(function (i) { return row(i, 'bool'); }).join(''),
+                 DATA.sections);
+  }
+  if (id === 'llm') {
+    var rows = DATA.llm.map(function (m) {
+      var html = row(m, 'bool');
+      if (VIEW === 'proposed' && m.key === 'expert_review') {
+        html += DATA.debate.map(function (d) { return row(d, 'bool', { sub: true }); }).join('');
+      }
+      return html;
+    }).join('');
+    return block('llm', 'LLM 章节（' + DATA.llm.length + ' 章 · 智囊团下含辩论子项）', rows, DATA.llm);
+  }
+  if (id === 'anonymization') {
+    var opts = DATA.anonymization.options.map(function (o) {
+      return row({ key: o.key, label: o.label, on: o.key === DATA.anonymization.mode, desc: '' }, 'radio');
+    }).join('');
+    return '<div class="block" data-block="anonymization"><h3 class="block-title">持仓匿名化</h3>' +
+      '<p class="block-meta">单选 · 作用于整份报告</p>' + opts + '</div>';
+  }
+  if (id === 'paths') {
+    var rows = DATA.paths.map(function (p) {
+      return '<div class="field"><label>' + esc(p.label) + '</label>' +
+        '<input type="text" value="' + esc(p.value) + '"><button class="btn">保存</button></div>' + desc(p, true);
+    }).join('');
+    return block('paths', '目录与文件', rows, DATA.paths);
+  }
+  if (id === 'indices') {
+    var keys = Object.keys(DATA.indices);
+    var rows = keys.map(function (code) {
+      return '<div class="list-row"><span class="grow">' + esc(DATA.indices[code]) + '　<span class="mono">' +
+        esc(code) + '</span></span><button class="btn">删除</button></div>';
+    }).join('');
+    return '<div class="block" data-block="indices"><h3 class="block-title">对比基准指数</h3>' +
+      '<p class="block-meta">' + keys.length + ' 个基准 · 用于图表与超额收益对照</p>' + rows +
+      '<div class="field"><input type="text" placeholder="指数代码（如 sh000905）">' +
+      '<input type="text" placeholder="名称（如 中证500）"><button class="btn">添加</button></div></div>';
+  }
+  if (id === 'providers') {
+    var p = DATA.providers;
+    var rows = p.items.map(function (it, i) {
+      return '<div class="list-row"><span class="grow">' + (i + 1) + '. ' + esc(it.name) + '（' + esc(it.provider) +
+        '）<span class="mono"> priority ' + esc(it.priority) + '</span></span>' +
+        '<button class="btn">▲</button><button class="btn">▼</button></div>';
+    }).join('');
+    return '<div class="block" data-block="providers"><h3 class="block-title">多链线路优先级</h3>' +
+      '<p class="block-meta">策略「' + esc(p.strategy) + '」· 越靠前越优先</p>' + rows + '</div>';
+  }
+  if (id === 'logging') {
+    var g = DATA.logging;
+    function sel(name, value, options) {
+      return '<select data-key="' + name + '">' + options.map(function (o) {
+        return '<option' + (o === value ? ' selected' : '') + '>' + o + '</option>';
+      }).join('') + '</select>';
+    }
+    var rows = '<div class="field"><label>写盘级别</label>' + sel('file.level', g.fileLevel, g.levels) + '</div>' +
+      '<div class="field"><label>控制台级别</label>' + sel('console.level', g.consoleLevel, g.levels) + '</div>' +
+      '<div class="field"><label>单文件上限 MB</label><input type="number" value="' + g.maxMB + '" min="1" max="1024"></div>' +
+      '<div class="field"><label>备份份数</label><input type="number" value="' + g.backupCount + '" min="0" max="50"></div>' +
+      '<div class="field"><label>查看器默认级别</label>' + sel('viewer.default_level', g.viewerLevel, g.viewerLevels) + '</div>' +
+      '<div class="field"><label>查看器首屏行数</label><input type="number" value="' + g.tailLines + '" min="50" max="10000"></div>';
+    return '<div class="block" data-block="logging"><h3 class="block-title">日志设置</h3>' +
+      '<p class="block-meta">写入 logger.json · 级别与轮转下次启动生效</p>' + rows +
+      '<p class="note">环境变量 INVEST_LOG_FILE_LEVEL / INVEST_LOG_CONSOLE_LEVEL 可临时覆盖级别，优先级高于本文件。</p></div>';
+  }
+  if (id === 'tuning') {
+    var rows = DATA.tuning.map(function (t) {
+      return '<div class="field"><label>' + esc(t.label) + '</label>' +
+        '<input type="number" value="' + esc(t.value) + '" min="' + t.min + '" max="' + t.max + '" step="' + t.step + '">' +
+        '<button class="btn">保存</button><span class="mono" style="color:var(--text-secondary)">' + t.min + '~' + t.max + '</span></div>' +
+        desc(t, true);
+    }).join('');
+    return block('tuning', '运行参数（6 项）', rows, DATA.tuning);
+  }
+  return '';
+}
+
+function block(id, title, rows, items) {
+  var on = (items || []).filter(function (i) { return i.on; }).length;
+  var meta = items ? items.length + ' 项 · ' + on + ' 开' : '';
+  return '<div class="block" data-block="' + id + '"><h3 class="block-title">' + esc(title) + '</h3>' +
+    (meta ? '<p class="block-meta">' + meta + '</p>' : '') + rows + '</div>';
+}
+
+function renderProposed() {
+  var html = '';
+  DATA.domains.forEach(function (d, i) {
+    html += '<section class="domain" id="domain-' + i + '">' +
+      '<h2 class="domain-title">' + esc(d.title) + '</h2>' +
+      '<p class="domain-hint">' + esc(d.hint) + '</p>' +
+      '<p class="domain-tui">' + esc(d.tui) + '</p>';
+    d.blocks.forEach(function (b) { html += blockHtml(b); });
+    html += '</section>';
+  });
+  return html;
+}
+
+function renderCurrent() {
+  var html = '';
+  DATA.currentBlocks.forEach(function (b) {
+    if (b.id.indexOf('features.') === 0) {
+      var key = b.id.slice(9);
+      var items = currentGroups()[key] || [];
+      if (!items.length) return;
+      var on = items.filter(function (i) { return i.on; }).length;
+      html += '<div class="block" data-block="' + b.id + '"><h3 class="block-title">' +
+        esc(DATA.groupTitles[key]) + '</h3><p class="block-meta">' + items.length + ' 项 · ' + on + ' 开</p>' +
+        items.map(function (i) { return row(i, 'bool'); }).join('') + '</div>';
+      return;
+    }
+    var fragment = blockHtml(b.id);
+    if (b.title && fragment) {
+      fragment = fragment.replace(/<h3 class="block-title">[^<]*<\/h3>/, '<h3 class="block-title">' + esc(b.title) + '</h3>');
+    }
+    html += fragment;
+  });
+  return html;
+}
+
+function applyFilter() {
+  var q = state.q.trim().toLowerCase();
+  document.querySelectorAll('.row, .field, .list-row').forEach(function (el) {
+    el.classList.toggle('hidden', !!q && el.textContent.toLowerCase().indexOf(q) === -1);
+  });
+  document.querySelectorAll('.block').forEach(function (blk) {
+    var visible = blk.querySelectorAll('.row:not(.hidden), .field:not(.hidden), .list-row:not(.hidden)').length;
+    var hasStatic = blk.querySelector('.empty');
+    blk.classList.toggle('hidden', !!q && visible === 0 && !hasStatic);
+  });
+  document.querySelectorAll('.domain').forEach(function (d) {
+    var blocks = d.querySelectorAll('.block:not(.hidden)');
+    d.classList.toggle('hidden', !!q && blocks.length === 0);
   });
 }
 
-function tagHtml(affects) {
-  if (state.tag !== 'on' || !affects) { return ''; }
-  return '<span class="tag-affects">影响报告</span>';
-}
-
-function descHtml(key, text, inline) {
-  if (state.desc === 'off' || !text) { return ''; }
-  if (state.desc === 'nonobvious' && DATA.needs_hint.indexOf(key) === -1) { return ''; }
-  return '<p class="config-item-desc' + (inline ? ' inline-note' : '') + '">' + esc(text) + '</p>';
-}
-
-/* ── 各块渲染器（对应 main.js 的 render*Group）── */
-var renderers = {
-  sections: function () {
-    var rows = DATA.sections.map(function (it) {
-      return '<div class="config-row"><input type="checkbox" checked>' +
-        '<div><span>' + esc(it.label) + '</span>' + tagHtml(it.affects) +
-        descHtml(it.key, it.desc) + '</div></div>';
-    }).join('');
-    return '<div class="config-group"><h3 class="config-group-title">报告章节</h3>' + rows + '</div>';
-  },
-  paths: function () {
-    var rows = DATA.paths.map(function (it) {
-      return '<div class="config-path-row"><label class="config-path-label">' + esc(it.label) + '：</label>' +
-        '<input type="text" value="' + esc(it.value) + '"><button class="btn-mini">保存</button></div>' +
-        descHtml(it.key, it.desc, true);
-    }).join('');
-    return '<div class="config-group"><h3 class="config-group-title">路径与文件</h3>' + rows + '</div>';
-  },
-  anonymization: function () {
-    var rows = DATA.anon.items.map(function (it) {
-      var on = it.key === DATA.anon.mode;
-      return '<div class="config-row"><input type="radio" name="anon" ' + (on ? 'checked' : '') + '>' +
-        '<div><span>' + esc(it.label) + '</span></div></div>';
-    }).join('');
-    return '<div class="config-group"><h3 class="config-group-title">持仓匿名化</h3>' + rows + '</div>';
-  },
-  indices: function () {
-    var rows = Object.keys(DATA.indices).map(function (code) {
-      return '<div class="config-index-row"><span class="config-index-name">' + esc(DATA.indices[code]) +
-        '（' + esc(code) + '）</span><button class="btn-mini">删除</button></div>';
-    }).join('');
-    return '<div class="config-group"><h3 class="config-group-title">对比指数池</h3>' + rows +
-      '<p class="config-note-sub">基线指数用于图表与超额收益对照；默认沪深300 / 中证500 / 中证全债。</p></div>';
-  },
-  providers: function () {
-    var p = DATA.providers;
-    var rows = p.items.map(function (it, i) {
-      return '<div class="config-index-row"><span class="config-index-name">' + (i + 1) + '. ' + esc(it.name) +
-        '（' + esc(it.provider) + '）priority ' + it.priority + '</span>' +
-        '<button class="btn-mini">▲</button><button class="btn-mini">▼</button></div>';
-    }).join('');
-    return '<div class="config-group"><h3 class="config-group-title">LLM 多链线路优先级</h3>' +
-      '<p class="config-note-sub">按下列顺序作为备用（越靠前越优先）。当前策略「' + esc(p.strategy_label) + '」' +
-      (p.order_is_chain ? '：顺序即实际链序' : '：实际链序由权重/成本决定，此顺序仅在「按优先级排序 / 仅回退」策略下生效') +
-      '</p>' + rows + '</div>';
-  },
-  tuning: function () {
-    var rows = DATA.tuning.map(function (it) {
-      return '<div class="config-path-row"><label class="config-path-label">' + esc(it.label) + '</label>' +
-        '<input type="number" value="' + it.value + '" min="' + it.min + '" max="' + it.max + '" style="flex:0 0 80px">' +
-        '<button class="btn-mini">保存</button></div>' + descHtml(it.key, it.hint, true);
-    }).join('');
-    return '<div class="config-group"><h3 class="config-group-title">LLM 调优参数</h3>' + rows + '</div>';
-  },
-  llm: function () {
-    var rows = DATA.llmModules.map(function (it) {
-      return '<div class="config-row"><input type="checkbox" checked>' +
-        '<div><span>' + esc(it.label) + '</span>' + tagHtml(it.affects) + descHtml(it.key, it.desc) + '</div></div>';
-    }).join('');
-    return '<div class="config-group"><h3 class="config-group-title">LLM 分析章节</h3>' + rows + '</div>';
-  },
-  featureGroup: function (groupKey) {
-    var inProposed = state.view === 'proposed';
-    var keys = DATA.switches.filter(function (s) {
-      if (groupKey === 'analysis') {
-        return s.group === 'analysis' && !(inProposed && DATA.debateKeys.indexOf(s.key) !== -1);
-      }
-      if (groupKey === 'llm_enhance') { return DATA.debateKeys.indexOf(s.key) !== -1 && s.group === 'analysis'; }
-      return s.group === groupKey;
-    });
-    var rows = keys.map(function (s) {
-      return '<div class="config-row"><input type="checkbox" ' + (s.on ? 'checked' : '') + '>' +
-        '<div>' + (s.exp ? '<span class="tag-exp">⚗</span>' : '') + '<span>' + esc(s.label) + '</span>' +
-        tagHtml(s.affects) + descHtml(s.key, s.desc) + '</div></div>';
-    }).join('');
-    var titles = inProposed ? DATA.groupTitlesProposed : DATA.groupTitlesCurrent;
-    return '<div class="config-group"><h3 class="config-group-title">' + esc(titles[groupKey]) + '</h3>' + rows + '</div>';
-  }
-};
-
 function render() {
-  var panel = document.getElementById('config-panel');
-  var html = '';
-  if (state.view === 'current') {
-    html += renderers.paths();
-    html += renderers.sections();
-    DATA.groupOrderCurrent.forEach(function (g) { html += renderers.featureGroup(g); });
-    html += renderers.anonymization();
-    html += renderers.indices();
-    html += renderers.providers();
-    html += renderers.tuning();
-    html += renderers.llm();
-    document.getElementById('panel-title').textContent = 'Web 配置面板 · 按文件编排';
-    document.getElementById('panel-lead').textContent =
-      '块顺序按配置值所在文件排列：config.json → features.json 各组 → config.json → llm_settings.json。';
-  } else {
-    html += '<div class="card" style="padding:0;border:0;box-shadow:none;background:transparent">';
-    DATA.domains.forEach(function (d) {
-      html += '<section class="config-domain"><h2 class="config-domain-title">' + esc(d.title) + '</h2>' +
-        '<p class="config-domain-hint">' + esc(d.hint) + '</p>';
-      d.blocks.forEach(function (b) {
-        if (b.indexOf('features.') === 0) { html += renderers.featureGroup(b.slice(9)); }
-        else if (renderers[b]) { html += renderers[b](); }
-      });
-      html += '</section>';
-    });
-    html += '</div>';
-    document.getElementById('panel-title').textContent = 'Web 配置面板 · 按域编排';
-    document.getElementById('panel-lead').textContent =
-      '域 = 一级分区（我要改什么），组 = 二级（开了长出什么）。块顺序、显示名、说明、默认值全部由服务端下发，前端不含任何中文文案。';
-  }
-  panel.innerHTML = html;
+  document.getElementById('panel').innerHTML = VIEW === 'proposed' ? renderProposed() : renderCurrent();
+  var chips = VIEW === 'proposed'
+    ? DATA.domains.map(function (d, i) { return '<a href="#domain-' + i + '">' + esc(d.title) + '</a>'; }).join('')
+    : '<a href="#panel">按存储文件顺序</a>';
+  document.getElementById('chips').innerHTML = chips;
+  document.getElementById('footnote').textContent = VIEW === 'proposed'
+    ? '域为一级分区、块为可编辑项组；条目名与 TUI 逐字相同，TUI 的数字编号只属于终端渠道。'
+    : '块顺序按配置值所在文件排列；仅作现有实现的对照。';
+  applyFilter();
 }
-
-var MAP_ROWS = [
-  ['LLM 分析章节', 7, '1-7', '1-7', '不动'],
-  ['分析增强', 14, '9-24（16 项）', '8-21', '起点 -1，项数 -2'],
-  ['独立章节与回放', 5, '25-29', '22-26', '前移 3'],
-  ['呈现与体验', 1, '8-8', '27-27', '后移 19'],
-  ['机制与诊断', 5, '30-34', '28-32', '前移 2'],
-  ['LLM 分析增强', 2, '（在分析增强内）', '33-34', '新增']
-];
 
 document.querySelectorAll('.seg').forEach(function (seg) {
   var kind = seg.id.replace('seg-', '');
   seg.addEventListener('click', function (e) {
     var btn = e.target.closest('button');
-    if (!btn) { return; }
+    if (!btn) return;
     seg.querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', 'false'); });
     btn.setAttribute('aria-pressed', 'true');
     if (kind === 'theme') {
@@ -373,15 +307,12 @@ document.querySelectorAll('.seg').forEach(function (seg) {
   });
 });
 
-(function init() {
-  var tb = document.querySelector('#map-table tbody');
-  tb.innerHTML = MAP_ROWS.map(function (r) {
-    var changed = r[4] !== '不动';
-    return '<tr' + (changed ? ' class="hl"' : '') + '><td>' + r[0] + '</td><td class="num">' + r[1] +
-      '</td><td class="num">' + r[2] + '</td><td class="num">' + r[3] + '</td><td>' + r[4] + '</td></tr>';
-  }).join('');
-  render();
-})();
+document.getElementById('filter').addEventListener('input', function (e) {
+  state.q = e.target.value;
+  applyFilter();
+});
+
+render();
 </script>
 </body>
 </html>
