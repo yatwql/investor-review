@@ -38,7 +38,7 @@ def _record_block_failure(full_code: str, body: str) -> None:
     from src.python.core.provider_registry import get_registry
 
     preview = (body or "").strip().replace("\n", " ")[:60]
-    logger.warning(
+    logger.debug(
         "Sina K 线 %s 返回非 JSON（疑似风控/限流页）→ 记源失败并交下一链路：%s", full_code, preview or "空响应"
     )
     get_registry().record_failure("sina", f"kline:block_page:{full_code}")

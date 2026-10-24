@@ -9,6 +9,8 @@
 
 ## [0.15.2-dev] - 开发中（未发布）
 
+- **`plan-211` 首片：K 线风控页日志降噪**：腾讯/新浪逐代码「返回非 JSON」从 WARNING 降为 DEBUG；源失败仍计入 registry，熔断汇总保持 WARNING。
+
 - **`rf-865` 持仓集中度 Excel 恒占位修复**：`excel_module_loader` 补注册 `compute_concentration`，Excel 与 HTML 同源；新增装配键/可调用回归。
 - **`rf-866` 自检截断语义修复**：`max_tokens_self_review` 默认 2048→3072；首次截断记 WARNING，自动放大后仍截断才记 ERROR，重试成功不再污染 `errors`。
 
