@@ -15,7 +15,7 @@
     ]
   },
   "filter_logs_by_level": {
-    "keys": 4,
+    "keys": 6,
     "must_show": [
       "最近日志（级别: ERROR）",
       "读取行情失败",

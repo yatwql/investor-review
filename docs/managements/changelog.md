@@ -9,6 +9,8 @@
 
 ## [0.15.1-dev] - 开发中（未发布）
 
+- **`rf-842` 日志动线场景用例长期失效（TUI 动线驱动器覆盖缺口）**：`_cmd_diagnose_menu` 等处函数内局部导入 `input_choice`，驱动器只 patch 模块属性无效，非 TTY 下回退内置 `input()` 直接读真实 stdin；该动线因此从未真正跑通（仅在 P2 regression 档暴露）。修复：驱动器增补 `builtins.input` 兜底（不 patch 源头，避免跨用例永久绑定），动线按键按菜单分层更新为 `[D]→[V]→级别→按键→[0]→[X]`，契约快照同步并在用例 docstring 说明「击键加长来自菜单分层、不是新增确认屏」。
+
 - **`rf-841` changelog 指针行跨小版本时指向旧档**：`apply_changelog_release` 只重写反引号内的归档文件名，链接目标 `(../archive/<minor>.x/...)` 保持原样——文件存在所以死链检查不报，读者点进去看到的是上一系列的归档。修复：指针行正则同时改写链接文本与目标路径；补回归用例 `test_pointer_line_target_path_follows_minor`（跨小版本场景）。
 
 
