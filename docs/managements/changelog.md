@@ -9,6 +9,8 @@
 
 ## [0.15.1-dev] - 开发中（未发布）
 
+- **`plan-201` 事实校验评估函数参数收敛（`rf-839` 技术债）**：`llm/fact_checker/_numerical.py::_evaluate_percent_value` 的 22 个参数（7 基础值 + 10 语境开关 + 5 数据映射）收进冻结 dataclass `PercentContext`——字段即语义，新增一种语境只需加字段并在调用点赋值，不必再改签名/文档/全部直接用例；函数签名收敛为 `_evaluate_percent(ctx)`，语境判定优先级（非收益率早退 → 回撤 → 收益语境）仍在函数体内单源维持。行为零变化：`src/test/unit/llm` 1326 例全绿（含 rf-836 的 6 例回归）。
+
 - **`plan-200` 配置体系重构第 15 轮：稳态观测与回退演练**（配置重构 15 轮到齐）：新增 `src/test/unit/config/test_config_resilience_contract.py`（10 例，全部 `tmp_path` 隔离）把四类路径变成可复跑断言——① **非法配置不静默**：非法 `schema_version` 返回 None 且日志含文件名 + 键 + 原因；`logger.json` 单键非法只回落该键（其余键按文件生效）；② **删除后重建**：`llm_settings.json` v2 模板、`logger.json` 幂等 `ensure_logger_file`、`llm_pricing_ref.json` 默认模板（23 个模型价）重建后均可加载；③ **缓存首轮重算**：首轮未命中 → 写入 → 次轮命中（目录隔离统一由 conftest 提供）；④ **非当前结构拒绝**：消息含「删除该文件后重新生成」。实测（临时目录）：非法配置 0.1ms 内检出并拒绝、三份重建即用、无静默降级。观测项复用现有日志与 `perf_history`，未新增面板。
 
 - **`rf-843` Web 配置面板块标题显示内部 id + 调优块渲染报错**：块标题曾用 `labels[blockKey]` 取，而 `labels` 只登记可编辑键，`sections` / `llm` / `standalone_*` 等块直接显示英文 id；重拍截图时又发现 `renderTuningGroup` 与块标题取源不一致（引用未定义 `surface`），整个配置面板渲染失败。修复：新增 `block_titles` 随面下发（单一来源，11 个块 id 全覆盖），前端一律取服务端下发的标题（不回退到块 id、不写死中文）；`renderAnonGroup` / `renderTuningGroup` 改为接收 `surface`；契约测试补「每块都有中文标题且标题≠块 id」两例。
