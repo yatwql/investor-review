@@ -38,7 +38,7 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-REPO = HERE.parents[2]
+REPO = HERE.parents[4]
 COLS = 108
 LINES = 60
 

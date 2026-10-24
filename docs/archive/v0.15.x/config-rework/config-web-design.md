@@ -1,6 +1,6 @@
 # Web 配置面设计（域分区 / 块与控件 / 保存语义）
 
-> **关联**：[`config-tui-design.md`](config-tui-design.md)（同一套条目名、标记口径与说明文案的终端表达）、[`config-files-design.md`](config-files-design.md)（写入目标与文件边界）、[`../managements/DESIGN.md`](../managements/DESIGN.md)（Web 设计语言契约）。
+> **关联**：[`config-tui-design.md`](config-tui-design.md)（同一套条目名、标记口径与说明文案的终端表达）、[`config-files-design.md`](config-files-design.md)（写入目标与文件边界）、[`../managements/DESIGN.md`](../../../managements/DESIGN.md)（Web 设计语言契约）。
 > **范围**：浏览器配置面板的一级分区、块清单、控件与保存语义、状态与反馈、无障碍与响应式。**不含**终端菜单层级与配置文件结构。
 > **图样**：[`config-panel-mockup/index.html`](config-panel-mockup/index.html)（目标设计）· [`web-current.html`](config-panel-mockup/web-current.html)（对照）。
 
@@ -214,7 +214,7 @@
 
 **自动验证**：`test_config_surface_contract`（块 ↔ 渲染器双向相等 / 元数据覆盖白名单全部可编辑键 / 无中文表 / 无 `innerHTML` 赋值 / 日志可写）、`test_web_config_interaction`（回滚与就地报错 / 显式保存保留输入 / 筛选与计数 / 域导航与深链 / 窄屏断点）、`test_smoke_web`（端到端冒烟）、`test_design_doc`（契约结构守卫）。
 
-**人工验证**：五域分区与 chips 顺序；`#domain-<key>` 深链直达；筛选清空即恢复；块计数与「已改 N 项」随保存刷新；≤768px 单列与焦点环。真机浏览器项见 [`../archive/v0.15.x/web-browser-verification/web-browser-verification.md`](../archive/v0.15.x/web-browser-verification/web-browser-verification.md)。
+**人工验证**：五域分区与 chips 顺序；`#domain-<key>` 深链直达；筛选清空即恢复；块计数与「已改 N 项」随保存刷新；≤768px 单列与焦点环。真机浏览器项见 [`../archive/v0.15.x/web-browser-verification/web-browser-verification.md`](../web-browser-verification/web-browser-verification.md)。
 
 ---
 

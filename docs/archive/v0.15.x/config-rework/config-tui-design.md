@@ -1,6 +1,6 @@
 # TUI 面板设计（菜单层级 / 面板内容 / 键位与提示）
 
-> **关联**：[`config-web-design.md`](config-web-design.md)（浏览器侧同一套概念的另一种表达）、[`config-files-design.md`](config-files-design.md)（配置文件的职责边界与写入约定）、[`../managements/DESIGN-TUI.md`](../managements/DESIGN-TUI.md)（终端交互契约）。
+> **关联**：[`config-web-design.md`](config-web-design.md)（浏览器侧同一套概念的另一种表达）、[`config-files-design.md`](config-files-design.md)（配置文件的职责边界与写入约定）、[`../managements/DESIGN-TUI.md`](../../../managements/DESIGN-TUI.md)（终端交互契约）。
 > **范围**：主菜单与各级面板的层级、键位、分组排版、条目文案来源，以及两渠道共用的组/条目名/标记口径。**不含**浏览器分区契约与配置文件结构。
 > **图样**：[`config-panel-mockup/tui.html`](config-panel-mockup/tui.html)（目标设计）· [`tui-current.html`](config-panel-mockup/tui-current.html)（对照）。
 

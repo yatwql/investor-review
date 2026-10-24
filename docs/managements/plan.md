@@ -8,7 +8,7 @@
 
 本文档只保留**在办任务的最新状态**：已完成项随发布迁入版本归档，此处不留实现过程记录。命名与实现纪律见 `CLAUDE.md` 与 `developer-guide.md`（单一事实位，本表不重复）。
 
-**当前迭代**：在办 7 项——P2 5 项（**plan-92/93/185/199/208**）、P3 1 项（**plan-70**）、P4 1 项（**plan-55**）。
+**当前迭代**：在办 6 项——P2 4 项（**plan-92/93/185/208**）、P3 1 项（**plan-70**）、P4 1 项（**plan-55**）。
 
 ---
 
@@ -41,10 +41,9 @@
 **现状**：口径标签已落地（`llm/rate_caliber.py` 唯一声明点，并入 `PROMPT_SCHEMA_VERSION` 指纹），**余验收**——事实校验只把数值改对，句意与修饰语仍可能挂错口径。
 **验收**：`perf_history.counters.fact_fix_total` 连续若干轮稳定 ≤3 处即归档。
 
-#### `plan-199` 配置重构发布编排
+#### `plan-199` 配置重构发布编排——已完成，待发布归档
 
-**现状**：配置结构（v2 嵌套、日志与计价独立文件）按「不做旧版兼容」策略发布，需留下可追溯台账。
-**动作**：走通 `release.py` 全链——`prepare`、`refresh`、`evolution --release`、`gate`、`publish`、`devbump`。验收：gate 全绿、版本一致性 15 项全绿、tag 已推送、master 已合并、devbump 后版本头一致。
+**状态**：v0.15.0 已走通 `release.py` 全链（`prepare` → `refresh` → `evolution --release` → `gate` → `publish` → `devbump`）；gate 全绿、版本一致性 15 项全绿、tag 已推送、master 已合并、devbump 后版本头一致。配置体系设计文档随本版迁入 `docs/archive/v0.15.x/config-rework/`。
 
 #### `plan-200` 配置稳态观测与回退演练——已完成，待发布归档
 
