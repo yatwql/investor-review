@@ -23,6 +23,8 @@
 
 - **报告收尾远程/无图形会话指引**：远程 SSH、手机远端或无 GUI 环境不再询问 `y/N` 并调用无效的服务器文件管理器；直接打印产物路径并提示 Web 下载或 `scp`/`sftp` 获取。本地桌面仍保留单键打开。
 
+- **交付文档与本地配置**：仓库内 `CLAUDE.md` 固定交互纪律（与全局 `AGENTS.md` 同源）；本地 `llm_settings.json` 恢复被误覆盖的模块启用状态（`global_macro`/`expert_review`/`health_check`/`penetration_deep`/`self_review`/`holding_change` 开启，`news_correlation` 保持关闭）。
+
 
 （本次发布内容见下方归档索引）
 
