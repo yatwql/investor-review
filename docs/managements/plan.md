@@ -45,13 +45,13 @@
 
 **当前状态**：完整报告（LLM 开启）约 140–153s，其中专家复盘 71–75s、新闻获取 19–23s；无 LLM 基线约 44–52s。新闻缓存保持 900s，专家/健康指纹含市值/盈亏字段，行情变化即失效，不做跨报告复用；新闻去重 `quick_ratio`、事件窗 bars/index 同批 memo 已落地。
 
-**当前验证**：53.2s 报告未实际调用 LLM，无法验收缓存/专家耗时；需在 LLM 开启下复测两次同条件报告。
+**当前验证**：最新完整报告 35.7s，`LLM+新闻` 20.2s；事件窗 bars/index memo 后装配降至 0.43s（此前 18.3s），新闻获取 19.7s/去重 12.0s。LLM 未实际调用，缓存/专家耗时仍需在 LLM 开启下复测两次同条件报告。
 
 **验收**：连续两次同条件报告的第二次 `LLM+新闻` 耗时下降 ≥50%，或专家复盘命中应用缓存；报告内容与首次一致（除生成时间）；补缓存键失效/命中的回归用例。
 
 #### `plan-211` 数据源降级与告警分级（行业资金流向 / hithink / K 线）——进行中
 
-**当前状态**：K 线风控页逐代码日志使用 DEBUG，源失败仍计入 registry、熔断汇总保留 WARNING；hithink 过滤场内 ETF 的 A 股价格/历史槽，并归一错误交易所后缀；行业资金流向暴露公开失败状态访问器，报告层经 `mark_data_unavailable` 写入 DegradationTracker，数据源矩阵显示不可用；`fetcher` / `cache` 统一经公开访问器读取状态。当前 `warnings_count=16`（东方财富 push2 11、熔断汇总 6、行业资金流向 2），`Unknown thscode=0`；push2 单代码日志已降 DEBUG、批量失败聚合一条 WARNING，待复测。
+**当前状态**：K 线风控页逐代码日志使用 DEBUG，源失败仍计入 registry、熔断汇总保留 WARNING；hithink 过滤场内 ETF 的 A 股价格/历史槽，并归一错误交易所后缀；行业资金流向暴露公开失败状态访问器，报告层经 `mark_data_unavailable` 写入 DegradationTracker，数据源矩阵显示不可用；`fetcher` / `cache` 统一经公开访问器读取状态。最新报告 `warnings_count=2`（仅行业资金流向：akshare 重试 + 获取失败），`Unknown thscode=0`，push2 per-code 告警为零；告警目标 ≤10 已达标。
 
 **剩余**：同条件复测 `warnings_count` 与 `Unknown thscode`；行业资金流向备用源或缓存方案（当前先保证状态可见）。
 
