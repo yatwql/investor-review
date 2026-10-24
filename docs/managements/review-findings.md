@@ -36,7 +36,7 @@
 
 | # | 问题 | 结论 |
 |---|------|------|
-| **rf-873** | 手机远端跑完报告提示「是否打开」(y/N)，按 `y` 后得到「打开失败」并返回主菜单（`DISPLAY` 为 tmux/screen 继承的会话环境变量时被当成有桌面） | 已修：`local_open_supported()` 在 Linux 上额外要求 X socket 真实存在且 `xdg-open` 可执行（残留 `DISPLAY` / 缺工具均按无图形会话）；打开失败一次后本会话直接打印路径与 Web/scp 指引；补 5 例回归 |
+| **rf-873** | 手机远端跑完报告提示「是否打开」(y/N)，按 `y` 后得到「打开失败」并返回主菜单（`DISPLAY` 为 tmux/screen/Catlink 等继承的会话环境变量时被当成有桌面） | 已修：`local_open_supported()` 在 Linux 上额外要求 X socket 真实存在且 `xdg-open` 可执行，并把 Catlink/Xpra 类桥接会话归为无图形会话；`xdg-open` 子进程 stdout/stderr 丢弃（转发器报错不写回终端，不打乱 TUI 版面）；打开失败一次后本会话直接打印路径与 Web/scp 指引；补 6 例回归 |
 
 
 ### 归档档案

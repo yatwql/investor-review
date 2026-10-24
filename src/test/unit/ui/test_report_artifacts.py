@@ -52,6 +52,22 @@ class TestOpenArtifacts:
         opened = ra.open_artifacts((first, second), opener=lambda p: p == second)
         assert opened == [second]
 
+    def test_open_path_keeps_child_output_off_terminal(self, tmp_path, monkeypatch):
+        """`xdg-open` 转发器的报错不得写回 TUI（逐行刷新界面会被打乱）。"""
+        from src.python.core import artifacts as core_artifacts
+
+        seen: dict = {}
+
+        def _run(command, **kwargs):
+            seen.update(command=command, **kwargs)
+            return core_artifacts.subprocess.CompletedProcess(command, 3)
+
+        monkeypatch.setattr(core_artifacts.subprocess, "run", _run)
+        monkeypatch.setattr(core_artifacts.sys, "platform", "linux")
+        assert core_artifacts.open_path(tmp_path) is False
+        assert seen["stdout"] is core_artifacts.subprocess.DEVNULL
+        assert seen["stderr"] is core_artifacts.subprocess.DEVNULL
+
     def test_default_opener_failure_is_swallowed(self, tmp_path, monkeypatch):
         """系统命令缺失/无图形环境 → 返回 False，不抛异常（平台分派在 core.artifacts）。"""
         from src.python.core import artifacts as core_artifacts
@@ -69,8 +85,23 @@ class TestLocalOpenSupported:
         monkeypatch.delenv("SSH_CONNECTION", raising=False)
         monkeypatch.delenv("SSH_TTY", raising=False)
         monkeypatch.delenv("MOSH_CONNECTION", raising=False)
+        for key in artifacts._BRIDGED_SESSION_ENV:
+            monkeypatch.delenv(key, raising=False)
         monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
         monkeypatch.setattr(artifacts.sys, "platform", "linux")
+
+    def test_bridged_remote_session_disables_local_open(self, monkeypatch):
+        """手机/云桌面桥接会话（Catlink / Xpra 类）不算本机桌面：服务端 `xdg-open`
+        只是转发到客户端，实测会直接报错——应直接给路径与传输指引。"""
+        from src.python.core import artifacts
+
+        self._linux_env(monkeypatch, artifacts)
+        monkeypatch.setenv("DISPLAY", ":100")
+        monkeypatch.setattr(artifacts, "_x11_socket_present", lambda display: True)
+        monkeypatch.setattr(artifacts, "_opener_present", lambda: True)
+        assert artifacts.local_open_supported() is True
+        monkeypatch.setenv("CATLINK_SESSION_DIR", "/run/catlink/sessions/100")
+        assert artifacts.local_open_supported() is False
 
     def test_remote_ssh_disables_local_open(self, monkeypatch):
         from src.python.core import artifacts
