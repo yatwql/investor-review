@@ -133,11 +133,19 @@ def build_llm_fingerprint(
 
 
 def get_cache_ttl_llm(subtype: str = "global_macro") -> float:
-    """获取 LLM 缓存 TTL。
+    """LLM 模块缓存 TTL —— **直接读缓存注册表**（本模块不持有任何映射表或默认值）。
 
-    TTL 优先级：
-      1. config.json 中的 cache_ttl.llm_global_macro / llm_expert_review / llm_news_correlation
-      2. 代码默认值（全球政经局势 86400s / 智囊团深度复盘·持仓体检·穿透深度 14400s / 财经新闻热点与持仓关联分析 14400s）
+    模块到数据类型的唯一事实在 ``core/data_registry.py``：LLM 模块的 ``data_type``
+    即 ``llm_<settings_suffix>``（辩论三键在 ``_CACHE_ONLY_REGISTRY`` 里同形态）。
+    因此本函数只是把模块键换成 ``data_type`` 后交给 :func:`cache.get_ttl`，
+    运行时优先级也全部由注册表那一条链决定：
+
+    1. ``config.json → cache_ttl.llm_<subtype>``（用户覆盖，最高优先）
+    2. 注册表默认值（`DataModuleDef.cache_ttl`）
+    3. ``CACHE_DAILY``（未注册类型兜底，同时打 WARNING 让漏登记可见）
+
+    好处：读侧、启动清理、统计、配置模板读的是**同一份数字**，不存在「两套配置
+    各写一遍、漏一处就静默借用别的模块 TTL」的漂移面。
 
     Args:
         subtype: LLM 模块键（global_macro / expert_review / health_check /
@@ -147,36 +155,13 @@ def get_cache_ttl_llm(subtype: str = "global_macro") -> float:
     Returns:
         过期时间（秒）
     """
-    # 从 config.json cache_ttl 读取
-    _key_map: dict[str, str] = {
-        "global_macro": "llm_global_macro",
-        "expert_review": "llm_expert_review",
-        "news_correlation": "llm_news_correlation",
-        "health_check": "llm_health_check",
-        "penetration_deep": "llm_penetration_deep",
-        "self_review": "llm_self_review",
-        "holding_change": "llm_holding_change",
-        "debate_pro": "llm_debate_pro",
-        "debate_con": "llm_debate_con",
-        "debate_synthesis": "llm_debate_synthesis",
-    }
-    data_type = _key_map.get(subtype, "llm_global_macro")
-    try:
-        from src.python.cache import get_ttl
+    from src.python.cache import get_ttl
+    from src.python.core.data_registry import get_registered_data_types
 
-        return get_ttl(data_type)
-    except (ImportError, TypeError, AttributeError):
-        logger.debug("_get_llm_ttl: 获取 TTL 失败，使用 LLM 默认值")
-        defaults: dict[str, float] = {
-            "global_macro": 86400,
-            "expert_review": 14400,
-            "news_correlation": 14400,
-            "health_check": 14400,
-            "penetration_deep": 14400,
-            "self_review": 86400,
-            "holding_change": 86400,
-            "debate_pro": 86400,
-            "debate_con": 86400,
-            "debate_synthesis": 86400,
-        }
-        return defaults.get(subtype, 14400)
+    data_type = f"llm_{subtype}"
+    if data_type not in get_registered_data_types():
+        logger.warning(
+            "[llm] 模块 %s 未在 data_registry 登记（缓存 TTL 按日级默认值处理）——新增 LLM 模块须登记 DataModuleDef",
+            subtype,
+        )
+    return get_ttl(data_type)
