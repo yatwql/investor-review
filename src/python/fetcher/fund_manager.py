@@ -22,13 +22,15 @@ import httpx
 
 from src.python.core.trading_calendar import elapsed_trading_days_with_natural_fallback
 from src.python.cache import get as cache_get
+from src.python.cache import get_ttl
 from src.python.cache import set as cache_set
 from src.python.core.http_client import make_http_client
 
 logger = logging.getLogger("invest")
 
 _CACHE_PREFIX = "fund_manager_"
-_MANAGER_TTL = 86400  # CACHE_DAILY
+# TTL 不在本模块声明：直读缓存注册表（fund_manager）
+_MANAGER_TTL = get_ttl("fund_manager")
 
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",

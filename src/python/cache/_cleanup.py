@@ -48,10 +48,8 @@ def _process_cache_file(
         return 0
     fpath = os.path.join(_CACHE_DIR, fname)
 
-    # 文件名带缓存键版本戳（`{key}_v{N}.json`），而"逻辑键"是读侧使用的那个串：
-    # 剥掉版本戳后才能 ① 命中精确键映射表；② 与读侧 `get_ttl(type, key)` 用**同一个
-    # 字符串**算 TTL 抖动因子（否则清理按 1.0×TTL 判定，读侧按 ±15% 判定，约一半
-    # key 会被提前最多 15% 删掉）。
+    # 文件名带缓存键版本戳（`{key}_v{N}.json`），逻辑键是读侧使用的那个串：
+    # 剥掉版本戳后才能命中精确键映射表（精确键在注册表里按逻辑键登记）。
     logical_key = fkey
     if fkey.endswith(f"_{_CACHE_KEY_VERSION}"):
         logical_key = fkey[: -(len(_CACHE_KEY_VERSION) + 1)]
@@ -65,7 +63,7 @@ def _process_cache_file(
                 data_type = dtype
                 break
 
-    ttl = get_ttl(data_type, logical_key)
+    ttl = get_ttl(data_type)
     payload = _read_cache_data(fpath, fkey, dry_run=dry_run)
     if payload is None:
         return 1  # 损坏也算清理

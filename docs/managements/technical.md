@@ -3984,7 +3984,7 @@ investor-review/
 | `llm_debate_synthesis` | `llm_debate_synthesis_{fingerprint}.json` | 24h | — | 复用 expert_review 持仓指纹（排除行情波动） | preload |
 | `llm_news_correlation` | `llm_news_item_{hash}.json`（逐条） | 4h | — | 标题前 80 字+持仓指纹 | refresh |
 
-> **TTL 两层模型**：① **默认值唯一来源** = `core/data_registry.py` 的 `DataModuleDef.cache_ttl`（清理/统计/读侧同源）；② **可选覆盖** = `config.json → cache_ttl.<类型>`，生成的配置里该段为空对象，只在用户显式添加键时生效。`cache.get_ttl` 的优先级为「交易时段特例（仅 `market_hour_aware` 声明的 price/index）→ 配置覆盖 → 注册表默认 → `CACHE_DAILY` 兜底（未注册类型，并打 WARNING）」；per-key ±15% 抖动是防雪崩的确定性修饰，**清理侧按同一 key 算同一因子**（否则会出现「读侧仍有效、清理已删」的提前删除窗口）。
+> **TTL 两层模型**：① **默认值唯一来源** = `core/data_registry.py` 的 `DataModuleDef.cache_ttl`（清理/统计/读侧同源）；② **可选覆盖** = `config.json → cache_ttl.<类型>`，生成的配置里该段为空对象，只在用户显式添加键时生效。`cache.get_ttl` 的优先级为「交易时段特例（仅 `market_hour_aware` 声明的 price/index）→ 配置覆盖 → 注册表默认 → `CACHE_DAILY` 兜底（未注册类型，并打 WARNING）」；**不做 per-key 抖动**——TTL 与 key 无关，读侧/清理侧天然同值（曾按 key 抖动，但只有部分读点传 key，导致约一半 LLM 缓存最多提前 15% 被清理删除；本应用缓存逐资产写入、过期时刻天然分散，抖动收益低于维护成本）。
 | `llm_global_macro` | `llm_global_macro_{fingerprint}.json` | 24h | — | A 股/美股指数+持仓汇总 | preload |
 | `llm_health_check` | `llm_health_check_{fingerprint}.json` | 4h | — | 持仓明细（排除行情波动） | preload |
 | `llm_penetration_deep` | `llm_penetration_deep_{fingerprint}.json` | 4h | — | 持仓明细（排除行情波动） | preload |

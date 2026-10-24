@@ -293,7 +293,7 @@ class TestCleanupExpired(CacheTestBase):
         mock_time.return_value = 10000.0
 
         def ttl_side_effect(dtype: str, key: str | None = None) -> float:
-            # 清理侧按（类型, 逻辑键）取 TTL——与读侧同一签名（抖动因子依赖 key）
+            # 清理侧与读侧同源取 TTL（key 参数保留兼容，不参与计算）
             mapping = {"price": 100.0, "news": 500.0}
             return mapping.get(dtype, 300.0)
 

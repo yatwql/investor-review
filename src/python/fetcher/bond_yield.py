@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 
 from src.python.cache import get as cache_get
+from src.python.cache import get_ttl
 from src.python.cache import set as cache_set
 from src.python.config import get_config
 
@@ -22,8 +23,9 @@ logger = logging.getLogger("invest")
 
 _CACHE_KEY_RF = "bond_yield_rf"
 _CACHE_KEY_HISTORY = "bond_yield_history"
-_CACHE_TTL_RF = 86400  # 1 天
-_CACHE_TTL_HISTORY = 86400  # 1 天（日频数据）
+# TTL 不在本模块声明：直读缓存注册表（bond_yield），避免与默认值双份维护
+_CACHE_TTL_RF = get_ttl("bond_yield")
+_CACHE_TTL_HISTORY = get_ttl("bond_yield")
 
 
 def get_risk_free_rate(cache_ok: bool = True) -> float | None:
