@@ -1195,7 +1195,7 @@
       return renderBoolBlock(surface, 'standalone_related', surface.standalone_related);
     },
     anonymization: function (surface) {
-      return renderAnonGroup(surface.anonymization);
+      return renderAnonGroup(surface);
     },
     indices: function (surface) {
       return renderIndicesGroup(surface);
@@ -1204,7 +1204,7 @@
       return renderProvidersGroup(surface);
     },
     tuning: function (surface) {
-      return renderTuningGroup(surface.llm_tuning);
+      return renderTuningGroup(surface);
     },
     logging: function (surface) {
       return renderLoggingBlock(surface);
@@ -1489,14 +1489,15 @@
    * LLM 调优参数（并发/预算/重试）：清单、范围、说明全部由服务端按共享白名单下发。
    * 保存走同一 POST /api/config/edit（校验在 config.edit_ops，三渠道同一强度）。
    */
-  function renderTuningGroup(items) {
+  function renderTuningGroup(surface) {
+    var items = surface.llm_tuning || [];
     var group = document.createElement('div');
     group.className = 'config-group';
     group.setAttribute('role', 'group');
     group.setAttribute('aria-label', 'LLM 调优参数');
     var heading = document.createElement('h3');
     heading.className = 'config-group-title';
-    heading.textContent = 'LLM 调优参数';
+    heading.textContent = (surface.block_titles || {}).tuning || 'LLM 运行参数';
     group.appendChild(heading);
 
     items.forEach(function (item) {
@@ -1548,7 +1549,7 @@
 
   function renderPathsGroup(surface) {
     var paths = surface.paths || {};
-    var group = makeBlockGroup('paths', surface.labels.paths || '目录与文件');
+    var group = makeBlockGroup('paths', (surface.block_titles || {}).paths || '目录与文件');
     Object.keys(paths).forEach(function (key) {
       var row = document.createElement('div');
       row.className = 'config-path-row';
@@ -1617,7 +1618,8 @@
 
   function renderBoolBlock(surface, blockKey, items, opts) {
     opts = opts || {};
-    var group = makeBlockGroup(blockKey, opts.title || surface.labels[blockKey] || blockKey);
+    var titles = surface.block_titles || {};
+    var group = makeBlockGroup(blockKey, opts.title || titles[blockKey] || blockKey);
     var labels = surface.labels;
     var descriptions = surface.descriptions || {};
     var defaults = surface.defaults || {};
@@ -1668,14 +1670,15 @@
     return group;
   }
 
-  function renderAnonGroup(anon) {
+  function renderAnonGroup(surface) {
+    var anon = surface.anonymization;
     var group = document.createElement('div');
     group.className = 'config-group';
     group.setAttribute('role', 'radiogroup');
     group.setAttribute('aria-label', '持仓匿名化');
     var heading = document.createElement('h3');
     heading.className = 'config-group-title';
-    heading.textContent = '持仓匿名化';
+    heading.textContent = (surface.block_titles || {}).anonymization || '持仓匿名化';
     heading.id = 'config-group-anonymization';
     group.id = 'config-block-anonymization';
     group.setAttribute('aria-labelledby', heading.id);
@@ -1709,7 +1712,7 @@
     group.setAttribute('aria-label', '对比指数池');
     var heading = document.createElement('h3');
     heading.className = 'config-group-title';
-    heading.textContent = '对比指数池';
+    heading.textContent = (surface.block_titles || {}).indices || '对比基准指数';
     group.appendChild(heading);
 
     var listWrap = document.createElement('div');
@@ -1764,7 +1767,10 @@
     group.setAttribute('aria-label', 'LLM 多链线路优先级');
     var heading = document.createElement('h3');
     heading.className = 'config-group-title';
-    heading.textContent = 'LLM 多链线路优先级';
+    heading.textContent = (surface.block_titles || {}).providers || '多链线路优先级';
+    heading.id = 'config-group-providers';
+    group.id = 'config-block-providers';
+    group.setAttribute('aria-labelledby', heading.id);
     group.appendChild(heading);
 
     var priorityAware = prov.strategy === 'priority' || prov.strategy === 'fallback_only';
@@ -2083,7 +2089,7 @@
     if (!data.items || !data.items.length) {
       return null;
     }
-    var group = makeBlockGroup('logging', surface.labels.logging || '日志设置');
+    var group = makeBlockGroup('logging', (surface.block_titles || {}).logging || '日志设置');
     var restart = data.restart_keys || [];
     data.items.forEach(function (item) {
       var row = document.createElement('div');
@@ -2146,7 +2152,7 @@
     if (!ref || !ref.pricing_path) {
       return null;
     }
-    var group = makeBlockGroup('reference', surface.labels.reference || '参考信息');
+    var group = makeBlockGroup('reference', (surface.block_titles || {}).reference || '参考信息');
     var row = document.createElement('div');
     row.className = 'ref-row';
     var label = document.createElement('span');

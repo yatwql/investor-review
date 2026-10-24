@@ -88,6 +88,21 @@ _DOMAIN_BLOCKS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("ops_diagnostics", ("logging", "reference")),
 )
 
+#: 块 id → 中文块标题（前端只用标题渲染，不持有任何中文表；`features.<组键>` 用组自身标题）
+_BLOCK_TITLES: dict[str, str] = {
+    "paths": "目录与文件",
+    "sections": "报告章节",
+    "llm": "LLM 分析章节",
+    "standalone_chapters": "默认关闭的整章",
+    "standalone_related": "关联产物",
+    "anonymization": "持仓匿名化",
+    "indices": "对比基准指数",
+    "providers": "多链线路优先级",
+    "tuning": "LLM 运行参数",
+    "logging": "日志设置",
+    "reference": "参考信息",
+}
+
 #: 六组「章内内容」开关所在的面板（`[S]`）；独立整章/关联产物另立块
 _CONTENT_PANEL = "[S]"
 
@@ -338,6 +353,7 @@ def get_config_edit_surface() -> dict:
     return {
         "domains": _block_domains(),
         **_panel_metadata(),
+        "block_titles": dict(_BLOCK_TITLES),
         "paths": paths,
         "sections": sections,
         "standalone_chapters": standalone_chapters,

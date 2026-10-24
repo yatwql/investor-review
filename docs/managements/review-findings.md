@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.15.1-dev
-> **编号源**：`rf-next = 843`（新增问题取此编号，完成后更新为 +1；已用最大 rf-842，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 844`（新增问题取此编号，完成后更新为 +1；已用最大 rf-843，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -30,6 +30,12 @@
 **当前无登记项**——三域均在登记线以下，新增文件触线时按上述口径登记。
 
 ## 已解决问题
+
+### 开发期已修复（0.15.1-dev）
+
+| # | 问题 | 修复 |
+|---|------|------|
+| **rf-843** | Web 配置面板的块标题回退成内部块 id：`renderBoolBlock` 用 `labels[blockKey]` 取标题，而 labels 只登记可编辑键；`sections` / `llm` 等块在面板上直接显示英文 id（中文块标题只有 `features.*` 组与少数写死项）。同批发现 `renderTuningGroup` 签名与块标题取源不一致（引用未定义 `surface`）导致整面板渲染失败 | 块标题改为**服务端随面下发**（`block_titles`，单一来源），前端一律取服务端下发的标题（不回退到 id、不写死中文）；`renderTuningGroup` / `renderAnonGroup` 改为接收 `surface`；契约测试补「每块都有中文标题且标题≠块 id」 |
 
 ### 归档档案
 - [`archived_review-findings.0.15.x.md`](../archive/v0.15.x/archived_review-findings.0.15.x.md) — v0.15.x（2026-10-24 ~ 2026-10-24）

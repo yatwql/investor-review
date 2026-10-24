@@ -9,6 +9,8 @@
 
 ## [0.15.1-dev] - 开发中（未发布）
 
+- **`rf-843` Web 配置面板块标题显示内部 id + 调优块渲染报错**：块标题曾用 `labels[blockKey]` 取，而 `labels` 只登记可编辑键，`sections` / `llm` / `standalone_*` 等块直接显示英文 id；重拍截图时又发现 `renderTuningGroup` 与块标题取源不一致（引用未定义 `surface`），整个配置面板渲染失败。修复：新增 `block_titles` 随面下发（单一来源，11 个块 id 全覆盖），前端一律取服务端下发的标题（不回退到块 id、不写死中文）；`renderAnonGroup` / `renderTuningGroup` 改为接收 `surface`；契约测试补「每块都有中文标题且标题≠块 id」两例。
+
 （本次发布内容见下方归档索引）
 
 ## 归档
