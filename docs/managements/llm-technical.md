@@ -1260,7 +1260,7 @@ reload_pricing() → 读 llm_pricing_ref.json
 
 ### 12.2 注册表键名派生
 
-在 `core/registry.py` 中，每个 LLM 模块通过 `settings_suffix` 注册（`global_macro`、`expert_review`、`health_check`、`penetration_deep`、`news_correlation`、`self_review`（生成后自检，出厂默认关；生成后一遍执行、不经并行调度）、`holding_change`（持仓变动复盘归因，`enabled_llm` 默认开；章本体由 feature `holding_change_review` 控制，不经并行调度），外加 3 个辩论模块 `debate_pro`/`debate_con`/`debate_synthesis`），自动派生 `llm_settings.json` 的所有合法键名：
+在 `core/registry.py` 中，每个 LLM 模块通过 `settings_suffix` 注册（`global_macro`、`expert_review`、`health_check`、`penetration_deep`、`news_correlation`、`self_review`（生成后自检，出厂默认开；生成后一遍执行、不经并行调度）、`holding_change`（持仓变动复盘归因，`enabled_llm` 默认开；章本体由 feature `holding_change_review` 控制，不经并行调度），外加 3 个辩论模块 `debate_pro`/`debate_con`/`debate_synthesis`），自动派生 `llm_settings.json` 的所有合法键名：
 
 ```
 已知 LLM Settings 键名（每个模块 9 个）：
@@ -1309,7 +1309,7 @@ reload_pricing() → 读 llm_pricing_ref.json
 
 消费点仅两处：编排层 `needs` 计算（模块集合）与报告层 `news_top_count` 解析（采集规模）。非默认档位在 LLM 用量页签写入一行自述（`standard` 不写，保持零噪声）。
 
-### 12.4 生成后自检（`self_review`，出厂默认关）
+### 12.4 生成后自检（`self_review`，出厂默认开）
 
 **分层定位（与确定性校验不重叠）**：① `llm/fact_checker` 确定性校验（数值/代码/排名有据性 + 自动修正，**始终生效**）；② `llm/self_review.py` 模型层复核（结论与数据是否矛盾 / 是否有未标注的推测性表述 / 模块间结论是否互斥），经 `enabled_llm.self_review` 开启。
 

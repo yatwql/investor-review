@@ -238,7 +238,7 @@ TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一�
 | `enable_history` | `true` | `config.json` | 组合历史走势与回撤 | 历史走势章节组（持仓快照不受影响，始终自动执行） |
 | `enable_portfolio_evolution` | `true` | `config.json` | 组合演进 | 组合演进章节组（持仓快照不受影响，始终自动执行） |
 | `enable_action` | `true` | `config.json` | 行动建议 | 行动建议章节组（再平衡信号/交易纪律/调仓建议/收益归因，纯算法） |
-| `enabled_llm`（4 个报告模块 + 1 个实验模块） | `true` | `llm_settings.json` | 全球政经局势、智囊团深度复盘、持仓体检报告、穿透深度分析、LLM API 用量；`self_review`（生成后自检，**出厂默认 `false`**，开启后每次报告额外调用一次 LLM，对四模块产出做一致性复核并输出【自检清单】附录） | LLM 分析章节组。任一报告模块启用即整体可见，仅 `news_correlation` 开启时不显示 |
+| `enabled_llm`（4 个报告模块 + 1 个实验模块） | `true` | `llm_settings.json` | 全球政经局势、智囊团深度复盘、持仓体检报告、穿透深度分析、LLM API 用量；`self_review`（生成后自检，**出厂默认 `true`**，开启后每次报告额外调用一次 LLM，对四模块产出做一致性复核并输出【自检清单】附录） | LLM 分析章节组。任一报告模块启用即整体可见，仅 `news_correlation` 开启时不显示 |
 
 > **enable_news 与 news_sources 的区别：** `enable_news` 控制报告章节的可见性——是否在报告中显示新闻相关章节；`news_sources` 控制数据源的启停——报告生成时从哪些新闻提供商获取数据。两者独立配置：`enable_news: true` 并关闭所有 `news_sources` 时章节仍显示但无数据可用；反之开启数据源但 `enable_news: false` 时章节完全隐藏。
 
@@ -353,7 +353,7 @@ TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一�
 | `llm_global_macro` | `llm_global_macro_{fingerprint}.json` | 24h | A股/美股指数 + 持仓汇总 | 全球政经局势 |
 | `llm_health_check` | `llm_health_check_{fingerprint}.json` | 24h | 持仓明细（排除行情波动） | 持仓体检报告 |
 | `llm_penetration_deep` | `llm_penetration_deep_{fingerprint}.json` | 24h | 持仓明细（排除行情波动） | 穿透深度分析 |
-| `llm_self_review` | `llm_self_review_{fingerprint}.json` | 2h | 四个分析模块的产出文本摘要 + 持仓/穿透摘要（**内容寻址**：产出不变即命中） | 生成后自检（⚗ 默认关） |
+| `llm_self_review` | `llm_self_review_{fingerprint}.json` | 2h | 四个分析模块的产出文本摘要 + 持仓/穿透摘要（**内容寻址**：产出不变即命中） | 生成后自检（⚗ 默认开） |
 | `llm_holding_change` | `llm_holding_change_{fingerprint}.json` | 2h | 变动事实块 + 信号对账块 + 持仓摘要 + 申购限购约束块（**内容寻址**：进提示词必进指纹） | 持仓变动复盘归因（章本体 `holding_change_review` 默认关，开启后归因默认开） |
 | `llm_debate_pro` | `llm_debate_pro_{fingerprint}.json` | 24h | 复用 expert_review 持仓指纹（排除行情波动） | 辩论白脸（实验功能） |
 | `llm_debate_con` | `llm_debate_con_{fingerprint}.json` | 24h | 复用 expert_review 持仓指纹（排除行情波动） | 辩论黑脸（实验功能） |

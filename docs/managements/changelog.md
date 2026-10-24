@@ -9,6 +9,8 @@
 
 ## [0.15.4-dev] - 开发中（未发布）
 
+- **LLM 默认值对齐本地偏好**：`self_review` 默认开启；`reasoning_effort` 默认值调整为 global_macro/health_check/news_correlation/penetration_deep=`low`、expert_review=`medium`。生成模板、用户手册与需求默认值描述同步。
+
 - **东方财富 push2 告警降噪**：单代码失败日志 DEBUG，批量失败按源聚合一条 WARNING；registry 熔断汇总保留，减少行业接口断连时的 per-code 噪声。
 - **事件窗取数复用**：`build_event_rows` 对同批 bars/index 做局部 memo；基金基准文本同批去重，避免重复链路取数。
 

@@ -61,7 +61,7 @@ LLM 配置由三个独立文件管理：
     "health_check": true,
     "penetration_deep": true,
     "news_correlation": false,
-    "self_review": false,
+    "self_review": true,
     "holding_change": true
   },
   "temperature_global_macro": 0.3,
@@ -275,7 +275,7 @@ LLM Provider 状态
 
 ## 模块启停
 
-通过 `enabled_llm` 嵌套字典控制每个模块的开关。除 `news_correlation`（新闻 LLM 关联分析）与 `self_review`（生成后自检，实验能力）默认关闭外，其余默认开启（`holding_change` 持仓变动复盘归因的启停同时受报告章节开关 `holding_change_review` 约束）：
+通过 `enabled_llm` 嵌套字典控制每个模块的开关。除 `news_correlation`（新闻 LLM 关联分析）默认关闭外，其余默认开启（`self_review` 默认开启）（`holding_change` 持仓变动复盘归因的启停同时受报告章节开关 `holding_change_review` 约束）：
 
 ```json
 "enabled_llm": {
@@ -284,7 +284,7 @@ LLM Provider 状态
   "health_check": true,
   "penetration_deep": true,
   "news_correlation": false,
-  "self_review": false,
+  "self_review": true,
   "holding_change": true
 }
 ```
@@ -359,7 +359,7 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
 - `llm_max_thinking_concurrency`（int，默认 `2`；**TUI `[D]→[L]` / Web 配置面板「LLM 调优参数」可改，范围 1~4**）：开启 Extended Thinking 的模块（health_check / expert_review 等 `thinking_enabled_{module}=true`）并发的最大请求数。默认 `2` 让两个 thinking 模块并行——实测串行时「等待并发槽」占单次报告墙钟约 44%（智囊团 68.7s + 体检 28.5s，体检全程排队）。多 thinking 模块同时涌向 DeepSeek 等强制推理端点时偶发返回空 content（HTTP 200 空响应），若日志出现空内容重试（会关闭 thinking 同 provider 重试一次）或内容质量下降，改回 `1` 恢复串行。非 thinking 模块不受此限
 
 > **全局并发 vs 端点级节流**：`llm_max_concurrency` 是**全局**上限（所有模块合起来最多几个线程）；若需对**某个具体端点**单独限速/限并发（例如同一个程序里，订阅制编码端点要低频串行、按量付费端点可以放开），用 `llm_providers.json` 各 provider 条目内的 `pacing` 段——两者叠加生效，见下方「端点级节流」。
-- `enabled_llm`（dict，默认除 `news_correlation` 与 `self_review` 为 `false` 外均为 `true`）：各模块独立启停开关。`self_review`（生成后自检）为实验能力：开启后每次报告额外调用一次 LLM，对四个分析模块产出做一致性复核并输出【自检清单】附录（与确定性事实校验分层不重叠，失败不影响主内容）
+- `enabled_llm`（dict，默认除 `news_correlation` 为 `false` 外均为 `true`；`self_review` 默认开启）：各模块独立启停开关。`self_review`（生成后自检）每次报告额外调用一次 LLM，对四个分析模块产出做一致性复核并输出【自检清单】附录（与确定性事实校验分层不重叠，失败不影响主内容）
 - `fact_check`（dict，默认 `{tolerance: 1.0}`）：LLM 输出数值一致性检测配置。详见下节「事实校验容差配置」
 - **计价策略与模型单价**：不在本文件，见独立参考数据 `data/config/llm_pricing_ref.json`（`version` + 策略 + `models` 逐模型覆盖；缺失时仅用内置价）。详见下方「完整模型定价表」章节
 - `news_correlation_top_n`（int，默认 `30`）：送 LLM 分析的新闻条数。仅 news_correlation 模块有效，值越大 Token 消耗越高
