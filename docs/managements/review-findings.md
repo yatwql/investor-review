@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.15.1-dev
-> **编号源**：`rf-next = 861`（新增问题取此编号，完成后更新为 +1；已用最大 rf-860，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 862`（新增问题取此编号，完成后更新为 +1；已用最大 rf-861，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -36,6 +36,7 @@
 
 | # | 问题 | 修复 |
 |---|------|------|
+| **rf-861** | 近 18h 变更的技术债：① `llm_report_unavailable_reason` 与 `is_enable_llm` 两套章节开通判据（可能漂移）；② 锚点「自动压缩」命名/日志/`doctor` 提示与「报告只追加、维护时压缩」新口径不符；③ `_runtime_overrides` 两个只读 API 无消费方；④ 维护体积提示每次 flush 都打印；⑤ `eval` 默认维护压缩失败会推翻已完成的评估输出；⑥ 测试 docstring 仍写「跨轮不重复追加/写失败回滚 key」 | ① 统一复用 `is_enable_llm`；② 改名 `_compact_anchor_file`/维护压缩，同步 doctor、testplan、requirements、folders、scripts-reference 与设计图样；③ 删除死 API；④ 每进程只提示一次（conftest 重置）；⑤ 维护失败只打印提示、保留评估结论；⑥ 改写测试与 eval 文档串 |
 | **rf-860** | `report --type full` 在 LLM 全关/未配置时静默等同 `both`：只在 Excel 页脚留「LLM 用量页签无落点」，日志与结束摘要无显式提示 | `core/system_info.llm_report_unavailable_reason()` 统一判定未配置/章节全关；`full` 生成开始时 `reporter.warn` 明确「按不含 LLM 内容生成（full 等同 both）」，三渠道同一提示；补充文案与测试 |
 | **rf-859** | `perf_history.breakdown` 仅记录 `LLM+新闻 → 新闻获取`，`数据准备 14.4s` 无子阶段、去重/锚点维护不可见 | `数据准备` 补九项子计时（行情与明细/指数获取/穿透/风格与因子/覆盖与新鲜度/估值与温度/财报摘要与指标/申购与成本位置/明细装配与建议）；`LLM+新闻` 补新闻源抓取/去重与关联/锚点维护/事件窗装配；子项全部沿用既有 `PhaseBreakdownRecorder`，不新增面板 |
 | **rf-858** | 去重锚点每轮全量加载/压缩（39 MB，约 18.5s，占管线 42%），而锚点只服务阈值校准 | **采集保持默认开启**（诊断数据不断档；`INVEST_DEDUP_COLLECT_ANCHORS=0` 可关）；写侧改为纯追加：不读旧文件、批内去重，跨轮重复由 `eval-dedup-threshold.py::load_anchors` 按键去重（保留最早一条），诊断结论不受影响；39MB 文件的加载/压缩移出报告路径（压缩只由 `--compact` 或 `INVEST_DEDUP_MAINTENANCE=1` 显式触发），文件超 32MB 仅记体积提示 |
