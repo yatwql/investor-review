@@ -90,7 +90,7 @@ def build_purchase_status_data(
     """
     from src.python.config import is_enable_fund_purchase_limit
 
-    if not is_enable_fund_purchase_limit(config):
+    if not is_enable_fund_purchase_limit():
         return None
 
     from src.python.fetcher.fund_purchase import fetch_fund_purchase_status_cached

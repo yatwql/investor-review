@@ -71,7 +71,7 @@ def compute_cost_position_data(holdings: list[Any], config: dict | None = None) 
     """
     from src.python.config import is_enable_cost_position
 
-    if not is_enable_cost_position(config):
+    if not is_enable_cost_position():
         return None
 
     rows: dict[str, dict[str, float | None]] = {}

@@ -317,7 +317,7 @@ def compute_financial_report_digest_data(
     """
     from src.python.config import is_enable_stock_fundamentals
 
-    if not is_enable_stock_fundamentals(config):
+    if not is_enable_stock_fundamentals():
         return None
     from src.python.report.financial_report_digest import build_financial_report_digest
 
@@ -371,7 +371,7 @@ def compute_financial_indicator_data(
     """
     from src.python.config import is_enable_stock_fundamentals
 
-    if not is_enable_stock_fundamentals(config):
+    if not is_enable_stock_fundamentals():
         return None
     from src.python.fetcher.financial_indicator import collect_price_map
     from src.python.report.financial_indicator import build_financial_indicator
@@ -437,7 +437,7 @@ def compute_valuation_data(
     """
     from src.python.config import datasink_feature_ready, is_enable_valuation_percentile
 
-    if not is_enable_valuation_percentile(config):
+    if not is_enable_valuation_percentile():
         return None
     # 真实分位口径是否生效：未就绪时渲染层保持价格分位的原始文案与免责语（静默回原样）
     real_basis = datasink_feature_ready(config)

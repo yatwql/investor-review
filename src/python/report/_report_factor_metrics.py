@@ -203,7 +203,7 @@ def compute_industry_beta_data(
 
     if not is_enable_fund_deep_analysis(config):
         return None
-    if not is_enable_industry_beta(config):
+    if not is_enable_industry_beta():
         return None
 
     from concurrent.futures import ThreadPoolExecutor
