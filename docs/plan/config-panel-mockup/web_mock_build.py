@@ -5,7 +5,7 @@
   ``index.html``         目标设计（按业务域编排）
   ``web-current.html``   现有实现（按存储文件编排）
 
-设计口径（与 `docs/plan/config-panel-design.md` 一致）：
+设计口径（与 `docs/plan/config-web-design.md` 一致）：
   - 域 = 一级分区（报告内容 / 呈现与机制 / 数据与线路 / LLM 运行）
   - 块 = 一组可编辑项；`features.<组键>` 对应注册表分组
   - 条目名与 TUI 逐字相同；TUI 的编号只属于 TUI，Web 用勾选/输入控件表达

@@ -1,6 +1,6 @@
 # 配置体系重构计划（15 轮）
 
-> **依据**：[`config-panel-design.md`](config-panel-design.md)（面板与配置文件全景）、[`llm-settings-nesting-design.md`](llm-settings-nesting-design.md)（LLM 配置纵切与计价参考）、[`logging-config-design.md`](logging-config-design.md)（日志配置独立）。
+> **依据**：[`config-tui-design.md`](config-tui-design.md)（终端面板）、[`config-web-design.md`](config-web-design.md)（浏览器分区）、[`config-files-design.md`](config-files-design.md)（配置文件边界）、[`llm-settings-nesting-design.md`](llm-settings-nesting-design.md)（LLM 配置纵切与计价参考）、[`logging-config-design.md`](logging-config-design.md)（日志配置独立）。
 > **性质**：迭代计划与验收基准。每轮独立可验收、失败即停止进入下一轮；跨轮依赖在前置轮次「依赖」列写明。
 > **约束与契约**：全部轮次受 `technical.md`「架构设计约束」、`DESIGN.md`（Web 视觉）、`DESIGN-TUI.md`（终端交互）约束；每轮的验收表列出对应检查点。
 
