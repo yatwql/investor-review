@@ -7,16 +7,8 @@
 - config.json / llm_settings.json / llm_key.json 支持 ``//`` 单行注释和 ``/* */`` 多行注释
   （自动剥离后解析），方便按业务场景分组管理配置项。
 
-架构：config/ 子包
-  _config_defaults.py      — config.json 默认配置 & 模板生成
-  _json_patch.py           — 带注释 JSON 顶层键扫描/patch 引擎 + 字段级文本替换
-  _llm_settings_defaults.py — llm_settings.json 缺省模板
-  _llm_providers_defaults.py — llm_providers.json 缺省模板
-  _llm_settings.py         — llm_settings.json 读取/合并/缓存与 LLM 配置入口
-  _llm_providers.py        — llm_providers.json 多链解析/凭据注入
-  _comments.py             — JSON 注释剥离
-  _validation.py           — config.json 配置校验函数集
-  _core.py                 — config.json 读写/缓存协调（解析委托 _comments/_validation，patch 引擎委托 _json_patch）
+架构：config/ 子包（各子模块职责见 `docs/managements/folders.md` 目录树；本文件只做公开面
+re-export，不含实现）。
 """
 
 # 保留子模块引用，供测试和外部直接访问

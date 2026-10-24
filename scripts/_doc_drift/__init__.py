@@ -43,6 +43,12 @@ from _doc_drift._format import (  # noqa: F401
     _HOURS_ROW,
     _ttl_default,
     check_llm_defaults,
+    _TEST_COVERAGE_ROW,
+    _COUNT_CELL,
+    _COUNT_NAME_ALIAS,
+    check_test_coverage_counts,
+)
+from _doc_drift._format_panels import (  # noqa: F401
     _HOWTO_PANEL_HEADING,
     _PANEL_ROW,
     _SUB_ITEM_ROW,
@@ -50,10 +56,6 @@ from _doc_drift._format import (  # noqa: F401
     _BLOCK_PANEL_RANGE,
     _PANEL_KEY_MAP_ROW,
     check_panel_numbering,
-    _TEST_COVERAGE_ROW,
-    _COUNT_CELL,
-    _COUNT_NAME_ALIAS,
-    check_test_coverage_counts,
 )
 from _doc_drift._tree import (  # noqa: F401
     _TREE_ENTRY,

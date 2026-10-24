@@ -1577,7 +1577,7 @@
       group.appendChild(row);
       var desc = surface.descriptions[key];
       if (desc) {
-        group.appendChild(makeConfigDesc(desc, ''));
+        group.appendChild(makeConfigDesc(desc));
       }
     });
     group.appendChild(makeGroupErrorEl());
@@ -1602,10 +1602,15 @@
     return group;
   }
 
-  /** 项说明副行（服务端 descriptions 下发；与控件文字左对齐）。 */
-  function makeConfigDesc(text, indent) {
+  /**
+   * 项说明副行（服务端 descriptions 下发）。
+   *
+   * @param {string} text 说明文本
+   * @param {boolean} [flush] 表单类块为 true——说明与字段左缘对齐（不缩进到控件文字列）
+   */
+  function makeConfigDesc(text, flush) {
     var desc = document.createElement('p');
-    desc.className = indent === '0' ? 'config-desc config-desc-flush' : 'config-desc';
+    desc.className = flush ? 'config-desc config-desc-flush' : 'config-desc';
     desc.textContent = text;
     return desc;
   }
@@ -1646,7 +1651,7 @@
       // 说明副行：注册表标了「需提示」或本块强制展开时默认显示，其余悬停可见
       var desc = descriptions[fullKey] || descriptions[key];
       if (desc && (needsHint.indexOf(fullKey) !== -1 || opts.showDesc)) {
-        group.appendChild(makeConfigDesc(desc, '24px'));
+        group.appendChild(makeConfigDesc(desc));
       } else if (desc) {
         row.title = desc;
       }
@@ -2122,7 +2127,7 @@
       row.appendChild(status);
       group.appendChild(row);
       if (item.hint) {
-        group.appendChild(makeConfigDesc(item.hint, '0'));
+        group.appendChild(makeConfigDesc(item.hint, true));
       }
     });
     if (restart.length) {
@@ -2153,7 +2158,7 @@
     row.appendChild(path);
     group.appendChild(row);
     if (ref.note) {
-      group.appendChild(makeConfigDesc(ref.note, '0'));
+      group.appendChild(makeConfigDesc(ref.note, true));
     }
     return group;
   }

@@ -88,6 +88,15 @@ from src.python.config.features import (  # noqa: E402,F401
 )
 from src.python.core.registry import _REPORT_SECTION_DEFAULT, get_llm_module_names  # noqa: E402,F401
 from src.python.tui.tui_menu import filter_menu_llm_modules  # noqa: E402,F401
+from _doc_drift._format_panels import (  # noqa: E402,F401  # 面板编号族（实现见 _doc_drift/_format_panels.py）
+    _HOWTO_PANEL_HEADING,
+    _PANEL_ROW,
+    _SUB_ITEM_ROW,
+    _GROUP_PANEL_RANGE,
+    _BLOCK_PANEL_RANGE,
+    _PANEL_KEY_MAP_ROW,
+    check_panel_numbering,
+)
 from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc_drift/）
     _RELIABILITY_MD,
     check_chain_table,
@@ -148,13 +157,6 @@ from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc
     _HOURS_ROW,
     _ttl_default,
     check_llm_defaults,
-    _HOWTO_PANEL_HEADING,
-    _PANEL_ROW,
-    _SUB_ITEM_ROW,
-    _GROUP_PANEL_RANGE,
-    _BLOCK_PANEL_RANGE,
-    _PANEL_KEY_MAP_ROW,
-    check_panel_numbering,
     _TEST_COVERAGE_ROW,
     _COUNT_CELL,
     _COUNT_NAME_ALIAS,

@@ -268,6 +268,13 @@ def _enclosing_bracket_span(sentence: str, anchor: int) -> tuple[int, int] | Non
     return best
 
 
+def _alias_normalized(text: str) -> str:
+    """把文本中的常用简称替换为规范名（"纳指"→"纳斯达克"），供简称匹配复用。"""
+    for alias, canon in sorted(_NAME_ALIAS_MAP.items(), key=lambda kv: -len(kv[0])):
+        text = text.replace(alias, canon)
+    return text
+
+
 def _has_subject_candidate(
     text: str,
     holding_codes: set[str],
@@ -284,9 +291,7 @@ def _has_subject_candidate(
     for name in name_to_code or {}:
         if name in text:
             return True
-    norm = text
-    for alias, canon in sorted(_NAME_ALIAS_MAP.items(), key=lambda kv: -len(kv[0])):
-        norm = norm.replace(alias, canon)
+    norm = _alias_normalized(text)
     if norm != text:
         for name in name_to_code or {}:
             core = _extract_core_name(name)
@@ -382,9 +387,7 @@ def _locate_subject_in(
     # 再与持仓名称核心名前缀匹配。仅在句中确实出现简称（norm != sentence）
     # 时执行，避免额外开销与误匹配。句中已有代码/全名时简称仅以「紧邻」覆盖
     # （不参与全局最近竞争），防止远距简称误路由。
-    norm = sentence
-    for _alias, _canon in sorted(_NAME_ALIAS_MAP.items(), key=lambda kv: -len(kv[0])):
-        norm = norm.replace(_alias, _canon)
+    norm = _alias_normalized(sentence)
     if norm != sentence:
         for name, code in sorted((name_to_code or {}).items(), key=lambda kv: -len(kv[0])):
             core = _extract_core_name(name)
