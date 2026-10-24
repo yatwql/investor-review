@@ -18,9 +18,9 @@
 | 测试用例 | — | — | 11,680 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 13 | 6,295 | 含 README.md（211 行）；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 12 | 6,077 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 188 | 67,594 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 6 + archive md 160），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 13,329 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
-| ├ archive/ | 版本归档 | 164 | 52,115 | 各版本 changelog/plan/review-findings 与设计文档归档（157 md 50,492 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
+| 项目文档 | Markdown | 191 | 67,625 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 6 + archive md 160），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 13,336 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| ├ archive/ | 版本归档 | 167 | 52,139 | 各版本 changelog/plan/review-findings 与设计文档归档（157 md 50,492 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 10 | ~2,058 | 在办设计文档（文档扁平存放、附属原型就近建子目录，完成后迁入对应版本的归档子目录）：两份 Jev 新闻关联判定文档（对照评测方案 + 类型化判定通道接入设计）+ 决策跨期反思闭环设计 + Web 浏览器验证方法 + 配置面板分类与描述设计 + LLM 配置纵切设计 + 日志配置独立成文件设计（共用同目录 `config-panel-mockup/` 设计图样与复跑脚本） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
 
@@ -1676,10 +1676,14 @@ investor-review/
 │   │   │   │   └── tui-interaction-hci-design.md # HCI 原则对照 + 交互契约 v0 + M1~M10 措施与机检载体
 │   │   │   └── tui-panel-runtime/           # TUI 统一交互运行时设计归档
 │   │   │       └── tui-panel-runtime-design.md # NavState/PanelItem/panel_loop 契约 + 13 面板清单 + 8 迭代
-│   │   └── v0.14.x/                         # v0.14.x 版本归档（changelog/plan/review-findings + 设计文档）
-│   │       ├── archived_changelog.0.14.x.md # 变更日志归档 v0.14.x（v0.14.0 起发布段）
-│   │       ├── archived_plan.0.14.x.md      # 实现计划归档 v0.14.x（已完成任务节）
-│   │       └── archived_review-findings.0.14.x.md # 自审记录归档 v0.14.x（开发期已修复批次）
+│   │   ├── v0.14.x/                         # v0.14.x 版本归档（changelog/plan/review-findings + 设计文档）
+│   │   │   ├── archived_changelog.0.14.x.md # 变更日志归档 v0.14.x（v0.14.0 起发布段）
+│   │   │   ├── archived_plan.0.14.x.md      # 实现计划归档 v0.14.x（已完成任务节）
+│   │   │   └── archived_review-findings.0.14.x.md # 自审记录归档 v0.14.x（开发期已修复批次）
+│   │   └── v0.15.x/                         # v0.15.x 版本归档（changelog/plan/review-findings + 设计文档）
+│   │       ├── archived_changelog.0.15.x.md # 变更日志归档 v0.15.x（发布段）
+│   │       ├── archived_plan.0.15.x.md      # 实现计划归档 v0.15.x（已完成任务节）
+│   │       └── archived_review-findings.0.15.x.md # 自审记录归档 v0.15.x（开发期已修复批次）
 │   └── plan/                          #   中间设计文件（在办设计文档，文档扁平存放、原型就近建子目录）；完成后迁入对应版本的归档子目录
 │       ├── config-tui-design.md   # TUI 面板设计（四组菜单层级/七项四组/章节显隐与章内内容/键位与分组标题纪律）
 │       ├── config-web-design.md   # Web 配置面设计（五域分区/块与控件/保存语义/无障碍与响应式）

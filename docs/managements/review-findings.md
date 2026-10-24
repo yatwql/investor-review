@@ -40,6 +40,7 @@
 | **rf-837** | 计价模块懒加载标志与显式重载不一致：显式 `reload_pricing()` 后 `_PRICING_LOADED` 仍为 False，进程内首次计费会再读一次配置文件并覆盖已装载的定价（用例单独执行失败、整文件通过） | `reload_pricing()` 在 `finally` 置 `_PRICING_LOADED = True`；新增回归用例 `test_explicit_reload_is_not_undone_by_lazy_init`（断言显式重载后计费直接使用已装载的定价） |
 
 ### 归档档案
+- [`archived_review-findings.0.15.x.md`](../archive/v0.15.x/archived_review-findings.0.15.x.md) — v0.15.x（2026-10-24 ~ 2026-10-24）
 - [`archived_review-findings.0.14.x.md`](../archive/v0.14.x/archived_review-findings.0.14.x.md) — v0.14.x（2026-10-21 ~ 2026-10-23）
 - [`archived_review-findings.0.13.x.md`](../archive/v0.13.x/archived_review-findings.0.13.x.md) — v0.13.x 开发期已修复批次（2026-10-14 ~ 2026-10-21）
 - [`archived_review-findings.0.12.x.md`](../archive/v0.12.x/archived_review-findings.0.12.x.md) — v0.12.0 ~ v0.12.13  （2026-10-03 ~ 2026-10-12）
