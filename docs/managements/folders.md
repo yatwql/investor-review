@@ -18,10 +18,10 @@
 | 测试用例 | — | — | 11,770 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 13 | 6,351 | 含 README.md（211 行）；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 12 | 6,133 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 191 | 67,732 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 6 + archive md 160），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 13,385 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 192 | 67,866 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 6 + archive md 160），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 13,396 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 168 | 52,406 | 各版本 changelog/plan/review-findings 与设计文档归档（157 md 50,492 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
-| ├ plan/ | 中间设计文件 | 9 | ~1,849 | 在办设计文档（文档扁平存放、附属原型就近建子目录，完成后迁入对应版本的归档子目录）：两份 Jev 新闻关联判定文档（对照评测方案 + 类型化判定通道接入设计）+ 决策跨期反思闭环设计 + Web 浏览器验证方法 + 配置面板分类与描述设计 + LLM 配置纵切设计 + 日志配置独立成文件设计（共用同目录 `config-panel-mockup/` 设计图样与复跑脚本） |
+| ├ plan/ | 中间设计文件 | 10 | ~1,972 | 在办设计文档（文档扁平存放、附属原型就近建子目录，完成后迁入对应版本的归档子目录）：两份 Jev 新闻关联判定文档（对照评测方案 + 类型化判定通道接入设计）+ 决策跨期反思闭环设计 + Web 浏览器验证方法 + 配置面板分类与描述设计 + LLM 配置纵切设计 + 日志配置独立成文件设计（共用同目录 `config-panel-mockup/` 设计图样与复跑脚本） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
 
 ## 版本演进对照（最初版本 → 最新发布 → 当前开发版）
@@ -1718,6 +1718,7 @@ investor-review/
 │       ├── config-llm-settings-design.md # LLM 配置设计（模块为第一层的纵切结构/三层缺省继承/键位映射/升级与回滚）
 │       ├── config-logging-design.md # 日志配置设计（logger.json 键表与默认值/加载优先级/校验与错误/面板入口）
 │       ├── config-rework-iteration-plan.md # 配置体系重构计划（轮次状态/待办轮次验收标准/门禁与契约映射）
+│       ├── import-surface-rename.md # 跨模块导入面重命名分析（兼容转发/唯一 owner/四阶段迁移/验收与护栏；未实施）
 │       ├── jev-news-judgment-evaluation.md # 判定迁移的对照评测方案（三方对照/语料冻结/预注册阈值与四类判定）
 │       ├── jev-news-judgment-design.md # 判定通道接入设计（独立于对话链的类型化通道/模板理由/降级矩阵；待评测通过后实施）
 │       └── decision-reflection-design.md # 决策跨期反思闭环设计（可结算决策账本/结算器/反思回灌与回滚）
