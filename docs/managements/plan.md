@@ -59,13 +59,15 @@
 
 **验收**：同条件报告 `warnings_count` 从 35 降至 ≤10 且无 `Unknown thscode` 无效请求；行业资金流向有明确可用/不可用状态；补数据源路由与降级回归。
 
-#### `plan-212` 报告级 LLM 缓存状态隔离与指纹审计
+#### `plan-212` 报告级 LLM 缓存状态隔离与指纹审计——进行中
 
 **现状**：同一非交易日、同持仓、新闻缓存命中时连续两次报告，LLM 模块仍全部缓存 miss；总市值/盈亏相同，说明不是 TTL 到期，而是报告级状态或指纹输入变化。设计见 [`llm-cache-state-isolation.md`](../plan/llm-cache-state-isolation.md)。
 
-**动作**：建立报告 run scope（清空/过滤 degradation 事件、重置 self_review 载体、LLM 用量按报告 delta 记账）；增加指纹组件审计，定位实际变化的输入；只对语义无关字段归一化，不剔除真实数据、不延长新闻 TTL。
+**已落地**：`report/_run_scope.py` 报告边界（清本轮降级事件、重置自检载体、取用量基线）；`_usage_delta` 按报告记账；`fingerprint_components` / `diff_fingerprint_components` 组件级审计（DEBUG 下自动记录相对上次的变化）。
 
 **不做**：不为命中缓存忽略行情/指数/数据质量/账本变化；不跨日缓存；不改变现有缓存 TTL。
+
+**剩余**：实跑两次同条件报告验证命中率；`holding_change_block` 随上一轮快照写入变化属真实输入，需先定快照写入时机口径。
 
 **验收**：同非交易日、同持仓/指数/新闻连续两次报告，基础模块第二次命中；perf LLM token/call_count 为单次报告值；无上一轮 degradation/self_review 残留；补同进程双报告与失效回归。
 

@@ -9,6 +9,9 @@
 
 ## [0.15.4-dev] - 开发中（未发布）
 
+- **报告级 LLM 缓存状态隔离**：新增报告运行边界（清本轮降级事件、重置自检载体、取 LLM 用量基线），`perf` 的 token/调用数改为按报告 delta 记账，TUI 会话累计不变。
+- **指纹组件审计**：新增组件级哈希与变化定位，DEBUG 下自动记录「相对上次报告哪些组件变了」，用于定位缓存未命中来源。
+
 - **LLM 默认值对齐本地偏好**：`self_review` 默认开启；`reasoning_effort` 默认值调整为 global_macro/health_check/news_correlation/penetration_deep=`low`、expert_review=`medium`。生成模板、用户手册与需求默认值描述同步。
 
 - **东方财富 push2 告警降噪**：单代码失败日志 DEBUG，批量失败按源聚合一条 WARNING；registry 熔断汇总保留，减少行业接口断连时的 per-code 噪声。

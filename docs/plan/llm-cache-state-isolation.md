@@ -16,7 +16,21 @@
 
 **结论**：TTL 未到期不是原因；key 是内容寻址的，报告级状态或指纹输入发生了变化。
 
-## 2. 待审计的状态源
+## 2. 缓存键实测证据（2026-10-24 20:41 / 20:44 两次报告）
+
+模块缓存键由「基础指纹 + 各后缀」拼接，逐段比对可见：
+
+| 模块 | 变化段 | 结论 |
+|:--|:--|:--|
+| health_check | 第 3 段（pipeline 块）`3a5ead75787a` → `eeddd418edb8` | 数据质量/降级块变了 —— 上一轮告警进入本轮提示词 |
+| expert_review | 基础段与 pipeline 段均变 | 同上，且 `holding_change_block` 随上一轮写入的快照变化 |
+| global_macro / penetration_deep / holding_change | 仅基础段变，生成参数段不变 | 配置未变，是数据输入变化 |
+| self_review | 内容寻址 | 上游产出变则必然变，属设计内 |
+
+同时 `perf_history` 第二份报告的 `input_tokens` 是累计值（expert 11677 = 5805 + 5872），
+说明用量侧未按报告取 delta。
+
+## 3. 待审计的状态源
 
 | 状态 | 生命周期 | 是否应进指纹 | 当前问题 |
 |:--|:--|:--|:--|
@@ -27,9 +41,9 @@
 | `history_data` 风险摘要 / 指数 / 竞争语境 | 报告数据 | 进基础指纹 | 非交易日应稳定；需 fingerprint audit 确认是否实际变化 |
 | `generation_params_suffix` | 配置 | 进指纹 | 配置默认值/思考参数变更会整体换键，需确认两次运行配置未变 |
 
-## 3. 设计候选
+## 4. 设计候选
 
-### 3.1 报告运行边界（P0）
+### 4.1 报告运行边界（P0，已实施）
 
 在报告入口建立显式 run scope：
 
@@ -38,7 +52,7 @@
 - `LLM session usage`：报告开始记录 baseline，`_record_llm_context` 按 delta 写 perf；不重置全局累计（TUI 会话统计仍需保留）
 - 把上述边界放在 full/both 共用入口，异常路径 `finally` 清理
 
-### 3.2 指纹审计（P1）
+### 4.2 指纹审计（P1，已实施）
 
 增加只读诊断（不改变缓存）：
 
@@ -46,13 +60,24 @@
 - 连续两次运行输出“哪些组件变化”，避免再凭猜测改指纹
 - 只对**语义无关**的组件做归一化；真实数据变化不得剔除
 
-### 3.3 缓存策略
+### 4.3 缓存策略
 
 - 不延长新闻 TTL，不缓存跨日/跨行情
 - 不为了命中而移除 `total_today_profit`、指数、数据质量等真实字段
 - 若 ledger 每次增长导致 expert 必 miss，评估“基础指纹 + 增量上下文”分层，或接受重算并单独计量
 
-## 4. 验收
+## 5. 已落地
+
+- `report/_run_scope.py::start_report_run()`：报告入口调用，清本轮降级事件与自检载体，返回用量基线
+- `DegradationTracker.begin_report()`：只清事件日志，保留失败计数与上次成功时间
+- `_generation_shared._usage_delta()`：perf 按基线写 delta，TUI 会话累计不受影响
+- `module_fingerprint.fingerprint_components()` / `diff_fingerprint_components()`：组件级哈希与变化定位，DEBUG 下自动记录「相对上次报告的组件变化」
+- 回归：`test_run_scope.py`、`test_fingerprint_components.py`
+
+**待观察**：`holding_change_block` / 快照差异仍会随上一轮报告写入而变（属真实输入变化），
+若同日后两次报告仍需复用 expert 结论，须先决定「快照写入时机」口径，不能靠指纹归一化绕过。
+
+## 6. 验收
 
 - 同一非交易日、同持仓/指数/新闻，连续两次报告：基础模块（global/health/penetration/holding）第二次命中应用缓存
 - `perf_history` 的 LLM token/call_count 为**单次报告**值，不累加

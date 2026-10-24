@@ -226,4 +226,5 @@ class TestLlmObservationRecorded:
         import inspect
 
         src = inspect.getsource(rg._generate_report_full)
-        assert "_record_llm_context(perf, _llm_sink)" in src
+        assert "_record_llm_context(perf, _llm_sink" in src
+        assert "_usage_baseline" in src, "报告用量须按本次运行基线记账（不累加会话累计）"

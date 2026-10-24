@@ -457,6 +457,19 @@ class DegradationTracker:
         with self._lock:
             self._events.clear()
 
+    def begin_report(self) -> None:
+        """开启一份新报告：只清空**事件日志**，保留失败计数与上次成功时间。
+
+        事件日志的消费方（数据质量块、数据源可用性矩阵、降级摘要）语义都是
+        「本次报告期间发生了什么」，跨报告累积会把上一轮的告警写进本轮的 LLM
+        提示词与缓存指纹，导致同数据连续报告也全部缓存 miss。
+        失败计数（``_counts``）与 ``_last_success`` 是降级判定与跨会话陈旧的
+        事实来源，**不在本方法清理范围内**（需要清时用 :meth:`reset`）。
+        """
+        with self._lock:
+            self._events.clear()
+            self._persist_dirty = True
+
     # ── 聚合降级记录 ──
 
     def record_aggregated(

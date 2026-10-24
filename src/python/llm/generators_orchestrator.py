@@ -47,6 +47,15 @@ from src.python.core.registry import get_llm_module_name, get_llm_module_names
 logger = logging.getLogger("invest")
 _MN = get_llm_module_name
 
+#: 上一次报告的指纹组件哈希（仅排障：连续两次报告对比变化来源；空=首次运行）
+_LAST_FP_COMPONENTS: dict[str, str] | None = None
+
+
+def reset_fingerprint_audit() -> None:
+    """清空指纹组件审计基线（进程内新会话/测试隔离用）。"""
+    global _LAST_FP_COMPONENTS
+    _LAST_FP_COMPONENTS = None
+
 
 # ── 子模块 re-export ──────────────────────────────────────
 # news_correlation 安全直调入口在 `_llm_news_correlation.py` 中实现，此处 re-export。
@@ -129,6 +138,22 @@ def _compute_module_cache_info(
         event_impact_block=event_impact_block or "",
         schedule_replay_block=schedule_replay_block or "",
     )
+    # 排障用组件级哈希：仅在 DEBUG 日志开启时计算（正式路径零额外开销）。
+    # 连续两次同数据报告仍全量 miss 时，对比两次日志即可定位变化来源。
+    if logger.isEnabledFor(logging.DEBUG):
+        global _LAST_FP_COMPONENTS
+        from src.python.llm.module_fingerprint import (
+            diff_fingerprint_components,
+            fingerprint_components,
+        )
+
+        _components = fingerprint_components(_inputs)
+        _changed = diff_fingerprint_components(_LAST_FP_COMPONENTS, _components)
+        logger.debug("[fingerprint] 组件哈希: %s", _components)
+        if _changed:
+            logger.debug("[fingerprint] 相对上次报告的组件变化: %s", _changed)
+        _LAST_FP_COMPONENTS = _components
+
     fp_global_macro = global_macro_fingerprint(_inputs)
     fp_expert_review = expert_review_fingerprint(_inputs)
     fp_health_check = health_check_fingerprint(_inputs)
