@@ -73,6 +73,25 @@ def _call_name(node: ast.Call) -> str:
     return func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
 
 
+class TestStatusRenderingContract:
+    """开关状态只有 ``switch_panel.status_text`` 一个实现；其他面板复用它。"""
+
+    def test_status_text_has_single_implementation(self):
+        definitions: list[str] = []
+        for path in _tui_sources():
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef) and node.name in {"status_text", "_status_text"}:
+                    definitions.append(path.name)
+        assert definitions == ["switch_panel.py"], f"状态渲染重复实现: {definitions}"
+
+    def test_report_chapters_reuses_shared_status(self):
+        source = (TUI_DIR / "handlers_report_chapters.py").read_text(encoding="utf-8")
+        assert "from src.python.tui.switch_panel import" in source
+        assert "status_text" in source
+        assert "_status_text" not in source
+
+
 class TestPanelPromptsUseTemplate:
     """规则 1：panel_loop 的 prompt 必须来自模板函数。"""
 

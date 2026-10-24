@@ -31,23 +31,15 @@ from src.python.qa.error_codes import (
 
 # 生成执行体（下沉至 web/run_generation.py；此处 re-export 保持既有引用面，
 # 调用点 patch 须指向 run_generation 模块——见该模块 docstring）
-from src.python.web.run_generation import (  # noqa: F401 — 兼容既有导入面
-    _EXIT_PARTIAL,
-    _EXIT_SEVERE,
-    _EXIT_SUCCESS,
+from src.python.web.run_generation import (
     _build_artifacts,
-    _notify_web_completion,
-    _run_generation,
-    _run_generation_impl,
-    _web_input_mode_snapshot_domain,
 )
 
 logger = logging.getLogger("invest")
 
 # 只读观测路由（健康 / 自检 / 日志 / 健康历史）下沉 web/handlers_health.py；
 # 此处 re-export 保持既有引用面（测试与调用方 import 路径不变）
-from src.python.web.handlers_health import (  # noqa: E402, F401 — 兼容既有导入面
-    _health_cache,
+from src.python.web.handlers_health import (  # noqa: E402
     _handle_doctor,
     _handle_health,
     _handle_health_history,
@@ -557,7 +549,8 @@ def _handle_scheduler_post():
     写共享配置异常 → 500 CONFIG_WRITE_FAILED（详情记日志，前端不泄露内部细节）。
     """
     from src.python.config.edit_ops import apply_scheduler_block
-    from src.python.web.scheduler import status_payload, validate_block
+    from src.python.config import validate_schedule_block
+    from src.python.web.scheduler import status_payload
 
     if not _is_same_origin():
         return _err("BAD_PARAM", "同源校验失败，拒绝提交"), 403
@@ -565,7 +558,7 @@ def _handle_scheduler_post():
     if not isinstance(payload, dict):
         return _err("BAD_PARAM", "请求体格式不合法"), 400
     try:
-        block = validate_block(payload)
+        block = validate_schedule_block(payload)
     except ValueError as e:
         return _err("BAD_PARAM", str(e)), 400
     try:

@@ -296,14 +296,14 @@ def _llm_review_view(llm_review: str) -> tuple[list[str], str, str]:
     from src.python.report.llm_content import (
         _extract_footer_text,
         _split_html_blocks,
-        _strip_html,
+        strip_html,
     )
 
     html = llm_review.strip()
     footer = _extract_footer_text(html)
     paragraphs: list[str] = []
     for block in _split_html_blocks(html):
-        text = _strip_html(block)
+        text = strip_html(block)
         if not text or (footer and text == footer):
             continue
         paragraphs.append(text)

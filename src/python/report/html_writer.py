@@ -28,23 +28,21 @@ from src.python.report.data_status import DataStatus
 from src.python.report.progress import ProgressReporter, SilentProgressReporter
 
 # ── 子模块 re-export ────────────────────────────────────
-from src.python.report.html_writer_assets import _copy_js_assets, _inline_js_assets  # noqa: F401
-from src.python.report.html_writer_display import (  # noqa: F401
+from src.python.report.html_writer_assets import _copy_js_assets, _inline_js_assets
+from src.python.report.html_writer_display import (
     _attach_valuation_to_penetration,
     _build_flow_display,
     _build_purchase_status_display,
     _build_temperature_display,
 )
-from src.python.report.html_writer_nav import (  # noqa: F401
+from src.python.report.html_writer_nav import (
     _LLM_SUPPORTED_SECTIONS,
-    _NAV_GROUP_LABELS,
     _build_section_nav_groups,
     _compute_section_visibility,
 )
 
-from src.python.report.html_writer_status import (  # noqa: F401 — 兼容既有导入面
+from src.python.report.html_writer_status import (
     _self_review_block,
-    _safe_build_data_status,
     _time_strings,
     _build_data_status_sections,
     _build_history_data_status,

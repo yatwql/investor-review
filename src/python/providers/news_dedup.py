@@ -16,8 +16,7 @@ from typing import Any
 
 from src.python.core.constants import PROJECT_ROOT
 
-from src.python.providers.news_dedup_rules import (  # noqa: F401
-    # 规则原语全部再导出：既有 import 面（测试 / 校准工具 / 报告层）保持不变
+from src.python.providers.news_dedup_rules import (
     ANCHOR_RULES_FIELD,
     _ANCHOR_RULES_VERSION,
     _CROSS_BG2_RATIO,
@@ -25,27 +24,14 @@ from src.python.providers.news_dedup_rules import (  # noqa: F401
     _CROSS_CANDIDATE_RATIO,
     _CROSS_DIRECT_RATIO,
     _CROSS_SAFE_RATIO,
-    _ENG_PLACEHOLDER,
-    _EVENT_GROUPS,
-    _GENERIC_TOKENS,
-    _OPPOSITE_PAIRS,
-    _RATIO_CLEAN,
     _SAME_SRC_BIGRAM_MIN,
-    _STOP_BIGRAMS,
-    _STOP_MASK_RE,
-    _TOKEN_LIKE,
-    _eng_len_placeholder,
     _extract_entity_bigrams,
     _has_opposite_direction,
     has_proper_noun_token,
-    _mask_stop,
     _normalize_title,
     _overlap_of_norms,
-    _pair_similarity,
-    proper_noun_tokens,
-    _ratio_of_norms,
+    _ratio_of_norms_bounded,
     share_event_group,
-    _rules_fingerprint,
 )
 
 logger = logging.getLogger("invest")
@@ -420,7 +406,7 @@ def _dedup_by_title(
             #    英文专名按长度分桶占位，避免共享专名（Anthropic/Meta/AMD）导致
             #    SequenceMatcher 比率虚高（英文专名在 _extract_entity_bigrams
             #    中已有独立处理，ratio 中可降权）。口径实现见 _ratio_of_norms。
-            ratio = _ratio_of_norms(norm, existing)
+            ratio = _ratio_of_norms_bounded(norm, existing, cross_threshold)
             if ratio >= _CROSS_SAFE_RATIO:
                 overlap = _overlap_of_norms(norm, existing)
                 # ratio ≥ 0.65 直接合并也要求专名 bg ≥ 1：不同公司同模板

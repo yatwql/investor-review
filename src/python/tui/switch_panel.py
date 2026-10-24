@@ -116,7 +116,7 @@ def inner_width(columns: int) -> int:
     return max(30, columns - _PANEL_CHROME)
 
 
-def _status(enabled: bool, tier: str) -> str:
+def status_text(enabled: bool, tier: str) -> str:
     """状态文本：宽/中档用「开启/关闭」，窄档用「开/关」；**开启绿 / 关闭红**。
 
     着色在方括号内（`[` + 颜色 + 标签 + `RESET` + `]`），非 TTY 或 `NO_COLOR`
@@ -176,7 +176,7 @@ def format_item(
     """
     tier = layout_tier(columns)
     limit = inner_width(columns)
-    status = _status(enabled, tier)
+    status = status_text(enabled, tier)
 
     num = f"{number:>{number_width}}"
 

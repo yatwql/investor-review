@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from src.python.providers.news_dedup import (
+from src.python.providers.news_dedup_rules import (
     ANCHOR_RULES_FIELD,
     _ANCHOR_RULES_VERSION,
     _CROSS_BG2_RATIO,

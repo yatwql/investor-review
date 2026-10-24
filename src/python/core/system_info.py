@@ -216,7 +216,7 @@ def llm_status() -> dict:
 
     # ── credentials_ref 多链模式 ──
     if provider_list and not llm_config.get("api_key"):
-        from src.python.config._llm_providers import order_providers_by_chain
+        from src.python.config import order_providers_by_chain
 
         all_creds = llm_config.get("_llm_credentials", {}) or {}
         # 链序口径单一：按 priority 升序输出（与 [M] 面板 / 运行时 resolve_provider_chain 一致），

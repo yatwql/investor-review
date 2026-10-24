@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.python.providers.sina import fetch_index_kline
+from src.python.providers.sina_kline import fetch_index_kline
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_providers, pytest.mark.edge]
 

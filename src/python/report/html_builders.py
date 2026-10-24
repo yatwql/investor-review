@@ -9,12 +9,8 @@ from typing import Any
 from src.python.fetcher.fund import fetch_fund_benchmark, fetch_fund_rankings, fetch_fund_rankings_batch
 from src.python.core.models import Holding
 from src.python.report.category import _categorize_holding, calc_yield_text
-from src.python.report.fund_performance import (
-    _RATING_COMMENT,
-    _format_rank,
-    _fund_display_type,
-    is_fund,
-)
+from src.python.report.fund_performance import _fund_display_type, is_fund
+from src.python.report._fund_rating import _RATING_COMMENT, _format_rank
 from src.python.report.market_value import DetailRow
 from src.python.report.progress import ProgressReporter, SilentProgressReporter
 

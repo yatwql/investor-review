@@ -15,6 +15,7 @@ from src.python.tui.text_layout import (
     display_width,
     pad_right,
     render_panel,
+    truncate_display,
     wrap_prompt,
 )
 
@@ -64,6 +65,30 @@ class TestPadRight:
     def test_exact_fit_adds_nothing(self):
         """正好等宽时不补白。"""
         assert pad_right("中文", 4) == "中文"
+
+
+class TestTruncateDisplay:
+    """truncate_display: 截断超宽行时必须闭合 ANSI，避免下一行继承颜色。"""
+
+    def test_truncation_closes_color_and_counts_width(self, monkeypatch):
+        monkeypatch.setattr("src.python.core.ansi_colors.RESET", "\x1b[0m")
+        text = "\x1b[94m" + "长" * 10 + "\x1b[0m"
+        out = truncate_display(text, 5)
+        assert out.startswith("\x1b[94m")
+        assert out.endswith("\x1b[0m")
+        assert display_width(out) == 5
+        assert "\x1b[" not in out.replace("\x1b[94m", "").replace("\x1b[0m", "")
+
+    def test_group_heading_truncation_does_not_leak_blue(self, monkeypatch):
+        """窄档截断蓝色分组标题后，紧接着的普通行不得继承蓝色。"""
+        monkeypatch.setattr("src.python.core.ansi_colors.RESET", "\x1b[0m")
+        heading = "\x1b[1m\x1b[94m" + "── 默认关闭的整章（3/3 开）──" + "\x1b[0m"
+        out = truncate_display(heading, 10)
+        assert out.endswith("\x1b[0m")
+        assert display_width(out) == 10
+
+    def test_plain_text_unchanged_when_fits(self):
+        assert truncate_display("abc", 3) == "abc"
 
 
 class TestRenderPanel:

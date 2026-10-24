@@ -165,13 +165,16 @@ def render_panel(title: str, rows: Iterable[str | None] = (), *, min_field: int 
 def truncate_display(text: str, columns: int, ellipsis: str = "…") -> str:
     """按显示列宽截断文本（超宽时以省略号收尾），用于窄终端的单行压缩。
 
+    ANSI 序列按零宽整体保留；截断时**必须补 RESET**——否则上一行被截在着色段中，
+    颜色会泄漏到下一行（真实案例：窄档截断蓝色分组标题后，紧接着的章节行整体变蓝）。
+
     Args:
         text: 原文（可含 ANSI 序列）。
         columns: 允许的最大显示列数（≤0 时返回空串）。
         ellipsis: 省略号（自身宽度计入列宽预算）。
 
     Returns:
-        截断后的文本；未超宽时原样返回。
+        截断后的文本；未超宽时原样返回；截断时以省略号收尾并闭合颜色。
     """
     if columns <= 0:
         return ""
@@ -180,12 +183,25 @@ def truncate_display(text: str, columns: int, ellipsis: str = "…") -> str:
     budget = columns - display_width(ellipsis)
     if budget <= 0:
         return ellipsis[:0]
-    out = ""
-    for char in text:
-        if display_width(out + char) > budget:
+    out: list[str] = []
+    width = 0
+    i = 0
+    while i < len(text):
+        match = _ANSI_SEQ.match(text, i)
+        if match is not None:
+            out.append(match.group())
+            i = match.end()
+            continue
+        char = text[i]
+        char_width = 0 if unicodedata.combining(char) else (2 if unicodedata.east_asian_width(char) in _WIDE else 1)
+        if width + char_width > budget:
             break
-        out += char
-    return out + ellipsis
+        out.append(char)
+        width += char_width
+        i += 1
+    from src.python.core.ansi_colors import RESET
+
+    return "".join(out) + ellipsis + RESET
 
 
 def wrap_hanging(text: str, columns: int, indent: str = "    ") -> list[str]:

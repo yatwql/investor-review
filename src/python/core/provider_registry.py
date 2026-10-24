@@ -21,7 +21,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from src.python.core._phase_timeout import phase_timeout  # noqa: F401  # re-export，test_phase_timeout 通过 provider_registry 访问
 from src.python.core.atomic_write import write_json_atomic
 
 logger = logging.getLogger("invest")
@@ -218,9 +217,9 @@ class DataSourceRegistry:
     @staticmethod
     def _get_breaker_state_path() -> str:
         """返回熔断状态持久化文件路径。"""
-        from src.python.cache._paths import _CACHE_DIR
+        from src.python.cache import get_cache_dir
 
-        return os.path.join(os.path.dirname(_CACHE_DIR), "state", _CIRCUIT_BREAKER_STATE_FILE)
+        return os.path.join(os.path.dirname(get_cache_dir()), "state", _CIRCUIT_BREAKER_STATE_FILE)
 
     def _save_state(self) -> None:
         """持久化当前熔断状态到 JSON 文件（原子写入，委托 core/atomic_write）。

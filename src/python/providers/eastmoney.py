@@ -14,11 +14,12 @@ from typing import Any
 
 import httpx
 
-from src.python.core.code_utils import get_index_exchange_prefix, is_index_code, is_us_index_code
+from src.python.core.code_utils import is_index_code, is_us_index_code
+from src.python.core.code_symbols import get_index_exchange_prefix
 from src.python.core.http_client import make_http_client
 from src.python.core.retry import STRATEGY_EXPONENTIAL, TRANSIENT_EXCEPTIONS, RetryPolicy, retry_transient
 from src.python.core.throttle import RateLimiter  # 间隔节流唯一原语（数据/调度/LLM 三层共用）
-from src.python.providers._utils import safe_float as _safe_float
+from src.python.providers.utils import safe_float as _safe_float
 
 logger = logging.getLogger("invest")
 

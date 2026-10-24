@@ -15,17 +15,14 @@ from typing import Any
 from src.python.analysis.prosperity_signals import (
     _benchmark_returns,
     _pct,
-    _snapshot_holding_codes,  # noqa: F401  # re-export：迁移名保持 import 面不变
     _top10_concentration_pct,
     _turnover_proxy_pct,
 )
 from src.python.core.num_utils import finite_or
 
-from ._prosperity_inputs import (  # noqa: F401 — 兼容既有导入面
-    _FALLBACK_CONFIG,
+from .prosperity_inputs import (
     _boom_weights,
     _config_defaults_for_module,
-    _fund_type_fallback_label,
     _matches,
     _sector_weight_items,
     estimated_fund_codes,

@@ -47,16 +47,12 @@ from src.python.report.market_value import DetailRow
 from src.python.report.penetration import ACTIVE_EQUITY, BOND_FUND, ETF, INDEX_LINK, QDII, classify_penetration
 from src.python.report.styles import BLUE_FONT, DARK_GREEN_FONT, GREEN_FONT, NOTE_FONT, NORMAL_FONT, RED_FONT
 
-from ._fund_rating import (  # noqa: F401 — 兼容既有导入面
-    _DEFAULT_EXCESS_THRESHOLD_DOWN,
-    _DEFAULT_EXCESS_THRESHOLD_UP,
-    _RATING_COMMENT,
+from ._fund_rating import (
     _RATING_ORDER,
     _adjust_rating_with_benchmark,
     _calc_rating_comment,
     _format_rank,
     _format_return,
-    _get_excess_thresholds,
 )
 
 logger = logging.getLogger("invest")

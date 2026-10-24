@@ -74,7 +74,7 @@ def _check_claude_truncation(data: dict, max_tokens: int, label: str, config_fie
     stop_reason = data.get("stop_reason")
     if stop_reason == "max_tokens":
         out_tokens = (data.get("usage") or {}).get("output_tokens", 0)
-        logger.error(
+        logger.warning(
             "LLM 输出被截断 [%s]: %s=%d, 实际输出=%d tokens。内容不完整，请在 llm_settings.json 中增大 %s",
             label,
             config_field,
@@ -97,7 +97,7 @@ def _check_openai_truncation(data: dict, max_tokens: int, label: str, config_fie
         return False
     if finish_reason == "length":
         out_tokens = (data.get("usage") or {}).get("completion_tokens", 0)
-        logger.error(
+        logger.warning(
             "LLM 输出被截断 [%s]: %s=%d, 实际输出=%d tokens。内容不完整，请在 llm_settings.json 中增大 %s",
             label,
             config_field,

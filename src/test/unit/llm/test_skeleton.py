@@ -79,11 +79,36 @@ class TestHandleTruncation(unittest.TestCase):
         self.assertEqual(r, "")
         self.assertIs(u, usage)
 
+    def test_successful_retry_does_not_log_error(self):
+        """首次截断后自动放大成功 → 只记 WARNING，不产生最终 ERROR。"""
+        from unittest.mock import patch
+
+        from src.python.llm._api_responses import TRUNCATION_MARKER
+        from src.python.llm.skeleton import _handle_truncation
+
+        truncated = f"<p>{TRUNCATION_MARKER}</p>"
+        with patch("src.python.llm.skeleton.call_llm", return_value=("<p>完整内容</p>", {"output_tokens": 9}, {})):
+            with self.assertNoLogs(level="ERROR"):
+                result, _usage = _handle_truncation(
+                    truncated,
+                    {},
+                    2048,
+                    "sys",
+                    "usr",
+                    {},
+                    60,
+                    None,
+                    "max_tokens_self_review",
+                    None,
+                    "",
+                )
+        self.assertEqual(result, "<p>完整内容</p>")
+
     def test_exhausted_retry_log_names_config_field_and_both_values(self):
         """自动放大仍截断 → 日志点名 config_field 与「当前 → 已试」两个值。"""
         from unittest.mock import patch
 
-        from src.python.llm.api_base import TRUNCATION_MARKER
+        from src.python.llm._api_responses import TRUNCATION_MARKER
         from src.python.llm.skeleton import _handle_truncation
 
         truncated = f"<p>{TRUNCATION_MARKER}</p>"
@@ -91,7 +116,7 @@ class TestHandleTruncation(unittest.TestCase):
             "src.python.llm.skeleton.call_llm",
             return_value=(truncated, {"output_tokens": 9}, {"name": "kimi-main"}),
         ):
-            with self.assertLogs(level="WARNING") as cm:
+            with self.assertLogs(level="ERROR") as cm:
                 _handle_truncation(
                     truncated,
                     {},

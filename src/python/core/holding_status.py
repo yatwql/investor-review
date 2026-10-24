@@ -25,7 +25,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from src.python.core.code_utils import is_fund_holding, strip_exchange_prefix
+from src.python.core.code_utils import is_fund_holding
+from src.python.core.code_symbols import strip_exchange_prefix
 from src.python.core.data_freshness import _detail_value, _has_effective_quote
 
 logger = logging.getLogger("invest")

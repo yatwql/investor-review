@@ -34,7 +34,7 @@ from src.python.core.registry import get_llm_module_names  # noqa: E402
 
 def _llm_tuning_surface() -> list[dict]:
     """LLM 调优项（并发/预算/重试）：清单、范围与说明全部取自共享白名单 ``edit_ops``。"""
-    from src.python.config._llm_settings import get_llm_config
+    from src.python.config import get_llm_config
     from src.python.config.edit_ops import LLM_TUNING_SPECS
 
     settings = get_llm_config() or {}
@@ -121,7 +121,7 @@ def _domain_tui_hint(domain_key: str) -> str:
 
 def _block_domains() -> list[dict]:
     """按 `_DOMAIN_BLOCKS` 派生 `domains`（`features.<组键>` 逐组展开，组键取自面板归属）。"""
-    from src.python.config._feature_registry import (
+    from src.python.config.features import (
         DOMAIN_HINTS,
         DOMAIN_LABELS,
         DOMAIN_ORDER,
@@ -168,7 +168,7 @@ def _standalone_blocks() -> tuple[dict, dict]:
 
 def _logging_surface() -> dict:
     """日志设置面：六项可编辑值 + 枚举/范围 + 「下次启动生效」清单。"""
-    from src.python.config._logging import read_logger_config
+    from src.python.config import read_logger_config
     from src.python.config.edit_ops import LOGGING_SPECS
 
     try:
@@ -200,7 +200,7 @@ def _logging_surface() -> dict:
 
 def _reference_surface() -> dict:
     """只读参考面：计价参考文件位置与说明（不进编辑面）。"""
-    from src.python.config._llm_pricing import get_llm_pricing_path
+    from src.python.config import get_llm_pricing_path
 
     return {
         "pricing_path": get_llm_pricing_path(),
@@ -213,8 +213,8 @@ def _panel_metadata() -> dict:
 
     全部由注册表与共享白名单派生——前端不持有任何中文表，也不自算「已改」基准。
     """
-    from src.python.config._llm_settings import default_enabled_llm
-    from src.python.config._llm_settings_defaults import get_llm_setting_default
+    from src.python.config import default_enabled_llm
+    from src.python.config import get_llm_setting_default
     from src.python.config.chapter_registry import chapter_label, chapter_registry
     from src.python.config.edit_ops import LLM_TUNING_SPECS, LOGGING_SPECS
     from src.python.core.registry import get_llm_module_names

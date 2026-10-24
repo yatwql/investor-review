@@ -234,7 +234,7 @@ def reload_pricing() -> None:
     global PRICING_TIMEZONE_NAME, PRICING_TZ
     global PRICING_WEEKEND_ALWAYS_IDLE, PRICING_HOLIDAY_ALWAYS_IDLE
     try:
-        from src.python.config._llm_pricing import load_pricing_config
+        from src.python.config import load_pricing_config
 
         config = load_pricing_config()
         PRICING_MERGED.clear()

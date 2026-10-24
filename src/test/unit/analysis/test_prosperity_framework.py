@@ -155,7 +155,7 @@ class TestBoomDimension:
 
     def test_union_coverage_not_double_counted(self):
         """直接持有的证券不重复计入；基金（穿透来源）按其类型标签单独计入。"""
-        from src.python.analysis.prosperity_framework import _sector_weight_items
+        from src.python.analysis.prosperity_inputs import _sector_weight_items
 
         details = [
             _row("600519", "贵州茅台", 500_000.0),
@@ -283,7 +283,7 @@ class TestRoeHelperPrimitives:
     """ROE 解析与推演集合判定的共用原语（唯一事实来源，防止多处各写一份而漂移）。"""
 
     def test_roe_by_code_from_rows_filters_invalid(self):
-        from src.python.analysis.prosperity_scoring import roe_by_code_from_rows
+        from src.python.analysis.prosperity_inputs import roe_by_code_from_rows
 
         rows = [
             {"code": "300308", "roe": 0.06},
@@ -296,7 +296,7 @@ class TestRoeHelperPrimitives:
         assert roe_by_code_from_rows(None) == {}
 
     def test_estimated_fund_codes_excludes_direct_roe(self):
-        from src.python.analysis.prosperity_scoring import estimated_fund_codes
+        from src.python.analysis.prosperity_inputs import estimated_fund_codes
 
         estimates = {
             "110022": {"roe": 0.08},
@@ -604,7 +604,7 @@ class TestFundTypeFallback:
     """
 
     def _items(self, rows):
-        from src.python.analysis.prosperity_framework import _sector_weight_items
+        from src.python.analysis.prosperity_inputs import _sector_weight_items
 
         return _sector_weight_items(None, rows)
 

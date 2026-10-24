@@ -1,5 +1,5 @@
 # 投资复盘助手 — 需求文档
-> 文档版本：0.15.1
+> 文档版本：0.15.2
 
 ---
 
@@ -293,7 +293,7 @@
 | R-FIN-01 | **独立数据域与标准字段契约**：新增 `financial_indicator` 域与 `FinancialIndicatorFields` 记录类（`code`/`symbol`/`report_period`/`doc_type`/`revenue`/`net_profit`/`revenue_yoy`/`net_profit_yoy`/`gross_margin`/`roe`/`debt_ratio`/`operating_cash_flow`/`eps`/`bvps`/`source_api`/`source`），登记 `DOMAIN_RECORDS` 并接受适配器契约自检 |
 | R-FIN-02 | **主源（akshare）**：一次调用 `stock_financial_abstract` 取回宽表，按报告期归一为多条记录；金额类字段单位元、比率类字段百分数→**小数比例**；同名指标多分组时按表格顺序**首个非空**为准；非 A 股代码/未安装/超时/空表返回空 |
 | R-FIN-03 | **接入既有链路**：新增链 `financial_indicator: [akshare_financial, datasink_indicator]` 与两个适配器；取数复用 `fetch_with_fallback`（缓存/熔断/降级），不新造获取路径；缓存前缀 `fin_indicator_` 纳入注册表（一月 TTL、基础类） |
-| R-FIN-04 | **共享原语收敛**：A 股→FMP 符号映射统一为 `core/code_utils.py::to_fmp_symbol`，取数超时封装统一为 `providers/_utils.py::run_with_timeout`（多个 provider 共用，不自留副本） |
+| R-FIN-04 | **共享原语收敛**：A 股→FMP 符号映射统一为 `core/code_symbols.py::to_fmp_symbol`，取数超时封装统一为 `providers/utils.py::run_with_timeout`（多个 provider 共用，不自留副本） |
 | R-FIN-13 | **数据底座门禁**：持仓基本面章区块①（财务指标）需 `datasink.enabled` 开启且凭据就绪（见 R-VAL-04）；未就绪时返回 None（章节隐藏、不写占位），且**门禁先于任何取数**（零网络开销） |
 | R-FIN-05 | **降级不阻断**：指标源不可用时返回空/None，由上层按「数据缺失」占位；不抛异常、不计入传输级熔断 |
 | R-FIN-15 | **PE/PB 官方口径优先**：指标标准记录新增 `pe_ttm`（TTM 市盈率）与 `pb_mrq`（MRQ 市净率）两字段；有官方值时 `current_valuation` 直接采用，缺失时逐字段回退「现价 ÷ EPS / BVPS」自算。理由：自算用**报告期**EPS，在半年报/季报上明显虚高（实测长江电力 自算 47.19 vs 官方 TTM 19.17，差约 2.5 倍），同一列混用会误导估值判断。官方估值只有当下快照 → **只写最新一期**，历史期不得倒填。同花顺估值快照另提供 `ps_ttm`/`pcf_ttm`（暂未纳入契约） |

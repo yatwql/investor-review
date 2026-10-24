@@ -16,7 +16,7 @@ import pytest
 from src.python.config import _config_defaults
 from src.python.config._core import invalidate_config_cache
 from src.python.web.app import create_app
-from src.python.web.handlers import _health_cache
+from src.python.web.handlers_health import _health_cache
 from src.python.web.runs import RunManager
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_web]

@@ -266,7 +266,7 @@ class TestBuildHoldingTradingDays:
 
     def test_reason_reports_trading_days(self):
         """过滤原因以交易日表述（回归：原实现措辞为「N 天」而判据实为交易日）。"""
-        from src.python.analysis.rebalance import _apply_false_positive_protection
+        from src.python.analysis._rebalance_deviation import _apply_false_positive_protection
 
         signals = [{"code": "600001", "type": "single_overflow", "action": "减仓"}]
         holdings = [{"name": "A", "code": "600001", "holding_days": 3}]

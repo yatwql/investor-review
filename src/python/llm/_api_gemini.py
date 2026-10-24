@@ -11,12 +11,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import httpx
 
-from src.python.llm.api_base import (
-    _extract_content_from_gemini,
-    _check_gemini_truncation,
-    _supports_extended_thinking,
-    call_llm_with_retry,
-)
+from src.python.llm.api_base import _supports_extended_thinking, call_llm_with_retry
+from src.python.llm._api_responses import _extract_content_from_gemini, _check_gemini_truncation
 from src.python.llm.api import (
     _DEFAULT_GEMINI_MODEL,
     _resolve_thinking_budget,

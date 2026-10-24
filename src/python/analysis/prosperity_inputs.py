@@ -11,7 +11,6 @@ from typing import Any
 
 from src.python.analysis.prosperity_signals import (
     _pct,
-    _snapshot_holding_codes,  # noqa: F401  # re-export：迁移名保持 import 面不变
 )
 from src.python.core.num_utils import finite_or
 

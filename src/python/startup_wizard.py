@@ -22,7 +22,7 @@ import logging
 import os
 import sys
 
-from src.python.config._local_state import get_flag, set_flag
+from src.python.config import get_local_flag, set_local_flag, get_llm_key_path, load_llm_providers
 
 logger = logging.getLogger("invest")
 
@@ -43,7 +43,7 @@ def is_first_run() -> bool:
         True 表示首次运行
     """
     try:
-        return not get_flag(_FIRST_RUN_KEY)
+        return not get_local_flag(_FIRST_RUN_KEY)
     except Exception:
         return True
 
@@ -51,8 +51,8 @@ def is_first_run() -> bool:
 def mark_wizard_shown() -> None:
     """标记引导已显示，避免重复提示。"""
     try:
-        if not get_flag(_FIRST_RUN_KEY):
-            set_flag(_FIRST_RUN_KEY, True)
+        if not get_local_flag(_FIRST_RUN_KEY):
+            set_local_flag(_FIRST_RUN_KEY, True)
             logger.info("[startup-wizard] 首次运行引导已标记为已读")
     except Exception:
         logger.debug("[startup-wizard] 标记引导失败（非关键）", exc_info=True)
@@ -89,11 +89,10 @@ def _list_holding_files(config: dict) -> list[str]:
 
 def _llm_key_present() -> bool:
     """LLM 凭据是否就绪：llm_key.json 存在，或 llm_providers.json 链模式有 provider。"""
-    from src.python.config._llm_providers import _get_llm_key_path, _load_llm_providers
 
-    if os.path.exists(_get_llm_key_path()):
+    if os.path.exists(get_llm_key_path()):
         return True
-    raw = _load_llm_providers()
+    raw = load_llm_providers()
     return bool(raw and raw.get("providers"))
 
 
@@ -130,10 +129,9 @@ def _write_llm_key_flat(
         model: 模型名（可选）
         endpoint: 自定义端点（可选，DeepSeek Anthropic 兼容端点）
     """
-    from src.python.config._core import _atomic_write
-    from src.python.config._llm_providers import _get_llm_key_path
+    from src.python.core.atomic_write import write_text_atomic
 
-    key_path = _get_llm_key_path()
+    key_path = get_llm_key_path()
     # 原子写要求父目录存在（同 set_config 的 _core.os.makedirs 范式）
     os.makedirs(os.path.dirname(key_path), exist_ok=True)
     data: dict = {"provider": provider, "api_key": api_key}
@@ -141,7 +139,7 @@ def _write_llm_key_flat(
         data["model"] = model
     if endpoint:
         data["endpoint"] = endpoint
-    _atomic_write(key_path, json.dumps(data, ensure_ascii=False, indent=2))
+    write_text_atomic(key_path, json.dumps(data, ensure_ascii=False, indent=2))
     logger.info("[startup-wizard] 已写入 llm_key.json（provider=%s）", provider)
 
 

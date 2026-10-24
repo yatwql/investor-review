@@ -176,7 +176,7 @@ class TestSymlink(unittest.TestCase):
 
     def test_symlink_in_cache_dir(self):
         """缓存目录存在符号链接 → listdir 不跟随。"""
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # 创建普通文件而不是符号链接（Windows 兼容）
@@ -211,7 +211,7 @@ class TestPathTraversal(unittest.TestCase):
 
     def test_cache_path_traversal_blocked(self):
         """缓存键含 ../ → 被 `_` 替换。"""
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         safe = _cache_path("../../etc/passwd")
         self.assertNotIn("..", safe)
@@ -219,7 +219,7 @@ class TestPathTraversal(unittest.TestCase):
 
     def test_cache_path_backslash_traversal(self):
         """缓存键含 ..\\ → `..` 和 `\\` 被替换，不逃逸出缓存目录。"""
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         safe = _cache_path("..\\..\\etc\\passwd")
         self.assertNotIn("..", safe)
@@ -306,7 +306,7 @@ class TestTempFileRace(unittest.TestCase):
 
     def test_mkstemp_used_for_cache(self):
         """cache.set 使用 mkstemp 防半写。"""
-        from src.python.cache import _write_atomic
+        from src.python.cache._io import _write_atomic
         import inspect
 
         source = inspect.getsource(_write_atomic)

@@ -16,22 +16,20 @@ from src.python.core.ansi_colors import CYAN, GREEN, RED, RESET, YELLOW
 logger = logging.getLogger("invest")
 
 # ── 模块耗时记录（跨模块共享，供直接使用 Timer() 的场景） ──
-_timing_records: list[tuple[str, float]] = []
-# 公开别名：同一列表对象；渠道层统一用 timing_records（私有名保留供既有内部引用）
-timing_records = _timing_records
+timing_records: list[tuple[str, float]] = []
 
 
 class Timer:
     """简单计时器上下文管理器，记录各模块耗时。
 
-    默认写入模块级 ``_timing_records``（供直接使用 Timer() 的调用方）。
+    默认写入模块级 ``timing_records``（供直接使用 Timer() 的调用方）。
     ProgressReporter 子类应通过 ``reporter.timer()`` 获取绑定了实例级
     记录列表的 Timer，避免跨报告生成的数据串扰。
     """
 
     def __init__(self, label: str, records: list | None = None) -> None:
         self.label = label
-        self.records = records if records is not None else _timing_records
+        self.records = records if records is not None else timing_records
         self.start: float = 0.0
 
     def __enter__(self) -> Timer:

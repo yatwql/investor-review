@@ -1,6 +1,6 @@
 """config.json 读写缓存中枢 — 读取 / 写入 / 章节开关协调。
 
-解析协调者而非独占解析器：注释剥离委托 `_comments`、路径绝对化委托 `_validation`、
+解析协调者而非独占解析器：注释剥离委托 `core/json_comments`、路径绝对化委托 `_validation`、
 顶层键 patch 引擎委托 `_json_patch`（本模块只保留 config.json 专用胶水与调用）。
 其余配置文件（llm_settings / llm_key / llm_providers / features）各有独立解析器，
 本模块仅触发文件存在性（`_ensure_llm_settings_file()` / `_ensure_llm_providers_file()`）。
@@ -16,19 +16,20 @@ import tempfile
 import threading
 from typing import Any
 
-from src.python.config import _comments, _config_defaults, _llm_providers
+from src.python.config import _config_defaults, _llm_providers
+from src.python.core.json_comments import strip_json_comments
 from src.python.config._json_patch import (
     _find_top_level_value_span,
     _patch_config_key,
     _remove_top_level_key,
 )
 from src.python.config._llm_providers_defaults import _get_default_llm_providers_template
-from src.python.config._validation import (
+from src.python.config._validation import validate_config
+from src.python.config._validation_scalars import (
     _PATH_CONFIG_KEYS,
     _absolutize_paths,
     _deabsolutize_paths,
     _is_abs,
-    validate_config,
 )
 
 # 本模块 init_config 触发的 llm_settings.json 存在性确保
@@ -119,7 +120,7 @@ def _load_config(_strict: bool = False) -> dict:
         try:
             with open(config_path, encoding="utf-8-sig") as f:
                 raw = f.read()
-                cleaned = _comments._strip_json_comments(raw)
+                cleaned = strip_json_comments(raw)
                 config = json.loads(cleaned)
             merged = dict(_config_defaults._DEFAULT_CONFIG)
             # 过滤 null 值：不允许 config.json 中的 null 覆盖默认值
@@ -182,7 +183,7 @@ def _persist_config_patch(new_raw: str, op: str) -> None:
     """
     global _config_cache, _config_mtime, _config_size
     try:
-        json.loads(_comments._strip_json_comments(new_raw))
+        json.loads(strip_json_comments(new_raw))
     except (json.JSONDecodeError, ValueError) as e:
         logger.error("config.json %s 后结果非法，拒绝写入: %s", op, e)
         raise
@@ -224,7 +225,7 @@ def set_config(key: str, value: Any) -> None:
 
         # 校验原文件可解析（保持 _strict 语义：损坏则中止，避免基于损坏文件覆盖写）
         try:
-            json.loads(_comments._strip_json_comments(raw))
+            json.loads(strip_json_comments(raw))
         except (json.JSONDecodeError, ValueError) as e:
             logger.warning("config.json 内容损坏，中止写入: %s", e)
             raise
@@ -255,7 +256,7 @@ def del_config(key: str) -> None:
             raw = f.read()
         # 校验原文件可解析（保持 _strict 语义：损坏则中止）
         try:
-            json.loads(_comments._strip_json_comments(raw))
+            json.loads(strip_json_comments(raw))
         except (json.JSONDecodeError, ValueError) as e:
             logger.warning("config.json 内容损坏，中止删除: %s", e)
             raise

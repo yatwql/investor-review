@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 
-from src.python.config._validation import _deabsolutize_paths
+from src.python.config._validation_scalars import _deabsolutize_paths
 from src.python.core.constants import PROJECT_ROOT
 from src.python.core.registry import get_cache_ttl_defaults
 
@@ -254,7 +254,7 @@ def _get_default_config_template() -> str:
 
     从 _DEFAULT_CONFIG 自动生成，确保值与代码定义一致。
     首次创建 config.json 时写入。使用 ``//`` 注释分组，
-    由 _strip_json_comments() 剥离后解析。
+    由 ``strip_json_comments()`` 剥离后解析。
     """
     return _build_template_from_defaults()
 

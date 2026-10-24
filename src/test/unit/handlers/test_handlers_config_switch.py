@@ -257,7 +257,7 @@ class TestSwitchPanelOperations:
 
     @staticmethod
     def _read(path) -> dict:
-        from src.python.config._comments import strip_json_comments
+        from src.python.core.json_comments import strip_json_comments
 
         return json.loads(strip_json_comments(path.read_text(encoding="utf-8")))
 

@@ -33,21 +33,17 @@ from src.python.llm.prompts import (
 )
 from src.python.llm.session import record_per_module
 
-from ._api_responses import (  # noqa: F401 — 兼容既有导入面
+from ._api_responses import (
     TRUNCATION_MARKER,
     _check_claude_truncation,
     _check_gemini_truncation,
     _check_openai_truncation,
     _extract_content,
     _extract_content_from_gemini,
-    _extract_ctx_local,
-    _get_extract_ctx,
     _log_token_usage,
     _process_success_response,
     _server_error_local,
-    _set_extract_ctx,
     _set_last_server_error,
-    _set_last_thinking_exhausted,
     _thinking_exhausted_local,
     _truncation_warning,
 )

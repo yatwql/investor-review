@@ -25,10 +25,8 @@ from src.python.llm.api import (
     call_llm,
     call_single_provider,
 )
-from src.python.llm.api_base import (
-    _extract_content,
-    _get_last_thinking_exhausted,
-)
+from src.python.llm.api_base import _get_last_thinking_exhausted
+from src.python.llm._api_responses import _extract_content
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.llm]
 

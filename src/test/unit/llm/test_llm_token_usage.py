@@ -26,7 +26,7 @@ class TestLogTokenUsage(unittest.TestCase):
 
     def test_claude_usage_logged(self) -> None:
         """Claude 格式用量 → info 日志含输入/输出/缓存命中，不抛异常。"""
-        from src.python.llm.api_base import _log_token_usage
+        from src.python.llm._api_responses import _log_token_usage
 
         usage = {"input_tokens": 100, "output_tokens": 50, "cache_read_input_tokens": 10}
         with self.assertLogs("invest", level="INFO") as cm:
@@ -48,7 +48,7 @@ class TestLogTokenUsage(unittest.TestCase):
 
     def test_openai_usage_logged(self) -> None:
         """OpenAI 格式用量 → info 日志含输入/输出（无缓存命中字段）。"""
-        from src.python.llm.api_base import _log_token_usage
+        from src.python.llm._api_responses import _log_token_usage
 
         usage = {"prompt_tokens": 200, "completion_tokens": 100}
         with self.assertLogs("invest", level="INFO") as cm:
@@ -60,7 +60,7 @@ class TestLogTokenUsage(unittest.TestCase):
 
     def test_openai_cache_hit_logged(self) -> None:
         """OpenAI 带 prompt_tokens_details.cached_tokens → info 日志含缓存命中（计量口径回归）。"""
-        from src.python.llm.api_base import _log_token_usage
+        from src.python.llm._api_responses import _log_token_usage
 
         usage = {
             "prompt_tokens": 200,
@@ -75,14 +75,14 @@ class TestLogTokenUsage(unittest.TestCase):
 
     def test_none_usage_ignored(self) -> None:
         """usage 为 None → 提前返回，不产生 info 日志。"""
-        from src.python.llm.api_base import _log_token_usage
+        from src.python.llm._api_responses import _log_token_usage
 
         with self.assertNoLogs("invest", level="INFO"):
             _log_token_usage("claude", None, "test_label")
 
     def test_empty_usage_ignored(self) -> None:
         """usage 为空 dict（falsy）→ 提前返回，不产生 info 日志。"""
-        from src.python.llm.api_base import _log_token_usage
+        from src.python.llm._api_responses import _log_token_usage
 
         with self.assertNoLogs("invest", level="INFO"):
             _log_token_usage("claude", {}, "test_label")

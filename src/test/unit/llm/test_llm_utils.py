@@ -11,14 +11,8 @@ from unittest.mock import patch
 import pytest
 
 from src.python.llm import pricing as _pricing_mod
-from src.python.llm.api_base import (
-    _check_claude_truncation,
-    _check_openai_truncation,
-    _extract_content,
-    _is_default_thinking_on,
-    _is_effort_model,
-    _supports_extended_thinking,
-)
+from src.python.llm.api_base import _is_default_thinking_on, _is_effort_model, _supports_extended_thinking
+from src.python.llm._api_responses import _check_claude_truncation, _check_openai_truncation, _extract_content
 from src.python.core.constants import MODEL_PRICING
 from src.python.llm.fingerprint import compute_fingerprint, get_cache_ttl_llm
 from src.python.llm.markdown import markdown_to_html
@@ -408,7 +402,7 @@ class TestCheckTruncation(unittest.TestCase):
         """默认 config_field='max_tokens' → 日志含 max_tokens。"""
 
         data = {"stop_reason": "max_tokens", "usage": {"output_tokens": 500}}
-        with self.assertLogs("invest", level="ERROR") as logs:
+        with self.assertLogs("invest", level="WARNING") as logs:
             result = _check_claude_truncation(data, 1000, "Claude")
         self.assertTrue(result)
         log_text = logs.output[0]
@@ -418,7 +412,7 @@ class TestCheckTruncation(unittest.TestCase):
         """config_field='max_tokens_expert_review' → 日志提示 max_tokens_expert_review。"""
 
         data = {"stop_reason": "max_tokens", "usage": {"output_tokens": 500}}
-        with self.assertLogs("invest", level="ERROR") as logs:
+        with self.assertLogs("invest", level="WARNING") as logs:
             result = _check_claude_truncation(data, 8192, "Claude", config_field="max_tokens_expert_review")
         self.assertTrue(result)
         log_text = logs.output[0]
@@ -439,7 +433,7 @@ class TestCheckTruncation(unittest.TestCase):
             "choices": [{"finish_reason": "length", "message": {"content": "..."}}],
             "usage": {"completion_tokens": 800},
         }
-        with self.assertLogs("invest", level="ERROR") as logs:
+        with self.assertLogs("invest", level="WARNING") as logs:
             result = _check_openai_truncation(data, 800, "OpenAI", config_field="max_tokens_global_macro")
         self.assertTrue(result)
         log_text = logs.output[0]
@@ -683,7 +677,7 @@ class TestPricing(unittest.TestCase):
         orig_flag = _pricing_mod.PRICING_WEEKEND_ALWAYS_IDLE
         try:
             with patch(
-                "src.python.config._llm_pricing.load_pricing_config",
+                "src.python.config.load_pricing_config",
                 return_value={
                     "models": {m: dict(p) for m, p in MODEL_PRICING.items()},
                     "currency": "CNY",
@@ -738,7 +732,7 @@ class TestPricing(unittest.TestCase):
         orig_flag = _pricing_mod.PRICING_HOLIDAY_ALWAYS_IDLE
         try:
             with patch(
-                "src.python.config._llm_pricing.load_pricing_config",
+                "src.python.config.load_pricing_config",
                 return_value={
                     "models": {m: dict(p) for m, p in MODEL_PRICING.items()},
                     "currency": "CNY",
@@ -786,7 +780,7 @@ class TestPricing(unittest.TestCase):
             }
             # patch 只在 reload 期间生效：计费发生在 patch 之外，故若懒加载再次读盘，
             # 就会读到真实配置文件而非上面注入的价格
-            with patch("src.python.config._llm_pricing.load_pricing_config", return_value=custom):
+            with patch("src.python.config.load_pricing_config", return_value=custom):
                 reload_pricing()
             self.assertTrue(_pricing_mod._PRICING_LOADED, "显式重载后应处于已加载态")
             cost = estimate_cost("deepseek-v4-flash", 1_000_000, 1_000_000, at_time=self._IDLE_TIME)
@@ -818,7 +812,7 @@ class TestPricing(unittest.TestCase):
                 "weekend_always_idle": True,
                 "holiday_always_idle": True,
             }
-            with patch("src.python.config._llm_pricing.load_pricing_config", return_value=custom):
+            with patch("src.python.config.load_pricing_config", return_value=custom):
                 reload_pricing()
             self.assertEqual(PRICING_PEAK_PERIODS, [(22 * 60, 23 * 60)])
             self.assertEqual(PRICING_IDLE_PERIODS, [])

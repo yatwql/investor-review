@@ -251,7 +251,7 @@ class TestFetchIndexKline(unittest.TestCase):
         )
         mock_client.get.return_value = mock_resp
 
-        from src.python.providers.sina import fetch_index_kline
+        from src.python.providers.sina_kline import fetch_index_kline
 
         result = fetch_index_kline("sh000300", 30)
         self.assertEqual(len(result), 2)
@@ -274,7 +274,7 @@ class TestFetchIndexKline(unittest.TestCase):
         )
         mock_client.get.return_value = mock_resp
 
-        from src.python.providers.sina import fetch_index_kline
+        from src.python.providers.sina_kline import fetch_index_kline
 
         result = fetch_index_kline("gb_inx", 30)
         self.assertEqual(len(result), 1)
@@ -290,7 +290,7 @@ class TestFetchIndexKline(unittest.TestCase):
         mock_resp.json.return_value = []
         mock_client.get.return_value = mock_resp
 
-        from src.python.providers.sina import fetch_index_kline
+        from src.python.providers.sina_kline import fetch_index_kline
 
         result = fetch_index_kline("sh000300", 30)
         self.assertEqual(result, [])
@@ -305,21 +305,21 @@ class TestFetchIndexKline(unittest.TestCase):
         mock_factory.return_value = mock_client
         mock_client.get.side_effect = httpx.TimeoutException("timeout")
 
-        from src.python.providers.sina import fetch_index_kline
+        from src.python.providers.sina_kline import fetch_index_kline
 
         result = fetch_index_kline("sh000300", 30)
         self.assertEqual(result, [])
 
     def test_non_index_code_returns_empty(self):
         """非指数代码 → 空列表。"""
-        from src.python.providers.sina import fetch_index_kline
+        from src.python.providers.sina_kline import fetch_index_kline
 
         result = fetch_index_kline("600900", 30)
         self.assertEqual(result, [])
 
     def test_empty_code_returns_empty(self):
         """空代码 → 空列表。"""
-        from src.python.providers.sina import fetch_index_kline
+        from src.python.providers.sina_kline import fetch_index_kline
 
         result = fetch_index_kline("", 30)
         self.assertEqual(result, [])
@@ -340,8 +340,8 @@ class TestFetchIndexKline(unittest.TestCase):
 
         from src.python.core.code_utils import is_index_code as _orig_is_index
 
-        with patch("src.python.providers.sina.is_index_code", wraps=_orig_is_index) as spy:
-            from src.python.providers.sina import fetch_index_kline
+        with patch("src.python.providers.sina_kline.is_index_code", wraps=_orig_is_index) as spy:
+            from src.python.providers.sina_kline import fetch_index_kline
 
             fetch_index_kline("sh000300", 30)
             spy.assert_called_with("sh000300")

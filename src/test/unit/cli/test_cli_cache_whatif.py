@@ -3,13 +3,7 @@
 from __future__ import annotations
 import pytest
 from unittest.mock import MagicMock, patch
-from src.python.cli import (
-    _EXIT_SEVERE,
-    _EXIT_SUCCESS,
-    _build_parser,
-    _handle_cache_update,
-    _handle_whatif,
-)
+from src.python.cli.cli import _EXIT_SEVERE, _EXIT_SUCCESS, _build_parser, _handle_cache_update, _handle_whatif
 from src.python.report.whatif_operations import WhatifRunResult
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_cli]

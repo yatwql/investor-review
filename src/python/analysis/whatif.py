@@ -22,11 +22,8 @@ import logging
 from typing import Any
 
 from src.python.analysis.metrics_risk import hhi
-from src.python.analysis.rebalance import (
-    _CATEGORY_LABELS,
-    _CATEGORY_ORDER,
-    classify_holding,
-)
+from src.python.analysis.rebalance import classify_holding
+from src.python.analysis._rebalance_deviation import _CATEGORY_LABELS, _CATEGORY_ORDER
 from src.python.analysis.purchase_feasibility import describe_feasibility, evaluate_purchase_feasibility
 from src.python.core.models import Holding
 from src.python.core.num_utils import finite_or

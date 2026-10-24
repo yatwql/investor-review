@@ -51,7 +51,7 @@ class CacheTestBase(unittest.TestCase):
 
     def _write_cache(self, key: str, data: object, ts: float) -> str:
         """向缓存目录写入指定内容的 JSON 文件，返回完整路径。"""
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         path = _cache_path(key)
         with open(path, "w", encoding="utf-8") as f:
@@ -62,7 +62,7 @@ class CacheTestBase(unittest.TestCase):
         """向缓存目录写入 gzip 压缩的 JSON 文件，返回完整路径。"""
         import gzip
 
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         path = _cache_path(key) + ".gz"
         with gzip.open(path, "wt", encoding="utf-8") as f:
@@ -173,7 +173,7 @@ class TestCleanupExpired(CacheTestBase):
         return self._write_cache(key, data, ts)
 
     def _read_ts_file(self, key: str) -> float:
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         path = _cache_path(key)
         with open(path, "r", encoding="utf-8") as f:
@@ -215,7 +215,7 @@ class TestCleanupExpired(CacheTestBase):
         count = cleanup_expired()
         self.assertEqual(count, 1)
 
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         old_path = _cache_path("price_old")
         fresh_path = _cache_path("price_fresh")
@@ -236,7 +236,7 @@ class TestCleanupExpired(CacheTestBase):
 
         count = cleanup_expired(dry_run=True)
         self.assertEqual(count, 1)
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         old_path = _cache_path("price_old")
         self.assertTrue(os.path.exists(old_path))
@@ -305,7 +305,7 @@ class TestCleanupExpired(CacheTestBase):
 
         count = cleanup_expired()
         self.assertEqual(count, 1)
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         self.assertFalse(os.path.exists(_cache_path("price_old")))
         self.assertTrue(os.path.exists(_cache_path("news_old")))
@@ -347,7 +347,7 @@ class TestCleanupExpired(CacheTestBase):
 
         count = cleanup_expired()
         self.assertEqual(count, 0)
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         path = _cache_path("trading_calendar")
         self.assertTrue(os.path.exists(path))
@@ -413,7 +413,7 @@ class TestClearByGroup(CacheTestBase):
 
         result = clear_by_group("refresh")
 
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         for key in ("fund_perf_000001", "news_abc", "industry_600000", "dividend_600000"):
             self.assertFalse(os.path.exists(_cache_path(key)))
@@ -431,7 +431,7 @@ class TestClearByGroup(CacheTestBase):
 
         result = clear_by_group("preload")
 
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         for key in ("price_000001", "index_sh000001", "llm_global_macro_abc"):
             self.assertFalse(os.path.exists(_cache_path(key)))
@@ -449,7 +449,7 @@ class TestClearByGroup(CacheTestBase):
 
         result = clear_by_group("preload")
 
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         for key in ("llm_debate_pro_abc", "llm_debate_con_abc", "llm_debate_synthesis_abc"):
             self.assertFalse(os.path.exists(_cache_path(key)), key)
@@ -463,7 +463,7 @@ class TestClearByGroup(CacheTestBase):
         from src.python.cache import clear_by_group
 
         result = clear_by_group("refresh")
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         self.assertFalse(os.path.exists(_cache_path("fund_benchmarks")))
         self.assertIn("基金业绩基准", result)

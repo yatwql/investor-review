@@ -41,7 +41,7 @@ class TestFirstRunGuidance(unittest.TestCase):
 
         self._orig_config = cfg._config_defaults._CONFIG_FILE
         cfg._config_defaults._CONFIG_FILE = os.path.join(self.tmp.name, "config.json")
-        cfg._clear_config_cache()
+        cfg._core._clear_config_cache()
 
         # 配置不存在时 get_config 返回默认值不崩溃
         result = cfg.get_config()
@@ -66,7 +66,7 @@ class TestFirstRunGuidance(unittest.TestCase):
         cfg._config_defaults._CONFIG_FILE = os.path.join(self.tmp.name, "config.json")
         with open(cfg._config_defaults._CONFIG_FILE, "w", encoding="utf-8") as f:
             f.write("{invalid}")
-        cfg._clear_config_cache()
+        cfg._core._clear_config_cache()
         with patch("logging.Logger.warning") as mock_warn:
             result = cfg.get_config()
             self.assertEqual(result["holdings_dir"], _ABS_HOLDINGS_DIR)
@@ -83,7 +83,7 @@ class TestFirstRunGuidance(unittest.TestCase):
 
         self._orig_config = cfg._config_defaults._CONFIG_FILE
         cfg._config_defaults._CONFIG_FILE = os.path.join(self.tmp.name, "config.json")
-        cfg._clear_config_cache()
+        cfg._core._clear_config_cache()
         result = cfg.get_config()
         self.assertIsNotNone(result.get("holdings_dir"))
         self.assertIsNotNone(result.get("output_dir"))

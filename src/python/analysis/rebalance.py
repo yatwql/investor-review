@@ -47,34 +47,12 @@ from src.python.core.code_utils import (
     is_convertible_bond_by_name,
     is_etf_by_name_or_code,
 )
-from src.python.config._core import get_config
+from src.python.config import get_config
 from src.python.core.trading_calendar import count_trading_days_elapsed
-from src.python.analysis._silence import (
-    _SILENCE_FILE,  # noqa: F401  # re-export，conftest 通过 rebalance._SILENCE_FILE 重定向
-    _load_silence_state,  # noqa: F401  # re-export，test_rebalance / test_rebalance_edge 引用
-    _save_silence_state,  # noqa: F401  # re-export，test_rebalance / test_rebalance_edge 引用
-)
 
-from src.python.analysis._silence import (  # noqa: E402, F401 — 兼容既有导入面
-    _filter_silenced_signals,
-    _update_silence_state,
-)
-from ._rebalance_deviation import (  # noqa: E402, F401 — 兼容既有导入面
-    MIN_NEW_POSITION_TRADING_DAYS,
-    _CATEGORY_ORDER,
-    _CATEGORY_LABELS,
-    _EQUITY_FI_GROUPS,
-    _apply_false_positive_protection,
-    _compute_confidence,
-    _categorize_holdings,
-    _calc_category_weights,
-    _calc_group_weights,
-    _build_category_deviation_signals,
-    _build_security_deviation_signals,
+from ._rebalance_deviation import (  # noqa: E402
     compute_target_deviation,
-    _build_equity_fi_signals,
     equity_fixed_income_deviation,
-    _compute_single_overflow_signals,
     compute_rebalance_signals,
 )
 

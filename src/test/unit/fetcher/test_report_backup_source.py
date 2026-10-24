@@ -417,7 +417,7 @@ class TestAdapterRefusalReason:
     def test_cninfo_refusal_writes_reason(self):
         """巨潮适配器遇异源 hint → None 且 last_reason 记录拒服务原因。"""
         from src.python.fetcher.report_adapters import CninfoReportAdapter
-        from src.python.providers._utils import clear_last_reason, take_last_reason
+        from src.python.providers.utils import clear_last_reason, take_last_reason
 
         clear_last_reason()
         assert CninfoReportAdapter().extract_data({"source_hint": "datasink", "doc_id": "9"}) is None
@@ -426,7 +426,7 @@ class TestAdapterRefusalReason:
     def test_datasink_refusal_writes_reason(self):
         """主源适配器遇异源 hint → None 且 last_reason 记录拒服务原因。"""
         from src.python.fetcher.report_adapters import DataSinkReportAdapter
-        from src.python.providers._utils import clear_last_reason, take_last_reason
+        from src.python.providers.utils import clear_last_reason, take_last_reason
 
         clear_last_reason()
         assert DataSinkReportAdapter().extract_data({"source_hint": "cninfo", "doc_id": "9"}) is None

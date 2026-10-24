@@ -122,7 +122,7 @@ def generate_debate_procon(
         (pro_text, con_text, synthesis_text) 三元组，均为 None 表示完全失败。
     """
     import threading as _threading
-    from src.python.config._llm_settings import get_llm_config
+    from src.python.config import get_llm_config
 
     # ── 辩论模式 feature 组合 ──────────────────────────
     _fp_suffix = debate_feature_cache_suffix()

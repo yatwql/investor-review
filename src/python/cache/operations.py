@@ -17,22 +17,16 @@ logger = _logger_mod.setup_logger()
 
 # ── 数据结构 ───────────────────────────────────────────────
 
-
-from ._cache_refresh import (  # noqa: E402, F401 — 兼容既有导入面
-    _POOL,
-    _get_news_top_count,
+from ._cache_refresh import (  # noqa: E402 — 刷新族实现下沉，编排侧复用
     _get_pool,
     _refresh_common_caches,
     _refresh_dividend_cache,
-    _refresh_extended_cache,
     _refresh_extended_caches,
-    _refresh_fund_manager_cache,
     _refresh_industry_cache,
-    _refresh_news_cache,
     _refresh_one_fund_cache,
     _refresh_profit_forecast_cache,
     _refresh_sector_flow_cache,
-    _sector_flow_hint,
+    sector_flow_hint,
 )
 
 
@@ -209,7 +203,7 @@ def update_basic_cache(holdings: list, reporter) -> CacheUpdateResult:
                 if result.sf_ok:
                     reporter.ok(f"行业资金流向 ({result.sf_ok} 个行业)")
                 else:
-                    reporter.warn(f"行业资金流向 {_sector_flow_hint()}")
+                    reporter.warn(f"行业资金流向 {sector_flow_hint()}")
             elif tag == "industry":
                 result.ind_ok = res
                 if result.ind_ok:
@@ -384,10 +378,6 @@ def get_cache_stats(reporter) -> CacheStats:
         stats.state_size_bytes = s_size
 
     return stats
-
-
-# 公开别名：展示提示文案（渠道层统一用此名；私有名保留供既有内部引用）
-sector_flow_hint = _sector_flow_hint
 
 
 def update_all_cache(holdings: list, reporter) -> int:

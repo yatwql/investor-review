@@ -58,13 +58,13 @@ def _load_llm_providers() -> dict | None:
     Returns:
         dict: 原始 JSON 解析结果，或 None（文件不存在/JSON 解析失败）
     """
-    from src.python.config import _comments
+    from src.python.core.json_comments import strip_json_comments
 
     if not os.path.exists(_get_llm_providers_path()):
         return None
     try:
         with open(_get_llm_providers_path(), encoding="utf-8-sig") as f:
-            config = json.loads(_comments._strip_json_comments(f.read()))
+            config = json.loads(strip_json_comments(f.read()))
         if not isinstance(config, dict):
             logger.warning("LLM providers 文件根元素不是 JSON 对象，已忽略")
             return None
@@ -87,13 +87,13 @@ def _load_llm_key_credentials() -> dict[str, dict] | None:
     Returns:
         {ref_name: {api_key, model?, endpoint?}} 或 None（文件不存在/解析失败）
     """
-    from src.python.config import _comments
+    from src.python.core.json_comments import strip_json_comments
 
     if not os.path.exists(_get_llm_key_path()):
         return None
     try:
         with open(_get_llm_key_path(), encoding="utf-8-sig") as f:
-            raw = json.loads(_comments._strip_json_comments(f.read()))
+            raw = json.loads(strip_json_comments(f.read()))
         if not isinstance(raw, dict):
             logger.warning("llm_key.json 根元素不是 JSON 对象，已忽略")
             return None
@@ -373,7 +373,7 @@ def write_llm_providers(config: dict, path: str) -> None:
         config: 要写入的多链配置 dict（可只含变更字段，如重排后的 providers 数组）。
         path: llm_providers.json 绝对路径。
     """
-    from src.python.config import _comments
+    from src.python.core.json_comments import strip_json_comments
     from src.python.config._core import _atomic_write
     from src.python.config._json_patch import _update_json_raw_text
 
@@ -385,7 +385,7 @@ def write_llm_providers(config: dict, path: str) -> None:
 
     os.makedirs(os.path.dirname(path), exist_ok=True)
     if raw.strip():
-        current = json.loads(_comments._strip_json_comments(raw))
+        current = json.loads(strip_json_comments(raw))
         updated_raw = _update_json_raw_text(raw, current, config)
         _atomic_write(path, _neutralize_chain_labels(updated_raw))
     else:

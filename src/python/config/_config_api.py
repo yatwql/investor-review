@@ -93,10 +93,18 @@ def get_local_flag(key: str) -> bool:
     return get_flag(key)
 
 
+def set_local_flag(key: str, value: bool) -> None:
+    """写入机器本地状态标记（与 ``get_local_flag`` 同一公开面）。"""
+    from src.python.config._local_state import set_flag
+
+    set_flag(key, value)
+
+
 __all__ = [
     "get_default",
     "resolve_holdings_path",
     "resolve_output_dir",
     "is_formal_holdings_source",
     "get_local_flag",
+    "set_local_flag",
 ]

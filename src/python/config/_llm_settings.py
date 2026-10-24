@@ -20,7 +20,8 @@ import os
 import threading
 from typing import Any
 
-from src.python.config import _comments, _llm_providers
+from src.python.config import _llm_providers
+from src.python.core.json_comments import strip_json_comments
 from src.python.config import _llm_schema
 from src.python.config._llm_settings_defaults import (
     _DEFAULT_LLM_SETTINGS,
@@ -215,7 +216,7 @@ def _load_settings_document(raw: str, path: str) -> dict:
     Raises:
         LLMSchemaError: 根元素/版本/段结构不符（消息含文件名、版本与重新生成指引）
     """
-    document = json.loads(_comments._strip_json_comments(raw))
+    document = json.loads(strip_json_comments(raw))
     _llm_schema.validate_document(document, filename=os.path.basename(path))
     from src.python.config._validation_llm import sanitize_document
 
@@ -292,7 +293,7 @@ def write_llm_settings(settings: dict, path: str) -> None:
     try:
         with open(path, encoding="utf-8-sig") as f:
             raw = f.read()
-        document = json.loads(_comments._strip_json_comments(raw))
+        document = json.loads(strip_json_comments(raw))
         _llm_schema.validate_document(document, filename=os.path.basename(path))
     except FileNotFoundError:
         document = copy.deepcopy(_DEFAULTS_NESTED)
@@ -323,7 +324,7 @@ def write_llm_settings(settings: dict, path: str) -> None:
         candidate = _llm_schema.patch_document_text(raw, patch_updates)
         if candidate is not None:
             try:
-                json.loads(_comments._strip_json_comments(candidate))
+                json.loads(strip_json_comments(candidate))
                 patched = candidate
             except (json.JSONDecodeError, ValueError):
                 patched = None
@@ -410,7 +411,7 @@ def _load_llm_config() -> dict | None:
 
             with open(_llm_providers._get_llm_key_path(), encoding="utf-8-sig") as f:
                 key_raw = f.read()
-                key_config = json.loads(_comments._strip_json_comments(key_raw))
+                key_config = json.loads(strip_json_comments(key_raw))
 
             provider = key_config.get("provider", "")
             endpoint = key_config.get("endpoint", "")

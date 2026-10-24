@@ -471,8 +471,8 @@ def _cmd_config_report_boards() -> None:
 def _cmd_refresh_config() -> None:
     """重新加载所有配置（config.json + LLM 三文件合并缓存：llm_settings/llm_key/llm_providers）。"""
     from src.python.config import get_config, get_llm_config
-    from src.python.config._core import invalidate_config_cache
-    from src.python.config._llm_settings import invalidate_llm_config_cache
+    from src.python.config import invalidate_config_cache
+    from src.python.config import invalidate_llm_config_cache
     from src.python.llm.pricing import reload_pricing
     from src.python.tui.status_line import reset_status_memo
 

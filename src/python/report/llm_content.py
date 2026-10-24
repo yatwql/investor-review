@@ -68,7 +68,7 @@ _BLOCK_END_TO_NEWLINE_RE = re.compile(
 )
 
 
-def _strip_html(text: str) -> str:
+def strip_html(text: str) -> str:
     """移除文本中的 HTML 标签，保留纯文本内容。
 
     块级结束标签（``</p>``、``</li>`` 等）与自闭合块（``<br>``/``<hr>``）
@@ -81,11 +81,6 @@ def _strip_html(text: str) -> str:
     text = _BLOCK_END_TO_NEWLINE_RE.sub("\n", text)
     text = re.sub(r"\n+", "\n", text)
     return re.sub(r"<[^>]+>", "", text).strip()
-
-
-# 公开别名：同级报告模块（Excel 用量页签等）需从 HTML 取纯文本时统一调用本函数，
-# 不重写一份剥离逻辑（块级标签→换行的口径必须单源，否则两处分行行为漂移）。
-strip_html = _strip_html
 
 
 # 块级 HTML 标签（含自闭合 <br>/<hr>），用于将 LLM 内容分段写入 Excel 单元格
@@ -289,7 +284,7 @@ def _write_content_sheet(
         blocks = _split_html_blocks(content)
 
         for block in blocks:
-            block_text = _strip_html(block)
+            block_text = strip_html(block)
             if not block_text:
                 continue
             # footer 块：正文跳过，末尾统一写一次，避免重复
@@ -385,7 +380,7 @@ def write_llm_sheets(
         """禁用或空内容返回 ""，否则返回剥离 HTML 的纯文本。"""
         if disabled or not c:
             return ""
-        return _strip_html(c)
+        return strip_html(c)
 
     return (
         _text_or_empty(content7, _disabled[0]),

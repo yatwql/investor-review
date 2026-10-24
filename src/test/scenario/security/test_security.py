@@ -162,7 +162,8 @@ class TestSecurityBaseline:
     @pytest.mark.scenario_security
     def test_cache_content_no_api_key(self, tmp_path):
         """缓存写入器产出的条目不含明文密钥（扫生产序列化后的真实文件）。"""
-        from src.python.cache import _cache_path, set as cache_set
+        from src.python.cache import set as cache_set
+        from src.python.cache._paths import _cache_path
 
         with patch("src.python.cache._paths._CACHE_DIR", str(tmp_path)):
             cache_set("test_cache_entry", {"price": 35.5, "name": "test"})

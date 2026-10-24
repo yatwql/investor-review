@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from src.python.cli import _build_parser, _handle_config
+from src.python.cli.cli import _build_parser, _handle_config
 from src.python.cli.cli import _apply_cli_anonymize, _apply_cli_chapters
 from src.python.config import _core, get_config
 

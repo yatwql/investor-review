@@ -37,7 +37,7 @@ from dataclasses import dataclass
 from src.python.core.registry import get_llm_module_name
 from src.python.llm.api_base import TRUNCATION_MARKER
 from src.python.llm.fallback import is_placeholder_content
-from src.python.report.llm_content import _strip_html
+from src.python.report.llm_content import strip_html
 
 logger = logging.getLogger("invest")
 
@@ -149,7 +149,7 @@ def grade_module(module_key: str, html: str | None) -> ModuleQuality:
     """
     name = get_llm_module_name(module_key)
     raw = html or ""
-    text = _strip_html(raw)
+    text = strip_html(raw)
     min_chars, comfort_chars = _LENGTH_THRESHOLDS.get(module_key, _DEFAULT_LENGTH_THRESHOLDS)
 
     if not text:

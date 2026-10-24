@@ -20,11 +20,11 @@ from src.python.web.runs import RunManager
 from src.python.web.scheduler import (
     SchedulerService,
     next_fire_at,
-    normalize_block,
+    normalize_schedule_block,
     parse_schedule,
     schedule_signature,
     status_payload,
-    validate_block,
+    validate_schedule_block,
 )
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_web]
@@ -93,7 +93,7 @@ class TestValidateBlock:
     """接口校验：非法字段抛 ValueError（中文文案直映 400）。"""
 
     def test_valid_block_normalizes(self) -> None:
-        block = validate_block({"enabled": True, "time": "8:05", "weekdays": [4, 0, 0], "report_type": "full"})
+        block = validate_schedule_block({"enabled": True, "time": "8:05", "weekdays": [4, 0, 0], "report_type": "full"})
         assert block == {"enabled": True, "time": "08:05", "weekdays": [0, 4], "report_type": "full"}
 
     @pytest.mark.parametrize(
@@ -110,18 +110,18 @@ class TestValidateBlock:
     )
     def test_invalid_payload_raises(self, payload) -> None:
         with pytest.raises(ValueError):
-            validate_block(payload)
+            validate_schedule_block(payload)
 
 
 class TestNormalizeBlock:
     """面板回显归一化：缺块/非法字段回默认（真值来源 _DEFAULT_CONFIG）。"""
 
     def test_absent_block_yields_defaults(self) -> None:
-        assert normalize_block(None) == DEFAULTS
-        assert normalize_block("junk") == DEFAULTS
+        assert normalize_schedule_block(None) == DEFAULTS
+        assert normalize_schedule_block("junk") == DEFAULTS
 
     def test_invalid_fields_fall_back_except_enabled(self) -> None:
-        block = normalize_block({"enabled": True, "time": "99:99", "weekdays": [9], "report_type": "nope"})
+        block = normalize_schedule_block({"enabled": True, "time": "99:99", "weekdays": [9], "report_type": "nope"})
         assert block["enabled"] is True
         assert block["time"] == DEFAULTS["time"]
         assert block["weekdays"] == DEFAULTS["weekdays"]

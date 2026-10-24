@@ -8,7 +8,8 @@ from src.python.config import _config_defaults
 from src.python.config._core import invalidate_config_cache
 from src.python.core.log_reader import LogEntry
 from src.python.web.app import create_app
-from src.python.web.handlers import _build_system_info, _health_cache
+from src.python.web.handlers import _build_system_info
+from src.python.web.handlers_health import _health_cache
 from src.python.web.runs import RunManager
 
 # 夹具按名注入（由测试签名消费），代码里无引用
@@ -106,7 +107,7 @@ class TestSystemInfo:
             lambda: module_names or {},
         )
         monkeypatch.setattr("src.python.llm.circuit_breaker.get_circuit_status", lambda ep: circuit)
-        monkeypatch.setattr("src.python.core.logger._get_machine_ip", lambda: "192.168.1.100")
+        monkeypatch.setattr("src.python.core.logger.get_machine_ip", lambda: "192.168.1.100")
         return config
 
     @staticmethod
@@ -114,7 +115,7 @@ class TestSystemInfo:
         """替换配置摘要数据源：get_config / 本地状态标志 / 机器 IP。"""
         monkeypatch.setattr("src.python.config.get_config", lambda: config or {})
         monkeypatch.setattr("src.python.config._local_state.get_flag", lambda key: privacy_shown)
-        monkeypatch.setattr("src.python.core.logger._get_machine_ip", lambda: "192.168.1.100")
+        monkeypatch.setattr("src.python.core.logger.get_machine_ip", lambda: "192.168.1.100")
         return config
 
     def test_default_no_llm_config(self, monkeypatch):

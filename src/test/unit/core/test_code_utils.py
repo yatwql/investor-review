@@ -14,7 +14,6 @@ from pathlib import Path
 import pytest
 
 from src.python.core.code_utils import (
-    get_index_exchange_prefix,
     is_a_share_code,
     is_letter_based_code,
     is_six_digit_code,
@@ -23,6 +22,9 @@ from src.python.core.code_utils import (
     is_otc_fund_by_name,
     is_us_index_code,
     otc_redemption_days_default,
+)
+from src.python.core.code_symbols import (
+    get_index_exchange_prefix,
     to_fmp_symbol,
     get_exchange_category,
     to_exchange_symbol,
@@ -377,46 +379,46 @@ class TestStripExchangePrefix:
     """strip_exchange_prefix：交易所前缀剥离（大小写不敏感、不校验位数）。"""
 
     def test_lowercase_prefix_stripped(self):
-        from src.python.core.code_utils import strip_exchange_prefix
+        from src.python.core.code_symbols import strip_exchange_prefix
 
         assert strip_exchange_prefix("sh600519") == "600519"
         assert strip_exchange_prefix("sz000001") == "000001"
         assert strip_exchange_prefix("bj430047") == "430047"
 
     def test_uppercase_prefix_stripped(self):
-        from src.python.core.code_utils import strip_exchange_prefix
+        from src.python.core.code_symbols import strip_exchange_prefix
 
         assert strip_exchange_prefix("SH600519") == "600519"
         assert strip_exchange_prefix("Sz000001") == "000001"
         assert strip_exchange_prefix("BJ430047") == "430047"
 
     def test_no_prefix_returned_as_is(self):
-        from src.python.core.code_utils import strip_exchange_prefix
+        from src.python.core.code_symbols import strip_exchange_prefix
 
         assert strip_exchange_prefix("600519") == "600519"
         assert strip_exchange_prefix("00700") == "00700"
 
     def test_empty_and_none_safe(self):
-        from src.python.core.code_utils import strip_exchange_prefix
+        from src.python.core.code_symbols import strip_exchange_prefix
 
         assert strip_exchange_prefix("") == ""
         assert strip_exchange_prefix(None) == ""
         assert strip_exchange_prefix("   ") == ""
 
     def test_surrounding_whitespace_trimmed(self):
-        from src.python.core.code_utils import strip_exchange_prefix
+        from src.python.core.code_symbols import strip_exchange_prefix
 
         assert strip_exchange_prefix("  sh600519  ") == "600519"
 
     def test_non_six_digit_kept_for_caller_judgement(self):
         """只剥前缀不校验形态：5 位港股码 / 带 .0 尾原样交给调用方判定。"""
-        from src.python.core.code_utils import strip_exchange_prefix
+        from src.python.core.code_symbols import strip_exchange_prefix
 
         assert strip_exchange_prefix("sh00700") == "00700"
         assert strip_exchange_prefix("sz000001.0") == "000001.0"
 
     def test_not_a_real_prefix_untouched(self):
-        from src.python.core.code_utils import strip_exchange_prefix
+        from src.python.core.code_symbols import strip_exchange_prefix
 
         assert strip_exchange_prefix("hk00700") == "hk00700"
 
@@ -444,15 +446,15 @@ class TestExchangePrefixCentralized:
     def test_constant_is_single_source(self):
         """判定用常量与剥离函数读同一份前缀表（新增前缀只改一处）。
 
-        派生量拆分后真值在 `code_symbols.py`，`code_utils.py` 反向引用同一对象
-        （`is` 断言：不是各存一份等值元组）。
+        派生量拆分后真值只在 `code_symbols.py`；`code_utils.py` 不再转出该常量，
+        避免同一符号出现第二条导入路径。
         """
         from src.python.core import code_symbols, code_utils
 
-        assert code_utils.EXCHANGE_PREFIXES == ("sh", "sz", "bj")
-        assert code_utils.EXCHANGE_PREFIXES is code_symbols.EXCHANGE_PREFIXES
-        for prefix in code_utils.EXCHANGE_PREFIXES:
-            assert code_utils.strip_exchange_prefix(f"{prefix}600519") == "600519"
+        assert code_symbols.EXCHANGE_PREFIXES == ("sh", "sz", "bj")
+        assert not hasattr(code_utils, "EXCHANGE_PREFIXES")
+        for prefix in code_symbols.EXCHANGE_PREFIXES:
+            assert code_symbols.strip_exchange_prefix(f"{prefix}600519") == "600519"
 
 
 class TestFmpSymbolPrefixedInput:

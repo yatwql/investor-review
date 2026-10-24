@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from ._validation_common import (  # noqa: F401 — 域内复用
-    _FETCH_MODES,
     _MISSING,
     _section,
 )

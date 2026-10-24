@@ -542,26 +542,26 @@ class TestBetaAnalysisEdge:
 
     def test_low_df_critical_value(self):
         """小自由度 → 查表给出界内值。"""
-        from src.python.analysis.metrics import _t_critical_95
+        from src.python.analysis._math_utils import _t_critical_95
 
         assert _t_critical_95(1) == 12.706
         assert _t_critical_95(2) == 4.303
 
     def test_very_large_df_approaches_1_96(self):
         """大自由度 → 逼近 1.96。"""
-        from src.python.analysis.metrics import _t_critical_95
+        from src.python.analysis._math_utils import _t_critical_95
 
         assert abs(_t_critical_95(1000) - 1.96) < 0.1
 
     def test_t_cdf_zero_df_returns_0_5(self):
         """df ≤ 0 → 返回 0.5。"""
-        from src.python.analysis.metrics import _t_cdf
+        from src.python.analysis._math_utils import _t_cdf
 
         assert _t_cdf(1.0, 0) == 0.5
 
     def test_t_cdf_extreme_values(self):
         """t 统计量极大/极小 → 概率饱和。"""
-        from src.python.analysis.metrics import _t_cdf
+        from src.python.analysis._math_utils import _t_cdf
 
         assert _t_cdf(10.0, 100) >= 0.999  # 极大 t → 接近 1
         assert _t_cdf(-10.0, 100) <= 0.001  # 极小 t → 接近 0

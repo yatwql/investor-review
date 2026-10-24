@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from src.python.config import get_config
-from src.python.config._scheduler import normalize_block, validate_block  # noqa: F401 — 面板与测试经本模块导入
+from src.python.config import normalize_schedule_block, validate_schedule_block  # noqa: F401 — 面板与测试经本模块导入
 from src.python.core.constants import PROJECT_ROOT
 
 logger = logging.getLogger("invest")
@@ -42,7 +42,7 @@ def parse_schedule(config: Any) -> dict | None:
     if not isinstance(raw, dict) or raw.get("enabled") is not True:
         return None
     try:
-        block = validate_block(raw)
+        block = validate_schedule_block(raw)
     except ValueError as e:
         logger.warning("定时生成配置非法，本次不调度：%s", e)
         return None
@@ -99,7 +99,7 @@ def status_payload(config: Any = None) -> dict:
     """GET /api/scheduler 载荷：归一化配置 + 下次触发预估 + 最近触发日。"""
     if config is None:
         config = get_config()
-    block = normalize_block(config.get("scheduler") if isinstance(config, dict) else None)
+    block = normalize_schedule_block(config.get("scheduler") if isinstance(config, dict) else None)
     schedule = parse_schedule(config)
     now = datetime.now()
     fired = _load_fired()

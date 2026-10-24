@@ -12,15 +12,11 @@ from typing import Any
 
 import httpx
 
-from src.python.core.code_utils import (
-    get_exchange_prefix,
-    is_a_share_code,
-    is_exchange_fund_code,
-    is_index_code,
-)
+from src.python.core.code_utils import is_a_share_code, is_exchange_fund_code, is_index_code
+from src.python.core.code_symbols import get_exchange_prefix
 from src.python.core.http_client import make_http_client
 from src.python.core.num_utils import safe_num
-from src.python.providers._utils import looks_like_block_page
+from src.python.providers.utils import looks_like_block_page
 from src.python.core.retry import (
     STRATEGY_EXPONENTIAL,
     STRATEGY_FIXED,
@@ -61,9 +57,7 @@ def _record_block_failure(source: str, domain: str, code: str, body: str) -> Non
     from src.python.core.provider_registry import get_registry
 
     preview = (body or "").strip().replace("\n", " ")[:60]
-    logger.warning(
-        "Tencent K 线 %s 返回非 JSON（疑似风控/限流页）→ 记源失败并交下一链路：%s", code, preview or "空响应"
-    )
+    logger.debug("Tencent K 线 %s 返回非 JSON（疑似风控/限流页）→ 记源失败并交下一链路：%s", code, preview or "空响应")
     get_registry().record_failure(source, f"{domain}:block_page:{code}")
 
 

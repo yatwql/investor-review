@@ -45,6 +45,52 @@ class TestComputeDividendFingerprint(unittest.TestCase):
         self.assertNotEqual(fp1, fp2, "不同代码应生成不同指纹")
 
 
+class TestSectorFundFlowFailureState(unittest.TestCase):
+    """行业资金流向失败类型必须写回模块状态，供缓存提示区分连接失败/暂无数据。"""
+
+    def setUp(self) -> None:
+        ae._memo_clear()
+        ae._SECTOR_FLOW_FAILURE = ""
+
+    def _patch_fetch(self, result):
+        return (
+            patch.object(ae, "ak", MagicMock()),
+            patch.object(ae, "run_with_timeout", return_value=result),
+            patch.object(ae, "cache_get", return_value=None),
+            patch.object(ae, "_compute_index_fingerprint", return_value="test-fp"),
+        )
+
+    def test_connection_failure_sets_connection(self) -> None:
+        p1, p2, p3, p4 = self._patch_fetch(None)
+        with p1, p2, p3, p4:
+            assert ae.get_sector_fund_flow() == []
+        assert ae._SECTOR_FLOW_FAILURE == "connection"
+
+    def test_empty_result_sets_empty(self) -> None:
+        df = MagicMock()
+        df.empty = True
+        p1, p2, p3, p4 = self._patch_fetch(df)
+        with p1, p2, p3, p4:
+            assert ae.get_sector_fund_flow() == []
+        assert ae._SECTOR_FLOW_FAILURE == "empty"
+
+    def test_public_failure_accessor_reflects_state(self) -> None:
+        ae._SECTOR_FLOW_FAILURE = "connection"
+        assert ae.sector_flow_failure() == "connection"
+        ae._DIVIDEND_FAILURE = "empty"
+        assert ae.dividend_failure() == "empty"
+
+    def test_success_clears_previous_failure(self) -> None:
+        ae._SECTOR_FLOW_FAILURE = "connection"
+        df = MagicMock()
+        df.empty = False
+        df.iterrows.return_value = []
+        p1, p2, p3, p4 = self._patch_fetch(df)
+        with p1, p2, p3, p4:
+            assert ae.get_sector_fund_flow() == []
+        assert ae._SECTOR_FLOW_FAILURE == ""
+
+
 class TestCalcDividendSummary(unittest.TestCase):
     """测试分红数据汇总计算（akshare 聚合格式）。"""
 

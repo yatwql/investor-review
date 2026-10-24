@@ -158,7 +158,7 @@ def _apply_cli_anonymize(mode: str | None) -> None:
 
     import logging
 
-    from src.python.config._runtime_overrides import set_config_override
+    from src.python.config import set_config_override
 
     set_config_override("anonymization.mode", mode)
     logging.getLogger("invest").info("[anonymizer] 命令行覆盖匿名化模式: %s（仅本次运行）", mode)

@@ -97,10 +97,11 @@ class TestConfigNoLlmKeyFile(unittest.TestCase):
 
     @patch("src.python.config._core.os.path.exists")
     def test_llm_key_path_not_exported(self, mock_exists: MagicMock) -> None:
-        """验证 get_llm_key_path 未从 config 模块导出。"""
+        """验证私有 _get_llm_key_path 未从 config 模块导出；公开 get_llm_key_path 可用。"""
         import src.python.config as cfg
 
-        self.assertFalse(hasattr(cfg, "get_llm_key_path"), "get_llm_key_path 应从 config 模块移除")
+        self.assertFalse(hasattr(cfg, "_get_llm_key_path"), "私有 _get_llm_key_path 不应从 config 导出")
+        self.assertTrue(hasattr(cfg, "get_llm_key_path"), "公开 get_llm_key_path 应由 config 提供")
 
 
 class TestConfigSanityAfterCleanup(unittest.TestCase):
@@ -116,7 +117,7 @@ class TestConfigSanityAfterCleanup(unittest.TestCase):
 
     def test_template_has_path_keys(self) -> None:
         """配置模板含 llm_key_file 和 llm_providers_file 路径键。"""
-        from src.python.config import _get_default_config_template
+        from src.python.config._config_defaults import _get_default_config_template
 
         template = _get_default_config_template()
         self.assertIn("llm_key_file", template, "配置模板中应含 llm_key_file")

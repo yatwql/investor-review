@@ -37,10 +37,6 @@ def seed_sensitive_path_isolation(monkeypatch, tmp_path, _doctor_probe_targets) 
         "src.python.cache._groups._CACHE_DIR",
         str(tmp_path / "data/cache"),
     )
-    monkeypatch.setattr(
-        "src.python.cache._CACHE_DIR",
-        str(tmp_path / "data/cache"),
-    )
     # check-doc-drift 测试计数快照缓存（data/cache/ 下持久化 JSON，经环境变量重定向——
     # 模块实例可能以 importlib 独立加载，setenv 对所有加载路径统一生效）
     monkeypatch.setenv("DOC_DRIFT_SNAPSHOT_CACHE", str(tmp_path / "data/cache/test_coverage_snapshot.json"))
@@ -55,13 +51,9 @@ def seed_sensitive_path_isolation(monkeypatch, tmp_path, _doctor_probe_targets) 
         "src.python.report.data_status._default_persist_path",
         lambda: str(tmp_path / "data/state/.degradation_state.json"),
     )
-    # rebalance 静默期文件隔离（_silence.py 是实际定义方，rebalance.py 仅 re-export）
+    # rebalance 静默期文件隔离（owner：_silence.py；调用方直接 patch owner）
     monkeypatch.setattr(
         "src.python.analysis._silence._SILENCE_FILE",
-        str(tmp_path / "data/state/rebalance_silence.json"),
-    )
-    monkeypatch.setattr(
-        "src.python.analysis.rebalance._SILENCE_FILE",
         str(tmp_path / "data/state/rebalance_silence.json"),
     )
     # 极简再平衡信号模块（行动章）静默期文件隔离（与 rebalance.py 共用同文件）

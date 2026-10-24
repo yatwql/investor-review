@@ -17,7 +17,7 @@ from __future__ import annotations
 import pytest
 
 from src.python.providers import hithink as ht
-from src.python.providers import _utils as pu
+from src.python.providers import utils as pu
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_providers]
 
@@ -264,6 +264,20 @@ class TestToThscode:
         """`00` 重叠区：同一代码既可能是深市股票也可能是场外基金，由调用方语义决定。"""
         assert ht.to_thscode("002943") == "002943.SZ"
         assert ht.to_thscode("002943", is_fund=True) == "002943.OF"
+
+    @pytest.mark.parametrize(
+        ("code", "expected"),
+        [("000925.SH", "000925.SZ"), ("600900.SZ", "600900.SH"), ("561910.SH", "561910.SH")],
+    )
+    def test_wrong_exchange_suffix_normalized(self, code, expected):
+        assert ht.to_thscode(code) == expected
+
+    def test_fetch_price_skips_exchange_fund(self):
+        """场内 ETF 不走 A 股价格槽（上游 Unknown thscode）。"""
+        assert ht.fetch_price("561910") is None
+
+    def test_fetch_kline_skips_exchange_fund(self):
+        assert ht.fetch_kline("561910") == []
 
     @pytest.mark.parametrize("code", ["", "  ", "8300000", "AAPL", "MU"])
     def test_unmappable_returns_empty(self, code):

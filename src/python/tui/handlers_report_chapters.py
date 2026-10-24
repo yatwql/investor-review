@@ -14,13 +14,14 @@ patch 点有效（与 ``[S]`` 面板同一手法）。
 
 from __future__ import annotations
 
-from src.python.core.ansi_colors import DIM, GREEN, RED, RESET, YELLOW
+from src.python.core.ansi_colors import DIM, GREEN, RESET, YELLOW
 from src.python.tui.panel_runtime import NavState, PanelItem, panel_loop
 from src.python.tui.prompt_text import panel_prompt
 from src.python.tui.switch_panel import (
     inner_width,
     layout_tier,
     render_titled_panel,
+    status_text,
     terminal_columns,
     wrap_hanging,
 )
@@ -34,15 +35,6 @@ from src.python.tui.text_layout import (
 
 COST_HISTORY_DAYS = 7
 """LLM 章节行尾历史费用摘要的回看窗口天数（与 ``perf.module_cost_summary`` 同口径）。"""
-
-
-def _status_text(enabled: bool, tier: str, *, grey: bool = False) -> str:
-    """状态方括号：宽/中档「开启/关闭」、窄档「开/关」；置灰子项不着状态色。"""
-    label = ("开" if enabled else "关") if tier == "narrow" else ("开启" if enabled else "关闭")
-    if grey:
-        return f"[{label}]"
-    color = GREEN if enabled else RED
-    return f"[{color}{label}{RESET}]" if color else f"[{label}]"
 
 
 def _cost_notes(key: str, cost_history: dict) -> str:
@@ -77,22 +69,20 @@ def _format_row(
     suffix = "." if "." not in number else ""
     prefix = f"{f'{number:>{number_width}}{suffix}'}{pad} "
     if tier == "narrow":
-        head = f"{cursor}{prefix}{label} {status}{star}"
+        shown_label = f"{DIM}{label}{RESET}" if grey else label
+        head = f"{cursor}{prefix}{shown_label} {status}{star}"
         second = f"{' ' * display_width(prefix)}{DIM}{key}{RESET}"
         if notes:
             second += f"{DIM}{notes}{RESET}"
-        if grey:
-            head = f"{DIM}{head}{RESET}"
-            second = f"{DIM}{key}{RESET}"
         return [truncate_display(head, limit), truncate_display(second, limit)]
-    head = (
-        f"{cursor}{prefix}{pad_right(label, max(0, name_column - indent))} "
-        f"{DIM}{pad_right(key, key_column)}{RESET} {status}{star}"
+    shown_label = (
+        f"{DIM}{pad_right(label, max(0, name_column - indent))}{RESET}"
+        if grey
+        else pad_right(label, max(0, name_column - indent))
     )
+    head = f"{cursor}{prefix}{shown_label} {DIM}{pad_right(key, key_column)}{RESET} {status}{star}"
     if notes:
         head += f"{DIM}{notes}{RESET}"
-    if grey:
-        head = f"{DIM}{head}{RESET}"
     return [truncate_display(head, limit)]
 
 
@@ -270,7 +260,7 @@ def run_report_chapters_panel() -> None:
                         number=str(number),
                         label=labels[entry.key],
                         key=entry.key,
-                        status=_status_text(enabled, tier),
+                        status=status_text(enabled, tier),
                         star="" if enabled == chapter_default(entry) else "*",
                         notes=notes,
                         columns=columns,
@@ -302,8 +292,8 @@ def run_report_chapters_panel() -> None:
                             number=f"{number}.{offset}",
                             label=label,
                             key=flag,
-                            status=_status_text(sub_enabled, tier, grey=not enabled),
-                            star="" if definition is None or sub_enabled == definition.default else "*",
+                            status=status_text(enabled and sub_enabled, tier),
+                            star="" if definition is None or (enabled and sub_enabled) == definition.default else "*",
                             notes=sub_notes,
                             columns=columns,
                             name_column=name_column,

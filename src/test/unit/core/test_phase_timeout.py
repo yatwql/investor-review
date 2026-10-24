@@ -10,7 +10,7 @@ import time
 
 import pytest
 
-from src.python.core.provider_registry import phase_timeout
+from src.python.core._phase_timeout import phase_timeout
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
 

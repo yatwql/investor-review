@@ -3,12 +3,7 @@
 from __future__ import annotations
 import pytest
 from unittest.mock import MagicMock, patch
-from src.python.cli import (
-    _EXIT_SEVERE,
-    _cli_read_holdings,
-    _cli_read_holdings_with_flows,
-    _handle_report,
-)
+from src.python.cli.cli import _EXIT_SEVERE, _cli_read_holdings, _cli_read_holdings_with_flows, _handle_report
 from src.python.cli._handlers import _collect_degradation_summary
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_cli]

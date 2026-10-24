@@ -83,7 +83,7 @@ _FLAT_DEFAULTS: dict[str, Any] = {
     "system_prompt_self_review": None,
     "model_self_review": None,
     "temperature_self_review": 0.1,
-    "max_tokens_self_review": 2048,
+    "max_tokens_self_review": 3072,
     "timeout_self_review": 90,
     "cache_enabled_self_review": True,
     "output_brief_self_review": False,

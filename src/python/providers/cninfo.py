@@ -35,11 +35,11 @@ from typing import Any
 from src.python.cache import get as cache_get
 from src.python.cache import get_ttl
 from src.python.cache import set as cache_set
-from src.python.core.code_utils import get_exchange_category
+from src.python.core.code_symbols import get_exchange_category
 from src.python.core.http_client import make_http_client
 from src.python.core.retry import STRATEGY_FIXED, RetryPolicy
 from src.python.core.throttle import interval_delay  # 间隔+抖动唯一算式
-from src.python.providers._utils import set_last_reason, with_connect_retry
+from src.python.providers.utils import set_last_reason, with_connect_retry
 
 logger = logging.getLogger("invest")
 

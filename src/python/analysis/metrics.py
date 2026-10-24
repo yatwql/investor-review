@@ -36,10 +36,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.python.analysis._math_utils import (  # noqa: F401
-    _t_cdf,  # noqa: F401  # re-export，test_metrics_edge 引用
-    _t_critical_95,  # noqa: F401  # re-export，test_metrics_edge 引用
-)
 from src.python.analysis.metrics_returns import (  # noqa: F401
     annualized_return,
     calmar_ratio,

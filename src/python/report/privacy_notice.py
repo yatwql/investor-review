@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 
-from src.python.config._local_state import get_flag, set_flag
+from src.python.config import get_local_flag, set_local_flag
 
 logger = logging.getLogger("invest")
 
@@ -37,7 +37,7 @@ def is_first_run() -> bool:
         True 表示首次运行
     """
     try:
-        return not get_flag(_FIRST_RUN_KEY)
+        return not get_local_flag(_FIRST_RUN_KEY)
     except Exception:
         return True
 
@@ -45,8 +45,8 @@ def is_first_run() -> bool:
 def mark_privacy_notice_shown() -> None:
     """标记隐私提示已显示，避免重复提示。"""
     try:
-        if not get_flag(_FIRST_RUN_KEY):
-            set_flag(_FIRST_RUN_KEY, True)
+        if not get_local_flag(_FIRST_RUN_KEY):
+            set_local_flag(_FIRST_RUN_KEY, True)
             logger.info("[privacy] 首次运行隐私提示已标记为已读")
     except Exception:
         logger.debug("[privacy] 标记隐私提示失败（非关键）", exc_info=True)

@@ -18,7 +18,7 @@ import httpx
 import pytest
 
 from src.python.providers import cninfo as cn
-from src.python.providers import _utils as pu
+from src.python.providers import utils as pu
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_providers]
 

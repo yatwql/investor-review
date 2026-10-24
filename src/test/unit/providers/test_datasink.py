@@ -18,7 +18,7 @@ from datetime import date
 import pytest
 
 from src.python.providers import datasink as ds
-from src.python.providers import _utils as pu
+from src.python.providers import utils as pu
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_providers]
 
@@ -239,7 +239,7 @@ class TestRequestStatus:
 
         import httpx
 
-        from src.python.providers import _utils as pu
+        from src.python.providers import utils as pu
 
         attempts = {"n": 0}
         clock = {"t": 0.0}
@@ -364,7 +364,7 @@ class TestEmptyReasonSelfReport:
     """datasink 在返回 None 时自陈原因（供链路替换笼统的「返回空」）。"""
 
     def _reason(self):
-        from src.python.providers._utils import take_last_reason
+        from src.python.providers.utils import take_last_reason
 
         return take_last_reason()
 

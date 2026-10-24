@@ -266,7 +266,8 @@ class TestCacheTampering(unittest.TestCase):
 
     def test_cache_file_corrupted_json(self):
         """缓存 JSON 损坏 → 自动删除并触发重新获取。"""
-        from src.python.cache import get, _cache_path
+        from src.python.cache import get
+        from src.python.cache._paths import _cache_path
 
         with tempfile.TemporaryDirectory() as tmpdir:
             with patch("src.python.cache._paths._CACHE_DIR", tmpdir):
@@ -279,7 +280,8 @@ class TestCacheTampering(unittest.TestCase):
 
     def test_cache_file_null_bytes(self):
         """缓存文件含空字节 → 解析失败，自动删除。"""
-        from src.python.cache import get, _cache_path
+        from src.python.cache import get
+        from src.python.cache._paths import _cache_path
 
         with tempfile.TemporaryDirectory() as tmpdir:
             with patch("src.python.cache._paths._CACHE_DIR", tmpdir):
@@ -292,7 +294,8 @@ class TestCacheTampering(unittest.TestCase):
 
     def test_cache_file_zero_bytes(self):
         """0 字节缓存文件 → 解析失败，自动删除。"""
-        from src.python.cache import get, _cache_path
+        from src.python.cache import get
+        from src.python.cache._paths import _cache_path
 
         with tempfile.TemporaryDirectory() as tmpdir:
             with patch("src.python.cache._paths._CACHE_DIR", tmpdir):
@@ -305,7 +308,8 @@ class TestCacheTampering(unittest.TestCase):
 
     def test_cache_file_non_utf8_content(self):
         """非 UTF-8 编码的缓存文件 → 解析失败，自动删除。"""
-        from src.python.cache import get, _cache_path
+        from src.python.cache import get
+        from src.python.cache._paths import _cache_path
 
         with tempfile.TemporaryDirectory() as tmpdir:
             with patch("src.python.cache._paths._CACHE_DIR", tmpdir):

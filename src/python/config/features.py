@@ -32,9 +32,9 @@ from typing import Any, Iterable
 from src.python.core.atomic_write import write_text_atomic
 from src.python.core.constants import PROJECT_ROOT
 
-from ._comments import strip_json_comments
+from src.python.core.json_comments import strip_json_comments
 from ._json_patch import _find_top_level_value_span, _patch_config_key, _remove_top_level_key
-from ._feature_registry import (  # noqa: F401 — 兼容既有导入面
+from ._feature_registry import (
     DOMAIN_DATA_AND_ROUTES,
     DOMAIN_HINTS,
     DOMAIN_LABELS,
@@ -65,7 +65,7 @@ from ._feature_registry import (  # noqa: F401 — 兼容既有导入面
     switches_in_group,
 )
 
-from ._feature_registry import _FEATURE_FLAGS_DEFAULT  # noqa: F401 — 私有派生表，仅本模块使用
+from ._feature_registry import _FEATURE_FLAGS_DEFAULT  # 私有派生表，仅本模块使用
 
 logger = logging.getLogger("invest")
 
@@ -122,7 +122,7 @@ FEATURES_FILE = os.path.join(PROJECT_ROOT, "data/config/features.json")
 # 列出一个不改报告任何字节的开关，读者会推断内容受其影响。
 
 # ── 出厂默认值投影 ──────────────────────────────────────────
-# 出厂默认值投影：``get_feature_defaults()`` 与兼容既有引用的取值表
+# 出厂默认值投影：``get_feature_defaults()`` 与注册表取值表
 
 # ── 注册表查询 ──────────────────────────────────────────────
 
@@ -345,6 +345,7 @@ __all__ = [
     "is_feature_enabled",
     "log_experimental_features",
     "parse_switch_override",
+    "panel_option_numbers",
     "resolve_experiment_flags",
     "resolve_switch_values",
     "set_feature_enabled",

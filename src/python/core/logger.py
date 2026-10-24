@@ -264,18 +264,12 @@ def setup_logger(name: str = "invest") -> logging.Logger:
     return logger
 
 
-def _get_machine_ip() -> str:
+def get_machine_ip() -> str:
     """获取本机 IP 地址，失败时返回 'unknown'。"""
     try:
         return socket.gethostbyname(socket.gethostname())
     except Exception:
         return "unknown"
-
-
-# 公开 API：渠道层/展示层统一使用此名（私有名保留供既有内部引用）
-def get_machine_ip() -> str:
-    """公开 API（转发包装：内部实现 ``_get_machine_ip`` 可被测试 patch，实时生效）。"""
-    return _get_machine_ip()
 
 
 def log_app_boundary(event: str, mode: str) -> None:
@@ -287,7 +281,7 @@ def log_app_boundary(event: str, mode: str) -> None:
     """
     from src.python.core.constants import APP_NAME, APP_VERSION
 
-    ip = _get_machine_ip()
+    ip = get_machine_ip()
     logging.getLogger("invest").info(
         "应用%s | %s v%s | %s | 主机 IP: %s",
         event,

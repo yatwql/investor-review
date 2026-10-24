@@ -86,7 +86,7 @@ def llm_settings(tmp_path, monkeypatch):
 
 
 def _features_file() -> dict:
-    from src.python.config._comments import strip_json_comments
+    from src.python.core.json_comments import strip_json_comments
     from src.python.config.features import FEATURES_FILE
 
     path = Path(FEATURES_FILE)
@@ -227,6 +227,41 @@ class TestChapterSubItems:
         out = _run(monkeypatch, ["0"])
         sub_lines = [line for line in out.splitlines() if "llm_debate_procon" in line]
         assert sub_lines and "启用本章节后可切换" in sub_lines[0]
+
+
+class TestChapterStatusColor:
+    """关闭项的状态字必须保持红色；置灰只作用于名称/键名，不得吞掉状态色。"""
+
+    def test_status_text_colors_closed_red_in_both_tiers(self, monkeypatch):
+        from src.python.tui import switch_panel
+
+        monkeypatch.setattr(switch_panel, "RED", "\033[91m")
+        monkeypatch.setattr(switch_panel, "RESET", "\033[0m")
+        assert switch_panel.status_text(False, "wide") == "[\033[91m关闭\033[0m]"
+        assert switch_panel.status_text(False, "narrow") == "[\033[91m关\033[0m]"
+
+    def test_default_off_sub_item_shows_red_under_enabled_parent(self, monkeypatch, llm_settings):
+        """7.1（llm_debate_procon）默认关、父项开启时应显示红色「关闭」。"""
+        from src.python.tui import switch_panel
+
+        monkeypatch.setattr(switch_panel, "RED", "\033[91m")
+        monkeypatch.setattr(switch_panel, "RESET", "\033[0m")
+        llm_settings({"expert_review": True})
+        out = _run(monkeypatch, ["0"])
+        line = next(line for line in out.splitlines() if "llm_debate_procon" in line)
+        assert "\033[91m关闭\033[0m" in line
+
+    def test_greyed_sub_item_still_shows_red_closed(self, monkeypatch, llm_settings):
+        """父项关闭时子项不可切换，但状态字仍须是红色「关闭」而非无色。"""
+        from src.python.tui import switch_panel
+
+        monkeypatch.setattr(switch_panel, "RED", "\033[91m")
+        monkeypatch.setattr(switch_panel, "RESET", "\033[0m")
+        llm_settings({"expert_review": False})
+        out = _run(monkeypatch, ["0"])
+        line = next(line for line in out.splitlines() if "llm_debate_procon" in line)
+        assert "\033[91m关闭\033[0m" in line
+        assert "启用本章节后可切换" in line
 
 
 class TestChapterPanelReadonly:

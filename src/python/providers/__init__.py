@@ -4,7 +4,6 @@
 """
 
 __all__ = [
-    "_utils",
     "akshare_extras",
     "akshare_news",
     "cls_news",

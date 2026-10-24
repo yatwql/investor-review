@@ -26,7 +26,8 @@ class TestTruncationWarning(unittest.TestCase):
 
     def test_warning_contains_marker(self) -> None:
         """警告含截断标记。"""
-        from src.python.llm.api_base import TRUNCATION_MARKER, _truncation_warning
+        from src.python.llm.api_base import _truncation_warning
+        from src.python.llm._api_responses import TRUNCATION_MARKER
 
         warning = _truncation_warning("max_tokens")
         self.assertIn(TRUNCATION_MARKER, warning)
@@ -404,7 +405,8 @@ class TestCallLlmWithRetryTruncation(unittest.TestCase):
     @patch("src.python.llm._api_responses.track_session_usage")
     def test_truncation_appends_warning(self, mock_track, mock_log, mock_success):
         """截断 → 内容追加截断警告。"""
-        from src.python.llm.api_base import TRUNCATION_MARKER, call_llm_with_retry
+        from src.python.llm.api_base import call_llm_with_retry
+        from src.python.llm._api_responses import TRUNCATION_MARKER
 
         def _truncated(data, mt):
             return True

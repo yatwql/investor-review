@@ -21,7 +21,7 @@ from src.python.cache import get as cache_get
 from src.python.cache import set as cache_set
 from src.python.core.code_utils import is_a_share_code
 from src.python.core.num_utils import safe_num
-from src.python.providers._utils import run_with_timeout
+from src.python.providers.utils import run_with_timeout
 
 logger = logging.getLogger("invest")
 
@@ -210,9 +210,20 @@ def get_profit_forecast_cache_key() -> str:
 # 行业资金流向最近失败类型: "" / "connection" / "empty"
 _SECTOR_FLOW_FAILURE: str = ""
 
+
+def sector_flow_failure() -> str:
+    """返回行业资金流向最近一次失败类型（公开只读访问器；空串=最近成功）。"""
+    return _SECTOR_FLOW_FAILURE
+
+
 # 分红数据最近失败类型: "" / "connection" / "empty"——供报告层如实登记分红
 # 数据状态（与 _SECTOR_FLOW_FAILURE 同习语：区分「源不可达」与「本无分红」）。
 _DIVIDEND_FAILURE: str = ""
+
+
+def dividend_failure() -> str:
+    """返回分红数据最近一次失败类型（公开只读访问器；空串=最近成功）。"""
+    return _DIVIDEND_FAILURE
 
 
 def get_sector_fund_flow() -> list[dict[str, Any]]:
@@ -239,6 +250,8 @@ def get_sector_fund_flow() -> list[dict[str, Any]]:
     _key = _cache_key(_CACHE_FLOW_PREFIX, _fp)
     cached = cache_get(_key, _SECTOR_FLOW_TTL)
     if cached is not None:
+        global _SECTOR_FLOW_FAILURE
+        _SECTOR_FLOW_FAILURE = ""
         _memo_set(_memo_key_str, cached)
         return cached
 
@@ -262,6 +275,7 @@ def get_sector_fund_flow() -> list[dict[str, Any]]:
         _SECTOR_FLOW_FAILURE = "empty"
         logger.debug("行业资金流向: 结果为空")
         return []
+    _SECTOR_FLOW_FAILURE = ""
 
     # ── 结构化 ──
     result: list[dict[str, Any]] = []

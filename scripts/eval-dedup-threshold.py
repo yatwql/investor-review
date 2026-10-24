@@ -40,13 +40,15 @@ if _PROJECT_ROOT not in sys.path:
 
 # 晚导入：sys.path 就绪后再引用项目模块
 from src.python.core.atomic_write import write_text_atomic  # noqa: E402
-from src.python.providers.news_dedup import (  # noqa: E402
-    ANCHOR_RULES_FIELD,
-    _ANCHOR_RULES_VERSION,
+from src.python.providers.news_dedup import (
     _ANCHOR_SIZE_WARN_BYTES,
     _anchor_retention_cutoff,
     _anchor_retention_days,
     _anchor_ts_on_or_after,
+)
+from src.python.providers.news_dedup_rules import (
+    ANCHOR_RULES_FIELD,
+    _ANCHOR_RULES_VERSION,
     _CROSS_BG2_RATIO,
     _CROSS_BIGRAM_MIN,
     _CROSS_CANDIDATE_RATIO,
@@ -244,7 +246,7 @@ def classify_pair(ratio: float, overlap: int, same_source: bool, title_a: str, t
 
 def _shared_carries_proper_noun(title_a: str, title_b: str) -> bool:
     """共享项中是否含真专名证据（与生产同源 ``has_proper_noun_token``，泛词否决表已生效）。"""
-    from src.python.providers.news_dedup import _extract_entity_bigrams
+    from src.python.providers.news_dedup_rules import _extract_entity_bigrams
 
     shared = _extract_entity_bigrams(_normalize_title(title_a)) & _extract_entity_bigrams(_normalize_title(title_b))
     return has_proper_noun_token(shared)
@@ -252,7 +254,7 @@ def _shared_carries_proper_noun(title_a: str, title_b: str) -> bool:
 
 def _shared_proper_nouns(title_a: str, title_b: str) -> list[str]:
     """共享项里的专名证据清单（展示用；与生产同源 ``proper_noun_tokens``，泛词否决已生效）。"""
-    from src.python.providers.news_dedup import _extract_entity_bigrams
+    from src.python.providers.news_dedup_rules import _extract_entity_bigrams
 
     shared = _extract_entity_bigrams(_normalize_title(title_a)) & _extract_entity_bigrams(_normalize_title(title_b))
     return proper_noun_tokens(shared)

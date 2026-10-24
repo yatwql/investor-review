@@ -16,6 +16,7 @@ from _release._changelog_archive import apply_changelog_release, write_archive_r
 from _release._commands_base import (
     _print_results,
     _timer,
+    _worktree_clean,
 )
 from _release._common import ReleaseError, exec_command as _exec
 from _release._versioning import (
@@ -90,7 +91,37 @@ def cmd_archive_init(args: argparse.Namespace, env, runner=None) -> int:
     return 0
 
 
+def _rollback_prepare(env, runner=None) -> None:
+    """prepare 失败后把工作树恢复到 prepare 前（仅预检确认干净树时可安全执行）。
+
+    只回滚受版本控制的文件；未跟踪文件不自动删除（可能含用户产物），逐条打印。
+    """
+    rc, out, err = _exec(["git", "reset", "--hard", "HEAD"], env.REPO_ROOT, runner)
+    if rc != 0:
+        print(f"[ERR] prepare 失败后自动回滚未完成：{(err or out).strip()}")
+        print("      请手动检查 git status，必要时恢复到 prepare 前提交")
+        return
+    print("[!] prepare 失败：工作树已回滚到 prepare 前（git reset --hard HEAD）")
+    rc2, status, _ = _exec(["git", "status", "--porcelain"], env.REPO_ROOT, runner)
+    if rc2 == 0 and status.strip():
+        print("[!] 回滚后仍有未跟踪/未回滚文件（未自动删除）：")
+        print(status.rstrip())
+
+
 def cmd_prepare(args: argparse.Namespace, env, runner=None) -> int:
+    clean_start = _worktree_clean(env.REPO_ROOT, runner)
+    try:
+        rc = _prepare_impl(args, env, runner)
+    except Exception:
+        if clean_start and not _worktree_clean(env.REPO_ROOT, runner):
+            _rollback_prepare(env, runner)
+        raise
+    if rc != 0 and clean_start and not _worktree_clean(env.REPO_ROOT, runner):
+        _rollback_prepare(env, runner)
+    return rc
+
+
+def _prepare_impl(args: argparse.Namespace, env, runner=None) -> int:
     constants_text = env.CONSTANTS_FILE.read_text(encoding="utf-8")
     dev_version = read_app_version(constants_text)
     derived = release_version_of(dev_version) if dev_version.endswith("-dev") else dev_version

@@ -20,7 +20,7 @@ from typing import Any, ClassVar
 
 from src.python.analysis.financial_indicator_extract import extract_indicators
 from src.python.analysis.financial_statement_derive import derive_indicator_records
-from src.python.core.code_utils import to_fmp_symbol
+from src.python.core.code_symbols import to_fmp_symbol
 from src.python.fetcher import financial_report
 from src.python.fetcher.source_adapter import SourceAdapter, register_adapter
 from src.python.providers import akshare_financial, hithink

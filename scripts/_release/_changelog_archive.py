@@ -183,7 +183,34 @@ def apply_changelog_release(text: str, release_version: str, date: str) -> tuple
     out, n_idx = idx_pat.subn(_idx_repl, out, count=1)
     if n_idx != 1:
         raise ReleaseError("changelog 归档索引行改写失败（格式与预期不符）" + _fmt_hint(_FMT_INDEX))
+    # 索引行链接目标也随小版本换目录（避免只改版本 token、路径仍指上一系列）
+    expected = f"../archive/{minor_dir}/{archive_name}"
+    out = re.sub(
+        rf"(^- \[`{re.escape(archive_name)}`\]\()[^)]*(\))",
+        lambda m: m.group(1) + expected + m.group(2),
+        out,
+        count=1,
+        flags=re.M,
+    )
+    _validate_archive_link_targets(out, archive_name)
     return out, body_core
+
+
+def _validate_archive_link_targets(text: str, archive_name: str) -> None:
+    """校验派生出的「最近发布」指针行与归档索引行都指向当前小版本归档。
+
+    这类路径由文件名/版本派生，写错时文件仍可能存在（只是指向上一系列），
+    死链检查不一定能发现；因此在**纯文本阶段**就断言目标路径，让 `check` 的
+    prepare 预演能在任何写入前拦下（发布 prepare 的写前校验复用同一函数）。
+    """
+    minor_dir = "v" + archive_name.removeprefix("archived_changelog.").removesuffix(".md")
+    expected = f"../archive/{minor_dir}/{archive_name}"
+    pointer = next((line for line in text.splitlines() if "最近发布" in line), "")
+    index = next((line for line in text.splitlines() if f"[`{archive_name}`]" in line), "")
+    if expected not in pointer:
+        raise ReleaseError(f"changelog 指针行目标路径不正确（期望 {expected}）" + _fmt_hint(_FMT_POINTER))
+    if expected not in index:
+        raise ReleaseError(f"changelog 归档索引行目标路径不正确（期望 {expected}）" + _fmt_hint(_FMT_INDEX))
 
 
 def render_archive_header(text: str, release_version: str, date: str) -> str:

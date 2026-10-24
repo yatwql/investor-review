@@ -15,13 +15,13 @@ from src.python.config import get_llm_config
 from src.python.llm.api import call_llm
 from src.python.llm.api_base import (
     AUTO_INCREASE_FACTOR,
-    TRUNCATION_MARKER,
     _build_cache_hint_and_record,
     _get_last_llm_failure,
     clear_last_llm_failure,
     FAIL_REASON_NETWORK_ERROR,
     FAIL_REASON_TIMEOUT,
 )
+from src.python.llm._api_responses import TRUNCATION_MARKER
 from src.python.llm.fingerprint import get_cache_ttl_llm
 from src.python.llm.markdown import markdown_to_html
 from src.python.llm.pricing import estimate_cost
@@ -80,7 +80,7 @@ def get_llm_chapter_disabled() -> dict[str, bool]:
     禁用的 LLM 分析章（core.registry.LLM_MODULE_GATED_SECTIONS）整章隐藏而非显示
     「待生成」占位。读取 llm_settings.json 配置，缺失键默认启用。
     """
-    from src.python.config._llm_settings import get_llm_config
+    from src.python.config import get_llm_config
     from src.python.core.registry import LLM_MODULE_GATED_SECTIONS
 
     cfg = get_llm_config()
@@ -212,7 +212,7 @@ def _handle_truncation(
     )
     if result2:
         if TRUNCATION_MARKER in result2:
-            logger.warning(
+            logger.error(
                 "增大 max_tokens 后仍被截断（%s：当前 %d → 已试 %d），请手动增大 llm_settings.json 的 %s",
                 config_field or "max_tokens",
                 max_tokens,

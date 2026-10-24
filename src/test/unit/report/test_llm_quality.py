@@ -101,7 +101,7 @@ class TestGradeModule:
 
     def test_truncation_marker_grades_d(self):
         """命中截断标记 → D，即使篇幅很长。"""
-        from src.python.llm.api_base import TRUNCATION_MARKER
+        from src.python.llm._api_responses import TRUNCATION_MARKER
 
         q = grade_module("health_check", _HEALTH_FULL + TRUNCATION_MARKER + "！上下文上限不足")
         assert q.grade == GRADE_D

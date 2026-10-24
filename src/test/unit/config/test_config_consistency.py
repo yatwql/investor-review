@@ -17,7 +17,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 from src.python import config as cfg
-from src.python.config import _comments
+from src.python.config._config_defaults import _get_default_config_template
+from src.python.core.json_comments import strip_json_comments as _strip_json_comments
 from src.python.core.constants import PROJECT_ROOT
 import pytest
 
@@ -36,7 +37,7 @@ class TestLlmSettingsKeyConsistency:
         的路径重定向，因为本测试是只读的代码-配置文件一致性校验，不依赖运行时配置。
         """
         import json
-        from src.python.config import _KNOWN_LLM_SETTINGS_KEYS, _strip_json_comments
+        from src.python.config._llm_settings import _KNOWN_LLM_SETTINGS_KEYS
 
         _path = _ABS_LLM_SETTINGS
         if not os.path.exists(_path):
@@ -120,7 +121,7 @@ class TestAtomicWriteCrashRecovery(unittest.TestCase):
 
         # 直接读取文件内容验证（内存缓存可能已被 crash 污染）
         with open(cfg._config_defaults._CONFIG_FILE, encoding="utf-8") as f:
-            payload = json.loads(_comments._strip_json_comments(f.read()))
+            payload = json.loads(_strip_json_comments(f.read()))
         self.assertEqual(payload.get("output_dir"), "/reports/original")
 
     def test_simulate_power_failure_then_recovery(self):
@@ -160,7 +161,7 @@ class TestAtomicWriteCrashRecovery(unittest.TestCase):
 
         # 旧值依然可用（直接读文件避免内存缓存污染）
         with open(cfg._config_defaults._CONFIG_FILE, encoding="utf-8") as f:
-            payload = json.loads(_comments._strip_json_comments(f.read()))
+            payload = json.loads(_strip_json_comments(f.read()))
         self.assertEqual(payload.get("holdings_dir"), "/safe/value")
 
 
@@ -282,28 +283,28 @@ class TestDefaultConfigTemplateConsistency:
         """模板 JSON 解析后应与 _DEFAULT_CONFIG 深度相等。"""
         import json
 
-        template_str = cfg._get_default_config_template()
-        cleaned = cfg._strip_json_comments(template_str)
+        template_str = _get_default_config_template()
+        cleaned = _strip_json_comments(template_str)
         parsed = json.loads(cleaned)
 
         # 深度比较：排除可能因运行时环境动态变化的 cache_ttl
         # （由 get_cache_ttl_defaults() 生成，模板和 _DEFAULT_CONFIG 均引用同一函数，
         #  但 registry 可能在不同测试间被修改）
-        assert parsed.keys() == cfg._DEFAULT_CONFIG.keys(), (
+        assert parsed.keys() == cfg._config_defaults._DEFAULT_CONFIG.keys(), (
             f"模板与 _DEFAULT_CONFIG 键集不一致\n"
-            f"模板独有: {parsed.keys() - cfg._DEFAULT_CONFIG.keys()}\n"
-            f"配置独有: {cfg._DEFAULT_CONFIG.keys() - parsed.keys()}"
+            f"模板独有: {parsed.keys() - cfg._config_defaults._DEFAULT_CONFIG.keys()}\n"
+            f"配置独有: {cfg._config_defaults._DEFAULT_CONFIG.keys() - parsed.keys()}"
         )
 
         for key in parsed:
             if key == "cache_ttl":
                 # cache_ttl 动态生成，兜底比较键集与值类型
-                assert parsed["cache_ttl"].keys() == cfg._DEFAULT_CONFIG["cache_ttl"].keys(), (
-                    f"cache_ttl 键集不一致: {parsed['cache_ttl'].keys() ^ cfg._DEFAULT_CONFIG['cache_ttl'].keys()}"
+                assert parsed["cache_ttl"].keys() == cfg._config_defaults._DEFAULT_CONFIG["cache_ttl"].keys(), (
+                    f"cache_ttl 键集不一致: {parsed['cache_ttl'].keys() ^ cfg._config_defaults._DEFAULT_CONFIG['cache_ttl'].keys()}"
                 )
                 for k in parsed["cache_ttl"]:
-                    assert type(parsed["cache_ttl"][k]) is type(cfg._DEFAULT_CONFIG["cache_ttl"][k]), (
-                        f"cache_ttl.{k} 类型不匹配: {type(parsed['cache_ttl'][k])} vs {type(cfg._DEFAULT_CONFIG['cache_ttl'][k])}"
+                    assert type(parsed["cache_ttl"][k]) is type(cfg._config_defaults._DEFAULT_CONFIG["cache_ttl"][k]), (
+                        f"cache_ttl.{k} 类型不匹配: {type(parsed['cache_ttl'][k])} vs {type(cfg._config_defaults._DEFAULT_CONFIG['cache_ttl'][k])}"
                     )
             if key in _PATH_KEYS_IN_TEMPLATE:
                 # 路径键：模板与 _DEFAULT_CONFIG 均使用绝对路径（CWD 无关安全），
@@ -313,8 +314,8 @@ class TestDefaultConfigTemplateConsistency:
                 assert parsed[key], f"模板中的路径键 {key!r} 为空"
                 assert isinstance(parsed[key], str), f"模板中的路径键 {key!r} 非字符串"
             else:
-                assert parsed[key] == cfg._DEFAULT_CONFIG[key], (
-                    f"键 {key!r} 值不匹配:\n  模板: {parsed[key]!r}\n  配置: {cfg._DEFAULT_CONFIG[key]!r}"
+                assert parsed[key] == cfg._config_defaults._DEFAULT_CONFIG[key], (
+                    f"键 {key!r} 值不匹配:\n  模板: {parsed[key]!r}\n  配置: {cfg._config_defaults._DEFAULT_CONFIG[key]!r}"
                 )
 
 
@@ -335,7 +336,7 @@ class TestLlmSettingsTemplateConsistency:
         from src.python.config._llm_settings_defaults import _DEFAULT_LLM_SETTINGS, _get_default_llm_settings_template
 
         template_str = _get_default_llm_settings_template()
-        parsed = json.loads(cfg._strip_json_comments(template_str))
+        parsed = json.loads(_strip_json_comments(template_str))
 
         assert parsed["schema_version"] == 2
         assert flatten(parsed) == _DEFAULT_LLM_SETTINGS, (
@@ -399,7 +400,7 @@ class TestRepoConfigSectionOrderContract:
 
         path = os.path.join(PROJECT_ROOT, "data", "config", "config.json")
         with open(path, encoding="utf-8") as f:
-            data = json.loads(_comments._strip_json_comments(f.read()))
+            data = json.loads(_strip_json_comments(f.read()))
         order = data.get("report_section_order") or {}
         assert set(order) == get_report_section_keys() - {"llm_usage"}
         for key, num in order.items():

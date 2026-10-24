@@ -22,7 +22,7 @@ import unittest
 from unittest.mock import patch
 
 from src.python import config as cfg
-from src.python.config import _comments
+from src.python.core.json_comments import strip_json_comments as _strip_json_comments
 from src.python.core.constants import PROJECT_ROOT
 import pytest
 
@@ -266,7 +266,7 @@ class TestInitConfig(unittest.TestCase):
             _defaults.update(_orig)
         with open(cfg._config_defaults._CONFIG_FILE, encoding="utf-8") as f:
             raw = f.read()
-        cleaned = _comments._strip_json_comments(raw)
+        cleaned = _strip_json_comments(raw)
         data = json.loads(cleaned)
         for key in _PATH_KEYS_IN_TEMPLATE:
             self.assertFalse(
@@ -357,7 +357,7 @@ class TestSetConfig(unittest.TestCase):
         cfg.init_config()
         cfg.set_config("holdings_dir", "data/custom")
         with open(cfg._config_defaults._CONFIG_FILE, encoding="utf-8") as f:
-            data = json.loads(_comments._strip_json_comments(f.read()))
+            data = json.loads(_strip_json_comments(f.read()))
         self.assertEqual(data["holdings_dir"], "data/custom")
         result = cfg.get_config()
         self.assertEqual(result["holdings_dir"], os.path.join(PROJECT_ROOT, "data/custom"))
@@ -368,7 +368,7 @@ class TestSetConfig(unittest.TestCase):
         external = os.path.join(os.path.dirname(PROJECT_ROOT), "external")
         cfg.set_config("holdings_dir", external)
         with open(cfg._config_defaults._CONFIG_FILE, encoding="utf-8") as f:
-            data = json.loads(_comments._strip_json_comments(f.read()))
+            data = json.loads(_strip_json_comments(f.read()))
         self.assertEqual(data["holdings_dir"], external)
 
 
@@ -404,7 +404,7 @@ class TestSetConfigSingleKeyPatch(unittest.TestCase):
         # enable_news 行尾注释保留
         self.assertIn("// 市场新闻", raw)
         # 值已更新
-        data = json.loads(_comments._strip_json_comments(raw))
+        data = json.loads(_strip_json_comments(raw))
         self.assertFalse(data["enable_news"])
 
     def test_patch_only_touches_target_key(self):
@@ -421,7 +421,7 @@ class TestSetConfigSingleKeyPatch(unittest.TestCase):
         """新键追加到对象末尾，已有注释与其他键不受影响。"""
         cfg.set_config("custom_extra", {"nested": [1, 2, 3]})
         raw = self._read_disk()
-        data = json.loads(_comments._strip_json_comments(raw))
+        data = json.loads(_strip_json_comments(raw))
         self.assertEqual(data["custom_extra"], {"nested": [1, 2, 3]})
         # 新键位于文件末尾的顶层对象内
         self.assertLess(raw.rfind('"custom_extra"'), raw.rfind("}"))
@@ -431,7 +431,7 @@ class TestSetConfigSingleKeyPatch(unittest.TestCase):
         """替换嵌套 dict 值不破坏相邻键与注释。"""
         cfg.set_config("comparison_indices", {"sh000300": "沪深300", "sh000905": "中证500"})
         raw = self._read_disk()
-        data = json.loads(_comments._strip_json_comments(raw))
+        data = json.loads(_strip_json_comments(raw))
         self.assertEqual(data["comparison_indices"], {"sh000300": "沪深300", "sh000905": "中证500"})
         self.assertIn("// ── F. 业绩基准与无风险利率 ──", raw)
         self.assertIsNone(data["risk_free_rate"])
@@ -443,7 +443,7 @@ class TestSetConfigSingleKeyPatch(unittest.TestCase):
         cfg.set_config("_privacy_notice_shown", True)
         raw = self._read_disk()
         self.assertIn("// ── A. 路径与文件 ──", raw)
-        data = json.loads(_comments._strip_json_comments(raw))
+        data = json.loads(_strip_json_comments(raw))
         self.assertTrue(data["_privacy_notice_shown"])
 
 
@@ -468,7 +468,7 @@ class TestDelConfig(unittest.TestCase):
         """删除已有键 → 键消失，文件仍为合法 JSON。"""
         cfg.set_config("custom_key", 123)
         cfg.del_config("custom_key")
-        data = json.loads(_comments._strip_json_comments(self._read_disk()))
+        data = json.loads(_strip_json_comments(self._read_disk()))
         self.assertNotIn("custom_key", data)
 
     def test_del_nonexistent_key_noop(self):
@@ -483,14 +483,14 @@ class TestDelConfig(unittest.TestCase):
         cfg.del_config("custom_a")
         raw = self._read_disk()
         self.assertIn("// ── A. 路径与文件 ──", raw)
-        data = json.loads(_comments._strip_json_comments(raw))
+        data = json.loads(_strip_json_comments(raw))
         self.assertEqual(data["news_top_count"], 300)
 
     def test_del_last_key_keeps_valid_json(self):
         """删除最后一个键（无尾随逗号）→ 清理前一成员尾逗号，JSON 合法。"""
         cfg.set_config("z_last", True)
         cfg.del_config("z_last")
-        data = json.loads(_comments._strip_json_comments(self._read_disk()))
+        data = json.loads(_strip_json_comments(self._read_disk()))
         self.assertNotIn("z_last", data)
         self.assertIn("risk_free_rate", data)
 
@@ -499,7 +499,7 @@ class TestDelConfig(unittest.TestCase):
         cfg.set_config("m1", 1)
         cfg.set_config("m2", 2)
         cfg.del_config("m1")
-        data = json.loads(_comments._strip_json_comments(self._read_disk()))
+        data = json.loads(_strip_json_comments(self._read_disk()))
         self.assertNotIn("m1", data)
         self.assertEqual(data["m2"], 2)
 
