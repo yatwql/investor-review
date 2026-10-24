@@ -80,6 +80,7 @@ _ANCHOR_COLLECT_ENV = "INVEST_DEDUP_COLLECT_ANCHORS"
 _ANCHOR_RETENTION_DAYS = 120
 _ANCHOR_RETENTION_ENV = "INVEST_DEDUP_ANCHOR_RETENTION_DAYS"
 
+
 def _anchor_key(record: dict[str, Any]) -> str:
     """锚点去重键：source 对 + 标题对（顺序无关）。"""
     a = (record.get("source_a", "") or "", record.get("title_a", "") or "")
