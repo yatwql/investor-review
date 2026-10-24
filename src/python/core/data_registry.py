@@ -207,7 +207,8 @@ _MODULE_REGISTRY: tuple[DataModuleDef, ...] = (
         "生成后自检",
         "llm_self_review",
         cache_prefixes=("llm_self_review_",),
-        cache_ttl=7200,
+        # 内容寻址（键含其余模块产出正文）：输入不变即命中，2h 过期只会白重算一次
+        cache_ttl=86400,
         settings_suffix="self_review",
         cache_groups=("preload",),
     ),
@@ -221,7 +222,8 @@ _MODULE_REGISTRY: tuple[DataModuleDef, ...] = (
         "持仓变动复盘归因",
         "llm_holding_change",
         cache_prefixes=("llm_holding_change_",),
-        cache_ttl=7200,
+        # 同上：键含复盘块正文，内容未变无需按时间强制重算
+        cache_ttl=86400,
         settings_suffix="holding_change",
         cache_groups=("preload",),
     ),

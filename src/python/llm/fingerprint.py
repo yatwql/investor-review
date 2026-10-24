@@ -140,7 +140,9 @@ def get_cache_ttl_llm(subtype: str = "global_macro") -> float:
       2. 代码默认值（全球政经局势 86400s / 智囊团深度复盘 7200s / 财经新闻热点与持仓关联分析 3600s）
 
     Args:
-        subtype: "global_macro"（全球政经局势）、"expert_review"（智囊团深度复盘）或 "news_correlation"（财经新闻热点与持仓关联分析）
+        subtype: LLM 模块键（global_macro / expert_review / health_check /
+            penetration_deep / news_correlation / self_review / holding_change /
+            debate_pro / debate_con / debate_synthesis）
 
     Returns:
         过期时间（秒）
@@ -152,6 +154,8 @@ def get_cache_ttl_llm(subtype: str = "global_macro") -> float:
         "news_correlation": "llm_news_correlation",
         "health_check": "llm_health_check",
         "penetration_deep": "llm_penetration_deep",
+        "self_review": "llm_self_review",
+        "holding_change": "llm_holding_change",
         "debate_pro": "llm_debate_pro",
         "debate_con": "llm_debate_con",
         "debate_synthesis": "llm_debate_synthesis",
@@ -169,6 +173,8 @@ def get_cache_ttl_llm(subtype: str = "global_macro") -> float:
             "news_correlation": 3600,
             "health_check": 86400,
             "penetration_deep": 86400,
+            "self_review": 86400,
+            "holding_change": 86400,
             "debate_pro": 86400,
             "debate_con": 86400,
             "debate_synthesis": 86400,

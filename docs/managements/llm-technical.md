@@ -935,10 +935,11 @@ penetrated_assets ──→ extract_stable_penetration()
 | `health_check` | 86400s (24h) | 体检报告每日更新 |
 | `penetration_deep` | 86400s (24h) | 穿透分析每日更新 |
 | `news_correlation` | 3600s (1h) | 新闻时效性强，TTL 较短 |
-| `self_review` | 7200s (2h) | 生成后自检（附录）；输入是其余模块产出，内容未变即命中 |
-| `holding_change` | 7200s (2h) | 持仓变动复盘归因（章内 LLM 归因块，本体由 feature `holding_change_review` 控制） |
+| `self_review` | 86400s (24h) | 生成后自检（附录）；**内容寻址**（键含各模块产出正文），输入未变即命中，按时间强制重算只会白花钱 |
+| `holding_change` | 86400s (24h) | 持仓变动复盘归因（章内 LLM 归因块，本体由 feature `holding_change_review` 控制）；同样内容寻址 |
 
 `import` 失败时兜底返回 hardcoded defaults（设计为防御性编程，正常情况下不会触发）。
+> **单一来源**：`get_cache_ttl_llm(模块)` 的内部映射表必须覆盖全部 LLM 缓存模块，且与 `core/data_registry` 的 `cache_ttl` 逐项相等——读侧与启动清理/配置派生用同一个数。漏登记会静默回落到 `llm_global_macro`（24h），而清理仍按旧值删文件，表现为「刚写的缓存下一轮又没了」。该不变式由 `src/test/unit/llm/test_llm_cache_ttl_single_source.py` 逐模块校验。
 
 ### 7.4 缓存命中提示
 
