@@ -155,6 +155,8 @@ _MODULE_REGISTRY: tuple[DataModuleDef, ...] = (
         cache_groups=("refresh",),
     ),
     # ── 新闻（refresh 组）──
+    # 新闻时效敏感：900s（15 分钟）为业务上限，不得为省耗时延长——
+    # 热点/突发事件可能在数分钟内变化，拉长 TTL 会把过期新闻带进报告。
     DataModuleDef("新闻聚合", "news", cache_prefixes=("news_",), cache_ttl=900, cache_groups=("refresh",)),
     # ── LLM 智能分析模块 ──
     DataModuleDef(
