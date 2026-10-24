@@ -1533,7 +1533,7 @@ CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` /
 | 域 | 代表脚本 | 什么时候用 |
 |:---|:---------|:-----------|
 | 测试 | `test-runner.py` / `test-collect-coverage.py` / `test-extract-failures.py` / `test-find-order-dependent.py` / `test-smoke-web.py` / `check-test-redundancy.py` / `check-test-markers.py` | 跑测试、统计覆盖、定位失败、用例质量机检 |
-| 文档 | `check-doc-traces.py` / `check-doc-links.py` / `check-doc-drift.py` / `check-semantic-index.py` / `make-assets.py` | 文档漂移、死链、语义命名、视觉资产（预览图生成 / 架构图渲染体检） |
+| 文档 | `check-doc-traces.py` / `check-doc-links.py` / `check-doc-drift.py` / `check-semantic-index.py` / `make-assets.py` / `make-screenshots.py` | 文档漂移、死链、语义命名、视觉资产（预览图生成 / 架构图渲染体检 / README 与手册演示截图） |
 | 代码与文件质量 | `check-code-traces.py` / `check-requirement-trace.py` / `check-task-numbering.py` / `check-file-length.py` / `check-version-consistency.py` / `check-style-guardrails.py` / `check-script-contract.py` | 痕迹、需求追溯、编号、行数红线、版本、样式护栏 |
 | 发布 | `release.py`（分步编排）/ `test-collect-coverage.py` | 发版全流程 |
 | 运维观测 | `perf-history.py` / `probe.py` / `check-sources`（CLI 子命令）/ `doctor`（CLI 子命令）/ `view-logs`（CLI 子命令） / `cassettes`（CLI 子命令） | 性能历史查看、数据源链路探测、日志与系统自检 |

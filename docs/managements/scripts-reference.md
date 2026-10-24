@@ -27,6 +27,7 @@
 | `test-extract-failures.py` | 测试 | 从 pytest-html 报告提取失败用例详情 |
 | `test-find-order-dependent.py` | 测试 | 单跑绿合跑红的顺序依赖污染源二分定位 |
 | `make-assets.py` | 文档 | 仓库视觉资产维护：社交预览图生成 + README 架构图渲染体检（几何/像素/文字越界；需 cairosvg / Pillow） |
+| `make-screenshots.py` | 文档 | README/手册演示截图生成：隔离演示工作区（自造持仓 + 占位凭据）/ 演示报告 / TUI 帧渲染 / Web CDP 截图（需 Pillow + 等宽 CJK 字体；Web 档需 Node ≥22 + Chromium） |
 | `check-code-traces.py` | 质量 | 代码注释/文档字符串中历史变更痕迹检查 |
 | `check-doc-traces.py` | 文档 | 面向读者文档（.md）历史变更痕迹 + 结构性冗余（DUPLICATE）检查 |
 | `check-test-markers.py` | 测试 | AST 静态扫描验证测试标记合规性 |
@@ -52,6 +53,7 @@
 | `probe.py` | 运维 | 探测统一入口（按 target 分发到 `_probes/` 子模块；新探针实现契约面登记即用） |
 | `eval-factor-zoo.py` | 评测 | 因子动物园目录评测（非生产代码；五个来源族各抽 5 个因子，评测 A 字段可得率 / B 与既有信号族增量 / C 全量计算耗时占比三项指标，A/B/C 全过才转正立项；子命令 catalog / fields / signals / timing / verdict / all，产物只落 `docs/tmp/factor-zoo/`；实现拆在 `_eval_factor_zoo/`） |
 | `_assets/` | 内部 | 视觉资产实现包（`social_preview.py` 预览图绘制与栅格化 / `svg_check.py` 架构图渲染体检） |
+| `_screenshots/` | 内部 | 演示截图实现包（`demo_workspace.py` 隔离工作区与报告 / `tui_frame.py` 帧文本折行保色与渲染 / `web_shot.py` CDP 封装 + `cdp_shot.mjs`） |
 | `_shared/` | 内部 | 跨脚本共享设施包（`checklib.py` CLI 契约与输出/路径/区间解析；`traces_common.py` 两域共用痕迹词表） |
 | `_test_runner/` | 内部 | 测试驱动内部实现包（paths / modes / pytest_env / machine_info / doc_writer / report_html / runner） |
 | `launch.sh` / `launch.ps1` | 启动 | Linux/macOS / Windows 一键启动脚本（无参数启动 TUI；`web` 子命令启动 Web 浏览器模式） |
@@ -70,7 +72,7 @@
 
 **结构约定（顶层 vs 子目录）**：`scripts/` 顶层只放**可直接运行的入口**（`python scripts/x.py …`）；
 共享库与实现细节一律放内部包——跨脚本共用进 `_shared/`（`checklib.py` / `traces_common.py`），
-单入口实现包用 `_<语义名>/`（`_probes/` / `_assets/` / `_release/` / `_test_runner/` / `_doc_drift/` /
+单入口实现包用 `_<语义名>/`（`_probes/` / `_assets/` / `_screenshots/` / `_release/` / `_test_runner/` / `_doc_drift/` /
 `_traces_code/` / `_traces_doc/` / `_test_redundancy/` / `_guardrails/` / `_perf_report/`），评测实现包用 `_eval_<x>/` 与入口
 `eval-<x>.py` 同名对应。新增共享代码**不得**再放顶层文件。
 
@@ -295,7 +297,7 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
 
 ## 文档类
 
-面向读者文档的痕迹、链接、与实现的一致性，语义命名索引的正反向校验，README 架构图渲染检查，以及仓库展示资产（品牌社交预览图）的生成。
+面向读者文档的痕迹、链接、与实现的一致性，语义命名索引的正反向校验，README 架构图渲染检查，以及仓库展示资产（品牌社交预览图）与 README/手册演示截图的生成。
 
 **`check-doc-traces.py` — 文档历史痕迹 + 结构性冗余检查**
 
@@ -513,6 +515,49 @@ sym |= set(re.findall(r'^\s{0,8}["\']([a-z][a-z0-9_]{2,})["\']\s*:', src, re.M))
 ```
 
 > **何时跑**：`git commit` 时由 pre-commit 钩子按暂存域自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` job 恒跑全量兜底。
+
+**`make-screenshots.py` — 演示截图生成（隔离演示工作区 + TUI 帧渲染 + Web CDP 截图）**
+
+README / 手册配图的可复现来源。四个子命令串成一条流水线，产物全部落 `docs/tmp/screenshots/`
+（git 忽略域），真实 `data/`（持仓 / 配置 / 密钥）零接触：
+
+```bash
+# ① 建演示工作区：两账户 6 只公开品种 + 明显占位凭据 + 相对路径上屏配置
+.venv/bin/python scripts/make-screenshots.py demo
+
+# ② 在演示工作区生成 Excel + HTML 报告（cwd=demo，上屏读作 data/holdings / reports）
+.venv/bin/python scripts/make-screenshots.py report
+
+# ③ TUI 首页一帧 → PNG（取帧走生产渲染函数；--text 可改用已有帧文本）
+.venv/bin/python scripts/make-screenshots.py tui docs/tmp/screenshots/demo/tui-menu.png
+.venv/bin/python scripts/make-screenshots.py tui /tmp/frame.png --config /tmp/demo/config.json --text /tmp/frame.txt
+
+# ④ Web 页面截图（导航 → 可选文本替换 → 滚动 → 截视口；固定侧栏不丢）
+.venv/bin/python scripts/make-screenshots.py web http://127.0.0.1:8000/workbench \
+    docs/tmp/screenshots/demo/web-workbench.png --scroll-y 0 --width 1440 --height 940 \
+    --replace '临时文本=>演示文本'
+```
+
+**演示工作区**（`demo_workspace.py`）：截图要展示 `data/holdings`、`reports` 这类相对路径，
+直接引用真实配置会把本机绝对路径印上屏。工作区的 `data/config/config.json` 用绝对路径（相对路径会被解析到项目根），上屏的相对路径
+由 TUI 渲染端抹掉演示目录前缀得到；持仓是公开品种 + 自造
+整数份额成本，凭据 `sk-demo-not-a-real-key` 让首页状态行显示「LLM 已配置」而非首次使用告警。
+
+**TUI 帧**（`tui_frame.py`）：取帧直接调用生产渲染函数（`print_header` + `show_config` +
+`render_menu`），不经过真实 TTY——文本与配色和终端同源，且不含光标控制序列；渲染端解析生产
+代码用到的 SGR 子集（30-37 / 90-97 / 1 / 2 / 0）。超宽行按终端语义折成多行，**续行重新打开
+配色**（否则第二行掉回默认前景色）；演示目录与仓库根的绝对路径前缀整体抹掉。宽字符按终端
+显示列计（`text_layout.display_width`，与生产同源）。
+
+**Web 截图**（`web_shot.py` + `cdp_shot.mjs`）：按「导航 → 可选文本替换 → 滚动到目标位置 →
+截视口」取图；滚动后再截而非整页截图，固定侧栏才会停在视口里。浏览器按「`--chrome` →
+`CHROME_BIN` → Playwright 下载的 Chromium → 常见系统路径」解析，`node` 用系统 PATH（需 ≥22，
+内置 WebSocket，无需 playwright）。
+
+> **何时跑**：README/手册配图需要刷新时（如界面改版）。不进提交与发布门禁，只在本机手工运行。
+
+**退出码**：`0` 成功；`1` 环境缺失（TUI 需 Pillow + 等宽 CJK 字体；Web 需 Node ≥22 与本机
+Chromium）或运行失败；`2` 参数或子命令错误。
 
 **`make-assets.py` — 仓库视觉资产维护（社交预览图 + 架构图渲染体检）**
 

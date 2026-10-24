@@ -9,6 +9,8 @@
 
 ## [0.15.1-dev] - 开发中（未发布）
 
+- **`plan-202` 演示截图生成器入库**：README/手册配图的生成过程从 `docs/tmp/` 的一次性脚本收进仓库——入口 `scripts/make-screenshots.py`（`demo` / `report` / `tui` / `web` 四子命令）+ 实现包 `scripts/_screenshots/`（`demo_workspace.py` / `tui_frame.py` / `web_shot.py` + `cdp_shot.mjs`）。演示工作区两账户 6 只公开品种 + 明显占位凭据，配置用绝对路径、上屏路径由渲染端抹掉演示目录前缀，真实 `data/` 零接触；TUI 取帧走生产渲染函数（非真实 TTY，文本与配色同源），超宽行折行时在续行重新打开配色；Web 档按「导航 → 文本替换 → 滚动 → 截视口」取图（固定侧栏不丢），浏览器从 `--chrome` / `CHROME_BIN` / Playwright 缓存 / 系统路径依次解析。16 例回归覆盖演示持仓与配置口径、报告命令装配、折行保色与路径瘦身、渲染尺寸、浏览器解析次序、入口分发；`scripts-reference.md` / `developer-guide.md` 按域索引 / `folders.md` 目录树同步登记。
+
 - **`plan-201` 事实校验评估函数参数收敛（`rf-839` 技术债）**：`llm/fact_checker/_numerical.py::_evaluate_percent_value` 的 22 个参数（7 基础值 + 10 语境开关 + 5 数据映射）收进冻结 dataclass `PercentContext`——字段即语义，新增一种语境只需加字段并在调用点赋值，不必再改签名/文档/全部直接用例；函数签名收敛为 `_evaluate_percent(ctx)`，语境判定优先级（非收益率早退 → 回撤 → 收益语境）仍在函数体内单源维持。行为零变化：`src/test/unit/llm` 1326 例全绿（含 rf-836 的 6 例回归）。
 
 - **`plan-200` 配置体系重构第 15 轮：稳态观测与回退演练**（配置重构 15 轮到齐）：新增 `src/test/unit/config/test_config_resilience_contract.py`（10 例，全部 `tmp_path` 隔离）把四类路径变成可复跑断言——① **非法配置不静默**：非法 `schema_version` 返回 None 且日志含文件名 + 键 + 原因；`logger.json` 单键非法只回落该键（其余键按文件生效）；② **删除后重建**：`llm_settings.json` v2 模板、`logger.json` 幂等 `ensure_logger_file`、`llm_pricing_ref.json` 默认模板（23 个模型价）重建后均可加载；③ **缓存首轮重算**：首轮未命中 → 写入 → 次轮命中（目录隔离统一由 conftest 提供）；④ **非当前结构拒绝**：消息含「删除该文件后重新生成」。实测（临时目录）：非法配置 0.1ms 内检出并拒绝、三份重建即用、无静默降级。观测项复用现有日志与 `perf_history`，未新增面板。
