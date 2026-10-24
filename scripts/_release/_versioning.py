@@ -50,12 +50,23 @@ def render_readme_version(text: str, version: str) -> str:
 
 
 def normalize_release_title(title: str) -> str:
-    """剥离 `--title` 中多余的 `release: v… —— ` 前缀。
+    """剥离 `--title` 中多余的 `release: v… —— ` 或裸版本 `v… —— ` 前缀。
 
-    commit subject 由 publish 统一加前缀；title 自带前缀时会拼出双前缀
-    （发布提交实测）。剥离后为空（title 本身就是前缀）则按原样使用。
+    commit subject 由 publish 统一加前缀（`release: v{ver} —— {title}`）；title 自带
+    前缀时会拼出双前缀（发布提交实测）。两类自写前缀都剥：
+
+    - `release: vX.Y.Z —— 主题`（带 release: 标签）
+    - `vX.Y.Z —— 主题` / `vX.Y.Z-dev —— 主题`（裸版本+破折号，人工写标题时最
+      自然的写法；此前只剥第一类，会拼出重复两遍版本号的提交标题）
+
+    剥离后为空（title 本身就是前缀）则按原样使用。
     """
-    stripped = re.sub(r"^release:\s*v\S+\s*—+\s*", "", title.strip())
+    stripped = title.strip()
+    for pattern in (
+        r"^release:\s*v\S+\s*—+\s*",
+        r"^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.\-]+)?\s*—+\s*",
+    ):
+        stripped = re.sub(pattern, "", stripped, count=1)
     return stripped or title.strip()
 
 

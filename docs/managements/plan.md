@@ -1,6 +1,6 @@
 # 投资复盘助手 — 实现计划
 > 文档版本：0.15.5-dev
-> **编号源**：`plan-next = 213`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-212，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`plan-next = 216`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-215，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -71,8 +71,25 @@
 
 **验收**：同非交易日、同持仓/指数/新闻连续两次报告，基础模块第二次命中；perf LLM token/call_count 为单次报告值；无上一轮 degradation/self_review 残留；补同进程双报告与失效回归。
 
-### P3 — 预期实施，有空时安排
+#### `plan-213` 发布标题剥掉裸版本前缀 ✅
 
+**问题**：`publish --title "v0.15.4 —— …"` 拼出 `release: v0.15.4 —— v0.15.4 —— …`（v0.15.4 发布实测）；`normalize_release_title` 只剥 `release: v… —— ` 一类。
+**动作**：补裸版本前缀（含 `-dev` 后缀）剥离；`v2 —— …` 这类非版本数字串不误伤。
+**验收**：`normalize_release_title("v0.15.4 —— 主题") == "主题"`，release 提交标题只出现一次版本号。
+
+#### `plan-214` devbump 分步耗时埋点 ✅
+
+**问题**：`logs/release.jsonl` 中 devbump 的 `steps` 恒空（只有总墙钟 14.1s），无法区分版本改写 / 一致性收敛 / 推送各占多少，跨版本对拍缺一环。
+**动作**：按 `_timer().mark_elapsed()` 补「版本全链改写 + 一致性收敛 / 迁档占位清理 / 切版提交 / 推送 dev / 发布闭环校验」五步，与其余发布命令同口径。
+**验收**：devbump 后台账 `steps` 非空且步骤可读；回归用例断言步骤名存在。
+
+#### `plan-215` 发布闭环机器校验 ✅
+
+**问题**：CLAUDE.md 的「每次正式发布都必须把 dev 合并入 master 并推送、不得只打 tag 不更新 master」此前只靠人看终端，没有任何机检；tag 打错分支 / master 未跟版都要等到下版才发现。
+**动作**：`devbump` 收尾新增闭环校验：`tag vX` 存在且在 master 历史内（`merge-base --is-ancestor`）、`master:<constants>` 的 `APP_VERSION == X`、当前分支为下一开发版；不一致即硬失败并给出逐项修复提示。无 tag 仅告警（`--no-push` 试跑 / 非发布库不误拦）。
+**验收**：三类缺口（tag 不在 master、master 版本不符、dev 未切版）均退出 1 且打印具体项；闭合时打印「发布闭环闭合」；回归用例覆盖三种缺口与无 tag 只告警。
+
+### P3 — 预期实施，有空时安排
 入选标准：收益明确，但需等待时机或数据积累。
 
 #### `plan-70` 决策跨期反思闭环（decision_reflection）验证死线
