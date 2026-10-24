@@ -12,7 +12,6 @@
 
 | # | 问题 | 修复方向 |
 |---|------|----------|
-| **rf-836** | 事实校验自动修正器会产出**用户可见的畸形数值**：报告正文出现 `持仓收益率+-9.0%`（双符号）。现状是三类错误叠加：① **位置语义未识别**——把「占比 / 最大持仓 / 份额 / 市值」等语境里的数字当收益率改写；② **主体归属错**——同句多个 6 位代码时按「最近者」选主体，对「A（代码，…收益率X%）」这类括号结构失效；③ **符号未归一**——只替换数字、不处理原值前导 `+`，与负数叠加成 `+-9.0%` | ① 先按「数值前词」判定语义再决定是否参与收益率修正；② 主体归属以「紧邻代码 / 名称」为准；③ 写入新值前剥除原值前导符号，并加「畸形数值自检」（`[+-]{2,}` 判失败、不写回） |
 | **rf-257** | Web 模式浏览器真机验收余 **4 类人工项**：真实 basic/full 进度观察（3.1c / 3.2 / 3.3 / 3.4）、结果区按钮（4.5）、提交即禁用（5.3）、真实拖拽与 Tab / Enter 抽验（2.5 / 2.6）；其余项已由自动化用例覆盖 | 判定标准见 [`docs/plan/web-browser-verification.md`](../plan/web-browser-verification.md)（启动 / 收尾命令 + 复验清单）；复跑 `.venv/bin/python scripts/test-smoke-web.py` + `node docs/tmp/browser-verify/cdp-check.mjs`；收尾 kill 服务与浏览器、清空 `data/holdings/uploads/`；全部通过后移入已解决 |
 
 ### P2 — 中优先：价值明确、成本可控（下批排期）
@@ -33,6 +32,7 @@
 | # | 问题 | 修复 |
 |---|------|------|
 | **rf-838** | `test_json_comments` 的叶子模块边界用例用 `subprocess.run(text=True)` 未指定编码——`PYTHONWARNDEFAULTENCODING=1` 下直接告警为错误（`error::EncodingWarning`），`LC_ALL=C` 等非 UTF-8 locale 还会按 cp936/latin-1 解码子进程输出 | 显式 `encoding="utf-8"` + `errors="replace"`；由 portability 隐式编码严格档拦截，无需新增用例 |
+| **rf-836** | 事实校验自动修正器产出用户可见畸形数值（`持仓收益率+-9.0%`）：把占比当收益率改写、同句多代码主体归属错、替换不处理原符号 | 三条同修：① 数值前文语义（占比/最大持仓/份额/市值/仓位等局部窗口）→ 不参与收益率修正；② 主体归属改为括号 > 分句 > 全句三级作用域；③ 替换时剥除原符号（新值符号优先，正值且原文有 `+` 时延续）并按 `[+-]{2,}` 做畸形自检，命中整批不写回。回归用例 6 例（`TestNonReturnMetricAndSignNormalization`） |
 | **rf-837** | 计价模块懒加载标志与显式重载不一致：显式 `reload_pricing()` 后 `_PRICING_LOADED` 仍为 False，进程内首次计费会再读一次配置文件并覆盖已装载的定价（用例单独执行失败、整文件通过） | `reload_pricing()` 在 `finally` 置 `_PRICING_LOADED = True`；新增回归用例 `test_explicit_reload_is_not_undone_by_lazy_init`（断言显式重载后计费直接使用已装载的定价） |
 
 ### 归档档案

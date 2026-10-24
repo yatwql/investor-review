@@ -20,6 +20,7 @@ from src.python.llm.fact_checker import (
 )
 from src.python.llm.fact_checker._corrections import (
     apply_code_corrections,
+    apply_numerical_corrections,
     detect_code_corrections,
 )
 
@@ -825,3 +826,66 @@ class TestCodeTypoAutoCorrection:
         assert "161910→561910" in summ  # 修正明细列出纠正（供用户查看）
         assert "自动修正 1 处代码" in summ
         assert "品种代码 161910 不在当前持仓中" not in summ  # ⚠ 不再重复列出已修正码
+
+
+class TestNonReturnMetricAndSignNormalization:
+    """占比/份额类数值不参与收益率修正；主体归属按括号与分句作用域；符号归一。
+
+    缺陷场景（实盘报告）：正文出现「持仓收益率+-9.0%」。三层原因——
+      ① 把「最大持仓 12.3%」（占比）当收益率改写；
+      ② 同句多代码时按"最近者"选主体，括号结构失效导致归属到另一个品种；
+      ③ 替换只换数字、不处理原有 `+` 号，与负值叠加成 `+-9.0%`。
+    """
+
+    @staticmethod
+    def _holdings() -> list[dict]:
+        return [
+            {"name": "永赢科技智选C", "code": "012325", "market_value": 104.55, "cost": 100.0, "profit_rate": 4.55},
+            {"name": "华宝增强债券A", "code": "240012", "market_value": 91.0, "cost": 100.0, "profit_rate": -9.0},
+            {
+                "name": "华安纳斯达克100ETF联接A",
+                "code": "040046",
+                "market_value": 230.61,
+                "cost": 100.0,
+                "profit_rate": 130.61,
+            },
+        ]
+
+    def test_proportion_value_not_corrected(self):
+        """「最大持仓12.3%」是占比（数值前文判定）→ 不参与收益率修正。"""
+        text = "超短债（012325，最大持仓12.3%，持仓收益率+4.55%）表现稳健。"
+        _issues, _checked, _passed, corrections = check_numerical_consistency(text, self._holdings())
+        assert corrections == [], f"占比数值不应被改写为收益率: {corrections}"
+
+    def test_subject_scoped_by_parenthesis(self):
+        """括号作用域：括号内的收益率归括号内的代码，不被紧随其后的另一代码抢走。"""
+        text = "超短债（012325，最大持仓12.3%，持仓收益率+45.5%），华宝增强债券A（240012）收益率为-9.0%。"
+        _issues, _checked, _passed, corrections = check_numerical_consistency(text, self._holdings())
+        assert len(corrections) == 1, f"应只修正 45.5 一处: {corrections}"
+        assert corrections[0][0] == "45.5" and corrections[0][1] == "4.5"
+        assert "012325" in corrections[0][3], f"应归属 012325: {corrections[0][3]}"
+
+    def test_subject_scoped_by_clause(self):
+        """分句作用域：数值归本分句主体，不被后一分句的代码（距离更近）抢走。"""
+        text = "华宝增强债券A（240012）收益率为 4.55%，超短债（012325）表现稳健。"
+        _issues, _checked, _passed, corrections = check_numerical_consistency(text, self._holdings())
+        assert len(corrections) == 1 and corrections[0][1] == "-9.0", f"4.55 应为 240012 的错值: {corrections}"
+
+    def test_replacement_normalizes_sign(self):
+        """替换时剥除原文 `+` 号：负值输出单一负号，不出现 `+-9.0%`。"""
+        html = "<p>持仓收益率+4.55%</p>"
+        out = apply_numerical_corrections(html, [("4.55", "-9.0", "持仓收益率+4.55%")])
+        assert out == "<p>持仓收益率-9.0%</p>"
+
+    def test_malformed_number_rejected(self):
+        """畸形数值自检：会产生连续符号时整批放弃写回（保留原文）。"""
+        html = "<p>收益率+4.55%</p>"
+        out = apply_numerical_corrections(html, [("4.55", "+-9.0", "收益率+4.55%")])
+        assert out == html, "连续符号属畸形数值，必须判失败并不写回"
+
+    def test_run_fact_check_has_no_malformed_number(self):
+        """整链路：修正后的正文不含连续符号（`[+-]{2,}`）。"""
+        holdings = self._holdings()
+        html = "<p>超短债（012325，最大持仓12.3%，持仓收益率+45.5%）表现稳健。</p>"
+        _report, corrected = run_fact_check(html, holdings)
+        assert "+-" not in corrected and "-+" not in corrected, f"出现畸形数值: {corrected}"

@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 
 import re
@@ -23,6 +24,11 @@ from src.python.llm.fact_checker._utils import (
     _extract_holding_map,
     _strip_html,
 )
+
+logger = logging.getLogger("invest")
+
+#: 畸形数值：连续符号（`+-9.0%` / `--9.0%`）。修正后出现即判定本批修正无效。
+_MALFORMED_NUMBER_RE = re.compile(r"[+-]{2,}")
 
 
 # ── 自动修正计数（跨模块累计，由报告层汇入 perf_history.counters）──
@@ -96,13 +102,29 @@ def apply_numerical_corrections(
         if sentence not in stripped:
             continue
 
-        # 在 HTML 文本中查找 wrong_val%（带可选空格）
-        # lookbehind 确保不会替换数字的一部分
-        pattern = re.compile(r"(?<!\d)" + re.escape(wrong_val) + r"\s*%")
+        # 在 HTML 文本中查找 wrong_val%（带可选前导符号与空格）
+        # lookbehind 确保不会替换数字的一部分；前导 `+`/`-` 一并吃掉——数值符号
+        # 一律以**新值自带的符号**为准，避免旧 `+` 与新 `-` 叠加成 `+-9.0%`。
+        pattern = re.compile(r"(?<![\d.])[+-]?" + re.escape(wrong_val) + r"\s*%")
+
+        def _replace(match: re.Match[str], _new: str = correct_val) -> str:
+            """新值自带符号优先；新值为正且原文显式写了 `+` 时延续原文风格。"""
+            if _new.startswith(("-", "+")):
+                return _new + "%"
+            explicit_plus = match.group(0).lstrip().startswith("+")
+            return ("+" if explicit_plus else "") + _new + "%"
+
         # count=1：check 阶段按数值全局去重，每个 wrong_val 在 corrections 中唯一，
         # 只替换判定处一次，避免误伤 HTML 中同值异义的其他出现处
         # （如"止盈约30%"与"收益率30%"并存时只修被判为错误的收益率处）。
-        result = pattern.sub(correct_val + "%", result, count=1)
+        result = pattern.sub(_replace, result, count=1)
+
+    # 畸形数值自检：修正后的正文不得出现连续符号。命中即说明符号未归一
+    # （旧值 `+4.55%` 被换成 `-9.0` → `+-9.0%`），用户视觉上会读到错误数字，
+    # 一律判本批修正失败、整批不写回（保留原文比写入畸形值安全）。
+    if _MALFORMED_NUMBER_RE.search(result) and not _MALFORMED_NUMBER_RE.search(html):
+        logger.warning("[fact-check] 自动修正会产生畸形数值（连续符号），已放弃写回：%d 处", len(corrections))
+        return html
 
     return result
 

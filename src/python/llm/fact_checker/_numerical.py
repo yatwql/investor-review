@@ -22,6 +22,7 @@ from src.python.llm.fact_checker._context import (
     _is_daily_change_context,
     _is_drawdown_context,
     _is_hypothetical_context,
+    _is_non_rate_pre_word_context,
     _is_portfolio_daily_change_context,
     _is_portfolio_level_context,
     _is_position_weight_context,
@@ -64,6 +65,7 @@ def _evaluate_percent_value(
     is_weight: bool = False,
     is_benchmark_relative: bool = False,
     is_trim_target: bool = False,
+    is_non_rate_metric: bool = False,
 ) -> tuple[str | None, tuple[str, str, str, str] | None]:
     """评估单个百分比数值。
 
@@ -89,6 +91,8 @@ def _evaluate_percent_value(
         is_weight: 是否为评分权重语境（维度权数，非收益率）。
         is_benchmark_relative: 是否为相对基准跑输/跑赢语境（指数差，非收益率）。
         is_trim_target: 是否为止盈/减仓目标比例语境（调仓目标，非收益率）。
+        is_non_rate_metric: 数值**紧邻前文**是否为占比/份额/市值/仓位类度量
+            （由 `_is_non_rate_pre_word_context` 按局部窗口判定，非整句）。
 
     Returns:
         (issue_str_or_None, correction_or_None)
@@ -99,6 +103,12 @@ def _evaluate_percent_value(
     # → 数值均非收益率，不可比较。均用近邻窗口检测（数值紧邻对应语境词），
     # 避免同句其他真实收益率被连带跳过。
     if is_change_rate or is_win_rate or is_weight or is_benchmark_relative or is_trim_target:
+        return None, None
+
+    # 数值前文是占比/份额/市值/仓位类度量 → 该数值不是收益率。
+    # 必须在收益语境判定之前：共现句（"最大持仓 12.3%，持仓收益率 +4.55%"）整句
+    # 含「收益」，整句级判定救不了，只有局部前文能区分两个数值的语义。
+    if is_non_rate_metric:
         return None, None
 
     # 单日/当日涨跌语境 → 数值为单日行情涨跌而非收益率。
@@ -351,6 +361,8 @@ def check_numerical_consistency(
                 is_weight=_is_weight_context(sentence, match.start()),
                 is_benchmark_relative=_is_benchmark_relative_context(sentence, match.start()),
                 is_trim_target=_is_trim_target_context(sentence, match.start()),
+                # 数值前文语义（占比/份额/市值/仓位）：局部窗口判定，优先于整句收益语境
+                is_non_rate_metric=_is_non_rate_pre_word_context(sentence, match.start()),
             )
             if issue is None:
                 passed += 1
