@@ -25,7 +25,7 @@ _APP_LOG_PATH = os.path.join(_LOGS_DIR, "app.log")
 _DEDUP_ANCHOR_REL = os.path.join("data", "calibration", "dedup_anchors.jsonl")
 _DEDUP_ANCHOR_PATH = os.path.join(PROJECT_ROOT, _DEDUP_ANCHOR_REL)
 _PERF_LEDGER_PATH = os.path.join(PROJECT_ROOT, "data", "state", "perf_history.jsonl")
-#: 去重锚点自动压缩阈值（与 providers/news_dedup._ANCHOR_SIZE_WARN_BYTES 同值）
+#: 去重锚点维护压缩阈值（与 providers/news_dedup._ANCHOR_SIZE_WARN_BYTES 同值）
 _ANCHOR_COMPACT_BYTES = 32 * 1024 * 1024
 #: 日志审计的采样上限（避免在超大日志上把自检拖慢）
 _LOG_SCAN_MAX_LINES = 200_000
@@ -83,7 +83,7 @@ def _check_log_volume() -> dict[str, Any]:
 
 
 def _check_dedup_anchor() -> dict[str, Any]:
-    """去重锚点文件体积（超阈值会在读侧自动压缩）。"""
+    """去重锚点文件体积（超阈值提示维护压缩；报告路径不压缩）。"""
     try:
         if not os.path.exists(_DEDUP_ANCHOR_PATH):
             return _item(GROUP_LOG_CACHE, "去重锚点", True, "未生成（尚无去重锚点，属正常）")
@@ -96,11 +96,11 @@ def _check_dedup_anchor() -> dict[str, Any]:
             GROUP_LOG_CACHE,
             "去重锚点",
             ok,
-            f"{size / 1024 / 1024:.1f} MB / {lines} 行（自动压缩阈值 {_ANCHOR_COMPACT_BYTES / 1024 / 1024:.0f} MB）{bak}",
+            f"{size / 1024 / 1024:.1f} MB / {lines} 行（维护压缩阈值 {_ANCHOR_COMPACT_BYTES / 1024 / 1024:.0f} MB）{bak}",
             hint=""
             if ok
-            else "超过阈值：下次生成时自动压缩（保留每组最新 + .bak 备份）；也可手工 "
-            "`python scripts/eval-dedup-threshold.py --compact`",
+            else "超过阈值：运行评估默认压缩（`python scripts/eval-dedup-threshold.py`），"
+            "或手工 `python scripts/eval-dedup-threshold.py --compact`",
         )
     except OSError as e:
         return _item(GROUP_LOG_CACHE, "去重锚点", False, f"读取失败：{e}", hint="检查 data/cache/ 权限")
