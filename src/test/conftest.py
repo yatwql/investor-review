@@ -301,6 +301,42 @@ def _auto_reset_last_reason():
 
 
 @pytest.fixture(autouse=True)
+def _restore_llm_pricing_state():
+    """隔离 llm.pricing 模块级状态，避免定价用例的 reload 影响后续用例。
+
+    历史缺陷：`test_llm_pricing` 用临时 llm_pricing_ref.json 调 `reload_pricing()`，
+    结束后只失效配置缓存、未恢复 `PRICING_PEAK_PERIODS`；同一 xdist worker 中后跑的
+    `test_peak_periods_defaults` 读到自定义时段（单跑绿、并行偶发红）。
+    """
+    import copy
+
+    from src.python.llm import pricing
+
+    snapshot = {
+        "merged": copy.deepcopy(pricing.PRICING_MERGED),
+        "currency": pricing.PRICING_CURRENCY,
+        "peak": list(pricing.PRICING_PEAK_PERIODS),
+        "idle": list(pricing.PRICING_IDLE_PERIODS),
+        "weekend": pricing.PRICING_WEEKEND_ALWAYS_IDLE,
+        "holiday": pricing.PRICING_HOLIDAY_ALWAYS_IDLE,
+        "timezone_name": pricing.PRICING_TIMEZONE_NAME,
+        "timezone": pricing.PRICING_TZ,
+        "loaded": pricing._PRICING_LOADED,
+    }
+    yield
+    pricing.PRICING_MERGED.clear()
+    pricing.PRICING_MERGED.update(snapshot["merged"])
+    pricing.PRICING_CURRENCY = snapshot["currency"]
+    pricing.PRICING_PEAK_PERIODS[:] = snapshot["peak"]
+    pricing.PRICING_IDLE_PERIODS[:] = snapshot["idle"]
+    pricing.PRICING_WEEKEND_ALWAYS_IDLE = snapshot["weekend"]
+    pricing.PRICING_HOLIDAY_ALWAYS_IDLE = snapshot["holiday"]
+    pricing.PRICING_TIMEZONE_NAME = snapshot["timezone_name"]
+    pricing.PRICING_TZ = snapshot["timezone"]
+    pricing._PRICING_LOADED = snapshot["loaded"]
+
+
+@pytest.fixture(autouse=True)
 def _auto_reset_market_hours_memo():
     """自动复位 market_hours 的进程内分钟级 memo 与日志去重状态。
 

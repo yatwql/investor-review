@@ -71,32 +71,60 @@ def _failure_context() -> dict | None:
     return _FAILURE
 
 
-def _summarize_failure(label: str, rc: int, out: str = "", err: str = "") -> dict:
+def _summarize_failure(
+    label: str,
+    rc: int,
+    out: str = "",
+    err: str = "",
+    root: Path | None = None,
+) -> dict:
     """把一次步骤失败压成台账可用的小快照。
 
-    报告目录与失败用例名从输出里提取（test-runner 的归档行 / pytest 短摘要），
-    台账因此自证「折在哪一步、哪些用例红、报告在哪」，不必再去
-    `test-reports/archives/` 按 mtime 反查。
+    报告目录与失败用例名从输出里提取（test-runner 的归档行 / pytest 短摘要）；
+    某些 runner 只把 FAILED 明细写进归档 debug.log、stdout 只剩摘要，故失败用例
+    为空时再读该报告目录的 `*_debug.log` 兜底。台账因此自证「折在哪一步、哪些
+    用例红、报告在哪」，不必再去 `test-reports/archives/` 按 mtime 反查。
     """
     combined = "\n".join(part for part in (out, err) if part)
     report_match = _REPORT_DIR_RE.search(combined)
-    failed_tests = list(dict.fromkeys(_FAILED_TEST_RE.findall(combined)))[:20]
-    tail_lines = [line for line in combined.splitlines() if line.strip()][-_FAILURE_TAIL_LINES:]
+    report_dir = report_match.group(1) if report_match else ""
+    extract_text = combined
+    diagnostic_tail = ""
+    if not _FAILED_TEST_RE.search(combined) and root is not None and report_dir:
+        candidates = [Path(root) / report_dir, Path(root) / "test-reports" / report_dir]
+        for candidate in candidates:
+            if not candidate.is_dir():
+                continue
+            debug_logs = sorted(candidate.glob("*_debug.log"))
+            if not debug_logs:
+                continue
+            debug_text = debug_logs[-1].read_text(encoding="utf-8", errors="replace")
+            extract_text += "\n" + debug_text
+            debug_lines = [line for line in debug_text.splitlines() if line.strip()]
+            first_failure = next(
+                (idx for idx, line in enumerate(debug_lines) if line.startswith(("FAILED ", "ERROR "))),
+                0,
+            )
+            diagnostic_tail = "\n".join(debug_lines[first_failure : first_failure + _FAILURE_TAIL_LINES])
+            break
+    failed_tests = list(dict.fromkeys(_FAILED_TEST_RE.findall(extract_text)))[:20]
+    tail_source = diagnostic_tail or combined
+    tail_lines = [line for line in tail_source.splitlines() if line.strip()][-_FAILURE_TAIL_LINES:]
     tail = "\n".join(tail_lines)[-_FAILURE_TAIL_CHARS:]
     return {
         "step": label,
         "rc": int(rc),
-        "report_dir": report_match.group(1) if report_match else "",
+        "report_dir": report_dir,
         "failed_tests": failed_tests,
         "tail": tail,
     }
 
 
-def _record_failure(label: str, rc: int, out: str = "", err: str = "") -> None:
+def _record_failure(label: str, rc: int, out: str = "", err: str = "", root: Path | None = None) -> None:
     """记录当前命令的首次失败（后续步骤的失败不覆盖第一现场）。"""
     global _FAILURE
     if _FAILURE is None:
-        _FAILURE = _summarize_failure(label, rc, out, err)
+        _FAILURE = _summarize_failure(label, rc, out, err, root=root)
 
 
 def _finish_timing(command: str, rc: int, env) -> None:
@@ -271,7 +299,7 @@ def _run_step(label: str, cmd: list[str], root: Path, runner=None) -> int:
     if rc != 0:
         if err.strip():
             print(err.rstrip())
-        _record_failure(label, rc, out, err)
+        _record_failure(label, rc, out, err, root=root)
         print(f"[ERR] {label} 退出码 {rc}（按输出处理后重跑本子命令）")
         return rc
     print(f"[OK] {label}")

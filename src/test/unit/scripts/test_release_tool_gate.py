@@ -810,6 +810,41 @@ class TestTimingTelemetry:
         assert failure["report_dir"] == "test-reports/archives/20261024/100000"
         assert set(failure["failed_tests"]) == {"src/test/x.py::test_a", "src/test/y.py::test_b"}
 
+    def test_failure_reads_debug_log_when_stdout_has_only_summary(self, rel, tmp_path, monkeypatch):
+        """test-runner 只把 FAILED 写进归档 debug.log 时，台账仍能提取用例名。"""
+        log = self._log(tmp_path, rel, monkeypatch)
+        report_dir = tmp_path / "test-reports" / "archives" / "20261024" / "100000"
+        report_dir.mkdir(parents=True)
+        (report_dir / "phase_unit_debug.log").write_text(
+            "FAILED src/test/x.py::test_a - assert 1 == 2\nE   assert 1 == 2\n",
+            encoding="utf-8",
+        )
+        rel._reset_timer()
+        runner = FakeRunner(
+            responses=[
+                (
+                    ["scripts/test-runner.py"],
+                    (
+                        1,
+                        "  [..] 历史报告已归档: test-reports/archives/20261024/100000/\n"
+                        "11446 passed, 1 failed in 40s\n",
+                        "",
+                    ),
+                )
+            ]
+        )
+        rc = rel._run_step(
+            "测试量与耗时快照回填",
+            [sys.executable, "scripts/test-runner.py", "--mode", "unit"],
+            tmp_path,
+            runner,
+        )
+        assert rc == 1
+        rel._finish_timing("refresh", rc)
+        failure = self._last_record(log)["failure"]
+        assert failure["failed_tests"] == ["src/test/x.py::test_a"]
+        assert "assert 1 == 2" in failure["tail"]
+
     def test_first_failure_wins_over_later_steps(self, rel, tmp_path, monkeypatch):
         """一个命令内多处失败时保留第一现场（后续失败不覆盖根因）。"""
         rel._reset_timer()
