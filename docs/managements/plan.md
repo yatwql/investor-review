@@ -43,7 +43,11 @@
 
 **动作**：两段数据质量文本改为**去重后按源排序、不输出次数**（语义保留「哪些源不可用」；次数由重试轮次与网络抖动决定，与本轮可得数据无关）；指纹审计基线保留在进程级（跨报告比对才有意义，报告边界只重置历史取数单轮状态）；预检结束新增一行 INFO「命中 N/M；未命中：…；重新生成跳过：…」。
 
-**验收**：`test_block_stable_when_failure_count_differs` + `TestDegradationBlockNoCrossSessionCounts`（次数变化不改变块文本）+ `TestPrecheckSummaryLog`（三类可区分）+ `test_keeps_fingerprint_audit_baseline_across_reports`；重启后同一数据连续两份报告的「指纹组件变化」行应为空（除真实行情/账本变化）。
+**验收**：`test_block_stable_when_failure_multiplicity_differs` + `TestDegradationBlockNoCrossSessionCounts`（次数变化不改变块文本）+ `TestPrecheckSummaryLog`（三类可区分）+ `test_keeps_fingerprint_audit_baseline_across_reports`；重启后同一数据连续两份报告的「指纹组件变化」行应为空（除真实行情/账本变化）。
+
+**实测**：`src/test/unit/llm/test_report_sequence_cache.py` 在同一进程内调用真实 `generate_all_llm`（LLM 全 mock、缓存目录隔离）连跑三份——第 2/3 份**预检层** 4/4 命中，第 3 份 self_review 亦命中；失败事件条数与累计次数变化不影响命中；指数变化时 `global_macro` 重算。四例均以缺陷版代码验证过可捕捉（改回旧实现即红）。
+
+**遗留（设计使然）**：`self_review` 内容寻址于其余模块产出，任一上游重算即 miss；`health_check` 在当日盈亏或数据源可用集合实际变化时重算。
 
 ### P1 — 当前待办（立即执行）
 

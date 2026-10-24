@@ -117,25 +117,31 @@ class TestDataQualityBlockCountsOnlyFailures:
         assert "连接失败: ff_sector_flow" in text
         assert "price_600900" not in text
 
-    def test_block_stable_when_failure_count_differs(self):
-        """同一源失败次数不同（重试轮次/网络抖动）→ 质量文本一致。
+    def test_block_stable_when_failure_multiplicity_differs(self):
+        """同一源失败**事件条数**与累计次数不同 → 质量文本一致。
 
-        次数与模型判断的「哪些源本次不可用」无关，却每轮都变（如 akshare 重试
-        1 次 vs 2 次）——若进文本，health_check 缓存键每份报告翻新。
+        条数由重试轮次/网络抖动决定（akshare 失败 1 次 vs 3 次），累计次数是跨
+        会话计数——两者都与模型要判断的「哪些源本次不可用」无关，却每轮都变，
+        若进文本会让 health_check 缓存键每份报告翻新。
         """
         from src.python.llm.prompts_tables import _build_data_quality_detail_block
 
-        base = self._events()
-        retried = base + [
-            {
-                "source_key": "ff_sector_flow",
-                "tier": "T4",
-                "success": False,
-                "failure_type": "unreachable",
-                "degraded": False,
-            }
-        ]
-        assert _build_data_quality_detail_block(base) == _build_data_quality_detail_block(retried)
+        one = self._events()
+        many = (
+            one
+            + [
+                {
+                    "source_key": "ff_sector_flow",
+                    "tier": "T4",
+                    "success": False,
+                    "failure_type": "unreachable",
+                    "degraded": False,
+                    "count": 9,
+                }
+            ]
+            * 3
+        )
+        assert _build_data_quality_detail_block(one) == _build_data_quality_detail_block(many)
 
     def test_block_stable_when_success_count_differs(self):
         """同一份失败集合 + 不同数量的成功取用 → 质量文本一致（缓存键不受缓存冷热影响）。"""
