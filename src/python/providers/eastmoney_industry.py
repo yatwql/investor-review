@@ -162,7 +162,7 @@ def make_push2_request(code: str, retries: int = _MAX_RETRIES) -> dict | None:
             on_retry=_on_transient_retry,
         )
     except TRANSIENT_EXCEPTIONS as e:
-        logger.warning("东方财富 push2 请求失败 [%s]: %s", code, e)
+        logger.debug("东方财富 push2 请求失败 [%s]: %s", code, e)
         reg.record_failure("eastmoney_industry", f"push2:{code}")
         return None
 

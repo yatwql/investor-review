@@ -547,6 +547,34 @@ class TestAbruptDisconnectFastFail:
         assert not _is_abrupt_disconnect(httpx.ConnectError("connection refused"))
 
     @patch("src.python.core.http_client.httpx.Client")
+    def test_disconnect_per_code_log_is_debug(self, mock_client_cls, caplog):
+        """push2 单代码断连由 registry 汇总；本模块不逐条打 WARNING。"""
+        import httpx
+
+        from src.python.providers.eastmoney_industry import make_push2_request
+
+        class Socket:
+            def __init__(self, *a, **k):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a, **k):
+                pass
+
+            def get(self, *a, **k):
+                raise httpx.RemoteProtocolError("Server disconnected without sending a response.")
+
+        mock_client_cls.side_effect = Socket
+        with caplog.at_level("DEBUG"):
+            assert make_push2_request("600900", retries=1) is None
+        per_code_warnings = [
+            r for r in caplog.records if r.levelname == "WARNING" and "push2 请求失败" in r.getMessage()
+        ]
+        assert per_code_warnings == []
+
+    @patch("src.python.core.http_client.httpx.Client")
     def test_disconnect_not_retried(self, mock_client_cls):
         """断连时 client.get 只调用一次（retries=1 也不重试），且仍回落 None。"""
         import httpx

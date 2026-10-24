@@ -227,5 +227,8 @@ def batch_fetch_industry_data(codes: list[str]) -> dict[str, dict]:
             result_map[code] = r.result
 
     dispatcher.shutdown()
+    failed = sum(1 for r in results if not r.success and not r.skipped)
+    if failed:
+        logger.warning("[industry] 行业数据批量失败 %d/%d（push2 已回落备用链路）", failed, len(a_codes))
     logger.info("批量行业数据就绪: %d/%d 个代码（含缓存命中）", len(result_map), len(a_codes))
     return result_map

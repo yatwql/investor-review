@@ -129,6 +129,9 @@ def build_event_rows(
     events: list[dict[str, Any]] = []
     degraded: list[dict[str, Any]] = []
     index = _build_keyword_index(holdings, penetrated_assets)
+    # 同一批事件反复命中同一代码/基准时只取一次；失败不缓存，保留下次重试语义。
+    bars_memo: dict[str, Any] = {}
+    index_memo: dict[str, Any] = {}
 
     for item in news_data or []:
         if len(events) >= max_rows:
@@ -155,8 +158,15 @@ def build_event_rows(
                 continue
             index_code = benchmark_code_for({"code": code})
             try:
-                asset_bars = fetch_bars(code)
-                index_bars = fetch_index(index_code) if index_code else None
+                if code not in bars_memo:
+                    bars_memo[code] = fetch_bars(code)
+                asset_bars = bars_memo[code]
+                if index_code:
+                    if index_code not in index_memo:
+                        index_memo[index_code] = fetch_index(index_code)
+                    index_bars = index_memo[index_code]
+                else:
+                    index_bars = None
                 impact = compute_event_impact(
                     event_date,
                     asset_bars,
@@ -391,8 +401,12 @@ def build_event_impact_panel(
     if benchmark_text_getter is None:
         from src.python.fetcher.fund import fetch_fund_benchmark
 
+        _benchmark_memo: dict[str, Any] = {}
+
         def benchmark_text_getter(code: str) -> Any:
-            return fetch_fund_benchmark(code)
+            if code not in _benchmark_memo:
+                _benchmark_memo[code] = fetch_fund_benchmark(code)
+            return _benchmark_memo[code]
 
     holdings_map = [
         {
