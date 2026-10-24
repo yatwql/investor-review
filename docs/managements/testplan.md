@@ -1,5 +1,5 @@
 # 投资复盘助手 — 质量控制与测试标准
-> 文档版本：0.15.0
+> 文档版本：0.15.1
 
 ---
 
@@ -631,6 +631,7 @@
 | R-CON-06 | `src/test/integration/test_error_isolation.py` | 批 6 |
 | R-CON-07 | `src/test/unit/fetcher/test_chain.py` + `src/test/scenario/resilience/test_chain_resilience.py` | 批 6 |
 | R-CON-08 | `src/test/unit/report/test_data_status.py` | 批 6 |
+| R-CON-09 | `src/test/unit/cli/test_cli_config_command.py` | 批 7 |
 | R-ADP-01 | `src/test/unit/fetcher/test_source_adapter.py` | 批 6 |
 | R-ADP-02 | `src/test/unit/fetcher/test_source_adapter.py` | 批 6 |
 | R-ADP-03 | `src/test/unit/fetcher/test_source_adapter.py` + `src/test/unit/fetcher/test_quote_adapter_parity.py` | 批 6 |
@@ -898,12 +899,12 @@ def test_get_ttl_closed(self, mock_open):
 12. **异常场景全覆盖**：§1.6 异常场景清单全部 ✅（每项异常场景均有对应自动化用例，edge/resilience 标记），不允许存在仅靠人工确认的 🔴/🟡 项
 13. **报告文件视觉结构**：Excel 和 HTML 输出无格式错乱（盈亏着色、评级色、冻结首行、中文不乱码）→ `test_excel_writer.py` / `test_summary.py` / `test_html_report_structure.py`
 14. **TUI 菜单功能**：主菜单 14 项四组（`[E]`/`[B]`/`[L]`/`[W]`/`[Q]` · `[1]`/`[2]`/`[3]`（缓存管理子菜单，内含 `3` 过期清理） · `[C]`/`[S]`/`[G]`/`[R]` · `[D]` · `[X]`），其中 `[G]` 二级为 H/F/O/L/I/A/M 七项四组、`[D]` 二级为 L/V/H/T（缺省系统自检恒上屏）、`[Q]` 报告追问受 `report_qa` 开关门控（默认关就地裁剪）响应正确、无崩溃 → `test_tui_menu.py`（键集合完整/键唯一/索引相对位/**任务分组覆盖全项一次、退出项在外**/**`/` 筛选命中与筛选内导航回绕**/**分组标题与筛选态渲染**，断言由 `MENU_ITEMS` 派生、不写死条数）+ `test_handlers_cache.py`（缓存管理子菜单动线）+ `test_switch_panel_layout.py`（`[S]` 三档响应式排版：宽/中/窄形态、40~200 列不越界、状态着色、窄屏 `k` 展开键名、操作后不整屏重绘）+ `TestMainLoopExitKeys`（`0`/`X` 双退出通道、未映射键不误退、页脚提示与折行）+ `test_tui_handlers.py` + `test_handlers_*.py`
-15. **TUI 人因门禁（击键数 + 屏幕语义）**：三条主路径动线（生成完整报告且只强刷指定模块 / 改一个功能开关并确认生效 / 按级别筛日志）断言「击键数不增」+「关键用户词必须上屏」，快照 `src/test/data/fixtures/tui_flow_contract.json`；主路径击键数快照另含 `/` 筛选动线（`tui_keystroke_baseline.json`）。**分层**：P0 `scenario_basic` 只跑生成主路径（1 条），P2 `scenario` 跑全 3 条 → `src/test/scenario/basic/test_tui_flow_semantics.py` + `src/test/unit/ui/test_keystroke_baseline.py`，共用驱动器 `src/test/_tui_flow.py`。同属人因门禁域：**三渠道用户词一致性**（端点状态经 `core.system_info.circuit_display` 唯一归一；日预算决策屏统一「用已有结果继续」）→ `src/test/integration/test_channel_vocabulary.py`（TUI/CLI/Web 同词，报告/Web 数据降级口径归 `DESIGN.md` 不在此域）
+15. **TUI 人因门禁（击键数 + 屏幕语义）**：三条主路径动线（生成完整报告且只强刷指定模块 / 改一个功能开关并确认生效 / 按级别筛日志）断言「击键数不增」+「关键用户词必须上屏」，快照 `src/test/data/fixtures/tui_flow_contract.json`；主路径击键数快照另含 `/` 筛选动线（`tui_keystroke_baseline.json`）。**分层**：P0 `scenario_basic` 跑生成主路径 + 日志筛选（2 条），P2 `scenario` 跑全 3 条 → `src/test/scenario/basic/test_tui_flow_semantics.py` + `src/test/unit/ui/test_keystroke_baseline.py`，共用驱动器 `src/test/_tui_flow.py`；驱动器在跑动线前做**打点矩阵自证**（`builtins.input` 与各消费方 `input_choice` / `get_key` 必须都指向 feeder）——处理器函数内局部导入会绕过模块属性 patch，日志动线曾因此长期静默跑空、只在 P2 暴露，自证 + P0 覆盖后同类问题在开发期即红。同属人因门禁域：**三渠道用户词一致性**（端点状态经 `core.system_info.circuit_display` 唯一归一；日预算决策屏统一「用已有结果继续」）→ `src/test/integration/test_channel_vocabulary.py`（TUI/CLI/Web 同词，报告/Web 数据降级口径归 `DESIGN.md` 不在此域）
 16. **whatif CLI**：`--candidate` 必填、`--base` 可选、缺失报参数错误、`--effective-date` 解析，生成/归档行为 → `test_cli.py::test_whatif_*` + `test_whatif_operations.py` / `test_whatif_sheet.py` / `test_whatif_html.py` / `test_whatif_writer.py`
 17. **whatif 生效日时序回测**：① 过去生效日→出「时序回测」页签/区 → `test_effective_date_merges_backtest` + `test_backtest_sheet_full` + `test_backtest_section_rendered`；② 缺省→维持现状（无回测）→ `test_no_effective_date_no_backtest_call` + `test_full_rendering_sections_without_backtest`；③ 未来/非法日期→降级占位、主报告正常 → `test_compute_backtest_days_invalid_format` / `test_compute_backtest_days_future_or_today_none` + `test_effective_date_exception_degrades` + `test_backtest_sheet_unavailable_reason_placeholder`；④ 断网/空缓存→回测不可用但报告仍生成 → `test_unavailable_returns_reason` / `test_unavailable_without_reason_falls_back` + `test_effective_date_bt_none_no_key`
 18. **编码/locale 可移植性**（CI `portability` job，阻塞；常规三道测试均跑在 UTF-8 locale 上，该类缺陷在它们上面结构性不可见；本地等价复现：`scripts/test-runner.py --mode portability`，发布期可 `release.py gate --with-portability`）：① 需求文件与 locale 无关——固定 `pip==24.3.1`（最后一版按「BOM → PEP263 cookie → locale 编码」解码）在 `LC_ALL=C` 下真实解析 `requirements.txt`，由 `test_script_encoding.py::TestRequirementsFileEncoding` 在本机同源守护（复刻旧 pip 解码次序 + 强制 cp936）；② 隐式编码严格档 —— `PYTHONWARNDEFAULTENCODING=1` 下任何未显式 `encoding=` 的文本 I/O 立即失败（`pytest.ini` 置 `error::EncodingWarning`，`openpyxl.worksheet._writer` 上游豁免就地声明），验载体为 `src/test/unit/` 全量（禁止 `open`/`Path.read_text`/`write_text`/`NamedTemporaryFile`/`subprocess.run(text=True)` 等隐式编码调用）；本地复现命令见 `developer-guide.md` → 编码/locale 自检
 19. **性能门禁**（CI `perf-gate` job，阻塞；`test-perf-report.py --gate` 主动压测——自造模拟持仓，行情/K线历史/交易日历咽喉打桩 + 传输层 socket 离线兜底与 sleep 置零，基准与网络状况/冷热缓存无关，basic 模式 ≤60s，未达标退出码 2；与运行历史查看 `perf-history.py`（样本不可控，不用于门禁）的分工见 `developer-guide.md`「定位边界（重要）」；验载体 `test_perf_report.py`（含离线化与状态隔离回归））
-20. **日志与缓存健康与卫生**：`doctor` 第八组只读体检（日志级别/DEBUG 占比/锚点体积/运行台账告警 + 事实校验修正中位，`test_doctor_health.py`）；日志默认 `INFO`、预期缺失 `INFO` 与传输级故障 `WARNING` 分离（`test_logger.py` / `test_chain_fallback.py`）；锚点超 32MB 自动压缩（每 key 最新 + 保留期，`.bak` 校验后清理，`test_news_dedup_compact.py`）；清理器只按 `_ts` 判龄、无 `_ts` 文件跳过不删（`test_cache_cleanup.py`）；K 线风控页按源失败记账（`test_tencent_edge.py`）；陈旧字节码清理（`test_release_hygiene.py`）
+20. **日志与缓存健康与卫生**：`doctor` 第八组只读体检（日志级别/DEBUG 占比/锚点体积/运行台账告警 + 事实校验修正中位，`test_doctor_health.py`）；日志默认 `INFO`、预期缺失 `INFO` 与传输级故障 `WARNING` 分离（`test_logger.py` / `test_chain_fallback.py`）；锚点超 32MB 记录维护提示、评估后默认压缩（每 key 最新 + 保留期，`.bak` 校验后清理，`test_news_dedup_compact.py` / `test_eval_dedup_threshold.py`）；清理器只按 `_ts` 判龄、无 `_ts` 文件跳过不删（`test_cache_cleanup.py`）；K 线风控页按源失败记账（`test_tencent_edge.py`）；陈旧字节码清理（`test_release_hygiene.py`）
 
 ---
 

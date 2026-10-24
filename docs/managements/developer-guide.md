@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.15.0
+> 文档版本：0.15.1
 
 ## 概述
 
@@ -446,7 +446,7 @@ P0 问题必须在 commit 前解决，否则代码不应进入版本控制。P1 
   - **`scenario_llm` — LLM 场景组合**：验证 LLM 模块在各种状态下的行为，包括缓存/成功/失败混合状态的颜色渲染、五种失败原因独立映射、Extended Thinking 标记、禁用优先原则、断网降级、全缓存无调用、三种输出格式（Excel/HTML/Summary）一致性。
   - **`scenario_datetime` — 日期/时间场景**：验证系统在不同市场时段（盘中/盘前/午休/盘后/非交易日/长假）、产品类型（场外基金/QDII/ETF/股票/混合）、边界条件（时段切换/缝隙/首次启动/断网）以及特殊日历（跨年/季末/汇率故障/调休/港股通假期）下的数据获取正确性和降级表现。
   - **`scenario_perf` — 性能基准场景**：以 mock 持仓与 mock API 跑 20 品种全量报告生成管线，记录各阶段耗时分布建立性能基线（basic 模式目标 <60s，>120s 判失败）。
-  - **`scenario_security` — 安全基线场景**：5 项安全基线自动化验证——密钥文件权限不可公开读取、缓存文件不含明文密钥、匿名化模式报告不含真实名称/代码、LLM API 日志不记录完整密钥、HTML 报告不泄露文件系统路径。
+  - **`scenario_security` — 安全基线场景**：5 项安全基线自动化验证——密钥文件权限不可公开读取、缓存写入器产出的条目不含明文密钥、匿名化模式报告不含真实名称/代码、LLM 调用层源码不把 `api_key` 写进日志语句（静态守卫）、HTML 模板不含绝对文件系统路径（产物扫描）。
 
 - **`--mode regression`** 与 `--mode scenario` 完全相同，但语义定位为"提交前回归验证"。建议在 git hook 或 CI 前置检查中使用此名称，使流水线意图更加清晰。
 - **`--mode integration`** 覆盖场景测试 + 集成测试（`scenario or integration`）。在全部业务场景基础上，增加模块间验证：接口契约、错误隔离、新闻流水线、缓存一致性、TUI 路由。用于修改了跨模块调用关系后的定向回归。CI test job 以 `pytest -m integration` 恒跑纯集成契约档（42 例 / 5.5s，不依赖分支条件），本地改跨模块时仍建议先行 `--mode integration`。
@@ -952,7 +952,7 @@ INVEST_LOG_CONSOLE_LEVEL=DEBUG ...                                              
 
 **LLM 总时间预算**：`llm_settings.json → llm_total_time_budget_sec`（秒，`0`=不启用）。超预算后**不再启动新模块**（已在跑的模块不打断），日志回显已用时与预算值，报告按已生成内容呈现。用于兜住「单模块卡住 + 重试叠加」把一次 full 拖成小时级（审计实测曾出现 6,623s 的 LLM+新闻阶段）。
 
-**去重锚点自动压缩**：`data/calibration/dedup_anchors.jsonl` 超过 32MB 时在读侧自动压缩——**每 key 最新一条 + 仅保留近 120 天**（`INVEST_DEDUP_ANCHOR_RETENTION_DAYS` 可覆盖，0 = 只按键去重）；写侧为追加（成本与体积无关），压缩后 `.bak` 默认在校验 + 原子替换后清理（`INVEST_DEDUP_KEEP_BACKUP=1` 可保留）；`INVEST_DEDUP_AUTO_COMPACT=0` 可关闭。手工口径用 `scripts/eval-dedup-threshold.py --compact`（同双条件，`--retention-days 0` 只按键去重）。压缩已执行仍超线记 INFO，压缩被禁用/失败才 WARNING。
+**去重锚点默认采集、写侧零读取**：`data/calibration/dedup_anchors.jsonl` 每次报告只追加边界案例（单次 `write`+`fsync`，不解析旧文件）；跨轮重复由 `eval-dedup-threshold.py::load_anchors` 按键去重（保留最早一条），诊断结论不受重复行影响。`INVEST_DEDUP_COLLECT_ANCHORS=0` 可关闭采集。文件超过 32MB 时只记提示，不自动压缩——压缩由 `scripts/eval-dedup-threshold.py` 评估后**默认顺带执行**（分析用完整样本，随后每 key 最新 + 近 120 天，`--no-compact` 关闭、`--retention-days 0` 只按键去重）或 `INVEST_DEDUP_MAINTENANCE=1` 显式触发；压缩前 `.bak` 与主文件等大，默认校验后清理（`INVEST_DEDUP_KEEP_BACKUP=1` 保留）。
 
 ### 日志：先看日志再看代码
 
@@ -1401,7 +1401,7 @@ registry 的测试在 `src/test/unit/core/test_registry.py`，验证 TTL 默认�
 
 发布版本时，按以下六步顺序执行：
 
-> 可用 `scripts/release.py` 分步编排（发布流程的可执行封装，每步独立可审阅、失败即停）：`check`（预检）→ `archive-init`（**仅新小版本首发需要**：三份归档 + 目录树块 + 三处索引行一次建齐，幂等）→ `prepare`（版本全链、changelog 发布段归档**并自动重写归档头部「涵盖版本 / 归档时间」（区间与并入记录由归档内各发布段标题派生，无需人工维护）与主文件指针的版本号/日期/归档文件名**、一致性 `--fix`，收尾自动 `doc-drift --sync`）→ `refresh` + `evolution --release`（数据刷新——纯文档变更〔仅 `.md`/图片〕自动跳过 bench+collect，`--force-refresh` 强制；演进快照，evolution 收尾同样自动 sync）→ `gate`（P2 门禁：verify 与 regression 并行；若 `refresh` 的 bench **实跑过 `unit`** 且代码指纹未变，则复用该次结果替代 verify（`unit` 是 verify 的严格超集，由标记不变量保证），否则实跑；十守护并行且并发度随核数收敛 ≤4 路；`--with-portability` 加跑 portability 探针；全绿后写「版本+代码指纹」通过戳——**指纹 = `CODE_PATHS` 下文件内容的 sha256（与是否已提交无关）**：gate 打戳时 prepare 的改动尚未提交、publish 提交后再算，两者仍相等）→ `publish --title`（**代码指纹与 gate 戳一致时复用 P1 verify**；提交前按钩子同源参数 `--sync --ci --with-test-count` 同步统计快照——只跑 `--sync` 时 `test-coverage.md` 收集计数不被校验，会「本地通过、钩子仍红」白跑一轮；同步失败即中止 + release 提交 + P1 verify + `--no-ff` 合并 + tag）→ `devbump`（切开发版 + 默认 `git push origin dev`（`--no-push` 跳过），并清空上一版迁档占位节）；bench 默认只测发布子集四档（`--full-bench` 全量；`--bench-jobs N` 调整采集并行度，改变并行度会改变耗时口径，环境表需同并行度可比）、每命令耗时、执行环境（provider/model/thinking）与 agent 会话 token 累计入 `logs/release.jsonl` 台账（发布墙钟、token 成本与执行模型均可跳版本对拍）；rf/plan/docs-plan 归档迁移的**机械部分已由 `prepare` 自动完成**（含 plan.md「当前迭代」概述行按剩余任务重算在办项数与 P1~P4 分档编号；人工只复核条目归属与设计文件判定，见下方步骤③），`gate` 会断言该版本台账已迁完、changelog 归档段非空，未迁/为空则前置中止；`prepare` 不跨版本发布（`--version` 与开发链推导值不一致时立即中止并给四步指引）；**分层纪律**：归档迁移或任何涉及管理文档/代码注释的改动完成后，进 `gate` 前先跑秒级便宜守护（至少 `check-doc-traces --ci` + `check-doc-links --ci`，改动面大时十守护全跑）——守护发现前置，避免 P2 门禁的全量 regression 因文档级 finding 白跑第二轮。下列手动命令为底层口径，脚本失败时按手动步骤排查。**publish 的 release 提交仍走 pre-commit 钩子全量守护**（不跳过）：与 gate 重复约 2~6s，换取「自动化提交也不旁路守护」的兜底——实测收益小于风险，故不做跳过。
+> 可用 `scripts/release.py` 分步编排（发布流程的可执行封装，每步独立可审阅、失败即停）：`check`（预检）→ `archive-init`（**仅新小版本首发需要**：三份归档 + 目录树块 + 三处索引行一次建齐，幂等）→ `prepare`（版本全链、changelog 发布段归档**并自动重写归档头部「涵盖版本 / 归档时间」（区间与并入记录由归档内各发布段标题派生，无需人工维护）与主文件指针的版本号/日期/归档文件名**、一致性 `--fix`，收尾自动 `doc-drift --sync`）→ `refresh` + `evolution --release`（数据刷新——纯文档变更〔仅 `.md`/图片〕自动跳过 bench+collect，`--force-refresh` 强制；演进快照，evolution 收尾同样自动 sync）→ `gate`（P2 门禁：verify 与 regression 并行；若 `refresh` 的 bench **实跑过 `unit`** 且代码指纹未变，则复用该次结果替代 verify（`unit` 是 verify 的严格超集，由标记不变量保证），否则实跑；十守护并行且并发度随核数收敛 ≤4 路；`--with-portability` 加跑 portability 探针；全绿后写「版本+代码指纹」通过戳——**指纹 = `CODE_PATHS` 下文件内容的 sha256（与是否已提交无关）**：gate 打戳时 prepare 的改动尚未提交、publish 提交后再算，两者仍相等）→ `publish --title`（**代码指纹与 gate 戳一致时复用 P1 verify**；提交前按钩子同源参数 `--sync --ci --with-test-count` 同步统计快照——只跑 `--sync` 时 `test-coverage.md` 收集计数不被校验，会「本地通过、钩子仍红」白跑一轮；同步失败即中止 + release 提交 + P1 verify + `--no-ff` 合并 + tag）→ `devbump`（切开发版 + 默认 `git push origin dev`（`--no-push` 跳过），并清空上一版迁档占位节）；bench 默认只测发布子集四档（`--full-bench` 全量；`--bench-jobs N` 调整采集并行度，改变并行度会改变耗时口径，环境表需同并行度可比），采集顺序为「场景档先、长尾档后」（`regression → integration → unit → dev-verify`）——`--fail-fast` 只取消尚未启动的档，长尾档压后才能让场景失败立刻中止；每命令耗时、执行环境（provider/model/thinking）与 agent 会话 token 累计入 `logs/release.jsonl` 台账，失败命令另写 `failure`（失败步 / 退出码 / 报告目录 / 失败用例名 / 输出尾部）；`check` 会预演 changelog 派生（只算不写），publish 在 gate 戳指纹不一致时点名 gate 后改动的代码文件并说明将实跑 P1 verify，提交/合并/tag/推送分段计时入账（发布墙钟、token 成本与执行模型均可跳版本对拍）；rf/plan/docs-plan 归档迁移的**机械部分已由 `prepare` 自动完成**（含 plan.md「当前迭代」概述行按剩余任务重算在办项数与 P1~P4 分档编号；人工只复核条目归属与设计文件判定，见下方步骤③），`gate` 会断言该版本台账已迁完、changelog 归档段非空，未迁/为空则前置中止；`prepare` 不跨版本发布（`--version` 与开发链推导值不一致时立即中止并给四步指引）；**分层纪律**：归档迁移或任何涉及管理文档/代码注释的改动完成后，进 `gate` 前先跑秒级便宜守护（至少 `check-doc-traces --ci` + `check-doc-links --ci`，改动面大时十守护全跑）——守护发现前置，避免 P2 门禁的全量 regression 因文档级 finding 白跑第二轮。下列手动命令为底层口径，脚本失败时按手动步骤排查。**publish 的 release 提交仍走 pre-commit 钩子全量守护**（不跳过）：与 gate 重复约 2~6s，换取「自动化提交也不旁路守护」的兜底——实测收益小于风险，故不做跳过。
 
 **① 版本号一致**
 
@@ -1533,13 +1533,13 @@ CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` /
 | 域 | 代表脚本 | 什么时候用 |
 |:---|:---------|:-----------|
 | 测试 | `test-runner.py` / `test-collect-coverage.py` / `test-extract-failures.py` / `test-find-order-dependent.py` / `test-smoke-web.py` / `check-test-redundancy.py` / `check-test-markers.py` | 跑测试、统计覆盖、定位失败、用例质量机检 |
-| 文档 | `check-doc-traces.py` / `check-doc-links.py` / `check-doc-drift.py` / `check-semantic-index.py` / `make-assets.py` | 文档漂移、死链、语义命名、视觉资产（预览图生成 / 架构图渲染体检） |
+| 文档 | `check-doc-traces.py` / `check-doc-links.py` / `check-doc-drift.py` / `check-semantic-index.py` / `make-assets.py` / `make-screenshots.py` | 文档漂移、死链、语义命名、视觉资产（预览图生成 / 架构图渲染体检 / README 与手册演示截图） |
 | 代码与文件质量 | `check-code-traces.py` / `check-requirement-trace.py` / `check-task-numbering.py` / `check-file-length.py` / `check-version-consistency.py` / `check-style-guardrails.py` / `check-script-contract.py` | 痕迹、需求追溯、编号、行数红线、版本、样式护栏 |
 | 发布 | `release.py`（分步编排）/ `test-collect-coverage.py` | 发版全流程 |
 | 运维观测 | `perf-history.py` / `probe.py` / `check-sources`（CLI 子命令）/ `doctor`（CLI 子命令）/ `view-logs`（CLI 子命令） / `cassettes`（CLI 子命令） | 性能历史查看、数据源链路探测、日志与系统自检 |
 | 评测与基准 | `test-perf-report.py` / `eval-llm-hallucination.py` / `eval-factor-zoo.py` / `eval-dedup-threshold.py` | 性能门禁压测、LLM 幻觉率采样、能力评测与阈值校准（不参与提交门禁） |
 | 启动 | `launch.sh` / `launch.ps1`（TUI 与 `web` 子命令）/ `cli.sh` / `llm.sh` 及其 `.ps1` 版 | 免解释器前缀的常用入口 |
-| CLI 子命令 | `report` / `cache` / `whatif` / `check-sources` / `health-history` / `view-logs` / `doctor` / `cassettes` | 用户侧命令行入口（详见 [CLI 手册](../manuals/how-to-use-cli-mode.md)） |
+| CLI 子命令 | `report` / `cache` / `whatif` / `config` / `check-sources` / `health-history` / `view-logs` / `doctor` / `cassettes` | 用户侧命令行入口（详见 [CLI 手册](../manuals/how-to-use-cli-mode.md)；`config` 为持久化配置编辑） |
 
 > 改名/合并脚本时按**五处同步**自查（本次改名的长尾教训）：① 同名测试文件；② `scripts-reference` 一览与详情小节；③ `folders.md` 目录树；④ CI/钩子/`release.py`/`test-runner` 等调用点；⑤ 文档与代码注释里的命令示例。机检覆盖 ②③④（一览覆盖、目录树双向、脚本存在性），①⑤ 靠本清单。
 >

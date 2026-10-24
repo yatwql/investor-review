@@ -19,6 +19,29 @@ import pytest
 pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
 
 
+class TestInvalidNumberHint:
+    """无效编号提示的范围必须从注册表派生（章节增删后不得把用户引到旧编号）。"""
+
+    def test_hint_spans_registry_extremes(self):
+        from src.python.config.chapter_registry import chapter_numbers, sub_item_numbers
+        from src.python.tui.handlers_report_chapters import invalid_number_hint
+
+        numbers = [str(number) for number, _entry in chapter_numbers()]
+        hint = invalid_number_hint()
+        assert f"{numbers[0]}-{numbers[-1]}" in hint
+        subs = sorted(sub_item_numbers())
+        assert subs, "注册表应至少有一个生成子项（提示需列出子项编号）"
+        assert all(sub in hint for sub in subs)
+
+    def test_hint_does_not_hardcode_replaced_range(self, monkeypatch):
+        """章节注册表缩短时提示跟着缩短（写死 1-16 的实现会立刻失配）。"""
+        from src.python.config import chapter_registry as registry
+        from src.python.tui.handlers_report_chapters import invalid_number_hint
+
+        monkeypatch.setattr(registry, "chapter_numbers", lambda: [(1, registry.chapter_registry[0])])
+        assert "可输入 1-1" in invalid_number_hint()
+
+
 def _chapter_number(key: str) -> int:
     from src.python.config.chapter_registry import chapter_number
 

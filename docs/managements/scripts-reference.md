@@ -27,6 +27,7 @@
 | `test-extract-failures.py` | 测试 | 从 pytest-html 报告提取失败用例详情 |
 | `test-find-order-dependent.py` | 测试 | 单跑绿合跑红的顺序依赖污染源二分定位 |
 | `make-assets.py` | 文档 | 仓库视觉资产维护：社交预览图生成 + README 架构图渲染体检（几何/像素/文字越界；需 cairosvg / Pillow） |
+| `make-screenshots.py` | 文档 | README/手册演示截图生成：隔离演示工作区（自造持仓 + 占位凭据）/ 演示报告 / TUI 帧渲染 / Web CDP 截图（需 Pillow + 等宽 CJK 字体；Web 档需 Node ≥22 + Chromium） |
 | `check-code-traces.py` | 质量 | 代码注释/文档字符串中历史变更痕迹检查 |
 | `check-doc-traces.py` | 文档 | 面向读者文档（.md）历史变更痕迹 + 结构性冗余（DUPLICATE）检查 |
 | `check-test-markers.py` | 测试 | AST 静态扫描验证测试标记合规性 |
@@ -46,12 +47,13 @@
 | `check-version-consistency.py` | 发布 | 版本号全局一致性检查（P0/P2 守护脚本 + 发布流程必跑） |
 | `check-style-guardrails.py` | 质量 | 设计护栏机检（DESIGN.md 护栏样式面；E 级：强调色越权/明暗同步/双面 token 对表判 finding，W 级：裸色值/圆角档位观察统计——未入 pre-commit 钩子与 CI guards；**发布门禁**（release.py gate）已纳入，开发期快反馈由 unit 测试承担） |
 | `check-script-contract.py` | 质量 | scripts 顶层脚本契约机检（退出码声明 ⊆ {0,2} 白名单、check-* 统一 `add_common_args` CLI 面、文本 I/O 显式 encoding、脚本↔测试覆盖映射，四条规则——**观察期**未入钩子与 CI） |
-| `release.py` | 发布 | 发布流程分步编排（check / archive-init〔新小版本归档骨架：三份归档 + 目录树块 + 三处索引行，幂等〕/ prepare〔含台账与设计文件归档迁移；不跨版本发布，`--version` 与推导值不一致即中止并给指引〕/ refresh / evolution / gate / publish〔提交前按 pre-commit 钩子同源参数 `--sync --ci --with-test-count` 同步统计快照，失败即中止〕/ devbump，每步独立可审阅、失败即停；refresh 纯文档变更跳过 bench+collect（`--force-refresh` 强制）、bench 默认只测发布子集四档（`--full-bench` 全量、`--bench-jobs N` 调并行度）、gate 十守护并行且随核数收敛 ≤4 路并断言归档已迁完；devbump 切版后清空上一版迁档占位节；每命令耗时入 `logs/release.jsonl` 台账） |
+| `release.py` | 发布 | 发布流程分步编排（check / archive-init〔新小版本归档骨架：三份归档 + 目录树块 + 三处索引行，幂等〕/ prepare〔含台账与设计文件归档迁移；不跨版本发布，`--version` 与推导值不一致即中止并给指引〕/ refresh / evolution / gate / publish〔提交前按 pre-commit 钩子同源参数 `--sync --ci --with-test-count` 同步统计快照，失败即中止〕/ devbump，每步独立可审阅、失败即停；refresh 纯文档变更跳过 bench+collect（`--force-refresh` 强制）、bench 默认只测发布子集四档且按「场景档先、长尾档后」排序（`--full-bench` 全量、`--bench-jobs N` 调并行度）、gate 十守护并行且随核数收敛 ≤4 路并断言归档已迁完、gate 戳存逐文件代码哈希（publish 点名 gate 后改动并说明重跑 verify）；check 预演 changelog 派生（只算不写）；publish 提交/合并/tag/推送分段计时；每命令耗时与失败原因（`failure`：失败步/报告目录/失败用例名）入 `logs/release.jsonl`；devbump 切版后清空上一版迁档占位节） |
 | `test-perf-report.py` | 评测 | 端到端报告生成管线性能基准（独立脚本，mock 外部数据源） |
 | `perf-history.py` | 运维 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 时段聚合（耗时与费用合计/环比）/机读输出（llm_cost、by_period 费用字段）；实现拆在 `_perf_history/`——`stats.py` 统计原语 / `data.py` 派生 / `report.py` 渲染 / `cli.py` 入口，主入口只留 docstring 与 re-export） |
 | `probe.py` | 运维 | 探测统一入口（按 target 分发到 `_probes/` 子模块；新探针实现契约面登记即用） |
 | `eval-factor-zoo.py` | 评测 | 因子动物园目录评测（非生产代码；五个来源族各抽 5 个因子，评测 A 字段可得率 / B 与既有信号族增量 / C 全量计算耗时占比三项指标，A/B/C 全过才转正立项；子命令 catalog / fields / signals / timing / verdict / all，产物只落 `docs/tmp/factor-zoo/`；实现拆在 `_eval_factor_zoo/`） |
 | `_assets/` | 内部 | 视觉资产实现包（`social_preview.py` 预览图绘制与栅格化 / `svg_check.py` 架构图渲染体检） |
+| `_screenshots/` | 内部 | 演示截图实现包（`demo_workspace.py` 隔离工作区与报告 / `tui_frame.py` 帧文本折行保色与渲染 / `web_shot.py` CDP 封装 + `cdp_shot.mjs`） |
 | `_shared/` | 内部 | 跨脚本共享设施包（`checklib.py` CLI 契约与输出/路径/区间解析；`traces_common.py` 两域共用痕迹词表） |
 | `_test_runner/` | 内部 | 测试驱动内部实现包（paths / modes / pytest_env / machine_info / doc_writer / report_html / runner） |
 | `launch.sh` / `launch.ps1` | 启动 | Linux/macOS / Windows 一键启动脚本（无参数启动 TUI；`web` 子命令启动 Web 浏览器模式） |
@@ -61,6 +63,7 @@
 | `doctor` | 运维 | cli.py 子命令：系统自检（环境/配置/目录/日志与缓存/开关/适配/凭据/数据源八组，`--offline`/`--timeout`，不受实验开关约束） |
 | `view-logs` | 运维 | cli.py 子命令：查看结构化运行日志（`--level`/`--lines`/`--since`/`--until`，与 TUI `[V]` 同实现） |
 | `whatif` | CLI | cli.py 子命令：调仓 What-if 模拟（对比两份持仓生成独立 diff 报告，见 [快速开始](../manuals/how-to-start.md)） |
+| `config` | CLI | cli.py 子命令：查看/持久化修改共享配置（`list`/`get`/`set`，白名单 + 校验 + `.bak`，与 TUI/Web 同编辑层；动作型键与密钥不在此入口） |
 | `cassettes` | 运维 | cli.py 子命令：数据源记录-回放维护（列表 / `--verify` 离线回放校验，见下文「CLI 子命令」） |
 
 ## 命名约定
@@ -70,7 +73,7 @@
 
 **结构约定（顶层 vs 子目录）**：`scripts/` 顶层只放**可直接运行的入口**（`python scripts/x.py …`）；
 共享库与实现细节一律放内部包——跨脚本共用进 `_shared/`（`checklib.py` / `traces_common.py`），
-单入口实现包用 `_<语义名>/`（`_probes/` / `_assets/` / `_release/` / `_test_runner/` / `_doc_drift/` /
+单入口实现包用 `_<语义名>/`（`_probes/` / `_assets/` / `_screenshots/` / `_release/` / `_test_runner/` / `_doc_drift/` /
 `_traces_code/` / `_traces_doc/` / `_test_redundancy/` / `_guardrails/` / `_perf_report/`），评测实现包用 `_eval_<x>/` 与入口
 `eval-<x>.py` 同名对应。新增共享代码**不得**再放顶层文件。
 
@@ -295,7 +298,7 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
 
 ## 文档类
 
-面向读者文档的痕迹、链接、与实现的一致性，语义命名索引的正反向校验，README 架构图渲染检查，以及仓库展示资产（品牌社交预览图）的生成。
+面向读者文档的痕迹、链接、与实现的一致性，语义命名索引的正反向校验，README 架构图渲染检查，以及仓库展示资产（品牌社交预览图）与 README/手册演示截图的生成。
 
 **`check-doc-traces.py` — 文档历史痕迹 + 结构性冗余检查**
 
@@ -513,6 +516,49 @@ sym |= set(re.findall(r'^\s{0,8}["\']([a-z][a-z0-9_]{2,})["\']\s*:', src, re.M))
 ```
 
 > **何时跑**：`git commit` 时由 pre-commit 钩子按暂存域自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` job 恒跑全量兜底。
+
+**`make-screenshots.py` — 演示截图生成（隔离演示工作区 + TUI 帧渲染 + Web CDP 截图）**
+
+README / 手册配图的可复现来源。四个子命令串成一条流水线，产物全部落 `docs/tmp/screenshots/`
+（git 忽略域），真实 `data/`（持仓 / 配置 / 密钥）零接触：
+
+```bash
+# ① 建演示工作区：两账户 6 只公开品种 + 明显占位凭据 + 相对路径上屏配置
+.venv/bin/python scripts/make-screenshots.py demo
+
+# ② 在演示工作区生成 Excel + HTML 报告（cwd=demo，上屏读作 data/holdings / reports）
+.venv/bin/python scripts/make-screenshots.py report
+
+# ③ TUI 首页一帧 → PNG（取帧走生产渲染函数；--text 可改用已有帧文本）
+.venv/bin/python scripts/make-screenshots.py tui docs/tmp/screenshots/demo/tui-menu.png
+.venv/bin/python scripts/make-screenshots.py tui /tmp/frame.png --config /tmp/demo/config.json --text /tmp/frame.txt
+
+# ④ Web 页面截图（导航 → 可选文本替换 → 滚动 → 截视口；固定侧栏不丢）
+.venv/bin/python scripts/make-screenshots.py web http://127.0.0.1:8000/workbench \
+    docs/tmp/screenshots/demo/web-workbench.png --scroll-y 0 --width 1440 --height 940 \
+    --replace '临时文本=>演示文本'
+```
+
+**演示工作区**（`demo_workspace.py`）：截图要展示 `data/holdings`、`reports` 这类相对路径，
+直接引用真实配置会把本机绝对路径印上屏。工作区的 `data/config/config.json` 用绝对路径（相对路径会被解析到项目根），上屏的相对路径
+由 TUI 渲染端抹掉演示目录前缀得到；持仓是公开品种 + 自造
+整数份额成本，凭据 `sk-demo-not-a-real-key` 让首页状态行显示「LLM 已配置」而非首次使用告警。
+
+**TUI 帧**（`tui_frame.py`）：取帧直接调用生产渲染函数（`print_header` + `show_config` +
+`render_menu`），不经过真实 TTY——文本与配色和终端同源，且不含光标控制序列；渲染端解析生产
+代码用到的 SGR 子集（30-37 / 90-97 / 1 / 2 / 0）。超宽行按终端语义折成多行，**续行重新打开
+配色**（否则第二行掉回默认前景色）；演示目录与仓库根的绝对路径前缀整体抹掉。宽字符按终端
+显示列计（`text_layout.display_width`，与生产同源）。
+
+**Web 截图**（`web_shot.py` + `cdp_shot.mjs`）：按「导航 → 可选文本替换 → 滚动到目标位置 →
+截视口」取图；滚动后再截而非整页截图，固定侧栏才会停在视口里。浏览器按「`--chrome` →
+`CHROME_BIN` → Playwright 下载的 Chromium → 常见系统路径」解析，`node` 用系统 PATH（需 ≥22，
+内置 WebSocket，无需 playwright）。
+
+> **何时跑**：README/手册配图需要刷新时（如界面改版）。不进提交与发布门禁，只在本机手工运行。
+
+**退出码**：`0` 成功；`1` 环境缺失（TUI 需 Pillow + 等宽 CJK 字体；Web 需 Node ≥22 与本机
+Chromium）或运行失败；`2` 参数或子命令错误。
 
 **`make-assets.py` — 仓库视觉资产维护（社交预览图 + 架构图渲染体检）**
 
@@ -793,7 +839,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 三层之外，**人工只复核语义**：迁入条目是否确属本版、`docs/plan` 候选是否真完成、要不要另写摘要。
 
 **④ 流程把控（三个时点各有一道闸）**：
-- **入口（`check`）**：除分支/工作树/版本形态/tag 外，提前校验「该发布版的归档前置」——三份归档文件与 folders.md 的 `vX.Y.x/` 归档子树块；新小版本首份归档缺件在此报出（另可直接跑 `archive-init` 一次补齐），而不是等 `prepare` 改完版本全链后中途撞上（那时需回滚）。
+- **入口（`check`）**：除分支/工作树/版本形态/tag 外，提前校验「该发布版的归档前置」——三份归档文件与 folders.md 的 `vX.Y.x/` 归档子树块；新小版本首份归档缺件在此报出（另可直接跑 `archive-init` 一次补齐），而不是等 `prepare` 改完版本全链后中途撞上（那时需回滚）。另做 **changelog 派生预演**（`apply_changelog_release` 只算不写）：发布段/归档段/指针行的格式派生失败在此中止，不先动归档骨架与台账。
 - **中途（`prepare` 内置 archive）**：**先算后写 + 整体回滚**——纯函数先在内存算出全部结果；设计文件迁档三连为「**引用改写 → 目录树 → `git mv`**」，三处落盘前对全部目标文件（changelog / plan / rf / folders / CLAUDE.md / README / 同级设计文档）拍文本快照，任一步失败即**整体回滚**，不会留下「引用已改指新路径、文件却没搬」或「树已改、文件没动」的错位状态；台账最后落盘，此时仍原样。收尾自动 `doc-drift --sync` + `check-doc-traces --ci` + `check-doc-links --ci`，把文档面 finding 留在本地。
 - **历史归档不改写（快照原则）**：`docs/archive/**` 内的旧路径引用**不随迁档改写**——那是历史记录，改写即篡改当时事实。脚本改为在 `archive` 输出里列 `[!] 历史归档仍按快照保留旧路径引用，涉及：…`，由人判断是否处理（通常不需要）。
 - **出口（`gate`）**：断言该版本 rf 已解决表已搬空 + 归档存在对应批次节，不满足即在 regression 前中止（省掉一次 20s 白跑，也不靠人记）。
@@ -801,7 +847,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 **使用逻辑**（分步命令 / 自动人工边界 / 格式契约 / 何时跑）
 
 ```bash
-.venv/bin/python scripts/release.py check     # 预检：分支/工作树/版本形态/tag/版本一致性 + 归档前置
+.venv/bin/python scripts/release.py check     # 预检：分支/工作树/版本形态/tag/版本一致性 + 归档前置 + changelog 派生预演（只算不写）
 .venv/bin/python scripts/release.py archive-init  # 新小版本首发：三份归档 + folders 目录树块 + 三处索引行一次建齐（幂等，--dry 只报告）
 .venv/bin/python scripts/release.py prepare   # 版本全链 + changelog 发布段归档 + 一致性 --fix + 台账/设计文件归档迁移 + 收尾 doc-drift --sync
 .venv/bin/python scripts/release.py archive   # 单独重跑归档迁移（--dry-run 只报告、--skip-design-docs 只做台账）；prepare 已内置，通常无需单独执行
@@ -814,7 +860,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 `publish` 默认不推送（只打印推送命令），`--push` 才执行；`devbump` **默认推送 `origin dev`**（发布闭环收尾即同步远端），需要本地先复核时用 `--no-push`。
 
-**`publish` 提交前先同步统计快照**：`git add/commit` 之前自动跑 `check-doc-drift.py --sync --ci --with-test-count`（与 pre-commit 钩子对含 `src/test` 变更的提交**同源参数**）。只跑 `--sync` 时 `test-coverage.md` 的收集派生计数不被校验，会出现「本地通过、钩子里仍红」——`publish` 白跑一轮（实测曾连败两次）。同步失败即中止，不提交、不合并、不打 tag。
+**`publish` 提交前先同步统计快照**：`git add/commit` 之前自动跑 `check-doc-drift.py --sync --ci --with-test-count`（与 pre-commit 钩子对含 `src/test` 变更的提交**同源参数**）。只跑 `--sync` 时 `test-coverage.md` 的收集派生计数不被校验，会出现「本地通过、钩子里仍红」——`publish` 白跑一轮（实测曾连败两次）。同步失败即中止，不提交、不合并、不打 tag。**gate 戳指纹不一致时**（gate 之后又改了代码/测试/脚本）会点名改动的代码文件并说明「gate 结论只对当时代码树有效 → 实跑 P1 verify」，避免被当成白跑。
 
 **`prepare` 不跨版本发布**：发布版恒等于开发链推导值（`X.Y.Z-dev` → `X.Y.Z`）。带 `--version` 且与推导值不一致时**立即中止（exit 2）**并打印四步指引（改 `APP_VERSION` → `check-version-consistency --fix` → 同步 changelog 开发段头与 rf 台账节头 → 提交后重跑），不再「按推导执行」跑到中途才报错。
 
@@ -841,9 +887,9 @@ sh .githooks/install-hooks.sh --off   # 停用
 | 归档步失败 | `[ERR]` 已给出具体原因与「台账未改写」状态：补好前置（目录树块/归档文件/头部行）后**重跑同一条命令**即可（变换幂等，重复执行不会二次搬运） |
 | 首次实战 / 大改后复验 | 在 `git clone --no-hardlinks` 的副本里跑 `prepare --date <日>` 全链演练（副本自带 `.venv` 或复用主仓解释器），按上表逐项核对产出后再在真仓执行——不污染工作树、不产生 tag |
 
-**bench 范围（refresh）**：默认只测发布口径关心的四档 `unit` / `dev-verify` / `regression` / `integration`——全量十四档串行约 5.5 min（2 路采集 3.2 min），占单次发布机器时间约 75%，其余模式与这四档高度重叠；未测模式的耗时与计数按 `--update-docs` 口径「保留上次实测值」不写脏，需要全量复测时加 `--full-bench`（或直接 `test-runner.py --mode bench --update-docs`）。
+**bench 范围与顺序（refresh）**：默认只测发布口径关心的四档 `regression` → `integration` → `unit` → `dev-verify`——全量十四档串行约 5.5 min（2 路采集 3.2 min），占单次发布机器时间约 75%，其余模式与这四档高度重叠；未测模式的耗时与计数按 `--update-docs` 口径「保留上次实测值」不写脏，需要全量复测时加 `--full-bench`（或直接 `test-runner.py --mode bench --update-docs`）。**顺序即失败反馈速度**：bench 以 `--fail-fast` 运行，而多档并行时只取消「尚未启动」的档——场景档先跑，场景/集成失败时长尾 `unit` 还没开始（或可被取消），十几秒内即中止；把 `unit` 排在前会让每次场景问题都白等完整 unit 时长。
 
-**耗时与 token 台账（`logs/release.jsonl`）**：每个子命令结束追加一行 JSON——`command` / `ok` / `elapsed_s` / `version` / `steps[]` / `agent{}`（执行环境身份：`provider`/`model`/`thinking`/`session_id`，取自 `PI_PROVIDER`/`PI_MODEL`/`PI_REASONING_LEVEL`/`PI_SESSION_ID`；非 agent 环境省略）/ `session_usage{}`（agent 会话**累计** token 快照：`input`/`output`/`cache_read`/`cache_write`/`total`/`cost`，取自 `PI_SESSION_FILE` 会话 JSONL 的 assistant 消息 + 非消息用量（cache_warm 等）+ compaction 三类条目，与 pi 自身 token 统计同口径；非 agent 环境省略该字段，旧台账行形状不变）（gate 的 `P2 场景回归`·`P2 十守护`·`P2 设计护栏`、refresh 的 bench·collect·sync、publish 的 `P1 verify`、evolution 的快照统计·统计同步、prepare 的 `台账归档迁移`）；终端尾行同步打印摘要。`logs/` 属 git 忽略域，台账不入仓库、不参与门禁，写入失败只打 `[!]` 且不改退出码（观测面不阻断发布）。跨版本对拍：`tail -n 20 logs/release.jsonl`（发布墙钟的变化归因到此，不再靠现场重测）。**token 统计口径**：窗口 = 上一次 `devbump` 之后的行，用量 = 末行累计 − 边界行累计（跨会话按正增量分段累加，不会出现负数）；每条命令尾行自动打印「执行环境：provider/model（thinking=…）」与「本次发布累计 token：N tok（in/out/cache r/w，≈¥C）」，便于把发布成本按版本对拍。
+**耗时与 token 台账（`logs/release.jsonl`）**：每个子命令结束追加一行 JSON——`command` / `ok` / `elapsed_s` / `version` / `steps[]` / `failure{}`（仅失败命令：失败步 / 退出码 / 测试报告目录 / 失败用例名 / 输出尾部，保留第一现场；非 `_run_step` 路径只记 rc） / `agent{}`（执行环境身份：`provider`/`model`/`thinking`/`session_id`，取自 `PI_PROVIDER`/`PI_MODEL`/`PI_REASONING_LEVEL`/`PI_SESSION_ID`；非 agent 环境省略）/ `session_usage{}`（agent 会话**累计** token 快照：`input`/`output`/`cache_read`/`cache_write`/`total`/`cost`，取自 `PI_SESSION_FILE` 会话 JSONL 的 assistant 消息 + 非消息用量（cache_warm 等）+ compaction 三类条目，与 pi 自身 token 统计同口径；非 agent 环境省略该字段，旧台账行形状不变）（gate 的 `P2 场景回归`·`P2 十守护`·`P2 设计护栏`、refresh 的 bench·collect·sync、publish 的 `release 提交`·`P1 verify`·`合并到 master`·`打 tag`·`推送 dev/master/tags`、evolution 的快照统计·统计同步、prepare 的 `台账归档迁移`）；终端尾行同步打印摘要。`logs/` 属 git 忽略域，台账不入仓库、不参与门禁，写入失败只打 `[!]` 且不改退出码（观测面不阻断发布）。跨版本对拍：`tail -n 20 logs/release.jsonl`（发布墙钟的变化归因到此，不再靠现场重测）。**token 统计口径**：窗口 = 上一次 `devbump` 之后的行，用量 = 末行累计 − 边界行累计（跨会话按正增量分段累加，不会出现负数）；每条命令尾行自动打印「执行环境：provider/model（thinking=…）」与「本次发布累计 token：N tok（in/out/cache r/w，≈¥C）」，便于把发布成本按版本对拍。
 
 ## 运维观测类
 
@@ -882,7 +928,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 | 最短/最长 | 该阶段历史最小/最大耗时 |
 | 次数 | 该阶段出现次数（条件阶段如历史走势仅在启用时出现）；行序按**中位降序**（最慢阶段在前，同分按名） |
 | 占比 | 阶段均值 ÷ 组平均总耗时；并行执行的阶段之和可超 100% |
-| 阶段细分 | 父阶段下的子项自身耗时（如 `LLM+新闻` → 四个 LLM 模块与新闻获取）；子项可并行，**之和不等于父阶段耗时**，仅用于定位瓶颈（子项按平均耗时降序） |
+| 阶段细分 | 父阶段下的子项自身耗时（`数据准备` → 行情与明细/指数获取/穿透/风格与因子/覆盖与新鲜度/估值与温度/财报摘要与指标/申购与成本位置/明细装配与建议；`LLM+新闻` → 新闻源抓取/去重与关联/锚点维护/事件窗装配/四个 LLM 模块）；子项可并行，**之和不等于父阶段耗时**，仅用于定位瓶颈（子项按平均耗时降序） |
 
 **分位口径**：`总体分位概览`与各分组的 P95/P99 均为**最近秩**（nearest-rank）分位——取 `ceil(pct% × n)` 位样本值，统一表述为「95% 的报告在 Xs 内完成，99% 的报告在 Ys 内完成」（概览口径行同句式：P95 即 95% 的报告在该耗时内完成，P99 即 99% 的报告在该耗时内完成；两段均带全主语，不分省略变体）。概览口径与分组一致（受 `--report-type` / `--last` 影响）；仅单一报告类型时只渲染合计行（不重复出类型行）。
 
@@ -912,7 +958,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 | 字段 | 含义 | 是否参与总耗时 |
 |:-----|:-----|:---------------|
 | `phases` | 粗粒度阶段墙钟（数据准备/快照对比/历史走势/行业资金流向/LLM+新闻/HTML 生成/Excel 生成） | **是**（`total_seconds` 唯一来源，保证跨版本可比与 ETA 口径稳定） |
-| `breakdown` | 父阶段下的子项自身耗时（LLM 四模块、新闻获取） | 否（子项可并行） |
+| `breakdown` | 父阶段下的子项自身耗时（数据准备九项、新闻抓取/去重/锚点/事件窗、LLM 四模块） | 否（子项可并行） |
 | `counters` | 运行期诊断计数（`warnings`/`errors` 等） | 否 |
 | `llm` | LLM 运行上下文（provider/model/thinking、重试与节流等待秒数、provider 降级次数、缓存命中、逐模块 tokens/费用） | 否 |
 | `errors` / `warnings_count` | 错误消息（封顶保留）与告警数 | 否 |
@@ -959,7 +1005,7 @@ curl 对照命令：`curl -s "https://push2.eastmoney.com/api/qt/stock/get?secid
 
 **`eval-dedup-threshold.py` — 新闻去重阈值校准**
 
-新闻标题去重（同源/跨源安全区分级 + 候选区阶梯 + 方向对立防护，阈值见 `news_dedup.py` 校准常量）在每次报告运行时自动记录"边界案例"到 `data/calibration/dedup_anchors.jsonl`。积累足够锚点后，用此脚本分析当前阈值是否合理。
+新闻标题去重（同源/跨源安全区分级 + 候选区阶梯 + 方向对立防护，阈值见 `news_dedup.py` 校准常量）的"边界案例"**默认采集**到 `data/calibration/dedup_anchors.jsonl`：写侧只追加、不读旧文件（跨轮重复由本脚本 `load_anchors` 按键去重），`INVEST_DEDUP_COLLECT_ANCHORS=0` 可关闭采集。积累足够锚点后，用此脚本分析当前阈值是否合理。**评估默认在分析完成后压缩一次锚点文件**（每 key 最新 + 保留期），顺带完成体积维护；`--no-compact` 只读分析，`--dry-run` 演练不写盘，`--compact` 仅压缩不分析。报告路径仍不自动压缩。
 
 ```bash
 # 分析全部锚点，输出建议
@@ -970,7 +1016,7 @@ curl 对照命令：`curl -s "https://push2.eastmoney.com/api/qt/stock/get?secid
 
 # 指定锚点文件
 .venv/bin/python scripts/eval-dedup-threshold.py --file data/calibration/dedup_anchors.jsonl
-# 压缩（每 key 最新 + 保留期裁剪，与生产自动压缩同口径）
+# 压缩（每 key 最新 + 保留期裁剪，与生产维护压缩同口径）
 .venv/bin/python scripts/eval-dedup-threshold.py --compact
 # 只按键去重、不按时间裁剪（保留历史时代样本，供跨规则对比）
 .venv/bin/python scripts/eval-dedup-threshold.py --compact --retention-days 0

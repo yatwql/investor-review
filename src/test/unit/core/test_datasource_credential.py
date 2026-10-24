@@ -74,13 +74,15 @@ class TestMissingCredential:
         """已声明且环境变量未设 → 返回声明（调用方据此跳过）。"""
         monkeypatch.delenv(_ENV_VAR, raising=False)
         register_credential_spec(_spec())
-        assert missing_credential("example") is not None
+        spec = missing_credential("example")
+        assert spec is not None and spec.env_var == _ENV_VAR
 
     def test_blank_env_counts_as_missing(self, monkeypatch):
         """空白串视为缺失 —— 防「设了空值以为配好了」。"""
         monkeypatch.setenv(_ENV_VAR, "   ")
         register_credential_spec(_spec())
-        assert missing_credential("example") is not None
+        spec = missing_credential("example")
+        assert spec is not None and spec.env_var == _ENV_VAR
 
     def test_set_env_is_ready(self, monkeypatch):
         """环境变量已设 → None（就绪，不跳过）。"""
@@ -171,20 +173,23 @@ class TestKeyFileCredential:
     def test_missing_key_file_counts_as_missing(self, monkeypatch, tmp_path):
         monkeypatch.delenv(_ENV_VAR, raising=False)
         register_credential_spec(_spec(key_file=str(tmp_path / "absent.json")))
-        assert missing_credential("example") is not None
+        spec = missing_credential("example")
+        assert spec is not None and spec.key_file.endswith("absent.json")
 
     def test_blank_key_field_counts_as_missing(self, monkeypatch, tmp_path):
         monkeypatch.delenv(_ENV_VAR, raising=False)
         key_file = self._write_key(tmp_path / "data_key.json", "   ")
         register_credential_spec(_spec(key_file=key_file))
-        assert missing_credential("example") is not None
+        spec = missing_credential("example")
+        assert spec is not None and spec.key_file == key_file
 
     def test_malformed_key_file_counts_as_missing(self, monkeypatch, tmp_path):
         monkeypatch.delenv(_ENV_VAR, raising=False)
         path = tmp_path / "data_key.json"
         path.write_text("{not-json", encoding="utf-8")
         register_credential_spec(_spec(key_file=str(path)))
-        assert missing_credential("example") is not None
+        spec = missing_credential("example")
+        assert spec is not None and spec.key_file == str(path)
 
     def test_hint_names_key_file_and_field(self, monkeypatch, tmp_path):
         monkeypatch.delenv(_ENV_VAR, raising=False)
@@ -225,7 +230,8 @@ class TestKeyFileCredential:
         path.write_text(json.dumps({"other": {"api_key": "other-secret"}}), encoding="utf-8")
         register_credential_spec(_spec(key_file=str(path)))
 
-        assert missing_credential("example") is not None
+        spec = missing_credential("example")
+        assert spec is not None and spec.key_file == str(path)
 
     def test_key_section_override(self, monkeypatch, tmp_path):
         """节名可用 key_section 覆盖（注册名与文件节名不一致时）。"""

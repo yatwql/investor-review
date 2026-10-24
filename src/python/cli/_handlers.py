@@ -638,3 +638,151 @@ def _handle_cassettes(args: argparse.Namespace) -> int:
         return _EXIT_SEVERE
     print("[OK] 全部录制的解析路径正常")
     return _EXIT_SUCCESS
+
+
+# ═══════════════════════════════════════════════════════════════
+# config 子命令（共享配置的查看与持久化编辑）
+# ═══════════════════════════════════════════════════════════════
+
+#: 动作型键的 CLI 指引（无单一标量值，不能直接赋值）
+_CONFIG_ACTION_HINTS = {
+    "comparison_indices": "对比指数池为增/删/重置动作型键：请用 TUI [G] / Web 配置面",
+    "llm_providers.priority": "多链线路重排请用 --llm-provider-order（持久化）或 TUI [G] → [L]",
+}
+
+
+def _parse_cli_config_value(key: str, raw: str, spec: dict):
+    """按白名单类型解析 CLI 传入的文本值（校验交给 edit_ops）。"""
+    from src.python.cli._parser import _parse_switch_bool
+    from src.python.config.edit_ops import ConfigEditError
+
+    kind = spec.get("kind")
+    if kind == "bool":
+        try:
+            return _parse_switch_bool(raw)
+        except argparse.ArgumentTypeError as exc:
+            raise ConfigEditError(str(exc)) from None
+    if kind == "int":
+        try:
+            return int(raw)
+        except ValueError:
+            raise ConfigEditError(f"{key} 需要整数（收到：{raw}）") from None
+    return raw
+
+
+def _parse_scheduler_value(field: str, raw: str):
+    """解析 scheduler 单字段文本值（周几用逗号分隔）。"""
+    from src.python.cli._parser import _parse_switch_bool
+    from src.python.config.edit_ops import ConfigEditError
+
+    if field == "enabled":
+        try:
+            return _parse_switch_bool(raw)
+        except argparse.ArgumentTypeError as exc:
+            raise ConfigEditError(str(exc)) from None
+    if field == "weekdays":
+        parts = [part.strip() for part in raw.split(",") if part.strip()]
+        try:
+            return [int(part) for part in parts]
+        except ValueError:
+            raise ConfigEditError("scheduler.weekdays 须为 0-6 整数（逗号分隔，0=周一）") from None
+    return raw
+
+
+def _config_current_value(key: str):
+    """读取单个键的当前生效值（含 scheduler.*）。"""
+    from src.python.config.edit_ops import ConfigEditError, read_config_value, scheduler_values
+
+    if key.startswith("scheduler."):
+        values = scheduler_values()
+        if key not in values:
+            raise ConfigEditError(f"未知调度字段：{key}（可选：{', '.join(sorted(values))}）")
+        return values[key]
+    return read_config_value(key)
+
+
+def _handle_config_list(as_json: bool) -> int:
+    """``config list``：列出白名单键的当前生效值与动作型键。"""
+    from src.python.config.edit_ops import config_edit_whitelist, read_config_value, scheduler_values
+
+    values: dict = {}
+    actions: dict[str, tuple] = {}
+    for key, entry in config_edit_whitelist.items():
+        if entry["writer"] in ("comparison_indices", "llm_providers"):
+            actions[key] = tuple(entry.get("actions") or ())
+            continue
+        values[key] = read_config_value(key)
+    values.update(scheduler_values())
+    if as_json:
+        print(json.dumps({"values": values, "actions": actions}, ensure_ascii=False, indent=2))
+        return _EXIT_SUCCESS
+    for key, value in values.items():
+        print(f"{key} = {json.dumps(value, ensure_ascii=False)}")
+    for key, acts in actions.items():
+        print(f"{key} = <动作型: {'/'.join(acts)}>")
+    return _EXIT_SUCCESS
+
+
+def _handle_config_set(args) -> int:
+    """``config set``：校验后持久化单键（或仅 --dry-run 校验）。"""
+    from src.python.config.edit_ops import (
+        ConfigEditError,
+        apply_config_edit,
+        config_edit_whitelist,
+        preview_config_edit,
+        scheduler_field_names,
+        set_scheduler_field,
+        validate_scheduler_value,
+    )
+
+    key, raw = args.key, args.value
+    if key.startswith("scheduler."):
+        field = key.split(".", 1)[1]
+        if field not in scheduler_field_names():
+            raise ConfigEditError(
+                f"未知调度字段：{key}（可选：{', '.join(f'scheduler.{name}' for name in scheduler_field_names())}）"
+            )
+        value = _parse_scheduler_value(field, raw)
+        if args.dry_run:
+            normalized = validate_scheduler_value(field, value)
+            print(f"  [OK] 校验通过（--dry-run 未写盘）：{key} = {json.dumps(normalized, ensure_ascii=False)}")
+            return _EXIT_SUCCESS
+        result = set_scheduler_field(field, value)
+        backup = result.get("backup")
+        normalized = (result.get("value") or {}).get(field, value)
+        print(f"  [OK] {key} = {json.dumps(normalized, ensure_ascii=False)}")
+        if backup:
+            print(f"       已备份：{backup}")
+        return _EXIT_SUCCESS
+
+    spec = config_edit_whitelist.get(key)
+    if spec is None:
+        raise ConfigEditError(f"配置键不在白名单: {key}（config list 查看全部可编辑键）")
+    if spec["writer"] in ("comparison_indices", "llm_providers"):
+        raise ConfigEditError(_CONFIG_ACTION_HINTS.get(key, f"{key} 是动作型键，不能直接赋值"))
+    value = _parse_cli_config_value(key, raw, spec)
+    if args.dry_run:
+        preview = preview_config_edit({"key": key, "value": value})
+        print(f"  [OK] 校验通过（--dry-run 未写盘）：{key} = {json.dumps(preview['value'], ensure_ascii=False)}")
+        return _EXIT_SUCCESS
+    result = apply_config_edit({"key": key, "value": value})
+    print(f"  [OK] {key} = {json.dumps(result['value'], ensure_ascii=False)}")
+    if result.get("backup"):
+        print(f"       已备份：{result['backup']}")
+    return _EXIT_SUCCESS
+
+
+def _handle_config(args, config) -> int:
+    """config 子命令：list / get / set（持久化写入走共享编辑层）。"""
+    from src.python.config.edit_ops import ConfigEditError
+
+    try:
+        if args.config_action == "list":
+            return _handle_config_list(bool(getattr(args, "json", False)))
+        if args.config_action == "get":
+            print(json.dumps(_config_current_value(args.key), ensure_ascii=False))
+            return _EXIT_SUCCESS
+        return _handle_config_set(args)
+    except (ConfigEditError, ValueError, OSError) as exc:
+        print(f"  [ERR] {exc}")
+        return _EXIT_SEVERE

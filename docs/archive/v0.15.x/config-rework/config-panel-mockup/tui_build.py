@@ -21,7 +21,7 @@ import re
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-REPO = HERE.parents[2]
+REPO = HERE.parents[4]
 FRAMES = REPO / "docs" / "tmp" / "tui-frames" / "tui_frames.json"
 
 MAX_LINES = 52

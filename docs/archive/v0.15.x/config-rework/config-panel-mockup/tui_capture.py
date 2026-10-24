@@ -38,7 +38,7 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-REPO = HERE.parents[2]
+REPO = HERE.parents[4]
 COLS = 108
 LINES = 60
 
@@ -424,7 +424,7 @@ _NORMALIZE_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"DEBUG 占比 \d+%"), "DEBUG 占比 85%"),
     (re.compile(r"采样 \d+ 行"), "采样 120000 行"),
     # 去重锚点体积 / 行数
-    (re.compile(r"([\d.]+ MB) / \d+ 行（自动压缩阈值"), r"37.0 MB / 110000 行（自动压缩阈值"),
+    (re.compile(r"([\d.]+ MB) / \d+ 行（维护压缩阈值"), r"37.0 MB / 110000 行（维护压缩阈值"),
     # 运行台账与账本统计
     (re.compile(r"告警中位 \d+、累计错误 \d+、中断 \d+"), "告警中位 12、累计错误 0、中断 0"),
     (re.compile(r"事实校验自动修正中位 \d+ 处"), "事实校验自动修正中位 3 处"),

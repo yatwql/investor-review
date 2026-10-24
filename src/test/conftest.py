@@ -415,15 +415,14 @@ def _auto_reset_hithink_limiter():
 def _auto_reset_anchor_state():
     """自动重置新闻去重锚点模块单例状态，防止测试间状态污染。
 
-    每个测试执行前清空进程级已写 key 集合、内存记录列表与惰性加载标志，
-    避免某测试记录的锚点状态泄漏到后续测试（锚点路径已由
-    _isolate_sensitive_paths 隔离到 tmp_path）。
+    每个测试执行前清空内存锚点记录列表，避免某测试记录的锚点状态泄漏到
+    后续测试（锚点路径已由 _isolate_sensitive_paths 隔离到 tmp_path；
+    写侧已无跨轮 key 缓存，不需要额外重置）。
     """
     from src.python.providers import news_dedup
 
-    news_dedup._WRITTEN_ANCHOR_KEYS = set()
     news_dedup._ANCHOR_RECORDS = []
-    news_dedup._WRITTEN_KEYS_LOADED = False
+    news_dedup._ANCHOR_SIZE_WARNED = False
 
 
 @pytest.fixture(autouse=True)
@@ -633,6 +632,20 @@ def _auto_reset_feature_flags():
     from src.python.config.features import reset_feature_flags
 
     reset_feature_flags()
+
+
+@pytest.fixture(autouse=True)
+def _auto_reset_runtime_overrides():
+    """自动清空命令行一次性覆写（--chapter / --anonymize 的进程内状态）。
+
+    覆写层是模块级字典，测试直接调用 CLI 覆写函数后若不清理，会串到后续用例
+    （读到的 chapter / 匿名化模式不再是配置真值）。
+    """
+    from src.python.config._runtime_overrides import reset_overrides
+
+    reset_overrides()
+    yield
+    reset_overrides()
 
 
 @pytest.fixture(autouse=True)

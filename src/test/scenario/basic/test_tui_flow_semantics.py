@@ -13,7 +13,9 @@
     否则「语义变好」只是代码注释里的说法。
 
 门禁分层：
-  - ``scenario_basic``（P0 快反馈）：仅动线 1（生成主路径）；
+  - ``scenario_basic``（P0 快反馈）：动线 1（生成主路径）+ 动线 3（日志筛选）；
+    动线 3 的处理器在函数内局部导入读取入口，曾长期只在 P2 暴露「打点失效」，
+    放进 P0 后同类问题在开发期即变红；
   - ``scenario``（P2 回归）：三条全跑。
 """
 
@@ -27,7 +29,7 @@ import pytest
 
 from src.test._tui_flow import common_patches, run_flow
 
-# P0（scenario_basic）只跑生成主路径；P2（scenario）三条全跑
+# P0（scenario_basic）跑生成主路径 + 日志筛选；P2（scenario）三条全跑
 pytestmark = [pytest.mark.scenario]
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -118,6 +120,7 @@ class TestToggleFeatureSwitch:
         applied.assert_called_once_with({"key": "decision_reflection", "value": True})
 
 
+@pytest.mark.scenario_basic
 class TestFilterLogsByLevel:
     """动线 3：按级别筛日志（筛选条件与结果标题同屏可核对）。
 

@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -245,7 +246,7 @@ class TestProperNounVetoSource:
 
 
 class TestCompactRetention:
-    """`--compact` 的保留期与生产读侧自动压缩同口径（仅按键去重压不动，时间裁剪才是上限）。"""
+    """`--compact` 的保留期与生产维护压缩同口径（仅按键去重压不动，时间裁剪才是上限）。"""
 
     def test_expired_rows_dropped(self, tmp_path, tool):
         old = _record("旧新闻A", "旧新闻B", 0.40, 2, "cross_skip")
@@ -277,3 +278,38 @@ class TestCompactRetention:
         path = _write(tmp_path, [_record("无时间戳A", "无时间戳B", 0.4, 2, "cross_skip")])
         result = tool.compact_anchors(path, retention_days=1)
         assert result["after_lines"] == 1 and result["expired"] == 0
+
+
+class TestMainMaintenance:
+    """命令行评估默认编排：分析 → 默认压缩维护；--no-compact 只读。"""
+
+    def _run(self, tool, monkeypatch, tmp_path, *extra: str):
+        path = _write(
+            tmp_path,
+            [
+                _record("新闻A", "新闻B", 0.4, 2, "cross_skip"),
+                _record("新闻A", "新闻B", 0.4, 2, "cross_skip"),
+                _record("新闻C", "新闻D", 0.4, 2, "cross_skip"),
+            ],
+        )
+        monkeypatch.setattr(sys, "argv", ["eval-dedup-threshold.py", "--file", path, "--summary", *extra])
+        tool.main()
+        return path
+
+    def test_default_compacts_after_analysis(self, tool, monkeypatch, tmp_path, capsys):
+        path = self._run(tool, monkeypatch, tmp_path)
+        assert "评估后维护压缩" in capsys.readouterr().out
+        with open(path, encoding="utf-8") as f:
+            assert len(f.readlines()) == 2, "重复标题对应被压成一条"
+
+    def test_no_compact_keeps_duplicates(self, tool, monkeypatch, tmp_path, capsys):
+        path = self._run(tool, monkeypatch, tmp_path, "--no-compact")
+        assert "评估后维护压缩" not in capsys.readouterr().out
+        with open(path, encoding="utf-8") as f:
+            assert len(f.readlines()) == 3
+
+    def test_dry_run_does_not_write(self, tool, monkeypatch, tmp_path, capsys):
+        path = self._run(tool, monkeypatch, tmp_path, "--dry-run")
+        assert "未写盘" in capsys.readouterr().out
+        with open(path, encoding="utf-8") as f:
+            assert len(f.readlines()) == 3

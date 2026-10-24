@@ -171,8 +171,8 @@ class TestReportProducingSwitches:
                 continue
             assert accessor() is bool(feature_switch_registry[flag].default), flag
 
-    def test_legacy_report_switches_keep_accessors(self):
-        """config.json 时代的报告子模块读取器不得随分组迁移丢失（既有调用点签名依赖）。"""
+    def test_report_submodule_accessors_exist(self):
+        """报告增强子模块访问器齐全（与功能开关注册表同名）。"""
         from src.python.config import _core
 
         for flag in self.KEYS:
@@ -191,13 +191,6 @@ class TestReportProducingSwitches:
         from src.python.config import get_config
 
         assert "report_submodules" not in get_config()
-
-    def test_config_argument_is_ignored(self):
-        """config 形参仅为兼容签名保留，不再参与取值。"""
-        from src.python.config import is_enable_market_temperature
-
-        assert is_enable_market_temperature({}) is True
-        assert is_enable_market_temperature({"report_submodules": {"market_temperature": False}}) is True
 
 
 class TestReportSectionOrderTemplateMatchesRegistry:

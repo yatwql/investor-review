@@ -345,7 +345,7 @@ def invalidate_llm_config_cache() -> None:
         _llm_config_size = 0
 
 
-def get_llm_config() -> dict | None:
+def _load_llm_config() -> dict | None:
     """读取 LLM 配置（合并 llm_settings.json + llm_key.json + llm_providers.json）。
 
     合并结果带内存缓存：判据 = 三文件 mtime+size；写原语写后主动失效；
@@ -434,3 +434,14 @@ def get_llm_config() -> dict | None:
             logger.warning("LLM 密钥文件读取失败: %s", e)
             _llm_config_cache = None
             return None
+
+
+def get_llm_config() -> dict | None:
+    """读取 LLM 配置（含命令行一次性 ``--chapter`` 覆写的 ``enabled_llm``）。
+
+    合并与缓存由 ``_load_llm_config`` 负责；本函数只在返回前叠加
+    ``config/_runtime_overrides.py`` 的进程内覆写，不写盘、不进缓存。
+    """
+    from src.python.config._runtime_overrides import apply_llm_enabled_overrides
+
+    return apply_llm_enabled_overrides(_load_llm_config())

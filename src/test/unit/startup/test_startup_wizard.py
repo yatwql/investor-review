@@ -60,12 +60,7 @@ class TestFirstRunFlag:
         assert is_first_run() is True
 
     def test_mark_wizard_shown_then_not_first_run(self):
-        """标记后 → 不再视为首次运行。"""
-        mark_wizard_shown()
-        assert is_first_run() is False
-
-    def test_mark_wizard_shown_idempotent(self):
-        """重复标记不报错。"""
+        """标记后 → 不再视为首次运行；重复标记幂等（不报错、状态不变）。"""
         mark_wizard_shown()
         mark_wizard_shown()
         assert is_first_run() is False

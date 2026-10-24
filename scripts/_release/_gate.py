@@ -34,17 +34,15 @@ def tree_fingerprint(exec_fn, root, runner=None) -> str:
 CODE_PATHS: tuple[str, ...] = ("src", "scripts", "pyproject.toml", "pytest.ini", "requirements.txt")
 
 
-def code_fingerprint(exec_fn, root, runner=None) -> str:
-    """测试相关代码路径的**内容**指纹（sha256，与提交状态无关）。
-
-    与 `tree_fingerprint` 的分工：本指纹只关心「会不会改变测试结论」的文件，
-    故 evolution / 统计回写这类文档写入不会使其失效——否则发布流程里必然
-    出现「刚 bench 完就被文档改写打回」的无谓返工。
+def code_file_hashes(exec_fn, root, runner=None) -> dict[str, str] | None:
+    """测试相关代码路径的逐文件内容哈希（工作区口径：tracked + 未忽略的未跟踪文件）。
 
     必须取**内容**而非「相对 HEAD 的差异」：publish 会先把 prepare 的改动提交再算
     指纹，若按 `git diff HEAD` / `git status` 哈希，HEAD 一变同一份代码就得到两个指纹，
-    gate 的戳必然对不上、复用路径按构造永不命中。内容哈希（tracked + 未忽略的未跟踪
-    文件逐个哈希）使「提交前」与「提交后」同一工作区得到同一指纹。
+    gate 的戳必然对不上、复用路径按构造永不命中。
+
+    Returns:
+        {相对路径: sha256 hex}；git 查询失败返回 None（与「没有任何代码文件」区分开）。
     """
     rc, out, _ = exec_fn(
         ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", *CODE_PATHS],
@@ -52,18 +50,52 @@ def code_fingerprint(exec_fn, root, runner=None) -> str:
         runner,
     )
     if rc != 0:
-        return ""
-    digest = hashlib.sha256()
+        return None
+    hashes: dict[str, str] = {}
     for rel in sorted(name for name in out.split("\0") if name):
         try:
             with open(os.path.join(root, rel), "rb") as handle:
                 body = handle.read()
         except OSError:
             continue  # 文件在列举与读取之间消失（构建产物等）：跳过即可，不改变口径
+        hashes[rel] = hashlib.sha256(body).hexdigest()
+    return hashes
+
+
+def fingerprint_of(hashes: dict[str, str]) -> str:
+    """逐文件哈希 → 汇总指纹（空字典仍是稳定指纹，与「git 查询失败」的空串区分）。"""
+    digest = hashlib.sha256()
+    for rel in sorted(hashes):
         digest.update(rel.encode("utf-8"))
         digest.update(b"\0")
-        digest.update(hashlib.sha256(body).digest())
+        digest.update(bytes.fromhex(hashes[rel]))
     return digest.hexdigest()
+
+
+def code_fingerprint(exec_fn, root, runner=None) -> str:
+    """测试相关代码路径的**内容**指纹（sha256，与提交状态无关）。
+
+    与 `tree_fingerprint` 的分工：本指纹只关心「会不会改变测试结论」的文件，
+    故 evolution / 统计回写这类文档写入不会使其失效——否则发布流程里必然
+    出现「刚 bench 完就被文档改写打回」的无谓返工。
+    """
+    hashes = code_file_hashes(exec_fn, root, runner)
+    return "" if hashes is None else fingerprint_of(hashes)
+
+
+def diff_code_files(recorded: dict[str, str], current: dict[str, str]) -> list[str]:
+    """两份「路径 → 哈希」之间的差异文件（新增/删除/内容变化，按路径排序）。"""
+    changed = set(recorded) ^ set(current)
+    changed |= {rel for rel in set(recorded) & set(current) if recorded[rel] != current[rel]}
+    return sorted(changed)
+
+
+def read_gate_stamp(path) -> dict | None:
+    """读 gate 戳原文（不校验匹配；缺文件/坏 JSON 返回 None）。"""
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
 
 
 def write_bench_stamp(path, version: str, modes: list[str], fingerprint: str, covers_unit: bool) -> None:
@@ -103,22 +135,30 @@ def bench_covers_verify(path, version: str, fingerprint: str) -> dict | None:
     return data
 
 
-def write_gate_stamp(path, version: str, fingerprint: str, verify_passed: str, source: str = "run") -> None:
-    """写入 gate 通过戳（logs/ 为 git 忽略域，不入目录树/门禁）。"""
+def write_gate_stamp(
+    path,
+    version: str,
+    fingerprint: str,
+    verify_passed: str,
+    source: str = "run",
+    code_files: dict[str, str] | None = None,
+) -> None:
+    """写入 gate 通过戳（logs/ 为 git 忽略域，不入目录树/门禁）。
+
+    ``code_files``：gate 时刻的逐文件代码哈希。publish 指纹不匹配时据此点名
+    「gate 之后哪些代码文件动过」，把「为什么重跑 verify」说清楚（不是白跑）。
+    """
+    payload = {
+        "version": version,
+        "fingerprint": fingerprint,
+        "verify_passed": verify_passed,
+        "verify_source": source,
+        "ts": __import__("datetime").datetime.now().isoformat(timespec="seconds"),
+    }
+    if code_files:
+        payload["code_files"] = dict(sorted(code_files.items()))
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(
-            {
-                "version": version,
-                "fingerprint": fingerprint,
-                "verify_passed": verify_passed,
-                "verify_source": source,
-                "ts": __import__("datetime").datetime.now().isoformat(timespec="seconds"),
-            },
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
-    )
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
 
 def gate_stamp_matches(path, version: str, fingerprint: str):
@@ -288,8 +328,11 @@ def run_gate(args, ctx, runner=None) -> int:
 
     # 用**代码指纹**（而非全树）：verify 的结论只取决于 src/scripts/ 等测试相关路径，
     # 发布链里的文档统计同步不应让 gate 刚跑完的 verify 失效（否则 publish 必定重跑）
-    fingerprint = code_fingerprint(ctx.exec_fn, ctx.root, runner)
-    write_gate_stamp(ctx.stamp_file, version, fingerprint, verify_passed, source=verify_source)
+    code_files = code_file_hashes(ctx.exec_fn, ctx.root, runner)
+    fingerprint = "" if code_files is None else fingerprint_of(code_files)
+    write_gate_stamp(
+        ctx.stamp_file, version, fingerprint, verify_passed, source=verify_source, code_files=code_files or {}
+    )
     suffix = " + portability" if getattr(args, "with_portability", False) else ""
     print(f"[OK] P2 门禁全绿（演进新鲜度 + verify + regression + 十守护 + 设计护栏{suffix}）")
     print(f"[OK] gate 通过戳已写入（指纹 {fingerprint[:12]}…），publish 指纹一致时复用 P1 verify")

@@ -99,7 +99,9 @@ class TestCassetteModel:
         """录制后按同一请求键可查到。"""
         cassette = cs.Cassette(name="c")
         cassette.record(_interaction("https://a.b/x"))
-        assert cassette.lookup(cs.normalize_request_key("GET", "https://a.b/x")) is not None
+        hit = cassette.lookup(cs.normalize_request_key("GET", "https://a.b/x"))
+        assert hit is not None
+        assert hit.body == _interaction("https://a.b/x").body
 
     def test_lookup_miss_returns_none(self):
         """未录制的请求键返回 None（由传输层转成显式失败）。"""

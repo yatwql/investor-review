@@ -32,7 +32,7 @@
 - 🔁 **决策有闭环** — 建议 → 登记 → 真实行情结算命中率 → 教训回灌提示词，越用越懂你的组合
 - 🔒 **隐私优先** — 数据全部本地处理，支持 4 档匿名化，凭据永不落日志与报告
 
-> 当前版本：0.15.0（[版本历史](docs/managements/changelog.md)）
+> 当前版本：0.15.1（[版本历史](docs/managements/changelog.md)）
 
 ## ✨ 核心亮点
 
@@ -51,17 +51,17 @@
 
 ## 📸 实际报告效果
 
-由**全新虚构样例持仓**（两账户 · 10 只多资产混合：个股 / ETF / 场外基金 / 债券基金 / 货币 ETF，纯编造份额成本，本机真实行情）生成的 HTML 报告实景，全量报告（全部功能开关与 LLM 模块开启，含实验项）：
+由**全新虚构样例持仓**（两账户 · 6 只公开品种：2 只宽基 ETF + 2 只个股 + 2 只场外基金；份额与成本均为自造整数，不含任何真实账户信息；行情为公开市场数据）生成的 HTML 报告实景：
 
 ![报告首屏：品牌标记、完整目录导航与章节入口](src/static/report-overview.png)
 
-![盈亏汇总与市场指数](src/static/report-toc.png)
+![盈亏汇总：总市值 / 总成本 / 总盈亏 / 收益率](src/static/report-toc.png)
 
 ![交互图表：穿透行业分布与 TOP10 持仓资产](src/static/report-charts.png)
 
 ## 🖥️ 界面实景
 
-**TUI 交互模式**——全键盘主菜单（四个任务分组共 14 项含退出，方向键 + 字母直达，`/` 关键词筛选，页头常驻状态行含 LLM 当前链首线路，页脚常驻键位提示；`0` 或 `X` 退出；窄屏/手机 SSH 自适应折行。「配置」组按高频优先排列：报告章节 → 功能开关 → LLM 多链 → 对比指数 → 匿名化 → 目录信息 → 刷新配置）：
+**TUI 交互模式**——全键盘主菜单（四个任务分组共 14 项含退出，方向键 + 字母直达，`/` 关键词筛选，页头常驻状态行（上次报告 / 缓存过期 / 新鲜度 / 备用源 / LLM 状态），页脚常驻键位提示；`0` 或 `X` 退出；窄屏/手机 SSH 自适应折行。「配置」组按高频优先排列：报告章节 → 功能开关 → LLM 多链 → 对比指数 → 匿名化 → 目录信息 → 刷新配置）：
 
 ![TUI 主菜单](src/static/tui-menu.png)
 
@@ -170,7 +170,7 @@ git clone https://github.com/yatwql/investor-review.git && cd investor-review
 | 0 | [手册总索引](docs/manuals/README.md) | **按场景导航**（我想……→ 看哪篇 → 直达章节）、阅读路径、界面用词对照 |
 | 1 | [快速开始](docs/manuals/how-to-start.md) | 三种启动方式、持仓格式、首次运行会生成什么 |
 | 2 | [TUI 菜单操作手册](docs/manuals/how-to-use-tui-menu.md) | 各菜单详解（含 `[C]` 章节显隐、`[S]` 章内内容、`[G]` 全局设置、`[D]` 诊断四项）、报告内容对照、缓存管理 |
-| 3 | [CLI 命令行模式使用指南](docs/manuals/how-to-use-cli-mode.md) | 命令结构、全局参数（`--experiment` / `--feature`）、各子命令、退出码、定时任务 |
+| 3 | [CLI 命令行模式使用指南](docs/manuals/how-to-use-cli-mode.md) | 命令结构、全局参数（`--experiment` / `--feature` / `--chapter` / `--anonymize`）、各子命令（含 `config`）、退出码、定时任务 |
 | 4 | [Web 浏览器模式使用指南](docs/manuals/how-to-use-web-mode.md) | 五区标签页工作台：生成报告 / 调仓模拟 / 配置 / 运行状态（含缓存管理）/ 日志 |
 | 5 | [常规配置指引](docs/manuals/how-to-config.md) | `config.json` 字段说明、数据源、缓存 TTL、章节可见性、功能开关 |
 | 6 | [LLM 配置指引](docs/manuals/how-to-config-llm.md) | 接入 LLM 分析、参数调优、多 Provider 策略、端点级节流、定价 |

@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -237,6 +238,17 @@ class TestGate:
         modes = {_mode_arg(c) for c in runner.calls if any("test-runner.py" in p for p in c)}
         assert "portability" in modes
 
+    def test_gate_stamp_records_code_files_for_publish_hint(self, rel, tmp_path, monkeypatch):
+        """gate 戳存逐文件哈希：publish 指纹不一致时能点名「gate 之后哪些代码动过」。"""
+        stamp = tmp_path / "gate.json"
+        monkeypatch.setattr(rel, "GATE_STAMP_FILE", stamp)
+        rel._write_gate_stamp("0.12.6", "fp", "9000", code_files={"src/a.py": "aa"})
+        data = json.loads(stamp.read_text(encoding="utf-8"))
+        assert data["code_files"] == {"src/a.py": "aa"}
+        assert rel._gate.diff_code_files(
+            {"src/a.py": "aa", "src/b.py": "bb"}, {"src/a.py": "cc", "src/c.py": "dd"}
+        ) == ["src/a.py", "src/b.py", "src/c.py"]
+
     def test_gate_returns_worst_guard_code(self, rel):
         responses = [
             (["scripts/test-runner.py"], (0, "", "")),
@@ -307,6 +319,28 @@ class TestPublish:
         assert not any(any("test-runner.py" in p for p in c) for c in runner.calls)
         merge = next(c for c in runner.calls if len(c) > 2 and c[1] == "merge")
         assert "9000 项已全绿" in merge[merge.index("-m") + 1]
+
+    def test_publish_explains_why_verify_reruns(self, rel, tmp_path, capsys):
+        """gate 后代码有改动 → publish 明说「哪些文件动了、将实跑 verify」，不是白跑。"""
+        fx = self._fixture(rel, tmp_path, "0.12.6")
+        fx.GATE_STAMP_FILE.parent.mkdir(parents=True, exist_ok=True)
+        fx.GATE_STAMP_FILE.write_text(
+            json.dumps(
+                {
+                    "version": "0.12.6",
+                    "fingerprint": "stale",
+                    "verify_passed": "1",
+                    "code_files": {"src/python/x.py": "aa"},
+                }
+            ),
+            encoding="utf-8",
+        )
+        runner = self._dirty_runner()
+        assert rel.cmd_publish(ns(title="主题", push=False), runner=runner) == 0
+        printed = capsys.readouterr().out
+        assert "个代码文件改动" in printed
+        assert "src/python/x.py" in printed
+        assert "实跑 P1 verify" in printed
 
     def test_code_fingerprint_ignores_docs_changes(self, rel):
         """发布戳用代码指纹：文档统计同步不会让 gate 的 verify 失效（全树指纹会）。"""
@@ -683,6 +717,14 @@ class TestRefresh:
         assert set(rel.RELEASE_BENCH_MODES) <= set(runner_mod.MODES)
         assert "bench" not in rel.RELEASE_BENCH_MODES  # 别名不得混入子集
 
+    def test_short_decisive_modes_run_before_bulk(self, rel):
+        """场景/集成档先于 unit/dev-verify：fail-fast 只在「尚未启动」的档上生效，
+        长尾档压后才能在场景失败时立刻中止，而不是白等完整 unit。"""
+        modes = rel.RELEASE_BENCH_MODES
+        assert modes.index("regression") < modes.index("unit")
+        assert modes.index("integration") < modes.index("unit")
+        assert modes.index("dev-verify") > modes.index("unit")
+
     def test_first_step_failure_stops_chain(self, rel):
         runner = FakeRunner(
             responses=[
@@ -733,6 +775,47 @@ class TestTimingTelemetry:
         rel._reset_timer()
         rel._finish_timing("gate", 2)
         assert self._last_record(log)["ok"] is False
+
+    def test_failure_record_carries_step_and_failed_tests(self, rel, tmp_path, monkeypatch):
+        """失败台账自证原因：失败步 / 退出码 / 报告目录 / 失败用例名。"""
+        log = self._log(tmp_path, rel, monkeypatch)
+        rel._reset_timer()
+        runner = FakeRunner(
+            responses=[
+                (
+                    ["scripts/test-runner.py"],
+                    (
+                        1,
+                        "  [..] 历史报告已归档: test-reports/archives/20261024/100000/\n"
+                        "FAILED src/test/x.py::test_a - assert 1 == 2\n"
+                        "FAILED src/test/y.py::test_b - boom\n",
+                        "",
+                    ),
+                )
+            ]
+        )
+        rc = rel._run_step(
+            "测试量与耗时快照回填",
+            [sys.executable, "scripts/test-runner.py", "--mode", "regression"],
+            tmp_path,
+            runner,
+        )
+        assert rc == 1
+        rel._finish_timing("refresh", rc)
+        record = self._last_record(log)
+        assert record["ok"] is False
+        failure = record["failure"]
+        assert failure["step"] == "测试量与耗时快照回填"
+        assert failure["rc"] == 1
+        assert failure["report_dir"] == "test-reports/archives/20261024/100000"
+        assert set(failure["failed_tests"]) == {"src/test/x.py::test_a", "src/test/y.py::test_b"}
+
+    def test_first_failure_wins_over_later_steps(self, rel, tmp_path, monkeypatch):
+        """一个命令内多处失败时保留第一现场（后续失败不覆盖根因）。"""
+        rel._reset_timer()
+        rel._record_failure("第一步", 1, "FAILED a::b", "")
+        rel._record_failure("第二步", 2, "FAILED c::d", "")
+        assert rel._failure_context()["step"] == "第一步"
 
     def test_appends_one_line_per_command(self, rel, tmp_path, monkeypatch):
         log = self._log(tmp_path, rel, monkeypatch)

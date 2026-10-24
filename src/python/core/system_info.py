@@ -170,6 +170,23 @@ def build_system_info() -> dict:
     return info
 
 
+def llm_report_unavailable_reason() -> str | None:
+    """``full`` 报告无法产出 LLM 内容的原因（``None`` = 可用）。
+
+    两类不可用：① 未配置凭据/provider；② ``enabled_llm`` 全部关闭。
+    渠道层（TUI / CLI / Web）在 full 生成开始时据此给出显式提示，
+    避免「选了 full 却静默等同 both」。
+    """
+    status = llm_status()
+    if not status.get("configured"):
+        return "LLM 未配置（llm_key.json / llm_providers.json）"
+    from src.python.config import is_enable_llm
+
+    if not is_enable_llm():
+        return "LLM 分析章节已全部关闭（TUI [C] / Web 配置面可开启）"
+    return None
+
+
 def llm_status() -> dict:
     """LLM 配置状态（三渠道状态展示共用的单一分支事实来源）。
 

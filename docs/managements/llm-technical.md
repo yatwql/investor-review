@@ -1,5 +1,5 @@
 # LLM 集成层技术设计
-> 文档版本：0.15.0
+> 文档版本：0.15.1
 
 本文档是 `technical.md` 的 LLM 集成层专项技术设计补充，对应 `technical.md` §5（LLM 集成层概要设计）。
 `technical.md` §5 提供 LLM 层的总体架构、模块清单、调用链概览、多 Provider 链模式概要及关键机制速览；
@@ -1152,7 +1152,7 @@ reload_pricing() → 读 llm_pricing_ref.json
                     可选字段 input_cache_hit 缺失时继承内置（或等于 input）
 ```
 
-文件缺失 → 仅用内置价；单条模型非法 → 告警跳过；`version` 不符 → 拒绝加载并提示重新生成（内置价兜底，报告仍可生成）。结构见 [`config-llm-settings-design.md`](../plan/config-llm-settings-design.md) / 用户手册 [`how-to-config-llm.md`](../manuals/how-to-config-llm.md)「完整模型定价表」。
+文件缺失 → 仅用内置价；单条模型非法 → 告警跳过；`version` 不符 → 拒绝加载并提示重新生成（内置价兜底，报告仍可生成）。结构见 [`config-llm-settings-design.md`](../archive/v0.15.x/config-rework/config-llm-settings-design.md) / 用户手册 [`how-to-config-llm.md`](../manuals/how-to-config-llm.md)「完整模型定价表」。
 
 ### 10.2 费用计算
 

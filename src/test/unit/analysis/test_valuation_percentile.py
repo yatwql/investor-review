@@ -83,7 +83,7 @@ class TestPricePercentile:
     def test_min_samples_threshold(self):
         """恰好达到 MIN_SAMPLES 可计算。"""
         closes = [float(i) for i in range(MIN_SAMPLES)]
-        assert price_percentile(closes) is not None
+        assert price_percentile(closes) == pytest.approx(100.0, abs=1e-9)
 
     def test_low_end(self):
         """最低价 → 分位 ~1%（含自身）。"""

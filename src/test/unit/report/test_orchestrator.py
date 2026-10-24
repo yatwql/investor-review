@@ -112,6 +112,18 @@ class TestPrepareReportData:
 
         mock_category = MagicMock()
 
+        class _Recorder:
+            """记录子阶段名。"""
+
+            def __init__(self) -> None:
+                self.names: list[str] = []
+
+            def record(self, name: str, seconds: float) -> None:
+                assert seconds >= 0
+                self.names.append(name)
+
+        recorder = _Recorder()
+
         with (
             patch("src.python.report.market_value._generate_details", return_value=[mock_detail]),
             patch("src.python.report.market_value.classify_holdings", return_value=[mock_category]),
@@ -129,7 +141,7 @@ class TestPrepareReportData:
                 return_value={"available": False, "status": "insufficient"},
             ),
         ):
-            result = prepare_report_data(mock_holdings, mock_reporter, config={})
+            result = prepare_report_data(mock_holdings, mock_reporter, config={}, recorder=recorder)
 
         expected_keys = {
             "details",
@@ -170,6 +182,18 @@ class TestPrepareReportData:
             "cost_position_data",
         }
         assert set(result.keys()) == expected_keys, f"缺少 key: {expected_keys - set(result.keys())}"
+        # 数据准备子阶段九项全部进入 breakdown 记录器
+        assert {
+            "行情与明细",
+            "指数获取",
+            "穿透",
+            "风格与因子",
+            "覆盖与新鲜度",
+            "估值与温度",
+            "财报摘要与指标",
+            "申购与成本位置",
+            "明细装配与建议",
+        } <= set(recorder.names)
 
         assert result["total_mv"] == 1200.0
         assert result["total_cost"] == 1000.0

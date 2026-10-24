@@ -89,7 +89,7 @@ def invalidate_config_cache() -> None:
         _config_size = 0
 
 
-def get_config(_strict: bool = False) -> dict:
+def _load_config(_strict: bool = False) -> dict:
     """
     读取配置文件并返回配置字典（带线程安全缓存）。
 
@@ -148,6 +148,18 @@ def get_config(_strict: bool = False) -> dict:
                 raise
             logger.warning("配置文件 %s 读取失败，已回退到默认配置", config_path)
             return dict(_config_defaults._DEFAULT_CONFIG)
+
+
+def get_config(_strict: bool = False) -> dict:
+    """读取配置（含命令行一次性覆写）。
+
+    与 ``_load_config`` 的分工：缓存/合并/降级由后者负责；本函数在**返回前**叠加
+    ``config/_runtime_overrides.py`` 的进程内覆写（``--chapter`` / ``--anonymize``），
+    覆写不进入缓存、不写盘，进程退出即消失。无覆写时原样返回缓存对象。
+    """
+    from src.python.config._runtime_overrides import apply_config_overrides
+
+    return apply_config_overrides(_load_config(_strict))
 
 
 def _patch_value_for_write(key: str, value: Any) -> str:
@@ -359,44 +371,35 @@ def is_enable_history(config: dict | None = None) -> bool:
     return bool(val)
 
 
-def is_enable_data_quality(config: dict | None = None) -> bool:
+def is_enable_data_quality() -> bool:
     """数据质量仪表盘子模块是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_ANALYSIS``）。
 
     取值来自功能开关注册表（``features.data_quality``，数据质量仪表盘为长期可信核心，出厂默认开），可用 `features.json`
-    覆盖；``config`` 形参仅为兼容既有调用签名保留，**取值不再读它**。
-
-    Args:
-        config: 兼容形参（不参与取值）
+    覆盖。
     """
     from src.python.config.features import is_feature_enabled
 
     return is_feature_enabled("data_quality")
 
 
-def is_enable_candidate_compare(config: dict | None = None) -> bool:
+def is_enable_candidate_compare() -> bool:
     """候选基金比较子表是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_ANALYSIS``）。
 
     取值来自功能开关注册表（``features.candidate_compare``，出厂默认关），可用 `features.json`
-    覆盖；``config`` 形参仅为兼容既有调用签名保留，**取值不再读它**。
-
-    Args:
-        config: 兼容形参（不参与取值）
+    覆盖。
     """
     from src.python.config.features import is_feature_enabled
 
     return is_feature_enabled("candidate_compare")
 
 
-def is_enable_stock_fundamentals(config: dict | None = None) -> bool:
+def is_enable_stock_fundamentals() -> bool:
     """个股基本面章是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_STANDALONE``）。
 
     合并原「财务指标」与「持仓个股财报摘要」两开关为单一「个股基本面」开关，同时
     控制该章财务指标块与财报摘要块的渲染；取值来自功能开关注册表
     （``features.stock_fundamentals``，出厂默认关（需数据底座与 DataSinking key）），
-    可用 `features.json` 覆盖；``config`` 形参仅为兼容既有调用签名保留，**取值不再读它**。
-
-    Args:
-        config: 兼容形参（不参与取值）
+    可用 `features.json` 覆盖。
     """
     from src.python.config.features import is_feature_enabled
 
@@ -440,98 +443,77 @@ def datasink_feature_ready(config: dict | None = None) -> bool:
     return missing_credential("datasink") is None
 
 
-def is_enable_market_sentiment(config: dict | None = None) -> bool:
+def is_enable_market_sentiment() -> bool:
     """市场情绪章是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_ANALYSIS``）。
 
     取值来自功能开关注册表（``features.market_sentiment``，出厂默认关），可用 `features.json`
-    覆盖；``config`` 形参仅为兼容既有调用签名保留。
-
-    Args:
-        config: 兼容用（不参与取值）
+    覆盖。
     """
     from src.python.config.features import is_feature_enabled
 
     return is_feature_enabled("market_sentiment")
 
 
-def is_enable_cost_lots(config: dict | None = None) -> bool:
+def is_enable_cost_lots() -> bool:
     """成本流水子模块是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_ANALYSIS``）。
 
     取值来自功能开关注册表（``features.cost_lots``，出厂默认关），可用 `features.json`
-    覆盖；``config`` 形参仅为兼容既有调用签名保留，**取值不再读它**。
-
-    Args:
-        config: 兼容形参（不参与取值）
+    覆盖。
     """
     from src.python.config.features import is_feature_enabled
 
     return is_feature_enabled("cost_lots")
 
 
-def is_enable_valuation_percentile(config: dict | None = None) -> bool:
+def is_enable_valuation_percentile() -> bool:
     """估值分位子模块是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_ANALYSIS``）。
 
     取值来自功能开关注册表（``features.valuation_percentile``，出厂默认关），可用 `features.json`
-    覆盖；``config`` 形参仅为兼容既有调用签名保留，**取值不再读它**。
-
-    Args:
-        config: 兼容形参（不参与取值）
+    覆盖。
     """
     from src.python.config.features import is_feature_enabled
 
     return is_feature_enabled("valuation_percentile")
 
 
-def is_enable_market_temperature(config: dict | None = None) -> bool:
+def is_enable_market_temperature() -> bool:
     """市场温度子模块是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_ANALYSIS``）。
 
     取值来自功能开关注册表（``features.market_temperature``，出厂默认开；数据不可用时该行静默省略），可用 `features.json`
-    覆盖；``config`` 形参仅为兼容既有调用签名保留，**取值不再读它**。
-
-    Args:
-        config: 兼容形参（不参与取值）
+    覆盖。
     """
     from src.python.config.features import is_feature_enabled
 
     return is_feature_enabled("market_temperature")
 
 
-def is_enable_industry_beta(config: dict | None = None) -> bool:
+def is_enable_industry_beta() -> bool:
     """行业 Beta 子表是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_ANALYSIS``）。
 
     取值来自功能开关注册表（``features.industry_beta``，出厂默认关），可用 `features.json`
-    覆盖；``config`` 形参仅为兼容既有调用签名保留，**取值不再读它**。
-
-    Args:
-        config: 兼容形参（不参与取值）
+    覆盖。
     """
     from src.python.config.features import is_feature_enabled
 
     return is_feature_enabled("industry_beta")
 
 
-def is_enable_fund_purchase_limit(config: dict | None = None) -> bool:
+def is_enable_fund_purchase_limit() -> bool:
     """基金申购限购列是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_ANALYSIS``）。
 
     取值来自功能开关注册表（``features.fund_purchase_limit``，出厂默认开），可用 `features.json`
-    覆盖；``config`` 形参仅为兼容既有调用签名保留，**取值不再读它**。
-
-    Args:
-        config: 兼容形参（不参与取值）
+    覆盖。
     """
     from src.python.config.features import is_feature_enabled
 
     return is_feature_enabled("fund_purchase_limit")
 
 
-def is_enable_cost_position(config: dict | None = None) -> bool:
+def is_enable_cost_position() -> bool:
     """持仓成本区间位置列是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_ANALYSIS``）。
 
     取值来自功能开关注册表（``features.cost_position``，出厂默认开），可用 `features.json`
-    覆盖；``config`` 形参仅为兼容既有调用签名保留，**取值不再读它**。
-
-    Args:
-        config: 兼容形参（不参与取值）
+    覆盖。
     """
     from src.python.config.features import is_feature_enabled
 

@@ -88,9 +88,12 @@ from _release._changelog_archive import (  # noqa: E402, F401 — 纯函数面�
 )
 from _release._cli import RELEASE_BENCH_MODES, build_parser, run_cli  # noqa: E402, F401
 from _release._commands_base import (  # noqa: E402, F401 — 共用原语
+    _failure_context,
     _gate_workers,
     _print_results,
+    _record_failure,
     _reset_timer,
+    _run_step,
     _timer,
     run_preflight,
 )
@@ -230,8 +233,14 @@ def _bench_covers_verify(runner=None) -> dict | None:
     return _cmd_base._bench_covers_verify(_env(), runner)
 
 
-def _write_gate_stamp(version: str, fingerprint: str, verify_passed: str, source: str = "run") -> None:
-    return _cmd_base._write_gate_stamp(version, fingerprint, verify_passed, _env(), source)
+def _write_gate_stamp(
+    version: str,
+    fingerprint: str,
+    verify_passed: str,
+    source: str = "run",
+    code_files: dict[str, str] | None = None,
+) -> None:
+    return _cmd_base._write_gate_stamp(version, fingerprint, verify_passed, _env(), source, code_files)
 
 
 def _write_bench_stamp(fingerprint: str, modes: list[str], covers_unit: bool) -> None:

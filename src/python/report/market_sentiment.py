@@ -34,7 +34,7 @@ def build_market_sentiment_data(
     """装配市场情绪契约（开关关闭返回 ``None``）。"""
     from src.python.config import is_enable_market_sentiment
 
-    if not is_enable_market_sentiment(config):
+    if not is_enable_market_sentiment():
         return None
     if _credential_missing() is not None:
         return {

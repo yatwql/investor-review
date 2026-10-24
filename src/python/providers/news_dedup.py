@@ -51,8 +51,9 @@ from src.python.providers.news_dedup_rules import (  # noqa: F401
 logger = logging.getLogger("invest")
 
 # ── 锚点采集（阈值校准用） ──────────────────────────────────────
-# 每次 _dedup_by_title 运行后，边界案例收集到此列表，
-# aggregate_news() 结束时追写至 data/calibration/dedup_anchors.jsonl。
+# 边界案例收集（阈值校准用）**默认开启**（`INVEST_DEDUP_COLLECT_ANCHORS=0` 可关）：
+# _dedup_by_title 记录、aggregate_news() 结束时**追加**至 data/calibration/dedup_anchors.jsonl，
+# 不读旧文件（跨轮重复由校准工具按键去重）。锚点不参与去重判定。
 # 一条记录为一个 JSON 行，append-only。格式：
 #   {"ts","title_a","title_b","source_a","source_b",
 #    "ratio","bigram_overlap","merged","rule","anchor_rules_version"}
@@ -66,25 +67,18 @@ _ANCHOR_PATH = os.path.join(
 )
 #: 体积告警线：超过此值在加载时提醒压缩（flush 写全文、加载解析全文件，均是全文成本）
 _ANCHOR_SIZE_WARN_BYTES = 32 * 1024 * 1024
-#: 自动压缩阈值（与告警线同值）：超过即就地压缩，避免每轮报告都全量读写几十 MB。
+#: 压缩阈值（与告警线同值）：超过时记录一次维护提示；实际压缩只在评估/维护路径执行。
 #: 压缩保留每个标题对的**最新一条**（文件 append-only → 最后即最新），并先备份 .bak。
-#: 用 `INVEST_DEDUP_AUTO_COMPACT=0` 可关闭自动压缩（仅保留告警）。
-_ANCHOR_AUTO_COMPACT_ENV = "INVEST_DEDUP_AUTO_COMPACT"
+#: 用 `INVEST_DEDUP_AUTO_COMPACT=0` 可关闭维护压缩（仅保留告警）。
+_ANCHOR_COMPACT_ENV = "INVEST_DEDUP_AUTO_COMPACT"
+#: 采集开关（默认开启）：边界案例持续积累供诊断/阈值校准；显式设 0 可关闭。
+#: 采集与去重判定解耦——写侧只追加、不读 39MB 旧文件（跨轮重复由校准工具按键去重）。
+_ANCHOR_COLLECT_ENV = "INVEST_DEDUP_COLLECT_ANCHORS"
 #: 压缩时的保留期（天）：锚点只服务于「近期同对新闻不重复追加」，过期记录无消费者。
 #: 仅按 key 去重无法压小文件（标题对高度唯一，实测压后仍 37.9 MB），保留期才是
 #: 真正的体积上限；`INVEST_DEDUP_ANCHOR_RETENTION_DAYS` 可覆盖（0 = 不限，退回纯去重）。
 _ANCHOR_RETENTION_DAYS = 120
 _ANCHOR_RETENTION_ENV = "INVEST_DEDUP_ANCHOR_RETENTION_DAYS"
-
-# 进程级"已写锚点 key"集合 — 防止同一对 (source,title) 在多轮运行中重复追加。
-# 背景：锚点文件 append-only，同一对新闻在每次真实抓取进入候选区时都会重新记录，
-# 多轮后同一对重复数十次（实测 calibration 文件 61.6% 为重复记录），使校准报告
-# 绝对数字严重失真（如 cross_skip bg=0 从 279 虚增至 13800）。
-# 方案：首次 flush 时惰性加载现有文件 key 到内存集合，之后每次 flush 只写
-# 不在集合中的新 key、写后加入。跨会话、跨轮次均拦截重复，避免每次读全文件。
-_WRITTEN_ANCHOR_KEYS: set[str] = set()
-_WRITTEN_KEYS_LOADED = False
-_WRITTEN_KEYS_LOCK = threading.Lock()
 
 
 def _anchor_key(record: dict[str, Any]) -> str:
@@ -94,6 +88,12 @@ def _anchor_key(record: dict[str, Any]) -> str:
     # 排序使 (A,B) 与 (B,A) 视为同一对，避免来源顺序不同产生重复
     sa, ta = (a, b) if a <= b else (b, a)
     return f"{sa[0]}|{sa[1]}|{ta[0]}|{ta[1]}"
+
+
+def _anchor_collection_enabled() -> bool:
+    """是否采集去重锚点（默认开启；``INVEST_DEDUP_COLLECT_ANCHORS=0`` 可关闭）。"""
+    raw = os.environ.get(_ANCHOR_COLLECT_ENV, "1")
+    return str(raw).strip().lower() not in ("0", "", "false", "no")
 
 
 def _anchor_retention_days() -> int:
@@ -186,12 +186,13 @@ def _compact_verified(path: str) -> bool:
         return False
 
 
-def _auto_compact_anchor_file(size: int) -> bool:
+def _compact_anchor_file(size: int) -> bool:
     """锚点文件超阈值时就地压缩（每 key 最新 + 保留期），成功返回 True。
 
-    只在读侧首次加载时触发一次；任何失败都只告警、不阻断报告（原文件保持不动）。
+    由显式维护路径触发（``INVEST_DEDUP_MAINTENANCE=1`` 或校准工具 ``--compact``）；
+    任何失败都只告警、不阻断报告（原文件保持不动）。
     """
-    if os.environ.get(_ANCHOR_AUTO_COMPACT_ENV, "1").strip() == "0":
+    if os.environ.get(_ANCHOR_COMPACT_ENV, "1").strip() == "0":
         return False
     if size <= _ANCHOR_SIZE_WARN_BYTES or not os.path.exists(_ANCHOR_PATH):
         return False
@@ -231,7 +232,7 @@ def _auto_compact_anchor_file(size: int) -> bool:
             except OSError:
                 keep_backup = True
         logger.info(
-            "[dedup] 锚点文件已自动压缩：%.1f MB → %.1f MB（每 key 最新 + 近 %d 天；%s）",
+            "[dedup] 锚点文件已压缩（维护）：%.1f MB → %.1f MB（每 key 最新 + 近 %d 天；%s）",
             size / 1e6,
             new_size / 1e6,
             _anchor_retention_days(),
@@ -241,69 +242,50 @@ def _auto_compact_anchor_file(size: int) -> bool:
         )
         return True
     except OSError as e:  # 压缩失败不阻断报告：保留原文件与告警
-        logger.warning("[dedup] 锚点文件自动压缩失败（继续使用原文件）：%s", e)
+        logger.warning("[dedup] 锚点文件维护压缩失败（继续使用原文件）：%s", e)
         return False
 
 
-def _load_written_keys() -> None:
-    """惰性加载锚点文件已有 key 到 _WRITTEN_ANCHOR_KEYS（进程生命周期内一次）。
+#: 维护开关（默认关闭）：开启时超阈值执行就地压缩；关闭时只做体积告警（无读取）。
+_ANCHOR_MAINTENANCE_ENV = "INVEST_DEDUP_MAINTENANCE"
 
-    首次 flush 前调用，读一次现有文件，之后所有 flush 仅内存比对。文件不存在或
-    为空时静默返回空集合。
 
-    **体积关注**：本文件 append-only 且历史累积（曾达数百 MB、重复行占近九成），
-    而 flush 走追加写（单次 write + fsync，不再读全文重写）——但加载仍需解析全文件，
-    压缩仍需全量读一遍。超过 ``_ANCHOR_SIZE_WARN_BYTES`` 时告警并指向压缩入口。
+_ANCHOR_SIZE_WARNED = False
+
+
+def _maybe_maintain_anchor_file() -> None:
+    """追加后检查体积：超阈值时按维护开关决定压缩或提示（只 stat，不读全文）。
+
+    常态报告**不压缩**——压缩需要全量读+重写 39MB，且压缩后未必能降到阈值以下；
+    需要压缩时运行 ``scripts/eval-dedup-threshold.py --compact``，或显式设
+    ``INVEST_DEDUP_MAINTENANCE=1`` 让下一次 flush 顺带压缩一次。
     """
-    global _WRITTEN_KEYS_LOADED
-    with _WRITTEN_KEYS_LOCK:
-        if _WRITTEN_KEYS_LOADED:
-            return
-        _WRITTEN_KEYS_LOADED = True
-        if not os.path.exists(_ANCHOR_PATH):
-            return
-        try:
-            size = os.path.getsize(_ANCHOR_PATH)
-        except OSError:
-            size = 0
-        compacted = False
-        if size > _ANCHOR_SIZE_WARN_BYTES:
-            compacted = _auto_compact_anchor_file(size)
-            try:
-                size = os.path.getsize(_ANCHOR_PATH)
-            except OSError:
-                size = 0
-        if size > _ANCHOR_SIZE_WARN_BYTES:
-            # 成本口径：写侧为追加（与体积无关），只有**加载**（逐行解析）与**压缩**
-            # （全量读一遍）随体积增长。压缩已按策略执行仍超线属正常（锚点本身多），
-            # 记 INFO；压缩被禁用/失败才升级为 WARNING（那才是需要人工介入的情形）。
-            level = logging.INFO if compacted else logging.WARNING
-            logger.log(
-                level,
-                "[dedup] 锚点文件 %.1f MB（建议线 %.0f MB）：加载与压缩成本随体积增长（写侧为追加）。%s",
-                size / 1e6,
-                _ANCHOR_SIZE_WARN_BYTES / 1e6,
-                "已按保留期自动压缩；如需更小可调小 INVEST_DEDUP_ANCHOR_RETENTION_DAYS"
-                if compacted
-                else "自动压缩未执行（被禁用或失败），建议运行 `python scripts/eval-dedup-threshold.py --compact`",
-            )
-        try:
-            with open(_ANCHOR_PATH, encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        rec = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-                    _WRITTEN_ANCHOR_KEYS.add(_anchor_key(rec))
-        except OSError:
-            logger.warning("锚点 key 加载失败: %s", _ANCHOR_PATH)
+    try:
+        size = os.path.getsize(_ANCHOR_PATH)
+    except OSError:
+        return
+    if size <= _ANCHOR_SIZE_WARN_BYTES:
+        return
+    global _ANCHOR_SIZE_WARNED
+    if os.environ.get(_ANCHOR_MAINTENANCE_ENV, "0").strip().lower() in ("1", "true", "yes"):
+        _compact_anchor_file(size)
+        return
+    if _ANCHOR_SIZE_WARNED:
+        return
+    _ANCHOR_SIZE_WARNED = True
+    logger.info(
+        "[dedup] 锚点文件 %.1f MB（建议线 %.0f MB，累加采集不影响报告耗时）："
+        "需要压缩时运行 `python scripts/eval-dedup-threshold.py --compact`"
+        "（或设 INVEST_DEDUP_MAINTENANCE=1 在下次 flush 顺带压缩）",
+        size / 1e6,
+        _ANCHOR_SIZE_WARN_BYTES / 1e6,
+    )
 
 
 def _record_anchor(record: dict[str, Any]) -> None:
-    """线程安全地追加一条锚点记录。"""
+    """线程安全地追加一条锚点记录（采集关闭时零开销返回）。"""
+    if not _anchor_collection_enabled():
+        return
     with _ANCHOR_LOCK:
         _ANCHOR_RECORDS.append(record)
 
@@ -337,43 +319,38 @@ def _make_anchor(
 
 
 def _flush_anchors() -> None:
-    """将内存中的锚点记录追写到 JSONL 文件，然后清空列表。
+    """将内存中的锚点记录**追加**到 JSONL 文件，然后清空列表。
 
-    一次运行产生数十条记录（~200 字节/条），文件写入发生在去重完成后，
-    不影响新闻获取和报告生成的主流程。
+    设计取舍：采集与去重判定解耦——写侧只追加（单次 ``write`` + ``fsync``），
+    **不读旧文件**。同一标题对跨轮重复由校准工具 ``load_anchors`` 按键去重
+    （保留最早一条），因此重复行不影响诊断结论，只影响文件体积；体积由体积告警
+    与 ``eval-dedup-threshold.py --compact``（或显式维护开关）治理。
 
-    写入前按 (source,title) 对去重：只写本次尚未写入文件的记录（查
-    _WRITTEN_ANCHOR_KEYS），写后加入集合。防止同一对新闻多轮运行重复
-    追加导致校准数字失真（见 _WRITTEN_ANCHOR_KEYS 注释）。
-
-    落盘走 :func:`_append_anchor_lines`（单次追加写 + fsync；写入量只与本次新增条数
-    相关，与文件体积无关）。
+    本次批次内仍按 ``_anchor_key`` 去重，避免同一次运行重复写入同一对。
     """
     global _ANCHOR_RECORDS
+    if not _anchor_collection_enabled():
+        with _ANCHOR_LOCK:
+            _ANCHOR_RECORDS = []
+        return
     if not _ANCHOR_RECORDS:
         return
     with _ANCHOR_LOCK:
         records = _ANCHOR_RECORDS
         _ANCHOR_RECORDS = []  # 先清空再写，防止递归写入
-    _load_written_keys()
+
     new_records: list[dict[str, Any]] = []
-    with _WRITTEN_KEYS_LOCK:
-        for r in records:
-            key = _anchor_key(r)
-            if key in _WRITTEN_ANCHOR_KEYS:
-                continue
-            _WRITTEN_ANCHOR_KEYS.add(key)
-            new_records.append(r)
+    seen: set[str] = set()
+    for record in records:
+        key = _anchor_key(record)
+        if key in seen:
+            continue
+        seen.add(key)
+        new_records.append(record)
     if not new_records:
         return
-    # 追加写（单次 write + fsync，不读全文、不整文件替换）：锚点文件实测 37.9 MB，
-    # 每轮只新增数十条，走「读全文→替换」等于为几十行重写几十 MB。
     if _append_anchor_lines([json.dumps(r, ensure_ascii=False) + "\n" for r in new_records]):
-        return
-    # 写盘失败：撤回本次登记的 key，否则这些锚点会被永久判为"已写"而丢失
-    with _WRITTEN_KEYS_LOCK:
-        for r in new_records:
-            _WRITTEN_ANCHOR_KEYS.discard(_anchor_key(r))
+        _maybe_maintain_anchor_file()
 
 
 def _dedup_by_title(

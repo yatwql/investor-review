@@ -40,6 +40,7 @@ def aggregate_news(
     per_source: int = 100,
     progress_callback: Callable[[str, int, str], None] | None = None,
     lightweight_keywords: set[str] | None = None,
+    span_recorder=None,
 ) -> list[dict[str, Any]]:
     """从多个新闻源获取新闻，去重后按关键词关联度排序。
 
@@ -63,6 +64,7 @@ def aggregate_news(
         per_source=per_source,
         progress_callback=progress_callback,
         lightweight_keywords=lightweight_keywords,
+        span_recorder=span_recorder,
     )
 
 

@@ -285,7 +285,7 @@ def build_candidate_compare_data(
         {"available": True, "exceed_limit", "invalid", "rows", "stale_baseline_notes"} — 正常。
         `stale_baseline_notes` 列出因报告期陈旧而未进入重合度基准的现有持仓基金。
     """
-    if not is_enable_candidate_compare(config):
+    if not is_enable_candidate_compare():
         return None
     codes = list(get_comparison_candidates(config) or [])
     if cli_codes:

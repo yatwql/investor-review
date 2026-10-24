@@ -100,10 +100,8 @@ class TestAtomicWriteCrashRecovery(unittest.TestCase):
         tmp_files_before = [f for f in os.listdir(config_dir) if f.endswith(".tmp")]
 
         with patch("src.python.config._core.os.replace", side_effect=OSError("crash")):
-            try:
+            with self.assertRaises(OSError):
                 cfg.set_config("holdings_dir", "/new")
-            except OSError:
-                pass
 
         tmp_files_after = [f for f in os.listdir(config_dir) if f.endswith(".tmp")]
         self.assertEqual(len(tmp_files_after), len(tmp_files_before))

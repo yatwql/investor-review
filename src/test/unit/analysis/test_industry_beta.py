@@ -84,9 +84,16 @@ class TestIndustryIndexMap:
     """行业名 → 指数代码映射。"""
 
     def test_common_industry_mapped(self):
-        """常见行业均有映射。"""
-        for name in ["银行", "证券", "白酒", "半导体", "医药"]:
-            assert industry_index_for(name) is not None
+        """常见行业映射到具体指数代码（映射表变更须同步本断言）。"""
+        expected = {
+            "银行": "sh000986",
+            "证券": "sz399975",
+            "白酒": "sz399997",
+            "半导体": "sz399995",
+            "医药": "sz399989",
+        }
+        for name, code in expected.items():
+            assert industry_index_for(name) == code
 
     def test_unknown_industry_none(self):
         """未知行业无映射（仅暴露占比）。"""

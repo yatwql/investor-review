@@ -194,13 +194,11 @@ class TestElapsedTradingDaysWithNaturalFallback:
         """日历可用 → 按交易日计（扣除周末/节假日）。"""
         from src.python.core import trading_calendar as tc
 
-        trading_days = {"2024-12-20", "2024-12-23", "2024-12-24", "2024-12-25", "2024-12-26", "2024-12-27"}
         monkeypatch.setattr(
             tc, "count_trading_days_elapsed", lambda s, e: 5 if (s, e) == ("2024-12-20", "2024-12-27") else None
         )
         monkeypatch.setattr(tc.cache, "get", lambda *a, **k: None)
         assert tc.elapsed_trading_days_with_natural_fallback("2024-12-20", "2024-12-27") == 5
-        del trading_days
 
 
 class TestCalendarProcessMemo:

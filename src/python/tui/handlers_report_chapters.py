@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""TUI ``[C]`` 报告章节显隐面板：16 项四块 + 智囊团两个生成子项。
+"""TUI ``[C]`` 报告章节显隐面板：四块章节 + 智囊团生成子项（数量由注册表派生）。
 
 清单、编号、分块、来源与子项全部取自 :mod:`config.chapter_registry`（唯一来源）；
 本模块只做「取值 → 渲染 → 派发」。写路径经 ``handlers_config._apply_edit``
@@ -94,6 +94,20 @@ def _format_row(
     if grey:
         head = f"{DIM}{head}{RESET}"
     return [truncate_display(head, limit)]
+
+
+def invalid_number_hint() -> str:
+    """无效编号提示里的可输入范围——编号与子项都从注册表现取，不写死数字。
+
+    章节/子项是注册表派生量：新增一章或一个生成子项后，写死的「1-16」「7.1」
+    会立刻过期，把用户引到不存在的编号上。
+    """
+    from src.python.config.chapter_registry import chapter_numbers, sub_item_numbers
+
+    numbers = [str(number) for number, _entry in chapter_numbers()]
+    span = f"{numbers[0]}-{numbers[-1]}" if numbers else "编号"
+    subs = sorted(sub_item_numbers())
+    return f"可输入 {span}" + (f" 或子项 {' / '.join(subs)}" if subs else "")
 
 
 def run_report_chapters_panel() -> None:
@@ -194,7 +208,7 @@ def run_report_chapters_panel() -> None:
     panel_items.append(PanelItem("0", "返回主菜单", kind="return"))
 
     def _on_text(token: str) -> None:
-        _emit(f"  {YELLOW}[!]{RESET} 无效编号「{token}」（可输入 1-16 或子项 7.1 / 7.2，? 看说明）")
+        _emit(f"  {YELLOW}[!]{RESET} 无效编号「{token}」（{invalid_number_hint()}，? 看说明）")
 
     def _help(target: str) -> bool:
         """``?编号`` / ``?7.1`` / ``?键名`` 富详情（只读，不写配置）。"""

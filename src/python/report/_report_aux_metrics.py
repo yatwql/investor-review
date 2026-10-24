@@ -43,7 +43,7 @@ def compute_market_temperature_data(
     """
     from src.python.config import is_enable_market_temperature
 
-    if not is_enable_market_temperature(config):
+    if not is_enable_market_temperature():
         return None
 
     from src.python.analysis.market_temperature import (
@@ -254,7 +254,7 @@ def compute_market_sentiment_data(
     """
     from src.python.config import is_enable_market_sentiment
 
-    if not is_enable_market_sentiment(config):
+    if not is_enable_market_sentiment():
         return None
     from src.python.report.market_sentiment import build_market_sentiment_data
 

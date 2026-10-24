@@ -1,7 +1,7 @@
 """Web 配置编辑 — 可编辑面（GET）呈现 + 编辑应用（POST）委托。
 
 编辑白名单、值校验、写入分派与写前备份的唯一实现在
-``src/python/config/edit_ops.py``（Web / TUI 共用同一函数，校验强度一致）；
+``src/python/config/edit_ops.py``（TUI / Web / CLI 共用同一函数，校验强度一致）；
 本模块保留 Web 面板特有的可编辑面组装（``get_config_edit_surface``），
 并公开再导出共享层符号（既有引用保持可用）。
 """
@@ -87,6 +87,21 @@ _DOMAIN_BLOCKS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("llm_run", ("tuning",)),
     ("ops_diagnostics", ("logging", "reference")),
 )
+
+#: 块 id → 中文块标题（前端只用标题渲染，不持有任何中文表；`features.<组键>` 用组自身标题）
+_BLOCK_TITLES: dict[str, str] = {
+    "paths": "目录与文件",
+    "sections": "报告章节",
+    "llm": "LLM 分析章节",
+    "standalone_chapters": "默认关闭的整章",
+    "standalone_related": "关联产物",
+    "anonymization": "持仓匿名化",
+    "indices": "对比基准指数",
+    "providers": "多链线路优先级",
+    "tuning": "LLM 运行参数",
+    "logging": "日志设置",
+    "reference": "参考信息",
+}
 
 #: 六组「章内内容」开关所在的面板（`[S]`）；独立整章/关联产物另立块
 _CONTENT_PANEL = "[S]"
@@ -338,6 +353,7 @@ def get_config_edit_surface() -> dict:
     return {
         "domains": _block_domains(),
         **_panel_metadata(),
+        "block_titles": dict(_BLOCK_TITLES),
         "paths": paths,
         "sections": sections,
         "standalone_chapters": standalone_chapters,

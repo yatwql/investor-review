@@ -1,8 +1,8 @@
-"""新闻去重实现分片：标题判定算法、锚点写入去重、追加写与保留期压缩。
+"""新闻去重实现分片：标题判定算法、锚点追加写、维护压缩。
 
 判定口径：
-- 同一 (source,title) 对跨轮不重复追加；不同对正常追加；写失败回滚 key；
-- 写侧为**追加**（不重写全文），压缩按「每 key 最新 + 保留期」双条件裁剪。
+- 写侧只追加（不读旧文件）；同批内按 (source,title) 去重，跨轮重复由校准工具按键去重；
+- 维护压缩按「每 key 最新 + 保留期」双条件裁剪（评估默认执行，报告路径不压缩）。
 """
 
 from __future__ import annotations
@@ -20,13 +20,26 @@ from src.python.providers.news_dedup import _record_anchor
 pytestmark = [pytest.mark.unit, pytest.mark.unit_news]
 
 
-class TestFlushAnchorsDedup(unittest.TestCase):
-    """_flush_anchors 锚点写入去重 — 同一对 (source,title) 跨轮运行不重复追加。
+@pytest.fixture(autouse=True)
+def _enable_anchor_collection(monkeypatch):
+    """锚点采集默认开启；本文件显式固定为开启，避免外部环境变量影响断言。"""
+    monkeypatch.setenv("INVEST_DEDUP_COLLECT_ANCHORS", "1")
 
-    背景：锚点文件 append-only，同一对新闻在每次真实抓取（_dedup_by_title
-    进入候选区）时都会重新记录，多轮运行后同一对重复数十次（实测 calibration
-    文件 61.6% 为重复记录），导致校准报告绝对数字失真（如 cross_skip bg=0
-    从 279 虚增至 13800）。本测试验证写入层按 key 去重后跨轮不重复。
+
+def test_anchor_collection_defaults_on(monkeypatch):
+    """采集默认开启（诊断数据持续积累）；仅显式设 0 才关闭。"""
+    from src.python.providers.news_dedup import _anchor_collection_enabled
+
+    monkeypatch.delenv("INVEST_DEDUP_COLLECT_ANCHORS", raising=False)
+    assert _anchor_collection_enabled() is True
+
+
+class TestFlushAnchorsDedup(unittest.TestCase):
+    """_flush_anchors 追加写语义：批内去重、跨轮追加由校准工具按键去重。
+
+    设计取舍：写侧只追加、不读旧文件（避免每轮解析 39MB）；同一标题对跨轮
+    重复由 ``eval-dedup-threshold.py::load_anchors`` 按键去重（保留最早一条），
+    因此诊断结论不受重复行影响。
     """
 
     pytestmark = [
@@ -35,7 +48,7 @@ class TestFlushAnchorsDedup(unittest.TestCase):
     ]
 
     def setUp(self) -> None:
-        """隔离锚点路径 + 清空进程级已写 key 集合，避免污染真实 calibration 文件。"""
+        """隔离锚点路径并清空内存记录，避免污染真实 calibration 文件。"""
         import tempfile
         from unittest.mock import patch
 
@@ -46,12 +59,13 @@ class TestFlushAnchorsDedup(unittest.TestCase):
         # 隔离写入路径：patch 模块常量，确保测试不触碰真实 data/calibration/
         self._path_patch = patch("src.python.providers.news_dedup._ANCHOR_PATH", self._anchor_path)
         self._path_patch.start()
-        # 重置进程级已写集合与内存记录列表
-        news_dedup._WRITTEN_ANCHOR_KEYS = set()
+        self._collect_patch = patch.dict(os.environ, {"INVEST_DEDUP_COLLECT_ANCHORS": "1"})
+        self._collect_patch.start()
         news_dedup._ANCHOR_RECORDS = []
 
     def tearDown(self) -> None:
         """恢复 patch。"""
+        self._collect_patch.stop()
         self._path_patch.stop()
 
     def _record_cross_skip(self, title_a: str, title_b: str) -> None:
@@ -71,22 +85,40 @@ class TestFlushAnchorsDedup(unittest.TestCase):
             }
         )
 
-    def test_same_pair_flushed_once_across_runs(self) -> None:
-        """同一对新闻跨两次 flush 只写入一次。"""
+    def test_collection_disabled_skips_record_and_flush(self) -> None:
+        """显式关闭采集：_record_anchor 不积累、_flush_anchors 不创建文件。"""
+        from src.python.providers import news_dedup
+
+        with patch.dict(os.environ, {"INVEST_DEDUP_COLLECT_ANCHORS": "0"}):
+            self._record_cross_skip("新闻A", "新闻B")
+            self.assertEqual(news_dedup._ANCHOR_RECORDS, [])
+            news_dedup._flush_anchors()
+        self.assertFalse(os.path.exists(self._anchor_path))
+
+    def test_same_pair_within_batch_flushed_once(self) -> None:
+        """同一批内同一对新闻只写一次（批内去重）。"""
         from src.python.providers.news_dedup import _flush_anchors
 
-        # 第一轮：两条不同记录 + 一条与下一轮相同的记录
-        self._record_cross_skip("特朗普下令暂停空袭伊朗", "美国连续第二晚暂停袭击伊朗")
-        self._record_cross_skip("华尔街见闻", "东方财富完全不同新闻")
+        self._record_cross_skip("新闻A", "新闻B")
+        self._record_cross_skip("新闻A", "新闻B")
         _flush_anchors()
-        lines1 = open(self._anchor_path, encoding="utf-8").readlines()
-        self.assertEqual(len(lines1), 2, f"第一轮应写 2 条: {lines1}")
+        with open(self._anchor_path, encoding="utf-8") as f:
+            self.assertEqual(len(f.readlines()), 1)
 
-        # 第二轮：再次出现第一轮同对记录 → 不应重复追加
-        self._record_cross_skip("特朗普下令暂停空袭伊朗", "美国连续第二晚暂停袭击伊朗")
+    def test_cross_run_duplicates_are_deduped_by_calibration(self) -> None:
+        """跨轮重复会追加（写侧不读旧文件），但校准工具按键去重为一对。"""
+        from src.python.providers.news_dedup import _flush_anchors
+        from src.test._script_loader import load_script
+
+        self._record_cross_skip("新闻A", "新闻B")
         _flush_anchors()
-        lines2 = open(self._anchor_path, encoding="utf-8").readlines()
-        self.assertEqual(len(lines2), 2, f"第二轮不应重复追加，仍应 2 条: {lines2}")
+        self._record_cross_skip("新闻A", "新闻B")
+        _flush_anchors()
+        with open(self._anchor_path, encoding="utf-8") as f:
+            self.assertEqual(len(f.readlines()), 2, "写侧只追加，跨轮重复保留在文件里")
+
+        tool = load_script("eval-dedup-threshold.py", module_name="_eval_dedup_threshold_under_test")
+        assert len(tool.load_anchors(self._anchor_path)) == 1, "校准工具应按键去重"
 
     def test_different_pairs_still_appended(self) -> None:
         """不同 (source,title) 对正常追加，不被误去重。"""
@@ -96,52 +128,8 @@ class TestFlushAnchorsDedup(unittest.TestCase):
         _flush_anchors()
         self._record_cross_skip("新闻C", "新闻D")
         _flush_anchors()
-        lines = open(self._anchor_path, encoding="utf-8").readlines()
-        self.assertEqual(len(lines), 2, f"不同对应各写一条: {lines}")
-
-    def test_anchor_keys_cached_across_flush(self) -> None:
-        """进程级已写 key 集合在 flush 后更新，后续同对直接拦截（不重复读文件）。"""
-        from src.python.providers import news_dedup
-
-        # 首次 flush 后 _WRITTEN_ANCHOR_KEYS 应包含已写 key
-        self._record_cross_skip("新闻A", "新闻B")
-        news_dedup._flush_anchors()
-        self.assertGreaterEqual(
-            len(news_dedup._WRITTEN_ANCHOR_KEYS),
-            1,
-            "flush 后进程级 key 集合应包含已写记录",
-        )
-
-    def test_write_failure_rolls_back_written_keys(self) -> None:
-        """落盘失败 → 撤回本次登记的 key，锚点不被永久判为「已写」而丢失。
-
-        回归背景：key 在「决定要写」时即加入 `_WRITTEN_ANCHOR_KEYS`，若落盘只走
-        ``open(..., "a")`` 且失败仅记一条 warning，key 就留在集合里——该对新闻
-        此后每轮都被判「已写」而永不重试，锚点永久丢失（校准数字少计却无任何
-        异常提示）。正确语义是批量原子写 + 失败回滚 key。
-
-        失败以真实 IO 故障构造（锚点目录被同名普通文件占位），使直接追加的写法
-        同样走到「记录警告」路径——断言在其下确为红，而非仅因接口改名而报错。
-        """
-        from src.python.providers import news_dedup
-
-        blocker = os.path.join(self._tmpdir, "blocker")
-        with open(blocker, "w", encoding="utf-8") as f:
-            f.write("占位：同名目录无法创建")
-        news_dedup._ANCHOR_PATH = os.path.join(blocker, "anchors.jsonl")
-
-        self._record_cross_skip("新闻E", "新闻F")
-        news_dedup._flush_anchors()
-
-        self.assertEqual(news_dedup._WRITTEN_ANCHOR_KEYS, set(), "写失败后 key 应被撤回")
-
-        # 恢复可写路径后重试 → 该对新闻仍能落盘，未被「已写」集合拦掉
-        news_dedup._ANCHOR_PATH = self._anchor_path
-        self._record_cross_skip("新闻E", "新闻F")
-        news_dedup._flush_anchors()
         with open(self._anchor_path, encoding="utf-8") as f:
-            lines = f.readlines()
-        self.assertEqual(len(lines), 1, f"重试后应写入 1 条: {lines}")
+            self.assertEqual(len(f.readlines()), 2)
 
 
 class TestDedupGenericTokenVeto(unittest.TestCase):
@@ -442,7 +430,6 @@ class TestPairSimilarityMatchesLinkDecision(unittest.TestCase):
             "src.python.providers.news_dedup._ANCHOR_PATH", os.path.join(self._tmpdir, "anchors.jsonl")
         )
         self._path_patch.start()
-        news_dedup._WRITTEN_ANCHOR_KEYS = set()
         news_dedup._ANCHOR_RECORDS = []
 
     def tearDown(self) -> None:
@@ -491,9 +478,7 @@ class TestAnchorAppendAndRetention(unittest.TestCase):
         self._path_patch.start()
         from src.python.providers import news_dedup
 
-        news_dedup._WRITTEN_ANCHOR_KEYS = set()
         news_dedup._ANCHOR_RECORDS = []
-        news_dedup._WRITTEN_KEYS_LOADED = False
 
     def tearDown(self) -> None:
         self._path_patch.stop()
@@ -564,7 +549,7 @@ class TestAnchorAppendAndRetention(unittest.TestCase):
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
         with patch.object(news_dedup, "_ANCHOR_SIZE_WARN_BYTES", 1):
-            news_dedup._auto_compact_anchor_file(os.path.getsize(self._anchor_path))
+            news_dedup._compact_anchor_file(os.path.getsize(self._anchor_path))
 
         remaining = open(self._anchor_path, encoding="utf-8").read()
         self.assertIn("新新闻一", remaining)
@@ -592,6 +577,6 @@ class TestAnchorAppendAndRetention(unittest.TestCase):
             patch.object(news_dedup, "_ANCHOR_SIZE_WARN_BYTES", 1),
             patch.dict(os.environ, {news_dedup._ANCHOR_RETENTION_ENV: "0"}),
         ):
-            news_dedup._auto_compact_anchor_file(os.path.getsize(self._anchor_path))
+            news_dedup._compact_anchor_file(os.path.getsize(self._anchor_path))
 
         self.assertIn("很老的新闻甲", open(self._anchor_path, encoding="utf-8").read())

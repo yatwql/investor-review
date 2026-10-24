@@ -294,3 +294,48 @@ class TestFetchFromAllSources(unittest.TestCase):
         # 去重后只保留 1 条（先到的不一定是哪个，但数量为 1）
         self.assertEqual(len(all_raw), 1)
         self.assertEqual(all_raw[0]["title"], "相同新闻")
+
+
+class _SpanRecorder:
+    """记录 span 名称与耗时（仅验证子阶段接线，不参与业务断言）。"""
+
+    def __init__(self) -> None:
+        self.spans: list[tuple[str, float]] = []
+
+    def record(self, name: str, seconds: float) -> None:
+        self.spans.append((name, seconds))
+
+
+class TestAggregateNewsSpans:
+    """新闻抓取/去重关联/锚点维护各自进入 breakdown。"""
+
+    @patch("src.python.providers.news_aggregator._flush_anchors")
+    @patch("src.python.providers.news_aggregator._save_news_cache")
+    @patch("src.python.providers.news_aggregator._finalize_news_results", return_value=[])
+    @patch(
+        "src.python.providers.news_aggregator._fetch_from_all_sources",
+        return_value=([{"title": "新闻", "ctime": "2026-10-24 10:00"}], {"sina": (1, "OK")}),
+    )
+    @patch("src.python.providers.news_aggregator._check_news_cache", return_value=None)
+    def test_sub_phases_recorded(self, _cache, _fetch, _finalize, _save, _flush):
+        from src.python.providers.news_aggregator import aggregate_news
+
+        recorder = _SpanRecorder()
+        aggregate_news(["茅台"], top_n=5, sources=["sina"], span_recorder=recorder)
+
+        names = [name for name, _seconds in recorder.spans]
+        assert names == ["新闻源抓取", "去重与关联", "锚点维护"]
+        assert all(seconds >= 0 for _name, seconds in recorder.spans)
+
+    @patch("src.python.providers.news_aggregator._flush_anchors")
+    @patch("src.python.providers.news_aggregator._save_news_cache")
+    @patch("src.python.providers.news_aggregator._finalize_news_results", return_value=[])
+    @patch(
+        "src.python.providers.news_aggregator._fetch_from_all_sources",
+        return_value=([], {}),
+    )
+    @patch("src.python.providers.news_aggregator._check_news_cache", return_value=None)
+    def test_no_recorder_keeps_behavior(self, _cache, _fetch, _finalize, _save, _flush):
+        from src.python.providers.news_aggregator import aggregate_news
+
+        assert aggregate_news(["茅台"], top_n=5, sources=["sina"]) == []

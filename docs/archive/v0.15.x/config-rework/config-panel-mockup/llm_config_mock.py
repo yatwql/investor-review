@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-REPO = HERE.parents[2]
+REPO = HERE.parents[4]
 sys.path.insert(0, str(REPO))
 
 from src.python.config import read_llm_settings_file  # noqa: E402

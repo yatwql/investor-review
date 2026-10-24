@@ -77,6 +77,27 @@ class TestBlockRendererContract:
         assert set(surface["standalone_related"]) == {e.key for e in chapters_in_block(BLOCK_ARTIFACT)}
 
 
+class TestBlockTitles:
+    def test_every_block_has_chinese_title(self, surface):
+        """每个块 id 都有随面下发的中文标题（`features.*` 用组自身标题）。
+
+        回归：块标题曾回退到块 id 本身，面板上直接显示 `sections` / `llm` 这类内部标识。
+        """
+        titles = surface["block_titles"]
+        for domain in surface["domains"]:
+            for block in domain["blocks"]:
+                if block.startswith("features."):
+                    assert block.split(".", 1)[1] in {group["key"] for group in surface["features"]["groups"]}, block
+                    continue
+                assert block in titles, f"块 {block} 缺中文标题"
+                assert any("\u4e00" <= ch <= "\u9fff" for ch in titles[block]), (block, titles[block])
+
+    def test_titles_are_not_block_ids(self, surface):
+        """标题不得等于块 id（前端显示的应是中文名，而不是内部标识）。"""
+        for block, title in surface["block_titles"].items():
+            assert title != block, block
+
+
 class TestNoChineseTablesInFrontend:
     def test_no_label_tables(self, main_js):
         """前端不持有中文标签字典（标签/说明/默认值一律服务端下发）。"""

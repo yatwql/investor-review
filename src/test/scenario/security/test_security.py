@@ -19,6 +19,7 @@ import os
 import re
 import sys
 import zipfile
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -40,6 +41,15 @@ _SAMPLE_KEY_PATTERNS = [
     re.compile(r"sk-[a-zA-Z0-9]{20,}"),  # OpenAI / Claude
     re.compile(r"api[_-]?key[\s\"':=]+[a-zA-Z0-9_\-]{10,}", re.IGNORECASE),
 ]
+
+#: 绝对文件系统路径形态（Windows 盘符 / UNC / Linux / macOS 家目录 / tmp）
+_PATH_LEAK_PATTERNS = (
+    re.compile(r"[A-Z]:\\"),
+    re.compile(r"/home/"),
+    re.compile(r"/Users/"),
+    re.compile(r"/tmp/"),
+    re.compile(r"\\Users\\"),
+)
 
 # ── 测试持仓 ─────────────────────────────────────────────────
 
@@ -127,7 +137,6 @@ class TestSecurityBaseline:
         不变量（与 `unit_config` 的内联 api_key 硬拒绝同一判据），也是上面
         权限基线可以不含它的依据。
         """
-        import json
 
         from src.python.core.constants import PROJECT_ROOT
 
@@ -152,20 +161,14 @@ class TestSecurityBaseline:
 
     @pytest.mark.scenario_security
     def test_cache_content_no_api_key(self, tmp_path):
-        """缓存文件不应包含明文 API 密钥（常见密钥模式与字段名特征）。"""
-        # 手动构造一个缓存 JSON 文件进行密钥扫描
-        cache_data = {
-            "_ts": 1000.0,
-            "_data": {
-                "price": 35.5,
-                "name": "test",
-            },
-        }
-        fpath = tmp_path / "test_cache_entry.json"
-        fpath.write_text(json.dumps(cache_data, ensure_ascii=False), encoding="utf-8")
+        """缓存写入器产出的条目不含明文密钥（扫生产序列化后的真实文件）。"""
+        from src.python.cache import _cache_path, set as cache_set
+
+        with patch("src.python.cache._paths._CACHE_DIR", str(tmp_path)):
+            cache_set("test_cache_entry", {"price": 35.5, "name": "test"})
+            content = Path(_cache_path("test_cache_entry")).read_text(encoding="utf-8")
 
         # 正则扫描常见密钥模式
-        content = fpath.read_text(encoding="utf-8")
         for pattern in _SAMPLE_KEY_PATTERNS:
             match = pattern.search(content)
             if match:
@@ -225,74 +228,36 @@ class TestSecurityBaseline:
     # ── 基线 4: LLM 日志密钥脱敏 ─────────────────────────
 
     @pytest.mark.scenario_security
-    def test_llm_api_key_masked_in_log(self):
-        """LLM API 日志不应记录完整密钥，仅显示 ***{last4}。"""
-        # 模拟日志消息
-        log_msg = f"调用 LLM API，key={_SAMPLE_API_KEY}"
-        # 检查是否有脱敏处理（在 llm 模块中查找 key_masking 逻辑）
-        # 模拟脱敏行为
-        masked = _mask_api_key(log_msg)
-        assert _SAMPLE_API_KEY not in masked, "完整密钥不应出现在脱敏日志中"
-        assert "***" in masked, "脱敏日志应含 ***"
-        logger.info("密钥脱敏验证: '%s' → '%s'", _SAMPLE_API_KEY[:8] + "...", masked)
+    def test_llm_source_never_logs_api_key(self):
+        """LLM 调用层源码不得把 api_key 写进日志语句（静态守卫，防新增泄漏点）。"""
+        from src.python.core.constants import PROJECT_ROOT
+
+        offenders: list[str] = []
+        for path in (Path(PROJECT_ROOT) / "src/python/llm").rglob("*.py"):
+            for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+                if "api_key" in line and ("logger." in line or "print(" in line):
+                    offenders.append(f"{path.relative_to(PROJECT_ROOT)}:{lineno}")
+        assert offenders == [], f"LLM 日志语句含 api_key：{offenders}"
 
     # ── 基线 5: HTML 路径泄露 ────────────────────────────
 
     @pytest.mark.scenario_security
-    def test_html_no_path_leakage(self):
-        """HTML 报告不应包含绝对文件系统路径（跨平台路径形态均可检出）。"""
-        # 模拟 HTML 片段
-        safe_html = "<h1>投资分析报告</h1><p>组合市值: ¥1,000,000</p>"
-        # 检查无路径泄露
-        path_patterns = [r"[A-Z]:\\", r"/home/", r"/Users/", r"/tmp/", r"\\Users\\"]
-        for pat in path_patterns:
-            match = re.search(pat, safe_html)
-            if match:
-                pytest.fail(f"HTML 泄露文件路径: {match.group()}")
+    def test_templates_contain_no_absolute_paths(self):
+        """HTML 模板产物不得含绝对文件系统路径（Windows / Linux / macOS 形态）。"""
+        from src.python.core.constants import PROJECT_ROOT
 
-        # 分段拼接构造含各类绝对路径的样本，验证检测器均能识别
-        # （源码中不出现完整绝对路径字面量，Windows/Linux/macOS 形态均覆盖）
-        windows_abs = "\\".join(["C:", "fake", "report.html"])  # 盘符型（Windows）
-        home_abs = "/".join(["", "home", "user", "report.html"])  # home 型（Linux/macOS）
-        tmp_abs = "/".join(["", "tmp", "report.html"])  # tmp 型（Linux/macOS）
-        user_abs = "\\".join(["", "Users", "user", "report.html"])  # Users 型（Windows）
-        unsafe_samples = [
-            f"<p>报告生成于 {windows_abs}</p>",
-            f"<p>报告生成于 {home_abs}</p>",
-            f"<p>报告生成于 {tmp_abs}</p>",
-            f"<p>报告生成于 {user_abs}</p>",
-        ]
-        for sample in unsafe_samples:
-            has_leak = any(re.search(pat, sample) for pat in path_patterns)
-            assert has_leak, f"路径检测模式应能识别绝对路径: {sample}"
-        logger.info("HTML 路径泄露检测模式验证通过")
-
-
-# ── 辅助函数 ─────────────────────────────────────────────────
-
-
-def _mask_api_key(text: str, visible_chars: int = 4) -> str:
-    """脱敏文本中的 API 密钥模式。
-
-    将 sk-... 格式的密钥替换为 sk-***{last4}。
-
-    Args:
-        text: 原始文本
-        visible_chars: 末尾保留的可见字符数
-
-    Returns:
-        脱敏后的文本
-    """
-    pattern = re.compile(r"(sk-)[a-zA-Z0-9_-]+")
-
-    def _replacer(m: re.Match) -> str:
-        prefix = m.group(1)
-        full_key = m.group(0)
-        if len(full_key) > visible_chars + len(prefix):
-            return f"{prefix}***{full_key[-visible_chars:]}"
-        return full_key
-
-    return pattern.sub(_replacer, text)
+        offenders: list[str] = []
+        template_dir = Path(PROJECT_ROOT) / "src/static/tmpl"
+        for path in sorted(template_dir.rglob("*")):
+            if path.suffix not in {".html", ".js", ".css"}:
+                continue
+            text = path.read_text(encoding="utf-8")
+            for pattern in _PATH_LEAK_PATTERNS:
+                match = pattern.search(text)
+                if match:
+                    offenders.append(f"{path.relative_to(PROJECT_ROOT)}: {match.group()}")
+        assert offenders == [], f"模板泄露文件路径：{offenders}"
+        logger.info("HTML 模板路径泄露检查通过")
 
 
 # ── 产物级端到端断言（config anonymization.mode → HTML/Excel 产物无样例真名） ──

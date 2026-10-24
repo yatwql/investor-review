@@ -1,6 +1,8 @@
 """CLI 命令行模式包。"""
 
 from src.python.cli.cli import (
+    _apply_cli_anonymize,
+    _apply_cli_chapters,
     _apply_cli_experiments,
     _apply_cli_switches,
     _build_parser,
@@ -13,6 +15,7 @@ from src.python.cli.cli import (
     _handle_cache,
     _handle_cache_update,
     _handle_cassettes,
+    _handle_config,
     _handle_doctor,
     _handle_health_history,
     _handle_report,
@@ -23,6 +26,8 @@ from src.python.cli.cli import (
 )
 
 __all__ = [
+    "_apply_cli_anonymize",
+    "_apply_cli_chapters",
     "_apply_cli_experiments",
     "_apply_cli_switches",
     "_build_parser",
@@ -35,6 +40,7 @@ __all__ = [
     "_handle_cache",
     "_handle_cache_update",
     "_handle_cassettes",
+    "_handle_config",
     "_handle_doctor",
     "_handle_health_history",
     "_handle_report",

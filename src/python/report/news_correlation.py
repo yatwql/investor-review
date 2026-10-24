@@ -442,6 +442,7 @@ def build_news_data(
     penetrated_assets: list[dict] | None = None,
     purchase_constraint_block: str = "",
     force_news_llm: bool = False,
+    span_recorder=None,
 ) -> tuple[list[dict[str, Any]], dict]:
     """获取新闻数据并与持仓关联。
 
@@ -460,6 +461,7 @@ def build_news_data(
             会额外覆盖穿透到的底层资产。
         force_news_llm: 新闻关联 LLM 增强模块级强刷（
             news_correlation ∈ 强刷集合时置 True，跳过 LLM 缓存）。
+        span_recorder: 可选子阶段记录器（新闻抓取/去重/锚点维护）。
 
     Returns:
         (news_data, meta)
@@ -484,6 +486,7 @@ def build_news_data(
         per_source=per_source,
         progress_callback=_news_source_cb,
         lightweight_keywords=lightweight_kw,
+        span_recorder=span_recorder,
     )
 
     active_sources = _extract_active_sources(news_items)

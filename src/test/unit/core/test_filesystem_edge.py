@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import os
 import tempfile
-import zipfile
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -170,31 +169,24 @@ class TestFileLocked(unittest.TestCase):
     @patch("src.python.core.reader.openpyxl.load_workbook")
     @patch("src.python.core.reader.os.path.exists")
     def test_locked_file_permission_error(self, mock_exists, mock_load):
-        """文件被占用（PermissionError）→ 转为 ValueError。"""
+        """文件被占用（PermissionError）→ 原样抛出（reader 只把格式错误转 ValueError）。"""
         from src.python.core.reader import read_holdings
 
         mock_exists.return_value = True
         mock_load.side_effect = PermissionError("被其他程序打开")
-        # 当前实现可能直接抛出 PermissionError
-        try:
+        with self.assertRaises(PermissionError):
             read_holdings("locked.xlsx")
-            self.fail("Should raise")
-        except (PermissionError, ValueError):
-            pass
 
     @patch("src.python.core.reader.openpyxl.load_workbook")
     @patch("src.python.core.reader.os.path.exists")
     def test_locked_file_oserror(self, mock_exists, mock_load):
-        """文件被占用（OSError）→ 不崩溃。"""
+        """文件被占用（OSError）→ 原样抛出（reader 只把格式错误转 ValueError）。"""
         from src.python.core.reader import read_holdings
 
         mock_exists.return_value = True
         mock_load.side_effect = OSError("文件已被其他进程占用")
-        try:
+        with self.assertRaises(OSError):
             read_holdings("locked.xlsx")
-            self.fail("Should raise")
-        except (OSError, ValueError):
-            pass
 
 
 # ═══════════════════════════════════════════════════════════
@@ -260,11 +252,8 @@ class TestLongPath(unittest.TestCase):
         mock_wb = MagicMock()
         mock_wb.sheetnames = []
         mock_load.return_value = mock_wb
-        try:
-            holdings = read_holdings(long_path)
-            self.assertEqual(holdings, [])
-        except OSError:
-            pass  # Windows 超长路径限制，允许此异常
+        holdings = read_holdings(long_path)
+        self.assertEqual(holdings, [])
 
 
 # ═══════════════════════════════════════════════════════════
@@ -352,12 +341,10 @@ class TestNullBytesInXlsx(unittest.TestCase):
             # 追加空字节（模拟文件污染）
             with open(fpath, "ab") as f:
                 f.write(b"\x00\x00")
-            try:
-                holdings = read_holdings(fpath)
-                # 可能成功（空字节在末尾被忽略）或抛出异常
-                self.assertIsInstance(holdings, list)
-            except (ValueError, zipfile.BadZipFile):
-                pass  # 允许两种行为
+            # zip 尾部追加的空字节在末尾被忽略：解析照常成功且内容完整
+            holdings = read_holdings(fpath)
+            self.assertEqual(len(holdings), 1)
+            self.assertEqual(holdings[0].code, "600900")
 
 
 if __name__ == "__main__":

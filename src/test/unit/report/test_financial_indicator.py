@@ -247,15 +247,6 @@ class TestDatasinkGate:
 
 
 class TestSwitchAndWiring:
-    def test_switch_accessor_ignores_config_arg(self):
-        """config 形参仅为兼容保留：取值只认功能开关注册表，传什么都不参与判定。"""
-        from src.python.config import is_enable_stock_fundamentals
-        from src.python.config.features import set_feature_enabled
-
-        assert is_enable_stock_fundamentals({"stock_fundamentals": True}) is False
-        set_feature_enabled("stock_fundamentals", True)
-        assert is_enable_stock_fundamentals({"stock_fundamentals": False}) is True
-
     def test_default_config_has_switch_off(self):
         """默认关的事实来源 = 功能开关注册表（GROUP_STANDALONE）。"""
         from src.python.config.features import feature_switch_registry

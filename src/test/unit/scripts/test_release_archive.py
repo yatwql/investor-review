@@ -611,6 +611,18 @@ class TestCurrentIterationRecompute:
         assert "在办 3 项" in line
         assert "plan-1/2" not in line and "plan-1、" not in line
 
+    def test_completed_word_sections_not_counted(self, rel):
+        """标题写「已完成，待发布归档」的节与 ✅ 同口径：可归档、且不计入「在办」。"""
+        text = (
+            "**当前迭代**：在办 3 项——P2 3 项（**plan-1/2/3**）。\n\n"
+            "### P2 — 下一阶段就绪\n\n"
+            "#### `plan-1` 甲任务——已完成，待发布归档\n\n- 状态\n\n"
+            "#### `plan-2` 乙任务\n\n- 在做\n\n"
+            "#### `plan-3` 丙任务\n\n- 在做\n"
+        )
+        line = next(ln for ln in rel.recompute_current_iteration(text).splitlines() if ln.startswith("**当前迭代**"))
+        assert line == "**当前迭代**：在办 2 项——P2 2 项（**plan-2/3**）。"
+
     def test_phantom_id_in_summary_dropped(self, rel):
         """概述里残留的已归档/不存在编号随重算消失。"""
         line = next(

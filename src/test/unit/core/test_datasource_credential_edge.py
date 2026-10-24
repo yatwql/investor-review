@@ -41,7 +41,8 @@ class TestDeclarationEdges:
         但机制须安全降级——把问题显式暴露成「缺少凭据」比抛 KeyError 有用。
         """
         register_credential_spec(CredentialSpec("broken", "声明有误的源", ""))
-        assert missing_credential("broken") is not None
+        spec = missing_credential("broken")
+        assert spec is not None and spec.env_var == ""
 
     def test_reset_clears_registry(self, monkeypatch):
         """清空后回到生产初始状态（未声明凭据需求的免费源）。"""
