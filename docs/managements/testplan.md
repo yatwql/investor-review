@@ -42,7 +42,7 @@
 | `core/market_hours.py` | 所有时段边界 | 开盘/收盘/午休/周末/节假日/UTC 时区、config 覆盖、API 掉线回退 |
 | `core/provider_registry.py` | 100% 熔断/缓存/策略 | Provider 注册/熔断（默认 3 次→冷却 300s→自动恢复，批量 API 如 eastmoney_industry 为 6 次→120s）、会话缓存 get/set/contains/clear/淘汰、策略选择(交易时段/熔断/QDII豁免)、链式熔断检测、并发安全、审计报告、phase_timeout 嵌套保护 |
 | `tui/handlers_*.py` | 各菜单命令入口 | 正常路径 + 配置缺失 + 异常日志 |
-| `tui/tui_menu.py` | 所有 18 选项 | 合法/非法输入、Ctrl+C、空目录选择、多文件导航、开关门控项 `[T]` 的裁剪与还原、`[D]` 配置目录信息子菜单（二级 C/F/O/M/B） |
+| `tui/tui_menu.py` | 主菜单 14 项 + 各级子面板 | 合法/非法输入、Ctrl+C、空目录选择、多文件导航、开关门控项 `[Q]` 的裁剪与还原、`[G]` 全局设置七项四组、`[D]` 诊断四项（缺省系统自检）、`[G]→[L]` 调优与线路面板 |
 | `analysis/correlation.py` | Pearson 相关矩阵计算+降级 | 已知答案（r=±1/缩放不变）、不显著配对、下三角布局、配对 |r| 降序、数据不足/单品种/无有效收益降级、名称回退、数据契约键、NaN/Inf/None 过滤、重复日期去重、日期缺口对齐、极大幅值钳位、多品种大矩阵 |
 | `report/position_structure_sheet.py` | 重合度/相关性/集中度三区块 Excel 呈现 | 矩阵/配对/说明三区齐全、下三角+对角+上三角空、N/A 格、available=False/None 占位、配对 |r| 降序 |
 | `report/report_template.html`（correlation 模块） | 相关性章节 HTML 呈现 | 汇总卡+相关度最高+热力矩阵+配对明细、单元格样式分支（强正/强负/不显著/N/A）、不足品种提示、available=False 降级占位、correlation_data=None 章节隐藏 |
@@ -677,7 +677,7 @@
 
 | 验证项 | 标准 | 现有测试 |
 |:-------|:-----|:--------:|
-| **TUI 菜单** | 19 选项完整、中文字符正常、按键响应正确 | ✅ |
+| **TUI 菜单** | 主菜单 14 项四组完整、中文字符正常、按键响应正确 | ✅ |
 | **TUI 进度反馈** | 长时间操作有进度条/动画，不出现"假死"感 | ✅ |
 | **TUI Ctrl+C 中断** | 中断不留下半渲染状态，可安全重试 | ✅ |
 | **TUI 错误提示友好** | 异常堆栈不暴露给用户，包装为中文提示 | ✅ | `test_tui_edge.py` |
@@ -889,7 +889,7 @@ def test_get_ttl_closed(self, mock_open):
 
 12. **异常场景全覆盖**：§1.6 异常场景清单全部 ✅（每项异常场景均有对应自动化用例，edge/resilience 标记），不允许存在仅靠人工确认的 🔴/🟡 项
 13. **报告文件视觉结构**：Excel 和 HTML 输出无格式错乱（盈亏着色、评级色、冻结首行、中文不乱码）→ `test_excel_writer.py` / `test_summary.py` / `test_html_report_structure.py`
-14. **TUI 菜单功能**：所有菜单选项（[E]/[B]/[L]/[W]/[Q]/[G]（二级 H/F/O/L/I/A/M）/[1]/[2]/[3]（缓存管理子菜单，内含 `3` 过期清理）/[C]/[S]/[M]/[I]/[A]/[D]/[R]/[V]/[H]/[T]/[X]，其中 `[T]` 系统自检恒上屏、`[Q]` 报告追问受 `report_qa` 开关门控（默认关就地裁剪））响应正确、无崩溃 → `test_tui_menu.py`（键集合完整/键唯一/索引相对位/**任务分组覆盖全项一次、退出项在外**/**`/` 筛选命中与筛选内导航回绕**/**分组标题与筛选态渲染**，断言由 `MENU_ITEMS` 派生、不写死条数）+ `test_handlers_cache.py`（缓存管理子菜单动线）+ `test_switch_panel_layout.py`（`[S]` 三档响应式排版：宽/中/窄形态、40~200 列不越界、状态着色、窄屏 `k` 展开键名、操作后不整屏重绘）+ `TestMainLoopExitKeys`（`0`/`X` 双退出通道、未映射键不误退、页脚提示与折行）+ `test_tui_handlers.py` + `test_handlers_*.py`
+14. **TUI 菜单功能**：主菜单 14 项四组（`[E]`/`[B]`/`[L]`/`[W]`/`[Q]` · `[1]`/`[2]`/`[3]`（缓存管理子菜单，内含 `3` 过期清理） · `[C]`/`[S]`/`[G]`/`[R]` · `[D]` · `[X]`），其中 `[G]` 二级为 H/F/O/L/I/A/M 七项四组、`[D]` 二级为 L/V/H/T（缺省系统自检恒上屏）、`[Q]` 报告追问受 `report_qa` 开关门控（默认关就地裁剪）响应正确、无崩溃 → `test_tui_menu.py`（键集合完整/键唯一/索引相对位/**任务分组覆盖全项一次、退出项在外**/**`/` 筛选命中与筛选内导航回绕**/**分组标题与筛选态渲染**，断言由 `MENU_ITEMS` 派生、不写死条数）+ `test_handlers_cache.py`（缓存管理子菜单动线）+ `test_switch_panel_layout.py`（`[S]` 三档响应式排版：宽/中/窄形态、40~200 列不越界、状态着色、窄屏 `k` 展开键名、操作后不整屏重绘）+ `TestMainLoopExitKeys`（`0`/`X` 双退出通道、未映射键不误退、页脚提示与折行）+ `test_tui_handlers.py` + `test_handlers_*.py`
 15. **TUI 人因门禁（击键数 + 屏幕语义）**：三条主路径动线（生成完整报告且只强刷指定模块 / 改一个功能开关并确认生效 / 按级别筛日志）断言「击键数不增」+「关键用户词必须上屏」，快照 `src/test/data/fixtures/tui_flow_contract.json`；主路径击键数快照另含 `/` 筛选动线（`tui_keystroke_baseline.json`）。**分层**：P0 `scenario_basic` 只跑生成主路径（1 条），P2 `scenario` 跑全 3 条 → `src/test/scenario/basic/test_tui_flow_semantics.py` + `src/test/unit/ui/test_keystroke_baseline.py`，共用驱动器 `src/test/_tui_flow.py`。同属人因门禁域：**三渠道用户词一致性**（端点状态经 `core.system_info.circuit_display` 唯一归一；日预算决策屏统一「用已有结果继续」）→ `src/test/integration/test_channel_vocabulary.py`（TUI/CLI/Web 同词，报告/Web 数据降级口径归 `DESIGN.md` 不在此域）
 16. **whatif CLI**：`--candidate` 必填、`--base` 可选、缺失报参数错误、`--effective-date` 解析，生成/归档行为 → `test_cli.py::test_whatif_*` + `test_whatif_operations.py` / `test_whatif_sheet.py` / `test_whatif_html.py` / `test_whatif_writer.py`
 17. **whatif 生效日时序回测**：① 过去生效日→出「时序回测」页签/区 → `test_effective_date_merges_backtest` + `test_backtest_sheet_full` + `test_backtest_section_rendered`；② 缺省→维持现状（无回测）→ `test_no_effective_date_no_backtest_call` + `test_full_rendering_sections_without_backtest`；③ 未来/非法日期→降级占位、主报告正常 → `test_compute_backtest_days_invalid_format` / `test_compute_backtest_days_future_or_today_none` + `test_effective_date_exception_degrades` + `test_backtest_sheet_unavailable_reason_placeholder`；④ 断网/空缓存→回测不可用但报告仍生成 → `test_unavailable_returns_reason` / `test_unavailable_without_reason_falls_back` + `test_effective_date_bt_none_no_key`

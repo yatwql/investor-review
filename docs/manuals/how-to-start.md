@@ -108,7 +108,7 @@ pip install -r requirements.txt
 | `--config PATH` | 备用配置文件路径，默认 `data/config/config.json` |
 
 > **Web 模式使用要点**：
-> - 首页「③ 配置编辑」面板与 TUI 主菜单可编辑项**完全一致**（11 组：路径/报告章节/功能开关八组/匿名化/对比指数池/LLM 多链线路/LLM 调优参数/LLM 开关），**即改即存**写入共享配置文件（config.json / llm_settings.json / features.json）并写前自动备份。
+> - 首页「③ 配置编辑」面板与 TUI 主菜单可编辑项**完全一致**，按**五个意图域**分区（报告内容 / 呈现与机制 / 数据与线路 / LLM 运行 / 运行与诊断），**即改即存**写入共享配置文件（config.json / llm_settings.json / features.json）并写前自动备份。
 > - 首页底部「运行状态 → 系统信息」卡片展示程序版本、本机 IP、持仓目录/文件、输出目录、新闻抓取上限、持仓文件就绪状态（对齐 TUI 首页摘要）、持仓匿名化模式、隐私声明与 LLM 配置状态（provider/模型/策略/熔断/模型路由）。
 > - 生成任务的「历史走势」复选框默认跟随配置 `history.fetch_mode`，可在提交前按本次需求勾选/取消；「强制重新生成 LLM 内容」跳过 LLM 缓存，仅 `full` 报告生效。
 > - 同一 `output_dir` 仅保持一个入口在运行：Web / TUI / CLI 共用输出目录，同时运行会互相覆盖最新版产物。

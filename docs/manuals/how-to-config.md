@@ -739,7 +739,7 @@ TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一�
 ```
 
 > **文件不必须存在** — 全部使用代码默认值时无需此文件。首次在菜单 **[S]** / **[C]** 切换相关开关或手动创建后自动生效。
-> **功能开关的三个入口**：TUI 菜单（章内内容组在 **[S]**，独立整章/关联产物/章节内选项在 **[C]**）/ Web 配置面板（同名八组）/ CLI 全局参数——`--experiment NAME`（只开全部实验项的简写，取值支持开关名、显示名或 `all`）与 `--feature NAME=VALUE`（**全部**开关、双向可控，取值写 `on`/`off`）。两者均**仅本次运行生效、不写盘**，详见 [CLI 命令行模式使用指南](how-to-use-cli-mode.md) §2。三者同源同一注册表，新增开关自动三处可用。
+> **功能开关的三个入口**：TUI 菜单（章内内容组在 **[S]**，独立整章/关联产物/智囊团子项在 **[C]**）/ Web 配置面板（同一批条目，按五个意图域分区）/ CLI 全局参数——`--experiment NAME`（只开全部实验项的简写，取值支持开关名、显示名或 `all`）与 `--feature NAME=VALUE`（**全部**开关、双向可控，取值写 `on`/`off`）。两者均**仅本次运行生效、不写盘**，详见 [CLI 命令行模式使用指南](how-to-use-cli-mode.md) §2。三者同源同一注册表，新增开关自动三处可用。
 >
 > **报告会自述生成条件**：生成报告时，已启用的实验功能随产物一并标注——HTML 报告页脚、Excel「LLM API 用量」页签各列一行开关清单与「输出质量可能不稳定」提示；**LLM 分析章节关闭时该页签不生成**，清单改落到 Excel「投资分析汇总」页脚（`include_llm=False` 下的兜底落点），故无论 LLM 章节开关与否，Excel 产物上都能看到清单；实验开关全关时各处均不出现，报告与默认配置下的产物一致。报告导出流转后，读者据此即可判断手中的内容是否为非默认开关下的产物。章节/页签类开关转正（摘除实验身份）后不再进入该自述——其开合改由所在作用域组的章节可见性表达（默认关，开启即出章）。
 > **注意**：features.json 支持 `//` 与 `/* */` 注释（读取时统一剥离；改—存后既有分类注释与项说明保留）。所有开关的默认值与完整说明见下表，或直接查看源码 `src/python/config/features.py` 的 `feature_switch_registry`（唯一登记点，每条含显示名/说明/分组/默认值/是否影响报告/实验身份）。
@@ -844,11 +844,11 @@ TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一�
 
 ### Q. Web 模式配置编辑
 
-Web 模式（浏览器界面）提供「配置编辑」面板，可修改的配置项与 TUI 主菜单**完全一致**（完整镜像），共 11 组（功能开关按与 TUI 相同的八组分块渲染；TUI 侧前六组在 `[S]`、后两组在 `[C]`）：
+Web 模式（浏览器界面）提供「配置编辑」面板，可修改的配置项与 TUI 主菜单**完全一致**（完整镜像）。面板按**五个意图域**分区（报告内容 / 呈现与机制 / 数据与线路 / LLM 运行 / 运行与诊断），域内再按块分组；域与 TUI 菜单不一一对应，两渠道共用同一批条目名与标记口径：
 
 | 组 | 配置项 | 对应 TUI 菜单 |
 |:--|:--|:--|
-| 路径与文件 | `holdings_dir` / `holdings_filename` / `output_dir` | `[G]` → `D` / `F` / `O` |
+| 路径与文件 | `holdings_dir` / `holdings_filename` / `output_dir` | `[G]` → `H` / `F` / `O` |
 | 报告章节 | `enable_fund_deep_analysis` / `enable_news` / `enable_history` / `enable_portfolio_evolution` / `enable_action` | `[C]` 1~5 |
 | 持仓与交易 | `cost_lots`（默认关）/ `fund_purchase_limit` / `cost_position` / `risk_adjusted_excess`（默认关） | `[S]` 1-4 |
 | 市场与估值 | `valuation_percentile`（默认关）/ `market_temperature` / `crisis_replay`（默认关）/ `prosperity_framework` | `[S]` 5-8 |
@@ -860,7 +860,7 @@ Web 模式（浏览器界面）提供「配置编辑」面板，可修改的配�
 | 章节内选项 | `llm_debate_procon`（默认关）/ `llm_debate_conditional` | `[C]` 7.1 / 7.2（智囊团复盘子项） |
 | 持仓匿名化 | `anonymization.mode`（off / code_display / full_anonymous / summary） | `[G]` → `A` |
 | 对比指数池 | `comparison_indices`（增 / 删 / 重置默认） | `[G]` → `I` |
-| LLM 多链线路优先级 | `llm_providers.providers[].priority`（各条目 ▲▼ 调序） | `[G]` → `M` |
+| LLM 多链线路优先级 | `llm_providers.providers[].priority`（各条目 ▲▼ 调序） | `[G]` → `L` 第 7 项 |
 | LLM 调优参数 | `llm_max_thinking_concurrency` / `llm_max_concurrency` / `max_retries` / `llm_full_fail_retry_delay` / `llm_total_time_budget_sec` / `daily_cost_limit` | `[G]` → `L` |
 | LLM 分析章节 | `enabled_llm.global_macro` / `expert_review` / `health_check` / `penetration_deep` / `news_correlation` / `self_review` / `holding_change` | `[C]` 6-12 |
 
