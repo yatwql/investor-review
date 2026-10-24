@@ -55,14 +55,14 @@ def _report_llm_module_results(
         reporter.info("所有 LLM 内容已跳过，未调用 LLM")
 
 
-def _timed_news_fetch(span_recorder, build_fn, *args, **kwargs) -> tuple:
-    """执行新闻获取并记入子项耗时（`span_recorder` 为 None 时零行为变化）。"""
+def _timed_news_fetch(recorder, build_fn, *args, **kwargs) -> tuple:
+    """执行新闻获取并记入子项耗时（`recorder` 为 None 时零行为变化）。"""
     started = time.perf_counter()
     try:
         return build_fn(*args, **kwargs)
     finally:
-        if span_recorder is not None:
-            span_recorder.record("新闻获取", time.perf_counter() - started)
+        if recorder is not None:
+            recorder.record("新闻获取", time.perf_counter() - started)
 
 
 def _submit_llm_future(
@@ -147,6 +147,7 @@ def _submit_news_future(
         prep_data["penetrated_assets"],
         purchase_constraint_block,
         force_news,
+        span_recorder=span_recorder,
     )
 
 
@@ -254,6 +255,7 @@ def _fetch_llm_and_news(
             news_data, news_llm_meta, news_ok = _collect_news_future_result(_news_fut, reporter)
             from src.python.report._experimental_seams import inject_event_impact_data
 
+            _t0 = time.perf_counter()
             inject_event_impact_data(
                 pipeline_data,
                 reporter,
@@ -262,6 +264,8 @@ def _fetch_llm_and_news(
                 penetrated_assets=prep_data.get("penetrated_assets"),
                 comparison_indices=comparison_indices,
             )
+            if span_recorder is not None:
+                span_recorder.record("事件窗装配", time.perf_counter() - _t0)
             if enable_llm:
                 _llm_fut = _submit_llm_future(
                     pool,

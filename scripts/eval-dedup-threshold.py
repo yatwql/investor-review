@@ -8,6 +8,9 @@
   python scripts/eval-dedup-threshold.py --compact --retention-days 0   # 仅按键去重、不按时间裁剪
   python scripts/eval-dedup-threshold.py --file X    # 指定锚点文件
 
+**采集前置**：去重锚点**默认不采集**（常态报告零开销）；需要新增校准样本时，
+先以 ``INVEST_DEDUP_COLLECT_ANCHORS=1`` 运行报告，再执行本工具分析。
+
 **口径（关键）**：锚点文件 append-only、跨规则时代累积，故本工具**不信任记录里的
 ``ratio`` / ``bigram_overlap`` / ``rule``**，而是拿 ``title_a`` / ``title_b`` 用当前代码
 重算相似度与实体重叠（``news_dedup._pair_similarity``），再按当前阈值重新判定分支——

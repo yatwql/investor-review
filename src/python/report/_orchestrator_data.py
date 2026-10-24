@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 from datetime import datetime
 from typing import Any
@@ -28,11 +29,18 @@ from src.python.report._report_factor_metrics import (  # noqa: F401
 logger = logging.getLogger("invest")
 
 
+def _record_span(recorder, name: str, started: float) -> None:
+    """记录一个子阶段耗时（recorder 为 None 时零行为变化）。"""
+    if recorder is not None:
+        recorder.record(name, time.perf_counter() - started)
+
+
 def prepare_report_data(
     holdings: list,
     reporter: ProgressReporter,
     config: dict,
     transactions: list | None = None,
+    recorder=None,
 ) -> dict:
     """获取行情、指数、穿透数据，整理持仓明细字典列表。
 
@@ -44,6 +52,8 @@ def prepare_report_data(
         transactions: 交易流水记录（可选）。提供时为持仓明细附加 holding_days
             （首次买入至今的交易日数），供再平衡误报防护的「新买入品种观察期」
             判定；缺省不附加该字段，防护按「未知」跳过观察期过滤。
+        recorder: 可选子阶段记录器（``PerfCollector.recorder("数据准备")``）；
+            None 时零行为变化。子项自身耗时，互不重叠。
     """
     from concurrent.futures import ThreadPoolExecutor
 
@@ -62,6 +72,7 @@ def prepare_report_data(
 
     today_str = datetime.now().strftime("%Y-%m-%d")
 
+    _t0 = time.perf_counter()
     reporter.info("正在获取行情数据...")
     details = _generate_details(holdings, today_str)
     total_mv = sum(d.market_value for d in details)
@@ -69,7 +80,9 @@ def prepare_report_data(
     total_profit = sum(d.profit for d in details)
     total_today_profit = sum(d.today_profit for d in details)
     categories = classify_holdings(holdings)
+    _record_span(recorder, "行情与明细", _t0)
 
+    _t0 = time.perf_counter()
     reporter.info("正在获取指数行情...")
     pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="orch_prep")
     try:
@@ -79,11 +92,15 @@ def prepare_report_data(
         us_indices = _us_fut.result()
     finally:
         pool.shutdown(wait=False)
+    _record_span(recorder, "指数获取", _t0)
 
+    _t0 = time.perf_counter()
     reporter.info("正在计算资产穿透 TOP10...")
     pen_result = compute_penetration_top10(holdings, details)
     penetrated_assets = (pen_result or {}).get("top10", [])
+    _record_span(recorder, "穿透", _t0)
 
+    _t0 = time.perf_counter()
     # 风格与因子分析：基金深度分析关闭时为 None（章节隐藏），
     # 开启时计算 dict（数据不足/故障时 available=False，不阻塞主报告）。
     # style_factor_data dict 主键（保留全部子键，不重复定义），
@@ -97,6 +114,9 @@ def prepare_report_data(
     # 数据契约 position_relationship_data——持仓关系矩阵一章两区块（重合度+相关性），
     # 相关性矩阵由编排层注入 pipeline_data；重合度区块为渲染期派生（§8.3）。
     correlation_data = compute_correlation_data(holdings, config, reporter)
+    _record_span(recorder, "风格与因子", _t0)
+
+    _t0 = time.perf_counter()
     # 品种覆盖诊断：逐品种标注数据状态，position_status数据契约
     coverage_status = build_coverage_summary(holdings, details)
     # 可信度摘要：逐品种新鲜度分类 + 单日 ±20% 跳变检测，data_freshness数据契约
@@ -106,14 +126,18 @@ def prepare_report_data(
         trading_day=get_last_trading_day(),
         prev_trading_day=get_prev_trading_day(),
     )
+    _record_span(recorder, "覆盖与新鲜度", _t0)
 
+    _t0 = time.perf_counter()
     # 估值分位（数据契约 valuation_data）：功能开关 `valuation_percentile`
     # 开启时计算（当前 PE/PB + 价格分位代理）；关闭返回 None（「资产穿透TOP10」列隐藏）
     valuation_data = compute_valuation_data(details, config, reporter)
     # 市场温度（数据契约 market_temperature_data）：功能开关 `market_temperature`
     # 开启时计算（价格分位+均线偏离+波动率三因子温度计）；关闭返回 None（汇总行隐藏）
     market_temperature_data = compute_market_temperature_data(config, reporter)
+    _record_span(recorder, "估值与温度", _t0)
 
+    _t0 = time.perf_counter()
     # 持仓个股财报摘要（数据契约 financial_report_digest_data）：
     # 功能开关 `financial_report_digest` 开启时计算（A 股标的取最新年报章节摘要）；
     # 关闭或无 key 时返回 None（章节隐藏/写占位）
@@ -123,6 +147,9 @@ def prepare_report_data(
     financial_indicator_data = compute_financial_indicator_data(
         holdings, penetrated_assets, config, reporter, details=details
     )
+    _record_span(recorder, "财报摘要与指标", _t0)
+
+    _t0 = time.perf_counter()
     # 申购限购状态（数据契约 purchase_status_data）：功能开关 `fund_purchase_limit`
     # 开启时取全量表（每日 1 次，会话内复用）；关闭时返回 None（申购状态列隐藏）；
     # 全链失败返回 available=False 的降级契约（静默隐列，不阻断主链路）。
@@ -145,7 +172,9 @@ def prepare_report_data(
     # 开启时计算（复用既有行情历史链，不新增数据源）；关闭时返回 None（两列隐藏）；
     # 全链失败返回 available=False 的降级契约（静默隐列，不阻断主链路）
     cost_position_data = compute_cost_position_data(holdings, config)
+    _record_span(recorder, "申购与成本位置", _t0)
 
+    _t0 = time.perf_counter()
     # 行动建议单一数据源：再平衡信号等纯算法产出，action_data数据契约
     # （单源计算，行动建议板块与智囊团深度复盘行动摘要共享同一对象）
     holdings_details = [
@@ -228,6 +257,7 @@ def prepare_report_data(
             logger.warning("[factor_catalog] 因子目录计算失败，降级为不可用占位: %s", exc)
             factor_catalog_data = {"available": False, "reason": f"计算异常: {type(exc).__name__}"}
 
+    _record_span(recorder, "明细装配与建议", _t0)
     return {
         "details": details,
         "total_mv": total_mv,

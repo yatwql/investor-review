@@ -234,3 +234,35 @@ class TestLlmStatusSingleSource:
         from src.python.core.system_info import build_system_info, llm_status
 
         assert build_system_info()["llm"] == llm_status()
+
+
+class TestLlmReportUnavailableReason:
+    """full 报告的 LLM 不可用原因（未配置 / 章节全关）。"""
+
+    def test_unconfigured(self, monkeypatch):
+        from src.python.core import system_info
+
+        monkeypatch.setattr(system_info, "llm_status", lambda: {"configured": False})
+        reason = system_info.llm_report_unavailable_reason()
+        assert reason is not None and "未配置" in reason
+
+    def test_all_chapters_disabled(self, monkeypatch):
+        from src.python.core import system_info
+
+        monkeypatch.setattr(system_info, "llm_status", lambda: {"configured": True})
+        monkeypatch.setattr(
+            "src.python.config.get_llm_config",
+            lambda: {"enabled_llm": {"global_macro": False, "expert_review": False}},
+        )
+        reason = system_info.llm_report_unavailable_reason()
+        assert reason is not None and "全部关闭" in reason
+
+    def test_available_returns_none(self, monkeypatch):
+        from src.python.core import system_info
+
+        monkeypatch.setattr(system_info, "llm_status", lambda: {"configured": True})
+        monkeypatch.setattr(
+            "src.python.config.get_llm_config",
+            lambda: {"enabled_llm": {"global_macro": True, "expert_review": False}},
+        )
+        assert system_info.llm_report_unavailable_reason() is None

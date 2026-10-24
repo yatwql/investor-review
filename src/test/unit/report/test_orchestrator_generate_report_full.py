@@ -83,7 +83,10 @@ class TestGenerateReportFull:
         assert result.report_generated is True
         # prepare_report_data 被调用且传入了 config；transactions 透传（未提供时为 None），
         # 供持仓明细附加 holding_days（再平衡误报防护的「新买入品种观察期」判据）
-        mock_prep.assert_called_once_with(mock_holdings, mock_reporter, config, transactions=None)
+        _prep_args, _prep_kwargs = mock_prep.call_args
+        assert _prep_args[:3] == (mock_holdings, mock_reporter, config)
+        assert _prep_kwargs["transactions"] is None
+        assert _prep_kwargs.get("recorder") is not None  # 数据准备子阶段记录器
         # HTML 和 Excel 报告生成
         assert mock_html.call_count >= 1
         assert mock_xls.call_count >= 1
@@ -383,3 +386,56 @@ class TestGenerateReportFull:
         assert result.excel_ok is True
         assert result.report_generated is True
         mock_xls.assert_called_once()
+
+    def test_full_with_llm_disabled_warns_equivalent_to_both(self):
+        """full 但 LLM 章节全关/未配置 → reporter 显式提示等同 both。"""
+        mock_reporter = MagicMock()
+        mock_holdings = [MagicMock(code="SH600001", name="测试", shares=100, cost_price=10.0)]
+        config = {"output_dir": "reports", "news_top_count": 100, "history": {"fetch_mode": "auto"}}
+
+        with (
+            patch("src.python.report.orchestrator.prepare_report_data") as mock_prep,
+            patch("src.python.report._snapshot.capture_snapshot", return_value={}),
+            patch("src.python.report._snapshot.fetch_history_data"),
+            patch("src.python.report._llm_news._fetch_llm_and_news") as mock_llm_news,
+            patch("src.python.report.html_writer.write_html_report"),
+            patch("src.python.report.excel_generator.generate_excel_report"),
+            patch("src.python.core.registry.get_report_section_order", return_value=[]),
+            patch("src.python.providers.akshare_extras.get_sector_fund_flow", return_value=[]),
+            patch("src.python.config.is_enable_fund_deep_analysis", return_value=True),
+            patch("src.python.config.is_enable_news", return_value=True),
+            patch("src.python.config.is_enable_history", return_value=True),
+            patch("src.python.config.is_enable_llm", return_value=False),
+            patch(
+                "src.python.core.system_info.llm_report_unavailable_reason",
+                return_value="LLM 未配置（llm_key.json / llm_providers.json）",
+            ),
+        ):
+            mock_prep.return_value = {
+                "details": [],
+                "total_mv": 0,
+                "total_cost": 0,
+                "total_profit": 0,
+                "total_today_profit": 0,
+                "categories": [],
+                "a_indices": {},
+                "us_indices": {},
+                "penetrated_assets": [],
+                "holdings_details": [],
+                "today_str": "2026-07-16",
+                "output_dir": "reports",
+                "news_top_count": 100,
+            }
+            mock_llm_news.return_value = ((None, None, None, None), [], {}, False, None)
+            generate_report(
+                holdings=mock_holdings,
+                config=config,
+                reporter=mock_reporter,
+                report_type="full",
+                fetch_history=False,
+                force_llm=False,
+            )
+
+        warned = " ".join(str(call.args[0]) for call in mock_reporter.warn.call_args_list)
+        assert "LLM 未配置" in warned
+        assert "full 等同 both" in warned

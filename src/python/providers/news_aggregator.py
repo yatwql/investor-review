@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import time
 import hashlib
 import json
 import logging
@@ -181,6 +182,12 @@ def _finalize_news_results(
     return correlated[:top_n]
 
 
+def _record_span(recorder, name: str, started: float) -> None:
+    """记录新闻子阶段耗时（recorder 为 None 时零行为变化）。"""
+    if recorder is not None:
+        recorder.record(name, time.perf_counter() - started)
+
+
 def aggregate_news(
     keywords: list[str],
     top_n: int = 100,
@@ -188,6 +195,7 @@ def aggregate_news(
     per_source: int = 100,
     progress_callback: Callable[[str, int, str], None] | None = None,
     lightweight_keywords: set[str] | None = None,
+    span_recorder=None,
 ) -> list[dict[str, Any]]:
     """从多个新闻源获取新闻，去重后按关键词关联度排序。
 
@@ -207,6 +215,8 @@ def aggregate_news(
             每次源获取完成后调用。status 为 "OK" 或 "失败原因"
         lightweight_keywords: 轻量级关键词集合（行业/概念），
             匹配此类关键词需要至少 2 个命中才视为关联。
+        span_recorder: 可选子阶段记录器（``LLM+新闻`` 父阶段），记录
+            ``新闻源抓取`` / ``去重与关联`` / ``锚点维护``；None 时零行为变化。
 
     Returns:
         关联后的新闻列表，每项含 matched_keywords 字段
@@ -223,7 +233,9 @@ def aggregate_news(
             _last_src_results = {s: (0, "cache") for s in sources}
         return cached
 
+    _t0 = time.perf_counter()
     all_raw, src_results = _fetch_from_all_sources(sources, per_source, progress_callback)
+    _record_span(span_recorder, "新闻源抓取", _t0)
     with _src_results_lock:
         _last_src_results = src_results
 
@@ -233,7 +245,11 @@ def aggregate_news(
 
     logger.info("新闻汇总: 去重后共 %d 条 (来自 %d 个源)", len(all_raw), len(sources))
 
+    _t0 = time.perf_counter()
     result = _finalize_news_results(all_raw, keywords, top_n, lightweight_keywords=lightweight_keywords)
+    _record_span(span_recorder, "去重与关联", _t0)
     _save_news_cache(cache_key, result)
+    _t0 = time.perf_counter()
     _flush_anchors()
+    _record_span(span_recorder, "锚点维护", _t0)
     return result

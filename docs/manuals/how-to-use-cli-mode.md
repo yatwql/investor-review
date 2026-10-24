@@ -88,7 +88,7 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 
 | 参数 | 说明 |
 |:-----|:-----|
-| `--type {basic,both,full}` | `basic`=仅 Excel 报告（约 1 分钟，默认）；`both`=Excel+HTML（不含 LLM，约 2 分钟）；`full`=全量含 LLM（约 5 分钟，需 LLM 配置） |
+| `--type {basic,both,full}` | `basic`=仅 Excel 报告（约 1 分钟，默认）；`both`=Excel+HTML（不含 LLM，约 2 分钟）；`full`=全量含 LLM（约 5 分钟，需 LLM 配置）。若 LLM 未配置或 `enabled_llm` 全部关闭，`full` 会在生成开始时打印 `[!]` 提示并按不含 LLM 内容生成（等同 `both`），不再静默 |
 | `--history {auto,off}` | 是否获取组合历史走势：`auto`=获取，`off`=跳过。未指定时按配置 `history.fetch_mode`（默认 `auto`）。仅 `--type both` / `full` 时有效 |
 | `--force-llm` | 强制重新调用 LLM API（忽略缓存），生成最新 LLM 内容（全量） |
 | `--llm-module KEY` | 模块级强刷：仅强制重生成指定模块，其余照常命中缓存（可重复传参；粒度优先于 `--force-llm`）。可选键：`global_macro` 全球政经局势 / `expert_review` 智囊团深度复盘 / `health_check` 持仓体检报告 / `penetration_deep` 穿透深度分析 / `news_correlation` 财经新闻关联 / `self_review` 生成后自检 / `holding_change` 持仓变动复盘归因 |

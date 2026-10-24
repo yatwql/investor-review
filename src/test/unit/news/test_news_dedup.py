@@ -20,6 +20,12 @@ from src.python.providers.news_dedup import _record_anchor
 pytestmark = [pytest.mark.unit, pytest.mark.unit_news]
 
 
+@pytest.fixture(autouse=True)
+def _enable_anchor_collection(monkeypatch):
+    """锚点采集默认关闭；本文件验证采集/写入行为，统一显式开启。"""
+    monkeypatch.setenv("INVEST_DEDUP_COLLECT_ANCHORS", "1")
+
+
 class TestFlushAnchorsDedup(unittest.TestCase):
     """_flush_anchors 锚点写入去重 — 同一对 (source,title) 跨轮运行不重复追加。
 
@@ -46,12 +52,16 @@ class TestFlushAnchorsDedup(unittest.TestCase):
         # 隔离写入路径：patch 模块常量，确保测试不触碰真实 data/calibration/
         self._path_patch = patch("src.python.providers.news_dedup._ANCHOR_PATH", self._anchor_path)
         self._path_patch.start()
+        # 锚点采集默认关闭：本组用例显式开启（生产默认不采集，见 _ANCHOR_COLLECT_ENV）
+        self._collect_patch = patch.dict(os.environ, {"INVEST_DEDUP_COLLECT_ANCHORS": "1"})
+        self._collect_patch.start()
         # 重置进程级已写集合与内存记录列表
         news_dedup._WRITTEN_ANCHOR_KEYS = set()
         news_dedup._ANCHOR_RECORDS = []
 
     def tearDown(self) -> None:
         """恢复 patch。"""
+        self._collect_patch.stop()
         self._path_patch.stop()
 
     def _record_cross_skip(self, title_a: str, title_b: str) -> None:
@@ -70,6 +80,16 @@ class TestFlushAnchorsDedup(unittest.TestCase):
                 "ts": "",
             }
         )
+
+    def test_collection_disabled_skips_record_and_flush(self) -> None:
+        """采集默认关闭：_record_anchor 不积累、_flush_anchors 不创建文件。"""
+        from src.python.providers import news_dedup
+
+        with patch.dict(os.environ, {"INVEST_DEDUP_COLLECT_ANCHORS": "0"}):
+            self._record_cross_skip("新闻A", "新闻B")
+            self.assertEqual(news_dedup._ANCHOR_RECORDS, [])
+            news_dedup._flush_anchors()
+        self.assertFalse(os.path.exists(self._anchor_path))
 
     def test_same_pair_flushed_once_across_runs(self) -> None:
         """同一对新闻跨两次 flush 只写入一次。"""

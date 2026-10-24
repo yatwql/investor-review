@@ -243,7 +243,7 @@ llm/generators_orchestrator.py ──→ cache/（可选）
 | **贯穿** | 代码类型判定 | 资产识别原语 | `core/code_utils.py` |
 | **贯穿** | 交易时段判断 | A 股时段、午间休市 | `core/market_hours.py` |
 | **贯穿** | HTTP 客户端 | 统一工厂 | `core/http_client.py` |
-| **贯穿** | 性能收集 | PerfCollector 三路径计时 + perf_history.jsonl 持久化 + 数据源健康历史聚合 `summarize_health_history()`；`counters` 除 warnings/errors 外含**事实校验自动修正计数**（`fact_fix_total` / `fact_fix_numeric` / `fact_fix_code` / `fact_fix:<模块>`，由 `llm/fact_checker` 线程安全累加、报告层 LLM 阶段前清零后汇入——修正次数是模型口径偏差的直接信号，单次只进日志时无法跨期对拍）；另有 `llm_thinking_wait_ms`（thinking 并发槽串行等待累计——默认上限已为 2；配回 1 时据此量化串行代价） | `core/perf.py` + `llm/fact_checker/_corrections.py` |
+| **贯穿** | 性能收集 | PerfCollector 三路径计时 + 子阶段 `breakdown`（数据准备：行情与明细/指数获取/穿透/风格与因子/覆盖与新鲜度/估值与温度/财报摘要与指标/申购与成本位置/明细装配与建议；LLM+新闻：新闻源抓取/去重与关联/锚点维护/事件窗装配/LLM 模块）+ perf_history.jsonl 持久化 + 数据源健康历史聚合 `summarize_health_history()`；`counters` 除 warnings/errors 外含**事实校验自动修正计数**（`fact_fix_total` / `fact_fix_numeric` / `fact_fix_code` / `fact_fix:<模块>`，由 `llm/fact_checker` 线程安全累加、报告层 LLM 阶段前清零后汇入——修正次数是模型口径偏差的直接信号，单次只进日志时无法跨期对拍）；另有 `llm_thinking_wait_ms`（thinking 并发槽串行等待累计——默认上限已为 2；配回 1 时据此量化串行代价） | `core/perf.py` + `llm/fact_checker/_corrections.py` |
 | **贯穿** | 运行一致性 | 生成中断收口（KeyboardInterrupt 安全落点：临时产物清扫 + `status=interrupted` 运行记录 + 已写盘/已丢弃明细）+ HTML/Excel 产物原子落盘登记 | `report/run_integrity.py` |
 | **贯穿** | 日志可视化 | 结构化日志读取（parse_log/tail_log/read_log），CLI/TUI/Web 三端共享 | `core/log_reader.py` |
 | **贯穿** | 系统自检 | 运行环境/配置/目录/日志与缓存/功能开关/数据源适配/数据源凭据/数据源八组一次性盘点（恒上屏，无开关），CLI/TUI/Web 三端共享；自身永不抛异常、零重依赖 | `core/doctor.py` |
@@ -2445,7 +2445,7 @@ _dedup_by_title(items)
 
 ##### 锚点采集体系
 
-去重判定边界案例自动采集到 `data/calibration/dedup_anchors.jsonl`（append-only），供 `eval-dedup-threshold.py` 分析阈值合理性：
+去重判定边界案例在**校准期显式开启采集**（`INVEST_DEDUP_COLLECT_ANCHORS=1`，默认关闭）后写入 `data/calibration/dedup_anchors.jsonl`（append-only），供 `eval-dedup-threshold.py` 分析阈值合理性。锚点不参与去重判定，常态报告不加载该文件：默认关闭时 `_record_anchor` 直接返回、`_flush_anchors` 不触发 `_load_written_keys` 与自动压缩（此前 39 MB 文件每轮加载+压缩实测约 18.5s）。
 
 | 锚点规则 | 采集条件 | 用途 |
 |:---------|:---------|:------|
@@ -2466,7 +2466,7 @@ _dedup_by_title(items)
 探针的 SHA1 前 10 位）——**规则一改指纹自动变**，不依赖人工维护版本号；校准工具据此
 区分时代，并拿标题用当前代码重算判定（详见下）。
 
-**体积治理**：文件 append-only 且历史上未被写侧去重覆盖的轮次留下大量重复行（实测
+**体积治理（采集开启时）**：文件 append-only 且历史上未被写侧去重覆盖的轮次留下大量重复行（实测
 456,546 行 / 152 MB 中仅 51,718 个唯一标题对，重复行占 89%）。写侧去重
 （`_WRITTEN_ANCHOR_KEYS`）已拦截新重复——存量的重复行来自写侧去重生效前的批量校准轮次。
 故分层治理：① **写侧改真追加**（`_append_anchor_lines`：单次 `write` + `fsync`，

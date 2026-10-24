@@ -1,6 +1,6 @@
 # 投资复盘助手 — 实现计划
 > 文档版本：0.15.1-dev
-> **编号源**：`plan-next = 206`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-205，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`plan-next = 207`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-206，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -57,6 +57,10 @@
 #### `plan-202` 演示截图生成器入库——已完成，待发布归档
 
 **状态**：入口 `scripts/make-screenshots.py`（`demo` / `report` / `tui` / `web`）+ 实现包 `scripts/_screenshots/`；16 例回归；参考文档与目录树三处登记。记录见 changelog。
+
+#### `plan-206` 报告运行观测三项整改（锚点开销 / 归因粒度 / full 提示）——已完成，待发布归档
+
+**状态**：按最近一次真实运行（44.4s 管线，去重锚点占 18.5s）落地三项——① **rf-858** 去重锚点采集默认关闭（`INVEST_DEDUP_COLLECT_ANCHORS=1` 校准期开启），常态报告不加载/不压缩 39MB 校准文件（零开销）；② **rf-859** `perf_history.breakdown` 补数据准备九项与新闻源抓取/去重与关联/锚点维护/事件窗装配子计时；③ **rf-860** 新增 `llm_report_unavailable_reason()`，full 在 LLM 未配置或章节全关时显式提示「按不含 LLM 内容生成（full 等同 both）」。回归 7 例（锚点默认关闭 / 新闻子阶段 / LLM 不可用判定 / full 提示）；文档同步技术设计、需求（R-DATA-09 / R-PERF-09）、脚本参考与 CLI/TUI 手册。
 
 #### `plan-205` CLI 配置面补齐（config 子命令 + 章节/匿名化一次性覆写）——已完成，待发布归档
 

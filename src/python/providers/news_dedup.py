@@ -51,8 +51,9 @@ from src.python.providers.news_dedup_rules import (  # noqa: F401
 logger = logging.getLogger("invest")
 
 # ── 锚点采集（阈值校准用） ──────────────────────────────────────
-# 每次 _dedup_by_title 运行后，边界案例收集到此列表，
-# aggregate_news() 结束时追写至 data/calibration/dedup_anchors.jsonl。
+# 边界案例收集（阈值校准用）默认关闭：`INVEST_DEDUP_COLLECT_ANCHORS=1` 时才在
+# _dedup_by_title 记录、aggregate_news() 结束时追写至 data/calibration/dedup_anchors.jsonl。
+# 锚点不参与去重判定，常态报告不应为校准数据支付加载/压缩成本。
 # 一条记录为一个 JSON 行，append-only。格式：
 #   {"ts","title_a","title_b","source_a","source_b",
 #    "ratio","bigram_overlap","merged","rule","anchor_rules_version"}
@@ -70,6 +71,9 @@ _ANCHOR_SIZE_WARN_BYTES = 32 * 1024 * 1024
 #: 压缩保留每个标题对的**最新一条**（文件 append-only → 最后即最新），并先备份 .bak。
 #: 用 `INVEST_DEDUP_AUTO_COMPACT=0` 可关闭自动压缩（仅保留告警）。
 _ANCHOR_AUTO_COMPACT_ENV = "INVEST_DEDUP_AUTO_COMPACT"
+#: 采集开关（默认关闭）：仅阈值校准期显式开启；关闭时 _record_anchor 直接返回，
+#: _flush_anchors 不加载 39MB 锚点文件、不触发自动压缩。
+_ANCHOR_COLLECT_ENV = "INVEST_DEDUP_COLLECT_ANCHORS"
 #: 压缩时的保留期（天）：锚点只服务于「近期同对新闻不重复追加」，过期记录无消费者。
 #: 仅按 key 去重无法压小文件（标题对高度唯一，实测压后仍 37.9 MB），保留期才是
 #: 真正的体积上限；`INVEST_DEDUP_ANCHOR_RETENTION_DAYS` 可覆盖（0 = 不限，退回纯去重）。
@@ -94,6 +98,12 @@ def _anchor_key(record: dict[str, Any]) -> str:
     # 排序使 (A,B) 与 (B,A) 视为同一对，避免来源顺序不同产生重复
     sa, ta = (a, b) if a <= b else (b, a)
     return f"{sa[0]}|{sa[1]}|{ta[0]}|{ta[1]}"
+
+
+def _anchor_collection_enabled() -> bool:
+    """是否采集去重锚点（默认关闭；校准期用 ``INVEST_DEDUP_COLLECT_ANCHORS=1`` 开启）。"""
+    raw = os.environ.get(_ANCHOR_COLLECT_ENV, "0")
+    return str(raw).strip().lower() not in ("0", "", "false", "no")
 
 
 def _anchor_retention_days() -> int:
@@ -303,7 +313,9 @@ def _load_written_keys() -> None:
 
 
 def _record_anchor(record: dict[str, Any]) -> None:
-    """线程安全地追加一条锚点记录。"""
+    """线程安全地追加一条锚点记录（采集关闭时零开销返回）。"""
+    if not _anchor_collection_enabled():
+        return
     with _ANCHOR_LOCK:
         _ANCHOR_RECORDS.append(record)
 
@@ -350,6 +362,10 @@ def _flush_anchors() -> None:
     相关，与文件体积无关）。
     """
     global _ANCHOR_RECORDS
+    if not _anchor_collection_enabled():
+        with _ANCHOR_LOCK:
+            _ANCHOR_RECORDS = []
+        return
     if not _ANCHOR_RECORDS:
         return
     with _ANCHOR_LOCK:

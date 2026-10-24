@@ -97,6 +97,11 @@ def _generate_report_full(
     _enable_portfolio_evolution = is_enable_portfolio_evolution(config)
     _enable_action = is_enable_action(config)
     _enable_llm = is_enable_llm(config)
+    if not _enable_llm:
+        from src.python.core.system_info import llm_report_unavailable_reason
+
+        _llm_reason = llm_report_unavailable_reason() or "LLM 分析章节未启用"
+        reporter.warn(f"{_llm_reason}；本次按不含 LLM 内容生成（full 等同 both）")
     _enable_data_quality = is_enable_data_quality(config)
     _enable_cost_lots = is_enable_cost_lots(config)
     _enable_stock_fundamentals = is_enable_stock_fundamentals(config)
@@ -107,7 +112,9 @@ def _generate_report_full(
 
     # ── 1. 完整数据准备（含指数/穿透/分类） ──
     perf.start("数据准备")
-    prep = prepare_report_data(holdings, reporter, config, transactions=transactions)
+    prep = prepare_report_data(
+        holdings, reporter, config, transactions=transactions, recorder=perf.recorder("数据准备")
+    )
     _validate_prep_completeness(prep)
     perf.stop()
 
