@@ -4,7 +4,7 @@
 >
 > 定位：在办评测方案（`docs/plan/` 中间设计文件）。评测完成后随完成态归档，或转为「已评估未采纳」存档。
 >
-> 配套文档：`jev-news-correlation-design.md`（接入设计草案）
+> 配套文档：`jev-news-judgment-design.md`（接入设计草案）
 
 ---
 
@@ -127,7 +127,7 @@ snapshot 阶段（一次性，可重复执行）
 ## 8. 脚本落点
 
 - 目录：`scripts/`（沿用扁平语义命名）
-- 拟名：`jev-news-correlation-eval.py`——与既有 `eval-dedup-threshold.py`、`eval-llm-hallucination.py` 同类，属离线评测/校准脚本
+- 拟名：`eval-jev-news-judgment.py`——顶层脚本按活动类型前缀命名（`eval-`），与既有 `eval-dedup-threshold.py`、`eval-llm-hallucination.py` 同类，属离线评测脚本
 - 子命令：`snapshot`（取数冻结）/ `run`（三方案跑分）/ `report`（指标汇总与判定）
 - 必须复用 `scripts/_checklib.py` 的 CLI 契约（`-v/--verbose` + `--ci`；通过退出 0，发现 finding 退出 2）
 - 该脚本是**离线工具**，不得被 pytest 收集：不放在 `src/test/` 下，也不得在其中真实调用 LLM 而进入测试套件
@@ -143,13 +143,13 @@ snapshot 阶段（一次性，可重复执行）
 
 ```bash
 # 1. 冻结语料（一次性，产物落在 git 忽略的 tmp 目录）
-.venv/bin/python scripts/jev-news-correlation-eval.py snapshot --out docs/tmp/jev-eval-corpus.jsonl
+.venv/bin/python scripts/eval-jev-news-judgment.py snapshot --out docs/tmp/jev-eval-corpus.jsonl
 
 # 2. 三方案跑分
-.venv/bin/python scripts/jev-news-correlation-eval.py run --corpus docs/tmp/jev-eval-corpus.jsonl
+.venv/bin/python scripts/eval-jev-news-judgment.py run --corpus docs/tmp/jev-eval-corpus.jsonl
 
 # 3. 汇总并做判定（含阈值比对，未达标返回退出码 2）
-.venv/bin/python scripts/jev-news-correlation-eval.py report --ci
+.venv/bin/python scripts/eval-jev-news-judgment.py report --ci
 ```
 
 ## 11. 结论记录方式
