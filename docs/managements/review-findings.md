@@ -35,12 +35,6 @@
 
 （本版开发期已修复项已随 v0.15.0 发布迁入归档档案）
 
-### 开发期已修复（0.15.1-dev）
-
-| # | 问题 | 修复 |
-|---|------|------|
-| **rf-842** | TUI 动线驱动器漏覆盖一类处理器：`_cmd_diagnose_menu` 等函数内 `from tui_keys import input_choice` 局部导入，模块属性 patch 无效；非 TTY 下 `input_choice` 退化为内置 `input()` → 动线跑不动（读真实 stdin）或静默错位。日志动线（`filter_logs_by_level`）场景用例因此长期失效，只在 P2 regression 档暴露 | 驱动器 `_patch_readers` 增补 `builtins.input` 兜底（不 patch 源头，避免跨用例永久绑定）；该动线按键序列按菜单分层更新为 `[D]→[V]→级别→按键→[0]→[X]`（6 键），契约快照同步并说明「加长来自菜单分层而非新增确认屏」 |
-
 ### 归档档案
 - [`archived_review-findings.0.15.x.md`](../archive/v0.15.x/archived_review-findings.0.15.x.md) — v0.15.x（2026-10-24 ~ 2026-10-24）
 - [`archived_review-findings.0.14.x.md`](../archive/v0.14.x/archived_review-findings.0.14.x.md) — v0.14.x（2026-10-21 ~ 2026-10-23）
