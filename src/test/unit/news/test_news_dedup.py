@@ -410,6 +410,25 @@ class TestAnchorRulesVersion(unittest.TestCase):
             self.assertNotEqual(news_dedup_rules._rules_fingerprint(), baseline)
 
 
+class TestBoundedRatio:
+    """去重循环的快速上界：不足候选门槛时不做完整 SequenceMatcher，判定不变。"""
+
+    def test_below_threshold_short_circuits_without_merge(self):
+        from src.python.providers.news_dedup_rules import _ratio_of_norms, _ratio_of_norms_bounded
+
+        a = "苹果公司发布新一代芯片产品线"
+        b = "央行宣布下调金融机构存款准备金率"
+        threshold = 0.35
+        assert _ratio_of_norms_bounded(a, b, threshold) < threshold
+        assert _ratio_of_norms(a, b) < threshold
+
+    def test_identical_titles_keep_full_ratio(self):
+        from src.python.providers.news_dedup_rules import _ratio_of_norms, _ratio_of_norms_bounded
+
+        title = "英伟达发布新一代人工智能芯片"
+        assert _ratio_of_norms_bounded(title, title, 0.35) == _ratio_of_norms(title, title) == 1.0
+
+
 class TestPairSimilarityMatchesLinkDecision(unittest.TestCase):
     """``_pair_similarity`` 与链路内判定同口径（校准工具不得自带一套算法）。
 

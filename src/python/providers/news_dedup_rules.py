@@ -310,6 +310,27 @@ def _ratio_of_norms(norm_a: str, norm_b: str) -> float:
     )
 
 
+def _ratio_of_norms_bounded(norm_a: str, norm_b: str, threshold: float) -> float:
+    """带去重循环下界的相似度：上界不足阈值时不做完整 SequenceMatcher。
+
+    ``SequenceMatcher.quick_ratio`` 是真实 ratio 的上界；若双向上界都低于
+    候选区门槛，所有合并规则都不可能命中。此时返回上界（仍 < threshold），
+    只影响负样本锚点的记录值，不改变任何合并结果；超过门槛才走
+    :func:`_ratio_of_norms` 的完整双向计算。
+    """
+    from difflib import SequenceMatcher
+
+    a = _ENG_PLACEHOLDER.sub(_eng_len_placeholder, _RATIO_CLEAN.sub("", norm_a))
+    b = _ENG_PLACEHOLDER.sub(_eng_len_placeholder, _RATIO_CLEAN.sub("", norm_b))
+    upper = max(
+        SequenceMatcher(None, a, b).quick_ratio(),
+        SequenceMatcher(None, b, a).quick_ratio(),
+    )
+    if upper < threshold:
+        return upper
+    return _ratio_of_norms(norm_a, norm_b)
+
+
 def _overlap_of_norms(norm_a: str, norm_b: str) -> int:
     """已归一标题的实体 bigram 交集大小（当前模板词表掩码后）。"""
     return len(_extract_entity_bigrams(norm_a) & _extract_entity_bigrams(norm_b))

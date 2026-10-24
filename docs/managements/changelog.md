@@ -9,6 +9,8 @@
 
 ## [0.15.2-dev] - 开发中（未发布）
 
+- **`plan-210` 新闻去重快速上界**：`_dedup_by_title` 先用 `SequenceMatcher.quick_ratio` 判断候选门槛，低于门槛不做完整双向 ratio；合并判定不变，新闻 TTL 仍保持 900s（不为提速放宽时效）。
+
 - **`plan-211` 数据源状态接入报告矩阵**：行业资金流向失败经 `mark_data_unavailable` 写入 DegradationTracker，数据源可用性矩阵可见；provider 暴露公开失败状态访问器，`fetcher`/`cache` 不再读取私有 `_SECTOR_FLOW_FAILURE`/`_DIVIDEND_FAILURE`。
 
 

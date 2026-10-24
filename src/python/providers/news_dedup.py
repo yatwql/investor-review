@@ -30,7 +30,7 @@ from src.python.providers.news_dedup_rules import (
     has_proper_noun_token,
     _normalize_title,
     _overlap_of_norms,
-    _ratio_of_norms,
+    _ratio_of_norms_bounded,
     share_event_group,
 )
 
@@ -406,7 +406,7 @@ def _dedup_by_title(
             #    英文专名按长度分桶占位，避免共享专名（Anthropic/Meta/AMD）导致
             #    SequenceMatcher 比率虚高（英文专名在 _extract_entity_bigrams
             #    中已有独立处理，ratio 中可降权）。口径实现见 _ratio_of_norms。
-            ratio = _ratio_of_norms(norm, existing)
+            ratio = _ratio_of_norms_bounded(norm, existing, cross_threshold)
             if ratio >= _CROSS_SAFE_RATIO:
                 overlap = _overlap_of_norms(norm, existing)
                 # ratio ≥ 0.65 直接合并也要求专名 bg ≥ 1：不同公司同模板
