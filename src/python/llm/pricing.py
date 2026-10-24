@@ -248,6 +248,12 @@ def reload_pricing() -> None:
         PRICING_HOLIDAY_ALWAYS_IDLE = bool(config["holiday_always_idle"])
     except Exception:
         logger.debug("加载计价参考失败，使用内置定价", exc_info=True)
+    finally:
+        # 显式重载即「已加载」：否则下一次计费的懒加载会再读一次文件，把调用方
+        # 刚刚装载的定价（如测试注入的自定义价）静默覆盖掉——表现为先 reload 后计费
+        # 的调用顺序里定价「自己变回去」，且只在进程内首次计费时发生（顺序依赖）。
+        global _PRICING_LOADED
+        _PRICING_LOADED = True
 
 
 def compute_cost_value(

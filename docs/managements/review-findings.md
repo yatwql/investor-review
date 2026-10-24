@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.14.9-dev
-> **编号源**：`rf-next = 837`（新增问题取此编号，完成后更新为 +1；已用最大 rf-836，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 839`（新增问题取此编号，完成后更新为 +1；已用最大 rf-838，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -27,6 +27,13 @@
 **当前无登记项**——三域均在登记线以下，新增文件触线时按上述口径登记。
 
 ## 已解决问题
+
+### 开发期已修复（随发布归档）
+
+| # | 问题 | 修复 |
+|---|------|------|
+| **rf-838** | `test_json_comments` 的叶子模块边界用例用 `subprocess.run(text=True)` 未指定编码——`PYTHONWARNDEFAULTENCODING=1` 下直接告警为错误（`error::EncodingWarning`），`LC_ALL=C` 等非 UTF-8 locale 还会按 cp936/latin-1 解码子进程输出 | 显式 `encoding="utf-8"` + `errors="replace"`；由 portability 隐式编码严格档拦截，无需新增用例 |
+| **rf-837** | 计价模块懒加载标志与显式重载不一致：显式 `reload_pricing()` 后 `_PRICING_LOADED` 仍为 False，进程内首次计费会再读一次配置文件并覆盖已装载的定价（用例单独执行失败、整文件通过） | `reload_pricing()` 在 `finally` 置 `_PRICING_LOADED = True`；新增回归用例 `test_explicit_reload_is_not_undone_by_lazy_init`（断言显式重载后计费直接使用已装载的定价） |
 
 ### 归档档案
 - [`archived_review-findings.0.14.x.md`](../archive/v0.14.x/archived_review-findings.0.14.x.md) — v0.14.x（2026-10-21 ~ 2026-10-23）

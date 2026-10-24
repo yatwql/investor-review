@@ -60,6 +60,10 @@ class TestLeafModuleBoundary:
             [sys.executable, "-c", code],
             capture_output=True,
             text=True,
+            # 显式编码：隐式编码在非 UTF-8 locale（如 LC_ALL=C）下按 cp936/latin-1 解码，
+            # 且 PYTHONWARNDEFAULTENCODING=1 会直接告警为错误（portability 探针覆盖）
+            encoding="utf-8",
+            errors="replace",
             check=True,
             cwd=str(_CORE_DIR.parents[2]),
         )
