@@ -132,6 +132,7 @@ class TestDerivedMaps:
         assert ttl_map["llm_expert_review"] == 14400
         assert ttl_map["llm_health_check"] == 14400
         assert ttl_map["llm_penetration_deep"] == 14400
+        assert ttl_map["llm_news_correlation"] == 14400
         assert ttl_map["sector_flow"] == 900
         # 财报索引与正文同档按月（回归：曾为两周，导致 DataSinking 频繁重取触发配额/连接失败）
         assert ttl_map["report"] == CACHE_MONTHLY

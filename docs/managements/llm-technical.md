@@ -211,7 +211,7 @@ skeleton.py:generate_llm_content()
 
 | 模块键 | 名称 | 默认 max_tokens | 默认 timeout | 默认 TTL | 默认 system_prompt |
 |:-------|:-----|:---------------:|:------------:|:--------:|:-------------------|
-| `news_correlation` | 新闻 LLM 关联分析 | 3000 | 60s | 1h（3600s） | 逐批分析新闻与持仓关联性（JSON 输出） |
+| `news_correlation` | 新闻 LLM 关联分析 | 3000 | 60s | 4h（14400s） | 逐批分析新闻与持仓关联性（JSON 输出） |
 
 **批量模式 vs 标准模式区别**：
 
@@ -934,7 +934,7 @@ penetrated_assets ──→ extract_stable_penetration()
 | `expert_review` | 14400s (4h) | 智囊团复盘可在同一天多次触发；4h 平衡新鲜度与重复调用成本 |
 | `health_check` | 14400s (4h) | 体检结论随持仓/数据质量变动，4h 刷新 |
 | `penetration_deep` | 14400s (4h) | 穿透结构随持仓变动，4h 刷新 |
-| `news_correlation` | 3600s (1h) | 新闻时效性强，TTL 较短 |
+| `news_correlation` | 14400s (4h) | 新闻时效性强，但逐条缓存的键含标题+持仓指纹，4h 内同批新闻结论稳定 |
 | `self_review` | 86400s (24h) | 生成后自检（附录）；**内容寻址**（键含各模块产出正文），输入未变即命中，按时间强制重算只会白花钱 |
 | `holding_change` | 86400s (24h) | 持仓变动复盘归因（章内 LLM 归因块，本体由 feature `holding_change_review` 控制）；同样内容寻址 |
 

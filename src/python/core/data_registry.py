@@ -179,7 +179,7 @@ _MODULE_REGISTRY: tuple[DataModuleDef, ...] = (
         "财经新闻热点与持仓关联分析",
         "llm_news_correlation",
         cache_prefixes=("llm_news_item_",),
-        cache_ttl=3600,
+        cache_ttl=14400,
         settings_suffix="news_correlation",
         cache_groups=("refresh",),
     ),

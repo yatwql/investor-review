@@ -54,14 +54,14 @@ class TestTTLSingleSource:
         for module in ("self_review", "holding_change"):
             assert get_cache_ttl_llm(module) == pytest.approx(86400, abs=1e-9), module
 
-    @pytest.mark.parametrize("module", ("expert_review", "health_check", "penetration_deep"))
+    @pytest.mark.parametrize("module", ("expert_review", "health_check", "penetration_deep", "news_correlation"))
     def test_generated_config_template_carries_four_hour_ttl(self, module):
         """生成配置的程序（`_DEFAULT_CONFIG` → 模板）写出的值同样是 4h。"""
         from src.python.config._config_defaults import _DEFAULT_CONFIG
 
         assert int(_DEFAULT_CONFIG["cache_ttl"][f"llm_{module}"]) == 14400
 
-    @pytest.mark.parametrize("module", ("expert_review", "health_check", "penetration_deep"))
+    @pytest.mark.parametrize("module", ("expert_review", "health_check", "penetration_deep", "news_correlation"))
     def test_analysis_modules_use_four_hour_ttl(self, module):
-        """三个分析模块统一 4h：平衡「日内变化要看得到」与「每次重算都是钱」。"""
+        """分析类模块统一 4h：平衡「日内变化要看得到」与「每次重算都是钱」。"""
         assert get_cache_ttl_llm(module) == pytest.approx(14400, abs=1e-9), module

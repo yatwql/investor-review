@@ -41,7 +41,7 @@
     "news": 900,
     "llm_global_macro": 86400,
     "llm_expert_review": 14400,
-    "llm_news_correlation": 3600,
+    "llm_news_correlation": 14400,
     "llm_health_check": 14400,
     "llm_penetration_deep": 14400,
     "llm_debate_pro": 86400,
