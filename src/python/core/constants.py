@@ -37,13 +37,17 @@ PROJECT_ROOT = _find_project_root()
 # 应用名称（单一来源，TUI 首页 / 启动日志 / Web 首页 / HTML 报告首页 / Excel 首页统一引用）
 APP_NAME = "投资复盘助手"
 
-APP_VERSION = "0.14.8"
+APP_VERSION = "0.15.0"
 
 # ── 报告产物文件名（单一来源：Excel/HTML 写入器与 Web 预览下载统一引用） ──
 # 报告产物文件基名（归档名 = 基名 + 时间戳后缀）
 REPORT_FILE_BASE = "个人投资分析报告"
 LATEST_XLSX_NAME = f"{REPORT_FILE_BASE}.xlsx"
 LATEST_HTML_NAME = f"{REPORT_FILE_BASE}.html"
+# 调仓模拟（少数派产物：与主报告并列于输出目录顶层，产物清扫与 TUI/Web 列举按名识别）
+WHATIF_FILE_BASE = "调仓模拟"
+LATEST_WHATIF_XLSX_NAME = f"{WHATIF_FILE_BASE}.xlsx"
+LATEST_WHATIF_HTML_NAME = f"{WHATIF_FILE_BASE}.html"
 
 # ── 缓存频率常量（秒，用作代码内默认值） ──────────────────
 
@@ -69,7 +73,7 @@ HISTORY_SNAPSHOT_MAX_COUNT = 365
 
 MODEL_PRICING: dict[str, dict[str, float | dict[str, float]]] = {
     # 单一来源：此表为唯一默认定价。pricing.py 以此为基，从 llm_settings.json
-    # 的 "pricing" 段加载覆盖（若存在），运行时合并到 _PRICING_MERGED。
+    # 的 llm_pricing_ref.json 逐模型覆盖，运行时合并到 _PRICING_MERGED。
     # 新增模型请在此处添加，不要仅修改 llm_settings.json。
     # Per 1M token:
     #   input: 标准输入（缓存未命中）——含 "peak" 子段的模型即闲时价（默认价）

@@ -107,7 +107,7 @@ class TestSectionCounts:
 
 
 def drift_marker() -> str:
-    return "**呈现与体验（默认开启 · 只改呈现不改内容）**：\n\n| 开关名 | 默认值 | 说明 |\n|:--|:--|:--|"
+    return "**持仓与交易（4 项；成本 / 申赎 / 成本收益 / 风险调整）**：\n\n| 开关名 | 默认值 | 说明 |\n|:--|:--|:--|"
 
 
 class TestSwitchTable:
@@ -165,7 +165,7 @@ class TestSwitchCounts:
         assert len(findings) == 1 and f"{wrong_total} 项功能开关" in findings[0]
 
     def test_bold_grouped_counts_from_requirements(self, drift):
-        """requirements §11.5 加粗组名写法（分**呈现与体验**（N 项…）等四组）同样受检。"""
+        """requirements §11.5 加粗组名写法（分**持仓与交易**（N 项…）等八组）同样受检。"""
         counts = drift._group_counts()
         names = drift._GROUP_DOC_NAMES
         keys = list(counts)
@@ -262,30 +262,51 @@ def _panel_doc(
     wrong_range_idx: int | None = None,
     reverse_map: bool = False,
 ) -> str:
-    """按注册表现造 [S] 面板文档：四组块标题 + 全量行号表 + 键名映射表。
+    """按注册表现造两面板文档：``[S]`` 六组块标题 + 行号表、``[C]`` 四块 + 子项 + 键名映射表。
 
-    drop_row 行号表抽掉一行；wrong_range_idx 指定组的块标题区间写错；
+    drop_row 行号表抽掉一行；wrong_range_idx 指定 ``[S]`` 组的块标题区间写错；
     reverse_map 颠倒映射表顺序——三种破坏各对应一类 finding。
     """
-    llm = len(drift.filter_menu_llm_modules(drift.get_llm_module_names()))
-    counts = drift._group_counts()
-    names = drift._GROUP_DOC_NAMES
-    lines = ["交互式子菜单（面板标题「配置 LLM 报告章节与功能开关」）"]
+    numbered = drift.panel_option_numbers("[S]")
+    lines = ["#### [S] 配置报告章节内容呈现", ""]
     mapping: list[str] = []
-    cursor = llm + 1
-    for idx, (group, name) in enumerate(zip(counts, names)):
-        flags = [flag for flag, _d in drift.switches_in_group(group)]
-        first = cursor
-        last = cursor + len(flags) - 1
+    by_group: dict[str, list[tuple[int, str]]] = {}
+    for number, flag, definition in numbered:
+        by_group.setdefault(definition.group, []).append((number, flag))
+    for idx, (group, items) in enumerate(by_group.items()):
+        name = drift._group_doc_name(group)
+        first, last = items[0][0], items[-1][0]
         shown = (first + 1, last + 1) if wrong_range_idx == idx else (first, last)
-        lines.append("")
         lines.append(f"**{name}（面板编号 {shown[0]}-{shown[1]}）**：组说明")
-        for offset, flag in enumerate(flags):
-            n = cursor + offset
-            if n != drop_row:
-                lines.append(f"| {n} | 开关 {n} | 效果 |")
-            mapping.append(f"> | `{flag}` | {n} | {name} |")
-        cursor = last + 1
+        lines.append("")
+        for number, flag in items:
+            if number != drop_row:
+                lines.append(f"| {number} | 开关 {number} | 效果 |")
+            mapping.append(f"> | `{flag}` | `[S]` {number} | {name} |")
+        lines.append("")
+
+    lines.append("#### [C] 配置报告章节显隐")
+    lines.append("")
+    for block in drift.BLOCK_ORDER:
+        entries = drift.chapters_in_block(block)
+        numbers = [drift.chapter_number(entry.key) for entry in entries]
+        first, last = numbers[0], numbers[-1]
+        lines.append(f"**{drift.BLOCK_LABELS[block]}（{first}-{last}，写配置文件）**：块说明")
+        lines.append("")
+        lines.append("| 编号 | 章节 | 键名 |")
+        lines.append("|:----:|:-----|:-----|")
+        for entry, number in zip(entries, numbers):
+            lines.append(f"| {number} | 章节 {number} | `{entry.key}` |")
+            if entry.source == drift.SOURCE_FEATURES:
+                mapping.append(
+                    f"> | `{entry.key}` | `[C]` {number} | {drift._group_doc_name(drift.feature_switch_registry[entry.key].group)} |"
+                )
+        lines.append("")
+    for sub_number, flag in drift.sub_item_numbers().items():
+        lines.append(f"| {sub_number} | 子项 {sub_number} | `{flag}` |")
+        mapping.append(
+            f"> | `{flag}` | `[C]` {sub_number} | {drift._group_doc_name(drift.feature_switch_registry[flag].group)} |"
+        )
     lines.append("")
     lines.extend(reversed(mapping) if reverse_map else mapping)
     return "\n".join(lines) + "\n"
@@ -296,8 +317,7 @@ class TestPanelNumbering:
         assert drift.check_panel_numbering(_panel_doc(drift)) == []
 
     def test_missing_number_reported(self, drift):
-        llm = len(drift.filter_menu_llm_modules(drift.get_llm_module_names()))
-        findings = drift.check_panel_numbering(_panel_doc(drift, drop_row=llm + 3))
+        findings = drift.check_panel_numbering(_panel_doc(drift, drop_row=3))
         assert any("编号序列" in f for f in findings)
 
     def test_group_range_mismatch_reported(self, drift):
@@ -306,11 +326,19 @@ class TestPanelNumbering:
 
     def test_key_map_order_mismatch_reported(self, drift):
         findings = drift.check_panel_numbering(_panel_doc(drift, reverse_map=True))
-        assert any("键名→菜单编号映射" in f for f in findings)
+        assert any("键名→面板编号映射" in f for f in findings)
 
     def test_missing_section_reported(self, drift):
         findings = drift.check_panel_numbering("无面板表\n")
-        assert len(findings) == 1 and "未找到 [S] 面板编号表区段" in findings[0]
+        assert any("未找到 [S] 面板编号表区段" in f for f in findings)
+        assert any("未找到 [C] 面板编号表区段" in f for f in findings)
+
+    def test_sub_item_number_mismatch_reported(self, drift):
+        """子项编号写错（`7.3`）→ 与注册表派生不一致即报出。"""
+        doc = _panel_doc(drift).replace("| 7.2 | 子项 7.2 |", "| 7.3 | 子项 7.3 |")
+        doc = doc.replace("| `llm_debate_conditional` | `[C]` 7.2 |", "| `llm_debate_conditional` | `[C]` 7.3 |")
+        findings = drift.check_panel_numbering(doc)
+        assert any("子项编号" in f for f in findings)
 
 
 class TestProjectStats:

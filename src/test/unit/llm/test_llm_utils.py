@@ -19,6 +19,7 @@ from src.python.llm.api_base import (
     _is_effort_model,
     _supports_extended_thinking,
 )
+from src.python.core.constants import MODEL_PRICING
 from src.python.llm.fingerprint import compute_fingerprint, get_cache_ttl_llm
 from src.python.llm.markdown import markdown_to_html
 from src.python.llm.pricing import (
@@ -681,7 +682,18 @@ class TestPricing(unittest.TestCase):
         """weekend_always_idle=False 时周末恢复按钟点区分峰谷（配置覆盖生效）。"""
         orig_flag = _pricing_mod.PRICING_WEEKEND_ALWAYS_IDLE
         try:
-            with patch("src.python.config.get_llm_config", return_value={"pricing": {"weekend_always_idle": False}}):
+            with patch(
+                "src.python.config._llm_pricing.load_pricing_config",
+                return_value={
+                    "models": {m: dict(p) for m, p in MODEL_PRICING.items()},
+                    "currency": "CNY",
+                    "timezone": "Asia/Shanghai",
+                    "peak_periods": list(PRICING_PEAK_PERIODS),
+                    "idle_periods": list(PRICING_IDLE_PERIODS),
+                    "weekend_always_idle": False,
+                    "holiday_always_idle": True,
+                },
+            ):
                 reload_pricing()
             self.assertFalse(_pricing_mod.PRICING_WEEKEND_ALWAYS_IDLE)
             cost_peak = estimate_cost("deepseek-v4-flash", 1_000_000, 1_000_000, at_time=self._WEEKEND_PEAK_HOUR_TIME)
@@ -725,7 +737,18 @@ class TestPricing(unittest.TestCase):
         """holiday_always_idle=False 时法定节假日恢复按钟点区分峰谷。"""
         orig_flag = _pricing_mod.PRICING_HOLIDAY_ALWAYS_IDLE
         try:
-            with patch("src.python.config.get_llm_config", return_value={"pricing": {"holiday_always_idle": False}}):
+            with patch(
+                "src.python.config._llm_pricing.load_pricing_config",
+                return_value={
+                    "models": {m: dict(p) for m, p in MODEL_PRICING.items()},
+                    "currency": "CNY",
+                    "timezone": "Asia/Shanghai",
+                    "peak_periods": list(PRICING_PEAK_PERIODS),
+                    "idle_periods": list(PRICING_IDLE_PERIODS),
+                    "weekend_always_idle": True,
+                    "holiday_always_idle": False,
+                },
+            ):
                 reload_pricing()
             self.assertFalse(_pricing_mod.PRICING_HOLIDAY_ALWAYS_IDLE)
             with patch("src.python.core.trading_calendar._is_trading_day", return_value=False):
@@ -736,6 +759,42 @@ class TestPricing(unittest.TestCase):
         finally:
             _pricing_mod.PRICING_HOLIDAY_ALWAYS_IDLE = orig_flag
 
+    def test_explicit_reload_is_not_undone_by_lazy_init(self) -> None:
+        """显式 `reload_pricing()` 装载的定价，不得被随后的懒加载再次读盘覆盖。
+
+        缺陷场景：`_PRICING_LOADED` 只在懒加载分支置位，显式重载后仍是 False——
+        进程内首次计费会再读一次配置文件，把调用方刚装载的定价静默换回文件值；
+        表现为「先 reload 后计费」的用例单独跑红、整文件跑绿（顺序依赖）。
+        """
+        orig_flash = dict(PRICING_MERGED.get("deepseek-v4-flash", {}))
+        try:
+            models = {m: dict(p) for m, p in MODEL_PRICING.items()}
+            models["deepseek-v4-flash"] = {
+                "input": 3.0,
+                "output": 6.0,
+                "input_cache_hit": 0.03,
+                "peak": {"input": 3.0, "output": 6.0, "input_cache_hit": 0.03},
+            }
+            custom = {
+                "models": models,
+                "currency": "CNY",
+                "timezone": "Asia/Shanghai",
+                "peak_periods": [(0, 24 * 60)],
+                "idle_periods": [],
+                "weekend_always_idle": False,
+                "holiday_always_idle": False,
+            }
+            # patch 只在 reload 期间生效：计费发生在 patch 之外，故若懒加载再次读盘，
+            # 就会读到真实配置文件而非上面注入的价格
+            with patch("src.python.config._llm_pricing.load_pricing_config", return_value=custom):
+                reload_pricing()
+            self.assertTrue(_pricing_mod._PRICING_LOADED, "显式重载后应处于已加载态")
+            cost = estimate_cost("deepseek-v4-flash", 1_000_000, 1_000_000, at_time=self._IDLE_TIME)
+            self.assertEqual(cost, "¥9.000")  # 注入价 3+6，若被覆盖则回落文件价
+        finally:
+            PRICING_MERGED["deepseek-v4-flash"] = orig_flash
+            reload_pricing()
+
     def test_peak_pricing_custom_periods_from_config(self) -> None:
         """llm_settings.json 自定义峰谷时段与模型价格后应生效（工作日）。"""
         orig_peak = list(PRICING_PEAK_PERIODS)
@@ -743,21 +802,23 @@ class TestPricing(unittest.TestCase):
         orig_tz = _pricing_mod.PRICING_TIMEZONE_NAME
         orig_flash = dict(PRICING_MERGED.get("deepseek-v4-flash", {}))
         try:
-            custom = {
-                "pricing": {
-                    "currency": "CNY",
-                    "timezone": "Asia/Shanghai",
-                    "peak_periods": ["22:00-23:00"],
-                    "idle_periods": [],
-                    "deepseek-v4-flash": {
-                        "input": 1.0,
-                        "output": 2.0,
-                        "input_cache_hit": 0.02,
-                        "peak": {"input": 2.0, "output": 4.0, "input_cache_hit": 0.04},
-                    },
-                }
+            models = {m: dict(p) for m, p in MODEL_PRICING.items()}
+            models["deepseek-v4-flash"] = {
+                "input": 1.0,
+                "output": 2.0,
+                "input_cache_hit": 0.02,
+                "peak": {"input": 2.0, "output": 4.0, "input_cache_hit": 0.04},
             }
-            with patch("src.python.config.get_llm_config", return_value=custom):
+            custom = {
+                "models": models,
+                "currency": "CNY",
+                "timezone": "Asia/Shanghai",
+                "peak_periods": [(22 * 60, 23 * 60)],
+                "idle_periods": [],
+                "weekend_always_idle": True,
+                "holiday_always_idle": True,
+            }
+            with patch("src.python.config._llm_pricing.load_pricing_config", return_value=custom):
                 reload_pricing()
             self.assertEqual(PRICING_PEAK_PERIODS, [(22 * 60, 23 * 60)])
             self.assertEqual(PRICING_IDLE_PERIODS, [])

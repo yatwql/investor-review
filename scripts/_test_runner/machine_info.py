@@ -270,7 +270,7 @@ def _env_value(label: str, info: dict) -> str | None:
 
 
 def _render_env_table(info: dict) -> str:
-    """渲染机器环境属性 markdown 表格（14 行，与文档「采集环境属性」表结构一致）。"""
+    """渲染机器环境属性 markdown 表格（行数 = `_ENV_ATTR_LABELS` 长度，与文档「采集环境属性」表结构一致）。"""
     rows = [(label, _env_value(label, info)) for label in _ENV_ATTR_LABELS]
     lines = [
         "| 环境属性 | 值 |",

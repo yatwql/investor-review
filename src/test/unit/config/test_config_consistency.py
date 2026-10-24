@@ -42,11 +42,14 @@ class TestLlmSettingsKeyConsistency:
         if not os.path.exists(_path):
             return  # 无真实配置文件时跳过（CI/裸环境）
 
+        from src.python.config._llm_schema import flatten
+
         with open(_path, encoding="utf-8") as f:
             raw = f.read()
             llm = json.loads(_strip_json_comments(raw))
 
-        file_keys = set(llm.keys())
+        # v2 嵌套结构：按消费方扁平契约核对键名（顶层 sections 不是配置键）
+        file_keys = set(flatten(llm))
         untracked = file_keys - _KNOWN_LLM_SETTINGS_KEYS
         assert not untracked, f"llm_settings.json 中发现 {len(untracked)} 个未登记键名: {sorted(untracked)}"
 
@@ -327,20 +330,19 @@ class TestLlmSettingsTemplateConsistency:
 
     @pytest.mark.unit_config
     def test_template_equals_default_settings(self):
-        """llm_settings 模板 JSON 解析后应与 _DEFAULT_LLM_SETTINGS 深度相等。"""
+        """v2 模板展平后应与扁平默认值 `_DEFAULT_LLM_SETTINGS` 深度相等。"""
         import json
 
+        from src.python.config._llm_schema import flatten
         from src.python.config._llm_settings_defaults import _DEFAULT_LLM_SETTINGS, _get_default_llm_settings_template
 
         template_str = _get_default_llm_settings_template()
-        cleaned = cfg._strip_json_comments(template_str)
-        parsed = json.loads(cleaned)
+        parsed = json.loads(cfg._strip_json_comments(template_str))
 
-        assert parsed == _DEFAULT_LLM_SETTINGS, (
-            f"llm_settings 模板与 _DEFAULT_LLM_SETTINGS 不一致\n"
-            f"模板独有键: {parsed.keys() - _DEFAULT_LLM_SETTINGS.keys()}\n"
-            f"默认独有键: {_DEFAULT_LLM_SETTINGS.keys() - parsed.keys()}\n"
-            f"值差异: {[k for k in parsed if parsed.get(k) != _DEFAULT_LLM_SETTINGS.get(k)]}"
+        assert parsed["schema_version"] == 2
+        assert flatten(parsed) == _DEFAULT_LLM_SETTINGS, (
+            f"llm_settings 模板展平后与 _DEFAULT_LLM_SETTINGS 不一致\n"
+            f"值差异: {[k for k in set(flatten(parsed)) | set(_DEFAULT_LLM_SETTINGS) if flatten(parsed).get(k) != _DEFAULT_LLM_SETTINGS.get(k)]}"
         )
 
     @pytest.mark.unit_config
@@ -364,7 +366,7 @@ class TestLlmSettingsTemplateConsistency:
 
     @pytest.mark.unit_config
     def test_template_module_titles_match_registry(self):
-        """模板中每个「<显示名> — <模块>」区块标题的显示名须与注册表一致（渲染结果层锁定）。"""
+        """模板中每个「<显示名>（<模块>）」区块标题的显示名须与注册表一致（渲染结果层锁定）。"""
         import re
 
         from src.python.config._llm_settings_defaults import _DEFAULT_LLM_SETTINGS, _get_default_llm_settings_template
@@ -372,7 +374,7 @@ class TestLlmSettingsTemplateConsistency:
 
         template = _get_default_llm_settings_template()
         titles = {
-            module: label for label, module in re.findall(r"^\s*//\s*(.+?)\s+—\s+([a-z_]+)\s*$", template, re.MULTILINE)
+            module: label for label, module in re.findall(r"^\s*//\s*(.+?)（([a-z_]+)）\s*$", template, re.MULTILINE)
         }
         assert titles, "模板中未找到任何模块区块标题，正则或模板格式已变"
 

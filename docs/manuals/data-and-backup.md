@@ -61,13 +61,13 @@ Compress-Archive -Path data\holdings,data\config,data\history -DestinationPath "
 
 ### 2.3 密钥文件（重点）
 
-`data/config/` 里有三个文件含敏感信息，**备份件也要当密码对待**：
+`data/config/` 里**两个文件含密钥，备份件也要当密码对待**；其余配置文件不含明文凭据：
 
 | 文件 | 内容 | 注意 |
 |---|---|---|
 | `llm_key.json` | LLM API Key | 不要提交到 git、不要贴到公开 issue、不要放进公共网盘 |
 | `data_key.json` | 数据源密钥（DataSinking / 同花顺等） | 同上 |
-| `llm_providers.json` | Provider 路由（**不含**明文密钥，用 `credentials_ref` 引用） | 可安全共享 |
+| `config.json` / `features.json` / `llm_settings.json` / `llm_providers.json` / `logger.json` / `llm_pricing_ref.json` | 路径与开关、LLM 参数、线路路由、日志级别、计价参考 | **不含明文密钥**（`llm_providers.json` 用 `credentials_ref` 引用密钥文件），可安全共享 |
 
 程序启动时会检查密钥文件权限，过宽会提示（Linux/macOS 建议 `chmod 600 data/config/llm_key.json data/config/data_key.json`）。另外所有配置写入都会先留 `.bak`（见 §5.3）。
 
@@ -101,7 +101,8 @@ Compress-Archive -Path data\holdings,data\config,data\history -DestinationPath "
 几个常见疑问：
 
 - **旧 `config.json` 缺新键怎么办？** 不用手补：程序按「配置文件不必须存在」的惯例处理，缺失键回落出厂默认；`features.json` 里新增的开关同理。
-- **升级后报告多/少了几章？** 先看变更日志里「新增开关默认值」；再确认 `[P]`/`[S]` 里的章节与开关状态（新开关默认值可能是「关」）。
+- **结构版本不符怎么办？** `llm_settings.json` / `logger.json` / `llm_pricing_ref.json` 带 `version`，且程序**只认当前结构**：版本不符会拒绝加载并提示重新生成——删掉该文件重启即按当前模板重建（个人设置需按手册重设；`.bak` 可回退）。`config.json` / `features.json` 无版本门槛，逐键回落默认。
+- **升级后报告多/少了几章？** 先看变更日志里「新增开关默认值」；再确认 `[C]`/`[S]` 里的章节与开关状态（新开关默认值可能是「关」）。
 - **升级后想回退？** `git checkout <旧 tag>` + 重跑启动脚本；`data/` 一般不需要回退（程序对旧数据向后兼容），但**持仓与配置先备份**更稳妥。
 
 ## 5. 重置与卸载

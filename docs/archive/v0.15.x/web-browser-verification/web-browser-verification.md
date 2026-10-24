@@ -1,7 +1,7 @@
-# Web 模式浏览器真机验证方法与实测结论（rf-257 五类 UX 项）
+# Web 模式浏览器真机验证方法与结论
 
-> **关联**：`docs/managements/review-findings.md` → **rf-257**（Web 模式浏览器真机人工验收）；勾选清单 [`docs/archive/v0.10.x/web-ui/web-ui-verification-checklist.md`](../archive/v0.10.x/web-ui/web-ui-verification-checklist.md)（①~⑤ 五类、逐步操作与判定标准）；启动方式见 [`docs/manuals/how-to-use-web-mode.md`](../manuals/how-to-use-web-mode.md) §1。
-> **目的**：把五类验收项拆成「**可自动化的实测项**」与「**必须人工的项**」，并留下可复现的验证方法与实测结论——后续 Web UI 改动复验时直接复用本方法（脚本与产物在 `docs/tmp/rf257/`，git 忽略，重跑即重建）。
+> **关联**：Web 模式浏览器真机人工验收（待验项清单见 `docs/managements/review-findings.md` 当前待处理问题）；勾选清单 [`docs/archive/v0.10.x/web-ui/web-ui-verification-checklist.md`](../archive/v0.10.x/web-ui/web-ui-verification-checklist.md)（①~⑤ 五类、逐步操作与判定标准）；启动方式见 [`docs/manuals/how-to-use-web-mode.md`](../manuals/how-to-use-web-mode.md) §1。
+> **目的**：把五类验收项拆成「**可自动化的实测项**」与「**必须人工的项**」，并留下可复现的验证方法与实测结论——后续 Web UI 改动复验时直接复用本方法（脚本与产物在 `docs/tmp/browser-verify/`，git 忽略，重跑即重建）。
 > **实测环境**：本机 headless Chromium · Node 全局 WebSocket 直连 CDP。
 > **复跑红线**：全程 **0 次真实 `POST /api/runs`**（浏览器侧 CDP 捕获 0 次 + 服务端 `server.log` 中 `POST /api/runs` 出现 0 次）；不改 `data/config/`、`data/holdings/` 正式持仓；上传测试仅落到 `data/holdings/uploads/` 临时区（测后已清空还原）。
 
@@ -14,9 +14,9 @@
 ```bash
 # ① 选空闲端口并启动本地 Web 服务（手册 §1「手动启动」；--port 可换端口）
 PORT=$(.venv/bin/python -c "import socket;s=socket.socket();s.bind(('127.0.0.1',0));print(s.getsockname()[1]);s.close()")
-nohup .venv/bin/python -m src.python.web --port "$PORT" > docs/tmp/rf257/server.log 2>&1 &
+nohup .venv/bin/python -m src.python.web --port "$PORT" > docs/tmp/browser-verify/server.log 2>&1 &
 SERVER_PID=$!                      # 记录 PID，验证结束必须 kill
-echo "$PORT" > docs/tmp/rf257/port.txt; echo "$SERVER_PID" > docs/tmp/rf257/server.pid
+echo "$PORT" > docs/tmp/browser-verify/port.txt; echo "$SERVER_PID" > docs/tmp/browser-verify/server.pid
 
 # ② HTTP 层证据（Flask test_client 进程内链路，不占端口、不发外网、mock 管线）
 .venv/bin/python scripts/test-smoke-web.py           # 预期 11/11，退出码 0
@@ -25,16 +25,16 @@ echo "$PORT" > docs/tmp/rf257/port.txt; echo "$SERVER_PID" > docs/tmp/rf257/serv
 CHROME=$HOME/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome
 CDP_PORT=$(.venv/bin/python -c "import socket;s=socket.socket();s.bind(('127.0.0.1',0));print(s.getsockname()[1]);s.close()")
 nohup "$CHROME" --headless=new --remote-debugging-port="$CDP_PORT" \
-  --user-data-dir="$PWD/docs/tmp/rf257/chrome-profile" --no-sandbox --disable-gpu \
+  --user-data-dir="$PWD/docs/tmp/browser-verify/chrome-profile" --no-sandbox --disable-gpu \
   --disable-dev-shm-usage --no-first-run --window-size=1280,900 about:blank \
-  > docs/tmp/rf257/chrome.log 2>&1 &
+  > docs/tmp/browser-verify/chrome.log 2>&1 &
 
 # ④ 跑自动化实测（Node 22 全局 WebSocket 直连 CDP）
-RF257_BASE="http://127.0.0.1:$PORT" RF257_CDP_HTTP="http://127.0.0.1:$CDP_PORT" \
-  node docs/tmp/rf257/cdp-check.mjs            # 输出逐项 [PASS]/[FAIL]/[MANUAL] + cdp-report.json
+BROWSER_VERIFY_BASE="http://127.0.0.1:$PORT" BROWSER_VERIFY_CDP_HTTP="http://127.0.0.1:$CDP_PORT" \
+  node docs/tmp/browser-verify/cdp-check.mjs            # 输出逐项 [PASS]/[FAIL]/[MANUAL] + cdp-report.json
 # 可选：⑤ 真实鼠标 hover 复核（会先自动上传一次使「生成报告」按钮可用）
-RF257_BASE="http://127.0.0.1:$PORT" RF257_CDP_HTTP="http://127.0.0.1:$CDP_PORT" \
-  RF257_FIXTURES="$PWD/docs/tmp/rf257" node docs/tmp/rf257/cdp-hover-debug.mjs
+BROWSER_VERIFY_BASE="http://127.0.0.1:$PORT" BROWSER_VERIFY_CDP_HTTP="http://127.0.0.1:$CDP_PORT" \
+  BROWSER_VERIFY_FIXTURES="$PWD/docs/tmp/browser-verify" node docs/tmp/browser-verify/cdp-hover-debug.mjs
 
 # ⑤ 收尾（必做）：杀浏览器、杀服务、清上传临时区
 kill "$SERVER_PID"  <chrome_pid>
@@ -48,22 +48,22 @@ ls data/holdings/uploads/     # 应为空；有残留则删除本次测试产生
 | 前置 | 判定 | 本次结果 |
 |:-----|:-----|:--------|
 | `GET /`、`/static/style.css`、`/static/main.js` 均 200 | curl 三条均为 200 | ✅ |
-| `scripts/test-smoke-web.py` 11/11 | 退出码 0 | ✅ 11/11（证据 `docs/tmp/rf257/test-smoke-web.log`） |
+| `scripts/test-smoke-web.py` 11/11 | 退出码 0 | ✅ 11/11（证据 `docs/tmp/browser-verify/test-smoke-web.log`） |
 | 未触发报告生成 | 浏览器侧 `Network.requestWillBeSent` 统计 `POST /api/runs`=0；服务端日志 `grep -c "POST /api/runs" server.log`=0 | ✅ 双侧均为 0 |
 
 ### 1.3 自动化脚本覆盖的检查点
 
-`docs/tmp/rf257/cdp-check.mjs`（**37 项断言**：**35 过 / 0 不过 / 2 人工**，全部中文输出）关键技术手段：
+`docs/tmp/browser-verify/cdp-check.mjs`（**37 项断言**：**35 过 / 0 不过 / 2 人工**，全部中文输出）关键技术手段：
 
 - **Console/异常**：`Runtime.consoleAPICalled(error)` + `Runtime.exceptionThrown` + `Log.entryAdded(error)`（域启用后先清缓冲再导航，避免上一页回放污染）。
 - **Network**：`Network.responseReceived` 记录全部状态码；`Network.setCacheDisabled` 保证读到当前版本静态资源。
 - **首屏占位态**：`Fetch.enable` 暂扣 `*api/runs/history*` 与 `*api/health`，使首屏时点能观察到「加载中…」「正在检测...」占位（本机回环过快，不暂扣会错过）。
 - **上传状态文案**：页面内 `MutationObserver` 记录 `#upload-status` 全部文本变更（否则 10ms 内完成的 busy 态采不到）。
 - **文件注入**：`DOM.setFileInputFiles` 塞入本地 fixture（只到上传层，不提交运行）。
-- **hover**：`Input.dispatchMouseEvent` 真实鼠标移动（先 `scrollIntoView` 再取坐标，避免元素在视口外导致真实 hover 落空——首版脚本未滚动时的偶发不落地属测试工件）+ `CSS.forcePseudoState` 强制 `:hover` 兜底（确定性判据），两口径交叉验证。
+- **hover**：`Input.dispatchMouseEvent` 真实鼠标移动（先 `scrollIntoView` 再取坐标，避免元素在视口外导致真实 hover 落空）+ `CSS.forcePseudoState` 强制 `:hover` 兜底（确定性判据），两口径交叉验证。
 - **375px**：`Emulation.setDeviceMetricsOverride {width:375, mobile:true}` 后读 `documentElement.scrollWidth/clientWidth`、卡片矩形、控件矩形。
 
-### 1.4 测试用文件（`docs/tmp/rf257/`，git 忽略）
+### 1.4 测试用文件（`docs/tmp/browser-verify/`，git 忽略）
 
 | 文件 | 用途 |
 |:-----|:-----|
@@ -115,7 +115,7 @@ ls data/holdings/uploads/     # 应为空；有残留则删除本次测试产生
 | 3.1a 初始隐藏 | 自动化 | **过**。首屏 `#progress-section`、`#result-section` 均带 `hidden`（未提交前不出现）。证据 `cdp-run.log` 3.1a |
 | 3.1b 静态初始态 | 自动化 | **过**。`#progress-bar`：`role=progressbar`、`aria-valuenow=0`、`aria-valuemin/max=0/100`；`#progress-phase` =「准备中...」；`#progress-events` 空 `<ol>`。证据 `cdp-run.log` 3.1b |
 | 3.3a 显隐逻辑 | 自动化 | **过（DOM 口径）**。脚本移除 `hidden` 后卡片真实可见（高度 139.9px、进度轨宽 = 容器宽、可渲染进度条），恢复 `hidden` 后回到隐藏。证据 `cdp-run.log` 3.3a |
-| 3.1c/3.2/3.3 提交后进度推进与事件追加 | **人工** | 需真实 `POST /api/runs`（本次红线禁止）。**已有证据**：`scripts/test-smoke-web.py` 第 4/5/6 项断言 `202 → GET events 非空且 status 可达 done → GET run 完成态 exit_code=0`（`docs/tmp/rf257/test-smoke-web.log`）。**完整进度观察需人工跑一次 basic** |
+| 3.1c/3.2/3.3 提交后进度推进与事件追加 | **人工** | 需真实 `POST /api/runs`（本次红线禁止）。**已有证据**：`scripts/test-smoke-web.py` 第 4/5/6 项断言 `202 → GET events 非空且 status 可达 done → GET run 完成态 exit_code=0`（`docs/tmp/browser-verify/test-smoke-web.log`）。**完整进度观察需人工跑一次 basic** |
 | 3.4 full 全程可观察 | **人工** | 同上，需人工跑一次 full（约 5 分钟） |
 | 3.5 生成期间按钮禁用 | **人工** | 与 5.3 同一代码路径（`onSubmit` 同步置 `disabled + aria-busy`），本次不实际提交 |
 
@@ -145,7 +145,7 @@ ls data/holdings/uploads/     # 应为空；有残留则删除本次测试产生
 |:------|:----|:----------|
 | 5.1 初始 disabled | 自动化 | **过**。DOMContentLoaded 时点 `#generate-btn.disabled=true`；disabled 视觉 `opacity=0.5`、`cursor=not-allowed`。证据 `cdp-run.log` 5.1/5.1b |
 | 5.2 上传 + 选格式后可点 | 自动化 | **过**。合法上传成功后 `disabled=false`（格式默认已选 basic）。证据 `cdp-run.log` 5.2 |
-| 5.3 点击生成后转禁用（完成后恢复） | **人工** | 真机 basic 实测已执行：点击即转禁用「正在提交...」→「生成中...」✅；**首测完成态按钮未复位**（停在「生成中...」禁用态，缺陷已修复：完成分支与 `resetFlow` 共用 `restoreGenerateBtn()` 单源复位 + 回归用例），复测并入 rf-257 收尾。代码路径：`onSubmit` 先 `disabled=true` + `aria-busy=true` |
+| 5.3 点击生成后转禁用（完成后恢复） | **人工** | 真机 basic 实测已执行：点击即转禁用「正在提交...」→「生成中...」✅；**首测完成态按钮未复位**（停在「生成中...」禁用态，缺陷已修复：完成分支与 `resetFlow` 共用 `restoreGenerateBtn()` 单源复位 + 回归用例），复测并入人工项收尾。代码路径：`onSubmit` 先 `disabled=true` + `aria-busy=true` |
 | 5.4 次级按钮 hover + 点击动作 | 自动化 | **过**。**真实鼠标**（`cdp-hover-debug.mjs`：`Input.dispatchMouseEvent` + 先 `scrollIntoView` 保证元素在视口内）4/4 按钮命中且移出后还原：`#generate-btn` 背景 `rgb(31,111,178) → rgb(24,90,146)`（`--primary → --primary-hover`，按钮已处于可用态）、`#config-reload`/`#health-refresh`/`#log-load` 边框 `rgb(217,220,225) → rgb(31,111,178)`，`:hover` 链逐级命中目标按钮；**375px 下** `#health-refresh` 真实 hover 同样命中。另以 `CSS.forcePseudoState` 强制 `:hover` 作为确定性兑底口径亦全部命中。**点击动作**：「刷新」→ 缓存统计回填（`306 个`）、**「加载日志」→ 日志列表真实加载**（只读 `GET`）。证据 `cdp-run.log` 5.4a/5.4b/5.4c/5.4d + `hover-debug.json`。注：「清理过期」会写 `data/cache/`，本次不点，留人工 |
 | 5.5 加载态占位非空白 | 自动化 | **过**。首屏时点（Fetch 暂扣响应保证可观察）`#health-list`「正在检测...」、`#history-list`「加载中...」。证据 `cdp-run.log` 5.5 |
 | 5.6 正式更新未确认被拦 | 自动化 | **过**。切到「正式更新」→ `#formal-options` 展开、未勾选「我已知晓」时 `disabled=true`（提交被拦）；勾选后 `disabled=false`；切回试算 → 展开区收起、确认勾选自动清除。证据 `cdp-run.log` 5.6 |
@@ -160,7 +160,7 @@ ls data/holdings/uploads/     # 应为空；有残留则删除本次测试产生
 
 | 项 | 标题 | 结果 | 说明与证据 |
 |:--:|:-----|:----:|:----------|
-| ① | 页面渲染（JS/CSS 加载） | ✅ **通过（全自动化）** | 5/5；`/static/main.js`、`/static/style.css` 均 200、171 条规则、Console 0 error → **无 404 回归闭合**。`docs/tmp/rf257/cdp-run.log` 1.1a~1.5b |
+| ① | 页面渲染（JS/CSS 加载） | ✅ **通过（全自动化）** | 5/5；`/static/main.js`、`/static/style.css` 均 200、171 条规则、Console 0 error → **无 404 回归闭合**。`docs/tmp/browser-verify/cdp-run.log` 1.1a~1.5b |
 | ② | 上传表单 UX | ✅ **通过（2.1~2.4 全自动化；2.5/2.6 合成事件+可达性口径）** | accept 断言 + 合法/非法/空文件三路径状态文案；真实拖拽、真实 Tab/Enter 留人工抽验。`cdp-run.log` 2.1~2.6 |
 | ③ | 进度事件可视化 | 🟡 **部分自动化** | 静态初始态 + 显隐逻辑过（3.1a/3.1b/3.3a）；真实进度以 test-smoke-web 第 4/5/6 项为已有证据，**完整进度观察需人工跑一次 basic**（full 抽验）。`cdp-run.log` 3.1a~3.3a + `test-smoke-web.log` |
 | ④ | 375px 响应式 | ✅ **通过（4.5 留人工）** | 4.1~4.4 自动化全过（`scrollWidth=375`、控件 `溢出=[]`、状态网格单列）；根因与处置见 §4 发现 1 / rf-644；4.5 结果区按钮待人工。`cdp-run.log` 4.1~4.4 + `overflow-debug.log` |
@@ -191,7 +191,7 @@ ls data/holdings/uploads/     # 应为空；有残留则删除本次测试产生
 
 ## 5. 复验清单（Web UI 改动后）
 
-1. 跑 §1.1 启动 → `scripts/test-smoke-web.py` 11/11 → `node docs/tmp/rf257/cdp-check.mjs`。
+1. 跑 §1.1 启动 → `scripts/test-smoke-web.py` 11/11 → `node docs/tmp/browser-verify/cdp-check.mjs`。
 2. 对照 §3 总表：①②⑤ 应保持全过；③ 静态项应过（真实进度人工抽验 basic）；④ 应全过（重点看 4.1/4.3 的 `scrollWidth` 与控件 `right` 值）。
-3. 结论回填 `review-findings.md` rf-257 行与归档清单状态行；本文件仅维护方法与实测数据，不承载台账状态。
+3. 结论回填 `review-findings.md` 对应待验项行与归档清单状态行；本文件仅维护方法与实测数据，不承载台账状态。
 4. 收尾必做：`kill` 服务与浏览器 PID、清空 `data/holdings/uploads/`、确认 `server.log` 无 `POST /api/runs`。

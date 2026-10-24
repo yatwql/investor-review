@@ -318,7 +318,8 @@ class TestRealArchiveContract:
         name, text = real["rf_archive"]
         fmt_pattern = re.escape(rel._RF_ARCHIVE_HEAD_FMT).replace(r"\{version\}", r"\d+\.\d+\.\d+")
         headings = [line for line in text.splitlines() if line.startswith("## 开发期已修复")]
-        assert headings, f"{name} 应含批次标题"
+        # 新小版本骨架由 `archive-init` 建出、首个版本发布时才写入批次节：
+        # 最新归档为空属预期（有则必同形，无则跳过）
         for heading in headings:
             assert re.fullmatch(fmt_pattern, heading), f"{name}: {heading}"
 
@@ -377,7 +378,7 @@ class TestRealArchiveContract:
         name, text = real["plan_archive"]
         headings = [line for line in text.splitlines() if line.startswith("## ") and "plan-" in line]
         done = [h for h in headings if "✅" in h]
-        assert done, f"{name} 应含带完成标记的任务节"
+        # 新小版本骨架（`archive-init` 刚建、尚未发布）尚无完成节：有则必可识别，无则跳过
         for heading in done:
             matched = rel.plan_completed_sections(heading + "\n\n正文\n")
             assert matched, heading
@@ -660,3 +661,29 @@ class TestEmptyBatchSectionAfterDevbump:
         out = rel.drop_migration_placeholders(text)
         assert "> 人工备注：本批已复核" in out
         assert "完整复盘见" not in out
+
+
+class TestDecisionNotDoIsArchivable:
+    """「❌ 决策不做」同属已关闭项：迁档口径与 ✅ 一致（否则永久滞留在在办清单）。
+
+    背景：判定不做的任务不算在办项，留在主台账会让「当前迭代」的条数与读者预期
+    长期错位；标记本身保留，归档里仍能区分「做完」与「决定不做」。
+    """
+
+    _TEXT = (
+        "## 当前迭代待办\n\n**当前迭代**：在办 9 项——P2 9 项（**plan-182/plan-200**）。\n\n### P2 — 下一阶段就绪\n\n"
+        "#### `plan-182` CLI 缺追问入口 ❌ 决策不做\n\n**决策（不做）**：形态不匹配，保留 TUI/Web 入口。\n\n"
+        "#### `plan-200` 仍在办的任务\n\n**动作**：待实施。\n\n## 归档\n"
+    )
+
+    def test_decision_not_do_section_is_collected(self, rel):
+        hits = rel.plan_completed_sections(self._TEXT)
+        assert len(hits) == 1
+        assert "plan-182" in hits[0][2]
+        assert "plan-200" not in hits[0][2]
+
+    def test_iteration_count_excludes_decision_not_do(self, rel):
+        out = rel.recompute_current_iteration(self._TEXT)
+        summary = next(line for line in out.splitlines() if line.startswith("**当前迭代**"))
+        assert "在办 1 项" in summary
+        assert "plan-200" in summary and "plan-182" not in summary

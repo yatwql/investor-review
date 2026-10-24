@@ -821,6 +821,108 @@ select:focus,
   justify-content: flex-end;
 }
 
+/* 配置工具条：标题 + 统计 + 关键词筛选 */
+.config-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  padding: 0 0 12px;
+}
+
+.config-toolbar-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.config-toolbar-stats {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.config-filter {
+  flex: 1 1 200px;
+  min-width: 160px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+/* 域导航 chips：横向可滚，当前域高亮（结构色） */
+.chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 0 0 12px;
+}
+
+.chip {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  background: var(--surface);
+}
+
+.chip:hover,
+.chip:focus-visible {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.chip.active {
+  color: var(--primary);
+  border-color: var(--primary);
+  font-weight: 600;
+}
+
+/* 块计数（N 项 · M 开）：与块标题同行，次要墨色 */
+.config-block-meta {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+/* 域分区（一级分区）：域之间以间距 + 分隔线分组；域标题为结构色（与 TUI 分组标题同色调） */
+.config-domain {
+  border-top: 1px solid var(--border);
+  padding: 16px 0 8px;
+}
+
+.config-domain:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.domain-title {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--primary);
+  padding-left: 8px;
+  border-left: 3px solid var(--primary);
+}
+
+.domain-hint {
+  margin: 0 0 4px 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.domain-tui {
+  margin: 0 0 12px 12px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
 .config-group {
   border-top: 1px dashed var(--border);
   padding: 12px 0 4px;
@@ -831,11 +933,25 @@ select:focus,
   padding-top: 0;
 }
 
+/* 项说明副行：与控件文字左对齐，脚注档 */
+.config-desc {
+  margin: 0 0 8px 24px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+/* 表单类块的说明副行与字段左缘对齐（不缩进） */
+.config-desc-flush {
+  margin-left: 0;
+}
+
 .config-group-title {
   margin: 0 0 8px;
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--text);
+  /* 结构色：与 TUI 分组标题同色调（终端 `── 组名 ──` 的结构蓝），不承载状态语义 */
+  color: var(--primary);
 }
 
 .config-row {
@@ -1152,6 +1268,27 @@ a:hover {
   select,
   textarea {
     min-height: 44px;
+  }
+
+  /* 配置面板：单列（工具条纵向、域导航横滚、筛选占满行宽） */
+  .config-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+
+  .chip {
+    white-space: nowrap;
+  }
+
+  .config-filter {
+    flex: 1 1 auto;
   }
 }
 

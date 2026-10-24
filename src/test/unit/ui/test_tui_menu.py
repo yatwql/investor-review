@@ -51,8 +51,8 @@ class TestMenuItems(unittest.TestCase):
         expected = {
             "E", "B", "L", "W", "Q", "D",
             "1", "2", "3",
-            "P", "I", "A", "S", "M", "R",
-            "V", "H", "T", "X",
+            "C", "S", "G", "R",
+            "X",
         }  # fmt: skip
         self.assertSetEqual({item[0] for item in MENU_ITEMS}, expected)
 
@@ -113,37 +113,31 @@ class TestMenuItems(unittest.TestCase):
         self.assertIsNone(cb)
         self.assertTrue(is_exit)
 
-    def test_view_logs_item(self) -> None:
-        """日志查看项在退出前（快捷键 V）。"""
-        key, label, cb, is_exit = MENU_ITEMS[index_by_key("V")]
-        self.assertEqual(key, "V")
-        self.assertIn("运行日志", label)
-        self.assertIsNone(cb)
-        self.assertFalse(is_exit)
-
-    def test_health_history_item(self) -> None:
-        """健康历史项在日志查看后（快捷键 H）。"""
-        key, label, cb, is_exit = MENU_ITEMS[index_by_key("H")]
-        self.assertEqual(key, "H")
-        self.assertIn("健康历史", label)
-        self.assertIsNone(cb)
-        self.assertFalse(is_exit)
-
-    def test_config_dir_info_item(self) -> None:
-        """查看配置与目录信息项在报告追问后（快捷键 D）。"""
+    def test_diagnose_item(self) -> None:
+        """诊断与排查聚合为一项（L/V/H/T 均下沉到二级）。"""
         key, label, cb, is_exit = MENU_ITEMS[index_by_key("D")]
         self.assertEqual(key, "D")
-        self.assertIn("配置与目录信息", label)
+        self.assertIn("诊断", label)
         self.assertIsNone(cb)
         self.assertFalse(is_exit)
+        for letter in ("V", "H", "T"):
+            self.assertIsNone(index_by_key(letter), f"顶层不应再有 {letter}")
 
-    def test_doctor_item(self) -> None:
-        """系统自检项在健康历史后、退出前（快捷键 T）。"""
-        key, label, cb, is_exit = MENU_ITEMS[index_by_key("T")]
-        self.assertEqual(key, "T")
-        self.assertIn("系统自检", label)
-        self.assertIsNone(cb)
+    def test_global_settings_item(self) -> None:
+        """全局设置聚合为一项（D/F/O/L/I/A/M 下沉）。"""
+        key, label, _cb, is_exit = MENU_ITEMS[index_by_key("G")]
+        self.assertEqual(key, "G")
+        self.assertIn("全局设置", label)
         self.assertFalse(is_exit)
+        for letter in ("M", "I", "A"):
+            self.assertIsNone(index_by_key(letter), f"顶层不应再有 {letter}")
+
+    def test_config_dir_info_item(self) -> None:
+        """配置与目录信息已下沉为 [G] 子项，顶层不单列（顶层 C 是章节显隐）。"""
+        key, label, _cb, _is_exit = MENU_ITEMS[index_by_key("C")]
+        self.assertEqual(key, "C")
+        self.assertIn("章节显隐", label)
+        self.assertNotIn("目录", label)
 
     def test_all_keys_unique(self) -> None:
         """所有快捷键不重复。"""
@@ -303,86 +297,15 @@ class TestFeatureGatedMenuItems:
         for flag in tm.FEATURE_GATED_ITEMS.values():
             assert flag in FEATURE_FLAGS
 
-    def test_doctor_item_hidden_when_flag_off(self):
+    def test_doctor_item_never_gated(self):
+        """[T] 已下沉到 [D] 且恒上屏，不再受功能开关门控。"""
         import src.python.tui.tui_menu as tm
 
         self._apply(enabled=False)
         assert "T" not in {item[0] for item in tm.MENU_ITEMS}
-
-    def test_doctor_item_visible_when_flag_on(self):
-        import src.python.tui.tui_menu as tm
-
         self._apply(enabled=True)
-        assert "T" in {item[0] for item in tm.MENU_ITEMS}
-
-    def test_doctor_item_visible_under_defaults(self):
-        """默认配置下 [T] 即在菜单里（系统自检已转正为默认开启）。
-
-        上面两条都用 patch 覆盖取值，测不出默认值本身——默认值若改回关闭，
-        它们仍全绿，而用户打开的菜单里会少一项。
-        """
-        import src.python.tui.tui_menu as tm
-
-        tm._apply_feature_gates()
-
-        assert "T" in {item[0] for item in tm.MENU_ITEMS}
-
-    def test_gate_is_reversible_when_flag_reenabled(self):
-        """先关后开必须恢复（回归：门控曾就地删项，运行中开启开关后该项永不出现）。
-
-        用户实测路径：启动时 `report_qa` 关闭 → `[Q]` 被裁掉 → 在 `[S]` 里开启 →
-        回首页仍看不到 `[Q]`（必须重启）。根因是 `_apply_feature_gates` 用切片过滤
-        `MENU_ITEMS` 本体，被删项没有母本可恢复。
-        """
-        import src.python.tui.tui_menu as tm
-
-        full = {item[0] for item in tm.MENU_ITEMS}
-        self._apply(enabled=False)
-        assert "Q" not in {item[0] for item in tm.MENU_ITEMS}
-        self._apply(enabled=True)
-        assert {item[0] for item in tm.MENU_ITEMS} == full, "重新开启后菜单项未完全恢复"
-
-    def test_main_loop_reapplies_gates_each_frame(self):
-        """主循环必须在重绘点重建门控——否则 [S] 里改完开关返回首页仍是旧菜单。"""
-        from pathlib import Path as _Path
-
-        src = (_Path(__file__).resolve().parents[4] / "src" / "python" / "tui" / "tui.py").read_text(encoding="utf-8")
-        loop_head = src[src.index("    while True:\n") : src.index("    while True:\n") + 400]
-        assert "_apply_feature_gates()" in loop_head, "主循环重绘点须重新应用功能开关门控"
-        assert "nav.count = len(MENU_ITEMS)" in loop_head, "裁剪后须同步导航上界（防游标越界）"
-
-    def test_gate_keeps_list_object_identity(self):
-        """门控经切片赋值重建：列表对象不变（调用方持有的视图同步）。"""
-        import src.python.tui.tui_menu as tm
-
-        obj = tm.MENU_ITEMS
-        self._apply(enabled=False)
-        self._apply(enabled=True)
-        assert tm.MENU_ITEMS is obj
-
-    def test_config_dir_info_unaffected_by_doctor_gate(self):
-        """开关关闭只裁剪 [T] 自检，[D] 查看配置与目录信息（无门控）仍在菜单中。"""
-        import src.python.tui.tui_menu as tm
-
-        self._apply(enabled=False)
-        assert "D" in {item[0] for item in tm.MENU_ITEMS}
-
-    def test_callback_binding_survives_gating(self):
-        """裁剪后其余项的回调绑定不受影响（索引与渲染一致）。"""
-        import src.python.tui.tui_menu as tm
-
-        self._apply(enabled=False)
-        keys = [item[0] for item in tm.MENU_ITEMS]
-        assert keys[-1] == "X"
-        assert len(keys) == len(set(keys))
-
-    def test_gating_is_idempotent(self):
-        import src.python.tui.tui_menu as tm
-
-        self._apply(enabled=False)
-        first = list(tm.MENU_ITEMS)
-        self._apply(enabled=False)
-        assert tm.MENU_ITEMS == first
+        assert "T" not in {item[0] for item in tm.MENU_ITEMS}
+        assert "T" not in tm.FEATURE_GATED_ITEMS
 
 
 class TestMenuGroups(unittest.TestCase):
@@ -408,11 +331,15 @@ class TestMenuGroups(unittest.TestCase):
             assert expected in titles, f"缺少任务分组「{expected}」: {titles}"
 
     def test_generation_group_holds_all_report_actions(self) -> None:
-        """生成组收纳全部报告产出动线（含调仓模拟），用户不必在菜单里翻找。"""
+        """生成组收纳全部报告产出动线（含调仓模拟与报告追问），用户不必在菜单里翻找。
+
+        判据是「产生或消费报告产物的动作」同组：`Q` 消费已生成报告且消耗 LLM，
+        与零成本的缓存维护（`1`/`2`/`3`）不同族，故不留在「数据与查看」。
+        """
         from src.python.tui.tui_menu import MENU_GROUPS
 
         generation = next(keys for title, keys in MENU_GROUPS if title == "生成报告")
-        assert {"E", "B", "L", "W"} <= set(generation)
+        assert {"E", "B", "L", "W", "Q"} <= set(generation)
 
 
 class TestMatchMenuItems(unittest.TestCase):
@@ -435,8 +362,8 @@ class TestMatchMenuItems(unittest.TestCase):
 
         # 按键精确命中优先：单键名筛选不得被标签里的拉丁字母（Excel/HTML）带偏
         assert [MENU_ITEMS[i][0] for i in match_menu_items("s")] == ["S"]
-        assert [MENU_ITEMS[i][0] for i in match_menu_items("T")] == ["T"]
-        assert [MENU_ITEMS[i][0] for i in match_menu_items("t")] == ["T"]
+        assert [MENU_ITEMS[i][0] for i in match_menu_items("G")] == ["G"]
+        assert [MENU_ITEMS[i][0] for i in match_menu_items("d")] == ["D"]
         assert [MENU_ITEMS[i][0] for i in match_menu_items("1")] == ["1"]
 
     def test_no_match_returns_empty(self) -> None:

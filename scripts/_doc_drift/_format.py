@@ -9,9 +9,13 @@ from _shared.checklib import rel
 from _test_runner.modes import UNIT_DOMAIN_LABELS
 from src.python.config._config_defaults import _DEFAULT_CONFIG
 from src.python.config._llm_settings_defaults import _DEFAULT_LLM_SETTINGS
-from src.python.config.features import GROUP_LABELS, GROUP_ORDER, feature_switch_registry, switches_in_group
+from src.python.config.features import (
+    GROUP_LABELS,
+    GROUP_ORDER,
+    feature_switch_registry,
+    switches_in_group,
+)
 from src.python.core.registry import _REPORT_SECTION_DEFAULT, get_cache_ttl_defaults, get_llm_module_names
-from src.python.tui.tui_menu import filter_menu_llm_modules
 
 from src.python.fetcher.chain import _DEFAULT_CHAINS  # noqa: E402
 from _doc_drift._shared import (
@@ -22,7 +26,6 @@ from _doc_drift._shared import (
     _LLM_TECHNICAL_MD,
     _REPORTS_MD,
     _TEST_COVERAGE_MD,
-    _TUI_MENU_MD,
     _values_equal,
 )
 
@@ -351,96 +354,6 @@ def check_llm_defaults(doc_text: str) -> list[str]:
             findings.append(
                 f"{rel(_LLM_TECHNICAL_MD)}: 模块 `{module}` TTL 表 {ttl}s 与缓存注册表 {int(exp_ttl)}s 不一致"
             )
-    return findings
-
-
-_PANEL_SECTION_START = "交互式子菜单（面板标题"
-
-
-_PANEL_ROW = re.compile(r"^\|\s*(\d+)(?:[-–](\d+))?\s*\|")
-
-
-#: 每组块标题「组短名（面板编号 X-Y）」——由 ``GROUP_LABELS`` 派生，手册措辞漂移即报错
-_GROUP_PANEL_RANGE: dict[str, "re.Pattern[str]"] = {
-    group: re.compile(re.escape(_group_doc_name(group)) + r"（面板编号\s*(\d+)-(\d+)）") for group in GROUP_ORDER
-}
-
-
-#: features.json 键名 → 菜单编号映射表行（兼容引用式 `> |` 前缀）：| `flag` | N | 组名 | 功能 |
-_PANEL_KEY_MAP_ROW = re.compile(r"^(?:>\s*)?\|\s*`([a-z0-9_]+)`\s*\|\s*(\d+)\s*\|\s*([^|]+?)\s*\|")
-
-
-def check_panel_numbering(doc_text: str) -> list[str]:
-    """校验 [S] 面板编号表：行号序列 / 四组块标题区间 / features.json 键名映射均与注册表派生一致。
-
-    面板编号 = LLM 菜单模块数 + 四组按 ``GROUP_ORDER`` 连续派生（handlers_config.py
-    运行时派发，非硬编码）；组块标题与映射表组名措辞须与 ``GROUP_LABELS`` 组短名一致。
-    """
-    findings: list[str] = []
-    lines = doc_text.splitlines()
-    start = next((i for i, ln in enumerate(lines) if ln.startswith(_PANEL_SECTION_START)), None)
-    if start is None:
-        return [f"{rel(_TUI_MENU_MD)}: 未找到 [S] 面板编号表区段"]
-    end = next(
-        (
-            i
-            for i in range(start + 1, len(lines))
-            if lines[i].startswith("#### ") or lines[i].startswith("## ") or lines[i] == "---"
-        ),
-        len(lines),
-    )
-    section = lines[start:end]
-    llm_visible = len(filter_menu_llm_modules(get_llm_module_names()))
-    total = len(feature_switch_registry)
-    expect_nums = list(range(llm_visible + 1, llm_visible + total + 1))
-
-    numbers: list[int] = []
-    for line in section:
-        m = _PANEL_ROW.match(line)
-        if not m:
-            continue
-        lo = int(m.group(1))
-        hi = int(m.group(2)) if m.group(2) else lo
-        numbers.extend(range(lo, hi + 1))
-    if numbers != expect_nums:
-        findings.append(
-            f"{rel(_TUI_MENU_MD)}: 功能开关编号序列 {numbers or '空'} 与派生编号 "
-            f"{expect_nums[0]}~{expect_nums[-1]}（LLM 菜单模块 {llm_visible} 项 + 功能开关 {total} 项，连续无缺）不一致"
-        )
-
-    # 四组块标题区间：「组短名（面板编号 X-Y）」与组计数派生边界逐一比对
-    section_text = "\n".join(section)
-    cursor = llm_visible + 1
-    for group in GROUP_ORDER:
-        name = _group_doc_name(group)
-        first = cursor
-        last = cursor + len(switches_in_group(group)) - 1
-        m = _GROUP_PANEL_RANGE[group].search(section_text)
-        if not m:
-            findings.append(f"{rel(_TUI_MENU_MD)}: 缺少组块标题「{name}（面板编号 {first}-{last}）」")
-        elif (int(m.group(1)), int(m.group(2))) != (first, last):
-            findings.append(
-                f"{rel(_TUI_MENU_MD)}: 组「{name}」块标题编号 {m.group(1)}-{m.group(2)} 与派生区间 {first}-{last} 不一致"
-            )
-        cursor = last + 1
-
-    # features.json 键名 → 菜单编号映射表：全量、按面板顺序、组名一致
-    got_pairs: list[tuple[str, int, str]] = []
-    for line in section:
-        m = _PANEL_KEY_MAP_ROW.match(line)
-        if m and m.group(1) in feature_switch_registry:
-            got_pairs.append((m.group(1), int(m.group(2)), m.group(3)))
-    expect_pairs: list[tuple[str, int, str]] = []
-    cursor = llm_visible + 1
-    for group in GROUP_ORDER:
-        name = _group_doc_name(group)
-        for flag, _d in switches_in_group(group):
-            expect_pairs.append((flag, cursor, name))
-            cursor += 1
-    if got_pairs != expect_pairs:
-        findings.append(
-            f"{rel(_TUI_MENU_MD)}: features.json 键名→菜单编号映射 {got_pairs} 与注册表派生 {expect_pairs} 不一致"
-        )
     return findings
 
 

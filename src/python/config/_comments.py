@@ -1,76 +1,15 @@
-"""JSON 注释剥离 — 用于 llm_settings.json / llm_key.json。"""
+"""JSON 注释剥离 — 再导出 ``core/json_comments``（配置包既有导入面）。
+
+实现位于叶子模块 ``core/json_comments.py``：``core/logger.py`` 与计价等 core 级
+读取方无需导入 ``config`` 包，避免向上依赖成环。配置包内部继续使用
+``_comments._strip_json_comments`` / ``strip_json_comments`` 两个名字。
+"""
 
 from __future__ import annotations
 
+from src.python.core.json_comments import loads, strip_json_comments
 
-def _strip_json_comments(text: str) -> str:
-    """剥离 JSON 中的 ``//`` 单行注释和 ``/* */`` 多行注释。
+#: 配置包内部沿用的私有别名（与 ``strip_json_comments`` 同一函数）
+_strip_json_comments = strip_json_comments
 
-    正确处理字符串中的转义引号，不会将字符串内的 ``//`` / ``/*`` 误伤。
-
-    Args:
-        text: 可能包含注释的 JSON 文本
-
-    Returns:
-        不含注释的纯 JSON 文本
-    """
-    # 逐个字符扫描，仅在字符串外识别注释
-    result: list[str] = []
-    i = 0
-    length = len(text)
-    in_string = False
-    in_single_line_comment = False
-    in_multi_line_comment = False
-
-    while i < length:
-        ch = text[i]
-
-        # ── 字符串内：只处理转义引号 ────────────────────────
-        if in_string:
-            result.append(ch)
-            if ch == "\\":
-                i += 1
-                if i < length:
-                    result.append(text[i])
-            elif ch == '"':
-                in_string = False
-            i += 1
-            continue
-
-        # ── 多行注释内 ──────────────────────────────────────
-        if in_multi_line_comment:
-            if ch == "*" and i + 1 < length and text[i + 1] == "/":
-                i += 2  # 跳过 */
-                in_multi_line_comment = False
-            else:
-                i += 1
-            continue
-
-        # ── 单行注释内 ──────────────────────────────────────
-        if in_single_line_comment:
-            if ch == "\n":
-                in_single_line_comment = False
-                result.append(ch)
-            i += 1
-            continue
-
-        # ── 注释起始检测（仅在字符串外） ─────────────────────
-        if ch == "/" and i + 1 < length:
-            nxt = text[i + 1]
-            if nxt == "/":
-                in_single_line_comment = True
-                i += 2
-                continue
-            if nxt == "*":
-                in_multi_line_comment = True
-                i += 2
-                continue
-
-        # ── 字符串起始 ────────────────────────────────────
-        if ch == '"':
-            in_string = True
-
-        result.append(ch)
-        i += 1
-
-    return "".join(result)
+__all__ = ["strip_json_comments", "_strip_json_comments", "loads"]

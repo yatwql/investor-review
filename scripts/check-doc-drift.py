@@ -71,9 +71,32 @@ if str(REPO_ROOT) not in sys.path:  # 允许任意 cwd 下运行
     sys.path.insert(0, str(REPO_ROOT))
 
 # 原面 re-export：实现层用到的外部符号（单测直接访问 drift.<name>，故在此保留绑定）
-from src.python.config.features import feature_switch_registry, switches_in_group  # noqa: E402,F401
+from src.python.config.chapter_registry import (  # noqa: E402,F401
+    BLOCK_LABELS,
+    BLOCK_ORDER,
+    SOURCE_FEATURES,
+    chapter_number,
+    chapter_numbers,
+    chapter_registry,
+    chapters_in_block,
+    sub_item_numbers,
+)
+from src.python.config.features import (  # noqa: E402,F401
+    feature_switch_registry,
+    panel_option_numbers,
+    switches_in_group,
+)
 from src.python.core.registry import _REPORT_SECTION_DEFAULT, get_llm_module_names  # noqa: E402,F401
 from src.python.tui.tui_menu import filter_menu_llm_modules  # noqa: E402,F401
+from _doc_drift._format_panels import (  # noqa: E402,F401  # 面板编号族（实现见 _doc_drift/_format_panels.py）
+    _HOWTO_PANEL_HEADING,
+    _PANEL_ROW,
+    _SUB_ITEM_ROW,
+    _GROUP_PANEL_RANGE,
+    _BLOCK_PANEL_RANGE,
+    _PANEL_KEY_MAP_ROW,
+    check_panel_numbering,
+)
 from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc_drift/）
     _RELIABILITY_MD,
     check_chain_table,
@@ -134,11 +157,6 @@ from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc
     _HOURS_ROW,
     _ttl_default,
     check_llm_defaults,
-    _PANEL_SECTION_START,
-    _PANEL_ROW,
-    _GROUP_PANEL_RANGE,
-    _PANEL_KEY_MAP_ROW,
-    check_panel_numbering,
     _TEST_COVERAGE_ROW,
     _COUNT_CELL,
     _COUNT_NAME_ALIAS,

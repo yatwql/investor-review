@@ -44,7 +44,7 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 | `--verbose` | 详细日志输出到 stderr（默认仅写入 `logs/app.log`） |
 | `--non-interactive` | 跳过首次运行交互式引导（定时任务 / 脚本使用） |
 | `--experiment NAME` | 启用**实验项**功能（`experimental` 字段为真的开关；只开不关的简写），**仅本次运行生效（不写入 features.json）**。可重复指定；`NAME` 取开关名（如 `decision_reflection`）或显示名（如 `决策跨期反思闭环`），`all` = 全部启用 |
-| `--feature NAME=VALUE` | 切换**任意**功能开关（四组任一均可），**双向**（可开可关）、**仅本次运行生效（不写入 features.json）**。可重复指定；`NAME` 取开关名（如 `doctor_check`），`VALUE` 取 `on`/`off`（也接受 `true`/`false`/`1`/`0`，大小写不敏感）。同名后写覆盖先写 |
+| `--feature NAME=VALUE` | 切换**任意**功能开关（八组任一均可），**双向**（可开可关）、**仅本次运行生效（不写盘）**；`NAME` 取注册表键名，`VALUE` 写 `on`/`off`。取值写错会立即报错并列出全部可选值 |
 | `--llm-provider-order NAME,...` | 重排 LLM 多链线路优先级并**写入** `llm_providers.json`（靠前优先），写盘后退出；`NAME` 须恰好覆盖全部现有线路（少写/多写/重复均拒绝，报错列出当前名单）。与 `--feature`（仅本次运行、不写盘）不同：本参数持久化。亦可在 TUI `[M]` / Web 配置面板调序 |
 | `--version` | 显示版本号并退出 |
 
@@ -63,13 +63,13 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 > .venv/bin/python -m src.python.cli --experiment all report --type full
 > ```
 >
-> 取值写错会立即报错并列出全部可选值，不会静默忽略。当前可选实验功能清单见[配置指引-功能开关 §N](how-to-config.md#n-功能开关featuresjson)（与 TUI 菜单 [S] 机制与诊断块的实验项同源，由 `features.feature_switch_registry` 注册表驱动）。
+> 取值写错会立即报错并列出全部可选值，不会静默忽略。当前可选实验功能清单见[配置指引-功能开关 §N](how-to-config.md#n-功能开关featuresjson)。
 
 > **`--feature` 说明**：`--experiment` 的补集——它面向**全部**开关而非仅实验项，且**双向**（既能开也能关）。常用来在不动持久化配置的前提下临时关闭某个默认开启的常规开关，或复现「关掉某开关后报告长什么样」：
 >
 > ```bash
 > # 本次运行关闭系统自检的界面入口（CLI 的 doctor 子命令本就不受该开关约束）
-> .venv/bin/python -m src.python.cli --feature doctor_check=off doctor
+> `.venv/bin/python -m src.python.cli --feature report_qa=on doctor`
 >
 > # 本次运行关闭量化指标输出（雷达图各轴 N/A）+ 关闭数据质量仪表盘（数据源可用性矩阵不渲染区块）
 > .venv/bin/python -m src.python.cli --feature metrics_enabled=off --feature data_quality=off report --type full
@@ -199,11 +199,11 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 **与其它子命令的两点不同**：
 
 1. **无需配置**——自检在加载配置**之前**执行。配置损坏正是它要诊断的场景，因此不会因配置读不出来而拒绝运行。
-2. **不受开关约束**——`doctor` 子命令始终可用，无需任何开关。`doctor_check` 开关（默认开启）只控制 TUI 菜单项与 Web 自检卡片这两个日常入口的可见性（同理：若 CLI 也被开关拦住，就会陷入「开开关要先读配置、读配置失败又要开开关」的死锁）。
+2. **不受开关约束**——`doctor` 子命令始终可用，无需任何开关。TUI `[T]` / Web「系统自检」卡恒上屏，功能开关中不再有自检项。
 
 **退出码**：`0` = 全部检查通过；`1` = 自检跑完了但**存在失败项**（注意：这不是「命令失败」，而是一条诊断结论，脚本可用它判定环境是否可用）。
 
-> 日常也可从 TUI 菜单 **[T]** 或 Web「系统自检」卡片触发同一套检查，三端共用 `core/doctor.py`。
+> 日常也可从 TUI 菜单 **D → T**** 或 Web「系统自检」卡片触发同一套检查，三端共用 `core/doctor.py`。
 
 ---
 
@@ -265,7 +265,7 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 
 ### 10.1 TUI 菜单 → CLI 命令对照
 
-TUI 菜单与 CLI 子命令落到**同一个业务编排函数**（`report/orchestrator.py::generate_report` 等），差别只在入参从哪来：TUI 在菜单里问，CLI 用参数传。下表对照**生成类菜单**（E/B/L/W）；缓存管理（`[1]`~`[3]`）、日志（`[V]`）、系统自检（`[T]`）的等价见上方「常用命令速查」，数据源健康历史（`[H]`）、配置类菜单（`[D]`/`[P]`/`[I]`/`[A]`/`[S]`/`[R]`）与报告追问（`[Q]`）暂无 CLI 等价（经 TUI / Web）。
+TUI 菜单与 CLI 子命令落到**同一个业务编排函数**（`report/orchestrator.py::generate_report` 等），差别只在入参从哪来：TUI 在菜单里问，CLI 用参数传。下表对照**生成类菜单**（E/B/L/W）；缓存管理（`[1]`~`[3]`）的等价见上方「常用命令速查」；配置类菜单（`[C]` 章节显隐 / `[S]` 章内内容 / `[G]` 全局设置 / `[R]` 刷新配置）、诊断四项（`[D]` → `V` 运行日志 / `H` 健康历史 / `T` 系统自检 / `L` 日志设置）与报告追问（`[Q]`）暂无 CLI 等价（经 TUI / Web）。
 
 | TUI 菜单 | CLI 等价命令 |
 |:---------|:-------------|

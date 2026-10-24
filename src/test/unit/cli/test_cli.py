@@ -185,8 +185,8 @@ class TestArgparseFeatureOverrides:
 
     def test_feature_off_on_standard_switch(self):
         """常规开关也能经 --feature 关闭——本批次补上的正是这条通道。"""
-        args = _build_parser().parse_args(["--feature", "doctor_check=off", "report"])
-        assert args.feature == [("doctor_check", False)]
+        args = _build_parser().parse_args(["--feature", "report_qa=off", "report"])
+        assert args.feature == [("report_qa", False)]
 
     def test_feature_on_experimental_switch(self):
         """实验开关同样可经 --feature 打开（与 --experiment 等价路径）。"""
@@ -209,7 +209,7 @@ class TestArgparseFeatureOverrides:
     def test_feature_bad_value_rejected(self):
         """取值不在词表内 → SystemExit(2)。"""
         with pytest.raises(SystemExit) as exc:
-            _build_parser().parse_args(["--feature", "doctor_check=maybe", "report"])
+            _build_parser().parse_args(["--feature", "report_qa=maybe", "report"])
         assert exc.value.code == 2
 
 
@@ -271,17 +271,17 @@ class TestApplyCliSwitches:
         """未传 --feature 时不改动任何开关。"""
         from src.python.config import features as feat
 
-        monkeypatch.setitem(feat.FEATURE_FLAGS, "doctor_check", True)
+        monkeypatch.setitem(feat.FEATURE_FLAGS, "report_qa", True)
         _apply_cli_switches(None)
-        assert feat.FEATURE_FLAGS["doctor_check"] is True
+        assert feat.FEATURE_FLAGS["report_qa"] is True
 
     def test_disables_standard_switch(self, monkeypatch):
         """关闭常规开关——本参数相对 --experiment 的核心能力。"""
         from src.python.config import features as feat
 
-        monkeypatch.setitem(feat.FEATURE_FLAGS, "doctor_check", True)
-        _apply_cli_switches([("doctor_check", False)])
-        assert feat.FEATURE_FLAGS["doctor_check"] is False
+        monkeypatch.setitem(feat.FEATURE_FLAGS, "report_qa", True)
+        _apply_cli_switches([("report_qa", False)])
+        assert feat.FEATURE_FLAGS["report_qa"] is False
 
     def test_enables_and_disables_in_one_run(self, monkeypatch):
         """同一次运行内双向覆写互不干扰。"""
@@ -307,5 +307,5 @@ class TestApplyCliSwitches:
 
         called: list[dict] = []
         monkeypatch.setattr(feat, "save_feature_overrides", lambda *a, **k: called.append({"a": a}))
-        _apply_cli_switches([("doctor_check", False)])
+        _apply_cli_switches([("report_qa", False)])
         assert called == []

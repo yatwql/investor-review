@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Callable
 
 from src.python.core.logger import setup_logger
 from src.python.core.reader import list_xlsx_files
@@ -20,14 +19,21 @@ from src.python.tui.tui_menu import (
 )
 from src.python.tui.switch_panel import (
     inner_width,
-    terminal_columns,
     render_titled_panel,
     use_panel_box,
     wrap_hanging,
 )
+from src.python.tui.text_layout import wrap_with_prefix
 from src.python.tui.panel_runtime import NavState, PanelItem, panel_loop
 from src.python.tui.prompt_text import panel_prompt
-from src.python.tui.text_layout import display_width, pad_right, style_heading, truncate_display
+from src.python.tui.text_layout import (
+    display_width,
+    group_heading,
+    pad_right,
+    style_heading,
+    terminal_columns,
+    truncate_display,
+)
 from src.python.tui.tui_keys import input_choice
 
 # ── 兼容再导出（面板本体已迁至 handlers_switch）──────────────────────────
@@ -148,15 +154,15 @@ def _cmd_config_output_dir() -> None:
 # 本表只做「配置散在哪些键」的导流说明（零行为变化，不改任何配置）。新增配置入口时
 # 在此补一行；键位调整时由 test_handlers_config 的「入口地图键均存在于主菜单」用例兜底。
 _CONFIG_ENTRY_MAP: tuple[tuple[str, str, str], ...] = (
-    ("功能开关 / LLM 模块启停 / 实验项", "[S]", "四组功能开关 + 7 个 LLM 标准模块，行尾费用摘要与启用统计"),
-    ("报告章节取舍（顺序与开关）", "[P]", "基金深度分析 / 市场新闻 / 历史走势+回撤 / 组合演进 / 行动建议"),
-    ("对比指数池（自定义基准）", "[I]", "增删指数、恢复默认"),
-    ("持仓匿名化（代码/名称脱敏）", "[A]", "off / code_display / full_anonymous / summary 四档"),
-    ("配置文件与目录位置", "[D]", "持仓目录 / 持仓文件名 / 报告输出目录（子菜单 C/F/O）"),
+    ("功能开关 / LLM 模块启停 / 实验项", "[S]", "八组功能开关 + 7 个 LLM 标准模块，行尾费用摘要与启用统计"),
+    ("报告章节取舍（顺序与开关）", "[C]", "五个顶层章节组的可见性"),
+    ("对比指数池（自定义基准）", "[G]", "全局设置 → I（增删指数、恢复默认）"),
+    ("持仓匿名化（代码/名称脱敏）", "[G]", "全局设置 → A（四档）"),
+    ("配置文件与目录位置", "[G]", "全局设置 → H / F / O"),
+    ("LLM 运行参数 / 多链线路", "[G]", "全局设置 → L（运行参数与线路优先级同在 L 面板）"),
     ("重新加载配置", "[R]", "改完 config.json / llm_settings.json 手工项后刷新内存配置"),
     ("缓存管理（统计与清理）", "[3]", "统计首屏 + 子菜单内 3 清理过期缓存"),
-    ("数据源健康历史 / 运行日志", "[H] / [V]", "近期数据源检查记录 / 结构化运行日志（可按级别筛选）"),
-    ("系统自检", "[T]", "环境/配置/目录/数据源一键体检（开关 doctor_check 关闭时该键不可见）"),
+    ("运行日志 / 健康历史 / 系统自检", "[D]", "诊断与排查 → V / H / T"),
 )
 
 
@@ -181,70 +187,62 @@ def _render_config_entry_map() -> None:
         print(line)
 
 
-#: [D] 查看配置与目录信息 面板的二级选项登记表（键 → (显示名, 处理器属性名)）
-#:
-#: 单一登记点：面板渲染、按键分发与手册机检（`check-doc-drift` 第 18 项的
-#: 「正文菜单键引用」分支）均从此表派生键集合——增删子项只改这一处，
-#: 不会出现「面板上有、机检认为不存在」（或反过来）的双维护漂移。
-#:
-#: 处理器登记**属性名**而非函数对象：分发时按名从模块全局取（`_dir_info_items()`），
-#: 使 `@patch("...handlers_config._cmd_config_dir")` 这类模块属性打桩始终生效——
-#: 若在导入时就把函数对象存进表里，打桩会落空且不报错。
-DIR_INFO_ITEMS: dict[str, tuple[str, str]] = {
-    "C": ("持仓信息目录", "_cmd_config_dir"),
-    "F": ("持仓信息文件名", "_cmd_config_filename"),
-    "O": ("报告输出目录", "_cmd_config_output_dir"),
-    "L": ("LLM 调优参数（并发/预算/重试）", "_cmd_config_llm_tuning"),
-    "M": ("配置入口地图（各配置项所在菜单）", "_render_config_entry_map"),
-}
-
-#: [D] 面板二级选项键（由 `DIR_INFO_ITEMS` 派生，供手册校验引用）
-CONFIG_DIR_INFO_KEYS: tuple[str, ...] = tuple(DIR_INFO_ITEMS)
-
-
-def _dir_info_items() -> list[tuple[str, str, Callable[[], None]]]:
-    """解析登记表为 `(键, 显示名, 处理器)`——处理器按名实时取，便于打桩与替换。"""
-    return [(key, label, globals()[handler_name]) for key, (label, handler_name) in DIR_INFO_ITEMS.items()]
-
-
-def _cmd_config_dir_info() -> None:
-    """查看配置与目录信息子菜单 — 对应主菜单 [D] 及其二级选项 [C]/[F]/[O]/[M]/[0]。
-
-    持仓目录 / 持仓文件名 / 报告输出目录三项聚合到 [D] 之下（主菜单不再单列）；
-    ``[M]`` 打印配置入口地图（各配置项 → 所在菜单键，只读索引）；
-    子菜单循环直至 [0]（或空输入 / Ctrl+C）返回主菜单。
-    子项在调用时从模块全局取函数（便于测试打桩与后续替换）。
-    """
-    items = _dir_info_items()
-
-    def _render(nav: NavState) -> list[str]:
-        print()
-        print(style_heading("  ── 配置与目录信息 ──"))
-        for i, (_key, label, _fn) in enumerate(items):
-            print(f" {nav.marker(i)} [{_key}] {label}")
-        print(f" {nav.marker(len(items))} [0] 返回主菜单")
-        print()
-        return []
-
-    panel_items = [PanelItem(key, label, action=fn) for key, label, fn in items]
-    panel_items.append(PanelItem("0", "返回主菜单", kind="return"))
-
-    try:
-        panel_loop(
-            panel_items,
-            render=_render,
-            prompt=panel_prompt("选择", example="C/F/O/M", help_hint=None),
-            read=input_choice,
-            on_text=lambda _t: print("  [!] 无效选择，请输入 C/F/O/M/0"),
-            default_key="0",
-        )
-    except (EOFError, KeyboardInterrupt):
-        print()
-
-
 # 持仓变动复盘双入口互指标注（只读行尾提示，行为零变化）：章本体（独立章节组
 # `holding_change_review`）与归因内容（LLM 区 `holding_change` 模块）为解耦的有意
 # 设计、默认态相反，面板相邻两行命名近似易误判——两侧行尾互相指出对方入口位置。
+#: [G] 全局设置七项（数字为主入口，字母为别名；分组只影响渲染）
+GLOBAL_SETTINGS_ITEMS: tuple[tuple[str, str, str, str], ...] = (
+    ("H", "持仓信息目录", "_cmd_config_dir", "目录与文件"),
+    ("F", "持仓信息文件名", "_cmd_config_filename", "目录与文件"),
+    ("O", "报告输出目录", "_cmd_config_output_dir", "目录与文件"),
+    ("L", "LLM 设置（运行参数 / 多链线路）", "_cmd_config_llm_tuning", "LLM 调优"),
+    ("I", "对比基准指数", "_cmd_config_comparison_indices", "基准与脱敏"),
+    ("A", "持仓匿名化", "_cmd_config_anonymization_mode", "基准与脱敏"),
+    ("M", "配置入口地图", "_render_config_entry_map", "索引"),
+)
+
+
+def _cmd_global_settings() -> None:
+    """[G] 全局设置：七项分组渲染，数字为主入口、字母为别名；0 返回主菜单。"""
+    from src.python.tui.tui_keys import input_choice
+
+    while True:
+        print()
+        print(style_heading("  ── 全局设置 ──"))
+        last_group = None
+        columns = terminal_columns()
+        for number, (letter, label, _handler, group) in enumerate(GLOBAL_SETTINGS_ITEMS, 1):
+            if group != last_group:
+                if last_group is not None:
+                    print()  # 组间空行：与首页分组同款呼吸感
+                for _line in group_heading(group, inner_width(columns)):
+                    print(_line)
+                last_group = group
+            # 长标签在手机窄屏折行：编号+键位前缀不参与断行，续行缩进到标签起始列
+            print("\n".join(wrap_with_prefix(f"   {number}. [{letter}] ", label, inner_width(columns))))
+        print("   0. 返回主菜单")
+        print()
+        try:
+            raw = input_choice("  选择编号或字母（回车=返回 · 0=返回）: ")
+        except (EOFError, KeyboardInterrupt):
+            # 管道输入耗尽（EOF）或 Ctrl+C：安静回主菜单，不抛到主循环
+            print()
+            return
+        if raw is None or raw.strip() in ("", "0"):
+            return
+        token = raw.strip().upper()
+        letter = None
+        if token.isdigit() and 1 <= int(token) <= len(GLOBAL_SETTINGS_ITEMS):
+            letter = GLOBAL_SETTINGS_ITEMS[int(token) - 1][0]
+        elif token in {item[0] for item in GLOBAL_SETTINGS_ITEMS}:
+            letter = token
+        if letter is None:
+            print("  [!] 无效选择，请输入编号或字母")
+            continue
+        entry = next(item for item in GLOBAL_SETTINGS_ITEMS if item[0] == letter)
+        globals()[entry[2]]()
+
+
 def _cmd_config_llm_tuning() -> None:
     """LLM 调优参数（thinking 并发 / 总并发 / 重试 / 时间与费用预算）。
 
@@ -290,14 +288,22 @@ def _cmd_config_llm_tuning() -> None:
                 f" {nav.marker(i - 1)} {i}. {spec['label']}"
                 f"（当前 {llm.get(key, config_edit_whitelist[key].get('default'))}）"
             )
-        print(f" {nav.marker(len(keys))} 0. 返回")
+        print(f" {nav.marker(len(keys))} {len(keys) + 1}. LLM 多链线路优先级")
+        print(f" {nav.marker(len(keys) + 1)} 0. 返回全局设置")
         print()
         return []
 
     items = [
         PanelItem(str(i), spec["label"], action=_edit(key)) for i, (key, spec) in enumerate(LLM_TUNING_SPECS.items(), 1)
     ]
-    items.append(PanelItem("0", "返回", kind="return"))
+    items.append(
+        PanelItem(
+            str(len(keys) + 1),
+            "LLM 多链线路优先级",
+            action=lambda: globals()["_cmd_config_llm_providers"](),
+        )
+    )
+    items.append(PanelItem("0", "返回全局设置", kind="return"))
     try:
         panel_loop(
             items,
@@ -311,15 +317,15 @@ def _cmd_config_llm_tuning() -> None:
         print()
 
 
-def _cmd_config_llm_modules() -> None:
-    """配置各 LLM 报告的启用/停用，以及全部功能开关——实现见 ``handlers_switch``。
+def _cmd_config_content_options() -> None:
+    """配置报告章节内容呈现（20 项六组）——实现见 ``handlers_switch``。
 
     本文件只保留菜单入口；面板本体（渲染/派发/重绘/帮助）在
-    ``handlers_switch.run_llm_modules_panel``（域拆分：本文件已接近单文件行数红线）。
+    ``handlers_switch.run_content_options_panel``（域拆分：本文件已接近单文件行数红线）。
     """
-    from src.python.tui.handlers_switch import run_llm_modules_panel
+    from src.python.tui.handlers_switch import run_content_options_panel
 
-    run_llm_modules_panel()
+    run_content_options_panel()
 
 
 def _cmd_config_comparison_indices() -> None:
@@ -451,92 +457,15 @@ def _remove_comparison_index(indices: dict[str, str]) -> None:
 
 
 def _cmd_config_report_boards() -> None:
-    """配置基础报告章节（基金深度分析 / 市场新闻 / 组合历史走势+回撤 / 组合演进 / 行动建议）。
+    """配置报告章节显隐（16 项四块 + 智囊团两个子项）——实现见 ``handlers_report_chapters``。
 
-    报告章节与增强子模块（数据质量/估值分位/市场温度/财报摘要/财务指标等）已在
-    功能开关注册表的「报告章节与增强」组，统一在菜单 [S] 配置（本面板不再另设入口）。
-    交互循环经 `panel_loop` 单源：方向键游标、Enter 防误触、直达同步、无效反馈。
+    章节清单/编号/来源/子项全部由 ``config.chapter_registry`` 派生，面板本体
+    （渲染/派发/帮助）在 ``handlers_report_chapters.run_report_chapters_panel``；
+    本文件只保留菜单入口（域拆分：本文件已接近单文件行数红线）。
     """
-    from src.python.config import (
-        get_config,
-        is_enable_action,
-        is_enable_fund_deep_analysis,
-        is_enable_history,
-        is_enable_news,
-        is_enable_portfolio_evolution,
-    )
+    from src.python.tui.handlers_report_chapters import run_report_chapters_panel
 
-    # 编号 → (配置键, 章节名, 状态读取器)：编号与派发键单源，渲染与动作共用
-    _flags: dict[str, tuple[str, str, Callable[[dict], bool]]] = {
-        "1": ("enable_fund_deep_analysis", "基金深度分析", is_enable_fund_deep_analysis),
-        "2": ("enable_news", "市场新闻", is_enable_news),
-        "3": ("enable_history", "组合历史走势+回撤", is_enable_history),
-        "4": ("enable_portfolio_evolution", "组合演进", is_enable_portfolio_evolution),
-        "5": ("enable_action", "行动建议", is_enable_action),
-    }
-
-    def _make_toggle(num: str) -> Callable[[], None]:
-        cfg_key, label, getter = _flags[num]
-
-        def _toggle() -> None:
-            current = getter(get_config())
-            if _apply_edit({"key": cfg_key, "value": not current}):
-                print(f"  {GREEN}[OK]{RESET} {label}已{'禁用' if current else '启用'}")
-
-        return _toggle
-
-    def _render(nav: NavState) -> list[str | None]:
-        config = get_config()
-        # 编号后的章节名补齐到同一列，使状态方括号纵向对齐
-        section_column = max(display_width(label) for _k, label, _g in _flags.values())
-        rows: list[str | None] = []
-        for i, num in enumerate(sorted(_flags)):
-            _key, label, getter = _flags[num]
-            enabled = getter(config)
-            status = f"{GREEN}启用{RESET}" if enabled else f"{RED}禁用{RESET}"
-            rows.append(f"{nav.marker(i)}{num}. {pad_right(label, section_column)} [{status}]")
-        rows.append("")
-        rows.append(f"{nav.marker(5)}6. 报告增强子模块 / LLM 分析章节 — 请在菜单 S 配置")
-        rows.append(f"{nav.marker(6)}0. 返回主菜单")
-        return [
-            None,
-            *render_titled_panel("配置报告可选章节", rows),
-            *wrap_hanging("  提示：报告章节与增强、LLM 分析章节请在菜单 [S] 配置", inner_width(terminal_columns())),
-            None,
-        ]
-
-    items = [
-        PanelItem(
-            num,
-            _flags[num][1],
-            action=_make_toggle(num),
-            detail="切换该章节是否出现在标准/完整报告中（当前启用状态见面板方括号）",
-        )
-        for num in sorted(_flags)
-    ]
-    items += [
-        PanelItem(
-            "6",
-            "报告增强子模块 / LLM 分析章节",
-            kind="info",
-            action=lambda: print(f"  {YELLOW}[!]{RESET} 报告增强子模块与 LLM 分析章节请使用菜单 [S] 配置"),
-            detail="报告增强子模块与 LLM 分析章节统一在菜单 [S] 的功能开关注册表中配置（本面板不重复设入口）",
-        ),
-        PanelItem("0", "返回主菜单", kind="return"),
-    ]
-
-    try:
-        panel_loop(
-            items,
-            render=_render,
-            prompt=panel_prompt("输入编号切换 (0-6)"),
-            read=input_choice,
-            on_text=lambda _t: print(f"  {YELLOW}[!]{RESET} 无效编号"),
-        )
-    except (EOFError, KeyboardInterrupt):
-        print()
-
-    refresh_config()
+    run_report_chapters_panel()
 
 
 def _cmd_refresh_config() -> None:

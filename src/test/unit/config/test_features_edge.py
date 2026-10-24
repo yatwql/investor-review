@@ -80,9 +80,9 @@ class TestParseSwitchOverrideEdge:
 
     @pytest.mark.edge
     def test_empty_value_raises(self):
-        """``doctor_check=`` → 取值空串视为笔误，报错而非按 false 处理。"""
+        """``report_qa=`` → 取值空串视为笔误，报错而非按 false 处理。"""
         with pytest.raises(ValueError):
-            parse_switch_override("doctor_check=")
+            parse_switch_override("report_qa=")
 
     @pytest.mark.edge
     def test_equals_only_raises(self):
@@ -101,7 +101,7 @@ class TestParseSwitchOverrideEdge:
     def test_value_with_extra_equals_keeps_full_value(self):
         """取值含多余 ``=`` → 整段参与词表比对，识别不了即报错，不静默截断。"""
         with pytest.raises(ValueError):
-            parse_switch_override("doctor_check=off=extra")
+            parse_switch_override("report_qa=off=extra")
 
     @pytest.mark.edge
     def test_name_case_sensitive(self):
@@ -122,7 +122,7 @@ class TestSaveFeatureOverridesEdge:
         更不能让"本次运行已生效"的内存态回退成旧值。
         """
         with (
-            patch("src.python.config.features.write_json_atomic", return_value=False),
+            patch("src.python.config.features.write_text_atomic", return_value=False),
             patch.dict(FEATURE_FLAGS, {"deterministic_signal": True}, clear=False),
         ):
             save_feature_overrides({"deterministic_signal": False}, merge=False)  # 不抛

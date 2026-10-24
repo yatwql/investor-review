@@ -21,7 +21,13 @@ import threading
 from typing import Any
 
 from src.python.config import _comments, _llm_providers
-from src.python.config._llm_settings_defaults import _DEFAULT_LLM_SETTINGS, _get_default_llm_settings_template
+from src.python.config import _llm_schema
+from src.python.config._llm_settings_defaults import (
+    _DEFAULT_LLM_SETTINGS,
+    _DEFAULTS_NESTED,
+    _get_default_llm_settings_template,
+    _render_v2,
+)
 from src.python.core.constants import PROJECT_ROOT
 from src.python.core.registry import get_known_llm_settings_keys
 
@@ -203,6 +209,23 @@ def _merge_llm_defaults(base: dict) -> dict:
     return merged
 
 
+def _load_settings_document(raw: str, path: str) -> dict:
+    """解析并校验 llm_settings.json（v2），返回扁平视图。
+
+    Raises:
+        LLMSchemaError: 根元素/版本/段结构不符（消息含文件名、版本与重新生成指引）
+    """
+    document = json.loads(_comments._strip_json_comments(raw))
+    _llm_schema.validate_document(document, filename=os.path.basename(path))
+    from src.python.config._validation_llm import sanitize_document
+
+    document, issues = sanitize_document(document, _DEFAULTS_NESTED)
+    for issue in issues:
+        logger.warning("[!] llm_settings.json %s", issue)
+    merged = _llm_schema.merge_defaults(document, _DEFAULTS_NESTED)
+    return _llm_schema.flatten(merged)
+
+
 def _ensure_llm_settings_file() -> None:
     """若 llm_settings.json 不存在，用默认值自动创建。"""
     from src.python.config._core import _atomic_write, get_config
@@ -242,38 +265,73 @@ def read_llm_settings_file() -> tuple[dict, str] | None:
     try:
         with open(path, encoding="utf-8-sig") as f:
             raw = f.read()
-        return json.loads(_comments._strip_json_comments(raw)), path
+        return _load_settings_document(raw, path), path
+    except _llm_schema.LLMSchemaError as e:
+        logger.error("[ERR] %s", e)
+        return None
     except (OSError, json.JSONDecodeError):
         return None
 
 
 def write_llm_settings(settings: dict, path: str) -> None:
-    """写入 llm_settings.json 并刷新 LLM 配置缓存，保留文件中的注释。
+    """写入 llm_settings.json（v2 结构，保留中文注释分类）并刷新缓存。
 
-    TUI / Web 配置编辑共享的 llm_settings.json 写入原语（自 tui 抽取）。
-    仅更新 settings 中发生变化的字段对应的文本区块，注释和其他字段原样保留；
-    原子写入（mkstemp + os.replace），完成后 get_llm_config() 刷新缓存。
+    ``settings`` 仍是**扁平键**（``model_<m>`` / ``enabled_llm`` / ``llm_max_*`` /
+    ``debate`` …）——对外契约不变；写盘前反展平到 ``defaults`` / ``modules`` /
+    ``runtime`` / ``advanced``，再按生成器同款排版渲染（值变化、注释保留）。
 
     Args:
-        settings: 要写入的 LLM 设置字典（可只含变更字段）。
+        settings: 要写入的扁平设置字典（可只含变更字段）。
         path: llm_settings.json 绝对路径。
     """
     from src.python.config._core import _atomic_write
-    from src.python.config._json_patch import _update_json_raw_text
+    from src.python.config._llm_settings_defaults import _DEFAULTS_NESTED
 
+    document: dict[str, Any]
+    raw = ""
     try:
-        with open(path, encoding="utf-8") as f:
+        with open(path, encoding="utf-8-sig") as f:
             raw = f.read()
+        document = json.loads(_comments._strip_json_comments(raw))
+        _llm_schema.validate_document(document, filename=os.path.basename(path))
     except FileNotFoundError:
-        raw = ""
+        document = copy.deepcopy(_DEFAULTS_NESTED)
+    except _llm_schema.LLMSchemaError as e:
+        logger.error("[ERR] %s", e)
+        raise
 
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    if raw.strip():
-        current = json.loads(_comments._strip_json_comments(raw))
-        updated_raw = _update_json_raw_text(raw, current, settings)
-        _atomic_write(path, updated_raw)
+    current_flat = _llm_schema.flatten(_llm_schema.merge_defaults(document, _DEFAULTS_NESTED))
+    patch_updates: dict[str, Any] = {}
+    structural: dict[str, Any] = {}
+    current_enabled = current_flat.get("enabled_llm") or {}
+    for key, value in settings.items():
+        if key == "enabled_llm" and isinstance(value, dict):
+            for name, flag in value.items():
+                if current_enabled.get(name) != flag:
+                    patch_updates[f"enabled_llm.{name}"] = bool(flag)
+            continue
+        if current_flat.get(key) == value:
+            continue
+        if isinstance(value, (dict, list)):
+            structural[key] = value
+        else:
+            patch_updates[key] = value
+
+    patched: str | None = None
+    if raw.strip() and not structural:
+        candidate = _llm_schema.patch_document_text(raw, patch_updates)
+        if candidate is not None:
+            try:
+                json.loads(_comments._strip_json_comments(candidate))
+                patched = candidate
+            except (json.JSONDecodeError, ValueError):
+                patched = None
+    if patched is not None:
+        _atomic_write(path, patched)
     else:
-        _atomic_write(path, json.dumps(settings, ensure_ascii=False, indent=2))
+        updated = _llm_schema.apply_flat_updates(document, {**settings, **structural})
+        _atomic_write(path, _render_v2(updated))
 
     get_llm_config()
 
@@ -303,15 +361,13 @@ def get_llm_config() -> dict | None:
             try:
                 with open(settings_path, encoding="utf-8-sig") as f:
                     raw = f.read()
-                    cleaned = _comments._strip_json_comments(raw)
-                    base_settings = json.loads(cleaned)
+                    base_settings = _load_settings_document(raw, settings_path)
                 settings_mtime = os.path.getmtime(settings_path)
                 if _llm_config_cache is None and base_settings:
                     _check_unknown_llm_keys(base_settings)
-                # 运行时补默认：llm_settings.json 缺失的键按 _DEFAULT_LLM_SETTINGS 兜底，
-                # 消除消费端 .get() 硬编码兜底与模板默认值之间的两套默认值漂移。
-                if base_settings:
-                    base_settings = _merge_llm_defaults(base_settings)
+            except _llm_schema.LLMSchemaError as e:
+                logger.error("[ERR] %s", e)
+                return None
             except (OSError, json.JSONDecodeError) as e:
                 logger.warning("LLM 设置文件读取失败: %s", e)
 

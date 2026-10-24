@@ -128,10 +128,11 @@ def _status(enabled: bool, tier: str) -> str:
     return f"[{color}{label}{RESET}]" if color else f"[{label}]"
 
 
-def format_heading(head: str, enabled_count: int, total: int, columns: int) -> str:
-    """分组标题行（含该组开启数；窄终端先截断再上色——截断不吃转义序列）。"""
-    text = truncate_display(f"{head}（{enabled_count}/{total} 开）", inner_width(columns))
-    return style_heading(text)
+def format_heading(head: str, enabled_count: int, total: int, columns: int) -> list[str]:
+    """分组标题行（含该组开启数）——形态与配色统一走 `text_layout.group_heading`。"""
+    from src.python.tui.text_layout import group_heading
+
+    return group_heading(f"{head}（{enabled_count}/{total} 开）", inner_width(columns), prefix="")
 
 
 def format_item(
@@ -213,7 +214,8 @@ def legend_lines(cost_days: int, columns: int, *, tier: str | None = None, revea
     """页脚图例（按终端宽度折行；窄档只保留符号释义与命令提示）。
 
     Args:
-        cost_days: 费用摘要回看窗口天数（与 `perf.module_cost_summary` 口径一致）。
+        cost_days: 费用摘要回看窗口天数（与 `perf.module_cost_summary` 口径一致）；
+            ``0`` 表示本面板无模块费用行（如 ``[S]``），省略该条图例。
         columns: 终端列数。
         tier: 版面档位；缺省按 `columns` 推导。
         reveal_key: 窄档当前是否已显示键名（决定提示写「k 显示键名」还是「k 隐藏键名」）。
@@ -242,7 +244,8 @@ def legend_lines(cost_days: int, columns: int, *, tier: str | None = None, revea
         else "  键名在每项第二行（淡色）：可直接输入键名 / ? 键名 / 键名=on|off 代替编号"
     )
     lines += wrap_hanging(key_note, limit)
-    lines += wrap_hanging(f"  行尾「N次 ¥X 均¥Y」= 近 {cost_days} 日该模块调用次数 / 累计费用 / 单次均值", limit)
+    if cost_days > 0:
+        lines += wrap_hanging(f"  行尾「N次 ¥X 均¥Y」= 近 {cost_days} 日该模块调用次数 / 累计费用 / 单次均值", limit)
     lines += wrap_hanging("  ?编号 查看说明 · r 编号 恢复本组默认 · ra 恢复全部 · x 实验项全关 · 0 返回", limit)
     return lines
 

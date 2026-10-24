@@ -84,19 +84,18 @@ class TestRegistryCompleteness:
                 )
 
     def test_llm_settings_keys_count(self):
-        """LLM settings 键名数量应与预期一致（5模块 × 10 - 1个例外 = 49 + 5全局 = 54）。"""
+        """LLM settings 键名与模块数×参数面同源（不写死总数；v2 起参数面对所有模块统一）。"""
         keys = get_known_llm_settings_keys()
         # 确认已知的全局键存在
         assert "max_retries" in keys
         assert "enabled_llm" in keys
-        assert "pricing" in keys
         assert "news_correlation_top_n" in keys
         assert "fact_check" in keys
         # 确认 per-module 键生成正确
         assert "temperature_global_macro" in keys
         assert "output_brief_global_macro" in keys
-        # news_correlation 不应有 output_brief
-        assert "output_brief_news_correlation" not in keys
+        # v2 起 output_brief 对所有 LLM 模块统一（不再对 news_correlation 例外）
+        assert "output_brief_news_correlation" in keys
         # 结构关系断言（不写死总数）：每个 LLM 模块的必备键均须存在
         # —— 总数会随模块/键演进，写死只会阻塞正常开发，且门禁已保证集合完整性
         for suffix in _llm_module_suffixes():
@@ -248,10 +247,12 @@ class TestDataModuleDef:
         assert "temperature_test_module" in keys
         assert "output_brief_test_module" in keys  # 非 news_correlation 应有 output_brief
 
-    def test_llm_settings_keys_news_correlation_no_output_brief(self):
-        """news_correlation 模块不应有 output_brief 键。"""
+    def test_llm_settings_keys_uniform_across_modules(self):
+        """参数面对所有 LLM 模块统一（模块段可写同一组键，缺省继承 defaults）。"""
         m = DataModuleDef("测试新闻", "test_news", cache_ttl=3600, settings_suffix="news_correlation")
-        assert "output_brief_news_correlation" not in m.llm_settings_keys()
+        keys = m.llm_settings_keys()
+        assert "output_brief_news_correlation" in keys
+        assert "thinking_budget_news_correlation" in keys
 
     def test_frozen_dataclass(self):
         """DataModuleDef 应为不可变。"""
@@ -311,7 +312,7 @@ class TestReportSectionDefault:
     def test_non_always_type_has_data_flag(self):
         """非 always/history/action 类型必须有 data_flag。
 
-        action 类型（行动建议）由独立顶层开关 enable_action 控制（默认开，菜单 P 可切换），
+        action 类型（行动建议）由独立顶层开关 enable_action 控制（默认开，菜单 C 可切换），
         数据可视为纯算法产出，无 data_flag 依赖（data_flag=None），
         available=False 时展示层写占位（§1.4.5 数据降级治理）。
         """

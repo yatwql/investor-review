@@ -397,7 +397,7 @@ def write_llm_providers(config: dict, path: str) -> None:
     except OSError:
         pass  # Windows 可能不支持完整 chmod，忽略
 
-    # 写后立即失效 LLM 合并缓存：同进程内状态行/[S]/[P]/运行时链序下一次
+    # 写后立即失效 LLM 合并缓存：同进程内状态行/[S]/[C]/运行时链序下一次
     # get_llm_config() 即重读三文件，不依赖 mtime 判据追赶（等长改写时判据可能无感）。
     # 局部导入：_llm_settings 顶层依赖本模块，顶层反向导入会成环。
     from src.python.config._llm_settings import invalidate_llm_config_cache

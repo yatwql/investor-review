@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>LLM 配置 · 目标设计</title><style>
+:root {
+  --bg: #0d1117; --panel: #161b22; --border: #30363d; --text: #c9d1d9; --dim: #8b949e;
+  --blue: #79c0ff; --green: #7ee787; --yellow: #ffd479; --red: #ff7b72; --orange: #f0883e;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Noto Sans Mono CJK SC", monospace;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; font-size: 14px; line-height: 1.7; }
+header { padding: 18px 24px; border-bottom: 1px solid var(--border); background: var(--panel); }
+header h1 { margin: 0 0 4px; font-size: 17px; font-weight: 600; }
+header p { margin: 0; color: var(--dim); font-size: 12.5px; }
+.stats { display: flex; gap: 26px; flex-wrap: wrap; padding: 14px 24px; border-bottom: 1px solid var(--border); }
+.stat { font-size: 12.5px; color: var(--dim); }
+.stat b { display: block; font-size: 19px; color: var(--text); font-variant-numeric: tabular-nums; }
+.stat.warn b { color: var(--orange); }
+main { padding: 20px 24px 60px; max-width: 1100px; }
+h2 { font-size: 14px; margin: 0 0 8px; }
+.sub { margin: 0 0 10px; color: var(--dim); font-size: 12px; }
+pre { margin: 0 0 20px; background: #0b0f14; border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px 16px; font-family: var(--mono); font-size: 12.5px; line-height: 1.6; overflow-x: auto; }
+.side { color: var(--dim); font-size: 11.5px; }
+.dup { color: var(--orange); } .var { color: var(--green); } .feat { color: var(--blue); }
+.rt { color: var(--yellow); } .head { color: var(--blue); font-weight: 600; } .mod { color: var(--green); }
+.nest { color: var(--yellow); } .ln { color: var(--dim); }
+.c0 { color: #79c0ff; } .c1 { color: #7ee787; } .c2 { color: #ffd479; }
+.c3 { color: #ff9bce; } .c4 { color: #a5d6ff; } .c5 { color: #d2a8ff; } .c6 { color: #ffa657; }
+.table { border-collapse: collapse; width: 100%; font-size: 12.5px; margin-bottom: 18px; }
+.table th, .table td { border-bottom: 1px solid var(--border); padding: 5px 8px; text-align: left; }
+.table th { color: var(--dim); font-weight: 600; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.card { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; background: var(--panel); }
+.card h3 { margin: 0 0 6px; font-size: 13px; }
+.card p { margin: 4px 0; font-size: 12.5px; color: var(--dim); }
+.card code { font-family: var(--mono); font-size: 12px; color: var(--text); }
+</style></head><body><header><h1>LLM 配置 · 目标设计</h1><p><code>llm_settings.json</code> 以模块为第一层：<code>defaults</code> 声明缺省，<code>modules</code> 只写差异，<code>runtime</code> 收运行参数，<code>advanced</code> 收高级选项；计价参考在独立的 <code>llm_pricing_ref.json</code>。</p></header><div class="stats"><div class="stat">一级键<b>29</b></div><div class="stat">模块数<b>7</b></div></div><main><h2>纵切组织 · 模块为第一层</h2><p class="sub">蓝=分区，绿=模块，黄=嵌套子对象；模块段只写与 <code>defaults</code> 不同的项。</p><pre>{
+<span class="ln">  &quot;schema_version&quot;: 2,</span>
+<span class="head">  &quot;defaults&quot;: {</span>
+    &quot;model&quot;: null,
+    &quot;temperature&quot;: 0.3,
+    &quot;max_tokens&quot;: 3072,
+    &quot;timeout&quot;: 60,
+    &quot;cache_enabled&quot;: true,
+    &quot;output_brief&quot;: false,
+    &quot;system_prompt&quot;: null,
+    &quot;thinking_enabled&quot;: false,
+    &quot;thinking_budget&quot;: 6000,
+    &quot;reasoning_effort&quot;: &quot;high&quot;
+  },
+<span class="head">  &quot;modules&quot;: {</span>
+<span class="mod">    &quot;global_macro&quot;: {</span>
+      &quot;enabled&quot;: true,
+<span class="nest">      &quot;thinking&quot;: {</span>
+        &quot;effort&quot;: &quot;low&quot;
+      }
+    },
+<span class="mod">    &quot;expert_review&quot;: {</span>
+      &quot;enabled&quot;: true,
+      &quot;max_tokens&quot;: 36000,
+      &quot;timeout&quot;: 120,
+<span class="nest">      &quot;thinking&quot;: {</span>
+        &quot;enabled&quot;: true,
+        &quot;budget&quot;: 24000,
+        &quot;effort&quot;: &quot;medium&quot;
+      },
+      &quot;debate&quot;: {
+        &quot;procon&quot;: {
+          &quot;per_call_max_tokens&quot;: 18432,
+          &quot;synthesis_model&quot;: null,
+          &quot;synthesis_temperature&quot;: 0.5
+        },
+        &quot;conditional&quot;: {
+          &quot;scenarios&quot;: [
+            {
+              &quot;name&quot;: &quot;上涨&quot;,
+              &quot;change&quot;: 0.2,
+              &quot;desc&quot;: &quot;如果未来市场上涨 20%&quot;
+            },
+            {
+              &quot;name&quot;: &quot;下跌&quot;,
+              &quot;change&quot;: -0.2,
+              &quot;desc&quot;: &quot;如果未来市场下跌 20%&quot;
+            },
+            {
+              &quot;name&quot;: &quot;震荡&quot;,
+              &quot;change&quot;: 0.05,
+              &quot;desc&quot;: &quot;如果未来市场窄幅震荡±5%&quot;
+            }
+          ]
+        },
+        &quot;concentration_qa&quot;: {
+          &quot;threshold&quot;: 0.2
+        }
+      }
+    },
+<span class="mod">    &quot;news_correlation&quot;: {</span>
+      &quot;enabled&quot;: true,
+      &quot;temperature&quot;: 0.1,
+      &quot;max_tokens&quot;: 3000,
+<span class="nest">      &quot;thinking&quot;: {</span>
+        &quot;effort&quot;: &quot;low&quot;
+      }
+    },
+<span class="mod">    &quot;health_check&quot;: {</span>
+      &quot;enabled&quot;: true,
+      &quot;temperature&quot;: 0.1,
+      &quot;max_tokens&quot;: 24000,
+      &quot;timeout&quot;: 120,
+<span class="nest">      &quot;thinking&quot;: {</span>
+        &quot;enabled&quot;: true,
+        &quot;budget&quot;: 18000,
+        &quot;effort&quot;: &quot;low&quot;
+      }
+    },
+<span class="mod">    &quot;penetration_deep&quot;: {</span>
+      &quot;enabled&quot;: true,
+      &quot;temperature&quot;: 0.1,
+      &quot;max_tokens&quot;: 12288,
+      &quot;timeout&quot;: 90,
+<span class="nest">      &quot;thinking&quot;: {</span>
+        &quot;budget&quot;: 12000,
+        &quot;effort&quot;: &quot;low&quot;
+      }
+    },
+<span class="mod">    &quot;self_review&quot;: {</span>
+      &quot;enabled&quot;: true
+    },
+<span class="mod">    &quot;holding_change&quot;: {</span>
+      &quot;enabled&quot;: true
+    }
+  },
+<span class="head">  &quot;runtime&quot;: {</span>
+    &quot;max_concurrency&quot;: 3,
+    &quot;thinking_concurrency&quot;: 2,
+    &quot;max_retries&quot;: 2,
+    &quot;full_fail_retry_delay_sec&quot;: 30,
+    &quot;time_budget_sec&quot;: 0,
+    &quot;daily_cost_limit&quot;: 0,
+<span class="mod">    &quot;debate_limits&quot;: {</span>
+      &quot;max_tokens_per_report&quot;: 72000,
+      &quot;call_timeout_override_sec&quot;: 90
+    }
+  },
+<span class="head">  &quot;advanced&quot;: {</span>
+    &quot;debate&quot;: &quot;…（原样移入）&quot;,
+    &quot;fact_check&quot;: &quot;…（原样移入）&quot;,
+    &quot;pricing&quot;: &quot;…（原样移入）&quot;,
+<span class="mod">    &quot;news_correlation&quot;: {</span>
+      &quot;top_n&quot;: 30
+    }
+  }
+}</pre><h2>键位映射（兼容读取用）</h2><table class="table"><thead><tr><th>扁平键</th><th>目标位置</th><th>说明</th></tr></thead><tbody><tr><td><code>temperature_&lt;模块&gt;</code> 等 6 项</td><td><code>modules.&lt;模块&gt;.&lt;参数&gt;</code></td><td>模型/温度/长度/超时/简报/提示词</td></tr><tr><td><code>cache_enabled_&lt;模块&gt;</code></td><td><code>modules.&lt;模块&gt;.cache</code></td><td>段内已表达归属</td></tr><tr><td><code>thinking_enabled/budget/reasoning_effort_&lt;模块&gt;</code></td><td><code>modules.&lt;模块&gt;.thinking.{enabled,budget,effort}</code></td><td>三者同属一个概念</td></tr><tr><td><code>enabled_llm.&lt;模块&gt;</code></td><td><code>modules.&lt;模块&gt;.enabled</code></td><td>启停与参数同段</td></tr><tr><td><code>llm_max_thinking_concurrency</code> 等 6 项</td><td><code>runtime.*</code></td><td>对应面板「LLM 调优参数」组</td></tr><tr><td><code>debate</code> / <code>fact_check</code> / <code>pricing</code> / <code>news_correlation_top_n</code></td><td><code>advanced.*</code></td><td>高级选项（避免与 features.json 同名）</td></tr></tbody></table><div class="cards"><div class="card"><h3>缺省继承（三层，确定性）</h3><p>模块值 → <code>defaults</code> → 代码内置默认。<code>defaults</code> 初值取程序内置默认，不做统计推断。</p><p><code>{&quot;model&quot;: null, &quot;temperature&quot;: 0.3, &quot;max_tokens&quot;: 3072, &quot;timeout&quot;: 60, &quot;cache_enabled&quot;: true, &quot;output_brief&quot;: false, &quot;system_prompt&quot;: null, &quot;thinking_enabled&quot;: false, &quot;thinking_budget&quot;: 6000, &quot;reasoning_effort&quot;: &quot;high&quot;}</code></p></div><div class="card"><h3>运行约束段（＝面板「LLM 调优参数」）</h3><p><code>{&quot;max_concurrency&quot;: 3, &quot;thinking_concurrency&quot;: 2, &quot;max_retries&quot;: 2, &quot;full_fail_retry_delay_sec&quot;: 30, &quot;time_budget_sec&quot;: 0, &quot;daily_cost_limit&quot;: 0, &quot;debate_limits&quot;: {&quot;max_tokens_per_report&quot;: 72000, &quot;call_timeout_override_sec&quot;: 90}}</code></p><p>面板 6 个调优项的标签与范围不变，写入落 <code>runtime.*</code>。</p></div><div class="card"><h3>读写契约</h3><p><code>get_llm_config()</code> 仍返回扁平视图，<code>llm/</code> 包零改动；写入反展平为纵切结构，写前 <code>.bak</code>。</p></div><div class="card"><h3>未知内容保留</h3><p>不认识的段与参数原样保留；<code>schema_version</code> 高于支持值时拒绝加载。</p></div></div></main></body></html>

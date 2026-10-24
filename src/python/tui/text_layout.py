@@ -228,6 +228,26 @@ def wrap_prompt(prompt: str, columns: int | None = None) -> str:
     return "\n".join(lines) + "\n  >  "
 
 
+def group_heading(title: str, columns: int | None = None, *, prefix: str = "  ") -> list[str]:
+    """分组标题行（结构色）——主菜单与全部面板的**唯一产出点**。
+
+    视觉契约（`DESIGN-TUI.md`「分组标题视觉纪律」）：
+      - 形态统一为 ``── 标题 ──``，与首页分组同款，任何渠道不得自造分隔符；
+      - 颜色统一走 :func:`style_heading`（蓝 + 粗，结构色，不承载状态语义）；
+      - 宽度按终端折行（``prefix`` 不参与断行），窄屏不硬折、不撑破右边框。
+
+    Args:
+        title: 组标题（不含 ``──`` 装饰）。
+        columns: 终端列数；``None`` 取实时值。
+        prefix: 首行缩进（主菜单用 ``"  "``；已带缩进的盒线面板内用 ``""``）。
+
+    Returns:
+        可直接逐行打印的标题行列表（已着色，每行 ≤ ``columns``）。
+    """
+    cols = columns or terminal_columns()
+    return [style_heading(line) for line in wrap_with_prefix(prefix, f"── {title} ──", cols)]
+
+
 def wrap_with_prefix(prefix: str, text: str, columns: int, *, indent: str | None = None) -> list[str]:
     """带首行前缀的折行：首行用「前缀 + 正文」，续行按缩进对齐。
 

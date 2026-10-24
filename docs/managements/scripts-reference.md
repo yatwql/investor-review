@@ -376,11 +376,11 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
    `fundamental_snapshot` 并新增 `schedule_replay` 后，表里仍写两个不存在的 type 名称且漏一行——行数恰好相等，计数断言全绿）
 2. 章节数量断言（`页签编号 1~N` / `默认顺序（N 项` / `返回 result（N 项` / `N 个报告章节`）↔ 注册表章节数
 3. 功能开关表（`how-to-config.md` 四组区段）↔ `feature_switch_registry`（成员/默认值/无表外键）
-4. 开关分组计数断言（`呈现与体验 A / 分析增强 B / 独立章节与回放 C / 机制与诊断 D` 连写、`<组名>（N 项`、`共 N 项开关`、旧三组名残留检测）↔ 分组计数
+4. 开关分组计数断言（八组连写、`<组名>（N 项`、`共 N 项开关`、旧三组名残留检测）↔ 分组计数
 5. 开关默认值断言（`` `flag` `` 后紧随「默认开/关」）↔ 注册表默认值
 6. 配置标量默认值表（`how-to-config.md`）↔ `_DEFAULT_CONFIG`
 7. LLM 默认参数表（`llm-technical.md`）↔ `_DEFAULT_LLM_SETTINGS` + 缓存 TTL 注册表
-8. TUI `[S]` 面板编号连续性与分组边界（`how-to-use-tui-menu.md`）↔ `handlers_config.py` 的派生编号规则
+8. TUI 两面板编号与分组边界（`how-to-use-tui-menu.md`）：`[S]` 六组编号 ↔ `features.panel_option_numbers`、`[C]` 章节与 `7.1`/`7.2` 子项编号 ↔ 章节注册表，块标题区间与 features 键名映射逐项对账（实现见 `_doc_drift/_format_panels.py`）
 9. 目录树（`folders.md`）↔ 文件系统实测（`src/`、`scripts/`、`docs/{managements,manuals,plan}`）；同父目录 `vN.N.x/` 版本目录块按版本号升序
 10. 项目统计表（`folders.md`）↔ 实测文件数/行数（加 `--with-test-count` 再核「测试用例」行）
 11. 测试覆盖计数表（`test-coverage.md`）↔ `scripts/test-collect-coverage.py` 快照（仅 `--with-test-count`）
@@ -816,7 +816,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 **`publish` 提交前先同步统计快照**：`git add/commit` 之前自动跑 `check-doc-drift.py --sync --ci --with-test-count`（与 pre-commit 钩子对含 `src/test` 变更的提交**同源参数**）。只跑 `--sync` 时 `test-coverage.md` 的收集派生计数不被校验，会出现「本地通过、钩子里仍红」——`publish` 白跑一轮（实测曾连败两次）。同步失败即中止，不提交、不合并、不打 tag。
 
-**`prepare` 不跨版本发布**：发布版恒等于开发链推导值（`0.14.1-dev` → `0.14.1`）。带 `--version` 且与推导值不一致时**立即中止（exit 2）**并打印四步指引（改 `APP_VERSION` → `check-version-consistency --fix` → 同步 changelog 开发段头与 rf 台账节头 → 提交后重跑），不再「按推导执行」跑到中途才报错。
+**`prepare` 不跨版本发布**：发布版恒等于开发链推导值（`X.Y.Z-dev` → `X.Y.Z`）。带 `--version` 且与推导值不一致时**立即中止（exit 2）**并打印四步指引（改 `APP_VERSION` → `check-version-consistency --fix` → 同步 changelog 开发段头与 rf 台账节头 → 提交后重跑），不再「按推导执行」跑到中途才报错。
 
 **归档迁移的自动 / 人工边界（`prepare` 内置，可 `--no-archive` 跳过）**：
 
@@ -1173,7 +1173,7 @@ CLI 模式的便捷入口，跳过 TUI 界面，直接以命令行模式运行�
 
 **无需配置**：与 `view-logs` / `cassettes` 同例，在 `init_config()` **之前**分派——配置损坏正是自检要定位的场景，若被配置初始化拦住即成死锁。
 
-**不受开关约束**：TUI 菜单 `[T]` 与 Web 自检卡片由 `doctor_check` 门控（该开关默认开启），但 CLI 子命令始终可用（同理，被开关拦住就失去了诊断手段）。
+**恒上屏**：TUI 菜单 `D` → `T` 与 Web 自检卡片无开关门控，CLI `doctor` 子命令同源可用
 
 **退出码**：0=全部通过，1=有失败项（`_EXIT_PARTIAL`）。自检有失败项不算命令本身失败——命令跑完了并给出了结论，故用 PARTIAL 而非 SEVERE。
 
@@ -1193,7 +1193,7 @@ CLI 模式的便捷入口，跳过 TUI 界面，直接以命令行模式运行�
 .venv/bin/python -m src.python.cli view-logs --lines 200
 ```
 
-级别/时间过滤与尾部读取逻辑全部委托 `core/log_reader.read_log()`（与 TUI 菜单 `[V]` 同一实现）。
+级别/时间过滤与尾部读取逻辑全部委托 `core/log_reader.read_log()`（与 TUI 菜单 `D` → `V` 同一实现）。
 
 ## LLM 幻觉率采样测试
 

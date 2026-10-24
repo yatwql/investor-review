@@ -1,5 +1,5 @@
 # LLM 集成层技术设计
-> 文档版本：0.14.8
+> 文档版本：0.15.0
 
 本文档是 `technical.md` 的 LLM 集成层专项技术设计补充，对应 `technical.md` §5（LLM 集成层概要设计）。
 `technical.md` §5 提供 LLM 层的总体架构、模块清单、调用链概览、多 Provider 链模式概要及关键机制速览；
@@ -1139,16 +1139,20 @@ _session_usage ──→ format_session_usage()
 `_PRICING_MERGED` 在运行时合并两层：
 
 1. **内置默认**（`core/constants.py` 中的 `MODEL_PRICING` 字典）
-2. **用户覆盖**（`llm_settings.json` → `pricing` 字段，模块加载时 `reload_pricing()` 自动合并）
+2. **参考文件覆盖**（`data/config/llm_pricing_ref.json`，`reload_pricing()` 时由 `config/_llm_pricing.py` 读取并合并）
 
-文件配置优先级高于内置默认：
+参考文件优先级高于内置默认（`pricing` 段已从 `llm_settings.json` 移除，写入会被按未知键告警）：
 
 ```
-_PRICING_MERGED = dict(MODEL_PRICING)     # 内置默认
-reload_pricing() → 合并 llm_settings.json → pricing
-                    每个模型条目覆盖或补充到 _PRICING_MERGED
+_PRICING_MERGED = dict(MODEL_PRICING)              # 内置默认
+reload_pricing() → 读 llm_pricing_ref.json
+                    顶层：version / currency / timezone / peak_periods /
+                          idle_periods / weekend_always_idle / holiday_always_idle
+                    models：逐模型覆盖或补充到 _PRICING_MERGED
                     可选字段 input_cache_hit 缺失时继承内置（或等于 input）
 ```
+
+文件缺失 → 仅用内置价；单条模型非法 → 告警跳过；`version` 不符 → 拒绝加载并提示重新生成（内置价兜底，报告仍可生成）。结构见 [`config-llm-settings-design.md`](../plan/config-llm-settings-design.md) / 用户手册 [`how-to-config-llm.md`](../manuals/how-to-config-llm.md)「完整模型定价表」。
 
 ### 10.2 费用计算
 
@@ -1177,7 +1181,7 @@ reload_pricing() → 合并 llm_settings.json → pricing
 - **高峰时段**（默认，仅高峰日生效）：北京时间 09:00–12:00、14:00–18:00；高峰日其余时间、
   **周末（周六/周日）全天**与**法定节假日全天**均为闲时（官方 2026-09-10 定价页口径：
   周末及中国法定节假日全天均为空闲时段，闲时价 = 高峰价的一半）
-- **配置覆盖**：`llm_settings.json → pricing` 段的 `timezone`（IANA 时区名）、
+- **配置覆盖**：`llm_pricing_ref.json` 顶层的 `timezone`（IANA 时区名）、
   `peak_periods` / `idle_periods`（`"HH:MM-HH:MM"` 闭区间列表）可调整时段与时区；
   `weekend_always_idle`（bool，默认 `true`）设为 `false` 时周末恢复按钟点区分峰谷；
   `holiday_always_idle`（bool，默认 `true`）设为 `false` 时法定节假日恢复按钟点区分峰谷
@@ -1193,7 +1197,7 @@ reload_pricing() → 合并 llm_settings.json → pricing
 
 ### 10.5 货币
 
-由 `llm_settings.json → pricing.currency` 控制（默认 `"CNY"`），决定费用显示符号（¥/$/€/£）。
+由 `llm_pricing_ref.json → currency` 控制（默认 `"CNY"`），决定费用显示符号（¥/$/€/£）。
 
 [↑ 回到顶部](#目录)
 
@@ -1252,7 +1256,7 @@ reload_pricing() → 合并 llm_settings.json → pricing
 | 简化模式 | `llm_settings.json` | `output_brief_expert_review` |
 | 缓存 TTL | `config.json` | `cache_ttl.llm_global_macro` |
 | Provider 文件路径 | `config.json` | `llm_providers_file`, `llm_key_file`, `llm_settings_file` |
-| 模型定价 | `llm_settings.json` → `pricing` | `pricing.currency`, `pricing.claude-sonnet-4-6.input` |
+| 模型定价 | `llm_pricing_ref.json` | `currency`, `models.<model>.input` |
 
 ### 12.2 注册表键名派生
 
@@ -1276,7 +1280,6 @@ reload_pricing() → 合并 llm_settings.json → pricing
 加上全局键名：
   max_retries
   enabled_llm
-  pricing
   llm_max_concurrency
   llm_max_thinking_concurrency
   llm_full_fail_retry_delay

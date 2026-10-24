@@ -18,6 +18,7 @@ from src.python.llm.fact_checker._constants import (
     _DRAWDOWN_KEYWORDS,
     _HYPOTHETICAL_KEYWORDS,
     _PORTFOLIO_KEYWORDS,
+    _NON_RATE_PRE_WORDS,
     _POSITION_WEIGHT_KEYWORDS,
     _PROFIT_KEYWORDS,
     _REPLAY_KEYWORDS,
@@ -203,6 +204,26 @@ def _is_portfolio_daily_change_context(sentence: str, match_start: int) -> bool:
 def _is_contribution_sentence(sentence: str) -> bool:
     """判断是否为收益归因句，其数值为贡献度占比而非收益率。"""
     return any(kw in sentence for kw in _CONTRIBUTION_KEYWORDS)
+
+
+def _is_non_rate_pre_word_context(sentence: str, match_start: int, window: int = 14) -> bool:
+    """数值**紧邻前文**是否为占比/份额/市值/仓位类度量（非收益率）。
+
+    与整句级 :func:`_is_position_weight_context` 的分工：整句判定在
+    「最大持仓 12.3%，持仓收益率 +4.55%」这类共现句里必然失败（句中有「收益」），
+    导致占比被当作收益率改写甚至叠加符号（`+-9.0%`）。本判定只看数值前
+    ``window`` 个字符，不跨到前一个数值。
+
+    Args:
+        sentence: 所在句子。
+        match_start: 数值在句中的起始位置。
+        window: 前文窗口字符数（14 覆盖「最大持仓约」「（市值」等短语）。
+
+    Returns:
+        前文命中非收益率先行词时为 True（该数值不参与收益率修正）。
+    """
+    prefix = sentence[max(0, match_start - window) : match_start]
+    return any(kw in prefix for kw in _NON_RATE_PRE_WORDS)
 
 
 def _is_position_weight_context(sentence: str) -> bool:

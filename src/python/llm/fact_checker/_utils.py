@@ -225,13 +225,120 @@ def _match_descriptive_tail(
     return (best_code, best_dist) if best_code is not None else None
 
 
+#: 分句符（与 `_split_sentences` 的断句口径一致，另含顿号与换行）
+_CLAUSE_SEPARATORS = "，,；;。、\n"
+
+
+def _clause_span(sentence: str, anchor: int) -> tuple[int, int]:
+    """返回 ``anchor`` 所在分句的区间 ``[start, end)``（按分句符切分）。"""
+    start = 0
+    for i in range(anchor - 1, -1, -1):
+        if sentence[i] in _CLAUSE_SEPARATORS:
+            start = i + 1
+            break
+    end = len(sentence)
+    for i in range(anchor, len(sentence)):
+        if sentence[i] in _CLAUSE_SEPARATORS:
+            end = i
+            break
+    return start, end
+
+
+_BRACKET_PAIRS: tuple[tuple[str, str], ...] = (("（", "）"), ("(", ")"))
+
+
+def _enclosing_bracket_span(sentence: str, anchor: int) -> tuple[int, int] | None:
+    """返回 ``anchor`` 所在最内层括号的区间 ``[start, end)``；不在括号内返回 None。
+
+    只认「未闭合的最近左括号 + 其后第一个右括号」这一对，跨括号（上一括号已闭合）
+    的候选被排除；中英文括号分别计算后取交集最紧的一对。
+    """
+    best: tuple[int, int] | None = None
+    for left, right in _BRACKET_PAIRS:
+        start = sentence.rfind(left, 0, anchor)
+        if start == -1:
+            continue
+        end = sentence.find(right, anchor)
+        if end == -1:
+            continue
+        # 左括号与新右括号之间若出现过右括号，说明 anchor 已在该括号之外
+        if sentence.rfind(right, 0, anchor) > start:
+            continue
+        best = (start, end) if best is None else (max(best[0], start), min(best[1], end))
+    return best
+
+
+def _alias_normalized(text: str) -> str:
+    """把文本中的常用简称替换为规范名（"纳指"→"纳斯达克"），供简称匹配复用。"""
+    for alias, canon in sorted(_NAME_ALIAS_MAP.items(), key=lambda kv: -len(kv[0])):
+        text = text.replace(alias, canon)
+    return text
+
+
+def _has_subject_candidate(
+    text: str,
+    holding_codes: set[str],
+    name_to_code: dict[str, str] | None,
+    anchor: int,
+) -> bool:
+    """分句内是否出现任何可归因主体（代码 / 全名 / 简称 / 描述性尾名）。
+
+    简称与尾名用与 :func:`_locate_subject_in` 同源的口径探测，避免「分句里有主体
+    但没识别出来」而错误回退全句、被远处的另一个主体抢走归属。
+    """
+    if any(code in holding_codes for code in _CODE_PATTERN.findall(text)):
+        return True
+    for name in name_to_code or {}:
+        if name in text:
+            return True
+    norm = _alias_normalized(text)
+    if norm != text:
+        for name in name_to_code or {}:
+            core = _extract_core_name(name)
+            if len(core) >= 2 and core in norm:
+                return True
+    return _match_descriptive_tail(text, name_to_code, anchor) is not None
+
+
 def _locate_subject_code(
     sentence: str,
     holding_codes: set[str],
     name_to_code: dict[str, str] | None,
     anchor: int,
 ) -> str | None:
-    """定位句中最可能指代的持仓代码。
+    """定位数值的主体持仓代码——作用域优先：括号 > 分句 > 全句。
+
+    1. **括号作用域**：数值落在某对括号内、且括号内有持仓**代码**时取该代码。
+       「超短债（012325，最大持仓12.3%，持仓收益率+4.55%）」的 +4.55% 属括号内
+       012325，不会因括号闭合符让后一个代码在距离上更近而误判。只认代码：标识符
+       形式无歧义；名称留给下级，避免括号内首个全名吃掉括号内全部数值。
+    2. **分句作用域**：主体通常写在本分句内（「超短债（012325）持仓收益率+45.5%，
+       华宝增强债券A（240012）收益率为-9.0%」——+45.5% 属前一分句）。本分句能识别
+       出任何主体时只在本分句内归因。
+    3. **全句**：分句内无主体时回退全句四来源匹配（保留「句中唯一代码钉扎」语义）。
+
+    各级内部规则见 :func:`_locate_subject_in`。
+    """
+    span = _enclosing_bracket_span(sentence, anchor)
+    if span is not None:
+        for cm in _CODE_PATTERN.finditer(sentence, span[0], span[1]):
+            if cm.group(0) in holding_codes:
+                return cm.group(0)
+
+    clause_start, clause_end = _clause_span(sentence, anchor)
+    clause = sentence[clause_start:clause_end]
+    if clause != sentence and _has_subject_candidate(clause, holding_codes, name_to_code, anchor - clause_start):
+        return _locate_subject_in(clause, holding_codes, name_to_code, anchor - clause_start)
+    return _locate_subject_in(sentence, holding_codes, name_to_code, anchor)
+
+
+def _locate_subject_in(
+    sentence: str,
+    holding_codes: set[str],
+    name_to_code: dict[str, str] | None,
+    anchor: int,
+) -> str | None:
+    """在给定文本内定位数值主体（四来源：代码 → 全名 → 简称归一 → 描述性尾名）。
 
     主体来源分四级：句中持仓代码 → 持仓全名 → 简称归一化 → 描述性尾名。
     采用「紧邻优先 + 可靠主体兜底」：
@@ -280,9 +387,7 @@ def _locate_subject_code(
     # 再与持仓名称核心名前缀匹配。仅在句中确实出现简称（norm != sentence）
     # 时执行，避免额外开销与误匹配。句中已有代码/全名时简称仅以「紧邻」覆盖
     # （不参与全局最近竞争），防止远距简称误路由。
-    norm = sentence
-    for _alias, _canon in sorted(_NAME_ALIAS_MAP.items(), key=lambda kv: -len(kv[0])):
-        norm = norm.replace(_alias, _canon)
+    norm = _alias_normalized(sentence)
     if norm != sentence:
         for name, code in sorted((name_to_code or {}).items(), key=lambda kv: -len(kv[0])):
             core = _extract_core_name(name)

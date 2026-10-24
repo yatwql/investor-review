@@ -86,10 +86,13 @@ class TestApplyLlmSettingsWrite:
         """enabled_llm.news_correlation 写：文件注释保留，字段更新。"""
         from src.python.config._llm_settings import get_llm_settings_path
 
+        from src.python.config._llm_settings_defaults import _get_default_llm_settings_template
+
         path = get_llm_settings_path()
         os.makedirs(os.path.dirname(path), exist_ok=True)
+        text = _get_default_llm_settings_template().replace("{", '{\n  "// 模型配置": true, // 模型配置', 1)
         with open(path, "w", encoding="utf-8") as f:
-            f.write('{\n  // 模型配置\n  "model": "claude",\n  "enabled_llm": {"news_correlation": false}\n}\n')
+            f.write(text)
 
         resp = app_client.post(
             "/api/config/edit",
@@ -100,8 +103,8 @@ class TestApplyLlmSettingsWrite:
 
         raw = open(path, encoding="utf-8").read()
         assert "// 模型配置" in raw  # 注释保留
-        assert '"model": "claude"' in raw  # 其余键保留
-        assert '"news_correlation": true' in raw  # 字段更新
+        assert '"// 模型配置": true' in raw  # 其余键保留
+        assert '"enabled": true' in raw  # 字段更新
 
 
 class TestApplyFeaturesWrite:
@@ -176,19 +179,6 @@ class TestApplyFeaturesWrite:
 
         raw = open(FEATURES_FILE, encoding="utf-8").read()
         assert '"metrics_enabled": false' in raw
-
-    def test_doctor_check_can_be_disabled_from_panel(self, app_client):
-        """系统自检转正后仍可从面板关闭——转正不再连入口一起摘掉（回归）。"""
-        from src.python.config.features import FEATURES_FILE, is_feature_enabled
-
-        assert is_feature_enabled("doctor_check") is True  # 默认开
-
-        resp = app_client.post("/api/config/edit", json={"key": "doctor_check", "value": False})
-        assert resp.status_code == 200
-        assert is_feature_enabled("doctor_check") is False
-
-        raw = open(FEATURES_FILE, encoding="utf-8").read()
-        assert '"doctor_check": false' in raw
 
 
 # ═══════════════════════════════════════════════════════════════

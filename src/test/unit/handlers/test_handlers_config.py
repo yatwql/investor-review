@@ -109,13 +109,11 @@ class TestConfigPanelsAreRectangular:
         assert len(widths) == 1, f"面板右边框未对齐，出现 {len(widths)} 种行宽：{sorted(widths)}"
 
     @patch("builtins.input", side_effect=["0"])
-    @patch("src.python.tui.handlers_config._read_llm_settings")
-    def test_llm_modules_panel_rectangular(self, mock_read, mock_input, capsys):
-        """LLM 分析章节面板：标准模块行与实验开关行在同一右边框内。"""
-        mock_read.return_value = ({"enabled_llm": {}}, "/tmp/llm_settings.json")
-        from src.python.tui.handlers_config import _cmd_config_llm_modules
+    def test_content_options_panel_rectangular(self, mock_input, capsys):
+        """[S] 章节内容面板：六组开关行与组标题行在同一右边框内。"""
+        from src.python.tui.handlers_config import _cmd_config_content_options
 
-        self._assert_rectangular(capsys, _cmd_config_llm_modules)
+        self._assert_rectangular(capsys, _cmd_config_content_options)
 
     @patch("src.python.tui.handlers_config.refresh_config")
     @patch("builtins.input", side_effect=["0"])
@@ -129,9 +127,10 @@ class TestConfigPanelsAreRectangular:
 
     @patch("src.python.tui.handlers_config.refresh_config")
     @patch("builtins.input", side_effect=["0"])
+    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/tmp/llm_settings.json"))
     @patch("src.python.config.get_config", return_value={})
-    def test_report_boards_panel_rectangular(self, mock_get, mock_input, mock_refresh, capsys):
-        """报告可选章节面板：最长行（增强子模块说明）决定宽度且不撑破边框。"""
+    def test_report_boards_panel_rectangular(self, mock_get, mock_read, mock_input, mock_refresh, capsys):
+        """[C] 章节显隐面板：四块章节、智囊团子项与块标题在同一右边框内。"""
         from src.python.tui.handlers_config import _cmd_config_report_boards
 
         self._assert_rectangular(capsys, _cmd_config_report_boards)
@@ -146,102 +145,53 @@ class TestConfigPanelsAreRectangular:
         self._assert_rectangular(capsys, _cmd_config_anonymization_mode)
 
 
-class TestReportGroupMovedToSwitchPanel:
-    """报告章节与增强子模块已并入功能开关注册表：P 面板不再另设入口，S 面板新增一块。"""
+class TestChapterPanelsOwnTheirBlocks:
+    """两面板职责切分：``[C]`` 只放章节（含 LLM / 整章 / 关联产物），``[S]`` 只放章内内容。"""
 
-    def _source(self, module: str = "handlers_config.py") -> str:
+    def _source(self, module: str) -> str:
         from pathlib import Path
 
         return (Path(__file__).resolve().parents[4] / "src" / "python" / "tui" / module).read_text(encoding="utf-8")
 
-    def test_p_subpanel_removed(self):
-        src = self._source()
-        assert "_cmd_config_report_submodules" not in src, "P 子面板应已删除"
-        assert "REPORT_SUBMODULE_ITEMS" not in src, "面板清单常量应随子面板删除"
+    def test_p_panel_is_chapter_registry_driven(self):
+        """[C] 的清单、编号、分块与子项全部来自章节注册表（渠道层不另写清单）。"""
+        src = self._source("handlers_report_chapters.py")
+        assert "chapter_numbers" in src and "chapters_in_block" in src
+        assert "BLOCK_ORDER" in src
+        assert "enable_fund_deep_analysis" not in src, "章节键名不得写死在渠道层"
 
-    def test_boards_panel_points_to_switch_menu(self):
-        """基础章节面板第 6 项提示改到菜单 [S]，输入范围收为 (0-6)。"""
-        src = self._source()
-        assert "输入编号切换 (0-6)" in src
-        assert "报告增强子模块 / LLM 分析章节 — 请在菜单 S 配置" in src
-
-    def test_switch_panel_renders_report_group(self):
-        """面板分组由注册表 GROUP_ORDER 派生（渠道层不得另写清单）。
-
-        面板本体已迁至 `handlers_switch`（域拆分），断言随实现位置同步。
-        """
+    def test_s_panel_renders_only_panel_groups(self):
+        """[S] 由 PANEL_GROUPS + panel_option_numbers 派生，不再混排 LLM 模块。"""
         src = self._source("handlers_switch.py")
-        assert "GROUP_ORDER" in src
-        assert "for group in GROUP_ORDER" in src
-        assert "GROUP_EXPERIMENTAL" not in src and "GROUP_REPORT" not in src
+        assert "PANEL_GROUPS" in src
+        assert "panel_option_numbers" in src
+        assert "get_llm_module_names" not in src, "LLM 章节已归 [C]"
+        assert "enabled_llm" not in src, "[S] 不再读写 llm_settings"
 
+    def test_panels_partition_feature_registry(self):
+        """两面板对功能开关的呈现是**划分**：并集=全注册表、交集为空。"""
+        from src.python.config.chapter_registry import chapter_registry
+        from src.python.config.features import PANEL_GROUPS, feature_switch_registry, panel_option_numbers
 
-class TestDualEntryCrossHints:
-    """持仓变动复盘双入口互指标注：LLM 行指章本体、独立组行指归因（只读，零行为变化）。"""
-
-    @patch("src.python.tui.handlers_config.refresh_config")
-    @patch(
-        "src.python.tui.handlers_config.filter_menu_llm_modules",
-        return_value={
-            **_STANDARD_LLM_MODULES,
-            "holding_change": "持仓变动复盘归因",
-        },
-    )
-    @patch("src.python.core.registry.get_llm_module_names")
-    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
-    def test_both_rows_carry_cross_hint(self, mock_read, mock_names, mock_filter, mock_refresh, capsys):
-        """两行各自携带对方入口提示，且仅这两行携带。"""
-        from src.python.tui.handlers_config import _cmd_config_llm_modules
-
-        with patch("builtins.input", side_effect=["0"]):
-            _cmd_config_llm_modules()
-
-        lines = capsys.readouterr().out.splitlines()
-        llm_lines = [ln for ln in lines if "持仓变动复盘归因" in ln and "holding_change " in ln]
-        feature_lines = [ln for ln in lines if "持仓变动复盘" in ln and "holding_change_review " in ln]
-        assert len(llm_lines) == 1, "LLM 模块行应唯一出现"
-        assert len(feature_lines) == 1, "独立组开关行应唯一出现"
-        assert "见独立组" in llm_lines[0]
-        assert "见 LLM 区" in feature_lines[0]
-        # 其余行不携带互指提示（标注不扩散）
-        other = [ln for ln in lines if "见独立组" in ln or "见 LLM 区" in ln]
-        assert len(other) == 2
-
-    @patch("src.python.tui.handlers_config.refresh_config")
-    @patch("src.python.config.features.save_feature_overrides")
-    @patch(
-        "src.python.tui.handlers_config.filter_menu_llm_modules",
-        return_value={
-            **_STANDARD_LLM_MODULES,
-            "holding_change": "持仓变动复盘归因",
-        },
-    )
-    @patch("src.python.core.registry.get_llm_module_names")
-    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
-    def test_hints_are_readonly_annotations(self, mock_read, mock_names, mock_filter, mock_save, mock_refresh, capsys):
-        """互指标注纯只读：渲染不触发任何配置写入。"""
-        from src.python.tui.handlers_config import _cmd_config_llm_modules
-
-        with patch("builtins.input", side_effect=["0"]):
-            _cmd_config_llm_modules()
-
-        assert "见独立组" in capsys.readouterr().out
-        mock_save.assert_not_called()
+        content = {flag for _n, flag, _d in panel_option_numbers("[S]")}
+        chapter_backed = {e.key for e in chapter_registry if e.source == "features"}
+        sub_items = {flag for e in chapter_registry for flag in e.sub_items}
+        assert content & chapter_backed == set()
+        assert content & sub_items == set()
+        assert content | chapter_backed | sub_items == set(feature_switch_registry)
+        assert set(PANEL_GROUPS) == {"[C]", "[S]"}
 
 
 class TestPanelPlainLanguageCopy:
     """[S] 面板用户文案白话化：不出现开发者术语 slug（页脚/帮助/报错全量断言）。"""
 
     @patch("src.python.tui.handlers_config.refresh_config")
-    @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value=_STANDARD_LLM_MODULES)
-    @patch("src.python.core.registry.get_llm_module_names")
-    @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
-    def test_render_and_help_have_no_dev_jargon(self, mock_read, mock_names, mock_filter, mock_refresh, capsys):
+    def test_render_and_help_have_no_dev_jargon(self, mock_refresh, capsys):
         """面板渲染 + `?` 未识别帮助 + r 未识别提示：全部用「键名」，无 'slug'。"""
-        from src.python.tui.handlers_config import _cmd_config_llm_modules
+        from src.python.tui.handlers_config import _cmd_config_content_options
 
         with patch("builtins.input", side_effect=["? nope", "r nope", "0"]):
-            _cmd_config_llm_modules()
+            _cmd_config_content_options()
 
         out = capsys.readouterr().out
         # 提示串由模板产出（input 被 mock 后不上屏），故断言「模板渲染结果」——不再
@@ -294,16 +244,16 @@ class TestConfigEntryMap:
             assert keys.startswith("[") and keys.endswith("]")
 
     @patch("builtins.input", side_effect=["M", "0"])
-    def test_d_submenu_renders_map_then_returns(self, mock_input, capsys):
-        """[D] → M 打印入口地图后回到子菜单，0 返回；全程不调用任何写入处理器。"""
-        from src.python.tui.handlers_config import _cmd_config_dir_info
+    def test_global_settings_renders_map_then_returns(self, mock_input, capsys):
+        """[G] → M 打印入口地图后回到全局设置，0 返回；全程不调用任何写入处理器。"""
+        from src.python.tui.handlers_config import _cmd_global_settings
 
         with (
             patch("src.python.tui.handlers_config._cmd_config_dir") as m_dir,
             patch("src.python.tui.handlers_config._cmd_config_filename") as m_fn,
             patch("src.python.tui.handlers_config._cmd_config_output_dir") as m_out,
         ):
-            _cmd_config_dir_info()
+            _cmd_global_settings()
         out = capsys.readouterr().out
         assert "配置入口地图" in out
         assert "功能开关 / LLM 模块启停 / 实验项" in out
@@ -311,12 +261,15 @@ class TestConfigEntryMap:
             handler.assert_not_called()
 
     @patch("builtins.input", side_effect=["Z", "0"])
-    def test_invalid_choice_lists_map_option(self, mock_input, capsys):
-        """无效选择提示含新增的 M 选项（C/F/O/M/0）。"""
-        from src.python.tui.handlers_config import _cmd_config_dir_info
+    def test_global_settings_invalid_choice_lists_keys(self, mock_input, capsys):
+        """无效选择提示「请输入编号或字母」，且面板列出全部七个字母。"""
+        from src.python.tui.handlers_config import GLOBAL_SETTINGS_ITEMS, _cmd_global_settings
 
-        _cmd_config_dir_info()
-        assert "请输入 C/F/O/M/0" in capsys.readouterr().out
+        _cmd_global_settings()
+        out = capsys.readouterr().out
+        assert "请输入编号或字母" in out
+        for letter, _label, _handler, _group in GLOBAL_SETTINGS_ITEMS:
+            assert f"[{letter}]" in out
 
     def test_map_rendering_is_readonly(self):
         """纯渲染无副作用：不调用配置写入/刷新入口。"""
@@ -336,15 +289,13 @@ class TestKeyColumnVisible:
 
     @staticmethod
     def _rows(capsys) -> list[str]:
-        from src.python.tui.handlers_config import _cmd_config_llm_modules
+        from src.python.tui.handlers_config import _cmd_config_content_options
 
         with (
             patch("builtins.input", side_effect=["0"]),
             patch("src.python.tui.handlers_config.refresh_config"),
-            patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json")),
-            patch("src.python.core.registry.get_llm_module_names", return_value={"global_macro": "全球政经局势"}),
         ):
-            _cmd_config_llm_modules()
+            _cmd_config_content_options()
         out = capsys.readouterr().out
         return [ln for ln in out.splitlines() if "[开启]" in ln or "[关闭]" in ln]
 
@@ -355,9 +306,14 @@ class TestKeyColumnVisible:
         rows = self._rows(capsys)
         assert rows
         flat = "\n".join(rows)
-        assert "global_macro" in flat
-        # 注册表全集里每个开关键名（长键名同样完整展示，不截断）
-        missing = [key for key in feature_switch_registry if key not in flat]
+        # 本章节内容面板的每个开关键名（长键名同样完整展示，不截断）
+        missing = [
+            key
+            for key in feature_switch_registry
+            if key not in flat
+            and key not in {"llm_debate_procon", "llm_debate_conditional"}
+            and feature_switch_registry[key].group not in {"standalone", "chapter_options"}
+        ]
         assert missing == []
 
     def test_key_column_is_aligned_within_each_block(self, capsys):
@@ -366,14 +322,13 @@ class TestKeyColumnVisible:
 
         from src.python.tui.text_layout import display_width
 
-        from src.python.tui.handlers_config import _cmd_config_llm_modules
+        from src.python.tui.handlers_config import _cmd_config_content_options
 
         with (
             patch("builtins.input", side_effect=["0"]),
             patch("src.python.tui.handlers_config.refresh_config"),
-            patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json")),
         ):
-            _cmd_config_llm_modules()
+            _cmd_config_content_options()
         out = capsys.readouterr().out
 
         block_columns: list[set[int]] = [set()]
@@ -389,16 +344,15 @@ class TestKeyColumnVisible:
         for cols in non_empty:
             assert len(cols) == 1, f"块内状态列未对齐: {sorted(cols)}"
 
-    def test_footer_explains_key_column_and_cost(self, capsys):
-        """页脚图例解释键名列与费用摘要口径（不靠用户推断）。"""
-        from src.python.tui.handlers_config import _cmd_config_llm_modules
+    def test_footer_explains_key_column_without_cost_row(self, capsys):
+        """页脚解释键名列；本章节内容面板无 LLM 章节行，故不再有费用摘要口径。"""
+        from src.python.tui.handlers_config import _cmd_config_content_options
 
         with (
             patch("builtins.input", side_effect=["0"]),
             patch("src.python.tui.handlers_config.refresh_config"),
-            patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json")),
         ):
-            _cmd_config_llm_modules()
+            _cmd_config_content_options()
         out = capsys.readouterr().out
         assert "键名即行内淡色列" in out
-        assert "近 7 日该模块调用次数 / 累计费用 / 单次均值" in out
+        assert "近 7 日该模块调用次数" not in out

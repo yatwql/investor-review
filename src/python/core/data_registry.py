@@ -90,9 +90,8 @@ class DataModuleDef:
             f"thinking_budget_{suffix}",
             f"reasoning_effort_{suffix}",
         }
-        # output_brief 在所有 LLM 模块中生成，但 news_correlation 除外
-        if suffix != "news_correlation":
-            keys.add(f"output_brief_{suffix}")
+        # v2 模块参数对所有 LLM 模块统一（output_brief 不再对 news_correlation 例外）
+        keys.add(f"output_brief_{suffix}")
         return keys
 
 
@@ -407,7 +406,6 @@ def get_known_llm_settings_keys() -> set[str]:
     keys |= {
         "max_retries",
         "enabled_llm",
-        "pricing",
         "llm_max_concurrency",
         "llm_max_thinking_concurrency",
         "llm_full_fail_retry_delay",

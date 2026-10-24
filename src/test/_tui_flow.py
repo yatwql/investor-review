@@ -82,6 +82,10 @@ def _patch_readers(feeder: KeyFeeder):
             patches.append(patch.object(mod, "input_choice", feeder))
     if hasattr(tui, "_read_filter_keyword"):
         patches.append(patch.object(tui, "_read_filter_keyword", lambda _prompt="": feeder(_prompt)))
+    # 兜底：`input_choice` 在非 TTY 下退化为内置 `input()`，而部分处理器在函数内
+    # `from tui_keys import input_choice`（局部导入绕不过模块属性 patch）——只有替换
+    # `input` 本身才能覆盖这类路径，且不产生「源头被永久绑定」的跨用例污染。
+    patches.append(patch("builtins.input", lambda _prompt="": feeder(_prompt)))
     return patches
 
 

@@ -1,6 +1,6 @@
-# 决策跨期反思闭环（decision_reflection）设计 —— plan-70
+# 决策跨期反思闭环（decision_reflection）设计
 
-> **状态**：设计（plan-70 死线未过；仅在转正判定后按本设计实施，死线条款优先）。
+> **状态**：设计。落地前置 = 实验项转正判定通过；判定依据与当前观测态见 `technical.md`「实验项生命周期表」与 `requirements.md` 对应条目。
 
 ## 1. 问题重述
 
@@ -40,7 +40,7 @@ whatif_backtest 引擎指标原语，不新增引擎。
 
 ## 5. 数据来源衔接（前瞻）
 
-plan-76 持仓变动复盘落地后，decision_ledger（意图侧）与 holding_change_events
+「持仓变动复盘」章（意图侧归因）与 decision_ledger（意图侧）与 holding_change_events
 （成交侧代理，快照差分事件）互为对照：建议了但没做、做了但没建议、建议且做了——
 三类样本正是反思闭环的质量指标。两项独立立项、只读对账，不互写（分层不重叠）。
 
