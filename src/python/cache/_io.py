@@ -40,7 +40,10 @@ def _read_cache_data(fpath: str, key: str, dry_run: bool = False) -> dict | None
                 return json.loads(gzip.decompress(f.read()).decode("utf-8"))
         with open(fpath, encoding="utf-8") as f:
             return json.load(f)
-    except (json.JSONDecodeError, OSError, UnicodeDecodeError) as e:
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError, EOFError) as e:
+        # EOFError：截断的 `.json.gz`（磁盘满/进程被杀留下的半写文件）会由 gzip
+        # 解压器抛出，不属于 OSError。不catch 时损坏缓存会直接把异常抛给调用方
+        # （报告生成/预检路径），而缓存的契约是「坏了就当没缓存」。
         if dry_run:
             logger.info("缓存清理(预览): 损坏文件 %s", os.path.basename(fpath))
         else:

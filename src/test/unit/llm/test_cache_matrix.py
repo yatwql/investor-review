@@ -15,7 +15,9 @@ from unittest.mock import patch
 
 import pytest
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_llm]
+# `unit_core` 横切标记：缓存命中契约属核心基础设施行为，需随 P0 `dev-verify` 跑
+# （该档选择面不含 `unit_llm`，只标 llm 域会让这批回归只在 P1 才执行）。
+pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.unit_core]
 
 _HOLDING_CODE = "600900"
 
@@ -234,6 +236,64 @@ class TestGenerationParams:
         flags = _run(base, llm_config=changed)
         assert flags[_IDX["expert_review"]] is False
         assert flags[_IDX["global_macro"]] is True
+
+    @pytest.mark.parametrize(
+        "overrides",
+        [
+            {"system_prompt_global_macro": "换成全新提示词"},
+            {"output_brief_global_macro": True},
+            {"model_global_macro": "another-model"},
+        ],
+        ids=["prompt-override", "output-brief", "model-override"],
+    )
+    def test_prompt_and_model_options_invalidate_key(self, cache_dir, overrides):
+        """自定义提示词 / 精简模式 / 模块级模型覆写都直接改写调用，必须换键。
+
+        回归：三者不入指纹时，用户改完配置照旧命中旧缓存，报告静默复用按旧提示词
+        （或旧模型）生成的结论。
+        """
+        base = _inputs()
+        _run(base)
+        flags = _run(base, llm_config=dict(_CHAIN_CONFIG, **overrides))
+        assert flags[_IDX["global_macro"]] is False, f"{overrides} 必须使该模块重算"
+        assert flags[_IDX["expert_review"]] is True, "其它模块不受影响"
+
+    def test_default_params_keep_five_component_suffix(self):
+        """默认参数下后缀只含五项基础参数——新增项不得改变存量缓存键。
+
+        这里必须 patch 配置读取（而不是走隔离环境）：本用例的被测对象就是
+        「按配置计算参数摘要」，读什么配置必须是确定的输入。
+        """
+        from src.python.llm.fingerprint import compute_fingerprint
+        from src.python.llm.module_fingerprint import generation_params_suffix
+
+        module = "global_macro"
+        defaults = {
+            f"temperature_{module}": 0.3,
+            f"max_tokens_{module}": 3072,
+            f"thinking_enabled_{module}": False,
+            f"thinking_budget_{module}": 6000,
+            f"reasoning_effort_{module}": "low",
+            f"model_{module}": None,
+            f"output_brief_{module}": False,
+            f"system_prompt_{module}": None,
+        }
+        expected = "_" + compute_fingerprint(
+            "t=0.3",
+            "mt=3072",
+            "th=0",
+            "tb=6000",
+            "te=low",
+        )
+        from src.python import config as cfg_mod
+
+        with patch.object(cfg_mod, "get_llm_config", return_value=dict(defaults)):
+            assert generation_params_suffix(module) == expected
+            for key in ("model_global_macro", "output_brief_global_macro", "system_prompt_global_macro"):
+                changed = dict(defaults)
+                changed[key] = "x" if key != "output_brief_global_macro" else True
+                with patch.object(cfg_mod, "get_llm_config", return_value=changed):
+                    assert generation_params_suffix(module) != expected, f"{key} 未进指纹"
 
     def test_cache_disabled_bypasses_read(self, cache_dir, caplog):
         """`cache_enabled_{module}=false` → 该模块不读缓存（且不计为命中）。"""

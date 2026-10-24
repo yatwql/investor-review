@@ -908,6 +908,19 @@ penetrated_assets ──→ extract_stable_penetration()
 
 > **键尾同源（C21）**：预检（`_compute_module_cache_info`）与写侧（`skeleton`）必须用**同一个函数**拼出完整键。历史上预检只拼到 `{指纹}`、写侧额外追加 `_{provider}`，后果是每份报告四模块全判 miss、全量派发、`cache_misses` 恒为 4，而真实命中发生在 skeleton 的第二次预检——观测上完全看不出是「键拼错了」。该不变式由 `test_llm_cache_multi.py` 的「预检键与写侧键逐字节相等」用例锁定。
 
+### 7.2.1 缓存与成本契约（金钱口径）
+
+缓存的第一价值是**省钱**，因此除「键是否命中」外还锁住四条金钱口径，由 `src/test/unit/llm/test_cache_cost_accounting.py` 守护：
+
+| 口径 | 含义 | 实现/证据 |
+|:-----|:-----|:----------|
+| 命中零边际成本 | 命中路径不产生 token 与费用；`record_per_module(cached=True)` 记账 cost=0 | `skeleton._handle_cache_hit` → `_build_cache_hint_and_record` |
+| 未命中必记账 | 真实调用的 token/费用逐模块入会话用量，可被事后汇总 | `_finalize_and_cache` → `record_per_module` |
+| 预算只看真实花费 | `daily_cost_limit` 用 perf 当日 `llm.total_cost` 求和；命中运行 `total_cost=0`，不消耗预算 | `cost_forecast.budget_status` / `today_llm_cost` |
+| 节省可见 | 命中模块按**历史付费样本均价**估算 `cache_saved_cost` 写入 perf，并打 INFO「命中 N 个模块，估算节省 ≈¥X」；无样本不虚报 | `cost_forecast.estimate_cached_saving` + `report/_generation_shared._record_llm_context` |
+
+**预估口径**：`forecast_run_cost` 的默认路径用历史实际费用样本给出区间（命中样本费用为 0，故下限可为 0）；**强制重新生成范围内**的模块保证真调用，改按静态单价计价，不吃缓存折扣（`forced_low/forced_high` 单列）。预估始终是**上限性质**：它不预检当前指纹，因此不会因为「这次大概会命中」而下调金额。
+
 ### 7.3 TTL 分辨率
 
 `get_ttl(data_type)` 两级优先级：

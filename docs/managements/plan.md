@@ -47,7 +47,11 @@
 
 **实测**：`src/test/unit/llm/test_report_sequence_cache.py` 在同一进程内调用真实 `generate_all_llm`（LLM 全 mock、缓存目录隔离）连跑三份——第 2/3 份**预检层** 4/4 命中，第 3 份 self_review 亦命中；失败事件条数与累计次数变化不影响命中；指数变化时 `global_macro` 重算。四例均以缺陷版代码验证过可捕捉（改回旧实现即红）。
 
-**完整矩阵**：`src/test/unit/llm/test_cache_matrix.py`（17 例）逐模块变换各模块自己的入参，断言「该重算的必重算、其余必命中」——指数（global_macro + 含竞争语境的 expert_review）/量化指标（expert_review）/穿透资产（expert_review、health_check、penetration_deep 三处）/历史风险信号/新增数据源失败（health_check）；另覆盖强算与模块级强算、Provider 切换不复用他方缓存、单 Provider 配置仍命中、温度变化换键、`cache_enabled=false` 跳过读、TTL 过期重算、跨进程重启后磁盘缓存仍命中、串行后置模块（生成后自检、持仓变动复盘归因）产出未变则命中、产出变则重算。用例已做变异验证（如从 expert 指纹移除 metrics、把失败次数渲染改回旧式）——对应用例必变红。
+**完整矩阵**：`src/test/unit/llm/test_cache_matrix.py`（21 例，含提示词/模型/精简模式入指纹）逐模块变换各模块自己的入参，断言「该重算的必重算、其余必命中」——指数（global_macro + 含竞争语境的 expert_review）/量化指标（expert_review）/穿透资产（expert_review、health_check、penetration_deep 三处）/历史风险信号/新增数据源失败（health_check）；另覆盖强算与模块级强算、Provider 切换不复用他方缓存、单 Provider 配置仍命中、温度变化换键、`cache_enabled=false` 跳过读、TTL 过期重算、跨进程重启后磁盘缓存仍命中、串行后置模块（生成后自检、持仓变动复盘归因）产出未变则命中、产出变则重算。用例已做变异验证（如从 expert 指纹移除 metrics、把失败次数渲染改回旧式）——对应用例必变红。
+
+**缓存测试域归位（标记与抽离口径）**：仓库**没有** `unit_cache` 标记——`unit/cache` 目录按 `scripts/check-test-markers.py` 期望表归 `unit_core`（缓存基础设施无专属域）。故分两层：① `src/test/unit/cache/test_cache_engine_scenarios.py`（14 例，`unit_core`）测缓存引擎硬契约——TTL 边界、压缩往返、损坏载荷（含截断 gzip）、原子并发写、键版本升级、目录不可写；② `src/test/unit/llm/test_{report_sequence_cache,cache_matrix,cache_real_config}.py`（38 例，`unit_llm` + **横切 `unit_core`**）测 LLM 语义。加 `unit_core` 的理由：P0 `dev-verify` 的选择面不含 `unit_llm`，只标 llm 域会让这批回归只在 P1 才跑。
+
+**逐用例实证**：真实配置链路（不 patch 配置读取）验证 v2 嵌套 + 多链 → 预检键与磁盘文件名交叉比对同源；单 Provider 升级兼容；损坏缓存/截断 gzip/大载荷 gzip/并发双报告/调用失败不落缓存；故障转移时按**实际** provider 落盘、下一轮预检不误复用；模块禁用不生成不落盘；命中正文与首次一致（页脚按设计追加缓存标记）。
 
 **遗留（设计使然）**：`self_review` 内容寻址于其余模块产出，任一上游重算即 miss；`health_check` 在当日盈亏或数据源可用集合实际变化时重算。
 

@@ -250,10 +250,14 @@ def diff_fingerprint_components(previous: dict[str, str] | None, current: dict[s
 
 
 def generation_params_suffix(module: str) -> str:
-    """模块级生成参数摘要（温度 / 输出上限 / 思考开关、预算、强度）→ 指纹后缀。
+    """模块级生成参数摘要（温度 / 输出上限 / 思考开关、预算、强度 / 模型 / 精简模式 / 自定义提示词）→ 指纹后缀。
 
     只并入会改变模型输出的参数：``cache`` 等与生成无关的项不参与，避免无谓失效。
     预检侧与写侧都调用同一个模块指纹构造器，故两侧天然同源。
+
+    **后三项只在非默认值时追加**（模型覆写 / 精简模式 / 自定义提示词）：它们都直接
+    改写系统提示词或调用目标，不进键就会在用户改配置后静默复用旧结论；而全为默认时
+    不追加任何 part，使存量缓存键逐字节不变（不因本约束整体失效）。
 
     ``get_llm_config()`` 不可用（无凭据/未初始化）时返回空串——键与引入前一致，
     不因读取失败使存量缓存整体失效。
@@ -263,13 +267,20 @@ def generation_params_suffix(module: str) -> str:
     config = get_llm_config()
     if not config:
         return ""
-    parts = (
+    parts = [
         f"t={config.get(f'temperature_{module}')}",
         f"mt={config.get(f'max_tokens_{module}')}",
         f"th={1 if config.get(f'thinking_enabled_{module}') else 0}",
         f"tb={config.get(f'thinking_budget_{module}')}",
         f"te={config.get(f'reasoning_effort_{module}')}",
-    )
+    ]
+    if config.get(f"model_{module}"):
+        parts.append(f"m={config.get(f'model_{module}')}")
+    if config.get(f"output_brief_{module}"):
+        parts.append("ob=1")
+    _override = config.get(f"system_prompt_{module}")
+    if _override:
+        parts.append("sp=" + compute_fingerprint(_override))
     return "_" + compute_fingerprint(*parts)
 
 
