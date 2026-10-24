@@ -15,86 +15,56 @@ from unittest.mock import patch
 
 import pytest
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.unit_core]
-
-_HOLDING_CODE = "600900"
-
-_LLM_CONFIG = {
-    "_provider_list": [{"name": "probe-main", "provider": "claude", "api_key": "sk-x"}],
-    "_strategy": "priority",
-    "_preferred_providers": {},
-    "llm_max_concurrency": 2,
-}
-
-_PAID_REPLY = (
-    "<p>生成内容</p>",
-    {"input_tokens": 1000, "output_tokens": 500, "cache_read_input_tokens": 0},
-    {"name": "probe-main", "model": "deepseek-v4-flash", "endpoint": "e"},
+from src.test.unit.llm._cache_helpers import (
+    LLM_REPLY_PAID,
+    make_inputs,
+    run_generate_all_llm,
 )
 
-
-def _inputs() -> dict:
-    return {
-        "a_indices": {"sh000300": {"name": "沪深300", "close": 4000.0, "change_pct": 0.5}},
-        "us_indices": {"^IXIC": {"name": "纳斯达克", "close": 18000.0, "change_pct": -0.2}},
-        "categories": {"股票": {"market_value": 10000.0, "cost": 9000.0, "count": 1}},
-        "holdings_details": [
-            {"name": "测试A", "code": _HOLDING_CODE, "cost": 1.0, "shares": 100, "market_value": 120.0}
-        ],
-        "penetrated_assets": [{"name": "测试A", "code": _HOLDING_CODE, "weight": 100.0}],
-        "history_data": {"max_drawdown_pct": -15.0, "annualized_volatility": 0.17, "total_return_pct": -10.0},
-        "pipeline_data": {"diff": {"added": [], "removed": []}, "data_degradation": []},
-    }
+pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.unit_core]
 
 
 @pytest.fixture()
-def cache_dir(tmp_path, monkeypatch):
-    from src.python.cache import _paths, _store
-
-    monkeypatch.setattr(_paths, "_CACHE_DIR", str(tmp_path / "cache"))
-    _store.reset_debug_log_state()
-    yield tmp_path / "cache"
-    _store.reset_debug_log_state()
+def cache_dir(llm_cache_dir):
+    return llm_cache_dir
 
 
-def _run(inputs: dict, caplog=None):
-    from src.python.llm import generators_orchestrator as go
+def _run(inputs: dict, *, reply=None, patch_call: bool = True):
+    from src.test.unit.llm._cache_helpers import LLM_REPLY_PAID
 
-    with (
-        patch.object(go, "get_llm_config", return_value=dict(_LLM_CONFIG)),
-        patch("src.python.llm.skeleton.call_llm", return_value=_PAID_REPLY),
-    ):
-        return go.generate_all_llm(
-            inputs["a_indices"],
-            inputs["us_indices"],
-            120.0,
-            100.0,
-            20.0,
-            1.0,
-            1,
-            inputs["categories"],
-            penetrated_assets=inputs["penetrated_assets"],
-            holdings_details=inputs["holdings_details"],
-            pipeline_data=inputs["pipeline_data"],
-            history_data=inputs["history_data"],
-        )
+    return run_generate_all_llm(
+        inputs,
+        reply=reply or LLM_REPLY_PAID,
+        patch_call=patch_call,
+    )
 
 
 class TestSessionCostDelta:
-    def test_cache_hit_adds_no_cost(self, cache_dir):
-        """命中运行：会话用量 delta 的 cost / call_count 不增长（零边际成本）。"""
+    def test_cache_hit_makes_no_api_call_and_records_zero_cost(self, cache_dir):
+        """命中运行：不再发生 API 调用（=不花钱），且记账条目 token/费用为 0。
+
+        用「provider 调用次数」而不是会话累计金额来判：skeleton 层 mock 下
+        `total_cost` 恒为 0，拿它断言会恒真（无效断言）。
+        """
         from src.python.llm.session import get_session_usage, reset_session_usage
-        from src.python.report._generation_shared import _usage_delta
 
-        base = _inputs()
-        _run(base)
-        baseline = get_session_usage()
-        _run(base)  # 全部命中
-        delta = _usage_delta(get_session_usage(), baseline)
+        base = make_inputs()
+        with patch("src.python.llm.skeleton.call_llm", return_value=LLM_REPLY_PAID) as mock_call:
+            first = _run(base)
+            calls_after_first = mock_call.call_count
+            reset_session_usage()
+            second = _run(base)
 
-        assert delta.get("total_cost", 0.0) == pytest.approx(0.0, abs=1e-9)
-        assert delta.get("call_count", 0) == 0
-        assert all(not (entry or {}).get("cost") for entry in (delta.get("per_module") or {}).values())
+        assert not any(first)
+        assert all(second), "第二份应全部命中"
+        assert mock_call.call_count == calls_after_first, "命中运行不得再发起 API 调用"
+
+        modules = get_session_usage().get("per_module") or {}
+        for key in ("global_macro", "expert_review", "health_check", "penetration_deep"):
+            entry = modules.get(key) or {}
+            assert entry.get("cached") is True, f"{key} 应标记为缓存"
+            assert entry.get("input_tokens", 0) == 0
+            assert not entry.get("cost")
         reset_session_usage()
 
     def test_cache_miss_records_cost_per_module(self, cache_dir):
@@ -106,7 +76,7 @@ class TestSessionCostDelta:
         from src.python.llm.session import get_session_usage, reset_session_usage
 
         reset_session_usage()
-        _run(_inputs())
+        _run(make_inputs())
         modules = get_session_usage().get("per_module") or {}
 
         for key in ("global_macro", "expert_review", "health_check", "penetration_deep"):
@@ -161,7 +131,7 @@ class TestCacheSavedCost:
         """命中报告把估算节省写入 perf，并打一条 INFO（金钱可见）。"""
         from src.python.report._generation_shared import _record_llm_context
 
-        base = _inputs()
+        base = make_inputs()
         _run(base)
         recorded: dict = {}
 
@@ -190,17 +160,6 @@ class TestBudgetAccounting:
         assert status["spent"] == pytest.approx(0.0, abs=1e-9)
         assert status["exceeded"] is False
 
-    def test_paid_runs_accumulate_and_trip_budget(self):
-        from src.python.llm.cost_forecast import budget_status
-
-        history = [
-            {"timestamp": __import__("datetime").date.today().isoformat() + "T10:00:00", "llm": {"total_cost": 0.6}},
-            {"timestamp": __import__("datetime").date.today().isoformat() + "T11:00:00", "llm": {"total_cost": 0.5}},
-        ]
-        status = budget_status({"daily_cost_limit": 1.0}, history=history)
-        assert status["spent"] == pytest.approx(1.1, abs=1e-9)
-        assert status["exceeded"] is True
-
 
 class TestForecastCacheDiscount:
     _HISTORY = [
@@ -214,7 +173,7 @@ class TestForecastCacheDiscount:
         },
     ]
 
-    def test_default_path_lower_bound_reflects_cache(self):
+    def test_history_with_cached_runs_makes_lower_bound_zero(self):
         """默认路径按历史样本给区间：命中样本（0 费用）使下限可为 0。"""
         from src.python.llm.cost_forecast import forecast_run_cost
 

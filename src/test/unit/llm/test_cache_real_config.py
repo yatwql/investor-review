@@ -18,26 +18,24 @@
 from __future__ import annotations
 
 import json
-from contextlib import nullcontext as _nullcontext
 from pathlib import Path
 from threading import Thread
 from unittest.mock import patch
 
 import pytest
 
+from src.test.unit.llm._cache_helpers import (
+    LLM_REPLY_DEFAULT,
+    MODULE_INDEX,
+    make_inputs,
+    run_generate_all_llm,
+)
+
 # `unit_core` 横切标记：缓存命中契约属核心基础设施行为，需随 P0 `dev-verify` 跑
 # （该档选择面不含 `unit_llm`，只标 llm 域会让这批回归只在 P1 才执行）。
 pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.unit_core]
 
-_HOLDING_CODE = "600900"
-
-_IDX_LOCAL = {"global_macro": 0, "expert_review": 1, "health_check": 2, "penetration_deep": 3}
-
-_LLM_REPLY = (
-    "<p>生成内容</p>",
-    {"input_tokens": 100, "output_tokens": 50, "cache_read_input_tokens": 0},
-    {"name": "probe-main", "model": "m", "endpoint": "e"},
-)
+_IDX_LOCAL = MODULE_INDEX
 
 _SETTINGS_V2 = {
     "schema_version": 2,
@@ -107,32 +105,6 @@ def real_config(tmp_path, monkeypatch):
     cfg.invalidate_llm_config_cache()
 
 
-@pytest.fixture()
-def cache_dir(tmp_path, monkeypatch):
-    from src.python.cache import _paths, _store
-
-    monkeypatch.setattr(_paths, "_CACHE_DIR", str(tmp_path / "cache"))
-    # 命中/未命中的「每进程每 key 首见一次」日志去重是模块级状态：不复位会让
-    # 后跑的用例看不到自己的命中日志（用例间互相遮蔽）。
-    _store.reset_debug_log_state()
-    yield tmp_path / "cache"
-    _store.reset_debug_log_state()
-
-
-def _inputs() -> dict:
-    return {
-        "a_indices": {"sh000300": {"name": "沪深300", "close": 4000.0, "change_pct": 0.5}},
-        "us_indices": {"^IXIC": {"name": "纳斯达克", "close": 18000.0, "change_pct": -0.2}},
-        "categories": {"股票": {"market_value": 10000.0, "cost": 9000.0, "count": 1}},
-        "holdings_details": [
-            {"name": "测试A", "code": _HOLDING_CODE, "cost": 1.0, "shares": 100, "market_value": 120.0}
-        ],
-        "penetrated_assets": [{"name": "测试A", "code": _HOLDING_CODE, "weight": 100.0}],
-        "history_data": {"max_drawdown_pct": -15.0, "annualized_volatility": 0.17, "return_pct": -10.0},
-        "pipeline_data": {"diff": {"added": [], "removed": []}, "data_degradation": []},
-    }
-
-
 def _run(
     inputs: dict,
     reply=None,
@@ -140,50 +112,32 @@ def _run(
     *,
     patch_call: bool = True,
 ) -> tuple[bool, bool, bool, bool]:
-    """真实配置下的完整编排（仅网络调用被 mock；`error` 用于模拟调用失败）。
+    """真实配置链路的编排调用：只 mock 网络层，配置从磁盘文件加载。
 
-    `patch_call=False` 供**并发**用例：多线程各自 `with patch(...)` 同一目标时，
-    `unittest.mock` 的保存/恢复会交错（一个线程把另一个线程的 Mock 当成原值恢复），
-    结果是 `call_llm` 永久留在 Mock 上、污染后续用例。并发场景应在外部打一次 patch。
+    `patch_call=False` 供并发用例在外部单点 patch（多线程各自 patch 同一目标会让
+    mock 的保存/恢复交错，`call_llm` 会永久留在 Mock 上）。
     """
-    from src.python.llm import generators_orchestrator as go
-
-    call_patch = (
-        patch("src.python.llm.skeleton.call_llm", side_effect=error)
-        if error is not None
-        else patch("src.python.llm.skeleton.call_llm", return_value=reply or _LLM_REPLY)
+    return run_generate_all_llm(
+        inputs,
+        reply=reply,
+        error=error,
+        patch_config=False,
+        patch_call=patch_call,
     )
-    ctx = call_patch if patch_call else _nullcontext()
-    with ctx:
-        out = go.generate_all_llm(
-            inputs["a_indices"],
-            inputs["us_indices"],
-            120.0,
-            100.0,
-            20.0,
-            1.0,
-            1,
-            inputs["categories"],
-            penetrated_assets=inputs["penetrated_assets"],
-            holdings_details=inputs["holdings_details"],
-            pipeline_data=inputs["pipeline_data"],
-            history_data=inputs["history_data"],
-        )
-    return out[4:8]  # type: ignore[return-value]
 
 
-def _cache_files(cache_dir: Path) -> list[Path]:
-    return sorted(cache_dir.glob("*.json*")) if cache_dir.exists() else []
+def _cache_files(llm_cache_dir: Path) -> list[Path]:
+    return sorted(llm_cache_dir.glob("*.json*")) if llm_cache_dir.exists() else []
 
 
 class TestRealConfigChain:
-    def test_second_report_hits_with_real_settings_files(self, real_config, cache_dir):
+    def test_second_report_hits_with_real_settings_files(self, real_config, llm_cache_dir):
         """真实 v2 嵌套配置 + 多链 → 第二份预检 4/4 命中。"""
-        base = _inputs()
+        base = make_inputs()
         assert not any(_run(base)), "首份不应命中"
         assert all(_run(base)), "第二份应全部命中"
 
-    def test_disk_key_matches_precheck_key_plus_version(self, real_config, cache_dir, caplog):
+    def test_disk_key_matches_precheck_key_plus_version(self, real_config, llm_cache_dir, caplog):
         """端到端同源：预检实际使用的键 + 缓存键版本 = 磁盘上的文件名。
 
         交叉比对两个独立来源（预检命中日志 vs 缓存目录文件名）：预检或写侧任何一侧
@@ -193,17 +147,17 @@ class TestRealConfigChain:
 
         from src.python.cache._paths import _CACHE_KEY_VERSION
 
-        base = _inputs()
+        base = make_inputs()
         _run(base)
         with caplog.at_level(logging.DEBUG, logger="invest"):
             _run(base)
         hit_keys = [r.args[0] for r in caplog.records if r.getMessage().startswith("缓存命中:") and r.args]
-        names = [p.name for p in _cache_files(cache_dir)]
+        names = [p.name for p in _cache_files(llm_cache_dir)]
         assert hit_keys, "第二份报告应产生缓存命中日志"
         for key in hit_keys:
             assert f"{key}_{_CACHE_KEY_VERSION}.json" in names, f"预检键 {key} 无对应磁盘文件：{names}"
 
-    def test_single_provider_key_has_no_suffix_and_still_hits(self, real_config, cache_dir):
+    def test_single_provider_key_has_no_suffix_and_still_hits(self, real_config, llm_cache_dir):
         """单 Provider 配置（无 llm_providers.json）：键不加后缀，升级后旧缓存仍命中。"""
         from src.python import config as cfg
         from src.python.config import _core
@@ -212,38 +166,38 @@ class TestRealConfigChain:
         _core._clear_config_cache()
         cfg.invalidate_llm_config_cache()
 
-        base = _inputs()
+        base = make_inputs()
         _run(base)
-        names = [p.name for p in _cache_files(cache_dir)]
+        names = [p.name for p in _cache_files(llm_cache_dir)]
         assert any("_probe-main" not in n and "llm_global_macro" in n for n in names), names
         assert all(_run(base)), "单 Provider 第二份应命中"
 
 
 class TestCacheFileRobustness:
-    def test_corrupt_cache_is_miss_not_crash(self, real_config, cache_dir):
-        base = _inputs()
+    def test_corrupt_cache_is_miss_not_crash(self, real_config, llm_cache_dir):
+        base = make_inputs()
         _run(base)
-        victim = next(p for p in _cache_files(cache_dir) if "llm_global_macro" in p.name)
+        victim = next(p for p in _cache_files(llm_cache_dir) if "llm_global_macro" in p.name)
         victim.write_text("{ this is not json", encoding="utf-8")
         flags = _run(base)
         assert flags[0] is False, "损坏缓存必须按未命中处理"
         assert victim.exists(), "重新生成后应重写该缓存"
         assert json.loads(victim.read_text(encoding="utf-8")), "重写内容应可解析"
 
-    def test_large_content_uses_gzip_and_still_hits(self, real_config, cache_dir):
+    def test_large_content_uses_gzip_and_still_hits(self, real_config, llm_cache_dir):
         """超过压缩阈值的内容走 `.json.gz`，第二份仍命中（压缩路径同契约）。"""
         big = "<p>" + ("长内容" * 20000) + "</p>"
-        base = _inputs()
-        _run(base, reply=(big, {"input_tokens": 1, "output_tokens": 1}, _LLM_REPLY[2]))
-        names = [p.name for p in _cache_files(cache_dir)]
+        base = make_inputs()
+        _run(base, reply=(big, {"input_tokens": 1, "output_tokens": 1}, LLM_REPLY_DEFAULT[2]))
+        names = [p.name for p in _cache_files(llm_cache_dir)]
         assert any(n.endswith(".json.gz") for n in names), names
         assert all(_run(base)), "gzip 缓存第二份应命中"
 
-    def test_failed_call_does_not_cache(self, real_config, cache_dir):
+    def test_failed_call_does_not_cache(self, real_config, llm_cache_dir):
         """LLM 调用失败 → 不落缓存，下次仍重试。"""
-        base = _inputs()
+        base = make_inputs()
         _run(base, error=RuntimeError("boom"))
-        failed_names = [p.name for p in _cache_files(cache_dir) if "llm_global_macro" in p.name]
+        failed_names = [p.name for p in _cache_files(llm_cache_dir) if "llm_global_macro" in p.name]
         assert failed_names == [], f"失败结果不得入缓存：{failed_names}"
         # 失败后重跑：先正常生成（未命中），再下一份才命中——失败不留毒缓存
         assert not any(_run(base)), "失败后首次重跑必须真实调用而非命中"
@@ -251,9 +205,9 @@ class TestCacheFileRobustness:
 
 
 class TestConcurrency:
-    def test_two_threads_same_inputs(self, real_config, cache_dir):
+    def test_two_threads_same_inputs(self, real_config, llm_cache_dir):
         """并发两份报告：不抛异常，缓存可读（原子写不得产生半写文件）。"""
-        base = _inputs()
+        base = make_inputs()
         errors: list[BaseException] = []
 
         def _worker() -> None:
@@ -264,7 +218,7 @@ class TestConcurrency:
 
         threads = [Thread(target=_worker) for _ in range(2)]
         # 单点 patch（主线程）：多线程各自 patch 同一目标会让 mock 的保存/恢复交错
-        with patch("src.python.llm.skeleton.call_llm", return_value=_LLM_REPLY):
+        with patch("src.python.llm.skeleton.call_llm", return_value=LLM_REPLY_DEFAULT):
             for t in threads:
                 t.start()
             for t in threads:
@@ -275,7 +229,7 @@ class TestConcurrency:
 
 
 class TestFailoverWriteThrough:
-    def test_write_key_follows_actual_provider(self, real_config, cache_dir):
+    def test_write_key_follows_actual_provider(self, real_config, llm_cache_dir):
         """主 provider 失败、备 provider 成功 → 落盘键带**实际** provider 名。
 
         下一轮预检按首选 provider 读不到（乐观预检键不同）→ 会重新调用，这是
@@ -283,20 +237,20 @@ class TestFailoverWriteThrough:
         """
         from src.python.cache._paths import _CACHE_KEY_VERSION
 
-        base = _inputs()
+        base = make_inputs()
         reply_backup = (
             "<p>备链产出</p>",
             {"input_tokens": 100, "output_tokens": 50, "cache_read_input_tokens": 0},
             {"name": "probe-backup", "model": "probe-model", "endpoint": "https://example.invalid"},
         )
         _run(base, reply=reply_backup)
-        names = [p.name for p in _cache_files(cache_dir)]
+        names = [p.name for p in _cache_files(llm_cache_dir)]
         assert any(n.endswith(f"_probe-backup_{_CACHE_KEY_VERSION}.json") for n in names), names
         assert not any(n.endswith(f"_probe-main_{_CACHE_KEY_VERSION}.json") for n in names), names
 
 
 class TestModuleEnableToggle:
-    def test_disabled_module_is_not_generated_or_cached(self, real_config, cache_dir):
+    def test_disabled_module_is_not_generated_or_cached(self, real_config, llm_cache_dir):
         """`enabled_llm.x=false` → 该模块不生成、不落盘。"""
         from src.python import config as cfg
         from src.python.config import _core
@@ -307,19 +261,19 @@ class TestModuleEnableToggle:
         _core._clear_config_cache()
         cfg.invalidate_llm_config_cache()
 
-        flags = _run(_inputs())
+        flags = _run(make_inputs())
         assert flags[_IDX_LOCAL["penetration_deep"]] is False
-        names = [p.name for p in _cache_files(cache_dir)]
+        names = [p.name for p in _cache_files(llm_cache_dir)]
         assert not any("llm_penetration_deep" in n for n in names), names
 
 
 class TestHitContentConsistency:
-    def test_second_report_returns_same_content(self, real_config, cache_dir):
+    def test_second_report_returns_same_content(self, real_config, llm_cache_dir):
         """命中缓存返回的内容与首次生成逐字节一致（除页脚时间信息相同）。"""
         from src.python.llm import generators_orchestrator as go
 
-        base = _inputs()
-        with patch("src.python.llm.skeleton.call_llm", return_value=_LLM_REPLY):
+        base = make_inputs()
+        with patch("src.python.llm.skeleton.call_llm", return_value=LLM_REPLY_DEFAULT):
             first = go.generate_all_llm(
                 base["a_indices"],
                 base["us_indices"],

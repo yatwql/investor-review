@@ -53,8 +53,8 @@ class TestTTLBoundary:
         time.sleep(0.01)
         assert cache_get("k_boundary", 0.001) is None
 
-    def test_expired_entry_is_replaced_not_deleted_silently(self, cache_env):
-        """过期后重新写入：新值可读，且 `_ts` 已刷新（不是靠删除才可用）。"""
+    def test_rewrite_after_expiry_serves_new_value(self, cache_env):
+        """过期后重新写入 → 读到新值（`_ts` 已刷新，不依赖清理动作）。"""
         from src.python.cache import get as cache_get
         from src.python.cache import set as cache_set
 
@@ -85,7 +85,12 @@ class TestCompressionRoundtrip:
 
 
 class TestCorruptionHandling:
-    def test_corrupt_json_is_miss_not_crash(self, cache_env):
+    def test_corrupt_json_is_miss_at_public_api(self, cache_env):
+        """store 层（`cache.get`）面对损坏载荷按未命中处理，不抛异常。
+
+        与 `test_cache_io` 的「IO 层删除损坏文件」分工不同：这里锁的是公开 API
+        的降级语义（LLM 预检等调用方只应有 miss，不应见到异常）。
+        """
         from src.python.cache import get as cache_get
 
         path = _cache_file(cache_env, "k_corrupt")
