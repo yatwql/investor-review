@@ -38,28 +38,22 @@
 
 #### `plan-185` 收益率指标缺口径标签，模型反复写错
 
-**现状**：口径标签已落地（`llm/rate_caliber.py` 唯一声明点，并入 `PROMPT_SCHEMA_VERSION` 指纹），**余验收**——事实校验只把数值改对，句意与修饰语仍可能挂错口径。最近两轮 `fact_fix_total` 为 5 / 4，未达到连续 ≤3。
+**现状**：口径标签已落地（`llm/rate_caliber.py` 唯一声明点，并入 `PROMPT_SCHEMA_VERSION` 指纹），**余验收**——事实校验只把数值改对，句意与修饰语仍可能挂错口径。当前 `fact_fix_total` 为 5 / 4，未达到连续 ≤3。
 **验收**：`perf_history.counters.fact_fix_total` 连续若干轮稳定 ≤3 处即归档。
 
 #### `plan-210` 报告重复运行耗时优化（LLM / 新闻）
 
-**现状**：完整报告（LLM 开启）约 140–153s，其中智囊团深度复盘 71–75s、新闻获取 19–23s；无 LLM 基线约 44–52s。专家复盘每轮重算。
+**当前状态**：完整报告（LLM 开启）约 140–153s，其中专家复盘 71–75s、新闻获取 19–23s；无 LLM 基线约 44–52s。新闻缓存保持 900s，专家/健康指纹含市值/盈亏字段，行情变化即失效，不做跨报告复用；新闻去重 `quick_ratio`、事件窗 bars/index 同批 memo 已落地。
 
-**约束**：新闻缓存保持 900s（15 分钟），不延长；专家复盘/健康检查指纹含 `total_mv` / `total_profit` / `total_today_profit`，行情变化即失效，不做跨报告复用。优化只限同一次运行内复用、新闻去重算法与专家 thinking 预算评测，不牺牲新闻/行情时效。
-
-**最近检查**：完整报告 53.2s，`LLM+新闻` 33.7s，但本次 LLM 实际调用为空（模块未启用），专家复盘/缓存验收不成立；新闻去重 11.9s。事件窗 bars/index 已加同批 memo，`event_window_impact` 开启时需复测装配耗时。
+**当前验证**：53.2s 报告未实际调用 LLM，无法验收缓存/专家耗时；需在 LLM 开启下复测两次同条件报告。
 
 **验收**：连续两次同条件报告的第二次 `LLM+新闻` 耗时下降 ≥50%，或专家复盘命中应用缓存；报告内容与首次一致（除生成时间）；补缓存键失效/命中的回归用例。
 
 #### `plan-211` 数据源降级与告警分级（行业资金流向 / hithink / K 线）——进行中
 
-**现状**：行业资金流向仍失败；东方财富 push2 行业接口每轮多代码断连；K 线与 hithink 告警已收敛。熔断与备用链路生效，但报告可能缺数据、日志仍有同源噪声。
+**当前状态**：K 线风控页逐代码日志使用 DEBUG，源失败仍计入 registry、熔断汇总保留 WARNING；hithink 过滤场内 ETF 的 A 股价格/历史槽，并归一错误交易所后缀；行业资金流向暴露公开失败状态访问器，报告层经 `mark_data_unavailable` 写入 DegradationTracker，数据源矩阵显示不可用；`fetcher` / `cache` 统一经公开访问器读取状态。当前 `warnings_count=16`（东方财富 push2 11、熔断汇总 6、行业资金流向 2），`Unknown thscode=0`；push2 单代码日志已降 DEBUG、批量失败聚合一条 WARNING，待复测。
 
-**当前状态**：K 线风控页逐代码日志使用 DEBUG，源失败仍计入 registry、熔断汇总保留 WARNING；hithink 过滤场内 ETF 的 A 股价格/历史槽，并归一错误交易所后缀；行业资金流向暴露公开失败状态访问器，报告层经 `mark_data_unavailable` 写入 DegradationTracker，数据源矩阵显示不可用；`fetcher` / `cache` 统一经公开访问器读取状态。
-
-**最近真实报告**：`warnings_count=16`（日志 19 条 WARNING：东方财富 push2 11、熔断汇总 6、行业资金流向 2），`Unknown thscode=0`；目标 ≤10 尚未达到，主要噪声来自东方财富 push2。
-
-**剩余**：东方财富 push2 单代码日志已降 DEBUG、批量失败聚合一条 WARNING，待同条件复测；行业资金流向备用源或缓存方案（当前先保证状态可见）；复测 `warnings_count` 与 `Unknown thscode`。
+**剩余**：同条件复测 `warnings_count` 与 `Unknown thscode`；行业资金流向备用源或缓存方案（当前先保证状态可见）。
 
 **不做**：不伪造数据、不把外部源失败静默当成功；不扩大年报/财报抓取范围。
 
