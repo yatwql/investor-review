@@ -1,8 +1,8 @@
-"""配置编辑共享层 — Web / TUI 唯一编辑通道（白名单 + 校验 + 写入 + 备份）。
+"""配置编辑共享层 — TUI / Web / CLI 唯一编辑通道（白名单 + 校验 + 写入 + 备份）。
 
 - ``config_edit_whitelist``：可编辑配置项白名单（点分键 → 类型/选项 → 目标文件 → 写入原语）。
   唯一事实来源；``set_config`` 不做值校验，任何渠道必须经本模块的白名单 + 值校验。
-- ``apply_config_edit``：应用单次编辑（Web POST / TUI 菜单共用），按目标文件分派写入，
+- ``apply_config_edit``：应用单次编辑（Web POST / TUI 菜单 / CLI ``config set`` 共用），按目标文件分派写入，
   写前对目标共享文件做单槽 .bak 备份。
 - ``config_backup_file``：写共享配置文件前的单槽 .bak 备份（copy_file_atomic 原子复制）。
 
@@ -10,7 +10,7 @@
   config.json 顶层标量 → ``set_config``；嵌套 dict（comparison_indices）读合并后整块写；
   anonymization → ``set_anonymization_mode``；llm_settings.json → ``write_llm_settings``；
   features.json → ``save_feature_overrides``（清单由 ``features.feature_switch_registry``
-  驱动，与 TUI 菜单 S / Web 开关面板同源）。
+  驱动，与 TUI 菜单 S / Web 开关面板 / CLI 同源）。
 
 校验规则集中于此（holdings_filename 禁路径分隔符、对比指数代码长度/字符/重复、
 类型/枚举/action 合法性），两渠道强度一致——禁止在渠道层另行实现同名规则。
@@ -476,7 +476,7 @@ def _apply_llm_provider_action(payload: dict, entry: dict) -> dict:
 
 
 def apply_config_edit(payload: dict) -> dict:
-    """应用单次配置编辑（Web POST / TUI 菜单共用入口）。
+    """应用单次配置编辑（Web POST / TUI 菜单 / CLI ``config set`` 共用入口）。
 
     按白名单校验键与值，写前对目标共享文件做单槽 .bak 备份，随后按
     目标文件分派写入原语。

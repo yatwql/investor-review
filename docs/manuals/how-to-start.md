@@ -73,7 +73,7 @@ pip install -r requirements.txt
 > 包装脚本 `scripts/cli.sh`（Windows `cli.ps1`）可省掉解释器前缀，例如 `./scripts/cli.sh report --type both`。
 > 报告类型差异：`basic` 核心 Excel 页签 / `both` Excel+HTML 含新闻与基金深度 / `full` 再加 LLM 章节；历史走势默认按配置自动获取（`--history off` 可跳过本次）。
 >
-> **完整命令参考**（全局参数、`cache` / `whatif` / `check-sources` / `view-logs` / `doctor` 子命令、退出码、定时任务、完成通知）见 **[CLI 命令行模式使用指南](how-to-use-cli-mode.md)**。
+> **完整命令参考**（全局参数、`cache` / `whatif` / `config` / `check-sources` / `view-logs` / `doctor` 子命令、退出码、定时任务、完成通知）见 **[CLI 命令行模式使用指南](how-to-use-cli-mode.md)**。
 
 ## 方式四：Web 浏览器模式
 

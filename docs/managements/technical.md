@@ -373,7 +373,7 @@ section_visible = board_enabled(section.type) AND data_available(section.data_fl
 | 维度 | TUI | CLI | Web |
 |:-----|:----|:----|:----|
 | 参数传递 | 菜单交互逐步选择 | argparse 参数 + `--type basic/both/full` | 前端表单提交（报告格式下拉 + 获取历史走势/强制 LLM 复选 + 强制模块多选） |
-| 配置编辑 | 主菜单改项即写即存（写前 .bak） | 无（编辑 config.json 或走 TUI/Web） | 配置编辑面板（§1.8.11 白名单 9 组）即改即存 + 写前 .bak + 同源守卫 |
+| 配置编辑 | 主菜单改项即写即存（写前 .bak） | `config set` 持久化（同一白名单/校验/.bak）；`--chapter` / `--anonymize` 仅本次运行 | 配置编辑面板（§1.8.11 白名单 9 组）即改即存 + 写前 .bak + 同源守卫 |
 | 进度传输 | 终端区实时刷新 | stdout/stderr 文本 | 事件缓冲 seq 增量轮询（`/api/runs/{id}/events`） |
 | 并发模型 | 单线程同步 | 单线程同步 | 单 worker 串行队列（HTTP 线程提交、worker 线程执行） |
 | 产物输出 | `output_dir` 最新版 + `YYYYMMDD/` 归档 | 同左 | 同左；产物定位基于 run 快照 output_dir，`/api/reports` 预览/下载 |
@@ -573,7 +573,7 @@ Web 渠道是第三种交互入口：**浏览器内完成「上传持仓 Excel �
 | `web/handlers.py` | API 路由 | 页面/上传/生成/轮询/预览/下载/历史/健康/日志/缓存统计与清理/What-if/报告追问/配置编辑；`_run_generation` 薄包装器（委托 `_run_generation_impl` + `result_box` 回传产物标志，收尾经 `_notify_web_completion` 按 `notify` 配置门控派发完成通知——Web 手动 + 内置定时调度共用，与 CLI 同构尽力而为不改退出码）；`_build_system_info` 委托 `core/system_info.build_system_info` 单源组装状态区系统信息（版本/本机 IP/持仓输出摘要/LLM 含多链/自检卡片可见性，与 TUI 同组展示原语）；`_handle_logs`/`_handle_health_history` 薄展示（委托 `core/log_reader.py` + `core/perf.py`，无解析逻辑）；`_handle_doctor` 薄展示（委托 `core/doctor.py`）；`_handle_config_edit` 同源守卫（`_is_same_origin`）；`_build_artifacts` 委托 `orchestrator.artifacts_for_report_type` 类型语义与 `core/constants` 最新产物名（不镜像 CLI --type 规则与文件名字面量）；空持仓门经 `core/reader.require_holdings` 单源（HTTP 端不带服务端路径） |
 | `web/run_generation.py` | Web 生成执行体 | `_run_generation` 薄入口（委托 `_run_generation_impl` + `result_box` 回传产物标志，收尾经 `_notify_web_completion` 按 `notify` 配置门控派发完成通知——Web 手动 + 内置定时调度共用，与 CLI 同构尽力而为不改退出码）；`_run_generation_impl` 读持仓/输入模式分派（试算→`web/` 隔离域、正式→共享主目录）/LLM 日预算硬闸/`generate_report` 调用/退出码映射/上传临时文件清理；`_build_artifacts` 委托 `orchestrator.artifacts_for_report_type` 类型语义与 `core/constants` 最新产物名；`_web_input_mode_snapshot_domain` 模式↔隔离域唯一事实来源 |
 | `web/upload.py` | 上传安全 | 服务端 uuid 重命名、扩展名白名单、大小上限、PK 魔数、原子落盘、TTL 清理 |
-| `web/config_edit.py` | 配置编辑 | 薄外观：再导出共享层 `config/edit_ops.py` 符号（`apply_config_edit`/`config_edit_whitelist`/`config_backup_file`）+ `get_config_edit_surface` 组装呈现面：`domains`（五域 → 块清单，块 id 含 `features.<组键>`）、`labels`/`descriptions`/`defaults`/`needs_hint` 元数据（全部由注册表与共享白名单派生，前端零中文表）、`logging`（六项含枚举/范围）、`reference`（只读计价参考）；规则与写入单源在共享层，与 TUI 同一函数 |
+| `web/config_edit.py` | 配置编辑 | 薄外观：再导出共享层 `config/edit_ops.py` 符号（`apply_config_edit`/`config_edit_whitelist`/`config_backup_file`）+ `get_config_edit_surface` 组装呈现面：`domains`（五域 → 块清单，块 id 含 `features.<组键>`）、`labels`/`descriptions`/`defaults`/`needs_hint` 元数据（全部由注册表与共享白名单派生，前端零中文表）、`logging`（六项含枚举/范围）、`reference`（只读计价参考）；规则与写入单源在共享层，与 TUI/CLI 同一函数 |
 | `web/runs.py` | 运行管理 | RunManager 单 worker 串行队列 + run 状态/事件注册表（Lock 保护） |
 | `web/progress.py` | 进度报告 | WebProgressReporter（ProgressReporter 子类 → RunState 事件缓冲） |
 | `src/static/web/` | 前端单页 | 原生 ES6 无框架、上传表单/进度事件/状态区/历史记录/配置编辑面板 |
@@ -693,12 +693,12 @@ Web 渠道是第三种交互入口：**浏览器内完成「上传持仓 Excel �
 | 启动防护 | 无 | 端口检测 + output_dir 写锁 |
 | 生命周期 | 会话 / 单次 | 常驻服务 |
 
-#### 1.8.11 Web 配置编辑（完整镜像 TUI 可编辑全集）
+#### 1.8.11 配置编辑（TUI / Web / CLI 同一编辑层）
 
-配置编辑的职责边界：**「能改什么」由白名单唯一确定，「怎么改」由共享编辑层单源执行**（含日志设置六项 `logging.*` → `write_logger_config`，与 TUI `[D]→[L]` 面板同一批键与同一校验）——Web `POST /api/config/edit` 与 TUI 配置面板（`_apply_edit` 外壳）同走 `config/edit_ops.py::apply_config_edit`，两渠道同一函数、同一强度；不引入任何白名单之外的新配置项。核心实现 `config/edit_ops.py`（`web/config_edit.py` 仅保留 `get_config_edit_surface` 呈现面组装）：
+配置编辑的职责边界：**「能改什么」由白名单唯一确定，「怎么改」由共享编辑层单源执行**（含日志设置六项 `logging.*` → `write_logger_config`，与 TUI `[D]→[L]` 面板同一批键与同一校验）——Web `POST /api/config/edit`、TUI 配置面板（`_apply_edit` 外壳）与 CLI `config set` 同走 `config/edit_ops.py::apply_config_edit`，三渠道同一函数、同一强度；不引入任何白名单之外的新配置项。CLI 的动作型键（`comparison_indices` / `llm_providers.priority`）与密钥文件不在 `config set` 入口内（前者指向 TUI/Web 或 `--llm-provider-order`，后者按手册维护）；`scheduler.*` 走 `apply_scheduler_block` 单写入原语（校验在 `config/_scheduler.py`，Web 面板与 CLI 共用）。核心实现 `config/edit_ops.py`（`web/config_edit.py` 仅保留 `get_config_edit_surface` 呈现面组装）：
 
-- **白名单 `config_edit_whitelist`**（定义于 `config/edit_ops.py`，小写模块级 dict，唯一事实来源）：点分键 → `{"kind", "target", "writer"}`。`kind` 取 `str`/`bool`/`enum`/`action`；`target` 取 `config`/`llm_settings`/`features`（落盘目标文件）；`writer` 取 `scalar`/`anonymization`/`llm`/`llm_scalar`/`llm_providers`/`features`/`comparison_indices`（写入分派器）。全集 8 组 51 条键（前端把「功能开关」组按 surface 下发的 `groups` 渲染成四块，故界面共 11 块）：自由文本路径 3（holdings_dir / holdings_filename / output_dir）、报告章节开关 5、匿名化 1 键 4 档、对比指数池 1 键（增/删/重置默认）、LLM 多链线路优先级 1（llm_providers）、LLM 调优参数 6（`LLM_TUNING_SPECS`：thinking 并发 / 模块并发 / 重试 / 整链重试等待 / 总时间预算 / 日费用上限）、LLM 分析章节开关 7（enabled_llm，键域=注册表 LLM 模块全集）、功能开关 27（features.json 全注册表：呈现与体验 1 + 分析增强 16 + 独立章节与回放 5 + 机制与诊断 5；分组、默认值与显示名同源，面板显示名与「影响报告」标记由 surface 下发，前端不写字典）。
-- **写入分派（共享层 `_dispatch_write` 单点，两渠道无各自实现）**：config.json 顶层标量 → `set_config`（`_PATH_CONFIG_KEYS` 路径键自动反绝对化）；嵌套 dict（comparison_indices）→ 读合并后 `set_config` 整块写；`anonymization.mode` → `set_anonymization_mode`；`enabled_llm.*` → 共享 `write_llm_settings`（`config/_llm_settings.py` 公开原语，自 `tui/handlers_config.py` 抽取，TUI 改委托、行为零变化；保留注释 + mkstemp + `os.replace` 原子写 + `get_llm_config()` 缓存刷新）；功能开关全注册表（含独立整章与关联产物）→ `save_feature_overrides`（features.json）。`[C]` 四块来源不同但写路径同源——顶层 `config`、LLM `llm_settings`、整章/关联产物 `features`，目标键由 `chapter_registry.chapter_edit_key()` 派生。
+- **白名单 `config_edit_whitelist`**（定义于 `config/edit_ops.py`，小写模块级 dict，唯一事实来源）：点分键 → `{"kind", "target", "writer"}`。`kind` 取 `str`/`bool`/`enum`/`action`；`target` 取 `config`/`llm_settings`/`features`/`llm_providers`/`logging`（落盘目标文件）；`writer` 取 `scalar`/`anonymization`/`llm`/`llm_scalar`/`llm_providers`/`features`/`comparison_indices`/`logging`（写入分派器）。全集 9 组 56 条键（前端把「功能开关」组按 surface 下发的 `groups` 渲染成四块，故界面共 11 块）：自由文本路径 3（holdings_dir / holdings_filename / output_dir）、报告章节开关 5、匿名化 1 键 4 档、对比指数池 1 键（增/删/重置默认）、LLM 多链线路优先级 1（llm_providers）、LLM 调优参数 6（`LLM_TUNING_SPECS`：thinking 并发 / 模块并发 / 重试 / 整链重试等待 / 总时间预算 / 日费用上限）、LLM 分析章节开关 7（enabled_llm，键域=注册表 LLM 模块全集）、功能开关 26（features.json 全注册表：呈现与体验 1 + 分析增强 16 + 独立章节与回放 5 + 机制与诊断 4；分组、默认值与显示名同源，面板显示名与「影响报告」标记由 surface 下发，前端不写字典）、日志设置 6（`logging.*`）。`scheduler.*` 四字段不在白名单内，走独立写入原语 `apply_scheduler_block`（校验在 `config/_scheduler.py`）。
+- **写入分派（共享层 `_dispatch_write` 单点，三渠道无各自实现）**：config.json 顶层标量 → `set_config`（`_PATH_CONFIG_KEYS` 路径键自动反绝对化）；嵌套 dict（comparison_indices）→ 读合并后 `set_config` 整块写；`anonymization.mode` → `set_anonymization_mode`；`enabled_llm.*` → 共享 `write_llm_settings`（`config/_llm_settings.py` 公开原语，自 `tui/handlers_config.py` 抽取，TUI 改委托、行为零变化；保留注释 + mkstemp + `os.replace` 原子写 + `get_llm_config()` 缓存刷新）；功能开关全注册表（含独立整章与关联产物）→ `save_feature_overrides`（features.json）。`[C]` 四块来源不同但写路径同源——顶层 `config`、LLM `llm_settings`、整章/关联产物 `features`，目标键由 `chapter_registry.chapter_edit_key()` 派生。
 - **类型/枚举校验（共享层 `_apply_plain_value`/`_apply_comparison_action`，Web 400 / TUI 黄色提示行同一规则）**：`set_config` 不做值类型/模式验证，规则集中在共享编辑层——kind=str 须非空字符串（trim 后判空），`holdings_filename` 额外拒绝路径分隔符（防破坏文件定位）；kind=bool 仅接受 `True`/`False`（`1`/`"true"`/`0.0` 等一律拒绝）；kind=enum 严格匹配合法枚举值（大小写/空白/非字符串拒绝）；对比指数池 code 非空且长度 ≥3、拒绝路径分隔符（防 `../` 穿越）、拒绝重复入池，name 非空。校验失败 Web 统一 400 BAD_PARAM（服务端中文文案）。
 - **写前备份 `config_backup_file`**：写目标文件前单槽 `.bak` 备份（`core/atomic_write.copy_file_atomic` 原子复制），原文件不存在时返回 None（不备份）；单槽轮转——第二次写覆盖上一版 `.bak`，供手动还原（`.bak` 改回原名）。
 - **同源守卫**：`_handle_config_edit` POST 复用 `_is_same_origin()`（Sec-Fetch-Site + Origin 校验，同源或非浏览器放行）——Web 无内建认证/无 CSRF token，副作用写操作以此兜底跨站写请求，失败 403。
@@ -3491,8 +3491,8 @@ make_http_client(timeout=10.0) → httpx.Client
 | `use_existing` | 直接用正式持仓文件 | Web 输入 | 输入隔离 | 无（run 级参数） |
 | `holdings_update` | 正式持仓更新（备份 + 提升） | Web 输入 | 输入隔离 | 无 |
 | `config_edit` | Web 配置编辑外观（再导出共享编辑层符号 + `get_config_edit_surface` 呈现面） | Web 配置 | 配置编辑 | 无（功能面） |
-| `config_edit_whitelist` | 可编辑配置项白名单（键→类型/枚举→目标文件→写入原语；定义于共享编辑层，Web/TUI 同源） | 配置管理 | 配置编辑 | 无（校验面） |
-| `edit_ops` | 配置编辑共享层（白名单 + 值规则 + 写入分派 + 写前备份，Web/TUI 唯一编辑通道） | 配置管理 | 配置编辑 | 无（校验面） |
+| `config_edit_whitelist` | 可编辑配置项白名单（键→类型/枚举→目标文件→写入原语；定义于共享编辑层，TUI/Web/CLI 同源） | 配置管理 | 配置编辑 | 无（校验面） |
+| `edit_ops` | 配置编辑共享层（白名单 + 值规则 + 写入分派 + 写前备份，TUI/Web/CLI 唯一编辑通道） | 配置管理 | 配置编辑 | 无（校验面） |
 | `system_info` | 系统状态组装与展示原语（Web 状态卡 / TUI 首页共用数据源：熔断/路由/凭据回填/匿名化标签） | 核心基础设施 | 状态展示 | 无（展示面） |
 | `history_policy` | 历史走势获取策略解析（off/auto/prompt 单源，三渠道共用，TUI 注入询问回调） | 报告生成 | 组合历史走势 | `history.fetch_mode` |
 | `run_integrity` | 生成运行一致性守卫（`guard_run` 装饰 `generate_report` 中断收口：临时产物清扫/已写盘登记/`status=interrupted` 运行记录/健康检查收敛；ContextVar 按线程隔离，写盘方 `note_temp`·`note_artifact` 登记） | 报告生成 | 报告输出 | 无（设施模块，中断时经 reporter 输出明细） |

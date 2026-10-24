@@ -9,7 +9,7 @@
 
 ## [0.15.1-dev] - 开发中（未发布）
 
-- **`plan-205` CLI 配置面补齐（config 子命令 + 章节/匿名化一次性覆写）**：新增 `config list/get/set`——白名单键的查看与持久化编辑，复用 `config/edit_ops.py` 同一校验/`.bak`/注释保留/缓存失效路径；`--dry-run` 只校验不落盘；`scheduler.*` 四字段走 `config/_scheduler.py` 严格校验（与 Web 面板归一化分离）。新增全局 `--chapter KEY=on|off`（按章节注册表分派 `config.json` / `enabled_llm.*` / features 三类来源）与 `--anonymize {off,code_display,full_anonymous,summary}`，均为进程内覆写（`config/_runtime_overrides.py`，不写盘、不进缓存）。报告追问按决策不进入 CLI。回归 43 例（`test_cli_config_command` 32 / `test_config_scheduler_spec` 11）；文档同步 CLI 手册 §2/§10.1/§14、配置手册与脚本参考；`rf-856` 修 `[M]` 过期指代与 §10.1 覆盖说明。
+- **`plan-205` CLI 配置面补齐（config 子命令 + 章节/匿名化一次性覆写）**：新增 `config list/get/set`——白名单键的查看与持久化编辑，复用 `config/edit_ops.py` 同一校验/`.bak`/注释保留/缓存失效路径；`--dry-run` 只校验不落盘；`scheduler.*` 四字段走 `config/_scheduler.py` 严格校验（与 Web 面板归一化分离）。新增全局 `--chapter KEY=on|off`（按章节注册表分派 `config.json` / `enabled_llm.*` / features 三类来源）与 `--anonymize {off,code_display,full_anonymous,summary}`，均为进程内覆写（`config/_runtime_overrides.py`，不写盘、不进缓存）。报告追问按决策不进入 CLI。回归 43 例（`test_cli_config_command` 32 / `test_config_scheduler_spec` 11）；文档同步 CLI 手册 §2/§10.1/§14、配置手册、脚本参考、技术设计（§1.5.3 / §1.8.11 / 语义表：配置编辑改为 TUI/Web/CLI 同一编辑层，白名单实测 9 组 56 条键 / 26 功能开关）与需求追溯（新增 `R-CON-09`）；`rf-856` 修 `[M]` 过期指代与 §10.1 覆盖说明，`rf-857` 修技术文档白名单计数与渠道表述。
 
 - **`plan-204` 测试用例全量审计与整改**：机检补位四类人工判据（自证式用例 / 双结果放行 / 弱断言 / 名称与内容不一致），扫描 586 个测试文件、11,111 个 `def test_`，整改 23 例——安全基线 3 例自证式改触生产（`cache.set` 产物扫描 / LLM 源码禁止日志含 `api_key` / HTML 模板绝对路径扫描）、文件系统边缘 4 例双结果放行改按 `reader` 契约断言、配置崩溃清理补 `assertRaises`、弱断言 11 例补足语义（行业映射锁定指数代码、分位阈值、警告文案、参数校验原因、cassette 响应体、凭据声明字段）、启动向导 2 例合并、2 处死变量清理。对应台账 rf-851（自证式安全用例）、rf-852（双结果放行）、rf-853（崩溃清理），以及 rf-854（弱断言）、rf-855（重复用例与死变量）。
 

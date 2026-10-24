@@ -1,7 +1,7 @@
 """Web 配置编辑 — 可编辑面（GET）呈现 + 编辑应用（POST）委托。
 
 编辑白名单、值校验、写入分派与写前备份的唯一实现在
-``src/python/config/edit_ops.py``（Web / TUI 共用同一函数，校验强度一致）；
+``src/python/config/edit_ops.py``（TUI / Web / CLI 共用同一函数，校验强度一致）；
 本模块保留 Web 面板特有的可编辑面组装（``get_config_edit_surface``），
 并公开再导出共享层符号（既有引用保持可用）。
 """

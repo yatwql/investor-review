@@ -631,6 +631,7 @@
 | R-CON-06 | `src/test/integration/test_error_isolation.py` | 批 6 |
 | R-CON-07 | `src/test/unit/fetcher/test_chain.py` + `src/test/scenario/resilience/test_chain_resilience.py` | 批 6 |
 | R-CON-08 | `src/test/unit/report/test_data_status.py` | 批 6 |
+| R-CON-09 | `src/test/unit/cli/test_cli_config_command.py` | 批 7 |
 | R-ADP-01 | `src/test/unit/fetcher/test_source_adapter.py` | 批 6 |
 | R-ADP-02 | `src/test/unit/fetcher/test_source_adapter.py` | 批 6 |
 | R-ADP-03 | `src/test/unit/fetcher/test_source_adapter.py` + `src/test/unit/fetcher/test_quote_adapter_parity.py` | 批 6 |
