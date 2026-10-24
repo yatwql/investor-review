@@ -50,6 +50,7 @@ from src.python.llm.fingerprint import (
     compute_fingerprint,
     extract_stable_holdings,
     extract_stable_penetration,
+    risk_signals_of,
 )
 from src.python.llm.prompts_signals import _signal_digest_cache_suffix
 
@@ -202,7 +203,8 @@ def fingerprint_components(inputs: "ModuleFingerprintInputs") -> dict[str, str]:
         "penetration": compute_fingerprint(extract_stable_penetration(inputs.penetrated_assets)),
         "penetration_full": compute_fingerprint(extract_stable_penetration(inputs.penetrated_assets, full=True)),
         "categories": compute_fingerprint(inputs.categories),
-        "history_risk": compute_fingerprint(inputs.history_data),
+        # 与正式指纹同口径：只哈希风险信号子集，不含 bars 等载荷
+        "history_risk": compute_fingerprint(risk_signals_of(inputs.history_data)),
         "a_indices": compute_fingerprint(inputs.a_indices),
         "us_indices": compute_fingerprint(inputs.us_indices),
         "competitive_context": compute_fingerprint(inputs.competitive_context),

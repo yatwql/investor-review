@@ -62,6 +62,17 @@ def extract_stable_penetration(penetrated_assets: list[dict] | None, full: bool 
     return result
 
 
+RISK_SIGNAL_KEYS = ("max_drawdown_pct", "annualized_volatility", "total_return_pct", "status")
+"""进指纹的风险信号键（唯一声明点；审计组件与正式指纹共用，避免口径漂移）。"""
+
+
+def risk_signals_of(history_data: dict | None) -> dict:
+    """从 history_data 提取进指纹的风险信号子集（不含 bars 等易变载荷）。"""
+    if not history_data or not isinstance(history_data, dict):
+        return {}
+    return {key: history_data[key] for key in RISK_SIGNAL_KEYS if key in history_data}
+
+
 def build_llm_fingerprint(
     total_mv: float = 0,
     total_cost: float = 0,
@@ -102,11 +113,7 @@ def build_llm_fingerprint(
     _pen = extract_stable_penetration(penetrated_assets, full=full_penetration)
 
     # 从 history_data 提取 key 风险信号摘要
-    _risk_signals: dict[str, float | str] = {}
-    if history_data and isinstance(history_data, dict):
-        for _key in ("max_drawdown_pct", "annualized_volatility", "total_return_pct", "status"):
-            if _key in history_data:
-                _risk_signals[_key] = history_data[_key]
+    _risk_signals = risk_signals_of(history_data)
 
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug("[fingerprint] history 风险信号: %s", _risk_signals)

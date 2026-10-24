@@ -141,3 +141,19 @@ class TestMarkDataUsedFailureType:
         event = tracker.get_log()[-1]
         assert event["success"] is True
         assert event["failure_type"] == "ok"
+
+
+class TestHistoryRiskComponentScope:
+    """history_risk 组件只反映风险信号子集，不受 bars 等载荷变化影响。"""
+
+    def test_bars_change_does_not_change_history_risk(self):
+        base = {"max_drawdown_pct": -15.75, "annualized_volatility": 0.1751, "total_return_pct": -10.07}
+        noisy = dict(base, bars=[{"date": "2026-10-24", "close": 1.0}])
+        first = fingerprint_components(_inputs(history_data=base))
+        second = fingerprint_components(_inputs(history_data=noisy))
+        assert first["history_risk"] == second["history_risk"]
+
+    def test_risk_signal_change_changes_component(self):
+        first = fingerprint_components(_inputs(history_data={"max_drawdown_pct": -15.75}))
+        second = fingerprint_components(_inputs(history_data={"max_drawdown_pct": -18.2}))
+        assert first["history_risk"] != second["history_risk"]
