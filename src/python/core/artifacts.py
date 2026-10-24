@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -43,16 +44,52 @@ def collect_artifacts(config: dict | None, output_dir: str | None = None) -> tup
     return tuple(path for path in candidates if path.is_file())
 
 
+def _x11_socket_present(display: str) -> bool:
+    """`DISPLAY` 声称有桌面时，确认对应 X socket 真的存在。
+
+    残留环境变量比缺失更常见：手机上连服务器时，进程继承的是**建立会话时**的
+    环境（tmux/screen 服务端、后台常驻启动器），`DISPLAY=:0` 还在、桌面早已不在。
+    只凭环境变量判定会让收尾去跑 `xdg-open` 而后失败（用户看到「打开失败」）。
+    远端 X（X forwarding，`host` 非空的形式）由客户端承载，不查本地 socket。
+    """
+    host, _, screen = display.rpartition(":")
+    if not screen:
+        return False
+    if host and host != "unix":
+        return True
+    number = screen.split(".")[0]
+    if not number.isdigit():
+        return False
+    return Path(f"/tmp/.X11-unix/X{number}").exists()
+
+
+def _opener_present() -> bool:
+    """`xdg-open` 是否可执行（没有它时 `open_path` 必然失败，不如不问）。"""
+    return shutil.which("xdg-open") is not None
+
+
 def local_open_supported() -> bool:
     """当前会话能否在**本机桌面**打开文件管理器/默认程序。
 
     远程 SSH/mosh、无 DISPLAY/WAYLAND 的服务端无法把文件管理器投到手机或远端
     客户端；此时调用 xdg-open/open 只会失败，调用方应展示路径与传输指引。
+
+    判定比「看环境变量是否有值」更严：Linux 上除 `DISPLAY`/`WAYLAND_DISPLAY`
+    非空，还要求 X socket 真实存在且 `xdg-open` 可执行——残留的 `DISPLAY`
+    （tmux/screen 服务端保留的旧桌面环境）与缺工具都不算可开。
     """
     if any(os.environ.get(key) for key in ("SSH_CONNECTION", "SSH_TTY", "MOSH_CONNECTION")):
         return False
     if sys.platform.startswith("linux"):
-        return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+        if os.environ.get("WAYLAND_DISPLAY"):
+            return _opener_present()
+        display = os.environ.get("DISPLAY") or ""
+        if not display:
+            return False
+        if not _x11_socket_present(display):
+            logger.info("[artifacts] DISPLAY=%s 但无对应 X socket（残留环境变量），按无图形会话处理", display)
+            return False
+        return _opener_present()
     return True
 
 
