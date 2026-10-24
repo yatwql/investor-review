@@ -1539,7 +1539,7 @@ CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` /
 | 运维观测 | `perf-history.py` / `probe.py` / `check-sources`（CLI 子命令）/ `doctor`（CLI 子命令）/ `view-logs`（CLI 子命令） / `cassettes`（CLI 子命令） | 性能历史查看、数据源链路探测、日志与系统自检 |
 | 评测与基准 | `test-perf-report.py` / `eval-llm-hallucination.py` / `eval-factor-zoo.py` / `eval-dedup-threshold.py` | 性能门禁压测、LLM 幻觉率采样、能力评测与阈值校准（不参与提交门禁） |
 | 启动 | `launch.sh` / `launch.ps1`（TUI 与 `web` 子命令）/ `cli.sh` / `llm.sh` 及其 `.ps1` 版 | 免解释器前缀的常用入口 |
-| CLI 子命令 | `report` / `cache` / `whatif` / `check-sources` / `health-history` / `view-logs` / `doctor` / `cassettes` | 用户侧命令行入口（详见 [CLI 手册](../manuals/how-to-use-cli-mode.md)） |
+| CLI 子命令 | `report` / `cache` / `whatif` / `config` / `check-sources` / `health-history` / `view-logs` / `doctor` / `cassettes` | 用户侧命令行入口（详见 [CLI 手册](../manuals/how-to-use-cli-mode.md)；`config` 为持久化配置编辑） |
 
 > 改名/合并脚本时按**五处同步**自查（本次改名的长尾教训）：① 同名测试文件；② `scripts-reference` 一览与详情小节；③ `folders.md` 目录树；④ CI/钩子/`release.py`/`test-runner` 等调用点；⑤ 文档与代码注释里的命令示例。机检覆盖 ②③④（一览覆盖、目录树双向、脚本存在性），①⑤ 靠本清单。
 >

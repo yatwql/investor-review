@@ -636,6 +636,20 @@ def _auto_reset_feature_flags():
 
 
 @pytest.fixture(autouse=True)
+def _auto_reset_runtime_overrides():
+    """自动清空命令行一次性覆写（--chapter / --anonymize 的进程内状态）。
+
+    覆写层是模块级字典，测试直接调用 CLI 覆写函数后若不清理，会串到后续用例
+    （读到的 chapter / 匿名化模式不再是配置真值）。
+    """
+    from src.python.config._runtime_overrides import reset_overrides
+
+    reset_overrides()
+    yield
+    reset_overrides()
+
+
+@pytest.fixture(autouse=True)
 def _reset_degradation_tracker():
     """自动重置 DegradationTracker 单例，防止测试间状态污染。
 

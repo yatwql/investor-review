@@ -35,6 +35,7 @@ from src.python.cli._handlers import (
     _handle_cache,
     _handle_cache_update,
     _handle_cassettes,
+    _handle_config,
     _handle_check_sources,
     _handle_doctor,
     _handle_health_history,
@@ -56,6 +57,8 @@ __all__ = [
     "_EXIT_PARTIAL",
     "_EXIT_SEVERE",
     "_EXIT_SUCCESS",
+    "_apply_cli_anonymize",
+    "_apply_cli_chapters",
     "_apply_cli_experiments",
     "_apply_cli_switches",
     "_build_parser",
@@ -70,6 +73,7 @@ __all__ = [
     "_handle_cache_update",
     "_handle_cassettes",
     "_handle_check_sources",
+    "_handle_config",
     "_handle_doctor",
     "_handle_health_history",
     "_handle_report",
@@ -127,6 +131,37 @@ def _apply_cli_switches(pairs: list[tuple[str, bool]] | None) -> None:
         len(overrides),
         "、".join(f"{flag}={'on' if value else 'off'}" for flag, value in overrides),
     )
+
+
+def _apply_cli_chapters(pairs: list[tuple[str, bool]] | None) -> None:
+    """应用命令行章节显隐覆写（仅当前进程运行时，不写盘）。"""
+    if not pairs:
+        return
+
+    import logging
+
+    from src.python.config.chapter_registry import set_chapter_runtime_override
+
+    for key, enabled in pairs:
+        set_chapter_runtime_override(key, enabled)
+    logging.getLogger("invest").info(
+        "[chapters] 命令行覆写报告章节 %d 项: %s",
+        len(pairs),
+        "、".join(f"{key}={'on' if enabled else 'off'}" for key, enabled in pairs),
+    )
+
+
+def _apply_cli_anonymize(mode: str | None) -> None:
+    """应用命令行匿名化模式覆写（仅当前进程运行时，不写盘）。"""
+    if not mode:
+        return
+
+    import logging
+
+    from src.python.config._runtime_overrides import set_config_override
+
+    set_config_override("anonymization.mode", mode)
+    logging.getLogger("invest").info("[anonymizer] 命令行覆盖匿名化模式: %s（仅本次运行）", mode)
 
 
 def _apply_cli_llm_provider_order(order: list[str]) -> int:
@@ -218,6 +253,8 @@ def main() -> int:
     # 命令行开关（需在配置初始化之后：覆写加载已完成，此处为本次运行增量）
     _apply_cli_experiments(args.experiment)
     _apply_cli_switches(args.feature)
+    _apply_cli_chapters(args.chapter)
+    _apply_cli_anonymize(args.anonymize)
 
     # 多链线路优先级调整：持久化写盘后退出（调整类命令，不触发报告生成）
     if args.llm_provider_order:
@@ -239,6 +276,8 @@ def main() -> int:
         return _handle_cache(args, config)
     elif args.command == "whatif":
         return _handle_whatif(args, config)
+    elif args.command == "config":
+        return _handle_config(args, config)
     return _EXIT_SEVERE
 
 

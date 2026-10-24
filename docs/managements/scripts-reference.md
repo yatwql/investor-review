@@ -63,6 +63,7 @@
 | `doctor` | 运维 | cli.py 子命令：系统自检（环境/配置/目录/日志与缓存/开关/适配/凭据/数据源八组，`--offline`/`--timeout`，不受实验开关约束） |
 | `view-logs` | 运维 | cli.py 子命令：查看结构化运行日志（`--level`/`--lines`/`--since`/`--until`，与 TUI `[V]` 同实现） |
 | `whatif` | CLI | cli.py 子命令：调仓 What-if 模拟（对比两份持仓生成独立 diff 报告，见 [快速开始](../manuals/how-to-start.md)） |
+| `config` | CLI | cli.py 子命令：查看/持久化修改共享配置（`list`/`get`/`set`，白名单 + 校验 + `.bak`，与 TUI/Web 同编辑层；动作型键与密钥不在此入口） |
 | `cassettes` | 运维 | cli.py 子命令：数据源记录-回放维护（列表 / `--verify` 离线回放校验，见下文「CLI 子命令」） |
 
 ## 命名约定

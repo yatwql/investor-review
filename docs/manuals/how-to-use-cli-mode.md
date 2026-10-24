@@ -16,10 +16,11 @@ CLI 命令行模式无需 TUI 菜单界面，通过命令行参数驱动，适�
 - [9. 使用示例](#9-使用示例) · [10. 常用命令速查](#10-常用命令速查)（[10.1 TUI 菜单 → CLI 命令对照](#101-tui-菜单--cli-命令对照) · [10.2 一键快捷入口](#102-一键快捷入口)）
 - [11. 退出码含义](#11-退出码含义) · [12. 最佳实践](#12-最佳实践)（[12.1 缓存预热](#121-缓存预热) · [12.2 报告输出路径](#122-报告输出路径) · [12.3 网络退避策略](#123-网络退避策略) · [12.4 性能历史自动收集](#124-性能历史自动收集) · [12.5 日志轮转](#125-日志轮转)）
 - [13. 定时任务](#13-定时任务)（[13.1 Windows 任务计划程序](#131-windows-任务计划程序) · [13.2 Linux crontab](#132-linux-crontab) · [13.3 定时任务排障](#133-定时任务排障) · [13.4 任务完成通知（notify）](#134-任务完成通知notify)）
+- [14. `config` 子命令（读写共享配置）](#14-config-子命令读写共享配置)
 
 ## 1. 命令结构
 
-CLI 命令分两层：**全局参数**（位于子命令之前）+ **子命令**（`report` / `cache` / `whatif` / `check-sources` / `health-history` / `view-logs` / `doctor` / `cassettes`）。
+CLI 命令分两层：**全局参数**（位于子命令之前）+ **子命令**（`report` / `cache` / `whatif` / `config` / `check-sources` / `health-history` / `view-logs` / `doctor` / `cassettes`）。
 
 > 其中 `cassettes` 是**开发维护命令**（列出/校验已录制的数据源真实响应，供离线回归使用），日常使用报告功能不需要它——详见 [开发者指南](../managements/developer-guide.md) → CLI 子命令。
 
@@ -45,7 +46,9 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 | `--non-interactive` | 跳过首次运行交互式引导（定时任务 / 脚本使用） |
 | `--experiment NAME` | 启用**实验项**功能（`experimental` 字段为真的开关；只开不关的简写），**仅本次运行生效（不写入 features.json）**。可重复指定；`NAME` 取开关名（如 `decision_reflection`）或显示名（如 `决策跨期反思闭环`），`all` = 全部启用 |
 | `--feature NAME=VALUE` | 切换**任意**功能开关（八组任一均可），**双向**（可开可关）、**仅本次运行生效（不写盘）**；`NAME` 取注册表键名，`VALUE` 写 `on`/`off`。取值写错会立即报错并列出全部可选值 |
-| `--llm-provider-order NAME,...` | 重排 LLM 多链线路优先级并**写入** `llm_providers.json`（靠前优先），写盘后退出；`NAME` 须恰好覆盖全部现有线路（少写/多写/重复均拒绝，报错列出当前名单）。与 `--feature`（仅本次运行、不写盘）不同：本参数持久化。亦可在 TUI `[M]` / Web 配置面板调序 |
+| `--chapter KEY=on\|off` | 一次性覆盖**报告章节显隐**（仅本次运行、不写盘）；`KEY` 取章节注册表稳定键名（含智囊团生成子项），可重复。章节来源（`config.json` / `llm_settings.json` / `features.json`）由注册表分派；与 `--feature` 作用于同一子项时本参数后应用。持久化请用 `config set` |
+| `--anonymize {off,code_display,full_anonymous,summary}` | 一次性覆盖**持仓匿名化模式**（仅本次运行、不写盘）；持久化请用 `config set anonymization.mode` |
+| `--llm-provider-order NAME,...` | 重排 LLM 多链线路优先级并**写入** `llm_providers.json`（靠前优先），写盘后退出；`NAME` 须恰好覆盖全部现有线路（少写/多写/重复均拒绝，报错列出当前名单）。与 `--feature`（仅本次运行、不写盘）不同：本参数持久化。亦可在 TUI `[G]` → `[L]` LLM 设置 / Web 配置面板调序 |
 | `--version` | 显示版本号并退出 |
 
 > **`--experiment` 说明**：等价于在 TUI 菜单 **[S]** / Web 配置面板中临时勾选实验开关，但**只作用于当前这一次命令、不改动持久化配置**——CI / 定时任务可在不污染用户配置的前提下试用实验功能；反之，用户配置里已开启的实验开关不会被本参数关闭。
@@ -76,6 +79,8 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 > ```
 >
 > 两个参数可同时使用：`--feature` 在 `--experiment` 之后应用，故 `--experiment all --feature factor_catalog=off` 表示「其余实验功能全开、只关掉因子目录」。
+>
+> **一次性覆写与持久化的分工**：`--experiment` / `--feature` / `--chapter` / `--anonymize` 只作用于**这一次命令**（进程退出即失效，不写盘）；要把改动落到共享配置，用 `config set`（见 [§14](#14-config-子命令读写共享配置)），或在 TUI / Web 配置面板操作。`--chapter` 与 `--feature` 的分工：前者按**章节键**（可覆盖 `config.json` 的 `enable_*`、`llm_settings.json` 的 `enabled_llm.*` 与独立章节/关联产物/智囊团子项），后者只覆盖 `features.json` 的功能开关。
 
 ---
 
@@ -261,11 +266,17 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 | 数据源健康检查 | `.venv/bin/python -m src.python.cli check-sources` |
 | 查看最近运行日志 | `.venv/bin/python -m src.python.cli view-logs --level WARNING` |
 | 系统自检（一键体检） | `.venv/bin/python -m src.python.cli doctor --offline` |
+| 查看当前生效配置 | `.venv/bin/python -m src.python.cli config list` |
+| 持久化关闭某章节 | `.venv/bin/python -m src.python.cli config set enable_news false` |
+| 一次性匿名生成 | `.venv/bin/python -m src.python.cli --anonymize full_anonymous report --type both` |
+| 一次性关闭某章节 | `.venv/bin/python -m src.python.cli --chapter enable_news=off report --type both` |
 | 查看性能历史趋势 | `.venv/bin/python scripts/perf-history.py` |
 
 ### 10.1 TUI 菜单 → CLI 命令对照
 
-TUI 菜单与 CLI 子命令落到**同一个业务编排函数**（`report/orchestrator.py::generate_report` 等），差别只在入参从哪来：TUI 在菜单里问，CLI 用参数传。下表对照**生成类菜单**（E/B/L/W）；缓存管理（`[1]`~`[3]`）的等价见上方「常用命令速查」；配置类菜单（`[C]` 章节显隐 / `[S]` 章内内容 / `[G]` 全局设置 / `[R]` 刷新配置）、诊断四项（`[D]` → `V` 运行日志 / `H` 健康历史 / `T` 系统自检 / `L` 日志设置）与报告追问（`[Q]`）暂无 CLI 等价（经 TUI / Web）。
+TUI 菜单与 CLI 子命令落到**同一个业务编排函数**（`report/orchestrator.py::generate_report` 等），差别只在入参从哪来：TUI 在菜单里问，CLI 用参数传。下表对照**生成类菜单**（E/B/L/W）与配置类菜单；缓存管理（`[1]`~`[3]`）的等价见上方「常用命令速查」。
+
+配置类菜单的 CLI 覆盖分**一次性**与**持久化**两档：一次性用全局参数（`--chapter` / `--feature` / `--anonymize` / `--output` / `--llm-provider-order`），持久化用 `config set`（`[C]`/`[S]`/`[G]` 的写盘面）。`[R]` 刷新配置对 CLI 无意义（每次命令启动即读最新配置）；诊断四项中 `V`/`H`/`T` 分别对应 `view-logs` / `health-history` / `doctor`，`L` 日志设置用 `config set logging.*`；报告追问 `[Q]` 仅 TUI / Web 提供（CLI 无对话式交互面）。
 
 | TUI 菜单 | CLI 等价命令 |
 |:---------|:-------------|
@@ -273,6 +284,9 @@ TUI 菜单与 CLI 子命令落到**同一个业务编排函数**（`report/orche
 | **[B]** 生成标准报告（Excel+HTML，按章节配置） | `report --type both --history auto` |
 | **[L]** 生成完整报告（Excel+HTML，含 LLM） | `report --type full --history auto` |
 | **[W]** 调仓 What-if 模拟 | `whatif --base <调仓前.xlsx> --candidate <调仓后.xlsx>` |
+| **[C]** 报告章节显隐 | 一次性：`--chapter enable_news=off`；持久化：`config set enable_news false` / `config set enabled_llm.health_check false` |
+| **[S]** 报告章节内容呈现 | 一次性：`--feature metrics_enabled=off`；持久化：`config set metrics_enabled false` |
+| **[G]** 全局设置 | 输出目录 `--output DIR`；多链调序 `--llm-provider-order`；持仓/基准/匿名化等 `config set holdings_dir …` / `--anonymize …` |
 
 以 `[L]` 为例，逐项拆开看更直观：
 
@@ -312,7 +326,7 @@ TUI 菜单与 CLI 子命令落到**同一个业务编排函数**（`report/orche
 
 追加的参数即 `report` 的报告级参数。需要全局参数（`--config` / `--output` / `--experiment` / `--feature`）时仍走 `cli.sh` / `cli.ps1`——它们必须写在子命令之前。
 
-其余菜单项（配置类、缓存类、日志/健康/自检）在 CLI 侧均有独立子命令，见上方速查表与各节说明。
+其余菜单项（配置类、缓存类、日志/健康/自检）在 CLI 侧均有对应命令或子命令，见上方速查表、§10.1 与各节说明。
 
 ---
 
@@ -553,3 +567,41 @@ cron / 任务计划运行只有退出码，失败也无人知晓。config.json `
 
 **相关手册**：[← TUI 菜单操作手册](how-to-use-tui-menu.md) · [Web 浏览器模式 →](how-to-use-web-mode.md) · [手册总索引](README.md)
 同主题：[常规配置指引](how-to-config.md) · [数据与备份](data-and-backup.md)
+
+---
+
+## 14. `config` 子命令（读写共享配置）
+
+`config` 用于在命令行**查看与持久化修改**共享配置，写盘路径与 TUI / Web 配置面板**同一编辑层**（`config/edit_ops.py`）：白名单校验、写前 `.bak` 备份、注释保留、缓存即时失效。适用于无桌面 / 服务器 / 自动化场景。
+
+| 子命令 | 用途 |
+|:--|:--|
+| `config list [--json]` | 列出白名单键与**当前生效值**（含 `scheduler.*`；动作型键单列） |
+| `config get KEY` | 读取单个键的当前生效值（JSON 输出） |
+| `config set KEY VALUE [--dry-run]` | 写入单个键（`--dry-run` 只校验并输出归一化值，不落盘） |
+
+**取值写法**：布尔用 `on`/`off`（也接受 `true/false/1/0`）；整数直接写数字；枚举写可选值；`scheduler.weekdays` 用逗号分隔（`0=周一`）。写入失败（未知键、取值越界、动作型键）退出码 2，并给出可操作提示。
+
+```bash
+# 查看/读取
+.venv/bin/python -m src.python.cli config list
+.venv/bin/python -m src.python.cli config list --json          # 供脚本消费
+.venv/bin/python -m src.python.cli config get holdings_dir
+
+# 持久化修改（写盘前自动 .bak）
+.venv/bin/python -m src.python.cli config set holdings_dir /data/holdings
+.venv/bin/python -m src.python.cli config set enable_news off
+.venv/bin/python -m src.python.cli config set anonymization.mode summary
+.venv/bin/python -m src.python.cli config set logging.level DEBUG
+.venv/bin/python -m src.python.cli config set scheduler.enabled on
+.venv/bin/python -m src.python.cli config set scheduler.weekdays 0,1,2,3,4
+.venv/bin/python -m src.python.cli config set holdings_filename 持仓.xlsx --dry-run
+```
+
+**覆盖范围（白名单）**：持仓目录/文件名、报告输出目录、顶层章节开关（`enable_*`）、匿名化模式、对比指数池（动作型，见下）、`enabled_llm.*`、全部功能开关、LLM 调优参数、`logging.*`，以及 `scheduler.*` 四个字段。
+
+**动作型键不提供 `set`**：`comparison_indices`（增/删/重置）请用 TUI `[G]` / Web 配置面；`llm_providers.priority`（重排）请用 `--llm-provider-order`。密钥（`llm_key.json` / `data_key.json`）**不在**配置编辑白名单内，请按手册直接维护文件或环境变量。
+
+**一次性 vs 持久化**：`config set` 是**持久化**写入；只想改这一次命令的产物，用全局参数 `--chapter` / `--feature` / `--anonymize`（零写盘）。`config list/get` 显示的是**当前生效值**——若同一条命令带了 `--chapter` / `--feature` / `--anonymize`，会看到覆写后的值。
+
+**调度说明**：`config set scheduler.*` 只写配置；实际触发由 **Web 服务常驻调度线程**执行（需 Web 进程在运行）。纯 headless 场景继续用 cron / 任务计划程序调用 `report`（见 [§13](#13-定时任务)）。

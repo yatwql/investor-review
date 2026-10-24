@@ -15,12 +15,12 @@ from __future__ import annotations
 import json
 import logging
 import os
-import re
 import threading
 from datetime import datetime, timedelta
 from typing import Any
 
 from src.python.config import get_config
+from src.python.config._scheduler import normalize_block, validate_block  # noqa: F401 — 面板与测试经本模块导入
 from src.python.core.constants import PROJECT_ROOT
 
 logger = logging.getLogger("invest")
@@ -34,75 +34,6 @@ _TICK_INTERVAL_S = 30
 _FIRE_GRACE_MINUTES = 30
 # 触发账本保留天数（超期条目写回时剔除，防长期膨胀）
 _LEDGER_RETAIN_DAYS = 7
-_TIME_RE = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
-_REPORT_TYPES = ("basic", "both", "full")
-_DEFAULT_BLOCK: dict[str, Any] = {
-    "enabled": False,
-    "time": "07:30",
-    "weekdays": [0, 1, 2, 3, 4, 5, 6],
-    "report_type": "basic",
-}
-
-
-def normalize_block(raw: Any) -> dict:
-    """把任意 ``scheduler`` 原始块归一化为完整可用形状（缺省/非法项回默认）。
-
-    Args:
-        raw: 配置中读到的原始值（可能是 None/部分字段/类型不符）。
-
-    Returns:
-        完整块 ``{enabled, time, weekdays, report_type}``（供面板回显）。
-    """
-    raw = raw if isinstance(raw, dict) else {}
-    block = dict(_DEFAULT_BLOCK)
-    if isinstance(raw.get("enabled"), bool):
-        block["enabled"] = raw["enabled"]
-    time_text = str(raw.get("time") or "")
-    match = _TIME_RE.match(time_text)
-    if match:
-        block["time"] = f"{int(match.group(1)):02d}:{int(match.group(2)):02d}"
-    days = raw.get("weekdays")
-    if isinstance(days, list):
-        try:
-            cleaned = sorted({int(d) for d in days})
-        except (TypeError, ValueError):
-            cleaned = []
-        if cleaned and 0 <= cleaned[0] and cleaned[-1] <= 6:
-            block["weekdays"] = cleaned
-    if raw.get("report_type") in _REPORT_TYPES:
-        block["report_type"] = raw["report_type"]
-    return block
-
-
-def validate_block(payload: Any) -> dict:
-    """校验面板/接口提交的 ``scheduler`` 块，返回归一化配置。
-
-    Raises:
-        ValueError: 任一字段非法（错误文案直映 HTTP 400 的中文提示）。
-    """
-    if not isinstance(payload, dict):
-        raise ValueError("调度配置格式不合法")
-    enabled = payload.get("enabled")
-    if not isinstance(enabled, bool):
-        raise ValueError("启用开关须为布尔值")
-    time_text = str(payload.get("time") or "")
-    match = _TIME_RE.match(time_text)
-    if match is None:
-        raise ValueError("时刻格式须为 HH:MM（00:00-23:59）")
-    days_raw = payload.get("weekdays")
-    if not isinstance(days_raw, list) or not days_raw:
-        raise ValueError("执行日不能为空（0=周一 … 6=周日）")
-    try:
-        days = sorted({int(d) for d in days_raw})
-    except (TypeError, ValueError):
-        raise ValueError("执行日须为 0-6 整数（0=周一 … 6=周日）") from None
-    if days[0] < 0 or days[-1] > 6:
-        raise ValueError("执行日须为 0-6 整数（0=周一 … 6=周日）")
-    report_type = payload.get("report_type", "basic")
-    if report_type not in _REPORT_TYPES:
-        raise ValueError("报告格式不合法（basic/both/full）")
-    hour, minute = int(match.group(1)), int(match.group(2))
-    return {"enabled": enabled, "time": f"{hour:02d}:{minute:02d}", "weekdays": days, "report_type": report_type}
 
 
 def parse_schedule(config: Any) -> dict | None:

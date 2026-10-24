@@ -20,11 +20,13 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import Any
 
 from src.python.config._config_defaults import _DEFAULT_CONFIG
 from src.python.config.features import (
     feature_switch_registry,
 )
+from src.python.config._scheduler import SCHEDULER_FIELDS as _SCHEDULER_FIELDS
 from src.python.core.atomic_write import copy_file_atomic
 from src.python.core.registry import get_llm_module_names
 
@@ -32,6 +34,9 @@ logger = logging.getLogger("invest")
 
 # 匿名化枚举选项（对齐 config/anonymizer._ANONYMIZATION_MODES）
 ANON_MODES = ("off", "code_display", "full_anonymous", "summary")
+
+#: 动作型写入原语（无单一标量值：增删/重置/重排），CLI 直接赋值路径不接受
+_ACTION_WRITERS = frozenset({"comparison_indices", "llm_providers"})
 
 
 class ConfigEditError(ValueError):
@@ -344,8 +349,8 @@ def _coerce_number(key: str, value, kind: str, entry: dict) -> int | float:
     return number
 
 
-def _apply_plain_value(key: str, value, entry: dict):
-    """标量/布尔/枚举编辑：先校验，再按 writer 分派写入。"""
+def _normalize_plain_value(key: str, value, entry: dict):
+    """标量/布尔/枚举/数值编辑的纯校验与归一化（不写盘）。"""
     kind = entry["kind"]
     if kind == "str":
         if not isinstance(value, str) or not value.strip():
@@ -364,9 +369,14 @@ def _apply_plain_value(key: str, value, entry: dict):
         value = _coerce_number(key, value, kind, entry)
     else:
         raise ConfigEditError(f"配置项 {key} 不支持的值类型: {kind}")
-
-    _dispatch_write(entry, key, value)
     return value
+
+
+def _apply_plain_value(key: str, value, entry: dict):
+    """标量/布尔/枚举编辑：先校验，再按 writer 分派写入。"""
+    normalized = _normalize_plain_value(key, value, entry)
+    _dispatch_write(entry, key, normalized)
+    return normalized
 
 
 def _apply_comparison_action(payload: dict, entry: dict) -> dict:
@@ -487,15 +497,126 @@ def apply_config_edit(payload: dict) -> dict:
     if entry is None:
         raise ConfigEditError(f"配置键不在白名单: {key}")
 
-    backup_path = config_backup_file(_target_path(entry["target"]))
+    if entry["writer"] in _ACTION_WRITERS:
+        backup_path = config_backup_file(_target_path(entry["target"]))
+        if entry["writer"] == "comparison_indices":
+            new_value = _apply_comparison_action(payload, entry)
+        else:
+            new_value = _apply_llm_provider_action(payload, entry)
+        return {"key": key, "value": new_value, "backup": backup_path}
 
-    if entry["writer"] == "comparison_indices":
-        new_value = _apply_comparison_action(payload, entry)
-    elif entry["writer"] == "llm_providers":
-        new_value = _apply_llm_provider_action(payload, entry)
-    else:
-        new_value = _apply_plain_value(key, payload.get("value"), entry)
+    # 先校验后备份：非法取值不产生 .bak（CLI --dry-run 复用同一校验路径）
+    new_value = _normalize_plain_value(key, payload.get("value"), entry)
+    backup_path = config_backup_file(_target_path(entry["target"]))
+    _dispatch_write(entry, key, new_value)
     return {"key": key, "value": new_value, "backup": backup_path}
+
+
+def preview_config_edit(payload: dict) -> dict:
+    """校验单次标量编辑但不写盘（CLI ``config set --dry-run`` 复用）。
+
+    Args:
+        payload: ``{"key": 点分键, "value": 值}``。
+
+    Returns:
+        ``{"key": 点分键, "value": 归一化后的值}``。
+
+    Raises:
+        ConfigEditError: 未知键 / 动作型键 / 值校验失败。
+    """
+    key = payload.get("key")
+    entry = config_edit_whitelist.get(key)
+    if entry is None:
+        raise ConfigEditError(f"配置键不在白名单: {key}")
+    if entry["writer"] in _ACTION_WRITERS:
+        raise ConfigEditError(f"{key} 是动作型键，不能直接赋值（请用 TUI/Web 或专用参数）")
+    return {"key": key, "value": _normalize_plain_value(key, payload.get("value"), entry)}
+
+
+def read_config_value(key: str):
+    """读取白名单键的当前生效值（CLI ``config list/get`` 用，含运行时覆写）。
+
+    Args:
+        key: 白名单点分键。
+
+    Returns:
+        当前值（bool/int/str/枚举/嵌套 dict）。
+
+    Raises:
+        ConfigEditError: 未知键或动作型键（动作型无单一标量值）。
+    """
+    entry = config_edit_whitelist.get(key)
+    if entry is None:
+        raise ConfigEditError(f"配置键不在白名单: {key}")
+    writer = entry["writer"]
+    if writer in _ACTION_WRITERS:
+        raise ConfigEditError(f"{key} 是动作型键，无单一取值")
+    if writer == "scalar":
+        from src.python.config import get_config
+
+        return get_config().get(key)
+    if writer == "anonymization":
+        from src.python.config import get_config
+
+        return (get_config().get("anonymization") or {}).get("mode", "off")
+    if writer in ("llm", "llm_scalar"):
+        from src.python.config import get_llm_config
+
+        llm = get_llm_config() or {}
+        if key.startswith("enabled_llm."):
+            return (llm.get("enabled_llm") or {}).get(key.split(".", 1)[1])
+        return llm.get(key)
+    if writer == "features":
+        from src.python.config.features import is_feature_enabled
+
+        return is_feature_enabled(key)
+    if writer == "logging":
+        from src.python.config._logging import read_logger_config
+
+        return read_logger_config().get(key.split(".", 1)[1])
+    raise ConfigEditError(f"未知写入目标：{writer}")
+
+
+def scheduler_field_names() -> tuple[str, ...]:
+    """``scheduler.*`` 可编辑字段名（CLI 帮助/校验用，避免渠道层导入私有模块）。"""
+    return _SCHEDULER_FIELDS
+
+
+def validate_scheduler_value(field: str, value: Any) -> Any:
+    """校验单个 ``scheduler.*`` 字段值（CLI ``--dry-run`` 用）。"""
+    from src.python.config._scheduler import validate_field
+
+    return validate_field(field, value)
+
+
+def scheduler_values() -> dict[str, Any]:
+    """``scheduler.*`` 四个字段的当前归一化取值（CLI ``config list/get`` 用）。"""
+    from src.python.config import get_config
+    from src.python.config._scheduler import normalize_block
+
+    block = normalize_block(get_config().get("scheduler"))
+    return {f"scheduler.{field}": block[field] for field in _SCHEDULER_FIELDS}
+
+
+def set_scheduler_field(field: str, value: Any) -> dict:
+    """写入单个 ``scheduler.*`` 字段（CLI ``config set`` 用）。
+
+    按当前块补全其余字段后整块落盘；字段值走严格校验（非法直接报错）。
+
+    Raises:
+        ValueError: 未知字段或取值非法。
+    """
+    from src.python.config._scheduler import normalize_block, validate_field
+
+    if field not in _SCHEDULER_FIELDS:
+        raise ValueError(f"未知调度字段：{field}")
+    from src.python.config import get_config
+
+    block = normalize_block(get_config().get("scheduler"))
+    block[field] = validate_field(field, value)
+    result = apply_scheduler_block(block)
+    result["key"] = f"scheduler.{field}"
+    return result
 
 
 def apply_scheduler_block(block: dict) -> dict:

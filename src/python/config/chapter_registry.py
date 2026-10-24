@@ -135,6 +135,36 @@ def chapter_edit_key(entry: ChapterEntry) -> str:
     return f"enabled_llm.{entry.key}" if entry.source == SOURCE_LLM else entry.key
 
 
+def set_chapter_runtime_override(key: str, enabled: bool) -> None:
+    """CLI ``--chapter`` 的一次性章节显隐覆写（仅本进程，不写盘）。
+
+    按章节来源分派：``config.json`` 顶层键走配置覆写、LLM 章节走
+    ``enabled_llm`` 覆写、独立章节/关联产物/子项走功能开关的运行时切换。
+    与 ``config set``（持久化）泾渭分明。
+
+    Raises:
+        ValueError: 未知章节键或未知子项键。
+    """
+    from src.python.config._runtime_overrides import set_config_override, set_llm_enabled_override
+
+    entry = chapter_by_key(key)
+    if entry is None:
+        raise ValueError(f"未知章节键：{key}")
+    if key in entry.sub_items:
+        from src.python.config.features import set_feature_enabled
+
+        set_feature_enabled(key, enabled)
+        return
+    if entry.source == SOURCE_CONFIG:
+        set_config_override(entry.key, bool(enabled))
+    elif entry.source == SOURCE_LLM:
+        set_llm_enabled_override(entry.key, bool(enabled))
+    else:
+        from src.python.config.features import set_feature_enabled
+
+        set_feature_enabled(entry.key, bool(enabled))
+
+
 def chapter_storage(entry: ChapterEntry) -> str:
     """章节的存储位置说明（面板 ``?`` 详情与文档同源）。"""
     return f"{SOURCE_FILES[entry.source]} → {chapter_edit_key(entry)}"
@@ -191,5 +221,6 @@ __all__ = [
     "chapter_registry",
     "chapter_storage",
     "chapters_in_block",
+    "set_chapter_runtime_override",
     "sub_item_numbers",
 ]

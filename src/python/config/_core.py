@@ -89,7 +89,7 @@ def invalidate_config_cache() -> None:
         _config_size = 0
 
 
-def get_config(_strict: bool = False) -> dict:
+def _load_config(_strict: bool = False) -> dict:
     """
     读取配置文件并返回配置字典（带线程安全缓存）。
 
@@ -148,6 +148,18 @@ def get_config(_strict: bool = False) -> dict:
                 raise
             logger.warning("配置文件 %s 读取失败，已回退到默认配置", config_path)
             return dict(_config_defaults._DEFAULT_CONFIG)
+
+
+def get_config(_strict: bool = False) -> dict:
+    """读取配置（含命令行一次性覆写）。
+
+    与 ``_load_config`` 的分工：缓存/合并/降级由后者负责；本函数在**返回前**叠加
+    ``config/_runtime_overrides.py`` 的进程内覆写（``--chapter`` / ``--anonymize``），
+    覆写不进入缓存、不写盘，进程退出即消失。无覆写时原样返回缓存对象。
+    """
+    from src.python.config._runtime_overrides import apply_config_overrides
+
+    return apply_config_overrides(_load_config(_strict))
 
 
 def _patch_value_for_write(key: str, value: Any) -> str:

@@ -32,6 +32,38 @@ def _experiment_name(value: str) -> tuple[str, ...]:
     return tuple(sorted(flags))
 
 
+def _parse_switch_bool(value: str) -> bool:
+    """``on/off`` 类布尔词表（CLI 一次性开关统一取值域）。"""
+    token = value.strip().lower()
+    if token in ("on", "true", "1", "yes"):
+        return True
+    if token in ("off", "false", "0", "no"):
+        return False
+    raise argparse.ArgumentTypeError(f"布尔取值须为 on/off（收到：{value}）")
+
+
+def _chapter_override(value: str) -> tuple[str, bool]:
+    """argparse type 回调 —— 校验 ``--chapter KEY=on|off`` 的章节键与取值。
+
+    键取章节注册表的稳定键名（含智囊团生成子项），不存在则当场报错并列出可选值；
+    该覆写**仅本次运行**（不写盘），持久化请用 ``config set``。
+    """
+    from src.python.config.chapter_registry import chapter_by_key, chapter_registry
+
+    key, sep, raw = value.partition("=")
+    key = key.strip()
+    if not sep or not key:
+        raise argparse.ArgumentTypeError("格式应为 KEY=on|off（如 enable_news=off、expert_review=off）")
+    enabled = _parse_switch_bool(raw)
+    if chapter_by_key(key) is None:
+        valid: list[str] = []
+        for entry in chapter_registry:
+            valid.append(entry.key)
+            valid.extend(entry.sub_items)
+        raise argparse.ArgumentTypeError(f"未知章节键 '{key}'；可选: {', '.join(valid)}")
+    return key, enabled
+
+
 def _provider_order(value: str) -> list[str]:
     """``--llm-provider-order`` 参数校验：非空线路名列表（覆盖性校验在共享编辑层）。"""
     names = [part.strip() for part in value.split(",")]
@@ -98,12 +130,27 @@ def _build_parser() -> argparse.ArgumentParser:
         "与 --experiment 的区别：本参数是全开关双向覆写，后者只开实验项。",
     )
     parser.add_argument(
+        "--chapter",
+        metavar="KEY=on|off",
+        action="append",
+        type=_chapter_override,
+        help="一次性覆盖报告章节显隐（仅本次运行，不写盘；键取章节注册表稳定名，含智囊团子项）。"
+        "可重复指定；与 --feature 作用于同一子项时本参数后应用（优先生效）。"
+        "持久化请用 config set / TUI [C] / Web 配置面。",
+    )
+    parser.add_argument(
+        "--anonymize",
+        choices=["off", "code_display", "full_anonymous", "summary"],
+        default=None,
+        help="一次性覆盖持仓匿名化模式（仅本次运行，不写盘）；持久化请用 config set anonymization.mode。",
+    )
+    parser.add_argument(
         "--llm-provider-order",
         metavar="NAME[,NAME...]",
         type=_provider_order,
         help="重排 LLM 多链线路优先级并**写入** llm_providers.json（靠前优先），随后退出。"
         "NAME 须恰好覆盖全部现有线路（如 deepseek-main,gemini-fallback）。"
-        "与 --feature（仅本次运行、不写盘）不同：本参数持久化；亦可在 TUI 菜单 [M] / Web 配置面调序。",
+        "与 --feature（仅本次运行、不写盘）不同：本参数持久化；亦可在 TUI [G] → [L] LLM 设置 / Web 配置面调序。",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s v{APP_VERSION}")
 
@@ -272,6 +319,36 @@ def _build_parser() -> argparse.ArgumentParser:
         "  doctor              完整自检（含数据源联通性）\n"
         "  doctor --offline    仅本地自检，不联网\n"
         "  doctor --timeout 15 放宽网络检查耗时预算"
+    )
+
+    # ── config 子命令（共享配置的查看与持久化编辑）──
+    config_p = sub.add_parser(
+        "config",
+        help="查看/修改共享配置（白名单键；写盘前 .bak 备份，值校验与 TUI/Web 同源）",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    config_sub = config_p.add_subparsers(dest="config_action", required=True)
+    cfg_list = config_sub.add_parser("list", help="列出可编辑键与当前生效值（含 scheduler.*）")
+    cfg_list.add_argument("--json", action="store_true", help="以 JSON 输出（供脚本消费）")
+    cfg_get = config_sub.add_parser("get", help="读取单个键的当前生效值（JSON 输出）")
+    cfg_get.add_argument(
+        "key", metavar="KEY", help="点分键，如 holdings_dir / enabled_llm.health_check / scheduler.time"
+    )
+    cfg_set = config_sub.add_parser("set", help="写入单个键（持久化；动作型键请用专用参数）")
+    cfg_set.add_argument("key", metavar="KEY", help="点分键（config list 查看全部）")
+    cfg_set.add_argument("value", metavar="VALUE", help="目标值（bool 用 on/off；周几用 0,1,2 逗号分隔）")
+    cfg_set.add_argument("--dry-run", action="store_true", help="只校验并输出归一化值，不写盘")
+    config_p.epilog = (
+        "示例:\n"
+        "  config list                              列出全部可编辑键与当前值\n"
+        "  config get holdings_dir                  读取单个键\n"
+        "  config set enable_news off               关闭「市场新闻」章节（持久化）\n"
+        "  config set anonymization.mode summary    设置匿名化模式（持久化）\n"
+        "  config set scheduler.enabled on          启用 Web 内置定时生成\n"
+        "  config set scheduler.weekdays 0,1,2,3,4  设置执行日（0=周一）\n"
+        "  config set holdings_filename a.xlsx --dry-run  只校验不写盘\n"
+        "\n"
+        "一次性（不改盘）请用全局参数 --chapter / --anonymize / --feature。"
     )
 
     return parser

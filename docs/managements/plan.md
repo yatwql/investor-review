@@ -1,6 +1,6 @@
 # 投资复盘助手 — 实现计划
 > 文档版本：0.15.1-dev
-> **编号源**：`plan-next = 205`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-204，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`plan-next = 206`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-205，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -57,6 +57,10 @@
 #### `plan-202` 演示截图生成器入库——已完成，待发布归档
 
 **状态**：入口 `scripts/make-screenshots.py`（`demo` / `report` / `tui` / `web`）+ 实现包 `scripts/_screenshots/`；16 例回归；参考文档与目录树三处登记。记录见 changelog。
+
+#### `plan-205` CLI 配置面补齐（config 子命令 + 章节/匿名化一次性覆写）——已完成，待发布归档
+
+**状态**：CLI 补齐与 TUI/Web 配置面同源的命令行入口——新增 `config list/get/set`（白名单 + 校验 + `.bak`，复用 `config/edit_ops.py`；`--dry-run` 只校验；调度四个字段走严格校验）与全局 `--chapter KEY=on|off` / `--anonymize MODE`（进程内覆写，不写盘，覆盖 `config.json` / `enabled_llm.*` / features 三类来源）。`--chapter` 的运行时叠加层为 `config/_runtime_overrides.py`，`get_config()` / `get_llm_config()` 返回前叠加；scheduler 归一化/严格校验上收 `config/_scheduler.py`（Web 面板与 CLI 共用）。报告追问 `[Q]` 按决策不提供 CLI 入口（对话式交互不适合命令行）。文档同步 CLI 手册 §2/§10.1/§14、配置手册与脚本参考。
 
 #### `plan-204` 测试用例全量审计与整改——已完成，待发布归档
 
