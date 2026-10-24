@@ -179,6 +179,17 @@ def _pipeline_block_cache_suffix(pipeline_data: dict | None) -> str:
     return "_" + compute_fingerprint(_block)
 
 
+def _pipeline_blocks_text(pipeline_data: dict | None) -> str:
+    """环比块 + 降级块的渲染文本（与正式指纹同一渲染路径）。"""
+    from src.python.llm.prompts_core import (
+        _build_data_degradation_block,
+        _build_difpipeline_data_block,
+    )
+
+    blocks = [_build_difpipeline_data_block(pipeline_data), _build_data_degradation_block(pipeline_data)]
+    return "\n".join(block for block in blocks if block)
+
+
 def fingerprint_components(inputs: "ModuleFingerprintInputs") -> dict[str, str]:
     """指纹**组件级**哈希（只读诊断，不参与缓存键）。
 
@@ -214,10 +225,9 @@ def fingerprint_components(inputs: "ModuleFingerprintInputs") -> dict[str, str]:
         "holding_change_block": compute_fingerprint(inputs.holding_change_block),
         "event_impact_block": compute_fingerprint(inputs.event_impact_block),
         "schedule_replay_block": compute_fingerprint(inputs.schedule_replay_block),
-        "pipeline_blocks": compute_fingerprint(
-            inputs.pipeline_data.get("snapshot_diff_data") if isinstance(inputs.pipeline_data, dict) else None,
-            inputs.pipeline_data.get("data_freshness") if isinstance(inputs.pipeline_data, dict) else None,
-        ),
+        # 与生产指纹同口径：哈希的是**渲染后的提示词文本**，不是契约 dict
+        # （契约含 snapshot_count 等展示字段，直接哈希会误报「组件变化」）
+        "pipeline_blocks": compute_fingerprint(_pipeline_blocks_text(inputs.pipeline_data)),
         "ledger_blocks": compute_fingerprint(ledger_blocks),
         "generation_params": compute_fingerprint(
             *[

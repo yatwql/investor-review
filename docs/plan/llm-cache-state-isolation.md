@@ -84,8 +84,18 @@
 成功事件数不同，质量文本因此不同（既是错误陈述，也是缓存抖动源）。现成功事件写 `failure_type="ok"`，
 质量块只统计 `success=False` 的事件。
 
-**待观察**：`holding_change_block` / `pipeline_blocks` 随上一轮报告写入的快照变化，`history_risk`
-的数值变化需用 DEBUG 的「history 风险信号」行确认是真实行情更新还是末位抖动。
+**第二次实测（21:40 / 21:48）**：变化仅 `history_risk`、`holding_change_block`、`pipeline_blocks`。
+
+- `history_risk`：两次风险信号值完全相同（-15.75 / 0.1751 / -10.07 / ok），是审计组件哈希了整个
+  `history_data`（含 bars 载荷）——已改为只哈希风险信号子集，与正式指纹同口径。
+- `holding_change_block`：`window_lines` 里带了「N 份快照按日去重」，N 是**原始快照文件数**，
+  每跑一次报告 +1；窗口行只保留「按日去重 + 滚动保留」。
+- `pipeline_blocks`：审计组件哈希的是契约 dict（含 `snapshot_count` 等展示字段），而生产指纹
+  哈希的是渲染文本。已改为与生产同口径（环比块 + 降级块的渲染文本）。
+
+实测确认：同一份快照数据下多写一份同日快照，`snapshot_diff` 只有 `snapshot_count` 变化，
+净值/份额/总额/HHI/新增移除全部稳定；环比基线本就按交易日跳过同日快照（`load_comparison_baseline`），
+故 `baseline_generated_at` 也不随同日重跑漂移。
 
 ## 6. 验收
 

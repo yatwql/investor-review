@@ -235,7 +235,9 @@ def build_holding_change_view(data: dict[str, Any] | None) -> dict[str, Any]:
 
     window_lines = [
         f"复盘窗口 {start_label} → {end_label}：{period_count} 个观察期 / {event_count} 个变动事件"
-        f"（{data.get('snapshot_count', 0)} 份快照按日去重，滚动保留 {data.get('retention_days', 0)} 天）",
+        # 只写「按日去重的观察期数」，不写原始快照文件数：后者每运行一次报告就 +1，
+        # 会随快照写入漂移，而本块同时进 LLM 提示词与缓存指纹（进提示词必进指纹）。
+        f"（按日去重，滚动保留 {data.get('retention_days', 0)} 天）",
         (
             f"复盘样本：{period_count} 期 / {event_count} 事件"
             f"（建议 ≥{sample.get('min_periods', MIN_REVIEW_PERIODS)} 期且 "

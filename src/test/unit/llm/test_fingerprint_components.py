@@ -157,3 +157,33 @@ class TestHistoryRiskComponentScope:
         first = fingerprint_components(_inputs(history_data={"max_drawdown_pct": -15.75}))
         second = fingerprint_components(_inputs(history_data={"max_drawdown_pct": -18.2}))
         assert first["history_risk"] != second["history_risk"]
+
+
+class TestSnapshotCountNotInPrompt:
+    """快照原始文件数不得进入提示词/指纹（每跑一次报告就 +1，属观测计数）。"""
+
+    def test_window_line_uses_period_count_not_raw_file_count(self):
+        from src.python.report.holding_change_panel import build_holding_change_view
+
+        contract = {
+            "available": True,
+            "period_count": 45,
+            "event_count": 106,
+            "window_start": "20260806T100000",
+            "window_end": "20261024T100000",
+            "snapshot_count": 999,
+            "retention_days": 180,
+            "sample": {"min_periods": 12, "min_events": 10, "sufficient": True},
+        }
+        view = build_holding_change_view(contract)
+        joined = "\n".join(view["window_lines"])
+        assert "999" not in joined
+        assert "45 个观察期" in joined
+
+    def test_pipeline_blocks_component_ignores_contract_display_fields(self):
+        """审计组件与生产同口径：契约里的 snapshot_count 变化不算组件变化。"""
+        from src.python.llm.module_fingerprint import _pipeline_blocks_text
+
+        base = {"diff": {"is_first_check": True}}
+        noisy = {"diff": {"is_first_check": True}, "snapshot_diff_data": {"snapshot_count": 999}}
+        assert _pipeline_blocks_text(base) == _pipeline_blocks_text(noisy)
