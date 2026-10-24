@@ -17,7 +17,7 @@ import os
 import sys
 from unittest.mock import patch
 
-__all__ = ["KeyFeeder", "run_flow", "common_patches"]
+__all__ = ["KeyFeeder", "run_flow", "common_patches", "validate_reader_patches"]
 
 
 class KeyFeeder:
@@ -85,8 +85,56 @@ def _patch_readers(feeder: KeyFeeder):
     # 兜底：`input_choice` 在非 TTY 下退化为内置 `input()`，而部分处理器在函数内
     # `from tui_keys import input_choice`（局部导入绕不过模块属性 patch）——只有替换
     # `input` 本身才能覆盖这类路径，且不产生「源头被永久绑定」的跨用例污染。
-    patches.append(patch("builtins.input", lambda _prompt="": feeder(_prompt)))
+    # 必须把 feeder 本身放进去（而非包一层 lambda）：`validate_reader_patches`
+    # 靠同一性判定「打点确实生效」。
+    patches.append(patch("builtins.input", feeder))
     return patches
+
+
+def validate_reader_patches(feeder: KeyFeeder) -> list[str]:
+    """打点矩阵自证：返回未绑定到 feeder 的读取入口（空清单 = 全部命中）。
+
+    守住一类静默失效：处理器在函数内 `from tui_keys import input_choice` 时，
+    模块属性 patch 不生效，动线会去读真实 stdin（或静默错位）——用例看似在跑，
+    实际没走到目标处理器。跑动线前先验证每个已暴露的读取入口都指向 feeder，
+    并在后续任何时候删除兜底/消费方登记时立即变红。
+    """
+    import builtins
+
+    from src.python.tui import (
+        handlers_cache,
+        handlers_config,
+        handlers_log,
+        handlers_qa,
+        handlers_report,
+        handlers_whatif,
+        panel_runtime,
+        tui,
+        tui_handlers,
+        tui_keys,
+        tui_menu,
+    )
+
+    violations: list[str] = []
+    if builtins.input is not feeder:
+        violations.append("builtins.input")
+    consumers = (
+        panel_runtime,
+        tui_handlers,
+        handlers_report,
+        handlers_config,
+        handlers_cache,
+        handlers_log,
+        handlers_qa,
+        handlers_whatif,
+    )
+    for mod in consumers:
+        if hasattr(mod, "input_choice") and mod.input_choice is not feeder:
+            violations.append(f"{mod.__name__}.input_choice")
+    for mod in (tui, tui_menu, tui_keys):
+        if hasattr(mod, "get_key") and mod.get_key is not feeder:
+            violations.append(f"{mod.__name__}.get_key")
+    return violations
 
 
 def common_patches():
@@ -117,6 +165,9 @@ def run_flow(keys: list[str], *, pre_patches=(), handler_patches=()) -> KeyFeede
         for ctx in ctxs:  # 显式进入/退出：ExitStack 在 unittest 与 pytest 混跑时曾遗留激活中的打点
             ctx.__enter__()
             entered.append(ctx)
+        violations = validate_reader_patches(feeder)
+        if violations:
+            raise AssertionError("TUI 动线打点未生效（局部导入会绕过模块属性 patch）：" + "、".join(violations))
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             with contextlib.suppress(SystemExit):

@@ -13,6 +13,7 @@ import time
 
 from _release._cli import RELEASE_BENCH_MODES
 from _release._commands_base import (
+    _changed_code_files,
     _code_fingerprint,
     _print_results,
     _current_branch,
@@ -20,6 +21,7 @@ from _release._commands_base import (
     _gate_stamp_matches,
     _git_ok,
     _last_release_tag,
+    _read_gate_stamp,
     _run_step,
     _timer,
     _write_bench_stamp,
@@ -191,6 +193,7 @@ def cmd_publish(args: argparse.Namespace, env, runner=None) -> int:
     rc, staged, _ = _git_ok(["status", "--porcelain"], env.REPO_ROOT, runner)
     if rc != 0:
         return 1
+    commit_started = time.perf_counter()
     if staged.strip():
         _git_ok(["add", "-A"], env.REPO_ROOT, runner)
         rc, out, err = _git_ok(
@@ -201,8 +204,10 @@ def cmd_publish(args: argparse.Namespace, env, runner=None) -> int:
         if rc != 0:
             print(f"[ERR] release 提交失败：{(err or out).strip()}")
             return rc
+        _timer().mark_elapsed("release 提交", commit_started)
         print(f"[OK] release 提交完成（v{release_version}）")
     else:
+        _timer().mark_elapsed("release 提交（无需提交）", commit_started)
         print("[OK] release 提交已存在，跳过")
 
     fingerprint = _code_fingerprint(env, runner)
@@ -211,7 +216,19 @@ def cmd_publish(args: argparse.Namespace, env, runner=None) -> int:
         passed = str(stamp.get("verify_passed") or "")
         print(f"[OK] 复用 gate 阶段的 P1 verify（树指纹一致 {fingerprint[:12]}…，{passed or '项数见 gate 输出'} 项）")
     else:
-        print("[..] P1 合入门禁：--mode verify（无匹配的 gate 通过戳，实跑）")
+        # 说清「为什么重跑」：gate 绿了之后再改代码/测试/脚本，旧结论就不再覆盖当前树
+        previous = _read_gate_stamp(env)
+        if previous is None:
+            print("[..] P1 合入门禁：--mode verify（尚无 gate 通过戳，实跑）")
+        else:
+            changed = _changed_code_files(env, previous, runner)
+            shown = "、".join(changed[:5]) + (" …" if len(changed) > 5 else "")
+            detail = f"（gate {previous.get('ts', '?')}）"
+            if changed:
+                print(f"[!] 自上次 gate {detail}后有 {len(changed)} 个代码文件改动：{shown}")
+            else:
+                print(f"[!] 代码指纹与上次 gate {detail}不一致（gate 后代码/测试/脚本有变动）")
+            print("[..] gate 结论只对当时代码树有效 → 实跑 P1 verify（不是白跑）")
         started = time.perf_counter()
         rc, out, err = _exec([sys.executable, "scripts/test-runner.py", "--mode", "verify"], env.REPO_ROOT, runner)
         _timer().mark_elapsed("P1 verify", started)
@@ -226,6 +243,7 @@ def cmd_publish(args: argparse.Namespace, env, runner=None) -> int:
         passed = counts[-1].replace(",", "") if counts else ""
         print(f"[OK] P1 verify 通过（{passed or '见报告'} 项）")
 
+    merge_started = time.perf_counter()
     rc, out, err = _git_ok(["checkout", "master"], env.REPO_ROOT, runner)
     if rc != 0:
         print(f"[ERR] 切换 master 失败：{(err or out).strip()}")
@@ -240,22 +258,27 @@ def cmd_publish(args: argparse.Namespace, env, runner=None) -> int:
         print(f"[ERR] 合并失败：{(err or out).strip()}")
         _git_ok(["checkout", "dev"], env.REPO_ROOT, runner)
         return rc
+    _timer().mark_elapsed("合并到 master", merge_started)
     print("[OK] dev → master 已合并（--no-ff）")
 
+    tag_started = time.perf_counter()
     rc, out, err = _git_ok(["tag", f"v{release_version}"], env.REPO_ROOT, runner)
     if rc != 0:
         print(f"[ERR] 打 tag 失败：{(err or out).strip()}")
         _git_ok(["checkout", "dev"], env.REPO_ROOT, runner)
         return rc
+    _timer().mark_elapsed("打 tag", tag_started)
     print(f"[OK] tag v{release_version} 已打在 master 合并提交")
 
     _git_ok(["checkout", "dev"], env.REPO_ROOT, runner)
     if args.push:
+        push_started = time.perf_counter()
         for push_args in (["push", "origin", "dev"], ["push", "origin", "master"], ["push", "origin", "--tags"]):
             rc, out, err = _git_ok(push_args, env.REPO_ROOT, runner, capture=True)
             if rc != 0:
                 print(f"[ERR] git {' '.join(push_args)} 失败：{(err or out).strip()}")
                 return rc
+        _timer().mark_elapsed("推送 dev/master/tags", push_started)
         print("[OK] dev / master / tags 已推送")
     else:
         print("[..] 未推送（默认）。确认后执行：")

@@ -457,7 +457,7 @@ def _remove_comparison_index(indices: dict[str, str]) -> None:
 
 
 def _cmd_config_report_boards() -> None:
-    """配置报告章节显隐（16 项四块 + 智囊团两个子项）——实现见 ``handlers_report_chapters``。
+    """配置报告章节显隐（四块章节 + 智囊团生成子项）——实现见 ``handlers_report_chapters``。
 
     章节清单/编号/来源/子项全部由 ``config.chapter_registry`` 派生，面板本体
     （渲染/派发/帮助）在 ``handlers_report_chapters.run_report_chapters_panel``；

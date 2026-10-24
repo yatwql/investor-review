@@ -47,7 +47,7 @@
 | `check-version-consistency.py` | 发布 | 版本号全局一致性检查（P0/P2 守护脚本 + 发布流程必跑） |
 | `check-style-guardrails.py` | 质量 | 设计护栏机检（DESIGN.md 护栏样式面；E 级：强调色越权/明暗同步/双面 token 对表判 finding，W 级：裸色值/圆角档位观察统计——未入 pre-commit 钩子与 CI guards；**发布门禁**（release.py gate）已纳入，开发期快反馈由 unit 测试承担） |
 | `check-script-contract.py` | 质量 | scripts 顶层脚本契约机检（退出码声明 ⊆ {0,2} 白名单、check-* 统一 `add_common_args` CLI 面、文本 I/O 显式 encoding、脚本↔测试覆盖映射，四条规则——**观察期**未入钩子与 CI） |
-| `release.py` | 发布 | 发布流程分步编排（check / archive-init〔新小版本归档骨架：三份归档 + 目录树块 + 三处索引行，幂等〕/ prepare〔含台账与设计文件归档迁移；不跨版本发布，`--version` 与推导值不一致即中止并给指引〕/ refresh / evolution / gate / publish〔提交前按 pre-commit 钩子同源参数 `--sync --ci --with-test-count` 同步统计快照，失败即中止〕/ devbump，每步独立可审阅、失败即停；refresh 纯文档变更跳过 bench+collect（`--force-refresh` 强制）、bench 默认只测发布子集四档（`--full-bench` 全量、`--bench-jobs N` 调并行度）、gate 十守护并行且随核数收敛 ≤4 路并断言归档已迁完；devbump 切版后清空上一版迁档占位节；每命令耗时入 `logs/release.jsonl` 台账） |
+| `release.py` | 发布 | 发布流程分步编排（check / archive-init〔新小版本归档骨架：三份归档 + 目录树块 + 三处索引行，幂等〕/ prepare〔含台账与设计文件归档迁移；不跨版本发布，`--version` 与推导值不一致即中止并给指引〕/ refresh / evolution / gate / publish〔提交前按 pre-commit 钩子同源参数 `--sync --ci --with-test-count` 同步统计快照，失败即中止〕/ devbump，每步独立可审阅、失败即停；refresh 纯文档变更跳过 bench+collect（`--force-refresh` 强制）、bench 默认只测发布子集四档且按「场景档先、长尾档后」排序（`--full-bench` 全量、`--bench-jobs N` 调并行度）、gate 十守护并行且随核数收敛 ≤4 路并断言归档已迁完、gate 戳存逐文件代码哈希（publish 点名 gate 后改动并说明重跑 verify）；check 预演 changelog 派生（只算不写）；publish 提交/合并/tag/推送分段计时；每命令耗时与失败原因（`failure`：失败步/报告目录/失败用例名）入 `logs/release.jsonl`；devbump 切版后清空上一版迁档占位节） |
 | `test-perf-report.py` | 评测 | 端到端报告生成管线性能基准（独立脚本，mock 外部数据源） |
 | `perf-history.py` | 运维 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 时段聚合（耗时与费用合计/环比）/机读输出（llm_cost、by_period 费用字段）；实现拆在 `_perf_history/`——`stats.py` 统计原语 / `data.py` 派生 / `report.py` 渲染 / `cli.py` 入口，主入口只留 docstring 与 re-export） |
 | `probe.py` | 运维 | 探测统一入口（按 target 分发到 `_probes/` 子模块；新探针实现契约面登记即用） |
@@ -838,7 +838,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 三层之外，**人工只复核语义**：迁入条目是否确属本版、`docs/plan` 候选是否真完成、要不要另写摘要。
 
 **④ 流程把控（三个时点各有一道闸）**：
-- **入口（`check`）**：除分支/工作树/版本形态/tag 外，提前校验「该发布版的归档前置」——三份归档文件与 folders.md 的 `vX.Y.x/` 归档子树块；新小版本首份归档缺件在此报出（另可直接跑 `archive-init` 一次补齐），而不是等 `prepare` 改完版本全链后中途撞上（那时需回滚）。
+- **入口（`check`）**：除分支/工作树/版本形态/tag 外，提前校验「该发布版的归档前置」——三份归档文件与 folders.md 的 `vX.Y.x/` 归档子树块；新小版本首份归档缺件在此报出（另可直接跑 `archive-init` 一次补齐），而不是等 `prepare` 改完版本全链后中途撞上（那时需回滚）。另做 **changelog 派生预演**（`apply_changelog_release` 只算不写）：发布段/归档段/指针行的格式派生失败在此中止，不先动归档骨架与台账。
 - **中途（`prepare` 内置 archive）**：**先算后写 + 整体回滚**——纯函数先在内存算出全部结果；设计文件迁档三连为「**引用改写 → 目录树 → `git mv`**」，三处落盘前对全部目标文件（changelog / plan / rf / folders / CLAUDE.md / README / 同级设计文档）拍文本快照，任一步失败即**整体回滚**，不会留下「引用已改指新路径、文件却没搬」或「树已改、文件没动」的错位状态；台账最后落盘，此时仍原样。收尾自动 `doc-drift --sync` + `check-doc-traces --ci` + `check-doc-links --ci`，把文档面 finding 留在本地。
 - **历史归档不改写（快照原则）**：`docs/archive/**` 内的旧路径引用**不随迁档改写**——那是历史记录，改写即篡改当时事实。脚本改为在 `archive` 输出里列 `[!] 历史归档仍按快照保留旧路径引用，涉及：…`，由人判断是否处理（通常不需要）。
 - **出口（`gate`）**：断言该版本 rf 已解决表已搬空 + 归档存在对应批次节，不满足即在 regression 前中止（省掉一次 20s 白跑，也不靠人记）。
@@ -846,7 +846,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 **使用逻辑**（分步命令 / 自动人工边界 / 格式契约 / 何时跑）
 
 ```bash
-.venv/bin/python scripts/release.py check     # 预检：分支/工作树/版本形态/tag/版本一致性 + 归档前置
+.venv/bin/python scripts/release.py check     # 预检：分支/工作树/版本形态/tag/版本一致性 + 归档前置 + changelog 派生预演（只算不写）
 .venv/bin/python scripts/release.py archive-init  # 新小版本首发：三份归档 + folders 目录树块 + 三处索引行一次建齐（幂等，--dry 只报告）
 .venv/bin/python scripts/release.py prepare   # 版本全链 + changelog 发布段归档 + 一致性 --fix + 台账/设计文件归档迁移 + 收尾 doc-drift --sync
 .venv/bin/python scripts/release.py archive   # 单独重跑归档迁移（--dry-run 只报告、--skip-design-docs 只做台账）；prepare 已内置，通常无需单独执行
@@ -859,7 +859,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 `publish` 默认不推送（只打印推送命令），`--push` 才执行；`devbump` **默认推送 `origin dev`**（发布闭环收尾即同步远端），需要本地先复核时用 `--no-push`。
 
-**`publish` 提交前先同步统计快照**：`git add/commit` 之前自动跑 `check-doc-drift.py --sync --ci --with-test-count`（与 pre-commit 钩子对含 `src/test` 变更的提交**同源参数**）。只跑 `--sync` 时 `test-coverage.md` 的收集派生计数不被校验，会出现「本地通过、钩子里仍红」——`publish` 白跑一轮（实测曾连败两次）。同步失败即中止，不提交、不合并、不打 tag。
+**`publish` 提交前先同步统计快照**：`git add/commit` 之前自动跑 `check-doc-drift.py --sync --ci --with-test-count`（与 pre-commit 钩子对含 `src/test` 变更的提交**同源参数**）。只跑 `--sync` 时 `test-coverage.md` 的收集派生计数不被校验，会出现「本地通过、钩子里仍红」——`publish` 白跑一轮（实测曾连败两次）。同步失败即中止，不提交、不合并、不打 tag。**gate 戳指纹不一致时**（gate 之后又改了代码/测试/脚本）会点名改动的代码文件并说明「gate 结论只对当时代码树有效 → 实跑 P1 verify」，避免被当成白跑。
 
 **`prepare` 不跨版本发布**：发布版恒等于开发链推导值（`X.Y.Z-dev` → `X.Y.Z`）。带 `--version` 且与推导值不一致时**立即中止（exit 2）**并打印四步指引（改 `APP_VERSION` → `check-version-consistency --fix` → 同步 changelog 开发段头与 rf 台账节头 → 提交后重跑），不再「按推导执行」跑到中途才报错。
 
@@ -886,9 +886,9 @@ sh .githooks/install-hooks.sh --off   # 停用
 | 归档步失败 | `[ERR]` 已给出具体原因与「台账未改写」状态：补好前置（目录树块/归档文件/头部行）后**重跑同一条命令**即可（变换幂等，重复执行不会二次搬运） |
 | 首次实战 / 大改后复验 | 在 `git clone --no-hardlinks` 的副本里跑 `prepare --date <日>` 全链演练（副本自带 `.venv` 或复用主仓解释器），按上表逐项核对产出后再在真仓执行——不污染工作树、不产生 tag |
 
-**bench 范围（refresh）**：默认只测发布口径关心的四档 `unit` / `dev-verify` / `regression` / `integration`——全量十四档串行约 5.5 min（2 路采集 3.2 min），占单次发布机器时间约 75%，其余模式与这四档高度重叠；未测模式的耗时与计数按 `--update-docs` 口径「保留上次实测值」不写脏，需要全量复测时加 `--full-bench`（或直接 `test-runner.py --mode bench --update-docs`）。
+**bench 范围与顺序（refresh）**：默认只测发布口径关心的四档 `regression` → `integration` → `unit` → `dev-verify`——全量十四档串行约 5.5 min（2 路采集 3.2 min），占单次发布机器时间约 75%，其余模式与这四档高度重叠；未测模式的耗时与计数按 `--update-docs` 口径「保留上次实测值」不写脏，需要全量复测时加 `--full-bench`（或直接 `test-runner.py --mode bench --update-docs`）。**顺序即失败反馈速度**：bench 以 `--fail-fast` 运行，而多档并行时只取消「尚未启动」的档——场景档先跑，场景/集成失败时长尾 `unit` 还没开始（或可被取消），十几秒内即中止；把 `unit` 排在前会让每次场景问题都白等完整 unit 时长。
 
-**耗时与 token 台账（`logs/release.jsonl`）**：每个子命令结束追加一行 JSON——`command` / `ok` / `elapsed_s` / `version` / `steps[]` / `agent{}`（执行环境身份：`provider`/`model`/`thinking`/`session_id`，取自 `PI_PROVIDER`/`PI_MODEL`/`PI_REASONING_LEVEL`/`PI_SESSION_ID`；非 agent 环境省略）/ `session_usage{}`（agent 会话**累计** token 快照：`input`/`output`/`cache_read`/`cache_write`/`total`/`cost`，取自 `PI_SESSION_FILE` 会话 JSONL 的 assistant 消息 + 非消息用量（cache_warm 等）+ compaction 三类条目，与 pi 自身 token 统计同口径；非 agent 环境省略该字段，旧台账行形状不变）（gate 的 `P2 场景回归`·`P2 十守护`·`P2 设计护栏`、refresh 的 bench·collect·sync、publish 的 `P1 verify`、evolution 的快照统计·统计同步、prepare 的 `台账归档迁移`）；终端尾行同步打印摘要。`logs/` 属 git 忽略域，台账不入仓库、不参与门禁，写入失败只打 `[!]` 且不改退出码（观测面不阻断发布）。跨版本对拍：`tail -n 20 logs/release.jsonl`（发布墙钟的变化归因到此，不再靠现场重测）。**token 统计口径**：窗口 = 上一次 `devbump` 之后的行，用量 = 末行累计 − 边界行累计（跨会话按正增量分段累加，不会出现负数）；每条命令尾行自动打印「执行环境：provider/model（thinking=…）」与「本次发布累计 token：N tok（in/out/cache r/w，≈¥C）」，便于把发布成本按版本对拍。
+**耗时与 token 台账（`logs/release.jsonl`）**：每个子命令结束追加一行 JSON——`command` / `ok` / `elapsed_s` / `version` / `steps[]` / `failure{}`（仅失败命令：失败步 / 退出码 / 测试报告目录 / 失败用例名 / 输出尾部，保留第一现场；非 `_run_step` 路径只记 rc） / `agent{}`（执行环境身份：`provider`/`model`/`thinking`/`session_id`，取自 `PI_PROVIDER`/`PI_MODEL`/`PI_REASONING_LEVEL`/`PI_SESSION_ID`；非 agent 环境省略）/ `session_usage{}`（agent 会话**累计** token 快照：`input`/`output`/`cache_read`/`cache_write`/`total`/`cost`，取自 `PI_SESSION_FILE` 会话 JSONL 的 assistant 消息 + 非消息用量（cache_warm 等）+ compaction 三类条目，与 pi 自身 token 统计同口径；非 agent 环境省略该字段，旧台账行形状不变）（gate 的 `P2 场景回归`·`P2 十守护`·`P2 设计护栏`、refresh 的 bench·collect·sync、publish 的 `release 提交`·`P1 verify`·`合并到 master`·`打 tag`·`推送 dev/master/tags`、evolution 的快照统计·统计同步、prepare 的 `台账归档迁移`）；终端尾行同步打印摘要。`logs/` 属 git 忽略域，台账不入仓库、不参与门禁，写入失败只打 `[!]` 且不改退出码（观测面不阻断发布）。跨版本对拍：`tail -n 20 logs/release.jsonl`（发布墙钟的变化归因到此，不再靠现场重测）。**token 统计口径**：窗口 = 上一次 `devbump` 之后的行，用量 = 末行累计 − 边界行累计（跨会话按正增量分段累加，不会出现负数）；每条命令尾行自动打印「执行环境：provider/model（thinking=…）」与「本次发布累计 token：N tok（in/out/cache r/w，≈¥C）」，便于把发布成本按版本对拍。
 
 ## 运维观测类
 

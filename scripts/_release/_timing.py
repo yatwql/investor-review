@@ -86,6 +86,7 @@ def build_record(
     version: str = "",
     session_usage: dict | None = None,
     agent: dict | None = None,
+    failure: dict | None = None,
 ) -> dict:
     """构造一条耗时记录（字段顺序固定，便于人工扫读与 jq 取值）。
 
@@ -96,6 +97,10 @@ def build_record(
     ``agent``：执行本次发布的 agent 身份（`agent_identity()` 产出：provider /
     model / thinking / session_id）——回答「这版是谁（哪个模型、什么思考档）发的」；
     非 agent 环境下同样省略。
+
+    ``failure``：失败命令的原因快照（失败步 / 退出码 / 报告目录 / 失败用例名 /
+    输出尾部）——失败记录只有 ok=false 时无法回答「折在哪、为什么」，复盘
+    只能去报告归档里按时间反查；有该字段就能直接读台账。
     """
     record = {
         "ts": now_iso(),
@@ -105,6 +110,8 @@ def build_record(
         "version": version,
         "steps": list(steps or ()),
     }
+    if failure:
+        record["failure"] = dict(failure)
     if agent:
         record["agent"] = dict(agent)
     if session_usage:

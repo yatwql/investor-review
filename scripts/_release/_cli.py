@@ -15,7 +15,12 @@ from collections.abc import Callable
 #: 高度重叠（standard / scenario / edge / data / smoke / report / all_no_unit /
 #: scenario_extreme / all）；未实测模式的耗时与计数按 `--update-docs` 既有口径
 #: 「保留上次实测值」，不会写脏。需要全量复测时用 `--full-bench`。
-RELEASE_BENCH_MODES: tuple[str, ...] = ("unit", "dev-verify", "regression", "integration")
+#:
+#: **顺序即失败反馈速度**：短而决定性的 P2/集成档排在前，长尾 P0/unit 档排在后。
+#: bench 以 `--fail-fast` 运行，多档并行时只会取消「尚未启动」的档——场景档失败
+#: 时若 unit 还在跑，就要白等完整 unit 时长（实测一次白等 ~45s）；前置短档后，
+#: 场景问题在十几秒内就能中止整条 bench。
+RELEASE_BENCH_MODES: tuple[str, ...] = ("regression", "integration", "unit", "dev-verify")
 
 
 def build_parser() -> argparse.ArgumentParser:

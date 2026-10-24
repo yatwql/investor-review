@@ -1,6 +1,6 @@
 # 投资复盘助手 — 实现计划
 > 文档版本：0.15.1-dev
-> **编号源**：`plan-next = 203`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-202，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`plan-next = 204`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-203，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -73,6 +73,18 @@
 **现状**：README / 手册配图的生成过程停在 `docs/tmp/screenshots/`（git 忽略域）的三个一次性脚本里，界面改版后无法按仓库里的可复现步骤重拍，也没有文档说明取帧口径与隔离方式。
 
 **动作**：按 `make-*` 资产工具前缀入库，实现拆进 `_screenshots/` 包；`scripts-reference.md` 补「一览 + 文档类详情」、`developer-guide.md` 按域索引与 `folders.md` 目录树同步；产物仍只落 `docs/tmp/screenshots/`，真实 `data/` 零接触。
+
+#### `plan-203` 发布流程四处改进（失败前移 / 台账可自证 / 预检前移 / 记账补全）——已实施，待发布归档
+
+**状态**：已实施（2026-10-24）。按 v0.15.0 发布复盘（工具耗时 220s 中 117s 花在两次 bench 失败重跑，另 6 分钟在 prepare 失败排查）落地：
+
+- **失败前移**：`[C]` 日志动线改名 `scenario_basic`（dev-verify 也跑）+ 动线驱动器新增「打点矩阵自证」——处理器局部导入绕过模块属性 patch 时直接报出未命中的读取入口（静默失效在跑动线前即中止）；
+- **bench 顺序**：发布子集改为 `regression → integration → unit → dev-verify`（快而决定性的档前置），`--fail-fast` 才能在场景失败时立刻中止长尾 `unit`；
+- **台账自证**：失败命令在 `logs/release.jsonl` 写入 `failure`（失败步 / 退出码 / 报告目录 / 失败用例名 / 输出尾部），复盘不必再按 mtime 反查测试报告归档；
+- **预检前移**：`check` 增加 changelog 派生预演（只算不写），prepare 会在写入前中止的文档手术问题提前暴露（归档骨架与台账保持未动）；
+- **publish 记账与提示**：`release 提交 / 合并 / tag / 推送` 分段入账；gate 戳增存逐文件代码哈希，指纹不一致时点名「gate 之后哪些代码文件动过」并说明将实跑 P1 verify。
+
+回归：`src/test/unit/scripts/test_release_tool_gate.py` 新增 5 例（失败台账字段 / 首现场保留 / bench 顺序 / gate 戳文件清单 / publish 提示），`test_keystroke_baseline.py` 新增 2 例（打点矩阵自证），`test_handlers_report_chapters.py` 新增 2 例（无效编号提示派生）。
 
 ### P3 — 预期实施，有空时安排
 

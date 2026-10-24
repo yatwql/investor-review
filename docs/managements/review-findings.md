@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.15.1-dev
-> **编号源**：`rf-next = 844`（新增问题取此编号，完成后更新为 +1；已用最大 rf-843，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 850`（新增问题取此编号，完成后更新为 +1；已用最大 rf-849，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -36,6 +36,12 @@
 
 | # | 问题 | 修复 |
 |---|------|------|
+| **rf-849** | `[C]` 面板无效编号提示写死「可输入 1-16 或子项 7.1 / 7.2」：章节与子项是注册表派生量，新增一章后提示立刻过期，把用户引到不存在的编号 | 新增 `invalid_number_hint()` 从 `chapter_numbers()` / `sub_item_numbers()` 现取范围；回归 2 例（范围随注册表、注册表缩短时提示同步缩短） |
+| **rf-848** | TUI 动线驱动器的打点可能静默失效：处理器函数内 `from tui_keys import input_choice` 绕过模块属性 patch，用例表面在跑、实际读真实 stdin（rf-842 的根因只在 P2 regression 暴露） | `run_flow` 前置「打点矩阵自证」——逐项校验 `builtins.input` 与各消费方 `input_choice` / `get_key` 都指向 feeder，任一未命中即报错；日志动线改标 `scenario_basic` 让 P0 也覆盖；回归 2 例 |
+| **rf-847** | 发布台账失败记录只有 `ok=false`：复盘时无法回答「折在哪一步、哪些用例红、报告在哪」，只能去 `test-reports/archives/` 按 mtime 反查（目录名与结束时间对不上） | 失败命令写 `failure`：失败步 / 退出码 / 报告目录 / 失败用例名 / 输出尾部（首次失败保留第一现场）；回归 2 例 |
+| **rf-846** | 发布 bench 的 `--fail-fast` 在多档并行时形同虚设：`unit` 等长尾档与场景档同批启动，场景失败仍要等完整 unit 跑完（实测一次白等约 45s） | 发布子集按「快而决定性 → 长尾」排序（regression → integration → unit → dev-verify）；回归 1 例锁顺序 |
+| **rf-845** | prepare 的文档手术会在写入前因 changelog 派生失败中止，但该失败发生在 archive-init 与台账操作之后，排查要回退已动文件 | `check` 增加 changelog 派生预演（`apply_changelog_release` 只算不写），派生失败在动文件前中止并给出修复方向 |
+| **rf-844** | publish 台账只记「统计快照同步」一步（1.32s），实际提交/合并/tag/推送均未入账；且 gate 后代码有改动时只说「实跑 verify」，读者不知道改了什么、是否白跑 | 提交/合并/tag/推送分段计时入账；gate 戳增存逐文件代码哈希，publish 指纹不一致时点名 gate 后改动的代码文件并说明 verify 为何重跑；回归 2 例 |
 | **rf-843** | Web 配置面板的块标题回退成内部块 id：`renderBoolBlock` 用 `labels[blockKey]` 取标题，而 labels 只登记可编辑键；`sections` / `llm` 等块在面板上直接显示英文 id（中文块标题只有 `features.*` 组与少数写死项）。同批发现 `renderTuningGroup` 签名与块标题取源不一致（引用未定义 `surface`）导致整面板渲染失败 | 块标题改为**服务端随面下发**（`block_titles`，单一来源），前端一律取服务端下发的标题（不回退到 id、不写死中文）；`renderTuningGroup` / `renderAnonGroup` 改为接收 `surface`；契约测试补「每块都有中文标题且标题≠块 id」 |
 | **rf-839** | `_evaluate_percent_value` 参数蔓延（单函数 22 个参数：7 基础值 + 10 语境开关 + 5 数据映射），新增一种语境要同步改签名/文档/调用点与全部直接用例，语境判定顺序只体现在函数体里 | 收进冻结 dataclass `PercentContext`（22 字段，字段即语义），函数签名单参 `_evaluate_percent(ctx)`；调用点构造上下文，语境优先级仍在函数体内单源维持；`src/test/unit/llm` 1326 例全绿（行为零变化） |
 

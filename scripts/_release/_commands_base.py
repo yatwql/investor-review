@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -37,6 +38,17 @@ _DOC_ONLY_SUFFIXES = (".md", ".png", ".jpg", ".jpeg", ".gif", ".svg")
 
 _TIMER: _StepTimer | None = None
 
+#: 失败原因快照（当前命令内首次失败的步骤；`_finish_timing` 写进台账 failure 字段）
+_FAILURE: dict | None = None
+
+#: 失败输出里「报告归档」行的路径（test-runner 归档成功后打印）
+_REPORT_DIR_RE = re.compile(r"历史报告已归档[:：]\s*(\S+?)/?\s*$", re.MULTILINE)
+#: pytest 短摘要的失败/错误用例行
+_FAILED_TEST_RE = re.compile(r"^(?:FAILED|ERROR)\s+(\S+)", re.MULTILINE)
+#: 台账里保留的输出尾部行数与字符上限（足够看出原因，不至于把整份日志塞进 JSONL）
+_FAILURE_TAIL_LINES = 12
+_FAILURE_TAIL_CHARS = 1600
+
 
 def _timer() -> _StepTimer:
     """取当前命令的计时器（未初始化时新建，保证 handler 可独立调用）。"""
@@ -47,10 +59,44 @@ def _timer() -> _StepTimer:
 
 
 def _reset_timer() -> _StepTimer:
-    """为下一条命令重置计时器（`main` 入口调用，避免进程内多次调用串味）。"""
-    global _TIMER
+    """为下一条命令重置计时器与失败快照（`main` 入口调用，避免进程内多次调用串味）。"""
+    global _TIMER, _FAILURE
     _TIMER = _StepTimer()
+    _FAILURE = None
     return _TIMER
+
+
+def _failure_context() -> dict | None:
+    """当前命令的失败快照（未失败返回 None）。"""
+    return _FAILURE
+
+
+def _summarize_failure(label: str, rc: int, out: str = "", err: str = "") -> dict:
+    """把一次步骤失败压成台账可用的小快照。
+
+    报告目录与失败用例名从输出里提取（test-runner 的归档行 / pytest 短摘要），
+    台账因此自证「折在哪一步、哪些用例红、报告在哪」，不必再去
+    `test-reports/archives/` 按 mtime 反查。
+    """
+    combined = "\n".join(part for part in (out, err) if part)
+    report_match = _REPORT_DIR_RE.search(combined)
+    failed_tests = list(dict.fromkeys(_FAILED_TEST_RE.findall(combined)))[:20]
+    tail_lines = [line for line in combined.splitlines() if line.strip()][-_FAILURE_TAIL_LINES:]
+    tail = "\n".join(tail_lines)[-_FAILURE_TAIL_CHARS:]
+    return {
+        "step": label,
+        "rc": int(rc),
+        "report_dir": report_match.group(1) if report_match else "",
+        "failed_tests": failed_tests,
+        "tail": tail,
+    }
+
+
+def _record_failure(label: str, rc: int, out: str = "", err: str = "") -> None:
+    """记录当前命令的首次失败（后续步骤的失败不覆盖第一现场）。"""
+    global _FAILURE
+    if _FAILURE is None:
+        _FAILURE = _summarize_failure(label, rc, out, err)
 
 
 def _finish_timing(command: str, rc: int, env) -> None:
@@ -64,6 +110,11 @@ def _finish_timing(command: str, rc: int, env) -> None:
         version = ""
     tokens = _session_usage(os.environ.get("PI_SESSION_FILE"))
     agent = _agent_identity()
+    failure = _failure_context() if rc != 0 else None
+    if rc != 0 and failure is None:
+        # 非 `_run_step` 路径（门禁断言/预检/归档前置等）只拿得到退出码：
+        # 仍写入 rc，原因由终端输出承担，避免失败记录只剩 ok=false
+        failure = {"step": "", "rc": int(rc), "note": "见终端输出（未经过 _run_step 的步骤）"}
     record = _build_record(
         command=command,
         elapsed_s=timer.total,
@@ -72,6 +123,7 @@ def _finish_timing(command: str, rc: int, env) -> None:
         version=version,
         session_usage=tokens,
         agent=agent,
+        failure=failure,
     )
     try:
         path = _append_record(env.RELEASE_LOG_FILE, record)
@@ -219,6 +271,7 @@ def _run_step(label: str, cmd: list[str], root: Path, runner=None) -> int:
     if rc != 0:
         if err.strip():
             print(err.rstrip())
+        _record_failure(label, rc, out, err)
         print(f"[ERR] {label} 退出码 {rc}（按输出处理后重跑本子命令）")
         return rc
     print(f"[OK] {label}")
@@ -235,9 +288,29 @@ def _tree_fingerprint(env, runner=None) -> str:
     return _gate.tree_fingerprint(_exec, env.REPO_ROOT, runner)
 
 
-def _write_gate_stamp(version: str, fingerprint: str, verify_passed: str, env, source: str = "run") -> None:
+def _write_gate_stamp(
+    version: str,
+    fingerprint: str,
+    verify_passed: str,
+    env,
+    source: str = "run",
+    code_files: dict[str, str] | None = None,
+) -> None:
     """写 gate 通过戳（实现在 `_release/_gate.py`）。"""
-    _gate.write_gate_stamp(env.GATE_STAMP_FILE, version, fingerprint, verify_passed, source)
+    _gate.write_gate_stamp(env.GATE_STAMP_FILE, version, fingerprint, verify_passed, source, code_files)
+
+
+def _read_gate_stamp(env) -> dict | None:
+    """读现有 gate 戳（不论是否匹配当前指纹），供 publish 解释「为何重跑 verify」。"""
+    return _gate.read_gate_stamp(env.GATE_STAMP_FILE)
+
+
+def _changed_code_files(env, stamp: dict | None, runner=None) -> list[str]:
+    """gate 之后发生改动的代码文件（戳里没存文件清单时返回空）。"""
+    if not stamp:
+        return []
+    current = _gate.code_file_hashes(_exec, env.REPO_ROOT, runner)
+    return _gate.diff_code_files(stamp.get("code_files") or {}, current)
 
 
 def _code_fingerprint(env, runner=None) -> str:

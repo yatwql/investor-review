@@ -33,6 +33,31 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 BASELINE_FILE = REPO_ROOT / "src" / "test" / "data" / "fixtures" / "tui_keystroke_baseline.json"
 
 
+class TestReaderPatchMatrix:
+    """打点矩阵自证：任一读取入口未绑定 feeder 即视为「动线没跑到位」。"""
+
+    def test_detects_unpatched_builtin_input(self):
+        """动线打点失效的守卫：局部导入路径只能靠 builtins.input 兜底，缺失必须报出来。"""
+        import builtins
+
+        from src.test import _tui_flow
+
+        feeder = _tui_flow.KeyFeeder(["X"])
+        with patch.object(builtins, "input", lambda *_args, **_kwargs: ""):
+            violations = _tui_flow.validate_reader_patches(feeder)
+        assert "builtins.input" in violations
+
+    def test_detects_unpatched_consumer_entry(self):
+        """消费方模块的 `input_choice` 被替换成别的实现时同样要报出来。"""
+        from src.python.tui import handlers_log
+        from src.test import _tui_flow
+
+        feeder = _tui_flow.KeyFeeder(["X"])
+        with patch.object(handlers_log, "input_choice", lambda *_args, **_kwargs: ""):
+            violations = _tui_flow.validate_reader_patches(feeder)
+        assert f"{handlers_log.__name__}.input_choice" in violations
+
+
 class TestKeystrokeBaseline:
     """主路径的击键数快照。"""
 

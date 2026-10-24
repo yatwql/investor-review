@@ -43,6 +43,21 @@ def cmd_check(args: argparse.Namespace, env, runner=None) -> int:
         print(f"[ERR] v{release_version} 归档前置未就绪，先补齐再执行 prepare")
         return 2
     print(f"[OK] 归档前置就绪（v{release_version} 台账归档与目录树块）")
+
+    # prepare 的文档派生预演（只算不写）：changelog 发布段 / 归档段 / 指针行任一
+    # 派生失败时，prepare 会在写入前中止——把它前移到 check，失败发生在归档骨架
+    # 与台账手术之前，不必先动文件再回滚
+    try:
+        apply_changelog_release(
+            env.CHANGELOG_FILE.read_text(encoding="utf-8"),
+            release_version,
+            _dt.date.today().isoformat(),
+        )
+    except ReleaseError as exc:
+        print(f"[ERR] changelog 发布段派生预演失败：{exc}")
+        print("[ERR] prepare 会在写入任何文件前中止：先修 changelog 发布段/归档段/指针行，再重跑 check")
+        return 2
+    print("[OK] prepare 文档派生预演通过（changelog 发布段 + 归档段 + 指针行）")
     print("[OK] 预检通过 — 可执行 prepare")
     return 0
 
