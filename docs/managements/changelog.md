@@ -9,6 +9,9 @@
 
 ## [0.15.2-dev] - 开发中（未发布）
 
+- **`rf-865` 持仓集中度 Excel 恒占位修复**：`excel_module_loader` 补注册 `compute_concentration`，Excel 与 HTML 同源；新增装配键/可调用回归。
+- **`rf-866` 自检截断语义修复**：`max_tokens_self_review` 默认 2048→3072；首次截断记 WARNING，自动放大后仍截断才记 ERROR，重试成功不再污染 `errors`。
+
 - **`plan-208` 跨模块导入面收窄完成**：`config/cache/cli/providers` 公共面移除私有 `__all__`；兼容转发注释清零；生产代码跨包私有导入清零；`code_utils`/`doctor`/`cache.operations` 等转发按 owner 收口；`providers/_utils.py`→`providers/utils.py`、`analysis/_prosperity_inputs.py`→`analysis/prosperity_inputs.py`；测试 patch 点对齐 owner；新增观察期 `scripts/check-import-surface.py`（compat-comment / private-all / cross-private / dynamic-target）与 owner 表（`technical.md` §9）。
 
 - **`plan-209` TUI 显示模式统一（完成）**：状态标签收敛到 `switch_panel.status_text`（关闭恒红，父项关闭的子项不再退化为无色）；`truncate_display` 改为 ANSI 感知并补 `RESET`，修复窄档蓝色分组标题颜色泄漏；`DESIGN-TUI.md` 新增「Display Modes」契约；立项设计见 `docs/plan/tui-display-modes.md`。

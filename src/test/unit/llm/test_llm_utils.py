@@ -402,7 +402,7 @@ class TestCheckTruncation(unittest.TestCase):
         """默认 config_field='max_tokens' → 日志含 max_tokens。"""
 
         data = {"stop_reason": "max_tokens", "usage": {"output_tokens": 500}}
-        with self.assertLogs("invest", level="ERROR") as logs:
+        with self.assertLogs("invest", level="WARNING") as logs:
             result = _check_claude_truncation(data, 1000, "Claude")
         self.assertTrue(result)
         log_text = logs.output[0]
@@ -412,7 +412,7 @@ class TestCheckTruncation(unittest.TestCase):
         """config_field='max_tokens_expert_review' → 日志提示 max_tokens_expert_review。"""
 
         data = {"stop_reason": "max_tokens", "usage": {"output_tokens": 500}}
-        with self.assertLogs("invest", level="ERROR") as logs:
+        with self.assertLogs("invest", level="WARNING") as logs:
             result = _check_claude_truncation(data, 8192, "Claude", config_field="max_tokens_expert_review")
         self.assertTrue(result)
         log_text = logs.output[0]
@@ -433,7 +433,7 @@ class TestCheckTruncation(unittest.TestCase):
             "choices": [{"finish_reason": "length", "message": {"content": "..."}}],
             "usage": {"completion_tokens": 800},
         }
-        with self.assertLogs("invest", level="ERROR") as logs:
+        with self.assertLogs("invest", level="WARNING") as logs:
             result = _check_openai_truncation(data, 800, "OpenAI", config_field="max_tokens_global_macro")
         self.assertTrue(result)
         log_text = logs.output[0]

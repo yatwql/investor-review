@@ -96,7 +96,7 @@ class TestCheckClaudeTruncation(unittest.TestCase):
         from src.python.llm._api_responses import _check_claude_truncation
 
         data = {"stop_reason": "max_tokens", "usage": {"output_tokens": 500}}
-        with self.assertLogs("invest", level="ERROR"):
+        with self.assertLogs("invest", level="WARNING"):
             result = _check_claude_truncation(data, 1000, "TestLabel")
         self.assertTrue(result)
 
@@ -132,7 +132,7 @@ class TestCheckOpenaiTruncation(unittest.TestCase):
         from src.python.llm._api_responses import _check_openai_truncation
 
         data = {"choices": [{"finish_reason": "length"}], "usage": {"completion_tokens": 500}}
-        with self.assertLogs("invest", level="ERROR"):
+        with self.assertLogs("invest", level="WARNING"):
             result = _check_openai_truncation(data, 1000, "OpenAI")
         self.assertTrue(result)
 

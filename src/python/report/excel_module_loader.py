@@ -124,6 +124,14 @@ def load_report_modules(prog: ProgressReporter) -> dict[str, Any]:
         prog.add_error("持仓结构与集中度写入模块缺失 (position_structure)")
 
     try:
+        from src.python.report.fund_concentration import compute_concentration
+
+        modules["compute_concentration"] = compute_concentration
+    except ImportError:
+        modules["compute_concentration"] = lambda _fund_holdings: []
+        prog.add_error("持仓集中度计算模块缺失 (fund_concentration)")
+
+    try:
         from src.python.report.fund_style_report import analyze_style_for_all_funds
         from src.python.report.style_factor_sheet import write_style_factor_sheet
 

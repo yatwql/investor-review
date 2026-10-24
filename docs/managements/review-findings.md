@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.15.2-dev
-> **编号源**：`rf-next = 865`（新增问题取此编号，完成后更新为 +1；已用最大 rf-864，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 867`（新增问题取此编号，完成后更新为 +1；已用最大 rf-866，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -36,6 +36,8 @@
 
 | # | 问题 | 修复 |
 |---|------|------|
+| **rf-865** | Excel「持仓集中度监控」恒为占位：loader 未注册 `compute_concentration`，HTML 有数据而 Excel 显示暂不可用 | `load_report_modules` 注册 `compute_concentration`（ImportError 降级）；新增 `compute_*` 装配键与集中度可调用回归 |
+| **rf-866** | `self_review` 默认 2048 截断；自动重试成功仍记 ERROR | 默认值 3072；首次截断降为 WARNING，仅放大后仍截断记 ERROR；新增「重试成功不产生 ERROR」回归 |
 | **rf-863** | 发布流程两处缺口：`check` 的 prepare 预演只验派生能成功、不验派生出的指针/索引目标路径（rf-862 到 prepare 写出后才被 doc-links 拦）；`prepare` 写盘后任一步失败会留下版本头/归档/changelog 半途状态，需手工 `git reset` | ① `apply_changelog_release` 在纯文本阶段校验指针行与归档索引行目标路径（并归一索引行目录）；② `cmd_prepare` 包装：预检干净树 + 写盘后失败自动 `git reset --hard HEAD` 回滚，未跟踪文件只提示不删除；回归 2 例（链接校验 / 失败回滚） |
 
 ### 归档档案

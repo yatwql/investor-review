@@ -68,6 +68,37 @@ class TestRegistryTypeBoardFlagConsistency:
         assert not stale, f"board_flags 残留已废弃 type: {sorted(stale)}"
 
 
+class TestComputeModuleKeyConsistency:
+    """分派层 `modules.get("compute_*")` 引用的计算键也必须由 loader 装配。"""
+
+    def _dispatch_compute_keys(self) -> set[str]:
+        keys: set[str] = set()
+        for path in sorted(_REPORT_DIR.glob("excel_*.py")):
+            if path.name == "excel_module_loader.py":
+                continue
+            src = path.read_text(encoding="utf-8")
+            keys |= set(re.findall(r'modules\.get\(\s*"(compute_[a-z_]+)"', src))
+        return keys
+
+    def _assembled_compute_keys(self) -> set[str]:
+        src = _LOADER_PATH.read_text(encoding="utf-8")
+        return set(re.findall(r'modules\[\s*"(compute_[a-z_]+)"\s*\]', src))
+
+    def test_all_dispatch_compute_keys_are_assembled(self):
+        """compute_* 分派键与装配键同步（持仓集中度曾因漏装恒占位）。"""
+        missing = self._dispatch_compute_keys() - self._assembled_compute_keys()
+        assert not missing, f"分派层引用了未装配的计算模块键: {sorted(missing)}"
+
+    def test_concentration_compute_is_wired(self):
+        """持仓集中度计算键必须真实可调用（Excel 不再恒写占位）。"""
+        from unittest.mock import MagicMock
+
+        from src.python.report.excel_module_loader import load_report_modules
+
+        modules = load_report_modules(MagicMock())
+        assert callable(modules["compute_concentration"])
+
+
 class TestSheetWriterModuleKeyConsistency:
     """分派层引用的写入器模块键，必须都由 excel_module_loader 装配。"""
 
