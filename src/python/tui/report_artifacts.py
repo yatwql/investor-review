@@ -93,6 +93,7 @@ def prompt_open_artifacts(
     for path in artifacts:
         echo(f"       产物文件  {path}")
     if _OPEN_FAILED_IN_SESSION or not (open_supported or _local_open_supported)():
+        logger.info("[report_artifacts] 本机打开不可用（远程/桥接/无图形会话），只打印产物路径")
         echo("  [!] 当前为远程/无图形终端，服务器无法在手机或远端打开文件管理器。")
         _remote_hint(echo)
         return "unsupported"

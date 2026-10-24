@@ -138,21 +138,21 @@ def _compute_module_cache_info(
         event_impact_block=event_impact_block or "",
         schedule_replay_block=schedule_replay_block or "",
     )
-    # 排障用组件级哈希：仅在 DEBUG 日志开启时计算（正式路径零额外开销）。
-    # 连续两次同数据报告仍全量 miss 时，对比两次日志即可定位变化来源。
-    if logger.isEnabledFor(logging.DEBUG):
-        global _LAST_FP_COMPONENTS
-        from src.python.llm.module_fingerprint import (
-            diff_fingerprint_components,
-            fingerprint_components,
-        )
+    # 组件级指纹审计：**变化定位恒开**（每份报告一行 INFO，默认配置就能回答「为什么又 miss」），
+    # 逐组件哈希快照只在 DEBUG 下打（纯排障，正式路径零额外开销）。
+    global _LAST_FP_COMPONENTS
+    from src.python.llm.module_fingerprint import (
+        diff_fingerprint_components,
+        fingerprint_components,
+    )
 
-        _components = fingerprint_components(_inputs)
-        _changed = diff_fingerprint_components(_LAST_FP_COMPONENTS, _components)
+    _components = fingerprint_components(_inputs)
+    _changed = diff_fingerprint_components(_LAST_FP_COMPONENTS, _components)
+    if _changed:
+        logger.info("[fingerprint] 指纹组件变化（相对上次报告）: %s", _changed)
+    if logger.isEnabledFor(logging.DEBUG):
         logger.debug("[fingerprint] 组件哈希: %s", _components)
-        if _changed:
-            logger.debug("[fingerprint] 相对上次报告的组件变化: %s", _changed)
-        _LAST_FP_COMPONENTS = _components
+    _LAST_FP_COMPONENTS = _components
 
     fp_global_macro = global_macro_fingerprint(_inputs)
     fp_expert_review = expert_review_fingerprint(_inputs)
