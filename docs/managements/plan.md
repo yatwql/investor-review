@@ -38,7 +38,7 @@
 
 #### `plan-185` 收益率指标缺口径标签，模型反复写错
 
-**现状**：口径标签已落地（`llm/rate_caliber.py` 唯一声明点，并入 `PROMPT_SCHEMA_VERSION` 指纹），**余验收**——事实校验只把数值改对，句意与修饰语仍可能挂错口径。
+**现状**：口径标签已落地（`llm/rate_caliber.py` 唯一声明点，并入 `PROMPT_SCHEMA_VERSION` 指纹），**余验收**——事实校验只把数值改对，句意与修饰语仍可能挂错口径。最近两轮 `fact_fix_total` 为 5 / 4，未达到连续 ≤3。
 **验收**：`perf_history.counters.fact_fix_total` 连续若干轮稳定 ≤3 处即归档。
 
 #### `plan-210` 报告重复运行耗时优化（LLM / 新闻）
@@ -67,7 +67,7 @@
 
 #### `plan-70` 决策跨期反思闭环（decision_reflection）验证死线
 
-**状态**：维持观察——启用 67 次、账本已结算 16 条 / 待结算 42 条；`directional_total = 12`、命中率 75%、样本仍不足。
+**状态**：维持观察——启用 75 次、账本已结算 16 条 / 待结算 47 条；`directional_total = 12`、命中率 75%、样本仍不足（阈值 40）。
 **判据**：① 启用次数停止增长（无真实使用），或 ② 已结算样本 <10 条且无达标趋势 → 撤销该实验功能（含 `decision_llm_capture`、行动章复盘块注入与对应需求条目）；已结算 ≥10 条则按 `doctor` 账本概览评估转正，`directional_total` 达 40+ 时评估转正。
 **落地设计（转正后启动）**：按 [`decision-reflection-design.md`](../plan/decision-reflection-design.md) 四迭代执行，以 Vibe-Trading `shadow_account` 为参照；与持仓变动复盘构成「意图 vs 成交」对账（只读，不互写）。
 **单一事实位**：[technical §6.9 实验项生命周期表](technical.md#69-实验项生命周期表)「决策跨期反思闭环」行。
