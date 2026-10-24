@@ -104,7 +104,7 @@
     "self_review": {
       "enabled": true,  // 是否启用（模块启停 / 思考模式）
       "temperature": 0.1,  // 采样温度（越低越确定）
-      "max_tokens": 2048,  // 单次调用最大输出 token
+      "max_tokens": 3072,  // 单次调用最大输出 token
       "timeout": 90,  // 单次调用超时（秒）
       "thinking": {
         "enabled": false,  // 是否启用（模块启停 / 思考模式）
