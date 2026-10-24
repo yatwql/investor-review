@@ -138,6 +138,29 @@ class TestChangelogRelease:
         assert "../archive/0.13.x/" not in pointer, "指针目标路径不得缺 v 前缀（跨小版本归档目录）"
         assert "../archive/v0.12.x/" not in pointer
 
+    def test_index_line_target_path_follows_minor(self, rel):
+        """归档索引行的目标路径也随小版本换目录，不能只改文件名。"""
+        text = _sample_changelog().replace(
+            "](../archive/v0.12.x/archived_changelog.0.12.x.md) —",
+            "](../archive/v0.11.x/archived_changelog.0.12.x.md) —",
+        )
+        out, _ = rel.apply_changelog_release(text, "0.12.6", "2026-10-08")
+        index = next(line for line in out.splitlines() if "archived_changelog.0.12.x.md" in line and "—" in line)
+        assert "../archive/v0.12.x/archived_changelog.0.12.x.md" in index
+        assert "../archive/v0.11.x/archived_changelog.0.12.x.md" not in index
+
+    def test_link_validation_rejects_missing_v(self, rel):
+        """派生链接缺 v 前缀（跨小版本目录）必须在纯文本阶段拒绝。"""
+        from _release import _changelog_archive as archive_mod
+
+        bad = (
+            "> **最近发布 [0.13.1]**（2026-10-09）——已发布版本段随发布移入 "
+            "[`archived_changelog.0.13.x.md`](../archive/0.13.x/archived_changelog.0.13.x.md)；本文件只保留当前开发版本段与归档索引。\n"
+            "- [`archived_changelog.0.13.x.md`](../archive/0.13.x/archived_changelog.0.13.x.md) — v0.13.1（2026-10-09）\n"
+        )
+        with pytest.raises(rel.ReleaseError):
+            archive_mod._validate_archive_link_targets(bad, "archived_changelog.0.13.x.md")
+
     def test_archive_init_placeholder_line_is_accepted(self, rel):
         """`archive-init` 生成的占位索引行（`vX.Y.x`）必须能被首版发布直接改写。
 
@@ -542,6 +565,30 @@ class TestPrepare:
         assert rc == 0
         assert "rf-901" in fx.RF_FILE.read_text(encoding="utf-8")
         assert "plan-42" in fx.PLAN_FILE.read_text(encoding="utf-8")
+
+    def test_failure_after_writes_rolls_back_when_start_clean(self, rel, tmp_path, monkeypatch):
+        """写盘后失败 → 预检确认的干净工作树自动回滚，不留半途状态。"""
+        fx = _ToolRepoFixture(rel, tmp_path)
+        runner = _ok_runner()
+        runner.dirty = False
+        original_run = runner.run
+
+        def run(cmd, root, capture=True):
+            if cmd[:3] == ["git", "status", "--porcelain"]:
+                return (0, " M docs/x.md\n" if runner.dirty else "", "")
+            return original_run(cmd, root, capture)
+
+        runner.run = run
+
+        def _fail_archive(*_args, **_kwargs):
+            runner.dirty = True
+            return 2
+
+        monkeypatch.setattr(rel._cmd_prep, "run_archive", _fail_archive)
+        rc = rel.cmd_prepare(ns(version=None, date="2026-10-08"), runner=runner)
+        assert rc == 2
+        assert any(call[:3] == ["git", "reset", "--hard"] for call in runner.calls), "失败后应自动回滚"
+        _ = fx
 
     def test_preflight_failure_leaves_files_untouched(self, rel, tmp_path):
         fx = _ToolRepoFixture(rel, tmp_path)
