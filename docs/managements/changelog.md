@@ -2,35 +2,19 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
-> **最近发布 [0.15.3]**（2026-10-24）——已发布版本段随发布移入 [`archived_changelog.0.15.x.md`](../archive/v0.15.x/archived_changelog.0.15.x.md)；本文件只保留当前开发版本段与归档索引。
+> **最近发布 [0.15.4]**（2026-10-24）——已发布版本段随发布移入 [`archived_changelog.0.15.x.md`](../archive/v0.15.x/archived_changelog.0.15.x.md)；本文件只保留当前开发版本段与归档索引。
 
 ---
 
 
-## [0.15.4-dev] - 开发中（未发布）
-
-- **持仓变动提示词去计数漂移**：复盘窗口行不再输出「原始快照文件数」（每跑一次报告 +1），改按日去重口径；指纹审计组件改为与生产同口径的渲染文本/风险信号子集，消除虚报的组件变化。
-
-- **数据质量块误报修复**：成功取用事件不再按 `failure_type` 计入「连接失败」，质量块只统计失败事件；此前正常取数会被写成「连接失败 N 次」，并使缓存冷热不同的两次报告产出不同文本。
-
-- **报告级 LLM 缓存状态隔离**：新增报告运行边界（清本轮降级事件、重置自检载体、取 LLM 用量基线），`perf` 的 token/调用数改为按报告 delta 记账，TUI 会话累计不变。
-- **指纹组件审计**：新增组件级哈希与变化定位，DEBUG 下自动记录「相对上次报告哪些组件变了」，用于定位缓存未命中来源。
-
-- **LLM 默认值对齐本地偏好**：`self_review` 默认开启；`reasoning_effort` 默认值调整为 global_macro/health_check/news_correlation/penetration_deep=`low`、expert_review=`medium`。生成模板、用户手册与需求默认值描述同步。
-
-- **东方财富 push2 告警降噪**：单代码失败日志 DEBUG，批量失败按源聚合一条 WARNING；registry 熔断汇总保留，减少行业接口断连时的 per-code 噪声。
-- **事件窗取数复用**：`build_event_rows` 对同批 bars/index 做局部 memo；基金基准文本同批去重，避免重复链路取数。
-
-- **报告收尾远程/无图形会话指引**：远程 SSH、手机远端或无 GUI 环境不再询问 `y/N` 并调用无效的服务器文件管理器；直接打印产物路径并提示 Web 下载或 `scp`/`sftp` 获取。本地桌面仍保留单键打开。
-
-- **交付文档与本地配置**：仓库内 `CLAUDE.md` 固定交互纪律（与全局 `AGENTS.md` 同源）；本地 `llm_settings.json` 恢复被误覆盖的模块启用状态（`global_macro`/`expert_review`/`health_check`/`penetration_deep`/`self_review`/`holding_change` 开启，`news_correlation` 保持关闭）。
+## [0.15.5-dev] - 开发中（未发布）
 
 
 （本次发布内容见下方归档索引）
 
 ## 归档
 
-- [`archived_changelog.0.15.x.md`](../archive/v0.15.x/archived_changelog.0.15.x.md) — v0.15.0 ~ v0.15.3（2026-10-24）
+- [`archived_changelog.0.15.x.md`](../archive/v0.15.x/archived_changelog.0.15.x.md) — v0.15.0 ~ v0.15.4（2026-10-24）
 - [`archived_changelog.0.14.x.md`](../archive/v0.14.x/archived_changelog.0.14.x.md) — v0.14.0 ~ v0.14.8（2026-10-21 ~ 2026-10-23）
 - [`archived_changelog.0.13.x.md`](../archive/v0.13.x/archived_changelog.0.13.x.md) — v0.13.0 ~ v0.13.12（2026-10-13 ~ 2026-10-21）
 - [`archived_changelog.0.12.x.md`](../archive/v0.12.x/archived_changelog.0.12.x.md) — v0.12.1 ~ v0.12.13（2026-10-03 ~ 2026-10-13）
