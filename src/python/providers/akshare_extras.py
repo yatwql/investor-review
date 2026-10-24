@@ -210,9 +210,20 @@ def get_profit_forecast_cache_key() -> str:
 # 行业资金流向最近失败类型: "" / "connection" / "empty"
 _SECTOR_FLOW_FAILURE: str = ""
 
+
+def sector_flow_failure() -> str:
+    """返回行业资金流向最近一次失败类型（公开只读访问器；空串=最近成功）。"""
+    return _SECTOR_FLOW_FAILURE
+
+
 # 分红数据最近失败类型: "" / "connection" / "empty"——供报告层如实登记分红
 # 数据状态（与 _SECTOR_FLOW_FAILURE 同习语：区分「源不可达」与「本无分红」）。
 _DIVIDEND_FAILURE: str = ""
+
+
+def dividend_failure() -> str:
+    """返回分红数据最近一次失败类型（公开只读访问器；空串=最近成功）。"""
+    return _DIVIDEND_FAILURE
 
 
 def get_sector_fund_flow() -> list[dict[str, Any]]:

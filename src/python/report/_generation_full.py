@@ -208,9 +208,29 @@ def _generate_report_full(
     try:
         sector_flow = get_sector_fund_flow()
         if sector_flow:
+            from src.python.report.data_status import mark_data_used
+
+            mark_data_used("ff_sector_flow", "T4")
             reporter.ok("行业资金流向获取完成")
+        else:
+            from src.python.cache.operations import sector_flow_hint
+            from src.python.providers.akshare_extras import sector_flow_failure
+            from src.python.report.data_status import mark_data_unavailable
+
+            failure = sector_flow_failure()
+            failure_type = "empty" if failure == "empty" else "unreachable"
+            mark_data_unavailable(
+                "fund_flow",
+                "T4",
+                failure_type=failure_type,
+                message=f"akshare（{sector_flow_hint()}）",
+            )
+            reporter.warn(f"行业资金流向{sector_flow_hint()}，将继续生成报告")
     except Exception:
         sector_flow = None
+        from src.python.report.data_status import mark_data_unavailable
+
+        mark_data_unavailable("ff_sector_flow", "T4", failure_type="unreachable", message="akshare（调用异常）")
         reporter.warn("行业资金流向获取失败，将继续生成报告")
     perf.stop()
 

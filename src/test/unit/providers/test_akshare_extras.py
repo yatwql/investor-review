@@ -74,6 +74,12 @@ class TestSectorFundFlowFailureState(unittest.TestCase):
             assert ae.get_sector_fund_flow() == []
         assert ae._SECTOR_FLOW_FAILURE == "empty"
 
+    def test_public_failure_accessor_reflects_state(self) -> None:
+        ae._SECTOR_FLOW_FAILURE = "connection"
+        assert ae.sector_flow_failure() == "connection"
+        ae._DIVIDEND_FAILURE = "empty"
+        assert ae.dividend_failure() == "empty"
+
     def test_success_clears_previous_failure(self) -> None:
         ae._SECTOR_FLOW_FAILURE = "connection"
         df = MagicMock()

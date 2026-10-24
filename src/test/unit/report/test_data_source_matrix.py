@@ -535,3 +535,19 @@ class TestCatalogFallbackAndSentimentRows:
         assert self._rows()["history"]["used"] is False
         mark_provider_used("history_stock", "tencent", "腾讯财经")
         assert self._rows()["history"]["used"] is True
+
+
+class TestFundFlowStatusVisibility:
+    """行业资金流向失败必须出现在数据源矩阵，而不是静默为空。"""
+
+    def test_fund_flow_failure_marks_category(self):
+        from src.python.report.data_source_matrix import build_data_source_matrix
+        from src.python.report.data_status import reset_tracker
+
+        reset_tracker()
+        tracker = get_tracker()
+        tracker.record("ff_sector_flow", "T4", success=False, failure_type="unreachable", message="akshare（连接失败）")
+        rows = {row["key"]: row for row in build_data_source_matrix()}
+        assert "fund_flow" in rows
+        assert rows["fund_flow"]["status"] in {"failed", "degraded"}
+        reset_tracker()

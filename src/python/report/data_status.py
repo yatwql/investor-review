@@ -171,6 +171,25 @@ def mark_data_used(source_key: str, tier: str = "T2") -> None:
         logger.debug("[data_status] 取用标记失败（非关键）: %s", source_key, exc_info=True)
 
 
+def mark_data_unavailable(
+    source_key: str,
+    tier: str = "T2",
+    *,
+    failure_type: str = "unreachable",
+    message: str | None = None,
+) -> None:
+    """登记一次「本次未取到该类别数据」的失败事件（观测性副作用，不抛异常）。
+
+    与 :func:`mark_data_used` 成对：成功记使用、失败记降级；只写观测层，不改变
+    业务降级决策。取数域在**确认失败**时调用，使数据源矩阵能显示可用/不可用状态，
+    而不是把失败静默成空数据。
+    """
+    try:
+        get_tracker().record(source_key, tier, success=False, failure_type=failure_type, message=message)
+    except Exception:  # 观测失败不影响主链路
+        logger.debug("[data_status] 不可用标记失败（非关键）: %s", source_key, exc_info=True)
+
+
 # ── provider 级归属（矩阵「命中源」列）──────────
 # 与类别级取用标记正交：类别级答「这类数据本次取到了吗」（说明表「本次使用」列），
 # provider 级答「本次是哪个源服务的」（矩阵「命中源」列）。链路在某个 provider 成功

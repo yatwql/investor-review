@@ -9,6 +9,8 @@
 
 ## [0.15.2-dev] - 开发中（未发布）
 
+- **`plan-211` 数据源状态接入报告矩阵**：行业资金流向失败经 `mark_data_unavailable` 写入 DegradationTracker，数据源可用性矩阵可见；provider 暴露公开失败状态访问器，`fetcher`/`cache` 不再读取私有 `_SECTOR_FLOW_FAILURE`/`_DIVIDEND_FAILURE`。
+
 
 - **`plan-211` 数据源路由与降级状态**：hithink 不再把场内 ETF 送入 A 股价格/历史槽，并归一 A 股错误交易所后缀；行业资金流向失败类型写回模块状态（连接失败/暂无数据），缓存提示可区分。
 

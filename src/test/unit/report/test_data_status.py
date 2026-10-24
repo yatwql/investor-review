@@ -865,3 +865,21 @@ class TestTrackerNotCachedAtModuleLevel:
         assert fund_performance._tracker() is current
         assert penetration_sheet._tracker() is current
         assert summary._tracker() is current
+
+
+class TestMarkDataUnavailable:
+    """失败登记与成功登记成对：矩阵能显示源不可用，而不是静默空数据。"""
+
+    def test_records_failure_event(self, tmp_path, monkeypatch):
+        tracker = DegradationTracker(persist_path=str(tmp_path / "degradation.json"))
+        monkeypatch.setattr(ds, "get_tracker", lambda: tracker)
+        ds.mark_data_unavailable("fund_flow", "T4", failure_type="empty", message="akshare（暂无数据）")
+        event = tracker.get_log()[-1]
+        assert event["source_key"] == "fund_flow"
+        assert event["failure_type"] == "empty"
+        assert event["success"] is False
+
+    def test_observation_failure_does_not_raise(self, monkeypatch):
+        monkeypatch.setattr(ds, "get_tracker", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+        result = ds.mark_data_unavailable("fund_flow", "T4")  # 观测副作用不得打断主链路
+        assert result is None
