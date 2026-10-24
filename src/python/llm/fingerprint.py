@@ -137,7 +137,7 @@ def get_cache_ttl_llm(subtype: str = "global_macro") -> float:
 
     TTL 优先级：
       1. config.json 中的 cache_ttl.llm_global_macro / llm_expert_review / llm_news_correlation
-      2. 代码默认值（全球政经局势 86400s / 智囊团深度复盘 7200s / 财经新闻热点与持仓关联分析 3600s）
+      2. 代码默认值（全球政经局势 86400s / 智囊团深度复盘·持仓体检·穿透深度 14400s / 财经新闻热点与持仓关联分析 3600s）
 
     Args:
         subtype: LLM 模块键（global_macro / expert_review / health_check /
@@ -169,10 +169,10 @@ def get_cache_ttl_llm(subtype: str = "global_macro") -> float:
         logger.debug("_get_llm_ttl: 获取 TTL 失败，使用 LLM 默认值")
         defaults: dict[str, float] = {
             "global_macro": 86400,
-            "expert_review": 7200,
+            "expert_review": 14400,
             "news_correlation": 3600,
-            "health_check": 86400,
-            "penetration_deep": 86400,
+            "health_check": 14400,
+            "penetration_deep": 14400,
             "self_review": 86400,
             "holding_change": 86400,
             "debate_pro": 86400,

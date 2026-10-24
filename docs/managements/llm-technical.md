@@ -203,9 +203,9 @@ skeleton.py:generate_llm_content()
 | 模块键 | 名称 | 默认 max_tokens | 默认 timeout | 默认 TTL | 默认 system_prompt |
 |:-------|:-----|:---------------:|:------------:|:--------:|:-------------------|
 | `global_macro` | 全球政经局势 | 3072 | 60s | 24h（86400s） | 宏观经济学家角色，500 字内，纯文本 |
-| `expert_review` | 智囊团深度复盘 | 36000 | 120s | 2h（7200s） | 召集令→圆桌会→定音锤三阶段 |
-| `health_check` | 持仓体检报告 | 24000 | 120s | 24h（86400s） | 五维度评分（风险分散度/流动性/收益合理性/成本结构/数据质量） |
-| `penetration_deep` | 穿透深度分析 | 12288 | 90s | 24h（86400s） | 行业/品种集中度+国别暴露 |
+| `expert_review` | 智囊团深度复盘 | 36000 | 120s | 4h（14400s） | 召集令→圆桌会→定音锤三阶段 |
+| `health_check` | 持仓体检报告 | 24000 | 120s | 4h（14400s） | 五维度评分（风险分散度/流动性/收益合理性/成本结构/数据质量） |
+| `penetration_deep` | 穿透深度分析 | 12288 | 90s | 4h（14400s） | 行业/品种集中度+国别暴露 |
 
 #### 批量模式模块（1 个，通过 `generate_llm_module` 以批量模式调用）
 
@@ -931,9 +931,9 @@ penetrated_assets ──→ extract_stable_penetration()
 | 模块 | 默认 TTL | 说明 |
 |:-----|:--------:|:------|
 | `global_macro` | 86400s (24h) | 宏观局势每日分析一次即可 |
-| `expert_review` | 7200s (2h) | 智囊团复盘可在同一天多次触发 |
-| `health_check` | 86400s (24h) | 体检报告每日更新 |
-| `penetration_deep` | 86400s (24h) | 穿透分析每日更新 |
+| `expert_review` | 14400s (4h) | 智囊团复盘可在同一天多次触发；4h 平衡新鲜度与重复调用成本 |
+| `health_check` | 14400s (4h) | 体检结论随持仓/数据质量变动，4h 刷新 |
+| `penetration_deep` | 14400s (4h) | 穿透结构随持仓变动，4h 刷新 |
 | `news_correlation` | 3600s (1h) | 新闻时效性强，TTL 较短 |
 | `self_review` | 86400s (24h) | 生成后自检（附录）；**内容寻址**（键含各模块产出正文），输入未变即命中，按时间强制重算只会白花钱 |
 | `holding_change` | 86400s (24h) | 持仓变动复盘归因（章内 LLM 归因块，本体由 feature `holding_change_review` 控制）；同样内容寻址 |

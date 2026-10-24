@@ -1,9 +1,9 @@
 """LLM 模块缓存 TTL 单一来源 —— 读侧与清理侧必须用同一个数。
 
-历史偏差：`get_cache_ttl_llm("self_review")` 未在映射表里，回落到
-`llm_global_macro`（24h），而缓存清理按 data_registry 的 7200s 判定——
-2h 后启动清理删掉了读侧仍认为有效的文件，下一份报告白重算一次自检/归因
-（真金白银 + 耗时），日志上只写「无此缓存文件」，看不出原因。
+契约来源：读侧 TTL 由 `get_cache_ttl_llm` 的映射表给出，清理/配置派生由
+`core/data_registry` 的 `cache_ttl` 给出；两侧必须是同一个数——任一侧漏登记
+就会「读侧认为有效、清理侧已删」，表现为刚写的缓存下一轮又没了（真金白银 +
+耗时，日志只写「无此缓存文件」）。
 
 本文件锁两条契约：
 1. 每个 LLM 模块的读侧 TTL == 注册表（清理/配置）TTL；
@@ -54,6 +54,14 @@ class TestTTLSingleSource:
         for module in ("self_review", "holding_change"):
             assert get_cache_ttl_llm(module) == pytest.approx(86400, abs=1e-9), module
 
-    def test_expert_review_keeps_short_ttl(self):
-        """专家复盘按 2h 刷新（日内行情/持仓变化快），不受本次对齐影响。"""
-        assert get_cache_ttl_llm("expert_review") == pytest.approx(7200, abs=1e-9)
+    @pytest.mark.parametrize("module", ("expert_review", "health_check", "penetration_deep"))
+    def test_generated_config_template_carries_four_hour_ttl(self, module):
+        """生成配置的程序（`_DEFAULT_CONFIG` → 模板）写出的值同样是 4h。"""
+        from src.python.config._config_defaults import _DEFAULT_CONFIG
+
+        assert int(_DEFAULT_CONFIG["cache_ttl"][f"llm_{module}"]) == 14400
+
+    @pytest.mark.parametrize("module", ("expert_review", "health_check", "penetration_deep"))
+    def test_analysis_modules_use_four_hour_ttl(self, module):
+        """三个分析模块统一 4h：平衡「日内变化要看得到」与「每次重算都是钱」。"""
+        assert get_cache_ttl_llm(module) == pytest.approx(14400, abs=1e-9), module

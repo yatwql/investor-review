@@ -240,11 +240,11 @@ class TestConfigDefaults:
 
 class TestLlmDefaults:
     def test_correct_row_passes(self, drift):
-        doc = "| `expert_review` | 智囊团深度复盘 | 36000 | 120s | 2h（7200s） | 三阶段 |\n"
+        doc = "| `expert_review` | 智囊团深度复盘 | 36000 | 120s | 4h（14400s） | 三阶段 |\n"
         assert drift.check_llm_defaults(doc) == []
 
     def test_max_tokens_and_timeout_mismatch(self, drift):
-        doc = "| `expert_review` | 智囊团深度复盘 | 999 | 30s | 2h（7200s） | 三阶段 |\n"
+        doc = "| `expert_review` | 智囊团深度复盘 | 999 | 30s | 4h（14400s） | 三阶段 |\n"
         findings = drift.check_llm_defaults(doc)
         assert any("max_tokens 文档 999" in f for f in findings)
         assert any("timeout 文档 30s" in f for f in findings)
