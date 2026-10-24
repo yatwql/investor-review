@@ -239,6 +239,8 @@ def get_sector_fund_flow() -> list[dict[str, Any]]:
     _key = _cache_key(_CACHE_FLOW_PREFIX, _fp)
     cached = cache_get(_key, _SECTOR_FLOW_TTL)
     if cached is not None:
+        global _SECTOR_FLOW_FAILURE
+        _SECTOR_FLOW_FAILURE = ""
         _memo_set(_memo_key_str, cached)
         return cached
 
@@ -262,6 +264,7 @@ def get_sector_fund_flow() -> list[dict[str, Any]]:
         _SECTOR_FLOW_FAILURE = "empty"
         logger.debug("行业资金流向: 结果为空")
         return []
+    _SECTOR_FLOW_FAILURE = ""
 
     # ── 结构化 ──
     result: list[dict[str, Any]] = []

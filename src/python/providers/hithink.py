@@ -31,6 +31,7 @@ import threading
 from typing import Any
 
 from src.python.core.code_symbols import to_exchange_symbol, to_fmp_symbol
+from src.python.core.code_utils import is_exchange_fund_code
 from src.python.core.datasource_credential import (
     DEFAULT_DATA_KEY_FILE,
     CredentialSpec,
@@ -201,12 +202,15 @@ def _request(path: str, params: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def fetch_price(code: str) -> dict[str, Any] | None:
-    """单只 A 股 / 场内基金实时行情（行情域链路第三槽）。
+    """单只 A 股实时行情（行情域链路第三槽）。
 
     形态对齐 ``providers/tencent.fetch_price``：``{name, code, price, yesterday_close,
     open, high, low, volume, turnover, price_date, pe, source}``（``market_cap`` 本源自
-    不提供，由适配器 default 落 ``None``）。非 A 股/场内基金返回 ``None``。
+    不提供，由适配器 default 落 ``None``）。场内基金/ETF 走 A 股价格接口会被上游判
+    ``Unknown thscode``，故本槽只服务 A 股个股；其余返回 ``None`` 交下一链路。
     """
+    if is_exchange_fund_code(code):
+        return None
     symbol = to_thscode(code)
     if not symbol:
         return None
@@ -232,14 +236,16 @@ def fetch_price(code: str) -> dict[str, Any] | None:
 
 
 def fetch_kline(code: str, days: int = 30, start_from: str | None = None) -> list[dict[str, Any]]:
-    """历史日 K（**前复权**），形态对齐 ``providers/tencent.fetch_kline``。
+    """A 股历史日 K（**前复权**），形态对齐 ``providers/tencent.fetch_kline``。
 
     上游字段名：历史 K 线的日期是 ``date_ms``（行情快照才是 ``timestamp``），
-    实测混用会导致解析出 0 条。
+    实测混用会导致解析出 0 条。场内基金/ETF 不走本槽（上游 A 股接口不认）。
 
     Returns:
         ``[{date, open, close, high, low, volume}, ...]`` 按日期升序；失败返回空列表。
     """
+    if is_exchange_fund_code(code):
+        return []
     return _kline_for_symbol(to_thscode(code), days, start_from)
 
 
@@ -317,6 +323,11 @@ def to_thscode(code: str, *, is_fund: bool = False) -> str:
     if not raw:
         return ""
     if "." in raw:
+        base, _, suffix = raw.partition(".")
+        fmp = to_fmp_symbol(base)
+        expected = "SH" if fmp.endswith(".SS") else fmp[-2:] if fmp.endswith((".SZ", ".BJ")) else ""
+        if expected and suffix in {"SH", "SZ", "BJ"} and suffix != expected:
+            return f"{base}.{expected}"
         return raw
     if is_fund:
         return f"{raw}.OF" if raw.isdigit() else ""

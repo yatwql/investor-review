@@ -265,6 +265,20 @@ class TestToThscode:
         assert ht.to_thscode("002943") == "002943.SZ"
         assert ht.to_thscode("002943", is_fund=True) == "002943.OF"
 
+    @pytest.mark.parametrize(
+        ("code", "expected"),
+        [("000925.SH", "000925.SZ"), ("600900.SZ", "600900.SH"), ("561910.SH", "561910.SH")],
+    )
+    def test_wrong_exchange_suffix_normalized(self, code, expected):
+        assert ht.to_thscode(code) == expected
+
+    def test_fetch_price_skips_exchange_fund(self):
+        """场内 ETF 不走 A 股价格槽（上游 Unknown thscode）。"""
+        assert ht.fetch_price("561910") is None
+
+    def test_fetch_kline_skips_exchange_fund(self):
+        assert ht.fetch_kline("561910") == []
+
     @pytest.mark.parametrize("code", ["", "  ", "8300000", "AAPL", "MU"])
     def test_unmappable_returns_empty(self, code):
         assert ht.to_thscode(code) == ""
