@@ -56,7 +56,9 @@
 
 **动作**：走通 `release.py` 全链——`prepare`（版本全链 + changelog / plan / review-findings / docs-plan 归档迁移）、`refresh`（bench + 覆盖率 + 统计同步）、`evolution --release`、`gate`（含前置断言）、`publish`（`--no-ff` 合并 + tag）、`devbump`。验收：gate 全绿、版本一致性 15 项全绿、tag 已推送、`master` 已合并、`devbump` 后开发版本号与文档版本头一致。
 
-#### `plan-200` 配置稳态观测与回退演练
+#### `plan-200` 配置稳态观测与回退演练——已实施，待发布归档
+
+**状态**：已实施（2026-10-24）。四类路径均有可复跑证据（`src/test/unit/config/test_config_resilience_contract.py`，10 例，全部用 `tmp_path` 隔离）：① 非法配置不静默——非法 `schema_version` 返回 None 且日志含「文件名 + 键 + 原因」，`logger.json` 单键非法只回落该键（其余键按文件生效）；② 删除三份配置后按当前模板重建且加载正常（`llm_settings` v2 模板 / `logger` 幂等 `ensure_logger_file` / `llm_pricing_ref` 默认模板 23 个模型价）；③ 缓存首轮未命中 → 写入 → 次轮命中（目录隔离由 conftest 统一提供）；④ 非当前结构明确拒绝，消息含「删除该文件后重新生成」。**实测**（2026-10-24，临时目录）：非法配置检出 0.1ms 内完成且不回落、三份重建后均可加载、拒绝文案完整。观测项复用现有日志与 `perf_history`，**未新增面板**。
 
 **现状**：「加载失败 / 生成器重建 / 缓存首轮全量重算 / 结构不符」四类路径缺现场验证与观测接入，出问题时难判是配置错配还是程序缺陷。
 
