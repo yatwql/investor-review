@@ -2,15 +2,19 @@
 """去重阈值校准工具 — 基于锚点数据分析**当前规则**的判定分布与边界风险。
 
 用法：
-  python scripts/eval-dedup-threshold.py             # 分析全部锚点
-  python scripts/eval-dedup-threshold.py --summary   # 仅汇总统计
-  python scripts/eval-dedup-threshold.py --compact   # 压缩锚点（每 key 最新 + 保留期裁剪，与生产同口径）
+  python scripts/eval-dedup-threshold.py             # 分析全部锚点，并在分析后默认压缩一次
+  python scripts/eval-dedup-threshold.py --summary   # 仅汇总统计（仍做默认压缩维护）
+  python scripts/eval-dedup-threshold.py --no-compact            # 只分析、不压缩（只读）
+  python scripts/eval-dedup-threshold.py --compact   # 只压缩锚点（每 key 最新 + 保留期裁剪）
   python scripts/eval-dedup-threshold.py --compact --retention-days 0   # 仅按键去重、不按时间裁剪
   python scripts/eval-dedup-threshold.py --file X    # 指定锚点文件
 
 **采集前置**：去重锚点**默认采集**（写侧只追加、不读旧文件，报告零读取开销）；
 ``INVEST_DEDUP_COLLECT_ANCHORS=0`` 可关闭。跨轮重复由本工具 ``load_anchors``
-按键去重（保留最早一条），不影响诊断结论；文件超 32MB 用 ``--compact`` 压缩。
+按键去重（保留最早一条），不影响诊断结论。
+
+**维护约定**：评估默认在分析完成后压缩一次锚点文件（每 key 最新 + 保留期），
+使评估顺带完成体积维护；``--no-compact`` 可只读分析，``--dry-run`` 只演练不写盘。
 
 **口径（关键）**：锚点文件 append-only、跨规则时代累积，故本工具**不信任记录里的
 ``ratio`` / ``bigram_overlap`` / ``rule``**，而是拿 ``title_a`` / ``title_b`` 用当前代码
@@ -522,39 +526,47 @@ def _print_current_rules() -> None:
     print()
 
 
+def _print_compaction_result(result: dict[str, Any], file: str, *, dry_run: bool, before_bytes: int) -> None:
+    """打印压缩结果（--compact 与评估后默认维护共用）。"""
+    print(f"锚点文件: {file}")
+    print(f"  压缩前: {result['before_lines']} 行 / {before_bytes / 1e6:.1f} MB")
+    print(
+        f"  压缩后: {result['after_lines']} 行 / {result['after_bytes'] / 1e6:.1f} MB"
+        f"（唯一标题对 {result['unique_keys']}）"
+    )
+    print(f"  丢弃重复行中被判为历史规则时代的: {result['legacy_era']} 条")
+    print(f"  超保留期（{result['retention_days']} 天，0=不裁剪）丢弃: {result['expired']} 条")
+    print("  " + ("[..] --dry-run：未写盘" if dry_run else "[OK] 已原子替换（每个标题对保留最新一条）"))
+
+
 def main() -> None:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--summary", action="store_true", help="仅显示汇总统计")
-    parser.add_argument("--compact", action="store_true", help="压缩锚点文件（每个标题对保留最新一条）")
-    parser.add_argument("--dry-run", action="store_true", help="兼容保留：本工具从不修改阈值，仅 --compact 会写盘")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--compact", action="store_true", help="只压缩锚点文件（每个标题对保留最新一条）")
+    mode.add_argument("--no-compact", action="store_true", help="评估后不压缩（只读分析；默认评估后压缩维护）")
+    parser.add_argument("--dry-run", action="store_true", help="演练：压缩（--compact 或评估后默认维护）不写盘")
     parser.add_argument("--file", default=_ANCHOR_PATH, help=f"锚点文件路径（默认 {_ANCHOR_PATH}）")
     parser.add_argument(
         "--retention-days",
         type=int,
         default=None,
-        help="--compact 的保留期天数（默认与生产自动压缩同值 _anchor_retention_days()；0 = 仅按键去重不裁剪）",
+        help="压缩保留期天数（默认 _anchor_retention_days()；0 = 仅按键去重不裁剪）",
     )
     args = parser.parse_args()
     global _ACTIVE_FILE
     _ACTIVE_FILE = args.file
 
+    before = os.path.getsize(args.file) if os.path.exists(args.file) else 0
+
     if args.compact:
-        before = os.path.getsize(args.file) if os.path.exists(args.file) else 0
         result = compact_anchors(args.file, dry_run=args.dry_run, retention_days=args.retention_days)
         if not result["before_lines"]:
             print(f"[!] 锚点文件不存在或为空: {args.file}")
             return
-        print(f"锚点文件: {args.file}")
-        print(f"  压缩前: {result['before_lines']} 行 / {before / 1e6:.1f} MB")
-        print(
-            f"  压缩后: {result['after_lines']} 行 / {result['after_bytes'] / 1e6:.1f} MB"
-            f"（唯一标题对 {result['unique_keys']}）"
-        )
-        print(f"  丢弃重复行中被判为历史规则时代的: {result['legacy_era']} 条")
-        print(f"  超保留期（{result['retention_days']} 天，0=不裁剪）丢弃: {result['expired']} 条")
-        print("  " + ("[..] --dry-run：未写盘" if args.dry_run else "[OK] 已原子替换（每个标题对保留最新一条）"))
+        _print_compaction_result(result, args.file, dry_run=args.dry_run, before_bytes=before)
         return
 
     records = load_anchors(args.file)
@@ -563,6 +575,14 @@ def main() -> None:
         print("    请先运行一次报告生成（触发新闻获取），积累数据后再校准。")
         sys.exit(0)
     report(records, summary_only=args.summary)
+
+    # 评估顺带维护：默认在分析完成后压缩（分析用完整样本，压缩只影响文件体积）。
+    if not args.no_compact:
+        print()
+        print("=" * 60)
+        print("[..] 评估后维护压缩（默认；--no-compact 可关闭）")
+        result = compact_anchors(args.file, dry_run=args.dry_run, retention_days=args.retention_days)
+        _print_compaction_result(result, args.file, dry_run=args.dry_run, before_bytes=before)
 
 
 if __name__ == "__main__":

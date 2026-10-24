@@ -2473,7 +2473,7 @@ _dedup_by_title(items)
 120 天**」双条件（`INVEST_DEDUP_ANCHOR_RETENTION_DAYS` 可覆盖，0 = 退回纯去重）——
 实测仅按 key 去重压不动（标题对高度唯一，压后仍 37.9 MB），保留期才是体积上限，
 压缩后 `.bak` **默认不保留**（与主文件等大、白占磁盘）——新文件经「非空 + 首行可解析」校验且 `os.replace` 原子替换后才删备份，`INVEST_DEDUP_KEEP_BACKUP=1` 可要求保留；
-③ `scripts/eval-dedup-threshold.py --compact` 供人工/校准侧压缩（同一双条件，幂等）。
+③ `scripts/eval-dedup-threshold.py` 评估后默认顺带压缩（分析用完整样本，随后按同一双条件幂等维护；`--no-compact` 只读、`--dry-run` 演练）；`--compact` 仍可单独压缩。
 
 ##### 校准工具
 
