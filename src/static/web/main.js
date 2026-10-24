@@ -149,10 +149,8 @@
       });
       btn.addEventListener('keydown', onTabKeydown);
     });
-    window.addEventListener('hashchange', function () {
-      activateTab((window.location.hash || '').slice(1), false);
-    });
-    activateTab((window.location.hash || '').slice(1) || 'generate', false);
+    window.addEventListener('hashchange', onLocationHashChange);
+    applyLocationHash(true);
 
     // 调仓 What-if：基准来源切换 + 双文件上传 + 提交
     document.querySelectorAll('input[name="whatif_base"]').forEach(function (r) {
@@ -1226,6 +1224,7 @@
 
   function renderConfigEdit(surface) {
     configState.surface = surface;
+    configState.query = '';
     els.configPanel.textContent = '';
     // 面板顶部警示区（同源失败 403 专用）
     var panelErr = document.createElement('p');
@@ -1235,12 +1234,201 @@
     panelErr.hidden = true;
     els.configPanel.appendChild(panelErr);
 
+    var toolbar = renderConfigToolbar();
+    els.configPanel.appendChild(toolbar);
+    els.configPanel.appendChild(renderDomainChips(surface.domains || []));
+
     // 域即分区：一级分区与块顺序全部由服务端 domains 决定，前端只做渲染与分派
     (surface.domains || []).forEach(function (domain) {
       var section = renderDomainSection(domain, surface);
       if (section) {
         els.configPanel.appendChild(section);
       }
+    });
+
+    refreshConfigStats();
+    observeDomains();
+    focusDomainFromHash();
+  }
+
+  /**
+   * 工具条：项数 / 已改数 / 关键词筛选（与 TUI 的「面板内查询 + 状态统计」等价表达）。
+   * 计数基准是服务端下发的 `defaults`，前端不自行推算出厂值。
+   */
+  function renderConfigToolbar() {
+    var bar = document.createElement('div');
+    bar.className = 'config-toolbar';
+    var title = document.createElement('h2');
+    title.className = 'config-toolbar-title';
+    title.textContent = '配置';
+    bar.appendChild(title);
+
+    var stats = document.createElement('span');
+    stats.id = 'config-stats';
+    stats.className = 'config-toolbar-stats';
+    stats.setAttribute('role', 'status');
+    stats.textContent = '加载中…';
+    bar.appendChild(stats);
+
+    var filter = document.createElement('input');
+    filter.type = 'search';
+    filter.id = 'config-filter';
+    filter.className = 'config-filter';
+    filter.placeholder = '筛选：标签 / 说明 / 键名';
+    filter.setAttribute('aria-label', '筛选配置项');
+    filter.addEventListener('input', function () {
+      configState.query = filter.value.trim();
+      applyConfigFilter();
+    });
+    bar.appendChild(filter);
+    return bar;
+  }
+
+  /** 域导航（chips）：点击直达分区并写 `#domain-<key>`；滚动时高亮当前域。 */
+  function renderDomainChips(domains) {
+    var nav = document.createElement('nav');
+    nav.className = 'chips';
+    nav.id = 'config-domain-nav';
+    nav.setAttribute('aria-label', '配置域导航');
+    domains.forEach(function (domain) {
+      var chip = document.createElement('a');
+      chip.href = '#domain-' + domain.key;
+      chip.className = 'chip';
+      chip.dataset.domain = domain.key;
+      chip.textContent = domain.title || domain.key;
+      chip.addEventListener('click', function (e) {
+        e.preventDefault();
+        scrollToDomain(domain.key, true);
+      });
+      nav.appendChild(chip);
+    });
+    return nav;
+  }
+
+  function scrollToDomain(key, updateHash) {
+    var section = document.getElementById('domain-' + key);
+    if (!section) {
+      return;
+    }
+    if (section.scrollIntoView) {
+      section.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+    if (updateHash !== false) {
+      window.history.replaceState(null, '', '#domain-' + key);
+    }
+  }
+
+  /** 深链：`#domain-<key>` → 切到配置页并滚到该域（与标签页 hash 共存）。 */
+  function focusDomainFromHash() {
+    var hash = (window.location.hash || '').slice(1);
+    if (hash.indexOf('domain-') !== 0) {
+      return;
+    }
+    scrollToDomain(hash.slice('domain-'.length), false);
+  }
+
+  /** 滚动高亮：可见域中取最靠上的一个置为 active（无 IntersectionObserver 时降级为不亮）。 */
+  function observeDomains() {
+    if (!('IntersectionObserver' in window)) {
+      return;
+    }
+    if (configState.domainObserver) {
+      configState.domainObserver.disconnect();
+    }
+    configState.domainObserver = new IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (entry) {
+          if (!entry.isIntersecting) {
+            return;
+          }
+          var key = entry.target.id.replace('domain-', '');
+          document.querySelectorAll('#config-domain-nav .chip').forEach(function (chip) {
+            chip.classList.toggle('active', chip.dataset.domain === key);
+          });
+        });
+      },
+      { rootMargin: '-20% 0px -60% 0px', threshold: 0 }
+    );
+    document.querySelectorAll('.config-domain').forEach(function (section) {
+      configState.domainObserver.observe(section);
+    });
+  }
+
+  /** 计数：总项数与「已改 N 项」（当前值 ≠ 服务端 defaults），并同步块计数。 */
+  function refreshConfigStats() {
+    var surface = configState.surface || {};
+    var defaults = surface.defaults || {};
+    var total = 0;
+    var changed = 0;
+    document.querySelectorAll('#config-panel [data-config-key]').forEach(function (control) {
+      var key = control.dataset.configKey;
+      var current;
+      if (control.type === 'checkbox' || control.type === 'radio') {
+        current = control.checked;
+      } else {
+        current = control.type === 'number' ? Number(control.value) : control.value;
+      }
+      total += 1;
+      if (Object.prototype.hasOwnProperty.call(defaults, key) && String(current) !== String(defaults[key])) {
+        changed += 1;
+      }
+    });
+    var stats = document.getElementById('config-stats');
+    if (stats) {
+      stats.textContent = '共 ' + total + ' 项 · 已改 ' + changed + ' 项';
+    }
+    refreshBlockCounts();
+  }
+
+  /** 每块标题旁的 `N 项 · M 开`（枚举/集合类块退化为 `N 项`）。 */
+  function refreshBlockCounts() {
+    document.querySelectorAll('#config-panel .config-group').forEach(function (group) {
+      var meta = group.querySelector('.config-block-meta');
+      if (!meta) {
+        return;
+      }
+      var boxes = group.querySelectorAll('input[type="checkbox"]');
+      if (boxes.length) {
+        var on = 0;
+        boxes.forEach(function (cb) {
+          if (cb.checked) {
+            on += 1;
+          }
+        });
+        meta.textContent = boxes.length + ' 项 · ' + on + ' 开';
+        return;
+      }
+      var others = group.querySelectorAll('.config-row, .field, .config-path-row, .ref-row');
+      meta.textContent = others.length + ' 项';
+    });
+  }
+
+  /** 关键词筛选：匹配标签/说明/键名；空块与空域隐藏，清空即恢复。 */
+  function applyConfigFilter() {
+    var query = (configState.query || '').toLowerCase();
+    document.querySelectorAll('#config-panel .config-domain').forEach(function (section) {
+      var visibleBlocks = 0;
+      section.querySelectorAll('.config-group').forEach(function (group) {
+        var visibleRows = 0;
+        group.querySelectorAll('.config-row, .config-path-row, .field, .ref-row').forEach(function (row) {
+          var control = row.querySelector('[data-config-key]');
+          var text = (row.textContent || '').toLowerCase();
+          var key = control ? String(control.dataset.configKey).toLowerCase() : '';
+          var hit = !query || text.indexOf(query) !== -1 || key.indexOf(query) !== -1;
+          row.classList.toggle('hidden', !hit);
+          if (hit) {
+            visibleRows += 1;
+          }
+        });
+        var hasBody = group.querySelectorAll('.config-row, .config-path-row, .field, .ref-row').length > 0;
+        // 无可筛选行的块（如只读参考块内单行）保持可见，避免筛选时整块消失
+        var show = !query || visibleRows > 0 || !hasBody;
+        group.classList.toggle('hidden', !show);
+        if (show) {
+          visibleBlocks += 1;
+        }
+      });
+      section.classList.toggle('hidden', visibleBlocks === 0);
     });
   }
 
@@ -1406,6 +1594,9 @@
     heading.id = 'config-group-' + blockKey;
     heading.className = 'config-group-title';
     heading.textContent = title;
+    var meta = document.createElement('span');
+    meta.className = 'config-block-meta';
+    heading.appendChild(meta);
     group.appendChild(heading);
     group.setAttribute('aria-labelledby', heading.id);
     return group;
@@ -1708,6 +1899,7 @@
       })
       .then(function () {
         cb.disabled = false;
+        refreshConfigStats();
       });
   }
 
@@ -1738,6 +1930,7 @@
         radios.forEach(function (r) {
           r.disabled = false;
         });
+        refreshConfigStats();
       });
   }
 
@@ -1757,6 +1950,7 @@
       .then(function () {
         status.textContent = '已保存';
         status.className = 'config-row-status status-ok';
+        refreshConfigStats();
       })
       .catch(function (err) {
         showGroupError(group, err);
@@ -1771,7 +1965,6 @@
     var row = btn.closest('.config-path-row');
     var input = row.querySelector('input[type="text"]');
     var key = input.id.replace('config-input-', '');
-    var prev = input.value;
     var group = btn.closest('.config-group');
     var status = row.querySelector('.config-row-status');
     btn.disabled = true;
@@ -1785,7 +1978,10 @@
         status.className = 'config-row-status status-ok';
       })
       .catch(function (err) {
-        input.value = prev; // 失败恢复为改动前值
+        // 显式保存失败：保留用户输入供直接重试（契约 §4.5「保留输入值 + 错误区提示」），
+        // 仅反映状态样式——回滚只用于即时保存类（勾选/单选）
+        status.textContent = '保存失败';
+        status.className = 'config-row-status status-error';
         showGroupError(group, err);
       })
       .then(function () {
@@ -2022,6 +2218,21 @@
     if (updateHash !== false && window.location.hash.slice(1) !== name) {
       window.history.replaceState(null, '', '#' + name);
     }
+  }
+
+  /** 深链路由：`#domain-<key>` 走配置页域锚点，其余按标签页名切换。 */
+  function applyLocationHash(initial) {
+    var hash = (window.location.hash || '').slice(1);
+    if (hash.indexOf('domain-') === 0) {
+      activateTab('config', initial ? true : false);
+      scrollToDomain(hash.slice('domain-'.length), false);
+      return;
+    }
+    activateTab(hash || 'generate', false);
+  }
+
+  function onLocationHashChange() {
+    applyLocationHash(false);
   }
 
   function onTabKeydown(e) {

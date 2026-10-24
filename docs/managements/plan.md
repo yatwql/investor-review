@@ -8,7 +8,7 @@
 
 本文档记录项目的实现计划。已完成项迁入版本归档，此处只保留在办任务的最新状态。
 
-**当前迭代**：在办 10 项——P2 8 项（**plan-92/93/185** 与配置体系重构剩余 5 轮 **plan-196~200**；plan-195 已实施待归档）、P3 1 项（**plan-70**）、P4 1 项（**plan-55**）。
+**当前迭代**：在办 9 项——P2 7 项（**plan-92/93/185** 与配置体系重构剩余 4 轮 **plan-197~200**；plan-195/196 已实施待归档）、P3 1 项（**plan-70**）、P4 1 项（**plan-55**）。
 
 > **命名纪律（强制）**：重构/新增的变量名、函数名、注释与文档表述必须与新章节语义相关（如 `position_relationship`/`portfolio_history_drawdown`/`style_factor`/`action`），**绝对禁止用任务编号命名**（F 系列、plan-N、rf-N 等）。任务编号仅在本表作链接锚点，不进入实现层。
 
@@ -50,11 +50,9 @@
 
 **状态**：已实施（2026-10-24）。`web/config_edit.py` 下发 `domains`（五域 → 有序块清单，含 `features.<组键>`）+ `labels`/`descriptions`/`defaults`/`needs_hint` 元数据 + `logging`（六项，枚举/范围）+ `reference`（只读）；`static/web/main.js` 改为按域分区渲染、块 id → `BLOCK_RENDERERS` 分派、删除 `CONFIG_LABELS`/`ANON_LABELS`；共享编辑层新增 `logging.*` 六键写入（`write_logger_config`，与 TUI 日志面板同源）。机检载体 `src/test/unit/web/test_config_surface_contract.py`（17 例：块↔渲染器双向相等 / 元数据覆盖白名单全部可编辑键 / 无中文表 / 无 `innerHTML` 赋值 / 日志写入与非法值拒绝 / 参考面只读）。
 
-#### `plan-196` Web 配置面交互与状态
+#### `plan-196` Web 配置面交互与状态——已实施，待发布归档
 
-**现状与问题**：即时保存类控件失败后无回滚、无就地报错；无域内筛选与深链，键盘可达性未覆盖。
-
-**动作**：即时保存失败自动回滚并就地报错、显式保存类保留输入值供重试；域内筛选与 `#domain-<key>` 深链直达分区；Tab 顺序与 focus 环键盘可达；`scripts/test-smoke-web.py` 覆盖且浏览器脚本不写真实 `data/config/`。验收：冒烟全绿、浏览器无 console error、前端交互用例标注 marker。
+**状态**：已实施（2026-10-24）。工具条（`共 N 项 · 已改 M 项`，基准 = 服务端 `defaults`）+ 关键词筛选（标签 / 说明 / 键名，空块与空域隐藏）+ 域导航 chips 与滚动高亮（`IntersectionObserver`，无该 API 时降级）+ 深链 `#domain-<key>`（与页签 hash 共存，`domain-` 前缀先切配置页再定位）+ 块计数 `N 项 · M 开` + ≤720px 单列断点。保存语义按契约 §4.5 分两类：即时保存失败回滚勾选并就地报错；显式保存（文本/数字）失败**保留输入值**供重试（原实现误回滚，本轮按契约修正）。机检载体 `src/test/unit/web/test_web_config_interaction.py`（17 例）。浏览器观感/可达性仍按 `docs/plan/web-browser-verification.md` 人工项复核。
 
 #### `plan-197` 配置重构的文档与契约登记收口
 
