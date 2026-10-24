@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.15.1-dev
-> **编号源**：`rf-next = 862`（新增问题取此编号，完成后更新为 +1；已用最大 rf-861，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 863`（新增问题取此编号，完成后更新为 +1；已用最大 rf-862，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -36,6 +36,7 @@
 
 | # | 问题 | 修复 |
 |---|------|------|
+| **rf-862** | 发布 prepare 的 changelog 指针行目标路径缺 `v` 前缀：跨小版本发布写出 `../archive/0.15.x/`（应为 `../archive/v0.15.x/`），死链检查在校验阶段拦下，prepare 中途失败；原回归用例只断言整篇文本含正确路径（索引行也含），未隔离指针行，故未拦住 | 指针目录由归档文件名派生并补 `v`；回归用例改为**只取「最近发布」指针行**断言目标路径，并显式排除缺 `v` 形态 |
 | **rf-861** | 近 18h 变更的技术债：① `llm_report_unavailable_reason` 与 `is_enable_llm` 两套章节开通判据（可能漂移）；② 锚点「自动压缩」命名/日志/`doctor` 提示与「报告只追加、维护时压缩」新口径不符；③ `_runtime_overrides` 两个只读 API 无消费方；④ 维护体积提示每次 flush 都打印；⑤ `eval` 默认维护压缩失败会推翻已完成的评估输出；⑥ 测试 docstring 仍写「跨轮不重复追加/写失败回滚 key」 | ① 统一复用 `is_enable_llm`；② 改名 `_compact_anchor_file`/维护压缩，同步 doctor、testplan、requirements、folders、scripts-reference 与设计图样；③ 删除死 API；④ 每进程只提示一次（conftest 重置）；⑤ 维护失败只打印提示、保留评估结论；⑥ 改写测试与 eval 文档串 |
 | **rf-860** | `report --type full` 在 LLM 全关/未配置时静默等同 `both`：只在 Excel 页脚留「LLM 用量页签无落点」，日志与结束摘要无显式提示 | `core/system_info.llm_report_unavailable_reason()` 统一判定未配置/章节全关；`full` 生成开始时 `reporter.warn` 明确「按不含 LLM 内容生成（full 等同 both）」，三渠道同一提示；补充文案与测试 |
 | **rf-859** | `perf_history.breakdown` 仅记录 `LLM+新闻 → 新闻获取`，`数据准备 14.4s` 无子阶段、去重/锚点维护不可见 | `数据准备` 补九项子计时（行情与明细/指数获取/穿透/风格与因子/覆盖与新鲜度/估值与温度/财报摘要与指标/申购与成本位置/明细装配与建议）；`LLM+新闻` 补新闻源抓取/去重与关联/锚点维护/事件窗装配；子项全部沿用既有 `PhaseBreakdownRecorder`，不新增面板 |

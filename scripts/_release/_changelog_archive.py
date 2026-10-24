@@ -126,7 +126,7 @@ def apply_changelog_release(text: str, release_version: str, date: str) -> tuple
     # 链接**文本与目标路径**都要改：跨小版本发布时归档目录也换名（v0.14.x → v0.15.x），
     # 只改文本会让 `(../archive/v0.14.x/...)` 继续指向上一系列的归档——文件存在，
     # 死链检查发现不了，只有人点进去才知道看的是旧档。
-    minor_dir = archive_name.split(".md")[0]  # archived_changelog.X.Y.x
+    minor_dir = "v" + archive_name.removeprefix("archived_changelog.").removesuffix(".md")  # vX.Y.x
     out, n_link = re.subn(
         r"(^> \*\*最近发布 \[[\d.]+\]\*\*（[\d-]+）——已发布版本段随发布移入\s*\[`)[^`]+(`\]\([^)]*?/archive/)v[\d.]+?x(/)[^)]+(\))",
         lambda m: (

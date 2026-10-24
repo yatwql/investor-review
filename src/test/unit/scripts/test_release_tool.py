@@ -133,8 +133,10 @@ class TestChangelogRelease:
             " — v0.12.1 ~ v0.12.5（2026-10-03 ~ 2026-10-07）\n"
         )
         out, _ = rel.apply_changelog_release(text, "0.13.1", "2026-10-09")
-        assert "[`archived_changelog.0.13.x.md`](../archive/v0.13.x/archived_changelog.0.13.x.md)" in out
-        assert "../archive/v0.12.x/" not in out.split("## 归档")[0]
+        pointer = next(line for line in out.splitlines() if "最近发布" in line)
+        assert "[`archived_changelog.0.13.x.md`](../archive/v0.13.x/archived_changelog.0.13.x.md)" in pointer
+        assert "../archive/0.13.x/" not in pointer, "指针目标路径不得缺 v 前缀（跨小版本归档目录）"
+        assert "../archive/v0.12.x/" not in pointer
 
     def test_archive_init_placeholder_line_is_accepted(self, rel):
         """`archive-init` 生成的占位索引行（`vX.Y.x`）必须能被首版发布直接改写。
