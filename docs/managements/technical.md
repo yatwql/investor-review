@@ -2445,7 +2445,7 @@ _dedup_by_title(items)
 
 ##### 锚点采集体系
 
-去重判定边界案例在**校准期显式开启采集**（`INVEST_DEDUP_COLLECT_ANCHORS=1`，默认关闭）后写入 `data/calibration/dedup_anchors.jsonl`（append-only），供 `eval-dedup-threshold.py` 分析阈值合理性。锚点不参与去重判定，常态报告不加载该文件：默认关闭时 `_record_anchor` 直接返回、`_flush_anchors` 不触发 `_load_written_keys` 与自动压缩（此前 39 MB 文件每轮加载+压缩实测约 18.5s）。
+去重判定边界案例**默认采集**写入 `data/calibration/dedup_anchors.jsonl`（append-only），供 `eval-dedup-threshold.py` 分析阈值合理性；`INVEST_DEDUP_COLLECT_ANCHORS=0` 可显式关闭。锚点不参与去重判定，写侧只追加、**不读旧文件**（跨轮重复由校准工具按键去重），因此采集本身不增加报告耗时；39 MB 文件的加载与压缩已移出报告主流程（详见下）。
 
 | 锚点规则 | 采集条件 | 用途 |
 |:---------|:---------|:------|
@@ -2466,17 +2466,14 @@ _dedup_by_title(items)
 探针的 SHA1 前 10 位）——**规则一改指纹自动变**，不依赖人工维护版本号；校准工具据此
 区分时代，并拿标题用当前代码重算判定（详见下）。
 
-**体积治理（采集开启时）**：文件 append-only 且历史上未被写侧去重覆盖的轮次留下大量重复行（实测
-456,546 行 / 152 MB 中仅 51,718 个唯一标题对，重复行占 89%）。写侧去重
-（`_WRITTEN_ANCHOR_KEYS`）已拦截新重复——存量的重复行来自写侧去重生效前的批量校准轮次。
-故分层治理：① **写侧改真追加**（`_append_anchor_lines`：单次 `write` + `fsync`，
-写盘成本只与本次新增条数相关，与文件体积无关——锚点已 37.9 MB 而每轮只新增数十条；
-读侧本就逐行容错，崩溃留下的半行不污染既有记录）；
-② 加载时超过 32 MB 触发**就地压缩**，压缩按「每标题对保留最新一条 + **仅保留近
+**体积治理**：文件 append-only，跨轮同一标题对会重复追加；校准工具 `load_anchors` 按键去重（保留最早一条），故重复行不改变诊断结论，只影响体积。分层治理：① **写侧真追加**（`_append_anchor_lines`：单次 `write` + `fsync`，
+写盘成本只与本次新增条数相关，与文件体积无关；读侧本就逐行容错，崩溃留下的半行不污染既有记录）；
+② 体积只 stat 检查：超过 32 MB 时记录提示，压缩**默认不在报告路径执行**，由
+`eval-dedup-threshold.py --compact` 或 `INVEST_DEDUP_MAINTENANCE=1` 显式触发（压缩按「每标题对保留最新一条 + **仅保留近
 120 天**」双条件（`INVEST_DEDUP_ANCHOR_RETENTION_DAYS` 可覆盖，0 = 退回纯去重）——
 实测仅按 key 去重压不动（标题对高度唯一，压后仍 37.9 MB），保留期才是体积上限，
-压缩后 `.bak` **默认不保留**（与主文件等大、白占磁盘：实测 37.9 MB）——新文件经「非空 + 首行可解析」校验且 `os.replace` 原子替换后才删备份，`INVEST_DEDUP_KEEP_BACKUP=1` 可要求保留。告警分级：压缩已执行仍超线（锚点本身多）记 INFO 并指向保留期旋钮；压缩被禁用/失败才 WARNING（那才是需人工介入的情形）；③
-`scripts/eval-dedup-threshold.py --compact` 供人工/校准侧压缩（同一双条件，幂等）。
+压缩后 `.bak` **默认不保留**（与主文件等大、白占磁盘）——新文件经「非空 + 首行可解析」校验且 `os.replace` 原子替换后才删备份，`INVEST_DEDUP_KEEP_BACKUP=1` 可要求保留；
+③ `scripts/eval-dedup-threshold.py --compact` 供人工/校准侧压缩（同一双条件，幂等）。
 
 ##### 校准工具
 

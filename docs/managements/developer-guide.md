@@ -952,7 +952,7 @@ INVEST_LOG_CONSOLE_LEVEL=DEBUG ...                                              
 
 **LLM 总时间预算**：`llm_settings.json → llm_total_time_budget_sec`（秒，`0`=不启用）。超预算后**不再启动新模块**（已在跑的模块不打断），日志回显已用时与预算值，报告按已生成内容呈现。用于兜住「单模块卡住 + 重试叠加」把一次 full 拖成小时级（审计实测曾出现 6,623s 的 LLM+新闻阶段）。
 
-**去重锚点采集默认关闭**：仅校准期 `INVEST_DEDUP_COLLECT_ANCHORS=1` 时采集 `data/calibration/dedup_anchors.jsonl`（锚点不参与去重判定；默认不加载、不压缩——39 MB 文件的加载+压缩曾使每轮报告多付约 18.5s）。开启采集后文件超过 32MB 时在读侧自动压缩——**每 key 最新一条 + 仅保留近 120 天**（`INVEST_DEDUP_ANCHOR_RETENTION_DAYS` 可覆盖，0 = 只按键去重）；写侧为追加（成本与体积无关），压缩后 `.bak` 默认在校验 + 原子替换后清理（`INVEST_DEDUP_KEEP_BACKUP=1` 可保留）；`INVEST_DEDUP_AUTO_COMPACT=0` 可关闭。手工口径用 `scripts/eval-dedup-threshold.py --compact`（同双条件，`--retention-days 0` 只按键去重）。压缩已执行仍超线记 INFO，压缩被禁用/失败才 WARNING。
+**去重锚点默认采集、写侧零读取**：`data/calibration/dedup_anchors.jsonl` 每次报告只追加边界案例（单次 `write`+`fsync`，不解析旧文件）；跨轮重复由 `eval-dedup-threshold.py::load_anchors` 按键去重（保留最早一条），诊断结论不受重复行影响。`INVEST_DEDUP_COLLECT_ANCHORS=0` 可关闭采集。文件超过 32MB 时只记提示，不自动压缩——压缩由 `scripts/eval-dedup-threshold.py --compact`（**每 key 最新 + 近 120 天**，`--retention-days 0` 只按键去重）或 `INVEST_DEDUP_MAINTENANCE=1` 显式触发；压缩前 `.bak` 与主文件等大，默认校验后清理（`INVEST_DEDUP_KEEP_BACKUP=1` 保留）。
 
 ### 日志：先看日志再看代码
 

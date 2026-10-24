@@ -1005,7 +1005,7 @@ curl 对照命令：`curl -s "https://push2.eastmoney.com/api/qt/stock/get?secid
 
 **`eval-dedup-threshold.py` — 新闻去重阈值校准**
 
-新闻标题去重（同源/跨源安全区分级 + 候选区阶梯 + 方向对立防护，阈值见 `news_dedup.py` 校准常量）的"边界案例"**默认不采集**；校准期用 `INVEST_DEDUP_COLLECT_ANCHORS=1` 运行报告，才会写入 `data/calibration/dedup_anchors.jsonl`（锚点不参与去重判定，常态报告零加载开销）。积累足够锚点后，用此脚本分析当前阈值是否合理。
+新闻标题去重（同源/跨源安全区分级 + 候选区阶梯 + 方向对立防护，阈值见 `news_dedup.py` 校准常量）的"边界案例"**默认采集**到 `data/calibration/dedup_anchors.jsonl`：写侧只追加、不读旧文件（跨轮重复由本脚本 `load_anchors` 按键去重），`INVEST_DEDUP_COLLECT_ANCHORS=0` 可关闭采集。积累足够锚点后，用此脚本分析当前阈值是否合理；文件超过 32MB 时用 `--compact` 压缩（报告路径不自动压缩）。
 
 ```bash
 # 分析全部锚点，输出建议

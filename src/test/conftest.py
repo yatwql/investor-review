@@ -415,15 +415,13 @@ def _auto_reset_hithink_limiter():
 def _auto_reset_anchor_state():
     """自动重置新闻去重锚点模块单例状态，防止测试间状态污染。
 
-    每个测试执行前清空进程级已写 key 集合、内存记录列表与惰性加载标志，
-    避免某测试记录的锚点状态泄漏到后续测试（锚点路径已由
-    _isolate_sensitive_paths 隔离到 tmp_path）。
+    每个测试执行前清空内存锚点记录列表，避免某测试记录的锚点状态泄漏到
+    后续测试（锚点路径已由 _isolate_sensitive_paths 隔离到 tmp_path；
+    写侧已无跨轮 key 缓存，不需要额外重置）。
     """
     from src.python.providers import news_dedup
 
-    news_dedup._WRITTEN_ANCHOR_KEYS = set()
     news_dedup._ANCHOR_RECORDS = []
-    news_dedup._WRITTEN_KEYS_LOADED = False
 
 
 @pytest.fixture(autouse=True)

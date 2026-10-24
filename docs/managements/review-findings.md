@@ -38,7 +38,7 @@
 |---|------|------|
 | **rf-860** | `report --type full` 在 LLM 全关/未配置时静默等同 `both`：只在 Excel 页脚留「LLM 用量页签无落点」，日志与结束摘要无显式提示 | `core/system_info.llm_report_unavailable_reason()` 统一判定未配置/章节全关；`full` 生成开始时 `reporter.warn` 明确「按不含 LLM 内容生成（full 等同 both）」，三渠道同一提示；补充文案与测试 |
 | **rf-859** | `perf_history.breakdown` 仅记录 `LLM+新闻 → 新闻获取`，`数据准备 14.4s` 无子阶段、去重/锚点维护不可见 | `数据准备` 补九项子计时（行情与明细/指数获取/穿透/风格与因子/覆盖与新鲜度/估值与温度/财报摘要与指标/申购与成本位置/明细装配与建议）；`LLM+新闻` 补新闻源抓取/去重与关联/锚点维护/事件窗装配；子项全部沿用既有 `PhaseBreakdownRecorder`，不新增面板 |
-| **rf-858** | 去重锚点每轮全量加载/压缩（39 MB，约 18.5s，占管线 42%），而锚点只服务阈值校准 | 采集默认关闭（`INVEST_DEDUP_COLLECT_ANCHORS=1` 校准期开启）：`_record_anchor` 直接返回、`_flush_anchors` 不加载/不压缩；采集开启时保留原有压缩与保留期治理，文档/需求/脚本参考同步 |
+| **rf-858** | 去重锚点每轮全量加载/压缩（39 MB，约 18.5s，占管线 42%），而锚点只服务阈值校准 | **采集保持默认开启**（诊断数据不断档；`INVEST_DEDUP_COLLECT_ANCHORS=0` 可关）；写侧改为纯追加：不读旧文件、批内去重，跨轮重复由 `eval-dedup-threshold.py::load_anchors` 按键去重（保留最早一条），诊断结论不受影响；39MB 文件的加载/压缩移出报告路径（压缩只由 `--compact` 或 `INVEST_DEDUP_MAINTENANCE=1` 显式触发），文件超 32MB 仅记体积提示 |
 | **rf-857** | 技术设计文档的配置编辑白名单计数陈旧：写「8 组 51 条键 / 功能开关 27」，实际为 9 组 56 条键 / 功能开关 26；`target` / `writer` 枚举漏 `llm_providers` / `logging`，也未记录 `scheduler.*` 走独立写入原语 | 按 `config_edit_whitelist` 实测刷新（9 组 56 条、26 开关、补 logging 与 scheduler 说明）；三处「Web/TUI 唯一/两渠道」表述改为 TUI/Web/CLI |
 | **rf-856** | CLI 帮助/手册把 LLM 多链调序指向「TUI 菜单 [M]」，而 [M] 现为「配置入口地图」，实际入口在 `[G]` → `[L]` LLM 设置；CLI 手册 §10.1 又笼统写「配置类菜单暂无 CLI 等价」，与 `--output` / `--feature` 的既有覆盖不符 | 帮助与手册改指 `[G]` → `[L]`；§10.1 改为「一次性 / 持久化」两档覆盖说明，并同步新增的 `--chapter` / `--anonymize` / `config set` 入口 |
 | **rf-855** | 启动向导「幂等」用例与「标记后非首次」用例只差一次重复调用，断言完全相同；交易日历用例留着未使用的 `trading_days` 集合并在末尾 `del`，指数链路用例的 `call_count` 计数从未被读取 | 两条启动向导用例合并为一条（重复标记 + 状态不变）；两处死变量删除 |
