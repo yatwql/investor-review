@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.15.3
+> 文档版本：0.15.4
 
 ## 目录
 
@@ -2555,6 +2555,8 @@ _dedup_by_title(items)
 
 可配置于 `config.json` 的 `degradation` 字段。支持跨会话持久化到 `data/state/.degradation_state.json`。
 
+**报告运行边界（`report/_run_scope.py`）**：每份报告入口 `start_report_run()` 只重置**轮次语义**的观测状态，不动跨报告事实——① `DegradationTracker.begin_report()` 清空**事件日志**（数据质量块 / 可用性矩阵 / 降级摘要的语义都是「本次报告期间发生了什么」），但保留 `_counts` 与 `_last_success`（降级判定与跨会话陈旧的事实来源）；② 重置 `self_review` 全局载体，上一轮自检区块不得残留到本轮；③ 取 `get_session_usage()` 深拷贝作**用量基线**，收尾 `_record_llm_context` 按基线算 delta 写入 perf（TUI「本会话累计」仍跨报告累计，单份报告的 token/调用数不翻倍）。任一步失败只记 DEBUG——观测隔离不得阻断报告生成。
+
 **与 DataSourceRegistry 的职责边界**：
 
 ```
@@ -3129,7 +3131,7 @@ LLM API 调用支持多 Provider 链式容错，与数据获取层的 Provider C
 | 截断重试 | 检测 `TRUNCATION_MARKER` 后自动 1.5× max_tokens 重试一次 | 修复内容被截断的情况 |
 | 空内容处理 | `_extract_content` 无 text block（DeepSeek 思考耗尽/偶发空 content）→ 先关闭 thinking 同 provider 重试一次（安全网，仅服务端正常返回时触发；error 信封/传输失败/熔断等服务侧故障直接切换）；仍无正文再切换 provider；真正空字符串 `""` 追加安抚指令重试一次 | 应对思考预算耗尽 + 内容审查误杀，且不对已故障端点无效重试 |
 | 墙钟总超时 | `core/http_client.post_with_deadline()` — POST 以独立 daemon 线程执行、主线程 join(timeout) 到点放弃并归一为 httpx.ReadTimeout | read 超时是块间间隔会被服务端滴流骗过（实测挂足 900s），墙钟兜底总时长，故障期快速切换 provider |
-| 会话用量追踪 | `session.py` 维护线程安全 `session_usage` 字典 + `cost_tracker.py` 报告级预算管理 | 按模块粒度追踪 token/费用/缓存命中/耗时 |
+| 会话用量追踪 | `session.py` 维护线程安全 `session_usage` 字典 + `cost_tracker.py` 报告级预算管理 | 按模块粒度追踪 token/费用/缓存命中/耗时；报告写 perf 时按入口基线取 delta（`_run_scope`），会话累计不受影响 |
 | Token 预算告警 | `cost_tracker.check_input_budget()` — 累计输入 Token 超 8K 时日志告警（不截断） | 为模型分层提供基线数据 |
 | 调用耗时记录 | `skeleton.py` `time.monotonic()` 计时 → `record_per_module(duration=)` → HTML 页脚展示 | 每次 call_llm() 记录实际耗时 |
 | LLM 熔断 | `llm/circuit_breaker.py` — 连续 N 次失败 → 60s 冷却 → 半开状态试探 | 防止无效调用浪费 token |
@@ -3408,7 +3410,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `depth_profile` | 报告深度档位表与解析（brief/standard/deep：只收窄模块集合与新闻采集规模，缺省档与既有行为逐字节一致） | LLM 智能分析 | 内容生成 | `config.json → llm_report_depth` |
 | `force_scope` | 模块级强刷范围（可强刷键清单 FORCEABLE_LLM_MODULES / resolve_force_scope 粒度优先归一与未知键校验 / is_module_forced；全局 force 与模块子集合并为模块键集合，强刷不改缓存键构造） | LLM 智能分析 | 内容生成 | 无（CLI `--llm-module` / TUI 多选 / Web 勾选，命令行一次性参数） |
 | `llm_providers.priority` | LLM 多链线路优先级（降级顺序三渠道调序：共享编辑层 reorder 动作归一化写盘，CLI `--llm-provider-order` / TUI [M] 面板 / Web 配置面 ▲▼） | LLM 智能分析 | 内容生成 | `llm_providers.json → providers[].priority` |
-| `self_review` | 生成后自检（模型层复核各模块产出与数据是否自洽；分层于确定性事实校验之上，出厂默认关） | LLM 智能分析 | 内容生成 | `llm_settings.json → enabled_llm.self_review` |
+| `self_review` | 生成后自检（模型层复核各模块产出与数据是否自洽；分层于确定性事实校验之上，出厂默认开） | LLM 智能分析 | 内容生成 | `llm_settings.json → enabled_llm.self_review` |
 | `quarter_walk_anchor` | 季报回溯窗口的时间锚点上下文（记录-回放时固定为 cassette 录制时点，去时间依赖而保留请求形状漂移信号） | 数据源 | 数据获取 | 无 |
 | `apply_compliance_guardrails` | 合规声明集中注入（在 system prompt 尾部幂等叠加「仅供复盘参考、不构成投资建议」，窄判定角色可追加专属约束） | LLM 智能分析 | 内容生成 | 无 |
 | `cost_forecast` | 事前费用预估与日预算（计划参与模块×模型单价区间预估：历史实际费用优先、静态包络兜底、无法定价降级不阻塞；重新生成范围感知——`force_llm`/`force_modules` 与创建运行同源 `resolve_force_scope` 归一，范围内模块按静态单价口径、范围外维持历史口径，摘要行拆分显示；日预算超限交互询问降级/中止、非交互硬闸——TUI/CLI/Web 三渠道同源数据面） | LLM 智能分析 | 内容生成 | `llm_settings.json → daily_cost_limit` |

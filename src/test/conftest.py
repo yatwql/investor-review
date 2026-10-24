@@ -301,6 +301,16 @@ def _auto_reset_last_reason():
 
 
 @pytest.fixture(autouse=True)
+def _auto_reset_fingerprint_audit():
+    """清空指纹组件审计基线，避免用例间「上次报告」串味。"""
+    from src.python.llm.generators_orchestrator import reset_fingerprint_audit
+
+    reset_fingerprint_audit()
+    yield
+    reset_fingerprint_audit()
+
+
+@pytest.fixture(autouse=True)
 def _restore_llm_pricing_state():
     """隔离 llm.pricing 模块级状态，避免定价用例的 reload 影响后续用例。
 

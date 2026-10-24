@@ -75,8 +75,12 @@ def _generate_report_both(
     from src.python.report.html_writer import write_html_report
     from src.python.report.orchestrator import ReportResult
 
+    from src.python.report._run_scope import start_report_run
+
     perf = PerfCollector(report_type="both", holdings=holdings, stage_announcer=reporter.stage_progress)
     bind_perf(perf)
+    # 报告运行边界：清本轮降级事件与自检载体（both 路径不调 LLM，无需用量基线）
+    start_report_run()
     result = ReportResult()
     result.holdings_ok = True
 

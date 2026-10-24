@@ -61,7 +61,7 @@ LLM 配置由三个独立文件管理：
     "health_check": true,
     "penetration_deep": true,
     "news_correlation": false,
-    "self_review": false,
+    "self_review": true,
     "holding_change": true
   },
   "temperature_global_macro": 0.3,
@@ -275,7 +275,7 @@ LLM Provider 状态
 
 ## 模块启停
 
-通过 `enabled_llm` 嵌套字典控制每个模块的开关。除 `news_correlation`（新闻 LLM 关联分析）与 `self_review`（生成后自检，实验能力）默认关闭外，其余默认开启（`holding_change` 持仓变动复盘归因的启停同时受报告章节开关 `holding_change_review` 约束）：
+通过 `enabled_llm` 嵌套字典控制每个模块的开关。除 `news_correlation`（新闻 LLM 关联分析）默认关闭外，其余默认开启（`self_review` 默认开启）（`holding_change` 持仓变动复盘归因的启停同时受报告章节开关 `holding_change_review` 约束）：
 
 ```json
 "enabled_llm": {
@@ -284,7 +284,7 @@ LLM Provider 状态
   "health_check": true,
   "penetration_deep": true,
   "news_correlation": false,
-  "self_review": false,
+  "self_review": true,
   "holding_change": true
 }
 ```
@@ -359,7 +359,7 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
 - `llm_max_thinking_concurrency`（int，默认 `2`；**TUI `[D]→[L]` / Web 配置面板「LLM 调优参数」可改，范围 1~4**）：开启 Extended Thinking 的模块（health_check / expert_review 等 `thinking_enabled_{module}=true`）并发的最大请求数。默认 `2` 让两个 thinking 模块并行——实测串行时「等待并发槽」占单次报告墙钟约 44%（智囊团 68.7s + 体检 28.5s，体检全程排队）。多 thinking 模块同时涌向 DeepSeek 等强制推理端点时偶发返回空 content（HTTP 200 空响应），若日志出现空内容重试（会关闭 thinking 同 provider 重试一次）或内容质量下降，改回 `1` 恢复串行。非 thinking 模块不受此限
 
 > **全局并发 vs 端点级节流**：`llm_max_concurrency` 是**全局**上限（所有模块合起来最多几个线程）；若需对**某个具体端点**单独限速/限并发（例如同一个程序里，订阅制编码端点要低频串行、按量付费端点可以放开），用 `llm_providers.json` 各 provider 条目内的 `pacing` 段——两者叠加生效，见下方「端点级节流」。
-- `enabled_llm`（dict，默认除 `news_correlation` 与 `self_review` 为 `false` 外均为 `true`）：各模块独立启停开关。`self_review`（生成后自检）为实验能力：开启后每次报告额外调用一次 LLM，对四个分析模块产出做一致性复核并输出【自检清单】附录（与确定性事实校验分层不重叠，失败不影响主内容）
+- `enabled_llm`（dict，默认除 `news_correlation` 为 `false` 外均为 `true`；`self_review` 默认开启）：各模块独立启停开关。`self_review`（生成后自检）每次报告额外调用一次 LLM，对四个分析模块产出做一致性复核并输出【自检清单】附录（与确定性事实校验分层不重叠，失败不影响主内容）
 - `fact_check`（dict，默认 `{tolerance: 1.0}`）：LLM 输出数值一致性检测配置。详见下节「事实校验容差配置」
 - **计价策略与模型单价**：不在本文件，见独立参考数据 `data/config/llm_pricing_ref.json`（`version` + 策略 + `models` 逐模型覆盖；缺失时仅用内置价）。详见下方「完整模型定价表」章节
 - `news_correlation_top_n`（int，默认 `30`）：送 LLM 分析的新闻条数。仅 news_correlation 模块有效，值越大 Token 消耗越高
@@ -379,7 +379,7 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
 | `output_brief_{module}` | bool | `false` | 精简模式：`true` 时输出 ≤200 字（global_macro）或 ≤300 字（其余模块）。**批量模式（news_correlation）不支持** |
 | `thinking_enabled_{module}` | bool | 模块差异 | 是否开启 Extended Thinking（Claude / DeepSeek / Gemini 2.5） |
 | `thinking_budget_{module}` | int | 6000~24000（模块差异） | **Claude / Gemini 2.5** Thinking token 预算。须小于对应 `max_tokens`（思考计入总输出预算，须为正文留余量），非法值代码自动修正 |
-| `reasoning_effort_{module}` | string / null | `"high"` | **仅 DeepSeek** 推理深度：`"low"` / `"medium"` / `"high"` / `"max"` |
+| `reasoning_effort_{module}` | string / null | `"low"`（`expert_review` 为 `"medium"`） | **仅 DeepSeek** 推理深度：`"low"` / `"medium"` / `"high"` / `"max"` |
 
 > 各模块默认值差异详见下方「各模块推荐参数值」表。
 
@@ -453,7 +453,7 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
   "modules": {
     "global_macro":     { "enabled": true },
     "expert_review":    { "enabled": true, "max_tokens": 36000,
-                          "thinking": { "enabled": true, "budget": 24000, "effort": "low" },
+                          "thinking": { "enabled": true, "budget": 24000, "effort": "medium" },
                           "debate": { /* procon / conditional / concentration_qa */ } },
     "news_correlation": { "enabled": false, "max_tokens": 3000, "timeout": 90 }
     // …其余模块同理
@@ -500,15 +500,17 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
 
 ## 各模块推荐参数值
 
-> 以下仅列出**有差异的调优参数**。其余参数所有模块统一：`cache_enabled=true`、`output_brief=false`、`system_prompt=null`（使用内置）、`reasoning_effort="high"`（expert_review / health_check 例外，见下表）。
+> 以下仅列出**有差异的调优参数**。其余参数所有模块统一：`cache_enabled=true`、`output_brief=false`、`system_prompt=null`（使用内置）、`reasoning_effort="low"`（`expert_review` 例外，见下表）。
 
 | 模块 | model | temperature | max_tokens | timeout | thinking_enabled | thinking_budget | reasoning_effort | output_brief_limit |
 |------|:-----:|:-----------:|:----------:|:-------:|:----------------:|:---------------:|:----------------:|:------------------:|
-| **全球政经局势** | null（使用默认） | **0.3**（低温保事实） | **3072** | **60s** | false | 6000 | high | **200 字** |
-| **智囊团深度复盘** | null | **0.3**（低温保事实） | **36000** | **120s** | **true** ⭐ | 24000 | **low** | 300 字 |
-| **持仓体检报告** | null | **0.1**（极低温保数值精确） | **24000** | **120s** | **true** | 18000 | **medium** | 300 字 |
-| **穿透深度分析** | null | **0.1**（极低温保数值精确） | **12288** | **90s** | false | 12000 | high | 300 字 |
-| **财经新闻关联分析** | null（可换轻量模型降成本） | **0.1**（极低温保 JSON） | **3000** | **60s** | false | 6000 | high | 不适用 |
+| **全球政经局势** | null（使用默认） | **0.3**（低温保事实） | **3072** | **60s** | false | 6000 | low | **200 字** |
+| **智囊团深度复盘** | null | **0.3**（低温保事实） | **36000** | **120s** | **true** ⭐ | 24000 | **medium** | 300 字 |
+| **持仓体检报告** | null | **0.1**（极低温保数值精确） | **24000** | **120s** | **true** | 18000 | **low** | 300 字 |
+| **穿透深度分析** | null | **0.1**（极低温保数值精确） | **12288** | **90s** | false | 12000 | low | 300 字 |
+| **财经新闻关联分析** | null（可换轻量模型降成本） | **0.1**（极低温保 JSON） | **3000** | **60s** | false | 6000 | low | 不适用 |
+| **生成后自检**（附录，默认开） | null | **0.1** | **3072** | **90s** | false | 6000 | low | 300 字 |
+| **持仓变动复盘归因**（章本体另有开关） | null | **0.2** | **2048** | **90s** | false | 6000 | low | 300 字 |
 
 > **补充**：财经新闻关联分析还支持 `news_correlation_top_n` 配置项（默认 `30`），控制送 LLM 分析的新闻条数上限，按关键词匹配数降序选取。增大此值会线性增加 Token 消耗，减小则降低 LLM 关联分析的覆盖率。设为 `0` 可完全禁用 LLM 分析（仅保留关键词匹配）。
 
@@ -559,11 +561,11 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
 | 与 temperature 关系 | **互斥**（开启后 temperature 参数被忽略） | **互斥**（开启后 temperature 参数被忽略） | **互斥**（开启后 temperature 参数被忽略） | **互斥**（开启后 temperature 参数被忽略） |
 | 兼容端点 | `api.anthropic.com` | `api.deepseek.com/anthropic`（Anthropic 兼容端点） | `generativelanguage.googleapis.com` | `api.moonshot.cn/anthropic`（Anthropic 兼容端点） |
 | 默认思考行为 | 默认不思考 | **默认开思考**（effort 族） | 默认不思考 | **默认开思考**（未开启时工具自动发 `disabled` 兜底） |
-| 推荐场景 | 预算可控，适合所有模型 | `max` 深度推荐仅用于智囊团；宏观/新闻保持 `high` | 低成本备选，适合轻量推理 | 通用主力（256k 上下文），预算可控 |
+| 推荐场景 | 预算可控，适合所有模型 | 默认 `low`（智囊团 `medium`）；需更深时手动提到 `high` / `max`（`max` 仅推荐智囊团） | 低成本备选，适合轻量推理 | 通用主力（256k 上下文），预算可控 |
 
 ### `thinking_budget` 与 `max_tokens` 的关系
 
-**仅在使用 Claude / Gemini / Kimi 模型时 `thinking_budget_{模块}` 有意义**（三者同属 `budget_tokens` 族）。DeepSeek 使用 `reasoning_effort`（`"high"` / `"max"`）定性控制思考深度，不涉及 token 预算概念。
+**仅在使用 Claude / Gemini / Kimi 模型时 `thinking_budget_{模块}` 有意义**（三者同属 `budget_tokens` 族）。DeepSeek 使用 `reasoning_effort`（`"low"` / `"medium"` / `"high"` / `"max"`，出厂默认 `"low"`）定性控制思考深度，不涉及 token 预算概念。
 
 | 配置项 | 管什么 | expert 默认值 |
 |--------|--------|:------------:|

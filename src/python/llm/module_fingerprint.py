@@ -50,12 +50,15 @@ from src.python.llm.fingerprint import (
     compute_fingerprint,
     extract_stable_holdings,
     extract_stable_penetration,
+    risk_signals_of,
 )
 from src.python.llm.prompts_signals import _signal_digest_cache_suffix
 
 __all__ = [
     "ModuleFingerprintInputs",
     "debate_feature_cache_suffix",
+    "fingerprint_components",
+    "diff_fingerprint_components",
     "debate_procon_fingerprint",
     "debate_synthesis_fingerprint",
     "global_macro_fingerprint",
@@ -174,6 +177,76 @@ def _pipeline_block_cache_suffix(pipeline_data: dict | None) -> str:
     if not _block:
         return ""
     return "_" + compute_fingerprint(_block)
+
+
+def _pipeline_blocks_text(pipeline_data: dict | None) -> str:
+    """环比块 + 降级块的渲染文本（与正式指纹同一渲染路径）。"""
+    from src.python.llm.prompts_core import (
+        _build_data_degradation_block,
+        _build_difpipeline_data_block,
+    )
+
+    blocks = [_build_difpipeline_data_block(pipeline_data), _build_data_degradation_block(pipeline_data)]
+    return "\n".join(block for block in blocks if block)
+
+
+def fingerprint_components(inputs: "ModuleFingerprintInputs") -> dict[str, str]:
+    """指纹**组件级**哈希（只读诊断，不参与缓存键）。
+
+    用途：连续两次同数据报告仍 miss 时，回答「到底哪一块变了」。返回的每项都是
+    该组件单独哈希后的短值；把两次结果并排比即可定位变化源，不必再凭猜测改指纹。
+
+    口径与正式指纹一致——同一份输入、同一 ``compute_fingerprint``，只是分组更细。
+    调用方应仅在设计/排障路径按需调用（正式路径不计算，避免额外哈希开销）。
+    """
+    ledger_blocks: dict[str, str] = {}
+    if decision_ledger.is_active():
+        ledger_blocks["decision_lessons"] = decision_ledger.lessons_cache_suffix()
+    ledger_blocks["signal_summary"] = signal_ledger.summary_cache_suffix()
+    return {
+        "totals": compute_fingerprint(
+            inputs.total_mv,
+            inputs.total_cost,
+            inputs.total_profit,
+            inputs.total_today_profit,
+        ),
+        "holdings": compute_fingerprint(extract_stable_holdings(inputs.holdings_details)),
+        "penetration": compute_fingerprint(extract_stable_penetration(inputs.penetrated_assets)),
+        "penetration_full": compute_fingerprint(extract_stable_penetration(inputs.penetrated_assets, full=True)),
+        "categories": compute_fingerprint(inputs.categories),
+        # 与正式指纹同口径：只哈希风险信号子集，不含 bars 等载荷
+        "history_risk": compute_fingerprint(risk_signals_of(inputs.history_data)),
+        "a_indices": compute_fingerprint(inputs.a_indices),
+        "us_indices": compute_fingerprint(inputs.us_indices),
+        "competitive_context": compute_fingerprint(inputs.competitive_context),
+        "metrics": compute_fingerprint(inputs.metrics),
+        "data_quality": compute_fingerprint(inputs.data_quality_text),
+        "purchase_block": compute_fingerprint(inputs.purchase_block),
+        "holding_change_block": compute_fingerprint(inputs.holding_change_block),
+        "event_impact_block": compute_fingerprint(inputs.event_impact_block),
+        "schedule_replay_block": compute_fingerprint(inputs.schedule_replay_block),
+        # 与生产指纹同口径：哈希的是**渲染后的提示词文本**，不是契约 dict
+        # （契约含 snapshot_count 等展示字段，直接哈希会误报「组件变化」）
+        "pipeline_blocks": compute_fingerprint(_pipeline_blocks_text(inputs.pipeline_data)),
+        "ledger_blocks": compute_fingerprint(ledger_blocks),
+        "generation_params": compute_fingerprint(
+            *[
+                generation_params_suffix(module)
+                for module in ("global_macro", "expert_review", "health_check", "penetration_deep")
+            ]
+        ),
+    }
+
+
+def diff_fingerprint_components(previous: dict[str, str] | None, current: dict[str, str]) -> list[str]:
+    """比较两次组件哈希，返回**值发生变化**的组件名（升序）。
+
+    用于连续报告排障：只报告真实变化的组件，避免把「缓存未命中」笼统归因于
+    「指纹算法有问题」。无上次记录（``None``/空）时返回空列表。
+    """
+    if not previous:
+        return []
+    return sorted(key for key in current if previous.get(key) != current.get(key))
 
 
 def generation_params_suffix(module: str) -> str:

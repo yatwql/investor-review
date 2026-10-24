@@ -199,7 +199,7 @@ _MODULE_REGISTRY: tuple[DataModuleDef, ...] = (
         settings_suffix="penetration_deep",
         cache_groups=("preload",),
     ),
-    # ── 生成后自检（实验能力，出厂默认关；生成后一遍执行，不属并行调度模块）──
+    # ── 生成后自检（出厂默认开；生成后一遍执行，不属并行调度模块）──
     # 登记于此的目的：显示名/缓存前缀/TTL/用量统计/失败原因载体全部复用既有机制。
     # **刻意不进 generators_orchestrator._MODULE_FNS**：其输入是其余模块的产出，
     # 必须串行在它们之后，不属线程池并行调度（见 llm/self_review.py 模块说明）。

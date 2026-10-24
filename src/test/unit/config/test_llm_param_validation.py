@@ -78,7 +78,7 @@ class TestLoadSanitize:
         assert doc["modules"]["global_macro"]["temperature"] == 0.3
         assert doc["modules"]["global_macro"]["max_tokens"] == 3072
         assert doc["modules"]["expert_review"]["thinking"]["budget"] == 24000
-        assert doc["modules"]["expert_review"]["thinking"]["effort"] == "low"
+        assert doc["modules"]["expert_review"]["thinking"]["effort"] == "medium"
         assert doc["modules"]["expert_review"]["debate"]["procon"]["synthesis_temperature"] == 0.5
         assert doc["runtime"]["debate_limits"]["max_tokens_per_report"] == 72000
         assert doc["runtime"]["debate_limits"]["call_timeout_override_sec"] == 90

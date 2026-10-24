@@ -84,8 +84,12 @@ def _generate_report_full(
     from src.python.report._snapshot import capture_snapshot
     from src.python.report.orchestrator import ReportResult, prepare_report_data
 
+    from src.python.report._run_scope import start_report_run
+
     perf = PerfCollector(report_type="full", holdings=holdings, stage_announcer=reporter.stage_progress)
     bind_perf(perf)
+    # 报告运行边界：清本轮降级事件与自检载体，取 LLM 用量基线（缓存状态按报告隔离）
+    _usage_baseline = start_report_run()
     result = ReportResult()
     result.holdings_ok = True
     _health_fut = _spawn_health_checks()
@@ -410,7 +414,7 @@ def _generate_report_full(
 
     result.news_ok = news_ok
     result.report_generated = result.html_ok or result.excel_ok
-    _record_llm_context(perf, _llm_sink)
+    _record_llm_context(perf, _llm_sink, _usage_baseline)
     perf.save()
     _collect_health_checks(_health_fut, "full", holdings)
     return result

@@ -34,7 +34,7 @@ _FLAT_DEFAULTS: dict[str, Any] = {
         "health_check": True,
         "penetration_deep": True,
         "news_correlation": False,
-        "self_review": False,
+        "self_review": True,
         # 持仓变动复盘归因：章本体由 feature holding_change_review 控制（默认关），
         # 此开关仅在章本体开启后决定是否额外调用一次 LLM 做归因（默认开）
         "holding_change": True,
@@ -48,7 +48,7 @@ _FLAT_DEFAULTS: dict[str, Any] = {
     "output_brief_global_macro": False,
     "thinking_enabled_global_macro": False,
     "thinking_budget_global_macro": 6000,
-    "reasoning_effort_global_macro": "high",
+    "reasoning_effort_global_macro": "low",
     "system_prompt_expert_review": None,
     "model_expert_review": None,
     "temperature_expert_review": 0.3,
@@ -58,7 +58,7 @@ _FLAT_DEFAULTS: dict[str, Any] = {
     "output_brief_expert_review": False,
     "thinking_enabled_expert_review": True,
     "thinking_budget_expert_review": 24000,
-    "reasoning_effort_expert_review": "low",
+    "reasoning_effort_expert_review": "medium",
     "system_prompt_health_check": None,
     "model_health_check": None,
     "temperature_health_check": 0.1,
@@ -68,7 +68,7 @@ _FLAT_DEFAULTS: dict[str, Any] = {
     "output_brief_health_check": False,
     "thinking_enabled_health_check": True,
     "thinking_budget_health_check": 18000,
-    "reasoning_effort_health_check": "medium",
+    "reasoning_effort_health_check": "low",
     "system_prompt_penetration_deep": None,
     "model_penetration_deep": None,
     "temperature_penetration_deep": 0.1,
@@ -78,8 +78,8 @@ _FLAT_DEFAULTS: dict[str, Any] = {
     "output_brief_penetration_deep": False,
     "thinking_enabled_penetration_deep": False,
     "thinking_budget_penetration_deep": 12000,
-    "reasoning_effort_penetration_deep": "high",
-    # ── 生成后自检（出厂默认关：开启后每次报告额外调用一次 LLM）──
+    "reasoning_effort_penetration_deep": "low",
+    # ── 生成后自检（出厂默认开：每次报告额外调用一次 LLM）──
     "system_prompt_self_review": None,
     "model_self_review": None,
     "temperature_self_review": 0.1,
@@ -109,7 +109,7 @@ _FLAT_DEFAULTS: dict[str, Any] = {
     "cache_enabled_news_correlation": True,
     "thinking_enabled_news_correlation": False,
     "thinking_budget_news_correlation": 6000,
-    "reasoning_effort_news_correlation": "high",
+    "reasoning_effort_news_correlation": "low",
     "news_correlation_top_n": 30,
     "debate": {
         "procon": {"per_call_max_tokens": 18432, "synthesis_model": None, "synthesis_temperature": 0.5},

@@ -1,5 +1,5 @@
 # LLM 集成层技术设计
-> 文档版本：0.15.3
+> 文档版本：0.15.4
 
 本文档是 `technical.md` 的 LLM 集成层专项技术设计补充，对应 `technical.md` §5（LLM 集成层概要设计）。
 `technical.md` §5 提供 LLM 层的总体架构、模块清单、调用链概览、多 Provider 链模式概要及关键机制速览；
@@ -184,7 +184,7 @@ skeleton.py:generate_llm_content()
 | `prompts_signals.py` | 工具 | 信号预消化：行业资金流向段方向标注与分方向排名（无开关，默认路径）+ 算法评级信号块（市场温度/估值分位/尾部风险/持仓基本面/叙事与数字背离 → `信号：…` 行，`deterministic_signal` 开关（读侧注入面），判定收敛于缓存后缀函数保证读写键同源） | `_build_sector_flow_block()` / `_build_signal_digest_block()` / `_signal_digest_cache_suffix()` |
 | `fingerprint.py` | 工具 | LLM 缓存指纹计算、稳定性字段提取、TTL 查询 | `compute_fingerprint()` / `build_llm_fingerprint()` |
 | `force_scope.py` | 工具 | 模块级强刷范围：可强刷键清单（注册表 settings_suffix 子集）+ `resolve_force_scope` 粒度优先归一与未知键校验 + `is_module_forced`；全局 force 与模块子集在 `generate_all_llm` 入口归一为模块键集合，不改缓存键构造 | `resolve_force_scope()` / `is_module_forced()` |
-| `module_fingerprint.py` | 工具 | **模块指纹的唯一事实来源（预检侧与写侧同源）**：四模块指纹构造器 + 输入闭包 + 注册表，两侧都调用同一函数，结构性消除「预检键 ≠ 写侧键」的漂移 | `MODULE_FINGERPRINT_BUILDERS` / `ModuleFingerprintInputs` / `*_fingerprint()` |
+| `module_fingerprint.py` | 工具 | **模块指纹的唯一事实来源（预检侧与写侧同源）**：四模块指纹构造器 + 输入闭包 + 注册表，两侧都调用同一函数，结构性消除「预检键 ≠ 写侧键」的漂移；另提供**组件级哈希审计**（逐输入分量的哈希与相对上次报告的变化定位，DEBUG 下记录「哪些组件变了」） | `MODULE_FINGERPRINT_BUILDERS` / `ModuleFingerprintInputs` / `*_fingerprint()` / `fingerprint_components()` / `diff_fingerprint_components()` |
 | `session.py` | 工具 | 会话级 Token 累计、模块级记录、格式化输出 | `track_session_usage()` / `get_session_usage()` |
 | `cost_tracker.py` | 工具 | Token 预算管理、输入检查、成本摘要格式化（compact/verbose） | `reset_budget()` / `get_cost_summary()` |
 | `pricing.py` | 工具 | 模型定价合并、费用估算 | `estimate_cost()` / `reload_pricing()` |
@@ -870,7 +870,7 @@ penetrated_assets ──→ extract_stable_penetration()
 |:-----|:-----------------|:---------|:-----|
 | `competitive_context` | `global_macro` / `expert_review` / 辩论三键 | `prompts_core._build_competitive_context_block()` | 竞争语境块（【今日对比】/【区间对比】），由 A 股/美股指数、对比指数配置、区间收益与量化指标渲染而成 |
 | `metrics` | `expert_review` / 辩论三键 | 提示词正文（【量化指标】/ 情景分析 / 风格一致性） | 量化指标字典 |
-| `data_quality_text` | `health_check` | `prompts_tables._build_data_quality_detail_block()` | 数据质量详细状态块（【数据质量详细状态】：净值新鲜度基准 + 净值滞后/无有效行情清单 + 连接失败 / 数据为空 / 触发降级计数），由 `degradation_events`（本进程内的降级事件日志）与 `data_freshness` 契约（交易日 + 逐品种新鲜度）共同渲染而成 |
+| `data_quality_text` | `health_check` | `prompts_tables._build_data_quality_detail_block()` | 数据质量详细状态块（【数据质量详细状态】：净值新鲜度基准 + 净值滞后/无有效行情清单 + 连接失败 / 数据为空 / 触发降级计数），由 `degradation_events`（**本轮报告**的降级事件日志，入口经 `begin_report` 清空）与 `data_freshness` 契约（交易日 + 逐品种新鲜度）共同渲染而成；计数**只统计失败事件**——`mark_data_used` 的成功取用事件同样带 `failure_type`，但渲染时按其可选的成功标志跳过，避免把正常取数写成「连接失败」并导致缓存冷热不同产出不同文本 |
 | `pipeline_data` 派生的【环比变化】【数据质量降级】两段 | `expert_review` / `health_check` / 辩论三键 | `prompts_core._build_difpipeline_data_block()` / `_build_data_degradation_block()` | 由 `_pipeline_block_cache_suffix()` 调用**提示词侧同一构建器**取文本再哈希——「进键的文本」与「进提示词的文本」同源 |
 | `purchase_constraint_block`（申购限购约束块） | 标准四模块 + 辩论三键 + `self_review` | `prompts_tables._build_prompt_appendix()` 第 4 段 |
 | `holding_change_block`（持仓变动复盘提示词块） | 标准四模块 + 辩论三键 + `self_review`（附录形态与 purchase 块平行） | `prompts_tables._build_prompt_appendix()` 第 5 段 | 由 `extract_holding_change_block(pipeline_data)` **唯一提取点**取契约字段 `prompt_block`（report 构建期经展示视图同源渲染一次），同一实例交预检侧 `holding_change_block` 与写侧附录；块空不进提示词也不进键（关态逐字节回退）；章内归因块另走 `holding_change_review_fingerprint` 内容寻址 | 由 `extract_purchase_constraint_block(pipeline_data)` **唯一提取点**取契约字段 `constraint_block`（report 构建期渲染一次），同一实例交预检侧 `purchase_block` 与写侧附录；块空不进提示词也不进键（接线前录制四模块基线，断言空块 == 引入前黄金值，防「空串+分隔符」换哈希）；新闻批量路径 `_batch_prompt` 拼块 + `_batch_preparer` 并入 `context_fp` 同源 |
@@ -886,9 +886,11 @@ penetrated_assets ──→ extract_stable_penetration()
 
 **辩论综合键（`debate_synthesis_fingerprint`）**：取「辩论基础指纹 + **综合提示词全文**」。综合提示词 = 白脸/黑脸**全文** + 条件推理情景段（`debate.conditional.scenarios` 驱动）+ 集中度问答段（`debate.concentration_qa.threshold` 驱动，内建段落），由 `_build_debate_synthesis_prompt()` 一次性渲染。既然提示词就是这三者的函数，键直接取该渲染结果，无需逐项枚举入哈希的来源、也就不会漏项。此前本键另起一套：截取 pro/con **前 200 字符**摘要 + 开关位字母后缀，两处后果——正文差异落在 200 字符之后时键不动，仅改 config（情景名/描述、集中度阈值）而开关位不变时键同样不动；两种情形都命中按旧正文/旧配置生成的综合结论且不报错。
 
-**数据质量段的成本口径**：该段曾按「纳入后数据源抖动期间事件集持续变化会让该模块反复未命中（TTL 24h 下的重算成本）」的理由不纳入指纹；核查显示三点前提均不成立——① 事件集是**本进程内**的降级日志（`DegradationTracker._events` 只存内存、不落盘），该块因而是**本次运行的数据源画像**而非「一日累计」；② 该块已是聚合结果（仅失败源与计数，无时间戳/消息/`detail`）；③ 本模块指纹本就含 `total_today_profit`，交易日内持仓一有盈亏变化即换键，24h TTL 从不是真实驻留期。故纳入的边际额外失效接近零，而收益是消除一类**静默的错误结论**：源恢复后重出报告不再复用故障期间缓存的健康判断（详见 `review-findings.md` 已解决区）。
+**数据质量段的成本口径**：该段曾按「纳入后数据源抖动期间事件集持续变化会让该模块反复未命中（TTL 24h 下的重算成本）」的理由不纳入指纹；核查显示三点前提均不成立——① 事件集是**本进程内**的降级日志（`DegradationTracker._events` 只存内存、不落盘，且每份报告入口经 `begin_report()` 清空），该块因而是**本次运行的数据源画像**而非「一日累计」；② 该块已是聚合结果（仅失败源与计数，无时间戳/消息/`detail`）；③ 本模块指纹本就含 `total_today_profit`，交易日内持仓一有盈亏变化即换键，24h TTL 从不是真实驻留期。故纳入的边际额外失效接近零，而收益是消除一类**静默的错误结论**：源恢复后重出报告不再复用故障期间缓存的健康判断（详见 `review-findings.md` 已解决区）。
 
 上述纪律由 `src/test/unit/llm/test_module_fingerprint.py` 锁定：既断言「进了提示词必须进键」（含预检侧同源），也断言「未进提示词的模块不得被并入」。
+
+**组件级指纹审计（`fingerprint_components()` / `diff_fingerprint_components()`）**：指纹本体是单一哈希，缓存 miss 时无法看出是哪个输入分量变了。故同函数族另提供「逐组件哈希」视图——与正式指纹**同口径**（`pipeline_blocks` 取渲染文本、`history_risk` 取风险信号子集，不拿原始 payload 去哈希），DEBUG 日志下记录「相对上次报告哪些组件变了」，用于定位缓存未命中的来源；审计只用于观测，不参与缓存键计算。
 
 ### 7.2 缓存键模式
 
@@ -913,6 +915,8 @@ penetrated_assets ──→ extract_stable_penetration()
 | `health_check` | 86400s (24h) | 体检报告每日更新 |
 | `penetration_deep` | 86400s (24h) | 穿透分析每日更新 |
 | `news_correlation` | 3600s (1h) | 新闻时效性强，TTL 较短 |
+| `self_review` | 7200s (2h) | 生成后自检（附录）；输入是其余模块产出，内容未变即命中 |
+| `holding_change` | 7200s (2h) | 持仓变动复盘归因（章内 LLM 归因块，本体由 feature `holding_change_review` 控制） |
 
 `import` 失败时兜底返回 hardcoded defaults（设计为防御性编程，正常情况下不会触发）。
 
@@ -1108,7 +1112,7 @@ enhance_news_correlation() -> 新闻关联完成
     └─ 进程退出                          ← 数据随进程释放（无显式重置调用点）
 ```
 
-用量数据由 `track_session_usage()` 随调用实时累计，`reset_session_usage()` 虽提供重置接口但生产代码无调用点；进程内多次生成报告时数据持续累计。
+用量数据由 `track_session_usage()` 随调用实时累计，`reset_session_usage()` 虽提供重置接口但生产代码无调用点；进程内多次生成报告时会话累计数据持续累计。**报告层写 perf 时按报告 delta 记账**：`report/_run_scope.start_report_run()` 在报告入口取一次会话用量基线，收尾 `_record_llm_context(perf, ..., baseline)` 经 `_usage_delta()` 取差值——TUI「本会话累计」仍是跨报告累计，而单份报告的 token/调用数不会因多跑几份报告而看似翻倍。
 
 ### 9.4 用量展示映射
 
@@ -1260,7 +1264,7 @@ reload_pricing() → 读 llm_pricing_ref.json
 
 ### 12.2 注册表键名派生
 
-在 `core/registry.py` 中，每个 LLM 模块通过 `settings_suffix` 注册（`global_macro`、`expert_review`、`health_check`、`penetration_deep`、`news_correlation`、`self_review`（生成后自检，出厂默认关；生成后一遍执行、不经并行调度）、`holding_change`（持仓变动复盘归因，`enabled_llm` 默认开；章本体由 feature `holding_change_review` 控制，不经并行调度），外加 3 个辩论模块 `debate_pro`/`debate_con`/`debate_synthesis`），自动派生 `llm_settings.json` 的所有合法键名：
+在 `core/registry.py` 中，每个 LLM 模块通过 `settings_suffix` 注册（`global_macro`、`expert_review`、`health_check`、`penetration_deep`、`news_correlation`、`self_review`（生成后自检，出厂默认开；生成后一遍执行、不经并行调度）、`holding_change`（持仓变动复盘归因，`enabled_llm` 默认开；章本体由 feature `holding_change_review` 控制，不经并行调度），外加 3 个辩论模块 `debate_pro`/`debate_con`/`debate_synthesis`），自动派生 `llm_settings.json` 的所有合法键名：
 
 ```
 已知 LLM Settings 键名（每个模块 9 个）：
@@ -1309,13 +1313,15 @@ reload_pricing() → 读 llm_pricing_ref.json
 
 消费点仅两处：编排层 `needs` 计算（模块集合）与报告层 `news_top_count` 解析（采集规模）。非默认档位在 LLM 用量页签写入一行自述（`standard` 不写，保持零噪声）。
 
-### 12.4 生成后自检（`self_review`，出厂默认关）
+### 12.4 生成后自检（`self_review`，出厂默认开）
 
 **分层定位（与确定性校验不重叠）**：① `llm/fact_checker` 确定性校验（数值/代码/排名有据性 + 自动修正，**始终生效**）；② `llm/self_review.py` 模型层复核（结论与数据是否矛盾 / 是否有未标注的推测性表述 / 模块间结论是否互斥），经 `enabled_llm.self_review` 开启。
 
 **注册形态**：在 `core/registry.py` 登记（显示名/缓存前缀/TTL/用量统计/失败原因载体自动获得），但**刻意不进 `generators_orchestrator._MODULE_FNS`**——其输入是其余模块的产出，必须串行在它们之后，属**生成后一遍**而非线程池并行调度模块（模块注册纪律明文允许该形态；`test_self_review.py` 有「不在并行表」的防注册漂移用例）。
 
 **产物交付**：不扩宽 4 元组 `llm_content` 契约（报告层多处按位置解包），改用**运行作用域载体 + 报告层零参 pull**（与 `report/experimental_notice` 同源模式）：`set_self_review_block()` 写入本轮区块，Excel 用量页签与 HTML「生成后自检（附录）」区块以零参函数取用。HTML 落点为附录区块（不占章节号、不参与目录导航）。
+
+**默认参数**：`max_tokens_self_review=3072` / `timeout_self_review=90` / `temperature_self_review=0.1` / `reasoning_effort_self_review=low`（出厂默认开；未产出时仍计入失败原因载体）。
 
 **指纹**：`module_fingerprint.self_review_fingerprint()` 为**内容寻址**（各模块产出正文 + 持仓/穿透摘要），仅写侧使用、不进 `MODULE_FINGERPRINT_BUILDERS`（该表供预检/写两侧共享同一 `ModuleFingerprintInputs` 形状）——产出未变（含全部缓存命中）时键不变，自检同样命中缓存。
 

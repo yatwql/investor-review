@@ -8,7 +8,8 @@
   失败不抛异常、由调用方回退为「手动访问路径」提示；
 - **交互**：单键读取——``y`` / ``Y`` = 打开报告目录与报告；**默认 N**，其余任何键
   （含 ``n`` / 回车 / Esc / 未知键）都按默认值处理，不额外追问；``Ctrl+C`` 沿用 TUI
-  既有约定（退出程序）；非 TTY（脚本/管道）不问、只打印产物清单，避免阻塞。
+  既有约定（退出程序）；非 TTY（脚本/管道）不问、只打印产物清单，避免阻塞；
+  远程 SSH/无图形会话不发起本机打开动作，只打印路径与传输指引。
 
 设计契约（`DESIGN-TUI.md`）：提示形态用二选一确认 ``(y/N)``（大写一侧为默认）；
 反馈带 ``[OK]`` / ``[!]`` 前缀并给出可核对路径；Esc 只取消当前提示、不退出程序。
@@ -59,6 +60,7 @@ def prompt_open_artifacts(
     key_reader: Callable[[], str] | None = None,
     opener: Callable[[Path], bool] | None = None,
     echo: Callable[[str], None] = print,
+    open_supported: Callable[[], bool] | None = None,
 ) -> str:
     """打印产物清单并询问是否打开（目录 + 报告）。
 
@@ -67,10 +69,12 @@ def prompt_open_artifacts(
         key_reader: 键读取（测试注入；缺省 ``tui_keys.get_key``）。
         opener: 打开动作（测试注入；缺省平台分派）。
         echo: 输出函数（测试注入）。
+        open_supported: 本机桌面打开能力探测（测试注入；缺省看 SSH/DISPLAY）。
 
     Returns:
         ``"skipped"``（非 TTY / 无产物 / 用户选默认 N）、``"opened"``（至少打开一项）、
-        ``"failed"``（用户选了是但一项都没打开）。
+        ``"failed"``（用户选了是但一项都没打开）、``"unsupported"``（远程/无图形会话，
+        服务器无法在客户端打开文件管理器）。
     """
     if not artifacts:
         return "skipped"
@@ -79,6 +83,10 @@ def prompt_open_artifacts(
     echo(f"       报告目录  {output_dir}")
     for path in artifacts:
         echo(f"       产物文件  {path}")
+    if not (open_supported or _local_open_supported)():
+        echo("  [!] 当前为远程/无图形终端，服务器无法在手机或远端打开文件管理器。")
+        echo("      产物已保存在上方路径；请使用 Web 工作台下载，或通过 scp/sftp 获取。")
+        return "unsupported"
     if not sys.stdin.isatty():
         return "skipped"  # 脚本/管道不阻塞：只列清单，交回菜单
 
@@ -95,6 +103,13 @@ def prompt_open_artifacts(
     for path in opened:
         echo(f"  [OK] 已打开：{path}")
     return "opened"
+
+
+def _local_open_supported() -> bool:
+    """延迟导入本机桌面能力探测，避免非 TUI 场景加载 core.artifacts。"""
+    from src.python.core.artifacts import local_open_supported
+
+    return local_open_supported()
 
 
 def _get_key() -> str:

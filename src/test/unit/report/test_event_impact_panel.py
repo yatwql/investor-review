@@ -137,6 +137,23 @@ def test_happy_path_single_event():
     fetch_index.assert_called_once_with("sh000300")
 
 
+def test_repeated_event_code_reuses_bars_and_index():
+    """同批多个事件命中同一品种/基准 → 本轮只取一次行情。"""
+    fetch_bars, fetch_index, resolve = _providers()
+    second = _news(title="工行续报", url="https://example.com/n2")
+    res = build_event_rows(
+        _HOLDINGS,
+        [_news(), second],
+        None,
+        fetch_bars=fetch_bars,
+        fetch_index=fetch_index,
+        benchmark_code_for=resolve,
+    )
+    assert len(res["events"]) == 2
+    assert fetch_bars.call_count == 1
+    assert fetch_index.call_count == 1
+
+
 def test_penetrated_stock_matched_by_name():
     """穿透资产名命中 → 底层 A 股代码出行。"""
     fetch_bars, fetch_index, resolve = _providers()

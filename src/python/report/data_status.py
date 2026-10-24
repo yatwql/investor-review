@@ -166,7 +166,10 @@ def mark_data_used(source_key: str, tier: str = "T2") -> None:
     自身不抛异常（观测性副作用不得影响取数）。
     """
     try:
-        get_tracker().record(source_key, tier, success=True)
+        # 成功事件不带失败类型：下游数据质量块按 failure_type 统计「连接失败/数据为空」，
+        # 若成功事件沿用默认 "unreachable"，每次正常取数都会被计成一次连接失败
+        # （既与事实相反，也让「缓存命中数不同」的报告产出不同的质量文本）。
+        get_tracker().record(source_key, tier, success=True, failure_type="ok")
     except Exception:  # 观测失败不影响主链路
         logger.debug("[data_status] 取用标记失败（非关键）: %s", source_key, exc_info=True)
 
@@ -456,6 +459,19 @@ class DegradationTracker:
         """清空事件日志（测试用）。"""
         with self._lock:
             self._events.clear()
+
+    def begin_report(self) -> None:
+        """开启一份新报告：只清空**事件日志**，保留失败计数与上次成功时间。
+
+        事件日志的消费方（数据质量块、数据源可用性矩阵、降级摘要）语义都是
+        「本次报告期间发生了什么」，跨报告累积会把上一轮的告警写进本轮的 LLM
+        提示词与缓存指纹，导致同数据连续报告也全部缓存 miss。
+        失败计数（``_counts``）与 ``_last_success`` 是降级判定与跨会话陈旧的
+        事实来源，**不在本方法清理范围内**（需要清时用 :meth:`reset`）。
+        """
+        with self._lock:
+            self._events.clear()
+            self._persist_dirty = True
 
     # ── 聚合降级记录 ──
 

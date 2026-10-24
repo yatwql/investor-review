@@ -43,6 +43,19 @@ def collect_artifacts(config: dict | None, output_dir: str | None = None) -> tup
     return tuple(path for path in candidates if path.is_file())
 
 
+def local_open_supported() -> bool:
+    """当前会话能否在**本机桌面**打开文件管理器/默认程序。
+
+    远程 SSH/mosh、无 DISPLAY/WAYLAND 的服务端无法把文件管理器投到手机或远端
+    客户端；此时调用 xdg-open/open 只会失败，调用方应展示路径与传输指引。
+    """
+    if any(os.environ.get(key) for key in ("SSH_CONNECTION", "SSH_TTY", "MOSH_CONNECTION")):
+        return False
+    if sys.platform.startswith("linux"):
+        return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+    return True
+
+
 def open_path(path: Path) -> bool:
     """用系统默认程序打开路径；成功返回 True，任何失败（含命令缺失）返回 False。"""
     try:

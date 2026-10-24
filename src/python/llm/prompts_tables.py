@@ -294,6 +294,11 @@ def _build_data_quality_detail_block(
     degraded_events: list[dict] = []
 
     for e in degradation_events:
+        # 只统计**失败**事件：成功取用事件（mark_data_used）也进事件日志，
+        # 若一并按 failure_type 计数，正常取数会被写成「连接失败 N 次」——
+        # 表述与事实相反，且缓存命中数不同的两次报告会因此得到不同的质量文本。
+        if e.get("success", False):
+            continue
         sk = e.get("source_key", "?")
         ft = e.get("failure_type", "?")
         degraded = e.get("degraded", False)
