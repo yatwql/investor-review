@@ -280,6 +280,15 @@ class TestPublish:
         assert rel.normalize_release_title("纯描述") == "纯描述"
         assert rel.normalize_release_title("release: v0.12.6 ——") == "release: v0.12.6 ——"
 
+    def test_normalize_release_title_strips_bare_version_prefix(self, rel):
+        """裸版本前缀同样剥掉：人工把版本号写进 `--title` 是自然写法，
+        不剥时 release 提交标题会拼出两遍版本号。"""
+        assert rel.normalize_release_title("v0.12.6 —— 发布主题") == "发布主题"
+        assert rel.normalize_release_title("v0.12.6 — 发布主题") == "发布主题"
+        assert rel.normalize_release_title("v0.15.4-dev —— 发布主题") == "发布主题"
+        # 非版本形态的数字串不动（避免误伤「v2 版方案」这类正文）
+        assert rel.normalize_release_title("v2 —— 发布主题") == "v2 —— 发布主题"
+
     def test_title_prefix_normalized_to_single_subject(self, rel, tmp_path):
         self._fixture(rel, tmp_path, "0.12.6")
         runner = self._dirty_runner()
@@ -513,6 +522,73 @@ class TestDevBump:
         assert "发布迁入归档档案" not in text
         assert "（0.12.6-dev）" not in text
         assert "### 归档档案" in text
+
+    def test_devbump_records_step_timings(self, rel, tmp_path):
+        """devbump 也要留下分步耗时（台账此前只有总墙钟，无法定位推送/切版提交占比）。"""
+        fx = _ToolRepoFixture(rel, tmp_path)
+        fx.CONSTANTS_FILE.write_text('APP_VERSION = "0.12.6"\n', encoding="utf-8")
+        runner = _ok_runner([(["git", "status", "--porcelain"], (0, " M docs/x.md\n", ""))])
+        rel._reset_timer()
+        assert rel.cmd_devbump(ns(push=False), runner=runner) == 0
+        labels = [entry["step"] for entry in rel._timer().steps]
+        assert "版本全链改写 + 一致性收敛" in labels
+        assert "切版提交" in labels
+        assert "发布闭环校验" in labels
+
+    def test_closure_check_passes_when_tag_and_master_aligned(self, rel, tmp_path, capsys):
+        """闭环闭合：tag 存在且在 master 历史内、master 为发布版。"""
+        fx = _ToolRepoFixture(rel, tmp_path)
+        fx.CONSTANTS_FILE.write_text('APP_VERSION = "0.12.6"\n', encoding="utf-8")
+        runner = _ok_runner(
+            [
+                (["git", "status", "--porcelain"], (0, " M docs/x.md\n", "")),
+                (["git", "tag", "--list"], (0, "v0.12.6\n", "")),
+                (["git", "merge-base"], (0, "", "")),
+                (["git", "show"], (0, 'APP_VERSION = "0.12.6"\n', "")),
+            ]
+        )
+        assert rel.cmd_devbump(ns(push=False), runner=runner) == 0
+        assert "[OK] 发布闭环闭合" in capsys.readouterr().out
+
+    def test_closure_check_flags_master_version_mismatch(self, rel, tmp_path, capsys):
+        """master 未跟版（只打 tag 不更新 master）是可追溯性缺口，必须硬失败。"""
+        fx = _ToolRepoFixture(rel, tmp_path)
+        fx.CONSTANTS_FILE.write_text('APP_VERSION = "0.12.6"\n', encoding="utf-8")
+        runner = _ok_runner(
+            [
+                (["git", "status", "--porcelain"], (0, " M docs/x.md\n", "")),
+                (["git", "tag", "--list"], (0, "v0.12.6\n", "")),
+                (["git", "merge-base"], (0, "", "")),
+                (["git", "show"], (0, 'APP_VERSION = "0.12.5"\n', "")),
+            ]
+        )
+        assert rel.cmd_devbump(ns(push=False), runner=runner) == 1
+        assert "master 版本为 0.12.5" in capsys.readouterr().out
+
+    def test_closure_check_flags_tag_outside_master(self, rel, tmp_path, capsys):
+        """tag 不在 master 历史内（打在别的分支）同样硬失败。"""
+        fx = _ToolRepoFixture(rel, tmp_path)
+        fx.CONSTANTS_FILE.write_text('APP_VERSION = "0.12.6"\n', encoding="utf-8")
+        runner = _ok_runner(
+            [
+                (["git", "status", "--porcelain"], (0, " M docs/x.md\n", "")),
+                (["git", "tag", "--list"], (0, "v0.12.6\n", "")),
+                (["git", "merge-base"], (1, "", "")),
+                (["git", "show"], (0, 'APP_VERSION = "0.12.6"\n', "")),
+            ]
+        )
+        assert rel.cmd_devbump(ns(push=False), runner=runner) == 1
+        assert "不在 master 历史内" in capsys.readouterr().out
+
+    def test_closure_check_missing_tag_is_warning_only(self, rel, tmp_path, capsys):
+        """无 tag 只告警：`--no-push` 试跑/非发布库不该因缺 tag 让切版失败。"""
+        fx = _ToolRepoFixture(rel, tmp_path)
+        fx.CONSTANTS_FILE.write_text('APP_VERSION = "0.12.6"\n', encoding="utf-8")
+        runner = _ok_runner([(["git", "status", "--porcelain"], (0, " M docs/x.md\n", ""))])
+        assert rel.cmd_devbump(ns(push=False), runner=runner) == 0
+        out = capsys.readouterr().out
+        assert "v0.12.6 不存在" in out
+        assert "发布闭环闭合" in out
 
     def test_rejects_non_dev_branch(self, rel, tmp_path):
         fx = _ToolRepoFixture(rel, tmp_path)

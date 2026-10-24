@@ -31,6 +31,29 @@ from src.python.fetcher.chain_diagnostics import (
 logger = logging.getLogger("invest")
 
 
+# ── 单轮报告内的历史取数复用与「空结果」短路 ───────────────────
+# 同一份报告里多个消费方按不同窗口（20/35/90/260/365/400/750）取同一代码的历史，
+# 而历史 chain 的缓存是「代码级」而非「窗口级」——每次调用都重新合并/续拉，
+# 实测一轮上百次重复请求、数十秒白耗。这里做两层单轮约束：
+#   1. 窗口复用：按（chain, code）记住本轮已取到的最大窗口，窗口 ≤ 已取到的
+#      直接截尾返回；要更大窗口才真正再取一次。
+#   2. 空结果短路：同一（chain, provider）连续多次返回空（结构性不支持，
+#      如 hithink 对 A 股历史）→ 本行余下请求不再尝试它，只留一条汇总告警。
+_RUN_HISTORY_MEMO: dict[tuple[str, str], tuple[int, list[dict]]] = {}
+_EMPTY_STREAK: dict[tuple[str, str], int] = {}
+_EMPTY_SKIP_LOGGED: set[tuple[str, str]] = set()
+
+#: 同一 provider 对同一 chain 连续空结果达此值 → 判为结构性不覆盖，本轮跳过
+_EMPTY_STREAK_SKIP = 5
+
+
+def reset_run_history_state() -> None:
+    """清空单轮历史取数状态（报告开始/测试隔离时调用）。"""
+    _RUN_HISTORY_MEMO.clear()
+    _EMPTY_STREAK.clear()
+    _EMPTY_SKIP_LOGGED.clear()
+
+
 # ═══════════════════════════════════════════════════════════════
 #  过期缓存降级回写（链外手写降级路径的统一出口）
 # ═══════════════════════════════════════════════════════════════
@@ -98,6 +121,19 @@ def _try_providers(
             if diagnostics is not None:
                 diagnostics.add(provider_name, "已被熔断跳过")
             continue
+        _streak_key = (chain_name, provider_name)
+        if _EMPTY_STREAK.get(_streak_key, 0) >= _EMPTY_STREAK_SKIP:
+            if _streak_key not in _EMPTY_SKIP_LOGGED:
+                _EMPTY_SKIP_LOGGED.add(_streak_key)
+                logger.warning(
+                    "[%s] %s 连续 %d 次返回空数据，本行余下请求不再尝试（结构性不覆盖，非网络故障）",
+                    chain_name,
+                    provider_name,
+                    _EMPTY_STREAK_SKIP,
+                )
+            if diagnostics is not None:
+                diagnostics.add(provider_name, "连续空结果，本轮跳过")
+            continue
         # 凭据就绪预检：与 fetch_with_fallback 同一判定（见彼处注释——配置级
         # 问题不计入熔断）。历史 chain 若缺此分支，需 key 的源会在此被当作
         # 「不可达」反复重试并累计熔断，正是本机制要消除的行为。
@@ -111,10 +147,12 @@ def _try_providers(
         try:
             data = _call_history_provider(provider_name, chain_name, code, days, start_from)
             if not data:
+                _EMPTY_STREAK[_streak_key] = _EMPTY_STREAK.get(_streak_key, 0) + 1
                 logger.info("[%s] %s 返回空数据（无此品种历史数据），尝试下一链路", chain_name, provider_name)
                 if diagnostics is not None:
                     diagnostics.add(provider_name, "返回空")
                 continue
+            _EMPTY_STREAK[_streak_key] = 0
             registry.record_success(provider_name)
             _mark_provider_used(chain_name, provider_name, _history_provider_label(provider_name))
             return data
@@ -152,6 +190,13 @@ def fetch_with_incremental_fallback(
         全链路失败时返回空列表（不使用过期缓存——走势数据降级后显示占位文本）。
     """
     cache_key = f"history_{chain_name}_{code}"
+    # 单轮窗口复用：同一（chain, code）已被更大窗口取过时直接截尾，不再走
+    # 缓存合并与 provider 链路（同一份报告内多个消费方各拉一道的根源）。
+    _memo_key = (chain_name, code)
+    _memo = _RUN_HISTORY_MEMO.get(_memo_key)
+    if _memo is not None and _memo[0] >= days:
+        return _memo[1][-days:]
+
     cached = cache_get(cache_key, CACHE_WEEKLY) or []
     last_cached_date = cached[-1]["date"] if cached else None
     # 缓存历史短于请求窗口时，增量续拉永远补不长（新数据只从缓存尾部续上，
@@ -177,6 +222,7 @@ def fetch_with_incremental_fallback(
         if cached and new_data and new_data[0].get("date", "") <= cached[0].get("date", ""):
             logger.debug("[%s] %s provider 全量返回，直接使用新数据", chain_name, code)
             cache_set(cache_key, new_data)
+            _RUN_HISTORY_MEMO[_memo_key] = (max(days, len(new_data)), new_data)
             return new_data[-days:]
 
         merged = _merge_by_date(cached, new_data)
@@ -206,6 +252,7 @@ def fetch_with_incremental_fallback(
                 full_data = _try_providers(providers, registry, chain_name, code, days, None, diagnostics)
                 if full_data:
                     cache_set(cache_key, full_data)
+                    _RUN_HISTORY_MEMO[_memo_key] = (max(days, len(full_data)), full_data)
                     return full_data[-days:]
                 logger.warning("[%s] 全量刷新失败，使用增量合并数据（仅修正重叠窗口）", chain_name)
 
@@ -215,9 +262,12 @@ def fetch_with_incremental_fallback(
             if cache_get(streak_key, CACHE_WEEKLY):
                 cache_set(streak_key, 0)  # 正常合并（无重叠检出）→ 重置连续触发计数
         cache_set(cache_key, merged)
+        _RUN_HISTORY_MEMO[_memo_key] = (max(days, len(merged)), merged)
         return merged[-days:]
     elif cached:
-        # 有缓存但无新数据 — 返回已有缓存
+        # 有缓存但无新数据 — 返回已有缓存（同样入本轮 memo：无新数据时下次同窗口
+        # 请求不必再走一遍 provider 链路）
+        _RUN_HISTORY_MEMO[_memo_key] = (max(days, len(cached)), cached)
         return cached[-days:]
 
     return []

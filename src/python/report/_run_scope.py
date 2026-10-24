@@ -9,6 +9,11 @@
 - ``self_review`` 全局载体：上一轮自检区块不得残留到本轮（本轮未产出即为空）。
 - LLM 会话用量：**只取基线不重置**——TUI 的「本会话累计」仍要跨报告累计，
   报告层写 perf 时按基线算 delta，避免第二份报告的 token/调用数看起来翻倍。
+- 历史 chain 单轮状态（窗口复用 memo 与空结果连续计数）：报告边界清空，
+  避免上一轮取到的数据遮蔽本轮真实的增量/修正。
+
+**指纹组件审计基线不在此重置**：它的语义是「相对上一份报告哪些输入变了」，
+基线必须跨报告保留；每份报告清空会让审计恒输出「无变化」。
 
 调用方：``_generate_report_full`` / ``_generate_report_both`` 入口取一次基线，
 收尾时把基线交给 ``_record_llm_context`` 计算 delta。
@@ -53,4 +58,10 @@ def start_report_run() -> dict[str, Any]:
         baseline = copy.deepcopy(get_session_usage())
     except Exception:
         logger.debug("[run_scope] 会话用量基线读取失败，已忽略", exc_info=True)
+    try:
+        from src.python.fetcher.chain_incremental import reset_run_history_state
+
+        reset_run_history_state()
+    except Exception:
+        logger.debug("[run_scope] 历史取数单轮状态重置失败，已忽略", exc_info=True)
     return baseline

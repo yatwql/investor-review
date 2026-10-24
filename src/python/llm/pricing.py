@@ -123,11 +123,6 @@ PRICING_HOLIDAY_ALWAYS_IDLE: bool = bool(_DEFAULT_HOLIDAY_ALWAYS_IDLE)
 PRICING_TIMEZONE_NAME: str = _DEFAULT_TIMEZONE
 PRICING_TZ: Any = _load_timezone(PRICING_TIMEZONE_NAME)
 
-# 非模型键：pricing 段中不作模型合并的元字段
-_NON_MODEL_PRICING_KEYS: frozenset[str] = frozenset(
-    {"currency", "timezone", "peak_periods", "idle_periods", "weekend_always_idle", "holiday_always_idle"}
-)
-
 # 延迟加载标记 — reload_pricing() 首次调用 estimate_cost() 时执行
 _PRICING_LOADED: bool = False
 

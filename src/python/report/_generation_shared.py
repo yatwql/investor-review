@@ -100,6 +100,23 @@ def _record_llm_context(perf, sink=None, baseline: dict | None = None) -> None:
             context["call_count"] = int(usage["call_count"])
             context["total_cost"] = round(float(usage.get("total_cost", 0.0)), 6)
 
+        # 缓存命中的**金钱**价值：命中模块的 token/费用都是 0，报告里只看得到
+        # 「无新增调用」，看不到省了多少。按历史逐模块实际均价估算，并写进 perf
+        # （无历史样本的模块不出数，不猜）。
+        cached_modules = [key for key, entry in per_module.items() if entry.get("cached")]
+        if cached_modules:
+            from src.python.llm.cost_forecast import estimate_cached_saving
+
+            saving = estimate_cached_saving(cached_modules)
+            if saving["priced"]:
+                context["cache_saved_cost"] = saving["saved"]
+                logger.info(
+                    "[LLM 缓存] 命中 %d 个模块，按历史均价估算节省 ≈¥%.4f（%s）",
+                    len(cached_modules),
+                    saving["saved"],
+                    "、".join(saving["priced"]),
+                )
+
         perf.set_llm_context(context)
     except Exception:
         logger.debug("[perf] LLM 上下文登记失败，已忽略", exc_info=True)

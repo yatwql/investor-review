@@ -356,6 +356,46 @@ def daily_cost_limit(llm_config: dict[str, Any] | None = None) -> float:
     return max(value, 0.0)
 
 
+def estimate_cached_saving(
+    module_keys: list[str],
+    history: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """缓存命中省下的**预计费用**（按历史逐模块实际均价估算）。
+
+    为什么需要：命中的价值不只是耗时，而是真金白银。但命中时 token 与费用都是
+    0，报告里只看得到「本次无新增调用」，看不到省了多少——用户无法判断缓存
+    值不值得（尤其自检/体检这类贵模块）。
+
+    口径：只对**命中**的模块计节省；样本取历史里该模块「真实调用过」的运行
+    （命中运行的 cost=0 会拉低均价，故排除 0 样本）。无历史样本的模块不出数，
+    不猜（宁缺不虚报）。
+
+    Args:
+        module_keys: 本次命中的模块键（顺序无关，重复自动去重）。
+        history: perf 历史（测试注入）；None 时读盘。
+
+    Returns:
+        ``{"saved": 估算金额, "priced": 有样本的模块, "unpriced": 无样本模块}``。
+    """
+    keys = list(dict.fromkeys(str(k) for k in module_keys if k))
+    if not keys:
+        return {"saved": 0.0, "priced": [], "unpriced": []}
+
+    records = history if history is not None else _load_perf_history()
+    samples_by_module, _runs = _history_module_costs(records, is_feature_enabled_for_debate())
+    saved = 0.0
+    priced: list[str] = []
+    unpriced: list[str] = []
+    for key in keys:
+        paid = [s for s in (samples_by_module.get(key) or []) if s > 0]
+        if not paid:
+            unpriced.append(key)
+            continue
+        saved += sum(paid) / len(paid)
+        priced.append(key)
+    return {"saved": round(saved, 6), "priced": priced, "unpriced": unpriced}
+
+
 def today_llm_cost(history: list[dict[str, Any]] | None = None) -> float:
     """今日（本地日期）已产生的 LLM 费用合计——与 perf 汇总同源。"""
     records = history if history is not None else _load_perf_history()
@@ -442,6 +482,7 @@ def forecast_summary_lines(
 __all__ = [
     "budget_status",
     "daily_cost_limit",
+    "estimate_cached_saving",
     "forecast_run_cost",
     "forecast_summary_lines",
     "resolve_planned_modules",

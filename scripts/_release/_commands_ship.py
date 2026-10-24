@@ -287,6 +287,48 @@ def cmd_publish(args: argparse.Namespace, env, runner=None) -> int:
     return 0
 
 
+def _release_closure_problems(env, release_version: str, next_dev: str, runner=None) -> tuple[list[str], list[str]]:
+    """发布闭环校验：返回 ``(errors, warnings)``。
+
+    闭环口径（`CLAUDE.md`「每次正式发布都必须把 dev 合并入 master 并推送」）：
+    tag `vX.Y.Z` 存在、且落在 master 历史内；master 上的 `APP_VERSION` 为发布版；
+    本分支版本为下一开发版。失败即硬报错（返回码非 0）——`tag` 在别的分支、
+    master 未跟版、切版后仍有写入，都是本次发布已不可追溯的事实。
+
+    唯一的软规则：**无 tag** 时只记 warning。`--no-push` 试跑、或本仓库并非
+    发布库时不该因「没有 tag」让切版流程失败（切版已落盘，回退无意义）。
+    """
+    errors: list[str] = []
+    warnings: list[str] = []
+    tag = f"v{release_version}"
+    rc, out, _ = _git_ok(["tag", "--list", tag], env.REPO_ROOT, runner)
+    if rc != 0 or not out.strip():
+        warnings.append(f"{tag} 不存在：若本次为正式发布，说明 tag 未打或未推送")
+    else:
+        rc, _, _ = _git_ok(["merge-base", "--is-ancestor", tag, "master"], env.REPO_ROOT, runner)
+        if rc != 0:
+            errors.append(f"{tag} 不在 master 历史内（tag 打在别的分支，或 master 未含该提交）")
+        try:
+            rel = env.CONSTANTS_FILE.relative_to(env.REPO_ROOT).as_posix()
+        except ValueError:
+            rel = "src/python/core/constants.py"
+        rc, out, _ = _git_ok(["show", f"master:{rel}"], env.REPO_ROOT, runner)
+        if rc != 0:
+            errors.append(f"读取 master 的 {rel} 失败（无法确认 master 版本）")
+        else:
+            try:
+                master_version = read_app_version(out)
+            except ReleaseError:
+                errors.append(f"master 的 {rel} 无 APP_VERSION 行")
+            else:
+                if master_version != release_version:
+                    errors.append(f"master 版本为 {master_version}，应为发布版 {release_version}")
+    current = read_app_version(env.CONSTANTS_FILE.read_text(encoding="utf-8"))
+    if current != next_dev:
+        errors.append(f"当前分支版本为 {current}，应为下一开发版 {next_dev}")
+    return errors, warnings
+
+
 def cmd_devbump(args: argparse.Namespace, env, runner=None) -> int:
     branch = _current_branch(env.REPO_ROOT, runner)
     if branch != "dev":
@@ -299,6 +341,7 @@ def cmd_devbump(args: argparse.Namespace, env, runner=None) -> int:
         return 2
     release_version = current
     next_dev = next_dev_version_of(release_version)
+    started = time.perf_counter()
     env.CONSTANTS_FILE.write_text(render_app_version(constants_text, next_dev), encoding="utf-8")
     env.README_FILE.write_text(
         render_readme_version(env.README_FILE.read_text(encoding="utf-8"), next_dev), encoding="utf-8"
@@ -308,16 +351,20 @@ def cmd_devbump(args: argparse.Namespace, env, runner=None) -> int:
         print((out or err).rstrip())
         print("[ERR] 切版后版本一致性未收敛")
         return rc
+    _timer().mark_elapsed("版本全链改写 + 一致性收敛", started)
     print(f"[OK] 版本全链 → {next_dev}")
 
     # 新开发周期：上一版的迁档占位节属过期信息（「本版已迁入归档档案」只对刚结束的
     # 发布周期有意义），连同空节一并清掉——归档正文与下方「归档档案」索引已记录全部版本
+    started = time.perf_counter()
     rf_text = env.RF_FILE.read_text(encoding="utf-8")
     cleaned = drop_migration_placeholders(rf_text)
     if cleaned != rf_text:
         env.RF_FILE.write_text(cleaned, encoding="utf-8")
         print("[OK] review-findings：已清掉上一版迁档占位节（新周期台账从空开始）")
+    _timer().mark_elapsed("迁档占位清理", started)
 
+    started = time.perf_counter()
     _, staged, _ = _git_ok(["status", "--porcelain"], env.REPO_ROOT, runner)
     if staged.strip():
         _git_ok(["add", "-A"], env.REPO_ROOT, runner)
@@ -330,10 +377,13 @@ def cmd_devbump(args: argparse.Namespace, env, runner=None) -> int:
             print(f"[ERR] 切版提交失败：{(err or out).strip()}")
             return rc
         print("[OK] 切版提交完成")
+    _timer().mark_elapsed("切版提交", started)
     # 默认推送：发布闭环的收尾就是把切版提交同步到远端（本地领先会让下个发布周期
     # 的 push/合并口径不一致）；需要本地先复核时用 `--no-push`
     if getattr(args, "push", True):
+        started = time.perf_counter()
         rc, out, err = _git_ok(["push", "origin", "dev"], env.REPO_ROOT, runner)
+        _timer().mark_elapsed("推送 dev", started)
         if rc != 0:
             print(f"[ERR] push 失败：{(err or out).strip()}")
             print("[..] 切版提交已落盘，网络恢复后重试：git push origin dev（或 --no-push 跳过）")
@@ -341,4 +391,18 @@ def cmd_devbump(args: argparse.Namespace, env, runner=None) -> int:
         print("[OK] dev 已推送")
     else:
         print("[..] 未推送（--no-push）。确认后执行：git push origin dev")
+
+    # 发布闭环校验：tag / master / dev 三者版本闭合（CLAUDE.md 的「必须合并入 master
+    # 并推送」由机器逐项确认，不靠人看终端）
+    started = time.perf_counter()
+    errors, warnings = _release_closure_problems(env, release_version, next_dev, runner)
+    _timer().mark_elapsed("发布闭环校验", started)
+    for item in warnings:
+        print(f"[!] {item}")
+    if errors:
+        for item in errors:
+            print(f"[ERR] {item}")
+        print("[ERR] 发布闭环未闭合 —— 切版提交已落盘，按上方逐项修复（打 tag / 同步 master / 推送）")
+        return 1
+    print(f"[OK] 发布闭环闭合：v{release_version} 在 master 历史内，master={release_version}，dev={next_dev}")
     return 0

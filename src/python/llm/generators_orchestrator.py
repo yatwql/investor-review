@@ -41,7 +41,7 @@ from src.python.llm.prompts import (
     _build_competitive_context_block,
     _build_data_quality_detail_block,
 )
-from src.python.llm.skeleton import is_llm_module_enabled
+from src.python.llm.skeleton import _build_provider_cache_key, is_llm_module_enabled
 from src.python.core.registry import get_llm_module_name, get_llm_module_names
 
 logger = logging.getLogger("invest")
@@ -138,53 +138,61 @@ def _compute_module_cache_info(
         event_impact_block=event_impact_block or "",
         schedule_replay_block=schedule_replay_block or "",
     )
-    # 排障用组件级哈希：仅在 DEBUG 日志开启时计算（正式路径零额外开销）。
-    # 连续两次同数据报告仍全量 miss 时，对比两次日志即可定位变化来源。
-    if logger.isEnabledFor(logging.DEBUG):
-        global _LAST_FP_COMPONENTS
-        from src.python.llm.module_fingerprint import (
-            diff_fingerprint_components,
-            fingerprint_components,
-        )
+    # 组件级指纹审计：**变化定位恒开**（每份报告一行 INFO，默认配置就能回答「为什么又 miss」），
+    # 逐组件哈希快照只在 DEBUG 下打（纯排障，正式路径零额外开销）。
+    global _LAST_FP_COMPONENTS
+    from src.python.llm.module_fingerprint import (
+        diff_fingerprint_components,
+        fingerprint_components,
+    )
 
-        _components = fingerprint_components(_inputs)
-        _changed = diff_fingerprint_components(_LAST_FP_COMPONENTS, _components)
+    _components = fingerprint_components(_inputs)
+    _changed = diff_fingerprint_components(_LAST_FP_COMPONENTS, _components)
+    if _changed:
+        logger.info("[fingerprint] 指纹组件变化（相对上次报告）: %s", _changed)
+    if logger.isEnabledFor(logging.DEBUG):
         logger.debug("[fingerprint] 组件哈希: %s", _components)
-        if _changed:
-            logger.debug("[fingerprint] 相对上次报告的组件变化: %s", _changed)
-        _LAST_FP_COMPONENTS = _components
+    _LAST_FP_COMPONENTS = _components
 
     fp_global_macro = global_macro_fingerprint(_inputs)
     fp_expert_review = expert_review_fingerprint(_inputs)
     fp_health_check = health_check_fingerprint(_inputs)
     fp_penetration_deep = penetration_deep_fingerprint(_inputs)
 
+    # 缓存键必须与**写侧**逐字节相同：chain 模式下写侧（``skeleton`` 的
+    # ``_build_provider_cache_key``）会在裸键后追加 ``_{provider_name}``。预检
+    # 不追加时读的是「短键」——文件永远不存在，于是每份报告四模块全判 miss、
+    # 全量派发进线程池（真正命中发生在 skeleton 的第二次预检），并虚报
+    # ``cache_misses``。同源由本函数的统一追加保证，不靠两侧各自拼。
+    def _key(module_key: str, fingerprint: str) -> str:
+        return _build_provider_cache_key(CACHE_PREFIX_LLM + f"{module_key}_{fingerprint}", llm_config, module_key)
+
     force_flag = force
     _forced = force_modules if force_modules is not None else frozenset()
     info: dict[str, dict] = {
         "global_macro": {
-            "key": CACHE_PREFIX_LLM + f"global_macro_{fp_global_macro}",
+            "key": _key("global_macro", fp_global_macro),
             "ttl": get_cache_ttl_llm("global_macro"),
             "can_cache": not (force_flag or "global_macro" in _forced)
             and llm_config.get("cache_enabled_global_macro", True),
             "thinking_key": "thinking_enabled_global_macro",
         },
         "expert_review": {
-            "key": CACHE_PREFIX_LLM + f"expert_review_{fp_expert_review}",
+            "key": _key("expert_review", fp_expert_review),
             "ttl": get_cache_ttl_llm("expert_review"),
             "can_cache": not (force_flag or "expert_review" in _forced)
             and llm_config.get("cache_enabled_expert_review", True),
             "thinking_key": "thinking_enabled_expert_review",
         },
         "health_check": {
-            "key": CACHE_PREFIX_LLM + f"health_check_{fp_health_check}",
+            "key": _key("health_check", fp_health_check),
             "ttl": get_cache_ttl_llm("health_check"),
             "can_cache": not (force_flag or "health_check" in _forced)
             and llm_config.get("cache_enabled_health_check", True),
             "thinking_key": "thinking_enabled_health_check",
         },
         "penetration_deep": {
-            "key": CACHE_PREFIX_LLM + f"penetration_deep_{fp_penetration_deep}",
+            "key": _key("penetration_deep", fp_penetration_deep),
             "ttl": get_cache_ttl_llm("penetration_deep"),
             "can_cache": not (force_flag or "penetration_deep" in _forced)
             and llm_config.get("cache_enabled_penetration_deep", True),
@@ -205,6 +213,12 @@ def _precheck_one_cache(
     确保 LLM API 用量页签能正确显示"缓存"状态。
     """
     if not cache_info["can_cache"]:
+        # 重新生成/强制刷新路径不读缓存，且不参与命中率统计——此处必须留一条 INFO：
+        # 否则用户看到的是「全部模块又调了一次 LLM」，无法区分「缓存没命中」与「自己选了重新生成」。
+        logger.info(
+            "[LLM 预检] %s 跳过缓存读（重新生成/强制刷新范围内）",
+            module_key or cache_info["key"],
+        )
         return (None, False)
     cached = cache_get(cache_info["key"], cache_info["ttl"])
     from src.python.llm.observation import current_llm_observation
@@ -247,7 +261,32 @@ def _precheck_all_modules(
             continue
         result, from_cache = _precheck_one_cache(info, llm_config, module_key)
         results[module_key] = {"result": result, "cached": from_cache}
+    _log_precheck_summary(results, llm_config, cache_info)
     return results
+
+
+def _log_precheck_summary(
+    results: dict[str, dict],
+    llm_config: dict,
+    cache_info: dict[str, dict],
+) -> None:
+    """每份报告打一行缓存命中概况：命中/未命中分别哪些模块，未命中的是否因重新生成。
+
+    为何需要：单人看报告时只能看到「这次又调了几次 LLM」，分不清是缓存真 miss
+    还是自己选了重新生成；逐模条日志在别的模块里，一屏信息里拼不起来。
+    """
+    hits = [k for k, v in results.items() if v.get("cached")]
+    misses = [k for k, v in results.items() if v.get("result") is None and k not in hits]
+    bypassed = [k for k in misses if not (cache_info.get(k) or {}).get("can_cache", True)]
+    real_misses = [k for k in misses if k not in bypassed]
+    logger.info(
+        "[LLM 预检] 命中 %d/%d：%s；未命中：%s；重新生成（跳过缓存）：%s",
+        len(hits),
+        len(results),
+        ", ".join(hits) or "无",
+        ", ".join(real_misses) or "无",
+        ", ".join(bypassed) or "无",
+    )
 
 
 def extract_purchase_constraint_block(pipeline_data: dict | None) -> str:

@@ -84,8 +84,10 @@ def _build_data_degradation_block(pipeline_data: dict | None) -> str:
         _sk = e.get("source_key", "?")
         _tier = e.get("tier", "?")
         _ft = e.get("failure_type", "?")
-        _cnt = e.get("count", 0)
-        lines.append(f"- {_sk}: {_tier} 降级 ({_ft}, 累计{_cnt}次)")
+        # 不带累计次数：`count` 是**跳会话**累计值，只要源持续不稳就每轮都变（如 3 次→4 次），
+        # 进文本会让 expert_review/health_check 的缓存键每份报告翻新，而模型只需要知道
+        # 「哪个源的哪些数据本次不可用」。
+        lines.append(f"- {_sk}: {_tier} 降级 ({_ft})")
     lines.append("（以上数据源部分或完全不可用，分析建议时请考虑数据缺失的影响）")
     return "\n".join(lines)
 

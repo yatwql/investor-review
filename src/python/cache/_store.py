@@ -40,6 +40,16 @@ def _debug_once(kind: str, key: str, *args: Any) -> None:
     logger.debug(template, key, *args)
 
 
+def _info_once(kind: str, key: str, *args: Any) -> None:
+    """同一 (kind, key) 每进程只记一条 INFO（缺缓存/过期都值得知道，但不刷屏）。"""
+    marker = f"info:{kind}:{key}"
+    with _log_seen_lock:
+        if marker in _log_seen:
+            return
+        _log_seen.add(marker)
+    logger.info(f"{kind}: %s" + (" (age=%.1fs, max=%.1fs)" if kind == "缓存已过期" else ""), key, *args)
+
+
 def reset_debug_log_state() -> None:
     """清空 DEBUG 首见记录（测试与长驻进程手动复位用）。"""
     with _log_seen_lock:
@@ -69,6 +79,7 @@ def get(key: str, max_age_seconds: float) -> Any | None:
         age = time.time() - timestamp
         if age > max_age_seconds:
             logger.debug("缓存 %s 已过期 (%.1fs > %.1fs)", key, age, max_age_seconds)
+            _info_once("缓存已过期", key, age, max_age_seconds)
             _record_cache_miss()
             return None
 
@@ -76,6 +87,8 @@ def get(key: str, max_age_seconds: float) -> Any | None:
         _record_cache_hit()
         return data.get("_data")
 
+    # 文件不存在与「读失败」在此合流：INFO 级看不到的话，用户只能看到「又调了一遍 LLM」
+    _info_once("缓存未命中（无此缓存文件）", key)
     _record_cache_miss()
     return None
 

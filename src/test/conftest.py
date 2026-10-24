@@ -311,6 +311,20 @@ def _auto_reset_fingerprint_audit():
 
 
 @pytest.fixture(autouse=True)
+def _auto_reset_run_history_state():
+    """清空历史 chain 的单轮状态（窗口复用 memo + 空结果连续计数）。
+
+    两者都是「本轮报告」语义的模块级状态：不重置时用例会从上游用例的
+    memo 里直接拿数据，表现为「mock 未被调用」或「全量刷新未发生」。
+    """
+    from src.python.fetcher.chain_incremental import reset_run_history_state
+
+    reset_run_history_state()
+    yield
+    reset_run_history_state()
+
+
+@pytest.fixture(autouse=True)
 def _restore_llm_pricing_state():
     """隔离 llm.pricing 模块级状态，避免定价用例的 reload 影响后续用例。
 

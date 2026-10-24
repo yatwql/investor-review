@@ -20,6 +20,12 @@ from src.python.tui import report_artifacts as ra
 pytestmark = [pytest.mark.unit, pytest.mark.unit_ui]
 
 
+@pytest.fixture(autouse=True)
+def _reset_open_failure_latch(monkeypatch):
+    """每次用例从「本会话未失败」开张（失败latch 是模块级会话状态）。"""
+    monkeypatch.setattr(ra, "_OPEN_FAILED_IN_SESSION", False)
+
+
 def _svc(tmp_path: Path, names: tuple[str, ...] = (LATEST_HTML_NAME, LATEST_XLSX_NAME)):
     for name in names:
         (tmp_path / name).write_text("x", encoding="utf-8")
@@ -46,6 +52,22 @@ class TestOpenArtifacts:
         opened = ra.open_artifacts((first, second), opener=lambda p: p == second)
         assert opened == [second]
 
+    def test_open_path_keeps_child_output_off_terminal(self, tmp_path, monkeypatch):
+        """`xdg-open` 转发器的报错不得写回 TUI（逐行刷新界面会被打乱）。"""
+        from src.python.core import artifacts as core_artifacts
+
+        seen: dict = {}
+
+        def _run(command, **kwargs):
+            seen.update(command=command, **kwargs)
+            return core_artifacts.subprocess.CompletedProcess(command, 3)
+
+        monkeypatch.setattr(core_artifacts.subprocess, "run", _run)
+        monkeypatch.setattr(core_artifacts.sys, "platform", "linux")
+        assert core_artifacts.open_path(tmp_path) is False
+        assert seen["stdout"] is core_artifacts.subprocess.DEVNULL
+        assert seen["stderr"] is core_artifacts.subprocess.DEVNULL
+
     def test_default_opener_failure_is_swallowed(self, tmp_path, monkeypatch):
         """系统命令缺失/无图形环境 → 返回 False，不抛异常（平台分派在 core.artifacts）。"""
         from src.python.core import artifacts as core_artifacts
@@ -59,14 +81,35 @@ class TestOpenArtifacts:
 
 
 class TestLocalOpenSupported:
-    def test_remote_ssh_disables_local_open(self, monkeypatch):
-        from src.python.core import artifacts
-
+    def _linux_env(self, monkeypatch, artifacts):
         monkeypatch.delenv("SSH_CONNECTION", raising=False)
         monkeypatch.delenv("SSH_TTY", raising=False)
         monkeypatch.delenv("MOSH_CONNECTION", raising=False)
-        monkeypatch.setenv("DISPLAY", ":0")
+        for key in artifacts._BRIDGED_SESSION_ENV:
+            monkeypatch.delenv(key, raising=False)
+        monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
         monkeypatch.setattr(artifacts.sys, "platform", "linux")
+
+    def test_bridged_remote_session_disables_local_open(self, monkeypatch):
+        """手机/云桌面桥接会话（Catlink / Xpra 类）不算本机桌面：服务端 `xdg-open`
+        只是转发到客户端，实测会直接报错——应直接给路径与传输指引。"""
+        from src.python.core import artifacts
+
+        self._linux_env(monkeypatch, artifacts)
+        monkeypatch.setenv("DISPLAY", ":100")
+        monkeypatch.setattr(artifacts, "_x11_socket_present", lambda display: True)
+        monkeypatch.setattr(artifacts, "_opener_present", lambda: True)
+        assert artifacts.local_open_supported() is True
+        monkeypatch.setenv("CATLINK_SESSION_DIR", "/run/catlink/sessions/100")
+        assert artifacts.local_open_supported() is False
+
+    def test_remote_ssh_disables_local_open(self, monkeypatch):
+        from src.python.core import artifacts
+
+        self._linux_env(monkeypatch, artifacts)
+        monkeypatch.setenv("DISPLAY", ":0")
+        monkeypatch.setattr(artifacts, "_x11_socket_present", lambda display: True)
+        monkeypatch.setattr(artifacts, "_opener_present", lambda: True)
         assert artifacts.local_open_supported() is True
         monkeypatch.setenv("SSH_CONNECTION", "1.2.3.4 1 5.6.7.8 22")
         assert artifacts.local_open_supported() is False
@@ -74,13 +117,40 @@ class TestLocalOpenSupported:
     def test_linux_without_display_disables_local_open(self, monkeypatch):
         from src.python.core import artifacts
 
-        monkeypatch.delenv("SSH_CONNECTION", raising=False)
-        monkeypatch.delenv("SSH_TTY", raising=False)
-        monkeypatch.delenv("MOSH_CONNECTION", raising=False)
+        self._linux_env(monkeypatch, artifacts)
         monkeypatch.delenv("DISPLAY", raising=False)
-        monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
-        monkeypatch.setattr(artifacts.sys, "platform", "linux")
         assert artifacts.local_open_supported() is False
+
+    def test_stale_display_without_x_socket_disables_local_open(self, monkeypatch):
+        """残留 `DISPLAY`（tmux/screen 继承的旧桌面环境）不算可开：手机远端场景下
+        只凭环境变量会去跑 xdg-open 然后失败，用户看到「打开失败」后跳回主菜单。"""
+        from src.python.core import artifacts
+
+        self._linux_env(monkeypatch, artifacts)
+        monkeypatch.setenv("DISPLAY", ":0")
+        monkeypatch.setattr(artifacts, "_x11_socket_present", lambda display: False)
+        monkeypatch.setattr(artifacts, "_opener_present", lambda: True)
+        assert artifacts.local_open_supported() is False
+
+    def test_missing_xdg_open_disables_local_open(self, monkeypatch):
+        """有桌面但没 xdg-open 时同样不问（问了必然失败）。"""
+        from src.python.core import artifacts
+
+        self._linux_env(monkeypatch, artifacts)
+        monkeypatch.setenv("DISPLAY", ":0")
+        monkeypatch.setattr(artifacts, "_x11_socket_present", lambda display: True)
+        monkeypatch.setattr(artifacts, "_opener_present", lambda: False)
+        assert artifacts.local_open_supported() is False
+
+    def test_x11_socket_probe_reads_display_number(self, monkeypatch, tmp_path):
+        """socket 探测按 `:N` 取编号；远端 X（host:N）由客户端承载不查本地。"""
+        from src.python.core import artifacts
+
+        monkeypatch.setattr(artifacts.Path, "exists", lambda self: str(self).endswith("X7"))
+        assert artifacts._x11_socket_present(":7") is True
+        assert artifacts._x11_socket_present(":0") is False
+        assert artifacts._x11_socket_present("localhost:7") is True
+        assert artifacts._x11_socket_present("nonsense") is False
 
 
 class TestPromptOpenArtifacts:
@@ -136,7 +206,29 @@ class TestPromptOpenArtifacts:
     def test_open_failure_reports_manual_path(self, tmp_path):
         result, calls, lines = self._run(tmp_path, "y", opener_ok=False)
         assert result == "failed"
-        assert any("打开失败" in line and "手动访问" in line for line in lines)
+        assert any("打开失败" in line for line in lines)
+        assert any("scp/sftp" in line for line in lines)
+
+    def test_open_failure_latches_for_session(self, tmp_path):
+        """一次打开失败后本会话不再询问（手机远端反复跑报告时不重复撞壁）。"""
+        first, _, _ = self._run(tmp_path, "y", opener_ok=False)
+        assert first == "failed"
+        asked = {"n": 0}
+        lines: list[str] = []
+
+        def _reader():
+            asked["n"] += 1
+            return "y"
+
+        second = ra.prompt_open_artifacts(
+            ra.collect_artifacts(_svc(tmp_path)),
+            key_reader=_reader,
+            opener=lambda p: True,
+            echo=lines.append,
+            open_supported=lambda: True,
+        )
+        assert second == "unsupported" and asked["n"] == 0
+        assert any("scp/sftp" in line for line in lines)
 
     def test_non_tty_skips_asking(self, tmp_path):
         """非 TTY（脚本/管道）只打印清单、不问，避免阻塞。"""

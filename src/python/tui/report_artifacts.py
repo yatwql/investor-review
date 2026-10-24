@@ -27,6 +27,14 @@ logger = logging.getLogger("invest")
 #: 打开动作的键（单键读取；大写一侧为默认 N —— 与提示 `(y/N)` 同源）
 _YES_KEYS = frozenset({"Y", "y"})
 
+#: 本会话内已试过打开且失败：不再重复询问（手机/远端反复跑报告时不重复撞壁）
+_OPEN_FAILED_IN_SESSION = False
+
+
+def _remote_hint(echo: Callable[[str], None]) -> None:
+    """打印远端/无图形会话的传输指引（两处分支共用，文案只声明一次）。"""
+    echo("      产物已保存在上方路径；请使用 Web 工作台下载，或通过 scp/sftp 获取。")
+
 
 def collect_artifacts(config: dict | None) -> tuple[Path, ...]:
     """产物定位委托 core（三渠道同一事实）：``output_dir`` 下存在的最新 HTML / Excel。"""
@@ -73,9 +81,10 @@ def prompt_open_artifacts(
 
     Returns:
         ``"skipped"``（非 TTY / 无产物 / 用户选默认 N）、``"opened"``（至少打开一项）、
-        ``"failed"``（用户选了是但一项都没打开）、``"unsupported"``（远程/无图形会话，
-        服务器无法在客户端打开文件管理器）。
+        ``"failed"``（用户选了是但一项都没打开）、``"unsupported"``（远程/无图形会话
+        或本会话已试过打开失败，服务器无法在客户端打开文件管理器）。
     """
+    global _OPEN_FAILED_IN_SESSION
     if not artifacts:
         return "skipped"
     output_dir = artifacts[0].parent
@@ -83,9 +92,10 @@ def prompt_open_artifacts(
     echo(f"       报告目录  {output_dir}")
     for path in artifacts:
         echo(f"       产物文件  {path}")
-    if not (open_supported or _local_open_supported)():
+    if _OPEN_FAILED_IN_SESSION or not (open_supported or _local_open_supported)():
+        logger.info("[report_artifacts] 本机打开不可用（远程/桥接/无图形会话），只打印产物路径")
         echo("  [!] 当前为远程/无图形终端，服务器无法在手机或远端打开文件管理器。")
-        echo("      产物已保存在上方路径；请使用 Web 工作台下载，或通过 scp/sftp 获取。")
+        _remote_hint(echo)
         return "unsupported"
     if not sys.stdin.isatty():
         return "skipped"  # 脚本/管道不阻塞：只列清单，交回菜单
@@ -98,7 +108,10 @@ def prompt_open_artifacts(
     targets = (output_dir, *artifacts)
     opened = open_artifacts(targets, opener=opener)
     if not opened:
-        echo("  [!] 打开失败（可能是无图形界面环境）：请手动访问上方路径")
+        _OPEN_FAILED_IN_SESSION = True
+        logger.warning("[report_artifacts] 本机打开失败，本会话不再尝试（后续报告只打印路径）")
+        echo("  [!] 本机没有可用的图形桌面/未安装 xdg-open，打开失败——本会话不再询问。")
+        _remote_hint(echo)
         return "failed"
     for path in opened:
         echo(f"  [OK] 已打开：{path}")

@@ -1,5 +1,5 @@
 # LLM 集成层技术设计
-> 文档版本：0.15.4
+> 文档版本：0.15.5
 
 本文档是 `technical.md` 的 LLM 集成层专项技术设计补充，对应 `technical.md` §5（LLM 集成层概要设计）。
 `technical.md` §5 提供 LLM 层的总体架构、模块清单、调用链概览、多 Provider 链模式概要及关键机制速览；
@@ -184,7 +184,7 @@ skeleton.py:generate_llm_content()
 | `prompts_signals.py` | 工具 | 信号预消化：行业资金流向段方向标注与分方向排名（无开关，默认路径）+ 算法评级信号块（市场温度/估值分位/尾部风险/持仓基本面/叙事与数字背离 → `信号：…` 行，`deterministic_signal` 开关（读侧注入面），判定收敛于缓存后缀函数保证读写键同源） | `_build_sector_flow_block()` / `_build_signal_digest_block()` / `_signal_digest_cache_suffix()` |
 | `fingerprint.py` | 工具 | LLM 缓存指纹计算、稳定性字段提取、TTL 查询 | `compute_fingerprint()` / `build_llm_fingerprint()` |
 | `force_scope.py` | 工具 | 模块级强刷范围：可强刷键清单（注册表 settings_suffix 子集）+ `resolve_force_scope` 粒度优先归一与未知键校验 + `is_module_forced`；全局 force 与模块子集在 `generate_all_llm` 入口归一为模块键集合，不改缓存键构造 | `resolve_force_scope()` / `is_module_forced()` |
-| `module_fingerprint.py` | 工具 | **模块指纹的唯一事实来源（预检侧与写侧同源）**：四模块指纹构造器 + 输入闭包 + 注册表，两侧都调用同一函数，结构性消除「预检键 ≠ 写侧键」的漂移；另提供**组件级哈希审计**（逐输入分量的哈希与相对上次报告的变化定位，DEBUG 下记录「哪些组件变了」） | `MODULE_FINGERPRINT_BUILDERS` / `ModuleFingerprintInputs` / `*_fingerprint()` / `fingerprint_components()` / `diff_fingerprint_components()` |
+| `module_fingerprint.py` | 工具 | **模块指纹的唯一事实来源（预检侧与写侧同源）**：四模块指纹构造器 + 输入闭包 + 注册表，两侧都调用同一函数，结构性消除「预检键 ≠ 写侧键」的漂移；另提供**组件级哈希审计**（逐输入分量的哈希与相对上次报告的变化定位；**变化定位恒开打 INFO**，逐组件哈希快照仅 DEBUG） | `MODULE_FINGERPRINT_BUILDERS` / `ModuleFingerprintInputs` / `*_fingerprint()` / `fingerprint_components()` / `diff_fingerprint_components()` |
 | `session.py` | 工具 | 会话级 Token 累计、模块级记录、格式化输出 | `track_session_usage()` / `get_session_usage()` |
 | `cost_tracker.py` | 工具 | Token 预算管理、输入检查、成本摘要格式化（compact/verbose） | `reset_budget()` / `get_cost_summary()` |
 | `pricing.py` | 工具 | 模型定价合并、费用估算 | `estimate_cost()` / `reload_pricing()` |
@@ -870,7 +870,7 @@ penetrated_assets ──→ extract_stable_penetration()
 |:-----|:-----------------|:---------|:-----|
 | `competitive_context` | `global_macro` / `expert_review` / 辩论三键 | `prompts_core._build_competitive_context_block()` | 竞争语境块（【今日对比】/【区间对比】），由 A 股/美股指数、对比指数配置、区间收益与量化指标渲染而成 |
 | `metrics` | `expert_review` / 辩论三键 | 提示词正文（【量化指标】/ 情景分析 / 风格一致性） | 量化指标字典 |
-| `data_quality_text` | `health_check` | `prompts_tables._build_data_quality_detail_block()` | 数据质量详细状态块（【数据质量详细状态】：净值新鲜度基准 + 净值滞后/无有效行情清单 + 连接失败 / 数据为空 / 触发降级计数），由 `degradation_events`（**本轮报告**的降级事件日志，入口经 `begin_report` 清空）与 `data_freshness` 契约（交易日 + 逐品种新鲜度）共同渲染而成；计数**只统计失败事件**——`mark_data_used` 的成功取用事件同样带 `failure_type`，但渲染时按其可选的成功标志跳过，避免把正常取数写成「连接失败」并导致缓存冷热不同产出不同文本 |
+| `data_quality_text` | `health_check` | `prompts_tables._build_data_quality_detail_block()` | 数据质量详细状态块（【数据质量详细状态】：净值新鲜度基准 + 净值滞后/无有效行情清单 + 连接失败 / 数据为空 / 触发降级**的源清单**），由 `degradation_events`（**本轮报告**的降级事件日志，入口经 `begin_report` 清空）与 `data_freshness` 契约（交易日 + 逐品种新鲜度）共同渲染而成；三处都要守：① 只统计失败事件（`mark_data_used` 的成功取用事件带 `failure_type` 但按其成功标志跳过）；② **不输出出现次数**（次数随重试轮次/网络抖动变，同数据两次报告得到不同文本 → 缓存键每轮翻新）；③ 同口径约束适用于【数据质量降级】段（`prompts_data_blocks._build_data_degradation_block`，不得带跳会话累计次数） |
 | `pipeline_data` 派生的【环比变化】【数据质量降级】两段 | `expert_review` / `health_check` / 辩论三键 | `prompts_core._build_difpipeline_data_block()` / `_build_data_degradation_block()` | 由 `_pipeline_block_cache_suffix()` 调用**提示词侧同一构建器**取文本再哈希——「进键的文本」与「进提示词的文本」同源 |
 | `purchase_constraint_block`（申购限购约束块） | 标准四模块 + 辩论三键 + `self_review` | `prompts_tables._build_prompt_appendix()` 第 4 段 |
 | `holding_change_block`（持仓变动复盘提示词块） | 标准四模块 + 辩论三键 + `self_review`（附录形态与 purchase 块平行） | `prompts_tables._build_prompt_appendix()` 第 5 段 | 由 `extract_holding_change_block(pipeline_data)` **唯一提取点**取契约字段 `prompt_block`（report 构建期经展示视图同源渲染一次），同一实例交预检侧 `holding_change_block` 与写侧附录；块空不进提示词也不进键（关态逐字节回退）；章内归因块另走 `holding_change_review_fingerprint` 内容寻址 | 由 `extract_purchase_constraint_block(pipeline_data)` **唯一提取点**取契约字段 `constraint_block`（report 构建期渲染一次），同一实例交预检侧 `purchase_block` 与写侧附录；块空不进提示词也不进键（接线前录制四模块基线，断言空块 == 引入前黄金值，防「空串+分隔符」换哈希）；新闻批量路径 `_batch_prompt` 拼块 + `_batch_preparer` 并入 `context_fp` 同源 |
@@ -890,7 +890,7 @@ penetrated_assets ──→ extract_stable_penetration()
 
 上述纪律由 `src/test/unit/llm/test_module_fingerprint.py` 锁定：既断言「进了提示词必须进键」（含预检侧同源），也断言「未进提示词的模块不得被并入」。
 
-**组件级指纹审计（`fingerprint_components()` / `diff_fingerprint_components()`）**：指纹本体是单一哈希，缓存 miss 时无法看出是哪个输入分量变了。故同函数族另提供「逐组件哈希」视图——与正式指纹**同口径**（`pipeline_blocks` 取渲染文本、`history_risk` 取风险信号子集，不拿原始 payload 去哈希），DEBUG 日志下记录「相对上次报告哪些组件变了」，用于定位缓存未命中的来源；审计只用于观测，不参与缓存键计算。
+**组件级指纹审计（`fingerprint_components()` / `diff_fingerprint_components()`）**：指纹本体是单一哈希，缓存 miss 时无法看出是哪个输入分量变了。故同函数族另提供「逐组件哈希」视图——与正式指纹**同口径**（`pipeline_blocks` 取渲染文本、`history_risk` 取风险信号子集，不拿原始 payload 去哈希）。**变化定位恒开**：预检侧每次报告打一行 INFO「指纹组件变化（相对上次报告）: [...]」，默认日志级别就能回答「为什么又 miss」；逐组件哈希快照仍在 DEBUG 下打（只用于细致比对）。代价是每次预检多算十几个小 md5（毫秒级），换得诊断能力不依赖重开 DEBUG。审计只用于观测，不参与缓存键计算。
 
 ### 7.2 缓存键模式
 
@@ -898,8 +898,28 @@ penetrated_assets ──→ extract_stable_penetration()
 标准模式:   llm_{module_key}_{fingerprint}.json
            如: llm_global_macro_a1b2c3d4e5f6.json
 
+多链模式:   llm_{module_key}_{fingerprint}_{provider_name}.json
+           如: llm_global_macro_a1b2c3d4e5f6_ada8a5c8591b_deepseek-main.json
+           （provider 后缀由 skeleton._build_provider_cache_key 唯一构造，
+             预检侧与写侧同调——两侧各拼一份时预检永远读不到写侧的文件）
+
 批量模式:   llm_news_item_{hash}.json  （逐条缓存，hash 含标题+持仓指纹）
 ```
+
+> **键尾同源（C21）**：预检（`_compute_module_cache_info`）与写侧（`skeleton`）必须用**同一个函数**拼出完整键。历史上预检只拼到 `{指纹}`、写侧额外追加 `_{provider}`，后果是每份报告四模块全判 miss、全量派发、`cache_misses` 恒为 4，而真实命中发生在 skeleton 的第二次预检——观测上完全看不出是「键拼错了」。该不变式由 `test_llm_cache_multi.py` 的「预检键与写侧键逐字节相等」用例锁定。
+
+### 7.2.1 缓存与成本契约（金钱口径）
+
+缓存的第一价值是**省钱**，因此除「键是否命中」外还锁住四条金钱口径，由 `src/test/unit/llm/test_cache_cost_accounting.py` 守护：
+
+| 口径 | 含义 | 实现/证据 |
+|:-----|:-----|:----------|
+| 命中零边际成本 | 命中路径不产生 token 与费用；`record_per_module(cached=True)` 记账 cost=0 | `skeleton._handle_cache_hit` → `_build_cache_hint_and_record` |
+| 未命中必记账 | 真实调用的 token/费用逐模块入会话用量，可被事后汇总 | `_finalize_and_cache` → `record_per_module` |
+| 预算只看真实花费 | `daily_cost_limit` 用 perf 当日 `llm.total_cost` 求和；命中运行 `total_cost=0`，不消耗预算 | `cost_forecast.budget_status` / `today_llm_cost` |
+| 节省可见 | 命中模块按**历史付费样本均价**估算 `cache_saved_cost` 写入 perf，并打 INFO「命中 N 个模块，估算节省 ≈¥X」；无样本不虚报 | `cost_forecast.estimate_cached_saving` + `report/_generation_shared._record_llm_context` |
+
+**预估口径**：`forecast_run_cost` 的默认路径用历史实际费用样本给出区间（命中样本费用为 0，故下限可为 0）；**强制重新生成范围内**的模块保证真调用，改按静态单价计价，不吃缓存折扣（`forced_low/forced_high` 单列）。预估始终是**上限性质**：它不预检当前指纹，因此不会因为「这次大概会命中」而下调金额。
 
 ### 7.3 TTL 分辨率
 
