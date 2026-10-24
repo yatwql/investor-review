@@ -2,41 +2,19 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
-> **最近发布 [0.15.0]**（2026-10-24）——已发布版本段随发布移入 [`archived_changelog.0.15.x.md`](../archive/v0.15.x/archived_changelog.0.15.x.md)；本文件只保留当前开发版本段与归档索引。
+> **最近发布 [0.15.1]**（2026-10-24）——已发布版本段随发布移入 [`archived_changelog.0.15.x.md`](../archive/v0.15.x/archived_changelog.0.15.x.md)；本文件只保留当前开发版本段与归档索引。
 
 ---
 
 
-## [0.15.1-dev] - 开发中（未发布）
+## [0.15.2-dev] - 开发中（未发布）
 
-- **`rf-862` 发布 prepare 的 changelog 指针路径缺 `v` 前缀**：跨小版本发布把指针目标写成 `../archive/0.15.x/...`，死链检查拦下并中止 prepare。改为从归档文件名派生 `vX.Y.x` 目录；回归用例只截「最近发布」指针行断言目标路径（原用例靠整篇文本命中，索引行掩盖了错误）。
-
-
-- **`plan-207` 清理旧配置形参兼容**：功能开关迁入 `features.json` 后，10 个 `is_enable_*` 访问器仍保留已不参与取值的 `config` 形参（旧调用签名）；本次移除形参并更新 26 处调用点/测试，删除「传旧 config 也不影响取值」的兼容用例。保留当前规格内的降级逻辑（快照缺市值回退成本口径 R-EVO-02、LLM flat 单凭据格式）——属现行契约而非旧数据兼容。
-
-- **`plan-206` 报告运行观测三项整改**（对应台账 rf-858 / rf-859 / rf-860 / rf-861）：① **去重锚点采集保持默认开启、写侧零读取**——锚点不参与去重判定，39MB 文件的加载+自动压缩（实测约 18.5s，占管线 42%）移出报告主流程：写侧只追加（`write`+`fsync`）、批内去重，跨轮重复由校准工具 `load_anchors` 按键去重（保留最早一条），诊断数据持续积累且报告零读取开销；`INVEST_DEDUP_COLLECT_ANCHORS=0` 可关闭采集，压缩改由 `eval-dedup-threshold.py` 评估后默认执行（`--no-compact` 关闭）或 `INVEST_DEDUP_MAINTENANCE=1` 显式触发。② **性能归因细化**——`数据准备` 增加九项子阶段（行情与明细/指数获取/穿透/风格与因子/覆盖与新鲜度/估值与温度/财报摘要与指标/申购与成本位置/明细装配与建议），`LLM+新闻` 增加新闻源抓取/去重与关联/锚点维护/事件窗装配子项。③ **full 显式提示**——`core.system_info.llm_report_unavailable_reason()` 统一判定「未配置 / 章节全关」，full 生成开始时提示「按不含 LLM 内容生成（full 等同 both）」，三渠道同源。回归 7 例；需求 R-DATA-09 / R-PERF-09 与技术/脚本/手册同步。
-
-- **`plan-205` CLI 配置面补齐（config 子命令 + 章节/匿名化一次性覆写）**：新增 `config list/get/set`——白名单键的查看与持久化编辑，复用 `config/edit_ops.py` 同一校验/`.bak`/注释保留/缓存失效路径；`--dry-run` 只校验不落盘；`scheduler.*` 四字段走 `config/_scheduler.py` 严格校验（与 Web 面板归一化分离）。新增全局 `--chapter KEY=on|off`（按章节注册表分派 `config.json` / `enabled_llm.*` / features 三类来源）与 `--anonymize {off,code_display,full_anonymous,summary}`，均为进程内覆写（`config/_runtime_overrides.py`，不写盘、不进缓存）。报告追问按决策不进入 CLI。回归 43 例（`test_cli_config_command` 32 / `test_config_scheduler_spec` 11）；文档同步 CLI 手册 §2/§10.1/§14、配置手册、脚本参考、技术设计（§1.5.3 / §1.8.11 / 语义表：配置编辑改为 TUI/Web/CLI 同一编辑层，白名单实测 9 组 56 条键 / 26 功能开关）与需求追溯（新增 `R-CON-09`）；`rf-856` 修 `[M]` 过期指代与 §10.1 覆盖说明，`rf-857` 修技术文档白名单计数与渠道表述。
-
-- **`plan-204` 测试用例全量审计与整改**：机检补位四类人工判据（自证式用例 / 双结果放行 / 弱断言 / 名称与内容不一致），扫描 586 个测试文件、11,111 个 `def test_`，整改 23 例——安全基线 3 例自证式改触生产（`cache.set` 产物扫描 / LLM 源码禁止日志含 `api_key` / HTML 模板绝对路径扫描）、文件系统边缘 4 例双结果放行改按 `reader` 契约断言、配置崩溃清理补 `assertRaises`、弱断言 11 例补足语义（行业映射锁定指数代码、分位阈值、警告文案、参数校验原因、cassette 响应体、凭据声明字段）、启动向导 2 例合并、2 处死变量清理。对应台账 rf-851（自证式安全用例）、rf-852（双结果放行）、rf-853（崩溃清理），以及 rf-854（弱断言）、rf-855（重复用例与死变量）。
-
-- **`plan-203` 发布流程四处改进（v0.15.0 复盘落地）**：① **失败前移**——`[C]` 日志动线改标 `scenario_basic`（dev-verify 也跑），动线驱动器新增「打点矩阵自证」（`builtins.input` 与各消费方读取入口必须都指向 feeder，局部导入绕过 patch 时直接报错）；② **bench 顺序**——发布子集调整为 `regression → integration → unit → dev-verify`，让 `--fail-fast` 在场景失败时立刻中止长尾 `unit`（实测曾白等约 45s）；③ **台账自证**——失败命令写 `failure`（失败步 / rc / 报告目录 / 失败用例名 / 输出尾部，保留第一现场），复盘不必再按 mtime 反查测试报告归档；④ **预检与记账**——`check` 增加 changelog 派生预演（只算不写，prepare 的文档手术问题在动文件前暴露）；publish 的提交/合并/tag/推送分段入账，gate 戳增存逐文件代码哈希，指纹不一致时点名「gate 后改动的代码文件」并说明将实跑 P1 verify。回归 9 例（发布工具 5 / 打点矩阵 2 / 无效编号提示 2）。对应台账 rf-844（publish 记账与重跑提示）、rf-845（check 派生预演）、rf-846（bench 顺序）、rf-847（台账失败字段）、rf-848（打点矩阵自证）、rf-849（无效编号提示派生）。
-
-- **`rf-850` 概述行与归档完成标记口径对齐**：「当前迭代」重算的排除集并入「已完成」（原只认 ✅/❌），与 `plan_completed_sections` 的归档判据单源——台账里写「已完成，待发布归档」的任务不再被算作在办；回归 1 例。同时梳理 `plan.md`：已完成项只留状态摘要与归档去向，在办项只留现状与动作/判据，概述行按现存在办节重算。
-
-- **`plan-202` 演示截图生成器入库**：README/手册配图的生成过程从 `docs/tmp/` 的一次性脚本收进仓库——入口 `scripts/make-screenshots.py`（`demo` / `report` / `tui` / `web` 四子命令）+ 实现包 `scripts/_screenshots/`（`demo_workspace.py` / `tui_frame.py` / `web_shot.py` + `cdp_shot.mjs`）。演示工作区两账户 6 只公开品种 + 明显占位凭据，配置用绝对路径、上屏路径由渲染端抹掉演示目录前缀，真实 `data/` 零接触；TUI 取帧走生产渲染函数（非真实 TTY，文本与配色同源），超宽行折行时在续行重新打开配色；Web 档按「导航 → 文本替换 → 滚动 → 截视口」取图（固定侧栏不丢），浏览器从 `--chrome` / `CHROME_BIN` / Playwright 缓存 / 系统路径依次解析。16 例回归覆盖演示持仓与配置口径、报告命令装配、折行保色与路径瘦身、渲染尺寸、浏览器解析次序、入口分发；`scripts-reference.md` / `developer-guide.md` 按域索引 / `folders.md` 目录树同步登记。
-
-- **`plan-201` 事实校验评估函数参数收敛（`rf-839` 技术债）**：`llm/fact_checker/_numerical.py::_evaluate_percent_value` 的 22 个参数（7 基础值 + 10 语境开关 + 5 数据映射）收进冻结 dataclass `PercentContext`——字段即语义，新增一种语境只需加字段并在调用点赋值，不必再改签名/文档/全部直接用例；函数签名收敛为 `_evaluate_percent(ctx)`，语境判定优先级（非收益率早退 → 回撤 → 收益语境）仍在函数体内单源维持。行为零变化：`src/test/unit/llm` 1326 例全绿（含 rf-836 的 6 例回归）。
-
-- **`plan-200` 配置体系重构第 15 轮：稳态观测与回退演练**（配置重构 15 轮到齐）：新增 `src/test/unit/config/test_config_resilience_contract.py`（10 例，全部 `tmp_path` 隔离）把四类路径变成可复跑断言——① **非法配置不静默**：非法 `schema_version` 返回 None 且日志含文件名 + 键 + 原因；`logger.json` 单键非法只回落该键（其余键按文件生效）；② **删除后重建**：`llm_settings.json` v2 模板、`logger.json` 幂等 `ensure_logger_file`、`llm_pricing_ref.json` 默认模板（23 个模型价）重建后均可加载；③ **缓存首轮重算**：首轮未命中 → 写入 → 次轮命中（目录隔离统一由 conftest 提供）；④ **非当前结构拒绝**：消息含「删除该文件后重新生成」。实测（临时目录）：非法配置 0.1ms 内检出并拒绝、三份重建即用、无静默降级。观测项复用现有日志与 `perf_history`，未新增面板。
-
-- **`rf-843` Web 配置面板块标题显示内部 id + 调优块渲染报错**：块标题曾用 `labels[blockKey]` 取，而 `labels` 只登记可编辑键，`sections` / `llm` / `standalone_*` 等块直接显示英文 id；重拍截图时又发现 `renderTuningGroup` 与块标题取源不一致（引用未定义 `surface`），整个配置面板渲染失败。修复：新增 `block_titles` 随面下发（单一来源，11 个块 id 全覆盖），前端一律取服务端下发的标题（不回退到块 id、不写死中文）；`renderAnonGroup` / `renderTuningGroup` 改为接收 `surface`；契约测试补「每块都有中文标题且标题≠块 id」两例。
 
 （本次发布内容见下方归档索引）
 
 ## 归档
 
-- [`archived_changelog.0.15.x.md`](../archive/v0.15.x/archived_changelog.0.15.x.md) — v0.15.0（2026-10-24）
+- [`archived_changelog.0.15.x.md`](../archive/v0.15.x/archived_changelog.0.15.x.md) — v0.15.0 ~ v0.15.1（2026-10-24）
 - [`archived_changelog.0.14.x.md`](../archive/v0.14.x/archived_changelog.0.14.x.md) — v0.14.0 ~ v0.14.8（2026-10-21 ~ 2026-10-23）
 - [`archived_changelog.0.13.x.md`](../archive/v0.13.x/archived_changelog.0.13.x.md) — v0.13.0 ~ v0.13.12（2026-10-13 ~ 2026-10-21）
 - [`archived_changelog.0.12.x.md`](../archive/v0.12.x/archived_changelog.0.12.x.md) — v0.12.1 ~ v0.12.13（2026-10-03 ~ 2026-10-13）
