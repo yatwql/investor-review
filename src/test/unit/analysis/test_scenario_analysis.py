@@ -194,6 +194,7 @@ class TestFxScenario:
 
         result = fx_scenario_analysis(0.03, 1_000_000)
         assert result["warning"] is not None
+        assert "汇率变动影响有限" in result["warning"]
 
     def test_impact_amount(self):
         from src.python.analysis.scenario import fx_scenario_analysis
@@ -241,3 +242,4 @@ class TestSharpeCI:
 
         result = sharpe_ci_propagation(0.50, 0.5)
         assert result["warning"] is not None
+        assert "夏普比率置信区间" in result["warning"] and "不足一年" in result["warning"]

@@ -51,7 +51,9 @@ class TestParamViolationTable:
             assert param_violation(param, None) is None
 
     def test_bool_rejected_for_numeric(self):
-        assert param_violation("max_tokens", True) is not None
+        message = param_violation("max_tokens", True)
+        assert message is not None
+        assert "max_tokens" in message and "应为数值" in message
 
 
 @pytest.mark.unit

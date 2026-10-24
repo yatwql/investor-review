@@ -216,7 +216,7 @@
 
 `enable_fund_deep_analysis`、`enable_news`、`enable_history`、`enable_portfolio_evolution`、`enable_action` 五个配置项控制报告按章节组显示或隐藏对应的章节。LLM 分析章节的可见性由 `llm_settings.json` 的 `enabled_llm` 字典控制。关闭某个章节组后，该组涉及的所有章节完全隐藏，不留下序号空缺，剩余章节按顺序重新编号。
 
-TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一章出现」的开关**收在一处，16 项四块（编号连续 1-16，另有智囊团生成子项 `7.1`/`7.2`）：
+TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一章出现」的开关**收在一处，按四块排列（编号连续、由章节注册表派生；智囊团章节下另有生成子项）：
 
 | 块 | 编号 | 内容 | 存放 |
 |:--|:--|:--|:--|
@@ -224,6 +224,8 @@ TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一�
 | LLM 章节 | 6-12 | 全球政经局势 / 智囊团深度复盘（子项 `7.1`/`7.2`）/ 财经新闻热点与持仓关联 / 持仓体检报告 / 穿透深度分析 / 生成后自检 / 持仓变动复盘归因 | `llm_settings.json` → `enabled_llm` |
 | 默认关闭的整章 | 13-15 | 调仓纪律回放 / 持仓变动复盘 / 个股基本面 | `features.json` |
 | 关联产物 | 16 | What-if 交易成本对比（仅调仓模拟报告页签） | `features.json` |
+
+> 上表编号为**当前注册表快照**：新增/删除章节后自动顺延，`?键名` 是稳定入口（面板状态行同时显示键名）。
 
 面板只切换显隐：章节集合与顺序由注册表和 `report_section_order` 决定，不提供增删或排序；关闭后该章完全隐藏、其余章节自动连续编号。每行显式展示键名，`?编号` / `?键名` 可查来源文件与出厂默认。
 
@@ -747,7 +749,7 @@ TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一�
 > **注意**：features.json 支持 `//` 与 `/* */` 注释（读取时统一剥离；改—存后既有分类注释与项说明保留）。所有开关的默认值与完整说明见下表，或直接查看源码 `src/python/config/features.py` 的 `feature_switch_registry`（唯一登记点，每条含显示名/说明/分组/默认值/是否影响报告/实验身份）。
 > **本表只收录「有消费者」的开关**——每一项在本程序内都确有一处读取其取值。**LLM 模块启停、基金深度分析、新闻源、历史走势、匿名化、启动缓存清理不在此文件**，它们各有归属配置：LLM 模块与基金深度分析走 `llm_settings.json` 的 `enabled_llm`（TUI 菜单 **[C]** LLM 章节块、Web 面板「LLM 分析章节」组），新闻源走 `config.json` 的 `news_sources`，历史走势与回撤走 `config.json` 的 `enable_history`，匿名化模式走 `config.json` 的 `anonymization.mode`（两侧面板均已上屏）。写在这些开关上的覆写不产生任何效果——程序启动时会在日志中告警列出，请据告警核对。
 
-全部 26 项开关分八组（持仓与交易 4 / 市场与估值 4 / 基金与风格 3 / 事件与摘要 4 / 呈现与交互 2 / 机制与质量 3 / 独立章节与回放 4 / 章节内选项 2）。**TUI 按「改了会怎样」分两个面板呈现**：前六组（章内内容）在 `[S]`（编号 1-20）；独立章节与回放、章节内选项在 `[C]`（整章 13-15 / 关联产物 16 / 智囊团子项 7.1-7.2）。Web 配置面板与 CLI 覆盖全部 26 项。
+全部 26 项开关分八组（持仓与交易 / 市场与估值 / 基金与风格 / 事件与摘要 / 呈现与交互 / 机制与质量 / 独立章节与回放 / 章节内选项）。**TUI 按「改了会怎样」分两个面板呈现**：前六组（章内内容）在 `[S]`；独立章节与回放、章节内选项在 `[C]`（编号与分块由注册表派生）。Web 配置面板与 CLI 覆盖全部开关。
 
 **持仓与交易（4 项；成本、申赎状态、成本收益与风险调整）**：
 
@@ -799,7 +801,7 @@ TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一�
 | `deterministic_signal` | **true** | 确定性信号模块（**实时注入 + 跨期沉淀双面**：①市场温度/估值分位/尾部风险预消化为 `信号：…` 方向行注入智囊团复盘与持仓体检提示词，减少模型读裸数值的误判；②同一批确定性评级（含风格因子/再平衡超限）沉淀为 `data/state/signal_ledger.jsonl` 账本，每条附**实时/非实时**来源标签，统计与摘要**默认只算实时记录**防降级行情冒充真实战绩，同日重跑不重复入账，摘要回灌提示词；`doctor` 自检上屏账本概览与各实验功能启用次数统计）。**默认开启**（读侧注入 + 跨期沉淀双面）；无可用信号时静默跳过、缓存键逐字节不变。features.json 写入的开关名以现行注册表为准 |
 | `module_quality_gate` | **true** | 模块级质量分级（对 4 个 LLM 模块输出按完整性/篇幅评 A~F，低评级中「内容在但存在缺陷」者随内容头部注入 `【内容质量提示】` 横幅——只标注、不阻断、不重试、不写回缓存）。**默认开启**——纯只读分级，A/B 级健康输出零噪音 |
 
-**独立章节与回放（4 项；新增整页签或多期回放）**——前 3 项在 `[C]`「默认关闭的整章」块（13-15），`whatif_trade_cost` 在 `[C]`「关联产物」块（16，仅调仓模拟报告）：
+**独立章节与回放（4 项；新增整页签或多期回放）**——前 3 项在 `[C]`「默认关闭的整章」块，`whatif_trade_cost` 在 `[C]`「关联产物」块（仅调仓模拟报告）：
 
 | 开关名 | 默认值 | 说明 |
 |:--|:--|:--|
@@ -858,13 +860,13 @@ Web 模式（浏览器界面）提供「配置编辑」面板，可修改的配�
 | 事件与摘要 | `event_window_impact`（默认关）/ `data_quality` / `market_sentiment`（默认关）/ `summary_highlights`（默认关） | `[S]` 12-15 |
 | 呈现与交互 | `report_qa`（默认关）/ `metrics_enabled` | `[S]` 16-17 |
 | 机制与质量 | `decision_reflection`（默认关）/ `deterministic_signal` / `module_quality_gate` | `[S]` 18-20 |
-| 独立章节与回放 | `rebalance_schedule_replay`（默认关）/ `holding_change_review`（默认关）/ `whatif_trade_cost`（默认关）/ `stock_fundamentals`（默认关） | `[C]` 13-16（整章 13-15 / 关联产物 16） |
+| 独立章节与回放 | `rebalance_schedule_replay`（默认关）/ `holding_change_review`（默认关）/ `whatif_trade_cost`（默认关）/ `stock_fundamentals`（默认关） | `[C]` 整章与关联产物块 |
 | 章节内选项 | `llm_debate_procon`（默认关）/ `llm_debate_conditional` | `[C]` 7.1 / 7.2（智囊团复盘子项） |
 | 持仓匿名化 | `anonymization.mode`（off / code_display / full_anonymous / summary） | `[G]` → `A` |
 | 对比指数池 | `comparison_indices`（增 / 删 / 重置默认） | `[G]` → `I` |
 | LLM 多链线路优先级 | `llm_providers.providers[].priority`（各条目 ▲▼ 调序） | `[G]` → `L` 第 7 项 |
 | LLM 调优参数 | `llm_max_thinking_concurrency` / `llm_max_concurrency` / `max_retries` / `llm_full_fail_retry_delay` / `llm_total_time_budget_sec` / `daily_cost_limit` | `[G]` → `L` |
-| LLM 分析章节 | `enabled_llm.global_macro` / `expert_review` / `health_check` / `penetration_deep` / `news_correlation` / `self_review` / `holding_change` | `[C]` 6-12 |
+| LLM 分析章节 | `enabled_llm.global_macro` / `expert_review` / `health_check` / `penetration_deep` / `news_correlation` / `self_review` / `holding_change` | `[C]` LLM 章节块 |
 
 **写入行为**：
 - 面板修改**立即写入**共享配置文件（`config.json` / `llm_settings.json` / `features.json`），TUI / CLI 下次读取即生效（缓存按文件修改时间自动失效，无需手动刷新）。

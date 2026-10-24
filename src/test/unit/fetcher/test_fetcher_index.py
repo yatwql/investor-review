@@ -96,22 +96,14 @@ class TestFetchIndices(unittest.TestCase):
     @patch("src.python.fetcher.index.tencent.fetch_index_price", return_value=None)
     @patch("src.python.fetcher.index.sina.fetch_a_indices", return_value={})
     def test_both_fail_no_stale(self, mock_sina, mock_fetch_price, mock_cache_get, mock_cache_set):
-        """腾讯+新浪都失败且无过期缓存 → 不抛异常。"""
-        # 第一次 get（每日TTL）→ None，第二次 get（周缓存）→ None
-
-        call_count = 0
-
-        def side_effect(key, ttl):
-            nonlocal call_count
-            call_count += 1
-            return None
-
-        mock_cache_get.side_effect = side_effect
+        """腾讯+新浪都失败且无过期缓存 → 返回空字典（不抛异常、不返回半截数据）。"""
+        # 每日 TTL 与周缓存两次 get 都未命中 → 无任何指数可用
+        mock_cache_get.return_value = None
 
         from src.python.fetcher.index import fetch_indices
 
         result = fetch_indices()
-        self.assertIsInstance(result, dict)
+        self.assertEqual(result, {})
 
     @patch("src.python.fetcher.index.cache_set")
     @patch("src.python.fetcher.index.cache_get", return_value=None)
