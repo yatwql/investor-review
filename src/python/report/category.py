@@ -132,7 +132,7 @@ def _record_dividend_status(success: bool, message: str = "") -> None:
 
 
 def _dividend_failure_hint(reason: str) -> str:
-    """分红失败类型 → 可读原因（与 ``cache/operations._sector_flow_hint`` 同文案口径）。"""
+    """分红失败类型 → 可读原因（与 ``cache._cache_refresh.sector_flow_hint`` 同文案口径）。"""
     return "连接失败" if reason == "connection" else "暂无数据"
 
 

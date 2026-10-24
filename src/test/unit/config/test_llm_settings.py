@@ -162,7 +162,7 @@ class TestFullFailRetryDelayDeclared:
     """
 
     def test_defaults_all_known_and_key_not_reported_unknown(self, caplog):
-        from src.python.config import _KNOWN_LLM_SETTINGS_KEYS
+        from src.python.config._llm_settings import _KNOWN_LLM_SETTINGS_KEYS
         from src.python.config._llm_settings import _check_unknown_llm_keys
         from src.python.config._llm_settings_defaults import _DEFAULT_LLM_SETTINGS
 

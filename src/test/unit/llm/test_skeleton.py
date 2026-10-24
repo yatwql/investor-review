@@ -83,7 +83,7 @@ class TestHandleTruncation(unittest.TestCase):
         """自动放大仍截断 → 日志点名 config_field 与「当前 → 已试」两个值。"""
         from unittest.mock import patch
 
-        from src.python.llm.api_base import TRUNCATION_MARKER
+        from src.python.llm._api_responses import TRUNCATION_MARKER
         from src.python.llm.skeleton import _handle_truncation
 
         truncated = f"<p>{TRUNCATION_MARKER}</p>"

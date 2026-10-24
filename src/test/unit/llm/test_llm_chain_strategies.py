@@ -116,7 +116,7 @@ class TestConfigSanityAfterCleanup(unittest.TestCase):
 
     def test_template_has_path_keys(self) -> None:
         """配置模板含 llm_key_file 和 llm_providers_file 路径键。"""
-        from src.python.config import _get_default_config_template
+        from src.python.config._config_defaults import _get_default_config_template
 
         template = _get_default_config_template()
         self.assertIn("llm_key_file", template, "配置模板中应含 llm_key_file")

@@ -61,8 +61,8 @@ def _calendar_cache_signature() -> tuple[int, int] | None:
 
     用于进程内 memo 的失效判据：缓存文件被重写、被清理、或被并发进程刷新即视为新值。
     """
-    base = cache._cache_path(_TRADING_CALENDAR_CACHE_KEY)
-    for path in (base, base + cache._GZIP_SUFFIX):
+    base = cache.get_cache_path(_TRADING_CALENDAR_CACHE_KEY)
+    for path in (base, base + cache.CACHE_GZIP_SUFFIX):
         try:
             st = os.stat(path)
         except OSError:

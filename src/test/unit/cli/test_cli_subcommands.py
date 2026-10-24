@@ -13,16 +13,8 @@ import pytest
 
 from unittest.mock import MagicMock, patch
 
-from src.python.cli import (
-    _EXIT_PARTIAL,
-    _EXIT_SEVERE,
-    _EXIT_SUCCESS,
-    _build_parser,
-    _handle_cassettes,
-    _handle_doctor,
-    _handle_view_logs,
-    main,
-)
+from src.python.cli import main
+from src.python.cli.cli import _EXIT_PARTIAL, _EXIT_SEVERE, _EXIT_SUCCESS, _build_parser, _handle_cassettes, _handle_doctor, _handle_view_logs
 from src.python.core.log_reader import LogEntry
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_cli]

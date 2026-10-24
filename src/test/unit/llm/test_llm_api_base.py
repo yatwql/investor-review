@@ -27,7 +27,7 @@ class TestExtractContent(unittest.TestCase):
 
     def test_normal_content_list(self) -> None:
         """正常 content 列表 → 返回拼接文本。"""
-        from src.python.llm.api_base import _extract_content
+        from src.python.llm._api_responses import _extract_content
 
         data = {"content": [{"type": "text", "text": "Hello"}, {"type": "text", "text": "World"}]}
         result = _extract_content(data)
@@ -35,7 +35,7 @@ class TestExtractContent(unittest.TestCase):
 
     def test_content_is_string(self) -> None:
         """content 为字符串 → 直接返回。"""
-        from src.python.llm.api_base import _extract_content
+        from src.python.llm._api_responses import _extract_content
 
         data = {"content": "plain string response"}
         result = _extract_content(data)
@@ -43,7 +43,7 @@ class TestExtractContent(unittest.TestCase):
 
     def test_thinking_block_ignored(self) -> None:
         """content 含 thinking/redacted_thinking block → 忽略 non-text block。"""
-        from src.python.llm.api_base import _extract_content
+        from src.python.llm._api_responses import _extract_content
 
         data = {
             "content": [
@@ -56,7 +56,7 @@ class TestExtractContent(unittest.TestCase):
 
     def test_empty_content_list(self) -> None:
         """content 为空列表 → 返回 None（无可用文本，走 provider 切换）。"""
-        from src.python.llm.api_base import _extract_content
+        from src.python.llm._api_responses import _extract_content
 
         data = {"content": []}
         result = _extract_content(data)
@@ -64,7 +64,7 @@ class TestExtractContent(unittest.TestCase):
 
     def test_error_in_response(self) -> None:
         """data 含 error → 返回 None。"""
-        from src.python.llm.api_base import _extract_content
+        from src.python.llm._api_responses import _extract_content
 
         data = {"error": {"type": "authentication_error", "message": "invalid api key"}}
         result = _extract_content(data)
@@ -72,14 +72,14 @@ class TestExtractContent(unittest.TestCase):
 
     def test_data_is_none(self) -> None:
         """data 为 None → 返回 None。"""
-        from src.python.llm.api_base import _extract_content
+        from src.python.llm._api_responses import _extract_content
 
         result = _extract_content(None)
         self.assertIsNone(result)
 
     def test_only_thinking_blocks(self) -> None:
         """仅有 thinking block 无 text → 返回 None（无可用文本，走 provider 切换）。"""
-        from src.python.llm.api_base import _extract_content
+        from src.python.llm._api_responses import _extract_content
 
         data = {
             "content": [{"type": "thinking", "thinking": "thinking..."}, {"type": "redacted_thinking", "data": "..."}]
@@ -93,7 +93,7 @@ class TestCheckClaudeTruncation(unittest.TestCase):
 
     def test_max_tokens_truncated(self) -> None:
         """stop_reason='max_tokens' → True。"""
-        from src.python.llm.api_base import _check_claude_truncation
+        from src.python.llm._api_responses import _check_claude_truncation
 
         data = {"stop_reason": "max_tokens", "usage": {"output_tokens": 500}}
         with self.assertLogs("invest", level="ERROR"):
@@ -102,7 +102,7 @@ class TestCheckClaudeTruncation(unittest.TestCase):
 
     def test_end_turn_not_truncated(self) -> None:
         """stop_reason='end_turn' → False。"""
-        from src.python.llm.api_base import _check_claude_truncation
+        from src.python.llm._api_responses import _check_claude_truncation
 
         data = {"stop_reason": "end_turn"}
         result = _check_claude_truncation(data, 1000, "TestLabel")
@@ -110,14 +110,14 @@ class TestCheckClaudeTruncation(unittest.TestCase):
 
     def test_empty_data_no_truncation(self) -> None:
         """异常 data 格式 → False。"""
-        from src.python.llm.api_base import _check_claude_truncation
+        from src.python.llm._api_responses import _check_claude_truncation
 
         result = _check_claude_truncation({}, 1000, "TestLabel")
         self.assertFalse(result)
 
     def test_missing_stop_reason(self) -> None:
         """data 无 stop_reason → False。"""
-        from src.python.llm.api_base import _check_claude_truncation
+        from src.python.llm._api_responses import _check_claude_truncation
 
         data = {"usage": {"output_tokens": 100}}
         result = _check_claude_truncation(data, 1000, "TestLabel")
@@ -129,7 +129,7 @@ class TestCheckOpenaiTruncation(unittest.TestCase):
 
     def test_length_finish_reason(self) -> None:
         """finish_reason='length' → True。"""
-        from src.python.llm.api_base import _check_openai_truncation
+        from src.python.llm._api_responses import _check_openai_truncation
 
         data = {"choices": [{"finish_reason": "length"}], "usage": {"completion_tokens": 500}}
         with self.assertLogs("invest", level="ERROR"):
@@ -138,7 +138,7 @@ class TestCheckOpenaiTruncation(unittest.TestCase):
 
     def test_stop_finish_reason(self) -> None:
         """finish_reason='stop' → False。"""
-        from src.python.llm.api_base import _check_openai_truncation
+        from src.python.llm._api_responses import _check_openai_truncation
 
         data = {"choices": [{"finish_reason": "stop"}]}
         result = _check_openai_truncation(data, 1000, "OpenAI")
@@ -146,14 +146,14 @@ class TestCheckOpenaiTruncation(unittest.TestCase):
 
     def test_malformed_choices(self) -> None:
         """choices 索引异常 → False。"""
-        from src.python.llm.api_base import _check_openai_truncation
+        from src.python.llm._api_responses import _check_openai_truncation
 
         result = _check_openai_truncation({"choices": []}, 1000, "OpenAI")
         self.assertFalse(result)
 
     def test_missing_choices(self) -> None:
         """data 无 choices → False。"""
-        from src.python.llm.api_base import _check_openai_truncation
+        from src.python.llm._api_responses import _check_openai_truncation
 
         result = _check_openai_truncation({}, 1000, "OpenAI")
         self.assertFalse(result)
@@ -452,18 +452,18 @@ class TestThinkingExhaustedConfigEcho(unittest.TestCase):
     """
 
     def setUp(self) -> None:
-        from src.python.llm.api_base import _set_extract_ctx
+        from src.python.llm._api_responses import _set_extract_ctx
 
         _set_extract_ctx("", 0)
 
     def tearDown(self) -> None:
-        from src.python.llm.api_base import _set_extract_ctx
+        from src.python.llm._api_responses import _set_extract_ctx
 
         _set_extract_ctx("", 0)
 
     def test_echoes_current_config_field_and_budget(self) -> None:
         """已注入上下文 → 提示句带 `config_field=值` 与配置文件路径。"""
-        from src.python.llm.api_base import _extract_content, _set_extract_ctx
+        from src.python.llm._api_responses import _extract_content, _set_extract_ctx
 
         _set_extract_ctx("max_tokens_expert_review", 8192)
         with self.assertLogs(level="WARNING") as cm:
@@ -476,7 +476,7 @@ class TestThinkingExhaustedConfigEcho(unittest.TestCase):
 
     def test_no_ctx_falls_back_to_generic_advice_without_value(self) -> None:
         """未注入上下文 → 不编造数值，只给通用建议。"""
-        from src.python.llm.api_base import _extract_content
+        from src.python.llm._api_responses import _extract_content
 
         with self.assertLogs(level="WARNING") as cm:
             out = _extract_content({"content": [], "stop_reason": "max_tokens"})
@@ -497,7 +497,8 @@ class TestServerErrorEnvelopeFlag(unittest.TestCase):
 
     def test_error_envelope_sets_flag(self) -> None:
         """200 + error 信封 → None 且置标志（安全网应据此跳过重试）。"""
-        from src.python.llm.api_base import _extract_content, _get_last_server_error
+        from src.python.llm.api_base import _get_last_server_error
+        from src.python.llm._api_responses import _extract_content
 
         msg = "We were unable to start processing your request within the 900-second timeout limit."
         out = _extract_content({"error": {"message": msg}})
@@ -506,7 +507,8 @@ class TestServerErrorEnvelopeFlag(unittest.TestCase):
 
     def test_empty_content_list_does_not_set_flag(self) -> None:
         """200 + 空 content 列表（真·空响应，安全网目标场景）→ None 不置标志。"""
-        from src.python.llm.api_base import _extract_content, _get_last_server_error
+        from src.python.llm.api_base import _get_last_server_error
+        from src.python.llm._api_responses import _extract_content
 
         out = _extract_content({"content": [], "stop_reason": "end_turn"})
         self.assertIsNone(out)
@@ -514,7 +516,8 @@ class TestServerErrorEnvelopeFlag(unittest.TestCase):
 
     def test_flag_resets_at_next_extraction(self) -> None:
         """标志按次复位：上一次信封不污染下一次正常响应的判定。"""
-        from src.python.llm.api_base import _extract_content, _get_last_server_error
+        from src.python.llm.api_base import _get_last_server_error
+        from src.python.llm._api_responses import _extract_content
 
         _extract_content({"error": {"message": "boom"}})
         out = _extract_content({"content": [{"type": "text", "text": "ok"}]})

@@ -19,7 +19,8 @@ from src.python.cache import clear as cache_clear
 from src.python.cache import get as cache_get
 from src.python.cache import get_ttl
 from src.python.cache import set as cache_set
-from src.python.core.code_utils import is_otc_fund_by_name, to_fmp_symbol
+from src.python.core.code_utils import is_otc_fund_by_name
+from src.python.core.code_symbols import to_fmp_symbol
 from src.python.fetcher.report_locate import locate_keyword_excerpt
 from src.python.fetcher.source_adapter import adapter_chain_slots
 from src.python.providers import cninfo, datasink

@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.python.cli import _confirm_cost_forecast, _handle_report, _build_parser, _EXIT_SEVERE
+from src.python.cli.cli import _confirm_cost_forecast, _handle_report, _build_parser, _EXIT_SEVERE
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_cli]
 

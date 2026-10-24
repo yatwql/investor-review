@@ -24,6 +24,7 @@ REQUIRED_SECTIONS = [
     "Prompts",
     "Defaults",
     "Colors",
+    "Display Modes",
     "Vocabulary",
     "Feedback",
     "Do's and Don'ts",
@@ -42,6 +43,7 @@ REQUIRED_TABLE_COLUMNS = {
 # 口径句：关键纪律必须以成句形式存在（改写成同义弱化表述即失守）
 REQUIRED_VERDICTS = {
     "Colors": ["一色一职责", "NO_COLOR", "先排版后上色"],
+    "Display Modes": ["关闭恒红", "状态字不被置灰吞掉", "RESET"],
     "Defaults": ["回车=取消", "安全侧"],
     "Vocabulary": ["适用范围", "数据质量"],
     "Feedback": ["[..]", "[OK]", "[!]", "[ERR]"],

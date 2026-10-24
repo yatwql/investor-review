@@ -34,31 +34,18 @@ import logging
 from typing import Any
 
 from src.python.core.num_utils import finite_or
-from src.python.analysis.prosperity_scoring import (  # noqa: F401
-    # 全部迁移名逐一再导出：既有测试与报告层的 import 面保持不变（含私有常量/打分器）
+from src.python.analysis.prosperity_scoring import (
     DEFAULT_CONFIG,
     RATING_THRESHOLDS,
-    estimated_fund_codes,
-    roe_by_code_from_rows,
-    _FALLBACK_CONFIG,
-    _LIQUIDITY_FLOOR,
-    _LIQUIDITY_TIERS,
     _LOW_ROE_THRESHOLD,
-    _TURNOVER_FLOOR,
-    _TURNOVER_TIERS,
     _W_BOOM,
     _W_CONCENTRATION,
     _W_GLOBAL,
     _W_LIQUIDITY,
     _W_PERFORMANCE,
     _W_ROE,
-    _benchmark_returns,
-    _boom_weights,
     _cfg,
-    _config_defaults_for_module,
-    _fund_type_fallback_label,
     _guard_dimension,
-    _matches,
     _pct,
     _rating,
     _score_boom,
@@ -67,12 +54,9 @@ from src.python.analysis.prosperity_scoring import (  # noqa: F401
     _score_liquidity,
     _score_performance,
     _score_roe,
-    _sector_weight_items,
-    _snapshot_holding_codes,
-    _top10_concentration_pct,
-    _turnover_proxy_pct,
     _unverified_dimension,
 )
+from src.python.analysis._prosperity_inputs import estimated_fund_codes, roe_by_code_from_rows, _matches
 
 logger = logging.getLogger("invest")
 

@@ -4,14 +4,12 @@ from __future__ import annotations
 import datetime
 import pytest
 from src.python.analysis.rebalance import (
-    _compute_confidence,
-    _filter_silenced_signals,
-    _load_silence_state,
-    _save_silence_state,
     compute_target_deviation,
     equity_fixed_income_deviation,
     compute_rebalance_signals,
 )
+from src.python.analysis._silence import _filter_silenced_signals, _load_silence_state, _save_silence_state
+from src.python.analysis._rebalance_deviation import _compute_confidence
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_analysis]
 

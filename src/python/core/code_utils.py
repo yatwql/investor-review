@@ -3,27 +3,17 @@
 集中管理 A 股/基金/债券/港股等资产类型的代码前缀和名称关键词知识，
 避免多个模块各自维护一套判定规则。**只做「这个代码是什么」的判断**。
 
-派生量（交易所前后缀归一、FMP/东财/cninfo 符号与参数、市值规模粗估）已拆到
-:mod:`src.python.core.code_symbols`；本模块 re-export 其公开符号，既有导入面不变。
-前缀常量（``EXCHANGE_PREFIXES`` / ``_INDEX_EXCHANGE_PREFIXES``）的唯一真值也在
-该模块，此处引用以免两处各建一张表。
+派生量（交易所前后缀归一、FMP/东财/cninfo 符号与参数、市值规模粗估）由
+:mod:`src.python.core.code_symbols` 单一实现，调用方直接导入该 owner；
+本模块只保留资产类型判定逻辑，并复用其中的前缀常量与剥离函数。
 """
 
 from __future__ import annotations
 
-# 派生量在 code_symbols 单一实现；此处 re-export 保持既有导入面
-from src.python.core.code_symbols import (  # noqa: F401 — 兼容既有导入面
-    EXCHANGE_PREFIXES,
+# 本模块内部复用的派生量（owner：code_symbols）
+from src.python.core.code_symbols import (
     _INDEX_EXCHANGE_PREFIXES,
-    estimate_market_cap_by_prefix,
-    get_exchange_category,
-    get_exchange_prefix,
-    get_index_exchange_prefix,
-    get_push2_secid,
-    strip_exchange_prefix,
     strip_to_digits,
-    to_exchange_symbol,
-    to_fmp_symbol,
 )
 
 # ── 已知代码前缀区间 ────────────────────────────────────────

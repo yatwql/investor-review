@@ -15,13 +15,13 @@ from src.python.config import get_llm_config
 from src.python.llm.api import call_llm
 from src.python.llm.api_base import (
     AUTO_INCREASE_FACTOR,
-    TRUNCATION_MARKER,
     _build_cache_hint_and_record,
     _get_last_llm_failure,
     clear_last_llm_failure,
     FAIL_REASON_NETWORK_ERROR,
     FAIL_REASON_TIMEOUT,
 )
+from src.python.llm._api_responses import TRUNCATION_MARKER
 from src.python.llm.fingerprint import get_cache_ttl_llm
 from src.python.llm.markdown import markdown_to_html
 from src.python.llm.pricing import estimate_cost

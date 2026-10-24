@@ -50,7 +50,7 @@ class CacheTestBase(unittest.TestCase):
 
     def _write_cache(self, key, data, ts=1000.0):
         """向缓存目录写入指定内容的 JSON 文件，返回完整路径。"""
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         path = _cache_path(key)
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -75,7 +75,8 @@ class TestGzipTransparentCompression(CacheTestBase):
     def test_small_data_not_gzip(self, mock_time):
         """小数据（<100KB）→ 存储为 .json 而非 .json.gz。"""
         mock_time.return_value = 1000.0
-        from src.python.cache import set, _cache_path
+        from src.python.cache import set
+        from src.python.cache._paths import _cache_path
 
         data = {"small": "hello"}
         set("small_key", data)
@@ -94,7 +95,7 @@ class TestGzipTransparentCompression(CacheTestBase):
         big = self._big_data(150)
         set("big_key", big)
 
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         json_path = _cache_path("big_key")
         gz_path = json_path + ".gz"
@@ -128,7 +129,7 @@ class TestGzipTransparentCompression(CacheTestBase):
         big = self._big_data(110)
         set("expire_gz", big)
 
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         gz_path = _cache_path("expire_gz") + ".gz"
         self.assertTrue(os.path.exists(gz_path))
@@ -151,7 +152,7 @@ class TestGzipTransparentCompression(CacheTestBase):
         set("price_gz_a", big1)
         set("price_gz_b", big2)
 
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         gz_a = _cache_path("price_gz_a") + ".gz"
         gz_b = _cache_path("price_gz_b") + ".gz"
@@ -167,7 +168,8 @@ class TestGzipTransparentCompression(CacheTestBase):
     def test_get_prefers_gz_over_json(self, mock_time):
         """同时存在 .json 和 .json.gz → 优先读取 .json.gz。"""
         mock_time.return_value = 1000.0
-        from src.python.cache import _cache_path, get
+        from src.python.cache import get
+        from src.python.cache._paths import _cache_path
 
         json_path = _cache_path("duel")
         gz_path = json_path + ".gz"

@@ -5,7 +5,7 @@
 
 放在 ``core/`` 而非 ``config/`` 的原因：``core/logger.py``、``llm/pricing.py`` 等
 core 级使用方也需要读配置，若从 ``config`` 包导入会形成向上依赖并可能成环。
-``config/_comments.py`` 仅做再导出，保持配置包既有导入面。
+配置包与 core 级读取方统一从这里导入，保持单一入口。
 """
 
 from __future__ import annotations

@@ -45,32 +45,14 @@ from src.python.report.excel_writer import (
 from src.python.report.market_value import DetailRow
 
 from ._holdings_detail_blocks import (  # noqa: F401 — 兼容既有导入面
-    _BLOCK_TITLE_CATEGORY,
-    _BLOCK_TITLE_MARKET_VALUE,
-    _CAT_COST_POS_HEADERS,
-    _CAT_EXTRA_HEADERS,
-    _CAT_HEADERS,
-    _CAT_NCOLS,
-    _CAT_NCOLS_WITH_FLOW,
-    _CAT_PURCHASE_HEADERS,
     _COST_POS_NCOLS,
-    _MV_COST_POS_HEADERS,
     _MV_EXTRA_HEADERS,
-    _MV_HEADERS,
     _MV_NCOLS,
-    _MV_PURCHASE_HEADERS,
-    _NAME_COL,
-    _PRICE_TYPE_COL,
-    _apply_category_profit_colors,
     _apply_price_type_colors,
     _apply_profit_colors,
-    _cat_num_formats,
     _detail_to_row_values,
-    _mv_num_formats,
     _weighted_avg_cost,
-    _write_account_groupings,
     _write_category_block,
-    _write_category_group,
     _write_market_value_block,
 )
 

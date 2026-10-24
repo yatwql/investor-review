@@ -16,6 +16,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import MagicMock, patch
 from src.python.core.models import Holding
+from src.python.report import _fund_rating as fp_rating
 from src.python.report import fund_performance as fp
 from src.python.report import penetration as pene
 import pytest
@@ -161,47 +162,47 @@ class TestFormatReturn(unittest.TestCase):
 
     def test_none(self):
         """None -> '--'"""
-        self.assertEqual(fp._format_return(None), "--")
+        self.assertEqual(fp_rating._format_return(None), "--")
 
     def test_dash_string(self):
         """'--' -> '--'"""
-        self.assertEqual(fp._format_return("--"), "--")
+        self.assertEqual(fp_rating._format_return("--"), "--")
 
     def test_positive_float(self):
         """正浮点数 -> 小数（如 1.5 -> 0.015）"""
-        self.assertAlmostEqual(fp._format_return(1.5), 0.015)
+        self.assertAlmostEqual(fp_rating._format_return(1.5), 0.015)
 
     def test_negative_float(self):
         """负浮点数 -> 负小数（如 -3.25 -> -0.0325）"""
-        self.assertAlmostEqual(fp._format_return(-3.25), -0.0325)
+        self.assertAlmostEqual(fp_rating._format_return(-3.25), -0.0325)
 
     def test_zero(self):
         """零 -> 0.0"""
-        self.assertEqual(fp._format_return(0), 0.0)
+        self.assertEqual(fp_rating._format_return(0), 0.0)
 
     def test_positive_string_number(self):
         """正数字符串 -> 小数（如 '2.5' -> 0.025）"""
-        self.assertAlmostEqual(fp._format_return("2.5"), 0.025)
+        self.assertAlmostEqual(fp_rating._format_return("2.5"), 0.025)
 
     def test_negative_string_number(self):
         """负数字符串 -> 负小数（如 '-1.8' -> -0.018）"""
-        self.assertAlmostEqual(fp._format_return("-1.8"), -0.018)
+        self.assertAlmostEqual(fp_rating._format_return("-1.8"), -0.018)
 
     def test_rounding(self):
         """四舍五入：99.999 -> 0.99999（浮点近似）"""
-        self.assertAlmostEqual(fp._format_return(99.999), 0.99999, places=5)
+        self.assertAlmostEqual(fp_rating._format_return(99.999), 0.99999, places=5)
 
     def test_small_positive(self):
         """很小的正数 -> 小数（0.006 -> 6e-5）"""
-        self.assertAlmostEqual(fp._format_return(0.006), 6e-5)
+        self.assertAlmostEqual(fp_rating._format_return(0.006), 6e-5)
 
     def test_empty_string(self):
         """空字符串 -> '--'"""
-        self.assertEqual(fp._format_return(""), "--")
+        self.assertEqual(fp_rating._format_return(""), "--")
 
     def test_invalid_string(self):
         """非数字字符串 -> '--'"""
-        self.assertEqual(fp._format_return("abc"), "--")
+        self.assertEqual(fp_rating._format_return("abc"), "--")
 
 
 class TestFormatRank(unittest.TestCase):
@@ -209,35 +210,35 @@ class TestFormatRank(unittest.TestCase):
 
     def test_formats_rank_over_total(self):
         """正常排名 -> 'rank/total'"""
-        self.assertEqual(fp._format_rank({"rank": 1, "total": 100}), "1/100")
+        self.assertEqual(fp_rating._format_rank({"rank": 1, "total": 100}), "1/100")
 
     def test_rank_is_dash(self):
         """rank='--' -> '--'"""
-        self.assertEqual(fp._format_rank({"rank": "--", "total": 100}), "--")
+        self.assertEqual(fp_rating._format_rank({"rank": "--", "total": 100}), "--")
 
     def test_total_is_dash(self):
         """total='--' -> '--'"""
-        self.assertEqual(fp._format_rank({"rank": 1, "total": "--"}), "--")
+        self.assertEqual(fp_rating._format_rank({"rank": 1, "total": "--"}), "--")
 
     def test_both_dash(self):
         """两者均为 '--' -> '--'"""
-        self.assertEqual(fp._format_rank({"rank": "--", "total": "--"}), "--")
+        self.assertEqual(fp_rating._format_rank({"rank": "--", "total": "--"}), "--")
 
     def test_empty_dict(self):
         """空字典 -> '--'（get 默认值）"""
-        self.assertEqual(fp._format_rank({}), "--")
+        self.assertEqual(fp_rating._format_rank({}), "--")
 
     def test_rank_zero(self):
         """rank=0 -> '0/total'"""
-        self.assertEqual(fp._format_rank({"rank": 0, "total": 500}), "0/500")
+        self.assertEqual(fp_rating._format_rank({"rank": 0, "total": 500}), "0/500")
 
     def test_string_values(self):
         """字符串数字值 -> 'rank/total'"""
-        self.assertEqual(fp._format_rank({"rank": "5", "total": "100"}), "5/100")
+        self.assertEqual(fp_rating._format_rank({"rank": "5", "total": "100"}), "5/100")
 
     def test_large_numbers(self):
         """大数字 -> '1234/99999'"""
-        self.assertEqual(fp._format_rank({"rank": 1234, "total": 99999}), "1234/99999")
+        self.assertEqual(fp_rating._format_rank({"rank": 1234, "total": 99999}), "1234/99999")
 
 
 class TestRatingComment(unittest.TestCase):
@@ -248,12 +249,12 @@ class TestRatingComment(unittest.TestCase):
         expected = ["优秀", "良好", "稳定", "偏差"]
         for k in expected:
             with self.subTest(key=k):
-                self.assertIn(k, fp._RATING_COMMENT)
-                self.assertTrue(fp._RATING_COMMENT[k])
+                self.assertIn(k, fp_rating._RATING_COMMENT)
+                self.assertTrue(fp_rating._RATING_COMMENT[k])
 
     def test_description_prefix_matches_key(self):
         """每个评级的描述以键名开头"""
-        for k, v in fp._RATING_COMMENT.items():
+        for k, v in fp_rating._RATING_COMMENT.items():
             with self.subTest(key=k):
                 self.assertTrue(v.startswith(k), f"'{v}' 不以 '{k}' 开头")
 
@@ -263,7 +264,7 @@ class TestFormatReturnBoundary(unittest.TestCase):
     """_format_return 边界值和合理性验证。"""
 
     def _call(self, val):
-        return fp._format_return(val)
+        return fp_rating._format_return(val)
 
     def test_normal_positive(self):
         """正收益率 → 小数（5.5 → 0.055）。"""
@@ -303,7 +304,7 @@ class TestFormatRankSanity(unittest.TestCase):
     """_format_rank 合理性验证。"""
 
     def _call(self, entry):
-        return fp._format_rank(entry)
+        return fp_rating._format_rank(entry)
 
     def test_normal_rank(self):
         """正常排名 → '排名/总数'。"""

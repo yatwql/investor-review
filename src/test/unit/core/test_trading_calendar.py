@@ -210,7 +210,7 @@ class TestCalendarProcessMemo:
         # 缓存文件真实存在（memo 的失效判据含文件指纹）
         cache_file = tmp_path / "trading_calendar.json"
         cache_file.write_text('{"_ts": 1, "_data": []}', encoding="utf-8")
-        monkeypatch.setattr(tc.cache, "_cache_path", lambda key: str(cache_file))
+        monkeypatch.setattr(tc.cache, "get_cache_path", lambda key: str(cache_file))
         monkeypatch.setattr(tc.cache, "get_ttl", lambda *a, **k: 3600.0)
 
         calls = {"n": 0}
@@ -235,7 +235,7 @@ class TestCalendarProcessMemo:
 
         cache_file = tmp_path / "trading_calendar.json"
         cache_file.write_text('{"_ts": 1, "_data": []}', encoding="utf-8")
-        monkeypatch.setattr(tc.cache, "_cache_path", lambda key: str(cache_file))
+        monkeypatch.setattr(tc.cache, "get_cache_path", lambda key: str(cache_file))
         monkeypatch.setattr(tc.cache, "get_ttl", lambda *a, **k: 3600.0)
 
         payload = {"dates": ["2026-09-17"]}
@@ -254,7 +254,7 @@ class TestCalendarProcessMemo:
 
         cache_file = tmp_path / "trading_calendar.json"
         cache_file.write_text("{}", encoding="utf-8")
-        monkeypatch.setattr(tc.cache, "_cache_path", lambda key: str(cache_file))
+        monkeypatch.setattr(tc.cache, "get_cache_path", lambda key: str(cache_file))
         monkeypatch.setattr(tc.cache, "get_ttl", lambda *a, **k: 3600.0)
         monkeypatch.setattr(tc.cache, "get", lambda *a, **k: ["2026-09-17"])
         tc._reset_calendar_memo()

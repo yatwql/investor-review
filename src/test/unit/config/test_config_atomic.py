@@ -20,7 +20,7 @@ import unittest
 from unittest.mock import patch
 import pytest
 
-from src.python.config import _comments
+from src.python.core.json_comments import strip_json_comments as _strip_json_comments
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_config]
 
@@ -45,7 +45,7 @@ class TestConfigAtomicWrite(unittest.TestCase):
 
         self.assertTrue(os.path.exists(self.config_path))
         with open(self.config_path, "r", encoding="utf-8") as f:
-            payload = json.loads(_comments._strip_json_comments(f.read()))
+            payload = json.loads(_strip_json_comments(f.read()))
         self.assertEqual(payload["test_key"], "hello")
 
     @patch("src.python.config._config_defaults.get_config_path")
@@ -137,7 +137,7 @@ class TestConfigAtomicWrite(unittest.TestCase):
         # 验证缩进
         self.assertIn("  ", content)  # indent=2
         # 验证可解析（配置文件带 // 注释，需剥离后解析）
-        payload = json.loads(_comments._strip_json_comments(content))
+        payload = json.loads(_strip_json_comments(content))
         self.assertEqual(payload["中文键"], "中文值")
         self.assertEqual(payload["number"], 42)
 
@@ -171,7 +171,8 @@ class TestConfigAtomicWriteFailure(unittest.TestCase):
         # mkstemp 返回一个不存在的 fd → 后续写入失败
         mock_mkstemp.return_value = (999, os.path.join(self.tmp.name, "bad.tmp"))
 
-        from src.python.config import _clear_config_cache, set_config
+        from src.python.config import set_config
+        from src.python.config._core import _clear_config_cache
 
         # 断言的是「写入失败后临时文件被清理」，缓存放行与否不影响该路径；
         # 先清缓存以避免上一次测试的缓存命中短路掉本次写入失败。
@@ -194,7 +195,7 @@ class TestConfigAtomicWriteFailure(unittest.TestCase):
 
         self.assertTrue(os.path.exists(nested_path))
         with open(nested_path, "r", encoding="utf-8") as f:
-            payload = json.loads(_comments._strip_json_comments(f.read()))
+            payload = json.loads(_strip_json_comments(f.read()))
         self.assertEqual(payload["nested_key"], "created")
 
 

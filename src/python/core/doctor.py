@@ -524,19 +524,10 @@ def _check_network(max_timeout: float) -> list[dict[str, Any]]:
     return results
 
 
-# 日志与缓存组探针下沉 core/doctor_logs.py；此处 re-export 保持既有引用面
-from src.python.core.doctor_logs import (  # noqa: E402, F401 — 兼容既有导入面
-    _ANCHOR_COMPACT_BYTES,
-    _APP_LOG_PATH,
-    _DEDUP_ANCHOR_PATH,
-    _DEDUP_ANCHOR_REL,
-    _LOG_SCAN_MAX_LINES,
-    _PERF_LEDGER_PATH,
-    _check_dedup_anchor,
-    _check_log_level,
-    _check_log_volume,
+# 日志与缓存组探针实现在 core/doctor_logs.py；该模块反向依赖本文件的 GROUP_* 常量，
+# 故在模块底部延迟导入以避开导入期环。
+from src.python.core.doctor_logs import (  # noqa: E402
     _check_logs_and_cache,
-    _check_perf_ledger_health,
 )
 
 

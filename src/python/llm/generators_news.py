@@ -12,9 +12,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import httpx
 
-from src.python.llm.api_base import (
-    _log_token_usage,
-)
+from src.python.llm._api_responses import _log_token_usage
 from src.python.llm.fingerprint import compute_fingerprint
 from src.python.llm.pricing import estimate_cost
 from src.python.llm.prompts import (

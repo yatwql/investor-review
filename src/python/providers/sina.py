@@ -17,12 +17,8 @@ from typing import Any
 
 import httpx
 
-from src.python.core.code_utils import (
-    get_exchange_prefix,
-    is_a_share_code,
-    is_exchange_fund_code,
-    is_index_code,  # noqa: F401  # re-export，sina_kline lazy import + 测试 patch 引用
-)
+from src.python.core.code_utils import is_a_share_code, is_exchange_fund_code
+from src.python.core.code_symbols import get_exchange_prefix
 from src.python.core.http_client import make_http_client
 
 logger = logging.getLogger("invest")

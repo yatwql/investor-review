@@ -32,14 +32,7 @@ from src.python.qa.error_codes import (
 # 生成执行体（下沉至 web/run_generation.py；此处 re-export 保持既有引用面，
 # 调用点 patch 须指向 run_generation 模块——见该模块 docstring）
 from src.python.web.run_generation import (  # noqa: F401 — 兼容既有导入面
-    _EXIT_PARTIAL,
-    _EXIT_SEVERE,
-    _EXIT_SUCCESS,
     _build_artifacts,
-    _notify_web_completion,
-    _run_generation,
-    _run_generation_impl,
-    _web_input_mode_snapshot_domain,
 )
 
 logger = logging.getLogger("invest")
@@ -47,7 +40,6 @@ logger = logging.getLogger("invest")
 # 只读观测路由（健康 / 自检 / 日志 / 健康历史）下沉 web/handlers_health.py；
 # 此处 re-export 保持既有引用面（测试与调用方 import 路径不变）
 from src.python.web.handlers_health import (  # noqa: E402, F401 — 兼容既有导入面
-    _health_cache,
     _handle_doctor,
     _handle_health,
     _handle_health_history,

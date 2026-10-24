@@ -1,25 +1,28 @@
-"""配置校验模块 — config.json 配置校验函数集。
+"""配置校验入口 — 组合各域校验函数并统计问题数。
 
-集中管理所有配置校验逻辑。
-每个 _validate_* 函数接收 (config, issues) 并返回 issues 计数。
+具体校验实现按域拆在 `_validation_llm` / `_validation_sections` / `_validation_scalars`；
+本模块只保留入口，不复制实现、不转出私有校验函数。
 """
 
 from __future__ import annotations
 
-from ._validation_common import (  # noqa: F401 — 共用原语
-    _FETCH_MODES,
-    _MISSING,
-    _section,
-)
-
 import logging
 
-from ._validation_llm import (  # noqa: F401 — 兼容既有导入面
+from ._validation_llm import (
     _validate_enable_boards,
     _validate_enable_llm,
     _validate_llm_report_depth,
 )
-from ._validation_sections import (  # noqa: F401 — 兼容既有导入面
+from ._validation_scalars import (
+    _validate_cache_ttl,
+    _validate_holdings_start_date,
+    _validate_market_hours,
+    _validate_news_sources,
+    _validate_news_top_count,
+    _validate_preferred_provider,
+    _validate_string_configs,
+)
+from ._validation_sections import (
     _validate_benchmark_indices,
     _validate_comparison_candidates,
     _validate_comparison_indices,
@@ -32,48 +35,8 @@ from ._validation_sections import (  # noqa: F401 — 兼容既有导入面
     _validate_user_fund_benchmarks,
     _validate_whatif_benchmark_index,
 )
-from ._validation_scalars import (  # noqa: F401 — 兼容既有导入面
-    _KNOWN_NEWS_SOURCES,
-    _KNOWN_PROVIDER_NAMES,
-    _KNOWN_PROVIDER_TYPES,
-    _PATH_CONFIG_KEYS,
-    _STRING_CONFIG_KEYS,
-    _absolutize_paths,
-    _deabsolutize_paths,
-    _is_abs,
-    _validate_cache_ttl,
-    _validate_holdings_start_date,
-    _validate_market_hours,
-    _validate_news_sources,
-    _validate_news_top_count,
-    _validate_preferred_provider,
-    _validate_string_configs,
-)
-
 
 logger = logging.getLogger("invest")
-
-# ═══════════════════════════════════════════════════════════════════
-# 配置校验常量
-# ═══════════════════════════════════════════════════════════════════
-
-
-# 需要绝对化的路径型配置键（不包含纯文件名 holdings_filename）
-
-
-# ═══════════════════════════════════════════════════════════════════
-# 校验辅助函数
-# ═══════════════════════════════════════════════════════════════════
-
-
-# ═══════════════════════════════════════════════════════════════════
-# 各配置段的校验函数
-# ═══════════════════════════════════════════════════════════════════
-
-
-# ═══════════════════════════════════════════════════════════════════
-# 配置校验入口
-# ═══════════════════════════════════════════════════════════════════
 
 
 def validate_config(config: dict | None = None) -> int:

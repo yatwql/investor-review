@@ -4,26 +4,30 @@ import logging
 
 from src.python.core.constants import CACHE_DAILY
 
-from ._cleanup import _process_cache_file, auto_cleanup_expired, cleanup_expired, clean_sensitive
+from ._cleanup import auto_cleanup_expired, cleanup_expired, clean_sensitive
 from ._groups import clear_by_group, clear_by_prefix
-from ._io import _read_cache_data, _write_atomic
-from ._paths import _CACHE_DIR, _GZIP_SUFFIX, _GZIP_THRESHOLD, _cache_path, check_cache_dir_permissions, get_cache_dir
+from ._paths import _cache_path, _GZIP_SUFFIX, check_cache_dir_permissions, get_cache_dir
 from ._stats import (
-    _record_cache_hit,
-    _record_cache_miss,
     get_cache_hit_rate,
     get_cache_stats,
     reset_cache_stats,
 )
-from ._store import _cache_lock, clear, get, set
+from ._store import clear, get, set
 from ._ttl import get_cache_age, get_cache_age_by_data_type, get_ttl
 from .services.holdings_tracker import (
-    _clear_holdings_related_caches,
-    _read_holdings_tracking,
     check_and_refresh_caches,
     compute_holdings_codes,
     compute_holdings_fingerprint,
 )
+
+
+def get_cache_path(key: str) -> str:
+    """缓存键 → 缓存文件路径（公开只读入口，供 core 等到期检查复用）。"""
+    return _cache_path(key)
+
+
+#: 缓存文件 gzip 变体后缀（与 ``get_cache_path`` 配套的公开只读常量）
+CACHE_GZIP_SUFFIX = _GZIP_SUFFIX
 
 __all__ = [
     "get",
@@ -44,23 +48,10 @@ __all__ = [
     "compute_holdings_fingerprint",
     "compute_holdings_codes",
     "get_cache_dir",
+    "get_cache_path",
+    "CACHE_GZIP_SUFFIX",
     "check_cache_dir_permissions",
-    # ── 公共常量（test_cache.py 有 3 处 from cache import CACHE_DAILY）──
     "CACHE_DAILY",
-    # ── 内部接口（_cache_lock 被市场时段等模块使用）──
-    "_cache_lock",
-    # ── 内部接口（re-export，供缓存子模块 / 外部直接引用）──
-    "_read_cache_data",
-    "_write_atomic",
-    "_CACHE_DIR",
-    "_GZIP_SUFFIX",
-    "_GZIP_THRESHOLD",
-    "_cache_path",
-    "_process_cache_file",
-    "_record_cache_hit",
-    "_record_cache_miss",
-    "_clear_holdings_related_caches",
-    "_read_holdings_tracking",
 ]
 
 

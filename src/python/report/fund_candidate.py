@@ -203,7 +203,7 @@ def _build_candidate_row(
     tot = rank_entry.get("total")
     if rk not in (None, "--") and tot not in (None, "--"):
         # 复用同一格式化器：与基金业绩分析章同口径（含排名数据日期附注）
-        from src.python.report.fund_performance import _format_rank
+        from src.python.report._fund_rating import _format_rank
 
         row["rank_text"] = _format_rank(rank_entry)
 

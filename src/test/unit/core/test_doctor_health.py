@@ -33,13 +33,13 @@ def _redirect_paths(tmp_path, monkeypatch):
 class TestLogLevel:
     def test_default_info(self, monkeypatch):
         monkeypatch.delenv("INVEST_LOG_FILE_LEVEL", raising=False)
-        item = doctor._check_log_level()
+        item = doctor_logs._check_log_level()
         assert item["ok"] is True
         assert "INFO" in item["message"]
 
     def test_debug_mode_hints_restore(self, monkeypatch):
         monkeypatch.setenv("INVEST_LOG_FILE_LEVEL", "debug")
-        item = doctor._check_log_level()
+        item = doctor_logs._check_log_level()
         assert "DEBUG" in item["message"]
         assert "unset INVEST_LOG_FILE_LEVEL" in item["hint"]
 
@@ -55,19 +55,19 @@ class TestLogVolume:
 
     def test_debug_heavy_log_flagged(self, tmp_path):
         self._write_log(tmp_path / "app.log", 0.9)
-        item = doctor._check_log_volume()
+        item = doctor_logs._check_log_volume()
         assert item["ok"] is False
         assert "DEBUG 占比" in item["message"]
         assert "INVEST_LOG_FILE_LEVEL" in item["hint"]
 
     def test_info_dominant_log_passes(self, tmp_path):
         self._write_log(tmp_path / "app.log", 0.1)
-        assert doctor._check_log_volume()["ok"] is True
+        assert doctor_logs._check_log_volume()["ok"] is True
 
 
 class TestDedupAnchor:
     def test_missing_anchor_is_fine(self):
-        item = doctor._check_dedup_anchor()
+        item = doctor_logs._check_dedup_anchor()
         assert item["ok"] is True
         assert "未生成" in item["message"]
 
@@ -77,7 +77,7 @@ class TestDedupAnchor:
         tmp = pathlib.Path(doctor_logs._DEDUP_ANCHOR_PATH)
         tmp.write_text("{}\n" * 10, encoding="utf-8")
         monkeypatch.setattr(doctor_logs, "_ANCHOR_COMPACT_BYTES", 10)
-        item = doctor._check_dedup_anchor()
+        item = doctor_logs._check_dedup_anchor()
         assert item["ok"] is False
         assert "eval-dedup-threshold.py --compact" in item["hint"]
 
@@ -89,19 +89,19 @@ class TestPerfLedger:
 
     def test_low_warnings_pass(self, tmp_path):
         self._write_ledger(tmp_path / "perf_history.jsonl", 1)
-        item = doctor._check_perf_ledger_health()
+        item = doctor_logs._check_perf_ledger_health()
         assert item["ok"] is True
         assert "告警中位 1" in item["message"]
 
     def test_high_warnings_or_errors_flagged(self, tmp_path):
         self._write_ledger(tmp_path / "perf_history.jsonl", 12, ["boom"])
-        item = doctor._check_perf_ledger_health()
+        item = doctor_logs._check_perf_ledger_health()
         assert item["ok"] is False
         assert "累计错误 10" in item["message"]
 
     def test_small_sample_not_judged(self, tmp_path):
         self._write_ledger(tmp_path / "perf_history.jsonl", 99, n=2)
-        item = doctor._check_perf_ledger_health()
+        item = doctor_logs._check_perf_ledger_health()
         assert item["ok"] is True
         assert "样本不足" in item["message"]
 
@@ -114,13 +114,13 @@ class TestPerfLedgerFactFix:
             {"status": "completed", "counters": {"warnings": 1, "fact_fix_total": n}, "errors": []} for n in (2, 4, 9)
         ]
         (tmp_path / "perf_history.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
-        item = doctor._check_perf_ledger_health()
+        item = doctor_logs._check_perf_ledger_health()
         assert "事实校验自动修正中位 4 处" in item["message"]
 
     def test_no_fact_fix_keeps_message_short(self, tmp_path):
         rows = [{"status": "completed", "counters": {"warnings": 1}, "errors": []} for _ in range(5)]
         (tmp_path / "perf_history.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
-        item = doctor._check_perf_ledger_health()
+        item = doctor_logs._check_perf_ledger_health()
         assert "事实校验自动修正" not in item["message"]
 
 
@@ -134,7 +134,7 @@ class TestAnchorPathSource:
 
         # 两边都可能被测试隔离重定向，比较相对尾部（data/calibration/dedup_anchors.jsonl）
         tail = os.path.join(*Path(news_dedup._ANCHOR_PATH).parts[-3:])
-        assert doctor._DEDUP_ANCHOR_REL == tail
+        assert doctor_logs._DEDUP_ANCHOR_REL == tail
 
 
 class TestGroupWiring:

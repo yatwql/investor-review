@@ -10,13 +10,7 @@ import pytest
 import os
 from unittest.mock import MagicMock, patch
 
-from src.python.cli import (
-    _EXIT_SUCCESS,
-    _apply_cli_experiments,
-    _apply_cli_switches,
-    _build_parser,
-    _cli_read_holdings,
-)
+from src.python.cli.cli import _EXIT_SUCCESS, _apply_cli_experiments, _apply_cli_switches, _build_parser, _cli_read_holdings
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_cli, pytest.mark.edge]
 
@@ -37,7 +31,7 @@ class TestCliEdge:
             ),
             patch("src.python.report.orchestrator.generate_report") as mock_gen,
         ):
-            from src.python.cli import _handle_report
+            from src.python.cli.cli import _handle_report
 
             args = MagicMock(type="basic", history="off", force_llm=False, output=None, verbose=False)
             _handle_report(args, {})
@@ -49,7 +43,7 @@ class TestCliEdge:
     @pytest.mark.edge
     def test_no_input_in_cache_path(self):
         """cache 路径无 input() 调用。"""
-        from src.python.cli import _handle_cache_update
+        from src.python.cli.cli import _handle_cache_update
 
         mock_result = MagicMock()
         mock_result.exit_code = _EXIT_SUCCESS

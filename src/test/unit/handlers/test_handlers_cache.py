@@ -21,7 +21,7 @@ class TestRefreshProfitForecastCache(unittest.TestCase):
     """_refresh_profit_forecast_cache 缓存刷新（operations 版）。"""
 
     def _call(self):
-        from src.python.cache.operations import _refresh_profit_forecast_cache
+        from src.python.cache._cache_refresh import _refresh_profit_forecast_cache
 
         return _refresh_profit_forecast_cache()
 
@@ -53,7 +53,7 @@ class TestRefreshSectorFlowCache(unittest.TestCase):
     """_refresh_sector_flow_cache 缓存刷新（operations 版）。"""
 
     def _call(self):
-        from src.python.cache.operations import _refresh_sector_flow_cache
+        from src.python.cache._cache_refresh import _refresh_sector_flow_cache
 
         return _refresh_sector_flow_cache()
 
@@ -208,7 +208,7 @@ class TestRefreshIndustryCache(unittest.TestCase):
     """_refresh_industry_cache 行业分类刷新（operations 版）。"""
 
     def _call(self, holdings):
-        from src.python.cache.operations import _refresh_industry_cache
+        from src.python.cache._cache_refresh import _refresh_industry_cache
 
         return _refresh_industry_cache(holdings)
 
@@ -248,7 +248,7 @@ class TestRefreshDividendCache(unittest.TestCase):
     """_refresh_dividend_cache 分红刷新（operations 版）。"""
 
     def _call(self, holdings):
-        from src.python.cache.operations import _refresh_dividend_cache
+        from src.python.cache._cache_refresh import _refresh_dividend_cache
 
         return _refresh_dividend_cache(holdings)
 
@@ -288,7 +288,7 @@ class TestRefreshOneFundCache(unittest.TestCase):
     @patch("src.python.fetcher.fund.fetch_fund_rankings")
     def test_all_ok(self, mock_rank, mock_hold, mock_bm):
         """全部数据获取成功。"""
-        from src.python.cache.operations import _refresh_one_fund_cache
+        from src.python.cache._cache_refresh import _refresh_one_fund_cache
 
         mock_rank.return_value = {"rank": 1}
         mock_hold.return_value = {"holdings": [{"name": "茅台", "code": "600519"}]}
@@ -306,7 +306,7 @@ class TestRefreshOneFundCache(unittest.TestCase):
     @patch("src.python.fetcher.fund.fetch_fund_rankings", return_value=None)
     def test_all_fail(self, mock_rank, mock_hold, mock_bm):
         """全部数据获取失败。"""
-        from src.python.cache.operations import _refresh_one_fund_cache
+        from src.python.cache._cache_refresh import _refresh_one_fund_cache
 
         result = _refresh_one_fund_cache(self._make_fund())
         self.assertIs(result[3], False)  # perf_ok
@@ -318,7 +318,7 @@ class TestRefreshOneFundCache(unittest.TestCase):
     @patch("src.python.fetcher.fund.fetch_fund_rankings", side_effect=Exception("API err"))
     def test_rankings_raises(self, mock_rank, mock_hold, mock_bm):
         """排名 API 抛出异常时向上传播（函数未捕获该异常）。"""
-        from src.python.cache.operations import _refresh_one_fund_cache
+        from src.python.cache._cache_refresh import _refresh_one_fund_cache
 
         with self.assertRaisesRegex(Exception, "API err"):
             _refresh_one_fund_cache(self._make_fund())
@@ -329,11 +329,11 @@ class TestRefreshNewsCache(unittest.TestCase):
     """_refresh_news_cache 新闻缓存刷新（operations 版）。"""
 
     def _call(self, holdings):
-        from src.python.cache.operations import _refresh_news_cache
+        from src.python.cache._cache_refresh import _refresh_news_cache
 
         return _refresh_news_cache(holdings)
 
-    @patch("src.python.cache.operations._get_news_top_count")
+    @patch("src.python.cache._cache_refresh._get_news_top_count")
     @patch("src.python.report.news_correlation._expand_industry_keywords")
     @patch("src.python.fetcher.news.build_holding_keywords")
     @patch("src.python.fetcher.news.aggregate_news")
@@ -378,7 +378,7 @@ class TestRefreshNewsCache(unittest.TestCase):
         mock_build.assert_not_called()
         mock_agg.assert_not_called()
 
-    @patch("src.python.cache.operations._get_news_top_count")
+    @patch("src.python.cache._cache_refresh._get_news_top_count")
     @patch("src.python.report.news_correlation._expand_industry_keywords")
     @patch("src.python.fetcher.news.build_holding_keywords")
     @patch("src.python.fetcher.news.aggregate_news")
@@ -405,7 +405,7 @@ class TestRefreshFundManagerCache(unittest.TestCase):
         return f
 
     def _call(self, funds):
-        from src.python.cache.operations import _refresh_fund_manager_cache
+        from src.python.cache._cache_refresh import _refresh_fund_manager_cache
 
         return _refresh_fund_manager_cache(funds)
 
@@ -438,7 +438,7 @@ class TestRefreshExtendedCache(unittest.TestCase):
         return Holding("证券", name, code, 100, 10.0)
 
     def _call(self, holdings):
-        from src.python.cache.operations import _refresh_extended_cache
+        from src.python.cache._cache_refresh import _refresh_extended_cache
 
         return _refresh_extended_cache(holdings)
 
@@ -484,7 +484,7 @@ class TestRefreshExtendedCaches(unittest.TestCase):
     @patch("src.python.cache._cache_refresh._refresh_news_cache", return_value=3)
     def test_all_refreshed(self, mock_news, mock_mgr, mock_ext):
         """有持仓且有基金 → 新闻/基金经理/风格扩展全部执行并写入结果。"""
-        from src.python.cache.operations import _refresh_extended_caches
+        from src.python.cache._cache_refresh import _refresh_extended_caches
 
         result = self._make_result()
         _refresh_extended_caches(["h1"], ["f1"], result, self._make_reporter())
@@ -500,7 +500,7 @@ class TestRefreshExtendedCaches(unittest.TestCase):
     @patch("src.python.cache._cache_refresh._refresh_news_cache", return_value=3)
     def test_no_funds_skips_manager(self, mock_news, mock_mgr, mock_ext):
         """无基金 → 跳过基金经理刷新，其余照常执行。"""
-        from src.python.cache.operations import _refresh_extended_caches
+        from src.python.cache._cache_refresh import _refresh_extended_caches
 
         result = self._make_result()
         _refresh_extended_caches(["h1"], [], result, self._make_reporter())
@@ -514,7 +514,7 @@ class TestRefreshExtendedCaches(unittest.TestCase):
     @patch("src.python.cache._cache_refresh._refresh_news_cache", return_value=3)
     def test_exception_recorded(self, mock_news, mock_mgr, mock_ext):
         """单个任务异常 → 记录 errors，其余任务正常写入。"""
-        from src.python.cache.operations import _refresh_extended_caches
+        from src.python.cache._cache_refresh import _refresh_extended_caches
 
         result = self._make_result()
         _refresh_extended_caches(["h1"], ["f1"], result, self._make_reporter())

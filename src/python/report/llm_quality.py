@@ -35,7 +35,7 @@ import logging
 from dataclasses import dataclass
 
 from src.python.core.registry import get_llm_module_name
-from src.python.llm.api_base import TRUNCATION_MARKER
+from src.python.llm._api_responses import TRUNCATION_MARKER
 from src.python.llm.fallback import is_placeholder_content
 from src.python.report.llm_content import _strip_html
 

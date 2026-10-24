@@ -8,15 +8,9 @@
 from __future__ import annotations
 import datetime
 import pytest
-from src.python.analysis.rebalance import (
-    _categorize_holdings,
-    _calc_category_weights,
-    _REBALANCE_PROFILES,
-    _load_silence_state,
-    _save_silence_state,
-    classify_holding,
-    resolve_rebalance_config,
-)
+from src.python.analysis.rebalance import _REBALANCE_PROFILES, classify_holding, resolve_rebalance_config
+from src.python.analysis._silence import _load_silence_state, _save_silence_state
+from src.python.analysis._rebalance_deviation import _categorize_holdings, _calc_category_weights
 from src.python.analysis.simple_rebalance import compute_simple_rebalance_signals
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_analysis]

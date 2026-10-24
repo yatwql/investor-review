@@ -6,11 +6,7 @@
 
 from __future__ import annotations
 import pytest
-from src.python.cli import (
-    _apply_cli_experiments,
-    _apply_cli_switches,
-    _build_parser,
-)
+from src.python.cli.cli import _apply_cli_experiments, _apply_cli_switches, _build_parser
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_cli]
 

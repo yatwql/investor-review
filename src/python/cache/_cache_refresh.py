@@ -83,7 +83,7 @@ def _refresh_sector_flow_cache() -> tuple[str, int]:
     return ("sector_flow", len(data) if data else 0)
 
 
-def _sector_flow_hint() -> str:
+def sector_flow_hint() -> str:
     """根据最近一次行业资金流向失败类型返回提示文案。"""
     from src.python.fetcher.akshare import get_sector_fund_flow  # noqa: F401  # 保持 fetcher 层活跃引用
     from src.python.providers.akshare_extras import _SECTOR_FLOW_FAILURE
@@ -140,7 +140,7 @@ def _refresh_common_caches(
                 if sf_ok:
                     reporter.ok(f"行业资金流向 ({sf_ok} 个行业)")
                 else:
-                    reporter.warn(f"行业资金流向 {_sector_flow_hint()}")
+                    reporter.warn(f"行业资金流向 {sector_flow_hint()}")
             elif tag == "industry":
                 ind_ok = fut.result()
                 if ind_ok:

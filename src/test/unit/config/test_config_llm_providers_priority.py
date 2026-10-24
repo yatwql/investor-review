@@ -16,7 +16,7 @@ from unittest.mock import patch
 
 import pytest
 
-from src.python.config._comments import _strip_json_comments
+from src.python.core.json_comments import strip_json_comments as _strip_json_comments
 from src.python.config.edit_ops import ConfigEditError, apply_config_edit
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_config]

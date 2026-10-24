@@ -12,8 +12,6 @@ if TYPE_CHECKING:
     import httpx
 
 from src.python.llm.api_base import (
-    _extract_content,
-    _check_claude_truncation,
     _get_last_llm_failure,
     _get_last_server_error,
     _get_last_thinking_exhausted,
@@ -21,6 +19,7 @@ from src.python.llm.api_base import (
     clear_last_thinking_exhausted,
     call_llm_with_retry,
 )
+from src.python.llm._api_responses import _extract_content, _check_claude_truncation
 from src.python.llm.api import (
     _DEFAULT_CLAUDE_MODEL,
     configure_extended_thinking,

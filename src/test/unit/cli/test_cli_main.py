@@ -5,12 +5,8 @@ import subprocess
 import sys
 import pytest
 from unittest.mock import patch
-from src.python.cli import (
-    _EXIT_SEVERE,
-    _EXIT_SUCCESS,
-    main,
-    run_cli,
-)
+from src.python.cli import main, run_cli
+from src.python.cli.cli import _EXIT_SEVERE, _EXIT_SUCCESS
 from src.python.core.constants import PROJECT_ROOT
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_cli]

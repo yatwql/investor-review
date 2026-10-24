@@ -22,6 +22,7 @@ from unittest.mock import MagicMock, patch
 from openpyxl import Workbook
 
 from src.python.core.models import Holding
+from src.python.report import _holdings_detail_blocks as hdb
 from src.python.report import holdings_detail_sheet as hds
 import pytest
 
@@ -56,7 +57,7 @@ class TestDetailToRowValues(unittest.TestCase):
             source="腾讯财经",
             source_api="tencent",
         )
-        vals = hds._detail_to_row_values(d)
+        vals = hdb._detail_to_row_values(d)
         self.assertEqual(len(vals), 15)
         self.assertEqual(vals[0], "证券账户")
         self.assertEqual(vals[1], "电池ETF")
@@ -77,7 +78,7 @@ class TestDetailToRowValues(unittest.TestCase):
     def test_default_row(self):
         """默认 DetailRow → 空字符串/0 值列表。"""
         d = hds.DetailRow()
-        vals = hds._detail_to_row_values(d)
+        vals = hdb._detail_to_row_values(d)
         self.assertEqual(len(vals), 15)
         self.assertEqual(vals[0], "")
         self.assertEqual(vals[3], 0.0)
@@ -95,29 +96,29 @@ class TestNumFormats(unittest.TestCase):
 
     def test_length(self):
         """返回 15 个格式。"""
-        fmts = hds._mv_num_formats()
+        fmts = hdb._mv_num_formats()
         self.assertEqual(len(fmts), 15)
 
     def test_price_format(self):
         """第 4 个为价格格式。"""
-        fmts = hds._mv_num_formats()
+        fmts = hdb._mv_num_formats()
         self.assertEqual(fmts[3], "#,##0.0000")
 
     def test_money_format(self):
         """市值/成本/盈亏列金额格式。"""
-        fmts = hds._mv_num_formats()
+        fmts = hdb._mv_num_formats()
         self.assertEqual(fmts[9], "#,##0.00")
         self.assertEqual(fmts[10], "#,##0.00")
         self.assertEqual(fmts[11], "#,##0.00")
 
     def test_percent_format(self):
         """收益率列百分比格式。"""
-        fmts = hds._mv_num_formats()
+        fmts = hdb._mv_num_formats()
         self.assertEqual(fmts[12], "0.00%")
 
     def test_shares_format(self):
         """份额列格式。"""
-        fmts = hds._mv_num_formats()
+        fmts = hdb._mv_num_formats()
         self.assertEqual(fmts[8], "#,##0.00")
 
 
@@ -140,7 +141,7 @@ class TestApplyProfitColors(unittest.TestCase):
         mock_pf.side_effect = lambda v: f"font_for_{v}"
         ws = MagicMock()
         ws.cell.side_effect = lambda row, column: self._make_cell(500.0)
-        hds._apply_profit_colors(ws, 3, 3, profit_col=12, rate_col=13, today_col=14)
+        hdb._apply_profit_colors(ws, 3, 3, profit_col=12, rate_col=13, today_col=14)
         mock_pf.assert_any_call(500.0)
         self.assertEqual(mock_pf.call_count, 3)
 
@@ -150,7 +151,7 @@ class TestApplyProfitColors(unittest.TestCase):
         mock_pf.side_effect = lambda v: f"font_for_{v}"
         ws = MagicMock()
         ws.cell.side_effect = lambda row, column: self._make_cell(-300.0)
-        hds._apply_profit_colors(ws, 3, 3, profit_col=12, rate_col=13, today_col=14)
+        hdb._apply_profit_colors(ws, 3, 3, profit_col=12, rate_col=13, today_col=14)
         mock_pf.assert_any_call(-300.0)
 
     @patch("src.python.report._holdings_detail_blocks.profit_font")
@@ -159,7 +160,7 @@ class TestApplyProfitColors(unittest.TestCase):
         mock_pf.side_effect = lambda v: f"font_for_{v}"
         ws = MagicMock()
         ws.cell.side_effect = lambda row, column: self._make_cell(0.0)
-        hds._apply_profit_colors(ws, 3, 3, profit_col=12, rate_col=13, today_col=14)
+        hdb._apply_profit_colors(ws, 3, 3, profit_col=12, rate_col=13, today_col=14)
         mock_pf.assert_any_call(0.0)
 
     @patch("src.python.report._holdings_detail_blocks.profit_font")
@@ -174,7 +175,7 @@ class TestApplyProfitColors(unittest.TestCase):
             return cell
 
         ws.cell.side_effect = cell_side_effect
-        hds._apply_profit_colors(ws, 3, 4, profit_col=12, rate_col=13, today_col=14)
+        hdb._apply_profit_colors(ws, 3, 4, profit_col=12, rate_col=13, today_col=14)
         mock_pf.assert_not_called()
 
     @patch("src.python.report._holdings_detail_blocks.profit_font")
@@ -182,7 +183,7 @@ class TestApplyProfitColors(unittest.TestCase):
         """None 值 → 不设置字体。"""
         ws = MagicMock()
         ws.cell.return_value = self._make_cell(None)
-        hds._apply_profit_colors(ws, 3, 4, profit_col=12, rate_col=13, today_col=14)
+        hdb._apply_profit_colors(ws, 3, 4, profit_col=12, rate_col=13, today_col=14)
         mock_pf.assert_not_called()
 
     @patch("src.python.report._holdings_detail_blocks.profit_font")
@@ -191,7 +192,7 @@ class TestApplyProfitColors(unittest.TestCase):
         mock_pf.side_effect = lambda v: f"font_for_{v}"
         ws = MagicMock()
         ws.cell.side_effect = lambda row, column: self._make_cell(0.05)
-        hds._apply_profit_colors(ws, 3, 3, profit_col=12, rate_col=13, today_col=14)
+        hdb._apply_profit_colors(ws, 3, 3, profit_col=12, rate_col=13, today_col=14)
         mock_pf.assert_called_with(0.05)
 
     @patch("src.python.report._holdings_detail_blocks.profit_font")
@@ -199,7 +200,7 @@ class TestApplyProfitColors(unittest.TestCase):
         """收益率列非 float（如字符串含 %）→ 不设置字体。"""
         ws = MagicMock()
         ws.cell.side_effect = lambda row, column: self._make_cell("5.00%")
-        hds._apply_profit_colors(ws, 3, 4, profit_col=12, rate_col=13, today_col=14)
+        hdb._apply_profit_colors(ws, 3, 4, profit_col=12, rate_col=13, today_col=14)
         mock_pf.assert_not_called()
 
     @patch("src.python.report._holdings_detail_blocks.profit_font")
@@ -215,7 +216,7 @@ class TestApplyProfitColors(unittest.TestCase):
             return cell
 
         ws.cell.side_effect = cell_side_effect
-        hds._apply_profit_colors(ws, 3, 5, profit_col=12, rate_col=13, today_col=14)
+        hdb._apply_profit_colors(ws, 3, 5, profit_col=12, rate_col=13, today_col=14)
         self.assertEqual(mock_pf.call_count, 9)
 
     def test_cell_font_assigned(self):
@@ -226,7 +227,7 @@ class TestApplyProfitColors(unittest.TestCase):
         ws.cell.return_value = cell
         with patch("src.python.report._holdings_detail_blocks.profit_font") as mock_pf:
             mock_pf.return_value = "red_font"
-            hds._apply_profit_colors(ws, 3, 3, profit_col=12, rate_col=13, today_col=14)
+            hdb._apply_profit_colors(ws, 3, 3, profit_col=12, rate_col=13, today_col=14)
         self.assertEqual(cell.font, "red_font")
 
     def test_int_rate_value(self):
@@ -236,14 +237,14 @@ class TestApplyProfitColors(unittest.TestCase):
             # 仅 rate 列设为 int；profit/today 列 None（非数字）
             values = {13: 5}
             ws.cell.side_effect = lambda row, column: self._make_cell(values.get(column))
-            hds._apply_profit_colors(ws, 3, 3, profit_col=12, rate_col=13, today_col=14)
+            hdb._apply_profit_colors(ws, 3, 3, profit_col=12, rate_col=13, today_col=14)
             mock_pf.assert_not_called()
 
     def test_empty_range_no_crash(self):
         """空范围（start > end）→ 不报错，且不访问任何单元格。"""
         with patch("src.python.report._holdings_detail_blocks.profit_font"):
             ws = MagicMock()
-            hds._apply_profit_colors(ws, 100, 50, profit_col=12, rate_col=13, today_col=14)
+            hdb._apply_profit_colors(ws, 100, 50, profit_col=12, rate_col=13, today_col=14)
             ws.cell.assert_not_called()
 
 
@@ -286,7 +287,7 @@ class TestApplyPriceTypeColors(unittest.TestCase):
 
     def test_scenario(self):
         """所有场景批量验证。"""
-        hds._apply_price_type_colors(self.ws, 2, 2 + len(self.test_cases) - 1)
+        hdb._apply_price_type_colors(self.ws, 2, 2 + len(self.test_cases) - 1)
         errors = []
         for i, (name, price_type, expected_blue) in enumerate(self.test_cases):
             row = i + 2
@@ -303,14 +304,14 @@ class TestApplyPriceTypeColors(unittest.TestCase):
     def test_empty_range_no_error(self):
         """空范围（start > end）→ 不报错，且不访问任何单元格。"""
         ws = MagicMock()
-        hds._apply_price_type_colors(ws, 100, 50)
+        hdb._apply_price_type_colors(ws, 100, 50)
         ws.cell.assert_not_called()
 
     def test_single_row(self):
         """单行范围。"""
         self.ws.cell(row=3, column=2, value="测试")
         self.ws.cell(row=3, column=7, value="场内收盘价(T)")
-        hds._apply_price_type_colors(self.ws, 3, 3)
+        hdb._apply_price_type_colors(self.ws, 3, 3)
         self._assert_blue(3)
 
     def test_none_price_type_col(self):
@@ -318,7 +319,7 @@ class TestApplyPriceTypeColors(unittest.TestCase):
         row = 2 + len(self.test_cases)
         self.ws.cell(row=row, column=2, value="测试")
         self.ws.cell(row=row, column=7, value=None)
-        hds._apply_price_type_colors(self.ws, row, row)
+        hdb._apply_price_type_colors(self.ws, row, row)
         self.assertIsNone(self.ws.cell(row=row, column=7).value)
 
 
@@ -377,7 +378,7 @@ class TestWriteAccountGroupings(unittest.TestCase):
         mock_fmts.return_value = [""] * 15
         mock_to_row.side_effect = lambda d: [d.account, d.name]
         ws = MagicMock()
-        _, _, _, _, final_row = hds._write_account_groupings(ws, [self.detail_a], 3)
+        _, _, _, _, final_row = hdb._write_account_groupings(ws, [self.detail_a], 3)
         mock_sub.assert_called_once()
         self.assertGreater(final_row, 3)
 
@@ -390,7 +391,7 @@ class TestWriteAccountGroupings(unittest.TestCase):
         mock_fmts.return_value = [""] * 15
         mock_to_row.side_effect = lambda d: [d.account, d.name]
         ws = MagicMock()
-        _, _, _, _, final_row = hds._write_account_groupings(ws, [self.detail_a, self.detail_b], 3)
+        _, _, _, _, final_row = hdb._write_account_groupings(ws, [self.detail_a, self.detail_b], 3)
         self.assertEqual(mock_sub.call_count, 2)
 
     @patch("src.python.report._holdings_detail_blocks.write_data_row")
@@ -401,7 +402,7 @@ class TestWriteAccountGroupings(unittest.TestCase):
         """空明细 → 无小计行。"""
         mock_fmts.return_value = [""] * 15
         ws = MagicMock()
-        _, _, _, _, final_row = hds._write_account_groupings(ws, [], 3)
+        _, _, _, _, final_row = hdb._write_account_groupings(ws, [], 3)
         mock_sub.assert_not_called()
         self.assertEqual(final_row, 3)
 
@@ -426,7 +427,7 @@ class TestWriteAccountGroupings(unittest.TestCase):
         )
         ws = MagicMock()
         try:
-            hds._write_account_groupings(ws, [detail_special], 3)
+            hdb._write_account_groupings(ws, [detail_special], 3)
         except Exception as e:
             self.fail(f"特殊字符账户名崩溃: {e}")
 
@@ -450,7 +451,7 @@ class TestWriteAccountGroupings(unittest.TestCase):
             today_profit=0.0,
         )
         ws = MagicMock()
-        hds._write_account_groupings(ws, [detail_cost_zero], 3)
+        hdb._write_account_groupings(ws, [detail_cost_zero], 3)
         sub_call = mock_sub.call_args
         if sub_call:
             subtotal_vals = sub_call[0][3]
@@ -557,7 +558,7 @@ class TestWriteMarketValueBlock(unittest.TestCase):
         mock_hdr.return_value = 3
         ws = MagicMock()
         ws.title = "fixture_title"
-        result = hds._write_market_value_block(ws, self.details, None, 1)
+        result = hdb._write_market_value_block(ws, self.details, None, 1)
         grand_mv, grand_cost, grand_profit, grand_today, details, _next_row = result
         self.assertAlmostEqual(grand_mv, 1300.0)
         self.assertAlmostEqual(grand_cost, 500.0)
@@ -606,7 +607,7 @@ class TestWriteMarketValueBlock(unittest.TestCase):
         mock_tl.return_value = 2
         mock_hdr.return_value = 3
         ws = MagicMock()
-        result = hds._write_market_value_block(ws, [], None, 1)
+        result = hdb._write_market_value_block(ws, [], None, 1)
         grand_mv, grand_cost, grand_profit, grand_today, details, _next_row = result
         self.assertAlmostEqual(grand_mv, 0.0)
         self.assertAlmostEqual(grand_cost, 0.0)
@@ -683,7 +684,7 @@ class TestWriteMarketValueBlock(unittest.TestCase):
         mock_tl.return_value = 2
         mock_hdr.return_value = 3
         ws = MagicMock()
-        result = hds._write_market_value_block(ws, [detail_a, detail_c, detail_b], None, 1)
+        result = hdb._write_market_value_block(ws, [detail_a, detail_c, detail_b], None, 1)
         self.assertEqual(mock_sub.call_count, 2)
         grand_mv = result[0]
         self.assertAlmostEqual(grand_mv, 3800.0)
@@ -720,7 +721,7 @@ class TestWriteMarketValueBlock(unittest.TestCase):
         mock_hdr.return_value = 3
         ws = MagicMock()
         ws.cell.return_value = MagicMock()
-        hds._write_market_value_block(
+        hdb._write_market_value_block(
             ws,
             [
                 hds.DetailRow(

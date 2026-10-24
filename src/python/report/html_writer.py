@@ -37,14 +37,12 @@ from src.python.report.html_writer_display import (  # noqa: F401
 )
 from src.python.report.html_writer_nav import (  # noqa: F401
     _LLM_SUPPORTED_SECTIONS,
-    _NAV_GROUP_LABELS,
     _build_section_nav_groups,
     _compute_section_visibility,
 )
 
 from src.python.report.html_writer_status import (  # noqa: F401 — 兼容既有导入面
     _self_review_block,
-    _safe_build_data_status,
     _time_strings,
     _build_data_status_sections,
     _build_history_data_status,

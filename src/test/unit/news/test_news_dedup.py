@@ -145,7 +145,7 @@ class TestDedupGenericTokenVeto(unittest.TestCase):
 
     def test_generic_tokens_vetoed_but_indicator_acronyms_allowed(self) -> None:
         """否决词全部无效；非否决短缩写（cpi 等）与混合集保留。"""
-        from src.python.providers.news_dedup import has_proper_noun_token, proper_noun_tokens
+        from src.python.providers.news_dedup_rules import has_proper_noun_token, proper_noun_tokens
 
         for word in ("ai", "etf", "cm", "gb", "ce", "pcb", "gdp"):
             self.assertEqual(proper_noun_tokens({word, "芯片"}), [], f"泛词应被否决: {word}")
@@ -157,7 +157,7 @@ class TestDedupGenericTokenVeto(unittest.TestCase):
         """真实锚点样本：黄金 ETF 两报——否决表置空即合并，现行否决表则保留两条。"""
         from src.python.providers import news_dedup_rules
         from src.python.providers.news_aggregator import _dedup_by_title
-        from src.python.providers.news_dedup import (
+        from src.python.providers.news_dedup_rules import (
             _CROSS_BG2_RATIO,
             _extract_entity_bigrams,
             _normalize_title,
@@ -184,7 +184,7 @@ class TestDedupGenericTokenVeto(unittest.TestCase):
         """校准实证样本：沙特与欧元区 GDP 数据发布——共享 gdp 不作专名证据，不合并。"""
         from src.python.providers import news_dedup_rules
         from src.python.providers.news_aggregator import _dedup_by_title
-        from src.python.providers.news_dedup import (
+        from src.python.providers.news_dedup_rules import (
             _CROSS_BG2_RATIO,
             _extract_entity_bigrams,
             _normalize_title,
@@ -209,7 +209,7 @@ class TestDedupGenericTokenVeto(unittest.TestCase):
     def test_rules_fingerprint_covers_generic_token_table(self) -> None:
         """泛词表入规则指纹：词表变动必须换锚点时代（分代依据不遗漏）。"""
         from src.python.providers import news_dedup_rules
-        from src.python.providers.news_dedup import _rules_fingerprint
+        from src.python.providers.news_dedup_rules import _rules_fingerprint
 
         base = _rules_fingerprint()
         with patch.object(
@@ -233,7 +233,7 @@ class TestDedupEventGroupGate(unittest.TestCase):
     def test_same_subject_different_event_not_merged(self) -> None:
         """校准实证：中际旭创暗盘跌 vs 资金抢筹——共享 3 bigram 但事件不一致，不合并。"""
         from src.python.providers.news_aggregator import _dedup_by_title
-        from src.python.providers.news_dedup import (
+        from src.python.providers.news_dedup_rules import (
             _CROSS_BIGRAM_MIN,
             _CROSS_CANDIDATE_RATIO,
             _extract_entity_bigrams,
@@ -257,11 +257,7 @@ class TestDedupEventGroupGate(unittest.TestCase):
     def test_same_event_group_interchange_keeps_merge(self) -> None:
         """同组词互认：立案调查留置 vs 被查——同事件类型，仍合并（不误杀）。"""
         from src.python.providers.news_aggregator import _dedup_by_title
-        from src.python.providers.news_dedup import (
-            _CROSS_BIGRAM_MIN,
-            _CROSS_CANDIDATE_RATIO,
-            _pair_similarity,
-        )
+        from src.python.providers.news_dedup_rules import _CROSS_BIGRAM_MIN, _CROSS_CANDIDATE_RATIO, _pair_similarity
 
         items = [
             self._make_item("华锦股份通报副总经理闫增辉被立案调查并留置", "证券时报"),
@@ -284,7 +280,7 @@ class TestDedupEventGroupGate(unittest.TestCase):
 
     def test_event_group_membership(self) -> None:
         """组内互认（立案/被查）；跨组不互认（袭击 vs 回购）；职务词不触发。"""
-        from src.python.providers.news_dedup import share_event_group
+        from src.python.providers.news_dedup_rules import share_event_group
 
         self.assertTrue(share_event_group("华锦副总被立案调查", "某公司副总被查"))
         self.assertTrue(share_event_group("兆易创新提议回购", "又一批公司集体回购公告"))
@@ -306,7 +302,7 @@ class TestDedupNumericTokenNotProperNoun(unittest.TestCase):
 
     def test_token_predicate_requires_letter(self) -> None:
         """专名证据判定：纯数字不算，含字母/虚拟专名才算。"""
-        from src.python.providers.news_dedup import _TOKEN_LIKE
+        from src.python.providers.news_dedup_rules import _TOKEN_LIKE
 
         for digits in ("100", "4400", "35", "20"):
             self.assertIsNone(_TOKEN_LIKE.match(digits), f"纯数字不应算专名证据: {digits}")
@@ -348,7 +344,7 @@ class TestDedupOppositeDirectionExtended(unittest.TestCase):
 
     def test_extended_pairs_detected(self) -> None:
         """新方向对能被检出（一正一反分属两标题）。"""
-        from src.python.providers.news_dedup import _has_opposite_direction
+        from src.python.providers.news_dedup_rules import _has_opposite_direction
 
         cases = [
             ("金价站稳4000美元上方", "现货黄金跌破4000美元关口"),
@@ -383,7 +379,8 @@ class TestAnchorRulesVersion(unittest.TestCase):
 
     def test_anchor_record_carries_rules_version(self) -> None:
         """每条锚点带当前规则指纹。"""
-        from src.python.providers.news_dedup import ANCHOR_RULES_FIELD, _ANCHOR_RULES_VERSION, _make_anchor
+        from src.python.providers.news_dedup import _make_anchor
+        from src.python.providers.news_dedup_rules import ANCHOR_RULES_FIELD, _ANCHOR_RULES_VERSION
 
         anchor = _make_anchor(
             {"title": "A", "_source": "x", "ctime": ""},
@@ -450,7 +447,9 @@ class TestPairSimilarityMatchesLinkDecision(unittest.TestCase):
         )
         records = [r for r in news_dedup._ANCHOR_RECORDS if r.get("rule") in ("cross_skip", "cross_merge")]
         self.assertTrue(records, "候选区样本应记录锚点")
-        ratio, overlap = news_dedup._pair_similarity(title_a, title_b)
+        from src.python.providers.news_dedup_rules import _pair_similarity
+
+        ratio, overlap = _pair_similarity(title_a, title_b)
         self.assertEqual(records[0]["ratio"], round(ratio, 3))
         self.assertEqual(records[0]["bigram_overlap"], overlap)
 

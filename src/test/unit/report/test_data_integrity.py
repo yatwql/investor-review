@@ -354,43 +354,43 @@ class TestFundPerformanceReasonableness(unittest.TestCase):
 
     def test_format_return_positive(self):
         """正收益率 → 小数（5.23 → 0.0523，浮点近似）。"""
-        from src.python.report.fund_performance import _format_return
+        from src.python.report._fund_rating import _format_return
 
         self.assertAlmostEqual(_format_return(5.23), 0.0523)
 
     def test_format_return_negative(self):
         """负收益率 → 负小数（-3.14 → -0.0314，浮点近似）。"""
-        from src.python.report.fund_performance import _format_return
+        from src.python.report._fund_rating import _format_return
 
         self.assertAlmostEqual(_format_return(-3.14), -0.0314)
 
     def test_format_return_zero(self):
         """零收益率 → 0.0。"""
-        from src.python.report.fund_performance import _format_return
+        from src.python.report._fund_rating import _format_return
 
         self.assertEqual(_format_return(0.0), 0.0)
 
     def test_format_return_none(self):
         """None → "--"。"""
-        from src.python.report.fund_performance import _format_return
+        from src.python.report._fund_rating import _format_return
 
         self.assertEqual(_format_return(None), "--")
 
     def test_format_return_dash(self):
         """'--' → '--'。"""
-        from src.python.report.fund_performance import _format_return
+        from src.python.report._fund_rating import _format_return
 
         self.assertEqual(_format_return("--"), "--")
 
     def test_format_rank_normal(self):
         """有效排名 → "排名/总数"（无数据日期时不附注）。"""
-        from src.python.report.fund_performance import _format_rank
+        from src.python.report._fund_rating import _format_rank
 
         self.assertEqual(_format_rank({"rank": 5, "total": 100}), "5/100")
 
     def test_format_rank_appends_data_date(self):
         """回归（实测 040046 的 253 快照）：带数据日期时附注期次，使排名可追溯。"""
-        from src.python.report.fund_performance import _format_rank
+        from src.python.report._fund_rating import _format_rank
 
         self.assertEqual(
             _format_rank({"rank": 231, "total": 362, "data_date": "2026-09-28"}),
@@ -399,7 +399,7 @@ class TestFundPerformanceReasonableness(unittest.TestCase):
 
     def test_format_rank_ignores_unparsable_date(self):
         """日期缺失/格式异常 → 只出排名（不得出现空括号或半截日期）。"""
-        from src.python.report.fund_performance import _format_rank
+        from src.python.report._fund_rating import _format_rank
 
         self.assertEqual(_format_rank({"rank": 5, "total": 100, "data_date": "--"}), "5/100")
         self.assertEqual(_format_rank({"rank": 5, "total": 100, "data_date": ""}), "5/100")
@@ -407,19 +407,19 @@ class TestFundPerformanceReasonableness(unittest.TestCase):
 
     def test_format_rank_none(self):
         """None 排名 → "--"。"""
-        from src.python.report.fund_performance import _format_rank
+        from src.python.report._fund_rating import _format_rank
 
         self.assertEqual(_format_rank({"rank": None, "total": 100}), "--")
 
     def test_format_rank_missing_key(self):
         """缺失键 → "--"。"""
-        from src.python.report.fund_performance import _format_rank
+        from src.python.report._fund_rating import _format_rank
 
         self.assertEqual(_format_rank({}), "--")
 
     def test_rating_adjustment_excess_high(self):
         """超额收益 ≥ 80 → 评级上调一级。"""
-        from src.python.report.fund_performance import _adjust_rating_with_benchmark
+        from src.python.report._fund_rating import _adjust_rating_with_benchmark
 
         perf_eval = {
             "categories": ["超额收益"],
@@ -430,7 +430,7 @@ class TestFundPerformanceReasonableness(unittest.TestCase):
 
     def test_rating_adjustment_excess_low(self):
         """超额收益 < 40 → 评级下调一级。"""
-        from src.python.report.fund_performance import _adjust_rating_with_benchmark
+        from src.python.report._fund_rating import _adjust_rating_with_benchmark
 
         perf_eval = {
             "categories": ["超额收益"],
@@ -441,7 +441,7 @@ class TestFundPerformanceReasonableness(unittest.TestCase):
 
     def test_rating_adjustment_no_change(self):
         """超额收益在 40-80 之间 → 评级不变。"""
-        from src.python.report.fund_performance import _adjust_rating_with_benchmark
+        from src.python.report._fund_rating import _adjust_rating_with_benchmark
 
         perf_eval = {
             "categories": ["超额收益"],
@@ -452,7 +452,7 @@ class TestFundPerformanceReasonableness(unittest.TestCase):
 
     def test_rating_adjustment_excellent_downgraded(self):
         """ "优秀" + 超额 < 40 → 下调为"良好"。"""
-        from src.python.report.fund_performance import _adjust_rating_with_benchmark
+        from src.python.report._fund_rating import _adjust_rating_with_benchmark
 
         perf_eval = {
             "categories": ["超额收益"],
@@ -463,7 +463,7 @@ class TestFundPerformanceReasonableness(unittest.TestCase):
 
     def test_rating_adjustment_poor_upgraded(self):
         """ "较差" + 超额 ≥ 80 → 上调为"偏差"。"""
-        from src.python.report.fund_performance import _adjust_rating_with_benchmark
+        from src.python.report._fund_rating import _adjust_rating_with_benchmark
 
         perf_eval = {
             "categories": ["超额收益"],

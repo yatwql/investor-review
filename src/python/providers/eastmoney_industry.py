@@ -22,7 +22,7 @@ from typing import Any
 import httpx
 
 
-from src.python.core.code_utils import get_push2_secid
+from src.python.core.code_symbols import get_push2_secid
 from src.python.core.http_client import make_http_client
 from src.python.core.num_utils import safe_num
 from src.python.core.retry import (

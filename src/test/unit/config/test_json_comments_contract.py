@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from src.python.config._comments import strip_json_comments
+from src.python.core.json_comments import strip_json_comments
 from src.python.core.json_comments import loads
 
 pytestmark = pytest.mark.unit_config

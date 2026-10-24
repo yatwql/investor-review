@@ -41,7 +41,7 @@ class TestProcessSuccessResponseEdge(unittest.TestCase):
 
     def test_empty_content_returns_with_usage(self) -> None:
         """空内容 → ("", usage)。"""
-        from src.python.llm.api_base import _process_success_response
+        from src.python.llm._api_responses import _process_success_response
 
         data = {"usage": {"input_tokens": 10}}
         content, usage = _process_success_response(
@@ -60,7 +60,7 @@ class TestProcessSuccessResponseEdge(unittest.TestCase):
 
     def test_extract_returns_none(self) -> None:
         """提取返回 None → (None, None)。"""
-        from src.python.llm.api_base import _process_success_response
+        from src.python.llm._api_responses import _process_success_response
 
         data = {"content": "test"}
         with patch("src.python.llm.api_base._cb_record_failure"):
@@ -80,10 +80,7 @@ class TestProcessSuccessResponseEdge(unittest.TestCase):
 
     def test_truncation_appends_warning(self) -> None:
         """截断检测 → 内容后追加警告。"""
-        from src.python.llm.api_base import (
-            TRUNCATION_MARKER,
-            _process_success_response,
-        )
+        from src.python.llm._api_responses import TRUNCATION_MARKER, _process_success_response
 
         data = {"content": "partial output", "usage": {"input_tokens": 10, "output_tokens": 5}}
         content, usage = _process_success_response(
@@ -102,7 +99,7 @@ class TestProcessSuccessResponseEdge(unittest.TestCase):
 
     def test_usage_missing_does_not_crash(self) -> None:
         """usage 缺失 → 不报错。"""
-        from src.python.llm.api_base import _process_success_response
+        from src.python.llm._api_responses import _process_success_response
 
         data = {"content": "no usage data"}
         try:
@@ -133,7 +130,7 @@ class TestExtractContentEdge(unittest.TestCase):
 
     def test_thinking_only_max_tokens_returns_none(self) -> None:
         """仅 thinking + stop_reason=max_tokens → None，记录预算耗尽日志（非"内容被过滤"）。"""
-        from src.python.llm.api_base import _extract_content
+        from src.python.llm._api_responses import _extract_content
 
         data = {
             "content": [{"type": "thinking", "thinking": "internal thoughts..."}],
@@ -149,7 +146,7 @@ class TestExtractContentEdge(unittest.TestCase):
 
     def test_thinking_only_end_turn_returns_none(self) -> None:
         """仅 thinking + stop_reason=end_turn → None，日志带响应结构诊断（非武断归因）。"""
-        from src.python.llm.api_base import _extract_content
+        from src.python.llm._api_responses import _extract_content
 
         data = {
             "content": [{"type": "thinking", "thinking": "internal thoughts..."}],
@@ -167,7 +164,7 @@ class TestExtractContentEdge(unittest.TestCase):
 
     def test_empty_content_list_logs_diagnostics(self) -> None:
         """content 空列表 + 无 stop_reason → None，日志含 block types / usage 诊断字段。"""
-        from src.python.llm.api_base import _extract_content
+        from src.python.llm._api_responses import _extract_content
 
         data = {
             "content": [],
@@ -183,7 +180,7 @@ class TestExtractContentEdge(unittest.TestCase):
 
     def test_thinking_plus_text_returns_text(self) -> None:
         """thinking + text 并存 → 正常返回 text（不回归）。"""
-        from src.python.llm.api_base import _extract_content
+        from src.python.llm._api_responses import _extract_content
 
         data = {
             "content": [

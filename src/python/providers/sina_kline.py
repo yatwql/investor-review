@@ -1,8 +1,7 @@
 """新浪财经 API — 历史 K 线数据。
 
-使用 sina 模块中的 make_http_client 和 is_index_code（lazy import），
-确保现有测试的 patch("src.python.providers.sina.make_http_client") 和
-patch("src.python.providers.sina.is_index_code") 继续生效。
+make_http_client 仍经 sina 模块延迟引用（便于测试替换 HTTP 客户端）；
+指数代码判定直接走 owner ``core.code_symbols.is_index_code``。
 
 Endpoint: money.finance.sina.com.cn/getKLineData
 """
@@ -15,11 +14,9 @@ from typing import Any
 
 import httpx
 
-from src.python.core.code_utils import (
-    get_exchange_prefix,
-    is_a_share_code,
-    is_exchange_fund_code,
-)
+from src.python.core.code_utils import is_a_share_code, is_exchange_fund_code
+from src.python.core.code_symbols import get_exchange_prefix
+from src.python.core.code_utils import is_index_code
 from src.python.core.num_utils import safe_num
 from src.python.providers._utils import looks_like_block_page
 
@@ -129,10 +126,10 @@ def fetch_index_kline(code: str, days: int = 30, start_from: str | None = None) 
         当前环境 `getKLineData` 端点对所有代码返回 404/空（备用链路暂不可用），
         保留此实现作为代码级备用；环境恢复后自动生效。
     """
-    # lazy import: 通过 sina 模块引用 is_index_code, 使现有测试 spy 生效
+    # lazy import：sina.make_http_client 仍由测试 patch 替换，不缓存函数引用
     from src.python.providers import sina as _sina_mod  # noqa: E402
 
-    if not _sina_mod.is_index_code(code):
+    if not is_index_code(code):
         logger.debug("Sina 跳过非指数代码: %s", code)
         return []
 

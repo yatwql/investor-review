@@ -21,7 +21,7 @@ from typing import Any
 
 import httpx
 
-from src.python.core.code_utils import get_exchange_prefix
+from src.python.core.code_symbols import get_exchange_prefix
 from src.python.core.http_client import make_http_client
 
 logger = logging.getLogger("invest")

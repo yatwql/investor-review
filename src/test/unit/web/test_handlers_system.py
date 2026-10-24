@@ -8,7 +8,8 @@ from src.python.config import _config_defaults
 from src.python.config._core import invalidate_config_cache
 from src.python.core.log_reader import LogEntry
 from src.python.web.app import create_app
-from src.python.web.handlers import _build_system_info, _health_cache
+from src.python.web.handlers import _build_system_info
+from src.python.web.handlers_health import _health_cache
 from src.python.web.runs import RunManager
 
 # 夹具按名注入（由测试签名消费），代码里无引用

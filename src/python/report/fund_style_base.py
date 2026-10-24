@@ -11,7 +11,7 @@ from typing import Any
 
 from src.python.cache import get as cache_get
 from src.python.cache import set as cache_set
-from src.python.core.code_utils import estimate_market_cap_by_prefix
+from src.python.core.code_symbols import estimate_market_cap_by_prefix
 
 logger = logging.getLogger("invest")
 

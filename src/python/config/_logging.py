@@ -11,7 +11,7 @@ import logging
 import os
 from typing import Any
 
-from src.python.config._comments import strip_json_comments
+from src.python.core.json_comments import strip_json_comments
 from src.python.core.atomic_write import write_text_atomic
 from src.python.core.constants import PROJECT_ROOT
 

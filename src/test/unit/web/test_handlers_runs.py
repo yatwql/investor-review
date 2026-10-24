@@ -6,6 +6,7 @@ import time
 from unittest.mock import patch
 import pytest
 from src.python.web.app import create_app
+from src.python.web import handlers_health
 from src.python.web.runs import RunManager
 
 from src.test.unit.web.test_handlers import (
@@ -77,14 +78,14 @@ class TestShortCacheConcurrency:
 
         with (
             patch("src.python.core.check_sources.run_health_checks", fake_probe),
-            patch.dict(h._health_cache, {"ts": time.time(), "data": [{"name": "cached"}]}),
+            patch.dict(handlers_health._health_cache, {"ts": time.time(), "data": [{"name": "cached"}]}),
         ):
             with weak_app.test_request_context("/api/health?fresh=1"):
                 rv = h._handle_health()
             assert len(probe_calls) == 1
             assert rv["data"] == [{"name": "x"}]
-            h._health_cache["ts"] = 0.0
-            h._health_cache["data"] = None
+            handlers_health._health_cache["ts"] = 0.0
+            handlers_health._health_cache["data"] = None
 
     def test_cache_writes_are_thread_safe(self, weak_app):
         """多线程并发写缓存 dict（盲写不崩、终态单一）。"""

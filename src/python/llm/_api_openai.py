@@ -11,10 +11,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import httpx
 
-from src.python.llm.api_base import (
-    _check_openai_truncation,
-    call_llm_with_retry,
-)
+from src.python.llm.api_base import call_llm_with_retry
+from src.python.llm._api_responses import _check_openai_truncation
 from src.python.llm.api import (
     _DEFAULT_OPENAI_MODEL,
 )

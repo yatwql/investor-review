@@ -30,7 +30,7 @@ import logging
 import threading
 from typing import Any
 
-from src.python.core.code_utils import to_exchange_symbol, to_fmp_symbol
+from src.python.core.code_symbols import to_exchange_symbol, to_fmp_symbol
 from src.python.core.datasource_credential import (
     DEFAULT_DATA_KEY_FILE,
     CredentialSpec,
@@ -344,7 +344,8 @@ def to_index_thscode(code: str) -> str:
     Returns:
         thscode；无法映射（非指数代码 / 美股指数）返回空串。
     """
-    from src.python.core.code_utils import get_index_exchange_prefix, is_index_code, is_us_index_code
+    from src.python.core.code_utils import is_index_code, is_us_index_code
+    from src.python.core.code_symbols import get_index_exchange_prefix
 
     raw = (code or "").strip().lower()
     if not raw or is_us_index_code(raw) or not is_index_code(raw):

@@ -409,7 +409,7 @@ TUI（Text User Interface）是系统**主要交互渠道**：桌面终端内的
 | `tui/tui_keys.py` | 键盘封装 | 跨平台（Windows msvcrt / Linux tty+termios+select），标准化键名 KEY_UP/DOWN/ENTER/CTRL_C |
 | `tui/handlers_report.py` | 报告生成外壳 | `_run_generate` 骨架、`_prompt_generate_confirm` 合并单屏一次确认（full：费用预估上屏 + 回车/`Y`/`N`/`q`/`h` 单问，默认侧 `Y`=用已有结果，`N`（同义 `f`）触发 `_select_force_modules` 模块多选，含日预算超限安全网）/`_prompt_history`（委托 resolve_fetch_history + 注入 y/N 询问，仅 both）、E/B/L 三命令 |
 | `tui/handlers_config.py` | 配置管理外壳 | 目录/文件名/输出目录/章节显隐/指数池/匿名化/章内内容开关/刷新等配置命令（面板本体按域拆分：`[C]`→`handlers_report_chapters.py`、`[S]`→`handlers_switch.py`，本文件只留菜单入口与共享写路径 `_apply_edit`） |
-| `tui/handlers_report_chapters.py` | `[C]` 章节显隐面板本体 | 四块章节 + 智囊团生成子项（条目与编号由注册表派生）：清单/编号/来源全部取自 `config/chapter_registry.py`；写路径统一经 `handlers_config._apply_edit`（config/llm_settings/features 四来源），子项闸门（父章节关闭时置灰并提示），`?编号`/`?键名` 富详情，LLM 章节行尾费用摘要；键名恒显（宽/中档行内列、窄档第二行） |
+| `tui/handlers_report_chapters.py` | `[C]` 章节显隐面板本体 | 四块章节 + 智囊团生成子项（条目与编号由注册表派生）：清单/编号/来源全部取自 `config/chapter_registry.py`；写路径统一经 `handlers_config._apply_edit`（config/llm_settings/features 四来源），子项闸门（父章节关闭时名称/键名置灰并提示，状态字仍红色「关」），`?编号`/`?键名` 富详情，LLM 章节行尾费用摘要；键名恒显（宽/中档行内列、窄档第二行） |
 | `tui/handlers_cache.py` | 缓存管理外壳 | 更新基础/行情类缓存、清理过期、查看统计 4 项命令 |
 | `tui/handlers_whatif.py` | 调仓模拟外壳 | What-if 对话流程，委托 `report/whatif_operations.py`（§4.13） |
 | `tui/handlers_log.py` | 诊断外壳 | `[V]` 运行日志查看（按级别筛选）/ `[H]` 数据源健康历史 / `[T]` 系统自检（doctor，§4.17）三命令 |
@@ -459,7 +459,7 @@ while True:
 | 配置管理 | `[G]` | 全局设置七项（`GLOBAL_SETTINGS_ITEMS` 单源登记：键 / 显示名 / 处理器 / 分组），数字为主入口、字母为别名：`H` 持仓信息目录、`F` 持仓信息文件名、`O` 报告输出目录、`L` LLM 设置（运行参数 1-6 + 第 7 项多链线路）、`I` 对比基准指数、`A` 持仓匿名化、`M` 配置入口地图（`_CONFIG_ENTRY_MAP` 只读索引）；目录三项直挂二级、无中间子面板（同一配置只有一条入口路径） |
 | 缓存管理 | `[1]`/`[2]` | 更新基础类缓存（基金业绩/持仓/经理/基准等，`clear_by_group("refresh")` 先清后取）/ 行情类缓存（价格/指数等，`clear_by_group("preload")` 先清后取） |
 | | `[3]` | 缓存管理**子菜单**（统计首屏 → 子菜单内 `3` 清理过期 / `B`/回车 返回；合并原清理与统计两个平级入口，`handlers_cache.py::_cmd_cache_management`） |
-| 配置管理 | `[C]` | 报告章节显隐（四块：顶层 / LLM / 默认关闭的整章 / 关联产物，另含智囊团生成子项；清单、编号、分块与来源由 `config/chapter_registry.py` 派生，四来源写入统一经共享编辑层 `config/edit_ops.py`；面板只切显隐、不增删章节不改顺序；子项在父章节关闭时置灰并提示原因；`?编号`/`?键名` 查看来源文件/写键/默认值，行尾 `*` 标漂移，LLM 行附近 7 日费用摘要） |
+| 配置管理 | `[C]` | 报告章节显隐（四块：顶层 / LLM / 默认关闭的整章 / 关联产物，另含智囊团生成子项；清单、编号、分块与来源由 `config/chapter_registry.py` 派生，四来源写入统一经共享编辑层 `config/edit_ops.py`；面板只切显隐、不增删章节不改顺序；子项在父章节关闭时名称/键名置灰并提示原因、状态字仍红色「关」；`?编号`/`?键名` 查看来源文件/写键/默认值，行尾 `*` 标漂移，LLM 行附近 7 日费用摘要） |
 | | `[I]` | 对比指数池管理（自定义基准指数） |
 | | `[A]` | 持仓匿名化模式（off / code_display / full_anonymous / summary 四种） |
 | | `[S]` | 报告章节内容呈现（`PANEL_GROUPS["[S]"]` 六组：持仓与交易 / 市场与估值 / 基金与风格 / 事件与摘要 / 呈现与交互 / 机制与质量；条目与编号由 `features.panel_option_numbers("[S]")` 按组序派生，增删开关自动重排；**不混排** LLM 章节/整章/关联产物——它们在 `[C]`；面板每行显式展示键名（淡色列），版面按终端宽度自适应三档（`tui/switch_panel.py`：<64 列去盒线、写路径切换后即时重绘且反馈带编号，只读查询/失败路径窄屏一行反馈（`p` 重绘）、所有提示按宽折行）；写路径三通道：`r 编号`/`ra`/`x`、裸键名、`键名=on|off`，实验项行首 ⚗ 标记） |

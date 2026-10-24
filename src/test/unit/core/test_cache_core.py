@@ -53,7 +53,7 @@ class CacheTestBase(unittest.TestCase):
 
     def _write_cache(self, key: str, data: object, ts: float) -> str:
         """向缓存目录写入指定内容的 JSON 文件，返回完整路径。"""
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         path = _cache_path(key)
         with open(path, "w", encoding="utf-8") as f:
@@ -64,7 +64,7 @@ class CacheTestBase(unittest.TestCase):
         """向缓存目录写入 gzip 压缩的 JSON 文件，返回完整路径。"""
         import gzip
 
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         path = _cache_path(key) + ".gz"
         with gzip.open(path, "wt", encoding="utf-8") as f:
@@ -82,7 +82,7 @@ class TestCachePath(unittest.TestCase):
 
     def test_normal_key(self):
         """普通键名 → 正确路径。"""
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         path = _cache_path("my_key")
         self.assertTrue(path.endswith("my_key_v3.json"))
@@ -91,7 +91,7 @@ class TestCachePath(unittest.TestCase):
 
     def test_key_with_slash_replaced(self):
         """含斜杠的键名 → 斜杠被替换。"""
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         path = _cache_path("a/b")
         self.assertIn("a_b", path)
@@ -99,14 +99,14 @@ class TestCachePath(unittest.TestCase):
 
     def test_key_with_backslash_replaced(self):
         """含反斜杠的键名 → 反斜杠被替换。"""
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         path = _cache_path("a\\b")
         self.assertIn("a_b", path)
 
     def test_key_with_dotdot_replaced(self):
         """含 .. 的键名 → .. 被替换。"""
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         path = _cache_path("..")
         self.assertNotIn("..", path.split(os.sep)[-1])
@@ -150,7 +150,7 @@ class TestCacheGet(CacheTestBase):
 
     def test_corrupted_json_deletes_file(self):
         """损坏的 JSON → 返回 None 且文件被自动删除。"""
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         path = _cache_path("corrupted")
         with open(path, "w", encoding="utf-8") as f:
@@ -164,7 +164,7 @@ class TestCacheGet(CacheTestBase):
 
     def test_corrupted_json_io_error_returns_none(self):
         """文件权限/IO 损坏 → 返回 None（文件可能残留在磁盘）。"""
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         path = _cache_path("ioerr")
         with open(path, "w", encoding="utf-8") as f:
@@ -179,7 +179,7 @@ class TestCacheGet(CacheTestBase):
     def test_missing_timestamp_treated_as_expired(self, mock_time):
         """缺少 _ts 字段 → 按过期处理返回 None。"""
         mock_time.return_value = 2000.0
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         path = _cache_path("no_ts")
         with open(path, "w", encoding="utf-8") as f:
@@ -194,7 +194,7 @@ class TestCacheGet(CacheTestBase):
     def test_missing_data_returns_none(self, mock_time):
         """缺少 _data 字段 → 返回 None。"""
         mock_time.return_value = 2000.0
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         path = _cache_path("no_data")
         with open(path, "w", encoding="utf-8") as f:
@@ -241,7 +241,7 @@ class TestCacheSet(CacheTestBase):
 
         set("newkey", "hello")
 
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         path = _cache_path("newkey")
         self.assertTrue(os.path.exists(path))
@@ -264,7 +264,7 @@ class TestCacheSet(CacheTestBase):
         set("nested", "data")
 
         self.assertTrue(os.path.exists(self.cache_dir))
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         path = _cache_path("nested")
         self.assertTrue(os.path.exists(path))
@@ -280,7 +280,7 @@ class TestCacheSet(CacheTestBase):
 
         set("overwrite", "new")
 
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         path = _cache_path("overwrite")
         with open(path, "r", encoding="utf-8") as f:
@@ -307,7 +307,7 @@ class TestCacheSet(CacheTestBase):
 
         set("listkey", data)
 
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         path = _cache_path("listkey")
         with open(path, "r", encoding="utf-8") as f:
@@ -326,7 +326,7 @@ class TestCacheSet(CacheTestBase):
 
         set("atomic", {"hello": "world"})
 
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         path = _cache_path("atomic")
 
@@ -343,7 +343,7 @@ class TestCacheSet(CacheTestBase):
 
             set("winlock", "data")
 
-            from src.python.cache import _cache_path
+            from src.python.cache._paths import _cache_path
 
             path = _cache_path("winlock")
             self.assertTrue(os.path.exists(path))
@@ -363,7 +363,7 @@ class TestCacheClear(CacheTestBase):
     def test_clear_existing_file(self):
         """清除存在的文件 → 文件被删除。"""
         self._write_cache("toclear", "x", ts=100.0)
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         path = _cache_path("toclear")
         self.assertTrue(os.path.exists(path))
@@ -375,7 +375,8 @@ class TestCacheClear(CacheTestBase):
 
     def test_clear_nonexistent_no_error(self):
         """清除不存在的文件 → 不抛异常，且不留下缓存文件。"""
-        from src.python.cache import _cache_path, clear
+        from src.python.cache import clear
+        from src.python.cache._paths import _cache_path
 
         clear("ghost")
         self.assertFalse(os.path.exists(_cache_path("ghost")))
@@ -415,7 +416,7 @@ class TestCacheClearByPrefix(CacheTestBase):
 
         count = clear_by_prefix("price_")
         self.assertEqual(count, 2)
-        from src.python.cache import _cache_path
+        from src.python.cache._paths import _cache_path
 
         self.assertFalse(os.path.exists(_cache_path("price_000001")))
         self.assertFalse(os.path.exists(_cache_path("price_000002")))

@@ -11,14 +11,8 @@ from unittest.mock import patch
 import pytest
 
 from src.python.llm import pricing as _pricing_mod
-from src.python.llm.api_base import (
-    _check_claude_truncation,
-    _check_openai_truncation,
-    _extract_content,
-    _is_default_thinking_on,
-    _is_effort_model,
-    _supports_extended_thinking,
-)
+from src.python.llm.api_base import _is_default_thinking_on, _is_effort_model, _supports_extended_thinking
+from src.python.llm._api_responses import _check_claude_truncation, _check_openai_truncation, _extract_content
 from src.python.core.constants import MODEL_PRICING
 from src.python.llm.fingerprint import compute_fingerprint, get_cache_ttl_llm
 from src.python.llm.markdown import markdown_to_html
