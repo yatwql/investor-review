@@ -74,8 +74,18 @@
 - `module_fingerprint.fingerprint_components()` / `diff_fingerprint_components()`：组件级哈希与变化定位，DEBUG 下自动记录「相对上次报告的组件变化」
 - 回归：`test_run_scope.py`、`test_fingerprint_components.py`
 
-**待观察**：`holding_change_block` / 快照差异仍会随上一轮报告写入而变（属真实输入变化），
-若同日后两次报告仍需复用 expert 结论，须先决定「快照写入时机」口径，不能靠指纹归一化绕过。
+**实测 diff（21:25 / 21:27 两次报告，DEBUG 组件审计）**：变化的组件只有
+`data_quality`、`history_risk`、`holding_change_block`、`pipeline_blocks`；
+`totals` / `holdings` / `penetration` / `categories` / `indices` / `competitive_context` /
+`metrics` / 各附录块 / `ledger_blocks` / `generation_params` 全部稳定。
+
+由此定位并修复一个事实性缺陷：`mark_data_used` 的成功事件沿用默认 `failure_type="unreachable"`，
+数据质量块又按 `failure_type` 计数 → 正常取数被写成「连接失败 N 次」。缓存命中数不同的两次报告
+成功事件数不同，质量文本因此不同（既是错误陈述，也是缓存抖动源）。现成功事件写 `failure_type="ok"`，
+质量块只统计 `success=False` 的事件。
+
+**待观察**：`holding_change_block` / `pipeline_blocks` 随上一轮报告写入的快照变化，`history_risk`
+的数值变化需用 DEBUG 的「history 风险信号」行确认是真实行情更新还是末位抖动。
 
 ## 6. 验收
 

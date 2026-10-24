@@ -166,7 +166,10 @@ def mark_data_used(source_key: str, tier: str = "T2") -> None:
     自身不抛异常（观测性副作用不得影响取数）。
     """
     try:
-        get_tracker().record(source_key, tier, success=True)
+        # 成功事件不带失败类型：下游数据质量块按 failure_type 统计「连接失败/数据为空」，
+        # 若成功事件沿用默认 "unreachable"，每次正常取数都会被计成一次连接失败
+        # （既与事实相反，也让「缓存命中数不同」的报告产出不同的质量文本）。
+        get_tracker().record(source_key, tier, success=True, failure_type="ok")
     except Exception:  # 观测失败不影响主链路
         logger.debug("[data_status] 取用标记失败（非关键）: %s", source_key, exc_info=True)
 

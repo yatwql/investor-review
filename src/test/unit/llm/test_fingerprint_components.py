@@ -85,3 +85,59 @@ class TestDiffFingerprintComponents:
         previous = {"totals": "1", "metrics": "2"}
         current = {"totals": "1", "metrics": "3"}
         assert diff_fingerprint_components(previous, current) == ["metrics"]
+
+
+class TestDataQualityBlockCountsOnlyFailures:
+    """数据质量块只统计失败事件：成功取用不得被写成「连接失败」。"""
+
+    def _events(self):
+        return [
+            {
+                "source_key": "price_600900",
+                "tier": "T2",
+                "success": True,
+                "failure_type": "ok",
+                "degraded": False,
+                "count": 0,
+            },
+            {
+                "source_key": "ff_sector_flow",
+                "tier": "T4",
+                "success": False,
+                "failure_type": "unreachable",
+                "degraded": False,
+                "count": 1,
+            },
+        ]
+
+    def test_success_events_are_not_counted_as_failures(self):
+        from src.python.llm.prompts_tables import _build_data_quality_detail_block
+
+        text = _build_data_quality_detail_block(self._events())
+        assert "连接失败: ff_sector_flow(1次)" in text
+        assert "price_600900" not in text
+
+    def test_block_stable_when_success_count_differs(self):
+        """同一份失败集合 + 不同数量的成功取用 → 质量文本一致（缓存键不受缓存冷热影响）。"""
+        from src.python.llm.prompts_tables import _build_data_quality_detail_block
+
+        base = self._events()
+        warm = base + [
+            {"source_key": f"industry_{i}", "tier": "T3", "success": True, "failure_type": "ok", "degraded": False}
+            for i in range(5)
+        ]
+        assert _build_data_quality_detail_block(base) == _build_data_quality_detail_block(warm)
+
+
+class TestMarkDataUsedFailureType:
+    """成功取用事件不得携带失败类型（否则下游按 failure_type 统计会误报）。"""
+
+    def test_success_event_uses_neutral_failure_type(self, tmp_path, monkeypatch):
+        from src.python.report import data_status as ds
+
+        tracker = ds.DegradationTracker(persist_path=str(tmp_path / "degradation.json"))
+        monkeypatch.setattr(ds, "get_tracker", lambda: tracker)
+        ds.mark_data_used("price_600900", "T2")
+        event = tracker.get_log()[-1]
+        assert event["success"] is True
+        assert event["failure_type"] == "ok"

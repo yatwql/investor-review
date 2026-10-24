@@ -108,6 +108,9 @@ def build_llm_fingerprint(
             if _key in history_data:
                 _risk_signals[_key] = history_data[_key]
 
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("[fingerprint] history 风险信号: %s", _risk_signals)
+
     return compute_fingerprint(
         total_mv,
         total_cost,
