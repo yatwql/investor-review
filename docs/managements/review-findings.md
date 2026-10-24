@@ -12,7 +12,7 @@
 
 | # | 问题 | 修复方向 |
 |---|------|----------|
-| **rf-257** | Web 模式浏览器真机验收余 **4 类人工项**：真实 basic/full 进度观察（3.1c / 3.2 / 3.3 / 3.4）、结果区按钮（4.5）、提交即禁用（5.3）、真实拖拽与 Tab / Enter 抽验（2.5 / 2.6）；其余项已由自动化用例覆盖 | 判定标准见 [`../archive/v0.15.x/web-browser-verification/web-browser-verification.md`](../archive/v0.15.x/web-browser-verification/web-browser-verification.md)（启动 / 收尾命令 + 复验清单）；复跑 `.venv/bin/python scripts/test-smoke-web.py` + `node docs/tmp/browser-verify/cdp-check.mjs`；收尾 kill 服务与浏览器、清空 `data/holdings/uploads/`；全部通过后移入已解决 |
+| **rf-257** | Web 模式浏览器真机验收余 **4 类人工项**：真实 basic/full 进度观察（3.1c / 3.2 / 3.3 / 3.4）、结果区按钮（4.5）、提交即禁用（5.3）、真实拖拽与 Tab / Enter 抽验（2.5 / 2.6） | 判定标准见 [`../archive/v0.15.x/web-browser-verification/web-browser-verification.md`](../archive/v0.15.x/web-browser-verification/web-browser-verification.md)（启动 / 收尾命令 + 复验清单）；复跑 `.venv/bin/python scripts/test-smoke-web.py` + `node docs/tmp/browser-verify/cdp-check.mjs`；收尾 kill 服务与浏览器、清空 `data/holdings/uploads/`；全部通过后移入已解决 |
 
 ### P2 — 中优先：价值明确、成本可控（下批排期）
 
@@ -32,13 +32,7 @@
 
 ## 已解决问题
 
-### 开发期已修复（0.15.2-dev）
-
-| # | 问题 | 修复 |
-|---|------|------|
-| **rf-865** | Excel「持仓集中度监控」恒为占位：loader 未注册 `compute_concentration`，HTML 有数据而 Excel 显示暂不可用 | `load_report_modules` 注册 `compute_concentration`（ImportError 降级）；新增 `compute_*` 装配键与集中度可调用回归 |
-| **rf-866** | `self_review` 默认 2048 截断；自动重试成功仍记 ERROR | 默认值 3072；首次截断降为 WARNING，仅放大后仍截断记 ERROR；新增「重试成功不产生 ERROR」回归 |
-| **rf-863** | 发布流程两处缺口：`check` 的 prepare 预演只验派生能成功、不验派生出的指针/索引目标路径（rf-862 到 prepare 写出后才被 doc-links 拦）；`prepare` 写盘后任一步失败会留下版本头/归档/changelog 半途状态，需手工 `git reset` | ① `apply_changelog_release` 在纯文本阶段校验指针行与归档索引行目标路径（并归一索引行目录）；② `cmd_prepare` 包装：预检干净树 + 写盘后失败自动 `git reset --hard HEAD` 回滚，未跟踪文件只提示不删除；回归 2 例（链接校验 / 失败回滚） |
+当前无已解决待归档项。
 
 ### 归档档案
 - [`archived_review-findings.0.15.x.md`](../archive/v0.15.x/archived_review-findings.0.15.x.md) — v0.15.x（2026-10-24 ~ 2026-10-24）
