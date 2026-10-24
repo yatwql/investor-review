@@ -23,10 +23,6 @@ _SNAPSHOT_TTL = 365 * 86400
 _SIZE_ORDER = ["大盘", "中盘", "小盘"]
 _STYLE_ORDER = ["价值", "混合", "成长"]
 
-# 所有有效风格组合
-_STYLE_BOXES: set[str] = {f"{size}{style}" for size in _SIZE_ORDER for style in _STYLE_ORDER}
-
-
 # ── 市值 / PE 阈值 ────────────────────────────────────────
 
 _MARKET_CAP_LARGE = 500e8  # 500 亿

@@ -45,7 +45,6 @@ RF_FILE = _MANAGEMENTS_DIR / "review-findings.md"
 PLAN_FILE = _MANAGEMENTS_DIR / "plan.md"
 PLAN_DOCS_DIR = REPO_ROOT / "docs" / "plan"
 FOLDERS_FILE = _MANAGEMENTS_DIR / "folders.md"
-TEST_COVERAGE_FILE = _MANAGEMENTS_DIR / "test-coverage.md"
 
 # P2 十守护清单（与 CLAUDE.md / testplan.md / developer-guide.md / ci.yml / pre-commit 钩子同源）
 GUARD_SCRIPTS = [
