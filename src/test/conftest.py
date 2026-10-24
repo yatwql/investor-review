@@ -422,6 +422,7 @@ def _auto_reset_anchor_state():
     from src.python.providers import news_dedup
 
     news_dedup._ANCHOR_RECORDS = []
+    news_dedup._ANCHOR_SIZE_WARNED = False
 
 
 @pytest.fixture(autouse=True)

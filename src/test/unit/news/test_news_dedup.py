@@ -1,8 +1,8 @@
-"""新闻去重实现分片：标题判定算法、锚点写入去重、追加写与保留期压缩。
+"""新闻去重实现分片：标题判定算法、锚点追加写、维护压缩。
 
 判定口径：
-- 同一 (source,title) 对跨轮不重复追加；不同对正常追加；写失败回滚 key；
-- 写侧为**追加**（不重写全文），压缩按「每 key 最新 + 保留期」双条件裁剪。
+- 写侧只追加（不读旧文件）；同批内按 (source,title) 去重，跨轮重复由校准工具按键去重；
+- 维护压缩按「每 key 最新 + 保留期」双条件裁剪（评估默认执行，报告路径不压缩）。
 """
 
 from __future__ import annotations
@@ -549,7 +549,7 @@ class TestAnchorAppendAndRetention(unittest.TestCase):
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
         with patch.object(news_dedup, "_ANCHOR_SIZE_WARN_BYTES", 1):
-            news_dedup._auto_compact_anchor_file(os.path.getsize(self._anchor_path))
+            news_dedup._compact_anchor_file(os.path.getsize(self._anchor_path))
 
         remaining = open(self._anchor_path, encoding="utf-8").read()
         self.assertIn("新新闻一", remaining)
@@ -577,6 +577,6 @@ class TestAnchorAppendAndRetention(unittest.TestCase):
             patch.object(news_dedup, "_ANCHOR_SIZE_WARN_BYTES", 1),
             patch.dict(os.environ, {news_dedup._ANCHOR_RETENTION_ENV: "0"}),
         ):
-            news_dedup._auto_compact_anchor_file(os.path.getsize(self._anchor_path))
+            news_dedup._compact_anchor_file(os.path.getsize(self._anchor_path))
 
         self.assertIn("很老的新闻甲", open(self._anchor_path, encoding="utf-8").read())

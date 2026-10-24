@@ -67,10 +67,10 @@ _ANCHOR_PATH = os.path.join(
 )
 #: 体积告警线：超过此值在加载时提醒压缩（flush 写全文、加载解析全文件，均是全文成本）
 _ANCHOR_SIZE_WARN_BYTES = 32 * 1024 * 1024
-#: 自动压缩阈值（与告警线同值）：超过即就地压缩，避免每轮报告都全量读写几十 MB。
+#: 压缩阈值（与告警线同值）：超过时记录一次维护提示；实际压缩只在评估/维护路径执行。
 #: 压缩保留每个标题对的**最新一条**（文件 append-only → 最后即最新），并先备份 .bak。
-#: 用 `INVEST_DEDUP_AUTO_COMPACT=0` 可关闭自动压缩（仅保留告警）。
-_ANCHOR_AUTO_COMPACT_ENV = "INVEST_DEDUP_AUTO_COMPACT"
+#: 用 `INVEST_DEDUP_AUTO_COMPACT=0` 可关闭维护压缩（仅保留告警）。
+_ANCHOR_COMPACT_ENV = "INVEST_DEDUP_AUTO_COMPACT"
 #: 采集开关（默认开启）：边界案例持续积累供诊断/阈值校准；显式设 0 可关闭。
 #: 采集与去重判定解耦——写侧只追加、不读 39MB 旧文件（跨轮重复由校准工具按键去重）。
 _ANCHOR_COLLECT_ENV = "INVEST_DEDUP_COLLECT_ANCHORS"
@@ -186,13 +186,13 @@ def _compact_verified(path: str) -> bool:
         return False
 
 
-def _auto_compact_anchor_file(size: int) -> bool:
+def _compact_anchor_file(size: int) -> bool:
     """锚点文件超阈值时就地压缩（每 key 最新 + 保留期），成功返回 True。
 
     由显式维护路径触发（``INVEST_DEDUP_MAINTENANCE=1`` 或校准工具 ``--compact``）；
     任何失败都只告警、不阻断报告（原文件保持不动）。
     """
-    if os.environ.get(_ANCHOR_AUTO_COMPACT_ENV, "1").strip() == "0":
+    if os.environ.get(_ANCHOR_COMPACT_ENV, "1").strip() == "0":
         return False
     if size <= _ANCHOR_SIZE_WARN_BYTES or not os.path.exists(_ANCHOR_PATH):
         return False
@@ -232,7 +232,7 @@ def _auto_compact_anchor_file(size: int) -> bool:
             except OSError:
                 keep_backup = True
         logger.info(
-            "[dedup] 锚点文件已自动压缩：%.1f MB → %.1f MB（每 key 最新 + 近 %d 天；%s）",
+            "[dedup] 锚点文件已压缩（维护）：%.1f MB → %.1f MB（每 key 最新 + 近 %d 天；%s）",
             size / 1e6,
             new_size / 1e6,
             _anchor_retention_days(),
@@ -242,12 +242,15 @@ def _auto_compact_anchor_file(size: int) -> bool:
         )
         return True
     except OSError as e:  # 压缩失败不阻断报告：保留原文件与告警
-        logger.warning("[dedup] 锚点文件自动压缩失败（继续使用原文件）：%s", e)
+        logger.warning("[dedup] 锚点文件维护压缩失败（继续使用原文件）：%s", e)
         return False
 
 
 #: 维护开关（默认关闭）：开启时超阈值执行就地压缩；关闭时只做体积告警（无读取）。
 _ANCHOR_MAINTENANCE_ENV = "INVEST_DEDUP_MAINTENANCE"
+
+
+_ANCHOR_SIZE_WARNED = False
 
 
 def _maybe_maintain_anchor_file() -> None:
@@ -263,9 +266,13 @@ def _maybe_maintain_anchor_file() -> None:
         return
     if size <= _ANCHOR_SIZE_WARN_BYTES:
         return
+    global _ANCHOR_SIZE_WARNED
     if os.environ.get(_ANCHOR_MAINTENANCE_ENV, "0").strip().lower() in ("1", "true", "yes"):
-        _auto_compact_anchor_file(size)
+        _compact_anchor_file(size)
         return
+    if _ANCHOR_SIZE_WARNED:
+        return
+    _ANCHOR_SIZE_WARNED = True
     logger.info(
         "[dedup] 锚点文件 %.1f MB（建议线 %.0f MB，累加采集不影响报告耗时）："
         "需要压缩时运行 `python scripts/eval-dedup-threshold.py --compact`"

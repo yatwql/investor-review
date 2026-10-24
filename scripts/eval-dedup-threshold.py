@@ -581,7 +581,11 @@ def main() -> None:
         print()
         print("=" * 60)
         print("[..] 评估后维护压缩（默认；--no-compact 可关闭）")
-        result = compact_anchors(args.file, dry_run=args.dry_run, retention_days=args.retention_days)
+        try:
+            result = compact_anchors(args.file, dry_run=args.dry_run, retention_days=args.retention_days)
+        except OSError as exc:
+            print(f"[!] 维护压缩失败（不影响本次评估结论）：{exc}")
+            return
         _print_compaction_result(result, args.file, dry_run=args.dry_run, before_bytes=before)
 
 

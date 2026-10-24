@@ -180,10 +180,9 @@ def llm_report_unavailable_reason() -> str | None:
     status = llm_status()
     if not status.get("configured"):
         return "LLM 未配置（llm_key.json / llm_providers.json）"
-    from src.python.config import get_llm_config
+    from src.python.config import is_enable_llm
 
-    enabled = (get_llm_config() or {}).get("enabled_llm") or {}
-    if enabled and not any(bool(value) for value in enabled.values()):
+    if not is_enable_llm():
         return "LLM 分析章节已全部关闭（TUI [C] / Web 配置面可开启）"
     return None
 

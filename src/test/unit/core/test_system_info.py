@@ -250,10 +250,7 @@ class TestLlmReportUnavailableReason:
         from src.python.core import system_info
 
         monkeypatch.setattr(system_info, "llm_status", lambda: {"configured": True})
-        monkeypatch.setattr(
-            "src.python.config.get_llm_config",
-            lambda: {"enabled_llm": {"global_macro": False, "expert_review": False}},
-        )
+        monkeypatch.setattr("src.python.config.is_enable_llm", lambda: False)
         reason = system_info.llm_report_unavailable_reason()
         assert reason is not None and "全部关闭" in reason
 
@@ -261,8 +258,5 @@ class TestLlmReportUnavailableReason:
         from src.python.core import system_info
 
         monkeypatch.setattr(system_info, "llm_status", lambda: {"configured": True})
-        monkeypatch.setattr(
-            "src.python.config.get_llm_config",
-            lambda: {"enabled_llm": {"global_macro": True, "expert_review": False}},
-        )
+        monkeypatch.setattr("src.python.config.is_enable_llm", lambda: True)
         assert system_info.llm_report_unavailable_reason() is None

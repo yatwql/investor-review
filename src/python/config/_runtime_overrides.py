@@ -28,16 +28,6 @@ def set_llm_enabled_override(module: str, enabled: bool) -> None:
     _llm_enabled_overrides[module] = bool(enabled)
 
 
-def config_overrides() -> dict[str, Any]:
-    """当前 config 覆写快照（副本）。"""
-    return dict(_config_overrides)
-
-
-def llm_enabled_overrides() -> dict[str, bool]:
-    """当前 LLM 章节覆写快照（副本）。"""
-    return dict(_llm_enabled_overrides)
-
-
 def reset_overrides() -> None:
     """清空全部覆写（测试隔离与进程内重入用）。"""
     _config_overrides.clear()
@@ -80,8 +70,6 @@ def apply_llm_enabled_overrides(llm: dict | None) -> dict | None:
 __all__ = [
     "apply_config_overrides",
     "apply_llm_enabled_overrides",
-    "config_overrides",
-    "llm_enabled_overrides",
     "reset_overrides",
     "set_config_override",
     "set_llm_enabled_override",

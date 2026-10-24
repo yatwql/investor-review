@@ -246,7 +246,7 @@ class TestProperNounVetoSource:
 
 
 class TestCompactRetention:
-    """`--compact` 的保留期与生产读侧自动压缩同口径（仅按键去重压不动，时间裁剪才是上限）。"""
+    """`--compact` 的保留期与生产维护压缩同口径（仅按键去重压不动，时间裁剪才是上限）。"""
 
     def test_expired_rows_dropped(self, tmp_path, tool):
         old = _record("旧新闻A", "旧新闻B", 0.40, 2, "cross_skip")
