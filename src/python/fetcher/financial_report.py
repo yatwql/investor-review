@@ -73,6 +73,12 @@ SECTION_SOURCE_FULLTEXT = "fulltext"
 #: 银行股半年报在 DataSinking 侧常缺「管理层讨论与分析」章节，回溯到上年年报即可取到。
 _REPORT_CANDIDATE_LIMIT = 3
 
+#: 判定「该标的本次确实没有可取正文」的负缓存（秒）。财报正文按季更新，
+#: 6h 内同一结论稳定；避免每份报告都把同一批 404/拒服务链路重走一遍
+#: （实测 5 只标的 × 章节阶 + 备源 ≈ 3s/份报告）。
+_REPORT_CONTENT_MISS_TTL = 6 * 3600
+_REPORT_CONTENT_MISS_PREFIX = "report_symbol_miss_"
+
 #: 未取到财报的原因文案（写入契约 failures，展示层原样透出）
 REASON_INDEX_EMPTY = "索引无该标的报告"
 REASON_SECTIONS_MISSING = "目标章节缺失（已试报告期：{periods}）"
@@ -533,6 +539,15 @@ def fetch_symbol_report_detailed(
     Returns:
         ``(记录 | None, 原因文案)``；成功时原因为空串。
     """
+    # 负缓存预检：本标的近期已确认「可取正文为空」，直接按同一原因降级。
+    # 只缓存**确定性**结论（章节阶 + 备源都试过仍无正文），索引为空/网络失败不入缓存
+    # ——后者可能只是瞬时不可用，缓存会让恢复期被无谓延长。
+    _miss_key = f"{_REPORT_CONTENT_MISS_PREFIX}{symbol}"
+    _cached_reason = cache_get(_miss_key, _REPORT_CONTENT_MISS_TTL)
+    if isinstance(_cached_reason, str) and _cached_reason:
+        logger.debug("[financial_report] %s 命中正文缺失负缓存（%s），跳过取数", symbol, _cached_reason)
+        return None, _cached_reason
+
     items = _fetch_index(symbol, doc_types)
     if not items:
         return None, REASON_INDEX_EMPTY
@@ -554,7 +569,9 @@ def fetch_symbol_report_detailed(
         if record is not None:
             return record, ""
 
-    return None, REASON_SECTIONS_MISSING.format(periods="、".join(tried) or "无")
+    _reason = REASON_SECTIONS_MISSING.format(periods="、".join(tried) or "无")
+    cache_set(_miss_key, _reason)
+    return None, _reason
 
 
 def fetch_symbol_report(
