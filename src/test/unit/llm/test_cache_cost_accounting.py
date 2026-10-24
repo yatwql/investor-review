@@ -24,11 +24,6 @@ from src.test.unit.llm._cache_helpers import (
 pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.unit_core]
 
 
-@pytest.fixture()
-def cache_dir(llm_cache_dir):
-    return llm_cache_dir
-
-
 def _run(inputs: dict, *, reply=None, patch_call: bool = True):
     from src.test.unit.llm._cache_helpers import LLM_REPLY_PAID
 
@@ -40,7 +35,7 @@ def _run(inputs: dict, *, reply=None, patch_call: bool = True):
 
 
 class TestSessionCostDelta:
-    def test_cache_hit_makes_no_api_call_and_records_zero_cost(self, cache_dir):
+    def test_cache_hit_makes_no_api_call_and_records_zero_cost(self, llm_cache_dir):
         """命中运行：不再发生 API 调用（=不花钱），且记账条目 token/费用为 0。
 
         用「provider 调用次数」而不是会话累计金额来判：skeleton 层 mock 下
@@ -67,7 +62,7 @@ class TestSessionCostDelta:
             assert not entry.get("cost")
         reset_session_usage()
 
-    def test_cache_miss_records_cost_per_module(self, cache_dir):
+    def test_cache_miss_records_cost_per_module(self, llm_cache_dir):
         """未命中运行：真实调用的费用/token 逐模块记账（可事后汇总）。
 
         注：`call_count`/`total_cost` 由 provider 层 `track_session_usage` 累计，
@@ -127,7 +122,7 @@ class TestCacheSavedCost:
         assert result["saved"] == 0.0
         assert result["unpriced"] == ["penetration_deep"]
 
-    def test_record_llm_context_writes_saved_cost(self, cache_dir):
+    def test_record_llm_context_writes_saved_cost(self, llm_cache_dir):
         """命中报告把估算节省写入 perf，并打一条 INFO（金钱可见）。"""
         from src.python.report._generation_shared import _record_llm_context
 

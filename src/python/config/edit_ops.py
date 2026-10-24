@@ -372,13 +372,6 @@ def _normalize_plain_value(key: str, value, entry: dict):
     return value
 
 
-def _apply_plain_value(key: str, value, entry: dict):
-    """标量/布尔/枚举编辑：先校验，再按 writer 分派写入。"""
-    normalized = _normalize_plain_value(key, value, entry)
-    _dispatch_write(entry, key, normalized)
-    return normalized
-
-
 def _apply_comparison_action(payload: dict, entry: dict) -> dict:
     """对比指数池增/删/重置（读合并 → set_config 整块写）。"""
     from src.python.config import get_config, set_config

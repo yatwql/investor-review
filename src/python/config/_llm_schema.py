@@ -18,17 +18,6 @@ from src.python.core.registry import get_llm_module_names
 
 SCHEMA_VERSION = 2
 
-#: 每个模块段可写的参数（除 ``enabled`` 与 ``debate`` 外）
-MODULE_PARAMS: tuple[str, ...] = (
-    "model",
-    "temperature",
-    "max_tokens",
-    "timeout",
-    "cache",
-    "output_brief",
-    "system_prompt",
-)
-
 #: 扁平键后缀 → v2 模块字段
 FLAT_MODULE_SUFFIXES: tuple[tuple[str, str], ...] = (
     ("system_prompt", "system_prompt"),

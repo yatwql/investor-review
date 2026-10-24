@@ -16,6 +16,7 @@ pytestmark = [pytest.mark.unit, pytest.mark.unit_ui]
 
 @pytest.fixture(autouse=True)
 def _fixed_width(monkeypatch):
+    """终端宽度固定为 120 列：标签宽度断言不随运行环境 $COLUMNS 漂移（autouse）。"""
     monkeypatch.setenv("COLUMNS", "120")
 
 

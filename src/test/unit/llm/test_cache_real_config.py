@@ -35,8 +35,6 @@ from src.test.unit.llm._cache_helpers import (
 # （该档选择面不含 `unit_llm`，只标 llm 域会让这批回归只在 P1 才执行）。
 pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.unit_core]
 
-_IDX_LOCAL = MODULE_INDEX
-
 _SETTINGS_V2 = {
     "schema_version": 2,
     "modules": {
@@ -262,7 +260,7 @@ class TestModuleEnableToggle:
         cfg.invalidate_llm_config_cache()
 
         flags = _run(make_inputs())
-        assert flags[_IDX_LOCAL["penetration_deep"]] is False
+        assert flags[MODULE_INDEX["penetration_deep"]] is False
         names = [p.name for p in _cache_files(llm_cache_dir)]
         assert not any("llm_penetration_deep" in n for n in names), names
 
