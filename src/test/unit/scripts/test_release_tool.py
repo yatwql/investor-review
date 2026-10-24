@@ -113,11 +113,34 @@ class TestChangelogRelease:
         out, _ = rel.apply_changelog_release(text, "0.12.6", "2026-10-08")
         assert "v0.12.5 ~ v0.12.6（2026-10-03 ~ 2026-10-08）" in out
 
+    def test_pointer_line_target_path_follows_minor(self, rel):
+        """指针行链接的**目标路径**也要随小版本换名（只改文本会继续指向旧档）。
+
+        回归：旧实现只重写反引号里的文件名，`(../archive/v0.12.x/...)` 保持原样——
+        文件存在故死链检查不报，人点进去看到的却是上一系列的归档。
+        场景：跨小版本发布（开发段与指针所在归档分属不同小版本，索引已含新小版本骨架行）。
+        """
+        text = (
+            "# 变更日志\n\n"
+            "> **最近发布 [0.12.5]**（2026-10-07）——已发布版本段随发布移入 "
+            "[`archived_changelog.0.12.x.md`](../archive/v0.12.x/archived_changelog.0.12.x.md)；"
+            "本文件只保留当前开发版本段与归档索引。\n\n---\n\n\n"
+            "## [0.13.1-dev] - 开发中（未发布）\n\n- **条目一**：内容甲\n\n"
+            "（本次发布内容见下方归档索引）\n\n## 归档\n\n"
+            "- [`archived_changelog.0.13.x.md`](../archive/v0.13.x/archived_changelog.0.13.x.md)"
+            " — v0.13.x（2026-10-08 ~ 2026-10-08）\n"
+            "- [`archived_changelog.0.12.x.md`](../archive/v0.12.x/archived_changelog.0.12.x.md)"
+            " — v0.12.1 ~ v0.12.5（2026-10-03 ~ 2026-10-07）\n"
+        )
+        out, _ = rel.apply_changelog_release(text, "0.13.1", "2026-10-09")
+        assert "[`archived_changelog.0.13.x.md`](../archive/v0.13.x/archived_changelog.0.13.x.md)" in out
+        assert "../archive/v0.12.x/" not in out.split("## 归档")[0]
+
     def test_archive_init_placeholder_line_is_accepted(self, rel):
         """`archive-init` 生成的占位索引行（`vX.Y.x`）必须能被首版发布直接改写。
 
         回归：占位行版本 token 是 `v0.12.x`（不是 `vX.Y.Z`），旧正则只接受
-        `v[\d.]+` → 新小版本首次发布在 prepare 阶段硬失败（「归档索引行改写失败」），
+        `v[digits]` 形态 → 新小版本首次发布在 prepare 阶段硬失败（「归档索引行改写失败」），
         必须先手工改索引行才能继续。占位形态语义 = 该 minor 还没有任何正式版本，
         本次发布即首版 → 归一为单版本 + 发布日。
         """

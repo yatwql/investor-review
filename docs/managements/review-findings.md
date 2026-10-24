@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.15.0-dev
-> **编号源**：`rf-next = 841`（新增问题取此编号，完成后更新为 +1；已用最大 rf-840，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> 文档版本：0.15.0
+> **编号源**：`rf-next = 842`（新增问题取此编号，完成后更新为 +1；已用最大 rf-841，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -12,7 +12,7 @@
 
 | # | 问题 | 修复方向 |
 |---|------|----------|
-| **rf-257** | Web 模式浏览器真机验收余 **4 类人工项**：真实 basic/full 进度观察（3.1c / 3.2 / 3.3 / 3.4）、结果区按钮（4.5）、提交即禁用（5.3）、真实拖拽与 Tab / Enter 抽验（2.5 / 2.6）；其余项已由自动化用例覆盖 | 判定标准见 [`docs/plan/web-browser-verification.md`](../plan/web-browser-verification.md)（启动 / 收尾命令 + 复验清单）；复跑 `.venv/bin/python scripts/test-smoke-web.py` + `node docs/tmp/browser-verify/cdp-check.mjs`；收尾 kill 服务与浏览器、清空 `data/holdings/uploads/`；全部通过后移入已解决 |
+| **rf-257** | Web 模式浏览器真机验收余 **4 类人工项**：真实 basic/full 进度观察（3.1c / 3.2 / 3.3 / 3.4）、结果区按钮（4.5）、提交即禁用（5.3）、真实拖拽与 Tab / Enter 抽验（2.5 / 2.6）；其余项已由自动化用例覆盖 | 判定标准见 [`../archive/v0.15.x/web-browser-verification/web-browser-verification.md`](../archive/v0.15.x/web-browser-verification/web-browser-verification.md)（启动 / 收尾命令 + 复验清单）；复跑 `.venv/bin/python scripts/test-smoke-web.py` + `node docs/tmp/browser-verify/cdp-check.mjs`；收尾 kill 服务与浏览器、清空 `data/holdings/uploads/`；全部通过后移入已解决 |
 
 ### P2 — 中优先：价值明确、成本可控（下批排期）
 
@@ -31,14 +31,9 @@
 
 ## 已解决问题
 
-### 开发期已修复（随发布归档）
+### 开发期已修复（0.15.0-dev）
 
-| # | 问题 | 修复 |
-|---|------|------|
-| **rf-840** | 发布工具链契约不一致：`archive-init` 写出的 changelog 归档索引行是占位形态 `— v0.15.x（date ~ date）`，`prepare` 的改写正则只接受 `vX.Y.Z` → 新小版本首次发布在 prepare 阶段硬失败 | 索引正则接受占位形态并按「首版」语义归一为 `v{release}（date）`；真实仓库契约测试对「刚 init 未发布」的空骨架放宽为「有则同形」；补回归用例 `test_archive_init_placeholder_line_is_accepted` |
-| **rf-838** | `test_json_comments` 的叶子模块边界用例用 `subprocess.run(text=True)` 未指定编码——`PYTHONWARNDEFAULTENCODING=1` 下直接告警为错误（`error::EncodingWarning`），`LC_ALL=C` 等非 UTF-8 locale 还会按 cp936/latin-1 解码子进程输出 | 显式 `encoding="utf-8"` + `errors="replace"`；由 portability 隐式编码严格档拦截，无需新增用例 |
-| **rf-836** | 事实校验自动修正器产出用户可见畸形数值（`持仓收益率+-9.0%`）：把占比当收益率改写、同句多代码主体归属错、替换不处理原符号 | 三条同修：① 数值前文语义（占比/最大持仓/份额/市值/仓位等局部窗口）→ 不参与收益率修正；② 主体归属改为括号 > 分句 > 全句三级作用域；③ 替换时剥除原符号（新值符号优先，正值且原文有 `+` 时延续）并按 `[+-]{2,}` 做畸形自检，命中整批不写回。回归用例 6 例（`TestNonReturnMetricAndSignNormalization`） |
-| **rf-837** | 计价模块懒加载标志与显式重载不一致：显式 `reload_pricing()` 后 `_PRICING_LOADED` 仍为 False，进程内首次计费会再读一次配置文件并覆盖已装载的定价（用例单独执行失败、整文件通过） | `reload_pricing()` 在 `finally` 置 `_PRICING_LOADED = True`；新增回归用例 `test_explicit_reload_is_not_undone_by_lazy_init`（断言显式重载后计费直接使用已装载的定价） |
+（本版开发期已修复项已随 v0.15.0 发布迁入归档档案）
 
 ### 归档档案
 - [`archived_review-findings.0.15.x.md`](../archive/v0.15.x/archived_review-findings.0.15.x.md) — v0.15.x（2026-10-24 ~ 2026-10-24）
