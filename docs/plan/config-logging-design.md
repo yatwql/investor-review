@@ -1,4 +1,4 @@
-# 日志配置独立成文件（`logger.json`）设计
+# 日志配置设计（`logger.json` 独立成文件）
 
 > **关联**：[`config-tui-design.md`](config-tui-design.md)（`[D]` 诊断入口）· [`config-web-design.md`](config-web-design.md)（运行与诊断域）；图样 `config-panel-mockup/tui.html`、`config-panel-mockup/index.html`。
 > **范围**：日志级别、输出目标、轮转参数、日志查看器默认筛选的**配置化**，以及对应的文件、加载顺序、校验、面板入口。

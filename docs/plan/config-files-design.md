@@ -1,6 +1,6 @@
 # 配置文件设计（八份文件边界 / 演进策略 / 写入约定）
 
-> **关联**：[`llm-settings-nesting-design.md`](llm-settings-nesting-design.md)（`llm_settings.json` 纵切结构）、[`logging-config-design.md`](logging-config-design.md)（`logger.json` 键表与加载优先级）、[`config-tui-design.md`](config-tui-design.md)/[`config-web-design.md`](config-web-design.md)（两个渠道的面板呈现）。
+> **关联**：[`config-llm-settings-design.md`](config-llm-settings-design.md)（`llm_settings.json` 纵切结构）、[`config-logging-design.md`](config-logging-design.md)（`logger.json` 键表与加载优先级）、[`config-tui-design.md`](config-tui-design.md)/[`config-web-design.md`](config-web-design.md)（两个渠道的面板呈现）。
 > **范围**：配置文件与密钥文件的职责边界、演进策略（不做旧版兼容）、`config.json` 的内部取舍、书写与读取约定（中文注释、统一剥离器、原子写）。**不含**面板层级与浏览器分区。
 > **单一事实位**：键位与默认值的真值在代码注册表（`config/_config_defaults.py`、`_llm_settings_defaults.py`、`_llm_pricing.py`、`_logging.py`、`_feature_registry.py`、`chapter_registry.py`），本文只记录边界与约定。
 
@@ -32,7 +32,7 @@
 |:--|:--|:--|:--|
 | `config.json` | 路径、章节开关、数据源、缓存、调度、通知、基准等 42 键 | 用户可编辑 | 保留，内部整理见 7.2 |
 | `features.json` | 功能开关的覆写层（22 项覆写 / 26 项注册） | 面板写入 | 保留：覆写层语义清晰，缺键即出厂默认 |
-| `llm_settings.json` | LLM 模块参数与运行约束 | 面板写入 | 保留；结构按 [`llm-settings-nesting-design.md`](llm-settings-nesting-design.md) 纵切 |
+| `llm_settings.json` | LLM 模块参数与运行约束 | 面板写入 | 保留；结构按 [`config-llm-settings-design.md`](config-llm-settings-design.md) 纵切 |
 | `llm_providers.json` | 多链线路清单与优先级 | 面板/CLI 写入 | 保留：多链是独立子系统 |
 | `llm_key.json` / `data_key.json` | 模型与数据源凭据（两份） | 仅手填 | 保留且**永不合并**：密钥与配置分离是安全边界（git 忽略） |
 | `logger.json` | 日志级别、轮转、查看器默认项 | 面板写入 | 新增：运行诊断域独立，且需环境变量临时覆盖 |
@@ -130,5 +130,5 @@
 ## 4. 关联设计
 
 - 面板入口与层级：[`config-tui-design.md`](config-tui-design.md)（终端）· [`config-web-design.md`](config-web-design.md)（浏览器）
-- 结构纵切：[`llm-settings-nesting-design.md`](llm-settings-nesting-design.md) · [`logging-config-design.md`](logging-config-design.md)
+- 结构纵切：[`config-llm-settings-design.md`](config-llm-settings-design.md) · [`config-logging-design.md`](config-logging-design.md)
 - 设计图样：[`config-panel-mockup/`](config-panel-mockup/)（TUI / Web / LLM 纵切三套）

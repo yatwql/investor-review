@@ -1,4 +1,4 @@
-# LLM 配置纵切设计（模块为第一层）
+# LLM 配置设计（`llm_settings.json` 纵切，模块为第一层）
 
 > **关联**：[`config-web-design.md`](config-web-design.md)（域与块编排）· [`config-tui-design.md`](config-tui-design.md)（终端面板层级）；设计图样 [`config-panel-mockup/llm-config.html`](config-panel-mockup/llm-config.html)。
 > **范围**：`data/config/llm_settings.json` 的组织方式（文件名与读取路径固定）、内存视图契约、校验、升级与文档口径。

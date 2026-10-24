@@ -267,7 +267,7 @@
    0. 返回诊断与排查
 ```
 
-- 日志设置写入独立的 `logger.json`（详见 [`logging-config-design.md`](logging-config-design.md)）；级别与轮转改动下次启动生效，查看器两项即时生效。
+- 日志设置写入独立的 `logger.json`（详见 [`config-logging-design.md`](config-logging-design.md)）；级别与轮转改动下次启动生效，查看器两项即时生效。
 - `[T]` 恒上屏：不设功能开关，也不受任何开关门控；本层**缺省项为 T**（回车直接进入系统自检）。
 - 返回语义：`0` 回主菜单；Esc 同义。
 
