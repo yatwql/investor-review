@@ -2352,6 +2352,13 @@ industry_{code}.json
 
 `_dedup_by_title()` 采用**多档模糊去重 + 实体 bigram + 英数 token 辅助判定 + 方向对立防护**策略，阈值基于 42560 条锚点分层采样校准（2026-08-17，误合并率从 ~70-80% 压降至可控区间）。判定口径（阈值常量 / 模板词表与掩码 / 标题归一化 / 实体 bigram 提取 / 相似度 / 方向词对 / 规则指纹）的唯一实现在 `providers/news_dedup_rules.py`；主流程模块 `providers/news_dedup.py` 只留锚点采集与比较循环，并原面 re-export 规则原语（既有引用面不变）。
 
+##### 比较成本（判定不变的两层省算）
+
+- **比较串缓存**：`_ratio_ready(norm)`（去通用日期 + 英文专名按长度分桶）与 `_char_multiset(norm)` 按标题字符串 `lru_cache`——同一「已保留项」在循环里被比较数十次，避免重复跑正则。
+- **字符多重集上界预筛**：`2·Σ_c min(count_a, count_b) / (len_a + len_b)` 是 `SequenceMatcher.ratio` 的严格上界；上界低于候选门槛时连 `SequenceMatcher` 都不构造（省去成对 `quick_ratio` 的对象开销）。上界只用于跳过**不可能命中**的对。
+
+等价性由 `src/test/unit/news/test_news_dedup_perf.py` 锁定：以「无预筛的完整 ratio 判定」为对照组跑同一语料，保留集合逐条一致。
+
 ##### 标题去重判定流程
 
 ```
@@ -2908,6 +2915,8 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
 **定位**：合并章「持仓基本面」（sheet key `fundamental_snapshot`，type `fundamental_snapshot`），一章两区块：**区块① 财务指标** + **区块② 持仓个股财报摘要**，两块由**同一功能开关 `stock_fundamentals`**（个股基本面，默认关）同开同关。单块渲染由各自数据契约判定（契约 dict 为 None 表示该块无数据 → 该块整体不渲染），章节整体可见性按注册表 `data_flag_any` 的 OR 口径（任一块就绪即显示；Excel 侧 `excel_generator` 同步登记两条契约 flag）。对持仓 + 穿透中的 **A 股个股**标的（场外基金排除，见 §4.19 取数链路），取目标章节的**原文摘要**，与「拿行情/拿持仓」互补：前者提供公司经营层叙事与财务口径原文。两区块均含「标的来源」列（直接持有 / 穿透：来源基金），穿透标的名称由穿透层回填中文名。
 
 **数据源与鉴权**：DataSinking（`https://api.datasink.ing`）提供全文本财报 Markdown，仅覆盖 A 股（SSE/SZSE/BSE，代码经 `core/code_symbols.py::to_fmp_symbol` 映射为 FMP 风格）。**需用户自备 API key**：凭据取通用密钥文件 `data/config/data_key.json` 的 `datasink` 节（`{"datasink": {"api_key": "..."}}`），环境变量 `DATASINK_API_KEY` 可覆盖；缺 key 时链路主动跳过并给申请指引，章节写占位。
+
+**探测负缓存**：带 `section` 的章节探测与 `/sections` 清单探测遇 404 时，把「该（文档, 章节）缺失」写入 12h 负缓存（`datasink_probe_miss_` 前缀，键 = path + section 的 md5）；同一天的后续报告直接走降级路径，不再逐章节重发请求（实测 7 只标的 × 多候选章节的 404 占十余秒）。文档级 404（`/documents/{id}`、`/documents` 列表）属真缺失，仍按 WARNING 处置且**不进**负缓存。
 
 **取数链路**：`fetcher/financial_report.py` 逐标的取元数据（`/documents`，**不带文种过滤**取最近若干篇后本地按「报告期 → 披露时间」倒序取最新一篇，故半年报/季报优先于年报；`doc_types` 非空时作白名单；**主源索引为空时切巨潮备源**，同一元数据形状）→ 取该文档**实际章节名清单**（`/documents/{id}/sections`，缓存于 `report_datasink_sections_`；备源无章节清单，直接落偏好名直取）→ 按 `sections` 偏好子串匹配出**精确章节名**逐个取正文（每节独立缓存、命中者按声明顺序以空行拼接；首选项 404 时继续试下一候选；清单不可得**或非空但残缺**时回退偏好名直取；**清单命中缓存但该批章节全部取不到正文时失效该文档的清单缓存**——清单是 14 天缓存，源侧若重新解析过文档，旧章节名会持续 404 且永不恢复，失效一次的代价只是下次多一次 `/sections` 探测）→ 仍无正文则**按报告期回溯上一份报告**（`_REPORT_CANDIDATE_LIMIT=3`，**年报/半年报优先于季报**：`_order_report_candidates` 稳定分组，季报无「管理层讨论与分析」只作最后兜底；标题含「公告」的信息披露条目跳过；命中即止，报告期/文种如实写入）→ **全文阶**：章节阶全失败时整篇下载后按偏好关键词定位片段（`_locate_from_fulltext`，跳过目录点线行/行内省略号，最多 `_FULLTEXT_FALLBACK_LIMIT=2` 篇，记录标 `section_source=fulltext`）→ 按 `datasink.max_chars` 截断为摘要。单篇正文经 `fetch_with_fallback` + 财报域适配器两槽（主：DataSinking；备：巨潮资讯网），复用缓存/熔断/降级；两源以 `source_hint` 做命名空间隔离（异源 doc_id 互不服务，备源候选进独立缓存键段），主源可用时备源零调用。关键词定位（目录行跳过）收敛于 `fetcher/report_locate.py`（全文兜底与备源切片共用同一规则）。**标的清单**由 `collect_a_share_targets(holdings, penetrated)` 生成：持仓场外基金经 `is_otc_fund_by_name` 剔除（`00` 重叠区），穿透标的带 `name`/`sources`（来源基金）用于展示层回填与来源标注；失败原因由 `fetch_symbol_report_detailed` 返回（索引无报告 / 目标章节缺失 + 已试报告期）。
 

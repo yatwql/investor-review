@@ -91,6 +91,55 @@ class TestSectorFundFlowFailureState(unittest.TestCase):
         assert ae._SECTOR_FLOW_FAILURE == ""
 
 
+class TestSectorFundFlowFailureMemo(unittest.TestCase):
+    """失败负缓存：同一次会话内的后续报告直接按不可用降级，不重复撞超时。"""
+
+    def setUp(self) -> None:
+        ae._memo_clear()
+        ae._SECTOR_FLOW_FAILURE = ""
+
+    def tearDown(self) -> None:
+        ae._memo_clear()
+        ae._SECTOR_FLOW_FAILURE = ""
+
+    def test_second_call_skips_fetch_after_connection_failure(self) -> None:
+        with (
+            patch.object(ae, "ak", MagicMock()),
+            patch.object(ae, "run_with_timeout", return_value=None) as fetch,
+            patch.object(ae, "cache_get", return_value=None),
+            patch.object(ae, "_compute_index_fingerprint", return_value="fp"),
+        ):
+            assert ae.get_sector_fund_flow() == []
+            assert fetch.call_count == 1
+            assert ae.get_sector_fund_flow() == []
+            assert fetch.call_count == 1, "失败负缓存期内不得再次取数"
+        assert ae.sector_flow_failure() == "connection"
+
+    def test_success_after_failure_memo_expiry_refetches(self) -> None:
+        """负缓存只影响「近期已失败」窗口：进程内清空后仍会重新尝试。"""
+        with (
+            patch.object(ae, "ak", MagicMock()),
+            patch.object(ae, "run_with_timeout", return_value=None),
+            patch.object(ae, "cache_get", return_value=None),
+            patch.object(ae, "_compute_index_fingerprint", return_value="fp"),
+        ):
+            ae.get_sector_fund_flow()
+        ae._memo_clear()
+        df = MagicMock()
+        df.empty = False
+        df.iterrows.return_value = []
+        with (
+            patch.object(ae, "ak", MagicMock()),
+            patch.object(ae, "run_with_timeout", return_value=df) as fetch,
+            patch.object(ae, "cache_get", return_value=None),
+            patch.object(ae, "_compute_index_fingerprint", return_value="fp"),
+            patch.object(ae, "cache_set"),
+        ):
+            assert ae.get_sector_fund_flow() == []
+            assert fetch.call_count == 1
+        assert ae.sector_flow_failure() == ""
+
+
 class TestCalcDividendSummary(unittest.TestCase):
     """测试分红数据汇总计算（akshare 聚合格式）。"""
 

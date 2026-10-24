@@ -40,6 +40,10 @@ _MEMO_TTL: dict[str, float] = {
     "profit_forecast": 300,  # 5 min — 指纹驱动，短期 memo 足够
     "sector_flow": 60,  # 1 min — 行业资金流向变化快
     "dividend": 600,  # 10 min — 分红数据会话内极少变化
+    # 行业资金流向**失败**的负缓存：源不可达/返回空时，同一天内多份报告不必
+    # 各自再撞一次超时（akshare 内部还会重试 2 次）；失败结论只用于「本会话内
+    # 先不再试」，状态仍经 ``sector_flow_failure()`` 如实上报，不会被当成成功。
+    "sector_flow_fail": 300,  # 5 min
 }
 
 
@@ -239,6 +243,8 @@ def get_sector_fund_flow() -> list[dict[str, Any]]:
         [{name, change_pct, main_net_inflow, main_net_inflow_pct, top_stock}, ...]
         失败时返回空列表
     """
+    global _SECTOR_FLOW_FAILURE
+
     # ── 内存缓存 ──
     _memo_key_str = _memo_key("sector_flow")
     _memo_val = _memo_get(_memo_key_str)
@@ -250,10 +256,17 @@ def get_sector_fund_flow() -> list[dict[str, Any]]:
     _key = _cache_key(_CACHE_FLOW_PREFIX, _fp)
     cached = cache_get(_key, _SECTOR_FLOW_TTL)
     if cached is not None:
-        global _SECTOR_FLOW_FAILURE
         _SECTOR_FLOW_FAILURE = ""
         _memo_set(_memo_key_str, cached)
         return cached
+
+    # ── 失败负缓存：同一天内的后续报告直接按「不可用」降级，不再撞超时 ──
+    _fail_key = _memo_key("sector_flow_fail")
+    _fail = _memo_get(_fail_key)
+    if isinstance(_fail, str) and _fail:
+        _SECTOR_FLOW_FAILURE = _fail
+        logger.debug("行业资金流向近期已失败（%s），本次跳过取数", _fail)
+        return []
 
     # ── 取数 ──
     if ak is None:
@@ -269,10 +282,12 @@ def get_sector_fund_flow() -> list[dict[str, Any]]:
     df = run_with_timeout(_fetch)
     if df is None:
         _SECTOR_FLOW_FAILURE = "connection"
+        _memo_set(_fail_key, "connection")
         logger.warning("行业资金流向获取失败")
         return []
     if df.empty:
         _SECTOR_FLOW_FAILURE = "empty"
+        _memo_set(_fail_key, "empty")
         logger.debug("行业资金流向: 结果为空")
         return []
     _SECTOR_FLOW_FAILURE = ""
