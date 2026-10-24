@@ -92,7 +92,7 @@
 
 **单一事实位**：本实验的「条件—数据—态」结构化口径见 [technical §6.9 实验项生命周期表](technical.md#69-实验项生命周期表)（决策跨期反思闭环行）；立项/转正/撤销时双方同步刷新。
 
-**落地设计（转正后启动）**：按 [`decision-reflection-shadow-design.md`](../plan/decision-reflection-shadow-design.md) 四迭代执行（决策条目结构化 → 到期结算器 → doctor 概览增强 → 报告内反思块），以 Vibe-Trading `shadow_account`（extract→backtest→render）为参照；判据未过前不实施。与持仓变动复盘构成「意图 vs 成交」对账（只读，不互写）。
+**落地设计（转正后启动）**：按 [`decision-reflection-design.md`](../plan/decision-reflection-design.md) 四迭代执行（决策条目结构化 → 到期结算器 → doctor 概览增强 → 报告内反思块），以 Vibe-Trading `shadow_account`（extract→backtest→render）为参照；判据未过前不实施。与持仓变动复盘构成「意图 vs 成交」对账（只读，不互写）。
 
 ### P4 — 实验候选（先决门槛未过，暂缓）
 

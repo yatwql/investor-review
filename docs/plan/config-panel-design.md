@@ -1,4 +1,4 @@
-# 配置面板分类与描述设计（TUI 与 Web 共用一套概念）
+# 配置面设计（TUI 面板 / Web 分区 / 配置文件边界）
 
 > **关联**：[`llm-settings-nesting-design.md`](llm-settings-nesting-design.md)（`llm_settings.json` 纵切）；设计图样 [`config-panel-mockup/index.html`](config-panel-mockup/index.html)（Web）、[`tui.html`](config-panel-mockup/tui.html)（TUI 全层级）。
 > **范围**：TUI 菜单与面板层级、Web 配置面编排、两渠道共用的概念与文案来源。**不含**新增可编辑项、改写入语义、改配置文件结构（见纵切设计）。

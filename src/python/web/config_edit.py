@@ -75,7 +75,7 @@ def _llm_providers_surface() -> dict:
     }
 
 
-#: 域 → 块（块顺序即渲染顺序）。域与块的划分见 `docs/plan/config-panel-taxonomy-design.md` §4.3；
+#: 域 → 块（块顺序即渲染顺序）。域与块的划分见 `docs/plan/config-panel-design.md` §4.3；
 #: `features.<组键>` 里只放六组「章内内容」开关——独立整章与关联产物走各自块（取自章节注册表）。
 _DOMAIN_BLOCKS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (

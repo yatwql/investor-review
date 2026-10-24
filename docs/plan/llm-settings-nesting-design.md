@@ -1,6 +1,6 @@
 # LLM 配置纵切设计（模块为第一层）
 
-> **关联**：[`config-panel-taxonomy-design.md`](config-panel-taxonomy-design.md)（面板四域编排）；设计图样 [`config-panel-mockup/llm-config.html`](config-panel-mockup/llm-config.html)。
+> **关联**：[`config-panel-design.md`](config-panel-design.md)（面板四域编排）；设计图样 [`config-panel-mockup/llm-config.html`](config-panel-mockup/llm-config.html)。
 > **范围**：`data/config/llm_settings.json` 的组织方式（文件名与读取路径固定）、内存视图契约、校验、升级与文档口径。
 > **不做**：改文件名/目录、改 `llm/` 包内任何调用、改写入语义（`.bak` 备份、范围校验、原子写）、改 `config.json` / `features.json` 的组织。
 

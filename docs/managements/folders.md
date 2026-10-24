@@ -18,10 +18,10 @@
 | 测试用例 | — | — | 11,673 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 13 | 6,292 | 含 README.md（211 行）；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 12 | 6,074 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 186 | 67,751 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 6 + archive md 160），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 13,290 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 186 | 67,563 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 6 + archive md 160），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 13,291 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 164 | 52,115 | 各版本 changelog/plan/review-findings 与设计文档归档（157 md 50,492 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
-| ├ plan/ | 中间设计文件 | 8 | ~2,254 | 在办设计文档（文档扁平存放、附属原型就近建子目录，完成后迁入对应版本的归档子目录）：两份 Jev 新闻关联判定文档（对照评测方案 + 类型化判定通道接入设计）+ 决策跨期反思闭环设计 + Web 浏览器验证方法 + 配置面板分类与描述设计 + LLM 配置纵切设计 + 日志配置独立成文件设计（共用同目录 `config-panel-mockup/` 设计图样与复跑脚本） |
+| ├ plan/ | 中间设计文件 | 8 | ~2,065 | 在办设计文档（文档扁平存放、附属原型就近建子目录，完成后迁入对应版本的归档子目录）：两份 Jev 新闻关联判定文档（对照评测方案 + 类型化判定通道接入设计）+ 决策跨期反思闭环设计 + Web 浏览器验证方法 + 配置面板分类与描述设计 + LLM 配置纵切设计 + 日志配置独立成文件设计（共用同目录 `config-panel-mockup/` 设计图样与复跑脚本） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
 
 ## 版本演进对照（最初版本 → 最新发布 → 当前开发版）
@@ -1680,7 +1680,7 @@ investor-review/
 │   │       ├── archived_plan.0.14.x.md      # 实现计划归档 v0.14.x（已完成任务节）
 │   │       └── archived_review-findings.0.14.x.md # 自审记录归档 v0.14.x（开发期已修复批次）
 │   └── plan/                          #   中间设计文件（在办设计文档，文档扁平存放、原型就近建子目录）；完成后迁入对应版本的归档子目录
-│       ├── config-panel-taxonomy-design.md # 配置面板分类与描述设计（域/组双轴、Web 面契约、TUI 编号派生）
+│       ├── config-panel-design.md # 配置面设计（域/组双轴、TUI 面板层级、Web 分区契约、配置文件边界）
 │       ├── config-panel-mockup/       #   设计图样原型目录（自包含 HTML，数据内联，浏览器直接打开）
 │       │   ├── index.html             #       Web 配置面板目标设计（按业务域编排；说明密度/标记/主题可切换）
 │       │   ├── web-current.html       #       Web 配置面板现有实现（按存储文件编排）
@@ -1695,11 +1695,11 @@ investor-review/
 │       │   └── web_mock_build.py      #       Web 配置面板图样生成器（真实注册表/配置取数，产出目标与现有两份 HTML）
 │       ├── llm-settings-nesting-design.md # LLM 配置纵切设计（模块为第一层/缺省继承/键位映射/升级回滚）
 │       ├── logging-config-design.md   # 日志配置独立成文件设计（logger.json 键表/加载优先级/面板入口/校验）
-│       ├── config-rework-iteration-plan.md # 配置体系重构迭代计划（逐轮验收标准/门禁/约束与契约映射）
+│       ├── config-rework-iteration-plan.md # 配置体系重构计划（轮次状态/待办轮次验收标准/门禁与契约映射）
 │       ├── jev-news-correlation-evaluation.md # 评测方案（三方对照：关键词/现网生成/Jev；预注册阈值与 go-no-go 判定）
 │       ├── jev-news-correlation-design.md # 新闻关联判定接入设计（独立于对话链的类型化判定通道/模板理由/降级矩阵）
-│       ├── decision-reflection-shadow-design.md # 决策跨期反思闭环设计（Vibe 影子账户参照/转正路径）
-│       └── web-browser-verification.md # Web 浏览器验证方法与实测结论（五类 37 断言实测 + 人工步骤 + 复验清单，人工验收验证载体）
+│       ├── decision-reflection-design.md # 决策跨期反思闭环设计（可结算决策账本/结算器/反思回灌与回滚）
+│       └── web-browser-verification.md # Web 浏览器验证方法（CDP 自动项 + 人工项步骤 + 复验清单）
 │
 ├── CLAUDE.md                         # AI 编程助手指引
 ├── README.md                         # 用户文档总入口（三渠道交互 + 核心亮点总览）

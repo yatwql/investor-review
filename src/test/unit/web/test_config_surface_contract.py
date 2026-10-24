@@ -1,6 +1,6 @@
 """Web 配置面契约测试（`domains` 编排契约的机检载体）。
 
-契约（见 `docs/plan/config-panel-taxonomy-design.md` §4.3/§4.4/§4.4.1）：
+契约（见 `docs/plan/config-panel-design.md` §4.3/§4.4/§4.4.1）：
 
   1. **块 ↔ 渲染器**：`domains[].blocks` 出现的每个块 id 在 `main.js` 都有渲染器，
      且 `main.js` 的渲染器表不列任何 `domains` 之外的块（双向相等，防漏接与僵尸渲染器）；
