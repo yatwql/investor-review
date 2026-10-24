@@ -289,7 +289,7 @@ class TestLlmChapterGate:
         from src.python.llm import skeleton
 
         monkeypatch.setattr(
-            "src.python.config._llm_settings.get_llm_config",
+            "src.python.config.get_llm_config",
             lambda: {"enabled_llm": {"expert_review": False}},
         )
         disabled = skeleton.get_llm_chapter_disabled()

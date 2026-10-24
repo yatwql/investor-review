@@ -310,12 +310,12 @@ class TestProviderEmptyReasonSurfaced(unittest.TestCase):
     """
 
     def tearDown(self):
-        from src.python.providers._utils import take_last_reason
+        from src.python.providers.utils import take_last_reason
 
         take_last_reason()  # 清残留，避免污染同进程其他用例
 
     def test_custom_reason_used_in_log_and_diag(self):
-        from src.python.providers._utils import set_last_reason
+        from src.python.providers.utils import set_last_reason
 
         def _fn(**_kw):
             set_last_reason("该文档无「管理层讨论与分析」章节")

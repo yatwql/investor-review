@@ -18,7 +18,7 @@ from typing import Any, ClassVar
 from src.python.fetcher.report_locate import locate_keyword_excerpt
 from src.python.fetcher.source_adapter import SourceAdapter, register_adapter
 from src.python.providers import cninfo, datasink
-from src.python.providers._utils import set_last_reason
+from src.python.providers.utils import set_last_reason
 from src.python.schemas.datasource_fields import DOMAIN_FINANCIAL_REPORT
 
 logger = logging.getLogger("invest")

@@ -21,7 +21,7 @@ from src.python.cache import get as cache_get
 from src.python.cache import set as cache_set
 from src.python.core.code_utils import is_a_share_code
 from src.python.core.num_utils import safe_num
-from src.python.providers._utils import run_with_timeout
+from src.python.providers.utils import run_with_timeout
 
 logger = logging.getLogger("invest")
 

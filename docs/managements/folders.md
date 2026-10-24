@@ -9,19 +9,19 @@
 >
 > | 类别 | 开发语言 | 文件数 | 代码行数 | 说明 |
 > |---|---|---|---|---|
-| 主程序代码 | Python | 397 | 104,698 | `src/` 下所有 `.py`（不含测试：`src/__init__.py` 顶层包标记 + `src/python/` 下 15 个 `__init__.py`，含 `web/` 服务层；近期新增 `providers/tiantian_purchase.py` 天天基金申购状态总表 provider + `fetcher/fund_purchase.py` 申购状态取数编排（双链路/准入/会话复用） + `core/jsonl_store.py` JSONL 原子原语 + `core/signal_ledger.py` 确定性信号账本 + `report/signal_record.py` 信号登记适配器 + `core/num_utils.py` 数值归一原语 + `core/doctor.py` 系统自检 + `core/cassette.py` 请求回放引擎 + `core/datasource_credential.py` 数据源凭据声明 + `fetcher/source_adapter.py` 适配契约 + `fetcher/quote_adapters.py` 行情域适配器 + `llm/module_fingerprint.py` 模块指纹唯一事实来源 + `report/_experimental_seams.py` 实验挂载点 + `report/holdings_freshness.py` 持仓报告期时效判定 + `report/experimental_notice.py` 实验功能清单语句单源 + `core/trading_calendar.py` 交易日历原语（时间距离一律以交易日计） + `providers/datasink.py` 全文本财报 provider（密钥/限速/配额） + `providers/hithink.py` 同花顺金融数据服务 provider（A 股行情/财务/基金/情绪面；凭据/qps 限速/信封错误码） + `fetcher/financial_report.py` 财报取数编排 + `fetcher/report_adapters.py` 财报域适配器 + `report/financial_report_digest.py` 财报摘要章节装配 + `providers/akshare_financial.py` 结构化财务指标主源 + `fetcher/financial_indicator_adapters.py` 财务指标域适配器 + `core/code_utils.py::to_fmp_symbol` 共享符号映射 + `providers/_utils.py::run_with_timeout` 共享取数超时原语 + `analysis/financial_indicator_extract.py` 财务指标全文解析（压平正文锚点提取，备用支路） + `fetcher/financial_indicator.py` 财务指标多期取数编排 + `analysis/financial_indicator.py` 财务指标派生（质量档/趋势/当前 PE·PB） + `report/financial_indicator.py` 财务指标章装配 + `report/holdings_detail_sheet.py` 持仓明细与分类 Excel 页签 + `report/position_structure_sheet.py` 持仓结构与集中度 Excel 页签 + `report/fundamental_snapshot_sheet.py` 持仓基本面 Excel 页签（三者均为章节合并写入器） + `llm/compliance.py` 合规声明集中注入（幂等叠加，单一漏斗覆盖全模块）） |
+| 主程序代码 | Python | 397 | 104,709 | `src/` 下所有 `.py`（不含测试：`src/__init__.py` 顶层包标记 + `src/python/` 下 15 个 `__init__.py`，含 `web/` 服务层；近期新增 `providers/tiantian_purchase.py` 天天基金申购状态总表 provider + `fetcher/fund_purchase.py` 申购状态取数编排（双链路/准入/会话复用） + `core/jsonl_store.py` JSONL 原子原语 + `core/signal_ledger.py` 确定性信号账本 + `report/signal_record.py` 信号登记适配器 + `core/num_utils.py` 数值归一原语 + `core/doctor.py` 系统自检 + `core/cassette.py` 请求回放引擎 + `core/datasource_credential.py` 数据源凭据声明 + `fetcher/source_adapter.py` 适配契约 + `fetcher/quote_adapters.py` 行情域适配器 + `llm/module_fingerprint.py` 模块指纹唯一事实来源 + `report/_experimental_seams.py` 实验挂载点 + `report/holdings_freshness.py` 持仓报告期时效判定 + `report/experimental_notice.py` 实验功能清单语句单源 + `core/trading_calendar.py` 交易日历原语（时间距离一律以交易日计） + `providers/datasink.py` 全文本财报 provider（密钥/限速/配额） + `providers/hithink.py` 同花顺金融数据服务 provider（A 股行情/财务/基金/情绪面；凭据/qps 限速/信封错误码） + `fetcher/financial_report.py` 财报取数编排 + `fetcher/report_adapters.py` 财报域适配器 + `report/financial_report_digest.py` 财报摘要章节装配 + `providers/akshare_financial.py` 结构化财务指标主源 + `fetcher/financial_indicator_adapters.py` 财务指标域适配器 + `core/code_symbols.py::to_fmp_symbol` 共享符号映射 + `providers/utils.py::run_with_timeout` 共享取数超时原语 + `analysis/financial_indicator_extract.py` 财务指标全文解析（压平正文锚点提取，备用支路） + `fetcher/financial_indicator.py` 财务指标多期取数编排 + `analysis/financial_indicator.py` 财务指标派生（质量档/趋势/当前 PE·PB） + `report/financial_indicator.py` 财务指标章装配 + `report/holdings_detail_sheet.py` 持仓明细与分类 Excel 页签 + `report/position_structure_sheet.py` 持仓结构与集中度 Excel 页签 + `report/fundamental_snapshot_sheet.py` 持仓基本面 Excel 页签（三者均为章节合并写入器） + `llm/compliance.py` 合规声明集中注入（幂等叠加，单一漏斗覆盖全模块）） |
 | HTML 报告模板 | HTML | 23 | 5,193 | `src/static/tmpl/report_template.html` + `whatif_template.html`（调仓 What-if 独立 HTML 页）+ `partials/`（章节级/区块级 partial，主模板按 TOC 六组经 Jinja include 拆入，清单见目录树 `partials/` 节点） |
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
-| 辅助脚本 | Python | 121 | 24,277 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
-| 源代码合计 | — | 545 | 134,564 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 628 | 172,924 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 11,782 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 辅助脚本 | Python | 122 | 24,461 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
+| 源代码合计 | — | 546 | 134,759 | 主程序 + 模板 + 脚本 + SVG |
+| 测试代码 | Python | 629 | 173,000 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 11,787 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 13 | 6,351 | 含 README.md（211 行）；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 12 | 6,133 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 193 | 68,062 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 6 + archive md 160），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 13,360 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
-| ├ archive/ | 版本归档 | 174 | 53,837 | 各版本 changelog/plan/review-findings 与设计文档归档（157 md 50,492 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
-| ├ plan/ | 中间设计文件 | 5 | ~773 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + 跨模块导入面重命名分析 |
+| 项目文档 | Markdown | 193 | 68,113 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 6 + archive md 160），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 13,411 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| ├ archive/ | 版本归档 | 175 | 54,059 | 各版本 changelog/plan/review-findings 与设计文档归档（157 md 50,492 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
+| ├ plan/ | 中间设计文件 | 4 | ~551 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + 跨模块导入面重命名分析 |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
 
 ## 版本演进对照（最初版本 → 最新发布 → 当前开发版）
@@ -160,7 +160,7 @@ investor-review/
 │   │   │
 │   │   ├── providers/                # 数据源提供商实现
 │   │   │   ├── __init__.py           #   子包标记
-│   │   │   ├── _utils.py             #   提供商模块共享工具函数（含 run_with_timeout 的 raise_on_failure 上抛开关）
+│   │   │   ├── utils.py              #   提供商模块共享工具函数（含 run_with_timeout 的 raise_on_failure 上抛开关）
 │   │   │   ├── datasink.py           #   DataSinking 全文本财报（A 股；密钥文件/计划感知限速/日配额护栏/连接级重试）
 │   │   │   ├── cninfo.py             #   巨潮资讯网财报备源（公开无凭据；公告列表/文种归类/PDF 解析/固定礼貌限速）
 │   │   │   ├── hithink.py            #   同花顺金融数据服务（A 股行情/财务/基金/情绪面；凭据/qps 限速/信封错误码/连接级重试）
@@ -210,7 +210,7 @@ investor-review/
 │   │   │   ├── crisis_annotation.py           #   危机区间标注（2015/2018/2020/2022/2025 静态表 + 区间回撤/恢复 + 回放态指数层 → crisis_annotation_data）
 │   │   │   ├── prosperity_framework.py        #   景气度框架诊断（六维评分卡：景气/ROE 弹性/全球比较/流动性/集中度与周期拼接/业绩回撤；常规功能）
 │   │   │   ├── prosperity_scoring.py     #   景气度评分内核（配置默认值 + 权重常量 + 六维打分器）
-│   │   │   ├── _prosperity_inputs.py   #   评分输入（配置默认值/板块权重聚合/权重与阈值常量/基金类型回退）
+│   │   │   ├── prosperity_inputs.py    #   评分输入（配置默认值/板块权重聚合/权重与阈值常量/基金类型回退）
 │   │   │   ├── prosperity_signals.py   #   景气度框架本地信号提取原语（持仓/快照/基准 → 数值信号，零网络）
 │   │   │   ├── fx_exposure.py                 #   外汇敞口分析（港股/QDII 汇率风险）
 │   │   │   ├── financial_indicator_extract.py #   财务指标全文解析（DataSinking 压平正文 → 标准指标：锚点/取值窗口/精度模式/合理性校验）
@@ -427,7 +427,7 @@ investor-review/
 │   │   │   ├── cassette.py           #   数据源记录-回放引擎（真实响应体离线录制/回放，经传输工厂注入，不联网）
 │   │   │   ├── check_sources.py      #   数据源健康检查命令处理器（CLI/报告共享）
 │   │   │   ├── circuit_breaker.py    #   统一断路器网关（Provider + LLM 熔断状态查询）
-│   │   │   ├── code_utils.py         #   证券代码/类型判定工具（派生量见 code_symbols.py，此处 re-export）
+│   │   │   ├── code_utils.py         #   证券代码/类型判定工具（派生量由 code_symbols.py 单一实现）
 │   │   │   ├── code_symbols.py     #   派生量（交易所前后缀归一 / FMP·东财·cninfo 符号与参数 / 市值粗估；前缀常量真值）
 │   │   │   ├── completion_notify.py  #   任务完成通知（notify 三通道分发：webhook/邮件/桌面，失败必发成功可选，未配置静默跳过）
 │   │   │   ├── constants.py          #   全局常量/版本号
@@ -1057,6 +1057,7 @@ investor-review/
 │       │   │   ├── test_check_version_consistency.py #   版本号一致性检查脚本测试
 │       │   │   ├── test_check_style_guardrails.py #   设计护栏机检测试（E1/E2/E3 命中与豁免 + W 级观察语义 + 真仓库冒烟）
 │       │   │   ├── test_check_script_contract.py # 脚本契约机检测试（退出码章节解析三格式/规则①②③④命中与豁免/白名单对齐真实声明/真实仓库规则①③④零偏离）
+│       │   │   ├── test_check_import_surface.py # 导入面契约检查（真实仓库零 finding/IS1~IS3 合成命中/动态导入目标 smoke）
 │       │   │   ├── test_scripts_reference_coverage.py #   文档↔脚本清单覆盖（一览/域索引/内部包点名）
 │       │   │   ├── test_conftest_scenario_gate.py #  conftest scenario 门禁双向校验回归（目录内缺裸 marker 拦截/裸 marker 越目录拦截/子域不豁免/反斜杠路径归一）
 │       │   │   ├── test_task_numbering_check_scripts.py # 任务编号一致性检查脚本测试
@@ -1281,6 +1282,8 @@ investor-review/
 │   ├── check-doc-drift.py           #   文档与实现一致性检查（章节/开关/默认值/面板编号/目录树/统计表/归档索引/管理文档分区纪律/Thinking 支持矩阵/章节-区块矩阵/手册菜单块）
 │   ├── check-doc-links.py           #   文档链接与结构一致性检查（死链/死锚点/重复标题/层级/编号序列/§引用）
 │   ├── check-file-length.py         #   单文件行数红线守护（主程序/脚本 >1000 / 测试 >1200；豁免与 review-findings 挂账同步，-v 清单供登记表派生）
+│   ├── check-import-surface.py      #   导入面契约检查（兼容注释/私有 __all__/跨包私有导入/动态导入字面量；观察期未入钩子/CI）
+│   ├── _import_surface_exceptions.json # 导入面检查例外表（owner/reason/expiry/replacement）
 │   ├── eval-factor-zoo.py           #   因子动物园目录评测入口（CLI + 原面 re-export；因子五族目录冻结/字段可得/信号相关/耗时基线/判定汇总，实现在 _eval_factor_zoo/ 包，产物落 docs/tmp/）
 │   ├── _eval_factor_zoo/                 #   因子目录评测内部实现包（入口 eval-factor-zoo.py 仅留 CLI 与原面 re-export）
 │   │   ├── __init__.py              #       子包标记（原面 re-export）
@@ -1715,10 +1718,11 @@ investor-review/
 │   │       │       ├── tui_build.py        #       ANSI 帧转 HTML 图样构建器
 │   │       │       ├── llm_config_mock.py  #       LLM 配置纵切图样生成器（读真实配置推导结构）
 │   │       │       └── web_mock_build.py   #       Web 配置面板图样生成器（真实注册表/配置取数，产出目标与现有两份 HTML）
+│   │       ├── import-surface/              # 导入面重命名完成归档（owner 表/IS 规则/迁移定稿）
+│   │       │   └── import-surface-rename.md # 跨模块导入面重命名分析定稿（兼容转发→唯一 owner；P0~P4 完成）
 │   │       └── web-browser-verification/    # 设计文档归档（任务完成后由发布归档迁入）
 │   │           └── web-browser-verification.md # 该文档的完整设计内容（迁档前位于在办设计目录）
 │   └── plan/                          #   中间设计文件（在办设计文档，文档扁平存放、原型就近建子目录）；完成后迁入对应版本的归档子目录
-│       ├── import-surface-rename.md # 跨模块导入面重命名分析（兼容转发/唯一 owner/四阶段迁移/验收与护栏；未实施）
 │       ├── tui-display-modes.md # TUI 显示模式统一设计（行型/分组/提示/开关状态；进行中）
 │       ├── jev-news-judgment-evaluation.md # 判定迁移的对照评测方案（三方对照/语料冻结/预注册阈值与四类判定）
 │       ├── jev-news-judgment-design.md # 判定通道接入设计（独立于对话链的类型化通道/模板理由/降级矩阵；待评测通过后实施）

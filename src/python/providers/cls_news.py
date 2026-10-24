@@ -13,7 +13,7 @@ from typing import Any
 import httpx
 
 from src.python.core.http_client import make_http_client
-from src.python.providers._utils import ts_to_str
+from src.python.providers.utils import ts_to_str
 
 logger = logging.getLogger("invest")
 

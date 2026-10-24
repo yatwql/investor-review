@@ -305,7 +305,7 @@ def _build_expert_review_prompt(
         _scenario_appended = False
         if enable_conditional:
             try:
-                from src.python.config._llm_settings import get_llm_config
+                from src.python.config import get_llm_config
 
                 _cfg = get_llm_config()
                 _scenarios = (_cfg or {}).get("debate", {}).get("conditional", {}).get("scenarios", [])
@@ -339,7 +339,7 @@ def _build_expert_review_prompt(
     # ── 集中度问答引导（辩论流程内建段落，仅辩论路径注入） ──
     if include_concentration_qa:
         try:
-            from src.python.config._llm_settings import get_llm_config
+            from src.python.config import get_llm_config
 
             _cfg = get_llm_config()
             _debate_cfg = (_cfg or {}).get("debate", {})
@@ -551,7 +551,7 @@ def _build_debate_synthesis_prompt(
 
     if enable_conditional:
         try:
-            from src.python.config._llm_settings import get_llm_config
+            from src.python.config import get_llm_config
 
             _cfg = get_llm_config()
             _scenarios = (_cfg or {}).get("debate", {}).get("conditional", {}).get("scenarios", [])
@@ -574,7 +574,7 @@ def _build_debate_synthesis_prompt(
     # ── 集中度问答（对齐需求 R-LLM-DB-QA-；辩论流程内建段落） ────
     if include_concentration_qa:
         try:
-            from src.python.config._llm_settings import get_llm_config
+            from src.python.config import get_llm_config
 
             _cfg = get_llm_config()
             _debate_cfg = (_cfg or {}).get("debate", {})

@@ -37,7 +37,7 @@ from src.python.core.atomic_write import write_json_atomic
 from src.python.core.constants import PROJECT_ROOT
 from src.python.core.retry import STRATEGY_FIXED, RetryPolicy
 from src.python.core.throttle import interval_delay  # 间隔+抖动唯一算式
-from src.python.providers._utils import set_last_reason, with_connect_retry
+from src.python.providers.utils import set_last_reason, with_connect_retry
 from src.python.core.datasource_credential import (
     DEFAULT_DATA_KEY_FILE,
     CredentialSpec,

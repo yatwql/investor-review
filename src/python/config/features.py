@@ -34,7 +34,7 @@ from src.python.core.constants import PROJECT_ROOT
 
 from src.python.core.json_comments import strip_json_comments
 from ._json_patch import _find_top_level_value_span, _patch_config_key, _remove_top_level_key
-from ._feature_registry import (  # noqa: F401 — 兼容既有导入面
+from ._feature_registry import (
     DOMAIN_DATA_AND_ROUTES,
     DOMAIN_HINTS,
     DOMAIN_LABELS,
@@ -65,7 +65,7 @@ from ._feature_registry import (  # noqa: F401 — 兼容既有导入面
     switches_in_group,
 )
 
-from ._feature_registry import _FEATURE_FLAGS_DEFAULT  # noqa: F401 — 私有派生表，仅本模块使用
+from ._feature_registry import _FEATURE_FLAGS_DEFAULT  # 私有派生表，仅本模块使用
 
 logger = logging.getLogger("invest")
 

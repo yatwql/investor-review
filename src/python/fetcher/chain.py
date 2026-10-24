@@ -86,7 +86,7 @@ def _try_provider_fetch(
     # 尝试前先清「失败原因」载体：该载体只在 provider 返回 None 时被消费，若上一次
     # 调用的原因未经消费就残留（直连调用/缓存命中直接返回），会把「上一条命令的失败
     # 原因」串到本次诊断上。先清后调即保证本次读到的只可能是本次 provider 写的。
-    from src.python.providers._utils import clear_last_reason as _clear_reason
+    from src.python.providers.utils import clear_last_reason as _clear_reason
 
     _clear_reason()
     try:
@@ -106,7 +106,7 @@ def _try_provider_fetch(
         # provider 可把「为什么空」写在 _utils 的 last-reason 里（如「该文档无目标章节」）；
         # 取到就用它替换笼统的「返回空」——「源故障」与「该文档确实没这一节」在运维上
         # 是完全不同的信号（前者要排查网络/凭据）。
-        from src.python.providers._utils import take_last_reason
+        from src.python.providers.utils import take_last_reason
 
         reason = take_last_reason("返回空")
         logger.info("[%s]%s %s 返回空（%s），尝试下一链路", data_type, _code_tag, provider_name, reason)

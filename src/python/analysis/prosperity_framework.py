@@ -56,7 +56,7 @@ from src.python.analysis.prosperity_scoring import (
     _score_roe,
     _unverified_dimension,
 )
-from src.python.analysis._prosperity_inputs import estimated_fund_codes, roe_by_code_from_rows, _matches
+from src.python.analysis.prosperity_inputs import estimated_fund_codes, roe_by_code_from_rows, _matches
 
 logger = logging.getLogger("invest")
 

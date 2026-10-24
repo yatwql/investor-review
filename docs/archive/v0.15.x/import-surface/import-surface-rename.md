@@ -1,6 +1,6 @@
-# 跨模块导入面重命名 — 分析与迁移方案（未实施）
+# 跨模块导入面重命名 — 分析与迁移方案
 
-> **状态**：分析稿（立项 `plan-208`，**不包含实施**）
+> **状态**：已完成（`plan-208`；P0~P4 收口，owner 表见 `technical.md`「导入面所有权」）
 > **范围**：`src/python/` 内跨模块/跨渠道的 re-export 兼容层、私有模块导入与 `__all__` 公共面
 > **关联**：`docs/managements/technical.md`（架构约束）、`docs/managements/developer-guide.md`（脚本与模块归属）、`scripts-reference.md`（命名约定）
 
@@ -11,7 +11,7 @@
 1. 问题存在但**不是「把所有 re-export 删掉」**：`noqa: F401` 中有相当一部分是合法的类型/副作用/惰性导入；必须按「**它是否只是转发到另一个模块**」分流，而不是按关键字批量删除。
 2. 主要收益不在代码行数，而在**可定位性与测试可信度**：patch 点与 owner 对齐后，能消除「用例绿、真实链路仍未被覆盖」的一类盲区。
 3. 建议按 **P0 owner 表 → config → core/cache → analysis/report/llm/web → 测试与文档** 五阶段推进；每阶段独立提交、独立回滚，不做 flag day。
-4. 本稿只做分析与方案；所有代码、配置、缓存、数据格式保持不变。
+4. 迁移只调整导入面、不修改运行时行为、配置/缓存/数据格式；实施结果与 owner 表见 `technical.md`。
 
 ## 2. 基线盘点（分析时快照）
 
@@ -82,7 +82,7 @@
 6. **测试 patch**：patch 目标必须是**实际查询/调用该符号的模块**；测试门面转发行为时才 patch 门面，并在用例 docstring 注明「测门面」。
 7. **删除即删除**：不保留 deprecated 别名、不做双写窗口；仓内调用点与文档同步更新（项目按无兼容别名策略执行）。
 
-## 6. 迁移设计（不实施）
+## 6. 迁移设计（已实施）
 
 ### 阶段工作量概览（按包，实测基线）
 
@@ -146,14 +146,14 @@ owner 表必须包含列：`符号 | owner 模块 | 兼容导入路径 | 生产�
 | 包级 import 环 | 不新增；存量环按复核结果登记处置 |
 | 门禁 | `dev-verify` / `verify` / 文档与结构守护全绿 |
 
-### 7.1 `check-import-surface.py` 规格（建议，未实施）
+### 7.1 `check-import-surface.py` 规格（观察期已实现）
 
 | 规则 | 判据 | 处理 |
 |:--|:--|:--|
-| IS1 兼容注释 | 四类关键词出现在 `src/python` | 发现即 finding（例外表除外） |
-| IS2 公共 `__all__` 私有名 | 包门面 `__all__` 中的 `_` 项 | 发现即 finding（例外表除外） |
-| IS3 跨包私有导入 | 跨包 `from src.python.<pkg>._x import` | 发现即 finding（叶子/循环例外表） |
-| IS4 动态导入目标 | `importlib.import_module` 的目标字符串是否指向现存模块 | 仅提示，无法静态判断改名前后的等价性 |
+| compat-comment 兼容注释 | 四类关键词出现在 `src/python` | 发现即 finding（例外表除外） |
+| private-all 公共 `__all__` 私有名 | 包门面 `__all__` 中的 `_` 项 | 发现即 finding（例外表除外） |
+| cross-private 跨包私有导入 | 跨包 `from src.python.<pkg>._x import` | 发现即 finding（叶子/循环例外表） |
+| dynamic-target 动态导入目标 | `importlib.import_module` 的目标字符串是否指向现存模块 | 仅提示，无法静态判断改名前后的等价性 |
 
 实现须复用 `_shared/checklib`（`-v/--ci`、退出 0/2）；例外表放独立 JSON（`reason` / `owner` / `expiry` / `replacement`），先观察期（与 `check-script-contract` 同模式）再评估入门禁。patch 错位不做机检（静态难以判定），用 P0 清单 + 域测试兜底。
 

@@ -357,7 +357,7 @@ def compute_prosperity_framework_data(
     # 估算失败降级为 None → ②维退回个股口径（不拖垮其余维度）
     fund_roe_estimates = None
     try:
-        from src.python.analysis._prosperity_inputs import roe_by_code_from_rows
+        from src.python.analysis.prosperity_inputs import roe_by_code_from_rows
         from src.python.report.fund_roe_estimate import estimate_fund_roe_batch
         from src.python.report.penetration import ACTIVE_EQUITY, ETF, INDEX_LINK, QDII, classify_penetration
 

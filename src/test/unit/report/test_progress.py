@@ -27,7 +27,7 @@ from src.python.report.progress import (
     SilentProgressReporter,
     TuiProgressReporter,
     Timer,
-    _timing_records,
+    timing_records,
 )
 import pytest
 
@@ -102,31 +102,31 @@ class TestProgressReporter(unittest.TestCase):
 
     def test_timer_context(self) -> None:
         """Timer 上下文管理器记录耗时。"""
-        saved = list(_timing_records)
-        _timing_records.clear()
+        saved = list(timing_records)
+        timing_records.clear()
         try:
             with Timer("测试计时"):
                 pass
-            self.assertEqual(len(_timing_records), 1)
-            label, elapsed = _timing_records[0]
+            self.assertEqual(len(timing_records), 1)
+            label, elapsed = timing_records[0]
             self.assertEqual(label, "测试计时")
             self.assertGreaterEqual(elapsed, 0.0)
         finally:
-            _timing_records.clear()
-            _timing_records.extend(saved)
+            timing_records.clear()
+            timing_records.extend(saved)
 
     def test_timer_context_elapsed_time(self) -> None:
         """Timer 记录的实际耗时接近真实耗时。"""
-        saved = list(_timing_records)
-        _timing_records.clear()
+        saved = list(timing_records)
+        timing_records.clear()
         try:
             with Timer("延时"):
                 _time_module.sleep(0.01)
-            _, elapsed = _timing_records[0]
+            _, elapsed = timing_records[0]
             self.assertAlmostEqual(elapsed, 0.01, delta=0.05)
         finally:
-            _timing_records.clear()
-            _timing_records.extend(saved)
+            timing_records.clear()
+            timing_records.extend(saved)
 
 
 class TestSilentProgressReporter(unittest.TestCase):
@@ -304,15 +304,15 @@ class TestTuiProgressReporter(unittest.TestCase):
 
     def test_timer_context_manager(self) -> None:
         """timer() 返回可用的 Timer。"""
-        saved = list(_timing_records)
-        _timing_records.clear()
+        saved = list(timing_records)
+        timing_records.clear()
         try:
             with self.r.timer("模块A"):
                 pass
             self.assertEqual(len(self.r._timing_records), 1)
         finally:
-            _timing_records.clear()
-            _timing_records.extend(saved)
+            timing_records.clear()
+            timing_records.extend(saved)
 
     # ── 耗时排行 ──
 
@@ -353,7 +353,7 @@ class TestTuiProgressReporter(unittest.TestCase):
             self.r._timing_records.extend(saved_records)
 
     def test_print_timing_summary_clears_records(self) -> None:
-        """print_timing_summary 输出后清空 _timing_records。"""
+        """print_timing_summary 输出后清空 timing_records。"""
         saved_records = list(self.r._timing_records)
         self.r._timing_records.clear()
         try:

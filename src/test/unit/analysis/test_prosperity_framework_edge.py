@@ -172,7 +172,7 @@ class TestSnapshotShapeRegression:
 
     def test_snapshotdata_dataclass_computes_turnover(self):
         """生产形态（SnapshotData）→ 换手代理可算，且**不抛异常**（缺陷回归）。"""
-        from src.python.analysis.prosperity_framework import _turnover_proxy_pct
+        from src.python.analysis.prosperity_signals import _turnover_proxy_pct
 
         snaps = [_snapshot_data(["600519", "300308"]), _snapshot_data(["600519", "601398"])]
         # Jaccard = 1/3 → 变动率 66.67%
@@ -191,7 +191,7 @@ class TestSnapshotShapeRegression:
 
     def test_dict_shape_still_supported(self):
         """dict 形态（既有测试/外部注入）保持可用。"""
-        from src.python.analysis.prosperity_framework import _turnover_proxy_pct
+        from src.python.analysis.prosperity_signals import _turnover_proxy_pct
 
         snaps = [
             {"holdings": [{"code": "A"}, {"code": "B"}]},
@@ -206,7 +206,7 @@ class TestSnapshotShapeRegression:
 
     def test_malformed_snapshot_objects_degrade_not_raise(self):
         """畸形快照（无 accounts/holdings 字段的对象）→ 不抛异常，该子项未验证。"""
-        from src.python.analysis.prosperity_framework import _turnover_proxy_pct
+        from src.python.analysis.prosperity_signals import _turnover_proxy_pct
 
         assert _turnover_proxy_pct([object(), object()]) is None
         assert _turnover_proxy_pct([None, None]) is None
@@ -218,7 +218,7 @@ class TestSnapshotShapeRegression:
 
     def test_snapshot_missing_holdings_attr(self):
         """带 accounts 但缺失 holdings 字段的对象 → 视为该期无持仓（未验证）。"""
-        from src.python.analysis.prosperity_framework import _turnover_proxy_pct
+        from src.python.analysis.prosperity_signals import _turnover_proxy_pct
 
         class _Acc:
             pass

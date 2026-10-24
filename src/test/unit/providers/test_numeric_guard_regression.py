@@ -11,7 +11,7 @@ import math
 
 import pytest
 
-from src.python.providers import _utils, akshare_extras, eastmoney_industry, sina_kline, tencent
+from src.python.providers import utils as _utils, akshare_extras, eastmoney_industry, sina_kline, tencent
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_providers]
 

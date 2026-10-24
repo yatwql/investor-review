@@ -295,9 +295,9 @@ def _auto_reset_last_reason():
     与 ``_auto_reset_provider_registry`` 同习语：模块级可变状态在每个测试前复位，
     使用例不依赖执行顺序/worker 分配。
     """
-    from src.python.providers import _utils
+    from src.python.providers import utils
 
-    _utils.clear_last_reason()
+    utils.clear_last_reason()
 
 
 @pytest.fixture(autouse=True)

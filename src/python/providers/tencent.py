@@ -16,7 +16,7 @@ from src.python.core.code_utils import is_a_share_code, is_exchange_fund_code, i
 from src.python.core.code_symbols import get_exchange_prefix
 from src.python.core.http_client import make_http_client
 from src.python.core.num_utils import safe_num
-from src.python.providers._utils import looks_like_block_page
+from src.python.providers.utils import looks_like_block_page
 from src.python.core.retry import (
     STRATEGY_EXPONENTIAL,
     STRATEGY_FIXED,

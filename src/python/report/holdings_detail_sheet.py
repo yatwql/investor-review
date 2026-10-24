@@ -44,7 +44,7 @@ from src.python.report.excel_writer import (
 )
 from src.python.report.market_value import DetailRow
 
-from ._holdings_detail_blocks import (  # noqa: F401 — 兼容既有导入面
+from ._holdings_detail_blocks import (
     _COST_POS_NCOLS,
     _MV_EXTRA_HEADERS,
     _MV_NCOLS,

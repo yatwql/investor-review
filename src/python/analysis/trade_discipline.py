@@ -24,7 +24,7 @@ import os
 from typing import Any
 
 from src.python.analysis import _silence
-from src.python.config._core import get_config
+from src.python.config import get_config
 from src.python.core.constants import PROJECT_ROOT
 
 logger = logging.getLogger("invest")

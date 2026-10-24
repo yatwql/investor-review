@@ -677,7 +677,7 @@ class TestPricing(unittest.TestCase):
         orig_flag = _pricing_mod.PRICING_WEEKEND_ALWAYS_IDLE
         try:
             with patch(
-                "src.python.config._llm_pricing.load_pricing_config",
+                "src.python.config.load_pricing_config",
                 return_value={
                     "models": {m: dict(p) for m, p in MODEL_PRICING.items()},
                     "currency": "CNY",
@@ -732,7 +732,7 @@ class TestPricing(unittest.TestCase):
         orig_flag = _pricing_mod.PRICING_HOLIDAY_ALWAYS_IDLE
         try:
             with patch(
-                "src.python.config._llm_pricing.load_pricing_config",
+                "src.python.config.load_pricing_config",
                 return_value={
                     "models": {m: dict(p) for m, p in MODEL_PRICING.items()},
                     "currency": "CNY",
@@ -780,7 +780,7 @@ class TestPricing(unittest.TestCase):
             }
             # patch 只在 reload 期间生效：计费发生在 patch 之外，故若懒加载再次读盘，
             # 就会读到真实配置文件而非上面注入的价格
-            with patch("src.python.config._llm_pricing.load_pricing_config", return_value=custom):
+            with patch("src.python.config.load_pricing_config", return_value=custom):
                 reload_pricing()
             self.assertTrue(_pricing_mod._PRICING_LOADED, "显式重载后应处于已加载态")
             cost = estimate_cost("deepseek-v4-flash", 1_000_000, 1_000_000, at_time=self._IDLE_TIME)
@@ -812,7 +812,7 @@ class TestPricing(unittest.TestCase):
                 "weekend_always_idle": True,
                 "holiday_always_idle": True,
             }
-            with patch("src.python.config._llm_pricing.load_pricing_config", return_value=custom):
+            with patch("src.python.config.load_pricing_config", return_value=custom):
                 reload_pricing()
             self.assertEqual(PRICING_PEAK_PERIODS, [(22 * 60, 23 * 60)])
             self.assertEqual(PRICING_IDLE_PERIODS, [])

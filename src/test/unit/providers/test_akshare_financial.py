@@ -219,7 +219,7 @@ class TestRunWithTimeoutRaiseOnFailure:
     """
 
     def test_default_swallows_after_retries(self):
-        from src.python.providers._utils import run_with_timeout
+        from src.python.providers.utils import run_with_timeout
 
         calls = {"n": 0}
 
@@ -231,7 +231,7 @@ class TestRunWithTimeoutRaiseOnFailure:
         assert calls["n"] == 2
 
     def test_raise_on_failure_propagates_after_retries(self):
-        from src.python.providers._utils import run_with_timeout
+        from src.python.providers.utils import run_with_timeout
 
         calls = {"n": 0}
 
@@ -252,7 +252,7 @@ class TestRunWithTimeoutFailFast:
     """
 
     def test_parse_failure_not_retried(self):
-        from src.python.providers._utils import run_with_timeout
+        from src.python.providers.utils import run_with_timeout
 
         calls = {"n": 0}
 
@@ -264,7 +264,7 @@ class TestRunWithTimeoutFailFast:
         assert calls["n"] == 1  # 解析崩溃重试必然重复 → fail-fast
 
     def test_deterministic_block_not_retried(self):
-        from src.python.providers._utils import run_with_timeout
+        from src.python.providers.utils import run_with_timeout
 
         calls = {"n": 0}
 

@@ -14,7 +14,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import MagicMock, patch
 
-from src.python.providers._utils import ts_to_str
+from src.python.providers.utils import ts_to_str
 from src.python.providers.sina_news import (
     _parse_news_item,
     fetch_news,

@@ -36,6 +36,7 @@
 | `check-semantic-index.py` | 文档 | 功能语义命名表正反向一致性校验（功能开关注册表表外键 / 僵尸条目 / 合并章 key 缺失） |
 | `check-doc-drift.py` | 文档 | 文档与实现一致性校验（章节表/章节数量、开关表/分组计数/默认值断言、配置与 LLM 默认值表、TUI 面板编号、目录树、项目统计表；`--sync` 自动回写统计快照） |
 | `check-doc-links.py` | 文档 | 文档链接与结构一致性校验（死链/死锚点/重复标题/层级/编号序列/§引用） |
+| `check-import-surface.py` | 质量 | 导入面契约观察（compat-comment 兼容注释 / private-all 私有 `__all__` / cross-private 跨包私有导入 / dynamic-target 动态导入字面量；例外表 `_import_surface_exceptions.json`，观察期未入钩子与 CI） |
 | `check-file-length.py` | 质量 | 单文件行数红线守护（主程序/脚本 >1000 行 / 测试 >1200 行；豁免登记与 review-findings 挂账同步，`-v` 输出可选优化区间清单与「行数 × 近 90 天改动」优先级，供登记表派生） |
 | `check-test-redundancy.py` | 测试 | 测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言；实现拆在 `_test_redundancy/`——八类检查各一模块 + 共用 AST 原语 + 事实缓存 + 编排，入口只留 CLI） |
 | `check-requirement-trace.py` | 质量 | 需求 ID ↔ 验证载体追溯（单段 ID 全域覆盖 / 载体文件存在 / ID 双向一致） |
@@ -763,6 +764,33 @@ sh .githooks/install-hooks.sh --off   # 停用
 处置：按规则号补声明 / 补 `add_common_args` / 补 `encoding=` / 补测试引用或登记豁免；确属特例才加白名单，并在注释写清理由。
 
 > **何时跑**：观察期——未入钩子与 CI；新增或改动 `scripts/` 顶层脚本后手动跑。
+
+**`check-import-surface.py` — 导入面契约检查（观察期）**
+
+**设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
+
+四条规则对应 `technical.md`「导入面所有权」与导入面重命名分析稿的 compat-comment / private-all / cross-private / dynamic-target 规格：
+
+1. **compat-comment 兼容注释**：`src/python/` 出现「兼容既有导入面 / 兼容既有引用 / 公开别名 / 私有名保留」即 finding。
+2. **private-all 私有 `__all__`**：包 `__init__.py` 的 `__all__` 不得列 `_` 开头的私有名。
+3. **cross-private 跨包私有导入**：跨包 `from src.python.<pkg>._x import ...` 即 finding；同包与测试私有导入不在此规则。
+4. **dynamic-target 动态导入字面量**：`importlib.import_module("字面量")` 的目标不可解析即 finding；变量形目标由 `test_check_import_surface.py` 的 smoke 覆盖。
+
+例外登记在 `scripts/_import_surface_exceptions.json`，每条须写 `path / name / owner / reason / expiry / replacement`；观察期与 `check-script-contract` 同模式，未接入钩子与 CI。
+
+**使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
+
+```bash
+.venv/bin/python scripts/check-import-surface.py      # 检查
+.venv/bin/python scripts/check-import-surface.py -v   # 打印规则计数
+.venv/bin/python scripts/check-import-surface.py --ci # CI 模式（只输出 文件:描述）
+```
+
+退出码：0 通过；2 发现 finding。
+
+处置：优先改 owner 导入或收窄 `__all__`；确需保留的公开门面/动态调度面写进例外表并注明替代路径与复核期限。
+
+> **何时跑**：观察期——改动 `src/python/` 导入面后手动跑；转正门禁前先清空或登记例外。
 
 **`check-style-guardrails.py` — 设计护栏机检（DESIGN.md 样式面）**
 

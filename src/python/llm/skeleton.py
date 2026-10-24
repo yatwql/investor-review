@@ -80,7 +80,7 @@ def get_llm_chapter_disabled() -> dict[str, bool]:
     禁用的 LLM 分析章（core.registry.LLM_MODULE_GATED_SECTIONS）整章隐藏而非显示
     「待生成」占位。读取 llm_settings.json 配置，缺失键默认启用。
     """
-    from src.python.config._llm_settings import get_llm_config
+    from src.python.config import get_llm_config
     from src.python.core.registry import LLM_MODULE_GATED_SECTIONS
 
     cfg = get_llm_config()

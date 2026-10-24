@@ -26,7 +26,7 @@ from src.python.report.llm_content import (
     _get_module_key_map,
     _get_placeholder,
     _split_html_blocks,
-    _strip_html,
+    strip_html,
     _extract_footer_text,
     _write_content_sheet,
     write_llm_sheets,
@@ -86,27 +86,27 @@ class TestStripHtml(unittest.TestCase):
     """测试 HTML 标签剥离。"""
 
     def test_plain_text(self) -> None:
-        self.assertEqual(_strip_html("hello"), "hello")
+        self.assertEqual(strip_html("hello"), "hello")
 
     def test_strip_p_tag(self) -> None:
-        self.assertEqual(_strip_html("<p>内容</p>"), "内容")
+        self.assertEqual(strip_html("<p>内容</p>"), "内容")
 
     def test_strip_strong(self) -> None:
-        self.assertEqual(_strip_html("<strong>粗体</strong>"), "粗体")
+        self.assertEqual(strip_html("<strong>粗体</strong>"), "粗体")
 
     def test_strip_nested(self) -> None:
         html = "<p>这是 <strong>粗体</strong> 和 <em>斜体</em></p>"
-        self.assertEqual(_strip_html(html), "这是 粗体 和 斜体")
+        self.assertEqual(strip_html(html), "这是 粗体 和 斜体")
 
     def test_html_entity_unchanged(self) -> None:
         """HTML 实体（如 &amp;）保留原样——已知行为。"""
-        self.assertEqual(_strip_html("A &amp; B"), "A &amp; B")
+        self.assertEqual(strip_html("A &amp; B"), "A &amp; B")
 
     def test_none_input(self) -> None:
-        self.assertEqual(_strip_html(None), "")
+        self.assertEqual(strip_html(None), "")
 
     def test_empty_string(self) -> None:
-        self.assertEqual(_strip_html(""), "")
+        self.assertEqual(strip_html(""), "")
 
 
 # ═══════════════════════════════════════════════════════════
@@ -658,7 +658,7 @@ class TestSplitHtmlBlocks(unittest.TestCase):
         html = '<p>正文段落</p><span style="color:#888;font-size:11px">已修正明细: 5%→6%</span>'
         blocks = _split_html_blocks(html)
         self.assertEqual(len(blocks), 1)
-        stripped = _strip_html(blocks[0])
+        stripped = strip_html(blocks[0])
         self.assertEqual(stripped, "正文段落\n已修正明细: 5%→6%")
 
     def test_hr_separates_blocks(self) -> None:
@@ -670,7 +670,7 @@ class TestSplitHtmlBlocks(unittest.TestCase):
         """<ul><li>…</li></ul> 整体一块，剥离后保留列表项多行。"""
         blocks = _split_html_blocks("<ul><li>项一</li><li>项二</li></ul>")
         self.assertEqual(len(blocks), 1)
-        stripped = _strip_html(blocks[0])
+        stripped = strip_html(blocks[0])
         self.assertIn("项一", stripped)
         self.assertIn("\n", stripped)
 

@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 
 
-from ._news_dedup_tables import (  # noqa: F401 — 兼容既有导入面
+from ._news_dedup_tables import (
     _EVENT_GROUPS,
     _OPPOSITE_PAIRS,
     _STOP_BIGRAMS,

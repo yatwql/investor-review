@@ -42,7 +42,7 @@ from src.python.core.datasource_credential import (
 )
 from src.python.core.http_client import make_http_client
 from src.python.core.num_utils import ms_to_date_str
-from src.python.providers._utils import with_connect_retry
+from src.python.providers.utils import with_connect_retry
 
 logger = logging.getLogger("invest")
 

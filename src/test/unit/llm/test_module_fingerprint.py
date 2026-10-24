@@ -591,7 +591,7 @@ def test_debate_synthesis_fingerprint_covers_config_driven_prompt_text():
     }
 
     def _fp(cfg: dict) -> str:
-        with patch("src.python.config._llm_settings.get_llm_config", return_value=cfg):
+        with patch("src.python.config.get_llm_config", return_value=cfg):
             prompt = _build_debate_synthesis_prompt(
                 "白脸观点。", "黑脸观点。", enable_conditional=True, total_mv=_TOTAL_MV
             )

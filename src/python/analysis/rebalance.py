@@ -47,10 +47,10 @@ from src.python.core.code_utils import (
     is_convertible_bond_by_name,
     is_etf_by_name_or_code,
 )
-from src.python.config._core import get_config
+from src.python.config import get_config
 from src.python.core.trading_calendar import count_trading_days_elapsed
 
-from ._rebalance_deviation import (  # noqa: E402, F401 — 兼容既有导入面
+from ._rebalance_deviation import (  # noqa: E402
     compute_target_deviation,
     equity_fixed_income_deviation,
     compute_rebalance_signals,

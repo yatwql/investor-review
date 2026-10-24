@@ -30,7 +30,7 @@ def run_llm_providers_panel() -> None:
     state: dict = {"ordered": [], "width": 80}
 
     def _load() -> tuple[str, list]:
-        from src.python.config._llm_providers import order_providers_by_chain
+        from src.python.config import order_providers_by_chain
 
         cfg = get_llm_providers()
         strategy = str(cfg.get("strategy") or "priority")

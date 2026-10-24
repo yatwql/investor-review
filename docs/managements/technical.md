@@ -827,9 +827,9 @@ Provider Chain 采用**职责链（Chain of Responsibility）模式**：每个�
 - **只重试传输级**：这类错误多为瞬时抖动，同源重试常即成功，避免过早降级到质量更低的槽位、也避免把偶发抖动累计成熔断（行业分类 push2 的 `Server disconnected`、DataSinking 的偶发断连即属此类）
 - **不重试代码级空结果**：Provider 正常返回但无该代码数据（`None`）时重试毫无意义（同一请求同一答案），且会白耗第三方日配额（DataSinking 免费档 8191 篇/日）
 - **传输级失败必须上抛给链路（provider 层不得自行吞成返回值）**：链路的传输级判据**只认异常**（`_try_provider_fetch` 捕获异常 → `TRANSPORT_FAILURE`），若 provider 把超时/断连 `return None`，链路会当成「代码级空结果」——同源重试不触发、``record_failure`` 不计、诊断文案把「握手超时」报成「返回空」（实测事故：DataSinking SSL 握手超时被记为返回空，既不重试也不熔断，单标的每篇白等 20s）。故 provider 的代码级结果（401/403/404/非 200/非 JSON）返回 `None`，传输级失败**重试耗尽后上抛**；弱链路承装的直连调用方需自行试/except 降级（如 `fetcher/financial_report._fetch_index` → 转备源）
-- **provider 自陈失败原因（「返回空」不再笼统）**：provider 返回 `None` 前可经 `providers/_utils.set_last_reason("原因")` 写下一行可读短句，链路（`chain._try_provider_fetch`）读到后**替换笼统的「返回空」**并同步进失败诊断（`FailureDiagnostics` → 报告数据源矩阵）。二者在运维上是完全不同的信号——「源故障」要排查网络/凭据（如 `HTTP 500`、`凭据无效`），而「该文档确实没这一节」（如 DataSinking 对没有「管理层讨论与分析」的季报返回 404）是正常业务结果（实测：该场景被笼统记成「返回空」，排查时被误读为源不可用）。载体**按线程隔离**（批量取数多线程）且**消费即清**（不串到下一次调用）；provider 未设置时措辞逐字不变。
-- **挂起型不重试（避免放大等待）**：区分**快速失败**（连接被拒/重置/DNS 立即失败 → 重试有效）与**挂起**（等到超时 → 重试只会把等待放大成 N × 超时）。判据：本次尝试耗时 ≥ 超时预算 × `HANG_ELAPSED_RATIO`（0.5）即视为「主机不可达」，不再重试、直接交链路失败（计入熔断）；实测：20s 预算下挂起型单请求从 63s（3 次）降到 20s（1 次），持续不可用时靠熔断快速跳过。判据由 `providers/_utils.build_transient_retry_judge` 统一提供，`datasink` / `hithink` / `cninfo` 三者共用
-- **连接级重试脚手架单源**：`providers/_utils.with_connect_retry(request_fn, timeout=…, log_tag=…, label=…, before_attempt=…)` 收敛 `datasink` / `hithink` / `cninfo` 三处的连接级重试（共用 `providers/_utils.CONNECT_RETRY_POLICY`：线性 1s/2s、共 3 次尝试）——耗时统计、挂起判据与警告、重试日志、每次尝试前的限速许可统一在此，各来源差异只用 `log_tag` / `label` / `before_attempt` 表达（避免同一约束复制三份、改一处漏两处）。**无链路承装的直连调用方**在调用点吞异常返回 `None`（如 `cninfo` 三条直连路径）维持降级契约；经链路的 provider 槽由链路承接上抛。**cninfo 直连路径的额外护栏**：公告 PDF 用独立的更宽超时（60s，年报原文几十 MB，与元数据接口共用 20s 必然失败）；挂起型失败后**本会话短路该主机**（`_mark_host_unreachable`，后续请求不发 HTTP 直接失败），把「N 篇文档 × 超时预算」降为 1 次
+- **provider 自陈失败原因（「返回空」不再笼统）**：provider 返回 `None` 前可经 `providers/utils.set_last_reason("原因")` 写下一行可读短句，链路（`chain._try_provider_fetch`）读到后**替换笼统的「返回空」**并同步进失败诊断（`FailureDiagnostics` → 报告数据源矩阵）。二者在运维上是完全不同的信号——「源故障」要排查网络/凭据（如 `HTTP 500`、`凭据无效`），而「该文档确实没这一节」（如 DataSinking 对没有「管理层讨论与分析」的季报返回 404）是正常业务结果（实测：该场景被笼统记成「返回空」，排查时被误读为源不可用）。载体**按线程隔离**（批量取数多线程）且**消费即清**（不串到下一次调用）；provider 未设置时措辞逐字不变。
+- **挂起型不重试（避免放大等待）**：区分**快速失败**（连接被拒/重置/DNS 立即失败 → 重试有效）与**挂起**（等到超时 → 重试只会把等待放大成 N × 超时）。判据：本次尝试耗时 ≥ 超时预算 × `HANG_ELAPSED_RATIO`（0.5）即视为「主机不可达」，不再重试、直接交链路失败（计入熔断）；实测：20s 预算下挂起型单请求从 63s（3 次）降到 20s（1 次），持续不可用时靠熔断快速跳过。判据由 `providers/utils.build_transient_retry_judge` 统一提供，`datasink` / `hithink` / `cninfo` 三者共用
+- **连接级重试脚手架单源**：`providers/utils.with_connect_retry(request_fn, timeout=…, log_tag=…, label=…, before_attempt=…)` 收敛 `datasink` / `hithink` / `cninfo` 三处的连接级重试（共用 `providers/utils.CONNECT_RETRY_POLICY`：线性 1s/2s、共 3 次尝试）——耗时统计、挂起判据与警告、重试日志、每次尝试前的限速许可统一在此，各来源差异只用 `log_tag` / `label` / `before_attempt` 表达（避免同一约束复制三份、改一处漏两处）。**无链路承装的直连调用方**在调用点吞异常返回 `None`（如 `cninfo` 三条直连路径）维持降级契约；经链路的 provider 槽由链路承接上抛。**cninfo 直连路径的额外护栏**：公告 PDF 用独立的更宽超时（60s，年报原文几十 MB，与元数据接口共用 20s 必然失败）；挂起型失败后**本会话短路该主机**（`_mark_host_unreachable`，后续请求不发 HTTP 直接失败），把「N 篇文档 × 超时预算」降为 1 次
 - **次数有界**：每个 Provider 每次调用最多 1 + 1 次请求；仍失败才计入熔断计数器并落下一槽
 - **口径单一来源**：退避算式（固定/线性/指数 + 抖动 + 上限）、尝试次数与「哪些异常算瞬时」由 `core/retry.py` 统一提供（`RetryPolicy` / `is_transient_exception` / `retry_transient`）——链路、各 provider 的连接级重试、akshare 超时重试与 HTTP 429 退避共用同一执行器，差异只用策略参数表达（约束 C26）；「两次请求至少间隔多久」见 `core/throttle.py`（约束 C27）
 
@@ -2782,7 +2782,7 @@ llm/skeleton.py            # 摘要注入 expert_review 提示词（开关门控
 
 **缺陷**：`float("nan")` / `float("±inf")` **不抛异常**，故各 provider 解析器里 `try: float(x) / except (TypeError, ValueError)` 形态的兜底对它们完全无效——脏值经 `fetcher/` 一路穿透到市值核算、收益序列与绘图数据，且在比较运算中表现得像正常数值（`nan > 0` 为假、`inf > 0` 为真），下游只能靠逐处判空补救。
 
-改动前的实际形态是**约 10 个互不一致的私有解析器 + 4 种失败口径**：有的返 `0.0`、有的返 `None`、有的抛异常；且被依赖最广的 `providers/_utils.safe_float`（基金净值/排名链路）恰是 NaN/±inf 防线最弱的一个。另有一类更隐蔽的漏点——形如 `value or 0.0` 的「空值兜底」对 **NaN 完全失效**（`nan or 0.0` 求值为 `nan`，因 NaN 是 truthy），脏值借此绕过判空直入聚合。
+改动前的实际形态是**约 10 个互不一致的私有解析器 + 4 种失败口径**：有的返 `0.0`、有的返 `None`、有的抛异常；且被依赖最广的 `providers/utils.safe_float`（基金净值/排名链路）恰是 NaN/±inf 防线最弱的一个。另有一类更隐蔽的漏点——形如 `value or 0.0` 的「空值兜底」对 **NaN 完全失效**（`nan or 0.0` 求值为 `nan`，因 NaN 是 truthy），脏值借此绕过判空直入聚合。
 
 **修复**共三层，合法输入的返回**逐字不变**（仅脏值路径改变）：
 
@@ -2799,7 +2799,7 @@ llm/skeleton.py            # 摘要注入 expert_review 提示词（开关门控
 
 | 模块 | 归一函数 | 兜底语义（保持不变） |
 |:-----|:---------|:---------------------|
-| `providers/_utils.py` | `safe_float` | 失败 → `0.0`（命中面最广：基金净值/排名链路） |
+| `providers/utils.py` | `safe_float` | 失败 → `0.0`（命中面最广：基金净值/排名链路） |
 | `providers/tencent.py` | `_parse_float` / `_parse_float_field` | 失败 → `0.0`（保留负数钳零的既有口径） |
 | `providers/sina_kline.py` | `_parse_sina_kline_float` | 失败 → `0.0` |
 | `providers/akshare_extras.py` | `_safe_float` | 失败 → `None` |
@@ -2905,7 +2905,7 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
 
 **定位**：合并章「持仓基本面」（sheet key `fundamental_snapshot`，type `fundamental_snapshot`），一章两区块：**区块① 财务指标** + **区块② 持仓个股财报摘要**，两块由**同一功能开关 `stock_fundamentals`**（个股基本面，默认关）同开同关。单块渲染由各自数据契约判定（契约 dict 为 None 表示该块无数据 → 该块整体不渲染），章节整体可见性按注册表 `data_flag_any` 的 OR 口径（任一块就绪即显示；Excel 侧 `excel_generator` 同步登记两条契约 flag）。对持仓 + 穿透中的 **A 股个股**标的（场外基金排除，见 §4.19 取数链路），取目标章节的**原文摘要**，与「拿行情/拿持仓」互补：前者提供公司经营层叙事与财务口径原文。两区块均含「标的来源」列（直接持有 / 穿透：来源基金），穿透标的名称由穿透层回填中文名。
 
-**数据源与鉴权**：DataSinking（`https://api.datasink.ing`）提供全文本财报 Markdown，仅覆盖 A 股（SSE/SZSE/BSE，代码经 `core/code_utils.py::to_fmp_symbol` 映射为 FMP 风格）。**需用户自备 API key**：凭据取通用密钥文件 `data/config/data_key.json` 的 `datasink` 节（`{"datasink": {"api_key": "..."}}`），环境变量 `DATASINK_API_KEY` 可覆盖；缺 key 时链路主动跳过并给申请指引，章节写占位。
+**数据源与鉴权**：DataSinking（`https://api.datasink.ing`）提供全文本财报 Markdown，仅覆盖 A 股（SSE/SZSE/BSE，代码经 `core/code_symbols.py::to_fmp_symbol` 映射为 FMP 风格）。**需用户自备 API key**：凭据取通用密钥文件 `data/config/data_key.json` 的 `datasink` 节（`{"datasink": {"api_key": "..."}}`），环境变量 `DATASINK_API_KEY` 可覆盖；缺 key 时链路主动跳过并给申请指引，章节写占位。
 
 **取数链路**：`fetcher/financial_report.py` 逐标的取元数据（`/documents`，**不带文种过滤**取最近若干篇后本地按「报告期 → 披露时间」倒序取最新一篇，故半年报/季报优先于年报；`doc_types` 非空时作白名单；**主源索引为空时切巨潮备源**，同一元数据形状）→ 取该文档**实际章节名清单**（`/documents/{id}/sections`，缓存于 `report_datasink_sections_`；备源无章节清单，直接落偏好名直取）→ 按 `sections` 偏好子串匹配出**精确章节名**逐个取正文（每节独立缓存、命中者按声明顺序以空行拼接；首选项 404 时继续试下一候选；清单不可得**或非空但残缺**时回退偏好名直取；**清单命中缓存但该批章节全部取不到正文时失效该文档的清单缓存**——清单是 14 天缓存，源侧若重新解析过文档，旧章节名会持续 404 且永不恢复，失效一次的代价只是下次多一次 `/sections` 探测）→ 仍无正文则**按报告期回溯上一份报告**（`_REPORT_CANDIDATE_LIMIT=3`，**年报/半年报优先于季报**：`_order_report_candidates` 稳定分组，季报无「管理层讨论与分析」只作最后兜底；标题含「公告」的信息披露条目跳过；命中即止，报告期/文种如实写入）→ **全文阶**：章节阶全失败时整篇下载后按偏好关键词定位片段（`_locate_from_fulltext`，跳过目录点线行/行内省略号，最多 `_FULLTEXT_FALLBACK_LIMIT=2` 篇，记录标 `section_source=fulltext`）→ 按 `datasink.max_chars` 截断为摘要。单篇正文经 `fetch_with_fallback` + 财报域适配器两槽（主：DataSinking；备：巨潮资讯网），复用缓存/熔断/降级；两源以 `source_hint` 做命名空间隔离（异源 doc_id 互不服务，备源候选进独立缓存键段），主源可用时备源零调用。关键词定位（目录行跳过）收敛于 `fetcher/report_locate.py`（全文兜底与备源切片共用同一规则）。**标的清单**由 `collect_a_share_targets(holdings, penetrated)` 生成：持仓场外基金经 `is_otc_fund_by_name` 剔除（`00` 重叠区），穿透标的带 `name`/`sources`（来源基金）用于展示层回填与来源标注；失败原因由 `fetch_symbol_report_detailed` 返回（索引无报告 / 目标章节缺失 + 已试报告期）。
 
@@ -3184,7 +3184,7 @@ config/
 
 #### JSON 注释支持
 
-`core/json_comments.py` 是叶子模块（仅标准库）：`strip_json_comments()` 逐字符扫描，支持 `//` 单行注释和 `/* */` 多行注释，正确处理字符串内的转义引号，不会将字符串内的 `//` / `/*` 误伤；`loads()` / `load()` 是统一读取入口。`config/_comments.py` 再导出同一实现，`core/logger.py` 与计价层因此不必导入 `config` 包（依赖不成环）。
+`core/json_comments.py` 是叶子模块（仅标准库）：`strip_json_comments()` 逐字符扫描，支持 `//` 单行注释和 `/* */` 多行注释，正确处理字符串内的转义引号，不会将字符串内的 `//` / `/*` 误伤；`loads()` / `load()` 是统一读取入口。配置包与 core 级读取方统一从该叶子模块导入，因此不必导入 `config` 包（依赖不成环）。
 
 #### 原子写入
 
@@ -3799,6 +3799,43 @@ web/ (Web 服务层，薄入口)
 
 ---
 
+## 9. 导入面所有权
+
+> **单一 owner 规则**：一个公开符号只有一个实现模块；包 `__init__` 只做已文档化公共 API 的门面，私有实现模块不跨包导入。测试为验证门面行为可 patch 门面，其余 patch 点必须指向实际查询/调用该符号的模块。
+
+| 符号 / 公共面 | owner | 兼容/门面路径 | 主要消费方 | 处置 |
+|:--|:--|:--|:--|:--|
+| `get_config` / `set_config` / 章节可见性 | `config/_core.py` | `config/__init__.py` | 全渠道 | 公开门面保留；私有缓存变量不再导出 |
+| `get_llm_config` / `validate_config` / LLM 默认值 | `config/_llm_settings.py`、`config/_validation.py`、`config/_llm_settings_defaults.py` | `config/__init__.py` | llm / web / tui / analysis | 公开函数保留；私有实现按域导入 |
+| `get_cache_path` / `get/set/clear` | `cache/_paths.py`、`cache/_store.py` | `cache/__init__.py` | core / 报告 / 渠道 | 仅公开入口跨包；`_io`/`_store` 私有 |
+| `is_a_share_code` 等资产判定 | `core/code_utils.py` | — | analysis / fetcher / report | 判定与派生量分离；派生量走 `core/code_symbols.py` |
+| 派生符号（交易所前缀/代码归一） | `core/code_symbols.py` | 原 `code_utils` 转发已删除 | fetcher / providers / report | 调用方直接导入 owner |
+| 日志与缓存自检探针 | `core/doctor_logs.py` | `core/doctor.py` 仅入口调用 | cli / tui / web | 私有探针不再经 `doctor` 转发 |
+| 缓存刷新族 | `cache/_cache_refresh.py` | `cache/operations.py` 编排入口 | tui / cli / web | 刷新函数由编排层内部导入；测试直接 patch owner |
+| 量化指标算法 | `analysis/metrics_returns.py`、`analysis/metrics_risk.py` | `analysis/metrics.py` 聚合 `compute_all_metrics` | report / analysis | 公开聚合保留；私有 `_t_cdf` 等走 `_math_utils` |
+| 景气度输入/权重 | `analysis/prosperity_inputs.py` | `analysis/prosperity_scoring.py` 评分 | report / analysis | 模块名去下划线，跨包直接导入 |
+| provider 共享原语/失败原因 | `providers/utils.py` | 原 `providers/utils.py` 已改名 | fetcher / providers | `set/take/clear_last_reason` 经公开模块 |
+| 基金评级 / 持仓区块 / HTML 状态 | `report/_fund_rating.py`、`report/_holdings_detail_blocks.py`、`report/html_writer_status.py` | `report/fund_performance.py` 等入口 | report / tui | 私有实现只在报告包内使用；测试 patch owner |
+| LLM 响应解析 | `llm/_api_responses.py` | `llm/api_base.py` 公共 API | llm / report | 公共常量/函数保留；内部 helper 直接导入 owner |
+| Web 生成 / 健康路由 | `web/run_generation.py`、`web/handlers_health.py` | `web/handlers.py` 仅路由聚合 | web / tests | 测试 patch 指向 owner；门面不再转出私有实现 |
+
+**登记例外**（保留理由见代码注释与 `check-import-surface` 观察期）：
+
+- `analysis/__init__.py`、`core/registry.py`、`llm/__init__.py`、`llm/fact_checker/__init__.py`：包级公共聚合面，`__all__` 只列公共 API；其中 `noqa: F401` 为门面再导出。
+- `providers/sina.py` 的 `fetch_kline` / `fetch_index_kline`：`fetcher/chain_incremental.py` 按 provider 名动态 `getattr`，属动态调度面而非普通转发。
+- `web/scheduler.py` 的 `normalize_schedule_block` / `validate_schedule_block`：Web 面板与测试共用入口，实现在 `config/_scheduler.py`。
+- 测试对私有模块的导入/patch：只允许指向 owner（如 `cache/_paths.py`、`report/_fund_rating.py`），不得再经转发模块。
+
+**存量导入环（不新增）**：当前包级顶层导入环 3 组，均已复核为有意设计，不再扩大：
+
+- `config` ↔ `config._core` / `_config_api` / `_llm_settings`：包门面公开 API 与内部实现互引，属公开面装配，不引入反向业务依赖。
+- `core.doctor` ↔ `core.doctor_logs`：自检入口与日志/缓存探针分组互引，`doctor` 在模块底部延迟导入以避开导入期环。
+- `llm.api` ↔ `llm._api_claude` / `_api_openai` / `_api_gemini`：API 分派根据 provider 名调用实现，实现共用 `api_base` 原语；新增 provider 时不得让实现反向导入 `llm.api`。
+
+**`noqa: F401` 保留口径**：包级公共聚合面（`analysis/__init__.py`、`core/registry.py`、`llm/__init__.py`、`llm/fact_checker/__init__.py`）的公开 API 再导出；动态调度面（`providers/sina.py` 的 K 线函数供 chain 按 provider 名 `getattr`）；显式副作用/类型导入。新增 `noqa: F401` 须在行内写明理由；测试私有导入只允许指向 owner。
+
+**机检**：`scripts/check-import-surface.py`（观察期，规则 compat-comment / private-all / cross-private / dynamic-target）；包 `__all__` 私有名、兼容注释、跨包私有导入当前均为 0。
+
 ## 附录
 
 ### 附录 A：目录结构
@@ -4146,7 +4183,7 @@ investor-review/
 > `sanitize_document()` 越界回落到 `defaults` 或内置默认并逐条告警（只改内存视图，不改写用户文件）；
 > 面板写入经 `edit_ops` 拒绝（文案含键名/当前值/合法范围），非法值不落盘。
 
-> **注释契约**：五份配置文件（config / llm_settings / llm_key / llm_providers / features）均支持 `//` 与 `/* */` 注释，读取一律经叶子模块 `core/json_comments.strip_json_comments()`（`config/_comments.py` 再导出）；写入走文本 patch（config 用 `_json_patch`、features 用键级 patch），保留既有分类注释与项说明。
+> **注释契约**：五份配置文件（config / llm_settings / llm_key / llm_providers / features）均支持 `//` 与 `/* */` 注释，读取一律经叶子模块 `core/json_comments.strip_json_comments()`；写入走文本 patch（config 用 `_json_patch`、features 用键级 patch），保留既有分类注释与项说明。
 
 #### I.2 消费模式
 

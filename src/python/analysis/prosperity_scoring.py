@@ -20,7 +20,7 @@ from src.python.analysis.prosperity_signals import (
 )
 from src.python.core.num_utils import finite_or
 
-from ._prosperity_inputs import (  # noqa: F401 — 兼容既有导入面
+from .prosperity_inputs import (
     _boom_weights,
     _config_defaults_for_module,
     _matches,

@@ -50,7 +50,13 @@ from src.python.config._core import (
 )
 
 # ── LLM 设置解析（llm_settings.json）──
-from src.python.config._llm_providers import get_llm_providers, write_llm_providers
+from src.python.config._llm_providers import (
+    _get_llm_key_path as get_llm_key_path,
+    _load_llm_providers as load_llm_providers,
+    get_llm_providers,
+    order_providers_by_chain,
+    write_llm_providers,
+)
 from src.python.config._llm_settings import (
     default_enabled_llm,
     get_llm_config,
@@ -61,10 +67,17 @@ from src.python.config._llm_settings import (
 )
 
 # ── 日志配置（logger.json）──
+from src.python.config._llm_pricing import get_llm_pricing_path, load_pricing_config
+from src.python.config._llm_settings_defaults import get_llm_setting_default
 from src.python.config._logging import (
     LoggerConfigError,
     read_logger_config,
     write_logger_config,
+)
+from src.python.config._runtime_overrides import set_config_override, set_llm_enabled_override
+from src.python.config._scheduler import (
+    normalize_block as normalize_schedule_block,
+    validate_block as validate_schedule_block,
 )
 
 # ── 渠道共享 API（默认值 / 持仓与输出路径 / 正式源判定 / 本地状态标记）──
@@ -74,6 +87,7 @@ from src.python.config._config_api import (
     is_formal_holdings_source,
     resolve_holdings_path,
     resolve_output_dir,
+    set_local_flag,
 )
 
 __all__ = [
@@ -117,6 +131,12 @@ __all__ = [
     "get_llm_settings_path",
     "read_llm_settings_file",
     "invalidate_llm_config_cache",
+    "get_llm_key_path",
+    "load_llm_providers",
+    "order_providers_by_chain",
+    "get_llm_pricing_path",
+    "load_pricing_config",
+    "get_llm_setting_default",
     # 日志配置
     "LoggerConfigError",
     "read_logger_config",
@@ -127,4 +147,9 @@ __all__ = [
     "resolve_holdings_path",
     "is_formal_holdings_source",
     "get_local_flag",
+    "set_local_flag",
+    "set_config_override",
+    "set_llm_enabled_override",
+    "normalize_schedule_block",
+    "validate_schedule_block",
 ]

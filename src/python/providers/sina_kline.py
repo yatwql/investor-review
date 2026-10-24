@@ -18,7 +18,7 @@ from src.python.core.code_utils import is_a_share_code, is_exchange_fund_code
 from src.python.core.code_symbols import get_exchange_prefix
 from src.python.core.code_utils import is_index_code
 from src.python.core.num_utils import safe_num
-from src.python.providers._utils import looks_like_block_page
+from src.python.providers.utils import looks_like_block_page
 
 logger = logging.getLogger("invest")
 

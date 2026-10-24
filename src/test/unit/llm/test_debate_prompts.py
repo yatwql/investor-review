@@ -67,7 +67,7 @@ class TestConditionalScenarioInjection(unittest.TestCase):
     条件推理不生效、回退标准 prompt。
     """
 
-    @mock.patch("src.python.config._llm_settings.get_llm_config")
+    @mock.patch("src.python.config.get_llm_config")
     def test_scenarios_rendered_into_synthesis_prompt(self, mock_get):
         """开关开启时，每条情景的 name/desc 都渲染进综合阶段 user prompt。"""
         from src.python.llm.prompts import _build_debate_synthesis_prompt
@@ -88,7 +88,7 @@ class TestConditionalScenarioInjection(unittest.TestCase):
                 f"情景 {sc['name']} 应以 name/desc 渲染进 user prompt",
             )
 
-    @mock.patch("src.python.config._llm_settings.get_llm_config")
+    @mock.patch("src.python.config.get_llm_config")
     def test_empty_scenarios_falls_back_to_baseline(self, mock_get):
         """scenarios 为空 → 条件推理不生效，综合 prompt 不含情景段（回退基线）。"""
         from src.python.llm.prompts import _build_debate_synthesis_prompt
@@ -100,7 +100,7 @@ class TestConditionalScenarioInjection(unittest.TestCase):
         self.assertNotIn("### 情景分析", result)
         self.assertIn("白脸原始分析", result)
 
-    @mock.patch("src.python.config._llm_settings.get_llm_config")
+    @mock.patch("src.python.config.get_llm_config")
     def test_flag_off_ignores_configured_scenarios(self, mock_get):
         """开关关闭时即使配置了情景也不注入（开关是条件推理的唯一门）。"""
         from src.python.llm.prompts import _build_debate_synthesis_prompt
@@ -120,7 +120,7 @@ class TestConditionalScenarioInjection(unittest.TestCase):
         self.assertNotIn("### 情景分析", result)
         self.assertNotIn("上涨情景（指数上涨20%）", result)
 
-    @mock.patch("src.python.config._llm_settings.get_llm_config")
+    @mock.patch("src.python.config.get_llm_config")
     def test_scenarios_rendered_into_expert_review_prompt(self, mock_get):
         """标准路径同样注入情景；`skip_scenarios=True` 时辩论 pro/con 跳过。"""
         from src.python.llm.prompts import _build_expert_review_prompt
@@ -379,7 +379,7 @@ class TestDebateQaConcentrationConfig(unittest.TestCase):
         self.assertNotIn("集中度问答", prompt)
         self.assertNotIn("警戒线", prompt)
 
-    @mock.patch("src.python.config._llm_settings.get_llm_config")
+    @mock.patch("src.python.config.get_llm_config")
     def test_synthesis_prompt_qa_uses_config_threshold(self, mock_get):
         """合成阶段 threshold 从 llm_settings 读取（18% 占比 + 15% 阈值 → 触发）。
 
@@ -408,7 +408,7 @@ class TestDebateQaConcentrationConfig(unittest.TestCase):
         self.assertIn("甲", prompt)
         self.assertIn("警戒线", prompt)
 
-    @mock.patch("src.python.config._llm_settings.get_llm_config")
+    @mock.patch("src.python.config.get_llm_config")
     def test_synthesis_prompt_qa_config_threshold_below_skips(self, mock_get):
         """合成阶段 threshold 读配置为 20% 时，18% 占比不触发集中度问答。"""
         from src.python.llm.prompts import _build_debate_synthesis_prompt
@@ -466,7 +466,7 @@ class TestDebateQaConcentrationConfig(unittest.TestCase):
 
     # ── _build_expert_review_prompt threshold 配置读取 ──────────
 
-    @mock.patch("src.python.config._llm_settings.get_llm_config")
+    @mock.patch("src.python.config.get_llm_config")
     def test_expert_review_prompt_threshold_from_config(self, mock_get):
         """标准模式 expert_review 的 threshold 从配置读取（22% 占比 + 15% 阈值 → 触发）。"""
         from src.python.llm.prompts import _build_expert_review_prompt
@@ -495,7 +495,7 @@ class TestDebateQaConcentrationConfig(unittest.TestCase):
         self.assertIn("甲", prompt)
         self.assertIn("警戒线", prompt)
 
-    @mock.patch("src.python.config._llm_settings.get_llm_config")
+    @mock.patch("src.python.config.get_llm_config")
     def test_expert_review_prompt_threshold_higher_skips(self, mock_get):
         """threshold 高于单品种占比（30% 阈值 + 22% 占比）→ 不触发集中度问答。
 
