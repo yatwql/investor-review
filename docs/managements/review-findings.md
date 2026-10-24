@@ -1,5 +1,5 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.15.5-dev
+> 文档版本：0.15.5
 > **编号源**：`rf-next = 874`（新增问题取此编号，完成后更新为 +1；已用最大 rf-873，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
@@ -34,13 +34,10 @@
 
 ### 开发期已修复（0.15.5-dev）
 
-| # | 问题 | 结论 |
-|---|------|------|
-| **rf-873** | 手机远端跑完报告提示「是否打开」(y/N)，按 `y` 后得到「打开失败」并返回主菜单（`DISPLAY` 为 tmux/screen/Catlink 等继承的会话环境变量时被当成有桌面） | 已修：`local_open_supported()` 在 Linux 上额外要求 X socket 真实存在且 `xdg-open` 可执行，并把 Catlink/Xpra 类桥接会话归为无图形会话；`xdg-open` 子进程 stdout/stderr 丢弃（转发器报错不写回终端，不打乱 TUI 版面）；打开失败一次后本会话直接打印路径与 Web/scp 指引；补 6 例回归 |
-
+（本版开发期已修复项已随 v0.15.5 发布迁入归档档案）
 
 ### 归档档案
-- [`archived_review-findings.0.15.x.md`](../archive/v0.15.x/archived_review-findings.0.15.x.md) — v0.15.x（2026-10-24 ~ 2026-10-24）
+- [`archived_review-findings.0.15.x.md`](../archive/v0.15.x/archived_review-findings.0.15.x.md) — v0.15.x（2026-10-24 ~ 2026-10-25）
 - [`archived_review-findings.0.14.x.md`](../archive/v0.14.x/archived_review-findings.0.14.x.md) — v0.14.x（2026-10-21 ~ 2026-10-23）
 - [`archived_review-findings.0.13.x.md`](../archive/v0.13.x/archived_review-findings.0.13.x.md) — v0.13.x 开发期已修复批次（2026-10-14 ~ 2026-10-21）
 - [`archived_review-findings.0.12.x.md`](../archive/v0.12.x/archived_review-findings.0.12.x.md) — v0.12.0 ~ v0.12.13  （2026-10-03 ~ 2026-10-12）

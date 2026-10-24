@@ -1,5 +1,5 @@
 # 投资复盘助手 — 实现计划
-> 文档版本：0.15.5-dev
+> 文档版本：0.15.5
 > **编号源**：`plan-next = 219`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-218，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
@@ -8,7 +8,7 @@
 
 本文档只保留**在办任务的最新状态**：已完成项随发布迁入版本归档，此处不留实现过程记录。命名与实现纪律见 `CLAUDE.md` 与 `developer-guide.md`（单一事实位，本表不重复）。
 
-**当前迭代**：在办 11 项——P0 3 项（**plan-216/217/218**，已修待实跑验收）、P2 6 项（**plan-92/93/185/210/211/212**）、P3 1 项（**plan-70**）、P4 1 项（**plan-55**）。
+**当前迭代**：在办 8 项——P2 6 项（**plan-92/93/185/210/211/212**）、P3 1 项（**plan-70**）、P4 1 项（**plan-55**）。
 
 ---
 
@@ -21,39 +21,6 @@
 ### P0 — 最高优先（立即执行）
 
 入选标准：直接影响用户可见行为且已验证的缺陷（不是待验证假设）。
-
-#### `plan-216` LLM 预检缓存键与写侧不同源（每份报告四模块全判 miss） ✅
-
-**缺陷（已实证）**：chain 模式下写侧（`skeleton._build_provider_cache_key`）会在裸键后追加 `_{provider}`，而编排层预检 `_compute_module_cache_info` 只拼 `llm_{模块}_{指纹}`——预检读的短键文件永远不存在。后果：① 每份报告四模块全判 miss、全部派发进线程池（真正命中发生在 skeleton 的第二次预检）；② perf `cache_misses` 恒为 4，用户看到的就是「缓存没起作用」；③ 节省派发/渲染开销的预检优化完全失效。
-
-**动作**：`_compute_module_cache_info` 的键统一经 `_build_provider_cache_key(...)` 构造（与写侧同一函数），不链式配置时不加后缀（旧缓存不整体失效）。
-
-**验收**：`test_orchestrator_precheck_key_matches_write_side`（链式配置键尾为 `_p1`，单 Provider 配置不带后缀）+ `test_orchestrator_precheck_hits_skeleton_written_cache`（写侧落盘键与预检键逐字节相等）。
-
-#### `plan-217` 历史取数单轮复用 + 空结果短路（hithink A 股历史无效请求风暴） ✅
-**缺陷（实测）**：单份报告内 `[history_stock] 尝试 hithink` 出现 110 次、其中 99 次「返回空数据」；同一代码按 20/35/90/260/365/400 多窗口分别重走缓存合并与 provider 链路，单轮白耗 30~44s，且 hithink 对 A 股历史结构性不覆盖。
-
-**动作**：`chain_incremental` 新增单轮状态（报告边界清空）——① 窗口复用：按（chain, code）记住本轮已取到的最大窗口，≤ 已取到的直接截尾返回；② 空结果短路：同一（chain, provider）连续 5 次空结果 → 本行余下请求跳过，只留一条汇总 WARNING（与「网络故障熔断」区分：凭据/空结果属结构性不覆盖，不计熔断）。报告入口 `_run_scope.start_report_run` 同时重置。
-
-**验收**：`TestRunHistoryMemo`（小窗口走 memo、大窗口只补取一次、reset 清空）+ `TestEmptyResultStreak`（连续空达阈值后跳过、成功即清零）；conftest 增加 autouse 复位防串味；full 报告复测 hithink 尝试数应从 110 降至 ≤5。
-
-#### `plan-218` 提示词中的可变计数导致缓存键每轮翻新 + 审计基线被误清 ✅
-
-**缺陷（日志实证）**：同一进程连续三份 full 报告（同持仓/同交易日），命中数 0/6 → 3/6 → 4/6，未命中的模块键尾差异集中在两处：①【数据质量详细状态】与【数据质量降级】段写入了失败**出现次数**（`连接失败: ff_sector_flow(1次)`、`累计 3 次`）——次数由重试轮次/网络抖动/跨会话累计决定，与模型要判断的「哪些源本次不可用」无关，却每轮都变，使 `health_check` / `expert_review` 键同变；② 指纹组件审计基线被接进报告边界清空，导致审计恒输出「无变化」，把定位能力也一起弄丢了。
-
-**动作**：两段数据质量文本改为**去重后按源排序、不输出次数**（语义保留「哪些源不可用」；次数由重试轮次与网络抖动决定，与本轮可得数据无关）；指纹审计基线保留在进程级（跨报告比对才有意义，报告边界只重置历史取数单轮状态）；预检结束新增一行 INFO「命中 N/M；未命中：…；重新生成跳过：…」。
-
-**验收**：`test_block_stable_when_failure_multiplicity_differs` + `TestDegradationBlockNoCrossSessionCounts`（次数变化不改变块文本）+ `TestPrecheckSummaryLog`（三类可区分）+ `test_keeps_fingerprint_audit_baseline_across_reports`；重启后同一数据连续两份报告的「指纹组件变化」行应为空（除真实行情/账本变化）。
-
-**实测**：`src/test/unit/llm/test_report_sequence_cache.py` 在同一进程内调用真实 `generate_all_llm`（LLM 全 mock、缓存目录隔离）连跑三份——第 2/3 份**预检层** 4/4 命中，第 3 份 self_review 亦命中；失败事件条数与累计次数变化不影响命中；指数变化时 `global_macro` 重算。四例均以缺陷版代码验证过可捕捉（改回旧实现即红）。
-
-**完整矩阵**：`src/test/unit/llm/test_cache_matrix.py`（21 例，含提示词/模型/精简模式入指纹）逐模块变换各模块自己的入参，断言「该重算的必重算、其余必命中」——指数（global_macro + 含竞争语境的 expert_review）/量化指标（expert_review）/穿透资产（expert_review、health_check、penetration_deep 三处）/历史风险信号/新增数据源失败（health_check）；另覆盖强算与模块级强算、Provider 切换不复用他方缓存、单 Provider 配置仍命中、温度变化换键、`cache_enabled=false` 跳过读、TTL 过期重算、跨进程重启后磁盘缓存仍命中、串行后置模块（生成后自检、持仓变动复盘归因）产出未变则命中、产出变则重算。用例已做变异验证（如从 expert 指纹移除 metrics、把失败次数渲染改回旧式）——对应用例必变红。
-
-**缓存测试域归位（标记与抽离口径）**：仓库**没有** `unit_cache` 标记——`unit/cache` 目录按 `scripts/check-test-markers.py` 期望表归 `unit_core`（缓存基础设施无专属域）。故分两层：① `src/test/unit/cache/test_cache_engine_scenarios.py`（14 例，`unit_core`）测缓存引擎硬契约——TTL 边界、压缩往返、损坏载荷（含截断 gzip）、原子并发写、键版本升级、目录不可写；② `src/test/unit/llm/test_{report_sequence_cache,cache_matrix,cache_real_config}.py`（38 例，`unit_llm` + **横切 `unit_core`**）测 LLM 语义。加 `unit_core` 的理由：P0 `dev-verify` 的选择面不含 `unit_llm`，只标 llm 域会让这批回归只在 P1 才跑。
-
-**逐用例实证**：真实配置链路（不 patch 配置读取）验证 v2 嵌套 + 多链 → 预检键与磁盘文件名交叉比对同源；单 Provider 升级兼容；损坏缓存/截断 gzip/大载荷 gzip/并发双报告/调用失败不落缓存；故障转移时按**实际** provider 落盘、下一轮预检不误复用；模块禁用不生成不落盘；命中正文与首次一致（页脚按设计追加缓存标记）。
-
-**遗留（设计使然）**：`self_review` 内容寻址于其余模块产出，任一上游重算即 miss；`health_check` 在当日盈亏或数据源可用集合实际变化时重算。
 
 ### P1 — 当前待办（立即执行）
 
@@ -113,24 +80,6 @@
 **第二轮复测（同一进程内连续两份 full）**：第一份四模块全 miss，第二份**四个基础模块全部命中**（日志四条 `LLM 缓存命中`，键与第一份相同）且指纹组件无变化（无「指纹变化」INFO 行）——证明缓存机制与指纹稳定性均正常，首份 miss 来自「该进程首次报告 + 缓存文件已被 TTL 清理/重新生成路径」。为消除这个盲区，`cache.get` 的两类未命中（无文件 / 已过期）改打 INFO，预检不可缓存时也打 INFO（原只能靠命中率数字猜）。
 
 **验收**：同非交易日、同持仓/指数/新闻连续两次报告，基础模块第二次命中；perf LLM token/call_count 为单次报告值；无上一轮 degradation/self_review 残留；补同进程双报告与失效回归。
-
-#### `plan-213` 发布标题剥掉裸版本前缀 ✅
-
-**问题**：`publish --title "v0.15.4 —— …"` 拼出 `release: v0.15.4 —— v0.15.4 —— …`（v0.15.4 发布实测）；`normalize_release_title` 只剥 `release: v… —— ` 一类。
-**动作**：补裸版本前缀（含 `-dev` 后缀）剥离；`v2 —— …` 这类非版本数字串不误伤。
-**验收**：`normalize_release_title("v0.15.4 —— 主题") == "主题"`，release 提交标题只出现一次版本号。
-
-#### `plan-214` devbump 分步耗时埋点 ✅
-
-**问题**：`logs/release.jsonl` 中 devbump 的 `steps` 恒空（只有总墙钟 14.1s），无法区分版本改写 / 一致性收敛 / 推送各占多少，跨版本对拍缺一环。
-**动作**：按 `_timer().mark_elapsed()` 补「版本全链改写 + 一致性收敛 / 迁档占位清理 / 切版提交 / 推送 dev / 发布闭环校验」五步，与其余发布命令同口径。
-**验收**：devbump 后台账 `steps` 非空且步骤可读；回归用例断言步骤名存在。
-
-#### `plan-215` 发布闭环机器校验 ✅
-
-**问题**：CLAUDE.md 的「每次正式发布都必须把 dev 合并入 master 并推送、不得只打 tag 不更新 master」此前只靠人看终端，没有任何机检；tag 打错分支 / master 未跟版都要等到下版才发现。
-**动作**：`devbump` 收尾新增闭环校验：`tag vX` 存在且在 master 历史内（`merge-base --is-ancestor`）、`master:<constants>` 的 `APP_VERSION == X`、当前分支为下一开发版；不一致即硬失败并给出逐项修复提示。无 tag 仅告警（`--no-push` 试跑 / 非发布库不误拦）。
-**验收**：三类缺口（tag 不在 master、master 版本不符、dev 未切版）均退出 1 且打印具体项；闭合时打印「发布闭环闭合」；回归用例覆盖三种缺口与无 tag 只告警。
 
 ### P3 — 预期实施，有空时安排
 入选标准：收益明确，但需等待时机或数据积累。
