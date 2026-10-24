@@ -239,13 +239,13 @@ A: 可以。`llm_settings.json` 不包含 API Key 等敏感信息，可安全共
 
 **Q: 如何备份我的配置和持仓？**
 
-A: 需要备份的文件：
-- `data/config/config.json` — 程序配置
-- `data/config/llm_settings.json` — LLM 模块配置
-- `data/config/llm_key.json` — LLM API Key（注意保密）
+A: 需要备份的是**持仓 Excel + 整个 `data/config/` 目录 + `data/history/`**（`data/config/` 内有 8 个文件，逐个挑容易漏）：
+
+- `config.json`（路径 / 章节开关 / 缓存 TTL）、`features.json`（功能开关覆写）、`llm_settings.json`（LLM 参数）、`llm_providers.json`（多链线路）、`logger.json`（日志级别与轮转）、`llm_pricing_ref.json`（计价参考）
+- `llm_key.json`（LLM API Key）、`data_key.json`（数据源密钥）—— **注意保密**
 - 持仓 `.xlsx` 文件
 
-缓存文件（`data/cache/`）无需备份，程序会自动重新生成。建议将上述文件定期复制到安全位置。迁移到新电脑时复制整个项目目录即可。
+缓存文件（`data/cache/`）与日志无需备份，程序会自动重新生成。整目录打包的现成命令见[数据与备份 → §2.1 最小备份](data-and-backup.md#21-最小备份推荐)。
 
 **Q: 在 Web 页面改了配置，会影响 TUI / CLI 吗？**
 

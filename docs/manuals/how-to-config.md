@@ -4,7 +4,7 @@
 
 ## 目录
 
-- [字段说明](#字段说明)（[A. 路径与文件](#a-路径与文件) · [B. 报告章节可见性](#b-报告章节可见性) · [C. 数据源与提供商](#c-数据源与提供商) · [D. 市场时段与缓存](#d-市场时段与缓存) · [E. 行为调优](#e-行为调优) · [F. 业绩基准与无风险利率](#f-业绩基准与无风险利率) · [G. 组合历史走势与持仓快照](#g-组合历史走势与持仓快照) · [H. 业绩评价配置](#h-业绩评价配置) · [I. 再平衡配置](#i-再平衡配置) · [J. 交易纪律配置](#j-交易纪律配置) · [K. 流动性配置](#k-流动性配置) · [L. 匿名化配置](#l-匿名化配置) · [M. 批量并行调度](#m-批量并行调度) · [N. 功能开关（features.json）](#n-功能开关featuresjson) · [O. 缓存分组](#o-缓存分组) · [P. 机器本地状态（非 config.json）](#p-机器本地状态非-configjson) · [Q. Web 模式配置编辑](#q-web-模式配置编辑) · [R. 任务完成通知（notify）](#r-任务完成通知notify) · [与菜单命令的对应关系](#与菜单命令的对应关系)）
+- [字段说明](#字段说明)（[A. 路径与文件](#a-路径与文件) · [B. 报告章节可见性](#b-报告章节可见性) · [C. 数据源与提供商](#c-数据源与提供商) · [D. 市场时段与缓存](#d-市场时段与缓存) · [E. 行为调优](#e-行为调优) · [F. 业绩基准与无风险利率](#f-业绩基准与无风险利率) · [G. 组合历史走势与持仓快照](#g-组合历史走势与持仓快照) · [H. 业绩评价配置](#h-业绩评价配置) · [I. 再平衡配置](#i-再平衡配置) · [J. 交易纪律配置](#j-交易纪律配置) · [K. 流动性配置](#k-流动性配置) · [L. 匿名化配置](#l-匿名化配置) · [M. 批量并行调度](#m-批量并行调度) · [N. 功能开关（features.json）](#n-功能开关featuresjson) · [O. 缓存分组](#o-缓存分组) · [P. 机器本地状态（非 config.json）](#p-机器本地状态非-configjson) · [Q. Web 模式配置编辑](#q-web-模式配置编辑) · [R. 任务完成通知（notify）](#r-任务完成通知notify) · [S. 日志配置（logger.json）](#s-日志配置loggerjson) · [与菜单命令的对应关系](#与菜单命令的对应关系)）
 
 ```json
 {
@@ -205,6 +205,8 @@
 ---
 
 ### A. 路径与文件
+
+> **`data/config/` 的 8 个文件**：`config.json`（本文件主文档）、`features.json`（功能开关覆写，见 [§N](#n-功能开关featuresjson)）、`llm_settings.json`（LLM 参数，见 [LLM 配置指引](how-to-config-llm.md)）、`llm_providers.json`（多链线路）、`logger.json`（日志级别与轮转，见 [§S](#s-日志配置loggerjson)）、`llm_pricing_ref.json`（计价参考，见 [LLM 配置指引 §完整模型定价表](how-to-config-llm.md)）、`llm_key.json` / `data_key.json`（两份密钥，仅手填）。
 
 路径/文件相关字段（`holdings_dir`、`holdings_filename`、`holdings_start_date`、`output_dir`、`llm_key_file`、`llm_settings_file`、`llm_providers_file`、`data_key_file`）见上方字段总表。
 

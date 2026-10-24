@@ -816,7 +816,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 **`publish` 提交前先同步统计快照**：`git add/commit` 之前自动跑 `check-doc-drift.py --sync --ci --with-test-count`（与 pre-commit 钩子对含 `src/test` 变更的提交**同源参数**）。只跑 `--sync` 时 `test-coverage.md` 的收集派生计数不被校验，会出现「本地通过、钩子里仍红」——`publish` 白跑一轮（实测曾连败两次）。同步失败即中止，不提交、不合并、不打 tag。
 
-**`prepare` 不跨版本发布**：发布版恒等于开发链推导值（`0.14.1-dev` → `0.14.1`）。带 `--version` 且与推导值不一致时**立即中止（exit 2）**并打印四步指引（改 `APP_VERSION` → `check-version-consistency --fix` → 同步 changelog 开发段头与 rf 台账节头 → 提交后重跑），不再「按推导执行」跑到中途才报错。
+**`prepare` 不跨版本发布**：发布版恒等于开发链推导值（`X.Y.Z-dev` → `X.Y.Z`）。带 `--version` 且与推导值不一致时**立即中止（exit 2）**并打印四步指引（改 `APP_VERSION` → `check-version-consistency --fix` → 同步 changelog 开发段头与 rf 台账节头 → 提交后重跑），不再「按推导执行」跑到中途才报错。
 
 **归档迁移的自动 / 人工边界（`prepare` 内置，可 `--no-archive` 跳过）**：
 
