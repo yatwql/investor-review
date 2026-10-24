@@ -63,11 +63,11 @@
 
 **现状**：同一非交易日、同持仓、新闻缓存命中时连续两次报告，LLM 模块仍全部缓存 miss；总市值/盈亏相同，说明不是 TTL 到期，而是报告级状态或指纹输入变化。设计见 [`llm-cache-state-isolation.md`](../plan/llm-cache-state-isolation.md)。
 
-**已落地**：`report/_run_scope.py` 报告边界（清本轮降级事件、重置自检载体、取用量基线）；`_usage_delta` 按报告记账；`fingerprint_components` / `diff_fingerprint_components` 组件级审计（DEBUG 下自动记录相对上次的变化）。
+**已落地**：`report/_run_scope.py` 报告边界（清本轮降级事件、重置自检载体、取用量基线）；`_usage_delta` 按报告记账；`fingerprint_components` / `diff_fingerprint_components` 组件级审计（DEBUG 下自动记录相对上次的变化，与生产指纹同口径）；数据质量块只统计失败事件；持仓变动窗口行按日去重口径，不输出原始快照文件数。
 
 **不做**：不为命中缓存忽略行情/指数/数据质量/账本变化；不跨日缓存；不改变现有缓存 TTL。
 
-**剩余**：实跑两次同条件报告验证命中率；`holding_change_block` 随上一轮快照写入变化属真实输入，需先定快照写入时机口径。
+**剩余**：实跑两次同条件报告确认命中（已排除快照计数、降级事件、用量累计、审计口径四类伪变化）。
 
 **验收**：同非交易日、同持仓/指数/新闻连续两次报告，基础模块第二次命中；perf LLM token/call_count 为单次报告值；无上一轮 degradation/self_review 残留；补同进程双报告与失效回归。
 
