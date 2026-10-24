@@ -1,6 +1,6 @@
 # TUI 显示模式统一 — 设计（进行中）
 
-> **状态**：在办（`plan-209`）；先统一行型与状态语义，再逐面板收口
+> **状态**：已完成（`plan-209`；四类行型、状态色、ANSI 截断与面板收口已落地）
 > **范围**：`src/python/tui/` 的配置项行、分组标题、提示/反馈行、开关状态（含关闭态）
 > **关联**：`docs/managements/DESIGN-TUI.md`（契约）、`docs/managements/technical.md`（面板矩阵）
 
@@ -33,11 +33,11 @@
 - `DESIGN-TUI.md` 新增「Display Modes — 行型与状态」，列明四类行型、颜色、产出点与整行着色/截断规则。
 - 回归：`test_handlers_report_chapters.py`（状态红色/父项关闭）、`test_text_layout.py`（ANSI 截断）、`test_prompt_contract.py`（状态唯一实现）。
 
-## 4. 待收口
+## 4. 收口结果
 
-- `[S]` / `[G]` / `[D]` 及健康/缓存面板逐行核对：分组是否统一走 `group_heading`，开关行是否统一走 `format_item`，是否存在手写 `[开启]/[关闭]`。
-- 反馈行（`[OK]/[!]/[ERR]`）与提示行做一次 AST 扫描，禁止新造状态色/前缀；必要时补白名单只减不增。
-- 运行 `dev-verify` / `verify` + `check-doc-drift` / `check-doc-links`；同步 `DESIGN-TUI.md`、手册截图与面板矩阵。
+- `[S]` / `[G]` / `[D]` 及健康/缓存面板已核对：`[S]` 开关行统一走 `format_item` / `status_text`；`[G]` / `[D]` 的分组标题走 `group_heading`；无手写状态徽标。
+- 反馈行与提示行由 `test_prompt_contract.py` 扫描；状态徽标唯一实现由新增契约用例锁定。
+- `dev-verify` / `verify` + 文档守护全绿；`DESIGN-TUI.md`、手册与面板矩阵已同步。
 
 ## 5. 不做
 

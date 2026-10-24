@@ -11,7 +11,7 @@
 
 - **`plan-208` 跨模块导入面收窄完成**：`config/cache/cli/providers` 公共面移除私有 `__all__`；兼容转发注释清零；生产代码跨包私有导入清零；`code_utils`/`doctor`/`cache.operations` 等转发按 owner 收口；`providers/_utils.py`→`providers/utils.py`、`analysis/_prosperity_inputs.py`→`analysis/prosperity_inputs.py`；测试 patch 点对齐 owner；新增观察期 `scripts/check-import-surface.py`（compat-comment / private-all / cross-private / dynamic-target）与 owner 表（`technical.md` §9）。
 
-- **`plan-209` TUI 显示模式统一（进行中）**：状态标签收敛到 `switch_panel.status_text`（关闭恒红，父项关闭的子项不再退化为无色）；`truncate_display` 改为 ANSI 感知并补 `RESET`，修复窄档蓝色分组标题颜色泄漏；`DESIGN-TUI.md` 新增「Display Modes」契约；立项设计见 `docs/plan/tui-display-modes.md`。
+- **`plan-209` TUI 显示模式统一（完成）**：状态标签收敛到 `switch_panel.status_text`（关闭恒红，父项关闭的子项不再退化为无色）；`truncate_display` 改为 ANSI 感知并补 `RESET`，修复窄档蓝色分组标题颜色泄漏；`DESIGN-TUI.md` 新增「Display Modes」契约；立项设计见 `docs/plan/tui-display-modes.md`。
 
 - **`rf-863` 发布流程写前校验与失败回滚**：`apply_changelog_release` 现在在纯文本阶段校验「最近发布」指针行与归档索引行的目标路径（跨小版本目录缺 `v` 等错误在 `check` 预演即中止），并把索引行目录一并归一；`prepare` 在预检干净树的前提下，写盘后任一步失败自动 `git reset --hard HEAD` 回滚（未跟踪文件只提示不删除），不再留半途状态。
 
