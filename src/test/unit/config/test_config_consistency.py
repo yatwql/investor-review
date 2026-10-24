@@ -287,9 +287,8 @@ class TestDefaultConfigTemplateConsistency:
         cleaned = _strip_json_comments(template_str)
         parsed = json.loads(cleaned)
 
-        # 深度比较：排除可能因运行时环境动态变化的 cache_ttl
-        # （由 get_cache_ttl_defaults() 生成，模板和 _DEFAULT_CONFIG 均引用同一函数，
-        #  但 registry 可能在不同测试间被修改）
+        # cache_ttl 为稀疏覆盖位（默认值唯一来源是缓存注册表），模板与 _DEFAULT_CONFIG
+        # 均为空对象，可与其他键一样直接深度比较。
         assert parsed.keys() == cfg._config_defaults._DEFAULT_CONFIG.keys(), (
             f"模板与 _DEFAULT_CONFIG 键集不一致\n"
             f"模板独有: {parsed.keys() - cfg._config_defaults._DEFAULT_CONFIG.keys()}\n"
@@ -297,15 +296,6 @@ class TestDefaultConfigTemplateConsistency:
         )
 
         for key in parsed:
-            if key == "cache_ttl":
-                # cache_ttl 动态生成，兜底比较键集与值类型
-                assert parsed["cache_ttl"].keys() == cfg._config_defaults._DEFAULT_CONFIG["cache_ttl"].keys(), (
-                    f"cache_ttl 键集不一致: {parsed['cache_ttl'].keys() ^ cfg._config_defaults._DEFAULT_CONFIG['cache_ttl'].keys()}"
-                )
-                for k in parsed["cache_ttl"]:
-                    assert type(parsed["cache_ttl"][k]) is type(cfg._config_defaults._DEFAULT_CONFIG["cache_ttl"][k]), (
-                        f"cache_ttl.{k} 类型不匹配: {type(parsed['cache_ttl'][k])} vs {type(cfg._config_defaults._DEFAULT_CONFIG['cache_ttl'][k])}"
-                    )
             if key in _PATH_KEYS_IN_TEMPLATE:
                 # 路径键：模板与 _DEFAULT_CONFIG 均使用绝对路径（CWD 无关安全），
                 # 但测试 fixture（_isolate_sensitive_paths）可能覆写 _DEFAULT_CONFIG

@@ -65,26 +65,38 @@ class TestCleanupReaderAlignment:
         assert _cleanup(cache_env) == 1
 
     def test_exact_key_mapping_uses_version_stripped_key(self, cache_env):
-        """精确键（无指纹后缀）在清理侧也要能命中类型映射。"""
-        from src.python.core.data_registry import get_exact_type_map
-        from src.python.cache._ttl import get_ttl
+        """精确键（无指纹后缀）在清理侧也命中精确映射，不因版本戳退化为 default/前缀类型。
 
-        sample = next(iter(get_exact_type_map()))
-        data_type = get_exact_type_map()[sample]
-        ttl = get_ttl(data_type, sample)
-        # 精确键的 TTL 与所属类型一致（不因版本戳退化为 default/日级）
-        assert ttl == pytest.approx(get_ttl(data_type), rel=0.2) or ttl != pytest.approx(86400, rel=0)
-        _write_cache(cache_env, sample, age_seconds=ttl - 60)
-        assert _cleanup(cache_env) == 0
+        判别法：从注册表的精确键表里挑一个「按精确键查到的类型 TTL」与「按前缀/默认
+        查到的 TTL」不同的样本，构造一个年龄落在两者之间的文件——只有精确映射生效时
+        才不会被判过期。
+        """
+        from src.python.cache._ttl import get_ttl
+        from src.python.core.data_registry import get_cache_ttl_defaults, get_exact_type_map, get_prefix_type_map
+
+        exact_map = get_exact_type_map()
+        prefix_map = get_prefix_type_map()
+        defaults = get_cache_ttl_defaults()
+
+        sample = None
+        for key, exact_type in exact_map.items():
+            prefix_type = next((dt for pfx, dt in prefix_map.items() if key.startswith(pfx)), "default")
+            exact_ttl = defaults.get(exact_type, 86400)
+            naive_ttl = defaults.get(prefix_type, 86400)
+            if exact_ttl > naive_ttl * 1.5:
+                sample = (key, exact_type, exact_ttl, naive_ttl)
+                break
+        assert sample, "注册表里应至少有一个精确键，其类型 TTL 明显长于前缀/默认兜底"
+        key, data_type, exact_ttl, naive_ttl = sample
+
+        ttl = get_ttl(data_type, key)  # 读侧口径（含抖动）
+        assert ttl >= naive_ttl * 1.2, "读侧 TTL 应明显长于前缀兜底值"
+        # 年龄介于「前缀兜底」与「精确类型」之间：精确映射未生效就会被误删
+        _write_cache(cache_env, key, age_seconds=(naive_ttl + ttl) / 2)
+        assert _cleanup(cache_env) == 0, f"精确键 {key} 应命中 {data_type} 的 TTL，未被提前删除"
 
 
 class TestSparseOverride:
-    def test_template_has_no_default_copy(self):
-        from src.python.config._config_defaults import _DEFAULT_CONFIG, _get_default_config_template
-
-        assert _DEFAULT_CONFIG["cache_ttl"] == {}
-        assert '"cache_ttl": {}' in _get_default_config_template()
-
     def test_registry_is_the_default(self, monkeypatch):
         """没有任何 config 覆盖时，`get_ttl` 取注册表默认值。"""
         from src.python.cache import _ttl

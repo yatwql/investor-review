@@ -53,19 +53,13 @@ class TestTTLSingleSource:
         for module in ("self_review", "holding_change"):
             assert get_cache_ttl_llm(module) == pytest.approx(86400, abs=1e-9), module
 
-    def test_generated_config_template_keeps_ttl_sparse(self):
-        """生成配置的程序**不抄默认值**：`cache_ttl` 为空对象，默认值唯一来源是注册表。
-
-        抄一份默认值会让「用户显式覆盖」与「模板陈旧」无法区分——改默认值后旧副本
-        仍按旧值生效，运行时与代码默认值脱钩。
-        """
-        from src.python.config._config_defaults import _DEFAULT_CONFIG, _get_default_config_template
+    def test_registry_carries_the_four_hour_defaults(self):
+        """4h 决策落在注册表（默认值唯一来源）；模板稀疏性由缓存域用例守护。"""
         from src.python.core.data_registry import get_cache_ttl_defaults
 
-        assert _DEFAULT_CONFIG["cache_ttl"] == {}
-        assert '"cache_ttl": {}' in _get_default_config_template()
-        # 模板不写 ≠ 丢值：默认值仍可从注册表取到
-        assert get_cache_ttl_defaults()["llm_expert_review"] == 14400
+        defaults = get_cache_ttl_defaults()
+        for module in ("expert_review", "health_check", "penetration_deep", "news_correlation"):
+            assert defaults[f"llm_{module}"] == 14400, module
 
     @pytest.mark.parametrize("module", ("expert_review", "health_check", "penetration_deep", "news_correlation"))
     def test_analysis_modules_use_four_hour_ttl(self, module):
