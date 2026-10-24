@@ -1,6 +1,6 @@
 # 投资复盘助手 — 实现计划
 > 文档版本：0.15.1-dev
-> **编号源**：`plan-next = 207`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-206，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`plan-next = 208`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-207，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -57,6 +57,10 @@
 #### `plan-202` 演示截图生成器入库——已完成，待发布归档
 
 **状态**：入口 `scripts/make-screenshots.py`（`demo` / `report` / `tui` / `web`）+ 实现包 `scripts/_screenshots/`；16 例回归；参考文档与目录树三处登记。记录见 changelog。
+
+#### `plan-207` 清理旧配置形参兼容——已完成，待发布归档
+
+**状态**：移除 10 个功能开关访问器（`is_enable_data_quality` / `candidate_compare` / `stock_fundamentals` / `market_sentiment` / `cost_lots` / `valuation_percentile` / `market_temperature` / `industry_beta` / `fund_purchase_limit` / `cost_position`）的 `config` 形参——该参数在功能开关迁入 `features.json` 后已不参与取值，仅为旧调用签名保留；同步更新 26 处调用点与测试，删除「旧 config 入参被忽略」的兼容用例。保留当前规格内的降级回退（快照缺市值按 R-EVO-02 回退成本口径、LLM flat 单凭据模式）——它们不是旧数据兼容。
 
 #### `plan-206` 报告运行观测三项整改（锚点开销 / 归因粒度 / full 提示）——已完成，待发布归档
 
