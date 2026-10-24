@@ -58,8 +58,33 @@ class TestOpenArtifacts:
         assert core_artifacts.open_path(tmp_path) is False
 
 
+class TestLocalOpenSupported:
+    def test_remote_ssh_disables_local_open(self, monkeypatch):
+        from src.python.core import artifacts
+
+        monkeypatch.delenv("SSH_CONNECTION", raising=False)
+        monkeypatch.delenv("SSH_TTY", raising=False)
+        monkeypatch.delenv("MOSH_CONNECTION", raising=False)
+        monkeypatch.setenv("DISPLAY", ":0")
+        monkeypatch.setattr(artifacts.sys, "platform", "linux")
+        assert artifacts.local_open_supported() is True
+        monkeypatch.setenv("SSH_CONNECTION", "1.2.3.4 1 5.6.7.8 22")
+        assert artifacts.local_open_supported() is False
+
+    def test_linux_without_display_disables_local_open(self, monkeypatch):
+        from src.python.core import artifacts
+
+        monkeypatch.delenv("SSH_CONNECTION", raising=False)
+        monkeypatch.delenv("SSH_TTY", raising=False)
+        monkeypatch.delenv("MOSH_CONNECTION", raising=False)
+        monkeypatch.delenv("DISPLAY", raising=False)
+        monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+        monkeypatch.setattr(artifacts.sys, "platform", "linux")
+        assert artifacts.local_open_supported() is False
+
+
 class TestPromptOpenArtifacts:
-    def _run(self, tmp_path, key, *, opener_ok=True, tty=True):
+    def _run(self, tmp_path, key, *, opener_ok=True, tty=True, supported=True):
         config = _svc(tmp_path)
         artifacts = ra.collect_artifacts(config)
         lines: list[str] = []
@@ -75,6 +100,7 @@ class TestPromptOpenArtifacts:
                 key_reader=lambda: key,
                 opener=_opener,
                 echo=lines.append,
+                open_supported=lambda: supported,
             )
         return result, calls, lines
 
@@ -102,7 +128,9 @@ class TestPromptOpenArtifacts:
             patch.object(ra.sys.stdin, "isatty", lambda: True),
             patch("src.python.tui.tui_menu.exit_app") as mock_exit,
         ):
-            ra.prompt_open_artifacts(artifacts, key_reader=lambda: "KEY_CTRL_C", opener=lambda p: True)
+            ra.prompt_open_artifacts(
+                artifacts, key_reader=lambda: "KEY_CTRL_C", opener=lambda p: True, open_supported=lambda: True
+            )
         mock_exit.assert_called_once()
 
     def test_open_failure_reports_manual_path(self, tmp_path):
@@ -122,9 +150,36 @@ class TestPromptOpenArtifacts:
             return "y"
 
         with patch.object(ra.sys.stdin, "isatty", lambda: False):
-            result = ra.prompt_open_artifacts(artifacts, key_reader=_reader, opener=lambda p: True, echo=lines.append)
+            result = ra.prompt_open_artifacts(
+                artifacts, key_reader=_reader, opener=lambda p: True, echo=lines.append, open_supported=lambda: True
+            )
         assert result == "skipped" and asked["n"] == 0
         assert any("产物文件" in line for line in lines)
+
+    def test_remote_or_headless_skips_open_with_guidance(self, tmp_path):
+        """远程/无图形会话无法在客户端打开服务器文件管理器，应展示路径指引。"""
+        config = _svc(tmp_path)
+        artifacts = ra.collect_artifacts(config)
+        asked = {"n": 0}
+        calls: list[Path] = []
+        lines: list[str] = []
+
+        def _reader():
+            asked["n"] += 1
+            return "y"
+
+        result = ra.prompt_open_artifacts(
+            artifacts,
+            key_reader=_reader,
+            opener=lambda p: calls.append(p) or True,
+            echo=lines.append,
+            open_supported=lambda: False,
+        )
+        assert result == "unsupported"
+        assert asked["n"] == 0
+        assert calls == []
+        assert any("远程/无图形" in line for line in lines)
+        assert any("scp/sftp" in line for line in lines)
 
     def test_empty_artifacts_do_nothing(self):
         lines: list[str] = []
