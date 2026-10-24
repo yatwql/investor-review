@@ -136,6 +136,9 @@ class TestCorrectionStreakCooldown(unittest.TestCase):
         ):
             result = []
             for _ in range(skip):
+                # 每次迭代视为一份新报告：单轮窗口复用 memo 在报告边界清空
+                # （同一份报告内的重复同窗口请求不再走增量合并与重叠检测）
+                ci.reset_run_history_state()
                 result = fetch_with_incremental_fallback("history_stock", "600000", 30)
 
         # 前 skip-1 次全量刷新，第 skip 次冷却跳过 → 共 skip-1 次全量调用

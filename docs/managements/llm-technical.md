@@ -898,8 +898,15 @@ penetrated_assets ──→ extract_stable_penetration()
 标准模式:   llm_{module_key}_{fingerprint}.json
            如: llm_global_macro_a1b2c3d4e5f6.json
 
+多链模式:   llm_{module_key}_{fingerprint}_{provider_name}.json
+           如: llm_global_macro_a1b2c3d4e5f6_ada8a5c8591b_deepseek-main.json
+           （provider 后缀由 skeleton._build_provider_cache_key 唯一构造，
+             预检侧与写侧同调——两侧各拼一份时预检永远读不到写侧的文件）
+
 批量模式:   llm_news_item_{hash}.json  （逐条缓存，hash 含标题+持仓指纹）
 ```
+
+> **键尾同源（C21）**：预检（`_compute_module_cache_info`）与写侧（`skeleton`）必须用**同一个函数**拼出完整键。历史上预检只拼到 `{指纹}`、写侧额外追加 `_{provider}`，后果是每份报告四模块全判 miss、全量派发、`cache_misses` 恒为 4，而真实命中发生在 skeleton 的第二次预检——观测上完全看不出是「键拼错了」。该不变式由 `test_llm_cache_multi.py` 的「预检键与写侧键逐字节相等」用例锁定。
 
 ### 7.3 TTL 分辨率
 

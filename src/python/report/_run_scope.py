@@ -53,4 +53,16 @@ def start_report_run() -> dict[str, Any]:
         baseline = copy.deepcopy(get_session_usage())
     except Exception:
         logger.debug("[run_scope] 会话用量基线读取失败，已忽略", exc_info=True)
+    try:
+        from src.python.fetcher.chain_incremental import reset_run_history_state
+
+        reset_run_history_state()
+    except Exception:
+        logger.debug("[run_scope] 历史取数单轮状态重置失败，已忽略", exc_info=True)
+    try:
+        from src.python.llm.generators_orchestrator import reset_fingerprint_audit
+
+        reset_fingerprint_audit()
+    except Exception:
+        logger.debug("[run_scope] 指纹审计基线重置失败，已忽略", exc_info=True)
     return baseline

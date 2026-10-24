@@ -242,6 +242,100 @@ class TestHistoryIndexChain(unittest.TestCase):
             mock_cache_set.assert_not_called()
 
 
+class TestRunHistoryMemo:
+    """单轮窗口复用：同一份报告内多个消费方按不同窗口取同一代码时只取一次。
+
+    实测一轮报告上百次重复历史请求（多窗口 × 多模块），全部重走缓存合并与
+    provider 链路；按（chain, code）记住本轮已取到的最大窗口即可消除。
+    """
+
+    def _bars(self, n: int, start_day: int = 1) -> list[dict]:
+        return [{"date": f"2026-09-{start_day + i:02d}", "close": 100.0 + i} for i in range(n)]
+
+    def test_smaller_window_served_from_memo(self):
+        from src.python.fetcher import chain_incremental as ci
+
+        ci.reset_run_history_state()
+        bars = self._bars(90)
+        with (
+            patch.object(ci, "cache_get", return_value=[]),
+            patch.object(ci, "cache_set"),
+            patch.object(ci, "_try_providers", return_value=bars) as mock_try,
+        ):
+            assert len(ci.fetch_with_incremental_fallback("history_stock", "600900", 90)) == 90
+            # 同代码更小窗口 → 直接截尾，不再取数
+            assert len(ci.fetch_with_incremental_fallback("history_stock", "600900", 35)) == 35
+            assert mock_try.call_count == 1
+
+    def test_larger_window_refetches_once(self):
+        from src.python.fetcher import chain_incremental as ci
+
+        ci.reset_run_history_state()
+        small, large = self._bars(30), self._bars(120)
+        with (
+            patch.object(ci, "cache_get", return_value=[]),
+            patch.object(ci, "cache_set"),
+            patch.object(ci, "_try_providers", side_effect=[small, large]) as mock_try,
+        ):
+            assert len(ci.fetch_with_incremental_fallback("history_stock", "601398", 30)) == 30
+            assert len(ci.fetch_with_incremental_fallback("history_stock", "601398", 120)) == 120
+            # 再要小窗口时已由 120 窗口截尾供给
+            assert len(ci.fetch_with_incremental_fallback("history_stock", "601398", 60)) == 60
+            assert mock_try.call_count == 2
+
+    def test_reset_clears_memo(self):
+        from src.python.fetcher import chain_incremental as ci
+
+        ci.reset_run_history_state()
+        with (
+            patch.object(ci, "cache_get", return_value=[]),
+            patch.object(ci, "cache_set"),
+            patch.object(ci, "_try_providers", return_value=[]),
+        ):
+            ci.fetch_with_incremental_fallback("history_stock", "600900", 90)
+        ci.reset_run_history_state()
+        assert ci._RUN_HISTORY_MEMO == {}
+
+
+class TestEmptyResultStreak:
+    """结构性不覆盖的 provider（如 hithink 对 A 股历史）连续空结果后本轮不再尝试。"""
+
+    def _run(self, ci, results):
+        from unittest.mock import MagicMock
+
+        registry = MagicMock()
+        registry.is_circuit_broken.return_value = False
+        calls: list[str] = []
+
+        def _call(provider_name, *_a, **_k):
+            calls.append(provider_name)
+            return results.get(provider_name, [])
+
+        with (
+            patch.object(ci, "missing_credential", return_value=None),
+            patch.object(ci, "_call_history_provider", side_effect=_call),
+        ):
+            for code in ("600900", "601398", "601939", "601988", "601288", "601328"):
+                ci._try_providers(["hithink"], registry, "history_stock", code, 90, None)
+        return calls
+
+    def test_empty_provider_skipped_after_streak(self):
+        from src.python.fetcher import chain_incremental as ci
+
+        ci.reset_run_history_state()
+        calls = self._run(ci, {"hithink": []})
+        # 前 5 次尝试计入 streak，第 6 个代码起直接跳过
+        assert len(calls) == ci._EMPTY_STREAK_SKIP
+
+    def test_success_resets_streak(self):
+        from src.python.fetcher import chain_incremental as ci
+
+        ci.reset_run_history_state()
+        calls = self._run(ci, {"hithink": [{"date": "2026-09-30", "close": 1.0}]})
+        assert len(calls) == 6  # 每次都有数据 → 从不跳过
+        assert ci._EMPTY_STREAK[("history_stock", "hithink")] == 0
+
+
 _TEST_CALENDAR = {
     "2026-09-08",
     "2026-09-09",

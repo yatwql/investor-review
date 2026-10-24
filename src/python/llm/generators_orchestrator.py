@@ -41,7 +41,7 @@ from src.python.llm.prompts import (
     _build_competitive_context_block,
     _build_data_quality_detail_block,
 )
-from src.python.llm.skeleton import is_llm_module_enabled
+from src.python.llm.skeleton import _build_provider_cache_key, is_llm_module_enabled
 from src.python.core.registry import get_llm_module_name, get_llm_module_names
 
 logger = logging.getLogger("invest")
@@ -159,32 +159,40 @@ def _compute_module_cache_info(
     fp_health_check = health_check_fingerprint(_inputs)
     fp_penetration_deep = penetration_deep_fingerprint(_inputs)
 
+    # 缓存键必须与**写侧**逐字节相同：chain 模式下写侧（``skeleton`` 的
+    # ``_build_provider_cache_key``）会在裸键后追加 ``_{provider_name}``。预检
+    # 不追加时读的是「短键」——文件永远不存在，于是每份报告四模块全判 miss、
+    # 全量派发进线程池（真正命中发生在 skeleton 的第二次预检），并虚报
+    # ``cache_misses``。同源由本函数的统一追加保证，不靠两侧各自拼。
+    def _key(module_key: str, fingerprint: str) -> str:
+        return _build_provider_cache_key(CACHE_PREFIX_LLM + f"{module_key}_{fingerprint}", llm_config, module_key)
+
     force_flag = force
     _forced = force_modules if force_modules is not None else frozenset()
     info: dict[str, dict] = {
         "global_macro": {
-            "key": CACHE_PREFIX_LLM + f"global_macro_{fp_global_macro}",
+            "key": _key("global_macro", fp_global_macro),
             "ttl": get_cache_ttl_llm("global_macro"),
             "can_cache": not (force_flag or "global_macro" in _forced)
             and llm_config.get("cache_enabled_global_macro", True),
             "thinking_key": "thinking_enabled_global_macro",
         },
         "expert_review": {
-            "key": CACHE_PREFIX_LLM + f"expert_review_{fp_expert_review}",
+            "key": _key("expert_review", fp_expert_review),
             "ttl": get_cache_ttl_llm("expert_review"),
             "can_cache": not (force_flag or "expert_review" in _forced)
             and llm_config.get("cache_enabled_expert_review", True),
             "thinking_key": "thinking_enabled_expert_review",
         },
         "health_check": {
-            "key": CACHE_PREFIX_LLM + f"health_check_{fp_health_check}",
+            "key": _key("health_check", fp_health_check),
             "ttl": get_cache_ttl_llm("health_check"),
             "can_cache": not (force_flag or "health_check" in _forced)
             and llm_config.get("cache_enabled_health_check", True),
             "thinking_key": "thinking_enabled_health_check",
         },
         "penetration_deep": {
-            "key": CACHE_PREFIX_LLM + f"penetration_deep_{fp_penetration_deep}",
+            "key": _key("penetration_deep", fp_penetration_deep),
             "ttl": get_cache_ttl_llm("penetration_deep"),
             "can_cache": not (force_flag or "penetration_deep" in _forced)
             and llm_config.get("cache_enabled_penetration_deep", True),
