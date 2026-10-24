@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.15.3-dev
-> **编号源**：`rf-next = 867`（新增问题取此编号，完成后更新为 +1；已用最大 rf-866，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 869`（新增问题取此编号，完成后更新为 +1；已用最大 rf-868，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -21,6 +21,8 @@
 | # | 问题 | 修复方向 |
 |---|------|----------|
 | **rf-864** | **手机窄终端报告收尾按 `y` 未打开新目录**：报告结束后提示「是否打开报告目录与报告？(y/N)」，按 `y` 未启动文件管理器/打开报告目录，而是直接回到主界面；疑似键读取未命中、`sys.stdin.isatty()` 在移动终端为假、或 `open_artifacts` 平台分派失败且窄屏未显示失败反馈 | 复现并逐层定位：① `_ask_open` 的 `get_key` 实际返回（`y/Y`、`y\r`、Esc、回车）；② `prompt_open_artifacts` 的 `isatty` 分支；③ `open_artifacts` 在 Android/Termux/远程移动终端的平台分派与失败提示。补 mock 回归：`y/Y` 必须调用 opener（目录 + 产物）、`n/回车/Esc` 不调用、非 TTY 只列清单、opener 失败必须上屏 `[!]` 提示；真机复验 Termux/手机浏览器终端 |
+| **rf-867** | 发布 `refresh` 的 unit 并行运行偶发 `test_peak_periods_defaults` 失败（11447 passed / 1 failed），单跑与完整 unit 重跑通过；本次发布因此多一次 56s refresh 与手动重跑 | 先固定复现（并行 worker/用例顺序、`PRICING_PEAK_PERIODS` 全局状态复位），再决定修测试隔离或生产状态；refresh 门禁不放宽 |
+| **rf-868** | 发布 `refresh` 失败时台账 `failure.failed_tests=[]`，`tail` 只有环境/耗时汇总，未保留 `FAILED` 用例与关键堆栈，事后只能翻归档日志 | 修正 `_summarize_failure` / refresh 输出采集：保留 pytest 短摘要与失败首因，确保台账能直接定位；补失败快照回归 |
 
 
 ### P3 — 持续监控：文件膨胀登记
