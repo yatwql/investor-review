@@ -1,6 +1,6 @@
 # 跨模块导入面重命名 — 分析与迁移方案（未实施）
 
-> **状态**：分析稿（立项 `plan-208`，**不包含实施**；经 30 轮复盘后的定稿）
+> **状态**：分析稿（立项 `plan-208`，**不包含实施**；经 50 轮复盘后的定稿）
 > **范围**：`src/python/` 内跨模块/跨渠道的 re-export 兼容层、私有模块导入与 `__all__` 公共面
 > **关联**：`docs/managements/technical.md`（架构约束）、`docs/managements/developer-guide.md`（脚本与模块归属）、`scripts-reference.md`（命名约定）
 
@@ -26,6 +26,15 @@
 | 包级 import 候选环 | **7 组** | 仅看模块顶层语句（排除 `TYPE_CHECKING` 与函数内导入）；仍需逐条复核，不能直接判违规 |
 
 复跑命令见附录 B。计数会随代码演进变化，实施前须以当次快照为准。
+
+### 2.1 重点热点（本轮补充实测）
+
+- **`config.__all__` 的 22 个私有名**分三类：配置默认值/路径与模板（`_DEFAULT_CONFIG` / `_CONFIG_FILE` / `_get_default_config_template` 等）、缓存与失效状态（`_clear_config_cache` / `_config_cache` / `_config_mtime` / `_config_size` / `_config_lock` / LLM 同名缓存六项）、校验常量（`_KNOWN_*` / `_STRING_CONFIG_KEYS`）。私有**状态变量**不应作为公共 API；需要读状态时提供函数，不导出变量本身。
+- **跨包私有导入热点**：`web/config_edit.py` 6 处、`llm/prompts_action.py` 4 处、`startup_wizard.py` 4 处；其余分布在 `fetcher/chain.py`、`tui/handlers_config.py`、`analysis/_rebalance_deviation.py` 等，共 31 处 / 18 文件。
+- **动态导入字符串**：`fetcher/source_adapter.py`（`module_name`）、`fetcher/chain_incremental.py`（`module_path`，3 处）——模块改名必须同步字符串并用导入 smoke 覆盖。
+- **测试 patch 转发模块的实例**：`report.fund_performance.write_fund_performance_sheet`、`cache.operations.update_basic_cache` / `update_position_cache`、`core.doctor.run_doctor_checks` 等；P0 需建立完整 patch 清单，不能只改生产导入。
+- **脚本也是消费者**：`scripts/_doc_drift/_format.py` 导入 `config._config_defaults` / `_llm_settings_defaults`，`scripts/_eval_halluc_sampler` 导入 `llm.fact_checker._runner` / `_utils`；owner 表须覆盖 `scripts/`，不能只扫 `src/`。
+- **文档引用需同步**：`folders.md` / `technical.md` / `requirements.md` / `llm-technical.md` 仍以 `code_utils`、`json_comments`、`_cache_refresh`、`doctor_logs` 等为路径锚点；P4 统一更新，避免代码与文档各说一套。
 
 ## 3. 问题模型
 
@@ -69,14 +78,15 @@
 ### P0 — owner 表
 
 产出：`符号 | owner 模块 | 旧导入路径 | 生产者调用点 | 测试 patch 点 | 处置（保留门面/删除转发/提升公开）`。
-覆盖优先级：`config.__all__` 的 22 个私有名、31 处跨包私有导入、103 行 F401 中疑似 re-export 的条目。
-退出条件：owner 表评审通过；每个拟删除项都有调用点/测试清单；例外项登记理由。
+覆盖优先级：`config.__all__` 的 22 个私有名（分默认值/状态/校验常量三类）、31 处跨包私有导入（`web/config_edit` 6 / `llm/prompts_action` 4 / `startup_wizard` 4 优先）、103 行 F401 中疑似 re-export 的条目，以及 `scripts/` 的私有导入（`_doc_drift` / `_eval_halluc_sampler`）。
+owner 表必须包含列：`符号 | owner 模块 | 旧导入路径 | 生产调用点 | 测试 patch 点 | 脚本消费者 | 处置 | 例外理由`。
+退出条件：owner 表评审通过；每个拟删除项都有调用点/测试/脚本清单；例外项登记理由、替代路径与复核期限；导入 smoke 与 patch 扫描命令已就绪。
 
 ### P1 — `config` 包
 
 - `_validation.py`：确认哪些转发仍被 `config/__init__.py` / `_core.py` 使用；公共面收窄，死转发删除。
 - `_comments.py`：统一到 `core/json_comments.py` 的唯一公开名；私有别名按调用点迁移。
-- `__init__.py`：22 个私有名分类——公共 API 移入公开名/新模块；仅测试使用的移出 `__all__`；删除无消费项。
+- `__init__.py`：22 个私有名按三类处置——默认值/模板类收敛为公开访问器；缓存/失效状态类改为函数读取（不导出变量）；校验常量仅保留确有消费的项。仅测试使用的移出 `__all__`，删除无消费项。
 - 退出条件：`config` 内无兼容转发注释；公共 `__all__` 无私有名（或例外表全绿）；`unit_config` + `verify` 全绿。
 
 ### P2 — `core` + `cache`
@@ -149,7 +159,7 @@
 - 不借重命名调整模块职责（职责调整另立设计）。
 - 不在本阶段删除任何现有转发；本文件只用于评审范围与顺序。
 
-## 附录 A — 30 轮复盘记录
+## 附录 A — 50 轮复盘记录
 
 | 轮次 | 复盘焦点 | 本轮改进 | 收益 | 风险 / 代价 |
 |:--:|:--|:--|:--|:--|
@@ -183,6 +193,27 @@
 | 28 | 术语统一 | 统一 shim / facade / owner / patch point | 减少歧义 | 纯文档成本 |
 | 29 | 实施清单 | 增加每阶段「改调用点→删转发→跑门禁」顺序 | 防漏删/先删后改 | 执行力依赖 reviewer |
 | 30 | 最终准入 | 增加开放决策与 go/no-go 前置 | 决策清晰 | 仍需 owner 表评审 |
+| 31 | 私有导出分类 | 把 `config.__all__` 22 个私有名分成默认值/状态/校验常量三类；状态变量不导出 | 公共面可收窄 | 需要新增读取函数 |
+| 32 | 脚本消费者 | owner 表覆盖 `scripts/`，记录 `_doc_drift` / `_eval_halluc_sampler` 的私有导入 | 避免漏改脚本 | 脚本测试面扩大 |
+| 33 | patch 实例 | 加入 `fund_performance` / `cache.operations` / `core.doctor` 等真实 patch 样例 | patch 审计有靶子 | 改动用例数量增加 |
+| 34 | 文档引用 | 把 `folders` / `technical` / `requirements` / `llm-technical` 的旧路径列入 P4 | 文档同步 | 文档 churn |
+| 35 | 动态导入 | 精确到 2 文件 6 处，要求改字符串 + 导入 smoke | 迁移完整 | smoke 可能触发副作用 |
+| 36 | 局部导入范围 | 明确只处理 owner 相关局部导入，不追求清零 995 处 | 避免无谓改动 | 指标变成定性 |
+| 37 | 真实环 | 列出 `config↔analysis` / `analysis↔fetcher` 候选，要求按导入时机复核 | 不误删惰性导入 | 复核成本 |
+| 38 | owner 表交付物 | 规定列（符号/owner/旧路径/调用点/测试 patch/处置）与评审门槛 | P0 可执行 | 表维护成本 |
+| 39 | 例外政策 | 为 `_comments` 叶子、`TYPE_CHECKING` 等建立「理由+替代+期限」例外 | 不误删 | 例外表膨胀 |
+| 40 | 公共面契约测试 | 设计「`__all__` 每项可解析、无私有名」测试 | 防回退 | 约束公共 API 演进 |
+| 41 | patch 扫描自动化 | 给出 grep/AST 扫描 patch 目标的命令 | 可复跑 | 字符串匹配误报 |
+| 42 | 导入 smoke | 设计 import 全模块 smoke（排除 side-effect 已知项） | 捕捉导入期错误 | 可能触发外部依赖 |
+| 43 | 阶段例外 | 承认 config→analysis 跨阶段依赖，允许例外并登记 | 排期可行 | 例外协调 |
+| 44 | 回滚纪律 | 禁止半删 shim；每阶段可 revert 且树保持绿 | 降低回滚风险 | review 粒度更细 |
+| 45 | 文档路径 | 文档锚点同步列为 P4 退出条件 | 接手者不迷路 | 文档工作量 |
+| 46 | 凭据边界 | 明确导入面重命名不改变 key/凭据路径；私有凭据不进入公共名 | 安全边界清晰 | 需核对配置入口 |
+| 47 | 导入耗时 | 要求按阶段记录 import 时间与导入副作用 | 防性能回退 | 测量噪声 |
+| 48 | 跨渠道 | 把 TUI/Web/CLI 私有导入纳入 P3，保留渠道分层测试 | 防渠道耦合 | 三渠道联调 |
+| 49 | 发布窗口 | 明确避开 release/gate；不改配置/数据 | 降低发布风险 | 排期弹性变差 |
+| 50 | 最终准入 | 汇总 owner 表、例外、指标、阶段门槛为 go/no-go 清单 | 决策可审计 | 仍需人工评审 |
+
 
 ## 附录 B — 复跑盘点命令
 
