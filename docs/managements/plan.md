@@ -47,6 +47,8 @@
 
 **实测**：`src/test/unit/llm/test_report_sequence_cache.py` 在同一进程内调用真实 `generate_all_llm`（LLM 全 mock、缓存目录隔离）连跑三份——第 2/3 份**预检层** 4/4 命中，第 3 份 self_review 亦命中；失败事件条数与累计次数变化不影响命中；指数变化时 `global_macro` 重算。四例均以缺陷版代码验证过可捕捉（改回旧实现即红）。
 
+**完整矩阵**：`src/test/unit/llm/test_cache_matrix.py`（17 例）逐模块变换各模块自己的入参，断言「该重算的必重算、其余必命中」——指数（global_macro + 含竞争语境的 expert_review）/量化指标（expert_review）/穿透资产（expert_review、health_check、penetration_deep 三处）/历史风险信号/新增数据源失败（health_check）；另覆盖强算与模块级强算、Provider 切换不复用他方缓存、单 Provider 配置仍命中、温度变化换键、`cache_enabled=false` 跳过读、TTL 过期重算、跨进程重启后磁盘缓存仍命中、串行后置模块（生成后自检、持仓变动复盘归因）产出未变则命中、产出变则重算。用例已做变异验证（如从 expert 指纹移除 metrics、把失败次数渲染改回旧式）——对应用例必变红。
+
 **遗留（设计使然）**：`self_review` 内容寻址于其余模块产出，任一上游重算即 miss；`health_check` 在当日盈亏或数据源可用集合实际变化时重算。
 
 ### P1 — 当前待办（立即执行）
