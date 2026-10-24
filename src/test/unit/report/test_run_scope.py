@@ -54,6 +54,20 @@ class TestStartReportRun:
         baseline = start_report_run()
         assert baseline["call_count"] == get_session_usage()["call_count"]
 
+    def test_keeps_fingerprint_audit_baseline_across_reports(self):
+        """报告边界不得清空指纹审计基线：清了它就永远报「无变化」。
+
+        回归：曾把 reset_fingerprint_audit 接进 start_report_run，导致审计失效，
+        日志里再也看不到「相对上次报告哪些组件变了」。
+        """
+        from src.python.llm import generators_orchestrator as go
+        from src.python.report._run_scope import start_report_run
+
+        go.reset_fingerprint_audit()
+        go._LAST_FP_COMPONENTS = {"totals": "abc"}
+        start_report_run()
+        assert go._LAST_FP_COMPONENTS == {"totals": "abc"}
+
     def test_failure_inside_scope_does_not_raise(self, monkeypatch):
         from src.python.report import _run_scope
 

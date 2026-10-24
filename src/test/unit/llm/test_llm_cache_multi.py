@@ -260,3 +260,30 @@ class TestCachePrecheckAndWrite(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPrecheckSummaryLog:
+    """每份报告一行缓存概况：命中/真未命中/重新生成跳过，三类可区分。"""
+
+    def test_summary_line_reports_hits_misses_and_bypass(self, caplog):
+        import logging
+
+        from src.python.llm.generators_orchestrator import _log_precheck_summary
+
+        results = {
+            "global_macro": {"result": "<p>x</p>", "cached": True},
+            "expert_review": {"result": None, "cached": False},
+            "health_check": {"result": None, "cached": False},
+        }
+        cache_info = {
+            "global_macro": {"can_cache": True},
+            "expert_review": {"can_cache": True},
+            "health_check": {"can_cache": False},
+        }
+        with caplog.at_level(logging.INFO, logger="invest"):
+            _log_precheck_summary(results, {}, cache_info)
+        line = next(r.getMessage() for r in caplog.records if "[LLM 预检]" in r.getMessage())
+        assert "命中 1/3" in line
+        assert "global_macro" in line
+        assert "expert_review" in line  # 真未命中
+        assert "health_check" in line  # 跳过缓存

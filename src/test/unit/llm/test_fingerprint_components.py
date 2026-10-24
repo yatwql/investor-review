@@ -114,8 +114,28 @@ class TestDataQualityBlockCountsOnlyFailures:
         from src.python.llm.prompts_tables import _build_data_quality_detail_block
 
         text = _build_data_quality_detail_block(self._events())
-        assert "连接失败: ff_sector_flow(1次)" in text
+        assert "连接失败: ff_sector_flow" in text
         assert "price_600900" not in text
+
+    def test_block_stable_when_failure_count_differs(self):
+        """同一源失败次数不同（重试轮次/网络抖动）→ 质量文本一致。
+
+        次数与模型判断的「哪些源本次不可用」无关，却每轮都变（如 akshare 重试
+        1 次 vs 2 次）——若进文本，health_check 缓存键每份报告翻新。
+        """
+        from src.python.llm.prompts_tables import _build_data_quality_detail_block
+
+        base = self._events()
+        retried = base + [
+            {
+                "source_key": "ff_sector_flow",
+                "tier": "T4",
+                "success": False,
+                "failure_type": "unreachable",
+                "degraded": False,
+            }
+        ]
+        assert _build_data_quality_detail_block(base) == _build_data_quality_detail_block(retried)
 
     def test_block_stable_when_success_count_differs(self):
         """同一份失败集合 + 不同数量的成功取用 → 质量文本一致（缓存键不受缓存冷热影响）。"""
@@ -187,3 +207,31 @@ class TestSnapshotCountNotInPrompt:
         base = {"diff": {"is_first_check": True}}
         noisy = {"diff": {"is_first_check": True}, "snapshot_diff_data": {"snapshot_count": 999}}
         assert _pipeline_blocks_text(base) == _pipeline_blocks_text(noisy)
+
+
+class TestDegradationBlockNoCrossSessionCounts:
+    """【数据质量降级】段不得带跨会话累计次数（否则 expert_review 键每轮翻新）。"""
+
+    def _pipeline(self, count: int) -> dict:
+        return {
+            "data_degradation": [
+                {
+                    "source_key": "industry",
+                    "tier": "T3",
+                    "failure_type": "unreachable",
+                    "degraded": True,
+                    "count": count,
+                }
+            ]
+        }
+
+    def test_count_change_does_not_change_block(self):
+        from src.python.llm.prompts_data_blocks import _build_data_degradation_block
+
+        assert _build_data_degradation_block(self._pipeline(3)) == _build_data_degradation_block(self._pipeline(9))
+
+    def test_source_still_reported(self):
+        from src.python.llm.prompts_data_blocks import _build_data_degradation_block
+
+        text = _build_data_degradation_block(self._pipeline(3))
+        assert "industry" in text and "unreachable" in text

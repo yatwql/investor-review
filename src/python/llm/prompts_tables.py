@@ -309,14 +309,15 @@ def _build_data_quality_detail_block(
         elif ft == "empty":
             empty[sk] = empty.get(sk, 0) + 1
 
+    # **不输出出现次数**：次数由重试轮次/网络抖动决定，同数据两次报告会得到
+    # 不同文本（如 akshare 重试 1 次 vs 2 次）→ health_check 缓存键每轮翻新，
+    # 而模型要判断的只是「哪些源本次不可用」，与次数无关。去重后按源排序输出。
     if unreachable:
-        parts = [f"{k}({v}次)" for k, v in sorted(unreachable.items(), key=lambda x: -x[1])]
-        lines.append(f"连接失败: {'、'.join(parts)}")
+        lines.append(f"连接失败: {'、'.join(sorted(unreachable))}")
     if empty:
-        parts = [f"{k}({v}次)" for k, v in sorted(empty.items(), key=lambda x: -x[1])]
-        lines.append(f"数据为空: {'、'.join(parts)}")
+        lines.append(f"数据为空: {'、'.join(sorted(empty))}")
     if degraded_events:
-        lines.append(f"触发降级: {len(degraded_events)} 次")
+        lines.append(f"触发降级: {'、'.join(sorted({e.get('source_key', '?') for e in degraded_events}))}")
 
     if not unreachable and not empty and not degraded_events:
         lines.append("今日无降级事件")

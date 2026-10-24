@@ -1,6 +1,6 @@
 # 投资复盘助手 — 实现计划
 > 文档版本：0.15.5-dev
-> **编号源**：`plan-next = 218`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-217，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`plan-next = 219`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-218，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -8,7 +8,7 @@
 
 本文档只保留**在办任务的最新状态**：已完成项随发布迁入版本归档，此处不留实现过程记录。命名与实现纪律见 `CLAUDE.md` 与 `developer-guide.md`（单一事实位，本表不重复）。
 
-**当前迭代**：在办 10 项——P0 2 项（**plan-216/217**，已修待实跑验收）、P2 6 项（**plan-92/93/185/210/211/212**）、P3 1 项（**plan-70**）、P4 1 项（**plan-55**）。
+**当前迭代**：在办 11 项——P0 3 项（**plan-216/217/218**，已修待实跑验收）、P2 6 项（**plan-92/93/185/210/211/212**）、P3 1 项（**plan-70**）、P4 1 项（**plan-55**）。
 
 ---
 
@@ -31,12 +31,19 @@
 **验收**：`test_orchestrator_precheck_key_matches_write_side`（链式配置键尾为 `_p1`，单 Provider 配置不带后缀）+ `test_orchestrator_precheck_hits_skeleton_written_cache`（写侧落盘键与预检键逐字节相等）。
 
 #### `plan-217` 历史取数单轮复用 + 空结果短路（hithink A 股历史无效请求风暴） ✅
-
 **缺陷（实测）**：单份报告内 `[history_stock] 尝试 hithink` 出现 110 次、其中 99 次「返回空数据」；同一代码按 20/35/90/260/365/400 多窗口分别重走缓存合并与 provider 链路，单轮白耗 30~44s，且 hithink 对 A 股历史结构性不覆盖。
 
 **动作**：`chain_incremental` 新增单轮状态（报告边界清空）——① 窗口复用：按（chain, code）记住本轮已取到的最大窗口，≤ 已取到的直接截尾返回；② 空结果短路：同一（chain, provider）连续 5 次空结果 → 本行余下请求跳过，只留一条汇总 WARNING（与「网络故障熔断」区分：凭据/空结果属结构性不覆盖，不计熔断）。报告入口 `_run_scope.start_report_run` 同时重置。
 
 **验收**：`TestRunHistoryMemo`（小窗口走 memo、大窗口只补取一次、reset 清空）+ `TestEmptyResultStreak`（连续空达阈值后跳过、成功即清零）；conftest 增加 autouse 复位防串味；full 报告复测 hithink 尝试数应从 110 降至 ≤5。
+
+#### `plan-218` 提示词中的可变计数导致缓存键每轮翻新 + 审计基线被误清 ✅
+
+**缺陷（日志实证）**：同一进程连续三份 full 报告（同持仓/同交易日），命中数 0/6 → 3/6 → 4/6，未命中的模块键尾差异集中在两处：①【数据质量详细状态】与【数据质量降级】段写入了失败**出现次数**（`连接失败: ff_sector_flow(1次)`、`累计 3 次`）——次数由重试轮次/网络抖动/跨会话累计决定，与模型要判断的「哪些源本次不可用」无关，却每轮都变，使 `health_check` / `expert_review` 键同变；② 指纹组件审计基线被接进报告边界清空，导致审计恒输出「无变化」，把定位能力也一起弄丢了。
+
+**动作**：两段数据质量文本改为**去重后按源排序、不输出次数**（语义保留「哪些源不可用」；次数由重试轮次与网络抖动决定，与本轮可得数据无关）；指纹审计基线保留在进程级（跨报告比对才有意义，报告边界只重置历史取数单轮状态）；预检结束新增一行 INFO「命中 N/M；未命中：…；重新生成跳过：…」。
+
+**验收**：`test_block_stable_when_failure_count_differs` + `TestDegradationBlockNoCrossSessionCounts`（次数变化不改变块文本）+ `TestPrecheckSummaryLog`（三类可区分）+ `test_keeps_fingerprint_audit_baseline_across_reports`；重启后同一数据连续两份报告的「指纹组件变化」行应为空（除真实行情/账本变化）。
 
 ### P1 — 当前待办（立即执行）
 

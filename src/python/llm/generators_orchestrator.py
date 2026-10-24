@@ -261,7 +261,32 @@ def _precheck_all_modules(
             continue
         result, from_cache = _precheck_one_cache(info, llm_config, module_key)
         results[module_key] = {"result": result, "cached": from_cache}
+    _log_precheck_summary(results, llm_config, cache_info)
     return results
+
+
+def _log_precheck_summary(
+    results: dict[str, dict],
+    llm_config: dict,
+    cache_info: dict[str, dict],
+) -> None:
+    """每份报告打一行缓存命中概况：命中/未命中分别哪些模块，未命中的是否因重新生成。
+
+    为何需要：单人看报告时只能看到「这次又调了几次 LLM」，分不清是缓存真 miss
+    还是自己选了重新生成；逐模条日志在别的模块里，一屏信息里拼不起来。
+    """
+    hits = [k for k, v in results.items() if v.get("cached")]
+    misses = [k for k, v in results.items() if v.get("result") is None and k not in hits]
+    bypassed = [k for k in misses if not (cache_info.get(k) or {}).get("can_cache", True)]
+    real_misses = [k for k in misses if k not in bypassed]
+    logger.info(
+        "[LLM 预检] 命中 %d/%d：%s；未命中：%s；重新生成（跳过缓存）：%s",
+        len(hits),
+        len(results),
+        ", ".join(hits) or "无",
+        ", ".join(real_misses) or "无",
+        ", ".join(bypassed) or "无",
+    )
 
 
 def extract_purchase_constraint_block(pipeline_data: dict | None) -> str:
