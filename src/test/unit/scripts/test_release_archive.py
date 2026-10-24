@@ -318,7 +318,8 @@ class TestRealArchiveContract:
         name, text = real["rf_archive"]
         fmt_pattern = re.escape(rel._RF_ARCHIVE_HEAD_FMT).replace(r"\{version\}", r"\d+\.\d+\.\d+")
         headings = [line for line in text.splitlines() if line.startswith("## 开发期已修复")]
-        assert headings, f"{name} 应含批次标题"
+        # 新小版本骨架由 `archive-init` 建出、首个版本发布时才写入批次节：
+        # 最新归档为空属预期（有则必同形，无则跳过）
         for heading in headings:
             assert re.fullmatch(fmt_pattern, heading), f"{name}: {heading}"
 
@@ -377,7 +378,7 @@ class TestRealArchiveContract:
         name, text = real["plan_archive"]
         headings = [line for line in text.splitlines() if line.startswith("## ") and "plan-" in line]
         done = [h for h in headings if "✅" in h]
-        assert done, f"{name} 应含带完成标记的任务节"
+        # 新小版本骨架（`archive-init` 刚建、尚未发布）尚无完成节：有则必可识别，无则跳过
         for heading in done:
             matched = rel.plan_completed_sections(heading + "\n\n正文\n")
             assert matched, heading

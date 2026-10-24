@@ -113,6 +113,23 @@ class TestChangelogRelease:
         out, _ = rel.apply_changelog_release(text, "0.12.6", "2026-10-08")
         assert "v0.12.5 ~ v0.12.6（2026-10-03 ~ 2026-10-08）" in out
 
+    def test_archive_init_placeholder_line_is_accepted(self, rel):
+        """`archive-init` 生成的占位索引行（`vX.Y.x`）必须能被首版发布直接改写。
+
+        回归：占位行版本 token 是 `v0.12.x`（不是 `vX.Y.Z`），旧正则只接受
+        `v[\d.]+` → 新小版本首次发布在 prepare 阶段硬失败（「归档索引行改写失败」），
+        必须先手工改索引行才能继续。占位形态语义 = 该 minor 还没有任何正式版本，
+        本次发布即首版 → 归一为单版本 + 发布日。
+        """
+        text = _sample_changelog().replace(
+            "— v0.12.1 ~ v0.12.5（2026-10-03 ~ 2026-10-07）",
+            "— v0.12.x（2026-10-01 ~ 2026-10-01）",
+        )
+        out, _ = rel.apply_changelog_release(text, "0.12.6", "2026-10-08")
+        assert "— v0.12.6（2026-10-08）" in out
+        # 路径里合法出现 `v0.12.x/`（归档目录名），只看索引行末的版本区间部分
+        assert "— v0.12.x" not in out
+
     def test_same_day_release_keeps_single_date(self, rel):
         """同日多版：日期不重复展开成 `a ~ a`，版本仍区间化。"""
         text = _sample_changelog().replace("— v0.12.1 ~ v0.12.5（2026-10-03 ~ 2026-10-07）", "— v0.12.1（2026-10-07）")

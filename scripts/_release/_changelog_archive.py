@@ -134,7 +134,9 @@ def apply_changelog_release(text: str, release_version: str, date: str) -> tuple
         raise ReleaseError("changelog 指针行的归档文件链接改写失败（格式与预期不符）" + _fmt_hint(_FMT_POINTER))
     idx_pat = re.compile(
         rf"^(- \[`{re.escape(archive_name)}`\]\([^)]*\)\s*—\s*[^（]*?)"
-        r"(v[\d.]+)( ~ v[\d.]+)?（(\d{4}-\d{2}-\d{2})( ~ \d{4}-\d{2}-\d{2})?）",
+        # 版本 token 两种形态：既有的 `vX.Y.Z`（可带 `~ vX.Y.Z` 区间），以及
+        # `archive-init` 为新小版本生成的占位 `vX.Y.x`（该 minor 还没有任何正式版本）
+        r"(v[\d.]+|v\d+\.\d+\.x)( ~ v[\d.]+)?（(\d{4}-\d{2}-\d{2})( ~ \d{4}-\d{2}-\d{2})?）",
         re.M,
     )
     if archive_name not in out:
@@ -153,8 +155,16 @@ def apply_changelog_release(text: str, release_version: str, date: str) -> tuple
         # 区间化：首次出现的单版本行（无 `~ v…` 尾巴）在第二次发布后必须变成区间，
         # 否则索引永远停在首个版本（连续两次发布后仍是首版单版本形态）。
         # 真值口径：起止都取发布实参，与归档文件头（按归档自身段标题派生）保持一致。
-        span_v = f"{start_v} ~ v{release_version}" if release_version.lstrip("v") not in start_v else start_v
-        span_d = f"{start_d} ~ {date}" if start_d != date else start_d
+        #
+        # 占位形态（`vX.Y.x`，由 `archive-init` 为新小版本生成）视为「该 minor 尚无发布
+        # 版本」：本次发布即其首版，归一为单版本 + 发布日；否则保持区间扩展语义。
+        is_placeholder = start_v.endswith(".x")
+        if is_placeholder:
+            span_v = f"v{release_version}"
+            span_d = date
+        else:
+            span_v = f"{start_v} ~ v{release_version}" if release_version.lstrip("v") not in start_v else start_v
+            span_d = f"{start_d} ~ {date}" if start_d != date else start_d
         _ = (tail_v, tail_d)  # 既有区间形态由 span_* 重算，无需区分
         return f"{head}{span_v}（{span_d}）"
 
