@@ -34,7 +34,9 @@
 
 **建议**：方案 C——注册表是唯一默认来源，`config.json` 仅存**稀疏覆盖**（模板不写默认值块）；清理侧改用与读侧同一抖动因子；`cache_ttl` 未注册键告警。
 
-**状态**：已完成分析，暂不实施（等确认方案 C 与 D1~D3 口径后再动代码）。
+**已实施（方案 C + D1 + D2，D3 不做）**：生成配置的 `cache_ttl` 改为空对象（默认值唯一来源 = 注册表）；`cleanup_expired` 按剥离版本戳后的逻辑键查类型并调用 `get_ttl(type, logical_key)`，与读侧同一抖动因子（顺带修好精确键映射：此前带版本戳查表必 miss）；`cache_ttl` 未注册键告警（不自动删）；用户配置中的死键 `fund_overlap` 已删除。契约由 `src/test/unit/cache/test_ttl_alignment.py`（7 例）与 `test_llm_cache_ttl_single_source.py`（17 例）锁定。
+
+**剩余**：实跑一轮报告后核对 `data/cache` 中无「读写两侧判定期不同」的早删现象（`cleanup_expired(dry_run=True)` 预览数与历史均值相当即可）。
 
 **不做**：不改注册表结构、不改 `get_ttl` 优先级顺序、不自动删除用户既有 config 键。
 

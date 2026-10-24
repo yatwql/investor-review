@@ -143,7 +143,18 @@ def _validate_cache_ttl(config: dict, issues: int) -> int:
     cache_ttl, issues = _section(config, "cache_ttl", dict, "所有缓存 TTL 将使用默认值", issues)
     if cache_ttl is _MISSING:
         return issues
+    try:
+        from src.python.core.data_registry import get_registered_data_types
+
+        known_types = get_registered_data_types()
+    except Exception:  # noqa: BLE001 — 注册表不可用时不误报
+        known_types = set()
     for k, v in cache_ttl.items():
+        # 未注册键属历史残留（如 v0.10.x 合并章删除的缓存模块）：不会被任何读取方
+        # 使用，也不会被清理；只告警不自动删，避免越界改用户配置。
+        if known_types and k not in known_types:
+            logger.warning("config.json cache_ttl.%s 不是已注册的缓存类型（该键不会生效，可删除）", k)
+            issues += 1
         try:
             val = float(v)
             if val <= 0:

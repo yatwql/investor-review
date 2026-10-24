@@ -939,7 +939,7 @@ penetrated_assets ──→ extract_stable_penetration()
 | `holding_change` | 86400s (24h) | 持仓变动复盘归因（章内 LLM 归因块，本体由 feature `holding_change_review` 控制）；同样内容寻址 |
 
 `import` 失败时兜底返回 hardcoded defaults（设计为防御性编程，正常情况下不会触发）。
-> **单一来源（读侧不持有任何配置）**：`get_cache_ttl_llm(模块)` 只做「模块键 → `llm_<模块>`」的换名，随后**直读 `cache.get_ttl`**；后者本身就是「`config.json → cache_ttl.llm_<模块>` 覆盖 → `core/data_registry` 的 `DataModuleDef.cache_ttl` 默认值 → `CACHE_DAILY` 兜底」。因此读侧、启动清理、统计与配置模板读的是同一份数字，**不存在第二套 TTL 配置**，也就没有「两处各写一遍、漏一处就静默借用别的模块」的漂移面；未登记的模块会打 WARNING 并按日级兜底（新增 LLM 模块忘登记立刻可见，不会被 `global_macro` 的 24h 掩盖）。该不变式由 `src/test/unit/llm/test_llm_cache_ttl_single_source.py` 按注册表派生的模块清单逐项校验。
+> **单一来源（读侧不持有任何配置）**：`get_cache_ttl_llm(模块)` 只做「模块键 → `llm_<模块>`」的换名，随后**直读 `cache.get_ttl`**；后者本身就是「`config.json → cache_ttl.llm_<模块>` 覆盖（生成的配置里该段为空对象，即默认无覆盖）→ `core/data_registry` 的 `DataModuleDef.cache_ttl` 默认值 → `CACHE_DAILY` 兜底」。因此读侧、启动清理、统计与配置模板读的是同一份数字，**不存在第二套 TTL 配置**，也就没有「两处各写一遍、漏一处就静默借用别的模块」的漂移面；未登记的模块会打 WARNING 并按日级兜底（新增 LLM 模块忘登记立刻可见，不会被 `global_macro` 的 24h 掩盖）。该不变式由 `src/test/unit/llm/test_llm_cache_ttl_single_source.py` 按注册表派生的模块清单逐项校验。
 
 ### 7.4 缓存命中提示
 
