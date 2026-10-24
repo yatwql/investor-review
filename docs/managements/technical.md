@@ -2555,6 +2555,8 @@ _dedup_by_title(items)
 
 可配置于 `config.json` 的 `degradation` 字段。支持跨会话持久化到 `data/state/.degradation_state.json`。
 
+**报告运行边界（`report/_run_scope.py`）**：每份报告入口 `start_report_run()` 只重置**轮次语义**的观测状态，不动跨报告事实——① `DegradationTracker.begin_report()` 清空**事件日志**（数据质量块 / 可用性矩阵 / 降级摘要的语义都是「本次报告期间发生了什么」），但保留 `_counts` 与 `_last_success`（降级判定与跨会话陈旧的事实来源）；② 重置 `self_review` 全局载体，上一轮自检区块不得残留到本轮；③ 取 `get_session_usage()` 深拷贝作**用量基线**，收尾 `_record_llm_context` 按基线算 delta 写入 perf（TUI「本会话累计」仍跨报告累计，单份报告的 token/调用数不翻倍）。任一步失败只记 DEBUG——观测隔离不得阻断报告生成。
+
 **与 DataSourceRegistry 的职责边界**：
 
 ```
@@ -3129,7 +3131,7 @@ LLM API 调用支持多 Provider 链式容错，与数据获取层的 Provider C
 | 截断重试 | 检测 `TRUNCATION_MARKER` 后自动 1.5× max_tokens 重试一次 | 修复内容被截断的情况 |
 | 空内容处理 | `_extract_content` 无 text block（DeepSeek 思考耗尽/偶发空 content）→ 先关闭 thinking 同 provider 重试一次（安全网，仅服务端正常返回时触发；error 信封/传输失败/熔断等服务侧故障直接切换）；仍无正文再切换 provider；真正空字符串 `""` 追加安抚指令重试一次 | 应对思考预算耗尽 + 内容审查误杀，且不对已故障端点无效重试 |
 | 墙钟总超时 | `core/http_client.post_with_deadline()` — POST 以独立 daemon 线程执行、主线程 join(timeout) 到点放弃并归一为 httpx.ReadTimeout | read 超时是块间间隔会被服务端滴流骗过（实测挂足 900s），墙钟兜底总时长，故障期快速切换 provider |
-| 会话用量追踪 | `session.py` 维护线程安全 `session_usage` 字典 + `cost_tracker.py` 报告级预算管理 | 按模块粒度追踪 token/费用/缓存命中/耗时 |
+| 会话用量追踪 | `session.py` 维护线程安全 `session_usage` 字典 + `cost_tracker.py` 报告级预算管理 | 按模块粒度追踪 token/费用/缓存命中/耗时；报告写 perf 时按入口基线取 delta（`_run_scope`），会话累计不受影响 |
 | Token 预算告警 | `cost_tracker.check_input_budget()` — 累计输入 Token 超 8K 时日志告警（不截断） | 为模型分层提供基线数据 |
 | 调用耗时记录 | `skeleton.py` `time.monotonic()` 计时 → `record_per_module(duration=)` → HTML 页脚展示 | 每次 call_llm() 记录实际耗时 |
 | LLM 熔断 | `llm/circuit_breaker.py` — 连续 N 次失败 → 60s 冷却 → 半开状态试探 | 防止无效调用浪费 token |

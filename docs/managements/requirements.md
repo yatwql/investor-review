@@ -1358,9 +1358,9 @@ LLM 五维度量化评分，每项满分 100：
 | `max_retries` | int | 2 | 503/超时/网络异常最大重试次数（429/403 归 quota 不重试） |
 | `llm_max_concurrency` | int | 3 | LLM 并发生成最大线程数 |
 | `llm_max_thinking_concurrency` | int | 2 | Extended Thinking 模块并发信号量上限（2 = 两个 thinking 模块并行，避免串行等待吃掉近半墙钟；端点偶发空响应时改回 1） |
-| `enabled_llm` | dict | 全局开启 | 各模块独立启停 |
+| `enabled_llm` | dict | 各模块不同（仅 `news_correlation` 默认关，`self_review` 默认开） | 各模块独立启停 |
 
-**模块级配置**（`{key}` = global_macro / expert_review / health_check / penetration_deep / news_correlation）：
+**模块级配置**（`{key}` = global_macro / expert_review / health_check / penetration_deep / news_correlation / self_review / holding_change）：
 
 | 键 | 类型 | 说明 |
 |:---|:----:|:-----|
