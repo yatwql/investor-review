@@ -9,6 +9,9 @@
 
 ## [0.15.3-dev] - 开发中（未发布）
 
+- **发布刷新稳定性修复**：全局测试 fixture 隔离 `llm.pricing` 模块状态，避免临时定价配置泄漏到后续用例（修复 `test_peak_periods_defaults` 并行偶发失败）；`refresh` 失败台账在 stdout 只有摘要时回读归档 `*_debug.log`，保留失败用例名与首因。
+
+
 
 （本次发布内容见下方归档索引）
 
