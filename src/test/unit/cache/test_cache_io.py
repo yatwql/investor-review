@@ -109,3 +109,37 @@ class TestCacheDebugOnce:
             _store.get("k3", 60)
         keys = {r.args[0] for r in caplog.records if r.getMessage().startswith("缓存命中")}
         assert keys == {"k2", "k3"}
+
+
+class TestCacheMissVisibility:
+    """未命中的两种原因在 **INFO** 级别可区分（无此文件 / 已过期）。
+
+    为何必须是 INFO：默认日志级别下用户只能看到「又调了一遍 LLM」，无法判断是
+    缓存被清、TTL 到期，还是自己选了「重新生成」——现场排查靠猜。
+    """
+
+    def test_missing_file_logged_once_at_info(self, tmp_path, monkeypatch, caplog):
+        from src.python.cache import _store
+
+        monkeypatch.setattr(_store, "_cache_path", lambda key: str(tmp_path / f"{key}.json"))
+        _store.reset_debug_log_state()
+        with caplog.at_level(logging.INFO, logger="invest"):
+            _store.get("absent", 60)
+            _store.get("absent", 60)
+        hits = [r for r in caplog.records if r.getMessage().startswith("缓存未命中（无此缓存文件）")]
+        assert len(hits) == 1  # 每进程每 key 首见一次，不刷屏
+        assert hits[0].levelno == logging.INFO
+        assert hits[0].args[0] == "absent"
+
+    def test_expired_logged_at_info_with_age_and_ttl(self, tmp_path, monkeypatch, caplog):
+        from src.python.cache import _store
+
+        monkeypatch.setattr(_store, "_cache_path", lambda key: str(tmp_path / f"{key}.json"))
+        _store.reset_debug_log_state()
+        _store.set("stale", {"v": 1})
+        with caplog.at_level(logging.INFO, logger="invest"):
+            assert _store.get("stale", max_age_seconds=0) is None
+        hits = [r for r in caplog.records if r.getMessage().startswith("缓存已过期")]
+        assert len(hits) == 1
+        assert hits[0].levelno == logging.INFO
+        assert hits[0].args[0] == "stale"

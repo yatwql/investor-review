@@ -205,6 +205,12 @@ def _precheck_one_cache(
     确保 LLM API 用量页签能正确显示"缓存"状态。
     """
     if not cache_info["can_cache"]:
+        # 重新生成/强制刷新路径不读缓存，且不参与命中率统计——此处必须留一条 INFO：
+        # 否则用户看到的是「全部模块又调了一次 LLM」，无法区分「缓存没命中」与「自己选了重新生成」。
+        logger.info(
+            "[LLM 预检] %s 跳过缓存读（重新生成/强制刷新范围内）",
+            module_key or cache_info["key"],
+        )
         return (None, False)
     cached = cache_get(cache_info["key"], cache_info["ttl"])
     from src.python.llm.observation import current_llm_observation

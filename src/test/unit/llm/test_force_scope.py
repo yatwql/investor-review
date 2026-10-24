@@ -115,6 +115,20 @@ class TestOrchestratorForceModules:
         info = _compute_module_cache_info({}, {}, {}, 0.0, 0.0, 0.0, 0.0, 0, {}, None, None, True)
         assert all(not v["can_cache"] for v in info.values())
 
+    def test_precheck_logs_skip_reason_at_info(self, caplog):
+        """不可缓存时留一条 INFO：否则用户只看到「又调了一遍 LLM」，分不清是缓存
+        没命中还是自己选了「重新生成」。"""
+        import logging
+
+        from src.python.llm.generators_orchestrator import _precheck_one_cache
+
+        info = {"key": "llm_expert_review_deadbeef", "ttl": 60, "can_cache": False, "thinking_key": "x"}
+        with caplog.at_level(logging.INFO, logger="invest"):
+            assert _precheck_one_cache(info, {}, "expert_review") == (None, False)
+        records = [r for r in caplog.records if "跳过缓存读" in r.getMessage()]
+        assert len(records) == 1
+        assert records[0].levelno == logging.INFO
+
     def test_cache_info_default_unchanged(self):
         """未指定任何 force 时全部可缓存（缺省行为逐字节不变）。"""
         from src.python.llm.generators_orchestrator import _compute_module_cache_info
