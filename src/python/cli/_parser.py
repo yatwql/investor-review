@@ -68,7 +68,7 @@ def _provider_order(value: str) -> list[str]:
     """``--llm-provider-order`` 参数校验：非空线路名列表（覆盖性校验在共享编辑层）。"""
     names = [part.strip() for part in value.split(",")]
     if not names or not all(names):
-        raise argparse.ArgumentTypeError("线路名列表不能为空（如 deepseek-main,gemini-fallback）")
+        raise argparse.ArgumentTypeError("线路名列表不能为空（如 deepseek-main,opencode-go）")
     if len(set(names)) != len(names):
         raise argparse.ArgumentTypeError("线路名重复")
     return names
@@ -149,7 +149,7 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="NAME[,NAME...]",
         type=_provider_order,
         help="重排 LLM 多链线路优先级并**写入** llm_providers.json（靠前优先），随后退出。"
-        "NAME 须恰好覆盖全部现有线路（如 deepseek-main,gemini-fallback）。"
+        "NAME 须恰好覆盖全部现有线路（如 deepseek-main,opencode-go）。"
         "与 --feature（仅本次运行、不写盘）不同：本参数持久化；亦可在 TUI [G] → [L] LLM 设置 / Web 配置面调序。",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s v{APP_VERSION}")

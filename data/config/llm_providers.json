@@ -1,23 +1,19 @@
 {
-  // LLM Provider 多链配置
-  // 按优先级尝试多个 provider，直到第一个成功返回
-  // 链序真值：下方 providers[].priority 升序（数值小者靠前），与数组项顺序无关
-  // 有效 provider 类型：claude, openai, gemini
+  // LLM Provider 多链配置：按 priority 升序逐条尝试，直到第一条成功返回
+  // 链序真值看 providers[].priority（数值小者靠前），与数组项摆放顺序无关；
+  // 调顺序用 [G]→[M] 面板 / Web 配置面 / --llm-provider-order，不必手改数组
   //
-  // 使用前请先在 llm_key.json 中配置对应的 credentials_ref 凭据块，
-  // 并按需修改 model / endpoint 为实际使用的模型与 API 端点。
+  // 两条线路都是 Anthropic 兼容端点，密钥与模型按 credentials_ref 写在 llm_key.json：
+  //   deepseek-main  → llm_key.json 同名块（api_key / model / endpoint）
+  //   opencode-go    → llm_key.json 同名块（api_key / model / endpoint）
   //
-  // 端点级节流（可选）：provider 内加 "pacing" 段可对**该端点**单独限速/限并发，
-  // 未声明则无额外约束（行为与未引入时一致）。适合订阅制编码端点等需低频串行的场景：
-  //   "pacing": { "min_interval": 20, "jitter": 0.2, "max_concurrency": 1 }
+  // pacing 是端点级节流（只约束本条目的端点），不写该段 = 无额外约束：
   //   min_interval=两次请求最小间隔秒；jitter=间隔随机抖动比例(0~1)；max_concurrency=在途上限
-  // 线路：DeepSeek（按量付费端点）
-  // 线路：Kimi K3（OpenCode Go 订阅中转，Anthropic 兼容端点；api_key 在 llm_key.json 的
-  //     kimi-opencode-go 块，未填时该条目轮空失败不影响主源）
 
   "strategy": "priority",
   "preferred_providers": {},
   "providers": [
+    // DeepSeek：Anthropic 兼容的按量付费端点，不额外限速
     {
       "name": "deepseek-main",
       "provider": "claude",
@@ -25,16 +21,14 @@
       "priority": 10,
       "timeout": 120
     },
+    // OpenCode Go：订阅制编码中转（Anthropic 兼容）；pacing 令请求串行低频（间隔 ≥5s、在途 ≤1），去掉该段即无额外约束
     {
       "name": "opencode-go",
       "provider": "claude",
       "credentials_ref": "opencode-go",
       "priority": 20,
       "timeout": 120,
-      "pacing": {
-        "min_interval": 5,
-        "max_concurrency": 1
-      }
+      "pacing": {"min_interval": 5, "max_concurrency": 1}
     }
   ]
 }

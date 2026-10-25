@@ -94,7 +94,33 @@ LLM 配置由三个独立文件管理：
 
 ### 配置步骤
 
-**Step A** — 编辑 `data/config/llm_providers.json`：
+**Step A** — 编辑 `data/config/llm_providers.json`（首次运行已按此生成：DeepSeek 主行 + OpenCode Go 订阅中转）：
+
+```json
+{
+  "strategy": "priority",
+  "preferred_providers": {},
+  "providers": [
+    {
+      "name": "deepseek-main",
+      "provider": "claude",
+      "credentials_ref": "deepseek-main",
+      "priority": 10,
+      "timeout": 120
+    },
+    {
+      "name": "opencode-go",
+      "provider": "claude",
+      "credentials_ref": "opencode-go",
+      "priority": 20,
+      "timeout": 120,
+      "pacing": { "min_interval": 5, "max_concurrency": 1 }
+    }
+  ]
+}
+```
+
+**Step A'** — 另一种常见配法：次选换成 Gemini（`provider` 类型为 `gemini`，端点与模型不同，无需 `pacing`）：
 
 ```json
 {
@@ -120,7 +146,7 @@ LLM 配置由三个独立文件管理：
 }
 ```
 
-**Step B** — 在 `data/config/llm_key.json` 中添加对应凭据块：
+**Step B** — 在 `data/config/llm_key.json` 中添加对应凭据块（按上一步采用哪套线路保留对应块）：
 
 ```json
 {
@@ -128,6 +154,11 @@ LLM 配置由三个独立文件管理：
     "api_key": "sk-your-deepseek-key",
     "model": "deepseek-v4-flash",
     "endpoint": "https://api.deepseek.com/anthropic/v1/messages"
+  },
+  "opencode-go": {
+    "api_key": "your-opencode-go-key",
+    "model": "deepseek-v4.1-flash",
+    "endpoint": "https://your-opencode-go-host.example/anthropic/v1/messages"
   },
   "gemini-fb": {
     "api_key": "AIzaSyYourGeminiKey",
@@ -162,7 +193,7 @@ LLM 配置由三个独立文件管理：
 
 - **TUI**：主菜单 `G` → `M` —— 面板按当前顺序列出线路，输入两个编号交换位置（如 `3 1`）即写盘
 - **Web**：配置面板「LLM 多链线路优先级」块，▲▼ 按钮调序即存
-- **CLI**：`python -m src.python.cli --llm-provider-order deepseek-main,gemini-fallback report --type basic` —— 顺序靠前优先，写盘后退出；`NAME` 须恰好覆盖全部现有线路（少写/多写/重复均拒绝，报错会列出当前名单）
+- **CLI**：`python -m src.python.cli --llm-provider-order deepseek-main,opencode-go report --type basic` —— 顺序靠前优先，写盘后退出；`NAME` 须恰好覆盖全部现有线路（少写/多写/重复均拒绝，报错会列出当前名单）
 
 > `weighted` / `cost_first` 策略下实际链序由权重/成本决定，上面顺序仅在 `priority` / `fallback_only` 策略下生效。
 
@@ -224,12 +255,12 @@ LLM 配置由三个独立文件管理：
 {
   "strategy": "priority",
   "preferred_providers": {
-    "expert_review": "gemini-fallback",
-    "health_check": "gemini-fallback"
+    "expert_review": "opencode-go",
+    "health_check": "opencode-go"
   },
   "providers": [
     { "name": "deepseek-main", "provider": "claude", "credentials_ref": "deepseek-main", "priority": 10, "timeout": 120 },
-    { "name": "gemini-fallback", "provider": "gemini", "credentials_ref": "gemini-fb", "priority": 20, "timeout": 60 }
+    { "name": "opencode-go", "provider": "claude", "credentials_ref": "opencode-go", "priority": 20, "timeout": 120, "pacing": { "min_interval": 5, "max_concurrency": 1 } }
   ]
 }
 ```
@@ -238,10 +269,10 @@ LLM 配置由三个独立文件管理：
 
 | 模块 | module_key | Chain 排序 | 优先尝试 |
 |------|-----------|-----------|---------|
-| 智囊团深度复盘 | `expert_review` | `[gemini-fallback, deepseek-main]` | Gemini |
-| 持仓体检报告 | `health_check` | `[gemini-fallback, deepseek-main]` | Gemini |
-| 全球政经局势 | `global_macro`（未配置） | `[deepseek-main, gemini-fallback]` | DeepSeek |
-| 穿透深度分析 | `penetration_deep`（未配置） | `[deepseek-main, gemini-fallback]` | DeepSeek |
+| 智囊团深度复盘 | `expert_review` | `[opencode-go, deepseek-main]` | OpenCode Go |
+| 持仓体检报告 | `health_check` | `[opencode-go, deepseek-main]` | OpenCode Go |
+| 全球政经局势 | `global_macro`（未配置） | `[deepseek-main, opencode-go]` | DeepSeek |
+| 穿透深度分析 | `penetration_deep`（未配置） | `[deepseek-main, opencode-go]` | DeepSeek |
 
 > **module_key 规则**：对应 `llm_settings.json` 中 `max_tokens_{module_key}` 的 `{module_key}` 部分。有效值：`global_macro` / `expert_review` / `health_check` / `penetration_deep` / `news_correlation`。
 >
