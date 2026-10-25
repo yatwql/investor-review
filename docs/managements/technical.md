@@ -544,7 +544,7 @@ CLI 渠道是**命令行参数**形态，面向脚本化与自动化场景：定
 - **`_handle_cache`**：三分支——`--clean` 委托 `cleanup_cache`；`--stats` 委托 `get_cache_stats` + 打印 LLM 配置状态（消费 `core/system_info.llm_status()` 单源，仅日志渲染）；`--update` 委托 `update_basic_cache`/`update_position_cache`（§3.6），`--update all` 委托 `update_all_cache` **最大努力模式**（basic 失败仍继续 position，退出码取两者 max）。
 - **`_handle_whatif`**：解析 `--base`/`--candidate` 两份持仓 → `run_whatif_simulation()`（§4.13）→ 结果 `ok` 判定，失败返回 2；`--effective-date` 触发时序回测扩展。
 - **`_handle_cassettes`**：无参数时经 `core/cassette.py::list_cassettes()` 列出已录制响应（来源/录制时间/交互数/大小）；`--verify` 时经 `fetcher/cassette_checks.py::CASSETTE_CHECKS` + `verify_cassettes()` 离线回放，有解析失败返回 `_EXIT_SEVERE`。纯只读展示层，不联网、不碰用户配置。
-- **`_handle_check_sources`**：`run_check_sources()`（内部 `sys.exit`）。
+- **`_handle_check_sources`**：`collect_check_sources_report()`（内部 `sys.exit`）。
 - **`_handle_view_logs`**：调 `core/log_reader.py::read_log(limit, level, since, until)`，输出每条 `time [LEVEL] message`（多行 body 缩进）；无匹配 → 提示并返回 0；ValueError/OSError → 记录日志 + 返回 `_EXIT_SEVERE`。**薄展示层，无解析逻辑**（解析/过滤全在 `core/log_reader.py`）。
 - **`_handle_doctor`**：调 `core/doctor.py::run_doctor_checks(include_network=not offline, max_timeout=timeout)` → `format_doctor_report(results, use_color=_use_ansi_color())` → 按 `summarize_doctor_results()` 返回 `_EXIT_SUCCESS`（全通过）/ `_EXIT_PARTIAL`（有失败项）。`_use_ansi_color()` 遵循 `NO_COLOR` + `isatty` + UTF-8 三项判据，终端不支持颜色时自动降级为纯文本（§4.17.3）。
 

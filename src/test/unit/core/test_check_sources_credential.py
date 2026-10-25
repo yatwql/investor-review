@@ -73,11 +73,11 @@ class TestExitCodeUnaffected:
     """跳过项是配置级问题 → 不计入 err/warn，退出码不受影响。"""
 
     def _run_cli(self, monkeypatch, capsys):
+        """core 只返回 (文本, 退出码)；打印/退出码处置归 CLI 层。"""
         probe_calls: list[str] = []
         with mock.patch.object(cs, "_checks", _checks_with_probe(probe_calls)):
-            with pytest.raises(SystemExit) as exc:
-                cs.run_check_sources()
-        return exc.value.code, capsys.readouterr().out
+            text, code = cs.collect_check_sources_report()
+        return code, text
 
     def test_all_skipped_exits_zero(self, monkeypatch, capsys):
         monkeypatch.delenv(_ENV_VAR, raising=False)
