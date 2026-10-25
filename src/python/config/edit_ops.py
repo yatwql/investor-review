@@ -551,7 +551,7 @@ def read_config_value(key: str):
     if writer == "anonymization":
         from src.python.config import get_config
 
-        return (get_config().get("anonymization") or {}).get("mode", "off")
+        return (get_config().get("anonymization") or {}).get("mode", _DEFAULT_CONFIG["anonymization"]["mode"])
     if writer in ("llm", "llm_scalar"):
         from src.python.config import get_llm_config
 

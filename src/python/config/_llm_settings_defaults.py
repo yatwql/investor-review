@@ -212,9 +212,19 @@ from src.python.config._llm_schema import flatten as _flatten_v2  # noqa: E402
 _DEFAULT_LLM_SETTINGS: dict[str, Any] = _flatten_v2(_DEFAULTS_NESTED)
 
 
-def get_llm_setting_default(key: str):
-    """读取 llm_settings 的出厂默认值（唯一来源 `_FLAT_DEFAULTS` → v2 投影）。"""
-    return _DEFAULT_LLM_SETTINGS.get(key)
+def get_llm_setting_default(key: str, *path: str):
+    """读取 llm_settings 的出厂默认值（唯一来源 `_FLAT_DEFAULTS` → v2 投影）。
+
+    支持嵌套项：``get_llm_setting_default("debate.concentration_qa.threshold")``
+    与逐层传参等价；任一层缺失返回 None。
+    """
+    segs = (key, *path) if path else tuple(key.split("."))
+    node: object = _DEFAULT_LLM_SETTINGS
+    for seg in segs:
+        if not isinstance(node, dict) or seg not in node:
+            return None
+        node = node[seg]
+    return node
 
 
 _KEY_COMMENTS: dict[str, str] = {

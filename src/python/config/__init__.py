@@ -71,6 +71,7 @@ from src.python.config._config_freshness import check_config_freshness
 
 # ── 日志配置（logger.json）──
 from src.python.config._llm_pricing import get_llm_pricing_path, load_pricing_config
+from src.python.config._llm_providers_defaults import DEFAULT_PROVIDER_PRIORITY
 from src.python.config._llm_settings_defaults import get_llm_setting_default
 from src.python.config._logging import (
     LoggerConfigError,
@@ -142,6 +143,7 @@ __all__ = [
     "get_llm_pricing_path",
     "load_pricing_config",
     "get_llm_setting_default",
+    "DEFAULT_PROVIDER_PRIORITY",
     # 日志配置
     "LoggerConfigError",
     "read_logger_config",

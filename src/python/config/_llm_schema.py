@@ -73,7 +73,7 @@ def flatten(document: dict[str, Any]) -> dict[str, Any]:
         module = modules.get(name) or {}
         if not isinstance(module, dict):
             continue
-        enabled[name] = bool(module.get("enabled", False))
+        enabled[name] = bool(module.get("enabled"))
         effective = {**defaults, **{k: v for k, v in module.items() if k not in ("enabled", "thinking", "debate")}}
         for suffix, field in FLAT_MODULE_SUFFIXES:
             if field in effective:

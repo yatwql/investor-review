@@ -48,6 +48,7 @@ from ._api_responses import (
     _truncation_warning,
 )
 
+from src.python.config import get_llm_setting_default
 logger = logging.getLogger("invest")
 
 __all__ = [
@@ -298,7 +299,7 @@ def _extract_model_from_cached(html: str) -> str:
 def _get_retry_max(llm_config: dict) -> int:
     """从 llm_config 中读取最大重试次数，兜底返回 2。"""
     try:
-        val = int(llm_config.get("max_retries", 2))
+        val = int(llm_config.get("max_retries", get_llm_setting_default("max_retries")))
         return max(0, val)
     except (TypeError, ValueError):
         return 2

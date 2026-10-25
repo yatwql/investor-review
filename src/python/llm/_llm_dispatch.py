@@ -31,6 +31,7 @@ from src.python.llm.generators import (
     generate_penetration_deep_analysis,
 )
 
+from src.python.config import get_llm_setting_default
 logger = logging.getLogger("invest")
 
 
@@ -290,7 +291,7 @@ def _dispatch_llm_workers(
     #    thinking 请求同时最多 llm_max_thinking_concurrency 个（默认 2），从源头降低
     #    偶发概率；非 thinking 模块不受限，保持原有并发。 ──
     try:
-        _thinking_limit = max(1, int((llm_config or {}).get("llm_max_thinking_concurrency", 2)))
+        _thinking_limit = max(1, int((llm_config or {}).get("llm_max_thinking_concurrency", get_llm_setting_default("llm_max_thinking_concurrency"))))
     except (TypeError, ValueError):
         _thinking_limit = 1
     _thinking_sem = threading.BoundedSemaphore(_thinking_limit)
@@ -442,7 +443,7 @@ def _dispatch_llm_workers(
         _MODULE_FNS["expert_review"] = _debate_wrapper
         logger.info("[debate] 辩论模式已启用，expert_review 路由已替换")
 
-    _max_workers = (llm_config or {}).get("llm_max_concurrency", 3)
+    _max_workers = (llm_config or {}).get("llm_max_concurrency", get_llm_setting_default("llm_max_concurrency"))
     # 总时间预算：每个模块**启动前**检查已用时长；超预算不再提交新模块（已提交的
     # 模块不打断——强杀线程会留下半截内容与未释放连接）。预算 0/缺省 = 不启用。
     _budget = float((llm_config or {}).get("llm_total_time_budget_sec") or 0)

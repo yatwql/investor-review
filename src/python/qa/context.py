@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from pathlib import Path
 
-from src.python.config import get_default
+from src.python.config import resolve_output_dir
 from src.python.qa.error_codes import QA_BAD_REPORT, QA_CONTEXT_INVALID, QA_REPORT_NOT_FOUND
 
 logger = logging.getLogger("invest")
@@ -235,7 +235,7 @@ def _resolve_report_path(report: str, output_dir: str | None) -> Path:
     """解析报告文件路径（净化单源 + 分层防御）。"""
     if sanitize_report_filename(report) is None:
         raise ReportQaContextError("report 参数不合法", code=QA_BAD_REPORT)
-    base = output_dir or get_default("output_dir") or "reports"
+    base = resolve_output_dir(override=output_dir)
     path = Path(base) / report
     if not path.is_file():
         raise ReportQaContextError("报告文件不存在（可能已被删除或移动，请重新生成报告）", code=QA_REPORT_NOT_FOUND)

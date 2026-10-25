@@ -77,7 +77,7 @@ def validate_block(payload: Any) -> dict:
         raise ValueError("执行日须为 0-6 整数（0=周一 … 6=周日）") from None
     if days[0] < 0 or days[-1] > 6:
         raise ValueError("执行日须为 0-6 整数（0=周一 … 6=周日）")
-    report_type = payload.get("report_type", "basic")
+    report_type = payload.get("report_type", _DEFAULT_CONFIG["scheduler"]["report_type"])
     if report_type not in REPORT_TYPES:
         raise ValueError("报告格式不合法（basic/both/full）")
     hour, minute = int(match.group(1)), int(match.group(2))

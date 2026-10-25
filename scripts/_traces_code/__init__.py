@@ -8,6 +8,7 @@
   - scan       scan_file 调度（四支路汇聚）
   - layers     core 反向依赖 AST 守卫
   - logging_discipline 日志统一 AST 守卫（print() 仅限交互呈现层）
+  - config_defaults 配置默认值单源 AST 守卫（禁止与默认表同值的字面量兜底）
 """
 
 from __future__ import annotations
@@ -19,6 +20,11 @@ from _traces_code.config import (  # noqa: F401
     SCAN_DIRS,
     SKIP_FILES,
     _is_tool_self,
+)
+from _traces_code.config_defaults import (  # noqa: F401
+    _DEFAULT_TABLE_FILES,
+    _collect_default_pairs,
+    _scan_config_default_fallbacks,
 )
 from _traces_code.exemptions import (  # noqa: F401
     _COMPILED_CHAPTER_EXCLUDE,

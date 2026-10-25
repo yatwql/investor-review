@@ -15,7 +15,7 @@ _project_root = os.path.dirname(os.path.dirname(os.path.dirname(_src_dir)))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-from src.python.config import init_config
+from src.python.config import init_config, get_default
 from src.python.llm.pricing import format_costs
 from src.python.core.logger import log_app_boundary, setup_logger
 from src.python.tui.panel_runtime import NavState
@@ -265,7 +265,7 @@ def main() -> None:
     # 关闭时对应项被裁剪，index_by_key 自然回落到首项）
     from src.python.config import get_config
 
-    _default_key = get_config().get("default_menu_key", "L").upper()
+    _default_key = get_config().get("default_menu_key", get_default("default_menu_key")).upper()
     _idx = index_by_key(_default_key)
     # 导航态单源（NavState）：首页 Enter 无条件派发、render_menu 自带高亮，故 cursor 即原 sel；
     # engaged 不影响主循环（仅 marker 用），与子菜单 panel_loop 的 engaged 门控语义独立

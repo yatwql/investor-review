@@ -154,11 +154,11 @@ def _is_market_open_official(current_min: int) -> bool | None:
         True 开市 / False 收盘 / None API 不可用
     """
     from src.python.cache import get, set
-    from src.python.config import get_config
+    from src.python.config import get_config, get_default
 
     config = get_config()
     mh_config = config.get("market_hours") or {}
-    use_official = mh_config.get("official_source", True)
+    use_official = mh_config.get("official_source", get_default("market_hours.official_source"))
     if not use_official:
         return None
     now = datetime.now(_BJ_TZ)

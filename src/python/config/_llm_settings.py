@@ -93,25 +93,8 @@ def _check_unknown_llm_keys(settings: dict) -> None:
         )
 
 
-_DEBATE_CONFIG_DEFAULTS: dict[str, Any] = {
-    "procon": {
-        "per_call_max_tokens": None,
-        "synthesis_model": None,
-        "synthesis_temperature": 0.5,
-    },
-    "conditional": {
-        "scenarios": [
-            {"name": "上涨", "change": 0.20, "desc": "如果未来市场上涨 20%"},
-            {"name": "下跌", "change": -0.20, "desc": "如果未来市场下跌 20%"},
-            {"name": "震荡", "change": 0.05, "desc": "如果未来市场窄幅震荡±5%"},
-        ],
-    },
-    "concentration_qa": {
-        "threshold": 0.20,
-    },
-    "max_total_tokens_per_report": 72000,
-    "per_call_timeout_override": 90,
-}
+#: debate 段出厂默认值（唯一来源：llm_settings 默认投影的 debate 段，不另写一份字面量）
+_DEBATE_CONFIG_DEFAULTS: dict[str, Any] = copy.deepcopy(_DEFAULT_LLM_SETTINGS["debate"])
 
 
 def _load_debate_config(settings: dict) -> dict:
@@ -191,7 +174,7 @@ def _merge_llm_defaults(base: dict) -> dict:
       - 默认中不存在的键原样透传（未知键透传，供消费端自定义字段使用）
 
     debate 段保留默认值作为合并底（_load_debate_config 会对每个子键做
-    schema 校验并以 _DEBATE_CONFIG_DEFAULTS 兜底），此处不特殊处理。
+    schema 校验并以出厂 debate 默认值兜底），此处不特殊处理。
 
     Args:
         base: 从 llm_settings.json 解析的用户配置字典。

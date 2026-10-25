@@ -29,6 +29,7 @@ from src.python.config.features import (
 logger = logging.getLogger("invest")
 
 # LLM 分析章节可编辑开关 = 模块注册表全集（共享单源；辩论三段不在其内，缓存登记在缓存域）
+from src.python.config import DEFAULT_PROVIDER_PRIORITY  # noqa: E402
 from src.python.core.registry import get_llm_module_names  # noqa: E402
 
 
@@ -65,11 +66,11 @@ def _llm_providers_surface() -> dict:
 
     cfg = get_llm_providers()
     providers = [p for p in (cfg.get("providers") or []) if isinstance(p, dict)]
-    ordered = sorted(enumerate(providers), key=lambda t: (t[1].get("priority", 99), t[0]))
+    ordered = sorted(enumerate(providers), key=lambda t: (t[1].get("priority", DEFAULT_PROVIDER_PRIORITY), t[0]))
     return {
         "strategy": str(cfg.get("strategy") or "priority"),
         "providers": [
-            {"name": p.get("name"), "provider": p.get("provider"), "priority": p.get("priority", 99)}
+            {"name": p.get("name"), "provider": p.get("provider"), "priority": p.get("priority", DEFAULT_PROVIDER_PRIORITY)}
             for _idx, p in ordered
         ],
     }

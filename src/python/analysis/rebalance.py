@@ -47,7 +47,7 @@ from src.python.core.code_utils import (
     is_convertible_bond_by_name,
     is_etf_by_name_or_code,
 )
-from src.python.config import get_config
+from src.python.config import get_config, get_default
 from src.python.core.trading_calendar import count_trading_days_elapsed
 
 from ._rebalance_deviation import (  # noqa: E402
@@ -95,7 +95,7 @@ def resolve_rebalance_config(rebalance_config: dict[str, Any] | None) -> dict[st
         rebalance_config = config.get("rebalance", {})
     result = dict(rebalance_config)
 
-    profile = result.get("profile", "moderate")
+    profile = result.get("profile", get_default("rebalance.profile"))
     if profile in _REBALANCE_PROFILES:
         preset = _REBALANCE_PROFILES[profile]
         # 预设值作为默认值，用户显式指定的值优先（已在 config 中）

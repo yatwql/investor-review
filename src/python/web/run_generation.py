@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 import os
 
-from src.python.config import resolve_output_dir
+from src.python.config import resolve_output_dir, get_default
 
 logger = logging.getLogger("invest")
 
@@ -152,7 +152,7 @@ def _run_generation_impl(state, params: dict, result_box: dict | None = None) ->
             holdings=holdings,
             config=config,
             reporter=reporter,
-            report_type=params.get("report_type", "basic"),
+            report_type=params.get("report_type", get_default("scheduler.report_type")),
             # None → generate_report 回退到配置层 history.fetch_mode 解析
             fetch_history=params.get("fetch_history"),
             force_llm=bool(params.get("force_llm")),
@@ -202,7 +202,7 @@ def _notify_web_completion(state, params: dict, exit_code: int, result: object) 
             return
         output_dir = state.output_dir or resolve_output_dir(config)
         event = build_completion_event(
-            report_type=str(params.get("report_type", "basic") or "basic"),
+            report_type=str(params.get("report_type", get_default("scheduler.report_type")) or "basic"),
             exit_code=exit_code,
             output_dir=str(output_dir),
             errors=list(state.errors or []),
@@ -225,7 +225,7 @@ def _build_artifacts(params: dict, state) -> list[dict]:
     from src.python.core.constants import LATEST_HTML_NAME, LATEST_XLSX_NAME
     from src.python.report.orchestrator import artifacts_for_report_type
 
-    report_type = params.get("report_type", "basic")
+    report_type = params.get("report_type", get_default("scheduler.report_type"))
     if not state.output_dir:
         return []
     # 严重失败/执行失败：报告未生成，产物按钮无意义（点击只会 404）

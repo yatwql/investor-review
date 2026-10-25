@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 
-from src.python.config import get_llm_config
+from src.python.config import get_llm_config, get_llm_setting_default
 from src.python.core.registry import get_llm_module_name
 from src.python.llm.prompts import (
     FAIL_REASON_API_ERROR,
@@ -56,7 +56,7 @@ def run_news_correlation_safe(
 
     # 检查 LLM 配置
     enabled_llm = llmc.get("enabled_llm") if llmc else None
-    llm_enabled = enabled_llm.get("news_correlation", False) if isinstance(enabled_llm, dict) else False
+    llm_enabled = enabled_llm.get("news_correlation", get_llm_setting_default("enabled_llm.news_correlation")) if isinstance(enabled_llm, dict) else False
     if not llmc or not llm_enabled:
         logger.info("%s LLM 分析已禁用（enabled_llm.news_correlation = false）", _MN("news_correlation"))
         LLM_MODULE_FAILURE["news_correlation"] = FAIL_REASON_DISABLED

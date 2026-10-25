@@ -3740,6 +3740,8 @@ web/ (Web 服务层，薄入口)
 >
 > **约束外参照（脚本 CLI 契约）**：`scripts/` 下的检查脚本统一 `-v/--verbose` + `--ci`（仅输出 `文件:描述`）与退出码语义（0=通过 / 2=发现 finding，`check-code-traces.py` 保留 HIGH=1、LOW=3 分级）；共享设施集中在 `scripts/_checklib.py`（CLI/输出/路径/文档区间解析）；历史痕迹检查内部实现拆在 `scripts/_traces_code/` 包内（共享排除模式在 `exemptions.py`，`_shared/traces_common.py` 已并入其中删除）；检查脚本内部实现普遍拆 `前置横线包`pattern（`_doc_drift/` / `_traces_code/` / `_traces_doc/` / `_test_runner/` / `_eval_halluc_sampler/`，入口仅留 CLI 与原面 re-export）；连通性探测统一入口 `scripts/probe.py`（target registry，实现在 `scripts/_probes/`，新探针登记即用）；发布编排分步 CLI `scripts/release.py`（check/prepare/refresh/evolution/gate/publish/devbump，每步独立可审阅、失败即停，内部实现同为入口薄 CLI + 单模块）。
 
+> **约束外参照（配置默认值单源纪律）**：配置项的出厂缺省值只有一份事实位（`config/_config_defaults.py` / `_llm_settings_defaults.py` / `_llm_providers_defaults.py` 三张默认表），读取侧一律经 `get_default()` / `get_llm_setting_default()` 取值（支持点分嵌套路径与逐层传参），**不得自带与默认表同值同键的字面量兜底**——同一数值两份拷贝时改默认表必然漏改其一，症状是「配置文件里没写该键却拿到旧值」。由 `scripts/check-code-traces.py --ci` 的 DEFAULTDUP 支路强制（AST 判定 `x.get("<键>", <默认值>)`，默认表自身与测试不在扫描域）。
+
 > **约束外参照（测试有效性纪律）**：测试用例不得是「死用例 / 无断言 / 完全重复 / 自证用例」——分别指：pytest 永不收集或同名覆盖的用例、没有任何断言（也不经含断言的同类辅助方法）、函数体与参数装饰器归一化后彼此完全一致的用例、以及 patch 掉被测函数后又把其 `return_value` 断言回原值的用例。由 `scripts/check-test-redundancy.py --ci` 强制；删除/合并用例后须同步刷新 `test-coverage.md` 与 `folders.md` 计数（`check-doc-drift.py --with-test-count` 兜底）。
 
 ### 8.1 数据获取层约束

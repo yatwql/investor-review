@@ -175,6 +175,7 @@ def _send_webhook(url: str, payload: dict, timeout: float) -> None:
 
 
 def _send_email(email_cfg: dict, subject: str, body: str, timeout: float) -> None:
+    from src.python.config import get_default
     """SMTP 邮件（SSL 或 STARTTLS，按 use_ssl 切换）。"""
     host = str(email_cfg.get("smtp_host") or "").strip()
     port = int(email_cfg.get("smtp_port") or 465)
@@ -190,7 +191,7 @@ def _send_email(email_cfg: dict, subject: str, body: str, timeout: float) -> Non
     msg["From"] = username or "investor-review"
     msg["To"] = ", ".join(recipients)
 
-    if bool(email_cfg.get("use_ssl", True)):
+    if bool(email_cfg.get("use_ssl", get_default("notify.email.use_ssl"))):
         smtp: smtplib.SMTP = smtplib.SMTP_SSL(host, port, timeout=timeout)
     else:
         smtp = smtplib.SMTP(host, port, timeout=timeout)

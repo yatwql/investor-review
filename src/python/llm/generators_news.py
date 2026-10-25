@@ -24,6 +24,7 @@ from src.python.llm.prompts import (
 from src.python.llm.session import record_per_module
 from src.python.llm.skeleton import generate_llm_module
 from src.python.core.registry import get_llm_module_name
+from src.python.config import get_llm_setting_default
 
 logger = logging.getLogger("invest")
 _MN = get_llm_module_name
@@ -319,7 +320,7 @@ def enhance_news_correlation(
     if not news_data:
         return (news_data, False, {})
 
-    top_n = (llm_config or {}).get("news_correlation_top_n", 30)
+    top_n = (llm_config or {}).get("news_correlation_top_n", get_llm_setting_default("news_correlation_top_n"))
     top_news, top_to_original = _select_top_news(news_data, top_n=top_n)
     batch_preparer, per_item_cache_fn, batch_prompt_fn, _model = _build_news_hooks(
         top_news,

@@ -20,7 +20,7 @@ from urllib.parse import urlparse
 
 from flask import request, send_from_directory
 
-from src.python.config import resolve_output_dir
+from src.python.config import resolve_output_dir, get_default
 from src.python.qa.error_codes import (
     QA_CONTEXT_INVALID,
     QA_DISABLED,
@@ -121,7 +121,7 @@ def _handle_index():
     # 历史走势默认跟随配置 fetch_mode（off→关闭；auto/prompt→开启）。
     config = get_config()
     fetch_mode = (config.get("history", {}) or {}).get("fetch_mode") or "auto"
-    history_checked = bool(config.get("enable_history", True)) and fetch_mode != "off"
+    history_checked = bool(config.get("enable_history", get_default("enable_history"))) and fetch_mode != "off"
     # 表单说明文案（模板里嵌在复选框 label 括号中，不再重复「历史走势」前缀）
     config_note = "跟随配置开启" if history_checked else "当前配置关闭"
     # 模块级强刷候选：键名单一来源 force_scope，中文名经注册表派生
@@ -161,7 +161,7 @@ def _handle_create_run(run_manager):
 
     payload = request.get_json(silent=True) or {}
     file_id = payload.get("file_id")
-    report_type = payload.get("report_type", "basic")
+    report_type = payload.get("report_type", get_default("scheduler.report_type"))
     fetch_history = payload.get("fetch_history")
     force_llm = payload.get("force_llm", False)
     llm_modules = payload.get("llm_modules")

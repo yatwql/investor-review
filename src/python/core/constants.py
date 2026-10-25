@@ -229,6 +229,13 @@ PRICING_HOLIDAY_ALWAYS_IDLE: bool = True
 # 峰谷时段判定所用 IANA 时区（默认北京时间）
 PRICING_TIMEZONE: str = "Asia/Shanghai"
 
+#: 报告深度档位（顺序即由省到全）：config.json 默认值与 llm 档位解析共用这一份，
+#: 新增档位只改这里（默认值单源纪律由 check-code-traces 的 DEFAULTDUP 守卫）
+REPORT_DEPTH_LEVELS: tuple[str, ...] = ("brief", "standard", "deep")
+
+#: 报告深度出厂默认档位
+REPORT_DEPTH_DEFAULT: str = "standard"
+
 #: 项目统一北京时间口径（UTC+8 固定偏移，无夏令时）。**所有「自然日」判定都用它**：
 #: 毫秒戳 → 日期的展示/契约转换、交易日边界、峰谷时段判定——用本机时区会随运行环境漂移
 #: （CI 跑 UTC 时，CST 午夜附近的毫秒戳会算成前一天，测试与报告日期随之不一致）。

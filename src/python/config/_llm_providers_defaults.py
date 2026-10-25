@@ -15,6 +15,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
+#: provider 条目缺省优先级（小者优先）：排序/展示/未声明兜底共用此值，
+#: 不得在读取侧另写字面量（默认值单源纪律由 check-code-traces 的 DEFAULTDUP 守卫）
+DEFAULT_PROVIDER_PRIORITY = 99
+
 # LLM Provider 多链缺省配置（与模板一一对应，确保一致性）
 _DEFAULT_LLM_PROVIDERS: dict[str, Any] = {
     "strategy": "priority",

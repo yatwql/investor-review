@@ -15,6 +15,7 @@ import os
 import re
 
 from src.python.core.constants import PROJECT_ROOT
+from src.python.config._llm_providers_defaults import DEFAULT_PROVIDER_PRIORITY, _DEFAULT_LLM_PROVIDERS
 
 logger = logging.getLogger("invest")
 
@@ -202,7 +203,7 @@ def _parse_providers_list(raw_config: dict) -> list[dict] | None:
             "name": name,
             "provider": entry["provider"],
             "endpoint": entry.get("endpoint"),
-            "priority": entry.get("priority", 99),
+            "priority": entry.get("priority", DEFAULT_PROVIDER_PRIORITY),
             "weight": entry.get("weight", 1),
             "timeout": float(entry.get("timeout", 60.0)),
             "proxy_preferred": entry.get("proxy_preferred", False),
@@ -254,7 +255,7 @@ def _inject_provider_chain_data(config: dict) -> dict:
     register_policies(provider_list)
 
     # strategy
-    strategy = raw_providers.get("strategy", "priority")
+    strategy = raw_providers.get("strategy", _DEFAULT_LLM_PROVIDERS["strategy"])
     if strategy not in _VALID_STRATEGIES:
         logger.warning(
             "LLM providers strategy '%s' 无效，回退到 'priority'（有效值: %s）",
@@ -312,7 +313,7 @@ def order_providers_by_chain(providers: list[dict]) -> list[dict]:
     Returns:
         新列表（不修改入参），按链序排列。
     """
-    return [p for _i, p in sorted(enumerate(providers), key=lambda kv: (kv[1].get("priority", 99), kv[0]))]
+    return [p for _i, p in sorted(enumerate(providers), key=lambda kv: (kv[1].get("priority", DEFAULT_PROVIDER_PRIORITY), kv[0]))]
 
 
 def get_llm_providers() -> dict:

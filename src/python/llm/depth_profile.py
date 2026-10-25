@@ -17,15 +17,16 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
+from src.python.core.constants import REPORT_DEPTH_DEFAULT, REPORT_DEPTH_LEVELS
 from src.python.core.registry import get_llm_module_names
 
 logger = logging.getLogger("invest")
 
-REPORT_DEPTH_LEVELS: tuple[str, ...] = ("brief", "standard", "deep")
-"""全部合法档位（顺序即由省到全）。"""
+REPORT_DEPTH_LEVELS = REPORT_DEPTH_LEVELS
+"""全部合法档位（顺序即由省到全；常量本体在 ``core.constants``，此处为原面 re-export）。"""
 
-REPORT_DEPTH_DEFAULT: str = "standard"
-"""出厂默认档位；缺省时行为与既有版本逐字节一致。"""
+REPORT_DEPTH_DEFAULT = REPORT_DEPTH_DEFAULT
+"""出厂默认档位（常量本体在 ``core.constants``）。"""
 
 _BRIEF_MODULES: frozenset[str] = frozenset({"global_macro"})
 """简版档仅保留的模块——全球政经局势（组合层面的宏观视角，单次调用）。"""

@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 import logging
 
 from concurrent.futures import ThreadPoolExecutor
+from src.python.config import get_default
 
 logger = logging.getLogger("invest")
 
@@ -166,7 +167,7 @@ def _get_news_top_count() -> int:
     from src.python.config import get_config
 
     try:
-        value = get_config().get("news_top_count", 300)
+        value = get_config().get("news_top_count", get_default("news_top_count"))
         return int(value) if value else 300
     except Exception:
         return 300

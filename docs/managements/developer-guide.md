@@ -135,7 +135,7 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 
 ```bash
 .venv/bin/python scripts/test-runner.py --mode dev-verify   # 核心单元 + 基础场景快速验证
-.venv/bin/python scripts/check-code-traces.py --ci          # 代码注释历史痕迹 + 任务编号标识符 + 日志统一检查
+.venv/bin/python scripts/check-code-traces.py --ci          # 代码注释历史痕迹 + 任务编号标识符 + 日志统一 + 配置默认值单源检查
 .venv/bin/python scripts/check-doc-traces.py --ci           # 文档历史痕迹 + 结构性冗余检查
 .venv/bin/python scripts/check-task-numbering.py --ci       # 任务编号全局一致性检查
 .venv/bin/python scripts/check-semantic-index.py --ci       # 语义命名索引正反向校验

@@ -42,6 +42,7 @@ from src.python.llm.prompts_tables import (
     _build_data_quality_detail_block,
 )
 
+from src.python.config import get_llm_setting_default
 logger = logging.getLogger("invest")
 
 
@@ -344,7 +345,7 @@ def _build_expert_review_prompt(
             _cfg = get_llm_config()
             _debate_cfg = (_cfg or {}).get("debate", {})
             _qa_cfg = _debate_cfg.get("concentration_qa") or {}
-            _threshold = _qa_cfg.get("threshold", 0.20)
+            _threshold = _qa_cfg.get("threshold", get_llm_setting_default("debate.concentration_qa.threshold"))
         except Exception:
             _threshold = 0.20
         _qa_block = _build_concentration_qa_block(
@@ -579,7 +580,7 @@ def _build_debate_synthesis_prompt(
             _cfg = get_llm_config()
             _debate_cfg = (_cfg or {}).get("debate", {})
             _qa_cfg = _debate_cfg.get("concentration_qa") or {}
-            _threshold = _qa_cfg.get("threshold", 0.20)
+            _threshold = _qa_cfg.get("threshold", get_llm_setting_default("debate.concentration_qa.threshold"))
         except Exception:
             _threshold = 0.20
         _qa_block = _build_concentration_qa_block(

@@ -26,6 +26,7 @@ from src.python.report._report_factor_metrics import (  # noqa: F401
     compute_industry_beta_data,
 )
 
+from src.python.config import get_default, resolve_output_dir
 logger = logging.getLogger("invest")
 
 
@@ -270,8 +271,8 @@ def prepare_report_data(
         "penetrated_assets": penetrated_assets,
         "holdings_details": holdings_details,
         "today_str": today_str,
-        "output_dir": config.get("output_dir", "reports"),
-        "news_top_count": effective_news_limit(int(config.get("news_top_count", 300)), resolve_depth_profile(config)),
+        "output_dir": resolve_output_dir(config),
+        "news_top_count": effective_news_limit(int(config.get("news_top_count", get_default("news_top_count"))), resolve_depth_profile(config)),
         # 组合风险指标（年化波动率/最大回撤/夏普比率等，需 history_data 计算后填充）
         "risk_metrics": {},
         # 风格与因子分析（数据契约 style_factor_data，内嵌 industry_beta 子键；

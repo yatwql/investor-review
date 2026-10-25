@@ -14,6 +14,8 @@
 from __future__ import annotations
 
 import logging
+
+from src.python.config import DEFAULT_PROVIDER_PRIORITY
 import os
 import random
 
@@ -49,7 +51,7 @@ def resolve_provider_chain(
 
     # step 1: 策略排序
     if strategy in ("priority", "fallback_only"):
-        chain = sorted(provider_list, key=lambda p: p.get("priority", 99))
+        chain = sorted(provider_list, key=lambda p: p.get("priority", DEFAULT_PROVIDER_PRIORITY))
     elif strategy == "weighted":
         chain = _apply_weighted(provider_list)
     elif strategy == "cost_first":
@@ -121,7 +123,7 @@ def _apply_weighted(provider_list: list[dict]) -> list[dict]:
     nonzero = [(i, p) for i, p in enumerate(provider_list) if p.get("weight", 1) > 0]
     if not nonzero:
         logger.warning("Weighted 策略所有 provider 权重全为 0，回退到 priority 排序")
-        return sorted(provider_list, key=lambda p: p.get("priority", 99))
+        return sorted(provider_list, key=lambda p: p.get("priority", DEFAULT_PROVIDER_PRIORITY))
 
     indices, candidates = zip(*nonzero)
     weights = [p.get("weight", 1) for p in candidates]

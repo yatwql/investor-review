@@ -31,6 +31,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from src.python.core.constants import REPORT_FILE_BASE
+from src.python.config import resolve_output_dir
 
 logger = logging.getLogger("invest")
 
@@ -99,7 +100,7 @@ def guard_run(fn: Callable) -> Callable:
         bound = inspect.signature(fn).bind(*args, **kwargs)
         bound.apply_defaults()
         config = bound.arguments.get("config") or {}
-        output_dir = bound.arguments.get("output_dir") or config.get("output_dir", "reports")
+        output_dir = bound.arguments.get("output_dir") or resolve_output_dir(config)
         begin_run(str(bound.arguments.get("report_type") or "basic"), str(output_dir))
         try:
             return fn(*args, **kwargs)

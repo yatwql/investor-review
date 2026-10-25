@@ -1,4 +1,4 @@
-"""check-code-traces 单文件扫描调度（痕迹/标识符/分层/日志 四条支路汇聚）。"""
+"""check-code-traces 单文件扫描调度（痕迹/标识符/分层/日志/配置默认值 五条支路汇聚）。"""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 
 from _traces_code.config import RULE_CARRIER_DIRS, RULE_CARRIER_FILES, REPO_ROOT, SKIP_FILES, _is_tool_self
+from _traces_code.config_defaults import _scan_config_default_fallbacks
 from _traces_code.exemptions import _is_chapter_excluded, _is_round_excluded
 from _traces_code.extract import _iter_comment_lines, _scan_identifiers
 from _traces_code.layers import _scan_core_layering
@@ -81,5 +82,8 @@ def scan_file(fpath: Path, verbose: bool) -> list[tuple[int, str, str, str]]:
 
     # 日志统一守卫（print() 仅限交互呈现层，其余模块走 logging 落盘）
     hits.extend(_scan_print_calls(fpath, REPO_ROOT))
+
+    # 配置默认值单源守卫（禁止与默认表同值的字面量兜底）
+    hits.extend(_scan_config_default_fallbacks(fpath, REPO_ROOT))
 
     return hits
