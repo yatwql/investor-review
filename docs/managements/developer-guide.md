@@ -1357,6 +1357,8 @@ class ComputModuleDef:
 2. **跨币种不相加**：累计/历史/预估一律用「币种 → 金额」桶。桶的读写规则在 `core/costs.py`（`costs_of` / `add_cost_bucket`，core 与 llm 两层共用，避免分层倒置）；累加与格式化在 `llm/pricing.py`（`add_cost` / `merge_costs` / `format_costs`）。**新增费用展示位一律用 `format_costs` 出串，不得自拼符号与数值**。
 3. **唯一的折算点在日预算**：`budget_status()` 判定超限时用 `pricing.FX_TO_CNY` 把各币种支出折到本币比对，折算结果**不进 `display`**（展示保持原生币种）；缺汇率的币种在摘要里点名，不按 0 静默计。
 
+**重算归因有两条路径，新增模块两条都要覆盖**：预检侧（`_compute_module_cache_info` 覆盖的四个基础模块）与骨架侧（`skeleton.generate_llm_content`，覆盖键在上游产出后才确定的模块如 `self_review`）。只加一条会让 `recompute_reasons` 的 `ttl_expired` 占比失真，据此调 TTL 会判错。
+
 `budget_status()` 只返回 `{enabled, exceeded, display}`：三渠道读 `exceeded` 作硬闸、前端读 `display` 整行直出。新增消费方只读这三个键，不要另加金额字段——那会让同一份数据出现两套格式（此前前端自拼 `low`/`symbol` 字段，后端改多币种后 `.toFixed()` 直接抛错）。
 
 ### 无需手动维护的派生产出

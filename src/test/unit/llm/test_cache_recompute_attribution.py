@@ -178,3 +178,89 @@ class TestPerfPersistence:
             assert go._inputs_fingerprint_changed("global_macro") is False
         finally:
             go._FINGERPRINT_CHANGED_MODULES.pop("__changed__", None)
+
+
+class TestSkeletonPathAttribution:
+    """骨架路径（预检之后才定键的模块，如 self_review）同样要进归因统计。
+
+    缺陷场景：`recompute_reasons` 只统计预检覆盖的四个基础模块，self_review 每次
+    重算却从未计入——最贵的模块之一被漏掉，据此判断 TTL 是否放宽会系统性低估。
+    """
+
+    def test_skeleton_miss_is_attributed(self, llm_cache_dir):
+        from src.python.llm import observation, skeleton
+
+        skeleton.reset_prev_module_cache_keys()
+        sink = observation.LlmObservation()
+        sink.note_recompute_reason("self_review", "cache_miss")
+        assert sink.module_recompute_reasons() == {"self_review": "cache_miss"}
+
+    def test_skeleton_miss_records_reason(self, llm_cache_dir):
+        """真实走骨架：无缓存 + 有观测汇聚器 → 记一条归因（预检路径漏掉的模块）。"""
+        from src.python.llm import observation, skeleton
+
+        skeleton.reset_prev_module_cache_keys()
+        sink = observation.LlmObservation()
+        with patch("src.python.llm.observation.current_llm_observation", return_value=sink):
+            skeleton.generate_llm_content(
+                {},
+                "llm_self_review_probe",
+                3600,
+                "sys",
+                "user",
+                cache_enabled=True,
+                force=False,
+                max_tokens=16,
+                timeout=5,
+                temperature=None,
+                model=None,
+                config_field="model_self_review",
+                module_key="self_review",
+            )
+        assert sink.module_recompute_reasons().get("self_review") in {
+            "cache_miss",
+            "fingerprint_changed",
+            "ttl_expired",
+        }
+
+    def test_skeleton_hit_records_no_reason(self, llm_cache_dir):
+        """命中时不得写归因（否则"命中/重算"统计互相污染）。"""
+        from src.python.llm import observation, skeleton
+
+        skeleton.reset_prev_module_cache_keys()
+        sink = observation.LlmObservation()
+        with patch("src.python.llm.skeleton.cache_get", return_value="<p>cached</p>"):
+            with patch("src.python.llm.observation.current_llm_observation", return_value=sink):
+                content, from_cache = skeleton.generate_llm_content(
+                    {},
+                    "llm_self_review_probe",
+                    3600,
+                    "sys",
+                    "user",
+                    cache_enabled=True,
+                    force=False,
+                    max_tokens=16,
+                    timeout=5,
+                    temperature=None,
+                    model=None,
+                    config_field="model_self_review",
+                    module_key="self_review",
+                )
+        assert from_cache is True
+        assert sink.module_recompute_reasons() == {}
+
+    def test_reset_clears_prev_keys(self):
+        from src.python.llm import skeleton
+
+        skeleton._PREV_MODULE_CACHE_KEY["self_review"] = "k"
+        skeleton.reset_prev_module_cache_keys()
+        assert skeleton._PREV_MODULE_CACHE_KEY == {}
+
+    def test_report_boundary_resets_prev_keys(self):
+        """报告边界复位：跨报告比对才成立，不把上次进程遗留的键当"上一轮"。"""
+        from src.python.llm import skeleton
+        from src.python.report._run_scope import start_report_run
+
+        skeleton._PREV_MODULE_CACHE_KEY["self_review"] = "stale"
+        start_report_run()
+        assert "self_review" not in skeleton._PREV_MODULE_CACHE_KEY

@@ -42,7 +42,9 @@ class LlmObservation:
         self._thinking_calls = 0
         self._cache_hits = 0
         self._cache_misses = 0
-        #: 缓存未命中归因：{原因: 次数}（ttl_expired / fingerprint_changed / forced）
+        #: 缓存未命中归因：{原因: 次数}
+        #: （`forced` 用户强制 / `fingerprint_changed` 内容变 / `ttl_expired` 纯到点 /
+        #:  `cache_miss` 无上轮可比对，骨架路径与预检路径分头记录）
         self._recompute_reasons: dict[str, int] = {}
         #: 逐模块最近一次重算原因（模块 → 原因）
         self._module_reasons: dict[str, str] = {}
