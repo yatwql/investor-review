@@ -19,6 +19,7 @@ from src.python.core.registry import _REPORT_SECTION_DEFAULT, get_cache_ttl_defa
 
 from src.python.fetcher.chain import _DEFAULT_CHAINS  # noqa: E402
 from _doc_drift._shared import (
+    _DATASOURCE_MD,
     _RELIABILITY_MD,
     _doc_section,
     _split_table_row,
@@ -306,6 +307,55 @@ _LLM_ROW = re.compile(
 
 
 _TTL_TABLE_ROW = re.compile(r"^\|\s*`([a-z_]+)`\s*\|\s*(\d+)s\s*(?:\([^)]*\))?\s*\|", re.M)
+
+
+#: datasource.md「LLM 模块缓存」表行：`| 中文名 | `llm_xxx_` | 4h | 分组 |`
+#: 前缀 → 注册表数据类型靠前缀表反查（`llm_news_item_` 属 `llm_news_correlation`）；
+#: 辩论三段一行多前缀，逐个校验。
+_DATASOURCE_LLM_ROW = re.compile(r"^\|\s*[^|]+\|\s*((?:`llm_[a-z_]+`\s*(?:/\s*)?)+)\|\s*([^|]+?)\s*\|", re.M)
+
+#: TTL 文本 → 秒（`24h` / `4h` / `7 天` / `90 分钟` / `30s`）
+_TTL_TEXT_UNITS = (("天", 86400), ("h", 3600), ("小时", 3600), ("分钟", 60), ("s", 1))
+
+
+def _parse_ttl_text(text: str) -> int | None:
+    m = re.search(r"(\d+(?:\.\d+)?)\s*(天|小时|分钟|h|s)", text)
+    if not m:
+        return None
+    value = float(m.group(1))
+    unit = next(sec for name, sec in _TTL_TEXT_UNITS if name == m.group(2))
+    return int(value * unit)
+
+
+def check_datasource_llm_ttl(doc_text: str) -> list[str]:
+    """`datasource.md` 的 LLM 缓存 TTL 行必须与缓存注册表一致。
+
+    用户文档里保留「数字」的 LLM TTL 清单只有本表（`faq.md` 引用配置文档；
+    `how-to-config` / `llm-technical` 由 `check_config_defaults` / `check_llm_defaults`
+    负责），因此在此补齐守卫：改默认值后忘记同步会被门禁抓住。
+    """
+    from src.python.core.data_registry import get_prefix_type_map
+
+    findings: list[str] = []
+    prefix_map = get_prefix_type_map()
+    defaults = get_cache_ttl_defaults()
+    for m in _DATASOURCE_LLM_ROW.finditer(doc_text):
+        prefixes = re.findall(r"`(llm_[a-z_]+)`", m.group(1))
+        shown = _parse_ttl_text(m.group(2))
+        if not prefixes or shown is None:
+            continue
+        for prefix in prefixes:
+            data_type = prefix_map.get(prefix)
+            if data_type is None or data_type not in defaults:
+                findings.append(f"{rel(_DATASOURCE_MD)}: LLM 缓存前缀 `{prefix}` 未在缓存注册表登记（无法核对 TTL）")
+                continue
+            expected = int(defaults[data_type])
+            if shown != expected:
+                findings.append(
+                    f"{rel(_DATASOURCE_MD)}: LLM 缓存 `{prefix}` TTL 文档 {m.group(2).strip()} 与缓存注册表 "
+                    f"{expected}s 不一致"
+                )
+    return findings
 
 
 _HOURS_ROW = re.compile(r"^|\s*`([a-z_]+)`\s*\|\s*(\d+)h（(\d+)s）\s*\|")

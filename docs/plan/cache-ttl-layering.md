@@ -2,7 +2,7 @@
 
 > 文档版本：0.15.6-dev
 >
-> 定位：`docs/plan/` 中间设计文件（分析结论待评审后实施）。关联任务 `plan-219`。
+> 定位：`docs/plan/` 中间设计文件。关联任务 `plan-219`（**已实施并验收**，随下个发布迁入版本归档）。
 >
 > **一句话问题**：同一个缓存条目的有效期，当前由「代码注册表默认值 + `config.json` 全量副本 + 读侧映射表 + 未注册兜底 + 交易时段特例 + 按 key 抖动」多层合成。层数过多导致「同一条目在不同调用点取到不同值」，已造成两次真实事故（详见 §2）。
 
@@ -123,3 +123,22 @@
 5. 对同一缓存文件名，读侧（`cache.get` 传入的 TTL）与清理侧（`cleanup_expired` 判定）**取值逐字节相等**（新增契约测试，覆盖抖动因子 >1 与 <1 两侧）；
 6. `cache_ttl` 中未注册键在校验时产生 WARNING（`fund_overlap` 类残留可见）；
 7. `test_llm_cache_ttl_single_source` 全绿；`check-doc-drift` 默认值表校验通过。
+
+---
+
+## 7. 实施与验收结论（已完成）
+
+**落地形态**（与 §4 方案 C 一致，D3 不做）：
+
+1. 生成的 `config.json` 中 `cache_ttl` 为空对象，默认值唯一来源 = 缓存注册表；
+2. `get_ttl(type, key=None)` 与 key 无关（抖动层整体移除），读侧/清理侧天然同值；
+3. `cleanup_expired` 剥离版本戳取逻辑键 → 精确键映射命中；
+4. `cache_ttl` 未注册键 WARNING；
+5. 死键 `fund_overlap` 与 37 个等于默认值的键已从运行时配置移除；
+6. 同值重复 TTL 常量（`bond_yield`/`fund_manager`）改为直读注册表；`index`/`index_valuation`/`chain` 的宽松常量补注为「陈旧兜底读」；`financial_report` 负缓存常量注为模块自有策略。
+
+**真实运行验收**：连续三次报告预检均 `命中 4/4`；TTL 收紧后首轮重算一次，其后两轮 **6/6 全命中**（节省 ≈¥0.12/份），期间无「指纹组件变化」行；`self_review` 在上游重算那一轮换键属内容寻址设计。
+
+**契约测试**：`src/test/unit/cache/test_ttl_alignment.py`（读写同值/精确键/稀疏覆盖/未注册告警）+ `src/test/unit/llm/test_llm_cache_ttl_single_source.py`（注册表派生模块逐项校验）。
+
+**跟随项**：文档 TTL 数字的防漂移守卫由 `plan-220` 完成（`datasource.md` 机器校验 + `faq.md` 去数字副本）。

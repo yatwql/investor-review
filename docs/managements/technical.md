@@ -3734,7 +3734,7 @@ web/ (Web 服务层，薄入口)
 
 > **约束外参照（语义命名纪律）**：除上表 C1~C29 编号约束外，**语义命名纪律**以 [「功能语义命名表」](#67-功能语义命名表) 为唯一现状基准——代码/配置标识符（函数/变量/模块/config 键）必须与表中语义 slug 一致，禁止用任务代号（`plan-N`/`rf-N`/系列代号）命名；新增功能先定语义名再设计。该纪律属全局代码卫生，与编号约束并列遵守，由双脚本强制：`scripts/check-code-traces.py --ci`（负面禁止 IDENT/CODE）+ `scripts/check-semantic-index.py --ci`（正面双向校验本表与代码一致）。
 
-> **约束外参照（文档与实现一致性纪律）**：除上表 C1~C29 编号约束外，**文档中的事实断言**（章节表与数量、功能开关表与分组计数、默认值表、TUI 面板编号、目录树、项目统计表）必须与代码/配置文件/文件系统一致，由 `scripts/check-doc-drift.py --ci` 强制（逐项对账，`changelog.md`/`review-findings.md` 与版本快照类文档按设计豁免）；历史痕迹类约束另由 `scripts/check-doc-traces.py --ci` 强制。
+> **约束外参照（文档与实现一致性纪律）**：除上表 C1~C29 编号约束外，**文档中的事实断言**（章节表与数量、功能开关表与分组计数、默认值表、LLM 缓存 TTL 行、TUI 面板编号、目录树、项目统计表）必须与代码/配置文件/文件系统一致，由 `scripts/check-doc-drift.py --ci` 强制（逐项对账，`changelog.md`/`review-findings.md` 与版本快照类文档按设计豁免）；历史痕迹类约束另由 `scripts/check-doc-traces.py --ci` 强制。
 
 > **约束外参照（脚本结构）**：`scripts/` 顶层只放可直接运行的入口；共享库进 `_shared/`（`checklib.py` / `traces_common.py`），单入口实现包用 `_<语义名>/`，评测实现包用 `_eval_<x>/` 与 `eval-<x>.py` 对应（详见 `scripts-reference.md`「命名约定」的结构约定）。
 >
