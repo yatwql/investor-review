@@ -237,6 +237,7 @@ GATE_WHITELIST = {
     ("handlers_log.py", "_cmd_view_logs"),  # 运行日志详情
     ("handlers_log.py", "_cmd_view_health_history"),  # 数据源健康历史
     ("handlers_log.py", "_cmd_run_doctor"),  # 系统自检结果
+    ("report_artifacts.py", "_wait_any_key"),  # 远程/无图形会话报告产物清单（无 y/N 询问）
 }
 
 

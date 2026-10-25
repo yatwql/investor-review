@@ -333,12 +333,17 @@ def next_matching(matches: list[int], cursor: int, step: int) -> int | None:
 # ── 通用 UI 辅助 ──────────────────────────────────────────────
 
 
-def press_any_key() -> None:
-    """等待用户按任意键继续。支持 Ctrl+C 退出。"""
+def press_any_key(*, key_reader: Callable[[], str] | None = None, echo: Callable[[str], None] = print) -> None:
+    """等待用户按任意键继续。支持 Ctrl+C 退出。
+
+    Args:
+        key_reader: 键读取（测试/调用方注入；缺省 ``tui_keys.get_key``）。
+        echo: 输出函数（缺省 ``print``）。
+    """
     from src.python.tui.tui_keys import KEY_CTRL_C, get_key
 
-    print("  按任意键返回菜单...")
-    k = get_key()
+    echo("  按任意键返回菜单...")
+    k = (key_reader or get_key)()
     if k == KEY_CTRL_C:
         exit_app()
 
