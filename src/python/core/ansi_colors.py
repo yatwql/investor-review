@@ -22,7 +22,7 @@ except ImportError:
 # ANSI 颜色：非 TTY 或设置了 NO_COLOR 环境变量时禁用颜色输出
 if "NO_COLOR" in os.environ or not sys.stdout.isatty():
     GREEN = RED = YELLOW = CYAN = DIM = RESET = ""
-    BLUE = BOLD = ORANGE = ""
+    BLUE = BOLD = ORANGE = MAGENTA = ""
 else:
     GREEN = "\033[92m"
     RED = "\033[91m"
@@ -31,5 +31,6 @@ else:
     DIM = "\033[2m"  # 次要信息降权（键名/费用/图例），让主列先被看到
     BLUE = "\033[94m"  # 结构色：分组标题与面板横幅（不承载状态语义）
     ORANGE = "\033[38;5;208m"  # 品牌色：应用名与版本号（256 色橙；不识别的终端落回默认色）
+    MAGENTA = "\033[95m"  # 事件色：LLM 实际调用行（报告运行时“花钱的调用发生了”的唯一视觉信号）
     BOLD = "\033[1m"
     RESET = "\033[0m"

@@ -185,7 +185,12 @@ def run_batch_mode(
         batches = [
             uncached_indices[i : i + _BATCH_CHUNK_SIZE] for i in range(0, len(uncached_indices), _BATCH_CHUNK_SIZE)
         ]
-        logger.info("正在调用 %s（%d 批未缓存，每批最多 %d 条）...", _MN(module_key), len(batches), _BATCH_CHUNK_SIZE)
+        logger.info(
+            "[LLM] 正在调用 %s（%d 批未缓存，每批最多 %d 条）...",
+            _MN(module_key),
+            len(batches),
+            _BATCH_CHUNK_SIZE,
+        )
 
         with ThreadPoolExecutor(max_workers=min(3, len(batches), _BATCH_MAX_WORKERS)) as ex:
             _fut_map = {

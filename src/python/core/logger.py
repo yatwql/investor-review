@@ -7,7 +7,7 @@ import sys
 from logging.handlers import RotatingFileHandler
 
 from src.python.core.constants import PROJECT_ROOT
-from src.python.core.ansi_colors import RED, RESET, YELLOW
+from src.python.core.ansi_colors import MAGENTA, RED, RESET, YELLOW
 
 # 日志文件路径（始终以项目根目录为基准，不受 CWD 影响）
 _LOG_BASE = os.path.join(PROJECT_ROOT, "logs")
@@ -160,8 +160,23 @@ def _resolve_level(env_name: str, default_name: str) -> int:
 # 仅控制台 handler 应用颜色，文件 handler 保持纯文本
 
 
+#: LLM 实际调用行的统一日志前缀——报告运行时滚屏日志里唯一“花钱的调用”信号。
+#: 新增 LLM 调用日志须以此前缀开头，才享受控制台品红与日志查看器同款标注。
+_LLM_CALL_TAG = "[LLM]"
+
+
+def is_llm_call_message(message: str) -> bool:
+    """消息是否为 LLM 实际调用行（前缀 ``[LLM]``；``[LLM 预检]`` 等判定行不算）。"""
+    return str(message).lstrip().startswith(_LLM_CALL_TAG)
+
+
 class _ColoredFormatter(logging.Formatter):
-    """按日志级别着色消息内容的格式器（仅限控制台；``use_color=False`` 时纯文本）。"""
+    """按日志级别着色消息内容的格式器（仅限控制台；``use_color=False`` 时纯文本）。
+
+    两级优先：级别色（WARNING 黄 / ERROR 红）先取，状态语义不被覆盖；
+    其余 INFO 行若命中 :func:`is_llm_call_message`，用品红标记——一次报告运行里
+    这些行就是“真实 LLM API 调用发生了”，在进度行中间需一眼可辨。
+    """
 
     _LEVEL_COLORS = {
         logging.WARNING: YELLOW,
@@ -173,8 +188,16 @@ class _ColoredFormatter(logging.Formatter):
         super().__init__(fmt)
         self._use_color = use_color
 
+    def _message_color(self, record: logging.LogRecord) -> str:
+        """消息着色：级别色优先（含无色模式下的「空色」），其次 LLM 调用品红。"""
+        if not self._use_color:
+            return ""
+        if record.levelno in self._LEVEL_COLORS:
+            return self._LEVEL_COLORS[record.levelno]
+        return MAGENTA if is_llm_call_message(record.getMessage()) else ""
+
     def format(self, record: logging.LogRecord) -> str:
-        color = self._LEVEL_COLORS.get(record.levelno, "") if self._use_color else ""
+        color = self._message_color(record)
         if color:
             original = record.msg
             record.msg = f"{color}{record.msg}{RESET}"

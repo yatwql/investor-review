@@ -117,3 +117,42 @@ class TestLogLevelConfig:
         with pytest.warns(RuntimeWarning, match="不是合法日志级别"):
             file_level, _ = self._levels(self._fresh("invest_lvl_bad", monkeypatch, tmp_path))
         assert file_level == logging.INFO
+
+
+class TestLlmCallColor:
+    """LLM 实际调用行的品红标注：前缀判据 + 级别色优先。"""
+
+    @staticmethod
+    def _format(level: int, msg: str, monkeypatch, *, use_color: bool = True) -> str:
+        monkeypatch.setattr(log_mod, "MAGENTA", "\033[95m")
+        monkeypatch.setattr(log_mod, "RESET", "\033[0m")
+        monkeypatch.setattr(
+            log_mod._ColoredFormatter,
+            "_LEVEL_COLORS",
+            {logging.WARNING: "\033[93m", logging.ERROR: "\033[91m", logging.CRITICAL: "\033[91m"},
+        )
+        formatter = log_mod._ColoredFormatter("%(message)s", use_color=use_color)
+        record = logging.LogRecord("invest", level, __file__, 1, msg, (), None)
+        return formatter.format(record)
+
+    def test_prefix_judgement_excludes_precheck_lines(self):
+        assert log_mod.is_llm_call_message("  [LLM] 全球政经局势: 输入 1,024 + 输出 512")
+        assert log_mod.is_llm_call_message("[LLM] 正在调用 全球政经局势（2 批未缓存，每批最多 50 条）...")
+        assert not log_mod.is_llm_call_message("[LLM 预检] 基础模块命中 4/4：全球政经局势")
+        assert not log_mod.is_llm_call_message("LLM 缓存命中: abc123")
+        assert not log_mod.is_llm_call_message("正在获取行情数据...")
+
+    def test_llm_call_line_is_magenta(self, monkeypatch):
+        out = self._format(logging.INFO, "  [LLM] 全球政经局势: 输入 1,024 + 输出 512", monkeypatch)
+        assert out == "\033[95m  [LLM] 全球政经局势: 输入 1,024 + 输出 512\033[0m"
+
+    def test_llm_call_warning_keeps_level_color(self, monkeypatch):
+        out = self._format(logging.WARNING, "[LLM] 调用重试中", monkeypatch)
+        assert out == "\033[93m[LLM] 调用重试中\033[0m"
+
+    def test_plain_line_stays_uncolored(self, monkeypatch):
+        assert self._format(logging.INFO, "正在获取行情数据...", monkeypatch) == "正在获取行情数据..."
+
+    def test_no_color_mode_skips_llm_highlight(self, monkeypatch):
+        out = self._format(logging.INFO, "[LLM] x", monkeypatch, use_color=False)
+        assert out == "[LLM] x"
