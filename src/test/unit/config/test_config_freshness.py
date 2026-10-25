@@ -85,3 +85,36 @@ class TestCheckConfigFreshness:
         stale = fresh.check_config_freshness()
         assert len(stale) == 1
         assert stale[0]["missing_keys"] == ["beta"]
+
+
+class TestParseErrorSeparation:
+    """文件自身解析失败不能被报成「缺全部键」。"""
+
+    def test_unparsable_file_sets_parse_error(self, tmp_path):
+        target = tmp_path / "config.json"
+        target.write_text('{"alpha": 1,,}\n', encoding="utf-8")
+        diff = fresh._diff(str(target), _TEMPLATE)
+        assert diff["parse_error"] is True
+        assert diff["missing_keys"] == []
+        assert diff["stale"] is True
+
+    def test_unparsable_file_not_reported_as_missing_keys(self, tmp_path, monkeypatch):
+        cfg = tmp_path / "config.json"
+        cfg.write_text("{broken\n", encoding="utf-8")
+        monkeypatch.setattr("src.python.config._config_defaults.get_config_path", lambda: str(cfg))
+        monkeypatch.setattr("src.python.config._config_defaults._build_template_from_defaults", lambda: _TEMPLATE)
+        monkeypatch.setattr(
+            "src.python.config._core.get_config", lambda: {"llm_settings_file": "", "llm_providers_file": ""}
+        )
+        [stale] = fresh.check_config_freshness()
+        assert stale["parse_error"] is True
+        assert stale["missing_keys"] == []
+
+    def test_undecodable_file_is_skipped(self, tmp_path, monkeypatch):
+        cfg = tmp_path / "config.json"
+        cfg.write_bytes(b"\xff\xfe{\x00}\x00")  # UTF-16/非法 UTF-8：解码失败
+        monkeypatch.setattr("src.python.config._config_defaults.get_config_path", lambda: str(cfg))
+        monkeypatch.setattr(
+            "src.python.config._core.get_config", lambda: {"llm_settings_file": "", "llm_providers_file": ""}
+        )
+        assert fresh.check_config_freshness() == []

@@ -22,7 +22,7 @@ logger = logging.getLogger("invest")
 def _fmt_span(seconds: float) -> str:
     """时长自适应单位（<60s 用 s、<60min 用 min、其余 h）。
 
-    盘中 price 类 TTL 为 30s（market_hour_ttl），统一按小时 двух位小数会印成
+    盘中 price 类 TTL 为 30s（market_hour_ttl），统一按小时两位小数会印成
     `ttl=0.0h`，配 `age=0.1h` 读起来像配置错误（实测日志复现）。
     """
     value = max(0.0, float(seconds))

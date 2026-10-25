@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from src.python.core.json_comments import strip_json_comments
@@ -63,28 +64,35 @@ def _comment_texts(text: str) -> set[str]:
     return texts
 
 
-def _keys_of(text: str) -> set[str]:
-    """抽取文本解析后的顶层键集合（解析失败返回空集，由调用方判为不可比较）。"""
-    import json
-
+def _keys_of(text: str) -> set[str] | None:
+    """抽取文本解析后的顶层键集合；解析失败返回 ``None``（不可比较，不当成「全缺」）。"""
     try:
         data = json.loads(strip_json_comments(text))
     except (ValueError, TypeError):
-        return set()
-    return set(data) if isinstance(data, dict) else set()
+        return None
+    return set(data) if isinstance(data, dict) else None
 
 
 def _diff(path: str, template: str) -> dict[str, Any]:
-    """对比单个文件与模板，返回差异描述。"""
+    """对比单个文件与模板，返回差异描述。
+
+    文件本身解析不了（手改语法错、编码不对）时置 ``parse_error``：此时既不能说「缺键」
+    也不能说「一致」——自检需要把「解析失败」与「落后」分开报，否则会把一个语法错
+    误导成「缺了全部 40 个新键」。
+    """
     with open(path, encoding="utf-8") as f:
         current = f.read()
-    missing_keys = sorted(_keys_of(template) - _keys_of(current))
+    current_keys = _keys_of(current)
+    template_keys = _keys_of(template) or set()
+    parse_error = current_keys is None
+    missing_keys = sorted(template_keys - (current_keys or set())) if not parse_error else []
     missing_comments = sorted(_comment_texts(template) - _comment_texts(current))
     return {
         "path": path,
         "missing_keys": missing_keys,
         "missing_comments": missing_comments,
-        "stale": bool(missing_keys or missing_comments),
+        "parse_error": parse_error,
+        "stale": bool(missing_keys or missing_comments or parse_error),
     }
 
 
@@ -93,9 +101,9 @@ def check_config_freshness() -> list[dict[str, Any]]:
 
     Returns:
         每个**存在且落后于模板**的文件一项：
-        ``{"path", "missing_keys", "missing_comments", "stale"}``。
-        文件不存在、解析失败或与模板一致时不返回（不存在的文件由首次运行生成，
-        不算「落后」）。
+        ``{"path", "missing_keys", "missing_comments", "parse_error", "stale"}``。
+        文件不存在或与模板一致时不返回（不存在的文件由首次运行生成，不算「落后」；
+        编码损坏或无法解码的文件跳过，由配置加载检查负责报错）。
     """
     from src.python.config._config_defaults import _build_template_from_defaults, get_config_path
     from src.python.config._core import get_config
@@ -119,8 +127,8 @@ def check_config_freshness() -> list[dict[str, Any]]:
             continue
         try:
             diff = _diff(path, template)
-        except OSError:
-            continue  # 文件不存在：属首次运行，不算落后
+        except (OSError, UnicodeDecodeError):
+            continue  # 文件不存在（首次运行）或编码不可解码（配置加载检查会单独报错）
         if diff["stale"]:
             results.append(diff)
     return results

@@ -463,13 +463,19 @@ def generate_llm_content(
             # 不同 ⇒ 内容变了（内容寻址模块换键）；无上轮记录 ⇒ 保守记 `cache_miss`。
             _sink = _hit_sink
             if _sink is not None and hasattr(_sink, "note_recompute_reason"):
+                from src.python.llm.observation import (
+                    RECOMPUTE_CACHE_MISS,
+                    RECOMPUTE_FINGERPRINT_CHANGED,
+                    RECOMPUTE_TTL_EXPIRED,
+                )
+
                 _prev = _PREV_MODULE_CACHE_KEY.get(module_key)
                 if _prev is None:
-                    _reason = "cache_miss"
+                    _reason = RECOMPUTE_CACHE_MISS
                 elif _prev == precheck_key:
-                    _reason = "ttl_expired"
+                    _reason = RECOMPUTE_TTL_EXPIRED
                 else:
-                    _reason = "fingerprint_changed"
+                    _reason = RECOMPUTE_FINGERPRINT_CHANGED
                 _sink.note_recompute_reason(module_key, _reason)
         if module_key:
             _PREV_MODULE_CACHE_KEY[module_key] = precheck_key

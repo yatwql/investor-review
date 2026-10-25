@@ -332,3 +332,34 @@ class TestObservationBindingAndCounting:
                     module_key="self_review",
                 )
         assert sink.snapshot().get("cache_misses") == 1
+
+
+class TestRecomputeReasonDomain:
+    """归因取值域是统计口径的唯一来源：拼错原因必须告警，不能静默多出一个桶。"""
+
+    def test_all_documented_reasons_are_registered(self):
+        from src.python.llm import observation as obs
+
+        assert {
+            obs.RECOMPUTE_FORCED,
+            obs.RECOMPUTE_FINGERPRINT_CHANGED,
+            obs.RECOMPUTE_TTL_EXPIRED,
+            obs.RECOMPUTE_CACHE_MISS,
+        } <= set(obs.RECOMPUTE_REASONS)
+
+    def test_unknown_reason_warns_once_and_still_counts(self, caplog):
+        from src.python.llm.observation import LlmObservation
+
+        sink = LlmObservation()
+        with caplog.at_level("WARNING"):
+            sink.note_recompute_reason("global_macro", "ttl-expired-typo")
+        assert any("未知的重算原因" in r.message for r in caplog.records)
+        assert sink.recompute_reasons() == {"ttl-expired-typo": 1}
+
+    def test_known_reason_does_not_warn(self, caplog):
+        from src.python.llm.observation import RECOMPUTE_TTL_EXPIRED, LlmObservation
+
+        sink = LlmObservation()
+        with caplog.at_level("WARNING"):
+            sink.note_recompute_reason("global_macro", RECOMPUTE_TTL_EXPIRED)
+        assert not [r for r in caplog.records if "未知的重算原因" in r.message]

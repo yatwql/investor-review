@@ -1354,7 +1354,7 @@ class ComputModuleDef:
 费用有三条硬纪律，改动任何一条都要同步跑 `test_pricing_currency.py` 与 `test_cache_fingerprint_alignment.py` 的对应用例：
 
 1. **展示币种 = 模型生效币种**：`pricing.model_currency(model)` 解析（配置币种若条目 `alt` 提供 → 否则原生币种）；`MODEL_PRICING` **每条显式声明 `currency`**（CNY 厂商也写），改配置币种不会改变条目自身标价。
-2. **跨币种不相加**：累计/历史/预估一律用「币种 → 金额」桶。桶的读写规则在 `core/costs.py`（`costs_of` / `add_cost_bucket`，core 与 llm 两层共用，避免分层倒置）；累加与格式化在 `llm/pricing.py`（`add_cost` / `merge_costs` / `format_costs`）。**新增费用展示位一律用 `format_costs` 出串，不得自拼符号与数值**。
+2. **跨币种不相加**：累计/历史/预估一律用「币种 → 金额」桶。桶的读取规则在 `core/costs.py`（`costs_of`，core 与 llm 两层共用，避免分层倒置）；累加与格式化在 `llm/pricing.py`（`add_cost` / `merge_costs` / `format_costs`）。**新增费用展示位一律用 `format_costs` 出串，不得自拼符号与数值**。
 3. **唯一的折算点在日预算**：`budget_status()` 判定超限时用 `pricing.FX_TO_CNY` 把各币种支出折到本币比对，折算结果**不进 `display`**（展示保持原生币种）；缺汇率的币种在摘要里点名，不按 0 静默计。
 
 **重算归因有两条路径，新增模块两条都要覆盖**：预检侧（`_compute_module_cache_info` 覆盖的四个基础模块）与骨架侧（`skeleton.generate_llm_content`，覆盖键在上游产出后才确定的模块如 `self_review`）。只加一条会让 `recompute_reasons` 的 `ttl_expired` 占比失真，据此调 TTL 会判错。同理，命中/未命中**计数**也要两条路径都记（骨架路径已计入），且汇聚器必须在「LLM+新闻」阶段**之前**绑定——预检在该阶段内部，晚绑即丢每次进程重启后首份报告的全部样本。

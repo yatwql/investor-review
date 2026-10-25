@@ -298,3 +298,25 @@ class TestGetLlmProvidersAccessor(_ProviderFileMixin, unittest.TestCase):
         with open(self.providers_path, "w", encoding="utf-8") as f:
             f.write("{broken")
         self.assertEqual(get_llm_providers(), {})
+
+
+class TestDefaultTemplateNotes:
+    """出厂模板：每条默认线路都要有专属说明，且模板可被注释剥离器解析。"""
+
+    def test_every_default_provider_has_notes(self):
+        from src.python.config._llm_providers_defaults import _DEFAULT_LLM_PROVIDERS, _PROVIDER_NOTES
+
+        names = [p["name"] for p in _DEFAULT_LLM_PROVIDERS["providers"]]
+        assert set(names) <= set(_PROVIDER_NOTES)
+        for name in names:
+            assert _PROVIDER_NOTES[name], f"{name} 的说明为空"
+
+    def test_template_parses_and_keeps_pacing_on_subscription_line(self):
+        from src.python.config._llm_providers_defaults import _get_default_llm_providers_template
+        from src.python.core.json_comments import loads
+
+        data = loads(_get_default_llm_providers_template())
+        by_name = {p["name"]: p for p in data["providers"]}
+        assert by_name["opencode-go"]["pacing"]["max_concurrency"] == 1
+        assert by_name["opencode-go"]["pacing"]["min_interval"] > 0
+        assert "pacing" not in by_name["deepseek-main"]

@@ -14,15 +14,41 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 from typing import Any
+
+logger = logging.getLogger("invest")
 
 __all__ = [
     "LlmObservation",
     "bind_llm_observation",
     "current_llm_observation",
     "clear_llm_observation",
+    "RECOMPUTE_FORCED",
+    "RECOMPUTE_FINGERPRINT_CHANGED",
+    "RECOMPUTE_TTL_EXPIRED",
+    "RECOMPUTE_CACHE_MISS",
+    "RECOMPUTE_REASONS",
 ]
+
+# ── 缓存未命中归因取值（统计口径的唯一来源）──
+#: 用户显式要求重新生成（跳过缓存读，不代表缓存真的过期）
+RECOMPUTE_FORCED = "forced"
+#: 输入指纹变了（内容真变，放宽 TTL 也省不下这次调用）
+RECOMPUTE_FINGERPRINT_CHANGED = "fingerprint_changed"
+#: 指纹未变、纯 TTL 到点（放宽 TTL 可省）
+RECOMPUTE_TTL_EXPIRED = "ttl_expired"
+#: 无上轮可比对的冷启动键（骨架路径专用，保守归类）
+RECOMPUTE_CACHE_MISS = "cache_miss"
+
+#: 全部合法归因值：写入方只许用这里列出的字符串，新增原因必须登记在此（否则周报统计口径漂移）
+RECOMPUTE_REASONS: tuple[str, ...] = (
+    RECOMPUTE_FORCED,
+    RECOMPUTE_FINGERPRINT_CHANGED,
+    RECOMPUTE_TTL_EXPIRED,
+    RECOMPUTE_CACHE_MISS,
+)
 
 _sink_lock = threading.Lock()
 _current: "LlmObservation | None" = None
@@ -42,9 +68,8 @@ class LlmObservation:
         self._thinking_calls = 0
         self._cache_hits = 0
         self._cache_misses = 0
-        #: 缓存未命中归因：{原因: 次数}
-        #: （`forced` 用户强制 / `fingerprint_changed` 内容变 / `ttl_expired` 纯到点 /
-        #:  `cache_miss` 无上轮可比对，骨架路径与预检路径分头记录）
+        #: 缓存未命中归因：{原因: 次数}（取值域见 `RECOMPUTE_REASONS`：用户强制 /
+        #: 指纹变化 / 纯 TTL 到点 / 骨架路径无可比对键）
         self._recompute_reasons: dict[str, int] = {}
         #: 逐模块最近一次重算原因（模块 → 原因）
         self._module_reasons: dict[str, str] = {}
@@ -92,7 +117,16 @@ class LlmObservation:
 
         用途：判断 4h TTL 是否把「内容没变、只是到点」的调用也重算了——这是决定
         TTL 能否放宽的唯一依据，靠观测而非主观判断。
+
+        ``reason`` 超出 :data:`RECOMPUTE_REASONS` （拼错/新原因未登记）时仍计数，
+        但告警一次：静默接受会让周报里多出一个没人认识的桶，口径无从对账。
         """
+        if reason not in RECOMPUTE_REASONS:
+            logger.warning(
+                "[llm] 未知的重算原因 %r（合法值：%s），已按原值记录——请登记到 observation.RECOMPUTE_REASONS",
+                reason,
+                " / ".join(RECOMPUTE_REASONS),
+            )
         with self._lock:
             self._recompute_reasons[reason] = self._recompute_reasons.get(reason, 0) + 1
             if module_key:

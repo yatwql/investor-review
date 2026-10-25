@@ -226,6 +226,19 @@ def _check_config_freshness() -> list[dict[str, Any]]:
         ]
 
     hints = "备份自定义值后删除对应文件，重新运行即按当前模板重生成"
+    parse_fail = [s for s in stale if s.get("parse_error")]
+    if parse_fail:
+        names = "、".join(os.path.basename(s["path"]) for s in parse_fail)
+        return [
+            _item(
+                GROUP_CONFIG,
+                "配置说明时效",
+                False,
+                f"配置文件无法解析，无法与当前版本比对：{names}",
+                hint="检查是否被手改出语法错误或被存成非 UTF-8；或删除后重生成",
+            )
+        ]
+
     missing_key_files = [s for s in stale if s["missing_keys"]]
     if missing_key_files:
         detail = "；".join(

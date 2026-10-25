@@ -18,11 +18,3 @@ def costs_of(entry: dict | None) -> dict[str, float]:
     if not isinstance(buckets, dict):
         return {}
     return {str(code).upper(): float(amount or 0.0) for code, amount in buckets.items() if float(amount or 0.0)}
-
-
-def add_cost_bucket(target: dict[str, float], source: dict[str, float]) -> dict[str, float]:
-    """把来源桶累加进目标桶（就地更新，同币种相加、异币种并存）。"""
-    for code, amount in (source or {}).items():
-        code = str(code).upper()
-        target[code] = target.get(code, 0.0) + float(amount or 0.0)
-    return target
