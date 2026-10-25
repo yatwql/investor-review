@@ -225,7 +225,16 @@ def _parse_periods(value: Any) -> list[tuple[int, int]] | None:
 def _policy_from_ref(ref: dict[str, Any], policy: dict[str, Any]) -> dict[str, Any]:
     merged = dict(policy)
     if isinstance(ref.get("currency"), str) and ref["currency"].strip():
-        merged["currency"] = ref["currency"].strip().upper()
+        code = ref["currency"].strip().upper()
+        if code in _REF_CURRENCIES:
+            merged["currency"] = code
+        else:
+            logger.warning(
+                "[pricing] 顶层 currency 不是受支持币种（%r），沿用默认 %s；受支持：%s",
+                ref["currency"],
+                merged["currency"],
+                "、".join(sorted(_REF_CURRENCIES)),
+            )
     if isinstance(ref.get("timezone"), str) and ref["timezone"].strip():
         merged["timezone"] = ref["timezone"].strip()
     parsed = _parse_periods(ref.get("peak_periods"))

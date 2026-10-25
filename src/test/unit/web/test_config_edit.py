@@ -424,4 +424,4 @@ class TestLlmTuningSurface:
             spec = LLM_TUNING_SPECS[row["key"]]
             assert row["min"] == spec["min"] and row["max"] == spec["max"]
             assert row["label"] and row["hint"]
-            assert isinstance(row["value"], (int, float, dict))
+            assert isinstance(row["value"], (int, float))

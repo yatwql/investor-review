@@ -22,10 +22,10 @@ _FLAT_DEFAULTS: dict[str, Any] = {
     "llm_max_thinking_concurrency": 2,
     # 全链路失败（网络/超时/接口异常）后整链重试 1 次的等待秒数（0 = 不等待）
     "llm_full_fail_retry_delay": 30,
-    # LLM 日费用预算上限（**逐币种**，如 {"CNY": 5, "USD": 1}；空 = 不启用）：
-    # 与事前费用预估同页展示，超限时交互渠道询问「用已有结果继续 / 中止」，
-    # 非交互渠道直接中止。币种各自独立比对，不做汇率折算
-    "daily_cost_limit": {},
+    # LLM 日费用预算上限（**本地主币种金额**，0 = 不启用）：币种由定价表的缺省币种决定
+    # （默认 CNY）；各币种支出在判定时按内部汇率折算进该币种。与事前费用预估同页展示，
+    # 超限时交互渠道询问「用已有结果继续 / 中止」，非交互渠道直接中止
+    "daily_cost_limit": 0,
     # LLM 总时间预算（秒，0 = 不启用）：超预算后不再启动新模块（已在跑的模块不打断），
     # 报告按「已生成/因预算跳过」如实呈现。防「单模块卡住 + 重试叠加」把一次报告拖成小时级
     "llm_total_time_budget_sec": 0,
@@ -233,7 +233,7 @@ _KEY_COMMENTS: dict[str, str] = {
     "max_retries": "单模块重试次数",
     "full_fail_retry_delay_sec": "全链路失败后整链重试等待（秒，0=不等）",
     "time_budget_sec": "报告总时间预算（秒，0=不启用）",
-    "daily_cost_limit": "LLM 日费用上限（逐币种，空=不启用）",
+    "daily_cost_limit": "LLM 日费用上限（本地主币种金额，0=不启用）",
     "max_tokens_per_report": "辩论单报告 token 预算",
     "call_timeout_override_sec": "辩论单次调用超时覆盖（秒，0=沿用模块）",
     "tolerance": "事实校验容差",

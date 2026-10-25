@@ -71,16 +71,16 @@ HISTORY_SNAPSHOT_MAX_COUNT = 365
 
 # ── LLM 模型定价表（每百万 token，CNY）══ 唯一默认源 ══
 
-# 币种口径：每条按**厂商官方标价币种原样记录**，不做任何汇率折算。外币厂商
-# （Anthropic / OpenAI / Google）条目带 `"currency": "USD"`，DeepSeek / Kimi 官方
-# 以人民币标价、不写 currency（缺省取 PRICING_CURRENCY，即 CNY）。报告按模型币种
-# 显示原生金额，跨币种金额分组并列（如 `¥0.012 + $0.003`），从不相加——汇率是每天
-# 变的市场量，写死在代码里必然滞后，折算值也不等于厂商账单。
+# 币种口径：每条按**厂商官方标价币种原样记录**，不做任何汇率折算，且**每条都显式
+# 写 `currency`**（Anthropic / OpenAI / Google = USD，DeepSeek / Kimi = CNY）——
+# 不让条目靠全局缺省兜底，避免「改本地币种配置把人民币数字贴成 `$`」。报告按条目
+# 币种显示原生金额，跨币种金额分组并列（如 `¥0.012 + $0.003`），从不相加。
 
 
-# 缺省币种（本地显示与计费的主币种）：模型条目未声明 currency 时按它计价；条目以
-# `alt` 提供该币种官方价时，切换为该币种计价与显示（即「客户配置币种优先」）。改这一处
-# 即改变全局缺省，`llm_pricing_ref.json → currency` 可再按环境覆盖。
+# 缺省币种（本地主币种，默认 CNY）。**语义只有一个**：模型同时提供多币种价时，选哪一套
+# 计价与显示（条目 `alt` 子表提供该币种价即命中），以及日预算以哪个币种判定。
+# 它**不是**「条目缺省币种」——`MODEL_PRICING` 每条都必须显式声明 `currency`
+# （CNY 厂商也要写），条目币种与配置币种各自独立，互不串味。
 PRICING_DEFAULT_CURRENCY: str = "CNY"
 
 MODEL_PRICING: dict[str, dict[str, float | str | dict[str, float]]] = {
@@ -168,6 +168,7 @@ MODEL_PRICING: dict[str, dict[str, float | str | dict[str, float]]] = {
     # flash 系列定价：闲时 输入 1.0/输出 4.0/缓存命中 0.02，高峰翻倍
     # 2.0/8.0/0.04（2026-09-10 12:00 北京时间起 flash 系列官方降价，最高 60%）。
     "deepseek-flash": {
+        "currency": "CNY",
         "input": 1.0,
         "output": 4.0,
         "input_cache_hit": 0.02,
@@ -176,6 +177,7 @@ MODEL_PRICING: dict[str, dict[str, float | str | dict[str, float]]] = {
     # 别名 deepseek-v4-flash / deepseek-v4-flash-vision-exp 端点仍接受，底层模型
     # 已由新一代 Flash 接管并按同一单价计费，故数值与 deepseek-flash 一致。
     "deepseek-v4-flash": {
+        "currency": "CNY",
         "input": 1.0,
         "output": 4.0,
         "input_cache_hit": 0.02,
@@ -184,6 +186,7 @@ MODEL_PRICING: dict[str, dict[str, float | str | dict[str, float]]] = {
     # deepseek-v4-pro 单价未随 flash 调价变动（官方 2026-09-10 公告：2026-09-14 之后
     # 继续提供 API 服务，计费方式保持不变）。
     "deepseek-v4-pro": {
+        "currency": "CNY",
         "input": 4.5,
         "output": 13.5,
         "input_cache_hit": 0.15,
@@ -192,13 +195,13 @@ MODEL_PRICING: dict[str, dict[str, float | str | dict[str, float]]] = {
     #
     # ── Kimi（月之暗面开放平台，官方直接以 CNY 标价） ──
     # kimi-k3.1-pro：旗舰升级版（1M 上下文），输入 13 / 输出 68 / 缓存命中 1.30
-    "kimi-k3.1-pro": {"input": 13.0, "output": 68.0, "input_cache_hit": 1.30},
+    "kimi-k3.1-pro": {"currency": "CNY", "input": 13.0, "output": 68.0, "input_cache_hit": 1.30},
     # kimi-k3.1-pro-highspeed：同模型高速档，输入 26 / 输出 136 / 缓存命中 1.30
-    "kimi-k3.1-pro-highspeed": {"input": 26.0, "output": 136.0, "input_cache_hit": 1.30},
+    "kimi-k3.1-pro-highspeed": {"currency": "CNY", "input": 26.0, "output": 136.0, "input_cache_hit": 1.30},
     # kimi-k3：旗舰模型（1M 上下文），输入 20 / 输出 100 / 缓存命中 2.00
-    "kimi-k3": {"input": 20.0, "output": 100.0, "input_cache_hit": 2.00},
+    "kimi-k3": {"currency": "CNY", "input": 20.0, "output": 100.0, "input_cache_hit": 2.00},
     # kimi-k2.6：通用模型（256k 上下文，支持思考/非思考模式）
-    "kimi-k2.6": {"input": 6.5, "output": 27.0, "input_cache_hit": 1.10},
+    "kimi-k2.6": {"currency": "CNY", "input": 6.5, "output": 27.0, "input_cache_hit": 1.10},
 }
 
 # ── LLM 峰谷定价时段（DeepSeek 官方方案，北京时间）══ 唯一默认源 ══

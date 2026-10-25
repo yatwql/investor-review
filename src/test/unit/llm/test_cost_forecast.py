@@ -229,10 +229,10 @@ class TestBudget:
     """日预算：上限解析 / 今日费用 / 超限边界。"""
 
     def test_limit_parsing_normalizes_invalid(self) -> None:
-        assert daily_cost_limit({"daily_cost_limit": 1.5}) == {"CNY": 1.5}
-        assert daily_cost_limit({"daily_cost_limit": -3}) == {}, "负值归 0（未启用）"
-        assert daily_cost_limit({"daily_cost_limit": "abc"}) == {}, "非法值归 0"
-        assert daily_cost_limit({}) == {}, "缺省 = 未启用"
+        assert daily_cost_limit({"daily_cost_limit": 1.5}) == 1.5
+        assert daily_cost_limit({"daily_cost_limit": -3}) == 0.0, "负值归 0（未启用）"
+        assert daily_cost_limit({"daily_cost_limit": "abc"}) == 0.0, "非法值归 0"
+        assert daily_cost_limit({}) == 0.0, "缺省 = 未启用"
 
     def test_today_cost_sums_only_local_date(self) -> None:
         today = date.today().isoformat()
@@ -259,8 +259,8 @@ class TestBudget:
 
     def test_budget_status_shape(self) -> None:
         st = budget_status({"daily_cost_limit": 2}, [])
-        assert {"enabled", "limits", "spent", "checks", "exceeded", "exceeded_currencies"} <= set(st)
-        assert st["limits"] == {"CNY": 2.0}, "单值上限落在缺省币种"
+        assert {"enabled", "limit", "currency", "spent", "spent_converted", "exceeded", "display"} <= set(st)
+        assert st["limit"] == 2.0, "上限为本币单个数字"
         assert st["spent"] == {}, "无历史 = 今日零支出"
         assert st["display"], "须给出可上屏的预算摘要"
 

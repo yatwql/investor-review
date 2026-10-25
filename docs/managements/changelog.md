@@ -12,7 +12,8 @@
 - **模型定价表按官方价目刷新（2026-10-25 核验）**：补入现役型号——Claude `5.5` 家族（Fable 5.1 / Opus 5.5 / Sonnet 5.5 / Haiku 5.5）与 legacy Sonnet 5；OpenAI `gpt-6.1-sol` / `gpt-6-luna` / `gpt-6-astra` / `gpt-5.6-sol`；Gemini `3.8-flash` / `3.1-pro`；Kimi `k3.1-pro` / `k3.1-pro-highspeed`。移除已下线或不在官方价目表的 `gemini-2.0-flash` / `gemini-3.5-flash`。DeepSeek 单价经核验未变。
 - **费用展示改为按模型原生币种**：`MODEL_PRICING` 每条带 `currency`（Anthropic/OpenAI/Google 为 USD，DeepSeek/Kimi 为 CNY），`estimate_cost` 出对应符号（`$`/`¥`），代码内**不再有任何用于展示的汇率折算**。模型同时提供多币种价时以配置币种（`llm_pricing_ref.json → currency`，默认 CNY）为主，用条目 `alt` 子表提供该币种价即可切换。
 - **跨币种金额分组并列、永不相加**：会话累计与报告合计改用「币种 → 金额」桶（`llm.pricing.add_cost/merge_costs/format_costs`），显示形如 `¥0.0123 + $0.0045`；`session_usage` 的 `total_cost`/`currency` 字段由 `costs` 取代，perf 记录写 `cost_by_currency`。
-- **日预算改为逐币种上限**：`daily_cost_limit` 支持对象形态（`{"CNY": 5, "USD": 1}`，默认 `{}` 不启用）；判定超限时按内部汇率表 `FX_TO_CNY` 把各币种支出折算到预算币种（**仅用于判定，不影响展示金额**）。单值写法视为只对显示币种生效并记 INFO 提示。
+- **币种配置收敛为一处开关**：`llm_pricing_ref.json → currency`（默认 CNY）只回答「模型提供多币种价时选哪套」与「日预算以哪个币种判定」，不再充当条目缺省币种——`MODEL_PRICING` 每条显式声明 `currency`（含 DeepSeek/Kimi 的 CNY），条目缺 `currency` 时回落常量缺省。此前把配置改成 `USD` 会让人民币标价的模型显示成 `$`，现已被结构排除；顶层 `currency` 非法取值告警并回退默认。
+- **日预算回到单值**：`daily_cost_limit` 为**本地主币种金额**（默认 `0` 不启用）；判定超限时按内部汇率表 `FX_TO_CNY` 把各币种支出折算到本币（**仅用于判定，不影响展示金额**）；缺内部汇率的币种列入 `unconvertible` 并在摘要点名 + 告警，不静默按 0 计。
 - **历史费用摘要按币种分组**：`perf.module_cost_summary` 返回 `{模块: {runs, costs: {币种: {total, avg}}}}`；`[S]` 面板行尾摘要、缓存节省估算与事前预估都按币种分组，跨币种样本不混算。
 - **发布台账不再折算金额**：`logs/release.jsonl` 的 `session_usage` 去掉 `cost` 字段，终端尾行只报 token 数（in/out/cache r/w）与执行环境（provider/model/thinking）。原因：金额只能来自 pi 的逐模型单价表，而订阅制/转发端点（如 opencode）的单价并非实际账单口径，折算出来的「费用」既不可核对也容易被当成账单。
 

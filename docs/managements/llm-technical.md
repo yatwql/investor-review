@@ -916,7 +916,7 @@ penetrated_assets ──→ extract_stable_penetration()
 |:-----|:-----|:----------|
 | 命中零边际成本 | 命中路径不产生 token 与费用；`record_per_module(cached=True)` 记账 cost=0 | `skeleton._handle_cache_hit` → `_build_cache_hint_and_record` |
 | 未命中必记账 | 真实调用的 token/费用逐模块入会话用量，可被事后汇总 | `_finalize_and_cache` → `record_per_module` |
-| 预算只看真实花费 | `daily_cost_limit` 用 perf 当日 `llm.cost_by_currency` 逐币种求和（判定时按内部汇率折算到预算币种）；命中运行无新增费用，不消耗预算 | `cost_forecast.budget_status` / `today_llm_cost` |
+| 预算只看真实花费 | `daily_cost_limit`（本币单值）判定时用 perf 当日 `llm.cost_by_currency` 逐币种求和并折算到本币；命中运行无新增费用，不消耗预算；缺汇率的币种显式点名而非按 0 计 | `cost_forecast.budget_status` / `today_llm_cost` |
 | 节省可见 | 命中模块按**历史付费样本均价**估算 `cache_saved_cost` 写入 perf，并打 INFO「命中 N 个模块，估算节省 ≈¥X」；无样本不虚报 | `cost_forecast.estimate_cached_saving` + `report/_generation_shared._record_llm_context` |
 
 **预估口径**：`forecast_run_cost` 的默认路径用历史实际费用样本给出区间（命中样本费用为 0，故下限可为 0）；**强制重新生成范围内**的模块保证真调用，改按静态单价计价，不吃缓存折扣（`forced_low/forced_high` 单列）。预估始终是**上限性质**：它不预检当前指纹，因此不会因为「这次大概会命中」而下调金额。
@@ -1229,7 +1229,8 @@ reload_pricing() → 读 llm_pricing_ref.json
 
 **原则：展示的金额永远是厂商官方标价币种，代码里没有汇率。**
 
-- **缺省币种单点定义**：`core/constants.py::PRICING_DEFAULT_CURRENCY`（默认 `CNY`）——本地显示与计费的主币种。`pricing.PRICING_CURRENCY` 与 `llm_pricing_ref.json` 默认模板的 `currency` 都取自它，改一处即改全局缺省；参考文件的 `currency` 可按环境再覆盖。
+- **缺省币种单点定义**：`core/constants.py::PRICING_DEFAULT_CURRENCY`（默认 `CNY`）。`pricing.PRICING_CURRENCY` 与参考文件模板的 `currency` 均取自它。
+  语义边界（避免"改配置把人民币贴成 `$`"）：本项**只**决定「多币种价选哪套」与「日预算币种」，**不是**条目缺省币种——`MODEL_PRICING` 每条都显式声明 `currency`，条目缺 `currency` 时也回落到常量缺省而非配置值。顶层 `currency` 非法取值（不在 `CNY/USD/EUR/GBP/JPY` 内）时告警并回退默认。
 - 定价条目自带币种：DeepSeek / Kimi 为 `CNY`，Anthropic / OpenAI / Google 为 `USD`（条目 `"currency": "USD"`，不声明时取缺省币种）。
 - 费用符号由 `pricing.model_currency(model)` 解析结果决定：`estimate_cost` 对 Claude 出 `$`、对 DeepSeek 出 `¥`，一笔调用一个币种，不做换算。
 - **配置币种优先**：条目可用 `alt` 子表提供另一币种的官方价（如国内渠道以人民币计价）——
@@ -1243,7 +1244,7 @@ reload_pricing() → 读 llm_pricing_ref.json
 
   `PRICING_CURRENCY`（`llm_pricing_ref.json → currency`，默认 `CNY`）命中 `alt` 时按该币种计费与显示，否则用原生币种。即「厂商同时提供多币种价时以客户配置币种为主，只提供原生币种时按原生币种显示」。
 - **跨币种不相加**：会话累计与报告合计用「币种 → 金额」桶（`pricing.add_cost` / `merge_costs` / `format_costs`），展示为 `¥0.0123 + $0.0045`。混币种金额相加必须先换汇，而换汇必然与真实账单不符，故一律并列。
-- **唯一的折算点在日预算**：`daily_cost_limit`（逐币种对象，如 `{"CNY": 5, "USD": 1}`）判定"超限"时，把各币种今日支出按内部汇率表 `pricing.FX_TO_CNY` 折算到预算币种后比对（`convert_amount`）；该折算结果**不进入任何展示金额**，只参与布尔判定。单值写法（旧形态）视为只对 `PRICING_CURRENCY` 生效并记 INFO 提示。
+- **唯一的折算点在日预算**：`daily_cost_limit` 是**一个数字**，币种即本地主币种（`PRICING_CURRENCY`）。判定时把各币种今日支出按内部汇率表 `pricing.FX_TO_CNY` 折算到该币种后比对（`convert_amount`）；该折算结果**不进入任何展示金额**，只参与布尔判定。某币种缺内部汇率时列入 `unconvertible` 并在摘要里点名 + 告警，不静默按 0 计（否则预算闸会无声失效）。对象形态（`{"CNY": 5}`）按本币值或求和解释并告警。
 
 ## 11. 熔断器
 

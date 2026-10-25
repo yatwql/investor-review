@@ -369,39 +369,115 @@ def _forecast_run_cost_impl(
     return base
 
 
-def daily_cost_limit(llm_config: dict[str, Any] | None = None) -> dict[str, float]:
-    """日预算上限，**逐币种**：``{"CNY": 5.0, "USD": 1.0}``；空 = 未启用。
+def daily_cost_limit(llm_config: dict[str, Any] | None = None) -> float:
+    """日预算上限（**本地主币种**金额）；0 = 未启用。非法取值按 0 处理。
 
-    配置形态：``daily_cost_limit`` 为对象时按币种分别设上限；为单个数字时视为
-    仅对缺省币种（``PRICING_CURRENCY``）生效（多币种模型并存时会低估其他币种
-    支出，故取该形态时记一条 INFO 提示改用对象形态）。非法取值一律忽略。
+    币种由 `pricing.PRICING_CURRENCY` 决定（缺省 CNY），配置里只有这一个数——不再按币种
+    分别设限，避免配置面出现第二套币种集合。对象形态（如 `{"CNY": 5}`）取本币值，
+    取不到时求和并告警。
     """
     cfg = llm_config if llm_config is not None else _get_llm_config()
     raw = cfg.get("daily_cost_limit")
     if isinstance(raw, dict):
-        limits: dict[str, float] = {}
-        for code, value in raw.items():
-            try:
-                amount = float(value or 0)
-            except (TypeError, ValueError):
-                logger.debug("[cost_forecast] daily_cost_limit.%s 取值非法，忽略", code)
-                continue
-            if amount > 0:
-                limits[str(code).strip().upper()] = amount
-        return limits
+        logger.warning(
+            "[cost_forecast] daily_cost_limit 已改为单个数字（本地主币种 %s），对象形态将按本币值"
+            "或求和解释；请把配置改成数字",
+            PRICING_CURRENCY,
+        )
+        if PRICING_CURRENCY in raw:
+            raw = raw[PRICING_CURRENCY]
+        else:
+            raw = sum(float(v or 0) for v in raw.values() if isinstance(v, (int, float)))
     try:
         value = float(raw or 0)
     except (TypeError, ValueError):
         logger.debug("[cost_forecast] daily_cost_limit 取值非法，按未启用处理", exc_info=True)
-        return {}
-    if value <= 0:
-        return {}
-    logger.info(
-        "[cost_forecast] daily_cost_limit 为单值，仅对 %s 生效；多币种模型并存时请改为 "
-        '对象形态（如 {"CNY": 5, "USD": 1}）',
-        PRICING_CURRENCY,
-    )
-    return {PRICING_CURRENCY: value}
+        return 0.0
+    return max(value, 0.0)
+
+
+def today_llm_cost(history: list[dict[str, Any]] | None = None) -> dict[str, float]:
+    """今日（本地日期）已产生的 LLM 费用，**逐币种**汇总——与 perf 记录同源。
+
+    记录里带 ``cost_by_currency`` 时按桶累加；无该字段的历史记录按缺省币种计入。
+    逐币种是为了**展示**（原生币种并列）；预算判定另走 :func:`budget_status` 的折算。
+    """
+    records = history if history is not None else _load_perf_history()
+    today = date.today().isoformat()
+    totals: dict[str, float] = {}
+    for rec in records:
+        if not str(rec.get("timestamp") or "").startswith(today):
+            continue
+        llm = rec.get("llm")
+        if not isinstance(llm, dict):
+            continue
+        buckets = llm.get("cost_by_currency")
+        if isinstance(buckets, dict) and buckets:
+            totals = merge_costs(totals, {str(k).upper(): float(v or 0.0) for k, v in buckets.items()})
+            continue
+        legacy = float(llm.get("total_cost") or 0.0)
+        if legacy:
+            totals[PRICING_CURRENCY] = totals.get(PRICING_CURRENCY, 0.0) + legacy
+    return {code: round(amount, 6) for code, amount in totals.items()}
+
+
+def budget_status(
+    llm_config: dict[str, Any] | None = None,
+    history: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """日预算状态：``{enabled, limit, currency, symbol, spent, spent_converted, unconvertible, exceeded, display}``。
+
+    - 上限是**一个数字**，币种 = 本地主币种（`PRICING_CURRENCY`，默认 CNY）；
+    - 判定时把各币种今日支出折算到该币种后比对（内部汇率表，**只参与判定**）；
+    - 展示的 `spent` 保持各模型原生币种，不折算；
+    - 某币种无内部汇率 → 计入 `unconvertible` 并告警（不静默按 0 计，避免预算闸无声失效）。
+    """
+    cfg = llm_config if llm_config is not None else _get_llm_config()
+    limit = daily_cost_limit(cfg)
+    spent = today_llm_cost(history)
+    currency = str(PRICING_CURRENCY).upper()
+    symbol = currency_symbol(currency)
+
+    converted = 0.0
+    unconvertible: list[str] = []
+    for code, amount in spent.items():
+        if code == currency:
+            converted += amount
+            continue
+        value = convert_amount(amount, code, currency)
+        if value is None:
+            unconvertible.append(code)
+        else:
+            converted += value
+    converted = round(converted, 6)
+    if unconvertible:
+        logger.warning(
+            "[cost_forecast] 以下币种缺少内部汇率，今日支出无法折算进日预算判定：%s",
+            "、".join(sorted(unconvertible)),
+        )
+
+    exceeded = limit > 0 and converted >= limit
+    spend_display = format_costs(spent)
+    if limit > 0:
+        state = "已达上限" if exceeded else "未超限"
+        budget_part = f"日预算 {symbol}{limit:.4f}（本币折算 {symbol}{converted:.4f}，{state}）"
+    else:
+        budget_part = "未设日预算上限"
+    display = f"今日已花 {spend_display}" if spend_display != "-" else "今日尚无 LLM 支出"
+    display = f"{display}；{budget_part}"
+    if unconvertible:
+        display = f"{display}；无法折算：{'、'.join(sorted(unconvertible))}"
+    return {
+        "enabled": limit > 0,
+        "limit": round(limit, 6),
+        "currency": currency,
+        "symbol": symbol,
+        "spent": spent,
+        "spent_converted": converted,
+        "unconvertible": sorted(unconvertible),
+        "exceeded": exceeded,
+        "display": display,
+    }
 
 
 def estimate_cached_saving(
@@ -451,89 +527,6 @@ def estimate_cached_saving(
         "saved_display": format_costs(rounded),
         "priced": priced,
         "unpriced": unpriced,
-    }
-
-
-def today_llm_cost(history: list[dict[str, Any]] | None = None) -> dict[str, float]:
-    """今日（本地日期）已产生的 LLM 费用，**逐币种**汇总——与 perf 记录同源。
-
-    记录里带 ``cost_by_currency`` 时按桶累加；无该字段的历史记录按缺省币种计入。
-    """
-    records = history if history is not None else _load_perf_history()
-    today = date.today().isoformat()
-    totals: dict[str, float] = {}
-    for rec in records:
-        if not str(rec.get("timestamp") or "").startswith(today):
-            continue
-        llm = rec.get("llm")
-        if not isinstance(llm, dict):
-            continue
-        buckets = llm.get("cost_by_currency")
-        if isinstance(buckets, dict) and buckets:
-            totals = merge_costs(totals, {str(k).upper(): float(v or 0.0) for k, v in buckets.items()})
-            continue
-        legacy = float(llm.get("total_cost") or 0.0)
-        if legacy:
-            totals[PRICING_CURRENCY] = totals.get(PRICING_CURRENCY, 0.0) + legacy
-    return {code: round(amount, 6) for code, amount in totals.items()}
-
-
-def budget_status(
-    llm_config: dict[str, Any] | None = None,
-    history: list[dict[str, Any]] | None = None,
-) -> dict[str, Any]:
-    """日预算状态（逐币种）：``{enabled, limits, spent, exceeded, exceeded_currencies, display}``。
-
-    ``exceeded`` 为硬闸判定：任一笔预算币种的今日已花 ≥ 该币种上限即为 True。
-    比对时各币种支出按内部汇率表（`pricing.FX_TO_CNY`）折算到预算币种——**折算只
-    参与判定**，展示的金额一律为各模型原生币种。是否降级/中止由渠道层按交互能力
-    处置（交互询问，非交互直接中止）。
-    """
-    cfg = llm_config if llm_config is not None else _get_llm_config()
-    limits = daily_cost_limit(cfg)
-    spent = today_llm_cost(history)
-
-    def _spent_in(code: str) -> float:
-        """把各币种支出按内部汇率折算到预算币种（**仅用于比对，不展示为金额**）。"""
-        total = 0.0
-        for src, amount in spent.items():
-            if src == code:
-                total += amount
-                continue
-            converted = convert_amount(amount, src, code)
-            if converted is not None:
-                total += converted
-        return round(total, 6)
-
-    checks: list[dict[str, Any]] = []
-    for code, limit in sorted(limits.items()):
-        used = _spent_in(code)
-        checks.append(
-            {
-                "currency": code,
-                "limit": round(limit, 6),
-                "spent": used,
-                "exceeded": limit > 0 and used >= limit,
-            }
-        )
-    exceeded_currencies = [c["currency"] for c in checks if c["exceeded"]]
-    spend_display = format_costs(spent)
-    parts: list[str] = []
-    for check in checks:
-        symbol = currency_symbol(check["currency"])
-        state = "已达上限" if check["exceeded"] else "未超限"
-        parts.append(f"{symbol}{check['spent']:.4f} / {symbol}{check['limit']:.4f}（{state}）")
-    display = f"已花 {spend_display}" if spend_display != "-" else ""
-    if parts:
-        display = (display + "；预算 " if display else "预算 ") + "；".join(parts)
-    return {
-        "enabled": bool(limits),
-        "limits": {code: round(v, 6) for code, v in limits.items()},
-        "spent": spent,
-        "checks": checks,
-        "exceeded": bool(exceeded_currencies),
-        "exceeded_currencies": exceeded_currencies,
-        "display": display,
     }
 
 

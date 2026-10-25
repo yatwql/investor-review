@@ -363,7 +363,7 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
 - `fact_check`（dict，默认 `{tolerance: 1.0}`）：LLM 输出数值一致性检测配置。详见下节「事实校验容差配置」
 - **计价策略与模型单价**：不在本文件，见独立参考数据 `data/config/llm_pricing_ref.json`（`version` + 策略 + `models` 逐模型覆盖；缺失时仅用内置价）。详见下方「完整模型定价表」章节
 - `news_correlation_top_n`（int，默认 `30`）：送 LLM 分析的新闻条数。仅 news_correlation 模块有效，值越大 Token 消耗越高
-- `daily_cost_limit`（**逐币种对象**，默认 `{}` 不启用，如 `{"CNY": 5, "USD": 1}`）：LLM **日费用预算上限**，每个币种各设一条、互不折算成同一笔；判定超限时把各币种今日支出按内部汇率表折算到该预算币种比对（折算仅参与判定，不改变展示金额）。单值写法（如 `5`）视为只对显示币种（`llm_pricing_ref.json → currency`，默认 CNY）生效，多币种模型并存时会低估其他币种支出（日志有 INFO 提示改用对象形态）。启用后 full 生成前展示**事前费用预估区间**（计划参与模块 × 模型单价；perf 历史逐模块实际费用优先、无历史静态兜底；TUI `N` 多选 / CLI `--force-llm`/`--llm-module` / Web 勾选的重新生成范围进入预估——范围内模块按静态单价、范围外维持历史口径，并以「其中 N 个模块重新生成」拆行显示）与今日已花费；达到上限时交互渠道（TUI / Web / CLI 终端）询问「用已有结果继续 / 中止」，非交互渠道（`--yes`、`--non-interactive`、非 TTY、Web 定时调度）直接中止。今日已花费 = perf 历史当日 `llm.cost_by_currency` 逐币种汇总，与报告内 LLM 用量统计同源；与**报告级输入 Token 预警**（`cost_tracker`，默认 8K、仅告警不阻断）分层——本项是**生成前的日费用硬闸**
+- `daily_cost_limit`（数值，默认 `0` 不启用）：LLM **日费用预算上限**，单位是**本地主币种**（`llm_pricing_ref.json → currency`，默认 CNY）。判定超限时把各币种今日支出按内部汇率表折算到该币种比对（折算仅参与判定，**不改变任何展示金额**）；某币种缺少内部汇率会被点名「无法折算」，不会静默按 0 计。
 - `debate`（dict，可选实验功能）：辩论模式配置。含 procon（三段式正反辩论，`per_call_max_tokens` 限定每阶段输出上限，默认 18432（null 时按代码兜底同值））、conditional（条件情景推理）、concentration_qa（集中度问答阈值，辩论流程内建段落的触发阈值），以及 `max_total_tokens_per_report`（单次报告辩论总 Token 预算上限，默认 72000，覆盖三段式真实成本）和 `per_call_timeout_override`（辩论单次 API 超时覆盖）。**本段仅控制辩论行为的参数，启停由 Feature Flag（`llm_debate_*`）决定，非配置直接启用**；决策跨期反思闭环（`decision_reflection`）同样由 Feature Flag 启停，无独立配置段
 
 ### 模块级配置
@@ -462,7 +462,7 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
   // 运行约束（面板「LLM 调优参数」）
   "runtime": {
     "max_concurrency": 3, "thinking_concurrency": 2, "max_retries": 2,
-    "full_fail_retry_delay_sec": 30, "time_budget_sec": 0, "daily_cost_limit": {},
+    "full_fail_retry_delay_sec": 30, "time_budget_sec": 0, "daily_cost_limit": 0,
     "debate_limits": { "max_tokens_per_report": 72000, "call_timeout_override_sec": 90 }
   },
 
@@ -929,13 +929,13 @@ $env:HTTPS_PROXY = "http://127.0.0.1:7890"
 | `kimi-k3` | CNY | 20.00 | 100.00 | 2.00 | Kimi 上一代旗舰（1M 上下文） |
 | `kimi-k2.6` | CNY | 6.50 | 27.00 | 1.10 | Kimi 通用主力（256k 上下文，支持思考模式） |
 
-> **缺省币种（本地主币种）**：`llm_pricing_ref.json` 顶层 `currency`（默认 `CNY`）声明本地显示与计费的主币种——模型条目不声明币种时按它计价；若条目用 `alt` 子表提供了该币种官方价，则按该币种计费与显示。改这一项即改变全局缺省，无需改任何模型条目。
+> **缺省币种（本地主币种）**：`llm_pricing_ref.json` 顶层 `currency`（默认 `CNY`）。语义只有两个——**模型同时提供多币种价时选哪一套**（条目 `alt` 子表提供该币种官方价即命中），以及**日预算以哪个币种判定**。它**不决定条目自身币种**：`MODEL_PRICING` 每条都显式声明了 `currency`，所以把本项改成 `USD` 也不会给人民币标价的模型贴上 `$`。
 
 > **币种与显示口径**：每条定价按**厂商官方标价币种**原样记录（DeepSeek / Kimi 为 CNY，Anthropic / OpenAI / Google 为 USD），**代码里没有任何汇率折算**。
 > - 报告、TUI、Web 的金额一律按**该模型生效币种**显示（Claude 出 `$`、DeepSeek 出 `¥`）；
 > - 一次报告里混用不同币种模型时，费用**分组并列**显示（如 `¥0.0123 + $0.0045`），从不相加；
 > - 若某模型你手上有另一币种的官方价（如国内渠道以人民币计价），可在 `llm_pricing_ref.json` 里用 `alt` 子表或直接把该模型条目改成你配置的币种——**配置币种优先**，模型同时提供多币种价时按你配置的币种显示；
-> - 日费用预算 `daily_cost_limit` 是唯一使用内部汇率的地方：各币种支出按内部汇率表折算到预算币种后比对，仅用于判定超限，**不改变任何展示金额**。
+> - 日费用预算 `daily_cost_limit`（一个数字，本地主币种）是唯一使用内部汇率的地方：各币种支出折算后比对，仅用于判定超限，**不改变任何展示金额**。
 
 > 表中为具体模型名；`core/constants.py::MODEL_PRICING` 另有 12 条**模型族前缀兜底价**（`claude-fable-5-` / `claude-opus-5-` / `claude-sonnet-5-` / `claude-haiku-5-` / `claude-sonnet-4-` / `claude-opus-4-` / `claude-haiku-4-` / `gpt-6.1-` / `gpt-5.6-` / `gemini-3.8-` / `gemini-3.1-` / `gemini-2.5-`），供带日期/小版本后缀的未列变体（如 `claude-sonnet-5-5-20260928`）按族价自动计价——表中不单列，也不会覆盖已有的具体模型价。
 

@@ -288,7 +288,7 @@ def _match_pricing(model: str) -> PriceEntry | None:
 
 def _entry_currencies(pricing: PriceEntry) -> list[str]:
     """条目可用的币种列表：原生 `currency` + `alt` 里额外提供的币种。"""
-    native = str(pricing.get("currency") or PRICING_CURRENCY).strip().upper()
+    native = str(pricing.get("currency") or _DEFAULT_PRICING_CURRENCY).strip().upper()
     codes = [native]
     alt = pricing.get("alt")
     if isinstance(alt, dict):
@@ -306,7 +306,9 @@ def _resolve_entry(model: str) -> tuple[PriceEntry, str]:
     pricing = _match_pricing(model)
     if not pricing:
         return ({}, PRICING_CURRENCY)
-    native = str(pricing.get("currency") or PRICING_CURRENCY).strip().upper()
+    # 条目未声明币种时用**常量缺省**（不是配置币种）：配置币种只决定「多币种价选哪套」，
+    # 绝不改变条目自身的标价币种，否则改配置会把人民币数字贴上 `$`
+    native = str(pricing.get("currency") or _DEFAULT_PRICING_CURRENCY).strip().upper()
     preferred = str(PRICING_CURRENCY).strip().upper()
     alt = pricing.get("alt")
     if preferred != native and isinstance(alt, dict):
