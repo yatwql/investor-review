@@ -10,8 +10,9 @@
 
 from __future__ import annotations
 
+from src.python.core.ansi_colors import MAGENTA
 from src.python.core.doctor import NETWORK_TIMEOUT_DEFAULT
-from src.python.core.logger import setup_logger
+from src.python.core.logger import is_llm_call_message, setup_logger
 from src.python.tui.text_layout import terminal_columns, wrap_hanging, wrap_prompt
 from src.python.tui.tui_keys import PromptCancelledError, input_choice
 from src.python.tui.tui_menu import GREEN, RED, RESET, YELLOW, press_any_key
@@ -39,13 +40,15 @@ def _level_prompt() -> str | None:
     return None
 
 
-def _level_color(level: str) -> str:
-    """日志级别对应的终端颜色（ERROR/CRITICAL 红、WARNING 黄、其余无色）。"""
+def _level_color(level: str, message: str = "") -> str:
+    """日志行颜色：级别优先（ERROR/CRITICAL 红、WARNING 黄）；
+    其余命中 LLM 调用标记的行用品红（与运行期控制台日志同款标注），未命中无色。
+    """
     if level in ("ERROR", "CRITICAL"):
         return RED
     if level == "WARNING":
         return YELLOW
-    return ""
+    return MAGENTA if is_llm_call_message(message) else ""
 
 
 def _cmd_diagnose_menu() -> None:
@@ -164,7 +167,7 @@ def _cmd_view_logs() -> None:
     print(f"  最近日志（级别: {level_label}）")
     print(rule)
     for entry in entries:
-        color = _level_color(entry.level)
+        color = _level_color(entry.level, entry.message)
         line = f"  {entry.time} [{entry.level}] {entry.message}"
         if narrow:
             # 窄档：先按内宽悬挂折行，再逐行上色（着色放在折行之后，ANSI 不被截断）
