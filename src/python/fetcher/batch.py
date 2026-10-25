@@ -455,9 +455,6 @@ def get_strategy_hook(
         from src.python.core.provider_registry import get_registry
 
         registry = get_registry()
-        # 验证 code_type 是否存在有效策略定义，不存在则返回 None
-        if not hasattr(registry, "get_effective_strategy"):
-            return None
 
         def _hook() -> str:
             strategy = registry.get_effective_strategy(code_type, chain, market_open)

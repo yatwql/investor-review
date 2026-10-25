@@ -389,18 +389,23 @@ def run_health_checks(max_timeout: float = 15.0) -> list[dict]:
     return _with_proxy_hint(results)
 
 
-def run_check_sources() -> None:
-    """执行全量数据源健康检查并打印结果（CLI 入口）。"""
+def collect_check_sources_report(max_timeout: float = 15.0) -> tuple[str, int]:
+    """执行全量数据源健康检查并**返回渲染文本与退出码**（不打印、不退出）。
+
+    输出归 CLI 层（``cli/_handlers.py::_handle_check_sources``）：core 只产出结构化
+    结果与整块文本，终端输出/退出码处置属渠道职责（日志与输出通道纪律）。
+    """
     from datetime import date
 
-    results = run_health_checks(max_timeout=15.0)
+    results = run_health_checks(max_timeout=max_timeout)
     hint_items = [r for r in results if r.get("hint")]
     results = [r for r in results if not r.get("hint")]
 
-    print(f"\n数据源健康检查结果 ({date.today()})")
-    print("─" * 55)
-    print(f"  {'状态':<4} {'数据源':<14} {'用途':<12} {'延迟':>8}  说明")
-    print("─" * 55)
+    lines: list[str] = []
+    lines.append(f"\n数据源健康检查结果 ({date.today()})")
+    lines.append("─" * 55)
+    lines.append(f"  {'状态':<4} {'数据源':<14} {'用途':<12} {'延迟':>8}  说明")
+    lines.append("─" * 55)
 
     ok_count = 0
     warn_count = 0
@@ -424,24 +429,21 @@ def run_check_sources() -> None:
             symbol = _ERR
 
         elapsed_str = f"{r['latency_ms']:>7.0f}ms" if r["latency_ms"] >= 0 else "       -"
-        print(f"  {symbol}  {r['name']:<12} {r['label']:<10} {elapsed_str:>8}  {r['message']}")
+        lines.append(f"  {symbol}  {r['name']:<12} {r['label']:<10} {elapsed_str:>8}  {r['message']}")
 
-    print("─" * 55)
+    lines.append("─" * 55)
     total = ok_count + warn_count + err_count + skip_count
     summary = f"  {total} 个数据源 — {_OK} {ok_count} / {_WARN} {warn_count} / {_ERR} {err_count}"
     if skip_count:
         summary += f" / {_SKIP} {skip_count}"
-    print(summary)
-    print(f"  {_credential_summary()}")
+    lines.append(summary)
+    lines.append(f"  {_credential_summary()}")
     if hint_items:
-        print(f"  {_WARN} {hint_items[0]['message']}")
-    print()
+        lines.append(f"  {_WARN} {hint_items[0]['message']}")
+    lines.append("")
 
-    if err_count > 0:
-        sys.exit(2)
-    if warn_count > 0:
-        sys.exit(1)
-    sys.exit(0)
+    exit_code = 2 if err_count > 0 else (1 if warn_count > 0 else 0)
+    return "\n".join(lines), exit_code
 
 
 def _credential_summary() -> str:

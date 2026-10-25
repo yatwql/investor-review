@@ -373,7 +373,7 @@ def is_enable_history(config: dict | None = None) -> bool:
 
 
 def is_enable_data_quality() -> bool:
-    """数据质量仪表盘子模块是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_ANALYSIS``）。
+    """数据质量仪表盘子模块是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_FUND_STYLE``）。
 
     取值来自功能开关注册表（``features.data_quality``，数据质量仪表盘为长期可信核心，出厂默认开），可用 `features.json`
     覆盖。
@@ -384,7 +384,7 @@ def is_enable_data_quality() -> bool:
 
 
 def is_enable_candidate_compare() -> bool:
-    """候选基金比较子表是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_ANALYSIS``）。
+    """候选基金比较子表是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_FUND_STYLE``）。
 
     取值来自功能开关注册表（``features.candidate_compare``，出厂默认关），可用 `features.json`
     覆盖。
@@ -445,7 +445,7 @@ def datasink_feature_ready(config: dict | None = None) -> bool:
 
 
 def is_enable_market_sentiment() -> bool:
-    """市场情绪章是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_ANALYSIS``）。
+    """市场情绪章是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_FUND_STYLE``）。
 
     取值来自功能开关注册表（``features.market_sentiment``，出厂默认关），可用 `features.json`
     覆盖。
@@ -456,7 +456,7 @@ def is_enable_market_sentiment() -> bool:
 
 
 def is_enable_cost_lots() -> bool:
-    """成本流水子模块是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_ANALYSIS``）。
+    """成本流水子模块是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_FUND_STYLE``）。
 
     取值来自功能开关注册表（``features.cost_lots``，出厂默认关），可用 `features.json`
     覆盖。
@@ -467,7 +467,7 @@ def is_enable_cost_lots() -> bool:
 
 
 def is_enable_valuation_percentile() -> bool:
-    """估值分位子模块是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_ANALYSIS``）。
+    """估值分位子模块是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_FUND_STYLE``）。
 
     取值来自功能开关注册表（``features.valuation_percentile``，出厂默认关），可用 `features.json`
     覆盖。
@@ -478,7 +478,7 @@ def is_enable_valuation_percentile() -> bool:
 
 
 def is_enable_market_temperature() -> bool:
-    """市场温度子模块是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_ANALYSIS``）。
+    """市场温度子模块是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_FUND_STYLE``）。
 
     取值来自功能开关注册表（``features.market_temperature``，出厂默认开；数据不可用时该行静默省略），可用 `features.json`
     覆盖。
@@ -489,7 +489,7 @@ def is_enable_market_temperature() -> bool:
 
 
 def is_enable_industry_beta() -> bool:
-    """行业 Beta 子表是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_ANALYSIS``）。
+    """行业 Beta 子表是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_FUND_STYLE``）。
 
     取值来自功能开关注册表（``features.industry_beta``，出厂默认关），可用 `features.json`
     覆盖。
@@ -500,7 +500,7 @@ def is_enable_industry_beta() -> bool:
 
 
 def is_enable_fund_purchase_limit() -> bool:
-    """基金申购限购列是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_ANALYSIS``）。
+    """基金申购限购列是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_FUND_STYLE``）。
 
     取值来自功能开关注册表（``features.fund_purchase_limit``，出厂默认开），可用 `features.json`
     覆盖。
@@ -511,7 +511,7 @@ def is_enable_fund_purchase_limit() -> bool:
 
 
 def is_enable_cost_position() -> bool:
-    """持仓成本区间位置列是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_ANALYSIS``）。
+    """持仓成本区间位置列是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_FUND_STYLE``）。
 
     取值来自功能开关注册表（``features.cost_position``，出厂默认开），可用 `features.json`
     覆盖。

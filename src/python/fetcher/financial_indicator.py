@@ -71,7 +71,7 @@ def fetch_latest_indicator(code: str) -> dict[str, Any] | None:
         "financial_indicator",
         provider_map,
         cache_key,
-        get_ttl("fin_indicator", cache_key),
+        get_ttl("fin_indicator"),
         fn_kwargs={"code": code},
         transform=transform_map,
     )
@@ -93,7 +93,7 @@ def fetch_indicator_series(code: str, limit: int = DEFAULT_PERIODS) -> list[dict
         return []
 
     cache_key = f"{HISTORY_PREFIX}{code}"
-    cached = cache_get(cache_key, get_ttl("fin_indicator", cache_key))
+    cached = cache_get(cache_key, get_ttl("fin_indicator"))
     if isinstance(cached, list):
         return cached
 

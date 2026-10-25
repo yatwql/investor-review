@@ -521,10 +521,11 @@ def _handle_check_sources() -> int:
     Returns:
         int 退出码（0=全部正常, 1=有告警, 2=有失败）
     """
-    from src.python.core.check_sources import run_check_sources
+    from src.python.core.check_sources import collect_check_sources_report
 
-    run_check_sources()
-    return 2  # unreachable, run_check_sources calls sys.exit
+    text, exit_code = collect_check_sources_report()
+    print(text, end="")
+    return exit_code
 
 
 def _use_ansi_color() -> bool:

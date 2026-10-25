@@ -18,11 +18,12 @@ _CACHE_DIR = os.path.join(PROJECT_ROOT, "data/cache")
 _GZIP_THRESHOLD = 100 * 1024  # 100KB 以上的缓存自动 gzip
 _GZIP_SUFFIX = ".gz"
 
-# 缓存 schema 版本号：变更缓存载荷结构/键语义时递增。
+# 缓存 schema 版本号：变更缓存载荷结构/键语义时递增（递增即整体作废旧缓存，
+# 不再为单个数据类型维护载荷版本字段/准入判据）。
 # 版本号作为键后缀（{key}_v{N}），升级后旧缓存键全部对不上 → 自动失效重建。
 # 采用后缀而非前缀：前缀匹配的清理/统计/敏感前缀识别（price_/holding_ 等）
 # 不受影响，无需额外剥离逻辑。
-_CACHE_KEY_VERSION = "v3"
+_CACHE_KEY_VERSION = "v4"
 
 
 def _cache_path(key: str) -> str:

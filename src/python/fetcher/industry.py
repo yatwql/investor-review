@@ -98,7 +98,7 @@ def fetch_industry_data(code: str) -> dict | None:
         "industry",
         _INDUSTRY_PROVIDERS,
         industry_cache_key,
-        get_ttl("industry", industry_cache_key),
+        get_ttl("industry"),
         fn_kwargs={"code": code.strip()},
         transform=_industry_transform,
         diagnostics=diag,
@@ -203,7 +203,7 @@ def batch_fetch_industry_data(codes: list[str]) -> dict[str, dict]:
 
     def _cache_check(cache_id: str) -> Any:
         """缓存命中判据：按 TTL 读取。"""
-        return cache_get(cache_id, get_ttl("industry", cache_id))
+        return cache_get(cache_id, get_ttl("industry"))
 
     results = dispatcher.execute_with_cache_check(
         items,

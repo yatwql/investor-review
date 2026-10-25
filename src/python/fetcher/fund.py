@@ -50,7 +50,6 @@ def fetch_fund_rankings(code: str) -> dict[str, Any] | None:
     Provider Chain（可配置）：天天基金
     """
     from src.python.report.data_status import get_tracker
-    from src.python.providers.tiantian_ranking import rank_payload_is_current
 
     code = code.strip()
     _t = get_tracker()
@@ -61,12 +60,9 @@ def fetch_fund_rankings(code: str) -> dict[str, Any] | None:
         "fund_rank",
         _FUND_RANK_PROVIDERS,
         rank_cache_key,
-        get_ttl("rank", rank_cache_key),
+        get_ttl("rank"),
         fn_kwargs={"code": code},
         diagnostics=diag,
-        # 载荷语义版本准入：旧缓存（无 rank_schema 的陈旧排名，如残留 155/253）自动作废重取，
-        # 不依赖 24h TTL 过期、也不需用户手动清缓存（与 fund_hold 的 hold_schema 同习语）。
-        cache_validate=rank_payload_is_current,
     )
     if result is not None:
         _t.record(_src_key, "T2", success=True)
@@ -81,30 +77,10 @@ def fetch_fund_rankings(code: str) -> dict[str, Any] | None:
 
 _FUND_HOLD_CACHE_PREFIX = "fund_hold_"
 
-_HOLD_PAYLOAD_SCHEMA = 2
-"""``fund_hold_*`` 缓存载荷的语义版本（当前值）。
-
-递增场景：载荷字段的**含义**变化、以致不含新字段的旧条目被当前实现误读时
-（判据是「旧载荷是否会被误读」，不是字段数量增减）。
-V2 对应「三跳取数阶梯 + 联接基金穿透」：V1 的联接基金条目没有 ``feeder_target_code``，
-新代码会把「未穿透的旧快照」当作普通基金持仓读取，直接命中报告层时效闸门、被记为
-持仓不可用——修复发布后，缓存未过期的机器（``hold`` TTL 7 天）依旧复现用户报障。
-
-读侧以 :func:`_is_current_hold_payload` 为准入判据：版本不符即视为未命中、丢弃重取，
-使「改变载荷语义的修复」不再依赖用户手动清缓存。
-
-**新增 provider 不递增版本**（同花顺官方源接入即为此例）：缓存写入前必经
-:func:`_normalize_hold_payload` 归一，缓存里的载荷恒为同一规范化形态，旧条目不会
-被新代码误读；递增只会让全体用户的白缓存失效。仅当**规范化形态本身的含义**变化
-（如 ``date`` 语义、``ratio`` 口径）时才递增。
-"""
-
-_HOLD_PAYLOAD_SCHEMA_FIELD = "hold_schema"
-
 
 def _is_current_hold_payload(payload: object) -> bool:
-    """缓存/预检载荷是否由当前语义版本写出（版本不符 → 视为未命中）。"""
-    return isinstance(payload, dict) and payload.get(_HOLD_PAYLOAD_SCHEMA_FIELD) == _HOLD_PAYLOAD_SCHEMA
+    """持仓载荷形状准入：必须是含 ``holdings`` 的 dict（防截断/空壳缓存流入）。"""
+    return isinstance(payload, dict) and isinstance(payload.get("holdings"), list)
 
 
 def _normalize_hithink_holdings(raw: dict[str, Any]) -> dict[str, Any]:
@@ -143,7 +119,7 @@ def _normalize_hithink_holdings(raw: dict[str, Any]) -> dict[str, Any]:
 
 
 def _normalize_hold_payload(raw: dict[str, Any], source_label: str = "") -> dict[str, Any]:
-    """provider 原始载荷 → 规范化持仓契约 + 盖当前语义版本。
+    """provider 原始载荷 → 规范化持仓契约。
 
     天天基金侧本来就是这个形态（原样透传，保证主源输出逐字不变）；同花顺侧为官方
     披露持仓形态（``item[]`` + ``asset_type``），按形状识别后归一。识别用形状而非
@@ -151,7 +127,7 @@ def _normalize_hold_payload(raw: dict[str, Any], source_label: str = "") -> dict
     """
     if "holdings" not in raw and "item" in raw:
         raw = _normalize_hithink_holdings(raw)
-    return {**raw, _HOLD_PAYLOAD_SCHEMA_FIELD: _HOLD_PAYLOAD_SCHEMA}
+    return dict(raw)
 
 
 _FUND_HOLD_PROVIDERS: dict[str, tuple[str, _ProviderFunc]] = {
@@ -187,11 +163,10 @@ def fetch_fund_holdings(code: str) -> dict[str, Any] | None:
         "fund_hold",
         _FUND_HOLD_PROVIDERS,
         hold_cache_key,
-        get_ttl("hold", hold_cache_key),
+        get_ttl("hold"),
         fn_kwargs={"code": code},
         diagnostics=diag,
         transform=_normalize_hold_payload,
-        cache_validate=_is_current_hold_payload,
     )
     if result is not None:
         _t.record(_src_key, "T2", success=True)
@@ -319,7 +294,7 @@ def fetch_fund_rankings_batch(
 
     results = dispatcher.execute_with_cache_check(
         items,
-        cache_check_fn=lambda cache_id: cache_get(cache_id, get_ttl("rank", cache_id)),
+        cache_check_fn=lambda cache_id: cache_get(cache_id, get_ttl("rank")),
     )
 
     rank_map: dict[str, dict[str, Any] | None] = {}
@@ -371,8 +346,8 @@ def fetch_fund_holdings_batch(
     ]
 
     def _hold_cache_check(cache_id: str) -> Any:
-        """批量预检：旧语义载荷视为未命中（任务会经 fetch_with_fallback 丢弃重取）。"""
-        cached = cache_get(cache_id, get_ttl("hold", cache_id))
+        """批量预检：形状不合法的载荷视为未命中（任务会经 fetch_with_fallback 丢弃重取）。"""
+        cached = cache_get(cache_id, get_ttl("hold"))
         return cached if _is_current_hold_payload(cached) else None
 
     results = dispatcher.execute_with_cache_check(
@@ -528,13 +503,13 @@ def fetch_fund_benchmark(code: str) -> str:
     """
     code = code.strip()
     cache_key = _BENCHMARK_TABLE_KEY
-    cached = cache_get(cache_key, get_ttl("benchmark", cache_key))
+    cached = cache_get(cache_key, get_ttl("benchmark"))
     if cached is not None and isinstance(cached, dict):
         return cached.get(code, "--")
 
     lock = _get_benchmark_lock(code)
     with lock:
-        cached = cache_get(cache_key, get_ttl("benchmark", cache_key))
+        cached = cache_get(cache_key, get_ttl("benchmark"))
         if cached is not None and isinstance(cached, dict):
             return cached.get(code, "--")
 

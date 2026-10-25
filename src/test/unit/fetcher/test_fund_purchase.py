@@ -25,7 +25,6 @@ from src.python.fetcher.fund_purchase import (
 )
 from src.python.providers.tiantian_purchase import (
     MIN_ACCEPT_ROWS,
-    PURCHASE_SCHEMA_FIELD,
     stamp_purchase_payload,
 )
 
@@ -133,7 +132,6 @@ class TestDegradationLadder:
         result = fetch_fund_purchase_status()
         assert result is not None
         assert result["source"] == "天天基金"
-        assert result[PURCHASE_SCHEMA_FIELD]
         assert calls == ["tiantian"]
 
         again = fetch_fund_purchase_status()
@@ -251,7 +249,7 @@ class TestAdmissionProtectsCache:
         _use_provider(monkeypatch, "akshare_purchase", "天天基金(akshare)", lambda: None)
 
         assert fetch_fund_purchase_status() is None
-        assert reads, "缓存读取应发生（准入判据挂在 cache_validate 上）"
+        assert reads, "写侧准入失败时仍会读缓存以走降级"
 
 
 # ============================================================

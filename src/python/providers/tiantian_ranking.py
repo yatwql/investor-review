@@ -41,12 +41,6 @@ def _parse_syl_returns(text: str) -> dict[str, dict[str, Any]]:
     return rankings
 
 
-#: 同类排名载荷的语义版本——写入缓存时随载荷同存，读侧以 :func:`rank_payload_is_current`
-#: 为准入判据：版本不符即视为未命中、丢弃重取（与 ``fetcher/fund.py`` 的 ``hold_schema`` 同习语），
-#: 使「改变载荷语义的修复」不再依赖用户手动清缓存、也不被 24h TTL 遮蔽。
-_RANK_SCHEMA_FIELD = "rank_schema"
-_RANK_SCHEMA = 2
-
 #: 排名日期与**同一文件内**的净值日期允许的最大偏差（天）。
 #: 为何以此为准：排名由净值派生，实测 13 只基金两侧尾部日期**完全相等**（Δ=0 天），
 #: 故这是一个**假阳性免疫**的陈旧判据——排名序列落后于净值序列即说明该次响应里的
@@ -130,14 +124,13 @@ def _parse_rank_entry(text: str) -> dict[str, Any]:
     两者均只告警+置空，不抛异常（宁缺毋错：宁可显示 ``--`` 也不显示错期排名）。
 
     Returns:
-        ``{"rank", "total", "percentile", "data_date", "rank_schema"}``；缺失项为 ``"--"``。
+        ``{"rank", "total", "percentile", "data_date"}``；缺失项为 ``"--"``。
     """
     rank_entry: dict[str, Any] = {
         "rank": "--",
         "total": "--",
         "percentile": "--",
         "data_date": "--",
-        _RANK_SCHEMA_FIELD: _RANK_SCHEMA,
     }
 
     # ── 排名数组（y=rank, sc=同类池规模, x=日期）──
@@ -211,23 +204,6 @@ def _parse_rank_entry(text: str) -> dict[str, Any]:
     if data_date:
         rank_entry["data_date"] = data_date
     return rank_entry
-
-
-def rank_payload_is_current(payload: object) -> bool:
-    """缓存载荷是否由**当前语义版本**的排名解析器写出（版本不符 → 视为未命中重取）。
-
-    为何需要：排名载荷的语义曾变更（新增日期附注、陈旧闸门），旧缓存条目**结构未变但
-    含义已变**——仅靠 24h TTL 会在过期前持续遮蔽修复（实测：旧条目里的 ``155/253``
-    在 TTL 内被重复上屏，用户看到问题依旧）。以版本戳作准入判据后，旧条目**自动作废**。
-
-    无排名数据的载荷（基金本身无同类排名）不拦——无东西可校验，拦了会无限重取。
-    """
-    if not isinstance(payload, dict):
-        return False
-    peer = (payload.get("rankings") or {}).get("同类排名")
-    if not isinstance(peer, dict):
-        return True
-    return peer.get(_RANK_SCHEMA_FIELD) == _RANK_SCHEMA
 
 
 # ── 评级计算（5 级 + 类型差异化阈值） ────────────────

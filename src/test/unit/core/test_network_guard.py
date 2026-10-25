@@ -212,5 +212,8 @@ class TestOfflineStubTargets:
         assert callable(getattr(trading_calendar, "_get_trading_calendar", None))
         assert isinstance(getattr(chain, "_TRANSIENT_RETRY_BACKOFF", None), float)
         assert hasattr(akshare_extras, "ak")
-        for module in (throttle, retry, cninfo, datasink):
+        for module in (throttle, retry):
             assert callable(getattr(module, "time", None).sleep), f"{module.__name__} 缺 time.sleep"
+        # provider 的 429 等待统一经 throttle.wait_interval（等待只由 throttle 持有）
+        for module in (cninfo, datasink):
+            assert callable(getattr(module, "wait_interval", None)), f"{module.__name__} 缺 wait_interval"

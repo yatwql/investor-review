@@ -218,7 +218,7 @@ def _generate_report_full(
             reporter.ok("行业资金流向获取完成")
         else:
             from src.python.cache.operations import sector_flow_hint
-            from src.python.providers.akshare_extras import sector_flow_failure
+            from src.python.fetcher.akshare import sector_flow_failure
             from src.python.report.data_status import mark_data_unavailable
 
             failure = sector_flow_failure()

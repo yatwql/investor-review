@@ -464,3 +464,29 @@ class TestFmpSymbolPrefixedInput:
         assert to_fmp_symbol("sh600519") == "SH600519"
         assert to_fmp_symbol("sz000001") == "SZ000001"
         assert to_fmp_symbol("bj430047") == "BJ430047"
+
+
+class TestIndexExchangeOf:
+    """`index_exchange_of`：A 股指数交易所判定的唯一实现。
+
+    锁定裸 6 位码与显式前缀两种入口；provider 侧只允许调用本函数。
+    """
+
+    @pytest.mark.parametrize(
+        ("code", "expected"),
+        [
+            ("sh000300", "sh"),
+            ("sz399001", "sz"),
+            ("399001", "sz"),
+            ("932000", "sz"),
+            ("000300", "sh"),
+            ("930903", "sh"),
+            ("gb_inx", ""),
+            ("600519", "sh"),
+            ("", ""),
+        ],
+    )
+    def test_exchange_resolution(self, code, expected):
+        from src.python.core.code_symbols import index_exchange_of
+
+        assert index_exchange_of(code) == expected

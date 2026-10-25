@@ -65,7 +65,7 @@ def _stamp_source(payload: dict[str, Any], source_label: str) -> dict[str, Any]:
 
 
 def _admit(payload: object, _source_label: str) -> bool:
-    """写侧准入（``validate`` 两参签名）：与读侧 ``cache_validate`` 同一份判据。"""
+    """写侧准入（``validate`` 两参签名）：形状/值域体检，防截断或错位载荷入缓存。"""
     return fee_payload_is_valid(payload)
 
 
@@ -82,13 +82,12 @@ def fetch_fund_fee(code: str) -> dict[str, Any] | None:
         "fund_fee",
         _FEE_PROVIDERS,
         _CACHE_PREFIX + code,
-        get_ttl("fund_fee", _CACHE_PREFIX + code),
+        get_ttl("fund_fee"),
         fn_kwargs={"code": code},
         diagnostics=diag,
         validate=_admit,
         transform=_stamp_source,
-        # 载荷语义版本准入：fee_schema 不符即丢弃重取（含过期降级条目），
-        # 损坏/截断的缓存体不得经过期缓存兜底流入费率装配。
+        # 读侧形状准入：损坏/截断载荷视为未命中，不得经过期缓存兜底流入费率装配。
         cache_validate=fee_payload_is_valid,
     )
 

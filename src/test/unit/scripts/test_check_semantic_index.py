@@ -100,8 +100,8 @@ class TestFeatureSwitchKeys:
         source = (
             "_OTHER: dict = {}\n"
             "feature_switch_registry: dict[str, FeatureSwitchDef] = {\n"
-            '    "data_quality": FeatureSwitchDef("数据质量", "d", GROUP_ANALYSIS, True, True),\n'
-            '    "cost_lots": FeatureSwitchDef("成本流水", "d", GROUP_ANALYSIS, False, True),\n'
+            '    "data_quality": FeatureSwitchDef("数据质量", "d", GROUP_FUND_STYLE, True, True),\n'
+            '    "cost_lots": FeatureSwitchDef("成本流水", "d", GROUP_FUND_STYLE, False, True),\n'
             "}\n"
         )
         assert sem_index.feature_switch_keys(source) == ["data_quality", "cost_lots"]
@@ -190,8 +190,8 @@ def _valid_doc() -> str:
 def _valid_features() -> str:
     return (
         "feature_switch_registry: dict[str, FeatureSwitchDef] = {\n"
-        '    "candidate_compare": FeatureSwitchDef("候选基金比较", "d", GROUP_ANALYSIS, False, True),\n'
-        '    "cost_lots": FeatureSwitchDef("成本流水", "d", GROUP_ANALYSIS, False, True),\n'
+        '    "candidate_compare": FeatureSwitchDef("候选基金比较", "d", GROUP_FUND_STYLE, False, True),\n'
+        '    "cost_lots": FeatureSwitchDef("成本流水", "d", GROUP_FUND_STYLE, False, True),\n'
         "}\n"
     )
 

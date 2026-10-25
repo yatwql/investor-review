@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.15.6
+> 文档版本：0.15.7
 
 ## 目录
 
@@ -544,7 +544,7 @@ CLI 渠道是**命令行参数**形态，面向脚本化与自动化场景：定
 - **`_handle_cache`**：三分支——`--clean` 委托 `cleanup_cache`；`--stats` 委托 `get_cache_stats` + 打印 LLM 配置状态（消费 `core/system_info.llm_status()` 单源，仅日志渲染）；`--update` 委托 `update_basic_cache`/`update_position_cache`（§3.6），`--update all` 委托 `update_all_cache` **最大努力模式**（basic 失败仍继续 position，退出码取两者 max）。
 - **`_handle_whatif`**：解析 `--base`/`--candidate` 两份持仓 → `run_whatif_simulation()`（§4.13）→ 结果 `ok` 判定，失败返回 2；`--effective-date` 触发时序回测扩展。
 - **`_handle_cassettes`**：无参数时经 `core/cassette.py::list_cassettes()` 列出已录制响应（来源/录制时间/交互数/大小）；`--verify` 时经 `fetcher/cassette_checks.py::CASSETTE_CHECKS` + `verify_cassettes()` 离线回放，有解析失败返回 `_EXIT_SEVERE`。纯只读展示层，不联网、不碰用户配置。
-- **`_handle_check_sources`**：`run_check_sources()`（内部 `sys.exit`）。
+- **`_handle_check_sources`**：`collect_check_sources_report()`（内部 `sys.exit`）。
 - **`_handle_view_logs`**：调 `core/log_reader.py::read_log(limit, level, since, until)`，输出每条 `time [LEVEL] message`（多行 body 缩进）；无匹配 → 提示并返回 0；ValueError/OSError → 记录日志 + 返回 `_EXIT_SEVERE`。**薄展示层，无解析逻辑**（解析/过滤全在 `core/log_reader.py`）。
 - **`_handle_doctor`**：调 `core/doctor.py::run_doctor_checks(include_network=not offline, max_timeout=timeout)` → `format_doctor_report(results, use_color=_use_ansi_color())` → 按 `summarize_doctor_results()` 返回 `_EXIT_SUCCESS`（全通过）/ `_EXIT_PARTIAL`（有失败项）。`_use_ansi_color()` 遵循 `NO_COLOR` + `isatty` + UTF-8 三项判据，终端不支持颜色时自动降级为纯文本（§4.17.3）。
 
@@ -1298,7 +1298,7 @@ cache/
 | `get(key, max_age_seconds)` | `(str, float) → Any\|None` | 先查 `.json.gz`，不存在时回退 `.json`；超龄返回 None |
 | `set(key, data)` | `(str, Any) → None` | `{"_ts": now, "_data": data}` 序列化 + 原子写入；≥100KB 自动 `.json.gz` |
 | `clear(key)` | `(str) → None` | 同时删除 `.json` 和 `.json.gz` |
-| `get_ttl(data_type, key=None)` | `(str, str) → float` | TTL 分辨率（见下方流程图）；`key` 为历史参数、**不参与计算**（无按 key 抖动） |
+| `get_ttl(data_type)` | `(str) → float` | TTL 分辨率（见下方流程图）；只由数据类型决定（无按 key 抖动、无兼容参数） |
 | `clear_by_group(group)` | `(str) → None` | 按 preload/refresh 分组清除 |
 | `cleanup_expired()` | `() → int` | 扫描全量缓存，删除超龄项（逐文件明细只进 DEBUG，INFO 留汇总行 + 释放字节；age/TTL 按量级自适应单位——盘中 30s 的 price TTL 不再印成 `ttl=0.0h`；**无 `_ts` 包封的文件跳过 TTL 判定**，见下） |
 
@@ -2262,10 +2262,8 @@ report/ 渲染                   # 模板 context 传递（C14）→ 风格表 +
 
 次序本身就是隔离手段：无年份兜底被压到第 3 跳、且联接基金在第 2 跳即返回，故它无法遮蔽联接基金。**取数层不做时效判定**——陈旧判据唯一归属 `report/holdings_freshness.py`（`is_stale_report` / `STALE_QUARTERS`），复制到取数层即「判据复制」，两者日后必然漂移；第 3 跳的陈年报告照常上送，由报告层时效闸门裁决并标注「报告期 X，距今 N 个完整季度」。
 
-**两源链与载荷归一（基金披露持仓）**：`fetcher/fund.py::_FUND_HOLD_PROVIDERS` 为「天天基金（主，三跳阶梯 + 联接穿透）→ 同花顺官方披露持仓（备，需 key）」；链路顺序可用 `config.json` 的 `preferred_provider.fund_hold` 调换。两侧字段形态不同，统一经 `_normalize_hold_payload` 归一后再落缓存：**天天基金形态原样透传**（保证主源可用时输出逐字不变），**同花顺形态**（`item[]` + `asset_type`）按形状识别——只取 `asset_type=stock`（穿透层是股票层，债券/基金资产混入会污染占比分母）、`hold_ratio`→`ratio`（与天天基金同口径的百分数原值）、报告期取 `end_date_ms`（回退 `publish_date_ms`）→ `YYYY-MM-DD` 供时效闸门判定、联接基金（持仓仅一只 `fund` 型资产）取该 ETF 代码作 `feeder_target_code`。**不递增 `hold_schema`**：缓存写入前必经归一，载荷恒为同一形态，旧条目不会被误读，递增只会让全体用户的白缓存失效（判据是「旧载荷是否会被误读」）。
 **联接基金穿透（内置恒开，无功能开关）**：ETF 联接基金的资产就是目标 ETF、本身不持有股票，故其季报股票表按构造为空（实测 `016055` 四个近季度的响应体均为 59/50 字节空内容）——修复前它在报告里恒为「持仓不可用」，QDII 联接基金因此拿不到任何底层暴露。穿透做法：目标 ETF 由基金主页面锚点**动态解析**（`parse_feeder_target_etf`，不维护「联接基金 → 目标 ETF」映射表，基金公司更换标的 ETF 时锚点随页面同步更新），再由 `fetcher/fund.py::with_feeder_penetration` 以目标 ETF 的持仓与报告期代理该基金的底层暴露，并在结果中记 `feeder_penetration = {target_code, target_name}` 供报告层标注来源。两处要点：①**幂等**——该函数在单条取数与批量两个接缝都调用，因为批量路径的 `execute_with_cache_check` 缓存命中时会跳过任务、穿透若只在网络路径做则热缓存下静默失效，故以「已带 `feeder_penetration` 即原样返回」保证重复调用无副作用；②**结构深度恒为 1**——只有名称含「联接」的基金才产出 `feeder_target_code`，而 ETF 名称不含「联接」，故目标基金永不产出新的目标，无需运行时深度计数。联动判定复用既有 `core/code_utils.py::is_index_link_by_name`（不新增第二份「是否联接」关键词表）；锚点两重区分（标签须止于「ETF」`(?!联)` + 目标须为场内代码）用于排除常规 ETF 页的**反向**链接（回指其场外联接基金）。归因口径为 **100%（不折算持有比例）**——联接基金约 95% 投向目标 ETF，未折算会轻微高估底层权重，报告中标「穿透自目标 ETF `XXXXXX`（未折算持有比例）」把该已知偏差公开；折算需解析联接基金自身的基金投资明细，当前无对应取数通道。
 
-**持仓缓存载荷语义版本（`hold_schema`）**：`fund_hold_*` 缓存条目的字段含义会在修复中变化（如 V2 的「三跳阶梯 + 联接穿透」使旧联接条目缺 `feeder_target_code`），而条目结构/键未变——仅靠 `hold` TTL（7 天）会在过期前持续遮蔽修复。故 provider 产出经 `fetcher/fund.py::_normalize_hold_payload` 归一后盖上 `hold_schema` 版本字段，读取侧以 `_is_current_hold_payload` 为准入判据：版本不符即视为未命中、丢弃重取。判据接在**两处**读缓存接缝——`fetch_with_fallback` 的 `cache_validate` 参数（含过期降级条目）与批量预检回调 `_hold_cache_check`（`execute_with_cache_check` 命中会跳过任务，判据若只挂在链路内则热缓存下失效，与穿透幂等后处理同一病根）。
 
 **板块分类（双层策略）**：
 
@@ -2613,6 +2611,8 @@ analysis/portfolio_evolution.py   # 纯计算：读快照 JSON → 趋势聚合 
 report/orchestrator.py            # 编排：聚合快照 → 写 pipeline_data['evolution_data']（C19）
 report/ 渲染                      # Excel 页签 + HTML 章节（模板 context 传递，C14）
 ```
+
+**并发取数、顺序汇总**：历史走势的并发只用于**取数**，汇总按输入持仓顺序（不按 `as_completed` 完成顺序）——完成顺序随网络/线程调度抖动，按它追加会让两次同数据报告的「已纳入走势计算」清单顺序不同、逐日浮点累加顺序漂移。同类实现（任何线程池汇总）都应遵守该纪律：结果集按稳定键（输入顺序/代码）排列后再参与计算与展示。
 
 **快照数下限**：`MIN_SNAPSHOTS=3`，有效快照不足时 `evolution_data.available=false`，展示层写「组合演进数据不足」占位（§1.4.5 降级）。
 
@@ -3434,7 +3434,6 @@ make_http_client(timeout=10.0) → httpx.Client
 | `fetch_kline` | 官方历史日 K（前复权；`date_ms` 字段、支持 `start_from` 增量，对齐既有 provider 形态） | 流动性分析 | 数据获取 | 需凭据源 |
 | `fetch_index_kline` | 指数历史日 K provider 槽（腾讯/新浪/东方财富 push2his/同花顺；前复权，对齐既有 provider 形态） | 数据源 | 数据获取 | 东方财富免 key；同花顺需凭据源（`hithink` 节） |
 | `to_index_thscode` | 指数代码 → 同花顺 thscode（`sh000300` → `000300.SH`，`sz399001` → `399001.SZ`；与 A 股 `to_thscode` 同后缀口径） | 数据源 | 数据获取 | 需凭据源（`hithink` 节） |
-| `_normalize_hold_payload` | 持仓载荷归一（provider 原始载荷 → 规范化持仓契约 `code/name/date/holdings` + `hold_schema`） | 基金业绩分析 | 数据获取 | 无 |
 | `holdings_detail` | 持仓明细与分类（合并章：市值核算明细区块 + 持仓分类汇总区块同页签呈现） | 持仓明细与分类 | 报告输出 | 始终显示（type=always） |
 | `holdings_detail_sheet` | 合并章 Excel 写入器（`write_holdings_detail_sheet`；区块写入器 `_write_market_value_block` / `_write_category_block`） | 持仓明细与分类 | 报告输出 | 无（渲染） |
 | `position_structure` | 持仓结构与集中度（合并章：重合度区块 + 相关性区块 + 集中度区块同页签呈现；可见性 `data_flag_any` OR） | 持仓结构与集中度 | 报告输出 | 基金深度分析（`enable_fund_deep_analysis` 控制） |
@@ -3449,7 +3448,6 @@ make_http_client(timeout=10.0) → httpx.Client
 | `parse_feeder_target_etf` | 目标 ETF 解析（联接基金主页面锚点 → 目标 ETF 代码，两重区分反向链接） | 资产穿透TOP10 | 数据获取 | 无（解析原语） |
 | `feeder_target_code` | 目标 ETF 标识（联接基金在第 2 跳的取数结果字段） | 资产穿透TOP10 | 数据获取 | 无（结果字段） |
 | `period_entry_label` | 报告期明细条目措辞（带穿透来源时补注目标 ETF 与「未折算持有比例」） | 资产穿透TOP10 | 报告配置 | 无（渲染原语） |
-| `hold_schema` | 基金持仓缓存载荷语义版本（读侧拒收非当前版本 → 视为未命中重取，防「语义变更型修复」被 TTL 内缓存遮蔽） | 资产穿透TOP10 | 数据获取 | 无（缓存契约字段，值见 `_HOLD_PAYLOAD_SCHEMA`） |
 | `cache_validate` | 缓存载荷准入判据（`fetch_with_fallback` 参数：载荷未通过判据即视为未命中、清缓存重取） | 资产穿透TOP10 | 数据获取 | 无（链路原语） |
 | `financial_report_digest` | 持仓个股财报摘要（持仓基本面章区块二：A 股标的取最新年报章节原文摘要；数据源 DataSinking，需用户自备 key） | 持仓基本面 | 数据获取 | 功能开关 `stock_fundamentals`（默认关） |
 | `financial_indicator` | 财务指标（数据域 + 持仓基本面章区块一：上市公司单报告期结构化指标 + 质量档 + 年度趋势 + 当前 PE/PB） | 持仓基本面 | 数据获取 | 功能开关 `stock_fundamentals`（默认关） |
@@ -3547,7 +3545,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `jsonl_store` | JSONL 原子追加原语（`perf`/`decision_ledger`/`signal_ledger` 共同委托的唯一拷贝） | 诊断 | 监控 | 无（模块级） |
 | `num_utils` | 数值归一原语（`safe_num` 显式拦下 NaN/±inf，替代失效的 `try: float()` 兜底） | 诊断 | 数据获取 | 无（模块级，A 通道无开关） |
 | `retry` | 重试与退避唯一原语（`RetryPolicy` 策略算式——固定/线性/指数/**显式序列**、`is_transient_exception` 瞬时判据、`retry_transient` 执行器；取数链路、各 provider 与 LLM 调用骨架共用） | 诊断 | 数据获取 | 无（模块级） |
-| `throttle` | 按名最小间隔节流唯一原语（`RateLimiter` + `interval_delay` 抖动算式；数据层限速/批量调度/LLM 端点节流三层共用） | 诊断 | 数据获取 | 无（模块级） |
+| `throttle` | 按名最小间隔节流唯一原语（`RateLimiter` + `interval_delay` 抖动算式 + `wait_interval` 一次性等待；数据层限速/批量调度/LLM 端点节流/429 退避窗口共用） | 诊断 | 数据获取 | 无（模块级） |
 | `completion_notify` | 任务完成通知（CLI/Web 报告收尾按 `notify` 配置分发 webhook/邮件/桌面三通道事件——失败必发、成功需 `on_success`；无配置静默跳过；单通道失败隔离、永不抛出不改退出码；webhook URL 日志只记域名；降级摘要单源 `report/data_status.degradation_summary()`） | 诊断 | 报告 | 随 `notify` 配置节 |
 | `degradation_summary` | 通知降级摘要单源（数据状态跟踪器事件日志 → 摘要行，最新在前按源去重；CLI/Web 收尾共用，渠道层不再各自镜像） | 诊断 | 报告 | 随 `notify` 配置节 |
 | `doctor` | 系统自检（环境/配置/目录/日志与缓存/功能开关/数据源适配/数据源凭据/数据源八组，失败项附可执行建议，自身永不抛异常） | 诊断 | 诊断 | 恒上屏（无开关） |
@@ -3734,7 +3732,7 @@ web/ (Web 服务层，薄入口)
 
 > **约束外参照（语义命名纪律）**：除上表 C1~C29 编号约束外，**语义命名纪律**以 [「功能语义命名表」](#67-功能语义命名表) 为唯一现状基准——代码/配置标识符（函数/变量/模块/config 键）必须与表中语义 slug 一致，禁止用任务代号（`plan-N`/`rf-N`/系列代号）命名；新增功能先定语义名再设计。该纪律属全局代码卫生，与编号约束并列遵守，由双脚本强制：`scripts/check-code-traces.py --ci`（负面禁止 IDENT/CODE）+ `scripts/check-semantic-index.py --ci`（正面双向校验本表与代码一致）。
 
-> **约束外参照（文档与实现一致性纪律）**：除上表 C1~C29 编号约束外，**文档中的事实断言**（章节表与数量、功能开关表与分组计数、默认值表、TUI 面板编号、目录树、项目统计表）必须与代码/配置文件/文件系统一致，由 `scripts/check-doc-drift.py --ci` 强制（逐项对账，`changelog.md`/`review-findings.md` 与版本快照类文档按设计豁免）；历史痕迹类约束另由 `scripts/check-doc-traces.py --ci` 强制。
+> **约束外参照（文档与实现一致性纪律）**：除上表 C1~C29 编号约束外，**文档中的事实断言**（章节表与数量、功能开关表与分组计数、默认值表、LLM 缓存 TTL 行、TUI 面板编号、目录树、项目统计表）必须与代码/配置文件/文件系统一致，由 `scripts/check-doc-drift.py --ci` 强制（逐项对账，`changelog.md`/`review-findings.md` 与版本快照类文档按设计豁免）；历史痕迹类约束另由 `scripts/check-doc-traces.py --ci` 强制。
 
 > **约束外参照（脚本结构）**：`scripts/` 顶层只放可直接运行的入口；共享库进 `_shared/`（`checklib.py` / `traces_common.py`），单入口实现包用 `_<语义名>/`，评测实现包用 `_eval_<x>/` 与 `eval-<x>.py` 对应（详见 `scripts-reference.md`「命名约定」的结构约定）。
 >
@@ -3791,7 +3789,7 @@ web/ (Web 服务层，薄入口)
 | **C23** | **功能开关注册表唯一事实来源** — **全部**功能开关的枚举、显示名、说明、分组、默认值与产物影响必须来自 `config/features.py` 的 `feature_switch_registry`（`_FEATURE_FLAGS_DEFAULT` 是它的派生投影，非独立登记点）；TUI 功能开关面板、Web 配置面板、CLI `--experiment` / `--feature` 取值校验与提示文案、用户文档与管理文档的开关清单**一律由该注册表驱动**，禁止任何渠道层另写一份清单 | 渠道各写清单时，新增/改名/删除开关必漏改某渠道——用户在该渠道看不到、改不了，或文档与实际开关对不上；清单是静态字面量，编译期与运行期均无任何提示，只会在用户报障时暴露。**可见性若与「是否实验项」绑定**，则转正（默认值改 `true`）会连带摘掉面板入口，关闭途径只剩手改 `features.json`——可见性由**分组属性**表达，与默认值解耦 | 开关在部分渠道缺失或名称不一致；文档承诺的开关在界面中不存在（或反之）；新增开关的接入成本从「改一处」膨胀为「逐个渠道找清单」；转正即失去界面入口 | `config/features.py`（唯一注册点）、`tui/`（功能开关面板）、`web/`（配置面板）、`cli/`（`--experiment` / `--feature` 校验与报错提示）、`docs/manuals/` 与 `docs/managements/` 的开关清单 |
 | **C16** | **路径绝对化** — 配置层输出的路径型键（`holdings_dir`、`output_dir`、`llm_key_file`、`llm_providers_file`、`llm_settings_file`）必须为绝对路径，在 `get_config()` 返回前经 `_absolutize_paths()` 统一转换；下游消费者不得依赖 CWD | `tui/tui.py`/`cli/cli.py` 去掉了 `os.chdir`，相对路径无法被正确解析 | 路径查找失败、配置文件/持仓文件/报告输出找不到 | `config/_core.py`（转换点），所有消费路径型配置的模块 |
 | **C26** | **重试与退避唯一原语** — 凡「失败后重试」必须经 `core/retry.py`（`RetryPolicy` 策略 / `is_transient_exception` 瞬时判据 / `retry_transient` 执行器），禁止各模块自建重试循环与退避算式；各来源差异只用策略参数表达 | 退避数值与「可重试」口径各写一处必然漂移：最坏时延无法估算、策略调整需改 N 处、测试钉住的次数与等待量随之失真 | 全部「失败后重试」路径：数据获取层（Provider Chain 同源重试、provider 连接级重试、akshare 超时重试、HTTP 429 退避）+ LLM 调用链（`llm/api_base.py` 的 503/超时/网络重试（429/403 归 quota 终态不重试），退避用显式序列策略表达；其**失败分类**（内容级/配额级判定）与终态副作用仍属 LLM 层职责，见 §5.4） |
-| **C27** | **间隔节流唯一原语** — 凡「两次请求至少间隔多久」必须经 `core/throttle.py`（`RateLimiter` + `interval_delay`），禁止自建「间隔 + 睡眠」与抖动算式 | 同一约束在数据层/调度层/LLM 层各写一份 → 抖动幅度与等待语义不一致；通用原语若住在某一上层模块，会被其他层反向依赖（层次倒置） | 数据源 qps 限速、`batch_rate_limit`、LLM 端点级节流（`pacing`） |
+| **C27** | **间隔节流唯一原语** — 凡「两次请求至少间隔多久」必须经 `core/throttle.py`（`RateLimiter` / `interval_delay` / 一次性等待 `wait_interval`），禁止自建「间隔 + 睡眠」与抖动算式 | 同一约束在数据层/调度层/LLM 层各写一份 → 抖动幅度与等待语义不一致；通用原语若住在某一上层模块，会被其他层反向依赖（层次倒置） | 数据源 qps 限速、`batch_rate_limit`、LLM 端点级节流（`pacing`） |
 | **C28** | **大文件红线体系（主程序/脚本/测试）** — 单文件行数按域执行固定红线：主程序（`src/python/`）> 1000 行、脚本（`scripts/` 递归含包内子模块）> 1000 行、测试（`src/test/`）> 1200 行即 finding；警戒区（`-v` 清单：主程序 700 / 脚本 600 / 测试 900，`__init__.py` 薄壳 200）为可选优化区间且即登记线，`-v` 另按「行数 × 近 90 天改动次数」输出拆分优先级；超限必须拆分，或在 `check-file-length` 的 `EXEMPTIONS` 登记并与 review-findings 挂账同步 | 行数无红线时文件无限膨胀（`scripts/` 未入守护域时 `eval-factor-zoo.py` 达 1595 行而无发现渠道）；阈值只写在文档不进守护脚本会改一处漏一处；无警戒区则只能在破线后才察觉，拆分时机失去观察缓冲 | 所有 py 源文件：`src/python/`、`scripts/`（含包内子模块）、`src/test/`；阈值与清单由 `scripts/check-file-length.py --ci` 单源强制（`_LIMIT_BY_KIND` / `_WARN_BY_KIND`），口径同步 developer-guide「文件膨胀阈值」表与 review-findings 文件膨胀登记表 |
 | **C29** | **TUI 分档只改版式不改语义** — `layout_tier` 的 wide/medium/narrow 分支只允许改**版式与密度**（列宽/盒线/折行/图例详略/重绘机制），不得改**按键语义、反馈有无、写路径可见性**：同一按键在各档必须产生相同的语义动作与可观察反馈（执行/退出/选中移动/单行提示），分档至多改变反馈的呈现方式 | 分档分支改语义曾三次造成用户可见缺陷：写路径窄屏不重绘（切换无结果）、方向键在窄屏解析漂移为孤 Esc（误退程序）、窄屏导航被整体删除（按键无反应）；语义随宽度漂移违反「同键同果」预期，且每档分支都是独立回归面 | `src/python/tui/` 全部 `layout_tier`/`narrow` 分支点（主循环、菜单渲染、各面板）；守护 = `test_tui_menu.py::TestTierSemanticParity`（同按键两档同语义/同反馈）+ `_print_hint` 单行反馈原语；**本次重构后**导航/派发控制流单源于 `tui/panel_runtime.py::panel_loop`——同一读键→导航→派发→反馈循环全列表面板共用一份实现，「同键同果」由构造性成立（分档只改 render 版式、不改派发），从「测试逐处兜底」升级为运行时单源** |
 
@@ -4134,7 +4132,7 @@ investor-review/
 >
 > `financial_indicator_data`（财务指标，C19 契约，5 键）：`{"available": bool, "reason": str, "rows": list[dict], "failures": list[dict], "entry_count": int}`。`rows` 每项含 `code`/`name`/`report_period`/`doc_type`/`doc_type_label`/`source_api`/`source`/`revenue`/`net_profit`/`revenue_yoy`/`net_profit_yoy`/`gross_margin`/`roe`/`debt_ratio`/`operating_cash_flow`/`eps`/`bvps`/`pe`/`pb`/`quality_grade`/`quality_score`/`trend`/`series`/`period_count`；`failures` 每项含 `code`/`name`/`reason`。对持仓 + 穿透中的 A 股标的取多期指标（`fetcher/financial_indicator.py`：主源 akshare 一次调用得多期；主源不可用时先由**同花顺官方合并报表派生多期**（`analysis/financial_statement_derive.py`，三张报表各一次请求即得多期），再退化为链路单期记录），由 `analysis/financial_indicator.py::quality_grade`/`trend_label`/`current_valuation` 派生质量档（ROE/毛利率/资产负债率/经营现金流对净利覆盖 四维均值启发式，**非投资建议、非评级**，阈值不区分行业）、年度趋势（相邻年报营收与净利）与当前 PE/PB（**官方 TTM/MRQ 口径优先**：数据源提供 `pe_ttm`/`pb_mrq` 时直接采用；缺失才回退「现价 ÷ 该报告期每股收益/每股净资产」，亏损或净资产非正留空——自算口径在半年报/季报上会明显虚高，两者混用会误导估值判断），由 `report/financial_indicator.py::build_financial_indicator` 装配（现价来自行情明细，经 `fetcher/financial_indicator.py::collect_price_map`）。功能开关 `stock_fundamentals` 默认关（关闭 → None → 区块不写）；无 A 股标的/数据源不可用 → `available=False` 降级。历史 PE/PB 分位（TTM 口径）属后续阶段，本章只给当前值。C7 注册：该契约并入合并章 `fundamental_snapshot` 的 `data_flag_any`（无独立 type）。消费方：Excel `report/fundamental_snapshot_sheet.py::_write_indicator_block` 与 HTML `partials/fundamental_snapshot_section.html`（区块一）。
 
-> `purchase_status_data`（申购限购状态，C19 契约，7 键）：`{"available": bool, "reason": str\|None, "rows": dict, "fetched_at": str\|None, "source": str\|None, "constraint_block": str, "restricted_index": dict}`。`constraint_block` 为构建期渲染的申购限购约束块（`purchase_status.py::build_purchase_constraint_block` 单源：准入四条任一不过 → `""`；行序 = 持仓明细顺序、字段值与单元格同源；`holdings_details` 缺省不传 → `""`——both/basic/What-if 取契约路径块恒空零开销），消费方为 LLM 分析章提示词（`generate_all_llm` 从 `pipeline_data` 提取同一实例 → `llm/prompts_tables.py::_build_prompt_appendix` 统一附录第 4 段，`skeleton` 单点注入，进提示词必进指纹；新闻批量路径由 `_llm_news.py::_fetch_llm_and_news` 同源读取交 `generators_news` 批量 hooks 的提示词与缓存指纹）。`restricted_index` 为受限标的预格式化索引（code → status/limit/limit_text/next_open_text/level，由 `purchase_status.py::build_restricted_index` 经 `_filter_restricted_rows` 单源筛选与格式化、`report/orchestrator.py` 编排层注入；准入不满足 → `{}`，消费方按缺席回退；What-if 路径经 `whatif_operations._purchase_restricted_index` 单点就地构建同名索引）。`rows` 为 `{代码: {purchase_status, redemption_status, next_open_date, daily_limit, min_purchase}}`（0 元/缺失限额在解析层已单点转 `daily_limit=None` → 展示「限额未知」）；由 `fetcher/fund_purchase.py::fetch_fund_purchase_status_cached` 取天天基金全量表（Provider Chain + `purchase_schema` 载荷准入 + 会话复用），`report/purchase_status.py::build_purchase_status_data` 装配。功能开关 `fund_purchase_limit` 默认开（关闭 → None → 列隐藏）；全链失败 → `available=False` 静默隐列（不阻断主链路）。时效分档由 `purchase_status.py::stale_level` 按交易日历计（≤3 正常 / 4~7 展示并标数据陈旧 / >7 显示「—」，宁缺毋错，长假不计入）。单元格文案、口径脚注、列可见判据均单源于 `report/purchase_status.py`（Excel 与 HTML 共用，不发散）。消费方：HTML `report_template.html` 持仓市值明细与持仓分类表条件列（同一 `purchase_status_display` 上下文——cells/level/footnote——明细行取 cells 映射、小计/总计空 td）与 Excel `report/holdings_detail_sheet.py`（市值明细与分类汇总两区块末列追加——明细行渲染、小计/总计留空——+ 区块①下方口径脚注，该行位于两区块之间覆盖两块）；What-if 目标持仓受限提示（`analysis/whatif.py::build_whatif_data` 的 `restricted_index` 形参 → 契约条件键 `feasibility` → Excel 持仓变动明细尾部区块 + HTML⑦申购受限提示节）。
+> `purchase_status_data`（申购限购状态，C19 契约，7 键）：`{"available": bool, "reason": str\|None, "rows": dict, "fetched_at": str\|None, "source": str\|None, "constraint_block": str, "restricted_index": dict}`。`constraint_block` 为构建期渲染的申购限购约束块（`purchase_status.py::build_purchase_constraint_block` 单源：准入四条任一不过 → `""`；行序 = 持仓明细顺序、字段值与单元格同源；`holdings_details` 缺省不传 → `""`——both/basic/What-if 取契约路径块恒空零开销），消费方为 LLM 分析章提示词（`generate_all_llm` 从 `pipeline_data` 提取同一实例 → `llm/prompts_tables.py::_build_prompt_appendix` 统一附录第 4 段，`skeleton` 单点注入，进提示词必进指纹；新闻批量路径由 `_llm_news.py::_fetch_llm_and_news` 同源读取交 `generators_news` 批量 hooks 的提示词与缓存指纹）。`restricted_index` 为受限标的预格式化索引（code → status/limit/limit_text/next_open_text/level，由 `purchase_status.py::build_restricted_index` 经 `_filter_restricted_rows` 单源筛选与格式化、`report/orchestrator.py` 编排层注入；准入不满足 → `{}`，消费方按缺席回退；What-if 路径经 `whatif_operations._purchase_restricted_index` 单点就地构建同名索引）。`rows` 为 `{代码: {purchase_status, redemption_status, next_open_date, daily_limit, min_purchase}}`（0 元/缺失限额在解析层已单点转 `daily_limit=None` → 展示「限额未知」）；由 `fetcher/fund_purchase.py::fetch_fund_purchase_status_cached` 取天天基金全量表（Provider Chain + 形状/值域准入 + 会话复用），`report/purchase_status.py::build_purchase_status_data` 装配。功能开关 `fund_purchase_limit` 默认开（关闭 → None → 列隐藏）；全链失败 → `available=False` 静默隐列（不阻断主链路）。时效分档由 `purchase_status.py::stale_level` 按交易日历计（≤3 正常 / 4~7 展示并标数据陈旧 / >7 显示「—」，宁缺毋错，长假不计入）。单元格文案、口径脚注、列可见判据均单源于 `report/purchase_status.py`（Excel 与 HTML 共用，不发散）。消费方：HTML `report_template.html` 持仓市值明细与持仓分类表条件列（同一 `purchase_status_display` 上下文——cells/level/footnote——明细行取 cells 映射、小计/总计空 td）与 Excel `report/holdings_detail_sheet.py`（市值明细与分类汇总两区块末列追加——明细行渲染、小计/总计留空——+ 区块①下方口径脚注，该行位于两区块之间覆盖两块）；What-if 目标持仓受限提示（`analysis/whatif.py::build_whatif_data` 的 `restricted_index` 形参 → 契约条件键 `feasibility` → Excel 持仓变动明细尾部区块 + HTML⑦申购受限提示节）。
 
 > `style_factor_data`（风格与因子分析，C19 契约，13 键 + 内嵌 `industry_beta` 子键）：主键 `{"available": bool, "status": str, "betas": {factor: float}, "t_stats": {factor: float}, "significant": {factor: bool}, "style_allocation": {factor: float}, "baseline_betas": {factor: float}, "factor_correlations": {pair: float}, "correlation_note": str, "alpha": float, "window": int, "sample_count": int, "stale_factors": list[str]}`。MVP 3 因子（价值/成长/质量），由 `analysis/style_factor_regression.py` 计算、`report/orchestrator.py` 组装。子键 `industry_beta`（行业 Beta，`industry_beta.py::compute_industry_beta_analysis`，功能开关 `industry_beta` 默认关；关闭 → None → 区块隐藏）：`{"available": bool, "exposure": {industry: float}, "index_codes": {industry: str}, "betas": {industry: float}, "t_stats": {industry: float}, "significant": {industry: bool}, "correlations": {industry: float}, "unmapped_industries": list[str]}`——行业暴露占比按持仓市值聚合，行业指数为中证行业指数（`INDUSTRY_INDEX_MAP`），β 复用 `compute_factor_exposure` 单因子 OLS。C7 注册见 §8.3（type=`fund_deep_analysis`、data_flag=`style_factor_data`），计算方案/架构约束/降级分支见 §4.8 风格与因子分析。
 

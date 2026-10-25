@@ -238,6 +238,42 @@ class TestConfigDefaults:
         assert drift.check_config_defaults(doc) == []
 
 
+class TestDatasourceLlmTtl:
+    """`datasource.md` 的 LLM 缓存 TTL 行必须与缓存注册表一致。"""
+
+    def test_correct_rows_pass(self, drift):
+        doc = (
+            "| 全球政经局势 | `llm_global_macro_` | 24h | 持仓类 |\n"
+            "| 智囊团深度复盘 | `llm_expert_review_` | 4h | 持仓类 |\n"
+            "| 财经新闻热点与持仓关联分析（LLM 二次关联） | `llm_news_item_` | 4h | 基础类 |\n"
+            "| 辩论三段 | `llm_debate_pro_` / `llm_debate_con_` / `llm_debate_synthesis_` | 24h | 持仓类 |\n"
+        )
+        assert drift.check_datasource_llm_ttl(doc) == []
+
+    def test_wrong_ttl_reports_file_and_row(self, drift):
+        doc = "| 智囊团深度复盘 | `llm_expert_review_` | 2h | 持仓类 |\n"
+        findings = drift.check_datasource_llm_ttl(doc)
+        assert len(findings) == 1
+        assert "datasource.md" in findings[0] and "llm_expert_review_" in findings[0]
+
+    def test_news_prefix_maps_to_batch_module(self, drift):
+        """`llm_news_item_` 属批量模块（`llm_news_correlation`），前缀反查须命中。"""
+        doc = "| 新闻关联 | `llm_news_item_` | 1h | 基础类 |\n"
+        findings = drift.check_datasource_llm_ttl(doc)
+        assert findings and "llm_news_item_" in findings[0]
+
+    def test_unregistered_prefix_reported(self, drift):
+        doc = "| 不存在 | `llm_not_registered_` | 4h | 持仓类 |\n"
+        findings = drift.check_datasource_llm_ttl(doc)
+        assert findings and "未在缓存注册表登记" in findings[0]
+
+    def test_day_unit_parsed(self, drift):
+        """非小时单位（天）也要正确换算：`1天` 与 24h 等价视为一致，`2天` 报不一致。"""
+        assert drift.check_datasource_llm_ttl("| 自检 | `llm_self_review_` | 1天 | 持仓类 |\n") == []
+        findings = drift.check_datasource_llm_ttl("| 自检 | `llm_self_review_` | 2天 | 持仓类 |\n")
+        assert findings and "llm_self_review_" in findings[0]
+
+
 class TestLlmDefaults:
     def test_correct_row_passes(self, drift):
         doc = "| `expert_review` | 智囊团深度复盘 | 36000 | 120s | 4h（14400s） | 三阶段 |\n"

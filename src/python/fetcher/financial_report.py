@@ -218,7 +218,7 @@ def _fetch_index(symbol: str, doc_types: tuple[str, ...] = ()) -> list[dict[str,
     主源可用时本函数行为与输出逐字不变。
     """
     cache_key = f"{INDEX_PREFIX}{symbol}"
-    cached = cache_get(cache_key, get_ttl("report", cache_key))
+    cached = cache_get(cache_key, get_ttl("report"))
     if cached is not None:
         _mark_used(_index_source_of(cached))
         return cached if isinstance(cached, list) else None
@@ -281,7 +281,7 @@ def _fetch_sections(doc_id: int | str, source: str | None = None) -> list[str] |
     if (source or datasink.SOURCE_ID) != datasink.SOURCE_ID:
         return None
     cache_key = f"{SECTIONS_PREFIX}{doc_id}"
-    cached = cache_get(cache_key, get_ttl("report", cache_key))
+    cached = cache_get(cache_key, get_ttl("report"))
     if isinstance(cached, list):
         return cached
     try:
@@ -352,7 +352,7 @@ def _fetch_document(
         "financial_report",
         provider_map,
         cache_key,
-        get_ttl("report_doc", cache_key),
+        get_ttl("report_doc"),
         fn_kwargs={"doc_id": doc_id, "section": section or None, "source_hint": src, "meta": meta or {}},
         transform=transform_map,
     )

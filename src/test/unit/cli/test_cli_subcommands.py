@@ -464,3 +464,32 @@ class TestHealthHistorySubcommand:
         with patch("src.python.core.perf.summarize_health_history", return_value=[]) as mock_history:
             _handle_health_history(self._args(limit=0))
         assert mock_history.call_args.kwargs["limit"] == 1
+
+
+class TestCheckSourcesOutputChannel:
+    """输出通道纪律：core 只返回文本+退出码，打印与退出码处置归 CLI。"""
+
+    def test_core_returns_text_not_print(self, capsys):
+        from unittest import mock
+
+        from src.python.core import check_sources as cs
+
+        raw = [{"name": "源A", "label": "行情", "ok": True, "latency_ms": 5.0, "message": "正常"}]
+        with mock.patch.object(cs, "run_health_checks", return_value=raw):
+            text, code = cs.collect_check_sources_report()
+        assert "数据源健康检查结果" in text
+        assert code == 0
+        assert capsys.readouterr().out == "", "core 层不得直接打印"
+
+    def test_cli_handler_prints_and_returns_code(self, capsys):
+        from unittest import mock
+
+        from src.python.cli import _handlers
+        from src.python.core import check_sources as cs
+
+        raw = [{"name": "源A", "label": "行情", "ok": False, "latency_ms": 3.0, "message": "HTTP 500"}]
+        with mock.patch.object(cs, "run_health_checks", return_value=raw):
+            code = _handlers._handle_check_sources()
+        out = capsys.readouterr().out
+        assert "数据源健康检查结果" in out and "源A" in out
+        assert code == 2

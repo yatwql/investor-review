@@ -1,4 +1,4 @@
-"""LLM 缓存测试共用设施（输入构造 / 编排调用 / 常量）。
+"""LLM 缓存测试共用构造器（输入 / 编排调用 / 常量；命名遵循 `_<模块>_fixtures.py`）。
 
 四个缓存测试文件（`test_report_sequence_cache` / `test_cache_matrix` /
 `test_cache_real_config` / `test_cache_cost_accounting`）此前各自复制了一份

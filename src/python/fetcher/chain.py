@@ -38,14 +38,11 @@ from src.python.fetcher.chain_config import (
 )
 from src.python.fetcher.chain_diagnostics import FailureDiagnostics, _brief_reason, _mark_provider_used
 from src.python.fetcher.chain_incremental import (
-    _CACHE_PAYLOAD_FIELD,
     _HISTORY_PROVIDER_MAP,
     _call_history_provider,
     _try_providers,
     clear_incremental_cache,
     fetch_with_incremental_fallback,
-    payload_version_current,
-    write_stale_with_version,
 )
 
 
@@ -163,21 +160,21 @@ def fetch_with_fallback(
     Args:
         diagnostics: 可选的失败原因收集器。传入时逐 provider 记录可读失败原因，
             供调用方写入降级事件（「错误即 UX」）；不传则零采集、零开销。
-        cache_validate: 可选的缓存载荷准入判据。缓存条目（含过期降级条目）
-            未通过判据时视为未命中、丢弃重取。用于「载荷语义已变更」的修复：
-            旧条目结构未变但含义已变，仅靠 TTL 会在过期前持续遮蔽修复。
+        cache_validate: 可选的缓存载荷**形状**准入判据（防截断/错位载荷流入展示层）。
+            缓存条目（含过期降级条目）未通过判据时视为未命中、丢弃重取。
+            载荷语义变更由缓存键版本号（``_CACHE_KEY_VERSION``）整体作废，不用逐类型版本字段。
     """
     chain = _get_chain(data_type)
     kwargs = fn_kwargs or {}
     _tag_key = kwargs.get("code") or kwargs.get("doc_id")
     _code_tag = f" [{_tag_key}]" if _tag_key else ""
 
-    # 1) 读缓存（准入判据不符 → 丢弃重取，避免旧语义载荷遮蔽修复）
+    # 1) 读缓存（形状不合 → 丢弃重取）
     cached = cache_get(cache_key, cache_ttl)
     if cached is not None:
         if cache_validate is None or cache_validate(cached):
             return cached
-        logger.info("[%s]%s 缓存载荷语义版本过期，丢弃并重取", data_type, _code_tag)
+        logger.info("[%s]%s 缓存载荷形状不合，丢弃并重取", data_type, _code_tag)
         cache_clear(cache_key)
 
     # 2) 遍历 chain 尝试（熔断委托 registry）
@@ -274,7 +271,7 @@ def fetch_with_fallback(
                 logger.warning("[%s]%s %s 连续失败，本会话后续请求跳过", data_type, _code_tag, provider_name)
         # else: 代码级空结果（API 不识别该代码）→ 不计入熔断计数器
 
-    # 3) 降级：全部 Provider 失败时尝试过期缓存（同样须过准入判据）
+    # 3) 降级：全部 Provider 失败时尝试过期缓存（同样须过形状判据）
     stale = cache_get(cache_key, CACHE_WEEKLY)
     if stale is not None and (cache_validate is None or cache_validate(stale)):
         logger.info("[%s]%s 全部 Provider 不可用，降级使用过期缓存", data_type, _code_tag)
@@ -303,12 +300,9 @@ __all__ = [
     "reset_chain_overrides",
     "reset_provider_skip",
     # 增量合并（chain_incremental）
-    "_CACHE_PAYLOAD_FIELD",
     "_HISTORY_PROVIDER_MAP",
     "_call_history_provider",
     "_try_providers",
     "clear_incremental_cache",
     "fetch_with_incremental_fallback",
-    "payload_version_current",
-    "write_stale_with_version",
 ]

@@ -84,7 +84,7 @@ class TestAssembly:
         """网关的缓存/熔断/降级由 fetch_with_fallback 承担（缓存命中不再发请求）。"""
         calls: list[tuple] = []
         monkeypatch.setattr(fms, "credential_missing", lambda: None)
-        monkeypatch.setattr("src.python.fetcher.market_sentiment.get_ttl", lambda data_type, key: 0.0, raising=False)
+        monkeypatch.setattr("src.python.fetcher.market_sentiment.get_ttl", lambda data_type: 0.0, raising=False)
 
         def _fake_fallback(data_type, fn_map, cache_key, cache_ttl, fn_kwargs=None, **_k):
             calls.append((data_type, fn_map and list(fn_map), cache_key))

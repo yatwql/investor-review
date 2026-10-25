@@ -32,6 +32,7 @@ from src.python.providers.akshare_extras import (
 )
 
 __all__ = [
+    "sector_flow_failure",
     "get_dividend_data",
     "get_profit_forecast",
     "get_profit_forecast_cache_key",
@@ -94,3 +95,10 @@ def get_sector_fund_flow() -> list[dict[str, Any]]:
         行业资金流向列表
     """
     return _get_sector_fund_flow()
+
+
+def sector_flow_failure() -> str:
+    """行业资金流向最近一次失败类型（report/cache 层经此读取，不直连 providers）。"""
+    from src.python.providers.akshare_extras import sector_flow_failure as _impl
+
+    return _impl()

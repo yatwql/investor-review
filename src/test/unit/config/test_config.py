@@ -20,6 +20,7 @@ import os
 import tempfile
 import unittest
 from unittest.mock import patch
+from unittest import mock
 
 from src.python import config as cfg
 from src.python.core.json_comments import strip_json_comments as _strip_json_comments
@@ -261,7 +262,13 @@ class TestInitConfig(unittest.TestCase):
         _orig = {k: _defaults[k] for k in _rel_values}
         try:
             _defaults.update(_rel_values)
-            cfg.init_config()
+            # `init_config` 末尾会按这些路径「确保 llm 配置文件存在」——本用例只验证
+            # 模板写出相对路径，不应在仓库内创建真实的 data/config/llm_*.json。
+            with (
+                mock.patch.object(cfg._core, "_ensure_llm_settings_file"),
+                mock.patch.object(cfg._core, "_ensure_llm_providers_file"),
+            ):
+                cfg.init_config()
         finally:
             _defaults.update(_orig)
         with open(cfg._config_defaults._CONFIG_FILE, encoding="utf-8") as f:

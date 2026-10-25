@@ -43,6 +43,8 @@ from _doc_drift._format import (  # noqa: F401
     _HOURS_ROW,
     _ttl_default,
     check_llm_defaults,
+    _DATASOURCE_LLM_ROW,
+    check_datasource_llm_ttl,
     _TEST_COVERAGE_ROW,
     _COUNT_CELL,
     _COUNT_NAME_ALIAS,
@@ -98,6 +100,7 @@ from _doc_drift._guards import (  # noqa: F401
 )
 from _doc_drift._shared import (  # noqa: F401
     _RELIABILITY_MD,
+    _DATASOURCE_MD,
     _README,
     _MANUALS,
     _MANAGEMENTS,

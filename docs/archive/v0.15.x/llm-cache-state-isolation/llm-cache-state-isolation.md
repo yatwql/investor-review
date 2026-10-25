@@ -104,3 +104,15 @@
 - 第二轮不包含第一轮 degradation/self-review 残留
 - 指纹审计能指出任何仍导致 miss 的真实输入变化
 - 新用例：同进程连续两次报告、稳定数据下缓存命中；状态变化时失效
+
+---
+
+## 实施与验收结论（已完成）
+
+**落地**：报告边界 `report/_run_scope.py`（清本轮降级事件、复位自检载体、取用量基线）；`_usage_delta` 让 perf 按单份报告记账；`fingerprint_components`/`diff_fingerprint_components` 组件级审计（变化定位恒开 INFO）；数据质量块只统计失败事件、不输出次数；预检键与写侧同源（含 provider 后缀）；提示词/模型/精简模式并入指纹；缓存未命中/跳过读 INFO 归因。
+
+**验收**：同一进程连跑三份报告——TTL 收紧后首轮一次性重算，其后两轮 `[LLM 预检] 命中 4/4`、6/6 模块全命中（节省 ≈¥0.12/份），无「指纹组件变化」行、无上一轮 degradation/self_review 残留。
+
+**契约测试**：`test_report_sequence_cache.py`（同输入第二份预检 4/4 命中）、`test_run_scope.py`（边界三件事一次成立 + perf 按报告 delta 记账）、`test_fingerprint_components.py`（组件级变化定位）、`test_cache_matrix.py`（失效场景反例）。
+
+**遗留（设计使然）**：`self_review` 内容寻址——上游任一模块重算即换键，上游重算那一份必须重跑自检。

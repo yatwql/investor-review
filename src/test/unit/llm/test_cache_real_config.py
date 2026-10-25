@@ -24,7 +24,7 @@ from unittest.mock import patch
 
 import pytest
 
-from src.test.unit.llm._cache_helpers import (
+from src.test.unit.llm._cache_fixtures import (
     LLM_REPLY_DEFAULT,
     MODULE_INDEX,
     make_inputs,

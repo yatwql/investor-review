@@ -174,10 +174,10 @@ class TestResultRowRenderingConsistency:
     """结果行符号与统计口径一致（回归：超时行被计入告警却渲染成红色错误）。"""
 
     def _run_cli(self, capsys, raw: list[dict]) -> tuple[int, str]:
+        """core 只返回 (文本, 退出码)；打印由 CLI 层负责。"""
         with mock.patch.object(cs, "run_health_checks", return_value=raw):
-            with pytest.raises(SystemExit) as exc:
-                cs.run_check_sources()
-        return exc.value.code, capsys.readouterr().out
+            text, code = cs.collect_check_sources_report()
+        return code, text
 
     def test_budget_timeout_row_rendered_as_warn(self, capsys):
         """预算超时（消息「超时（预算 Ns）」）→ 行符号为告警、统计计入告警、退出码 1。

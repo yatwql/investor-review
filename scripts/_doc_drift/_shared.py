@@ -47,6 +47,9 @@ _TECHNICAL_MD = _MANAGEMENTS / "technical.md"
 _RELIABILITY_MD = _MANUALS / "datasource-reliability.md"
 
 
+_DATASOURCE_MD = _MANUALS / "datasource.md"
+
+
 _TEST_COVERAGE_MD = _MANAGEMENTS / "test-coverage.md"
 
 

@@ -15,7 +15,7 @@
   - [12] 手续费 = **单档申购费率（天天基金优惠）**，如 ``0.15%`` → 载荷
     ``purchase_fee_rate``（小数 0.0015；``0.00%`` 为已知 0，空/不可解析为未知
     None）。它是 whatif 交易成本申购腿在 F10 优惠档不可得时的单档来源
-    （``table_single``），语义与准入随 :data:`PURCHASE_SCHEMA` 一同演进。
+    （``table_single``），语义演进由缓存键版本号整体作废旧载荷。
 
 稳定性四层保障（设计文档 §3.4，硬约束）中的「载荷准入校验」由
 :func:`purchase_status_payload_is_valid` 承担——写侧（provider 成功后、入缓存前）
@@ -57,8 +57,6 @@ _TIMEOUT = 15.0
 #: 载荷语义版本——写入缓存时随载荷同存，读侧以 :func:`purchase_status_payload_is_valid`
 #: 为准入判据：版本不符即视为未命中、丢弃重取（与 ``rank_schema``/``hold_schema`` 同习语）。
 #: v2（2026-10-06）：新增 ``purchase_fee_rate``（col12 手续费，小数）；v1 旧缓存自动作废。
-PURCHASE_SCHEMA_FIELD = "purchase_schema"
-PURCHASE_SCHEMA = 2
 
 #: 载荷准入的最少行数（实测全量约 2.7 万行，骤降即异常——行数不足判失败走降级）
 MIN_ACCEPT_ROWS = 20_000
@@ -103,7 +101,6 @@ def stamp_purchase_payload(rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
     return {
         "rows": rows,
         "fetched_at": datetime.now(BEIJING_TZ).isoformat(timespec="seconds"),
-        PURCHASE_SCHEMA_FIELD: PURCHASE_SCHEMA,
     }
 
 
@@ -154,13 +151,12 @@ def _fee_percent(text: str) -> float | None:
 
 
 def purchase_status_payload_is_valid(payload: object) -> bool:
-    """载荷准入校验（``cache_validate`` 与写侧 ``validate`` 共用同一判据）。
+    """载荷形状/值域准入校验（写侧 ``validate`` 用；防截断与错位载荷入缓存）。
 
     校验项（设计文档 §3.4-3）：
       1. 可解析且行数 ≥ :data:`MIN_ACCEPT_ROWS`（正常 2.7 万，骤降即异常）；
-      2. 载荷携带语义版本字段 ``purchase_schema`` 且等于当前版本；
-      3. 必需字段齐全（每行六键契约）；
-      4. 值域体检（防位置错位整体误过）：基金代码 100% 为 6 位数字、
+      2. 必需字段齐全（每行六键契约）；
+      3. 值域体检（防位置错位整体误过）：基金代码 100% 为 6 位数字、
          申购/赎回状态 ∈ 已知枚举、日累计限定金额为 None 或非负有限数值、
          下一开放日为空或 ``YYYY-MM-DD``、申购费率为 None 或 [0,1) 有限小数。
 
@@ -168,8 +164,6 @@ def purchase_status_payload_is_valid(payload: object) -> bool:
     损坏/截断的缓存体不得流入展示层）。
     """
     if not isinstance(payload, dict):
-        return False
-    if payload.get(PURCHASE_SCHEMA_FIELD) != PURCHASE_SCHEMA:
         return False
     rows = payload.get("rows")
     if not isinstance(rows, dict) or len(rows) < MIN_ACCEPT_ROWS:

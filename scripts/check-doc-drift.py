@@ -107,6 +107,7 @@ from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc
     _HOW_TO_CONFIG_MD,
     _REPORTS_MD,
     _TUI_MENU_MD,
+    _DATASOURCE_MD,
     _LLM_TECHNICAL_MD,
     _TECHNICAL_MD,
     _TEST_COVERAGE_MD,
@@ -156,6 +157,7 @@ from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc
     _TTL_TABLE_ROW,
     _HOURS_ROW,
     _ttl_default,
+    check_datasource_llm_ttl,
     check_llm_defaults,
     _TEST_COVERAGE_ROW,
     _COUNT_CELL,
@@ -220,6 +222,7 @@ def run_checks(with_test_count: bool = False, docs: dict | None = None) -> list[
     findings += check_switch_default_claims(docs)
     findings += check_config_defaults(docs[_HOW_TO_CONFIG_MD])
     findings += check_llm_defaults(docs[_LLM_TECHNICAL_MD])
+    findings += check_datasource_llm_ttl(docs[_DATASOURCE_MD])
     findings += check_panel_numbering(docs[_TUI_MENU_MD])
     findings += check_menu_blocks({_HOW_TO_START_MD: docs[_HOW_TO_START_MD], _TUI_MENU_MD: docs[_TUI_MENU_MD]})
     findings += check_menu_key_references(docs)

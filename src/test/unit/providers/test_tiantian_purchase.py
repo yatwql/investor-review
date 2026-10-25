@@ -22,8 +22,6 @@ import pytest
 
 from src.python.providers import tiantian_purchase as tp
 from src.python.providers.tiantian_purchase import (
-    PURCHASE_SCHEMA,
-    PURCHASE_SCHEMA_FIELD,
     parse_purchase_table,
     stamp_purchase_payload,
 )
@@ -106,10 +104,9 @@ class TestParsePurchaseTable:
     """parse_purchase_table 真实样本解析 → 契约字段逐项断言。"""
 
     def test_payload_carries_schema_version_and_fetched_at(self):
-        """载荷含 purchase_schema 版本字段与北京时区 fetched_at。"""
+        """载荷含北京时区 fetched_at 与 6 位代码键。"""
         payload = parse_purchase_table(_fixture_text())
         assert payload is not None
-        assert payload[PURCHASE_SCHEMA_FIELD] == PURCHASE_SCHEMA
         fetched = datetime.fromisoformat(payload["fetched_at"])
         assert fetched.tzinfo is not None  # 陈旧阶梯按其与交易日历的距离判定
 
@@ -195,7 +192,6 @@ class TestStampPurchasePayload:
         rows = {"000001": {"purchase_status": "开放申购"}}
         payload = stamp_purchase_payload(rows)
         assert payload["rows"] is rows
-        assert payload[PURCHASE_SCHEMA_FIELD] == PURCHASE_SCHEMA
         assert datetime.fromisoformat(payload["fetched_at"]).tzinfo is not None
 
 
@@ -235,7 +231,6 @@ class TestAkshareBackupParse:
         self._stub_akshare(monkeypatch, df)
         payload = tp.fetch_fund_purchase_table_via_akshare()
         assert payload is not None
-        assert payload[PURCHASE_SCHEMA_FIELD] == PURCHASE_SCHEMA
         assert payload["rows"]["000041"]["daily_limit"] == pytest.approx(10_000.0)
         assert payload["rows"]["000041"]["min_purchase"] == pytest.approx(10.0)
         assert payload["rows"]["000013"]["daily_limit"] is None  # 0 → 限额未知
@@ -293,7 +288,6 @@ class TestDirectFetch:
         monkeypatch.setattr(tp, "make_http_client", lambda **_kwargs: client)
         payload = tp.fetch_fund_purchase_table()
         assert payload is not None
-        assert payload[PURCHASE_SCHEMA_FIELD] == PURCHASE_SCHEMA
         assert "000005" in payload["rows"]
         assert len(client.calls) == 1
         call = client.calls[0]

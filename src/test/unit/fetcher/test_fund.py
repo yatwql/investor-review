@@ -387,57 +387,6 @@ class TestFetchFundRankingsBatch(unittest.TestCase):
         mock_disp.shutdown.assert_not_called()
 
 
-class TestRankCacheAdmission(unittest.TestCase):
-    """排名缓存的语义版本准入（即 `rank_payload_is_current`）。
-
-    回归（实测 040046 残留 155/253）：旧缓存条目结构未变但含义已变，仅靠 24h TTL
-    会在过期前持续遮蔽修复；版本戳准入使旧条目自动作废重取。
-    """
-
-    def _check(self, payload):
-        from src.python.providers.tiantian_ranking import rank_payload_is_current
-
-        return rank_payload_is_current(payload)
-
-    def test_legacy_payload_without_schema_is_rejected(self):
-        """旧载荷（无 rank_schema，即残留 155/253 那一版）→ 拒绝（视为未命中）。"""
-        self.assertFalse(self._check({"rankings": {"同类排名": {"rank": "155", "total": "253"}}}))
-
-    def test_current_payload_is_accepted(self):
-        """当前解析器写出的载荷（带版本戳）→ 接受。"""
-        from src.python.providers.tiantian_ranking import _RANK_SCHEMA, _RANK_SCHEMA_FIELD
-
-        payload = {"rankings": {"同类排名": {"rank": "231", "total": "362", _RANK_SCHEMA_FIELD: _RANK_SCHEMA}}}
-        self.assertTrue(self._check(payload))
-
-    def test_payload_without_rank_data_is_accepted(self):
-        """基金本身无排名数据 → 不拦（拦了会无限重取）。"""
-        self.assertTrue(self._check({"rankings": {}}))
-        self.assertTrue(self._check({"rankings": {"同类排名": "不是 dict"}}))
-
-    def test_non_dict_payload_is_rejected(self):
-        """非 dict（异常缓存形态）→ 拒绝。"""
-        self.assertFalse(self._check(None))
-        self.assertFalse(self._check([1, 2, 3]))
-
-    def test_fetch_passes_validator_to_chain(self):
-        """接线：fetch_fund_rankings 必须把准入判据传给链路（否则版本戳形同虚设）。"""
-        from src.python.fetcher import fund as fund_mod
-        from src.python.providers.tiantian_ranking import rank_payload_is_current
-
-        captured = {}
-
-        def _fake_fetch_with_fallback(data_type, provider_map, cache_key, ttl, **kwargs):
-            captured["data_type"] = data_type
-            captured["cache_validate"] = kwargs.get("cache_validate")
-            return {"rankings": {"同类排名": {"rank": "231", "total": "362"}}}
-
-        with patch.object(fund_mod, "fetch_with_fallback", _fake_fetch_with_fallback):
-            fund_mod.fetch_fund_rankings("040046")
-        self.assertEqual(captured["data_type"], "fund_rank")
-        self.assertIs(captured["cache_validate"], rank_payload_is_current)
-
-
 class TestFetchFundHoldingsBatch(unittest.TestCase):
     """fetch_fund_holdings_batch 批量并行获取。"""
 
@@ -647,7 +596,6 @@ class TestHithinkHoldingsNormalization(unittest.TestCase):
         self.assertEqual(out["holdings"][0], {"name": "华峰测控", "code": "688200", "ratio": 9.53})
         self.assertEqual(out["date"], "2026-06-30")  # end_date_ms → YYYY-MM-DD（Asia/Shanghai）
         self.assertEqual(out["name"], "")  # 上游该端点不提供基金名
-        self.assertEqual(out["hold_schema"], 2)
 
     def test_publish_date_fallback_and_invalid_ts(self):
         from src.python.fetcher.fund import _normalize_hold_payload
@@ -675,7 +623,7 @@ class TestHithinkHoldingsNormalization(unittest.TestCase):
             "holdings": [{"name": "x", "code": "1", "ratio": 1.0}],
         }
         out = _normalize_hold_payload(raw, "天天基金")
-        self.assertEqual({k: v for k, v in out.items() if k != "hold_schema"}, raw)
+        self.assertEqual(out, raw)
 
 
 class TestFundHoldProviderChain(unittest.TestCase):
@@ -722,74 +670,36 @@ class TestFundHoldProviderChain(unittest.TestCase):
         self.assertEqual([c[0] for c in calls], ["tiantian", "hithink"])
         self.assertEqual(out["holdings"][0]["name"], "阳光电源")
         self.assertEqual(out["date"], "2026-06-30")
-        self.assertEqual(out["hold_schema"], 2)
 
 
-class TestHoldPayloadSchema(unittest.TestCase):
-    """``fund_hold_*`` 缓存载荷语义版本（``hold_schema``）——修复自失效防线。
+class TestHoldPayloadShapeAdmission(unittest.TestCase):
+    """``fund_hold_*`` 载荷的**形状**准入（版本字段已随缓存键版本整体作废机制移除）。
 
-    回归场景（用户报障）：取数修复发布后，另一台机器仍报「QDII 持仓不可用」——
-    发布时写下的 ``fund_hold_*`` 条目没有 ``feeder_target_code``，当前实现把未穿透的
-    快照当作普通持仓读取、直接撞上报告层时效闸门。TTL 为 7 天，条目过期前修复被全程遮蔽。本类验证：旧语义载荷一律被视为未命中并重取。
+    载荷语义变更由缓存键版本号（``_CACHE_KEY_VERSION``）整体作废旧条目，
+    不再为单个数据类型维护 ``*_schema`` 字段；此处只锁「形状不合即视为未命中」。
     """
 
-    def test_stamp_adds_schema_field(self):
-        """provider 产出经 transform 盖章后带版本字段（天天基金形态原样透传）。"""
-        from src.python.fetcher.fund import (
-            _HOLD_PAYLOAD_SCHEMA,
-            _HOLD_PAYLOAD_SCHEMA_FIELD,
-            _normalize_hold_payload,
-        )
+    def test_normalize_does_not_stamp_schema(self):
+        """归一化只产出规范契约，不再盖版本字段。"""
+        from src.python.fetcher.fund import _normalize_hold_payload
 
-        stamped = _normalize_hold_payload(
+        out = _normalize_hold_payload(
             {"code": "016055", "name": "某基金", "date": "2026-03-31", "holdings": []}, "天天基金"
         )
-        self.assertEqual(stamped[_HOLD_PAYLOAD_SCHEMA_FIELD], _HOLD_PAYLOAD_SCHEMA)
-        self.assertEqual(stamped["code"], "016055")
-        self.assertEqual(stamped["date"], "2026-03-31")
+        self.assertNotIn("hold_schema", out)
+        self.assertEqual(out["code"], "016055")
 
-    def test_current_payload_detection(self):
-        """带当前版本字段才准入；旧载荷与空值均拒收。"""
-        from src.python.fetcher.fund import (
-            _HOLD_PAYLOAD_SCHEMA,
-            _HOLD_PAYLOAD_SCHEMA_FIELD,
-            _is_current_hold_payload,
-        )
+    def test_shape_admission(self):
+        """含 ``holdings`` 列表的 dict 才准入；空壳/非 dict 一律拒收。"""
+        from src.python.fetcher.fund import _is_current_hold_payload
 
-        self.assertTrue(_is_current_hold_payload({_HOLD_PAYLOAD_SCHEMA_FIELD: _HOLD_PAYLOAD_SCHEMA}))
-        self.assertFalse(_is_current_hold_payload({"code": "016055", "holdings": []}))
-        self.assertFalse(_is_current_hold_payload({_HOLD_PAYLOAD_SCHEMA_FIELD: _HOLD_PAYLOAD_SCHEMA - 1}))
+        self.assertTrue(_is_current_hold_payload({"code": "016055", "holdings": []}))
+        self.assertFalse(_is_current_hold_payload({"code": "016055"}))
+        self.assertFalse(_is_current_hold_payload({"holdings": "broken"}))
         self.assertFalse(_is_current_hold_payload(None))
 
-    def test_legacy_cached_payload_refetched_and_stamped(self):
-        """旧语义缓存条目 → 丢弃重取，新结果带版本字段。"""
-        from src.python.fetcher import fund as fm
-
-        legacy = {
-            "code": "016055",
-            "name": "某联接基金",
-            "date": "2023-09-30",
-            "holdings": [{"name": "英伟达", "code": "NVDA", "ratio": 7.0}],
-        }
-        fresh = {"code": "016055", "name": "某联接基金", "date": "", "holdings": [], "feeder_target_code": "513390"}
-        provider = MagicMock(return_value=fresh)
-
-        with (
-            patch("src.python.fetcher.chain.cache_get", return_value=legacy),
-            patch("src.python.fetcher.chain.cache_set"),
-            patch("src.python.fetcher.chain.cache_clear") as mock_clear,
-            patch.dict(fm._FUND_HOLD_PROVIDERS, {"tiantian": ("天天基金", provider)}),
-            patch("src.python.fetcher.fund.with_feeder_penetration", side_effect=lambda _c, r: r),
-        ):
-            result = fm.fetch_fund_holdings("016055")
-
-        mock_clear.assert_called_once_with("fund_hold_016055")
-        provider.assert_called_once()
-        self.assertEqual(result["hold_schema"], fm._HOLD_PAYLOAD_SCHEMA)
-        self.assertEqual(result["feeder_target_code"], "513390")
-
-    def test_current_cached_payload_returns_without_refetch(self):
-        """版本匹配的缓存条目 → 直接命中，不调 provider。"""
+    def test_shape_ok_cached_payload_returns_without_refetch(self):
+        """形状合规的缓存条目 → 直接命中，不调 provider。"""
         from src.python.fetcher import fund as fm
 
         cached = {
@@ -797,25 +707,22 @@ class TestHoldPayloadSchema(unittest.TestCase):
             "name": "某联接基金",
             "date": "2026-06-30",
             "holdings": [{"name": "苹果", "code": "AAPL", "ratio": 9.0}],
-            "hold_schema": fm._HOLD_PAYLOAD_SCHEMA,
         }
         provider = MagicMock(return_value={"code": "016055", "holdings": []})
 
         with (
             patch("src.python.fetcher.chain.cache_get", return_value=cached),
-            patch("src.python.fetcher.chain.cache_clear") as mock_clear,
             patch.dict(fm._FUND_HOLD_PROVIDERS, {"tiantian": ("天天基金", provider)}),
             patch("src.python.fetcher.fund.with_feeder_penetration", side_effect=lambda _c, r: r),
         ):
             result = fm.fetch_fund_holdings("016055")
 
         provider.assert_not_called()
-        mock_clear.assert_not_called()
         self.assertEqual(result["holdings"], cached["holdings"])
 
     @patch("src.python.fetcher.batch.BatchDispatcher")
-    def test_batch_cache_check_rejects_legacy_payload(self, mock_dispatcher_cls):
-        """批量预检同样拒收旧语义载荷，迫使任务执行走重取路径。"""
+    def test_batch_cache_check_uses_shape(self, mock_dispatcher_cls):
+        """批量预检按形状判定：空壳载荷视为未命中，合规载荷直接返回。"""
         from src.python.fetcher import fund as fm
 
         captured: dict = {}
@@ -828,12 +735,11 @@ class TestHoldPayloadSchema(unittest.TestCase):
         mock_disp.execute_with_cache_check.side_effect = _fake_exec
         mock_dispatcher_cls.return_value = mock_disp
 
-        legacy = {"code": "016055", "date": "2023-09-30", "holdings": [{"name": "旧", "ratio": 1.0}]}
-        with patch("src.python.fetcher.fund.cache_get", return_value=legacy):
+        with patch("src.python.fetcher.fund.cache_get", return_value={"code": "016055"}):
             fm.fetch_fund_holdings_batch(["016055"])
             self.assertIsNone(captured["fn"]("fund_hold_016055"))
 
-        current = {"code": "016055", "holdings": [], "hold_schema": fm._HOLD_PAYLOAD_SCHEMA}
+        current = {"code": "016055", "holdings": []}
         with patch("src.python.fetcher.fund.cache_get", return_value=current):
             fm.fetch_fund_holdings_batch(["016055"])
             self.assertEqual(captured["fn"]("fund_hold_016055"), current)

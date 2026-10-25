@@ -36,6 +36,19 @@ def interval_delay(interval: float, jitter_ratio: float = DEFAULT_JITTER_RATIO) 
     return float(interval) + random.uniform(0.0, interval * ratio)
 
 
+def wait_interval(interval: float, jitter_ratio: float = DEFAULT_JITTER_RATIO) -> float:
+    """按间隔算式**等待一次**（429/限速退避窗口的唯一实现），返回实际等待秒数。
+
+    与 :meth:`RateLimiter.acquire_interval` 的分工：后者保证「同一端点两次请求之间的
+    最小间隔」（依赖上次调用时刻），本函数表达的是「此刻必须停多久」——典型场景是
+    HTTP 429 后按限速窗口重试一次。两者共用同一抖动算式，禁止调用方自写「间隔 + 睡眠」。
+    """
+    delay = interval_delay(interval, jitter_ratio)
+    if delay > 0:
+        time.sleep(delay)
+    return delay
+
+
 class RateLimiter:
     """Provider/端点级别请求间隔控制器。
 

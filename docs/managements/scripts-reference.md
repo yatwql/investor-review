@@ -34,7 +34,7 @@
 | `check-task-numbering.py` | 质量 | 任务编号（plan-/rf-）全局一致性检查，防新增编号与历史归档冲突 |
 | `check-task-numbering-hook.py` | 质量 | Claude Code PostToolUse hook——编辑编号管理文档后自动校验编号一致性 |
 | `check-semantic-index.py` | 文档 | 功能语义命名表正反向一致性校验（功能开关注册表表外键 / 僵尸条目 / 合并章 key 缺失） |
-| `check-doc-drift.py` | 文档 | 文档与实现一致性校验（章节表/章节数量、开关表/分组计数/默认值断言、配置与 LLM 默认值表、TUI 面板编号、目录树、项目统计表；`--sync` 自动回写统计快照） |
+| `check-doc-drift.py` | 文档 | 文档与实现一致性校验（章节表/章节数量、开关表/分组计数/默认值断言、配置与 LLM 默认值表、`datasource.md` 的 LLM 缓存 TTL 行（按前缀反查注册表）、TUI 面板编号、目录树、项目统计表；`--sync` 自动回写统计快照） |
 | `check-doc-links.py` | 文档 | 文档链接与结构一致性校验（死链/死锚点/重复标题/层级/编号序列/§引用） |
 | `check-import-surface.py` | 质量 | 导入面契约观察（compat-comment 兼容注释 / private-all 私有 `__all__` / cross-private 跨包私有导入 / dynamic-target 动态导入字面量；例外表 `_import_surface_exceptions.json`，观察期未入钩子与 CI） |
 | `check-file-length.py` | 质量 | 单文件行数红线守护（主程序/脚本 >1000 行 / 测试 >1200 行；豁免登记与 review-findings 挂账同步，`-v` 输出可选优化区间清单与「行数 × 近 90 天改动」优先级，供登记表派生） |

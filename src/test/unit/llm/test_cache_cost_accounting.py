@@ -15,7 +15,7 @@ from unittest.mock import patch
 
 import pytest
 
-from src.test.unit.llm._cache_helpers import (
+from src.test.unit.llm._cache_fixtures import (
     LLM_REPLY_PAID,
     make_inputs,
     run_generate_all_llm,
@@ -25,7 +25,7 @@ pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.unit_core]
 
 
 def _run(inputs: dict, *, reply=None, patch_call: bool = True):
-    from src.test.unit.llm._cache_helpers import LLM_REPLY_PAID
+    from src.test.unit.llm._cache_fixtures import LLM_REPLY_PAID
 
     return run_generate_all_llm(
         inputs,

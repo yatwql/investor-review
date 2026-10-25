@@ -44,7 +44,6 @@ from ._feature_registry import (
     DOMAIN_PRESENTATION_MECHANISM,
     DOMAIN_REPORT_CONTENT,
     EXPERIMENT_ALL,
-    GROUP_ANALYSIS,
     GROUP_CHAPTER_OPTIONS,
     GROUP_DOMAIN,
     GROUP_EVENT_SUMMARY,
@@ -109,7 +108,7 @@ FEATURES_FILE = os.path.join(PROJECT_ROOT, "data/config/features.json")
 #   - 基础报告章节（基金深度分析/市场新闻/组合演进/行动建议）→ config.json 的 enable_*
 #   - 匿名化模式 → config.json 的 anonymization.mode
 # 注：报告增强子模块（数据质量/行业Beta/候选比较/成本流水/估值分位/市场温度/财报摘要/
-# 财务指标）登记于本注册表 GROUP_ANALYSIS / GROUP_STANDALONE 分组，取值落 features.json。
+# 财务指标）登记于本注册表 GROUP_FUND_STYLE / GROUP_STANDALONE 分组，取值落 features.json。
 # 声明了却无人读取的开关会让用户照文档配置后毫无效果（本注册表曾含 16 项此类
 # 陈旧开关，已全部移除）。新增开关必须同时接线到消费点，回归测试见
 # test_features.py::TestRegistryLiveness。
@@ -328,7 +327,7 @@ __all__ = [
     "GROUP_PORTFOLIO",
     "PANEL_GROUPS",
     "FEATURE_FLAGS",
-    "GROUP_ANALYSIS",
+    "GROUP_FUND_STYLE",
     "GROUP_LABELS",
     "GROUP_MECHANISM",
     "GROUP_ORDER",

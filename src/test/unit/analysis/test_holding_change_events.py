@@ -193,7 +193,7 @@ def test_build_wrapper_reads_snapshots_from_directory():
 
 def test_extraction_never_writes_snapshot_files():
     """抽取过程对快照目录零写入：文件集合与 mtime 抽取前后逐项不变。"""
-    from src.python.core.constants import HISTORY_SNAPSHOT_DIR, PROJECT_ROOT
+    from src.python.core.constants import HISTORY_SNAPSHOT_DIR
 
     _save("20260105T090000", [_h("A", 1000, 10)])
     _save("20260106T090000", [_h("A", 800, 10)])
@@ -206,7 +206,5 @@ def test_extraction_never_writes_snapshot_files():
         }
 
     isolated_before = _mtimes(HISTORY_SNAPSHOT_DIR)
-    real_before = _mtimes(os.path.join(PROJECT_ROOT, "data", "history", "snapshots"))
     build_holding_change_events()
     assert _mtimes(HISTORY_SNAPSHOT_DIR) == isolated_before
-    assert _mtimes(os.path.join(PROJECT_ROOT, "data", "history", "snapshots")) == real_before

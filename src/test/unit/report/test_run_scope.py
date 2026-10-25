@@ -38,6 +38,28 @@ class TestBeginReportClearsEvents:
 
 
 class TestStartReportRun:
+    def test_boundary_clears_events_and_carrier_keeps_cross_facts(self, tmp_path):
+        """一次报告边界同时成立：事件清空 + 自检载体复位 + 跨报告事实保留。
+
+        这三件事此前分散在三条用例里各自验证；此处按**真实入口** `start_report_run()`
+        一次性断言，防止将来只做到其中一两件（例如又在报告边界里重置指纹审计基线）。
+        """
+        from src.python.llm.self_review import get_self_review_block, set_self_review_block
+        from src.python.report._run_scope import start_report_run
+
+        tracker = ds.get_tracker()
+        tracker.clear_log()
+        tracker.record("price_a", "T2", success=False, failure_type="unreachable")
+        counts_before = dict(tracker.get_counts("price_a"))
+        set_self_review_block("<p>上一轮自检</p>")
+
+        baseline = start_report_run()
+
+        assert tracker.get_log() == [], "上一轮降级事件不得进入本轮"
+        assert tracker.get_counts("price_a") == counts_before, "失败计数属跨报告事实"
+        assert get_self_review_block() is None, "上一轮自检区块不得残留"
+        assert isinstance(baseline, dict), "必须返回用量基线（供收尾算 delta）"
+
     def test_resets_self_review_carrier(self):
         from src.python.llm.self_review import get_self_review_block, set_self_review_block
         from src.python.report._run_scope import start_report_run
@@ -92,6 +114,41 @@ class TestUsageDelta:
         assert delta["call_count"] == 2
         assert delta["total_cost"] == pytest.approx(0.4)
         assert delta["per_module"]["expert_review"]["input_tokens"] == 60
+
+    def test_record_llm_context_records_per_report_delta(self):
+        """perf 里记的是**本份报告**的调用数与费用，不是会话累计（报告级缓存隔离的验收项）。
+
+        会话累计仍要跨报告累计（TUI 退出汇总用），故只能在此处取 delta 写入 perf；
+        直接写累计会让第二份报告看起来「又花了第一份的钱」。
+        """
+        from src.python.report._generation_shared import _record_llm_context
+        from src.python.llm import session as session_mod
+
+        baseline = {"input_tokens": 1000, "output_tokens": 500, "call_count": 4, "total_cost": 0.5, "per_module": {}}
+        current = {
+            "input_tokens": 1200,
+            "output_tokens": 600,
+            "cache_hit_tokens": 0,
+            "call_count": 5,
+            "total_cost": 0.62,
+            "per_module": {"expert_review": {"input_tokens": 200, "output_tokens": 100, "cost": 0.12}},
+        }
+        recorded: dict = {}
+
+        class _Perf:
+            def set_llm_context(self, ctx):
+                recorded.update(ctx or {})
+
+        original = session_mod.get_session_usage
+        session_mod.get_session_usage = lambda: dict(current)
+        try:
+            _record_llm_context(_Perf(), baseline=baseline)
+        finally:
+            session_mod.get_session_usage = original
+
+        assert recorded["call_count"] == 1, "调用数必须是本份报告的增量"
+        assert recorded["total_cost"] == pytest.approx(0.12)
+        assert recorded["modules"]["expert_review"]["input_tokens"] == 200
 
     def test_no_baseline_returns_current(self):
         current = {"input_tokens": 10, "per_module": {}}

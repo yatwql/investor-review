@@ -500,13 +500,6 @@ class TestParseRankEntry(unittest.TestCase):
         result = _parse_rank_entry(js)
         self.assertEqual((result["rank"], result["total"]), ("231", "362"))
 
-    def test_payload_carries_schema_version(self):
-        """载荷带语义版本戳（供缓存准入判据；旧缓存无此字段 → 自动作废重取）。"""
-        from src.python.providers.tiantian_ranking import _RANK_SCHEMA, _RANK_SCHEMA_FIELD
-
-        result = _parse_rank_entry("var nothing = 1;")
-        self.assertEqual(result[_RANK_SCHEMA_FIELD], _RANK_SCHEMA)
-
 
 class TestCalcRatingFromEntry(unittest.TestCase):
     """_calc_rating_from_entry — 5 级评级 + 类型差异化阈值。"""
