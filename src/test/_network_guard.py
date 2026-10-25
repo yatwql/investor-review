@@ -145,7 +145,7 @@ def apply_offline_stubs(monkeypatch: Any) -> None:
 
     from src.python.core import retry, throttle, trading_calendar
     from src.python.fetcher import chain
-    from src.python.providers import akshare_extras, cninfo, datasink
+    from src.python.providers import akshare_extras
 
     akshare_stub = _OfflineAkshareModule()
 
@@ -172,8 +172,9 @@ def apply_offline_stubs(monkeypatch: Any) -> None:
     # 5. 等待型 sleep 接管（与上面链路口径一致：即时失败后不再白等）——
     #    ``core.throttle`` 的间隔节流（LLM 端点 pacing / provider qps / 批量调度）、
     #    ``core.retry`` 的多策略退避（provider 连接重试、K 线/财务多期重试等，
-    #    含函数内就地构造的策略，无需逐个登记）、``cninfo`` / ``datasink`` 的 429
-    #    限速重试窗口（两处自用模块级 ``time.sleep``）。
+    #    含函数内就地构造的策略，无需逐个登记）、provider 的 429 限速重试窗口
+    #    （``cninfo`` / ``datasink`` 已统一经 ``throttle.wait_interval`` 等待，故只需接管
+    #    ``throttle.time``；provider 模块不再自持 ``time.sleep``）。
     no_wait = _NoWaitClock()
-    for module in (throttle, retry, cninfo, datasink):
+    for module in (throttle, retry):
         monkeypatch.setattr(module, "time", no_wait)

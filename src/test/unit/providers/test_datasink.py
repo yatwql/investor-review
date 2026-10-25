@@ -392,12 +392,16 @@ class TestEmptyReasonSelfReport:
 
 
 class TestRateLimitWaitFormula:
-    """429 退避等待经 interval_delay 唯一算式（间隔节流唯一原语约束）。"""
+    """429 退避等待经 `core.throttle.wait_interval` 唯一原语（间隔节流）。"""
 
-    def test_429_wait_goes_through_interval_delay(self, monkeypatch):
+    def test_429_wait_goes_through_throttle_primitive(self, monkeypatch):
         waits: list[float] = []
-        monkeypatch.setattr(ds, "interval_delay", lambda d: d)  # 算式原样透传，便于断言
-        monkeypatch.setattr(ds.time, "sleep", lambda s: waits.append(s))
+
+        def _wait(interval: float, jitter_ratio: float = 0.0) -> float:
+            waits.append(interval)
+            return interval
+
+        monkeypatch.setattr(ds, "wait_interval", _wait)
 
         counter = [0]
 

@@ -9,6 +9,8 @@
 
 ## [0.15.7-dev] - 开发中（未发布）
 
+- **架构约束整改（重试/节流原语、Provider Chain 边界、代码判定中心化）**：① LLM 全链失败重试改走 `core.retry.retry_transient`（不再分支内 `time.sleep` 自建重试）；② 新增 `core.throttle.wait_interval` 作为「429/限速窗口一次性等待」唯一原语，cninfo/datasink 的 `interval_delay + sleep` 改经该原语；③ 行业资金流向失败状态访问器下沉 `fetcher/akshare.py`，report/cache 层不再直连 `providers`；④ A 股指数交易所判定收敛为 `code_symbols.index_exchange_of`，同花顺 provider 内自建的 399/932 判定删除。
+
 - **删除旧结构与旧接口的兼容层**（不保留向后兼容）：① `get_ttl` 去掉历史 `key` 参数（30 处调用点同步）；② 删除历史序列的「载荷语义版本戳」闸门（`_payload_ver` / `write_stale_with_version` / `payload_version_current`）；③ **缓存键版本 `v3`→`v4`**，整体作废旧缓存，替代逐载荷 `rank_schema`/`hold_schema`/`purchase_schema`/`fee_schema` 字段与 `rank_payload_is_current` 判据（排名/持仓归一化不再盖版本字段）；申购/费率的读侧**形状**准准入（防截断载荷）保留；④ 功能开关注册表旧名别名 `GROUP_ANALYSIS` 统一为 `GROUP_FUND_STYLE`；⑤ 删除 `fetcher/batch` 对旧 registry 对象的 duck-typing 守卫；⑥ 清理 `code_symbols`/`datasink` 注释中「`code_utils` 仍转出派生符号」的过期兼容声明。
 
 - **新闻去重比较成本下降**（rf-872）：比较串与字符多重集按标题缓存，并先用字符多重集上界跳过不可能命中的标题对（不再为每个远低门槛的对构造两个 `SequenceMatcher`）；判定结果不变，基准语料约 1.17×。

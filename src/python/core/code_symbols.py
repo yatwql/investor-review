@@ -166,6 +166,23 @@ def get_index_exchange_prefix(code: str) -> str:
     return ""
 
 
+def index_exchange_of(code: str) -> str:
+    """A 股指数代码 → 交易所（``"sh"`` / ``"sz"`` / ``""``）——唯一判定点。
+
+    判据：显式前缀优先（``sh``/``sz``）；裸 6 位码按段归属——``399``/``932`` 属深市，
+    其余 A 股指数（``000``/``930`` 等）归沪市。该规则只在本模块声明；provider 侧
+    一律调用本函数，不得自建段前缀表。
+    """
+    raw = (code or "").strip().lower()
+    prefix = get_index_exchange_prefix(raw)
+    if prefix:
+        return prefix
+    digits = raw
+    if not digits.isdigit() or len(digits) != 6:
+        return ""
+    return "sz" if digits.startswith(("399", "932")) else "sh"
+
+
 def get_push2_secid(code: str) -> str:
     """生成东方财富 push2 API 所需的 secid 参数。
 

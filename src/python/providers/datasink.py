@@ -28,7 +28,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import time
 import os
 import threading
 from datetime import date
@@ -39,7 +38,7 @@ from src.python.cache import set as cache_set
 from src.python.core.atomic_write import write_json_atomic
 from src.python.core.constants import PROJECT_ROOT
 from src.python.core.retry import STRATEGY_FIXED, RetryPolicy
-from src.python.core.throttle import interval_delay  # 间隔+抖动唯一算式
+from src.python.core.throttle import wait_interval  # 间隔+抖动唯一算式
 from src.python.providers.utils import set_last_reason, with_connect_retry
 from src.python.core.datasource_credential import (
     DEFAULT_DATA_KEY_FILE,
@@ -285,9 +284,8 @@ def _request(path: str, params: dict[str, Any]) -> dict[str, Any] | None:
         return None
     if resp.status_code == 429:
         # 限速：等待一个限速窗口后**重试一次**（免费档 3 请求/秒，并发路径下仍可能触顶）
-        delay = interval_delay(_RATE_LIMIT_POLICY.delay_for(1))  # 等待算式统一走 interval 原语
+        delay = wait_interval(_RATE_LIMIT_POLICY.delay_for(1))
         logger.warning("[datasink] 触发限速（HTTP 429），%.1fs 后重试一次", delay)
-        time.sleep(delay)
         resp = _get_with_transient_retry(path, query)
         if resp.status_code != 200:
             logger.warning("[datasink] 重试仍失败（HTTP %d），跳过 %s", resp.status_code, path)

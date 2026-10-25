@@ -356,7 +356,7 @@ def to_index_thscode(code: str) -> str:
         thscode；无法映射（非指数代码 / 美股指数）返回空串。
     """
     from src.python.core.code_utils import is_index_code, is_us_index_code
-    from src.python.core.code_symbols import get_index_exchange_prefix
+    from src.python.core.code_symbols import get_index_exchange_prefix, index_exchange_of
 
     raw = (code or "").strip().lower()
     if not raw or is_us_index_code(raw) or not is_index_code(raw):
@@ -365,9 +365,8 @@ def to_index_thscode(code: str) -> str:
     digits = raw[len(prefix) :] if prefix else raw
     if not digits.isdigit() or len(digits) != 6:
         return ""
-    if prefix == "sz" or (not prefix and digits.startswith(("399", "932"))):
-        return f"{digits}.SZ"
-    return f"{digits}.SH"
+    exchange = index_exchange_of(raw)
+    return f"{digits}.{'SZ' if exchange == 'sz' else 'SH'}"
 
 
 # ── A 股：财务报表（三张合并报表；指标由报表派生，见 analysis/financial_statement_derive.py）──

@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 
 from src.python.cache import get as cache_get  # noqa: F401
 from src.python.cache import set as cache_set
+from src.python.core.retry import STRATEGY_FIXED, RetryPolicy, retry_transient
 from src.python.config import get_llm_config
 from src.python.llm.api import call_llm
 from src.python.llm.api_base import (
@@ -346,19 +347,35 @@ def _execute_llm_with_finalize(
             res = raw_filter_fn(res)
         return res, usg, p_info, elapsed
 
-    result, usage, provider_info, _duration = _attempt_once()
-    if not result:
-        # 瞬时故障（网络/超时/接口异常）全链路失败后，延迟整链重试一次：全挂通常由
-        # 出口网络抖动或端点瞬时故障引发，固定窗口后再试可自愈；配额耗尽/熔断中
-        # 属终态（窗口滚动/冷却未到），重试无益，不进入此分支。
-        _fail_reason = _get_last_llm_failure()
-        if _fail_reason in {FAIL_REASON_NETWORK_ERROR, FAIL_REASON_TIMEOUT, FAIL_REASON_API_ERROR}:
-            delay = float(llm_config.get("llm_full_fail_retry_delay", 30) or 0)
-            if delay > 0:
-                logger.warning("LLM 调用全链路失败（%s），%.0fs 后重试 1 次: %s", _fail_reason, delay, cache_key)
-                time.sleep(delay)
+    # 瞬时故障（网络/超时/接口异常）全链路失败后，延迟整链重试一次：全挂通常由出口网络
+    # 抖动或端点瞬时故障引发，固定窗口后再试可自愈。配额耗尽/熔断中属终态（窗口滚动/
+    # 冷却未到），重试无益 —— 用 attempts=1 表达「不重试」，避免分支里各写一遍 sleep。
+    _fail_reason = _get_last_llm_failure()
+    _retryable = _fail_reason in {FAIL_REASON_NETWORK_ERROR, FAIL_REASON_TIMEOUT, FAIL_REASON_API_ERROR}
+    _delay = float(llm_config.get("llm_full_fail_retry_delay", 30) or 0) if _retryable else 0.0
+    _policy = RetryPolicy(
+        attempts=2 if _retryable else 1,
+        strategy=STRATEGY_FIXED,
+        base_backoff=max(_delay, 0.0),
+    )
+    _attempts = {"n": 0}
+
+    def _attempt_with_retry() -> tuple:
+        _attempts["n"] += 1
+        if _attempts["n"] > 1:
             clear_last_llm_failure()
-            result, usage, provider_info, _duration = _attempt_once()
+        return _attempt_once()
+
+    def _on_retry(_failed: int, delay: float, _exc: BaseException | None) -> None:
+        logger.warning("LLM 调用全链路失败（%s），%.0fs 后重试 1 次: %s", _fail_reason, delay, cache_key)
+
+    result, usage, provider_info, _duration = retry_transient(
+        _attempt_with_retry,
+        policy=_policy,
+        retry_on=lambda _exc: False,
+        retry_if_result=lambda attempt_result: not attempt_result[0],
+        on_retry=_on_retry,
+    )
 
     if result:
         provider_name = provider_info.get("name") if provider_info else None

@@ -125,3 +125,33 @@ class TestArchitectureOwnership:
             source = inspect.getsource(module)
             assert "from src.python.core.throttle import RateLimiter" in source
             assert "from src.python.fetcher.batch import RateLimiter" not in source
+
+
+class TestWaitIntervalPrimitive:
+    """`wait_interval`：一次性间隔等待的唯一原语（429/限速窗口场景）。"""
+
+    def test_waits_and_returns_delay(self, monkeypatch):
+        from src.python.core import throttle
+
+        waited: list[float] = []
+        monkeypatch.setattr(throttle.time, "sleep", lambda s: waited.append(s))
+        got = throttle.wait_interval(2.0, jitter_ratio=0)
+        assert got == 2.0
+        assert waited == [2.0]
+
+    def test_zero_interval_does_not_sleep(self, monkeypatch):
+        from src.python.core import throttle
+
+        waited: list[float] = []
+        monkeypatch.setattr(throttle.time, "sleep", lambda s: waited.append(s))
+        assert throttle.wait_interval(0.0) == 0.0
+        assert waited == []
+
+    def test_jitter_ratio_applied(self, monkeypatch):
+        from src.python.core import throttle
+
+        waited: list[float] = []
+        monkeypatch.setattr(throttle.time, "sleep", lambda s: waited.append(s))
+        got = throttle.wait_interval(1.0, jitter_ratio=0.5)
+        assert 1.0 <= got <= 1.5
+        assert waited == [got]
