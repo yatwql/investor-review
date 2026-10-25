@@ -18,10 +18,10 @@
 | 测试用例 | — | — | 12,323 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 13 | 6,399 | 含 README.md（211 行）；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 12 | 6,181 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 196 | 68,809 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 6 + archive md 160），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 13,579 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
-| ├ archive/ | 版本归档 | 178 | 54,595 | 各版本 changelog/plan/review-findings 与设计文档归档（157 md 50,492 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
-| ├ plan/ | 中间设计文件 | 4 | ~542 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + 跨模块导入面重命名分析 |
+| 项目文档 | Markdown | 196 | 68,810 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 6 + archive md 160），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 13,580 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| ├ archive/ | 版本归档 | 179 | 54,638 | 各版本 changelog/plan/review-findings 与设计文档归档（157 md 50,492 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
+| ├ plan/ | 中间设计文件 | 3 | ~499 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + 跨模块导入面重命名分析 |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
 
 ## 版本演进对照（最初版本 → 最新发布 → 当前开发版）
@@ -1757,13 +1757,14 @@ investor-review/
 │   │       ├── tui-display-modes/           # TUI 显示模式统一完成归档（行型/分组/提示/开关状态）
 │   │       │   ├── tui-display-modes.md     # 设计定稿与收口记录（状态唯一实现/关闭恒红/ANSI 截断）
 │   │       │   ├── import-surface-rename.md # 跨模块导入面重命名分析定稿（兼容转发→唯一 owner；P0~P4 完成）
+│   │       ├── pricing-native-currency/     # 定价按币种计价完成归档（原生币种展示/分组聚合/预算内部汇率）
+│   │       │   └── pricing-native-currency.md # 设计定稿与验收（币种桶/format_costs/代码内无展示汇率）
 │   │       ├── web-browser-verification/    # 设计文档归档（任务完成后由发布归档迁入）
 │   │           └── web-browser-verification.md # 该文档的完整设计内容（迁档前位于在办设计目录）
 │   └── plan/                          #   中间设计文件（在办设计文档，文档扁平存放、原型就近建子目录）；完成后迁入对应版本的归档子目录
 │       ├── jev-news-judgment-evaluation.md # 判定迁移的对照评测方案（三方对照/语料冻结/预注册阈值与四类判定）
 │       ├── jev-news-judgment-design.md # 判定通道接入设计（独立于对话链的类型化通道/模板理由/降级矩阵；待评测通过后实施）
 │       ├── decision-reflection-design.md # 决策跨期反思闭环设计（可结算决策账本/结算器/反思回灌与回滚）
-│       └── pricing-native-currency.md # 定价按官方币种原样计价（多币种分组展示、预算内部汇率）
 │
 ├── CLAUDE.md                         # AI 编程助手指引
 ├── README.md                         # 用户文档总入口（三渠道交互 + 核心亮点总览）
