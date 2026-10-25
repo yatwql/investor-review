@@ -66,6 +66,9 @@ from src.python.config._llm_settings import (
     read_llm_settings_file,
 )
 
+# ── 配置文件新旧对比（供系统自检提示重生成）──
+from src.python.config._config_freshness import check_config_freshness
+
 # ── 日志配置（logger.json）──
 from src.python.config._llm_pricing import get_llm_pricing_path, load_pricing_config
 from src.python.config._llm_settings_defaults import get_llm_setting_default
@@ -96,6 +99,8 @@ __all__ = [
     # 配置路径
     "get_config_path",
     "set_config_path_override",
+    # 配置文件时效（自检用）
+    "check_config_freshness",
     # 核心读写
     "get_config",
     "set_config",

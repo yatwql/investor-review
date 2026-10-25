@@ -788,3 +788,35 @@ class TestDefaultEnabledLlmAccessor:
         from src.python.core.registry import get_llm_module_names
 
         assert set(get_llm_module_names()) <= set(default_enabled_llm())
+
+
+class TestRenderOverrides:
+    """覆写文件重建：逐项注释取自注册表，末项不带尾逗号且整体可解析。"""
+
+    def test_each_line_carries_registry_note(self):
+        from src.python.config.features import _render_overrides
+        from src.python.core.json_comments import loads
+
+        text = _render_overrides({"decision_reflection": True, "summary_highlights": False})
+        assert "决策跨期反思闭环" in text
+        assert "本期要点与环比对照" in text
+        assert loads(text) == {"decision_reflection": True, "summary_highlights": False}
+
+    def test_last_entry_has_no_trailing_comma(self):
+        from src.python.config.features import _render_overrides
+
+        text = _render_overrides({"report_qa": True, "cost_lots": True})
+        entries = [line for line in text.splitlines() if line.strip().startswith('"')]
+        assert len(entries) == 2
+        assert not entries[-1].split("//")[0].rstrip().endswith(",")
+        assert entries[0].split("//")[0].rstrip().endswith(",")
+
+    def test_unknown_key_rendered_without_note(self):
+        from src.python.config.features import _render_overrides
+        from src.python.core.json_comments import loads
+
+        text = _render_overrides({"not_a_registered_flag": True})
+        entries = [line for line in text.splitlines() if line.strip().startswith('"')]
+        assert len(entries) == 1
+        assert "//" not in entries[0]
+        assert loads(text) == {"not_a_registered_flag": True}

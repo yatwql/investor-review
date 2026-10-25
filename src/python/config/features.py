@@ -397,17 +397,30 @@ def _load_overrides_document() -> tuple[str, dict[str, Any]]:
 
 
 def _render_overrides(values: dict[str, bool]) -> str:
-    """按「一键一行」重排覆写文件（保留文件头说明注释）。
+    """按「一键一行」重排覆写文件（保留文件头说明，并为每项带上注册表说明）。
 
     用于源文件是紧凑单行 JSON 的情况：按键区间删除会吞掉整行，故改以稳定
     排版重建；单行文件本就没有可保留的逐项注释。
+
+    逐项注释取自功能开关注册表（``label`` / ``desc``），与 TUI、[C]/[S] 面板
+    同源——用户手工编辑时不必回查文档就知道这一行是什么。
     """
     if not values:
-        body = ""
-    else:
-        entries = [f'  "{key}": {"true" if value else "false"}' for key, value in values.items()]
-        body = ",\n".join(entries) + "\n"
-    return _FEATURES_HEADER + "{\n" + body + "}\n"
+        return _FEATURES_HEADER + "{\n}\n"
+
+    from ._feature_registry import feature_switch_registry
+
+    lines: list[str] = []
+    total = len(values)
+    for index, (key, value) in enumerate(values.items()):
+        separator = "," if index < total - 1 else ""
+        line = f'  "{key}": {"true" if value else "false"}{separator}'
+        definition = feature_switch_registry.get(key)
+        if definition is not None:
+            note = f"{definition.label}：{definition.desc}" if definition.desc else definition.label
+            line += f"  // {note}"
+        lines.append(line)
+    return _FEATURES_HEADER + "{\n" + "\n".join(lines) + "\n}\n"
 
 
 def _apply_override_patch(raw: str, before: dict[str, Any], after: dict[str, bool]) -> str:

@@ -194,7 +194,58 @@ def _check_config() -> list[dict[str, Any]]:
         results.append(_item(GROUP_CONFIG, "关键路径字段", True, "holdings_dir / output_dir 均已配置"))
 
     results.extend(_check_llm_credentials())
+    results.extend(_check_config_freshness())
     return results
+
+
+def _check_config_freshness() -> list[dict[str, Any]]:
+    """检查配置文件是否落后于当前生成器模板（注释/新键）。
+
+    为什么需要：键与注释只在**生成那一刻**写入，之后文件冻结。代码侧调了
+    菜单键（注释引用的字母可能已不是当前键位）、补了新键或改写了口径说明，
+    用户手上那份文件不会跟着变，照着注释找就会找不到。
+
+    分级：缺键 = 失败（新功能开关在文件里根本不存在）；仅缺说明 = 通过但
+    给出重生成建议（不影响运行，只影响可读性）。
+    """
+    try:
+        from src.python.config import check_config_freshness
+
+        stale = check_config_freshness()
+    except Exception as exc:  # noqa: BLE001 — 自检必须吞掉一切异常
+        return [_item(GROUP_CONFIG, "配置说明时效", False, f"对比失败: {type(exc).__name__}: {exc}")]
+
+    if not stale:
+        return [
+            _item(
+                GROUP_CONFIG,
+                "配置说明时效",
+                True,
+                "config.json / llm_settings.json / llm_providers.json 与当前版本一致",
+            )
+        ]
+
+    hints = "备份自定义值后删除对应文件，重新运行即按当前模板重生成"
+    missing_key_files = [s for s in stale if s["missing_keys"]]
+    if missing_key_files:
+        detail = "；".join(
+            f"{os.path.basename(s['path'])} 缺 {len(s['missing_keys'])} 个新键（{'、'.join(s['missing_keys'][:4])}"
+            + (" 等" if len(s["missing_keys"]) > 4 else "")
+            + "）"
+            for s in missing_key_files
+        )
+        return [_item(GROUP_CONFIG, "配置说明时效", False, f"配置文件落后于当前版本：{detail}", hint=hints)]
+
+    detail = "；".join(f"{os.path.basename(s['path'])} 缺 {len(s['missing_comments'])} 条说明" for s in stale)
+    return [
+        _item(
+            GROUP_CONFIG,
+            "配置说明时效",
+            True,
+            f"注释落后于当前版本（不影响运行）：{detail}",
+            hint=f"若需与最新说明对齐：{hints}",
+        )
+    ]
 
 
 def _check_llm_credentials() -> list[dict[str, Any]]:
