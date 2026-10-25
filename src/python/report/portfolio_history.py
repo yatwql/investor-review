@@ -300,31 +300,39 @@ class PortfolioHistoryCalculator:
         Returns:
             (all_series, success_count, failed_holdings, successful_holdings)
         """
-        all_series: list[list[dict]] = []
         total_holdings = len(holdings)
-        success_count = 0
-        failed_holdings: list[str] = []
-        successful_holdings: list[str] = []
 
+        # 并发只用于**取数**；汇总顺序按输入持仓顺序（不按完成顺序）——
+        # `as_completed` 的返回序随网络/线程调度抖动，直接按它追加会让
+        # ①「已纳入走势计算」清单在两次同数据报告里顺序不同（报告内容不可复现）；
+        # ② 浮点求和顺序漂移（逐日市值累加的末位可能变），极端时影响四舍五入后的展示值。
+        series_by_code: dict[str, list[dict] | None] = {}
         _max_workers = min(8, total_holdings) if total_holdings > 1 else 1
         with ThreadPoolExecutor(max_workers=_max_workers) as _pool:
             _futures = {
-                _pool.submit(self.calculate_for_holding, code, name, shares, days): (code, name)
+                _pool.submit(self.calculate_for_holding, code, name, shares, days): code
                 for code, name, shares in holdings
             }
             for _fut in as_completed(_futures):
-                _code, _name = _futures[_fut]
+                _code = _futures[_fut]
                 try:
-                    series = _fut.result()
+                    series_by_code[_code] = _fut.result()
                 except Exception:
                     logger.warning("[history] %s 历史数据获取异常", _code, exc_info=True)
-                    series = None
-                if series:
-                    all_series.append(series)
-                    success_count += 1
-                    successful_holdings.append(f"{_name}({_code})")
-                else:
-                    failed_holdings.append(f"{_name}({_code})")
+                    series_by_code[_code] = None
+
+        all_series: list[list[dict]] = []
+        success_count = 0
+        failed_holdings: list[str] = []
+        successful_holdings: list[str] = []
+        for code, name, _shares in holdings:
+            series = series_by_code.get(code)
+            if series:
+                all_series.append(series)
+                success_count += 1
+                successful_holdings.append(f"{name}({code})")
+            else:
+                failed_holdings.append(f"{name}({code})")
 
         return all_series, success_count, failed_holdings, successful_holdings
 
