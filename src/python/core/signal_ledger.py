@@ -40,7 +40,7 @@ from typing import Any, Iterable
 from src.python.core.constants import PROJECT_ROOT
 from src.python.core.data_freshness import FRESHNESS_FRESH, FRESHNESS_LABELS
 from src.python.core.decision_ledger import DIRECTION_FLAT
-from src.python.core.jsonl_store import append_jsonl_atomic, read_jsonl
+from src.python.core.jsonl_store import append_jsonl_atomic, prune_jsonl_by_age, read_jsonl
 from src.python.core.num_utils import strict_num
 
 logger = logging.getLogger("invest")
@@ -81,6 +81,9 @@ FEATURE_FLAG = "deterministic_signal"
 # data/state 而非 data/cache：避开 cache.cleanup_expired() 清扫（理由同
 # src/python/report/data_status.py _default_persist_path）。
 _SIGNAL_LEDGER_FILE = os.path.join(PROJECT_ROOT, "data", "state", "signal_ledger.jsonl")
+
+SIGNAL_LEDGER_RETENTION_DAYS = 730
+"""信号账本按龄保留（730 天）：折叠统计要看跨年同期，超出窗口的历史不再参与。"""
 
 # ── 事件类型 ────────────────────────────────────────────
 EVENT_SIGNAL = "signal"
@@ -282,6 +285,15 @@ def append_signals(
         return []
     payload = "".join(json.dumps(s, ensure_ascii=False, sort_keys=True) + "\n" for s in fresh)
     written = append_jsonl_atomic(target, payload, prefix=".signal_ledger_", log_tag="signal_ledger", noun="账本")
+    if written:
+        prune_jsonl_by_age(
+            target,
+            retention_days=SIGNAL_LEDGER_RETENTION_DAYS,
+            date_key="report_date",
+            prefix=".signal_ledger_",
+            log_tag="signal_ledger",
+            noun="账本",
+        )
     # 写盘失败 → 未入账，不返回乐观结果（详见 docstring）
     return fresh if written else []
 

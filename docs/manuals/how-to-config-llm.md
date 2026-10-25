@@ -363,7 +363,7 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
 - `fact_check`（dict，默认 `{tolerance: 1.0}`）：LLM 输出数值一致性检测配置。详见下节「事实校验容差配置」
 - **计价策略与模型单价**：不在本文件，见独立参考数据 `data/config/llm_pricing_ref.json`（`version` + 策略 + `models` 逐模型覆盖；缺失时仅用内置价）。详见下方「完整模型定价表」章节
 - `news_correlation_top_n`（int，默认 `30`）：送 LLM 分析的新闻条数。仅 news_correlation 模块有效，值越大 Token 消耗越高
-- `daily_cost_limit`（数值，默认 `0`）：LLM **日费用预算上限**（货币单位与 `llm_pricing_ref.json` 的 `currency` 一致，`0`=不启用）。启用后 full 生成前展示**事前费用预估区间**（计划参与模块 × 模型单价；perf 历史逐模块实际费用优先、无历史静态兜底；TUI `N` 多选 / CLI `--force-llm`/`--llm-module` / Web 勾选的重新生成范围进入预估——范围内模块按静态单价、范围外维持历史口径，并以「其中 N 个模块重新生成」拆行显示）与今日已花费；达到上限时交互渠道（TUI / Web / CLI 终端）询问「用已有结果继续 / 中止」，非交互渠道（`--yes`、`--non-interactive`、非 TTY、Web 定时调度）直接中止。今日已花费 = perf 历史当日 `llm.total_cost` 汇总，与报告内 LLM 用量统计同源；与**报告级输入 Token 预警**（`cost_tracker`，默认 8K、仅告警不阻断）分层——本项是**生成前的日费用硬闸**
+- `daily_cost_limit`（数值，默认 `0` 不启用）：LLM **日费用预算上限**，单位是**本地主币种**（`llm_pricing_ref.json → currency`，默认 CNY）。判定超限时把各币种今日支出按内部汇率表折算到该币种比对（折算仅参与判定，**不改变任何展示金额**）；某币种缺少内部汇率会被点名「无法折算」，不会静默按 0 计。
 - `debate`（dict，可选实验功能）：辩论模式配置。含 procon（三段式正反辩论，`per_call_max_tokens` 限定每阶段输出上限，默认 18432（null 时按代码兜底同值））、conditional（条件情景推理）、concentration_qa（集中度问答阈值，辩论流程内建段落的触发阈值），以及 `max_total_tokens_per_report`（单次报告辩论总 Token 预算上限，默认 72000，覆盖三段式真实成本）和 `per_call_timeout_override`（辩论单次 API 超时覆盖）。**本段仅控制辩论行为的参数，启停由 Feature Flag（`llm_debate_*`）决定，非配置直接启用**；决策跨期反思闭环（`decision_reflection`）同样由 Feature Flag 启停，无独立配置段
 
 ### 模块级配置
@@ -898,29 +898,46 @@ $env:HTTPS_PROXY = "http://127.0.0.1:7890"
 
 ## 完整模型定价表
 
-代码内置所有支持模型的 Token 定价（货币单位 CNY，每百万 Token），`llm_pricing_ref.json` 可按模型覆盖：
+代码内置所有支持模型的 Token 定价，**按厂商官方标价币种原样记录**（不做汇率折算）：
 
-| 模型 | 输入 ¥/M | 输出 ¥/M | 缓存命中 ¥/M | 说明 |
-|------|:--------:|:--------:|:------------:|------|
-| `claude-sonnet-4-6` | 3.00 | 15.00 | 0.30 | Claude 主力模型，推荐日常使用 |
-| `claude-sonnet-4-8` | 3.00 | 15.00 | 0.30 | Sonnet 升级版，同价 |
-| `claude-haiku-4-5` | 1.00 | 5.00 | 0.10 | 轻量高性价比，适合批量任务 |
-| `claude-opus-4-6` | 5.00 | 25.00 | 0.50 | 强推理，适合智囊团等复杂分析 |
-| `claude-opus-4-8` | 5.00 | 25.00 | 0.50 | Opus 升级版，同价 |
-| `claude-fable-5` | 10.00 | 50.00 | 1.00 | 最新 Claude 模型 |
-| `gpt-4o` | 2.50 | 10.00 | 1.25 | OpenAI 主力（缓存 50% 折扣） |
-| `gpt-4o-mini` | 0.15 | 0.60 | 0.075 | OpenAI 轻量（缓存 50% 折扣） |
-| `deepseek-v4-flash` | 1.00 / 2.00 | 4.00 / 8.00 | 0.02 / 0.04 | ⭐ 高性价比推荐，默认模型（峰谷定价，闲时/高峰；2026-09-10 降价） |
-| `deepseek-flash` | 1.00 / 2.00 | 4.00 / 8.00 | 0.02 / 0.04 | DeepSeek-V4.1-Flash 正式模型名（2026-09-10 发布，与 v4-flash 同价同底层） |
-| `deepseek-v4-pro` | 4.50 / 9.00 | 13.50 / 27.00 | 0.15 / 0.30 | DeepSeek 增强推理（峰谷定价，闲时/高峰） |
-| `gemini-3.5-flash` | 1.50 | 9.00 | 0.15 | Gemini 新一代（可选，GA 价） |
-| `gemini-2.5-flash` | 0.30 | 2.50 | 0.03 | Gemini 主力，高性价比（代码默认，GA 价） |
-| `gemini-2.5-pro` | 1.25 | 10.00 | 0.125 | Gemini 强推理 |
-| `gemini-2.0-flash` | 0.10 | 0.40 | 0.01 | Gemini 2.0 轻量（较早系列） |
-| `kimi-k2.6` | 6.50 | 27.00 | 1.10 | Kimi 通用主力（256k 上下文，支持思考模式） |
-| `kimi-k3` | 20.00 | 100.00 | 2.00 | Kimi 旗舰（1M 上下文） |
+| 模型 | 币种 | 输入/M | 输出/M | 缓存命中/M | 说明 |
+|------|:----:|:----:|:----:|:--------:|------|
+| `claude-sonnet-5-5` | USD | 2.00 | 10.00 | 0.10 | Claude 现役主力（官方 $/M） |
+| `claude-opus-5-5` | USD | 4.00 | 20.00 | 0.20 | Claude 现役旗舰推理，适合智囊团等复杂分析 |
+| `claude-haiku-5-5` | USD | 0.10 | 0.50 | 0.01 | Claude 现役轻量（单次输入 ≤100K token） |
+| `claude-sonnet-5` | USD | 2.00 | 10.00 | 0.20 | 上一代 Sonnet（legacy） |
+| `claude-sonnet-4-6` | USD | 3.00 | 15.00 | 0.30 | 上一代 Sonnet（legacy） |
+| `claude-opus-4-8` | USD | 5.00 | 25.00 | 0.50 | 上一代 Opus（legacy） |
+| `claude-haiku-4-5` | USD | 1.00 | 5.00 | 0.10 | 上一代轻量（legacy） |
+| `claude-fable-5-1` | USD | 10.00 | 50.00 | 0.25 | Claude 顶级推理与长程 agent 任务 |
+| `claude-fable-5` | USD | 10.00 | 50.00 | 1.00 | 上一代顶级（legacy） |
+| `gpt-6.1-sol` | USD | 2.00 | 10.00 | 0.10 | OpenAI 现役主力 |
+| `gpt-6-luna` | USD | 0.10 | 0.50 | 0.01 | OpenAI 现役轻量 |
+| `gpt-6-astra` | USD | 10.00 | 50.00 | 1.00 | OpenAI 旗舰推理 |
+| `gpt-5.6-sol` | USD | 4.00 | 20.00 | 0.40 | 上一代主力 |
+| `gpt-4o` | USD | 2.50 | 10.00 | 1.25 | 早期主力（legacy，缓存 50% 折扣） |
+| `gpt-4o-mini` | USD | 0.15 | 0.60 | 0.075 | 早期轻量（legacy） |
+| `deepseek-v4-flash` | CNY | 1.00 / 2.00 | 4.00 / 8.00 | 0.02 / 0.04 | ⭐ 高性价比推荐，默认模型（峰谷定价，闲时/高峰；2026-09-10 降价） |
+| `deepseek-flash` | CNY | 1.00 / 2.00 | 4.00 / 8.00 | 0.02 / 0.04 | DeepSeek-V4.1-Flash 正式模型名（与 v4-flash 同价同底层） |
+| `deepseek-v4-pro` | CNY | 4.50 / 9.00 | 13.50 / 27.00 | 0.15 / 0.30 | DeepSeek 增强推理（峰谷定价，闲时/高峰） |
+| `gemini-3.8-flash` | USD | 0.75 | 3.75 | 0.075 | Gemini 现役主力（2026-12-31 前优惠价） |
+| `gemini-3.1-pro` | USD | 2.00 | 12.00 | 0.20 | Gemini 强推理（preview） |
+| `gemini-2.5-flash` | USD | 0.30 | 2.50 | 0.03 | Gemini 上一代主力（legacy） |
+| `gemini-2.5-pro` | USD | 1.25 | 10.00 | 0.125 | Gemini 上一代强推理（legacy） |
+| `kimi-k3.1-pro` | CNY | 13.00 | 68.00 | 1.30 | Kimi 现役旗舰（1M 上下文） |
+| `kimi-k3.1-pro-highspeed` | CNY | 26.00 | 136.00 | 1.30 | Kimi 现役旗舰高速档 |
+| `kimi-k3` | CNY | 20.00 | 100.00 | 2.00 | Kimi 上一代旗舰（1M 上下文） |
+| `kimi-k2.6` | CNY | 6.50 | 27.00 | 1.10 | Kimi 通用主力（256k 上下文，支持思考模式） |
 
-> 表中为具体模型名；`core/constants.py::MODEL_PRICING` 另有 `claude-sonnet-4-` / `claude-opus-4-` / `claude-haiku-4-` / `gemini-3.5-` / `gemini-2.5-` / `gemini-2.0-` 六条**模型族前缀兜底价**，供带日期/小版本后缀的未列变体（如 `claude-sonnet-4-20250514`）按族价自动计价——表中不单列，也不会覆盖已有的具体模型价。
+> **缺省币种（本地主币种）**：`llm_pricing_ref.json` 顶层 `currency`（默认 `CNY`）。语义只有两个——**模型同时提供多币种价时选哪一套**（条目 `alt` 子表提供该币种官方价即命中），以及**日预算以哪个币种判定**。它**不决定条目自身币种**：`MODEL_PRICING` 每条都显式声明了 `currency`，所以把本项改成 `USD` 也不会给人民币标价的模型贴上 `$`。
+
+> **币种与显示口径**：每条定价按**厂商官方标价币种**原样记录（DeepSeek / Kimi 为 CNY，Anthropic / OpenAI / Google 为 USD），**代码里没有任何汇率折算**。
+> - 报告、TUI、Web 的金额一律按**该模型生效币种**显示（Claude 出 `$`、DeepSeek 出 `¥`）；
+> - 一次报告里混用不同币种模型时，费用**分组并列**显示（如 `¥0.0123 + $0.0045`），从不相加；
+> - 若某模型你手上有另一币种的官方价（如国内渠道以人民币计价），可在 `llm_pricing_ref.json` 里用 `alt` 子表或直接把该模型条目改成你配置的币种——**配置币种优先**，模型同时提供多币种价时按你配置的币种显示；
+> - 日费用预算 `daily_cost_limit`（一个数字，本地主币种）是唯一使用内部汇率的地方：各币种支出折算后比对，仅用于判定超限，**不改变任何展示金额**。
+
+> 表中为具体模型名；`core/constants.py::MODEL_PRICING` 另有 12 条**模型族前缀兜底价**（`claude-fable-5-` / `claude-opus-5-` / `claude-sonnet-5-` / `claude-haiku-5-` / `claude-sonnet-4-` / `claude-opus-4-` / `claude-haiku-4-` / `gpt-6.1-` / `gpt-5.6-` / `gemini-3.8-` / `gemini-3.1-` / `gemini-2.5-`），供带日期/小版本后缀的未列变体（如 `claude-sonnet-5-5-20260928`）按族价自动计价——表中不单列，也不会覆盖已有的具体模型价。
 
 > **峰谷定价（DeepSeek）**：`deepseek-flash` / `deepseek-v4-*` 采用 DeepSeek 官方峰谷定价（2026-08-17 起生效，2026-08-23 起优化周末规则，2026-09-10 起 flash 系列降价并补充法定节假日规则），表中「闲时/高峰」两列分别为非高峰与高峰时段的每百万 Token 单价。**高峰时段仅在高峰日（周一至周五，不含中国法定节假日）生效**，为**北京时间 09:00–12:00、14:00–18:00**；高峰日其余时间为闲时、**周末（周六/周日）与法定节假日全天一律按闲时价计费**（不区分峰谷，闲时价 = 高峰价的一半）。时段、判定时区与周末/法定节假日规则可在 `llm_pricing_ref.json` 的 `peak_periods` / `idle_periods` / `timezone` / `weekend_always_idle` / `holiday_always_idle` 中覆盖；含 `"peak"` 子段的模型高峰日高峰时段按 `peak` 价计费，其余时段（含周末与法定节假日全天）按 base 价，无 `"peak"` 的模型始终按 base 价计费。
 >
@@ -937,7 +954,7 @@ $env:HTTPS_PROXY = "http://127.0.0.1:7890"
 >   "weekend_always_idle": true,
 >   "holiday_always_idle": true,
 >   "models": {
->     "claude-sonnet-4-6": {"input_price": 3, "output_price": 15},
+>     "claude-sonnet-5-5": {"input_price": 2, "output_price": 10},
 >     "my-new-model": {"input_price": 5, "output_price": 10, "input_cache_hit": 0.5},
 >     "deepseek-v4-flash": {
 >       "input_price": 1.0, "output_price": 4.0, "input_cache_hit": 0.02,

@@ -73,11 +73,10 @@ SECTION_SOURCE_FULLTEXT = "fulltext"
 #: 银行股半年报在 DataSinking 侧常缺「管理层讨论与分析」章节，回溯到上年年报即可取到。
 _REPORT_CANDIDATE_LIMIT = 3
 
-#: 判定「该标的本次确实没有可取正文」的负缓存（秒）——**本模块自有策略**，
-#: 与缓存注册表的新鲜期 TTL 不是同一口径（负结论需要独立时效），故不经 `get_ttl`。财报正文按季更新，
-#: 6h 内同一结论稳定；避免每份报告都把同一批 404/拒服务链路重走一遍
-#: （实测 5 只标的 × 章节阶 + 备源 ≈ 3s/份报告）。
-_REPORT_CONTENT_MISS_TTL = 6 * 3600
+#: 判定「该标的本次确实没有可取正文」的负缓存键前缀；TTL 登记在缓存注册表
+#: （`report_symbol_miss`，6h）——负结论需要独立时效，但读侧与清理侧必须同源，
+#: 故统一经 `get_ttl` 取。6h 内同一结论稳定；避免每份报告都把同一批 404/拒服务
+#: 链路重走一遍（实测 5 只标的 × 章节阶 + 备源 ≈ 3s/份报告）。
 _REPORT_CONTENT_MISS_PREFIX = "report_symbol_miss_"
 
 #: 未取到财报的原因文案（写入契约 failures，展示层原样透出）
@@ -544,7 +543,7 @@ def fetch_symbol_report_detailed(
     # 只缓存**确定性**结论（章节阶 + 备源都试过仍无正文），索引为空/网络失败不入缓存
     # ——后者可能只是瞬时不可用，缓存会让恢复期被无谓延长。
     _miss_key = f"{_REPORT_CONTENT_MISS_PREFIX}{symbol}"
-    _cached_reason = cache_get(_miss_key, _REPORT_CONTENT_MISS_TTL)
+    _cached_reason = cache_get(_miss_key, get_ttl("report_symbol_miss"))
     if isinstance(_cached_reason, str) and _cached_reason:
         logger.debug("[financial_report] %s 命中正文缺失负缓存（%s），跳过取数", symbol, _cached_reason)
         return None, _cached_reason

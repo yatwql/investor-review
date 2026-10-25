@@ -33,6 +33,7 @@ __all__ = [
     "get_known_llm_settings_keys",
     "get_llm_module_name",
     "get_llm_module_names",
+    "get_market_ttl_map",
     "get_prefix_type_map",
     "get_registered_data_types",
     "get_registry",
@@ -56,6 +57,9 @@ class DataModuleDef:
         exact_cache_keys: 精确缓存键名（非前缀匹配），
             用于固定键名的特殊缓存文件。
         cache_ttl: 默认缓存过期时间（秒）。
+        market_ttl: 交易时段内的短 TTL（秒）；None = 该类型不随盘中降频。
+            盘中敏感性是**数据属性**（价格/指数分钟级变化），由注册表声明，
+            不放在用户配置里（误配会让非行情数据盘中高频打源）。
         settings_suffix: LLM settings 键的后缀，
             设置后自动生成该模块的所有 llm_settings.json 合法键名。
             None 表示非 LLM 模块。
@@ -68,6 +72,7 @@ class DataModuleDef:
     cache_ttl: float = CACHE_DAILY
     settings_suffix: str | None = None
     cache_groups: tuple[str, ...] = ()
+    market_ttl: float | None = None
 
     @property
     def is_llm(self) -> bool:
@@ -106,8 +111,23 @@ class DataModuleDef:
 
 _MODULE_REGISTRY: tuple[DataModuleDef, ...] = (
     # ── 基础行情（preload 组：换持仓后重取）──
-    DataModuleDef("股票价格", "price", cache_prefixes=("price_",), cache_ttl=CACHE_DAILY, cache_groups=("preload",)),
-    DataModuleDef("市场指数", "index", cache_prefixes=("index_",), cache_ttl=CACHE_DAILY, cache_groups=("preload",)),
+    # 盘中价格/指数分钟级变化：交易时段内降到 30s（数值可由 config.market_hour_ttl 覆盖）
+    DataModuleDef(
+        "股票价格",
+        "price",
+        cache_prefixes=("price_",),
+        cache_ttl=CACHE_DAILY,
+        market_ttl=30.0,
+        cache_groups=("preload",),
+    ),
+    DataModuleDef(
+        "市场指数",
+        "index",
+        cache_prefixes=("index_",),
+        cache_ttl=CACHE_DAILY,
+        market_ttl=30.0,
+        cache_groups=("preload",),
+    ),
     # ── 基金数据（refresh 组：主动刷新缓存）──
     DataModuleDef(
         "基金业绩排名", "rank", cache_prefixes=("fund_perf_",), cache_ttl=CACHE_DAILY, cache_groups=("refresh",)
@@ -122,10 +142,10 @@ _MODULE_REGISTRY: tuple[DataModuleDef, ...] = (
     # ── 市场情绪（同花顺官方：龙虎榜 + 连板梯队；盘中变化 → 短 TTL）──
     DataModuleDef("市场情绪", "sentiment", cache_prefixes=("sentiment_",), cache_ttl=3600.0, cache_groups=("refresh",)),
     # ── 全文本财报（DataSinking 主源 + 巨潮备源；索引与正文分级 TTL）──
-    # 索引/章节清单 TTL 与正文同档（月度）：财报披露是低频事件（年报/半年报/季报），
-    # 索引两周过期会频繁重取 DataSinking（免费档日配额 8191 篇、还受 3 请求/秒限制），
-    # 正是「连接失败」高发的一类场景；月度窗口不损失语义（新报告期出现时按报告期排序
-    # 自然优先，且正文取数另走正文级 TTL）。
+    # 索引/章节清单 TTL = 1 天：缓存键是 **symbol 级**（每标的一条），新一期财报披露后
+    # 最长要等到 TTL 到期才会被发现；月度窗口会让报告整月沿用上一期口径。日频是
+    # 「新披露 ≤1 天可见」与配额成本（每标的每日至多 1 次请求，10~20 标的 ≈ 日配额
+    # 8191 的 0.12%~0.24%）的平衡点。正文另走 `report_doc`（月度：正文按 doc_id 不可变）。
     DataModuleDef(
         "财报索引",
         "report",
@@ -136,7 +156,7 @@ _MODULE_REGISTRY: tuple[DataModuleDef, ...] = (
             "report_cninfo_orgid_",
             "report_cninfo_text_",
         ),
-        cache_ttl=CACHE_MONTHLY,
+        cache_ttl=CACHE_DAILY,
         cache_groups=("refresh",),
     ),
     DataModuleDef(
@@ -147,11 +167,13 @@ _MODULE_REGISTRY: tuple[DataModuleDef, ...] = (
         cache_groups=("refresh",),
     ),
     # ── 结构化财务指标（akshare 主源） ──
+    # symbol 级键 + 1 天：与财报索引同口径——新报告期靠日刷新被发现，避免整月沿用
+    # 上一期指标；主源为 akshare（不受 DataSinking 日配额约束）。
     DataModuleDef(
         "财务指标",
         "fin_indicator",
         cache_prefixes=("fin_indicator_",),
-        cache_ttl=CACHE_MONTHLY,
+        cache_ttl=CACHE_DAILY,
         cache_groups=("refresh",),
     ),
     # ── 新闻（refresh 组）──
@@ -238,8 +260,10 @@ _MODULE_REGISTRY: tuple[DataModuleDef, ...] = (
     DataModuleDef(
         "行业资金流向", "sector_flow", cache_prefixes=("sector_flow_",), cache_ttl=900, cache_groups=("refresh",)
     ),
+    # symbol 级键 + 1 周：分红公告不定期发布，月度窗口可能漏掉新公告；周频兼顾
+    # 「公告 ≤1 周可见」与 akShare 请求量（与 `idx_valuation` 同档）
     DataModuleDef(
-        "股票历史分红", "dividend", cache_prefixes=("dividend_",), cache_ttl=CACHE_MONTHLY, cache_groups=("refresh",)
+        "股票历史分红", "dividend", cache_prefixes=("dividend_",), cache_ttl=CACHE_WEEKLY, cache_groups=("refresh",)
     ),
     # ── 基金深度分析模块 ──
     DataModuleDef(
@@ -318,7 +342,7 @@ _MODULE_REGISTRY: tuple[DataModuleDef, ...] = (
 
 
 # ── 派生产出 ────────────────────────────────────────────────
-# ── 缓存专属登记（注册表外：辩论三段缓存）─────────────────────
+# ── 缓存专属登记（注册表外：辩论三段缓存 + 缺失探测负缓存）─────
 # 辩论白脸/黑脸/综合三段的运行时开关挂 features（llm_debate_procon，分析增强组），
 # 三段**不属于 LLM 模块注册表**：菜单、配置编辑白名单与 llm_settings 键域均不含
 # 其键（settings_suffix 为空）。但磁盘缓存仍以 llm_debate_pro_ / llm_debate_con_ /
@@ -347,6 +371,21 @@ _CACHE_ONLY_REGISTRY: tuple[DataModuleDef, ...] = (
         cache_ttl=86400,
         cache_groups=("preload",),
     ),
+    # 负缓存：只在**确定性**缺失时写入（已发布静态文档章节 404 / 标的正文主备源均无），
+    # TTL 短于「当天多次报告」周期、长于单次链路重试——登记在此使读侧 TTL、清理判定、
+    # config 覆盖与文档表格共用同一来源（此前散落在调用点常量里，清理按未注册默认 24h 判定）。
+    DataModuleDef(
+        "财报章节缺失探测",
+        "datasink_probe_miss",
+        cache_prefixes=("datasink_probe_miss_",),
+        cache_ttl=12 * 3600,
+    ),
+    DataModuleDef(
+        "标的正文缺失",
+        "report_symbol_miss",
+        cache_prefixes=("report_symbol_miss_",),
+        cache_ttl=6 * 3600,
+    ),
 )
 
 
@@ -374,6 +413,15 @@ def get_cache_ttl_defaults() -> dict[str, float]:
     未注册的类型回退到 CACHE_DAILY。
     """
     return {m.data_type: m.cache_ttl for m in get_cache_registry()}
+
+
+def get_market_ttl_map() -> dict[str, float]:
+    """按数据类型返回**盘中短 TTL** 映射（仅盘中敏感类型有条目，如 price/index）。
+
+    盘中敏感性属数据属性，由注册表单一声明；Ttl 数值可由
+    `config.json → market_hour_ttl` 全局覆盖（见 `cache._ttl.get_ttl`）。
+    """
+    return {m.data_type: m.market_ttl for m in get_cache_registry() if m.market_ttl}
 
 
 def get_prefix_type_map() -> dict[str, str]:

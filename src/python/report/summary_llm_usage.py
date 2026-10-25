@@ -186,13 +186,10 @@ def _write_module_data_rows(ws: Any, row: int, module_info: list[dict]) -> int:
                 ws.cell(row=row, column=ci, value="—").font = Font(size=9, color="cccccc")
             ws.cell(row=row, column=ci).alignment = right_align
 
-        _cost = mi.get("cost", 0.0)
+        _cost_display = mi.get("cost_display") or ""
         _status_val = mi.get("status", "")
-        if _cost > 0:
-            from src.python.llm.pricing import CURRENCY_SYMBOLS, PRICING_CURRENCY
-
-            _sym = CURRENCY_SYMBOLS.get(PRICING_CURRENCY, "¥")
-            ws.cell(row=row, column=8, value=f"{_sym}{_cost:.4f}").font = _KV_VAL_FONT
+        if _cost_display:
+            ws.cell(row=row, column=8, value=_cost_display).font = _KV_VAL_FONT
             ws.cell(row=row, column=8).alignment = right_align
         elif _status_val == "cached":
             ws.cell(row=row, column=8, value="已计入原调用").font = Font(size=9, color="999999")

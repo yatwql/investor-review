@@ -35,14 +35,30 @@ def _enabled_only(*targets: str) -> dict:
 
 
 def _known_model() -> str:
-    """取定价表中一个真实模型键（定价表演进不改测试）。"""
+    """取定价表中一个真实模型键（定价表演进不改测试）。
+
+    选**显示币种**（缺省 CNY）计价的模型：预估的历史样本与模型币种必须一致，
+    否则同币种无样本会按静态兜底（跨币种样本不混算）。
+    """
+    from src.python.llm.pricing import PRICING_CURRENCY, model_currency
+
     reload_pricing()
     assert PRICING_MERGED, "定价表不应为空（缺省定价随代码发布）"
-    return next(iter(PRICING_MERGED))
+    return next(m for m in PRICING_MERGED if model_currency(m) == PRICING_CURRENCY)
 
 
 def _rec(ts: str, total: float, modules: dict) -> dict:
-    return {"timestamp": ts, "llm": {"total_cost": total, "modules": modules}}
+    return {"timestamp": ts, "llm": {"cost_by_currency": {"CNY": total}, "modules": modules}}
+
+
+def _total_forced(fc: dict, key: str = "low") -> float:
+    """逐币种「重新生成范围内」区间求和（单币种用例）。"""
+    return sum(float(v[key]) for v in (fc.get("forced_costs") or {}).values())
+
+
+def _total(fc: dict, key: str = "low") -> float:
+    """逐币种区间求和（用例均为单币种场景；多币种分组另有用例覆盖）。"""
+    return sum(float(v[key]) for v in fc["costs"].values())
 
 
 class TestResolvePlannedModules:
@@ -79,27 +95,35 @@ class TestForecastHistoryBasis:
     def test_full_history_coverage(self) -> None:
         cfg = {"enabled_llm": _enabled_only("global_macro", "expert_review")}
         history = [
-            _rec("2026-01-01T10:00:00", 0.4, {"global_macro": {"cost": 0.1}, "expert_review": {"cost": 0.3}}),
-            _rec("2026-01-02T10:00:00", 0.5, {"global_macro": {"cost": 0.2}, "expert_review": {"cost": 0.3}}),
+            _rec(
+                "2026-01-01T10:00:00",
+                0.4,
+                {"global_macro": {"costs": {"CNY": 0.1}}, "expert_review": {"costs": {"CNY": 0.3}}},
+            ),
+            _rec(
+                "2026-01-02T10:00:00",
+                0.5,
+                {"global_macro": {"costs": {"CNY": 0.2}}, "expert_review": {"costs": {"CNY": 0.3}}},
+            ),
         ]
         fc = forecast_run_cost(cfg, {"llm_report_depth": "standard"}, history=history)
         assert fc["ok"] is True
         assert fc["basis"] == "history:2"
         assert fc["history_runs"] == 2
-        assert fc["low"] == pytest.approx(0.1 + 0.3)
-        assert fc["high"] == pytest.approx(0.2 + 0.3)
+        assert _total(fc, "low") == pytest.approx(0.1 + 0.3)
+        assert _total(fc, "high") == pytest.approx(0.2 + 0.3)
         assert fc["unpriced"] == []
         assert fc["detail"]["global_macro"]["samples"] == 2
 
     def test_partial_history_yields_mixed_basis(self) -> None:
         cfg = {"enabled_llm": _enabled_only("global_macro", "expert_review"), "model": _known_model()}
-        history = [_rec("2026-01-01T10:00:00", 0.1, {"global_macro": {"cost": 0.1}})]
+        history = [_rec("2026-01-01T10:00:00", 0.1, {"global_macro": {"costs": {"CNY": 0.1}}})]
         fc = forecast_run_cost(cfg, {"llm_report_depth": "standard"}, history=history)
         assert fc["ok"] is True
         assert fc["basis"] == "mixed"
         assert fc["detail"]["global_macro"]["basis"] == "history"
         assert fc["detail"]["expert_review"]["basis"] == "static"
-        assert fc["high"] >= fc["low"] > 0
+        assert _total(fc, "high") >= _total(fc, "low") > 0
 
     def test_no_llm_records_yields_static_basis(self) -> None:
         cfg = {"enabled_llm": _enabled_only("global_macro"), "model": _known_model()}
@@ -121,8 +145,8 @@ class TestForecastStaticFallback:
         assert fc["ok"] is True
         expected_low = compute_cost_value(model, _STATIC_IN_LOW, _STATIC_OUT_LOW)
         expected_high = compute_cost_value(model, _STATIC_IN_HIGH, 3072)
-        assert fc["low"] == pytest.approx(round(expected_low, 6))
-        assert fc["high"] == pytest.approx(round(expected_high, 6))
+        assert _total(fc, "low") == pytest.approx(round(expected_low, 6))
+        assert _total(fc, "high") == pytest.approx(round(expected_high, 6))
         assert expected_high > expected_low
 
     def test_max_tokens_fallback_when_unconfigured(self) -> None:
@@ -131,7 +155,9 @@ class TestForecastStaticFallback:
         model = _known_model()
         cfg = {"enabled_llm": _enabled_only("global_macro"), "model": model}
         fc = forecast_run_cost(cfg, {"llm_report_depth": "standard"}, history=[])
-        assert fc["high"] == pytest.approx(round(compute_cost_value(model, _STATIC_IN_HIGH, _STATIC_OUT_FALLBACK), 6))
+        assert _total(fc, "high") == pytest.approx(
+            round(compute_cost_value(model, _STATIC_IN_HIGH, _STATIC_OUT_FALLBACK), 6)
+        )
 
     def test_unknown_model_without_history_fails_nonblocking(self) -> None:
         cfg = {"enabled_llm": _enabled_only("global_macro"), "model": "no-such-model-xyz"}
@@ -143,7 +169,7 @@ class TestForecastStaticFallback:
 
     def test_partial_unpriced_stays_ok_with_reason(self) -> None:
         cfg = {"enabled_llm": _enabled_only("global_macro", "expert_review"), "model": "no-such-model-xyz"}
-        history = [_rec("2026-01-01T10:00:00", 0.1, {"global_macro": {"cost": 0.1}})]
+        history = [_rec("2026-01-01T10:00:00", 0.1, {"global_macro": {"costs": {"CNY": 0.1}}})]
         fc = forecast_run_cost(cfg, {"llm_report_depth": "standard"}, history=history)
         assert fc["ok"] is True, "有历史覆盖时仍给可用区间"
         assert fc["unpriced"] == ["expert_review"]
@@ -154,7 +180,7 @@ class TestForecastStaticFallback:
         assert fc["ok"] is True
         assert fc["module_count"] == 0
         assert fc["basis"] == "no-modules"
-        assert fc["low"] == fc["high"] == 0.0
+        assert _total(fc, "low") == _total(fc, "high") == 0.0
 
 
 class TestForecastDebateCaliber:
@@ -168,7 +194,7 @@ class TestForecastDebateCaliber:
         cfg = {"enabled_llm": _enabled_only("expert_review"), "model": model}
         fc = forecast_run_cost(cfg, {"llm_report_depth": "standard"}, history=[])
         base = compute_cost_value(model, _STATIC_IN_HIGH, _STATIC_OUT_FALLBACK)
-        assert fc["high"] == pytest.approx(round(base * _DEBATE_CALL_MULT, 6))
+        assert _total(fc, "high") == pytest.approx(round(base * _DEBATE_CALL_MULT, 6))
 
     def test_history_standard_sample_scaled_and_debate_run_merged(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from src.python.llm.cost_forecast import _DEBATE_CALL_MULT
@@ -176,22 +202,22 @@ class TestForecastDebateCaliber:
         monkeypatch.setattr(cf, "is_feature_enabled_for_debate", lambda: True)
         cfg = {"enabled_llm": _enabled_only("expert_review"), "model": "no-such-model-xyz"}
         history = [
-            _rec("2026-01-01T10:00:00", 0.4, {"expert_review": {"cost": 0.1}}),
+            _rec("2026-01-01T10:00:00", 0.4, {"expert_review": {"costs": {"CNY": 0.1}}}),
             _rec(
                 "2026-01-02T10:00:00",
                 0.23,
                 {
-                    "expert_review": {"cost": 0.1},
-                    "debate_pro": {"cost": 0.05},
-                    "debate_con": {"cost": 0.05},
-                    "debate_synthesis": {"cost": 0.03},
+                    "expert_review": {"costs": {"CNY": 0.1}},
+                    "debate_pro": {"costs": {"CNY": 0.05}},
+                    "debate_con": {"costs": {"CNY": 0.05}},
+                    "debate_synthesis": {"costs": {"CNY": 0.03}},
                 },
             ),
         ]
         fc = forecast_run_cost(cfg, {"llm_report_depth": "standard"}, history=history)
         assert fc["ok"] is True
-        assert fc["low"] == pytest.approx(0.23)
-        assert fc["high"] == pytest.approx(round(0.1 * _DEBATE_CALL_MULT, 6))
+        assert _total(fc, "low") == pytest.approx(0.23)
+        assert _total(fc, "high") == pytest.approx(round(0.1 * _DEBATE_CALL_MULT, 6))
 
     def test_debate_off_excludes_hidden_keys(self) -> None:
         cfg = {"enabled_llm": _enabled_only("expert_review"), "model": "no-such-model-xyz"}
@@ -199,12 +225,12 @@ class TestForecastDebateCaliber:
             _rec(
                 "2026-01-01T10:00:00",
                 0.5,
-                {"expert_review": {"cost": 0.4}, "debate_pro": {"cost": 0.1}},
+                {"expert_review": {"costs": {"CNY": 0.4}}, "debate_pro": {"costs": {"CNY": 0.1}}},
             ),
         ]
         fc = forecast_run_cost(cfg, {"llm_report_depth": "standard"}, history=history)
         assert fc["ok"] is True
-        assert fc["low"] == fc["high"] == pytest.approx(0.4), "辩论特征关闭时不得把辩论键计入计划模块"
+        assert _total(fc, "low") == _total(fc, "high") == pytest.approx(0.4), "辩论特征关闭时不得把辩论键计入计划模块"
 
 
 class TestBudget:
@@ -220,12 +246,12 @@ class TestBudget:
         today = date.today().isoformat()
         yesterday = (date.today() - timedelta(days=1)).isoformat()
         history = [
-            _rec(f"{today}T09:00:00", 0.25, {"global_macro": {"cost": 0.25}}),
-            _rec(f"{today}T18:30:00", 0.5, {"expert_review": {"cost": 0.5}}),
-            _rec(f"{yesterday}T10:00:00", 9.9, {"expert_review": {"cost": 9.9}}),
+            _rec(f"{today}T09:00:00", 0.25, {"global_macro": {"costs": {"CNY": 0.25}}}),
+            _rec(f"{today}T18:30:00", 0.5, {"expert_review": {"costs": {"CNY": 0.5}}}),
+            _rec(f"{yesterday}T10:00:00", 9.9, {"expert_review": {"costs": {"CNY": 9.9}}}),
             {"timestamp": f"{today}T10:00:00"},  # 无 llm 段
         ]
-        assert today_llm_cost(history) == pytest.approx(0.75)
+        assert today_llm_cost(history)["CNY"] == pytest.approx(0.75)
 
     def test_budget_status_exceeded_boundary(self) -> None:
         today = date.today().isoformat()
@@ -241,7 +267,10 @@ class TestBudget:
 
     def test_budget_status_shape(self) -> None:
         st = budget_status({"daily_cost_limit": 2}, [])
-        assert set(st) == {"enabled", "limit", "spent", "exceeded", "currency", "symbol"}
+        # 只暴露真实消费面：三渠道读 exceeded、前端读 display
+        assert set(st) == {"enabled", "exceeded", "display"}
+        assert st["enabled"] is True
+        assert "日预算" in st["display"], "display 须含预算与状态"
 
 
 class TestSummaryLines:
@@ -251,10 +280,9 @@ class TestSummaryLines:
         fc = {
             "ok": True,
             "module_count": 2,
-            "low": 0.1,
-            "high": 0.2,
+            "costs": {"CNY": {"low": 0.1, "high": 0.2}},
+            "cost_display": "¥0.1000 ~ ¥0.2000",
             "basis": "history:7",
-            "symbol": "¥",
             "reason": None,
         }
         lines = forecast_summary_lines(fc)
@@ -267,9 +295,22 @@ class TestSummaryLines:
         assert any("无 LLM 模块参与" in ln for ln in lines)
 
     def test_budget_lines_branch(self) -> None:
-        fc = {"ok": True, "module_count": 1, "low": 0.1, "high": 0.2, "basis": "static", "symbol": "¥", "reason": None}
-        on = {"enabled": True, "limit": 1.0, "spent": 1.2, "exceeded": True, "symbol": "¥"}
-        off = {"enabled": False, "limit": 0.0, "spent": 0.3, "exceeded": False, "symbol": "¥"}
+        fc = {
+            "ok": True,
+            "module_count": 1,
+            "costs": {"CNY": {"low": 0.1, "high": 0.2}},
+            "cost_display": "¥0.1000 ~ ¥0.2000",
+            "basis": "static",
+            "reason": None,
+        }
+        on = {
+            "enabled": True,
+            "limits": {"CNY": 1.0},
+            "spent": {"CNY": 1.2},
+            "exceeded": True,
+            "display": "已花 ¥1.2000；预算 ¥1.2000 / ¥1.0000（已达上限）",
+        }
+        off = {"enabled": False, "limits": {}, "spent": {"CNY": 0.3}, "exceeded": False, "display": "已花 ¥0.3000"}
         assert any("已达上限" in ln for ln in forecast_summary_lines(fc, on))
         assert any("未设日预算上限" in ln for ln in forecast_summary_lines(fc, off))
 
@@ -293,14 +334,14 @@ class TestForceScopeForecast:
 
     @staticmethod
     def _hist():
-        # perf 历史真实结构：rec["llm"]["modules"][键]["cost"]
+        # perf 历史真实结构：rec["llm"]["modules"][键]["costs"]（币种桶）
         return [
             {
                 "run_id": "r1",
                 "llm": {
                     "modules": {
-                        "expert_review": {"ok": True, "cost": 0.5},
-                        "global_macro": {"ok": True, "cost": 0.3},
+                        "expert_review": {"ok": True, "costs": {"USD": 0.5}, "model": "gpt-4o"},
+                        "global_macro": {"ok": True, "costs": {"USD": 0.3}, "model": "gpt-4o"},
                     }
                 },
             }
@@ -318,7 +359,7 @@ class TestForceScopeForecast:
         assert fc["force_scope"] == ["expert_review"]
         assert fc["detail"]["expert_review"]["basis"] == "static", "范围内模块按静态口径（历史样本含缓存折扣不适用）"
         assert fc["forced_count"] == 1
-        assert fc["forced_low"] > 0 and fc["forced_high"] >= fc["forced_low"]
+        assert _total_forced(fc, "low") > 0 and _total_forced(fc, "high") >= _total_forced(fc, "low")
         assert any("重新生成" in ln for ln in forecast_summary_lines(fc)), "重新生成拆行须上屏"
 
     def test_unscoped_modules_keep_history_caliber(self):

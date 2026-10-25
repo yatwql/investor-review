@@ -49,7 +49,6 @@
   },
 
   // ── D. 市场时段与缓存 ──
-  "market_hour_aware": ["price", "index"],
   "market_hour_ttl": 30,
   "market_hours": {
     "start": "09:30",
@@ -153,8 +152,7 @@
 | `news_sources` | 见下方 | 各新闻数据源启停开关 | 手动编辑 |
 | `preferred_provider` | `{}` | 各数据类型的首选提供商覆写 | 手动编辑 |
 | `datasink.*` | `{enabled: true, plan: "free", ...}` | DataSinking 数据底座配置：`enabled`（**总开关，默认开**；关闭后所有依赖该底座的分析——财务指标章、真实历史估值分位——**静默回到引入前的报告形态**，不产生任何可感知变化）、`plan`（free/yearly，决定限速与日配额默认值）、`requests_per_second` / `daily_quota`（0=按 plan 自动）、`sections`（取用章节偏好：按顺序在文档实际章节名中子串匹配，命中即取；季报会自动落到「主要财务数据/主要会计数据」）、`max_chars`（摘要截断）、`doc_types`（**文种白名单，空数组 = 不限文种**，默认取最新报告期——半年报/季报通常比年报新）。免费档 3 请求/秒（触发 429 时自动退避重试一次）、8191 篇/日；仅覆盖 A 股 | 手动编辑 |
-| `market_hour_aware` | `["price", "index"]` | 交易时段内使用短 TTL 的数据类型列表 | 手动编辑 |
-| `market_hour_ttl` | `30` | 交易时段内 market_hour_aware 类型的缓存有效期（秒），最短 30s，最长 86400s。低于 30s 的值在配置校验时告警，运行时自动钳制到 30s | 手动编辑 |
+| `market_hour_ttl` | `30` | 交易时段内**价/指**的缓存有效期（秒），最短 30s，最长 86400s。盘中敏感类型由注册表声明（`price`/`index`），原 `market_hour_aware` 已退役（写入会告警并被忽略）；低于 30s 的值在配置校验时告警，运行时自动钳制到 30s | 手动编辑 |
 | `market_hours` | `{start: "09:30", end: "15:00", official_source: true}` | 市场时段配置（见 §market_hours 章节） | 手动编辑 |
 | `cache_ttl.*` | 见下方 | 各缓存类型有效期（秒） | 手动编辑 |
 | `default_menu_key` | `L` | TUI 菜单缺省选项的快捷键（E/B/L/W/Q/D/1/2/4/P/I/A/S/R/V/H/T/X；其中 `T`（系统自检）恒上屏，`Q`（报告追问）受 `report_qa` 开关门控）。取值未命中时回落到 `L` |
@@ -340,10 +338,10 @@ TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一�
 | `hold` | `fund_hold_{code}.json` | 7 天 | — | 基金前 10 持仓明细 |
 | `industry` | `industry_{code}.json` | 14 天 | — | 行业分类/概念板块 |
 | `sentiment` | `sentiment_dragon_tiger.json` + `sentiment_ladder.json` | 1h | — | 市场情绪（龙虎榜 + 连板天梯，同花顺唯一源） |
-| `report` | `report_datasink_index_{symbol}.json` + `report_datasink_sections_{doc_id}.json` + `report_cninfo_index_*` | 30 天 | — | 财报索引/章节清单（DataSinking 主源 + 巨潮备源） |
+| `report` | `report_datasink_index_{symbol}.json` + `report_datasink_sections_{doc_id}.json` + `report_cninfo_index_*` | 24h | — | 财报索引/章节清单（DataSinking 主源 + 巨潮备源）；symbol 级键，日频让**新披露最迟次日可见** |
 | `report_doc` | `report_datasink_doc_{doc_id}_{section}.json`（备源 `report_cninfo_text_*`） | 30 天 | — | 财报正文（主源全文 / 备源 PDF 解析） |
-| `fin_indicator` | `fin_indicator_{code}.json` + `fin_indicator_hist_{code}.json` | 30 天 | — | 结构化财务指标（akshare 主源 + 同花顺合并报表兜底） |
-| `dividend` | `dividend_{fingerprint}.json` | 30 天 | 持仓+穿透 A 股代码列表 | 股票历史分红汇总 |
+| `fin_indicator` | `fin_indicator_{code}.json` + `fin_indicator_hist_{code}.json` | 24h | — | 结构化财务指标（akshare 主源 + 同花顺合并报表兜底）；同索引口径 |
+| `dividend` | `dividend_{fingerprint}.json` | 7 天 | 持仓+穿透 A 股代码列表 | 股票历史分红汇总（公告不定期，周频兼顾可见性与请求量） |
 | `benchmark` | `fund_benchmarks.json` | 30 天 | — | 业绩比较基准对照表 |
 
 ##### LLM 分析类
@@ -947,6 +945,7 @@ Web 模式（浏览器界面）提供「配置编辑」面板，可修改的配�
 > **调整建议：** 持仓变动少可将 `hold` 的 TTL 调大为 30 天，减少基金持仓的重复拉取。
 >
 > **交易时段短 TTL：** `price` 和 `index` 在 A 股交易时段（09:30–11:30 + 13:00–15:00）自动使用 `market_hour_ttl`（默认 30s）替代常规 TTL，确保盘中实时行情。收盘后自动回落长 TTL 保持收盘价。可通过 `market_hours` 配置手动调整。
+> **哪些类型盘中敏感由程序声明**（不是配置项）：只有行情价与指数是分钟级变化，它们会随盘中降频；新闻（15 分钟）、情绪（1 小时）、财报索引（24h）等数据不因盘中被降频——否则只是把上游请求翻几倍而拿回同一份数据。若你同时配了 `cache_ttl.price`，盘中仍以 `market_hour_ttl` 为准（日志会提示一次），`cache_ttl.price` 只在盘后生效。
 
 ---
 

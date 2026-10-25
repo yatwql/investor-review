@@ -1,5 +1,5 @@
 # 投资复盘助手 — 需求文档
-> 文档版本：0.15.7
+> 文档版本：0.15.8
 
 ---
 
@@ -1031,7 +1031,8 @@ LLM 五维度量化评分，每项满分 100：
 | R-LLM-12 | **生成后自检**（`llm_settings.json` 的 `enabled_llm.self_review`，出厂默认 `true`）：开启后每次报告在四个分析模块产出之后追加一次模型层复核，输出固定条目的【自检清单】（结论与数据是否矛盾 / 是否有未标注的推测性表述 / 模块间结论是否互斥）；**与确定性事实校验分层不重叠**（后者始终生效，本项只做模型层复核）；关闭时**零 LLM 调用**；自检失败或未产出不影响主内容（仅登记失败原因）；输出恒附「辅助信号、不构成质量保证」尾注；其用量在 LLM 用量页签按「有数据才上屏」参与明细（保证行合计与总计一致）|
 | R-LLM-10 | **端点级节流与并发治理**：Provider 路由条目可声明 `pacing`（`min_interval` 最小请求间隔秒 / `jitter` 间隔随机抖动比例 / `max_concurrency` 在途并发上限）对该端点单独限速限并发，与全局 `llm_max_concurrency` 两级叠加；**未声明即无约束**（零开销直通，行为与未引入时逐字节一致）——使同一程序可对订阅制端点收紧、对按量付费端点放开。端点返回 **403**（配额/风控，如订阅额度滚动窗口、并发上限）时**不重试**（窗口按时间滚动，重试无益且加剧风控画像），直接降级下一 Provider 并以 `quota_exceeded` 差异化提示；**503** 仍按 `max_retries` 重试；**429** 归 `quota` 终态不重试（首试即 600s 长冷却熔断，避免无效退避请求） |
 | R-LLM-08 | 各 Provider 的失败原因（API 错误 / 超时 / 网络异常等）需追踪记录，在报告中按模块展示失败明细 |
-| R-LLM-13 | **事前费用预估与日预算**：full 生成前按「计划参与模块（`enabled_llm` ∩ 深度档位收窄）× 生效模型单价」给费用区间预估——优先取 perf 历史逐模块实际费用（自校准），无历史回落静态 token 包络；预估失败**不阻塞**生成（Web/CLI 跳过确认继续；TUI 单屏照常给出、回车即继续）。三渠道确认：**TUI 合并单屏一次确认**（预估上屏 + 问句「是否用已有的 AI 分析结果生成？（`Y`=用已有结果，免费但可能不是最新；`N`=重新生成，会产生费用）」+ 键位行「回车/`Y`=用已有结果生成 / `N`=重新生成（可选模块） / `q`=中止」（默认侧 `Y`，`f` 为 `N` 同义键），历史走势 `h` 选项并入——默认路径由原「是否重新生成 y/N + 费用 y/N + 历史 y/N」三问降为一问） / Web 提交前弹层 / CLI 交互确认（`--yes`、`--non-interactive`、非 TTY 跳过）。`llm_settings.json → daily_cost_limit`（默认 `0`=不启用）为**日费用硬闸**：今日已花费（perf 当日 `llm.total_cost` 求和，与事后统计同源）达上限时交互渠道询问「用已有结果继续 / 中止」（该路径清空本次重新生成范围），非交互链路直接中止——CLI 退出码 2、Web 创建 409 `BUDGET_EXCEEDED` + 执行体兜底（定时调度/直连 API 同拦）。三渠道费用预估同源感知重新生成范围（`forecast_run_cost(force_llm/force_modules)`：范围内模块静态单价口径、范围外历史口径；TUI 选模块后重打更新预估行、Web cost-preflight 透传 `llm_modules`、CLI `--yes` 确认同源，预估行「其中 N 个模块重新生成」拆行区分口径） |
+| R-LLM-13 | **事前费用预估与日预算**：full 生成前按「计划参与模块（`enabled_llm` ∩ 深度档位收窄）× 生效模型单价」给费用区间预估——优先取 perf 历史逐模块实际费用（自校准），无历史回落静态 token 包络；预估失败**不阻塞**生成（Web/CLI 跳过确认继续；TUI 单屏照常给出、回车即继续）。三渠道确认：**TUI 合并单屏一次确认**（预估上屏 + 问句「是否用已有的 AI 分析结果生成？（`Y`=用已有结果，免费但可能不是最新；`N`=重新生成，会产生费用）」+ 键位行「回车/`Y`=用已有结果生成 / `N`=重新生成（可选模块） / `q`=中止」（默认侧 `Y`，`f` 为 `N` 同义键），历史走势 `h` 选项并入——默认路径由原「是否重新生成 y/N + 费用 y/N + 历史 y/N」三问降为一问） / Web 提交前弹层 / CLI 交互确认（`--yes`、`--non-interactive`、非 TTY 跳过）。`llm_settings.json → daily_cost_limit`（**本地主币种金额单值**，默认 `0` 不启用）为**日费用硬闸**：今日已花费（perf 当日 `llm.cost_by_currency` 逐币种求和；判定时按内部汇率表折算到本币，折算不进入展示金额，缺汇率的币种显式点名）达上限时交互渠道询问「用已有结果继续 / 中止」（该路径清空本次重新生成范围），非交互链路直接中止——CLI 退出码 2、Web 创建 409 `BUDGET_EXCEEDED` + 执行体兜底（定时调度/直连 API 同拦）。三渠道费用预估同源感知重新生成范围（`forecast_run_cost(force_llm/force_modules)`：范围内模块静态单价口径、范围外历史口径；TUI 选模块后重打更新预估行、Web cost-preflight 透传 `llm_modules`、CLI `--yes` 确认同源，预估行「其中 N 个模块重新生成」拆行区分口径） |
+| R-LLM-14 | **LLM 缓存未命中归因**：每次模块缓存未命中记录原因（`forced` / `fingerprint_changed` / `ttl_expired`），按次数聚合写入 perf 的 `llm.recompute_reasons` 并在预检摘要行显示分布；归因只读不写缓存键，纯旁路不改命中判定与调用次数。用途：以 `ttl_expired` 占比作为 TTL 放宽（内容型模块 4h→8~12h）的唯一决策依据，`news_correlation` 维持 ≤4h |
 | R-LLM-14 | 多链降级顺序（`providers[].priority`）可通过 CLI（`--llm-provider-order`，持久化写盘后退出）、TUI（`[M]` 面板编号交换）、Web（配置面板 ▲▼ 调序）三渠道调整；写路径同源（共享编辑层：order 须恰好覆盖全部线路、priority 归一化、注释保留、写前 .bak） |
 | R-LLM-15 | **总时间预算**（`llm_settings.json → llm_total_time_budget_sec`，秒，`0`=不启用）：超预算后不再启动新模块（已在跑的模块不打断），日志回显已用时长与预算值，报告按已生成内容呈现；用于兜住「单模块卡住 + 重试叠加」把一次 full 拖成小时级 |
 
@@ -1216,7 +1217,7 @@ LLM 五维度量化评分，每项满分 100：
 | R-CCH-11 | 机构盈利预测 | 24h | — |
 | R-CCH-12 | 基金持仓明细 | 7 天 | — |
 | R-CCH-13 | 行业分类/概念板块 | 14 天 | — |
-| R-CCH-14 | 股票历史分红 | 30 天 | — |
+| R-CCH-14 | 股票历史分红 | 7 天 | — |
 | R-CCH-15 | 业绩比较基准 | 30 天 | — |
 | R-CCH-16 | LLM 智囊团深度复盘 | 4h（14400s） | — |
 | R-CCH-17 | LLM 新闻关联分析 | 4h（14400s） | — |
@@ -1296,7 +1297,6 @@ LLM 五维度量化评分，每项满分 100：
 | `enable_history` | bool | true | ✅ P | 历史走势启停 |
 | `enable_portfolio_evolution` | bool | true | ✅ P | 组合演进启停 |
 | `enable_action` | bool | true | ✅ P | 行动建议启停（默认开；再平衡信号/交易纪律/调仓建议/收益归因） |
-| `market_hour_aware` | list | `["price","index"]` | — | 交易时段短 TTL 的数据类型 |
 | `market_hour_ttl` | int | 30 | — | 交易时段缓存有效期（秒） |
 | `market_hours` | dict | `{start:"09:30",end:"15:00",official_source:true}` | — | 交易时段配置（official_source=true 以官方行情源判定开市/收盘；false 不使用官方源，返回 None 走 fallback） |
 | `degradation` | dict | T2/T3/T4 默认 | — | T2（基金业绩/行业分类等, stale_days=3）/ T3（资金流向/基金持仓等, stale_days=14）/ T4（穿透数据, stale_days=14），每层含 unreachable_threshold / empty_data_threshold / stale_days 三参数 |

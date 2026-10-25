@@ -16,7 +16,12 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
+from src.python.llm.pricing import PRICING_CURRENCY, currency_symbol, format_costs
+
+from src.python.core.costs import add_cost_bucket
+
 from _perf_history.data import (
+    _record_costs,
     _slowest_phase,
     _version_evolution_data,
     _is_abnormal_record,
@@ -242,6 +247,26 @@ def _drift_lines(records: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
+def _format_bucket(bucket: dict[str, float]) -> str:
+    """时段费用单元格：有非零金额按币种分列；只有 0 值样本时给本币 0.0000。"""
+    if not bucket:
+        return "—"
+    if any(amount for amount in bucket.values()):
+        return format_costs(bucket)
+    return f"{currency_symbol(sorted(bucket)[0])}0.0000"
+
+
+def _cost_delta(prev: dict[str, float], cur: dict[str, float]) -> str:
+    """两个时段的费用环比：同币种才给数值，跨币种返回破折号（不相减）。"""
+    codes = set(prev) | set(cur)
+    if len(codes) != 1:
+        return "—"
+    code = next(iter(codes))
+    delta = float(cur.get(code, 0.0)) - float(prev.get(code, 0.0))
+    sign = "-" if delta < 0 else "+"
+    return f"{sign}{currency_symbol(code)}{abs(delta):.4f}"
+
+
 def _bucket_lines(records: list[dict[str, Any]], by: str) -> list[str]:
     """按时段聚合（day/week/hour）：样本数 / 中位 / P95 / 最长 / 费用合计 / 费用环比。
 
@@ -250,16 +275,16 @@ def _bucket_lines(records: list[dict[str, Any]], by: str) -> list[str]:
     时间序（ISO 日期 / ISO 周 / 小时），费用与耗时同表交叉，直接读出趋势。
     """
     buckets: dict[str, list[float]] = defaultdict(list)
-    costs: dict[str, float] = defaultdict(float)
+    costs: dict[str, dict[str, float]] = defaultdict(dict)
     for r in records:
         key = _bucket_key(r.get("timestamp", ""), by)
         buckets[key].append(float(r.get("total_seconds") or 0))
         llm = r.get("llm")
         if isinstance(llm, dict):
-            costs[key] += float(llm.get("total_cost") or 0)
+            add_cost_bucket(costs[key], _record_costs(llm) or {PRICING_CURRENCY: 0.0})
     if not buckets:
         return []
-    has_cost = any(v > 0 for v in costs.values())
+    has_cost = any(any(v > 0 for v in bucket.values()) for bucket in costs.values())
     label = {"day": "日期", "week": "ISO 周", "hour": "小时"}[by]
     lines = [f"## 时段聚合（按{label}）", ""]
     if has_cost:
@@ -277,25 +302,30 @@ def _bucket_lines(records: list[dict[str, Any]], by: str) -> list[str]:
             ]
         )
     keys = sorted(buckets)
-    prev_cost: float | None = None
+    prev_cost: dict[str, float] | None = None
     for key in keys:
         vals = buckets[key]
         row = (
             f"| {key} | {len(vals)} | {_median(vals):.1f}s | {_percentile(vals, 95):.1f}s | {_min_max(vals)[1]:.1f}s |"
         )
         if has_cost:
-            cur = costs.get(key, 0.0)
-            delta_cell = "—" if prev_cost is None else f"{cur - prev_cost:+.4f}"
-            row += f" {cur:.4f} | {delta_cell} |"
-            prev_cost = cur
+            cur_costs = costs.get(key) or {}
+            delta_cell = "—" if prev_cost is None else _cost_delta(prev_cost, cur_costs)
+            row += f" {_format_bucket(cur_costs)} | {delta_cell} |"
+            prev_cost = cur_costs
         lines.append(row)
     if has_cost and len(keys) >= 2:
-        last_cost = costs.get(keys[-1], 0.0)
-        prev_cost2 = costs.get(keys[-2], 0.0)
-        lines.append("")
-        lines.append(
-            f"**费用环比（末档 vs 前档）**：{prev_cost2:.4f} → {last_cost:.4f}（{last_cost - prev_cost2:+.4f}）"
-        )
+        last_costs = costs.get(keys[-1]) or {}
+        prev_costs = costs.get(keys[-2]) or {}
+        delta = _cost_delta(prev_costs, last_costs)
+        if delta != "—":
+            lines.append("")
+            lines.append(
+                f"**费用环比（末档 vs 前档）**：{_format_bucket(prev_costs)} → {_format_bucket(last_costs)}（{delta}）"
+            )
+        elif last_costs or prev_costs:
+            lines.append("")
+            lines.append("**费用环比（末档 vs 前档）**：跨币种不可直接相减，已省略数值环比")
     lines.append("")
     return lines
 
@@ -319,7 +349,9 @@ def _llm_context_lines(records: list[dict[str, Any]]) -> list[str]:
     fallbacks = int(_sum("fallbacks"))
     hits = int(_sum("cache_hits"))
     misses = int(_sum("cache_misses"))
-    cost = _sum("total_cost")
+    total_costs: dict[str, float] = {}
+    for r in with_ctx:
+        add_cost_bucket(total_costs, _record_costs(r["llm"]))
 
     lines = [
         "## LLM 运行上下文",
@@ -334,8 +366,8 @@ def _llm_context_lines(records: list[dict[str, Any]]) -> list[str]:
         f"| provider 降级 | {fallbacks} | {fallbacks / len(with_ctx):.2f} |",
         f"| 缓存命中/未命中 | {hits} / {misses} | — |",
     ]
-    if cost:
-        lines.append(f"| 累计费用 | {cost:.4f} | {cost / len(with_ctx):.4f} |")
+    if any(total_costs.values()):
+        lines.append(f"| 累计费用 | {format_costs(total_costs)} | 按币种分列 |")
     lines.append("")
 
     providers: dict[str, int] = defaultdict(int)

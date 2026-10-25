@@ -536,7 +536,7 @@ class TestBuildModuleInfoList(unittest.TestCase):
         self.assertEqual(gm["status"], "disabled")
         self.assertEqual(gm["status_label"], "已禁用")
         self.assertEqual(gm["model"], "")
-        self.assertEqual(gm["cost"], 0.0)
+        self.assertEqual(gm["cost_display"], "")
 
     def test_failed(self):
         """FAIL_REASON_API_ERROR → status='failed', status_label 含错误描述。"""

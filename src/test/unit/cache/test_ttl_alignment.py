@@ -1,6 +1,6 @@
 """TTL 三处对齐 —— 默认值唯一来源、清理侧与读侧同源、未注册键可见。
 
-本文件守住四条契约（默认值/覆盖/清理/告警）：
+本文件守住五条契约（默认值/覆盖/清理/告警/盘中敏感）：
 
 1. **默认值唯一来源**：生成的 `config.json` 里 `cache_ttl` 是空对象，默认值只来自
    缓存注册表；用户在 config 里写键才构成覆盖，删键即回默认。
@@ -8,6 +8,8 @@
    查类型——两侧取到同一个数（`get_ttl` 只接受 `data_type`，不存在按 key 的第二口径）。
 3. **精确键映射用逻辑键**：文件名带 `_v{N}` 版本戳，去查精确键表必须先剥离。
 4. **未注册键可见**：`cache_ttl.fund_overlap` 这类历史残留要告警（不自动删）。
+5. **盘中敏感类型逐类生效**：价/指盘中 30s（清理侧同源，防"过期价被当收盘价"），
+   盘后回到静态 TTL（防为"实时"白打上游）；负缓存按各自 12h/6h 判定，不吃 24h 兜底。
 """
 
 from __future__ import annotations
@@ -140,3 +142,57 @@ class TestUnregisteredKeyWarning:
             issues = _validate_cache_ttl({"cache_ttl": {"price": 3600, "llm_expert_review": 21600}}, 0)
         assert issues == 0
         assert not any("不是已注册的缓存类型" in r.getMessage() for r in caplog.records)
+
+
+class TestIntradayAndNegativeCacheTTL:
+    """盘中敏感与缺失负缓存的 TTL 契约（数据敏感性与上游负担的平衡点）。"""
+
+    def test_negative_cache_types_are_registered(self):
+        """两个负缓存类型的 TTL 由注册表承载（而非调用点常量）。"""
+        from src.python.core.registry import get_cache_ttl_defaults, get_prefix_type_map
+
+        ttl = get_cache_ttl_defaults()
+        assert ttl["datasink_probe_miss"] == 12 * 3600
+        assert ttl["report_symbol_miss"] == 6 * 3600
+        prefixes = get_prefix_type_map()
+        assert prefixes["datasink_probe_miss_"] == "datasink_probe_miss"
+        assert prefixes["report_symbol_miss_"] == "report_symbol_miss"
+
+    def test_probe_miss_survives_twelve_hours_only(self, cache_env):
+        """带 12h 负缓存的探测缺失：7h 保留、13h 清理（不被 24h 兜底延长）。"""
+        _write_cache(cache_env, "datasink_probe_miss_abc123", age_seconds=7 * 3600)
+        assert _cleanup(cache_env) == 0, "7h 未到 12h，应保留"
+        _write_cache(cache_env, "datasink_probe_miss_def456", age_seconds=13 * 3600)
+        assert _cleanup(cache_env) == 1, "13h 超过 12h，应清理"
+
+    def test_symbol_miss_expires_at_six_hours(self, cache_env):
+        """标的正文缺失（6h）在 7h 后清理——负结论不跨报告周期堆积。"""
+        _write_cache(cache_env, "report_symbol_miss_abc123", age_seconds=7 * 3600)
+        assert _cleanup(cache_env) == 1
+
+    def test_intraday_price_uses_short_ttl_on_cleanup(self, cache_env, monkeypatch):
+        """盘中：价的 60s 缓存即过期（清理侧与读侧同为 30s），防盘中价被当收盘价。"""
+        from src.python.cache import _ttl as ttl_mod
+
+        monkeypatch.setattr(ttl_mod, "_is_market_open", lambda: True)
+
+        _write_cache(cache_env, "price_600519", age_seconds=60)
+        assert _cleanup(cache_env) == 1, "盘中 30s TTL：60s 前写入的价必须清理"
+
+    def test_closed_market_price_keeps_static_ttl(self, cache_env, monkeypatch):
+        """盘后：静态 TTL（24h）生效，1h 前抓的价格不重复清理（避免白打上游）。"""
+        from src.python.cache import _ttl as ttl_mod
+
+        monkeypatch.setattr(ttl_mod, "_is_market_open", lambda: False)
+
+        _write_cache(cache_env, "price_600519", age_seconds=3600)
+        assert _cleanup(cache_env) == 0
+
+    def test_every_registered_type_has_positive_ttl(self):
+        """全量结构不变量：每个注册类型的 TTL 为正（含负缓存与盘中敏感类型）。"""
+        from src.python.core.registry import get_cache_ttl_defaults, get_market_ttl_map
+
+        ttl = get_cache_ttl_defaults()
+        assert ttl, "注册表不应为空"
+        assert all(value > 0 for value in ttl.values())
+        assert all(value > 0 for value in get_market_ttl_map().values())

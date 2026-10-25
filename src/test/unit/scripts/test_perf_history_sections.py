@@ -76,7 +76,7 @@ class TestLlmContextSection:
             "fallbacks": 1,
             "cache_hits": 3,
             "cache_misses": 1,
-            "total_cost": 0.42,
+            "cost_by_currency": {"CNY": 0.42},
             "providers": {"deepseek-main": 4},
             "models": {"deepseek-v4-flash": 4},
         }
@@ -379,21 +379,21 @@ def _cost_records() -> list[dict]:
             "report_type": "full",
             "timestamp": "2026-01-01 10:00:00",
             "total_seconds": 10.0,
-            "llm": {"total_cost": 0.10},
+            "llm": {"cost_by_currency": {"CNY": 0.10}},
         },
         {
             "version": "0.1.0",
             "report_type": "full",
             "timestamp": "2026-01-01 11:00:00",
             "total_seconds": 12.0,
-            "llm": {"total_cost": 0.15},
+            "llm": {"cost_by_currency": {"CNY": 0.15}},
         },
         {
             "version": "0.1.0",
             "report_type": "full",
             "timestamp": "2026-01-02 10:00:00",
             "total_seconds": 9.0,
-            "llm": {"total_cost": 0.05},
+            "llm": {"cost_by_currency": {"CNY": 0.05}},
         },
         {
             "version": "0.1.0",
@@ -414,14 +414,14 @@ class TestBucketCostAggregation:
         day1 = next(ln for ln in text.splitlines() if ln.startswith("| 2026-01-01 "))
         day2 = next(ln for ln in text.splitlines() if ln.startswith("| 2026-01-02 "))
         day3 = next(ln for ln in text.splitlines() if ln.startswith("| 2026-01-03 "))
-        assert "0.2500 | —" in day1, "首档无上期，费用合计为 0.10+0.15、环比为 —"
-        assert "0.0500 | -0.2000" in day2, "环比 = 0.05 − 0.25"
-        assert "0.0000 | -0.0500" in day3, "无 llm 记录的时段计零并参与环比"
+        assert "¥0.2500 | —" in day1, "首档无上期，费用合计为 0.10+0.15、环比为 —"
+        assert "¥0.0500 | -¥0.2000" in day2, "环比 = 0.05 − 0.25（带币种符号）"
+        assert "| — | -¥0.0500 |" in day3, "无 llm 记录的时段显示无费用，环比仍可算"
 
     def test_last_bucket_delta_footer(self, mod):
         """末档 vs 前档提示行给出当期环比（趋势一眼可读）。"""
         text = "\n".join(mod._bucket_lines(_cost_records(), "day"))
-        assert "**费用环比（末档 vs 前档）**：0.0500 → 0.0000（-0.0500）" in text
+        assert "**费用环比（末档 vs 前档）**：¥0.0500 → —（-¥0.0500）" in text
 
     def test_cost_columns_absent_without_cost_samples(self, mod):
         """范围内无费用样本时省略费用列（不制造全列噪音）。"""
@@ -434,7 +434,7 @@ class TestBucketCostAggregation:
         text = "\n".join(mod._bucket_lines(_cost_records(), "hour"))
         assert "费用合计" in text
         hour10 = next(ln for ln in text.splitlines() if ln.startswith("| 10 "))
-        assert "0.1500" in hour10, "10 点档 = 0.10 + 0.05"
+        assert "¥0.1500" in hour10, "10 点档 = 0.10 + 0.05"
 
 
 class TestLlmCostMachineData:

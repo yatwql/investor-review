@@ -239,6 +239,13 @@ def _generate_report_full(
     perf.stop()
 
     # ── 5. 并行获取 LLM + 新闻 ──
+    # 观测汇聚器必须在**预检之前**绑定：预检（`_precheck_all_modules`）会记录
+    # 缓存命中与重算归因，绑定晚一步就会让每次进程重启后的首份报告整体丢样本——
+    # 而首跑恰是最贵的一份，缺它会让 `ttl_expired` 占比统计系统性偏差。
+    from src.python.llm.observation import LlmObservation, bind_llm_observation
+
+    _llm_sink = LlmObservation()
+    bind_llm_observation(_llm_sink)
     _comparison_indices = config.get("comparison_indices", None)
     # 事实校验自动修正计数：每轮从零开始累计（长驻进程/N 次生成不跨轮串味）
     from src.python.llm.fact_checker import auto_correction_counts, reset_auto_correction_counts
@@ -247,10 +254,6 @@ def _generate_report_full(
     reset_auto_correction_counts()
     reset_thinking_wait_total()
     perf.start("LLM+新闻")
-    from src.python.llm.observation import LlmObservation, bind_llm_observation
-
-    _llm_sink = LlmObservation()
-    bind_llm_observation(_llm_sink)
     try:
         llm_content, news_data, news_llm_meta, news_ok, debate_info = _fetch_llm_and_news(
             holdings,

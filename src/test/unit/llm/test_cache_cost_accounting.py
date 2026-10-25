@@ -78,7 +78,7 @@ class TestSessionCostDelta:
             entry = modules.get(key) or {}
             assert entry, f"{key} 未记账"
             assert entry.get("input_tokens", 0) > 0
-            assert entry.get("cost", 0) > 0, f"{key} 未记费用：{entry}"
+            assert sum((entry.get("costs") or {}).values()) > 0, f"{key} 未记费用：{entry}"
         reset_session_usage()
 
 
@@ -88,9 +88,9 @@ class TestCacheSavedCost:
             "timestamp": "2026-10-25T10:00:00+08:00",
             "llm": {
                 "modules": {
-                    "global_macro": {"cost": 0.02},
-                    "expert_review": {"cost": 0.30},
-                    "health_check": {"cost": 0.12},
+                    "global_macro": {"costs": {"CNY": 0.02}},
+                    "expert_review": {"costs": {"CNY": 0.30}},
+                    "health_check": {"costs": {"CNY": 0.12}},
                 }
             },
         },
@@ -98,8 +98,8 @@ class TestCacheSavedCost:
             "timestamp": "2026-10-25T11:00:00+08:00",
             "llm": {
                 "modules": {
-                    "global_macro": {"cost": 0.04},
-                    "expert_review": {"cost": 0.0},  # 命中运行不计入均价
+                    "global_macro": {"costs": {"CNY": 0.04}},
+                    "expert_review": {"costs": {"CNY": 0.0}},  # 命中运行不计入均价
                 }
             },
         },
@@ -110,7 +110,7 @@ class TestCacheSavedCost:
 
         result = estimate_cached_saving(["global_macro", "expert_review"], history=self._HISTORY)
         # global_macro 均价 (0.02+0.04)/2 = 0.03；expert_review 只有 0.30 这一个付费样本
-        assert result["saved"] == pytest.approx(0.33, abs=1e-9)
+        assert result["saved"]["CNY"] == pytest.approx(0.33, abs=1e-9)
         assert set(result["priced"]) == {"global_macro", "expert_review"}
         assert result["unpriced"] == []
 
@@ -119,7 +119,7 @@ class TestCacheSavedCost:
         from src.python.llm.cost_forecast import estimate_cached_saving
 
         result = estimate_cached_saving(["penetration_deep"], history=self._HISTORY)
-        assert result["saved"] == 0.0
+        assert result["saved"] == {}
         assert result["unpriced"] == ["penetration_deep"]
 
     def test_record_llm_context_writes_saved_cost(self, llm_cache_dir):
@@ -138,21 +138,22 @@ class TestCacheSavedCost:
             _run(base)  # 全命中后再登记
             _record_llm_context(_Perf())
 
-        assert recorded.get("cache_saved_cost", 0) >= 0.3
-        assert not recorded.get("total_cost"), "命中运行不应记费用"
+        saved = recorded.get("cache_saved_cost") or {}
+        assert sum(saved.values()) >= 0.3
+        assert not any(recorded.get("cost_by_currency") or {}), "命中运行不应记费用"
 
 
 class TestBudgetAccounting:
     _PERF = [
-        {"timestamp": "2026-10-25T10:00:00+08:00", "llm": {"total_cost": 0.0}},
-        {"timestamp": "2026-10-25T11:00:00+08:00", "llm": {"total_cost": 0.0}},
+        {"timestamp": "2026-10-25T10:00:00+08:00", "llm": {"cost_by_currency": {}}},
+        {"timestamp": "2026-10-25T11:00:00+08:00", "llm": {"cost_by_currency": {}}},
     ]
 
     def test_hit_only_runs_do_not_consume_budget(self):
         from src.python.llm.cost_forecast import budget_status
 
         status = budget_status({"daily_cost_limit": 1.0}, history=self._PERF)
-        assert status["spent"] == pytest.approx(0.0, abs=1e-9)
+        assert "今日尚无 LLM 支出" in status["display"], "命中运行不产生支出（display 如实反映）"
         assert status["exceeded"] is False
 
 
@@ -160,11 +161,11 @@ class TestForecastCacheDiscount:
     _HISTORY = [
         {
             "timestamp": "2026-10-25T10:00:00+08:00",
-            "llm": {"modules": {"global_macro": {"cost": 0.0}}},  # 全命中运行
+            "llm": {"modules": {"global_macro": {"costs": {"CNY": 0.0}}}},  # 全命中运行
         },
         {
             "timestamp": "2026-10-25T11:00:00+08:00",
-            "llm": {"modules": {"global_macro": {"cost": 0.02}}},
+            "llm": {"modules": {"global_macro": {"costs": {"CNY": 0.02}}}},
         },
     ]
 
@@ -186,7 +187,7 @@ class TestForecastCacheDiscount:
             history=self._HISTORY,
         )
         assert result["ok"] is True
-        assert result["low"] == pytest.approx(0.0, abs=1e-9)
+        assert sum(v["low"] for v in result["costs"].values()) == pytest.approx(0.0, abs=1e-9)
 
     def test_forced_module_priced_without_cache_discount(self):
         """强制重新生成的模块保证真调用：按静态单价计，不吃缓存折扣。"""
@@ -208,4 +209,6 @@ class TestForecastCacheDiscount:
         )
         assert result["forced_count"] == 1
         # 无静态定价时回落历史样本；有静态定价时必须 >0（不吃 0 费用折扣）
-        assert result["forced_high"] >= result["forced_low"] >= 0.0
+        forced = result["forced_costs"]
+        assert forced, "重新生成范围须给出逐币种区间"
+        assert sum(v["high"] for v in forced.values()) >= sum(v["low"] for v in forced.values()) >= 0.0

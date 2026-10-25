@@ -35,7 +35,7 @@ class TestS17PartialCacheExpiry(unittest.TestCase):
                 "input_tokens": 0,
                 "output_tokens": 0,
                 "cache_hit_tokens": 1000,
-                "cost": 0.0,
+                "costs": {"CNY": 0.0},
                 "thinking": False,
                 "endpoint": "",
             },
@@ -45,7 +45,7 @@ class TestS17PartialCacheExpiry(unittest.TestCase):
                 "input_tokens": 3000,
                 "output_tokens": 1500,
                 "cache_hit_tokens": 0,
-                "cost": 0.015,
+                "costs": {"CNY": 0.015},
                 "thinking": True,
                 "endpoint": "",
             },
@@ -56,7 +56,7 @@ class TestS17PartialCacheExpiry(unittest.TestCase):
 
         # 缓存
         self.assertEqual(by_key["global_macro"]["status"], "cached")
-        self.assertEqual(by_key["global_macro"]["cost"], 0.0)
+        self.assertEqual(by_key["global_macro"]["cost_display"], "")
         self.assertEqual(by_key["global_macro"]["cache_hit_tokens"], 1000)
         self.assertTrue(by_key["global_macro"]["cached"])
 
@@ -65,7 +65,7 @@ class TestS17PartialCacheExpiry(unittest.TestCase):
         self.assertEqual(by_key["expert_review"]["input_tokens"], 3000)
         self.assertEqual(by_key["expert_review"]["output_tokens"], 1500)
         self.assertEqual(by_key["expert_review"]["total_tokens"], 4500)
-        self.assertEqual(by_key["expert_review"]["cost"], 0.015)
+        self.assertEqual(by_key["expert_review"]["cost_display"], "¥0.0150")
         self.assertFalse(by_key["expert_review"]["cached"])
 
         # 无 per_module → unknown
@@ -123,7 +123,7 @@ class TestS17aFullCache(unittest.TestCase):
                 "input_tokens": 0,
                 "output_tokens": 0,
                 "cache_hit_tokens": 500,
-                "cost": 0.0,
+                "costs": {"CNY": 0.0},
                 "thinking": False,
                 "endpoint": "",
             },
@@ -133,7 +133,7 @@ class TestS17aFullCache(unittest.TestCase):
                 "input_tokens": 0,
                 "output_tokens": 0,
                 "cache_hit_tokens": 300,
-                "cost": 0.0,
+                "costs": {"CNY": 0.0},
                 "thinking": True,
                 "endpoint": "",
             },
@@ -143,7 +143,7 @@ class TestS17aFullCache(unittest.TestCase):
                 "input_tokens": 0,
                 "output_tokens": 0,
                 "cache_hit_tokens": 200,
-                "cost": 0.0,
+                "costs": {"CNY": 0.0},
                 "thinking": False,
                 "endpoint": "",
             },
@@ -153,7 +153,7 @@ class TestS17aFullCache(unittest.TestCase):
                 "input_tokens": 0,
                 "output_tokens": 0,
                 "cache_hit_tokens": 400,
-                "cost": 0.0,
+                "costs": {"CNY": 0.0},
                 "thinking": False,
                 "endpoint": "",
             },
@@ -163,7 +163,7 @@ class TestS17aFullCache(unittest.TestCase):
                 "input_tokens": 0,
                 "output_tokens": 0,
                 "cache_hit_tokens": 600,
-                "cost": 0.0,
+                "costs": {"CNY": 0.0},
                 "thinking": False,
                 "endpoint": "",
             },
@@ -176,4 +176,4 @@ class TestS17aFullCache(unittest.TestCase):
             with self.subTest(key=key):
                 self.assertEqual(by_key[key]["status"], "cached")
                 self.assertTrue(by_key[key]["cached"])
-                self.assertEqual(by_key[key]["cost"], 0.0)
+                self.assertEqual(by_key[key]["cost_display"], "")

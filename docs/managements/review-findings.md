@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.15.7
-> **编号源**：`rf-next = 874`（新增问题取此编号，完成后更新为 +1；已用最大 rf-873，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> 文档版本：0.15.8
+> **编号源**：`rf-next = 881`（新增问题取此编号，完成后更新为 +1；已用最大 rf-880，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -12,24 +12,17 @@
 
 | # | 问题 | 修复方向 |
 |---|------|----------|
-| **rf-257** | Web 模式浏览器真机验收余 **4 类人工项**：真实 basic/full 进度观察（3.1c / 3.2 / 3.3 / 3.4）、结果区按钮（4.5）、提交即禁用（5.3）、真实拖拽与 Tab / Enter 抽验（2.5 / 2.6） | 判定标准见 [`../archive/v0.15.x/web-browser-verification/web-browser-verification.md`](../archive/v0.15.x/web-browser-verification/web-browser-verification.md)（启动 / 收尾命令 + 复验清单）；复跑 `.venv/bin/python scripts/test-smoke-web.py` + `node docs/tmp/browser-verify/cdp-check.mjs`；收尾 kill 服务与浏览器、清空 `data/holdings/uploads/`；全部通过后移入已解决 |
+| **rf-257** | Web 模式浏览器真机验收余 4 类人工项（进度观察 3.1c/3.2/3.3/3.4、结果区按钮 4.5、提交即禁用 5.3、拖拽与 Tab/Enter 抽验 2.5/2.6） | 判定标准见 [`web-browser-verification.md`](../archive/v0.15.x/web-browser-verification/web-browser-verification.md)；复跑 `scripts/test-smoke-web.py` + `docs/tmp/browser-verify/cdp-check.mjs`；收尾 kill 服务与浏览器、清空 `data/holdings/uploads/`；全过后移入已解决 |
 
 ### P2 — 中优先：价值明确、成本可控（下批排期）
 
-当前无 P2 项（入选标准：重构收益明确、回归面可圈定，且不与在办功能争抢同一批文件）。
+当前无 P2 项（入选标准：重构收益明确、回归面可圈定）。
 
 ### P3 — 持续监控：文件膨胀登记
 
-> **单一事实源**：行数与拆分优先级以 `scripts/check-file-length.py -v` 为准（主程序 >700 警告 / >1000 红线；`scripts/` >600 / >1000；测试 >900 / >1200；`__init__.py` >200）；口径见 `technical.md` C28。
-> **入表规则**：达警告线即登记（登记线 = 警告线），破线豁免当前为 0。
-
-**当前无登记项**（三域均在登记线以下）。
+行数与拆分优先级以 `scripts/check-file-length.py -v` 为准（口径见 `technical.md` C28），达警告线即登记。**当前无登记项**。
 
 ## 已解决问题
-
-### 开发期已修复（0.15.7-dev）
-
-（本版开发期已修复项已随 v0.15.7 发布迁入归档档案）
 
 ### 归档档案
 - [`archived_review-findings.0.15.x.md`](../archive/v0.15.x/archived_review-findings.0.15.x.md) — v0.15.x（2026-10-24 ~ 2026-10-25）

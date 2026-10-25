@@ -201,9 +201,7 @@ def _handle_create_run(run_manager):
             return (
                 _err(
                     "BUDGET_EXCEEDED",
-                    f"今日 LLM 费用已达日预算上限"
-                    f"（已花 {_budget['symbol']}{_budget['spent']:.4f} / 上限 {_budget['symbol']}{_budget['limit']:.4f}），"
-                    "确认「用已有结果继续」后重试",
+                    f"今日 LLM 费用已达日预算上限（{_budget.get('display', '')}），确认「用已有结果继续」后重试",
                 ),
                 409,
             )

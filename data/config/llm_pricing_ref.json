@@ -2,9 +2,14 @@
 // 参考数据不是用户开关：不进 TUI/Web 配置面板；改价直接编辑本文件。
 // 合并口径：constants.py 的 MODEL_PRICING 为基础价，本文件 models 逐模型覆盖
 // 出现的字段，未出现的字段继承内置值。文件缺失时仅用内置价。
+// 币种：每条模型价按厂商官方币种记录（DeepSeek/Kimi=CNY，Anthropic/OpenAI/Google=USD），
+// 展示按该模型生效币种出符号，不做汇率折算。
+// currency = **缺省币种（本地显示与计费主币种，默认 CNY）**：模型条目未声明 currency
+// 时按它计价；若某模型用 "alt" 提供了该币种官方价（如国内渠道以人民币计价），则按
+// 该币种计费与显示（客户配置币种优先）。
 {
   "version": 1,   // 结构版本；不符即拒绝加载并提示重新生成
-  "currency": "CNY",   // 货币标识（影响费用符号）
+  "currency": "CNY",   // 缺省币种（本地显示与计费主币种，默认 CNY；影响费用符号）
   "timezone": "Asia/Shanghai",   // 峰谷判定时区（IANA 名称）
   "peak_periods": ["09:00-12:00", "14:00-18:00"],   // 高峰时段（HH:MM-HH:MM，闭区间）
   "idle_periods": [],   // 闲时时段（空 = 高峰之外均闲时）
@@ -13,6 +18,9 @@
   "models": {
     // 逐模型覆盖示例（单位：元 / 百万 token；未写字段继承内置价）：
     // "deepseek-flash": {"input_price": 1.0, "output_price": 4.0,
-    //                     "peak": {"input_price": 2.0, "output_price": 8.0}}
+    //                     "peak": {"input_price": 2.0, "output_price": 8.0}},
+    // "claude-sonnet-5-5": {"input_price": 2, "output_price": 10},
+    // 多币种：厂商只给 USD 价、你按人民币结算时可补 alt 子表（配置币种优先）
+    // "claude-sonnet-5-5": {"alt": {"CNY": {"input_price": 15, "output_price": 75}}}
   }
 }

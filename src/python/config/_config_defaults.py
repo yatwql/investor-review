@@ -73,7 +73,8 @@ _DEFAULT_CONFIG = {
         "doc_types": [],
     },
     # ── D. 市场时段与缓存 ──
-    "market_hour_aware": ["price", "index"],
+    # 盘中敏感类型（价/指）由 core/data_registry 的 DataModuleDef.market_ttl 声明；
+    # 此处只保留盘中 TTL 的**全局数值覆盖**（缺省 30s，钳制 [30, 86400]）
     "market_hour_ttl": 30,
     "market_hours": {
         "start": "09:30",
@@ -303,7 +304,6 @@ def _build_template_from_defaults() -> str:
         "",
         # ── D ──
         "  // ── D. 市场时段与缓存 ──",
-        f'  "market_hour_aware": {json.dumps(d["market_hour_aware"])},',
         f'  "market_hour_ttl": {json.dumps(d["market_hour_ttl"])},',
         f'  "market_hours": {json.dumps(d["market_hours"], indent=2).replace(chr(10), chr(10) + "  ")},',
         "  // cache_ttl 为「稀疏覆盖」：默认值见 docs/manuals/how-to-config.md 的 TTL 表（来自缓存注册表）；",

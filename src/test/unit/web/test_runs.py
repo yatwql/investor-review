@@ -150,15 +150,17 @@ class TestRetention:
         run_ids = [m.submit({"report_type": "basic"}) for _ in range(_RUN_KEEP + 5)]
         assert all(run_ids)  # 队列放大后全部入队成功
 
-        # 等待所有已提交 run 执行完毕（提交瞬间即 trim，早期 run 可能已淘汰）
-        deadline = time.time() + 5.0
+        # 等待所有已提交 run 执行完毕（提交瞬间即 trim，早期 run 可能已淘汰）。
+        # 超时留足余量：xdist 多 worker 并行时 CPU 竞争明显（实测单跑 <1s，全量
+        # 并行下 5s 曾偶发超时），故取 30s——本用例验的是保留上限语义，不是时延。
+        deadline = time.time() + 30.0
         while time.time() < deadline:
             remaining = [r for r in m.list_runs(limit=1000) if r.status in ("queued", "running")]
             if not remaining:
                 break
             time.sleep(0.01)
         else:
-            raise AssertionError("worker 队列未在 5s 内清空")
+            raise AssertionError("worker 队列未在 30s 内清空")
 
         assert len(m.list_runs(limit=1000)) <= _RUN_KEEP
         # 保留上限内应保留最新 run（淘汰最旧）

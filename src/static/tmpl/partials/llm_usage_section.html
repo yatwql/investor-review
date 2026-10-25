@@ -57,8 +57,8 @@
                         <td style="padding: 4px 8px; text-align: right;">{% if _mi.status == "unknown" %}—{% else %}{{ _mi.output_tokens | thousands }}{% endif %}</td>
                         <td style="padding: 4px 8px; text-align: right;">{% if _mi.status == "unknown" %}—{% else %}{{ _mi.cache_hit_tokens | thousands }}{% endif %}</td>
                         <td style="padding: 4px 8px; text-align: right;">
-                            {% if _mi.cost > 0 %}
-                            ¥{{ "%.4f"|format(_mi.cost) }}
+                            {% if _mi.cost_display %}
+                            {{ _mi.cost_display }}
                             {% elif _mi.status == "cached" %}
                             <span style="color: var(--text-faint);">已计入原调用</span>
                             {% else %}

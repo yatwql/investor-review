@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.15.7
+> 文档版本：0.15.8
 
 ## 概述
 
@@ -1247,6 +1247,8 @@ DataModuleDef("我的 LLM 分析", "llm_my_analysis",
 > **开关改变提示词 → 同一后缀函数供两侧调用**：凡开关**会改变提示词内容**（`deterministic_signal` 注入信号块与确定性信号摘要、辩论增强后缀），其开关判定必须**收敛在后缀函数内部**，由 `module_fingerprint.py` 的构造器统一调用——写侧与预检侧只调用同一构造函数，不得任一环节自行拼接（自行拼接的后果是两侧结果永久不等：写侧照常写入、预检侧永不命中，表现为「开关看似生效但每次仍全量调用 LLM」）。后缀函数关闭时返回 `""`（键不变、不误伤既有缓存），开启时返回稳定短串（如 `"_dh"`）。**内容指纹型**后缀（如 `decision_ledger.lessons_cache_suffix`、`prompts_signals._signal_digest_cache_suffix`、`signal_ledger.summary_cache_suffix`）另取块内容 md5 作版本，使数值变化即换键。
 
 > **追加型状态文件一律走共享原语 `core/jsonl_store.py`**：`perf`（性能历史）、`decision_ledger`（决策账本）、`signal_ledger`（信号账本）三者的「读全文 → 拼接 → 写临时文件 → `os.replace`」逻辑已抽为 `append_jsonl_atomic()` / `read_jsonl()`，**新增任何 JSONL 持久化都不得再抄一份**——各自只保留自己的序列化口径（如 `decision_ledger` 的 `sort_keys=True` + `ensure_ascii=False`）与 `prefix`/日志标签，行为逐字不变由 `test_jsonl_store.py::TestDelegationPreservesBehaviour` 锁定。新增持久化文件时**必须**在 `src/test/conftest.py` 的 `_isolate_sensitive_paths` 中把路径重定向到 `tmp_path`，不得依赖测试自行清理。
+>
+> **保留窗口分两类，不得混用**：① **遥测类**（`perf_history` 5000 行、`datasource_health` 2000 行）用 `append_jsonl_atomic(..., max_lines=N)`——按行数截断，丢的只是遥测样本；② **业务账本**（`decision_ledger` / `signal_ledger`）用 `prune_jsonl_by_age(path, retention_days=730, date_key=..., keep=...)`——一行一份状态，按行数截断会连最旧的**已结算**样本一起裁掉、跨期反思随即失样本；决策账本对 `settlement` 事件用 `keep` 谓词永久保留。坏行不裁（不替读取侧吞掉损坏证据），缺日期字段的行保留。
 
 > **统计类输出默认只算「实时」记录**：凡把历史记录折叠成统计/排行榜/提示词摘要的功能（如 `core/signal_ledger.py::fold_signals(live_only=True)`），必须给每条记录附来源标签并可区分「可证明为实时」与其余，**默认只统计实时记录**、且**不引入新的合成数据开关**——来源判定复用既有数据质量设施（逐品种 `data_freshness` + 降级事件），未识别的取值一律保守判非实时；确需乐观缺省时（无逐品种条目可证伪）必须显式写入理由字段，不得静默。
 
@@ -1293,6 +1295,24 @@ DataModuleDef("我的 LLM 分析", "llm_my_analysis",
 
 > **新增数值解析一律委托 `core/num_utils.py`，禁止自写 `try: float(x) / except`**：`float("nan")` / `float("±inf")` **不抛异常**，该形态的兜底对它们完全无效，脏值会一路穿透到聚合、绘图与 JSON 序列化；`value or 0.0` 同样是**假兜底**（NaN 是真值，`or` 不会短路）。按语义选入口：宽容解析（含数值字符串）用 `safe_num`、类型契约敏感场景用 `strict_num`、替代 `or 0.0` 惯用法用 `finite_or`、判定谓词用 `is_finite_number`。**不改变既有失败口径**（`0.0` 还是 `None` 由调用方契约决定），只保证「返回的数值一定有限」。
 
+### 盘中敏感性（`market_ttl`）
+
+盘中敏感是**数据属性**，登记在注册表，不进用户配置：
+
+```python
+DataModuleDef("股票价格", "price", cache_prefixes=("price_",),
+              cache_ttl=CACHE_DAILY, market_ttl=30.0, cache_groups=("preload",))
+```
+
+- `get_ttl(data_type)` 解析顺序：**盘中敏感且有 `market_ttl`** → 交易时段用 `market_hour_ttl`（config 数值覆盖，缺钳 [30, 86400]）→ 否则静态 `cache_ttl` 覆盖 → 注册表默认 → `CACHE_DAILY` 兜底（未注册类型）。
+- 只有行情价/指数是分钟级变化，**其余类型不得声明 `market_ttl`**——把非行情数据放进盘中降频等于把上游请求翻几倍而拿回同一份数据。
+- 读侧（`cache.get`）与清理侧（`cleanup_expired`）取同一个数：`get_ttl` 是唯一出口，不得在任一侧另算。
+- 改 TTL 默认值后必须同步两份只读参考表（`technical.md` 缓存各表 / `how-to-config.md`「cache_ttl 可调参数」）——`check-doc-drift.py` 第 22 项会逐类型对账。
+
+### 缺失探测负缓存
+
+只在**确定性**缺失时写入（已发布静态文档的章节 404、章节阶与备源均无正文），瞬时网络错误不写——否则一次抖动会污染整个 TTL 窗口。TTL 过短会反复重试打源、过长会把「源侧后来补解析」长期遮蔽。新增同类负缓存**必须**登记注册表（`data_type` + `cache_prefixes` + `cache_ttl`），否则清理侧按未注册默认 24h 判定、`cache_ttl` 覆盖与文档表格都覆盖不到。
+
 ### 精确键名缓存
 
 ```python
@@ -1329,11 +1349,24 @@ class ComputModuleDef:
 
 新增计算模块只需在 `_COMPUTATION_REGISTRY` 中添加一行 `ComputModuleDef`，纯算法模块无需缓存注册。
 
+### 费用与币种（LLM）
+
+费用有三条硬纪律，改动任何一条都要同步跑 `test_pricing_currency.py` 与 `test_cache_fingerprint_alignment.py` 的对应用例：
+
+1. **展示币种 = 模型生效币种**：`pricing.model_currency(model)` 解析（配置币种若条目 `alt` 提供 → 否则原生币种）；`MODEL_PRICING` **每条显式声明 `currency`**（CNY 厂商也写），改配置币种不会改变条目自身标价。
+2. **跨币种不相加**：累计/历史/预估一律用「币种 → 金额」桶。桶的读写规则在 `core/costs.py`（`costs_of` / `add_cost_bucket`，core 与 llm 两层共用，避免分层倒置）；累加与格式化在 `llm/pricing.py`（`add_cost` / `merge_costs` / `format_costs`）。**新增费用展示位一律用 `format_costs` 出串，不得自拼符号与数值**。
+3. **唯一的折算点在日预算**：`budget_status()` 判定超限时用 `pricing.FX_TO_CNY` 把各币种支出折到本币比对，折算结果**不进 `display`**（展示保持原生币种）；缺汇率的币种在摘要里点名，不按 0 静默计。
+
+**重算归因有两条路径，新增模块两条都要覆盖**：预检侧（`_compute_module_cache_info` 覆盖的四个基础模块）与骨架侧（`skeleton.generate_llm_content`，覆盖键在上游产出后才确定的模块如 `self_review`）。只加一条会让 `recompute_reasons` 的 `ttl_expired` 占比失真，据此调 TTL 会判错。同理，命中/未命中**计数**也要两条路径都记（骨架路径已计入），且汇聚器必须在「LLM+新闻」阶段**之前**绑定——预检在该阶段内部，晚绑即丢每次进程重启后首份报告的全部样本。
+
+`budget_status()` 只返回 `{enabled, exceeded, display}`：三渠道读 `exceeded` 作硬闸、前端读 `display` 整行直出。新增消费方只读这三个键，不要另加金额字段——那会让同一份数据出现两套格式（此前前端自拼 `low`/`symbol` 字段，后端改多币种后 `.toFixed()` 直接抛错）。
+
 ### 无需手动维护的派生产出
 
 新增模块时只需在 `_MODULE_REGISTRY` 添加一行 `DataModuleDef`，即可自动同步到以下位置：
 
 - 缓存 TTL 默认值 → `get_cache_ttl_defaults()`
+- 盘中短 TTL（仅 `market_ttl` 非空类型）→ `get_market_ttl_map()`
 - 缓存前缀/精确键名映射 → `get_prefix_type_map()` / `get_exact_type_map()`
 - LLM settings 键名 → `get_known_llm_settings_keys()`
 - LLM 模块名称 → `get_llm_module_names()`

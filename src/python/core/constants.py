@@ -37,7 +37,7 @@ PROJECT_ROOT = _find_project_root()
 # 应用名称（单一来源，TUI 首页 / 启动日志 / Web 首页 / HTML 报告首页 / Excel 首页统一引用）
 APP_NAME = "投资复盘助手"
 
-APP_VERSION = "0.15.7"
+APP_VERSION = "0.15.8"
 
 # ── 报告产物文件名（单一来源：Excel/HTML 写入器与 Web 预览下载统一引用） ──
 # 报告产物文件基名（归档名 = 基名 + 时间戳后缀）
@@ -71,7 +71,19 @@ HISTORY_SNAPSHOT_MAX_COUNT = 365
 
 # ── LLM 模型定价表（每百万 token，CNY）══ 唯一默认源 ══
 
-MODEL_PRICING: dict[str, dict[str, float | dict[str, float]]] = {
+# 币种口径：每条按**厂商官方标价币种原样记录**，不做任何汇率折算，且**每条都显式
+# 写 `currency`**（Anthropic / OpenAI / Google = USD，DeepSeek / Kimi = CNY）——
+# 不让条目靠全局缺省兜底，避免「改本地币种配置把人民币数字贴成 `$`」。报告按条目
+# 币种显示原生金额，跨币种金额分组并列（如 `¥0.012 + $0.003`），从不相加。
+
+
+# 缺省币种（本地主币种，默认 CNY）。**语义只有一个**：模型同时提供多币种价时，选哪一套
+# 计价与显示（条目 `alt` 子表提供该币种价即命中），以及日预算以哪个币种判定。
+# 它**不是**「条目缺省币种」——`MODEL_PRICING` 每条都必须显式声明 `currency`
+# （CNY 厂商也要写），条目币种与配置币种各自独立，互不串味。
+PRICING_DEFAULT_CURRENCY: str = "CNY"
+
+MODEL_PRICING: dict[str, dict[str, float | str | dict[str, float]]] = {
     # 单一来源：此表为唯一默认定价。pricing.py 以此为基，从 llm_settings.json
     # 的 llm_pricing_ref.json 逐模型覆盖，运行时合并到 _PRICING_MERGED。
     # 新增模型请在此处添加，不要仅修改 llm_settings.json。
@@ -85,24 +97,69 @@ MODEL_PRICING: dict[str, dict[str, float | dict[str, float]]] = {
     #         全天按闲时价（2026-08-23 起周末统一低谷价、2026-09-10 起含法定节假日），
     #         见 PRICING_WEEKEND_ALWAYS_IDLE / PRICING_HOLIDAY_ALWAYS_IDLE。
     #         均可经 llm_settings.json → pricing 段覆盖。
-    # 通用前缀（如 "claude-sonnet-4-"）用作 startswith() 回退匹配，
-    # 覆盖所有日期戳变体（如 claude-sonnet-4-20250514），避免费用显示 "-"。
-    "claude-sonnet-4-6": {"input": 3.0, "output": 15.0, "input_cache_hit": 0.30},
-    "claude-sonnet-4-8": {"input": 3.0, "output": 15.0, "input_cache_hit": 0.30},
-    "claude-sonnet-4-": {"input": 3.0, "output": 15.0, "input_cache_hit": 0.30},
-    # Opus 4.x 官方定价 $5/$25（缓存命中 $0.50，10%）；2026-10-17 官方定价页核实
-    "claude-opus-4-6": {"input": 5.0, "output": 25.0, "input_cache_hit": 0.50},
-    "claude-opus-4-8": {"input": 5.0, "output": 25.0, "input_cache_hit": 0.50},
-    "claude-opus-4-": {"input": 5.0, "output": 25.0, "input_cache_hit": 0.50},
-    # Haiku 4.5 官方 $1/$5（缓存命中 $0.10）；2026-10-17 官方定价页核实
-    "claude-haiku-4-5": {"input": 1.0, "output": 5.0, "input_cache_hit": 0.10},
-    "claude-haiku-4-": {"input": 1.0, "output": 5.0, "input_cache_hit": 0.10},
-    # Fable 5 官方 $10/$50（缓存命中 $1.00）；2026-10-17 官方定价页核实
-    "claude-fable-5": {"input": 10.0, "output": 50.0, "input_cache_hit": 1.00},
-    # OpenAI 缓存命中 50% 折扣；2026-10-17 官方定价页核实
-    "gpt-4o": {"input": 2.5, "output": 10.0, "input_cache_hit": 1.25},
-    "gpt-4o-mini": {"input": 0.15, "output": 0.6, "input_cache_hit": 0.075},
-    # ── DeepSeek 峰谷定价（元/百万 token）──
+    # 通用前缀（如 "claude-sonnet-5-"）用作 startswith() 回退匹配，
+    # 覆盖所有日期戳变体（如 claude-sonnet-5-5-20260928），避免费用显示 "-"。
+    # 官方价目核验：Anthropic / OpenAI / Google / DeepSeek / Kimi 官方定价页（2026-10-25）。
+    #
+    # ── Claude 5.5 家族（现役，官方 USD 标价） ──
+    # Fable 5.1 $10/$50，缓存命中 $0.25
+    "claude-fable-5-1": {"currency": "USD", "input": 10.0, "output": 50.0, "input_cache_hit": 0.25},
+    "claude-fable-5-": {"currency": "USD", "input": 10.0, "output": 50.0, "input_cache_hit": 0.25},
+    # Opus 5.5 $4/$20，缓存命中 $0.20
+    "claude-opus-5-5": {"currency": "USD", "input": 4.0, "output": 20.0, "input_cache_hit": 0.2},
+    "claude-opus-5-": {"currency": "USD", "input": 4.0, "output": 20.0, "input_cache_hit": 0.2},
+    # Sonnet 5.5 $2/$10，缓存命中 $0.10
+    "claude-sonnet-5-5": {"currency": "USD", "input": 2.0, "output": 10.0, "input_cache_hit": 0.1},
+    # Sonnet 5（legacy，仍在售）$2/$10，缓存命中 $0.20
+    "claude-sonnet-5-": {"currency": "USD", "input": 2.0, "output": 10.0, "input_cache_hit": 0.2},
+    # Haiku 5.5 $0.10/$0.50（prompt ≤100K），缓存命中 $0.01；>100K 档
+    # （$0.50/$2.50，命中 $0.05）不单列——本表一条记录对应一个模型名，
+    # 分档计费需按输入长度切换，超出「单模型单价」表达能力。
+    "claude-haiku-5-5": {"currency": "USD", "input": 0.1, "output": 0.5, "input_cache_hit": 0.01},
+    "claude-haiku-5-": {"currency": "USD", "input": 0.1, "output": 0.5, "input_cache_hit": 0.01},
+    #
+    # ── Claude 旧代（legacy，仍可调用） ──
+    # Sonnet 4.6 $3/$15，缓存命中 $0.30
+    "claude-sonnet-4-6": {"currency": "USD", "input": 3.0, "output": 15.0, "input_cache_hit": 0.3},
+    "claude-sonnet-4-": {"currency": "USD", "input": 3.0, "output": 15.0, "input_cache_hit": 0.3},
+    # Opus 4.x $5/$25，缓存命中 $0.50
+    "claude-opus-4-6": {"currency": "USD", "input": 5.0, "output": 25.0, "input_cache_hit": 0.5},
+    "claude-opus-4-8": {"currency": "USD", "input": 5.0, "output": 25.0, "input_cache_hit": 0.5},
+    "claude-opus-4-": {"currency": "USD", "input": 5.0, "output": 25.0, "input_cache_hit": 0.5},
+    # Haiku 4.5 $1/$5，缓存命中 $0.10
+    "claude-haiku-4-5": {"currency": "USD", "input": 1.0, "output": 5.0, "input_cache_hit": 0.1},
+    "claude-haiku-4-": {"currency": "USD", "input": 1.0, "output": 5.0, "input_cache_hit": 0.1},
+    # Fable 5 $10/$50，缓存命中 $1.00
+    "claude-fable-5": {"currency": "USD", "input": 10.0, "output": 50.0, "input_cache_hit": 1.0},
+    #
+    # ── OpenAI（官方 USD） ──
+    # GPT-6 Astra $10/$50，缓存命中 $1.00
+    "gpt-6-astra": {"currency": "USD", "input": 10.0, "output": 50.0, "input_cache_hit": 1.0},
+    # GPT-6.1 Sol $2/$10，缓存命中 $0.10
+    "gpt-6.1-sol": {"currency": "USD", "input": 2.0, "output": 10.0, "input_cache_hit": 0.1},
+    "gpt-6.1-": {"currency": "USD", "input": 2.0, "output": 10.0, "input_cache_hit": 0.1},
+    # GPT-6 Luna $0.10/$0.50，缓存命中 $0.01（不入 gpt-6- 族前缀，避免与 Sol 价混淆）
+    "gpt-6-luna": {"currency": "USD", "input": 0.1, "output": 0.5, "input_cache_hit": 0.01},
+    # GPT-5.6 Sol $4/$20，缓存命中 $0.40
+    "gpt-5.6-sol": {"currency": "USD", "input": 4.0, "output": 20.0, "input_cache_hit": 0.4},
+    "gpt-5.6-": {"currency": "USD", "input": 4.0, "output": 20.0, "input_cache_hit": 0.4},
+    # GPT-4o 系列（legacy）$2.50/$10 与 $0.15/$0.60，缓存命中各 50%
+    "gpt-4o": {"currency": "USD", "input": 2.5, "output": 10.0, "input_cache_hit": 1.25},
+    "gpt-4o-mini": {"currency": "USD", "input": 0.15, "output": 0.6, "input_cache_hit": 0.075},
+    #
+    # ── Gemini（官方 USD） ──
+    # Gemini 3.8 Flash $0.75/$3.75（2026-12-31 前优惠价），缓存命中 $0.075
+    "gemini-3.8-flash": {"currency": "USD", "input": 0.75, "output": 3.75, "input_cache_hit": 0.075},
+    "gemini-3.8-": {"currency": "USD", "input": 0.75, "output": 3.75, "input_cache_hit": 0.075},
+    # Gemini 3.1 Pro (preview) $2/$12，缓存命中 $0.20
+    "gemini-3.1-pro": {"currency": "USD", "input": 2.0, "output": 12.0, "input_cache_hit": 0.2},
+    "gemini-3.1-": {"currency": "USD", "input": 2.0, "output": 12.0, "input_cache_hit": 0.2},
+    # Gemini 2.5 Flash / Pro（legacy）$0.30/$2.50 与 $1.25/$10
+    "gemini-2.5-flash": {"currency": "USD", "input": 0.3, "output": 2.5, "input_cache_hit": 0.03},
+    "gemini-2.5-pro": {"currency": "USD", "input": 1.25, "output": 10.0, "input_cache_hit": 0.125},
+    "gemini-2.5-": {"currency": "USD", "input": 1.25, "output": 10.0, "input_cache_hit": 0.125},
+    #
+    # ── DeepSeek 峰谷定价（元/百万 token，官方直接以 CNY 标价） ──
     # base 为闲时价；peak 为高峰价（高峰时段为闲时的 2 倍）。峰谷时段、周末与法定
     # 节假日规则见下方 PRICING_PEAK_PERIODS / PRICING_WEEKEND_ALWAYS_IDLE /
     # PRICING_HOLIDAY_ALWAYS_IDLE。
@@ -111,6 +168,7 @@ MODEL_PRICING: dict[str, dict[str, float | dict[str, float]]] = {
     # flash 系列定价：闲时 输入 1.0/输出 4.0/缓存命中 0.02，高峰翻倍
     # 2.0/8.0/0.04（2026-09-10 12:00 北京时间起 flash 系列官方降价，最高 60%）。
     "deepseek-flash": {
+        "currency": "CNY",
         "input": 1.0,
         "output": 4.0,
         "input_cache_hit": 0.02,
@@ -119,36 +177,31 @@ MODEL_PRICING: dict[str, dict[str, float | dict[str, float]]] = {
     # 别名 deepseek-v4-flash / deepseek-v4-flash-vision-exp 端点仍接受，底层模型
     # 已由新一代 Flash 接管并按同一单价计费，故数值与 deepseek-flash 一致。
     "deepseek-v4-flash": {
+        "currency": "CNY",
         "input": 1.0,
         "output": 4.0,
         "input_cache_hit": 0.02,
         "peak": {"input": 2.0, "output": 8.0, "input_cache_hit": 0.04},
     },
-    # deepseek-v4-pro 单价未随本轮 flash 调价变动。官方 2026-09-10 公告：响应用户
-    # 需求，deepseek-v4-pro 在 2026-09-14 之后继续提供 API 服务，计费方式保持不变
-    # （后续如有调整另行通知）。
+    # deepseek-v4-pro 单价未随 flash 调价变动（官方 2026-09-10 公告：2026-09-14 之后
+    # 继续提供 API 服务，计费方式保持不变）。
     "deepseek-v4-pro": {
+        "currency": "CNY",
         "input": 4.5,
         "output": 13.5,
         "input_cache_hit": 0.15,
         "peak": {"input": 9.0, "output": 27.0, "input_cache_hit": 0.30},
     },
-    # ── Kimi（月之暗面开放平台，元/百万 token，platform.kimi.com 官方价）──
+    #
+    # ── Kimi（月之暗面开放平台，官方直接以 CNY 标价） ──
+    # kimi-k3.1-pro：旗舰升级版（1M 上下文），输入 13 / 输出 68 / 缓存命中 1.30
+    "kimi-k3.1-pro": {"currency": "CNY", "input": 13.0, "output": 68.0, "input_cache_hit": 1.30},
+    # kimi-k3.1-pro-highspeed：同模型高速档，输入 26 / 输出 136 / 缓存命中 1.30
+    "kimi-k3.1-pro-highspeed": {"currency": "CNY", "input": 26.0, "output": 136.0, "input_cache_hit": 1.30},
+    # kimi-k3：旗舰模型（1M 上下文），输入 20 / 输出 100 / 缓存命中 2.00
+    "kimi-k3": {"currency": "CNY", "input": 20.0, "output": 100.0, "input_cache_hit": 2.00},
     # kimi-k2.6：通用模型（256k 上下文，支持思考/非思考模式）
-    "kimi-k2.6": {"input": 6.5, "output": 27.0, "input_cache_hit": 1.10},
-    # kimi-k3：旗舰模型（1M 上下文）
-    "kimi-k3": {"input": 20.0, "output": 100.0, "input_cache_hit": 2.00},
-    # Gemini
-    # Gemini 3.5 Flash 正式 GA 价 $1.50/$9.00（缓存命中 $0.15）；2026-10-17 按 ai.google.dev 核实
-    "gemini-3.5-flash": {"input": 1.5, "output": 9.0, "input_cache_hit": 0.15},
-    "gemini-3.5-": {"input": 1.5, "output": 9.0, "input_cache_hit": 0.15},
-    # Gemini 2.5 Flash GA 价 $0.30/$2.50（缓存命中 $0.03）；2026-10-17 按 ai.google.dev 核实
-    "gemini-2.5-flash": {"input": 0.30, "output": 2.50, "input_cache_hit": 0.03},
-    # Gemini 2.5 Pro 官方 $1.25/$10.00（≤200k 上下文）；2026-10-17 按 ai.google.dev 核实
-    "gemini-2.5-pro": {"input": 1.25, "output": 10.0, "input_cache_hit": 0.125},
-    "gemini-2.5-": {"input": 1.25, "output": 10.0, "input_cache_hit": 0.125},
-    "gemini-2.0-flash": {"input": 0.10, "output": 0.40, "input_cache_hit": 0.01},
-    "gemini-2.0-": {"input": 0.10, "output": 0.40, "input_cache_hit": 0.01},
+    "kimi-k2.6": {"currency": "CNY", "input": 6.5, "output": 27.0, "input_cache_hit": 1.10},
 }
 
 # ── LLM 峰谷定价时段（DeepSeek 官方方案，北京时间）══ 唯一默认源 ══

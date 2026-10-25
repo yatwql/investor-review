@@ -543,6 +543,61 @@ class TestPricing(unittest.TestCase):
                 "-",
             )
 
+    def test_current_generation_pricing_locked(self) -> None:
+        """现役主力型号锁定官方单价（已折算为 ¥/M）：价格漂移会让报告费用整体偏移。"""
+        locked = {
+            "claude-sonnet-5-5": "$12.000",  # $2/$10
+            "claude-opus-5-5": "$24.000",  # $4/$20
+            "claude-haiku-5-5": "$0.600",  # $0.10/$0.50
+            "gpt-6.1-sol": "$12.000",  # $2/$10
+            "gemini-3.8-flash": "$4.500",  # $0.75/$3.75
+        }
+        for model, expected in locked.items():
+            with self.subTest(model=model):
+                self.assertEqual(estimate_cost(model, 1_000_000, 1_000_000, at_time=self._IDLE_TIME), expected)
+
+    def test_foreign_models_display_native_currency(self) -> None:
+        """外币厂商按**官方标价币种**显示：Claude/GPT/Gemini 出 $、DeepSeek/Kimi 出 ¥。
+
+        币种随模型走、不做任何汇率折算——折算值既不是厂商标价也不是账单。
+        """
+        from src.python.llm.pricing import model_currency
+
+        self.assertEqual(model_currency("claude-sonnet-5-5"), "USD")
+        self.assertEqual(model_currency("gpt-6.1-sol"), "USD")
+        self.assertEqual(model_currency("deepseek-flash"), "CNY")
+        self.assertEqual(model_currency("kimi-k3"), "CNY")
+        self.assertTrue(estimate_cost("claude-sonnet-5-5", 1_000_000, 0, at_time=self._IDLE_TIME).startswith("$"))
+
+    def test_configured_currency_wins_when_model_offers_it(self) -> None:
+        """厂商同时提供多币种价时以客户配置币种为主（加 alt 子表 → 显示切到 ¥）。"""
+        from src.python.llm import pricing
+
+        pricing.reload_pricing()  # 先定表，避免首次计费懒加载把注入的 alt 冲掉
+        entry = pricing.PRICING_MERGED["claude-sonnet-5-5"]
+        original = dict(entry)
+        try:
+            entry["alt"] = {"CNY": {"input": 15.0, "output": 75.0, "input_cache_hit": 0.75}}
+            self.assertEqual(pricing.model_currency("claude-sonnet-5-5"), "CNY")
+            self.assertEqual(
+                estimate_cost("claude-sonnet-5-5", 1_000_000, 1_000_000, at_time=self._IDLE_TIME),
+                "¥90.000",
+            )
+        finally:
+            entry.clear()
+            entry.update(original)
+
+    def test_all_prices_are_well_formed(self) -> None:
+        """全表结构不变量：单价为正、缓存命中价不高于标准输入价、峰谷价不得低于闲时价。"""
+        for model, entry in PRICING_MERGED.items():
+            with self.subTest(model=model):
+                self.assertGreater(entry["input"], 0)
+                self.assertGreater(entry["output"], 0)
+                self.assertLessEqual(entry.get("input_cache_hit", entry["input"]), entry["input"])
+                peak = entry.get("peak") or {}
+                if peak:
+                    self.assertGreaterEqual(peak["input"], entry["input"])
+
     def test_kimi_pricing_locked(self) -> None:
         """Kimi 条目锁定官方单价（元/百万 token）：k2.6 输入 6.5 / 输出 27.0，k3 输入 20.0 / 输出 100.0。
 
@@ -613,9 +668,9 @@ class TestPricing(unittest.TestCase):
         """无 peak 子段的模型不受时段影响。"""
         cost_peak = estimate_cost("claude-sonnet-4-6", 1_000_000, 1_000_000, at_time=self._PEAK_TIME)
         cost_idle = estimate_cost("claude-sonnet-4-6", 1_000_000, 1_000_000, at_time=self._IDLE_TIME)
-        # 3 + 15 = 18，两个时段一致
+        # 厂商 USD 标价 $3/$15（按官方币种显示，不做折算），两个时段一致
         self.assertEqual(cost_peak, cost_idle)
-        self.assertEqual(cost_peak, "¥18.000")
+        self.assertEqual(cost_peak, "$18.000")
 
     def test_peak_pricing_cache_hit_uses_peak_rate(self) -> None:
         """工作日缓存命中 token 在高峰时段按 peak.input_cache_hit 计费。"""

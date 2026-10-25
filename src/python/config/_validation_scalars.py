@@ -204,9 +204,12 @@ def _validate_preferred_provider(config: dict, issues: int) -> int:
 
 
 def _validate_market_hours(config: dict, issues: int) -> int:
-    mha = config.get("market_hour_aware")
-    if mha is not None and (not isinstance(mha, list) or not all(isinstance(x, str) for x in mha)):
-        logger.warning("config.json market_hour_aware = %r 不是字符串列表", mha)
+    if config.get("market_hour_aware") is not None:
+        # 盘中敏感类型已改由注册表声明（数据属性），配置列表不再参与 TTL 解析
+        logger.warning(
+            "config.json market_hour_aware 已退役并被忽略：盘中敏感类型由 core/data_registry 声明（price/index），"
+            "如需调整盘中频率请改 market_hour_ttl"
+        )
         issues += 1
     mht = config.get("market_hour_ttl")
     if mht is not None:

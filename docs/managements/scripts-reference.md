@@ -34,7 +34,7 @@
 | `check-task-numbering.py` | 质量 | 任务编号（plan-/rf-）全局一致性检查，防新增编号与历史归档冲突 |
 | `check-task-numbering-hook.py` | 质量 | Claude Code PostToolUse hook——编辑编号管理文档后自动校验编号一致性 |
 | `check-semantic-index.py` | 文档 | 功能语义命名表正反向一致性校验（功能开关注册表表外键 / 僵尸条目 / 合并章 key 缺失） |
-| `check-doc-drift.py` | 文档 | 文档与实现一致性校验（章节表/章节数量、开关表/分组计数/默认值断言、配置与 LLM 默认值表、`datasource.md` 的 LLM 缓存 TTL 行（按前缀反查注册表）、TUI 面板编号、目录树、项目统计表；`--sync` 自动回写统计快照） |
+| `check-doc-drift.py` | 文档 | 文档与实现一致性校验（章节表/章节数量、开关表/分组计数/默认值断言、配置与 LLM 默认值表、`datasource.md` 的 LLM 缓存 TTL 行（按前缀反查注册表）、`technical.md`+`how-to-config.md` 的缓存 TTL 表（逐类型对账）、TUI 面板编号、目录树、项目统计表；`--sync` 自动回写统计快照） |
 | `check-doc-links.py` | 文档 | 文档链接与结构一致性校验（死链/死锚点/重复标题/层级/编号序列/§引用） |
 | `check-import-surface.py` | 质量 | 导入面契约观察（compat-comment 兼容注释 / private-all 私有 `__all__` / cross-private 跨包私有导入 / dynamic-target 动态导入字面量；例外表 `_import_surface_exceptions.json`，观察期未入钩子与 CI） |
 | `check-file-length.py` | 质量 | 单文件行数红线守护（主程序/脚本 >1000 行 / 测试 >1200 行；豁免登记与 review-findings 挂账同步，`-v` 输出可选优化区间清单与「行数 × 近 90 天改动」优先级，供登记表派生） |
@@ -407,11 +407,14 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
 19. 需求菜单表（`requirements.md` §3.2）：键集合/分组标题/组内顺序 ↔ MENU_ITEMS + MENU_GROUPS
 20. 迁档占位↔归档节：review-findings「已随 vX.Y.Z 发布迁入」占位 ↔ 对应版本归档正文含该版本二级标题归档节
 21. 树描述计数禁令：folders.md 目录树描述禁写「阿拉伯数字+量词」易漂移计数（docs/archive 记录域豁免；中文数词设计常量不入检）
+22. 缓存 TTL 表（`technical.md` 缓存各表 + `how-to-config.md`「cache_ttl 可调参数」）↔ 缓存注册表 `DataModuleDef.cache_ttl`
+    逐类型对账（实现 `_doc_drift/_format.py::check_cache_ttl_tables`）。默认值只存在注册表一处、两份文档各维护只读参考表，
+    改默认值漏同步时读者会被误导（如以为财报索引 30 天才刷新）；表内新增类型自动纳入核对，解析不出 TTL 文本的行跳过）
 
 **使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
 
 ```bash
-.venv/bin/python scripts/check-doc-drift.py                   # 二十一项全查
+.venv/bin/python scripts/check-doc-drift.py                   # 二十二项全查
 .venv/bin/python scripts/check-doc-drift.py -v                # 详细输出（打印解析结果与实测统计）
 .venv/bin/python scripts/check-doc-drift.py --ci              # CI 模式（只输出 文件:描述，退出码 2）
 .venv/bin/python scripts/check-doc-drift.py --with-test-count # 附带 pytest 收集，核对「测试用例」与 test-coverage.md 计数表
@@ -919,7 +922,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 **bench 范围与顺序（refresh）**：默认只测发布口径关心的四档 `regression` → `integration` → `unit` → `dev-verify`——全量十四档串行约 5.5 min（2 路采集 3.2 min），占单次发布机器时间约 75%，其余模式与这四档高度重叠；未测模式的耗时与计数按 `--update-docs` 口径「保留上次实测值」不写脏，需要全量复测时加 `--full-bench`（或直接 `test-runner.py --mode bench --update-docs`）。**顺序即失败反馈速度**：bench 以 `--fail-fast` 运行，而多档并行时只取消「尚未启动」的档——场景档先跑，场景/集成失败时长尾 `unit` 还没开始（或可被取消），十几秒内即中止；把 `unit` 排在前会让每次场景问题都白等完整 unit 时长。
 
-**耗时与 token 台账（`logs/release.jsonl`）**：每个子命令结束追加一行 JSON——`command` / `ok` / `elapsed_s` / `version` / `steps[]` / `failure{}`（仅失败命令：失败步 / 退出码 / 测试报告目录 / 失败用例名 / 输出尾部，保留第一现场；非 `_run_step` 路径只记 rc） / `agent{}`（执行环境身份：`provider`/`model`/`thinking`/`session_id`，取自 `PI_PROVIDER`/`PI_MODEL`/`PI_REASONING_LEVEL`/`PI_SESSION_ID`；非 agent 环境省略）/ `session_usage{}`（agent 会话**累计** token 快照：`input`/`output`/`cache_read`/`cache_write`/`total`/`cost`，取自 `PI_SESSION_FILE` 会话 JSONL 的 assistant 消息 + 非消息用量（cache_warm 等）+ compaction 三类条目，与 pi 自身 token 统计同口径；非 agent 环境省略该字段，旧台账行形状不变）（gate 的 `P2 场景回归`·`P2 十守护`·`P2 设计护栏`、refresh 的 bench·collect·sync、publish 的 `release 提交`·`P1 verify`·`合并到 master`·`打 tag`·`推送 dev/master/tags`、evolution 的快照统计·统计同步、prepare 的 `台账归档迁移`、devbump 的 `版本全链改写 + 一致性收敛`·`迁档占位清理`·`切版提交`·`推送 dev`·`发布闭环校验`）；终端尾行同步打印摘要。`logs/` 属 git 忽略域，台账不入仓库、不参与门禁，写入失败只打 `[!]` 且不改退出码（观测面不阻断发布）。跨版本对拍：`tail -n 20 logs/release.jsonl`（发布墙钟的变化归因到此，不再靠现场重测）。**token 统计口径**：窗口 = 上一次 `devbump` 之后的行，用量 = 末行累计 − 边界行累计（跨会话按正增量分段累加，不会出现负数）；每条命令尾行自动打印「执行环境：provider/model（thinking=…）」与「本次发布累计 token：N tok（in/out/cache r/w，≈¥C）」，便于把发布成本按版本对拍。
+**耗时与 token 台账（`logs/release.jsonl`）**：每个子命令结束追加一行 JSON——`command` / `ok` / `elapsed_s` / `version` / `steps[]` / `failure{}`（仅失败命令：失败步 / 退出码 / 测试报告目录 / 失败用例名 / 输出尾部，保留第一现场；非 `_run_step` 路径只记 rc） / `agent{}`（执行环境身份：`provider`/`model`/`thinking`/`session_id`，取自 `PI_PROVIDER`/`PI_MODEL`/`PI_REASONING_LEVEL`/`PI_SESSION_ID`；非 agent 环境省略）/ `session_usage{}`（agent 会话**累计** token 快照：`input`/`output`/`cache_read`/`cache_write`/`total`——**只记 token，不折算金额**：金额只能来自 pi 的逐模型单价表，而订阅制/转发端点（opencode 等）的单价不是实际账单口径，折算值容易被视为账单；取自 `PI_SESSION_FILE` 会话 JSONL 的 assistant 消息 + 非消息用量（cache_warm 等）+ compaction 三类条目，与 pi 自身 token 统计同口径；非 agent 环境省略该字段，旧台账行形状不变）（gate 的 `P2 场景回归`·`P2 十守护`·`P2 设计护栏`、refresh 的 bench·collect·sync、publish 的 `release 提交`·`P1 verify`·`合并到 master`·`打 tag`·`推送 dev/master/tags`、evolution 的快照统计·统计同步、prepare 的 `台账归档迁移`、devbump 的 `版本全链改写 + 一致性收敛`·`迁档占位清理`·`切版提交`·`推送 dev`·`发布闭环校验`）；终端尾行同步打印摘要。`logs/` 属 git 忽略域，台账不入仓库、不参与门禁，写入失败只打 `[!]` 且不改退出码（观测面不阻断发布）。跨版本对拍：`tail -n 20 logs/release.jsonl`（发布墙钟的变化归因到此，不再靠现场重测）。**token 统计口径**：窗口 = 上一次 `devbump` 之后的行，用量 = 末行累计 − 边界行累计（跨会话按正增量分段累加，不会出现负数）；每条命令尾行自动打印「执行环境：provider/model（thinking=…）」与「本次发布累计 token：N tok（in/out/cache r/w）」，便于把发布成本按版本对拍。
 
 ## 运维观测类
 
@@ -927,7 +930,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 **`perf-history.py` — 性能历史趋势查看**
 
-读取 `data/state/perf_history.jsonl`（由 `PerfCollector` 在每次报告生成时自动追加），按版本和报告类型分组统计（分组节按各组**首次运行时间**排序，最新版本在最末；组内明细行按时间戳升序），输出版本间性能趋势对比；输出跨版本「总体分位概览」（样本数 / 平均 / 中位 / **P95** / **P99** / 最长 / 中位秒每品种，n<20 附小样本提示）、**版本演进总表**（每版中位/P95/较上一版 delta+⚠，按首现时间排序）、离群与尾部归因、**异常运行专区**（中断/失败，无则省略）与**同版本漂移检测**（时间对半、噪声带判显著）。头部含**数据新鲜度**行（最新记录时间戳与距今时长）与可选**版本筛选**行；组详情阶段表按**中位降序**（最慢在前）并含**占比**列；阶段细分/LLM 上下文在范围内应有数据而缺时**明示提示行**（区分「无数据」与「不适用」）而非静默省略。`--by day|week|hour` 时段聚合在耗时列外附**费用合计/费用环比**（与 LLM 段「累计费用」同源的 `llm.total_cost`，范围内无费用样本自动省列，首档环比为 —、末档附提示行）；`--json` 汇总带 `llm_cost` 费用块（`--by` 时另附 `by_period` 时段费用序列），CSV 列不变。
+读取 `data/state/perf_history.jsonl`（由 `PerfCollector` 在每次报告生成时自动追加），按版本和报告类型分组统计（分组节按各组**首次运行时间**排序，最新版本在最末；组内明细行按时间戳升序），输出版本间性能趋势对比；输出跨版本「总体分位概览」（样本数 / 平均 / 中位 / **P95** / **P99** / 最长 / 中位秒每品种，n<20 附小样本提示）、**版本演进总表**（每版中位/P95/较上一版 delta+⚠，按首现时间排序）、离群与尾部归因、**异常运行专区**（中断/失败，无则省略）与**同版本漂移检测**（时间对半、噪声带判显著）。头部含**数据新鲜度**行（最新记录时间戳与距今时长）与可选**版本筛选**行；组详情阶段表按**中位降序**（最慢在前）并含**占比**列；阶段细分/LLM 上下文在范围内应有数据而缺时**明示提示行**（区分「无数据」与「不适用」）而非静默省略。`--by day|week|hour` 时段聚合在耗时列外附**费用合计/费用环比**（与 LLM 段「累计费用」同源，源为 perf 记录的 `llm.cost_by_currency` 币种桶，**按币种带符号显示**、跨币种不过环比而是给「不可直接相减」提示，范围内无费用样本自动省列，首档环比为 —、末档附提示行）；`--json` 汇总带 `llm_cost` 费用块（逐币种 `by_currency`；单币种时另给顶层 `total`/`mean`/`median`/`max`，多币种为 null；`--by` 时另附 `by_period` 时段费用序列，每档 `costs` 为币种桶、单币种时给 `total_cost`），CSV 列不变。
 
 ```bash
 # 输出全部历史趋势到 stdout（--json/--csv 机读模式同样只向 stdout，落盘需自行重定向）

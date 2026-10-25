@@ -407,6 +407,17 @@ def _execute_llm_with_finalize(
     return (None, False)
 
 
+#: 上一轮各模块的缓存键（进程内保留，跨报告比对）：用于把「缓存未命中」细分为
+#: 「内容变了」还是「只是 TTL 到点」。self_review 这类内容寻址模块的键要等上游产出
+#: 才确定，预检阶段无法比对，故在此记录。仅用于归因，不参与缓存键构造。
+_PREV_MODULE_CACHE_KEY: dict[str, str] = {}
+
+
+def reset_prev_module_cache_keys() -> None:
+    """清空上一轮缓存键记录（报告边界/测试隔离用）。"""
+    _PREV_MODULE_CACHE_KEY.clear()
+
+
 def generate_llm_content(
     llm_config: dict,
     cache_key: str,
@@ -434,8 +445,34 @@ def generate_llm_content(
     precheck_key = _build_provider_cache_key(cache_key, llm_config, module_key, first_name)
 
     # ── 缓存检查 ──
+    # 命中/未命中一律经观测汇聚器计数：预检侧只覆盖四个基础模块，`self_review` /
+    # `holding_change` 等键在上游产出后才确定的模块走本骨架——不计入会让命中率
+    # 低估（实测「预检 4/4」实为 6/6 全命中）。
+    from src.python.llm.observation import current_llm_observation
+
+    _hit_sink = current_llm_observation()
     if cache_enabled and not force:
         cached = cache_get(precheck_key, cache_ttl)
+        if _hit_sink is not None and hasattr(_hit_sink, "note_cache"):
+            _hit_sink.note_cache(bool(cached))
+        if not cached and module_key:
+            # 归因（观测，不改控制流）：此路径覆盖预检未覆盖的模块（self_review 等
+            # 由上游产出内容寻址、在预检之后才确定键）——否则重算原因统计会漏掉
+            # 它们，据此判断 TTL 是否放宽会系统性低估。
+            # 原因判定：与上一轮该模块的缓存键相同 ⇒ 内容没变、只是 TTL 到点；
+            # 不同 ⇒ 内容变了（内容寻址模块换键）；无上轮记录 ⇒ 保守记 `cache_miss`。
+            _sink = _hit_sink
+            if _sink is not None and hasattr(_sink, "note_recompute_reason"):
+                _prev = _PREV_MODULE_CACHE_KEY.get(module_key)
+                if _prev is None:
+                    _reason = "cache_miss"
+                elif _prev == precheck_key:
+                    _reason = "ttl_expired"
+                else:
+                    _reason = "fingerprint_changed"
+                _sink.note_recompute_reason(module_key, _reason)
+        if module_key:
+            _PREV_MODULE_CACHE_KEY[module_key] = precheck_key
         if cached:
             return (
                 _handle_cache_hit(

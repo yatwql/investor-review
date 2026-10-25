@@ -556,3 +556,45 @@ def check_chain_table(doc_text: str) -> list[str]:
             f"——文档 {doc_slots} vs 代码 {code_slots}"
         )
     return findings
+
+
+#: 缓存 TTL 表行：`| \`type\` | 文件名模式 | TTL 文本 | … |`（第二列必须像文件名/键名，
+#: 避免命中「类型 → 数据源」之类的其它表格）
+_CACHE_TTL_ROW = re.compile(r"^\|\s*`([a-z_]+)`\s*\|\s*[^|]*(?:\.json|\.gz|_\{|精确键名|前缀)[^|]*\|\s*([^|]+)\|")
+
+
+def check_cache_ttl_tables(*docs: tuple[str, str]) -> list[str]:
+    """缓存 TTL 表（管理/用户文档）与注册表默认值必须一致。
+
+    为什么需要：默认值只存在于 `core/data_registry.py`，但 `technical.md` 与
+    `how-to-config.md` 各维护一份**只读参考表**。改默认值忘了同步时，用户会被
+    文档误导（如以为财报索引 30 天才刷新）。本检查按数据类型逐行核对，只看能
+    解析出 TTL 文本的行，表内新增类型自动纳入。
+
+    Args:
+        docs: `(标签, 文档文本)` 序列；标签用于 finding 前缀（如 `docs/managements/technical.md`）。
+
+    Returns:
+        finding 列表（空表示一致）。
+    """
+    from src.python.core.data_registry import get_cache_ttl_defaults
+
+    defaults = get_cache_ttl_defaults()
+    findings: list[str] = []
+    for label, text in docs:
+        for line in text.splitlines():
+            m = _CACHE_TTL_ROW.match(line)
+            if not m:
+                continue
+            data_type, ttl_text = m.group(1), m.group(2)
+            expected = defaults.get(data_type)
+            if expected is None:
+                continue
+            shown = _parse_ttl_text(ttl_text)
+            if shown is None:
+                continue
+            if shown != int(expected):
+                findings.append(
+                    f"{label}: 缓存 `{data_type}` TTL 文档 {ttl_text.strip()} 与注册表 {int(expected)}s 不一致"
+                )
+    return findings

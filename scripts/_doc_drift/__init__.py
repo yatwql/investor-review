@@ -44,6 +44,7 @@ from _doc_drift._format import (  # noqa: F401
     _ttl_default,
     check_llm_defaults,
     _DATASOURCE_LLM_ROW,
+    check_cache_ttl_tables,
     check_datasource_llm_ttl,
     _TEST_COVERAGE_ROW,
     _COUNT_CELL,

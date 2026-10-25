@@ -474,7 +474,6 @@ class TestReleaseTokenAccounting:
                             "cacheRead": 300,
                             "cacheWrite": 10,
                             "totalTokens": 420,
-                            "cost": {"total": 0.05},
                         },
                     },
                 },
@@ -482,16 +481,16 @@ class TestReleaseTokenAccounting:
                 {
                     "type": "usage",
                     "kind": "cache_warm",
-                    "usage": {"input": 0, "output": 0, "cacheRead": 50, "totalTokens": 50, "cost": {"total": 0.001}},
+                    "usage": {"input": 0, "output": 0, "cacheRead": 50, "totalTokens": 50},
                 },
-                {"type": "compaction", "usage": {"input": 5, "output": 5, "totalTokens": 10, "cost": {"total": 0.002}}},
+                {"type": "compaction", "usage": {"input": 5, "output": 5, "totalTokens": 10}},
             ],
         )
         usage = rel.session_usage(path)
         assert usage["input"] == 105 and usage["output"] == 25
         assert usage["cache_read"] == 350 and usage["cache_write"] == 10
         assert usage["total"] == 480
-        assert abs(usage["cost"] - 0.053) < 1e-9
+        assert "cost" not in usage
 
     def test_missing_file_and_bad_lines_are_tolerated(self, rel, tmp_path):
         assert rel.session_usage(None) == {}
@@ -516,7 +515,7 @@ class TestReleaseTokenAccounting:
         used = rel.release_token_usage(rows)
         assert used["input"] == 500 and used["output"] == 80
         assert used["total"] == 580
-        assert abs(used["cost"] - 0.8) < 1e-9
+        assert "cost" not in used
 
     def test_window_usage_handles_session_reset(self, rel):
         """agent 重启后累计归零：按正增量分段累加，不出现负数。"""
@@ -532,6 +531,13 @@ class TestReleaseTokenAccounting:
         rows = [{"command": "devbump", "session_usage": {"total": 10}}]
         assert rel.release_token_usage(rows) == {}
         assert rel.format_tokens({}) == ""
+
+    def test_token_line_reports_no_money(self, rel):
+        """发布台账只报 token 与执行环境，不折算金额（订阅制/转发价无账单口径）。"""
+        usage = {"total": 1000, "input": 600, "output": 100, "cache_read": 300, "cache_write": 0, "cost": 1.23}
+        line = rel.format_tokens(usage)
+        assert "1,000 tok" in line
+        assert "¥" not in line and "$" not in line and "1.23" not in line
 
 
 class TestReleaseAgentIdentity:

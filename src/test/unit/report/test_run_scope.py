@@ -99,20 +99,20 @@ class TestStartReportRun:
 
 class TestUsageDelta:
     def test_delta_subtracts_baseline(self):
-        baseline = {"input_tokens": 100, "output_tokens": 20, "call_count": 1, "total_cost": 0.5, "per_module": {}}
+        baseline = {"input_tokens": 100, "output_tokens": 20, "call_count": 1, "costs": {"CNY": 0.5}, "per_module": {}}
         current = {
             "input_tokens": 160,
             "output_tokens": 50,
             "cache_hit_tokens": 0,
             "call_count": 3,
-            "total_cost": 0.9,
+            "costs": {"CNY": 0.9},
             "per_module": {"expert_review": {"input_tokens": 60, "output_tokens": 30, "cost": 0.4}},
         }
         delta = _usage_delta(current, baseline)
         assert delta["input_tokens"] == 60
         assert delta["output_tokens"] == 30
         assert delta["call_count"] == 2
-        assert delta["total_cost"] == pytest.approx(0.4)
+        assert delta["costs"]["CNY"] == pytest.approx(0.4)
         assert delta["per_module"]["expert_review"]["input_tokens"] == 60
 
     def test_record_llm_context_records_per_report_delta(self):
@@ -124,13 +124,19 @@ class TestUsageDelta:
         from src.python.report._generation_shared import _record_llm_context
         from src.python.llm import session as session_mod
 
-        baseline = {"input_tokens": 1000, "output_tokens": 500, "call_count": 4, "total_cost": 0.5, "per_module": {}}
+        baseline = {
+            "input_tokens": 1000,
+            "output_tokens": 500,
+            "call_count": 4,
+            "costs": {"CNY": 0.5},
+            "per_module": {},
+        }
         current = {
             "input_tokens": 1200,
             "output_tokens": 600,
             "cache_hit_tokens": 0,
             "call_count": 5,
-            "total_cost": 0.62,
+            "costs": {"CNY": 0.62},
             "per_module": {"expert_review": {"input_tokens": 200, "output_tokens": 100, "cost": 0.12}},
         }
         recorded: dict = {}
@@ -147,7 +153,7 @@ class TestUsageDelta:
             session_mod.get_session_usage = original
 
         assert recorded["call_count"] == 1, "调用数必须是本份报告的增量"
-        assert recorded["total_cost"] == pytest.approx(0.12)
+        assert recorded["cost_by_currency"]["CNY"] == pytest.approx(0.12)
         assert recorded["modules"]["expert_review"]["input_tokens"] == 200
 
     def test_no_baseline_returns_current(self):

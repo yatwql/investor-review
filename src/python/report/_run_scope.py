@@ -39,6 +39,14 @@ def start_report_run() -> dict[str, Any]:
         ``get_session_usage()`` 的深拷贝基线；取不到时返回空 dict（delta 退化为
         全量，与引入前行为一致）。
     """
+    # 缓存未命中归因的「上一轮键」随报告边界复位：跨报告比对才成立，
+    # 把上一次进程遗留的键当"上一轮"会误判内容变化。
+    try:
+        from src.python.llm.skeleton import reset_prev_module_cache_keys
+
+        reset_prev_module_cache_keys()
+    except Exception:  # 观测隔离失败不阻断主链路
+        logger.debug("[run_scope] 缓存键归因基线重置失败，已忽略", exc_info=True)
     baseline: dict[str, Any] = {}
     try:
         from src.python.report.data_status import get_tracker

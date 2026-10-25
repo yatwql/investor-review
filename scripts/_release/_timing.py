@@ -165,7 +165,14 @@ def agent_identity(env: dict | None = None) -> dict:
 
 
 def _zero_usage() -> dict:
-    return {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0, "total": 0, "cost": 0.0}
+    """token 聚合器（**不含金额**）。
+
+    为何不算钱：金额只能来自 pi 的逐模型单价表（`~/.pi/agent/models-store.json`），
+    而订阅制/转发渠道（如 opencode、部分中转端点）的「单价」并非实际账单口径，
+    折算出来的数字对人没有决策价值、却看起来像个账单——比不显示更糟。
+    发布台账只记客观量：token 数与执行环境身份（provider/model/thinking）。
+    """
+    return {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0, "total": 0}
 
 
 def _add_usage(acc: dict, usage: dict) -> None:
@@ -175,8 +182,6 @@ def _add_usage(acc: dict, usage: dict) -> None:
     acc["cache_read"] += int(usage.get("cacheRead") or 0)
     acc["cache_write"] += int(usage.get("cacheWrite") or 0)
     acc["total"] += int(usage.get("totalTokens") or 0)
-    cost = usage.get("cost") or {}
-    acc["cost"] += float(cost.get("total") or 0.0)
 
 
 def session_usage(session_file: str | Path | None) -> dict:
@@ -253,8 +258,6 @@ def release_token_usage(records: list[dict]) -> dict:
         for key in ("input", "output", "cache_read", "cache_write", "total"):
             delta = cur[key] - prev[key]
             acc[key] += delta if delta > 0 else cur[key]  # 负增量 = 会话重启
-        cost_delta = cur["cost"] - prev["cost"]
-        acc["cost"] += cost_delta if cost_delta > 0 else cur["cost"]
         prev = cur
     return acc
 
@@ -274,5 +277,5 @@ def format_tokens(usage: dict) -> str:
         return ""
     return (
         f"{usage['total']:,} tok（in {usage['input']:,} / out {usage['output']:,} / "
-        f"cache r {usage['cache_read']:,} w {usage['cache_write']:,}，≈¥{usage['cost']:.2f}）"
+        f"cache r {usage['cache_read']:,} w {usage['cache_write']:,}）"
     )

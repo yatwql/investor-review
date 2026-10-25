@@ -36,9 +36,18 @@ def _usage_delta(current: dict, baseline: dict | None) -> dict:
     if not baseline:
         return current
     delta: dict = {}
-    for key in ("input_tokens", "output_tokens", "cache_hit_tokens", "total_cost", "call_count"):
+    for key in ("input_tokens", "output_tokens", "cache_hit_tokens", "call_count"):
         if key in current:
             delta[key] = current.get(key, 0) - baseline.get(key, 0)
+    # 费用按币种分桶：逐币种做差，异币种并存
+    base_costs = baseline.get("costs") or {}
+    cur_costs = current.get("costs") or {}
+    cost_delta: dict[str, float] = {}
+    for code in set(cur_costs) | set(base_costs):
+        diff = float(cur_costs.get(code, 0.0)) - float(base_costs.get(code, 0.0))
+        if diff:
+            cost_delta[str(code).upper()] = diff
+    delta["costs"] = cost_delta
     base_modules = baseline.get("per_module") or {}
     per_module: dict = {}
     for module_key, entry in (current.get("per_module") or {}).items():
@@ -92,13 +101,20 @@ def _record_llm_context(perf, sink=None, baseline: dict | None = None) -> None:
                     "cached": bool(entry.get("cached")),
                     "input_tokens": int(entry.get("input_tokens", 0)),
                     "output_tokens": int(entry.get("output_tokens", 0)),
-                    "cost": round(float(entry.get("cost", 0.0)), 6),
+                    "costs": {code: round(float(amount), 6) for code, amount in (entry.get("costs") or {}).items()},
                 }
                 for key, entry in sorted(per_module.items())
             }
         if usage.get("call_count"):
             context["call_count"] = int(usage["call_count"])
-            context["total_cost"] = round(float(usage.get("total_cost", 0.0)), 6)
+        # 重算原因归因（观测，不影响控制流）：回答「4h TTL 卡掉了多少本该复用的调用」
+        _reasons = getattr(sink, "module_recompute_reasons", None) if sink is not None else None
+        if callable(_reasons):
+            _reason_map = _reasons()
+            if _reason_map:
+                context["recompute_reasons"] = dict(sorted(_reason_map.items()))
+        costs = {str(k).upper(): round(float(v or 0.0), 6) for k, v in (usage.get("costs") or {}).items()}
+        context["cost_by_currency"] = costs
 
         # 缓存命中的**金钱**价值：命中模块的 token/费用都是 0，报告里只看得到
         # 「无新增调用」，看不到省了多少。按历史逐模块实际均价估算，并写进 perf
@@ -111,9 +127,9 @@ def _record_llm_context(perf, sink=None, baseline: dict | None = None) -> None:
             if saving["priced"]:
                 context["cache_saved_cost"] = saving["saved"]
                 logger.info(
-                    "[LLM 缓存] 命中 %d 个模块，按历史均价估算节省 ≈¥%.4f（%s）",
+                    "[LLM 缓存] 命中 %d 个模块，按历史均价估算节省 ≈%s（%s）",
                     len(cached_modules),
-                    saving["saved"],
+                    saving["saved_display"],
                     "、".join(saving["priced"]),
                 )
 

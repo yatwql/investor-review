@@ -41,7 +41,7 @@ class TestLlmModuleInfoContract(unittest.TestCase):
             "output_tokens": entry.get("output_tokens"),
             "total_tokens": entry.get("total_tokens"),
             "cache_hit_tokens": entry.get("cache_hit_tokens"),
-            "cost": entry.get("cost"),
+            "cost_display": entry.get("cost_display") or "",
             "cached": entry.get("cached"),
             "thinking": entry.get("thinking"),
         }
@@ -68,7 +68,7 @@ class TestLlmModuleInfoContract(unittest.TestCase):
             "output_tokens": 0,
             "total_tokens": 0,
             "cache_hit_tokens": 0,
-            "cost": 0.0,
+            "costs": {"CNY": 0.0},
             "cached": False,
             "thinking": False,
             "endpoint": "",
@@ -95,7 +95,7 @@ class TestLlmModuleInfoContract(unittest.TestCase):
                 self.assertEqual(test_entry["status"], "failed")
                 self.assertEqual(test_entry["status_label"], expected_label)
                 self.assertEqual(test_entry["model"], "")
-                self.assertEqual(test_entry["cost"], 0.0)
+                self.assertEqual(test_entry["cost_display"], "")
 
     def test_all_five_failure_reasons(self):
         """5 个模块同时失败 → 每个模块映射到对应标签。"""
@@ -124,7 +124,7 @@ class TestLlmModuleInfoContract(unittest.TestCase):
                 self.assertEqual(by_key[key]["status"], exp_status)
                 self.assertEqual(by_key[key]["status_label"], exp_label)
                 self.assertEqual(by_key[key]["model"], "")
-                self.assertEqual(by_key[key]["cost"], 0.0)
+                self.assertEqual(by_key[key]["cost_display"], "")
 
     def test_failure_priority_over_per_module(self):
         """failure 状态优先于 per_module 数据。"""
@@ -141,7 +141,7 @@ class TestLlmModuleInfoContract(unittest.TestCase):
                 "input_tokens": 100,
                 "output_tokens": 50,
                 "cache_hit_tokens": 0,
-                "cost": 0.001,
+                "costs": {"CNY": 0.001},
                 "thinking": False,
                 "endpoint": "",
             },
@@ -165,7 +165,7 @@ class TestLlmModuleInfoContract(unittest.TestCase):
                 "input_tokens": 1500,
                 "output_tokens": 800,
                 "cache_hit_tokens": 0,
-                "cost": 0.005,
+                "costs": {"CNY": 0.005},
                 "thinking": True,
                 "endpoint": "",
             },
@@ -176,7 +176,7 @@ class TestLlmModuleInfoContract(unittest.TestCase):
         self.assertEqual(er_html["status"], "success")
         self.assertEqual(er_html["status_label"], "成功")
         self.assertEqual(er_html["total_tokens"], 2300)
-        self.assertEqual(er_html["cost"], 0.005)
+        self.assertEqual(er_html["cost_display"], "¥0.0050")
         self.assertTrue(er_html["thinking"])
 
         # 与规范字段结构一致
@@ -190,7 +190,7 @@ class TestLlmModuleInfoContract(unittest.TestCase):
             "output_tokens": 800,
             "total_tokens": 2300,
             "cache_hit_tokens": 0,
-            "cost": 0.005,
+            "cost_display": "¥0.0050",
             "cached": False,
             "thinking": True,
             "endpoint": "",
@@ -208,7 +208,7 @@ class TestLlmModuleInfoContract(unittest.TestCase):
                 "input_tokens": 0,
                 "output_tokens": 0,
                 "cache_hit_tokens": 500,
-                "cost": 0.0,
+                "costs": {"CNY": 0.0},
                 "thinking": False,
                 "endpoint": "",
             },
@@ -232,7 +232,7 @@ class TestLlmModuleInfoContract(unittest.TestCase):
             "output_tokens": 0,
             "total_tokens": 0,
             "cache_hit_tokens": 500,
-            "cost": 0.0,
+            "costs": {"CNY": 0.0},
             "cached": True,
             "thinking": False,
             "endpoint": "",
@@ -251,7 +251,7 @@ class TestLlmModuleInfoContract(unittest.TestCase):
                 "input_tokens": 0,
                 "output_tokens": 0,
                 "cache_hit_tokens": 500,
-                "cost": 0.0,
+                "costs": {"CNY": 0.0},
                 "thinking": False,
                 "endpoint": "",
             },
@@ -261,7 +261,7 @@ class TestLlmModuleInfoContract(unittest.TestCase):
                 "input_tokens": 2000,
                 "output_tokens": 1000,
                 "cache_hit_tokens": 0,
-                "cost": 0.008,
+                "costs": {"CNY": 0.008},
                 "thinking": True,
                 "endpoint": "",
             },
@@ -287,7 +287,7 @@ class TestLlmModuleInfoContract(unittest.TestCase):
                 "input_tokens": 1000,
                 "output_tokens": 500,
                 "cache_hit_tokens": 0,
-                "cost": 0.005,
+                "costs": {"CNY": 0.005},
                 "thinking": False,
                 "endpoint": "",
             },
@@ -299,7 +299,7 @@ class TestLlmModuleInfoContract(unittest.TestCase):
                 "input_tokens": 2000,
                 "output_tokens": 1000,
                 "cache_hit_tokens": 0,
-                "cost": 0.008,
+                "costs": {"CNY": 0.008},
                 "thinking": True,
                 "endpoint": "",
             },
@@ -324,7 +324,7 @@ class TestLlmModuleInfoContract(unittest.TestCase):
                 "input_tokens": 0,
                 "output_tokens": 0,
                 "cache_hit_tokens": 500,
-                "cost": 0.0,
+                "costs": {"CNY": 0.0},
                 "thinking": False,
                 "endpoint": "",
             },
@@ -334,7 +334,7 @@ class TestLlmModuleInfoContract(unittest.TestCase):
                 "input_tokens": 100,
                 "output_tokens": 50,
                 "cache_hit_tokens": 0,
-                "cost": 0.001,
+                "costs": {"CNY": 0.001},
                 "thinking": True,
                 "endpoint": "",
             },
@@ -344,7 +344,7 @@ class TestLlmModuleInfoContract(unittest.TestCase):
                 "input_tokens": 200,
                 "output_tokens": 100,
                 "cache_hit_tokens": 0,
-                "cost": 0.002,
+                "costs": {"CNY": 0.002},
                 "thinking": False,
                 "endpoint": "",
             },
@@ -354,7 +354,7 @@ class TestLlmModuleInfoContract(unittest.TestCase):
                 "input_tokens": 300,
                 "output_tokens": 150,
                 "cache_hit_tokens": 0,
-                "cost": 0.003,
+                "costs": {"CNY": 0.003},
                 "thinking": False,
                 "endpoint": "",
             },
@@ -364,7 +364,7 @@ class TestLlmModuleInfoContract(unittest.TestCase):
                 "input_tokens": 400,
                 "output_tokens": 200,
                 "cache_hit_tokens": 0,
-                "cost": 0.004,
+                "costs": {"CNY": 0.004},
                 "thinking": False,
                 "endpoint": "",
             },

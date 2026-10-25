@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.15.7
+> 文档版本：0.15.8
 
 ## 目录
 
@@ -1308,43 +1308,45 @@ cache/
 get_ttl(data_type)
     │
     ▼
-┌──────────────────────────────┐
-│ data_type 在 market_hour_   │
-│ aware 列表中?                │── NO ─┐
-└────────────┬─────────────────┘       │
-            YES                         │
-             │                          │
-             ▼                          │
-┌──────────────────────────────┐       │
-│ is_market_open()?            │       │
-├──────────────────────────────┤       │
-│ YES → 交易时段内              │       │
-│   ↓                          │       │
-│   market_hour_ttl（config）   │       │
-│   默认 30s，范围 [30, 86400]  │       │
-│                              │       │
-│ NO → 非交易时段               │       │
-└────────────┬─────────────────┘       │
-             │                          │
-             ▼                          ▼
-    ┌──────────────────────────────────────┐
-    │ config.json → cache_ttl.{data_type}  │
-    │ 用户显式配置?                          │
-    ├────────────┬─────────────────────────┤
-    │ YES → 返回  │ NO → registry 默认值   │
-    │ 用户配置值   │ get_cache_ttl_defaults │
-    └────────────┘         │
-                           ▼
-                  ┌──────────────────┐
-                  │ 类型未注册?       │
-                  ├──────┬───────────┤
-                  │ YES  │ NO        │
-                  │ 回退  │ 返回默认值 │
-                  │86400s│           │
-                  └──────┘           │
+┌──────────────────────────────────────┐
+│ 注册表声明 market_ttl？               │── NO ─┐
+│ （DataModuleDef.market_ttl，仅价/指） │       │
+└────────────┬─────────────────────────┘       │
+            YES                                │
+             │                                 │
+             ▼                                 │
+┌──────────────────────────────┐               │
+│ is_market_open()?            │               │
+├──────────────────────────────┤               │
+│ YES → market_hour_ttl 覆盖    │               │
+│   （config，缺省 30s，钳制    │               │
+│     [30, 86400]）             │               │
+│ NO  → 静态 TTL 分支            │               │
+└────────────┬─────────────────┘               │
+             │                                 │
+             ▼                                 ▼
+    ┌──────────────────────────────────────────┐
+    │ config.json → cache_ttl.{data_type}       │
+    │ 用户显式覆盖（正数）?                      │
+    ├────────────┬─────────────────────────────┤
+    │ YES → 返回  │ NO → 注册表默认             │
+    │ 用户配置值   │ get_cache_ttl_defaults     │
+    └────────────┘         │                   │
+                           ▼                   │
+                  ┌──────────────────┐         │
+                  │ 类型未注册?       │         │
+                  ├──────┬───────────┤         │
+                  │ YES  │ NO        │         │
+                  │ 回退  │ 返回默认值 │         │
+                  │86400s│           │         │
+                  └──────┘           │         │
 ```
 
-**`market_hour_aware` 类型列表**：由 `config.json` 的 `market_hour_aware` 数组配置（如 `["price", "index"]`），非硬编码。
+**盘中敏感性由注册表声明**（`DataModuleDef.market_ttl`，当前只有 `price`/`index` = 30s）：这是数据属性而非用户偏好——价格/指数分钟级变化，盘中必须短 TTL 才能避免把盘中价当收盘价（否则"本日盈亏/快照环比"系统性偏离），而非行情数据（新闻 900s、情绪 3600s 等）不得因盘中被降频、白打上游。`config.json → market_hour_aware` 已退役：写入该项只会在配置校验时告警并被忽略。
+
+**盘中覆盖可见**：若用户同时配了 `cache_ttl.{type}` 而该类型盘中敏感，`get_ttl` 会打一条 INFO（每类型一次）说明"盘中以 `market_hour_ttl` 为准，`cache_ttl` 仅盘后生效"——把静默失效变成可观测。
+
+**负缓存同源**：缺失探测类负缓存（`datasink_probe_miss_` 12h、`report_symbol_miss_` 6h）登记为正式缓存类型，读侧 TTL、`cleanup_expired` 判定、`cache_ttl` 覆盖与文档表格共用同一注册表条目（未登记时会被按未注册默认 24h 判定，滞留更久且配置不可见）。
 
 ### 3.3 原子写入与并发安全
 
@@ -2739,7 +2741,7 @@ report/decision_llm_capture.py   # 抽取：结构化优先 → 表格兜底
 **分层（`core/` 为共享层，两个消费方向都无环）**：
 
 ```
-core/jsonl_store.py        # 原子追加 + 容错读取原语（零项目内依赖）
+core/jsonl_store.py        # 原子追加 + 容错读取 + 按龄裁剪原语（零项目内依赖）
     ↑ 委托（各自保持 prefix/日志标签，行为逐字不变）
 core/perf.py               # 性能历史
 core/decision_ledger.py    # 决策账本（序列化口径：键排序 + ensure_ascii=False）
@@ -2890,7 +2892,7 @@ LLM 的操作建议与确定性调仓信号此前「当次即评、事后无对�
 **分层（`core/` 零 report/llm 依赖，两个消费方向都无环）**：
 
 ```
-core/jsonl_store.py             # 原子追加 + 容错读取原语（零项目内依赖）
+core/jsonl_store.py             # 原子追加 + 容错读取 + 按龄裁剪原语（零项目内依赖）
     ↑
 core/decision_ledger.py         # 决策账本：追加/折叠/结算原语 + 教训区块；is_active() 单源开关
     ↑
@@ -2926,7 +2928,7 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
 
 **降级与合规**：**传输级**失败（网络不可达/连接超时）经连接级重试（线性 1s/2s，共 3 次）后**上抛**，由链路计入同源重试与熔断；**代码级**结果（401/403/429 重试后仍非 200/非 JSON）返回空、不计传输级熔断。单标的失败进失败清单；`available=False` 时写占位。返回对象含披露平台归属字段 `source`，报告逐行标注（再分发时保留）。
 
-**缓存**：报告元数据与章节正文均按月（30 天；`report_datasink_index_` / `report_datasink_doc_`），随菜单缓存命令与 TTL 管理。**数据契约** `financial_report_digest_data`（附录 H）；语义命名行见 §6.7。
+**缓存**：索引/章节清单 1 天、正文 30 天（`report` / `report_doc`）——索引是 symbol 级键，日频才能让**新披露最迟次日可见**；正文按 `doc_id` 不可变，月度复用不重复消耗配额。随菜单缓存命令与 TTL 管理。**数据契约** `financial_report_digest_data`（附录 H）；语义命名行见 §6.7。
 
 **数据源说明表**：「数据源可用性矩阵」章在健康度表后附「数据源说明（实际使用清单）」表——逐数据类别列实际链路、用途、计费（财报全文随 `datasink.plan` 动态展示免费/付费档）与凭据要求（是否需 key + 就绪状态），并标本次运行是否实际使用（`report/data_source_matrix.py::build_data_source_catalog`，前缀取自 `_SOURCE_CATEGORIES`、计费取自 provider 套餐表，单一事实来源）。**「本次使用」判定口径**：该类别的取数链路在**取得数据时**（含命中缓存的返回）经 `report/data_status.py::mark_data_used()` 记一条成功事件，说明表据事件前缀判定 `used`；**只记成功、不记降级**——章节名 fuzzy 未命中、标的不在源覆盖范围等预期内空结果不计入 T2 连续失败阈值（否则会把预期内空结果误报为源故障），失败与降级仍由 provider 日志、章节失败清单与链路 FailureDiagnostics 披露。因此 `未使用` 的含义是「本次未取到该类数据」，**不等于**源故障；对 DataSinking 类源另注明「需开启哪些功能开关才会取用」。类别清单含 `financial_report`（`report_datasink_`）与 `financial_indicator`（`fin_indicator_`），两者同时进入可用性矩阵与说明表；含同花顺兜底槽位的类别（`price` / `fund_hold` / `history` / `financial_indicator`）在「实际数据源（链路）」列显式列出「→ 同花顺金融数据（…，需 key）」，市场情绪（`sentiment`，同花顺**唯一源**）单列一行并附 key 就绪态。
 
@@ -2955,7 +2957,7 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
 
 **数据流（市场情绪与持仓热点）**：`providers/hithink.py`（官方龙虎榜 + 连板梯队）→ `analysis/market_sentiment.py::build_market_sentiment`（纯装配：只保留命中持仓/穿透标的**代码**的事件行，金额换算亿元）→ `report/_report_aux_metrics.py::compute_market_sentiment_data`（开关门禁 + 异常兜底；取数缓存 1h）→ `pipeline_data["market_sentiment_data"]`（both/full 由 `_report_generation` 注入；basic 由 `excel_generator` 就地兜底）→ 行动建议章内嵌块（HTML `partials/action_section.html` ⑦ / Excel `report/action_sheet.py::_write_market_sentiment_block`）。
 
-**数据流**：权益类基金重仓 ROE 推演由 `report/fund_roe_estimate.py::estimate_fund_roe_batch`（复用 `fetch_fund_holdings_batch` 基金持仓链路 + `fetch_latest_indicator` 个股财务指标链路，报告期陈旧闸门与穿透层同口径）在编排层计算 →（**首次运行**涉及重仓股名单的一次财务指标取数：未命中缓存时按 `batch.akshare_workers` 并发、受东方财富限速档约束，命中后按财务指标月度缓存复用；取数失败只缺席该基金，不阻断诊断）→ `analysis/prosperity_framework.py::build_prosperity_framework_data`（装配入口；打分内核在 `analysis/prosperity_scoring.py`，市价读取经 `finite_or` 归一）→ `report/_report_aux_metrics.py::compute_prosperity_framework_data`（组装：穿透优先取 `prep.penetrated_assets`、缺失按需计算；流动性/快照取数失败降级为该维未验证；开关关闭返回 None）→ `pipeline_data["prosperity_framework_data"]`（both/full 由 `_report_generation` 注入；basic 由 `excel_generator` 就地兜底）→ 行动建议章内嵌块（HTML `partials/action_section.html` ⑥ / Excel `report/action_sheet.py::_write_prosperity_block`）。
+**数据流**：权益类基金重仓 ROE 推演由 `report/fund_roe_estimate.py::estimate_fund_roe_batch`（复用 `fetch_fund_holdings_batch` 基金持仓链路 + `fetch_latest_indicator` 个股财务指标链路，报告期陈旧闸门与穿透层同口径）在编排层计算 →（**首次运行**涉及重仓股名单的一次财务指标取数：未命中缓存时按 `batch.akshare_workers` 并发、受东方财富限速档约束，命中后按财务指标日频缓存复用；取数失败只缺席该基金，不阻断诊断）→ `analysis/prosperity_framework.py::build_prosperity_framework_data`（装配入口；打分内核在 `analysis/prosperity_scoring.py`，市价读取经 `finite_or` 归一）→ `report/_report_aux_metrics.py::compute_prosperity_framework_data`（组装：穿透优先取 `prep.penetrated_assets`、缺失按需计算；流动性/快照取数失败降级为该维未验证；开关关闭返回 None）→ `pipeline_data["prosperity_framework_data"]`（both/full 由 `_report_generation` 注入；basic 由 `excel_generator` 就地兜底）→ 行动建议章内嵌块（HTML `partials/action_section.html` ⑥ / Excel `report/action_sheet.py::_write_prosperity_block`）。
 
 **配置**：顶层键 `prosperity_framework`（`boom_keywords` / `global_edge_keywords` / `defensive_keywords` / `concentration_target_pct`，手动编辑）。
 
@@ -3321,7 +3323,7 @@ is_market_open()
 **时区安全**：所有 `datetime.now()` 调用均使用 `timezone(timedelta(hours=8))` 北京时区，防止 UTC 服务器上时段判断全错。异常时保守返回 `False`。
 
 **消费方**：
-- `cache/_ttl.py:get_ttl()` — 交易时段内 `market_hour_aware` 类型自动使用短 TTL（30s）
+- `cache/_ttl.py:get_ttl()` — 交易时段内注册表声明 `market_ttl` 的类型（价/指）自动使用短 TTL（30s）
 - `report/market_value.py:is_market_open()` — 取价方式标签判断
 - `report/market_value.py:is_midday_break()` — 午间休市识别（11:30-13:00）
 
@@ -3542,7 +3544,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `log_reader` | 日志读取（read_log/tail_log/parse_log） | 日志可视化 | 诊断 | 无（模块级） |
 | `view_logs` | 查看日志（CLI view-logs 子命令） | 日志可视化 | 诊断 | 无（子命令） |
 | `health_history` | 数据源健康历史（load_health_history/summarize_health_history） | 日志可视化 | 监控 | data/state/datasource_health.jsonl |
-| `jsonl_store` | JSONL 原子追加原语（`perf`/`decision_ledger`/`signal_ledger` 共同委托的唯一拷贝） | 诊断 | 监控 | 无（模块级） |
+| `jsonl_store` | JSONL 原子追加 + 按龄裁剪原语（`perf`/`decision_ledger`/`signal_ledger` 共同委托的唯一拷贝；`prune_jsonl_by_age` 供业务账本按保留窗口裁剪，`max_lines` 仅限遥测类） | 诊断 | 监控 | 无（模块级） |
 | `num_utils` | 数值归一原语（`safe_num` 显式拦下 NaN/±inf，替代失效的 `try: float()` 兜底） | 诊断 | 数据获取 | 无（模块级，A 通道无开关） |
 | `retry` | 重试与退避唯一原语（`RetryPolicy` 策略算式——固定/线性/指数/**显式序列**、`is_transient_exception` 瞬时判据、`retry_transient` 执行器；取数链路、各 provider 与 LLM 调用骨架共用） | 诊断 | 数据获取 | 无（模块级） |
 | `throttle` | 按名最小间隔节流唯一原语（`RateLimiter` + `interval_delay` 抖动算式 + `wait_interval` 一次性等待；数据层限速/批量调度/LLM 端点节流/429 退避窗口共用） | 诊断 | 数据获取 | 无（模块级） |
@@ -3966,10 +3968,10 @@ investor-review/
 | `hold` | `fund_hold_{code}.json` | 7 天 | — | — | refresh |
 | `industry` | `industry_{code}.json` | 14 天 | — | — | refresh |
 | `sentiment` | `sentiment_dragon_tiger.json` + `sentiment_ladder.json` | 1h | — | — | refresh |
-| `report` | `report_datasink_index_{symbol}.json` + `report_datasink_sections_{doc_id}.json` + `report_cninfo_index_*` | 30 天 | — | — | refresh |
+| `report` | `report_datasink_index_{symbol}.json` + `report_datasink_sections_{doc_id}.json` + `report_cninfo_index_*` | 24h | — | — | refresh |
 | `report_doc` | `report_datasink_doc_{doc_id}_{section}.json` | 30 天 | — | — | refresh |
-| `fin_indicator` | `fin_indicator_{code}.json` + `fin_indicator_hist_{code}.json` | 30 天 | — | — | refresh |
-| `dividend` | `dividend_{fingerprint}.json` | 30 天 | — | 持仓+穿透 A 股代码 | refresh |
+| `fin_indicator` | `fin_indicator_{code}.json` + `fin_indicator_hist_{code}.json` | 24h | — | — | refresh |
+| `dividend` | `dividend_{fingerprint}.json` | 7 天 | — | 持仓+穿透 A 股代码 | refresh |
 | `benchmark` | `fund_benchmarks.json` | 30 天 | — | — | refresh |
 
 #### LLM 分析类
@@ -3982,7 +3984,7 @@ investor-review/
 | `llm_debate_synthesis` | `llm_debate_synthesis_{fingerprint}.json` | 24h | — | 复用 expert_review 持仓指纹（排除行情波动） | preload |
 | `llm_news_correlation` | `llm_news_item_{hash}.json`（逐条） | 4h | — | 标题前 80 字+持仓指纹 | refresh |
 
-> **TTL 两层模型**：① **默认值唯一来源** = `core/data_registry.py` 的 `DataModuleDef.cache_ttl`（清理/统计/读侧同源）；② **可选覆盖** = `config.json → cache_ttl.<类型>`，生成的配置里该段为空对象，只在用户显式添加键时生效。`cache.get_ttl` 的优先级为「交易时段特例（仅 `market_hour_aware` 声明的 price/index）→ 配置覆盖 → 注册表默认 → `CACHE_DAILY` 兜底（未注册类型，并打 WARNING）」；**不做 per-key 抖动**——TTL 只由「类型」决定、与 key 无关，因此读侧与清理侧天然同值。按 key 抖动要求每个读点都传 key 才能与清理侧一致，属无机制保障的隐式契约；而本应用缓存逐资产写入、过期时刻天然分散，抖动的收益低于该维护成本。
+> **TTL 两层模型**：① **默认值唯一来源** = `core/data_registry.py` 的 `DataModuleDef.cache_ttl`（清理/统计/读侧同源）；② **可选覆盖** = `config.json → cache_ttl.<类型>`，生成的配置里该段为空对象，只在用户显式添加键时生效。`cache.get_ttl` 的优先级为「盘中特例（注册表 `market_ttl` 声明的 price/index）→ 配置覆盖（`cache_ttl`，仅盘后对盘中敏感类型生效）→ 注册表默认 → `CACHE_DAILY` 兜底（未注册类型，并打 WARNING）」；**不做 per-key 抖动**——TTL 只由「类型」决定、与 key 无关，因此读侧与清理侧天然同值。按 key 抖动要求每个读点都传 key 才能与清理侧一致，属无机制保障的隐式契约；而本应用缓存逐资产写入、过期时刻天然分散，抖动的收益低于该维护成本。
 | `llm_global_macro` | `llm_global_macro_{fingerprint}.json` | 24h | — | A 股/美股指数+持仓汇总 | preload |
 | `llm_health_check` | `llm_health_check_{fingerprint}.json` | 4h | — | 持仓明细（排除行情波动） | preload |
 | `llm_penetration_deep` | `llm_penetration_deep_{fingerprint}.json` | 4h | — | 持仓明细（排除行情波动） | preload |
@@ -3993,8 +3995,8 @@ investor-review/
 |:-----|:----------|:---:|:--------:|:----|:-----|
 | `fund_manager` | `fund_manager_{code}.json` + `fund_manager_snapshot.json` | 24h | — | — | refresh |
 | —（持仓重合度） | 运行时推导（复用 `fund_hold_{code}.json`，无独立缓存） | — | — | — | — |
-| `fund_concentration` | `fund_concentration_snapshot.json` | 月级快照 | — | — | 无分组 |
-| `fund_style_snapshot` | `fund_style_snapshot.json` | 月级快照 | — | — | 无分组 |
+| `fund_concentration` | `fund_concentration_snapshot.json` | 30 天 | — | — | 无分组 |
+| `fund_style_snapshot` | `fund_style_snapshot.json` | 30 天 | — | — | 无分组 |
 | `extended` | `extended_{code}.json` | 24h | — | — | refresh |
 
 #### 历史走势类
@@ -4013,8 +4015,11 @@ investor-review/
 | `calendar` | `trading_calendar.json` | 14 天 | — | — | 无分组 |
 | `bond_yield` | `bond_yield_rf` / `bond_yield_history`（精确键名） | 1 天 | — | — | refresh |
 | `idx_valuation` | `idx_valuation_`（前缀，当前仅 sh000300） | 7 天 | — | — | refresh |
+| `datasink_probe_miss` | `datasink_probe_miss_{hash}.json` | 12h | — | — | 无分组 |
+| `report_symbol_miss` | `report_symbol_miss_{hash}.json` | 6h | — | — | 无分组 |
 
 > `—` 表示精确键名（无指纹后缀），TTL 到期后刷新。
+> **缺失探测负缓存**（`datasink_probe_miss` / `report_symbol_miss`）：只在**确定性**缺失时写入（已发布静态文档的章节 404、章节阶与备源均无正文），瞬时网络错误不写；TTL 短于「当天多次报告」周期、长于单次链路重试。
 > **非缓存引擎托管的文件**：`data/cache/` 下还存在脚本自管的性能缓存（`scripts/_doc_drift` 的用例收集快照、`scripts/_test_redundancy` 的逐文件事实缓存）。它们由脚本直接写 JSON，历史上没有 `_ts` 包封 —— 而清理器按 `now - payload.get("_ts", 0)` 算龄，等于把它们算成 **57 年陈货**并每轮启动删掉（缓存优化白做，日志里还留下荒谬条目）。两侧同时修：脚本写入补 `_ts`（缓存引擎的写入时间包封），清理器对**仍无 `_ts` 的文件一律跳过**（托管边界之外，不按 epoch 虚龄删，只留 DEBUG 痕迹）。
 >
 > **交易日历进程内 memo**：`core/trading_calendar._get_trading_calendar()` 被逐事件/逐持仓高频调用（实测单次报告 600+ 次），每次都 `cache.get` 等于读盘 + JSON 解析 600 次。现按「缓存文件指纹（mtime_ns+size）不变且剩余 TTL 未到」进程内复用同一份日历；文件被重写/清理/到期即回落磁盘缓存，语义不变；与 `market_hours` memo 同习语（`reset` 由 conftest autouse fixture 复位，防跨用例串味）。

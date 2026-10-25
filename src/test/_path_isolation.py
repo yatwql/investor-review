@@ -76,6 +76,16 @@ def seed_sensitive_path_isolation(monkeypatch, tmp_path, _doctor_probe_targets) 
         "src.python.analysis.circuit_breaker_wrapper._METRICS_BREAKER_FILE",
         str(tmp_path / "data/state/metrics_breaker.json"),
     )
+    # 数据源熔断状态持久化隔离（路径在调用时由 cache 目录 dirname 推导，缓存目录
+    # 被重定向后仍可能因**后台线程活过用例 teardown**（monkeypatch 已还原）而写回真实
+    # data/state/ —— 故直接钉死该路径解析函数，不依赖缓存目录推导）
+    from src.python.core.provider_registry import DataSourceRegistry
+
+    monkeypatch.setattr(
+        DataSourceRegistry,
+        "_get_breaker_state_path",
+        staticmethod(lambda: str(tmp_path / "data/state/circuit_breaker.json")),
+    )
     # perf_history.jsonl 性能历史文件隔离
     monkeypatch.setattr(
         "src.python.core.perf._PERF_HISTORY_FILE",

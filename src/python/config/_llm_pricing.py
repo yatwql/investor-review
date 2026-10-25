@@ -16,6 +16,7 @@ from typing import Any
 
 from src.python.core.constants import (
     MODEL_PRICING,
+    PRICING_DEFAULT_CURRENCY as PLAN_PRICING_DEFAULT_CURRENCY,
     PRICING_HOLIDAY_ALWAYS_IDLE,
     PRICING_IDLE_PERIODS,
     PRICING_PEAK_PERIODS,
@@ -53,7 +54,8 @@ def invalidate_pricing_cache() -> None:
 
 def _default_policy() -> dict[str, Any]:
     return {
-        "currency": "CNY",
+        # 缺省币种 = 本地显示与计费的主币种；由 constants 单点定义，默认 CNY
+        "currency": PLAN_PRICING_DEFAULT_CURRENCY,
         "timezone": PRICING_TIMEZONE,
         "peak_periods": list(PRICING_PEAK_PERIODS),
         "idle_periods": list(PRICING_IDLE_PERIODS),
@@ -77,9 +79,14 @@ def render_default_pricing_ref() -> str:
 // 参考数据不是用户开关：不进 TUI/Web 配置面板；改价直接编辑本文件。
 // 合并口径：constants.py 的 MODEL_PRICING 为基础价，本文件 models 逐模型覆盖
 // 出现的字段，未出现的字段继承内置值。文件缺失时仅用内置价。
+// 币种：每条模型价按厂商官方币种记录（DeepSeek/Kimi=CNY，Anthropic/OpenAI/Google=USD），
+// 展示按该模型生效币种出符号，不做汇率折算。
+// currency = **缺省币种（本地显示与计费主币种，默认 CNY）**：模型条目未声明 currency
+// 时按它计价；若某模型用 "alt" 提供了该币种官方价（如国内渠道以人民币计价），则按
+// 该币种计费与显示（客户配置币种优先）。
 {{
   "version": {PRICING_SCHEMA_VERSION},   // 结构版本；不符即拒绝加载并提示重新生成
-  "currency": "{policy["currency"]}",   // 货币标识（影响费用符号）
+  "currency": "{policy["currency"]}",   // 缺省币种（本地显示与计费主币种，默认 CNY；影响费用符号）
   "timezone": "{policy["timezone"]}",   // 峰谷判定时区（IANA 名称）
   "peak_periods": {_periods_as_text(policy["peak_periods"])},   // 高峰时段（HH:MM-HH:MM，闭区间）
   "idle_periods": {_periods_as_text(policy["idle_periods"])},   // 闲时时段（空 = 高峰之外均闲时）
@@ -88,7 +95,10 @@ def render_default_pricing_ref() -> str:
   "models": {{
     // 逐模型覆盖示例（单位：元 / 百万 token；未写字段继承内置价）：
     // "deepseek-flash": {{"input_price": 1.0, "output_price": 4.0,
-    //                     "peak": {{"input_price": 2.0, "output_price": 8.0}}}}
+    //                     "peak": {{"input_price": 2.0, "output_price": 8.0}}}},
+    // "claude-sonnet-5-5": {{"input_price": 2, "output_price": 10}},
+    // 多币种：厂商只给 USD 价、你按人民币结算时可补 alt 子表（配置币种优先）
+    // "claude-sonnet-5-5": {{"alt": {{"CNY": {{"input_price": 15, "output_price": 75}}}}}}
   }}
 }}
 """
@@ -127,7 +137,12 @@ _REF_PRICE_KEYS = {
 }
 
 
-def _merge_model(entry: Any, model: str) -> dict[str, float] | None:
+_REF_CURRENCIES = frozenset({"CNY", "USD", "EUR", "GBP", "JPY"})
+"""允许的模型币种白名单（与 `llm.pricing.CURRENCY_SYMBOLS` 同源；此处独立声明避免
+config 层反向依赖 llm 层，改动需两处同步）。"""
+
+
+def _merge_model(entry: Any, model: str) -> dict[str, Any] | None:
     """合并单个模型条目；非法返回 None（调用方告警跳过）。"""
     if not isinstance(entry, dict):
         logger.warning("[pricing] %s 的条目不是 JSON 对象，已跳过", model)
@@ -143,6 +158,14 @@ def _merge_model(entry: Any, model: str) -> dict[str, float] | None:
             logger.warning("[pricing] %s.%s 不是合法非负数值（%r），已跳过该字段", model, ref_key, entry[ref_key])
             continue
         merged[runtime_key] = price
+
+    if "currency" in entry:
+        currency = entry["currency"]
+        code = str(currency).strip().upper() if isinstance(currency, str) else ""
+        if code in _REF_CURRENCIES:
+            merged["currency"] = code
+        else:
+            logger.warning("[pricing] %s.currency 不是受支持币种（%r），沿用内置币种", model, currency)
 
     peak = entry.get("peak")
     if peak is not None:
@@ -202,7 +225,16 @@ def _parse_periods(value: Any) -> list[tuple[int, int]] | None:
 def _policy_from_ref(ref: dict[str, Any], policy: dict[str, Any]) -> dict[str, Any]:
     merged = dict(policy)
     if isinstance(ref.get("currency"), str) and ref["currency"].strip():
-        merged["currency"] = ref["currency"].strip().upper()
+        code = ref["currency"].strip().upper()
+        if code in _REF_CURRENCIES:
+            merged["currency"] = code
+        else:
+            logger.warning(
+                "[pricing] 顶层 currency 不是受支持币种（%r），沿用默认 %s；受支持：%s",
+                ref["currency"],
+                merged["currency"],
+                "、".join(sorted(_REF_CURRENCIES)),
+            )
     if isinstance(ref.get("timezone"), str) and ref["timezone"].strip():
         merged["timezone"] = ref["timezone"].strip()
     parsed = _parse_periods(ref.get("peak_periods"))
