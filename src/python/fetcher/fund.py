@@ -61,7 +61,7 @@ def fetch_fund_rankings(code: str) -> dict[str, Any] | None:
         "fund_rank",
         _FUND_RANK_PROVIDERS,
         rank_cache_key,
-        get_ttl("rank", rank_cache_key),
+        get_ttl("rank"),
         fn_kwargs={"code": code},
         diagnostics=diag,
         # 载荷语义版本准入：旧缓存（无 rank_schema 的陈旧排名，如残留 155/253）自动作废重取，
@@ -187,7 +187,7 @@ def fetch_fund_holdings(code: str) -> dict[str, Any] | None:
         "fund_hold",
         _FUND_HOLD_PROVIDERS,
         hold_cache_key,
-        get_ttl("hold", hold_cache_key),
+        get_ttl("hold"),
         fn_kwargs={"code": code},
         diagnostics=diag,
         transform=_normalize_hold_payload,
@@ -319,7 +319,7 @@ def fetch_fund_rankings_batch(
 
     results = dispatcher.execute_with_cache_check(
         items,
-        cache_check_fn=lambda cache_id: cache_get(cache_id, get_ttl("rank", cache_id)),
+        cache_check_fn=lambda cache_id: cache_get(cache_id, get_ttl("rank")),
     )
 
     rank_map: dict[str, dict[str, Any] | None] = {}
@@ -372,7 +372,7 @@ def fetch_fund_holdings_batch(
 
     def _hold_cache_check(cache_id: str) -> Any:
         """批量预检：旧语义载荷视为未命中（任务会经 fetch_with_fallback 丢弃重取）。"""
-        cached = cache_get(cache_id, get_ttl("hold", cache_id))
+        cached = cache_get(cache_id, get_ttl("hold"))
         return cached if _is_current_hold_payload(cached) else None
 
     results = dispatcher.execute_with_cache_check(
@@ -528,13 +528,13 @@ def fetch_fund_benchmark(code: str) -> str:
     """
     code = code.strip()
     cache_key = _BENCHMARK_TABLE_KEY
-    cached = cache_get(cache_key, get_ttl("benchmark", cache_key))
+    cached = cache_get(cache_key, get_ttl("benchmark"))
     if cached is not None and isinstance(cached, dict):
         return cached.get(code, "--")
 
     lock = _get_benchmark_lock(code)
     with lock:
-        cached = cache_get(cache_key, get_ttl("benchmark", cache_key))
+        cached = cache_get(cache_key, get_ttl("benchmark"))
         if cached is not None and isinstance(cached, dict):
             return cached.get(code, "--")
 

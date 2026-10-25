@@ -88,7 +88,7 @@ _register_credential_spec(
 )
 
 
-# 符号映射 ``to_fmp_symbol`` 统一存放于 ``core/code_utils.py``（多个数据源共用同一
+# 符号映射 ``to_fmp_symbol`` 统一存放于 ``core/code_symbols.py``（多个数据源共用同一
 # A 股→FMP 符号口径），本模块不再自留一份。
 
 # ═══════════════════════════════════════════════════════════════

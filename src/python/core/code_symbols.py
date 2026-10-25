@@ -5,8 +5,7 @@
 东方财富 push2 的 secid、cninfo 栏目参数、市值规模粗估。两者共用同一套前缀常量
 （唯一真值在本模块，`code_utils` 反向引用，避免两处各建一张表）。
 
-**向后兼容**：`core/code_utils.py` 仍 re-export 本模块的公开符号，既有
-``from src.python.core.code_utils import to_fmp_symbol`` 等调用面不变。
+**导入口径**：派生量一律从本模块导入（`code_utils` 只做资产类型判定，不转出本模块符号）。
 """
 
 from __future__ import annotations

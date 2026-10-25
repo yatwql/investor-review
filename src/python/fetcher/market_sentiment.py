@@ -36,7 +36,7 @@ def fetch_dragon_tiger() -> dict[str, Any] | None:
         "sentiment",
         {"hithink": (hithink.DISPLAY_NAME, hithink.fetch_dragon_tiger_list)},
         LHB_CACHE_KEY,
-        get_ttl("sentiment", LHB_CACHE_KEY),
+        get_ttl("sentiment"),
         fn_kwargs={"board_type": "all"},
     )
 
@@ -49,5 +49,5 @@ def fetch_limit_up_ladder() -> dict[str, Any] | None:
         "sentiment",
         {"hithink": (hithink.DISPLAY_NAME, hithink.fetch_limit_up_ladder)},
         LADDER_CACHE_KEY,
-        get_ttl("sentiment", LADDER_CACHE_KEY),
+        get_ttl("sentiment"),
     )

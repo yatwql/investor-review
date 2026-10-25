@@ -77,7 +77,7 @@ def get_cache_age_by_data_type(
     return None
 
 
-def get_ttl(data_type: str, key: str | None = None) -> float:
+def get_ttl(data_type: str) -> float:
     """获取指定数据类型的缓存过期时间（秒）—— **同一类型恒返回同一值**。
 
     用途单一化：TTL 就是「注册表默认值（可被 `config.json cache_ttl` 覆盖）」，
@@ -87,8 +87,6 @@ def get_ttl(data_type: str, key: str | None = None) -> float:
 
     Args:
         data_type: 数据类型键名，如 "price"、"rank"、"hold"
-        key: **历史参数，已不参与计算**。保留签名以兼容既有调用点（`get_ttl(t, key)`），
-            避免为一次简化改动触碰十余处调用；新代码无需传。
 
     Returns:
         过期时间（秒）

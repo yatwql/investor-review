@@ -4,9 +4,8 @@
 
 1. **默认值唯一来源**：生成的 `config.json` 里 `cache_ttl` 是空对象，默认值只来自
    缓存注册表；用户在 config 里写键才构成覆盖，删键即回默认。
-2. **清理侧与读侧同源**：TTL 与 key 无关（抖动层已移除），清理按「剥离版本戳后的
-   逻辑键」查类型——两侧取到同一个数。若 TTL 依赖 key 而只有部分调用点传 key，
-   就会出现「读侧仍有效、清理已删」的成规模白删（实测事故 C）。
+2. **清理侧与读侧同源**：TTL 只由数据类型决定，清理按「剥离版本戳后的逻辑键」
+   查类型——两侧取到同一个数（`get_ttl` 只接受 `data_type`，不存在按 key 的第二口径）。
 3. **精确键映射用逻辑键**：文件名带 `_v{N}` 版本戳，去查精确键表必须先剥离。
 4. **未注册键可见**：`cache_ttl.fund_overlap` 这类历史残留要告警（不自动删）。
 """
@@ -47,18 +46,13 @@ def _cleanup(cache_env) -> int:
 
 
 class TestCleanupReaderAlignment:
-    def test_ttl_is_key_independent(self):
-        """同一数据类型的 TTL 与传入的 key 无关（历史 key 参数保留但不参与计算）。
+    def test_reader_ttl_has_no_key_parameter(self):
+        """`get_ttl` 只接受数据类型：无 key 参数（抖动兼容层已删除）。"""
+        import inspect
 
-        深度审计结论：按 key 抖动若只在部分调用点生效，就会与清理侧判定期不一致
-        （成规模的白删）。本应用缓存按资产逐条写入、过期时刻天然分散，抖动的收益
-        低于其维护成本，故整层移除——读侧/清理侧因此天然同值。
-        """
         from src.python.cache._ttl import get_ttl
 
-        base = get_ttl("llm_expert_review")
-        for key in ("llm_expert_review_a", "llm_expert_review_b", "llm_expert_review_c"):
-            assert get_ttl("llm_expert_review", key) == base, key
+        assert list(inspect.signature(get_ttl).parameters) == ["data_type"]
 
     def test_cleanup_threshold_equals_reader_ttl(self, cache_env):
         """清理判定的过期阈值 == 读侧 TTL：略小于不删、略大于才删。"""

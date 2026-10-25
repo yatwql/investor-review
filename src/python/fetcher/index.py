@@ -14,7 +14,6 @@ from typing import Any
 from src.python.cache import get as cache_get
 from src.python.cache import get_ttl
 from src.python.cache import set as cache_set
-from src.python.fetcher.chain import write_stale_with_version
 
 # 注意：本模块的 `CACHE_WEEKLY` 用于**陈旧兜底读**（stale-tolerant）：
 # 网络失败时允许读比新鲜 TTL 更旧的数据，故刻意不使用 `get_ttl`（后者是新鲜期判定）。
@@ -126,7 +125,7 @@ def fetch_indices() -> dict[str, dict[str, Any]]:
     uncached_codes: list[str] = []
     for index_code in _A_INDICES:
         cache_key = _index_cache_key(index_code)
-        cached = cache_get(cache_key, get_ttl("index", cache_key))
+        cached = cache_get(cache_key, get_ttl("index"))
         if cached is not None:
             cached["_source"] = "cache"
             indices[index_code] = cached
@@ -297,7 +296,7 @@ def fetch_us_indices() -> dict[str, dict[str, Any]]:
 
     for code in _US_INDEX_CODES:
         cache_key = _index_cache_key(code)
-        cached = cache_get(cache_key, get_ttl("index", cache_key))
+        cached = cache_get(cache_key, get_ttl("index"))
         if cached is not None:
             cached["_source"] = "cache"
             indices[code] = cached
@@ -349,8 +348,10 @@ def fetch_us_indices() -> dict[str, dict[str, Any]]:
     if still_missing and expired_cached:
         logger.info("美股指数全部 API 不可用，使用过期缓存数据")
         for code, data in expired_cached.items():
-            # 过期缓存回写走统一降级助手（盖语义版本戳，防旧语义载荷遮蔽修复）
-            indices[code] = write_stale_with_version(_index_cache_key(code), data)
+            # 过期缓存回写：标来源后直接入缓存（不做旧载荷语义版本兼容）
+            data = dict(data, _source="stale_cache")
+            cache_set(_index_cache_key(code), data)
+            indices[code] = data
             logger.info("美股指数 %s 降级为过期缓存数据（经统一降级助手回写）", code)
     elif still_missing:
         logger.warning("美股指数全部获取失败（API + 缓存均无数据）")

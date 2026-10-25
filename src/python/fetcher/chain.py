@@ -38,14 +38,11 @@ from src.python.fetcher.chain_config import (
 )
 from src.python.fetcher.chain_diagnostics import FailureDiagnostics, _brief_reason, _mark_provider_used
 from src.python.fetcher.chain_incremental import (
-    _CACHE_PAYLOAD_FIELD,
     _HISTORY_PROVIDER_MAP,
     _call_history_provider,
     _try_providers,
     clear_incremental_cache,
     fetch_with_incremental_fallback,
-    payload_version_current,
-    write_stale_with_version,
 )
 
 
@@ -303,12 +300,9 @@ __all__ = [
     "reset_chain_overrides",
     "reset_provider_skip",
     # 增量合并（chain_incremental）
-    "_CACHE_PAYLOAD_FIELD",
     "_HISTORY_PROVIDER_MAP",
     "_call_history_provider",
     "_try_providers",
     "clear_incremental_cache",
     "fetch_with_incremental_fallback",
-    "payload_version_current",
-    "write_stale_with_version",
 ]

@@ -208,7 +208,7 @@ def test_chain_falls_back_to_datasink(monkeypatch):
         "financial_indicator",
         provider_map,
         cache_key,
-        get_ttl("fin_indicator", cache_key),
+        get_ttl("fin_indicator"),
         fn_kwargs={"code": "600900"},
         transform=transform_map,
     )
@@ -236,7 +236,7 @@ def test_chain_returns_none_when_both_unavailable(monkeypatch):
         "financial_indicator",
         provider_map,
         cache_key,
-        get_ttl("fin_indicator", cache_key),
+        get_ttl("fin_indicator"),
         fn_kwargs={"code": "600900"},
         transform=transform_map,
     )
@@ -326,7 +326,7 @@ def test_fetch_via_chain_returns_standard_record(monkeypatch):
         "financial_indicator",
         provider_map,
         cache_key,
-        get_ttl("fin_indicator", cache_key),
+        get_ttl("fin_indicator"),
         fn_kwargs={"code": "600519"},
         transform=transform_map,
     )
@@ -351,7 +351,7 @@ def test_fetch_via_chain_degrades_when_provider_empty(monkeypatch):
         "financial_indicator",
         provider_map,
         cache_key,
-        get_ttl("fin_indicator", cache_key),
+        get_ttl("fin_indicator"),
         fn_kwargs={"code": "999999"},
         transform=transform_map,
     )

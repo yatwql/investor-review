@@ -82,7 +82,7 @@ def fetch_fund_fee(code: str) -> dict[str, Any] | None:
         "fund_fee",
         _FEE_PROVIDERS,
         _CACHE_PREFIX + code,
-        get_ttl("fund_fee", _CACHE_PREFIX + code),
+        get_ttl("fund_fee"),
         fn_kwargs={"code": code},
         diagnostics=diag,
         validate=_admit,

@@ -23,8 +23,6 @@ GROUP_MECHANISM = "mechanism"
 GROUP_STANDALONE = "standalone"
 GROUP_CHAPTER_OPTIONS = "chapter_options"
 
-#: 别名：GROUP_ANALYSIS ≡ GROUP_FUND_STYLE（供沿用该名字的导入方使用）
-GROUP_ANALYSIS = GROUP_FUND_STYLE
 
 GROUP_LABELS: dict[str, str] = {
     GROUP_PORTFOLIO: "💼 持仓与交易（成本、申赎状态、成本收益、风险调整）",
@@ -109,7 +107,7 @@ class FeatureSwitchDef:
     Attributes:
         label: 显示名（TUI 面板行名 / Web 配置面板标签，服务端同源下发）
         desc: 一句话说明（CLI 报错提示、控制台横幅、文档）
-        group: 作用域分组（``GROUP_PRESENTATION`` / ``GROUP_ANALYSIS`` /
+        group: 作用域分组（``GROUP_PRESENTATION`` / ``GROUP_FUND_STYLE`` /
             ``GROUP_STANDALONE`` / ``GROUP_MECHANISM``）
         default: 出厂默认值（``features.json`` 未覆写时的取值）
         affects_report: 开启后报告产物内容是否可能不同——决定它是否进入产物自述

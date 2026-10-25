@@ -9,6 +9,8 @@
 
 ## [0.15.7-dev] - 开发中（未发布）
 
+- **删除旧结构与旧接口的兼容层**（不保留向后兼容）：① `get_ttl` 去掉历史 `key` 参数（30 处调用点同步）；② 删除历史序列的「载荷语义版本戳」闸门（`_payload_ver` / `write_stale_with_version` / `payload_version_current`，旧缓存结构不再做准入校验）；③ 功能开关注册表的旧名别名 `GROUP_ANALYSIS` 统一为 `GROUP_FUND_STYLE`；④ 删除 `fetcher/batch` 对旧 registry 对象的 duck-typing 守卫；⑤ 清理 `code_symbols`/`datasink` 注释中「`code_utils` 仍转出派生符号」的过期兼容声明。
+
 - **新闻去重比较成本下降**（rf-872）：比较串与字符多重集按标题缓存，并先用字符多重集上界跳过不可能命中的标题对（不再为每个远低门槛的对构造两个 `SequenceMatcher`）；判定结果不变，基准语料约 1.17×。
 
 - **行业资金流向降级收敛**（rf-871）：失败后 5 分钟内不再重试（akshare 内部本已重试 2 次），后续报告直接按「不可用」降级并只留一条告警；备用源评估结论为「免 key 场景无可靠第二源」，故保留显式不可用、不引入过期缓存。

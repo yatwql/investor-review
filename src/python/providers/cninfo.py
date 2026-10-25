@@ -309,7 +309,7 @@ def resolve_org_id(code: str) -> str | None:
     if not code:
         return None
     cache_key = f"{ORGID_PREFIX}{code}"
-    cached = cache_get(cache_key, get_ttl("report", cache_key))
+    cached = cache_get(cache_key, get_ttl("report"))
     if isinstance(cached, str) and cached:
         return cached
     payload = _post_json(
@@ -363,7 +363,7 @@ def fetch_report_listings(code: str) -> list[dict[str, Any]] | None:
     if not code:
         return None
     cache_key = f"{INDEX_PREFIX}{code}"
-    cached = cache_get(cache_key, get_ttl("report", cache_key))
+    cached = cache_get(cache_key, get_ttl("report"))
     if cached is not None:
         return cached if isinstance(cached, list) else None
 
@@ -464,7 +464,7 @@ def fetch_report_text(announcement_id: str, adjunct_url: str) -> str:
     if not announcement_id or not adjunct_url:
         return ""
     cache_key = f"{TEXT_PREFIX}{announcement_id}"
-    cached = cache_get(cache_key, get_ttl("report", cache_key))
+    cached = cache_get(cache_key, get_ttl("report"))
     if isinstance(cached, str):
         return cached
     url = adjunct_url if adjunct_url.startswith("http") else f"{_STATIC_BASE}/{adjunct_url.lstrip('/')}"

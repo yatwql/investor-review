@@ -70,7 +70,7 @@ def fetch_fund_purchase_status() -> dict[str, Any] | None:
         "fund_purchase",
         _PURCHASE_PROVIDERS,
         _PURCHASE_CACHE_KEY,
-        get_ttl("fund_purchase", _PURCHASE_CACHE_KEY),
+        get_ttl("fund_purchase"),
         diagnostics=diag,
         validate=_admit,
         transform=_stamp_source,

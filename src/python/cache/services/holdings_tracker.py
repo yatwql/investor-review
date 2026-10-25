@@ -61,7 +61,7 @@ def _read_holdings_tracking(tracking_key: str) -> dict | None:
     Returns:
         跟踪数据字典（含 fingerprint / codes），不存在/过期/损坏时返回 None
     """
-    data = get(tracking_key, get_ttl("tracking", tracking_key))
+    data = get(tracking_key, get_ttl("tracking"))
     if not isinstance(data, dict):
         return None
     return data
