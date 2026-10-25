@@ -49,6 +49,7 @@ from ._api_responses import (
 )
 
 from src.python.config import get_llm_setting_default
+
 logger = logging.getLogger("invest")
 
 __all__ = [

@@ -197,7 +197,9 @@ def _compute_module_cache_info(
             "key": _key("penetration_deep", fp_penetration_deep),
             "ttl": get_cache_ttl_llm("penetration_deep"),
             "can_cache": not (force_flag or "penetration_deep" in _forced)
-            and llm_config.get("cache_enabled_penetration_deep", get_llm_setting_default("cache_enabled_penetration_deep")),
+            and llm_config.get(
+                "cache_enabled_penetration_deep", get_llm_setting_default("cache_enabled_penetration_deep")
+            ),
             "thinking_key": "thinking_enabled_penetration_deep",
         },
     }

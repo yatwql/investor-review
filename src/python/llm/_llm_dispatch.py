@@ -32,6 +32,7 @@ from src.python.llm.generators import (
 )
 
 from src.python.config import get_llm_setting_default
+
 logger = logging.getLogger("invest")
 
 
@@ -291,7 +292,14 @@ def _dispatch_llm_workers(
     #    thinking 请求同时最多 llm_max_thinking_concurrency 个（默认 2），从源头降低
     #    偶发概率；非 thinking 模块不受限，保持原有并发。 ──
     try:
-        _thinking_limit = max(1, int((llm_config or {}).get("llm_max_thinking_concurrency", get_llm_setting_default("llm_max_thinking_concurrency"))))
+        _thinking_limit = max(
+            1,
+            int(
+                (llm_config or {}).get(
+                    "llm_max_thinking_concurrency", get_llm_setting_default("llm_max_thinking_concurrency")
+                )
+            ),
+        )
     except (TypeError, ValueError):
         _thinking_limit = 1
     _thinking_sem = threading.BoundedSemaphore(_thinking_limit)

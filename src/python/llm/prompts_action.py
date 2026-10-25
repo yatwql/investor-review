@@ -43,6 +43,7 @@ from src.python.llm.prompts_tables import (
 )
 
 from src.python.config import get_llm_setting_default
+
 logger = logging.getLogger("invest")
 
 

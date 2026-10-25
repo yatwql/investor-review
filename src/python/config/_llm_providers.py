@@ -313,7 +313,12 @@ def order_providers_by_chain(providers: list[dict]) -> list[dict]:
     Returns:
         新列表（不修改入参），按链序排列。
     """
-    return [p for _i, p in sorted(enumerate(providers), key=lambda kv: (kv[1].get("priority", DEFAULT_PROVIDER_PRIORITY), kv[0]))]
+    return [
+        p
+        for _i, p in sorted(
+            enumerate(providers), key=lambda kv: (kv[1].get("priority", DEFAULT_PROVIDER_PRIORITY), kv[0])
+        )
+    ]
 
 
 def get_llm_providers() -> dict:

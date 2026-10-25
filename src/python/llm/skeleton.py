@@ -352,7 +352,11 @@ def _execute_llm_with_finalize(
     # 冷却未到），重试无益 —— 用 attempts=1 表达「不重试」，避免分支里各写一遍 sleep。
     _fail_reason = _get_last_llm_failure()
     _retryable = _fail_reason in {FAIL_REASON_NETWORK_ERROR, FAIL_REASON_TIMEOUT, FAIL_REASON_API_ERROR}
-    _delay = float(llm_config.get("llm_full_fail_retry_delay", get_llm_setting_default("llm_full_fail_retry_delay")) or 0) if _retryable else 0.0
+    _delay = (
+        float(llm_config.get("llm_full_fail_retry_delay", get_llm_setting_default("llm_full_fail_retry_delay")) or 0)
+        if _retryable
+        else 0.0
+    )
     _policy = RetryPolicy(
         attempts=2 if _retryable else 1,
         strategy=STRATEGY_FIXED,

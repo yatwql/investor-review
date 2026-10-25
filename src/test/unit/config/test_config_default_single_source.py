@@ -54,9 +54,10 @@ class TestDebateDefaultsSingleSource:
 
     def test_procon_default_token_budget_present(self) -> None:
         """procon 单阶段输出上限有默认值（缺失会让预算守卫按 None 计算）。"""
-        assert _DEBATE_CONFIG_DEFAULTS["procon"]["per_call_max_tokens"] == _DEFAULT_LLM_SETTINGS["debate"]["procon"][
-            "per_call_max_tokens"
-        ]
+        assert (
+            _DEBATE_CONFIG_DEFAULTS["procon"]["per_call_max_tokens"]
+            == _DEFAULT_LLM_SETTINGS["debate"]["procon"]["per_call_max_tokens"]
+        )
 
 
 class TestProviderPrioritySingleSource:

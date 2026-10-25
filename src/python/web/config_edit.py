@@ -70,7 +70,11 @@ def _llm_providers_surface() -> dict:
     return {
         "strategy": str(cfg.get("strategy") or "priority"),
         "providers": [
-            {"name": p.get("name"), "provider": p.get("provider"), "priority": p.get("priority", DEFAULT_PROVIDER_PRIORITY)}
+            {
+                "name": p.get("name"),
+                "provider": p.get("provider"),
+                "priority": p.get("priority", DEFAULT_PROVIDER_PRIORITY),
+            }
             for _idx, p in ordered
         ],
     }

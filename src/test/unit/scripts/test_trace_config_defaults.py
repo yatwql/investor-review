@@ -112,7 +112,7 @@ class TestExemptions:
         assert guard._scan_config_default_fallbacks(target, root) == []
 
     def test_syntax_error_file_tolerated(self, guard, tmp_path: Path) -> None:
-        root, target = _repo(tmp_path, 'def broken(:\n')
+        root, target = _repo(tmp_path, "def broken(:\n")
         assert guard._scan_config_default_fallbacks(target, root) == []
 
 

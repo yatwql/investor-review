@@ -258,7 +258,9 @@ def _concurrency_hint(endpoint_key: str = "") -> str:
     try:
         from src.python.config import get_llm_config
 
-        global_limit = int((get_llm_config() or {}).get("llm_max_concurrency", get_llm_setting_default("llm_max_concurrency")))
+        global_limit = int(
+            (get_llm_config() or {}).get("llm_max_concurrency", get_llm_setting_default("llm_max_concurrency"))
+        )
     except Exception:  # 配置层不可用不应阻断诊断日志
         global_limit = 3
 
