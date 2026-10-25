@@ -8,7 +8,7 @@
 
 本文档只保留**在办任务的最新状态**：已完成项随发布迁入版本归档，此处不留实现过程记录。命名与实现纪律见 `CLAUDE.md` 与 `developer-guide.md`（单一事实位，本表不重复）。
 
-**当前迭代**：在办 8 项——P2 5 项（**plan-92/93/225/226/227**）、P3 2 项（**plan-70/228**）、P4 1 项（**plan-55**）。
+**当前迭代**：在办 7 项——P2 4 项（**plan-92/93/227**）、P3 2 项（**plan-70/228**）、P4 1 项（**plan-55**）（plan-225/226 已完成，发布时归档）。
 
 ---
 
@@ -37,15 +37,13 @@
 
 **验收**：新增缓存契约测试四面——`test_ttl_business_matrix.py`（8 时段 × 7 类型 × 覆盖层矩阵 + 读/清理同源 + 同日两次报告/收盘后/负缓存/LLM 边界）、`test_price_freshness_gate.py`（收盘时点门禁：盘中价盘后不得当收盘价、QDII T-1、盘后写入可复用）、`test_cache_stamp_and_cleanup.py`（非当前版本戳不可读但仍按类型 TTL 清理、LLM 逐类型 TTL 不退化为默认）、`test_cache_edge.py::TestGetTTLIntraday` + `test_ttl_alignment.py::TestIntradayAndNegativeCacheTTL`（退役键无扩权、覆盖提示仅一次、负缓存 12h/6h 判定）；`technical.md` TTL 流程、`datasource.md` 负缓存表与盘中口径、`requirements.md`/`how-to-config.md` 配置表同步。
 
-#### `plan-226` 财报索引与财务指标 TTL 对齐披露节奏（来源 rf-876）
+#### `plan-226` 财报索引与财务指标 TTL 对齐披露节奏（来源 rf-876）✅
 
-**现状（实测）**：`report`（财报索引）与 `fin_indicator`（财务指标）都是 **symbol 级缓存键 + 30 天 TTL**（`get_ttl("report")` / `get_ttl("fin_indicator")`）。A 股定期披露按季：新一期财报披露之后，索引最长要等 30 天才重新拉取 → 报告可能整月沿用上一期口径。当前缓解手段是 TUI `[C]` 基础缓存刷新（`clear_by_group("refresh")`），但只在用户主动操作时生效，定时/无人值守运行仍会滞后。
+**完成**：`report`（索引/章节清单）与 `fin_indicator`（财务指标）30d → **1d**，`dividend` 30d → **7d**；`report_doc`（正文）保持 30d——正文按 `doc_id` 不可变，索引负责"发现新披露"、正文负责"取一次即定型"。
 
-**动作**：`report` 索引 30d → **1d**（正文 `report_doc` 保持 30d：正文按 `doc_id` 不可变，且探测负缓存已保证缺失章节不重复打源）；`fin_indicator` 30d → **1d**（symbol 级键，新报告期靠日刷新被发现）。`dividend` 30d → 7d（分红公告不定期，同属"symbol 级键 + 长 TTL"）。
+**依据**：两类都是 symbol 级缓存键，30d 窗口下新一期财报披露后报告可能整月沿用上一期口径；TUI `[C]` 基础缓存刷新只在人为操作时生效，定时运行无兜底。配额影响有界——每标的每天至多 1 次索引请求，20 标的 ≈ 免费档日配额 8191 的 0.24%，且报告次数不放大（TTL 而非调用数决定）。
 
-**配额测算（客观依据）**：DataSinking 生效日配额 `resolve_daily_quota()` = **8191**（免费档），今日已用 121。索引刷新为每标的每日至多 1 次请求，持仓规模 10~20 → **+10~20 请求/日（占配额 0.12%~0.24%）**，一天跑 4 次报告也不放大（TTL 而非调用数决定）。故该调整的对外成本可忽略，收益是"新披露 ≤1 天可见"。
-
-**硬约束**：不改 `price`/`index` 的盘中路径；`report_doc` 与 `sector_flow` 等盘中/日频类型不动；改动须同步 `datasource.md` 缓存表 + `technical.md` 默认值表，并补"新报告期次日可见"的回归用例（用固定时钟 + 假索引验证 TTL 边界）。
+**验收**：`test_disclosure_cache_cadence.py` 14 例——日频/月频/周频节奏、跨 TTL 边界"新披露次日可见"、同日四份报告共用一份索引（不重复打源）、巨潮备源与主源同组、清理侧同 TTL、日请求量 = 标的数（用真实缓存行为验证，非算术断言）；`technical.md` 缓存表与财报段、`datasource.md` 披露类节奏表同步。
 
 #### `plan-227` LLM 模块 TTL 取值决策所需观测（来源 rf-879）
 

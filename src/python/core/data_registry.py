@@ -142,10 +142,10 @@ _MODULE_REGISTRY: tuple[DataModuleDef, ...] = (
     # ── 市场情绪（同花顺官方：龙虎榜 + 连板梯队；盘中变化 → 短 TTL）──
     DataModuleDef("市场情绪", "sentiment", cache_prefixes=("sentiment_",), cache_ttl=3600.0, cache_groups=("refresh",)),
     # ── 全文本财报（DataSinking 主源 + 巨潮备源；索引与正文分级 TTL）──
-    # 索引/章节清单 TTL 与正文同档（月度）：财报披露是低频事件（年报/半年报/季报），
-    # 索引两周过期会频繁重取 DataSinking（免费档日配额 8191 篇、还受 3 请求/秒限制），
-    # 正是「连接失败」高发的一类场景；月度窗口不损失语义（新报告期出现时按报告期排序
-    # 自然优先，且正文取数另走正文级 TTL）。
+    # 索引/章节清单 TTL = 1 天：缓存键是 **symbol 级**（每标的一条），新一期财报披露后
+    # 最长要等到 TTL 到期才会被发现；月度窗口会让报告整月沿用上一期口径。日频是
+    # 「新披露 ≤1 天可见」与配额成本（每标的每日至多 1 次请求，10~20 标的 ≈ 日配额
+    # 8191 的 0.12%~0.24%）的平衡点。正文另走 `report_doc`（月度：正文按 doc_id 不可变）。
     DataModuleDef(
         "财报索引",
         "report",
@@ -156,7 +156,7 @@ _MODULE_REGISTRY: tuple[DataModuleDef, ...] = (
             "report_cninfo_orgid_",
             "report_cninfo_text_",
         ),
-        cache_ttl=CACHE_MONTHLY,
+        cache_ttl=CACHE_DAILY,
         cache_groups=("refresh",),
     ),
     DataModuleDef(
@@ -167,11 +167,13 @@ _MODULE_REGISTRY: tuple[DataModuleDef, ...] = (
         cache_groups=("refresh",),
     ),
     # ── 结构化财务指标（akshare 主源） ──
+    # symbol 级键 + 1 天：与财报索引同口径——新报告期靠日刷新被发现，避免整月沿用
+    # 上一期指标；主源为 akshare（不受 DataSinking 日配额约束）。
     DataModuleDef(
         "财务指标",
         "fin_indicator",
         cache_prefixes=("fin_indicator_",),
-        cache_ttl=CACHE_MONTHLY,
+        cache_ttl=CACHE_DAILY,
         cache_groups=("refresh",),
     ),
     # ── 新闻（refresh 组）──
@@ -258,8 +260,10 @@ _MODULE_REGISTRY: tuple[DataModuleDef, ...] = (
     DataModuleDef(
         "行业资金流向", "sector_flow", cache_prefixes=("sector_flow_",), cache_ttl=900, cache_groups=("refresh",)
     ),
+    # symbol 级键 + 1 周：分红公告不定期发布，月度窗口可能漏掉新公告；周频兼顾
+    # 「公告 ≤1 周可见」与 akShare 请求量（与 `idx_valuation` 同档）
     DataModuleDef(
-        "股票历史分红", "dividend", cache_prefixes=("dividend_",), cache_ttl=CACHE_MONTHLY, cache_groups=("refresh",)
+        "股票历史分红", "dividend", cache_prefixes=("dividend_",), cache_ttl=CACHE_WEEKLY, cache_groups=("refresh",)
     ),
     # ── 基金深度分析模块 ──
     DataModuleDef(

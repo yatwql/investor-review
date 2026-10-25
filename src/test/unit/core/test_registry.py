@@ -134,9 +134,12 @@ class TestDerivedMaps:
         assert ttl_map["llm_penetration_deep"] == 14400
         assert ttl_map["llm_news_correlation"] == 14400
         assert ttl_map["sector_flow"] == 900
-        # 财报索引与正文同档按月（回归：曾为两周，导致 DataSinking 频繁重取触发配额/连接失败）
-        assert ttl_map["report"] == CACHE_MONTHLY
+        # 索引按日（symbol 级键：新披露最迟次日可见）、正文按月（doc_id 不可变）
+        assert ttl_map["report"] == CACHE_DAILY
         assert ttl_map["report_doc"] == CACHE_MONTHLY
+        # 指标按日（同索引）、分红按周（公告不定期）
+        assert ttl_map["fin_indicator"] == CACHE_DAILY
+        assert ttl_map["dividend"] == CACHE_WEEKLY
 
     def test_prefix_type_map_covers_all_prefixes(self):
         """所有模块的缓存前缀在 prefix_type_map 中均有对应。"""
