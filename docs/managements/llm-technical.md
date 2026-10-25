@@ -925,7 +925,7 @@ penetrated_assets ──→ extract_stable_penetration()
 
 `get_ttl(data_type)` 的解析顺序（**与缓存键无关，不做按 key 抖动**）：
 
-1. 交易时段特例：`data_type ∈ config.market_hour_aware`（仅 price/index）且盘中 → `market_hour_ttl`（30s）
+1. 盘中特例：注册表 `DataModuleDef.market_ttl` 声明盘中敏感（当前仅 price/index）且处于交易时段 → `market_hour_ttl`（config 数值覆盖，缺省 30s）
 2. `config.json` → `cache_ttl.llm_{subtype}` 稀疏覆盖（生成的配置里为空对象）
 3. 缓存注册表默认值（`core/data_registry.py` 的 `DataModuleDef.cache_ttl`）：
 4. 未注册类型 → `CACHE_DAILY` 兜底并告警

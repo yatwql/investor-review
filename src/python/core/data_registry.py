@@ -33,6 +33,7 @@ __all__ = [
     "get_known_llm_settings_keys",
     "get_llm_module_name",
     "get_llm_module_names",
+    "get_market_ttl_map",
     "get_prefix_type_map",
     "get_registered_data_types",
     "get_registry",
@@ -56,6 +57,9 @@ class DataModuleDef:
         exact_cache_keys: 精确缓存键名（非前缀匹配），
             用于固定键名的特殊缓存文件。
         cache_ttl: 默认缓存过期时间（秒）。
+        market_ttl: 交易时段内的短 TTL（秒）；None = 该类型不随盘中降频。
+            盘中敏感性是**数据属性**（价格/指数分钟级变化），由注册表声明，
+            不放在用户配置里（误配会让非行情数据盘中高频打源）。
         settings_suffix: LLM settings 键的后缀，
             设置后自动生成该模块的所有 llm_settings.json 合法键名。
             None 表示非 LLM 模块。
@@ -68,6 +72,7 @@ class DataModuleDef:
     cache_ttl: float = CACHE_DAILY
     settings_suffix: str | None = None
     cache_groups: tuple[str, ...] = ()
+    market_ttl: float | None = None
 
     @property
     def is_llm(self) -> bool:
@@ -106,8 +111,23 @@ class DataModuleDef:
 
 _MODULE_REGISTRY: tuple[DataModuleDef, ...] = (
     # ── 基础行情（preload 组：换持仓后重取）──
-    DataModuleDef("股票价格", "price", cache_prefixes=("price_",), cache_ttl=CACHE_DAILY, cache_groups=("preload",)),
-    DataModuleDef("市场指数", "index", cache_prefixes=("index_",), cache_ttl=CACHE_DAILY, cache_groups=("preload",)),
+    # 盘中价格/指数分钟级变化：交易时段内降到 30s（数值可由 config.market_hour_ttl 覆盖）
+    DataModuleDef(
+        "股票价格",
+        "price",
+        cache_prefixes=("price_",),
+        cache_ttl=CACHE_DAILY,
+        market_ttl=30.0,
+        cache_groups=("preload",),
+    ),
+    DataModuleDef(
+        "市场指数",
+        "index",
+        cache_prefixes=("index_",),
+        cache_ttl=CACHE_DAILY,
+        market_ttl=30.0,
+        cache_groups=("preload",),
+    ),
     # ── 基金数据（refresh 组：主动刷新缓存）──
     DataModuleDef(
         "基金业绩排名", "rank", cache_prefixes=("fund_perf_",), cache_ttl=CACHE_DAILY, cache_groups=("refresh",)
@@ -318,7 +338,7 @@ _MODULE_REGISTRY: tuple[DataModuleDef, ...] = (
 
 
 # ── 派生产出 ────────────────────────────────────────────────
-# ── 缓存专属登记（注册表外：辩论三段缓存）─────────────────────
+# ── 缓存专属登记（注册表外：辩论三段缓存 + 缺失探测负缓存）─────
 # 辩论白脸/黑脸/综合三段的运行时开关挂 features（llm_debate_procon，分析增强组），
 # 三段**不属于 LLM 模块注册表**：菜单、配置编辑白名单与 llm_settings 键域均不含
 # 其键（settings_suffix 为空）。但磁盘缓存仍以 llm_debate_pro_ / llm_debate_con_ /
@@ -347,6 +367,21 @@ _CACHE_ONLY_REGISTRY: tuple[DataModuleDef, ...] = (
         cache_ttl=86400,
         cache_groups=("preload",),
     ),
+    # 负缓存：只在**确定性**缺失时写入（已发布静态文档章节 404 / 标的正文主备源均无），
+    # TTL 短于「当天多次报告」周期、长于单次链路重试——登记在此使读侧 TTL、清理判定、
+    # config 覆盖与文档表格共用同一来源（此前散落在调用点常量里，清理按未注册默认 24h 判定）。
+    DataModuleDef(
+        "财报章节缺失探测",
+        "datasink_probe_miss",
+        cache_prefixes=("datasink_probe_miss_",),
+        cache_ttl=12 * 3600,
+    ),
+    DataModuleDef(
+        "标的正文缺失",
+        "report_symbol_miss",
+        cache_prefixes=("report_symbol_miss_",),
+        cache_ttl=6 * 3600,
+    ),
 )
 
 
@@ -374,6 +409,15 @@ def get_cache_ttl_defaults() -> dict[str, float]:
     未注册的类型回退到 CACHE_DAILY。
     """
     return {m.data_type: m.cache_ttl for m in get_cache_registry()}
+
+
+def get_market_ttl_map() -> dict[str, float]:
+    """按数据类型返回**盘中短 TTL** 映射（仅盘中敏感类型有条目，如 price/index）。
+
+    盘中敏感性属数据属性，由注册表单一声明；Ttl 数值可由
+    `config.json → market_hour_ttl` 全局覆盖（见 `cache._ttl.get_ttl`）。
+    """
+    return {m.data_type: m.market_ttl for m in get_cache_registry() if m.market_ttl}
 
 
 def get_prefix_type_map() -> dict[str, str]:

@@ -26,7 +26,7 @@ from src.python.core.models import Holding
 
 @pytest.mark.scenario_datetime
 @pytest.mark.scenario
-class TestGetTtlMarketAware:
+class TestGetTtlIntraday:
     """get_ttl 市场时段感知测试 — 参数化版本。
 
     核心要求（T1 盘中 / T2 盘前 / T4 盘后 / T5 非交易日）：
@@ -44,61 +44,54 @@ class TestGetTtlMarketAware:
                 self._mock_is_open = mock_is_open
                 yield
 
-    def _setup_config(
-        self, market_hour_aware: list | None = None, cache_ttl: dict | None = None, market_hour_ttl: int = 30
-    ):
-        """构造 mock config。"""
+    def _setup_config(self, cache_ttl: dict | None = None, market_hour_ttl: int | None = 30):
+        """构造 mock config（盘中敏感类型由注册表声明，配置只留数值覆盖）。"""
         cfg: dict = {}
-        if market_hour_aware is not None:
-            cfg["market_hour_aware"] = market_hour_aware
         if cache_ttl is not None:
             cfg["cache_ttl"] = cache_ttl
-        if "market_hour_aware" in cfg or market_hour_ttl != 30:
+        if market_hour_ttl is not None:
             cfg["market_hour_ttl"] = market_hour_ttl
         self._mock_get_config.return_value = cfg
 
     @pytest.mark.parametrize(
-        "is_open,aware,cache_ttl,mh_ttl,typ,expected",
+        "is_open,cache_ttl,mh_ttl,typ,expected",
         [
             # T1: 盘中 — short TTL for price/index
-            pytest.param(True, ["price", "index"], {"price": 86400, "index": 86400}, 30, "price", 30, id="T1-price"),
-            pytest.param(True, ["price", "index"], {"price": 86400, "index": 86400}, 30, "index", 30, id="T1-index"),
-            pytest.param(True, ["price"], {"price": 86400}, 60, "price", 60, id="T1-custom-mh-ttl"),
+            pytest.param(True, {"price": 86400, "index": 86400}, 30, "price", 30, id="T1-price"),
+            pytest.param(True, {"price": 86400, "index": 86400}, 30, "index", 30, id="T1-index"),
+            pytest.param(True, {"price": 86400}, 60, "price", 60, id="T1-custom-mh-ttl"),
             # T2/T4/T5: 非交易时段 — long TTL
-            pytest.param(
-                False, ["price", "index"], {"price": 86400, "index": 86400}, 30, "price", 86400, id="T2-pre-market"
-            ),
-            pytest.param(
-                False, ["price", "index"], {"price": 86400, "index": 86400}, 30, "index", 86400, id="T4-post-market"
-            ),
-            pytest.param(False, ["price", "index"], {"price": 86400}, 30, "price", 86400, id="T5-weekend"),
+            pytest.param(False, {"price": 86400, "index": 86400}, 30, "price", 86400, id="T2-pre-market"),
+            pytest.param(False, {"price": 86400, "index": 86400}, 30, "index", 86400, id="T4-post-market"),
+            pytest.param(False, {"price": 86400}, 30, "price", 86400, id="T5-weekend"),
             # 非感知类型不受市场状态影响
-            pytest.param(True, ["price", "index"], {"rank": 7200}, 30, "rank", 7200, id="non-aware-rank"),
-            pytest.param(False, ["price", "index"], {"hold": 604800}, 30, "hold", 604800, id="non-aware-hold"),
+            pytest.param(True, {"rank": 7200}, 30, "rank", 7200, id="non-aware-rank"),
+            pytest.param(False, {"hold": 604800}, 30, "hold", 604800, id="non-aware-hold"),
             # 边界: TTL 钳位
-            pytest.param(True, ["price"], {"price": 86400}, 10, "price", 30, id="clamp-min"),
-            pytest.param(True, ["price"], {"price": 86400}, 999999, "price", 86400, id="clamp-max"),
+            pytest.param(True, {"price": 86400}, 10, "price", 30, id="clamp-min"),
+            pytest.param(True, {"price": 86400}, 999999, "price", 86400, id="clamp-max"),
         ],
     )
-    def test_ttl_scenario(self, is_open, aware, cache_ttl, mh_ttl, typ, expected):
-        """参数化 TTL 场景：盘中/盘前/盘后/非交易日/钳位。"""
+    def test_ttl_scenario(self, is_open, cache_ttl, mh_ttl, typ, expected):
+        """参数化 TTL 场景：盘中/盘前/盘后/非交易日/钳位（盘中敏感类型来自注册表）。"""
         self._mock_is_open.return_value = is_open
-        self._setup_config(market_hour_aware=aware, cache_ttl=cache_ttl, market_hour_ttl=mh_ttl)
+        self._setup_config(cache_ttl=cache_ttl, market_hour_ttl=mh_ttl)
         from src.python.cache import get_ttl
 
         assert get_ttl(typ) == expected
 
     @pytest.mark.parametrize(
-        "desc,is_open,aware,cache_ttl,typ,expected",
+        "desc,is_open,cache_ttl,market_hour_ttl,typ,expected",
         [
-            ("无配置 → CACHE_DAILY", False, None, None, "price", "__CACHE_DAILY__"),
-            ("aware 为空 → 配置 cache_ttl", True, [], {"price": 3600}, "price", 3600),
+            ("无配置 → 注册表默认", False, None, None, "price", "__CACHE_DAILY__"),
+            ("盘中 cache_ttl 覆盖被盘中 TTL 顶替", True, {"price": 3600}, 30, "price", 30),
+            ("非盘中敏感类型用 cache_ttl", True, {"rank": 3600}, 30, "rank", 3600),
         ],
     )
-    def test_ttl_fallback(self, desc, is_open, aware, cache_ttl, typ, expected):
-        """参数化回退场景：配置缺失 / aware 列表为空。"""
+    def test_ttl_fallback(self, desc, is_open, cache_ttl, market_hour_ttl, typ, expected):
+        """参数化回退：配置缺失 / 盘中优先级 / 非敏感类型。"""
         self._mock_is_open.return_value = is_open
-        self._setup_config(market_hour_aware=aware, cache_ttl=cache_ttl)
+        self._setup_config(cache_ttl=cache_ttl, market_hour_ttl=market_hour_ttl)
         if expected == "__CACHE_DAILY__":
             from src.python.core.constants import CACHE_DAILY
 

@@ -34,6 +34,7 @@ from datetime import date
 from typing import Any
 
 from src.python.cache import get as cache_get
+from src.python.cache import get_ttl
 from src.python.cache import set as cache_set
 from src.python.core.atomic_write import write_json_atomic
 from src.python.core.constants import PROJECT_ROOT
@@ -228,9 +229,9 @@ def _get_with_transient_retry(path: str, query: dict[str, Any]) -> Any:
     )
 
 
-#: 探测未命中（404）的负缓存 TTL：财报全文是已发布静态文档，缺失章节不会回补；
-#: 12h 足以跨过同一天的多次报告，又不会让「源侧后来补解析」长期不可见。
-_PROBE_MISS_TTL = 12 * 3600
+#: 探测未命中（404）的负缓存：TTL 在 core/data_registry 登记（`datasink_probe_miss`，12h）
+#: ——财报全文是已发布静态文档，缺失章节不会回补；12h 足以跨过同一天的多次报告，
+#: 又不会让「源侧后来补解析」长期不可见。读 TTL 走 `get_ttl`，与清理判定同源。
 
 
 def _probe_miss_key(path: str, params: dict[str, Any]) -> str:
@@ -268,7 +269,7 @@ def _request(path: str, params: dict[str, Any]) -> dict[str, Any] | None:
     # 财报章节探测在每份报告里都要按候选章节名逐个试，404 各占一个网络往返
     # （实测 7 只标的 × 多章节 → 十余秒），而这批「源侧确实没有」的结论跨报告稳定。
     miss_key = _probe_miss_key(path, params)
-    if miss_key and cache_get(miss_key, _PROBE_MISS_TTL):
+    if miss_key and cache_get(miss_key, get_ttl("datasink_probe_miss")):
         logger.debug("[datasink] 探测负缓存命中（已确认缺失，跳过请求）：%s", path)
         set_last_reason("该章节此前确认缺失（负缓存）")
         return None

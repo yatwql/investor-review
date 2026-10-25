@@ -1308,43 +1308,45 @@ cache/
 get_ttl(data_type)
     │
     ▼
-┌──────────────────────────────┐
-│ data_type 在 market_hour_   │
-│ aware 列表中?                │── NO ─┐
-└────────────┬─────────────────┘       │
-            YES                         │
-             │                          │
-             ▼                          │
-┌──────────────────────────────┐       │
-│ is_market_open()?            │       │
-├──────────────────────────────┤       │
-│ YES → 交易时段内              │       │
-│   ↓                          │       │
-│   market_hour_ttl（config）   │       │
-│   默认 30s，范围 [30, 86400]  │       │
-│                              │       │
-│ NO → 非交易时段               │       │
-└────────────┬─────────────────┘       │
-             │                          │
-             ▼                          ▼
-    ┌──────────────────────────────────────┐
-    │ config.json → cache_ttl.{data_type}  │
-    │ 用户显式配置?                          │
-    ├────────────┬─────────────────────────┤
-    │ YES → 返回  │ NO → registry 默认值   │
-    │ 用户配置值   │ get_cache_ttl_defaults │
-    └────────────┘         │
-                           ▼
-                  ┌──────────────────┐
-                  │ 类型未注册?       │
-                  ├──────┬───────────┤
-                  │ YES  │ NO        │
-                  │ 回退  │ 返回默认值 │
-                  │86400s│           │
-                  └──────┘           │
+┌──────────────────────────────────────┐
+│ 注册表声明 market_ttl？               │── NO ─┐
+│ （DataModuleDef.market_ttl，仅价/指） │       │
+└────────────┬─────────────────────────┘       │
+            YES                                │
+             │                                 │
+             ▼                                 │
+┌──────────────────────────────┐               │
+│ is_market_open()?            │               │
+├──────────────────────────────┤               │
+│ YES → market_hour_ttl 覆盖    │               │
+│   （config，缺省 30s，钳制    │               │
+│     [30, 86400]）             │               │
+│ NO  → 静态 TTL 分支            │               │
+└────────────┬─────────────────┘               │
+             │                                 │
+             ▼                                 ▼
+    ┌──────────────────────────────────────────┐
+    │ config.json → cache_ttl.{data_type}       │
+    │ 用户显式覆盖（正数）?                      │
+    ├────────────┬─────────────────────────────┤
+    │ YES → 返回  │ NO → 注册表默认             │
+    │ 用户配置值   │ get_cache_ttl_defaults     │
+    └────────────┘         │                   │
+                           ▼                   │
+                  ┌──────────────────┐         │
+                  │ 类型未注册?       │         │
+                  ├──────┬───────────┤         │
+                  │ YES  │ NO        │         │
+                  │ 回退  │ 返回默认值 │         │
+                  │86400s│           │         │
+                  └──────┘           │         │
 ```
 
-**`market_hour_aware` 类型列表**：由 `config.json` 的 `market_hour_aware` 数组配置（如 `["price", "index"]`），非硬编码。
+**盘中敏感性由注册表声明**（`DataModuleDef.market_ttl`，当前只有 `price`/`index` = 30s）：这是数据属性而非用户偏好——价格/指数分钟级变化，盘中必须短 TTL 才能避免把盘中价当收盘价（否则"本日盈亏/快照环比"系统性偏离），而非行情数据（新闻 900s、情绪 3600s 等）不得因盘中被降频、白打上游。`config.json → market_hour_aware` 已退役：写入该项只会在配置校验时告警并被忽略。
+
+**盘中覆盖可见**：若用户同时配了 `cache_ttl.{type}` 而该类型盘中敏感，`get_ttl` 会打一条 INFO（每类型一次）说明"盘中以 `market_hour_ttl` 为准，`cache_ttl` 仅盘后生效"——把静默失效变成可观测。
+
+**负缓存同源**：缺失探测类负缓存（`datasink_probe_miss_` 12h、`report_symbol_miss_` 6h）登记为正式缓存类型，读侧 TTL、`cleanup_expired` 判定、`cache_ttl` 覆盖与文档表格共用同一注册表条目（未登记时会被按未注册默认 24h 判定，滞留更久且配置不可见）。
 
 ### 3.3 原子写入与并发安全
 
@@ -3321,7 +3323,7 @@ is_market_open()
 **时区安全**：所有 `datetime.now()` 调用均使用 `timezone(timedelta(hours=8))` 北京时区，防止 UTC 服务器上时段判断全错。异常时保守返回 `False`。
 
 **消费方**：
-- `cache/_ttl.py:get_ttl()` — 交易时段内 `market_hour_aware` 类型自动使用短 TTL（30s）
+- `cache/_ttl.py:get_ttl()` — 交易时段内注册表声明 `market_ttl` 的类型（价/指）自动使用短 TTL（30s）
 - `report/market_value.py:is_market_open()` — 取价方式标签判断
 - `report/market_value.py:is_midday_break()` — 午间休市识别（11:30-13:00）
 
@@ -3982,7 +3984,7 @@ investor-review/
 | `llm_debate_synthesis` | `llm_debate_synthesis_{fingerprint}.json` | 24h | — | 复用 expert_review 持仓指纹（排除行情波动） | preload |
 | `llm_news_correlation` | `llm_news_item_{hash}.json`（逐条） | 4h | — | 标题前 80 字+持仓指纹 | refresh |
 
-> **TTL 两层模型**：① **默认值唯一来源** = `core/data_registry.py` 的 `DataModuleDef.cache_ttl`（清理/统计/读侧同源）；② **可选覆盖** = `config.json → cache_ttl.<类型>`，生成的配置里该段为空对象，只在用户显式添加键时生效。`cache.get_ttl` 的优先级为「交易时段特例（仅 `market_hour_aware` 声明的 price/index）→ 配置覆盖 → 注册表默认 → `CACHE_DAILY` 兜底（未注册类型，并打 WARNING）」；**不做 per-key 抖动**——TTL 只由「类型」决定、与 key 无关，因此读侧与清理侧天然同值。按 key 抖动要求每个读点都传 key 才能与清理侧一致，属无机制保障的隐式契约；而本应用缓存逐资产写入、过期时刻天然分散，抖动的收益低于该维护成本。
+> **TTL 两层模型**：① **默认值唯一来源** = `core/data_registry.py` 的 `DataModuleDef.cache_ttl`（清理/统计/读侧同源）；② **可选覆盖** = `config.json → cache_ttl.<类型>`，生成的配置里该段为空对象，只在用户显式添加键时生效。`cache.get_ttl` 的优先级为「盘中特例（注册表 `market_ttl` 声明的 price/index）→ 配置覆盖（`cache_ttl`，仅盘后对盘中敏感类型生效）→ 注册表默认 → `CACHE_DAILY` 兜底（未注册类型，并打 WARNING）」；**不做 per-key 抖动**——TTL 只由「类型」决定、与 key 无关，因此读侧与清理侧天然同值。按 key 抖动要求每个读点都传 key 才能与清理侧一致，属无机制保障的隐式契约；而本应用缓存逐资产写入、过期时刻天然分散，抖动的收益低于该维护成本。
 | `llm_global_macro` | `llm_global_macro_{fingerprint}.json` | 24h | — | A 股/美股指数+持仓汇总 | preload |
 | `llm_health_check` | `llm_health_check_{fingerprint}.json` | 4h | — | 持仓明细（排除行情波动） | preload |
 | `llm_penetration_deep` | `llm_penetration_deep_{fingerprint}.json` | 4h | — | 持仓明细（排除行情波动） | preload |

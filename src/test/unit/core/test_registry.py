@@ -727,6 +727,9 @@ class TestCacheOnlyDebateRegistry:
             assert ttl[data_type] == 86400
             assert prefixes[f"{data_type}_"] == data_type
 
+    #: 缓存专属的缺失探测负缓存类型（不进模块清单，仅缓存域消费）
+    _NEGATIVE_CACHE_TYPES = {"datasink_probe_miss", "report_symbol_miss"}
+
     def test_cache_registry_is_registry_plus_cache_only(self) -> None:
         """缓存域注册表 = 常规注册表 ∪ 缓存专属项，常规项无重复。"""
         from src.python.core.data_registry import _MODULE_REGISTRY
@@ -736,7 +739,7 @@ class TestCacheOnlyDebateRegistry:
         assert set(_MODULE_REGISTRY) < set(cache_registry)
         assert len(cache_registry) == len(set(cache_registry))
         extra = {m.data_type for m in cache_registry} - {m.data_type for m in _MODULE_REGISTRY}
-        assert extra == set(self._DEBATE_CACHE_TYPES)
+        assert extra == set(self._DEBATE_CACHE_TYPES) | self._NEGATIVE_CACHE_TYPES
 
     def test_cache_only_entries_not_llm_typed(self) -> None:
         """缓存专属项无 settings_suffix（不进 enabled_llm/llm_settings 合法键域）。"""

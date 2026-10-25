@@ -339,9 +339,9 @@ class TestValidateMarketHours(unittest.TestCase):
         n = scalars._validate_market_hours({}, 0)
         self.assertEqual(n, 0)
 
-    def test_invalid_market_hour_aware_warns(self):
-        """market_hour_aware 不是字符串列表 → 告警。"""
-        n = scalars._validate_market_hours({"market_hour_aware": "not_a_list"}, 0)
+    def test_retired_market_hour_aware_warns(self):
+        """market_hour_aware 已退役 → 任何取值都告警并被忽略（盘中敏感性改由注册表声明）。"""
+        n = scalars._validate_market_hours({"market_hour_aware": ["price", "news"]}, 0)
         self.assertEqual(n, 1)
 
     def test_market_hour_ttl_too_small_warns(self):

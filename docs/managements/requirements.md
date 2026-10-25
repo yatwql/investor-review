@@ -1296,7 +1296,6 @@ LLM 五维度量化评分，每项满分 100：
 | `enable_history` | bool | true | ✅ P | 历史走势启停 |
 | `enable_portfolio_evolution` | bool | true | ✅ P | 组合演进启停 |
 | `enable_action` | bool | true | ✅ P | 行动建议启停（默认开；再平衡信号/交易纪律/调仓建议/收益归因） |
-| `market_hour_aware` | list | `["price","index"]` | — | 交易时段短 TTL 的数据类型 |
 | `market_hour_ttl` | int | 30 | — | 交易时段缓存有效期（秒） |
 | `market_hours` | dict | `{start:"09:30",end:"15:00",official_source:true}` | — | 交易时段配置（official_source=true 以官方行情源判定开市/收盘；false 不使用官方源，返回 None 走 fallback） |
 | `degradation` | dict | T2/T3/T4 默认 | — | T2（基金业绩/行业分类等, stale_days=3）/ T3（资金流向/基金持仓等, stale_days=14）/ T4（穿透数据, stale_days=14），每层含 unreachable_threshold / empty_data_threshold / stale_days 三参数 |

@@ -10,12 +10,15 @@ import time
 
 from src.python.core.constants import CACHE_DAILY
 from src.python.core.market_hours import is_market_open as _is_market_open
-from src.python.core.registry import get_cache_ttl_defaults
+from src.python.core.registry import get_cache_ttl_defaults, get_market_ttl_map
 
 from ._io import _read_cache_data
 from ._paths import _GZIP_SUFFIX, _cache_path
 
 logger = logging.getLogger("invest")
+
+#: 已提示过「盘中 TTL 优先于 cache_ttl」的类型（每类型只提示一次，避免每份报告刷屏）
+_INTRADAY_OVERRIDE_NOTIFIED: set[str] = set()
 
 
 def get_cache_age(key: str) -> float | None:
@@ -80,8 +83,17 @@ def get_cache_age_by_data_type(
 def get_ttl(data_type: str) -> float:
     """获取指定数据类型的缓存过期时间（秒）—— **同一类型恒返回同一值**。
 
-    用途单一化：TTL 就是「注册表默认值（可被 `config.json cache_ttl` 覆盖）」，
-    交易时段内额外对 `market_hour_aware` 声明的类型（price/index）降为短 TTL。
+    解析顺序（单一来源 + 两种覆盖）：
+
+    1. **盘中敏感类型**（注册表 `DataModuleDef.market_ttl`，价/指 = 30s）且当前处于
+       交易时段 → 返回盘中 TTL；数值可被 `config.json → market_hour_ttl` 全局覆盖，
+       钳制在 [30, 86400]。
+    2. 否则返回静态 TTL：`config.json → cache_ttl.{type}`（正数）优先，未配置取注册表默认。
+
+    盘中敏感性由注册表声明（数据属性），不再由配置列表决定——避免非行情类型被误配成
+    盘中 30s 高频打源。若用户同时配了 `cache_ttl.{type}` 而该类型盘中敏感，打一条 INFO
+    说明「盘中以 market_hour_ttl 为准」，把静默失效变成可观测。
+
     读侧（`cache.get`）与清理侧（`cleanup_expired`）取到的是同一个数——这是
     「读写两侧判定期一致」的前提，不需要两侧各自对齐。
 
@@ -91,32 +103,33 @@ def get_ttl(data_type: str) -> float:
     Returns:
         过期时间（秒）
     """
+    defaults = get_cache_ttl_defaults()
     try:
         from src.python.config import get_config  # lazy import
 
         config = get_config()
-        # ── 交易时段内：配置声明的数据类型用短 TTL 确保实时性 ──
-        market_hour_aware: list = config.get("market_hour_aware") or []
-        if _is_market_open() and data_type in market_hour_aware:
-            market_ttl = config.get("market_hour_ttl", 30)
+        market_ttl = get_market_ttl_map().get(data_type)
+        if market_ttl is not None and _is_market_open():
+            override = config.get("market_hour_ttl", market_ttl)
             try:
-                market_ttl_val = float(market_ttl)
-                ttl = max(30, min(86400, market_ttl_val))
-            except (ValueError, TypeError):
-                ttl = 30
-        else:
-            # ── 非交易时段或非感知类型：用静态配置或默认值 ──
-            ttl_config = config.get("cache_ttl") or {}
-            if data_type in ttl_config:
-                val = float(ttl_config[data_type])
-                if val > 0:
-                    ttl = val
-                else:
-                    ttl = get_cache_ttl_defaults().get(data_type, CACHE_DAILY)
-            else:
-                ttl = get_cache_ttl_defaults().get(data_type, CACHE_DAILY)
+                ttl = max(30.0, min(86400.0, float(override)))
+            except (TypeError, ValueError):
+                ttl = max(30.0, min(86400.0, float(market_ttl)))
+            if data_type in (config.get("cache_ttl") or {}) and data_type not in _INTRADAY_OVERRIDE_NOTIFIED:
+                _INTRADAY_OVERRIDE_NOTIFIED.add(data_type)
+                logger.info(
+                    "[cache] 交易时段内 %s 使用盘中 TTL（%.0fs），cache_ttl.%s 仅在盘后生效；"
+                    "如需调整盘中频率请改 market_hour_ttl",
+                    data_type,
+                    ttl,
+                    data_type,
+                )
+            return ttl
+        ttl_config = config.get("cache_ttl") or {}
+        if data_type in ttl_config:
+            val = float(ttl_config[data_type])
+            return val if val > 0 else defaults.get(data_type, CACHE_DAILY)
+        return defaults.get(data_type, CACHE_DAILY)
     except (ImportError, TypeError, ValueError, KeyError, AttributeError, RuntimeError):
         logger.debug("get_ttl: 配置读取失败，使用默认值")
-        ttl = get_cache_ttl_defaults().get(data_type, CACHE_DAILY)
-
-    return ttl
+        return defaults.get(data_type, CACHE_DAILY)

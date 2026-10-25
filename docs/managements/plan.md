@@ -31,20 +31,11 @@
 **现状**：19 页签为静态数字与文字，收益率高低、集中度偏离需逐格读数。
 **动作**：高价值数值列加色阶/数据条、趋势列加迷你折线（openpyxl 原生）；先试点持仓明细 / 量化指标 / 集中度 2~3 个页签，认可后再扩。
 
-#### `plan-225` 缓存 TTL 机制收敛（来源 rf-874 / rf-875）
+#### `plan-225` 缓存 TTL 机制收敛（来源 rf-874 / rf-875）✅
 
-**现状（实测）**：同一份过期语义由三处决定——注册表默认（`DataModuleDef.cache_ttl`）、`config.json → cache_ttl` 稀疏覆盖、`config.json → market_hour_aware` + `market_hour_ttl`（盘中 30s）。`technical.md`「TTL 分辨率流程」已写明优先级，但仍有两处真实缺口：
-1. **配置静默失效**：盘中 `market_hour_aware` 命中时直接返回 `market_hour_ttl`，**`cache_ttl.price` 的覆盖值不生效且无任何提示**（用户改 `cache_ttl.price=3600` 以为生效，实际盘中仍是 30s）。
-2. **负缓存类型未注册**：`datasink_probe_miss_`（12h）与 `report_symbol_miss_`（6h）只存在于调用点常量 → `cleanup_expired` 按未注册默认 24h 判定（比设计多留 12h/18h）、`cache_ttl` 覆盖与 `datasource.md` 表格都覆盖不到、清理统计里算"未注册键"。
-3. **`market_hour_aware` 不校验**：列表里写未注册类型（如 `news`）不告警，等于让该类盘中变 30s。
+**完成**：盘中敏感性从配置列表下沉为注册表数据属性——`DataModuleDef.market_ttl`（`price`/`index` = 30s）；`config.market_hour_aware` 退役（写入时校验告警并忽略），配置只留 `market_hour_ttl` 全局数值覆盖（钳制 [30, 86400]）；`get_ttl` 对"盘中覆盖与 `cache_ttl` 冲突"打一次性 INFO（静默失效变可见）。两个负缓存类型（`datasink_probe_miss` 12h / `report_symbol_miss` 6h）登记进注册表，读侧与 `cleanup_expired` 同源、`cache_ttl` 可覆盖、文档表格可见。
 
-**动作**（按风险从低到高，实施时按此顺序）：
-1. 两个负缓存类型补注册表（`data_type` + `cache_prefixes` + `cache_ttl`），调用点改读 `get_ttl(type)`；同步 `datasource.md` 缓存表与 `technical.md` 流程图的"类型未注册"分支。
-2. `market_hour_aware` 校验：条目必须 ∈ 已注册类型，否则告警并忽略该项（`_validation_scalars._validate_market_hours`）。
-3. `cache_ttl` 命中 aware 类型时打一条 INFO 说明"盘中以 `market_hour_ttl` 为准"，把静默变成可观测。
-4. **收敛取舍（推荐 A）**：A = 注册表新增"是否盘中敏感 + 盘中 TTL"元数据，`market_hour_aware` 列表退役、配置只留数值覆盖；B = 保持三键现状，仅做 1~3。选 A 的理由：列表属代码能力而非用户偏好（误配会让非行情数据在盘中高频打源），且退役一个配置键、少一处冲突源；代价是注册表字段 + `config` 校验 + 文档小改，行为不变。
-
-**硬约束（不得回归）**：`price`/`index` 盘中 30s 与 `technical.md` 2.4.1 的**日期门禁 + 收盘时点门禁**（盘中价曾被当成收盘价，导致"本日盈亏/快照环比"系统性偏离，两道门禁即为该事故的修复）必须原样保留；改动后须有回归用例钉住"盘中 30s、盘后按静态 TTL、收盘时点门禁仍生效"。
+**验收**：盘中 30s 与盘后静态 TTL 双向契约、退役键无扩权、覆盖提示仅一次、负缓存清理按 12h/6h 判定（不吃 24h 兜底）、全量注册类型 TTL 为正——`test_cache_edge.py::TestGetTTLIntraday`、`test_ttl_alignment.py::TestIntradayAndNegativeCacheTTL`、`test_registry.py` 结构性断言；`technical.md` TTL 流程、`datasource.md` 负缓存表与盘中口径、`requirements.md`/`how-to-config.md` 配置表同步。
 
 #### `plan-226` 财报索引与财务指标 TTL 对齐披露节奏（来源 rf-876）
 

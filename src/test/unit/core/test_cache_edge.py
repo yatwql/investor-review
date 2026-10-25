@@ -72,8 +72,14 @@ class _CacheTestBase:
 
 
 @pytest.mark.edge
-class TestGetTTLMarketHourAware(unittest.TestCase, _CacheTestBase):
-    """get_ttl 在收盘/午休等特殊时段的行为。"""
+class TestGetTTLIntraday(unittest.TestCase, _CacheTestBase):
+    """get_ttl 盘中/盘后行为：盘中敏感性由注册表声明（`market_hour_aware` 已退役）。
+
+    契约（数据敏感性与性能的平衡点）：
+      - 价/指（`price`/`index`）盘中降到 30s（可被 `market_hour_ttl` 全局覆盖，钳制 [30, 86400]）；
+      - 盘后回到静态 TTL（24h），不为"实时"白打上游；
+      - 其余类型（如 `news` 900s）**不因盘中而变短**——避免非行情数据被误配成高频打源。
+    """
 
     def setUp(self):
         _CacheTestBase.setUp(self)
@@ -82,12 +88,12 @@ class TestGetTTLMarketHourAware(unittest.TestCase, _CacheTestBase):
         _CacheTestBase.tearDown(self)
 
     def test_market_open_uses_short_ttl(self):
-        """交易时段 + market_hour_aware 声明过 → 用短的刷新间隔 TTL。"""
+        """交易时段 + 注册表声明盘中敏感（price）→ 用 `market_hour_ttl` 覆盖值。"""
         with (
             patch("src.python.cache._ttl._is_market_open", return_value=True),
             patch("src.python.config.get_config") as mock_cfg,
         ):
-            mock_cfg.return_value = {"market_hour_aware": ["price"], "market_hour_ttl": 120}
+            mock_cfg.return_value = {"market_hour_ttl": 120}
             from src.python.cache import get_ttl
 
             self.assertEqual(get_ttl("price"), 120)
@@ -98,10 +104,7 @@ class TestGetTTLMarketHourAware(unittest.TestCase, _CacheTestBase):
             patch("src.python.cache._ttl._is_market_open", return_value=True),
             patch("src.python.config.get_config") as mock_cfg,
         ):
-            mock_cfg.return_value = {
-                "market_hour_aware": ["price"],
-                "market_hour_ttl": 5,
-            }
+            mock_cfg.return_value = {"market_hour_ttl": 5}
             from src.python.cache import get_ttl
 
             result = get_ttl("price")
@@ -113,26 +116,19 @@ class TestGetTTLMarketHourAware(unittest.TestCase, _CacheTestBase):
             patch("src.python.cache._ttl._is_market_open", return_value=True),
             patch("src.python.config.get_config") as mock_cfg,
         ):
-            mock_cfg.return_value = {
-                "market_hour_aware": ["price"],
-                "market_hour_ttl": 999999,
-            }
+            mock_cfg.return_value = {"market_hour_ttl": 999999}
             from src.python.cache import get_ttl
 
             result = get_ttl("price")
             self.assertLessEqual(result, 86400)
 
-    def test_non_aware_type_uses_static(self):
-        """未声明为市场感知的类型 → 即使开盘也用静态 TTL（短 TTL 不生效）。"""
+    def test_non_intraday_type_uses_static(self):
+        """未声明盘中敏感的类型 → 即使开盘也用静态 TTL（短 TTL 不生效）。"""
         with (
             patch("src.python.cache._ttl._is_market_open", return_value=True),
             patch("src.python.config.get_config") as mock_cfg,
         ):
-            mock_cfg.return_value = {
-                "market_hour_aware": ["price"],
-                "market_hour_ttl": 120,
-                "cache_ttl": {"news": 900},
-            }
+            mock_cfg.return_value = {"market_hour_ttl": 120, "cache_ttl": {"news": 900}}
             from src.python.cache import get_ttl
 
             self.assertEqual(get_ttl("news"), 900)
@@ -143,11 +139,7 @@ class TestGetTTLMarketHourAware(unittest.TestCase, _CacheTestBase):
             patch("src.python.cache._ttl._is_market_open", return_value=False),
             patch("src.python.config.get_config") as mock_cfg,
         ):
-            mock_cfg.return_value = {
-                "market_hour_aware": ["price"],
-                "market_hour_ttl": 120,
-                "cache_ttl": {"price": 43200},
-            }
+            mock_cfg.return_value = {"market_hour_ttl": 120, "cache_ttl": {"price": 43200}}
             from src.python.cache import get_ttl
 
             self.assertEqual(get_ttl("price"), 43200)
@@ -170,13 +162,10 @@ class TestGetTTLMarketHourAware(unittest.TestCase, _CacheTestBase):
             patch("src.python.cache._ttl._is_market_open", return_value=True),
             patch("src.python.config.get_config") as mock_cfg,
         ):
-            mock_cfg.return_value = {
-                "market_hour_aware": ["price"],
-            }
+            mock_cfg.return_value = {}
             from src.python.cache import get_ttl
 
-            result = get_ttl("price")
-            self.assertEqual(result, 30)
+            self.assertEqual(get_ttl("price"), 30, "未配置时用注册表声明的盘中 TTL")
 
     def test_invalid_market_hour_ttl_fallback_to_30(self):
         """market_hour_ttl 配置值非法 → 使用 30 秒默认值。"""
@@ -184,14 +173,55 @@ class TestGetTTLMarketHourAware(unittest.TestCase, _CacheTestBase):
             patch("src.python.cache._ttl._is_market_open", return_value=True),
             patch("src.python.config.get_config") as mock_cfg,
         ):
-            mock_cfg.return_value = {
-                "market_hour_aware": ["price"],
-                "market_hour_ttl": "not_a_number",
-            }
+            mock_cfg.return_value = {"market_hour_ttl": "not_a_number"}
             from src.python.cache import get_ttl
 
             result = get_ttl("price")
             self.assertEqual(result, 30)
+
+    def test_intraday_types_are_declared_by_registry(self):
+        """盘中敏感集合来自注册表 `market_ttl`，不是配置列表（退役键无法扩权）。"""
+        from src.python.core.registry import get_market_ttl_map
+
+        market_ttl = get_market_ttl_map()
+        self.assertIn("price", market_ttl)
+        self.assertIn("index", market_ttl)
+        self.assertNotIn("news", market_ttl, "非行情数据不得因盘中而降频")
+
+    def test_retired_aware_key_cannot_widen_intraday_set(self):
+        """旧 `market_hour_aware` 仍写着 `news` 也不生效：news 盘中维持静态 TTL。"""
+        with (
+            patch("src.python.cache._ttl._is_market_open", return_value=True),
+            patch("src.python.config.get_config") as mock_cfg,
+        ):
+            mock_cfg.return_value = {
+                "market_hour_aware": ["news"],
+                "market_hour_ttl": 30,
+                "cache_ttl": {"news": 900},
+            }
+            from src.python.cache import get_ttl
+
+            self.assertEqual(get_ttl("news"), 900)
+
+    def test_cache_ttl_override_on_intraday_type_notifies_once(self):
+        """配了 `cache_ttl.price` 而盘中以 market_hour_ttl 为准 → 只提示一次（不刷屏）。"""
+        import logging
+
+        from src.python.cache import _ttl
+
+        _ttl._INTRADAY_OVERRIDE_NOTIFIED.clear()
+        with (
+            patch("src.python.cache._ttl._is_market_open", return_value=True),
+            patch("src.python.config.get_config") as mock_cfg,
+            self.assertLogs("invest", level=logging.INFO) as captured,
+        ):
+            mock_cfg.return_value = {"market_hour_ttl": 30, "cache_ttl": {"price": 3600}}
+            from src.python.cache import get_ttl
+
+            self.assertEqual(get_ttl("price"), 30)
+            self.assertEqual(get_ttl("price"), 30)
+        notices = [line for line in captured.output if "盘中 TTL" in line]
+        self.assertEqual(len(notices), 1, "同一类型只提示一次")
 
     def test_closed_hours_use_static_ttl(self):
         """非交易时段（午间休市 / 下午收盘后）→ 均走静态 TTL 分支。
@@ -203,11 +233,7 @@ class TestGetTTLMarketHourAware(unittest.TestCase, _CacheTestBase):
             patch("src.python.cache._ttl._is_market_open", return_value=False),
             patch("src.python.config.get_config") as mock_cfg,
         ):
-            mock_cfg.return_value = {
-                "market_hour_aware": ["price"],
-                "market_hour_ttl": 120,
-                "cache_ttl": {"price": 86400},
-            }
+            mock_cfg.return_value = {"market_hour_ttl": 120, "cache_ttl": {"price": 86400}}
             from src.python.cache import get_ttl
 
             with self.subTest(scenario="午间休市"):
