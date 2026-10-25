@@ -32,7 +32,7 @@
 | **rf-883** | `config/_config_freshness._keys_of` 解析失败返回空集 → 自检把「文件语法坏」报成「缺全部 40 个新键」，误导修复方向 | 返回 `None` 表示不可比较；`_diff` 增加 `parse_error` 字段；自检单独报「无法解析」并给编码/语法提示；回归 2 例 |
 | **rf-884** | 同模块 `check_config_freshness` 只捕 `OSError`，非 UTF-8 配置文件解码失败时冒泡成「对比失败」 | 同时捕 `UnicodeDecodeError`（跳过，由配置加载检查负责报错）；回归 1 例 |
 | **rf-885** | 同模块 `import json` 写在函数体内（风格与分层不一致） | 提到模块顶部 |
-| **rf-886** | `core/costs.add_cost_bucket` 为新增公共函数但全仓零调用（死代码） | 删除（`costs_of` 保留，`core/perf` 与 `llm/pricing` 共用） |
+| **rf-886** | 审计误判：把 `core/costs.add_cost_bucket` 判为「死代码」（只 grep 了 `src/`，漏掉 `scripts/_perf_history` 两处调用），删除后 dev-verify 才暴露 | 已恢复并补 docstring 调用方说明（core / llm / scripts 三方共用）；教训：死代码判定必须扫全仓（含 `scripts/`），且以门禁实跑兜底 |
 | **rf-887** | 重算原因（forced/fingerprint_changed/ttl_expired/cache_miss）以字符串字面量散落在预检与骨架两条路径，新增的 `RECOMPUTE_REASONS` 取值域无人使用 | 两处改引用 `observation.RECOMPUTE_*` 常量；`note_recompute_reason` 对域外值告警一次（仍计数，避免静默多出无人认识的统计桶）；回归 3 例 |
 | **rf-888** | `_llm_providers_defaults._PROVIDER_NOTES` 与默认线路未配对时静默无注释（新增线路漏写说明不会被发现） | 补对齐回归 2 例：每条默认线路必须有非空说明 + 模板可被注释剥离器解析且订阅制线路保留 `pacing` |
 
