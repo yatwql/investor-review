@@ -66,7 +66,7 @@ def _get_default_llm_providers_template() -> str:
     lines.append("  //")
     lines.append("  // 两条线路都是 Anthropic 兼容端点，密钥与模型按 credentials_ref 写在 llm_key.json：")
     for entry in d["providers"]:
-        lines.append(f'  //   {entry["credentials_ref"]:<14} → llm_key.json 同名块（api_key / model / endpoint）')
+        lines.append(f"  //   {entry['credentials_ref']:<14} → llm_key.json 同名块（api_key / model / endpoint）")
     lines.append("  //")
     lines.append("  // pacing 是端点级节流（只约束本条目的端点），不写该段 = 无额外约束：")
     lines.append("  //   min_interval=两次请求最小间隔秒；jitter=间隔随机抖动比例(0~1)；max_concurrency=在途上限")
