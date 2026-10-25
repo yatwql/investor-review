@@ -1501,6 +1501,23 @@ git checkout dev
 
 合入后确认 tag 所指提交已在 `master` 可达（`git merge-base --is-ancestor v{x.y.z} origin/master`）；`master` 推送会触发 CI 的 P1（`verify`）档。本步与步骤⑤互不替代：⑤ 是让 dev 进入下一个开发周期，⑥ 是把已发布状态同步到发布分支。
 
+### 发布前本地门禁前置（`release.py check` 已内置）
+
+`check` 除分支/工作树/版本/tag/归档前置外，**默认执行两项本地门禁**（`--no-local-gate` 可跳过）：
+
+1. **统计快照同步**：`check-doc-drift --ci`（秒级）——测试文件增删或计数变化后未跑
+   `test-collect-coverage --update-docs` + `check-doc-drift --sync --with-test-count`，
+   这里立刻红；
+2. **本地全量测试**：`test-runner --mode dev-verify`（≈30s）——失败用例名直接可见。
+
+**为什么前移到 check**：实测一次发布里 `refresh` 失败 1 次、`gate` 失败 3 次，累计白跑
+≈150s 门禁墙钟，根因只有一个——改完代码**只跑了局部测试**（如 `pytest src/test/scenario`）
+就进 gate，连带统计快照也没同步。这两项都便宜且失败信息直指修法，放在动手前查掉。
+
+**纪律**：改完测试/代码 → 跑一次 `dev-verify`（不是局部目录）→ `test-collect-coverage
+--update-docs` + `check-doc-drift --sync` → 提交 → 才跑 `release.py`。跳过任一步，
+gate 会用 40s×N 次把它演示给你看。
+
 ### CI 失败排查
 
 CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` / `perf-gate` / `portability` / `format`），**失败先按 job 定位，再本地复现**：

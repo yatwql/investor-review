@@ -30,7 +30,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("check", help="预检：分支/工作树/版本形态/tag/版本一致性")
+    p_check = sub.add_parser(
+        "check", help="预检：分支/工作树/版本形态/tag/版本一致性 + 本地门禁前置（统计快照/dev-verify）"
+    )
+    p_check.add_argument(
+        "--no-local-gate",
+        action="store_true",
+        help="跳过本地门禁前置（统计快照核对 + dev-verify）；仅看文档派生时用",
+    )
 
     p_prepare = sub.add_parser("prepare", help="版本全链 + changelog 发布段归档 + 一致性 --fix + 台账/设计文件归档迁移")
     p_prepare.add_argument("--version", help="目标发布版（默认按 APP_VERSION 推导）")

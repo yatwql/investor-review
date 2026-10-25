@@ -9,6 +9,7 @@
 
 ## [0.15.9-dev] - 开发中（未发布）
 
+- **`release.py check` 补本地门禁前置**：默认执行两项检查（`--no-local-gate` 可跳过）——① 统计快照核对（`check-doc-drift --ci`，秒级）；② 本地全量测试（`test-runner --mode dev-verify`，≈30s）。背景：一次发布中 `refresh` 失败 1 次、`gate` 失败 3 次，累计白跑约 150s 门禁墙钟，根因是改完代码只跑了局部测试（`pytest src/test/scenario`）就进 gate，连带统计快照也未同步。两项都便宜且失败信息直指修法（实现 `_release/_local_gate.py`）。
 
 （本次发布内容见下方归档索引）
 

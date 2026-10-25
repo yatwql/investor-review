@@ -1031,3 +1031,56 @@ class TestPrepareVersionMismatchGuidance:
         assert "check-version-consistency.py --fix" in out
         # 未写入任何文件（版本链保持开发态）
         assert rel.read_app_version(rel.CONSTANTS_FILE.read_text(encoding="utf-8")) == "0.13.13-dev"
+
+
+class TestCheckLocalGate:
+    """`release.py check` 的本地门禁前置（统计快照 + dev-verify）。
+
+    真实事故：一次发布里 refresh 失败 1 次、gate 失败 3 次，累计白跑 ≈150s 门禁
+    墙钟——根因是改完代码只跑局部测试就进 gate，统计快照也没同步。两条前置把
+    这类返工挡在 check（秒级~30s）。
+    """
+
+    def test_doc_snapshot_passes_through_success(self, monkeypatch, tmp_path):
+        """成功路径：底层 rc=0 → 无 findings（真跑全仓由 CI 的 guards job 覆盖）。"""
+        import scripts._release._local_gate as lg
+
+        monkeypatch.setattr(lg, "_run", lambda cmd, root: (0, ""))
+        ok, msg = lg.check_doc_snapshot(tmp_path)
+        assert ok is True and msg == ""
+
+    def test_doc_snapshot_reports_fix_hint(self, monkeypatch, tmp_path):
+        import scripts._release._local_gate as lg
+
+        monkeypatch.setattr(lg, "_run", lambda cmd, root: (2, "docs/managements/folders.md: 行数不一致"))
+        ok, msg = lg.check_doc_snapshot(tmp_path)
+        assert ok is False
+        assert "test-collect-coverage.py --update-docs" in msg
+        assert "行数不一致" in msg
+
+    def test_local_tests_passes_through_success(self, monkeypatch, tmp_path):
+        """成功路径：dev-verify rc=0 → 无 findings（不在此处真跑 30s，CI 覆盖）。"""
+        import scripts._release._local_gate as lg
+
+        monkeypatch.setattr(lg, "_run", lambda cmd, root: (0, ""))
+        ok, msg = lg.check_local_tests(tmp_path)
+        assert ok is True and msg == ""
+
+    def test_local_tests_surfaces_failures(self, monkeypatch, tmp_path):
+        import scripts._release._local_gate as lg
+
+        out = "  [ERR] test_a 失败\n  [ERR] test_b 失败\n"
+        monkeypatch.setattr(lg, "_run", lambda cmd, root: (1, out))
+        ok, msg = lg.check_local_tests(tmp_path)
+        assert ok is False
+        assert "test-extract-failures" in msg
+        assert "[ERR] test_a 失败" in msg
+
+    def test_check_command_skips_gate_with_flag(self):
+        """`--no-local-gate` 跳过两项前置（只看文档派生时用）。"""
+        import inspect
+
+        from scripts._release import _cli, _commands_prep
+
+        assert "--no-local-gate" in inspect.getsource(_cli)
+        assert "no_local_gate" in inspect.getsource(_commands_prep)
