@@ -59,6 +59,28 @@ def cmd_check(args: argparse.Namespace, env, runner=None) -> int:
         print("[ERR] prepare 会在写入任何文件前中止：先修 changelog 发布段/归档段/指针行，再重跑 check")
         return 2
     print("[OK] prepare 文档派生预演通过（changelog 发布段 + 归档段 + 指针行）")
+
+    # 本地门禁前置：这两项是「进 gate 才发现」的高频返工源（实测一次发布因此
+    # 多跑 1 次 refresh + 3 次 gate ≈ 150s）。它们都便宜（秒级~30s）且失败信息
+    # 直接指向修法，故默认在 check 阶段跑掉。
+    if getattr(args, "no_local_gate", False):
+        print("[..] 本地门禁前置已跳过（--no-local-gate）")
+    else:
+        from scripts._release._local_gate import check_doc_snapshot, check_local_tests
+
+        print("[..] 本地门禁前置：统计快照同步")
+        snap_ok, snap_msg = check_doc_snapshot(env.REPO_ROOT)
+        if not snap_ok:
+            print(f"[ERR] {snap_msg}")
+            return 2
+        print("  [OK] 统计快照与实测一致")
+        print("[..] 本地门禁前置：dev-verify（≈30s）")
+        tests_ok, tests_msg = check_local_tests(env.REPO_ROOT)
+        if not tests_ok:
+            print(f"[ERR] {tests_msg}")
+            return 2
+        print("  [OK] dev-verify 全绿")
+
     print("[OK] 预检通过 — 可执行 prepare")
     return 0
 

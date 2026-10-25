@@ -273,6 +273,57 @@ class TestPromptOpenArtifacts:
         assert any("远程/无图形" in line for line in lines)
         assert any("scp/sftp" in line for line in lines)
 
+    def test_remote_session_gates_before_returning_to_menu(self, tmp_path):
+        """远程/无图形会话没有 y/N 询问，须先停屏再回菜单——否则产物路径被随后重绘顶出。"""
+        config = _svc(tmp_path)
+        artifacts = ra.collect_artifacts(config)
+        reads = {"n": 0}
+        lines: list[str] = []
+
+        def _reader():
+            reads["n"] += 1
+            return "KEY_UNKNOWN"
+
+        with patch.object(ra.sys.stdin, "isatty", lambda: True):
+            result = ra.prompt_open_artifacts(
+                artifacts,
+                key_reader=_reader,
+                opener=lambda p: True,
+                echo=lines.append,
+                open_supported=lambda: False,
+            )
+        assert result == "unsupported"
+        assert reads["n"] == 1  # 恰好一次：按一下即回菜单
+        assert any("按任意键返回菜单" in line for line in lines)
+
+    def test_remote_session_without_tty_does_not_wait(self, tmp_path):
+        """非 TTY（脚本/管道）在远程分支也不阻塞：只打印清单与指引。"""
+        config = _svc(tmp_path)
+        artifacts = ra.collect_artifacts(config)
+        reads = {"n": 0}
+        lines: list[str] = []
+
+        def _reader():
+            reads["n"] += 1
+            return "KEY_UNKNOWN"
+
+        with patch.object(ra.sys.stdin, "isatty", lambda: False):
+            result = ra.prompt_open_artifacts(
+                artifacts,
+                key_reader=_reader,
+                opener=lambda p: True,
+                echo=lines.append,
+                open_supported=lambda: False,
+            )
+        assert result == "unsupported" and reads["n"] == 0
+        assert any("scp/sftp" in line for line in lines)
+
+    def test_open_failure_gates_before_returning_to_menu(self, tmp_path):
+        """打开失败后同样停屏：先读完失败原因与传输指引再回菜单。"""
+        result, _calls, lines = self._run(tmp_path, "y", opener_ok=False, tty=True)
+        assert result == "failed"
+        assert any("按任意键返回菜单" in line for line in lines)
+
     def test_empty_artifacts_do_nothing(self):
         lines: list[str] = []
         assert ra.prompt_open_artifacts((), echo=lines.append) == "skipped"
