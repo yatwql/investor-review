@@ -25,7 +25,8 @@ _SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
-from src.python.llm.pricing import PRICING_CURRENCY, costs_of
+from src.python.core.costs import add_cost_bucket, costs_of
+from src.python.llm.pricing import PRICING_CURRENCY
 
 from _perf_history.stats import (
     _DRIFT_MIN_SAMPLES,
@@ -227,13 +228,6 @@ def _compare_versions(
     return {"a": _summary(recs_a, version_a), "b": _summary(recs_b, version_b), "phases": rows}
 
 
-def _add_costs(target: dict[str, float], source: dict[str, float]) -> dict[str, float]:
-    """累加币种桶（**保留 0 值**：全缓存运行也是该时段的一个 0 费用样本）。"""
-    for code, amount in source.items():
-        target[code] = target.get(code, 0.0) + float(amount or 0.0)
-    return target
-
-
 def _record_costs(llm: dict[str, Any]) -> dict[str, float]:
     """读一条 perf 记录的 LLM 费用桶（生产写 ``cost_by_currency``，旧记录是标量 ``total_cost``）。"""
     buckets = llm.get("cost_by_currency")
@@ -302,7 +296,7 @@ def _cost_period_data(records: list[dict[str, Any]], by: str) -> list[dict[str, 
         runs[key] += 1
         llm = r.get("llm")
         if isinstance(llm, dict):
-            _add_costs(costs[key], _record_costs(llm) or {PRICING_CURRENCY: 0.0})
+            add_cost_bucket(costs[key], _record_costs(llm) or {PRICING_CURRENCY: 0.0})
     rows: list[dict[str, Any]] = []
     for key in sorted(runs):
         bucket = costs.get(key) or {}

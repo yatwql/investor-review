@@ -18,8 +18,9 @@ if _PROJECT_ROOT not in sys.path:
 
 from src.python.llm.pricing import PRICING_CURRENCY, currency_symbol, format_costs
 
+from src.python.core.costs import add_cost_bucket
+
 from _perf_history.data import (
-    _add_costs,
     _record_costs,
     _slowest_phase,
     _version_evolution_data,
@@ -280,7 +281,7 @@ def _bucket_lines(records: list[dict[str, Any]], by: str) -> list[str]:
         buckets[key].append(float(r.get("total_seconds") or 0))
         llm = r.get("llm")
         if isinstance(llm, dict):
-            _add_costs(costs[key], _record_costs(llm) or {PRICING_CURRENCY: 0.0})
+            add_cost_bucket(costs[key], _record_costs(llm) or {PRICING_CURRENCY: 0.0})
     if not buckets:
         return []
     has_cost = any(any(v > 0 for v in bucket.values()) for bucket in costs.values())
@@ -350,7 +351,7 @@ def _llm_context_lines(records: list[dict[str, Any]]) -> list[str]:
     misses = int(_sum("cache_misses"))
     total_costs: dict[str, float] = {}
     for r in with_ctx:
-        _add_costs(total_costs, _record_costs(r["llm"]))
+        add_cost_bucket(total_costs, _record_costs(r["llm"]))
 
     lines = [
         "## LLM 运行上下文",

@@ -2,7 +2,7 @@
 
 ## 背景
 
-上一轮把外币厂商（Anthropic / OpenAI / Google）的 USD 官方价按 `USD_CNY_RATE` 常量折算成人民币写进 `MODEL_PRICING`，理由是「报告里所有费用要能相加」。
+外币厂商（Anthropic / OpenAI / Google）的 USD 官方价一度按固定汇率折算成人民币写进 `MODEL_PRICING`，理由是「报告里所有费用要能相加」。
 
 问题：汇率是每天变的市场量，写死在代码里必然滞后；而且折算值既不是官方标价也不是账单，用户看到 `¥13.44`（Sonnet 5.5 输入）无法与官方 `$2` 对上，也不知道用了哪天汇率。
 
@@ -17,7 +17,7 @@
 ### 1. 定价表
 
 - `MODEL_PRICING` 条目新增可选 `currency` 字段；缺省取 `PRICING_CURRENCY`（默认 `CNY`）。
-- 外币厂商条目写官方原值 + `"currency": "USD"`；删除 `USD_CNY_RATE` 与 `_usd()`。
+- 外币厂商条目写官方原值 + `"currency": "USD"`；表内不出现任何汇率常量与折算函数。
 - 峰谷 `peak` 子段沿用所属模型的币种（仅 DeepSeek 使用，本币 CNY）。
 
 ### 2. 计价与展示（配置币种优先）
