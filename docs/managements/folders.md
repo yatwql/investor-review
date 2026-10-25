@@ -18,8 +18,8 @@
 | 测试用例 | — | — | 11,963 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 13 | 6,365 | 含 README.md（211 行）；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 12 | 6,147 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 195 | 68,610 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 6 + archive md 160），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 13,499 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 195 | 68,611 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 6 + archive md 160），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 13,500 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 176 | 54,249 | 各版本 changelog/plan/review-findings 与设计文档归档（157 md 50,492 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 5 | ~769 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + 跨模块导入面重命名分析 |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -836,7 +836,7 @@ investor-review/
 │       │   │   ├── test_fingerprint_components.py # 指纹组件级哈希与连续报告变化定位（稳定输入不变/单输入只改单组件/diff 只报变化项）
 │       │   │   ├── test_report_sequence_cache.py # 连续报告缓存实测（同输入第二份预检 4/4 命中、失败条数漂移不换键、行情变化必重算）
 │       │   │   ├── test_cache_matrix.py # 缓存命中矩阵（逐模块精度/强制与模块级强制/Provider 切换/单 Provider/生成参数/TTL/跨进程/串行后置模块）
-│       │   │   ├── _cache_helpers.py # 缓存测试共用设施（最小自洽输入/编排调用/常量，四文件共用）
+│       │   │   ├── _cache_fixtures.py # 缓存测试共用设施（最小自洽输入/编排调用/常量，四文件共用）
 │       │   │   ├── test_cache_cost_accounting.py # 缓存成本契约（命中零边际成本/未命中必记账/日预算只算真实花费/节省估算/预估缓存折扣口径）
 │       │   │   ├── test_cache_real_config.py # 真实配置链路缓存契约（不 patch 配置：v2 嵌套+多链、键同源、单 Provider、损坏/gzip/并发/失败不缓存、故障转移写盘、模块开关）
 │       │   │   ├── test_llm_analysis.py       #   LLM 分析测试

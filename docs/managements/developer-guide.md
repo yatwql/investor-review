@@ -858,6 +858,7 @@ mod = load_script("_test_runner/modes.py", module_name="modes_under_test")   # �
 
 - 兄弟分片共用 `test_<模块>_<域>.py` 命名（如 `test_excel_generator_llm_usage.py`），并在主分片 docstring 的「兄弟分片」行互相点名——读者从任一文件都能找到全貌；
 - **共享构造器（模板路径 / 注册表常量 / 最小渲染数据 / mock 工厂）放 `<包>/_<模块>_fixtures.py`**（下划线前缀，不含 `test_*` 故不被收集），各分片 `from ... import ...` 引用，禁止复制一份到每个分片——改模板契约时漏改分片副本是最常见的静默漂移；
+- **共享 fixture 放目录级 `conftest.py`**：同一目录多文件共用、且需要 `tmp_path`/`monkeypatch` 的装配（如 `src/test/unit/llm/conftest.py::llm_cache_dir` 统一重定向缓存目录并复位日志去重）放这里，而不是在每个测试文件各写一份或塞进 `_fixtures.py`（后者只放纯函数与常量）；
 - **分片后 patch 目标须重定向**：实现下沉到子模块（如 `_perf_report/report.py`、`_traces_doc/deleted_refs.py`）后，`monkeypatch.setattr(入口模块, "_常量", ...)` 对写入无效——必须 patch **调用点所在子模块**，并同步迁移该模块的进程级缓存重置点（`_HIST_DEFS = None` 一类）；
 - 分片不新增/删除用例：原文件的 `def test_` 总数须等于各分片之和，收尾用 `grep -c 'def test_'` 对拍，并同步 `folders.md` 目录树与 `test-coverage.md` 计数。
 
@@ -1057,7 +1058,7 @@ time.sleep = _sleep
 | 2 | 重试与限流 | 需要重试就用 `core/retry.RetryPolicy`（瞬时/确定性判据），需要间隔就用 `core.throttle.RateLimiter`（唯一实现，勿自建 sleep） |
 | 3 | 注册 | 在 `core/registry.py` 的白名单/注册表登记，并在健康检查探针清单里加一项（`doctor` 与 `[H]` 会用到） |
 | 4 | 路由 | 需要按数据类型覆盖首选源时，登记 `preferred_provider` 的键 |
-| 5 | 缓存 | 明确缓存前缀与 TTL（`config.cache_ttl.*`），前缀要在 `datasource.md` 的对照表里登记 |
+| 5 | 缓存 | 缓存前缀 + TTL 在 `core/data_registry.py` 登记（`cache_ttl` 是**唯一默认来源**；`config.cache_ttl.*` 仅为稀疏覆盖，模板不写默认值）；前缀须在 `datasource.md` 对照表登记 |
 | 6 | 契约测试 | `src/test/unit/providers/test_<name>.py`：正常/超时/429/畸形响应/降级；能录真实响应的用 cassette（`scripts/` 录制回放，`--run-live` opt-in） |
 | 7 | 文档 | [datasource.md](../manuals/datasource.md)（数据源↔缓存↔章节对照）+ [datasource-reliability.md](../manuals/datasource-reliability.md)（可靠度评级、限流、已知问题）+ 如涉及新密钥：[how-to-config.md](../manuals/how-to-config.md) |
 | 8 | 需求与门禁 | `requirements.md` 补需求行（`R-DATA-*`）→ `testplan.md` 补验证载体 → `scripts/check-requirement-trace.py --ci` |
@@ -1139,7 +1140,7 @@ from src.python.core.registry import (
 )
 ```
 
-`get_cache_ttl_defaults()` 供 `config/_config_defaults.py` 生成默认配置模板；`get_prefix_type_map()` / `get_exact_type_map()` 供 `cache/_cleanup.py` 按文件名前缀 / 精确键名清理过期缓存；`get_registered_data_types()` 用于校验与测试。
+`get_cache_ttl_defaults()` 是 TTL 默认值唯一出口（`get_ttl` 的兜底与 `check-doc-drift` 的文档校验都读它；配置模板不抄默认值，留空对象作稀疏覆盖位）；`get_prefix_type_map()` / `get_exact_type_map()` 供 `cache/_cleanup.py` 按文件名前缀 / 精确键名清理过期缓存；`get_registered_data_types()` 用于校验与测试。
 
 **LLM 模块名称查询**：
 
@@ -1236,7 +1237,7 @@ DataModuleDef("我的 LLM 分析", "llm_my_analysis",
 | ⑦ | **运行注册表测试** | 终端 | `.venv/bin/python -m pytest src/test/unit/core/test_registry.py -v` — 验证 TTL/前缀/键名完整性 |
 | ⑧ | **验证标记合规** | 终端 | `.venv/bin/python scripts/check-test-markers.py` — 确认测试文件标记无遗漏 |
 
-> **LLM 模块补充步骤**：在上述 registry 清单基础上，新增 LLM 模块还需完成领域特定步骤——`llm/prompts.py` 新增 `_SYSTEM_{MODULE}` 常量与提示词构建函数；`report/html_writer.py`（HTML）+ `report/llm_content.py`（Excel）新章节双渲染；`config.json` → `cache_ttl` 添加 `llm_{module}` 条目；`llm_settings.json` 加入推荐默认值并更新 [配置指南](../manuals/how-to-config.md)。
+> **LLM 模块补充步骤**：在上述 registry 清单基础上，新增 LLM 模块还需完成领域特定步骤——`llm/prompts.py` 新增 `_SYSTEM_{MODULE}` 常量与提示词构建函数；`report/html_writer.py`（HTML）+ `report/llm_content.py`（Excel）新章节双渲染；在 `core/data_registry.py` 为该模块登记 `DataModuleDef`（`cache_ttl` 即默认 TTL，LLM 惯例：分析类 4h、内容寻址类 24h；无需改 `config.json`）；`llm_settings.json` 加入推荐默认值并更新 [配置指南](../manuals/how-to-config.md)。
 >
 > **纳入模块级质量分级（可选，开关 `module_quality_gate`）**：新模块默认不参与 `report/llm_quality.py` 的 A~F 分级（分级为只读旁路，未登记不影响任何既有功能）。若需纳入：在 `_MODULE_KEYS` 追加模块键（顺序须与 `llm_content` 四元组位置一致）、在 `_LENGTH_THRESHOLDS` 设定该模块的 `(降级下限, 参考篇幅)` 双阈值（依据真实健康输出实测字符数标定）；若其提示词规定了固定章节清单，还需在 `_REQUIRED_MARKERS` 登记标记——`test_llm_quality.py::TestRequiredMarkersMatchPrompts` 会直接比对提示词常量，标记与提示词不同步即测试失败。
 

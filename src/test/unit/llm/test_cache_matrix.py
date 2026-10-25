@@ -15,7 +15,7 @@ from unittest.mock import patch
 
 import pytest
 
-from src.test.unit.llm._cache_helpers import (
+from src.test.unit.llm._cache_fixtures import (
     CHAIN_CONFIG,
     MODULE_INDEX,
     LLM_REPLY_DEFAULT,
