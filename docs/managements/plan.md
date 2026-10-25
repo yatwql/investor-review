@@ -18,13 +18,9 @@
 
 > **归档放弃项边界（禁止重提）**：Brinson 业绩归因、MC 蒙特卡洛情景模拟、Euler 精确风险贡献、申万行业分类迁移、全量行业指数 K 线、仓位硬建议、全市场基金筛选等已放弃项禁止立项（放弃理由与清单见各版归档）。
 
-### P0 — 最高优先（立即执行）
-
-当前无 P0 项（入选标准：直接影响用户可见行为且已验证的缺陷）。
-
 ### P1 — 当前待办（立即执行）
 
-入选标准：立即可执行且价值/风险最高——数据完整性、费用风险、核心量化缺口。
+入选标准：立即可执行且价值/风险最高——数据完整性、费用风险、核心量化缺口；P0（必须完成才能发布）当前无项。
 
 #### `plan-219` 缓存 TTL 分层收敛（分析完成，待评审实施）
 
@@ -32,9 +28,9 @@
 
 **分析**：见 [`cache-ttl-layering.md`](../plan/cache-ttl-layering.md)（分层现状、必要性与方案 A/B/C 比较、三个次级口径 D1~D3、影响面与验收）。
 
-**建议**：方案 C——注册表是唯一默认来源，`config.json` 仅存**稀疏覆盖**（模板不写默认值块）；清理侧改用与读侧同一抖动因子；`cache_ttl` 未注册键告警。
+**建议（已采纳）**：方案 C——注册表是唯一默认来源，`config.json` 仅存**稀疏覆盖**（模板不写默认值块）；移除按 key 的 TTL 抖动（TTL 与键无关，读写两侧天然同值）；`cache_ttl` 未注册键告警。
 
-**已实施（方案 C + D1 + D2，D3 不做）**：生成配置的 `cache_ttl` 改为空对象（默认值唯一来源 = 注册表）；`cleanup_expired` 按剥离版本戳后的逻辑键查类型并调用 `get_ttl(type, logical_key)`，与读侧同一抖动因子（顺带修好精确键映射：此前带版本戳查表必 miss）；`cache_ttl` 未注册键告警（不自动删）；用户配置中的死键 `fund_overlap` 已删除。契约由 `src/test/unit/cache/test_ttl_alignment.py`（7 例）与 `test_llm_cache_ttl_single_source.py`（17 例）锁定。
+**已实施**：生成配置的 `cache_ttl` 改为空对象（默认值唯一来源 = 注册表）；**TTL 与缓存键无关**（`get_ttl` 的 `key` 参数保留但不参与计算，即无按 key 抖动），读侧与清理侧取到同一个数；`cleanup_expired` 按剥离版本戳后的逻辑键查类型，精确键映射随之命中；`cache_ttl` 未注册键告警（不自动删）；用户配置中的死键 `fund_overlap` 已删除、等于默认值的 37 个键收敛为空对象。契约由 `src/test/unit/cache/test_ttl_alignment.py`（7 例）与 `test_llm_cache_ttl_single_source.py`（17 例）锁定。
 
 **验收记录**：`cleanup_expired(dry_run=True)` 对现有 517 个缓存文件预览 23 个过期（与历史量级一致，拆分见 `logs/app.log` 的 DEBUG 明细）；运行时 `config.json` 的 `cache_ttl` 已收敛为空对象（等于默认值的 37 个键全部移除，行为不变）。
 
