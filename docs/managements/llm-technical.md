@@ -1224,9 +1224,16 @@ reload_pricing() → 读 llm_pricing_ref.json
 - **时段对象稳定性**：`reload_pricing()` 以就地替换（`[:]`）方式更新时段列表，
   保持列表对象身份稳定，外部已持有引用不失效
 
-### 10.5 货币
+### 10.5 货币与外币折算
 
-由 `llm_pricing_ref.json → currency` 控制（默认 `"CNY"`），决定费用显示符号（¥/$/€/£）。
+显示符号由 `llm_pricing_ref.json → currency` 控制（默认 `"CNY"`，对应 ¥；可选 `USD`/`EUR`/`GBP`）。
+
+外币厂商（Anthropic / OpenAI / Google）官方以 USD 标价，`MODEL_PRICING` **统一折算为 CNY 存储**，折算率取 `core/constants.py::USD_CNY_RATE`（中国人民银行授权中国外汇交易中心中间价，改价时同步刷新）。这样做的两个理由：
+
+- **可比与可加**：报告内各模块费用会相加成总计，混币种的金额无法相加；单一货币符号下所有数字同口径。
+- **不手写折算**：条目一律经 `_usd(input, output, cache_hit)` 换算，改汇率只需改 `USD_CNY_RATE`，避免「官方美元价直接当人民币填」这类低约 6.7 倍的错误。
+
+DeepSeek 与 Kimi 官方以人民币标价，不折算。汇率折算值属估算，非账单口径；需要精确对账时应以厂商账单为准。
 
 [↑ 回到顶部](#目录)
 
@@ -1489,31 +1496,40 @@ LLM 集成层与系统其他组件的接口：
 
 ### 附录 B：内置模型定价表
 
-以下为 `core/constants.py` 中 `MODEL_PRICING` 内置的定价快照（单位：元/百万 token），可通过 `llm_settings.json` 的 `pricing` 覆盖：
+以下为 `core/constants.py` 中 `MODEL_PRICING` 内置的定价快照（单位：元/百万 token，外币厂商已按 `USD_CNY_RATE` 折算），可通过 `data/config/llm_pricing_ref.json` 的 `models` 逐模型覆盖：
 
 | 模型 | 输入 | 输出 | 缓存命中 | 说明 |
 |:-----|:----:|:----:|:--------:|:-----|
-| claude-fable-5 | 10.00 | 50.00 | 1.00 | 官方 $10/$50（2026-10-17 核实） |
-| claude-haiku-4-5 | 1.00 | 5.00 | 0.10 | 官方 $1/$5（2026-10-17 核实） |
-| claude-opus-4-8 | 5.00 | 25.00 | 0.50 | 官方 $5/$25（2026-10-17 核实） |
-| claude-opus-4-6 | 5.00 | 25.00 | 0.50 | 官方 $5/$25（2026-10-17 核实） |
-| claude-sonnet-4-6 | 3.00 | 15.00 | 0.30 | |
-| claude-sonnet-4-8 | 3.00 | 15.00 | 0.30 | |
+| claude-fable-5-1 | 67.20 | 336.00 | 1.680 | 官方 $10/$50（2026-10-25 核实） |
+| claude-fable-5 | 67.20 | 336.00 | 6.720 | legacy $10/$50 |
+| claude-haiku-4-5 | 6.72 | 33.60 | 0.672 | legacy $1/$5 |
+| claude-haiku-5-5 | 0.672 | 3.360 | 0.0672 | 官方 $0.10/$0.50（prompt ≤100K；>100K 档 $0.50/$2.50 不单列） |
+| claude-opus-4-6 / -4-8 | 33.60 | 168.00 | 3.360 | legacy $5/$25 |
+| claude-opus-5-5 | 26.88 | 134.40 | 1.344 | 官方 $4/$20 |
+| claude-sonnet-4-6 | 20.16 | 100.80 | 2.016 | legacy $3/$15 |
+| claude-sonnet-5 | 13.44 | 67.20 | 1.344 | legacy $2/$10（缓存命中 $0.20） |
+| claude-sonnet-5-5 | 13.44 | 67.20 | 0.672 | 官方 $2/$10（缓存命中 $0.10） |
 | deepseek-flash | 1.00 / 2.00 | 4.00 / 8.00 | 0.02 / 0.04 | 峰谷定价（闲时/高峰）；DeepSeek-V4.1-Flash 正式模型名（2026-09-10 发布） |
 | deepseek-v4-flash | 1.00 / 2.00 | 4.00 / 8.00 | 0.02 / 0.04 | 峰谷定价（闲时/高峰）；别名，端点仍接受、底层由 V4.1-Flash 接管并按同价计费 |
 | deepseek-v4-pro | 4.50 / 9.00 | 13.50 / 27.00 | 0.15 / 0.30 | 峰谷定价（闲时/高峰）；官方 2026-09-10 公告继续提供 API 服务，计费方式不变 |
-| gemini-2.0-flash | 0.10 | 0.40 | 0.01 | |
-| gemini-2.5-flash | 0.30 | 2.50 | 0.03 | GA 价（2026-10-17 核实） |
-| gemini-2.5-pro | 1.25 | 10.00 | 0.125 | 官方 ≤200k 价（2026-10-17 核实） |
-| gemini-3.5-flash | 1.50 | 9.00 | 0.15 | GA 价（2026-10-17 核实） |
-| gpt-4o | 2.50 | 10.00 | 1.25 | 缓存 50% 折扣（2026-10-17 核实） |
-| gpt-4o-mini | 0.15 | 0.60 | 0.075 | 缓存 50% 折扣（2026-10-17 核实） |
+| gemini-2.5-flash | 2.016 | 16.80 | 0.2016 | legacy $0.30/$2.50 |
+| gemini-2.5-pro | 8.40 | 67.20 | 0.840 | legacy $1.25/$10（≤200k 上下文） |
+| gemini-3.1-pro | 13.44 | 80.64 | 1.344 | preview $2/$12 |
+| gemini-3.8-flash | 5.04 | 25.20 | 0.504 | 官方 $0.75/$3.75（2026-12-31 前优惠价） |
+| gpt-4o | 16.80 | 67.20 | 8.400 | legacy $2.50/$10（缓存 50% 折扣） |
+| gpt-4o-mini | 1.008 | 4.032 | 0.504 | legacy $0.15/$0.60（缓存 50% 折扣） |
+| gpt-5.6-sol | 26.88 | 134.40 | 2.688 | 上一代主力 $4/$20 |
+| gpt-6-astra | 67.20 | 336.00 | 6.720 | 旗舰 $10/$50 |
+| gpt-6-luna | 0.672 | 3.360 | 0.0672 | 轻量 $0.10/$0.50 |
+| gpt-6.1-sol | 13.44 | 67.20 | 0.672 | 现役主力 $2/$10 |
 | kimi-k2.6 | 6.50 | 27.00 | 1.10 | Kimi 通用主力（256k 上下文），Anthropic 兼容端点默认开思考（未开启 thinking 时显式禁用） |
-| kimi-k3 | 20.00 | 100.00 | 2.00 | Kimi 旗舰（1M 上下文） |
+| kimi-k3 | 20.00 | 100.00 | 2.00 | Kimi 上一代旗舰（1M 上下文） |
+| kimi-k3.1-pro | 13.00 | 68.00 | 1.30 | Kimi 现役旗舰（1M 上下文） |
+| kimi-k3.1-pro-highspeed | 26.00 | 136.00 | 1.30 | Kimi 现役旗舰高速档 |
 
-> 上表为具名模型定价；`MODEL_PRICING` 另有 6 个前缀回退键（`claude-sonnet-4-`/`claude-opus-4-`/`claude-haiku-4-`/`gemini-3.5-`/`gemini-2.5-`/`gemini-2.0-`）用于 startswith 回退匹配日期戳变体，未逐行列示。
+> 上表为具名模型定价；`MODEL_PRICING` 另有 12 个前缀回退键（`claude-fable-5-`/`claude-opus-5-`/`claude-sonnet-5-`/`claude-haiku-5-`/`claude-sonnet-4-`/`claude-opus-4-`/`claude-haiku-4-`/`gpt-6.1-`/`gpt-5.6-`/`gemini-3.8-`/`gemini-3.1-`/`gemini-2.5-`）用于 startswith 回退匹配日期戳变体，未逐行列示。
 >
-> 峰谷定价模型的「闲时/高峰」两列为非高峰与高峰时段单价（高峰时段为北京时间 09:00–12:00、14:00–18:00，**仅高峰日（周一至周五，不含中国法定节假日）生效**；闲时为其外全部时间，**周末与法定节假日全天按闲时价**）；模型条目含 `"peak"` 高峰价子段，时段可经 `pricing` 段 `peak_periods`/`idle_periods`/`timezone`/`weekend_always_idle`/`holiday_always_idle` 覆盖。
+> 峰谷定价模型的「闲时/高峰」两列为非高峰与高峰时段单价（高峰时段为北京时间 09:00–12:00、14:00–18:00，**仅高峰日（周一至周五，不含中国法定节假日）生效**；闲时为其外全部时间，**周末与法定节假日全天按闲时价**）；模型条目含 `"peak"` 高峰价子段，时段可经 `llm_pricing_ref.json` 顶层 `peak_periods`/`idle_periods`/`timezone`/`weekend_always_idle`/`holiday_always_idle` 覆盖。
 
 费用按 `(input_tokens × 输入单价 + output_tokens × 输出单价 + cache_hit_tokens × 缓存命中单价) / 1_000_000` 计算。
 

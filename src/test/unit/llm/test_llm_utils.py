@@ -543,6 +543,40 @@ class TestPricing(unittest.TestCase):
                 "-",
             )
 
+    def test_current_generation_pricing_locked(self) -> None:
+        """现役主力型号锁定官方单价（已折算为 ¥/M）：价格漂移会让报告费用整体偏移。"""
+        locked = {
+            "claude-sonnet-5-5": "¥80.640",  # $2/$10
+            "claude-opus-5-5": "¥161.280",  # $4/$20
+            "claude-haiku-5-5": "¥4.032",  # $0.10/$0.50
+            "gpt-6.1-sol": "¥80.640",  # $2/$10
+            "gemini-3.8-flash": "¥30.240",  # $0.75/$3.75
+        }
+        for model, expected in locked.items():
+            with self.subTest(model=model):
+                self.assertEqual(estimate_cost(model, 1_000_000, 1_000_000, at_time=self._IDLE_TIME), expected)
+
+    def test_foreign_prices_are_fx_converted(self) -> None:
+        """外币厂商条目按 USD_CNY_RATE 折算，不是直接把美元数字当人民币。"""
+        from src.python.core.constants import USD_CNY_RATE
+
+        self.assertGreater(USD_CNY_RATE, 1.0)
+        # 换算后 CNY 单价必须显著高于美元面值；直接用美元面值会让报告金额低约 6.7 倍
+        self.assertEqual(
+            estimate_cost("claude-sonnet-5-5", 1_000_000, 0, at_time=self._IDLE_TIME), f"¥{2.0 * USD_CNY_RATE:.3f}"
+        )
+
+    def test_all_prices_are_well_formed(self) -> None:
+        """全表结构不变量：单价为正、缓存命中价不高于标准输入价、峰谷价不得低于闲时价。"""
+        for model, entry in PRICING_MERGED.items():
+            with self.subTest(model=model):
+                self.assertGreater(entry["input"], 0)
+                self.assertGreater(entry["output"], 0)
+                self.assertLessEqual(entry.get("input_cache_hit", entry["input"]), entry["input"])
+                peak = entry.get("peak") or {}
+                if peak:
+                    self.assertGreaterEqual(peak["input"], entry["input"])
+
     def test_kimi_pricing_locked(self) -> None:
         """Kimi 条目锁定官方单价（元/百万 token）：k2.6 输入 6.5 / 输出 27.0，k3 输入 20.0 / 输出 100.0。
 
@@ -613,9 +647,9 @@ class TestPricing(unittest.TestCase):
         """无 peak 子段的模型不受时段影响。"""
         cost_peak = estimate_cost("claude-sonnet-4-6", 1_000_000, 1_000_000, at_time=self._PEAK_TIME)
         cost_idle = estimate_cost("claude-sonnet-4-6", 1_000_000, 1_000_000, at_time=self._IDLE_TIME)
-        # 3 + 15 = 18，两个时段一致
+        # 厂商 USD 标价 $3/$15 折算为表内 CNY（汇率见 USD_CNY_RATE），两个时段一致
         self.assertEqual(cost_peak, cost_idle)
-        self.assertEqual(cost_peak, "¥18.000")
+        self.assertEqual(cost_peak, "¥120.960")
 
     def test_peak_pricing_cache_hit_uses_peak_rate(self) -> None:
         """工作日缓存命中 token 在高峰时段按 peak.input_cache_hit 计费。"""

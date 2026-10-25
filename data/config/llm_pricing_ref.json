@@ -2,6 +2,8 @@
 // 参考数据不是用户开关：不进 TUI/Web 配置面板；改价直接编辑本文件。
 // 合并口径：constants.py 的 MODEL_PRICING 为基础价，本文件 models 逐模型覆盖
 // 出现的字段，未出现的字段继承内置值。文件缺失时仅用内置价。
+// 单位：元 / 百万 token（CNY）。外币厂商（Anthropic/OpenAI/Google）的官方 USD 价
+// 已在 constants.py 内经 USD_CNY_RATE 折算，本文件覆盖时同样填人民币值。
 {
   "version": 1,   // 结构版本；不符即拒绝加载并提示重新生成
   "currency": "CNY",   // 货币标识（影响费用符号）
@@ -13,6 +15,7 @@
   "models": {
     // 逐模型覆盖示例（单位：元 / 百万 token；未写字段继承内置价）：
     // "deepseek-flash": {"input_price": 1.0, "output_price": 4.0,
-    //                     "peak": {"input_price": 2.0, "output_price": 8.0}}
+    //                     "peak": {"input_price": 2.0, "output_price": 8.0}},
+    // "claude-sonnet-5-5": {"input_price": 13.44, "output_price": 67.2}
   }
 }

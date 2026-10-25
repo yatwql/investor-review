@@ -902,25 +902,36 @@ $env:HTTPS_PROXY = "http://127.0.0.1:7890"
 
 | 模型 | 输入 ¥/M | 输出 ¥/M | 缓存命中 ¥/M | 说明 |
 |------|:--------:|:--------:|:------------:|------|
-| `claude-sonnet-4-6` | 3.00 | 15.00 | 0.30 | Claude 主力模型，推荐日常使用 |
-| `claude-sonnet-4-8` | 3.00 | 15.00 | 0.30 | Sonnet 升级版，同价 |
-| `claude-haiku-4-5` | 1.00 | 5.00 | 0.10 | 轻量高性价比，适合批量任务 |
-| `claude-opus-4-6` | 5.00 | 25.00 | 0.50 | 强推理，适合智囊团等复杂分析 |
-| `claude-opus-4-8` | 5.00 | 25.00 | 0.50 | Opus 升级版，同价 |
-| `claude-fable-5` | 10.00 | 50.00 | 1.00 | 最新 Claude 模型 |
-| `gpt-4o` | 2.50 | 10.00 | 1.25 | OpenAI 主力（缓存 50% 折扣） |
-| `gpt-4o-mini` | 0.15 | 0.60 | 0.075 | OpenAI 轻量（缓存 50% 折扣） |
+| `claude-sonnet-5-5` | 13.44 | 67.20 | 0.672 | Claude 现役主力，推荐日常使用（官方 $2/$10） |
+| `claude-opus-5-5` | 26.88 | 134.40 | 1.344 | Claude 现役旗舰推理，适合智囊团等复杂分析（$4/$20） |
+| `claude-haiku-5-5` | 0.67 | 3.36 | 0.067 | Claude 现役轻量高性价比（$0.10/$0.50，单次输入 ≤100K token） |
+| `claude-sonnet-5` | 13.44 | 67.20 | 1.344 | 上一代 Sonnet（legacy，$2/$10） |
+| `claude-sonnet-4-6` | 20.16 | 100.80 | 2.016 | 上一代 Sonnet（legacy，$3/$15） |
+| `claude-opus-4-8` | 33.60 | 168.00 | 3.360 | 上一代 Opus（legacy，$5/$25） |
+| `claude-haiku-4-5` | 6.72 | 33.60 | 0.672 | 上一代轻量（legacy，$1/$5） |
+| `claude-fable-5-1` | 67.20 | 336.00 | 1.680 | Claude 顶级推理与长程 agent 任务（$10/$50） |
+| `claude-fable-5` | 67.20 | 336.00 | 6.720 | 上一代顶级（legacy，$10/$50） |
+| `gpt-6.1-sol` | 13.44 | 67.20 | 0.672 | OpenAI 现役主力（$2/$10） |
+| `gpt-6-luna` | 0.67 | 3.36 | 0.067 | OpenAI 现役轻量（$0.10/$0.50） |
+| `gpt-6-astra` | 67.20 | 336.00 | 6.720 | OpenAI 旗舰推理（$10/$50） |
+| `gpt-5.6-sol` | 26.88 | 134.40 | 2.688 | 上一代主力（$4/$20） |
+| `gpt-4o` | 16.80 | 67.20 | 8.400 | 早期主力（legacy，$2.50/$10，缓存 50% 折扣） |
+| `gpt-4o-mini` | 1.008 | 4.032 | 0.504 | 早期轻量（legacy，$0.15/$0.60） |
 | `deepseek-v4-flash` | 1.00 / 2.00 | 4.00 / 8.00 | 0.02 / 0.04 | ⭐ 高性价比推荐，默认模型（峰谷定价，闲时/高峰；2026-09-10 降价） |
 | `deepseek-flash` | 1.00 / 2.00 | 4.00 / 8.00 | 0.02 / 0.04 | DeepSeek-V4.1-Flash 正式模型名（2026-09-10 发布，与 v4-flash 同价同底层） |
 | `deepseek-v4-pro` | 4.50 / 9.00 | 13.50 / 27.00 | 0.15 / 0.30 | DeepSeek 增强推理（峰谷定价，闲时/高峰） |
-| `gemini-3.5-flash` | 1.50 | 9.00 | 0.15 | Gemini 新一代（可选，GA 价） |
-| `gemini-2.5-flash` | 0.30 | 2.50 | 0.03 | Gemini 主力，高性价比（代码默认，GA 价） |
-| `gemini-2.5-pro` | 1.25 | 10.00 | 0.125 | Gemini 强推理 |
-| `gemini-2.0-flash` | 0.10 | 0.40 | 0.01 | Gemini 2.0 轻量（较早系列） |
+| `gemini-3.8-flash` | 5.04 | 25.20 | 0.504 | Gemini 现役主力（$0.75/$3.75，2026-12-31 前优惠价） |
+| `gemini-3.1-pro` | 13.44 | 80.64 | 1.344 | Gemini 强推理（preview，$2/$12） |
+| `gemini-2.5-flash` | 2.016 | 16.80 | 0.2016 | Gemini 上一代主力（legacy，$0.30/$2.50） |
+| `gemini-2.5-pro` | 8.40 | 67.20 | 0.840 | Gemini 上一代强推理（legacy，$1.25/$10） |
+| `kimi-k3.1-pro` | 13.00 | 68.00 | 1.30 | Kimi 现役旗舰（1M 上下文） |
+| `kimi-k3.1-pro-highspeed` | 26.00 | 136.00 | 1.30 | Kimi 现役旗舰高速档（同模型、更快更贵） |
+| `kimi-k3` | 20.00 | 100.00 | 2.00 | Kimi 上一代旗舰（1M 上下文） |
 | `kimi-k2.6` | 6.50 | 27.00 | 1.10 | Kimi 通用主力（256k 上下文，支持思考模式） |
-| `kimi-k3` | 20.00 | 100.00 | 2.00 | Kimi 旗舰（1M 上下文） |
 
-> 表中为具体模型名；`core/constants.py::MODEL_PRICING` 另有 `claude-sonnet-4-` / `claude-opus-4-` / `claude-haiku-4-` / `gemini-3.5-` / `gemini-2.5-` / `gemini-2.0-` 六条**模型族前缀兜底价**，供带日期/小版本后缀的未列变体（如 `claude-sonnet-4-20250514`）按族价自动计价——表中不单列，也不会覆盖已有的具体模型价。
+> **货币口径**：外币厂商（Anthropic / OpenAI / Google）官方以 USD 标价，表内统一按 `USD_CNY_RATE`（`core/constants.py`，取中国人民银行授权中国外汇交易中心中间价）折算为人民币，保证报告内所有费用同一货币可直接相加；DeepSeek 与 Kimi 官方本身以人民币标价，不折算。改汇率或改价时两者需同步，条目一律经 `_usd()` 换算，不手写折算结果。
+
+> 表中为具体模型名；`core/constants.py::MODEL_PRICING` 另有 12 条**模型族前缀兜底价**（`claude-fable-5-` / `claude-opus-5-` / `claude-sonnet-5-` / `claude-haiku-5-` / `claude-sonnet-4-` / `claude-opus-4-` / `claude-haiku-4-` / `gpt-6.1-` / `gpt-5.6-` / `gemini-3.8-` / `gemini-3.1-` / `gemini-2.5-`），供带日期/小版本后缀的未列变体（如 `claude-sonnet-5-5-20260928`）按族价自动计价——表中不单列，也不会覆盖已有的具体模型价。
 
 > **峰谷定价（DeepSeek）**：`deepseek-flash` / `deepseek-v4-*` 采用 DeepSeek 官方峰谷定价（2026-08-17 起生效，2026-08-23 起优化周末规则，2026-09-10 起 flash 系列降价并补充法定节假日规则），表中「闲时/高峰」两列分别为非高峰与高峰时段的每百万 Token 单价。**高峰时段仅在高峰日（周一至周五，不含中国法定节假日）生效**，为**北京时间 09:00–12:00、14:00–18:00**；高峰日其余时间为闲时、**周末（周六/周日）与法定节假日全天一律按闲时价计费**（不区分峰谷，闲时价 = 高峰价的一半）。时段、判定时区与周末/法定节假日规则可在 `llm_pricing_ref.json` 的 `peak_periods` / `idle_periods` / `timezone` / `weekend_always_idle` / `holiday_always_idle` 中覆盖；含 `"peak"` 子段的模型高峰日高峰时段按 `peak` 价计费，其余时段（含周末与法定节假日全天）按 base 价，无 `"peak"` 的模型始终按 base 价计费。
 >
@@ -937,7 +948,7 @@ $env:HTTPS_PROXY = "http://127.0.0.1:7890"
 >   "weekend_always_idle": true,
 >   "holiday_always_idle": true,
 >   "models": {
->     "claude-sonnet-4-6": {"input_price": 3, "output_price": 15},
+>     "claude-sonnet-5-5": {"input_price": 13.44, "output_price": 67.2},
 >     "my-new-model": {"input_price": 5, "output_price": 10, "input_cache_hit": 0.5},
 >     "deepseek-v4-flash": {
 >       "input_price": 1.0, "output_price": 4.0, "input_cache_hit": 0.02,
