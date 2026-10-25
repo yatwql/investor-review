@@ -45,8 +45,6 @@ _HEADERS = {
 _TIMEOUT = 15.0
 
 #: 载荷语义版本——费率口径/行结构变更即递增，旧缓存按未命中丢弃（同 purchase_schema 习语）
-FEE_SCHEMA_FIELD = "fee_schema"
-FEE_SCHEMA = 1
 
 _RE_TABLE = re.compile(r"<table[^>]*>(.*?)</table>", re.DOTALL | re.IGNORECASE)
 _RE_ROW = re.compile(r"<tr[^>]*>(.*?)</tr>", re.DOTALL | re.IGNORECASE)
@@ -66,7 +64,6 @@ def stamp_fee_payload(redemption_rows: list[list[str]], purchase_rows: list[list
         "redemption_rows": redemption_rows,
         "purchase_rows": purchase_rows,
         "fetched_at": datetime.now(BEIJING_TZ).isoformat(timespec="seconds"),
-        FEE_SCHEMA_FIELD: FEE_SCHEMA,
     }
 
 
@@ -83,18 +80,15 @@ def _rows_shape_ok(rows: object) -> bool:
 
 
 def fee_payload_is_valid(payload: object) -> bool:
-    """载荷准入校验（``cache_validate`` 与写侧 ``validate`` 共用同一判据）。
+    """载荷形状/值域准入校验（写侧 ``validate`` 用；防截断与错位载荷入缓存）。
 
     校验项：
-      1. 语义版本字段 ``fee_schema`` 等于当前版本（旧结构缓存一律作废）；
-      2. ``fetched_at`` 非空时间串；
-      3. ``redemption_rows`` 非空且逐行结构合法（**赎回阶梯是本数据类型的核心**，
+      1. ``fetched_at`` 非空时间串；
+      2. ``redemption_rows`` 非空且逐行结构合法（**赎回阶梯是本数据类型的核心**，
          缺失即整载荷失败——场内基金页/解析漂移均落此，走备链路与配置兜底）；
-      4. ``purchase_rows`` 为列表（可为空）且非空时逐行结构合法。
+      3. ``purchase_rows`` 为列表（可为空）且非空时逐行结构合法。
     """
     if not isinstance(payload, dict):
-        return False
-    if payload.get(FEE_SCHEMA_FIELD) != FEE_SCHEMA:
         return False
     fetched_at = payload.get("fetched_at")
     if not isinstance(fetched_at, str) or not fetched_at.strip():

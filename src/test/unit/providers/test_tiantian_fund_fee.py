@@ -3,7 +3,7 @@
 测试目标（whatif-cost-benchmark-design §11）：
   - 解析器：真实页面结构（9 表）中定位赎回阶梯表与申购档位表——优惠表优先于
     原生表、干扰表（申购状态/运作费用等）自动跳过、实体与空白归一
-  - 准入：fee_schema 语义版本 + 赎回阶梯非空硬条件 + 行结构体检
+  - 准入：赎回阶梯非空硬条件 + 行结构体检
   - 抓取：调用点 make_http_client 传输桩走完整路径（零出网）
   - 备链路：akshare fund_fee_em 封装（stub sys.modules，零出网）
 
@@ -21,8 +21,6 @@ import pytest
 
 from src.python.providers import tiantian_fund_fee as tf
 from src.python.providers.tiantian_fund_fee import (
-    FEE_SCHEMA,
-    FEE_SCHEMA_FIELD,
     fee_payload_is_valid,
     parse_fee_page,
     stamp_fee_payload,
@@ -134,12 +132,6 @@ class TestPayloadAdmission:
     def test_valid_payload_passes(self):
         assert fee_payload_is_valid(stamp_fee_payload([["小于7天", "1.50%"]], [])) is True
 
-    def test_schema_mismatch_rejected(self):
-        """fee_schema 不等于当前版本（旧结构缓存）→ 拒绝按未命中丢弃。"""
-        payload = stamp_fee_payload([["小于7天", "1.50%"]], [])
-        assert fee_payload_is_valid({**payload, FEE_SCHEMA_FIELD: FEE_SCHEMA + 99}) is False
-        assert fee_payload_is_valid({"redemption_rows": [["a", "1%"]], "purchase_rows": []}) is False
-
     def test_empty_redemption_rejected(self):
         """赎回阶梯缺失/为空 → 拒绝（核心侧缺失即整载荷失败）。"""
         assert fee_payload_is_valid(stamp_fee_payload([], [])) is False
@@ -168,7 +160,6 @@ class TestPayloadAdmission:
 
     def test_stamp_carries_schema_and_tz_fetched_at(self):
         payload = stamp_fee_payload([["小于7天", "1.50%"]], [])
-        assert payload[FEE_SCHEMA_FIELD] == FEE_SCHEMA
         fetched = datetime.fromisoformat(payload["fetched_at"])
         assert fetched.tzinfo is not None
 
@@ -222,7 +213,6 @@ class TestDirectFetch:
         monkeypatch.setattr(tf, "make_http_client", lambda **_kwargs: client)
         payload = tf.fetch_fund_fee_page("002943")
         assert payload is not None
-        assert payload[FEE_SCHEMA_FIELD] == FEE_SCHEMA
         assert payload["redemption_rows"][0] == ["小于7天", "1.50%"]
         assert len(client.calls) == 1
         call = client.calls[0]

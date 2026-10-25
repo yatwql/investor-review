@@ -16,10 +16,8 @@ from typing import Any
 
 import pytest
 
-from src.python.providers import tiantian_purchase as tp
 from src.python.providers.tiantian_purchase import (
     MIN_ACCEPT_ROWS,
-    PURCHASE_SCHEMA_FIELD,
     parse_purchase_table,
     purchase_status_payload_is_valid,
     stamp_purchase_payload,
@@ -167,25 +165,13 @@ class TestPayloadAdmission:
     """载荷准入：任一校验项不满足即判失败（写侧/读侧同判据）。"""
 
     def test_valid_payload_passes(self, _valid_payload):
-        """合法载荷（行数达标 + 版本一致 + 值域全过）→ 准入通过。"""
+        """合法载荷（行数达标 + 值域全过）→ 准入通过。"""
         assert purchase_status_payload_is_valid(_valid_payload) is True
 
     def test_non_dict_payload_rejected(self):
         """非 dict 载荷（损坏缓存体）→ 拒绝。"""
         assert purchase_status_payload_is_valid(None) is False
         assert purchase_status_payload_is_valid("broken") is False
-
-    def test_missing_schema_field_rejected(self):
-        """缺 purchase_schema 版本字段 → 拒绝（旧语义条目自动作废）。"""
-        payload = stamp_purchase_payload(_large_rows())
-        del payload[PURCHASE_SCHEMA_FIELD]
-        assert purchase_status_payload_is_valid(payload) is False
-
-    def test_stale_schema_version_rejected(self):
-        """purchase_schema 版本不符 → 拒绝（未来字段演进抬版本即失效旧缓存）。"""
-        payload = stamp_purchase_payload(_large_rows())
-        payload[PURCHASE_SCHEMA_FIELD] = tp.PURCHASE_SCHEMA + 1
-        assert purchase_status_payload_is_valid(payload) is False
 
     def test_row_count_below_threshold_rejected(self, _valid_payload):
         """行数骤降（< MIN_ACCEPT_ROWS）→ 拒绝（上游半表/截断防护）。"""

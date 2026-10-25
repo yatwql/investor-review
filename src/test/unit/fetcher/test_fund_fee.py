@@ -3,7 +3,7 @@
 测试目标（whatif-cost-benchmark-design §11）：
   - 链注册：_DEFAULT_CHAINS 槽位与 provider 映射同构（同序同集）
   - 降级阶梯：主链路成功 → 备链路递补 → 过期缓存 → 暂不可用
-  - 载荷准入：写侧失败不污染缓存；读侧 fee_schema 语义版本不符按未命中丢弃
+  - 载荷准入：写侧失败不污染缓存；不过准入的载荷走降级
   - 会话缓存：同一次报告生成内每代码单次经链（None 亦缓存）
   - 费率索引装配 fetch_fee_index：逐侧来源优先级（f10_tier → table_single →
     config）、未知代码不入索引、单代码失败不中断批
@@ -26,7 +26,6 @@ from src.python.fetcher.fund_fee import (
     fetch_fee_index,
 )
 from src.python.providers.tiantian_fund_fee import (
-    FEE_SCHEMA_FIELD,
     stamp_fee_payload,
 )
 
@@ -135,7 +134,6 @@ class TestDegradationLadder:
         result = fetch_fund_fee("002943")
         assert result is not None
         assert result["source"] == "天天基金F10"
-        assert result[FEE_SCHEMA_FIELD]
         assert calls == ["tiantian_f10"]
 
         again = fetch_fund_fee("002943")
@@ -214,29 +212,6 @@ class TestAdmissionProtectsCache:
         assert result is not None
         assert result["fetched_at"] == _STALE_FETCHED_AT
         spy.assert_not_called()
-
-    def test_stale_schema_version_discarded_on_read(self, monkeypatch: pytest.MonkeyPatch):
-        """读侧同判据：fee_schema 版本过期的缓存条目 → 丢弃重取（进降级阶梯）。"""
-        old_schema = {**_payload(), FEE_SCHEMA_FIELD: 999}
-        reads: list[int] = []
-
-        def _fake_cache_get(_key: str, *_args: Any, **_kwargs: Any):
-            reads.append(1)
-            return old_schema if len(reads) == 1 else None
-
-        spy = MagicMock(name="cache_set")
-        monkeypatch.setattr(chain, "cache_get", _fake_cache_get)
-        monkeypatch.setattr(chain, "cache_set", spy)
-        _use_provider(monkeypatch, "tiantian_f10", "天天基金F10", lambda **_: None)
-        _use_provider(monkeypatch, "akshare_fee", "天天基金F10(akshare)", lambda **_: None)
-
-        assert fetch_fund_fee("002943") is None
-        assert reads, "缓存读取应发生（语义版本判据挂在 cache_validate 上）"
-
-
-# ============================================================
-#  会话缓存
-# ============================================================
 
 
 class TestSessionReuse:
