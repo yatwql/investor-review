@@ -35,7 +35,7 @@
 
 **完成**：盘中敏感性从配置列表下沉为注册表数据属性——`DataModuleDef.market_ttl`（`price`/`index` = 30s）；`config.market_hour_aware` 退役（写入时校验告警并忽略），配置只留 `market_hour_ttl` 全局数值覆盖（钳制 [30, 86400]）；`get_ttl` 对"盘中覆盖与 `cache_ttl` 冲突"打一次性 INFO（静默失效变可见）。两个负缓存类型（`datasink_probe_miss` 12h / `report_symbol_miss` 6h）登记进注册表，读侧与 `cleanup_expired` 同源、`cache_ttl` 可覆盖、文档表格可见。
 
-**验收**：盘中 30s 与盘后静态 TTL 双向契约、退役键无扩权、覆盖提示仅一次、负缓存清理按 12h/6h 判定（不吃 24h 兜底）、全量注册类型 TTL 为正——`test_cache_edge.py::TestGetTTLIntraday`、`test_ttl_alignment.py::TestIntradayAndNegativeCacheTTL`、`test_registry.py` 结构性断言；`technical.md` TTL 流程、`datasource.md` 负缓存表与盘中口径、`requirements.md`/`how-to-config.md` 配置表同步。
+**验收**：新增缓存契约测试四面——`test_ttl_business_matrix.py`（8 时段 × 7 类型 × 覆盖层矩阵 + 读/清理同源 + 同日两次报告/收盘后/负缓存/LLM 边界）、`test_price_freshness_gate.py`（收盘时点门禁：盘中价盘后不得当收盘价、QDII T-1、盘后写入可复用）、`test_cache_stamp_and_cleanup.py`（非当前版本戳不可读但仍按类型 TTL 清理、LLM 逐类型 TTL 不退化为默认）、`test_cache_edge.py::TestGetTTLIntraday` + `test_ttl_alignment.py::TestIntradayAndNegativeCacheTTL`（退役键无扩权、覆盖提示仅一次、负缓存 12h/6h 判定）；`technical.md` TTL 流程、`datasource.md` 负缓存表与盘中口径、`requirements.md`/`how-to-config.md` 配置表同步。
 
 #### `plan-226` 财报索引与财务指标 TTL 对齐披露节奏（来源 rf-876）
 
