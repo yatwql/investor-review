@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any
+from typing import Any, Callable
 
 from src.python.core.atomic_write import write_text_atomic
 
@@ -77,9 +77,10 @@ def append_jsonl_atomic_many(
         其余参数同 :func:`append_jsonl_atomic`
 
     ``max_lines``（保留上限）：追加后超限时只留末尾 N 行、最旧行丢弃——专为
-    **遥测类**只增历史（perf/健康检查）防无界增长设计；业务态账本（决策/信号/
-    折叠/去重锚点）丢失即丢状态，**不得设置**。追加本就要重写全文件，裁剪零
-    额外 I/O 成本。
+    **遥测类**只增历史（perf/健康检查）防无界增长设计。业务态账本（决策/信号/
+    折叠/去重锚点）丢失即丢状态，**不得**用它做裁剪；这类文件需要保留窗口时走
+    :func:`prune_jsonl_by_age`（按龄裁剪 + 可选保留谓词，不会无视语义丢状态）。
+    追加本就要重写全文件，裁剪零额外 I/O 成本。
 
     Returns:
         是否落盘成功（语义同 :func:`append_jsonl_atomic`）。
@@ -148,3 +149,66 @@ def read_jsonl(
     except OSError:
         logger.warning("[%s] %s读取失败: %s", log_tag, noun, path)
     return records
+
+
+def prune_jsonl_by_age(
+    path: str,
+    *,
+    retention_days: int,
+    date_key: str,
+    keep: Callable[[dict[str, Any]], bool] | None = None,
+    prefix: str = ".jsonl_",
+    log_tag: str = "jsonl",
+    noun: str = "JSONL 文件",
+) -> tuple[int, int]:
+    """按**龄**裁剪业务态账本：早于保留窗口的行丢弃，`keep` 命中的行无条件保留。
+
+    为什么不做成 `max_lines`：业务账本一行就是一份状态（决策/结算/信号），按行数
+    截断会把最旧的已结算样本一起裁掉，「跨期反思」类消费随即失样本；按龄裁剪才
+    对应真实语义（超过保留期的历史不再参与反思），`keep` 再兜住必须长期留存的
+    记录（如已结算决策）。
+
+    Args:
+        retention_days: 保留天数（<=0 表示不裁剪，直接返回）
+        date_key: 行内日期字段名（取 ISO 日期前 10 位比较；解析失败的行**保留**）
+        keep: 额外保留谓词（返回 True 的行无论多旧都留下）
+        prefix/log_tag/noun: 同其他原语（保留调用点原有日志文本）
+
+    Returns:
+        (保留行数, 丢弃行数)。文件不存在或全空时返回 (0, 0)。
+    """
+    import datetime as _dt
+
+    if retention_days <= 0 or not os.path.isfile(path):
+        return (0, 0)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            lines = f.read().splitlines(keepends=True)
+    except OSError:
+        logger.warning("[%s] %s不可读，跳过裁剪: %s", log_tag, noun, path)
+        return (0, 0)
+
+    cutoff = (_dt.date.today() - _dt.timedelta(days=retention_days)).isoformat()
+    kept: list[str] = []
+    dropped = 0
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            record = json.loads(line)
+        except ValueError:
+            kept.append(line)  # 坏行不裁：留给读取侧告警，不由裁剪静默吞掉
+            continue
+        if not isinstance(record, dict):
+            kept.append(line)
+            continue
+        day = str(record.get(date_key) or "")[:10]
+        fresh_enough = not day or day >= cutoff
+        if fresh_enough or (keep is not None and keep(record)):
+            kept.append(line)
+        else:
+            dropped += 1
+    if dropped:
+        write_text_atomic(path, "".join(kept), prefix=prefix, log_tag=log_tag, noun=noun)
+        logger.info("[%s] %s按龄裁剪：丢弃 %d 行（保留 %d 天）", log_tag, noun, dropped, retention_days)
+    return (len(kept), dropped)

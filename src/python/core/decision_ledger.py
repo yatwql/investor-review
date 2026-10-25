@@ -34,7 +34,7 @@ from datetime import datetime
 from typing import Any, Iterable
 
 from src.python.core.constants import PROJECT_ROOT
-from src.python.core.jsonl_store import append_jsonl_atomic, read_jsonl
+from src.python.core.jsonl_store import append_jsonl_atomic, prune_jsonl_by_age, read_jsonl
 
 logger = logging.getLogger("invest")
 
@@ -47,6 +47,13 @@ FEATURE_FLAG = "decision_reflection"
 # data/state 而非 data/cache：避开 cache.cleanup_expired() 清扫（理由同
 # src/python/report/data_status.py _default_persist_path）。
 _DECISION_LEDGER_FILE = os.path.join(PROJECT_ROOT, "data", "state", "decision_ledger.jsonl")
+
+DECISION_LEDGER_RETENTION_DAYS = 730
+"""决策账本按龄保留（730 天 ≈ 两个完整年度，跨季度反思需长样本）。
+
+为什么不用行数上限：账本一行一份状态，按行数截断会连最旧的**已结算**样本一起裁掉，
+跨期反思随即失样本。按龄裁剪才对应"超过保留期的历史不再参与反思"；已结算决策另有
+`keep` 谓词永久保留（结算样本是反思链路的核心证据）。"""
 
 # ── 结算/统计口径常量（承接 augur 纪律 + 设计文档 §1.2）──
 # 方向：+1 加仓/看多；-1 减仓/看空；0 持有/中性
@@ -94,7 +101,17 @@ def _append_event_atomic(event: dict[str, Any], path: str | None = None) -> None
     """
     target = path or _DECISION_LEDGER_FILE
     line = json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n"
-    append_jsonl_atomic(target, line, prefix=".decision_ledger_", log_tag="decision_ledger", noun="账本")
+    written = append_jsonl_atomic(target, line, prefix=".decision_ledger_", log_tag="decision_ledger", noun="账本")
+    prune_jsonl_by_age(
+        target,
+        retention_days=DECISION_LEDGER_RETENTION_DAYS,
+        date_key="report_date",
+        keep=lambda rec: rec.get("event") == EVENT_SETTLEMENT,
+        prefix=".decision_ledger_",
+        log_tag="decision_ledger",
+        noun="账本",
+    )
+    return written
 
 
 def load_events(path: str | None = None) -> list[dict[str, Any]]:

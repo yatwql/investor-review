@@ -20,7 +20,6 @@
 
 | # | 问题 | 修复方向 |
 |---|------|----------|
-| **rf-880** | `decision_ledger.jsonl` / `signal_ledger.jsonl` 无保留上限（现 26KB / 127KB，按日增长），与 perf（5000 行）/health（2000 行）/dedup anchors（120 天 + 压缩）不一致 | 加按龄保留（决策反思需跨期样本，可 730 天）或行上限，写入复用 `jsonl_store` 的 `max_lines` |
 
 ### P3 — 持续监控：文件膨胀登记
 
