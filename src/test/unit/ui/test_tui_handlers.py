@@ -269,7 +269,7 @@ class TestPrintLlmSessionUsage(unittest.TestCase):
 
     def test_with_calls(self):
         """有调用记录时输出格式正确。"""
-        usage = {"call_count": 5, "input_tokens": 1000, "output_tokens": 500, "total_cost": 0.15, "currency": "CNY"}
+        usage = {"call_count": 5, "input_tokens": 1000, "output_tokens": 500, "costs": {"CNY": 0.15}}
         out = self._capture(usage)
         self.assertIn("5", out)
         self.assertIn("1,500", out)
@@ -277,19 +277,19 @@ class TestPrintLlmSessionUsage(unittest.TestCase):
 
     def test_usd_currency(self):
         """USD 货币符号正确。"""
-        usage = {"call_count": 1, "input_tokens": 100, "output_tokens": 100, "total_cost": 0.05, "currency": "USD"}
+        usage = {"call_count": 1, "input_tokens": 100, "output_tokens": 100, "costs": {"USD": 0.05}}
         out = self._capture(usage)
         self.assertIn("$0.0500", out)
 
     def test_eur_currency(self):
         """EUR 货币符号正确。"""
-        usage = {"call_count": 1, "input_tokens": 100, "output_tokens": 100, "total_cost": 0.05, "currency": "EUR"}
+        usage = {"call_count": 1, "input_tokens": 100, "output_tokens": 100, "costs": {"EUR": 0.05}}
         out = self._capture(usage)
         self.assertIn("€0.0500", out)
 
     def test_gbp_currency(self):
         """GBP 货币符号正确。"""
-        usage = {"call_count": 1, "input_tokens": 100, "output_tokens": 100, "total_cost": 0.05, "currency": "GBP"}
+        usage = {"call_count": 1, "input_tokens": 100, "output_tokens": 100, "costs": {"GBP": 0.05}}
         out = self._capture(usage)
         self.assertIn("£0.0500", out)
 

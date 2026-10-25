@@ -6,7 +6,7 @@ import logging
 import threading
 from typing import Any
 
-from src.python.llm.pricing import CURRENCY_SYMBOLS, PRICING_CURRENCY, estimate_cost
+from src.python.llm.pricing import add_cost, compute_cost_value, format_costs, model_currency
 
 logger = logging.getLogger("invest")
 
@@ -26,8 +26,7 @@ _session_usage: dict[str, Any] = {
     "input_tokens": 0,
     "output_tokens": 0,
     "cache_hit_tokens": 0,
-    "total_cost": 0.0,
-    "currency": "CNY",
+    "costs": {},
     "model": "未指定",
     "models": [],
     "call_count": 0,
@@ -35,7 +34,10 @@ _session_usage: dict[str, Any] = {
 }
 """会话期间所有 LLM 调用的累计 Token 用量和费用。
 per_module: {module_key: {"model": str, "input_tokens": int, "output_tokens": int,
-                           "cached": bool, "thinking": bool, "cost": float}}
+                           "cached": bool, "thinking": bool, "cost": float, "currency": str}}
+
+``costs`` 是「币种 → 金额」桶：不同模型可能以不同货币标价（DeepSeek/Kimi 为 CNY，
+Claude/GPT/Gemini 为 USD），跨币种**从不相加**，展示时分组并列。
 生成报告后可在 TUI/汇总页展示。"""
 
 # 线程锁：_session_usage 被 ThreadPoolExecutor（LLM 并行生成）从多线程写入
@@ -48,7 +50,7 @@ def reset_session_usage() -> None:
         _session_usage["input_tokens"] = 0
         _session_usage["output_tokens"] = 0
         _session_usage["cache_hit_tokens"] = 0
-        _session_usage["total_cost"] = 0.0
+        _session_usage["costs"] = {}
         _session_usage["call_count"] = 0
         _session_usage["per_module"] = {}
         _session_usage["models"] = []
@@ -71,9 +73,8 @@ def format_session_usage(raw: dict[str, Any] | None) -> dict[str, Any]:
       output_tokens
       total_tokens — 输入+输出合计数
       cache_hit_tokens
-      cost         — 费用数值（float）
-      currency     — 货币类型（CNY/USD）
-      cost_display — 格式化费用字符串（如 "¥0.0456"）
+      cost_by_currency — 「币种 → 金额」桶（跨币种不相加）
+      cost_display     — 分币种并列展示串（如 "¥0.0456 + $0.0021"）
     """
     if not raw:
         return {"has_usage": False}
@@ -83,9 +84,7 @@ def format_session_usage(raw: dict[str, Any] | None) -> dict[str, Any]:
     inp = raw.get("input_tokens", 0)
     out = raw.get("output_tokens", 0)
     cache_hit = raw.get("cache_hit_tokens", 0)
-    cost = raw.get("total_cost", 0.0)
-    currency = raw.get("currency", "CNY")
-    symbol = CURRENCY_SYMBOLS.get(currency, "¥")
+    costs = dict(raw.get("costs") or {})
     models = raw.get("models", [])
     models = [m for m in models if m and m != "未指定"]
     model_display = " / ".join(models) if models else raw.get("model", "未指定")
@@ -100,9 +99,8 @@ def format_session_usage(raw: dict[str, Any] | None) -> dict[str, Any]:
         "output_tokens": out,
         "total_tokens": inp + out,
         "cache_hit_tokens": cache_hit,
-        "cost": cost,
-        "currency": currency,
-        "cost_display": f"{symbol}{cost:.4f}",
+        "cost_by_currency": costs,
+        "cost_display": format_costs(costs),
     }
 
 
@@ -158,15 +156,10 @@ def track_session_usage(provider: str, usage: dict | None, model_name: str = "")
             if model_name not in _session_usage["models"]:
                 _session_usage["models"].append(model_name)
 
-        # 累计费用
-        _cost_str = estimate_cost(model_name, inp, out, cache_hit_input_tokens=cache_hit)
-        if _cost_str != "-":
-            try:
-                cost_val = float(_cost_str.lstrip("$¥€£"))
-                _session_usage["total_cost"] += cost_val
-            except (ValueError, AttributeError) as _cost_err:
-                logger.warning("解析 LLM 费用字符串失败: %s （原始值: %s）", _cost_err, _cost_str)
-        _session_usage["currency"] = PRICING_CURRENCY
+        # 累计费用：按该模型官方币种入桶（跨币种不相加）
+        cost_val = compute_cost_value(model_name, inp, out, cache_hit_input_tokens=cache_hit)
+        if cost_val:
+            add_cost(_session_usage["costs"], model_currency(model_name), cost_val)
 
 
 def record_per_module(
@@ -192,6 +185,7 @@ def record_per_module(
                 "cached": cached,
                 "thinking": thinking,
                 "cost": 0.0,
+                "currency": model_currency(model_name),
                 "endpoint": endpoint,
                 "cache_hit_tokens": 0,
                 "duration": 0.0,
@@ -204,6 +198,7 @@ def record_per_module(
         entry["duration"] += duration
         if model_name:
             entry["model"] = model_name
+            entry["currency"] = model_currency(model_name)
         if endpoint:
             entry["endpoint"] = endpoint
         if cached:

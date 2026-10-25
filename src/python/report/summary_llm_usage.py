@@ -189,9 +189,9 @@ def _write_module_data_rows(ws: Any, row: int, module_info: list[dict]) -> int:
         _cost = mi.get("cost", 0.0)
         _status_val = mi.get("status", "")
         if _cost > 0:
-            from src.python.llm.pricing import CURRENCY_SYMBOLS, PRICING_CURRENCY
+            from src.python.llm.pricing import currency_symbol
 
-            _sym = CURRENCY_SYMBOLS.get(PRICING_CURRENCY, "¥")
+            _sym = currency_symbol(mi.get("currency"))
             ws.cell(row=row, column=8, value=f"{_sym}{_cost:.4f}").font = _KV_VAL_FONT
             ws.cell(row=row, column=8).alignment = right_align
         elif _status_val == "cached":

@@ -21,9 +21,13 @@ from datetime import date
 from typing import Any
 
 from src.python.llm.pricing import (
-    CURRENCY_SYMBOLS,
     PRICING_CURRENCY,
     compute_cost_value,
+    convert_amount,
+    currency_symbol,
+    format_costs,
+    merge_costs,
+    model_currency,
 )
 
 logger = logging.getLogger("invest")
@@ -46,8 +50,15 @@ _DEBATE_KEYS = ("debate_pro", "debate_con", "debate_synthesis")
 """辩论三段缓存键（缓存域登记；费用并入 expert_review 口径，与其计划参与口径对齐）。"""
 
 
-def _currency_symbol() -> str:
-    return CURRENCY_SYMBOLS.get(PRICING_CURRENCY, "$")
+def _range_display(costs: dict[str, dict[str, float]], digits: int = 4) -> str:
+    """把「币种 → {low, high}」格式化为 `¥0.0200 ~ ¥0.0400`（多币种以 ` + ` 并列）。"""
+    parts: list[str] = []
+    for code in sorted(costs):
+        symbol = currency_symbol(code)
+        low = float(costs[code].get("low") or 0.0)
+        high = float(costs[code].get("high") or 0.0)
+        parts.append(f"{symbol}{low:.{digits}f} ~ {symbol}{high:.{digits}f}")
+    return " + ".join(parts)
 
 
 def _get_llm_config() -> dict[str, Any]:
@@ -120,11 +131,11 @@ def _static_module_cost_range(
     llm_config: dict[str, Any],
     module_key: str,
     debate_active: bool,
-) -> tuple[float, float] | None:
+) -> tuple[float, float, str] | None:
     """静态兜底区间：输入/输出 token 包络 × 生效模型单价。
 
     Returns:
-        (low, high) 费用数值；模型无法定价时返回 None。
+        (low, high, currency) 费用数值与**该模型官方币种**；无法定价时返回 None。
     """
     out_high = int(llm_config.get(f"max_tokens_{module_key}") or _STATIC_OUT_FALLBACK)
     out_low = min(_STATIC_OUT_LOW, out_high)
@@ -137,13 +148,13 @@ def _static_module_cost_range(
         # 辩论模式：正/反/综述三次调用（历史缺失时的静态上界口径）
         low *= _DEBATE_CALL_MULT
         high *= _DEBATE_CALL_MULT
-    return (low, high)
+    return (low, high, model_currency(model))
 
 
 def _history_module_costs(
     records: list[dict[str, Any]],
     debate_active: bool,
-) -> tuple[dict[str, list[float]], int]:
+) -> tuple[dict[str, dict[str, list[float]]], int]:
     """从 perf 历史提取逐模块**单次运行**费用样本。
 
     expert_review 口径与计划参与口径对齐：辩论特征开启时，同一次运行内
@@ -151,10 +162,11 @@ def _history_module_costs(
     仅含标准调用的历史样本乘以静态辩论倍数（推断该运行未走辩论）。
 
     Returns:
-        (模块 → 费用样本列表, 贡献样本的运行数)。
+        (模块 → 币种 → 费用样本列表, 贡献样本的运行数)。历史记录带
+        ``currency`` 字段（缺省按 PRICING_CURRENCY）——币种不同的样本**不混算**。
     """
     window = records[-_HISTORY_WINDOW_RUNS:]
-    per_module: dict[str, list[float]] = {}
+    per_module: dict[str, dict[str, list[float]]] = {}
     runs_used = 0
     for rec in window:
         llm = rec.get("llm")
@@ -168,17 +180,22 @@ def _history_module_costs(
             if not isinstance(entry, dict):
                 continue
             cost = float(entry.get("cost") or 0.0)
+            # 币种优先取记录字段；早期记录无该字段时按该模块当时的模型推断
+            currency = str(entry.get("currency") or "").upper()
+            if not currency:
+                currency = model_currency(str(entry.get("model") or ""))
+            bucket = per_module.setdefault(key, {}).setdefault(currency, [])
             if key == "expert_review" and debate_active:
                 debate_sum = sum(float((modules.get(k) or {}).get("cost") or 0.0) for k in _DEBATE_KEYS)
                 if debate_sum > 0:
-                    per_module.setdefault(key, []).append(cost + debate_sum)
+                    bucket.append(cost + debate_sum)
                 else:
-                    per_module.setdefault(key, []).append(cost * _DEBATE_CALL_MULT)
+                    bucket.append(cost * _DEBATE_CALL_MULT)
                 continue
             if debate_active and key in _DEBATE_KEYS:
                 # 已并入 expert_review 口径，避免重复计数
                 continue
-            per_module.setdefault(key, []).append(cost)
+            bucket.append(cost)
     return per_module, runs_used
 
 
@@ -251,12 +268,9 @@ def _forecast_run_cost_impl(
         "module_count": len(planned),
         "force_scope": sorted(scope),
         "forced_count": 0,
-        "forced_low": 0.0,
-        "forced_high": 0.0,
-        "low": 0.0,
-        "high": 0.0,
-        "currency": PRICING_CURRENCY,
-        "symbol": _currency_symbol(),
+        "forced_costs": {},
+        "costs": {},
+        "cost_display": "",
         "basis": "no-modules",
         "history_runs": 0,
         "unpriced": [],
@@ -270,22 +284,30 @@ def _forecast_run_cost_impl(
     hist_samples, runs_used = _history_module_costs(records, debate_active)
     base["history_runs"] = runs_used
 
-    low_total = 0.0
-    high_total = 0.0
+    costs: dict[str, dict[str, float]] = {}
+    forced_costs: dict[str, dict[str, float]] = {}
     unpriced: list[str] = []
     detail: dict[str, dict[str, Any]] = {}
     history_parts = 0
-    forced_low = 0.0
-    forced_high = 0.0
     forced_count = 0
+
+    def _accumulate(bucket: dict[str, dict[str, float]], currency: str, lo: float, hi: float) -> None:
+        entry = bucket.setdefault(currency, {"low": 0.0, "high": 0.0})
+        entry["low"] += lo
+        entry["high"] += hi
+
     for sfx in planned:
-        samples = hist_samples.get(sfx) or []
+        model = _module_model(cfg, sfx)
+        currency = model_currency(model)
+        by_currency = hist_samples.get(sfx) or {}
+        # 同模块历史样本可能跨币种（换过模型）：只取当前模型币种的样本，不混算
+        samples = by_currency.get(currency) or []
         if sfx in scope:
             # 重新生成范围内模块：保证重新调用（无缓存折扣），历史样本含缓存
             # 折扣不再适用——优先静态单价口径；静态不可得时回落历史样本（保守近似）
             rng = _static_module_cost_range(cfg, sfx, debate_active)
             if rng is not None:
-                lo, hi = rng
+                lo, hi, currency = rng
                 part_basis = "static"
             elif samples:
                 lo, hi = min(samples), max(samples)
@@ -293,8 +315,7 @@ def _forecast_run_cost_impl(
             else:
                 unpriced.append(sfx)
                 continue
-            forced_low += lo
-            forced_high += hi
+            _accumulate(forced_costs, currency, lo, hi)
             forced_count += 1
         elif samples:
             lo, hi = min(samples), max(samples)
@@ -305,13 +326,13 @@ def _forecast_run_cost_impl(
             if rng is None:
                 unpriced.append(sfx)
                 continue
-            lo, hi = rng
+            lo, hi, currency = rng
             part_basis = "static"
-        low_total += lo
-        high_total += hi
+        _accumulate(costs, currency, lo, hi)
         detail[sfx] = {
             "low": round(lo, 6),
             "high": round(hi, 6),
+            "currency": currency,
             "samples": len(samples),
             "basis": part_basis,
         }
@@ -328,16 +349,19 @@ def _forecast_run_cost_impl(
         part_basis = f"history:{runs_used}"
     else:
         part_basis = "mixed"
+    rounded = {code: {"low": round(v["low"], 6), "high": round(v["high"], 6)} for code, v in costs.items()}
+    rounded_forced = {
+        code: {"low": round(v["low"], 6), "high": round(v["high"], 6)} for code, v in forced_costs.items()
+    }
     base.update(
         {
-            "low": round(low_total, 6),
-            "high": round(high_total, 6),
+            "costs": rounded,
+            "cost_display": _range_display(rounded),
             "basis": part_basis,
             "unpriced": unpriced,
             "detail": detail,
             "forced_count": forced_count,
-            "forced_low": round(forced_low, 6),
-            "forced_high": round(forced_high, 6),
+            "forced_costs": rounded_forced,
         }
     )
     if unpriced:
@@ -345,15 +369,39 @@ def _forecast_run_cost_impl(
     return base
 
 
-def daily_cost_limit(llm_config: dict[str, Any] | None = None) -> float:
-    """日预算上限（货币数值）；0 = 未启用。非法取值按 0 处理。"""
+def daily_cost_limit(llm_config: dict[str, Any] | None = None) -> dict[str, float]:
+    """日预算上限，**逐币种**：``{"CNY": 5.0, "USD": 1.0}``；空 = 未启用。
+
+    配置形态：``daily_cost_limit`` 为对象时按币种分别设上限；为单个数字时视为
+    仅对缺省币种（``PRICING_CURRENCY``）生效（多币种模型并存时会低估其他币种
+    支出，故取该形态时记一条 INFO 提示改用对象形态）。非法取值一律忽略。
+    """
     cfg = llm_config if llm_config is not None else _get_llm_config()
+    raw = cfg.get("daily_cost_limit")
+    if isinstance(raw, dict):
+        limits: dict[str, float] = {}
+        for code, value in raw.items():
+            try:
+                amount = float(value or 0)
+            except (TypeError, ValueError):
+                logger.debug("[cost_forecast] daily_cost_limit.%s 取值非法，忽略", code)
+                continue
+            if amount > 0:
+                limits[str(code).strip().upper()] = amount
+        return limits
     try:
-        value = float(cfg.get("daily_cost_limit") or 0)
+        value = float(raw or 0)
     except (TypeError, ValueError):
         logger.debug("[cost_forecast] daily_cost_limit 取值非法，按未启用处理", exc_info=True)
-        return 0.0
-    return max(value, 0.0)
+        return {}
+    if value <= 0:
+        return {}
+    logger.info(
+        "[cost_forecast] daily_cost_limit 为单值，仅对 %s 生效；多币种模型并存时请改为 "
+        '对象形态（如 {"CNY": 5, "USD": 1}）',
+        PRICING_CURRENCY,
+    )
+    return {PRICING_CURRENCY: value}
 
 
 def estimate_cached_saving(
@@ -375,60 +423,117 @@ def estimate_cached_saving(
         history: perf 历史（测试注入）；None 时读盘。
 
     Returns:
-        ``{"saved": 估算金额, "priced": 有样本的模块, "unpriced": 无样本模块}``。
+        ``{"saved": {币种: 估算金额}, "saved_display": "¥0.0123", "priced": 有样本的模块,
+        "unpriced": 无样本模块}``——历史样本按币种分组，跨币种不相加。
     """
     keys = list(dict.fromkeys(str(k) for k in module_keys if k))
     if not keys:
-        return {"saved": 0.0, "priced": [], "unpriced": []}
+        return {"saved": {}, "saved_display": "-", "priced": [], "unpriced": []}
 
     records = history if history is not None else _load_perf_history()
     samples_by_module, _runs = _history_module_costs(records, is_feature_enabled_for_debate())
-    saved = 0.0
+    saved: dict[str, float] = {}
     priced: list[str] = []
     unpriced: list[str] = []
     for key in keys:
-        paid = [s for s in (samples_by_module.get(key) or []) if s > 0]
-        if not paid:
+        by_currency = samples_by_module.get(key) or {}
+        paid_by_currency = {code: [s for s in samples if s > 0] for code, samples in by_currency.items()}
+        paid_by_currency = {code: samples for code, samples in paid_by_currency.items() if samples}
+        if not paid_by_currency:
             unpriced.append(key)
             continue
-        saved += sum(paid) / len(paid)
+        for code, samples in paid_by_currency.items():
+            saved[code] = saved.get(code, 0.0) + sum(samples) / len(samples)
         priced.append(key)
-    return {"saved": round(saved, 6), "priced": priced, "unpriced": unpriced}
+    rounded = {code: round(amount, 6) for code, amount in saved.items()}
+    return {
+        "saved": rounded,
+        "saved_display": format_costs(rounded),
+        "priced": priced,
+        "unpriced": unpriced,
+    }
 
 
-def today_llm_cost(history: list[dict[str, Any]] | None = None) -> float:
-    """今日（本地日期）已产生的 LLM 费用合计——与 perf 汇总同源。"""
+def today_llm_cost(history: list[dict[str, Any]] | None = None) -> dict[str, float]:
+    """今日（本地日期）已产生的 LLM 费用，**逐币种**汇总——与 perf 记录同源。
+
+    记录里带 ``cost_by_currency`` 时按桶累加；无该字段的历史记录按缺省币种计入。
+    """
     records = history if history is not None else _load_perf_history()
     today = date.today().isoformat()
-    total = 0.0
+    totals: dict[str, float] = {}
     for rec in records:
         if not str(rec.get("timestamp") or "").startswith(today):
             continue
         llm = rec.get("llm")
-        if isinstance(llm, dict):
-            total += float(llm.get("total_cost") or 0.0)
-    return round(total, 6)
+        if not isinstance(llm, dict):
+            continue
+        buckets = llm.get("cost_by_currency")
+        if isinstance(buckets, dict) and buckets:
+            totals = merge_costs(totals, {str(k).upper(): float(v or 0.0) for k, v in buckets.items()})
+            continue
+        legacy = float(llm.get("total_cost") or 0.0)
+        if legacy:
+            totals[PRICING_CURRENCY] = totals.get(PRICING_CURRENCY, 0.0) + legacy
+    return {code: round(amount, 6) for code, amount in totals.items()}
 
 
 def budget_status(
     llm_config: dict[str, Any] | None = None,
     history: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """日预算状态：{enabled, limit, spent, exceeded, currency, symbol}。
+    """日预算状态（逐币种）：``{enabled, limits, spent, exceeded, exceeded_currencies, display}``。
 
-    ``exceeded`` 为硬闸判定（``limit > 0 and spent >= limit``）；是否降级/中止
-    由渠道层按交互能力处置（交互询问，非交互直接中止）。
+    ``exceeded`` 为硬闸判定：任一笔预算币种的今日已花 ≥ 该币种上限即为 True。
+    比对时各币种支出按内部汇率表（`pricing.FX_TO_CNY`）折算到预算币种——**折算只
+    参与判定**，展示的金额一律为各模型原生币种。是否降级/中止由渠道层按交互能力
+    处置（交互询问，非交互直接中止）。
     """
     cfg = llm_config if llm_config is not None else _get_llm_config()
-    limit = daily_cost_limit(cfg)
+    limits = daily_cost_limit(cfg)
     spent = today_llm_cost(history)
+
+    def _spent_in(code: str) -> float:
+        """把各币种支出按内部汇率折算到预算币种（**仅用于比对，不展示为金额**）。"""
+        total = 0.0
+        for src, amount in spent.items():
+            if src == code:
+                total += amount
+                continue
+            converted = convert_amount(amount, src, code)
+            if converted is not None:
+                total += converted
+        return round(total, 6)
+
+    checks: list[dict[str, Any]] = []
+    for code, limit in sorted(limits.items()):
+        used = _spent_in(code)
+        checks.append(
+            {
+                "currency": code,
+                "limit": round(limit, 6),
+                "spent": used,
+                "exceeded": limit > 0 and used >= limit,
+            }
+        )
+    exceeded_currencies = [c["currency"] for c in checks if c["exceeded"]]
+    spend_display = format_costs(spent)
+    parts: list[str] = []
+    for check in checks:
+        symbol = currency_symbol(check["currency"])
+        state = "已达上限" if check["exceeded"] else "未超限"
+        parts.append(f"{symbol}{check['spent']:.4f} / {symbol}{check['limit']:.4f}（{state}）")
+    display = f"已花 {spend_display}" if spend_display != "-" else ""
+    if parts:
+        display = (display + "；预算 " if display else "预算 ") + "；".join(parts)
     return {
-        "enabled": limit > 0,
-        "limit": round(limit, 6),
+        "enabled": bool(limits),
+        "limits": {code: round(v, 6) for code, v in limits.items()},
         "spent": spent,
-        "exceeded": limit > 0 and spent >= limit,
-        "currency": PRICING_CURRENCY,
-        "symbol": _currency_symbol(),
+        "checks": checks,
+        "exceeded": bool(exceeded_currencies),
+        "exceeded_currencies": exceeded_currencies,
+        "display": display,
     }
 
 
@@ -437,7 +542,6 @@ def forecast_summary_lines(
     budget: dict[str, Any] | None = None,
 ) -> list[str]:
     """事前预估的纯文本摘要行（渠道层加各自前缀/颜色，不在此处做 UI）。"""
-    symbol = forecast.get("symbol") or _currency_symbol()
     lines: list[str] = []
     if forecast.get("ok"):
         if forecast.get("module_count", 0) == 0:
@@ -453,29 +557,24 @@ def forecast_summary_lines(
             else:
                 basis_desc = basis or "未知"
             lines.append(
-                f"本次生成 LLM 费用预估 {symbol}{forecast['low']:.4f} ~ {symbol}{forecast['high']:.4f}"
+                f"本次生成 LLM 费用预估 {forecast.get('cost_display') or '—'}"
                 f"（计划 {forecast['module_count']} 个模块，依据：{basis_desc}）"
             )
             forced_count = int(forecast.get("forced_count") or 0)
             if forced_count:
                 lines.append(
-                    f"其中 {forced_count} 个模块重新生成："
-                    f"{symbol}{float(forecast.get('forced_low') or 0.0):.4f} ~ "
-                    f"{symbol}{float(forecast.get('forced_high') or 0.0):.4f}"
+                    f"其中 {forced_count} 个模块重新生成：{_range_display(forecast.get('forced_costs') or {}) or '—'}"
                 )
         if forecast.get("reason"):
             lines.append(f"预估说明：{forecast['reason']}")
     else:
         lines.append(f"费用预估不可用（{forecast.get('reason') or '未知原因'}），不阻塞生成")
     if budget is not None:
-        b_symbol = budget.get("symbol") or symbol
+        display = budget.get("display") or ""
         if budget.get("enabled"):
-            state = "已达上限" if budget["exceeded"] else "未超限"
-            lines.append(
-                f"今日已花费 {b_symbol}{budget['spent']:.4f} / 日预算 {b_symbol}{budget['limit']:.4f}（{state}）"
-            )
-        else:
-            lines.append(f"今日已花费 {b_symbol}{budget['spent']:.4f}（未设日预算上限）")
+            lines.append(f"今日 LLM 费用：{display}")
+        elif display:
+            lines.append(f"今日 LLM 费用：{display}（未设日预算上限）")
     return lines
 
 

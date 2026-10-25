@@ -39,11 +39,20 @@ COST_HISTORY_DAYS = 7
 
 def _cost_notes(key: str, cost_history: dict) -> str:
     """LLM 章节行尾费用摘要（无样本 / 读取失败均返回空串，静默省略）。"""
+    from src.python.llm.pricing import currency_symbol
+
     info = cost_history.get(key) or {}
     runs = info.get("runs")
     if not isinstance(runs, int) or runs <= 0:
         return ""
-    return f" · {runs}次 ¥{float(info.get('total') or 0.0):.4f} 均¥{float(info.get('avg') or 0.0):.4f}"
+    parts: list[str] = []
+    for code in sorted(info.get("costs") or {}):
+        bucket = info["costs"][code]
+        symbol = currency_symbol(code)
+        parts.append(f"{symbol}{float(bucket.get('total') or 0.0):.4f} 均{symbol}{float(bucket.get('avg') or 0.0):.4f}")
+    if not parts:
+        return ""
+    return f" · {runs}次 " + " + ".join(parts)
 
 
 def _format_row(

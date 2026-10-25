@@ -22,10 +22,9 @@ def _fc(**over):
     base = {
         "ok": True,
         "module_count": 3,
-        "low": 0.1,
-        "high": 0.9,
+        "costs": {"CNY": {"low": 0.1, "high": 0.9}},
+        "cost_display": "¥0.1000 ~ ¥0.9000",
         "basis": "static",
-        "symbol": "¥",
         "reason": None,
     }
     base.update(over)
@@ -210,7 +209,11 @@ class TestPromptGenerateConfirm(unittest.TestCase):
 
         def _rec(*args, **kwargs):
             calls.append(kwargs)
-            return _fc(high=9.99) if len(calls) > 1 else _fc()
+            return (
+                _fc(costs={"CNY": {"low": 0.1, "high": 9.99}}, cost_display="¥0.1000 ~ ¥9.9900")
+                if len(calls) > 1
+                else _fc()
+            )
 
         reporter = MagicMock()
         buf = io.StringIO()

@@ -16,7 +16,7 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 from src.python.config import init_config
-from src.python.llm.pricing import CURRENCY_SYMBOLS
+from src.python.llm.pricing import format_costs
 from src.python.core.logger import log_app_boundary, setup_logger
 from src.python.tui.panel_runtime import NavState
 from src.python.tui.switch_panel import layout_tier
@@ -52,9 +52,7 @@ def _print_session_usage_on_exit() -> None:
             cache_hit = usage.get("cache_hit_tokens", 0)
             total_tok = inp + out
             calls = usage.get("call_count", 0)
-            cost = usage.get("total_cost", 0.0)
-            currency = usage.get("currency", "CNY")
-            symbol = CURRENCY_SYMBOLS.get(currency, "¥")
+            cost_display = format_costs(usage.get("costs") or {})
             model = usage.get("model", "")
             print("\n── LLM 会话统计 ──")
             print(f"  模型: {model}")
@@ -75,7 +73,7 @@ def _print_session_usage_on_exit() -> None:
             if cache_hit:
                 print(f"  缓存命中: {cache_hit:,}")
             print(f"  总 tokens: {total_tok:,}")
-            print(f"  累计费用: {symbol}{cost:.4f}")
+            print(f"  累计费用: {cost_display}")
             print("──────────────────")
     except (KeyError, TypeError, AttributeError):
         logger.warning("打印 LLM 会话统计时出错", exc_info=True)

@@ -262,8 +262,8 @@ class TestModuleCostHistory:
                         "llm": {
                             "total_cost": 2.0,
                             "modules": {
-                                "global_macro": {"cost": 1.5, "model": "m"},
-                                "news_correlation": {"cost": 0.5, "model": "m"},
+                                "global_macro": {"cost": 1.5, "model": "m", "currency": "CNY"},
+                                "news_correlation": {"cost": 0.5, "model": "m", "currency": "CNY"},
                             },
                         },
                     }
@@ -271,7 +271,7 @@ class TestModuleCostHistory:
                 json.dumps(
                     {
                         "timestamp": now.isoformat(timespec="seconds"),
-                        "llm": {"modules": {"global_macro": {"cost": 0.5}}},
+                        "llm": {"modules": {"global_macro": {"cost": 0.5, "currency": "CNY"}}},
                     }
                 ),
                 json.dumps({"timestamp": old, "llm": {"modules": {"global_macro": {"cost": 9.9}}}}),
@@ -280,8 +280,8 @@ class TestModuleCostHistory:
             ],
         )
         out = module_cost_summary(days=7, path=path)
-        assert out["global_macro"] == {"total": 2.0, "runs": 2, "avg": 1.0}
-        assert out["news_correlation"] == {"total": 0.5, "runs": 1, "avg": 0.5}
+        assert out["global_macro"] == {"runs": 2, "costs": {"CNY": {"total": 2.0, "avg": 1.0}}}
+        assert out["news_correlation"] == {"runs": 1, "costs": {"CNY": {"total": 0.5, "avg": 0.5}}}
         assert "debate_pro" not in out
 
     def test_empty_when_missing_file(self, tmp_path):
@@ -306,4 +306,4 @@ class TestModuleCostHistory:
         )
         out = module_cost_summary(days=7, path=path)
         assert "self_review" not in out
-        assert out["global_macro"]["total"] == 0.25
+        assert out["global_macro"]["costs"]["CNY"]["total"] == 0.25

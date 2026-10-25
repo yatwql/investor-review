@@ -81,11 +81,11 @@ class TestResetSessionUsage(unittest.TestCase):
         self.assertEqual(_session_usage["per_module"], {})
 
     def test_reset_total_cost(self):
-        """reset 后 total_cost 归零。"""
+        """reset 后费用桶清空。"""
         with _session_lock:
-            _session_usage["total_cost"] = 1.23
+            _session_usage["costs"] = {"CNY": 1.23}
         reset_session_usage()
-        self.assertEqual(_session_usage["total_cost"], 0.0)
+        self.assertEqual(_session_usage["costs"], {})
 
 
 class TestGetSessionUsage(unittest.TestCase):
@@ -184,8 +184,7 @@ class TestFormatSessionUsage(unittest.TestCase):
         result = format_session_usage(
             {
                 "call_count": 1,
-                "total_cost": 0.0456,
-                "currency": "CNY",
+                "costs": {"CNY": 0.0456},
             }
         )
         self.assertIn("¥", result["cost_display"])
@@ -241,7 +240,7 @@ class TestTrackSessionUsage(unittest.TestCase):
 
     def test_session_cost_matches_per_call_estimate(self):
         """会话费用与单次估算口径一致：同一份归一用量下两者等值。"""
-        from src.python.llm.pricing import estimate_cost
+        from src.python.llm.pricing import compute_cost_value
 
         usage = {
             "input_tokens": 10,
@@ -250,8 +249,9 @@ class TestTrackSessionUsage(unittest.TestCase):
         }
         track_session_usage("claude", usage, model_name="claude-sonnet-4-6")
         # 归一口径：总输入 15（含命中 5），命中按折扣价
-        expected = float(estimate_cost("claude-sonnet-4-6", 15, 5, cache_hit_input_tokens=5).lstrip("$¥€£"))
-        self.assertAlmostEqual(_session_usage["total_cost"], expected, places=6)
+        expected = compute_cost_value("claude-sonnet-4-6", 15, 5, cache_hit_input_tokens=5)
+        # 该模型按官方 USD 计价 → 落在 USD 桶
+        self.assertAlmostEqual(_session_usage["costs"]["USD"], expected, places=6)
 
     def test_openai_provider_tokens(self):
         """openai provider 使用 prompt_tokens / completion_tokens。"""

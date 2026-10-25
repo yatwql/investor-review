@@ -156,7 +156,7 @@ class TestChapterPanelRendering:
         llm_settings({})
         with patch(
             "src.python.core.perf.module_cost_summary",
-            return_value={"global_macro": {"total": 1.234567, "runs": 3, "avg": 0.411522}},
+            return_value={"global_macro": {"runs": 3, "costs": {"CNY": {"total": 1.234567, "avg": 0.411522}}}},
         ):
             out = _run(monkeypatch, ["0"])
         gm_lines = [line for line in out.splitlines() if "global_macro" in line]

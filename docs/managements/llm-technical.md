@@ -916,7 +916,7 @@ penetrated_assets ──→ extract_stable_penetration()
 |:-----|:-----|:----------|
 | 命中零边际成本 | 命中路径不产生 token 与费用；`record_per_module(cached=True)` 记账 cost=0 | `skeleton._handle_cache_hit` → `_build_cache_hint_and_record` |
 | 未命中必记账 | 真实调用的 token/费用逐模块入会话用量，可被事后汇总 | `_finalize_and_cache` → `record_per_module` |
-| 预算只看真实花费 | `daily_cost_limit` 用 perf 当日 `llm.total_cost` 求和；命中运行 `total_cost=0`，不消耗预算 | `cost_forecast.budget_status` / `today_llm_cost` |
+| 预算只看真实花费 | `daily_cost_limit` 用 perf 当日 `llm.cost_by_currency` 逐币种求和（判定时按内部汇率折算到预算币种）；命中运行无新增费用，不消耗预算 | `cost_forecast.budget_status` / `today_llm_cost` |
 | 节省可见 | 命中模块按**历史付费样本均价**估算 `cache_saved_cost` 写入 perf，并打 INFO「命中 N 个模块，估算节省 ≈¥X」；无样本不虚报 | `cost_forecast.estimate_cached_saving` + `report/_generation_shared._record_llm_context` |
 
 **预估口径**：`forecast_run_cost` 的默认路径用历史实际费用样本给出区间（命中样本费用为 0，故下限可为 0）；**强制重新生成范围内**的模块保证真调用，改按静态单价计价，不吃缓存折扣（`forced_low/forced_high` 单列）。预估始终是**上限性质**：它不预检当前指纹，因此不会因为「这次大概会命中」而下调金额。
@@ -1175,8 +1175,9 @@ _session_usage ──→ format_session_usage()
 ```
 _PRICING_MERGED = dict(MODEL_PRICING)              # 内置默认
 reload_pricing() → 读 llm_pricing_ref.json
-                    顶层：version / currency / timezone / peak_periods /
-                          idle_periods / weekend_always_idle / holiday_always_idle
+                    顶层：version / currency（缺省币种，默认 CNY）/ timezone /
+                          peak_periods / idle_periods / weekend_always_idle /
+                          holiday_always_idle
                     models：逐模型覆盖或补充到 _PRICING_MERGED
                     可选字段 input_cache_hit 缺失时继承内置（或等于 input）
 ```
@@ -1224,20 +1225,25 @@ reload_pricing() → 读 llm_pricing_ref.json
 - **时段对象稳定性**：`reload_pricing()` 以就地替换（`[:]`）方式更新时段列表，
   保持列表对象身份稳定，外部已持有引用不失效
 
-### 10.5 货币与外币折算
+### 10.5 币种：原生展示、配置优先、预算内部折算
 
-显示符号由 `llm_pricing_ref.json → currency` 控制（默认 `"CNY"`，对应 ¥；可选 `USD`/`EUR`/`GBP`）。
+**原则：展示的金额永远是厂商官方标价币种，代码里没有汇率。**
 
-外币厂商（Anthropic / OpenAI / Google）官方以 USD 标价，`MODEL_PRICING` **统一折算为 CNY 存储**，折算率取 `core/constants.py::USD_CNY_RATE`（中国人民银行授权中国外汇交易中心中间价，改价时同步刷新）。这样做的两个理由：
+- **缺省币种单点定义**：`core/constants.py::PRICING_DEFAULT_CURRENCY`（默认 `CNY`）——本地显示与计费的主币种。`pricing.PRICING_CURRENCY` 与 `llm_pricing_ref.json` 默认模板的 `currency` 都取自它，改一处即改全局缺省；参考文件的 `currency` 可按环境再覆盖。
+- 定价条目自带币种：DeepSeek / Kimi 为 `CNY`，Anthropic / OpenAI / Google 为 `USD`（条目 `"currency": "USD"`，不声明时取缺省币种）。
+- 费用符号由 `pricing.model_currency(model)` 解析结果决定：`estimate_cost` 对 Claude 出 `$`、对 DeepSeek 出 `¥`，一笔调用一个币种，不做换算。
+- **配置币种优先**：条目可用 `alt` 子表提供另一币种的官方价（如国内渠道以人民币计价）——
 
-- **可比与可加**：报告内各模块费用会相加成总计，混币种的金额无法相加；单一货币符号下所有数字同口径。
-- **不手写折算**：条目一律经 `_usd(input, output, cache_hit)` 换算，改汇率只需改 `USD_CNY_RATE`，避免「官方美元价直接当人民币填」这类低约 6.7 倍的错误。
+  ```json
+  "claude-sonnet-5-5": {
+    "currency": "USD", "input": 2, "output": 10, "input_cache_hit": 0.1,
+    "alt": {"CNY": {"input": 15, "output": 75, "input_cache_hit": 0.75}}
+  }
+  ```
 
-DeepSeek 与 Kimi 官方以人民币标价，不折算。汇率折算值属估算，非账单口径；需要精确对账时应以厂商账单为准。
-
-[↑ 回到顶部](#目录)
-
----
+  `PRICING_CURRENCY`（`llm_pricing_ref.json → currency`，默认 `CNY`）命中 `alt` 时按该币种计费与显示，否则用原生币种。即「厂商同时提供多币种价时以客户配置币种为主，只提供原生币种时按原生币种显示」。
+- **跨币种不相加**：会话累计与报告合计用「币种 → 金额」桶（`pricing.add_cost` / `merge_costs` / `format_costs`），展示为 `¥0.0123 + $0.0045`。混币种金额相加必须先换汇，而换汇必然与真实账单不符，故一律并列。
+- **唯一的折算点在日预算**：`daily_cost_limit`（逐币种对象，如 `{"CNY": 5, "USD": 1}`）判定"超限"时，把各币种今日支出按内部汇率表 `pricing.FX_TO_CNY` 折算到预算币种后比对（`convert_amount`）；该折算结果**不进入任何展示金额**，只参与布尔判定。单值写法（旧形态）视为只对 `PRICING_CURRENCY` 生效并记 INFO 提示。
 
 ## 11. 熔断器
 
@@ -1496,42 +1502,42 @@ LLM 集成层与系统其他组件的接口：
 
 ### 附录 B：内置模型定价表
 
-以下为 `core/constants.py` 中 `MODEL_PRICING` 内置的定价快照（单位：元/百万 token，外币厂商已按 `USD_CNY_RATE` 折算），可通过 `data/config/llm_pricing_ref.json` 的 `models` 逐模型覆盖：
+以下为 `core/constants.py` 中 `MODEL_PRICING` 内置的定价快照（**按厂商官方标价币种原样记录**，单位：每百万 token），可通过 `data/config/llm_pricing_ref.json` 的 `models` 逐模型覆盖：
 
-| 模型 | 输入 | 输出 | 缓存命中 | 说明 |
-|:-----|:----:|:----:|:--------:|:-----|
-| claude-fable-5-1 | 67.20 | 336.00 | 1.680 | 官方 $10/$50（2026-10-25 核实） |
-| claude-fable-5 | 67.20 | 336.00 | 6.720 | legacy $10/$50 |
-| claude-haiku-4-5 | 6.72 | 33.60 | 0.672 | legacy $1/$5 |
-| claude-haiku-5-5 | 0.672 | 3.360 | 0.0672 | 官方 $0.10/$0.50（prompt ≤100K；>100K 档 $0.50/$2.50 不单列） |
-| claude-opus-4-6 / -4-8 | 33.60 | 168.00 | 3.360 | legacy $5/$25 |
-| claude-opus-5-5 | 26.88 | 134.40 | 1.344 | 官方 $4/$20 |
-| claude-sonnet-4-6 | 20.16 | 100.80 | 2.016 | legacy $3/$15 |
-| claude-sonnet-5 | 13.44 | 67.20 | 1.344 | legacy $2/$10（缓存命中 $0.20） |
-| claude-sonnet-5-5 | 13.44 | 67.20 | 0.672 | 官方 $2/$10（缓存命中 $0.10） |
-| deepseek-flash | 1.00 / 2.00 | 4.00 / 8.00 | 0.02 / 0.04 | 峰谷定价（闲时/高峰）；DeepSeek-V4.1-Flash 正式模型名（2026-09-10 发布） |
-| deepseek-v4-flash | 1.00 / 2.00 | 4.00 / 8.00 | 0.02 / 0.04 | 峰谷定价（闲时/高峰）；别名，端点仍接受、底层由 V4.1-Flash 接管并按同价计费 |
-| deepseek-v4-pro | 4.50 / 9.00 | 13.50 / 27.00 | 0.15 / 0.30 | 峰谷定价（闲时/高峰）；官方 2026-09-10 公告继续提供 API 服务，计费方式不变 |
-| gemini-2.5-flash | 2.016 | 16.80 | 0.2016 | legacy $0.30/$2.50 |
-| gemini-2.5-pro | 8.40 | 67.20 | 0.840 | legacy $1.25/$10（≤200k 上下文） |
-| gemini-3.1-pro | 13.44 | 80.64 | 1.344 | preview $2/$12 |
-| gemini-3.8-flash | 5.04 | 25.20 | 0.504 | 官方 $0.75/$3.75（2026-12-31 前优惠价） |
-| gpt-4o | 16.80 | 67.20 | 8.400 | legacy $2.50/$10（缓存 50% 折扣） |
-| gpt-4o-mini | 1.008 | 4.032 | 0.504 | legacy $0.15/$0.60（缓存 50% 折扣） |
-| gpt-5.6-sol | 26.88 | 134.40 | 2.688 | 上一代主力 $4/$20 |
-| gpt-6-astra | 67.20 | 336.00 | 6.720 | 旗舰 $10/$50 |
-| gpt-6-luna | 0.672 | 3.360 | 0.0672 | 轻量 $0.10/$0.50 |
-| gpt-6.1-sol | 13.44 | 67.20 | 0.672 | 现役主力 $2/$10 |
-| kimi-k2.6 | 6.50 | 27.00 | 1.10 | Kimi 通用主力（256k 上下文），Anthropic 兼容端点默认开思考（未开启 thinking 时显式禁用） |
-| kimi-k3 | 20.00 | 100.00 | 2.00 | Kimi 上一代旗舰（1M 上下文） |
-| kimi-k3.1-pro | 13.00 | 68.00 | 1.30 | Kimi 现役旗舰（1M 上下文） |
-| kimi-k3.1-pro-highspeed | 26.00 | 136.00 | 1.30 | Kimi 现役旗舰高速档 |
+| 模型 | 币种 | 输入 | 输出 | 缓存命中 | 说明 |
+|:-----|:----:|:----:|:----:|:--------:|:-----|
+| claude-fable-5-1 | USD | 10.00 | 50.00 | 0.250 | 官方 $10/$50（2026-10-25 核实） |
+| claude-fable-5 | USD | 10.00 | 50.00 | 1.000 | legacy $10/$50 |
+| claude-haiku-4-5 | USD | 1.00 | 5.00 | 0.100 | legacy $1/$5 |
+| claude-haiku-5-5 | USD | 0.10 | 0.50 | 0.010 | 官方 $0.10/$0.50（prompt ≤100K；>100K 档 $0.50/$2.50 不单列） |
+| claude-opus-4-6 / -4-8 | USD | 5.00 | 25.00 | 0.500 | legacy $5/$25 |
+| claude-opus-5-5 | USD | 4.00 | 20.00 | 0.200 | 官方 $4/$20 |
+| claude-sonnet-4-6 | USD | 3.00 | 15.00 | 0.300 | legacy $3/$15 |
+| claude-sonnet-5 | USD | 2.00 | 10.00 | 0.200 | legacy $2/$10（缓存命中 $0.20） |
+| claude-sonnet-5-5 | USD | 2.00 | 10.00 | 0.100 | 官方 $2/$10（缓存命中 $0.10） |
+| deepseek-flash | CNY | 1.00 / 2.00 | 4.00 / 8.00 | 0.02 / 0.04 | 峰谷定价（闲时/高峰）；DeepSeek-V4.1-Flash 正式模型名（2026-09-10 发布） |
+| deepseek-v4-flash | CNY | 1.00 / 2.00 | 4.00 / 8.00 | 0.02 / 0.04 | 峰谷定价（闲时/高峰）；别名，端点仍接受、底层由 V4.1-Flash 接管并按同价计费 |
+| deepseek-v4-pro | CNY | 4.50 / 9.00 | 13.50 / 27.00 | 0.15 / 0.30 | 峰谷定价（闲时/高峰）；官方 2026-09-10 公告继续提供 API 服务，计费方式不变 |
+| gemini-2.5-flash | USD | 0.30 | 2.50 | 0.030 | legacy $0.30/$2.50 |
+| gemini-2.5-pro | USD | 1.25 | 10.00 | 0.125 | legacy $1.25/$10（≤200k 上下文） |
+| gemini-3.1-pro | USD | 2.00 | 12.00 | 0.200 | preview $2/$12 |
+| gemini-3.8-flash | USD | 0.75 | 3.75 | 0.075 | 官方 $0.75/$3.75（2026-12-31 前优惠价） |
+| gpt-4o | USD | 2.50 | 10.00 | 1.250 | legacy $2.50/$10（缓存 50% 折扣） |
+| gpt-4o-mini | USD | 0.15 | 0.60 | 0.075 | legacy $0.15/$0.60（缓存 50% 折扣） |
+| gpt-5.6-sol | USD | 4.00 | 20.00 | 0.400 | 上一代主力 $4/$20 |
+| gpt-6-astra | USD | 10.00 | 50.00 | 1.000 | 旗舰 $10/$50 |
+| gpt-6-luna | USD | 0.10 | 0.50 | 0.010 | 轻量 $0.10/$0.50 |
+| gpt-6.1-sol | USD | 2.00 | 10.00 | 0.100 | 现役主力 $2/$10 |
+| kimi-k2.6 | CNY | 6.50 | 27.00 | 1.10 | Kimi 通用主力（256k 上下文），Anthropic 兼容端点默认开思考（未开启 thinking 时显式禁用） |
+| kimi-k3 | CNY | 20.00 | 100.00 | 2.00 | Kimi 上一代旗舰（1M 上下文） |
+| kimi-k3.1-pro | CNY | 13.00 | 68.00 | 1.30 | Kimi 现役旗舰（1M 上下文） |
+| kimi-k3.1-pro-highspeed | CNY | 26.00 | 136.00 | 1.30 | Kimi 现役旗舰高速档 |
 
 > 上表为具名模型定价；`MODEL_PRICING` 另有 12 个前缀回退键（`claude-fable-5-`/`claude-opus-5-`/`claude-sonnet-5-`/`claude-haiku-5-`/`claude-sonnet-4-`/`claude-opus-4-`/`claude-haiku-4-`/`gpt-6.1-`/`gpt-5.6-`/`gemini-3.8-`/`gemini-3.1-`/`gemini-2.5-`）用于 startswith 回退匹配日期戳变体，未逐行列示。
 >
 > 峰谷定价模型的「闲时/高峰」两列为非高峰与高峰时段单价（高峰时段为北京时间 09:00–12:00、14:00–18:00，**仅高峰日（周一至周五，不含中国法定节假日）生效**；闲时为其外全部时间，**周末与法定节假日全天按闲时价**）；模型条目含 `"peak"` 高峰价子段，时段可经 `llm_pricing_ref.json` 顶层 `peak_periods`/`idle_periods`/`timezone`/`weekend_always_idle`/`holiday_always_idle` 覆盖。
 
-费用按 `(input_tokens × 输入单价 + output_tokens × 输出单价 + cache_hit_tokens × 缓存命中单价) / 1_000_000` 计算。
+费用按 `(input_tokens × 输入单价 + output_tokens × 输出单价 + cache_hit_tokens × 缓存命中单价) / 1_000_000` 计算，货币单位即该行「币种」列。
 
 ### 附录 C：LLM 模块指纹依赖字段
 

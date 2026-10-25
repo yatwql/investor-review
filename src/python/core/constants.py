@@ -71,23 +71,19 @@ HISTORY_SNAPSHOT_MAX_COUNT = 365
 
 # ── LLM 模型定价表（每百万 token，CNY）══ 唯一默认源 ══
 
-# 外币厂商（Anthropic / OpenAI / Google）官方以 USD 标价，本表统一折算为 CNY，
-# 保证「报告里所有费用同一货币、可直接相加」。汇率取中国人民银行授权中国外汇交易
-# 中心公布的中间价（2026-10-23：1 USD = 6.7180 CNY，下取两位）。改价或汇率变动时
-# 同时更新本常量与下方对应模型条目——条目一律用 `_usd()` 换算，不手写折算结果。
-USD_CNY_RATE = 6.72
+# 币种口径：每条按**厂商官方标价币种原样记录**，不做任何汇率折算。外币厂商
+# （Anthropic / OpenAI / Google）条目带 `"currency": "USD"`，DeepSeek / Kimi 官方
+# 以人民币标价、不写 currency（缺省取 PRICING_CURRENCY，即 CNY）。报告按模型币种
+# 显示原生金额，跨币种金额分组并列（如 `¥0.012 + $0.003`），从不相加——汇率是每天
+# 变的市场量，写死在代码里必然滞后，折算值也不等于厂商账单。
 
 
-def _usd(input_usd: float, output_usd: float, cache_hit_usd: float) -> dict[str, float]:
-    """把厂商 USD 标价（每百万 token）折算为表内 CNY 单价（保留 4 位小数）。"""
-    return {
-        "input": round(input_usd * USD_CNY_RATE, 4),
-        "output": round(output_usd * USD_CNY_RATE, 4),
-        "input_cache_hit": round(cache_hit_usd * USD_CNY_RATE, 4),
-    }
+# 缺省币种（本地显示与计费的主币种）：模型条目未声明 currency 时按它计价；条目以
+# `alt` 提供该币种官方价时，切换为该币种计价与显示（即「客户配置币种优先」）。改这一处
+# 即改变全局缺省，`llm_pricing_ref.json → currency` 可再按环境覆盖。
+PRICING_DEFAULT_CURRENCY: str = "CNY"
 
-
-MODEL_PRICING: dict[str, dict[str, float | dict[str, float]]] = {
+MODEL_PRICING: dict[str, dict[str, float | str | dict[str, float]]] = {
     # 单一来源：此表为唯一默认定价。pricing.py 以此为基，从 llm_settings.json
     # 的 llm_pricing_ref.json 逐模型覆盖，运行时合并到 _PRICING_MERGED。
     # 新增模型请在此处添加，不要仅修改 llm_settings.json。
@@ -105,63 +101,63 @@ MODEL_PRICING: dict[str, dict[str, float | dict[str, float]]] = {
     # 覆盖所有日期戳变体（如 claude-sonnet-5-5-20260928），避免费用显示 "-"。
     # 官方价目核验：Anthropic / OpenAI / Google / DeepSeek / Kimi 官方定价页（2026-10-25）。
     #
-    # ── Claude 5.5 家族（现役，官方 USD） ──
+    # ── Claude 5.5 家族（现役，官方 USD 标价） ──
     # Fable 5.1 $10/$50，缓存命中 $0.25
-    "claude-fable-5-1": _usd(10.0, 50.0, 0.25),
-    "claude-fable-5-": _usd(10.0, 50.0, 0.25),
+    "claude-fable-5-1": {"currency": "USD", "input": 10.0, "output": 50.0, "input_cache_hit": 0.25},
+    "claude-fable-5-": {"currency": "USD", "input": 10.0, "output": 50.0, "input_cache_hit": 0.25},
     # Opus 5.5 $4/$20，缓存命中 $0.20
-    "claude-opus-5-5": _usd(4.0, 20.0, 0.20),
-    "claude-opus-5-": _usd(4.0, 20.0, 0.20),
+    "claude-opus-5-5": {"currency": "USD", "input": 4.0, "output": 20.0, "input_cache_hit": 0.2},
+    "claude-opus-5-": {"currency": "USD", "input": 4.0, "output": 20.0, "input_cache_hit": 0.2},
     # Sonnet 5.5 $2/$10，缓存命中 $0.10
-    "claude-sonnet-5-5": _usd(2.0, 10.0, 0.10),
+    "claude-sonnet-5-5": {"currency": "USD", "input": 2.0, "output": 10.0, "input_cache_hit": 0.1},
     # Sonnet 5（legacy，仍在售）$2/$10，缓存命中 $0.20
-    "claude-sonnet-5-": _usd(2.0, 10.0, 0.20),
+    "claude-sonnet-5-": {"currency": "USD", "input": 2.0, "output": 10.0, "input_cache_hit": 0.2},
     # Haiku 5.5 $0.10/$0.50（prompt ≤100K），缓存命中 $0.01；>100K 档
     # （$0.50/$2.50，命中 $0.05）不单列——本表一条记录对应一个模型名，
     # 分档计费需按输入长度切换，超出「单模型单价」表达能力。
-    "claude-haiku-5-5": _usd(0.10, 0.50, 0.01),
-    "claude-haiku-5-": _usd(0.10, 0.50, 0.01),
+    "claude-haiku-5-5": {"currency": "USD", "input": 0.1, "output": 0.5, "input_cache_hit": 0.01},
+    "claude-haiku-5-": {"currency": "USD", "input": 0.1, "output": 0.5, "input_cache_hit": 0.01},
     #
     # ── Claude 旧代（legacy，仍可调用） ──
     # Sonnet 4.6 $3/$15，缓存命中 $0.30
-    "claude-sonnet-4-6": _usd(3.0, 15.0, 0.30),
-    "claude-sonnet-4-": _usd(3.0, 15.0, 0.30),
+    "claude-sonnet-4-6": {"currency": "USD", "input": 3.0, "output": 15.0, "input_cache_hit": 0.3},
+    "claude-sonnet-4-": {"currency": "USD", "input": 3.0, "output": 15.0, "input_cache_hit": 0.3},
     # Opus 4.x $5/$25，缓存命中 $0.50
-    "claude-opus-4-6": _usd(5.0, 25.0, 0.50),
-    "claude-opus-4-8": _usd(5.0, 25.0, 0.50),
-    "claude-opus-4-": _usd(5.0, 25.0, 0.50),
+    "claude-opus-4-6": {"currency": "USD", "input": 5.0, "output": 25.0, "input_cache_hit": 0.5},
+    "claude-opus-4-8": {"currency": "USD", "input": 5.0, "output": 25.0, "input_cache_hit": 0.5},
+    "claude-opus-4-": {"currency": "USD", "input": 5.0, "output": 25.0, "input_cache_hit": 0.5},
     # Haiku 4.5 $1/$5，缓存命中 $0.10
-    "claude-haiku-4-5": _usd(1.0, 5.0, 0.10),
-    "claude-haiku-4-": _usd(1.0, 5.0, 0.10),
+    "claude-haiku-4-5": {"currency": "USD", "input": 1.0, "output": 5.0, "input_cache_hit": 0.1},
+    "claude-haiku-4-": {"currency": "USD", "input": 1.0, "output": 5.0, "input_cache_hit": 0.1},
     # Fable 5 $10/$50，缓存命中 $1.00
-    "claude-fable-5": _usd(10.0, 50.0, 1.00),
+    "claude-fable-5": {"currency": "USD", "input": 10.0, "output": 50.0, "input_cache_hit": 1.0},
     #
     # ── OpenAI（官方 USD） ──
     # GPT-6 Astra $10/$50，缓存命中 $1.00
-    "gpt-6-astra": _usd(10.0, 50.0, 1.00),
+    "gpt-6-astra": {"currency": "USD", "input": 10.0, "output": 50.0, "input_cache_hit": 1.0},
     # GPT-6.1 Sol $2/$10，缓存命中 $0.10
-    "gpt-6.1-sol": _usd(2.0, 10.0, 0.10),
-    "gpt-6.1-": _usd(2.0, 10.0, 0.10),
+    "gpt-6.1-sol": {"currency": "USD", "input": 2.0, "output": 10.0, "input_cache_hit": 0.1},
+    "gpt-6.1-": {"currency": "USD", "input": 2.0, "output": 10.0, "input_cache_hit": 0.1},
     # GPT-6 Luna $0.10/$0.50，缓存命中 $0.01（不入 gpt-6- 族前缀，避免与 Sol 价混淆）
-    "gpt-6-luna": _usd(0.10, 0.50, 0.01),
+    "gpt-6-luna": {"currency": "USD", "input": 0.1, "output": 0.5, "input_cache_hit": 0.01},
     # GPT-5.6 Sol $4/$20，缓存命中 $0.40
-    "gpt-5.6-sol": _usd(4.0, 20.0, 0.40),
-    "gpt-5.6-": _usd(4.0, 20.0, 0.40),
+    "gpt-5.6-sol": {"currency": "USD", "input": 4.0, "output": 20.0, "input_cache_hit": 0.4},
+    "gpt-5.6-": {"currency": "USD", "input": 4.0, "output": 20.0, "input_cache_hit": 0.4},
     # GPT-4o 系列（legacy）$2.50/$10 与 $0.15/$0.60，缓存命中各 50%
-    "gpt-4o": _usd(2.5, 10.0, 1.25),
-    "gpt-4o-mini": _usd(0.15, 0.6, 0.075),
+    "gpt-4o": {"currency": "USD", "input": 2.5, "output": 10.0, "input_cache_hit": 1.25},
+    "gpt-4o-mini": {"currency": "USD", "input": 0.15, "output": 0.6, "input_cache_hit": 0.075},
     #
     # ── Gemini（官方 USD） ──
     # Gemini 3.8 Flash $0.75/$3.75（2026-12-31 前优惠价），缓存命中 $0.075
-    "gemini-3.8-flash": _usd(0.75, 3.75, 0.075),
-    "gemini-3.8-": _usd(0.75, 3.75, 0.075),
+    "gemini-3.8-flash": {"currency": "USD", "input": 0.75, "output": 3.75, "input_cache_hit": 0.075},
+    "gemini-3.8-": {"currency": "USD", "input": 0.75, "output": 3.75, "input_cache_hit": 0.075},
     # Gemini 3.1 Pro (preview) $2/$12，缓存命中 $0.20
-    "gemini-3.1-pro": _usd(2.0, 12.0, 0.20),
-    "gemini-3.1-": _usd(2.0, 12.0, 0.20),
+    "gemini-3.1-pro": {"currency": "USD", "input": 2.0, "output": 12.0, "input_cache_hit": 0.2},
+    "gemini-3.1-": {"currency": "USD", "input": 2.0, "output": 12.0, "input_cache_hit": 0.2},
     # Gemini 2.5 Flash / Pro（legacy）$0.30/$2.50 与 $1.25/$10
-    "gemini-2.5-flash": _usd(0.30, 2.50, 0.03),
-    "gemini-2.5-pro": _usd(1.25, 10.0, 0.125),
-    "gemini-2.5-": _usd(1.25, 10.0, 0.125),
+    "gemini-2.5-flash": {"currency": "USD", "input": 0.3, "output": 2.5, "input_cache_hit": 0.03},
+    "gemini-2.5-pro": {"currency": "USD", "input": 1.25, "output": 10.0, "input_cache_hit": 0.125},
+    "gemini-2.5-": {"currency": "USD", "input": 1.25, "output": 10.0, "input_cache_hit": 0.125},
     #
     # ── DeepSeek 峰谷定价（元/百万 token，官方直接以 CNY 标价） ──
     # base 为闲时价；peak 为高峰价（高峰时段为闲时的 2 倍）。峰谷时段、周末与法定

@@ -14,7 +14,7 @@ import threading
 from datetime import datetime
 
 from src.python.core.num_utils import format_size
-from src.python.llm.pricing import CURRENCY_SYMBOLS
+from src.python.llm.pricing import format_costs
 from src.python.core.logger import setup_logger
 from src.python.core.reader import get_xlsx_info, list_xlsx_files, read_holdings_with_flows, require_holdings
 from src.python.report.progress import TuiProgressReporter
@@ -44,9 +44,8 @@ def print_llm_session_usage(usage: dict | None = None) -> None:
         return
     calls = usage["call_count"]
     total_tok = usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
-    cost = usage.get("total_cost", 0.0)
-    symbol = CURRENCY_SYMBOLS.get(usage.get("currency", "CNY"), "¥")
-    print(f"  [OK] 本会话 LLM 累计：{calls} 次调用，{total_tok:,} tokens，费用 {symbol}{cost:.4f}")
+    cost_display = format_costs(usage.get("costs") or {})
+    print(f"  [OK] 本会话 LLM 累计：{calls} 次调用，{total_tok:,} tokens，费用 {cost_display}")
 
 
 def print_timing_summary() -> None:

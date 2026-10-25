@@ -15,6 +15,7 @@ from typing import Any
 
 from src.python.core.constants import (
     MODEL_PRICING,
+    PRICING_DEFAULT_CURRENCY as _DEFAULT_PRICING_CURRENCY,
     PRICING_HOLIDAY_ALWAYS_IDLE as _DEFAULT_HOLIDAY_ALWAYS_IDLE,
     PRICING_IDLE_PERIODS as _DEFAULT_IDLE_PERIODS,
     PRICING_PEAK_PERIODS as _DEFAULT_PEAK_PERIODS,
@@ -28,6 +29,13 @@ __all__ = [
     "PRICING_MERGED",
     "PRICING_CURRENCY",
     "CURRENCY_SYMBOLS",
+    "add_cost",
+    "currency_symbol",
+    "FX_TO_CNY",
+    "convert_amount",
+    "format_costs",
+    "merge_costs",
+    "model_currency",
     "PRICING_PEAK_PERIODS",
     "PRICING_IDLE_PERIODS",
     "PRICING_TIMEZONE_NAME",
@@ -91,11 +99,24 @@ def _parse_periods(value: Any) -> list[tuple[int, int]] | None:
 # ── 运行时合并定价表：硬编码 + llm_settings.json 覆盖
 # 定价条目结构：base 价（input/output/input_cache_hit，float）+ 可选高峰价子段
 # "peak"（dict[str, float]）。无 "peak" 的模型始终按 base 价计费。
-PriceEntry = dict[str, float | dict[str, float]]
+PriceEntry = dict[str, float | str | dict[str, float]]
 PRICING_MERGED: dict[str, PriceEntry] = {model: dict(prices) for model, prices in MODEL_PRICING.items()}
 
-# 定价货币标识，默认 CNY；可通过 llm_settings.json → pricing.currency 覆盖
-PRICING_CURRENCY: str = "CNY"
+# 计价与**显示**币种偏好（本地主币种），缺省取 `constants.PRICING_DEFAULT_CURRENCY`
+# （CNY）；可由 llm_pricing_ref.json 顶层 currency 覆盖。解析顺序：配置币种（若该模型
+# 提供此币种价）→ 模型原生币种。即「厂商同时提供多币种价时以客户配置币种为主」，
+# 只提供原生币种时按原生币种显示（不做汇率折算）。
+PRICING_CURRENCY: str = _DEFAULT_PRICING_CURRENCY
+
+# 预算换算用的内部汇率表（**只用于日预算比对，绝不用于展示金额**）。
+# 依据 2026-10-25 中国外汇交易中心/银行牌价中间价取整；改汇率只影响预算判断。
+FX_TO_CNY: dict[str, float] = {
+    "CNY": 1.0,
+    "USD": 6.67,
+    "EUR": 7.47,
+    "GBP": 8.92,
+    "JPY": 0.0425,
+}
 
 # 货币符号映射
 CURRENCY_SYMBOLS: dict[str, str] = {
@@ -251,6 +272,112 @@ def reload_pricing() -> None:
         _PRICING_LOADED = True
 
 
+def _match_pricing(model: str) -> PriceEntry | None:
+    """按「精确 → 前缀」匹配定价条目（未知模型返回 None）。"""
+    model_lower = str(model or "").lower().strip()
+    if not model_lower:
+        return None
+    pricing = PRICING_MERGED.get(model_lower)
+    if pricing:
+        return pricing
+    for known, price in PRICING_MERGED.items():
+        if model_lower.startswith(known):
+            return price
+    return None
+
+
+def _entry_currencies(pricing: PriceEntry) -> list[str]:
+    """条目可用的币种列表：原生 `currency` + `alt` 里额外提供的币种。"""
+    native = str(pricing.get("currency") or PRICING_CURRENCY).strip().upper()
+    codes = [native]
+    alt = pricing.get("alt")
+    if isinstance(alt, dict):
+        codes.extend(str(code).strip().upper() for code in alt if str(code).strip())
+    return list(dict.fromkeys(codes))
+
+
+def _resolve_entry(model: str) -> tuple[PriceEntry, str]:
+    """解析模型生效的价格条目与币种。
+
+    规则（客户配置优先）：配置币种 `PRICING_CURRENCY` 在条目提供的币种里 → 用该币种
+    的价（原生或 `alt` 子表）；否则用模型原生币种。**不做任何汇率折算**——折算会让
+    显示金额对不上厂商标价。
+    """
+    pricing = _match_pricing(model)
+    if not pricing:
+        return ({}, PRICING_CURRENCY)
+    native = str(pricing.get("currency") or PRICING_CURRENCY).strip().upper()
+    preferred = str(PRICING_CURRENCY).strip().upper()
+    alt = pricing.get("alt")
+    if preferred != native and isinstance(alt, dict):
+        override = alt.get(preferred) or alt.get(preferred.lower())
+        if isinstance(override, dict) and override:
+            merged: PriceEntry = {k: v for k, v in pricing.items() if k != "alt"}
+            merged.update({k: v for k, v in override.items() if k != "currency"})
+            merged["currency"] = preferred
+            return (merged, preferred)
+    return (pricing, native)
+
+
+def model_currency(model: str) -> str:
+    """模型生效的**展示币种**（配置币种优先，其次原生币种）。"""
+    _entry, currency = _resolve_entry(model)
+    return currency
+
+
+def currency_symbol(currency: str | None) -> str:
+    """币种代码 → 显示符号（未知币种原样返回代码，避免假装成某种货币）。"""
+    code = str(currency or PRICING_CURRENCY).strip().upper()
+    return CURRENCY_SYMBOLS.get(code, code)
+
+
+# ── 多币种金额聚合（跨币种**从不相加**，只分组并列） ──────────────
+
+
+def add_cost(buckets: dict[str, float], currency: str, amount: float) -> None:
+    """把一笔金额累加进「币种 → 金额」桶（就地更新）。"""
+    if not amount:
+        return
+    code = str(currency or PRICING_CURRENCY).strip().upper()
+    buckets[code] = buckets.get(code, 0.0) + float(amount)
+
+
+def convert_amount(amount: float, from_currency: str, to_currency: str) -> float | None:
+    """按内部汇率表把金额从一种币种换算到另一种——**仅供预算比对**，不用于展示。
+
+    未知币种返回 None（调用方按「无法比对」处理，不猜）。
+    """
+    src = str(from_currency or PRICING_CURRENCY).strip().upper()
+    dst = str(to_currency or PRICING_CURRENCY).strip().upper()
+    rate_src = FX_TO_CNY.get(src)
+    rate_dst = FX_TO_CNY.get(dst)
+    if not rate_src or not rate_dst:
+        return None
+    return float(amount) * rate_src / rate_dst
+
+
+def merge_costs(*buckets: dict[str, float]) -> dict[str, float]:
+    """合并多个「币种 → 金额」桶（同币种相加，异币种并存）。"""
+    merged: dict[str, float] = {}
+    for bucket in buckets:
+        for code, amount in (bucket or {}).items():
+            add_cost(merged, code, float(amount or 0.0))
+    return merged
+
+
+def format_costs(buckets: dict[str, float] | None, digits: int = 4) -> str:
+    """把「币种 → 金额」桶格式化为展示串：`¥0.0123 + $0.0045`。
+
+    单币种时与逐笔格式一致（`¥0.0123`）；空桶返回 `"-"`。币种按代码排序，
+    保证同一组数字在任何调用顺序下显示一致。
+    """
+    items = {str(k).upper(): float(v or 0.0) for k, v in (buckets or {}).items()}
+    items = {k: v for k, v in items.items() if v}
+    if not items:
+        return "-"
+    return " + ".join(f"{currency_symbol(code)}{items[code]:.{digits}f}" for code in sorted(items))
+
+
 def compute_cost_value(
     model: str,
     input_tokens: int,
@@ -272,7 +399,7 @@ def compute_cost_value(
         at_time: 计费时刻（默认当前时间；naive 视为已在定价时区，便于测试固定时刻）
 
     Returns:
-        费用数值（货币单位同 PRICING_CURRENCY）；未知模型或无 token 时返回 None
+        费用数值（货币单位 = 该模型的官方币种，见 ``model_currency``）；未知模型或无 token 返回 None
     """
     global _PRICING_LOADED
     if not _PRICING_LOADED:
@@ -280,13 +407,7 @@ def compute_cost_value(
         _PRICING_LOADED = True
     if not input_tokens and not output_tokens:
         return None
-    model_lower = model.lower().strip()
-    pricing = PRICING_MERGED.get(model_lower)
-    if not pricing:
-        for known, price in PRICING_MERGED.items():
-            if model_lower.startswith(known):
-                pricing = price
-                break
+    pricing, _currency = _resolve_entry(model)
     if not pricing:
         return None
     # 峰谷定价：高峰日（工作日且非法定节假日）命中高峰时段时切换到高峰价子段；
@@ -316,7 +437,8 @@ def estimate_cost(
 
     基于已知模型定价（每百万 token 价格），计费数学单源于 `compute_cost_value`。
     未知模型返回 "-"。
-    货币符号由 PRICING_CURRENCY 决定（自 llm_settings.json → pricing.currency）。
+    货币符号由**模型自身币种**决定（`model_currency`）：Claude / GPT / Gemini 显示
+    `$`，DeepSeek / Kimi 显示 `¥`；不做汇率折算。
     若存在缓存命中 token，按 input_cache_hit 费率计算（通常为 input 的 10%）。
     含 "peak" 高峰价子段的模型，在高峰日（工作日且非法定节假日）高峰时段按 peak
     价计费，其余时段按 base（闲时）价；周末与法定节假日全天一律按 base（闲时）价
@@ -335,7 +457,7 @@ def estimate_cost(
     cost = compute_cost_value(model, input_tokens, output_tokens, cache_hit_input_tokens, at_time)
     if cost is None:
         return "-"
-    symbol = CURRENCY_SYMBOLS.get(PRICING_CURRENCY, "$")
+    symbol = currency_symbol(model_currency(model))
     if cost < 0.01:
         return f"{symbol}{cost:.4f}"
     return f"{symbol}{cost:.3f}"

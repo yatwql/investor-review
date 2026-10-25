@@ -101,8 +101,7 @@ def _run_generation_impl(state, params: dict, result_box: dict | None = None) ->
             _budget = budget_status()
             if _budget.get("exceeded"):
                 state.errors.append(
-                    f"今日 LLM 费用已达日预算上限（已花 {_budget['symbol']}{_budget['spent']:.4f}"
-                    f" / 上限 {_budget['symbol']}{_budget['limit']:.4f}），本次生成已中止；"
+                    f"今日 LLM 费用已达日预算上限（{_budget.get('display', '')}），本次生成已中止；"
                     "确认「用已有结果继续」后重试可继续"
                 )
                 return _EXIT_SEVERE

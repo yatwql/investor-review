@@ -547,8 +547,8 @@ def module_cost_summary(days: int = 7, path: str | None = None) -> dict[str, dic
         path: 历史文件路径，默认 ``_PERF_HISTORY_FILE``（测试可指向临时文件）。
 
     Returns:
-        ``{模块 key: {"total": 费用合计, "runs": 含该模块的运行数, "avg": 单次均值}}``；
-        无可汇总样本或读取失败返回空 dict（调用方静默省略展示）。
+        ``{模块 key: {"runs": 含该模块的运行数, "costs": {币种: {"total", "avg"}}}}``——
+        逐币种汇总、跨币种不相加；无可汇总样本或读取失败返回空 dict（调用方静默省略展示）。
     """
     try:
         records = load_history(path)
@@ -578,12 +578,17 @@ def module_cost_summary(days: int = 7, path: str | None = None) -> dict[str, dic
                 cost = float(entry.get("cost") or 0.0)
             except (TypeError, ValueError):
                 continue
-            bucket = summary.setdefault(str(key), {"total": 0.0, "runs": 0})
-            bucket["total"] += cost
+            code = str(entry.get("currency") or "CNY").upper()
+            bucket = summary.setdefault(str(key), {"runs": 0, "costs": {}})
+            currency_bucket = bucket["costs"].setdefault(code, {"total": 0.0, "runs": 0})
+            currency_bucket["total"] += cost
+            currency_bucket["runs"] += 1
             bucket["runs"] += 1
     for bucket in summary.values():
-        bucket["total"] = round(bucket["total"], 6)
-        bucket["avg"] = round(bucket["total"] / bucket["runs"], 6) if bucket["runs"] else 0.0
+        for currency_bucket in bucket["costs"].values():
+            runs = currency_bucket.pop("runs") or 0
+            currency_bucket["total"] = round(currency_bucket["total"], 6)
+            currency_bucket["avg"] = round(currency_bucket["total"] / runs, 6) if runs else 0.0
     return summary
 
 
