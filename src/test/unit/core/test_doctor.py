@@ -262,6 +262,57 @@ class TestReviewLedgerOverview:
 
 @pytest.mark.unit
 @pytest.mark.unit_core
+class TestConfigFreshness:
+    """配置文件落后于生成器模板：缺键=失败，仅缺说明=通过但建议重生成。"""
+
+    def test_up_to_date_passes(self, monkeypatch):
+        monkeypatch.setattr("src.python.config.check_config_freshness", lambda: [])
+        [item] = doctor._check_config_freshness()
+        assert item["ok"] is True
+        assert "一致" in item["message"]
+
+    def test_missing_keys_fails_with_hint(self, monkeypatch):
+        stale = [
+            {
+                "path": "/tmp/config.json",
+                "missing_keys": ["notify", "scheduler"],
+                "missing_comments": [],
+                "stale": True,
+            }
+        ]
+        monkeypatch.setattr("src.python.config.check_config_freshness", lambda: stale)
+        [item] = doctor._check_config_freshness()
+        assert item["ok"] is False
+        assert "config.json" in item["message"]
+        assert "notify" in item["message"]
+        assert item["hint"]
+
+    def test_comment_drift_is_pass_with_advice(self, monkeypatch):
+        stale = [
+            {
+                "path": "/tmp/llm_providers.json",
+                "missing_keys": [],
+                "missing_comments": ["链序真值", "按优先级尝试多个 provider"],
+                "stale": True,
+            }
+        ]
+        monkeypatch.setattr("src.python.config.check_config_freshness", lambda: stale)
+        [item] = doctor._check_config_freshness()
+        assert item["ok"] is True
+        assert "注释落后" in item["message"]
+        assert "llm_providers.json" in item["message"]
+        assert item["hint"]
+
+    def test_exception_becomes_failure_item(self, monkeypatch):
+        def _boom():
+            raise RuntimeError("模板生成炸了")
+
+        monkeypatch.setattr("src.python.config.check_config_freshness", _boom)
+        [item] = doctor._check_config_freshness()
+        assert item["ok"] is False
+        assert "对比失败" in item["message"]
+
+
 class TestSummaryAndRender:
     """统计与渲染。"""
 

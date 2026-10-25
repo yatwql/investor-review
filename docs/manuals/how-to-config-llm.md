@@ -94,7 +94,35 @@ LLM 配置由三个独立文件管理：
 
 ### 配置步骤
 
-**Step A** — 编辑 `data/config/llm_providers.json`：
+**Step A** — 编辑 `data/config/llm_providers.json`（首次运行已按此生成：DeepSeek 主行 + OpenCode Go 订阅中转）：
+
+> `opencode-go` 是**订阅制**中转：`pacing` 段对它不是可选优化——删掉就回到不限速高频调用，容易撞风控/超会员额度。出厂值 `min_interval: 5` 是实测可用档，想更保守可写成 `{ "min_interval": 20, "jitter": 0.2, "max_concurrency": 1 }`。
+
+```json
+{
+  "strategy": "priority",
+  "preferred_providers": {},
+  "providers": [
+    {
+      "name": "deepseek-main",
+      "provider": "claude",
+      "credentials_ref": "deepseek-main",
+      "priority": 10,
+      "timeout": 120
+    },
+    {
+      "name": "opencode-go",
+      "provider": "claude",
+      "credentials_ref": "opencode-go",
+      "priority": 20,
+      "timeout": 120,
+      "pacing": { "min_interval": 5, "max_concurrency": 1 }
+    }
+  ]
+}
+```
+
+**Step A'** — 另一种常见配法：次选换成 Gemini（`provider` 类型为 `gemini`，端点与模型不同，无需 `pacing`）：
 
 ```json
 {
@@ -120,7 +148,7 @@ LLM 配置由三个独立文件管理：
 }
 ```
 
-**Step B** — 在 `data/config/llm_key.json` 中添加对应凭据块：
+**Step B** — 在 `data/config/llm_key.json` 中添加对应凭据块（按上一步采用哪套线路保留对应块）：
 
 ```json
 {
@@ -128,6 +156,11 @@ LLM 配置由三个独立文件管理：
     "api_key": "sk-your-deepseek-key",
     "model": "deepseek-v4-flash",
     "endpoint": "https://api.deepseek.com/anthropic/v1/messages"
+  },
+  "opencode-go": {
+    "api_key": "your-opencode-go-key",
+    "model": "deepseek-v4.1-flash",
+    "endpoint": "https://your-opencode-go-host.example/anthropic/v1/messages"
   },
   "gemini-fb": {
     "api_key": "AIzaSyYourGeminiKey",
@@ -162,7 +195,7 @@ LLM 配置由三个独立文件管理：
 
 - **TUI**：主菜单 `G` → `M` —— 面板按当前顺序列出线路，输入两个编号交换位置（如 `3 1`）即写盘
 - **Web**：配置面板「LLM 多链线路优先级」块，▲▼ 按钮调序即存
-- **CLI**：`python -m src.python.cli --llm-provider-order deepseek-main,gemini-fallback report --type basic` —— 顺序靠前优先，写盘后退出；`NAME` 须恰好覆盖全部现有线路（少写/多写/重复均拒绝，报错会列出当前名单）
+- **CLI**：`python -m src.python.cli --llm-provider-order deepseek-main,opencode-go report --type basic` —— 顺序靠前优先，写盘后退出；`NAME` 须恰好覆盖全部现有线路（少写/多写/重复均拒绝，报错会列出当前名单）
 
 > `weighted` / `cost_first` 策略下实际链序由权重/成本决定，上面顺序仅在 `priority` / `fallback_only` 策略下生效。
 
@@ -172,8 +205,8 @@ LLM 配置由三个独立文件管理：
 
 **为什么需要它**：同一次报告生成的 LLM 调用会落在不同端点上，而各端点背后的服务约束截然不同——
 
-- **订阅制编码端点**（如 Kimi Code，`https://api.kimi.com/coding/`）：按会员额度计费，带滚动频率窗口与风控型并发上限；其服务条款要求**交互式**使用，批量调用应低频串行。
-- **按量付费端点**（如开放平台 `api.moonshot.cn/v1`）：有明确的分级 RPM / TPM 与按量账单，可放心用较高并发。
+- **订阅制编码端点**（如 OpenCode Go、Kimi Code）：按会员额度计费（按周期刷新而非按量扣费），带滚动频率窗口与风控型并发上限；其服务条款要求**交互式**使用，批量调用应低频串行。**pacing 对它们是必备约束**：出厂默认的 `opencode-go` 条目已带 `pacing`，删掉就回到不限速高频调用。
+- **按量付费端点**（如 DeepSeek 开放平台 `api.deepseek.com/anthropic`）：有明确的分级 RPM / TPM 与按量账单，可放心用较高并发，不写 `pacing` 即可。
 
 全局键 `llm_max_concurrency` 无法表达「同一程序、不同端点不同策略」，因此把约束**声明到 provider 条目**上：
 
@@ -224,12 +257,12 @@ LLM 配置由三个独立文件管理：
 {
   "strategy": "priority",
   "preferred_providers": {
-    "expert_review": "gemini-fallback",
-    "health_check": "gemini-fallback"
+    "expert_review": "opencode-go",
+    "health_check": "opencode-go"
   },
   "providers": [
     { "name": "deepseek-main", "provider": "claude", "credentials_ref": "deepseek-main", "priority": 10, "timeout": 120 },
-    { "name": "gemini-fallback", "provider": "gemini", "credentials_ref": "gemini-fb", "priority": 20, "timeout": 60 }
+    { "name": "opencode-go", "provider": "claude", "credentials_ref": "opencode-go", "priority": 20, "timeout": 120, "pacing": { "min_interval": 5, "max_concurrency": 1 } }
   ]
 }
 ```
@@ -238,10 +271,10 @@ LLM 配置由三个独立文件管理：
 
 | 模块 | module_key | Chain 排序 | 优先尝试 |
 |------|-----------|-----------|---------|
-| 智囊团深度复盘 | `expert_review` | `[gemini-fallback, deepseek-main]` | Gemini |
-| 持仓体检报告 | `health_check` | `[gemini-fallback, deepseek-main]` | Gemini |
-| 全球政经局势 | `global_macro`（未配置） | `[deepseek-main, gemini-fallback]` | DeepSeek |
-| 穿透深度分析 | `penetration_deep`（未配置） | `[deepseek-main, gemini-fallback]` | DeepSeek |
+| 智囊团深度复盘 | `expert_review` | `[opencode-go, deepseek-main]` | OpenCode Go |
+| 持仓体检报告 | `health_check` | `[opencode-go, deepseek-main]` | OpenCode Go |
+| 全球政经局势 | `global_macro`（未配置） | `[deepseek-main, opencode-go]` | DeepSeek |
+| 穿透深度分析 | `penetration_deep`（未配置） | `[deepseek-main, opencode-go]` | DeepSeek |
 
 > **module_key 规则**：对应 `llm_settings.json` 中 `max_tokens_{module_key}` 的 `{module_key}` 部分。有效值：`global_macro` / `expert_review` / `health_check` / `penetration_deep` / `news_correlation`。
 >

@@ -14,24 +14,26 @@
   "enable_news": true,  // 市场新闻
   "enable_history": true,  // 组合历史走势+回撤
   "enable_portfolio_evolution": true,  // 组合演进
-  "enable_action": true,  // 行动建议独立章（决策行动，默认开，菜单 P 可切换）
+  "enable_action": true,  // 行动建议独立章（决策行动，默认开，菜单 C 可切换）
   // 报告子模块开关（数据质量仪表盘长期可信默认开，其余新增能力默认关闭，避免既有报告突然"变胖"）
 
   // ── C. 数据源与提供商 ──
   "news_top_count": 300,
+  "llm_report_depth": "standard",  // 报告深度档位 brief/standard/deep（收窄模块集合与新闻条数，不打开已关模块）
   "news_sources": {"sina": true, "eastmoney": true, "cls": false, "wallstreetcn": true, "akshare": true},
   "preferred_provider": {},
   // DataSinking 全文本财报（仅 A 股；requests_per_second/daily_quota 为 0 时按 plan 自动）
   "datasink": {"enabled": true, "plan": "free", "requests_per_second": 0, "daily_quota": 0, "sections": ["管理层讨论与分析"], "max_chars": 2000, "doc_types": []},
 
   // ── D. 市场时段与缓存 ──
-  "market_hour_aware": ["price", "index"],
   "market_hour_ttl": 30,
   "market_hours": {
     "start": "09:30",
     "end": "15:00",
     "official_source": true
   },
+  // cache_ttl 为「稀疏覆盖」：默认值见 docs/manuals/how-to-config.md 的 TTL 表（来自缓存注册表）；
+  // 仅需调整某个类型时在此添加该键，例如："llm_expert_review": 21600
   "cache_ttl": {},
 
   // ── E. 行为调优 ──
@@ -58,6 +60,8 @@
   // ── F. 业绩基准与无风险利率 ──
   "risk_free_rate": null,  // Rf 手动配置（None=自动获取，填小数如0.0174或百分比如1.74）
   "user_fund_benchmarks": {},
+  "fund_fee_fallback": {},  // 申赎费率配置兑底（code → {purchase_rate, redemption_tiers}；仅在线来源不可得时生效）
+  "whatif_benchmark_index": "",  // What-if 业绩基准指数覆盖（如 sh000905；空 = 自动映射）
   // 竞争语境对比指数池（默认沪深300+中证500+中证全债）
   "comparison_indices": {"sh000300": "沪深300", "sh000905": "中证500", "sh000012": "中证全债"},
   // 候选基金比较子表候选（6 位基金代码列表，≤10；配合功能开关 candidate_compare）
@@ -120,7 +124,8 @@
     "max_total_workers": 15,  // 全局 batch 线程硬上限（已有池不计入）
     "fund_workers": 3,  // 基金排名/持仓批量并发数
     "industry_workers": 8,  // 行业分类批量并发数
-    "datasink_workers": 2  // 财报取数并发数（免费档批量上限 ≤3）
+    "datasink_workers": 2,  // 财报取数并发数（免费档批量上限 ≤3）
+    "akshare_workers": 2  // akshare 财务指标取数并发数（财务指标章 + 基金重仓 ROE 推演）
   },
   "batch_rate_limit": {  // Provider 级别请求间隔（秒），0=不限速
     "tencent": 0.0,  // 腾讯行情（不限速）
@@ -128,5 +133,29 @@
     "eastmoney": 0.1,  // 东方财富行情（100ms）
     "tiantian": 0.5,  // 天天基金（500ms）
     "eastmoney_industry": 0.05  // 东方财富行业（50ms）
+  },
+
+  // ── N. 任务完成通知（无人值守；缺省全关=静默跳过）──
+  "notify": {
+    "on_success": false,  // 成功也发送（失败/部分失败必发）
+    "webhook_url": "",  // webhook 地址（POST JSON），空=不启用；URL 常含凭据，日志只记域名
+    "email": {
+      "smtp_host": "",
+      "smtp_port": 465,
+      "use_ssl": true,
+      "username": "",
+      "password": "",
+      "to": ""
+    },  // SMTP 邮件通道（smtp_host 或 to 为空=不启用）
+    "desktop": false,  // 桌面通知（notify-send，Linux）
+    "timeout_seconds": 10  // 通道超时（秒）
+  },
+
+  // ── O. 内置定时生成（Web 调度面板；缺省关闭）──
+  "scheduler": {
+    "enabled": false,  // 启用内置定时生成（与手动生成同队列串行）
+    "time": "07:30",  // 触发时刻 HH:MM（本机时区）
+    "weekdays": [0, 1, 2, 3, 4, 5, 6],  // 执行日 0=周一 … 6=周日
+    "report_type": "basic"  // 报告格式 basic/both/full
   }
 }

@@ -269,10 +269,12 @@ def _inputs_fingerprint_changed(module_key: str) -> bool:
 
 
 def _recompute_reason(cache_info: dict, fingerprint_changed: bool) -> str:
-    """未命中原因：forced（用户强制）/ disabled（模块缓存关闭）/ fingerprint_changed / ttl_expired。"""
+    """未命中原因：强制刷新 / 指纹变化 / 纯 TTL 到点（取值来自 ``RECOMPUTE_REASONS``）。"""
+    from src.python.llm.observation import RECOMPUTE_FINGERPRINT_CHANGED, RECOMPUTE_FORCED, RECOMPUTE_TTL_EXPIRED
+
     if not cache_info.get("can_cache", True):
-        return "forced"
-    return "fingerprint_changed" if fingerprint_changed else "ttl_expired"
+        return RECOMPUTE_FORCED
+    return RECOMPUTE_FINGERPRINT_CHANGED if fingerprint_changed else RECOMPUTE_TTL_EXPIRED
 
 
 def _note_recompute_reason(sink, module_key: str, reason: str) -> None:
