@@ -39,7 +39,7 @@ class TestS15DisabledPriority(unittest.TestCase):
                 "input_tokens": 500,
                 "output_tokens": 300,
                 "cache_hit_tokens": 0,
-                "cost": 0.002,
+                "costs": {"CNY": 0.002},
                 "thinking": False,
                 "endpoint": "",
             },
@@ -54,7 +54,7 @@ class TestS15DisabledPriority(unittest.TestCase):
         # 禁用时 model 应为空（不显示原始模型）
         self.assertEqual(by_key["health_check"]["model"], "")
         # 禁用时费用为 0
-        self.assertEqual(by_key["health_check"]["cost"], 0.0)
+        self.assertEqual(by_key["health_check"]["cost_display"], "")
         # 禁用时 cached=False
         self.assertFalse(by_key["health_check"]["cached"])
 
@@ -72,7 +72,7 @@ class TestS15DisabledPriority(unittest.TestCase):
                 "input_tokens": 0,
                 "output_tokens": 0,
                 "cache_hit_tokens": 500,
-                "cost": 0.0,
+                "costs": {"CNY": 0.0},
                 "thinking": False,
                 "endpoint": "",
             },
