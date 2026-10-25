@@ -145,9 +145,9 @@ class TestBudgetConversion:
 
         # 判定：$0.2 折算后仍低于 ¥2.0 → 未超限
         assert status["exceeded"] is False
-        # 展示：原生桶保持美元，不被折成人民币
-        assert status["spent"] == pytest.approx({"USD": 0.2})
+        # 展示：原生币种金额照原样呈现，不被折成人民币
         assert "$0.2000" in status["display"]
+        assert "¥0.2000" not in status["display"]
 
     def test_budget_exceeded_after_conversion(self):
         """上限是本币单值：外币支出折算后超限即触发（判定用汇率，展示仍原生）。"""
@@ -157,8 +157,8 @@ class TestBudgetConversion:
         history = [{"timestamp": today, "llm": {"cost_by_currency": {"USD": 2.0}}}]
         status = budget_status({"daily_cost_limit": 1.0}, history)
         assert status["exceeded"] is True
-        assert status["currency"] == pricing.PRICING_CURRENCY
-        assert status["spent"] == pytest.approx({"USD": 2.0})
+        assert "已达上限" in status["display"]
+        assert "$2.0000" in status["display"], "展示金额保持原生币种"
 
     def test_unconvertible_currency_is_surfaced(self):
         """缺内部汇率的币种不得静默按 0 计：列入 unconvertible 并在摘要里点名。"""
@@ -167,5 +167,5 @@ class TestBudgetConversion:
         today = date.today().isoformat()
         history = [{"timestamp": today, "llm": {"cost_by_currency": {"XYZ": 9.0}}}]
         status = budget_status({"daily_cost_limit": 1.0}, history)
-        assert status["unconvertible"] == ["XYZ"]
-        assert "无法折算" in status["display"]
+        assert status["exceeded"] is False, "无法折算的币种不得被当成 0 支出而虚增余量"
+        assert "无法折算：XYZ" in status["display"]

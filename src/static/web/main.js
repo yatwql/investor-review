@@ -475,19 +475,16 @@
         if (!f || !f.ok || !f.module_count) {
           return { proceed: true };
         }
-        var sym = f.symbol || '¥';
-        var bsym = (b && b.symbol) || sym;
-        var lines =
-          '本次生成 LLM 费用预估 ' + sym + f.low.toFixed(4) +
-          ' ~ ' + sym + f.high.toFixed(4) + '（计划 ' + f.module_count + ' 个模块）';
+        // 费用一律用后端格式化好的展示串（分币种并列 `¥0.0123 + $0.0045`）：
+        // 前端不再自拼符号与数值，避免各币种各写一遍格式化规则而漂移。
+        var lines = '本次生成 LLM 费用预估 ' + (f.cost_display || '—') +
+          '（计划 ' + f.module_count + ' 个模块）';
         if (f.forced_count) {
           lines += '\n其中 ' + f.forced_count + ' 个模块重新生成：' +
-            sym + f.forced_low.toFixed(4) + ' ~ ' + sym + f.forced_high.toFixed(4);
+            (f.forced_cost_display || '—');
         }
-        if (b && b.enabled) {
-          lines += '\n今日已花费 ' + bsym + b.spent.toFixed(4) + ' / 日预算 ' + bsym + b.limit.toFixed(4);
-        } else if (b) {
-          lines += '\n今日已花费 ' + bsym + b.spent.toFixed(4) + '（未设日预算上限）';
+        if (b && b.display) {
+          lines += '\n' + b.display;
         }
         if (b && b.exceeded) {
           if (!window.confirm('[!] ' + lines + '\n\n今日已超日预算。确定「用已有结果继续」？')) {

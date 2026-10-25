@@ -275,6 +275,7 @@ def _forecast_run_cost_impl(
         "forced_costs": {},
         "costs": {},
         "cost_display": "",
+        "forced_cost_display": "",
         "basis": "no-modules",
         "history_runs": 0,
         "unpriced": [],
@@ -361,6 +362,7 @@ def _forecast_run_cost_impl(
         {
             "costs": rounded,
             "cost_display": _range_display(rounded),
+            "forced_cost_display": _range_display(rounded_forced),
             "basis": part_basis,
             "unpriced": unpriced,
             "detail": detail,
@@ -413,7 +415,11 @@ def budget_status(
     llm_config: dict[str, Any] | None = None,
     history: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """日预算状态：``{enabled, limit, currency, symbol, spent, spent_converted, unconvertible, exceeded, display}``。
+    """日预算状态：``{enabled, exceeded, display}``——闸门判定 + 一行可直接上屏的摘要。
+
+    只暴露真实消费面：三渠道只读 `exceeded`（硬闸）、前端只读 `display` 与 `exceeded`。
+    金额明细（当前支出、折算值、不可折算币种）已汇总进 `display`，不再单独返回，
+    避免同一份数据两套格式并存、消费方各取一半。
 
     - 上限是**一个数字**，币种 = 本地主币种（`PRICING_CURRENCY`，默认 CNY）；
     - 判定时把各币种今日支出折算到该币种后比对（内部汇率表，**只参与判定**）；
@@ -457,12 +463,6 @@ def budget_status(
         display = f"{display}；无法折算：{'、'.join(sorted(unconvertible))}"
     return {
         "enabled": limit > 0,
-        "limit": round(limit, 6),
-        "currency": currency,
-        "symbol": symbol,
-        "spent": spent,
-        "spent_converted": converted,
-        "unconvertible": sorted(unconvertible),
         "exceeded": exceeded,
         "display": display,
     }
@@ -543,9 +543,7 @@ def forecast_summary_lines(
             )
             forced_count = int(forecast.get("forced_count") or 0)
             if forced_count:
-                lines.append(
-                    f"其中 {forced_count} 个模块重新生成：{_range_display(forecast.get('forced_costs') or {}) or '—'}"
-                )
+                lines.append(f"其中 {forced_count} 个模块重新生成：{forecast.get('forced_cost_display') or '—'}")
         if forecast.get("reason"):
             lines.append(f"预估说明：{forecast['reason']}")
     else:

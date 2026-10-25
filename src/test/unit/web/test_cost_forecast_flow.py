@@ -42,7 +42,14 @@ def _fc(**over):
 
 
 def _budget(**over):
-    base = {"enabled": False, "limit": 0.0, "spent": 0.0, "exceeded": False, "currency": "CNY", "symbol": "¥"}
+    base = {
+        "enabled": False,
+        "limit": 0.0,
+        "spent": {},
+        "exceeded": False,
+        "currency": "CNY",
+        "display": "今日尚无 LLM 支出；未设日预算上限",
+    }
     base.update(over)
     return base
 
@@ -61,7 +68,9 @@ class TestCostPreflight:
         assert data["relevant"] is True
         assert data["forecast"]["ok"] is True
         assert data["forecast"]["module_count"] == 3
-        assert set(data["budget"]) == {"enabled", "limit", "spent", "exceeded", "currency", "symbol"}
+        # 契约：预算载荷必须含 exceeded 闸门字段与可直接上屏的 display 摘要；
+        # 具体金额字段集随展示口径演进（多币种桶），故只断言结构性必需项。
+        assert {"exceeded", "display"} <= set(data["budget"])
 
     def test_non_full_mode_omits_forecast(self, app_client):
         with patch("src.python.llm.cost_forecast.budget_status", return_value=_budget()):

@@ -34,7 +34,7 @@
 | `check-task-numbering.py` | 质量 | 任务编号（plan-/rf-）全局一致性检查，防新增编号与历史归档冲突 |
 | `check-task-numbering-hook.py` | 质量 | Claude Code PostToolUse hook——编辑编号管理文档后自动校验编号一致性 |
 | `check-semantic-index.py` | 文档 | 功能语义命名表正反向一致性校验（功能开关注册表表外键 / 僵尸条目 / 合并章 key 缺失） |
-| `check-doc-drift.py` | 文档 | 文档与实现一致性校验（章节表/章节数量、开关表/分组计数/默认值断言、配置与 LLM 默认值表、`datasource.md` 的 LLM 缓存 TTL 行（按前缀反查注册表）、TUI 面板编号、目录树、项目统计表；`--sync` 自动回写统计快照） |
+| `check-doc-drift.py` | 文档 | 文档与实现一致性校验（章节表/章节数量、开关表/分组计数/默认值断言、配置与 LLM 默认值表、`datasource.md` 的 LLM 缓存 TTL 行（按前缀反查注册表）、`technical.md`+`how-to-config.md` 的缓存 TTL 表（逐类型对账）、TUI 面板编号、目录树、项目统计表；`--sync` 自动回写统计快照） |
 | `check-doc-links.py` | 文档 | 文档链接与结构一致性校验（死链/死锚点/重复标题/层级/编号序列/§引用） |
 | `check-import-surface.py` | 质量 | 导入面契约观察（compat-comment 兼容注释 / private-all 私有 `__all__` / cross-private 跨包私有导入 / dynamic-target 动态导入字面量；例外表 `_import_surface_exceptions.json`，观察期未入钩子与 CI） |
 | `check-file-length.py` | 质量 | 单文件行数红线守护（主程序/脚本 >1000 行 / 测试 >1200 行；豁免登记与 review-findings 挂账同步，`-v` 输出可选优化区间清单与「行数 × 近 90 天改动」优先级，供登记表派生） |
@@ -407,11 +407,14 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
 19. 需求菜单表（`requirements.md` §3.2）：键集合/分组标题/组内顺序 ↔ MENU_ITEMS + MENU_GROUPS
 20. 迁档占位↔归档节：review-findings「已随 vX.Y.Z 发布迁入」占位 ↔ 对应版本归档正文含该版本二级标题归档节
 21. 树描述计数禁令：folders.md 目录树描述禁写「阿拉伯数字+量词」易漂移计数（docs/archive 记录域豁免；中文数词设计常量不入检）
+22. 缓存 TTL 表（`technical.md` 缓存各表 + `how-to-config.md`「cache_ttl 可调参数」）↔ 缓存注册表 `DataModuleDef.cache_ttl`
+    逐类型对账（实现 `_doc_drift/_format.py::check_cache_ttl_tables`）。默认值只存在注册表一处、两份文档各维护只读参考表，
+    改默认值漏同步时读者会被误导（如以为财报索引 30 天才刷新）；表内新增类型自动纳入核对，解析不出 TTL 文本的行跳过）
 
 **使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
 
 ```bash
-.venv/bin/python scripts/check-doc-drift.py                   # 二十一项全查
+.venv/bin/python scripts/check-doc-drift.py                   # 二十二项全查
 .venv/bin/python scripts/check-doc-drift.py -v                # 详细输出（打印解析结果与实测统计）
 .venv/bin/python scripts/check-doc-drift.py --ci              # CI 模式（只输出 文件:描述，退出码 2）
 .venv/bin/python scripts/check-doc-drift.py --with-test-count # 附带 pytest 收集，核对「测试用例」与 test-coverage.md 计数表

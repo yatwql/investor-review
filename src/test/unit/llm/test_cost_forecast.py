@@ -267,10 +267,10 @@ class TestBudget:
 
     def test_budget_status_shape(self) -> None:
         st = budget_status({"daily_cost_limit": 2}, [])
-        assert {"enabled", "limit", "currency", "spent", "spent_converted", "exceeded", "display"} <= set(st)
-        assert st["limit"] == 2.0, "上限为本币单个数字"
-        assert st["spent"] == {}, "无历史 = 今日零支出"
-        assert st["display"], "须给出可上屏的预算摘要"
+        # 只暴露真实消费面：三渠道读 exceeded、前端读 display
+        assert set(st) == {"enabled", "exceeded", "display"}
+        assert st["enabled"] is True
+        assert "日预算" in st["display"], "display 须含预算与状态"
 
 
 class TestSummaryLines:

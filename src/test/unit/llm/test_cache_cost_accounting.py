@@ -153,7 +153,7 @@ class TestBudgetAccounting:
         from src.python.llm.cost_forecast import budget_status
 
         status = budget_status({"daily_cost_limit": 1.0}, history=self._PERF)
-        assert status["spent"].get("CNY", 0.0) == pytest.approx(0.0, abs=1e-9)
+        assert "今日尚无 LLM 支出" in status["display"], "命中运行不产生支出（display 如实反映）"
         assert status["exceeded"] is False
 
 
