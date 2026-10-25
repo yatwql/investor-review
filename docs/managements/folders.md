@@ -18,9 +18,9 @@
 | 测试用例 | — | — | 12,333 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 13 | 6,399 | 含 README.md（211 行）；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 12 | 6,181 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 196 | 68,815 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 6 + archive md 160），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 13,585 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
-| ├ archive/ | 版本归档 | 179 | 54,638 | 各版本 changelog/plan/review-findings 与设计文档归档（157 md 50,492 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
+| 项目文档 | Markdown | 199 | 68,846 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 6 + archive md 160），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 13,592 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| ├ archive/ | 版本归档 | 182 | 54,662 | 各版本 changelog/plan/review-findings 与设计文档归档（157 md 50,492 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 3 | ~499 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + 跨模块导入面重命名分析 |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
 
@@ -1727,41 +1727,45 @@ investor-review/
 │   │   │   ├── archived_changelog.0.14.x.md # 变更日志归档 v0.14.x（v0.14.0 起发布段）
 │   │   │   ├── archived_plan.0.14.x.md      # 实现计划归档 v0.14.x（已完成任务节）
 │   │   │   └── archived_review-findings.0.14.x.md # 自审记录归档 v0.14.x（开发期已修复批次）
-│   │   └── v0.15.x/                         # v0.15.x 版本归档（changelog/plan/review-findings + 设计文档）
-│   │       ├── archived_changelog.0.15.x.md # 变更日志归档 v0.15.x（发布段）
-│   │       ├── archived_plan.0.15.x.md      # 实现计划归档 v0.15.x（已完成任务节）
-│   │       ├── archived_review-findings.0.15.x.md # 自审记录归档 v0.15.x（开发期已修复批次）
-│   │       ├── cache-ttl-layering/ # 设计文档归档（任务完成后由发布归档迁入）
-│   │       │   ├── cache-ttl-layering.md # 该文档的完整设计内容（迁档前位于在办设计目录）
-│   │       ├── config-rework/               # 配置体系重构设计归档（v0.15.x 已完成轮次）
-│   │       │   ├── config-rework-iteration-plan.md # 配置体系重构计划（15 轮状态/验收基准/门禁与契约映射；已完成）
-│   │       │   ├── config-tui-design.md    # TUI 面板设计（四组菜单层级/七项四组/章节显隐与章内内容/键位与分组标题纪律）
-│   │       │   ├── config-web-design.md    # Web 配置面设计（五域分区/块与控件/保存语义/无障碍与响应式）
-│   │       │   ├── config-files-design.md  # 配置文件设计（八份文件边界/演进策略/config.json 取舍/书写与读取约定）
-│   │       │   ├── config-llm-settings-design.md # LLM 配置设计（模块为第一层的纵切结构/三层缺省继承/键位映射/升级与回滚）
-│   │       │   ├── config-logging-design.md # 日志配置设计（logger.json 键表与默认值/加载优先级/校验与错误/面板入口）
-│   │       │   ├── config-panel-mockup/    #   设计图样原型目录（自包含 HTML，数据内联，浏览器直接打开）
-│   │       │       ├── index.html          #       Web 配置面板目标设计（按业务域编排；说明密度/标记/主题可切换）
-│   │       ├── llm-cache-state-isolation/ # 设计文档归档（任务完成后由发布归档迁入）
-│   │       │   └── llm-cache-state-isolation.md # 该文档的完整设计内容（迁档前位于在办设计目录）
-│   │       │       ├── web-current.html    #       Web 配置面板现有实现（按存储文件编排）
-│   │       │       ├── tui.html            #       TUI 全层级图样 · 目标设计（[C] 章节总表/[S] 报告呈现与增强/[G] 全局设置）
-│   │       │       ├── tui-current.html    #       TUI 全层级图样 · 现有实现（四组开关/[D] 目录信息/[D]→[L] 调优参数）
-│   │       │       ├── llm-config.html     #       LLM 配置目标设计（模块纵切结构 + 键位映射）
-│   │       │       ├── llm-config-current.html #  LLM 配置现有实现（扁平结构：参数 × 模块平铺）
-│   │       │       ├── tui_render.py       #       TUI 单屏渲染取样（真实处理器 + 伪终端）
-│   │       │       ├── tui_capture.py      #       TUI 逐屏采集（产出帧数据到 docs/tmp，git 忽略）
-│   │       │       ├── tui_build.py        #       ANSI 帧转 HTML 图样构建器
-│   │       │       ├── llm_config_mock.py  #       LLM 配置纵切图样生成器（读真实配置推导结构）
-│   │       │       ├── web_mock_build.py   #       Web 配置面板图样生成器（真实注册表/配置取数，产出目标与现有两份 HTML）
-│   │       ├── import-surface/              # 导入面重命名完成归档（owner 表/四条规则/迁移定稿）
-│   │       ├── tui-display-modes/           # TUI 显示模式统一完成归档（行型/分组/提示/开关状态）
-│   │       │   ├── tui-display-modes.md     # 设计定稿与收口记录（状态唯一实现/关闭恒红/ANSI 截断）
-│   │       │   ├── import-surface-rename.md # 跨模块导入面重命名分析定稿（兼容转发→唯一 owner；P0~P4 完成）
-│   │       ├── pricing-native-currency/     # 定价按币种计价完成归档（原生币种展示/分组聚合/预算内部汇率）
-│   │       │   └── pricing-native-currency.md # 设计定稿与验收（币种桶/format_costs/代码内无展示汇率）
-│   │       ├── web-browser-verification/    # 设计文档归档（任务完成后由发布归档迁入）
-│   │           └── web-browser-verification.md # 该文档的完整设计内容（迁档前位于在办设计目录）
+│   │   ├── v0.15.x/                         # v0.15.x 版本归档（changelog/plan/review-findings + 设计文档）
+│   │   │   ├── archived_changelog.0.15.x.md # 变更日志归档 v0.15.x（发布段）
+│   │   │   ├── archived_plan.0.15.x.md      # 实现计划归档 v0.15.x（已完成任务节）
+│   │   │   ├── archived_review-findings.0.15.x.md # 自审记录归档 v0.15.x（开发期已修复批次）
+│   │   │   ├── cache-ttl-layering/ # 设计文档归档（任务完成后由发布归档迁入）
+│   │   │   │   ├── cache-ttl-layering.md # 该文档的完整设计内容（迁档前位于在办设计目录）
+│   │   │   ├── config-rework/               # 配置体系重构设计归档（v0.15.x 已完成轮次）
+│   │   │   │   ├── config-rework-iteration-plan.md # 配置体系重构计划（15 轮状态/验收基准/门禁与契约映射；已完成）
+│   │   │   │   ├── config-tui-design.md    # TUI 面板设计（四组菜单层级/七项四组/章节显隐与章内内容/键位与分组标题纪律）
+│   │   │   │   ├── config-web-design.md    # Web 配置面设计（五域分区/块与控件/保存语义/无障碍与响应式）
+│   │   │   │   ├── config-files-design.md  # 配置文件设计（八份文件边界/演进策略/config.json 取舍/书写与读取约定）
+│   │   │   │   ├── config-llm-settings-design.md # LLM 配置设计（模块为第一层的纵切结构/三层缺省继承/键位映射/升级与回滚）
+│   │   │   │   ├── config-logging-design.md # 日志配置设计（logger.json 键表与默认值/加载优先级/校验与错误/面板入口）
+│   │   │   │   ├── config-panel-mockup/    #   设计图样原型目录（自包含 HTML，数据内联，浏览器直接打开）
+│   │   │   │       ├── index.html          #       Web 配置面板目标设计（按业务域编排；说明密度/标记/主题可切换）
+│   │   │   ├── llm-cache-state-isolation/ # 设计文档归档（任务完成后由发布归档迁入）
+│   │   │   │   └── llm-cache-state-isolation.md # 该文档的完整设计内容（迁档前位于在办设计目录）
+│   │   │   │       ├── web-current.html    #       Web 配置面板现有实现（按存储文件编排）
+│   │   │   │       ├── tui.html            #       TUI 全层级图样 · 目标设计（[C] 章节总表/[S] 报告呈现与增强/[G] 全局设置）
+│   │   │   │       ├── tui-current.html    #       TUI 全层级图样 · 现有实现（四组开关/[D] 目录信息/[D]→[L] 调优参数）
+│   │   │   │       ├── llm-config.html     #       LLM 配置目标设计（模块纵切结构 + 键位映射）
+│   │   │   │       ├── llm-config-current.html #  LLM 配置现有实现（扁平结构：参数 × 模块平铺）
+│   │   │   │       ├── tui_render.py       #       TUI 单屏渲染取样（真实处理器 + 伪终端）
+│   │   │   │       ├── tui_capture.py      #       TUI 逐屏采集（产出帧数据到 docs/tmp，git 忽略）
+│   │   │   │       ├── tui_build.py        #       ANSI 帧转 HTML 图样构建器
+│   │   │   │       ├── llm_config_mock.py  #       LLM 配置纵切图样生成器（读真实配置推导结构）
+│   │   │   │       ├── web_mock_build.py   #       Web 配置面板图样生成器（真实注册表/配置取数，产出目标与现有两份 HTML）
+│   │   │   ├── import-surface/              # 导入面重命名完成归档（owner 表/四条规则/迁移定稿）
+│   │   │   ├── tui-display-modes/           # TUI 显示模式统一完成归档（行型/分组/提示/开关状态）
+│   │   │   │   ├── tui-display-modes.md     # 设计定稿与收口记录（状态唯一实现/关闭恒红/ANSI 截断）
+│   │   │   │   ├── import-surface-rename.md # 跨模块导入面重命名分析定稿（兼容转发→唯一 owner；P0~P4 完成）
+│   │   │   ├── pricing-native-currency/     # 定价按币种计价完成归档（原生币种展示/分组聚合/预算内部汇率）
+│   │   │   │   └── pricing-native-currency.md # 设计定稿与验收（币种桶/format_costs/代码内无展示汇率）
+│   │   │   ├── web-browser-verification/    # 设计文档归档（任务完成后由发布归档迁入）
+│   │   │       └── web-browser-verification.md # 该文档的完整设计内容（迁档前位于在办设计目录）
+│   │   └── v0.16.x/                         # v0.16.x 版本归档（changelog/plan/review-findings + 设计文档）
+│   │       ├── archived_changelog.0.16.x.md # 变更日志归档 v0.16.x（发布段）
+│   │       ├── archived_plan.0.16.x.md      # 实现计划归档 v0.16.x（已完成任务节）
+│   │       └── archived_review-findings.0.16.x.md # 自审记录归档 v0.16.x（开发期已修复批次）
 │   └── plan/                          #   中间设计文件（在办设计文档，文档扁平存放、原型就近建子目录）；完成后迁入对应版本的归档子目录
 │       ├── jev-news-judgment-evaluation.md # 判定迁移的对照评测方案（三方对照/语料冻结/预注册阈值与四类判定）
 │       ├── jev-news-judgment-design.md # 判定通道接入设计（独立于对话链的类型化通道/模板理由/降级矩阵；待评测通过后实施）
