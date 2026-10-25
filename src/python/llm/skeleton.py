@@ -445,17 +445,23 @@ def generate_llm_content(
     precheck_key = _build_provider_cache_key(cache_key, llm_config, module_key, first_name)
 
     # ── 缓存检查 ──
+    # 命中/未命中一律经观测汇聚器计数：预检侧只覆盖四个基础模块，`self_review` /
+    # `holding_change` 等键在上游产出后才确定的模块走本骨架——不计入会让命中率
+    # 低估（实测「预检 4/4」实为 6/6 全命中）。
+    from src.python.llm.observation import current_llm_observation
+
+    _hit_sink = current_llm_observation()
     if cache_enabled and not force:
         cached = cache_get(precheck_key, cache_ttl)
+        if _hit_sink is not None and hasattr(_hit_sink, "note_cache"):
+            _hit_sink.note_cache(bool(cached))
         if not cached and module_key:
             # 归因（观测，不改控制流）：此路径覆盖预检未覆盖的模块（self_review 等
             # 由上游产出内容寻址、在预检之后才确定键）——否则重算原因统计会漏掉
             # 它们，据此判断 TTL 是否放宽会系统性低估。
             # 原因判定：与上一轮该模块的缓存键相同 ⇒ 内容没变、只是 TTL 到点；
             # 不同 ⇒ 内容变了（内容寻址模块换键）；无上轮记录 ⇒ 保守记 `cache_miss`。
-            from src.python.llm.observation import current_llm_observation
-
-            _sink = current_llm_observation()
+            _sink = _hit_sink
             if _sink is not None and hasattr(_sink, "note_recompute_reason"):
                 _prev = _PREV_MODULE_CACHE_KEY.get(module_key)
                 if _prev is None:

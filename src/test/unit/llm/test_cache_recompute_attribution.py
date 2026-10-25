@@ -264,3 +264,71 @@ class TestSkeletonPathAttribution:
         skeleton._PREV_MODULE_CACHE_KEY["self_review"] = "stale"
         start_report_run()
         assert "self_review" not in skeleton._PREV_MODULE_CACHE_KEY
+
+
+class TestObservationBindingAndCounting:
+    """观测口径：绑定时机与计数范围（缺一则首跑样本丢失 / 命中率低估）。"""
+
+    def test_sink_bound_before_llm_phase(self):
+        """汇聚器在「LLM+新闻」阶段之前绑定：预检发生在其内部，晚绑即丢首跑样本。"""
+        import inspect
+
+        from src.python.report import _generation_full as gf
+
+        src = inspect.getsource(gf)
+        bind_at = src.index("bind_llm_observation(_llm_sink)")
+        phase_at = src.index('perf.start("LLM+新闻")')
+        assert bind_at < phase_at, "汇聚器绑定必须早于 LLM 阶段（预检在其内部）"
+
+    def test_skeleton_records_hit(self, llm_cache_dir):
+        """骨架路径命中也要计入 cache_hits（否则「基础模块 4/4」实为 6/6 时命中率被低估）。"""
+        from unittest.mock import patch
+
+        from src.python.llm import observation, skeleton
+
+        sink = observation.LlmObservation()
+        with patch("src.python.llm.skeleton.cache_get", return_value="<p>cached</p>"):
+            with patch("src.python.llm.observation.current_llm_observation", return_value=sink):
+                skeleton.generate_llm_content(
+                    {},
+                    "llm_self_review_probe",
+                    3600,
+                    "sys",
+                    "user",
+                    cache_enabled=True,
+                    force=False,
+                    max_tokens=16,
+                    timeout=5,
+                    temperature=None,
+                    model=None,
+                    config_field="model_self_review",
+                    module_key="self_review",
+                )
+        assert sink.snapshot().get("cache_hits") == 1
+        assert "cache_misses" not in sink.snapshot()
+
+    def test_skeleton_records_miss(self, llm_cache_dir):
+        """骨架路径未命中同样计数（与 precheck 侧口径一致）。"""
+        from unittest.mock import patch
+
+        from src.python.llm import observation, skeleton
+
+        sink = observation.LlmObservation()
+        with patch("src.python.llm.skeleton.cache_get", return_value=None):
+            with patch("src.python.llm.observation.current_llm_observation", return_value=sink):
+                skeleton.generate_llm_content(
+                    {},
+                    "llm_self_review_probe",
+                    3600,
+                    "sys",
+                    "user",
+                    cache_enabled=True,
+                    force=False,
+                    max_tokens=16,
+                    timeout=5,
+                    temperature=None,
+                    model=None,
+                    config_field="model_self_review",
+                    module_key="self_review",
+                )
+        assert sink.snapshot().get("cache_misses") == 1

@@ -9,6 +9,7 @@
 
 ## [0.15.8-dev] - 开发中（未发布）
 
+- **观测绑定时机与计数口径修正**：观测汇聚器原在「LLM+新闻」阶段内、预检**之后**才绑定，导致每次进程重启后首份报告的 `cache_hits` / `cache_misses` / `recompute_reasons` 整体缺失——而首跑恰是最贵一份（实测 ¥0.108 占三份合计 88%），缺它会让 TTL 决策统计系统性偏差。现绑定前移至该阶段开始前。同时骨架路径（`self_review` / `holding_change` 等）的命中/未命中计入同一汇聚器：此前「基础模块命中 4/4」实为 6/6 全命中，命中率被低估；预检摘要行文案改为「基础模块命中 N/M」以区分口径（该行不代表本次无 LLM 调用）。
 - **重算归因覆盖骨架路径（补 plan-227 观测完整性）**：`self_review` 等「缓存键在上游产出后才确定」的模块走骨架生成（`skeleton.generate_llm_content`），此前不参与重算归因——而它每次重算且费用占比可达三成，会让 `ttl_expired` 占比统计系统性低估。现骨架路径同样记录原因，并按「本轮键与上一轮是否相同」细分 `ttl_expired`（内容没变、纯到点）/ `fingerprint_changed`（内容寻址换键）；无上轮记录时如实记 `cache_miss`，不臆断。上一轮键随报告边界复位（跨报告比对才成立）。命中时不写归因，防命中/重算统计互相污染。
 - **Web 成本预检弹层修复**：多币种改造后前端仍在读已移除的 `forecast.low/high/symbol` 与 `budget.spent/limit`，`undefined.toFixed()` 抛 `TypeError`——表现为点「生成」后弹层不出现、按钮无反应（无日志无提示）。现前端只消费后端格式化好的展示串（`cost_display` / `forced_cost_display` / `display`），新增契约测试静态扫描 JS，禁止回读已移除字段。
 - **日预算状态收敛为真实消费面**：`budget_status()` 由 8 键收敛为 `{enabled, exceeded, display}`（三渠道读 `exceeded` 作硬闸、前端读 `display` 整行直出）；金额明细并入摘要，不再单列 `currency`/`symbol`/`limit`/`spent`/`spent_converted`/`unconvertible` 等无人消费字段。

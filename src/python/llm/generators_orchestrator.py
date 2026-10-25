@@ -372,8 +372,12 @@ def _log_precheck_summary(
 
     _sink = current_llm_observation()
     reasons = getattr(_sink, "recompute_reasons", lambda: {})() if _sink is not None else {}
+    # 口径说明：本行只统计**四个基础模块**的预检结果。`self_review` /
+    # `holding_change` 的键要等上游产出才确定，其命中与归因由骨架路径记录，
+    # 汇总在 perf 的 `cache_hits/cache_misses` 里——故此处标注「基础模块」，
+    # 避免把「4/4」误读为「本次运行没有任何 LLM 调用」。
     logger.info(
-        "[LLM 预检] 命中 %d/%d：%s；未命中：%s；重新生成（跳过缓存）：%s；未命中原因：%s",
+        "[LLM 预检] 基础模块命中 %d/%d：%s；未命中：%s；重新生成（跳过缓存）：%s；未命中原因：%s",
         len(hits),
         len(results),
         ", ".join(hits) or "无",

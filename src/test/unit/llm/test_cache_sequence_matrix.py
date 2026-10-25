@@ -203,7 +203,7 @@ class TestPrecheckAttribution:
         with caplog.at_level(logging.INFO, logger="invest"):
             _run(inputs)
         lines = [r.getMessage() for r in caplog.records if "[LLM 预检]" in r.getMessage()]
-        assert any("命中 4/4" in line for line in lines), f"预检汇总缺失：{lines}"
+        assert any("基础模块命中 4/4" in line for line in lines), f"预检汇总缺失：{lines}"
 
     def test_miss_is_attributed(self, llm_cache_dir, caplog):
         inputs = make_inputs()

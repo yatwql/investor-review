@@ -47,7 +47,7 @@ class TestConsecutiveReportCache:
             second = _run(inputs, events)
 
         assert all(second), f"第二份报告应全部命中，实际 {second}"
-        assert any("命中 4/4" in line for line in _precheck_summary_lines(caplog))
+        assert any("基础模块命中 4/4" in line for line in _precheck_summary_lines(caplog))
 
     def test_failure_multiplicity_drift_does_not_break_hit(self, llm_cache_dir):
         """失败事件**条数**与累计次数变化不得影响命中。
