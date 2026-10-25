@@ -9,6 +9,10 @@
 
 ## [0.15.8-dev] - 开发中（未发布）
 
+- **重算归因覆盖骨架路径（补 plan-227 观测完整性）**：`self_review` 等「缓存键在上游产出后才确定」的模块走骨架生成（`skeleton.generate_llm_content`），此前不参与重算归因——而它每次重算且费用占比可达三成，会让 `ttl_expired` 占比统计系统性低估。现骨架路径同样记录原因，并按「本轮键与上一轮是否相同」细分 `ttl_expired`（内容没变、纯到点）/ `fingerprint_changed`（内容寻址换键）；无上轮记录时如实记 `cache_miss`，不臆断。上一轮键随报告边界复位（跨报告比对才成立）。命中时不写归因，防命中/重算统计互相污染。
+- **Web 成本预检弹层修复**：多币种改造后前端仍在读已移除的 `forecast.low/high/symbol` 与 `budget.spent/limit`，`undefined.toFixed()` 抛 `TypeError`——表现为点「生成」后弹层不出现、按钮无反应（无日志无提示）。现前端只消费后端格式化好的展示串（`cost_display` / `forced_cost_display` / `display`），新增契约测试静态扫描 JS，禁止回读已移除字段。
+- **日预算状态收敛为真实消费面**：`budget_status()` 由 8 键收敛为 `{enabled, exceeded, display}`（三渠道读 `exceeded` 作硬闸、前端读 `display` 整行直出）；金额明细并入摘要，不再单列 `currency`/`symbol`/`limit`/`spent`/`spent_converted`/`unconvertible` 等无人消费字段。
+- **文档 TTL 表核对纳入守护**：`check-doc-drift` 新增第 22 项——`technical.md` 缓存各表与 `how-to-config.md`「cache_ttl 可调参数」逐类型对账缓存注册表，改默认值漏同步即拦截（表内新增类型自动纳入）。
 - **决策/信号账本按龄保留（plan-228）**：`core/jsonl_store` 新增 `prune_jsonl_by_age`（按龄裁剪 + `keep` 谓词），决策账本与信号账本追加后按 **730 天** 裁剪；决策账本的**已结算事件永久保留**（跨期反思样本）。不使用行数上限——账本一行一份状态，按行数截断会连最旧已结算样本一起裁掉。坏行不裁（不替读取侧吞掉损坏证据），缺日期的行保留。
 - **LLM 缓存重算归因观测（plan-227）**：缓存未命中时记录原因——`forced`（重新生成/缓存关闭）/ `fingerprint_changed`（内容变了）/ `ttl_expired`（内容没变、纯到点），按次数聚合进 perf 的 `llm.recompute_reasons` 并在预检摘要行显示分布。观测为纯旁路（命中判定/调用次数/费用不变），用于回答「4h TTL 是否把内容未变的调用也重算了」——这是决定能否放宽到 8~12h 的唯一依据。`news_correlation` 维持 ≤4h。
 - **财报类缓存节奏对齐披露周期（plan-226）**：`report`（财报索引/章节清单）与 `fin_indicator`（财务指标）TTL 30 天 → **1 天**，`dividend` 30 天 → **7 天**；`report_doc`（正文）保持 30 天。两类 symbol 级键过去在新一期财报披露后可能整月沿用上一期口径（定时运行无手动刷新兜底）。配额影响有界：每标的每天至多 1 次索引请求（20 标的 ≈ 免费档日配额 0.24%），且报告次数不放大。
