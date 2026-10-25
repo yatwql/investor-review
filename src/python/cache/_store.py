@@ -74,6 +74,16 @@ def get(key: str, max_age_seconds: float) -> Any | None:
         data = _read_cache_data(fpath, key)
         if data is None:
             continue
+        if not isinstance(data, dict):
+            # 顶层非对象的载荷（如 `[]` / 标量）视为损坏：后续按 `_ts` 判定会抛
+            # AttributeError，而缓存的契约是「坏了就当没缓存」，不得中断调用链
+            logger.warning("缓存 %s 载荷形状非法（%s），删除后按未命中处理", key, type(data).__name__)
+            try:
+                os.remove(fpath)
+            except OSError:
+                pass
+            _record_cache_miss()
+            return None
 
         timestamp = data.get("_ts", 0)
         age = time.time() - timestamp
