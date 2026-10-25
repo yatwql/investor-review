@@ -474,7 +474,6 @@ class TestReleaseTokenAccounting:
                             "cacheRead": 300,
                             "cacheWrite": 10,
                             "totalTokens": 420,
-
                         },
                     },
                 },
