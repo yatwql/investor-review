@@ -20,7 +20,6 @@
 
 | # | 问题 | 修复方向 |
 |---|------|----------|
-| **rf-879** | LLM 模块 TTL 统一 4h（`expert_review` / `health_check` / `penetration_deep` / `news_correlation`）：同一份持仓一天跑 2~3 次报告时会重复调用最贵模块。指纹已覆盖持仓/数据变化，4h 只是"内容不变时的强制重算上限" | 待数据决策：内容型模块放到 8~12h（成本约降一半），新闻关联保持 ≤4h。建议先统计一周"指纹未变但 TTL 到期"的模块分布再定值 |
 | **rf-880** | `decision_ledger.jsonl` / `signal_ledger.jsonl` 无保留上限（现 26KB / 127KB，按日增长），与 perf（5000 行）/health（2000 行）/dedup anchors（120 天 + 压缩）不一致 | 加按龄保留（决策反思需跨期样本，可 730 天）或行上限，写入复用 `jsonl_store` 的 `max_lines` |
 
 ### P3 — 持续监控：文件膨胀登记

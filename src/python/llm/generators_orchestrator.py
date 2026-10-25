@@ -148,6 +148,8 @@ def _compute_module_cache_info(
 
     _components = fingerprint_components(_inputs)
     _changed = diff_fingerprint_components(_LAST_FP_COMPONENTS, _components)
+    # 变化组件集合供缓存未命中归因（"内容变了" vs "只是 TTL 到点"），不参与键构造
+    _FINGERPRINT_CHANGED_MODULES["__changed__"] = frozenset(_changed)
     if _changed:
         logger.info("[fingerprint] 指纹组件变化（相对上次报告）: %s", _changed)
     if logger.isEnabledFor(logging.DEBUG):
@@ -202,6 +204,84 @@ def _compute_module_cache_info(
     return info
 
 
+#: 本次运行「相对上次报告」发生变化的指纹组件（模块 → 是否受影响）
+_FINGERPRINT_CHANGED_MODULES: dict[str, bool] = {}
+
+#: 模块 → 依赖的指纹组件（与 `llm/module_fingerprint.py` 各构造函数的入参口径一致）。
+#: 只用于**归因**（判断"内容变了"还是"只是 TTL 到点"），不参与缓存键构造。
+_MODULE_FINGERPRINT_COMPONENTS: dict[str, frozenset[str]] = {
+    "global_macro": frozenset({"totals", "categories", "a_indices", "us_indices", "competitive_context"}),
+    "expert_review": frozenset(
+        {
+            "totals",
+            "holdings",
+            "penetration",
+            "categories",
+            "history_risk",
+            "competitive_context",
+            "metrics",
+            "pipeline_blocks",
+            "ledger_blocks",
+            "purchase_block",
+            "holding_change_block",
+            "event_impact_block",
+            "schedule_replay_block",
+            "generation_params",
+        }
+    ),
+    "health_check": frozenset(
+        {
+            "totals",
+            "holdings",
+            "penetration",
+            "categories",
+            "history_risk",
+            "data_quality",
+            "pipeline_blocks",
+            "ledger_blocks",
+            "purchase_block",
+            "generation_params",
+        }
+    ),
+    "penetration_deep": frozenset(
+        {
+            "totals",
+            "holdings",
+            "penetration_full",
+            "categories",
+            "history_risk",
+            "purchase_block",
+            "generation_params",
+        }
+    ),
+}
+
+
+def _inputs_fingerprint_changed(module_key: str) -> bool:
+    """该模块依赖的指纹组件相对上次报告是否变化（未知模块按变化处理，保守）。"""
+    changed = _FINGERPRINT_CHANGED_MODULES.get("__changed__")
+    if not changed:
+        return False
+    components = _MODULE_FINGERPRINT_COMPONENTS.get(module_key)
+    if components is None:
+        return True
+    return bool(components & changed)
+
+
+def _recompute_reason(cache_info: dict, fingerprint_changed: bool) -> str:
+    """未命中原因：forced（用户强制）/ disabled（模块缓存关闭）/ fingerprint_changed / ttl_expired。"""
+    if not cache_info.get("can_cache", True):
+        return "forced"
+    return "fingerprint_changed" if fingerprint_changed else "ttl_expired"
+
+
+def _note_recompute_reason(sink, module_key: str, reason: str) -> None:
+    """把重算原因记入观测汇聚器（无汇聚器时静默跳过，不增加任何调用）。"""
+    if sink is None or not hasattr(sink, "note_recompute_reason"):
+        return
+    sink.note_recompute_reason(module_key, reason)
+
+
 def _precheck_one_cache(
     cache_info: dict,
     llm_config: dict,
@@ -227,6 +307,15 @@ def _precheck_one_cache(
     if _sink is not None:
         _sink.note_cache(bool(cached))
     if not cached:
+        # 重算原因归因（**观测**，不改变控制流）：知道「为什么没命中」才能回答
+        # 「4h 的 TTL 到底卡掉了多少本该复用的调用」——内容真变了还是只是到点重算，
+        # 直接决定 TTL 该不该放宽。指纹未变却未命中 ⇒ `ttl_expired`。
+        _module_key = module_key or cache_info["key"]
+        _note_recompute_reason(
+            _sink,
+            _module_key,
+            _recompute_reason(cache_info, _inputs_fingerprint_changed(_module_key)),
+        )
         return (None, False)
     thinking_enabled = llm_config.get(cache_info["thinking_key"], False)
     # 当 endpoint 为空时有 provider chain 则尝试解析
@@ -279,13 +368,18 @@ def _log_precheck_summary(
     misses = [k for k, v in results.items() if v.get("result") is None and k not in hits]
     bypassed = [k for k in misses if not (cache_info.get(k) or {}).get("can_cache", True)]
     real_misses = [k for k in misses if k not in bypassed]
+    from src.python.llm.observation import current_llm_observation
+
+    _sink = current_llm_observation()
+    reasons = getattr(_sink, "recompute_reasons", lambda: {})() if _sink is not None else {}
     logger.info(
-        "[LLM 预检] 命中 %d/%d：%s；未命中：%s；重新生成（跳过缓存）：%s",
+        "[LLM 预检] 命中 %d/%d：%s；未命中：%s；重新生成（跳过缓存）：%s；未命中原因：%s",
         len(hits),
         len(results),
         ", ".join(hits) or "无",
         ", ".join(real_misses) or "无",
         ", ".join(bypassed) or "无",
+        ", ".join(f"{k}={v}" for k, v in sorted(reasons.items())) or "无",
     )
 
 

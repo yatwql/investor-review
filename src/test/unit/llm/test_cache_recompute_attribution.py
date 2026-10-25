@@ -1,0 +1,180 @@
+"""LLM 缓存重算归因观测 —— 回答"为什么又调了一次 LLM"。
+
+业务问题：`llm_expert_review` 等模块 TTL 为 4h，指纹已覆盖内容变化，所以 4h 的真实
+作用只是"内容没变时也强制重算"的上限。**要不要放宽**取决于真实分布：如果绝大多数
+重算都是 `ttl_expired`（内容没变、纯到点），放宽就省钱；如果多数是
+`fingerprint_changed`（内容变了），放宽无意义甚至有害（结论陈旧）。
+
+只有观测数据能回答，不能凭感觉改。本文件验证三件事：
+
+1. **归因口径正确**：未命中原因区分 `forced` / `fingerprint_changed` / `ttl_expired`；
+2. **观测不改行为**：加了归因后命中/未命中判定、调用次数、费用完全不变；
+3. **数据可落盘**：原因分布写入 perf 的 `llm.recompute_reasons`，可按周统计。
+"""
+
+from __future__ import annotations
+
+import logging
+from unittest.mock import patch
+
+import pytest
+
+from src.python.llm.observation import LlmObservation
+from src.test.unit.llm._cache_fixtures import degradation_events, make_inputs, run_generate_all_llm
+
+pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.unit_core]
+
+
+class TestObservationSink:
+    """观测汇聚器：原因按次数聚合、逐模块留最近一次、快照只含非零项。"""
+
+    def test_reasons_aggregate_by_count(self):
+        sink = LlmObservation()
+        for reason in ("ttl_expired", "ttl_expired", "fingerprint_changed"):
+            sink.note_recompute_reason("expert_review", reason)
+        assert sink.recompute_reasons() == {"ttl_expired": 2, "fingerprint_changed": 1}
+
+    def test_reasons_sorted_by_count_desc(self):
+        sink = LlmObservation()
+        sink.note_recompute_reason("a", "fingerprint_changed")
+        for _ in range(3):
+            sink.note_recompute_reason("b", "ttl_expired")
+        assert list(sink.recompute_reasons()) == ["ttl_expired", "fingerprint_changed"]
+
+    def test_module_keeps_latest_reason(self):
+        sink = LlmObservation()
+        sink.note_recompute_reason("expert_review", "fingerprint_changed")
+        sink.note_recompute_reason("expert_review", "ttl_expired")
+        assert sink.module_recompute_reasons() == {"expert_review": "ttl_expired"}
+
+    def test_snapshot_includes_reasons_only_when_present(self):
+        empty = LlmObservation()
+        assert "recompute_reasons" not in empty.snapshot()
+
+        sink = LlmObservation()
+        sink.note_recompute_reason("health_check", "ttl_expired")
+        assert sink.snapshot()["recompute_reasons"] == {"ttl_expired": 1}
+
+
+class TestReasonClassification:
+    """原因判定：强制重生成 / 指纹变化 / 纯 TTL 到期三分。"""
+
+    def test_forced_when_not_cacheable(self):
+        from src.python.llm.generators_orchestrator import _recompute_reason
+
+        assert _recompute_reason({"can_cache": False}, fingerprint_changed=True) == "forced"
+
+    def test_fingerprint_changed(self):
+        from src.python.llm.generators_orchestrator import _recompute_reason
+
+        assert _recompute_reason({"can_cache": True}, fingerprint_changed=True) == "fingerprint_changed"
+
+    def test_ttl_expired_when_content_unchanged(self):
+        """内容没变却没命中 → 只能是 TTL 到期（这正是可能被放宽的那部分调用）。"""
+        from src.python.llm.generators_orchestrator import _recompute_reason
+
+        assert _recompute_reason({"can_cache": True}, fingerprint_changed=False) == "ttl_expired"
+
+    @pytest.mark.parametrize(
+        "module,component,expected",
+        [
+            ("global_macro", "a_indices", True),
+            ("global_macro", "data_quality", False),
+            ("health_check", "data_quality", True),
+            ("penetration_deep", "penetration_full", True),
+            ("penetration_deep", "metrics", False),
+        ],
+    )
+    def test_module_component_mapping(self, module, component, expected):
+        """模块 → 依赖组件：只有真正影响该模块的组件变化才算"内容变了"。"""
+        from src.python.llm import generators_orchestrator as go
+
+        go._FINGERPRINT_CHANGED_MODULES["__changed__"] = frozenset({component})
+        try:
+            assert go._inputs_fingerprint_changed(module) is expected
+        finally:
+            go._FINGERPRINT_CHANGED_MODULES.pop("__changed__", None)
+
+
+class TestObservationDoesNotChangeBehaviour:
+    """观测是纯旁路：命中判定、调用次数、费用一概不变。"""
+
+    def test_second_run_still_hits_all_with_attribution(self, llm_cache_dir):
+        inputs = make_inputs()
+        assert not any(run_generate_all_llm(inputs))
+        assert all(run_generate_all_llm(inputs))
+
+    def test_call_count_identical_with_observation(self, llm_cache_dir):
+        from src.test.unit.llm._cache_fixtures import LLM_REPLY_PAID
+
+        inputs = make_inputs()
+        with patch("src.python.llm.skeleton.call_llm", return_value=LLM_REPLY_PAID) as mocked:
+            run_generate_all_llm(inputs, patch_call=False)
+            first = mocked.call_count
+        with patch("src.python.llm.skeleton.call_llm", return_value=LLM_REPLY_PAID) as mocked:
+            run_generate_all_llm(inputs, patch_call=False)
+            second = mocked.call_count
+        assert second < first, "命中运行调用数应少于未命中（归因不得改变缓存行为）"
+
+    def test_summary_line_reports_reason_distribution(self, llm_cache_dir, caplog):
+        """预检摘要行带原因分布：一份报告内即可看出"是内容变了还是到点了"。"""
+        inputs = make_inputs()
+        _run(inputs)
+        with caplog.at_level(logging.INFO, logger="invest"):
+            _run({**inputs, "a_indices": {"sh000300": {"close": 4100.0, "change_pct": 2.0}}})
+        lines = [r.getMessage() for r in caplog.records if "[LLM 预检]" in r.getMessage()]
+        summary = next((line for line in lines if "命中" in line), "")
+        assert "未命中原因" in summary, summary
+
+
+def _run(inputs, **kwargs):
+    return run_generate_all_llm(inputs, **kwargs)
+
+
+class TestPerfPersistence:
+    """原因分布写入 perf：可按周统计，作为 TTL 调值的唯一依据。"""
+
+    def test_recompute_reasons_written_into_perf_context(self, llm_cache_dir):
+        from src.python.report._generation_shared import _record_llm_context
+
+        inputs = make_inputs()
+        _run(inputs)
+        recorded: dict = {}
+
+        class _Perf:
+            def set_llm_context(self, ctx):
+                recorded.update(ctx or {})
+
+        sink = LlmObservation()
+        sink.note_recompute_reason("expert_review", "ttl_expired")
+        with patch("src.python.llm.observation.current_llm_observation", return_value=sink):
+            _record_llm_context(_Perf())
+
+        assert recorded.get("recompute_reasons") == {"expert_review": "ttl_expired"}
+
+    def test_no_field_when_no_miss(self, llm_cache_dir):
+        from src.python.report._generation_shared import _record_llm_context
+
+        recorded: dict = {}
+
+        class _Perf:
+            def set_llm_context(self, ctx):
+                recorded.update(ctx or {})
+
+        sink = LlmObservation()
+        with patch("src.python.llm.observation.current_llm_observation", return_value=sink):
+            _record_llm_context(_Perf())
+        assert "recompute_reasons" not in recorded, "全命中时不应写该字段（perf 记录不膨胀）"
+
+    def test_degradation_scenario_still_recorded(self, llm_cache_dir):
+        """带降级事件的运行也能归因（降级块变化应体现为 fingerprint_changed）。"""
+        from src.python.llm import generators_orchestrator as go
+
+        inputs = make_inputs()
+        _run(inputs, degradation=degradation_events("industry"))
+        go._FINGERPRINT_CHANGED_MODULES["__changed__"] = frozenset({"data_quality"})
+        try:
+            assert go._inputs_fingerprint_changed("health_check") is True
+            assert go._inputs_fingerprint_changed("global_macro") is False
+        finally:
+            go._FINGERPRINT_CHANGED_MODULES.pop("__changed__", None)

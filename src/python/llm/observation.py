@@ -42,6 +42,10 @@ class LlmObservation:
         self._thinking_calls = 0
         self._cache_hits = 0
         self._cache_misses = 0
+        #: 缓存未命中归因：{原因: 次数}（ttl_expired / fingerprint_changed / forced）
+        self._recompute_reasons: dict[str, int] = {}
+        #: 逐模块最近一次重算原因（模块 → 原因）
+        self._module_reasons: dict[str, str] = {}
 
     # ── 等待与重试 ──
 
@@ -81,6 +85,27 @@ class LlmObservation:
             else:
                 self._cache_misses += 1
 
+    def note_recompute_reason(self, module_key: str, reason: str) -> None:
+        """记录一次"为什么重算"（按原因聚合次数，逐模块明细留 DEBUG 不膨胀）。
+
+        用途：判断 4h TTL 是否把「内容没变、只是到点」的调用也重算了——这是决定
+        TTL 能否放宽的唯一依据，靠观测而非主观判断。
+        """
+        with self._lock:
+            self._recompute_reasons[reason] = self._recompute_reasons.get(reason, 0) + 1
+            if module_key:
+                self._module_reasons[module_key] = reason
+
+    def recompute_reasons(self) -> dict[str, int]:
+        """本次运行的重算原因分布（按次数降序；无样本返回空 dict）。"""
+        with self._lock:
+            return dict(sorted(self._recompute_reasons.items(), key=lambda kv: -kv[1]))
+
+    def module_recompute_reasons(self) -> dict[str, str]:
+        """逐模块最近一次重算原因（排障用，写入 perf 的模块条目）。"""
+        with self._lock:
+            return dict(self._module_reasons)
+
     # ── 输出 ──
 
     def snapshot(self) -> dict[str, Any]:
@@ -95,6 +120,8 @@ class LlmObservation:
                 "cache_hits": self._cache_hits,
                 "cache_misses": self._cache_misses,
             }
+            if self._recompute_reasons:
+                data["recompute_reasons"] = dict(sorted(self._recompute_reasons.items(), key=lambda kv: -kv[1]))
             if self._providers:
                 data["providers"] = dict(sorted(self._providers.items()))
             if self._models:
