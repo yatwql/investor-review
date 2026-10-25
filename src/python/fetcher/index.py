@@ -15,6 +15,9 @@ from src.python.cache import get as cache_get
 from src.python.cache import get_ttl
 from src.python.cache import set as cache_set
 from src.python.fetcher.chain import write_stale_with_version
+
+# 注意：本模块的 `CACHE_WEEKLY` 用于**陈旧兜底读**（stale-tolerant）：
+# 网络失败时允许读比新鲜 TTL 更旧的数据，故刻意不使用 `get_ttl`（后者是新鲜期判定）。
 from src.python.core.constants import CACHE_WEEKLY
 from src.python.core.retry import STRATEGY_FIXED, RetryPolicy, retry_transient
 from src.python.providers import sina, tencent

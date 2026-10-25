@@ -1,5 +1,5 @@
 # 投资复盘助手 — 需求文档
-> 文档版本：0.15.5
+> 文档版本：0.15.6
 
 ---
 
@@ -1218,11 +1218,11 @@ LLM 五维度量化评分，每项满分 100：
 | R-CCH-13 | 行业分类/概念板块 | 14 天 | — |
 | R-CCH-14 | 股票历史分红 | 30 天 | — |
 | R-CCH-15 | 业绩比较基准 | 30 天 | — |
-| R-CCH-16 | LLM 智囊团深度复盘 | 2h | — |
-| R-CCH-17 | LLM 新闻关联分析 | 1h | — |
+| R-CCH-16 | LLM 智囊团深度复盘 | 4h（14400s） | — |
+| R-CCH-17 | LLM 新闻关联分析 | 4h（14400s） | — |
 | R-CCH-18 | LLM 全球政经局势 | 24h | — |
-| R-CCH-19 | LLM 持仓体检报告 | 24h | — |
-| R-CCH-20 | LLM 穿透深度分析 | 24h | — |
+| R-CCH-19 | LLM 持仓体检报告 | 4h（14400s） | — |
+| R-CCH-20 | LLM 穿透深度分析 | 4h（14400s） | — |
 | R-CCH-21 | 基金经理数据 | 24h | — |
 | R-CCH-22 | 基金风格扩展数据 | 24h | — |
 | R-CCH-23 | 历史 K 线 | 7 天 | — |
@@ -1320,7 +1320,7 @@ LLM 五维度量化评分，每项满分 100：
 | `discipline.drawdown_pct` | float | -10.0 | — | 回撤线（%）：组合相对历史峰值回撤 ≥ 此绝对值 → 建议控回撤 |
 | `discipline.silence_days` | int | 30 | — | 交易纪律信号静默期天数，同品种触发 N 天内不重复告警 |
 | `redemption_limits` | dict | {} | — | 场外基金单日赎回上限，格式 `{基金代码: 金额}`。配置后计算场外品种全量赎回所需天数 |
-| `cache_ttl` | dict | 默认 TTL | — | 各缓存类型 TTL 覆盖 |
+| `cache_ttl` | dict | 空对象（稀疏覆盖） | — | 各缓存类型 TTL 覆盖；默认值唯一来源是缓存注册表，仅需调整时添加键，删键即回默认（`get_ttl` 不做按 key 抖动） |
 | `llm_key_file` | str | `data/config/llm_key.json` | — | LLM 密钥文件路径（敏感凭据，纳入 .gitignore） |
 | `llm_providers_file` | str | `data/config/llm_providers.json` | — | LLM Provider 多链配置文件路径 |
 | `llm_settings_file` | str | `data/config/llm_settings.json` | — | LLM 参数文件路径 |

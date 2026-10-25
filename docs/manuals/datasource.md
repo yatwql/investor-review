@@ -51,10 +51,10 @@ LLM 分析结果独立缓存，通过指纹自动失效，不占用数据源请�
 | 模块 | 缓存前缀 | 默认 TTL | 分组 |
 |:-----|:---------|:--------:|:-----|
 | 全球政经局势 | `llm_global_macro_` | 24h | 持仓类 |
-| 智囊团深度复盘 | `llm_expert_review_` | 2h | 持仓类 |
-| 持仓体检报告 | `llm_health_check_` | 24h | 持仓类 |
-| 穿透深度分析 | `llm_penetration_deep_` | 24h | 持仓类 |
-| 财经新闻热点与持仓关联分析（LLM 二次关联） | `llm_news_item_` | 1h | 基础类 |
+| 智囊团深度复盘 | `llm_expert_review_` | 4h | 持仓类 |
+| 持仓体检报告 | `llm_health_check_` | 4h | 持仓类 |
+| 穿透深度分析 | `llm_penetration_deep_` | 4h | 持仓类 |
+| 财经新闻热点与持仓关联分析（LLM 二次关联） | `llm_news_item_` | 4h | 基础类 |
 | 辩论模式三段缓存（pro/con/synthesis，实验功能） | `llm_debate_pro_` / `llm_debate_con_` / `llm_debate_synthesis_` | 24h | 持仓类 |
 
 ---

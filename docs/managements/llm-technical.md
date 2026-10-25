@@ -1,5 +1,5 @@
 # LLM 集成层技术设计
-> 文档版本：0.15.5
+> 文档版本：0.15.6
 
 本文档是 `technical.md` 的 LLM 集成层专项技术设计补充，对应 `technical.md` §5（LLM 集成层概要设计）。
 `technical.md` §5 提供 LLM 层的总体架构、模块清单、调用链概览、多 Provider 链模式概要及关键机制速览；
@@ -203,15 +203,15 @@ skeleton.py:generate_llm_content()
 | 模块键 | 名称 | 默认 max_tokens | 默认 timeout | 默认 TTL | 默认 system_prompt |
 |:-------|:-----|:---------------:|:------------:|:--------:|:-------------------|
 | `global_macro` | 全球政经局势 | 3072 | 60s | 24h（86400s） | 宏观经济学家角色，500 字内，纯文本 |
-| `expert_review` | 智囊团深度复盘 | 36000 | 120s | 2h（7200s） | 召集令→圆桌会→定音锤三阶段 |
-| `health_check` | 持仓体检报告 | 24000 | 120s | 24h（86400s） | 五维度评分（风险分散度/流动性/收益合理性/成本结构/数据质量） |
-| `penetration_deep` | 穿透深度分析 | 12288 | 90s | 24h（86400s） | 行业/品种集中度+国别暴露 |
+| `expert_review` | 智囊团深度复盘 | 36000 | 120s | 4h（14400s） | 召集令→圆桌会→定音锤三阶段 |
+| `health_check` | 持仓体检报告 | 24000 | 120s | 4h（14400s） | 五维度评分（风险分散度/流动性/收益合理性/成本结构/数据质量） |
+| `penetration_deep` | 穿透深度分析 | 12288 | 90s | 4h（14400s） | 行业/品种集中度+国别暴露 |
 
 #### 批量模式模块（1 个，通过 `generate_llm_module` 以批量模式调用）
 
 | 模块键 | 名称 | 默认 max_tokens | 默认 timeout | 默认 TTL | 默认 system_prompt |
 |:-------|:-----|:---------------:|:------------:|:--------:|:-------------------|
-| `news_correlation` | 新闻 LLM 关联分析 | 3000 | 60s | 1h（3600s） | 逐批分析新闻与持仓关联性（JSON 输出） |
+| `news_correlation` | 新闻 LLM 关联分析 | 3000 | 60s | 4h（14400s） | 逐批分析新闻与持仓关联性（JSON 输出） |
 
 **批量模式 vs 标准模式区别**：
 
@@ -923,22 +923,27 @@ penetrated_assets ──→ extract_stable_penetration()
 
 ### 7.3 TTL 分辨率
 
-`get_ttl(data_type)` 两级优先级：
+`get_ttl(data_type)` 的解析顺序（**与缓存键无关，不做按 key 抖动**）：
 
-1. `config.json` → `cache_ttl.llm_{subtype}` 用户显式配置
-2. 代码默认值（hardcoded defaults）：
+1. 交易时段特例：`data_type ∈ config.market_hour_aware`（仅 price/index）且盘中 → `market_hour_ttl`（30s）
+2. `config.json` → `cache_ttl.llm_{subtype}` 稀疏覆盖（生成的配置里为空对象）
+3. 缓存注册表默认值（`core/data_registry.py` 的 `DataModuleDef.cache_ttl`）：
+4. 未注册类型 → `CACHE_DAILY` 兜底并告警
+
+下表为第 3 步的 LLM 模块默认值：
 
 | 模块 | 默认 TTL | 说明 |
 |:-----|:--------:|:------|
 | `global_macro` | 86400s (24h) | 宏观局势每日分析一次即可 |
-| `expert_review` | 7200s (2h) | 智囊团复盘可在同一天多次触发 |
-| `health_check` | 86400s (24h) | 体检报告每日更新 |
-| `penetration_deep` | 86400s (24h) | 穿透分析每日更新 |
-| `news_correlation` | 3600s (1h) | 新闻时效性强，TTL 较短 |
-| `self_review` | 7200s (2h) | 生成后自检（附录）；输入是其余模块产出，内容未变即命中 |
-| `holding_change` | 7200s (2h) | 持仓变动复盘归因（章内 LLM 归因块，本体由 feature `holding_change_review` 控制） |
+| `expert_review` | 14400s (4h) | 智囊团复盘可在同一天多次触发；4h 平衡新鲜度与重复调用成本 |
+| `health_check` | 14400s (4h) | 体检结论随持仓/数据质量变动，4h 刷新 |
+| `penetration_deep` | 14400s (4h) | 穿透结构随持仓变动，4h 刷新 |
+| `news_correlation` | 14400s (4h) | 新闻时效性强，但逐条缓存的键含标题+持仓指纹，4h 内同批新闻结论稳定 |
+| `self_review` | 86400s (24h) | 生成后自检（附录）；**内容寻址**（键含各模块产出正文），输入未变即命中，按时间强制重算只会白花钱 |
+| `holding_change` | 86400s (24h) | 持仓变动复盘归因（章内 LLM 归因块，本体由 feature `holding_change_review` 控制）；同样内容寻址 |
 
-`import` 失败时兜底返回 hardcoded defaults（设计为防御性编程，正常情况下不会触发）。
+配置/注册表读取异常时由 `get_ttl` 内部 `try/except` 兜底为注册表默认值（正常情况下不会触发）。
+> **单一来源（读侧不持有任何配置）**：`get_cache_ttl_llm(模块)` 只做「模块键 → `llm_<模块>`」的换名，随后**直读 `cache.get_ttl`**；后者本身就是「`config.json → cache_ttl.llm_<模块>` 覆盖（生成的配置里该段为空对象，即默认无覆盖）→ `core/data_registry` 的 `DataModuleDef.cache_ttl` 默认值 → `CACHE_DAILY` 兜底」。因此读侧、启动清理、统计与配置模板读的是同一份数字，**不存在第二套 TTL 配置**，也就没有「两处各写一遍、漏一处就静默借用别的模块」的漂移面；未登记的模块会打 WARNING 并按日级兜底（新增 LLM 模块忘登记立刻可见，不会被 `global_macro` 的 24h 掩盖）。TTL 与缓存键无关（不做 per-key 抖动），因此读侧与清理侧取到的是同一个数。该不变式由 `src/test/unit/llm/test_llm_cache_ttl_single_source.py`（注册表派生模块清单逐项校验）与 `src/test/unit/cache/test_ttl_alignment.py`（读写同值/精确键映射）共同守卫。
 
 ### 7.4 缓存命中提示
 

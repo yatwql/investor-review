@@ -12,7 +12,7 @@ import time
 from src.python.core.registry import get_exact_type_map, get_prefix_type_map
 
 from ._io import _read_cache_data
-from ._paths import _CACHE_DIR
+from ._paths import _CACHE_DIR, _CACHE_KEY_VERSION
 from ._store import _cache_lock
 from ._ttl import get_ttl
 
@@ -48,12 +48,18 @@ def _process_cache_file(
         return 0
     fpath = os.path.join(_CACHE_DIR, fname)
 
+    # 文件名带缓存键版本戳（`{key}_v{N}.json`），逻辑键是读侧使用的那个串：
+    # 剥掉版本戳后才能命中精确键映射表（精确键在注册表里按逻辑键登记）。
+    logical_key = fkey
+    if fkey.endswith(f"_{_CACHE_KEY_VERSION}"):
+        logical_key = fkey[: -(len(_CACHE_KEY_VERSION) + 1)]
+
     data_type = "default"
-    if fkey in exact_map:
-        data_type = exact_map[fkey]
+    if logical_key in exact_map:
+        data_type = exact_map[logical_key]
     else:
         for pfx, dtype in prefix_type_map.items():
-            if fkey.startswith(pfx):
+            if logical_key.startswith(pfx):
                 data_type = dtype
                 break
 

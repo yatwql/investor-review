@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.15.5
+> 文档版本：0.15.6
 
 ## 概述
 
@@ -1208,7 +1208,7 @@ DataModuleDef("我的中文名称", "my_data_type",
 
 - `name` — 中文显示名；`data_type` — 内部标识键，需唯一。
 - `cache_prefixes` — 缓存文件名前缀（可多个），清理时按前缀匹配。**注意：长前缀需排在短前缀之前**，否则短前缀可能先匹配（如 `"llm_"` 会误匹配 `"llm_global_macro_"`）。实际声明时所有 LLM 模块均已使用完整长前缀，无歧义。
-- `cache_ttl` — 使用 `CACHE_DAILY` / `CACHE_WEEKLY` / `CACHE_MONTHLY` 或自定义秒数。
+- `cache_ttl` — 使用 `CACHE_DAILY` / `CACHE_WEEKLY` / `CACHE_MONTHLY` 或自定义秒数；**这是该类型 TTL 的唯一默认来源**（配置文件里的 `cache_ttl.<type>` 只是稀疏覆盖，`get_ttl` 不做按 key 抖动）。
 - `cache_groups` — `"preload"`（换持仓需重取）或 `"refresh"`（主动刷新按钮触发）；**留空 `()` 表示不被任何组清除操作命中**（如 `tracking`、`calendar` 等安全设计）。
 
 ### 新增 LLM 分析模块
@@ -1218,7 +1218,7 @@ DataModuleDef("我的中文名称", "my_data_type",
 ```python
 DataModuleDef("我的 LLM 分析", "llm_my_analysis",
               cache_prefixes=("llm_my_analysis_",),
-              cache_ttl=7200,
+              cache_ttl=14400,  # 4h；LLM 模块惯例：分析类 4h、内容寻址类 24h
               settings_suffix="my_analysis",
               cache_groups=("preload",)),
 ```

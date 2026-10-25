@@ -25,6 +25,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import time
@@ -33,6 +34,8 @@ import threading
 from datetime import date
 from typing import Any
 
+from src.python.cache import get as cache_get
+from src.python.cache import set as cache_set
 from src.python.core.atomic_write import write_json_atomic
 from src.python.core.constants import PROJECT_ROOT
 from src.python.core.retry import STRATEGY_FIXED, RetryPolicy
@@ -226,6 +229,20 @@ def _get_with_transient_retry(path: str, query: dict[str, Any]) -> Any:
     )
 
 
+#: 探测未命中（404）的负缓存 TTL：财报全文是已发布静态文档，缺失章节不会回补；
+#: 12h 足以跨过同一天的多次报告，又不会让「源侧后来补解析」长期不可见。
+_PROBE_MISS_TTL = 12 * 3600
+
+
+def _probe_miss_key(path: str, params: dict[str, Any]) -> str:
+    """探测负缓存的键（path + section）；非探测请求返回空串。"""
+    section = str(params.get("section") or "")
+    if not section and not path.endswith("/sections"):
+        return ""
+    payload = f"{path}|{section}"
+    return "datasink_probe_miss_" + hashlib.md5(payload.encode("utf-8")).hexdigest()[:12]
+
+
 def _request(path: str, params: dict[str, Any]) -> dict[str, Any] | None:
     """带凭据 / 限速 / 配额护栏的 GET。
 
@@ -246,6 +263,15 @@ def _request(path: str, params: dict[str, Any]) -> dict[str, Any] | None:
         return None
     if not _consume_quota():
         set_last_reason("日配额已用尽")
+        return None
+
+    # 负缓存预检：同一（文档, 章节）已确认缺失 → 直接按降级路径返回，不再发请求。
+    # 财报章节探测在每份报告里都要按候选章节名逐个试，404 各占一个网络往返
+    # （实测 7 只标的 × 多章节 → 十余秒），而这批「源侧确实没有」的结论跨报告稳定。
+    miss_key = _probe_miss_key(path, params)
+    if miss_key and cache_get(miss_key, _PROBE_MISS_TTL):
+        logger.debug("[datasink] 探测负缓存命中（已确认缺失，跳过请求）：%s", path)
+        set_last_reason("该章节此前确认缺失（负缓存）")
         return None
 
     query = {k: v for k, v in params.items() if v not in (None, "")}
@@ -280,6 +306,8 @@ def _request(path: str, params: dict[str, Any]) -> dict[str, Any] | None:
                 set_last_reason(f"该文档无「{params['section']}」章节")
             else:
                 set_last_reason("该文档章节清单未被源侧解析")
+            if miss_key:
+                cache_set(miss_key, True)
         else:
             logger.warning("[datasink] 请求 %s 返回 HTTP %d", path, resp.status_code)
             set_last_reason(f"HTTP {resp.status_code}")

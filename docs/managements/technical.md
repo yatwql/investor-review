@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.15.5
+> 文档版本：0.15.6
 
 ## 目录
 
@@ -1298,7 +1298,7 @@ cache/
 | `get(key, max_age_seconds)` | `(str, float) → Any\|None` | 先查 `.json.gz`，不存在时回退 `.json`；超龄返回 None |
 | `set(key, data)` | `(str, Any) → None` | `{"_ts": now, "_data": data}` 序列化 + 原子写入；≥100KB 自动 `.json.gz` |
 | `clear(key)` | `(str) → None` | 同时删除 `.json` 和 `.json.gz` |
-| `get_ttl(data_type)` | `(str) → float` | TTL 分辨率（见下方流程图） |
+| `get_ttl(data_type, key=None)` | `(str, str) → float` | TTL 分辨率（见下方流程图）；`key` 为历史参数、**不参与计算**（无按 key 抖动） |
 | `clear_by_group(group)` | `(str) → None` | 按 preload/refresh 分组清除 |
 | `cleanup_expired()` | `() → int` | 扫描全量缓存，删除超龄项（逐文件明细只进 DEBUG，INFO 留汇总行 + 释放字节；age/TTL 按量级自适应单位——盘中 30s 的 price TTL 不再印成 `ttl=0.0h`；**无 `_ts` 包封的文件跳过 TTL 判定**，见下） |
 
@@ -2352,6 +2352,13 @@ industry_{code}.json
 
 `_dedup_by_title()` 采用**多档模糊去重 + 实体 bigram + 英数 token 辅助判定 + 方向对立防护**策略，阈值基于 42560 条锚点分层采样校准（2026-08-17，误合并率从 ~70-80% 压降至可控区间）。判定口径（阈值常量 / 模板词表与掩码 / 标题归一化 / 实体 bigram 提取 / 相似度 / 方向词对 / 规则指纹）的唯一实现在 `providers/news_dedup_rules.py`；主流程模块 `providers/news_dedup.py` 只留锚点采集与比较循环，并原面 re-export 规则原语（既有引用面不变）。
 
+##### 比较成本（判定不变的两层省算）
+
+- **比较串缓存**：`_ratio_ready(norm)`（去通用日期 + 英文专名按长度分桶）与 `_char_multiset(norm)` 按标题字符串 `lru_cache`——同一「已保留项」在循环里被比较数十次，避免重复跑正则。
+- **字符多重集上界预筛**：`2·Σ_c min(count_a, count_b) / (len_a + len_b)` 是 `SequenceMatcher.ratio` 的严格上界；上界低于候选门槛时连 `SequenceMatcher` 都不构造（省去成对 `quick_ratio` 的对象开销）。上界只用于跳过**不可能命中**的对。
+
+等价性由 `src/test/unit/news/test_news_dedup_perf.py` 锁定：以「无预筛的完整 ratio 判定」为对照组跑同一语料，保留集合逐条一致。
+
 ##### 标题去重判定流程
 
 ```
@@ -2909,6 +2916,10 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
 
 **数据源与鉴权**：DataSinking（`https://api.datasink.ing`）提供全文本财报 Markdown，仅覆盖 A 股（SSE/SZSE/BSE，代码经 `core/code_symbols.py::to_fmp_symbol` 映射为 FMP 风格）。**需用户自备 API key**：凭据取通用密钥文件 `data/config/data_key.json` 的 `datasink` 节（`{"datasink": {"api_key": "..."}}`），环境变量 `DATASINK_API_KEY` 可覆盖；缺 key 时链路主动跳过并给申请指引，章节写占位。
 
+**标的级正文缺失负缓存**：章节阶 + 备源两阶都试过仍无正文（`REASON_SECTIONS_MISSING`）时，按标的写 6h 负缓存（`report_symbol_miss_{symbol}`），同一天的后续报告直接复用同一原因文案、不再读索引与走候选；**索引为空/网络失败不入负缓存**（可能是瞬时不可用，缓存会无谓延长恢复期）。
+
+**探测负缓存**：带 `section` 的章节探测与 `/sections` 清单探测遇 404 时，把「该（文档, 章节）缺失」写入 12h 负缓存（`datasink_probe_miss_` 前缀，键 = path + section 的 md5）；同一天的后续报告直接走降级路径，不再逐章节重发请求（实测 7 只标的 × 多候选章节的 404 占十余秒）。文档级 404（`/documents/{id}`、`/documents` 列表）属真缺失，仍按 WARNING 处置且**不进**负缓存。
+
 **取数链路**：`fetcher/financial_report.py` 逐标的取元数据（`/documents`，**不带文种过滤**取最近若干篇后本地按「报告期 → 披露时间」倒序取最新一篇，故半年报/季报优先于年报；`doc_types` 非空时作白名单；**主源索引为空时切巨潮备源**，同一元数据形状）→ 取该文档**实际章节名清单**（`/documents/{id}/sections`，缓存于 `report_datasink_sections_`；备源无章节清单，直接落偏好名直取）→ 按 `sections` 偏好子串匹配出**精确章节名**逐个取正文（每节独立缓存、命中者按声明顺序以空行拼接；首选项 404 时继续试下一候选；清单不可得**或非空但残缺**时回退偏好名直取；**清单命中缓存但该批章节全部取不到正文时失效该文档的清单缓存**——清单是 14 天缓存，源侧若重新解析过文档，旧章节名会持续 404 且永不恢复，失效一次的代价只是下次多一次 `/sections` 探测）→ 仍无正文则**按报告期回溯上一份报告**（`_REPORT_CANDIDATE_LIMIT=3`，**年报/半年报优先于季报**：`_order_report_candidates` 稳定分组，季报无「管理层讨论与分析」只作最后兜底；标题含「公告」的信息披露条目跳过；命中即止，报告期/文种如实写入）→ **全文阶**：章节阶全失败时整篇下载后按偏好关键词定位片段（`_locate_from_fulltext`，跳过目录点线行/行内省略号，最多 `_FULLTEXT_FALLBACK_LIMIT=2` 篇，记录标 `section_source=fulltext`）→ 按 `datasink.max_chars` 截断为摘要。单篇正文经 `fetch_with_fallback` + 财报域适配器两槽（主：DataSinking；备：巨潮资讯网），复用缓存/熔断/降级；两源以 `source_hint` 做命名空间隔离（异源 doc_id 互不服务，备源候选进独立缓存键段），主源可用时备源零调用。关键词定位（目录行跳过）收敛于 `fetcher/report_locate.py`（全文兜底与备源切片共用同一规则）。**标的清单**由 `collect_a_share_targets(holdings, penetrated)` 生成：持仓场外基金经 `is_otc_fund_by_name` 剔除（`00` 重叠区），穿透标的带 `name`/`sources`（来源基金）用于展示层回填与来源标注；失败原因由 `fetch_symbol_report_detailed` 返回（索引无报告 / 目标章节缺失 + 已试报告期）。
 
 **限速与配额护栏**：每次 HTTP 请求前经 `RateLimiter`（`core/throttle.py`）以「间隔 = 1/每秒上限」限速（免费档 3 请求/秒；付费档 31）；日配额计数存 `data/state/datasink_quota.json`，超限即停并告警。**免费档无批量端点、必然逐篇请求**，故限速必须落在 provider 每次请求前（批量调度器层挡不住单条调用）。并发取数由 `batch.datasink_workers` 控制（**默认 2**，免费档批量上限 ≤3），速率仍由 provider 兜底。
@@ -3099,7 +3110,7 @@ LLM 集成层提供 5 个分析模块，通过 `llm_settings.json` 的 `enabled_
 | 智囊团深度复盘 | `expert_review` | 持仓明细+穿透 → 专业分析师多视角辩论 | preload | 2h |
 | 持仓体检报告 | `health_check` | 持仓明细（排除行情波动）→ 5 维健康度评分 | preload | 24h |
 | 穿透深度分析 | `penetration_deep` | 穿透 TOP10 → 行业/品种/国家集中度分析 | preload | 24h |
-| 新闻二次关联 | `news_correlation` | 逐条新闻 → LLM 深度关联评分（批量模式） | refresh | 1h |
+| 新闻二次关联 | `news_correlation` | 逐条新闻 → LLM 深度关联评分（批量模式） | refresh | 4h |
 
 每个模块的详细参数（model、temperature、timeout、max_tokens 等）通过 `{参数}_{标识}` 命名约定在 `llm_settings.json` 中配置。
 
@@ -3967,14 +3978,16 @@ investor-review/
 
 | 键名 | 文件名模式 | TTL | 盘中特殊 | 指纹 | 分组 |
 |:-----|:----------|:---:|:--------:|:----|:-----|
-| `llm_expert_review` | `llm_expert_review_{fingerprint}.json` | 2h | — | 持仓汇总+分类+穿透+明细 | preload |
+| `llm_expert_review` | `llm_expert_review_{fingerprint}.json` | 4h | — | 持仓汇总+分类+穿透+明细 | preload |
 | `llm_debate_pro` | `llm_debate_pro_{fingerprint}.json` | 24h | — | 复用 expert_review 持仓指纹（排除行情波动） | preload |
 | `llm_debate_con` | `llm_debate_con_{fingerprint}.json` | 24h | — | 复用 expert_review 持仓指纹（排除行情波动） | preload |
 | `llm_debate_synthesis` | `llm_debate_synthesis_{fingerprint}.json` | 24h | — | 复用 expert_review 持仓指纹（排除行情波动） | preload |
-| `llm_news_correlation` | `llm_news_item_{hash}.json`（逐条） | 1h | — | 标题前 80 字+持仓指纹 | refresh |
+| `llm_news_correlation` | `llm_news_item_{hash}.json`（逐条） | 4h | — | 标题前 80 字+持仓指纹 | refresh |
+
+> **TTL 两层模型**：① **默认值唯一来源** = `core/data_registry.py` 的 `DataModuleDef.cache_ttl`（清理/统计/读侧同源）；② **可选覆盖** = `config.json → cache_ttl.<类型>`，生成的配置里该段为空对象，只在用户显式添加键时生效。`cache.get_ttl` 的优先级为「交易时段特例（仅 `market_hour_aware` 声明的 price/index）→ 配置覆盖 → 注册表默认 → `CACHE_DAILY` 兜底（未注册类型，并打 WARNING）」；**不做 per-key 抖动**——TTL 只由「类型」决定、与 key 无关，因此读侧与清理侧天然同值。按 key 抖动要求每个读点都传 key 才能与清理侧一致，属无机制保障的隐式契约；而本应用缓存逐资产写入、过期时刻天然分散，抖动的收益低于该维护成本。
 | `llm_global_macro` | `llm_global_macro_{fingerprint}.json` | 24h | — | A 股/美股指数+持仓汇总 | preload |
-| `llm_health_check` | `llm_health_check_{fingerprint}.json` | 24h | — | 持仓明细（排除行情波动） | preload |
-| `llm_penetration_deep` | `llm_penetration_deep_{fingerprint}.json` | 24h | — | 持仓明细（排除行情波动） | preload |
+| `llm_health_check` | `llm_health_check_{fingerprint}.json` | 4h | — | 持仓明细（排除行情波动） | preload |
+| `llm_penetration_deep` | `llm_penetration_deep_{fingerprint}.json` | 4h | — | 持仓明细（排除行情波动） | preload |
 
 #### 基金深度分析类
 

@@ -7,7 +7,6 @@ import os
 
 from src.python.config._validation_scalars import _deabsolutize_paths
 from src.python.core.constants import PROJECT_ROOT
-from src.python.core.registry import get_cache_ttl_defaults
 
 # 配置文件路径（支持 CLI --config 覆写），始终以项目根目录为基准
 _CONFIG_FILE = os.path.join(PROJECT_ROOT, "data/config/config.json")
@@ -81,7 +80,10 @@ _DEFAULT_CONFIG = {
         "end": "15:00",
         "official_source": True,
     },
-    "cache_ttl": get_cache_ttl_defaults(),
+    # 稀疏覆盖位：默认值唯一来源是 core/data_registry（DataModuleDef.cache_ttl）。
+    # 这里**不抄默认值**——抄一份会让「用户显式覆盖」与「模板陈旧」无法区分，
+    # 改默认值时旧副本继续生效（实测事故）。需要调某个类型 TTL 时再添加该键。
+    "cache_ttl": {},
     # ── E. 行为调优 ──
     "default_menu_key": "L",
     "report_section_order": {},
@@ -304,7 +306,9 @@ def _build_template_from_defaults() -> str:
         f'  "market_hour_aware": {json.dumps(d["market_hour_aware"])},',
         f'  "market_hour_ttl": {json.dumps(d["market_hour_ttl"])},',
         f'  "market_hours": {json.dumps(d["market_hours"], indent=2).replace(chr(10), chr(10) + "  ")},',
-        f'  "cache_ttl": {json.dumps(d["cache_ttl"], ensure_ascii=False, indent=2).replace(chr(10), chr(10) + "  ")},',
+        "  // cache_ttl 为「稀疏覆盖」：默认值见 docs/manuals/how-to-config.md 的 TTL 表（来自缓存注册表）；",
+        '  // 仅需调整某个类型时在此添加该键，例如："llm_expert_review": 21600',
+        f'  "cache_ttl": {json.dumps(d["cache_ttl"], ensure_ascii=False)},',
         "",
         # ── E ──
         "  // ── E. 行为调优 ──",

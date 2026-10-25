@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import time
 
@@ -17,27 +16,6 @@ from ._io import _read_cache_data
 from ._paths import _GZIP_SUFFIX, _cache_path
 
 logger = logging.getLogger("invest")
-
-# 缓存雪崩防护：TTL 随机偏移范围 (±15%)
-_TTL_JITTER_RANGE = 0.15
-_TTL_JITTER_RESOLUTION = 301  # 步数，使偏移值在 [0.85, 1.15] 范围内有 301 个可能值
-
-
-def _ttl_jitter_factor(key: str) -> float:
-    """基于 key 哈希的确定性 TTL 偏移因子 [0.85, 1.15]。
-
-    相同 key 始终返回相同因子（跨进程稳定），确保缓存过期时间分散，
-    防止大量同类缓存同时过期导致缓存雪崩。
-
-    Args:
-        key: 缓存键名
-
-    Returns:
-        [0.85, 1.15] 范围内的偏移因子
-    """
-    h = int(hashlib.md5(key.encode()).hexdigest()[:4], 16)
-    offset = h % _TTL_JITTER_RESOLUTION  # 0 .. 300
-    return 1.0 + _TTL_JITTER_RANGE * (offset - _TTL_JITTER_RESOLUTION // 2) / (_TTL_JITTER_RESOLUTION // 2)
 
 
 def get_cache_age(key: str) -> float | None:
@@ -100,17 +78,17 @@ def get_cache_age_by_data_type(
 
 
 def get_ttl(data_type: str, key: str | None = None) -> float:
-    """获取指定数据类型的缓存过期时间（秒）。
+    """获取指定数据类型的缓存过期时间（秒）—— **同一类型恒返回同一值**。
 
-    交易时段内，对 market_hour_aware 声明过的数据类型使用短 TTL（默认 30s）
-    确保实时性，优先于静态 cache_ttl 配置。
-
-    当传入 key 参数时，对 TTL 增加 ±15% 的确定性随机偏移（基于 key 哈希），
-    用于防止大量同类缓存同时过期导致的缓存雪崩。
+    用途单一化：TTL 就是「注册表默认值（可被 `config.json cache_ttl` 覆盖）」，
+    交易时段内额外对 `market_hour_aware` 声明的类型（price/index）降为短 TTL。
+    读侧（`cache.get`）与清理侧（`cleanup_expired`）取到的是同一个数——这是
+    「读写两侧判定期一致」的前提，不需要两侧各自对齐。
 
     Args:
         data_type: 数据类型键名，如 "price"、"rank"、"hold"
-        key: 缓存键名，传入时启用 TTL 随机偏移（缓存雪崩防护）
+        key: **历史参数，已不参与计算**。保留签名以兼容既有调用点（`get_ttl(t, key)`），
+            避免为一次简化改动触碰十余处调用；新代码无需传。
 
     Returns:
         过期时间（秒）
@@ -143,7 +121,4 @@ def get_ttl(data_type: str, key: str | None = None) -> float:
         logger.debug("get_ttl: 配置读取失败，使用默认值")
         ttl = get_cache_ttl_defaults().get(data_type, CACHE_DAILY)
 
-    # 缓存雪崩防护：基于 key 哈希的确定性 TTL 偏移
-    if key is not None:
-        ttl *= _ttl_jitter_factor(key)
     return ttl

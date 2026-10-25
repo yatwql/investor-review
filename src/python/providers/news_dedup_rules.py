@@ -15,7 +15,8 @@
 from __future__ import annotations
 
 import re
-
+from collections import Counter
+from functools import lru_cache
 
 from ._news_dedup_tables import (
     _EVENT_GROUPS,
@@ -101,6 +102,12 @@ _STOP_MASK_RE = re.compile("|".join(re.escape(w) for w in sorted(_STOP_BIGRAMS, 
 def _mask_stop(text: str) -> str:
     """将停用模板词整体替换为占位符，供 bigram 提取前掩码。"""
     return _STOP_MASK_RE.sub("□", text)
+
+
+@lru_cache(maxsize=4096)
+def _extract_entity_bigrams_cached(text: str) -> frozenset[str]:
+    """bigram 提取的缓存包装（返回不可变集合，调用方只做集合运算）。"""
+    return frozenset(_extract_entity_bigrams(text))
 
 
 def _extract_entity_bigrams(text: str) -> set[str]:
@@ -293,6 +300,39 @@ def _has_opposite_direction(title_a: str, title_b: str) -> bool:
     return any((w1 in title_a and w2 in title_b) or (w2 in title_a and w1 in title_b) for w1, w2 in _OPPOSITE_PAIRS)
 
 
+@lru_cache(maxsize=4096)
+def _ratio_ready(norm: str) -> str:
+    """归一标题 → 相似度比较串（去通用日期 + 英文专名按长度分桶占位）。
+
+    这是纯字符串变换，同一份新闻标题在去重循环里会被作为「已保留项」参与
+    数十次比较；按字符串缓存可避免每次都重跑两条正则（实测占比较耗时的
+    可观比例）。缓存键是内容，不引入跨轮语义耦合。
+    """
+    return _ENG_PLACEHOLDER.sub(_eng_len_placeholder, _RATIO_CLEAN.sub("", norm))
+
+
+@lru_cache(maxsize=4096)
+def _char_multiset(norm: str) -> tuple[tuple[str, int], ...]:
+    """比较串的字符多重集（排序后的 (字符, 次数) 元组，可直接哈希缓存）。"""
+    return tuple(sorted(Counter(_ratio_ready(norm)).items()))
+
+
+def _multiset_upper_bound(norm_a: str, norm_b: str) -> float:
+    """相似度的**严格上界**：2·Σ_c min(count_a, count_b) / (len_a + len_b)。
+
+    ``SequenceMatcher.ratio`` = 2M/T，其中 M 为匹配字符数；任意匹配方案里每个
+    字符都要从两侧各消耗一个，故 M ≤ Σ_c min(count_a, count_b)（多重集交集）。
+    该上界只需比较计数表，比构造两个 ``SequenceMatcher`` 便宜一个量级。
+    """
+    counts_a = dict(_char_multiset(norm_a))
+    counts_b = dict(_char_multiset(norm_b))
+    total = sum(counts_a.values()) + sum(counts_b.values())
+    if total == 0:
+        return 0.0
+    shared = sum(min(count, counts_b.get(char, 0)) for char, count in counts_a.items())
+    return 2.0 * shared / total
+
+
 def _ratio_of_norms(norm_a: str, norm_b: str) -> float:
     """已归一标题的相似度（双向 SequenceMatcher 取 max）。
 
@@ -302,8 +342,8 @@ def _ratio_of_norms(norm_a: str, norm_b: str) -> float:
     """
     from difflib import SequenceMatcher
 
-    a = _ENG_PLACEHOLDER.sub(_eng_len_placeholder, _RATIO_CLEAN.sub("", norm_a))
-    b = _ENG_PLACEHOLDER.sub(_eng_len_placeholder, _RATIO_CLEAN.sub("", norm_b))
+    a = _ratio_ready(norm_a)
+    b = _ratio_ready(norm_b)
     return max(
         SequenceMatcher(None, a, b).ratio(),
         SequenceMatcher(None, b, a).ratio(),
@@ -320,8 +360,14 @@ def _ratio_of_norms_bounded(norm_a: str, norm_b: str, threshold: float) -> float
     """
     from difflib import SequenceMatcher
 
-    a = _ENG_PLACEHOLDER.sub(_eng_len_placeholder, _RATIO_CLEAN.sub("", norm_a))
-    b = _ENG_PLACEHOLDER.sub(_eng_len_placeholder, _RATIO_CLEAN.sub("", norm_b))
+    # 先取零分配的字符多重集上界：达不到门槛时连 SequenceMatcher 都不必构造。
+    # 该上界不小于真实 ratio，故「上界 < 门槛 ⇒ 所有合并规则都不可能命中」与原
+    # 实现（quick_ratio 双向上界）判据等价，判定结果不变。
+    cheap_upper = _multiset_upper_bound(norm_a, norm_b)
+    if cheap_upper < threshold:
+        return cheap_upper
+    a = _ratio_ready(norm_a)
+    b = _ratio_ready(norm_b)
     upper = max(
         SequenceMatcher(None, a, b).quick_ratio(),
         SequenceMatcher(None, b, a).quick_ratio(),
@@ -333,7 +379,7 @@ def _ratio_of_norms_bounded(norm_a: str, norm_b: str, threshold: float) -> float
 
 def _overlap_of_norms(norm_a: str, norm_b: str) -> int:
     """已归一标题的实体 bigram 交集大小（当前模板词表掩码后）。"""
-    return len(_extract_entity_bigrams(norm_a) & _extract_entity_bigrams(norm_b))
+    return len(_extract_entity_bigrams_cached(norm_a) & _extract_entity_bigrams_cached(norm_b))
 
 
 def _pair_similarity(title_a: str, title_b: str) -> tuple[float, int]:

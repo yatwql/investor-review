@@ -292,7 +292,8 @@ class TestCleanupExpired(CacheTestBase):
         """不同前缀使用对应 TTL 判断过期。"""
         mock_time.return_value = 10000.0
 
-        def ttl_side_effect(dtype: str) -> float:
+        def ttl_side_effect(dtype: str, key: str | None = None) -> float:
+            # 清理侧与读侧同源取 TTL（key 参数保留兼容，不参与计算）
             mapping = {"price": 100.0, "news": 500.0}
             return mapping.get(dtype, 300.0)
 

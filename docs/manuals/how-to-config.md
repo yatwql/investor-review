@@ -56,11 +56,9 @@
     "end": "15:00",
     "official_source": true
   },
-  "cache_ttl": {
-    "price": 86400,
-    "index": 86400
-    // ...（完整列表见下方 cache_ttl 章节）
-  },
+  // cache_ttl：稀疏覆盖位。默认值见下方「cache_ttl 可调参数」表（来自缓存注册表）；
+  // 仅需调整某个类型时在此添加该键，如 { "llm_expert_review": 21600 }；删键即回默认。
+  "cache_ttl": {},
 
   // ── E. 行为调优 ──
   "default_menu_key": "L",
@@ -321,6 +319,10 @@ TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一�
 
 #### cache_ttl 可调参数
 
+> **默认值只存在于代码注册表**（`core/data_registry.py` 的 `DataModuleDef.cache_ttl`）；本节表格是它的**只读参考**。
+> 生成的 `config.json` 里 `cache_ttl` 是**空对象**——需要调某个类型时再添加该键（如 `"llm_expert_review": 21600`），删掉该键即回到默认值。
+> 这样「默认值」只有一处：代码改默认值即对所有未覆盖的安装生效，配置文件不会留下与之不一致的旧副本。
+
 > `—` 表示该缓存类型文件名为精确键名（无指纹后缀），不受持仓变化影响，仅在 TTL 到期后刷新。
 
 快速定位：— [行情/数据类](#行情数据类) — [LLM 分析类](#llm-分析类) — [基金深度分析类](#基金深度分析类) — [系统类](#系统类) — [历史走势类](#历史走势类)
@@ -348,13 +350,13 @@ TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一�
 
 | 键名 | 文件名模式 | 默认 TTL | 指纹来源 | 说明 |
 |------|-----------|:--------:|----------|------|
-| `llm_expert_review` | `llm_expert_review_{fingerprint}.json` | 2h | 持仓汇总 + 分类计数 + 穿透 TOP10 + 持仓明细 | 智囊团深度复盘 |
-| `llm_news_correlation` | `llm_news_item_{hash}.json`（逐条） | 1h | 标题前 80 字 + 持仓指纹 | 财经新闻热点与持仓关联分析 |
+| `llm_expert_review` | `llm_expert_review_{fingerprint}.json` | 4h | 持仓汇总 + 分类计数 + 穿透 TOP10 + 持仓明细 | 智囊团深度复盘 |
+| `llm_news_correlation` | `llm_news_item_{hash}.json`（逐条） | 4h | 标题前 80 字 + 持仓指纹 | 财经新闻热点与持仓关联分析 |
 | `llm_global_macro` | `llm_global_macro_{fingerprint}.json` | 24h | A股/美股指数 + 持仓汇总 | 全球政经局势 |
-| `llm_health_check` | `llm_health_check_{fingerprint}.json` | 24h | 持仓明细（排除行情波动） | 持仓体检报告 |
-| `llm_penetration_deep` | `llm_penetration_deep_{fingerprint}.json` | 24h | 持仓明细（排除行情波动） | 穿透深度分析 |
-| `llm_self_review` | `llm_self_review_{fingerprint}.json` | 2h | 四个分析模块的产出文本摘要 + 持仓/穿透摘要（**内容寻址**：产出不变即命中） | 生成后自检（⚗ 默认开） |
-| `llm_holding_change` | `llm_holding_change_{fingerprint}.json` | 2h | 变动事实块 + 信号对账块 + 持仓摘要 + 申购限购约束块（**内容寻址**：进提示词必进指纹） | 持仓变动复盘归因（章本体 `holding_change_review` 默认关，开启后归因默认开） |
+| `llm_health_check` | `llm_health_check_{fingerprint}.json` | 4h | 持仓明细（排除行情波动） | 持仓体检报告 |
+| `llm_penetration_deep` | `llm_penetration_deep_{fingerprint}.json` | 4h | 持仓明细（排除行情波动） | 穿透深度分析 |
+| `llm_self_review` | `llm_self_review_{fingerprint}.json` | 24h | 四个分析模块的产出文本摘要 + 持仓/穿透摘要（**内容寻址**：产出不变即命中） | 生成后自检（⚗ 默认开） |
+| `llm_holding_change` | `llm_holding_change_{fingerprint}.json` | 24h | 变动事实块 + 信号对账块 + 持仓摘要 + 申购限购约束块（**内容寻址**：进提示词必进指纹） | 持仓变动复盘归因（章本体 `holding_change_review` 默认关，开启后归因默认开） |
 | `llm_debate_pro` | `llm_debate_pro_{fingerprint}.json` | 24h | 复用 expert_review 持仓指纹（排除行情波动） | 辩论白脸（实验功能） |
 | `llm_debate_con` | `llm_debate_con_{fingerprint}.json` | 24h | 复用 expert_review 持仓指纹（排除行情波动） | 辩论黑脸（实验功能） |
 | `llm_debate_synthesis` | `llm_debate_synthesis_{fingerprint}.json` | 24h | 复用 expert_review 持仓指纹（排除行情波动） | 辩论综合（实验功能） |

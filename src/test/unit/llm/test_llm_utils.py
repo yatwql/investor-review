@@ -154,12 +154,12 @@ class TestGetCacheTtlLlm(unittest.TestCase):
 
     def test_expert_review_default(self) -> None:
         ttl = get_cache_ttl_llm("expert_review")
-        self.assertEqual(ttl, 7200)
+        self.assertEqual(ttl, 14400)
 
     def test_news_correlation_default(self) -> None:
         ttl = get_cache_ttl_llm("news_correlation")
         self.assertGreater(ttl, 0)
-        self.assertEqual(ttl, 3600)
+        self.assertEqual(ttl, 14400)
 
 
 # ═══════════════════════════════════════════════════════════
