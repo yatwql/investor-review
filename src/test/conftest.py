@@ -182,6 +182,33 @@ def _doctor_probe_targets(tmp_path_factory):
     return targets
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _isolate_process_wide_state_paths(tmp_path_factory):
+    """进程级（session）钉死会**活过用例 teardown** 的落盘路径。
+
+    有些状态写入发生在后台线程/延迟回调里：用例 teardown 时函数级 monkeypatch 已
+    还原，线程再解析路径就会写回真实 `data/state/`。这里用 session 级 MonkeyPatch
+    在整个测试进程内固定这些路径（不随单个用例还原）：
+
+    - 数据源熔断状态（`DataSourceRegistry._get_breaker_state_path`）：真实运行里
+      熔断失败上下文会带测试网络守卫的报错文本，一旦落真实文件会污染生产熔断状态。
+    """
+    import pytest as _pytest
+
+    from src.python.core.provider_registry import DataSourceRegistry
+
+    base = tmp_path_factory.mktemp("process_state")
+    state_dir = base / "data" / "state"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    with _pytest.MonkeyPatch.context() as mp:
+        mp.setattr(
+            DataSourceRegistry,
+            "_get_breaker_state_path",
+            staticmethod(lambda: str(state_dir / "circuit_breaker.json")),
+        )
+        yield
+
+
 @pytest.fixture(autouse=True)
 def _isolate_sensitive_paths(tmp_path, monkeypatch, _doctor_probe_targets):
     """自动将 config.json 和缓存目录重定向到临时目录。
