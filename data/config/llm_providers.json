@@ -7,7 +7,8 @@
   //   deepseek-main  → llm_key.json 同名块（api_key / model / endpoint）
   //   opencode-go    → llm_key.json 同名块（api_key / model / endpoint）
   //
-  // pacing 是端点级节流（只约束本条目的端点），不写该段 = 无额外约束：
+  // pacing 是端点级节流（只约束本条目的端点）：订阅制端点必须保留该段，
+  // 按量付费端点可不写（= 无额外约束）。字段：
   //   min_interval=两次请求最小间隔秒；jitter=间隔随机抖动比例(0~1)；max_concurrency=在途上限
 
   "strategy": "priority",
@@ -21,7 +22,9 @@
       "priority": 10,
       "timeout": 120
     },
-    // OpenCode Go：订阅制编码中转（Anthropic 兼容）；pacing 令请求串行低频（间隔 ≥5s、在途 ≤1），去掉该段即无额外约束
+    // OpenCode Go：订阅制编码中转（Anthropic 兼容），额度按会员周期计、带风控型并发上限
+    // 条款要求交互式低频使用 ⇒ pacing 是必备约束而非可选优化（间隔 ≥5s、在途 ≤1）
+    // 删掉该段即按不限速模式高频调用
     {
       "name": "opencode-go",
       "provider": "claude",

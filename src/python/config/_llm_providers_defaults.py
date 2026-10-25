@@ -38,13 +38,14 @@ _DEFAULT_LLM_PROVIDERS: dict[str, Any] = {
     ],
 }
 
-#: 每条线路的专属说明（模板里写在对应条目上方；按 provider name 对齐，
-#: 只写该线路的**稳定事实**——角色、端点类型、节流意图，不写换序后会失效的相对标注）。
-_PROVIDER_NOTES: dict[str, str] = {
-    "deepseek-main": "DeepSeek：Anthropic 兼容的按量付费端点，不额外限速",
+#: 每条线路的专属说明（模板里写在对应条目上方；按 provider name 对齐，多行即多条注释）。
+#: 只写该线路的**稳定事实**——角色、端点类型、节流意图，不写换序后会失效的相对标注。
+_PROVIDER_NOTES: dict[str, tuple[str, ...]] = {
+    "deepseek-main": ("DeepSeek：Anthropic 兼容的按量付费端点，不额外限速",),
     "opencode-go": (
-        "OpenCode Go：订阅制编码中转（Anthropic 兼容）；pacing 令请求串行低频"
-        "（间隔 ≥5s、在途 ≤1），去掉该段即无额外约束"
+        "OpenCode Go：订阅制编码中转（Anthropic 兼容），额度按会员周期计、带风控型并发上限",
+        "条款要求交互式低频使用 ⇒ pacing 是必备约束而非可选优化（间隔 ≥5s、在途 ≤1）",
+        "删掉该段即按不限速模式高频调用",
     ),
 }
 
@@ -68,7 +69,8 @@ def _get_default_llm_providers_template() -> str:
     for entry in d["providers"]:
         lines.append(f"  //   {entry['credentials_ref']:<14} → llm_key.json 同名块（api_key / model / endpoint）")
     lines.append("  //")
-    lines.append("  // pacing 是端点级节流（只约束本条目的端点），不写该段 = 无额外约束：")
+    lines.append("  // pacing 是端点级节流（只约束本条目的端点）：订阅制端点必须保留该段，")
+    lines.append("  // 按量付费端点可不写（= 无额外约束）。字段：")
     lines.append("  //   min_interval=两次请求最小间隔秒；jitter=间隔随机抖动比例(0~1)；max_concurrency=在途上限")
     lines.append("")
 
@@ -79,9 +81,9 @@ def _get_default_llm_providers_template() -> str:
 
     # ── providers 列表（每条上方写该线路的专属说明）──
     for idx, entry in enumerate(d["providers"]):
-        note = _PROVIDER_NOTES.get(entry["name"])
-        if note:
-            lines.append(f"    // {note}")
+        note = _PROVIDER_NOTES.get(entry["name"], ())
+        for note_line in note:
+            lines.append(f"    // {note_line}")
         lines.append("    {")
         items = list(entry.items())
         for i, (key, val) in enumerate(items):

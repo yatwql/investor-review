@@ -96,6 +96,8 @@ LLM 配置由三个独立文件管理：
 
 **Step A** — 编辑 `data/config/llm_providers.json`（首次运行已按此生成：DeepSeek 主行 + OpenCode Go 订阅中转）：
 
+> `opencode-go` 是**订阅制**中转：`pacing` 段对它不是可选优化——删掉就回到不限速高频调用，容易撞风控/超会员额度。出厂值 `min_interval: 5` 是实测可用档，想更保守可写成 `{ "min_interval": 20, "jitter": 0.2, "max_concurrency": 1 }`。
+
 ```json
 {
   "strategy": "priority",
@@ -203,8 +205,8 @@ LLM 配置由三个独立文件管理：
 
 **为什么需要它**：同一次报告生成的 LLM 调用会落在不同端点上，而各端点背后的服务约束截然不同——
 
-- **订阅制编码端点**（如 Kimi Code，`https://api.kimi.com/coding/`）：按会员额度计费，带滚动频率窗口与风控型并发上限；其服务条款要求**交互式**使用，批量调用应低频串行。
-- **按量付费端点**（如开放平台 `api.moonshot.cn/v1`）：有明确的分级 RPM / TPM 与按量账单，可放心用较高并发。
+- **订阅制编码端点**（如 OpenCode Go、Kimi Code）：按会员额度计费（按周期刷新而非按量扣费），带滚动频率窗口与风控型并发上限；其服务条款要求**交互式**使用，批量调用应低频串行。**pacing 对它们是必备约束**：出厂默认的 `opencode-go` 条目已带 `pacing`，删掉就回到不限速高频调用。
+- **按量付费端点**（如 DeepSeek 开放平台 `api.deepseek.com/anthropic`）：有明确的分级 RPM / TPM 与按量账单，可放心用较高并发，不写 `pacing` 即可。
 
 全局键 `llm_max_concurrency` 无法表达「同一程序、不同端点不同策略」，因此把约束**声明到 provider 条目**上：
 
