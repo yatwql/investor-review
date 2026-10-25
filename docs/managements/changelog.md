@@ -2,22 +2,19 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
-> **最近发布 [0.15.8]**（2026-10-25）——已发布版本段随发布移入 [`archived_changelog.0.15.x.md`](../archive/v0.15.x/archived_changelog.0.15.x.md)；本文件只保留当前开发版本段与归档索引。
+> **最近发布 [0.15.9]**（2026-10-25）——已发布版本段随发布移入 [`archived_changelog.0.15.x.md`](../archive/v0.15.x/archived_changelog.0.15.x.md)；本文件只保留当前开发版本段与归档索引。
 
 ---
 
 
-## [0.15.9-dev] - 开发中（未发布）
+## [0.15.10-dev] - 开发中（未发布）
 
-- **修复：远程会话报告收尾直接跳回菜单（rf-881）**——远程/无图形会话不再询问打开后，产物清单与耗时排行无处停留；现补「按任意键返回菜单」停屏（仅 TTY，非 TTY 不阻塞），打开失败分支同办。
-
-- **`release.py check` 补本地门禁前置**：默认执行两项检查（`--no-local-gate` 可跳过）——① 统计快照核对（`check-doc-drift --ci`，秒级）；② 本地全量测试（`test-runner --mode dev-verify`，≈30s）。背景：一次发布中 `refresh` 失败 1 次、`gate` 失败 3 次，累计白跑约 150s 门禁墙钟，根因是改完代码只跑了局部测试（`pytest src/test/scenario`）就进 gate，连带统计快照也未同步。两项都便宜且失败信息直指修法（实现 `_release/_local_gate.py`）。
 
 （本次发布内容见下方归档索引）
 
 ## 归档
 
-- [`archived_changelog.0.15.x.md`](../archive/v0.15.x/archived_changelog.0.15.x.md) — v0.15.0 ~ v0.15.8（2026-10-24 ~ 2026-10-25）
+- [`archived_changelog.0.15.x.md`](../archive/v0.15.x/archived_changelog.0.15.x.md) — v0.15.0 ~ v0.15.9（2026-10-24 ~ 2026-10-25）
 - [`archived_changelog.0.14.x.md`](../archive/v0.14.x/archived_changelog.0.14.x.md) — v0.14.0 ~ v0.14.8（2026-10-21 ~ 2026-10-23）
 - [`archived_changelog.0.13.x.md`](../archive/v0.13.x/archived_changelog.0.13.x.md) — v0.13.0 ~ v0.13.12（2026-10-13 ~ 2026-10-21）
 - [`archived_changelog.0.12.x.md`](../archive/v0.12.x/archived_changelog.0.12.x.md) — v0.12.1 ~ v0.12.13（2026-10-03 ~ 2026-10-13）
