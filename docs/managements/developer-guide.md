@@ -858,6 +858,7 @@ mod = load_script("_test_runner/modes.py", module_name="modes_under_test")   # �
 
 - 兄弟分片共用 `test_<模块>_<域>.py` 命名（如 `test_excel_generator_llm_usage.py`），并在主分片 docstring 的「兄弟分片」行互相点名——读者从任一文件都能找到全貌；
 - **共享构造器（模板路径 / 注册表常量 / 最小渲染数据 / mock 工厂）放 `<包>/_<模块>_fixtures.py`**（下划线前缀，不含 `test_*` 故不被收集），各分片 `from ... import ...` 引用，禁止复制一份到每个分片——改模板契约时漏改分片副本是最常见的静默漂移；
+- **不得读真实 `data/`、`reports/`、`logs/` 做断言**：隔离类断言（「测试没有写真实目录」）用注入的隔离目录（`HISTORY_SNAPSHOT_DIR` 等已由 conftest 重定向）即可，不要额外读取 `PROJECT_ROOT/data/...` 的现状——那既引入对开发者本地数据的依赖，也让用例在 CI（无该目录）与本地表现不同。
 - **共享 fixture 放目录级 `conftest.py`**：同一目录多文件共用、且需要 `tmp_path`/`monkeypatch` 的装配（如 `src/test/unit/llm/conftest.py::llm_cache_dir` 统一重定向缓存目录并复位日志去重）放这里，而不是在每个测试文件各写一份或塞进 `_fixtures.py`（后者只放纯函数与常量）；
 - **分片后 patch 目标须重定向**：实现下沉到子模块（如 `_perf_report/report.py`、`_traces_doc/deleted_refs.py`）后，`monkeypatch.setattr(入口模块, "_常量", ...)` 对写入无效——必须 patch **调用点所在子模块**，并同步迁移该模块的进程级缓存重置点（`_HIST_DEFS = None` 一类）；
 - 分片不新增/删除用例：原文件的 `def test_` 总数须等于各分片之和，收尾用 `grep -c 'def test_'` 对拍，并同步 `folders.md` 目录树与 `test-coverage.md` 计数。
