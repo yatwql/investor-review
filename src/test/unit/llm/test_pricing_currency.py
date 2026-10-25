@@ -79,6 +79,39 @@ class TestDefaultCurrency:
         assert model_currency("deepseek-flash") == pricing.PRICING_CURRENCY
 
 
+class TestCurrencyWhitelistConsistency:
+    """config 层的币种白名单与定价层符号表必须同源（分层禁止 import，靠用例守）。"""
+
+    def test_config_whitelist_matches_pricing_symbols(self):
+        from src.python.config._llm_pricing import _REF_CURRENCIES
+
+        assert set(_REF_CURRENCIES) == set(pricing.CURRENCY_SYMBOLS)
+
+    def test_internal_fx_table_covers_whitelist(self):
+        assert set(pricing.FX_TO_CNY) <= set(pricing.CURRENCY_SYMBOLS)
+
+
+class TestModuleCostsBuckets:
+    """模块级费用也是币种桶：同一模块跨币种调用不得混成一笔。"""
+
+    def test_module_entry_keeps_currencies_separate(self):
+        from src.python.llm import session
+
+        session.reset_session_usage()
+        session.record_per_module("expert_review", "claude-sonnet-5-5", inp=10, out=5, cost=0.001)
+        session.record_per_module("expert_review", "deepseek-flash", inp=10, out=5, cost=0.002)
+        entry = session.get_session_usage()["per_module"]["expert_review"]
+        assert entry["costs"] == pytest.approx({"USD": 0.001, "CNY": 0.002})
+
+    def test_costs_of_reads_legacy_scalar(self):
+        """旧记录只有标量 cost + currency：读侧折算成单币种桶。"""
+        from src.python.llm.pricing import costs_of
+
+        assert costs_of({"cost": 0.5, "currency": "USD"}) == pytest.approx({"USD": 0.5})
+        assert costs_of({"cost": 0.5}) == pytest.approx({pricing.PRICING_CURRENCY: 0.5})
+        assert costs_of({"cost": 0.0}) == {}
+
+
 class TestCostBuckets:
     """多币种金额桶：分组并存、格式化并列、空桶为短横线。"""
 

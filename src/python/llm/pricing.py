@@ -13,6 +13,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
+from src.python.core.costs import costs_of
 from src.python.core.constants import (
     MODEL_PRICING,
     PRICING_DEFAULT_CURRENCY as _DEFAULT_PRICING_CURRENCY,
@@ -33,6 +34,7 @@ __all__ = [
     "currency_symbol",
     "FX_TO_CNY",
     "convert_amount",
+    "costs_of",
     "format_costs",
     "merge_costs",
     "model_currency",
@@ -284,16 +286,6 @@ def _match_pricing(model: str) -> PriceEntry | None:
         if model_lower.startswith(known):
             return price
     return None
-
-
-def _entry_currencies(pricing: PriceEntry) -> list[str]:
-    """条目可用的币种列表：原生 `currency` + `alt` 里额外提供的币种。"""
-    native = str(pricing.get("currency") or _DEFAULT_PRICING_CURRENCY).strip().upper()
-    codes = [native]
-    alt = pricing.get("alt")
-    if isinstance(alt, dict):
-        codes.extend(str(code).strip().upper() for code in alt if str(code).strip())
-    return list(dict.fromkeys(codes))
 
 
 def _resolve_entry(model: str) -> tuple[PriceEntry, str]:

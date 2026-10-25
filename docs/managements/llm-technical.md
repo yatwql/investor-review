@@ -1243,7 +1243,7 @@ reload_pricing() → 读 llm_pricing_ref.json
   ```
 
   `PRICING_CURRENCY`（`llm_pricing_ref.json → currency`，默认 `CNY`）命中 `alt` 时按该币种计费与显示，否则用原生币种。即「厂商同时提供多币种价时以客户配置币种为主，只提供原生币种时按原生币种显示」。
-- **跨币种不相加**：会话累计与报告合计用「币种 → 金额」桶（`pricing.add_cost` / `merge_costs` / `format_costs`），展示为 `¥0.0123 + $0.0045`。混币种金额相加必须先换汇，而换汇必然与真实账单不符，故一律并列。
+- **跨币种不相加**：会话累计与报告合计用「币种 → 金额」桶（读写规则在 `core/costs.py`（`costs_of`，perf 与 llm 两层共用），累加/格式化在 `pricing.add_cost` / `merge_costs` / `format_costs`），展示为 `¥0.0123 + $0.0045`；旧的标量 `cost`+`currency` 记录在读取时折算成单币种桶。混币种金额相加必须先换汇，而换汇必然与真实账单不符，故一律并列。
 - **唯一的折算点在日预算**：`daily_cost_limit` 是**一个数字**，币种即本地主币种（`PRICING_CURRENCY`）。判定时把各币种今日支出按内部汇率表 `pricing.FX_TO_CNY` 折算到该币种后比对（`convert_amount`）；该折算结果**不进入任何展示金额**，只参与布尔判定。某币种缺内部汇率时列入 `unconvertible` 并在摘要里点名 + 告警，不静默按 0 计（否则预算闸会无声失效）。对象形态（`{"CNY": 5}`）按本币值或求和解释并告警。
 
 ## 11. 熔断器

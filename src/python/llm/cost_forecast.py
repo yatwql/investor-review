@@ -24,6 +24,7 @@ from src.python.llm.pricing import (
     PRICING_CURRENCY,
     compute_cost_value,
     convert_amount,
+    costs_of,
     currency_symbol,
     format_costs,
     merge_costs,
@@ -179,23 +180,26 @@ def _history_module_costs(
         for key, entry in modules.items():
             if not isinstance(entry, dict):
                 continue
-            cost = float(entry.get("cost") or 0.0)
-            # 币种优先取记录字段；早期记录无该字段时按该模块当时的模型推断
-            currency = str(entry.get("currency") or "").upper()
-            if not currency:
-                currency = model_currency(str(entry.get("model") or ""))
-            bucket = per_module.setdefault(key, {}).setdefault(currency, [])
+            # 币种桶：早期记录只有标量 cost + currency，按 costs_of 统一读
+            entry_costs = costs_of(entry)
+            if not entry_costs:
+                entry_costs = {model_currency(str(entry.get("model") or "")): 0.0}
             if key == "expert_review" and debate_active:
-                debate_sum = sum(float((modules.get(k) or {}).get("cost") or 0.0) for k in _DEBATE_KEYS)
-                if debate_sum > 0:
-                    bucket.append(cost + debate_sum)
-                else:
-                    bucket.append(cost * _DEBATE_CALL_MULT)
+                debate_costs: dict[str, float] = {}
+                for k in _DEBATE_KEYS:
+                    debate_costs = merge_costs(debate_costs, costs_of(modules.get(k)))
+                for currency, cost in entry_costs.items():
+                    bucket = per_module.setdefault(key, {}).setdefault(currency, [])
+                    if sum(debate_costs.values()) > 0:
+                        bucket.append(cost + debate_costs.get(currency, 0.0))
+                    else:
+                        bucket.append(cost * _DEBATE_CALL_MULT)
                 continue
             if debate_active and key in _DEBATE_KEYS:
                 # 已并入 expert_review 口径，避免重复计数
                 continue
-            bucket.append(cost)
+            for currency, cost in entry_costs.items():
+                per_module.setdefault(key, {}).setdefault(currency, []).append(cost)
     return per_module, runs_used
 
 
@@ -372,22 +376,10 @@ def _forecast_run_cost_impl(
 def daily_cost_limit(llm_config: dict[str, Any] | None = None) -> float:
     """日预算上限（**本地主币种**金额）；0 = 未启用。非法取值按 0 处理。
 
-    币种由 `pricing.PRICING_CURRENCY` 决定（缺省 CNY），配置里只有这一个数——不再按币种
-    分别设限，避免配置面出现第二套币种集合。对象形态（如 `{"CNY": 5}`）取本币值，
-    取不到时求和并告警。
+    币种由 `pricing.PRICING_CURRENCY` 决定（缺省 CNY）：配置里只有这一个数，币种不重复出现。
     """
     cfg = llm_config if llm_config is not None else _get_llm_config()
     raw = cfg.get("daily_cost_limit")
-    if isinstance(raw, dict):
-        logger.warning(
-            "[cost_forecast] daily_cost_limit 已改为单个数字（本地主币种 %s），对象形态将按本币值"
-            "或求和解释；请把配置改成数字",
-            PRICING_CURRENCY,
-        )
-        if PRICING_CURRENCY in raw:
-            raw = raw[PRICING_CURRENCY]
-        else:
-            raw = sum(float(v or 0) for v in raw.values() if isinstance(v, (int, float)))
     try:
         value = float(raw or 0)
     except (TypeError, ValueError):

@@ -298,7 +298,9 @@ class TestRecordPerModule(unittest.TestCase):
         entry = pm["global_macro"]
         self.assertEqual(entry["input_tokens"], 100)
         self.assertEqual(entry["output_tokens"], 50)
-        self.assertEqual(entry["cost"], 0.01)
+        costs = entry["costs"]
+        self.assertEqual(len(costs), 1, "单次记录只落一个币种桶")
+        self.assertAlmostEqual(next(iter(costs.values())), 0.01)
 
     def test_record_accumulates(self):
         """多次记录同一模块累加 Token 和费用。"""
@@ -307,7 +309,9 @@ class TestRecordPerModule(unittest.TestCase):
         entry = _session_usage["per_module"]["global_macro"]
         self.assertEqual(entry["input_tokens"], 300)
         self.assertEqual(entry["output_tokens"], 80)
-        self.assertEqual(entry["cost"], 0.03)
+        costs = entry["costs"]
+        self.assertEqual(len(costs), 1, "同币种多次记录合并到同一桶")
+        self.assertAlmostEqual(next(iter(costs.values())), 0.03)
 
     def test_cached_flag_persists(self):
         """cached=True 后保持 True。"""

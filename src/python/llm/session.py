@@ -34,7 +34,7 @@ _session_usage: dict[str, Any] = {
 }
 """会话期间所有 LLM 调用的累计 Token 用量和费用。
 per_module: {module_key: {"model": str, "input_tokens": int, "output_tokens": int,
-                           "cached": bool, "thinking": bool, "cost": float, "currency": str}}
+                           "cached": bool, "thinking": bool, "costs": {币种: 金额}}}
 
 ``costs`` 是「币种 → 金额」桶：不同模型可能以不同货币标价（DeepSeek/Kimi 为 CNY，
 Claude/GPT/Gemini 为 USD），跨币种**从不相加**，展示时分组并列。
@@ -184,8 +184,7 @@ def record_per_module(
                 "output_tokens": 0,
                 "cached": cached,
                 "thinking": thinking,
-                "cost": 0.0,
-                "currency": model_currency(model_name),
+                "costs": {},
                 "endpoint": endpoint,
                 "cache_hit_tokens": 0,
                 "duration": 0.0,
@@ -193,12 +192,12 @@ def record_per_module(
         entry = pm[module_key]
         entry["input_tokens"] += inp
         entry["output_tokens"] += out
-        entry["cost"] += cost
+        if cost:
+            add_cost(entry.setdefault("costs", {}), model_currency(model_name), cost)
         entry["cache_hit_tokens"] += cache_hit_tokens
         entry["duration"] += duration
         if model_name:
             entry["model"] = model_name
-            entry["currency"] = model_currency(model_name)
         if endpoint:
             entry["endpoint"] = endpoint
         if cached:

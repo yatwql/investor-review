@@ -24,6 +24,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from src.python.llm.pricing import costs_of, format_costs
 from src.python.llm.session import format_session_usage, get_session_usage
 
 logger = logging.getLogger("invest")
@@ -216,14 +217,13 @@ def get_cost_summary(for_report: bool = True) -> str:
             for mod_key, mod_data in sorted(per_module.items()):
                 mi = mod_data.get("input_tokens", 0)
                 mo = mod_data.get("output_tokens", 0)
-                mc = mod_data.get("cost", 0.0)
+                mc = format_costs(costs_of(mod_data))
                 mm = mod_data.get("model", "")
                 md = mod_data.get("duration", 0.0)
                 mcached = " [缓存]" if mod_data.get("cached") else ""
                 dur_str = _format_duration(md) if md > 0 else ""
                 parts.append(
-                    f"  {mod_key}: 输入{mi:,}/输出{mo:,} 费用¥{mc:.4f}"
-                    f"{' 耗时' + dur_str if dur_str else ''}{mcached} ({mm})"
+                    f"  {mod_key}: 输入{mi:,}/输出{mo:,} 费用{mc}{' 耗时' + dur_str if dur_str else ''}{mcached} ({mm})"
                 )
 
         budget_info = get_budget_status()

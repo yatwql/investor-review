@@ -78,7 +78,7 @@ class TestSessionCostDelta:
             entry = modules.get(key) or {}
             assert entry, f"{key} 未记账"
             assert entry.get("input_tokens", 0) > 0
-            assert entry.get("cost", 0) > 0, f"{key} 未记费用：{entry}"
+            assert sum((entry.get("costs") or {}).values()) > 0, f"{key} 未记费用：{entry}"
         reset_session_usage()
 
 

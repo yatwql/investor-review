@@ -114,7 +114,7 @@ def test_self_review_row_appears_when_it_ran():
     entry = next(r for r in rows if r["key"] == "self_review")
     assert entry["status"] == "success"
     assert entry["total_tokens"] == 150
-    assert entry["cost"] == 0.001
+    assert entry["cost_display"] == "¥0.0010"
 
 
 def test_self_review_row_appears_with_skip_reason():

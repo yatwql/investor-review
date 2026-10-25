@@ -25,6 +25,8 @@ _SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
+from src.python.llm.pricing import PRICING_CURRENCY, costs_of
+
 from _perf_history.stats import (
     _DRIFT_MIN_SAMPLES,
     _OUTLIER_K,
@@ -225,39 +227,97 @@ def _compare_versions(
     return {"a": _summary(recs_a, version_a), "b": _summary(recs_b, version_b), "phases": rows}
 
 
-def _llm_cost_data(records: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """机读费用汇总：含 llm 记录数与费用合计/均值/中位/单次最高（无样本 → None）。
+def _add_costs(target: dict[str, float], source: dict[str, float]) -> dict[str, float]:
+    """累加币种桶（**保留 0 值**：全缓存运行也是该时段的一个 0 费用样本）。"""
+    for code, amount in source.items():
+        target[code] = target.get(code, 0.0) + float(amount or 0.0)
+    return target
 
-    费用字段与 Markdown LLM 段的「累计费用」同源（``llm.total_cost``），
-    统计用既有均值/中位/极值 helper（中位稳健抗单次异常）。
+
+def _record_costs(llm: dict[str, Any]) -> dict[str, float]:
+    """读一条 perf 记录的 LLM 费用桶（生产写 ``cost_by_currency``，旧记录是标量 ``total_cost``）。"""
+    buckets = llm.get("cost_by_currency")
+    if isinstance(buckets, dict):
+        merged: dict[str, float] = {}
+        for code, amount in buckets.items():
+            amount = float(amount or 0.0)
+            if amount:
+                merged[str(code).upper()] = merged.get(str(code).upper(), 0.0) + amount
+        return merged
+    return costs_of({"cost": llm.get("total_cost"), "currency": llm.get("currency")})
+
+
+def _llm_cost_data(records: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """机读费用汇总：含 llm 记录数与**逐币种**费用合计/均值/中位/单次最高。
+
+    费用来源为记录的 ``llm.costs``/``cost_by_currency`` 币种桶（旧记录走
+    ``costs_of`` 折算成单币种桶）。跨币种**不相加**：多币种时 ``total``/``mean``/
+    ``median``/``max`` 为 null，明细看 ``by_currency``；单币种时同时给出顶层
+    标量便于旧消费方直接读取。
     """
-    costs = [float(r["llm"].get("total_cost") or 0) for r in records if isinstance(r.get("llm"), dict) and r["llm"]]
-    if not costs:
+    per_currency: dict[str, list[float]] = defaultdict(list)
+    runs = 0
+    for rec in records:
+        llm = rec.get("llm")
+        if not isinstance(llm, dict) or not llm:
+            continue
+        runs += 1
+        buckets = _record_costs(llm) or {PRICING_CURRENCY: 0.0}
+        for code, amount in buckets.items():
+            per_currency[code].append(amount)
+    if not runs:
         return None
+    by_currency = {
+        code: {
+            "total": round(sum(amounts), 6),
+            "mean": round(_mean(amounts), 6),
+            "median": round(_median(amounts), 6),
+            "max": round(_min_max(amounts)[1], 6),
+        }
+        for code, amounts in sorted(per_currency.items())
+    }
+    single = len(per_currency) == 1
+    only = next(iter(by_currency)) if single else None
     return {
-        "runs": len(costs),
-        "total": round(sum(costs), 6),
-        "mean": round(_mean(costs), 6),
-        "median": round(_median(costs), 6),
-        "max": round(_min_max(costs)[1], 6),
+        "runs": runs,
+        "currency": only,
+        "total": by_currency[only]["total"] if single else None,
+        "mean": by_currency[only]["mean"] if single else None,
+        "median": by_currency[only]["median"] if single else None,
+        "max": by_currency[only]["max"] if single else None,
+        "by_currency": by_currency,
     }
 
 
 def _cost_period_data(records: list[dict[str, Any]], by: str) -> list[dict[str, Any]]:
     """按 ``--by`` 时段的费用序列（机读）：``[{bucket, runs, total_cost}]``（时段键升序）。
 
-    runs 为时段内全部记录数，total_cost 仅累加含 ``llm.total_cost`` 的记录；
-    时段键升序即时间序，消费方可直接做相邻差分。
+    runs 为时段内全部记录数；费用按币种分组（``costs``），单币种时另给
+    ``total_cost`` 与 ``currency`` 便于旧消费方读；时段键升序即时间序。
     """
     runs: dict[str, int] = defaultdict(int)
-    costs: dict[str, float] = defaultdict(float)
+    costs: dict[str, dict[str, float]] = defaultdict(dict)
     for r in records:
         key = _bucket_key(r.get("timestamp", ""), by)
         runs[key] += 1
         llm = r.get("llm")
         if isinstance(llm, dict):
-            costs[key] += float(llm.get("total_cost") or 0)
-    return [{"bucket": key, "runs": runs[key], "total_cost": round(costs.get(key, 0.0), 6)} for key in sorted(runs)]
+            _add_costs(costs[key], _record_costs(llm) or {PRICING_CURRENCY: 0.0})
+    rows: list[dict[str, Any]] = []
+    for key in sorted(runs):
+        bucket = costs.get(key) or {}
+        single = len(bucket) == 1
+        rows.append(
+            {
+                "bucket": key,
+                "runs": runs[key],
+                "currency": next(iter(bucket)) if single else (None if bucket else PRICING_CURRENCY),
+                # 无 LLM 记录的时段给 0（保持序列可相邻差分），币种按本币标注
+                "total_cost": round(next(iter(bucket.values())), 6) if single else (0.0 if not bucket else None),
+                "costs": {code: round(amount, 6) for code, amount in sorted(bucket.items())},
+            }
+        )
+    return rows
 
 
 def _machine_summary(

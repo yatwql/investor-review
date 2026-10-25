@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from src.python.core.registry import get_llm_module_names
+from src.python.llm.pricing import costs_of, format_costs
 
 try:
     from src.python.llm import (
@@ -169,7 +170,7 @@ def build_llm_module_info(
                 output_tokens=0,
                 total_tokens=0,
                 cache_hit_tokens=0,
-                cost=0.0,
+                cost_display="",
                 cached=False,
                 thinking=False,
                 endpoint="",
@@ -183,7 +184,7 @@ def build_llm_module_info(
                 output_tokens=0,
                 total_tokens=0,
                 cache_hit_tokens=0,
-                cost=0.0,
+                cost_display="",
                 cached=False,
                 thinking=False,
                 endpoint="",
@@ -206,7 +207,7 @@ def build_llm_module_info(
                 output_tokens=out,
                 total_tokens=inp + out,
                 cache_hit_tokens=pm.get("cache_hit_tokens", 0),
-                cost=pm.get("cost", 0.0),
+                cost_display=format_costs(costs_of(pm)),
                 cached=pm.get("cached", False),
                 thinking=pm.get("thinking", False),
                 endpoint=pm.get("endpoint", ""),
@@ -222,7 +223,7 @@ def build_llm_module_info(
                 output_tokens=0,
                 total_tokens=0,
                 cache_hit_tokens=0,
-                cost=0.0,
+                cost_display="",
                 cached=False,
                 thinking=False,
                 endpoint="",

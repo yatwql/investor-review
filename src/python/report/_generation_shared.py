@@ -101,8 +101,7 @@ def _record_llm_context(perf, sink=None, baseline: dict | None = None) -> None:
                     "cached": bool(entry.get("cached")),
                     "input_tokens": int(entry.get("input_tokens", 0)),
                     "output_tokens": int(entry.get("output_tokens", 0)),
-                    "cost": round(float(entry.get("cost", 0.0)), 6),
-                    "currency": entry.get("currency"),
+                    "costs": {code: round(float(amount), 6) for code, amount in (entry.get("costs") or {}).items()},
                 }
                 for key, entry in sorted(per_module.items())
             }

@@ -540,7 +540,7 @@ def module_cost_summary(days: int = 7, path: str | None = None) -> dict[str, dic
     读取 perf 历史记录的 ``llm.modules.*.cost``——与运行事前费用预估
     （``llm.cost_forecast``）和日费用预算统计（``daily_cost_limit``）**同一记录、
     同一字段、同一计费数学**（``llm.pricing.compute_cost_value``），三处展示的
-    数字同源不打架；模块费用为 ``llm.total_cost`` 的子集，不会大于同窗口总额。
+    数字同源不打架；模块费用为 ``llm.cost_by_currency`` 的子集，不会大于同窗口总额。
 
     Args:
         days: 回看窗口天数（含今日，按记录 ``timestamp`` 本地时间过滤）。
@@ -574,15 +574,19 @@ def module_cost_summary(days: int = 7, path: str | None = None) -> dict[str, dic
         for key, entry in modules.items():
             if not isinstance(entry, dict):
                 continue
+            from src.python.core.costs import costs_of
+
             try:
-                cost = float(entry.get("cost") or 0.0)
+                entry_costs = costs_of(entry)
             except (TypeError, ValueError):
                 continue
-            code = str(entry.get("currency") or "CNY").upper()
+            if not entry_costs:
+                continue
             bucket = summary.setdefault(str(key), {"runs": 0, "costs": {}})
-            currency_bucket = bucket["costs"].setdefault(code, {"total": 0.0, "runs": 0})
-            currency_bucket["total"] += cost
-            currency_bucket["runs"] += 1
+            for code, cost in entry_costs.items():
+                currency_bucket = bucket["costs"].setdefault(code, {"total": 0.0, "runs": 0})
+                currency_bucket["total"] += cost
+                currency_bucket["runs"] += 1
             bucket["runs"] += 1
     for bucket in summary.values():
         for currency_bucket in bucket["costs"].values():
