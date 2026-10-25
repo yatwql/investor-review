@@ -16,17 +16,14 @@
 
 ### P2 — 中优先：价值明确、成本可控（下批排期）
 
-入选标准：重构收益明确、回归面可圈定，且不与在办功能争抢同一批文件。
-
-| # | 问题 | 修复方向 |
-|---|------|----------|
+当前无 P2 项（入选标准：重构收益明确、回归面可圈定，且不与在办功能争抢同一批文件）。
 
 ### P3 — 持续监控：文件膨胀登记
 
-> **单一事实源**：行数、登记线与拆分优先级以 `scripts/check-file-length.py -v` 为准（主程序警告 >700 / 红线 >1000；`scripts/` >600 / >1000；测试 >900 / >1200，且 >80 用例告警；`__init__.py` 薄壳 >200）。口径与理由见 `technical.md` C28。
-> **入表规则**：达到警告线即登记在此表（登记线 = 警告线，不另立数字），行数快照随复核刷新；破线豁免当前为 0。
+> **单一事实源**：行数与拆分优先级以 `scripts/check-file-length.py -v` 为准（主程序 >700 警告 / >1000 红线；`scripts/` >600 / >1000；测试 >900 / >1200；`__init__.py` >200）；口径见 `technical.md` C28。
+> **入表规则**：达警告线即登记（登记线 = 警告线），破线豁免当前为 0。
 
-**当前无登记项**——三域均在登记线以下，新增文件触线时按上述口径登记。
+**当前无登记项**（三域均在登记线以下）。
 
 ## 已解决问题
 
@@ -34,8 +31,8 @@
 
 | # | 问题 | 结论 |
 |---|------|------|
-| **rf-871** | 行业资金流向只有显式不可用状态，无备用源/缓存 | 已收敛：失败后 5 分钟负缓存（同会话后续报告直接降级、单条聚合告警、不复用过期数据）；备用源评估结论为免 key 场景无可靠第二源，保留显式不可用 |
-| **rf-872** | 新闻去重 11.9s 是 `LLM+新闻` 主要子项之一 | 已优化：比较串/字符多重集按标题缓存 + 字符多重集上界预筛（判定等价，基准 1.17x），新闻 TTL 不变 |
+| **rf-871** | 行业资金流向无备用源/缓存 | 失败负缓存 5 分钟 + 单条聚合告警；备用源评估＝免 key 无可靠第二源，保留显式不可用 |
+| **rf-872** | 新闻去重耗时占比高 | 比较串/多重集缓存 + 上界预筛（判定等价），新闻 TTL 不变 |
 
 
 ### 归档档案
@@ -47,10 +44,10 @@
 - [`archived_review-findings.0.10.x.md`](../archive/v0.10.x/archived_review-findings.0.10.x.md) — v0.10.1 ~ v0.10.20（2026-08-04 ~ 2026-09-15）
 - [`archived_review-findings.0.9.x.md`](../archive/v0.9.x/archived_review-findings.0.9.x.md) — v0.9.0 ~ v0.9.12（2026-07-30 ~ 2026-08-03）
 - [`archived_review-findings.0.8.x.md`](../archive/v0.8.x/archived_review-findings.0.8.x.md) — 0.8.0 ~ 0.8.10（2026-07-21 ~ 2026-07-30）
-- [`archived_review-findings.0.7.x.md`](../archive/v0.7.x/archived_review-findings.0.7.x.md) 
-- [`archived_review-findings.0.6.x.md`](../archive/v0.6.x/archived_review-findings.0.6.x.md)
-- [`archived_review-findings.0.5.x.md`](../archive/v0.5.x/archived_review-findings.0.5.x.md)
-- [`archived_review-findings.0.4.x.md`](../archive/v0.4.x/archived_review-findings.0.4.x.md)
-- [`archived_review-findings.0.3.x.md`](../archive/v0.3.x/archived_review-findings.0.3.x.md)
-- [`archived_review-findings.0.2.x.md`](../archive/v0.2.x/archived_review-findings.0.2.x.md)
-- [`archived_review-findings.0.1.x.md`](../archive/v0.1.x/archived_review-findings.0.1.x.md)
+- [`archived_review-findings.0.7.x.md`](../archive/v0.7.x/archived_review-findings.0.7.x.md) — v0.7.x 开发期已修复批次
+- [`archived_review-findings.0.6.x.md`](../archive/v0.6.x/archived_review-findings.0.6.x.md) — v0.6.x 开发期已修复批次
+- [`archived_review-findings.0.5.x.md`](../archive/v0.5.x/archived_review-findings.0.5.x.md) — v0.5.x 开发期已修复批次
+- [`archived_review-findings.0.4.x.md`](../archive/v0.4.x/archived_review-findings.0.4.x.md) — v0.4.x 开发期已修复批次
+- [`archived_review-findings.0.3.x.md`](../archive/v0.3.x/archived_review-findings.0.3.x.md) — v0.3.x 开发期已修复批次
+- [`archived_review-findings.0.2.x.md`](../archive/v0.2.x/archived_review-findings.0.2.x.md) — v0.2.x 开发期已修复批次
+- [`archived_review-findings.0.1.x.md`](../archive/v0.1.x/archived_review-findings.0.1.x.md) — 早期版本记录

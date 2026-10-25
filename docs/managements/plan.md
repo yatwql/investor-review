@@ -20,25 +20,7 @@
 
 ### P1 — 当前待办（立即执行）
 
-入选标准：立即可执行且价值/风险最高——数据完整性、费用风险、核心量化缺口（P0「必须完成才能发布」当前无项；下节为已完成待归档项）。
-
-#### `plan-219` 缓存 TTL 分层收敛 ✅
-
-**问题**：同一缓存条目的有效期由多层合成（注册表默认 + `config.json` 全量副本 + 读侧映射表 + 未注册兜底 + 交易时段特例 + 按 key 抖动），已造成两类真实事故：① `self_review`/`holding_change` 读侧与清理侧取值不同（清理先删、读侧仍认为有效 → 白重算）；② 默认值被抄进 `config.json`，改默认值后运行时无感（本次改 4h 即撞）。另发现潜在第三类：抖动只应用于读侧，清理按 1.0×TTL 判定 → 约一半 key 会被最多提前 15% 过期删除。
-
-**分析**：见 [`cache-ttl-layering.md`](../plan/cache-ttl-layering.md)（分层现状、必要性与方案 A/B/C 比较、三个次级口径 D1~D3、影响面与验收）。
-
-**建议（已采纳）**：方案 C——注册表是唯一默认来源，`config.json` 仅存**稀疏覆盖**（模板不写默认值块）；移除按 key 的 TTL 抖动（TTL 与键无关，读写两侧天然同值）；`cache_ttl` 未注册键告警。
-
-**已实施**：生成配置的 `cache_ttl` 改为空对象（默认值唯一来源 = 注册表）；**TTL 与缓存键无关**（`get_ttl` 的 `key` 参数保留但不参与计算，即无按 key 抖动），读侧与清理侧取到同一个数；`cleanup_expired` 按剥离版本戳后的逻辑键查类型，精确键映射随之命中；`cache_ttl` 未注册键告警（不自动删）；用户配置中的死键 `fund_overlap` 已删除、等于默认值的 37 个键收敛为空对象。契约由 `src/test/unit/cache/test_ttl_alignment.py`（7 例）与 `test_llm_cache_ttl_single_source.py`（17 例）锁定。
-
-**验收记录**：`cleanup_expired(dry_run=True)` 对现有 517 个缓存文件预览 23 个过期（与历史量级一致，拆分见 `logs/app.log` 的 DEBUG 明细）；运行时 `config.json` 的 `cache_ttl` 已收敛为空对象（等于默认值的 37 个键全部移除，行为不变）。
-
-**深度审计追加（同批修复）**：① 移除按 key 的 TTL 抖动——抖动只在部分读点生效，而 LLM 读侧（skeleton/批量/辩论/预检）全都不传 key，导致清理侧按抖动值提前删除（最多 15% TTL）；TTL 与 key 无关后两侧天然同值。② `bond_yield`/`fund_manager` 的同值重复 TTL 常量改为直读注册表；`index`/`index_valuation`/`chain` 的宽松常量补注为「陈旧兜底读」口径；`financial_report` 的两处负缓存常量注为模块自有策略。
-
-**验收（真实运行）**：连续三次报告预检均 `命中 4/4`；TTL 收紧后的首轮因旧缓存按新 TTL 过期而重算一次，其后两轮 **6/6 全命中**（节省 ≈¥0.1215 / ¥0.1222），全时段无「指纹组件变化」行。唯一的 `self_review` 单次未命中出现在「上游刚重算」那一轮——内容寻址按上游正文换键，属设计（详见 `llm-technical.md` §12.4）。文档数字守卫已由 `plan-220` 覆盖（`datasource.md` 机器校验 + `faq.md` 去数字副本）。
-
-**不做**：不改注册表结构、不改 `get_ttl` 优先级顺序、不自动删除用户既有 config 键。
+当前无 P1 项（含 P0）。入选标准：立即可执行且价值/风险最高——数据完整性、费用风险、核心量化缺口。
 
 ### P2 — 下一阶段就绪（满足条件即开工）
 
@@ -54,42 +36,15 @@
 **现状**：HTML 按日期归档到子目录但不生成索引；TUI 无「最近报告」入口；Web 运行历史不含归档目录。
 **动作**：生成 / 刷新 `output_dir/index.html`（按日期列出 Excel/HTML 产物与打开链接），TUI 加「打开输出目录 / 最近报告」入口；只列路径信息，匿名化口径与报告一致。
 
-#### `plan-185` 收益率指标缺口径标签，模型反复写错 ✅
-
-**现状**：口径标签已落地（`llm/rate_caliber.py` 唯一声明点，并入 `PROMPT_SCHEMA_VERSION` 指纹），余验收——事实校验只改数值，句意与修饰语仍可能挂错口径。
-**验收（真实运行）**：最近 8 轮 `fact_fix_total` 全为 **1**（连续多轮稳定 ≤3，达标），异常模块在智囊团/体检间轮换属单点数值笔误而非口径系统性错挂。
-
-#### `plan-210` 报告重复运行耗时优化（LLM / 新闻） ✅
-
-**现状**：完整报告（LLM 开启）`LLM+新闻` 占大头，专家复盘为主项；新闻缓存 900s；专家/健康指纹含市值盈亏，行情变化即失效（不跨报告复用）。已落地：新闻去重比较串缓存 + 字符多重集上界预筛（判定等价的省算）、事件窗 bars/index 同批 memo、历史取数单轮窗口复用与空结果短路、财报章节探测 404 负缓存（12h）与标的级正文缺失负缓存（6h）。
-**验收（真实运行，同进程连跑四份）**：首份（TTL 收紧后冷启动）`LLM+新闻` **138.7s** → 第 2~4 份 **0.0s**（全模块缓存命中，`新闻获取` 0.002~0.003s、`事件窗装配` 0.01s），降幅 ≈100%，远超 ≥50% 目标；数据准备侧 8.0s → 5.3/6.0/6.3s（财报负缓存与历史单轮复用生效）。
-
-**顺手修的内容可复现性缺陷**：两次全命中报告除时间戳外仍有差异——`_fetch_all_histories` 按 `as_completed` 完成顺序汇总，导致「已纳入走势计算」清单顺序抖动，且逐日市值浮点累加顺序随之漂移。已改为**按输入持仓顺序汇总**（并发只用于取数），新增 `test_portfolio_history_order.py` 两例（随机完成顺序下清单/序列顺序恒定）。
-**验收**：第二份 `LLM+新闻` 下降 ≥50%，或专家复盘命中应用缓存；报告内容与首次一致（除生成时间）；补缓存键失效/命中的回归用例。
-
-#### `plan-211` 数据源降级与告警分级（行业资金流向 / K 线） ✅
-
-**现状**：K 线风控页逐代码日志 DEBUG、源失败计 registry、熔断汇总保留 WARNING；行业资金流向暴露公开失败状态访问器，报告层经 `mark_data_unavailable` 写入 DegradationTracker，数据源矩阵显示不可用；失败后进 5 分钟负缓存（同会话后续报告直接按不可用降级，状态仍如实上报）；hithink 的 A 股历史无效请求由「单轮窗口复用 + 空结果短路」处理（结构性不覆盖的槽位在本轮直接跳过）。
-**验收（真实运行）**：最近 8 轮 `warnings_count` 为 2 / 2 / null / 5 / 2 / null / null / null（≤10 达标，`Unknown thscode` 全库 0 次）；行业资金流向首轮失败 1 次告警后，后续报告 **0.001~0.002s** 直接降级（失败负缓存生效：单次取数 + 单条告警）。**备用源评估**：免 key 场景下 akshare 为唯一可用源，东方财富 push2 行业资金流需另一接口且无 key 时同样不稳定——按 `review-findings rf-871` 的判据**保留显式不可用 + 负缓存 + 单条聚合告警，不引入过期缓存**（宁可显式缺数据，不可静默用旧值）。
-**不做**：不伪造数据、不把外部源失败静默当成功；不扩大年报/财报抓取范围。
-**验收**：同条件报告 `warnings_count` ≤10 且无 `Unknown thscode` 无效请求；行业资金流向有明确可用/不可用状态；补数据源路由与降级回归。
-
-#### `plan-212` 报告级 LLM 缓存状态隔离与指纹审计 ✅
-
-**已落地**：`report/_run_scope.py` 报告边界（清本轮降级事件、重置自检载体、取用量基线）；`_usage_delta` 按报告记账；`fingerprint_components` / `diff_fingerprint_components` 组件级审计（变化定位恒开打 INFO，与生产指纹同口径）；数据质量块只统计失败事件；缓存未命中/跳过读 INFO 归因；提示词、模型、精简模式并入指纹；预检键与写侧同源。设计见 [`llm-cache-state-isolation.md`](../plan/llm-cache-state-isolation.md)。
-**不做**：不为命中缓存忽略行情/指数/数据质量/账本变化；不跨日缓存；不改变现有缓存 TTL。
-**验收（真实运行）**：同一进程连跑三份报告，TTL 收紧后首轮一次性重算，其后两轮 `[LLM 预检] 命中 4/4` 且 **6/6 模块全命中**（节省 ≈¥0.1215 / ¥0.1222）；全程无「指纹组件变化」行、无上一轮 degradation/self_review 残留；perf 的 token/调用数按单份报告记账（首轮 calls=4→后续 None/cost 为空）。
-**验收**：第二份基础模块命中；perf LLM token/call_count 为单次报告值；无上一轮 degradation/self_review 残留。
-
 ### P3 — 预期实施，有空时安排
 
 入选标准：收益明确，但需等待时机或数据积累。
 
 #### `plan-70` 决策跨期反思闭环（decision_reflection）验证死线
 
-**状态**：维持观察——启用 75 次、账本已结算 16 条 / 待结算 47 条；`directional_total = 12`、命中率 75%、样本仍不足（阈值 40）。
-**判据**：① 启用次数停止增长（无真实使用），或 ② 已结算样本 <10 条且无达标趋势 → 撤销该实验功能（含 `decision_llm_capture`、行动章复盘块注入与对应需求条目）；已结算 ≥10 条则按 `doctor` 账本概览评估转正，`directional_total` 达 40+ 时评估转正。
-**落地设计（转正后启动）**：按 [`decision-reflection-design.md`](../plan/decision-reflection-design.md) 四迭代执行，以 Vibe-Trading `shadow_account` 为参照；与持仓变动复盘构成「意图 vs 成交」对账（只读，不互写）。
+**状态**：观察中——启用 75 次、已结算 16 条 / 待结算 47 条，`directional_total = 12`（阈值 40），样本不足。
+**判据**：启用停增或已结算 <10 条且无达标趋势 → 撤销该实验功能（含 `decision_llm_capture`、行动章复盘块与对应需求条目）；已结算 ≥10 条按 `doctor` 账本概览评估转正，`directional_total` 达 40+ 再评估。
+**设计**：[`decision-reflection-design.md`](../plan/decision-reflection-design.md)（转正后按四迭代执行）；与持仓变动复盘构成「意图 vs 成交」对账（只读，不互写）。
 **单一事实位**：[technical §6.9 实验项生命周期表](technical.md#69-实验项生命周期表)「决策跨期反思闭环」行。
 
 ### P4 — 实验候选（先决门槛未过，暂缓）
@@ -98,10 +53,36 @@
 
 #### `plan-55` 新闻关联判定接入 Jev（对照评测先决）
 
-**状态**：待评测——评测脚本 `eval-jev-news-judgment.py` 未建立，三方对照未开跑；该模块属窄判断（批量、选项有限、需校准概率），是 Jev 类型化判定接口的适用场景。
-**先决门槛（未过不接入）**：按 [`jev-news-judgment-evaluation.md`](../plan/jev-news-judgment-evaluation.md) 跑三方对照（关键词确定性 / 现网生成模型 / Jev），主指标、预检收窄结论与预注册阈值见该文档 §2 / §7；未达阈值则归档为已评估未采纳。
-**待评测后实施部分**：见 [`jev-news-judgment-design.md`](../plan/jev-news-judgment-design.md)。
-**约束与红线**：① 不得作为用户可选对话模型（不生成文本）；② 不得做成「生成 + 判定」双供应商级联；③ 语料冻结产物落 `docs/tmp/`，仅脱敏样例可入库；④ 类型化通道故障不得拖垮生成链（熔断实例分离）；⑤ 新增配置键按开关注册表纪律登记，默认值保持 `chat`。
+**状态**：待评测——`eval-jev-news-judgment.py` 未建立，三方对照未开跑；该模块属窄判断（批量、选项有限、需校准概率），是类型化判定接口的适用场景。
+**先决门槛**：按 [`jev-news-judgment-evaluation.md`](../plan/jev-news-judgment-evaluation.md) 跑三方对照（关键词确定性 / 现网生成模型 / Jev），主指标与预注册阈值见该文档 §2 / §7；未达阈值则归档为已评估未采纳。
+**实施设计**：[`jev-news-judgment-design.md`](../plan/jev-news-judgment-design.md)。
+**约束与红线**：① 不作为用户可选对话模型（不生成文本）；② 不做「生成 + 判定」双供应商级联；③ 语料冻结产物落 `docs/tmp/`，仅脱敏样例可入库；④ 类型化通道故障不得拖垮生成链（熔断实例分离）；⑤ 新增配置键按开关注册表纪律登记，默认值保持 `chat`。
+
+### 已完成待归档（下次发布迁入版本归档）
+
+#### `plan-219` 缓存 TTL 分层收敛 ✅
+
+交付：TTL 收敛为「注册表默认 + config 稀疏覆盖」两层，且 TTL 与缓存键无关（读侧/清理侧同值）；契约 24 例。
+
+#### `plan-220` 文档 TTL 数字的防漂移守卫 ✅
+
+交付：`datasource.md` 的 LLM 缓存 TTL 行按前缀反查注册表校验；`faq.md` 数字列举改为引用配置文档。
+
+#### `plan-210` 报告重复运行耗时优化（LLM / 新闻） ✅
+
+交付：同进程连跑四份，`LLM+新闻` 138.7s → 0.0s；历史走势并发取数改按输入顺序汇总（内容可复现）。
+
+#### `plan-211` 数据源降级与告警分级（行业资金流向 / K 线） ✅
+
+交付：`warnings_count` ≤5、`Unknown thscode` 0；行业资金流向失败负缓存 + 单条告警；备用源评估＝免 key 无可靠第二源。
+
+#### `plan-212` 报告级 LLM 缓存状态隔离与指纹审计 ✅
+
+交付：报告边界、用量 delta、指纹组件审计落地；连跑三份无指纹误变、无上一轮残留。
+
+#### `plan-185` 收益率指标缺口径标签，模型反复写错 ✅
+
+交付：口径标签生效，`fact_fix_total` 连续 8 轮为 1（≤3 达标）。
 
 ## 归档
 
@@ -113,10 +94,10 @@
 - [`archived_plan.0.10.x.md`](../archive/v0.10.x/archived_plan.0.10.x.md) — v0.10.x 已完成项
 - [`archived_plan.0.9.x.md`](../archive/v0.9.x/archived_plan.0.9.x.md) — v0.9.x 已完成项
 - [`archived_plan.0.8.x.md`](../archive/v0.8.x/archived_plan.0.8.x.md) — v0.8.0 ~ v0.8.10
-- [`archived_plan.0.7.x.md`](../archive/v0.7.x/archived_plan.0.7.x.md)
-- [`archived_plan.0.6.x.md`](../archive/v0.6.x/archived_plan.0.6.x.md)
-- [`archived_plan.0.5.x.md`](../archive/v0.5.x/archived_plan.0.5.x.md)
-- [`archived_plan.0.4.x.md`](../archive/v0.4.x/archived_plan.0.4.x.md)
-- [`archived_plan.0.3.x.md`](../archive/v0.3.x/archived_plan.0.3.x.md)
-- [`archived_plan.0.2.x.md`](../archive/v0.2.x/archived_plan.0.2.x.md)
-- [`archived_plan.0.1.x.md`](../archive/v0.1.x/archived_plan.0.1.x.md)
+- [`archived_plan.0.7.x.md`](../archive/v0.7.x/archived_plan.0.7.x.md) — v0.7.x 已完成项
+- [`archived_plan.0.6.x.md`](../archive/v0.6.x/archived_plan.0.6.x.md) — v0.6.x 已完成项
+- [`archived_plan.0.5.x.md`](../archive/v0.5.x/archived_plan.0.5.x.md) — v0.5.x 已完成项
+- [`archived_plan.0.4.x.md`](../archive/v0.4.x/archived_plan.0.4.x.md) — v0.4.x 已完成项
+- [`archived_plan.0.3.x.md`](../archive/v0.3.x/archived_plan.0.3.x.md) — v0.3.x 已完成项
+- [`archived_plan.0.2.x.md`](../archive/v0.2.x/archived_plan.0.2.x.md) — v0.2.x 已完成项
+- [`archived_plan.0.1.x.md`](../archive/v0.1.x/archived_plan.0.1.x.md) — 早期版本已完成项
