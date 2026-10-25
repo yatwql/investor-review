@@ -88,9 +88,9 @@ class TestCacheSavedCost:
             "timestamp": "2026-10-25T10:00:00+08:00",
             "llm": {
                 "modules": {
-                    "global_macro": {"cost": 0.02},
-                    "expert_review": {"cost": 0.30},
-                    "health_check": {"cost": 0.12},
+                    "global_macro": {"costs": {"CNY": 0.02}},
+                    "expert_review": {"costs": {"CNY": 0.30}},
+                    "health_check": {"costs": {"CNY": 0.12}},
                 }
             },
         },
@@ -98,8 +98,8 @@ class TestCacheSavedCost:
             "timestamp": "2026-10-25T11:00:00+08:00",
             "llm": {
                 "modules": {
-                    "global_macro": {"cost": 0.04},
-                    "expert_review": {"cost": 0.0},  # 命中运行不计入均价
+                    "global_macro": {"costs": {"CNY": 0.04}},
+                    "expert_review": {"costs": {"CNY": 0.0}},  # 命中运行不计入均价
                 }
             },
         },
@@ -161,11 +161,11 @@ class TestForecastCacheDiscount:
     _HISTORY = [
         {
             "timestamp": "2026-10-25T10:00:00+08:00",
-            "llm": {"modules": {"global_macro": {"cost": 0.0}}},  # 全命中运行
+            "llm": {"modules": {"global_macro": {"costs": {"CNY": 0.0}}}},  # 全命中运行
         },
         {
             "timestamp": "2026-10-25T11:00:00+08:00",
-            "llm": {"modules": {"global_macro": {"cost": 0.02}}},
+            "llm": {"modules": {"global_macro": {"costs": {"CNY": 0.02}}}},
         },
     ]
 

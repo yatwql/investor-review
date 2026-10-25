@@ -260,10 +260,10 @@ class TestModuleCostHistory:
                     {
                         "timestamp": now.isoformat(timespec="seconds"),
                         "llm": {
-                            "total_cost": 2.0,
+                            "cost_by_currency": {"CNY": 2.0},
                             "modules": {
-                                "global_macro": {"cost": 1.5, "model": "m", "currency": "CNY"},
-                                "news_correlation": {"cost": 0.5, "model": "m", "currency": "CNY"},
+                                "global_macro": {"costs": {"CNY": 1.5}, "model": "m"},
+                                "news_correlation": {"costs": {"CNY": 0.5}, "model": "m"},
                             },
                         },
                     }
@@ -271,10 +271,10 @@ class TestModuleCostHistory:
                 json.dumps(
                     {
                         "timestamp": now.isoformat(timespec="seconds"),
-                        "llm": {"modules": {"global_macro": {"cost": 0.5, "currency": "CNY"}}},
+                        "llm": {"modules": {"global_macro": {"costs": {"CNY": 0.5}}}},
                     }
                 ),
-                json.dumps({"timestamp": old, "llm": {"modules": {"global_macro": {"cost": 9.9}}}}),
+                json.dumps({"timestamp": old, "llm": {"modules": {"global_macro": {"costs": {"CNY": 9.9}}}}}),
                 "{bad json line",
                 json.dumps({"timestamp": now.isoformat(timespec="seconds"), "errors": []}),
             ],
@@ -300,8 +300,8 @@ class TestModuleCostHistory:
         path = self._write_history(
             tmp_path,
             [
-                json.dumps({"timestamp": old, "llm": {"modules": {"self_review": {"cost": 3.0}}}}),
-                json.dumps({"timestamp": now, "llm": {"modules": {"global_macro": {"cost": 0.25}}}}),
+                json.dumps({"timestamp": old, "llm": {"modules": {"self_review": {"costs": {"CNY": 3.0}}}}}),
+                json.dumps({"timestamp": now, "llm": {"modules": {"global_macro": {"costs": {"CNY": 0.25}}}}}),
             ],
         )
         out = module_cost_summary(days=7, path=path)

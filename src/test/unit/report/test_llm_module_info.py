@@ -104,7 +104,7 @@ def test_self_review_row_appears_when_it_ran():
             "model": "test-model",
             "input_tokens": 100,
             "output_tokens": 50,
-            "cost": 0.001,
+            "costs": {"CNY": 0.001},
             "cached": False,
             "thinking": False,
             "endpoint": "",

@@ -229,16 +229,8 @@ def _compare_versions(
 
 
 def _record_costs(llm: dict[str, Any]) -> dict[str, float]:
-    """读一条 perf 记录的 LLM 费用桶（生产写 ``cost_by_currency``，旧记录是标量 ``total_cost``）。"""
-    buckets = llm.get("cost_by_currency")
-    if isinstance(buckets, dict):
-        merged: dict[str, float] = {}
-        for code, amount in buckets.items():
-            amount = float(amount or 0.0)
-            if amount:
-                merged[str(code).upper()] = merged.get(str(code).upper(), 0.0) + amount
-        return merged
-    return costs_of({"cost": llm.get("total_cost"), "currency": llm.get("currency")})
+    """读一条 perf 记录的 LLM 费用桶（``llm.cost_by_currency``；无该字段视为无费用）。"""
+    return costs_of(llm.get("cost_by_currency") and {"costs": llm["cost_by_currency"]})
 
 
 def _llm_cost_data(records: list[dict[str, Any]]) -> dict[str, Any] | None:

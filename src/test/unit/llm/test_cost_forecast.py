@@ -95,8 +95,16 @@ class TestForecastHistoryBasis:
     def test_full_history_coverage(self) -> None:
         cfg = {"enabled_llm": _enabled_only("global_macro", "expert_review")}
         history = [
-            _rec("2026-01-01T10:00:00", 0.4, {"global_macro": {"cost": 0.1}, "expert_review": {"cost": 0.3}}),
-            _rec("2026-01-02T10:00:00", 0.5, {"global_macro": {"cost": 0.2}, "expert_review": {"cost": 0.3}}),
+            _rec(
+                "2026-01-01T10:00:00",
+                0.4,
+                {"global_macro": {"costs": {"CNY": 0.1}}, "expert_review": {"costs": {"CNY": 0.3}}},
+            ),
+            _rec(
+                "2026-01-02T10:00:00",
+                0.5,
+                {"global_macro": {"costs": {"CNY": 0.2}}, "expert_review": {"costs": {"CNY": 0.3}}},
+            ),
         ]
         fc = forecast_run_cost(cfg, {"llm_report_depth": "standard"}, history=history)
         assert fc["ok"] is True
@@ -109,7 +117,7 @@ class TestForecastHistoryBasis:
 
     def test_partial_history_yields_mixed_basis(self) -> None:
         cfg = {"enabled_llm": _enabled_only("global_macro", "expert_review"), "model": _known_model()}
-        history = [_rec("2026-01-01T10:00:00", 0.1, {"global_macro": {"cost": 0.1}})]
+        history = [_rec("2026-01-01T10:00:00", 0.1, {"global_macro": {"costs": {"CNY": 0.1}}})]
         fc = forecast_run_cost(cfg, {"llm_report_depth": "standard"}, history=history)
         assert fc["ok"] is True
         assert fc["basis"] == "mixed"
@@ -161,7 +169,7 @@ class TestForecastStaticFallback:
 
     def test_partial_unpriced_stays_ok_with_reason(self) -> None:
         cfg = {"enabled_llm": _enabled_only("global_macro", "expert_review"), "model": "no-such-model-xyz"}
-        history = [_rec("2026-01-01T10:00:00", 0.1, {"global_macro": {"cost": 0.1}})]
+        history = [_rec("2026-01-01T10:00:00", 0.1, {"global_macro": {"costs": {"CNY": 0.1}}})]
         fc = forecast_run_cost(cfg, {"llm_report_depth": "standard"}, history=history)
         assert fc["ok"] is True, "有历史覆盖时仍给可用区间"
         assert fc["unpriced"] == ["expert_review"]
@@ -194,15 +202,15 @@ class TestForecastDebateCaliber:
         monkeypatch.setattr(cf, "is_feature_enabled_for_debate", lambda: True)
         cfg = {"enabled_llm": _enabled_only("expert_review"), "model": "no-such-model-xyz"}
         history = [
-            _rec("2026-01-01T10:00:00", 0.4, {"expert_review": {"cost": 0.1}}),
+            _rec("2026-01-01T10:00:00", 0.4, {"expert_review": {"costs": {"CNY": 0.1}}}),
             _rec(
                 "2026-01-02T10:00:00",
                 0.23,
                 {
-                    "expert_review": {"cost": 0.1},
-                    "debate_pro": {"cost": 0.05},
-                    "debate_con": {"cost": 0.05},
-                    "debate_synthesis": {"cost": 0.03},
+                    "expert_review": {"costs": {"CNY": 0.1}},
+                    "debate_pro": {"costs": {"CNY": 0.05}},
+                    "debate_con": {"costs": {"CNY": 0.05}},
+                    "debate_synthesis": {"costs": {"CNY": 0.03}},
                 },
             ),
         ]
@@ -217,7 +225,7 @@ class TestForecastDebateCaliber:
             _rec(
                 "2026-01-01T10:00:00",
                 0.5,
-                {"expert_review": {"cost": 0.4}, "debate_pro": {"cost": 0.1}},
+                {"expert_review": {"costs": {"CNY": 0.4}}, "debate_pro": {"costs": {"CNY": 0.1}}},
             ),
         ]
         fc = forecast_run_cost(cfg, {"llm_report_depth": "standard"}, history=history)
@@ -238,9 +246,9 @@ class TestBudget:
         today = date.today().isoformat()
         yesterday = (date.today() - timedelta(days=1)).isoformat()
         history = [
-            _rec(f"{today}T09:00:00", 0.25, {"global_macro": {"cost": 0.25}}),
-            _rec(f"{today}T18:30:00", 0.5, {"expert_review": {"cost": 0.5}}),
-            _rec(f"{yesterday}T10:00:00", 9.9, {"expert_review": {"cost": 9.9}}),
+            _rec(f"{today}T09:00:00", 0.25, {"global_macro": {"costs": {"CNY": 0.25}}}),
+            _rec(f"{today}T18:30:00", 0.5, {"expert_review": {"costs": {"CNY": 0.5}}}),
+            _rec(f"{yesterday}T10:00:00", 9.9, {"expert_review": {"costs": {"CNY": 9.9}}}),
             {"timestamp": f"{today}T10:00:00"},  # 无 llm 段
         ]
         assert today_llm_cost(history)["CNY"] == pytest.approx(0.75)
@@ -326,14 +334,14 @@ class TestForceScopeForecast:
 
     @staticmethod
     def _hist():
-        # perf 历史真实结构：rec["llm"]["modules"][键]["cost"]
+        # perf 历史真实结构：rec["llm"]["modules"][键]["costs"]（币种桶）
         return [
             {
                 "run_id": "r1",
                 "llm": {
                     "modules": {
-                        "expert_review": {"ok": True, "cost": 0.5, "model": "gpt-4o", "currency": "USD"},
-                        "global_macro": {"ok": True, "cost": 0.3, "model": "gpt-4o", "currency": "USD"},
+                        "expert_review": {"ok": True, "costs": {"USD": 0.5}, "model": "gpt-4o"},
+                        "global_macro": {"ok": True, "costs": {"USD": 0.3}, "model": "gpt-4o"},
                     }
                 },
             }

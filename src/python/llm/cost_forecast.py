@@ -7,7 +7,7 @@
     单价（量级兜底）。全部模块既无历史又无法定价时 `ok=False`——**预估失败永不
     阻塞生成**，由渠道层降级为「跳过确认继续」。
   - **日预算**：`llm_settings.json → daily_cost_limit`（0/缺省 = 不启用）。今日已
-    花费从 `perf_history.jsonl` 当日记录的 `llm.total_cost` 求和——与事后统计
+    花费从 `perf_history.jsonl` 当日记录的 `llm.cost_by_currency` 逐币种求和——与事后统计
     （session usage / perf 汇总）同源，避免两处数字打架。预算是**硬闸**：交互
     渠道询问「用已有结果继续 / 中止」，非交互渠道直接中止。
 
@@ -391,7 +391,7 @@ def daily_cost_limit(llm_config: dict[str, Any] | None = None) -> float:
 def today_llm_cost(history: list[dict[str, Any]] | None = None) -> dict[str, float]:
     """今日（本地日期）已产生的 LLM 费用，**逐币种**汇总——与 perf 记录同源。
 
-    记录里带 ``cost_by_currency`` 时按桶累加；无该字段的历史记录按缺省币种计入。
+    只读记录里的 ``llm.cost_by_currency`` 币种桶（无该字段的记录不计费用）。
     逐币种是为了**展示**（原生币种并列）；预算判定另走 :func:`budget_status` 的折算。
     """
     records = history if history is not None else _load_perf_history()
@@ -406,10 +406,6 @@ def today_llm_cost(history: list[dict[str, Any]] | None = None) -> dict[str, flo
         buckets = llm.get("cost_by_currency")
         if isinstance(buckets, dict) and buckets:
             totals = merge_costs(totals, {str(k).upper(): float(v or 0.0) for k, v in buckets.items()})
-            continue
-        legacy = float(llm.get("total_cost") or 0.0)
-        if legacy:
-            totals[PRICING_CURRENCY] = totals.get(PRICING_CURRENCY, 0.0) + legacy
     return {code: round(amount, 6) for code, amount in totals.items()}
 
 

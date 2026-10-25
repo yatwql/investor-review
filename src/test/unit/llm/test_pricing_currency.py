@@ -103,14 +103,6 @@ class TestModuleCostsBuckets:
         entry = session.get_session_usage()["per_module"]["expert_review"]
         assert entry["costs"] == pytest.approx({"USD": 0.001, "CNY": 0.002})
 
-    def test_costs_of_reads_legacy_scalar(self):
-        """旧记录只有标量 cost + currency：读侧折算成单币种桶。"""
-        from src.python.llm.pricing import costs_of
-
-        assert costs_of({"cost": 0.5, "currency": "USD"}) == pytest.approx({"USD": 0.5})
-        assert costs_of({"cost": 0.5}) == pytest.approx({pricing.PRICING_CURRENCY: 0.5})
-        assert costs_of({"cost": 0.0}) == {}
-
 
 class TestCostBuckets:
     """多币种金额桶：分组并存、格式化并列、空桶为短横线。"""

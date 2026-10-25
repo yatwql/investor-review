@@ -1,31 +1,23 @@
 """LLM 费用「币种 → 金额」桶的读取与合并（core 层，供 core/perf 与 llm/report 共用）。
 
 为什么放在 core：`core/perf.py` 汇总历史费用时需要读同一份桶结构，而 core 不得反向
-import 上层（`llm.pricing`）。把该读写规则下沉到这里，两层共用同一实现，避免两处
-各写一份「标量 → 桶」的兼容规则。
+import 上层（`llm.pricing`）。把该读写规则下沉到这里，两层共用同一实现，避免两处各写
+一份同样的解析规则。
 
 桶结构约定（perf 记录、session per_module、报告上下文一致）：
-
-- 新记录：``{"costs": {"CNY": 0.02, "USD": 0.005}}``（跨币种不相加）
-- 旧记录：``{"cost": 0.02, "currency": "CNY"}``（标量 + 币种，读时折算成单币种桶）
+``{"costs": {"CNY": 0.02, "USD": 0.005}}``——跨币种不相加。标量字段（单值 + 币种）
+不足以表达混币种，故不作为读入形态。
 """
 
 from __future__ import annotations
 
-from src.python.core.constants import PRICING_DEFAULT_CURRENCY
-
 
 def costs_of(entry: dict | None) -> dict[str, float]:
-    """从一条用量/历史条目读出「币种 → 金额」桶（零值桶丢弃）。"""
-    data = entry or {}
-    buckets = data.get("costs")
-    if isinstance(buckets, dict):
-        return {str(code).upper(): float(amount or 0.0) for code, amount in buckets.items() if float(amount or 0.0)}
-    legacy = float(data.get("cost") or 0.0)
-    if not legacy:
+    """从一条用量条目读出「币种 → 金额」桶（零值桶丢弃；无桶返回空 dict）。"""
+    buckets = (entry or {}).get("costs")
+    if not isinstance(buckets, dict):
         return {}
-    code = str(data.get("currency") or PRICING_DEFAULT_CURRENCY).upper()
-    return {code: legacy}
+    return {str(code).upper(): float(amount or 0.0) for code, amount in buckets.items() if float(amount or 0.0)}
 
 
 def add_cost_bucket(target: dict[str, float], source: dict[str, float]) -> dict[str, float]:

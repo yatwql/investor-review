@@ -76,7 +76,7 @@ class TestLlmContextSection:
             "fallbacks": 1,
             "cache_hits": 3,
             "cache_misses": 1,
-            "total_cost": 0.42,
+            "cost_by_currency": {"CNY": 0.42},
             "providers": {"deepseek-main": 4},
             "models": {"deepseek-v4-flash": 4},
         }
@@ -379,21 +379,21 @@ def _cost_records() -> list[dict]:
             "report_type": "full",
             "timestamp": "2026-01-01 10:00:00",
             "total_seconds": 10.0,
-            "llm": {"total_cost": 0.10},
+            "llm": {"cost_by_currency": {"CNY": 0.10}},
         },
         {
             "version": "0.1.0",
             "report_type": "full",
             "timestamp": "2026-01-01 11:00:00",
             "total_seconds": 12.0,
-            "llm": {"total_cost": 0.15},
+            "llm": {"cost_by_currency": {"CNY": 0.15}},
         },
         {
             "version": "0.1.0",
             "report_type": "full",
             "timestamp": "2026-01-02 10:00:00",
             "total_seconds": 9.0,
-            "llm": {"total_cost": 0.05},
+            "llm": {"cost_by_currency": {"CNY": 0.05}},
         },
         {
             "version": "0.1.0",
