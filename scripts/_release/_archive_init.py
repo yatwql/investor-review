@@ -99,9 +99,9 @@ def insert_tree_block(folders_text: str, minor: str) -> tuple[str, bool]:
 
     block = [
         f"{prefix}└── v{minor}.x/                         # v{minor}.x 版本归档（changelog/plan/review-findings + 设计文档）",
-        f"{prefix}    ├── archived_changelog.{minor}.x.md # 变更日志归档 v{minor}.x（发布段）",
-        f"{prefix}    ├── archived_plan.{minor}.x.md      # 实现计划归档 v{minor}.x（已完成任务节）",
-        f"{prefix}    └── archived_review-findings.{minor}.x.md # 自审记录归档 v{minor}.x（开发期已修复批次）",
+        f"{prefix}    ├── archived_changelog.{minor}.x.md # 变更日志归档 v{minor}.x",
+        f"{prefix}    ├── archived_plan.{minor}.x.md      # 实现计划归档 v{minor}.x",
+        f"{prefix}    └── archived_review-findings.{minor}.x.md # 自审记录归档 v{minor}.x",
     ]
     lines[block_end:block_end] = block
     return "\n".join(lines) + "\n", True
