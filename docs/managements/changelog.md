@@ -9,6 +9,8 @@
 
 ## [0.15.8-dev] - 开发中（未发布）
 
+- **发布台账不再折算金额**：`logs/release.jsonl` 的 `session_usage` 去掉 `cost` 字段，终端尾行只报 token 数（in/out/cache r/w）与执行环境（provider/model/thinking）。原因：金额只能来自 pi 的逐模型单价表，而订阅制/转发端点（如 opencode）的单价并非实际账单口径，折算出来的「费用」既不可核对也容易被当成账单。
+
 
 （本次发布内容见下方归档索引）
 
