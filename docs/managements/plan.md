@@ -1,6 +1,6 @@
 # 投资复盘助手 — 实现计划
 > 文档版本：0.15.8-dev
-> **编号源**：`plan-next = 225`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-224，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`plan-next = 229`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-228，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -8,7 +8,7 @@
 
 本文档只保留**在办任务的最新状态**：已完成项随发布迁入版本归档，此处不留实现过程记录。命名与实现纪律见 `CLAUDE.md` 与 `developer-guide.md`（单一事实位，本表不重复）。
 
-**当前迭代**：在办 4 项——P2 2 项（**plan-92/93**）、P3 1 项（**plan-70**）、P4 1 项（**plan-55**）。
+**当前迭代**：在办 8 项——P2 5 项（**plan-92/93/225/226/227**）、P3 2 项（**plan-70/228**）、P4 1 项（**plan-55**）。
 
 ---
 
@@ -30,6 +30,49 @@
 
 **现状**：19 页签为静态数字与文字，收益率高低、集中度偏离需逐格读数。
 **动作**：高价值数值列加色阶/数据条、趋势列加迷你折线（openpyxl 原生）；先试点持仓明细 / 量化指标 / 集中度 2~3 个页签，认可后再扩。
+
+#### `plan-225` 缓存 TTL 机制收敛（来源 rf-874 / rf-875）
+
+**现状（实测）**：同一份过期语义由三处决定——注册表默认（`DataModuleDef.cache_ttl`）、`config.json → cache_ttl` 稀疏覆盖、`config.json → market_hour_aware` + `market_hour_ttl`（盘中 30s）。`technical.md`「TTL 分辨率流程」已写明优先级，但仍有两处真实缺口：
+1. **配置静默失效**：盘中 `market_hour_aware` 命中时直接返回 `market_hour_ttl`，**`cache_ttl.price` 的覆盖值不生效且无任何提示**（用户改 `cache_ttl.price=3600` 以为生效，实际盘中仍是 30s）。
+2. **负缓存类型未注册**：`datasink_probe_miss_`（12h）与 `report_symbol_miss_`（6h）只存在于调用点常量 → `cleanup_expired` 按未注册默认 24h 判定（比设计多留 12h/18h）、`cache_ttl` 覆盖与 `datasource.md` 表格都覆盖不到、清理统计里算"未注册键"。
+3. **`market_hour_aware` 不校验**：列表里写未注册类型（如 `news`）不告警，等于让该类盘中变 30s。
+
+**动作**（按风险从低到高，实施时按此顺序）：
+1. 两个负缓存类型补注册表（`data_type` + `cache_prefixes` + `cache_ttl`），调用点改读 `get_ttl(type)`；同步 `datasource.md` 缓存表与 `technical.md` 流程图的"类型未注册"分支。
+2. `market_hour_aware` 校验：条目必须 ∈ 已注册类型，否则告警并忽略该项（`_validation_scalars._validate_market_hours`）。
+3. `cache_ttl` 命中 aware 类型时打一条 INFO 说明"盘中以 `market_hour_ttl` 为准"，把静默变成可观测。
+4. **收敛取舍（推荐 A）**：A = 注册表新增"是否盘中敏感 + 盘中 TTL"元数据，`market_hour_aware` 列表退役、配置只留数值覆盖；B = 保持三键现状，仅做 1~3。选 A 的理由：列表属代码能力而非用户偏好（误配会让非行情数据在盘中高频打源），且退役一个配置键、少一处冲突源；代价是注册表字段 + `config` 校验 + 文档小改，行为不变。
+
+**硬约束（不得回归）**：`price`/`index` 盘中 30s 与 `technical.md` 2.4.1 的**日期门禁 + 收盘时点门禁**（盘中价曾被当成收盘价，导致"本日盈亏/快照环比"系统性偏离，两道门禁即为该事故的修复）必须原样保留；改动后须有回归用例钉住"盘中 30s、盘后按静态 TTL、收盘时点门禁仍生效"。
+
+#### `plan-226` 财报索引与财务指标 TTL 对齐披露节奏（来源 rf-876）
+
+**现状（实测）**：`report`（财报索引）与 `fin_indicator`（财务指标）都是 **symbol 级缓存键 + 30 天 TTL**（`get_ttl("report")` / `get_ttl("fin_indicator")`）。A 股定期披露按季：新一期财报披露之后，索引最长要等 30 天才重新拉取 → 报告可能整月沿用上一期口径。当前缓解手段是 TUI `[C]` 基础缓存刷新（`clear_by_group("refresh")`），但只在用户主动操作时生效，定时/无人值守运行仍会滞后。
+
+**动作**：`report` 索引 30d → **1d**（正文 `report_doc` 保持 30d：正文按 `doc_id` 不可变，且探测负缓存已保证缺失章节不重复打源）；`fin_indicator` 30d → **1d**（symbol 级键，新报告期靠日刷新被发现）。`dividend` 30d → 7d（分红公告不定期，同属"symbol 级键 + 长 TTL"）。
+
+**配额测算（客观依据）**：DataSinking 生效日配额 `resolve_daily_quota()` = **8191**（免费档），今日已用 121。索引刷新为每标的每日至多 1 次请求，持仓规模 10~20 → **+10~20 请求/日（占配额 0.12%~0.24%）**，一天跑 4 次报告也不放大（TTL 而非调用数决定）。故该调整的对外成本可忽略，收益是"新披露 ≤1 天可见"。
+
+**硬约束**：不改 `price`/`index` 的盘中路径；`report_doc` 与 `sector_flow` 等盘中/日频类型不动；改动须同步 `datasource.md` 缓存表 + `technical.md` 默认值表，并补"新报告期次日可见"的回归用例（用固定时钟 + 假索引验证 TTL 边界）。
+
+#### `plan-227` LLM 模块 TTL 取值决策所需观测（来源 rf-879）
+
+**现状**：`llm_expert_review` / `llm_health_check` / `llm_penetration_deep` / `llm_news_correlation` 统一 4h。指纹（`module_fingerprint`）已覆盖持仓/数据/参数变化，4h 的实际作用只是"内容未变时也强制重算"的上限；一天跑 2~3 次报告会重复调用最贵模块（`how-to-config-llm.md` 估算单次 ¥0.02~0.04）。
+
+**为什么不能凭感觉改**：把 4h 调到 8~12h 直接换成本/时效，取决于真实使用节奏（每天几次报告、指纹是否变化、不同模块的到期分布），当前没有数据。
+
+**动作**：先加**观测**不改值——在生成链路记录每模块"本次重算原因"（`fingerprint_changed` / `ttl_expired` / `no_cache` / `forced`）并累加到 perf（`llm.modules.*.recompute_reason`）；跑满一周后按分布决定是否调值（建议内容型 8~12h、`news_correlation` 维持 ≤4h）。观测本身不改行为、不增加调用。
+
+**硬约束**：观测字段只增不改；`self_review` 为内容寻址（上游重算即换键），不参与本次调值讨论。
+
+#### `plan-228` 决策/信号账本保留上限（来源 rf-880）
+
+**现状**：`decision_ledger.jsonl`（26 KB）、`signal_ledger.jsonl`（127 KB）只追加、无上限；同类历史文件已有策略——perf 5000 行、健康检查 2000 行、去重锚点 120 天 + 超限压缩，三者不一致。
+
+**动作**：两本账加**按龄保留**（建议 730 天：决策跨期反思需跨季度样本）并在写入时复用 `jsonl_store.append_jsonl_atomic(..., max_lines=)` 兜底行数上限；超限压缩保留最近样本与"已结算"记录（防止反思样本被裁光）。
+
+**硬约束**：压缩需幂等、原子（`atomic_write`）；不得改变账本读取接口；`plan-70`（决策跨期反思）依赖结算样本，压缩规则须保证已结算决策不被裁剪。
 
 #### `plan-93` 历史报告归档无索引导航
 

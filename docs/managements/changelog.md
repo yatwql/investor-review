@@ -9,6 +9,7 @@
 
 ## [0.15.8-dev] - 开发中（未发布）
 
+- **缓存过期时间（TTL）专项核查与立项**：盘点 37 个缓存类型与 10 处保留/陈旧窗口后立项 `plan-225`（TTL 机制收敛：注册两处未注册负缓存类型、校验 `market_hour_aware`、让 `cache_ttl` 盘中失效可观测）、`plan-226`（财报索引 30d→1d、财务指标 30d→1d、分红 30d→7d，配额测算 +10~20 请求/日）、`plan-227`（先观测 LLM 模块"重算原因"再决定 4h 是否放宽）、`plan-228`（决策/信号账本加保留上限）。核查中撤回两项原拟议：`sentiment` 含盘中实时更新的连板梯队，1h TTL 属盘中时效设计；两个负缓存只在**确定性** 404（已发布静态文档、章节与备源均无正文）时写入，瞬时网络错误不会污染当日结果——两条均无需调整。
 - **模型定价表按官方价目刷新（2026-10-25 核验）**：补入现役型号——Claude `5.5` 家族（Fable 5.1 / Opus 5.5 / Sonnet 5.5 / Haiku 5.5）与 legacy Sonnet 5；OpenAI `gpt-6.1-sol` / `gpt-6-luna` / `gpt-6-astra` / `gpt-5.6-sol`；Gemini `3.8-flash` / `3.1-pro`；Kimi `k3.1-pro` / `k3.1-pro-highspeed`。移除已下线或不在官方价目表的 `gemini-2.0-flash` / `gemini-3.5-flash`。DeepSeek 单价经核验未变。
 - **费用展示改为按模型原生币种**：`MODEL_PRICING` 每条带 `currency`（Anthropic/OpenAI/Google 为 USD，DeepSeek/Kimi 为 CNY），`estimate_cost` 出对应符号（`$`/`¥`），代码内**不再有任何用于展示的汇率折算**。模型同时提供多币种价时以配置币种（`llm_pricing_ref.json → currency`，默认 CNY）为主，用条目 `alt` 子表提供该币种价即可切换。
 - **跨币种金额分组并列、永不相加**：会话累计与报告合计改用「币种 → 金额」桶（`llm.pricing.add_cost/merge_costs/format_costs`），显示形如 `¥0.0123 + $0.0045`；`session_usage` 的 `total_cost`/`currency` 字段由 `costs` 取代，perf 记录写 `cost_by_currency`。
