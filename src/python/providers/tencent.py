@@ -13,10 +13,9 @@ from typing import Any
 import httpx
 
 from src.python.core.code_utils import is_a_share_code, is_exchange_fund_code, is_index_code
-from src.python.core.code_symbols import get_exchange_prefix
 from src.python.core.http_client import make_http_client
 from src.python.core.num_utils import safe_num
-from src.python.providers.utils import looks_like_block_page
+from src.python.providers.utils import looks_like_block_page, with_exchange_prefix
 from src.python.core.retry import (
     STRATEGY_EXPONENTIAL,
     STRATEGY_FIXED,
@@ -133,12 +132,8 @@ _FIELD_MAP: dict[str, int] = {
 }
 
 
-def _add_prefix(code: str) -> str:
-    """根据代码前缀添加交易所标识（委托至 code_utils.get_exchange_prefix）。"""
-    code = code.strip()
-    if len(code) != 6:
-        return code
-    return get_exchange_prefix(code) + code
+#: 交易所前缀补全的唯一实现在 providers/utils（三家行情源共用）。
+_add_prefix = with_exchange_prefix
 
 
 def _parse_response(text: str) -> dict[str, Any] | None:

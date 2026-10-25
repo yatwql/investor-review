@@ -105,8 +105,10 @@ def _inject_snapshot_diff_data(
 
 
 def _validate_prep_completeness(prep: dict) -> None:
-    """校验 prepare_report_data 返回数据的完整性。"""
-    assert isinstance(prep, dict), "prepare_report_data 返回类型异常"
+    """校验 prepare_report_data 返回数据的完整性（类型异常只告警，不中断报告）。"""
+    if not isinstance(prep, dict):
+        logger.warning("[checkpoint] prepare_report_data 返回类型异常: %s", type(prep).__name__)
+        return
     for _ck in (
         "total_mv",
         "total_cost",
@@ -129,7 +131,9 @@ def _validate_prep_completeness(prep: dict) -> None:
 def _validate_pipeline_snapshot(pipeline_data: dict | None) -> None:
     """校验 capture_snapshot 返回数据的完整性。"""
     if pipeline_data is not None:
-        assert isinstance(pipeline_data, dict), "capture_snapshot pipeline_data 类型异常"
+        if not isinstance(pipeline_data, dict):
+            logger.warning("[checkpoint] capture_snapshot pipeline_data 类型异常: %s", type(pipeline_data).__name__)
+            return
         _diff = pipeline_data.get("diff")
         if _diff is not None:
             if not isinstance(_diff, dict):

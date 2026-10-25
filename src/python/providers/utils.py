@@ -289,3 +289,18 @@ def safe_float(s: Any) -> float:
     """
     result = safe_num(s, default=0.0)
     return float(result)  # type: ignore[arg-type]
+
+
+def with_exchange_prefix(code: str) -> str:
+    """给 6 位代码补交易所前缀（``sh``/``sz``/``bj``），非 6 位原样返回。
+
+    三家行情源（新浪个股 / 新浪 K 线 / 腾讯）的取数 URL 共用这一份前缀规则：
+    分散实现时改动长度判据或前缀表只能改到一处，其余两处会静默取错代码。
+    规则本体在 ``core/code_symbols.get_exchange_prefix``。
+    """
+    from src.python.core.code_symbols import get_exchange_prefix
+
+    code = code.strip()
+    if len(code) != 6:
+        return code
+    return get_exchange_prefix(code) + code

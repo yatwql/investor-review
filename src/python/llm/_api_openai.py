@@ -61,7 +61,8 @@ def call_openai(
     if temperature is not None:
         payload["temperature"] = temperature
     client = http_client
-    assert client is not None
+    if client is None:  # 收窄而非 assert：-O 下 assert 会被剥离，留 None 只会在调用处炸得更晚
+        raise ValueError("http_client 未提供（调用方须先构造 HTTP 客户端）")
 
     def _extract_openai(data: dict) -> str | None:
         try:

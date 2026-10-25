@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.16.1-dev
-> **编号源**：`rf-next = 889`（新增问题取此编号，完成后更新为 +1；已用最大 rf-888，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 893`（新增问题取此编号，完成后更新为 +1；已用最大 rf-892，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -35,6 +35,10 @@
 | **rf-886** | 审计误判：把 `core/costs.add_cost_bucket` 判为「死代码」（只 grep 了 `src/`，漏掉 `scripts/_perf_history` 两处调用），删除后 dev-verify 才暴露 | 已恢复并补 docstring 调用方说明（core / llm / scripts 三方共用）；教训：死代码判定必须扫全仓（含 `scripts/`），且以门禁实跑兜底 |
 | **rf-887** | 重算原因（forced/fingerprint_changed/ttl_expired/cache_miss）以字符串字面量散落在预检与骨架两条路径，新增的 `RECOMPUTE_REASONS` 取值域无人使用 | 两处改引用 `observation.RECOMPUTE_*` 常量；`note_recompute_reason` 对域外值告警一次（仍计数，避免静默多出无人认识的统计桶）；回归 3 例 |
 | **rf-888** | `_llm_providers_defaults._PROVIDER_NOTES` 与默认线路未配对时静默无注释（新增线路漏写说明不会被发现） | 补对齐回归 2 例：每条默认线路必须有非空说明 + 模板可被注释剥离器解析且订阅制线路保留 `pacing` |
+| **rf-889** | 360h 核查：`scripts/_eval_halluc_sampler/llm_call.py` 与 `holdings.py` 有三处逐字重复（`_compute_categories` / `_compute_portfolio_values` / `_load_datasets`），其中一份引用已搬走的 `fact_checker._calc_portfolio_values`，被调即 ImportError | 删除 llm_call 内副本（本模块未使用），唯一实现留在 holdings；模块 docstring 记明原因 |
+| **rf-890** | 360h 核查：三家行情源（sina / sina_kline / tencent）各持一份逐字相同的 `_add_prefix`，改一处长度判据或前缀表会让另两处静默取错代码 | 收敛为 `providers/utils.with_exchange_prefix`（规则本体仍在 `core/code_symbols`），三处改为别名；语法断言纯函数行为不变 |
+| **rf-891** | 360h 核查：`scripts/_eval_factor_zoo/metrics.py` 内联副本了 `_closes` / `_daily_returns` / `_rolling_beta`（离线评测不依赖 src 私有名，属有意为之），但无任何机制阻止两份公式漂移 | 加同源数值测试：同一段 bars/指数在两侧逐步对比（NaN 位与浮点均带容差）——公式一改即红，而非静默出不同因子值 |
+| **rf-892** | 360h 核查：生产代码 6 处 `assert` 承担类型收窄与入参校验职责（LLM 三客户端 `client is not None`、报告两处 checkpoint 类型断言），`python -O` 下会被剥离——真出错时炸点推到更晚且信息更差 | LLM 三处改显式 `if client is None: raise ValueError`；报告 checkpoint 改告警不中断（与同函数内其他校验口径一致）；现全仓生产代码 `assert` 清零 |
 
 ### 归档档案
 - [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-10-25）

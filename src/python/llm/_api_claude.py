@@ -80,7 +80,8 @@ def call_claude(
     if temperature is not None and "thinking" not in payload:
         payload["temperature"] = temperature
     client = http_client
-    assert client is not None
+    if client is None:  # 收窄而非 assert：-O 下 assert 会被剥离，留 None 只会在调用处炸得更晚
+        raise ValueError("http_client 未提供（调用方须先构造 HTTP 客户端）")
 
     def _do_call(p: dict) -> tuple[str | None, dict | None]:
         return call_llm_with_retry(

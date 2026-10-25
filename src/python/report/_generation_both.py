@@ -188,9 +188,11 @@ def _generate_report_both(
     # 行动建议单一数据源（action_data）在「3. 历史走势」之后统一注入
     # （组合回撤纪律需组合历史峰值市值，见 tail_risk_data 注入点）。
     perf.stop()
-    # [checkpoint] pipeline_data 类型断言
-    if pipeline_data is not None:
-        assert isinstance(pipeline_data, dict), "capture_snapshot(both) pipeline_data 类型异常"
+    # [checkpoint] pipeline_data 类型校验（异常只告警，不中断报告）
+    if not isinstance(pipeline_data, dict):
+        if pipeline_data is not None:
+            logger.warning("[checkpoint] pipeline_data 类型异常(both): %s", type(pipeline_data).__name__)
+    else:
         _diff = pipeline_data.get("diff")
         if _diff is not None and not isinstance(_diff, dict):
             logger.warning("[checkpoint] pipeline_data.diff 类型异常(both): %s", type(_diff).__name__)

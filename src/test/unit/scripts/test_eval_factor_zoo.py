@@ -370,3 +370,37 @@ def test_probe_fields_injected_probes_no_network(ev):
     assert set(fr["per_code"][ev.FIELD_VAL]) == set(pool["codes"])
     assert set(fr["per_code"][ev.FIELD_FIN]) == set(pool["codes"])
     assert len(fr["index_bars"]) == len(bars)
+
+
+# ── 与 src 实现的数值同源性（防两份公式静默漂移） ──────────────
+#
+# 评测脚本 `_eval_factor_zoo/metrics.py` 内联了一份 `_closes` / `_daily_returns` /
+# `_rolling_beta`（离线评测不依赖 src 私有名）。两份公式一旦各自演进就会静默给出
+# 不同因子值，评测结论与产出报告脱节——故在此锁定数值一致。
+
+
+def test_inlined_formulas_match_src_implementation():
+    """评测内联的涨跌幅/滚动 Beta 与 `analysis/_factor_formulas` 逐值一致。"""
+    from src.python.analysis import _factor_formulas as src_impl
+
+    from _eval_factor_zoo import metrics as zoo  # noqa: F401 —— 由 load_script 加入 sys.path
+
+    closes = [10.0, 10.5, 10.2, 10.8, 11.3, 11.0, 11.6]
+    bars = [{"close": c} for c in closes]
+    market = [9.0, 9.4, 9.1, 9.9, 10.4, 10.1, 10.7]
+
+    assert zoo._closes(bars) == src_impl._closes(bars)
+
+    zoo_rets = zoo._daily_returns(closes)
+    src_rets = src_impl._daily_returns(closes)
+    assert len(zoo_rets) == len(src_rets)
+    for a, b in zip(zoo_rets, src_rets):
+        assert (a != a and b != b) or a == pytest.approx(b, abs=1e-12)
+
+    zoo_beta = zoo._rolling_beta(zoo_rets[1:], zoo._daily_returns(market)[1:], 3)
+    src_beta = src_impl._rolling_beta(src_rets[1:], src_impl._daily_returns(market)[1:], 3)
+    for a, b in zip(zoo_beta, src_beta):
+        if a is None or b is None:
+            assert a is b
+        else:
+            assert a == pytest.approx(b, abs=1e-12)
