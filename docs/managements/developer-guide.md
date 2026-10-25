@@ -1247,6 +1247,8 @@ DataModuleDef("我的 LLM 分析", "llm_my_analysis",
 > **开关改变提示词 → 同一后缀函数供两侧调用**：凡开关**会改变提示词内容**（`deterministic_signal` 注入信号块与确定性信号摘要、辩论增强后缀），其开关判定必须**收敛在后缀函数内部**，由 `module_fingerprint.py` 的构造器统一调用——写侧与预检侧只调用同一构造函数，不得任一环节自行拼接（自行拼接的后果是两侧结果永久不等：写侧照常写入、预检侧永不命中，表现为「开关看似生效但每次仍全量调用 LLM」）。后缀函数关闭时返回 `""`（键不变、不误伤既有缓存），开启时返回稳定短串（如 `"_dh"`）。**内容指纹型**后缀（如 `decision_ledger.lessons_cache_suffix`、`prompts_signals._signal_digest_cache_suffix`、`signal_ledger.summary_cache_suffix`）另取块内容 md5 作版本，使数值变化即换键。
 
 > **追加型状态文件一律走共享原语 `core/jsonl_store.py`**：`perf`（性能历史）、`decision_ledger`（决策账本）、`signal_ledger`（信号账本）三者的「读全文 → 拼接 → 写临时文件 → `os.replace`」逻辑已抽为 `append_jsonl_atomic()` / `read_jsonl()`，**新增任何 JSONL 持久化都不得再抄一份**——各自只保留自己的序列化口径（如 `decision_ledger` 的 `sort_keys=True` + `ensure_ascii=False`）与 `prefix`/日志标签，行为逐字不变由 `test_jsonl_store.py::TestDelegationPreservesBehaviour` 锁定。新增持久化文件时**必须**在 `src/test/conftest.py` 的 `_isolate_sensitive_paths` 中把路径重定向到 `tmp_path`，不得依赖测试自行清理。
+>
+> **保留窗口分两类，不得混用**：① **遥测类**（`perf_history` 5000 行、`datasource_health` 2000 行）用 `append_jsonl_atomic(..., max_lines=N)`——按行数截断，丢的只是遥测样本；② **业务账本**（`decision_ledger` / `signal_ledger`）用 `prune_jsonl_by_age(path, retention_days=730, date_key=..., keep=...)`——一行一份状态，按行数截断会连最旧的**已结算**样本一起裁掉、跨期反思随即失样本；决策账本对 `settlement` 事件用 `keep` 谓词永久保留。坏行不裁（不替读取侧吞掉损坏证据），缺日期字段的行保留。
 
 > **统计类输出默认只算「实时」记录**：凡把历史记录折叠成统计/排行榜/提示词摘要的功能（如 `core/signal_ledger.py::fold_signals(live_only=True)`），必须给每条记录附来源标签并可区分「可证明为实时」与其余，**默认只统计实时记录**、且**不引入新的合成数据开关**——来源判定复用既有数据质量设施（逐品种 `data_freshness` + 降级事件），未识别的取值一律保守判非实时；确需乐观缺省时（无逐品种条目可证伪）必须显式写入理由字段，不得静默。
 

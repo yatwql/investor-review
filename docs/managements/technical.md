@@ -2741,7 +2741,7 @@ report/decision_llm_capture.py   # 抽取：结构化优先 → 表格兜底
 **分层（`core/` 为共享层，两个消费方向都无环）**：
 
 ```
-core/jsonl_store.py        # 原子追加 + 容错读取原语（零项目内依赖）
+core/jsonl_store.py        # 原子追加 + 容错读取 + 按龄裁剪原语（零项目内依赖）
     ↑ 委托（各自保持 prefix/日志标签，行为逐字不变）
 core/perf.py               # 性能历史
 core/decision_ledger.py    # 决策账本（序列化口径：键排序 + ensure_ascii=False）
@@ -2892,7 +2892,7 @@ LLM 的操作建议与确定性调仓信号此前「当次即评、事后无对�
 **分层（`core/` 零 report/llm 依赖，两个消费方向都无环）**：
 
 ```
-core/jsonl_store.py             # 原子追加 + 容错读取原语（零项目内依赖）
+core/jsonl_store.py             # 原子追加 + 容错读取 + 按龄裁剪原语（零项目内依赖）
     ↑
 core/decision_ledger.py         # 决策账本：追加/折叠/结算原语 + 教训区块；is_active() 单源开关
     ↑
@@ -3544,7 +3544,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `log_reader` | 日志读取（read_log/tail_log/parse_log） | 日志可视化 | 诊断 | 无（模块级） |
 | `view_logs` | 查看日志（CLI view-logs 子命令） | 日志可视化 | 诊断 | 无（子命令） |
 | `health_history` | 数据源健康历史（load_health_history/summarize_health_history） | 日志可视化 | 监控 | data/state/datasource_health.jsonl |
-| `jsonl_store` | JSONL 原子追加原语（`perf`/`decision_ledger`/`signal_ledger` 共同委托的唯一拷贝） | 诊断 | 监控 | 无（模块级） |
+| `jsonl_store` | JSONL 原子追加 + 按龄裁剪原语（`perf`/`decision_ledger`/`signal_ledger` 共同委托的唯一拷贝；`prune_jsonl_by_age` 供业务账本按保留窗口裁剪，`max_lines` 仅限遥测类） | 诊断 | 监控 | 无（模块级） |
 | `num_utils` | 数值归一原语（`safe_num` 显式拦下 NaN/±inf，替代失效的 `try: float()` 兜底） | 诊断 | 数据获取 | 无（模块级，A 通道无开关） |
 | `retry` | 重试与退避唯一原语（`RetryPolicy` 策略算式——固定/线性/指数/**显式序列**、`is_transient_exception` 瞬时判据、`retry_transient` 执行器；取数链路、各 provider 与 LLM 调用骨架共用） | 诊断 | 数据获取 | 无（模块级） |
 | `throttle` | 按名最小间隔节流唯一原语（`RateLimiter` + `interval_delay` 抖动算式 + `wait_interval` 一次性等待；数据层限速/批量调度/LLM 端点节流/429 退避窗口共用） | 诊断 | 数据获取 | 无（模块级） |
@@ -3968,9 +3968,9 @@ investor-review/
 | `hold` | `fund_hold_{code}.json` | 7 天 | — | — | refresh |
 | `industry` | `industry_{code}.json` | 14 天 | — | — | refresh |
 | `sentiment` | `sentiment_dragon_tiger.json` + `sentiment_ladder.json` | 1h | — | — | refresh |
-| `report` | `report_datasink_index_{symbol}.json` + `report_datasink_sections_{doc_id}.json` + `report_cninfo_index_*` | 1 天 | — | — | refresh |
+| `report` | `report_datasink_index_{symbol}.json` + `report_datasink_sections_{doc_id}.json` + `report_cninfo_index_*` | 24h | — | — | refresh |
 | `report_doc` | `report_datasink_doc_{doc_id}_{section}.json` | 30 天 | — | — | refresh |
-| `fin_indicator` | `fin_indicator_{code}.json` + `fin_indicator_hist_{code}.json` | 1 天 | — | — | refresh |
+| `fin_indicator` | `fin_indicator_{code}.json` + `fin_indicator_hist_{code}.json` | 24h | — | — | refresh |
 | `dividend` | `dividend_{fingerprint}.json` | 7 天 | — | 持仓+穿透 A 股代码 | refresh |
 | `benchmark` | `fund_benchmarks.json` | 30 天 | — | — | refresh |
 
@@ -3995,8 +3995,8 @@ investor-review/
 |:-----|:----------|:---:|:--------:|:----|:-----|
 | `fund_manager` | `fund_manager_{code}.json` + `fund_manager_snapshot.json` | 24h | — | — | refresh |
 | —（持仓重合度） | 运行时推导（复用 `fund_hold_{code}.json`，无独立缓存） | — | — | — | — |
-| `fund_concentration` | `fund_concentration_snapshot.json` | 月级快照 | — | — | 无分组 |
-| `fund_style_snapshot` | `fund_style_snapshot.json` | 月级快照 | — | — | 无分组 |
+| `fund_concentration` | `fund_concentration_snapshot.json` | 30 天 | — | — | 无分组 |
+| `fund_style_snapshot` | `fund_style_snapshot.json` | 30 天 | — | — | 无分组 |
 | `extended` | `extended_{code}.json` | 24h | — | — | refresh |
 
 #### 历史走势类
@@ -4015,8 +4015,11 @@ investor-review/
 | `calendar` | `trading_calendar.json` | 14 天 | — | — | 无分组 |
 | `bond_yield` | `bond_yield_rf` / `bond_yield_history`（精确键名） | 1 天 | — | — | refresh |
 | `idx_valuation` | `idx_valuation_`（前缀，当前仅 sh000300） | 7 天 | — | — | refresh |
+| `datasink_probe_miss` | `datasink_probe_miss_{hash}.json` | 12h | — | — | 无分组 |
+| `report_symbol_miss` | `report_symbol_miss_{hash}.json` | 6h | — | — | 无分组 |
 
 > `—` 表示精确键名（无指纹后缀），TTL 到期后刷新。
+> **缺失探测负缓存**（`datasink_probe_miss` / `report_symbol_miss`）：只在**确定性**缺失时写入（已发布静态文档的章节 404、章节阶与备源均无正文），瞬时网络错误不写；TTL 短于「当天多次报告」周期、长于单次链路重试。
 > **非缓存引擎托管的文件**：`data/cache/` 下还存在脚本自管的性能缓存（`scripts/_doc_drift` 的用例收集快照、`scripts/_test_redundancy` 的逐文件事实缓存）。它们由脚本直接写 JSON，历史上没有 `_ts` 包封 —— 而清理器按 `now - payload.get("_ts", 0)` 算龄，等于把它们算成 **57 年陈货**并每轮启动删掉（缓存优化白做，日志里还留下荒谬条目）。两侧同时修：脚本写入补 `_ts`（缓存引擎的写入时间包封），清理器对**仍无 `_ts` 的文件一律跳过**（托管边界之外，不按 epoch 虚龄删，只留 DEBUG 痕迹）。
 >
 > **交易日历进程内 memo**：`core/trading_calendar._get_trading_calendar()` 被逐事件/逐持仓高频调用（实测单次报告 600+ 次），每次都 `cache.get` 等于读盘 + JSON 解析 600 次。现按「缓存文件指纹（mtime_ns+size）不变且剩余 TTL 未到」进程内复用同一份日历；文件被重写/清理/到期即回落磁盘缓存，语义不变；与 `market_hours` memo 同习语（`reset` 由 conftest autouse fixture 复位，防跨用例串味）。

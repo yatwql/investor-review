@@ -338,10 +338,10 @@ TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一�
 | `hold` | `fund_hold_{code}.json` | 7 天 | — | 基金前 10 持仓明细 |
 | `industry` | `industry_{code}.json` | 14 天 | — | 行业分类/概念板块 |
 | `sentiment` | `sentiment_dragon_tiger.json` + `sentiment_ladder.json` | 1h | — | 市场情绪（龙虎榜 + 连板天梯，同花顺唯一源） |
-| `report` | `report_datasink_index_{symbol}.json` + `report_datasink_sections_{doc_id}.json` + `report_cninfo_index_*` | 30 天 | — | 财报索引/章节清单（DataSinking 主源 + 巨潮备源） |
+| `report` | `report_datasink_index_{symbol}.json` + `report_datasink_sections_{doc_id}.json` + `report_cninfo_index_*` | 24h | — | 财报索引/章节清单（DataSinking 主源 + 巨潮备源）；symbol 级键，日频让**新披露最迟次日可见** |
 | `report_doc` | `report_datasink_doc_{doc_id}_{section}.json`（备源 `report_cninfo_text_*`） | 30 天 | — | 财报正文（主源全文 / 备源 PDF 解析） |
-| `fin_indicator` | `fin_indicator_{code}.json` + `fin_indicator_hist_{code}.json` | 30 天 | — | 结构化财务指标（akshare 主源 + 同花顺合并报表兜底） |
-| `dividend` | `dividend_{fingerprint}.json` | 30 天 | 持仓+穿透 A 股代码列表 | 股票历史分红汇总 |
+| `fin_indicator` | `fin_indicator_{code}.json` + `fin_indicator_hist_{code}.json` | 24h | — | 结构化财务指标（akshare 主源 + 同花顺合并报表兜底）；同索引口径 |
+| `dividend` | `dividend_{fingerprint}.json` | 7 天 | 持仓+穿透 A 股代码列表 | 股票历史分红汇总（公告不定期，周频兼顾可见性与请求量） |
 | `benchmark` | `fund_benchmarks.json` | 30 天 | — | 业绩比较基准对照表 |
 
 ##### LLM 分析类
@@ -945,6 +945,7 @@ Web 模式（浏览器界面）提供「配置编辑」面板，可修改的配�
 > **调整建议：** 持仓变动少可将 `hold` 的 TTL 调大为 30 天，减少基金持仓的重复拉取。
 >
 > **交易时段短 TTL：** `price` 和 `index` 在 A 股交易时段（09:30–11:30 + 13:00–15:00）自动使用 `market_hour_ttl`（默认 30s）替代常规 TTL，确保盘中实时行情。收盘后自动回落长 TTL 保持收盘价。可通过 `market_hours` 配置手动调整。
+> **哪些类型盘中敏感由程序声明**（不是配置项）：只有行情价与指数是分钟级变化，它们会随盘中降频；新闻（15 分钟）、情绪（1 小时）、财报索引（24h）等数据不因盘中被降频——否则只是把上游请求翻几倍而拿回同一份数据。若你同时配了 `cache_ttl.price`，盘中仍以 `market_hour_ttl` 为准（日志会提示一次），`cache_ttl.price` 只在盘后生效。
 
 ---
 
