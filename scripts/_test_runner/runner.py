@@ -124,7 +124,7 @@ def run_mode(
             "skipped": 0,
             "errors": 0,
             "subtests": 0,
-            "duration": float(timeout),
+            "duration": float(timeout or 0),
             "exit_code": -1,
         }
         stats["timed_out"] = True
@@ -284,7 +284,8 @@ def _run_phased(
             if not stripped:
                 continue
             if any(
-                kw in stripped for kw in ("passed", "failed", "error", "warning", "===", "short test summary", "ERROR")
+                kw in stripped
+                for kw in ("passed", "failed", "error", "warning", "===", "short test summary", "ERROR", "FAILED")
             ):
                 print(f"      {stripped}")
 

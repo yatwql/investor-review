@@ -136,7 +136,14 @@ _TREE_SAMPLE = """
 
 
 class _ToolRepoFixture:
-    """把 release 模块的输出路径重定向到临时目录，并构造最小文件集。"""
+    """把 release 模块的输出路径重定向到临时目录，并构造最小文件集。
+
+    下列路径常量在 ``__init__`` 里逐个赋到 fixture、并经 setattr 批量投影到 release
+    模块上（一处声明双端生效），故两侧同名可见。
+    """
+
+    mod: object
+    root: Path
 
     def __init__(self, rel_mod, tmp_path: Path):
         self.mod = rel_mod
@@ -180,7 +187,20 @@ class _ToolRepoFixture:
         }
         for name, value in paths.items():
             setattr(rel_mod, name, value)
-            setattr(self, name, value)
+        # 逐个显式赋值（而非 setattr 循环）：类型检查器能识别这些属性，
+        # 模块端统一 setattr 投影，一处声明双端生效。
+        self.REPO_ROOT = paths["REPO_ROOT"]
+        self.CONSTANTS_FILE = paths["CONSTANTS_FILE"]
+        self.README_FILE = paths["README_FILE"]
+        self.CHANGELOG_FILE = paths["CHANGELOG_FILE"]
+        self.FOLDERS_FILE = paths["FOLDERS_FILE"]
+        self._MANAGEMENTS_DIR = paths["_MANAGEMENTS_DIR"]
+        self._ARCHIVE_DOCS_DIR = paths["_ARCHIVE_DOCS_DIR"]
+        self.RF_FILE = paths["RF_FILE"]
+        self.PLAN_FILE = paths["PLAN_FILE"]
+        self.PLAN_DOCS_DIR = paths["PLAN_DOCS_DIR"]
+        self.GATE_STAMP_FILE = paths["GATE_STAMP_FILE"]
+        self.BENCH_STAMP_FILE = paths["BENCH_STAMP_FILE"]
 
 
 def _ok_runner(overrides: list | None = None) -> FakeRunner:
