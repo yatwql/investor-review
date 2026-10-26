@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.16.3-dev
-> **编号源**：`rf-next = 913`（新增问题提出后更新为 +1；已用最大 rf-912，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 916`（新增问题提出后更新为 +1；已用最大 rf-915，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -12,6 +12,8 @@
 
 | # | 问题 | 修复方向 |
 |---|------|----------|
+| **rf-913** | **原子写入单源偏离**（架构约束表「缓存原子写入」条）：`web/scheduler.py::_save_fired` 自建 `tmp + os.replace`，且临时文件名固定为 `scheduler_fired.json.tmp`（非 `tempfile.mkstemp`）——同目录 `web/upload.py`、`web/holdings_update.py` 都已显式走 `core/atomic_write`；固定 tmp 名下并发写会互相截断，落盘实现也成了第二份。其余手写 tmp+replace 均有正当理由且在 docstring 注明（`config/_core._atomic_write` 要抛原异常类型、`cache/_io` 需 gzip 与 Windows 锁重试、`providers/news_dedup` 带 .bak 校验、`excel_writer`/`html_save` 是产物且经 `note_temp` 登记） | 改 `core.atomic_write.write_json_atomic`（保留 prune 与失败记 ERROR 行为）；回归：并发写不互相截断（两线程各写 50 条后账本完整）、写失败只记日志不抛 |
+| **rf-915** | `docs/plan/` 三份在办设计无 `plan-XXXX` 任务追溯：`decision-reflection-design.md`、`jev-news-judgment-design.md`、`jev-news-judgment-evaluation.md`——`release.py prepare` 每轮都提「未引用任何任务编号，人工确认是否完成」，状态只能靠读文档头自行判断 | 为在办项补 plan 任务（含关联设计文件路径与完成判据）；若已判定不做/已评估未采纳，迁入版本归档并删除在办状态 |
 | **rf-257** | Web 模式真机验收余 4 类人工项（进度观察、结果区按钮、提交即禁用、拖拽与键位） | 判定标准见 [`web-browser-verification.md`](../archive/v0.15.x/web-browser-verification/web-browser-verification.md)；复跑 `scripts/test-smoke-web.py` 与 `docs/tmp/browser-verify/cdp-check.mjs`；收尾 kill 服务与浏览器、清空 `data/holdings/uploads/` |
 
 ### P2 — 中优先：价值明确、成本可控（下批排期）
@@ -24,7 +26,15 @@
 
 ### P4 — 持续监控：文件膨胀登记
 
-行数与拆分优先级以 `scripts/check-file-length.py -v` 为准（口径见 `technical.md` C28），达警告线即登记。当前无登记项。
+行数与拆分优先级以 `scripts/check-file-length.py -v` 为准（口径见 `technical.md` C28），达警告线即登记。
+
+| # | 文件 | 现状与拆分方向 |
+|---|------|----------------|
+| **rf-914** | `src/test/unit/scripts/test_release_tool_gate.py` 1147 行（测试登记线 900 / 红线 1200） | 按域再拆：`refresh` 编排一组、`publish` 一组独立成文件；拆分前先确认不放宽断言 |
+| **rf-914** | `src/test/conftest.py` 999 行（测试登记线 900） | fixture 族按域下沉（行情/LLM/网络/持久化各一模块），conftest 只留 autouse 装配与 marker 注册 |
+| **rf-914** | `src/python/llm/generators_orchestrator.py` 827 行（主程序登记线 700） | 生成编排与共享钩子可再分（`generators_*` 同族已多文件，按模块族对齐） |
+| **rf-914** | `src/python/cli/_handlers.py` 789 行（主程序登记线 700） | 命令处理器按渠道分文件（generate/config/data 三簇），保持入口薄壳 |
+| **rf-914** | `src/python/llm/skeleton.py` 739 行（主程序登记线 700） | 骨架模板与占位渲染可分（模板数据 vs 渲染逻辑） |
 
 ## 已解决问题
 
