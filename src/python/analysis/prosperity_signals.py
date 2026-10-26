@@ -33,11 +33,9 @@ def _top10_concentration_pct(holdings_details: list[dict[str, Any]]) -> float | 
 def _snapshot_holding_codes(snap: Any) -> set[str]:
     """从一期快照中提取持仓代码集合。
 
-    兼容两种形态（快照来源经 `history_snapshot.load_all()`，返回**冻结 dataclass**）：
-
-      - `SnapshotData` 对象：`snap.accounts[*].holdings[*].code`（生产形态）
-      - dict 形态：`{"accounts": [{"holdings": [{"code": ...}]}]}` 或
-        `{"holdings"/"details": [{"code": ...}]}`（测试/外部注入形态）
+    快照唯一形态是 `accounts[*].holdings[*].code`（`schemas/history.SnapshotData`，
+    来源 `history_snapshot.load_all()`）；为便于注入，dict 形态同样只认
+    `{"accounts": [{"holdings": [...]}]}`，不接受把持仓摊在顶层的其它写法。
 
     任何字段缺失/类型异常一律按「无该字段」处理（返回值可能为空集），
     由调用方判定该期不可用 —— 本函数**不得抛异常**（诊断功能不拖垮主报告）。
@@ -62,8 +60,6 @@ def _snapshot_holding_codes(snap: Any) -> set[str]:
             holdings = account.get("holdings")
         _harvest(holdings)
 
-    if not codes and isinstance(snap, dict):
-        _harvest(snap.get("holdings") or snap.get("details"))
     return codes
 
 

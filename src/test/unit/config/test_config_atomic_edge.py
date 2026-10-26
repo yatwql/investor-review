@@ -261,7 +261,7 @@ class TestConfigEnvEdge(unittest.TestCase):
     # ── api_key 空格 ──
 
     def test_api_key_whitespace_stripped(self):
-        """api_key 含首尾空格 → 被 strip 后再用于 API 调用。"""
+        """扁平密钥文档规范化时 api_key 首尾空格被去除（写入命名凭据块）。"""
         import src.python.config as cfg
 
         settings_path = os.path.join(self.tmp.name, "llm_settings.json")
@@ -281,7 +281,8 @@ class TestConfigEnvEdge(unittest.TestCase):
             result = cfg.get_llm_config()
 
         self.assertIsNotNone(result)
-        self.assertEqual(result["api_key"], "sk-test-with-spaces", "api_key 首尾空格应被去除")
+        creds = (result.get("_llm_credentials") or {}).get("default") or {}
+        self.assertEqual(creds.get("api_key"), "sk-test-with-spaces", "规范化后的 api_key 首尾空格应被去除")
 
     def test_api_key_whitespace_in_settings_only(self):
         """仅 llm_settings.json 含 api_key → 因无 llm_key.json 返回 None（凭据分离）。"""

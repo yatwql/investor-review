@@ -6,7 +6,7 @@ import json
 import os
 
 from src.python.config._validation_scalars import _deabsolutize_paths
-from src.python.core.constants import PROJECT_ROOT
+from src.python.core.constants import PROJECT_ROOT, REPORT_DEPTH_DEFAULT
 
 # 配置文件路径（支持 CLI --config 覆写），始终以项目根目录为基准
 _CONFIG_FILE = os.path.join(PROJECT_ROOT, "data/config/config.json")
@@ -49,7 +49,7 @@ _DEFAULT_CONFIG = {
     "news_top_count": 300,
     # 报告深度档位（brief/standard/deep）：在模块开关之上收窄参与集合与新闻采集条数，
     # 不得打开已关闭模块；standard 为缺省档，与未引入档位时逐字节一致。
-    "llm_report_depth": "standard",
+    "llm_report_depth": REPORT_DEPTH_DEFAULT,
     "news_sources": {
         "sina": True,
         "eastmoney": True,

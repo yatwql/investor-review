@@ -26,7 +26,7 @@ from src.python.llm.cost_forecast import (
 )
 from src.python.llm.pricing import PRICING_MERGED, compute_cost_value, reload_pricing
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_llm]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.usefixtures("offline_external_sources")]
 
 
 def _enabled_only(*targets: str) -> dict:

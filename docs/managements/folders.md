@@ -1,5 +1,5 @@
 # 目录结构与项目统计
-> 文档版本：0.16.1
+> 文档版本：0.16.2
 >
 > 项目目录树 — 新增/重命名任何非排除文件或目录时，必须同步更新此文档。
 >
@@ -9,25 +9,25 @@
 >
 > | 类别 | 开发语言 | 文件数 | 代码行数 | 说明 |
 > |---|---|---|---|---|
-| 主程序代码 | Python | 400 | 106,360 | `src/` 下所有 `.py`（不含测试：`src/__init__.py` 顶层包标记 + `src/python/` 下 15 个 `__init__.py`，含 `web/` 服务层；近期新增 `providers/tiantian_purchase.py` 天天基金申购状态总表 provider + `fetcher/fund_purchase.py` 申购状态取数编排（双链路/准入/会话复用） + `core/jsonl_store.py` JSONL 原子原语 + `core/signal_ledger.py` 确定性信号账本 + `report/signal_record.py` 信号登记适配器 + `core/num_utils.py` 数值归一原语 + `core/doctor.py` 系统自检 + `core/cassette.py` 请求回放引擎 + `core/datasource_credential.py` 数据源凭据声明 + `fetcher/source_adapter.py` 适配契约 + `fetcher/quote_adapters.py` 行情域适配器 + `llm/module_fingerprint.py` 模块指纹唯一事实来源 + `report/_experimental_seams.py` 实验挂载点 + `report/holdings_freshness.py` 持仓报告期时效判定 + `report/experimental_notice.py` 实验功能清单语句单源 + `core/trading_calendar.py` 交易日历原语（时间距离一律以交易日计） + `providers/datasink.py` 全文本财报 provider（密钥/限速/配额） + `providers/hithink.py` 同花顺金融数据服务 provider（A 股行情/财务/基金/情绪面；凭据/qps 限速/信封错误码） + `fetcher/financial_report.py` 财报取数编排 + `fetcher/report_adapters.py` 财报域适配器 + `report/financial_report_digest.py` 财报摘要章节装配 + `providers/akshare_financial.py` 结构化财务指标主源 + `fetcher/financial_indicator_adapters.py` 财务指标域适配器 + `core/code_symbols.py::to_fmp_symbol` 共享符号映射 + `providers/utils.py::run_with_timeout` 共享取数超时原语 + `analysis/financial_indicator_extract.py` 财务指标全文解析（压平正文锚点提取，备用支路） + `fetcher/financial_indicator.py` 财务指标多期取数编排 + `analysis/financial_indicator.py` 财务指标派生（质量档/趋势/当前 PE·PB） + `report/financial_indicator.py` 财务指标章装配 + `report/holdings_detail_sheet.py` 持仓明细与分类 Excel 页签 + `report/position_structure_sheet.py` 持仓结构与集中度 Excel 页签 + `report/fundamental_snapshot_sheet.py` 持仓基本面 Excel 页签（三者均为章节合并写入器） + `llm/compliance.py` 合规声明集中注入（幂等叠加，单一漏斗覆盖全模块）） |
+| 主程序代码 | Python | 400 | 106,532 | `src/` 下所有 `.py`（不含测试：`src/__init__.py` 顶层包标记 + `src/python/` 下 15 个 `__init__.py`，含 `web/` 服务层；近期新增 `providers/tiantian_purchase.py` 天天基金申购状态总表 provider + `fetcher/fund_purchase.py` 申购状态取数编排（双链路/准入/会话复用） + `core/jsonl_store.py` JSONL 原子原语 + `core/signal_ledger.py` 确定性信号账本 + `report/signal_record.py` 信号登记适配器 + `core/num_utils.py` 数值归一原语 + `core/doctor.py` 系统自检 + `core/cassette.py` 请求回放引擎 + `core/datasource_credential.py` 数据源凭据声明 + `fetcher/source_adapter.py` 适配契约 + `fetcher/quote_adapters.py` 行情域适配器 + `llm/module_fingerprint.py` 模块指纹唯一事实来源 + `report/_experimental_seams.py` 实验挂载点 + `report/holdings_freshness.py` 持仓报告期时效判定 + `report/experimental_notice.py` 实验功能清单语句单源 + `core/trading_calendar.py` 交易日历原语（时间距离一律以交易日计） + `providers/datasink.py` 全文本财报 provider（密钥/限速/配额） + `providers/hithink.py` 同花顺金融数据服务 provider（A 股行情/财务/基金/情绪面；凭据/qps 限速/信封错误码） + `fetcher/financial_report.py` 财报取数编排 + `fetcher/report_adapters.py` 财报域适配器 + `report/financial_report_digest.py` 财报摘要章节装配 + `providers/akshare_financial.py` 结构化财务指标主源 + `fetcher/financial_indicator_adapters.py` 财务指标域适配器 + `core/code_symbols.py::to_fmp_symbol` 共享符号映射 + `providers/utils.py::run_with_timeout` 共享取数超时原语 + `analysis/financial_indicator_extract.py` 财务指标全文解析（压平正文锚点提取，备用支路） + `fetcher/financial_indicator.py` 财务指标多期取数编排 + `analysis/financial_indicator.py` 财务指标派生（质量档/趋势/当前 PE·PB） + `report/financial_indicator.py` 财务指标章装配 + `report/holdings_detail_sheet.py` 持仓明细与分类 Excel 页签 + `report/position_structure_sheet.py` 持仓结构与集中度 Excel 页签 + `report/fundamental_snapshot_sheet.py` 持仓基本面 Excel 页签（三者均为章节合并写入器） + `llm/compliance.py` 合规声明集中注入（幂等叠加，单一漏斗覆盖全模块）） |
 | HTML 报告模板 | HTML | 23 | 5,193 | `src/static/tmpl/report_template.html` + `whatif_template.html`（调仓 What-if 独立 HTML 页）+ `partials/`（章节级/区块级 partial，主模板按 TOC 六组经 Jinja include 拆入，清单见目录树 `partials/` 节点） |
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
-| 辅助脚本 | Python | 123 | 24,819 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
-| 源代码合计 | — | 550 | 136,768 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 659 | 179,325 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 12,358 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
-| 用户文档 | Markdown | 13 | 6,456 | 含 README.md（211 行）；行数为 README + manuals 之和 |
-| ├ manuals/ | 用户手册分册 | 12 | 6,238 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 199 | 68,882 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 6 + archive md 160），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 13,597 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
-| ├ archive/ | 版本归档 | 182 | 54,693 | 各版本 changelog/plan/review-findings 与设计文档归档（157 md 50,492 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
+| 辅助脚本 | Python | 124 | 24,965 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
+| 源代码合计 | — | 551 | 137,086 | 主程序 + 模板 + 脚本 + SVG |
+| 测试代码 | Python | 662 | 179,692 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 12,389 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 用户文档 | Markdown | 13 | 6,570 | 含 README.md（211 行）；行数为 README + manuals 之和 |
+| ├ manuals/ | 用户手册分册 | 12 | 6,352 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
+| 项目文档 | Markdown | 199 | 68,940 | 含 CLAUDE.md（89 行）；md 口径（CLAUDE.md 1 + managements 12 + plan 6 + archive md 160），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 13,579 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| ├ archive/ | 版本归档 | 182 | 54,769 | 各版本 changelog/plan/review-findings 与设计文档归档（157 md 50,492 行，含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 3 | ~499 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + 跨模块导入面重命名分析 |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
 
 ## 版本演进对照（最初版本 → 最新发布 → 当前开发版）
 
 > **性质**：点对点快照对照（回答「这个项目从哪来、长到多大」），非门禁校验项——与上方「项目统计」的区别是它有**两个固定基准**：最初版本 vs 最新发布。
-> **三个读数**：最初版本 = 仓库首个提交（`项目初始基线`，2026-06-27）；最新发布 = 最近一次发布 tag（v0.16.1 · 2026-10-25）；**当前开发版 = 本次重跑时的工作区**（`git ls-files` 清单 + 直接读磁盘，故含未提交改动）——第三列是**滚动读数**（按需重跑刷新），前两列是固定快照（发布点不动）。
+> **三个读数**：最初版本 = 仓库首个提交（`项目初始基线`，2026-06-27）；最新发布 = 最近一次发布 tag（v0.16.2 · 2026-10-26）；**当前开发版 = 本次重跑时的工作区**（`git ls-files` 清单 + 直接读磁盘，故含未提交改动）——第三列是**滚动读数**（按需重跑刷新），前两列是固定快照（发布点不动）。
 > **复现方法**：与上方「项目统计」同一套分类规则，对每个 revision 各跑一遍下述三步；「当前开发版」一列按需重跑即可刷新（该列省略 `<rev>`、以 `git ls-files` 取清单，即在工作区上统计）。
 
 ```bash
@@ -44,23 +44,23 @@ git grep -c "def test_" <rev> -- 'src/test'
 
 > 等价做法（更省事，前两列即以此重跑）：`git archive <rev> | tar -x -C <临时目录>` 导出后本地计数——免去逐文件 `cat-file` 的解析；口径同上（末行无换行按 1 行计）。
 
-| 指标 | 最初版本（首个提交 · 2026-06-27） | 最新发布（最近发布 tag v0.16.1 · 2026-10-25） | 当前开发版（0.16.1 · 本次重跑时的工作区 · 2026-10-25） | 增长（最初 → 当前） |
+| 指标 | 最初版本（首个提交 · 2026-06-27） | 最新发布（最近发布 tag v0.16.2 · 2026-10-26） | 当前开发版（0.16.2 · 本次重跑时的工作区 · 2026-10-26） | 增长（最初 → 当前） |
 |:-----|:----------------------------------|:-----------------------|:--------------------------|:----:|
-| 主程序（`src/**/*.py`，不含测试） | 30 文件 / 7,258 行 | 400 文件 / 106,363 行 | 400 文件 / 106,363 行 | 14.7×
-| 测试（`src/test/**/*.py`） | 13 文件 / 6,108 行 | 659 文件 / 179,328 行 | 659 文件 / 179,328 行 | 29.4×
-| 辅助脚本（`scripts/*.py`） | 0（当时仅 `launch.sh` / `launch.ps1`） | 123 文件 / 24,821 行 | 123 文件 / 24,821 行 | 新增
+| 主程序（`src/**/*.py`，不含测试） | 30 文件 / 7,258 行 | 400 文件 / 106,535 行 | 400 文件 / 106,535 行 | 14.7×
+| 测试（`src/test/**/*.py`） | 13 文件 / 6,108 行 | 662 文件 / 179,695 行 | 662 文件 / 179,695 行 | 29.4×
+| 辅助脚本（`scripts/*.py`） | 0（当时仅 `launch.sh` / `launch.ps1`） | 124 文件 / 24,967 行 | 124 文件 / 24,967 行 | 新增
 | HTML 报告模板（`src/static/tmpl/*.html`） | 0（当时为 `src/tmpl/`：1 个 / 469 行） | 23 文件 / 5,193 行 | 23 文件 / 5,193 行 | 1 → 23
 | 架构图示（SVG） | 0 | 5 文件 / 413 行 | 5 文件 / 413 行 | 新增
-| 文档（`.md`） | 7 文件 / 1,355 行 | 215 文件 / 75,516 行 | 215 文件 / 75,516 行 | 55.7×
-| **代码文件合计**（前 5 项） | **43** | **1,210** | **1,210** | 28.1×
-| **代码行合计**（前 5 项） | **13,366** | **316,118** | **316,118** | 23.7×
-| **测试用例数**（`def test_` 行数口径） | **491** | **11,561** | **11,561** | 23.5×
-| 仓库文件总数 | 56 | 1,499 | 1,499 | 26.8×
-| 仓库总行数（全部跟踪文件） | 15,600 | 407,797 | 407,797 | 26.1×
+| 文档（`.md`） | 7 文件 / 1,355 行 | 215 文件 / 75,688 行 | 215 文件 / 75,688 行 | 55.9×
+| **代码文件合计**（前 5 项） | **43** | **1,214** | **1,214** | 28.2×
+| **代码行合计**（前 5 项） | **13,366** | **316,803** | **316,803** | 23.7×
+| **测试用例数**（`def test_` 行数口径） | **491** | **11,592** | **11,592** | 23.6×
+| 仓库文件总数 | 56 | 1,503 | 1,503 | 26.8×
+| 仓库总行数（全部跟踪文件） | 15,600 | 408,654 | 408,654 | 26.2×
 
 > **口径与读数说明**（避免误读三个"新增/突增"）：
-> - **测试用例数**采 `git grep -c "def test_"` 的**行数口径**（含注释/文档串中的 `def test_` 提及）：最初 491 → 当前 11,561；按更严格的「以 `def test_` 开头的定义行（含类方法缩进）」口径为 11,487；按 pytest 实际收集（含参数化展开）为 **10,707** 项（另 20 项 opt-in live 反选，全量 10,727）——**执行口径见 `test-coverage.md`「模式对应测试量」表**，该表由 `--mode bench --update-docs` 自动回填，本表第三列与之并非同一读数，仅作跨版本可比的历史尺度。
-> - **测试 / 主程序行数比**由 0.84:1（6,108 / 7,258）升至 **1.69:1**（179,328 / 106,363，最新发布点），当前工作区为 **1.69:1**（179,328 / 106,363）——测试与文档的投入增速快于主程序，是增长里最显著的结构变化。
+> - **测试用例数**采 `git grep -c "def test_"` 的**行数口径**（含注释/文档串中的 `def test_` 提及）：最初 491 → 当前 11,592；按更严格的「以 `def test_` 开头的定义行（含类方法缩进）」口径为 11,518；按 pytest 实际收集（含参数化展开）为 **10,707** 项（另 20 项 opt-in live 反选，全量 10,727）——**执行口径见 `test-coverage.md`「模式对应测试量」表**，该表由 `--mode bench --update-docs` 自动回填，本表第三列与之并非同一读数，仅作跨版本可比的历史尺度。
+> - **测试 / 主程序行数比**由 0.84:1（6,108 / 7,258）升至 **1.69:1**（179,695 / 106,535，最新发布点），当前工作区为 **1.69:1**（179,695 / 106,535）——测试与文档的投入增速快于主程序，是增长里最显著的结构变化。
 > - 「辅助脚本 / 报告模板 / 架构图」显示"新增"含**目录口径差异**：最初版本布局不同（测试平铺为 `src/test_*.py`、模板在 `src/tmpl/`、无 `scripts/*.py`、无 SVG）。按「HTML 模板总数」直接比是 **1 → 22**（若把 Web 首页与图表调试页也计入则 1 → 24）。
 > - 「文档」为仓库内全部 `.md` 计数（总数 = 根 2 + `managements` 12 + `manuals` 10 + `plan` 8 + `archive` 160 + `src/` 下 3 个代码相邻 README，其中 `plan` 为在办设计文档实数）；按上方统计表口径的**项目文档**为 CLAUDE.md 1 + 管理文档 12 + 中间设计（plan 实数 8）+ 归档 160（不含手册与 README）。本行数字随 `check-doc-drift --sync` 刷新，`plan` 分项以文件系统实测为准。
 
@@ -673,6 +673,7 @@ investor-review/
 │       │   │   ├── test_config_atomic.py     #   配置原子操作测试
 │       │   │   ├── test_config_atomic_edge.py #   配置原子操作边缘场景
 │       │   │   ├── test_config_consistency.py #   配置模板与声明一致性测试（LLM 设置键/批处理键/报告节顺序/原子写崩溃恢复）
+│       │   │   ├── test_config_default_single_source.py # 配置默认值单源收敛（嵌套取值/辩论段与档位默认值同源/provider 优先级一致）
 │       │   │   ├── test_config_edge.py       #   配置管理边缘场景
 │       │   │   ├── test_config_freshness.py  #   配置文件新旧对比（缺键/缺说明判据、URL 不当注释、用户自加注释不误报）
 │       │   │   ├── test_config_feature_gates.py # 功能开关与访问器测试（组合进化/候选比较/动作开关/数据沉降/分组与生命周期开关）
@@ -682,6 +683,7 @@ investor-review/
 │       │   │   ├── test_config_llm_multi.py      #   LLM 多配置测试
 │       │   │   ├── test_json_comments_contract.py # JSONC 读取契约（五份配置文件注释样本/features 读改写保注释/模板生成）
 │       │   │   ├── test_llm_settings_v2.py  #   v2 结构（生成器/版本拒绝/三层缺省/展平契约/未知保留）
+│       │   │   ├── test_llm_credentials_blocks.py # 扁平密钥文档规范化（命名凭据块/备份/幂等/失败显式拒绝/读取路径自动改写）
 │       │   │   ├── test_llm_pricing.py      #   计价参考（缺失回退/部分覆盖/非法跳过/版本拒绝/计费等价）
 │       │   │   ├── test_logging_config.py   #   日志配置（默认/回落/保存拒绝/env 优先/轮转/不可写与颜色降级）
 │       │   │   ├── test_llm_param_validation.py # 参数范围（表驱动合法/越界/类型错/加载回落/写入拒绝与不落盘）
@@ -850,10 +852,10 @@ investor-review/
 │       │   │   ├── test_cache_recompute_attribution.py # 重算归因观测（forced/fingerprint_changed/ttl_expired、旁路不改行为、写 perf）
 │       │   │   ├── test_report_sequence_cache.py # 连续报告缓存实测（同输入第二份预检 4/4 命中、失败条数漂移不换键、行情变化必重算）
 │       │   │   ├── test_cache_sequence_matrix.py # 端到端报告序列命中矩阵（变化维度 × 命中模块/参数与模型/强制/成本一致/预检归因）
-│       │   │   ├── test_cache_matrix.py # 缓存命中矩阵（逐模块精度/强制与模块级强制/Provider 切换/单 Provider/生成参数/TTL/跨进程/串行后置模块）
+│       │   │   ├── test_cache_matrix.py # 缓存命中矩阵（逐模块精度/强制与模块级强制/Provider 切换/无链即失败/生成参数/TTL/跨进程/串行后置模块）
 │       │   │   ├── _cache_fixtures.py # 缓存测试共用设施（最小自洽输入/编排调用/常量，四文件共用）
 │       │   │   ├── test_cache_cost_accounting.py # 缓存成本契约（命中零边际成本/未命中必记账/日预算只算真实花费/节省估算/预估缓存折扣口径）
-│       │   │   ├── test_cache_real_config.py # 真实配置链路缓存契约（不 patch 配置：v2 嵌套+多链、键同源、单 Provider、损坏/gzip/并发/失败不缓存、故障转移写盘、模块开关）
+│       │   │   ├── test_cache_real_config.py # 真实配置链路缓存契约（不 patch 配置：v2 嵌套+多链、键同源、缺链不可用、损坏/gzip/并发/失败不缓存、故障转移写盘、模块开关）
 │       │   │   ├── test_llm_analysis.py       #   LLM 分析测试
 │       │   │   ├── test_llm_api.py            #   LLM API 主入口测试
 │       │   │   ├── test_llm_api_attempt.py    #   单次调用尝试与重试策略表测试（200/429/503/超时/HTTP 异常与 429 诊断回显）
@@ -1100,6 +1102,7 @@ investor-review/
 │       │   │   ├── test_trace_check_scripts_doc.py                  #   文档域痕迹检查（check-doc-traces）
 │       │   │   ├── test_trace_domain_exemptions.py #   MAGIC/DASHTASK/UNDERSCORE 合法领域值豁免边界专项覆盖
 │       │   │   ├── test_trace_logging_discipline.py #  日志统一守卫（非交互层 print 检出 / 豁免域 / 白名单完整性）
+│       │   │   ├── test_trace_config_defaults.py #   配置默认值单源守卫（重复兜底检出/类型敏感/豁免域/真实仓库零 finding）
 │       │   │   ├── test_doc_trace_deleted_refs.py #   doc-traces 已删函数残留检查测试（历史 def 注入/引用形态过滤/git 不可用容错）
 │       │   │   ├── test_test_quality_regression.py #  测试质量回归守护（静态禁止空测试体=死用例）
 │       │   │   ├── test_test_runner_machine_info.py  #  test_runner 机器信息采集/bench 别名/耗时表格渲染测试
@@ -1309,7 +1312,7 @@ investor-review/
 │   ├── check-script-contract.py  #   scripts 顶层脚本契约机检（退出码声明 ⊆ {0,2} + check-* add_common_args CLI 面 + 文本 I/O 显式 encoding + 脚本↔测试覆盖，四条规则+白名单——观察期未入钩子/CI）
 │   ├── eval-dedup-threshold.py #   新闻去重阈值校准 + 锚点压缩（保留期同生产）
 │   ├── test-collect-coverage.py     #   测试覆盖计数收集（pytest --collect-only 快照；--update-docs 回写 test-coverage/folders 计数行）
-│   ├── check-code-traces.py         #   代码注释历史痕迹 + 任务编号 + 日志统一检查（AST 支路：core 分层 / print 禁令）
+│   ├── check-code-traces.py         #   代码注释历史痕迹 + 任务编号 + 日志统一 + 配置默认值单源检查（AST 支路：core 分层 / print 禁令 / 默认值重复兜底）
 │   ├── check-doc-traces.py          #   文档历史痕迹与结构性冗余检查
 │   ├── check-semantic-index.py      #   功能语义命名表正反向一致性检查
 │   ├── check-doc-drift.py           #   文档与实现一致性检查（章节/开关/默认值/面板编号/目录树/统计表/归档索引/管理文档分区纪律/Thinking 支持矩阵/章节-区块矩阵/手册菜单块）
@@ -1365,9 +1368,10 @@ investor-review/
 │   │   ├── patterns.py               #       匹配模式表（历史痕迹/标识符/暗号；只管「匹配什么」，共享叙述词表引用 _traces_common）
 │   │   ├── exemptions.py             #       豁免表（章节/轮次共享豁免 + 代码侧行级/魔法编号豁免与判定函数）
 │   │   ├── extract.py                #       注释抽取（per-language）与标识符提取
-│   │   ├── scan.py                   #       scan_file 调度（痕迹/标识符/分层/日志四支路汇聚）
+│   │   ├── scan.py                   #       scan_file 调度（痕迹/标识符/分层/日志/配置默认值五支路汇聚）
 │   │   ├── layers.py                 #       core 反向依赖 AST 守卫
-│   │   └── logging_discipline.py     #       日志统一 AST 守卫（print() 仅限交互呈现层白名单）
+│   │   ├── logging_discipline.py     #       日志统一 AST 守卫（print() 仅限交互呈现层白名单）
+│   │   └── config_defaults.py        #       配置默认值单源守卫（与默认表同值的字面量兜底检出）
 │   ├── _traces_doc/                  #   check-doc-traces 扫描后端包（入口薄 CLI + 原面 re-export）
 │   │   ├── __init__.py               #       子包标记（原面 re-export）
 │   │   ├── patterns.py               #       文档痕迹模式表与行级豁免（含目录树行专属补强）
@@ -1464,15 +1468,15 @@ investor-review/
 │   │   ├── technical.md              #     技术设计文档
 │   │   ├── test-coverage.md          #     测试覆盖率统计
 │   │   └── testplan.md               #     测试计划
-│   ├── archive/                      #   历史归档
+│   ├── archive/                      #   版本归档（按 minor 版本分区）
 │   │   ├── v0.1.x/                            # v0.1.x 版本归档
-│   │   │   ├── archived_changelog.0.1.x.md        # 变更日志归档 v0.1.x
-│   │   │   ├── archived_plan.0.1.x.md             # 实现计划归档 v0.1.x
-│   │   │   └── archived_review-findings.0.1.x.md  # 自审记录归档 v0.1.x
+│   │   │   ├── archived_changelog.0.1.x.md       # 变更日志归档 v0.1.x
+│   │   │   ├── archived_plan.0.1.x.md            # 实现计划归档 v0.1.x
+│   │   │   └── archived_review-findings.0.1.x.md # 自审记录归档 v0.1.x
 │   │   ├── v0.2.x/                            # v0.2.x 版本归档
-│   │   │   ├── archived_changelog.0.2.x.md        # 变更日志归档 v0.2.x
-│   │   │   ├── archived_plan.0.2.x.md             # 实现计划归档 v0.2.x
-│   │   │   ├── archived_review-findings.0.2.x.md  # 自审记录归档 v0.2.x
+│   │   │   ├── archived_changelog.0.2.x.md       # 变更日志归档 v0.2.x
+│   │   │   ├── archived_plan.0.2.x.md            # 实现计划归档 v0.2.x
+│   │   │   ├── archived_review-findings.0.2.x.md # 自审记录归档 v0.2.x
 │   │   │   ├── archived-data-source-pre-study.md  # 数据源可行性预研报告
 │   │   │   ├── data-degradation/                  # 数据降级处理方案
 │   │   │   │   ├── d-iteration-data-degradation-design.md     # 数据降级设计
@@ -1492,9 +1496,9 @@ investor-review/
 │   │   │   └── test-runtime-optimization/         # 测试运行优化
 │   │   │       └── test-runtime-optimization.md # 测试运行优化
 │   │   ├── v0.3.x/                            # v0.3.x 版本归档
-│   │   │   ├── archived_changelog.0.3.x.md        # 变更日志归档 v0.3.x
-│   │   │   ├── archived_plan.0.3.x.md             # 实现计划归档 v0.3.x
-│   │   │   ├── archived_review-findings.0.3.x.md  # 自审记录归档 v0.3.x
+│   │   │   ├── archived_changelog.0.3.x.md       # 变更日志归档 v0.3.x
+│   │   │   ├── archived_plan.0.3.x.md            # 实现计划归档 v0.3.x
+│   │   │   ├── archived_review-findings.0.3.x.md # 自审记录归档 v0.3.x
 │   │   │   ├── refactor-cache-engine/             # 缓存引擎重构
 │   │   │   │   └── cache-refactor-plan.md         # 缓存引擎重构计划
 │   │   │   ├── refactor-excel-generator/          # Excel 生成器重构
@@ -1510,18 +1514,18 @@ investor-review/
 │   │   │   └── test-verify-mode-optimization/     # 测试 verify 模式运行优化
 │   │   │       └── verify_mode_optimization.md # 测试 verify 模式运行优化
 │   │   ├── v0.4.x/                            # v0.4.x 版本归档
-│   │   │   ├── archived_changelog.0.4.x.md        # 变更日志归档 v0.4.x
-│   │   │   ├── archived_plan.0.4.x.md             # 实现计划归档 v0.4.x
-│   │   │   ├── archived_review-findings.0.4.x.md  # 自审记录归档 v0.4.x
+│   │   │   ├── archived_changelog.0.4.x.md       # 变更日志归档 v0.4.x
+│   │   │   ├── archived_plan.0.4.x.md            # 实现计划归档 v0.4.x
+│   │   │   ├── archived_review-findings.0.4.x.md # 自审记录归档 v0.4.x
 │   │   │   ├── portfolio-history-comparison/      # 组合历史对比
 │   │   │   │   ├── F-portfolio-history-comparison.md        # F 迭代计划与技术设计
 │   │   │   │   └── html-report-chart-native-canvas-fallback-plan.md # HTML Canvas 渲染修复
 │   │   │   └── test-add-config-edge-testcase/     # 边缘测试配置
 │   │   │       └── y5-edge-test-config-env.md     # 边缘测试配置环境
 │   │   ├── v0.5.x/                            # v0.5.x 版本归档
-│   │   │   ├── archived_changelog.0.5.x.md        # 变更日志归档 v0.5.x
-│   │   │   ├── archived_plan.0.5.x.md             # 实现计划归档 v0.5.x
-│   │   │   ├── archived_review-findings.0.5.x.md  # 自审记录归档 v0.5.x
+│   │   │   ├── archived_changelog.0.5.x.md       # 变更日志归档 v0.5.x
+│   │   │   ├── archived_plan.0.5.x.md            # 实现计划归档 v0.5.x
+│   │   │   ├── archived_review-findings.0.5.x.md # 自审记录归档 v0.5.x
 │   │   │   ├── portfolio-benchmark-comparison/    # I 迭代基准指数对比归档
 │   │   │   │   ├── I-comparative-benchmark-design.md    # I 迭代基准对比设计
 │   │   │   │   ├── I-comparative-benchmark-iteration.md # I 迭代基准对比迭代计划
@@ -1529,9 +1533,9 @@ investor-review/
 │   │   │   └── report-board-visibility-configable/ # 看板可见性配置
 │   │   │       └── g-board-visibility-iteration-plan.md # 看板可见性配置迭代计划
 │   │   ├── v0.6.x/                            # v0.6.x 版本归档
-│   │   │   ├── archived_changelog.0.6.x.md        # 变更日志归档 v0.6.x
-│   │   │   ├── archived_plan.0.6.x.md             # 实现计划归档 v0.6.x
-│   │   │   ├── archived_review-findings.0.6.x.md  # 自审记录归档 v0.6.x
+│   │   │   ├── archived_changelog.0.6.x.md       # 变更日志归档 v0.6.x
+│   │   │   ├── archived_plan.0.6.x.md            # 实现计划归档 v0.6.x
+│   │   │   ├── archived_review-findings.0.6.x.md # 自审记录归档 v0.6.x
 │   │   │   ├── llm-multi-provider/                # 多 LLM Provider 链式服务归档
 │   │   │   │   ├── llm-multi-provider-design.md       # 多 LLM Provider 链式服务技术设计
 │   │   │   │   └── llm-multi-provider-iteration-plan.md # 多 LLM Provider 链式服务迭代计划
@@ -1539,9 +1543,9 @@ investor-review/
 │   │   │       ├── cli-mode-iteration-plan.md     # CLI 迭代计划
 │   │   │       └── cli-mode-technical-design.md   # CLI 技术设计
 │   │   ├── v0.7.x/                            # v0.7.x 版本归档
-│   │   │   ├── archived_changelog.0.7.x.md        # 变更日志归档 v0.7.x
-│   │   │   ├── archived_plan.0.7.x.md             # 实现计划归档 v0.7.x
-│   │   │   ├── archived_review-findings.0.7.x.md  # 自审记录归档 v0.7.x
+│   │   │   ├── archived_changelog.0.7.x.md       # 变更日志归档 v0.7.x
+│   │   │   ├── archived_plan.0.7.x.md            # 实现计划归档 v0.7.x
+│   │   │   ├── archived_review-findings.0.7.x.md # 自审记录归档 v0.7.x
 │   │   │   ├── porting-to-rust-vs-java/           # Rust/Java 移植评估归档
 │   │   │   │   └── porting-to-rust-vs-java-analysis.md # 移植技术分析（依赖替代风险 / 两方案成本对比）
 │   │   │   └── better-investment-advice/           # 投资建议改进分析讨论
@@ -1557,8 +1561,8 @@ investor-review/
 │   │   │       ├── llm-hallucination-prompts_expert-review.md          # 幻觉采样完整 Prompt 构造（Dry-Run）
 │   │   │       └── llm-hallucination-sample-output_expert-review.txt   # 幻觉采样 LLM 原始输出样本
 │   │   ├── v0.8.x/                           # v0.8.x 版本归档
-│   │   │   ├── archived_changelog.0.8.x.md    # 变更日志归档 v0.8.x
-│   │   │   ├── archived_plan.0.8.x.md         # 实现计划归档 v0.8.x
+│   │   │   ├── archived_changelog.0.8.x.md       # 变更日志归档 v0.8.x
+│   │   │   ├── archived_plan.0.8.x.md            # 实现计划归档 v0.8.x
 │   │   │   ├── archived_review-findings.0.8.x.md # 自审记录归档 v0.8.x
 │   │   │   ├── tiantian-split/               #   tiantian.py 大文件拆分记录
 │   │   │   │   └── tiantian-split.md          #     tiantian.py 拆分记录
@@ -1575,10 +1579,10 @@ investor-review/
 │   │   │   │   ├── batch-parallel-design.md #      批量并行调度技术设计
 │   │   │   │   └── batch-parallel-iteration-plan.md # 批量并行调度迭代计划
 │   │   ├── v0.9.x/                           # v0.9.x 版本归档（changelog/plan/review-findings + 设计文档）
-│   │   │   ├── archived_plan.0.9.x.md         # 实现计划归档 v0.9.x（设计文档索引）
-│   │   │   ├── archived_changelog.0.9.x.md     # 变更日志归档 v0.9.x
+│   │   │   ├── archived_plan.0.9.x.md            # 实现计划归档 v0.9.x
+│   │   │   ├── archived_changelog.0.9.x.md       # 变更日志归档 v0.9.x
 │   │   │   ├── archived_review-findings.0.9.x.md # 自审记录归档 v0.9.x
-│   │   │   ├── abandoned-design/               #   已放弃设计决策归档区（业绩归因）
+│   │   │   ├── abandoned-design/               #   已放弃的设计方案（Brinson 业绩归因）
 │   │   │   │   └── brinson-attribution-abandoned.md # 业绩归因（Brinson）放弃设计
 │   │   │   ├── chartjs-upgrade/               #   交互式 HTML 报告升级设计（8 迭代）
 │   │   │   │   ├── plan-chartjs-report-upgrade.md   # Chart.js 升级实施方案
@@ -1606,9 +1610,9 @@ investor-review/
 │   │   │   └── qa-concentration-chart-optimization/ # 集中度问答 + 穿透柱状图优化修复设计
 │   │   │       └── plan-fix-qa-concentration-and-chart-optimization.md # 集中度问答 + 柱状图优化修复
 │   │   ├── v0.10.x/                         # v0.10.x 版本归档（changelog/plan/review-findings + 设计文档）
-│   │   │   ├── archived_plan.0.10.x.md      #    实现计划归档 v0.10.x（含设计文档索引）
-│   │   │   ├── archived_changelog.0.10.x.md #    变更日志归档 v0.10.x
-│   │   │   ├── archived_review-findings.0.10.x.md # v0.10.x 自审记录归档（含 v0.10.20-dev 批次）
+│   │   │   ├── archived_plan.0.10.x.md            # 实现计划归档 v0.10.x
+│   │   │   ├── archived_changelog.0.10.x.md       # 变更日志归档 v0.10.x
+│   │   │   ├── archived_review-findings.0.10.x.md # 自审记录归档 v0.10.x
 │   │   │   ├── investment-features/         #   投资功能优化 + 章节归并设计文档
 │   │   │   │   ├── plan-investment-features.md  #     投资分析功能优化设计（需求×数据源×章节归并）
 │   │   │   │   └── plan-investment-iteration.md #     投资功能优化 21 轮迭代实施计划（每轮量化验收）
@@ -1633,7 +1637,7 @@ investor-review/
 │   │   │   ├── datasink-financial-report-digest/ #   DataSinking 财报接入设计归档（持仓个股财报摘要）
 │   │   │   │   └── datasink-financial-report-digest-design.md # 凭据/计划感知限速/配额护栏/章节装配与渲染接线
 │   │   │   └── dedup-calibration/            #   新闻去重阈值校准分析归档（dedup 逐条样本 + 分布 + 判定）
-│   │   │       ├── dedup-calibration-report.md #   dedup 阈值校准原始计数（锚点总数/跨源跳过分布/维持现阈值依据）
+│   │   │       ├── dedup-calibration-report.md #   dedup 阈值校准计数（锚点总数、跨源跳过分布、阈值依据）
 │   │   │       ├── dedup-review.md           #   dedup 灰色带（bg≥2 ratio 0.35~0.40）逐条示例 + 人工判定
 │   │   │       └── cross_merge_bg2_review.md #   cross_merge_bg2 30 条去重后独立 pair 分析
 │   │   │   ├── tradingagents-borrowing/      #   外部 TradingAgents-astock 借鉴系列（决策反思 + LLM 输入/输出质量治理）
@@ -1665,9 +1669,9 @@ investor-review/
 │   │   │   ├── report-followup-qa/ #   报告对话式追问设计归档（qa 独立子包设计）
 │   │   │   │   └── report-followup-qa-design.md # 报告对话式追问设计（上下文从报告 HTML 提取/会话服务/报告页区块/TUI [Q] 入口/转正路径）
 │   │   ├── v0.11.x/                         # v0.11.x 版本归档（0.11 系列首份）
-│   │   │   ├── archived_changelog.0.11.x.md # v0.11.0 ~ v0.11.10 已发布变更记录
-│   │   │   ├── archived_plan.0.11.x.md    # 实现计划归档 v0.11.x（含设计文档索引）
-│   │   │   ├── archived_review-findings.0.11.x.md # v0.11.x 开发期已修复记录
+│   │   │   ├── archived_changelog.0.11.x.md       # 变更日志归档 v0.11.x
+│   │   │   ├── archived_plan.0.11.x.md            # 实现计划归档 v0.11.x
+│   │   │   ├── archived_review-findings.0.11.x.md # 自审记录归档 v0.11.x
 │   │   │   ├── section-consolidation/     # 报告章节整合设计归档（设计层 + 实施层）
 │   │   │   │   ├── section-consolidation-design.md    # 设计层：四项合并/可见性模型扩展/约束对照/验收标准
 │   │   │   │   └── section-consolidation-iteration.md # 实施层：命名统一总表/接缝地图/逐批施工单/十轮复盘记录
@@ -1676,15 +1680,15 @@ investor-review/
 │   │   │   ├── hithink-data-source/       # 同花顺官方数据接入设计归档（五阶段接入方案）
 │   │   │       └── hithink-financial-data-design.md # 覆盖边界/四域接入方案/实测字段与限流/验证计划/架构约束自查标准
 │   │   │   ├── dedup-anchor-calibration/  # 新闻去重锚点校准复核归档
-│   │   │   │   └── dedup-anchor-calibration.md # 锚点混代证据/当前规则重判分布/原建议逐条核对与处置
+│   │   │   │   └── dedup-anchor-calibration.md # 锚点混代证据、规则重判分布、建议处置清单
 │   │   │   ├── tradingagents-cn-borrow-research/ # 借鉴批候选研究归档（现状比对 + 终态标注）
-│   │   │   │   └── tradingagents-cn-borrow-candidates-research.md # 10 项候选借鉴分析（6 落地 / 3 未采纳 / 共性教训）
+│   │   │   │   └── tradingagents-cn-borrow-candidates-research.md # 候选借鉴分析（落地项/未采纳项/共性教训）
 │   │   │   └── llm-depth-selfreview-source-override/ # LLM 深度自审来源覆盖整体设计归档
 │   │   │       └── report-depth-selfreview-source-override-design.md # 报告深度档位/LLM 生成后自检/调用级源指定设计（形态/分层不重叠/运行作用域/约束对照）
 │   │   ├── v0.12.x/                         # v0.12.x 版本归档（0.12 系列首份）
-│   │   │   ├── archived_changelog.0.12.x.md # v0.12.1 已发布变更记录
-│   │   │   ├── archived_plan.0.12.x.md       # 实现计划归档 v0.12.x（含限购信息接入与持仓展示面设计）
-│   │   │   ├── archived_review-findings.0.12.x.md # v0.12.x 开发期已修复记录
+│   │   │   ├── archived_changelog.0.12.x.md       # 变更日志归档 v0.12.x
+│   │   │   ├── archived_plan.0.12.x.md            # 实现计划归档 v0.12.x
+│   │   │   ├── archived_review-findings.0.12.x.md # 自审记录归档 v0.12.x
 │   │   │   ├── awesome-design-md-borrow-research/ # Web 展示借鉴研究归档
 │   │   │   │   └── awesome-design-md-borrow-candidates-research.md # 73 份 DESIGN.md 骨架与样板要点 + 我方两面样式差距映射（6 立项 / 5 不采纳）
 │   │   │   ├── gs-quant-borrow-research/      # gs-quant 借鉴研究归档
@@ -1708,9 +1712,9 @@ investor-review/
 │   │   │   └── rebalance-schedule-replay/         # 调仓纪律回放设计归档
 │   │   │       └── rebalance-schedule-replay-design.md # 调仓纪律回放设计（规则契约/成本软依赖/四迭代）
 │   │   ├── v0.13.x/                         # v0.13.x 版本归档（changelog/plan/review-findings + 设计文档）
-│   │   │   ├── archived_changelog.0.13.x.md # 变更日志归档 v0.13.x（v0.13.0 ~ v0.13.4 已发布段）
-│   │   │   ├── archived_plan.0.13.x.md      # 实现计划归档 v0.13.x（含设计文档索引）
-│   │   │   ├── archived_review-findings.0.13.x.md # 自审记录归档 v0.13.x（开发期已修复批次）
+│   │   │   ├── archived_changelog.0.13.x.md       # 变更日志归档 v0.13.x
+│   │   │   ├── archived_plan.0.13.x.md            # 实现计划归档 v0.13.x
+│   │   │   ├── archived_review-findings.0.13.x.md # 自审记录归档 v0.13.x
 │   │   │   ├── holding-cost-position/      # 持仓成本历史价格区间位置设计归档
 │   │   │   │   └── holding-cost-position-design.md # 持仓成本相对历史价格区间位置设计
 │   │   │   ├── llm-cost-optimization/       # LLM 调用成本优化分析归档
@@ -1720,57 +1724,57 @@ investor-review/
 │   │   │   ├── report-browser-verification/ # 报告浏览器验证归档
 │   │   │   │   └── report-browser-verification.md # 验证方法与实测结论（CDP 自动化子项实测 + 人工步骤 + 复验清单）
 │   │   │   ├── trace-vocabulary-single-source/ # 检查脚本共享词表单一来源设计归档
-│   │   │   │   └── trace-vocabulary-single-source.md # 同源正则抽入 `_traces_common` + 文档域模式表迁入 `_traces_doc/patterns.py`
+│   │   │   │   └── trace-vocabulary-single-source.md # 共享正则与文档域模式表的单一来源（`_traces_common`、`_traces_doc/patterns.py`）
 │   │   │   ├── tui-interaction-hci/         # TUI 交互 HCI 治理设计归档
 │   │   │   │   └── tui-interaction-hci-design.md # HCI 原则对照 + 交互契约 v0 + M1~M10 措施与机检载体
 │   │   │   └── tui-panel-runtime/           # TUI 统一交互运行时设计归档
 │   │   │       └── tui-panel-runtime-design.md # NavState/PanelItem/panel_loop 契约 + 13 面板清单 + 8 迭代
 │   │   ├── v0.14.x/                         # v0.14.x 版本归档（changelog/plan/review-findings + 设计文档）
-│   │   │   ├── archived_changelog.0.14.x.md # 变更日志归档 v0.14.x（v0.14.0 起发布段）
-│   │   │   ├── archived_plan.0.14.x.md      # 实现计划归档 v0.14.x（已完成任务节）
-│   │   │   └── archived_review-findings.0.14.x.md # 自审记录归档 v0.14.x（开发期已修复批次）
+│   │   │   ├── archived_changelog.0.14.x.md       # 变更日志归档 v0.14.x
+│   │   │   ├── archived_plan.0.14.x.md            # 实现计划归档 v0.14.x
+│   │   │   └── archived_review-findings.0.14.x.md # 自审记录归档 v0.14.x
 │   │   ├── v0.15.x/                         # v0.15.x 版本归档（changelog/plan/review-findings + 设计文档）
-│   │   │   ├── archived_changelog.0.15.x.md # 变更日志归档 v0.15.x（发布段）
-│   │   │   ├── archived_plan.0.15.x.md      # 实现计划归档 v0.15.x（已完成任务节）
-│   │   │   ├── archived_review-findings.0.15.x.md # 自审记录归档 v0.15.x（开发期已修复批次）
-│   │   │   ├── cache-ttl-layering/ # 设计文档归档（任务完成后由发布归档迁入）
-│   │   │   │   ├── cache-ttl-layering.md # 该文档的完整设计内容（迁档前位于在办设计目录）
-│   │   │   ├── config-rework/               # 配置体系重构设计归档（v0.15.x 已完成轮次）
-│   │   │   │   ├── config-rework-iteration-plan.md # 配置体系重构计划（15 轮状态/验收基准/门禁与契约映射；已完成）
-│   │   │   │   ├── config-tui-design.md    # TUI 面板设计（四组菜单层级/七项四组/章节显隐与章内内容/键位与分组标题纪律）
-│   │   │   │   ├── config-web-design.md    # Web 配置面设计（五域分区/块与控件/保存语义/无障碍与响应式）
-│   │   │   │   ├── config-files-design.md  # 配置文件设计（八份文件边界/演进策略/config.json 取舍/书写与读取约定）
-│   │   │   │   ├── config-llm-settings-design.md # LLM 配置设计（模块为第一层的纵切结构/三层缺省继承/键位映射/升级与回滚）
-│   │   │   │   ├── config-logging-design.md # 日志配置设计（logger.json 键表与默认值/加载优先级/校验与错误/面板入口）
-│   │   │   │   ├── config-panel-mockup/    #   设计图样原型目录（自包含 HTML，数据内联，浏览器直接打开）
-│   │   │   │       ├── index.html          #       Web 配置面板目标设计（按业务域编排；说明密度/标记/主题可切换）
-│   │   │   ├── llm-cache-state-isolation/ # 设计文档归档（任务完成后由发布归档迁入）
-│   │   │   │   └── llm-cache-state-isolation.md # 该文档的完整设计内容（迁档前位于在办设计目录）
-│   │   │   │       ├── web-current.html    #       Web 配置面板现有实现（按存储文件编排）
-│   │   │   │       ├── tui.html            #       TUI 全层级图样 · 目标设计（[C] 章节总表/[S] 报告呈现与增强/[G] 全局设置）
-│   │   │   │       ├── tui-current.html    #       TUI 全层级图样 · 现有实现（四组开关/[D] 目录信息/[D]→[L] 调优参数）
-│   │   │   │       ├── llm-config.html     #       LLM 配置目标设计（模块纵切结构 + 键位映射）
-│   │   │   │       ├── llm-config-current.html #  LLM 配置现有实现（扁平结构：参数 × 模块平铺）
-│   │   │   │       ├── tui_render.py       #       TUI 单屏渲染取样（真实处理器 + 伪终端）
-│   │   │   │       ├── tui_capture.py      #       TUI 逐屏采集（产出帧数据到 docs/tmp，git 忽略）
-│   │   │   │       ├── tui_build.py        #       ANSI 帧转 HTML 图样构建器
-│   │   │   │       ├── llm_config_mock.py  #       LLM 配置纵切图样生成器（读真实配置推导结构）
-│   │   │   │       ├── web_mock_build.py   #       Web 配置面板图样生成器（真实注册表/配置取数，产出目标与现有两份 HTML）
-│   │   │   ├── import-surface/              # 导入面重命名完成归档（owner 表/四条规则/迁移定稿）
-│   │   │   ├── tui-display-modes/           # TUI 显示模式统一完成归档（行型/分组/提示/开关状态）
-│   │   │   │   ├── tui-display-modes.md     # 设计定稿与收口记录（状态唯一实现/关闭恒红/ANSI 截断）
-│   │   │   │   ├── import-surface-rename.md # 跨模块导入面重命名分析定稿（兼容转发→唯一 owner；P0~P4 完成）
-│   │   │   ├── pricing-native-currency/     # 定价按币种计价完成归档（原生币种展示/分组聚合/预算内部汇率）
-│   │   │   │   └── pricing-native-currency.md # 设计定稿与验收（币种桶/format_costs/代码内无展示汇率）
-│   │   │   ├── web-browser-verification/    # 设计文档归档（任务完成后由发布归档迁入）
-│   │   │       └── web-browser-verification.md # 该文档的完整设计内容（迁档前位于在办设计目录）
+│   │   │   ├── archived_changelog.0.15.x.md       # 变更日志归档 v0.15.x
+│   │   │   ├── archived_plan.0.15.x.md            # 实现计划归档 v0.15.x
+│   │   │   ├── archived_review-findings.0.15.x.md # 自审记录归档 v0.15.x
+│   │   │   ├── cache-ttl-layering/                      # 缓存 TTL 决定权统一（分层必要性、两种方案取舍）
+│   │   │   │   ├── cache-ttl-layering.md                # 各 TTL 的决定方、分层必要性、维持四层与只读注册表对比
+│   │   │   ├── config-rework/                           # 配置体系重构（文件划分、键名与界面映射、TUI/Web 面板）
+│   │   │   │   ├── config-rework-iteration-plan.md      # 分轮推进表（各轮范围、验收基准、门禁与契约）
+│   │   │   │   ├── config-tui-design.md                 # TUI 面板设计（四组菜单层级/七项四组/章节显隐与章内内容/键位与分组标题纪律）
+│   │   │   │   ├── config-web-design.md                 # Web 配置面设计（五域分区/块与控件/保存语义/无障碍与响应式）
+│   │   │   │   ├── config-files-design.md               # 配置文件设计（八份文件边界/演进策略/config.json 取舍/书写与读取约定）
+│   │   │   │   ├── config-llm-settings-design.md        # LLM 配置设计（模块为第一层的纵切结构/三层缺省继承/键位映射/升级与回滚）
+│   │   │   │   ├── config-logging-design.md             # 日志配置设计（logger.json 键表与默认值/加载优先级/校验与错误/面板入口）
+│   │   │   │   ├── config-panel-mockup/                 # 设计图样原型目录（自包含 HTML，数据内联，浏览器直接打开）
+│   │   │   │   │   ├── index.html                       # Web 配置面板目标设计（按业务域编排；说明密度/标记/主题可切换）
+│   │   │   │   │   ├── web-current.html                 # Web 配置面板现有实现（按存储文件编排）
+│   │   │   │   │   ├── tui.html                         # TUI 全层级图样 · 目标设计（[C] 章节总表/[S] 报告呈现与增强/[G] 全局设置）
+│   │   │   │   │   ├── tui-current.html                 # TUI 全层级图样 · 现有实现（四组开关/[D] 目录信息/[D]→[L] 调优参数）
+│   │   │   │   │   ├── llm-config.html                  # LLM 配置目标设计（模块纵切结构 + 键位映射）
+│   │   │   │   │   ├── llm-config-current.html          # LLM 配置现有实现（扁平结构：参数 × 模块平铺）
+│   │   │   │   │   ├── tui_render.py                    # TUI 单屏渲染取样（真实处理器 + 伪终端）
+│   │   │   │   │   ├── tui_capture.py                   # TUI 逐屏采集（产出帧数据到 docs/tmp，git 忽略）
+│   │   │   │   │   ├── tui_build.py                     # ANSI 帧转 HTML 图样构建器
+│   │   │   │   │   ├── llm_config_mock.py               # LLM 配置纵切图样生成器（读真实配置推导结构）
+│   │   │   │   │   └── web_mock_build.py                # Web 配置面板图样生成器（真实注册表/配置取数，产出目标与现有两份 HTML）
+│   │   │   ├── import-surface/                          # 跨模块导入面唯一出处（所有权、转发路径收敛）
+│   │   │   │   └── import-surface-rename.md             # 导入所有权总表、四条规则、分批收回旧转发路径
+│   │   │   ├── llm-cache-state-isolation/               # 报告级 LLM 缓存状态隔离（现象、实测证据、状态边界）
+│   │   │   │   └── llm-cache-state-isolation.md         # 影响缓存键的状态源与三层处理（运行边界、指纹审计、缓存策略）
+│   │   │   ├── pricing-native-currency/                 # 多币种计价（原币种展示、分组汇总、预算折算）
+│   │   │   │   └── pricing-native-currency.md           # 币种桶存储、金额格式化、展示层不做汇率换算
+│   │   │   ├── tui-display-modes/                       # TUI 显示模式统一（行型、状态色、关闭恒红、ANSI 截断）
+│   │   │   │   └── tui-display-modes.md                 # 行型判定与分组、颜色语义、关闭恒红与截断规则
+│   │   │   └── web-browser-verification/                # Web 模式真机验证（无头 Chromium 自动化、结论可复现）
+│   │   │       └── web-browser-verification.md         # 启动步骤、接口层证据、自动化实测、鼠标悬停复核
 │   │   └── v0.16.x/                         # v0.16.x 版本归档（changelog/plan/review-findings + 设计文档）
-│   │       ├── archived_changelog.0.16.x.md # 变更日志归档 v0.16.x（发布段）
-│   │       ├── archived_plan.0.16.x.md      # 实现计划归档 v0.16.x（已完成任务节）
-│   │       └── archived_review-findings.0.16.x.md # 自审记录归档 v0.16.x（开发期已修复批次）
-│   └── plan/                          #   中间设计文件（在办设计文档，文档扁平存放、原型就近建子目录）；完成后迁入对应版本的归档子目录
-│       ├── jev-news-judgment-evaluation.md # 判定迁移的对照评测方案（三方对照/语料冻结/预注册阈值与四类判定）
-│       ├── jev-news-judgment-design.md # 判定通道接入设计（独立于对话链的类型化通道/模板理由/降级矩阵；待评测通过后实施）
+│   │       ├── archived_changelog.0.16.x.md       # 变更日志归档 v0.16.x
+│   │       ├── archived_plan.0.16.x.md            # 实现计划归档 v0.16.x
+│   │       └── archived_review-findings.0.16.x.md # 自审记录归档 v0.16.x
+│   └── plan/                          #   在办设计文档（扁平存放，原型就近建子目录）
+│       ├── jev-news-judgment-evaluation.md # 判定通道迁移的对照评测方案（三方对照、语料冻结、预注册阈值）
+│       ├── jev-news-judgment-design.md # 判定通道接入设计（独立于对话链、模板理由、降级矩阵）
 │       ├── decision-reflection-design.md # 决策跨期反思闭环设计（可结算决策账本/结算器/反思回灌与回滚）
 │
 ├── CLAUDE.md                         # AI 编程助手指引

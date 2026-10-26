@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+from src.python.config import DEFAULT_PROVIDER_PRIORITY
 from src.python.core.ansi_colors import GREEN, RESET, YELLOW
 from src.python.tui.panel_runtime import NavState, PanelItem, panel_loop
 from src.python.tui.prompt_text import panel_prompt
@@ -61,7 +62,7 @@ def run_llm_providers_panel() -> None:
         for num, (_i, provider) in enumerate(ordered, 1):
             row = (
                 f"  {nav.marker(num - 1)}{num}. {provider.get('name')}（{provider.get('provider')}）priority "
-                f"{provider.get('priority', 99)}"
+                f"{provider.get('priority', DEFAULT_PROVIDER_PRIORITY)}"
             )
             for line in wrap_hanging(row, width):
                 print(line)
@@ -127,7 +128,7 @@ def run_llm_providers_panel() -> None:
             str(i),
             str(p.get("name")),
             detail=(
-                f"模型 {p.get('model') or '默认'} · 优先级 {p.get('priority', 99)}"
+                f"模型 {p.get('model') or '默认'} · 优先级 {p.get('priority', DEFAULT_PROVIDER_PRIORITY)}"
                 f"（数值小者链序靠前）· 端点 {p.get('endpoint') or '由凭据决定'}"
             ),
         )

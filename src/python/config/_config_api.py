@@ -11,9 +11,23 @@ from src.python.config._config_defaults import _DEFAULT_CONFIG
 from src.python.config._core import get_config as _get_config
 
 
-def get_default(key: str):
-    """返回配置默认值表中的默认值（``_DEFAULT_CONFIG`` 单一来源）。"""
-    return _DEFAULT_CONFIG.get(key)
+def get_default(key: str, *path: str):
+    """返回配置默认值表中的默认值（``_DEFAULT_CONFIG`` 单一来源）。
+
+    支持嵌套项：``get_default("history.lookback_days")`` 与
+    ``get_default("history", "lookback_days")`` 等价；任一层缺失返回 None。
+
+    Args:
+        key: 顶层键名，或点分嵌套路径（如 ``"a.b.c"``）
+        *path: 可选的逐层键名（与点分写法二选一，显式传参优先）
+    """
+    segs = (key, *path) if path else tuple(key.split("."))
+    node: object = _DEFAULT_CONFIG
+    for seg in segs:
+        if not isinstance(node, dict) or seg not in node:
+            return None
+        node = node[seg]
+    return node
 
 
 def resolve_holdings_path(config: dict | None = None) -> str:

@@ -66,9 +66,10 @@ def _liquidity() -> list[dict]:
 
 
 def _snapshots() -> list[dict]:
+    """快照唯一形态 accounts[].holdings（与 schemas/history.SnapshotData 一致）。"""
     return [
-        {"holdings": [{"code": "300308"}, {"code": "688981"}, {"code": "600519"}]},
-        {"holdings": [{"code": "300308"}, {"code": "601398"}]},
+        {"accounts": [{"holdings": [{"code": "300308"}, {"code": "688981"}, {"code": "600519"}]}]},
+        {"accounts": [{"holdings": [{"code": "300308"}, {"code": "601398"}]}]},
     ]
 
 

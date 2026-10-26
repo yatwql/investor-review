@@ -38,6 +38,8 @@ from ._orchestrator_data import (  # noqa: F401
     prepare_report_data,
 )
 
+from src.python.config import resolve_output_dir
+
 logger = __import__("logging").getLogger("invest")
 
 
@@ -180,7 +182,7 @@ def generate_report(
         perf = PerfCollector(report_type="basic", holdings=holdings, stage_announcer=reporter.stage_progress)
         bind_perf(perf)
         sec_order = get_report_section_order(config)
-        output = output_dir or config.get("output_dir", "reports")
+        output = output_dir or resolve_output_dir(config)
 
         # 后台启动健康检查（与 Excel 生成并行）
         _health_fut = _spawn_health_checks()

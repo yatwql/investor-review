@@ -255,8 +255,9 @@ def test_real_generator_reaches_provider_with_compliance_and_caches(monkeypatch)
         return ("<p>【自检清单】未发现矛盾</p>", {"input_tokens": 10, "output_tokens": 5})
 
     llm_config = {
-        "provider": "claude",
         "api_key": "sk-test",
+        "_provider_list": [{"name": "test-provider", "provider": "claude", "api_key": "sk-test"}],
+        "_strategy": "priority",
         "enabled_llm": {SELF_REVIEW_MODULE_KEY: True},
         "cache_enabled_self_review": True,
         "max_tokens_self_review": 2048,

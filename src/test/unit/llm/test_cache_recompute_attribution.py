@@ -9,7 +9,8 @@
 
 1. **归因口径正确**：未命中原因区分 `forced` / `fingerprint_changed` / `ttl_expired`；
 2. **观测不改行为**：加了归因后命中/未命中判定、调用次数、费用完全不变；
-3. **数据可落盘**：原因分布写入 perf 的 `llm.recompute_reasons`，可按周统计。
+3. **数据可落盘**：聚合计数写入 perf 的 `llm.recompute_reasons`、逐模块明细写入
+   `llm.module_recompute_reasons`（形状不同、互不覆盖），可按周统计。
 """
 
 from __future__ import annotations
@@ -22,7 +23,12 @@ import pytest
 from src.python.llm.observation import LlmObservation
 from src.test.unit.llm._cache_fixtures import degradation_events, make_inputs, run_generate_all_llm
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.unit_core]
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.unit_llm,
+    pytest.mark.unit_core,
+    pytest.mark.usefixtures("offline_external_sources"),
+]
 
 
 class TestObservationSink:
@@ -150,7 +156,9 @@ class TestPerfPersistence:
         with patch("src.python.llm.observation.current_llm_observation", return_value=sink):
             _record_llm_context(_Perf())
 
-        assert recorded.get("recompute_reasons") == {"expert_review": "ttl_expired"}
+        # 聚合计数（判据口径）与逐模块明细分属两个字段，形状不同、互不覆盖
+        assert recorded.get("recompute_reasons") == {"ttl_expired": 1}
+        assert recorded.get("module_recompute_reasons") == {"expert_review": "ttl_expired"}
 
     def test_no_field_when_no_miss(self, llm_cache_dir):
         from src.python.report._generation_shared import _record_llm_context
@@ -164,7 +172,7 @@ class TestPerfPersistence:
         sink = LlmObservation()
         with patch("src.python.llm.observation.current_llm_observation", return_value=sink):
             _record_llm_context(_Perf())
-        assert "recompute_reasons" not in recorded, "全命中时不应写该字段（perf 记录不膨胀）"
+        assert "module_recompute_reasons" not in recorded, "全命中时不应写该字段（perf 记录不膨胀）"
 
     def test_degradation_scenario_still_recorded(self, llm_cache_dir):
         """带降级事件的运行也能归因（降级块变化应体现为 fingerprint_changed）。"""
@@ -222,6 +230,32 @@ class TestSkeletonPathAttribution:
             "fingerprint_changed",
             "ttl_expired",
         }
+
+    def test_skeleton_does_not_override_precheck_attribution(self, llm_cache_dir):
+        """预检已归因的模块不被骨架二次归因（重启后无上轮键记忆也不得改判）。"""
+        from src.python.llm import observation, skeleton
+
+        skeleton.reset_prev_module_cache_keys()
+        sink = observation.LlmObservation()
+        sink.note_recompute_reason("expert_review", "ttl_expired")
+        with patch("src.python.llm.observation.current_llm_observation", return_value=sink):
+            skeleton.generate_llm_content(
+                {},
+                "llm_expert_review_probe",
+                3600,
+                "sys",
+                "user",
+                cache_enabled=True,
+                force=False,
+                max_tokens=16,
+                timeout=5,
+                temperature=None,
+                model=None,
+                config_field="model_expert_review",
+                module_key="expert_review",
+            )
+        assert sink.module_recompute_reasons() == {"expert_review": "ttl_expired"}, "预检归因不得被覆盖"
+        assert sink.recompute_reasons() == {"ttl_expired": 1}, "聚合计数只应有一条"
 
     def test_skeleton_hit_records_no_reason(self, llm_cache_dir):
         """命中时不得写归因（否则"命中/重算"统计互相污染）。"""

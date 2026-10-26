@@ -288,16 +288,17 @@ def _check_llm_credentials() -> list[dict[str, Any]]:
         strategy = llm_config.get("_strategy", "priority")
         return [_item(GROUP_CONFIG, "LLM 凭据", True, f"多链模式（策略 {strategy}）：{names}")]
 
-    provider = llm_config.get("provider", "?")
-    if llm_config.get("api_key"):
-        return [_item(GROUP_CONFIG, "LLM 凭据", True, f"provider={provider}，API Key 已配置")]
     return [
         _item(
             GROUP_CONFIG,
             "LLM 凭据",
             False,
-            f"provider={provider}，API Key 为空",
-            hint="在 TUI 菜单或 Web 配置面板中填写 API Key",
+            "未配置 provider 链（llm_providers.json 缺失或无有效条目）",
+            hint=(
+                "在 TUI [M] 面板或 Web 配置面板配置线路与 credentials_ref；"
+                "旧版 llm_key.json 顶层 api_key/provider 形态已不支持（启动时自动迁移为 "
+                "default 凭据块与同名 provider 条目，失败时见日志提示）"
+            ),
         )
     ]
 

@@ -49,6 +49,7 @@ from src.python.core.datasource_credential import (
 )
 from src.python.core.datasource_credential import register_credential_spec as _register_credential_spec
 from src.python.core.http_client import make_http_client
+from src.python.config import get_default
 
 logger = logging.getLogger("invest")
 
@@ -109,14 +110,14 @@ def _datasink_config() -> dict[str, Any]:
 
 def resolve_plan(cfg: dict[str, Any] | None = None) -> str:
     """当前套餐（``free`` / ``yearly``）。"""
-    plan = str((cfg or _datasink_config()).get("plan", "free")).strip().lower()
+    plan = str((cfg or _datasink_config()).get("plan", get_default("datasink.plan"))).strip().lower()
     return plan if plan in _PLAN_LIMITS else "free"
 
 
 def resolve_requests_per_second(cfg: dict[str, Any] | None = None) -> float:
     """每秒请求上限：显式配置优先，否则按套餐派生。"""
     section = cfg or _datasink_config()
-    configured = section.get("requests_per_second", 0)
+    configured = section.get("requests_per_second", get_default("datasink.requests_per_second"))
     if isinstance(configured, (int, float)) and configured > 0:
         return float(configured)
     return float(_PLAN_LIMITS[resolve_plan(section)][0])
@@ -125,7 +126,7 @@ def resolve_requests_per_second(cfg: dict[str, Any] | None = None) -> float:
 def resolve_daily_quota(cfg: dict[str, Any] | None = None) -> int:
     """每日文档配额：显式配置优先，否则按套餐派生；返回值恒为正（不限用 0 表达则回退套餐）。"""
     section = cfg or _datasink_config()
-    configured = section.get("daily_quota", 0)
+    configured = section.get("daily_quota", get_default("datasink.daily_quota"))
     if isinstance(configured, (int, float)) and configured > 0:
         return int(configured)
     return int(_PLAN_LIMITS[resolve_plan(section)][1])

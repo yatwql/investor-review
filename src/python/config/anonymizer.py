@@ -29,6 +29,7 @@ from typing import Any
 
 from src.python.core.code_utils import is_fund_holding
 from src.python.core.models import Holding
+from src.python.config import get_default
 
 #: 代码显示掩码：匿名模式下持仓代码在「展示面」的统一显示值。
 CODE_DISPLAY_MASK = "000XXX"
@@ -532,7 +533,7 @@ def get_anonymization_mode() -> str:
 
     config = get_config()
     anon_config = config.get("anonymization", {})
-    mode = anon_config.get("mode", "off")
+    mode = anon_config.get("mode", get_default("anonymization.mode"))
     if mode not in _ANONYMIZATION_MODES:
         logger.warning("[anonymizer] 配置中的匿名化模式 '%s' 无效，使用 'off'", mode)
         mode = "off"

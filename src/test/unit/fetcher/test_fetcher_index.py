@@ -514,6 +514,29 @@ class TestFetchIndexHistory(unittest.TestCase):
     @patch("src.python.core.provider_registry.get_registry")
     @patch("src.python.fetcher.chain.fetch_with_incremental_fallback")
     @patch("src.python.fetcher.index.cache_get")
+    def test_source_cap_does_not_trigger_heal(self, mock_cache, mock_fetch, mock_get_reg):
+        """结果已达源单次上限（约 2000 根）→ 短于请求窗口属源限制，不清缓存重取。"""
+        from src.python.core.provider_registry import NOT_FOUND
+
+        mock_reg = MagicMock()
+        mock_reg.session_cache_get.return_value = NOT_FOUND
+        mock_get_reg.return_value = mock_reg
+        capped = [self._SAMPLE_KLINE_1] * 2001  # 上游上限形态
+        mock_cache.return_value = capped
+        mock_fetch.return_value = capped
+
+        from src.python.fetcher.index import fetch_index_history
+
+        with patch("src.python.fetcher.chain.clear_incremental_cache") as mock_clear:
+            result = fetch_index_history("sh000300", days=2927)
+
+        self.assertEqual(len(result), 2001)
+        self.assertEqual(mock_fetch.call_count, 1, "达源上限不得重取")
+        mock_clear.assert_not_called()
+
+    @patch("src.python.core.provider_registry.get_registry")
+    @patch("src.python.fetcher.chain.fetch_with_incremental_fallback")
+    @patch("src.python.fetcher.index.cache_get")
     def test_no_heal_without_file_cache(self, mock_cache, mock_fetch, mock_get_reg):
         """无链路文件缓存时短结果即源上限 → 不重取（避免白打一次请求）。"""
         from src.python.core.provider_registry import NOT_FOUND

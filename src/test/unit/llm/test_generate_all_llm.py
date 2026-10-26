@@ -11,6 +11,8 @@
 
 from __future__ import annotations
 
+from src.test.helpers import make_chain_config
+
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -192,7 +194,7 @@ class TestGenerateFunctionsAcceptLlmConfig(unittest.TestCase):
         from src.python.llm.generators import generate_global_macro
 
         mock_gen.return_value = ("<p>结果</p>", False)
-        llm_config = {"provider": "claude", "api_key": "sk-test", "cache_enabled_global_macro": False}
+        llm_config = make_chain_config(api_key="sk-test", cache_enabled_global_macro=False)
         result, cached = generate_global_macro(
             a_indices={},
             us_indices={},
@@ -215,7 +217,7 @@ class TestGenerateFunctionsAcceptLlmConfig(unittest.TestCase):
         from src.python.llm.generators import generate_expert_review
 
         mock_gen.return_value = ("<p>复盘</p>", False)
-        llm_config = {"provider": "claude", "api_key": "sk-test", "cache_enabled_expert_review": False}
+        llm_config = make_chain_config(api_key="sk-test", cache_enabled_expert_review=False)
         result, cached = generate_expert_review(
             total_mv=0,
             total_cost=0,
@@ -237,7 +239,7 @@ class TestGenerateFunctionsAcceptLlmConfig(unittest.TestCase):
         from src.python.llm.generators import generate_health_check
 
         mock_gen.return_value = ("<p>体检</p>", False)
-        llm_config = {"provider": "claude", "api_key": "sk-test", "cache_enabled_health_check": False}
+        llm_config = make_chain_config(api_key="sk-test", cache_enabled_health_check=False)
         result, cached = generate_health_check(
             total_mv=0,
             total_cost=0,
@@ -259,7 +261,7 @@ class TestGenerateFunctionsAcceptLlmConfig(unittest.TestCase):
         from src.python.llm.generators import generate_penetration_deep_analysis
 
         mock_gen.return_value = ("<p>穿透</p>", False)
-        llm_config = {"provider": "claude", "api_key": "sk-test", "cache_enabled_penetration_deep": False}
+        llm_config = make_chain_config(api_key="sk-test", cache_enabled_penetration_deep=False)
         result, cached = generate_penetration_deep_analysis(
             total_mv=0,
             total_cost=0,
@@ -527,14 +529,14 @@ class TestGenerateAllLlmCachePrecheck(unittest.TestCase):
             "can_cache": True,
             "thinking_key": "thinking_enabled_global_macro",
         }
-        llm_config = {"model": "test-model", "endpoint": "https://test.endpoint"}
+        llm_config = make_chain_config(model="test-model", endpoint="https://test.endpoint")
 
         with patch("src.python.llm.generators_orchestrator.cache_get", return_value=self.CACHED_CONTENT):
             result, from_cache = _precheck_one_cache(cache_info, llm_config, "global_macro")
 
         self.assertIsNotNone(result)
         self.assertTrue(from_cache)
-        # 当缓存内容不含模型名时，使用 llm_config["model"] 作为模型名
+        # 当缓存内容不含模型名时，用 provider 链解析出的模型/端点作记录
         mock_record.assert_called_once_with(
             "global_macro",
             "test-model",

@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import pytest
 from unittest.mock import MagicMock, patch
+from src.python.config import resolve_output_dir
 from src.python.report.orchestrator import (
     ReportResult,
     generate_report,
@@ -97,7 +98,7 @@ class TestGenerateReport:
         mock_gen.assert_called_once_with(
             mock_holdings,
             include_news=False,
-            output_dir="reports",
+            output_dir=resolve_output_dir(config),
             section_order=[{"key": "overview"}],
             progress=mock_reporter,
             enable_action=True,

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.python.config import DEFAULT_PROVIDER_PRIORITY
 from src.python.core.registry import get_llm_module_names
 from src.python.llm.pricing import costs_of, format_costs
 
@@ -94,7 +95,7 @@ def _endpoint_priority_map(llm_config: dict | None) -> dict[str, float]:
     for provider in llm_config.get("_provider_list") or []:
         endpoint = resolve_provider_endpoint(provider, llm_config)
         if endpoint and endpoint not in mapping:
-            mapping[endpoint] = float(provider.get("priority", 999))
+            mapping[endpoint] = float(provider.get("priority", DEFAULT_PROVIDER_PRIORITY))
     return mapping
 
 

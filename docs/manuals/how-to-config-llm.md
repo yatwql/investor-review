@@ -6,8 +6,8 @@ LLM 配置由三个独立文件管理：
 
 | 文件 | 内容 | 用途 |
 |------|------|------|
-| `data/config/llm_key.json` | 4 个必填字段，或 `credentials_ref` 多键凭据块 | API 调用渠道（必填：provider / api_key / model / endpoint） |
-| `data/config/llm_providers.json` | Provider 路由配置（多链模式） | 定义多个 Provider 的切换顺序、策略和凭据引用 |
+| `data/config/llm_key.json` | `credentials_ref` 命名凭据块（每块含 api_key / model / endpoint） | 密钥与线路明细（不提交仓库） |
+| `data/config/llm_providers.json` | Provider 路由配置 | 定义 Provider 的切换顺序、策略，并 `credentials_ref` 引用凭据块 |
 | `data/config/llm_settings.json` | 所有非敏感配置 | 参数调优（temperature、timeout、cache、system_prompt 等） |
 
 > **为什么用三个文件？** `llm_key.json` 包含 API Key，可加入 `.gitignore` 避免误提交；
@@ -17,7 +17,7 @@ LLM 配置由三个独立文件管理：
 > 
 > | 原因 | 占位文本 |
 > |------|---------|
-> | LLM 未配置 | 本节内容待生成 — LLM 未配置（请配置 data/config/llm_key.json） |
+> | LLM 未配置 | 本节内容待生成 — LLM 未配置（请配置 data/config/llm_key.json 与 llm_providers.json） |
 > | API 调用失败 | 本节内容待生成 — LLM API 调用失败（请检查 API Key 和网络连接后重新生成） |
 > | 请求超时 | 本节内容待生成 — LLM API 请求超时（可尝试在 llm_settings.json 中增大 timeout 配置） |
 > | 网络连接失败 | 本节内容待生成 — LLM API 网络连接失败（请检查网络后重新生成） |
@@ -26,7 +26,7 @@ LLM 配置由三个独立文件管理：
 
 ## 目录
 
-- [快速配置](#快速配置) · [多 Provider 链式服务（进阶）](#多-provider-链式服务进阶)（[文件分工](#文件分工) · [配置步骤](#配置步骤) · [Provider 条目字段](#provider-条目字段) · [调整多链线路优先级](#调整多链线路优先级) · [端点级节流（`pacing`）](#端点级节流pacing) · [切换策略](#切换策略) · [模块级 Provider 偏好](#模块级-provider-偏好) · [配置检查](#配置检查) · [兼容性](#兼容性)）
+- [快速配置](#快速配置) · [多 Provider 链式服务（进阶）](#多-provider-链式服务进阶)（[文件分工](#文件分工) · [配置步骤](#配置步骤) · [Provider 条目字段](#provider-条目字段) · [调整多链线路优先级](#调整多链线路优先级) · [端点级节流（`pacing`）](#端点级节流pacing) · [切换策略](#切换策略) · [模块级 Provider 偏好](#模块级-provider-偏好) · [配置检查](#配置检查) · [配置形态与自动转换](#配置形态与自动转换)）
 - [模块启停](#模块启停) · [缓存机制](#缓存机制)
 - [失败降级与占位](#失败降级与占位) · [`system_prompt` 配置覆盖链](#system_prompt-配置覆盖链)
 - [配置项总览](#配置项总览)（[模块级配置](#模块级配置) · [事实校验容差配置](#事实校验容差配置)） · [各模块推荐参数值](#各模块推荐参数值) · [参数合法范围](#参数合法范围)
@@ -37,20 +37,38 @@ LLM 配置由三个独立文件管理：
 
 ## 快速配置
 
-**Step 1**：编辑 `data/config/llm_key.json`，填入必填字段：
+**Step 1**：在 `data/config/llm_key.json` 写入一个命名凭据块（键名自定义，下文以 `claude-main` 为例）：
 
 ```json
 {
-  "provider": "claude",
-  "api_key": "sk-ant-xxxxxxxxxxxxx",
-  "model": "claude-sonnet-4-20250514",
-  "endpoint": "https://api.anthropic.com/v1/messages"
+  "claude-main": {
+    "api_key": "sk-ant-xxxxxxxxxxxxx",
+    "model": "claude-sonnet-4-20250514",
+    "endpoint": "https://api.anthropic.com/v1/messages"
+  }
 }
 ```
 
-> **必填字段**：仅前 4 项（`provider` / `api_key` / `model` / `endpoint`）即可运行。Provider 高可用/自动降级场景统一使用 `llm_providers.json` 多 Provider 链式配置（见下文「多 Provider 链式服务」）。非敏感参数统一在 `llm_settings.json` 中管理。
+**Step 2**：在 `data/config/llm_providers.json` 写一条引用该凭据块的线路（只需一条也能正常出报告；多线路自动降级见下文「多 Provider 链式服务」）：
 
-**Step 2**（可选，使用默认值即可跳过）：编辑 `data/config/llm_settings.json`，根据偏好微调参数。示意结构如下（完整配置项见「配置项总览」章节）：
+```json
+{
+  "strategy": "priority",
+  "providers": [
+    {
+      "name": "claude-main",
+      "provider": "claude",
+      "credentials_ref": "claude-main",
+      "priority": 10,
+      "timeout": 120
+    }
+  ]
+}
+```
+
+> **两条都必填**：`llm_key.json` 只放密钥（`api_key`/`model`/`endpoint`），`llm_providers.json` 只放路由字段并用 `credentials_ref` 指向凭据块的键名——两者键名必须一致。`llm_providers.json` 里写 `api_key` 会被拒绝（凭据分离）。非敏感参数统一在 `llm_settings.json` 中管理。
+
+**Step 3**（可选，使用默认值即可跳过）：编辑 `data/config/llm_settings.json`，根据偏好微调参数。示意结构如下（完整配置项见「配置项总览」章节）：
 
 ```json
 {
@@ -77,7 +95,7 @@ LLM 配置由三个独立文件管理：
 > - 代码内置提示词定义在 `src/python/llm/prompts_core.py`（主 prompt）、`prompts_tables.py`（数据表格）、`prompts_action.py`（行动建议）中，更新代码时可自动升级。
 > - 计价策略与模型单价覆盖在独立参考文件 `llm_pricing_ref.json` 中，详见下方「完整模型定价表」章节。
 
-**Step 3**：启动程序，菜单选 **L** 生成包含 LLM 分析的完整版报告。
+**Step 4**：启动程序，菜单选 **L** 生成包含 LLM 分析的完整版报告。
 
 ---
 
@@ -299,10 +317,15 @@ LLM Provider 状态
 - 每个 provider 单独两行：`[序号] 名称 (backend)` + `模型 / 优先级 / 自动重试` 状态
 - `▶ 模块偏好` 行仅在配置了 `preferred_providers` 时显示
 
-### 兼容性
+### 配置形态与自动转换
 
-- 多链模式与 flat 格式（`llm_key.json` 含顶层 `api_key` / `provider`）**并存兼容**。检测到 `llm_key.json` 有顶层 `api_key` 时自动使用 flat 模式，否则按 `credentials_ref` 多链模式解析
-- 不需要多链时，保持 flat 格式即可，`llm_providers.json` 可不配置
+运行期只认「命名凭据块 + provider 条目」这一种形态。若 `llm_key.json` 的密钥摊在顶层（`provider` / `api_key` / `model` / `endpoint` 四个顶层字段，扁平形态），程序在读取时会**自动改写**：
+
+- 原文件备份为 `llm_key.json.bak`（已存在则不覆盖）
+- 顶层字段改写为名为 `default` 的命名凭据块
+- `llm_providers.json` 追加一条引用该凭据块的线路（已存在则不重复追加）
+
+改写失败（如目录只读）时不做降级：日志给出明确提示，LLM 章节按「未配置」显示占位。手动改写即按上文 Step 1 / Step 2 处理两个文件。
 
 ---
 
@@ -404,7 +427,7 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
 | 配置键 | 类型 | 默认值（各模块不同） | 说明 |
 |--------|:----:|:--------------------:|------|
 | `system_prompt_{module}` | string / null | `null` | 系统提示词覆盖，`null`=使用代码内置 prompt |
-| `model_{module}` | string / null | `null` | 独立指定本模块使用的模型，`null`=使用 Provider 默认模型。**仅 flat 模式生效；多链模式优先使用 `llm_providers.json` 中凭据块定义的模型** |
+| `model_{module}` | string / null | `null` | 独立指定本模块使用的模型，`null`=沿用线路默认。**线路条目或凭据块中的 `model` 优先**（模块级值只在两者都缺省时生效） |
 | `temperature_{module}` | float | 0.1~0.8（模块差异） | 采样温度，0=确定性最高，1=最大多样性 |
 | `max_tokens_{module}` | int | 3072~36000（模块差异） | 输出最大 token 数，超过时内容被截断（触发自动重试）。**DeepSeek 为 thinking + 正文共享预算**（详见下方 DeepSeek V4 说明） |
 | `timeout_{module}` | int | 60~120（模块差异） | API 超时秒数 |
@@ -641,17 +664,30 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
 
 ## 支持的 provider 及配置示例
 
-所有示例配置写入 `data/config/llm_key.json`，非敏感参数仍在 `llm_settings.json` 中管理。
+以下示例的**凭据块**写入 `data/config/llm_key.json`，**provider 类型与线路**写入 `data/config/llm_providers.json`（每条线路用 `credentials_ref` 指向凭据块键名），非敏感参数仍在 `llm_settings.json` 中管理。
 
 <details>
 <summary><b>Claude（Anthropic 官方）</b></summary>
 
 ```json
+// llm_key.json
 {
+  "claude-main": {
+    "api_key": "sk-ant-your-key",
+    "model": "claude-sonnet-4-20250514",
+    "endpoint": "https://api.anthropic.com/v1/messages"
+  }
+}
+```
+
+```json
+// llm_providers.json（providers 数组中的一条）
+{
+  "name": "claude-main",
   "provider": "claude",
-  "api_key": "sk-ant-your-key",
-  "model": "claude-sonnet-4-20250514",
-  "endpoint": "https://api.anthropic.com/v1/messages"
+  "credentials_ref": "claude-main",
+  "priority": 10,
+  "timeout": 120
 }
 ```
 
@@ -662,11 +698,24 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
 <summary><b>OpenAI</b></summary>
 
 ```json
+// llm_key.json
 {
+  "openai-main": {
+    "api_key": "sk-your-key",
+    "model": "gpt-4o",
+    "endpoint": "https://api.openai.com/v1/chat/completions"
+  }
+}
+```
+
+```json
+// llm_providers.json（providers 数组中的一条）
+{
+  "name": "openai-main",
   "provider": "openai",
-  "api_key": "sk-your-key",
-  "model": "gpt-4o",
-  "endpoint": "https://api.openai.com/v1/chat/completions"
+  "credentials_ref": "openai-main",
+  "priority": 10,
+  "timeout": 120
 }
 ```
 
@@ -679,11 +728,24 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
 DeepSeek 官方提供 Anthropic API 兼容端点，`provider` 设为 `"claude"` 即可调用。
 
 ```json
+// llm_key.json
 {
+  "claude-main": {
+    "api_key": "sk-your-deepseek-key",
+    "model": "deepseek-v4-flash",
+    "endpoint": "https://api.deepseek.com/anthropic/v1/messages"
+  }
+}
+```
+
+```json
+// llm_providers.json（providers 数组中的一条）
+{
+  "name": "claude-main",
   "provider": "claude",
-  "api_key": "sk-your-deepseek-key",
-  "model": "deepseek-v4-flash",
-  "endpoint": "https://api.deepseek.com/anthropic/v1/messages"
+  "credentials_ref": "claude-main",
+  "priority": 10,
+  "timeout": 120
 }
 ```
 
@@ -700,11 +762,24 @@ DeepSeek 官方提供 Anthropic API 兼容端点，`provider` 设为 `"claude"` 
 Kimi 开放平台提供 Anthropic API 兼容端点，`provider` 设为 `"claude"` 即可调用。
 
 ```json
+// llm_key.json
 {
+  "claude-main": {
+    "api_key": "sk-your-kimi-key",
+    "model": "kimi-k2.6",
+    "endpoint": "https://api.moonshot.cn/anthropic/v1/messages"
+  }
+}
+```
+
+```json
+// llm_providers.json（providers 数组中的一条）
+{
+  "name": "claude-main",
   "provider": "claude",
-  "api_key": "sk-your-kimi-key",
-  "model": "kimi-k2.6",
-  "endpoint": "https://api.moonshot.cn/anthropic/v1/messages"
+  "credentials_ref": "claude-main",
+  "priority": 10,
+  "timeout": 120
 }
 ```
 
@@ -830,11 +905,24 @@ Kimi 开放平台提供 Anthropic API 兼容端点，`provider` 设为 `"claude"
 <summary><b>DeepSeek（OpenAI 兼容格式）</b></summary>
 
 ```json
+// llm_key.json
 {
+  "openai-main": {
+    "api_key": "sk-your-deepseek-key",
+    "model": "DeepSeek-V4-Flash",
+    "endpoint": "https://api.deepseek.com/v1/chat/completions"
+  }
+}
+```
+
+```json
+// llm_providers.json（providers 数组中的一条）
+{
+  "name": "openai-main",
   "provider": "openai",
-  "api_key": "sk-your-deepseek-key",
-  "model": "DeepSeek-V4-Flash",
-  "endpoint": "https://api.deepseek.com/v1/chat/completions"
+  "credentials_ref": "openai-main",
+  "priority": 10,
+  "timeout": 120
 }
 ```
 </details>
@@ -843,11 +931,24 @@ Kimi 开放平台提供 Anthropic API 兼容端点，`provider` 设为 `"claude"
 <summary><b>火山引擎（豆包）</b></summary>
 
 ```json
+// llm_key.json
 {
+  "openai-main": {
+    "api_key": "your-volcengine-key",
+    "model": "doubao-pro-32k",
+    "endpoint": "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
+  }
+}
+```
+
+```json
+// llm_providers.json（providers 数组中的一条）
+{
+  "name": "openai-main",
   "provider": "openai",
-  "api_key": "your-volcengine-key",
-  "model": "doubao-pro-32k",
-  "endpoint": "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
+  "credentials_ref": "openai-main",
+  "priority": 10,
+  "timeout": 120
 }
 ```
 
@@ -858,11 +959,24 @@ Kimi 开放平台提供 Anthropic API 兼容端点，`provider` 设为 `"claude"
 <summary><b>Gemini（Google）</b></summary>
 
 ```json
+// llm_key.json
 {
+  "gemini-main": {
+    "api_key": "AIzaSyYourGeminiKey",
+    "model": "gemini-2.5-flash",
+    "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+  }
+}
+```
+
+```json
+// llm_providers.json（providers 数组中的一条）
+{
+  "name": "gemini-main",
   "provider": "gemini",
-  "api_key": "AIzaSyYourGeminiKey",
-  "model": "gemini-2.5-flash",
-  "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+  "credentials_ref": "gemini-main",
+  "priority": 10,
+  "timeout": 120
 }
 ```
 

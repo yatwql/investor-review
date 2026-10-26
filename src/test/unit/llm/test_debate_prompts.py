@@ -523,3 +523,19 @@ class TestDebateQaConcentrationConfig(unittest.TestCase):
             include_concentration_qa=True,
         )
         self.assertNotIn("### 集中度问答", prompt)
+
+
+class TestDebateCacheKeyPrefixSingleSource:
+    """辩论缓存键前缀取自共享常量（不另写字面量，改前缀即全链跟随）。"""
+
+    def test_generators_uses_shared_cache_prefix(self):
+        import inspect
+
+        from src.python.llm import generators
+        from src.python.llm.skeleton import CACHE_PREFIX_LLM
+
+        src = inspect.getsource(generators)
+        # 三处辩论缓存键均以共享常量拼接；无残留的字面量前缀
+        assert src.count("CACHE_PREFIX_LLM}debate_") == 3
+        assert 'f"llm_debate_' not in src
+        assert CACHE_PREFIX_LLM == "llm_"

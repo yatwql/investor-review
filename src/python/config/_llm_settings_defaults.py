@@ -212,9 +212,19 @@ from src.python.config._llm_schema import flatten as _flatten_v2  # noqa: E402
 _DEFAULT_LLM_SETTINGS: dict[str, Any] = _flatten_v2(_DEFAULTS_NESTED)
 
 
-def get_llm_setting_default(key: str):
-    """读取 llm_settings 的出厂默认值（唯一来源 `_FLAT_DEFAULTS` → v2 投影）。"""
-    return _DEFAULT_LLM_SETTINGS.get(key)
+def get_llm_setting_default(key: str, *path: str):
+    """读取 llm_settings 的出厂默认值（唯一来源 `_FLAT_DEFAULTS` → v2 投影）。
+
+    支持嵌套项：``get_llm_setting_default("debate.concentration_qa.threshold")``
+    与逐层传参等价；任一层缺失返回 None。
+    """
+    segs = (key, *path) if path else tuple(key.split("."))
+    node: object = _DEFAULT_LLM_SETTINGS
+    for seg in segs:
+        if not isinstance(node, dict) or seg not in node:
+            return None
+        node = node[seg]
+    return node
 
 
 _KEY_COMMENTS: dict[str, str] = {
@@ -323,9 +333,12 @@ def _render_modules_section(modules: dict[str, Any]) -> list[str]:
 
 def _render_v2(doc: dict[str, Any]) -> str:
     """把任意 v2 文档渲染为带中文分类注释与逐项说明的 JSONC 文本。"""
+    version = doc.get("schema_version")
     source = doc
+    if version != 2:
+        raise ValueError(f"llm_settings 文档 schema_version 必须为 2（实际 {version!r}）；请删除该文件后重新生成")
     doc = {
-        "schema_version": doc.get("schema_version", 2),
+        "schema_version": version,
         "defaults": doc.get("defaults") or {},
         "modules": doc.get("modules") or {},
         "runtime": doc.get("runtime") or {},

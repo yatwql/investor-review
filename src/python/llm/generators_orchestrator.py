@@ -21,7 +21,7 @@ from typing import Any
 
 
 from src.python.cache import get as cache_get
-from src.python.config import get_llm_config
+from src.python.config import get_llm_config, get_llm_setting_default
 from src.python.llm.api_base import (
     _build_cache_hint_and_record,
 )
@@ -176,28 +176,30 @@ def _compute_module_cache_info(
             "key": _key("global_macro", fp_global_macro),
             "ttl": get_cache_ttl_llm("global_macro"),
             "can_cache": not (force_flag or "global_macro" in _forced)
-            and llm_config.get("cache_enabled_global_macro", True),
+            and llm_config.get("cache_enabled_global_macro", get_llm_setting_default("cache_enabled_global_macro")),
             "thinking_key": "thinking_enabled_global_macro",
         },
         "expert_review": {
             "key": _key("expert_review", fp_expert_review),
             "ttl": get_cache_ttl_llm("expert_review"),
             "can_cache": not (force_flag or "expert_review" in _forced)
-            and llm_config.get("cache_enabled_expert_review", True),
+            and llm_config.get("cache_enabled_expert_review", get_llm_setting_default("cache_enabled_expert_review")),
             "thinking_key": "thinking_enabled_expert_review",
         },
         "health_check": {
             "key": _key("health_check", fp_health_check),
             "ttl": get_cache_ttl_llm("health_check"),
             "can_cache": not (force_flag or "health_check" in _forced)
-            and llm_config.get("cache_enabled_health_check", True),
+            and llm_config.get("cache_enabled_health_check", get_llm_setting_default("cache_enabled_health_check")),
             "thinking_key": "thinking_enabled_health_check",
         },
         "penetration_deep": {
             "key": _key("penetration_deep", fp_penetration_deep),
             "ttl": get_cache_ttl_llm("penetration_deep"),
             "can_cache": not (force_flag or "penetration_deep" in _forced)
-            and llm_config.get("cache_enabled_penetration_deep", True),
+            and llm_config.get(
+                "cache_enabled_penetration_deep", get_llm_setting_default("cache_enabled_penetration_deep")
+            ),
             "thinking_key": "thinking_enabled_penetration_deep",
         },
     }
@@ -711,7 +713,7 @@ def generate_all_llm(
 
     # 读取事实校验容差配置（来自 llm_settings.json fact_check 段）
     _fc_cfg = (llm_config or {}).get("fact_check", {})
-    _fc_tolerance: float = _fc_cfg.get("tolerance", 1.0)
+    _fc_tolerance: float = _fc_cfg.get("tolerance", get_llm_setting_default("fact_check.tolerance"))
     _fc_overrides: dict = _fc_cfg.get("tolerance_overrides", {})
 
     # 提取穿透资产中的股票代码（用于穿透分析的品种存在性校验）

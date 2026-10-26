@@ -33,6 +33,8 @@ from src.python.report._report_helpers import (  # noqa: F401
     _validate_prep_completeness,
 )
 
+from src.python.config import get_default, resolve_output_dir
+
 logger = logging.getLogger("invest")
 
 
@@ -98,8 +100,10 @@ def _generate_report_both(
     _enable_stock_fundamentals = is_enable_stock_fundamentals()
     _enable_summary_highlights = is_feature_enabled("summary_highlights")
     sec_order = get_report_section_order(config)
-    output = output_dir or config.get("output_dir", "reports")
-    news_top_count = effective_news_limit(int(config.get("news_top_count", 300)), resolve_depth_profile(config))
+    output = output_dir or resolve_output_dir(config)
+    news_top_count = effective_news_limit(
+        int(config.get("news_top_count", get_default("news_top_count"))), resolve_depth_profile(config)
+    )
 
     # ── 1. 行情获取（轻量级，无指数/穿透/分类） ──
     perf.start("行情获取")

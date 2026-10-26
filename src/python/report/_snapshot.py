@@ -7,6 +7,7 @@ from __future__ import annotations
 
 
 from src.python.report.progress import ProgressReporter
+from src.python.config import get_default
 
 logger = __import__("logging").getLogger("invest")
 
@@ -275,10 +276,10 @@ def fetch_history_data(
     _history_cfg = (config or {}).get("history", {})
 
     try:
-        _coverage = _history_cfg.get("coverage_threshold", 0.8)
+        _coverage = _history_cfg.get("coverage_threshold", get_default("history.coverage_threshold"))
         _benchmark_indices = _history_cfg.get("benchmark_indices", {})
         # 取数窗口：默认 90（≥ drawdown MIN_SPAN 60 个交易日），保证回撤分析可用
-        _lookback_days = _history_cfg.get("lookback_days", 90)
+        _lookback_days = _history_cfg.get("lookback_days", get_default("history.lookback_days"))
         _calc = PortfolioHistoryCalculator(
             coverage_threshold=_coverage,
             benchmark_indices=_benchmark_indices,
@@ -349,7 +350,7 @@ def fetch_extended_history(
     if not isinstance(_cfg, dict):
         _cfg = {}
     try:
-        _days = max(int(_cfg.get("lookback_days", 90) or 90), _EXTENDED_HISTORY_DAYS)
+        _days = max(int(_cfg.get("lookback_days", get_default("history.lookback_days")) or 90), _EXTENDED_HISTORY_DAYS)
     except (TypeError, ValueError):
         _days = _EXTENDED_HISTORY_DAYS
     try:
@@ -357,7 +358,7 @@ def fetch_extended_history(
         from src.python.report.portfolio_history import PortfolioHistoryCalculator
 
         _calc = PortfolioHistoryCalculator(
-            coverage_threshold=_cfg.get("coverage_threshold", 0.8),
+            coverage_threshold=_cfg.get("coverage_threshold", get_default("history.coverage_threshold")),
             benchmark_indices=_cfg.get("benchmark_indices", {}) or {},
         )
         _tuples = [(h.code, h.name, h.shares) for h in holdings]

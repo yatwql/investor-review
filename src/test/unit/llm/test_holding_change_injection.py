@@ -12,6 +12,8 @@
 
 from __future__ import annotations
 
+from src.test.helpers import make_chain_config
+
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -459,7 +461,7 @@ class TestRunHoldingChangeReviewFallbackClient(unittest.TestCase):
 
         contract = {"available": True, "prompt_block": _BLOCK, "llm_review": None}
         cfg = dict(_ENABLED)
-        cfg.update({"provider": "claude", "api_key": "sk-test"})
+        cfg.update(make_chain_config(api_key="sk-test"))
         with (
             patch("src.python.core.signal_ledger.is_active", return_value=False),
             patch(
@@ -482,7 +484,7 @@ class TestRunHoldingChangeReviewFallbackClient(unittest.TestCase):
 
         contract = {"available": True, "prompt_block": _BLOCK, "llm_review": None}
         cfg = dict(_ENABLED)
-        cfg.update({"provider": "claude", "api_key": "sk-test"})
+        cfg.update(make_chain_config(api_key="sk-test"))
         try:
             with (
                 patch("src.python.core.signal_ledger.is_active", return_value=False),

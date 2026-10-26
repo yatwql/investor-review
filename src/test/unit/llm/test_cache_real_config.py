@@ -33,7 +33,12 @@ from src.test.unit.llm._cache_fixtures import (
 
 # `unit_core` 横切标记：缓存命中契约属核心基础设施行为，需随 P0 `dev-verify` 跑
 # （该档选择面不含 `unit_llm`，只标 llm 域会让这批回归只在 P1 才执行）。
-pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.unit_core]
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.unit_llm,
+    pytest.mark.unit_core,
+    pytest.mark.usefixtures("offline_external_sources"),
+]
 
 _SETTINGS_V2 = {
     "schema_version": 2,
@@ -59,18 +64,12 @@ _PROVIDERS = {
 }
 
 _KEYS = {
-    "provider": "claude",
-    "api_key": "sk-probe",
-    "model": "probe-model",
-    "endpoint": "https://example.invalid/v1/messages",
     "probe-main": {
-        "provider": "claude",
         "api_key": "sk-probe",
         "model": "probe-model",
         "endpoint": "https://example.invalid/v1/messages",
     },
     "probe-backup": {
-        "provider": "claude",
         "api_key": "sk-probe",
         "model": "probe-model",
         "endpoint": "https://example.invalid/v1/messages",
@@ -155,8 +154,8 @@ class TestRealConfigChain:
         for key in hit_keys:
             assert f"{key}_{_CACHE_KEY_VERSION}.json" in names, f"预检键 {key} 无对应磁盘文件：{names}"
 
-    def test_single_provider_key_has_no_suffix_and_still_hits(self, real_config, llm_cache_dir):
-        """单 Provider 配置（无 llm_providers.json）：键不加后缀，升级后旧缓存仍命中。"""
+    def test_missing_provider_chain_makes_llm_unavailable(self, real_config, llm_cache_dir):
+        """无 llm_providers.json（旧单 Provider 形态）→ LLM 调用不可用，且不写缓存。"""
         from src.python import config as cfg
         from src.python.config import _core
 
@@ -165,10 +164,9 @@ class TestRealConfigChain:
         cfg.invalidate_llm_config_cache()
 
         base = make_inputs()
-        _run(base)
-        names = [p.name for p in _cache_files(llm_cache_dir)]
-        assert any("_probe-main" not in n and "llm_global_macro" in n for n in names), names
-        assert all(_run(base)), "单 Provider 第二份应命中"
+        assert not any(_run(base)), "缺少 provider 链时不应产出 LLM 结果"
+        # 也不再产生「按 provider 区分」的缓存键（该形态只属链路由）
+        assert not any("_probe-main" in p.name for p in _cache_files(llm_cache_dir))
 
 
 class TestCacheFileRobustness:

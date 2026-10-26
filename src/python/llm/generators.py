@@ -32,7 +32,7 @@ from src.python.llm.prompts import (
     _build_expert_review_prompt,
 )
 from src.python.llm._hallucination_filter import _filter_hallucinated_codes
-from src.python.llm.skeleton import generate_llm_module
+from src.python.llm.skeleton import CACHE_PREFIX_LLM, generate_llm_module
 from src.python.llm.holding_change_review import generate_holding_change_review
 
 # ── 门面再导出（单例域子模块；_llm_dispatch / 测试导入面保持稳定） ──
@@ -42,6 +42,8 @@ from src.python.llm.generators_singletons import (  # noqa: F401
     generate_health_check,
     generate_penetration_deep_analysis,
 )
+
+from src.python.config import get_llm_setting_default
 
 logger = logging.getLogger("invest")
 
@@ -189,16 +191,22 @@ def generate_debate_procon(
     _lc = llm_config or get_llm_config()
     debate_cfg = (_lc or {}).get("debate", {})
     procon_cfg = debate_cfg.get("procon", {})
+    _debate_defaults = get_llm_setting_default("debate") or {}
+    _procon_defaults = _debate_defaults.get("procon") or {}
     _per_call_max_tokens = procon_cfg.get("per_call_max_tokens")
-    _synthesis_temperature = procon_cfg.get("synthesis_temperature", 0.5)
+    _synthesis_temperature = procon_cfg.get("synthesis_temperature", _procon_defaults.get("synthesis_temperature"))
 
     # 每阶段输出上限兜底：配置缺省/为 null 时用 18432（原 8192 在智囊团复盘三段式下偏紧，
     # 实测 pro 段即被截断触发重试；思考型模型还会先把预算吃在 thinking 上，故再上调 50%）
-    _max_tokens = _per_call_max_tokens if _per_call_max_tokens is not None else 18432
-    _timeout = debate_cfg.get("per_call_timeout_override", 90)
+    _max_tokens = (
+        _per_call_max_tokens if _per_call_max_tokens is not None else _procon_defaults.get("per_call_max_tokens")
+    )
+    _timeout = debate_cfg.get("per_call_timeout_override", _debate_defaults.get("per_call_timeout_override"))
 
     # ── Token 预算守卫 ─────────────────────────────────
-    _max_total_tokens_budget = debate_cfg.get("max_total_tokens_per_report", 72000)
+    _max_total_tokens_budget = debate_cfg.get(
+        "max_total_tokens_per_report", _debate_defaults.get("max_total_tokens_per_report")
+    )
     # 中文+Markdown 混排输出约 1 字符 ≈ 1 token，按 1:1 折算字符级阈值；
     # 若按 1.5 token/字符估算，守卫会在真实预算 ~65% 处过早触发。
     _budget_char_threshold = int(_max_total_tokens_budget)
@@ -221,7 +229,7 @@ def generate_debate_procon(
                     _valid_codes.add(str(_c).strip())
 
     # ── Step 1: 白脸（Pro） ────────────────────────────
-    _pro_cache_key = f"llm_debate_pro_{_fingerprint}"
+    _pro_cache_key = f"{CACHE_PREFIX_LLM}debate_pro_{_fingerprint}"
     _session_pro_key = f"debate_pro_{_fingerprint}"
     pro_text = _check_session_cache(_session_pro_key)
 
@@ -276,7 +284,7 @@ def generate_debate_procon(
         return (None, None, None)
 
     # ── Step 2: 黑脸（Con） ────────────────────────────
-    _con_cache_key = f"llm_debate_con_{_fingerprint}"
+    _con_cache_key = f"{CACHE_PREFIX_LLM}debate_con_{_fingerprint}"
     _session_con_key = f"debate_con_{_fingerprint}"
     con_text = _check_session_cache(_session_con_key)
 
@@ -344,7 +352,7 @@ def generate_debate_procon(
     # 摘要口径会漏掉 200 字符之后的正文差异，也漏掉仅 config 变化（情景名/描述、
     # 集中度阈值）的情形——两者都让提示词变了而键不动，命中旧综合结论。
     _syn_fingerprint = debate_synthesis_fingerprint(_fp_inputs, _synthesis_user)
-    _syn_cache_key = f"llm_debate_synthesis_{_syn_fingerprint}"
+    _syn_cache_key = f"{CACHE_PREFIX_LLM}debate_synthesis_{_syn_fingerprint}"
     _session_syn_key = f"debate_syn_{_syn_fingerprint}"
     synthesis_text = _check_session_cache(_session_syn_key)
 

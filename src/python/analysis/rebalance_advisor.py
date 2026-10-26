@@ -12,8 +12,8 @@
     代码命中场内前缀而被误判的场外持有场景（LOF/开放式指数基金）
   - 非场外 → 回退证券类型判定（A 股印花税 / 场内基金仅佣金 / 100 份取整），
     避免用单一渠道覆盖 A 股印花税等差异化费率
-  显式 channel 优先，其次按 account 关键词判定（is_offsite_fund），
-  两者皆无时保持既有代码/名称判定（向后兼容）。
+  渠道由报告层按账户判定后写入 channel，本层只消费该字段；字段缺失即按
+  证券类型判定（不自行解析账户名）。
 
 份额取整的证券类型判定复用 core/code_utils.py（代码类型判定中心化）
 （is_a_share_code / is_exchange_fund_code / is_otc_fund_by_name），
@@ -40,7 +40,6 @@ from typing import Any
 from src.python.core.code_utils import (
     is_a_share_code,
     is_exchange_fund_code,
-    is_offsite_fund,
     is_otc_fund_by_name,
 )
 
@@ -74,26 +73,20 @@ _SELL_OPERATIONS = frozenset(_PRIORITY)
 def _channel_of_holding(holding: dict[str, Any]) -> str:
     """持仓明细 → 渠道（"场外" / 空串）。
 
-    显式 channel 字段优先（报告层契约已按账户判定填充）；兼容直接携带
-    account 的调用（按场外账户关键词判定）；两者皆无返回空串，由取整/
-    费用估算回退证券类型判定（向后兼容）。
+    只消费 ``channel`` 字段（报告层按账户判定后填充，判定单源在
+    ``core/holding_status.classify_channel``）；字段缺失返回空串，由取整/
+    费用估算回退证券类型判定。
 
     返回值语义："场外" = 按场外基金处理（整数份取整 + 赎回费）；非场外
     仍需区分 A 股（印花税）与场内基金（仅佣金），故此处不返回"场内"。
 
     Args:
-        holding: 持仓明细单行（含可选 channel/account）
+        holding: 持仓明细单行（含 channel）
 
     Returns:
         "场外" 表示场外渠道，空串表示无渠道上下文。
     """
-    ch = (holding.get("channel") or "").strip()
-    if ch == "场外":
-        return "场外"
-    account = (holding.get("account") or "").strip()
-    if account and is_offsite_fund(account):
-        return "场外"
-    return ""
+    return "场外" if (holding.get("channel") or "").strip() == "场外" else ""
 
 
 def _round_to_lot(raw_shares: float, code: str, name: str, channel: str = "") -> int:

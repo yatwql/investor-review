@@ -189,7 +189,7 @@ def _price_chain_slots() -> tuple[dict[str, tuple[str, _ProviderFunc]], dict[str
 _OTC_NAV_ROUTES = frozenset({"price_fund_otc"})
 
 
-def _cache_captured_at(cache_key: str | None) -> float | None:
+def _cache_captured_at(cache_key: str) -> float | None:
     """价格缓存写入时刻（epoch 秒）；无缓存 / 读取异常返回 None。
 
     缓存文件把写入时刻存于 ``_ts``，但 ``cache.get`` 只返回 ``_data``，故用
@@ -228,8 +228,8 @@ def _trading_day_close_epoch(trading_day: str) -> float | None:
 def _price_cache_fresh(
     data: dict,
     data_type: str,
-    name: str = "",
-    cache_key: str | None = None,
+    name: str,
+    cache_key: str,
 ) -> bool:
     """收市后验证价格缓存数据是否来自当前交易日（且已过收盘时点）。
 
@@ -247,8 +247,8 @@ def _price_cache_fresh(
     但 T 日收盘（15:00）之前写入的缓存是**盘中残留**——盘后或次日盘前继续沿用会把
     盘中价当作 T 日收盘价，使「本日盈亏」与「快照环比」系统性偏离真实涨跌。故当
     T 日已收盘（now ≥ T 日 15:00）时，要求缓存写入时刻 ≥ T 日 15:00；午间休市等
-    T 日尚未收盘的时段不施加此约束（上午收盘价即当时最新价）。传入 ``cache_key``
-    方能取到写入时刻；缺省（None）时跳过该时点校验以兼容旧调用。
+    T 日尚未收盘的时段不施加此约束（上午收盘价即当时最新价）。写入时刻由 ``cache_key``
+    取到；该参数必填（缺省会让盘后沿用盘中残留价，故不提供跳过分支）。
 
     QDII 判定与 ``report.market_value.price_update_status`` 同源自
     ``is_qdii_extended``，确保「缓存新鲜度门禁」与「价格更新状态」口径一致——

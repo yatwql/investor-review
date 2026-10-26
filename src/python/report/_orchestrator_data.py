@@ -26,6 +26,8 @@ from src.python.report._report_factor_metrics import (  # noqa: F401
     compute_industry_beta_data,
 )
 
+from src.python.config import get_default, resolve_output_dir
+
 logger = logging.getLogger("invest")
 
 
@@ -57,7 +59,7 @@ def prepare_report_data(
     """
     from concurrent.futures import ThreadPoolExecutor
 
-    from src.python.core.code_utils import is_offsite_fund
+    from src.python.core.holding_status import classify_channel
     from src.python.core.data_freshness import build_freshness_summary
     from src.python.core.holding_status import build_coverage_summary
     from src.python.analysis.action_advisor import build_action_data
@@ -198,13 +200,10 @@ def prepare_report_data(
             # shares/price 供调仓建议可行化层计算可执行卖出份额与金额
             "shares": d.shares,
             "price": d.price,
-            # 渠道上下文（场内/场外）：按账户关键词判定（is_offsite_fund），
-            # 供调仓建议可行化层按渠道计算份额取整与费用（场外整数份+赎回费）；
-            # getattr 兼容缺 account 的 detail 对象（测试 fixture 简化版）
-            "channel": "场外" if is_offsite_fund(getattr(d, "account", "")) else "场内",
-            # 账户名原值：收益归因大类分解需 classify_holding_tier 单源分类的
-            # 场外渠道判定（场外/场内二值已丢失渠道关键词）；测试 fixture 缺省
-            # detail 对象无 account 时按空串兼容（归因层 getattr 兜底）
+            # 渠道上下文（场内/场外）：判定单源在 holding_status.classify_channel，
+            # 供调仓建议可行化层按渠道计算份额取整与费用（场外整数份+赎回费）
+            "channel": classify_channel(getattr(d, "account", "")),
+            # 账户名原值：收益归因大类分解的场外渠道判定需渠道关键词，故原值随行
             "account": getattr(d, "account", ""),
         }
         for d in details
@@ -270,8 +269,10 @@ def prepare_report_data(
         "penetrated_assets": penetrated_assets,
         "holdings_details": holdings_details,
         "today_str": today_str,
-        "output_dir": config.get("output_dir", "reports"),
-        "news_top_count": effective_news_limit(int(config.get("news_top_count", 300)), resolve_depth_profile(config)),
+        "output_dir": resolve_output_dir(config),
+        "news_top_count": effective_news_limit(
+            int(config.get("news_top_count", get_default("news_top_count"))), resolve_depth_profile(config)
+        ),
         # 组合风险指标（年化波动率/最大回撤/夏普比率等，需 history_data 计算后填充）
         "risk_metrics": {},
         # 风格与因子分析（数据契约 style_factor_data，内嵌 industry_beta 子键；

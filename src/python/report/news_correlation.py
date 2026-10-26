@@ -33,6 +33,8 @@ from src.python.report.excel_writer import (
     write_title_row,
 )
 
+from src.python.config import get_llm_setting_default
+
 logger = logging.getLogger("invest")
 
 _NCOLS = 6
@@ -351,7 +353,11 @@ def _apply_llm_enhancement(
 
     llm_config = get_llm_config()
     enabled_llm = llm_config.get("enabled_llm") if llm_config else None
-    llm_enabled = enabled_llm.get("news_correlation", False) if isinstance(enabled_llm, dict) else False
+    llm_enabled = (
+        enabled_llm.get("news_correlation", get_llm_setting_default("enabled_llm.news_correlation"))
+        if isinstance(enabled_llm, dict)
+        else False
+    )
 
     if not llm_config or not llm_enabled:
         return meta
@@ -383,7 +389,9 @@ def _apply_llm_enhancement(
         token_usage = {}
     meta["llm_cached"] = cached
     meta["token_usage"] = token_usage
-    meta["thinking_enabled"] = llm_config.get("thinking_enabled_news_correlation", False)
+    meta["thinking_enabled"] = llm_config.get(
+        "thinking_enabled_news_correlation", get_llm_setting_default("thinking_enabled_news_correlation")
+    )
     if token_usage and token_usage.get("model"):
         from src.python.llm.session import _normalize_usage_tokens
 

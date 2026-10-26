@@ -25,7 +25,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from src.python.core.code_utils import is_fund_holding
+from src.python.core.code_utils import is_fund_holding, is_offsite_fund
 from src.python.core.code_symbols import strip_exchange_prefix
 from src.python.core.data_freshness import _detail_value, _has_effective_quote
 
@@ -68,6 +68,21 @@ _ABNORMAL_STATUSES: frozenset[str] = frozenset(
 
 
 # ── 本地信号：代码格式校验 ──────────────────────────────────
+
+
+def classify_channel(account: str | None) -> str:
+    """账户名 → 持有渠道（``"场外"`` / ``"场内"``）。
+
+    渠道判定的唯一实现：报告层组装持仓明细时据此填 ``channel`` 字段，下游
+    （调仓建议可行化、费用估算、份额取整）只消费该字段，不再各自解析账户名。
+
+    Args:
+        account: 账户名（可为空/None）
+
+    Returns:
+        ``"场外"`` 表示场外基金渠道（整数份取整 + 赎回费），``"场内"`` 为其余
+    """
+    return "场外" if is_offsite_fund(account or "") else "场内"
 
 
 def classify_code_format(code: str | None) -> str:

@@ -15,7 +15,6 @@ from src.python.core.system_info import (
     anon_mode_label,
     build_system_info,
     circuit_display,
-    model_route_labels,
     priority_display,
     resolve_provider_credentials,
     simplify_endpoint,
@@ -37,7 +36,7 @@ class TestDisplayPrimitives:
         assert simplify_endpoint("not-a-url") == "not-a-url"
 
     def test_circuit_display_default_semantics(self):
-        # flat 模式：字面「默认」视为无端点；多链模式：仍查端点状态
+        # default_as_none：字面「默认」视为无端点；否则仍查端点状态
         assert circuit_display("默认", default_as_none=True) == "—"
         assert circuit_display("", default_as_none=True) == "—"
         assert circuit_display("") == "—"
@@ -75,14 +74,6 @@ class TestDisplayPrimitives:
             {"credentials_ref": "ref-1", "model": "inline", "endpoint": "https://e"}, creds
         )
         assert (model, endpoint) == ("inline", "https://e")
-
-    def test_model_route_labels_use_effective_model(self):
-        labels = model_route_labels({"model": "base-model", "model_news_correlation": "special-model"})
-        # 每个可见模块一行「显示名=生效模型」（覆盖与模块清单一致，不写死条数）
-        from src.python.core.registry import get_llm_module_names
-
-        assert len(labels) == len(get_llm_module_names())
-        assert any(label.startswith("财经新闻热点与持仓关联分析=special-model") for label in labels)
 
 
 class TestBuildSystemInfo:
@@ -137,11 +128,8 @@ class TestBuildSystemInfo:
         with patch("src.python.llm.circuit_breaker.get_circuit_status", return_value="正常"):
             info = build_system_info()
         llm = info["llm"]
-        assert llm["configured"] is True
-        assert llm["mode"] == "flat"
-        assert llm["endpoint_display"] == "api.x"
-        assert llm["circuit"] == "正常"
-        assert isinstance(llm["route"], list)
+        # 无 provider 链即未配置：扁平密钥文档（顶层 provider/api_key）不参与运行期配置
+        assert llm == {"configured": False}
 
 
 class TestLlmStatusSingleSource:
@@ -160,17 +148,15 @@ class TestLlmStatusSingleSource:
 
         assert llm_status()["configured"] is False
 
-    def test_flat_configured_contract_keys(self, monkeypatch):
+    def test_single_provider_top_level_fields_rejected(self, monkeypatch):
+        """顶层 api_key/provider（旧单 Provider 形态）不再被认作已配置。"""
         monkeypatch.setattr(
             "src.python.config.get_llm_config",
             lambda: {"api_key": "sk-x", "provider": "claude", "model": "m", "endpoint": "https://api.x/v1"},
         )
         from src.python.core.system_info import llm_status
 
-        llm = llm_status()
-        assert llm["configured"] is True
-        assert llm["mode"] == "flat"
-        assert {"provider", "model", "endpoint", "endpoint_display", "circuit", "route"} <= set(llm)
+        assert llm_status() == {"configured": False}
 
     def test_multi_chain_contract(self, monkeypatch):
         monkeypatch.setattr(

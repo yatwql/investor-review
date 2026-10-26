@@ -93,25 +93,8 @@ def _check_unknown_llm_keys(settings: dict) -> None:
         )
 
 
-_DEBATE_CONFIG_DEFAULTS: dict[str, Any] = {
-    "procon": {
-        "per_call_max_tokens": None,
-        "synthesis_model": None,
-        "synthesis_temperature": 0.5,
-    },
-    "conditional": {
-        "scenarios": [
-            {"name": "上涨", "change": 0.20, "desc": "如果未来市场上涨 20%"},
-            {"name": "下跌", "change": -0.20, "desc": "如果未来市场下跌 20%"},
-            {"name": "震荡", "change": 0.05, "desc": "如果未来市场窄幅震荡±5%"},
-        ],
-    },
-    "concentration_qa": {
-        "threshold": 0.20,
-    },
-    "max_total_tokens_per_report": 72000,
-    "per_call_timeout_override": 90,
-}
+#: debate 段出厂默认值（唯一来源：llm_settings 默认投影的 debate 段，不另写一份字面量）
+_DEBATE_CONFIG_DEFAULTS: dict[str, Any] = copy.deepcopy(_DEFAULT_LLM_SETTINGS["debate"])
 
 
 def _load_debate_config(settings: dict) -> dict:
@@ -191,7 +174,7 @@ def _merge_llm_defaults(base: dict) -> dict:
       - 默认中不存在的键原样透传（未知键透传，供消费端自定义字段使用）
 
     debate 段保留默认值作为合并底（_load_debate_config 会对每个子键做
-    schema 校验并以 _DEBATE_CONFIG_DEFAULTS 兜底），此处不特殊处理。
+    schema 校验并以出厂 debate 默认值兜底），此处不特殊处理。
 
     Args:
         base: 从 llm_settings.json 解析的用户配置字典。
@@ -409,22 +392,21 @@ def _load_llm_config() -> dict | None:
             ):
                 return _llm_config_cache
 
-            with open(_llm_providers._get_llm_key_path(), encoding="utf-8-sig") as f:
+            key_path = _llm_providers._get_llm_key_path()
+            with open(key_path, encoding="utf-8-sig") as f:
                 key_raw = f.read()
                 key_config = json.loads(strip_json_comments(key_raw))
 
-            provider = key_config.get("provider", "")
-            endpoint = key_config.get("endpoint", "")
-            if provider and provider not in ("claude", "openai", "gemini"):
-                logger.warning("llm_key.json provider = '%s' 不是有效值（claude/openai/gemini）", provider)
-            if endpoint and not endpoint.startswith("http"):
-                logger.warning("llm_key.json endpoint = '%s' 不是有效 URL", endpoint)
+            # 扁平密钥文档（顶层四字段）→ 规范为命名凭据块 + provider 条目；
+            # 改写成功后重读文件，运行期只走 provider 链路径
+            if _llm_providers.is_flat_key_document(key_config) and _llm_providers.ensure_credential_blocks(key_config):
+                with open(key_path, encoding="utf-8-sig") as f:
+                    key_config = json.loads(strip_json_comments(f.read()))
 
+            # 密钥文件只承载凭据块（credentials_ref 索引），不参与顶层配置合并：
+            # 顶层 provider/api_key/endpoint 不参与运行期配置。
             merged = dict(base_settings)
-            merged.update(key_config)
             merged["debate"] = _load_debate_config(merged)
-            if merged.get("api_key"):
-                merged["api_key"] = merged["api_key"].strip()
 
             _llm_providers._inject_provider_chain_data(merged)
             _llm_config_cache = merged

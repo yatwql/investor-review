@@ -24,8 +24,19 @@ from src.python.llm.prompts import (
 from src.python.llm.session import record_per_module
 from src.python.llm.skeleton import generate_llm_module
 from src.python.core.registry import get_llm_module_name
+from src.python.config import get_llm_setting_default
 
 logger = logging.getLogger("invest")
+
+
+def _first_provider_name(llm_config: dict) -> str:
+    """记录用 provider 名：取 provider 链首个条目的 name（无链即 "unknown"）。"""
+    chain = llm_config.get("_provider_list") or []
+    if chain and isinstance(chain[0], dict):
+        return str(chain[0].get("name") or "unknown")
+    return "unknown"
+
+
 _MN = get_llm_module_name
 
 
@@ -242,7 +253,7 @@ def _finalize_news_token_usage(
     if llm_config:
         if total_in > 0 or total_out > 0:
             _log_token_usage(
-                llm_config.get("provider", "unknown"),
+                _first_provider_name(llm_config),
                 {
                     # 合成 usage 还原未命中口径：input_tokens=未命中 + cache_read=命中
                     "input_tokens": total_in - total_hit,
@@ -259,8 +270,8 @@ def _finalize_news_token_usage(
                 _cost_val = float(_cost.lstrip("$¥€£"))
             except ValueError as e:
                 logger.warning("[llm] 费用估值 JSON 解码失败: %s", e)
-        _endpoint = llm_config.get("endpoint", "") or ""
-        if not _endpoint and llm_config.get("_provider_list"):
+        _endpoint = ""
+        if llm_config.get("_provider_list"):
             from src.python.llm.api import _resolve_first_provider_model_endpoint
 
             _, _endpoint = _resolve_first_provider_model_endpoint(llm_config, "news_correlation")
@@ -319,7 +330,7 @@ def enhance_news_correlation(
     if not news_data:
         return (news_data, False, {})
 
-    top_n = (llm_config or {}).get("news_correlation_top_n", 30)
+    top_n = (llm_config or {}).get("news_correlation_top_n", get_llm_setting_default("news_correlation_top_n"))
     top_news, top_to_original = _select_top_news(news_data, top_n=top_n)
     batch_preparer, per_item_cache_fn, batch_prompt_fn, _model = _build_news_hooks(
         top_news,

@@ -48,6 +48,8 @@ from ._api_responses import (
     _truncation_warning,
 )
 
+from src.python.config import get_llm_setting_default
+
 logger = logging.getLogger("invest")
 
 __all__ = [
@@ -228,8 +230,9 @@ def _build_cache_hint_and_record(
     if thinking_enabled:
         hint = hint.rstrip().replace("</p>", " | Extended Thinking</p>", 1)
     if module_key:
-        model_for_record = orig_model or model_hint or llm_config.get("model", "") or "缓存命中"
-        endpoint_for_record = endpoint or llm_config.get("endpoint", "") or ""
+        chain_model, chain_endpoint = _chain_route_hint(llm_config, module_key)
+        model_for_record = orig_model or model_hint or chain_model or "缓存命中"
+        endpoint_for_record = endpoint or chain_endpoint or ""
         record_per_module(
             module_key, model_for_record, cached=True, thinking=thinking_enabled, endpoint=endpoint_for_record
         )
@@ -289,6 +292,20 @@ def _is_default_thinking_on(model: str) -> bool:
     return any(model.lower().startswith(p) for p in _THINKING_DEFAULT_ON_PREFIXES)
 
 
+def _chain_route_hint(llm_config: dict | None, module_key: str) -> tuple[str, str]:
+    """缓存命中路径的模型/端点：复用链解析单源（``api._resolve_first_provider_model_endpoint``）。
+
+    缓存命中不经过 provider 解析，记录里的模型名仍要能指向真实线路
+    （否则「模块用量」只能显示「缓存命中」，无法对账）。
+    """
+    if not (llm_config or {}).get("_provider_list"):
+        return "", ""
+    from src.python.llm.api import _resolve_first_provider_model_endpoint  # 惰性：api 依赖本模块
+
+    model, endpoint = _resolve_first_provider_model_endpoint(llm_config, module_key)
+    return (model or ""), (endpoint or "")
+
+
 def _extract_model_from_cached(html: str) -> str:
     """从缓存的 HTML 中提取原始模型名称。"""
     m = _MODEL_LINE_RE.search(html)
@@ -298,7 +315,7 @@ def _extract_model_from_cached(html: str) -> str:
 def _get_retry_max(llm_config: dict) -> int:
     """从 llm_config 中读取最大重试次数，兜底返回 2。"""
     try:
-        val = int(llm_config.get("max_retries", 2))
+        val = int(llm_config.get("max_retries", get_llm_setting_default("max_retries")))
         return max(0, val)
     except (TypeError, ValueError):
         return 2

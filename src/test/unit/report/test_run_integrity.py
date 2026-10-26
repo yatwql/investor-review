@@ -374,7 +374,10 @@ class TestGuardRun(_RunContextBase):
             return None
 
         _fake_generate(config={"output_dir": "custom_out"}, output_dir=None)
-        self.assertEqual(captured["output_dir"], "custom_out")
+        # 渠道共享定位入口统一绝对化（相对串随 CWD 漂移）
+        from src.python.config import resolve_output_dir
+
+        self.assertEqual(captured["output_dir"], resolve_output_dir({"output_dir": "custom_out"}))
 
     def test_explicit_output_dir_wins(self) -> None:
         """显式 output_dir 优先于 config。"""

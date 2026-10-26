@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 from src.python.cache import get as cache_get  # noqa: F401
 from src.python.cache import set as cache_set
 from src.python.core.retry import STRATEGY_FIXED, RetryPolicy, retry_transient
-from src.python.config import get_llm_config
+from src.python.config import get_llm_config, get_llm_setting_default
 from src.python.llm.api import call_llm
 from src.python.llm.api_base import (
     AUTO_INCREASE_FACTOR,
@@ -352,7 +352,11 @@ def _execute_llm_with_finalize(
     # 冷却未到），重试无益 —— 用 attempts=1 表达「不重试」，避免分支里各写一遍 sleep。
     _fail_reason = _get_last_llm_failure()
     _retryable = _fail_reason in {FAIL_REASON_NETWORK_ERROR, FAIL_REASON_TIMEOUT, FAIL_REASON_API_ERROR}
-    _delay = float(llm_config.get("llm_full_fail_retry_delay", 30) or 0) if _retryable else 0.0
+    _delay = (
+        float(llm_config.get("llm_full_fail_retry_delay", get_llm_setting_default("llm_full_fail_retry_delay")) or 0)
+        if _retryable
+        else 0.0
+    )
     _policy = RetryPolicy(
         attempts=2 if _retryable else 1,
         strategy=STRATEGY_FIXED,
@@ -461,8 +465,15 @@ def generate_llm_content(
             # 它们，据此判断 TTL 是否放宽会系统性低估。
             # 原因判定：与上一轮该模块的缓存键相同 ⇒ 内容没变、只是 TTL 到点；
             # 不同 ⇒ 内容变了（内容寻址模块换键）；无上轮记录 ⇒ 保守记 `cache_miss`。
+            # 预检已归因的四个基础模块不再二次归因：进程重启后本进程无「上一轮键」
+            # 记忆，再记一次会把 `ttl_expired` 覆盖成 `cache_miss`（TTL 判据被污染）。
             _sink = _hit_sink
-            if _sink is not None and hasattr(_sink, "note_recompute_reason"):
+            _already_attributed = bool(
+                _sink is not None
+                and hasattr(_sink, "module_recompute_reasons")
+                and module_key in (_sink.module_recompute_reasons() or {})
+            )
+            if _sink is not None and hasattr(_sink, "note_recompute_reason") and not _already_attributed:
                 from src.python.llm.observation import (
                     RECOMPUTE_CACHE_MISS,
                     RECOMPUTE_FINGERPRINT_CHANGED,

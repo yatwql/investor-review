@@ -28,7 +28,7 @@
 | `test-find-order-dependent.py` | 测试 | 单跑绿合跑红的顺序依赖污染源二分定位 |
 | `make-assets.py` | 文档 | 仓库视觉资产维护：社交预览图生成 + README 架构图渲染体检（几何/像素/文字越界；需 cairosvg / Pillow） |
 | `make-screenshots.py` | 文档 | README/手册演示截图生成：隔离演示工作区（自造持仓 + 占位凭据）/ 演示报告 / TUI 帧渲染 / Web CDP 截图（需 Pillow + 等宽 CJK 字体；Web 档需 Node ≥22 + Chromium） |
-| `check-code-traces.py` | 质量 | 代码注释/文档字符串中历史变更痕迹检查 |
+| `check-code-traces.py` | 质量 | 代码注释/文档字符串中历史变更痕迹检查 + AST 守卫（分层/日志/配置默认值单源） |
 | `check-doc-traces.py` | 文档 | 面向读者文档（.md）历史变更痕迹 + 结构性冗余（DUPLICATE）检查 |
 | `check-test-markers.py` | 测试 | AST 静态扫描验证测试标记合规性 |
 | `check-task-numbering.py` | 质量 | 任务编号（plan-/rf-）全局一致性检查，防新增编号与历史归档冲突 |
@@ -604,7 +604,7 @@ y 范围（svg 单位）；`margin` = 检测范围到卡片右缘的右扩量（
 
 ## 代码与文件质量类
 
-代码注释痕迹（含三条 AST 守卫）、文件行数红线、需求追溯与任务编号一致性（含钩子接线），以及两条观察期契约检查。
+代码注释痕迹（含四条 AST 守卫）、文件行数红线、需求追溯与任务编号一致性（含钩子接线），以及两条观察期契约检查。
 
 **`check-code-traces.py` — 代码注释历史痕迹检查**
 
@@ -612,13 +612,14 @@ y 范围（svg 单位）；`margin` = 检测范围到卡片右缘的右扩量（
 
 扫描 `src/python/`、`src/test/`、`src/static/`、`scripts/` 下所有 `.py` / `.js` / `.mjs` / `.html` / `.sh` / `.ps1` / `.bat` / `.cmd` 文件的注释和文档字符串，检查是否含有代码历史迭代信息（来源拆分、版本号、任务编号、历史迭代叙述等）。代码注释只应描述"当前是什么"，不应记录"从哪里来、怎么变的"。
 
-除注释痕迹外，另有三条 **AST 级架构守卫**（直接看语法树，与注释格式无关）：
+除注释痕迹外，另有四条 **AST 级架构守卫**（直接看语法树，与注释格式无关）：
 
 | 守卫 | 检出内容 | 实现 |
 |:-----|:---------|:-----|
 | core 分层 | core 层反向 `import` 上层包（`fetcher`/`analysis`/`report`/`llm`/`providers`/`web`/`tui`/`cli`） | `_traces_code/layers.py`（豁免文件在 technical.md 声明） |
 | 日志统一 | 非交互呈现层调用 `print()`（诊断输出应走 `logging` 落盘） | `_traces_code/logging_discipline.py`（豁免域：`tui/`、`cli/` 整目录 + 进度/一次性检查报告/向导六个模块） |
 | 语义命名 | 标识符/注释夹带任务编号、系列代号、字母数字暗号 | `_traces_code/extract.py` + `patterns.py` |
+| 配置默认值单源 | 生产代码自带与默认值表同值同键的字面量兜底（`x.get("<键>", <默认值>)`，改默认表不会跟随） | `_traces_code/config_defaults.py`（默认表自身与测试不在扫描域） |
 
 **使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
 
@@ -633,13 +634,14 @@ y 范围（svg 单位）；`margin` = 检测范围到卡片右缘的右扩量（
 .venv/bin/python scripts/check-code-traces.py --ci
 ```
 
-除注释痕迹外，另有三条 **AST 级架构守卫**（直接看语法树，与注释格式无关）：
+除注释痕迹外，另有四条 **AST 级架构守卫**（直接看语法树，与注释格式无关）：
 
 | 守卫 | 检出内容 | 实现 |
 |:-----|:---------|:-----|
 | core 分层 | core 层反向 `import` 上层包（`fetcher`/`analysis`/`report`/`llm`/`providers`/`web`/`tui`/`cli`） | `_traces_code/layers.py`（豁免文件在 technical.md 声明） |
 | 日志统一 | 非交互呈现层调用 `print()`（诊断输出应走 `logging` 落盘） | `_traces_code/logging_discipline.py`（豁免域：`tui/`、`cli/` 整目录 + 进度/一次性检查报告/向导六个模块） |
 | 语义命名 | 标识符/注释夹带任务编号、系列代号、字母数字暗号 | `_traces_code/extract.py` + `patterns.py` |
+| 配置默认值单源 | 生产代码自带与默认值表同值同键的字面量兜底（`x.get("<键>", <默认值>)`，改默认表不会跟随） | `_traces_code/config_defaults.py`（默认表自身与测试不在扫描域） |
 
 **退出码含义**：
 
@@ -647,7 +649,7 @@ y 范围（svg 单位）；`margin` = 检测范围到卡片右缘的右扩量（
 |:------:|:-----|:-----|
 | 0 | 全部通过 | 无需处理 |
 | 1 | HIGH/ORIGIN/VERSION 痕迹 | 必须修复后再提交 |
-| 2 | CODE/IDENT/CHAPTER/ROUND/LOG（任务编号/标识符/章节编号引用/日志统一违规） | 应改用语义描述，`print()` 改用 `logging` |
+| 2 | CODE/IDENT/CHAPTER/ROUND/LOG/DEFAULTDUP（任务编号/标识符/章节编号引用/日志统一违规/默认值重复兜底） | 应改用语义描述，`print()` 改用 `logging`，默认值改走 `get_default()` / `get_llm_setting_default()` |
 | 3 | 仅 TODO/CHANGE/DEPR 级别 | 建议人工复核 |
 
 > **何时跑**：`git commit` 时由 pre-commit 钩子按暂存域自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` job 恒跑全量兜底。

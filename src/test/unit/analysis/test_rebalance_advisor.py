@@ -195,13 +195,13 @@ class TestChannelAware:
         assert len(advice) == 1
         assert advice[0]["shares"] == 1234
 
-    def test_account_fallback_when_no_channel(self):
-        """无 channel 但 account 为场外关键词（天天基金）→ 按场外渠道处理。"""
+    def test_account_alone_does_not_decide_channel(self):
+        """渠道只看 channel：仅带 account（天天基金）不生效 → 回退证券类型判定 100 份取整。"""
         holdings = [_holding("招商中证白酒指数A", "161725", 1234.5, 1.2, account="天天基金")]
         signals = [_discipline("161725", "招商中证白酒指数A", "止损/减仓")]
         advice = build_rebalance_advice([], signals, holdings, total_mv=1481.4, fee_table=_FEE_FIXTURE)
         assert len(advice) == 1
-        assert advice[0]["shares"] == 1234
+        assert advice[0]["shares"] == 1200
 
     def test_no_channel_falls_back_to_code_detection(self):
         """无 channel 无 account → 回退证券类型判定（161725 16 开头命中场内前缀 → 100 份取整）。"""

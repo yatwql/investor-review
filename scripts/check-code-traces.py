@@ -32,6 +32,8 @@ _magic_excludes() / _dash_excludes() / _under_excludes() 行豁免。
   - core 分层：core 层禁止反向 import 上层包
   - 日志统一：print() 仅限交互呈现层（TUI/CLI 目录 + 逐文件列举的交互输出
     模块），其余生产模块须走 logging 落盘（LOG）
+  - 配置默认值单源：生产代码不得自带与默认值表同值的字面量兜底
+    （DEFAULTDUP，改用 get_default() / get_llm_setting_default()）
 
 本文件为**薄 CLI**：模式表/扫描/守卫实现均在 `scripts/_traces_code/` 包
 （config / patterns / exemptions / extract / scan / layers 六模块），
@@ -48,8 +50,9 @@ _magic_excludes() / _dash_excludes() / _under_excludes() 行豁免。
   0 — 全部通过（无可报痕迹）
   1 — 发现高置信度痕迹（HIGH/ORIGIN/VERSION）
   2 — 发现任务编号/章节编号/架构约束代号/语义命名暗号引用
-      （CODE/IDENT/CHAPTER/ROUND/MAGIC/DASHTASK/UNDERSCORE）或日志统一违规（LOG），
-      应从注释/标识符中移除 / 改用 logging 落盘
+      （CODE/IDENT/CHAPTER/ROUND/MAGIC/DASHTASK/UNDERSCORE）或日志统一违规（LOG）
+      或配置默认值重复兜底（DEFAULTDUP），
+      应从注释/标识符中移除 / 改用 logging 落盘 / 改走默认值单一入口
       （CHAPTER：注释中用数字章节号"N 章"/"第 N 章"指代报告具体章节，
       章节合并/重排后数字即失效，须改用语义章节名「X」章；
       ROUND：注释中用"第 N 轮"/"经 N 轮"/"N 轮"/"轮 N"指代开发迭代
@@ -98,6 +101,7 @@ from _traces_code import (  # noqa: E402
     _py_comment_lines,  # noqa: F401
     _py_identifier_names,  # noqa: F401
     _round_excludes,  # noqa: F401
+    _scan_config_default_fallbacks,  # noqa: F401
     _scan_core_layering,  # noqa: F401
     _scan_identifiers,  # noqa: F401
     _shell_comment_lines,  # noqa: F401
@@ -130,6 +134,7 @@ CODE_CATEGORIES = (
     "DASHTASK",
     "UNDERSCORE",
     "LOG",
+    "DEFAULTDUP",
 )
 LOW_CATEGORIES = ("TODO", "CHANGE", "DEPR")
 

@@ -9,7 +9,7 @@
   - show_startup_wizard_if_needed(non_interactive=False) — 交互式引导
 
 架构约束：
-  - 写入 llm_key.json 使用 `config._core._atomic_write` 原子写入
+  - 写入 llm_key.json / llm_providers.json 使用原子写入
   - 运行时诊断走 logging；交互式引导 print 属日志豁免（提示类输出）
   - 持仓目录使用配置层已绝对化的 holdings_dir，不依赖 CWD
   - 凭据写入 llm_key.json（合法凭据位置），不写入 llm_providers.json
@@ -17,7 +17,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import sys
@@ -115,32 +114,24 @@ def _is_non_interactive(force: bool = False) -> bool:
         return True
 
 
-def _write_llm_key_flat(
+def _write_llm_credentials(
     api_key: str,
     provider: str = "claude",
     model: str = "",
     endpoint: str = "",
 ) -> None:
-    """原子写入 flat llm_key.json（单凭据格式，读取时自动升级为 _default）。
+    """写入链形态 LLM 凭据（委托 config 层单源实现）。
 
     Args:
         api_key: API 密钥
-        provider: provider 类型（claude/openai 等）
+        provider: provider 类型（claude/openai/gemini）
         model: 模型名（可选）
-        endpoint: 自定义端点（可选，DeepSeek Anthropic 兼容端点）
+        endpoint: 自定义端点（可选）
     """
-    from src.python.core.atomic_write import write_text_atomic
+    from src.python.config import write_llm_credentials
 
-    key_path = get_llm_key_path()
-    # 原子写要求父目录存在（同 set_config 的 _core.os.makedirs 范式）
-    os.makedirs(os.path.dirname(key_path), exist_ok=True)
-    data: dict = {"provider": provider, "api_key": api_key}
-    if model:
-        data["model"] = model
-    if endpoint:
-        data["endpoint"] = endpoint
-    write_text_atomic(key_path, json.dumps(data, ensure_ascii=False, indent=2))
-    logger.info("[startup-wizard] 已写入 llm_key.json（provider=%s）", provider)
+    write_llm_credentials(api_key, provider=provider, model=model, endpoint=endpoint)
+    logger.info("[startup-wizard] 已写入 llm_key.json 凭据块与 llm_providers.json 条目（provider=%s）", provider)
 
 
 # ── 交互式引导 ───────────────────────────────────────────────
@@ -184,8 +175,8 @@ def _handle_key_input() -> None:
         if not api_key:
             _print_line("已跳过 Key 输入，可在菜单「LLM 配置」中补充。")
             return
-        _write_llm_key_flat(api_key)
-        _print_line("✓ 已保存 llm_key.json，下次生成报告生效。")
+        _write_llm_credentials(api_key)
+        _print_line("✓ 已保存 llm_key.json 凭据块与 provider 条目，下次生成报告生效。")
     except (EOFError, KeyboardInterrupt):
         _print_line("已取消 Key 输入。")
 

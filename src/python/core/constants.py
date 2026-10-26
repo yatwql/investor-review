@@ -37,7 +37,7 @@ PROJECT_ROOT = _find_project_root()
 # 应用名称（单一来源，TUI 首页 / 启动日志 / Web 首页 / HTML 报告首页 / Excel 首页统一引用）
 APP_NAME = "投资复盘助手"
 
-APP_VERSION = "0.16.1"
+APP_VERSION = "0.16.2"
 
 # ── 报告产物文件名（单一来源：Excel/HTML 写入器与 Web 预览下载统一引用） ──
 # 报告产物文件基名（归档名 = 基名 + 时间戳后缀）
@@ -228,6 +228,13 @@ PRICING_HOLIDAY_ALWAYS_IDLE: bool = True
 
 # 峰谷时段判定所用 IANA 时区（默认北京时间）
 PRICING_TIMEZONE: str = "Asia/Shanghai"
+
+#: 报告深度档位（顺序即由省到全）：config.json 默认值与 llm 档位解析共用这一份，
+#: 新增档位只改这里（默认值单源纪律由 check-code-traces 的 DEFAULTDUP 守卫）
+REPORT_DEPTH_LEVELS: tuple[str, ...] = ("brief", "standard", "deep")
+
+#: 报告深度出厂默认档位
+REPORT_DEPTH_DEFAULT: str = "standard"
 
 #: 项目统一北京时间口径（UTC+8 固定偏移，无夏令时）。**所有「自然日」判定都用它**：
 #: 毫秒戳 → 日期的展示/契约转换、交易日边界、峰谷时段判定——用本机时区会随运行环境漂移

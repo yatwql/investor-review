@@ -29,6 +29,7 @@ from typing import Any, Callable
 
 from src.python.core.retry import STRATEGY_LINEAR, RetryPolicy, retry_transient
 from src.python.core.throttle import RateLimiter  # 实现见 core/throttle.py（数据/调度/LLM 三层共用）
+from src.python.config import get_default
 
 logger = logging.getLogger("invest")
 
@@ -412,7 +413,7 @@ def get_batch_worker_count(config_key: str, default: int = 3) -> int:
         cfg = get_config()
         batch_cfg = cfg.get("batch", {})
         requested = batch_cfg.get(config_key, default)
-        max_total = batch_cfg.get("max_total_workers", 15)
+        max_total = batch_cfg.get("max_total_workers", get_default("batch.max_total_workers"))
 
         if not isinstance(requested, (int, float)) or requested < 1:
             requested = default

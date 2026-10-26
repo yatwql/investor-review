@@ -16,7 +16,7 @@ from typing import Any
 from src.python.core.code_utils import (
     is_convertible_bond_by_name,
 )
-from src.python.config import get_config
+from src.python.config import get_config, get_default
 from src.python.analysis._silence import (
     _filter_silenced_signals,
     _update_silence_state,
@@ -533,8 +533,8 @@ def compute_rebalance_signals(
         return []
 
     resolved = resolve_rebalance_config(rebalance_config)
-    threshold = resolved.get("threshold", 0.15)
-    deviation_threshold = resolved.get("deviation_threshold", 0.05)
+    threshold = resolved.get("threshold", get_default("rebalance.threshold"))
+    deviation_threshold = resolved.get("deviation_threshold", get_default("rebalance.deviation_threshold"))
     target_allocation = resolved.get("target_allocation", {})
     equity_fi_target = resolved.get("equity_fixed_income", {})
 
@@ -555,7 +555,7 @@ def compute_rebalance_signals(
     signals = _apply_false_positive_protection(signals, holdings_details)
 
     # 5. 静默期过滤 + 更新
-    silence_days = resolved.get("silence_days", 30)
+    silence_days = resolved.get("silence_days", get_default("rebalance.silence_days"))
     if silence_days > 0:
         silence_file = resolved.get("_silence_file")
         signals = _filter_silenced_signals(signals, silence_days, silence_file)
