@@ -188,7 +188,7 @@ def _seed_merged_inputs(tmp_path, monkeypatch):
     from src.python.config._llm_settings_defaults import _get_default_llm_settings_template
 
     settings_path.write_text(_get_default_llm_settings_template(), encoding="utf-8")
-    key_path.write_text(json.dumps({"legacy-default": {"api_key": "test-key"}}, ensure_ascii=False), encoding="utf-8")
+    key_path.write_text(json.dumps({"default": {"api_key": "test-key"}}, ensure_ascii=False), encoding="utf-8")
     providers_path.write_text(json.dumps(_DEFAULT_LLM_PROVIDERS, ensure_ascii=False, indent=2), encoding="utf-8")
 
     monkeypatch.setattr(settings_mod, "get_llm_settings_path", lambda: str(settings_path))

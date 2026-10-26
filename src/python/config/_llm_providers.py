@@ -93,6 +93,49 @@ def flat_key_to_credentials(doc: dict) -> dict[str, dict]:
     return {DEFAULT_CREDENTIALS_REF: block}
 
 
+def _write_key_document(documents: dict) -> None:
+    """原子写入 llm_key.json（命名凭据块文档）并把权限收紧为仅所有者可读写。"""
+    from src.python.config._core import _atomic_write
+
+    key_path = _get_llm_key_path()
+    os.makedirs(os.path.dirname(key_path), exist_ok=True)
+    _atomic_write(key_path, json.dumps(documents, ensure_ascii=False, indent=2))
+    try:
+        os.chmod(key_path, 0o600)
+    except OSError:
+        pass  # Windows 可能不支持完整 chmod
+
+
+def _attach_credentials_provider(backend: str) -> None:
+    """确保 llm_providers.json 有一条引用默认凭据块的 provider 条目（幂等）。
+
+    条目只写路由字段与 ``credentials_ref``，不写密钥（凭据分离）。
+    """
+    from src.python.config._core import _atomic_write
+
+    provider = backend if backend in _VALID_LLM_PROVIDER_TYPES else "claude"
+    providers_path = _get_llm_providers_path()
+    raw = _load_llm_providers() or {}
+    provider_list = raw.get("providers")
+    if not isinstance(provider_list, list):
+        provider_list = list(_DEFAULT_LLM_PROVIDERS["providers"])
+    if not any(isinstance(e, dict) and e.get("credentials_ref") == DEFAULT_CREDENTIALS_REF for e in provider_list):
+        provider_list.append(
+            {
+                "name": DEFAULT_CREDENTIALS_REF,
+                "provider": provider,
+                "credentials_ref": DEFAULT_CREDENTIALS_REF,
+                "priority": 10,
+                "timeout": 120,
+            }
+        )
+    raw["providers"] = provider_list
+    raw.setdefault("strategy", _DEFAULT_LLM_PROVIDERS["strategy"])
+    raw.setdefault("preferred_providers", _DEFAULT_LLM_PROVIDERS["preferred_providers"])
+    os.makedirs(os.path.dirname(providers_path), exist_ok=True)
+    _atomic_write(providers_path, json.dumps(raw, ensure_ascii=False, indent=2))
+
+
 def ensure_credential_blocks(doc: dict) -> bool:
     """把扁平密钥文档规范为命名凭据块 + 引用它的 provider 条目（幂等）。
 
@@ -111,44 +154,13 @@ def ensure_credential_blocks(doc: dict) -> bool:
     from src.python.config._core import _atomic_write
 
     key_path = _get_llm_key_path()
-    credentials = flat_key_to_credentials(doc)
     try:
         backup = key_path + ".bak"
         if not os.path.exists(backup):
             with open(key_path, encoding="utf-8") as src:
                 _atomic_write(backup, src.read())
-        _atomic_write(key_path, json.dumps(credentials, ensure_ascii=False, indent=2))
-        try:
-            os.chmod(key_path, 0o600)
-        except OSError:
-            pass
-
-        providers_path = _get_llm_providers_path()
-        raw = _load_llm_providers() or {}
-        provider_list = raw.get("providers")
-        if not isinstance(provider_list, list):
-            provider_list = list(_DEFAULT_LLM_PROVIDERS["providers"])
-        has_ref = any(
-            isinstance(e, dict) and e.get("credentials_ref") == DEFAULT_CREDENTIALS_REF for e in provider_list
-        )
-        if not has_ref:
-            backend = doc.get("provider") or "claude"
-            if backend not in _VALID_LLM_PROVIDER_TYPES:
-                backend = "claude"
-            provider_list.append(
-                {
-                    "name": DEFAULT_CREDENTIALS_REF,
-                    "provider": backend,
-                    "credentials_ref": DEFAULT_CREDENTIALS_REF,
-                    "priority": 10,
-                    "timeout": 120,
-                }
-            )
-        raw["providers"] = provider_list
-        raw.setdefault("strategy", _DEFAULT_LLM_PROVIDERS["strategy"])
-        raw.setdefault("preferred_providers", _DEFAULT_LLM_PROVIDERS["preferred_providers"])
-        os.makedirs(os.path.dirname(providers_path), exist_ok=True)
-        _atomic_write(providers_path, json.dumps(raw, ensure_ascii=False, indent=2))
+        _write_key_document(flat_key_to_credentials(doc))
+        _attach_credentials_provider(doc.get("provider") or "claude")
     except OSError as exc:
         logger.warning("扁平密钥文档规范化失败（保持原文件不动）: %s", exc)
         return False
@@ -209,7 +221,7 @@ def write_llm_credentials(
 ) -> None:
     """写入「命名凭据块 + 引用它的 provider 条目」（交互式配置与首启向导共用）。
 
-    凭据分离：密钥只落 ``llm_key.json`` 的命名块（``legacy-default``），
+    凭据分离：密钥只落 ``llm_key.json`` 的命名块（``default``），
     ``llm_providers.json`` 只写引用（``credentials_ref``）与路由字段。
 
     Args:
@@ -218,42 +230,13 @@ def write_llm_credentials(
         model: 模型名（可选）
         endpoint: 自定义端点（可选）
     """
-    from src.python.core.atomic_write import write_text_atomic
-
-    key_path = _get_llm_key_path()
-    os.makedirs(os.path.dirname(key_path), exist_ok=True)
     block: dict = {"api_key": (api_key or "").strip()}
     if model:
         block["model"] = model
     if endpoint:
         block["endpoint"] = endpoint
-    write_text_atomic(key_path, json.dumps({DEFAULT_CREDENTIALS_REF: block}, ensure_ascii=False, indent=2))
-    try:
-        os.chmod(key_path, 0o600)
-    except OSError:
-        pass
-
-    providers_path = _get_llm_providers_path()
-    raw = _load_llm_providers() or {}
-    provider_list = raw.get("providers")
-    if not isinstance(provider_list, list):
-        provider_list = list(_DEFAULT_LLM_PROVIDERS["providers"])
-    if not any(isinstance(e, dict) and e.get("credentials_ref") == DEFAULT_CREDENTIALS_REF for e in provider_list):
-        backend = provider if provider in _VALID_LLM_PROVIDER_TYPES else "claude"
-        provider_list.append(
-            {
-                "name": DEFAULT_CREDENTIALS_REF,
-                "provider": backend,
-                "credentials_ref": DEFAULT_CREDENTIALS_REF,
-                "priority": 10,
-                "timeout": 120,
-            }
-        )
-    raw["providers"] = provider_list
-    raw.setdefault("strategy", _DEFAULT_LLM_PROVIDERS["strategy"])
-    raw.setdefault("preferred_providers", _DEFAULT_LLM_PROVIDERS["preferred_providers"])
-    os.makedirs(os.path.dirname(providers_path), exist_ok=True)
-    write_text_atomic(providers_path, json.dumps(raw, ensure_ascii=False, indent=2))
+    _write_key_document({DEFAULT_CREDENTIALS_REF: block})
+    _attach_credentials_provider(provider)
 
 
 def _validate_provider_entry(entry: dict) -> list[str]:

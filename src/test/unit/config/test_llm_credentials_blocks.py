@@ -5,7 +5,7 @@
     llm_providers.json 追加引用同名凭据的条目（凭据分离：条目不含密钥）
   - 幂等：再次读取不重复追加条目、不再改写
   - 规范化不可用时凭据加载直接拒绝（不得静默走单 Provider 直连）
-  - 已是指纹命名块的文档不被误改写
+  - 已是命名凭据块的文档不被误改写
 
 运行：pytest src/test/unit/config/test_llm_credentials_blocks.py -v
 """
@@ -75,12 +75,10 @@ class TestFlatKeyDocumentConversion:
     def test_idempotent(self, flat_env: tuple[Path, Path]) -> None:
         key_path, providers_path = flat_env
         providers_mod.ensure_credential_blocks(json.loads(key_path.read_text(encoding="utf-8")))
-        first = providers_path.read_text(encoding="utf-8")
-        # 再次规范化不应重复追加条目
+        first_raw = providers_path.read_text(encoding="utf-8")
+        # 再次规范化不应追加重复条目（文件内容应逐字不变）
         providers_mod.ensure_credential_blocks(json.loads(key_path.read_text(encoding="utf-8")))
-        raw = json.loads(providers_path.read_text(encoding="utf-8"))
-        assert sum(1 for e in raw["providers"] if e.get("credentials_ref") == DEFAULT_CREDENTIALS_REF) == 1
-        assert json.loads(first)["providers"], first
+        assert providers_path.read_text(encoding="utf-8") == first_raw
 
     def test_named_block_not_migrated(self, tmp_path: Path) -> None:
         doc = {"probe": {"api_key": "sk-1"}}

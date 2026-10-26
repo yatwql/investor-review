@@ -1,12 +1,12 @@
 """系统状态信息组装与展示原语 — Web 状态卡片 / TUI 首页摘要共用数据源。
 
 - ``build_system_info()``：版本 / 机器 IP / 持仓与输出摘要 / 匿名化与隐私 /
-  自检开关 / LLM 配置状态（flat 单 provider 与 credentials_ref 多链两种模式）。
+  自检开关 / LLM 配置状态（credentials_ref 多链模式；无链即未配置）。
   渠道层只做渲染，不自行组装状态数据。
 - ``llm_status()``：LLM 配置状态单源（三渠道状态展示共用判定树，渠道不复刻分支）。
 - 展示原语（``simplify_endpoint`` / ``circuit_display`` / ``strategy_label`` /
   ``priority_display`` / ``anon_mode_label`` / ``resolve_provider_credentials`` /
-  ``model_route_labels``）：熔断规则、主机名简化、策略标签、凭据回填等
+  ``resolve_provider_credentials``）：熔断规则、主机名简化、策略标签、凭据回填等
   曾在渠道各持一份的展示规则，收敛于此单点实现。
 
 配置读取失败按默认值兜底，不阻断页面渲染。
@@ -41,7 +41,7 @@ def circuit_display(endpoint: str, *, default_as_none: bool = False) -> str:
 
     Args:
         endpoint: provider endpoint。
-        default_as_none: True 时字面 ``默认`` 视为无端点（flat 单 provider 模式）；
+        default_as_none: True 时字面 ``默认`` 视为无端点（未配置端点的展示口径）；
             多链模式（False）仅空端点视为无端点。
 
     Returns:

@@ -36,7 +36,7 @@ class TestDisplayPrimitives:
         assert simplify_endpoint("not-a-url") == "not-a-url"
 
     def test_circuit_display_default_semantics(self):
-        # flat 模式：字面「默认」视为无端点；多链模式：仍查端点状态
+        # default_as_none：字面「默认」视为无端点；否则仍查端点状态
         assert circuit_display("默认", default_as_none=True) == "—"
         assert circuit_display("", default_as_none=True) == "—"
         assert circuit_display("") == "—"

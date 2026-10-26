@@ -95,7 +95,7 @@ class TestHealthEndpoint:
 class TestSystemInfo:
     """状态区系统信息组装（_build_system_info：版本 / IP / 持仓摘要 / LLM 状态，对齐 TUI）。
 
-    覆盖：默认未配置 / 持仓摘要字段（含文件就绪判定）/ flat 单 provider /
+    覆盖：默认未配置 / 持仓摘要字段（含文件就绪判定）/ 顶层字段不参与配置 /
     credentials_ref 多链 / 读配置异常兜底 / 索引页渲染（未配置时显示「未配置」）。
     """
 
@@ -194,7 +194,7 @@ class TestSystemInfo:
         assert info["llm"] == {"configured": False}
 
     def test_default_llm_key_missing(self, monkeypatch):
-        """flat 模式但缺 api_key/provider：按未配置兜底。"""
+        """缺 provider 链：按未配置兜底。"""
         self._patch_llm(monkeypatch, config={"model": "claude-sonnet-4-6"})
         info = _build_system_info()
         assert info["llm"] == {"configured": False}

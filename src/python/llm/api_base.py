@@ -230,7 +230,7 @@ def _build_cache_hint_and_record(
     if thinking_enabled:
         hint = hint.rstrip().replace("</p>", " | Extended Thinking</p>", 1)
     if module_key:
-        chain_model, chain_endpoint = _chain_route_hint(llm_config)
+        chain_model, chain_endpoint = _chain_route_hint(llm_config, module_key)
         model_for_record = orig_model or model_hint or chain_model or "缓存命中"
         endpoint_for_record = endpoint or chain_endpoint or ""
         record_per_module(
@@ -292,23 +292,18 @@ def _is_default_thinking_on(model: str) -> bool:
     return any(model.lower().startswith(p) for p in _THINKING_DEFAULT_ON_PREFIXES)
 
 
-def _chain_route_hint(llm_config: dict | None) -> tuple[str, str]:
-    """缓存命中路径的模型/端点提示：取 provider 链首条目的解析结果。
+def _chain_route_hint(llm_config: dict | None, module_key: str) -> tuple[str, str]:
+    """缓存命中路径的模型/端点：复用链解析单源（``api._resolve_first_provider_model_endpoint``）。
 
     缓存命中不经过 provider 解析，记录里的模型名仍要能指向真实线路
     （否则「模块用量」只能显示「缓存命中」，无法对账）。
     """
-    chain = (llm_config or {}).get("_provider_list") or []
-    creds = (llm_config or {}).get("_llm_credentials") or {}
-    for entry in chain:
-        if not isinstance(entry, dict):
-            continue
-        block = creds.get(entry.get("credentials_ref"), {}) if entry.get("credentials_ref") else {}
-        model = entry.get("model") or (block or {}).get("model") or ""
-        endpoint = entry.get("endpoint") or (block or {}).get("endpoint") or ""
-        if model or endpoint:
-            return str(model or ""), str(endpoint or "")
-    return "", ""
+    if not (llm_config or {}).get("_provider_list"):
+        return "", ""
+    from src.python.llm.api import _resolve_first_provider_model_endpoint  # 惰性：api 依赖本模块
+
+    model, endpoint = _resolve_first_provider_model_endpoint(llm_config, module_key)
+    return (model or ""), (endpoint or "")
 
 
 def _extract_model_from_cached(html: str) -> str:

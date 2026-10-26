@@ -95,7 +95,7 @@ LLM 配置由三个独立文件管理：
 > - 代码内置提示词定义在 `src/python/llm/prompts_core.py`（主 prompt）、`prompts_tables.py`（数据表格）、`prompts_action.py`（行动建议）中，更新代码时可自动升级。
 > - 计价策略与模型单价覆盖在独立参考文件 `llm_pricing_ref.json` 中，详见下方「完整模型定价表」章节。
 
-**Step 3**：启动程序，菜单选 **L** 生成包含 LLM 分析的完整版报告。
+**Step 4**：启动程序，菜单选 **L** 生成包含 LLM 分析的完整版报告。
 
 ---
 

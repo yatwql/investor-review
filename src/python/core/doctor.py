@@ -297,7 +297,7 @@ def _check_llm_credentials() -> list[dict[str, Any]]:
             hint=(
                 "在 TUI [M] 面板或 Web 配置面板配置线路与 credentials_ref；"
                 "旧版 llm_key.json 顶层 api_key/provider 形态已不支持（启动时自动迁移为 "
-                "legacy-default 凭据块与同名 provider 条目，失败时见日志提示）"
+                "default 凭据块与同名 provider 条目，失败时见日志提示）"
             ),
         )
     ]
