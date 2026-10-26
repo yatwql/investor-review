@@ -9,6 +9,10 @@
 
 ## [0.16.3-dev] - 开发中（未发布）
 
+### 变更
+
+- **持仓明细行装配单源**（rf-909）：新增 `report/_holding_detail_rows.py::build_holding_detail_rows()`——编排路径（`_orchestrator_data.prepare_report_data`，全量含行情三字段）与行动建议路径（`_report_helpers._action_holdings_details`，basic/both 共享的 10 字段子集）过去各写一份字面量，`profit_rate` 百分号换算与 `channel` 渠道判定重复实现，字段增删漏改一处即出现「同一持仓在两处字段不同」；现共有 10 字段集中构造、`with_market_fields=True` 追加 `change_pct`/`nav_date`/`source_api`、尾部统一附加 `holding_days`，`_action_holdings_details` 降为其薄封装。回归 9 例（两路径共有字段逐项一致、键序固定、字段子集不变、百分号与 None、零昨收 `0.0`、渠道单源、`holding_days` 两侧一致）
+
 ### 修复
 
 - **发布 bench 不再随机假红**（rf-912）：`unit/web/test_runs.py` 的 `_wait_done` 原本用 3s 真实墙钟等后台线程，8 路 xdist 满载时线程几十次调度才被唤醒即超时（`test_concurrent_submits_isolated` 已实测假红，同文件 `test_retention_trim_oldest` 同类）；等待预算改为 `_WAIT_TIMEOUT_S = 30.0`——这是「等到就绪」而非时延断言，注释写明满载场景。回归 2 例（假时钟下第 5 次轮询才就绪仍须等到、预算耗尽须报等待时长与末态）

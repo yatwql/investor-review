@@ -12,7 +12,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from src.python.report.progress import ProgressReporter
 
@@ -143,31 +143,13 @@ def _validate_pipeline_snapshot(pipeline_data: dict | None) -> None:
 # ── 持仓明细 → 行动建议消费字段子集（basic/both 共用） ──
 
 
-def attach_holding_trading_days(rows: list[dict], transactions: list | None) -> None:
-    """为行动建议持仓明细就地附加 holding_days（首次买入至今的交易日数）。
-
-    再平衡误报防护的第 (2) 类「新买入品种观察期」依赖该字段。无交易流水或
-    品种无买入记录时不写入该键——防护按「未知」跳过观察期过滤，宁可不抑制
-    也不误抑制。
-
-    Args:
-        rows: 行动建议持仓明细（orchestrator / _action_holdings_details 产物）。
-        transactions: 交易流水记录（可为 None / 空）。
-    """
-    if not transactions:
-        return
-    from src.python.analysis.rebalance import build_holding_trading_days
-    from src.python.report.market_value import get_last_trading_day
-
-    trading_days = build_holding_trading_days(transactions, get_last_trading_day())
-    for row in rows:
-        days = trading_days.get(row.get("code", ""))
-        if days is not None:
-            row["holding_days"] = days
+# `attach_holding_trading_days` 已随行装配一并下沉到 `_holding_detail_rows`；
+# 此处保留同名导出，既有 `from ..._report_helpers import attach_holding_trading_days` 不变。
+from src.python.report._holding_detail_rows import attach_holding_trading_days  # noqa: E402, F401
 
 
 def _action_holdings_details(details: list, transactions: list | None = None) -> list[dict]:
-    """持仓明细 → 行动建议消费的字段子集（数据契约同 orchestrator 组装）。
+    """持仓明细 → 行动建议消费的字段子集（与编排路径同一装配点）。
 
     交易纪律依赖收益率数据（profit_rate），统一换算为百分数（小数 ×100）；
     shares/price 供调仓建议可行化层计算可执行卖出份额与金额；
@@ -180,27 +162,9 @@ def _action_holdings_details(details: list, transactions: list | None = None) ->
         transactions: 交易流水记录（可为 None）；提供时附加 holding_days
             （再平衡误报防护的「新买入品种观察期」判据）。
     """
-    from src.python.core.holding_status import classify_channel
+    from src.python.report._holding_detail_rows import build_holding_detail_rows
 
-    rows = [
-        {
-            "name": d.name,
-            "code": d.code,
-            "market_value": d.market_value,
-            "cost": d.cost,
-            "profit": d.profit,
-            "profit_rate": (d.profit_rate * 100) if d.profit_rate is not None else None,
-            "shares": d.shares,
-            "price": d.price,
-            # 渠道上下文：判定单源在 holding_status.classify_channel（与编排路径同源）
-            "channel": classify_channel(getattr(d, "account", "")),
-            # 账户名原值：收益归因大类分解的场外渠道判定需渠道关键词
-            "account": getattr(d, "account", ""),
-        }
-        for d in details
-    ]
-    attach_holding_trading_days(rows, transactions)
-    return rows
+    return build_holding_detail_rows(details, with_market_fields=False, transactions=transactions)
 
 
 # ── 持仓匿名化（报告管线接线） ──────────────────────────────
@@ -255,7 +219,9 @@ def apply_report_anonymization(
     if mode == "summary":
         return fold_details_summary(details), rows
 
-    anon_details = anonymize_holdings_details(details, mode)
+    # summary 已在上面单独分流（走 fold_details_summary），此处必然是列表形态；
+    # anonymize_holdings_details 的联合返回类型在此收窄，避免下游拿到 Union 形态。
+    anon_details = cast("list[dict]", anonymize_holdings_details(details, mode))
     if alias_map is None:
         from src.python.config.anonymizer import build_report_alias_map
 

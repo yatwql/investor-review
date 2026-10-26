@@ -16,11 +16,7 @@
 
 ### P2 — 中优先：价值明确、成本可控（下批排期）
 
-入选标准：重构收益明确、回归面可圈定。
-
-| # | 问题 | 修复方向 |
-|---|------|----------|
-| **rf-909** | 持仓明细行组装两份拷贝：`report/_orchestrator_data.py`（编排路径，10 字段 + `change_pct`/`nav_date`/`source_api`）与 `report/_report_helpers._action_holdings_details`（行动建议路径，同 10 字段子集）各写一遍，`profit_rate` 百分号换算与 `channel` 渠道判定在两处重复；字段增删需同时改两处，漏改即出现「同一持仓在行动建议与编排数据里字段不同」 | 抽 `report/_holding_detail_rows.build_holding_detail_rows(details, *, with_market_fields, transactions=None)`：共有 10 字段（含 `profit_rate` 百分号口径、`channel` 经 `classify_channel` 单源、`account` 原值）集中构造，`with_market_fields=True` 追加行情三字段；尾部统一 `attach_holding_trading_days`。回归：样例持仓下两路径的行键集/值逐项一致、`yesterday_close` 为 0 时 `change_pct` 仍为 0.0、行动建议字段子集不变 |
+入选标准：重构收益明确、回归面可圈定。当前无登记项。
 
 ### P3 — 持续监控：兼容残留
 
@@ -36,6 +32,7 @@
 
 | # | 问题 | 修复 |
 |---|------|------|
+| **rf-909** | 持仓明细行组装两份拷贝：`report/_orchestrator_data.py`（编排路径，10 字段 + `change_pct`/`nav_date`/`source_api`）与 `report/_report_helpers._action_holdings_details`（行动建议路径，同 10 字段子集）各写一遍，`profit_rate` 百分号换算与 `channel` 渠道判定在两处重复；字段增删需同时改两处，漏改即出现「同一持仓在行动建议与编排数据里字段不同」 | 抽 `report/_holding_detail_rows.py::build_holding_detail_rows(details, *, with_market_fields, transactions=None)`：共有 10 字段（`profit_rate` 百分号口径、`channel` 经 `classify_channel` 单源、`account` 原值）集中构造，`with_market_fields=True` 追加行情三字段（`change_pct` 零昨收兜底），尾部统一 `attach_holding_trading_days`；`_action_holdings_details` 改为其薄封装，编排路径改为同名调用（顺带把 `changed_code_files`/`penetrated_targets` 等既有类型摩擦就地收窄）。回归 9 例（两路径共有字段逐项一致/键序固定/行动建议字段子集不变/百分号与 None/零昨收 0.0/渠道单源/两侧同时附加 holding_days） |
 | **rf-912** | 发布 `refresh` 的 bench 偶发退出码 1 而台账 `failed_tests` 为空，看不出哪个用例红——真因有两处：① `unit/web/test_runs.py::TestConcurrency::test_concurrent_submits_isolated` 的 `_wait_done` 用 3s 真实墙钟等后台线程，8 路 xdist 满载时线程迟迟不被调度即超时（时序脆弱，同文件另有 `test_retention_trim_oldest` 同类）；② `_run_phased` 的关键词过滤只留小写 `failed`，pytest 短摘要的 `FAILED 路径::用例` 行被丢弃，`_summarize_failure` 的 debug.log 兜底又只看 stdout 归档行指向的目录（那是**上一次**运行的报告目录，本次失败档的 debug.log 还在 `test-reports/latest/`）→ 连续三次发布（0.15.2/0.15.8/0.16.2）各多花一轮人工重跑与翻归档定位 | 等待预算改 `_WAIT_TIMEOUT_S = 30.0`（等到就绪而非时延断言，注释写明满载场景）；`_run_phased` 过滤补 `FAILED`；新增 `_failure_debug_text()`：归档目录未命中时按 mtime 倒序搜 `test-reports/latest/<模式>/` 的 debug.log，且 stdout 已有 FAILED 行则不读（防旧失败被当本次）。回归 4 例（假时钟下慢调度仍等到、预算耗尽报时长与末态、latest 兜底点名用例、stdout 优先于 latest） |
 
 ### 归档档案

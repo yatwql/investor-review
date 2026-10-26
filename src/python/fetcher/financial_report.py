@@ -13,7 +13,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Sequence
 
 from src.python.cache import clear as cache_clear
 from src.python.cache import get as cache_get
@@ -103,7 +103,7 @@ def target_source_label(target: dict[str, Any]) -> str:
 
 def collect_a_share_targets(
     holdings: list,
-    penetrated_targets: list[dict[str, Any] | str] | None = None,
+    penetrated_targets: Sequence[dict[str, Any] | str] | None = None,
 ) -> list[dict[str, Any]]:
     """持仓 + 穿透资产中的 A 股**个股**标的（去重、按代码升序）。
 

@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Sequence
 
 from src.python.core.num_utils import ms_to_date_str
 from src.python.fetcher.financial_report import (
@@ -47,7 +47,7 @@ def build_financial_report_digest(
     holdings: list,
     config: dict | None = None,
     reporter: Any = None,
-    penetrated_targets: list[dict[str, Any] | str] | None = None,
+    penetrated_targets: Sequence[dict[str, Any] | str] | None = None,
 ) -> dict[str, Any]:
     """构建「持仓个股财报摘要」数据契约。
 
