@@ -21,6 +21,7 @@ from typing import Any
 
 from src.python.config import get_config
 from src.python.config import normalize_schedule_block, validate_schedule_block  # noqa: F401 — 面板与测试经本模块导入
+from src.python.core.atomic_write import write_json_atomic
 from src.python.core.constants import PROJECT_ROOT
 
 logger = logging.getLogger("invest")
@@ -82,17 +83,21 @@ def _load_fired() -> dict[str, str]:
 
 
 def _save_fired(fired: dict[str, str]) -> None:
-    """原子写触发账本（tmp + replace），写回时剔除超保留期条目；写失败记 ERROR。"""
+    """写触发账本（经 `core/atomic_write` 唯一原子写原语），写回时剔除超保留期条目。
+
+    写失败只记 ERROR、不向上抛：调度链路不为账本落盘失败中断，代价是重启后
+    当日计划可能重复触发（与读取失败同一取舍）。
+    """
     cutoff = (datetime.now() - timedelta(days=_LEDGER_RETAIN_DAYS)).strftime("%Y-%m-%d")
     pruned = {k: v for k, v in fired.items() if v >= cutoff}
-    try:
-        os.makedirs(os.path.dirname(_FIRED_STATE_FILE), exist_ok=True)
-        tmp_path = _FIRED_STATE_FILE + ".tmp"
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            json.dump({"fired": pruned}, f, ensure_ascii=False, indent=2)
-        os.replace(tmp_path, _FIRED_STATE_FILE)
-    except OSError:
-        logger.exception("定时生成账本写入失败（重启后当日计划可能重复触发）")
+    ok = write_json_atomic(
+        _FIRED_STATE_FILE,
+        {"fired": pruned},
+        log_tag="scheduler",
+        noun="定时生成账本",
+    )
+    if not ok:
+        logger.error("定时生成账本写入失败（重启后当日计划可能重复触发）")
 
 
 def status_payload(config: Any = None) -> dict:
@@ -103,9 +108,10 @@ def status_payload(config: Any = None) -> dict:
     schedule = parse_schedule(config)
     now = datetime.now()
     fired = _load_fired()
+    next_at = next_fire_at(now, schedule) if schedule else None
     return {
         **block,
-        "next_fire": next_fire_at(now, schedule).strftime("%Y-%m-%d %H:%M") if schedule else None,
+        "next_fire": next_at.strftime("%Y-%m-%d %H:%M") if next_at else None,
         "last_fired": fired.get(schedule_signature(schedule)) if schedule else None,
         "grace_minutes": _FIRE_GRACE_MINUTES,
     }
