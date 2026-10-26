@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+from src.test.helpers import make_chain_config
+
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -69,7 +71,7 @@ class TestCallLlmComplianceWiring(unittest.TestCase):
     @patch("src.python.llm.api.call_claude")
     def test_claude_receives_guardrailed_prompt(self, mock_call: MagicMock) -> None:
         mock_call.return_value = ("ok", {"input_tokens": 1, "output_tokens": 2})
-        content, _, _ = call_llm("原始 system", "user", {"provider": "claude", "api_key": "sk-x"})
+        content, _, _ = call_llm("原始 system", "user", make_chain_config(api_key="sk-x"))
         self.assertEqual(content, "ok")
         sent_system = mock_call.call_args[0][0] if mock_call.call_args[0] else mock_call.call_args.kwargs.get("system")
         # call_claude 第一个位置参数为 system prompt
@@ -81,6 +83,6 @@ class TestCallLlmComplianceWiring(unittest.TestCase):
     def test_prompt_with_existing_closing_not_doubled_through_call_llm(self, mock_call: MagicMock) -> None:
         mock_call.return_value = ("ok", {"input_tokens": 1, "output_tokens": 2})
         pre_guardrailed = apply_compliance_guardrails("原始 system")
-        call_llm(pre_guardrailed, "user", {"provider": "claude", "api_key": "sk-x"})
+        call_llm(pre_guardrailed, "user", make_chain_config(api_key="sk-x"))
         sent_system = mock_call.call_args[0][0] if mock_call.call_args[0] else mock_call.call_args.kwargs.get("system")
         self.assertEqual(sent_system.count(COMPLIANCE_CLOSING), 1)

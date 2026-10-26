@@ -3,7 +3,7 @@
 测试策略：
   - is_first_run / mark_wizard_shown — 配置标记键读写（测试隔离下用 tmp config）
   - _detect_startup_state — 持仓目录 / LLM 凭据 / 降级三态检测
-  - _write_llm_key_flat — 原子写 flat llm_key.json（原子写 + 凭据分离，llm_key 路径被
+  - _write_llm_credentials — 原子写命名凭据块 + provider 条目（凭据分离，两文件路径被
     _isolate_sensitive_paths 重定向到 tmp_path）
   - _is_non_interactive — CI / NON_INTERACTIVE / force 跳过
   - show_startup_wizard_if_needed — 非首次/非交互静默、交互引导打印、标记已读
@@ -28,7 +28,7 @@ from src.python.startup_wizard import (
     _detect_startup_state,
     _is_non_interactive,
     _llm_key_present,
-    _write_llm_key_flat,
+    _write_llm_credentials,
     is_first_run,
     mark_wizard_shown,
     show_startup_wizard_if_needed,
@@ -119,24 +119,28 @@ class TestDetectStartupState:
 # ── llm_key 写入 ─────────────────────────────────────────────
 
 
-class TestWriteLlmKeyFlat:
-    """_write_llm_key_flat 原子写 flat llm_key.json 测试。"""
+class TestWriteLlmCredentials:
+    """_write_llm_credentials 写入链形态凭据（命名块 + provider 条目）。"""
 
-    def test_writes_flat_key_file(self):
-        """写入 provider/api_key，可被 _load_llm_key_credentials 读回（自动升级）。"""
-        _write_llm_key_flat("sk-test", provider="claude")
-        assert _key_path().exists()
+    def test_writes_named_block_and_provider_entry(self):
+        """密钥落命名凭据块，provider 条目只带 credentials_ref（凭据分离）。"""
+        _write_llm_credentials("sk-test", provider="claude")
         creds = _load_llm_key_credentials()
         assert creds is not None
-        assert creds["_default"]["api_key"] == "sk-test"
-        assert creds["_default"]["provider"] == "claude"
+        assert creds["default"]["api_key"] == "sk-test"
+        assert "provider" not in creds["default"], "凭据块不得混入路由字段之外的内容"
+
+        raw = json.loads(Path(_get_llm_providers_path()).read_text(encoding="utf-8"))
+        entry = next(e for e in raw["providers"] if e.get("credentials_ref") == "default")
+        assert entry["provider"] == "claude"
+        assert "api_key" not in entry, "providers 文件不得内联密钥"
 
     def test_writes_model_and_endpoint(self):
-        """带 model/endpoint → 一并写入。"""
-        _write_llm_key_flat(
+        """带 model/endpoint → 一并写入凭据块，并在 provider 侧可通过 ref 解析。"""
+        _write_llm_credentials(
             "sk-x", provider="claude", model="claude-sonnet-4-6", endpoint="https://api.deepseek.com/anthropic"
         )
-        creds = _load_llm_key_credentials()["_default"]
+        creds = _load_llm_key_credentials()["default"]
         assert creds["model"] == "claude-sonnet-4-6"
         assert creds["endpoint"] == "https://api.deepseek.com/anthropic"
 
@@ -226,7 +230,7 @@ class TestShowStartupWizard:
         # 校验写入内容
         assert _key_path().exists()
         raw = json.loads(_key_path().read_text(encoding="utf-8"))
-        assert raw["api_key"] == "sk-interactive"
+        assert raw["default"]["api_key"] == "sk-interactive"
 
     def test_user_skips_key(self, monkeypatch, capsys):
         """用户选择跳过 Key 输入 → 不写文件。"""

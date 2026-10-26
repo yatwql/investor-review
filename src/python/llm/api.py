@@ -107,10 +107,8 @@ def _resolve_entry_credentials(
         - `entry["api_key"]` 分支只服务**运行期内存条目**（调用方直接构造）。
           经 `_parse_providers_list()` 从 llm_providers.json 解析出的条目**永不带
           此键**——内联 api_key 在校验阶段即被拒（该条目会被整条跳过）。
-        - llm_key.json 的凭据**不**流经本函数的 entry 分支：多键格式由
-          `credentials_ref` 查 `_llm_credentials`；单键 flat 格式则由
-          `get_llm_config()` 合并为 config 顶层键，走无 `_provider_list` 时的
-          单 Provider 模式（`_call_llm_legacy()`），不构造 entry。
+        - llm_key.json 的凭据**不**流经本函数的 entry 分支：由 `credentials_ref`
+          查 `_llm_credentials`（扁平密钥文档在读取阶段即规范为命名凭据块）。
         - `model` / `endpoint` 是非敏感路由字段，entry 级值优先于凭据块同名值。
     Returns:
         (api_key, model, endpoint)
@@ -369,10 +367,10 @@ def call_llm(
     # 合规声明集中注入：单一漏斗覆盖全部 LLM 模块（幂等，见 llm.compliance）
     system_prompt = apply_compliance_guardrails(system_prompt, role=_infer_module_key(config_field))
     if not provider_list:
-        # 无多链配置，回退单 Provider 模式
-        return _call_llm_legacy(
-            system_prompt, user_prompt, llm_config, timeout, http_client, max_tokens, config_field, temperature, model
-        )
+        # 无 provider 链即配置不可用：显式失败（不设单 Provider 直连回退——绕过链路由
+        # 会绕开策略/熔断/端点节流，违背 Provider Chain 必经约束）
+        logger.error("LLM 配置缺少 provider 链（llm_providers.json 未配置或读取失败）——本次调用不可用")
+        return (None, None, None)
 
     # 多链模式
     strategy = llm_config.get("_strategy", "priority")
@@ -455,70 +453,6 @@ def call_llm(
             "attempted": attempted,
             "final_status": final_status,
         }
-    return (None, None, None)
-
-
-def _call_llm_legacy(
-    system_prompt: str,
-    user_prompt: str,
-    llm_config: dict,
-    timeout: float = 60.0,
-    http_client: httpx.Client | None = None,
-    max_tokens: int | None = None,
-    config_field: str = "max_tokens",
-    temperature: float | None = None,
-    model: str | None = None,
-) -> tuple[str | None, dict | None, dict | None]:
-    """无 _provider_list 配置时的单 Provider 模式。"""
-    provider = llm_config.get("provider", "")
-    api_key = llm_config.get("api_key", "")
-    resolved_model = model or llm_config.get("model", "")
-    endpoint = llm_config.get("endpoint", "")
-    resolved_max_tokens = max_tokens or 2500
-    max_retries = _get_retry_max(llm_config)
-
-    result, usage = call_single_provider(
-        provider,
-        system_prompt,
-        user_prompt,
-        api_key,
-        resolved_model,
-        endpoint,
-        resolved_max_tokens,
-        timeout,
-        max_retries,
-        http_client,
-        config_field,
-        temperature,
-        llm_config,
-    )
-    if result is not None:
-        if result != "":
-            return result, usage, {"name": provider or None, "model": resolved_model, "endpoint": endpoint or ""}
-
-        # 空内容 → 安抚重试
-        def _legacy_retry(sys: str, usr: str):
-            r = call_single_provider(
-                provider,
-                sys,
-                usr,
-                api_key,
-                resolved_model,
-                endpoint,
-                resolved_max_tokens,
-                timeout,
-                max_retries,
-                http_client,
-                config_field,
-                temperature,
-                llm_config,
-            )
-            return r[0], r[1]
-
-        result2, usage2 = _calm_retry(system_prompt, user_prompt, provider, _legacy_retry)
-        if result2 is not None:
-            return result2, usage2, {"name": provider or None, "model": resolved_model, "endpoint": endpoint or ""}
-
     return (None, None, None)
 
 

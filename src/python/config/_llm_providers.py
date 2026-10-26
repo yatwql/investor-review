@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 import logging
 import os
 import re
@@ -75,6 +76,90 @@ def _load_llm_providers() -> dict | None:
         return None
 
 
+#: 扁平密钥文档改写后使用的默认凭据块名（同时用作 provider 条目名）
+DEFAULT_CREDENTIALS_REF = "default"
+
+
+def is_flat_key_document(doc: Any) -> bool:
+    """判断 llm_key.json 文档是否为扁平形态（凭据摊在顶层，``api_key`` 为顶层键）。"""
+    return isinstance(doc, dict) and isinstance(doc.get("api_key"), str)
+
+
+def flat_key_to_credentials(doc: dict) -> dict[str, dict]:
+    """扁平密钥文档 → 命名凭据块文档（纯函数，不写盘）。"""
+    block = {key: doc[key] for key in ("api_key", "model", "endpoint") if doc.get(key)}
+    if isinstance(block.get("api_key"), str):
+        block["api_key"] = block["api_key"].strip()
+    return {DEFAULT_CREDENTIALS_REF: block}
+
+
+def ensure_credential_blocks(doc: dict) -> bool:
+    """把扁平密钥文档规范为命名凭据块 + 引用它的 provider 条目（幂等）。
+
+    改写动作（失败仅告警、不改动原文件）：
+      1. ``llm_key.json`` 原样备份为 ``llm_key.json.bak``（已存在则不覆盖）；
+      2. 顶层字段改写为名为 ``default`` 的命名凭据块；
+      3. ``llm_providers.json`` 追加一条引用该凭据块的 provider 条目
+         （已存在同 ref 条目则只改凭据文件）。
+
+    Args:
+        doc: 已解析的 llm_key.json 文档（顶层含 api_key）
+
+    Returns:
+        True 表示已改写（调用方须重读配置）；False 表示未改写（保持原文件）
+    """
+    from src.python.config._core import _atomic_write
+
+    key_path = _get_llm_key_path()
+    credentials = flat_key_to_credentials(doc)
+    try:
+        backup = key_path + ".bak"
+        if not os.path.exists(backup):
+            with open(key_path, encoding="utf-8") as src:
+                _atomic_write(backup, src.read())
+        _atomic_write(key_path, json.dumps(credentials, ensure_ascii=False, indent=2))
+        try:
+            os.chmod(key_path, 0o600)
+        except OSError:
+            pass
+
+        providers_path = _get_llm_providers_path()
+        raw = _load_llm_providers() or {}
+        provider_list = raw.get("providers")
+        if not isinstance(provider_list, list):
+            provider_list = list(_DEFAULT_LLM_PROVIDERS["providers"])
+        has_ref = any(
+            isinstance(e, dict) and e.get("credentials_ref") == DEFAULT_CREDENTIALS_REF for e in provider_list
+        )
+        if not has_ref:
+            backend = doc.get("provider") or "claude"
+            if backend not in _VALID_LLM_PROVIDER_TYPES:
+                backend = "claude"
+            provider_list.append(
+                {
+                    "name": DEFAULT_CREDENTIALS_REF,
+                    "provider": backend,
+                    "credentials_ref": DEFAULT_CREDENTIALS_REF,
+                    "priority": 10,
+                    "timeout": 120,
+                }
+            )
+        raw["providers"] = provider_list
+        raw.setdefault("strategy", _DEFAULT_LLM_PROVIDERS["strategy"])
+        raw.setdefault("preferred_providers", _DEFAULT_LLM_PROVIDERS["preferred_providers"])
+        os.makedirs(os.path.dirname(providers_path), exist_ok=True)
+        _atomic_write(providers_path, json.dumps(raw, ensure_ascii=False, indent=2))
+    except OSError as exc:
+        logger.warning("扁平密钥文档规范化失败（保持原文件不动）: %s", exc)
+        return False
+
+    logger.info(
+        "扁平密钥文档已改写为命名凭据块 '%s'，并在 llm_providers.json 追加同名条目（原文件备份为 llm_key.json.bak）",
+        DEFAULT_CREDENTIALS_REF,
+    )
+    return True
+
+
 def _load_llm_key_credentials() -> dict[str, dict] | None:
     """读取 llm_key.json 为多键凭据字典。
 
@@ -98,9 +183,14 @@ def _load_llm_key_credentials() -> dict[str, dict] | None:
         if not isinstance(raw, dict):
             logger.warning("llm_key.json 根元素不是 JSON 对象，已忽略")
             return None
-        # 格式检测：顶层有 "api_key" 字符串键 → 单凭据格式
-        if isinstance(raw.get("api_key"), str):
-            return {"_default": raw}
+        # 扁平形态：应由 ensure_credential_blocks() 在读取阶段改写；走到这里说明改写未成功，拒绝加载
+        if is_flat_key_document(raw):
+            logger.error(
+                "llm_key.json 仍是扁平格式（顶层 api_key）——请改写为命名凭据块"
+                '（{%r: {"api_key": ...}}）并在 llm_providers.json 中用 credentials_ref 引用',
+                DEFAULT_CREDENTIALS_REF,
+            )
+            return None
         # 多凭据格式：校验每项是 dict
         for ref_name, creds in raw.items():
             if not isinstance(creds, dict):
@@ -109,6 +199,61 @@ def _load_llm_key_credentials() -> dict[str, dict] | None:
     except (OSError, json.JSONDecodeError) as e:
         logger.warning("llm_key.json 读取失败: %s", e)
         return None
+
+
+def write_llm_credentials(
+    api_key: str,
+    provider: str = "claude",
+    model: str = "",
+    endpoint: str = "",
+) -> None:
+    """写入「命名凭据块 + 引用它的 provider 条目」（交互式配置与首启向导共用）。
+
+    凭据分离：密钥只落 ``llm_key.json`` 的命名块（``legacy-default``），
+    ``llm_providers.json`` 只写引用（``credentials_ref``）与路由字段。
+
+    Args:
+        api_key: API 密钥（写入前去除首尾空格）
+        provider: provider 类型（claude/openai/gemini）
+        model: 模型名（可选）
+        endpoint: 自定义端点（可选）
+    """
+    from src.python.core.atomic_write import write_text_atomic
+
+    key_path = _get_llm_key_path()
+    os.makedirs(os.path.dirname(key_path), exist_ok=True)
+    block: dict = {"api_key": (api_key or "").strip()}
+    if model:
+        block["model"] = model
+    if endpoint:
+        block["endpoint"] = endpoint
+    write_text_atomic(key_path, json.dumps({DEFAULT_CREDENTIALS_REF: block}, ensure_ascii=False, indent=2))
+    try:
+        os.chmod(key_path, 0o600)
+    except OSError:
+        pass
+
+    providers_path = _get_llm_providers_path()
+    raw = _load_llm_providers() or {}
+    provider_list = raw.get("providers")
+    if not isinstance(provider_list, list):
+        provider_list = list(_DEFAULT_LLM_PROVIDERS["providers"])
+    if not any(isinstance(e, dict) and e.get("credentials_ref") == DEFAULT_CREDENTIALS_REF for e in provider_list):
+        backend = provider if provider in _VALID_LLM_PROVIDER_TYPES else "claude"
+        provider_list.append(
+            {
+                "name": DEFAULT_CREDENTIALS_REF,
+                "provider": backend,
+                "credentials_ref": DEFAULT_CREDENTIALS_REF,
+                "priority": 10,
+                "timeout": 120,
+            }
+        )
+    raw["providers"] = provider_list
+    raw.setdefault("strategy", _DEFAULT_LLM_PROVIDERS["strategy"])
+    raw.setdefault("preferred_providers", _DEFAULT_LLM_PROVIDERS["preferred_providers"])
+    os.makedirs(os.path.dirname(providers_path), exist_ok=True)
+    write_text_atomic(providers_path, json.dumps(raw, ensure_ascii=False, indent=2))
 
 
 def _validate_provider_entry(entry: dict) -> list[str]:

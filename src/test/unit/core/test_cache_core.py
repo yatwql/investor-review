@@ -496,9 +496,10 @@ class TestGetTTL(unittest.TestCase):
 
         self.assertEqual(get_ttl("benchmark"), CACHE_MONTHLY)
 
+    @patch("src.python.cache._ttl._is_market_open", return_value=False)
     @patch("src.python.config.get_config")
-    def test_config_value_used_when_present(self, mock_get_config):
-        """配置文件中的 cache_ttl 值被优先使用。"""
+    def test_config_value_used_when_present(self, mock_get_config, mock_market):
+        """配置文件中的 cache_ttl 值被优先使用（非交易时段；盘中由 market_hour_ttl 覆盖）。"""
         mock_get_config.return_value = {
             "cache_ttl": {"price": 12345},
         }

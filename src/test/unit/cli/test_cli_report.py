@@ -392,11 +392,10 @@ class TestLlmStatusLogging:
         monkeypatch.setattr("src.python.config.get_llm_config", lambda: None)
         assert "状态: 未配置" in self._records(caplog)
 
-    def test_flat_configured(self, caplog, monkeypatch):
+    def test_single_provider_fields_unconfigured(self, caplog, monkeypatch):
+        """顶层 api_key/provider（旧单 Provider 形态）不再算已配置。"""
         monkeypatch.setattr("src.python.config.get_llm_config", lambda: {"api_key": "k", "provider": "claude"})
-        text = self._records(caplog)
-        assert "状态: 已配置" in text
-        assert "provider=claude" in text
+        assert "状态: 未配置" in self._records(caplog)
 
     def test_multi_chain(self, caplog, monkeypatch):
         monkeypatch.setattr(

@@ -10,6 +10,8 @@ edge 场景：
 
 from __future__ import annotations
 
+from src.test.helpers import make_chain_config
+
 import unittest
 from unittest.mock import MagicMock, patch
 import pytest
@@ -29,7 +31,7 @@ class TestCallLlmEdge(unittest.TestCase):
             ("", {"input_tokens": 10, "output_tokens": 0}),
             ("安抚成功", {"input_tokens": 15, "output_tokens": 200}),
         ]
-        result, usage, _ = call_llm("system", "user", {"provider": "claude", "api_key": "sk-x"})
+        result, usage, _ = call_llm("system", "user", make_chain_config(api_key="sk-x"))
         self.assertEqual(result, "安抚成功")
         self.assertEqual(usage["input_tokens"], 15, "usage 应来自安抚重试，非原始调用")
         self.assertEqual(usage["output_tokens"], 200)
@@ -43,7 +45,7 @@ class TestCallLlmEdge(unittest.TestCase):
             ("", {"input_tokens": 10}),
             ("   ", {"input_tokens": 20}),  # 仅空白字符，strip() 后为空
         ]
-        result, usage, _ = call_llm("system", "user", {"provider": "claude", "api_key": "sk-x"})
+        result, usage, _ = call_llm("system", "user", make_chain_config(api_key="sk-x"))
         self.assertIsNone(result)
         self.assertIsNone(usage)
         self.assertEqual(mock_single.call_count, 2)

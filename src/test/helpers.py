@@ -51,3 +51,46 @@ class SynchronousExecutor:
 
     def shutdown(self, wait: bool = True) -> None:
         pass
+
+
+def make_chain_config(
+    *,
+    provider: str = "claude",
+    api_key: str = "sk-test",
+    name: str = "test-provider",
+    model: str = "",
+    endpoint: str = "",
+    priority: int = 10,
+    strategy: str = "priority",
+    **extra: object,
+) -> dict:
+    """构造一条 provider 链的最小 LLM 配置（单 provider 即本函数默认参数）。
+
+    运行期 LLM 配置只有一种形态：`_provider_list` + `_strategy`（+ 合并后的非敏感
+    设置）。测试需要「一个可用的 provider」时用本函数，不要手写 `provider`/`api_key`
+    顶层字段——那是已移除的单 Provider 配置形态。
+
+    Args:
+        provider: 后端类型（claude/openai/gemini）
+        api_key: 运行期内存条目的内联密钥（等价 credentials_ref 解析结果）
+        name: 条目名（记录/展示用）
+        model / endpoint: 路由字段（空串表示沿用该后端默认）
+        priority: 链内优先级（小者优先）
+        strategy: 链策略（priority / weighted / cost_first / fallback_only）
+        **extra: 额外的顶层（非敏感）设置，如 `llm_max_concurrency`
+
+    Returns:
+        可直接传给 `call_llm()` / `generate_*` 的配置字典
+    """
+    entry: dict[str, object] = {"name": name, "provider": provider, "api_key": api_key, "priority": priority}
+    if model:
+        entry["model"] = model
+    if endpoint:
+        entry["endpoint"] = endpoint
+    config: dict[str, object] = {
+        "_provider_list": [entry],
+        "_strategy": strategy,
+        "_preferred_providers": {},
+    }
+    config.update(extra)
+    return config

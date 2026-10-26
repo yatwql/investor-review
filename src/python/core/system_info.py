@@ -97,20 +97,11 @@ def resolve_provider_credentials(entry: dict, all_creds: dict) -> tuple[str, str
     return model, endpoint
 
 
-def model_route_labels(llm_config: dict) -> list[str]:
-    """flat 模式模型路由行：``模块显示名=生效模型``（面板隐藏模块已剔除）。"""
-    from src.python.core.registry import get_llm_module_names
-
-    model = llm_config.get("model") or "默认"
-    return [f"{name}={llm_config.get(f'model_{sfx}') or model}" for sfx, name in get_llm_module_names().items()]
-
-
 def build_system_info() -> dict:
     """组装系统状态信息（版本 / IP / 持仓与输出摘要 / LLM 配置状态）。
 
     - 持仓目录 / 持仓文件 / 输出目录 / 新闻抓取上限 / 状态（文件是否就绪）；
     - 持仓匿名化模式（中文映射）/ 隐私声明是否已显示；
-    - flat 单 provider：provider / model / endpoint（简化主机名）/ 熔断 / 模型路由；
     - credentials_ref 多链：策略 / 各 provider（名称/后端/模型/优先级/熔断）/ 模块偏好；
     - 未配置：configured=False（消费方按未配置展示）。
 
@@ -215,7 +206,7 @@ def llm_status() -> dict:
     provider_list = llm_config.get("_provider_list") or []
 
     # ── credentials_ref 多链模式 ──
-    if provider_list and not llm_config.get("api_key"):
+    if provider_list:
         from src.python.config import order_providers_by_chain
 
         all_creds = llm_config.get("_llm_credentials", {}) or {}
@@ -255,19 +246,5 @@ def llm_status() -> dict:
             "chain_head": chain_head,
         }
 
-    # ── 传统 flat 模式：单 provider ──
-    if not llm_config.get("api_key") or not llm_config.get("provider"):
-        return {"configured": False}
-
-    model = llm_config.get("model") or "默认"
-    endpoint = llm_config.get("endpoint") or "默认"
-    return {
-        "configured": True,
-        "mode": "flat",
-        "provider": llm_config["provider"],
-        "model": model,
-        "endpoint": endpoint,
-        "endpoint_display": simplify_endpoint(endpoint),
-        "circuit": circuit_display(endpoint, default_as_none=True),
-        "route": model_route_labels(llm_config),
-    }
+    # 无 provider 链即视为未配置
+    return {"configured": False}

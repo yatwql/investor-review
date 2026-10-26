@@ -392,22 +392,21 @@ def _load_llm_config() -> dict | None:
             ):
                 return _llm_config_cache
 
-            with open(_llm_providers._get_llm_key_path(), encoding="utf-8-sig") as f:
+            key_path = _llm_providers._get_llm_key_path()
+            with open(key_path, encoding="utf-8-sig") as f:
                 key_raw = f.read()
                 key_config = json.loads(strip_json_comments(key_raw))
 
-            provider = key_config.get("provider", "")
-            endpoint = key_config.get("endpoint", "")
-            if provider and provider not in ("claude", "openai", "gemini"):
-                logger.warning("llm_key.json provider = '%s' 不是有效值（claude/openai/gemini）", provider)
-            if endpoint and not endpoint.startswith("http"):
-                logger.warning("llm_key.json endpoint = '%s' 不是有效 URL", endpoint)
+            # 扁平密钥文档（顶层四字段）→ 规范为命名凭据块 + provider 条目；
+            # 改写成功后重读文件，运行期只走 provider 链路径
+            if _llm_providers.is_flat_key_document(key_config) and _llm_providers.ensure_credential_blocks(key_config):
+                with open(key_path, encoding="utf-8-sig") as f:
+                    key_config = json.loads(strip_json_comments(f.read()))
 
+            # 密钥文件只承载凭据块（credentials_ref 索引），不参与顶层配置合并：
+            # 顶层 provider/api_key/endpoint 不参与运行期配置。
             merged = dict(base_settings)
-            merged.update(key_config)
             merged["debate"] = _load_debate_config(merged)
-            if merged.get("api_key"):
-                merged["api_key"] = merged["api_key"].strip()
 
             _llm_providers._inject_provider_chain_data(merged)
             _llm_config_cache = merged

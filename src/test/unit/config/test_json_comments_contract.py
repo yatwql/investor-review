@@ -11,10 +11,12 @@ from src.python.core.json_comments import loads
 
 pytestmark = pytest.mark.unit_config
 
-_LLM_KEY_SAMPLE = """// LLM 凭据（单凭据格式）
+_LLM_KEY_SAMPLE = """// LLM 凭据（命名凭据块格式）
 {
-  "api_key": "sk-test",   // 本机密钥
-  "model": "claude-sonnet-4"
+  "probe": {
+    "api_key": "sk-test",   // 本机密钥
+    "model": "claude-sonnet-4"
+  }
 }
 """
 
@@ -96,7 +98,7 @@ class TestConfigJsonComments:
 
         creds = _llm_providers._load_llm_key_credentials()
 
-        assert creds == {"_default": {"api_key": "sk-test", "model": "claude-sonnet-4"}}
+        assert creds == {"probe": {"api_key": "sk-test", "model": "claude-sonnet-4"}}
 
 
 @pytest.mark.unit

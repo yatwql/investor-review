@@ -12,6 +12,8 @@
 
 from __future__ import annotations
 
+from src.test.helpers import make_chain_config
+
 import threading
 import unittest
 from unittest.mock import MagicMock, patch
@@ -40,7 +42,7 @@ class TestCallLlmProvider(unittest.TestCase):
     """测试 call_llm 的 provider 路由。"""
 
     def test_unsupported_provider(self) -> None:
-        config = {"provider": "unknown", "api_key": "test"}
+        config = make_chain_config(provider="unknown", api_key="test")
         content, usage, _ = call_llm("system", "user", config)
         self.assertIsNone(content)
         self.assertIsNone(usage)
@@ -48,7 +50,7 @@ class TestCallLlmProvider(unittest.TestCase):
     @patch("src.python.llm.api.call_claude")
     def test_claude_routing(self, mock_call: MagicMock) -> None:
         mock_call.return_value = ("claude result", {"input_tokens": 10, "output_tokens": 50})
-        config = {"provider": "claude", "api_key": "sk-xxx"}
+        config = make_chain_config(provider="claude", api_key="sk-xxx")
         content, usage, _ = call_llm("system", "user", config)
         self.assertEqual(content, "claude result")
         self.assertEqual(usage, {"input_tokens": 10, "output_tokens": 50})
@@ -57,7 +59,7 @@ class TestCallLlmProvider(unittest.TestCase):
     @patch("src.python.llm.api.call_openai")
     def test_openai_routing(self, mock_call: MagicMock) -> None:
         mock_call.return_value = ("openai result", {"prompt_tokens": 20, "completion_tokens": 80})
-        config = {"provider": "openai", "api_key": "sk-xxx"}
+        config = make_chain_config(provider="openai", api_key="sk-xxx")
         content, usage, _ = call_llm("system", "user", config)
         self.assertEqual(content, "openai result")
         self.assertEqual(usage, {"prompt_tokens": 20, "completion_tokens": 80})
@@ -556,10 +558,7 @@ class TestProviderFallback(unittest.TestCase):
     def test_main_provider_success_no_fallback(self, mock_call):
         """主 provider 成功 → 不调用 fallback。"""
         mock_call.return_value = ("main result", {"input_tokens": 100})
-        config = {
-            "provider": "claude",
-            "api_key": "sk-main",
-        }
+        config = make_chain_config(api_key="sk-main")
         content, usage, _ = call_llm("sys", "user", config)
         self.assertEqual(content, "main result")
         self.assertEqual(mock_call.call_count, 1)
@@ -568,15 +567,14 @@ class TestProviderFallback(unittest.TestCase):
     def test_fallback_fields_ignored_on_failure(self, mock_call):
         """旧 fallback 字段已移除：主 provider 失败 → 返回 None，不额外调用。"""
         mock_call.side_effect = [(None, None)]  # 主 provider 失败
-        config = {
-            "provider": "claude",
-            "api_key": "sk-main",
+        config = make_chain_config(
+            api_key="sk-main",
             # 残留旧 fallback 字段——不再生效
-            "fallback_provider": "openai",
-            "fallback_api_key": "sk-fb",
-            "fallback_endpoint": "https://api.openai.com/v1",
-            "fallback_model": "gpt-4o",
-        }
+            fallback_provider="openai",
+            fallback_api_key="sk-fb",
+            fallback_endpoint="https://api.openai.com/v1",
+            fallback_model="gpt-4o",
+        )
         content, usage, _ = call_llm("sys", "user", config)
         self.assertIsNone(content)
         self.assertIsNone(usage)
@@ -586,12 +584,7 @@ class TestProviderFallback(unittest.TestCase):
     def test_fallback_fields_ignored_both_fail(self, mock_call):
         """残留 fallback 字段 + 主 provider 失败 → (None, None)，只调主 provider。"""
         mock_call.return_value = (None, None)
-        config = {
-            "provider": "claude",
-            "api_key": "sk-main",
-            "fallback_provider": "openai",
-            "fallback_api_key": "sk-fb",
-        }
+        config = make_chain_config(api_key="sk-main", fallback_provider="openai", fallback_api_key="sk-fb")
         content, usage, _ = call_llm("sys", "user", config)
         self.assertIsNone(content)
         self.assertIsNone(usage)
@@ -601,7 +594,7 @@ class TestProviderFallback(unittest.TestCase):
     def test_no_fallback_configured(self, mock_call):
         """未配置 fallback → 不尝试 fallback。"""
         mock_call.return_value = (None, None)
-        config = {"provider": "claude", "api_key": "sk-main"}
+        config = make_chain_config(api_key="sk-main")
         content, usage, _ = call_llm("sys", "user", config)
         self.assertIsNone(content)
         self.assertEqual(mock_call.call_count, 1)
@@ -622,7 +615,7 @@ class TestContentFilterRecovery(unittest.TestCase):
             ("", {"input_tokens": 100}),  # 第一次：空内容
             ("retry result", {"input_tokens": 200}),  # 第二次：安抚后成功
         ]
-        config = {"provider": "claude", "api_key": "sk-test"}
+        config = make_chain_config(api_key="sk-test")
         content, usage, _ = call_llm("system prompt", "user content", config)
         # 应返回安抚重试后的结果
         self.assertEqual(content, "retry result")
@@ -630,7 +623,10 @@ class TestContentFilterRecovery(unittest.TestCase):
 
         # 验证第二次调用 system_prompt 包含安抚指令
 
-        second_call_system = mock_call.call_args_list[1][0][1]  # system_prompt arg
+        second = mock_call.call_args_list[1]
+        second_call_system = second.kwargs.get("system_prompt") or next(
+            (a for a in second.args if isinstance(a, str) and "system" in a.lower()), ""
+        )
         self.assertIn("注意：请确保你的回答包含实质性的分析内容", second_call_system)
 
     @patch("src.python.llm.api.call_single_provider")
@@ -640,12 +636,7 @@ class TestContentFilterRecovery(unittest.TestCase):
             ("", {"input_tokens": 10}),  # 主 provider 空
             ("", {"input_tokens": 20}),  # 安抚重试仍空
         ]
-        config = {
-            "provider": "claude",
-            "api_key": "sk-main",
-            "fallback_provider": "openai",
-            "fallback_api_key": "sk-fb",
-        }
+        config = make_chain_config(api_key="sk-main", fallback_provider="openai", fallback_api_key="sk-fb")
         content, usage, _ = call_llm("sys", "user", config)
         self.assertIsNone(content)
         # 只调 2 次（原始 + 安抚重试），无 fallback 调用
@@ -655,7 +646,7 @@ class TestContentFilterRecovery(unittest.TestCase):
     def test_empty_content_no_fallback_returns_none(self, mock_call):
         """安抚重试仍空且无 fallback → (None, None)。"""
         mock_call.return_value = ("", {"input_tokens": 10})
-        config = {"provider": "claude", "api_key": "sk-test"}
+        config = make_chain_config(api_key="sk-test")
         content, usage, _ = call_llm("sys", "user", config)
         self.assertIsNone(content)
         # 被调用 2 次（原始 + 安抚重试）
@@ -665,7 +656,7 @@ class TestContentFilterRecovery(unittest.TestCase):
     def test_normal_content_no_retry(self, mock_call):
         """正常返回内容 → 不触发安抚重试。"""
         mock_call.return_value = ("正常内容", {"input_tokens": 100})
-        config = {"provider": "claude", "api_key": "sk-test"}
+        config = make_chain_config(api_key="sk-test")
         content, usage, _ = call_llm("sys", "user", config)
         self.assertEqual(content, "正常内容")
         self.assertEqual(mock_call.call_count, 1)
@@ -674,12 +665,7 @@ class TestContentFilterRecovery(unittest.TestCase):
     def test_none_from_provider_returns_none(self, mock_call):
         """provider 返回 None（格式异常）→ 返回 None，无安抚重试。"""
         mock_call.side_effect = [(None, None)]  # 主 provider 格式异常
-        config = {
-            "provider": "claude",
-            "api_key": "sk-main",
-            "fallback_provider": "openai",
-            "fallback_api_key": "sk-fb",
-        }
+        config = make_chain_config(api_key="sk-main", fallback_provider="openai", fallback_api_key="sk-fb")
         content, usage, _ = call_llm("sys", "user", config)
         self.assertIsNone(content)
         # 只调 1 次（主 provider），没有安抚重试也没有 fallback

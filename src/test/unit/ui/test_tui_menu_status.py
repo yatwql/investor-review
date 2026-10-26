@@ -33,12 +33,11 @@ class TestLlmStatusRendering:
         with patch("src.python.config.get_llm_config", return_value=None):
             assert "未配置" in self._render()
 
-    def test_flat_configured_line(self):
+    def test_single_provider_fields_show_unconfigured(self):
+        """顶层 api_key/provider 不产出已配置渲染（运行期只认 provider 链）。"""
         with patch("src.python.config.get_llm_config", return_value={"api_key": "k", "provider": "claude"}):
             out = self._render()
-        assert "已配置" in out
-        assert "provider=claude" in out
-        assert "模型路由" in out
+        assert "未配置" in out
 
     def test_multi_chain_render(self):
         cfg = {"_provider_list": [{"name": "alpha", "provider": "claude", "priority": 10}]}
