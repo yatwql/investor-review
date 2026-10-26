@@ -49,6 +49,12 @@ def write_block_title(ws, row: int, title: str, ncols: int | None = None) -> int
 
 # 空子块占位（框架先行，后续轮次填充时被真实数据替换）
 _PLACEHOLDER_EMPTY = "暂无触发"
+
+#: 调仓建议清单空态（真无触发）
+_PLACEHOLDER_ADVICE_NO_SIGNAL = "无再平衡/纪律触发信号，暂无调仓建议"
+#: 调仓建议清单空态（有触发但无对应单品订单：组合级回撤/超警戒线不带 code，
+#: 可行化层不产生个股订单）——与上方交易纪律表的「触发」行不矛盾
+_PLACEHOLDER_ADVICE_NO_ORDER = "已触发信号但无可执行单品订单（组合级回撤不落到个股），暂无调仓建议"
 _PLACEHOLDER_UNAVAILABLE = "无持仓数据，行动建议无法生成"
 
 
@@ -168,11 +174,17 @@ def write_action_sheet(
     )
 
     # 子块 3：调仓建议（可行化清单：份额取整一手/费用估算/现金缓冲）
+    # 空态区分两种成因：真无触发 vs 有触发但无对应单品订单（组合级回撤/超警戒线
+    # 这类信号不带 code，可行化层不产生个股订单）——后者若仍写「无触发信号」，
+    # 会与上方交易纪律表里「触发」的行自相矛盾。
+    _advice = action_data.get("rebalance_advice") or []
+    _has_signal = bool(action_data.get("rebalance_signals") or action_data.get("discipline_signals"))
+    _advice_placeholder = _PLACEHOLDER_ADVICE_NO_SIGNAL if not _has_signal else _PLACEHOLDER_ADVICE_NO_ORDER
     row = _write_sub_block(
         ws,
         row,
         "调仓建议清单",
-        action_data.get("rebalance_advice") or [],
+        _advice,
         ["代码", "名称", "操作", "份额", "金额", "预估费用", "调仓后现金"],
         7,
         lambda s: [
@@ -184,7 +196,7 @@ def write_action_sheet(
             s.get("fee", ""),
             s.get("cash_after", ""),
         ],
-        placeholder="无再平衡/纪律触发信号，暂无调仓建议",
+        placeholder=_advice_placeholder,
     )
 
     # 子块 4：收益归因（大类 → 品种两级贡献占比，同口径分层 + 净额合计 + 口径脚注）

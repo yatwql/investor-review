@@ -505,38 +505,38 @@ class TestCalcRatingFromEntry(unittest.TestCase):
     """_calc_rating_from_entry — 5 级评级 + 类型差异化阈值。"""
 
     def test_excellent_top_10pct(self):
-        self.assertEqual(_calc_rating_from_entry({"percentile": "5.0"}), "优秀")
+        self.assertEqual(_calc_rating_from_entry({"percentile": "95.0"}), "优秀")
 
     def test_good_10_to_30pct(self):
-        self.assertEqual(_calc_rating_from_entry({"percentile": "20.0"}), "良好")
+        self.assertEqual(_calc_rating_from_entry({"percentile": "80.0"}), "良好")
 
     def test_stable_30_to_50pct(self):
-        self.assertEqual(_calc_rating_from_entry({"percentile": "40.0"}), "稳定")
+        self.assertEqual(_calc_rating_from_entry({"percentile": "60.0"}), "稳定")
 
     def test_poor_50_to_75pct(self):
-        self.assertEqual(_calc_rating_from_entry({"percentile": "60.0"}), "偏差")
+        self.assertEqual(_calc_rating_from_entry({"percentile": "40.0"}), "偏差")
 
     def test_worst_bottom_25pct(self):
         """5 级：较差（后 25%）。"""
-        self.assertEqual(_calc_rating_from_entry({"percentile": "80.0"}), "较差")
+        self.assertEqual(_calc_rating_from_entry({"percentile": "20.0"}), "较差")
 
     def test_boundary_10(self):
         """10% 为优秀/良好分界线（优秀）。"""
-        self.assertEqual(_calc_rating_from_entry({"percentile": "10.0"}), "优秀")
+        self.assertEqual(_calc_rating_from_entry({"percentile": "90.0"}), "优秀")
 
     def test_boundary_10_exact_11(self):
         """10% 以上为良好。"""
-        self.assertEqual(_calc_rating_from_entry({"percentile": "10.01"}), "良好")
+        self.assertEqual(_calc_rating_from_entry({"percentile": "89.99"}), "良好")
 
     def test_boundary_30(self):
-        self.assertEqual(_calc_rating_from_entry({"percentile": "30.0"}), "良好")
+        self.assertEqual(_calc_rating_from_entry({"percentile": "70.0"}), "良好")
 
     def test_boundary_50(self):
         self.assertEqual(_calc_rating_from_entry({"percentile": "50.0"}), "稳定")
 
     def test_boundary_75(self):
         """75% 为稳定/偏差分界线。"""
-        self.assertEqual(_calc_rating_from_entry({"percentile": "75.0"}), "偏差")
+        self.assertEqual(_calc_rating_from_entry({"percentile": "25.0"}), "偏差")
 
     def test_fallback_rank_ratio(self):
         self.assertEqual(_calc_rating_from_entry({"rank": "10", "total": "100"}), "优秀")
@@ -559,7 +559,7 @@ class TestCalcRatingFromEntry(unittest.TestCase):
         self.assertEqual(
             _calc_rating_from_entry(
                 {
-                    "percentile": "3.33",
+                    "percentile": "96.67",
                     "rank": "4823",
                     "total": "4985",
                 }
@@ -572,7 +572,7 @@ class TestCalcRatingFromEntry(unittest.TestCase):
         self.assertEqual(
             _calc_rating_from_entry(
                 {
-                    "percentile": "60.0",
+                    "percentile": "40.0",
                     "rank": "10",
                     "total": "100",
                 }
@@ -585,7 +585,7 @@ class TestCalcRatingFromEntry(unittest.TestCase):
         self.assertEqual(
             _calc_rating_from_entry(
                 {
-                    "percentile": "5.0",
+                    "percentile": "95.0",
                     "rank": "10",
                     "total": "100",
                 }
@@ -598,7 +598,7 @@ class TestCalcRatingFromEntry(unittest.TestCase):
         self.assertEqual(
             _calc_rating_from_entry(
                 {
-                    "percentile": "60.0",
+                    "percentile": "20.0",
                     "rank": "80",
                     "total": "100",
                 }
@@ -607,11 +607,30 @@ class TestCalcRatingFromEntry(unittest.TestCase):
         )
 
     def test_rank_takes_precedence_over_percentile(self):
-        """rank/total 与 percentile 矛盾时以排名为准（percentile 90 本应落偏差档）。"""
+        """rank/total 与 percentile 矛盾时以排名为准（percentile 20 本应落较差档）。"""
         self.assertEqual(
-            _calc_rating_from_entry({"percentile": "90.0", "rank": "5", "total": "100"}),
+            _calc_rating_from_entry({"percentile": "20.0", "rank": "5", "total": "100"}),
             "优秀",
         )
+
+    def test_percentile_direction_matches_rank_complement(self):
+        """百分位口径回归：上游值越高越好（恒等于 100 − rank/total×100），两侧评级须一致。
+
+        取自实测样本（240012 / 096001 / 011506），此前方向取反会让同一只基金在
+        「百分位路径」与「排名路径」得出相反评级。"""
+        cases = [
+            ("1.51", "1765", "1792", "较差"),
+            ("85.91", "51", "362", "良好"),
+            ("12.09", "967", "1100", "较差"),
+        ]
+        for pct, rank, total, expected in cases:
+            with self.subTest(pct=pct, rank=rank):
+                self.assertEqual(_calc_rating_from_entry({"percentile": pct, "rank": rank, "total": total}), expected)
+                self.assertEqual(_calc_rating_from_entry({"percentile": pct}), expected)
+
+    def test_percentile_only_top_ranked_is_excellent(self):
+        """仅百分位可用时方向不得取反：98.5（同类前 1.5%）→ 优秀。"""
+        self.assertEqual(_calc_rating_from_entry({"percentile": "98.5"}), "优秀")
 
     def test_rank_only_fallback(self):
         self.assertEqual(

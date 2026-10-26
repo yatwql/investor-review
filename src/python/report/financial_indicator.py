@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Sequence
 
 from src.python.analysis.financial_indicator import (
     current_valuation,
@@ -87,7 +87,7 @@ def build_financial_indicator(
     holdings: list,
     config: dict | None = None,
     reporter: Any = None,
-    penetrated_targets: list[dict[str, Any] | str] | None = None,
+    penetrated_targets: Sequence[dict[str, Any] | str] | None = None,
     prices: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """构建「财务指标」数据契约。

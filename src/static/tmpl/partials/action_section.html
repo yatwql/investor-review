@@ -108,7 +108,11 @@
         </table>
         </div>
         {% else %}
-        <div class="empty-note"><p>暂无触发</p></div>
+        {% if _action.get("rebalance_signals") or _action.get("discipline_signals") %}
+        <div class="empty-note"><p>已触发信号但无可执行单品订单（组合级回撤不落到个股），暂无调仓建议</p></div>
+        {% else %}
+        <div class="empty-note"><p>无再平衡/纪律触发信号，暂无调仓建议</p></div>
+        {% endif %}
         {% endif %}
 
         <!-- ④ 收益归因（大类 → 品种两级贡献占比，同口径分层 + 净额合计 + 口径脚注） -->

@@ -59,7 +59,6 @@ def prepare_report_data(
     """
     from concurrent.futures import ThreadPoolExecutor
 
-    from src.python.core.holding_status import classify_channel
     from src.python.core.data_freshness import build_freshness_summary
     from src.python.core.holding_status import build_coverage_summary
     from src.python.analysis.action_advisor import build_action_data
@@ -179,40 +178,14 @@ def prepare_report_data(
     _t0 = time.perf_counter()
     # 行动建议单一数据源：再平衡信号等纯算法产出，action_data数据契约
     # （单源计算，行动建议板块与智囊团深度复盘行动摘要共享同一对象）
-    holdings_details = [
-        {
-            "name": d.name,
-            "code": d.code,
-            "market_value": d.market_value,
-            "cost": d.cost,
-            "profit": d.profit,
-            # profit_rate 契约为百分比（小数 ×100，如 1.8712 → 187.12），
-            # 供 prompt 格式化（f"{rate:+.2f}%"）与 fact_checker 校验使用；
-            # market_value 的 DetailRow.profit_rate 是小数字段，此处统一为百分。
-            "profit_rate": (d.profit_rate * 100) if d.profit_rate is not None else None,
-            "change_pct": (
-                (d.price - d.yesterday_close) / d.yesterday_close * 100
-                if d.yesterday_close and abs(d.yesterday_close) > 1e-10
-                else 0.0
-            ),
-            "nav_date": d.nav_date,
-            "source_api": d.source_api,
-            # shares/price 供调仓建议可行化层计算可执行卖出份额与金额
-            "shares": d.shares,
-            "price": d.price,
-            # 渠道上下文（场内/场外）：判定单源在 holding_status.classify_channel，
-            # 供调仓建议可行化层按渠道计算份额取整与费用（场外整数份+赎回费）
-            "channel": classify_channel(getattr(d, "account", "")),
-            # 账户名原值：收益归因大类分解的场外渠道判定需渠道关键词，故原值随行
-            "account": getattr(d, "account", ""),
-        }
-        for d in details
-    ]
-    # 新买入品种观察期判据（R-RBL-07 第 (2) 条）：按交易流水首次买入日以交易日计。
-    # 须在下方 build_action_data 之前附加，信号计算即已消费该字段。
-    from src.python.report._report_helpers import attach_holding_trading_days
+    # 明细行装配单源在 `_holding_detail_rows.build_holding_detail_rows`：与 basic/both
+    # 的行动建议路径共用同一字段口径（profit_rate 百分号与 channel 渠道判定只此一份），
+    # 编排路径独有的是行情三字段（with_market_fields=True）。
+    # 新买入品种观察期判据（R-RBL-07 第 (2) 条）：holding_days 由装配函数尾部统一附加，
+    # 故 build_action_data 调用时该字段已在行上，信号计算即可消费。
+    from src.python.report._holding_detail_rows import build_holding_detail_rows
 
-    attach_holding_trading_days(holdings_details, transactions)
+    holdings_details = build_holding_detail_rows(details, with_market_fields=True, transactions=transactions)
 
     # 持仓匿名化（config anonymization.mode）：明细装配边界统一脱敏——行情
     # 取数与派生计算（申购限购、价格更新状态）先用真值完成后，在此一次性

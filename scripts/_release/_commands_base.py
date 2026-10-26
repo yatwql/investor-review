@@ -82,23 +82,17 @@ def _summarize_failure(
 
     报告目录与失败用例名从输出里提取（test-runner 的归档行 / pytest 短摘要）；
     某些 runner 只把 FAILED 明细写进归档 debug.log、stdout 只剩摘要，故失败用例
-    为空时再读该报告目录的 `*_debug.log` 兜底。台账因此自证「折在哪一步、哪些
-    用例红、报告在哪」，不必再去 `test-reports/archives/` 按 mtime 反查。
+    为空时再读 debug.log 兜底。台账因此自证「折在哪一步、哪些用例红、报告在哪」，
+    不必再去 `test-reports/archives/` 按 mtime 反查。
     """
     combined = "\n".join(part for part in (out, err) if part)
     report_match = _REPORT_DIR_RE.search(combined)
     report_dir = report_match.group(1) if report_match else ""
     extract_text = combined
     diagnostic_tail = ""
-    if not _FAILED_TEST_RE.search(combined) and root is not None and report_dir:
-        candidates = [Path(root) / report_dir, Path(root) / "test-reports" / report_dir]
-        for candidate in candidates:
-            if not candidate.is_dir():
-                continue
-            debug_logs = sorted(candidate.glob("*_debug.log"))
-            if not debug_logs:
-                continue
-            debug_text = debug_logs[-1].read_text(encoding="utf-8", errors="replace")
+    if not _FAILED_TEST_RE.search(combined) and root is not None:
+        debug_text = _failure_debug_text(root, report_dir)
+        if debug_text:
             extract_text += "\n" + debug_text
             debug_lines = [line for line in debug_text.splitlines() if line.strip()]
             first_failure = next(
@@ -106,7 +100,6 @@ def _summarize_failure(
                 0,
             )
             diagnostic_tail = "\n".join(debug_lines[first_failure : first_failure + _FAILURE_TAIL_LINES])
-            break
     failed_tests = list(dict.fromkeys(_FAILED_TEST_RE.findall(extract_text)))[:20]
     tail_source = diagnostic_tail or combined
     tail_lines = [line for line in tail_source.splitlines() if line.strip()][-_FAILURE_TAIL_LINES:]
@@ -118,6 +111,30 @@ def _summarize_failure(
         "failed_tests": failed_tests,
         "tail": tail,
     }
+
+
+def _failure_debug_text(root: Path, report_dir: str) -> str:
+    """取失败档的 pytest 完整输出（`*_debug.log`），无可用文件返回空串。
+
+    归档时机与本次命令不同步：stdout 打印的归档行指向**上一次**的报告目录，而本次
+    失败档的 debug.log 此刻还在 `test-reports/latest/<模式>/`。故先看归档目录，再
+    按目录 mtime 倒序看 latest 下的各模式目录——只走前一处会漏掉刚发生的失败。
+    """
+    search_dirs: list[Path] = []
+    if report_dir:
+        search_dirs.extend([root / report_dir, root / "test-reports" / report_dir])
+    latest = root / "test-reports" / "latest"
+    if latest.is_dir():
+        search_dirs.extend(
+            sorted((p for p in latest.iterdir() if p.is_dir()), key=lambda p: p.stat().st_mtime, reverse=True)
+        )
+    for candidate in search_dirs:
+        if not candidate.is_dir():
+            continue
+        debug_logs = sorted(candidate.glob("*_debug.log"), key=lambda p: p.stat().st_mtime, reverse=True)
+        if debug_logs:
+            return debug_logs[0].read_text(encoding="utf-8", errors="replace")
+    return ""
 
 
 def _record_failure(label: str, rc: int, out: str = "", err: str = "", root: Path | None = None) -> None:
@@ -337,8 +354,11 @@ def _changed_code_files(env, stamp: dict | None, runner=None) -> list[str]:
     """gate 之后发生改动的代码文件（戳里没存文件清单时返回空）。"""
     if not stamp:
         return []
-    current = _gate.code_file_hashes(_exec, env.REPO_ROOT, runner)
-    return _gate.diff_code_files(stamp.get("code_files") or {}, current)
+    stored = stamp.get("code_files")
+    if not isinstance(stored, dict):
+        return []
+    current = _gate.code_file_hashes(_exec, env.REPO_ROOT, runner) or {}
+    return _gate.diff_code_files(stored, current)
 
 
 def _code_fingerprint(env, runner=None) -> str:

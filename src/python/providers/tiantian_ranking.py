@@ -125,6 +125,8 @@ def _parse_rank_entry(text: str) -> dict[str, Any]:
 
     Returns:
         ``{"rank", "total", "percentile", "data_date"}``；缺失项为 ``"--"``。
+        ``percentile`` 保留上游原值（越高越好，恒等于 ``100 − rank/total×100``），
+        方向换算在评级计算侧统一处理（取补后套「越低越好」的阈值）。
     """
     rank_entry: dict[str, Any] = {
         "rank": "--",
@@ -286,10 +288,15 @@ def _calc_rating_from_entry(rank_entry: dict[str, Any], fund_type_hint: str = ""
         return _pct_to_rating(pct, _get_rating_thresholds(fund_type_hint))
 
     # 路径1：百分位
+    # 口径方向：上游 ``Data_rateInSimilarPersent`` 是「同类百分位，**越高越好**」——
+    # 实测 9 只基金恒等于 ``100 − rank/total×100``（如 240012 的 1765/1792 → 1.51、
+    # 096001 的 51/362 → 85.91），而评级阈值按排名分位（越低越好）定义，故先取补。
     pct_rating = ""
     if rank_entry.get("percentile", "--") != "--":
         try:
-            pct_val = float(rank_entry["percentile"]) / 100.0
+            # 用 (100 − 值) / 100 而非 1 − 值/100：后者在 70 这类档位上会得到
+            # 0.30000000000000004，恰好越过 0.30 阈值把「良好」误判成「稳定」。
+            pct_val = (100.0 - float(rank_entry["percentile"])) / 100.0
             pct_rating = _pct_to_rating_with_type(pct_val)
         except (ValueError, TypeError):
             pass

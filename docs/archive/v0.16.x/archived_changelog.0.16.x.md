@@ -1,8 +1,8 @@
 # 变更日志归档 — v0.16.x
 
-> 归档时间：2026-10-26（v0.16.2 发布并入；已并入 3 段：v0.16.0（10-25）、v0.16.1（10-25）、v0.16.2（10-26））
+> 归档时间：2026-10-26（v0.16.3 发布并入；已并入 4 段：v0.16.0（10-25）、v0.16.1（10-25）、v0.16.2（10-26）、v0.16.3（10-26））
 > 原始文件：`docs/managements/changelog.md`
-> 涵盖版本：v0.16.0 ~ v0.16.2（2026-10-25 ~ 2026-10-26）
+> 涵盖版本：v0.16.0 ~ v0.16.3（2026-10-25 ~ 2026-10-26）
 > 归档内容：由 `release.py prepare` 自动迁入各发布段
 
 ---
@@ -60,3 +60,22 @@
 ### 审查
 
 - 完成「架构设计约束 / 设计契约 / 内部兼容适配」全面审查：约束表逐条机检未见违背（缓存统一与原子写入、HTTP 客户端统一、章节顺序不硬编码、日志统一、渲染期数据经 context、路径绝对化、LLM 缓存指纹单源、交易日计、重试与节流原语、TUI 分档只改版式——抽查表内各域代表条目；DESIGN.md / DESIGN-TUI.md 机检通过）；内部兼容层沉淀为 rf-901（旧单 Provider 配置簇）、rf-902（旧凭据文件格式）；rf-907（持仓渠道双输入）、rf-908（快照双形态字段）已同批结案
+
+## [0.16.3] - 2026-10-26
+
+### 变更
+
+- **文件膨胀登记清单落表**（rf-914）：`check-file-length -v` 实测 5 个文件越过登记线（测试 >900：`test_release_tool_gate.py` 1147、`conftest.py` 999；主程序 >700：`generators_orchestrator.py` 827、`cli/_handlers.py` 789、`llm/skeleton.py` 739），而 P4 原写「当前无登记项」——按文件逐条登记为 P4 存量监控清单（不占用 rf 编号，拆分后逐行删除）
+- **在办设计补任务反引**（rf-915）：`jev-news-judgment-design.md` / `jev-news-judgment-evaluation.md` 头部补「关联任务：`plan-55`」，与 `plan.md` 的正向引用构成双向追溯；`release.py prepare` 的「未引用任何任务编号」提示随之归零
+
+- **持仓明细行装配单源**（rf-909）：新增 `report/_holding_detail_rows.py::build_holding_detail_rows()`——编排路径（`_orchestrator_data.prepare_report_data`，全量含行情三字段）与行动建议路径（`_report_helpers._action_holdings_details`，basic/both 共享的 10 字段子集）过去各写一份字面量，`profit_rate` 百分号换算与 `channel` 渠道判定重复实现，字段增删漏改一处即出现「同一持仓在两处字段不同」；现共有 10 字段集中构造、`with_market_fields=True` 追加 `change_pct`/`nav_date`/`source_api`、尾部统一附加 `holding_days`，`_action_holdings_details` 降为其薄封装。回归 9 例（两路径共有字段逐项一致、键序固定、字段子集不变、百分号与 None、零昨收 `0.0`、渠道单源、`holding_days` 两侧一致）
+
+### 修复
+- **基金同类百分位口径不再取反**（rf-918）：上游 `Data_rateInSimilarPersent` 越高越好（恒等于 `100 − rank/total×100`），评级侧按 `(100 − 值)/100` 取补后套阈值——仅百分位可用时不再好坏颠倒，也不再每次运行刷「百分位与排名评级不一致」告警（此前日志累计 16 条）。回归 3 例（实测样本两侧评级一致 / 仅百分位 98.5 → 优秀 / 档位边界）
+- **调仓建议清单空态不再与交易纪律表矛盾**（rf-917）：组合级纪律（回撤线/超警戒线）触发时信号不带 `code`、可行化层不产生个股订单，空态文案需区分「真无触发」与「有触发但无订单」——Excel 与 HTML 各自按同一文案分支渲染，回归 2 例
+- **峰谷计费等价用例与运行时刻解耦**（rf-916）：`test_llm_pricing.py` 的价格覆盖用例两侧峰谷策略不一致（基线内置双高峰窗 vs 覆盖文件单窗口），且计费时刻取当前时间，特定钟点（如 14:06 CST）会落在两侧不同的峰谷分支上算出 2 倍价差；计费调用统一传 `at_time` 钉死时刻、`_base_ref()` 的 `peak_periods` 对齐内置默认，并补「周末恒闲时 = 基础价之和」非空校验
+
+- **定时生成账本落盘走唯一原子写原语**（rf-913）：`web/scheduler.py::_save_fired` 原自建 `tmp + os.replace` 且临时名固定为 `scheduler_fired.json.tmp`（并发写互相截断、与同目录 `upload.py`/`holdings_update.py` 的做法分叉），改 `core.atomic_write.write_json_atomic`（保留剪除超保留期条目、「失败只记 ERROR 不外抛」）；顺带修 `status_payload` 的 `next_fire_at(...).strftime` 空值访问。回归 2 例（落盘失败只记 ERROR 且不产半文件、3 线程各写 20 轮后账本完整可解析且无残留 `.tmp`）
+
+- **发布 bench 不再随机假红**（rf-912）：`unit/web/test_runs.py` 的 `_wait_done` 原本用 3s 真实墙钟等后台线程，8 路 xdist 满载时线程几十次调度才被唤醒即超时（`test_concurrent_submits_isolated` 已实测假红，同文件 `test_retention_trim_oldest` 同类）；等待预算改为 `_WAIT_TIMEOUT_S = 30.0`——这是「等到就绪」而非时延断言，注释写明满载场景。回归 2 例（假时钟下第 5 次轮询才就绪仍须等到、预算耗尽须报等待时长与末态）
+- **发布台账能自证「哪个用例红」**（rf-912）：两处诊断盲区——`_test_runner.runner._run_phased` 的关键词过滤只留小写 `failed`，pytest 短摘要的 `FAILED 路径::用例` 行被丢弃；`release._commands_base._summarize_failure` 的 debug.log 兜底只看 stdout 归档行指向的目录（那是**上一次**运行的报告目录，本次失败档的 debug.log 还在 `test-reports/latest/`）。前者过滤补 `FAILED`，后者新增 `_failure_debug_text()`：归档目录未命中时按 mtime 倒序搜 `test-reports/latest/<模式>/` 的 debug.log，且 stdout 已有 `FAILED` 行则不读（防旧失败被当成本次）。回归 2 例（latest 兜底点名用例、stdout 优先于 latest）；连带修复 `_changed_code_files` 的 `dict | None` 入参与超时分支的 `float(None)`

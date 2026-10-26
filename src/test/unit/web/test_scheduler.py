@@ -7,7 +7,9 @@
 
 from __future__ import annotations
 
+import json
 import os
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -227,6 +229,43 @@ class TestFiredLedger:
         scheduler_mod._save_fired({"sig-old": "2020-01-01", "sig-new": today})
         fired = scheduler_mod._load_fired()
         assert fired == {"sig-new": today}
+
+    def test_write_failure_logs_error_without_raising(self, tmp_path, monkeypatch, caplog) -> None:
+        """落盘失败只记 ERROR 不外抛（调度链路不为账本失败中断）。"""
+        blocker = tmp_path / "logs"
+        blocker.write_text("占位文件，使目录创建失败", encoding="utf-8")
+        monkeypatch.setattr(scheduler_mod, "_FIRED_STATE_FILE", str(blocker / "scheduler_fired.json"))
+
+        with caplog.at_level("ERROR", logger="invest"):
+            scheduler_mod._save_fired({"sig": datetime.now().strftime("%Y-%m-%d")})
+
+        assert "定时生成账本写入失败" in caplog.text
+        assert not (blocker / "scheduler_fired.json").exists()
+
+    def test_concurrent_writes_leave_no_partial_file(self) -> None:
+        """并发写不互相截断：每次落盘经唯一原语（临时文件各写各的 + 原子替换），
+        任一时点读取都能解析出完整账本（固定临时名下会互相截断）。"""
+        dates = {f"sig-{i}": datetime.now().strftime("%Y-%m-%d") for i in range(200)}
+        errors: list[BaseException] = []
+
+        def _write() -> None:
+            try:
+                for _ in range(20):
+                    scheduler_mod._save_fired(dict(dates))
+            except BaseException as exc:  # noqa: BLE001 — 线程内异常需带回主线程断言
+                errors.append(exc)
+
+        writers = [threading.Thread(target=_write) for _ in range(3)]
+        for w in writers:
+            w.start()
+        for w in writers:
+            w.join()
+
+        assert errors == []
+        payload = json.loads(Path(scheduler_mod._FIRED_STATE_FILE).read_text(encoding="utf-8"))
+        assert payload["fired"] == dates
+        leftovers = list(Path(scheduler_mod._FIRED_STATE_FILE).parent.glob("*.tmp*"))
+        assert leftovers == []
 
     def test_corrupt_ledger_treated_as_empty(self) -> None:
         os.makedirs(os.path.dirname(scheduler_mod._FIRED_STATE_FILE), exist_ok=True)

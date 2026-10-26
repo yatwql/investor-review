@@ -369,7 +369,7 @@ class TestPublish:
         算成两个指纹（gate 打戳时 prepare 的改动未提交，publish 先提交再算），
         复用分支按构造永不命中——故指纹必须取文件内容哈希。
         """
-        from _release._gate import code_fingerprint
+        code_fingerprint = load_script("_release/_gate.py").code_fingerprint
 
         (tmp_path / "src").mkdir()
         (tmp_path / "src" / "a.py").write_text("x = 1\n", encoding="utf-8")
@@ -921,6 +921,67 @@ class TestTimingTelemetry:
         assert failure["failed_tests"] == ["src/test/x.py::test_a"]
         assert "assert 1 == 2" in failure["tail"]
 
+    def test_failure_falls_back_to_latest_debug_log(self, rel, tmp_path, monkeypatch):
+        """归档行指向上一次报告目录（本次档的 debug.log 还在 latest）时，台账仍能点名用例。"""
+        log = self._log(tmp_path, rel, monkeypatch)
+        # 归档目录存在但为空：对应「stdout 的归档行是上一次运行留下的」这一时序
+        (tmp_path / "test-reports" / "archives" / "20261026" / "130224").mkdir(parents=True)
+        latest = tmp_path / "test-reports" / "latest" / "dev-verify"
+        latest.mkdir(parents=True)
+        (latest / "dev-verify_debug.log").write_text(
+            "FAILED src/test/unit/web/test_runs.py::TestConcurrency::test_concurrent_submits_isolated"
+            " - AssertionError\n"
+            "E   AssertionError: run m_1 未在 3.0s 内完成（status=queued）\n",
+            encoding="utf-8",
+        )
+        rel._reset_timer()
+        runner = FakeRunner(
+            responses=[
+                (
+                    ["scripts/test-runner.py"],
+                    (
+                        1,
+                        "  [..] 历史报告已归档: test-reports/archives/20261026/130224/\n"
+                        "1 failed, 8448 passed, 118 subtests passed in 45.08s\n",
+                        "",
+                    ),
+                )
+            ]
+        )
+        rc = rel._run_step(
+            "测试量与耗时快照回填",
+            [sys.executable, "scripts/test-runner.py", "--mode", "dev-verify"],
+            tmp_path,
+            runner,
+        )
+        assert rc == 1
+        rel._finish_timing("refresh", rc)
+        failure = self._last_record(log)["failure"]
+        assert failure["failed_tests"] == [
+            "src/test/unit/web/test_runs.py::TestConcurrency::test_concurrent_submits_isolated"
+        ]
+        assert "status=queued" in failure["tail"]
+
+    def test_stdout_failure_lines_take_precedence_over_latest_debug_log(self, rel, tmp_path, monkeypatch):
+        """stdout 已给出本次失败用例时不再读 debug.log（避免 latest 里的旧失败被当成本次）。"""
+        log = self._log(tmp_path, rel, monkeypatch)
+        latest = tmp_path / "test-reports" / "latest" / "unit"
+        latest.mkdir(parents=True)
+        (latest / "unit_debug.log").write_text("FAILED src/test/stale.py::test_old - 上次的失败\n", encoding="utf-8")
+        rel._reset_timer()
+        runner = FakeRunner(
+            responses=[
+                (
+                    ["scripts/test-runner.py"],
+                    (1, "FAILED src/test/fresh.py::test_now - boom\n1 failed in 3s\n", ""),
+                )
+            ]
+        )
+        rel._run_step("测试量与耗时快照回填", [sys.executable, "scripts/test-runner.py"], tmp_path, runner)
+        rel._finish_timing("refresh", 1)
+        failure = self._last_record(log)["failure"]
+        assert failure["failed_tests"] == ["src/test/fresh.py::test_now"]
+
     def test_first_failure_wins_over_later_steps(self, rel, tmp_path, monkeypatch):
         """一个命令内多处失败时保留第一现场（后续失败不覆盖根因）。"""
         rel._reset_timer()
@@ -939,7 +1000,7 @@ class TestTimingTelemetry:
 
     def test_log_is_bounded_and_atomic(self, rel, tmp_path, monkeypatch):
         """台账有上限且走原子追加原语：不因长期反复发布无界增长，也不留半行。"""
-        from _release import _timing
+        _timing = load_script("_release/_timing.py")
 
         log = tmp_path / "logs" / "release.jsonl"
         for i in range(8):
@@ -951,7 +1012,7 @@ class TestTimingTelemetry:
 
     def test_log_write_failure_raises_for_caller_decision(self, rel, tmp_path):
         """写盘失败以异常如实上报（调用方据以打 [!]），不静默当成已写入。"""
-        from _release import _timing
+        _timing = load_script("_release/_timing.py")
 
         blocker = tmp_path / "logs"
         blocker.write_text("占位文件", encoding="utf-8")

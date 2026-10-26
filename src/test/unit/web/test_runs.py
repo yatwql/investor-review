@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import time
+from typing import cast
 
 import pytest
 
@@ -23,15 +24,24 @@ from src.python.web.runs import (
 pytestmark = [pytest.mark.unit, pytest.mark.unit_web]
 
 
-def _wait_done(manager: RunManager, run_id: str, timeout: float = 3.0):
+#: 等待预算：这是「等到就绪」而非时延断言——满载（8 路 xdist + 数千用例）时
+#: worker 线程可能几十次调度才被唤醒，预算给窄即随机假红（实测 3s 在发布 bench 下超时）。
+_WAIT_TIMEOUT_S = 30.0
+
+
+def _wait_done(manager: RunManager, run_id: str | None, timeout: float = _WAIT_TIMEOUT_S):
     """轮询等待 run 进入终态（done/failed），返回 RunState。"""
+    assert run_id is not None, "submit() 返回 None 表示队列已满（_QUEUE_LIMIT），本路径不该走到等待"
     deadline = time.time() + timeout
+    last: RunState | None = None
     while time.time() < deadline:
-        state = manager.get(run_id)
-        if state is not None and state.status in ("done", "failed"):
-            return state
+        last = manager.get(run_id)
+        if last is not None and last.status in ("done", "failed"):
+            return last
         time.sleep(0.005)
-    raise AssertionError(f"run {run_id} 未在 {timeout}s 内完成（status={manager.get(run_id).status}）")
+    raise AssertionError(
+        f"run {run_id} 未在 {timeout}s 内完成（status={last.status if last is not None else 'missing'}）"
+    )
 
 
 def _make_executor(code: int):
@@ -131,6 +141,53 @@ class TestConcurrency:
             assert _wait_done(m, rid).status == "done"
         # 单 worker：任何时刻最多 1 个活跃执行
         assert slow_executor_calls["max_active"] == 1
+
+
+class TestWaitBudget:
+    """等待预算须能容忍满载调度延迟（不得退回窄窗口时延断言）。"""
+
+    class _StubManager:
+        """前 4 次轮询仍 queued、之后 done 的替身（模拟线程迟迟没被调度）。"""
+
+        def __init__(self) -> None:
+            self.polls = 0
+
+        def get(self, _run_id: str):
+            self.polls += 1
+            state = RunState(_run_id, {})
+            state.status = "done" if self.polls > 4 else "queued"
+            return state
+
+    class _FakeClock:
+        """每次读表前进 1s：把等待预算换算成「可轮询次数」，无需真实睡眠。"""
+
+        def __init__(self) -> None:
+            self.now = 0.0
+
+        def time(self) -> float:
+            self.now += 1.0
+            return self.now
+
+        def sleep(self, _seconds: float) -> None:
+            return None
+
+    def test_slow_scheduled_run_is_still_awaited(self, monkeypatch):
+        stub = self._StubManager()
+        monkeypatch.setattr("src.test.unit.web.test_runs.time", self._FakeClock())
+        assert _wait_done(cast(RunManager, stub), "r1").status == "done"
+        assert stub.polls > 4
+
+    def test_exhausted_budget_reports_timeout_and_last_status(self, monkeypatch):
+        """预算耗尽须报出等待时长与末态（否则只能看到一句无信息的断言失败）。"""
+        stub = self._StubManager()
+        stub.polls = -(10**9)  # 永不就绪
+        manager = cast(RunManager, stub)
+        monkeypatch.setattr("src.test.unit.web.test_runs.time", self._FakeClock())
+        with pytest.raises(AssertionError) as excinfo:
+            _wait_done(manager, "r2", timeout=4.0)
+        message = str(excinfo.value)
+        assert "4.0s" in message
+        assert "queued" in message
 
 
 class TestRetention:

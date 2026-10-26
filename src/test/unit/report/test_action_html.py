@@ -142,6 +142,18 @@ class TestHtmlActionSection(unittest.TestCase):
         self.assertIn("暂无触发", text)
         self.assertIn("待生成", text)  # 收益归因 available 缺省 → 待生成
 
+    def test_advice_empty_state_distinguishes_trigger_without_order(self):
+        """有组合级触发但无个股订单 → ③ 区空态说明「已触发但无单品订单」。"""
+        data = _action_data(
+            rebalance_signals=[],
+            discipline_signals=[
+                {"code": "组合", "name": "", "rule": "回撤线 -10%", "value": "-14.9%", "status_label": "触发"}
+            ],
+        )
+        text = self._section(data).get_text()
+        self.assertIn("已触发信号但无可执行单品订单", text)
+        self.assertNotIn("无再平衡/纪律触发信号，暂无调仓建议", text)
+
     def test_attribution_render_when_available(self):
         """收益归因可用 → 大类层 + 盈利/亏损品种明细（+pp 与 +, 格式）+ 净额合计 + 口径脚注。"""
         attr = {
