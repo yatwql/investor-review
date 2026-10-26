@@ -2,6 +2,7 @@
 
 覆盖：
   - classify_code_format — 代码格式校验（A股/港股/场内/场外/异常格式/浮点假象）
+  - classify_channel — 账户名 → 渠道（场外关键词/场内/空值）
   - names_match / normalize_name — 名称比对（精确/简称子串/空名）
   - annotate_position_status — 品种状态清单（有行情/净值缺失/可能退市/代码格式可疑/名称不匹配）
   - build_coverage_summary — 覆盖诊断契约摘要（abnormal_count / summary）
@@ -30,6 +31,26 @@ def _holding(name: str, code: str, account: str = "证券") -> Holding:
 def _detail(code: str, name: str, price: float = 10.0) -> SimpleNamespace:
     """构造最小行情明细（鸭子类型，仅含标注所需的属性）。"""
     return SimpleNamespace(code=code, name=name, price=price, price_type="场内收盘价(T)")
+
+
+# ═════════════════════════════════════════════════════════════
+#  classify_channel
+# ═════════════════════════════════════════════════════════════
+
+
+class TestClassifyChannel(unittest.TestCase):
+    """渠道判定单源：报告层写入 channel 后下游只消费该字段。"""
+
+    def test_offsite_keyword_account_is_offsite(self):
+        self.assertEqual(hs.classify_channel("天天基金"), "场外")
+
+    def test_securities_account_is_exchange(self):
+        self.assertEqual(hs.classify_channel("证券账户"), "场内")
+
+    def test_empty_or_none_account_is_exchange(self):
+        """空账户名不抛异常，按场内处理（下游仍按证券类型细化费率）。"""
+        self.assertEqual(hs.classify_channel(""), "场内")
+        self.assertEqual(hs.classify_channel(None), "场内")
 
 
 # ═════════════════════════════════════════════════════════════

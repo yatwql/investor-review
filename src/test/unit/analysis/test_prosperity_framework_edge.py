@@ -189,20 +189,20 @@ class TestSnapshotShapeRegression:
         assert conc["status"] == "scored"
         assert data["turnover_proxy_pct"] == 66.67
 
-    def test_dict_shape_still_supported(self):
-        """dict 形态（既有测试/外部注入）保持可用。"""
+    def test_dict_shape_requires_accounts(self):
+        """dict 形态只认 accounts[].holdings；顶层摊开的持仓不被采纳（未验证）。"""
         from src.python.analysis.prosperity_signals import _turnover_proxy_pct
 
-        snaps = [
-            {"holdings": [{"code": "A"}, {"code": "B"}]},
-            {"holdings": [{"code": "A"}, {"code": "C"}]},
-        ]
-        assert _turnover_proxy_pct(snaps) == 66.67
         snaps_accounts = [
             {"accounts": [{"holdings": [{"code": "A"}]}]},
             {"accounts": [{"holdings": [{"code": "B"}]}]},
         ]
         assert _turnover_proxy_pct(snaps_accounts) == 100.0
+        top_level = [
+            {"holdings": [{"code": "A"}, {"code": "B"}]},
+            {"holdings": [{"code": "A"}, {"code": "C"}]},
+        ]
+        assert _turnover_proxy_pct(top_level) is None
 
     def test_malformed_snapshot_objects_degrade_not_raise(self):
         """畸形快照（无 accounts/holdings 字段的对象）→ 不抛异常，该子项未验证。"""

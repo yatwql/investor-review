@@ -180,7 +180,7 @@ def _action_holdings_details(details: list, transactions: list | None = None) ->
         transactions: 交易流水记录（可为 None）；提供时附加 holding_days
             （再平衡误报防护的「新买入品种观察期」判据）。
     """
-    from src.python.core.code_utils import is_offsite_fund
+    from src.python.core.holding_status import classify_channel
 
     rows = [
         {
@@ -192,10 +192,9 @@ def _action_holdings_details(details: list, transactions: list | None = None) ->
             "profit_rate": (d.profit_rate * 100) if d.profit_rate is not None else None,
             "shares": d.shares,
             "price": d.price,
-            # getattr 兼容缺 account 的 detail 对象（测试 fixture 简化版）
-            "channel": "场外" if is_offsite_fund(getattr(d, "account", "")) else "场内",
-            # 账户名原值：收益归因大类分解需 classify_holding_tier 单源分类的
-            # 场外渠道判定（orchestrator 组装路径同字段，数据契约一致）
+            # 渠道上下文：判定单源在 holding_status.classify_channel（与编排路径同源）
+            "channel": classify_channel(getattr(d, "account", "")),
+            # 账户名原值：收益归因大类分解的场外渠道判定需渠道关键词
             "account": getattr(d, "account", ""),
         }
         for d in details
