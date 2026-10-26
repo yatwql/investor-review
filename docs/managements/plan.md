@@ -1,5 +1,5 @@
 # 投资复盘助手 — 实现计划
-> 文档版本：0.16.2-dev
+> 文档版本：0.16.2
 > **编号源**：`plan-next = 229`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-228，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
@@ -21,31 +21,6 @@
 入选标准：立即可执行且价值/风险最高——数据完整性、费用风险、核心量化缺口。
 
 当前无 P1 立项任务。
-
-#### `plan-227` LLM 模块 TTL 调值 ✅（结论：维持 4h）
-
-**结论**：维持内容型模块 4h（`news_correlation` ≤4h 不变）。当前无客观依据支持调值。
-
-**依据（实测，非主观判断）**：
-- 同日间隔 ≤4h 的运行全部命中缓存（近两日 15/16 次；间隔 0.01~1.9h 均命中，含 6/6 全命中）；
-- 唯一一次「4~8h 间隔」样本（10-25 15:09，间隔 5.58h）四个基础模块记 `ttl_expired`——调 8h 只能救这一档；
-- 跨夜运行（>12h）无论 4h 还是 12h 都会过期，调值对此无收益。
-
-**复核触发条件**：归因落盘口径已修（聚合计数与逐模块明细分字段），累计出现 ≥10 次「4~8h 间隔」运行且其中 `ttl_expired` 占比 >30% 时，再评估是否提到 8h。
-
-**聚合命令**（`llm.recompute_reasons` 为按原因聚合的计数）：
-
-```bash
-.venv/bin/python -c "
-import json, pathlib, collections
-rows=[json.loads(l) for l in pathlib.Path('data/state/perf_history.jsonl').read_text(encoding='utf-8').splitlines() if l.strip()]
-c=collections.Counter()
-for r in rows[-30:]:
-    c.update((r.get('llm') or {}).get('recompute_reasons') or {})
-print(dict(c))"
-```
-
-**验收**：`test_cache_recompute_attribution.py`（归因分类、双路径计数、预检归因不被骨架覆盖、报告边界复位、perf 双字段落盘）。
 
 ### P2 — 下一阶段就绪（满足条件即开工）
 
