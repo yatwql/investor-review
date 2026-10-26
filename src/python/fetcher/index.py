@@ -23,6 +23,10 @@ from src.python.providers import sina, tencent
 
 logger = logging.getLogger("invest")
 
+#: 上游指数日线单次返回上限（腾讯/新浪均约 2000 根）：结果达到该长度即视为
+#: 源上限而非缓存钉死，短于请求窗口属正常（见 fetch_index_history 的自愈判据）
+_SOURCE_HISTORY_CAP = 2000
+
 # ── A 股指数 ─────────────────────────────────────────────────
 
 _A_INDICES = {
@@ -255,9 +259,11 @@ def fetch_index_history(code: str, days: int = 365) -> list[dict] | None:
         # 窗口缩水自愈：增量合并路径从 last_cached_date 起补数，旧的短窗口文件缓存
         # 会把序列钉死在旧长度（实测：请求 2000 天只返回历史缓存的 91 根）。
         # 仅当链路文件缓存存在（钉死成因）且结果仍短于请求窗口时清缓存全量重取
-        # 一次；无文件缓存时短结果即源上限，不重试
+        # 一次；无文件缓存时短结果即源上限，不重试。
+        # 源单次上限（约 2000 根）也要排除：结果已达上限即短于请求属源限制，
+        # 清缓存重取只会得到同样的长度，白白多打一次大请求并让缓存反复失效。
         file_cached = cache_get(f"history_{chain_name}_{code}", CACHE_WEEKLY) or []
-        if result and len(result) < days and file_cached:
+        if result and len(result) < days and len(result) < _SOURCE_HISTORY_CAP and file_cached:
             logger.info(
                 "[index] %s 返回 %d 根 < 请求 %d 天，清链路缓存全量重取",
                 code,

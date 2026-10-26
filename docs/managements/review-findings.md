@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.16.2-dev
-> **编号源**：`rf-next = 909`（新增问题取此编号，完成后更新为 +1；已用最大 rf-908，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 911`（新增问题取此编号，完成后更新为 +1；已用最大 rf-910，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -16,7 +16,11 @@
 
 ### P2 — 中优先：价值明确、成本可控（下批排期）
 
-入选标准：重构收益明确、回归面可圈定。当前无登记项。
+入选标准：重构收益明确、回归面可圈定。
+
+| # | 问题 | 修复方向 |
+|---|------|----------|
+| **rf-909** | 持仓明细行组装两份拷贝：`report/_orchestrator_data.py`（编排路径，10 字段 + `change_pct`/`nav_date`/`source_api`）与 `report/_report_helpers._action_holdings_details`（行动建议路径，同 10 字段子集）各写一遍，`profit_rate` 百分号换算与 `channel` 渠道判定在两处重复；字段增删需同时改两处，漏改即出现「同一持仓在行动建议与编排数据里字段不同」 | 抽 `report/_holding_detail_rows.build_holding_detail_rows(details, *, with_market_fields, transactions=None)`：共有 10 字段（含 `profit_rate` 百分号口径、`channel` 经 `classify_channel` 单源、`account` 原值）集中构造，`with_market_fields=True` 追加行情三字段；尾部统一 `attach_holding_trading_days`。回归：样例持仓下两路径的行键集/值逐项一致、`yesterday_close` 为 0 时 `change_pct` 仍为 0.0、行动建议字段子集不变 |
 
 ### P3 — 持续监控：兼容残留
 
