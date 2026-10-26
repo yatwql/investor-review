@@ -17,6 +17,7 @@
 - **持仓明细行装配单源**（rf-909）：新增 `report/_holding_detail_rows.py::build_holding_detail_rows()`——编排路径（`_orchestrator_data.prepare_report_data`，全量含行情三字段）与行动建议路径（`_report_helpers._action_holdings_details`，basic/both 共享的 10 字段子集）过去各写一份字面量，`profit_rate` 百分号换算与 `channel` 渠道判定重复实现，字段增删漏改一处即出现「同一持仓在两处字段不同」；现共有 10 字段集中构造、`with_market_fields=True` 追加 `change_pct`/`nav_date`/`source_api`、尾部统一附加 `holding_days`，`_action_holdings_details` 降为其薄封装。回归 9 例（两路径共有字段逐项一致、键序固定、字段子集不变、百分号与 None、零昨收 `0.0`、渠道单源、`holding_days` 两侧一致）
 
 ### 修复
+- **调仓建议清单空态不再与交易纪律表矛盾**（rf-917）：组合级纪律（回撤线/超警戒线）触发时信号不带 `code`、可行化层不产生个股订单，空态文案需区分「真无触发」与「有触发但无订单」——Excel 与 HTML 各自按同一文案分支渲染，回归 2 例
 - **峰谷计费等价用例与运行时刻解耦**（rf-916）：`test_llm_pricing.py` 的价格覆盖用例两侧峰谷策略不一致（基线内置双高峰窗 vs 覆盖文件单窗口），且计费时刻取当前时间，特定钟点（如 14:06 CST）会落在两侧不同的峰谷分支上算出 2 倍价差；计费调用统一传 `at_time` 钉死时刻、`_base_ref()` 的 `peak_periods` 对齐内置默认，并补「周末恒闲时 = 基础价之和」非空校验
 
 - **定时生成账本落盘走唯一原子写原语**（rf-913）：`web/scheduler.py::_save_fired` 原自建 `tmp + os.replace` 且临时名固定为 `scheduler_fired.json.tmp`（并发写互相截断、与同目录 `upload.py`/`holdings_update.py` 的做法分叉），改 `core.atomic_write.write_json_atomic`（保留剪除超保留期条目、「失败只记 ERROR 不外抛」）；顺带修 `status_payload` 的 `next_fire_at(...).strftime` 空值访问。回归 2 例（落盘失败只记 ERROR 且不产半文件、3 线程各写 20 轮后账本完整可解析且无残留 `.tmp`）

@@ -122,6 +122,21 @@ class TestExcelActionSheet(_ExcelSheetAssertHelpers, unittest.TestCase):
         self.assertIn("暂无触发", flat)
         self.assertIn("无再平衡/纪律触发信号，暂无调仓建议", flat)
 
+    def test_advice_placeholder_distinguishes_trigger_without_order(self):
+        """组合级信号触发（不带 code，不出个股订单）→ 空态不得写「无触发信号」。
+
+        否则与上方交易纪律表里「触发」的行自相矛盾。"""
+        data = _action_data(
+            rebalance_signals=[],
+            discipline_signals=[
+                {"code": "组合", "name": "", "rule": "回撤线 -10%", "value": "-14.9%", "status_label": "触发"}
+            ],
+            rebalance_advice=[],
+        )
+        flat = self._flat(self._write(data))
+        self.assertIn("已触发信号但无可执行单品订单（组合级回撤不落到个股），暂无调仓建议", flat)
+        self.assertNotIn("无再平衡/纪律触发信号，暂无调仓建议", flat)
+
     def test_attribution_unavailable_placeholder(self):
         """收益归因 available=False / None → 「待生成」占位。"""
         data = _action_data(attribution={"available": False})
