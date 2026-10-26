@@ -9,7 +9,7 @@ import pytest
 from src.python.config import _llm_pricing
 from src.python.core.constants import MODEL_PRICING
 
-pytestmark = pytest.mark.unit_config
+pytestmark = [pytest.mark.unit_config, pytest.mark.usefixtures("offline_external_sources")]
 
 
 def _base_ref() -> dict:

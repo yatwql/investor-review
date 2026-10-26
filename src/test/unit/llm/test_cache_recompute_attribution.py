@@ -22,7 +22,12 @@ import pytest
 from src.python.llm.observation import LlmObservation
 from src.test.unit.llm._cache_fixtures import degradation_events, make_inputs, run_generate_all_llm
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.unit_core]
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.unit_llm,
+    pytest.mark.unit_core,
+    pytest.mark.usefixtures("offline_external_sources"),
+]
 
 
 class TestObservationSink:

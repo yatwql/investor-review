@@ -32,7 +32,7 @@ from src.python.llm.prompts import (
     _build_expert_review_prompt,
 )
 from src.python.llm._hallucination_filter import _filter_hallucinated_codes
-from src.python.llm.skeleton import generate_llm_module
+from src.python.llm.skeleton import CACHE_PREFIX_LLM, generate_llm_module
 from src.python.llm.holding_change_review import generate_holding_change_review
 
 # ── 门面再导出（单例域子模块；_llm_dispatch / 测试导入面保持稳定） ──
@@ -229,7 +229,7 @@ def generate_debate_procon(
                     _valid_codes.add(str(_c).strip())
 
     # ── Step 1: 白脸（Pro） ────────────────────────────
-    _pro_cache_key = f"llm_debate_pro_{_fingerprint}"
+    _pro_cache_key = f"{CACHE_PREFIX_LLM}debate_pro_{_fingerprint}"
     _session_pro_key = f"debate_pro_{_fingerprint}"
     pro_text = _check_session_cache(_session_pro_key)
 
@@ -284,7 +284,7 @@ def generate_debate_procon(
         return (None, None, None)
 
     # ── Step 2: 黑脸（Con） ────────────────────────────
-    _con_cache_key = f"llm_debate_con_{_fingerprint}"
+    _con_cache_key = f"{CACHE_PREFIX_LLM}debate_con_{_fingerprint}"
     _session_con_key = f"debate_con_{_fingerprint}"
     con_text = _check_session_cache(_session_con_key)
 
@@ -352,7 +352,7 @@ def generate_debate_procon(
     # 摘要口径会漏掉 200 字符之后的正文差异，也漏掉仅 config 变化（情景名/描述、
     # 集中度阈值）的情形——两者都让提示词变了而键不动，命中旧综合结论。
     _syn_fingerprint = debate_synthesis_fingerprint(_fp_inputs, _synthesis_user)
-    _syn_cache_key = f"llm_debate_synthesis_{_syn_fingerprint}"
+    _syn_cache_key = f"{CACHE_PREFIX_LLM}debate_synthesis_{_syn_fingerprint}"
     _session_syn_key = f"debate_syn_{_syn_fingerprint}"
     synthesis_text = _check_session_cache(_session_syn_key)
 

@@ -333,9 +333,12 @@ def _render_modules_section(modules: dict[str, Any]) -> list[str]:
 
 def _render_v2(doc: dict[str, Any]) -> str:
     """把任意 v2 文档渲染为带中文分类注释与逐项说明的 JSONC 文本。"""
+    version = doc.get("schema_version")
     source = doc
+    if version != 2:
+        raise ValueError(f"llm_settings 文档 schema_version 必须为 2（实际 {version!r}）；请删除该文件后重新生成")
     doc = {
-        "schema_version": doc.get("schema_version", 2),
+        "schema_version": version,
         "defaults": doc.get("defaults") or {},
         "modules": doc.get("modules") or {},
         "runtime": doc.get("runtime") or {},

@@ -21,7 +21,12 @@ from src.test.unit.llm._cache_fixtures import (
     run_generate_all_llm,
 )
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.unit_core]
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.unit_llm,
+    pytest.mark.unit_core,
+    pytest.mark.usefixtures("offline_external_sources"),
+]
 
 
 def _run(inputs: dict, *, reply=None, patch_call: bool = True):

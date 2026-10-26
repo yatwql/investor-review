@@ -20,7 +20,12 @@ from src.test.unit.llm._cache_fixtures import degradation_events, make_inputs, r
 
 # `unit_core` 横切标记：缓存命中契约属核心基础设施行为，需随 P0 `dev-verify` 跑
 # （该档选择面不含 `unit_llm`，只标 llm 域会让这批回归只在 P1 才执行）。
-pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.unit_core]
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.unit_llm,
+    pytest.mark.unit_core,
+    pytest.mark.usefixtures("offline_external_sources"),
+]
 
 
 def _run(inputs, degradation=None):

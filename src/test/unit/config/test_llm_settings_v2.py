@@ -155,3 +155,19 @@ class TestUnknownPreservedOnWrite:
         updated = _llm_schema.apply_flat_updates(doc, {"max_retries": 5})
         assert updated["plugin_section"] == {"x": 1}
         assert updated["runtime"]["max_retries"] == 5
+
+
+class TestRenderSchemaVersionStrict:
+    """渲染路径与加载侧同口径：schema_version 缺失或不为 2 即拒绝。"""
+
+    def test_missing_version_rejected(self):
+        doc = copy.deepcopy(_DEFAULTS_NESTED)
+        doc.pop("schema_version", None)
+        with pytest.raises(ValueError, match="schema_version"):
+            _render_v2(doc)
+
+    def test_wrong_version_rejected(self):
+        doc = copy.deepcopy(_DEFAULTS_NESTED)
+        doc["schema_version"] = 1
+        with pytest.raises(ValueError, match="schema_version"):
+            _render_v2(doc)
