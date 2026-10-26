@@ -17,6 +17,25 @@ import pytest
 pytestmark = [pytest.mark.unit, pytest.mark.unit_ui]
 
 
+class TestDetailHintKeys:
+    """状态行「详情」指引的键位必须仍在主菜单里（防菜单改键后指引失效）。"""
+
+    def test_hint_keys_exist_in_main_menu(self) -> None:
+        from src.python.tui.status_line import DETAIL_HINT_KEYS
+        from src.python.tui.tui_menu import _apply_feature_gates, MENU_ITEMS
+
+        _apply_feature_gates()  # 按当前开关重建菜单（母本裁剪后的真实可见键集）
+        menu_keys = {item[0] for item in MENU_ITEMS}
+        assert set(DETAIL_HINT_KEYS) <= menu_keys, f"指引键不在主菜单：{set(DETAIL_HINT_KEYS) - menu_keys}"
+
+    def test_hint_text_lists_every_key(self) -> None:
+        from src.python.tui.status_line import DETAIL_HINT_KEYS, _detail_hint
+
+        hint = _detail_hint()
+        for key in DETAIL_HINT_KEYS:
+            assert f"[{key}]" in hint
+
+
 class TestLlmStatusRendering:
     """_show_llm_config_status — 消费 llm_status 单源的三态终端渲染。"""
 
@@ -214,7 +233,7 @@ class TestStatusLine(unittest.TestCase):
         self.assertIn("新鲜度 —", line)
         self.assertIn("备用源 —", line)
         self.assertIn("LLM ●", line)
-        self.assertIn("〔详情 [4][H][S]〕", line)
+        self.assertIn("〔详情 [3][D][S]〕", line)
 
     def test_full_line_drops_hint_when_narrow(self) -> None:
         """窄终端弃「详情」指引，五个语义段保留（指引最先降级）。"""

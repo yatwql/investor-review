@@ -57,7 +57,7 @@ def _last_report_part() -> str:
 
 
 def _cache_expired_part() -> str:
-    """缓存过期数（与菜单 [4] 同一统计口径）。"""
+    """缓存过期数（与菜单 [3] 缓存管理同一统计口径）。"""
     try:
         from src.python.cache.operations import get_cache_stats
         from src.python.report.progress import SilentProgressReporter
@@ -145,6 +145,17 @@ def _llm_part() -> str:
         return "LLM —"
 
 
+#: 状态行「详情」指引指向的面板键：缓存统计 [3] / 数据源与运行日志 [D] /
+#: 功能开关与 LLM 模块 [S]。键位必须取自主菜单（菜单增删键时由
+#: `test_tui_menu_status.TestDetailHintKeys` 拦截，避免指引指向已不存在的键）。
+DETAIL_HINT_KEYS: tuple[str, ...] = ("3", "D", "S")
+
+
+def _detail_hint() -> str:
+    """状态行末尾的菜单指引（形如 ``[3][D][S]``）。"""
+    return "".join(f"[{key}]" for key in DETAIL_HINT_KEYS)
+
+
 def build_status_line(*, now: float | None = None) -> str:
     """组装页头状态行（TTL 内复用记忆；任何异常降级为 ``状态 │ —``）。
 
@@ -153,7 +164,7 @@ def build_status_line(*, now: float | None = None) -> str:
 
     Returns:
         形如 ``状态 │ 上次报告 10-07 09:55 · 缓存过期 3 · 新鲜度 最新 ·
-        备用源 0 · LLM ● kimi-k3〔详情 [4][H][S]〕`` 的单行文本（多链时
+        备用源 0 · LLM ● kimi-k3〔详情 [3][D][S]〕`` 的单行文本（多链时
         LLM 段携带链首线路名）；窄终端弃「详情」指引、五个语义段全保留。
     """
     ts = time.time() if now is None else float(now)
@@ -168,7 +179,7 @@ def build_status_line(*, now: float | None = None) -> str:
             _degraded_part(),
             _llm_part(),
         ]
-        line = "状态 │ " + " · ".join(parts) + f"{DIM}〔详情 [4][H][S]〕{RESET}"
+        line = "状态 │ " + " · ".join(parts) + f"{DIM}〔详情 {_detail_hint()}〕{RESET}"
         # 宽度守卫：窄终端先弃「详情」指引（指引最先降级；五个语义段全保留）。
         # 语义段不截断——ANSI 序列截断风险与语义损失均高于弃指引。
         if display_width(line) > terminal_columns() - 2:
