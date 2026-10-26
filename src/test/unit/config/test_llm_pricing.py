@@ -17,7 +17,9 @@ def _base_ref() -> dict:
         "version": 1,
         "currency": "CNY",
         "timezone": "Asia/Shanghai",
-        "peak_periods": ["09:00-12:00"],
+        # 峰谷策略与内置默认一致：本函数服务于「价格覆盖」类断言，若策略也不同，
+        # 两套计费在高/闲时判定上会分叉，结论随运行时刻漂移（详见计费等价用例）。
+        "peak_periods": ["09:00-12:00", "14:00-18:00"],
         "idle_periods": [],
         "weekend_always_idle": True,
         "holiday_always_idle": True,
@@ -148,11 +150,19 @@ class TestVersionRejection:
 @pytest.mark.unit
 class TestCostEquivalence:
     def test_same_prices_produce_same_cost(self, pricing_file):
-        """覆盖为与内置相同的价格时，费用计算结果与基线一致（浮点容差）。"""
+        """覆盖为与内置相同的价格时，费用与基线一致（浮点容差）。
+
+        计费时刻必须钉死：峰谷定价按「当日分钟 + 是否闲时日」分支，两套策略若在
+        同一时刻落在不同分支（曾因基线取内置双高峰窗、覆盖取单窗，在 14:06 这类
+        时刻算出 2 倍价差）结论就随运行时刻漂移。
+        """
+        from datetime import datetime
+
         from src.python.llm.pricing import compute_cost_value, reload_pricing
 
+        at_time = datetime(2026, 1, 6, 10, 0)  # 周二 10:00，固定在高峰窗内
         reload_pricing()
-        baseline = compute_cost_value("deepseek-v4-flash", 1_000_000, 1_000_000)
+        baseline = compute_cost_value("deepseek-v4-flash", 1_000_000, 1_000_000, at_time=at_time)
 
         ref = _base_ref()
         builtin = MODEL_PRICING["deepseek-v4-flash"]
@@ -166,6 +176,10 @@ class TestCostEquivalence:
         _write(pricing_file, ref)
         _llm_pricing.invalidate_pricing_cache()
         reload_pricing()
-        overridden = compute_cost_value("deepseek-v4-flash", 1_000_000, 1_000_000)
+        overridden = compute_cost_value("deepseek-v4-flash", 1_000_000, 1_000_000, at_time=at_time)
 
         assert overridden == pytest.approx(baseline, rel=1e-12, abs=1e-12)
+        # 非空断言：周末恒闲时 → 必然按基础价计费，可独立验算（防「两边都算 0」也通过）
+        weekend = datetime(2026, 1, 10, 10, 0)  # 周六
+        weekend_cost = compute_cost_value("deepseek-v4-flash", 1_000_000, 1_000_000, at_time=weekend)
+        assert weekend_cost == pytest.approx(builtin["input"] + builtin["output"])

@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.16.3-dev
-> **编号源**：`rf-next = 916`（新增问题提出后更新为 +1；已用最大 rf-915，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 917`（新增问题提出后更新为 +1；已用最大 rf-916，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -41,6 +41,7 @@
 | # | 问题 | 修复 |
 |---|------|------|
 | **rf-909** | 持仓明细行组装两份拷贝：`report/_orchestrator_data.py`（编排路径，10 字段 + `change_pct`/`nav_date`/`source_api`）与 `report/_report_helpers._action_holdings_details`（行动建议路径，同 10 字段子集）各写一遍，`profit_rate` 百分号换算与 `channel` 渠道判定在两处重复；字段增删需同时改两处，漏改即出现「同一持仓在行动建议与编排数据里字段不同」 | 抽 `report/_holding_detail_rows.py::build_holding_detail_rows(details, *, with_market_fields, transactions=None)`：共有 10 字段（`profit_rate` 百分号口径、`channel` 经 `classify_channel` 单源、`account` 原值）集中构造，`with_market_fields=True` 追加行情三字段（`change_pct` 零昨收兜底），尾部统一 `attach_holding_trading_days`；`_action_holdings_details` 改为其薄封装，编排路径改为同名调用（顺带把 `changed_code_files`/`penetrated_targets` 等既有类型摩擦就地收窄）。回归 9 例（两路径共有字段逐项一致/键序固定/行动建议字段子集不变/百分号与 None/零昨收 0.0/渠道单源/两侧同时附加 holding_days） |
+| **rf-916** | 峰谷计费等价用例的时刻依赖缺陷：`test_llm_pricing.py::TestCostEquivalence::test_same_prices_produce_same_cost` 两侧策略不同（基线走内置双高峰窗、覆盖文件用单窗口）且计费时刻未固定，两侧落在不同峰谷分支时价差正好 2 倍——特定钟点（如 14:06 CST）必红的时刻依赖假红 | 计费调用统一传 `at_time` 钉死时刻，`_base_ref()` 的 `peak_periods` 与内置默认对齐（价格覆盖用例不改变峰谷策略）；另补「周末恒闲时 = 基础价之和」非空校验，防两侧同为 0 也通过。回归 1 例 |
 | **rf-913** | **原子写入单源偏离**（架构约束表「缓存原子写入」条）：`web/scheduler.py::_save_fired` 自建 `tmp + os.replace`，且临时文件名固定为 `scheduler_fired.json.tmp`（非 `tempfile.mkstemp`）——同目录 `web/upload.py`、`web/holdings_update.py` 都已显式走 `core/atomic_write`；固定 tmp 名下并发写会互相截断，落盘实现也成了第二份 | 改 `core.atomic_write.write_json_atomic`（保留剪除超保留期条目与「失败只记 ERROR 不外抛」行为），并顺带修 `status_payload` 的 `next_fire_at(...).strftime` 空值访问。回归 2 例（落盘失败只记 ERROR 不抛且不产半文件、3 线程各写 20 轮后账本完整可解析且无残留 `.tmp`） |
 | **rf-914** | 文件膨胀登记簿与事实不符：`check-file-length -v` 实测 5 个文件越过登记线（测试 >900：`test_release_tool_gate.py` 1147、`conftest.py` 999；主程序 >700：`generators_orchestrator.py` 827、`cli/_handlers.py` 789、`llm/skeleton.py` 739），而 P4 原写「当前无登记项」 | 5 个文件按拆分方向逐条登记进 P4 存量监控清单（不占用 rf 编号，拆分后逐行删除）；红线本身 0 违规、0 豁免 |
 | **rf-915** | `docs/plan/` 在办设计无任务追溯：`jev-news-judgment-design.md`、`jev-news-judgment-evaluation.md` 不引用任何 `plan-XXXX`，`release.py prepare` 每轮都提「未引用任何任务编号，人工确认是否完成」，状态只能靠读文档头自判 （`decision-reflection-design.md` 已引 `plan-70`/`plan-71`，属正常） | 两份文档头部补「关联任务：`plan-55`」反向引用，追溯双向可达；`_ledger_archive.unreferenced_docs()` 复核由 2 项归零 |
