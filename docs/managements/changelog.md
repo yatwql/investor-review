@@ -21,6 +21,7 @@
 - **报告深度档位常量下沉**：`REPORT_DEPTH_LEVELS` / `REPORT_DEPTH_DEFAULT` 迁入 `core/constants.py`（config 默认表与 llm 档位解析共用），`llm/depth_profile.py` 保留原面 re-export
 - **持仓渠道判定单源**（rf-907）：新增 `core/holding_status.classify_channel(account)`，报告层两处明细组装改调它（原各自内联账户关键词判定）；`analysis/rebalance_advisor` 只消费 `channel` 字段，不再自行按 `account` 解析（渠道字段缺失即按证券类型判定）。回归 3 例（场外/场内/空值 + 「仅带 account 不生效」）
 - **快照形态单一化**（rf-908）：`analysis/prosperity_signals` 提取持仓代码只认 `accounts[].holdings`（与 `schemas/history.SnapshotData` 一致），删除顶层 `holdings`/`details` 兜底；测试 fixture 与用例改为 accounts 形态 + 「顶层摊开不再被采纳」回归
+- **LLM 模块 TTL 维持 4h**（plan-227 结案）：实测同日 ≤4h 间隔运行全部命中（15/16）、唯一 4~8h 间隔样本为 `ttl_expired`、跨夜运行任何 TTL 都过期 → 无客观依据支持调值；复核触发条件见 `plan.md`
 - **移除单 Provider 配置形态，只保留 provider 链**（rf-901/902）：`llm/api.py` 删除 `_call_llm_legacy()` 与「无 `_provider_list` 即单 Provider 直连」回退（现在显式失败并告警，不再绕开链路由/熔断/端点节流）；`get_llm_config()` 不再把 `llm_key.json` 整份并进顶层配置；`core/system_info` 与 `core/doctor` 的 flat 展示/凭据分支随之删除；`llm_key.json` 顶层四字段（旧单 Provider 形态）不再被接受。单 provider 场景改用「一条 provider 条目」，能力不减（自动获得链路由治理）
 - **旧配置自动迁移**：新增 `config._llm_providers.ensure_credential_blocks()`——读取到顶层四字段时自动改写为 `default` 命名凭据块（原文件备份 `llm_key.json.bak`，首尾空格去除）并在 `llm_providers.json` 追加引用它的条目（幂等）；迁移失败不改原文件、日志给明确指引，LLM 章节按未配置占位
 - **首次引导与交互配置写链形态**：新增公共入口 `config.write_llm_credentials()`（凭据块 + provider 条目原子写入，凭据分离），`startup_wizard._write_llm_credentials` 改为其薄封装
@@ -35,6 +36,8 @@
 - 规范化回归的弱断言（断言首次快照非空）改为「二次规范化后文件逐字不变」
 
 ### 修复
+
+- **重算归因落盘口径拆分**（rf-911）：perf 的 `llm.recompute_reasons` 只放「按原因聚合计数」，逐模块明细改 `llm.module_recompute_reasons`（原实现同名覆盖，聚合计数丢失、判据无法统计）；骨架路径不再对预检已归因的模块二次归因（进程重启后无「上一轮键」记忆时会把 `ttl_expired` 改判成 `cache_miss`，污染 TTL 判据）。回归 3 例（双字段落盘、不二次归因、聚合计数单条）
 
 - **指数历史源上限不再触发无谓重取**（rf-910）：`fetcher/index.py` 的「窗口缩水自愈」判据补源单次上限（约 2000 根）排除——请求 2927 天而上游给 2001 根时属源限制，此前每次运行都会清链路缓存并整段重取一遍（近 24h 6/6 次运行均命中，白打一次大请求且缓存反复失效）；达上限即接受短序列。回归 1 例（上限场景只取一次且不清缓存，钉死场景仍自愈）
 

@@ -465,8 +465,15 @@ def generate_llm_content(
             # 它们，据此判断 TTL 是否放宽会系统性低估。
             # 原因判定：与上一轮该模块的缓存键相同 ⇒ 内容没变、只是 TTL 到点；
             # 不同 ⇒ 内容变了（内容寻址模块换键）；无上轮记录 ⇒ 保守记 `cache_miss`。
+            # 预检已归因的四个基础模块不再二次归因：进程重启后本进程无「上一轮键」
+            # 记忆，再记一次会把 `ttl_expired` 覆盖成 `cache_miss`（TTL 判据被污染）。
             _sink = _hit_sink
-            if _sink is not None and hasattr(_sink, "note_recompute_reason"):
+            _already_attributed = bool(
+                _sink is not None
+                and hasattr(_sink, "module_recompute_reasons")
+                and module_key in (_sink.module_recompute_reasons() or {})
+            )
+            if _sink is not None and hasattr(_sink, "note_recompute_reason") and not _already_attributed:
                 from src.python.llm.observation import (
                     RECOMPUTE_CACHE_MISS,
                     RECOMPUTE_FINGERPRINT_CHANGED,

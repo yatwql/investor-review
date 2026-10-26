@@ -6,7 +6,7 @@
 
 ## 概述
 
-在办 4 项：P1 1 项（**plan-227** 等数据定值）、P2 1 项（**plan-92**）、P3 1 项（**plan-70**）、P4 1 项（**plan-55**）。命名与实现纪律见 `CLAUDE.md`（单一事实位，本表不重复）。
+在办 3 项：P2 1 项（**plan-92**）、P3 1 项（**plan-70**）、P4 1 项（**plan-55**）。命名与实现纪律见 `CLAUDE.md`（单一事实位，本表不重复）。
 
 ---
 
@@ -22,15 +22,18 @@
 
 当前无 P1 立项任务。
 
-#### `plan-227` LLM 模块 TTL 调值（等数据定值）
+#### `plan-227` LLM 模块 TTL 调值 ✅（结论：维持 4h）
 
-**状态**：观测口径已上线，等约一周真实报告（≥10 次，覆盖同日连跑与跨天两种节奏）定值；结论产出前不归档。
+**结论**：维持内容型模块 4h（`news_correlation` ≤4h 不变）。当前无客观依据支持调值。
 
-**观测口径**：缓存未命中按原因计数——`forced`（重新生成/缓存关闭）/ `fingerprint_changed`（内容变了）/ `ttl_expired`（内容未变、纯到点）/ `cache_miss`（无上轮可比对）；覆盖预检四基础模块与骨架 `self_review`/`holding_change`，聚合进 perf 的 `llm.recompute_reasons`。
+**依据（实测，非主观判断）**：
+- 同日间隔 ≤4h 的运行全部命中缓存（近两日 15/16 次；间隔 0.01~1.9h 均命中，含 6/6 全命中）；
+- 唯一一次「4~8h 间隔」样本（10-25 15:09，间隔 5.58h）四个基础模块记 `ttl_expired`——调 8h 只能救这一档；
+- 跨夜运行（>12h）无论 4h 还是 12h 都会过期，调值对此无收益。
 
-**判据**：`ttl_expired` 占比高 ⇒ 内容型模块 TTL 由 4h 调到 8~12h（`news_correlation` 维持 ≤4h）；占比低 ⇒ 维持现值，按「观测支持维持」结论归档。
+**复核触发条件**：归因落盘口径已修（聚合计数与逐模块明细分字段），累计出现 ≥10 次「4~8h 间隔」运行且其中 `ttl_expired` 占比 >30% 时，再评估是否提到 8h。
 
-**聚合命令**：
+**聚合命令**（`llm.recompute_reasons` 为按原因聚合的计数）：
 
 ```bash
 .venv/bin/python -c "
@@ -38,11 +41,11 @@ import json, pathlib, collections
 rows=[json.loads(l) for l in pathlib.Path('data/state/perf_history.jsonl').read_text(encoding='utf-8').splitlines() if l.strip()]
 c=collections.Counter()
 for r in rows[-30:]:
-    for k in ((r.get('llm') or {}).get('recompute_reasons') or {}): c[k]+=1
+    c.update((r.get('llm') or {}).get('recompute_reasons') or {})
 print(dict(c))"
 ```
 
-**验收**：`test_cache_recompute_attribution.py`（归因分类、双路径计数、绑定时机、报告边界复位、perf 落盘）。
+**验收**：`test_cache_recompute_attribution.py`（归因分类、双路径计数、预检归因不被骨架覆盖、报告边界复位、perf 双字段落盘）。
 
 ### P2 — 下一阶段就绪（满足条件即开工）
 

@@ -107,12 +107,14 @@ def _record_llm_context(perf, sink=None, baseline: dict | None = None) -> None:
             }
         if usage.get("call_count"):
             context["call_count"] = int(usage["call_count"])
-        # 重算原因归因（观测，不影响控制流）：回答「4h TTL 卡掉了多少本该复用的调用」
+        # 重算原因归因（观测，不影响控制流）：回答「4h TTL 卡掉了多少本该复用的调用」。
+        # 聚合计数由 observation.snapshot() 提供（`recompute_reasons`），此处只补
+        # 逐模块明细（`module_recompute_reasons`）——两者形状不同，不得同名覆盖。
         _reasons = getattr(sink, "module_recompute_reasons", None) if sink is not None else None
         if callable(_reasons):
             _reason_map = _reasons()
             if _reason_map:
-                context["recompute_reasons"] = dict(sorted(_reason_map.items()))
+                context["module_recompute_reasons"] = dict(sorted(_reason_map.items()))
         costs = {str(k).upper(): round(float(v or 0.0), 6) for k, v in (usage.get("costs") or {}).items()}
         context["cost_by_currency"] = costs
 
