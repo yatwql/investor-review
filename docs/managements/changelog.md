@@ -17,6 +17,7 @@
 - **持仓明细行装配单源**（rf-909）：新增 `report/_holding_detail_rows.py::build_holding_detail_rows()`——编排路径（`_orchestrator_data.prepare_report_data`，全量含行情三字段）与行动建议路径（`_report_helpers._action_holdings_details`，basic/both 共享的 10 字段子集）过去各写一份字面量，`profit_rate` 百分号换算与 `channel` 渠道判定重复实现，字段增删漏改一处即出现「同一持仓在两处字段不同」；现共有 10 字段集中构造、`with_market_fields=True` 追加 `change_pct`/`nav_date`/`source_api`、尾部统一附加 `holding_days`，`_action_holdings_details` 降为其薄封装。回归 9 例（两路径共有字段逐项一致、键序固定、字段子集不变、百分号与 None、零昨收 `0.0`、渠道单源、`holding_days` 两侧一致）
 
 ### 修复
+- **基金同类百分位口径不再取反**（rf-918）：上游 `Data_rateInSimilarPersent` 越高越好（恒等于 `100 − rank/total×100`），评级侧按 `(100 − 值)/100` 取补后套阈值——仅百分位可用时不再好坏颠倒，也不再每次运行刷「百分位与排名评级不一致」告警（此前日志累计 16 条）。回归 3 例（实测样本两侧评级一致 / 仅百分位 98.5 → 优秀 / 档位边界）
 - **调仓建议清单空态不再与交易纪律表矛盾**（rf-917）：组合级纪律（回撤线/超警戒线）触发时信号不带 `code`、可行化层不产生个股订单，空态文案需区分「真无触发」与「有触发但无订单」——Excel 与 HTML 各自按同一文案分支渲染，回归 2 例
 - **峰谷计费等价用例与运行时刻解耦**（rf-916）：`test_llm_pricing.py` 的价格覆盖用例两侧峰谷策略不一致（基线内置双高峰窗 vs 覆盖文件单窗口），且计费时刻取当前时间，特定钟点（如 14:06 CST）会落在两侧不同的峰谷分支上算出 2 倍价差；计费调用统一传 `at_time` 钉死时刻、`_base_ref()` 的 `peak_periods` 对齐内置默认，并补「周末恒闲时 = 基础价之和」非空校验
 
