@@ -19,6 +19,8 @@
 - **`[S]` 面板措辞与归类清理**：① `module_quality_gate` 标签「模块级质量分级」→「**LLM 输出评级**」（与 `data_quality` 的「质量」解歧，后者描述补「数据侧质量，与 LLM 输出评级无关」）；② `event_window_impact`「事件窗量化对照」→「**事件窗对照**」、`summary_highlights`「本期要点与环比对照」→「**首页执行摘要卡**」——标签同步注册表/区块注册表/HTML 模板/Excel/手册，报告区块标题随之一致（区块名不带括号：`normalize_block_title` 会剥离括号注解）；③ 描述白话化：`valuation_percentile` 改「有历史 PE/PB 就用真分位，没有就用价格分位近似」、`report_qa` 补「按量计费」、`prosperity_framework` 明说评估对象是「持仓组合」
 - **两处类型标注纠偏（顺带）**：`report/_llm_news._fetch_llm_and_news` 返回标注由四元组补成五元组（实际一直返回五元组、调用侧解包五值）；`force_llm_modules` / `force_modules` 参数由 `set|frozenset` 放宽为 `Collection`（调用侧传 list），线程池 future 列表补 `Future` 标注
 
+- **`metrics_enabled` 内置为恒开（去掉显示开关）**：报告量化指标始终全量计算与渲染，`[S]` 面板 20 → **19 项**（呈现与交互组剩 `report_qa`）。原开关是纯展示项却并联了跨层副作用——关闭会让**指标级断路器暂停失败计数**并自动解熔，即「改报告观感」影响「熔断统计」，属设计债；本次一并删除 `analysis/circuit_breaker_wrapper` 的 Feature Flag 联动分支（`_check_feature_flag` / `_log_ff_event` / `_ff_was_off` 残留计数），`chart_data_builder` 去掉 `metrics_enabled` 参数与「全轴 N/A」分支；三渠道随注册表自动收敛（CLI 已拒绝旧键、Web 面板不再出该行）
+
 （本次发布内容见下方归档索引）
 
 ## 归档

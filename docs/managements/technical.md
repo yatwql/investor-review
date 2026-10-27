@@ -3574,7 +3574,6 @@ make_http_client(timeout=10.0) → httpx.Client
 | `llm_debate_procon` | 辩论-正反辩论（三段式：白脸 → 黑脸 → 综合；集中度问答段内建于流程） | 智囊团深度复盘 | LLM 注入 | 功能开关（默认关，分析增强组） |
 | `llm_debate_conditional` | 辩论-条件推理（上涨 / 下跌 / 震荡情景注入） | 智囊团深度复盘 | LLM 注入 | 功能开关（默认开，分析增强组；与正反辩论相邻） |
 | `concentration_qa` | 集中度问答段（辩论流程内建：单品种占比超 `debate.concentration_qa.threshold` 时白脸/黑脸/综合各附集中度量化评估；原实验开关 `llm_debate_qa_concentration` 已撤销并入） | 智囊团深度复盘 | LLM 注入 | 无独立开关（随 `llm_debate_procon` 流程内建） |
-| `metrics_enabled` | 量化指标显示（原 metrics_sharpe / calmar / hhi / winrate / turnover / risk_contribution / beta 七项并入；指标始终全量计算） | 量化指标雷达图画像（含降级 3 轴） + 指标熔断联动 | 报告输出 / 分析计算 | 常规开关（默认开） |
 
 > **子功能并入说明**：以下语义已并入其他功能，不作为独立标识符参与本表校验——`dividend_flow`（分红现金流，并入 `fund_flow`）、`holding_diagnosis`（品种覆盖诊断，并入 `data_quality`）。
 

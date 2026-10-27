@@ -102,8 +102,8 @@ def test_radar_all_metrics_none_with_history() -> None:
     assert chart["datasets"][0]["note"] == "仅限基础指标"
 
 
-def test_radar_metrics_switch_unset_keeps_values() -> None:
-    """metrics_enabled 未传（None，如交互图表关闭路径）→ 不过滤，轴值按原样保留。"""
+def test_radar_renders_values_as_is() -> None:
+    """雷达轴值按数据原样渲染（量化指标显示开关已内置，无「N/A 过滤」分支）。"""
     am = {
         "sharpe_ratio": 1.2,
         "calmar_ratio": 0.8,

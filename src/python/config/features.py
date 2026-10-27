@@ -5,7 +5,7 @@
 
 用法：
   >>> from src.python.config.features import is_feature_enabled, FEATURE_FLAGS
-  >>> if is_feature_enabled("metrics_enabled"):
+  >>> if is_feature_enabled("cost_position"):
   ...     render_metric_cards()
 
 配置持久化：功能开关可通过 features.json 覆写默认值。
@@ -506,7 +506,6 @@ def load_feature_overrides() -> None:
 
     JSON 格式：
       {
-        "metrics_enabled": true,
         "data_quality": false
       }
     """
