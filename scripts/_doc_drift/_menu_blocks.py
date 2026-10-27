@@ -94,6 +94,21 @@ _RET_TAIL_KEY_RE = re.compile(r"([A-Za-z0-9])\s*(?:\*\*|\])?\s*$")
 #: 「菜单 `G` → `X`」/「菜单 `D` → `X`」，避免读者把二级键当主菜单键找。
 _SUBMENU_KEYS: frozenset[str] = frozenset({item[0] for item in GLOBAL_SETTINGS_ITEMS}) | frozenset({"V", "H", "T", "L"})
 
+#: 二级面板的父子归属（箭头路径合法性）：`[G]` 全局设置 / `[D]` 诊断与排查
+_SUBMENU_CHILDREN: dict[str, frozenset[str]] = {
+    "G": frozenset({item[0] for item in GLOBAL_SETTINGS_ITEMS}),
+    "D": frozenset({"L", "V", "H", "T"}),
+}
+
+#: 「主菜单」声明分句切分：分句内才成立「主菜单 + 键」的同句关系
+_MAIN_MENU_CLAUSE_SPLIT_RE = re.compile(r"[，。；：、（）()]")
+#: 分句内出现这些词即说明作者已在说「层级关系」，不属「把二级项当主菜单项」误写
+_MAIN_MENU_CLAIM_EXEMPT = ("二级", "一级", "不在", "→", "->", "不是")
+#: 分句内键记号：仅反引号包裹的 `[X]`（裸字母不参与，避免英文首字母误捕）
+_CLAUSE_KEY_REF_RE = re.compile(r"`\[([A-Za-z0-9])\]`")
+#: 箭头路径：`` `[X]` → `[Y]` ``（含 `->`）
+_SUBMENU_PATH_RE = re.compile(r"`\[([A-Za-z0-9]+)\]`\s*(?:→|->)\s*`\[([A-Za-z0-9.]+)\]`")
+
 #: 正文菜单引用：``菜单 `X` `` / ``菜单 `[X]` `` / ``菜单 [X]`` / ``菜单 **`[X]`**`` / 裸键 ``菜单 F 的…``
 #: 裸键形态必须紧跟空白/标点/句末，否则「主菜单 code block」的 ``c`` 会被误捕
 _MENU_REF_RE = re.compile(
@@ -116,6 +131,14 @@ def check_menu_key_references(docs: dict[Path, str]) -> list[str]:
     合法域 = ``MENU_ITEMS`` 键 ∪ 返回键 ``0``；``[G]`` 的二级选项（C/F/O/M）
     必须以「菜单 `G` → `F`」写法出现（写成裸「菜单 `F`」即发 finding）——例外是
     该字母本身已是主菜单键者（如 `C` 现为主菜单「章节显隐」，裸写合法）。
+
+    另三条同域规则（均针对“读者按文档找不到入口”的同一后果）：
+
+    1. **主菜单归属**：分句内把二级项说成在主菜单里（「`[T]` 恒出现在主菜单中」）即
+       发 finding——二级项的入口是 ``[D] → [T]``；已在说「二级 / 不在 / 箭头路径」
+       的分句豁免（「`[T]` 是 `[D]` 的二级项」属正确表述）。
+    2. **箭头路径合法性**：``[X] → [Y]`` 要求 ``X`` 为 `[G]` / `[D]` 且 ``Y`` 属其二级项。
+    3. 三项均在手册与 `README.md` 范围内生效，历史记录类文档由扫描入口排除。
     """
     findings: list[str] = []
     allowed = set(_MENU_LABEL_BY_KEY) | {"0"}
@@ -132,6 +155,47 @@ def check_menu_key_references(docs: dict[Path, str]) -> list[str]:
                 )
                 shown = match.group(0).strip()
                 findings.append(f"{rel(path)}:{lineno}: 「{shown}」不是主菜单键{hint}")
+            findings.extend(_main_menu_claim_findings(path, lineno, line, allowed))
+            findings.extend(_submenu_path_findings(path, lineno, line))
+    return findings
+
+
+def _main_menu_claim_findings(path: Path, lineno: int, line: str, allowed: set[str]) -> list[str]:
+    """分句内把二级项说成在主菜单里 → finding（同一分句只报一次）。"""
+    findings: list[str] = []
+    seen: set[tuple[str, str]] = set()
+    for clause in _MAIN_MENU_CLAUSE_SPLIT_RE.split(line):
+        if "主菜单" not in clause:
+            continue
+        if any(token in clause for token in _MAIN_MENU_CLAIM_EXEMPT):
+            continue
+        stripped = clause.strip().strip("*").strip()
+        for match in _CLAUSE_KEY_REF_RE.finditer(clause):
+            key = match.group(1).upper()
+            if key in allowed or key not in _SUBMENU_KEYS:
+                continue
+            if (key, stripped) in seen:
+                continue
+            seen.add((key, stripped))
+            findings.append(
+                f"{rel(path)}:{lineno}: 「{stripped}」把二级项 [{key}] 说成在主菜单里"
+                f"（二级项须写作 `[D]` → `[{key}]` 或 `[G]` → `[{key}]`，主菜单没有该项）"
+            )
+    return findings
+
+
+def _submenu_path_findings(path: Path, lineno: int, line: str) -> list[str]:
+    """箭头路径 ``[X] → [Y]`` 的父子关系必须成立。"""
+    findings: list[str] = []
+    for match in _SUBMENU_PATH_RE.finditer(line):
+        parent, child = match.group(1).upper(), match.group(2).upper()
+        children = _SUBMENU_CHILDREN.get(parent)
+        if children is not None and child in children:
+            continue
+        if children is None:
+            findings.append(f"{rel(path)}:{lineno}: 「[{parent}] → [{child}]」无效——[{parent}] 无二级项")
+        else:
+            findings.append(f"{rel(path)}:{lineno}: 「[{parent}] → [{child}]」无效——[{parent}] 下无 [{child}] 项")
     return findings
 
 

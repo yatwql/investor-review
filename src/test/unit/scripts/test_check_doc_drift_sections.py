@@ -255,6 +255,39 @@ class TestMenuKeyReferences:
         findings = drift.check_menu_key_references({p: "| `holdings_filename` | 持仓文件名 | 菜单 `F` |\n"})
         assert any("`G` → `F`" in f for f in findings)
 
+    def test_submenu_key_claimed_as_main_menu_reported(self, drift, tmp_path):
+        """把二级项说成在主菜单里 → 报出（历史真实残留：「[T] 恒出现在主菜单中」）。"""
+        p = tmp_path / "faq.md"
+        findings = drift.check_menu_key_references({p: "A: `[T]` 系统自检**恒出现在主菜单中**（无功能开关）。\n"})
+        assert any("说成在主菜单里" in f and "[T]" in f for f in findings)
+
+    def test_submenu_key_claimed_in_main_menu_question_reported(self, drift, tmp_path):
+        """问句形态「主菜单里找不到 `[T]`」同样报出。"""
+        p = tmp_path / "faq.md"
+        findings = drift.check_menu_key_references({p: "**Q: TUI 主菜单里找不到 `[T]` 系统自检项？**\n"})
+        assert any("[T]" in f for f in findings)
+
+    def test_layered_phrasing_exempt(self, drift, tmp_path):
+        """已声明层级关系（二级 / 不在 / 箭头路径）的表述放行。"""
+        p = tmp_path / "faq.md"
+        text = (
+            "A: `[T]` 是主菜单 `[D]` 的二级项（`[D]` → `[T]`），**不在主菜单顶层**。\n"
+            "`[Q]` 开启后返回主菜单即刻显示；`[T]` 系统自检恒上屏。\n"
+        )
+        assert drift.check_menu_key_references({p: text}) == []
+
+    def test_illegal_submenu_path_reported(self, drift, tmp_path):
+        """箭头路径父子关系不成立 → 分别报「无二级项」与「下无该项」。"""
+        p = tmp_path / "how-to-config.md"
+        findings = drift.check_menu_key_references({p: "`[S]` → `[L]`；`[G]` → `[T]`。\n"})
+        assert any("无二级项" in f for f in findings)
+        assert any("下无 [T] 项" in f for f in findings)
+
+    def test_legal_submenu_path_passes(self, drift, tmp_path):
+        """合法二级路径（`[G]`→`[L]`、`[D]`→`[T]`）放行。"""
+        p = tmp_path / "how-to-config.md"
+        assert drift.check_menu_key_references({p: "`[G]` → `[L]` 改 LLM 参数；`[D]` → `[T]` 看自检。\n"}) == []
+
     def test_bare_word_not_captured(self, drift, tmp_path):
         """「主菜单 code block」里的英文词首字母不当作键（裸键形态须跟空白/标点）。"""
         p = tmp_path / "developer-guide.md"

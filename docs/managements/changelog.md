@@ -15,12 +15,14 @@
 - **LLM 缓存键写侧回归单源**（LLM 缓存键单源约束）：`llm/skeleton.py` 落盘路径自拼 `f"{cache_key}_{provider_name}"`，绕过唯一构造点 `_build_provider_cache_key`——写侧与预检侧任一侧改后缀格式即永久不等，表现为「开关/参数看似生效但每次仍全量调用 LLM」（费用与耗时翻倍、无异常难察觉）；改为调用共享构建函数
 - **预检取数空链时的未绑定变量**：`llm/skeleton._resolve_first_provider` 在 provider 链为空时 `first_model` / `first_endpoint` 从未赋值，`return` 处抛 `UnboundLocalError` 只能由外层 `except Exception` 兑成「无预检」——真实异常与空链无法区分且 debug 日志被常态污染；三个返回值改为显式初值
 - **TUI 首次使用指引指向错误入口**：持仓缺失提示原写「通过菜单 `[D]` 配置持仓目录/文件名」（`[D]` 是诊断与排查，无此入口），LLM 未配置提示原写「菜单 `[S]` 查看状态」（`[S]` 是章节内容呈现）——均改为实际路径 `[G]`（`[H]`/`[F]`）与 `[G] → [L]`，并补页头 `LLM ○` 状态说明
+- **用户手册菜单路径与实现对齐**：`faq.md` 三处把 LLM 调优入口写成「主菜单 `[D]` → `[L]`」（实为 `[G]` → `[L]`，`[D]`→`[L]` 是日志设置）、把 `[T]` 系统自检说成「恒出现在主菜单中」（实为 `[D]` 的二级项）；`requirements.md` 的 R-DIAG-05 同步改写为「`[D]` 二级恒提供」；手册术语按上屏口径统一（「强刷」→「重新生成」、`Enter`→「回车」）
 - **LLM 多链面板横幅缺结构色**：`handlers_llm_providers.py` 单线路分支的横幅裸 `truncate_display("── … ──")`，与同文件多线路分支不一致（一处有色一处无色），违反「结构色统一经 `style_heading` 产出」
 
 ### 变更
 
 - **日志器名称纳入机检**：`check-code-traces.py` 日志统一支路新增 AST 判定「绑定到 `logger` / `_logger` 且名称非 `invest`」（第三方日志器静音与 `core/logger.py` 的构造链豁免），此前该守卫只查 `print()`，日志器名称长期无人守
 - **测试标记合规检查收口两处空洞**：① 目录期望原为「至少命中其一」且期望集含通用 `unit`——任何只标 `unit` 的文件都能通过，域绑定形同虚设；改为「通用标记不计域归属，域标记必须命中其一」。② 标记提取只认 `pytestmark = [...]` 列表写法，`pytestmark = pytest.mark.x` 单值与元组写法被漏读；抽出 `_markers_from_value` 统一三种形态
+- **手册菜单引用机检扩两条规则**（`check-doc-drift` 第 18 项域）：① **主菜单归属**——分句内把二级项说成在主菜单里即报（已声明「二级 / 不在 / 箭头路径」的分句豁免），上线即检出 `requirements.md` 的一处残留错误陈述；② **箭头路径合法性**——`[X] → [Y]` 要求 `X` 为 `[G]`/`[D]` 且 `Y` 属其二级项，杜绝把无二级项的键写成路径
 - **`unit/handlers` 目录期望表修正**：原声明 `{unit, unit_core}` 与实况不符（TUI 处理层实际标 `unit_ui`），改为 `{unit, unit_core, unit_ui}`；`unit/web/test_cost_preflight_contract.py` 补 `unit_web`（原只标 `unit_llm`，`-m unit_web` 选不到它）
 
 ### 文档
