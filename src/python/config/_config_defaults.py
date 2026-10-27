@@ -291,7 +291,7 @@ def _build_template_from_defaults() -> str:
         f'  "enable_history": {json.dumps(d["enable_history"])},  // 组合历史走势+回撤',
         f'  "enable_portfolio_evolution": {json.dumps(d["enable_portfolio_evolution"])},  // 组合演进',
         f'  "enable_action": {json.dumps(d["enable_action"])},  // 行动建议独立章（决策行动，默认开，菜单 C 可切换）',
-        '  // 报告子模块开关（数据质量仪表盘长期可信默认开，其余新增能力默认关闭，避免既有报告突然"变胖"）',
+        '  // 报告子模块开关（新增能力默认关闭，避免既有报告突然"变胖"）',
         "",
         # ── C ──
         "  // ── C. 数据源与提供商 ──",

@@ -45,7 +45,7 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 | `--verbose` | 详细日志输出到 stderr（默认仅写入 `logs/app.log`） |
 | `--non-interactive` | 跳过首次运行交互式引导（定时任务 / 脚本使用） |
 | `--experiment NAME` | 启用**实验项**功能（`experimental` 字段为真的开关；只开不关的简写），**仅本次运行生效（不写入 features.json）**。可重复指定；`NAME` 取开关名（如 `decision_reflection`）或显示名（如 `决策跨期反思闭环`），`all` = 全部启用 |
-| `--feature NAME=VALUE` | 切换**任意**功能开关（八组任一均可），**双向**（可开可关）、**仅本次运行生效（不写盘）**；`NAME` 取注册表键名，`VALUE` 写 `on`/`off`。取值写错会立即报错并列出全部可选值 |
+| `--feature NAME=VALUE` | 切换**任意**功能开关（`[S]` 五组 + `[C]` 两组，任一均可），**双向**（可开可关）、**仅本次运行生效（不写盘）**；`NAME` 取注册表键名，`VALUE` 写 `on`/`off`。取值写错会立即报错并列出全部可选值 |
 | `--chapter KEY=on\|off` | 一次性覆盖**报告章节显隐**（仅本次运行、不写盘）；`KEY` 取章节注册表稳定键名（含智囊团生成子项），可重复。章节来源（`config.json` / `llm_settings.json` / `features.json`）由注册表分派；与 `--feature` 作用于同一子项时本参数后应用。持久化请用 `config set` |
 | `--anonymize {off,code_display,full_anonymous,summary}` | 一次性覆盖**持仓匿名化模式**（仅本次运行、不写盘）；持久化请用 `config set anonymization.mode` |
 | `--llm-provider-order NAME,...` | 重排 LLM 多链线路优先级并**写入** `llm_providers.json`（靠前优先），写盘后退出；`NAME` 须恰好覆盖全部现有线路（少写/多写/重复均拒绝，报错列出当前名单）。与 `--feature`（仅本次运行、不写盘）不同：本参数持久化。亦可在 TUI `[G]` → `[L]` LLM 设置 / Web 配置面板调序 |
