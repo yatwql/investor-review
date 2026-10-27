@@ -500,7 +500,7 @@ class TestSwitchOverrideParsing:
         """取值词表覆盖 1/0 与 yes/no。"""
         assert parse_switch_override("cost_position=1") == ("cost_position", True)
         assert parse_switch_override("cost_position=0") == ("cost_position", False)
-        assert parse_switch_override("data_quality=no") == ("data_quality", False)
+        assert parse_switch_override("market_temperature=no") == ("market_temperature", False)
 
     def test_parse_tolerates_surrounding_spaces(self):
         """``NAME = VALUE`` 两侧空白可容忍（手输命令行常见）。"""

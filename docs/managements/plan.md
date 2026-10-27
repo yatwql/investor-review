@@ -1,12 +1,12 @@
 # 投资复盘助手 — 实现计划
 > 文档版本：0.16.6-dev
-> **编号源**：`plan-next = 232`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-231，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`plan-next = 233`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-232，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
 ## 概述
 
-在办 3 项：P2 1 项（**plan-92**）、P3 1 项（**plan-70**）、P4 1 项（**plan-55**）。命名与实现纪律见 `CLAUDE.md`（单一事实位，本表不重复）。
+在办 4 项：P2 1 项（**plan-92**）、P3 2 项（**plan-70**、**plan-232**）、P4 1 项（**plan-55**）。命名与实现纪律见 `CLAUDE.md`（单一事实位，本表不重复）。
 
 ---
 
@@ -34,6 +34,12 @@
 ### P3 — 预期实施，有空时安排
 
 入选标准：收益明确，但需等待时机或数据积累。
+
+#### `plan-232` 数据质量仪表盘恒真参数清理
+
+**现状**：`data_quality` 开关已内置（仪表盘恒开），但渲染管道仍保留 `enable_data_quality` 布尔参数——跨 4 层（`_generation_full` / `_generation_both` / `orchestrator` → `_report_output` → `excel_generator` / `html_writer`），默认值已改为 `True` 并注明「技术债，参数待清理」。
+**动作**：删除该参数与三处调用点传参，把「仪表盘恒渲染」写进渲染函数本身；同步删 `_report_output` 两处 docstring 的旧口径，并确认 `data_quality_sheet` 无隐藏分支。
+**验收**：全仓 `grep enable_data_quality` 为 0；报告三条生成路径的输出与现在逐字节一致（用同持仓生成前的 Excel/HTML 对比块数）。
 
 #### `plan-70` 决策跨期反思闭环（decision_reflection）转正判据
 

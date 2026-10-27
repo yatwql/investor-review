@@ -61,7 +61,6 @@ def _generate_report_both(
     from src.python.config import (
         is_enable_action,
         is_enable_cost_lots,
-        is_enable_data_quality,
         is_enable_fund_deep_analysis,
         is_enable_history,
         is_enable_news,
@@ -95,7 +94,8 @@ def _generate_report_both(
     _enable_history = is_enable_history(config)
     _enable_portfolio_evolution = is_enable_portfolio_evolution(config)
     _enable_action = is_enable_action(config)
-    _enable_data_quality = is_enable_data_quality()
+    # 数据质量仪表盘已内置恒开（开关移除）——参数保留，恒 True
+    _enable_data_quality = True
     _enable_cost_lots = is_enable_cost_lots()
     _enable_stock_fundamentals = is_enable_stock_fundamentals()
     _enable_summary_highlights = is_feature_enabled("summary_highlights")

@@ -116,7 +116,7 @@ def _domain_tui_hint(domain_key: str) -> str:
     """域的 TUI 入口导引（只作阅读导引，不参与交互）。"""
     mapping = {
         "report_content": "TUI：[C] 报告章节显隐 + [S] 报告章节内容",
-        "presentation_mechanism": "TUI：[G] 基准与脱敏（匿名化）+ [S] 呈现与交互 / 机制与质量",
+        "presentation_mechanism": "TUI：[G] 基准与脱敏（匿名化）+ [S] 机制与质量",
         "data_and_routes": "TUI：[G] 目录与文件 / 基准与脱敏（基准）/ LLM 调优第 7 项",
         "llm_run": "TUI：[G]→[L] 运行参数 1-6",
         "ops_diagnostics": "TUI：[D]→[L] 日志设置",

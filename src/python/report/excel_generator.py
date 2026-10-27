@@ -206,7 +206,7 @@ def generate_excel_report(
     enable_portfolio_evolution: bool = True,  # board 层：组合演进章节是否开启
     enable_fundamental_snapshot: bool = False,  # board 层：持仓基本面章（功能开关 stock_fundamentals）
     enable_action: bool = False,  # board 层：行动建议章节是否开启（config 默认开）
-    enable_data_quality: bool = False,  # 子模块：数据质量仪表盘（功能开关 `data_quality`）
+    enable_data_quality: bool = True,  # 技术债：开关已移除（仪表盘恒开），调用方恒传 True
     progress: ProgressReporter | None = None,
     section_order: list[dict] | None = None,
     pipeline_data: dict | None = None,  # 组合历史走势：环比对比数据（drives delta columns）

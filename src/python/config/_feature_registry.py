@@ -18,7 +18,6 @@ GROUP_PORTFOLIO = "portfolio"
 GROUP_MARKET = "market"
 GROUP_FUND_STYLE = "fund_style"
 GROUP_EVENT_SUMMARY = "event_summary"
-GROUP_PRESENTATION = "presentation"
 GROUP_MECHANISM = "mechanism"
 GROUP_STANDALONE = "standalone"
 GROUP_CHAPTER_OPTIONS = "chapter_options"
@@ -28,9 +27,8 @@ GROUP_LABELS: dict[str, str] = {
     GROUP_PORTFOLIO: "💼 持仓与交易（成本、申赎状态、成本收益、风险调整）",
     GROUP_MARKET: "📈 市场与估值（温度、估值分位、景气度、危机回放）",
     GROUP_FUND_STYLE: "🧩 基金与风格（候选比较、行业 Beta、因子目录）",
-    GROUP_EVENT_SUMMARY: "📰 事件与摘要（事件窗、情绪热点、数据质量、本期要点）",
-    GROUP_PRESENTATION: "🧭 呈现与交互（图表轴值 / 报告页追问）",
-    GROUP_MECHANISM: "⚙ 机制与质量（提示词注入 / 输出评级）",
+    GROUP_EVENT_SUMMARY: "📰 事件与摘要（事件窗、情绪热点、本期要点）",
+    GROUP_MECHANISM: "⚙ 机制与质量（提示词注入 / 报告追问 / 输出评级）",
     GROUP_STANDALONE: "📑 独立章节与回放（新增整页签或多期回放）",
     GROUP_CHAPTER_OPTIONS: "🧩 章节内选项（由 [C] 作为章节子项渲染）",
 }
@@ -40,7 +38,6 @@ GROUP_ORDER: tuple[str, ...] = (
     GROUP_MARKET,
     GROUP_FUND_STYLE,
     GROUP_EVENT_SUMMARY,
-    GROUP_PRESENTATION,
     GROUP_MECHANISM,
     GROUP_STANDALONE,
     GROUP_CHAPTER_OPTIONS,
@@ -81,7 +78,6 @@ GROUP_DOMAIN: dict[str, str] = {
     GROUP_MARKET: DOMAIN_REPORT_CONTENT,
     GROUP_FUND_STYLE: DOMAIN_REPORT_CONTENT,
     GROUP_EVENT_SUMMARY: DOMAIN_REPORT_CONTENT,
-    GROUP_PRESENTATION: DOMAIN_PRESENTATION_MECHANISM,
     GROUP_MECHANISM: DOMAIN_PRESENTATION_MECHANISM,
     GROUP_STANDALONE: DOMAIN_REPORT_CONTENT,
     GROUP_CHAPTER_OPTIONS: DOMAIN_REPORT_CONTENT,
@@ -93,7 +89,6 @@ PANEL_GROUPS: dict[str, tuple[str, ...]] = {
         GROUP_MARKET,
         GROUP_FUND_STYLE,
         GROUP_EVENT_SUMMARY,
-        GROUP_PRESENTATION,
         GROUP_MECHANISM,
     ),
     "[C]": (GROUP_STANDALONE, GROUP_CHAPTER_OPTIONS),
@@ -140,7 +135,7 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
     "report_qa": FeatureSwitchDef(
         "报告对话式追问",
         "报告页内针对本期报告的会话式追问（零新增取数、轮数上限；回答由 LLM 生成、按量计费，用量独立记账）",
-        GROUP_PRESENTATION,
+        GROUP_MECHANISM,
         False,
         True,
         experimental=True,
@@ -216,13 +211,6 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
     ),
     # ── 机制与诊断：只读诊断（不改产物、不写文件，默认关的代价是环境出故障者看不到它） ──
     # ── 分析增强与独立章节与回放（以下声明顺序即各组组内面板顺序）──
-    "data_quality": FeatureSwitchDef(
-        "数据质量仪表盘",
-        "「数据源可用性矩阵」章渲染数据覆盖/时效/降级状态区块（数据侧质量，与 LLM 输出评级无关）",
-        GROUP_EVENT_SUMMARY,
-        True,
-        True,
-    ),
     "industry_beta": FeatureSwitchDef(
         "行业Beta子表",
         "「风格与因子分析」章渲染行业 Beta 子表（行业暴露 + 回归敏感性）",

@@ -490,9 +490,8 @@ Web 模式（浏览器界面）提供「配置编辑」面板，可修改的配�
 | 持仓与交易 | `cost_lots`（默认关）/ `fund_purchase_limit` / `cost_position` / `risk_adjusted_excess`（默认关） | `[S]` 1-4 |
 | 市场与估值 | `valuation_percentile`（默认关）/ `market_temperature` / `crisis_replay`（默认关）/ `prosperity_framework` | `[S]` 5-8 |
 | 基金与风格 | `factor_catalog` / `industry_beta` / `candidate_compare`（默认关） | `[S]` 9-11 |
-| 事件与摘要 | `event_window_impact`（默认关）/ `data_quality` / `market_sentiment`（默认关）/ `summary_highlights`（默认关） | `[S]` 12-15 |
-| 呈现与交互 | `report_qa`（默认关） | `[S]` 16 |
-| 机制与质量 | `decision_reflection`（默认关）/ `deterministic_signal` / `module_quality_gate` | `[S]` 18-20 |
+| 事件与摘要 | `event_window_impact`（默认关）/ `market_sentiment`（默认关）/ `summary_highlights`（默认关） | `[S]` 12-14 |
+| 机制与质量 | `decision_reflection`（默认关）/ `report_qa`（默认关、实验）/ `deterministic_signal` / `module_quality_gate` | `[S]` 15-18 |
 | 独立章节与回放 | `rebalance_schedule_replay`（默认关）/ `holding_change_review`（默认关）/ `whatif_trade_cost`（默认关）/ `stock_fundamentals`（默认关） | `[C]` 整章与关联产物块 |
 | 章节内选项 | `llm_debate_procon`（默认关）/ `llm_debate_conditional` | `[C]` 7.1 / 7.2（智囊团复盘子项） |
 | 持仓匿名化 | `anonymization.mode`（off / code_display / full_anonymous / summary） | `[G]` → `A` |

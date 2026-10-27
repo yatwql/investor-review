@@ -41,7 +41,8 @@ def _generate_full_excel_report(
     result,
     enable_portfolio_evolution: bool = True,
     enable_action: bool = False,
-    enable_data_quality: bool = False,
+    # 技术债：开关已移除（仪表盘恒开），调用方恒传 True；参数待清理
+    enable_data_quality: bool = True,
     enable_cost_lots: bool = False,
     transactions: list | None = None,
     dividends: list | None = None,
@@ -123,7 +124,8 @@ def _generate_full_html_report(
     evolution_data: dict | None = None,
     enable_portfolio_evolution: bool = True,
     enable_action: bool = False,
-    enable_data_quality: bool = False,
+    # 技术债：开关已移除（仪表盘恒开），调用方恒传 True；参数待清理
+    enable_data_quality: bool = True,
     position_status: dict | None = None,
     data_freshness: dict | None = None,
     action_data: dict | None = None,
@@ -158,7 +160,7 @@ def _generate_full_html_report(
         evolution_data: 组合演进数据契约 dict（多快照趋势聚合），
             数据不足时 available=False（模板写占位）。
         enable_portfolio_evolution: board 层 — 组合演进章节是否开启。
-        enable_data_quality: 子模块 — 数据质量仪表盘（默认关，保持旧样式）。
+        enable_data_quality: 子模块 — 数据质量仪表盘（开关已移除，恒开；参数保留待清理）。
         position_status: 品种覆盖诊断 `position_status` 契约 dict，
             品种覆盖区块数据源（开关关闭时忽略）。
         data_freshness: 可信度摘要 `data_freshness` 契约 dict，

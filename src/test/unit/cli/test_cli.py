@@ -192,9 +192,9 @@ class TestArgparseFeatureOverrides:
     def test_feature_repeatable(self):
         """可重复指定，逐项独立解析并保留顺序。"""
         args = _build_parser().parse_args(
-            ["--feature", "cost_position=off", "--feature", "data_quality=off", "report"]
+            ["--feature", "cost_position=off", "--feature", "market_temperature=off", "report"]
         )
-        assert args.feature == [("cost_position", False), ("data_quality", False)]
+        assert args.feature == [("cost_position", False), ("market_temperature", False)]
 
     def test_feature_unknown_name_rejected(self):
         """未知开关名 → SystemExit(2)（解析期报错，不留到运行时静默失效）。"""

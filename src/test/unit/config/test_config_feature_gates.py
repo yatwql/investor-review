@@ -131,10 +131,9 @@ class TestDatasinkFeatureGate:
 
 
 class TestReportProducingSwitches:
-    """报告产物开关（作用域横跨六个内容组 / 独立章 / 章节选项）：功能开关注册表为唯一真源。"""
+    """报告产物开关（作用域横跨五个内容组 / 独立章 / 章节选项）：功能开关注册表为唯一真源。"""
 
     KEYS = (
-        "data_quality",
         "industry_beta",
         "candidate_compare",
         "cost_lots",

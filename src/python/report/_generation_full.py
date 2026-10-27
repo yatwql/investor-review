@@ -69,7 +69,6 @@ def _generate_report_full(
     from src.python.config import (
         is_enable_action,
         is_enable_cost_lots,
-        is_enable_data_quality,
         is_enable_fund_deep_analysis,
         is_enable_history,
         is_enable_llm,
@@ -106,7 +105,8 @@ def _generate_report_full(
 
         _llm_reason = llm_report_unavailable_reason() or "LLM 分析章节未启用"
         reporter.warn(f"{_llm_reason}；本次按不含 LLM 内容生成（full 等同 both）")
-    _enable_data_quality = is_enable_data_quality()
+    # 数据质量仪表盘已内置恒开（开关移除）——参数保留，恒 True
+    _enable_data_quality = True
     _enable_cost_lots = is_enable_cost_lots()
     _enable_stock_fundamentals = is_enable_stock_fundamentals()
     from src.python.config.features import is_feature_enabled
