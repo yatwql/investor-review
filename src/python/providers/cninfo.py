@@ -261,7 +261,7 @@ def _post_json(
     *,
     timeout: float | None = None,
     deadline: bool = False,
-) -> dict[str, Any] | None:
+) -> dict[str, Any] | list[Any] | None:
     """限速 POST 取 JSON；失败返回 None（不计熔断，交链路/编排降级）。
 
     连接级瞬时失败由 ``_with_transient_retry`` 退避重试一次；HTTP 429 另有自己的退避分支。

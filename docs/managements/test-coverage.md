@@ -1,5 +1,5 @@
 # 测试覆盖统计
-> 文档版本：0.16.4-dev
+> 文档版本：0.16.4
 
 > ⚠ 以下测试项数为撰写时的快照值，实际计数随版本迭代而变化。`模式对应测试量` 表由 `--mode bench --update-docs` 自动回填本机实测；功能域/分组等子表精确统计请运行 `scripts/test-collect-coverage.py`（或 `pytest src/test/ --collect-only -q`）获取实时计数。
 
@@ -12,13 +12,13 @@
 <!-- mode-count-table:start -->
 | `--mode` 值 | 覆盖项数 | 典型耗时 |
 |:------------|:--------:|:--------:|
-| `unit` | **12114** | ~50s |
+| `unit` | **12114** | ~55s |
 | `standard` | **10879** | ~28s |
 | `scenario` | **292** | ~6s |
 | `regression` | **292** | ~12s |
-| `dev-verify` | **8514** | ~48s |
+| `dev-verify` | **8514** | ~51s |
 | `verify` | **12116** | ~29s |
-| `integration` | **343** | ~12s |
+| `integration` | **343** | ~13s |
 | `edge` | **1167** | ~12s |
 | `data` | **70** | ~5s |
 | `all` | **12459** | ~28s |
@@ -41,7 +41,7 @@
 #### 采集环境属性
 
 <!-- env-table:start -->
-| 环境属性 | dragonball（2026-10-26 实测） | stallman-NB1（2026-10-02 实测） |
+| 环境属性 | dragonball（2026-10-27 实测） | stallman-NB1（2026-10-02 实测） |
 |:---------|:---------------------------|:---|
 | 操作系统 | Linux | Windows |
 | 系统版本 | 6.18.25-x64v3-xanmod1 | 11 |
@@ -57,7 +57,7 @@
 | 并行级别 | medium | medium |
 | worker 数 | 8 | 4 |
 | 采集并行度 | 2 | 1 |
-| 采集日期 | 2026-10-26 | 2026-10-02 |
+| 采集日期 | 2026-10-27 | 2026-10-02 |
 <!-- env-table:end -->
 
 #### 各模式耗时对照
@@ -65,16 +65,16 @@
 > 注：表内耗时为 bench 多模式**串行采集**墙钟（并行度 1，环境属性表「采集并行度」行记录口径）；`test-runner --jobs N` 默认自适应（4 核+ 取 2、弱机取 1），显式 N 覆盖；并行含模式间 CPU 争抢，跨并行度不与本表直接比。单模式命令不受影响。
 
 <!-- duration-table:start -->
-| `--mode` | dragonball（2026-10-26 实测） | stallman-NB1（2026-10-02 实测） |
+| `--mode` | dragonball（2026-10-27 实测） | stallman-NB1（2026-10-02 实测） |
 |:---------|:---------------------------:|:---:|
-| `unit` | ~50s | ~3min |
+| `unit` | ~55s | ~3min |
 | `standard` | ~28s | ~3min |
 | `scenario` | ~6s | ~51s |
 | `regression` | ~12s | ~1min |
 | `verify,regression` | ~35s（verify+regression 顺序之和） | ~5min（verify+regression 顺序之和） |
-| `dev-verify` | ~48s | ~4min |
+| `dev-verify` | ~51s | ~4min |
 | `verify` | ~29s | ~4min |
-| `integration` | ~12s | ~2min |
+| `integration` | ~13s | ~2min |
 | `edge` | ~12s | ~1min |
 | `data` | ~5s | ~31s |
 | `all` | ~28s | ~4min |
@@ -82,7 +82,7 @@
 | `report` | ~12s | ~2min |
 | `all_no_unit` | ~11s | ~1min |
 | `scenario_extreme` | ~4s | ~32s |
-| 数据更新时间 | 2026-10-26 | 2026-10-02 |
+| 数据更新时间 | 2026-10-27 | 2026-10-02 |
 <!-- duration-table:end -->
 
 > **2026-10-03 门禁口径变更**：P0 `dev-verify` 与 P1 `verify` 的 marker 已并入 `unit_report` 域（98 文件 / 2,130 用例此前不进任何门禁档），新量级见上方「模式对应测试量」表（本机实测 ~38s / ~32s）；上方对照表中 `dev-verify`/`verify` 两行为**并入前快照**，跨档对比时以新口径为准。

@@ -1,5 +1,5 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.16.4-dev
+> 文档版本：0.16.4
 > **编号源**：`rf-next = 927`（新增问题提出后更新为 +1；已用最大 rf-926，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
@@ -38,20 +38,12 @@
 
 ### 开发期已修复（0.16.4-dev）
 
-| # | 问题 | 修复 |
-|---|------|------|
-| **rf-919** | 页头状态行的「详情」指引指向已不存在的菜单键：写死 `〔详情 [4][H][S]〕`，而主菜单把缓存管理收到 `[3]`、持仓信息目录下沉为 `[G]` 子项，`[4]` 与顶层 `[H]` 均已不存在——按指引按键只会落空 | 指引键收敛为常量 `status_line.DETAIL_HINT_KEYS = ("3", "D", "S")`（缓存统计 / 数据源与运行日志 / 功能开关与 LLM 模块），渲染由 `_detail_hint()` 单源派生；新增守护用例对主菜单键做子集校验（菜单改键即红），并在 DESIGN-TUI 页头状态行契约写明出处。回归 2 例（指引键 ⊆ 主菜单 / 渲染文本逐键出现） |
-| **rf-920** | 页头「新鲜度」自首版起恒为「—」：反推缓存键未剥 `_{版本}` 戳（拼出 `_v4_v4`）且 `cache.get` 的 `max_age_seconds` 未传（TypeError 被兜底吞掉） | 反推口径收为 `cache_key_from_file_name` 单源，`get(key, inf)`（要报的就是偏旧数据）；回归 1 例走真实读档（不 patch `get`） |
-| **rf-921** | 缓存包启动清理在异常路径崩：`del _logger, _cleaned` 在 `try` 外，`clean_sensitive` 抛异常时 `_cleaned` 未绑定即删；`os.listdir` 无容错 | 初值 0 + `_cache_file_names()` 容错列举（清理尽力而为，不中断主流程） |
+（本版开发期已修复项已随 v0.16.4 发布迁入归档档案）
 
-| **rf-922** | 用户文档与配图滞后于页头状态行改动：手册无状态行读法、`README` 仍写「缓存过期/备用源/五项」、目录树描述滞后，且「菜单分组」段落组成员写的是已不存在的键（`P/S/M/I/A/D/R`、`V/H/T`） | 手册补「页头状态行读法」+ 分组归属按 `MENU_GROUPS` 纠偏；README/`folders`/`developer-guide`/`test-coverage` 同步；配图重生成 |
-| **rf-923** | 截图工具逐段步进按「字号 × 0.62」估算，等宽 CJK 字体实际步进不符 → 配色段起点累积偏移（README 配图状态行彩色段前一大段空白） | 改 `ImageDraw.textlength` 实测推进 + 画布按实测宽度；回归 1 例断言偏移 ≤4px |
-| **rf-924** | cninfo orgId 反查单次挂 40.2s：20s 预算在 httpx 分阶段超时下放大成 2 倍，且失败结果不留痕——同一网络条件下每次重跑都重付一遍（实测报告 167.7s vs 上轮 121.1s，数据准备 52.7s vs 6.5s） | 该路径改端到端墙钟 8s（`post_with_deadline` 加表单编码支持）+ 1h 负缓存并区分「连接失败/源侧无该代码档案」；回归 3 例 |
-| **rf-925** | 主源财报正文的「确定性空结果」未缓存：5 只 A 股均无「管理层讨论与分析」章节，每份报告逐只重走链路（合计约 10s），属可避免的重复请求 | 按 `(doc_id, section)` 记 1 天负缓存 `report_datasink_doc_miss_`（各槽原因均为确定性拒绝才写：该文档无/异源候选拒服务；任一传输失败不写）；登记进「财报索引」缓存类型；命中按轮计数并打一行 INFO 汇总（无需 DEBUG）；回归 5 例 |
-| **rf-926** | 截图脚本的演示报告污染真实运行状态：`make-screenshots.py report` 会向 `data/state/perf_history.jsonl`、`datasource_health.jsonl`、`data/calibration/dedup_anchors.jsonl` 追加演示数据（实测 1 条 perf + 1 条健康），违背脚本自述的「真实 data/ 零接触」 | 跑前快照 `data/state` 与 `data/calibration`、跑后原样还原（含删除运行期新增文件）；已清理本次污染记录；补 2 例回归 |
+（本版开发期已修复项已随 v0.16.4 发布迁入归档档案）
 
 ### 归档档案
-- [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-10-26）
+- [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-10-27）
 - [`archived_review-findings.0.15.x.md`](../archive/v0.15.x/archived_review-findings.0.15.x.md) — v0.15.x（2026-10-24 ~ 2026-10-25）
 - [`archived_review-findings.0.14.x.md`](../archive/v0.14.x/archived_review-findings.0.14.x.md) — v0.14.x（2026-10-21 ~ 2026-10-23）
 - [`archived_review-findings.0.13.x.md`](../archive/v0.13.x/archived_review-findings.0.13.x.md) — v0.13.x（2026-10-14 ~ 2026-10-21）
