@@ -84,7 +84,7 @@
 | 3 | [CLI 命令行模式](how-to-use-cli-mode.md) | 子命令、全局参数、退出码、定时任务、通知 | 自动化 / 定时任务 |
 | 4 | [Web 浏览器模式](how-to-use-web-mode.md) | 五区工作台：生成 / 调仓模拟 / 配置 / 运行状态 / 日志 | 电脑端使用者 |
 | 5 | [常规配置指引](how-to-config.md) | 字段总表、出厂样例、缓存 TTL、功能开关 | 想调优的人 |
-| 5.1 | [配置字段详解](how-to-config-fields.md) | 逐键说明：路径 / 章节可见性 / 数据源 / 行为调优 / 基准 / 快照 / 流动性 / 匿名化 / 通知 / 日志 | 改某项但不确定含义 |
+| 5.1 | [配置参考：逐项详解](how-to-config-reference.md) | 逐键说明：路径 / 章节可见性 / 数据源 / 行为调优 / 基准 / 快照 / 流动性 / 匿名化 / 通知 / 日志 | 改某项但不确定含义 |
 | 6 | [LLM 配置指引](how-to-config-llm.md) | 接入 LLM、多 Provider 链式、节流、Thinking、缓存与成本 | 想用 LLM 分析的人 |
 | 6.1 | [LLM 参考附录](how-to-config-llm-reference.md) | 逐家 provider 配置示例、完整模型定价表 | 配线路 / 算成本 |
 | 7 | [报告文件结构](reports-instruction.md) | Excel 每页签 / HTML 每章节逐项说明，含 What-if 报告 | 看报告的人 |

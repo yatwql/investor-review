@@ -18,8 +18,8 @@
 | 测试用例 | — | — | 12,482 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 6,755 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,537 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 200 | 69,684 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 13,661 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 200 | 69,685 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 13,662 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 183 | 55,427 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 3 | ~503 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + 跨模块导入面重命名分析 |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -1461,7 +1461,7 @@ investor-review/
 │   │   ├── datasource.md             #     数据源一览
 │   │   ├── datasource-reliability.md #     数据源可靠性文档（运维视角）
 │   │   ├── faq.md                    #     常见问题解答
-│   │   ├── how-to-config-fields.md   #     配置字段详解（A/B/C/E…S 逐节逐键，含默认值与判定口径）
+│   │   ├── how-to-config-reference.md #    配置参考：逐项详解（A/B/C/E…S 逐节逐键，含默认值与判定口径）
 │   │   ├── how-to-config-llm-reference.md #   LLM 参考附录（逐家 provider 配置示例 + 完整模型定价表）
 │   │   ├── how-to-config-llm.md      #     LLM 配置指南
 │   │   ├── how-to-config.md          #     配置说明（字段总表 + 市场时段/缓存 TTL + 功能开关）
