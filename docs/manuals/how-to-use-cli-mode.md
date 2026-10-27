@@ -74,7 +74,7 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 > # 本次运行关闭系统自检的界面入口（CLI 的 doctor 子命令本就不受该开关约束）
 > `.venv/bin/python -m src.python.cli --feature report_qa=on doctor`
 >
-> # 本次运行关闭量化指标输出（雷达图各轴 N/A）+ 关闭数据质量仪表盘（数据源可用性矩阵不渲染区块）
+> # 本次运行关闭两项报告增强：持仓成本区间位置列 + 市场温度刻度行（其余照常）
 > .venv/bin/python -m src.python.cli --feature cost_position=off --feature market_temperature=off report --type full
 > ```
 >

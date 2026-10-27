@@ -1439,12 +1439,10 @@ LLM 五维度量化评分，每项满分 100：
 | `decision_reflection` | bool | false（默认关闭） | 决策跨期反思闭环启停：登记决策 → 真实行情结算命中率 → 教训回灌专家复盘提示词 |
 | `deterministic_signal` | bool | true（默认开启） | 确定性信号模块启停（读侧注入 + 跨期沉淀双面，原 `signal_pre_digest`/`signal_ledger` 两开关合并）。信号注入面：市场温度/估值分位/尾部风险/**持仓基本面**/**叙事与数字背离**五路预消化为带方向标注的信号行（`信号：… 看多/看空/中性/风险高/中/低/需交叉核实`）注入专家复盘与持仓体检提示词（后两路需 DataSinking 数据底座就绪，未就绪自动缺席）。**默认开启**——读侧注入既有信号，不额外调用 LLM、不写盘；无可用信号时静默跳过、缓存键逐字节不变 |
 | `module_quality_gate` | bool | true（默认开启） | LLM 输出评级启停：对 4 个 LLM 模块输出按完整性/篇幅评 A~F，低评级中「内容在但存在缺陷」者随内容头部注入 `【内容质量提示】` 横幅（只标注、不阻断、不重试、不写回缓存）。**默认开启**——纯只读分级，A/B 级健康输出零噪音 |
-| `metrics_enabled` | bool | true | 量化指标显示（原 `metrics_sharpe` / `metrics_calmar` / `metrics_hhi` / `metrics_winrate` / `metrics_turnover` / `metrics_risk_contribution` / `metrics_beta` 七项并入）：指标始终全量计算；关闭即量化指标雷达图各轴显示 N/A（含降级 3 轴）且断路器暂停该组指标的失败计数，智囊团复盘指标表不受影响 |
 
 用法：在 `features.json` 中仅列出需覆写的开关，未列出的保持默认值。
 ```json
 {
-  "metrics_enabled": false,
   "market_temperature": false
 }
 ```

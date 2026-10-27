@@ -385,7 +385,7 @@
 | `llm_debate_conditional` | **true** | 辩论-条件推理（情景化分析：涨/跌/震荡；与正反辩论相邻，保持辩论开关同组可查。**默认开启**——情景段与既有输出在同一次调用内产出，不换调用次数） |
 
 
-> 以上 26 项为**全部**功能开关清单（默认值与代码 `features.py::feature_switch_registry` 一致）。features.json 仅需列出需覆写的开关，未列出的保持默认值。
+> 以上 24 项为**全部**功能开关清单（默认值与代码 `features.py::feature_switch_registry` 一致）。features.json 仅需列出需覆写的开关，未列出的保持默认值。
 > 该文件不包含敏感信息，可安全纳入版本控制。
 
 ---

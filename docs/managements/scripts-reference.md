@@ -385,7 +385,7 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
 5. 开关默认值断言（`` `flag` `` 后紧随「默认开/关」）↔ 注册表默认值
 6. 配置标量默认值表（`how-to-config.md`）↔ `_DEFAULT_CONFIG`
 7. LLM 默认参数表（`llm-technical.md`）↔ `_DEFAULT_LLM_SETTINGS` + 缓存 TTL 注册表
-8. TUI 两面板编号与分组边界（`how-to-use-tui-menu.md`）：`[S]` 六组编号 ↔ `features.panel_option_numbers`、`[C]` 章节与 `7.1`/`7.2` 子项编号 ↔ 章节注册表，块标题区间与 features 键名映射逐项对账（实现见 `_doc_drift/_format_panels.py`）
+8. TUI 两面板编号与分组边界（`how-to-use-tui-menu.md`）：`[S]` 五组编号 ↔ `features.panel_option_numbers`、`[C]` 章节与 `7.1`/`7.2` 子项编号 ↔ 章节注册表，块标题区间与 features 键名映射逐项对账（实现见 `_doc_drift/_format_panels.py`）
 9. 目录树（`folders.md`）↔ 文件系统实测（`src/`、`scripts/`、`docs/{managements,manuals,plan}`）；同父目录 `vN.N.x/` 版本目录块按版本号升序
 10. 项目统计表（`folders.md`）↔ 实测文件数/行数（加 `--with-test-count` 再核「测试用例」行）
 11. 测试覆盖计数表（`test-coverage.md`）↔ `scripts/test-collect-coverage.py` 快照（仅 `--with-test-count`）
