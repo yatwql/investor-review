@@ -10,7 +10,7 @@ from _traces_code.config_defaults import _scan_config_default_fallbacks
 from _traces_code.exemptions import _is_chapter_excluded, _is_round_excluded
 from _traces_code.extract import _iter_comment_lines, _scan_identifiers
 from _traces_code.layers import _scan_core_layering
-from _traces_code.logging_discipline import _scan_print_calls
+from _traces_code.logging_discipline import _scan_logger_calls, _scan_print_calls
 from _traces_code.patterns import (
     _COMPILED_PATTERNS,
     _PATTERNS_PREFILTER,
@@ -82,6 +82,9 @@ def scan_file(fpath: Path, verbose: bool) -> list[tuple[int, str, str, str]]:
 
     # 日志统一守卫（print() 仅限交互呈现层，其余模块走 logging 落盘）
     hits.extend(_scan_print_calls(fpath, REPO_ROOT))
+
+    # 日志器名称统一守卫（C8：一律 logging.getLogger("invest")，否则脱离统一 handler 与落盘）
+    hits.extend(_scan_logger_calls(fpath, REPO_ROOT))
 
     # 配置默认值单源守卫（禁止与默认表同值的字面量兜底）
     hits.extend(_scan_config_default_fallbacks(fpath, REPO_ROOT))

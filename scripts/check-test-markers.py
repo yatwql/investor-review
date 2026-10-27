@@ -51,7 +51,7 @@ EXPECTED_DIR_MARKERS: dict[str, set[str]] = {
     "unit/config": {"unit", "unit_config"},
     "unit/core": {"unit", "unit_core"},
     "unit/fetcher": {"unit", "unit_fetcher"},
-    "unit/handlers": {"unit", "unit_core"},
+    "unit/handlers": {"unit", "unit_core", "unit_ui"},
     "unit/llm": {"unit", "unit_llm", "llm"},
     "unit/news": {"unit", "unit_news"},
     "unit/providers": {"unit", "unit_providers"},
@@ -96,8 +96,31 @@ def registered_markers(conftest_path: Path = CONFTEST_PATH) -> set[str]:
     return names
 
 
+#: 通用标记（仅表达测试层级，不计作域归属）
+_GENERIC_MARKERS = {"unit", "scenario"}
+
 #: 已知的合法标记全集（与 src/test/conftest.py 注册集同源派生，见 `registered_markers`）
 KNOWN_MARKERS: set[str] = registered_markers()
+
+
+def _markers_from_value(value: ast.expr) -> set[str]:
+    """从 ``pytestmark`` 的赋值表达式提取标记名（支持列表/元组/单个 mark）。"""
+    elts: list[ast.expr] = []
+    if isinstance(value, (ast.List, ast.Tuple)):
+        elts = list(value.elts)
+    else:
+        elts = [value]
+    found: set[str] = set()
+    for elt in elts:
+        if (
+            isinstance(elt, ast.Attribute)
+            and isinstance(elt.value, ast.Attribute)
+            and elt.value.attr == "mark"
+            and isinstance(elt.value.value, ast.Name)
+            and elt.value.value.id == "pytest"
+        ):
+            found.add(elt.attr)
+    return found
 
 
 def _extract_markers_from_file(filepath: Path) -> set[str]:
@@ -110,20 +133,11 @@ def _extract_markers_from_file(filepath: Path) -> set[str]:
     markers: set[str] = set()
 
     for node in ast.walk(tree):
-        # 提取 pytestmark = [pytest.mark.xxx, ...]
+        # 提取 pytestmark 赋值（列表 / 元组 / 单个 `pytest.mark.xxx` 三种写法）
         if isinstance(node, ast.Assign):
             for target in node.targets:
                 if isinstance(target, ast.Name) and target.id == "pytestmark":
-                    if isinstance(node.value, ast.List):
-                        for elt in node.value.elts:
-                            if (
-                                isinstance(elt, ast.Attribute)
-                                and isinstance(elt.value, ast.Attribute)
-                                and elt.value.attr == "mark"
-                                and isinstance(elt.value.value, ast.Name)
-                                and elt.value.value.id == "pytest"
-                            ):
-                                markers.add(elt.attr)
+                    markers |= _markers_from_value(node.value)
         # 提取 @pytest.mark.xxx 装饰器（类级或方法级）
         if isinstance(node, (ast.ClassDef, ast.FunctionDef)):
             for decorator in node.decorator_list:
@@ -180,10 +194,13 @@ def check_file(filepath: Path, verbose: bool, ci_mode: bool) -> list[str]:
     rel_dir = _get_relative_dir(filepath)
     expected = EXPECTED_DIR_MARKERS.get(rel_dir)
     if expected is not None:
-        # 提取该文件实际含有的、属于预期集的标记
-        found_expected = markers & expected
-        if not found_expected:
-            violations.append(f"{rel_path}: 缺少期望标记 {expected}（当前: {markers or '空'}）")
+        # 通用标记（`unit` / `scenario`）只表达测试层级，不承载域归属：只标 `unit`
+        # 会让目录期望形同虚设（曾放过 `unit/web/` 下只标 `unit_llm` 的错域文件）。
+        # 故域标记必须命中其一；期望集若只有通用标记则退回原集合判定。
+        domain_expected = expected - _GENERIC_MARKERS
+        required = domain_expected or expected
+        if not (markers & required):
+            violations.append(f"{rel_path}: 缺少域标记 {sorted(required)}（当前: {markers or '空'}）")
 
     if verbose and not violations:
         print(f"  [OK] {rel_path} — markers: {sorted(markers)}")

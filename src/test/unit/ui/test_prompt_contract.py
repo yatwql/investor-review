@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import ast
 import re
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -301,7 +302,7 @@ class TestEnterDeclaresAction:
     _ENTER_DECLARED = re.compile(r"回车\s*[=＝]|回车[/或]|回车\s*[\u4e00-\u9fff]{1,4}")
     _CANCEL_WORDS = ("取消", "中止", "跳过")
 
-    def _user_literals(self):
+    def _user_literals(self) -> Iterator[tuple[Path, ast.Constant, str]]:
         for path in _tui_sources():
             tree = ast.parse(path.read_text(encoding="utf-8"))
             docstrings = {
@@ -316,12 +317,11 @@ class TestEnterDeclaresAction:
                 if isinstance(node, ast.Constant) and isinstance(node.value, str):
                     if id(node) in docstrings or "回车" not in node.value:
                         continue
-                    yield path, node
+                    yield path, node, node.value
 
     def test_enter_declares_action_name(self):
         violations = []
-        for path, node in self._user_literals():
-            text = node.value
+        for path, node, text in self._user_literals():
             if self._ENTER_DECLARED.search(text):
                 continue
             violations.append(f"{path.name}:{node.lineno} {text.strip()[:70]}")
@@ -333,8 +333,7 @@ class TestEnterDeclaresAction:
     def test_enter_cancel_clause_leads(self):
         """回车承担取消/中止/跳过时，该分句须是提示首句（不得放在末尾括注）。"""
         violations = []
-        for path, node in self._user_literals():
-            text = node.value
+        for path, node, text in self._user_literals():
             if not any(w in text for w in self._CANCEL_WORDS):
                 continue
             clauses = [c.strip() for c in text.split("/")]
@@ -390,3 +389,42 @@ class TestPanelNumberingContiguous:
             if numbers != expected:
                 violations.append(f"{filename}:{func} 编号 {numbers} ≠ {expected}")
         assert violations == [], "面板手写编号须 1..N 连续（0 为返回项）：\n" + "\n".join(violations)
+
+
+class TestFirstRunHintsPointToRealMenus:
+    """首次使用指引里的菜单键必须真实存在且指向正确入口。
+
+    回归背景：持仓目录实际在 `[G] 全局设置 → [H]/[F]`，LLM 设置在 `[G] → [L]`；
+    指引曾指向 `[D]` / `[S]`（分别是诊断与章节内容面板），用户按提示走不到目标项。
+    """
+
+    @staticmethod
+    def _hints(monkeypatch, tmp_path) -> str:
+        """在「持仓文件不存在 + LLM 未配置」条件下捕获指引文本。"""
+        import io
+
+        from src.python.tui import tui_menu
+
+        monkeypatch.setattr(
+            tui_menu, "_config_cache", {"holdings_dir": str(tmp_path), "holdings_filename": "missing.xlsx"}
+        )
+        import src.python.core.system_info as system_info
+
+        monkeypatch.setattr(system_info, "llm_status", lambda: {"configured": False})
+        out = io.StringIO()
+        monkeypatch.setattr("sys.stdout", out)
+        tui_menu.print_header()
+        return out.getvalue()
+
+    def test_holdings_hint_points_to_global_settings(self, monkeypatch, tmp_path):
+        text = self._hints(monkeypatch, tmp_path)
+        holdings_line = next(line for line in text.splitlines() if "持仓" in line and "配置" in line)
+        assert "[G]" in holdings_line, f"持仓目录入口应在 [G]，实际：{holdings_line}"
+        assert "[H]" in holdings_line and "[F]" in holdings_line
+        assert "[D]" not in holdings_line, f"持仓目录不在 [D]，实际：{holdings_line}"
+
+    def test_llm_hint_does_not_point_to_chapter_panel(self, monkeypatch, tmp_path):
+        text = self._hints(monkeypatch, tmp_path)
+        llm_line = next(line for line in text.splitlines() if "llm_key.json" in line)
+        assert "[G]" in llm_line and "[L]" in llm_line
+        assert "[S]" not in llm_line, f"LLM 设置不在 [S]（章节内容面板），实际：{llm_line}"

@@ -32,7 +32,7 @@ pytestmark = [
 def discipline():
     """日志统一守卫实现（load_script 先把 scripts/ 注入 sys.path）。"""
     load_script("check-code-traces.py")
-    from _traces_code import logging_discipline
+    from _traces_code import logging_discipline  # pyright: ignore[reportMissingImports]  # scripts/ 由 load_script 注入 sys.path
 
     return logging_discipline
 
@@ -183,3 +183,81 @@ class TestWhitelistIntegrity:
             if not discipline._is_print_exempt(rel):
                 offenders.append(rel)
         assert offenders == [], f"这些模块含 print() 却不在豁免域，应改用 logging：{offenders}"
+
+
+class TestLoggerNameDetection:
+    """日志器名称统一：模块日志器必须为 ``logging.getLogger("invest")``。"""
+
+    def test_name_dunder_name_flagged(self, tmp_path, discipline) -> None:
+        path = _write_production(
+            tmp_path,
+            "src/python/report/sample_panel.py",
+            "import logging\n\nlogger = logging.getLogger(__name__)\n",
+        )
+        hits = discipline._scan_logger_calls(path, tmp_path)
+        assert [h[1] for h in hits] == ["LOG"]
+        assert hits[0][0] == 3, "行号应指向日志器绑定所在行"
+
+    def test_custom_name_flagged(self, tmp_path, discipline) -> None:
+        path = _write_production(
+            tmp_path,
+            "src/python/tui/sample_status.py",
+            "import logging\n\n_logger = logging.getLogger('mymod')\n",
+        )
+        assert len(discipline._scan_logger_calls(path, tmp_path)) == 1
+
+    def test_annotated_assignment_flagged(self, tmp_path, discipline) -> None:
+        path = _write_production(
+            tmp_path,
+            "src/python/analysis/sample.py",
+            "import logging\n\nlogger: logging.Logger = logging.getLogger('x')\n",
+        )
+        assert len(discipline._scan_logger_calls(path, tmp_path)) == 1
+
+    def test_invest_name_accepted(self, tmp_path, discipline) -> None:
+        path = _write_production(
+            tmp_path,
+            "src/python/analysis/sample.py",
+            "import logging\n\nlogger = logging.getLogger('invest')\n",
+        )
+        assert discipline._scan_logger_calls(path, tmp_path) == []
+
+    def test_third_party_silencing_not_flagged(self, tmp_path, discipline) -> None:
+        """第三方日志器静音（未绑定到 ``logger`` 名）不属本约束域。"""
+        path = _write_production(
+            tmp_path,
+            "src/python/web/app.py",
+            "import logging\n\nlogging.getLogger('werkzeug').setLevel(logging.WARNING)\n",
+        )
+        assert discipline._scan_logger_calls(path, tmp_path) == []
+
+    def test_logger_factory_exempt(self, tmp_path, discipline) -> None:
+        """``core/logger.py`` 是 ``"invest"`` 的唯一创建点，按变量名建链属合法。"""
+        path = _write_production(
+            tmp_path,
+            "src/python/core/logger.py",
+            "import logging\n\n\ndef setup_logger(name='invest'):\n    logger = logging.getLogger(name)\n    return logger\n",
+        )
+        assert discipline._scan_logger_calls(path, tmp_path) == []
+
+    def test_non_production_path_skipped(self, tmp_path, discipline) -> None:
+        path = _write_production(
+            tmp_path,
+            "src/test/unit/sample_test.py",
+            "import logging\n\nlogger = logging.getLogger(__name__)\n",
+        )
+        assert discipline._scan_logger_calls(path, tmp_path) == []
+
+    def test_current_production_loggers_all_unified(self, discipline) -> None:
+        """当前生产层不含未统一的模块日志器（守护基线自洽）。"""
+        from src.python.core.constants import PROJECT_ROOT
+
+        root = Path(PROJECT_ROOT)
+        offenders = []
+        for path in (root / "src" / "python").rglob("*.py"):
+            if "__pycache__" in path.parts:
+                continue
+            hits = discipline._scan_logger_calls(path, root)
+            if hits:
+                offenders.append(f"{path.relative_to(root).as_posix()}:{hits[0][0]}")
+        assert offenders == [], f"这些模块未使用 logging.getLogger('invest')：{offenders}"

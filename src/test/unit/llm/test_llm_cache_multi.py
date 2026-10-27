@@ -287,3 +287,49 @@ class TestPrecheckSummaryLog:
         assert "global_macro" in line
         assert "expert_review" in line  # 真未命中
         assert "health_check" in line  # 跳过缓存
+
+
+class TestProviderKeySingleSource:
+    """键尾只有 ``_build_provider_cache_key`` 一处构造（写侧与预检侧同源）。"""
+
+    def test_write_side_reuses_shared_builder(self) -> None:
+        """落盘键必须经共享构建函数，不得就地拼接 `_{provider_name}`。"""
+        import inspect
+
+        from src.python.llm import skeleton
+
+        src = inspect.getsource(skeleton)
+        assert "_build_provider_cache_key(cache_key, llm_config, module_key, provider_name)" in src, (
+            "写侧应调用共享构建函数生成键尾"
+        )
+        assert "_build_provider_cache_key(cache_key, llm_config, module_key, first_name)" in src, (
+            "预检侧应调用共享构建函数生成键尾"
+        )
+
+    def test_write_key_matches_precheck_key(self) -> None:
+        """回退场景（实际 provider ≠ 链首）下，写侧键与同 provider 的预检键一致。"""
+        from src.python.llm.skeleton import _build_provider_cache_key
+
+        cfg = {"_provider_list": [{"name": "p1"}, {"name": "p2"}]}
+        base = "llm_global_macro_fp123"
+        assert _build_provider_cache_key(base, cfg, "global_macro", "p2") == f"{base}_p2"
+
+
+class TestResolveFirstProviderEmptyChain:
+    """空链时预检返回值确定（不靠外层 except 静默兜底）。"""
+
+    def test_empty_chain_returns_none_without_exception_path(self) -> None:
+        from unittest.mock import patch
+
+        from src.python.llm import skeleton
+
+        with (
+            patch("src.python.llm.strategy.resolve_provider_chain", return_value=[]),
+            patch.object(skeleton.logger, "debug") as debug_mock,
+        ):
+            result = skeleton._resolve_first_provider(
+                {"_provider_list": [{"name": "p1"}]},
+                "global_macro",
+            )
+        assert result == (None, None, "")
+        debug_mock.assert_not_called()

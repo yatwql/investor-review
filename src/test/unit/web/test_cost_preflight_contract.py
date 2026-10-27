@@ -20,7 +20,7 @@ import pytest
 
 from src.python.llm.cost_forecast import budget_status, forecast_run_cost
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_llm]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_web, pytest.mark.unit_llm]
 
 _MAIN_JS = pathlib.Path("src/static/web/main.js")
 

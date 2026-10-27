@@ -13,7 +13,7 @@
   3.  功能开关表        config/features.py `feature_switch_registry`    → manuals/how-to-config.md
   4.  开关分组计数断言  同上（四组连写链 `呈现与体验 A / 分析增强 B / 独立章节 C / 机制与诊断 D`、单组 `组名（N 项`（含加粗组名）、`共/提供 N 项开关`、`完整 N 项与分组清单`；另检旧三组名残留 `实验组/常规组/报告组/报告章节与增强组`，组名与残留名单以 `_GROUP_DOC_NAMES`/`_RETIRED_GROUP_NAMES` 注册表派生为真值）→ 全库文档
   5.  开关默认值断言    同上（`` `flag` `` 后紧随「默认开/关」）          → 全库文档
-  6.  配置标量默认值表   config/_config_defaults.py `_DEFAULT_CONFIG`   → manuals/how-to-config.md
+  6.  配置标量默认值表   config/_config_defaults.py `_DEFAULT_CONFIG`   → manuals/how-to-config.md + how-to-config-reference.md
   7.  LLM 默认参数表     config/_llm_settings_defaults.py + 缓存 TTL 注册表 → managements/llm-technical.md
   8.  TUI 面板编号       `tui/handlers_config.py` 的派生规则（LLM 可见模块 + 作用域四组顺序连续编号）→ manuals/how-to-use-tui-menu.md
   9.  目录树           文件系统实测（src/、scripts/、docs/{managements,manuals,plan}）+ 版本目录块升序 → managements/folders.md
@@ -105,6 +105,7 @@ from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc
     _MANAGEMENTS,
     _FOLDERS_MD,
     _HOW_TO_CONFIG_MD,
+    _HOW_TO_CONFIG_REF_MD,
     _REPORTS_MD,
     _TUI_MENU_MD,
     _DATASOURCE_MD,
@@ -222,6 +223,8 @@ def run_checks(with_test_count: bool = False, docs: dict | None = None) -> list[
     findings += check_switch_counts(docs)
     findings += check_switch_default_claims(docs)
     findings += check_config_defaults(docs[_HOW_TO_CONFIG_MD])
+    # 字段详解拆篇后，B/C/E/G/M 等节的默认值表落在该文件，同受检（漏扫即静默失去漂移保护）
+    findings += check_config_defaults(docs[_HOW_TO_CONFIG_REF_MD])
     findings += check_llm_defaults(docs[_LLM_TECHNICAL_MD])
     findings += check_datasource_llm_ttl(docs[_DATASOURCE_MD])
     findings += check_cache_ttl_tables(

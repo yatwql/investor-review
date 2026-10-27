@@ -107,6 +107,7 @@ from _doc_drift._shared import (  # noqa: F401
     _MANAGEMENTS,
     _FOLDERS_MD,
     _HOW_TO_CONFIG_MD,
+    _HOW_TO_CONFIG_REF_MD,
     _REPORTS_MD,
     _TUI_MENU_MD,
     _HOW_TO_START_MD,

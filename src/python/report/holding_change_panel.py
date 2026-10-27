@@ -35,7 +35,7 @@ from src.python.core.constants import HISTORY_SNAPSHOT_RETENTION_DAYS
 from src.python.core.registry import get_report_sheet_name
 from src.python.report.data_status import STATUS_MESSAGES
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("invest")
 
 # 「区间净额推断、非逐笔」口径标注——随事件表同现（单源常量，双端共用）
 LIMITATIONS_NOTE = (

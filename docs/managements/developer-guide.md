@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.16.4
+> 文档版本：0.16.5
 
 ## 概述
 
@@ -449,7 +449,7 @@ P0 问题必须在 commit 前解决，否则代码不应进入版本控制。P1 
   - **`scenario_security` — 安全基线场景**：5 项安全基线自动化验证——密钥文件权限不可公开读取、缓存写入器产出的条目不含明文密钥、匿名化模式报告不含真实名称/代码、LLM 调用层源码不把 `api_key` 写进日志语句（静态守卫）、HTML 模板不含绝对文件系统路径（产物扫描）。
 
 - **`--mode regression`** 与 `--mode scenario` 完全相同，但语义定位为"提交前回归验证"。建议在 git hook 或 CI 前置检查中使用此名称，使流水线意图更加清晰。
-- **`--mode integration`** 覆盖场景测试 + 集成测试（`scenario or integration`）。在全部业务场景基础上，增加模块间验证：接口契约、错误隔离、新闻流水线、缓存一致性、TUI 路由。用于修改了跨模块调用关系后的定向回归。CI test job 以 `pytest -m integration` 恒跑纯集成契约档（42 例 / 5.5s，不依赖分支条件），本地改跨模块时仍建议先行 `--mode integration`。
+- **`--mode integration`** 覆盖场景测试 + 集成测试（`scenario or integration`）。在全部业务场景基础上，增加模块间验证：接口契约、错误隔离、新闻流水线、缓存一致性、TUI 路由。用于修改了跨模块调用关系后的定向回归。CI test job 以 `pytest -m integration` 恒跑纯集成契约档（50+ 例 / ~5s，不依赖分支条件），本地改跨模块时仍建议先行 `--mode integration`。
 - **`--mode dev-verify`** 提交前门禁模式（P0），组合 9 个 unit 子模块（unit_core/unit_providers/unit_fetcher/unit_news/unit_analysis/unit_scripts/unit_web/unit_qa/unit_report，排除 edge/data）并行 + 基础业务场景（`scenario_basic`）。约 20s，适合开发者改完代码后随时跑。不包含极限场景（scenario_extreme）和 LLM/日期/容错等专项场景。
 - **`--mode verify`** 合入门禁模式（`unit_core or unit_providers or unit_fetcher or unit_config or unit_news or unit_llm or unit_analysis or unit_scripts or unit_web or unit_qa or unit_report`），包含核心基础设施 + 数据源 Provider + 数据获取调度 + 配置管理 + 新闻聚合 + LLM 模块 + 分析计算 + 工程脚本 + Web 入口 + 报告对话式追问 + 报告生成的单元测试，共约 10s（并行执行）。场景测试由 P0 dev-verify（基础场景）和 P2 verify,regression（全场景）覆盖。
 
@@ -1184,7 +1184,7 @@ from src.python.core.registry import (
 - `get_report_sheet_name("summary")` → `"投资分析汇总"`
 - `get_report_section_order(config)` → 解析 `report_section_order` 配置，返回有序键列表
 - `get_report_section_number("position_structure")` → 当前配置下该模块的序号（被基金深度分析各页签写入器调用）
-- `get_report_section_keys()` → 全部 19 个模块键名（键名→中文标题对照见 [配置指南 → report_section_order](../manuals/how-to-config.md#report_section_order-报告序号配置)）
+- `get_report_section_keys()` → 全部 19 个模块键名（键名→中文标题对照见 [配置参考 → report_section_order](../manuals/how-to-config-reference.md#report_section_order-报告序号配置)）
 
 **计算模块查询**：
 

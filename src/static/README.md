@@ -1,42 +1,42 @@
 # src/static/ — 前端资产
 
-非 Python 前端资产统一存放于此目录（plan-27 后分三类）：
+非 Python 前端资产统一存放于此目录，按归属分为三类：
 
-1. **报告图表 bundle**（`chart*.js` / `toc.js` / `theme.js` / `test-chart.html`）：报告生成时由 `report/html_writer_assets.py` 复制到报告输出目录（与 HTML 同目录），模板以**相对路径**引用，报告完全离线自包含（R21 纯本地 bundle 决策）。
+1. **报告图表 bundle**（`chart*.js` / `toc.js` / `theme.js` / `test-chart.html`）：报告生成时由 `report/html_writer_assets.py` 复制到报告输出目录（与 HTML 同目录），模板以**相对路径**引用，报告完全离线自包含（纯本地 bundle 决策）。
 2. **Web UI 前端**（`web/`）：轻量 Web 模式单页 UI 的 Jinja 模板 + 静态资产。`web/app.py` 的 Flask `template_folder` / `static_folder` 指向 `src/static/web/`，URL 前缀 `/static/`、`render_template("index.html")` 契约与归入前一致。
 3. **报告 Jinja 模板**（`tmpl/`）：HTML 报告主模板、调仓 What-if 独立页与章节级 partial，由 `report/html_jinja_env.py` 的 `FileSystemLoader` 加载（单加载点）。
 
 ---
 
-# 报告图表 bundle
+## 报告图表 bundle
 
 Chart.js 交互式图表的前端资产（引擎 + 自有 JS + 独立调试页）。报告生成时复制到输出目录，模板以相对路径引用。
 
-## 文件清单
+### 文件清单
 
 | 文件 | 职责 | 体积 |
 |:-----|:-----|:----:|
 | `chart.min.js` | **Chart.js v4 引擎**（UMD 构建，第三方库） | ~205KB |
-| `chart-print.js` | 打印降级（§4.5）：beforeprint 快照 `<img>` / afterprint 恢复 | <5KB |
-| `chart-config.js` | 全局配置：配色（CSS 变量驱动）/ 动画关闭（P2）/ DPR 限制（P4） | <5KB |
-| `chart-init.js` | 6 张图表初始化（O1 异常隔离 + `typeof Chart` 守卫） | <10KB |
-| `test-chart.html` | **独立调试页**（TD8）：6 图渲染/交互/降级场景验证（S2 升级验证载体） | <20KB |
+| `chart-print.js` | 打印降级：beforeprint 快照 `<img>` / afterprint 恢复 | <5KB |
+| `chart-config.js` | 全局配置：配色（CSS 变量驱动）、关闭动画、限制 `devicePixelRatio` | <5KB |
+| `chart-init.js` | 12 张图表初始化（单图异常隔离 + `typeof Chart` 守卫） | <10KB |
+| `test-chart.html` | **独立调试页**：6 图渲染/交互/降级场景验证，Chart.js 升级的验收载体 | <20KB |
 
-## 版本记录
+### 版本记录
 
 | 日期 | Chart.js 版本 | 说明 |
 |:-----|:-------------|:-----|
-| 2026-08-01 | v4.4.3 | 初始引入（plan-1 Iter 1）。来源：jsdelivr `chart.js@4.4.3/dist/chart.umd.min.js` |
+| 2026-08-01 | v4.4.3 | 初始引入。来源：jsdelivr `chart.js@4.4.3/dist/chart.umd.min.js` |
 
-## 升级 Chart.js
+### 升级 Chart.js
 
 1. 从官方/镜像下载新版 `chart.umd.min.js`，替换本文件（重命名为 `chart.min.js`）
-2. **无需 SRI**（R21）：本地文件来自自身可信下载源，`file://` 下部分浏览器不校验 integrity
+2. **无需 SRI**：本地文件来自自身可信下载源，`file://` 下部分浏览器不校验 integrity
 3. 升级后在 **`test-chart.html`** 验证 6 图渲染 + 交互 + 4 场景（正常/降级/空数据/离线）——打开调试页即可自检，替代完整报告生成
-4. 通过后补做 Iter 7 全链路手动验证（真实报告打印 + 微信/离线场景）
+4. 通过后补做全链路手动验证（真实报告打印 + 微信/离线场景）
 5. 更新本文件「版本记录」表
 
-## 安全
+### 安全
 
-- 引擎从官方/镜像下载**一次**后入库 git 跟踪，无外部域名加载（R10 已闭环）
-- 如需额外防护，可对本文件计算 SHA-256 记录于此
+- 引擎从官方/镜像下载**一次**后入库 git 跟踪，无外部域名加载
+- 如需额外防护，可对 `chart.min.js` 计算 SHA-256 记录于此
