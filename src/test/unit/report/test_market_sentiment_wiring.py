@@ -181,7 +181,6 @@ class TestFullPathInjection:
         for _flag in (
             "is_enable_action",
             "is_enable_cost_lots",
-            "is_enable_data_quality",
             "is_enable_fund_deep_analysis",
             "is_enable_history",
             "is_enable_llm",

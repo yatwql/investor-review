@@ -12,7 +12,7 @@ import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const [url, out, scrollY = '0', width = '1440', height = '940', replaceSpec = ''] = process.argv.slice(2);
+const [url, out, scrollY = '-', width = '1440', height = '940', replaceSpec = ''] = process.argv.slice(2);
 
 if (!url || !out) {
   console.error('  [ERR] 用法：node cdp_shot.mjs <url> <out.png> [scrollY] [width] [height] [from=>to]');
@@ -61,7 +61,12 @@ function connect(wsUrl) {
     let nextId = 0;
     const pending = new Map();
     socket.onmessage = (event) => {
-      const message = JSON.parse(event.data);
+      let message;
+      try {
+        message = JSON.parse(event.data);
+      } catch {
+        return; // 非 JSON 事件（如 keepalive/干扰）忽略，不中断后续响应匹配
+      }
       if (message.id && pending.has(message.id)) {
         const { ok, fail } = pending.get(message.id);
         pending.delete(message.id);
@@ -109,12 +114,22 @@ try {
     });
     await sleep(200);
   }
-  await client.send('Runtime.evaluate', { expression: `window.scrollTo(0, ${Number(scrollY)}); 1` });
-  await sleep(900);
+  // scrollY 省略（'-'）时保留 URL 锚点定位并重新对齐一次：图表加载会改变布局，
+  // 浏览器首次 hash 滚动可能落在展开前的坐标上。
+  const anchored = scrollY === '' || scrollY === '-';
+  if (anchored) {
+    await client.send('Runtime.evaluate', {
+      expression: `(() => { const h = decodeURIComponent(location.hash.slice(1)); if (!h) return 0; const el = document.getElementById(h); if (el) el.scrollIntoView({ block: 'start' }); return 1; })()`,
+    });
+    await sleep(600);
+  } else {
+    await client.send('Runtime.evaluate', { expression: `window.scrollTo(0, ${Number(scrollY)}); 1` });
+    await sleep(900);
+  }
   const shot = await client.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
   writeFileSync(out, Buffer.from(shot.data, 'base64'));
   client.close();
-  console.log(`  [OK] ${out} scrollY=${scrollY}`);
+  console.log(`  [OK] ${out} scrollY=${anchored ? 'anchor' : scrollY}`);
 } catch (error) {
   console.error(`  [ERR] 截图失败：${error && error.message ? error.message : error}`);
   process.exitCode = 1;

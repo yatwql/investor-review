@@ -199,12 +199,28 @@ def capture_frame(config_path: Path) -> str:
         sys.path.insert(0, str(REPO_ROOT))
     saved_stdout = sys.stdout
     sys.stdout = _TtyStdout(saved_stdout)  # type: ignore[assignment]
+    _perf = None
+    _orig_perf = ""
+    _orig_health = ""
     try:
         from src.python.config import set_config_path_override
         from src.python.config._core import _clear_config_cache
 
         set_config_path_override(str(config_path))
         _clear_config_cache()
+
+        # 页头状态行会显示「上次报告 / 新鲜度 / 数据源失败」——这些读的是本机真实运行状态。
+        # 演示帧必须只用演示工作区的状态：把 perf/健康历史路径指向演示目录（演示目录里没有
+        # 这些文件 → 显示占位），事后再还原模块属性，不触碰真实 data/state。
+        demo_root = config_path.parents[2]
+        state_dir = demo_root / "data" / "state"
+        state_dir.mkdir(parents=True, exist_ok=True)
+        from src.python.core import perf as _perf
+
+        _orig_perf = _perf._PERF_HISTORY_FILE
+        _orig_health = _perf._HEALTH_CHECK_FILE
+        _perf._PERF_HISTORY_FILE = str(state_dir / "perf_history.jsonl")
+        _perf._HEALTH_CHECK_FILE = str(state_dir / "datasource_health.jsonl")
 
         from src.python.tui import tui_menu
 
@@ -221,6 +237,9 @@ def capture_frame(config_path: Path) -> str:
         return buffer.getvalue()
     finally:
         sys.stdout = saved_stdout
+        if _perf is not None:  # 取帧失败在赋值前也要安全退出
+            _perf._PERF_HISTORY_FILE = _orig_perf
+            _perf._HEALTH_CHECK_FILE = _orig_health
 
 
 def main(argv: list[str] | None = None) -> int:

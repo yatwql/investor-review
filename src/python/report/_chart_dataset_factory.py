@@ -27,12 +27,8 @@ def _build_chart_datasets_for_report(
     """构建 Chart.js 数据集（数据缺失时返回空 dict，单图失败独立降级）。
 
     - build_chart_datasets（内部对单图失败独立 try/except）
-
-       量化指标总开关（``metrics_enabled``）：关闭时 radar 数据集各轴输出
-       "N/A"（含降级 3 轴路径）；开启或未传时按数据原值渲染。
     """
     try:
-        from src.python.config.features import is_feature_enabled
         from src.python.report.chart_data_builder import build_chart_datasets
 
         return build_chart_datasets(
@@ -40,7 +36,6 @@ def _build_chart_datasets_for_report(
             details=details,
             risk_metrics=risk_metrics,
             all_metrics=all_metrics,
-            metrics_enabled=is_feature_enabled("metrics_enabled"),
         )
     except Exception:
         # 预处理器顶层兜底：任何异常 → 返回空 dict（报告仍有表格/占位）

@@ -818,7 +818,7 @@
         </div>
         <div class="subtitle">统计时间: {{ now }} | 所属交易日: {{ trading_day }}</div>
         <div class="subtitle" style="font-size: var(--fs-table-sm); margin-top:2px;">由 {{ app_name }} v{{ app_version }} 生成</div>
-        {% if data_quality_enabled and data_freshness and data_freshness.available and data_freshness.abnormal_count > 0 %}
+        {% if data_freshness and data_freshness.available and data_freshness.abnormal_count > 0 %}
         <div class="data-status" style="margin-top:10px;">
             <span class="src-matrix-failed">&#9888; {{ data_freshness.summary }}</span>
             <span style="margin-left:8px;color: var(--text-muted);">含净值滞后/行情缺失/疑似跳变，详见第 {{ section_numbers["data_source_status"] }} 章</span>

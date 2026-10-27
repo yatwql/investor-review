@@ -45,7 +45,7 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 | `--verbose` | 详细日志输出到 stderr（默认仅写入 `logs/app.log`） |
 | `--non-interactive` | 跳过首次运行交互式引导（定时任务 / 脚本使用） |
 | `--experiment NAME` | 启用**实验项**功能（`experimental` 字段为真的开关；只开不关的简写），**仅本次运行生效（不写入 features.json）**。可重复指定；`NAME` 取开关名（如 `decision_reflection`）或显示名（如 `决策跨期反思闭环`），`all` = 全部启用 |
-| `--feature NAME=VALUE` | 切换**任意**功能开关（八组任一均可），**双向**（可开可关）、**仅本次运行生效（不写盘）**；`NAME` 取注册表键名，`VALUE` 写 `on`/`off`。取值写错会立即报错并列出全部可选值 |
+| `--feature NAME=VALUE` | 切换**任意**功能开关（`[S]` 五组 + `[C]` 两组，任一均可），**双向**（可开可关）、**仅本次运行生效（不写盘）**；`NAME` 取注册表键名，`VALUE` 写 `on`/`off`。取值写错会立即报错并列出全部可选值 |
 | `--chapter KEY=on\|off` | 一次性覆盖**报告章节显隐**（仅本次运行、不写盘）；`KEY` 取章节注册表稳定键名（含智囊团生成子项），可重复。章节来源（`config.json` / `llm_settings.json` / `features.json`）由注册表分派；与 `--feature` 作用于同一子项时本参数后应用。持久化请用 `config set` |
 | `--anonymize {off,code_display,full_anonymous,summary}` | 一次性覆盖**持仓匿名化模式**（仅本次运行、不写盘）；持久化请用 `config set anonymization.mode` |
 | `--llm-provider-order NAME,...` | 重排 LLM 多链线路优先级并**写入** `llm_providers.json`（靠前优先），写盘后退出；`NAME` 须恰好覆盖全部现有线路（少写/多写/重复均拒绝，报错列出当前名单）。与 `--feature`（仅本次运行、不写盘）不同：本参数持久化。亦可在 TUI `[G]` → `[L]` LLM 设置 / Web 配置面板调序 |
@@ -74,8 +74,8 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 > # 本次运行关闭系统自检的界面入口（CLI 的 doctor 子命令本就不受该开关约束）
 > `.venv/bin/python -m src.python.cli --feature report_qa=on doctor`
 >
-> # 本次运行关闭量化指标输出（雷达图各轴 N/A）+ 关闭数据质量仪表盘（数据源可用性矩阵不渲染区块）
-> .venv/bin/python -m src.python.cli --feature metrics_enabled=off --feature data_quality=off report --type full
+> # 本次运行关闭两项报告增强：持仓成本区间位置列 + 市场温度刻度行（其余照常）
+> .venv/bin/python -m src.python.cli --feature cost_position=off --feature market_temperature=off report --type full
 > ```
 >
 > 两个参数可同时使用：`--feature` 在 `--experiment` 之后应用，故 `--experiment all --feature factor_catalog=off` 表示「其余实验功能全开、只关掉因子目录」。
@@ -289,7 +289,7 @@ TUI 菜单与 CLI 子命令落到**同一个业务编排函数**（`report/orche
 | **[L]** 生成完整报告（Excel+HTML，含 LLM） | `report --type full --history auto` |
 | **[W]** 调仓 What-if 模拟 | `whatif --base <调仓前.xlsx> --candidate <调仓后.xlsx>` |
 | **[C]** 报告章节显隐 | 一次性：`--chapter enable_news=off`；持久化：`config set enable_news false` / `config set enabled_llm.health_check false` |
-| **[S]** 报告章节内容呈现 | 一次性：`--feature metrics_enabled=off`；持久化：`config set metrics_enabled false` |
+| **[S]** 报告章节内容呈现 | 一次性：`--feature cost_position=off`；持久化：`config set cost_position false` |
 | **[G]** 全局设置 | 输出目录 `--output DIR`；多链调序 `--llm-provider-order`；持仓/基准/匿名化等 `config set holdings_dir …` / `--anonymize …` |
 
 以 `[L]` 为例，逐项拆开看更直观：

@@ -69,7 +69,6 @@ def _generate_report_full(
     from src.python.config import (
         is_enable_action,
         is_enable_cost_lots,
-        is_enable_data_quality,
         is_enable_fund_deep_analysis,
         is_enable_history,
         is_enable_llm,
@@ -106,7 +105,6 @@ def _generate_report_full(
 
         _llm_reason = llm_report_unavailable_reason() or "LLM 分析章节未启用"
         reporter.warn(f"{_llm_reason}；本次按不含 LLM 内容生成（full 等同 both）")
-    _enable_data_quality = is_enable_data_quality()
     _enable_cost_lots = is_enable_cost_lots()
     _enable_stock_fundamentals = is_enable_stock_fundamentals()
     from src.python.config.features import is_feature_enabled
@@ -163,7 +161,7 @@ def _generate_report_full(
     # 2b3. 调仓纪律回放（实验开关 rebalance_schedule_replay，默认关）：多期规则回放
     #     装配（持仓 + 历史净值 + 成本两态）；开关关闭时键缺席 → 整章隐藏（见 seams）
     inject_schedule_replay_data(pipeline_data, reporter, holdings=holdings)
-    # 2b4. 摘要区本期要点与环比对照（报告章节与增强开关 summary_highlights，默认关）：
+    # 2b4. 摘要区首页执行摘要卡（报告章节与增强开关 summary_highlights，默认关）：
     #      快照 diff 单源纯内存派生；无上期快照时键值为 None → 首屏整块隐藏
     if _enable_summary_highlights and pipeline_data is not None:
         from src.python.report.summary_highlights import build_summary_highlights
@@ -255,6 +253,8 @@ def _generate_report_full(
     reset_thinking_wait_total()
     perf.start("LLM+新闻")
     try:
+        # 返回五元组：LLM 内容 / 新闻数据 / 新闻元信息 / 新闻是否成功 / 辩论信息
+        # （辩论信息为可选，无辩论时为 None；force_llm_modules 允许任意集合/列表）
         llm_content, news_data, news_llm_meta, news_ok, debate_info = _fetch_llm_and_news(
             holdings,
             prep,
@@ -289,7 +289,7 @@ def _generate_report_full(
     if llm_content:
         llm_content = tuple(strip_structured_header(_item) for _item in llm_content)
 
-    # ── 5c. 模块级质量分级（实验开关，默认关闭）──
+    # ── 5c. LLM 输出评级（实验开关，默认关闭）──
     # 只标注不阻断、不重试、不写回缓存。置于决策登记之后：横幅会改变内容文本，
     # 须避开操作建议表的解析。
     llm_content = apply_module_quality_banners(llm_content, reporter)
@@ -363,7 +363,6 @@ def _generate_report_full(
         (pipeline_data or {}).get("evolution_data"),
         _enable_portfolio_evolution,
         _enable_action,
-        _enable_data_quality,
         (pipeline_data or {}).get("position_status"),
         (pipeline_data or {}).get("data_freshness"),
         (pipeline_data or {}).get("action_data"),
@@ -408,7 +407,6 @@ def _generate_report_full(
         result,
         _enable_portfolio_evolution,
         _enable_action,
-        _enable_data_quality,
         _enable_cost_lots,
         transactions,
         dividends,

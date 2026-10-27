@@ -81,8 +81,8 @@ class TestExtractionPrimitives:
         assert normalize_block_title("【持仓概况】") == "持仓概况"
         assert normalize_block_title("行业 Beta（组合对各行业指数敏感性）") == "行业 Beta"
         assert (
-            normalize_block_title('事件窗量化对照 <span style="font-size:12px;">新闻事件 × 持仓行情窗口比对</span>')
-            == "事件窗量化对照"
+            normalize_block_title('事件窗对照 <span style="font-size:12px;">新闻事件 × 持仓行情窗口比对</span>')
+            == "事件窗对照"
         )
 
     def test_html_extract_three_source_rules(self, tmp_path):

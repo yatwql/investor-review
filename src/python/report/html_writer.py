@@ -16,6 +16,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import logging
 from datetime import datetime
 
@@ -93,31 +95,31 @@ def _render_template(
     update_status_dict: dict,
     a_indices_list: list,
     us_indices_list: list,
-    accounts: list,
-    account_totals: list,
+    accounts: dict[str, list],
+    account_totals: dict[str, dict[str, float]],
     cat_data: list,
-    penetration: dict,
+    penetration: dict | None,
     perf_data: list,
     candidate_data: dict | None,
     news_data: list,
     _news_llm_meta: dict | None,
     has_llm_analysis: bool,
-    manager_analysis: dict,
-    overlap_matrix: dict,
-    concentration_analysis: dict,
-    style_analysis: dict,
+    manager_analysis: dict | None,
+    overlap_matrix: dict | None,
+    concentration_analysis: dict | None,
+    style_analysis: dict | None,
     llm_enabled_flag: bool,
     global_macro_content: str | None,
     expert_review_content: str | None,
     health_check_content: str | None,
     penetration_deep_content: str | None,
-    _llm_session_usage: dict,
+    _llm_session_usage: dict | None,
     _llm_module_info: list,
     llm_endpoint: str | None,
-    module_disabled: list,
-    _debate_mode_label: str,
+    module_disabled: dict[str, bool],
+    _debate_mode_label: str | None,
     debate_info: dict | None,
-    _debate_mode_combination: str,
+    _debate_mode_combination: str | None,
     order: list,
     section_numbers: dict,
     section_visible_dict: dict,
@@ -128,7 +130,7 @@ def _render_template(
     data_status_category: DataStatus,
     history_data: dict | None,
     data_status_history: DataStatus,
-    data_source_matrix: dict,
+    data_source_matrix: list[dict[str, Any]],
     chart_datasets: dict | None = None,
     style_factor_data: dict | None = None,
     factor_catalog_data: dict | None = None,
@@ -137,7 +139,6 @@ def _render_template(
     position_relationship_data: dict | None = None,
     evolution_data: dict | None = None,
     drawdown_min_span: int = DRAW_DOWN_MIN_SPAN,
-    data_quality_enabled: bool = False,  # 子模块：数据质量仪表盘开关
     position_status: dict | None = None,  # 品种覆盖诊断 position_status
     data_freshness: dict | None = None,  # 可信度摘要 data_freshness
     action_data: dict | None = None,  # 行动建议单一数据源 action_data（行动板块 + 智囊团深度复盘行动摘要）
@@ -154,14 +155,14 @@ def _render_template(
     | None = None,  # 市场温度数据契约 market_temperature_data（汇总温度行，None=开关关闭）
     decision_review_data: dict | None = None,  # 历史决策复盘 decision_review_data（行动章内嵌块，None=开关关闭）
     holding_change_view: dict | None = None,  # 持仓变动复盘双端单源视图（预格式化行；None=章隐藏）
-    event_impact_view: dict | None = None,  # 事件窗量化对照双端单源视图（预格式化行；None=新闻章内区块隐藏）
+    event_impact_view: dict | None = None,  # 事件窗对照双端单源视图（预格式化行；None=新闻章内区块隐藏）
     schedule_replay_view: dict | None = None,  # 调仓纪律回放双端单源视图（预格式化行；None=章隐藏）
     financial_report_digest_data: dict | None = None,  # 持仓个股财报摘要契约（None=开关关闭/无数据）
     financial_indicator_data: dict | None = None,  # 财务指标契约（None=开关关闭/无数据）
     purchase_status_data: dict | None = None,  # 申购限购状态契约（None=开关关闭/无数据，申购状态列隐藏）
     data_source_catalog: list | None = None,  # 数据源说明表（实际使用清单 / 计费 / 凭据）
     summary_highlights_data: dict
-    | None = None,  # 本期要点与环比对照契约（报告增强开关 summary_highlights，None=首屏块隐藏）
+    | None = None,  # 首页执行摘要卡契约（报告增强开关 summary_highlights，None=首屏块隐藏）
 ) -> str:
     """渲染 Jinja2 模板并返回 HTML。"""
     from src.python.config.features import enabled_experimental_features, is_feature_enabled
@@ -263,7 +264,6 @@ def _render_template(
         evolution_data=evolution_data,
         evolution_chart_data=build_evolution_chart_data(evolution_data, code_map=anon_code_map),
         drawdown_min_span=drawdown_min_span,
-        data_quality_enabled=data_quality_enabled,
         position_status=position_status,
         data_freshness=data_freshness,
         action_data=action_data,
@@ -308,7 +308,6 @@ def write_html_report(
     enable_history: bool = True,
     enable_portfolio_evolution: bool = True,
     enable_action: bool = False,  # 行动建议独立章（enable_action config 默认开）
-    enable_data_quality: bool = False,  # 子模块：数据质量仪表盘（功能开关 `data_quality`）
     position_status: dict | None = None,  # 品种覆盖诊断 position_status（品种覆盖区块）
     data_freshness: dict | None = None,  # 可信度摘要 data_freshness（可信度区块 + 头部摘要行）
     action_data: dict | None = None,  # 行动建议单一数据源 action_data（行动板块 + 智囊团深度复盘行动摘要）
@@ -338,11 +337,11 @@ def write_html_report(
     holding_change_data: dict
     | None = None,  # data 层：持仓变动复盘契约（报告章节与增强开关 `holding_change_review`，None=键缺席→整章隐藏）
     event_impact_data: dict
-    | None = None,  # data 层：事件窗量化对照契约（报告章节与增强开关 `event_window_impact`，None=键缺席→整章隐藏）
+    | None = None,  # data 层：事件窗对照契约（报告章节与增强开关 `event_window_impact`，None=键缺席→整章隐藏）
     schedule_replay_data: dict
     | None = None,  # data 层：调仓纪律回放契约（实验开关 `rebalance_schedule_replay`，None=键缺席→整章隐藏）
     summary_highlights_data: dict
-    | None = None,  # data 层：本期要点与环比对照契约（报告章节与增强开关 `summary_highlights`，None=键缺席→首屏块隐藏）
+    | None = None,  # data 层：首页执行摘要卡契约（报告章节与增强开关 `summary_highlights`，None=键缺席→首屏块隐藏）
 ) -> str:
     """生成 HTML 分析报告并保存到文件。
 
@@ -475,7 +474,7 @@ def write_html_report(
         from src.python.report.holding_change_panel import build_holding_change_view
 
         holding_change_view = build_holding_change_view(holding_change_data)
-    # 事件窗量化对照视图（双端单源）：与 Excel 新闻页签尾部区块消费同一份预格式化字符串；
+    # 事件窗对照视图（双端单源）：与 Excel 新闻页签尾部区块消费同一份预格式化字符串；
     # 契约缺席（开关关闭/未注入）→ None → 新闻章内区块隐藏，逐字节回退既有输出
     event_impact_view = None
     if event_impact_data:
@@ -621,7 +620,6 @@ def write_html_report(
         data_source_matrix=data_source_matrix,
         data_source_catalog=data_source_catalog,
         chart_datasets=chart_datasets,
-        data_quality_enabled=enable_data_quality,
         position_status=position_status,
         data_freshness=data_freshness,
         action_data=action_data,
@@ -665,7 +663,7 @@ def write_html_report(
         html = mask_display_text(html, build_report_alias_map(holdings, _anon_mode, include_codes=False))
         html = mask_code_text(html, _code_display_map)
 
-    return _save_html_report(html, output_dir, total_mv, total_profit, prog)
+    return _save_html_report(html or "", output_dir, total_mv, total_profit, prog)
 
 
 # ── 桥接 import：外部子模块 ─────────────────────────────────

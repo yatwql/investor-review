@@ -1,4 +1,4 @@
-"""事件窗量化对照（event_window_impact）边缘场景：降级只降级不硬算，全部离线。"""
+"""事件窗对照（event_window_impact）边缘场景：降级只降级不硬算，全部离线。"""
 
 from datetime import datetime, timedelta
 from unittest.mock import patch

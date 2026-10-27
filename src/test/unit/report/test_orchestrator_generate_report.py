@@ -102,7 +102,6 @@ class TestGenerateReport:
             section_order=[{"key": "overview"}],
             progress=mock_reporter,
             enable_action=True,
-            enable_data_quality=True,
             enable_cost_lots=False,
             transactions=None,
             dividends=None,

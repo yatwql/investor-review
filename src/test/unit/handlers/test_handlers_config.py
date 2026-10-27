@@ -110,7 +110,7 @@ class TestConfigPanelsAreRectangular:
 
     @patch("builtins.input", side_effect=["0"])
     def test_content_options_panel_rectangular(self, mock_input, capsys):
-        """[S] 章节内容面板：六组开关行与组标题行在同一右边框内。"""
+        """[S] 章节内容面板：五组开关行与组标题行在同一右边框内。"""
         from src.python.tui.handlers_config import _cmd_config_content_options
 
         self._assert_rectangular(capsys, _cmd_config_content_options)

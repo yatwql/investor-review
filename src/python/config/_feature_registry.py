@@ -18,7 +18,6 @@ GROUP_PORTFOLIO = "portfolio"
 GROUP_MARKET = "market"
 GROUP_FUND_STYLE = "fund_style"
 GROUP_EVENT_SUMMARY = "event_summary"
-GROUP_PRESENTATION = "presentation"
 GROUP_MECHANISM = "mechanism"
 GROUP_STANDALONE = "standalone"
 GROUP_CHAPTER_OPTIONS = "chapter_options"
@@ -28,9 +27,8 @@ GROUP_LABELS: dict[str, str] = {
     GROUP_PORTFOLIO: "💼 持仓与交易（成本、申赎状态、成本收益、风险调整）",
     GROUP_MARKET: "📈 市场与估值（温度、估值分位、景气度、危机回放）",
     GROUP_FUND_STYLE: "🧩 基金与风格（候选比较、行业 Beta、因子目录）",
-    GROUP_EVENT_SUMMARY: "📰 事件与摘要（事件窗、情绪热点、数据质量、本期要点）",
-    GROUP_PRESENTATION: "🧭 呈现与交互（图表轴值 / 报告页追问）",
-    GROUP_MECHANISM: "⚙ 机制与质量（提示词注入 / 输出评级）",
+    GROUP_EVENT_SUMMARY: "📰 事件与摘要（事件窗、情绪热点、本期要点）",
+    GROUP_MECHANISM: "⚙ 机制与质量（提示词注入 / 报告追问 / 输出评级）",
     GROUP_STANDALONE: "📑 独立章节与回放（新增整页签或多期回放）",
     GROUP_CHAPTER_OPTIONS: "🧩 章节内选项（由 [C] 作为章节子项渲染）",
 }
@@ -40,7 +38,6 @@ GROUP_ORDER: tuple[str, ...] = (
     GROUP_MARKET,
     GROUP_FUND_STYLE,
     GROUP_EVENT_SUMMARY,
-    GROUP_PRESENTATION,
     GROUP_MECHANISM,
     GROUP_STANDALONE,
     GROUP_CHAPTER_OPTIONS,
@@ -81,7 +78,6 @@ GROUP_DOMAIN: dict[str, str] = {
     GROUP_MARKET: DOMAIN_REPORT_CONTENT,
     GROUP_FUND_STYLE: DOMAIN_REPORT_CONTENT,
     GROUP_EVENT_SUMMARY: DOMAIN_REPORT_CONTENT,
-    GROUP_PRESENTATION: DOMAIN_PRESENTATION_MECHANISM,
     GROUP_MECHANISM: DOMAIN_PRESENTATION_MECHANISM,
     GROUP_STANDALONE: DOMAIN_REPORT_CONTENT,
     GROUP_CHAPTER_OPTIONS: DOMAIN_REPORT_CONTENT,
@@ -93,7 +89,6 @@ PANEL_GROUPS: dict[str, tuple[str, ...]] = {
         GROUP_MARKET,
         GROUP_FUND_STYLE,
         GROUP_EVENT_SUMMARY,
-        GROUP_PRESENTATION,
         GROUP_MECHANISM,
     ),
     "[C]": (GROUP_STANDALONE, GROUP_CHAPTER_OPTIONS),
@@ -139,8 +134,8 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
     #    消费点：web/handlers._handle_report_qa_ask（403 门）+ 报告模板追问区块 ──
     "report_qa": FeatureSwitchDef(
         "报告对话式追问",
-        "报告页内针对本期报告的会话式追问（零新增取数、轮数上限、用量独立记账）",
-        GROUP_PRESENTATION,
+        "报告页内针对本期报告的会话式追问（零新增取数、轮数上限；回答由 LLM 生成、按量计费，用量独立记账）",
+        GROUP_MECHANISM,
         False,
         True,
         experimental=True,
@@ -198,42 +193,24 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         False,
         True,
     ),
-    # ── 分析增强：事件窗量化对照（区块类转正项：实验身份已摘除、default 保持 False）──
+    # ── 分析增强：事件窗对照（区块类转正项：实验身份已摘除、default 保持 False）──
     "event_window_impact": FeatureSwitchDef(
-        "事件窗量化对照",
-        "新闻事件映射交易日后 ±5 交易日窗口：品种收益/超额收益与文本极性同表对照，分歧例进 LLM 分析章",
+        "事件窗对照",
+        "新闻事件发生后 ±5 个交易日的品种表现：收益/超额收益与文本极性同表对照，分歧例进 LLM 分析章",
         GROUP_EVENT_SUMMARY,
         False,
         True,
     ),
     # ── 机制与诊断：LLM 输出增强（只读侧注入，不增调用次数、不写盘） ──
     "module_quality_gate": FeatureSwitchDef(
-        "模块级质量分级",
+        "LLM 输出评级",
         "按完整性/一致性给各 LLM 模块输出评 A~F 级，低评级随内容头部标注质量提示（不阻断不重试）",
         GROUP_MECHANISM,
         True,
         True,
     ),
-    # ── 呈现与体验：量化指标（原 metrics_* 七项逐项开关，已合并为单一总开关）──
-    # 七项指标始终全量计算，开关只表达「量化指标画像是否输出」：关闭即雷达图
-    # 各轴转 "N/A"（含降级 3 轴路径）+ 熔断器暂停指标失败计数，指标之间无差异化
-    # 生效面，逐项开关未换来逐项控制价值，故收敛为一项（面板 7 行 → 1 行）。
-    "metrics_enabled": FeatureSwitchDef(
-        "量化指标显示",
-        "报告量化指标是否输出（雷达图各轴）；关闭即各轴显示 N/A、熔断器暂停指标失败计数（指标始终全量计算）",
-        GROUP_PRESENTATION,
-        True,
-        True,
-    ),
     # ── 机制与诊断：只读诊断（不改产物、不写文件，默认关的代价是环境出故障者看不到它） ──
     # ── 分析增强与独立章节与回放（以下声明顺序即各组组内面板顺序）──
-    "data_quality": FeatureSwitchDef(
-        "数据质量仪表盘",
-        "「数据源可用性矩阵」章渲染数据覆盖/时效/降级状态区块",
-        GROUP_EVENT_SUMMARY,
-        True,
-        True,
-    ),
     "industry_beta": FeatureSwitchDef(
         "行业Beta子表",
         "「风格与因子分析」章渲染行业 Beta 子表（行业暴露 + 回归敏感性）",
@@ -257,7 +234,7 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
     ),
     "valuation_percentile": FeatureSwitchDef(
         "估值分位",
-        "「资产穿透TOP10」章渲染估值分位列（真实历史 PE/PB 分位，无覆盖时回落价格分位代理）",
+        "「资产穿透TOP10」章渲染估值分位列（有历史 PE/PB 数据时用真实分位，没有时用价格分位近似）",
         GROUP_MARKET,
         False,
         True,
@@ -312,7 +289,7 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         True,
     ),
     "summary_highlights": FeatureSwitchDef(
-        "本期要点与环比对照",
+        "首页执行摘要卡",
         "摘要区首屏执行摘要卡：关键指标环比行（总市值/总收益率/持仓数/集中度） + 本期关键变化 Top N（快照 diff 单源派生，无上期快照时整块隐藏）",
         GROUP_EVENT_SUMMARY,
         False,
@@ -322,7 +299,7 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
     # 行动章内嵌评分卡区块，作用域属既有章内追加） ──
     "prosperity_framework": FeatureSwitchDef(
         "景气度框架诊断",
-        "六维评分卡（景气方向/ROE 低位弹性/全球比较优势/流动性/集中度与周期拼接/业绩回撤印证）评估组合契合度，缺数据维度标记需核实",
+        "评估持仓组合与当前景气的匹配度：六维评分卡（景气方向/ROE 低位弹性/全球比较优势/流动性/集中度与周期拼接/业绩回撤印证），缺数据维度标记需核实",
         GROUP_MARKET,
         True,
         True,
@@ -345,7 +322,7 @@ def switches_in_group(group: str) -> list[tuple[str, FeatureSwitchDef]]:
 def panel_option_numbers(panel: str) -> tuple[tuple[int, str, FeatureSwitchDef], ...]:
     """按面板的组序派生编号：``((1, 开关名, 声明), (2, ...), ...)``（1 起连续）。
 
-    面板编号的唯一派生入口——``[S]`` 只呈现 ``PANEL_GROUPS["[S]"]`` 的六组
+    面板编号的唯一派生入口——``[S]`` 只呈现 ``PANEL_GROUPS["[S]"]`` 的五组
     （LLM 章节与独立章节在 ``[C]``）；增删开关后编号自动重排，渠道层与测试都
     不得写死数字。
     """

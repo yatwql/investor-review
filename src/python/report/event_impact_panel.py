@@ -260,7 +260,7 @@ def build_event_impact_view(contract: dict[str, Any] | None) -> dict[str, Any]:
     view: dict[str, Any] = {
         "available": False,
         "reason": "",
-        "title_summary": "事件窗量化对照数据不足",
+        "title_summary": "事件窗对照数据不足",
         "summary_lines": [],
         "event_header": list(EVENT_TABLE_HEADER),
         "event_rows": [],
@@ -344,7 +344,7 @@ def _build_prompt_block(view: dict[str, Any]) -> str:
     divergent = [row for row in (view.get("event_rows") or []) if row and row[-1] == "分歧"]
     if not divergent:
         return ""
-    lines = ["【事件窗量化对照·分歧例（文本判定 vs 事件窗方向）】"]
+    lines = ["【事件窗对照·分歧例（文本判定 vs 事件窗方向）】"]
     lines.extend(view.get("summary_lines") or [])
     lines.append(f"分歧例（{len(divergent)} 条，与报告事件表同源）：")
     for row in divergent:
@@ -368,7 +368,7 @@ def build_event_impact_panel(
     fetch_index: Callable[[str], Any] | None = None,
     max_rows: int = MAX_EVENT_ROWS,
 ) -> dict[str, Any]:
-    """装配「事件窗量化对照」数据契约（只读新闻关联输出，绝不回写）。
+    """装配「事件窗对照」数据契约（只读新闻关联输出，绝不回写）。
 
     取数默认接生产网关（chain 增量历史 + 指数双链路，测试注入替身）；
     基准经 ``resolve_benchmark_index`` 三阶映射（配置覆盖 → 持仓基准文本 →
@@ -467,11 +467,11 @@ def build_event_impact_panel(
 
 
 def write_event_impact_footer(ws: Any, event_impact_data: dict[str, Any] | None, *, start_row: int) -> None:
-    """在财经新闻页签尾部写入「事件窗量化对照」区块（与 HTML partial 消费同一份 view 字符串）。
+    """在财经新闻页签尾部写入「事件窗对照」区块（与 HTML partial 消费同一份 view 字符串）。
 
-    事件窗量化对照已并入财经新闻章（注册表不占独立条目、不消耗连续编号），
+    事件窗对照已并入财经新闻章（注册表不占独立条目、不消耗连续编号），
     Excel 端对应为财经新闻页签尾部区块而非独立页签；``start_row`` 为区块首行
-    （新闻内容之后留一空行）。区块标题与 partial 章内标题同为「事件窗量化对照」。
+    （新闻内容之后留一空行）。区块标题与 partial 章内标题同为「事件窗对照」。
     """
     from src.python.report.excel_writer import (
         write_block_title,
@@ -483,12 +483,12 @@ def write_event_impact_footer(ws: Any, event_impact_data: dict[str, Any] | None,
 
     view = build_event_impact_view(event_impact_data)
     _ncols = len(EVENT_TABLE_HEADER)
-    row = write_block_title(ws, start_row, "事件窗量化对照", ncols=_ncols)
+    row = write_block_title(ws, start_row, "事件窗对照", ncols=_ncols)
 
     if not view["available"]:
         _write_placeholder(ws, view["reason"], row=row + 1, max_cols=_ncols)
         auto_width(ws)
-        logger.info("事件窗量化对照区块：数据不足，写入占位")
+        logger.info("事件窗对照区块：数据不足，写入占位")
         return
 
     # ── 1. 口径摘要 ──

@@ -130,8 +130,8 @@ class TestResolveExperimentFlags:
 
     def test_experiment_group_excludes_standard_switches(self):
         """非实验开关不得混进实验清单——否则会被当实验项写进产物自述。"""
-        assert "metrics_enabled" not in _experimental_flags()
-        assert is_experimental_switch("metrics_enabled") is False
+        assert "cost_position" not in _experimental_flags()
+        assert is_experimental_switch("cost_position") is False
         # 转正后的读侧增强同理：混进实验清单会被当成「非默认产物」写进自述
         assert "deterministic_signal" not in _experimental_flags()
 
@@ -167,10 +167,10 @@ class TestEnabledExperimentalFeatures:
         ]
 
     def test_only_experimental_flags_listed(self):
-        """默认开启的非实验开关（如 metrics_enabled）不进清单——清单只答「非默认产物」与否。"""
+        """默认开启的非实验开关（如 cost_position）不进清单——清单只答「非默认产物」与否。"""
         from src.python.config.features import set_feature_enabled
 
-        set_feature_enabled("metrics_enabled", True)
+        set_feature_enabled("cost_position", True)
 
         assert enabled_experimental_features() == []
 
@@ -355,7 +355,7 @@ class TestRegistryLiveness:
         "anonymizer",
         # 启动缓存清理 → 无条件执行，无开关（见 cache/__init__.py）
         "cache_daily_cleanup",
-        # 量化指标逐项开关 → 并入单开关 metrics_enabled（原 7 项）
+        # 量化指标逐项开关 → 已删除（指标始终全量计算与渲染，无开关）
         "metrics_sharpe",
         "metrics_calmar",
         "metrics_hhi",
@@ -404,7 +404,7 @@ class TestRegistryLiveness:
             f"以下开关已被移除，不得回到 _FEATURE_FLAGS_DEFAULT：{resurrected}；"
             "对应能力分别归属 llm_settings.json 的 enabled_llm / config.json 的 "
             "enable_fund_deep_analysis、news_sources、enable_history、anonymization.mode，"
-            "量化指标逐项开关已并入单开关 metrics_enabled，联接基金穿透已内置恒开"
+            "量化指标随指标全量渲染（无开关），联接基金穿透已内置恒开"
             "（fetcher/fund.py::with_feeder_penetration，无开关）"
         )
 
@@ -488,41 +488,41 @@ class TestSwitchOverrideParsing:
 
     def test_parse_off_and_on(self):
         """off/on 双向均可解析——这是与 ``--experiment``（只开）的关键差异。"""
-        assert parse_switch_override("metrics_enabled=off") == ("metrics_enabled", False)
+        assert parse_switch_override("cost_position=off") == ("cost_position", False)
         assert parse_switch_override("deterministic_signal=on") == ("deterministic_signal", True)
 
     def test_parse_value_case_insensitive(self):
         """取值大小写不敏感（开关名仍精确匹配）。"""
-        assert parse_switch_override("metrics_enabled=OFF") == ("metrics_enabled", False)
-        assert parse_switch_override("metrics_enabled=TRUE") == ("metrics_enabled", True)
+        assert parse_switch_override("cost_position=OFF") == ("cost_position", False)
+        assert parse_switch_override("cost_position=TRUE") == ("cost_position", True)
 
     def test_parse_accepts_numeric_and_yes_no(self):
         """取值词表覆盖 1/0 与 yes/no。"""
-        assert parse_switch_override("metrics_enabled=1") == ("metrics_enabled", True)
-        assert parse_switch_override("metrics_enabled=0") == ("metrics_enabled", False)
-        assert parse_switch_override("data_quality=no") == ("data_quality", False)
+        assert parse_switch_override("cost_position=1") == ("cost_position", True)
+        assert parse_switch_override("cost_position=0") == ("cost_position", False)
+        assert parse_switch_override("market_temperature=no") == ("market_temperature", False)
 
     def test_parse_tolerates_surrounding_spaces(self):
         """``NAME = VALUE`` 两侧空白可容忍（手输命令行常见）。"""
-        assert parse_switch_override(" metrics_enabled = off ") == ("metrics_enabled", False)
+        assert parse_switch_override(" cost_position = off ") == ("cost_position", False)
 
     def test_unknown_name_raises_with_options(self):
         """未知开关名 → 报错并列出可选项，不静默失效。"""
         with pytest.raises(ValueError) as err:
             parse_switch_override("no_such_switch=on")
         assert "no_such_switch" in str(err.value)
-        assert "metrics_enabled" in str(err.value)
+        assert "cost_position" in str(err.value)
 
     def test_missing_equals_raises(self):
         """缺 ``=`` → 报错（不把整个串当开关名而报「未知开关」）。"""
         with pytest.raises(ValueError) as err:
-            parse_switch_override("metrics_enabled")
+            parse_switch_override("cost_position")
         assert "NAME=VALUE" in str(err.value)
 
     def test_unrecognized_value_raises(self):
-        """取值不在词表内 → 报错（如误传 `metrics_enabled=maybe`）。"""
+        """取值不在词表内 → 报错（如误传 `cost_position=maybe`）。"""
         with pytest.raises(ValueError) as err:
-            parse_switch_override("metrics_enabled=maybe")
+            parse_switch_override("cost_position=maybe")
         assert "maybe" in str(err.value)
 
     def test_every_registry_flag_parsable(self):
@@ -532,9 +532,7 @@ class TestSwitchOverrideParsing:
 
     def test_resolve_switch_values_last_wins(self):
         """同名重复以最后一次为准（命令行从左到右覆盖）。"""
-        assert resolve_switch_values([("metrics_enabled", False), ("metrics_enabled", True)]) == [
-            ("metrics_enabled", True)
-        ]
+        assert resolve_switch_values([("cost_position", False), ("cost_position", True)]) == [("cost_position", True)]
 
     def test_resolve_switch_values_empty(self):
         """未传参数（None / 空列表）→ 空覆写，不触碰运行时开关。"""
@@ -589,7 +587,7 @@ class TestUnknownOverrideWarning:
     def test_known_flag_does_not_warn(self, tmp_path):
         """已登记开关不触发无消费者告警，且覆写照常生效（正常配置不被误报）。"""
         fpath = tmp_path / "features.json"
-        fpath.write_text(json.dumps({"metrics_enabled": False}), encoding="utf-8")
+        fpath.write_text(json.dumps({"cost_position": False}), encoding="utf-8")
 
         with (
             patch("src.python.config.features.FEATURES_FILE", str(fpath)),
@@ -600,14 +598,14 @@ class TestUnknownOverrideWarning:
             warnings = [text for text in self._rendered_warnings(mock_logger) if "无消费者" in text]
 
             assert warnings == []
-            assert FEATURE_FLAGS["metrics_enabled"] is False, "已登记开关的覆写仍须正常生效"
+            assert FEATURE_FLAGS["cost_position"] is False, "已登记开关的覆写仍须正常生效"
 
     @pytest.mark.unit
     def test_legacy_metrics_flags_warn_as_unknown(self, tmp_path):
-        """已并入 ``metrics_enabled`` 的旧逐项键 → 按无消费者告警（不静默生效）。
+        """旧 ``metrics_*`` 逐项键 → 按无消费者告警（不静默生效）。
 
-        量化指标由 7 个逐项开关合并为单开关后，用户 features.json 中残留的旧键
-        必须可见地失效，否则「配置了却没效果」会以静默方式复现。
+        量化指标逐项开关已整体删除（指标始终全量渲染），用户 features.json 中残留的
+        旧键必须可见地失效，否则「配置了却没效果」会以静默方式复现。
         """
         fpath = tmp_path / "features.json"
         fpath.write_text(json.dumps({"metrics_hhi": False, "metrics_beta": False}), encoding="utf-8")
@@ -763,8 +761,8 @@ class TestPublicSwitchVocabulary:
         from src.python.config.features import parse_switch_override, parse_switch_value
 
         for token in ("on", "yes", "0", "disable"):
-            name, value = parse_switch_override(f"metrics_enabled={token}")
-            assert name == "metrics_enabled"
+            name, value = parse_switch_override(f"cost_position={token}")
+            assert name == "cost_position"
             assert value is parse_switch_value(token)
 
 
@@ -799,7 +797,7 @@ class TestRenderOverrides:
 
         text = _render_overrides({"decision_reflection": True, "summary_highlights": False})
         assert "决策跨期反思闭环" in text
-        assert "本期要点与环比对照" in text
+        assert "首页执行摘要卡" in text
         assert loads(text) == {"decision_reflection": True, "summary_highlights": False}
 
     def test_last_entry_has_no_trailing_comma(self):

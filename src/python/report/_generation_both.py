@@ -61,7 +61,6 @@ def _generate_report_both(
     from src.python.config import (
         is_enable_action,
         is_enable_cost_lots,
-        is_enable_data_quality,
         is_enable_fund_deep_analysis,
         is_enable_history,
         is_enable_news,
@@ -95,7 +94,6 @@ def _generate_report_both(
     _enable_history = is_enable_history(config)
     _enable_portfolio_evolution = is_enable_portfolio_evolution(config)
     _enable_action = is_enable_action(config)
-    _enable_data_quality = is_enable_data_quality()
     _enable_cost_lots = is_enable_cost_lots()
     _enable_stock_fundamentals = is_enable_stock_fundamentals()
     _enable_summary_highlights = is_feature_enabled("summary_highlights")
@@ -163,7 +161,7 @@ def _generate_report_both(
     # 2b2. 持仓变动复盘（报告章节与增强开关 holding_change_review，默认关；独立于演进开关）：
     #      事件清单差分须晚于本次快照捕获；开关关闭时键缺席 → 整章隐藏（见 seams）
     inject_holding_change_data(pipeline_data, config, reporter, snapshot_namespace=snapshot_namespace)
-    # 2b4. 摘要区本期要点与环比对照（报告章节与增强开关 summary_highlights，默认关）：
+    # 2b4. 摘要区首页执行摘要卡（报告章节与增强开关 summary_highlights，默认关）：
     #      快照 diff 单源纯内存派生；无上期快照时键值为 None → 首屏整块隐藏
     if _enable_summary_highlights and pipeline_data is not None:
         from src.python.report.summary_highlights import build_summary_highlights
@@ -290,7 +288,6 @@ def _generate_report_both(
             enable_llm=False,
             chart_datasets=chart_datasets,
             evolution_data=(pipeline_data or {}).get("evolution_data"),
-            enable_data_quality=_enable_data_quality,
             position_status=(pipeline_data or {}).get("position_status"),
             data_freshness=(pipeline_data or {}).get("data_freshness"),
             action_data=(pipeline_data or {}).get("action_data"),
@@ -340,7 +337,6 @@ def _generate_report_both(
             enable_portfolio_evolution=_enable_portfolio_evolution,
             enable_action=_enable_action,
             enable_llm=False,
-            enable_data_quality=_enable_data_quality,
             enable_cost_lots=_enable_cost_lots,
             transactions=transactions,
             dividends=dividends,

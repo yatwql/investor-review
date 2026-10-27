@@ -11,10 +11,9 @@
     管指标计算层面的异常（除零/空数据/置信度不足），per-indicator 粒度。
     不关心底层是哪个数据源——只关心指标算不算得出来。
 
-熔断与功能开关联动（Feature Flag ↔ Circuit Breaker）：
-  - Feature Flag 关闭期间不计断路失败次数
-  - Feature Flag 打开时自动重置断路器状态
-  - Feature Flag 变更事件记录到 DegradationTracker
+与功能开关的关系：
+  断路只看指标自身的连续失败次数——指标始终计算、始终计数。
+  量化指标展示不再提供关闭开关（显示开关曾与失败计数联动，属跨层副作用，已移除）。
 """
 
 from __future__ import annotations
@@ -49,22 +48,6 @@ _DEFAULT_COOLDOWN_SECS = 86400
 
 _CIRCUIT_BREAKER_TTL = 86400 * 7
 """持久化记录的超时 TTL（秒，默认 7 天），超过此时间的条目在加载时自动清理。"""
-
-_METRICS_FEATURE_FLAG = "metrics_enabled"
-"""量化指标总开关（features 注册表）——原 metrics_* 七个逐项开关已合并为本单开关。"""
-
-_METRIC_INDICATOR_NAMES = frozenset(
-    {
-        "sharpe_ratio",
-        "calmar_ratio",
-        "hhi",
-        "win_rate",
-        "turnover_rate",
-        "risk_contribution",
-        "beta",
-    }
-)
-"""与量化指标总开关联动的指标名（其余指标无对应开关，默认可用）。"""
 
 
 class IndicatorBreaker:
@@ -159,78 +142,6 @@ class IndicatorBreaker:
             return False
         return st.get("is_broken", False)
 
-    def _check_feature_flag(self, indicator_name: str) -> bool:
-        """检查 Feature Flag 状态，联动断路器。
-
-        熔断与功能开关联动：
-          - Feature Flag 关闭期间不计断路失败次数
-          - Feature Flag 打开时自动重置断路器状态
-          - Feature Flag 变更事件记录到 DegradationTracker
-        """
-        from src.python.config.features import FEATURE_FLAGS, is_feature_enabled
-
-        # 量化指标总开关覆盖全部指标级开关（原 7 个 metrics_* 已合并为单开关）
-        flag_name = _METRICS_FEATURE_FLAG if indicator_name in _METRIC_INDICATOR_NAMES else None
-        if flag_name is None:
-            return True  # 没有对应 Feature Flag 的指标默认可用
-
-        if not is_feature_enabled(flag_name):
-            # a: Feature Flag 关闭期间不计断路失败次数
-            st = self._state.get(indicator_name)
-            if st and st.get("is_broken", False):
-                # 若已经断路，但 FF 关闭，自动解除断路（不计为失败）
-                self._state.pop(indicator_name, None)
-                self._save_state()
-                # c: 记录到 DegradationTracker
-                self._log_ff_event(indicator_name, flag_name, False)
-            elif st:
-                # 关闭期到来前的残留失败计数打标：开关回开时清零
-                # （否则旧计数会跨开关周期累计，在开关开启后立即误触发断路）
-                if not st.get("_ff_was_off", False):
-                    st["_ff_was_off"] = True
-                    self._save_state()
-
-            # 从 FEATURE_FLAGS 检查是否发生了状态变化
-            return False
-
-        # b: Feature Flag 从 false 切换到 true 时，重置断路器
-        # 从元数据检查：之前的状态是 false
-        last_ff_state = FEATURE_FLAGS.get(flag_name, True)
-        if last_ff_state:  # 当前是 true
-            st = self._state.get(indicator_name)
-            if st and st.get("_ff_was_off", False):
-                # 之前 FF 关闭过，现在打开了 → 清空历史失败
-                self._state.pop(indicator_name, None)
-                self._save_state()
-                # c: 记录到 DegradationTracker
-                self._log_ff_event(indicator_name, flag_name, True)
-
-        return True
-
-    @staticmethod
-    def _log_ff_event(indicator_name: str, flag_name: str, now_enabled: bool) -> None:
-        """c: Feature Flag 变更事件记录到 DegradationTracker。"""
-        try:
-            from src.python.report.data_status import get_tracker
-
-            tracker = get_tracker()
-            tracker.record(
-                source_key=f"ff_{indicator_name}",
-                tier="T3",
-                success=True,
-                failure_type="unreachable",
-            )
-            logger.info(
-                "[breaker] 图下说明 %s: Feature Flag %s → %s",
-                indicator_name,
-                flag_name,
-                "启用" if now_enabled else "关闭",
-            )
-        except Exception:
-            logger.debug(
-                "[breaker] DegradationTracker 不可用，跳过 Feature Flag 记录", exc_info=True
-            )  # DegradationTracker 不可用时不阻塞
-
     # ── 记录成功/失败 ────────────────────────────────
 
     def record_success(self, indicator_name: str) -> None:
@@ -241,18 +152,7 @@ class IndicatorBreaker:
             self._save_state()
 
     def record_failure(self, indicator_name: str, context: str = "") -> None:
-        """记录一次指标计算失败，达到阈值时触发断路。
-
-        feature_flag 关闭时不计失败次数。
-        """
-        from src.python.config.features import is_feature_enabled
-
-        flag_name = _METRICS_FEATURE_FLAG if indicator_name in _METRIC_INDICATOR_NAMES else None
-        if flag_name and not is_feature_enabled(flag_name):
-            # a: FF 关闭，不计失败
-            logger.debug("[breaker] %s FF 关闭（%s），不计失败", indicator_name, flag_name)
-            return
-
+        """记录一次指标计算失败，达到阈值时触发断路（指标失败始终计数）。"""
         st = self._state.setdefault(
             indicator_name,
             {
@@ -321,7 +221,7 @@ class IndicatorBreaker:
         *args: Any,
         **kwargs: Any,
     ) -> Any:
-        """包裹执行：先查断路 → 查 Feature Flag → 执行 → 记录结果。
+        """包裹执行：先查断路 → 执行 → 记录结果。
 
         Args:
             indicator_name: 指标名称（用于断路状态跟踪）
@@ -329,14 +229,9 @@ class IndicatorBreaker:
             *args, **kwargs: 传给 compute_fn 的参数
 
         Returns:
-            compute_fn 的返回值，或 None（断路/FF 关闭/异常）
+            compute_fn 的返回值，或 None（断路/异常）
         """
-        # 1. 检查 Feature Flag
-        if not self._check_feature_flag(indicator_name):
-            logger.debug("[breaker] %s Feature Flag 关闭，跳过", indicator_name)
-            return None
-
-        # 2. 检查断路状态
+        # 1. 检查断路状态
         if self.is_broken(indicator_name):
             logger.debug("[breaker] %s 断路中，跳过计算", indicator_name)
             return None

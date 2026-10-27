@@ -32,7 +32,7 @@ TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一�
 
 面板只切换显隐：章节集合与顺序由注册表和 `report_section_order` 决定，不提供增删或排序；关闭后该章完全隐藏、其余章节自动连续编号。每行显式展示键名，`?编号` / `?键名` 可查来源文件与出厂默认。
 
-> **内容增强类开关（成本流水/估值分位/市场温度/事件窗量化对照/数据质量仪表盘/行业Beta子表/候选基金比较/市场情绪/申购状态等）不在 `[C]`**——它们不增删章节，只改变章内呈现，统一由功能开关注册表的「持仓与交易 / 市场与估值 / 基金与风格 / 事件与摘要」四组管理，在菜单 `[S]` 对应块配置（见 [N. 功能开关](how-to-config.md#n-功能开关featuresjson)）。
+> **内容增强类开关（成本流水/估值分位/市场温度/事件窗对照/数据质量仪表盘/行业Beta子表/候选基金比较/市场情绪/申购状态等）不在 `[C]`**——它们不增删章节，只改变章内呈现，统一由功能开关注册表的「持仓与交易 / 市场与估值 / 基金与风格 / 事件与摘要」四组管理，在菜单 `[S]` 对应块配置（见 [N. 功能开关](how-to-config.md#n-功能开关featuresjson)）。
 
 | 字段 | 默认值 | 配置来源 | 控制章节 | 说明 |
 |:-----|:------:|:---------|:---------|:-----|
@@ -490,9 +490,8 @@ Web 模式（浏览器界面）提供「配置编辑」面板，可修改的配�
 | 持仓与交易 | `cost_lots`（默认关）/ `fund_purchase_limit` / `cost_position` / `risk_adjusted_excess`（默认关） | `[S]` 1-4 |
 | 市场与估值 | `valuation_percentile`（默认关）/ `market_temperature` / `crisis_replay`（默认关）/ `prosperity_framework` | `[S]` 5-8 |
 | 基金与风格 | `factor_catalog` / `industry_beta` / `candidate_compare`（默认关） | `[S]` 9-11 |
-| 事件与摘要 | `event_window_impact`（默认关）/ `data_quality` / `market_sentiment`（默认关）/ `summary_highlights`（默认关） | `[S]` 12-15 |
-| 呈现与交互 | `report_qa`（默认关）/ `metrics_enabled` | `[S]` 16-17 |
-| 机制与质量 | `decision_reflection`（默认关）/ `deterministic_signal` / `module_quality_gate` | `[S]` 18-20 |
+| 事件与摘要 | `event_window_impact`（默认关）/ `market_sentiment`（默认关）/ `summary_highlights`（默认关） | `[S]` 12-14 |
+| 机制与质量 | `decision_reflection`（默认关）/ `report_qa`（默认关、实验）/ `deterministic_signal` / `module_quality_gate` | `[S]` 15-18 |
 | 独立章节与回放 | `rebalance_schedule_replay`（默认关）/ `holding_change_review`（默认关）/ `whatif_trade_cost`（默认关）/ `stock_fundamentals`（默认关） | `[C]` 整章与关联产物块 |
 | 章节内选项 | `llm_debate_procon`（默认关）/ `llm_debate_conditional` | `[C]` 7.1 / 7.2（智囊团复盘子项） |
 | 持仓匿名化 | `anonymization.mode`（off / code_display / full_anonymous / summary） | `[G]` → `A` |

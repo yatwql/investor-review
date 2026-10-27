@@ -112,25 +112,28 @@ def drift_marker() -> str:
 
 class TestSwitchTable:
     def test_extract_stops_at_next_heading(self, drift):
-        doc = drift_marker() + "\n| `data_quality` | `true` | 说明 |\n\n## 下一节\n\n| `sina` | `true` | 非开关表 |\n"
-        assert drift.extract_switch_table(doc) == {"data_quality": True}
+        doc = (
+            drift_marker()
+            + "\n| `market_temperature` | `true` | 说明 |\n\n## 下一节\n\n| `sina` | `true` | 非开关表 |\n"
+        )
+        assert drift.extract_switch_table(doc) == {"market_temperature": True}
 
     def test_missing_section_reported(self, drift):
         findings = drift.check_switch_table("没有开关表\n")
         assert len(findings) == 1 and "未找到功能开关表区段" in findings[0]
 
     def test_missing_flag_and_unknown_flag_reported(self, drift, monkeypatch, drift_parts):
-        registry = {"data_quality": drift.feature_switch_registry["data_quality"]}
+        registry = {"market_temperature": drift.feature_switch_registry["market_temperature"]}
         monkeypatch.setattr(drift_parts._format, "feature_switch_registry", registry)
         doc = drift_marker() + "\n| `ghost_switch` | `true` | 说明 |\n"
         findings = drift.check_switch_table(doc)
-        assert any("`data_quality` 未列入开关表" in f for f in findings)
+        assert any("`market_temperature` 未列入开关表" in f for f in findings)
         assert any("未登记开关 `ghost_switch`" in f for f in findings)
 
     def test_default_mismatch_reported(self, drift, monkeypatch, drift_parts):
-        registry = {"data_quality": drift.feature_switch_registry["data_quality"]}
+        registry = {"market_temperature": drift.feature_switch_registry["market_temperature"]}
         monkeypatch.setattr(drift_parts._format, "feature_switch_registry", registry)
-        doc = drift_marker() + "\n| `data_quality` | `false` | 说明 |\n"
+        doc = drift_marker() + "\n| `market_temperature` | `false` | 说明 |\n"
         findings = drift.check_switch_table(doc)
         assert any("默认值 False 与注册表 True" in f for f in findings)
 
@@ -192,15 +195,15 @@ class TestSwitchCounts:
 
 class TestDefaultClaims:
     def test_stale_default_flagged(self, drift):
-        findings = drift.check_switch_default_claims({Path("m.md"): "`data_quality`（默认关）"})
-        assert len(findings) == 1 and "`data_quality`" in findings[0]
+        findings = drift.check_switch_default_claims({Path("m.md"): "`market_temperature`（默认关）"})
+        assert len(findings) == 1 and "`market_temperature`" in findings[0]
 
     def test_correct_default_passes(self, drift):
-        assert drift.check_switch_default_claims({Path("m.md"): "`data_quality`（默认开）"}) == []
+        assert drift.check_switch_default_claims({Path("m.md"): "`market_temperature`（默认开）"}) == []
 
     def test_does_not_cross_to_next_switch(self, drift):
         """相邻开关的默认值不得算到前一个开关头上。"""
-        text = "`market_sentiment`（默认关）/ `data_quality`（默认开）"
+        text = "`market_sentiment`（默认关）/ `market_temperature`（默认开）"
         assert drift.check_switch_default_claims({Path("m.md"): text}) == []
 
     def test_suffixed_identifier_not_matched(self, drift):

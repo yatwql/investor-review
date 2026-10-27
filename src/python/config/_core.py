@@ -372,17 +372,6 @@ def is_enable_history(config: dict | None = None) -> bool:
     return bool(val)
 
 
-def is_enable_data_quality() -> bool:
-    """数据质量仪表盘子模块是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_FUND_STYLE``）。
-
-    取值来自功能开关注册表（``features.data_quality``，数据质量仪表盘为长期可信核心，出厂默认开），可用 `features.json`
-    覆盖。
-    """
-    from src.python.config.features import is_feature_enabled
-
-    return is_feature_enabled("data_quality")
-
-
 def is_enable_candidate_compare() -> bool:
     """候选基金比较子表是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_FUND_STYLE``）。
 

@@ -76,7 +76,7 @@ _PIPELINE_DATA_KNOWN_KEYS: set[str] = {
     # `holding_change_review`，由 report/_experimental_seams.inject_holding_change_data
     # 注入；开关关闭时键缺席，整章隐藏）
     "holding_change_data",
-    # 事件窗量化对照：新闻事件窗口收益与文本极性对照表（报告章节与增强开关
+    # 事件窗对照：新闻事件窗口收益与文本极性对照表（报告章节与增强开关
     # `event_window_impact`，由 report/_experimental_seams.inject_event_impact_data
     # 注入；开关关闭时键缺席，整章隐藏）
     "event_impact_data",
@@ -94,7 +94,7 @@ _PIPELINE_DATA_KNOWN_KEYS: set[str] = {
     # 由 report/purchase_status.build_purchase_status_data 组装；开关关闭时为 None、
     # 全链失败时 available=False 静默隐列）
     "purchase_status_data",
-    # 本期要点与环比对照：摘要区首屏执行摘要卡（报告章节与增强开关 `summary_highlights`，
+    # 首页执行摘要卡：摘要区首屏执行摘要卡（报告章节与增强开关 `summary_highlights`，
     # 由 report/summary_highlights.build_summary_highlights 派生；开关关闭时键缺席、
     # 无上期快照时键值为 None，首屏整块隐藏）
     "summary_highlights_data",

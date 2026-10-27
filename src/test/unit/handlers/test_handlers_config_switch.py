@@ -1,6 +1,6 @@
 """test_handlers_config 兄弟分片（switch）：[S] 章节内容面板的只读信息 / 切换 / 实验开关。
 
-``[S]`` 只呈现 ``PANEL_GROUPS["[S]"]`` 的六组（20 项）内容开关；LLM 章节 / 独立
+``[S]`` 只呈现 ``PANEL_GROUPS["[S]"]`` 的五组（18 项）内容开关；LLM 章节 / 独立
 整章 / 关联产物在 ``[C]``，其面板用例见 ``test_handlers_report_chapters``。
 """
 
@@ -29,7 +29,7 @@ def _switch_menu_number(flag: str) -> int:
 
 
 class TestContentPanelToggles:
-    """[S] 面板：编号由注册表派生，切换落到 features.json（六组顺序稳定）。"""
+    """[S] 面板：编号由注册表派生，切换落到 features.json（五组顺序稳定）。"""
 
     def _toggle(self, flag: str, capsys) -> None:
         from src.python.tui.handlers_config import _cmd_config_content_options
@@ -59,7 +59,7 @@ class TestContentPanelToggles:
 
     def test_derived_number_toggles_switch(self, capsys):
         """编号全部由面板注册表派生：任意一项按其派生编号都能精确命中。"""
-        flag = "metrics_enabled"
+        flag = "cost_position"
         save = self._toggle(flag, capsys)
         save.assert_called_once_with({flag: False})
 

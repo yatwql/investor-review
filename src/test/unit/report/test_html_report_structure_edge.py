@@ -101,7 +101,7 @@ class TestHtmlCssStructure(unittest.TestCase):
         组合演进/行动建议/持仓个股财报摘要/财务指标/调仓纪律回放章节已拆入
         partials/evolution_section.html、partials/action_section.html、
         partials/financial_report_section.html、partials/financial_indicator_section.html
-        与 partials/schedule_replay_section.html（经 include 引入）；事件窗量化对照为
+        与 partials/schedule_replay_section.html（经 include 引入）；事件窗对照为
         新闻章内区块（partial 无独立 .section 容器），不计入本统计。
         """
         sections = re.findall(r'<div\s+class="section"[^>]*>', self.tmpl)

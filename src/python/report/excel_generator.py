@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from src.python.core.logger import setup_logger
-from src.python.core.registry import get_report_section_order, get_report_sheet_name
+from src.python.core.registry import get_report_section_order
 from src.python.report.excel_fund_deep_analysis import write_fund_deep_analysis_sheets
 from src.python.report.excel_content_sheets import write_content_sheets
 from src.python.report.excel_llm_usage import write_llm_section_and_usage
@@ -53,91 +53,6 @@ def _write_portfolio_history_drawdown_sheet(
     from src.python.report.portfolio_history_drawdown_sheet import write_portfolio_history_drawdown_sheet
 
     write_portfolio_history_drawdown_sheet(ws, effective, crisis_annotation, tail_risk, risk_adjusted_excess)
-
-
-def _write_data_source_matrix_sheet(ws, prog) -> None:
-    """写入数据源可用性矩阵页签（旧样式，数据质量仪表盘开关关闭时使用）。
-
-    Args:
-        ws: data_source_status 页签 worksheet
-        prog: 进度上报接口
-    """
-    prog.info("正在写入数据源可用性矩阵...")
-    try:
-        from src.python.report.data_source_matrix import MATRIX_HEADERS, build_data_source_matrix
-        from src.python.report.excel_writer import (
-            auto_width,
-            write_data_row,
-            write_header_row,
-            write_title_row,
-        )
-        from openpyxl.styles import Font
-
-        _FONT_RED = Font(color="CC0000")
-        _FONT_GREEN = Font(color="009900")
-        _FONT_ORANGE = Font(color="E67E22")
-
-        matrix = build_data_source_matrix()
-        if matrix:
-            ncols = len(MATRIX_HEADERS)
-            # 标题取自页签显示名注册表（与页签名同源），不硬编码字面量
-            row = write_title_row(ws, 1, get_report_sheet_name("data_source_status"), ncols)
-            row = write_header_row(
-                ws,
-                row,
-                list(MATRIX_HEADERS),
-            )
-            for m in matrix:
-                if m["status"] == "ok":
-                    status_label = "✅ 正常"
-                    _font = _FONT_GREEN
-                elif m["status"] == "degraded":
-                    status_label = "⚠️ 降级"
-                    _font = _FONT_ORANGE
-                else:
-                    status_label = "❌ 失败"
-                    _font = _FONT_RED
-                row = write_data_row(
-                    ws,
-                    row,
-                    [
-                        m["name"],
-                        status_label,
-                        m.get("providers_text", "—"),
-                        m["detail"],
-                        m["ok"],
-                        f"{m['degraded']}/{m['failed']}",
-                    ],
-                )
-                if m["status"] != "ok":
-                    for col in range(1, ncols + 1):
-                        ws.cell(row=row - 1, column=col).font = _font
-
-            has_degraded = any(m["degraded_list"] for m in matrix)
-            if has_degraded:
-                row += 1
-                row = write_title_row(ws, row, "降级明细", ncols)
-                for m in matrix:
-                    for dg in m.get("degraded_list", []):
-                        row = write_data_row(ws, row, [m["name"], dg, "", "", "", ""])
-
-            has_failures = any(m["sample_failures"] for m in matrix)
-            if has_failures:
-                row += 1
-                row = write_title_row(ws, row, "失败明细", ncols)
-                for m in matrix:
-                    for sf in m.get("sample_failures", []):
-                        row = write_data_row(ws, row, [m["name"], sf, "", "", "", ""])
-            # 数据源说明表（实际使用清单：用途 / 计费 / 凭据要求）
-            from src.python.report.data_quality_sheet import write_source_catalog_block
-
-            write_source_catalog_block(ws, row)
-            auto_width(ws)
-            logger.info("数据源可用性矩阵页签已写入")
-        else:
-            logger.debug("[excel] 数据源矩阵为空，跳过页签写入")
-    except Exception:
-        logger.debug("[excel] 数据源可用性矩阵页签写入失败（非关键）", exc_info=True)
 
 
 def _llm_usage_sheet_carries_notice(sheets: dict[str, Any]) -> bool:
@@ -206,7 +121,6 @@ def generate_excel_report(
     enable_portfolio_evolution: bool = True,  # board 层：组合演进章节是否开启
     enable_fundamental_snapshot: bool = False,  # board 层：持仓基本面章（功能开关 stock_fundamentals）
     enable_action: bool = False,  # board 层：行动建议章节是否开启（config 默认开）
-    enable_data_quality: bool = False,  # 子模块：数据质量仪表盘（功能开关 `data_quality`）
     progress: ProgressReporter | None = None,
     section_order: list[dict] | None = None,
     pipeline_data: dict | None = None,  # 组合历史走势：环比对比数据（drives delta columns）
@@ -245,8 +159,6 @@ def generate_excel_report(
         enable_llm: board 层 — LLM 分析章节是否开启
         enable_history: board 层 — 历史走势章节是否开启
         enable_portfolio_evolution: board 层 — 组合演进章节是否开启
-        enable_data_quality: 子模块 — 数据质量仪表盘（源健康+品种覆盖），
-            默认 False（未开启时该章保持旧「数据源可用性矩阵」样式）
         progress: 进度报告接口（默认 SilentProgressReporter，不输出）
         section_order: 可选的自定义报告模块顺序，来自 get_report_section_order(config)
         pipeline_data: 组合历史走势环比对比数据（含 diff 等），注入 summary 页签生成 δ 列对比摘要
@@ -469,18 +381,18 @@ def generate_excel_report(
         except Exception:
             logger.debug("[excel] 持仓变动复盘页签写入失败（非关键）", exc_info=True)
 
-    # ── 事件窗量化对照区块（并入财经新闻页签尾部；报告章节与增强开关 event_window_impact
+    # ── 事件窗对照区块（并入财经新闻页签尾部；报告章节与增强开关 event_window_impact
     #      默认关，键缺席时区块不渲染，此处自然不触发） ──
     ws_news = sheets.get("news_correlation")
     event_data = (pipeline_data or {}).get("event_impact_data")
     if ws_news is not None and event_data is not None:
-        prog.info("正在写入事件窗量化对照区块（财经新闻页签尾部）...")
+        prog.info("正在写入事件窗对照区块（财经新闻页签尾部）...")
         try:
             from src.python.report.event_impact_panel import write_event_impact_footer
 
             write_event_impact_footer(ws_news, event_data, start_row=ws_news.max_row + 2)
         except Exception:
-            logger.debug("[excel] 事件窗量化对照区块写入失败（非关键）", exc_info=True)
+            logger.debug("[excel] 事件窗对照区块写入失败（非关键）", exc_info=True)
 
     # ── 调仓纪律回放页签（多期规则回放 vs 买入持有；实验开关
     #      rebalance_schedule_replay 默认关，键缺席时页签不创建，此处自然不触发） ──
@@ -529,24 +441,20 @@ def generate_excel_report(
     # ── 数据质量仪表盘 / 数据源可用性矩阵页签 ──
     ws_ds = sheets.get("data_source_status")
     if ws_ds is not None:
-        if enable_data_quality:
-            # 子模块开关开启：该章改造为「数据质量仪表盘」（源健康 + 品种覆盖 + 可信度）
-            prog.info("正在写入数据质量仪表盘...")
-            try:
-                from src.python.report.data_quality_sheet import write_data_quality_sheet
-                from src.python.report.data_source_matrix import build_data_source_matrix
+        # 数据质量仪表盘（内置恒开）：源健康 + 品种覆盖 + 可信度
+        prog.info("正在写入数据质量仪表盘...")
+        try:
+            from src.python.report.data_quality_sheet import write_data_quality_sheet
+            from src.python.report.data_source_matrix import build_data_source_matrix
 
-                write_data_quality_sheet(
-                    ws_ds,
-                    build_data_source_matrix(),
-                    (pipeline_data or {}).get("position_status"),
-                    (pipeline_data or {}).get("data_freshness"),
-                )
-            except Exception:
-                logger.debug("[excel] 数据质量仪表盘页签写入失败（非关键）", exc_info=True)
-        else:
-            # 开关关闭：该章保持旧「数据源可用性矩阵」样式
-            _write_data_source_matrix_sheet(ws_ds, prog)
+            write_data_quality_sheet(
+                ws_ds,
+                build_data_source_matrix(),
+                (pipeline_data or {}).get("position_status"),
+                (pipeline_data or {}).get("data_freshness"),
+            )
+        except Exception:
+            logger.debug("[excel] 数据质量仪表盘页签写入失败（非关键）", exc_info=True)
 
     # ── 组合历史走势：环比对比摘要（写入 summary 页签底部） ──
     if pipeline_data and pipeline_data.get("diff") and "summary" in sheets:

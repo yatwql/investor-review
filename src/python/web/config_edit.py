@@ -81,7 +81,7 @@ def _llm_providers_surface() -> dict:
 
 
 #: 域 → 块（块顺序即渲染顺序）。域与块的划分见 `docs/plan/config-web-design.md` §3.3；
-#: `features.<组键>` 里只放六组「章内内容」开关——独立整章与关联产物走各自块（取自章节注册表）。
+#: `features.<组键>` 里只放五组「章内内容」开关——独立整章与关联产物走各自块（取自章节注册表）。
 _DOMAIN_BLOCKS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
         "report_content",
@@ -108,7 +108,7 @@ _BLOCK_TITLES: dict[str, str] = {
     "reference": "参考信息",
 }
 
-#: 六组「章内内容」开关所在的面板（`[S]`）；独立整章/关联产物另立块
+#: 五组「章内内容」开关所在的面板（`[S]`）；独立整章/关联产物另立块
 _CONTENT_PANEL = "[S]"
 
 
@@ -116,7 +116,7 @@ def _domain_tui_hint(domain_key: str) -> str:
     """域的 TUI 入口导引（只作阅读导引，不参与交互）。"""
     mapping = {
         "report_content": "TUI：[C] 报告章节显隐 + [S] 报告章节内容",
-        "presentation_mechanism": "TUI：[G] 基准与脱敏（匿名化）+ [S] 呈现与交互 / 机制与质量",
+        "presentation_mechanism": "TUI：[G] 基准与脱敏（匿名化）+ [S] 机制与质量",
         "data_and_routes": "TUI：[G] 目录与文件 / 基准与脱敏（基准）/ LLM 调优第 7 项",
         "llm_run": "TUI：[G]→[L] 运行参数 1-6",
         "ops_diagnostics": "TUI：[D]→[L] 日志设置",
@@ -134,7 +134,7 @@ def _block_domains() -> list[dict]:
         PANEL_GROUPS,
     )
 
-    # `[S]` 的六组即「章内内容」开关；按域再分：四组内容域 + 两组呈现与机制域
+    # `[S]` 的五组即「章内内容」开关；按域再分：四组内容域 + 一组呈现与机制域
     content_groups = [g for g in PANEL_GROUPS[_CONTENT_PANEL] if GROUP_DOMAIN[g] == "report_content"]
     mechanic_groups = [g for g in PANEL_GROUPS[_CONTENT_PANEL] if GROUP_DOMAIN[g] != "report_content"]
     domains: list[dict] = []
@@ -324,7 +324,12 @@ def get_config_edit_surface() -> dict:
         "enable_action": is_enable_action(config),
     }
     anon_mode = get_anonymization_mode()
-    indices = config.get("comparison_indices") or get_default("comparison_indices")
+    # 归一为 dict：配置层可能返回 dict / None / 其它（面板只消费代码→名称映射），
+    # 非 dict 一律按空表处理，避免 `dict(...)` 对未知形态抛错
+    _indices_raw = config.get("comparison_indices") or get_default("comparison_indices")
+    indices: dict = dict(_indices_raw) if isinstance(_indices_raw, dict) else {}
+    _indices_defaults_raw = get_default("comparison_indices")
+    indices_defaults: dict = dict(_indices_defaults_raw) if isinstance(_indices_defaults_raw, dict) else {}
 
     # LLM enabled_llm：读 llm_settings.json 的**原始落盘值**（配置层唯一读取入口；
     # 未配置 LLM 时 get_llm_config 返回 None，但面板仍要能展示开关）；
@@ -369,7 +374,7 @@ def get_config_edit_surface() -> dict:
             "labels": {mode: ANONYMIZATION_MODE_DESCRIPTIONS.get(mode, mode) for mode in ANON_MODES},
         },
         "comparison_indices": dict(indices),
-        "comparison_indices_defaults": dict(get_default("comparison_indices") or {}),
+        "comparison_indices_defaults": dict(indices_defaults),
         "llm": {"enabled_llm": surface_enabled},
         "llm_tuning": _llm_tuning_surface(),
         "llm_providers": _llm_providers_surface(),

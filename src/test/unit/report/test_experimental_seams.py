@@ -241,11 +241,11 @@ class TestLlmDecisionsAndReviewBlock:
         assert "决策复盘（LLM 登记/复盘装配）" in reporter.warns()[0]
 
 
-# ── 模块级质量分级 ───────────────────────────────────────────
+# ── LLM 输出评级 ───────────────────────────────────────────
 
 
 class TestApplyModuleQualityBanners:
-    """模块级质量分级挂载点（唯一带返回值 —— 异常须回退入参原值）。"""
+    """LLM 输出评级挂载点（唯一带返回值 —— 异常须回退入参原值）。"""
 
     def test_success_passes_through_downstream_result(self, reporter):
         """成功 → 原样返回下游结果（挂载点不做二次加工）。"""
@@ -269,7 +269,7 @@ class TestApplyModuleQualityBanners:
 
         assert result is incoming
         assert len(reporter.warns()) == 1
-        assert "模块级质量分级" in reporter.warns()[0]
+        assert "LLM 输出评级" in reporter.warns()[0]
         assert _SKIPPED_HINT in reporter.warns()[0]
 
     def test_missing_downstream_symbol_returns_input_unchanged(self, reporter):
