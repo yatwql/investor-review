@@ -42,6 +42,44 @@ print(dict(c))"
 
 **验收**：`test_cache_recompute_attribution.py`（归因分类、双路径计数、预检归因不被骨架覆盖、报告边界复位、perf 双字段落盘）。
 
+### 复核记录（2026-10-27，v0.16.4 发布当日）
+
+**触发条件核对**（数据源：`data/state/perf_history.jsonl` 190 轮）：
+
+| 间隔档 | 样本 | 重算 | 其中记 `ttl_expired` |
+|---|---|---|---|
+| 4–8h | **32**（≥10 ✓） | 32 | **3（9.4%，< 30% ✗）** |
+| 8–24h | 35 | 35 | 0 |
+| >24h | 20 | 20 | 0 |
+
+→ 复核条件**未满足**（样本量达标，但 `ttl_expired` 占比 9.4% 未达 30% 阈值），维持 4h。
+
+**更关键的一条**：4h 窗口内**理论应命中 95 次、实际命中仅 17 次**，差额 78 次由**输入指纹变化**（持仓 / 行情 / 指标 / 环比差异）驱动，与 TTL 无关。把 TTL 提到 8h 最多只能救 4–8h 档里的那 3 次（占全量 1.6%）。
+
+**结论**：TTL 参数不是这条链路的杠杆；真正的杠杆是「指纹稳定性」（需产品接受「分析文本当天不随行情刷新」的取舍）或「换更快线路/模型」。若将来立项「叙事与数值分离」或「换线路」，随那次评估一并重估本项。
+
+**复核命令**：
+
+```bash
+.venv/bin/python - <<'PY'
+import json, pathlib
+from datetime import datetime
+rows=[json.loads(l) for l in pathlib.Path("data/state/perf_history.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
+ev=[]
+for r in rows:
+    try: ts=datetime.fromisoformat(r["timestamp"])
+    except Exception: continue
+    llm=r.get("llm") or {}
+    mod=(llm.get("modules") or {}).get("expert_review") or {}
+    ev.append((ts, bool(mod.get("cached")), (llm.get("module_recompute_reasons") or {}).get("expert_review")))
+ev.sort()
+gaps=[((b[0]-a[0]).total_seconds()/3600, b[1], b[2]) for a,b in zip(ev,ev[1:])]
+for label,lo,hi in (("4-8h",4,8),("8-24h",8,24),(">24h",24,1e9)):
+    seg=[g for g in gaps if lo<g[0]<=hi]
+    print(label, "n=", len(seg), "命中=", sum(1 for g in seg if g[1]), "ttl_expired=", sum(1 for g in seg if g[2]=="ttl_expired"))
+PY
+```
+
 ## `plan-229` LLM 关键路径时延治理（表达预算）✅（结论：不采纳）
 
 **结论**：不采纳，未改生产代码。离线评测显示「分节表达预算」可省约 30% 时延，但需以正文篇幅减半 + 结构补写接缝为代价；绝对收益小（每次约 19.5 秒、每月约 ¥2.8），不足以承担交付完整性与维护复杂度。
