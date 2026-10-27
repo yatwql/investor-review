@@ -49,6 +49,7 @@ _DEFAULT_COOLDOWN_SECS = 86400
 _CIRCUIT_BREAKER_TTL = 86400 * 7
 """持久化记录的超时 TTL（秒，默认 7 天），超过此时间的条目在加载时自动清理。"""
 
+
 class IndicatorBreaker:
     """指标级断路器 — 为单个指标计算函数提供断路保护。
 

@@ -112,7 +112,10 @@ def drift_marker() -> str:
 
 class TestSwitchTable:
     def test_extract_stops_at_next_heading(self, drift):
-        doc = drift_marker() + "\n| `market_temperature` | `true` | 说明 |\n\n## 下一节\n\n| `sina` | `true` | 非开关表 |\n"
+        doc = (
+            drift_marker()
+            + "\n| `market_temperature` | `true` | 说明 |\n\n## 下一节\n\n| `sina` | `true` | 非开关表 |\n"
+        )
         assert drift.extract_switch_table(doc) == {"market_temperature": True}
 
     def test_missing_section_reported(self, drift):

@@ -532,9 +532,7 @@ class TestSwitchOverrideParsing:
 
     def test_resolve_switch_values_last_wins(self):
         """同名重复以最后一次为准（命令行从左到右覆盖）。"""
-        assert resolve_switch_values([("cost_position", False), ("cost_position", True)]) == [
-            ("cost_position", True)
-        ]
+        assert resolve_switch_values([("cost_position", False), ("cost_position", True)]) == [("cost_position", True)]
 
     def test_resolve_switch_values_empty(self):
         """未传参数（None / 空列表）→ 空覆写，不触碰运行时开关。"""

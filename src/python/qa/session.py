@@ -241,11 +241,7 @@ def _ask_report_qa_impl(
 
         history_block = _history_block(session)
         input_chars = (
-            len(_QA_SYSTEM_RULES)
-            + len(context.declaration)
-            + len(context.text)
-            + len(history_block)
-            + len(question)
+            len(_QA_SYSTEM_RULES) + len(context.declaration) + len(context.text) + len(history_block) + len(question)
         )
         if input_chars // _QA_TOKEN_CHARS_PER_TOKEN > _QA_INPUT_TOKEN_CAP:
             return _fail(
@@ -255,11 +251,7 @@ def _ask_report_qa_impl(
             )
 
         system_prompt = (
-            _QA_SYSTEM_RULES
-            + "\n【生成条件】\n"
-            + context.declaration
-            + "\n\n【本期报告内容】\n"
-            + context.text
+            _QA_SYSTEM_RULES + "\n【生成条件】\n" + context.declaration + "\n\n【本期报告内容】\n" + context.text
         )
         user_prompt = history_block + question
         content, usage, provider_info = call_llm(
@@ -332,6 +324,7 @@ def _ask_report_qa_impl(
                 "provider": str((provider_info or {}).get("name") or session.usage.get("provider") or ""),
             },
         }
+
 
 def ask_report_qa(
     report: str,
