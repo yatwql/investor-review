@@ -36,10 +36,12 @@ _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     "Referer": "https://fund.eastmoney.com/",
 }
-_TIMEOUT = 15.0
-#: 档案页（回退链路）超时：实测 SSL 握手挂起单请求 17s，而它只是主页解析失败后的
-#: 尽力回退——长挂起会把单个代码的解析拖成十几秒（整批随之延长），故单独收紧。
-_ARCHIVE_TIMEOUT = 8.0
+#: 主页请求超时。实测该源 SSL 握手挂起可达 17s+，旧值 15s 叠加回退链路后单个代码
+#: 能吃掉 27s（占数据准备阶段近四成）且最终仍解析失败——按「预算 10s 内给出结论」收敛。
+_TIMEOUT = 6.0
+#: 档案页（回退链路）超时：与主页合计不超过 ~10s；它只是主页解析失败后的尽力回退，
+#: 不值得为它把单个代码拖成十几秒。
+_ARCHIVE_TIMEOUT = 4.0
 
 # ── HTML 解析辅助函数 ─────────────────────────────────────────
 
@@ -208,21 +210,31 @@ def parse_manager_from_html(html: str) -> dict[str, Any] | None:
 # ── 独立 HTTP 请求（穿透模块未预先获取 HTML 时使用） ─────────────
 
 
-def _request_fund_html(code: str) -> str | None:
-    """请求基金主页面 HTML（复用 tiantian 的同名函数逻辑）。"""
+def _request_fund_html_status(code: str) -> tuple[str | None, bool]:
+    """请求基金主页面 HTML，返回 ``(html, 是否网络级超时)``。
+
+    超时与其它请求错误分开返回，供调用方决定是否继续走档案页回退——握手/连接超时
+    意味着同一站群整体不可达，再试一次只会把等待翻倍（实测 15s+8s）。
+    """
     url = f"https://fund.eastmoney.com/{code.strip()}.html"
     logger.debug("请求基金经理页面: %s", url)
     try:
         with make_http_client(timeout=_TIMEOUT, follow_redirects=True) as client:
             resp = client.get(url, headers=_HEADERS)
             resp.encoding = "utf-8"
-            return resp.text
+            return resp.text, False
     except httpx.TimeoutException:
         logger.warning("基金经理页面超时: %s", code)
-        return None
+        return None, True
     except httpx.RequestError as e:
         logger.warning("基金经理页面请求失败 %s: %s", code, e)
-        return None
+        return None, False
+
+
+def _request_fund_html(code: str) -> str | None:
+    """请求基金主页面 HTML（兼容既有调用方：只取 HTML，丢弃超时标记）。"""
+    html, _timed_out = _request_fund_html_status(code)
+    return html
 
 
 # ── 回退：从档案页解析（当主页解析失败时） ─────────────────────
@@ -361,13 +373,17 @@ def fetch_fund_manager(code: str) -> dict[str, Any] | None:
         return cached
 
     # 主页面解析
-    html = _request_fund_html(code)
+    html, timed_out = _request_fund_html_status(code)
     if html:
         result = parse_manager_from_html(html)
         if result:
             cache_set(cache_key, result)
             return result
         logger.debug("基金经理主页解析失败 [%s]，尝试档案页回退", code)
+    elif timed_out:
+        # 网络级超时：同一站群档案页同样多半不通，再赌一个超时只会把等待翻倍
+        logger.warning("基金经理主页超时，跳过档案页回退（按缺数据降级）[%s]", code)
+        return None
     else:
         logger.debug("基金经理主页请求失败 [%s]，尝试档案页回退", code)
 

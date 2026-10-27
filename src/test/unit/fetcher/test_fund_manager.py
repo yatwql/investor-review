@@ -109,6 +109,7 @@ class TestParseManagerFromHtml(unittest.TestCase):
         """从 infoOfFund 表格中正确提取经理信息。"""
         result = parse_manager_from_html(_HTML_INFOOFUND)
         self.assertIsNotNone(result)
+        assert result is not None  # 供静态分析收窄 Optional
         self.assertEqual(result["manager_name"], "张坤")
         self.assertEqual(result["start_date"], "2012-09-28")
         self.assertGreater(result["tenure_days"], 0)
@@ -118,6 +119,7 @@ class TestParseManagerFromHtml(unittest.TestCase):
         """两位基金经理用"/"连接。"""
         result = parse_manager_from_html(_HTML_TWO_MANAGERS)
         self.assertIsNotNone(result)
+        assert result is not None  # 供静态分析收窄 Optional
         self.assertIn("王浩", result["manager_name"])
         self.assertIn("陈晨", result["manager_name"])
         self.assertIn("/", result["manager_name"])
@@ -127,6 +129,7 @@ class TestParseManagerFromHtml(unittest.TestCase):
         """无 infoOfFund 表格时通过全文回退匹配经理。"""
         result = parse_manager_from_html(_HTML_NO_TABLE)
         self.assertIsNotNone(result)
+        assert result is not None  # 供静态分析收窄 Optional
         self.assertEqual(result["manager_name"], "刘彦春")
 
     def test_no_manager_returns_none(self):
@@ -138,6 +141,7 @@ class TestParseManagerFromHtml(unittest.TestCase):
         """移动端简化页面（span 模式）也能正确解析。"""
         result = parse_manager_from_html(_HTML_MOBILE_STYLE)
         self.assertIsNotNone(result)
+        assert result is not None  # 供静态分析收窄 Optional
         self.assertEqual(result["manager_name"], "葛兰")
 
     def test_empty_html_returns_none(self):
@@ -161,7 +165,7 @@ class TestFetchFundManager(unittest.TestCase):
         self.cache_key = f"fund_manager_{self.code}"
 
     @patch("src.python.fetcher.fund_manager.cache_get")
-    @patch("src.python.fetcher.fund_manager._request_fund_html")
+    @patch("src.python.fetcher.fund_manager._request_fund_html_status")
     def test_cache_hit(self, mock_request: MagicMock, mock_cache: MagicMock):
         """缓存命中时直接返回缓存数据，不发起 HTTP。"""
         cached_data = {
@@ -178,7 +182,7 @@ class TestFetchFundManager(unittest.TestCase):
         mock_request.assert_not_called()
 
     @patch("src.python.fetcher.fund_manager.cache_get")
-    @patch("src.python.fetcher.fund_manager._request_fund_html")
+    @patch("src.python.fetcher.fund_manager._request_fund_html_status")
     @patch("src.python.fetcher.fund_manager.cache_set")
     def test_cache_miss_html_success(
         self,
@@ -188,16 +192,17 @@ class TestFetchFundManager(unittest.TestCase):
     ):
         """缓存未命中，HTTP 成功，解析并缓存。"""
         mock_cache.return_value = None
-        mock_request.return_value = _HTML_INFOOFUND
+        mock_request.return_value = (_HTML_INFOOFUND, False)
 
         result = fetch_fund_manager(self.code)
 
         self.assertIsNotNone(result)
+        assert result is not None  # 供静态分析收窄 Optional
         self.assertEqual(result["manager_name"], "张坤")
         mock_set.assert_called_once()
 
     @patch("src.python.fetcher.fund_manager.cache_get")
-    @patch("src.python.fetcher.fund_manager._request_fund_html")
+    @patch("src.python.fetcher.fund_manager._request_fund_html_status")
     @patch("src.python.fetcher.fund_manager._parse_manager_from_archive_page")
     @patch("src.python.fetcher.fund_manager.cache_set")
     def test_html_failed_archive_fallback(
@@ -209,7 +214,7 @@ class TestFetchFundManager(unittest.TestCase):
     ):
         """主页请求失败时回退到档案页。"""
         mock_cache.return_value = None
-        mock_request.return_value = None
+        mock_request.return_value = (None, False)
         mock_archive.return_value = {
             "manager_name": "张坤",
             "start_date": "2012-09-28",
@@ -220,12 +225,13 @@ class TestFetchFundManager(unittest.TestCase):
         result = fetch_fund_manager(self.code)
 
         self.assertIsNotNone(result)
+        assert result is not None  # 供静态分析收窄 Optional
         self.assertEqual(result["manager_name"], "张坤")
         mock_archive.assert_called_once_with(self.code)
         mock_set.assert_called_once()
 
     @patch("src.python.fetcher.fund_manager.cache_get")
-    @patch("src.python.fetcher.fund_manager._request_fund_html")
+    @patch("src.python.fetcher.fund_manager._request_fund_html_status")
     @patch("src.python.fetcher.fund_manager._parse_manager_from_archive_page")
     def test_all_failed_returns_none(
         self,
@@ -235,7 +241,7 @@ class TestFetchFundManager(unittest.TestCase):
     ):
         """主页和档案页均失败时返回 None。"""
         mock_cache.return_value = None
-        mock_request.return_value = None  # 主页请求失败
+        mock_request.return_value = (None, False)  # 主页请求失败
         mock_archive.return_value = None  # 档案页也失败
 
         result = fetch_fund_manager(self.code)
@@ -243,7 +249,7 @@ class TestFetchFundManager(unittest.TestCase):
         self.assertIsNone(result)
 
     @patch("src.python.fetcher.fund_manager.cache_get")
-    @patch("src.python.fetcher.fund_manager._request_fund_html")
+    @patch("src.python.fetcher.fund_manager._request_fund_html_status")
     @patch("src.python.fetcher.fund_manager._parse_manager_from_archive_page")
     @patch("src.python.fetcher.fund_manager.cache_set")
     def test_archive_fallback(
@@ -255,7 +261,7 @@ class TestFetchFundManager(unittest.TestCase):
     ):
         """主页 HTML 无经理信息时回退到档案页。"""
         mock_cache.return_value = None
-        mock_request.return_value = _HTML_NO_MANAGER  # 主页无经理信息
+        mock_request.return_value = (_HTML_NO_MANAGER, False)  # 主页无经理信息
         mock_archive.return_value = {
             "manager_name": "张坤",
             "start_date": "2012-09-28",
@@ -266,6 +272,7 @@ class TestFetchFundManager(unittest.TestCase):
         result = fetch_fund_manager(self.code)
 
         self.assertIsNotNone(result)
+        assert result is not None  # 供静态分析收窄 Optional
         self.assertEqual(result["manager_name"], "张坤")
         mock_archive.assert_called_once_with(self.code)
 
@@ -289,6 +296,7 @@ class TestParseManagerFromArchivePage(unittest.TestCase):
         result = _parse_manager_from_archive_page("110011")
 
         self.assertIsNotNone(result)
+        assert result is not None  # 供静态分析收窄 Optional
         self.assertEqual(result["manager_name"], "张坤")
         self.assertEqual(result["start_date"], "2012-09-28")
         self.assertGreater(result["tenure_days"], 0)
@@ -325,3 +333,47 @@ class TestArchivePageTimeout:
             fm._parse_manager_from_archive_page("017730")
 
         assert mock_client.call_args.kwargs["timeout"] == fm._ARCHIVE_TIMEOUT
+
+
+class TestManagerTimeoutBudget(unittest.TestCase):
+    """基金经理抓取的时间预算（握手挂起曾导致单代码 27s 且最终仍失败）。"""
+
+    def test_timeout_skips_archive_fallback(self):
+        """主页网络级超时 → 不再赌档案页（同站群），直接按缺数据降级。"""
+        from src.python.fetcher import fund_manager
+
+        with (
+            patch.object(fund_manager, "cache_get", return_value=None),
+            patch.object(fund_manager, "_request_fund_html_status", return_value=(None, True)),
+            patch.object(fund_manager, "_parse_manager_from_archive_page") as mock_archive,
+        ):
+            result = fund_manager.fetch_fund_manager("561910")
+
+        self.assertIsNone(result)
+        mock_archive.assert_not_called()
+
+    def test_non_timeout_error_still_falls_back(self):
+        """非超时失败（解析失败/普通请求错）仍走档案页回退。"""
+        from src.python.fetcher import fund_manager
+
+        with (
+            patch.object(fund_manager, "cache_get", return_value=None),
+            patch.object(fund_manager, "_request_fund_html_status", return_value=(None, False)),
+            patch.object(
+                fund_manager,
+                "_parse_manager_from_archive_page",
+                return_value={"manager_name": "张三", "start_date": "2020-01-01", "tenure_days": 100, "history": []},
+            ),
+            patch.object(fund_manager, "cache_set"),
+        ):
+            result = fund_manager.fetch_fund_manager("561910")
+
+        self.assertEqual(result, {"manager_name": "张三", "start_date": "2020-01-01", "tenure_days": 100, "history": []})
+
+    def test_total_budget_within_ten_seconds(self):
+        """主页 + 档案页超时预算合计不超过 ~10s（实测旧值 15+8 造成 27s 挂起）。"""
+        from src.python.fetcher import fund_manager
+
+        self.assertLessEqual(fund_manager._TIMEOUT, 6.0)
+        self.assertLessEqual(fund_manager._ARCHIVE_TIMEOUT, 4.0)
+        self.assertLessEqual(fund_manager._TIMEOUT + fund_manager._ARCHIVE_TIMEOUT, 10.0)

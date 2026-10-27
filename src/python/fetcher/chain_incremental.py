@@ -373,30 +373,90 @@ def _replace_by_date(data: list[dict], item: dict) -> None:
             break
 
 
+#: 重叠段数值比较的相对容差（0.01%）：低于此视为「同一份数据」，高于即判定为修正。
+#: 取值理由：qfq 复权价在两次请求间因四舍五入可差末位（约 1e-5 量级），而真实除权
+#: 除息回溯调整通常是百分级——0.01% 落在两者之间，既不误报也不漏报。
+_OVERLAP_PRICE_REL_TOL = 1e-4
+#: 参与重叠比较的价格字段（任一缺失则跳过该字段；全缺失时按「无重叠证据」处理）
+_OVERLAP_PRICE_KEYS = ("close", "open", "high", "low")
+
+
+def _overlap_values_changed(cached: list[dict], new_data: list[dict]) -> bool:
+    """重叠日期上的价格是否真的变了（区分「源按条数返回」与「历史修正」）。
+
+    为什么需要：历史接口的增量参数常是「从某日起的最近 N 条」，N 大于缓存覆盖时
+    必然整段重叠——此时**日期重叠不代表数据被修正**。旧口径「有重叠即全量刷新」
+    会把每次冷启动的正常衔接误判为修正，导致同一份数据被整段重拉（实测一次运行
+    触发两次：个股 400 天 + 指数 2928 天）。
+
+    Returns:
+        True 至少一个重叠日期的价格变化超过容差（真修正）；False 无重叠比较或全部一致。
+    """
+    if not cached or not new_data:
+        return False
+    old_by_date = {row.get("date"): row for row in cached if row.get("date")}
+    last_old_date = cached[-1].get("date", "")
+    checked = 0
+    for row in new_data:  # new_data 按日期升序
+        date_str = row.get("date")
+        if not date_str or date_str > last_old_date:
+            break
+        old_row = old_by_date.get(date_str)
+        if old_row is None:
+            continue
+        for key in _OVERLAP_PRICE_KEYS:
+            old_val, new_val = old_row.get(key), row.get(key)
+            if old_val is None or new_val is None:
+                continue
+            try:
+                old_f, new_f = float(old_val), float(new_val)
+            except (TypeError, ValueError):
+                continue
+            checked += 1
+            if old_f == new_f:
+                continue
+            denom = max(abs(old_f), abs(new_f), 1e-9)
+            if abs(old_f - new_f) / denom > _OVERLAP_PRICE_REL_TOL:
+                return True
+    if checked:
+        logger.debug("[history] 重叠段 %d 个价格点数值一致（源按条数返回），按日合并即可", checked)
+    return False
+
+
 def _validate_continuity(cached: list[dict], new_data: list[dict], cache_key: str) -> bool:
     """校验新旧数据连续性，检测历史修正信号。
+
+    判据分两层：**先看日期重叠，再看重叠段数值**——只有重叠日期上的价格真的变了
+    才算历史修正（如除权除息回溯调整）；若数值一致，说明只是源按条数返回了整窗，
+    按日合并覆盖同日数据即可，不必整段重拉。
 
     注意：此函数为纯检测/日志用途，异常不影响主流程。
     调用方应在 try/except 中包装。
 
     Returns:
-        True 检测到数据重叠（可能为历史修正，调用方可据此触发全量刷新）
-        False 无重叠或数据不足
+        True 检测到真历史修正（调用方可据此触发全量刷新）
+        False 无重叠、重叠但数值一致、或数据不足
     """
     if not cached or not new_data:
         return False
     last_old = cached[-1]
     first_new = new_data[0]
 
-    # 检测日期重叠：新数据首日早于旧数据末日（非相等，相等=API 包含边界日），说明有修正
+    # 日期重叠：新数据首日早于旧数据末日（相等=API 包含边界日，属正常衔接）
     if first_new.get("date") < last_old.get("date"):
-        logger.warning("[%s] 新旧数据重叠——可能是历史修正，自动全量刷新", cache_key)
-        cache_set(f"{cache_key}_correction_flag", True)
-        return True
-    else:
-        gap = _missing_trading_days(last_old.get("date"), first_new.get("date"))
-        if gap > _MAX_GAP_TRADING_DAYS:
-            logger.warning("[%s] 数据跳空 %d 个交易日——部分历史不可达", cache_key, gap)
+        if _overlap_values_changed(cached, new_data):
+            logger.warning("[%s] 新旧数据重叠且重叠段数值变化——判定为历史修正，自动全量刷新", cache_key)
+            cache_set(f"{cache_key}_correction_flag", True)
+            return True
+        logger.debug(
+            "[%s] 新旧数据重叠但重叠段数值一致（源按条数返回整窗）——按日合并，不做全量刷新",
+            cache_key,
+        )
+        return False
+
+    gap = _missing_trading_days(last_old.get("date"), first_new.get("date"))
+    if gap > _MAX_GAP_TRADING_DAYS:
+        logger.warning("[%s] 数据跳空 %d 个交易日——部分历史不可达", cache_key, gap)
     return False
 
 
