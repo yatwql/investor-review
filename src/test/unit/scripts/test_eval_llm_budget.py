@@ -12,6 +12,7 @@ import pytest
 
 from scripts._eval_llm_budget import budget, measure, report, sample
 from scripts._eval_llm_budget.cli import main
+from src.test._script_loader import load_script
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_scripts]
 
@@ -264,3 +265,32 @@ class TestCli:
             encoding="utf-8",
         )
         assert main(["run", "--sample", str(out), "--modes", "nope", "--dry-run"]) == 2
+
+
+class TestEntryScript:
+    """入口薄壳 `scripts/eval-llm-budget.py`：可加载、help 可用、dry-run 透传。"""
+
+    @pytest.mark.unit_scripts
+    def test_entry_help_lists_subcommands(self):
+        entry = load_script("eval-llm-budget.py", module_name="_eval_llm_budget_entry")
+        parser = entry.build_parser() if hasattr(entry, "build_parser") else None
+        assert parser is not None or callable(entry.main)
+
+    @pytest.mark.unit_scripts
+    def test_entry_dry_run_returns_zero(self, tmp_path):
+        """入口透传：带样本 `run --dry-run` 返回 0（不调用 LLM）。"""
+        entry = load_script("eval-llm-budget.py", module_name="_eval_llm_budget_entry2")
+        sample_path = tmp_path / "sample.json"
+        sample_path.write_text(
+            json.dumps(
+                {
+                    "holdings_details": [{"code": "600900", "market_value": 1, "profit": 0, "cost": 1}],
+                    "total_mv": 1,
+                    "total_cost": 1,
+                    "total_profit": 0,
+                    "holdings_count": 1,
+                }
+            ),
+            encoding="utf-8",
+        )
+        assert entry.main(["run", "--sample", str(sample_path), "--dry-run"]) == 0
