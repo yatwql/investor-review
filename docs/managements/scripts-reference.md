@@ -541,13 +541,20 @@ README / 手册配图的可复现来源。五个子命令（demo / report / tui 
 # ④ CLI 输出截图（伪终端采集：进度、耗时排行、产物路径；日志时间戳与绝对路径已抹平）
 .venv/bin/python scripts/make-screenshots.py cli src/static/cli-report.png
 
-# ⑤ Web 页面截图（导航 → 可选文本替换 → 滚动 → 截视口；固定侧栏不丢）
-.venv/bin/python scripts/make-screenshots.py web http://127.0.0.1:8000/workbench \
-    docs/tmp/screenshots/demo/web-workbench.png --scroll-y 0 --width 1440 --height 940 \
+# ⑤ Web 页面截图（导航 → 可选文本替换 → 定位 → 截视口；固定侧栏不丢）
+#    工作台首页在 `/`（五区用 hash 深链：#generate / #config / #whatif …）
+.venv/bin/python scripts/make-screenshots.py web http://127.0.0.1:8000/ \
+    docs/tmp/screenshots/demo/web-workbench.png --width 1440 --height 940 \
     --replace '临时文本=>演示文本'
+
+#   报告章节图用锚点定位：省略 --scroll-y 即保留 URL 锚点（并强制滚动一次，
+#   避免图表加载改变布局后首次 hash 滚动落空）；给 --scroll-y N 则按像素滚动
+.venv/bin/python scripts/make-screenshots.py web \
+    "http://127.0.0.1:8000/api/reports/个人投资分析报告.html#sec-summary" \
+    src/static/report-toc.png
 ```
 
-**运行状态护栏**：`report` 子命令会跑一次真实报告生成，而该流程会写 `data/state/`（perf 台账 / 数据源健康历史 / 实验与熔断状态）与 `data/calibration/`（去重锚点）。为兑现「真实 data/ 零接触」，脚本在跑前快照这两个目录、跑后原样还原（含删除运行期新增文件），演示数据不会进入真实统计与阈值校准。
+**运行状态护栏**：`report` / `cli` 会跑一次真实报告生成，而该流程会写 `data/state/`（perf 台账 / 数据源健康历史 / 实验与熔断状态）与 `data/calibration/`（去重锚点）。为兑现「真实 data/ 零接触」，脚本在跑前快照这两个目录、跑后原样还原（含删除运行期新增文件），演示数据不会进入真实统计与阈值校准。
 
 **演示工作区**（`demo_workspace.py`）：截图要展示 `data/holdings`、`reports` 这类相对路径，
 直接引用真实配置会把本机绝对路径印上屏。工作区的 `data/config/config.json` 用绝对路径（相对路径会被解析到项目根），上屏的相对路径
@@ -555,7 +562,9 @@ README / 手册配图的可复现来源。五个子命令（demo / report / tui 
 整数份额成本，凭据 `sk-demo-not-a-real-key` 让首页状态行显示「LLM 已配置」而非首次使用告警。
 
 **TUI 帧**（`tui_frame.py`）：取帧直接调用生产渲染函数（`print_header` + `show_config` +
-`render_menu`），不经过真实 TTY——文本与配色和终端同源，且不含光标控制序列；渲染端解析生产
+`render_menu`），不经过真实 TTY——文本与配色和终端同源，且不含光标控制序列；取帧前把
+perf 台账 / 数据源健康历史的**读路径指向演示工作区**（页头状态行的「上次报告 / 数据源失败」
+因此不反映本机真实运行状态），取帧后还原模块属性；渲染端解析生产
 代码用到的 SGR 子集（30-37 / 90-97 / 1 / 2 / 0）。超宽行按终端语义折成多行，**续行重新打开
 配色**（否则第二行掉回默认前景色）；演示目录与仓库根的绝对路径前缀整体抹掉。宽字符按终端
 显示列计（`text_layout.display_width`，与生产同源）。

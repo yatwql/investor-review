@@ -10,7 +10,8 @@
                                     把一帧 TUI 首页渲染成 PNG（取帧走生产渲染函数）
   cli <out.png> [--text F]            把一次 CLI 生成输出渲染成 PNG（伪终端采集，含进度与耗时排行）
   web <url> <out.png> [--scroll-y N] [--width W] [--height H] [--replace from=>to] [--chrome P]
-                                    无头 Chromium CDP 截图（滚动后截视口，固定侧栏不丢）
+                                    无头 Chromium CDP 截图（滚动后截视口，固定侧栏不丢；
+                                    省略 --scroll-y 时保留 URL 锚点定位，适合报告章节截图）
 
 典型用法（README 配图刷新）：
 
@@ -111,7 +112,12 @@ def build_parser() -> argparse.ArgumentParser:
     web = subparsers.add_parser("web", help="无头 Chromium CDP 截图")
     web.add_argument("url", help="目标页面 URL")
     web.add_argument("output", type=Path, help="输出 PNG 路径")
-    web.add_argument("--scroll-y", type=int, default=0, help="滚动到该纵向位置再截图（默认 0）")
+    web.add_argument(
+        "--scroll-y",
+        type=int,
+        default=None,
+        help="滚动到该纵向位置再截图（省略时保留 URL 锚点定位，适合 #sec-xxx 章节图）",
+    )
     web.add_argument("--width", type=int, default=1440, help="视口宽（默认 1440）")
     web.add_argument("--height", type=int, default=940, help="视口高（默认 940）")
     web.add_argument("--replace", default="", help="截图前替换文本，写法 `原文=>替换`（用于抹除临时数据）")
