@@ -368,7 +368,9 @@ class TestManagerTimeoutBudget(unittest.TestCase):
         ):
             result = fund_manager.fetch_fund_manager("561910")
 
-        self.assertEqual(result, {"manager_name": "张三", "start_date": "2020-01-01", "tenure_days": 100, "history": []})
+        self.assertEqual(
+            result, {"manager_name": "张三", "start_date": "2020-01-01", "tenure_days": 100, "history": []}
+        )
 
     def test_total_budget_within_ten_seconds(self):
         """主页 + 档案页超时预算合计不超过 ~10s（实测旧值 15+8 造成 27s 挂起）。"""

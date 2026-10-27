@@ -22,10 +22,7 @@ pytestmark = [
 
 def _bars(dates: list[str], close: float = 10.0) -> list[dict]:
     """构造升序日线（价格四键同值，便于按需改价）。"""
-    return [
-        {"date": d, "open": close, "close": close, "high": close, "low": close, "volume": 1000}
-        for d in dates
-    ]
+    return [{"date": d, "open": close, "close": close, "high": close, "low": close, "volume": 1000} for d in dates]
 
 
 _CACHED_DATES = ["2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08"]
