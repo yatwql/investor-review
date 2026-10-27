@@ -199,6 +199,9 @@ def capture_frame(config_path: Path) -> str:
         sys.path.insert(0, str(REPO_ROOT))
     saved_stdout = sys.stdout
     sys.stdout = _TtyStdout(saved_stdout)  # type: ignore[assignment]
+    _perf = None
+    _orig_perf = ""
+    _orig_health = ""
     try:
         from src.python.config import set_config_path_override
         from src.python.config._core import _clear_config_cache
@@ -234,11 +237,9 @@ def capture_frame(config_path: Path) -> str:
         return buffer.getvalue()
     finally:
         sys.stdout = saved_stdout
-        try:  # 还原真实状态路径（Demo 帧不得改变本机读取来源）
+        if _perf is not None:  # 取帧失败在赋值前也要安全退出
             _perf._PERF_HISTORY_FILE = _orig_perf
             _perf._HEALTH_CHECK_FILE = _orig_health
-        except (NameError, UnboundLocalError):
-            pass
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -61,7 +61,12 @@ function connect(wsUrl) {
     let nextId = 0;
     const pending = new Map();
     socket.onmessage = (event) => {
-      const message = JSON.parse(event.data);
+      let message;
+      try {
+        message = JSON.parse(event.data);
+      } catch {
+        return; // 非 JSON 事件（如 keepalive/干扰）忽略，不中断后续响应匹配
+      }
       if (message.id && pending.has(message.id)) {
         const { ok, fail } = pending.get(message.id);
         pending.delete(message.id);

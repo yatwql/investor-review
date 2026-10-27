@@ -2,34 +2,19 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
-> **最近发布 [0.16.5]**（2026-10-27）——已发布版本段随发布移入 [`archived_changelog.0.16.x.md`](../archive/v0.16.x/archived_changelog.0.16.x.md)；本文件只保留当前开发版本段与归档索引。
+> **最近发布 [0.16.6]**（2026-10-28）——已发布版本段随发布移入 [`archived_changelog.0.16.x.md`](../archive/v0.16.x/archived_changelog.0.16.x.md)；本文件只保留当前开发版本段与归档索引。
 
 ---
 
 
-## [0.16.6-dev] - 开发中（未发布）
+## [0.16.7-dev] - 开发中（未发布）
 
-
-### 修复
-
-- **复用 gate 戳时的提示文案拼接**：`release.py publish` 在 gate 通过戳缺「用例数」字段时打印出「…，项数见 gate 输出 项」（多一个悬空「项」）——改为缺值时整段省略，不再拼出残句
-
-### 变更
-
-- **`[S]` 面板措辞与归类清理**：① `module_quality_gate` 标签「模块级质量分级」→「**LLM 输出评级**」（与 `data_quality` 的「质量」解歧，后者描述补「数据侧质量，与 LLM 输出评级无关」）；② `event_window_impact`「事件窗量化对照」→「**事件窗对照**」、`summary_highlights`「本期要点与环比对照」→「**首页执行摘要卡**」——标签同步注册表/区块注册表/HTML 模板/Excel/手册，报告区块标题随之一致（区块名不带括号：`normalize_block_title` 会剥离括号注解）；③ 描述白话化：`valuation_percentile` 改「有历史 PE/PB 就用真分位，没有就用价格分位近似」、`report_qa` 补「按量计费」、`prosperity_framework` 明说评估对象是「持仓组合」
-- **`data_quality` 内置为恒开**：数据质量仪表盘不再有开关（数据本就在收集，关掉只是「看不见可信度」）；渲染管道参数保留并标注技术债（清理项见 `plan.md`）
-- **`report_qa` 归入「机制与质量」**：它是唯一新增 LLM 费用与用量记账的项，放在「呈现与交互」会误导；随之**删除空的「呈现与交互」组**（`[S]` 六组 → **五组**、20 → **18 项**），编号 12-18 重排，CLI/Web/报告三渠道随注册表自动收敛
-- **报告追问埋点（转正判据数据底座）**：`qa/telemetry.py` 每次提问记一行到 `data/state/qa_usage.jsonl`（渠道/成败/错误码/轮数/tokens/费用/耗时/事实核对降级，**只记问题字数不记正文**，滚动 5000 行）；`summarize_qa_usage` 汇总提问量/无回答占比/失败码/渠道/平均轮数/费用，并按三条判据（提问量 ≥ 30、无回答 ≤ 15%、降级率 ≤ 30%）给出「可评估转正 / 维持实验」；`doctor` 新增「报告追问效果」卡片，`ask_report_qa` 单点接线（Web/TUI 传渠道，返回体不暴露内部字段），埋点异常一律吞掉
-- **归还「恒真参数」技术债（plan-232）**：`data_quality` 内置后遗留的 `enable_data_quality` 布尔参数从 4 层链路（`_generation_full` / `_generation_both` / `orchestrator` → `_report_output` → `excel_generator` / `html_writer`）彻底删除，模板 `data_quality_enabled` 恒真条件一并移除（`{% if %}` 包裹的两个区块改为无条件渲染）；不可达的旧样式写入器 `_write_data_source_matrix_sheet` 与其 2 个用例、`get_report_sheet_name` 孤儿导入同步清掉——全仓 `grep enable_data_quality|data_quality_enabled` 归零
-- **两处类型标注纠偏（顺带）**：`report/_llm_news._fetch_llm_and_news` 返回标注由四元组补成五元组（实际一直返回五元组、调用侧解包五值）；`force_llm_modules` / `force_modules` 参数由 `set|frozenset` 放宽为 `Collection`（调用侧传 list），线程池 future 列表补 `Future` 标注
-
-- **`metrics_enabled` 内置为恒开（去掉显示开关）**：报告量化指标始终全量计算与渲染，`[S]` 面板 20 → **19 项**（呈现与交互组剩 `report_qa`）。原开关是纯展示项却并联了跨层副作用——关闭会让**指标级断路器暂停失败计数**并自动解熔，即「改报告观感」影响「熔断统计」，属设计债；本次一并删除 `analysis/circuit_breaker_wrapper` 的 Feature Flag 联动分支（`_check_feature_flag` / `_log_ff_event` / `_ff_was_off` 残留计数），`chart_data_builder` 去掉 `metrics_enabled` 参数与「全轴 N/A」分支；三渠道随注册表自动收敛（CLI 已拒绝旧键、Web 面板不再出该行）
 
 （本次发布内容见下方归档索引）
 
 ## 归档
 
-- [`archived_changelog.0.16.x.md`](../archive/v0.16.x/archived_changelog.0.16.x.md) — v0.16.0 ~ v0.16.5（2026-10-25 ~ 2026-10-27）
+- [`archived_changelog.0.16.x.md`](../archive/v0.16.x/archived_changelog.0.16.x.md) — v0.16.0 ~ v0.16.6（2026-10-25 ~ 2026-10-28）
 - [`archived_changelog.0.15.x.md`](../archive/v0.15.x/archived_changelog.0.15.x.md) — v0.15.0 ~ v0.15.9（2026-10-24 ~ 2026-10-25）
 - [`archived_changelog.0.14.x.md`](../archive/v0.14.x/archived_changelog.0.14.x.md) — v0.14.0 ~ v0.14.8（2026-10-21 ~ 2026-10-23）
 - [`archived_changelog.0.13.x.md`](../archive/v0.13.x/archived_changelog.0.13.x.md) — v0.13.0 ~ v0.13.12（2026-10-13 ~ 2026-10-21）

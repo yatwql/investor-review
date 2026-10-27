@@ -497,8 +497,13 @@ def _clear_rate_limiter_cache() -> None:
         _DEFAULT_RATE_LIMITER = None
 
 
-# 将 cache_clear 挂到 get_rate_limiter 上，方便调用方发现
+# 将 cache_clear 挂到 get_rate_limiter 上，方便调用方发现（兼容旧调用点）
 get_rate_limiter.cache_clear = _clear_rate_limiter_cache  # type: ignore[attr-defined]
+
+
+def clear_rate_limiter_cache() -> None:
+    """清除 RateLimiter 单例缓存（公开入口，供 TUI/CLI 刷新配置后重建）。"""
+    _clear_rate_limiter_cache()
 
 
 def _build_rate_limiter_from_config() -> RateLimiter:

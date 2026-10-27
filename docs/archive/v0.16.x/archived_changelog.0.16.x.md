@@ -1,8 +1,8 @@
 # 变更日志归档 — v0.16.x
 
-> 归档时间：2026-10-27（v0.16.5 发布并入；已并入 6 段：v0.16.0（10-25）、v0.16.1（10-25）、v0.16.2（10-26）、v0.16.3（10-26）、v0.16.4（10-27）、v0.16.5（10-27））
+> 归档时间：2026-10-28（v0.16.6 发布并入；已并入 7 段：v0.16.0（10-25）、v0.16.1（10-25）、v0.16.2（10-26）、v0.16.3（10-26）、v0.16.4（10-27）、v0.16.5（10-27）、v0.16.6（10-28））
 > 原始文件：`docs/managements/changelog.md`
-> 涵盖版本：v0.16.0 ~ v0.16.5（2026-10-25 ~ 2026-10-27）
+> 涵盖版本：v0.16.0 ~ v0.16.6（2026-10-25 ~ 2026-10-28）
 > 归档内容：由 `release.py prepare` 自动迁入各发布段
 
 ---
@@ -151,3 +151,22 @@
 ### 测试
 
 - 新增回归 13 例：日志器名称 8 例（检出 / 豁免 / 全仓基线自洽）、缓存键单源 3 例（写侧与预检侧同源结构断言 / 键一致 / 空链不走异常分支）、测试标记 4 例（单值与元组 `pytestmark` 提取 / 通用标记不足以满足域期望 / 真实测试树全域绑定）与 TUI 指引 2 例（持仓必须指向 `[G]`+`[H]`/`[F]`、LLM 必须指向 `[G]`+`[L]`，且不得出现旧键）
+
+## [0.16.6] - 2026-10-28
+
+### 修复
+
+- **发布期类型/容错清理（发布当天自查）**：`tui/handlers_switch` 的分组块元素类型由 `object` 收窄为 `FeatureSwitchDef`（面板渲染参数的静态类型不再是 object）；`tui/handlers_config` 的对比指数池归一为 dict（非 dict 形态按空表，与 Web 面板同口径）、限速器刷新改用公开入口 `clear_rate_limiter_cache()`（原调用依赖挂在函数对象上的 `cache_clear` 属性，静态不可见）；`fetcher/batch` 补该公开入口并保留旧属性兼容；截图链路 `cdp_shot.mjs` 对非 JSON 事件容错（不再因一条干扰消息中断整个 CDP 客户端）、`tui_frame` 的 finally 还原分支改为前置初始化（Pyright 报告的「可能未绑定变量」）
+
+- **复用 gate 戳时的提示文案拼接**：`release.py publish` 在 gate 通过戳缺「用例数」字段时打印出「…，项数见 gate 输出 项」（多一个悬空「项」）——改为缺值时整段省略，不再拼出残句
+
+### 变更
+
+- **`[S]` 面板措辞与归类清理**：① `module_quality_gate` 标签「模块级质量分级」→「**LLM 输出评级**」（与 `data_quality` 的「质量」解歧，后者描述补「数据侧质量，与 LLM 输出评级无关」）；② `event_window_impact`「事件窗量化对照」→「**事件窗对照**」、`summary_highlights`「本期要点与环比对照」→「**首页执行摘要卡**」——标签同步注册表/区块注册表/HTML 模板/Excel/手册，报告区块标题随之一致（区块名不带括号：`normalize_block_title` 会剥离括号注解）；③ 描述白话化：`valuation_percentile` 改「有历史 PE/PB 就用真分位，没有就用价格分位近似」、`report_qa` 补「按量计费」、`prosperity_framework` 明说评估对象是「持仓组合」
+- **`data_quality` 内置为恒开**：数据质量仪表盘不再有开关（数据本就在收集，关掉只是「看不见可信度」）；渲染管道参数保留并标注技术债（清理项见 `plan.md`）
+- **`report_qa` 归入「机制与质量」**：它是唯一新增 LLM 费用与用量记账的项，放在「呈现与交互」会误导；随之**删除空的「呈现与交互」组**（`[S]` 六组 → **五组**、20 → **18 项**），编号 12-18 重排，CLI/Web/报告三渠道随注册表自动收敛
+- **报告追问埋点（转正判据数据底座）**：`qa/telemetry.py` 每次提问记一行到 `data/state/qa_usage.jsonl`（渠道/成败/错误码/轮数/tokens/费用/耗时/事实核对降级，**只记问题字数不记正文**，滚动 5000 行）；`summarize_qa_usage` 汇总提问量/无回答占比/失败码/渠道/平均轮数/费用，并按三条判据（提问量 ≥ 30、无回答 ≤ 15%、降级率 ≤ 30%）给出「可评估转正 / 维持实验」；`doctor` 新增「报告追问效果」卡片，`ask_report_qa` 单点接线（Web/TUI 传渠道，返回体不暴露内部字段），埋点异常一律吞掉
+- **归还「恒真参数」技术债（plan-232）**：`data_quality` 内置后遗留的 `enable_data_quality` 布尔参数从 4 层链路（`_generation_full` / `_generation_both` / `orchestrator` → `_report_output` → `excel_generator` / `html_writer`）彻底删除，模板 `data_quality_enabled` 恒真条件一并移除（`{% if %}` 包裹的两个区块改为无条件渲染）；不可达的旧样式写入器 `_write_data_source_matrix_sheet` 与其 2 个用例、`get_report_sheet_name` 孤儿导入同步清掉——全仓 `grep enable_data_quality|data_quality_enabled` 归零
+- **两处类型标注纠偏（顺带）**：`report/_llm_news._fetch_llm_and_news` 返回标注由四元组补成五元组（实际一直返回五元组、调用侧解包五值）；`force_llm_modules` / `force_modules` 参数由 `set|frozenset` 放宽为 `Collection`（调用侧传 list），线程池 future 列表补 `Future` 标注
+
+- **`metrics_enabled` 内置为恒开（去掉显示开关）**：报告量化指标始终全量计算与渲染，`[S]` 面板 20 → **19 项**（呈现与交互组剩 `report_qa`）。原开关是纯展示项却并联了跨层副作用——关闭会让**指标级断路器暂停失败计数**并自动解熔，即「改报告观感」影响「熔断统计」，属设计债；本次一并删除 `analysis/circuit_breaker_wrapper` 的 Feature Flag 联动分支（`_check_feature_flag` / `_log_ff_event` / `_ff_was_off` 残留计数），`chart_data_builder` 去掉 `metrics_enabled` 参数与「全轴 N/A」分支；三渠道随注册表自动收敛（CLI 已拒绝旧键、Web 面板不再出该行）

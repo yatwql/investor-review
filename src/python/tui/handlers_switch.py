@@ -113,6 +113,7 @@ def run_content_options_panel() -> None:
         PANEL_GROUPS,
         clear_feature_overrides,
         experimental_flags,
+        FeatureSwitchDef,
         feature_switch_registry,
         is_feature_enabled,
         panel_option_numbers,
@@ -124,7 +125,7 @@ def run_content_options_panel() -> None:
     panel = "[S]"
     numbered = panel_option_numbers(panel)
     groups = PANEL_GROUPS[panel]
-    blocks: dict[str, list[tuple[int, str, object]]] = {group: [] for group in groups}
+    blocks: dict[str, list[tuple[int, str, FeatureSwitchDef]]] = {group: [] for group in groups}
     for num, flag, definition in numbered:
         blocks[definition.group].append((num, flag, definition))
 

@@ -334,7 +334,9 @@ def _cmd_config_comparison_indices() -> None:
 
     def _indices() -> dict[str, str]:
         config = get_config_cache() or {}
-        return config.get("comparison_indices") or get_default("comparison_indices")
+        raw = config.get("comparison_indices") or get_default("comparison_indices")
+        # 配置层可能给出 dict / None / 其它形态：面板只消费「代码 → 名称」映射，非 dict 按空表
+        return dict(raw) if isinstance(raw, dict) else {}
 
     def _render(nav: NavState) -> list[str]:
         refresh_config()
@@ -486,9 +488,9 @@ def _cmd_refresh_config() -> None:
     reload_pricing()
 
     # 刷新 BatchDispatcher 限速器配置（batch_rate_limit 即时生效）
-    from src.python.fetcher.batch import get_rate_limiter
+    from src.python.fetcher.batch import clear_rate_limiter_cache
 
-    get_rate_limiter.cache_clear()
+    clear_rate_limiter_cache()
 
     # 刷新 tui_menu 配置缓存
     refresh_config()
