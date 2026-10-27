@@ -214,7 +214,9 @@ def cmd_publish(args: argparse.Namespace, env, runner=None) -> int:
     stamp = _gate_stamp_matches(release_version, fingerprint, env)
     if stamp:
         passed = str(stamp.get("verify_passed") or "")
-        print(f"[OK] 复用 gate 阶段的 P1 verify（树指纹一致 {fingerprint[:12]}…，{passed or '项数见 gate 输出'} 项）")
+        # 戳里只有指纹与用例数（旧戳可能缺项数）：缺时不要拼成「项数见 gate 输出 项」
+        detail = f"，{passed} 项" if passed else "，项数见 gate 输出"
+        print(f"[OK] 复用 gate 阶段的 P1 verify（树指纹一致 {fingerprint[:12]}…{detail}）")
     else:
         # 说清「为什么重跑」：gate 绿了之后再改代码/测试/脚本，旧结论就不再覆盖当前树
         previous = _read_gate_stamp(env)
