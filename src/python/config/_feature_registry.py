@@ -139,7 +139,7 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
     #    消费点：web/handlers._handle_report_qa_ask（403 门）+ 报告模板追问区块 ──
     "report_qa": FeatureSwitchDef(
         "报告对话式追问",
-        "报告页内针对本期报告的会话式追问（零新增取数、轮数上限、用量独立记账）",
+        "报告页内针对本期报告的会话式追问（零新增取数、轮数上限；回答由 LLM 生成、按量计费，用量独立记账）",
         GROUP_PRESENTATION,
         False,
         True,
@@ -198,17 +198,17 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         False,
         True,
     ),
-    # ── 分析增强：事件窗量化对照（区块类转正项：实验身份已摘除、default 保持 False）──
+    # ── 分析增强：事件窗对照（区块类转正项：实验身份已摘除、default 保持 False）──
     "event_window_impact": FeatureSwitchDef(
-        "事件窗量化对照",
-        "新闻事件映射交易日后 ±5 交易日窗口：品种收益/超额收益与文本极性同表对照，分歧例进 LLM 分析章",
+        "事件窗对照",
+        "新闻事件发生后 ±5 个交易日的品种表现：收益/超额收益与文本极性同表对照，分歧例进 LLM 分析章",
         GROUP_EVENT_SUMMARY,
         False,
         True,
     ),
     # ── 机制与诊断：LLM 输出增强（只读侧注入，不增调用次数、不写盘） ──
     "module_quality_gate": FeatureSwitchDef(
-        "模块级质量分级",
+        "LLM 输出评级",
         "按完整性/一致性给各 LLM 模块输出评 A~F 级，低评级随内容头部标注质量提示（不阻断不重试）",
         GROUP_MECHANISM,
         True,
@@ -229,7 +229,7 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
     # ── 分析增强与独立章节与回放（以下声明顺序即各组组内面板顺序）──
     "data_quality": FeatureSwitchDef(
         "数据质量仪表盘",
-        "「数据源可用性矩阵」章渲染数据覆盖/时效/降级状态区块",
+        "「数据源可用性矩阵」章渲染数据覆盖/时效/降级状态区块（数据侧质量，与 LLM 输出评级无关）",
         GROUP_EVENT_SUMMARY,
         True,
         True,
@@ -257,7 +257,7 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
     ),
     "valuation_percentile": FeatureSwitchDef(
         "估值分位",
-        "「资产穿透TOP10」章渲染估值分位列（真实历史 PE/PB 分位，无覆盖时回落价格分位代理）",
+        "「资产穿透TOP10」章渲染估值分位列（有历史 PE/PB 数据时用真实分位，没有时用价格分位近似）",
         GROUP_MARKET,
         False,
         True,
@@ -312,7 +312,7 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         True,
     ),
     "summary_highlights": FeatureSwitchDef(
-        "本期要点与环比对照",
+        "首页执行摘要卡",
         "摘要区首屏执行摘要卡：关键指标环比行（总市值/总收益率/持仓数/集中度） + 本期关键变化 Top N（快照 diff 单源派生，无上期快照时整块隐藏）",
         GROUP_EVENT_SUMMARY,
         False,
@@ -322,7 +322,7 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
     # 行动章内嵌评分卡区块，作用域属既有章内追加） ──
     "prosperity_framework": FeatureSwitchDef(
         "景气度框架诊断",
-        "六维评分卡（景气方向/ROE 低位弹性/全球比较优势/流动性/集中度与周期拼接/业绩回撤印证）评估组合契合度，缺数据维度标记需核实",
+        "评估持仓组合与当前景气的匹配度：六维评分卡（景气方向/ROE 低位弹性/全球比较优势/流动性/集中度与周期拼接/业绩回撤印证），缺数据维度标记需核实",
         GROUP_MARKET,
         True,
         True,

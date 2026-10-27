@@ -1,5 +1,5 @@
 {# ==============================================================
-   事件窗量化对照区块 partial（并入「财经新闻热点与持仓关联分析」章内，
+   事件窗对照区块 partial（并入「财经新闻热点与持仓关联分析」章内，
    经 report_template.html 在新闻章正文之后 include 引入）。
 
    注册表不占独立条目、不消耗连续编号（连续编号/导航/页签均由注册表驱动，
@@ -19,17 +19,17 @@
    ============================================================== #}
 {% if event_impact_view %}
 <!-- ═══════════════════════════════════════════════════════ -->
-<!--  事件窗量化对照（新闻事件 × 持仓行情窗口比对）          -->
+<!--  事件窗对照（新闻事件 × 持仓行情窗口比对）          -->
 <!-- ═══════════════════════════════════════════════════════ -->
 {% set _ev = event_impact_view %}
 <div id="sec-event_impact" style="margin-top: 16px;">
     <div class="block-title">
-        事件窗量化对照
+        事件窗对照
         <span style="font-size: var(--fs-table-sm);font-weight:400;opacity:0.8;margin-left:8px;">新闻事件 × 持仓行情窗口比对</span>
     </div>
     <details class="section-fold">
         <summary class="section-fold-summary">
-            {% if _ev.get("available") %}{{ _ev.get("title_summary") }}{% else %}事件窗量化对照数据不足{% endif %} —— 点击展开/收起事件对照表
+            {% if _ev.get("available") %}{{ _ev.get("title_summary") }}{% else %}事件窗对照数据不足{% endif %} —— 点击展开/收起事件对照表
         </summary>
     {% if _ev.get("available") %}
     <div class="section-content">
@@ -61,7 +61,7 @@
     {% else %}
     <div class="section-content">
         <div class="empty-note">
-            <p><strong>事件窗量化对照数据暂不可用</strong></p>
+            <p><strong>事件窗对照数据暂不可用</strong></p>
             <p style="margin-top:8px;font-size: var(--fs-table);color:var(--text-muted);">
                 {{ _ev.get("reason") }}
             </p>

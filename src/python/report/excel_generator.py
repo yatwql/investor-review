@@ -469,18 +469,18 @@ def generate_excel_report(
         except Exception:
             logger.debug("[excel] 持仓变动复盘页签写入失败（非关键）", exc_info=True)
 
-    # ── 事件窗量化对照区块（并入财经新闻页签尾部；报告章节与增强开关 event_window_impact
+    # ── 事件窗对照区块（并入财经新闻页签尾部；报告章节与增强开关 event_window_impact
     #      默认关，键缺席时区块不渲染，此处自然不触发） ──
     ws_news = sheets.get("news_correlation")
     event_data = (pipeline_data or {}).get("event_impact_data")
     if ws_news is not None and event_data is not None:
-        prog.info("正在写入事件窗量化对照区块（财经新闻页签尾部）...")
+        prog.info("正在写入事件窗对照区块（财经新闻页签尾部）...")
         try:
             from src.python.report.event_impact_panel import write_event_impact_footer
 
             write_event_impact_footer(ws_news, event_data, start_row=ws_news.max_row + 2)
         except Exception:
-            logger.debug("[excel] 事件窗量化对照区块写入失败（非关键）", exc_info=True)
+            logger.debug("[excel] 事件窗对照区块写入失败（非关键）", exc_info=True)
 
     # ── 调仓纪律回放页签（多期规则回放 vs 买入持有；实验开关
     #      rebalance_schedule_replay 默认关，键缺席时页签不创建，此处自然不触发） ──

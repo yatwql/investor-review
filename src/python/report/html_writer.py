@@ -154,14 +154,14 @@ def _render_template(
     | None = None,  # 市场温度数据契约 market_temperature_data（汇总温度行，None=开关关闭）
     decision_review_data: dict | None = None,  # 历史决策复盘 decision_review_data（行动章内嵌块，None=开关关闭）
     holding_change_view: dict | None = None,  # 持仓变动复盘双端单源视图（预格式化行；None=章隐藏）
-    event_impact_view: dict | None = None,  # 事件窗量化对照双端单源视图（预格式化行；None=新闻章内区块隐藏）
+    event_impact_view: dict | None = None,  # 事件窗对照双端单源视图（预格式化行；None=新闻章内区块隐藏）
     schedule_replay_view: dict | None = None,  # 调仓纪律回放双端单源视图（预格式化行；None=章隐藏）
     financial_report_digest_data: dict | None = None,  # 持仓个股财报摘要契约（None=开关关闭/无数据）
     financial_indicator_data: dict | None = None,  # 财务指标契约（None=开关关闭/无数据）
     purchase_status_data: dict | None = None,  # 申购限购状态契约（None=开关关闭/无数据，申购状态列隐藏）
     data_source_catalog: list | None = None,  # 数据源说明表（实际使用清单 / 计费 / 凭据）
     summary_highlights_data: dict
-    | None = None,  # 本期要点与环比对照契约（报告增强开关 summary_highlights，None=首屏块隐藏）
+    | None = None,  # 首页执行摘要卡契约（报告增强开关 summary_highlights，None=首屏块隐藏）
 ) -> str:
     """渲染 Jinja2 模板并返回 HTML。"""
     from src.python.config.features import enabled_experimental_features, is_feature_enabled
@@ -338,11 +338,11 @@ def write_html_report(
     holding_change_data: dict
     | None = None,  # data 层：持仓变动复盘契约（报告章节与增强开关 `holding_change_review`，None=键缺席→整章隐藏）
     event_impact_data: dict
-    | None = None,  # data 层：事件窗量化对照契约（报告章节与增强开关 `event_window_impact`，None=键缺席→整章隐藏）
+    | None = None,  # data 层：事件窗对照契约（报告章节与增强开关 `event_window_impact`，None=键缺席→整章隐藏）
     schedule_replay_data: dict
     | None = None,  # data 层：调仓纪律回放契约（实验开关 `rebalance_schedule_replay`，None=键缺席→整章隐藏）
     summary_highlights_data: dict
-    | None = None,  # data 层：本期要点与环比对照契约（报告章节与增强开关 `summary_highlights`，None=键缺席→首屏块隐藏）
+    | None = None,  # data 层：首页执行摘要卡契约（报告章节与增强开关 `summary_highlights`，None=键缺席→首屏块隐藏）
 ) -> str:
     """生成 HTML 分析报告并保存到文件。
 
@@ -475,7 +475,7 @@ def write_html_report(
         from src.python.report.holding_change_panel import build_holding_change_view
 
         holding_change_view = build_holding_change_view(holding_change_data)
-    # 事件窗量化对照视图（双端单源）：与 Excel 新闻页签尾部区块消费同一份预格式化字符串；
+    # 事件窗对照视图（双端单源）：与 Excel 新闻页签尾部区块消费同一份预格式化字符串；
     # 契约缺席（开关关闭/未注入）→ None → 新闻章内区块隐藏，逐字节回退既有输出
     event_impact_view = None
     if event_impact_data:

@@ -1,4 +1,4 @@
-"""事件窗量化对照纯计算（event_window_impact）。
+"""事件窗对照纯计算（event_window_impact）。
 
 口径唯一定义（先决门槛「窗口口径可判定」的文档化落点）：
 

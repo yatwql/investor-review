@@ -112,7 +112,7 @@ SECTION_BLOCK_SPECS: dict[str, SectionBlockSpec] = {
         modules=("action_sheet.py",),
     ),
     "news_correlation": SectionBlockSpec.both(
-        ("事件窗量化对照", "事件窗对照表"),
+        ("事件窗对照", "事件窗对照表"),
         partials=("news_correlation_section.html", "event_impact_section.html"),
         modules=("news_correlation.py", "event_impact_panel.py"),
     ),

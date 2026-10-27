@@ -1,7 +1,7 @@
 """报告管线实验功能挂载点（seam）—— 同一守护语义只实现一次。
 
-六个挂载点（决策跨期反思闭环 / 模块级质量分级 / 确定性信号沉淀 / 景气度框架诊断 /
-持仓变动复盘 / 事件窗量化对照；六者均已转正（前四者入机制与诊断组、后两者分属独立章与分析增强组），但守护语义与挂载形态不变）
+六个挂载点（决策跨期反思闭环 / LLM 输出评级 / 确定性信号沉淀 / 景气度框架诊断 /
+持仓变动复盘 / 事件窗对照；六者均已转正（前四者入机制与诊断组、后两者分属独立章与分析增强组），但守护语义与挂载形态不变）
 在报告管线固定工序位置插入挂载点。决策/横幅/信号三个位于
 ``_report_generation._generate_report_full`` 的工序序列内；景气度框架诊断（产出
 ``prosperity_framework_data`` 契约）经 :func:`record_prosperity_diagnosis` 接入两条 HTML
@@ -29,7 +29,7 @@
   4. **持仓变动复盘晚于快照捕获**：事件清单由本次 ``capture_snapshot`` 落盘后的
      快照目录差分产出，前置注入会漏掉当期变动；对账读的是历史区间内已落档的
      决策事件，当次新登记（3.6/5b）属未来动作、不应入账。
-  5. **事件窗量化对照晚于新闻获取**：事件表须以本次新闻（含逐条 LLM 关联判定
+  5. **事件窗对照晚于新闻获取**：事件表须以本次新闻（含逐条 LLM 关联判定
      极性）为输入，由 ``_llm_news._fetch_llm_and_news`` 在新闻收集完成后调用
      ``inject_event_impact_data``（开关开启时新闻先行串行，避免装配竞态）。
 
@@ -165,7 +165,7 @@ def record_llm_decisions_and_review_block(
 
 
 def apply_module_quality_banners(llm_content: tuple, reporter: ProgressReporter) -> tuple:
-    """模块级质量分级：给 4 个 LLM 模块输出评级，低评级内容头部注入质量横幅。
+    """LLM 输出评级：给 4 个 LLM 模块输出评级，低评级内容头部注入质量横幅。
 
     只标注不阻断、不重试、不写回缓存。置于决策登记之后：横幅改写内容文本，须
     避开操作建议表解析。开关判定在 ``llm_quality`` 内部（关闭时原样返回入参）。
@@ -179,7 +179,7 @@ def apply_module_quality_banners(llm_content: tuple, reporter: ProgressReporter)
 
         return llm_quality.apply_quality_banners(llm_content, reporter)
 
-    return _guarded("模块级质量分级", "llm_quality", reporter, _action, llm_content)
+    return _guarded("LLM 输出评级", "llm_quality", reporter, _action, llm_content)
 
 
 def record_deterministic_signals(pipeline_data: dict | None, prep: dict, reporter: ProgressReporter) -> None:
@@ -299,7 +299,7 @@ def inject_event_impact_data(
     penetrated_assets: list[dict] | None = None,
     comparison_indices: dict[str, str] | None = None,
 ) -> None:
-    """事件窗量化对照（报告章节与增强开关，新闻获取后注入）：装配事件表并注入 ``pipeline_data``。
+    """事件窗对照（报告章节与增强开关，新闻获取后注入）：装配事件表并注入 ``pipeline_data``。
 
     事件表须以**本次新闻**（含逐条 LLM 关联判定极性）为输入，故挂载点位于新闻
     收集完成之后（调用方 ``_llm_news._fetch_llm_and_news`` 保证顺序；开关开启时
@@ -335,7 +335,7 @@ def inject_event_impact_data(
             benchmark_override=str(_config.get("whatif_benchmark_index") or "") or None,
         )
 
-    _guarded("事件窗量化对照（事件表装配）", "event_window_impact", reporter, _action, None)
+    _guarded("事件窗对照（事件表装配）", "event_window_impact", reporter, _action, None)
 
 
 def inject_schedule_replay_data(

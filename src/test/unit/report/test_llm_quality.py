@@ -53,7 +53,7 @@ _PENETRATION_FULL = (
 
 
 def _feature_on(monkeypatch) -> None:
-    """在当前用例内开启模块级质量分级开关。"""
+    """在当前用例内开启LLM 输出评级开关。"""
     from src.python.config import features as feat
 
     monkeypatch.setitem(feat.FEATURE_FLAGS, "module_quality_gate", True)

@@ -25,7 +25,7 @@ from src.test.helpers import SynchronousExecutor
 pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.llm]
 
 _BLOCK = (
-    "【事件窗量化对照·分歧例（文本判定 vs 事件窗方向）】\n"
+    "【事件窗对照·分歧例（文本判定 vs 事件窗方向）】\n"
     "分歧例（1 条，与报告事件表同源）：\n"
     "  2026-09-22（交易日 2026-09-22） 300750 关键词 宁德时代 文本=利好 方向=下 收益 -2.02% 超额 +1.99%｜示例新闻"
 )
@@ -159,7 +159,7 @@ class TestPromptEndToEndContainsBlock(unittest.TestCase):
             mock_content.reset_mock()
             fn(**self._call_kwargs(module_key), event_impact_block=_BLOCK)
             texts = self._prompt_texts(mock_content)
-            assert any("【事件窗量化对照·分歧例" in s for s in texts), f"{module_key}: 最终 prompt 不含块"
+            assert any("【事件窗对照·分歧例" in s for s in texts), f"{module_key}: 最终 prompt 不含块"
 
     def test_four_modules_absent_block_unchanged(self, mock_cfg, mock_content):
         """块缺席 → 最终 prompt 不含块（关态逐字节回退面）。"""
@@ -175,7 +175,7 @@ class TestPromptEndToEndContainsBlock(unittest.TestCase):
             mock_content.reset_mock()
             fn(**self._call_kwargs(module_key))
             texts = self._prompt_texts(mock_content)
-            assert not any("【事件窗量化对照·分歧例" in s for s in texts), f"{module_key}: 缺席时 prompt 意外含块"
+            assert not any("【事件窗对照·分歧例" in s for s in texts), f"{module_key}: 缺席时 prompt 意外含块"
 
 
 # ═══════════════════════════════════════════════════════════════

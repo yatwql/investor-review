@@ -799,7 +799,7 @@ class TestRenderOverrides:
 
         text = _render_overrides({"decision_reflection": True, "summary_highlights": False})
         assert "决策跨期反思闭环" in text
-        assert "本期要点与环比对照" in text
+        assert "首页执行摘要卡" in text
         assert loads(text) == {"decision_reflection": True, "summary_highlights": False}
 
     def test_last_entry_has_no_trailing_comma(self):

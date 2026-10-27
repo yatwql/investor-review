@@ -163,7 +163,7 @@ def _generate_report_both(
     # 2b2. 持仓变动复盘（报告章节与增强开关 holding_change_review，默认关；独立于演进开关）：
     #      事件清单差分须晚于本次快照捕获；开关关闭时键缺席 → 整章隐藏（见 seams）
     inject_holding_change_data(pipeline_data, config, reporter, snapshot_namespace=snapshot_namespace)
-    # 2b4. 摘要区本期要点与环比对照（报告章节与增强开关 summary_highlights，默认关）：
+    # 2b4. 摘要区首页执行摘要卡（报告章节与增强开关 summary_highlights，默认关）：
     #      快照 diff 单源纯内存派生；无上期快照时键值为 None → 首屏整块隐藏
     if _enable_summary_highlights and pipeline_data is not None:
         from src.python.report.summary_highlights import build_summary_highlights

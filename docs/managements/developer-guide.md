@@ -1240,7 +1240,7 @@ DataModuleDef("我的 LLM 分析", "llm_my_analysis",
 
 > **LLM 模块补充步骤**：在上述 registry 清单基础上，新增 LLM 模块还需完成领域特定步骤——`llm/prompts.py` 新增 `_SYSTEM_{MODULE}` 常量与提示词构建函数；`report/html_writer.py`（HTML）+ `report/llm_content.py`（Excel）新章节双渲染；在 `core/data_registry.py` 为该模块登记 `DataModuleDef`（`cache_ttl` 即默认 TTL，LLM 惯例：分析类 4h、内容寻址类 24h；无需改 `config.json`）；`llm_settings.json` 加入推荐默认值并更新 [配置指南](../manuals/how-to-config.md)。
 >
-> **纳入模块级质量分级（可选，开关 `module_quality_gate`）**：新模块默认不参与 `report/llm_quality.py` 的 A~F 分级（分级为只读旁路，未登记不影响任何既有功能）。若需纳入：在 `_MODULE_KEYS` 追加模块键（顺序须与 `llm_content` 四元组位置一致）、在 `_LENGTH_THRESHOLDS` 设定该模块的 `(降级下限, 参考篇幅)` 双阈值（依据真实健康输出实测字符数标定）；若其提示词规定了固定章节清单，还需在 `_REQUIRED_MARKERS` 登记标记——`test_llm_quality.py::TestRequiredMarkersMatchPrompts` 会直接比对提示词常量，标记与提示词不同步即测试失败。
+> **纳入LLM 输出评级（可选，开关 `module_quality_gate`）**：新模块默认不参与 `report/llm_quality.py` 的 A~F 分级（分级为只读旁路，未登记不影响任何既有功能）。若需纳入：在 `_MODULE_KEYS` 追加模块键（顺序须与 `llm_content` 四元组位置一致）、在 `_LENGTH_THRESHOLDS` 设定该模块的 `(降级下限, 参考篇幅)` 双阈值（依据真实健康输出实测字符数标定）；若其提示词规定了固定章节清单，还需在 `_REQUIRED_MARKERS` 登记标记——`test_llm_quality.py::TestRequiredMarkersMatchPrompts` 会直接比对提示词常量，标记与提示词不同步即测试失败。
 
 > **提示词内容必须进指纹（唯一事实来源 `llm/module_fingerprint.py`）**：缓存键与提示词内容脱钩会静默复用陈旧结论（键不变 → 预检命中旧键 → 不重生成、不报错）。因此**凡进了提示词的段落都必须进该模块的指纹**：已渲染文本（`competitive_context` / `data_quality_text`）、量化指标（`metrics`）、以及 `pipeline_data` 派生的【环比变化】【数据质量降级】两段——**只进「提示词确实含该段」的模块**，不进提示词的模块并入即纯成本失效。判据与完整清单见 `llm-technical.md` §7.1。
 >

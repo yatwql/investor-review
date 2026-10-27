@@ -9,6 +9,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Collection
+from concurrent.futures import Future
+
 import time
 
 from src.python.report.progress import ProgressReporter
@@ -74,12 +77,12 @@ def _submit_llm_future(
     pipeline_data: dict | None,
     enable_llm: bool,
     *,
-    force_modules: set[str] | frozenset[str] | None = None,
+    force_modules: Collection[str] | None = None,
     history_data: dict | None = None,
     comparison_indices: dict[str, str] | None = None,
     metrics: dict | None = None,
     span_recorder=None,
-) -> object | None:
+) -> Future | None:
     """向线程池提交 LLM 生成任务，返回 Future 或 None。
 
     ``span_recorder``：四模块耗时记录器（由调用方按 `LLM+新闻` 父阶段建立），
@@ -127,7 +130,7 @@ def _submit_news_future(
     purchase_constraint_block: str = "",
     force_news: bool = False,
     span_recorder=None,
-) -> object | None:
+) -> Future | None:
     """向线程池提交新闻获取任务，返回 Future 或 None。
 
     ``force_news``：新闻关联 LLM 增强的模块级强刷（
@@ -189,12 +192,12 @@ def _fetch_llm_and_news(
     enable_llm: bool,
     reporter: ProgressReporter,
     *,
-    force_llm_modules: set[str] | frozenset[str] | None = None,
+    force_llm_modules: Collection[str] | None = None,
     history_data: dict | None = None,
     comparison_indices: dict[str, str] | None = None,
     metrics: dict | None = None,
     span_recorder=None,
-) -> tuple[tuple, list, dict, bool]:
+) -> tuple[tuple, list, dict, bool, dict | None]:
     """并行获取 LLM 内容 + 新闻数据，统一处理 4 分支。
 
     内部管理线程池（max_workers=2）。
@@ -203,7 +206,7 @@ def _fetch_llm_and_news(
     ``span_recorder``：`LLM+新闻` 父阶段的子项记录器（上层按父阶段建立），
     逐模块与新闻获取各自记时；None 时零行为变化。
 
-    ``force_llm_modules``：模块级强刷集合——并行四模块经
+    ``force_llm_modules``：模块级强刷范围（集合/列表均可，只做成员判定）——并行四模块经
     ``generate_all_llm`` 同源消费，新闻 LLM 增强按 ``news_correlation``
     是否在集合内单独置 force。
     """
@@ -311,7 +314,8 @@ def _fetch_llm_and_news(
 
         if _llm_fut is not None and _news_fut is not None:
             # 分支 ①：LLM + 新闻均开启（并行等待）
-            for fut in as_completed([_news_fut, _llm_fut]):
+            _waiting: list[Future] = [_news_fut, _llm_fut]
+            for fut in as_completed(_waiting):
                 if fut is _llm_fut:
                     llm_content, debate_info = _collect_llm_future_result(fut, reporter)
                 else:

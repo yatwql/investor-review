@@ -1,4 +1,4 @@
-"""摘要区「本期要点与环比对照」单元测试。
+"""摘要区「首页执行摘要卡」单元测试。
 
 覆盖三面：
   1. ``report/summary_highlights.py::build_summary_highlights`` 派生契约
@@ -6,7 +6,7 @@
   2. ``fetcher/history_diff.py`` 总盈亏率环比计算与 ``report/_snapshot.py`` diff 透传
   3. ``partials/summary_section.html`` 渲染开/关态（开关关闭时块零输出——关态产物逐字节不变）
 
-需求 ``R-OUT-15``（摘要区本期要点与环比对照）。
+需求 ``R-OUT-15``（摘要区首页执行摘要卡）。
 """
 
 from __future__ import annotations

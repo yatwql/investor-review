@@ -1,4 +1,4 @@
-"""事件窗量化对照（event_impact_panel）接线测试 — 开关/挂载点/注册表/双端/LLM 串行化。
+"""事件窗对照（event_impact_panel）接线测试 — 开关/挂载点/注册表/双端/LLM 串行化。
 
 覆盖（对应验收条目）：
   - 开关注册表：event_window_impact 已登记（分析增强组、默认关、影响报告）
@@ -129,7 +129,7 @@ class TestFeatureSwitchRegistry:
 
     def test_switch_registered_in_analysis_group_off_by_default(self):
         sw = feature_switch_registry["event_window_impact"]
-        assert sw.label == "事件窗量化对照"
+        assert sw.label == "事件窗对照"
         assert sw.group == "event_summary"
         assert sw.default is False
         assert sw.affects_report is True
@@ -140,7 +140,7 @@ class TestFeatureSwitchRegistry:
 
 
 class TestEventImpactMount:
-    """事件窗量化对照挂载点（报告章节与增强开关，产出 ``event_impact_data`` 契约）。"""
+    """事件窗对照挂载点（报告章节与增强开关，产出 ``event_impact_data`` 契约）。"""
 
     def test_flag_off_is_inert(self, reporter):
         """开关关闭 → 不装配、不注入、不告警（零导入零成本）。"""
@@ -190,7 +190,7 @@ class TestEventImpactMount:
             seams.inject_event_impact_data(pipeline_data, reporter, news_data=[], holdings=[])
         assert pipeline_data == {}
         assert len(reporter.warns()) == 1
-        assert "事件窗量化对照" in reporter.warns()[0]
+        assert "事件窗对照" in reporter.warns()[0]
 
 
 # ── 注册表 / 导航 / 页签名 ──────────────────────────────
@@ -282,7 +282,7 @@ class TestViewSheetSingleSource:
         wb = Workbook()
         ws = wb.active
         write_event_impact_footer(ws, contract, start_row=5)
-        assert ws.cell(row=5, column=1).value == "事件窗量化对照", "区块标题必须落在 start_row"
+        assert ws.cell(row=5, column=1).value == "事件窗对照", "区块标题必须落在 start_row"
         cells = [str(c) for row in ws.iter_rows(values_only=True) for c in row if c is not None]
 
         for line in view["summary_lines"]:
