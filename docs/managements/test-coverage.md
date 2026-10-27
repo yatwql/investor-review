@@ -1,5 +1,5 @@
 # 测试覆盖统计
-> 文档版本：0.16.5-dev
+> 文档版本：0.16.5
 
 > ⚠ 以下测试项数为撰写时的快照值，实际计数随版本迭代而变化。`模式对应测试量` 表由 `--mode bench --update-docs` 自动回填本机实测；功能域/分组等子表精确统计请运行 `scripts/test-collect-coverage.py`（或 `pytest src/test/ --collect-only -q`）获取实时计数。
 
@@ -12,11 +12,11 @@
 <!-- mode-count-table:start -->
 | `--mode` 值 | 覆盖项数 | 典型耗时 |
 |:------------|:--------:|:--------:|
-| `unit` | **12145** | ~55s |
+| `unit` | **12145** | ~54s |
 | `standard` | **10910** | ~28s |
 | `scenario` | **292** | ~6s |
 | `regression` | **292** | ~12s |
-| `dev-verify` | **8554** | ~51s |
+| `dev-verify` | **8554** | ~52s |
 | `verify` | **12147** | ~29s |
 | `integration` | **343** | ~13s |
 | `edge` | **1167** | ~12s |
@@ -67,12 +67,12 @@
 <!-- duration-table:start -->
 | `--mode` | dragonball（2026-10-27 实测） | stallman-NB1（2026-10-02 实测） |
 |:---------|:---------------------------:|:---:|
-| `unit` | ~55s | ~3min |
+| `unit` | ~54s | ~3min |
 | `standard` | ~28s | ~3min |
 | `scenario` | ~6s | ~51s |
 | `regression` | ~12s | ~1min |
 | `verify,regression` | ~35s（verify+regression 顺序之和） | ~5min（verify+regression 顺序之和） |
-| `dev-verify` | ~51s | ~4min |
+| `dev-verify` | ~52s | ~4min |
 | `verify` | ~29s | ~4min |
 | `integration` | ~13s | ~2min |
 | `edge` | ~12s | ~1min |
