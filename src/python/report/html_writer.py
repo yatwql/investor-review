@@ -16,6 +16,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import logging
 from datetime import datetime
 
@@ -93,31 +95,31 @@ def _render_template(
     update_status_dict: dict,
     a_indices_list: list,
     us_indices_list: list,
-    accounts: list,
-    account_totals: list,
+    accounts: dict[str, list],
+    account_totals: dict[str, dict[str, float]],
     cat_data: list,
-    penetration: dict,
+    penetration: dict | None,
     perf_data: list,
     candidate_data: dict | None,
     news_data: list,
     _news_llm_meta: dict | None,
     has_llm_analysis: bool,
-    manager_analysis: dict,
-    overlap_matrix: dict,
-    concentration_analysis: dict,
-    style_analysis: dict,
+    manager_analysis: dict | None,
+    overlap_matrix: dict | None,
+    concentration_analysis: dict | None,
+    style_analysis: dict | None,
     llm_enabled_flag: bool,
     global_macro_content: str | None,
     expert_review_content: str | None,
     health_check_content: str | None,
     penetration_deep_content: str | None,
-    _llm_session_usage: dict,
+    _llm_session_usage: dict | None,
     _llm_module_info: list,
     llm_endpoint: str | None,
-    module_disabled: list,
-    _debate_mode_label: str,
+    module_disabled: dict[str, bool],
+    _debate_mode_label: str | None,
     debate_info: dict | None,
-    _debate_mode_combination: str,
+    _debate_mode_combination: str | None,
     order: list,
     section_numbers: dict,
     section_visible_dict: dict,
@@ -128,7 +130,7 @@ def _render_template(
     data_status_category: DataStatus,
     history_data: dict | None,
     data_status_history: DataStatus,
-    data_source_matrix: dict,
+    data_source_matrix: list[dict[str, Any]],
     chart_datasets: dict | None = None,
     style_factor_data: dict | None = None,
     factor_catalog_data: dict | None = None,
@@ -665,7 +667,7 @@ def write_html_report(
         html = mask_display_text(html, build_report_alias_map(holdings, _anon_mode, include_codes=False))
         html = mask_code_text(html, _code_display_map)
 
-    return _save_html_report(html, output_dir, total_mv, total_profit, prog)
+    return _save_html_report(html or "", output_dir, total_mv, total_profit, prog)
 
 
 # ── 桥接 import：外部子模块 ─────────────────────────────────

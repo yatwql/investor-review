@@ -3545,6 +3545,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `log_reader` | 日志读取（read_log/tail_log/parse_log） | 日志可视化 | 诊断 | 无（模块级） |
 | `view_logs` | 查看日志（CLI view-logs 子命令） | 日志可视化 | 诊断 | 无（子命令） |
 | `health_history` | 数据源健康历史（load_health_history/summarize_health_history） | 日志可视化 | 监控 | data/state/datasource_health.jsonl |
+| `qa_telemetry` | 报告追问埋点与效果汇总（record_attempt / summarize_qa_usage / format_summary_block；转正判据逐条判定，`doctor` 上屏） | 报告追问 | 监控 | data/state/qa_usage.jsonl |
 | `jsonl_store` | JSONL 原子追加 + 按龄裁剪原语（`perf`/`decision_ledger`/`signal_ledger` 共同委托的唯一拷贝；`prune_jsonl_by_age` 供业务账本按保留窗口裁剪，`max_lines` 仅限遥测类） | 诊断 | 监控 | 无（模块级） |
 | `num_utils` | 数值归一原语（`safe_num` 显式拦下 NaN/±inf，替代失效的 `try: float()` 兜底） | 诊断 | 数据获取 | 无（模块级，A 通道无开关） |
 | `retry` | 重试与退避唯一原语（`RetryPolicy` 策略算式——固定/线性/指数/**显式序列**、`is_transient_exception` 瞬时判据、`retry_transient` 执行器；取数链路、各 provider 与 LLM 调用骨架共用） | 诊断 | 数据获取 | 无（模块级） |

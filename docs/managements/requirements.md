@@ -1013,6 +1013,7 @@ LLM 五维度量化评分，每项满分 100：
 | R-QA-08 | 用量独立记账：`QaSession.usage`（input/output tokens + provider）按轮累计返回前端；追问不写报告周期 LLM 用量统计（`qa` 不依赖 `llm.session`，源码级断言守护）；日志只记会话 id、轮数、问题前 20 字与 token 数 |
 | R-QA-09 | 报告页区块（`partials/report_qa_section.html`）：开态在报告尾部渲染输入/发送/多轮消息/状态条（空态「输入问题开始追问」、进行态、失败态「服务暂不可用」、上限态）与剩余轮次 + 累计用量；同源 `fetch("/api/qa/ask")`，`file://` 直开降级为「经 Web 工作台打开报告后可使用追问」引导（零 CORS 机制）；样式全取报告既有 token（断点 768px、打印隐藏）；`report_qa_enabled` 经 render context 传递、不写模板 globals |
 | R-QA-10 | TUI 主菜单 [Q] 入口（`tui/handlers_qa.py`）：`input()` 多轮文本输入循环 —— 报告选择（输出目录顶层 `.html` 按修改时间倒序、回车=最新、q/EOF/Ctrl+C 取消）、回答纯文本化展示、会话续传（同 `session_id`）、轮数/用量/警示回显、错误信封（会话上限/报告不可用终止循环，其余继续提问）；`report_qa` 开关门控（`FEATURE_GATED_ITEMS` 就地裁剪，与 Web/报告区块同源，关闭时菜单项整体不出现）；零 TUI 私有副本（`ask_report_qa` 同源同对象断言）；`default_menu_key` 支持 Q |
+| R-QA-11 | 转正判据埋点（`qa/telemetry.py`，语义 `qa_telemetry`）：每次追问尝试记一行到 `data/state/qa_usage.jsonl`（渠道/成功标志/错误码/轮数/tokens/模型/耗时/事实核对降级/**仅问题字数不落正文**），滚动上限 5000 行；`summarize_qa_usage` 汇总提问量、无回答占比、失败码分布、渠道、平均轮数、tokens 与费用，并按阈值给出转正判据逐条结论；`doctor` 上屏最近 30 天概览；埋点异常一律吞掉，不得影响追问主链路 |
 
 ## 7. LLM 智能分析
 

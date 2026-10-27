@@ -401,6 +401,22 @@ def _check_experimental_features() -> list[dict[str, Any]]:
     return [_item(GROUP_FEATURES, "实验功能", True, f"已启用 {len(enabled)} 项 — {detail}")]
 
 
+def _check_report_qa_usage() -> list[dict[str, Any]]:
+    """报告追问（实验项）的使用与效果概览（信息性，不影响自检结论）。
+
+    转正判据需要实测数据：提问量 / 无回答占比 / 事实核对降级率。账本为空时
+    明确说明「尚无记录」，不虚构结论。
+    """
+    try:
+        from src.python.qa.telemetry import format_summary_block, summarize_qa_usage
+
+        summary = summarize_qa_usage(days=30)
+        lines = format_summary_block(summary, days=30)
+    except Exception as exc:  # noqa: BLE001
+        return [_item(GROUP_FEATURES, "报告追问效果", False, f"读取失败: {type(exc).__name__}: {exc}")]
+    return [_item(GROUP_FEATURES, "报告追问效果", True, "\n".join(lines))]
+
+
 def _check_review_ledger_overview() -> list[dict[str, Any]]:
     """复盘账本与实验功能使用统计的只读概览（信息性，不影响自检结论）。
 
@@ -618,6 +634,7 @@ def run_doctor_checks(*, include_network: bool = True, max_timeout: float = 8.0)
     results.extend(_check_directories())
     results.extend(_check_logs_and_cache())
     results.extend(_check_experimental_features())
+    results.extend(_check_report_qa_usage())
     results.extend(_check_review_ledger_overview())
     results.extend(_check_source_adapters())
     results.extend(_check_datasource_credentials())

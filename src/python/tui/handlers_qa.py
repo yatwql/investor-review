@@ -179,7 +179,7 @@ def _qa_input_loop(report: str) -> None:
         if not question or question.lower() == "q":
             break
         print("  [..] 思考中…")
-        result = ask_report_qa(report=report, question=question, session_id=session_id)
+        result = ask_report_qa(report=report, question=question, session_id=session_id, channel="tui")
         if not result.get("ok"):
             error = result.get("error") or "服务暂不可用"
             code = result.get("error_code") or ""

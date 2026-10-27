@@ -177,7 +177,7 @@ def _fact_check(answer_html: str, holdings: list[dict]) -> tuple[bool, bool]:
     return warned, False
 
 
-def ask_report_qa(
+def _ask_report_qa_impl(
     report: str,
     question: str,
     session_id: str | None = None,
@@ -186,7 +186,7 @@ def ask_report_qa(
     llm_config: dict | None = None,
     http_client=None,
 ) -> dict:
-    """报告追问主入口（Web 路由与 TUI 共用）。
+    """报告追问实现体（由 :func:`ask_report_qa` 包装并埋点，勿直接调用）。
 
     Args:
         report: 报告文件名（basename，.html）。
@@ -233,12 +233,17 @@ def ask_report_qa(
             except ReportQaContextError as exc:
                 logger.warning("[report_qa] 上下文不可用 code=%s report=%s", exc.code, report)
                 return _fail(exc.code, str(exc))
+        # 取局部引用：上下文是对象属性，静态分析无法跨赋值收窄；这里再兜一次空值
+        # （理论不可达——上面要么已赋值、要么早返回），避免把 None 当上下文用。
+        context = session.context
+        if context is None:  # pragma: no cover - 防御分支
+            return _fail(QA_LLM_FAILED, "服务暂不可用（报告上下文缺失）", session_id=session.session_id)
 
         history_block = _history_block(session)
         input_chars = (
             len(_QA_SYSTEM_RULES)
-            + len(session.context.declaration)
-            + len(session.context.text)
+            + len(context.declaration)
+            + len(context.text)
             + len(history_block)
             + len(question)
         )
@@ -252,9 +257,9 @@ def ask_report_qa(
         system_prompt = (
             _QA_SYSTEM_RULES
             + "\n【生成条件】\n"
-            + session.context.declaration
+            + context.declaration
             + "\n\n【本期报告内容】\n"
-            + session.context.text
+            + context.text
         )
         user_prompt = history_block + question
         content, usage, provider_info = call_llm(
@@ -279,7 +284,7 @@ def ask_report_qa(
                 session_id=session.session_id,
             )
 
-        warned, degraded = _fact_check(answer_html, session.context.holdings_details)
+        warned, degraded = _fact_check(answer_html, context.holdings_details)
         fragments = [answer_html]
         if warned:
             fragments.append(
@@ -319,4 +324,62 @@ def ask_report_qa(
             "remaining_turns": max(0, _QA_MAX_TURNS - session.turns),
             "usage": dict(session.usage),
             "fact_warning": warned,
+            # 内部：本次调用的用量与路由（仅供埋点，wrapper 取出后从返回值删除）
+            "_telemetry": {
+                "in_tokens": in_tok,
+                "out_tokens": out_tok,
+                "model": str((provider_info or {}).get("model") or ""),
+                "provider": str((provider_info or {}).get("name") or session.usage.get("provider") or ""),
+            },
         }
+
+def ask_report_qa(
+    report: str,
+    question: str,
+    session_id: str | None = None,
+    *,
+    output_dir: str | None = None,
+    llm_config: dict | None = None,
+    http_client=None,
+    channel: str = "unknown",
+) -> dict:
+    """报告追问主入口（Web 路由与 TUI 共用）——成功/失败都记一行埋点。
+
+    Args:
+        channel: 调用渠道（``web`` / ``tui``）；仅用于埋点分渠道统计，
+            不影响业务逻辑。未知渠道按 ``unknown`` 记。
+
+    Returns:
+        同 :func:`_ask_report_qa_impl`；返回值不含内部 ``_telemetry`` 字段。
+    """
+    started = time.perf_counter()
+    result = _ask_report_qa_impl(
+        report,
+        question,
+        session_id,
+        output_dir=output_dir,
+        llm_config=llm_config,
+        http_client=http_client,
+    )
+    meta = result.pop("_telemetry", None) or {}
+    try:
+        from src.python.qa.telemetry import record_attempt
+
+        record_attempt(
+            channel=channel,
+            report=report,
+            ok=bool(result.get("ok")),
+            session_id=str(result.get("session_id") or ""),
+            rounds=int(result.get("turns") or 0),
+            error_code=str(result.get("error_code") or ""),
+            input_tokens=int(meta.get("in_tokens") or 0),
+            output_tokens=int(meta.get("out_tokens") or 0),
+            model=str(meta.get("model") or ""),
+            provider=str(meta.get("provider") or ""),
+            latency_ms=(time.perf_counter() - started) * 1000,
+            fact_warning=bool(result.get("fact_warning")),
+            question_chars=len(str(question or "").strip()),
+        )
+    except Exception:  # 埋点异常绝不影响追问结果
+        logger.debug("[report_qa] 埋点记录失败，忽略", exc_info=True)
+    return result

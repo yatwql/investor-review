@@ -113,6 +113,12 @@ def seed_sensitive_path_isolation(monkeypatch, tmp_path, _doctor_probe_targets) 
         "src.python.core.signal_ledger._SIGNAL_LEDGER_FILE",
         str(tmp_path / "data/state/signal_ledger.jsonl"),
     )
+    # qa_usage.jsonl 报告追问埋点账本隔离（无单例，路径隔离即状态隔离——
+    # summarize_qa_usage/format_summary_block 按需读档现算）
+    monkeypatch.setattr(
+        "src.python.qa.telemetry._QA_USAGE_PATH",
+        tmp_path / "data/state/qa_usage.jsonl",
+    )
     # scheduler_fired.json 定时生成触发账本文件隔离（调度线程/接口读写该文件，
     # 测试经此重定向到 tmp，不得落真实 data/state/）
     monkeypatch.setattr(

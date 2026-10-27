@@ -507,7 +507,12 @@ def _handle_report_qa_ask():
 
     from src.python.qa.session import ask_report_qa
 
-    result = ask_report_qa(report=report, question=str(payload.get("question") or ""), session_id=session_id)
+    result = ask_report_qa(
+        report=report,
+        question=str(payload.get("question") or ""),
+        session_id=session_id,
+        channel="web",
+    )
     if not result.get("ok"):
         code = result.get("error_code")
         return _err(code, result.get("error")), _QA_STATUS_BY_CODE.get(code, 400)
