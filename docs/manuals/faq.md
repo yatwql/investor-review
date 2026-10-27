@@ -11,7 +11,8 @@
 - [LLM 相关](#llm-相关) · [报告理解](#报告理解)
 - [投资概念与指标释义](#投资概念与指标释义) · [缓存相关](#缓存相关)
 - [手机与移动端](#手机与移动端) · [平台与兼容性](#平台与兼容性)
-- [隐私与安全](#隐私与安全) · [故障排查](#故障排查)（[Web 模式（浏览器界面）](#web-模式浏览器界面)）
+- [隐私与安全](#隐私与安全) · [错误信息索引](#错误信息索引先按消息查这里)
+- [故障排查](#故障排查)（[Web 模式（浏览器界面）](#web-模式浏览器界面)）
 
 ## 启动与安装
 
@@ -217,7 +218,7 @@ A: 编辑 `data/config/config.json` 的 `report_section_order` 字段，格式�
 }
 ```
 
-空对象 `{}` 或缺失此字段时使用 19 项默认顺序。完整模块标识列表见 [配置指南](how-to-config.md#report_section_order-报告序号配置)。
+空对象 `{}` 或缺失此字段时使用 19 项默认顺序。完整模块标识列表见 [配置指南 §字段详解](how-to-config-fields.md#report_section_order-报告序号配置)。
 
 **Q: 菜单 C（配置报告可选章节）是做什么的？**
 
@@ -466,7 +467,7 @@ A: **技术上可以，但官方条款有明确风险，不推荐用于批量报
 - **两套系统互不通用**：Kimi Code 订阅端点是 `https://api.kimi.com/coding/`、模型名 `kimi-for-coding`；开放平台是 `https://api.moonshot.cn`、模型名 `kimi-k2.6`。Key 与 Base URL 必须配套，混用会 401 `Invalid Authentication`。
 - **条款限制**：Kimi Code 官方社区准则明确 **"Don't use Kimi Code for non-interactive automation"**（订阅仅限个人交互式使用，脚本化批量执行属超范围）。本工具的批量报告生成属非交互式自动化，违规处置可能是 **403 并发/风控限制**（只能申诉）。
 - **建议**：程序跑自动化用**开放平台按量付费 Key**（成本很低，约每次报告 ¥0.3~0.5）；订阅 Key 留给 Claude Code / CLI 等交互式编码场景。
-- **确实要用**：完整改法与降风险措施（两个文件的改法、`pacing` 端点级节流、403 不重试语义）见 [LLM 配置指引](how-to-config-llm.md) → 「支持的 provider 及配置示例」→ **Kimi Code（订阅会员）** 折叠块。
+- **确实要用**：完整改法与降风险措施（两个文件的改法、`pacing` 端点级节流、403 不重试语义）见 [LLM 参考附录](how-to-config-llm-reference.md) → 「支持的 provider 及配置示例」→ **Kimi Code（订阅会员）** 折叠块。
 
 **Q: LLM API 返回 429（请求过多）怎么办？**
 
@@ -526,7 +527,7 @@ A: 先试菜单 `[1]` 更新基础缓存，再试 `[2]` 更新行情类缓存，
 
 **Q: Excel 报告页签的编号（1.~19.）顺序是固定的吗？**
 
-A: 默认使用固定顺序（投资分析汇总 → LLM API 用量），但可通过 `config.json` 的 `report_section_order` 字段自定义各模块的序号和排列顺序。未配置时保持默认行为。详见[配置指南](how-to-config.md#report_section_order-报告序号配置)。
+A: 默认使用固定顺序（投资分析汇总 → LLM API 用量），但可通过 `config.json` 的 `report_section_order` 字段自定义各模块的序号和排列顺序。未配置时保持默认行为。详见[配置指南 §字段详解](how-to-config-fields.md#report_section_order-报告序号配置)。
 
 菜单 E/B/L 生成范围不同：E 为基础页签（始终显示的 5 个核心模块，另含组合演进页签——开启 `enable_portfolio_evolution` 时显示；行动建议页签——`enable_action`（默认开启）控制时显示；不含基金深度分析、不含新闻、不含历史走势），B 在 E 基础上加基金深度分析+新闻+历史走势（不含 LLM 分析模块），L 为全量（1~19）。各菜单对应的页签范围详见[TUI 菜单操作手册](how-to-use-tui-menu.md#报告内容对照)。
 
@@ -822,6 +823,54 @@ A: `llm_key.json` 中的 API Key 以明文存储。程序不主动上报或同�
 **Q: 日志中会记录敏感信息吗？**
 
 A: 默认 INFO 级别下，日志记录模块调用结果和错误信息，不记录完整持仓名称和盈亏明细。切换为 DEBUG 级别后会记录更详细的调用参数（包括 LLM 发送的 prompt 内容），DEBUG 日志建议勿长期开启或在公开场合展示。
+
+---
+
+## 错误信息索引（先按消息查这里）
+
+三个渠道共用一张「故障 → 用户提示」映射（`core/error_hints.py`），所以同一种故障在三处说法一致；Web 另带机器可判定的 `error_code`。**看到报错先按消息原文在本节定位**，再去对应章节看细节。
+
+### 三渠道共用的提示
+
+| 你会看到 | 常见原因 | 下一步 |
+|---|---|---|
+| 文件读取/写入权限不足 | 目录只读、权限不足、文件被其他程序占用 | 检查 `data/`、`reports/`、`logs/` 的权限；Windows 上确认文件没被 Excel 打开 |
+| 文件未找到，请检查路径是否正确 | 持仓文件名/目录写错、盘符或挂载点变了 | 对照[配置指南 §字段说明](how-to-config.md#字段说明)核对 `holdings_dir` / `holdings_filename`，或用 TUI `[G]`→`[H]` / `[F]` 改 |
+| 模块加载失败，请检查依赖是否完整安装 | 依赖缺失、或用了系统 Python 而非项目虚拟环境 | `.venv/bin/pip install -r requirements.txt`；命令一律走 `.venv/bin/python` |
+| 配置文件格式错误（JSON 语法错误） | 手改 JSON 漏逗号、多写注释、BOM 异常 | 用 `config list` 验证；或删除该文件让程序重新生成（见[配置文件随版本更新](how-to-config.md#配置文件随版本更新)） |
+| 网络连接异常，请检查网络后重试 | 断网、DNS、公司网关、代理不通 | 检查网络；代理相关见 [LLM 配置指引 §HTTP 代理配置](how-to-config-llm.md#http-代理配置) |
+| 数据处理异常 / 操作异常，详情请查看日志文件 | 数据形态超出预期（上游接口改版等） | 看 `logs/app.log` 同一时刻的堆栈；反馈问题时附该段 |
+
+### Web 的 error_code
+
+| error_code | HTTP | 含义 | 怎么办 |
+|---|---|---|---|
+| `BAD_PARAM` | 400 / 403 | 参数、枚举或格式校验失败；`403` 特指同源校验失败 | 按提示改输入；403 刷新页面后重新上传 |
+| `UPLOAD_BAD_FILE` | 400 | 非 `.xlsx`、内容不是有效 Excel、或不是标准四列 | 用 Excel 另存为 `.xlsx`，确认每张表首行是 名称/代码/份额/成本 |
+| `UPLOAD_TOO_LARGE` | 400 | 文件超过 10MB | 删掉空行、多余列后另存 |
+| `UPLOAD_TOO_MANY_ROWS` | 400 | 超过 5000 行 | 拆成多个持仓文件分次生成 |
+| `UPLOAD_EMPTY` | 400 | 文件为空或无有效账户 | 检查是否漏填代码或份额 |
+| `FILE_EXPIRED` | 404 | 上传的临时文件已被清理 | 重新上传 |
+| `RUN_QUEUE_FULL` | 429 | 已有报告任务在跑 | 等当前任务结束再提交 |
+| `BUDGET_EXCEEDED` | 409 | 今日 LLM 费用已达日预算上限 | 选「用已有结果继续」，或调整 `daily_cost_limit`（[LLM 配置](how-to-config-llm.md)） |
+| `WHATIF_UNAVAILABLE` | 422 | 调仓对比数据不可用（两侧为空或读取失败） | 检查两份持仓内容后重试 |
+| `WHATIF_BUSY` | 429 | 已有调仓模拟在执行 | 稍后重试 |
+| `WHATIF_FAILED` | 500 | 调仓模拟执行异常 | 看 `logs/app.log` |
+| `CONFIG_WRITE_FAILED` | 500 | 配置写入失败（权限或磁盘） | 检查 `data/config/` 权限与磁盘空间 |
+| `NOT_FOUND` | 404 | 接口或任务不存在 | 刷新页面重试 |
+| `LOG_READ_FAILED` / `HEALTH_HISTORY_READ_FAILED` | 500 | 读取运行日志/健康历史失败 | 看 `logs/app.log` |
+| `SERVER_ERROR` | 500 | 服务器内部错误 | 看日志；持续发生请附日志反馈 |
+
+### CLI 退出码
+
+| 码 | 含义 | 说明 |
+|---|---|---|
+| `0` | 成功 | 含「诊断跑完且全部正常」 |
+| `1` | 命令跑完了但有失败项 | 诊断类命令（`doctor` 等）的**结论**，不是命令失败 |
+| `2` | 未处理异常 / 参数写法错误 | argparse 参数错也走这里；堆栈在 `logs/app.log` |
+| `130` | 被 Ctrl+C 中断 | 正常退出路径 |
+
+> 完整说明：CLI 见 [退出码含义](how-to-use-cli-mode.md#11-退出码含义)；Web 交互细节见 [边界与错误提示](how-to-use-web-mode.md#42-边界与错误提示)。
 
 ---
 

@@ -127,7 +127,7 @@
 | **L** | ✅ | ☆ | ✅ | ✅ | ☆ | ☆ | ☆ | ☆ | ☆ | ☆ | ☆ | ☆ |
 
 ¹ 基金深度分析：持仓结构与集中度、风格与因子分析，共 2 个页签（持仓结构与集中度为一章三区块：重合度 + 相关性 + 集中度；风格与因子分析为一章三区块：基金风格表 + 风格因子回归 + 行业 Beta 子表）；基金经理变更监控为「基金业绩分析」章末尾区块，随同一开关显隐。
-² ☆ 表示受章节可见性配置控制：基金深度分析的 `enable_fund_deep_analysis`、新闻的 `enable_news`、组合历史走势与回撤的 `enable_history`、组合演进的 `enable_portfolio_evolution`、行动建议的 `enable_action`（均默认开启，可在菜单 `C` 切换，存于 `config.json`）和 LLM 的 `enabled_llm`（在 `llm_settings.json`）。数据源可用性矩阵为 always 类型始终显示。详见[配置指南](how-to-config.md#b-报告章节可见性)。
+² ☆ 表示受章节可见性配置控制：基金深度分析的 `enable_fund_deep_analysis`、新闻的 `enable_news`、组合历史走势与回撤的 `enable_history`、组合演进的 `enable_portfolio_evolution`、行动建议的 `enable_action`（均默认开启，可在菜单 `C` 切换，存于 `config.json`）和 LLM 的 `enabled_llm`（在 `llm_settings.json`）。数据源可用性矩阵为 always 类型始终显示。详见[配置指南](how-to-config-fields.md#b-报告章节可见性)。
 ³ 组合历史走势与回撤（一章三区块：走势表 + 回撤矩阵 + 危机区间标注）依赖 `history.fetch_mode` 配置（`"prompt"` 或 `"auto"` 时可用，`"off"` 时显示占位文本）。
 ⁴ 累计收益率从 ≥80% 持仓覆盖的日期起算，避免 QDII/债券基金数据起点较晚导致组合早期市值偏低、收益率虚高的问题。
 

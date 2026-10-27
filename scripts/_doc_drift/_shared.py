@@ -32,6 +32,10 @@ _FOLDERS_MD = _MANAGEMENTS / "folders.md"
 _HOW_TO_CONFIG_MD = _MANUALS / "how-to-config.md"
 
 
+#: 配置字段逐节详解（A/B/C/E…S）——配置默认值表的另一半事实位，与主文件同受检
+_HOW_TO_CONFIG_FIELDS_MD = _MANUALS / "how-to-config-fields.md"
+
+
 _REPORTS_MD = _MANUALS / "reports-instruction.md"
 
 
