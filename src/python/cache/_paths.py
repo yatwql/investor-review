@@ -38,6 +38,29 @@ def get_cache_dir() -> str:
     return os.path.abspath(_CACHE_DIR)
 
 
+def cache_key_from_file_name(file_name: str) -> str | None:
+    """缓存文件名 → 逻辑缓存键（剥 `.json` / `.json.gz` 与 `_{版本}` 戳）。
+
+    磁盘上的缓存键带版本戳（`{key}_v{N}.json`），而读侧 `get()` 用的是逻辑键；
+    任何从目录列举反推缓存键的地方（过期清理、页头新鲜度）都必须走本函数，
+    否则会拼出 `{key}_v4_v4.json` 这类不存在的路径而静默降级。
+
+    Args:
+        file_name: 目录中的完整文件名（带扩展名）。
+
+    Returns:
+        逻辑缓存键；非 `.json` / `.json.gz` 文件返回 None。
+    """
+    for suffix in (".json.gz", ".json"):
+        if file_name.endswith(suffix):
+            stem = file_name[: -len(suffix)]
+            break
+    else:
+        return None
+    version_stamp = f"_{_CACHE_KEY_VERSION}"
+    return stem[: -len(version_stamp)] if stem.endswith(version_stamp) else stem
+
+
 def check_cache_dir_permissions() -> None:
     """检查缓存目录权限，确保目录存在且权限正确。
 

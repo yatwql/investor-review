@@ -20,6 +20,8 @@ from src.python.fetcher.financial_report import (
     DEFAULT_SECTIONS,
     collect_a_share_targets,
     datasink_credential_missing,
+    doc_miss_hits,
+    reset_doc_miss_hits,
     fetch_symbol_report_detailed,
     target_source_label,
 )
@@ -73,6 +75,7 @@ def build_financial_report_digest(
     max_chars = int(max_chars) if isinstance(max_chars, (int, float)) and max_chars > 0 else DEFAULT_MAX_CHARS
     doc_types = tuple(section_cfg.get("doc_types") or DEFAULT_DOC_TYPES)
 
+    reset_doc_miss_hits()
     targets = collect_a_share_targets(holdings, penetrated_targets)
     if not targets:
         return _empty("无 A 股持仓或穿透标的")
@@ -131,6 +134,14 @@ def build_financial_report_digest(
         return result
 
     logger.info("[financial_report_digest] 取到 %d/%d 只 A 股财报摘要", len(rows), len(targets))
+    _miss_hits = doc_miss_hits()
+    if _miss_hits:
+        # 一行 INFO：说明「这轮省掉了多少次重复的空请求」，便于无 DEBUG 时确认负缓存生效
+        logger.info(
+            "[financial_report_digest] 正文空结果命中负缓存 %d 次（跳过 %d 次重复请求，确定性缺失，非故障）",
+            _miss_hits,
+            _miss_hits,
+        )
     return {
         "available": True,
         "reason": "",

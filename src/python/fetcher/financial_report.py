@@ -13,7 +13,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Sequence
+import threading
+from typing import TYPE_CHECKING, Any, Sequence
 
 from src.python.cache import clear as cache_clear
 from src.python.cache import get as cache_get
@@ -26,11 +27,43 @@ from src.python.fetcher.source_adapter import adapter_chain_slots
 from src.python.providers import cninfo, datasink
 from src.python.schemas.datasource_fields import DOMAIN_FINANCIAL_REPORT
 
+if TYPE_CHECKING:  # 仅类型标注：运行期不引入凭据模块依赖
+    from src.python.core.datasource_credential import CredentialSpec
+
 logger = logging.getLogger("invest")
 
 INDEX_PREFIX = "report_datasink_index_"
 DOC_PREFIX = "report_datasink_doc_"
 SECTIONS_PREFIX = "report_datasink_sections_"
+#: 单篇「确定性空正文」的负缓存前缀（如该文档确实无「管理层讨论与分析」章节）：
+#: 同一 (doc_id, section) 在 TTL 内不再重走链路。只缓存**确定性**结论—
+#: 传输级失败（超时/断连）不写，避免恢复期被无谓延长。
+DOC_MISS_PREFIX = "report_datasink_doc_miss_"
+
+#: 判定「确定性空」的原因关键词。两类都属**确定性**结论（重试不会有不同结果）：
+#:   - 「该文档无…」：主源明确回报该文档缺该章节（providers/datasink 写入 last-reason）
+#:   - 「异源候选拒服务」：主源文档号对巨潮槽无意义，槽位主动拒服务（命名空间隔离）
+#: 传输级失败（超时/断连/5xx/429）不在其中 —— 那些可能是瞬时问题，不能进负缓存。
+_DETERMINISTIC_EMPTY_MARKERS: tuple[str, ...] = ("该文档无", "异源候选拒服务")
+
+#: 本轮命中「空正文负缓存」的次数（并发取数 → 加锁累加；每轮开头由
+#: ``report/financial_report_digest`` 重置）。命中本身是**省请求**，不是错误，
+#: 故只在报告级打一行 INFO 汇总，不逐条刷屏。
+_DOC_MISS_HITS: dict[str, int] = {"hits": 0}
+_DOC_MISS_LOCK = threading.Lock()
+
+
+def reset_doc_miss_hits() -> None:
+    """清零本轮空正文负缓存命中计数（每份报告开头调用）。"""
+    with _DOC_MISS_LOCK:
+        _DOC_MISS_HITS["hits"] = 0
+
+
+def doc_miss_hits() -> int:
+    """本轮空正文负缓存命中次数（报告级汇总日志/观测用）。"""
+    with _DOC_MISS_LOCK:
+        return int(_DOC_MISS_HITS["hits"])
+
 
 #: 索引来源的类别级取用标记（数据源说明表「本次使用」按前缀归属；两前缀同归「财报全文」类别）
 _SRC_INDEX_DATASINK = "report_datasink_index"
@@ -325,6 +358,21 @@ def _pick_sections(available: list[str] | None, preferences: tuple[str, ...]) ->
     return picked
 
 
+def _is_deterministic_empty(diagnostics: Any) -> bool:
+    """本次链路是否「确定性空」（文档确实没这一节）而非传输失败。
+
+    Args:
+        diagnostics: 链路传入的 ``FailureDiagnostics``（无尝试记录时返回 False）。
+
+    Returns:
+        全部尝试都带「该文档无」类原因时为 True。
+    """
+    attempts = list(getattr(diagnostics, "attempts", None) or [])
+    if not attempts:
+        return False
+    return all(any(marker in reason for marker in _DETERMINISTIC_EMPTY_MARKERS) for _, reason in attempts)
+
+
 def _fetch_document(
     doc_id: int | str,
     section: str,
@@ -342,11 +390,19 @@ def _fetch_document(
         meta: 候选元数据（巨潮适配器取标题/报告期/下载路径等，随查询透传）。
     """
     from src.python.fetcher.chain import fetch_with_fallback
+    from src.python.fetcher.chain_diagnostics import FailureDiagnostics
 
     provider_map, transform_map = adapter_chain_slots(DOMAIN_FINANCIAL_REPORT)
     src = source or datasink.SOURCE_ID
     ns = f"{cninfo.SOURCE_ID}_" if src == cninfo.SOURCE_ID else ""
     cache_key = f"{DOC_PREFIX}{ns}{doc_id}_{section or 'full'}"
+    miss_key = f"{DOC_MISS_PREFIX}{ns}{doc_id}_{section or 'full'}"
+    if cache_get(miss_key, get_ttl("report")) is not None:
+        with _DOC_MISS_LOCK:
+            _DOC_MISS_HITS["hits"] += 1
+        logger.debug("[financial_report]%s 命中空正文负缓存（该文档无该章节），跳过取数", f" [{doc_id}]")
+        return None
+    diagnostics = FailureDiagnostics()
     record = fetch_with_fallback(
         "financial_report",
         provider_map,
@@ -354,9 +410,15 @@ def _fetch_document(
         get_ttl("report_doc"),
         fn_kwargs={"doc_id": doc_id, "section": section or None, "source_hint": src, "meta": meta or {}},
         transform=transform_map,
+        diagnostics=diagnostics,
     )
     if record:
         _mark_used(DOC_PREFIX.rstrip("_"))
+        return record
+    if _is_deterministic_empty(diagnostics):
+        # 确定性空（该文档确实无这一节）：记短 TTL 负缓存，后续同类请求不再白走链路
+        cache_set(miss_key, "该文档无该章节")
+        logger.debug("[financial_report]%s 空正文已进负缓存（该文档无该章节）", f" [{doc_id}]")
     return record
 
 
@@ -490,6 +552,8 @@ def _attempt_candidates(
     """
     for meta in candidates:
         doc_id = meta.get("id")
+        if doc_id is None:
+            continue
         source = _candidate_source(meta)
         tried.append(str(meta.get("report_period") or meta.get("title") or doc_id))
         record, contents = _collect_doc_sections(doc_id, preferences, source=source, meta=meta)
@@ -500,6 +564,8 @@ def _attempt_candidates(
     # ② 全文阶：源侧章节未解析出来时，整篇下载后按关键词定位片段
     for meta in candidates[:_FULLTEXT_FALLBACK_LIMIT]:
         doc_id = meta.get("id")
+        if doc_id is None:
+            continue
         source = _candidate_source(meta)
         excerpt, matched = _locate_from_fulltext(doc_id, preferences, max_chars, source=source, meta=meta)
         if not excerpt.strip():
@@ -596,7 +662,7 @@ def fetch_symbol_report(
     return record
 
 
-def datasink_credential_missing() -> str | None:
+def datasink_credential_missing() -> "CredentialSpec | None":
     """DataSinking 凭据就绪判定（只读透传；报告层取数一律经本模块）。"""
     return datasink.missing_credential(datasink.SOURCE_ID)
 

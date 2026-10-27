@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import time
 import unittest
 from io import StringIO
 from types import SimpleNamespace
@@ -15,6 +16,31 @@ from src.python.tui.tui_menu import (
 import pytest
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_ui]
+
+
+class TestActionHintKeys:
+    """动作提示短语带的菜单键必须仍在主菜单里（防菜单改键后提示按键落空）。"""
+
+    def test_action_keys_exist_in_main_menu(self) -> None:
+        from src.python.tui.status_line import ACTION_TEMPLATES
+        from src.python.tui.tui_menu import _apply_feature_gates, MENU_ITEMS
+
+        _apply_feature_gates()  # 按当前开关重建菜单（母本裁剪后的真实可见键集）
+        menu_keys = {item[0] for item in MENU_ITEMS}
+        for name, text in ACTION_TEMPLATES.items():
+            assert text.startswith("["), f"动作提示必须以菜单键开头：{name}={text}"
+            # 短语形如 `[G]→L 配置 LLM`：只校验首键（二级入口不在主菜单）
+            assert text[1] in menu_keys, f"{name} 首键 [{text[1]}] 不在主菜单"
+
+    def test_every_template_is_used(self) -> None:
+        """模板不得有死条目（没人引用的提示永远不上屏）。"""
+        import inspect
+
+        from src.python.tui import status_line
+
+        source = inspect.getsource(status_line)
+        for name in status_line.ACTION_TEMPLATES:
+            assert source.count(f'ACTION_TEMPLATES["{name}"]') >= 1, f"模板 {name} 未被任何状态段引用（死条目）"
 
 
 class TestLlmStatusRendering:
@@ -100,7 +126,7 @@ class TestStatusLine(unittest.TestCase):
             "src.python.cache.operations.get_cache_stats",
             side_effect=OSError("目录不可读"),
         ):
-            self.assertEqual(_cache_expired_part(), "缓存过期 —")
+            self.assertEqual(_cache_expired_part(), "", "取数失败同样不上屏（改由 [3] 面板查看）")
 
     def test_freshness_latest_from_price_cache(self) -> None:
         """最新价格缓存的 price_date → 数据日期 + 自然日龄（纯本地，不触交易日历）。"""
@@ -120,6 +146,31 @@ class TestStatusLine(unittest.TestCase):
                 from src.python.tui.status_line import _freshness_part
 
                 self.assertEqual(_freshness_part(), f"新鲜度 {today:%m-%d}（0天）")
+
+    def test_freshness_reads_version_stamped_cache_file(self) -> None:
+        """回归：带版本戳的缓存文件名 → 逻辑键，且 ``get`` 的 TTL 参数必填。
+
+        两个缺陷曾让本项恒为「—」：① 从文件名反推键时未剥版本戳，拼出
+        `{key}_v4_v4.json`；② ``cache.get`` 的 ``max_age_seconds`` 未传，
+        TypeError 被兜底吞掉。本用例不 patch ``get``，走真实读档路径。
+        """
+        from datetime import datetime
+
+        from src.python.cache._paths import _CACHE_KEY_VERSION
+
+        today = datetime.now().date()
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = {"_ts": time.time(), "_data": {"price": 1.23, "price_date": today.isoformat()}}
+            fname = f"price_demo_{_CACHE_KEY_VERSION}.json"
+            with open(os.path.join(tmp, fname), "w", encoding="utf-8") as f:
+                json.dump(payload, f)
+            # 目录单源在 _paths._CACHE_DIR（get_cache_dir 与 get 的路径拼装同读它）
+            with patch("src.python.cache._paths._CACHE_DIR", tmp):
+                from src.python.tui.status_line import _freshness_part
+
+                part = _freshness_part()
+        assert part == f"新鲜度 {today:%m-%d}（0天）", f"未读到版本戳缓存：{part!r}"
+        assert part.action == ""  # 数据新鲜 → 不提示动作
 
     def test_freshness_no_price_cache(self) -> None:
         """无价格缓存 → 新鲜度 —。"""
@@ -143,21 +194,21 @@ class TestStatusLine(unittest.TestCase):
                 self.assertEqual(_freshness_part(), "新鲜度 —")
 
     def test_degraded_count_from_health_history(self) -> None:
-        """健康历史末条 fail_count → 备用源数；无记录 → —。"""
+        """健康历史末条 fail_count → 数据源失败数；无记录 → —。"""
         from src.python.tui.status_line import _degraded_part
 
         with patch(
             "src.python.core.perf.summarize_health_history",
             return_value=[{"fail_count": 2}],
         ):
-            self.assertEqual(_degraded_part(), "备用源 2")
+            self.assertEqual(_degraded_part(), "数据源失败 2")
         with patch("src.python.core.perf.summarize_health_history", return_value=[]):
-            self.assertEqual(_degraded_part(), "备用源 —")
+            self.assertEqual(_degraded_part(), "数据源失败 —")
         with patch(
             "src.python.core.perf.summarize_health_history",
             side_effect=OSError("读档失败"),
         ):
-            self.assertEqual(_degraded_part(), "备用源 —")
+            self.assertEqual(_degraded_part(), "数据源失败 —")
 
     def test_llm_status_dot(self) -> None:
         """LLM 状态点：已配置 ● / 未配置 ○ / 异常 —。"""
@@ -191,8 +242,8 @@ class TestStatusLine(unittest.TestCase):
 
     # ── 整行组装 ──
 
-    def test_full_line_format_with_menu_hint(self) -> None:
-        """五项拼接为单行并携带详情菜单指引。"""
+    def test_full_line_format_and_action_line(self) -> None:
+        """五项拼接为单行；异常段汇总为第二行动作提示。"""
         with (
             patch("src.python.core.perf.load_history", return_value=[]),
             patch(
@@ -208,17 +259,58 @@ class TestStatusLine(unittest.TestCase):
             patch("src.python.cache.get_cache_dir", return_value=tmp),
         ):
             line = build_status_line()
-        self.assertTrue(line.startswith("状态 │ "))
-        self.assertIn("上次报告 —", line)
-        self.assertIn("缓存过期 5", line)
-        self.assertIn("新鲜度 —", line)
-        self.assertIn("备用源 —", line)
-        self.assertIn("LLM ●", line)
-        self.assertIn("〔详情 [4][H][S]〕", line)
+        head, _, actions = line.partition("\n")
+        self.assertTrue(head.startswith("状态 │ "))
+        for segment in ("上次报告 —", "缓存过期 5", "新鲜度 —", "数据源失败 —", "LLM ●"):
+            self.assertIn(segment, head)
+        self.assertIn("[B] 生成标准报告", actions)
+        self.assertIn("[3] 清理过期缓存", actions)
+        self.assertIn("[2] 更新行情缓存", actions)
 
-    def test_full_line_drops_hint_when_narrow(self) -> None:
-        """窄终端弃「详情」指引，五个语义段保留（指引最先降级）。"""
-        from src.python.tui.status_line import reset_status_memo
+    def test_normal_state_has_no_action_line(self) -> None:
+        """全部正常 → 无第二行（不向「一切正常」喊话）。"""
+        from datetime import datetime
+
+        from src.python.cache._paths import _CACHE_KEY_VERSION
+
+        today = datetime.now().date()
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = {"_ts": time.time(), "_data": {"price": 1.23, "price_date": today.isoformat()}}
+            with open(os.path.join(tmp, f"price_demo_{_CACHE_KEY_VERSION}.json"), "w", encoding="utf-8") as f:
+                json.dump(payload, f)
+            with (
+                patch(
+                    "src.python.core.perf.load_history",
+                    return_value=[{"timestamp": "2026-10-07T09:55:00"}],
+                ),
+                patch(
+                    "src.python.cache.operations.get_cache_stats",
+                    return_value=SimpleNamespace(expired=0),
+                ),
+                patch("src.python.core.perf.summarize_health_history", return_value=[{"fail_count": 0}]),
+                patch(
+                    "src.python.core.system_info.llm_status",
+                    return_value={"configured": True},
+                ),
+                patch(
+                    "src.python.core.data_freshness.header_freshness",
+                    return_value={
+                        "date": today.isoformat(),
+                        "age_days": 0,
+                        "stale": False,
+                    },
+                ),
+                patch("src.python.cache._paths._CACHE_DIR", tmp),
+            ):
+                line = build_status_line()
+        self.assertNotIn("└", line)
+        self.assertIn("LLM ●", line)
+        self.assertNotIn("缓存过期", line)  # 0 个过期 → 整段静默
+        self.assertIn(f"新鲜度 {today:%m-%d}（0天）", line)
+
+    def test_action_line_wraps_on_narrow_terminal(self) -> None:
+        """窄终端：动作提示按列宽折行，不丢菜单键、不屈出终宽。"""
+        from src.python.tui.text_layout import display_width
 
         reset_status_memo()
         with (
@@ -227,23 +319,26 @@ class TestStatusLine(unittest.TestCase):
                 "src.python.cache.operations.get_cache_stats",
                 return_value=SimpleNamespace(expired=5),
             ),
-            patch("src.python.core.perf.summarize_health_history", return_value=[]),
+            patch("src.python.core.perf.summarize_health_history", return_value=[{"fail_count": 3}]),
             patch(
                 "src.python.core.system_info.llm_status",
-                return_value={"configured": True},
+                return_value={"configured": False},
             ),
-            patch("src.python.tui.status_line.terminal_columns", return_value=60),
+            patch("src.python.tui.status_line.terminal_columns", return_value=46),
             tempfile.TemporaryDirectory() as tmp,
             patch("src.python.cache.get_cache_dir", return_value=tmp),
         ):
-            line = build_status_line()
-            self.assertNotIn("〔详情", line)
-            self.assertIn("缓存过期 5", line)
-            self.assertIn("LLM ●", line)
-        reset_status_memo()  # 防窄版整行漏入后续用例的记忆
+            lines = build_status_line().split("\n")
+        reset_status_memo()  # 防窄版文字漏入后续用例的记忆
+        self.assertGreater(len(lines), 2, f"窄终端未折行：{lines}")
+        for text in lines[1:]:
+            self.assertLessEqual(display_width(text), 44, f"动作提示超出终宽：{text!r}")
+        joined = " ".join(lines[1:])
+        for template in ("[B] 生成标准报告", "[2] 更新行情缓存", "[D]→V 看数据源记录", "[G]→L 配置 LLM"):
+            self.assertIn(template, joined)
 
     def test_all_sources_fail_degrades_per_item(self) -> None:
-        """五路取数全挂 → 逐项显示 —，不向调用方抛出。"""
+        """四路取数全挂 → 逐项显示 —，不向调用方抛出；缓存过期段静默不上屏。"""
         boom = side_effect = RuntimeError("全挂")
         with (
             patch("src.python.core.perf.load_history", side_effect=boom),
@@ -253,8 +348,34 @@ class TestStatusLine(unittest.TestCase):
             patch("src.python.core.system_info.llm_status", side_effect=side_effect),
         ):
             line = build_status_line()
-        for label in ("上次报告", "缓存过期", "新鲜度", "备用源", "LLM"):
+        for label in ("上次报告", "新鲜度", "数据源失败", "LLM"):
             self.assertIn(f"{label} —", line)
+        self.assertNotIn("缓存过期", line)
+
+    def test_cache_expired_segment_hidden_when_zero(self) -> None:
+        """缓存过期 0 → 整段不上屏（启动已自动清理，常态 0 只会引人发问）。"""
+        from src.python.tui.status_line import _cache_expired_part
+
+        with patch(
+            "src.python.cache.operations.get_cache_stats",
+            return_value=SimpleNamespace(expired=0),
+        ):
+            self.assertEqual(_cache_expired_part(), "")
+
+        with (
+            patch(
+                "src.python.cache.operations.get_cache_stats",
+                return_value=SimpleNamespace(expired=0),
+            ),
+            patch("src.python.core.perf.load_history", return_value=[]),
+            patch("src.python.core.perf.summarize_health_history", return_value=[]),
+            patch("src.python.core.system_info.llm_status", return_value={"configured": True}),
+            tempfile.TemporaryDirectory() as tmp,
+            patch("src.python.cache.get_cache_dir", return_value=tmp),
+        ):
+            line = build_status_line()
+        self.assertNotIn("缓存过期", line)
+        self.assertNotIn(" ·  · ", line)  # 空段不留下多余分隔符
 
     def test_memo_ttl_reuses_then_refreshes(self) -> None:
         """TTL 内复用记忆（重活不重取），过期后重新取数。"""

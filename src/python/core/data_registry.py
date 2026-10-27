@@ -152,8 +152,10 @@ _MODULE_REGISTRY: tuple[DataModuleDef, ...] = (
         cache_prefixes=(
             "report_datasink_index_",
             "report_datasink_sections_",
+            "report_datasink_doc_miss_",
             "report_cninfo_index_",
             "report_cninfo_orgid_",
+            "report_cninfo_orgid_miss_",
             "report_cninfo_text_",
         ),
         cache_ttl=CACHE_DAILY,

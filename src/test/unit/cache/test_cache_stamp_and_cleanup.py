@@ -86,3 +86,28 @@ class TestPerTypeCleanupTTL:
         """未注册前缀走 CACHE_DAILY 兜底（仍可清理，不是永久滞留）。"""
         _write(cache_env, "some_unknown_cache_v4.json", age_seconds=86401)
         assert _cleanup() == 1
+
+
+class TestCacheKeyFromFileName:
+    """文件名 → 逻辑缓存键的单源转换（清理与页头新鲜度共用，不得各自拼字符串）。"""
+
+    def test_strips_version_stamp_and_json(self):
+        from src.python.cache._paths import _CACHE_KEY_VERSION, cache_key_from_file_name
+
+        assert cache_key_from_file_name(f"price_600519_{_CACHE_KEY_VERSION}.json") == "price_600519"
+
+    def test_strips_gzip_suffix(self):
+        from src.python.cache._paths import _CACHE_KEY_VERSION, cache_key_from_file_name
+
+        assert cache_key_from_file_name(f"report_x_{_CACHE_KEY_VERSION}.json.gz") == "report_x"
+
+    def test_legacy_stamp_kept_verbatim(self):
+        """旧戳不是当前戳 → 原样保留（旧戳文件本就该读不到，转换不做猜测）。"""
+        from src.python.cache import cache_key_from_file_name
+
+        assert cache_key_from_file_name("price_600519_v3.json") == "price_600519_v3"
+
+    def test_non_cache_file_returns_none(self):
+        from src.python.cache import cache_key_from_file_name
+
+        assert cache_key_from_file_name("notes.txt") is None

@@ -14,6 +14,8 @@ HTTP 一律 mock（``monkeypatch.setattr(cn, "make_http_client", ...)``，与
 from __future__ import annotations
 
 
+import time
+
 import httpx
 import pytest
 
@@ -45,7 +47,7 @@ class _FakeClient:
         self.posts: list[tuple[str, dict]] = []
         self.gets: list[str] = []
 
-    def post(self, url, data=None, headers=None):
+    def post(self, url, data=None, headers=None, timeout=None):
         self.posts.append((url, dict(data or {})))
         for suffix, resp in self._post_map.items():
             if url.endswith(suffix):
@@ -125,6 +127,50 @@ class TestResolveOrgId:
 
     def test_empty_code(self, _isolate):
         assert cn.resolve_org_id("") is None
+
+    def test_org_id_query_capped_by_wall_clock(self, monkeypatch, _isolate):
+        """回归：orgId 快查受端到端墙钟约束（httpx 分阶段超时曾让 20s 预算挂 40.2s）。"""
+        monkeypatch.setattr(cn, "_ORGID_TIMEOUT", 0.05)
+        _patch_client(monkeypatch, _SlowClient())
+        started = time.monotonic()
+        assert cn.resolve_org_id("600900") is None
+        elapsed = time.monotonic() - started
+        assert elapsed < 1.0, f"墙钟未生效，耗时 {elapsed:.2f}s"
+
+    def test_failed_org_id_is_negatively_cached(self, monkeypatch, _isolate):
+        """失败入 1h 负缓存：同网络条件下重跑不再重付墙钟（区分网络失败/源侧无档案）。"""
+        _patch_client(monkeypatch, _FlakyClient(fail_times=None))
+        monkeypatch.setattr(pu.time, "sleep", lambda _s: None)
+        assert cn.resolve_org_id("600900") is None
+        assert _isolate[cn.ORGID_MISS_PREFIX + "600900"] == "连接失败"
+
+        # 网络恢复正常也不立即重试（负缓存生效，未发出新请求）
+        client = _FakeClient(
+            post_map={
+                "/topSearch/query": _FakeResp(payload={"keyBoardList": [{"code": "600900", "orgId": "gssh0600900"}]})
+            }
+        )
+        _patch_client(monkeypatch, client)
+        assert cn.resolve_org_id("600900") is None
+        assert client.posts == []
+
+    def test_missing_record_negative_reason(self, monkeypatch, _isolate):
+        """源侧无该代码档案与网络失败分开记（前者不是网络问题）。"""
+        _patch_client(monkeypatch, _FakeClient(post_map={"/topSearch/query": _FakeResp(payload={"keyBoardList": []})}))
+        assert cn.resolve_org_id("600900") is None
+        assert _isolate[cn.ORGID_MISS_PREFIX + "600900"] == "源侧无该代码档案"
+
+
+class _SlowClient(_FakeClient):
+    """post 故意慢于墙钟预算：验证端到端截止（而非 httpx 分阶段超时）生效。"""
+
+    def __init__(self, delay: float = 0.3) -> None:
+        super().__init__()
+        self._delay = delay
+
+    def post(self, url, data=None, headers=None, timeout=None):
+        time.sleep(self._delay)
+        return super().post(url, data=data, headers=headers)
 
 
 class TestFetchReportListings:
@@ -305,7 +351,7 @@ class TestGuards:
             def __init__(self):
                 self.calls = 0
 
-            def post(self, url, data=None, headers=None):
+            def post(self, url, data=None, headers=None, timeout=None):
                 self.calls += 1
                 if self.calls == 1:
                     return _FakeResp(status_code=429)
@@ -355,7 +401,7 @@ class _FlakyClient:
             raise self._exc
         return self._resp
 
-    def post(self, url, data=None, headers=None) -> _FakeResp:
+    def post(self, url, data=None, headers=None, timeout=None) -> _FakeResp:
         return self._do()
 
     def get(self, url, headers=None) -> _FakeResp:

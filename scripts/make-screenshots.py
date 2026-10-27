@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """演示截图生成器（README / 手册配图）：隔离演示工作区 + TUI 帧渲染 + Web CDP 截图。
 
-一条流水线四个子命令，产物全部落在 `docs/tmp/screenshots/`（git 忽略域），
+一条流水线五个子命令，产物全部落在 `docs/tmp/screenshots/`（git 忽略域），
 真实 `data/`（持仓、配置、密钥）零接触：
 
   demo                              建隔离演示工作区：自造持仓 + 占位凭据 + 相对路径上屏配置
   report                            在演示工作区生成 Excel + HTML 报告
   tui <out.png> [--config P] [--text F]
                                     把一帧 TUI 首页渲染成 PNG（取帧走生产渲染函数）
+  cli <out.png> [--text F]            把一次 CLI 生成输出渲染成 PNG（伪终端采集，含进度与耗时排行）
   web <url> <out.png> [--scroll-y N] [--width W] [--height H] [--replace from=>to] [--chrome P]
                                     无头 Chromium CDP 截图（滚动后截视口，固定侧栏不丢）
 
@@ -57,6 +58,18 @@ def _tui(args: argparse.Namespace) -> int:
     return tui_frame.main(argv)
 
 
+def _cli(args: argparse.Namespace) -> int:
+    """把一帧 CLI 生成输出渲染成 PNG（伪终端采集 + 状态护栏）。"""
+    from _screenshots import tui_frame
+
+    text = demo_workspace.capture_report_text()
+    if args.text is not None:
+        text = Path(args.text).read_text(encoding="utf-8")
+    output = tui_frame.render(text + "\n", args.output)
+    print(f"  [OK] {output}")
+    return 0
+
+
 def _web(args: argparse.Namespace) -> int:
     return web_shot.run(
         args.url,
@@ -89,6 +102,11 @@ def build_parser() -> argparse.ArgumentParser:
     tui.add_argument("--config", type=Path, help="配置路径（缺省用演示工作区配置）")
     tui.add_argument("--text", type=Path, help="改用已有的帧文本文件（跳过取帧）")
     tui.set_defaults(handler=_tui)
+
+    cli = subparsers.add_parser("cli", help="把一帧 CLI 生成输出渲染成 PNG（伪终端采集）")
+    cli.add_argument("output", type=Path, help="输出 PNG 路径")
+    cli.add_argument("--text", type=Path, help="改用已有的输出文本文件（跳过采集）")
+    cli.set_defaults(handler=_cli)
 
     web = subparsers.add_parser("web", help="无头 Chromium CDP 截图")
     web.add_argument("url", help="目标页面 URL")

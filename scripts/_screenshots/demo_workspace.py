@@ -37,6 +37,36 @@ HOLDINGS_FILENAME = "演示持仓.xlsx"
 DEMO_API_KEY = "sk-demo-not-a-real-key"
 
 
+#: 演示报告运行会写真实运行状态（perf 台账 / 健康历史 / 实验与熔断状态 / 去重锚点）。
+#: 「真实 data/ 零接触」要求这些目录在跑前快照、跑后原样还原。
+GUARDED_STATE_DIRS: tuple[str, ...] = ("data/state", "data/calibration")
+
+
+def snapshot_paths(paths: tuple[Path, ...]) -> dict[Path, bytes]:
+    """把这些目录下的文件全部读入内存（不存在或不可读的目录忽略）。"""
+    snap: dict[Path, bytes] = {}
+    for base in paths:
+        if not base.is_dir():
+            continue
+        for file in base.rglob("*"):
+            if file.is_file():
+                snap[file] = file.read_bytes()
+    return snap
+
+
+def restore_paths(paths: tuple[Path, ...], snap: dict[Path, bytes]) -> None:
+    """还原快照：删掉运行期新增的文件，写回原有内容。"""
+    for base in paths:
+        if not base.is_dir():
+            continue
+        for file in base.rglob("*"):
+            if file.is_file() and file not in snap:
+                file.unlink(missing_ok=True)
+    for file, data in snap.items():
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(data)
+
+
 def demo_dir(output_root: Path | None = None) -> Path:
     """演示工作区目录（默认 `docs/tmp/screenshots/demo`）。"""
     return (output_root or DEFAULT_ROOT) / "demo"
@@ -115,6 +145,90 @@ def report_command(config: Path) -> list[str]:
     ]
 
 
+def clean_cli_text(text: str, *, tail_lines: int = 22) -> list[str]:
+    """CLI 输出 → 可直接上屏的行（去进度回车残段、抹演示路径、只留尾部）。
+
+    Args:
+        text: 伪终端捕获的原始输出（含 ``\r`` 进度刷新与 ANSI 色）。
+        tail_lines: 保留末尾行数（默认 22：汇总 + 耗时排行 + 产物路径，够用不冗长）。
+
+    Returns:
+        逐行文本列表；空行被丢弃。
+    """
+    import re
+
+    # 控制台日志前缀「2026-10-27 07:52:43,331 」剥掉，上屏只留「[INFO] 正文」——
+    # 与实机配色/可读性一致，也避免同一屏出现五个不同秒数干扰阅读。
+    stamp = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} ")
+    lines: list[str] = []
+    # 终端输出的行尾是 CRLF：先把 CRLF 归一成 LF，再按 LF 切行，最后才把行内的
+    # 孤立 \r 当进度刷新取末段（顺序错了会把整行当成「末段为空」而全部丢弃——
+    # 实测：CRLF 未归一 + 先 split("\r") 时，23KB 输出只剩 1 行）。
+    for raw in text.replace("\r\n", "\n").split("\n"):
+        segment = raw.split("\r")[-1].rstrip()  # 进度刷新只保留最后一次
+        segment = stamp.sub("", segment)
+        if not segment.strip():
+            continue
+        lines.append(segment)
+    lines = scrub_cli_paths(lines)
+    return lines[-tail_lines:]
+
+
+def scrub_cli_paths(lines: list[str]) -> list[str]:
+    """抹掉绝对路径前缀（演示工作区 → 空，仓库根 → 空），上屏读作相对路径。"""
+    prefixes = sorted({str(demo_dir().resolve()), str(REPO_ROOT)}, key=len, reverse=True)
+    out: list[str] = []
+    for line in lines:
+        for prefix in prefixes:
+            line = line.replace(prefix + os.sep, "").replace(prefix, "")
+        out.append(line)
+    return out
+
+
+def capture_report_text(output_root: Path | None = None) -> str:
+    """用伪终端跑一次演示报告，返回可上屏的 CLI 输出（含进度与耗时排行）。
+
+    伪终端是必要的：CLI 在非 TTY 下会退化为无进度/无耗时排行的精简输出，
+    截出来的图与用户真机所见不一致。运行同样受状态护栏保护。
+    """
+    import pty
+
+    config = config_path(output_root)
+    if not config.is_file():
+        build(output_root)
+    demo = demo_dir(output_root)
+    env = {**os.environ, "PYTHONPATH": str(REPO_ROOT), "TERM": "xterm-256color", "COLUMNS": "110"}
+    guarded = tuple(REPO_ROOT / rel for rel in GUARDED_STATE_DIRS)
+    snap = snapshot_paths(guarded)
+    master, slave = pty.openpty()
+    try:
+        proc = subprocess.Popen(
+            report_command(config),
+            cwd=demo,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=slave,
+            stderr=slave,
+            close_fds=True,
+        )
+        os.close(slave)
+        chunks: list[bytes] = []
+        while True:
+            try:
+                chunk = os.read(master, 65536)
+            except OSError:  # 从端关闭
+                break
+            if not chunk:
+                break
+            chunks.append(chunk)
+        proc.wait(timeout=900)
+        text = b"".join(chunks).decode("utf-8", errors="replace")
+    finally:
+        os.close(master)
+        restore_paths(guarded, snap)
+    return "\n".join(clean_cli_text(text))
+
+
 def run_report(output_root: Path | None = None) -> int:
     """在演示工作区跑一次报告生成，返回命令行退出码（工作区缺失时先建）。"""
     config = config_path(output_root)
@@ -122,13 +236,19 @@ def run_report(output_root: Path | None = None) -> int:
         build(output_root)
     demo = demo_dir(output_root)
     env = {**os.environ, "PYTHONPATH": str(REPO_ROOT)}
-    completed = subprocess.run(
-        report_command(config),
-        cwd=demo,
-        env=env,
-        check=False,
-        encoding="utf-8",
-        errors="replace",
-    )
+    guarded = tuple(REPO_ROOT / rel for rel in GUARDED_STATE_DIRS)
+    snap = snapshot_paths(guarded)
+    try:
+        completed = subprocess.run(
+            report_command(config),
+            cwd=demo,
+            env=env,
+            check=False,
+            encoding="utf-8",
+            errors="replace",
+        )
+    finally:
+        # 演示运行写下的 perf 台账 / 健康历史 / 去重锚点一律还原（截图不污染真实统计）
+        restore_paths(guarded, snap)
     print(f"  [{'OK' if completed.returncode == 0 else 'ERR'}] 演示报告（{demo / 'reports'}）")
     return completed.returncode

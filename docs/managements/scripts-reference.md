@@ -43,6 +43,7 @@
 | `hook-install-claude.py` | 质量 | 安装/卸载 Claude Code PostToolUse hook（任务编号一致性自动校验） |
 | `eval-llm-hallucination.py` | 评测 | 10 组标准持仓 × LLM 幻觉率采样（薄 CLI，实现在 `_eval_halluc_sampler/` 包） |
 | `eval-dedup-threshold.py` | 评测 | 新闻去重阈值校准分析 |
+| `eval-llm-budget.py` | 评测 | LLM 表达预算校准（冻结持仓样本 × 预算档位 × 模式矩阵；墙钟/输出 tokens/分段字数/要素机检/操作建议行数；`freeze` 建样本、`run --dry-run` 零费用；产物落 `docs/tmp/llm-budget/`，实现在 `_eval_llm_budget/`） |
 | `test-collect-coverage.py` | 测试 | 测试覆盖计数收集（`--collect-only` 快照；`--update-docs` 回写 test-coverage/folders 计数行） |
 | `test-smoke-web.py` | 测试 | Web 模式 HTTP 冒烟脚本（test_client 进程内全链路断言，可独立运行） |
 | `check-version-consistency.py` | 发布 | 版本号全局一致性检查（P0/P2 守护脚本 + 发布流程必跑） |
@@ -523,7 +524,7 @@ sym |= set(re.findall(r'^\s{0,8}["\']([a-z][a-z0-9_]{2,})["\']\s*:', src, re.M))
 
 **`make-screenshots.py` — 演示截图生成（隔离演示工作区 + TUI 帧渲染 + Web CDP 截图）**
 
-README / 手册配图的可复现来源。四个子命令串成一条流水线，产物全部落 `docs/tmp/screenshots/`
+README / 手册配图的可复现来源。五个子命令（demo / report / tui / cli / web）串成一条流水线，产物全部落 `docs/tmp/screenshots/`
 （git 忽略域），真实 `data/`（持仓 / 配置 / 密钥）零接触：
 
 ```bash
@@ -537,11 +538,16 @@ README / 手册配图的可复现来源。四个子命令串成一条流水线�
 .venv/bin/python scripts/make-screenshots.py tui docs/tmp/screenshots/demo/tui-menu.png
 .venv/bin/python scripts/make-screenshots.py tui /tmp/frame.png --config /tmp/demo/config.json --text /tmp/frame.txt
 
-# ④ Web 页面截图（导航 → 可选文本替换 → 滚动 → 截视口；固定侧栏不丢）
+# ④ CLI 输出截图（伪终端采集：进度、耗时排行、产物路径；日志时间戳与绝对路径已抹平）
+.venv/bin/python scripts/make-screenshots.py cli src/static/cli-report.png
+
+# ⑤ Web 页面截图（导航 → 可选文本替换 → 滚动 → 截视口；固定侧栏不丢）
 .venv/bin/python scripts/make-screenshots.py web http://127.0.0.1:8000/workbench \
     docs/tmp/screenshots/demo/web-workbench.png --scroll-y 0 --width 1440 --height 940 \
     --replace '临时文本=>演示文本'
 ```
+
+**运行状态护栏**：`report` 子命令会跑一次真实报告生成，而该流程会写 `data/state/`（perf 台账 / 数据源健康历史 / 实验与熔断状态）与 `data/calibration/`（去重锚点）。为兑现「真实 data/ 零接触」，脚本在跑前快照这两个目录、跑后原样还原（含删除运行期新增文件），演示数据不会进入真实统计与阈值校准。
 
 **演示工作区**（`demo_workspace.py`）：截图要展示 `data/holdings`、`reports` 这类相对路径，
 直接引用真实配置会把本机绝对路径印上屏。工作区的 `data/config/config.json` 用绝对路径（相对路径会被解析到项目根），上屏的相对路径
@@ -1039,6 +1045,26 @@ curl 对照命令：`curl -s "https://push2.eastmoney.com/api/qt/stock/get?secid
 **`eval-llm-hallucination.py` — LLM 幻觉率采样**
 
 见下文「LLM 幻觉率采样测试」章节。
+
+**`eval-llm-budget.py` — LLM 表达预算校准**
+
+在不改生产代码的前提下，临时把预算段追加到系统提示，比较「4 档预算 × 4 种模式」的输出长度、墙钟与结构完整度，用于决定预算是否落成默认值。真实调用只在 `run`（`--dry-run` 零费用）；样本来自持仓快照（离线构建）。
+
+```bash
+# 从最近持仓快照生成冻结样本
+.venv/bin/python scripts/eval-llm-budget.py freeze --snapshot data/history/snapshots/snapshot_20261026T214032.json
+
+# 先看计划（不调用 LLM）
+.venv/bin/python scripts/eval-llm-budget.py run --dry-run
+
+# 正式测量（默认 4 模式 × 4 档 × 3 次；产物落 docs/tmp/llm-budget/）
+.venv/bin/python scripts/eval-llm-budget.py run --repeats 3
+
+# 快速趋势：只跑标准模式两档
+.venv/bin/python scripts/eval-llm-budget.py run --modes standard --tiers 4800,4000 --repeats 2
+```
+
+退出码：0 成功 / 1 运行失败 / 2 参数错误 / 3 判定不通过。
 
 **`eval-dedup-threshold.py` — 新闻去重阈值校准**
 

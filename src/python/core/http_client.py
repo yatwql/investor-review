@@ -103,6 +103,8 @@ def post_with_deadline(
     headers: dict,
     payload: dict,
     timeout: float,
+    *,
+    form: bool = False,
 ) -> Any:
     """执行 HTTP POST，附带端到端墙钟截止，防 read 超时被服务端滴流骗过。
 
@@ -117,15 +119,24 @@ def post_with_deadline(
     连接由其连接池自行回收。
 
     ``timeout <= 0`` 时不设墙钟，保持纯 httpx 超时行为。
+
+    Args:
+        form: True 时按表单编码提交（``data=payload``），否则按 JSON 提交。
     """
-    if timeout <= 0:
+
+    def _send() -> Any:
+        if form:
+            return client.post(url, data=payload, headers=headers, timeout=timeout)
         return client.post(url, json=payload, headers=headers, timeout=timeout)
+
+    if timeout <= 0:
+        return _send()
 
     box: dict[str, Any] = {}
 
     def _run() -> None:
         try:
-            box["resp"] = client.post(url, json=payload, headers=headers, timeout=timeout)
+            box["resp"] = _send()
         except BaseException as exc:  # 异常须跨线程原样上抛，由调用方按类型分流
             box["exc"] = exc
 

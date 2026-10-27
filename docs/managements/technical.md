@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.16.3
+> 文档版本：0.16.4
 
 ## 目录
 
@@ -417,7 +417,7 @@ TUI（Text User Interface）是系统**主要交互渠道**：桌面终端内的
 | `tui/text_layout.py` | 终端排版原语 | `display_width`（东亚宽度，剥离 ANSI）/`pad_right`/`truncate_display`（按列截断带省略号）/`wrap_display`（按列折行）/`wrap_hanging`（续行悬挂缩进，逐行扣减缩进宽度）/`wrap_with_prefix`（前缀不参与断行，续行对齐正文列）/`render_panel`（盒线面板，统一定宽）/`terminal_columns`（实时尺寸 > `COLUMNS` > 兜底，下限 40）；TUI 所有打印型输出按它折行，窄屏（手机）不硬折 |
 | `tui/switch_panel.py` | `[S]` 面板响应式排版 | `layout_tier()` 按终端列数分三档（≥96 宽 / 64~95 中 / <64 窄）、`status_text()` 状态唯一实现（关闭恒红）、`format_item()` 逐档生成「编号·名称·键名(淡色)·状态·备注」行、`legend_lines()` 页脚图例折行、`format_item(reveal_key=)` 窄屏按 `k` 追加键名行；终端宽度探测与折行原语在 `tui/text_layout.py`（本模块 re-export `terminal_columns`）；**只排版不取数**，不变式「任意档位每行 ≤ 面板内宽」由单测锁定 |
 | `tui/panel_runtime.py` | TUI 统一交互运行时 | `NavState`（游标 + engaged 导航态，语义真值取自主循环 `sel`）/ `PanelItem`（key/label/kind/action 派发项）/ `panel_loop`（读键→导航→派发→反馈/重绘单源循环：方向键回绕且跳过 return 项、Enter 防误触 engaged 门控、直达键游标同步不置 engaged、Esc/return 退出、`pick>1` 收集、`on_text` 词法、Ctrl+C/EOF/render 异常原样上抛）；全列表面板（`[C]/[A]/[D]/[I]/[S]/[M]`/缓存）与主循环 `sel` 收敛于此，导航态为实例态、模块内零可变全局（C14）；只统一「怎么到达一次派发」，不改「派发什么」 |
-| `tui/status_line.py` | 页头状态行 | `build_status_line()` 五项常驻状态（上次报告时间/缓存过期数/数据新鲜度/备用源数/LLM 状态点），全本地取数、逐项降级、TTL 记忆化 |
+| `tui/status_line.py` | 页头状态行 | `build_status_line()` 页头状态（上次报告时间/数据新鲜度/数据源失败数/LLM 状态点常驻 + `缓存过期 N` 仅 N>0 上屏；异常段自带带键动作短语为第二行，正常态无第二行），全本地取数、逐项降级、TTL 记忆化 |
 | `report/progress.py` | 进度报告 | TuiProgressReporter（`[..]`/`[OK]`/`[!]`/`[ERR]` 前缀 + 耗时排行） |
 
 #### 1.6.2 主循环与键盘导航
@@ -469,7 +469,7 @@ while True:
 | | `[T]` | 系统自检（环境/配置/目录/数据源一键体检，`handlers_log.py::_cmd_run_doctor`；恒上屏，无开关） |
 | 退出 | `[X]` | 退出程序 |
 
-面板交互运行时 `tui/panel_runtime.py`：`PanelItem(key, label, kind, action, detail)` + `panel_loop` 统一承接导航/派发/反馈/重绘与帮助——`?` 打印本面板可用键一览、`?键` 打印单项详情（详情文案取 `PanelItem.detail`，面板各写业务含义、渲染单源；`on_help` 可整面板接管）。菜单渲染层与状态面板：`print_header`（标题 + 页头常驻状态行 `status_line.build_status_line()`——上次报告时间/缓存过期数/数据新鲜度/备用源数/LLM 状态点五项，全本地取数、单项异常降级为 `—`、TTL 记忆化——+ 首次运行指引：缺持仓文件/缺 LLM 配置提示）、`show_config`（持仓目录/持仓文件、输出目录、新闻抓取上限、文件就绪状态 `[OK]`/`[!!]`、匿名化状态、隐私声明、LLM 配置状态单链/多链两视图）。LLM 状态面板支持多 Provider 链式模式（策略、各 provider 后端/模型/优先级/自动重试状态、模块级偏好）；上屏词按 `DESIGN-TUI` 术语表转用户词——端点状态由 `core.system_info.circuit_display` **唯一归一**（`熔断中`→`暂时失败`，未知上游文案透传），TUI/CLI/Web 三渠道共用同一词，各渠道不得自带映射表；面板数据消费 `core/system_info.llm_status()` 单源（configured 判定与多链/flat 分支唯一在共享层，渠道只做终端渲染）；多链 `providers` 出口按链序排列——排序口径唯一实现在 `config/_llm_providers.order_providers_by_chain`（`priority` 升序、同值保持数组原序），`llm_status()` 与 `[M]` 面板同经此函数，`chain_head` 恒等于 `providers[0]`，保证首页编号 / 状态行链首 / 面板编号三处不会出现相反顺序（数组物理顺序不作数：reorder 只改 priority 值、不改数组项位置）。**配色一色一职责**（角色表见 `DESIGN-TUI` Colors）：品牌橙=应用名与版本号、结构蓝粗=分组标题（`text_layout.style_heading` 单源，首页与 `[S]` 同步改色）、焦点青=选中标记/面板游标、状态色按值给（绿正常/黄注意/红错误）、DIM=分隔线与页脚图例；非 TTY 与 `NO_COLOR` 下全量退化无色。
+面板交互运行时 `tui/panel_runtime.py`：`PanelItem(key, label, kind, action, detail)` + `panel_loop` 统一承接导航/派发/反馈/重绘与帮助——`?` 打印本面板可用键一览、`?键` 打印单项详情（详情文案取 `PanelItem.detail`，面板各写业务含义、渲染单源；`on_help` 可整面板接管）。菜单渲染层与状态面板：`print_header`（标题 + 页头状态行 `status_line.build_status_line()`——上次报告时间/数据新鲜度/数据源失败数/LLM 状态点四项常驻（`缓存过期 N` 仅 N>0 上屏），异常段汇总为第二行带键动作提示（正常态无第二行），全本地取数、单项异常降级为 `—`、TTL 记忆化——+ 首次运行指引：缺持仓文件/缺 LLM 配置提示）、`show_config`（持仓目录/持仓文件、输出目录、新闻抓取上限、文件就绪状态 `[OK]`/`[!!]`、匿名化状态、隐私声明、LLM 配置状态单链/多链两视图）。LLM 状态面板支持多 Provider 链式模式（策略、各 provider 后端/模型/优先级/自动重试状态、模块级偏好）；上屏词按 `DESIGN-TUI` 术语表转用户词——端点状态由 `core.system_info.circuit_display` **唯一归一**（`熔断中`→`暂时失败`，未知上游文案透传），TUI/CLI/Web 三渠道共用同一词，各渠道不得自带映射表；面板数据消费 `core/system_info.llm_status()` 单源（configured 判定与多链/flat 分支唯一在共享层，渠道只做终端渲染）；多链 `providers` 出口按链序排列——排序口径唯一实现在 `config/_llm_providers.order_providers_by_chain`（`priority` 升序、同值保持数组原序），`llm_status()` 与 `[M]` 面板同经此函数，`chain_head` 恒等于 `providers[0]`，保证首页编号 / 状态行链首 / 面板编号三处不会出现相反顺序（数组物理顺序不作数：reorder 只改 priority 值、不改数组项位置）。**配色一色一职责**（角色表见 `DESIGN-TUI` Colors）：品牌橙=应用名与版本号、结构蓝粗=分组标题（`text_layout.style_heading` 单源，首页与 `[S]` 同步改色）、焦点青=选中标记/面板游标、状态色按值给（绿正常/黄注意/红错误）、DIM=分隔线与页脚图例；非 TTY 与 `NO_COLOR` 下全量退化无色。
 
 #### 1.6.4 报告生成流程
 
@@ -829,7 +829,7 @@ Provider Chain 采用**职责链（Chain of Responsibility）模式**：每个�
 - **传输级失败必须上抛给链路（provider 层不得自行吞成返回值）**：链路的传输级判据**只认异常**（`_try_provider_fetch` 捕获异常 → `TRANSPORT_FAILURE`），若 provider 把超时/断连 `return None`，链路会当成「代码级空结果」——同源重试不触发、``record_failure`` 不计、诊断文案把「握手超时」报成「返回空」（实测事故：DataSinking SSL 握手超时被记为返回空，既不重试也不熔断，单标的每篇白等 20s）。故 provider 的代码级结果（401/403/404/非 200/非 JSON）返回 `None`，传输级失败**重试耗尽后上抛**；弱链路承装的直连调用方需自行试/except 降级（如 `fetcher/financial_report._fetch_index` → 转备源）
 - **provider 自陈失败原因（「返回空」不再笼统）**：provider 返回 `None` 前可经 `providers/utils.set_last_reason("原因")` 写下一行可读短句，链路（`chain._try_provider_fetch`）读到后**替换笼统的「返回空」**并同步进失败诊断（`FailureDiagnostics` → 报告数据源矩阵）。二者在运维上是完全不同的信号——「源故障」要排查网络/凭据（如 `HTTP 500`、`凭据无效`），而「该文档确实没这一节」（如 DataSinking 对没有「管理层讨论与分析」的季报返回 404）是正常业务结果（实测：该场景被笼统记成「返回空」，排查时被误读为源不可用）。载体**按线程隔离**（批量取数多线程）且**消费即清**（不串到下一次调用）；provider 未设置时措辞逐字不变。
 - **挂起型不重试（避免放大等待）**：区分**快速失败**（连接被拒/重置/DNS 立即失败 → 重试有效）与**挂起**（等到超时 → 重试只会把等待放大成 N × 超时）。判据：本次尝试耗时 ≥ 超时预算 × `HANG_ELAPSED_RATIO`（0.5）即视为「主机不可达」，不再重试、直接交链路失败（计入熔断）；实测：20s 预算下挂起型单请求从 63s（3 次）降到 20s（1 次），持续不可用时靠熔断快速跳过。判据由 `providers/utils.build_transient_retry_judge` 统一提供，`datasink` / `hithink` / `cninfo` 三者共用
-- **连接级重试脚手架单源**：`providers/utils.with_connect_retry(request_fn, timeout=…, log_tag=…, label=…, before_attempt=…)` 收敛 `datasink` / `hithink` / `cninfo` 三处的连接级重试（共用 `providers/utils.CONNECT_RETRY_POLICY`：线性 1s/2s、共 3 次尝试）——耗时统计、挂起判据与警告、重试日志、每次尝试前的限速许可统一在此，各来源差异只用 `log_tag` / `label` / `before_attempt` 表达（避免同一约束复制三份、改一处漏两处）。**无链路承装的直连调用方**在调用点吞异常返回 `None`（如 `cninfo` 三条直连路径）维持降级契约；经链路的 provider 槽由链路承接上抛。**cninfo 直连路径的额外护栏**：公告 PDF 用独立的更宽超时（60s，年报原文几十 MB，与元数据接口共用 20s 必然失败）；挂起型失败后**本会话短路该主机**（`_mark_host_unreachable`，后续请求不发 HTTP 直接失败），把「N 篇文档 × 超时预算」降为 1 次
+- **连接级重试脚手架单源**：`providers/utils.with_connect_retry(request_fn, timeout=…, log_tag=…, label=…, before_attempt=…)` 收敛 `datasink` / `hithink` / `cninfo` 三处的连接级重试（共用 `providers/utils.CONNECT_RETRY_POLICY`：线性 1s/2s、共 3 次尝试）——耗时统计、挂起判据与警告、重试日志、每次尝试前的限速许可统一在此，各来源差异只用 `log_tag` / `label` / `before_attempt` 表达（避免同一约束复制三份、改一处漏两处）。**无链路承装的直连调用方**在调用点吞异常返回 `None`（如 `cninfo` 三条直连路径）维持降级契约；经链路的 provider 槽由链路承接上抛。**cninfo 直连路径的额外护栏**：公告 PDF 用独立的更宽超时（60s，年报原文几十 MB，与元数据接口共用 20s 必然失败）；挂起型失败后**本会话短路该主机**（`_mark_host_unreachable`，后续请求不发 HTTP 直接失败），把「N 篇文档 × 超时预算」降为 1 次；**orgId 反查另加两条**：单次预算改为**端到端墙钟 8s**（`post_with_deadline`——httpx 分阶段超时叠加实测可达预算 2 倍，20s 预算曾挂 40.2s，而 orgId 卡在报告主路径上），失败结果入**1h 负缓存** `report_cninfo_orgid_miss_` 并区分「连接失败 / 源侧无该代码档案」（否则同网络条件下每次重跑都要重付一遍）
 - **次数有界**：每个 Provider 每次调用最多 1 + 1 次请求；仍失败才计入熔断计数器并落下一槽
 - **口径单一来源**：退避算式（固定/线性/指数 + 抖动 + 上限）、尝试次数与「哪些异常算瞬时」由 `core/retry.py` 统一提供（`RetryPolicy` / `is_transient_exception` / `retry_transient`）——链路、各 provider 的连接级重试、akshare 超时重试与 HTTP 429 退避共用同一执行器，差异只用策略参数表达（约束 C26）；「两次请求至少间隔多久」见 `core/throttle.py`（约束 C27）
 
@@ -3970,7 +3970,7 @@ investor-review/
 | `hold` | `fund_hold_{code}.json` | 7 天 | — | — | refresh |
 | `industry` | `industry_{code}.json` | 14 天 | — | — | refresh |
 | `sentiment` | `sentiment_dragon_tiger.json` + `sentiment_ladder.json` | 1h | — | — | refresh |
-| `report` | `report_datasink_index_{symbol}.json` + `report_datasink_sections_{doc_id}.json` + `report_cninfo_index_*` | 24h | — | — | refresh |
+| `report` | `report_datasink_index_{symbol}.json` + `report_datasink_sections_{doc_id}.json` + `report_cninfo_index_*` + `report_datasink_doc_miss_{doc_id}_{section}.json`（确定性空正文负缓存） | 24h | — | — | refresh |
 | `report_doc` | `report_datasink_doc_{doc_id}_{section}.json` | 30 天 | — | — | refresh |
 | `fin_indicator` | `fin_indicator_{code}.json` + `fin_indicator_hist_{code}.json` | 24h | — | — | refresh |
 | `dividend` | `dividend_{fingerprint}.json` | 7 天 | — | 持仓+穿透 A 股代码 | refresh |

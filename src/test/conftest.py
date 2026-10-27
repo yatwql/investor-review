@@ -328,6 +328,14 @@ def _auto_reset_last_reason():
 
 
 @pytest.fixture(autouse=True)
+def _auto_reset_doc_miss_hits():
+    """清零「空正文负缓存命中」按轮计数，避免用例间串味。"""
+    from src.python.fetcher.financial_report import reset_doc_miss_hits
+
+    reset_doc_miss_hits()
+
+
+@pytest.fixture(autouse=True)
 def _auto_reset_fingerprint_audit():
     """清空指纹组件审计基线，避免用例间「上次报告」串味。"""
     from src.python.llm.generators_orchestrator import reset_fingerprint_audit

@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.16.3
-> **编号源**：`rf-next = 919`（新增问题提出后更新为 +1；已用最大 rf-918，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> 文档版本：0.16.4
+> **编号源**：`rf-next = 927`（新增问题提出后更新为 +1；已用最大 rf-926，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -36,12 +36,14 @@
 
 ## 已解决问题
 
-### 开发期已修复（0.16.3-dev）
+### 开发期已修复（0.16.4-dev）
 
-（本版开发期已修复项已随 v0.16.3 发布迁入归档档案）
+（本版开发期已修复项已随 v0.16.4 发布迁入归档档案）
+
+（本版开发期已修复项已随 v0.16.4 发布迁入归档档案）
 
 ### 归档档案
-- [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-10-26）
+- [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-10-27）
 - [`archived_review-findings.0.15.x.md`](../archive/v0.15.x/archived_review-findings.0.15.x.md) — v0.15.x（2026-10-24 ~ 2026-10-25）
 - [`archived_review-findings.0.14.x.md`](../archive/v0.14.x/archived_review-findings.0.14.x.md) — v0.14.x（2026-10-21 ~ 2026-10-23）
 - [`archived_review-findings.0.13.x.md`](../archive/v0.13.x/archived_review-findings.0.13.x.md) — v0.13.x（2026-10-14 ~ 2026-10-21）

@@ -6,7 +6,13 @@ from src.python.core.constants import CACHE_DAILY
 
 from ._cleanup import auto_cleanup_expired, cleanup_expired, clean_sensitive
 from ._groups import clear_by_group, clear_by_prefix
-from ._paths import _cache_path, _GZIP_SUFFIX, check_cache_dir_permissions, get_cache_dir
+from ._paths import (
+    _cache_path,
+    _GZIP_SUFFIX,
+    cache_key_from_file_name,
+    check_cache_dir_permissions,
+    get_cache_dir,
+)
 from ._stats import (
     get_cache_hit_rate,
     get_cache_stats,
@@ -49,6 +55,7 @@ __all__ = [
     "compute_holdings_codes",
     "get_cache_dir",
     "get_cache_path",
+    "cache_key_from_file_name",
     "CACHE_GZIP_SUFFIX",
     "check_cache_dir_permissions",
     "CACHE_DAILY",
@@ -57,6 +64,7 @@ __all__ = [
 
 # ── 启动时自动清理过期敏感缓存（静默执行，仅日志记录）──
 _logger = logging.getLogger("invest")
+_cleaned = 0
 try:
     _cleaned = clean_sensitive(older_than_days=90, dry_run=False)
     if _cleaned > 0:

@@ -35,7 +35,7 @@ from src.python.cache import get as cache_get
 from src.python.cache import get_ttl
 from src.python.cache import set as cache_set
 from src.python.core.code_symbols import get_exchange_category
-from src.python.core.http_client import make_http_client
+from src.python.core.http_client import make_http_client, post_with_deadline
 from src.python.core.retry import STRATEGY_FIXED, RetryPolicy
 from src.python.core.throttle import wait_interval  # 间隔+抖动唯一算式
 from src.python.providers.utils import set_last_reason, with_connect_retry
@@ -47,8 +47,14 @@ DISPLAY_NAME = "巨潮资讯"
 
 _BASE = "http://www.cninfo.com.cn"
 _STATIC_BASE = "http://static.cninfo.com.cn"
-#: 元数据类接口（orgId 搜索 / 公告列表）的超时预算
+#: 元数据类接口（公告列表等）的超时预算
 _TIMEOUT = 20.0
+#: orgId 反查的**端到端墙钟**预算（纯元数据快查，卡在报告主路径上）。
+#: httpx 的 timeout 按阶段计、read 超时又度量「相邻两次收数据的间隔」，实测 20s
+#: 预算能挂到 40.2s；本路径用端到端墙钟把最坏情况锁死在预算内。
+_ORGID_TIMEOUT = 8.0
+#: orgId 失败结果的负缓存 TTL（秒）：失败不入缓存时，每次重跑都要重付一遍墙钟预算
+_ORGID_MISS_TTL = 3600.0
 #: 公告 PDF 下载的超时预算。年报原文动辄几十 MB，与元数据接口共用 20s 必然在
 #: 慢链路下触发「挂起 → 不重试 → 失败」，且**从未成功过**（白等 N × 超时）。
 #: 单独放宽到 60s，配合下方「本会话主机不可达短路」避免反复白等。
@@ -61,6 +67,7 @@ _RATE_LIMIT_POLICY = RetryPolicy(attempts=2, strategy=STRATEGY_FIXED, base_backo
 
 INDEX_PREFIX = "report_cninfo_index_"
 ORGID_PREFIX = "report_cninfo_orgid_"
+ORGID_MISS_PREFIX = "report_cninfo_orgid_miss_"
 TEXT_PREFIX = "report_cninfo_text_"
 
 #: 列表一次取回的公告条数（本地归类/过滤后由编排层再按报告期排序回溯）
@@ -228,9 +235,17 @@ def _looks_like_hang(exc: BaseException, timeout: float) -> bool:
     return "timeout" in type(exc).__name__.lower() or "timeout" in str(exc).lower()
 
 
-def _post_once(url: str, data: dict[str, Any]) -> Any:
-    """单次限速 POST（限速在调用方统一获取）。"""
-    with make_http_client(timeout=_TIMEOUT, follow_redirects=True) as client:
+def _post_once(url: str, data: dict[str, Any], timeout: float | None = None, *, deadline: bool = False) -> Any:
+    """单次限速 POST（限速在调用方统一获取）。
+
+    Args:
+        timeout: 单次请求预算；None 取 ``_TIMEOUT``。
+        deadline: True 时走端到端墙钟（``post_with_deadline``，表单编码）。
+    """
+    budget = _TIMEOUT if timeout is None else timeout
+    with make_http_client(timeout=budget, follow_redirects=True) as client:
+        if deadline:
+            return post_with_deadline(client, url, _HEADERS, data, budget, form=True)
         return client.post(url, data=data, headers=_HEADERS)
 
 
@@ -240,19 +255,41 @@ def _get_once(url: str, timeout: float | None = None) -> Any:
         return client.get(url, headers=_HEADERS)
 
 
-def _post_json(path: str, data: dict[str, Any]) -> dict[str, Any] | None:
+def _post_json(
+    path: str,
+    data: dict[str, Any],
+    *,
+    timeout: float | None = None,
+    deadline: bool = False,
+) -> dict[str, Any] | list[Any] | None:
     """限速 POST 取 JSON；失败返回 None（不计熔断，交链路/编排降级）。
 
     连接级瞬时失败由 ``_with_transient_retry`` 退避重试一次；HTTP 429 另有自己的退避分支。
+
+    Args:
+        timeout: 单次请求预算；None 取 ``_TIMEOUT``（元数据类接口）。
+        deadline: True 时附加端到端墙钟截止（``post_with_deadline``）——httpx 的
+            分阶段超时叠加后单请求能挂到预算的 2 倍，orgId 快查不接受这种放大。
     """
+    budget = _TIMEOUT if timeout is None else timeout
     url = f"{_BASE}{path}"
-    resp = _with_transient_retry(path, lambda: _post_once(url, data), url=url)
+    resp = _with_transient_retry(
+        path,
+        lambda: _post_once(url, data, budget, deadline=deadline),
+        url=url,
+        timeout=budget,
+    )
     if resp is None:
         return None  # 失败原因已由 _with_transient_retry 写入 last-reason
     if resp.status_code == 429:
         delay = wait_interval(_RATE_LIMIT_POLICY.delay_for(1))
         logger.warning("[cninfo] 触发限速（HTTP 429），%.1fs 后重试一次", delay)
-        resp = _with_transient_retry(path, lambda: _post_once(url, data), url=url)
+        resp = _with_transient_retry(
+            path,
+            lambda: _post_once(url, data, budget, deadline=deadline),
+            url=url,
+            timeout=budget,
+        )
         if resp is None:
             return None
     if resp.status_code != 200:
@@ -310,9 +347,19 @@ def resolve_org_id(code: str) -> str | None:
     cached = cache_get(cache_key, get_ttl("report"))
     if isinstance(cached, str) and cached:
         return cached
+    # 失败负缓存（短 TTL）：本接口是财报备源的前置快查，主机不可达时单次实测挂 40.2s；
+    # 失败不留痕的话，之后每次重跑都要重付一遍，而重跑通常发生在同一网络条件下。
+    miss_key = f"{ORGID_MISS_PREFIX}{code}"
+    miss_reason = cache_get(miss_key, _ORGID_MISS_TTL)
+    if isinstance(miss_reason, str) and miss_reason:
+        logger.debug("[cninfo] 代码 %s 近 %.0f 分钟内解析失败（%s），本轮跳过", code, _ORGID_MISS_TTL / 60, miss_reason)
+        set_last_reason(f"orgId 近期解析失败（{miss_reason}）")
+        return None
     payload = _post_json(
         "/new/information/topSearch/query",
         {"keyWord": code, "maxSecNum": 10, "maxListNum": 10},
+        timeout=_ORGID_TIMEOUT,
+        deadline=True,
     )
     # 该接口返回**数组**（实测：[{"code": "600900", "orgId": "gssh0600900", ...}]）；
     # 保留 dict 形状兼容（历史/其他部署可能包一层）。
@@ -329,8 +376,11 @@ def resolve_org_id(code: str) -> str | None:
     if not org_id and isinstance(items, list) and items:
         org_id = str(items[0].get("orgId") or "")
     if not org_id:
-        logger.info("[cninfo] 代码 %s 未解析到 orgId", code)
-        set_last_reason("未解析到 orgId（源侧无该代码档案或连接失败）")
+        # 区分网络失败与源侧无档案：前者是环境问题（短 TTL 后重试即可），后者是字段缺失
+        reason = "连接失败" if payload is None else "源侧无该代码档案"
+        cache_set(miss_key, reason)
+        logger.info("[cninfo] 代码 %s 未解析到 orgId（%s），%.0f 分钟内不再重试", code, reason, _ORGID_MISS_TTL / 60)
+        set_last_reason(f"未解析到 orgId（{reason}）")
         return None
     resolved = f"{code},{org_id}"
     cache_set(cache_key, resolved)
