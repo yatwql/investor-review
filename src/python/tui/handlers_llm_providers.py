@@ -58,7 +58,7 @@ def run_llm_providers_panel() -> None:
         state["ordered"] = ordered
         state["width"] = width
         print()
-        print(truncate_display(f"  ── LLM 多链线路优先级（strategy: {strategy}） ──", width))
+        print(style_heading(truncate_display(f"  ── LLM 多链线路优先级（strategy: {strategy}） ──", width)))
         for num, (_i, provider) in enumerate(ordered, 1):
             row = (
                 f"  {nav.marker(num - 1)}{num}. {provider.get('name')}（{provider.get('provider')}）priority "

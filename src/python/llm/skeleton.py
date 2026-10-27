@@ -282,10 +282,15 @@ def _resolve_first_provider(
 
         chain = resolve_provider_chain(provider_list, strategy, module_key, preferred)
         first_entry = chain[0] if chain else None
-        first_name = first_entry["name"] if first_entry else None
+        # 空链时三个返回值必须有确定初值（否则 return 处 UnboundLocalError，
+        # 只能靠外层 except 静默兑成「无预检」，控制流依赖异常）
+        first_name: str | None = None
+        first_model: str | None = None
+        first_endpoint = ""
         if first_entry:
             from src.python.llm.api import _resolve_entry_credentials
 
+            first_name = first_entry["name"]
             _, first_model, first_endpoint = _resolve_entry_credentials(first_entry, llm_config)
         return (first_name, first_model, first_endpoint)
     except Exception:
@@ -385,11 +390,12 @@ def _execute_llm_with_finalize(
         provider_name = provider_info.get("name") if provider_info else None
         resolved_model = provider_info.get("model") if provider_info else model
         resolved_endpoint = provider_info.get("endpoint", "") if provider_info else ""
-        # 按实际 provider_name 落盘（可能与乐观预检不同——回退场景）
+        # 按实际 provider_name 落盘（可能与乐观预检不同——回退场景）。
+        # 键尾由 `_build_provider_cache_key` 唯一构造（写侧/预检侧同源，禁止就地拼字串）
         provider_list = llm_config.get("_provider_list")
         write_key = cache_key
         if provider_list and provider_name:
-            write_key = f"{cache_key}_{provider_name}"
+            write_key = _build_provider_cache_key(cache_key, llm_config, module_key, provider_name)
         return _finalize_and_cache(
             result,
             usage,

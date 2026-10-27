@@ -127,12 +127,12 @@ def print_header() -> None:
     holdings = os.path.join(config.get("holdings_dir", ""), config.get("holdings_filename", ""))
     _first_run_hints = []
     if not os.path.exists(holdings):
-        _first_run_hints.append("• 请先通过菜单 [D] 配置持仓目录/文件名，或放置文件到默认目录")
+        _first_run_hints.append("• 请先通过菜单 [G] 全局设置配置持仓目录 / 文件名（[H] / [F]），或放置文件到默认目录")
     from src.python.core.system_info import llm_status
 
     if not llm_status()["configured"]:
         _first_run_hints.append(
-            "• 如需 LLM 分析，请配置 data/config/llm_key.json 或 llm_providers.json（菜单 [S] 查看状态）"
+            "• 如需 LLM 分析，请配置 data/config/llm_key.json 或 llm_providers.json（菜单 [G] → [L] LLM 设置；页头 LLM ○ 为当前状态）"
         )
     if _first_run_hints:
         print("  📋 首次使用指引：")

@@ -31,7 +31,9 @@ _magic_excludes() / _dash_excludes() / _under_excludes() 行豁免。
 三类 AST 级架构守卫（与注释无关，直接看语法树）：
   - core 分层：core 层禁止反向 import 上层包
   - 日志统一：print() 仅限交互呈现层（TUI/CLI 目录 + 逐文件列举的交互输出
-    模块），其余生产模块须走 logging 落盘（LOG）
+    模块），其余生产模块须走 logging 落盘；且模块日志器名称一律为
+    `logging.getLogger("invest")`（自取 `__name__`/自定义名即脱离统一
+    handler、级别与落盘）（LOG）
   - 配置默认值单源：生产代码不得自带与默认值表同值的字面量兜底
     （DEFAULTDUP，改用 get_default() / get_llm_setting_default()）
 

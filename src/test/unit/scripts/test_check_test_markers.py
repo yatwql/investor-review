@@ -148,7 +148,7 @@ class TestCheckFile:
         assert mod.check_file(path, verbose=False, ci_mode=True) == []
 
     def test_dir_expectation_unmet_reported(self, mod, isolated_dir):
-        """unit/core 目录期望 {unit, unit_core}，两者都不标即报缺期望标记。"""
+        """unit/core 目录期望 {unit, unit_core}，域标记 unit_core 缺失即报违规。"""
         path = _write(
             isolated_dir,
             "unit/core/test_cache.py",
@@ -156,7 +156,7 @@ class TestCheckFile:
         )
         violations = mod.check_file(path, verbose=False, ci_mode=True)
         assert len(violations) == 1
-        assert "期望标记" in violations[0]
+        assert "域标记" in violations[0]
         assert "unit_core" in violations[0]
 
     def test_dir_expectation_met_passes(self, mod, isolated_dir):
@@ -278,6 +278,8 @@ def _unit_dir_to_marker(repo_root: Path) -> dict[str, str]:
     tree = ast.parse(conftest_path.read_text(encoding="utf-8"))
     for node in tree.body:
         if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id == "_DIR_TO_MARKER":
+            if node.value is None:
+                raise AssertionError("src/test/unit/conftest.py 的 _DIR_TO_MARKER 缺少赋值")
             return ast.literal_eval(node.value)
     raise AssertionError("src/test/unit/conftest.py 未找到 _DIR_TO_MARKER")
 
@@ -356,3 +358,71 @@ class TestDocstringConsistency:
     def test_integration_family_is_registered(self, mod):
         assert "integration" in mod.KNOWN_MARKERS
         assert "integration" not in mod.DEPRECATED_MARKERS
+
+
+class TestModuleLevelSingleMarker:
+    """`pytestmark` 的三种写法都必须被提取（曾只认列表形式，漏标非列表写法）。"""
+
+    def test_single_attribute_form(self, mod, tmp_path):
+        path = _write(
+            tmp_path,
+            "test_sample.py",
+            "import pytest\npytestmark = pytest.mark.unit_config\ndef test_x():\n    assert True\n",
+        )
+        assert mod._extract_markers_from_file(path) == {"unit_config"}
+
+    def test_tuple_form(self, mod, tmp_path):
+        path = _write(
+            tmp_path,
+            "test_sample.py",
+            "import pytest\npytestmark = (pytest.mark.unit, pytest.mark.unit_core)\ndef test_x():\n    assert True\n",
+        )
+        assert mod._extract_markers_from_file(path) == {"unit", "unit_core"}
+
+
+class TestDomainMarkerRequired:
+    """通用标记 `unit` 不得替代域标记（否则目录期望形同虚设）。"""
+
+    def test_generic_unit_alone_reports_missing_domain(self, mod, isolated_dir):
+        path = _write(
+            isolated_dir,
+            "unit/core/test_only_generic.py",
+            "import pytest\npytestmark = [pytest.mark.unit]\ndef test_x():\n    assert True\n",
+        )
+        violations = mod.check_file(path, verbose=False, ci_mode=True)
+        assert violations, "只标 unit 应报缺少域标记"
+        assert "unit_core" in violations[0]
+
+    def test_domain_marker_satisfies(self, mod, isolated_dir):
+        path = _write(
+            isolated_dir,
+            "unit/core/test_with_domain.py",
+            "import pytest\npytestmark = [pytest.mark.unit, pytest.mark.unit_core]\ndef test_x():\n    assert True\n",
+        )
+        assert mod.check_file(path, verbose=False, ci_mode=True) == []
+
+
+class TestRealTreeDomainCompliance:
+    """真实测试树必须全部满足「目录域 ↔ 域标记」绑定。"""
+
+    def test_every_file_carries_its_domain_marker(self, mod):
+        from src.python.core.constants import PROJECT_ROOT
+
+        test_dir = Path(PROJECT_ROOT) / "src" / "test"
+        offenders = []
+        for path in sorted(test_dir.rglob("test_*.py")):
+            if "__pycache__" in path.parts:
+                continue
+            rel_dir = mod._get_relative_dir(path)
+            expected = mod.EXPECTED_DIR_MARKERS.get(rel_dir)
+            if not expected:
+                continue
+            required = expected - {"unit", "scenario"}
+            if not required:
+                continue
+            markers = mod._extract_markers_from_file(path)
+            if not (markers & required):
+                offenders.append(
+                    f"{path.relative_to(PROJECT_ROOT).as_posix()}（期望 {sorted(required)}：{sorted(markers)}）"
+                )
+        assert offenders == [], "目录域标记缺失：" + "; ".join(offenders)

@@ -36,7 +36,7 @@ from typing import Any
 from src.python.core.ansi_colors import DIM, GREEN, RESET, YELLOW
 from src.python.tui.text_layout import terminal_columns, wrap_with_prefix
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("invest")
 
 _STATUS_TTL = 45.0  # 页头重绘频繁，缓存/健康历史等重取限频（秒）
 # 数据新鲜度告警阈值（自然日）：超过则在页头用黄色提示「数据偏旧」
@@ -180,7 +180,7 @@ def _degraded_part() -> _Segment:
 
 
 def _llm_part() -> _Segment:
-    """LLM 状态点（● 已配置 / ○ 未配置，判定与 [S] 状态同源）+ 多链链首线路名。
+    """LLM 状态点（● 已配置 / ○ 未配置，判定与 [G] → [L] LLM 设置同源）+ 多链链首线路名。
 
     链首名来自 llm_status()["chain_head"]（单源，仅 priority/fallback_only
     策略存在）——换序/手改优先级后回首页即见新链首，一眼验证配置已生效。

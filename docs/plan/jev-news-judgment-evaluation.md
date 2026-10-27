@@ -129,7 +129,7 @@ snapshot 阶段（一次性，可重复执行）
 - 目录：`scripts/`（沿用扁平语义命名）
 - 拟名：`eval-jev-news-judgment.py`——顶层脚本按活动类型前缀命名（`eval-`），与既有 `eval-dedup-threshold.py`、`eval-llm-hallucination.py` 同类，属离线评测脚本
 - 子命令：`snapshot`（取数冻结）/ `run`（三方案跑分）/ `report`（指标汇总与判定）
-- 必须复用 `scripts/_checklib.py` 的 CLI 契约（`-v/--verbose` + `--ci`；通过退出 0，发现 finding 退出 2）
+- 必须复用 `scripts/_shared/checklib.py` 的 CLI 契约（`-v/--verbose` + `--ci`；通过退出 0，发现 finding 退出 2）
 - 该脚本是**离线工具**，不得被 pytest 收集：不放在 `src/test/` 下，也不得在其中真实调用 LLM 而进入测试套件
 
 ## 9. 前置条件

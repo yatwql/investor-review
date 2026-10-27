@@ -7,7 +7,7 @@
   - extract    注释抽取（per-language）与标识符提取
   - scan       scan_file 调度（四支路汇聚）
   - layers     core 反向依赖 AST 守卫
-  - logging_discipline 日志统一 AST 守卫（print() 仅限交互呈现层）
+  - logging_discipline 日志统一 AST 守卫（print() 仅限交互呈现层 + 日志器名称须为 "invest"）
   - config_defaults 配置默认值单源 AST 守卫（禁止与默认表同值的字面量兜底）
 """
 
