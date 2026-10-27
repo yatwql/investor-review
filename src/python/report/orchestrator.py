@@ -196,9 +196,6 @@ def generate_report(
                 output_dir=output,
                 section_order=sec_order,
                 progress=reporter,
-                # 数据质量仪表盘子模块开关（basic 无行情数据，品种覆盖区块显示降级占位）
-                # 数据质量仪表盘已内置恒开（开关移除，见 changelog）；参数保留待清理
-                enable_data_quality=True,
                 # 行动建议章节开关（basic 纯算法可见；action_data 由 excel_generator
                 # 就地由行情明细构建——basic 不经编排层，无 pipeline_data 注入）
                 enable_action=is_enable_action(config),

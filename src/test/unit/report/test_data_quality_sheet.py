@@ -18,7 +18,6 @@ import unittest
 import openpyxl
 import pytest
 
-from unittest.mock import patch
 
 from src.python.report.data_quality_sheet import (
     _COVERAGE_PLACEHOLDER,
@@ -277,49 +276,3 @@ class TestWriteDataQualitySheet(unittest.TestCase):
         )
         cells = [str(self.ws.cell(row=r, column=c).value or "") for r in range(1, end_row + 1) for c in range(1, 6)]
         self.assertIn(_FRESHNESS_PLACEHOLDER, "|".join(cells))
-
-
-class TestSourceMatrixDefaultStyle(unittest.TestCase):
-    """开关关闭时「数据源可用性矩阵」保持默认样式（不含「品种覆盖」区块）。"""
-
-    def setUp(self):
-        self.wb = openpyxl.Workbook()
-        self.ws = self.wb.active
-
-    def test_default_title_and_matrix_rows(self):
-        """标题为「数据源可用性矩阵」，矩阵行保留。"""
-        from src.python.report.excel_generator import _write_data_source_matrix_sheet
-        from src.python.report.progress import SilentProgressReporter
-
-        with patch(
-            "src.python.report.data_source_matrix.build_data_source_matrix",
-            return_value=[_matrix_row("行情数据", "degraded", "1 降级")],
-        ):
-            _write_data_source_matrix_sheet(self.ws, SilentProgressReporter())
-        cells = [
-            str(self.ws.cell(row=r, column=c).value or "") for r in range(1, self.ws.max_row + 1) for c in range(1, 6)
-        ]
-        joined = "|".join(cells)
-        self.assertIn("数据源可用性矩阵", joined)
-        self.assertIn("行情数据", joined)
-        self.assertIn("降级", joined)
-        # 开关关闭时不含「品种覆盖」区块
-        self.assertNotIn("品种覆盖", joined)
-
-    def test_default_style_renders_provider_hits(self):
-        """开关关闭时旧样式页签同样渲染「命中源」列。"""
-        from src.python.report.excel_generator import _write_data_source_matrix_sheet
-        from src.python.report.progress import SilentProgressReporter
-
-        row = {**_matrix_row("行情数据"), "providers_text": "腾讯财经 ×3"}
-        with patch(
-            "src.python.report.data_source_matrix.build_data_source_matrix",
-            return_value=[row],
-        ):
-            _write_data_source_matrix_sheet(self.ws, SilentProgressReporter())
-        cells = [
-            str(self.ws.cell(row=r, column=c).value or "") for r in range(1, self.ws.max_row + 1) for c in range(1, 7)
-        ]
-        joined = "|".join(cells)
-        self.assertIn("命中源", joined)
-        self.assertIn("腾讯财经 ×3", joined)

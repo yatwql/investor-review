@@ -94,8 +94,6 @@ def _generate_report_both(
     _enable_history = is_enable_history(config)
     _enable_portfolio_evolution = is_enable_portfolio_evolution(config)
     _enable_action = is_enable_action(config)
-    # 数据质量仪表盘已内置恒开（开关移除）——参数保留，恒 True
-    _enable_data_quality = True
     _enable_cost_lots = is_enable_cost_lots()
     _enable_stock_fundamentals = is_enable_stock_fundamentals()
     _enable_summary_highlights = is_feature_enabled("summary_highlights")
@@ -290,7 +288,6 @@ def _generate_report_both(
             enable_llm=False,
             chart_datasets=chart_datasets,
             evolution_data=(pipeline_data or {}).get("evolution_data"),
-            enable_data_quality=_enable_data_quality,
             position_status=(pipeline_data or {}).get("position_status"),
             data_freshness=(pipeline_data or {}).get("data_freshness"),
             action_data=(pipeline_data or {}).get("action_data"),
@@ -340,7 +337,6 @@ def _generate_report_both(
             enable_portfolio_evolution=_enable_portfolio_evolution,
             enable_action=_enable_action,
             enable_llm=False,
-            enable_data_quality=_enable_data_quality,
             enable_cost_lots=_enable_cost_lots,
             transactions=transactions,
             dividends=dividends,

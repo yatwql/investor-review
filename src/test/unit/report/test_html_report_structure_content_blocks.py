@@ -29,13 +29,12 @@ class TestHtmlDataQualityBlocks(unittest.TestCase):
         cls.numbers = {sec["key"]: sec["number"] for sec in cls.order}
         cls.sv_dict = {sec["key"]: True for sec in cls.order}
 
-    def _render_dq(self, position_status, data_freshness, enabled=True):
+    def _render_dq(self, position_status, data_freshness):
         render_data = _build_minimal_render_data(self.order, self.numbers, self.sv_dict)
         # 数据质量区块嵌套于「数据源可用性矩阵」章节（registry 中 data_source_status
         # 为 always 类型，number=18）——渲染需使其可见
         render_data["section_visible_dict"] = {**self.sv_dict, "data_source_status": True}
         render_data["section_numbers"] = {**self.numbers, "data_source_status": 18}
-        render_data["data_quality_enabled"] = enabled
         render_data["position_status"] = position_status
         render_data["data_freshness"] = data_freshness
         return _render_template(render_data)
@@ -118,45 +117,6 @@ class TestHtmlDataQualityBlocks(unittest.TestCase):
         )
         text = soup.get_text()
         self.assertIn("未获取行情数据，品种覆盖无法判定", text)
-
-    def test_data_quality_disabled_skips_blocks(self):
-        """data_quality_enabled=False → 两区块均不渲染。"""
-        soup = self._render_dq(
-            {
-                "available": True,
-                "items": [
-                    {
-                        "code": "000001",
-                        "name": "平安银行",
-                        "account": "全部",
-                        "status": "ok",
-                        "status_label": "正常",
-                        "reason": "",
-                    }
-                ],
-            },
-            {
-                "available": True,
-                "items": [
-                    {
-                        "code": "600519",
-                        "name": "贵州茅台",
-                        "account": "全部",
-                        "freshness": "ok",
-                        "freshness_label": "新鲜",
-                        "change_pct": 0.5,
-                        "jump": False,
-                        "jump_label": None,
-                    }
-                ],
-                "abnormal_count": 0,
-                "summary": "",
-            },
-            enabled=False,
-        )
-        text = soup.get_text()
-        self.assertNotIn("品种覆盖（逐品种数据状态）", text)
-        self.assertNotIn("可信度（数据新鲜度 + 单日跳变）", text)
 
     def test_header_alert_shows_when_abnormal(self):
         """数据异常时报告头部显示摘要告警行（summary + 详见第 N 章）。"""

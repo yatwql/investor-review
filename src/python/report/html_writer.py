@@ -139,7 +139,6 @@ def _render_template(
     position_relationship_data: dict | None = None,
     evolution_data: dict | None = None,
     drawdown_min_span: int = DRAW_DOWN_MIN_SPAN,
-    data_quality_enabled: bool = False,  # 子模块：数据质量仪表盘开关
     position_status: dict | None = None,  # 品种覆盖诊断 position_status
     data_freshness: dict | None = None,  # 可信度摘要 data_freshness
     action_data: dict | None = None,  # 行动建议单一数据源 action_data（行动板块 + 智囊团深度复盘行动摘要）
@@ -265,7 +264,6 @@ def _render_template(
         evolution_data=evolution_data,
         evolution_chart_data=build_evolution_chart_data(evolution_data, code_map=anon_code_map),
         drawdown_min_span=drawdown_min_span,
-        data_quality_enabled=data_quality_enabled,
         position_status=position_status,
         data_freshness=data_freshness,
         action_data=action_data,
@@ -310,7 +308,6 @@ def write_html_report(
     enable_history: bool = True,
     enable_portfolio_evolution: bool = True,
     enable_action: bool = False,  # 行动建议独立章（enable_action config 默认开）
-    enable_data_quality: bool = True,  # 技术债：开关已移除（仪表盘恒开），调用方恒传 True
     position_status: dict | None = None,  # 品种覆盖诊断 position_status（品种覆盖区块）
     data_freshness: dict | None = None,  # 可信度摘要 data_freshness（可信度区块 + 头部摘要行）
     action_data: dict | None = None,  # 行动建议单一数据源 action_data（行动板块 + 智囊团深度复盘行动摘要）
@@ -623,7 +620,6 @@ def write_html_report(
         data_source_matrix=data_source_matrix,
         data_source_catalog=data_source_catalog,
         chart_datasets=chart_datasets,
-        data_quality_enabled=enable_data_quality,
         position_status=position_status,
         data_freshness=data_freshness,
         action_data=action_data,

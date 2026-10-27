@@ -9,8 +9,6 @@
   区块 C 可信度   — 逐品种数据新鲜度分类 + 单日 ±20% 异常跳变检测
                      （`data_freshness` 契约，由数据新鲜度诊断组装）
 
-该页签恒走本模块（开关已移除）。`excel_generator` 仍保留「旧数据源可用性矩阵样式」分支，
-仅作 `enable_data_quality=False` 的防御路径（该参数为待清理技术债）。
 """
 
 from __future__ import annotations

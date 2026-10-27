@@ -105,8 +105,6 @@ def _generate_report_full(
 
         _llm_reason = llm_report_unavailable_reason() or "LLM 分析章节未启用"
         reporter.warn(f"{_llm_reason}；本次按不含 LLM 内容生成（full 等同 both）")
-    # 数据质量仪表盘已内置恒开（开关移除）——参数保留，恒 True
-    _enable_data_quality = True
     _enable_cost_lots = is_enable_cost_lots()
     _enable_stock_fundamentals = is_enable_stock_fundamentals()
     from src.python.config.features import is_feature_enabled
@@ -365,7 +363,6 @@ def _generate_report_full(
         (pipeline_data or {}).get("evolution_data"),
         _enable_portfolio_evolution,
         _enable_action,
-        _enable_data_quality,
         (pipeline_data or {}).get("position_status"),
         (pipeline_data or {}).get("data_freshness"),
         (pipeline_data or {}).get("action_data"),
@@ -410,7 +407,6 @@ def _generate_report_full(
         result,
         _enable_portfolio_evolution,
         _enable_action,
-        _enable_data_quality,
         _enable_cost_lots,
         transactions,
         dividends,
