@@ -102,7 +102,7 @@
             </div>
             {% endif %}
             {% if data_quality_enabled %}
-            <!-- 品种覆盖区块（数据质量仪表盘子模块，功能开关 data_quality 开启时显示） -->
+            <!-- 品种覆盖区块（数据质量仪表盘子模块，内置恒开——原 data_quality 开关已移除） -->
             <div class="data-status" style="margin-top:12px;">
                 <div class="data-status-title">品种覆盖（逐品种数据状态）</div>
                 {% if position_status and position_status.available and position_status.get("items") %}
@@ -134,7 +134,7 @@
                 <div class="data-status-info">&#8505; 数据不可用：未获取行情数据，品种覆盖无法判定</div>
                 {% endif %}
             </div>
-            <!-- 可信度区块（数据质量仪表盘子模块，功能开关 data_quality 开启时显示） -->
+            <!-- 可信度区块（数据质量仪表盘子模块，内置恒开——原 data_quality 开关已移除） -->
             <div class="data-status" style="margin-top:12px;">
                 <div class="data-status-title">可信度（数据新鲜度 + 单日跳变）</div>
                 {% if data_freshness and data_freshness.available and data_freshness.get("items") %}

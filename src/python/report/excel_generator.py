@@ -530,7 +530,7 @@ def generate_excel_report(
     ws_ds = sheets.get("data_source_status")
     if ws_ds is not None:
         if enable_data_quality:
-            # 子模块开关开启：该章改造为「数据质量仪表盘」（源健康 + 品种覆盖 + 可信度）
+            # 恒开（开关已移除）：该章为「数据质量仪表盘」（源健康 + 品种覆盖 + 可信度）
             prog.info("正在写入数据质量仪表盘...")
             try:
                 from src.python.report.data_quality_sheet import write_data_quality_sheet
