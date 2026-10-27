@@ -82,6 +82,64 @@ class TestDemoWorkspace:
         assert command[-1] == "--yes"
 
 
+class TestCliText:
+    """CLI 输出清洗：剥时间戳、进度回车只留末段、抹绝对路径、截尾。"""
+
+    @pytest.mark.unit_scripts
+    def test_strips_log_stamp_and_keeps_info_prefix(self, demo):
+        text = "2026-10-27 07:52:43,331 [INFO] 总市值: 1.00元\n"
+        assert demo.clean_cli_text(text) == ["[INFO] 总市值: 1.00元"]
+
+    @pytest.mark.unit_scripts
+    def test_progress_carriage_returns_keep_last_state(self, demo):
+        text = "进度 10%\r进度 60%\r进度 100%\n"
+        assert demo.clean_cli_text(text) == ["进度 100%"]
+
+    @pytest.mark.unit_scripts
+    def test_scrubs_repo_root_to_relative(self, demo):
+
+        line = f"[INFO] 耗时已记录到 {demo.REPO_ROOT}/data/state/perf_history.jsonl"
+        assert demo.clean_cli_text(line) == ["[INFO] 耗时已记录到 data/state/perf_history.jsonl"]
+
+    @pytest.mark.unit_scripts
+    def test_crlf_lines_are_kept(self, demo):
+        """回归：终端输出是 CRLF，先 split("\\r") 会把整行当空段丢掉（实测 23KB 只剩 1 行）。"""
+        text = "2026-10-27 07:52:43,331 [INFO] 第一行\r\n2026-10-27 07:52:43,332 [INFO] 第二行\r\n"
+        assert demo.clean_cli_text(text) == ["[INFO] 第一行", "[INFO] 第二行"]
+
+    @pytest.mark.unit_scripts
+    def test_tail_window_keeps_last_lines(self, demo):
+        text = "\n".join(f"[INFO] 行{i}" for i in range(30))
+        lines = demo.clean_cli_text(text, tail_lines=5)
+        assert lines == [f"[INFO] 行{i}" for i in range(25, 30)]
+
+
+class TestStateGuard:
+    """演示报告不得改动真实运行状态：跑前快照、跑后还原（含删除运行期新增文件）。"""
+
+    @pytest.mark.unit_scripts
+    def test_snapshot_and_restore_roundtrip(self, tmp_path, demo):
+        state = tmp_path / "state"
+        (state / "nested").mkdir(parents=True)
+        (state / "perf.jsonl").write_text("old\n", encoding="utf-8")
+        (state / "nested/k.json").write_text("{}", encoding="utf-8")
+
+        snap = demo.snapshot_paths((state,))
+        assert set(snap) == {state / "perf.jsonl", state / "nested/k.json"}
+
+        (state / "perf.jsonl").write_text("new\n", encoding="utf-8")
+        (state / "added.json").write_text("x", encoding="utf-8")
+        demo.restore_paths((state,), snap)
+
+        assert (state / "perf.jsonl").read_text(encoding="utf-8") == "old\n"
+        assert not (state / "added.json").exists(), "运行期新增文件应被删除"
+
+    @pytest.mark.unit_scripts
+    def test_snapshot_missing_dir_is_noop(self, tmp_path, demo):
+        assert demo.snapshot_paths((tmp_path / "absent",)) == {}
+        demo.restore_paths((tmp_path / "absent",), {})
+
+
 class TestTuiFrame:
     """TUI 帧：折行保色、路径瘦身、渲染尺寸。"""
 
@@ -125,6 +183,37 @@ class TestTuiFrame:
         with Image.open(output) as image:
             assert image.size[1] == tui.LINE_HEIGHT * 2 + tui.PADDING * 2
             assert image.size[0] >= 320
+
+    @pytest.mark.unit_scripts
+    def test_colored_tail_starts_at_measured_offset(self, tui, tmp_path):
+        """回归：配色段起点按字体实测推进。
+
+        旧实现按「字号 × 固定系数」估算每段步进，等宽 CJK 字体里拉丁/全角的实际
+        步进与估算不一致，偏差随段落长度累积——页头状态行这类长行上表现为彩色段
+        前的一大段空白（README 配图曾如此）。
+        """
+        pytest.importorskip("PIL.Image")
+        from PIL import Image, ImageDraw, ImageFont
+
+        try:
+            font_path = tui.resolve_font()
+        except tui.RenderDependencyError as exc:
+            pytest.skip(str(exc))
+        prefix = "中文字符" * 3
+        output = tui.render(f"{prefix}\x1b[32m末段\x1b[0m\n", tmp_path / "drift.png")
+        font = ImageFont.truetype(font_path, tui.FONT_SIZE)
+        probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+        expected_x = tui.PADDING + probe.textlength(prefix, font=font)
+        green = tui.PALETTE[32]
+        hits: list[int] = []
+        with Image.open(output) as image:
+            pixels = image.convert("RGB").load()
+            for y in range(tui.PADDING, tui.PADDING + tui.LINE_HEIGHT):
+                for x in range(image.size[0]):
+                    if pixels[x, y] == green:
+                        hits.append(x)
+        assert hits, "未找到绿色末段的像素"
+        assert abs(min(hits) - expected_x) <= 4, f"配色段偏移 {min(hits) - expected_x:.1f}px（估算步进残留）"
 
 
 class TestWebShot:

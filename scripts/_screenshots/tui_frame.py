@@ -147,12 +147,14 @@ def render(text: str, out: Path) -> Path:
     lines: list[str] = []
     for raw in text.expandtabs(4).splitlines():
         lines.extend(wrap_line(raw))
-    plain = [strip_ansi(line) for line in lines] or [""]
-    columns = max(display_width(line) for line in plain)
-    char_width = FONT_SIZE * 0.62
+    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    # 画布宽度按**字体实测**取（与逐段绘制同一口径）：等宽 CJK 字体里拉丁与全角的
+    # 实际步进不同，用「字号 × 固定系数」估算会让长行（如页头状态行）的每个配色段
+    # 起点逐段偏移，肉眼看到的是段间一大段空白。
+    measured = max((int(probe.textlength(strip_ansi(line), font=font)) for line in lines), default=0)
     image = Image.new(
         "RGB",
-        (max(int(columns * char_width) + PADDING * 2, 320), LINE_HEIGHT * len(lines) + PADDING * 2),
+        (max(measured + PADDING * 2, 320), LINE_HEIGHT * len(lines) + PADDING * 2),
         BACKGROUND,
     )
     draw = ImageDraw.Draw(image)
@@ -165,7 +167,7 @@ def render(text: str, out: Path) -> Path:
             chunk = line[position : match.start()]
             if chunk:
                 draw.text((x, y), chunk, font=font, fill=foreground)
-                x += int(display_width(chunk) * char_width)
+                x += draw.textlength(chunk, font=font)
             codes = [int(code) for code in match.group(1).split(";") if code != ""] or [0]
             for code in codes:
                 if code == 0:
@@ -199,12 +201,10 @@ def capture_frame(config_path: Path) -> str:
     sys.stdout = _TtyStdout(saved_stdout)  # type: ignore[assignment]
     try:
         from src.python.config import set_config_path_override
+        from src.python.config._core import _clear_config_cache
 
         set_config_path_override(str(config_path))
-        import src.python.config as config
-
-        if hasattr(config._core, "_clear_config_cache"):
-            config._core._clear_config_cache()
+        _clear_config_cache()
 
         from src.python.tui import tui_menu
 
@@ -214,7 +214,8 @@ def capture_frame(config_path: Path) -> str:
             tui_menu.print_header()
             tui_menu.show_config()
             # 游标落在配置的缺省项：真机首页即此状态，截图须一致
-            default_key = str(tui_menu.get_config_cache().get("default_menu_key") or "L")
+            cached_config = tui_menu.get_config_cache() or {}
+            default_key = str(cached_config.get("default_menu_key") or "L")
             selected = tui_menu.index_by_key(default_key)
             tui_menu.render_menu(selected if selected is not None else 0)
         return buffer.getvalue()

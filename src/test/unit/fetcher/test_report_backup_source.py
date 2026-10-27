@@ -197,7 +197,7 @@ class TestOrchestrationTakeover:
         self._isolate_cache(monkeypatch)
         seen: list = []
 
-        def _fake_chain(data_type, provider_map, cache_key, ttl, fn_kwargs=None, transform=None):
+        def _fake_chain(data_type, provider_map, cache_key, ttl, fn_kwargs=None, transform=None, diagnostics=None):
             seen.append((cache_key, fn_kwargs))
             return {
                 "doc_id": 1001,
@@ -247,7 +247,7 @@ class TestOrchestrationTakeover:
         )
 
         # 主源文档取数全失败（源侧章节残缺）；巨潮候选命中正文
-        def _fake_chain(data_type, provider_map, cache_key, ttl, fn_kwargs=None, transform=None):
+        def _fake_chain(data_type, provider_map, cache_key, ttl, fn_kwargs=None, transform=None, diagnostics=None):
             if fn_kwargs and fn_kwargs.get("source_hint") == cninfo.SOURCE_ID:
                 return {
                     "doc_id": "1001",
@@ -277,7 +277,7 @@ class TestOrchestrationTakeover:
         cn_calls: list = []
         monkeypatch.setattr(fr.cninfo, "fetch_report_listings", lambda code: cn_calls.append(code) or [])
 
-        def _fake_chain(data_type, provider_map, cache_key, ttl, fn_kwargs=None, transform=None):
+        def _fake_chain(data_type, provider_map, cache_key, ttl, fn_kwargs=None, transform=None, diagnostics=None):
             return {
                 "doc_id": 7,
                 "content": "第三节 管理层讨论与分析\n报告期内经营稳健。",
@@ -325,7 +325,9 @@ class TestOrchestrationTakeover:
         seen: list = []
         monkeypatch.setattr(
             "src.python.fetcher.chain.fetch_with_fallback",
-            lambda data_type, provider_map, cache_key, ttl, fn_kwargs=None, transform=None: seen.append(cache_key),
+            lambda data_type, provider_map, cache_key, ttl, fn_kwargs=None, transform=None, diagnostics=None: (
+                seen.append(cache_key)
+            ),
         )
         fr._fetch_document(7, "管理层讨论与分析", source=None, meta=None)
         assert seen[0] == f"{fr.DOC_PREFIX}7_管理层讨论与分析"

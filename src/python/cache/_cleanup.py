@@ -12,7 +12,7 @@ import time
 from src.python.core.registry import get_exact_type_map, get_prefix_type_map
 
 from ._io import _read_cache_data
-from ._paths import _CACHE_DIR, _CACHE_KEY_VERSION
+from ._paths import _CACHE_DIR, cache_key_from_file_name
 from ._store import _cache_lock
 from ._ttl import get_ttl
 
@@ -33,6 +33,15 @@ def _fmt_span(seconds: float) -> str:
     return f"{value / 3600:.1f}h"
 
 
+def _cache_file_names() -> list[str]:
+    """缓存目录中的文件名（目录不可读时回空——清理是尽力而为，不得中断主流程）。"""
+    try:
+        return sorted(os.listdir(_CACHE_DIR))
+    except OSError:
+        logger.debug("缓存目录列举失败，跳过本轮清理", exc_info=True)
+        return []
+
+
 def _process_cache_file(
     fname: str,
     dry_run: bool,
@@ -50,9 +59,9 @@ def _process_cache_file(
 
     # 文件名带缓存键版本戳（`{key}_v{N}.json`），逻辑键是读侧使用的那个串：
     # 剥掉版本戳后才能命中精确键映射表（精确键在注册表里按逻辑键登记）。
-    logical_key = fkey
-    if fkey.endswith(f"_{_CACHE_KEY_VERSION}"):
-        logical_key = fkey[: -(len(_CACHE_KEY_VERSION) + 1)]
+    logical_key = cache_key_from_file_name(fname)
+    if logical_key is None:
+        return 0
 
     data_type = "default"
     if logical_key in exact_map:
@@ -124,7 +133,7 @@ def cleanup_expired(dry_run: bool = False) -> int:
 
         removed = 0
         free_bytes = 0
-        for fname in sorted(os.listdir(_CACHE_DIR)):
+        for fname in _cache_file_names():
             fpath = os.path.join(_CACHE_DIR, fname)
             try:
                 size = os.path.getsize(fpath)
@@ -196,7 +205,7 @@ def clean_sensitive(older_than_days: int = 90, dry_run: bool = False) -> int:
         now = time.time()
         removed = 0
 
-        for fname in sorted(os.listdir(_CACHE_DIR)):
+        for fname in _cache_file_names():
             if not any(fname.startswith(pfx) for pfx in _SENSITIVE_PREFIXES):
                 continue
 
