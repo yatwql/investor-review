@@ -81,7 +81,7 @@ def _llm_providers_surface() -> dict:
 
 
 #: 域 → 块（块顺序即渲染顺序）。域与块的划分见 `docs/plan/config-web-design.md` §3.3；
-#: `features.<组键>` 里只放六组「章内内容」开关——独立整章与关联产物走各自块（取自章节注册表）。
+#: `features.<组键>` 里只放五组「章内内容」开关——独立整章与关联产物走各自块（取自章节注册表）。
 _DOMAIN_BLOCKS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
         "report_content",
@@ -108,7 +108,7 @@ _BLOCK_TITLES: dict[str, str] = {
     "reference": "参考信息",
 }
 
-#: 六组「章内内容」开关所在的面板（`[S]`）；独立整章/关联产物另立块
+#: 五组「章内内容」开关所在的面板（`[S]`）；独立整章/关联产物另立块
 _CONTENT_PANEL = "[S]"
 
 
@@ -134,7 +134,7 @@ def _block_domains() -> list[dict]:
         PANEL_GROUPS,
     )
 
-    # `[S]` 的六组即「章内内容」开关；按域再分：四组内容域 + 两组呈现与机制域
+    # `[S]` 的五组即「章内内容」开关；按域再分：四组内容域 + 一组呈现与机制域
     content_groups = [g for g in PANEL_GROUPS[_CONTENT_PANEL] if GROUP_DOMAIN[g] == "report_content"]
     mechanic_groups = [g for g in PANEL_GROUPS[_CONTENT_PANEL] if GROUP_DOMAIN[g] != "report_content"]
     domains: list[dict] = []

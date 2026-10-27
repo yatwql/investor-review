@@ -56,7 +56,7 @@ def _write_portfolio_history_drawdown_sheet(
 
 
 def _write_data_source_matrix_sheet(ws, prog) -> None:
-    """写入数据源可用性矩阵页签（旧样式，数据质量仪表盘开关关闭时使用）。
+    """写入数据源可用性矩阵页签（旧样式分支，仅 `enable_data_quality=False` 的防御路径使用）。
 
     Args:
         ws: data_source_status 页签 worksheet

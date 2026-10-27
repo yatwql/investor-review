@@ -149,7 +149,9 @@ class TestFormatSummary:
 
     def test_non_empty_mentions_metrics_and_verdict(self, ledger):
         for _ in range(3):
-            telemetry.record_attempt(channel="web", report="r.html", ok=True, rounds=1, input_tokens=100, output_tokens=10)
+            telemetry.record_attempt(
+                channel="web", report="r.html", ok=True, rounds=1, input_tokens=100, output_tokens=10
+            )
         text = "\n".join(telemetry.format_summary_block(telemetry.summarize_qa_usage()))
         assert "提问 3 次" in text
         assert "无回答占比 0.0%" in text

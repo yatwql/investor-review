@@ -322,7 +322,7 @@ def switches_in_group(group: str) -> list[tuple[str, FeatureSwitchDef]]:
 def panel_option_numbers(panel: str) -> tuple[tuple[int, str, FeatureSwitchDef], ...]:
     """按面板的组序派生编号：``((1, 开关名, 声明), (2, ...), ...)``（1 起连续）。
 
-    面板编号的唯一派生入口——``[S]`` 只呈现 ``PANEL_GROUPS["[S]"]`` 的六组
+    面板编号的唯一派生入口——``[S]`` 只呈现 ``PANEL_GROUPS["[S]"]`` 的五组
     （LLM 章节与独立章节在 ``[C]``）；增删开关后编号自动重排，渠道层与测试都
     不得写死数字。
     """

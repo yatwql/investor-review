@@ -24,7 +24,7 @@ pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
 
 
 def _panel_last_switch_flag() -> str:
-    """``[S]`` 面板末项（六组末组末开关）：从注册表动态派生，不写死清单。"""
+    """``[S]`` 面板末项（五组末组末开关）：从注册表动态派生，不写死清单。"""
     from src.python.config.features import panel_option_numbers
 
     numbered = panel_option_numbers("[S]")
@@ -238,7 +238,7 @@ class TestPanelNumberingRendered:
     @patch("src.python.tui.handlers_config.refresh_config")
     @patch("src.python.config.features.save_feature_overrides")
     def test_content_options_numbering(self, *_mocks):
-        """[S] 六组开关编号 1..N 连续、末项 0（N 由注册表派生）。"""
+        """[S] 五组开关编号 1..N 连续、末项 0（N 由注册表派生）。"""
         from src.python.tui.handlers_config import _cmd_config_content_options
 
         self._assert_contiguous(self._rendered_numbers(_cmd_config_content_options))
