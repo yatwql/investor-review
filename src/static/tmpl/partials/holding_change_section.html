@@ -51,6 +51,9 @@
         </table>
         </div>
         <div class="notice-banner" style="margin: 8px 0 4px;">{{ _hc.get("limitations_note") }}</div>
+        {% if _hc.get("baseline_note") %}
+        <div class="notice-banner" style="margin: 4px 0 8px;">{{ _hc.get("baseline_note") }}</div>
+        {% endif %}
 
         <!-- ② 频率与结构演变 -->
         {% if _hc.get("metrics_lines") %}

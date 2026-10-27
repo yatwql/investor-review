@@ -39,7 +39,7 @@ DEMO_API_KEY = "sk-demo-not-a-real-key"
 
 #: 演示报告运行会写真实运行状态（perf 台账 / 健康历史 / 实验与熔断状态 / 去重锚点）。
 #: 「真实 data/ 零接触」要求这些目录在跑前快照、跑后原样还原。
-GUARDED_STATE_DIRS: tuple[str, ...] = ("data/state", "data/calibration")
+GUARDED_STATE_DIRS: tuple[str, ...] = ("data/state", "data/calibration", "data/history")
 
 
 def snapshot_paths(paths: tuple[Path, ...]) -> dict[Path, bytes]:

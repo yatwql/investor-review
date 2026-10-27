@@ -198,7 +198,7 @@ def test_extraction_never_writes_snapshot_files():
     _save("20260105T090000", [_h("A", 1000, 10)])
     _save("20260106T090000", [_h("A", 800, 10)])
 
-    def _mtimes(directory: str) -> dict[str, int]:
+    def _mtimes(directory: str) -> dict[str, float]:
         if not os.path.isdir(directory):
             return {}
         return {
@@ -208,3 +208,63 @@ def test_extraction_never_writes_snapshot_files():
     isolated_before = _mtimes(HISTORY_SNAPSHOT_DIR)
     build_holding_change_events()
     assert _mtimes(HISTORY_SNAPSHOT_DIR) == isolated_before
+
+
+class TestBaselineSwitchGuard:
+    """持仓基线切换守卫：相邻快照标的重合度过低 → 跳过该区间事件推断。
+
+    回归背景：截图/演示运行曾把一份 23 只演示持仓写进真实快照目录，真实报告
+    在「持仓变动复盘」章把整批演示标的报成「新增」（并连带真实持仓「清仓」）。
+    """
+
+    @staticmethod
+    def _snap_of(ts: str, prefix: str, n: int) -> SnapshotData:
+        return _snap(ts, [_h(f"{prefix}{i}", 100, 10) for i in range(n)])
+
+    def test_disjoint_portfolios_skip_events(self):
+        """12 只 vs 23 只且仅 3 只重合（Jaccard≈0.09）→ 整对跳过，不出事件。"""
+        prev = self._snap_of("20261014T090000", "A", 12)
+        curr = self._snap_of("20261015T223039", "B", 20)
+        curr = _snap(
+            "20261015T223039",
+            list(curr.accounts[0].holdings) + [_h("A0", 100, 10), _h("A1", 100, 10), _h("A2", 100, 10)],
+        )
+
+        out = extract_change_events([prev, curr])
+
+        assert out["available"] is True
+        assert out["events"] == [], "基线切换不得产出新增/清仓事件"
+        assert out["skipped_pairs"] == 1
+        assert "基线变化" in out["baseline_note"]
+        assert out["baseline_switches"][0]["jaccard"] < 0.5
+
+    def test_normal_change_not_skipped(self):
+        """正常加仓/新增（重合度高）不触发守卫。"""
+        base = [_h(f"A{i}", 100, 10) for i in range(12)]
+        prev = _snap("20261014T090000", base)
+        curr = _snap("20261015T090000", base + [_h("NEW", 100, 10)])
+
+        out = extract_change_events([prev, curr])
+
+        assert out["skipped_pairs"] == 0
+        assert out["baseline_note"] == ""
+        assert any(e["action"] == "新增" and e["code"] == "NEW" for e in out["events"])
+
+    def test_only_switched_pair_is_skipped(self):
+        """三期中只有第一对是基线切换 → 只跳该对，其余照常差分。"""
+        prev = self._snap_of("20261014T090000", "A", 12)
+        mid_holdings = [_h(f"B{i}", 100, 10) for i in range(9)]
+        mid = _snap("20261015T090000", mid_holdings)
+        nxt = _snap("20261016T090000", mid_holdings + [_h("ADDED", 50, 10)])
+
+        out = extract_change_events([prev, mid, nxt])
+
+        assert out["skipped_pairs"] == 1
+        codes = {(e["action"], e["code"]) for e in out["events"]}
+        assert ("新增", "ADDED") in codes, "第二对是正常变动，必须照常出事件"
+        assert not any(c.startswith("B") for _a, c in codes), "被跳过的区间不得产出事件"
+
+    def test_empty_holdings_pair_not_skipped(self):
+        """两侧都空（无代码）时不判基线切换（无标的可比）。"""
+        out = extract_change_events([_snap("20261014T090000", []), _snap("20261015T090000", [])])
+        assert out["skipped_pairs"] == 0

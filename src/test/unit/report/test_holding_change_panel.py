@@ -162,7 +162,7 @@ class TestBuildContract:
 
         from src.python.report.history_snapshot import _list_snapshot_files
 
-        def _mtimes() -> dict[str, int]:
+        def _mtimes() -> dict[str, float]:
             return {f: os.path.getmtime(f) for f in _list_snapshot_files()}
 
         before = _mtimes()
@@ -513,3 +513,30 @@ class TestPromptBlockAndReorder:
             }
         )
         assert any("疑似账户结构重排" in line for line in view["window_lines"])
+
+
+class TestBaselineNotePropagation:
+    """基线切换说明：契约 → 展示视图（HTML/Excel 共用）必须透传。"""
+
+    def test_view_carries_baseline_note(self):
+        from src.python.report.holding_change_panel import build_holding_change_view
+
+        data = {
+            "available": True,
+            "reason": "",
+            "period_count": 3,
+            "event_count": 1,
+            "window_start": "20261014T090000",
+            "window_end": "20261016T090000",
+            "events": [],
+            "sample": {},
+            "baseline_note": "检测到持仓基线变化（x→y）",
+        }
+        view = build_holding_change_view(data)
+        assert view["baseline_note"] == "检测到持仓基线变化（x→y）"
+
+    def test_view_without_baseline_note_is_empty(self):
+        from src.python.report.holding_change_panel import build_holding_change_view
+
+        view = build_holding_change_view({"available": True, "period_count": 3, "event_count": 0})
+        assert view["baseline_note"] == ""
