@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.16.8-dev
-> **编号源**：`rf-next = 958`（新增问题提出后更新为 +1；已用最大 rf-957，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 959`（新增问题提出后更新为 +1；已用最大 rf-958，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -72,6 +72,7 @@
 | **rf-956** | `scripts/probe.py` 子探针 import 失败被静默当成「探测失败」：入口只把 `scripts/` 加进 `sys.path`，子探针的 `from src.python…` 全部 ImportError——`csi` 因此长期输出「无可用代码」的错误结论 | 入口补仓库根 `sys.path`；`_probes` 登记表加 Protocol 契约面；`sector-flow` target 实测双通道（主 0/4、备 4/4） |
 | **rf-957** | `test_fingerprint_baseline.py` 两个用例依赖执行顺序：单跑通过、整目录跑必红（同目录其他用例写过内存键基线后未复位，`reset_baseline_cache()` 只清文件侧） | `reset_baseline_cache()` 同时清 `skeleton._PREV_MODULE_CACHE_KEY`（上轮基线本就是「快照 + 进程内」两个来源）；回归 1 例断言 reset 后归因为冷启动而非「键变了」 |
 | **rf-953** | `HTML 生成` 阶段耗时分化（同机同持仓 0.3s ↔ 17.3s，日志内找不到对应耗时动作） | **根因**：该阶段夹带了惰性补数据（基金排名/业绩/基金经理/风格），而卡顿源是基金经理页面的 SSL 握手超时——它以 `ConnectError` 抛出而非 `TimeoutException`，未被识别成「站点不可达」，于是又去撞档案页，同一只基金连等两次（各 ~6.9s）。**修复**：连接阶段单独封顶（`httpx.Timeout(6.0, connect=3.0)` / `(4.0, connect=3.0)`），`ConnectError` 归入「站点不可达」并跳过档案页回退；回归 2 例（握手失败不赌回退 / 连接预算封顶） |
+| **rf-958** | `plan.md` 概述与正文可脱钩且无告警：`plan-70` 小节被删而概述仍引用（有编号无正文的孤儿），随后压缩概述又把唯一引用删掉，任务静默消失 | P3 恢复该小节并保留单一事实位（technical §6.9）；`check-doc-drift` 新增「概述引用的 plan-N ⇒ 正文小节或计划归档存在」断言（`_PLAN_ANY_HEADING_ID` 认无状态标记的在办小节），回归 2 例（孤儿报出 / 正文存在不误报） |
 
 ### 归档档案
 - [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-10-27）

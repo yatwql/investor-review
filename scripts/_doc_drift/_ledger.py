@@ -47,6 +47,10 @@ _PLAN_HEADING_ID = re.compile(r"^\s*#{2,4}\s*(?:🔲|✅)\s*`?(plan-\d+)", re.M)
 
 _PLAN_DONE_HEADING_ID = re.compile(r"^\s*#{2,4}\s*✅\s*`?(plan-\d+)", re.M)
 
+#: 任意 plan 小节标题（含无状态标记的在办项）——「概述 → 正文」双向校验用：
+#: 在办小节通常不带 ✅/🔲 标记，只认带标记的集合会把在办项全判成孤儿。
+_PLAN_ANY_HEADING_ID = re.compile(r"^\s*#{2,4}\s*(?:🔲|✅)?\s*`?(plan-\d+)", re.M)
+
 
 _ARCHIVE_INDEX_PAIRS: tuple[tuple[Path, str], ...] = (
     (_MANAGEMENTS / "changelog.md", "archived_changelog."),
@@ -136,6 +140,17 @@ def audit_management_partitions(
         archived_plan_ids |= set(_PLAN_DONE_HEADING_ID.findall(text))
     for pid in sorted(todo_ids & archived_plan_ids):
         findings.append(f"{rel(_PLAN_MD)}: `{pid}` 已归档却仍列在未完成区（分区互斥）")
+
+    # 概述行是「在办清单」的索引，正文小节是唯一事实位：只校验一个方向（正文↔归档互斥）
+    # 时，小节被误删而概述仍引用会长期静默，故双向都查。
+    overview = _doc_section(plan, "## 概述", "## 当前迭代待办")
+    overview_ids = {f"plan-{n}" for n in _PLAN_ID.findall(overview)}
+    body_ids = set(_PLAN_ANY_HEADING_ID.findall(todo))
+    for pid in sorted(overview_ids - (body_ids | archived_plan_ids)):
+        findings.append(
+            f"{rel(_PLAN_MD)}: 概述引用的 `{pid}` 在正文小节与计划归档中都找不到"
+            "——有编号无正文（孤儿编号，任务会被静默丢失）"
+        )
 
     if changelog:
         headers = _CHANGELOG_HEADER.findall(changelog)
