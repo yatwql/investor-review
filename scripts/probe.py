@@ -21,6 +21,9 @@ from __future__ import annotations
 import sys
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent))  # 同目录共享包（probes）
+sys.path.insert(
+    0, str(__import__("pathlib").Path(__file__).resolve().parent.parent)
+)  # 仓库根：子探针需 import src.python（否则直接跑入口时全部探针 import 失败）
 
 from _probes import available_targets, get  # noqa: E402
 

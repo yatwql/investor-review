@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.16.8-dev
-> **编号源**：`rf-next = 955`（新增问题提出后更新为 +1；已用最大 rf-954，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 957`（新增问题提出后更新为 +1；已用最大 rf-956，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -69,6 +69,8 @@
 | **rf-940** | 锚点体积无确定性上限：键全唯一 + 保留期未触发，越 32 MB 只告警不回缩（约 3 个月到 100 MB） | 压缩加**体积目标 24 MB**（`_ANCHOR_SIZE_TARGET_BYTES`，与告警线分离）：超目标按最旧裁剪到 ≤24 MB，**每分支保留最新 50 条**防小分支整类消失；读取前后比对 `(size, mtime)`，并发追加则放弃本次压缩；无行可裁不重写；回归 6 例 |
 | **rf-941** | 21%（20,306 条）锚点缺 `anchor_rules_version`，与在用指纹混算 | 压缩时对无指纹旧行补 `ANCHOR_LEGACY_ERA` 标注并计数；校准报告分「当前指纹 / 历史指纹 / 未标注」三桶并列出历史指纹 Top3；回归 5 例 |
 | **rf-942** | 锚点维护段文档与实现漂移（写 120 天可压小、未写缺省压缩与体积上限口径） | 按三重条件重写 developer-guide / technical / requirements R-DATA-09 / scripts-reference / testplan 与自检提示；压缩结果打印超期/体积裁剪（含分支分布）/补标注/并发放弃四类计数 |
+| **rf-955** | 缓存清理器按文件名前缀统一取 TTL，把同前缀下的异构寿命键一并裁掉：`sector_flow_last_good`（设计 3 天）与 `sector_flow_negative`（设计 30 分钟）都落到 900s → 陈旧回退基准活不过一次启动清理，R-BRK-09 的回退条款结构性不可达 | 注册表新增 `exact_key_ttls` 单源声明 + `get_exact_ttl_map()`，清理器按精确键覆盖前缀默认值；取数侧 TTL 同源读取；回归 6 例（对应 `plan-237`） |
+| **rf-956** | `scripts/probe.py` 子探针 import 失败被静默当成「探测失败」：入口只把 `scripts/` 加进 `sys.path`，子探针的 `from src.python…` 全部 ImportError——`csi` 因此长期输出「无可用代码」的错误结论 | 入口补仓库根 `sys.path`；`_probes` 登记表加 Protocol 契约面；`sector-flow` target 实测双通道（主 0/4、备 4/4） |
 
 ### 归档档案
 - [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-10-27）

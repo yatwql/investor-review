@@ -9,7 +9,7 @@ import logging
 import os
 import time
 
-from src.python.core.registry import get_exact_type_map, get_prefix_type_map
+from src.python.core.registry import get_exact_ttl_map, get_exact_type_map, get_prefix_type_map
 
 from ._io import _read_cache_data
 from ._paths import _CACHE_DIR, cache_key_from_file_name
@@ -47,6 +47,7 @@ def _process_cache_file(
     dry_run: bool,
     prefix_type_map: dict[str, str],
     exact_map: dict[str, str],
+    exact_ttl_map: dict[str, float] | None = None,
 ) -> int:
     """处理单个缓存文件：判断类型、检查过期、删除。returns 是否删除（0/1）。"""
     if fname.endswith(".json.gz"):
@@ -73,6 +74,12 @@ def _process_cache_file(
                 break
 
     ttl = get_ttl(data_type)
+    # 同前缀下的异构寿命键（回退基准/负缓存等）按精确键独立 TTL 裁：
+    # 前缀默认值只适用于本域常规载荷，套到这些键上会腰斩甚至直接删掉它们。
+    override = (exact_ttl_map or {}).get(logical_key)
+    if override is not None:
+        ttl = override
+        logger.debug("缓存清理按精确键 TTL: %s (ttl=%s)", logical_key, _fmt_span(ttl))
     payload = _read_cache_data(fpath, fkey, dry_run=dry_run)
     if payload is None:
         return 1  # 损坏也算清理
@@ -126,6 +133,7 @@ def cleanup_expired(dry_run: bool = False) -> int:
     with _cache_lock:
         prefix_type_map: dict[str, str] = get_prefix_type_map()
         exact_map: dict[str, str] = get_exact_type_map()
+        exact_ttl_map: dict[str, float] = get_exact_ttl_map()
 
         if not os.path.isdir(_CACHE_DIR):
             logger.info("缓存目录不存在，跳过清理")
@@ -139,7 +147,7 @@ def cleanup_expired(dry_run: bool = False) -> int:
                 size = os.path.getsize(fpath)
             except OSError:
                 size = 0
-            hit = _process_cache_file(fname, dry_run, prefix_type_map, exact_map)
+            hit = _process_cache_file(fname, dry_run, prefix_type_map, exact_map, exact_ttl_map)
             removed += hit
             free_bytes += size if hit else 0
 

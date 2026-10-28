@@ -1026,6 +1026,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 - `csi` — CSI 风格指数可用性探测（因子暴露分析已实施，现为**周期性复核**工具：新机器/新窗口验证指数链路与停更预警，条数+新鲜度双维度判定）
 - `push2` — 东方财富 push2 连通性诊断（见下）
+- `sector-flow` — 行业资金流向双通道可用性探测（主=东财 push2 / 备=同花顺，见下）
 
 **`csi` target — CSI 风格指数可用性**：判定全量 5 因子 / MVP 3 因子 / 不可行；建议数据回归前置运行一次。
 
@@ -1047,6 +1048,17 @@ sh .githooks/install-hooks.sh --off   # 停用
 - **脚本失败、curl 对照成功** → httpx/TLS 指纹被 WAF 拦截，curl_cffi 浏览器指纹方案才有价值
 
 curl 对照命令：`curl -s "https://push2.eastmoney.com/api/qt/stock/get?secid=1.000001&fields=f58"`。纯只读探测，不写缓存/熔断/降级记录，无副作用。
+
+**`sector-flow` target — 行业资金流向双通道可用性**
+
+逐个通道直调**取数层**（与报告同一代码路径，不写缓存/不记负缓存），回答「现在到底哪个通道能取数」。实测结论：主通道 `push2` 在被限流时表现为 TLS 层 `RemoteDisconnected`（约 0.2s 秒断、非超时），仅罕见短窗口放行；备用同花顺通道稳定（约 0.4s / 90 个行业）。
+
+```bash
+.venv/bin/python scripts/probe.py sector-flow            # 每通道 10 次
+.venv/bin/python scripts/probe.py sector-flow --count 3
+```
+
+判读：主通道 ≥ 8/10 → 无需备用；主低备高 → 生产链路自动切换，无需改代码；两通道都低 → 环境侧/时段性限制，保持现有降级口径。
 
 ## 评测与基准类
 

@@ -21,6 +21,11 @@ from src.python.cache import clear as cache_clear
 from src.python.cache import get as cache_get
 from src.python.cache import set as cache_set
 from src.python.core.code_utils import is_a_share_code
+from src.python.core.data_registry import (
+    SECTOR_FLOW_NEG_KEY,
+    SECTOR_FLOW_STALE_KEY,
+    get_exact_ttl_map,
+)
 from src.python.core.num_utils import safe_num
 from src.python.providers.utils import run_with_timeout
 
@@ -93,16 +98,147 @@ _TTL = 86400  # 盈利预测：1天
 _SECTOR_FLOW_TTL = 900  # 行业资金流向：15分钟
 _DIVIDEND_TTL = 2592000  # 分红：1个月
 
+#: 行业资金流向两个衍生键的 TTL 与键名统一取自注册表（`exact_key_ttls` 单源）：
+#: 清理器与取数侧同源读取，两处数值不得各自写死。
+_SECTOR_FLOW_EXACT_TTLS = get_exact_ttl_map()
+
 #: 行业资金流向**失败**的跨进程负缓存键（无指纹，稳定键）：源不可达时，同机后续
 #: 报告各自是独立进程，内存 memo 管不到——每份报告都会再撞一次超时（实测 30 次真实
-#: 运行 38 次 akshare 异常）。落盘后 30 分钟内不再试，恢复后自动重新尝试。
-_SECTOR_FLOW_NEG_KEY = "sector_flow_negative"
-_SECTOR_FLOW_NEG_TTL = 1800  # 30 分钟
+#: 运行 38 次 akshare 异常）。落盘后在窗口内不再试，恢复后自动重新尝试。
+_SECTOR_FLOW_NEG_KEY = SECTOR_FLOW_NEG_KEY
+_SECTOR_FLOW_NEG_TTL = _SECTOR_FLOW_EXACT_TTLS[SECTOR_FLOW_NEG_KEY]
 
 #: 最近一次**成功**的行业资金流向载荷（无指纹，稳定键）：源不可达时回退陈旧数据，
 #: 不让「今日资金流向」整块从报告和 LLM 提示词里消失。
-_SECTOR_FLOW_LAST_KEY = "sector_flow_last_good"
-_SECTOR_FLOW_STALE_TTL = 259200  # 3 天：再旧对当下判断无意义，宁可留空
+_SECTOR_FLOW_LAST_KEY = SECTOR_FLOW_STALE_KEY
+_SECTOR_FLOW_STALE_TTL = _SECTOR_FLOW_EXACT_TTLS[SECTOR_FLOW_STALE_KEY]
+
+#: 行业资金流向取数通道（按序尝试）。主通道东财 `push2` 在本机出口被配额型限流
+#: （实测连续 20 次 0 成功、仅罕见短窗口放行），同花顺行业资金流实测 0.5s 返回 90 个
+#: 行业——两通道输出同一结构契约，下游（报告/LLM 提示词）不感知来源。
+_SECTOR_FLOW_CHANNELS: tuple[str, ...] = ("em_push2", "ths_industry")
+_SECTOR_FLOW_CHANNEL_LABELS: dict[str, str] = {"em_push2": "东财 push2", "ths_industry": "同花顺"}
+
+#: 同花顺行业资金流的金额单位是**亿元**，下游（`prompts_signals._fmt_amount` 等）
+#: 按东财口径的**元**消费，契约层统一换算。
+_THS_YI_TO_YUAN = 1e8
+
+
+class _SectorFlowUnavailable(RuntimeError):
+    """单个取数通道不可用（`kind` 与现有失败类型同词：connection / empty）。"""
+
+    def __init__(self, kind: str, channel: str) -> None:
+        super().__init__(f"{channel}:{kind}")
+        self.kind = kind
+        self.channel = channel
+
+
+def _fetch_sector_flow_em_push2() -> list[dict[str, Any]]:
+    """主通道：东财 push2 板块资金流排行（`ak.stock_sector_fund_flow_rank`）。"""
+    _ak = ak
+    if _ak is None:
+        raise _SectorFlowUnavailable("connection", "em_push2")
+    df = run_with_timeout(lambda: _ak.stock_sector_fund_flow_rank(indicator="今日", sector_type="行业资金流"))
+    if df is None:
+        raise _SectorFlowUnavailable("connection", "em_push2")
+    if df.empty:
+        raise _SectorFlowUnavailable("empty", "em_push2")
+    return _struct_sector_flow_rows(df, _EM_SECTOR_FIELDS, "em_push2")
+
+
+def _fetch_sector_flow_ths_industry() -> list[dict[str, Any]]:
+    """备用通道：同花顺行业资金流（`ak.stock_fund_flow_industry("即时")`）。
+
+    差异归一：金额由亿元换算为元；同花顺没有「主力净占比」字段，改由
+    ``净额 / (流入+流出) * 100`` 派生（分母不可用时留空，不编造 0）。
+    """
+    _ak = ak
+    if _ak is None:
+        raise _SectorFlowUnavailable("connection", "ths_industry")
+    df = run_with_timeout(lambda: _ak.stock_fund_flow_industry(symbol="即时"))
+    if df is None:
+        raise _SectorFlowUnavailable("connection", "ths_industry")
+    if df.empty:
+        raise _SectorFlowUnavailable("empty", "ths_industry")
+
+    result: list[dict[str, Any]] = []
+    try:
+        for _, row in df.iterrows():  # noqa: PERF203 —— 逐行容错，单行脏数据不弃整榜
+            _in = _safe_float(row.get("流入资金"))
+            _out = _safe_float(row.get("流出资金"))
+            _net = _safe_float(row.get("净额"))
+            _turnover = (abs(_in) if _in is not None else 0.0) + (abs(_out) if _out is not None else 0.0)
+            result.append(
+                {
+                    "name": str(row.get("行业", "") or "").strip(),
+                    "change_pct": _safe_float(row.get("行业-涨跌幅")),
+                    "main_net_inflow": None if _net is None else round(_net * _THS_YI_TO_YUAN, 2),
+                    "main_net_inflow_pct": (
+                        round(_net / _turnover * 100, 2) if _net is not None and _turnover > 0 else None
+                    ),
+                    "top_stock": str(row.get("领涨股", "") or "").strip(),
+                }
+            )
+    except (ValueError, TypeError, KeyError, AttributeError) as exc:
+        raise _SectorFlowUnavailable("connection", "ths_industry") from exc
+    return result
+
+
+#: 东财 push2 行字段 → 契约字段（列名由 akshare 定义，变更时只需改这张表）。
+_EM_SECTOR_FIELDS: tuple[tuple[str, str], ...] = (
+    ("name", "名称"),
+    ("change_pct", "今日涨跌幅"),
+    ("main_net_inflow", "今日主力净流入-净额"),
+    ("main_net_inflow_pct", "今日主力净流入-净占比"),
+    ("top_stock", "今日主力净流入最大股"),
+)
+
+
+#: 通道名 → 取数函数（顺序即优先级，由 `_SECTOR_FLOW_CHANNELS` 决定）。
+_SECTOR_FLOW_FETCHERS: dict[str, Any] = {
+    "em_push2": _fetch_sector_flow_em_push2,
+    "ths_industry": _fetch_sector_flow_ths_industry,
+}
+
+
+def _struct_sector_flow_rows(df: Any, fields: tuple[tuple[str, str], ...], channel: str) -> list[dict[str, Any]]:
+    """按字段表把 DataFrame 归一到契约结构；解析异常规整为通道不可用。"""
+    result: list[dict[str, Any]] = []
+    try:
+        for _, row in df.iterrows():  # noqa: PERF203 —— 逐行容错，单行脏数据不弃整榜
+            item: dict[str, Any] = {}
+            for key, col in fields:
+                item[key] = (
+                    _safe_float(row.get(col))
+                    if key != "name" and key != "top_stock"
+                    else str(row.get(col) or "").strip()
+                )
+            result.append(item)
+    except (ValueError, TypeError, KeyError, AttributeError) as exc:
+        raise _SectorFlowUnavailable("connection", channel) from exc
+    return result
+
+
+def _channel_failures() -> dict[str, str]:
+    """读取各通道的失败态（进程内 memo → 跨进程负缓存）。"""
+    raw = _memo_get(_memo_key("sector_flow_fail"))
+    if not isinstance(raw, dict):
+        raw = cache_get(_SECTOR_FLOW_NEG_KEY, _SECTOR_FLOW_NEG_TTL)
+    if isinstance(raw, dict):
+        return {str(ch): str(kind) for ch, kind in raw.items() if ch in _SECTOR_FLOW_CHANNELS and kind}
+    if isinstance(raw, str) and raw:
+        # 旧形态（整源单一字符串）：等同“全部通道同源失败”，升级后不立即重撞一轮。
+        return {ch: raw for ch in _SECTOR_FLOW_CHANNELS}
+    return {}
+
+
+def _save_channel_failures(failures: dict[str, str]) -> None:
+    """写回各通道失败态；全部恢复时清掉跨进程负缓存。"""
+    _memo_set(_memo_key("sector_flow_fail"), dict(failures))
+    if failures:
+        cache_set(_SECTOR_FLOW_NEG_KEY, dict(failures))
+    else:
+        cache_clear(_SECTOR_FLOW_NEG_KEY)
 
 
 def _sector_flow_stale_fallback(failure: str) -> list[dict[str, Any]]:
@@ -118,9 +254,7 @@ def _sector_flow_stale_fallback(failure: str) -> list[dict[str, Any]]:
 
 
 def _note_sector_flow_failure(failure: str) -> list[dict[str, Any]]:
-    """记录失败（进程内 memo + 跨进程负缓存）并返回陈回退数据或空列表。"""
-    _memo_set(_memo_key("sector_flow_fail"), failure)
-    cache_set(_SECTOR_FLOW_NEG_KEY, failure)
+    """失败回调：回退陈旧数据或返回空列表（各通道负缓存已由调用方写入）。"""
     return _sector_flow_stale_fallback(failure)
 
 
@@ -293,56 +427,49 @@ def get_sector_fund_flow() -> list[dict[str, Any]]:
         cache_set(_SECTOR_FLOW_LAST_KEY, cached)  # 保住「陈旧回退」窗口的新鲜度
         return cached
 
-    # ── 失败负缓存（进程内 → 跨进程）：后续报告直接降级，不再逐份撞超时 ──
-    _fail_key = _memo_key("sector_flow_fail")
-    _fail = _memo_get(_fail_key)
-    if not (isinstance(_fail, str) and _fail):
-        _fail = cache_get(_SECTOR_FLOW_NEG_KEY, _SECTOR_FLOW_NEG_TTL)
-    if isinstance(_fail, str) and _fail:
-        logger.info("行业资金流向近期已失败（%s），本次跳过取数", _fail)
-        return _sector_flow_stale_fallback(_fail)
+    # ── 失败负缓存（进程内 → 跨进程，**按通道分别记录**）：主通道被限流不得连带
+    #    锚死备用通道，否则一通道抖动就把整源钉死整个窗口 ──
+    failures = _channel_failures()
+    if all(ch in failures for ch in _SECTOR_FLOW_CHANNELS):
+        _kind = failures.get(_SECTOR_FLOW_CHANNELS[0], "connection")
+        logger.info("行业资金流向全部通道近期已失败（%s），本次跳过取数", _kind)
+        return _sector_flow_stale_fallback(_kind)
 
-    # ── 取数 ──
+    # ── 取数：按通道优先级依次尝试，先成功者胜 ──
     if ak is None:
         logger.warning("akshare 模块未安装，跳过行业资金流向")
         return []
-    _ak = ak  # 局部绑定：全局 ak 为可空（可选依赖），静态检查需要非空视图
 
-    def _fetch():
-        return _ak.stock_sector_fund_flow_rank(
-            indicator="今日",
-            sector_type="行业资金流",
-        )
-
-    df = run_with_timeout(_fetch)
-    if df is None:
-        logger.warning("行业资金流向获取失败")
-        return _note_sector_flow_failure("connection")
-    if df.empty:
-        logger.debug("行业资金流向: 结果为空")
-        return _note_sector_flow_failure("empty")
-    _SECTOR_FLOW_FAILURE = ""
-
-    # ── 结构化 ──
     result: list[dict[str, Any]] = []
-    for _, row in df.iterrows():
-        try:
-            result.append(
-                {
-                    "name": str(row.get("名称", "") or "").strip(),
-                    "change_pct": _safe_float(row.get("今日涨跌幅")),
-                    "main_net_inflow": _safe_float(row.get("今日主力净流入-净额")),
-                    "main_net_inflow_pct": _safe_float(row.get("今日主力净流入-净占比")),
-                    "top_stock": str(row.get("今日主力净流入最大股", "") or "").strip(),
-                }
-            )
-        except (ValueError, TypeError):  # noqa: PERF203
+    for channel in _SECTOR_FLOW_CHANNELS:
+        _label = _SECTOR_FLOW_CHANNEL_LABELS.get(channel, channel)
+        if channel in failures:
+            logger.debug("行业资金流向跳过通道 %s（近期已失败: %s）", _label, failures[channel])
             continue
+        try:
+            result = _SECTOR_FLOW_FETCHERS[channel]()
+        except _SectorFlowUnavailable as exc:
+            failures[channel] = exc.kind
+            logger.warning("行业资金流向通道 %s 不可用（%s），尝试下一通道", _label, exc.kind)
+            continue
+        if not result:
+            # 取数通了但一行业也没解析出来：对下游等同取不到数，交给下一通道
+            failures[channel] = "empty"
+            logger.warning("行业资金流向通道 %s 返回空榜，尝试下一通道", _label)
+            continue
+        failures.pop(channel, None)
+        break
 
+    _save_channel_failures(failures)
+    if not result:
+        _kind = failures.get(_SECTOR_FLOW_CHANNELS[0], "connection")
+        logger.warning("行业资金流向获取失败（全部通道不可用）")
+        return _note_sector_flow_failure(_kind)
+
+    _SECTOR_FLOW_FAILURE = ""
     logger.info("行业资金流向加载完成: %d 个行业", len(result))
     cache_set(_key, result)
     cache_set(_SECTOR_FLOW_LAST_KEY, result)  # 陈旧回退基准
-    cache_clear(_SECTOR_FLOW_NEG_KEY)  # 源恢复：清掉跨进程负缓存
     _memo_set(_memo_key_str, result)
     return result
 

@@ -20,7 +20,7 @@
 | 基金申赎费率（What-if 交易成本，开关 `whatif_trade_cost`） | 天天基金 F10 基金费用页 `fundf10.eastmoney.com/f10/jjfl_{code}.html`（申购/赎回费率表解析，`FEE_SCHEMA` 载荷准入） | akshare `fund_fee_em` 封装（同上游页族，仅赎回表）→ 过期缓存 → `fund_fee_fallback` 配置兜底 → 费率未知标注 | `fund_fee_`（per-code，TTL 周档） | 基础类 |
 | 行业分类/概念板块 | 东方财富 `push2.eastmoney.com`（三级行业 + 概念板块归属） | 东方财富 REST 行情页（仅行业，无概念） | `industry_` | 基础类 |
 | 机构盈利预测 | akshare `stock_profit_forecast_em()` 全量获取 | — | `profit_forecast_` | 基础类 |
-| 行业资金流向 | akshare `stock_sector_fund_flow_rank()` 今日排名 | — | `sector_flow_` | 基础类 |
+| 行业资金流向 | akshare `stock_sector_fund_flow_rank()` 今日排名（主）/ `stock_fund_flow_industry("即时")` 同花顺行业资金流（备） | 主通道被限流时自动切备用 | `sector_flow_` | 基础类 |
 | 股票历史分红 | akshare `stock_history_dividend()` 无参全量拉取后按代码过滤 | — | `dividend_` | 基础类 |
 | 无风险利率（Rf） | akshare `bond_zh_us_rate`（国债收益率，单值 + 历史序列双键） | config.json 手动配置兜底 | `bond_yield_rf`/`bond_yield_history`¹ | 基础类 |
 | 指数估值历史（市场温度估值因子） | akshare 乐咕 `stock_index_pe_lg`/`stock_index_pb_lg`（沪深300 月频 PE/PB，2005 起） | 过期缓存兜底（30 天）→ 仍不可得时温度第一因子回落点位分位 | `idx_valuation_` | 基础类 |
@@ -148,7 +148,7 @@ LLM 分析结果独立缓存，通过指纹自动失效，不占用数据源请�
 | 财经新闻 | 实时推送 | 5 源聚合去重，部分源可能有 1~5 分钟延迟 |
 | 行业分类 | 季度更新 | 东方财富三级行业分类，含概念板块归属 |
 | 机构盈利预测 | 不定期更新 | 基于券商研报汇总，时效性取决于研报发布时间 |
-| 行业资金流向 | 交易日实时 | akshare 今日排名，非交易日或盘前为空 |
+| 行业资金流向 | 交易日实时 | 东财为主、同花顺备用，非交易日或盘前为空 |
 | 无风险利率 | 每日更新 | akshare 获取中国 10Y 国债收益率，config 可手动覆盖 |
 | 指数估值历史 | 每周（月频数据 + 7 天缓存） | akshare 获取沪深300 PE/PB 月频历史，源不可得时用 30 天内旧缓存兜底 |
 | 股票/ETF 历史日线 | 交易日更新 | 包含前复权数据（腾讯/新浪为主，同花顺官方前复权为第三链路），含开高低收与成交量（涨跌幅由相邻交易日收盘价推得；换手率另由组合两期持仓计算，取自行情 K 线之外） |

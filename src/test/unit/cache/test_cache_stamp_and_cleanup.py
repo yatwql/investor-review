@@ -88,6 +88,55 @@ class TestPerTypeCleanupTTL:
         assert _cleanup() == 1
 
 
+class TestExactKeyTTLOverride:
+    """同前缀下的异构寿命键按精确键独立 TTL 裁，不被前缀默认值删。
+
+    回归背景：`sector_flow_` 前缀默认 900s，但同前缀的「陈旧回退基准」设计寿命 3 天、
+    「失败负缓存」设计寿命 30 分钟——曾经它们都被 900s 一并裁掉，回退链路形同虚设。
+    """
+
+    def test_stale_baseline_survives_prefix_ttl(self, cache_env):
+        """1 小时龄的回退基准（前缀 TTL 只有 15 分钟）必须留下。"""
+        _write(cache_env, "sector_flow_last_good.json", age_seconds=3600)
+        assert _cleanup() == 0
+        assert (cache_env / "sector_flow_last_good.json").exists()
+
+    def test_negative_cache_survives_prefix_ttl(self, cache_env):
+        """20 分钟龄的负缓存（前缀 TTL 只 15 分钟，自身 30 分钟）必须留下。"""
+        from src.python.cache._paths import _CACHE_KEY_VERSION
+
+        _write(cache_env, f"sector_flow_negative_{_CACHE_KEY_VERSION}.json", age_seconds=20 * 60)
+        assert _cleanup() == 0
+
+    def test_stale_baseline_expires_after_own_ttl(self, cache_env):
+        """超过自身 3 天寿命才删（不是永久滞留）。"""
+        _write(cache_env, "sector_flow_last_good.json", age_seconds=4 * 86400)
+        assert _cleanup() == 1
+
+    def test_negative_cache_expires_after_own_ttl(self, cache_env):
+        """31 分钟即过期（负缓存不该跟 3 天基准同寿命）。"""
+        from src.python.cache._paths import _CACHE_KEY_VERSION
+
+        _write(cache_env, f"sector_flow_negative_{_CACHE_KEY_VERSION}.json", age_seconds=31 * 60)
+        assert _cleanup() == 1
+
+    def test_regular_payload_keeps_prefix_ttl(self, cache_env):
+        """同前缀的常规列表载荷不受覆盖影响：仍按 900s 裁。"""
+        from src.python.cache._paths import _CACHE_KEY_VERSION
+
+        _write(cache_env, f"sector_flow_abc123def456_{_CACHE_KEY_VERSION}.json", age_seconds=3600)
+        assert _cleanup() == 1
+
+    def test_provider_ttls_come_from_registry(self):
+        """取数侧与清理器同一份 TTL（两处各写一份就会飘）。"""
+        from src.python.core.data_registry import get_exact_ttl_map
+        from src.python.providers import akshare_extras as ae
+
+        exact = get_exact_ttl_map()
+        assert ae._SECTOR_FLOW_STALE_TTL == exact[ae._SECTOR_FLOW_LAST_KEY]
+        assert ae._SECTOR_FLOW_NEG_TTL == exact[ae._SECTOR_FLOW_NEG_KEY]
+
+
 class TestCacheKeyFromFileName:
     """文件名 → 逻辑缓存键的单源转换（清理与页头新鲜度共用，不得各自拼字符串）。"""
 

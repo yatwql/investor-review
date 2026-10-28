@@ -3956,7 +3956,7 @@ investor-review/
 | 财经新闻 | 5 源并行：新浪/东方财富/财联社/华尔街见闻/akshare | 各 `*_news.py` |
 | 行业分类/概念板块 | 东方财富 push2（主）→ quotedata 回退 | `eastmoney_industry.py` / `eastmoney_industry_rest.py` |
 | 机构盈利预测 | akshare 全量获取（直达） | `fetcher/akshare.py`（封装 `akshare_extras.py`） |
-| 行业资金流向 | akshare 今日排名（直达） | `fetcher/akshare.py`（封装 `akshare_extras.py`） |
+| 行业资金流向 | akshare：东财 push2 今日排名（主通道）→ 同花顺行业资金流（备用通道，金额亿元→元、净占比派生） | `fetcher/akshare.py`（封装 `akshare_extras.py`） |
 | 股票历史分红 | akshare 无参全量拉取后按代码过滤（直达） | `fetcher/akshare.py`（封装 `akshare_extras.py`） |
 | 基金经理数据 | 天天基金 HTML 解析（主）→ 档案页回退 | `fetcher/fund_manager.py` |
 | 无风险利率（Rf） | akshare `bond_zh_us_rate`（Sina 国债收益率，单值 + 历史序列双键）→ 手动配置兜底 | `fetcher/bond_yield.py` |
@@ -3978,6 +3978,7 @@ investor-review/
 | `index` | `index_{code}.json` | 24h | 交易时段 30s | — | preload |
 | `news` | `news_{md5}.json` | 15 分钟 | — | 新闻源参数+关键词 | refresh |
 | `sector_flow` | `sector_flow_{fingerprint}.json` | 15 分钟 | — | A 股+美股指数 | refresh |
+| `sector_flow`（异构键） | `sector_flow_last_good`（3 天）/ `sector_flow_negative`（30 分钟） | 按注册表 `exact_key_ttls` 独立声明 | — | — | refresh |
 | `rank` | `fund_perf_{code}.json` | 24h | — | — | refresh |
 | `profit_forecast` | `profit_forecast_{fingerprint}.json` | 24h | — | A 股+美股指数 | refresh |
 | `hold` | `fund_hold_{code}.json` | 7 天 | — | — | refresh |
