@@ -6,6 +6,12 @@ from src.python.core.constants import CACHE_DAILY
 
 from ._cleanup import auto_cleanup_expired, cleanup_expired, clean_sensitive
 from ._groups import clear_by_group, clear_by_prefix
+from ._negative import (
+    NegativeCache,
+    negative_cache_entries,
+    nonzero_summaries,
+    reset_all_negative_hits,
+)
 from ._paths import (
     _cache_path,
     _GZIP_SUFFIX,
@@ -50,6 +56,10 @@ __all__ = [
     "clean_sensitive",
     "clear_by_prefix",
     "clear_by_group",
+    "NegativeCache",
+    "negative_cache_entries",
+    "nonzero_summaries",
+    "reset_all_negative_hits",
     "check_and_refresh_caches",
     "compute_holdings_fingerprint",
     "compute_holdings_codes",

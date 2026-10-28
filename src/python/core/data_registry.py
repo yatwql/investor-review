@@ -237,11 +237,11 @@ _MODULE_REGISTRY: tuple[DataModuleDef, ...] = (
         cache_groups=("preload",),
     ),
     # ── 持仓变动复盘归因（章本体由 feature holding_change_review 控制（独立章节与回放组，默认关）；
-    #    章内 LLM 归因块，串行后置执行）──
+    #    章内 LLM 归因块，登记进 _MODULE_FNS 与四模块同批并行执行）──
     # 登记目的同生成后自检：显示名/缓存前缀/TTL/用量统计/失败原因载体复用既有机制。
-    # **刻意不进 generators_orchestrator._MODULE_FNS**：输入是报告 seam 注入的契约
-    # （holding_change_data），必须在报告管线内串行取用，不属线程池并行调度
-    # （见 llm/holding_change_review.py 模块说明）。
+    # 归因只读报告 seam 注入的契约（holding_change_data），不依赖四模块产出，故与四模块
+    # 同批调度（`llm/_llm_dispatch.py::_build_module_fns` 的 holding_change 条目）；
+    # 契约缺席或开关关闭时模块内部即时短路（见 llm/holding_change_review.py 模块说明）。
     DataModuleDef(
         "持仓变动复盘归因",
         "llm_holding_change",
@@ -387,6 +387,21 @@ _CACHE_ONLY_REGISTRY: tuple[DataModuleDef, ...] = (
         "report_symbol_miss",
         cache_prefixes=("report_symbol_miss_",),
         cache_ttl=6 * 3600,
+    ),
+    DataModuleDef(
+        "财报章节清单缺失",
+        "report_sections_miss",
+        cache_prefixes=("report_sections_miss_",),
+        cache_ttl=6 * 3600,
+    ),
+    # 与上一条**语义不同**：上一类是「源侧确认没有清单」（确定性，6h），本条是
+    # 「这次探测传输级挂起了」（瞬时，30min 退避）——探测本身只是取数优选路径，
+    # 挂起一次白等 20s，短退避即可止住「每份报告都再撞一次」。
+    DataModuleDef(
+        "财报章节清单探测退避",
+        "report_sections_backoff",
+        cache_prefixes=("report_sections_backoff_",),
+        cache_ttl=30 * 60,
     ),
 )
 

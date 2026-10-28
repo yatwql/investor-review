@@ -7,6 +7,7 @@
   - check_symbol_existence      — 品种存在性校验
   - check_ranking_correctness   — 排名正确性校验
   - run_fact_check              — 统一入口（全量校验 + 自动修正）
+  - strip_fact_check_blocks     — 剥离校验产物段落（下游复核类消费方取纯分析正文）
 
 用法:
     >>> from src.python.llm.fact_checker import run_fact_check
@@ -39,6 +40,7 @@ from src.python.llm.fact_checker._ranking import (  # noqa: F401
 )
 from src.python.llm.fact_checker._runner import (  # noqa: F401
     run_fact_check,
+    strip_fact_check_blocks,
 )
 from src.python.llm.fact_checker._symbols import (  # noqa: F401
     check_symbol_existence,
@@ -46,6 +48,7 @@ from src.python.llm.fact_checker._symbols import (  # noqa: F401
 
 __all__ = [
     "run_fact_check",
+    "strip_fact_check_blocks",
     "auto_correction_counts",
     "reset_auto_correction_counts",
     "check_numerical_consistency",

@@ -267,7 +267,7 @@ def check_numerical_consistency(
     holdings_details: list[dict] | None,
     tolerance_pct: float = _DEFAULT_TOLERANCE_PCT,
     max_drawdown_pct: float | None = None,
-) -> tuple[list[str], int, int, list[tuple[str, str, str]]]:
+) -> tuple[list[str], int, int, list[tuple[str, str, str, str]]]:
     """检查 LLM 输出中的百分比数值与实际组合/个股数据是否一致。
 
     v2 改进：
@@ -292,10 +292,10 @@ def check_numerical_consistency(
 
     Returns:
         (issues, total_checked, passed_count, corrections)
-        corrections: [(wrong_value_str, correct_value_str, context_sentence), ...]
+        corrections: [(wrong_value_str, correct_value_str, context_sentence, reason), ...]
     """
     issues: list[str] = []
-    corrections: list[tuple[str, str, str]] = []
+    corrections: list[tuple[str, str, str, str]] = []
     if not text:
         return issues, 0, 0, corrections
 

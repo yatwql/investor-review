@@ -979,8 +979,9 @@ sh .githooks/install-hooks.sh --off   # 停用
 | 平均耗时 | 该阶段历史平均耗时 |
 | 最短/最长 | 该阶段历史最小/最大耗时 |
 | 次数 | 该阶段出现次数（条件阶段如历史走势仅在启用时出现）；行序按**中位降序**（最慢阶段在前，同分按名） |
+| 缓存冷热 | `counters.prep_cache_hits` / `prep_cache_misses`：数据准备阶段内的缓存命中/未命中**增量**（阶段前后快照相减）；同一阶段耗时在冷/热两态能差一个数量级，对拍「这轮为什么慢」先看这两个数 |
 | 占比 | 阶段均值 ÷ 组平均总耗时；并行执行的阶段之和可超 100% |
-| 阶段细分 | 父阶段下的子项自身耗时（`数据准备` → 行情与明细/指数获取/穿透/风格与因子/覆盖与新鲜度/估值与温度/财报摘要与指标/申购与成本位置/明细装配与建议；`LLM+新闻` → 新闻源抓取/去重与关联/锚点维护/事件窗装配/四个 LLM 模块）；子项可并行，**之和不等于父阶段耗时**，仅用于定位瓶颈（子项按平均耗时降序） |
+| 阶段细分 | 父阶段下的子项自身耗时（`数据准备` → 行情与明细/指数获取/穿透/风格与因子/覆盖与新鲜度/估值与温度/财报摘要/财务指标/申购与成本位置/明细装配与建议；`LLM+新闻` → 新闻源抓取/去重与关联/锚点维护/事件窗装配/四个 LLM 模块；`HTML 生成` → 图表数据装配/页面写入）；子项可并行，**之和不等于父阶段耗时**，仅用于定位瓶颈（子项按平均耗时降序）。**跨版本键名**：「财报摘要与指标」已拆为「财报摘要」+「财务指标」两子项（拆分见 changelog）；历史记录的旧合并段在读取侧按别名归一为 `财报摘要+财务指标（旧·合并段）` 单列展示（`_perf_history/stats.py::_LEGACY_BREAKDOWN_ALIASES`），**不与拆分后的新子项混算**——合并段一次计时覆盖两子项，与逐子项均值量级不等价 |
 
 **分位口径**：`总体分位概览`与各分组的 P95/P99 均为**最近秩**（nearest-rank）分位——取 `ceil(pct% × n)` 位样本值，统一表述为「95% 的报告在 Xs 内完成，99% 的报告在 Ys 内完成」（概览口径行同句式：P95 即 95% 的报告在该耗时内完成，P99 即 99% 的报告在该耗时内完成；两段均带全主语，不分省略变体）。概览口径与分组一致（受 `--report-type` / `--last` 影响）；仅单一报告类型时只渲染合计行（不重复出类型行）。
 
@@ -1077,7 +1078,7 @@ curl 对照命令：`curl -s "https://push2.eastmoney.com/api/qt/stock/get?secid
 
 **`eval-dedup-threshold.py` — 新闻去重阈值校准**
 
-新闻标题去重（同源/跨源安全区分级 + 候选区阶梯 + 方向对立防护，阈值见 `news_dedup.py` 校准常量）的"边界案例"**默认采集**到 `data/calibration/dedup_anchors.jsonl`：写侧只追加、不读旧文件（跨轮重复由本脚本 `load_anchors` 按键去重），`INVEST_DEDUP_COLLECT_ANCHORS=0` 可关闭采集。积累足够锚点后，用此脚本分析当前阈值是否合理。**评估默认在分析完成后压缩一次锚点文件**（每 key 最新 + 保留期），顺带完成体积维护；`--no-compact` 只读分析，`--dry-run` 演练不写盘，`--compact` 仅压缩不分析。报告路径仍不自动压缩。
+新闻标题去重（同源/跨源安全区分级 + 候选区阶梯 + 方向对立防护，阈值见 `news_dedup.py` 校准常量）的"边界案例"**默认采集**到 `data/calibration/dedup_anchors-YYYYMM.jsonl.gz`（按月 gzip 分片，写侧按 multi-member gzip 追加、不读旧文件；读侧 `gzip.open` 透明解压，跨轮重复由本脚本 `load_anchors` 按键去重），`INVEST_DEDUP_COLLECT_ANCHORS=0` 可关闭采集。积累足够锚点后，用此脚本分析当前阈值是否合理。**评估默认在分析完成后压缩一次锚点文件**（每 key 最新 + 保留期 30 天 + 体积目标 24MB 与分支配额，实现在 `news_dedup.compact_anchor_file`，与本工具同源），顺带完成体积维护；压缩结果会打印超期/体积裁剪（含分支分布）/无指纹补标注/并发放弃四类计数。`--no-compact` 只读分析，`--dry-run` 演练不写盘，`--compact` 仅压缩不分析。报告路径仍不自动压缩。
 
 ```bash
 # 分析全部锚点，输出建议
@@ -1086,9 +1087,9 @@ curl 对照命令：`curl -s "https://push2.eastmoney.com/api/qt/stock/get?secid
 # 仅看汇总统计（不展开详细列表）
 .venv/bin/python scripts/eval-dedup-threshold.py --summary
 
-# 指定锚点文件
+# 指定锚点基路径（同目录的 dedup_anchors-YYYYMM.jsonl.gz 分片一并读取）
 .venv/bin/python scripts/eval-dedup-threshold.py --file data/calibration/dedup_anchors.jsonl
-# 压缩（每 key 最新 + 保留期裁剪，与生产维护压缩同口径）
+# 压缩（每 key 最新 + 保留期 30 天 + 体积目标 24MB，与生产维护压缩同口径）
 .venv/bin/python scripts/eval-dedup-threshold.py --compact
 # 只按键去重、不按时间裁剪（保留历史时代样本，供跨规则对比）
 .venv/bin/python scripts/eval-dedup-threshold.py --compact --retention-days 0

@@ -30,7 +30,7 @@
 | 指数历史日线 | 腾讯财经 K 线接口 | 东方财富 `push2his` 指数 K 线（免 key）→ 新浪财经 K 线接口 → 同花顺官方日 K（需 key） | `history_index_` | 历史走势 |
 | 持仓重合度 | 运行时推导（基于持仓基金前 10 大重仓股的 Jaccard 相似度） | — | —（复用 `fund_hold_`，无独立缓存前缀） | — |
 | 基金风格扩展数据（市值/PE） | 东方财富 + 天天基金（基金持仓市值风格 + 市盈率/市净率数据） | — | `extended_` | 基础类 |
-| 个股财报全文（持仓基本面章·区块②） | DataSinking `api.datasink.ing`（全文本财报 Markdown，仅 A 股，**需用户自备 key**）；**备源**：巨潮资讯网 `cninfo.com.cn`（公开免费、**无需 key**，公告 PDF 解析；主源无该标的时接管） | — | `report_datasink_index_` / `report_datasink_doc_` / `report_datasink_doc_miss_` / `report_cninfo_index_` / `report_cninfo_text_` / `report_cninfo_orgid_` | 基础类 |
+| 个股财报全文（持仓基本面章·区块②） | DataSinking `api.datasink.ing`（全文本财报 Markdown，仅 A 股，**需用户自备 key**）；**备源**：巨潮资讯网 `cninfo.com.cn`（公开免费、**无需 key**，公告 PDF 解析；主源无该标的时接管） | — | `report_datasink_index_` / `report_datasink_doc_` / `report_datasink_doc_miss_` / `report_sections_miss_` / `report_cninfo_index_` / `report_cninfo_text_` / `report_cninfo_orgid_` | 基础类 |
 | 个股财务指标（持仓基本面章·区块①） | akshare `stock_financial_abstract`（东方财富关键指标，宽表） | DataSinking「公司简介和主要财务指标」章节解析（`datasink_indicator`）→ **同花顺官方合并报表派生**（利润表/资产负债表/现金流量表，需 key；一次给多期） | `fin_indicator_` | 基础类 |
 | 市场情绪（龙虎榜 / 连板梯队） | 同花顺金融数据服务（官方源，**需用户自备 key**；本类别**唯一源**） | — | `sentiment_` | 基础类 |
 | A 股行情 / 财务 / 基金 / **市场情绪** | 同花顺金融数据服务 `fuyao.aicubes.cn`（官方源，**需用户自备 key**） | — | 行情/持仓/情绪面各域前缀（其中龙虎榜与连板天梯为 `sentiment` 类别**唯一源**） | 基础类 / 分析类 |
@@ -63,6 +63,8 @@ LLM 分析结果独立缓存，通过指纹自动失效，不占用数据源请�
 |:-----|:---------|:--------:|
 | 财报章节 404 探测（已发布静态文档，缺失章节不回补） | `datasink_probe_miss_` | 12h |
 | 标的正文缺失（章节阶 + 备源均无正文） | `report_symbol_miss_` | 6h |
+| 章节清单不可得（源侧应答但无可用清单：空清单，或只解析出封面/目录几项导致取正文全空） | `report_sections_miss_` | 6h |
+| 章节清单探测传输级失败（挂起/断连） | `report_sections_backoff_` | 30min |
 
 **披露类缓存节奏**（与财报/指标/分红的发布节奏对齐）：
 

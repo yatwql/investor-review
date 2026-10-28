@@ -163,8 +163,8 @@ skeleton.py:generate_llm_content()
 | `_llm_dispatch.py` | 编排层 | 4+1 模块并行调度：`_build_module_fns` 模块→生成函数映射（`_MODULE_FNS`）、`ThreadPoolExecutor` 分发与进度回调、thinking 串行上限与辩论模式 `_debate_wrapper` 路由、`_LLM_CLIENT_SETTINGS` HTTP 客户端设置 | `_dispatch_llm_workers()` |
 | `generators.py` | 生成层 | 生成门面（按生成器域拆分）：辩论模式 pro/con/synthesis 生成 + `generate_self_review()`（生成后自检）+ `generate_holding_change_review()` 门面（实现于 `holding_change_review.py`）+ 单例四函数门面再导出 | 各 `generate_*()` |
 | `generators_singletons.py` | 生成层 | 4 个单例生成函数（global_macro / expert_review / health_check / penetration_deep，自 generators 按生成器域下沉；**测试 patch 以本模块为解析点**——`generate_llm_module` 等 seam 名在本域内解析） | 各 `generate_*()` |
-| `self_review.py` | 运行作用域 | 生成后自检的开关判定/输入存在性判定/失败隔离与运行作用域载体（报告层零参 pull；**不经** `_MODULE_FNS` 并行调度） | `run_self_review()` / `get_self_review_block()` |
-| `holding_change_review.py` | 运行作用域 | 持仓变动复盘归因的契约准入（feature + 快照准入 + 事实块非空）/失败隔离，结果写回契约 `llm_review`（**不经** `_MODULE_FNS` 并行调度，编排层串行后置调用） | `run_holding_change_review()` |
+| `self_review.py` | 运行作用域 | 生成后自检的开关判定/输入存在性判定/失败隔离与运行作用域载体（报告层零参 pull；**不经** `_MODULE_FNS` 并行调度）。输入为**纯分析正文**：编排层先剥离 LLM 用量页脚（`skeleton.strip_llm_footer`）与事实校验产物段落（`fact_checker.strip_fact_check_blocks`）——两段均为运行元信息且随缓存态变化，并入自检输入会让同一份正文算出不同缓存键 | `run_self_review()` / `get_self_review_block()` |
+| `holding_change_review.py` | 运行作用域 | 持仓变动复盘归因的契约准入（feature + 快照准入 + 事实块非空）/失败隔离，结果写回契约 `llm_review`（**经** `_MODULE_FNS['holding_change']` 并入并行批：只吃持仓变动契约、不依赖四模块产出，串行后置会把单次 4~25s 白加到关键路径） | `run_holding_change_review()` / `run_holding_change_in_worker()` |
 | `depth_profile.py` | 配置层 | 报告深度档位表（唯一事实来源）：档位只**收窄**模块集合与新闻采集规模，不进提示词正文 | `resolve_depth_profile()` / `depth_gate()` |
 | `generators_news.py` | 生成层 | 新闻 LLM 二次关联分析（批量模式 7 函数） | `enhance_news_correlation()` |
 | `_llm_news_correlation.py` | 私有 | 新闻关联安全直调入口（返回类型 `(list[dict], bool, dict)` 与其余四模块的 `(str, bool)` 不同，**不经编排层线程池**，由 `report/news_correlation.py` 直接调用），由 `generators_orchestrator.py`（聚合门面）re-export 对外提供 | `run_news_correlation_safe()` |
@@ -451,7 +451,7 @@ _LLM_CLIENT_SETTINGS = {
 
 每个工作线程创建**独立**的 `httpx.Client` 实例（`_make_runner` 闭包），避免全局共享连接池的线程安全问题。`h2` 包不可用时自动降级到 HTTP/1.1。
 
-**缺省兜底（串行后置模块）**：客户端装配只发生在分发层（`_llm_dispatch._execute` 为并行 worker 装配）；**编排层串行后置调用**（`run_self_review` / `run_holding_change_review`）不注入 `http_client`，None 会直达 provider 层 `assert client is not None` 秒败，且 AssertionError 被 `call_llm` 的 per-provider `except Exception` 吞成「provider 异常，切换下一 provider」整链连环失败（归因整章静默丢失）。因此兜底收口在多链与 legacy 两路的**唯一汇聚点** `api.call_single_provider`：`http_client is None` 且 provider 受支持（claude/openai/gemini）时经 `core.http_client.make_http_client`（HTTP 客户端统一工厂约束）自建一次性客户端，`with` 块内完成调用后关闭；不支持的 provider 不建（避免浪费连接），调用方自备客户端则原样透传、漏斗不代为关闭。
+**缺省兜底（未注入客户端的调用）**：客户端装配只发生在分发层（`_llm_dispatch._execute` 为并行 worker 装配）；**编排层串行后置调用**（现只剩 `run_self_review`，`run_holding_change_review` 已并入并行批并复用 worker 客户端）不注入 `http_client`，None 会直达 provider 层 `assert client is not None` 秒败，且 AssertionError 被 `call_llm` 的 per-provider `except Exception` 吞成「provider 异常，切换下一 provider」整链连环失败（归因整章静默丢失）。因此兜底收口在多链与 legacy 两路的**唯一汇聚点** `api.call_single_provider`：`http_client is None` 且 provider 受支持（claude/openai/gemini）时经 `core.http_client.make_http_client`（HTTP 客户端统一工厂约束）自建一次性客户端，`with` 块内完成调用后关闭；不支持的 provider 不建（避免浪费连接），调用方自备客户端则原样透传、漏斗不代为关闭。
 
 `max_workers=llm_config.llm_max_concurrency`（config 默认 3）控制并行调用数。开启 Extended Thinking 的模块（`thinking_enabled_{suffix}=true`）受独立信号量 `llm_max_thinking_concurrency`（默认 2）约束——多 thinking 模块并发涌向 DeepSeek 等强制推理端点时偶发返回空 content（HTTP 200 空响应），该信号量从源头降低并发（thinking 请求同时最多 N 个），非 thinking 模块不受此限。
 
@@ -910,6 +910,8 @@ penetrated_assets ──→ extract_stable_penetration()
 
 > **键尾同源（C21）**：预检（`_compute_module_cache_info`）与写侧（`skeleton`）必须用**同一个函数**拼出完整键。历史上预检只拼到 `{指纹}`、写侧额外追加 `_{provider}`，后果是每份报告四模块全判 miss、全量派发、`cache_misses` 恒为 4，而真实命中发生在 skeleton 的第二次预检——观测上完全看不出是「键拼错了」。该不变式由 `test_llm_cache_multi.py` 的「预检键与写侧键逐字节相等」用例锁定。
 
+> **产出侧回写（缓存正文 = 展示正文）**：事实校验的自动修正（数值/代码笔误）改的是**产出**，不是输入指纹。若不回写，缓存里留着的仍是修正前正文——每份报告都要对同一份缓存内容重做同一批修正（`counters.fact_fix:*` 连续多轮恒为同一数），且报告展示值与缓存值口径不一致（不可复现）。因此修正发生后经 `skeleton.write_back_module_cache(content, cache_key=cache_info[mk]["key"], module_key=mk, cached=…)` 原键回写：**键不变**（指纹是生成输入的内容地址，输入未变即同键），只改缓存里的产出正文；校验摘要属当轮元信息，在回写之后拼接、不入缓存；写盘失败只记 WARNING，不影响报告。判据由 `src/test/unit/llm/test_fact_check_cache_writeback.py` 锁定——命中轮次对已修正正文再校验必须得零修正。
+
 ### 7.2.1 缓存与成本契约（金钱口径）
 
 缓存的第一价值是**省钱**，因此除「键是否命中」外还锁住四条金钱口径，由 `src/test/unit/llm/test_cache_cost_accounting.py` 守护：
@@ -1305,7 +1307,7 @@ reload_pricing() → 读 llm_pricing_ref.json
 
 ### 12.2 注册表键名派生
 
-在 `core/registry.py` 中，每个 LLM 模块通过 `settings_suffix` 注册（`global_macro`、`expert_review`、`health_check`、`penetration_deep`、`news_correlation`、`self_review`（生成后自检，出厂默认开；生成后一遍执行、不经并行调度）、`holding_change`（持仓变动复盘归因，`enabled_llm` 默认开；章本体由 feature `holding_change_review` 控制，不经并行调度），外加 3 个辩论模块 `debate_pro`/`debate_con`/`debate_synthesis`），自动派生 `llm_settings.json` 的所有合法键名：
+在 `core/registry.py` 中，每个 LLM 模块通过 `settings_suffix` 注册（`global_macro`、`expert_review`、`health_check`、`penetration_deep`、`news_correlation`、`self_review`（生成后自检，出厂默认开；生成后一遍执行、不经并行调度）、`holding_change`（持仓变动复盘归因，`enabled_llm` 默认开；章本体由 feature `holding_change_review` 控制，并入并行批调度），外加 3 个辩论模块 `debate_pro`/`debate_con`/`debate_synthesis`），自动派生 `llm_settings.json` 的所有合法键名：
 
 ```
 已知 LLM Settings 键名（每个模块 9 个）：

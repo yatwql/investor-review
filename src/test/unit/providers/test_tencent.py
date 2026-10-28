@@ -233,6 +233,49 @@ class TestFetchPrice(unittest.TestCase):
         self.assertIsNone(fetch_price("600900"))
 
 
+class TestKlineHangNoRetry(unittest.TestCase):
+    """K 线挂起判定：单次尝试耗时超预算一半即不重试（慢主机不白等第二个预算）。"""
+
+    @patch("src.python.providers.tencent.make_http_client")
+    def test_hang_does_not_retry(self, mock_factory):
+        import httpx
+
+        from src.python.providers import tencent
+
+        mock_client = MagicMock()
+        mock_client.__enter__.return_value = mock_client
+        mock_factory.return_value = mock_client
+        mock_client.get.side_effect = httpx.ConnectTimeout("handshake operation timed out")
+
+        # 阈值压到 0：任意一次尝试都算挂起
+        with patch.object(tencent, "_KLINE_TIMEOUT", 0.0):
+            result = tencent._fetch_kline_json("sh000300", 30, None)
+
+        assert result is None
+        assert mock_client.get.call_count == 1, "挂起后不得再同源重试"
+
+    @patch("src.python.providers.tencent.make_http_client")
+    def test_fast_transient_failure_still_retries(self, mock_factory):
+        """快速瞬时失败（未挂起）仍按策略重试一次——抖动重试是有效收益。"""
+        import httpx
+
+        from src.python.providers import tencent
+
+        mock_client = MagicMock()
+        mock_client.__enter__.return_value = mock_client
+        mock_factory.return_value = mock_client
+        mock_client.get.side_effect = httpx.ConnectError("connection reset by peer")
+
+        with (
+            patch.object(tencent, "_KLINE_RETRY_POLICY", tencent._KLINE_RETRY_POLICY),
+            patch.object(tencent, "_KLINE_TIMEOUT", 30.0),
+        ):
+            result = tencent._fetch_kline_json("sh000300", 30, None)
+
+        assert result is None
+        assert mock_client.get.call_count == 2, "快速瞬时失败应重试一次（attempts=2）"
+
+
 class TestFetchIndexKline(unittest.TestCase):
     """fetch_index_kline 指数历史 K 线获取测试。"""
 

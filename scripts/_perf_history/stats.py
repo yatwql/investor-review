@@ -190,10 +190,21 @@ def _outlier_records(records: list[dict[str, Any]], k: float = _OUTLIER_K) -> li
     return [r for r in records if _is_outlier(float(r.get("total_seconds") or 0), totals, k)]
 
 
+#: 历史 `breakdown` 子项名 → 现行展示名（键名跨版本对齐）。
+#: 只为**避免跨版本对拍时把旧口径与新风口径混算**：被拆分的合并段（旧一次计时覆盖
+#: 两个新子项）与其后逐个新子项在数量级上不等价，故给旧键加显式标记而不是静默合并。
+_LEGACY_BREAKDOWN_ALIASES: dict[str, str] = {
+    "财报摘要与指标": "财报摘要+财务指标（旧·合并段）",
+}
+
+
 def _merge_breakdown_stats(
     records: list[dict[str, Any]],
 ) -> dict[str, dict[str, dict[str, float]]]:
     """合并记录中的阶段细分（`breakdown`）统计。
+
+    历史键名经 `_LEGACY_BREAKDOWN_ALIASES` 归一（旧「合并段」带显式标记单列，
+    不与拆分后的新子项混算——两者量级不等价）。
 
     Returns:
         {父阶段: {子项名: {avg, max, count}}}；无细分数据时为空字典。
@@ -210,7 +221,7 @@ def _merge_breakdown_stats(
             for name, sec in spans.items():
                 if isinstance(sec, bool) or not isinstance(sec, (int, float)):
                     continue
-                values[parent][name].append(float(sec))
+                values[parent][_LEGACY_BREAKDOWN_ALIASES.get(name, name)].append(float(sec))
     result: dict[str, dict[str, dict[str, float]]] = {}
     for parent, spans in values.items():
         spans_stats = {

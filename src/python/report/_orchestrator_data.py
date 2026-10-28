@@ -143,12 +143,18 @@ def prepare_report_data(
     # 功能开关 `financial_report_digest` 开启时计算（A 股标的取最新年报章节摘要）；
     # 关闭或无 key 时返回 None（章节隐藏/写占位）
     financial_report_digest_data = compute_financial_report_digest_data(holdings, penetrated_assets, config, reporter)
+    # 两个契约各计一段：「财报摘要」是逐篇候选的网络探测（索引/章节清单/正文），
+    # 「财务指标」是单次 akshare 多期取数——合并成一段时全缓存运行仍报 5~8s
+    # 无法归因，只能整段计时拍脑袋猜
+    _record_span(recorder, "财报摘要", _t0)
+
+    _t0 = time.perf_counter()
     # 财务指标（数据契约 financial_indicator_data）：功能开关 `financial_indicator`
     # 开启时计算（A 股标的指标 + 质量档 + 趋势 + 当前 PE/PB）；关闭时返回 None（章节隐藏）
     financial_indicator_data = compute_financial_indicator_data(
         holdings, penetrated_assets, config, reporter, details=details
     )
-    _record_span(recorder, "财报摘要与指标", _t0)
+    _record_span(recorder, "财务指标", _t0)
 
     _t0 = time.perf_counter()
     # 申购限购状态（数据契约 purchase_status_data）：功能开关 `fund_purchase_limit`

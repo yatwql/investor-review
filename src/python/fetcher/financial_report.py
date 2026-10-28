@@ -13,9 +13,9 @@
 from __future__ import annotations
 
 import logging
-import threading
 from typing import TYPE_CHECKING, Any, Sequence
 
+from src.python.cache import NegativeCache, reset_all_negative_hits
 from src.python.cache import clear as cache_clear
 from src.python.cache import get as cache_get
 from src.python.cache import get_ttl
@@ -46,23 +46,53 @@ DOC_MISS_PREFIX = "report_datasink_doc_miss_"
 #: 传输级失败（超时/断连/5xx/429）不在其中 —— 那些可能是瞬时问题，不能进负缓存。
 _DETERMINISTIC_EMPTY_MARKERS: tuple[str, ...] = ("该文档无", "异源候选拒服务")
 
-#: 本轮命中「空正文负缓存」的次数（并发取数 → 加锁累加；每轮开头由
-#: ``report/financial_report_digest`` 重置）。命中本身是**省请求**，不是错误，
-#: 故只在报告级打一行 INFO 汇总，不逐条刷屏。
-_DOC_MISS_HITS: dict[str, int] = {"hits": 0}
-_DOC_MISS_LOCK = threading.Lock()
+#: 本轮命中「空正文负缓存」的次数与「章节清单不可得」计数，均由 ``cache.NegativeCache``
+#: 统一承接（一个类一份锁+计数+汇总文案，新增一类负缓存只需登记实例，不再各自写样板）。
+#: 命中本身是**省请求**，不是错误，故只在报告级打一行 INFO 汇总，不逐条刷屏。
+DOC_MISS = NegativeCache(
+    "空正文（该文档无该章节）",
+    DOC_MISS_PREFIX,
+    "report",
+    hit_note="跳过重复取数",
+)
+
+#: 「该文档章节清单不可得」的负缓存。源侧返回 200 但无可用章节清单时，`/sections`
+#: 每份报告都要重探一次——实测 5 篇 × 0.3~1.4s ≈ 5s/份，是「全缓存运行」下数据准备的
+#: 主要残差。清单是否可得由源侧解析状态决定、跨报告稳定，故按确定性结论负缓存；
+#: TTL 用注册表条目 `report_sections_miss`（6h，与同类「源侧确实没有」结论同源）。
+#: 传输级失败（超时/断连）**不入**负缓存：那可能只是瞬时不可用。
+SECTIONS_MISS_PREFIX = "report_sections_miss_"
+SECTIONS_MISS = NegativeCache(
+    "章节清单不可得",
+    SECTIONS_MISS_PREFIX,
+    "report_sections_miss",
+    hit_note="跳过 /sections 探测",
+)
+#: 章节清单探测的**传输级失败**短退避（与上一条的语义不同：那条是「源侧确认没有清单」，
+#: 确定性、6h；这条是「这次探测挂起了」，瞬时、30min）。探测只是取数优选路径，一次挂起
+#: 就白等满超时预算（实测单篇 20.7s），短退避即可止住「每份报告都再撞一次」，又不把
+#: 源侧恢复长时间挡住。
+SECTIONS_BACKOFF = NegativeCache(
+    "章节清单探测退避（传输级失败）",
+    "report_sections_backoff_",
+    "report_sections_backoff",
+    hit_note="跳过易挂起的 /sections 探测",
+)
 
 
 def reset_doc_miss_hits() -> None:
-    """清零本轮空正文负缓存命中计数（每份报告开头调用）。"""
-    with _DOC_MISS_LOCK:
-        _DOC_MISS_HITS["hits"] = 0
+    """清零本轮全部负缓存命中计数（每份报告开头调用）。"""
+    reset_all_negative_hits()
+
+
+def sections_miss_hits() -> int:
+    """本轮「章节清单不可得」负缓存命中次数（供报告层打一行汇总 INFO）。"""
+    return SECTIONS_MISS.hits()
 
 
 def doc_miss_hits() -> int:
     """本轮空正文负缓存命中次数（报告级汇总日志/观测用）。"""
-    with _DOC_MISS_LOCK:
-        return int(_DOC_MISS_HITS["hits"])
+    return DOC_MISS.hits()
 
 
 #: 索引来源的类别级取用标记（数据源说明表「本次使用」按前缀归属；两前缀同归「财报全文」类别）
@@ -111,6 +141,14 @@ _REPORT_CANDIDATE_LIMIT = 3
 #: 故统一经 `get_ttl` 取。6h 内同一结论稳定；避免每份报告都把同一批 404/拒服务
 #: 链路重走一遍（实测 5 只标的 × 章节阶 + 备源 ≈ 3s/份报告）。
 _REPORT_CONTENT_MISS_PREFIX = "report_symbol_miss_"
+
+#: 标的级「正文缺失」负缓存（章节阶 + 备源均无正文）：同一标的同类报告期内结论稳定。
+SYMBOL_MISS = NegativeCache(
+    "标的正文缺失",
+    _REPORT_CONTENT_MISS_PREFIX,
+    "report_symbol_miss",
+    hit_note="跳过索引与候选回溯",
+)
 
 #: 未取到财报的原因文案（写入契约 failures，展示层原样透出）
 REASON_INDEX_EMPTY = "索引无该标的报告"
@@ -316,19 +354,34 @@ def _fetch_sections(doc_id: int | str, source: str | None = None) -> list[str] |
     cached = cache_get(cache_key, get_ttl("report"))
     if isinstance(cached, list):
         return cached
+    miss_key = SECTIONS_MISS.key(doc_id)
+    if SECTIONS_MISS.is_missing(miss_key):
+        logger.debug("[financial_report] 命中章节清单不可得负缓存（doc=%s），跳过 /sections 探测", doc_id)
+        return None
+    backoff_key = SECTIONS_BACKOFF.key(doc_id)
+    if SECTIONS_BACKOFF.is_missing(backoff_key):
+        logger.debug("[financial_report] 章节清单探测在退避窗口内（doc=%s），本轮跳过 /sections", doc_id)
+        return None
     try:
         sections = datasink.fetch_report_sections(doc_id)
     except Exception as e:
+        # 传输级失败（挂起/断连）：只影响「清单优选路径」，回退偏好名直取即可；
+        # 同时记短退避，避免每份报告都为同一篇文档再白等一次超时预算
+        SECTIONS_BACKOFF.mark(backoff_key, "章节清单探测传输级失败")
         logger.warning("[financial_report] 章节清单取数失败（doc=%s）：%s，回退偏好名直取", doc_id, e)
         return None
+    # 探测成功（无论有时清单）：解除退避窗口
+    SECTIONS_BACKOFF.clear(backoff_key)
     if sections:
         cache_set(cache_key, sections)
         return sections
+    # 源侧成功应答但无可用清单（404 探测未命中 / 200 空列表）：确定性结论，记负缓存
+    SECTIONS_MISS.mark(miss_key)
     return None
 
 
 def _invalidate_sections_cache(doc_id: int | str) -> None:
-    """失效该文档的章节名清单缓存（下次重取 ``/sections``）。
+    """失效该文档的章节名清单缓存与负缓存（下次重取 ``/sections``）。
 
     动机：清单缓存（14 天）命中后一直复用同一批章节名；若源侧已重新解析过该文档
     （章节改名/补齐），这套旧名字会持续 404——每次运行都在同一批死名字上做无效探测，
@@ -336,6 +389,7 @@ def _invalidate_sections_cache(doc_id: int | str) -> None:
     ``/sections`` 探测（单请求、本身也带缓存）。
     """
     cache_clear(f"{SECTIONS_PREFIX}{doc_id}")
+    cache_clear(f"{SECTIONS_MISS_PREFIX}{doc_id}")
 
 
 def _pick_sections(available: list[str] | None, preferences: tuple[str, ...]) -> list[str]:
@@ -396,10 +450,8 @@ def _fetch_document(
     src = source or datasink.SOURCE_ID
     ns = f"{cninfo.SOURCE_ID}_" if src == cninfo.SOURCE_ID else ""
     cache_key = f"{DOC_PREFIX}{ns}{doc_id}_{section or 'full'}"
-    miss_key = f"{DOC_MISS_PREFIX}{ns}{doc_id}_{section or 'full'}"
-    if cache_get(miss_key, get_ttl("report")) is not None:
-        with _DOC_MISS_LOCK:
-            _DOC_MISS_HITS["hits"] += 1
+    miss_key = DOC_MISS.key(ns, doc_id, "_", section or "full")
+    if DOC_MISS.is_missing(miss_key):
         logger.debug("[financial_report]%s 命中空正文负缓存（该文档无该章节），跳过取数", f" [{doc_id}]")
         return None
     diagnostics = FailureDiagnostics()
@@ -417,7 +469,7 @@ def _fetch_document(
         return record
     if _is_deterministic_empty(diagnostics):
         # 确定性空（该文档确实无这一节）：记短 TTL 负缓存，后续同类请求不再白走链路
-        cache_set(miss_key, "该文档无该章节")
+        DOC_MISS.mark(miss_key, "该文档无该章节")
         logger.debug("[financial_report]%s 空正文已进负缓存（该文档无该章节）", f" [{doc_id}]")
     return record
 
@@ -454,8 +506,13 @@ def _collect_doc_sections(
         if text:
             contents.append(text)
     if not contents and available:
-        # 清单匹配出的章节全部取不到正文 → 该清单不可信，失效后由下次重取恢复
+        # 清单匹配出的章节全部取不到正文 → 该清单不可信：先失效（下次重取拿得回恢复机会），
+        # 再记 6h 负缓存——实测源侧对若干文档返回「非空但不可用」的清单（只有封面/目录几项），
+        # 这类清单每次都会走到这里；只失效不记负缓存，就等于每份报告都为同一篇文档重探
+        # 一次 /sections 并重试同一批死章节名（实测 1~3s/篇）。恢复窗口为 6h；新披露是新的
+        # doc_id（新键）不受影响，故不会拖延「源侧后来补齐」的可见性。
         _invalidate_sections_cache(doc_id)
+        SECTIONS_MISS.mark(SECTIONS_MISS.key(doc_id))
     return record, contents
 
 
@@ -608,8 +665,8 @@ def fetch_symbol_report_detailed(
     # 负缓存预检：本标的近期已确认「可取正文为空」，直接按同一原因降级。
     # 只缓存**确定性**结论（章节阶 + 备源都试过仍无正文），索引为空/网络失败不入缓存
     # ——后者可能只是瞬时不可用，缓存会让恢复期被无谓延长。
-    _miss_key = f"{_REPORT_CONTENT_MISS_PREFIX}{symbol}"
-    _cached_reason = cache_get(_miss_key, get_ttl("report_symbol_miss"))
+    _miss_key = SYMBOL_MISS.key(symbol)
+    _cached_reason = SYMBOL_MISS.probe(_miss_key)
     if isinstance(_cached_reason, str) and _cached_reason:
         logger.debug("[financial_report] %s 命中正文缺失负缓存（%s），跳过取数", symbol, _cached_reason)
         return None, _cached_reason
@@ -636,7 +693,7 @@ def fetch_symbol_report_detailed(
             return record, ""
 
     _reason = REASON_SECTIONS_MISSING.format(periods="、".join(tried) or "无")
-    cache_set(_miss_key, _reason)
+    SYMBOL_MISS.mark(_miss_key, _reason)
     return None, _reason
 
 

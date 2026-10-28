@@ -15,7 +15,9 @@ from unittest.mock import patch
 
 import pytest
 
+from src.python.providers import news_dedup
 from src.python.providers.news_dedup import _record_anchor
+from src.python.providers import news_dedup_anchor_policy
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_news]
 
@@ -54,14 +56,13 @@ class TestFlushAnchorsDedup(unittest.TestCase):
 
         self._tmpdir = tempfile.mkdtemp()
         self._anchor_path = os.path.join(self._tmpdir, "anchors.jsonl")
-        from src.python.providers import news_dedup
 
         # 隔离写入路径：patch 模块常量，确保测试不触碰真实 data/calibration/
-        self._path_patch = patch("src.python.providers.news_dedup._ANCHOR_PATH", self._anchor_path)
+        self._path_patch = patch("src.python.providers.news_dedup_anchor_store._ANCHOR_PATH", self._anchor_path)
         self._path_patch.start()
         self._collect_patch = patch.dict(os.environ, {"INVEST_DEDUP_COLLECT_ANCHORS": "1"})
         self._collect_patch.start()
-        news_dedup._ANCHOR_RECORDS = []
+        news_dedup_anchor_policy.reset_anchor_records()
 
     def tearDown(self) -> None:
         """恢复 patch。"""
@@ -87,12 +88,11 @@ class TestFlushAnchorsDedup(unittest.TestCase):
 
     def test_collection_disabled_skips_record_and_flush(self) -> None:
         """显式关闭采集：_record_anchor 不积累、_flush_anchors 不创建文件。"""
-        from src.python.providers import news_dedup
 
         with patch.dict(os.environ, {"INVEST_DEDUP_COLLECT_ANCHORS": "0"}):
             self._record_cross_skip("新闻A", "新闻B")
-            self.assertEqual(news_dedup._ANCHOR_RECORDS, [])
-            news_dedup._flush_anchors()
+            self.assertEqual(news_dedup_anchor_policy._ANCHOR_RECORDS, [])
+            news_dedup_anchor_policy._flush_anchors()
         self.assertFalse(os.path.exists(self._anchor_path))
 
     def test_same_pair_within_batch_flushed_once(self) -> None:
@@ -102,8 +102,7 @@ class TestFlushAnchorsDedup(unittest.TestCase):
         self._record_cross_skip("新闻A", "新闻B")
         self._record_cross_skip("新闻A", "新闻B")
         _flush_anchors()
-        with open(self._anchor_path, encoding="utf-8") as f:
-            self.assertEqual(len(f.readlines()), 1)
+        self.assertEqual(len(_anchor_lines(self._tmpdir)), 1)
 
     def test_cross_run_duplicates_are_deduped_by_calibration(self) -> None:
         """跨轮重复会追加（写侧不读旧文件），但校准工具按键去重为一对。"""
@@ -114,8 +113,7 @@ class TestFlushAnchorsDedup(unittest.TestCase):
         _flush_anchors()
         self._record_cross_skip("新闻A", "新闻B")
         _flush_anchors()
-        with open(self._anchor_path, encoding="utf-8") as f:
-            self.assertEqual(len(f.readlines()), 2, "写侧只追加，跨轮重复保留在文件里")
+        self.assertEqual(len(_anchor_lines(self._tmpdir)), 2, "写侧只追加，跨轮重复保留在分片里")
 
         tool = load_script("eval-dedup-threshold.py", module_name="_eval_dedup_threshold_under_test")
         assert len(tool.load_anchors(self._anchor_path)) == 1, "校准工具应按键去重"
@@ -128,8 +126,7 @@ class TestFlushAnchorsDedup(unittest.TestCase):
         _flush_anchors()
         self._record_cross_skip("新闻C", "新闻D")
         _flush_anchors()
-        with open(self._anchor_path, encoding="utf-8") as f:
-            self.assertEqual(len(f.readlines()), 2)
+        self.assertEqual(len(_anchor_lines(self._tmpdir)), 2)
 
 
 class TestDedupGenericTokenVeto(unittest.TestCase):
@@ -439,21 +436,18 @@ class TestPairSimilarityMatchesLinkDecision(unittest.TestCase):
     def setUp(self) -> None:
         import tempfile
 
-        from src.python.providers import news_dedup
-
         self._tmpdir = tempfile.mkdtemp()
         self._path_patch = patch(
             "src.python.providers.news_dedup._ANCHOR_PATH", os.path.join(self._tmpdir, "anchors.jsonl")
         )
         self._path_patch.start()
-        news_dedup._ANCHOR_RECORDS = []
+        news_dedup_anchor_policy.reset_anchor_records()
 
     def tearDown(self) -> None:
         self._path_patch.stop()
 
     def test_recorded_ratio_and_overlap_match_pure_recompute(self) -> None:
         """锚点记录里的 ratio/bigram_overlap 与纯重算结果一致（候选区样本）。"""
-        from src.python.providers import news_dedup
         from src.python.providers.news_aggregator import _dedup_by_title
 
         title_a = "美国F-35战机在加州海军陆战队航空站附近坠毁"
@@ -464,7 +458,9 @@ class TestPairSimilarityMatchesLinkDecision(unittest.TestCase):
                 {"title": title_b, "_source": "新浪财经", "url": "b"},
             ]
         )
-        records = [r for r in news_dedup._ANCHOR_RECORDS if r.get("rule") in ("cross_skip", "cross_merge")]
+        records = [
+            r for r in news_dedup_anchor_policy._ANCHOR_RECORDS if r.get("rule") in ("cross_skip", "cross_merge")
+        ]
         self.assertTrue(records, "候选区样本应记录锚点")
         from src.python.providers.news_dedup_rules import _pair_similarity
 
@@ -492,11 +488,10 @@ class TestAnchorAppendAndRetention(unittest.TestCase):
 
         self._tmpdir = tempfile.mkdtemp()
         self._anchor_path = os.path.join(self._tmpdir, "anchors.jsonl")
-        self._path_patch = patch("src.python.providers.news_dedup._ANCHOR_PATH", self._anchor_path)
+        self._path_patch = patch("src.python.providers.news_dedup_anchor_store._ANCHOR_PATH", self._anchor_path)
         self._path_patch.start()
-        from src.python.providers import news_dedup
 
-        news_dedup._ANCHOR_RECORDS = []
+        news_dedup_anchor_policy.reset_anchor_records()
 
     def tearDown(self) -> None:
         self._path_patch.stop()
@@ -523,29 +518,29 @@ class TestAnchorAppendAndRetention(unittest.TestCase):
 
         self._record("新闻A", "新闻B")
         _flush_anchors()
-        before_stat = os.stat(self._anchor_path)
-        before_bytes = open(self._anchor_path, "rb").read()
+        shard = _anchor_shard(self._tmpdir)
+        before_stat = os.stat(shard)
+        before_bytes = open(shard, "rb").read()
 
         self._record("新闻C", "新闻D")
         _flush_anchors()
-        after_stat = os.stat(self._anchor_path)
+        after_stat = os.stat(_anchor_shard(self._tmpdir))
 
-        self.assertEqual(before_stat.st_ino, after_stat.st_ino, "追加写不应替换文件（inode 变化=整体重写）")
-        with open(self._anchor_path, "rb") as f:
+        self.assertEqual(shard, _anchor_shard(self._tmpdir), "同月追加应落在同一分片")
+        self.assertEqual(before_stat.st_ino, after_stat.st_ino, "追加写不应替换分片（inode 变化=整体重写）")
+        with open(shard, "rb") as f:
             after_bytes = f.read()
-        self.assertTrue(after_bytes.startswith(before_bytes), "既有内容必须原样保留在前")
+        self.assertTrue(after_bytes.startswith(before_bytes), "既有压缩 member 必须原样保留在前")
         self.assertGreater(len(after_bytes), len(before_bytes))
 
     def test_compaction_drops_records_beyond_retention(self) -> None:
         """压缩：超出保留期的记录被裁掉，保留期内的保留（体积才有上限）。"""
         from unittest.mock import patch
 
-        from src.python.providers import news_dedup
-
         old_ts = "2020-01-02 10:00"
         recent_ts = datetime.now().strftime("%Y-%m-%d %H:%M")
         rows = [
-            news_dedup._make_anchor(
+            news_dedup_anchor_policy._make_anchor(
                 {"ctime": old_ts, "title": "旧新闻一", "_source": "A"},
                 {"ctime": old_ts, "title": "旧新闻二", "_source": "B"},
                 0.3,
@@ -553,7 +548,7 @@ class TestAnchorAppendAndRetention(unittest.TestCase):
                 False,
                 "cross_skip",
             ),
-            news_dedup._make_anchor(
+            news_dedup_anchor_policy._make_anchor(
                 {"ctime": recent_ts, "title": "新新闻一", "_source": "A"},
                 {"ctime": recent_ts, "title": "新新闻二", "_source": "B"},
                 0.3,
@@ -562,25 +557,50 @@ class TestAnchorAppendAndRetention(unittest.TestCase):
                 "cross_skip",
             ),
         ]
+        rows[0]["written_at"] = old_ts  # 发布时间与写入时刻都过期，才算超保留期
         with open(self._anchor_path, "w", encoding="utf-8") as f:
             for row in rows:
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
-        with patch.object(news_dedup, "_ANCHOR_SIZE_WARN_BYTES", 1):
-            news_dedup._compact_anchor_file(os.path.getsize(self._anchor_path))
+        with patch.object(news_dedup_anchor_policy, "_ANCHOR_SIZE_WARN_BYTES", 1):
+            news_dedup_anchor_policy._compact_anchor_file(os.path.getsize(self._anchor_path))
 
-        remaining = open(self._anchor_path, encoding="utf-8").read()
+        remaining = "".join(_anchor_lines(self._tmpdir))
         self.assertIn("新新闻一", remaining)
         self.assertNotIn("旧新闻一", remaining, "超保留期记录应被裁掉")
+
+    def test_old_news_recently_written_survives_retention(self) -> None:
+        """补录/回溯抓到的老新闻（`ts` 很老但刚写入）不被保留期秒裁。
+
+        只按 `ts` 判定时，这类记录会在写入后的第一次压缩就被删掉，等于样本白采；
+        `written_at` 作为第二判据把它留在窗口内。
+        """
+        from unittest.mock import patch
+
+        old_ts = "2020-01-02 10:00"
+        backlog = news_dedup_anchor_policy._make_anchor(
+            {"ctime": old_ts, "title": "补录新闻一", "_source": "A"},
+            {"ctime": old_ts, "title": "补录新闻二", "_source": "B"},
+            0.3,
+            2,
+            False,
+            "cross_skip",
+        )
+        with open(self._anchor_path, "w", encoding="utf-8") as f:
+            f.write(json.dumps(backlog, ensure_ascii=False) + "\n")
+
+        with patch.object(news_dedup_anchor_policy, "_ANCHOR_SIZE_WARN_BYTES", 1):
+            news_dedup_anchor_policy._compact_anchor_file(os.path.getsize(self._anchor_path))
+
+        remaining = "".join(_anchor_lines(self._tmpdir))
+        self.assertIn("补录新闻一", remaining, "刚写入的样本不应因发布时间老而被裁掉")
 
     def test_retention_zero_keeps_all(self) -> None:
         """保留期设为 0 → 退回纯去重（不按时间裁剪），由运维显式选择。"""
         from unittest.mock import patch
 
-        from src.python.providers import news_dedup
-
         old_ts = "2020-01-02 10:00"
-        row = news_dedup._make_anchor(
+        row = news_dedup_anchor_policy._make_anchor(
             {"ctime": old_ts, "title": "很老的新闻甲", "_source": "A"},
             {"ctime": old_ts, "title": "很老的新闻乙", "_source": "B"},
             0.3,
@@ -592,9 +612,77 @@ class TestAnchorAppendAndRetention(unittest.TestCase):
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
         with (
-            patch.object(news_dedup, "_ANCHOR_SIZE_WARN_BYTES", 1),
+            patch.object(news_dedup_anchor_policy, "_ANCHOR_SIZE_WARN_BYTES", 1),
             patch.dict(os.environ, {news_dedup._ANCHOR_RETENTION_ENV: "0"}),
         ):
-            news_dedup._compact_anchor_file(os.path.getsize(self._anchor_path))
+            news_dedup_anchor_policy._compact_anchor_file(news_dedup.anchor_total_bytes(self._anchor_path))
 
-        self.assertIn("很老的新闻甲", open(self._anchor_path, encoding="utf-8").read())
+        self.assertIn("很老的新闻甲", "".join(_anchor_lines(self._tmpdir)))
+
+
+class TestSameSrcAnchorSampling(unittest.TestCase):
+    """同源锚点按标题对哈希采样：样本量足够校准，体积不再由同源样本主导。
+
+    同源样本只服务「同一源合并阈值」校准，而 2~5 的 bigram 区间样本极密
+    （实测占锚点文件 61%），全量采集只放大体积；按 1/N 确定性采样后样本数仍远超
+    校准所需（工具建议 ≥50 条）。
+    """
+
+    def _collect(self, count: int = 200, *, sample: int, rule: str = "same_src") -> list[dict]:
+
+        records: list[dict] = []
+        with (
+            patch.object(news_dedup_anchor_policy, "_SAME_SRC_ANCHOR_SAMPLE", sample),
+            patch.object(news_dedup_anchor_policy, "_ANCHOR_RECORDS", records),
+            patch.object(news_dedup_anchor_policy, "_anchor_collection_enabled", lambda: True),
+        ):
+            for idx in range(count):
+                news_dedup_anchor_policy._record_anchor(
+                    {
+                        "rule": rule,
+                        "source_a": "sina",
+                        "title_a": f"标题{idx}",
+                        "source_b": "sina",
+                        "title_b": f"对照{idx}",
+                    }
+                )
+        return records
+
+    def test_sample_one_keeps_everything(self) -> None:
+        self.assertEqual(len(self._collect(sample=1)), 200)
+
+    def test_sampling_bounds_volume_but_keeps_samples(self) -> None:
+        kept = self._collect(sample=50)
+        self.assertGreater(len(kept), 0)
+        self.assertLess(len(kept), 200)
+
+    def test_sampling_is_deterministic(self) -> None:
+        first = [(r["title_a"], r["title_b"]) for r in self._collect(sample=50)]
+        second = [(r["title_a"], r["title_b"]) for r in self._collect(sample=50)]
+        self.assertEqual(first, second)
+
+    def test_other_rules_are_not_sampled(self) -> None:
+        self.assertEqual(len(self._collect(sample=50, rule="cross_merge")), 200)
+
+
+def _anchor_shard(directory: str) -> str:
+    """返回目录下的当月锚点分片路径（写侧只写当月分片）。"""
+    names = sorted(n for n in os.listdir(directory) if n.startswith("dedup_anchors-") and n.endswith(".jsonl.gz"))
+    assert names, f"{directory} 下没有锚点分片"
+    return os.path.join(directory, names[-1])
+
+
+def _anchor_lines(directory: str) -> list[str]:
+    """读取锚点目录下全部分片与未分片单文件的行（gzip 分片透明解压）。"""
+    import gzip
+
+    lines: list[str] = []
+    for name in sorted(os.listdir(directory)):
+        path = os.path.join(directory, name)
+        if name.endswith(".jsonl.gz"):
+            with gzip.open(path, "rt", encoding="utf-8") as f:
+                lines.extend(f.readlines())
+        elif name.endswith(".jsonl"):
+            with open(path, encoding="utf-8") as f:
+                lines.extend(f.readlines())
+    return lines

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from typing import Any
 
 import httpx
@@ -15,7 +16,7 @@ import httpx
 from src.python.core.code_utils import is_a_share_code, is_exchange_fund_code, is_index_code
 from src.python.core.http_client import make_http_client
 from src.python.core.num_utils import safe_num
-from src.python.providers.utils import looks_like_block_page, with_exchange_prefix
+from src.python.providers.utils import HANG_ELAPSED_RATIO, looks_like_block_page, with_exchange_prefix
 from src.python.core.retry import (
     STRATEGY_EXPONENTIAL,
     STRATEGY_FIXED,
@@ -32,11 +33,16 @@ _BASE_URL = "https://qt.gtimg.cn/q="
 _TIMEOUT = 15.0  # 普通行情超时
 #: 行情取数重试策略：总尝试 2 次、无退避（末次失败立即交下一链路）
 _PRICE_RETRY_POLICY = RetryPolicy(attempts=2, strategy=STRATEGY_FIXED, base_backoff=0.0)
-_KLINE_TIMEOUT = 30.0  # K 线超时（需等待更多数据）
-#: K 线取数重试策略：总尝试 3 次、指数退避——K 线请求较重，抖动多来自远端限流/瞬断。
+#: K 线超时预算：K 线载荷很小（365 日 ≈ 60KB），30s 是给「需等待更多数据」的过度宽限——
+#: 实测主机不可达时每次 ConnectTimeout/握手超时都要白等满预算，单标的 3 次尝试 ≈ 2 分钟、
+#: 十余个持仓直接把报告卡成二十分钟。10s 足以覆盖正常慢响应，挂起主机只付 10s。
+_KLINE_TIMEOUT = 10.0
+#: 挂起判定：单次尝试耗时 ≥ 预算 × HANG_ELAPSED_RATIO（5s）即判「主机不可达」，不再同源重试
+#: （慢主机只会继续慢，重试是纯白等；换链路由调用方负责）。
+#: K 线取数重试策略：总尝试 2 次、指数退避——K 线请求较重，抖动多来自远端限流/瞬断。
 #: 历史链路（``fetcher/chain.py::_try_providers``）**无链级重试**，故重试必须落在
 #: provider 内：provider 把传输失败吞成空列表，链级无从判别，单源抖动会直接表现为整链空。
-_KLINE_RETRY_POLICY = RetryPolicy(attempts=3, strategy=STRATEGY_EXPONENTIAL, base_backoff=0.5, factor=2.0, jitter=0.2)
+_KLINE_RETRY_POLICY = RetryPolicy(attempts=2, strategy=STRATEGY_EXPONENTIAL, base_backoff=0.5, factor=2.0, jitter=0.2)
 
 
 class _NonJsonBody(ValueError):
@@ -69,6 +75,9 @@ def _fetch_kline_json(full_code: str, days: int, start_from: str | None) -> dict
     url = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
     params: dict[str, str | int] = {"param": f"{full_code},day,{start_from or ''},,{days},qfq"}
 
+    #: 单次尝试耗时（供挂起判据：超预算一半即判主机不可达，不再同源重试）
+    elapsed_box: dict[str, float] = {"v": 0.0}
+
     def _attempt() -> dict:
         with make_http_client(timeout=_KLINE_TIMEOUT) as client:
             resp = client.get(url, params=params)
@@ -91,12 +100,24 @@ def _fetch_kline_json(full_code: str, days: int, start_from: str | None) -> dict
             _KLINE_RETRY_POLICY.attempts - 1,
         )
 
+    def _attempt_timed() -> dict:
+        started = time.monotonic()
+        try:
+            return _attempt()
+        finally:
+            elapsed_box["v"] = time.monotonic() - started
+
     try:
         return retry_transient(
-            _attempt,
+            _attempt_timed,
             policy=_KLINE_RETRY_POLICY,
-            # 确定性失败（基准禁网桩）换时机重试必然重复：fail-fast 直接上抛
-            retry_on=lambda e: is_transient_exception(e) and not is_deterministic_failure(e),
+            # 确定性失败（基准禁网桩）换时机重试必然重复：fail-fast 直接上抛；
+            # 挂起型（单次 ≥ 预算一半）同样不重试——再试只会再白等一个预算
+            retry_on=lambda e: (
+                is_transient_exception(e)
+                and not is_deterministic_failure(e)
+                and elapsed_box["v"] < _KLINE_TIMEOUT * HANG_ELAPSED_RATIO
+            ),
             on_retry=_on_transient_retry,
         )
     except TRANSIENT_EXCEPTIONS as e:

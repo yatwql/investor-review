@@ -290,6 +290,10 @@
 | `tracking` | `holdings_tracking.json` | 30 天 | — | 持仓跟踪数据（精确键名，无指纹） |
 | `calendar` | `trading_calendar.json` | 14 天 | — | A 股交易日历（精确键名，无指纹） |
 | `bond_yield` | `bond_yield_rf` | 24h | — | 无风险利率（国债收益率；精确键名，无指纹） |
+| `datasink_probe_miss` | `datasink_probe_miss_{hash}.json` | 12h | — | 财报章节 404 探测负缓存（只记**确定性**缺失；调大=省请求但恢复更慢） |
+| `report_symbol_miss` | `report_symbol_miss_{symbol}.json` | 6h | — | 标的正文缺失负缓存（章节阶 + 备源均无正文） |
+| `report_sections_miss` | `report_sections_miss_{doc_id}.json` | 6h | — | 章节清单不可得负缓存（源侧应答但无可用清单，避免每份报告重探 `/sections`） |
+| `report_sections_backoff` | `report_sections_backoff_{doc_id}.json` | 30min | — | 章节清单**探测失败**的短退避（传输级挂起，成功后立即解除；与上一条语义不同） |
 
 ##### 历史走势类
 

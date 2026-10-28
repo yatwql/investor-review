@@ -67,6 +67,41 @@ class TestPhaseBreakdownRecorder:
         assert rec.spans()["模块"] == pytest.approx(800.0)
 
 
+class TestTrackCacheCounters:
+    """缓存冷热标记：阶段内的命中/未命中增量写入 counters，供跨运行对拍。"""
+
+    def test_records_incremental_hits_and_misses(self, monkeypatch):
+        from src.python.cache import _stats
+        from src.python.core.perf import PerfCollector
+
+        _stats.reset_cache_stats()
+        perf = PerfCollector("full", [])
+        with perf.track_cache_counters("prep_cache"):
+            _stats._record_cache_hit()
+            _stats._record_cache_hit()
+            _stats._record_cache_miss()
+        counters = perf.snapshot().counters
+        assert counters["prep_cache_hits"] == 2
+        assert counters["prep_cache_misses"] == 1
+        _stats.reset_cache_stats()
+
+    def test_second_block_counts_only_its_own_delta(self, monkeypatch):
+        from src.python.cache import _stats
+        from src.python.core.perf import PerfCollector
+
+        _stats.reset_cache_stats()
+        perf = PerfCollector("full", [])
+        with perf.track_cache_counters("a"):
+            _stats._record_cache_hit()
+        with perf.track_cache_counters("b"):
+            _stats._record_cache_miss()
+            _stats._record_cache_miss()
+        counters = perf.snapshot().counters
+        assert counters["a_hits"] == 1 and counters["a_misses"] == 0
+        assert counters["b_hits"] == 0 and counters["b_misses"] == 2
+        _stats.reset_cache_stats()
+
+
 class TestCollectorRecorderRegistry:
     """collector.recorder：实例复用与快照归集。"""
 

@@ -11,6 +11,7 @@ patch 必须指向本模块 `doctor_logs`，指向 `doctor` 不会生效（调�
 from __future__ import annotations
 
 import glob
+import gzip
 import json
 import os
 from typing import Any
@@ -82,28 +83,58 @@ def _check_log_volume() -> dict[str, Any]:
         return _item(GROUP_LOG_CACHE, "日志体积", False, f"读取失败：{e}", hint="检查 logs/ 目录权限")
 
 
-def _check_dedup_anchor() -> dict[str, Any]:
-    """去重锚点文件体积（超阈值提示维护压缩；报告路径不压缩）。"""
+def _anchor_files() -> list[str]:
+    """锚点分片（`dedup_anchors-YYYYMM.jsonl.gz`）+ 未分片单文件（若仍存在）。"""
+    directory = os.path.dirname(_DEDUP_ANCHOR_PATH)
     try:
-        if not os.path.exists(_DEDUP_ANCHOR_PATH):
-            return _item(GROUP_LOG_CACHE, "去重锚点", True, "未生成（尚无去重锚点，属正常）")
-        size = os.path.getsize(_DEDUP_ANCHOR_PATH)
-        with open(_DEDUP_ANCHOR_PATH, encoding="utf-8", errors="replace") as f:
-            lines = sum(1 for _ in f)
-        bak = "（已保留 .bak 备份）" if os.path.exists(_DEDUP_ANCHOR_PATH + ".bak") else ""
-        ok = size <= _ANCHOR_COMPACT_BYTES
-        return _item(
-            GROUP_LOG_CACHE,
-            "去重锚点",
-            ok,
-            f"{size / 1024 / 1024:.1f} MB / {lines} 行（维护压缩阈值 {_ANCHOR_COMPACT_BYTES / 1024 / 1024:.0f} MB）{bak}",
-            hint=""
-            if ok
-            else "超过阈值：运行评估默认压缩（`python scripts/eval-dedup-threshold.py`），"
-            "或手工 `python scripts/eval-dedup-threshold.py --compact`",
+        names = sorted(
+            name for name in os.listdir(directory) if name.startswith("dedup_anchors-") and name.endswith(".jsonl.gz")
         )
+    except OSError:
+        names = []
+    paths = [os.path.join(directory, name) for name in names]
+    if os.path.exists(_DEDUP_ANCHOR_PATH):
+        paths.append(_DEDUP_ANCHOR_PATH)
+    return paths
+
+
+def _count_anchor_lines(path: str) -> int:
+    """数一个锚点文件的行数（分片为 gzip，透明解压；坏行按行计入不影响体积判断）。"""
+    try:
+        if path.endswith(".gz"):
+            with gzip.open(path, "rt", encoding="utf-8", errors="replace") as f:
+                return sum(1 for _ in f)
+        with open(path, encoding="utf-8", errors="replace") as f:
+            return sum(1 for _ in f)
+    except (OSError, EOFError):
+        return 0
+
+
+def _check_dedup_anchor() -> dict[str, Any]:
+    """去重锚点总体积（各月分片之和；超阈值提示维护压缩，报告路径不压缩）。"""
+    paths = _anchor_files()
+    if not paths:
+        return _item(GROUP_LOG_CACHE, "去重锚点", True, "未生成（尚无去重锚点，属正常）")
+    try:
+        size = sum(os.path.getsize(path) for path in paths if os.path.isfile(path))
+        lines = sum(_count_anchor_lines(path) for path in paths)
     except OSError as e:
-        return _item(GROUP_LOG_CACHE, "去重锚点", False, f"读取失败：{e}", hint="检查 data/cache/ 权限")
+        return _item(GROUP_LOG_CACHE, "去重锚点", False, f"读取失败：{e}", hint="检查 data/calibration/ 权限")
+    shards = sum(1 for path in paths if path.endswith(".gz"))
+    legacy = "（含旧版单文件，下次压缩并入分片）" if any(path.endswith(".jsonl") for path in paths) else ""
+    bak = "（已保留 .bak 备份）" if any(os.path.exists(path + ".bak") for path in paths) else ""
+    ok = size <= _ANCHOR_COMPACT_BYTES
+    return _item(
+        GROUP_LOG_CACHE,
+        "去重锚点",
+        ok,
+        f"{size / 1024 / 1024:.1f} MB / {lines} 行 / {shards} 个分片"
+        f"（告警线 {_ANCHOR_COMPACT_BYTES / 1024 / 1024:.0f} MB）{legacy}{bak}",
+        hint=""
+        if ok
+        else "超过阈值：运行评估默认压缩（`python scripts/eval-dedup-threshold.py`，会裁到体积目标内并打印裁剪分布），"
+        "或手工 `python scripts/eval-dedup-threshold.py --compact`",
+    )
 
 
 def _check_perf_ledger_health() -> dict[str, Any]:

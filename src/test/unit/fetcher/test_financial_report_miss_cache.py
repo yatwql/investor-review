@@ -193,8 +193,202 @@ class TestDocMissVisibility:
                 "",
             ),
         )
-        monkeypatch.setattr(digest, "doc_miss_hits", lambda: 2)
+        # 计数是进程级，先全清再按类注入，避免其它用例的命中串进本次断言
+        fr.reset_doc_miss_hits()
         monkeypatch.setattr(digest, "reset_doc_miss_hits", lambda: None)
+        # 汇总按 `cache.NegativeCache` 统一清单逐类打一行：把实例计数换成 2 即可
+        monkeypatch.setattr(fr.DOC_MISS, "hits", lambda: 2)
         with caplog.at_level(logging.INFO, logger="invest"):
             digest.build_financial_report_digest([], {})
-        assert any("命中负缓存 2 次" in record.getMessage() for record in caplog.records)
+        assert any("空正文（该文档无该章节）命中负缓存 2 次" in record.getMessage() for record in caplog.records)
+
+
+class TestSectionsUnavailableNegativeCache:
+    """章节清单不可得 → 负缓存，`/sections` 不再每份报告重探。
+
+    判定口径：源侧成功应答但无可用章节清单（404 探测未命中 / 200 空列表）时，
+    清单结论只取决于源侧解析状态、跨报告稳定——不缓存就会每份报告为同一篇文档
+    重发一次 `/sections`（实测 5 篇 × 0.3~1.4s ≈ 5s/份，全缓存运行的数据准备
+    主要残差）。传输级失败另走 30min **短退避**（不进 6h 确定性缺失缓存）——避免
+    每份报告都为同一篇文档白等一次超时预算（实测单篇 20.7s），又不长时间堵住恢复。
+    """
+
+    def test_second_call_skips_sections_probe(self, isolated_cache, monkeypatch):
+        calls = {"n": 0}
+
+        def _sections(doc_id):
+            calls["n"] += 1
+            return None
+
+        monkeypatch.setattr(fr.datasink, "fetch_report_sections", _sections)
+        assert fr._fetch_sections("47990") is None
+        assert fr._fetch_sections("47990") is None
+        assert calls["n"] == 1, "确认不可得后不得再发 /sections 请求"
+
+    def test_transport_failure_opens_backoff_not_deterministic_miss(self, isolated_cache, monkeypatch):
+        """传输级失败 → 短退避（30min），**不**进「确定性缺失 6h」负缓存。
+
+        两者语义必须分开：这条只是这次探测挂起了（源侧可能马上恢复，短暂避让即可），
+        那条是源侧确认没有清单（结论稳定，6h 不用再问）。
+        """
+        calls = {"n": 0}
+
+        def _sections(doc_id):
+            calls["n"] += 1
+            raise RuntimeError("connection reset")
+
+        monkeypatch.setattr(fr.datasink, "fetch_report_sections", _sections)
+        assert fr._fetch_sections("47990") is None
+        assert fr._fetch_sections("47990") is None
+        assert calls["n"] == 1, "退避窗口内不得重探（每轮白等满一个超时预算）"
+        assert fr.SECTIONS_BACKOFF.is_missing(fr.SECTIONS_BACKOFF.key("47990")) is True
+        assert fr.SECTIONS_MISS.is_missing(fr.SECTIONS_MISS.key("47990")) is False, "传输失败不得当成确定性缺失"
+
+    def test_available_sections_still_cached_positive(self, isolated_cache, monkeypatch):
+        calls = {"n": 0}
+
+        def _sections(doc_id):
+            calls["n"] += 1
+            return ["第三节管理层讨论与分析"]
+
+        monkeypatch.setattr(fr.datasink, "fetch_report_sections", _sections)
+        assert fr._fetch_sections("47990") == ["第三节管理层讨论与分析"]
+        assert fr._fetch_sections("47990") == ["第三节管理层讨论与分析"]
+        assert calls["n"] == 1
+
+    def test_invalidate_clears_negative_cache(self, isolated_cache, monkeypatch):
+        """全空正文时清一次清单缓存：负缓存也要清，否则恢复期被无谓延长。"""
+        calls = {"n": 0}
+
+        def _sections(doc_id):
+            calls["n"] += 1
+            return None
+
+        monkeypatch.setattr(fr.datasink, "fetch_report_sections", _sections)
+        fr._fetch_sections("47990")
+        fr._invalidate_sections_cache("47990")
+        fr._fetch_sections("47990")
+        assert calls["n"] == 2, "失效后应重新探测（清单可能已被源侧补齐）"
+
+    def test_hits_are_counted_and_resettable(self, isolated_cache, monkeypatch):
+        monkeypatch.setattr(fr.datasink, "fetch_report_sections", lambda doc_id: None)
+        fr.reset_doc_miss_hits()
+        fr._fetch_sections("47990")  # 首次：写负缓存（未命中）→ 不计
+        assert fr.sections_miss_hits() == 0
+        fr._fetch_sections("47990")
+        fr._fetch_sections("47990")
+        assert fr.sections_miss_hits() == 2
+        fr.reset_doc_miss_hits()
+        assert fr.sections_miss_hits() == 0
+
+    def test_transport_failure_opens_short_backoff(self, isolated_cache, monkeypatch):
+        """传输级失败（挂起/断连）→ 30min 短退避，下一轮不再白等同一篇的超时预算。
+
+        与「确定性缺失 6h 负缓存」语义不同：那条是源侧确认没有清单，这条只是这次探测
+        挂起了；探测只是取数优选路径，短退避止住「每份报告都再撞一次」，又不长时间堵住恢复。
+        """
+        calls = {"n": 0}
+
+        def _sections(doc_id):
+            calls["n"] += 1
+            raise RuntimeError("handshake operation timed out")
+
+        monkeypatch.setattr(fr.datasink, "fetch_report_sections", _sections)
+        assert fr._fetch_sections("817432") is None
+        assert fr._fetch_sections("817432") is None
+        assert calls["n"] == 1, "退避窗口内不得再探测 /sections"
+
+    def test_success_clears_backoff(self, isolated_cache, monkeypatch):
+        """探测成功即解除退避（源侧恢复后立刻重新用上清单）。"""
+        monkeypatch.setattr(
+            fr.datasink, "fetch_report_sections", lambda doc_id: (_ for _ in ()).throw(RuntimeError("t"))
+        )
+        fr._fetch_sections("817432")
+        monkeypatch.setattr(fr.datasink, "fetch_report_sections", lambda doc_id: None)
+        # 退避窗口内仍跳过（返回 None 且不再请求）
+        assert fr._fetch_sections("817432") is None
+        fr._invalidate_sections_cache("817432")  # 显式失效不清退避，另用 clear
+        fr.SECTIONS_BACKOFF.clear(fr.SECTIONS_BACKOFF.key("817432"))
+        mark = {"n": 0}
+
+        def _ok(doc_id):
+            mark["n"] += 1
+            return ["第三节管理层讨论与分析"]
+
+        monkeypatch.setattr(fr.datasink, "fetch_report_sections", _ok)
+        assert fr._fetch_sections("817432") == ["第三节管理层讨论与分析"]
+        assert mark["n"] == 1
+        # 成功后再探一次：正向缓存命中，不再请求
+        assert fr._fetch_sections("817432") == ["第三节管理层讨论与分析"]
+        assert mark["n"] == 1
+
+    def test_unusable_sections_list_is_negative_cached(self, isolated_cache, monkeypatch):
+        """源侧返回**非空但不可用**的清单（只有封面/目录几项）→ 失效同时记负缓存。
+
+        实测形态：`/sections` 返回 3 项「公司名 / 年度报告 / 重要提示」，匹配不到任何
+        偏好章节 → 回退偏好名直取仍全空 → 该清单每次都会走到失效分支。只失效不记负缓存，
+        等于每份报告都为同一篇文档重探 `/sections` 并重试同一批死章节名（1~3s/篇）。
+        """
+        calls = {"n": 0}
+
+        def _sections(doc_id):
+            calls["n"] += 1
+            return ["某公司", "2025 年年度报告", "重要提示"]
+
+        monkeypatch.setattr(fr.datasink, "fetch_report_sections", _sections)
+        monkeypatch.setattr(fr, "_fetch_document", lambda *a, **k: None)
+        fr.reset_doc_miss_hits()
+        assert fr._collect_doc_sections(817432, ["管理层讨论与分析"])[1] == []
+        assert fr._collect_doc_sections(817432, ["管理层讨论与分析"])[1] == []
+        assert calls["n"] == 1, "不可用清单确认一次后，下一轮不得再探 /sections"
+        assert fr.sections_miss_hits() == 1
+
+    def test_unusable_sections_miss_can_be_invalidated(self, isolated_cache, monkeypatch):
+        """负缓存可被显式失效（源侧补齐时不必干等 TTL）。"""
+        monkeypatch.setattr(fr.datasink, "fetch_report_sections", lambda doc_id: None)
+        fr._fetch_sections("817432")
+        assert fr._fetch_sections("817432") is None  # 命中负缓存
+        fr._invalidate_sections_cache("817432")
+        mark_calls = {"n": 0}
+        monkeypatch.setattr(
+            fr.datasink, "fetch_report_sections", lambda doc_id: (mark_calls.__setitem__("n", 1), None)[1]
+        )
+        fr._fetch_sections("817432")
+        assert mark_calls["n"] == 1, "失效后必须重新探测"
+
+    def test_digest_logs_sections_miss_summary(self, isolated_cache, monkeypatch, caplog):
+        """报告级一行 INFO：让「这轮省了几次 /sections 探测」可直接读日志确认。"""
+        import logging
+
+        from src.python.report import financial_report_digest as digest
+
+        monkeypatch.setattr(digest, "datasink_credential_missing", lambda: None)
+        monkeypatch.setattr(
+            digest,
+            "collect_a_share_targets",
+            lambda h, p: [{"code": "47990", "symbol": "47990.SS", "name": "演示", "kind": "holding"}],
+        )
+        monkeypatch.setattr(
+            digest,
+            "fetch_symbol_report_detailed",
+            lambda *a, **k: (
+                {
+                    "doc_id": "1",
+                    "symbol": "47990.SS",
+                    "report_period": "2026-09-30",
+                    "doc_type": "三季报",
+                    "title": "t",
+                    "content": "c",
+                    "summary": "c",
+                    "source": "datasink",
+                    "word_count": 1,
+                },
+                "",
+            ),
+        )
+        fr.reset_doc_miss_hits()
+        monkeypatch.setattr(digest, "reset_doc_miss_hits", lambda: None)
+        monkeypatch.setattr(fr.SECTIONS_MISS, "hits", lambda: 3)
+        with caplog.at_level(logging.INFO, logger="invest"):
+            digest.build_financial_report_digest([], {})
+        assert any("章节清单不可得命中负缓存 3 次" in record.getMessage() for record in caplog.records)

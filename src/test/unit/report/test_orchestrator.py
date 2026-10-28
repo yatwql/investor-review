@@ -182,7 +182,9 @@ class TestPrepareReportData:
             "cost_position_data",
         }
         assert set(result.keys()) == expected_keys, f"缺少 key: {expected_keys - set(result.keys())}"
-        # 数据准备子阶段九项全部进入 breakdown 记录器
+        # 数据准备子阶段十项全部进入 breakdown 记录器（「财报摘要」与「财务指标」
+        # 分两段：合并时无法区分「逐篇候选网络探测」与「单次多期取数」，全缓存运行
+        # 仍报 5~8s 无法归因）
         assert {
             "行情与明细",
             "指数获取",
@@ -190,7 +192,8 @@ class TestPrepareReportData:
             "风格与因子",
             "覆盖与新鲜度",
             "估值与温度",
-            "财报摘要与指标",
+            "财报摘要",
+            "财务指标",
             "申购与成本位置",
             "明细装配与建议",
         } <= set(recorder.names)

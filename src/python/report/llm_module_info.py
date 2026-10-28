@@ -36,21 +36,23 @@ _MODULE_KEYS = ["global_macro", "expert_review", "health_check", "penetration_de
 
 
 def _module_keys(llm_failure: dict, per_module: dict) -> list[str]:
-    """明细行的模块枚举：固定五模块 + （条件）生成后自检。
+    """明细行的模块枚举：固定五模块 + （条件）生成后自检 + （条件）持仓变动复盘归因。
 
-    生成后自检仅在产生实际用量或留下跳过原因时上屏；无数据的空行不展示，
-    但一旦它实际运行或留下了跳过原因，就**必须**上屏——否则用量总计包含它、
-    而明细行不含它，行合计与总计对不上（成本不可追溯）。
+    后两者仅在产生实际用量或留下跳过原因时上屏；无数据的空行不展示，但一旦它实际
+    运行或留下了跳过原因，就**必须**上屏——否则用量总计包含它、而明细行不含它，
+    行合计与总计对不上（成本不可追溯）。
     """
+    from src.python.llm.holding_change_review import HOLDING_CHANGE_MODULE_KEY
     from src.python.llm.self_review import SELF_REVIEW_MODULE_KEY
 
     keys = list(_MODULE_KEYS)
-    if SELF_REVIEW_MODULE_KEY in keys:
-        return keys
-    has_data = SELF_REVIEW_MODULE_KEY in (per_module or {})
-    has_status = bool(get_llm_module_failure_reason(llm_failure or {}, SELF_REVIEW_MODULE_KEY))
-    if has_data or has_status:
-        keys.append(SELF_REVIEW_MODULE_KEY)
+    for optional_key in (SELF_REVIEW_MODULE_KEY, HOLDING_CHANGE_MODULE_KEY):
+        if optional_key in keys:
+            continue
+        has_data = optional_key in (per_module or {})
+        has_status = bool(get_llm_module_failure_reason(llm_failure or {}, optional_key))
+        if has_data or has_status:
+            keys.append(optional_key)
     return keys
 
 

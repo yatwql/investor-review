@@ -555,13 +555,18 @@ class TestStaleSectionsCacheRecovery:
         monkeypatch.setattr(fr, "_fetch_sections", lambda doc_id, source=None: sections)
         monkeypatch.setattr(fr, "_fetch_document", lambda doc_id, section, **kw: doc_result)
         monkeypatch.setattr(fr, "cache_clear", lambda key: cleared.append(key))
+        # 失效分支同时写负缓存：必须打桩，否则用例会落到真实缓存目录
+        monkeypatch.setattr(fr, "cache_set", lambda key, value: None)
         return cleared
 
     def test_all_sections_missing_invalidates_list_cache(self, monkeypatch):
         cleared = self._wire(monkeypatch, ["第三节管理层讨论与分析"], None)
         record, contents = fr._collect_doc_sections(810006, ["管理层讨论与分析"])
         assert record is None and contents == []
-        assert cleared == [f"{fr.SECTIONS_PREFIX}810006"], "清单不可信时必须失效该文档的清单缓存"
+        assert cleared == [
+            f"{fr.SECTIONS_PREFIX}810006",
+            f"{fr.SECTIONS_MISS_PREFIX}810006",
+        ], "清单不可信时必须失效该文档的清单缓存（正负两键同清，否则负缓存挡住重新探测）"
 
     def test_successful_fetch_keeps_list_cache(self, monkeypatch):
         """取到正文时不得清缓存（每篇都清会让清单缓存形同虚设，多付一次 /sections 探测）。"""

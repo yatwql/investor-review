@@ -514,10 +514,12 @@ def _auto_reset_anchor_state():
     后续测试（锚点路径已由 _isolate_sensitive_paths 隔离到 tmp_path；
     写侧已无跨轮 key 缓存，不需要额外重置）。
     """
-    from src.python.providers import news_dedup
+    from src.python.providers import news_dedup_anchor_policy
 
-    news_dedup._ANCHOR_RECORDS = []
-    news_dedup._ANCHOR_SIZE_WARNED = False
+    # 批内缓冲与「已告警」标记都属写侧（策略层）状态：必须改实际持有者，
+    # 改门面 `news_dedup.<同名>` 只是换个副本，状态照旧串到下个用例
+    news_dedup_anchor_policy.reset_anchor_records()
+    news_dedup_anchor_policy._ANCHOR_SIZE_WARNED = False
 
 
 @pytest.fixture(autouse=True)

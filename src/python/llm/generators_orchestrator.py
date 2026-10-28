@@ -675,6 +675,11 @@ def generate_all_llm(
     if is_feature_enabled("llm_debate_procon"):
         needs["expert_review"] = depth_gate(is_llm_module_enabled(llm_config, "expert_review"), "expert_review", _depth)
 
+    # ── 持仓变动复盘归因并入并行批 ──────────────────────
+    # 只吃持仓变动契约、不依赖四模块产出，无串行后置的必要；其单次 4~25s 原先完全
+    # 叠加在 expert_review 之后的关键路径上。契约缺席/开关关闭由模块内部跳过。
+    needs.setdefault("holding_change", True)
+
     # ── 辩论模式容器（用于闭包捕获 debate_info） ────────
     _debate_info_container: list[dict | None] = [None]
     _has_debate = is_feature_enabled("llm_debate_procon")
@@ -780,6 +785,19 @@ def generate_all_llm(
                 )
                 # 用修正后的内容替换原结果
                 if _corrected != _result and _corrected != _summary:
+                    # 修正只改产出不改输入：缓存键（内容寻址生成输入）不变，但缓存里的
+                    # 正文仍是修正前的——不回写则每次运行都重做同一批修正，且展示正文
+                    # 与缓存正文口径不一致（不可复现）。回写时机在此（摘要拼接前）：
+                    # 摘要属当轮元信息，不能混进缓存正文。键取预检/写侧同源的
+                    # `cache_info[mk]["key"]`（仅预检命中的模块不经骨架，骨架那边无记录）。
+                    from src.python.llm.skeleton import write_back_module_cache
+
+                    write_back_module_cache(
+                        _corrected,
+                        cache_key=(cache_info.get(_mk) or {}).get("key", ""),
+                        module_key=_mk,
+                        cached=_cached,
+                    )
                     _result = _corrected
                 if _summary and _summary not in _result:
                     _result = _result + "\n" + _summary
@@ -796,14 +814,28 @@ def generate_all_llm(
     # ── 生成后自检（开关开启时执行；自检输入是上面四个模块的产出，必须在它们之后）──
     # 不属线程池并行调度模块，故**不登记**进 _MODULE_FNS（注册纪律：无独立调度语义的
     # 编排注册属注册漂移）；模块本身仍在 core/registry.py 登记以复用缓存/统计/失败载体。
+    from src.python.llm.fact_checker import strip_fact_check_blocks
     from src.python.llm.self_review import run_self_review
+    from src.python.llm.skeleton import strip_llm_footer
+
+    def _review_text(html: str | None) -> str | None:
+        """自检输入只取分析正文：剥离用量页脚与事实校验产物段落。
+
+        两者都是「本次运行的元信息」而非分析结论：页脚随缓存态必然不同（新生成含
+        Token/耗时/费用，命中含"使用缓存"），校验摘要的检查项计数随缓存态变化、
+        修正条数随正文变化。任一混进自检输入，同一份分析正文都会算出不同的缓存键，
+        表现为「上游重算后必多一次自检调用」。报告渲染仍用含这两段的完整正文。
+        """
+        if not html:
+            return html
+        return strip_fact_check_blocks(strip_llm_footer(html))
 
     run_self_review(
         {
-            "global_macro": gm_r,
-            "expert_review": er_r,
-            "health_check": hc_r,
-            "penetration_deep": pd_r,
+            "global_macro": _review_text(gm_r),
+            "expert_review": _review_text(er_r),
+            "health_check": _review_text(hc_r),
+            "penetration_deep": _review_text(pd_r),
         },
         holdings_details,
         penetrated_assets,
@@ -815,18 +847,10 @@ def generate_all_llm(
         schedule_replay_block=schedule_replay_block,
     )
 
-    # ── 持仓变动复盘归因（章内块；与自检同为串行后置调用）──
-    # 契约缺席（开关关闭/准入未过）时 run_holding_change_review 内部直接跳过——
-    # 不进 LLM、不写载体，`llm_review` 保持 None，报告归因块隐藏（双端同构）。
-    from src.python.llm.holding_change_review import run_holding_change_review
-
-    run_holding_change_review(
-        pipeline_data,
-        llm_config,
-        force="holding_change" in _force_scope,
-        holdings_details=holdings_details,
-        purchase_constraint_block=purchase_constraint_block,
-    )
+    # ── 持仓变动复盘归因：已在上面并入并行批（`_MODULE_FNS["holding_change"]`）──
+    # 早先串行后置是因为它与自检同属「章内块」，但它只吃持仓变动契约、不依赖四模块
+    # 产出，串行只是把 4~25s 白加到关键路径上。契约缺席（开关关闭/准入未过）时内部
+    # 直接跳过：不进 LLM、不写载体，`llm_review` 保持 None，报告归因块隐藏（双端同构）。
 
     logger.info(
         "LLM 生成完成: %s=%s, %s=%s, %s=%s, %s=%s",

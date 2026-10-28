@@ -142,6 +142,12 @@ class _StubPerf:
 
         return MagicMock()
 
+    def track_cache_counters(self, *args, **kwargs):
+        """缓存冷热计数替身：上下文管理器，块内零行为。"""
+        from contextlib import nullcontext
+
+        return nullcontext()
+
     def save(self, *args, **kwargs) -> None:
         pass
 

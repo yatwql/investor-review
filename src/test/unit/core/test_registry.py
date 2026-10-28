@@ -731,7 +731,12 @@ class TestCacheOnlyDebateRegistry:
             assert prefixes[f"{data_type}_"] == data_type
 
     #: 缓存专属的缺失探测负缓存类型（不进模块清单，仅缓存域消费）
-    _NEGATIVE_CACHE_TYPES = {"datasink_probe_miss", "report_symbol_miss"}
+    _NEGATIVE_CACHE_TYPES = {
+        "datasink_probe_miss",
+        "report_symbol_miss",
+        "report_sections_miss",
+        "report_sections_backoff",
+    }
 
     def test_cache_registry_is_registry_plus_cache_only(self) -> None:
         """缓存域注册表 = 常规注册表 ∪ 缓存专属项，常规项无重复。"""

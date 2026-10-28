@@ -56,6 +56,33 @@ class TestFetchWithFallbackEdge(unittest.TestCase):
     @patch("src.python.fetcher.chain.cache_get")
     @patch("src.python.fetcher.chain.cache_set")
     @patch("src.python.fetcher.chain._get_chain")
+    def test_hang_is_not_retried_same_source(self, mock_chain, mock_set, mock_get):
+        """挂起型失败（单次耗时超阈值）→ 不再同源重试，直接落下一槽。
+
+        判定口径：慢主机只会继续慢。实测腾讯 K 线握手超时 60s×3 次/标的，十余持仓
+        把报告卡成二十分钟；链级重试对挂起毫无收益，只放大等待。
+        用例把阈值压到 0，使「任意一次尝试都算挂起」，直接验证判据接线。
+        """
+        from src.python.fetcher import chain
+        from src.python.fetcher.chain import fetch_with_fallback
+        import httpx
+
+        mock_chain.return_value = ["p1", "p2"]
+        mock_get.return_value = None
+        fn1 = MagicMock(side_effect=httpx.TimeoutException("handshake operation timed out"))
+        fn2 = MagicMock(return_value={"data": "fallback_ok"})
+        provider_map = {"p1": ("P1", fn1), "p2": ("P2", fn2)}
+
+        with patch.object(chain, "_TRANSIENT_RETRY_BACKOFF", 0.0), patch.object(chain, "_HANG_ELAPSED_SECONDS", 0.0):
+            result = fetch_with_fallback("price", provider_map, "test_key", 3600)
+
+        assert result == {"data": "fallback_ok"}
+        assert fn1.call_count == 1, "挂起型失败不得同源重试"
+        fn2.assert_called_once()
+
+    @patch("src.python.fetcher.chain.cache_get")
+    @patch("src.python.fetcher.chain.cache_set")
+    @patch("src.python.fetcher.chain._get_chain")
     def test_http_429_triggers_fallback(self, mock_chain, mock_set, mock_get):
         """HTTP 429 限流 → 回退到下一链路。"""
         from src.python.fetcher.chain import fetch_with_fallback

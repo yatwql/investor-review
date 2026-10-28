@@ -78,7 +78,7 @@ class TestExtractFromPipelineData(unittest.TestCase):
         pipeline_data = {"holding_change_data": dict(_CONTRACT)}
 
         with patch("src.python.llm.holding_change_review.run_holding_change_review") as mock_run:
-            generate_all_llm([], [], 0, 0, 0, 0, 0, {}, pipeline_data=pipeline_data)
+            generate_all_llm({}, {}, 0, 0, 0, 0, 0, {}, pipeline_data=pipeline_data)
 
         for name, mock_fn in [
             ("global_macro", mock_macro),
@@ -88,7 +88,7 @@ class TestExtractFromPipelineData(unittest.TestCase):
         ]:
             kwargs = mock_fn.call_args.kwargs
             assert kwargs.get("holding_change_block") == _BLOCK, f"{name}: 未收到提示词块实例"
-        # 归因入口同样以该管线数据被编排层串行调用
+        # 归因入口同样以该管线数据被并行调度（worker 线程内调用）
         assert mock_run.call_count == 1
         assert mock_run.call_args.args[0] is pipeline_data
 
@@ -96,7 +96,7 @@ class TestExtractFromPipelineData(unittest.TestCase):
         """契约缺席（feature 关闭/准入未过）→ ""（提示词与缓存键双不变）。"""
         self._stubs(mock_expert, mock_macro, mock_health, mock_penetration)
 
-        generate_all_llm([], [], 0, 0, 0, 0, 0, {}, pipeline_data={})
+        generate_all_llm({}, {}, 0, 0, 0, 0, 0, {}, pipeline_data={})
 
         for name, mock_fn in [
             ("global_macro", mock_macro),
@@ -407,12 +407,20 @@ class TestRegistryAlignment(unittest.TestCase):
         else:
             pytest.fail("默认设置缺少 *_holding_change 键组")
 
-    def test_not_in_dispatch_module_fns(self):
-        """刻意不进 _build_module_fns（串行后置，无独立并行调度语义）。"""
+    def test_registered_in_dispatch_module_fns(self):
+        """并入并行批：只吃持仓变动契约、不依赖四模块产出，串行后置只会白加关键路径耗时。"""
         from src.python.llm import _llm_dispatch
 
         fns = _llm_dispatch._build_module_fns({}, {}, 0.0, 0.0, 0.0, 0.0, 0, {}, None, None, None, False)
-        assert "holding_change" not in fns, "归因模块应由编排层串行调用，不得进线程池调度"
+        assert "holding_change" in fns, "归因模块应登记进并行调度（离线跑不覆盖其入批）"
+        assert callable(_llm_dispatch.run_holding_change_in_worker)
+
+    def test_self_review_stays_serial(self):
+        """自检仍串行后置：它的输入是四模块产出，进线程池会读到 None。"""
+        from src.python.llm import _llm_dispatch
+
+        fns = _llm_dispatch._build_module_fns({}, {}, 0.0, 0.0, 0.0, 0.0, 0, {}, None, None, None, False)
+        assert "self_review" not in fns
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -496,3 +504,179 @@ class TestRunHoldingChangeReviewFallbackClient(unittest.TestCase):
             assert LLM_MODULE_FAILURE.get("holding_change"), "失败须登记可观测原因"
         finally:
             LLM_MODULE_FAILURE.pop("holding_change", None)
+
+
+def _dispatch_holding_change(pipeline, llm_config=None):
+    from src.python.llm import _llm_dispatch
+
+    return _llm_dispatch._dispatch_llm_workers(
+        {"holding_change": True},
+        llm_config or {},
+        False,
+        {},
+        {},
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0,
+        {},
+        None,
+        None,
+        None,
+        pipeline_data=pipeline,
+    )
+
+
+def test_holding_change_runs_in_worker_thread_and_writes_contract(monkeypatch):
+    """归因并入并行批：在 worker 线程里跑、复用共享客户端、写回契约。"""
+    import threading
+
+    from src.python.llm import holding_change_review
+
+    seen: dict = {}
+
+    def fake_run(
+        pipeline_data,
+        llm_config,
+        *,
+        force=False,
+        holdings_details=None,
+        purchase_constraint_block="",
+        http_client=None,
+    ):
+        seen["thread"] = threading.current_thread().name
+        seen["has_shared_client"] = http_client is not None
+        pipeline_data["holding_change_data"]["llm_review"] = "归因文本"
+        return True
+
+    monkeypatch.setattr(holding_change_review, "run_holding_change_review", fake_run)
+    pipeline = {"holding_change_data": {"available": True, "prompt_block": "P", "llm_review": None}}
+
+    results = _dispatch_holding_change(pipeline)
+
+    assert seen["thread"] != threading.main_thread().name, "必须在线程池里跑（串行后置会白加关键路径耗时）"
+    assert seen["has_shared_client"] is True, "worker 应复用线程持有的共享 HTTP 客户端"
+    assert results["holding_change"]["result"] == "ok"
+    assert pipeline["holding_change_data"]["llm_review"] == "归因文本"
+
+
+def test_holding_change_failure_isolated(monkeypatch):
+    """归因抛异常只降级为「无归因」，不拖垮并行批。"""
+    from src.python.llm import holding_change_review
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("端点挂了")
+
+    monkeypatch.setattr(holding_change_review, "run_holding_change_review", boom)
+    pipeline = {"holding_change_data": {"available": True, "prompt_block": "P", "llm_review": None}}
+
+    results = _dispatch_holding_change(pipeline)
+
+    assert results["holding_change"]["result"] is None
+    assert pipeline["holding_change_data"]["llm_review"] is None
+
+
+@pytest.mark.usefixtures("offline_external_sources")
+def test_cache_hit_through_dispatch(monkeypatch, llm_cache_dir):
+    """T4：同一契约经分发层二次调用只产生 1 次真实调用（缓存键与指纹不受调度位置影响）。"""
+    from src.python import config as cfg_mod
+    from src.python.llm.holding_change_review import run_holding_change_review
+    from src.test.unit.llm._cache_fixtures import CHAIN_CONFIG, LLM_REPLY_DEFAULT
+
+    conf = dict(CHAIN_CONFIG)
+    pipeline = {"holding_change_data": {"available": True, "prompt_block": "块A", "llm_review": None}}
+    with (
+        patch.object(cfg_mod, "get_llm_config", return_value=conf),
+        patch("src.python.llm.skeleton.call_llm", return_value=LLM_REPLY_DEFAULT) as mock_call,
+    ):
+        first = _dispatch_holding_change(pipeline, conf)
+        pipeline["holding_change_data"]["llm_review"] = None
+        second = _dispatch_holding_change(pipeline, conf)
+
+    assert first["holding_change"]["result"] == "ok"
+    assert second["holding_change"]["result"] == "ok"
+    assert mock_call.call_count == 1, "契约未变时经分发层的第二次调用必须命中缓存"
+    del run_holding_change_review  # 仅用于文档锚点：断言对象是分发层路径
+
+
+@pytest.mark.usefixtures("offline_external_sources")
+def test_routes_through_provider_chain(monkeypatch, llm_cache_dir):
+    """T6：归因在 worker 内仍经 call_llm 进入 Provider Chain（不因透传客户端绕开链路）。"""
+    from src.python import config as cfg_mod
+    from src.test.unit.llm._cache_fixtures import CHAIN_CONFIG, LLM_REPLY_DEFAULT
+
+    conf = dict(CHAIN_CONFIG)
+    pipeline = {"holding_change_data": {"available": True, "prompt_block": "块B", "llm_review": None}}
+    with (
+        patch.object(cfg_mod, "get_llm_config", return_value=conf),
+        patch("src.python.llm.skeleton.call_llm", return_value=LLM_REPLY_DEFAULT) as mock_call,
+    ):
+        results = _dispatch_holding_change(pipeline, conf)
+
+    assert results["holding_change"]["result"] == "ok"
+    assert mock_call.call_count == 1, "归因必须经 call_llm（Chain 入口）发起，恰好一次"
+
+
+def test_registry_notes_match_parallel_dispatch():
+    """T8：登记说明与模块 docstring 的调度表述必须与并行实现一致（防注释与代码相反）。"""
+    from pathlib import Path
+
+    from src.python.core.constants import PROJECT_ROOT
+
+    registry = (Path(PROJECT_ROOT) / "src/python/core/data_registry.py").read_text(encoding="utf-8")
+    review = (Path(PROJECT_ROOT) / "src/python/llm/holding_change_review.py").read_text(encoding="utf-8")
+
+    stale = "无独立并行调度语义"
+    assert stale not in registry, "data_registry 的归因条目说明不得再声称无并行调度语义"
+    assert "刻意不进" not in review, "归因模块 docstring 不得再声称不进 _MODULE_FNS"
+    assert "同批并行调度" in review, "docstring 必须写明与四模块同批并行调度"
+
+
+def test_self_review_receives_text_without_fact_check_blocks():
+    """编排层喂给自检的正文剔除校验产物段落（报告渲染仍用含校验段落的完整正文）。"""
+    from unittest.mock import MagicMock
+
+    from src.test.helpers import SynchronousExecutor
+
+    summary = '<p style="color:#4a4;font-size:12px">[全球政经局势] ✓ 事实校验通过：19/19 项检查全部通过</p>'
+    captured: dict = {}
+
+    def fake_self_review(outputs, *args, **kwargs):
+        captured.update(outputs)
+        return False
+
+    _precheck = {
+        k: {"result": None, "cached": False}
+        for k in ("global_macro", "expert_review", "health_check", "penetration_deep")
+    }
+    with (
+        patch("src.python.llm.generators_orchestrator.get_llm_config", return_value=dict(_ENABLED)),
+        patch("src.python.llm.generators_orchestrator._precheck_all_modules", return_value=_precheck),
+        patch("src.python.llm._llm_dispatch.ThreadPoolExecutor", new=SynchronousExecutor),
+        patch("src.python.llm._llm_dispatch.httpx.Client", new=MagicMock()),
+        patch(
+            "src.python.llm._llm_dispatch.generate_global_macro",
+            return_value=(f"<p>正文</p>{summary}", False),
+        ),
+        patch(
+            "src.python.llm._llm_dispatch.generate_expert_review",
+            return_value=(f"<p>正文</p>{summary}", False),
+        ),
+        patch(
+            "src.python.llm._llm_dispatch.generate_health_check",
+            return_value=(f"<p>正文</p>{summary}", False),
+        ),
+        patch(
+            "src.python.llm._llm_dispatch.generate_penetration_deep_analysis",
+            return_value=(f"<p>正文</p>{summary}", False),
+        ),
+        patch("src.python.llm.self_review.run_self_review", side_effect=fake_self_review),
+    ):
+        generate_all_llm({}, {}, 0, 0, 0, 0, 0, {}, pipeline_data={})
+
+    assert captured, "自检必须收到模块产出"
+    for name, text in captured.items():
+        if text:
+            assert "事实校验" not in text, f"{name}: 自检输入不得含校验摘要段落"
+            assert "<p>正文</p>" in text

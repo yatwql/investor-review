@@ -71,6 +71,38 @@ def thinking_wait_total_seconds() -> float:
         return round(_THINKING_WAIT_TOTAL["seconds"], 3)
 
 
+def run_holding_change_in_worker(
+    pipeline_data: dict | None,
+    llm_config: dict | None,
+    *,
+    force: bool = False,
+    holdings_details: list[dict] | None = None,
+    purchase_constraint_block: str = "",
+    http_client: Any = None,
+) -> tuple[str | None, bool]:
+    """持仓变动复盘归因的**并行工作线程**包装（把 bool 结果转成调度层形态）。
+
+    该模块不进 ``llm/session`` 的四模块统计口径（仍按 registry 登记复用缓存/统计），
+    这里只负责调用与失败隔离：任何异常都降级为「无归因」（报告归因块隐藏），
+    绝不影响主内容。
+    """
+    from src.python.llm.holding_change_review import run_holding_change_review
+
+    try:
+        ok = run_holding_change_review(
+            pipeline_data,
+            llm_config,
+            force=force,
+            holdings_details=holdings_details,
+            purchase_constraint_block=purchase_constraint_block,
+            http_client=http_client,
+        )
+    except Exception:  # noqa: BLE001 — 归因失败不得影响主内容
+        logger.warning("持仓变动复盘归因并行调度异常（不影响主内容）", exc_info=True)
+        return (None, False)
+    return ("ok" if ok else None, False)
+
+
 def _build_module_fns(
     a_indices,
     us_indices,
@@ -113,6 +145,17 @@ def _build_module_fns(
         return force or key in _forced
 
     return {
+        # 持仓变动复盘归因：只吃持仓变动契约（`pipeline_data["holding_change_data"]`），
+        # 不依赖四模块产出，因此并入并行批而非串行后置——实测其单次 4~25s 原先完全
+        # 叠加在 expert_review 之后的关键路径上。契约缺席/开关关闭时内部直接跳过。
+        "holding_change": lambda c, lc: run_holding_change_in_worker(
+            pipeline_data,
+            lc,
+            force=_mod_force("holding_change"),
+            holdings_details=holdings_details,
+            purchase_constraint_block=purchase_constraint_block,
+            http_client=c,
+        ),
         "global_macro": lambda c, lc: generate_global_macro(
             a_indices,
             us_indices,

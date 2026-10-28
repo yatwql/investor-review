@@ -75,7 +75,7 @@ def reset_auto_correction_counts() -> None:
 
 def apply_numerical_corrections(
     html: str,
-    corrections: list[tuple[str, str, str]],
+    corrections: list[tuple[str, str, str, str]],
 ) -> str:
     """对 HTML 内容中的错误百分比数值执行自动替换。
 

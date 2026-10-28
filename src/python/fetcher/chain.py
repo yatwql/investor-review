@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Callable
 from typing import Any, cast
 
@@ -54,6 +55,10 @@ from src.python.fetcher.chain_incremental import (
 # （DataSinking 免费档日配额仅 8191 篇）。
 _TRANSIENT_RETRY_ATTEMPTS = 1  # 同源额外重试次数
 _TRANSIENT_RETRY_BACKOFF = 0.6  # 首次重试基础退避（秒），指数增长 + 抖动
+#: 「挂起型」失败的链级判据：单次尝试耗时 ≥ 该秒数即判主机不可达，**不再同源重试**——
+#: 慢主机只会继续慢（实测腾讯 K 线握手超时 60s×3 次/标的，十余持仓把报告卡成二十分钟）。
+#: 阈值取 20s：正常慢响应（含 1.7MB 财报全文）不会误判，只有真挂起才命中。
+_HANG_ELAPSED_SECONDS = 20.0
 
 
 logger = logging.getLogger("invest")
@@ -219,11 +224,17 @@ def fetch_with_fallback(
 
         reason_box: dict[str, str] = {"reason": ""}
 
+        hang_box: dict[str, bool] = {"v": False}
+
         def _attempt() -> Any:
-            result, reason_box["reason"] = _try_provider_fetch(
-                data_type, provider_name, source_label, fetch_fn, kwargs, validate, transform
-            )
-            return result
+            _started = time.monotonic()
+            try:
+                result, reason_box["reason"] = _try_provider_fetch(
+                    data_type, provider_name, source_label, fetch_fn, kwargs, validate, transform
+                )
+                return result
+            finally:
+                hang_box["v"] = (time.monotonic() - _started) >= _HANG_ELAPSED_SECONDS
 
         def _on_transient_retry(failed_attempt: int, delay: float, _exc: BaseException | None) -> None:
             logger.info(
@@ -247,7 +258,8 @@ def fetch_with_fallback(
                 factor=2.0,
                 jitter=0.2,
             ),
-            retry_if_result=lambda r: r is TRANSPORT_FAILURE,
+            # 挂起型失败不再同源重试（再试只会再白等一个超时预算），直接落下一槽
+            retry_if_result=lambda r: r is TRANSPORT_FAILURE and not hang_box["v"],
             on_retry=_on_transient_retry,
         )
         reason = reason_box["reason"]
