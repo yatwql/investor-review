@@ -19,8 +19,6 @@
 
 | # | 问题 | 修复方向 |
 | --- | --- | --- |
-| **rf-957** | `test_fingerprint_baseline.py` 两个用例依赖执行顺序：单跑通过、整目录跑必红（同目录其他用例写过内存键基线后未复位，`reset_baseline_cache()` 只清文件侧）；HEAD 上同样复现，非本批引入 | 该模块加 autouse fixture 复位 orchestrator 侧内存基线（`_PREV_MODULE_CACHE_KEY` 等），或用例内显式复位；随后「整目录」与「单例」两种跑法都绿 |
-| **rf-953** | `HTML 生成` 阶段耗时异常分化：同一台机器、同一持仓，20:52 为 0.3s，22:20 为 **17.3s**，日志内找不到对应的耗时动作（该段只有开发期一次穿透回显）；期间同时段其它阶段正常，故非 CPU 饥饿的可解释形态 | 已加**阶段细分计时**（`_report_output` 的 `图表数据装配` / `页面写入` 两段，见 perf breakdown），下次复现即可判定是图表数据装配还是渲染/落盘；若落在「页面写入」，再按模板渲染与文件写入二次细分（`write_html_report` 内部）|
 
 ### P3 — 持续监控：兼容残留
 
@@ -72,6 +70,8 @@
 | **rf-942** | 锚点维护段文档与实现漂移（写 120 天可压小、未写缺省压缩与体积上限口径） | 按三重条件重写 developer-guide / technical / requirements R-DATA-09 / scripts-reference / testplan 与自检提示；压缩结果打印超期/体积裁剪（含分支分布）/补标注/并发放弃四类计数 |
 | **rf-955** | 缓存清理器按文件名前缀统一取 TTL，把同前缀下的异构寿命键一并裁掉：`sector_flow_last_good`（设计 3 天）与 `sector_flow_negative`（设计 30 分钟）都落到 900s → 陈旧回退基准活不过一次启动清理，R-BRK-09 的回退条款结构性不可达 | 注册表新增 `exact_key_ttls` 单源声明 + `get_exact_ttl_map()`，清理器按精确键覆盖前缀默认值；取数侧 TTL 同源读取；回归 6 例（对应 `plan-237`） |
 | **rf-956** | `scripts/probe.py` 子探针 import 失败被静默当成「探测失败」：入口只把 `scripts/` 加进 `sys.path`，子探针的 `from src.python…` 全部 ImportError——`csi` 因此长期输出「无可用代码」的错误结论 | 入口补仓库根 `sys.path`；`_probes` 登记表加 Protocol 契约面；`sector-flow` target 实测双通道（主 0/4、备 4/4） |
+| **rf-957** | `test_fingerprint_baseline.py` 两个用例依赖执行顺序：单跑通过、整目录跑必红（同目录其他用例写过内存键基线后未复位，`reset_baseline_cache()` 只清文件侧） | `reset_baseline_cache()` 同时清 `skeleton._PREV_MODULE_CACHE_KEY`（上轮基线本就是「快照 + 进程内」两个来源）；回归 1 例断言 reset 后归因为冷启动而非「键变了」 |
+| **rf-953** | `HTML 生成` 阶段耗时分化（同机同持仓 0.3s ↔ 17.3s，日志内找不到对应耗时动作） | **根因**：该阶段夹带了惰性补数据（基金排名/业绩/基金经理/风格），而卡顿源是基金经理页面的 SSL 握手超时——它以 `ConnectError` 抛出而非 `TimeoutException`，未被识别成「站点不可达」，于是又去撞档案页，同一只基金连等两次（各 ~6.9s）。**修复**：连接阶段单独封顶（`httpx.Timeout(6.0, connect=3.0)` / `(4.0, connect=3.0)`），`ConnectError` 归入「站点不可达」并跳过档案页回退；回归 2 例（握手失败不赌回退 / 连接预算封顶） |
 
 ### 归档档案
 - [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-10-27）

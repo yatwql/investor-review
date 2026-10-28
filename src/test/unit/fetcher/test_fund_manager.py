@@ -326,7 +326,8 @@ class TestArchivePageTimeout:
     def test_archive_page_uses_tighter_timeout(self):
         from src.python.fetcher import fund_manager as fm
 
-        assert fm._ARCHIVE_TIMEOUT < fm._TIMEOUT, "回退页超时应小于主页超时"
+        assert fm._ARCHIVE_TIMEOUT.read < fm._TIMEOUT.read, "回退页读超时应小于主页读超时"
+        assert fm._TIMEOUT.connect <= 3.0, "连接阶段（含 TLS 握手）须单独封顶"
 
         with patch.object(fm, "make_http_client") as mock_client:
             mock_client.return_value.__enter__.return_value.get.return_value.text = "<html></html>"
@@ -376,6 +377,30 @@ class TestManagerTimeoutBudget(unittest.TestCase):
         """主页 + 档案页超时预算合计不超过 ~10s（实测旧值 15+8 造成 27s 挂起）。"""
         from src.python.fetcher import fund_manager
 
-        self.assertLessEqual(fund_manager._TIMEOUT, 6.0)
-        self.assertLessEqual(fund_manager._ARCHIVE_TIMEOUT, 4.0)
-        self.assertLessEqual(fund_manager._TIMEOUT + fund_manager._ARCHIVE_TIMEOUT, 10.0)
+        self.assertLessEqual(fund_manager._TIMEOUT.read, 6.0)
+        self.assertLessEqual(fund_manager._ARCHIVE_TIMEOUT.read, 4.0)
+        self.assertLessEqual(fund_manager._TIMEOUT.read + fund_manager._ARCHIVE_TIMEOUT.read, 10.0)
+
+    def test_connect_failure_skips_archive_fallback(self):
+        """SSL 握手超时以 ConnectError 抛出（非 TimeoutException）→ 同样视为站点不可达、不再赌档案页。
+
+        回归场景：同一只基金连撞两次握手超时（各 ~6.9s），把 HTML 阶段撑到 17s+。
+        """
+        import httpx
+
+        from src.python.fetcher import fund_manager
+
+        with (
+            patch.object(fund_manager, "cache_get", return_value=None),
+            patch.object(
+                fund_manager,
+                "make_http_client",
+                side_effect=httpx.ConnectError("_ssl.c:1012: The handshake operation timed out"),
+            ),
+            patch.object(fund_manager, "_parse_manager_from_archive_page") as mock_archive,
+        ):
+            html, unreachable = fund_manager._request_fund_html_status("022365")
+
+        self.assertIsNone(html)
+        self.assertTrue(unreachable, "握手/建连失败必须归为站点不可达")
+        mock_archive.assert_not_called()

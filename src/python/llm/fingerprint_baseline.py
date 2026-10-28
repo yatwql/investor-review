@@ -43,10 +43,18 @@ def _path() -> str:
 
 
 def reset_baseline_cache() -> None:
-    """丢弃进程内缓存（报告边界/测试隔离用；下次读取重新落盘读）。"""
+    """丢弃**全部**上轮基线：本模块的快照缓存 + 生成侧的进程内键记录。
+
+    「上轮基线」有两个来源（跨进程快照、本进程内 `skeleton._PREV_MODULE_CACHE_KEY`），
+    归因时进程内优先。只清快照会让「新进程视角」失效——内存里还留着上一轮的键，
+    冷启动会被误判成「键变了」。报告边界与测试隔离都走这一个入口。
+    """
     global _loaded
     with _lock:
         _loaded = None
+    from src.python.llm.skeleton import reset_prev_module_cache_keys
+
+    reset_prev_module_cache_keys()
 
 
 def load_baseline() -> dict[str, Any]:

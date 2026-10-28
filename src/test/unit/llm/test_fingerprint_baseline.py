@@ -53,6 +53,26 @@ class TestSnapshotStorage:
         assert fb.changed_components({"holdings": "a"}, {}) == [], "无基线不臆测变化"
 
 
+class TestResetClearsBothBaselines:
+    """`reset_baseline_cache()` 必须同时清「跨进程快照」与「进程内上轮键」。
+
+    回归场景：只清快照时，同进程里残留的上一轮键会让冷启动被误判为
+    `fingerprint_changed`（整目录跑测试时表现为「单跑绿、合跑红」）。
+    """
+
+    def test_reset_clears_in_process_prev_keys(self, tmp_path, monkeypatch):
+        from src.python.llm import fingerprint_baseline, skeleton
+        from src.python.llm.generators_orchestrator import _key_changed_from_baseline
+
+        monkeypatch.setattr(fingerprint_baseline, "BASELINE_FILE", str(tmp_path / "snap.json"))
+        skeleton._PREV_MODULE_CACHE_KEY["penetration_deep"] = "llm_penetration_deep_OLD"
+        fingerprint_baseline.reset_baseline_cache()
+        assert skeleton._PREV_MODULE_CACHE_KEY == {}, "reset 须清空进程内上轮键"
+        assert _key_changed_from_baseline("llm_penetration_deep_NEW", "penetration_deep") is None, (
+            "无任何基线时不得臆测为「键变了」，应回落冷启动"
+        )
+
+
 class TestAttributionUsesKeyBaseline:
     """归因主信号是「键是否变化」，组件映射只作解释（可滞后于指纹函数入参）。"""
 

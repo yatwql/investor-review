@@ -38,10 +38,12 @@ _HEADERS = {
 }
 #: 主页请求超时。实测该源 SSL 握手挂起可达 17s+，旧值 15s 叠加回退链路后单个代码
 #: 能吃掉 27s（占数据准备阶段近四成）且最终仍解析失败——按「预算 10s 内给出结论」收敛。
-_TIMEOUT = 6.0
+# 超时按连接/读取分档：SSL 握手超时也算「站点不可达」，需在连接阶段就封顶，
+# 否则握手会按读超时预算白等（实测单次 ~6.9s）。
+_TIMEOUT = httpx.Timeout(6.0, connect=3.0)
 #: 档案页（回退链路）超时：与主页合计不超过 ~10s；它只是主页解析失败后的尽力回退，
 #: 不值得为它把单个代码拖成十几秒。
-_ARCHIVE_TIMEOUT = 4.0
+_ARCHIVE_TIMEOUT = httpx.Timeout(4.0, connect=3.0)
 
 # ── HTML 解析辅助函数 ─────────────────────────────────────────
 
@@ -211,10 +213,12 @@ def parse_manager_from_html(html: str) -> dict[str, Any] | None:
 
 
 def _request_fund_html_status(code: str) -> tuple[str | None, bool]:
-    """请求基金主页面 HTML，返回 ``(html, 是否网络级超时)``。
+    """请求基金主页面 HTML，返回 ``(html, 站点是否不可达)``。
 
-    超时与其它请求错误分开返回，供调用方决定是否继续走档案页回退——握手/连接超时
-    意味着同一站群整体不可达，再试一次只会把等待翻倍（实测 15s+8s）。
+    「不可达」指握手/连接/读超时**这一类传输级失败**（含 SSL 握手超时，它以
+    `ConnectError` 形态抛出而非 `TimeoutException`），与 4xx/解析失败区分开：前者
+    意味着同一站群整体不通，再走档案页只会把等待翻倍（实测同一只基金连撞两次
+    6.9s，HTML 阶段被撑到 17s+）。
     """
     url = f"https://fund.eastmoney.com/{code.strip()}.html"
     logger.debug("请求基金经理页面: %s", url)
@@ -226,6 +230,10 @@ def _request_fund_html_status(code: str) -> tuple[str | None, bool]:
     except httpx.TimeoutException:
         logger.warning("基金经理页面超时: %s", code)
         return None, True
+    except httpx.ConnectError as e:
+        # 握手/建连失败（含 SSL handshake timeout）——同一站群整体不可达
+        logger.warning("基金经理页面连接失败（站点不可达）%s: %s", code, e)
+        return None, True
     except httpx.RequestError as e:
         logger.warning("基金经理页面请求失败 %s: %s", code, e)
         return None, False
@@ -233,7 +241,7 @@ def _request_fund_html_status(code: str) -> tuple[str | None, bool]:
 
 def _request_fund_html(code: str) -> str | None:
     """请求基金主页面 HTML（兼容既有调用方：只取 HTML，丢弃超时标记）。"""
-    html, _timed_out = _request_fund_html_status(code)
+    html, _unreachable = _request_fund_html_status(code)
     return html
 
 
@@ -373,16 +381,16 @@ def fetch_fund_manager(code: str) -> dict[str, Any] | None:
         return cached
 
     # 主页面解析
-    html, timed_out = _request_fund_html_status(code)
+    html, unreachable = _request_fund_html_status(code)
     if html:
         result = parse_manager_from_html(html)
         if result:
             cache_set(cache_key, result)
             return result
         logger.debug("基金经理主页解析失败 [%s]，尝试档案页回退", code)
-    elif timed_out:
-        # 网络级超时：同一站群档案页同样多半不通，再赌一个超时只会把等待翻倍
-        logger.warning("基金经理主页超时，跳过档案页回退（按缺数据降级）[%s]", code)
+    elif unreachable:
+        # 传输级不可达（握手/连接/读超时）：同一站群档案页同样不通，再赌一次只会把等待翻倍
+        logger.warning("基金经理主页不可达，跳过档案页回退（按缺数据降级）[%s]", code)
         return None
     else:
         logger.debug("基金经理主页请求失败 [%s]，尝试档案页回退", code)
