@@ -36,10 +36,16 @@ HOLDINGS_FILENAME = "演示持仓.xlsx"
 #: 占位凭据：值明显不是真 key，让首页状态行显示「LLM 已配置」而非首次使用告警
 DEMO_API_KEY = "sk-demo-not-a-real-key"
 
+#: 演示工作区的凭据块名（llm_key.json 的键 = llm_providers.json 的 credentials_ref）
+DEMO_CREDENTIALS_REF = "demo-main"
+
+#: 运行上下文标签（真实运行为空）——日志分析据此区分演示产出与真实产出
+DEMO_RUN_CONTEXT = "demo"
+
 
 #: 演示报告运行会写真实运行状态（perf 台账 / 健康历史 / 实验与熔断状态 / 去重锚点）。
 #: 「真实 data/ 零接触」要求这些目录在跑前快照、跑后原样还原。
-GUARDED_STATE_DIRS: tuple[str, ...] = ("data/state", "data/calibration")
+GUARDED_STATE_DIRS: tuple[str, ...] = ("data/state", "data/calibration", "data/history")
 
 
 def snapshot_paths(paths: tuple[Path, ...]) -> dict[Path, bytes]:
@@ -96,7 +102,9 @@ def _write_holdings(demo: Path) -> None:
     holdings_dir = demo / "data" / "holdings"
     holdings_dir.mkdir(parents=True, exist_ok=True)
     workbook = Workbook()
-    workbook.remove(workbook.active)
+    default_sheet = workbook.active
+    if default_sheet is not None:
+        workbook.remove(default_sheet)
     for account in dict.fromkeys(item[0] for item in HOLDINGS):
         sheet = workbook.create_sheet(account)
         sheet.append(["名称", "代码", "持仓份额", "每份成本"])
@@ -104,6 +112,58 @@ def _write_holdings(demo: Path) -> None:
             if row_account == account:
                 sheet.append([name, code, shares, cost])
     workbook.save(holdings_dir / HOLDINGS_FILENAME)
+
+
+def _write_llm_files(demo: Path) -> None:
+    """写入演示工作区的 LLM 配置对（凭据块名与 provider 引用同名）。
+
+    两份文件必须同位：``llm_key.json`` 的凭据块名 = ``DEMO_CREDENTIALS_REF``，
+    ``llm_providers.json`` 只声明引用同一个块。不同名时每次演示 run 都会刷
+    「引用凭据在 llm_key.json 中不存在」的 WARNING，把真实日志里的告警统计带偏；
+    凭据本身是明显占位值，不连任何真实源。
+    """
+    config_dir = demo / "data" / "config"
+    (config_dir / "llm_key.json").write_text(
+        json.dumps(
+            {DEMO_CREDENTIALS_REF: {"api_key": DEMO_API_KEY, "model": "demo-model"}}, ensure_ascii=False, indent=2
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (config_dir / "llm_providers.json").write_text(
+        json.dumps(
+            {
+                "providers": [
+                    {
+                        "name": DEMO_CREDENTIALS_REF,
+                        "provider": "claude",
+                        "credentials_ref": DEMO_CREDENTIALS_REF,
+                        "priority": 10,
+                        "timeout": 120,
+                    }
+                ],
+                "strategy": "priority",
+                "preferred_providers": {},
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def isolation_env(demo: Path) -> dict[str, str]:
+    """演示运行的环境变量：日志与缓存都改落演示目录，真实 data/ 与 logs/ 零接触。
+
+    Returns:
+        需并入子进程 env 的键值对。
+    """
+    return {
+        "INVEST_LOG_PATH": str(demo / "logs" / "app.log"),
+        "INVEST_RUN_CONTEXT": DEMO_RUN_CONTEXT,
+        "INVEST_CACHE_DIR": str(demo / "data" / "cache"),
+    }
 
 
 def build(output_root: Path | None = None) -> Path:
@@ -114,12 +174,9 @@ def build(output_root: Path | None = None) -> Path:
         path.mkdir(parents=True, exist_ok=True)
 
     _write_holdings(demo)
+    _write_llm_files(demo)
     config = _config(demo)
     (config_dir / "config.json").write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    (config_dir / "llm_key.json").write_text(
-        json.dumps({"provider": "claude", "api_key": DEMO_API_KEY}, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
     return demo
 
 
@@ -197,7 +254,13 @@ def capture_report_text(output_root: Path | None = None) -> str:
     if not config.is_file():
         build(output_root)
     demo = demo_dir(output_root)
-    env = {**os.environ, "PYTHONPATH": str(REPO_ROOT), "TERM": "xterm-256color", "COLUMNS": "110"}
+    env = {
+        **os.environ,
+        "PYTHONPATH": str(REPO_ROOT),
+        "TERM": "xterm-256color",
+        "COLUMNS": "110",
+        **isolation_env(demo),
+    }
     guarded = tuple(REPO_ROOT / rel for rel in GUARDED_STATE_DIRS)
     snap = snapshot_paths(guarded)
     master, slave = pty.openpty()
@@ -235,7 +298,7 @@ def run_report(output_root: Path | None = None) -> int:
     if not config.is_file():
         build(output_root)
     demo = demo_dir(output_root)
-    env = {**os.environ, "PYTHONPATH": str(REPO_ROOT)}
+    env = {**os.environ, "PYTHONPATH": str(REPO_ROOT), **isolation_env(demo)}
     guarded = tuple(REPO_ROOT / rel for rel in GUARDED_STATE_DIRS)
     snap = snapshot_paths(guarded)
     try:

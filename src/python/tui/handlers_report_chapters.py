@@ -132,6 +132,7 @@ def run_report_chapters_panel() -> None:
     from src.python.config.features import feature_switch_registry, is_feature_enabled
     from src.python.core.experiment_stats import load_experiment_usage
     from src.python.core.registry import get_llm_module_names
+    from src.python.tui.tui_menu import filter_menu_llm_modules
 
     # ``llm_settings.json`` 读不到时仍让顶层章节 / 功能开关可用：LLM 块按出厂默认展示，
     # 切换时由编辑层给出具体错误（不静默回落，也不整面板罢工）。
@@ -139,7 +140,7 @@ def run_report_chapters_panel() -> None:
     settings = snapshot[0] if snapshot else {}
     enabled_llm: dict[str, bool] = dict(settings.get("enabled_llm") or {})
     llm_defaults = default_enabled_llm()
-    llm_names = hc.filter_menu_llm_modules(get_llm_module_names())
+    llm_names = filter_menu_llm_modules(get_llm_module_names())
 
     try:
         from src.python.core.perf import module_cost_summary
@@ -229,7 +230,7 @@ def run_report_chapters_panel() -> None:
             return False
         return _print_detail(chapter, flag, llm_names, cost_history)
 
-    def _render(nav: NavState) -> list[str]:
+    def _render(nav: NavState) -> list[str | None]:
         columns = terminal_columns()
         tier = layout_tier(columns)
         numbered = dict(chapter_numbers())

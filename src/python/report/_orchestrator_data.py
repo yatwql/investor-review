@@ -313,9 +313,8 @@ def _penetrated_targets(penetrated_assets: list | None) -> list[dict[str, Any]]:
         if not isinstance(asset, dict):
             continue
         name = str(asset.get("name") or "")
-        # top10 契约（`_build_penetration_result`）已把合并层的 funds 归一为 sources；
-        # 同时兼容 merged 原始形态（测试/降级路径直接喂 merged 值时）
-        raw_sources = asset.get("sources") or asset.get("funds") or []
+        # 来源键真值是 top10 契约的 `sources`（`_build_penetration_result` 归一后）
+        raw_sources = asset.get("sources") or []
         sources = [str(f).strip() for f in raw_sources if str(f).strip() and str(f).strip() != "直接持有"]
         codes: list[str] = []
         code = asset.get("code")
@@ -333,7 +332,7 @@ def compute_financial_indicator_data(
     holdings: list,
     penetrated_assets: list | None,
     config: dict,
-    reporter: ProgressReporter,
+    reporter: ProgressReporter | None,
     details: list | None = None,
 ) -> dict | None:
     """编排财务指标数据（`financial_indicator_data` 数据契约）。

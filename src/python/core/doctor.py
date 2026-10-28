@@ -296,8 +296,7 @@ def _check_llm_credentials() -> list[dict[str, Any]]:
             "未配置 provider 链（llm_providers.json 缺失或无有效条目）",
             hint=(
                 "在 TUI [M] 面板或 Web 配置面板配置线路与 credentials_ref；"
-                "旧版 llm_key.json 顶层 api_key/provider 形态已不支持（启动时自动迁移为 "
-                "default 凭据块与同名 provider 条目，失败时见日志提示）"
+                "llm_key.json 只支持命名凭据块（顶层 api_key 形态不再支持，也不会自动迁移）"
             ),
         )
     ]

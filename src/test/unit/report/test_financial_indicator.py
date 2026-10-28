@@ -170,12 +170,13 @@ class TestOrchestration:
         out = compute_financial_indicator_data(
             [],
             [
-                {"name": "贵州茅台", "codes": ["600519"], "funds": ["[ETF] 某ETF(561910)"]},
-                {"name": "平安银行", "codes": ["000001", "600036"], "funds": ["直接持有"]},
+                {"name": "贵州茅台", "codes": ["600519"], "sources": ["[ETF] 某ETF(561910)"]},
+                {"name": "平安银行", "codes": ["000001", "600036"], "sources": ["直接持有"]},
             ],
             {},
             None,
         )
+        assert out is not None
         assert {r["code"] for r in out["rows"]} == {"600519", "000001", "600036"}
         by_code = {r["code"]: r for r in out["rows"]}
         assert by_code["600519"]["name"] == "贵州茅台"
@@ -201,12 +202,12 @@ class TestPenetratedTargets:
         assert out[0]["sources"] == ["[ETF] 招商中证电池主题ETF(561910)"]
         assert out[1]["sources"] == []  # 「直接持有」来源被剔除（以持仓身份入列）
 
-    def test_merged_shape_funds_key_still_supported(self):
-        """合并层原始形态（funds）仍可用（测试/降级路径直接喂 merged 值）。"""
+    def test_legacy_funds_key_not_read(self):
+        """来源键只以 `sources` 为准：`funds`（合并层内部键）不再作为回退来源。"""
         from src.python.report.orchestrator import _penetrated_targets
 
         out = _penetrated_targets([{"name": "新易盛", "codes": {"300502"}, "funds": ["[QDII] 某基金(017730)"]}])
-        assert out[0]["sources"] == ["[QDII] 某基金(017730)"]
+        assert out[0]["sources"] == []
 
 
 class TestDatasinkGate:

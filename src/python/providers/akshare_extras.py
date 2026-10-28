@@ -17,6 +17,7 @@ import threading as _threading
 import time as _time
 from typing import Any
 
+from src.python.cache import clear as cache_clear
 from src.python.cache import get as cache_get
 from src.python.cache import set as cache_set
 from src.python.core.code_utils import is_a_share_code
@@ -92,6 +93,36 @@ _TTL = 86400  # 盈利预测：1天
 _SECTOR_FLOW_TTL = 900  # 行业资金流向：15分钟
 _DIVIDEND_TTL = 2592000  # 分红：1个月
 
+#: 行业资金流向**失败**的跨进程负缓存键（无指纹，稳定键）：源不可达时，同机后续
+#: 报告各自是独立进程，内存 memo 管不到——每份报告都会再撞一次超时（实测 30 次真实
+#: 运行 38 次 akshare 异常）。落盘后 30 分钟内不再试，恢复后自动重新尝试。
+_SECTOR_FLOW_NEG_KEY = "sector_flow_negative"
+_SECTOR_FLOW_NEG_TTL = 1800  # 30 分钟
+
+#: 最近一次**成功**的行业资金流向载荷（无指纹，稳定键）：源不可达时回退陈旧数据，
+#: 不让「今日资金流向」整块从报告和 LLM 提示词里消失。
+_SECTOR_FLOW_LAST_KEY = "sector_flow_last_good"
+_SECTOR_FLOW_STALE_TTL = 259200  # 3 天：再旧对当下判断无意义，宁可留空
+
+
+def _sector_flow_stale_fallback(failure: str) -> list[dict[str, Any]]:
+    """源不可达/空结果时的降级：回退最近一次成功载荷（≤3 天），拿不到才留空。"""
+    global _SECTOR_FLOW_FAILURE
+    stale = cache_get(_SECTOR_FLOW_LAST_KEY, _SECTOR_FLOW_STALE_TTL)
+    if isinstance(stale, list) and stale:
+        _SECTOR_FLOW_FAILURE = "stale"
+        logger.info("行业资金流向回退陈旧数据（%d 个行业，源状态=%s）", len(stale), failure)
+        return stale
+    _SECTOR_FLOW_FAILURE = failure
+    return []
+
+
+def _note_sector_flow_failure(failure: str) -> list[dict[str, Any]]:
+    """记录失败（进程内 memo + 跨进程负缓存）并返回陈回退数据或空列表。"""
+    _memo_set(_memo_key("sector_flow_fail"), failure)
+    cache_set(_SECTOR_FLOW_NEG_KEY, failure)
+    return _sector_flow_stale_fallback(failure)
+
 
 def _compute_index_fingerprint() -> str:
     """计算市场指数数据的指纹，用于缓存键。
@@ -161,9 +192,10 @@ def get_profit_forecast() -> dict[str, dict]:
     if ak is None:
         logger.warning("akshare 模块未安装，跳过盈利预测")
         return {}
+    _ak = ak  # 局部绑定：全局 ak 为可空（可选依赖），静态检查需要非空视图
 
     def _fetch():
-        return ak.stock_profit_forecast_em()
+        return _ak.stock_profit_forecast_em()
 
     df = run_with_timeout(_fetch, timeout=30.0)
     if df is None:
@@ -258,38 +290,37 @@ def get_sector_fund_flow() -> list[dict[str, Any]]:
     if cached is not None:
         _SECTOR_FLOW_FAILURE = ""
         _memo_set(_memo_key_str, cached)
+        cache_set(_SECTOR_FLOW_LAST_KEY, cached)  # 保住「陈旧回退」窗口的新鲜度
         return cached
 
-    # ── 失败负缓存：同一天内的后续报告直接按「不可用」降级，不再撞超时 ──
+    # ── 失败负缓存（进程内 → 跨进程）：后续报告直接降级，不再逐份撞超时 ──
     _fail_key = _memo_key("sector_flow_fail")
     _fail = _memo_get(_fail_key)
+    if not (isinstance(_fail, str) and _fail):
+        _fail = cache_get(_SECTOR_FLOW_NEG_KEY, _SECTOR_FLOW_NEG_TTL)
     if isinstance(_fail, str) and _fail:
-        _SECTOR_FLOW_FAILURE = _fail
-        logger.debug("行业资金流向近期已失败（%s），本次跳过取数", _fail)
-        return []
+        logger.info("行业资金流向近期已失败（%s），本次跳过取数", _fail)
+        return _sector_flow_stale_fallback(_fail)
 
     # ── 取数 ──
     if ak is None:
         logger.warning("akshare 模块未安装，跳过行业资金流向")
         return []
+    _ak = ak  # 局部绑定：全局 ak 为可空（可选依赖），静态检查需要非空视图
 
     def _fetch():
-        return ak.stock_sector_fund_flow_rank(
+        return _ak.stock_sector_fund_flow_rank(
             indicator="今日",
             sector_type="行业资金流",
         )
 
     df = run_with_timeout(_fetch)
     if df is None:
-        _SECTOR_FLOW_FAILURE = "connection"
-        _memo_set(_fail_key, "connection")
         logger.warning("行业资金流向获取失败")
-        return []
+        return _note_sector_flow_failure("connection")
     if df.empty:
-        _SECTOR_FLOW_FAILURE = "empty"
-        _memo_set(_fail_key, "empty")
         logger.debug("行业资金流向: 结果为空")
-        return []
+        return _note_sector_flow_failure("empty")
     _SECTOR_FLOW_FAILURE = ""
 
     # ── 结构化 ──
@@ -310,6 +341,8 @@ def get_sector_fund_flow() -> list[dict[str, Any]]:
 
     logger.info("行业资金流向加载完成: %d 个行业", len(result))
     cache_set(_key, result)
+    cache_set(_SECTOR_FLOW_LAST_KEY, result)  # 陈旧回退基准
+    cache_clear(_SECTOR_FLOW_NEG_KEY)  # 源恢复：清掉跨进程负缓存
     _memo_set(_memo_key_str, result)
     return result
 
@@ -379,8 +412,13 @@ def _fetch_all_dividends(a_codes: list[str]) -> dict[str, dict]:
     """
     result: dict[str, dict] = {}
 
+    if ak is None:
+        logger.warning("akshare 模块未安装，跳过分红取数")
+        return result
+    _ak = ak  # 局部绑定：全局 ak 为可空（可选依赖），静态检查需要非空视图
+
     try:
-        full_df = ak.stock_history_dividend()
+        full_df = _ak.stock_history_dividend()
     except Exception as e:
         logger.warning("分红全量数据拉取失败: %s", e)
         return result

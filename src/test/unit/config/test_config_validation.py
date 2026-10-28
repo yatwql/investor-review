@@ -339,10 +339,14 @@ class TestValidateMarketHours(unittest.TestCase):
         n = scalars._validate_market_hours({}, 0)
         self.assertEqual(n, 0)
 
-    def test_retired_market_hour_aware_warns(self):
-        """market_hour_aware 已退役 → 任何取值都告警并被忽略（盘中敏感性改由注册表声明）。"""
+    def test_unknown_market_hour_key_ignored(self):
+        """无对应实现的键（如已移除的 market_hour_aware）静默忽略，不计问题。
+
+        盘中敏感类型由注册表声明（price/index），配置层无同名项可消费；
+        不为已移除的键保留识别/告警分支。
+        """
         n = scalars._validate_market_hours({"market_hour_aware": ["price", "news"]}, 0)
-        self.assertEqual(n, 1)
+        self.assertEqual(n, 0)
 
     def test_market_hour_ttl_too_small_warns(self):
         """market_hour_ttl < 30 → 告警。"""

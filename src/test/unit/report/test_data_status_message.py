@@ -126,3 +126,47 @@ class TestMatrixUsesReadableReason:
         tracker.record("industry_000001", "T3", success=False, failure_type="unreachable")
 
         assert "industry_000001: unreachable" in self._matrix_for(tracker)
+
+
+@pytest.mark.unit
+@pytest.mark.unit_report
+class TestStaleFreshnessMarking:
+    """陈旧回退（源不可达 → 上次成功载荷）要在事件里如实标注。"""
+
+    def _events(self, tracker):
+        return [e for e in tracker.get_log() if e["source_key"] == "ff_sector_flow"]
+
+    def test_stale_marking_lands_in_event_detail(self, tracker):
+        from unittest.mock import patch
+
+        from src.python.report import data_status
+
+        with patch.object(data_status, "get_tracker", return_value=tracker):
+            data_status.mark_data_used("ff_sector_flow", "T4", freshness="stale")
+        events = self._events(tracker)
+        assert events and events[-1]["success"] is True
+        assert events[-1]["detail"] == {"freshness": "stale"}
+
+    def test_plain_use_has_no_detail(self, tracker):
+        from unittest.mock import patch
+
+        from src.python.report import data_status
+
+        with patch.object(data_status, "get_tracker", return_value=tracker):
+            data_status.mark_data_used("ff_sector_flow", "T4")
+        assert self._events(tracker)[-1]["detail"] is None
+
+    def test_stale_marking_does_not_touch_failure_counts(self, tracker):
+        """标注不得把自己算成一次失败（否则数据源矩阵会误报降级）。"""
+        from unittest.mock import patch
+
+        from src.python.report import data_status
+
+        with patch.object(data_status, "get_tracker", return_value=tracker):
+            data_status.mark_data_used("ff_sector_flow", "T4", freshness="stale")
+        assert tracker.get_counts("ff_sector_flow") == {}
+
+    def test_success_message_still_dropped(self, tracker):
+        """成功事件仍不带失败原因（陈旧标注只走 freshness 通道）。"""
+        tracker.record("ff_sector_flow", "T4", success=True, failure_type="ok", message="不应上屏")
+        assert self._events(tracker)[-1]["detail"] is None

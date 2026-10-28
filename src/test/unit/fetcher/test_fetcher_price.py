@@ -69,6 +69,20 @@ class TestNameMatches(unittest.TestCase):
         """无非汉字的名称 → False。"""
         self.assertFalse(self._call("ABC", "XYZ"))
 
+    def test_source_short_name_matches_holding_full_name(self):
+        """源侧简称 vs 持仓全称：连续汉字公共段（白酒）足矣 —— 否则有效报价被拒。
+
+        回归场景：161725 源侧返回「白酒基金LOF」/「白酒基金」，持仓写「招商中证白酒」，
+        汉字集合重叠仅 2/4=0.5 低于 0.7 阀值 → 判为不同标的 → 该持仓永久无行情。
+        """
+        self.assertTrue(self._call("白酒基金LOF", "招商中证白酒"))
+        self.assertTrue(self._call("白酒基金", "招商中证白酒"))
+
+    def test_different_securities_still_rejected_by_run_rule(self):
+        """代码歧义场景（没任何连续汉字公共段）仍被拒，连续段判据不得放宽过头。"""
+        self.assertFalse(self._call("宇晶股份", "广发多因子"))
+        self.assertFalse(self._call("长江电力", "贵州茅台"))
+
 
 class TestPriceCacheKey(unittest.TestCase):
     """_price_cache_key / resolve_price_route 纯函数测试。"""
@@ -134,6 +148,7 @@ class TestPriceTransformTencent(unittest.TestCase):
             "price_date": "2026-07-01",
         }
         result = self._call(raw)
+        assert result is not None
         self.assertEqual(result["name"], "长江电力")
         self.assertEqual(result["price"], 26.65)
         self.assertEqual(result["source_api"], "tencent")
@@ -142,6 +157,7 @@ class TestPriceTransformTencent(unittest.TestCase):
     def test_empty_fields(self):
         """缺字段 → 不抛异常。"""
         result = self._call({"code": "600900"})
+        assert result is not None
         self.assertEqual(result["price"], 0.0)
         self.assertEqual(result["name"], "")
 
@@ -164,6 +180,7 @@ class TestPriceTransformEastmoney(unittest.TestCase):
             "nav_date": "2026-07-01",
         }
         result = self._call(raw)
+        assert result is not None
         self.assertEqual(result["name"], "测试基金")
         self.assertEqual(result["price"], 1.2345)
         self.assertEqual(result["yesterday_close"], 1.2000)
@@ -197,6 +214,7 @@ class TestFetchMarketData(unittest.TestCase):
         from src.python.fetcher.price import fetch_market_data
 
         result = fetch_market_data("600900", "长江电力")
+        assert result is not None
         self.assertEqual(result["price"], 26.65)
 
     @patch("src.python.fetcher.price.fetch_with_fallback")
@@ -291,19 +309,22 @@ class TestFetchMarketData(unittest.TestCase):
 
     @patch("src.python.fetcher.price._price_cache_fresh", return_value=True)
     @patch("src.python.fetcher.price.fetch_with_fallback")
-    def test_etf_fund_only_stock_chain(
+    def test_etf_fund_degrades_to_nav_chain_on_failure(
         self,
         mock_fallback,
         mock_fresh,
     ):
-        """161725 ETF 基金 → 仅走 stock 链路（exchange_fund 判定），不降级。"""
+        """场内基金（161725 这类 LOF）股票链路全失败 → 降级净值链路兜底。
+
+        回归场景：LOF 源侧改名（「白酒基金LOF」）导致股票链路验证不过，而 LOF 不在
+        00 重叠区降级名单里 → 无任何兜底 → 每份报告都缺这条行情。
+        """
         from src.python.fetcher.price import fetch_market_data
 
         mock_fallback.return_value = None
-        fetch_market_data("161725", "招商中证白酒指数(LOF)")
-        self.assertEqual(mock_fallback.call_count, 1)
-        args, kwargs = mock_fallback.call_args
-        self.assertEqual(kwargs["data_type"], "price_stock")
+        fetch_market_data("161725", "招商中证白酒")
+        self.assertEqual(mock_fallback.call_count, 2)
+        self.assertEqual(mock_fallback.call_args.kwargs["data_type"], "price_fund_otc")
 
     # ── 00 代码降级 ──────────────────────────────────────
 
@@ -330,6 +351,7 @@ class TestFetchMarketData(unittest.TestCase):
         from src.python.fetcher.price import fetch_market_data
 
         result = fetch_market_data("002943", "广发多因子")
+        assert result is not None
         self.assertIsNotNone(result)
         self.assertEqual(result["source_api"], "eastmoney")
         self.assertEqual(result["price"], 1.2345)
@@ -367,6 +389,7 @@ class TestFetchMarketData(unittest.TestCase):
         from src.python.fetcher.price import fetch_market_data
 
         result = fetch_market_data("000001", "平安银行")
+        assert result is not None
         self.assertIsNotNone(result)
         self.assertEqual(result["source_api"], "tencent")
         self.assertEqual(mock_fallback.call_count, 1)
@@ -639,6 +662,7 @@ class TestFetchPriceCacheRefresh(unittest.TestCase):
         """跨日残留 → 清除缓存 + 重新拉取，返回最新净值并写回缓存。"""
         mock_fallback.side_effect = [self._STALE, self._FRESH]
         result = self._call()
+        assert result is not None
         self.assertEqual(result["price"], 1.2345)  # 返回第二次（最新）结果
         self.assertEqual(result["price_date"], "2026-07-31")
         self.assertEqual(mock_fallback.call_count, 2)
@@ -651,6 +675,7 @@ class TestFetchPriceCacheRefresh(unittest.TestCase):
         """强制刷新后全链仍失败 → 退回刷新前的过时缓存（不因清缓存反而丢数据）。"""
         mock_fallback.side_effect = [self._STALE, None]
         result = self._call()
+        assert result is not None
         self.assertIsNotNone(result)
         self.assertEqual(result["price_date"], "2026-07-30")
         self.assertEqual(mock_fallback.call_count, 2)
@@ -669,6 +694,7 @@ class TestFetchPriceCacheRefresh(unittest.TestCase):
         """
         mock_fallback.side_effect = [self._STALE, self._FRESH]
         result = self._call()
+        assert result is not None
         self.assertEqual(result["price_date"], "2026-07-31")
         self.assertEqual(mock_fallback.call_count, 2)
         mock_clear.assert_called_once_with("price_011506")
@@ -680,6 +706,7 @@ class TestFetchPriceCacheRefresh(unittest.TestCase):
         """新鲜缓存 → 不触发强刷，仅一次 fetch。"""
         mock_fallback.return_value = self._FRESH
         result = self._call()
+        assert result is not None
         self.assertEqual(result["price"], 1.2345)
         self.assertEqual(mock_fallback.call_count, 1)
         mock_clear.assert_not_called()
@@ -724,6 +751,7 @@ class TestFetchPriceCacheRefresh(unittest.TestCase):
         """
         mock_fallback.side_effect = [self._INTRADAY_RESIDUAL, self._POST_CLOSE]
         result = self._call("price_stock")
+        assert result is not None
         self.assertEqual(result["price"], 29.60)
         self.assertEqual(mock_fallback.call_count, 2)
         mock_clear.assert_called_once_with("price_011506")

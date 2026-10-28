@@ -1,11 +1,10 @@
-"""扁平密钥文档规范化回归 — 顶层四字段 → 命名凭据块 + provider 条目。
+"""命名凭据块契约 — llm_key.json 只接受 ``{ref: {api_key, ...}}`` 形态。
 
 覆盖：
-  - 规范化结果：llm_key.json 改写为 `default` 凭据块、原文件备份 `.bak`、
-    llm_providers.json 追加引用同名凭据的条目（凭据分离：条目不含密钥）
-  - 幂等：再次读取不重复追加条目、不再改写
-  - 规范化不可用时凭据加载直接拒绝（不得静默走单 Provider 直连）
-  - 已是命名凭据块的文档不被误改写
+  - 命名凭据块正常加载（含 model / endpoint 可选字段）
+  - 顶层 ``api_key``（单凭据旧形态）**直接拒绝**：不做迁移、不写备份、不改原文件
+  - 拒绝时给出可执行的改写指引（错误日志含目标形态与 credentials_ref）
+  - 非对象值（块内值不是 dict）逐项忽略，不拖垮整份凭据
 
 运行：pytest src/test/unit/config/test_llm_credentials_blocks.py -v
 """
@@ -13,6 +12,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 import pytest
@@ -28,80 +28,103 @@ def _paths(tmp_path: Path) -> tuple[Path, Path]:
     return tmp_path / "llm_key.json", tmp_path / "llm_providers.json"
 
 
-@pytest.fixture(name="flat_env")
-def fixture_flat_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
-    """临时目录下的扁平密钥文档（顶层 provider/api_key/model/endpoint）。"""
+@pytest.fixture(name="key_env")
+def fixture_key_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
+    """临时目录下的 llm_key.json / llm_providers.json 路径（内容由用例自行写）。"""
     key_path, providers_path = _paths(tmp_path)
-    key_path.write_text(
-        json.dumps(
-            {"provider": "openai", "api_key": "  sk-legacy  ", "model": "gpt-x", "endpoint": "https://e/v1"},
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
-    )
     monkeypatch.setattr(providers_mod, "_get_llm_key_path", lambda: str(key_path))
     monkeypatch.setattr(providers_mod, "_get_llm_providers_path", lambda: str(providers_path))
     return key_path, providers_path
 
 
-class TestFlatKeyDocumentConversion:
-    """扁平密钥文档读取时一次性规范化。"""
+class TestNamedBlocksLoad:
+    """命名凭据块是唯一受支持的形态。"""
 
-    def test_key_file_rewritten_to_named_block(self, flat_env: tuple[Path, Path]) -> None:
-        key_path, _ = flat_env
-        assert providers_mod.ensure_credential_blocks(json.loads(key_path.read_text(encoding="utf-8"))) is True
+    def test_named_blocks_loaded_verbatim(self, key_env: tuple[Path, Path]) -> None:
+        key_path, _ = key_env
+        key_path.write_text(
+            json.dumps(
+                {
+                    "main": {"api_key": "sk-a", "model": "m1", "endpoint": "https://e/v1"},
+                    "fallback": {"api_key": "sk-b"},
+                }
+            ),
+            encoding="utf-8",
+        )
+        creds = _load_llm_key_credentials()
+        assert creds is not None
+        assert set(creds) == {"main", "fallback"}
+        assert creds["main"]["model"] == "m1"
+        assert creds["fallback"] == {"api_key": "sk-b"}
 
-        doc = json.loads(key_path.read_text(encoding="utf-8"))
-        assert list(doc) == [DEFAULT_CREDENTIALS_REF]
-        assert doc[DEFAULT_CREDENTIALS_REF]["api_key"] == "sk-legacy", "迁移后密钥应去除首尾空格"
-        assert doc[DEFAULT_CREDENTIALS_REF]["model"] == "gpt-x"
-
-    def test_original_file_backed_up(self, flat_env: tuple[Path, Path]) -> None:
-        key_path, _ = flat_env
-        providers_mod.ensure_credential_blocks(json.loads(key_path.read_text(encoding="utf-8")))
-        backup = Path(str(key_path) + ".bak")
-        assert backup.exists()
-        assert json.loads(backup.read_text(encoding="utf-8"))["api_key"] == "  sk-legacy  "
-
-    def test_provider_entry_appended_with_ref_only(self, flat_env: tuple[Path, Path]) -> None:
-        key_path, providers_path = flat_env
-        providers_mod.ensure_credential_blocks(json.loads(key_path.read_text(encoding="utf-8")))
-
-        raw = json.loads(providers_path.read_text(encoding="utf-8"))
-        entry = next(e for e in raw["providers"] if e.get("credentials_ref") == DEFAULT_CREDENTIALS_REF)
-        assert entry["provider"] == "openai", "后端类型取自旧配置的 provider 字段"
-        assert "api_key" not in entry, "providers 文件不得内联密钥（凭据分离）"
-
-    def test_idempotent(self, flat_env: tuple[Path, Path]) -> None:
-        key_path, providers_path = flat_env
-        providers_mod.ensure_credential_blocks(json.loads(key_path.read_text(encoding="utf-8")))
-        first_raw = providers_path.read_text(encoding="utf-8")
-        # 再次规范化不应追加重复条目（文件内容应逐字不变）
-        providers_mod.ensure_credential_blocks(json.loads(key_path.read_text(encoding="utf-8")))
-        assert providers_path.read_text(encoding="utf-8") == first_raw
-
-    def test_named_block_not_migrated(self, tmp_path: Path) -> None:
-        doc = {"probe": {"api_key": "sk-1"}}
-        assert providers_mod.is_flat_key_document(doc) is False
-
-
-class TestConversionFailureIsExplicit:
-    """规范化失败时不得回退单 Provider 直连：凭据加载直接拒绝。"""
-
-    def test_flat_document_rejected_by_loader(self, flat_env: tuple[Path, Path]) -> None:
+    def test_missing_file_returns_none(self, key_env: tuple[Path, Path]) -> None:
         assert _load_llm_key_credentials() is None
-        # 文件保持原样（不因拒绝而破坏用户配置）
-        key_path, _ = flat_env
-        assert json.loads(key_path.read_text(encoding="utf-8"))["api_key"] == "  sk-legacy  "
+
+    def test_non_object_block_ignored_not_fatal(self, key_env: tuple[Path, Path], caplog) -> None:
+        key_path, _ = key_env
+        key_path.write_text(json.dumps({"main": {"api_key": "sk-a"}, "junk": "sk-b"}), encoding="utf-8")
+        with caplog.at_level(logging.WARNING, logger="invest"):
+            creds = _load_llm_key_credentials()
+        assert creds is not None and "main" in creds
+        assert any("不是 JSON 对象" in r.getMessage() for r in caplog.records)
 
 
-class TestGetLlmConfigNormalizesOnRead:
-    """读取路径自动规范化：规范化后配置具备 provider 链与凭据块。"""
+class TestFlatDocumentRejected:
+    """顶层 api_key 旧形态：拒绝加载，且不留任何迁移痕迹。"""
 
-    def test_get_llm_config_returns_chain_after_conversion(
-        self, flat_env: tuple[Path, Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    def _write_flat(self, key_path: Path) -> None:
+        key_path.write_text(
+            json.dumps(
+                {"provider": "openai", "api_key": "  sk-flat  ", "model": "gpt-x", "endpoint": "https://e/v1"},
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+    def test_loader_returns_none(self, key_env: tuple[Path, Path]) -> None:
+        key_path, _ = key_env
+        self._write_flat(key_path)
+        assert _load_llm_key_credentials() is None
+
+    def test_original_file_untouched_and_no_backup(self, key_env: tuple[Path, Path]) -> None:
+        """不迁移：原文件逐字不变，也不产生 .bak 备份。"""
+        key_path, _ = key_env
+        self._write_flat(key_path)
+        before = key_path.read_text(encoding="utf-8")
+        _load_llm_key_credentials()
+        assert key_path.read_text(encoding="utf-8") == before
+        assert not Path(str(key_path) + ".bak").exists()
+
+    def test_providers_file_not_modified(self, key_env: tuple[Path, Path]) -> None:
+        """不追加 provider 条目：providers 文件不因凭据形态非法而被改写。"""
+        key_path, providers_path = key_env
+        self._write_flat(key_path)
+        raw = {"providers": [{"name": "main", "provider": "claude", "credentials_ref": "main"}]}
+        providers_path.write_text(json.dumps(raw), encoding="utf-8")
+        before = providers_path.read_text(encoding="utf-8")
+        _load_llm_key_credentials()
+        assert providers_path.read_text(encoding="utf-8") == before
+
+    def test_error_message_points_to_target_shape(self, key_env: tuple[Path, Path], caplog) -> None:
+        """拒绝必须可执行：日志说明目标形态 + credentials_ref 字段名。"""
+        key_path, _ = key_env
+        self._write_flat(key_path)
+        with caplog.at_level(logging.ERROR, logger="invest"):
+            _load_llm_key_credentials()
+        errors = [r.getMessage() for r in caplog.records if r.levelno == logging.ERROR]
+        assert any("顶层 api_key" in m for m in errors), errors
+        assert any(DEFAULT_CREDENTIALS_REF in m for m in errors), errors
+        assert any("credentials_ref" in m for m in errors), errors
+
+
+class TestMergedConfigRejectsFlatDocument:
+    """合并读取路径同样不迁移：扁平文档下 get_llm_config 无可用凭据。"""
+
+    def test_get_llm_config_has_no_credentials(
+        self, key_env: tuple[Path, Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        key_path, providers_path = flat_env
+        key_path, _ = key_env
+        key_path.write_text(json.dumps({"api_key": "sk-flat", "model": "gpt-x"}), encoding="utf-8")
         settings_path = tmp_path / "llm_settings.json"
         from src.python.config._llm_settings_defaults import _get_default_llm_settings_template
 
@@ -110,10 +133,6 @@ class TestGetLlmConfigNormalizesOnRead:
         settings_mod._llm_config_cache = None
 
         cfg = settings_mod.get_llm_config()
-
-        assert cfg is not None
-        chain = cfg.get("_provider_list") or []
-        assert any(e.get("credentials_ref") == DEFAULT_CREDENTIALS_REF for e in chain), "规范化后应走 provider 链"
-        assert (cfg.get("_llm_credentials") or {}).get(DEFAULT_CREDENTIALS_REF, {}).get("api_key") == "sk-legacy"
-        assert "api_key" not in cfg, "密钥不得出现在合并后的顶层配置里"
+        assert cfg is not None, "配置文件本身可读，合并结果仍应产出"
+        assert not (cfg.get("_llm_credentials") or {}), "扁平文档不得被当成凭据块加载"
         settings_mod._llm_config_cache = None

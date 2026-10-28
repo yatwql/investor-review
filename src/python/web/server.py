@@ -23,6 +23,7 @@ import logging
 import os
 import socket
 import sys
+import time
 
 # 确保项目根目录在 sys.path 中（支持直接执行 python src/python/web/server.py）
 _src_dir = os.path.dirname(os.path.abspath(__file__))
@@ -38,15 +39,101 @@ logger = logging.getLogger("invest")
 # output_dir 写锁文件名（点文件：不参与 YYYYMMDD 归档扫描与历史枚举）
 OUTPUT_DIR_LOCK_FILE = ".investor_output.lock"
 
+#: 锁文件无 pid 信息时的陈旧阀值（秒）：旧格式/半写的锁超过这个年龄按残留处理
+_LOCK_STALE_SECONDS = 12 * 3600
+
 
 def _output_dir_lock_path(output_dir: str) -> str:
     """返回 output_dir 写锁文件路径。"""
     return os.path.join(output_dir, OUTPUT_DIR_LOCK_FILE)
 
 
+def _read_lock_payload(lock_path: str) -> dict:
+    """读锁文件载荷；不可读/非对象一律当空载荷（陈旧判据自行降级到文件年龄）。"""
+    try:
+        with open(lock_path, encoding="utf-8") as f:
+            payload = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _pid_alive(pid: int) -> bool | None:
+    """pid 是否存活；无法可靠判定时返回 ``None``（调用方退化为文件年龄判据）。
+
+    **Windows 上绝不能用 ``os.kill(pid, 0)`` 探测**：该 API 在 Windows 对非控制台
+    信号直接走 ``TerminateProcess``（sig 被当作退出码）——探测即等于系死持有锁的进程。
+    改用 ``OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)`` 只看句柄能否打开。
+
+    Args:
+        pid: 目标进程号。
+
+    Returns:
+        True（存活）/ False（已退出）/ None（无法判定）。
+    """
+    if os.name == "nt":
+        try:
+            import ctypes
+
+            process_query_limited_information = 0x1000
+            kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+            handle = kernel32.OpenProcess(process_query_limited_information, False, pid)
+            if not handle:
+                return False
+            kernel32.CloseHandle(handle)
+            return True
+        except Exception:  # noqa: BLE001 — 探测失败不得让启动防护报错
+            return None
+    try:
+        os.kill(pid, 0)
+    except PermissionError:
+        return True  # 进程存在、属其它用户 —— 视为仍占用
+    except OSError:
+        return False
+    return True
+
+
+def _lock_staleness(lock_path: str) -> str:
+    """锁文件陈旧判据（返回空串 = 仍然有效）。
+
+    只判「存在」会把崩溃残留锁（kill -9 / 容器重启 / 演示工作区旧锁）当成持续占用：
+    实测一个 4 天前的残留锁让每次启动都刷一条「可能正被其他入口占用」的告警，
+    既误报又让人对真实抢占型告警脱敏。两条判据：
+
+    1. 锁内 pid 已不存在 → 持有者已退出；
+    2. pid 无法判定，或锁内无 pid（旧格式/半写）→ 文件超过 ``_LOCK_STALE_SECONDS``
+       未更新才判残留（存活持有者年龄再大也不接管）。
+
+    Args:
+        lock_path: 锁文件路径。
+
+    Returns:
+        陈旧原因（用于日志）；仍有效时为空串。
+    """
+    payload = _read_lock_payload(lock_path)
+    pid = payload.get("pid")
+    if isinstance(pid, int) and pid > 0:
+        alive = _pid_alive(pid)
+        if alive is False:
+            return f"持有进程 {pid} 已不存在"
+        if alive is True:
+            return ""
+    try:
+        age = os.path.getmtime(lock_path)
+    except OSError:
+        return ""
+    idle = time.time() - age
+    if idle > _LOCK_STALE_SECONDS:
+        return f"锁文件 {idle / 3600:.1f} 小时未更新（pid 无法确认）"
+    return ""
+
+
 def _is_output_dir_locked(output_dir: str) -> bool:
-    """output_dir 是否已被其他入口占用（锁文件存在）。"""
-    return os.path.exists(_output_dir_lock_path(output_dir))
+    """output_dir 是否已被其他入口**有效**占用（残留锁不算）。"""
+    lock_path = _output_dir_lock_path(output_dir)
+    if not os.path.exists(lock_path):
+        return False
+    return not _lock_staleness(lock_path)
 
 
 def _acquire_output_dir_lock(output_dir: str) -> str | None:
@@ -66,7 +153,16 @@ def _acquire_output_dir_lock(output_dir: str) -> str | None:
     try:
         fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except OSError:
-        return None
+        # 扣锁失败：先判陈旧残留——残留锁不应永久占据输出目录
+        stale = _lock_staleness(lock_path)
+        if not stale:
+            return None
+        logger.info("清理陈旧输出目录锁（%s）: %s", stale, lock_path)
+        try:
+            os.remove(lock_path)
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except OSError:
+            return None
     with os.fdopen(fd, "w", encoding="utf-8") as f:
         json.dump({"entry": "web", "pid": os.getpid()}, f, ensure_ascii=False)
     return lock_path

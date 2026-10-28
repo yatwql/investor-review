@@ -6,8 +6,10 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
+import time
 
 import pytest
 
@@ -38,6 +40,44 @@ class TestIsOutputDirLocked:
 
     def test_locked_when_lock_file_present(self, tmp_path):
         _touch(str(tmp_path / server.OUTPUT_DIR_LOCK_FILE))
+        assert server._is_output_dir_locked(str(tmp_path)) is True
+
+
+class TestStaleLockTakeover:
+    """残留锁不得永久占据输出目录（崩溃/容器重启后的现场）。"""
+
+    def test_dead_pid_lock_is_not_treated_as_locked(self, tmp_path):
+        lock = tmp_path / server.OUTPUT_DIR_LOCK_FILE
+        lock.write_text(json.dumps({"entry": "web", "pid": 999999}), encoding="utf-8")
+        assert "已不存在" in server._lock_staleness(str(lock))
+        assert server._is_output_dir_locked(str(tmp_path)) is False
+
+    def test_dead_pid_lock_is_taken_over(self, tmp_path):
+        lock = tmp_path / server.OUTPUT_DIR_LOCK_FILE
+        lock.write_text(json.dumps({"entry": "web", "pid": 999999}), encoding="utf-8")
+        acquired = server._acquire_output_dir_lock(str(tmp_path))
+        assert acquired is not None
+        assert json.loads(lock.read_text(encoding="utf-8"))["pid"] == os.getpid()
+
+    def test_live_pid_lock_blocks_acquire(self, tmp_path):
+        lock = tmp_path / server.OUTPUT_DIR_LOCK_FILE
+        lock.write_text(json.dumps({"entry": "web", "pid": os.getpid()}), encoding="utf-8")
+        assert server._lock_staleness(str(lock)) == ""
+        assert server._is_output_dir_locked(str(tmp_path)) is True
+        assert server._acquire_output_dir_lock(str(tmp_path)) is None
+
+    def test_pidless_old_lock_is_stale(self, tmp_path):
+        lock = tmp_path / server.OUTPUT_DIR_LOCK_FILE
+        lock.write_text("{}", encoding="utf-8")
+        old = time.time() - server._LOCK_STALE_SECONDS - 60
+        os.utime(lock, (old, old))
+        assert "小时未更新" in server._lock_staleness(str(lock))
+        assert server._is_output_dir_locked(str(tmp_path)) is False
+
+    def test_pidless_fresh_lock_still_counts(self, tmp_path):
+        """无 pid 的新锁（刚建的旧格式）仍按占用处理，不误判。"""
+        lock = tmp_path / server.OUTPUT_DIR_LOCK_FILE
+        lock.write_text("{}", encoding="utf-8")
         assert server._is_output_dir_locked(str(tmp_path)) is True
 
 
@@ -105,3 +145,46 @@ class TestEnsureOutputDirLock:
             lock_path = server.ensure_output_dir_lock(str(blocker))
         assert lock_path is None
         assert "写锁创建失败" in caplog.text
+
+
+class TestPidProbePlatformSafety:
+    """pid 探活不得有副作用：Windows 上 ``os.kill(pid, 0)`` 会直接杀进程。"""
+
+    def test_windows_path_never_calls_os_kill(self, monkeypatch, tmp_path):
+        """回归：Windows 探测必须走 OpenProcess，绝不调 os.kill。
+
+        CPython 文档：Windows 上 os.kill 对非控制台信号直接 TerminateProcess
+        （sig 被当退出码）——探测持有锁的进程等于把它杀掉。
+        """
+
+        def _forbidden(*a, **k):  # pragma: no cover - 触发即失败
+            raise AssertionError("Windows 上不得调用 os.kill 探测 pid")
+
+        monkeypatch.setattr(server.os, "name", "nt", raising=False)
+        monkeypatch.setattr(server.os, "kill", _forbidden)
+        assert server._pid_alive(12345) is None  # 非 Windows 容器里 OpenProcess 不可用 → 无法判定
+
+    def test_posix_path_uses_signal_zero(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(server.os, "name", "posix", raising=False)
+        monkeypatch.setattr(server.os, "kill", lambda pid, sig: calls.append((pid, sig)))
+        assert server._pid_alive(1) is True
+        assert calls == [(1, 0)]
+
+    def test_posix_missing_pid_reports_dead(self, monkeypatch):
+        def _dead(pid, sig):
+            raise ProcessLookupError
+
+        monkeypatch.setattr(server.os, "name", "posix", raising=False)
+        monkeypatch.setattr(server.os, "kill", _dead)
+        assert server._pid_alive(999999) is False
+
+    def test_unjudgeable_pid_falls_back_to_age(self, monkeypatch, tmp_path):
+        """pid 无法判定 + 文件够旧 → 仍按残留接管；够新 → 保守视为占用。"""
+        monkeypatch.setattr(server, "_pid_alive", staticmethod(lambda pid: None))
+        lock = tmp_path / server.OUTPUT_DIR_LOCK_FILE
+        lock.write_text(json.dumps({"entry": "web", "pid": 4242}), encoding="utf-8")
+        assert server._lock_staleness(str(lock)) == ""
+        old = time.time() - server._LOCK_STALE_SECONDS - 60
+        os.utime(lock, (old, old))
+        assert "pid 无法确认" in server._lock_staleness(str(lock))

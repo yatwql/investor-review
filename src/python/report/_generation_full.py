@@ -210,9 +210,15 @@ def _generate_report_full(
     try:
         sector_flow = get_sector_fund_flow()
         if sector_flow:
+            from src.python.fetcher.akshare import sector_flow_failure
             from src.python.report.data_status import mark_data_used
 
-            mark_data_used("ff_sector_flow", "T4")
+            # 陈旧回退（源不可达 → 上次成功载荷）必须如实标注：否则「今日资金流向」
+            # 拿的是 1~3 天前的数据，而报告与 LLM 提示词看不出任何异常。
+            _stale = sector_flow_failure() == "stale"
+            mark_data_used("ff_sector_flow", "T4", freshness="stale" if _stale else "")
+            if _stale:
+                reporter.warn("行业资金流向源不可达，本次使用上次成功数据（已标注陈旧）")
             reporter.ok("行业资金流向获取完成")
         else:
             from src.python.cache.operations import sector_flow_hint

@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.16.6
+> 文档版本：0.16.7
 
 ## 概述
 
@@ -940,6 +940,17 @@ INVEST_LOG_CONSOLE_LEVEL=DEBUG ...                                              
 
 非法值回落 INFO 并提示一次。**默认不开 DEBUG** 的原因：日志审计（近一周 107,625 行）显示 DEBUG 占 91%，其中「市场时段」67%、缓存命中 17%，真实告警被埋在噪声里，10MB 轮转只能留约 6 天。
 
+**非真实运行的日志/缓存隔离**（演示截屏、性能基准）：
+
+```bash
+INVEST_LOG_PATH=docs/tmp/screenshots/demo/logs/app.log \   # 改落盘文件（不写真实 logs/app.log）
+INVEST_RUN_CONTEXT=demo \                                  # 启动时一行上下文标记（落哪都能归属）
+INVEST_CACHE_DIR=docs/tmp/screenshots/demo/data/cache \    # 缓存改落（不读写真实 data/cache）
+  .venv/bin/python -m src.python.cli --config <demo/config.json> report --type both
+```
+
+不隔离的后果是**分析面**污染：演示持仓的告警（源侧名称对不上/缺凭据/陈旧锁）混进真实日志，按「读了哪个持仓文件」事后反推才能区分；演示取数结果与真实缓存互串还会让截图与真机不一致。`scripts/make-screenshots.py` 已自动注入这三个变量（`scripts/_screenshots/demo_workspace.py::isolation_env`）。
+
 **写日志时的三级语义（新增日志按此选级）**：
 
 | 级别 | 用在哪 | 例子 |
@@ -955,6 +966,20 @@ INVEST_LOG_CONSOLE_LEVEL=DEBUG ...                                              
 **LLM 总时间预算**：`llm_settings.json → llm_total_time_budget_sec`（秒，`0`=不启用）。超预算后**不再启动新模块**（已在跑的模块不打断），日志回显已用时与预算值，报告按已生成内容呈现。用于兜住「单模块卡住 + 重试叠加」把一次 full 拖成小时级（审计实测曾出现 6,623s 的 LLM+新闻阶段）。
 
 **去重锚点默认采集、写侧零读取**：`data/calibration/dedup_anchors.jsonl` 每次报告只追加边界案例（单次 `write`+`fsync`，不解析旧文件）；跨轮重复由 `eval-dedup-threshold.py::load_anchors` 按键去重（保留最早一条），诊断结论不受重复行影响。`INVEST_DEDUP_COLLECT_ANCHORS=0` 可关闭采集。文件超过 32MB 时只记提示，不自动压缩——压缩由 `scripts/eval-dedup-threshold.py` 评估后**默认顺带执行**（分析用完整样本，随后每 key 最新 + 近 120 天，`--no-compact` 关闭、`--retention-days 0` 只按键去重）或 `INVEST_DEDUP_MAINTENANCE=1` 显式触发；压缩前 `.bak` 与主文件等大，默认校验后清理（`INVEST_DEDUP_KEEP_BACKUP=1` 保留）。
+
+### 兼容层纪律（不保留旧形态支持）
+
+本项目的运行主体是单一本机部署 + 作者自用，**不设兼容层**：旧数据结构、旧数据文件、旧缓存载荷、旧配置键、旧配置文件、旧内部 API 一律不保留支持。破坏性变更的做法是「换键/换字段 + 版本戳整体作废」，而不是写一条兼容分支。
+
+| 变更面 | 做法 | 具体机制 |
+|:-------|:-----|:---------|
+| 缓存载荷结构 | 递增版本戳作废旧缓存 | `cache/_paths.py::_CACHE_KEY_VERSION`（旧文件自然不再命中，无需逐类型版本字段） |
+| 配置文件结构 | 校验拒载 + 提示重新生成 | `llm_settings.json` 的 `schema_version` 不匹配即拒载；`llm_key.json` 顶层 `api_key` 旧形态直接拒绝并给改写指引 |
+| 已移除的配置键 | 直接忽略，不保留识别/告警分支 | 如 `market_hour_aware`（无同名消费方，留着“识别 + 告警”只是持续维护死代码） |
+| 内部函数/再导出 | 删就删，同时改调用点与 patch 点 | 不为「既有测试 patch 点」保留再导出壳（`noqa: F401`） |
+| 数据契约字段名 | 每个事实只认一个真值键，不做多键回退取值 | 如穿透资产的来源键只认 `sources`（合并层内部键不参与对外契约） |
+
+**与「健壮性」的边界**（这两类要保留，别当兼容代码删）：① 针对**上游瞬时异常**的防御（如半写文件的 `pid` 缺失、上游字段缺失/类型异常、`json` 截断），它们防护的是当下的坏输入；② `AtomicWrite` / `临时文件 + os.replace` 这类写入安全机制。判据：**这个分支是为了让昨天的产物继续工作，还是为了让今天的异常不炸？**前者删，后者留。
 
 ### 日志：先看日志再看代码
 

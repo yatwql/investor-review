@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 import logging
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from src.python.config import get_default
 
 logger = logging.getLogger("invest")
@@ -92,6 +92,8 @@ def sector_flow_hint() -> str:
     failure = sector_flow_failure()
     if failure == "connection":
         return "连接失败"
+    if failure == "stale":
+        return "使用上次成功数据（源不可达）"
     if failure == "empty":
         return "暂无数据"
     return "获取失败"
@@ -115,7 +117,7 @@ def _refresh_common_caches(
 
     f1 = pool.submit(_refresh_profit_forecast_cache)
     f2 = pool.submit(_refresh_sector_flow_cache)
-    futs: list[tuple[ThreadPoolExecutor, str, str]] = [
+    futs: list[tuple[Future, str, str]] = [
         (f1, "profit_forecast", "盈利预测"),
         (f2, "sector_flow", "行业资金流向"),
     ]

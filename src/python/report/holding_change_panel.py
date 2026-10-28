@@ -109,6 +109,8 @@ def build_holding_change_panel(
         "events": raw.get("events", []),
         "event_count": raw.get("event_count", 0),
         "indeterminate_count": raw.get("indeterminate_count", 0),
+        "baseline_switch_count": raw.get("skipped_pairs", 0),
+        "baseline_note": raw.get("baseline_note") or "",
         "metrics": None,
         "limitations_note": LIMITATIONS_NOTE,
         "reorder": None,
@@ -208,6 +210,7 @@ def build_holding_change_view(data: dict[str, Any] | None) -> dict[str, Any]:
         "event_header": list(EVENT_HEADER),
         "event_rows": [],
         "limitations_note": LIMITATIONS_NOTE,
+        "baseline_note": "",
         "metrics_lines": [],
         "intent_header": list(INTENT_HEADER),
         "intent_rows": [],
@@ -225,6 +228,7 @@ def build_holding_change_view(data: dict[str, Any] | None) -> dict[str, Any]:
         return view
 
     view["available"] = True
+    view["baseline_note"] = str(data.get("baseline_note") or "")
     period_count = int(data.get("period_count", 0))
     event_count = int(data.get("event_count", 0))
     start_label = _ts_label(data.get("window_start"))
@@ -437,6 +441,8 @@ def write_holding_change_sheet(ws: Any, holding_change_data: dict[str, Any] | No
     for cells in view["event_rows"]:
         row = write_data_row(ws, row, cells)
     row = write_data_row(ws, row, [view["limitations_note"]] + [""] * (_ncols - 1))
+    if view.get("baseline_note"):  # 基线切换说明：与事件表同现，避免误读为真实调仓
+        row = write_data_row(ws, row, [view["baseline_note"]] + [""] * (_ncols - 1))
 
     # ── 3. 频率与结构演变 ──
     if view["metrics_lines"]:

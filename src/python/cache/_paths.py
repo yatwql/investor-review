@@ -14,7 +14,23 @@ from src.python.core.constants import PROJECT_ROOT
 logger = logging.getLogger("invest")
 
 # 项目根路径从 constants.py 统一导入，确保路径来源唯一
-_CACHE_DIR = os.path.join(PROJECT_ROOT, "data/cache")
+_ROOT_CACHE_DIR = os.path.join(PROJECT_ROOT, "data/cache")
+
+#: 非真实运行（演示截图 / 性能基准）的缓存隔离：显式指定时改落该目录。
+#: 不隔离时演示 run 与真实 run 共享同一份缓存：演示持仓的取数结果（行情/新闻去重锚点/
+#: LLM 结论）会写进真实缓存，反之真实缓存也会让演示报告复用真实数据（截图与实际不符）。
+_CACHE_DIR_ENV = "INVEST_CACHE_DIR"
+
+
+def _resolve_cache_dir() -> str:
+    """缓存目录：``INVEST_CACHE_DIR`` 优先（相对路径按项目根解析），否则 data/cache。"""
+    override = os.environ.get(_CACHE_DIR_ENV, "").strip()
+    if not override:
+        return _ROOT_CACHE_DIR
+    return override if os.path.isabs(override) else os.path.join(PROJECT_ROOT, override)
+
+
+_CACHE_DIR = _resolve_cache_dir()
 _GZIP_THRESHOLD = 100 * 1024  # 100KB 以上的缓存自动 gzip
 _GZIP_SUFFIX = ".gz"
 

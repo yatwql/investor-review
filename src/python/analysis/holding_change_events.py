@@ -41,6 +41,9 @@ MIN_REVIEW_EVENTS = 10
 _DEFAULT_MIN_PERIODS = 2
 #: 份额差绝对值低于该值视为「不变」（与 HistoryDiff 分类阈值一致）
 _SHARES_EPS = 0.001
+#: 基线切换判定：相邻两期快照的持仓代码 Jaccard 相似度低于该阈值 → 视为「换了持仓口径」
+#: （持仓文件被替换/账户重记/同名容器切换），该区间不推断交易事件。
+_BASELINE_SWITCH_MAX_JACCARD = 0.5
 
 # 事件方向枚举（分类复用 HistoryDiff；「不可判定」为本模块缺字段降级补充）
 ACTION_NEW = "新增"
@@ -101,12 +104,42 @@ def extract_change_events(
             "events": [],
             "event_count": 0,
             "indeterminate_count": 0,
+            "baseline_switches": [],
+            "skipped_pairs": 0,
+            "baseline_note": "",
             "reason": reason,
         }
 
     events: list[dict[str, Any]] = []
     indeterminate_count = 0
+    baseline_switches: list[dict[str, Any]] = []
     for prev_sd, curr_sd in zip(periods, periods[1:]):
+        prev_codes, curr_codes = _codes_of(prev_sd), _codes_of(curr_sd)
+        union = prev_codes | curr_codes
+        # 只在「两侧都有持仓且标的重合度极低」时判基线切换：单侧为空是清仓/建仓
+        # 的正常形态（全清后回补同批标的属账户重排，需保留事件让重排检测识别）
+        if prev_codes and curr_codes:
+            jaccard = len(prev_codes & curr_codes) / len(union)
+            if jaccard < _BASELINE_SWITCH_MAX_JACCARD:
+                # 持仓整体换了（文件替换/账户重记）：逐对差分会把整批标报成新增/清仓
+                baseline_switches.append(
+                    {
+                        "period_from": prev_sd.timestamp or "",
+                        "period_to": curr_sd.timestamp or "",
+                        "prev_codes": len(prev_codes),
+                        "curr_codes": len(curr_codes),
+                        "overlap_codes": len(prev_codes & curr_codes),
+                        "jaccard": round(jaccard, 3),
+                    }
+                )
+                logger.warning(
+                    "[holding_change_events] 持仓基线切换（%s → %s）：代码重合度 %.2f < %.2f，跳过该区间交易事件推断",
+                    prev_sd.timestamp,
+                    curr_sd.timestamp,
+                    jaccard,
+                    _BASELINE_SWITCH_MAX_JACCARD,
+                )
+                continue
         pair_events, pair_indeterminate = _diff_pair(prev_sd, curr_sd)
         events.extend(pair_events)
         indeterminate_count += pair_indeterminate
@@ -127,6 +160,9 @@ def extract_change_events(
         "events": events,
         "event_count": len(events),
         "indeterminate_count": indeterminate_count,
+        "baseline_switches": baseline_switches,
+        "skipped_pairs": len(baseline_switches),
+        "baseline_note": _baseline_note(baseline_switches),
         "reason": "",
     }
 
@@ -151,6 +187,24 @@ def build_holding_change_events(
 
 
 # ── 内部辅助 ─────────────────────────────────────────────
+
+
+def _codes_of(snapshot: SnapshotData) -> set[str]:
+    """快照内全部持仓代码（跨账户去重；用于基线切换判定）。"""
+    return {h.code for account in snapshot.accounts for h in account.holdings if h.code}
+
+
+def _baseline_note(switches: list[dict[str, Any]]) -> str:
+    """基线切换说明（无切换返回空串，保持「无额外提示」的常态）。"""
+    if not switches:
+        return ""
+    spans = "、".join(f"{s['period_from']}→{s['period_to']}" for s in switches[:3])
+    more = f" 等 {len(switches)} 处" if len(switches) > 3 else ""
+    return (
+        f"检测到持仓基线变化（{spans}{more}）：相邻快照的持仓标的几乎不相交，"
+        "判断为持仓文件/账户口径更换，对应区间已跳过交易事件推断，"
+        "避免把整批标的误报为「新增 / 清仓」。"
+    )
 
 
 def _diff_pair(
