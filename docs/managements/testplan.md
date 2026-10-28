@@ -415,6 +415,7 @@
 | R-BRK-06 | `src/test/unit/core/test_circuit_breaker_gateway.py` + `src/test/unit/llm/test_circuit_breaker_recovery.py` | 批 2 |
 | R-BRK-07 | `src/test/unit/core/test_circuit_breaker_gateway.py` + `src/test/unit/config/test_local_state.py` | 批 2 |
 | R-BRK-08 | `src/test/unit/core/test_circuit_breaker_gateway.py`（网关统一双熔断器）+ `src/test/unit/core/test_provider_registry.py` | 批 2 |
+| R-BRK-09 | `src/test/unit/providers/test_akshare_extras.py`（磁盘负缓存短路取数 / 失败落盘 / 陈旧回退 / 成功清负缓存并刷新基准） | 批 15 |
 | R-CRD-01 | `src/test/unit/core/test_datasource_credential.py` | 批 2 |
 | R-CRD-02 | `src/test/unit/core/test_datasource_credential.py` + `src/test/unit/core/test_datasource_credential_edge.py` | 批 2 |
 | R-CRD-03 | `src/test/unit/core/test_datasource_credential.py` | 批 2 |
@@ -476,6 +477,7 @@
 | R-OUT-13 | `src/test/unit/report/test_run_integrity.py` | 批 9 |
 | R-OUT-14 | `src/test/unit/core/test_completion_notify.py` + `src/test/unit/cli/test_cli.py` + `src/test/unit/web/test_web_completion_notify.py` | 批 13 |
 | R-OUT-15 | `src/test/unit/report/test_summary_highlights.py` | 批 14 |
+| R-OUT-16 | `src/test/unit/web/test_server.py`（陈旧锁判据与接管 / Windows 不调 os.kill / 无法判定按文件年龄） | 批 15 |
 | R-COR-01 | `src/test/unit/analysis/test_correlation.py` + `src/test/unit/analysis/test_correlation_edge.py` + `src/test/unit/report/test_correlation_html.py` + `src/test/unit/report/test_position_structure_sheet.py` + `src/test/unit/fetcher/test_chain.py` | 批 14 |
 | R-PERF-01 | `src/test/unit/news/test_news_aggregator.py` | 批 4 |
 | R-PERF-02 | `src/test/unit/llm/test_generate_all_llm.py` | 批 4 |
@@ -487,6 +489,7 @@
 | R-PERF-08 | `src/test/unit/core/test_phase_timeout.py` | 批 4 |
 | R-PERF-09 | `src/test/unit/report/test_progress.py` + `src/test/unit/config/test_local_state.py` | 批 4 |
 | R-PERF-10 | `src/test/unit/core/test_check_sources.py` + `src/test/unit/config/test_local_state.py` | 批 4 |
+| R-PERF-11 | `src/test/unit/llm/test_cache_recompute_attribution.py`（四态归因 / 冷启动记 cache_miss） | 批 15 |
 | R-WIF-01 | `src/test/unit/cli/test_cli.py` + `src/test/integration/test_cli_integration.py` | 批 4 |
 | R-WIF-02 | `src/test/unit/analysis/test_whatif.py` | 批 4 |
 | R-WIF-03 | `src/test/unit/analysis/test_whatif.py` | 批 4 |
@@ -556,6 +559,8 @@
 | R-LLM-15 | `src/test/unit/llm/test_llm_budget.py` | 批 6 |
 | R-DATA-08 | `src/test/unit/fetcher/test_chain_overrides.py` | 批 5 |
 | R-DATA-09 | `src/test/unit/news/test_news_dedup_compact.py` | 批 6 |
+| R-DATA-10 | `src/test/unit/fetcher/test_fetcher_price.py`（场内基金链路失败降级净值链路 + 名称判据连续汉字公共段 / 不同标的仍拒） | 批 15 |
+| R-DATA-11 | `src/test/unit/report/test_data_status_message.py`（freshness 进事件 detail、不污染失败计数）+ `src/test/unit/llm/test_llm_prompt_builders.py`（质量块「陈旧回退」行） | 批 15 |
 | R-LLM-10 | `src/test/unit/llm/test_llm_pacing.py`（策略解析/容错/注册/惰性装载兜底/零开销直通/间隔/抖动/并发上限/异常释放/403 不重试）+ `src/test/unit/config/test_config_llm_multi.py`（pacing 透传/缺省不注入/非对象忽略）+ `src/test/unit/llm/test_llm_api_multi.py`（`endpoint_key` 逐层下传并到达重试骨架——漏传则 `PacingGate` 拿空键、端点节流空转） | 批 5 |
 | R-LLM-08 | `src/test/unit/llm/test_llm_api.py` + `src/test/unit/report/test_llm_module_info.py` | 批 5 |
 | R-PF-01 | `src/test/unit/config/test_features.py` + `src/test/unit/report/test_section_visibility.py` | 批 5 |

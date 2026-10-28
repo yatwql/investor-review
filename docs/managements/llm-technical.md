@@ -892,6 +892,8 @@ penetrated_assets ──→ extract_stable_penetration()
 
 **组件级指纹审计（`fingerprint_components()` / `diff_fingerprint_components()`）**：指纹本体是单一哈希，缓存 miss 时无法看出是哪个输入分量变了。故同函数族另提供「逐组件哈希」视图——与正式指纹**同口径**（`pipeline_blocks` 取渲染文本、`history_risk` 取风险信号子集，不拿原始 payload 去哈希）。**变化定位恒开**：预检侧每次报告打一行 INFO「指纹组件变化（相对上次报告）: [...]」，默认日志级别就能回答「为什么又 miss」；逐组件哈希快照仍在 DEBUG 下打（只用于细致比对）。代价是每次预检多算十几个小 md5（毫秒级），换得诊断能力不依赖重开 DEBUG。审计只用于观测，不参与缓存键计算。
 
+**重算归因四态（观测，不改控制流）**：只回答「为什么又 miss」不够，还要区分「值不值得为它放宽 TTL」。预检侧与骨架侧统一把未命中归因为四态：`forced`（用户强刷，不读缓存）、`fingerprint_changed`（输入指纹变了——内容真变，放宽 TTL 也省不下）、`ttl_expired`（指纹未变、纯到点——放宽 TTL 可省）、`cache_miss`（本进程无上轮指纹快照的冷启动）。**冷启动不得记为 `ttl_expired`**：两者对「放宽 TTL 能不能省钱」的判断相反（冷启动本来就没有可命中的上轮缓存），混同会让 TTL 调值依据系统性偏离。分布写 perf：`llm.recompute_reasons`（按原因聚合计次）+ `llm.module_recompute_reasons`（逐模块留最近一次），形状不同互不覆盖。归因只旁路观测：命中判定、调用次数与费用零变化。
+
 ### 7.2 缓存键模式
 
 ```
