@@ -248,6 +248,7 @@
 | `index` | `index_{code}.json` | 24h（交易时段 30s） | — | 市场指数行情 |
 | `news` | `news_{md5}.json` | 15 分钟 | 新闻源参数 + 关键词 | 多源新闻聚合结果 |
 | `sector_flow` | `sector_flow_{fingerprint}.json` | 15 分钟 | A股+美股指数 | 行业资金流向排名 |
+| `sector_flow`（衍生键） | `sector_flow_last_good` / `sector_flow_negative` | 3 天 / 30 分钟 | — | 陈旧回退基准 / 失败负缓存（按精确键独立 TTL，不随 15 分钟前缀裁掉） |
 | `rank` | `fund_perf_{code}.json` | 24h | — | 基金同类排名+区间收益率 |
 | `profit_forecast` | `profit_forecast_{fingerprint}.json` | 24h | A股+美股指数 | 机构盈利预测全量数据 |
 | `hold` | `fund_hold_{code}.json` | 7 天 | — | 基金前 10 持仓明细 |

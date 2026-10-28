@@ -201,15 +201,21 @@ def mark_data_unavailable(
     *,
     failure_type: str = "unreachable",
     message: str | None = None,
+    freshness: str = "",
 ) -> None:
     """登记一次「本次未取到该类别数据」的失败事件（观测性副作用，不抛异常）。
+
+    freshness 用于区分**降级后还剩什么**（``""`` / ``"no_baseline"``）：同为失败，
+    「有历史载荷可回退」与「连基准都没有、区块只能留空」对读者是两件事。
 
     与 :func:`mark_data_used` 成对：成功记使用、失败记降级；只写观测层，不改变
     业务降级决策。取数域在**确认失败**时调用，使数据源矩阵能显示可用/不可用状态，
     而不是把失败静默成空数据。
     """
     try:
-        get_tracker().record(source_key, tier, success=False, failure_type=failure_type, message=message)
+        get_tracker().record(
+            source_key, tier, success=False, failure_type=failure_type, message=message, freshness=freshness
+        )
     except Exception:  # 观测失败不影响主链路
         logger.debug("[data_status] 不可用标记失败（非关键）: %s", source_key, exc_info=True)
 

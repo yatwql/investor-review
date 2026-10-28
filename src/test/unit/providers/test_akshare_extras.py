@@ -318,6 +318,61 @@ class TestSectorFlowChannelFallback(unittest.TestCase):
         assert [r["name"] for r in result] == ["半导体"]
 
 
+class TestSectorFlowDegradedState(unittest.TestCase):
+    """降级态三态：正常 / 陈旧回退 / 无回退基准（后者只能整块留空）。"""
+
+    def setUp(self) -> None:
+        ae._memo_clear()
+        ae._SECTOR_FLOW_FAILURE = ""
+        ae._SECTOR_FLOW_DEGRADED = ""
+
+    def tearDown(self) -> None:
+        ae._memo_clear()
+        ae._SECTOR_FLOW_FAILURE = ""
+        ae._SECTOR_FLOW_DEGRADED = ""
+
+    def test_no_baseline_when_source_fails_without_history(self) -> None:
+        with (
+            patch.object(ae, "ak", MagicMock()),
+            patch.object(ae, "run_with_timeout", return_value=None),
+            patch.object(ae, "cache_get", return_value=None),
+            patch.object(ae, "cache_set"),
+            patch.object(ae, "_compute_index_fingerprint", return_value="fp"),
+        ):
+            assert ae.get_sector_fund_flow() == []
+        assert ae.sector_flow_degraded_state() == "no_baseline"
+        assert ae.sector_flow_failure() == "connection"
+
+    def test_stale_when_history_available(self) -> None:
+        stale = [{"name": "银行", "main_net_inflow": 1.0}]
+
+        def _fake_get(key, _ttl):
+            return stale if key == ae._SECTOR_FLOW_LAST_KEY else None
+
+        with (
+            patch.object(ae, "ak", MagicMock()),
+            patch.object(ae, "run_with_timeout", return_value=None),
+            patch.object(ae, "cache_get", side_effect=_fake_get),
+            patch.object(ae, "cache_set"),
+            patch.object(ae, "_compute_index_fingerprint", return_value="fp"),
+        ):
+            assert ae.get_sector_fund_flow() == stale
+        assert ae.sector_flow_degraded_state() == "stale"
+
+    def test_success_resets_degraded_state(self) -> None:
+        ae._SECTOR_FLOW_DEGRADED = "no_baseline"
+        with (
+            patch.object(ae, "ak", MagicMock()),
+            patch.object(ae, "run_with_timeout", return_value=_FakeFlowDF([_EM_ROW])),
+            patch.object(ae, "cache_get", return_value=None),
+            patch.object(ae, "cache_set"),
+            patch.object(ae, "cache_clear"),
+            patch.object(ae, "_compute_index_fingerprint", return_value="fp"),
+        ):
+            ae.get_sector_fund_flow()
+        assert ae.sector_flow_degraded_state() == ""
+
+
 class TestCalcDividendSummary(unittest.TestCase):
     """测试分红数据汇总计算（akshare 聚合格式）。"""
 

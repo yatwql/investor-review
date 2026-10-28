@@ -293,6 +293,7 @@ def _build_data_quality_detail_block(
     empty: dict[str, int] = {}
     degraded_events: list[dict] = []
     stale_sources: set[str] = set()
+    no_baseline_sources: set[str] = set()
 
     for e in degradation_events:
         # 只统计**失败**事件：成功取用事件（mark_data_used）也进事件日志，
@@ -307,6 +308,9 @@ def _build_data_quality_detail_block(
             continue
         sk = e.get("source_key", "?")
         ft = e.get("failure_type", "?")
+        detail = e.get("detail")
+        if isinstance(detail, dict) and detail.get("freshness") == "no_baseline":
+            no_baseline_sources.add(str(sk))
         degraded = e.get("degraded", False)
         if degraded:
             degraded_events.append(e)
@@ -326,8 +330,12 @@ def _build_data_quality_detail_block(
         lines.append(f"触发降级: {'、'.join(sorted({e.get('source_key', '?') for e in degraded_events}))}")
     if stale_sources:
         lines.append(f"陈旧回退（源不可达，用上次成功数据）: {'、'.join(sorted(stale_sources))}")
+    if no_baseline_sources:
+        lines.append(
+            f"无回退基准（源不可达且本机无历史成功载荷，对应区块留空）: {'、'.join(sorted(no_baseline_sources))}"
+        )
 
-    if not unreachable and not empty and not degraded_events and not stale_sources:
+    if not unreachable and not empty and not degraded_events and not stale_sources and not no_baseline_sources:
         lines.append("今日无降级事件")
 
     return "\n".join(lines)

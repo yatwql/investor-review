@@ -42,7 +42,7 @@
 | 东方财富 | 场外基金净值 | ★★★★★ | ✅ | 无需 | eastmoney → sina_fund（新浪场外净值，跨厂商备源）；东财内部另有 fundf10 HTML 兜底 |
 | 天天基金 | 持仓/排名/历史净值 | ★★★★★ | ✅ | 无需 | 唯一链路（季度 API 内回退） |
 | 东方财富 push2 | 行业分类/概念板块 | ★★★★☆ | ✅ | 无需 | push2 → REST HTML |
-| akshare | 盈利预测/资金流向/分红 | ★★★☆☆ | ✅ | 无需 | 唯一链路（可选依赖，带超时保护） |
+| akshare | 盈利预测/资金流向/分红 | ★★★☆☆ | ✅ | 无需 | 资金流向双通道（东财 push2 → 同花顺）；其余唯一链路（可选依赖，带超时保护） |
 | akshare 财务指标 | 上市公司结构化财务指标（基本面） | ★★★☆☆ | ✅ | 无需 | akshare_financial → datasink_indicator（财报章节解析） |
 | 新闻聚合（5 源） | 财经新闻 | ★★★★☆ | ✅ | 财联社需签名 | 源间隔离，逐源降级 |
 | 历史 K 线 | 走势/回撤计算 | ★★★★☆ | ✅ | 无需 | tencent → sina（A股），sina → tencent（美股） |
@@ -140,8 +140,10 @@
 > 每份报告是独立进程，负缓存只存进程内存则下次 run 仍会再撞一次超时。
 >
 > **陈旧回退**：全部通道失败时回退最近一次成功载荷（≤3 天），失败原因标为 `stale` 并如实上报
-> （`sector_flow_failure()` → 报告层写 DegradationTracker → 提示文案「使用上次成功数据（源不可达）」），
+> （`sector_flow_failure()` / `sector_flow_degraded_state()` → 报告层写 DegradationTracker → 提示文案「使用上次成功数据（源不可达）」或「无回退基准，区块留空」），
 > 不让「今日资金流向」整块从报告与 LLM 提示词里消失；超过 3 天则留空，**绝不复用**过旧数据。
+> **无回退基准**：本机从未成功取到过该源时没有基准可退，区块整块留空，文案与 LLM 质量块
+> 单独标注「无回退基准」，与「陈旧回退」互斥展示——避免把「从来就没有过」说成「暂时取不到」。
 > 回退基准与负缓存的 TTL 在缓存域注册表 `exact_key_ttls` 单源声明（清理器按精确键裁，不落 15 分钟前缀默认值）。
 
 ### 3.6 akshare 扩展服务
@@ -149,12 +151,12 @@
 | 字段 | 说明 |
 |------|------|
 | **名称** | akshare 数据封装层 |
-| **用途** | 机构盈利预测（`stock_profit_forecast_em`）、行业资金流向（`stock_sector_fund_flow_rank`）、历史分红（`stock_history_dividend`）、无风险利率（`bond_zh_us_rate`）、指数 PE/PB 估值历史（`stock_index_pe_lg`/`stock_index_pb_lg`，乐咕） |
+| **用途** | 机构盈利预测（`stock_profit_forecast_em`）、行业资金流向（主 `stock_sector_fund_flow_rank` / 备 `stock_fund_flow_industry`）、历史分红（`stock_history_dividend`）、无风险利率（`bond_zh_us_rate`）、指数 PE/PB 估值历史（`stock_index_pe_lg`/`stock_index_pb_lg`，乐咕） |
 | **接口类型** | Python 库调用（通过 `ThreadPoolExecutor` 超时保护） |
 | **数据频率** | 盈利预测不定期，资金流向交易日实时，分红年度更新，利率每日 |
 | **可靠度** | ★★★☆☆——依赖 akshare 第三方库，接口变更频繁 |
 | **降级目标** | ① akshare 未安装 → 静默降级为空结果 ② 调用超时 → ThreadPoolExecutor 强杀 + 重试 1 次 ③ 无风险利率 → `config.json` 手动设置兜底 ④ 指数估值历史（乐咕）不可得 → 30 天内旧缓存兜底，仍不可得 → 市场温度第一因子回落点位分位（温度行不消失）。**财务指标另有同花顺官方合并报表派生**（需 key，见 §3.10） |
-| **限流规则** | 无限流；内存 TTL 缓存（盈利预测 5min，资金流向 1min，分红 10min） |
+| **限流规则** | 无限流；文件缓存 TTL（盈利预测 1 天，行业资金流向 15 分钟，分红 1 个月） |
 | **免费边界** | 无认证；akshare 库本身开源免费 |
 | **超时设定** | 默认 15s，盈利预测 30s，分红 60s（akshare 同步调用可能阻塞，必须 ThreadPoolExecutor 强杀） |
 | **已知问题** | ① **akshare 版本频繁变更** → 接口签名/返回值格式可能变更；升级 `pip install --upgrade akshare` 通常可解决 ② 盈利预测用指数数据指纹做缓存失效，当指数数据不更新时缓存可能过旧 ③ 资金流向仅在交易日有数据，非交易日/盘前返回空 |

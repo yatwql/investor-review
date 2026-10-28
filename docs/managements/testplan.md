@@ -415,7 +415,7 @@
 | R-BRK-06 | `src/test/unit/core/test_circuit_breaker_gateway.py` + `src/test/unit/llm/test_circuit_breaker_recovery.py` | 批 2 |
 | R-BRK-07 | `src/test/unit/core/test_circuit_breaker_gateway.py` + `src/test/unit/config/test_local_state.py` | 批 2 |
 | R-BRK-08 | `src/test/unit/core/test_circuit_breaker_gateway.py`（网关统一双熔断器）+ `src/test/unit/core/test_provider_registry.py` | 批 2 |
-| R-BRK-09 | `src/test/unit/providers/test_akshare_extras.py`（磁盘负缓存短路取数 / 失败落盘 / 陈旧回退 / 成功清负缓存并刷新基准） | 批 15 |
+| R-BRK-09 | `src/test/unit/providers/test_akshare_extras.py`（磁盘负缓存短路取数 / 按通道落盘 / 主备切换 / 降级三态 / 陈旧回退 / 成功复位并刷新基准） | 批 15 |
 | R-CRD-01 | `src/test/unit/core/test_datasource_credential.py` | 批 2 |
 | R-CRD-02 | `src/test/unit/core/test_datasource_credential.py` + `src/test/unit/core/test_datasource_credential_edge.py` | 批 2 |
 | R-CRD-03 | `src/test/unit/core/test_datasource_credential.py` | 批 2 |

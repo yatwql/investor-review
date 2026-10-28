@@ -243,13 +243,16 @@ def _save_channel_failures(failures: dict[str, str]) -> None:
 
 def _sector_flow_stale_fallback(failure: str) -> list[dict[str, Any]]:
     """源不可达/空结果时的降级：回退最近一次成功载荷（≤3 天），拿不到才留空。"""
-    global _SECTOR_FLOW_FAILURE
+    global _SECTOR_FLOW_FAILURE, _SECTOR_FLOW_DEGRADED
     stale = cache_get(_SECTOR_FLOW_LAST_KEY, _SECTOR_FLOW_STALE_TTL)
     if isinstance(stale, list) and stale:
         _SECTOR_FLOW_FAILURE = "stale"
+        _SECTOR_FLOW_DEGRADED = "stale"
         logger.info("行业资金流向回退陈旧数据（%d 个行业，源状态=%s）", len(stale), failure)
         return stale
     _SECTOR_FLOW_FAILURE = failure
+    _SECTOR_FLOW_DEGRADED = "no_baseline"
+    logger.info("行业资金流向无可用历史基准（源状态=%s），本次留空", failure)
     return []
 
 
@@ -380,10 +383,23 @@ def get_profit_forecast_cache_key() -> str:
 # 行业资金流向最近失败类型: "" / "connection" / "empty"
 _SECTOR_FLOW_FAILURE: str = ""
 
+# 行业资金流向最近降级态: "" / "stale"（回退到历史成功载荷）/ "no_baseline"（连基准都没有）
+_SECTOR_FLOW_DEGRADED: str = ""
+
 
 def sector_flow_failure() -> str:
     """返回行业资金流向最近一次失败类型（公开只读访问器；空串=最近成功）。"""
     return _SECTOR_FLOW_FAILURE
+
+
+def sector_flow_degraded_state() -> str:
+    """返回最近一次降级态（公开只读访问器）。
+
+    ``""`` = 本次取数正常；``"stale"`` = 源不可达、已回退历史成功载荷；
+    ``"no_baseline"`` = 源不可达且本机没有可回退的历史载荷（该区块只能留空）。
+    下游据它区分两种降级表现，避免把「本机从未取到过」误述成「暂时取不到」。
+    """
+    return _SECTOR_FLOW_DEGRADED
 
 
 # 分红数据最近失败类型: "" / "connection" / "empty"——供报告层如实登记分红
@@ -409,7 +425,7 @@ def get_sector_fund_flow() -> list[dict[str, Any]]:
         [{name, change_pct, main_net_inflow, main_net_inflow_pct, top_stock}, ...]
         失败时返回空列表
     """
-    global _SECTOR_FLOW_FAILURE
+    global _SECTOR_FLOW_FAILURE, _SECTOR_FLOW_DEGRADED
 
     # ── 内存缓存 ──
     _memo_key_str = _memo_key("sector_flow")
@@ -423,6 +439,7 @@ def get_sector_fund_flow() -> list[dict[str, Any]]:
     cached = cache_get(_key, _SECTOR_FLOW_TTL)
     if cached is not None:
         _SECTOR_FLOW_FAILURE = ""
+        _SECTOR_FLOW_DEGRADED = ""
         _memo_set(_memo_key_str, cached)
         cache_set(_SECTOR_FLOW_LAST_KEY, cached)  # 保住「陈旧回退」窗口的新鲜度
         return cached
@@ -467,6 +484,7 @@ def get_sector_fund_flow() -> list[dict[str, Any]]:
         return _note_sector_flow_failure(_kind)
 
     _SECTOR_FLOW_FAILURE = ""
+    _SECTOR_FLOW_DEGRADED = ""
     logger.info("行业资金流向加载完成: %d 个行业", len(result))
     cache_set(_key, result)
     cache_set(_SECTOR_FLOW_LAST_KEY, result)  # 陈旧回退基准

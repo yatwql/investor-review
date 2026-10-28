@@ -794,3 +794,25 @@ class TestStaleUsageInQualityBlock:
         )
         assert "连接失败: industry" in text
         assert "陈旧回退" in text
+
+    def test_no_baseline_listed_separately_from_stale(self):
+        """「有基准可回退」与「连基准都没有」必须两行两义，不得混为一谈。"""
+        text = self._block(
+            [
+                {"source_key": "ff_sector_flow", "success": True, "detail": {"freshness": "stale"}},
+                {
+                    "source_key": "fund_flow",
+                    "success": False,
+                    "failure_type": "unreachable",
+                    "detail": {"freshness": "no_baseline"},
+                },
+            ]
+        )
+        assert "无回退基准" in text
+        assert "陈旧回退" in text
+        assert "ff_sector_flow" not in text.split("无回退基准")[1].split("\n")[0], "两种降级态的源不得串行"
+
+    def test_failure_without_markers_has_no_baseline_line(self):
+        """普通失败事件（无 no_baseline 标记）不产出「无回退基准」行，避免无中生有。"""
+        text = self._block([{"source_key": "industry", "success": False, "failure_type": "unreachable"}])
+        assert "无回退基准" not in text

@@ -11,6 +11,7 @@
   - get_profit_forecast — 机构盈利预测
   - get_profit_forecast_cache_key — 盈利预测缓存键
   - get_sector_fund_flow — 行业资金流向排名
+  - sector_flow_failure / sector_flow_degraded_state — 该源失败类型与降级态
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ from src.python.providers.akshare_extras import (
 )
 
 __all__ = [
+    "sector_flow_degraded_state",
     "sector_flow_failure",
     "get_dividend_data",
     "get_profit_forecast",
@@ -100,5 +102,12 @@ def get_sector_fund_flow() -> list[dict[str, Any]]:
 def sector_flow_failure() -> str:
     """行业资金流向最近一次失败类型（report/cache 层经此读取，不直连 providers）。"""
     from src.python.providers.akshare_extras import sector_flow_failure as _impl
+
+    return _impl()
+
+
+def sector_flow_degraded_state() -> str:
+    """行业资金流向最近一次降级态（"" / "stale" / "no_baseline"；同一门面口径）。"""
+    from src.python.providers.akshare_extras import sector_flow_degraded_state as _impl
 
     return _impl()
