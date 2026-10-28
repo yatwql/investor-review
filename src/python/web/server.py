@@ -38,15 +38,69 @@ logger = logging.getLogger("invest")
 # output_dir 写锁文件名（点文件：不参与 YYYYMMDD 归档扫描与历史枚举）
 OUTPUT_DIR_LOCK_FILE = ".investor_output.lock"
 
+#: 锁文件无 pid 信息时的陈旧阀值（秒）：旧格式/半写的锁超过这个年龄按残留处理
+_LOCK_STALE_SECONDS = 12 * 3600
+
 
 def _output_dir_lock_path(output_dir: str) -> str:
     """返回 output_dir 写锁文件路径。"""
     return os.path.join(output_dir, OUTPUT_DIR_LOCK_FILE)
 
 
+def _read_lock_payload(lock_path: str) -> dict:
+    """读锁文件载荷；不可读/非对象一律当空载荷（陈旧判据自行降级到文件年龄）。"""
+    try:
+        with open(lock_path, encoding="utf-8") as f:
+            payload = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _lock_staleness(lock_path: str) -> str:
+    """锁文件陈旧判据（返回空串 = 仍然有效）。
+
+    只判「存在」会把崩溃残留锁（kill -9 / 容器重启 / 演示工作区旧锁）当成持续占用：
+    实测一个 4 天前的残留锁让每次启动都刷一条「可能正被其他入口占用」的告警，
+    既误报又让人对真实抢占型告警脱敏。两条判据：
+
+    1. 锁内 pid 已不存在 → 持有者已退出；
+    2. 无可用 pid（旧格式/半写）→ 文件超过 ``_LOCK_STALE_SECONDS`` 未更新。
+
+    Args:
+        lock_path: 锁文件路径。
+
+    Returns:
+        陈旧原因（用于日志）；仍有效时为空串。
+    """
+    payload = _read_lock_payload(lock_path)
+    pid = payload.get("pid")
+    if isinstance(pid, int) and pid > 0:
+        try:
+            os.kill(pid, 0)
+        except PermissionError:
+            return ""  # 进程存在、属其它用户 —— 视为仍占用
+        except OSError:
+            return f"持有进程 {pid} 已不存在"
+        return ""
+    try:
+        age = os.path.getmtime(lock_path)
+    except OSError:
+        return ""
+    import time
+
+    idle = time.time() - age
+    if idle > _LOCK_STALE_SECONDS:
+        return f"锁文件 {idle / 3600:.1f} 小时未更新（无 pid 信息）"
+    return ""
+
+
 def _is_output_dir_locked(output_dir: str) -> bool:
-    """output_dir 是否已被其他入口占用（锁文件存在）。"""
-    return os.path.exists(_output_dir_lock_path(output_dir))
+    """output_dir 是否已被其他入口**有效**占用（残留锁不算）。"""
+    lock_path = _output_dir_lock_path(output_dir)
+    if not os.path.exists(lock_path):
+        return False
+    return not _lock_staleness(lock_path)
 
 
 def _acquire_output_dir_lock(output_dir: str) -> str | None:
@@ -66,7 +120,16 @@ def _acquire_output_dir_lock(output_dir: str) -> str | None:
     try:
         fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except OSError:
-        return None
+        # 扣锁失败：先判陈旧残留——残留锁不应永久占据输出目录
+        stale = _lock_staleness(lock_path)
+        if not stale:
+            return None
+        logger.info("清理陈旧输出目录锁（%s）: %s", stale, lock_path)
+        try:
+            os.remove(lock_path)
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except OSError:
+            return None
     with os.fdopen(fd, "w", encoding="utf-8") as f:
         json.dump({"entry": "web", "pid": os.getpid()}, f, ensure_ascii=False)
     return lock_path

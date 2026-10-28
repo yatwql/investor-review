@@ -68,8 +68,33 @@ class TestDemoWorkspace:
     def test_placeholder_key_is_obviously_fake(self, demo, tmp_path):
         workspace = demo.build(tmp_path / "shots")
         key = json.loads((workspace / "data" / "config" / "llm_key.json").read_text(encoding="utf-8"))
-        assert key["api_key"] == demo.DEMO_API_KEY
-        assert "demo" in key["api_key"]
+        block = key[demo.DEMO_CREDENTIALS_REF]
+        assert block["api_key"] == demo.DEMO_API_KEY
+        assert "demo" in block["api_key"]
+
+    @pytest.mark.unit_scripts
+    def test_demo_credentials_match_provider_refs(self, demo, tmp_path):
+        """凭据块名与 providers 的 credentials_ref 必须同名。
+
+        回归场景：demo 的 llm_key.json 只有一个旧格式的 ``default`` 块，而 providers 引用
+        ``deepseek-main`` / ``opencode-go``——每次演示 run 刷两行「引用凭据不存在」告警，
+        污染真实日志的告警统计。
+        """
+        workspace = demo.build(tmp_path / "shots")
+        key = json.loads((workspace / "data" / "config" / "llm_key.json").read_text(encoding="utf-8"))
+        providers = json.loads((workspace / "data" / "config" / "llm_providers.json").read_text(encoding="utf-8"))
+        refs = {p["credentials_ref"] for p in providers["providers"]}
+        assert refs == set(key), "演示工作区的凭据块与 provider 引用必须一一对应"
+
+    @pytest.mark.unit_scripts
+    def test_isolation_env_redirects_logs_and_cache(self, demo, tmp_path):
+        """演示 run 的日志/缓存必须落演示目录，真实 logs//data/cache 零接触。"""
+        workspace = demo.build(tmp_path / "shots")
+        env = demo.isolation_env(workspace)
+        assert env["INVEST_RUN_CONTEXT"] == demo.DEMO_RUN_CONTEXT
+        assert env["INVEST_LOG_PATH"].startswith(str(workspace))
+        assert env["INVEST_CACHE_DIR"].startswith(str(workspace))
+        assert str(demo.REPO_ROOT / "logs" / "app.log") != env["INVEST_LOG_PATH"]
 
     @pytest.mark.unit_scripts
     def test_report_command_runs_report_subcommand_on_demo_config(self, demo, tmp_path):
@@ -208,6 +233,7 @@ class TestTuiFrame:
         hits: list[int] = []
         with Image.open(output) as image:
             pixels = image.convert("RGB").load()
+            assert pixels is not None
             for y in range(tui.PADDING, tui.PADDING + tui.LINE_HEIGHT):
                 for x in range(image.size[0]):
                     if pixels[x, y] == green:

@@ -116,7 +116,7 @@ def _apply_logger_config(config: dict) -> None:
     path = config["path"]
     if not os.path.isabs(path):
         path = os.path.join(PROJECT_ROOT, path)
-    _LOG_FILE = os.path.join(_LOG_BASE, "test.log") if _is_pytest else path
+    _LOG_FILE = os.path.join(_LOG_BASE, "test.log") if _is_pytest else _apply_env_log_path(path)
     _LOG_MAX_BYTES = int(config["max_bytes"])
     _LOG_BACKUP_COUNT = int(config["backup_count"])
     _CONSOLE_COLOR = bool(config["console_color"])
@@ -228,6 +228,32 @@ _LOG_MAX_BYTES = _DEFAULT_ROTATION_BYTES
 _LOG_BACKUP_COUNT = _DEFAULT_BACKUP_COUNT
 _CONSOLE_COLOR = _DEFAULT_CONSOLE_COLOR
 _LOG_FILE = os.path.join(_LOG_BASE, "test.log") if _is_pytest else os.path.join(_LOG_BASE, "app.log")
+
+# ── 非真实运行（演示截图 / 性能基准）的日志隔离 ──────────────
+# 演示 run 与真实 run 写同一个 app.log 时，演示持仓的告警（无行情/缺凭据/陈旧锁）会
+# 混进真实运行的日志分析，只能靠「读了哪个持仓文件」事后反推识别。故两条通道：
+#   INVEST_LOG_PATH=<文件>     → 改落盘文件（演示落 demo/logs/app.log，不污染真实日志）
+#   INVEST_RUN_CONTEXT=<标签>  → 启动时打一行上下文标记（万一某子进程漏传 env，
+#                                标签行能把整段运行归属出来）
+_LOG_PATH_ENV = "INVEST_LOG_PATH"
+_RUN_CONTEXT_ENV = "INVEST_RUN_CONTEXT"
+
+
+def get_run_context() -> str:
+    """当前进程的运行上下文标签（真实运行为空串；演示/基准为 ``demo`` / ``perf``）。"""
+    return os.environ.get(_RUN_CONTEXT_ENV, "").strip()
+
+
+def _apply_env_log_path(path: str) -> str:
+    """环境变量指定的日志文件（相对路径按项目根解析）；测试进程固定 test.log。"""
+    if _is_pytest:
+        return path
+    override = os.environ.get(_LOG_PATH_ENV, "").strip()
+    if not override:
+        return path
+    return override if os.path.isabs(override) else os.path.join(PROJECT_ROOT, override)
+
+
 _apply_logger_config(_read_logger_config_file())
 
 
@@ -283,6 +309,12 @@ def setup_logger(name: str = "invest") -> logging.Logger:
         logger.addHandler(file_handler)
     except OSError as e:
         logger.warning("日志文件不可写（%s），本次仅输出到控制台: %s", _LOG_FILE, e)
+
+    # 上下文标记：一行钉住「本次运行属于演示/基准而非真实报告」，即使某子进程
+    # 漏传 INVEST_LOG_PATH 落回了真实日志，也能靠这行把整段输出归属出去。
+    _context = get_run_context()
+    if _context:
+        logger.info("[run] 运行上下文=%s | 日志文件: %s", _context, _LOG_FILE)
 
     return logger
 

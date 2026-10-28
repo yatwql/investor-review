@@ -16,6 +16,7 @@ from __future__ import annotations
 import contextlib
 import io
 import logging
+import os
 from unittest import mock
 
 import pytest
@@ -156,3 +157,51 @@ class TestLlmCallColor:
     def test_no_color_mode_skips_llm_highlight(self, monkeypatch):
         out = self._format(logging.INFO, "[LLM] x", monkeypatch, use_color=False)
         assert out == "[LLM] x"
+
+
+class TestRunContextIsolation:
+    """演示/基准运行的日志隔离：改落盘路径 + 上下文标记行。"""
+
+    def test_env_log_path_overrides_file(self, monkeypatch):
+        """``INVEST_LOG_PATH`` 指定时日志不落真实 app.log。"""
+        monkeypatch.setattr(log_mod, "_is_pytest", False)
+        monkeypatch.setenv(log_mod._LOG_PATH_ENV, "docs/tmp/demo-app.log")
+        assert log_mod._apply_env_log_path("logs/app.log") == os.path.join(
+            log_mod.PROJECT_ROOT, "docs/tmp/demo-app.log"
+        )
+
+    def test_env_log_path_absolute_kept_verbatim(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(log_mod, "_is_pytest", False)
+        monkeypatch.setenv(log_mod._LOG_PATH_ENV, str(tmp_path / "x.log"))
+        assert log_mod._apply_env_log_path("logs/app.log") == str(tmp_path / "x.log")
+
+    def test_no_env_keeps_default_path(self, monkeypatch):
+        monkeypatch.setattr(log_mod, "_is_pytest", False)
+        monkeypatch.delenv(log_mod._LOG_PATH_ENV, raising=False)
+        assert log_mod._apply_env_log_path("logs/app.log") == "logs/app.log"
+
+    def test_pytest_process_ignores_env_override(self, monkeypatch):
+        """测试进程固定 test.log：隔离变量不得把测试日志写到别处。"""
+        monkeypatch.setattr(log_mod, "_is_pytest", True)
+        monkeypatch.setenv(log_mod._LOG_PATH_ENV, "docs/tmp/demo-app.log")
+        assert log_mod._apply_env_log_path("logs/test.log") == "logs/test.log"
+
+    def test_run_context_reads_env(self, monkeypatch):
+        monkeypatch.setenv(log_mod._RUN_CONTEXT_ENV, "demo")
+        assert log_mod.get_run_context() == "demo"
+        monkeypatch.setenv(log_mod._RUN_CONTEXT_ENV, "  ")
+        assert log_mod.get_run_context() == ""
+
+    def test_context_marker_logged_once(self, monkeypatch, tmp_path):
+        """启动时打一行上下文标记；重复 setup_logger 不重复打。"""
+        monkeypatch.setenv(log_mod._RUN_CONTEXT_ENV, "demo")
+        monkeypatch.setattr(log_mod, "_LOG_FILE", str(tmp_path / "demo.log"))
+        logger = log_mod.setup_logger("invest_context_probe")
+        try:
+            logger.info("占位")
+            text = (tmp_path / "demo.log").read_text(encoding="utf-8")
+            marker = [line for line in text.splitlines() if "运行上下文" in line]
+            assert len(marker) == 1, "上下文标记应恰好一行（每个进程一次）"
+            assert "demo" in marker[0]
+        finally:
+            logger.handlers.clear()

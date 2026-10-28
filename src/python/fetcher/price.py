@@ -30,8 +30,28 @@ logger = logging.getLogger("invest")
 # ── 名称匹配 ─────────────────────────────────────────────────
 
 
+def _longest_common_cjk_run(a: str, b: str) -> int:
+    """两个名称的最长连续汉字公共子串长度（非汉字字符不参与）。"""
+    best = 0
+    for i in range(len(a)):
+        for j in range(i + best + 1, len(a) + 1):
+            segment = a[i:j]
+            if segment in b:
+                best = len(segment)
+            else:
+                break
+    return best
+
+
 def _name_matches(a: str, b: str) -> bool:
-    """判断两个证券名称是否指向同一标的。"""
+    """判断两个证券名称是否指向同一标的。
+
+    判据按从严到宽：全等 → 子串 → 连续汉字公共段 → 汉字集合重叠率。
+    「连续 2 个汉字」一档覆盖**全称 vs 源侧简称**：源侧返回「白酒基金LOF」/「白酒基金」
+    而持仓写「招商中证白酒」(LOF) 时，集合重叠仅 2/4 会误判为两只不同标的、把有效
+    报价拒掉（该代码已由路由确定身份，名称只作二次防错）。真正的代码歧义场景
+    （深市股票「宇晶股份」vs 场外基金「广发多因子」）没有任何连续汉字公共段，仍被拒。
+    """
     a = a.strip()
     b = b.strip()
     if not a or not b:
@@ -39,6 +59,8 @@ def _name_matches(a: str, b: str) -> bool:
     if a == b:
         return True
     if len(a) >= 3 and len(b) >= 3 and (a in b or b in a):
+        return True
+    if _longest_common_cjk_run(a, b) >= 2:
         return True
     a_chars = set(re.findall(r"[一-鿿]", a))
     b_chars = set(re.findall(r"[一-鿿]", b))
@@ -409,8 +431,11 @@ def fetch_market_data(code: str, expected_name: str = "") -> dict[str, Any] | No
 
     result = _fetch_price_with_cache_refresh(data_type, code, _price_cache_key(code, data_type), expected_name)
 
-    # ── 降级：00 代码在股票链路全失败 → 尝试场外基金链路 ──
-    if result is None and _needs_degrade:
+    # ── 降级：股票链路全失败 → 尝试场外基金链路 ──
+    # 两类触发：① 00 代码重叠区（路由本身有歧义）；② 场内基金（LOF/ETF）——源侧
+    # 改名或验证判据不通过时同样只能靠基金净值链路兜底，否则该持仓永久缺价
+    # （实测 161725「白酒基金LOF」在股票链路被拒后无任何兜底）。
+    if result is None and (_needs_degrade or is_exchange_fund_code(code)):
         _tag = f"  [{code} {expected_name}]" if expected_name else f"  [{code}]"
         logger.info("[price]%s 股票链路全部失败（该代码可能为场外基金），降级尝试东方财富净值链路", _tag)
         result = _fetch_price_with_cache_refresh(

@@ -101,6 +101,18 @@ class TestReasonClassification:
         finally:
             go._FINGERPRINT_CHANGED_MODULES.pop("__changed__", None)
 
+    def test_cold_start_is_not_labelled_ttl_expired(self):
+        """冷启动（本进程无上轮快照）不得归因为 ``ttl_expired``。
+
+        回归场景：新进程首轮四模块全 miss，日志记 `ttl_expired=4`——据此判定「放宽
+        TTL 能省钱」是错的：实际是无上轮缓存可命中，放宽 TTL 一分也省不下。
+        """
+        from src.python.llm import generators_orchestrator as go
+
+        go._FINGERPRINT_CHANGED_MODULES.pop("__changed__", None)
+        assert go._inputs_fingerprint_changed("global_macro") is None
+        assert go._recompute_reason({"can_cache": True}, None) == "cache_miss"
+
 
 class TestObservationDoesNotChangeBehaviour:
     """观测是纯旁路：命中判定、调用次数、费用一概不变。"""

@@ -206,8 +206,9 @@ def _compute_module_cache_info(
     return info
 
 
-#: 本次运行「相对上次报告」发生变化的指纹组件（模块 → 是否受影响）
-_FINGERPRINT_CHANGED_MODULES: dict[str, bool] = {}
+#: 本次运行「相对上次报告」发生变化的指纹组件（键 ``__changed__`` → 变化组件集合）。
+#: 值类型不统一是有意的：唯一消费者是归因判定（读 ``__changed__``），不参与键构造。
+_FINGERPRINT_CHANGED_MODULES: dict[str, Any] = {}
 
 #: 模块 → 依赖的指纹组件（与 `llm/module_fingerprint.py` 各构造函数的入参口径一致）。
 #: 只用于**归因**（判断"内容变了"还是"只是 TTL 到点"），不参与缓存键构造。
@@ -259,23 +260,37 @@ _MODULE_FINGERPRINT_COMPONENTS: dict[str, frozenset[str]] = {
 }
 
 
-def _inputs_fingerprint_changed(module_key: str) -> bool:
-    """该模块依赖的指纹组件相对上次报告是否变化（未知模块按变化处理，保守）。"""
+def _inputs_fingerprint_changed(module_key: str) -> bool | None:
+    """该模块依赖的指纹组件相对上次报告是否变化。
+
+    Returns:
+        ``True``/``False``：有上轮基线可比较；``None``：本进程内还没有上轮快照
+        （冷启动）。冷启动不能归因为 ``ttl_expired``——那是「内容没变、只是到点」的
+        结论，实际是「压根没有可命中的上轮缓存」，两者对「放宽 TTL 能不能省钱」的判断相反。
+    """
     changed = _FINGERPRINT_CHANGED_MODULES.get("__changed__")
-    if not changed:
-        return False
+    if changed is None:
+        return None
+    changed_components = frozenset(changed) if isinstance(changed, (set, frozenset, list, tuple)) else frozenset()
     components = _MODULE_FINGERPRINT_COMPONENTS.get(module_key)
     if components is None:
         return True
-    return bool(components & changed)
+    return bool(components & changed_components)
 
 
-def _recompute_reason(cache_info: dict, fingerprint_changed: bool) -> str:
-    """未命中原因：强制刷新 / 指纹变化 / 纯 TTL 到点（取值来自 ``RECOMPUTE_REASONS``）。"""
-    from src.python.llm.observation import RECOMPUTE_FINGERPRINT_CHANGED, RECOMPUTE_FORCED, RECOMPUTE_TTL_EXPIRED
+def _recompute_reason(cache_info: dict, fingerprint_changed: bool | None) -> str:
+    """未命中原因：强制刷新 / 指纹变化 / 纯 TTL 到点 / 冷启动（取值来自 ``RECOMPUTE_REASONS``）。"""
+    from src.python.llm.observation import (
+        RECOMPUTE_CACHE_MISS,
+        RECOMPUTE_FINGERPRINT_CHANGED,
+        RECOMPUTE_FORCED,
+        RECOMPUTE_TTL_EXPIRED,
+    )
 
     if not cache_info.get("can_cache", True):
         return RECOMPUTE_FORCED
+    if fingerprint_changed is None:
+        return RECOMPUTE_CACHE_MISS
     return RECOMPUTE_FINGERPRINT_CHANGED if fingerprint_changed else RECOMPUTE_TTL_EXPIRED
 
 
@@ -507,7 +522,10 @@ def generate_all_llm(
     degradation_events: list[dict] | None = None,
     comparison_indices: dict[str, str] | None = None,
     span_recorder=None,
-) -> tuple[str | None, str | None, str | None, str | None, bool, bool, bool, bool]:
+) -> (
+    tuple[str | None, str | None, str | None, str | None, bool, bool, bool, bool]
+    | tuple[str | None, str | None, str | None, str | None, bool, bool, bool, bool, dict | None]
+):
     """并行生成全球政经局势 + 智囊团深度复盘 + 持仓体检报告 + 穿透深度分析。
 
     优化：

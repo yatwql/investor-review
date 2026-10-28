@@ -6,8 +6,10 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
+import time
 
 import pytest
 
@@ -38,6 +40,44 @@ class TestIsOutputDirLocked:
 
     def test_locked_when_lock_file_present(self, tmp_path):
         _touch(str(tmp_path / server.OUTPUT_DIR_LOCK_FILE))
+        assert server._is_output_dir_locked(str(tmp_path)) is True
+
+
+class TestStaleLockTakeover:
+    """残留锁不得永久占据输出目录（崩溃/容器重启后的现场）。"""
+
+    def test_dead_pid_lock_is_not_treated_as_locked(self, tmp_path):
+        lock = tmp_path / server.OUTPUT_DIR_LOCK_FILE
+        lock.write_text(json.dumps({"entry": "web", "pid": 999999}), encoding="utf-8")
+        assert "已不存在" in server._lock_staleness(str(lock))
+        assert server._is_output_dir_locked(str(tmp_path)) is False
+
+    def test_dead_pid_lock_is_taken_over(self, tmp_path):
+        lock = tmp_path / server.OUTPUT_DIR_LOCK_FILE
+        lock.write_text(json.dumps({"entry": "web", "pid": 999999}), encoding="utf-8")
+        acquired = server._acquire_output_dir_lock(str(tmp_path))
+        assert acquired is not None
+        assert json.loads(lock.read_text(encoding="utf-8"))["pid"] == os.getpid()
+
+    def test_live_pid_lock_blocks_acquire(self, tmp_path):
+        lock = tmp_path / server.OUTPUT_DIR_LOCK_FILE
+        lock.write_text(json.dumps({"entry": "web", "pid": os.getpid()}), encoding="utf-8")
+        assert server._lock_staleness(str(lock)) == ""
+        assert server._is_output_dir_locked(str(tmp_path)) is True
+        assert server._acquire_output_dir_lock(str(tmp_path)) is None
+
+    def test_pidless_old_lock_is_stale(self, tmp_path):
+        lock = tmp_path / server.OUTPUT_DIR_LOCK_FILE
+        lock.write_text("{}", encoding="utf-8")
+        old = time.time() - server._LOCK_STALE_SECONDS - 60
+        os.utime(lock, (old, old))
+        assert "小时未更新" in server._lock_staleness(str(lock))
+        assert server._is_output_dir_locked(str(tmp_path)) is False
+
+    def test_pidless_fresh_lock_still_counts(self, tmp_path):
+        """无 pid 的新锁（刚建的旧格式）仍按占用处理，不误判。"""
+        lock = tmp_path / server.OUTPUT_DIR_LOCK_FILE
+        lock.write_text("{}", encoding="utf-8")
         assert server._is_output_dir_locked(str(tmp_path)) is True
 
 

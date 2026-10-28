@@ -607,3 +607,40 @@ class TestCacheConstants(unittest.TestCase):
         from src.python.core.constants import CACHE_MONTHLY
 
         self.assertEqual(CACHE_MONTHLY, 2592000)
+
+
+# ═══════════════════════════════════════════════════════════
+#  缓存目录隔离（演示/基准运行）
+# ═══════════════════════════════════════════════════════════
+
+
+class TestCacheDirIsolation(unittest.TestCase):
+    """演示/基准运行可用 ``INVEST_CACHE_DIR`` 把缓存改落别处，避免与真实缓存互串。"""
+
+    def test_env_override_wins(self):
+        from unittest.mock import patch
+
+        from src.python.cache import _paths
+
+        with patch.dict(os.environ, {_paths._CACHE_DIR_ENV: "docs/tmp/democache"}):
+            resolved = _paths._resolve_cache_dir()
+        self.assertTrue(resolved.endswith(os.path.join("docs", "tmp", "democache")))
+
+    def test_absolute_env_kept_verbatim(self):
+        from unittest.mock import patch
+
+        from src.python.cache import _paths
+
+        with patch.dict(os.environ, {_paths._CACHE_DIR_ENV: "/tmp/democache-abs"}):
+            resolved = _paths._resolve_cache_dir()
+        self.assertEqual(resolved, "/tmp/democache-abs")
+
+    def test_default_is_project_data_cache(self):
+        from unittest.mock import patch
+
+        from src.python.cache import _paths
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop(_paths._CACHE_DIR_ENV, None)
+            resolved = _paths._resolve_cache_dir()
+        self.assertEqual(resolved, os.path.join(_paths.PROJECT_ROOT, "data", "cache"))

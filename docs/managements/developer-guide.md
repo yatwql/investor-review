@@ -940,6 +940,17 @@ INVEST_LOG_CONSOLE_LEVEL=DEBUG ...                                              
 
 非法值回落 INFO 并提示一次。**默认不开 DEBUG** 的原因：日志审计（近一周 107,625 行）显示 DEBUG 占 91%，其中「市场时段」67%、缓存命中 17%，真实告警被埋在噪声里，10MB 轮转只能留约 6 天。
 
+**非真实运行的日志/缓存隔离**（演示截屏、性能基准）：
+
+```bash
+INVEST_LOG_PATH=docs/tmp/screenshots/demo/logs/app.log \   # 改落盘文件（不写真实 logs/app.log）
+INVEST_RUN_CONTEXT=demo \                                  # 启动时一行上下文标记（落哪都能归属）
+INVEST_CACHE_DIR=docs/tmp/screenshots/demo/data/cache \    # 缓存改落（不读写真实 data/cache）
+  .venv/bin/python -m src.python.cli --config <demo/config.json> report --type both
+```
+
+不隔离的后果是**分析面**污染：演示持仓的告警（源侧名称对不上/缺凭据/陈旧锁）混进真实日志，按「读了哪个持仓文件」事后反推才能区分；演示取数结果与真实缓存互串还会让截图与真机不一致。`scripts/make-screenshots.py` 已自动注入这三个变量（`scripts/_screenshots/demo_workspace.py::isolation_env`）。
+
 **写日志时的三级语义（新增日志按此选级）**：
 
 | 级别 | 用在哪 | 例子 |

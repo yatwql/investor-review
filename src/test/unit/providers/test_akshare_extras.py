@@ -140,6 +140,89 @@ class TestSectorFundFlowFailureMemo(unittest.TestCase):
         assert ae.sector_flow_failure() == ""
 
 
+class TestSectorFlowCrossProcessFallback(unittest.TestCase):
+    """跨进程负缓存 + 陈旧回退：每份报告都是新进程，内存 memo 管不到。
+
+    回归场景：30 次真实报告里 38 次 akshare 异常——每次 run 都重新撞一次超时；
+    且失败后行业资金流向整块从报告/LLM 提示词里消失。
+    """
+
+    def setUp(self) -> None:
+        ae._memo_clear()
+        ae._SECTOR_FLOW_FAILURE = ""
+
+    def tearDown(self) -> None:
+        ae._memo_clear()
+        ae._SECTOR_FLOW_FAILURE = ""
+
+    def test_disk_negative_cache_skips_fetch(self) -> None:
+        """其他进程刚失败过 → 本次直接降级，不取数。"""
+
+        def _fake_get(key, ttl):
+            return "connection" if key == ae._SECTOR_FLOW_NEG_KEY else None
+
+        with (
+            patch.object(ae, "ak", MagicMock()),
+            patch.object(ae, "run_with_timeout") as fetch,
+            patch.object(ae, "cache_get", side_effect=_fake_get),
+            patch.object(ae, "_compute_index_fingerprint", return_value="fp"),
+        ):
+            assert ae.get_sector_fund_flow() == []
+            fetch.assert_not_called()
+        assert ae.sector_flow_failure() == "connection"
+
+    def test_failure_is_written_to_disk_for_next_process(self) -> None:
+        """取数失败 → 写跨进程负缓存（否则下个进程再撞一次）。"""
+        with (
+            patch.object(ae, "ak", MagicMock()),
+            patch.object(ae, "run_with_timeout", return_value=None),
+            patch.object(ae, "cache_get", return_value=None),
+            patch.object(ae, "cache_set") as cache_set,
+            patch.object(ae, "_compute_index_fingerprint", return_value="fp"),
+        ):
+            ae.get_sector_fund_flow()
+        written = {call.args[0] for call in cache_set.call_args_list}
+        assert ae._SECTOR_FLOW_NEG_KEY in written
+
+    def test_stale_payload_used_when_source_unreachable(self) -> None:
+        """源不可达但有上次成功载荷 → 回退陈旧数据，失败类型标 stale。"""
+        stale = [{"name": "银行", "main_net_inflow": 1.0}]
+
+        def _fake_get(key, ttl):
+            if key == ae._SECTOR_FLOW_LAST_KEY:
+                return stale
+            return None
+
+        with (
+            patch.object(ae, "ak", MagicMock()),
+            patch.object(ae, "run_with_timeout", return_value=None),
+            patch.object(ae, "cache_get", side_effect=_fake_get),
+            patch.object(ae, "cache_set"),
+            patch.object(ae, "_compute_index_fingerprint", return_value="fp"),
+        ):
+            assert ae.get_sector_fund_flow() == stale
+        assert ae.sector_flow_failure() == "stale"
+
+    def test_success_keeps_last_good_and_clears_negative(self) -> None:
+        """成功 → 写「最近成功」基准并清掉跨进程负缓存（源已恢复）。"""
+        df = MagicMock()
+        df.empty = False
+        df.iterrows.return_value = []
+        with (
+            patch.object(ae, "ak", MagicMock()),
+            patch.object(ae, "run_with_timeout", return_value=df),
+            patch.object(ae, "cache_get", return_value=None),
+            patch.object(ae, "cache_set") as cache_set,
+            patch.object(ae, "cache_clear") as cache_clear,
+            patch.object(ae, "_compute_index_fingerprint", return_value="fp"),
+        ):
+            ae.get_sector_fund_flow()
+        written = {call.args[0] for call in cache_set.call_args_list}
+        assert ae._SECTOR_FLOW_LAST_KEY in written
+        cache_clear.assert_called_once_with(ae._SECTOR_FLOW_NEG_KEY)
+        assert ae.sector_flow_failure() == ""
+
+
 class TestCalcDividendSummary(unittest.TestCase):
     """测试分红数据汇总计算（akshare 聚合格式）。"""
 
@@ -158,14 +241,14 @@ class TestCalcDividendSummary(unittest.TestCase):
     def test_normal_data(self) -> None:
         df = self._make_agg_df(19.4583, 3)
         result = ae._calc_dividend_summary(df)
-        self.assertIsNotNone(result)
+        assert result is not None
         self.assertAlmostEqual(result["avg_dividend"], 19.4583, places=4)
         self.assertEqual(result["record_count"], 3)
 
     def test_single_year(self) -> None:
         df = self._make_agg_df(21.875, 1)
         result = ae._calc_dividend_summary(df)
-        self.assertIsNotNone(result)
+        assert result is not None
         self.assertAlmostEqual(result["avg_dividend"], 21.875, places=4)
         self.assertEqual(result["record_count"], 1)
 
@@ -173,7 +256,7 @@ class TestCalcDividendSummary(unittest.TestCase):
         """akshare 已聚合为年均值，"同一年多次分红"由 akshare 自身处理。"""
         df = self._make_agg_df(1.4, 2)
         result = ae._calc_dividend_summary(df)
-        self.assertIsNotNone(result)
+        assert result is not None
         self.assertAlmostEqual(result["avg_dividend"], 1.4, places=4)
         self.assertEqual(result["record_count"], 2)
 

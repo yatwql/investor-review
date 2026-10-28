@@ -253,7 +253,10 @@ def read_llm_settings_file() -> tuple[dict, str] | None:
     except _llm_schema.LLMSchemaError as e:
         logger.error("[ERR] %s", e)
         return None
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError) as e:
+        # 必须带出原因：原先静默返回 None，面板只看到「读取失败，按默认展示」，
+        # 现场无法区分「文件被占/半写」「JSONC 解析失败」还是「编码问题」。
+        logger.warning("llm_settings.json 读取失败（%s: %s），按默认值处理: %s", type(e).__name__, e, path)
         return None
 
 

@@ -267,6 +267,7 @@ class TestMergedCacheInvalidation:
 
         assert settings_mod._llm_config_cache is None  # 写后立即置空
         refreshed = get_llm_config()
+        assert refreshed is not None
         by_name = {p["name"]: p["priority"] for p in refreshed["_provider_list"]}
         assert by_name[entries[0]["name"]] == entries[1]["priority"]
         assert by_name[entries[1]["name"]] == entries[0]["priority"]
@@ -321,3 +322,22 @@ class TestWriteLlmProvidersFilePermission:
         write_llm_providers({"providers": []}, str(path))
 
         assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+
+
+class TestReadSettingsFailureReason:
+    """llm_settings.json 读取失败必须带出原因（现场可诊断）。"""
+
+    def test_parse_failure_logs_reason(self, tmp_path, caplog):
+        """回归：原先静默返回 None，只看到「读取失败，按默认展示」，无从定位。"""
+        from unittest.mock import patch
+
+        from src.python.config import _llm_settings
+
+        broken = tmp_path / "llm_settings.json"
+        broken.write_text('{\n  "defaults": {,}\n', encoding="utf-8")
+        with patch.object(_llm_settings, "get_llm_settings_path", return_value=str(broken)):
+            with caplog.at_level(logging.WARNING, logger="invest"):
+                assert _llm_settings.read_llm_settings_file() is None
+        messages = [r.getMessage() for r in caplog.records]
+        assert any("llm_settings.json 读取失败" in m for m in messages), messages
+        assert any("JSONDecodeError" in m or "JSON" in m for m in messages), messages
