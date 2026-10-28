@@ -18,6 +18,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 import pytest
 
+from src.python.config import _config_defaults, _llm_settings
 from src.python.core.json_comments import strip_json_comments as _strip_json_comments
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_config, pytest.mark.edge]
@@ -175,9 +176,7 @@ class TestConfigEnvEdge(unittest.TestCase):
 
     def tearDown(self):
         if self._orig_config is not None:
-            import src.python.config as cfg
-
-            cfg._config_defaults._CONFIG_FILE = self._orig_config
+            _config_defaults._CONFIG_FILE = self._orig_config
         self.tmp.cleanup()
 
     # ── BOM 头 JSON ──
@@ -186,12 +185,12 @@ class TestConfigEnvEdge(unittest.TestCase):
         """含 UTF-8 BOM 的 config.json → 能被 get_config() 正常解析。"""
         import src.python.config as cfg
 
-        self._orig_config = cfg._config_defaults._CONFIG_FILE
-        cfg._config_defaults._CONFIG_FILE = os.path.join(self.tmp.name, "config.json")
+        self._orig_config = _config_defaults._CONFIG_FILE
+        _config_defaults._CONFIG_FILE = os.path.join(self.tmp.name, "config.json")
 
         # 用 utf-8-sig 写入（自动添加 BOM），内容不含
         raw = '{"holdings_dir": "data/holdings", "holdings_filename": "test.xlsx"}'
-        with open(cfg._config_defaults._CONFIG_FILE, "w", encoding="utf-8-sig") as f:
+        with open(_config_defaults._CONFIG_FILE, "w", encoding="utf-8-sig") as f:
             f.write(raw)
 
         result = cfg.get_config()
@@ -221,10 +220,10 @@ class TestConfigEnvEdge(unittest.TestCase):
             patch("src.python.config._llm_providers._get_llm_key_path", return_value=key_path),
         ):
             # 清缓存
-            cfg._llm_settings._llm_config_cache = None
+            _llm_settings._llm_config_cache = None
             result = cfg.get_llm_config()
 
-        self.assertIsNotNone(result)
+        assert result is not None
         self.assertEqual(result.get("temperature_global_macro"), 0.7)
 
     # ── CRLF 行尾 ──
@@ -251,23 +250,26 @@ class TestConfigEnvEdge(unittest.TestCase):
             patch("src.python.config._llm_settings.get_llm_settings_path", return_value=settings_path),
             patch("src.python.config._llm_providers._get_llm_key_path", return_value=key_path),
         ):
-            cfg._llm_settings._llm_config_cache = None
+            _llm_settings._llm_config_cache = None
             result = cfg.get_llm_config()
 
-        self.assertIsNotNone(result)
+        assert result is not None
         self.assertEqual(result.get("temperature_global_macro"), 0.7)
         self.assertEqual(result.get("max_tokens_global_macro"), 2048)
 
     # ── api_key 空格 ──
 
-    def test_api_key_whitespace_stripped(self):
-        """扁平密钥文档规范化时 api_key 首尾空格被去除（写入命名凭据块）。"""
+    def test_flat_key_document_rejected_not_migrated(self):
+        """顶层 api_key 旧形态：不再规范化，直接不可用（凭据块名必须显式给出）。
+
+        历史行为是读取时把顶层 api_key 包成 `default` 块并去空格；该迁移已移除，
+        现在这类文件不产生任何凭据（见手册「配置形态」：需手工改写为命名块）。
+        """
         import src.python.config as cfg
 
         settings_path = os.path.join(self.tmp.name, "llm_settings.json")
         key_path = os.path.join(self.tmp.name, "llm_key.json")
 
-        # 写带空格的 api_key
         with open(settings_path, "w", encoding="utf-8") as f:
             json.dump({"schema_version": 2, "modules": {"global_macro": {"enabled": True}}}, f)
         with open(key_path, "w", encoding="utf-8") as f:
@@ -277,12 +279,11 @@ class TestConfigEnvEdge(unittest.TestCase):
             patch("src.python.config._llm_settings.get_llm_settings_path", return_value=settings_path),
             patch("src.python.config._llm_providers._get_llm_key_path", return_value=key_path),
         ):
-            cfg._llm_settings._llm_config_cache = None
+            _llm_settings._llm_config_cache = None
             result = cfg.get_llm_config()
 
-        self.assertIsNotNone(result)
-        creds = (result.get("_llm_credentials") or {}).get("default") or {}
-        self.assertEqual(creds.get("api_key"), "sk-test-with-spaces", "规范化后的 api_key 首尾空格应被去除")
+        assert result is not None
+        self.assertFalse(result.get("_llm_credentials"), "旧形态不再被迁移成凭据块")
 
     def test_api_key_whitespace_in_settings_only(self):
         """仅 llm_settings.json 含 api_key → 因无 llm_key.json 返回 None（凭据分离）。"""
@@ -305,7 +306,7 @@ class TestConfigEnvEdge(unittest.TestCase):
                 return_value=os.path.join(self.tmp.name, "llm_providers_not_exists.json"),
             ),
         ):
-            cfg._llm_settings._llm_config_cache = None
+            _llm_settings._llm_config_cache = None
             result = cfg.get_llm_config()
 
         # 凭据分离：无 llm_key.json 且无 llm_providers.json → 返回 None
@@ -331,10 +332,10 @@ class TestConfigEnvEdge(unittest.TestCase):
             patch("src.python.config._llm_settings.get_llm_settings_path", return_value=settings_path),
             patch("src.python.config._llm_providers._get_llm_key_path", return_value=key_path),
         ):
-            cfg._llm_settings._llm_config_cache = None
+            _llm_settings._llm_config_cache = None
             result = cfg.get_llm_config()
 
-        self.assertIsNotNone(result)
+        assert result is not None
         self.assertEqual(result.get("temperature_global_macro"), 0.3)
         # 计价参考独立成文件：llm_settings 不再承载 pricing（混入会被判未知键）
         self.assertNotIn("pricing", result)
@@ -355,10 +356,10 @@ class TestConfigEnvEdge(unittest.TestCase):
             patch("src.python.config._llm_settings.get_llm_settings_path", return_value=settings_path),
             patch("src.python.config._llm_providers._get_llm_key_path", return_value=key_path),
         ):
-            cfg._llm_settings._llm_config_cache = None
+            _llm_settings._llm_config_cache = None
             result = cfg.get_llm_config()
 
-        self.assertIsNotNone(result)
+        assert result is not None
         # system_prompt_* 缺失 → 运行时补默认 None（生成时再回退内置提示词）
         self.assertIn("system_prompt_global_macro", result)
         self.assertIsNone(result["system_prompt_global_macro"])
@@ -369,9 +370,9 @@ class TestConfigEnvEdge(unittest.TestCase):
         """config.json 缺失时双线程同时 init_config() → 不崩溃。"""
         import src.python.config as cfg
 
-        self._orig_config = cfg._config_defaults._CONFIG_FILE
+        self._orig_config = _config_defaults._CONFIG_FILE
         config_path = os.path.join(self.tmp.name, "config.json")
-        cfg._config_defaults._CONFIG_FILE = config_path
+        _config_defaults._CONFIG_FILE = config_path
 
         import threading
 

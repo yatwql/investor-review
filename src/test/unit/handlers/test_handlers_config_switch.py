@@ -31,12 +31,15 @@ def _switch_menu_number(flag: str) -> int:
 class TestContentPanelToggles:
     """[S] 面板：编号由注册表派生，切换落到 features.json（五组顺序稳定）。"""
 
-    def _toggle(self, flag: str, capsys) -> None:
+    def _toggle(self, flag: str, capsys):
+        from unittest.mock import MagicMock
+
         from src.python.tui.handlers_config import _cmd_config_content_options
 
+        save = MagicMock()
         with (
             patch("builtins.input", side_effect=[str(_switch_menu_number(flag)), "0"]),
-            patch("src.python.config.features.save_feature_overrides") as save,
+            patch("src.python.config.features.save_feature_overrides", save),
             patch("src.python.tui.handlers_config.refresh_config"),
         ):
             _cmd_config_content_options()
@@ -198,8 +201,7 @@ class TestSwitchPanelReadonlyInfo:
 
     @patch("src.python.tui.handlers_config.refresh_config")
     @patch("builtins.input", side_effect=["0"])
-    @patch("src.python.tui.handlers_config.filter_menu_llm_modules", return_value={})
-    def test_non_default_feature_star_marked(self, mock_filter, mock_input, mock_refresh, capsys):
+    def test_non_default_feature_star_marked(self, mock_input, mock_refresh, capsys):
         """功能开关与出厂默认不一致时行尾标 *（默认关的开关被置开）。"""
         import re
 

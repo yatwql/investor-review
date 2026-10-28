@@ -3,14 +3,13 @@
 职责范围：
   - llm_providers.json / llm_key.json 文件路径解析
   - Providers 列表加载、校验、反序列化
-  - 凭据（llm_key.json）加载与格式升级
+  - 凭据（llm_key.json）加载（命名凭据块，无旧形态迁移）
   - Provider 链数据注入函数
 """
 
 from __future__ import annotations
 
 import json
-from typing import Any
 import logging
 import os
 import re
@@ -76,21 +75,8 @@ def _load_llm_providers() -> dict | None:
         return None
 
 
-#: 扁平密钥文档改写后使用的默认凭据块名（同时用作 provider 条目名）
+#: 凭据块默认名（交互式配置与首启向导写入时使用，同时用作 provider 条目名）
 DEFAULT_CREDENTIALS_REF = "default"
-
-
-def is_flat_key_document(doc: Any) -> bool:
-    """判断 llm_key.json 文档是否为扁平形态（凭据摊在顶层，``api_key`` 为顶层键）。"""
-    return isinstance(doc, dict) and isinstance(doc.get("api_key"), str)
-
-
-def flat_key_to_credentials(doc: dict) -> dict[str, dict]:
-    """扁平密钥文档 → 命名凭据块文档（纯函数，不写盘）。"""
-    block = {key: doc[key] for key in ("api_key", "model", "endpoint") if doc.get(key)}
-    if isinstance(block.get("api_key"), str):
-        block["api_key"] = block["api_key"].strip()
-    return {DEFAULT_CREDENTIALS_REF: block}
 
 
 def _write_key_document(documents: dict) -> None:
@@ -98,7 +84,12 @@ def _write_key_document(documents: dict) -> None:
     from src.python.config._core import _atomic_write
 
     key_path = _get_llm_key_path()
-    os.makedirs(os.path.dirname(key_path), exist_ok=True)
+    try:
+        os.makedirs(os.path.dirname(key_path), exist_ok=True)
+    except OSError as e:
+        # 写凭据是交互式配置的最后一环：目录不可建必须报出来，不能静默留下半成品
+        logger.error("llm_key.json 目录创建失败（%s）: %s", os.path.dirname(key_path), e)
+        raise
     _atomic_write(key_path, json.dumps(documents, ensure_ascii=False, indent=2))
     try:
         os.chmod(key_path, 0o600)
@@ -136,54 +127,14 @@ def _attach_credentials_provider(backend: str) -> None:
     _atomic_write(providers_path, json.dumps(raw, ensure_ascii=False, indent=2))
 
 
-def ensure_credential_blocks(doc: dict) -> bool:
-    """把扁平密钥文档规范为命名凭据块 + 引用它的 provider 条目（幂等）。
-
-    改写动作（失败仅告警、不改动原文件）：
-      1. ``llm_key.json`` 原样备份为 ``llm_key.json.bak``（已存在则不覆盖）；
-      2. 顶层字段改写为名为 ``default`` 的命名凭据块；
-      3. ``llm_providers.json`` 追加一条引用该凭据块的 provider 条目
-         （已存在同 ref 条目则只改凭据文件）。
-
-    Args:
-        doc: 已解析的 llm_key.json 文档（顶层含 api_key）
-
-    Returns:
-        True 表示已改写（调用方须重读配置）；False 表示未改写（保持原文件）
-    """
-    from src.python.config._core import _atomic_write
-
-    key_path = _get_llm_key_path()
-    try:
-        backup = key_path + ".bak"
-        if not os.path.exists(backup):
-            with open(key_path, encoding="utf-8") as src:
-                _atomic_write(backup, src.read())
-        _write_key_document(flat_key_to_credentials(doc))
-        _attach_credentials_provider(doc.get("provider") or "claude")
-    except OSError as exc:
-        logger.warning("扁平密钥文档规范化失败（保持原文件不动）: %s", exc)
-        return False
-
-    logger.info(
-        "扁平密钥文档已改写为命名凭据块 '%s'，并在 llm_providers.json 追加同名条目（原文件备份为 llm_key.json.bak）",
-        DEFAULT_CREDENTIALS_REF,
-    )
-    return True
-
-
 def _load_llm_key_credentials() -> dict[str, dict] | None:
-    """读取 llm_key.json 为多键凭据字典。
+    """读取 llm_key.json 为命名凭据块字典：``{ref_name: {api_key, model?, endpoint?}}``。
 
-    多凭据格式：
-      {"claude-main": {"api_key": "sk-...", "model": "..."}, "openai-fb": {"api_key": "..."}}
-
-    单凭据格式（自动升级）：
-      {"api_key": "sk-...", "model": "claude-sonnet-4-..."}
-      → 自动包裹为 {"_default": {"api_key": "...", "model": "..."}}
+    唯一受支持形态是命名块 ``{ref: {api_key, ...}}``。顶层 ``api_key`` 视为非法输入：
+    拒绝加载并给出改写指引（不迁移、不写备份），使凭据解析路径只有一条。
 
     Returns:
-        {ref_name: {api_key, model?, endpoint?}} 或 None（文件不存在/解析失败）
+        {ref_name: {api_key, model?, endpoint?}} 或 None（文件缺失/解析失败/形态非法）
     """
     from src.python.core.json_comments import strip_json_comments
 
@@ -195,15 +146,14 @@ def _load_llm_key_credentials() -> dict[str, dict] | None:
         if not isinstance(raw, dict):
             logger.warning("llm_key.json 根元素不是 JSON 对象，已忽略")
             return None
-        # 扁平形态：应由 ensure_credential_blocks() 在读取阶段改写；走到这里说明改写未成功，拒绝加载
-        if is_flat_key_document(raw):
+        if isinstance(raw.get("api_key"), str):
             logger.error(
-                "llm_key.json 仍是扁平格式（顶层 api_key）——请改写为命名凭据块"
+                "llm_key.json 顶层 api_key 形态不被支持——请改写为命名凭据块"
                 '（{%r: {"api_key": ...}}）并在 llm_providers.json 中用 credentials_ref 引用',
                 DEFAULT_CREDENTIALS_REF,
             )
             return None
-        # 多凭据格式：校验每项是 dict
+        # 凭据块字典：校验每项是 dict
         for ref_name, creds in raw.items():
             if not isinstance(creds, dict):
                 logger.warning("llm_key.json 中 '%s' 的值不是 JSON 对象，已忽略", ref_name)

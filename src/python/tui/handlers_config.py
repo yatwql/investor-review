@@ -36,12 +36,6 @@ from src.python.tui.text_layout import (
 )
 from src.python.tui.tui_keys import input_choice
 
-# ── 兼容再导出（面板本体已迁至 handlers_switch）──────────────────────────
-# `[S]` 面板现在 `handlers_switch.run_llm_modules_panel`，但它对该模块的取值统一经
-# `handlers_config.<符号>`（函数内局部导入），以便既有测试 patch 点与外部调用保持有效。
-# 这些名字在本文件内可能已无直接引用，故显式豁免 F401。
-from src.python.tui.tui_menu import filter_menu_llm_modules  # noqa: F401
-
 logger = setup_logger()
 
 

@@ -967,6 +967,20 @@ INVEST_CACHE_DIR=docs/tmp/screenshots/demo/data/cache \    # 缓存改落（不�
 
 **去重锚点默认采集、写侧零读取**：`data/calibration/dedup_anchors.jsonl` 每次报告只追加边界案例（单次 `write`+`fsync`，不解析旧文件）；跨轮重复由 `eval-dedup-threshold.py::load_anchors` 按键去重（保留最早一条），诊断结论不受重复行影响。`INVEST_DEDUP_COLLECT_ANCHORS=0` 可关闭采集。文件超过 32MB 时只记提示，不自动压缩——压缩由 `scripts/eval-dedup-threshold.py` 评估后**默认顺带执行**（分析用完整样本，随后每 key 最新 + 近 120 天，`--no-compact` 关闭、`--retention-days 0` 只按键去重）或 `INVEST_DEDUP_MAINTENANCE=1` 显式触发；压缩前 `.bak` 与主文件等大，默认校验后清理（`INVEST_DEDUP_KEEP_BACKUP=1` 保留）。
 
+### 兼容层纪律（不保留旧形态支持）
+
+本项目的运行主体是单一本机部署 + 作者自用，**不设兼容层**：旧数据结构、旧数据文件、旧缓存载荷、旧配置键、旧配置文件、旧内部 API 一律不保留支持。破坏性变更的做法是「换键/换字段 + 版本戳整体作废」，而不是写一条兼容分支。
+
+| 变更面 | 做法 | 具体机制 |
+|:-------|:-----|:---------|
+| 缓存载荷结构 | 递增版本戳作废旧缓存 | `cache/_paths.py::_CACHE_KEY_VERSION`（旧文件自然不再命中，无需逐类型版本字段） |
+| 配置文件结构 | 校验拒载 + 提示重新生成 | `llm_settings.json` 的 `schema_version` 不匹配即拒载；`llm_key.json` 顶层 `api_key` 旧形态直接拒绝并给改写指引 |
+| 已移除的配置键 | 直接忽略，不保留识别/告警分支 | 如 `market_hour_aware`（无同名消费方，留着“识别 + 告警”只是持续维护死代码） |
+| 内部函数/再导出 | 删就删，同时改调用点与 patch 点 | 不为「既有测试 patch 点」保留再导出壳（`noqa: F401`） |
+| 数据契约字段名 | 每个事实只认一个真值键，不做多键回退取值 | 如穿透资产的来源键只认 `sources`（合并层内部键不参与对外契约） |
+
+**与「健壮性」的边界**（这两类要保留，别当兼容代码删）：① 针对**上游瞬时异常**的防御（如半写文件的 `pid` 缺失、上游字段缺失/类型异常、`json` 截断），它们防护的是当下的坏输入；② `AtomicWrite` / `临时文件 + os.replace` 这类写入安全机制。判据：**这个分支是为了让昨天的产物继续工作，还是为了让今天的异常不炸？**前者删，后者留。
+
 ### 日志：先看日志再看代码
 
 - **logger 名**：项目统一 `logging.getLogger("invest")`，`setup_logger()` 落盘到 `logs/app.log`（按大小轮转），控制台同步 INFO/WARNING/ERROR。
