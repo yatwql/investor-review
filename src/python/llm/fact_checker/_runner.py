@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+import re
 
 from src.python.llm.fact_checker._constants import _DEFAULT_TOLERANCE_PCT
 from src.python.llm.fact_checker._corrections import (
@@ -96,7 +97,7 @@ def run_fact_check(
     all_issues: list[str] = []
     total_checks = 0
     total_passed = 0
-    all_corrections: list[tuple[str, str, str]] = []
+    all_corrections: list[tuple[str, str, str, str]] = []
 
     # 检查 1：数值一致性（含回撤语境检测）
     num_issues, num_checked, num_passed, corrections = check_numerical_consistency(
@@ -218,3 +219,25 @@ def run_fact_check(
     else:
         summary = f"{tag}✓ 事实校验通过：{total_passed}/{total_checks} 项检查全部通过{auto_msg}"
     return corrected_html, f'<p style="color:#a40;font-size:12px">{summary}</p>{suggestion_lines}{correction_lines}'
+
+
+#: 校验产物段落（摘要 / 建议提及 / 已修正明细）——它们描述「校验结果」而非分析正文。
+#: 摘要里的检查项计数会随缓存态变化（缓存命中时排名校验跳过）、修正条数随正文变化，
+#: 若把整段正文（含这些段落）当自检输入，同一份分析正文会因校验产物不同而产生不同
+#: 的自检缓存键。故下游「复核分析正文」的消费方须先剥掉本模式匹配的段落。
+_FACT_CHECK_BLOCK_RE = re.compile(
+    r'<p style="color:#(?:4a4|a40);font-size:12px">[^<]*事实校验[^<]*</p>'
+    r'|<span style="color:#(?:999|888);font-size:11px">(?:ℹ [^<]*建议提及[^<]*|已修正明细[^<]*)</span>'
+)
+
+
+def strip_fact_check_blocks(html_content: str) -> str:
+    """剥离事实校验产物段落，返回纯分析正文（供下游复核类消费方使用）。
+
+    报告渲染仍用含校验段落的完整正文（校验结论对读者有用）；只有「以正文为输入的
+    下游判断」需要剥掉——生成后自检即属此类：它复核的是分析结论本身，把校验摘要
+    一并喂进去会让自检缓存键随校验计数漂移。
+    """
+    if not html_content:
+        return html_content
+    return _FACT_CHECK_BLOCK_RE.sub("", html_content)

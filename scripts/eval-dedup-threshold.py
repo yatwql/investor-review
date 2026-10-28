@@ -30,7 +30,7 @@ import argparse
 import json
 import os
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from typing import Any
 
 # ── 项目路径（脚本独立运行，需先把仓库根加入 sys.path） ──
@@ -39,16 +39,17 @@ if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
 # 晚导入：sys.path 就绪后再引用项目模块
-from src.python.core.atomic_write import write_text_atomic  # noqa: E402
 from src.python.providers.news_dedup import (
     _ANCHOR_SIZE_WARN_BYTES,
-    _anchor_retention_cutoff,
-    _anchor_retention_days,
-    _anchor_ts_on_or_after,
+    anchor_shard_paths,
+    anchor_total_bytes,
+    compact_anchor_file,
+    read_anchor_lines,
 )
 from src.python.providers.news_dedup_rules import (
     ANCHOR_RULES_FIELD,
     _ANCHOR_RULES_VERSION,
+    anchor_rules_version,
     _CROSS_BG2_RATIO,
     _CROSS_BIGRAM_MIN,
     _CROSS_CANDIDATE_RATIO,
@@ -95,27 +96,17 @@ def load_anchors(path: str = _ANCHOR_PATH) -> list[dict[str, Any]]:
     Returns:
         去重后的记录列表；文件不存在时返回空列表（调用方决定是否退出）。
     """
-    if not os.path.exists(path):
-        return []
     buckets: dict[tuple[str, str, str, str], dict[str, Any]] = {}
-    with open(path, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                record = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            buckets.setdefault(_anchor_key(record), record)
+    for line in read_anchor_lines(path):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        buckets.setdefault(_anchor_key(record), record)
     return list(buckets.values())
-
-
-def _retention_days_value(retention_days: int | None) -> int:
-    """展示用保留期天数（None = 生产默认值，便于输出里写清本次用了多少天）。"""
-    if retention_days is None:
-        return _anchor_retention_days()
-    return max(0, int(retention_days))
 
 
 def compact_anchors(
@@ -124,87 +115,13 @@ def compact_anchors(
     dry_run: bool = False,
     retention_days: int | None = None,
 ) -> dict[str, Any]:
-    """压缩锚点文件：每个标题对只保留**最后一条**（append-only → 最后即最新）+ 保留期裁剪。
+    """压缩锚点文件（每 key 最新 + 保留期 + 体积上限），返回统计字典。
 
-    保留期与生产维护压缩**同一双条件**（`retention_days=None` 取
-    `news_dedup._anchor_retention_days()` 的默认值，`0` = 仅按键去重、不按时间裁剪）——
-    仅按键去重压不动（标题对高度唯一，实测压后仍 37.9 MB），时间裁剪才是体积上限。
-
-    文件是 append-only 累积，历史批量校准轮次留下了大量重复行
-    （实测 456,546 行 / 152 MB 中仅 51,718 个唯一对）。重复行对校准无信息量，
-    却让每次 flush 的「读全文 → 整文件替换」与每次加载的全文解析白白放大数倍。
-
-    两遍扫描实现：第一遍只记「每个 key 的最后行号」（内存只放 key → int），
-    第二遍按行号挑选直接透写原文（不重新序列化，保留原始记录逐字不变），
-    最后原子替换（``core.atomic_write.write_text_atomic``）。
-
-    Returns:
-        ``{before_lines, after_lines, before_bytes, after_bytes, unique_keys, legacy_era}``
-        —— ``legacy_era`` 为被丢弃行中规则指纹与当前不一致（或缺失）的条数。
+    实现在 :func:`news_dedup.compact_anchor_file`——生产维护路径与本工具共用同一套
+    三条件（含分支配额保护与并发写入检测），避免两份实现漂移。``retention_days=None``
+    取生产默认值（``_anchor_retention_days()``）；``0`` = 只按键去重、不按时间裁剪。
     """
-    if not os.path.exists(path):
-        return {
-            "before_lines": 0,
-            "after_lines": 0,
-            "before_bytes": 0,
-            "after_bytes": 0,
-            "unique_keys": 0,
-            "legacy_era": 0,
-            "expired": 0,
-            "retention_days": _retention_days_value(retention_days),
-        }
-
-    before_bytes = os.path.getsize(path)
-    cutoff = _anchor_retention_cutoff(retention_days)
-    last_line_of: dict[tuple[str, str, str, str], int] = {}
-    before_lines = 0
-    expired = 0
-    with open(path, encoding="utf-8") as f:
-        for idx, line in enumerate(f):
-            if not line.strip():
-                continue
-            before_lines += 1
-            try:
-                record = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if cutoff is not None and not _anchor_ts_on_or_after(record.get("ts"), cutoff):
-                expired += 1  # 超保留期：任一 key 均不保留（含最新一条）
-                continue
-            last_line_of[_anchor_key(record)] = idx
-
-    kept: list[str] = []
-    legacy_era = 0
-    with open(path, encoding="utf-8") as f:
-        for idx, line in enumerate(f):
-            if not line.strip():
-                continue
-            record = json.loads(line)
-            if last_line_of.get(_anchor_key(record), -1) == idx:
-                kept.append(line if line.endswith("\n") else line + "\n")
-            elif record.get(ANCHOR_RULES_FIELD, "") != _ANCHOR_RULES_VERSION:
-                legacy_era += 1
-
-    result = {
-        "before_lines": before_lines,
-        "after_lines": len(kept),
-        "before_bytes": before_bytes,
-        "after_bytes": len("".join(kept).encode("utf-8")),
-        "unique_keys": len(last_line_of),
-        "legacy_era": legacy_era,
-        "expired": expired,
-        "retention_days": _retention_days_value(retention_days),
-    }
-    if dry_run or not kept:
-        return result
-    write_text_atomic(
-        path,
-        "".join(kept),
-        prefix=".dedup_anchors_compact_",
-        log_tag="dedup",
-        noun="锚点文件",
-    )
-    return result
+    return compact_anchor_file(path, dry_run=dry_run, retention_days=retention_days)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -264,6 +181,8 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
     """对全部锚点做「当前规则重判」并汇总。"""
     branches: dict[str, list[dict[str, Any]]] = defaultdict(list)
     era_current = 0
+    era_unattributed = 0
+    era_versions: Counter[str] = Counter()
     drift = 0
     for record in records:
         title_a = record.get("title_a", "") or ""
@@ -273,14 +192,26 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
         ratio, overlap = _pair_similarity(title_a, title_b)
         same_source = bool(record.get("source_a")) and record.get("source_a") == record.get("source_b")
         branch = classify_pair(ratio, overlap, same_source, record.get("title_a", ""), record.get("title_b", ""))
-        if record.get(ANCHOR_RULES_FIELD, "") == _ANCHOR_RULES_VERSION:
+        version = anchor_rules_version(record)
+        if version == _ANCHOR_RULES_VERSION:
             era_current += 1
+        if version:
+            era_versions[version] += 1
+        else:
+            era_unattributed += 1
         # 记录时的 rule 与重判分支口径不同（如记录 cross_skip vs 重判 cross_merge）
         stored = record.get("rule", "")
         if stored and not _branch_matches_stored(branch, stored):
             drift += 1
         branches[branch].append({**record, "_ratio_now": ratio, "_overlap_now": overlap})
-    return {"branches": branches, "era_current": era_current, "era_legacy": len(records) - era_current, "drift": drift}
+    return {
+        "branches": branches,
+        "era_current": era_current,
+        "era_legacy": len(records) - era_current - era_unattributed,
+        "era_unattributed": era_unattributed,
+        "era_versions": era_versions,
+        "drift": drift,
+    }
 
 
 def _branch_matches_stored(branch: str, stored: str) -> bool:
@@ -304,18 +235,23 @@ def report(records: list[dict[str, Any]], *, summary_only: bool = False, sample:
     if not records:
         print("[!] 锚点文件为空，尚无数据可用于校准。")
         return
-    size = os.path.getsize(_ACTIVE_FILE) if os.path.exists(_ACTIVE_FILE) else 0
+    size = anchor_total_bytes(_ACTIVE_FILE)
 
     data = analyze(records)
     branches: dict[str, list[dict[str, Any]]] = data["branches"]
 
-    print(f"锚点文件: {_ACTIVE_FILE}")
+    print(f"锚点目录: {os.path.dirname(_ACTIVE_FILE) or '.'}（{len(anchor_shard_paths(_ACTIVE_FILE))} 个分片/文件）")
     print(f"  体积: {size / 1e6:.1f} MB（告警线 {_ANCHOR_SIZE_WARN_BYTES / 1e6:.0f} MB）")
     print(f"唯一标题对: {len(records)}")
     print(
         f"规则时代: 当前指纹 {_ANCHOR_RULES_VERSION} = {data['era_current']} 条；"
-        f"历史时代 = {data['era_legacy']} 条（旧样本按当前代码重算，仍计入下方分布）"
+        f"历史时代 = {data['era_legacy']} 条；未标注（旧版遗留）= {data['era_unattributed']} 条"
+        "（旧样本按当前代码重算，仍计入下方分布）"
     )
+    others = {v: n for v, n in data["era_versions"].items() if v != _ANCHOR_RULES_VERSION}
+    if others:
+        shown = "、".join(f"{v}={n}" for v, n in sorted(others.items(), key=lambda kv: -kv[1])[:3])
+        print(f"  历史指纹分布（Top3）: {shown}（压缩后可一并归并为较少时代）")
     print(f"与记录时判定不一致: {data['drift']} 条（规则已调整，属正常）")
     print()
     print("── 当前规则重判分布 ──")
@@ -499,7 +435,7 @@ def _print_advice(branches: dict[str, list[dict[str, Any]]]) -> None:
     if edge3:
         print(f"[!] 跨源 bg={_CROSS_BIGRAM_MIN} 边界 {len(edge3)} 条：误合并风险集中区，需抽样人工判读")
     print(f"[i] 有效跨源样本 {cross_total} 条（≥100 条建议校准一次）；同源样本 {same_total} 条（≥50 条建议校准一次）")
-    if os.path.exists(_ACTIVE_FILE) and os.path.getsize(_ACTIVE_FILE) > _ANCHOR_SIZE_WARN_BYTES:
+    if anchor_total_bytes(_ACTIVE_FILE) > _ANCHOR_SIZE_WARN_BYTES:
         print(
             f"[!] 锚点文件超过 {_ANCHOR_SIZE_WARN_BYTES / 1e6:.0f} MB："
             f"运行 `python scripts/eval-dedup-threshold.py --compact` 压缩"
@@ -537,13 +473,29 @@ def _print_compaction_result(result: dict[str, Any], file: str, *, dry_run: bool
         f"（唯一标题对 {result['unique_keys']}）"
     )
     print(f"  丢弃重复行中被判为历史规则时代的: {result['legacy_era']} 条")
+    print(f"  保留行中无指纹、已补 legacy 标注的: {result['unattributed']} 条")
     print(f"  超保留期（{result['retention_days']} 天，0=不裁剪）丢弃: {result['expired']} 条")
-    print("  " + ("[..] --dry-run：未写盘" if dry_run else "[OK] 已原子替换（每个标题对保留最新一条）"))
+    if result["trimmed"]:
+        detail = "、".join(f"{name or '(无分支)'} {n} 条" for name, n in result["trimmed_by_branch"].items())
+        print(f"  体积超目标裁剪: {result['trimmed']} 条（{detail}）")
+    if result["aborted"]:
+        print(f"  [!] 本轮放弃（{result['aborted']}），原文件未动")
+    print(
+        "  "
+        + (
+            "[..] --dry-run：未写盘"
+            if dry_run
+            else "[OK] 已原子替换（每个标题对保留最新一条）"
+            if result["written"]
+            else "[OK] 无需改动（未重写文件）"
+        )
+    )
 
 
 def main() -> None:
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if callable(reconfigure):
+        reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--summary", action="store_true", help="仅显示汇总统计")
     mode = parser.add_mutually_exclusive_group()
@@ -561,7 +513,7 @@ def main() -> None:
     global _ACTIVE_FILE
     _ACTIVE_FILE = args.file
 
-    before = os.path.getsize(args.file) if os.path.exists(args.file) else 0
+    before = anchor_total_bytes(args.file)
 
     if args.compact:
         result = compact_anchors(args.file, dry_run=args.dry_run, retention_days=args.retention_days)

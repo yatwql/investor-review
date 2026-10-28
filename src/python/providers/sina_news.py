@@ -18,7 +18,10 @@ from src.python.providers.utils import ts_to_str
 logger = logging.getLogger("invest")
 
 _BASE_URL = "https://feed.mix.sina.com.cn/api/roll/get"
-_TIMEOUT = 15.0
+
+#: 单请求超时（连接/读取分开）。正常响应 0.2~0.5s，整段 15s 的预算会让单类挂起
+#: 把整个源拖到十几秒（实测慢尾 15.5s vs 基线 5s），故按读超时收紧到秒级。
+_TIMEOUT = httpx.Timeout(connect=3.0, read=6.0, write=3.0, pool=3.0)
 
 # 新闻分类
 _LID_MAP: dict[str, str] = {
@@ -65,13 +68,19 @@ def _parse_news_item(item: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def fetch_news(lid: str = "2516", num: int = 30, page: int = 1) -> list[dict[str, Any]]:
+def fetch_news(
+    lid: str = "2516",
+    num: int = 30,
+    page: int = 1,
+    timeout: httpx.Timeout | float | None = None,
+) -> list[dict[str, Any]]:
     """从新浪财经获取新闻列表。
 
     Args:
         lid: 分类 ID (2516=财经要闻, 2509=国内财经, 2510=国际财经)
         num: 每页条数
         page: 页码
+        timeout: 本次请求超时覆盖（调用方按**整源剩余预算**收紧，None = 模块默认）
 
     Returns:
         结构化新闻列表，每项包含 title, intro, url, ctime, media_name
@@ -89,7 +98,7 @@ def fetch_news(lid: str = "2516", num: int = 30, page: int = 1) -> list[dict[str
     logger.debug("Sina 新闻请求: %s (分类=%s, num=%d, page=%d)", lid, category, num, page)
 
     try:
-        with make_http_client(timeout=_TIMEOUT) as client:
+        with make_http_client(timeout=timeout if timeout is not None else _TIMEOUT) as client:
             resp = client.get(_BASE_URL, params=params, headers=_HEADERS)
             resp.raise_for_status()
             data = resp.json()

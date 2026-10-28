@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import logging
 import time
 from typing import TYPE_CHECKING, Any
@@ -36,6 +38,24 @@ from src.python.llm.prompts import (
 from src.python.llm.prompts_tables import _build_prompt_appendix
 from src.python.llm.session import record_per_module
 from src.python.core.registry import get_llm_module_name
+
+#: 页脚样式标记（生成用量页脚与缓存命中提示行共用同一 markup）——语义为「本次调用的
+#: 运行元信息」而非分析正文，随缓存态变化（新生成含 Token/耗时/费用，命中含"使用缓存"）。
+_LLM_FOOTER_STYLE = 'style="color:#888;font-size:12px"'
+_LLM_FOOTER_RE = re.compile(r'<p style="color:#888;font-size:12px">[^<]*</p>')
+
+
+def strip_llm_footer(html: str) -> str:
+    """剥离 LLM 页脚（用量/缓存提示行），返回纯正文。
+
+    供「以正文为输入」的下游判断使用（生成后自检）：页脚随缓存态必然不同，把它
+    计入自检输入会让同一份分析正文在「新生成 → 命中」之间产生不同的缓存键，
+    表现为每次上游重算后必多一次自检开销。
+    """
+    if not html:
+        return html
+    return _LLM_FOOTER_RE.sub("", html)
+
 
 _MN = get_llm_module_name
 
@@ -426,6 +446,56 @@ _PREV_MODULE_CACHE_KEY: dict[str, str] = {}
 def reset_prev_module_cache_keys() -> None:
     """清空上一轮缓存键记录（报告边界/测试隔离用）。"""
     _PREV_MODULE_CACHE_KEY.clear()
+
+
+def module_cache_key(module_key: str) -> str:
+    """该模块**本轮实际使用**的缓存键（无记录时返回空串）。
+
+    键由生成骨架单点构造（含 provider/model 后缀），下游回写必须用它而不是就地拼字串
+    ——否则回写会落到一个永远读不到的邻键上。
+    """
+    return _PREV_MODULE_CACHE_KEY.get(str(module_key or ""), "")
+
+
+def write_back_module_cache(
+    content: str,
+    *,
+    cache_key: str = "",
+    module_key: str = "",
+    cached: bool = False,
+) -> bool:
+    """把事实校验自动修正后的正文回写该模块缓存。
+
+    动机：校验修正（数值/代码笔误）只作用于当轮输出，缓存里仍存着修正前的正文，
+    于是**每次运行都要把同一批修正重做一遍**，且报告展示的正文与缓存存储的正文
+    口径不一致（不可复现）。回写后缓存内容 = 展示正文，下一轮命中即零修正。
+
+    键**不变**：指纹是生成输入的内容地址（输入未变 → 同一键），修正改的是产出正文，
+    不放宽键也不新开键，避免旧键复活或缓存分叉。
+
+    Args:
+        content: 修正后的完整正文（不含校验摘要；摘要属当轮元信息，不进缓存）。
+        cache_key: 本轮实际读写的缓存键；空则按 ``module_key`` 取骨架记下的键。
+        module_key: LLM 模块键（仅用于日志归因）。
+        cached: 本轮是否为缓存命中（仅用于日志归因）。
+
+    Returns:
+        写入成功为 True；无键/空内容/写入异常为 False（不中断主链路）。
+    """
+    key = cache_key or module_cache_key(module_key)
+    if not key or not content:
+        return False
+    try:
+        cache_set(key, content)
+    except Exception:  # 缓存不可写不应影响报告生成
+        logger.warning("[llm] 事实校验修正回写缓存失败（%s），按原样继续", module_key, exc_info=True)
+        return False
+    logger.info(
+        "[llm] 事实校验修正已回写缓存（%s，本轮%s）：缓存正文与展示正文对齐，下一轮无需重做同一批修正",
+        module_key or key,
+        "缓存命中" if cached else "新生成",
+    )
+    return True
 
 
 def generate_llm_content(

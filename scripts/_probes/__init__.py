@@ -12,10 +12,22 @@ target 生命周期：
 from __future__ import annotations
 
 import importlib
+from typing import Protocol, cast
 
-_MODULES = ("_probes.csi", "_probes.push2")
 
-_REGISTRY: dict[str, object] = {}
+class ProbeTarget(Protocol):
+    """探测子模块契约面（`scripts/probe.py` 只依赖这三项）。"""
+
+    PROBE_TARGET: str
+
+    def build_parser(self): ...
+
+    def run(self, args) -> int: ...
+
+
+_MODULES = ("_probes.csi", "_probes.push2", "_probes.sector_flow")
+
+_REGISTRY: dict[str, ProbeTarget] = {}
 
 
 def register_targets() -> None:
@@ -23,7 +35,7 @@ def register_targets() -> None:
     _REGISTRY.clear()
     for mod_name in _MODULES:
         module = importlib.import_module(mod_name)
-        _REGISTRY[module.PROBE_TARGET] = module
+        _REGISTRY[module.PROBE_TARGET] = cast(ProbeTarget, module)
 
 
 register_targets()
@@ -34,6 +46,6 @@ def available_targets() -> set[str]:
     return set(_REGISTRY)
 
 
-def get(name: str):
+def get(name: str) -> ProbeTarget:
     """按名称取 target 子模块（probe.py 已做存在性校验）。"""
     return _REGISTRY[name]

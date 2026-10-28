@@ -12,12 +12,13 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
 
 from src.python.providers.news_dedup_rules import (
+    ANCHOR_LEGACY_ERA,
     ANCHOR_RULES_FIELD,
     _ANCHOR_RULES_VERSION,
     _CROSS_BG2_RATIO,
@@ -38,8 +39,15 @@ def tool():
 
 
 def _record(
-    title_a: str, title_b: str, ratio: float, overlap: int, rule: str, *, source_a="东方财富", source_b="新浪财经"
-):
+    title_a: str,
+    title_b: str,
+    ratio: float,
+    overlap: int,
+    rule: str,
+    *,
+    source_a="东方财富",
+    source_b="新浪财经",
+) -> dict[str, object]:
     return {
         "ts": "",
         "title_a": title_a,
@@ -51,6 +59,23 @@ def _record(
         "merged": rule in ("cross_merge", "cross_merge_bg2", "cross_safe"),
         "rule": rule,
     }
+
+
+def _rows(directory) -> list[dict]:
+    """读取锚点目录下全部分片与未分片单文件（gzip 分片透明解压）。"""
+    import gzip
+    import os
+
+    rows: list[dict] = []
+    for name in sorted(os.listdir(directory)):
+        path = os.path.join(directory, name)
+        if name.endswith(".jsonl.gz"):
+            with gzip.open(path, "rt", encoding="utf-8") as f:
+                rows.extend(json.loads(line) for line in f if line.strip())
+        elif name.endswith(".jsonl"):
+            with open(path, encoding="utf-8") as f:
+                rows.extend(json.loads(line) for line in f if line.strip())
+    return rows
 
 
 def _write(tmp_path: Path, records: list[dict], name: str = "anchors.jsonl") -> str:
@@ -121,7 +146,7 @@ class TestCompactAnchors:
         assert result["before_lines"] == 3
         assert result["after_lines"] == 2
         assert result["unique_keys"] == 2
-        lines = [json.loads(line) for line in open(path, encoding="utf-8")]
+        lines = _rows(Path(path).parent)
         kept = [r for r in lines if r["title_a"] == "新闻A"][0]
         assert kept["ratio"] == 0.40, "应保留最新一条（后者覆盖前者）"
 
@@ -259,8 +284,8 @@ class TestCompactRetention:
 
         assert result["expired"] == 1
         assert result["after_lines"] == 1
-        text = Path(path).read_text(encoding="utf-8")
-        assert "新新闻A" in text and "旧新闻A" not in text
+        titles = {r["title_a"] for r in _rows(tmp_path)}
+        assert "新新闻A" in titles and "旧新闻A" not in titles
 
     def test_zero_retention_keeps_all_and_dedups_only(self, tmp_path, tool):
         old = _record("旧新闻A", "旧新闻B", 0.40, 2, "cross_skip")
@@ -297,10 +322,9 @@ class TestMainMaintenance:
         return path
 
     def test_default_compacts_after_analysis(self, tool, monkeypatch, tmp_path, capsys):
-        path = self._run(tool, monkeypatch, tmp_path)
+        self._run(tool, monkeypatch, tmp_path)
         assert "评估后维护压缩" in capsys.readouterr().out
-        with open(path, encoding="utf-8") as f:
-            assert len(f.readlines()) == 2, "重复标题对应被压成一条"
+        assert len(_rows(tmp_path)) == 2, "重复标题对应被压成一条（写入按月分片）"
 
     def test_no_compact_keeps_duplicates(self, tool, monkeypatch, tmp_path, capsys):
         path = self._run(tool, monkeypatch, tmp_path, "--no-compact")
@@ -313,3 +337,105 @@ class TestMainMaintenance:
         assert "未写盘" in capsys.readouterr().out
         with open(path, encoding="utf-8") as f:
             assert len(f.readlines()) == 3
+
+
+class TestLegacyEraMarking:
+    """无规则指纹的早期行：压缩时补 legacy 标注后保留（不丢历史、不混算口径）。"""
+
+    def test_compaction_marks_unattributed_rows(self, tmp_path, tool):
+        path = _write(tmp_path, [_record("A", "B", 0.4, 2, "cross_skip")])
+        result = tool.compact_anchors(path)
+        assert result["unattributed"] == 1
+        kept = _rows(tmp_path)[0]
+        assert kept[ANCHOR_RULES_FIELD] == ANCHOR_LEGACY_ERA
+
+    def test_compaction_keeps_current_fingerprint_untouched(self, tmp_path, tool):
+        record = _record("A", "B", 0.4, 2, "cross_skip")
+        record[ANCHOR_RULES_FIELD] = _ANCHOR_RULES_VERSION
+        path = _write(tmp_path, [record])
+        result = tool.compact_anchors(path)
+        assert result["unattributed"] == 0
+        kept = _rows(tmp_path)[0]
+        assert kept[ANCHOR_RULES_FIELD] == _ANCHOR_RULES_VERSION
+
+
+class TestEraBuckets:
+    """校准口径分桶：当前指纹 / 历史指纹 / 未标注（无指纹）三类分开统计。"""
+
+    def _records(self) -> list[dict]:
+        current = _record("央行宣布下调存款准备金率", "苹果发布新一代芯片", 0.4, 2, "cross_skip")
+        current[ANCHOR_RULES_FIELD] = _ANCHOR_RULES_VERSION
+        old = dict(current, ratio=0.41)
+        old[ANCHOR_RULES_FIELD] = "oldfingerprint"
+        missing = dict(current, ratio=0.42)
+        missing.pop(ANCHOR_RULES_FIELD)
+        return [current, old, missing]
+
+    def test_analyze_splits_era_counts(self, tool):
+        data = tool.analyze(self._records())
+        assert data["era_current"] == 1
+        assert data["era_legacy"] == 1
+        assert data["era_unattributed"] == 1
+        assert set(data["era_versions"]) == {_ANCHOR_RULES_VERSION, "oldfingerprint"}
+        assert data["era_versions"]["oldfingerprint"] == 1
+
+
+class TestDefaultRetention:
+    """缺省保留期与生产同源（不传 --retention-days 时按生产默认窗口裁剪）。"""
+
+    def test_default_window_applies(self, tmp_path, tool):
+        from src.python.providers import news_dedup
+
+        days = news_dedup._anchor_retention_days()
+        assert days > 0
+        stale = _record("过期新闻A", "过期新闻B", 0.40, 2, "cross_skip")
+        stale["ts"] = (datetime.now() - timedelta(days=days + 1)).strftime("%Y-%m-%d %H:%M")
+        fresh = _record("窗口内新闻A", "窗口内新闻B", 0.40, 2, "cross_skip")
+        fresh["ts"] = (datetime.now() - timedelta(days=max(days - 1, 1))).strftime("%Y-%m-%d %H:%M")
+        path = _write(tmp_path, [stale, fresh])
+
+        result = tool.compact_anchors(path)
+
+        assert result["retention_days"] == days
+        assert result["expired"] == 1
+        titles = {r["title_a"] for r in _rows(tmp_path)}
+        assert "窗口内新闻A" in titles and "过期新闻A" not in titles
+
+
+class TestCompactionOutput:
+    """压缩结果输出：体积裁剪与并发放弃都要可见（丢失不能静默）。"""
+
+    def _result(self, **overrides) -> dict:
+        result = {
+            "before_lines": 10,
+            "after_lines": 8,
+            "before_bytes": 1000,
+            "after_bytes": 800,
+            "unique_keys": 8,
+            "legacy_era": 1,
+            "unattributed": 2,
+            "expired": 1,
+            "trimmed": 3,
+            "trimmed_by_branch": {"cross_skip": 3},
+            "retention_days": 30,
+            "aborted": None,
+            "written": True,
+        }
+        result.update(overrides)
+        return result
+
+    def test_reports_size_trim(self, tool, capsys):
+        tool._print_compaction_result(self._result(), "x.jsonl", dry_run=False, before_bytes=1000)
+        out = capsys.readouterr().out
+        assert "体积超目标裁剪: 3 条（cross_skip 3 条）" in out
+        assert "已原子替换" in out
+
+    def test_reports_abort(self, tool, capsys):
+        tool._print_compaction_result(
+            self._result(aborted="concurrent-write", written=False, trimmed=0, trimmed_by_branch={}),
+            "x.jsonl",
+            dry_run=False,
+            before_bytes=1000,
+        )
+        out = capsys.readouterr().out
+        assert "本轮放弃（concurrent-write）" in out

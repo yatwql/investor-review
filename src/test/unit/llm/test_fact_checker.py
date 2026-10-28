@@ -208,7 +208,8 @@ class TestCheckNumericalConsistency:
         # 归因到组合总收益率（"实际累计收益率"为组合级专用消息），不写成某个个股的收益率
         assert "实际累计收益率" in issues[0]
         assert len(corrections) == 1
-        assert corrections[0][3] == "组合实际收益率9.9%"
+        _wrong, _correct, _sentence, _reason = corrections[0]
+        assert _reason == "组合实际收益率9.9%"
 
     def test_pp_vs_rate_confusion_detected(self):
         """LLM 混淆贡献占比 pp 与个股收益率 → 检测并修正。"""
@@ -418,9 +419,10 @@ class TestProfitRateUnitAndDailyChange:
         assert checked == 1
         assert passed == 0
         assert len(corrections) == 1
-        assert corrections[0][0] == "1.9"
-        assert corrections[0][1] == "187.1"
-        assert "187.1%" in corrections[0][3]  # 语义 reason 指明实际收益率
+        wrong_value, correct_value, _sentence, reason = corrections[0]
+        assert wrong_value == "1.9"
+        assert correct_value == "187.1"
+        assert "187.1%" in reason  # 语义 reason 指明实际收益率
 
     def test_daily_change_matching_change_pct_not_corrected(self, holdings_with_rates):
         """单日涨跌语境：今日下跌 3.41% 与 601939 change_pct=-3.41 一致 → 不修正。
@@ -504,3 +506,56 @@ class TestAutoCorrectionCounters:
         assert auto_correction_counts()
         reset_auto_correction_counts()
         assert auto_correction_counts() == {}
+
+
+class TestStripFactCheckBlocks:
+    """校验产物段落剥离：下游复核类消费方（生成后自检）只取分析正文。
+
+    校验摘要里的检查项计数随缓存态变化（缓存命中时排名校验跳过）、修正条数随正文
+    变化；把它们并入自检输入，同一份分析正文会算出不同的自检缓存键。
+    """
+
+    def test_removes_summary_suggestion_and_correction(self):
+        from src.python.llm.fact_checker import strip_fact_check_blocks
+
+        html = (
+            "<p>分析正文甲</p>"
+            '<p style="color:#a40;font-size:12px">[智囊团深度复盘] ✓ 事实校验通过：62/64 项检查全部通过（自动修正 2 处数值）</p>'
+            '<span style="color:#888;font-size:11px">已修正明细: 总市值 270302 → 272065</span>'
+            '<span style="color:#999;font-size:11px">ℹ [智囊团深度复盘]建议提及（不计入校验）: 某标的</span>'
+            "<p>分析正文乙</p>"
+        )
+        assert strip_fact_check_blocks(html) == "<p>分析正文甲</p><p>分析正文乙</p>"
+
+    def test_keeps_analysis_paragraphs_with_similar_style(self):
+        """只剥「事实校验」摘要与两个附属 span，不改正文里同色样式的其它段落。"""
+        from src.python.llm.fact_checker import strip_fact_check_blocks
+
+        html = '<p style="color:#4a4;font-size:12px">这是正文里的一段强调，非校验摘要</p>'
+        assert strip_fact_check_blocks(html) == html
+
+    def test_empty_and_plain_inputs_pass_through(self):
+        from src.python.llm.fact_checker import strip_fact_check_blocks
+
+        assert strip_fact_check_blocks("") == ""
+        assert strip_fact_check_blocks("<p>无校验段</p>") == "<p>无校验段</p>"
+
+
+class TestStripLlmFooter:
+    """LLM 页脚剥离：用量/缓存提示行属运行元信息，不进「以正文为输入」的下游判断。"""
+
+    def test_removes_generation_and_cache_footers(self):
+        from src.python.llm.skeleton import strip_llm_footer
+
+        html = (
+            "<p>分析正文</p>"
+            '<p style="color:#888;font-size:12px">模型：m | Token 用量：输入 1,000 / 输出 500 = 1,500 | 耗时: 3.2s</p>'
+            '<p style="color:#888;font-size:12px">本次使用LLM缓存（原始模型：m）</p>'
+        )
+        assert strip_llm_footer(html) == "<p>分析正文</p>"
+
+    def test_keeps_other_paragraphs(self):
+        from src.python.llm.skeleton import strip_llm_footer
+
+        html = '<p style="color:#888;font-size:13px">别的样式段落</p>'
+        assert strip_llm_footer(html) == html

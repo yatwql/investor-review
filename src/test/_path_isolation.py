@@ -172,11 +172,19 @@ def seed_sensitive_path_isolation(monkeypatch, tmp_path, _doctor_probe_targets) 
         "src.python.report.history_snapshot.HISTORY_SNAPSHOT_DIR",
         str(tmp_path / "data/history/snapshots"),
     )
-    # 新闻去重锚点文件隔离（data/calibration/dedup_anchors.jsonl —— _flush_anchors
-    # 追写目标；防测试运行污染真实校准数据，与 _auto_reset_anchor_state 配套）
+    # 新闻去重锚点文件隔离（data/calibration/dedup_anchors-YYYYMM.jsonl.gz —— 写侧
+    # 追写目标；防测试运行污染真实校准数据，与 _auto_reset_anchor_state 配套）。
+    # 必须打在实际持有者（存储层）上：策略层按属性读 `_anchor_store._ANCHOR_PATH`，
+    # 打在门面 `news_dedup` 上只是换了个同名变量，写侧照旧落真实目录。
     monkeypatch.setattr(
-        "src.python.providers.news_dedup._ANCHOR_PATH",
+        "src.python.providers.news_dedup_anchor_store._ANCHOR_PATH",
         str(tmp_path / "data/calibration/dedup_anchors.jsonl"),
+    )
+    # LLM 指纹基线快照（data/state/llm_fingerprint_snapshot.json —— 跨进程缓存归因用；
+    # 不隔离会让用例读到开发者本机的上一轮键，归因断言随本地状态漂移）
+    monkeypatch.setattr(
+        "src.python.llm.fingerprint_baseline.BASELINE_FILE",
+        str(tmp_path / "data/state/llm_fingerprint_snapshot.json"),
     )
     # 清空配置缓存，使下次 get_config() 使用新路径
     import src.python.config._config_defaults as _cfg_defaults

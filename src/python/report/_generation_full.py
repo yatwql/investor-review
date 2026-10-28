@@ -114,9 +114,12 @@ def _generate_report_full(
 
     # ── 1. 完整数据准备（含指数/穿透/分类） ──
     perf.start("数据准备")
-    prep = prepare_report_data(
-        holdings, reporter, config, transactions=transactions, recorder=perf.recorder("数据准备")
-    )
+    # 缓存冷热标记：同一阶段的耗时在「全命中 / 全落空」下能差一个数量级，
+    # 不记这个增量时，跨运行对拍「这轮为什么慢」只能靠猜
+    with perf.track_cache_counters("prep_cache"):
+        prep = prepare_report_data(
+            holdings, reporter, config, transactions=transactions, recorder=perf.recorder("数据准备")
+        )
     _validate_prep_completeness(prep)
     perf.stop()
 

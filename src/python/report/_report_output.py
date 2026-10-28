@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 from src.python.report._chart_dataset_factory import _build_chart_datasets_for_report
 from src.python.report.progress import ProgressReporter
@@ -182,6 +183,8 @@ def _generate_full_html_report(
     reporter.info(f"正在生成 HTML 报告（{_report_label}分析章节）...")
     if _perf is not None:
         _perf.start("HTML 生成")
+    _html_recorder = _perf.recorder("HTML 生成") if _perf is not None else None
+    _t0 = time.perf_counter()
     try:
         chart_datasets = _build_chart_datasets_for_report(
             history_data=history_data,
@@ -189,6 +192,11 @@ def _generate_full_html_report(
             risk_metrics=prep.get("risk_metrics"),
             all_metrics=metrics,
         )
+        if _html_recorder is not None:
+            # 图表数据装配与页面写入分两段：整段 HTML 生成异常偏慢时（实测同一台机器
+            # 0.3s 与 17.3s 两档），先看是数据装配还是渲染/落盘，否则无从下手
+            _html_recorder.record("图表数据装配", time.perf_counter() - _t0)
+            _t0 = time.perf_counter()
         path = write_html_report(
             holdings,
             output_dir=output_dir or prep["output_dir"],
@@ -246,4 +254,6 @@ def _generate_full_html_report(
         return False
     finally:
         if _perf is not None:
+            if _html_recorder is not None:
+                _html_recorder.record("页面写入", time.perf_counter() - _t0)
             _perf.stop()

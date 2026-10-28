@@ -1,11 +1,14 @@
-"""持仓变动复盘归因（章内 LLM 归因块）——编排层串行后置调用入口。
+"""持仓变动复盘归因（章内 LLM 归因块）——并行批调度入口与实现。
 
-形态与 ``llm/self_review.py`` 同构（用户拍板的双轨方案之轨 2）：
+形态与 ``llm/self_review.py`` 相邻，但调度位置不同：
 
   - 模块在 ``core/registry.py`` 登记（显示名/缓存前缀/TTL/用量统计/失败原因
-    载体全部复用既有机制），**刻意不进** ``generators_orchestrator._MODULE_FNS``
-    ——无独立并行调度语义，由 ``generate_all_llm`` 在四个分析模块 + 生成后自检
-    之后**串行**调用本模块入口 ``run_holding_change_review``。
+    载体全部复用既有机制），并**登记进** ``llm/_llm_dispatch.py::_build_module_fns``
+    的 ``holding_change`` 条目——它只读报告 seam 注入的契约，不依赖四模块产出，
+    因此与基础四模块同批并行调度（单次 4~25s 不再叠加在 expert_review 之后）。
+    调度层用 ``run_holding_change_in_worker`` 把布尔结果转成 ``(result, from_cache)``。
+  - ``llm/self_review.py`` 与之相反：入参是四模块产出，**不进** ``_MODULE_FNS``，
+    由 ``generate_all_llm`` 在四模块之后串行调用。
   - 输入不是其余模块的产出，而是报告 seam 注入的契约 ``holding_change_data``
     （构建期已渲染的事实块 ``prompt_block``——报告展示与 LLM 提示词同源）。
     契约缺席（feature ``holding_change_review`` 关闭 / 快照准入未过）时本函数
@@ -42,6 +45,7 @@ def run_holding_change_review(
     force: bool = False,
     holdings_details: list[dict] | None = None,
     purchase_constraint_block: str = "",
+    http_client: Any = None,
 ) -> bool:
     """生成持仓变动复盘归因并写回契约（编排层唯一入口）。
 
@@ -51,6 +55,8 @@ def run_holding_change_review(
         force: 强制重算（跳过缓存）。
         holdings_details: 持仓明细（附录与指纹摘要）。
         purchase_constraint_block: 申购限购约束块（附录与指纹，与四模块同源实例）。
+        http_client: 并行工作线程持有的共享 HTTP 客户端（串行后置调用时为 None，
+            由 ``api.call_single_provider`` 的兜底逻辑自建）。
 
     Returns:
         是否产出了归因内容（契约缺席、开关关闭、调用失败均返回 ``False``）。
@@ -85,6 +91,7 @@ def run_holding_change_review(
             signal_block=signal_block,
             holdings_details=holdings_details,
             force=force,
+            http_client=http_client,
             llm_config=llm_config,
             purchase_constraint_block=purchase_constraint_block,
         )

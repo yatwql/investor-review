@@ -26,7 +26,7 @@ pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
 
 class _RecordingPerf:
-    """PerfCollector 替身：记录 start/stop 调用序列。"""
+    """PerfCollector 替身：记录 start/stop 与子项 span 的调用序列。"""
 
     def __init__(self) -> None:
         self.events: list[str] = []
@@ -36,6 +36,16 @@ class _RecordingPerf:
 
     def stop(self) -> None:
         self.events.append("stop")
+
+    def recorder(self, parent_phase: str):
+        """阶段子项记录器替身（HTML 生成细分为「图表数据装配 / 页面写入」两段）。"""
+        perf = self
+
+        class _Rec:
+            def record(self, name: str, seconds: float) -> None:
+                perf.events.append(f"span:{parent_phase}:{name}")
+
+        return _Rec()
 
 
 @pytest.fixture(name="prep_stub")
@@ -89,7 +99,12 @@ class TestFullPathPhaseSpans:
         )
 
         assert ok is True
-        assert perf.events == ["start:HTML 生成", "stop"]
+        assert perf.events == [
+            "start:HTML 生成",
+            "span:HTML 生成:图表数据装配",
+            "span:HTML 生成:页面写入",
+            "stop",
+        ], "HTML 阶段须细分为「图表数据装配」与「页面写入」两段（整段异常偏慢时才能定位）"
 
     def test_excel_helper_records_phase(self, monkeypatch, tmp_path, prep_stub):
         perf = _RecordingPerf()
@@ -154,7 +169,12 @@ class TestFullPathPhaseSpans:
         )
 
         assert ok is False
-        assert perf.events == ["start:HTML 生成", "stop"]
+        assert perf.events == [
+            "start:HTML 生成",
+            "span:HTML 生成:图表数据装配",
+            "span:HTML 生成:页面写入",
+            "stop",
+        ]
 
     def test_no_run_context_skips_timing(self, monkeypatch, tmp_path, prep_stub):
         """无运行上下文（current_perf() 为 None）时零行为变化：不报错、照常产出。"""

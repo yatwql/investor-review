@@ -416,6 +416,7 @@ def generate_self_review(
     走与其余模块相同的骨架（``generate_llm_module``）——缓存键、TTL、尾部标识行、
     失败原因登记全部复用既有机制；档位/开关判定在调用侧（``llm/self_review.py``）。
     """
+    from src.python.llm.fingerprint import compute_fingerprint
     from src.python.llm.module_fingerprint import self_review_fingerprint
     from src.python.llm.prompts import _SYSTEM_SELF_REVIEW, _build_self_review_prompt
 
@@ -433,7 +434,7 @@ def generate_self_review(
     def _prompt():
         return _build_self_review_prompt(module_outputs, holdings_details, penetrated_assets)
 
-    return generate_llm_module(
+    _result = generate_llm_module(
         llm_config,
         "self_review",
         force=force,
@@ -450,3 +451,22 @@ def generate_self_review(
         event_impact_block=event_impact_block,
         schedule_replay_block=schedule_replay_block,
     )
+    if not _result[1]:
+        # 未命中时逐段摘要（8 位）落日志：自检键并入六类输入，只看总键无法判断
+        # 「哪一段变了」——缺这条只能靠反复试跑反推（该键曾出现同输入隔次未命中）。
+        from src.python.llm.module_fingerprint import self_review_fingerprint_parts
+
+        _parts = self_review_fingerprint_parts(
+            module_outputs,
+            holdings_details,
+            penetrated_assets,
+            purchase_block=purchase_constraint_block or "",
+            holding_change_block=holding_change_block or "",
+            event_impact_block=event_impact_block or "",
+            schedule_replay_block=schedule_replay_block or "",
+        )
+        logger.info(
+            "[llm/self_review] 未命中缓存，输入分段摘要：%s",
+            " ".join(f"{name}={compute_fingerprint(value)[:8]}" for name, value in _parts.items()),
+        )
+    return _result

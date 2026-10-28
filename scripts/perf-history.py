@@ -73,6 +73,7 @@ from _perf_history.report import (  # noqa: E402, F401
 )
 from _perf_history.stats import (  # noqa: E402, F401
     _DRIFT_MIN_SAMPLES,
+    _LEGACY_BREAKDOWN_ALIASES,
     _OUTLIER_K,
     _cv,
     _filter_records,

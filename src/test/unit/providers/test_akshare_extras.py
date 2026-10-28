@@ -24,6 +24,26 @@ import pytest
 pytestmark = [pytest.mark.unit, pytest.mark.unit_providers]
 
 
+class _FakeFlowDF:
+    """最小 DataFrame 替身：只实现通道代码用到的 `empty` / `iterrows`。"""
+
+    def __init__(self, rows: list[dict]) -> None:
+        self._rows = rows
+        self.empty = not rows
+
+    def iterrows(self):
+        return list(enumerate(self._rows))
+
+
+_EM_ROW = {
+    "名称": "银行",
+    "今日涨跌幅": 1.2,
+    "今日主力净流入-净额": 5e8,
+    "今日主力净流入-净占比": 3.1,
+    "今日主力净流入最大股": "招商银行",
+}
+
+
 class TestComputeDividendFingerprint(unittest.TestCase):
     """测试分红指纹计算。"""
 
@@ -82,12 +102,11 @@ class TestSectorFundFlowFailureState(unittest.TestCase):
 
     def test_success_clears_previous_failure(self) -> None:
         ae._SECTOR_FLOW_FAILURE = "connection"
-        df = MagicMock()
-        df.empty = False
-        df.iterrows.return_value = []
+        df = _FakeFlowDF([_EM_ROW])
         p1, p2, p3, p4 = self._patch_fetch(df)
         with p1, p2, p3, p4:
-            assert ae.get_sector_fund_flow() == []
+            result = ae.get_sector_fund_flow()
+        assert [r["name"] for r in result] == ["银行"]
         assert ae._SECTOR_FLOW_FAILURE == ""
 
 
@@ -110,9 +129,9 @@ class TestSectorFundFlowFailureMemo(unittest.TestCase):
             patch.object(ae, "_compute_index_fingerprint", return_value="fp"),
         ):
             assert ae.get_sector_fund_flow() == []
-            assert fetch.call_count == 1
+            assert fetch.call_count == len(ae._SECTOR_FLOW_CHANNELS), "两通道各试一次"
             assert ae.get_sector_fund_flow() == []
-            assert fetch.call_count == 1, "失败负缓存期内不得再次取数"
+            assert fetch.call_count == len(ae._SECTOR_FLOW_CHANNELS), "失败负缓存期内不得再次取数"
         assert ae.sector_flow_failure() == "connection"
 
     def test_success_after_failure_memo_expiry_refetches(self) -> None:
@@ -125,9 +144,7 @@ class TestSectorFundFlowFailureMemo(unittest.TestCase):
         ):
             ae.get_sector_fund_flow()
         ae._memo_clear()
-        df = MagicMock()
-        df.empty = False
-        df.iterrows.return_value = []
+        df = _FakeFlowDF([_EM_ROW])
         with (
             patch.object(ae, "ak", MagicMock()),
             patch.object(ae, "run_with_timeout", return_value=df) as fetch,
@@ -135,8 +152,8 @@ class TestSectorFundFlowFailureMemo(unittest.TestCase):
             patch.object(ae, "_compute_index_fingerprint", return_value="fp"),
             patch.object(ae, "cache_set"),
         ):
-            assert ae.get_sector_fund_flow() == []
-            assert fetch.call_count == 1
+            assert [r["name"] for r in ae.get_sector_fund_flow()] == ["银行"]
+            assert fetch.call_count == 1, "首通道即命中时不得再试备用通道"
         assert ae.sector_flow_failure() == ""
 
 
@@ -205,9 +222,7 @@ class TestSectorFlowCrossProcessFallback(unittest.TestCase):
 
     def test_success_keeps_last_good_and_clears_negative(self) -> None:
         """成功 → 写「最近成功」基准并清掉跨进程负缓存（源已恢复）。"""
-        df = MagicMock()
-        df.empty = False
-        df.iterrows.return_value = []
+        df = _FakeFlowDF([_EM_ROW])
         with (
             patch.object(ae, "ak", MagicMock()),
             patch.object(ae, "run_with_timeout", return_value=df),
@@ -221,6 +236,141 @@ class TestSectorFlowCrossProcessFallback(unittest.TestCase):
         assert ae._SECTOR_FLOW_LAST_KEY in written
         cache_clear.assert_called_once_with(ae._SECTOR_FLOW_NEG_KEY)
         assert ae.sector_flow_failure() == ""
+
+
+_THS_ROW = {
+    "行业": "半导体",
+    "行业-涨跌幅": 4.85,
+    "流入资金": 675.90,
+    "流出资金": 587.34,
+    "净额": 88.56,
+    "领涨股": "富瀚微",
+}
+
+
+class TestSectorFlowChannelFallback(unittest.TestCase):
+    """双通道：主通道（东财 push2）被限流时自动切备用（同花顺），下游无感。"""
+
+    def setUp(self) -> None:
+        ae._memo_clear()
+        ae._SECTOR_FLOW_FAILURE = ""
+
+    def tearDown(self) -> None:
+        ae._memo_clear()
+        ae._SECTOR_FLOW_FAILURE = ""
+
+    def test_primary_failure_falls_back_to_secondary(self) -> None:
+        ths_df = _FakeFlowDF([_THS_ROW])
+        with (
+            patch.object(ae, "ak", MagicMock()),
+            patch.object(ae, "run_with_timeout", side_effect=[None, ths_df]),
+            patch.object(ae, "cache_get", return_value=None),
+            patch.object(ae, "cache_set"),
+            patch.object(ae, "cache_clear"),
+            patch.object(ae, "_compute_index_fingerprint", return_value="fp"),
+        ):
+            result = ae.get_sector_fund_flow()
+        assert [r["name"] for r in result] == ["半导体"]
+        assert result[0]["main_net_inflow"] == pytest.approx(88.56 * 1e8), "同花顺亿元须换算为元"
+        assert result[0]["main_net_inflow_pct"] == pytest.approx(88.56 / (675.90 + 587.34) * 100, abs=0.01)
+        assert result[0]["top_stock"] == "富瀚微"
+        assert ae.sector_flow_failure() == "", "备用通道成功即视为可用"
+
+    def test_secondary_pct_is_none_when_turnover_zero(self) -> None:
+        row = dict(_THS_ROW, **{"流入资金": 0.0, "流出资金": 0.0})
+        with (
+            patch.object(ae, "ak", MagicMock()),
+            patch.object(ae, "run_with_timeout", return_value=_FakeFlowDF([row])),
+        ):
+            result = ae._fetch_sector_flow_ths_industry()
+        assert result[0]["main_net_inflow_pct"] is None, "分母不可用宁留空，不编造 0"
+
+    def test_both_channels_failing_records_per_channel_state(self) -> None:
+        with (
+            patch.object(ae, "ak", MagicMock()),
+            patch.object(ae, "run_with_timeout", return_value=None),
+            patch.object(ae, "cache_get", return_value=None),
+            patch.object(ae, "cache_set") as cache_set,
+            patch.object(ae, "_compute_index_fingerprint", return_value="fp"),
+        ):
+            assert ae.get_sector_fund_flow() == []
+        written = {c.args[0]: c.args[1] for c in cache_set.call_args_list if len(c.args) >= 2}
+        state = written.get(ae._SECTOR_FLOW_NEG_KEY)
+        assert isinstance(state, dict), "负缓存按通道分别记录"
+        assert set(state) == set(ae._SECTOR_FLOW_CHANNELS)
+
+    def test_primary_negative_cache_does_not_block_secondary(self) -> None:
+        """主通道在负缓存窗口内 !== 全部通道都不可用。"""
+        ths_df = _FakeFlowDF([_THS_ROW])
+
+        def _fake_get(key, _ttl):
+            return {"em_push2": "connection"} if key == ae._SECTOR_FLOW_NEG_KEY else None
+
+        with (
+            patch.object(ae, "ak", MagicMock()),
+            patch.object(ae, "run_with_timeout", return_value=ths_df) as fetch,
+            patch.object(ae, "cache_get", side_effect=_fake_get),
+            patch.object(ae, "cache_set"),
+            patch.object(ae, "_compute_index_fingerprint", return_value="fp"),
+        ):
+            result = ae.get_sector_fund_flow()
+        assert fetch.call_count == 1, "主通道被跳过后只应调用备用通道一次"
+        assert [r["name"] for r in result] == ["半导体"]
+
+
+class TestSectorFlowDegradedState(unittest.TestCase):
+    """降级态三态：正常 / 陈旧回退 / 无回退基准（后者只能整块留空）。"""
+
+    def setUp(self) -> None:
+        ae._memo_clear()
+        ae._SECTOR_FLOW_FAILURE = ""
+        ae._SECTOR_FLOW_DEGRADED = ""
+
+    def tearDown(self) -> None:
+        ae._memo_clear()
+        ae._SECTOR_FLOW_FAILURE = ""
+        ae._SECTOR_FLOW_DEGRADED = ""
+
+    def test_no_baseline_when_source_fails_without_history(self) -> None:
+        with (
+            patch.object(ae, "ak", MagicMock()),
+            patch.object(ae, "run_with_timeout", return_value=None),
+            patch.object(ae, "cache_get", return_value=None),
+            patch.object(ae, "cache_set"),
+            patch.object(ae, "_compute_index_fingerprint", return_value="fp"),
+        ):
+            assert ae.get_sector_fund_flow() == []
+        assert ae.sector_flow_degraded_state() == "no_baseline"
+        assert ae.sector_flow_failure() == "connection"
+
+    def test_stale_when_history_available(self) -> None:
+        stale = [{"name": "银行", "main_net_inflow": 1.0}]
+
+        def _fake_get(key, _ttl):
+            return stale if key == ae._SECTOR_FLOW_LAST_KEY else None
+
+        with (
+            patch.object(ae, "ak", MagicMock()),
+            patch.object(ae, "run_with_timeout", return_value=None),
+            patch.object(ae, "cache_get", side_effect=_fake_get),
+            patch.object(ae, "cache_set"),
+            patch.object(ae, "_compute_index_fingerprint", return_value="fp"),
+        ):
+            assert ae.get_sector_fund_flow() == stale
+        assert ae.sector_flow_degraded_state() == "stale"
+
+    def test_success_resets_degraded_state(self) -> None:
+        ae._SECTOR_FLOW_DEGRADED = "no_baseline"
+        with (
+            patch.object(ae, "ak", MagicMock()),
+            patch.object(ae, "run_with_timeout", return_value=_FakeFlowDF([_EM_ROW])),
+            patch.object(ae, "cache_get", return_value=None),
+            patch.object(ae, "cache_set"),
+            patch.object(ae, "cache_clear"),
+            patch.object(ae, "_compute_index_fingerprint", return_value="fp"),
+        ):
+            ae.get_sector_fund_flow()
+        assert ae.sector_flow_degraded_state() == ""
 
 
 class TestCalcDividendSummary(unittest.TestCase):

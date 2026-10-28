@@ -143,6 +143,23 @@ class TestMergeBreakdownStats:
         names = list(mod._merge_breakdown_stats(records)["LLM+新闻"])
         assert names == ["新闻获取", "持仓体检报告"]
 
+    def test_legacy_merged_span_is_renamed_not_mixed(self, mod):
+        """跨版本键名：旧「合并段」带显式标记单列，不与拆分后的新子项混算。
+
+        判定口径：合并段（一次计时覆盖两个子项）与后续逐个新子项量级不等价，
+        静默并名会让拆前后对拍的均值失去意义。
+        """
+        records = [
+            {"breakdown": {"数据准备": {"财报摘要与指标": 6.4}}},
+            {"breakdown": {"数据准备": {"财报摘要": 0.2, "财务指标": 0.1}}},
+        ]
+        stats = mod._merge_breakdown_stats(records)["数据准备"]
+        legacy_name = mod._LEGACY_BREAKDOWN_ALIASES["财报摘要与指标"]
+        assert legacy_name in stats, "旧键必须有明确可见的别名，不能静默消失"
+        assert stats[legacy_name]["avg"] == pytest.approx(6.4)
+        assert stats["财报摘要"]["avg"] == pytest.approx(0.2), "新子项均值只取自身样本"
+        assert "财报摘要与指标" not in stats
+
 
 class TestRobustStats:
     """稳健统计：中位/MAD/离群判定/稳健均值/z 分数。"""

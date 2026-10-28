@@ -248,6 +248,7 @@
 | `index` | `index_{code}.json` | 24h（交易时段 30s） | — | 市场指数行情 |
 | `news` | `news_{md5}.json` | 15 分钟 | 新闻源参数 + 关键词 | 多源新闻聚合结果 |
 | `sector_flow` | `sector_flow_{fingerprint}.json` | 15 分钟 | A股+美股指数 | 行业资金流向排名 |
+| `sector_flow`（衍生键） | `sector_flow_last_good` / `sector_flow_negative` | 3 天 / 30 分钟 | — | 陈旧回退基准 / 失败负缓存（按精确键独立 TTL，不随 15 分钟前缀裁掉） |
 | `rank` | `fund_perf_{code}.json` | 24h | — | 基金同类排名+区间收益率 |
 | `profit_forecast` | `profit_forecast_{fingerprint}.json` | 24h | A股+美股指数 | 机构盈利预测全量数据 |
 | `hold` | `fund_hold_{code}.json` | 7 天 | — | 基金前 10 持仓明细 |
@@ -290,6 +291,10 @@
 | `tracking` | `holdings_tracking.json` | 30 天 | — | 持仓跟踪数据（精确键名，无指纹） |
 | `calendar` | `trading_calendar.json` | 14 天 | — | A 股交易日历（精确键名，无指纹） |
 | `bond_yield` | `bond_yield_rf` | 24h | — | 无风险利率（国债收益率；精确键名，无指纹） |
+| `datasink_probe_miss` | `datasink_probe_miss_{hash}.json` | 12h | — | 财报章节 404 探测负缓存（只记**确定性**缺失；调大=省请求但恢复更慢） |
+| `report_symbol_miss` | `report_symbol_miss_{symbol}.json` | 6h | — | 标的正文缺失负缓存（章节阶 + 备源均无正文） |
+| `report_sections_miss` | `report_sections_miss_{doc_id}.json` | 6h | — | 章节清单不可得负缓存（源侧应答但无可用清单，避免每份报告重探 `/sections`） |
+| `report_sections_backoff` | `report_sections_backoff_{doc_id}.json` | 30min | — | 章节清单**探测失败**的短退避（传输级挂起，成功后立即解除；与上一条语义不同） |
 
 ##### 历史走势类
 
@@ -364,7 +369,7 @@
 | 开关名 | 默认值 | 说明 |
 |:--|:--|:--|
 | `report_qa` | **false** | 报告对话式追问（读者在 HTML 报告页内对**本期报告**发起会话式提问：上下文只读当期报告、零新增取数、轮数上限；回答由 LLM 生成、按量计费，用量独立记账） |
-| `decision_reflection` | **false** | 验证死线执行中；决策跨期反思闭环（登记决策 → 真实行情结算命中率 → 教训回灌专家复盘提示词；行动建议章内嵌「历史决策复盘」块） |
+| `decision_reflection` | **false** | 决策跨期反思闭环（实验项 ⚗，默认关）：登记决策 → 用真实行情结算命中率 → 教训回灌专家复盘提示词；开启后行动建议章内嵌「历史决策复盘」块 |
 | `deterministic_signal` | **true** | 确定性信号模块（**实时注入 + 跨期沉淀双面**：①市场温度/估值分位/尾部风险预消化为 `信号：…` 方向行注入智囊团复盘与持仓体检提示词，减少模型读裸数值的误判；②同一批确定性评级（含风格因子/再平衡超限）沉淀为 `data/state/signal_ledger.jsonl` 账本，每条附**实时/非实时**来源标签，统计与摘要**默认只算实时记录**防降级行情冒充真实战绩，同日重跑不重复入账，摘要回灌提示词；`doctor` 自检上屏账本概览与各实验功能启用次数统计）。**默认开启**（读侧注入 + 跨期沉淀双面）；无可用信号时静默跳过、缓存键逐字节不变。features.json 写入的开关名以现行注册表为准 |
 | `module_quality_gate` | **true** | LLM 输出评级（对 4 个 LLM 模块输出按完整性/篇幅评 A~F，低评级中「内容在但存在缺陷」者随内容头部注入 `【内容质量提示】` 横幅——只标注、不阻断、不重试、不写回缓存）。**默认开启**——纯只读分级，A/B 级健康输出零噪音 |
 

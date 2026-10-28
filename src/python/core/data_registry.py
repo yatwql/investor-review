@@ -28,6 +28,7 @@ __all__ = [
     "_MODULE_REGISTRY",
     "get_cache_registry",
     "get_cache_ttl_defaults",
+    "get_exact_ttl_map",
     "get_exact_type_map",
     "get_known_enabled_llm_keys",
     "get_known_llm_settings_keys",
@@ -38,6 +39,15 @@ __all__ = [
     "get_registered_data_types",
     "get_registry",
 ]
+
+# ── 行业资金流向：同前缀异构 TTL 键（单源声明）─────────
+# 列表载荷 `sector_flow_{指纹}` 是「今日榜单」（900s），但同前缀下两个衍生键
+# 寿命完全不同；按前缀 TTL 裁会连同它们一起裁掉，故在此声明精确键 + 独立 TTL，
+# 由 `get_exact_ttl_map()` 下发给清理器与取数侧共用。
+SECTOR_FLOW_STALE_KEY = "sector_flow_last_good"
+SECTOR_FLOW_STALE_TTL = 259200  # 3 天：陈旧回退基准（再旧对当下判断无意义）
+SECTOR_FLOW_NEG_KEY = "sector_flow_negative"
+SECTOR_FLOW_NEG_TTL = 1800  # 30 分钟：跨进程失败负缓存
 
 # ── 模块定义 ────────────────────────────────────────────────
 
@@ -56,6 +66,10 @@ class DataModuleDef:
             用于 cleanup_expired() 从文件名推断数据类型。
         exact_cache_keys: 精确缓存键名（非前缀匹配），
             用于固定键名的特殊缓存文件。
+        exact_key_ttls: 精确缓存键名 → **独立 TTL**（覆盖同前缀默认值）。
+            前缀 TTL 是「此域常规载荷」的默认窗口，但同前缀下可有寿命完全不同的
+            衍生键（如陈旧回退基准要活 3 天、失败负缓存只要活 30 分钟）——
+            不在此显式声明的异构键会被清理器按前缀默认值误裁。
         cache_ttl: 默认缓存过期时间（秒）。
         market_ttl: 交易时段内的短 TTL（秒）；None = 该类型不随盘中降频。
             盘中敏感性是**数据属性**（价格/指数分钟级变化），由注册表声明，
@@ -69,6 +83,7 @@ class DataModuleDef:
     data_type: str
     cache_prefixes: tuple[str, ...] = ()
     exact_cache_keys: tuple[str, ...] = ()
+    exact_key_ttls: tuple[tuple[str, float], ...] = ()
     cache_ttl: float = CACHE_DAILY
     settings_suffix: str | None = None
     cache_groups: tuple[str, ...] = ()
@@ -237,11 +252,11 @@ _MODULE_REGISTRY: tuple[DataModuleDef, ...] = (
         cache_groups=("preload",),
     ),
     # ── 持仓变动复盘归因（章本体由 feature holding_change_review 控制（独立章节与回放组，默认关）；
-    #    章内 LLM 归因块，串行后置执行）──
+    #    章内 LLM 归因块，登记进 _MODULE_FNS 与四模块同批并行执行）──
     # 登记目的同生成后自检：显示名/缓存前缀/TTL/用量统计/失败原因载体复用既有机制。
-    # **刻意不进 generators_orchestrator._MODULE_FNS**：输入是报告 seam 注入的契约
-    # （holding_change_data），必须在报告管线内串行取用，不属线程池并行调度
-    # （见 llm/holding_change_review.py 模块说明）。
+    # 归因只读报告 seam 注入的契约（holding_change_data），不依赖四模块产出，故与四模块
+    # 同批调度（`llm/_llm_dispatch.py::_build_module_fns` 的 holding_change 条目）；
+    # 契约缺席或开关关闭时模块内部即时短路（见 llm/holding_change_review.py 模块说明）。
     DataModuleDef(
         "持仓变动复盘归因",
         "llm_holding_change",
@@ -260,7 +275,17 @@ _MODULE_REGISTRY: tuple[DataModuleDef, ...] = (
         cache_groups=("refresh",),
     ),
     DataModuleDef(
-        "行业资金流向", "sector_flow", cache_prefixes=("sector_flow_",), cache_ttl=900, cache_groups=("refresh",)
+        "行业资金流向",
+        "sector_flow",
+        cache_prefixes=("sector_flow_",),
+        cache_ttl=900,
+        # 同前缀下两个衍生键的寿命与「今日榜单」完全不同：回退基准要活 3 天
+        # （否则源一断就无旧可回），失败负缓存只需 30 分钟（源恢复即重试）。
+        exact_key_ttls=(
+            (SECTOR_FLOW_STALE_KEY, SECTOR_FLOW_STALE_TTL),
+            (SECTOR_FLOW_NEG_KEY, SECTOR_FLOW_NEG_TTL),
+        ),
+        cache_groups=("refresh",),
     ),
     # symbol 级键 + 1 周：分红公告不定期发布，月度窗口可能漏掉新公告；周频兼顾
     # 「公告 ≤1 周可见」与 akShare 请求量（与 `idx_valuation` 同档）
@@ -388,6 +413,21 @@ _CACHE_ONLY_REGISTRY: tuple[DataModuleDef, ...] = (
         cache_prefixes=("report_symbol_miss_",),
         cache_ttl=6 * 3600,
     ),
+    DataModuleDef(
+        "财报章节清单缺失",
+        "report_sections_miss",
+        cache_prefixes=("report_sections_miss_",),
+        cache_ttl=6 * 3600,
+    ),
+    # 与上一条**语义不同**：上一类是「源侧确认没有清单」（确定性，6h），本条是
+    # 「这次探测传输级挂起了」（瞬时，30min 退避）——探测本身只是取数优选路径，
+    # 挂起一次白等 20s，短退避即可止住「每份报告都再撞一次」。
+    DataModuleDef(
+        "财报章节清单探测退避",
+        "report_sections_backoff",
+        cache_prefixes=("report_sections_backoff_",),
+        cache_ttl=30 * 60,
+    ),
 )
 
 
@@ -444,6 +484,16 @@ def get_exact_type_map() -> dict[str, str]:
     用于固定键名（无通配前缀）的缓存文件清理。
     """
     return {key: m.data_type for m in get_cache_registry() for key in m.exact_cache_keys}
+
+
+def get_exact_ttl_map() -> dict[str, float]:
+    """精确缓存键名 → **独立 TTL** 映射（覆盖同前缀默认值）。
+
+    供清理器判定「同前缀下异构寿命」的衍生键（回退基准 / 失败负缓存等）：
+    这些键不能按所属域的前缀 TTL 裁，否则寿命被腰斩甚至直接删掉。
+    取数侧也从此读同一份数值，避免 TTL 在注册表与 provider 里两处飘。
+    """
+    return {key: ttl for m in get_cache_registry() for key, ttl in m.exact_key_ttls}
 
 
 def get_known_llm_settings_keys() -> set[str]:

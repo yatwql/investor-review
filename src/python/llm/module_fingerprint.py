@@ -66,6 +66,7 @@ __all__ = [
     "health_check_fingerprint",
     "penetration_deep_fingerprint",
     "self_review_fingerprint",
+    "self_review_fingerprint_parts",
     "MODULE_FINGERPRINT_BUILDERS",
 ]
 
@@ -531,29 +532,53 @@ def self_review_fingerprint(
         holding_change_block: 持仓变动复盘提示词块（非空 → 提示词附录含块，
             故进键；块空 → 键与引入前一致）。
     """
+    _parts = self_review_fingerprint_parts(
+        module_outputs,
+        holdings_details,
+        penetrated_assets,
+        purchase_block=purchase_block,
+        holding_change_block=holding_change_block,
+        event_impact_block=event_impact_block,
+        schedule_replay_block=schedule_replay_block,
+    )
+    return compute_fingerprint(*_parts.values()) + generation_params_suffix("self_review")
+
+
+def self_review_fingerprint_parts(
+    module_outputs: dict[str, str | None] | None,
+    holdings_details: list[dict] | None = None,
+    penetrated_assets: list[dict] | None = None,
+    purchase_block: str = "",
+    holding_change_block: str = "",
+    event_impact_block: str = "",
+    schedule_replay_block: str = "",
+) -> dict[str, object]:
+    """自检指纹的**分段构成**（有序）：同一事实源供指纹与「哪一段变了」诊断共用。
+
+    键顺序即并入顺序；块为空时不出现该键（与指纹的条件并入逐字节一致）。
+    诊断用途：未命中时逐段取摘要比对，可直接定位是哪一段输入变化导致重算
+    （自检键并入六类输入，仅看总键无法区分）。
+    """
     normalized = {
         key: (text or "")
         for key, text in sorted((module_outputs or {}).items())
         if isinstance(text, str) and text.strip()
     }
-    _parts = [
-        normalized,
-        extract_stable_holdings(holdings_details),
-        extract_stable_penetration(penetrated_assets),
-    ]
+    parts: dict[str, object] = {
+        "outputs": normalized,
+        "holdings": extract_stable_holdings(holdings_details),
+        "penetration": extract_stable_penetration(penetrated_assets),
+    }
+    # 条件并入：进提示词必进指纹；块空不追加 part（逐字节回退）
     if purchase_block:
-        # 条件并入：进提示词必进指纹；块空不追加 part（逐字节回退）
-        _parts.append(purchase_block)
+        parts["purchase"] = purchase_block
     if holding_change_block:
-        # 条件并入：进提示词必进指纹；块空不追加 part（逐字节回退）
-        _parts.append(holding_change_block)
+        parts["holding_change"] = holding_change_block
     if event_impact_block:
-        # 条件并入：进提示词必进指纹；块空不追加 part（逐字节回退）
-        _parts.append(event_impact_block)
+        parts["event_impact"] = event_impact_block
     if schedule_replay_block:
-        # 条件并入：进提示词必进指纹；块空不追加 part（逐字节回退）
-        _parts.append(schedule_replay_block)
-    return compute_fingerprint(*_parts) + generation_params_suffix("self_review")
+        parts["schedule_replay"] = schedule_replay_block
+    return parts
 
 
 def holding_change_review_fingerprint(

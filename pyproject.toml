@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "investor-review"
-version = "0.16.7"
+version = "0.16.8"
 description = "投资复盘助手：读取持仓 Excel，生成 Excel/HTML 投资分析报告（含行情、穿透、基金业绩、财经新闻热点关联分析与 LLM 深度复盘）"
 requires-python = ">=3.11"
 dependencies = [
@@ -42,7 +42,11 @@ required_plugins = ["pytest-mock>=3.15", "pytest-xdist>=3.6"]
 target-version = "py310"
 line-length = 120
 # docs 下为归档快照（含历史脚本副本），冻结不再参与 lint / format
+# force-exclude：带上命令行显式路径（如 `ruff format docs`）时仍尊重 exclude。
+# 缺这一项时 exclude 只在「整树扫描」生效——显式传目录会把归档脚本一并重排，
+# 使历史快照漂移（实测曾误改 7 个 docs/archive 下脚本）。
 extend-exclude = [".venv", "docs"]
+force-exclude = true
 
 [tool.ruff.lint]
 # 显式声明基线选择项（等价于 ruff 默认集），避免默认集随版本升级静默漂移

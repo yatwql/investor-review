@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.16.7
+> 文档版本：0.16.8
 
 ## 目录
 
@@ -244,7 +244,7 @@ llm/generators_orchestrator.py ──→ cache/（可选）
 | **贯穿** | 代码类型判定 | 资产识别原语 | `core/code_utils.py` |
 | **贯穿** | 交易时段判断 | A 股时段、午间休市 | `core/market_hours.py` |
 | **贯穿** | HTTP 客户端 | 统一工厂 | `core/http_client.py` |
-| **贯穿** | 性能收集 | PerfCollector 三路径计时 + 子阶段 `breakdown`（数据准备：行情与明细/指数获取/穿透/风格与因子/覆盖与新鲜度/估值与温度/财报摘要与指标/申购与成本位置/明细装配与建议；LLM+新闻：新闻源抓取/去重与关联/锚点维护/事件窗装配/LLM 模块）+ perf_history.jsonl 持久化 + 数据源健康历史聚合 `summarize_health_history()`；`counters` 除 warnings/errors 外含**事实校验自动修正计数**（`fact_fix_total` / `fact_fix_numeric` / `fact_fix_code` / `fact_fix:<模块>`，由 `llm/fact_checker` 线程安全累加、报告层 LLM 阶段前清零后汇入——修正次数是模型口径偏差的直接信号，单次只进日志时无法跨期对拍）；另有 `llm_thinking_wait_ms`（thinking 并发槽串行等待累计——默认上限已为 2；配回 1 时据此量化串行代价） | `core/perf.py` + `llm/fact_checker/_corrections.py` |
+| **贯穿** | 性能收集 | PerfCollector 三路径计时 + 子阶段 `breakdown`（数据准备：行情与明细/指数获取/穿透/风格与因子/覆盖与新鲜度/估值与温度/财报摘要/财务指标/申购与成本位置/明细装配与建议；LLM+新闻：新闻源抓取/去重与关联/锚点维护/事件窗装配/LLM 模块 span；HTML 生成：图表数据装配/页面写入）；数据准备另记**缓存冷热**增量（`counters.prep_cache_hits` / `prep_cache_misses`，阶段前后快照相减——同一阶段耗时在冷/热两态差一个数量级，跨运行对拍必须先看这两个数）+ perf_history.jsonl 持久化 + 数据源健康历史聚合 `summarize_health_history()`；`counters` 除 warnings/errors 外含**事实校验自动修正计数**（`fact_fix_total` / `fact_fix_numeric` / `fact_fix_code` / `fact_fix:<模块>`，由 `llm/fact_checker` 线程安全累加、报告层 LLM 阶段前清零后汇入——修正次数是模型口径偏差的直接信号，单次只进日志时无法跨期对拍。**计数口径 = 新生成正文的修正**：命中轮次的正文已由回写（`skeleton.write_back_module_cache`）带去修正结果，故稳态运行该计数为 0，不是「模型变准了」；跨期对拍照样以首轮生成样本为准，`action_fix` 归零时需回看 `llm.cache_hits` 确认是命中轮）；`llm` 段除各模块 model/token/费用外记 **`duration_seconds`**（逐模块耗时；缓存命中记 0，统计口径只取非命中样本——关键路径分析的机读依据，span 只覆盖经 `_MODULE_FNS` 调度的模块）；另有 `llm_thinking_wait_ms`（thinking 并发槽串行等待累计——默认上限已为 2；配回 1 时据此量化串行代价） | `core/perf.py` + `llm/fact_checker/_corrections.py` |
 | **贯穿** | 运行一致性 | 生成中断收口（KeyboardInterrupt 安全落点：临时产物清扫 + `status=interrupted` 运行记录 + 已写盘/已丢弃明细）+ HTML/Excel 产物原子落盘登记 | `report/run_integrity.py` |
 | **贯穿** | 日志可视化 | 结构化日志读取（parse_log/tail_log/read_log），CLI/TUI/Web 三端共享 | `core/log_reader.py` |
 | **贯穿** | 系统自检 | 运行环境/配置/目录/日志与缓存/功能开关/数据源适配/数据源凭据/数据源八组一次性盘点（恒上屏，无开关），CLI/TUI/Web 三端共享；自身永不抛异常、零重依赖 | `core/doctor.py` |
@@ -587,7 +587,7 @@ Web 渠道是第三种交互入口：**浏览器内完成「上传持仓 Excel �
 2. **参数解析**：`--host`（默认 127.0.0.1 仅本机；局域网显式用 0.0.0.0）、`--port`（默认 8000）、`--config`（备用配置文件路径）。
 3. **配置初始化**：`init_config(config_path)`，缺失自动生成默认配置。
 4. **端口占用检测**：`socket` bind 探测（立即释放）——端口被占用则报错退出（返回码 2），避免服务静默失败/多实例混用产物。
-5. **output_dir 写锁检测**：`ensure_output_dir_lock(output_dir)`——原子抢占 `.investor_output.lock`（`os.open` `O_CREAT|O_EXCL` 防多进程抢占竞态，内容记录 entry/pid）；锁已被其他入口持有则记录警告「该输出目录可能正被其他入口占用，产物可能互相覆盖」；**仅告警不阻塞启动**（产物竞态交由用户决策）；抢占成功则持有至进程退出 `finally` 释放。锁文件为点文件，不参与 `YYYYMMDD` 归档扫描与历史枚举。
+5. **output_dir 写锁检测**：`ensure_output_dir_lock(output_dir)`——原子抢占 `.investor_output.lock`（`os.open` `O_CREAT|O_EXCL` 防多进程抢占竞态，内容记录 entry/pid）；**陈旧判据**：锁内 pid 已不存在、或 pid 无法判定且文件超 12 小时未更新 → 按残留处理并接管（只判「文件存在」会把 `kill -9`/容器重启后的残留锁当成持续占用，每次启动都刷一条误导告警）；活进程持有（含属其他用户）仍正常拦截——锁已被其他入口持有则记录警告「该输出目录可能正被其他入口占用，产物可能互相覆盖」；**仅告警不阻塞启动**（产物竞态交由用户决策）；抢占成功则持有至进程退出 `finally` 释放。**pid 探活在 Windows 上禁用 `os.kill(pid, 0)`**——该 API 在 Windows 对非控制台信号走 `TerminateProcess`，探测等于杀掉持有锁的进程，须改用 `OpenProcess` 查句柄；无法判定时退化为文件年龄判据。锁文件为点文件，不参与 `YYYYMMDD` 归档扫描与历史枚举。
 6. **应用构建**：`create_app(run_manager)` → 注册路由 → 清理残留上传 → `app.run(host, port, threaded=True)` 常驻。
 
 #### 1.8.3 Flask 应用工厂与统一错误处理
@@ -829,7 +829,7 @@ Provider Chain 采用**职责链（Chain of Responsibility）模式**：每个�
 - **不重试代码级空结果**：Provider 正常返回但无该代码数据（`None`）时重试毫无意义（同一请求同一答案），且会白耗第三方日配额（DataSinking 免费档 8191 篇/日）
 - **传输级失败必须上抛给链路（provider 层不得自行吞成返回值）**：链路的传输级判据**只认异常**（`_try_provider_fetch` 捕获异常 → `TRANSPORT_FAILURE`），若 provider 把超时/断连 `return None`，链路会当成「代码级空结果」——同源重试不触发、``record_failure`` 不计、诊断文案把「握手超时」报成「返回空」（实测事故：DataSinking SSL 握手超时被记为返回空，既不重试也不熔断，单标的每篇白等 20s）。故 provider 的代码级结果（401/403/404/非 200/非 JSON）返回 `None`，传输级失败**重试耗尽后上抛**；弱链路承装的直连调用方需自行试/except 降级（如 `fetcher/financial_report._fetch_index` → 转备源）
 - **provider 自陈失败原因（「返回空」不再笼统）**：provider 返回 `None` 前可经 `providers/utils.set_last_reason("原因")` 写下一行可读短句，链路（`chain._try_provider_fetch`）读到后**替换笼统的「返回空」**并同步进失败诊断（`FailureDiagnostics` → 报告数据源矩阵）。二者在运维上是完全不同的信号——「源故障」要排查网络/凭据（如 `HTTP 500`、`凭据无效`），而「该文档确实没这一节」（如 DataSinking 对没有「管理层讨论与分析」的季报返回 404）是正常业务结果（实测：该场景被笼统记成「返回空」，排查时被误读为源不可用）。载体**按线程隔离**（批量取数多线程）且**消费即清**（不串到下一次调用）；provider 未设置时措辞逐字不变。
-- **挂起型不重试（避免放大等待）**：区分**快速失败**（连接被拒/重置/DNS 立即失败 → 重试有效）与**挂起**（等到超时 → 重试只会把等待放大成 N × 超时）。判据：本次尝试耗时 ≥ 超时预算 × `HANG_ELAPSED_RATIO`（0.5）即视为「主机不可达」，不再重试、直接交链路失败（计入熔断）；实测：20s 预算下挂起型单请求从 63s（3 次）降到 20s（1 次），持续不可用时靠熔断快速跳过。判据由 `providers/utils.build_transient_retry_judge` 统一提供，`datasink` / `hithink` / `cninfo` 三者共用
+- **挂起型不重试（避免放大等待）**：链级判据 `_HANG_ELAPSED_SECONDS=20s`——单次尝试耗时 ≥ 20s 即判主机不可达，**不再同源重试**（慢主机只会继续慢；实测腾讯 K 线握手超时按 30s×3 次/标的叠加，十余持仓把报告卡成二十分钟）。provider 内同样分档：腾讯 K 线超时预算 10s、单次 ≥ 预算一半即不重试（`_KLINE_TIMEOUT×HANG_ELAPSED_RATIO`）。区分**快速失败**（连接被拒/重置/DNS 立即失败 → 重试有效）与**挂起**（等到超时 → 重试只会把等待放大成 N × 超时）。判据：本次尝试耗时 ≥ 超时预算 × `HANG_ELAPSED_RATIO`（0.5）即视为「主机不可达」，不再重试、直接交链路失败（计入熔断）；实测：20s 预算下挂起型单请求从 63s（3 次）降到 20s（1 次），持续不可用时靠熔断快速跳过。判据由 `providers/utils.build_transient_retry_judge` 统一提供，`datasink` / `hithink` / `cninfo` 三者共用
 - **连接级重试脚手架单源**：`providers/utils.with_connect_retry(request_fn, timeout=…, log_tag=…, label=…, before_attempt=…)` 收敛 `datasink` / `hithink` / `cninfo` 三处的连接级重试（共用 `providers/utils.CONNECT_RETRY_POLICY`：线性 1s/2s、共 3 次尝试）——耗时统计、挂起判据与警告、重试日志、每次尝试前的限速许可统一在此，各来源差异只用 `log_tag` / `label` / `before_attempt` 表达（避免同一约束复制三份、改一处漏两处）。**无链路承装的直连调用方**在调用点吞异常返回 `None`（如 `cninfo` 三条直连路径）维持降级契约；经链路的 provider 槽由链路承接上抛。**cninfo 直连路径的额外护栏**：公告 PDF 用独立的更宽超时（60s，年报原文几十 MB，与元数据接口共用 20s 必然失败）；挂起型失败后**本会话短路该主机**（`_mark_host_unreachable`，后续请求不发 HTTP 直接失败），把「N 篇文档 × 超时预算」降为 1 次；**orgId 反查另加两条**：单次预算改为**端到端墙钟 8s**（`post_with_deadline`——httpx 分阶段超时叠加实测可达预算 2 倍，20s 预算曾挂 40.2s，而 orgId 卡在报告主路径上），失败结果入**1h 负缓存** `report_cninfo_orgid_miss_` 并区分「连接失败 / 源侧无该代码档案」（否则同网络条件下每次重跑都要重付一遍）
 - **次数有界**：每个 Provider 每次调用最多 1 + 1 次请求；仍失败才计入熔断计数器并落下一槽
 - **口径单一来源**：退避算式（固定/线性/指数 + 抖动 + 上限）、尝试次数与「哪些异常算瞬时」由 `core/retry.py` 统一提供（`RetryPolicy` / `is_transient_exception` / `retry_transient`）——链路、各 provider 的连接级重试、akshare 超时重试与 HTTP 429 退避共用同一执行器，差异只用策略参数表达（约束 C26）；「两次请求至少间隔多久」见 `core/throttle.py`（约束 C27）
@@ -1285,6 +1285,7 @@ cache/
 ├── _groups.py         分组清理：clear_by_group()、clear_by_prefix()
 ├── _cleanup.py        过期清理：cleanup_expired()
 ├── _stats.py          统计：缓存命中率、命中/未命中计数
+├── _negative.py       负缓存探针：NegativeCache（键族/TTL 取注册表/命中计数/汇总文案）
 ├── operations.py      缓存操作共享层（三渠道共用业务逻辑）
 └── services/
     └── holdings_tracker.py  持仓跟踪、指纹比对、增量刷新
@@ -1347,7 +1348,9 @@ get_ttl(data_type)
 
 **盘中覆盖可见**：若用户同时配了 `cache_ttl.{type}` 而该类型盘中敏感，`get_ttl` 会打一条 INFO（每类型一次）说明"盘中以 `market_hour_ttl` 为准，`cache_ttl` 仅盘后生效"——把静默失效变成可观测。
 
-**负缓存同源**：缺失探测类负缓存（`datasink_probe_miss_` 12h、`report_symbol_miss_` 6h）登记为正式缓存类型，读侧 TTL、`cleanup_expired` 判定、`cache_ttl` 覆盖与文档表格共用同一注册表条目（未登记时会被按未注册默认 24h 判定，滞留更久且配置不可见）。
+**负缓存单一样板**：四类确定性缺失（标的正文缺失 / 章节清单不可得 / 该文档无该章节 / provider 404 探测）统一经 `cache/_negative.py::NegativeCache` 登记——调用点只声明「标签 + 键前缀 + TTL 类型」，锁/命中计数/汇总文案由该类统一承接，`cache.negative_cache_entries()` 给出可枚举清单、`nonzero_summaries()` 直接产出报告级汇总行（新增一类负缓存不再复制一份 lock+counter+reset 样板）。
+
+**负缓存同源**：缺失探测类负缓存（`datasink_probe_miss_` 12h、`report_symbol_miss_` 6h、`report_sections_miss_` 6h）登记为正式缓存类型，读侧 TTL、`cleanup_expired` 判定、`cache_ttl` 覆盖与文档表格共用同一注册表条目（未登记时会被按未注册默认 24h 判定，滞留更久且配置不可见）。
 
 ### 3.3 原子写入与并发安全
 
@@ -2453,7 +2456,7 @@ _dedup_by_title(items)
 
 ##### 锚点采集体系
 
-去重判定边界案例**默认采集**写入 `data/calibration/dedup_anchors.jsonl`（append-only），供 `eval-dedup-threshold.py` 分析阈值合理性；`INVEST_DEDUP_COLLECT_ANCHORS=0` 可显式关闭。锚点不参与去重判定，写侧只追加、**不读旧文件**（跨轮重复由校准工具按键去重），因此采集本身不增加报告耗时；39 MB 文件的加载与压缩已移出报告主流程（详见下）。
+去重判定边界案例**默认采集**写入 `data/calibration/dedup_anchors-YYYYMM.jsonl.gz`（按月 gzip 分片、append-only），供 `eval-dedup-threshold.py` 分析阈值合理性；`INVEST_DEDUP_COLLECT_ANCHORS=0` 可显式关闭。锚点不参与去重判定，写侧只追加、**不读旧文件**（跨轮重复由校准工具按键去重），因此采集本身不增加报告耗时；39 MB 文件的加载与压缩已移出报告主流程（详见下）。
 
 | 锚点规则 | 采集条件 | 用途 |
 |:---------|:---------|:------|
@@ -2477,15 +2480,22 @@ _dedup_by_title(items)
 **体积治理**：文件 append-only，跨轮同一标题对会重复追加；校准工具 `load_anchors` 按键去重（保留最早一条），故重复行不改变诊断结论，只影响体积。分层治理：① **写侧真追加**（`_append_anchor_lines`：单次 `write` + `fsync`，
 写盘成本只与本次新增条数相关，与文件体积无关；读侧本就逐行容错，崩溃留下的半行不污染既有记录）；
 ② 体积只 stat 检查：超过 32 MB 时记录提示，压缩**默认不在报告路径执行**，由
-`eval-dedup-threshold.py --compact` 或 `INVEST_DEDUP_MAINTENANCE=1` 显式触发（压缩按「每标题对保留最新一条 + **仅保留近
-120 天**」双条件（`INVEST_DEDUP_ANCHOR_RETENTION_DAYS` 可覆盖，0 = 退回纯去重）——
-实测仅按 key 去重压不动（标题对高度唯一，压后仍 37.9 MB），保留期才是体积上限，
-压缩后 `.bak` **默认不保留**（与主文件等大、白占磁盘）——新文件经「非空 + 首行可解析」校验且 `os.replace` 原子替换后才删备份，`INVEST_DEDUP_KEEP_BACKUP=1` 可要求保留；
-③ `scripts/eval-dedup-threshold.py` 评估后默认顺带压缩（分析用完整样本，随后按同一双条件幂等维护；`--no-compact` 只读、`--dry-run` 演练）；`--compact` 仍可单独压缩。
+`eval-dedup-threshold.py` 或 `INVEST_DEDUP_MAINTENANCE=1` 显式触发。压缩条件是**三重**的
+（`news_dedup.compact_anchor_file` 唯一实现，生产维护与校准工具共用；实现按层拆分——字节动作用 `providers/news_dedup_anchor_store.py`（分片命名/路径/汇总体积/读取/追加/原子替换），保留期·体积目标·同源采样·裁剪编排在 `providers/news_dedup_anchor_policy.py`，`news_dedup.py` 保留判定主流程并原面 re-export 两层原语（既有引用与 patch 点不变。**注意**：patch 锚点路径须打在实际持有者 `news_dedup_anchor_store._ANCHOR_PATH` 上，打在门面上只换一个同名变量、写侧照旧落真实目录）：
+① 每标题对保留最新一条；② **保留期 30 天**——`ts`（发布时间）或 `written_at`（写入时刻）
+任一在窗口内即保留（补录/回溯抓到的老新闻 `ts` 很老但刚写入，不会在首次压缩就被删；
+`INVEST_DEDUP_ANCHOR_RETENTION_DAYS` 可覆盖，`0` = 不按时间裁剪）；③ **体积上限 24 MB**——
+裁完保留期仍超目标时按时间从最旧继续丢到 ≤24 MB，每个分支保留最新 50 条不被裁剪，
+小分支（`cross_opposite` 等只有几十条）不会整类消失。仅按 key 去重压不动（标题对高度
+唯一，实测重复率 0.000），保留期与体积上限才是真正的两个维度。并发安全：读取前后比对
+`(size, mtime_ns)`，期间被并发追加则放弃本次压缩并记 `aborted`；无行可裁时不重写文件。
+压缩后 `.bak` **默认不保留**（与主文件等大、白占磁盘）——新文件经「非空 + 首行可解析」
+校验且 `os.replace` 原子替换后才删备份，`INVEST_DEDUP_KEEP_BACKUP=1` 可要求保留；
+④ 校准工具评估后默认顺带压缩（分析用完整样本，随后按同一三重条件幂等维护；`--no-compact` 只读、`--dry-run` 演练）；`--compact` 仍可单独压缩。
 
 ##### 校准工具
 
-`.venv/bin/python scripts/eval-dedup-threshold.py` 分析 `data/calibration/dedup_anchors.jsonl`。
+`.venv/bin/python scripts/eval-dedup-threshold.py` 分析 `data/calibration/dedup_anchors-*.jsonl.gz`（各月分片合并读取）。
 
 **口径（关键）**：工具**不信任锚点里的 `ratio`/`bigram_overlap`/`rule`**（它们是各次记录
 当时的规则产物），而是拿 `title_a`/`title_b` 用当前代码重算并按当前阈值重判——阈值从
@@ -2919,7 +2929,7 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
 
 **数据源与鉴权**：DataSinking（`https://api.datasink.ing`）提供全文本财报 Markdown，仅覆盖 A 股（SSE/SZSE/BSE，代码经 `core/code_symbols.py::to_fmp_symbol` 映射为 FMP 风格）。**需用户自备 API key**：凭据取通用密钥文件 `data/config/data_key.json` 的 `datasink` 节（`{"datasink": {"api_key": "..."}}`），环境变量 `DATASINK_API_KEY` 可覆盖；缺 key 时链路主动跳过并给申请指引，章节写占位。
 
-**标的级正文缺失负缓存**：章节阶 + 备源两阶都试过仍无正文（`REASON_SECTIONS_MISSING`）时，按标的写 6h 负缓存（`report_symbol_miss_{symbol}`），同一天的后续报告直接复用同一原因文案、不再读索引与走候选；**索引为空/网络失败不入负缓存**（可能是瞬时不可用，缓存会无谓延长恢复期）。
+**标的级正文缺失负缓存**：章节阶 + 备源两阶都试过仍无正文（`REASON_SECTIONS_MISSING`）时，按标的写 6h 负缓存（`report_symbol_miss_{symbol}`），同一天的后续报告直接复用同一原因文案、不再读索引与走候选；**索引为空/网络失败不入负缓存**（可能是瞬时不可用，缓存会无谓延长恢复期）。**章节清单不可得负缓存**：`/sections` 应答成功但无可用清单时写 6h 负缓存（`report_sections_miss_{doc_id}`）——覆盖两种形态：① 404 探测未命中 / 200 空列表；② **非空但不可用**（源侧只解析出「公司名 / 年度报告 / 重要提示」几项，匹配不到任何偏好章节、回退直取也全空，即「清单全部取不到正文」分支）。清单是否可用由源侧解析状态决定、跨报告稳定，不缓存则每份报告都为同一文档重探一次（实测 1~3s/篇，全缓存运行的主要残差）。失效方向：该分支先失效清单（正负两键）再记负缓存，恢复窗口 6h；新披露是新的 `doc_id`（新键），不受影响。**传输级失败另记 30min 短退避**（`report_sections_backoff_{doc_id}`，注册表类型 `report_sections_backoff`）：与「确定性缺失」语义分开——那只说明这次探测挂起（实测单篇 20.7s），探测成功即清退避。
 
 **探测负缓存**：带 `section` 的章节探测与 `/sections` 清单探测遇 404 时，把「该（文档, 章节）缺失」写入 12h 负缓存（`datasink_probe_miss_` 前缀，键 = path + section 的 md5）；同一天的后续报告直接走降级路径，不再逐章节重发请求（实测 7 只标的 × 多候选章节的 404 占十余秒）。文档级 404（`/documents/{id}`、`/documents` 列表）属真缺失，仍按 WARNING 处置且**不进**负缓存。
 
@@ -2931,7 +2941,7 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
 
 **缓存**：索引/章节清单 1 天、正文 30 天（`report` / `report_doc`）——索引是 symbol 级键，日频才能让**新披露最迟次日可见**；正文按 `doc_id` 不可变，月度复用不重复消耗配额。随菜单缓存命令与 TTL 管理。**数据契约** `financial_report_digest_data`（附录 H）；语义命名行见 §6.7。
 
-**数据源说明表**：「数据源可用性矩阵」章在健康度表后附「数据源说明（实际使用清单）」表——逐数据类别列实际链路、用途、计费（财报全文随 `datasink.plan` 动态展示免费/付费档）与凭据要求（是否需 key + 就绪状态），并标本次运行是否实际使用（`report/data_source_matrix.py::build_data_source_catalog`，前缀取自 `_SOURCE_CATEGORIES`、计费取自 provider 套餐表，单一事实来源）。**「本次使用」判定口径**：该类别的取数链路在**取得数据时**（含命中缓存的返回）经 `report/data_status.py::mark_data_used()` 记一条成功事件，说明表据事件前缀判定 `used`；**只记成功、不记降级**——章节名 fuzzy 未命中、标的不在源覆盖范围等预期内空结果不计入 T2 连续失败阈值（否则会把预期内空结果误报为源故障），失败与降级仍由 provider 日志、章节失败清单与链路 FailureDiagnostics 披露。因此 `未使用` 的含义是「本次未取到该类数据」，**不等于**源故障；对 DataSinking 类源另注明「需开启哪些功能开关才会取用」。类别清单含 `financial_report`（`report_datasink_`）与 `financial_indicator`（`fin_indicator_`），两者同时进入可用性矩阵与说明表；含同花顺兜底槽位的类别（`price` / `fund_hold` / `history` / `financial_indicator`）在「实际数据源（链路）」列显式列出「→ 同花顺金融数据（…，需 key）」，市场情绪（`sentiment`，同花顺**唯一源**）单列一行并附 key 就绪态。
+**数据源说明表**：「数据源可用性矩阵」章在健康度表后附「数据源说明（实际使用清单）」表——逐数据类别列实际链路、用途、计费（财报全文随 `datasink.plan` 动态展示免费/付费档）与凭据要求（是否需 key + 就绪状态），并标本次运行是否实际使用（`report/data_source_matrix.py::build_data_source_catalog`，前缀取自 `_SOURCE_CATEGORIES`、计费取自 provider 套餐表，单一事实来源）。**「本次使用」判定口径**：该类别的取数链路在**取得数据时**（含命中缓存的返回）经 `report/data_status.py::mark_data_used()` 记一条成功事件，说明表据事件前缀判定 `used`；**只记成功、不记降级**——章节名 fuzzy 未命中、标的不在源覆盖范围等预期内空结果不计入 T2 连续失败阈值（否则会把预期内空结果误报为源故障），失败与降级仍由 provider 日志、章节失败清单与链路 FailureDiagnostics 披露。因此 `未使用` 的含义是「本次未取到该类数据」，**不等于**源故障；对 DataSinking 类源另注明「需开启哪些功能开关才会取用」。**新鲜度通道**：`mark_data_used()` 另有 `freshness` 参数，成功事件可标 `stale`（源不可达后回退上次成功载荷），该标记进事件 `detail` 但**不进降级计数**（陈旧回退不是失败，算成失败会误报降级），并在数据质量详细状态块单列「陈旧回退（源不可达，用上次成功数据）」行——否则模型会把数天前的数据当今日数据评。类别清单含 `financial_report`（`report_datasink_`）与 `financial_indicator`（`fin_indicator_`），两者同时进入可用性矩阵与说明表；含同花顺兜底槽位的类别（`price` / `fund_hold` / `history` / `financial_indicator`）在「实际数据源（链路）」列显式列出「→ 同花顺金融数据（…，需 key）」，市场情绪（`sentiment`，同花顺**唯一源**）单列一行并附 key 就绪态。
 
 **矩阵「命中源」列（provider 级归属）**：矩阵行除了类别健康度，还叠加一层 provider 级归属，回答使用者最常问的「我配的 key 到底被用上了吗」——类别健康度事件（`price_price_stock_600900` 这类键）只含代码不含 provider，**同花顺作为兜底槽接管时旧口径在报告里一字未提**，导致使用者误以为 key 未生效。修复：链路在某个 provider 成功返回时经 `report/data_status.py::mark_provider_used(data_type, provider_id, 展示名)` 登记（`fetcher/chain.py` 的 `fetch_with_fallback` 与 `_try_providers` 两处成功分支 + 同花顺独占的 `report/market_sentiment.py`、`fetcher/financial_indicator.py` 多期序列支路），矩阵按 `_SOURCE_CATEGORIES` 各行的 `data_types` 声明映射归入对应行并渲染为 `名称 ×次数`（按次数降序；无归属显示 `—`）。登记表存放于 `data_status.py` 模块级字典而非 DegradationTracker——归属是纯观测事实，既不参与降级计数，也不在 `.degradation_state.json` 里堆积 provider 键；归属只反映**本次网络取数**，命中缓存时该列为 `—` 而说明表「本次使用」仍为已使用（两列并读即得「用了谁的数」与「有没有取到」）。历史日 K 等类别只登记缓存键、不记降级事件，其矩阵行由 provider 归属单独成立（详情写「取数 N 次（无降级事件）」）。链路的 data_type 必须全部有归属类别，否则命中源静默丢失——`UNMAPPED_CHAIN_DATA_TYPES` 登记有意不进矩阵者（如 `bond_yield`），由 `test_data_source_matrix.py` 的不变式用例强制。附带修复：矩阵类别补齐 `history`（历史走势）与 `sentiment`（市场情绪），与 `datasource.md` 已登记的类别口径一致。
 
@@ -3043,7 +3053,7 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
                _llm_dispatch.py              worker 装配/线程池分发/辩论路由（经门面 re-export，patch 点不变）
                _batch_mode.py                批量模式分块执行（10 条/批、≤3 批并行）
                self_review.py                生成后自检（串行后置，不经并行调度）
-               holding_change_review.py      持仓变动复盘归因（串行后置，不经并行调度）
+               holding_change_review.py      持仓变动复盘归因（并入并行批，契约缺席自跳过）
                   │
 API 层         api.py        Provider 路由 + Multi-Provider Chain 遍历
                api_base.py   HTTP 调用 + 重试骨架
@@ -3513,6 +3523,8 @@ make_http_client(timeout=10.0) → httpx.Client
 | `_pair_similarity` | 标题相似度口径的唯一实现（归一化 → 日期剥离 → 英文分桶占位 → 双向 ratio + 实体 bigram 交集；链路判定与校准工具共用，防两套口径漂移） | 财经新闻热点与持仓关联分析 | 数据获取 | 随 `enable_news` |
 | `anchor_rules_version` | 锚点规则时代指纹字段（`_rules_fingerprint()` 由阈值/模板词表/方向词对/正则 + 行为探针派生，规则一改自动变，供校准工具区分时代） | 财经新闻热点与持仓关联分析 | 数据获取 | 随 `enable_news` |
 | `news_dedup_rules` | 去重规则原语模块（阈值常量 / 模板词表与掩码 / 标题归一化 / 实体 bigram / 相似度口径 / 方向词对 / 规则指纹的唯一实现） | 财经新闻热点与持仓关联分析 | 数据获取 | 随 `enable_news` |
+| `news_dedup_anchor_store` | 锚点**存储层**（分片命名 `dedup_anchors-YYYYMM.jsonl.gz` / 路径与汇总体积 / 容错读取 / multi-member gzip 追加 / 校验后原子替换） | 财经新闻热点与持仓关联分析 | 数据获取 | 随 `enable_news` |
+| `news_dedup_anchor_policy` | 锚点**策略层**（保留期 30 天 / 体积目标 24 MB / 每分支保底 50 条 / 同源 1/50 确定性采样 / `compact_anchor_file` 裁剪编排与维护开关） | 财经新闻热点与持仓关联分析 | 数据获取 | 随 `enable_news` |
 | `record_prosperity_diagnosis` | 景气度框架诊断挂载点（市场与估值组开关；守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供） | 行动建议（章内嵌块） | 报告输出 | 分析增强开关 `prosperity_framework`（默认开） |
 | `inject_holding_change_data` | 持仓变动复盘挂载点（独立章节与回放组开关；守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供） | 持仓变动复盘（报告独立章，type=holding_change） | 报告输出 | 独立章节与回放开关 `holding_change_review`（默认关） |
 | `inject_event_impact_data` | 事件窗对照挂载点（事件与摘要组开关；守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供；新闻先行串行段内注入，供分歧例附录块同轮进 LLM） | 事件窗对照（财经新闻章内区块，随父章；注册表无独立条目） | 报告输出 | 报告章节与增强开关 `event_window_impact`（默认关） |
@@ -3634,18 +3646,14 @@ make_http_client(timeout=10.0) → httpx.Client
 
 ### 6.9 实验项生命周期表
 
-> 定位：全部 ⚗ 实验项（`experimental=True` 的功能开关）的**单一事实位**——判据、转正/撤销条件与当前态只在本表维护；计划死线条目与版本归档的评估记录是其**双向引用入口**（各自回链本节，本表不复制其全文）。**纪律：实验项立项（新增 `experimental=True` 条目）、转正（摘除 `experimental`）、撤销（删除注册表条目与机制）任一发生时，必须同步刷新本表。** 面板 ⚗ 标记、页脚实验功能清单与 `--experiment` 取值域均派生自注册表 `experimental` 字段，本表解释其「为什么在此态、何时变」。
+> 定位：全部 ⚗ 实验项（`experimental=True` 的功能开关）的**已落地机制登记**——本表只收「机制—观测数据源—判据指针」三元组：判据、转正/撤销条件与当前态属管理条款，唯一事实位在计划文档对应条目（本表不复制，避免阈值改动要动技术文档）。**纪律：实验项立项（新增 `experimental=True` 条目）、转正（摘除 `experimental`）、撤销（删除注册表条目与机制）任一发生时，必须同步刷新本表与计划条目。** 面板 ⚗ 标记、页脚实验功能清单与 `--experiment` 取值域均派生自注册表 `experimental` 字段，本表解释其「靠什么机制运行、从哪里取数判定」。
 
-| flag | 实验目的 | 判据来源 | 转正条件 | 撤销条件 | 观察数据源 | 当前态 |
-|:-----|:---------|:---------|:---------|:---------|:-----------|:-------|
-| `decision_reflection`（决策跨期反思闭环） | 用真实行情结算历史决策命中率，并把教训回灌专家复盘提示词——验证「教训回灌」对复盘质量的真实增益 | 计划管理文档「决策跨期反思闭环（`decision_reflection`）验证死线」条目（判据与观测手段在该条目维护） | 已结算样本 ≥10 条且命中率可采信 → 据 doctor 账本概览评估转正（摘除 `experimental`，面板 ⚗ 消失、页脚不再随产物自述） | 启用次数停止增长（无真实使用），**或** 已结算样本 <10 且无达标趋势 → 撤销实验（含 LLM 决策登记 `decision_llm_capture`、行动章复盘块注入与对应需求条目） | `experiment_stats` 启用计数、`data/state/decision_ledger.jsonl` 已结算样本、`doctor` 复盘账本概览 | 观察中（2026-10-23：启用 63 次／已结算 11 条／directional 9 条，命中率样本未达可信阈值；37 条 LLM 决策待到期结算） |
-| `report_qa`（报告对话式追问） | 报告页内会话式追问，验证「零新增取数的报告内问答」的可用性与回答忠实度 | 版本归档「`report_qa` 转正评估挂账」记录（首轮评估已执行，判据与执行清单固化在该记录） | 真实使用样本充分（启用频次达标）**且** 问答样本留痕可抽检（`QaSession` 持久化）**且** 费用留痕接入 perf → 按转正清单摘 `experimental`、复核 `affects_report`、三端文档同步、收窄 `--experiment` 取值域 | 长期无人使用触发撤销条件，或忠实度不可接受 → 按撤销清单摘注册表条目与页内区块 | `experiment_stats` 启用计数、`QaSession.usage`（token 口径，费用口径待接）、问答样本抽检 | 实验观察（转正判据挂账中） |
+| flag | 实验目的 | 已落地机制与挂载点 | 观测数据源 | 判据与裁决（计划文档） |
+|:-----|:---------|:------------------|:-----------|:----------------------|
+| `decision_reflection`（决策跨期反思闭环） | 用真实行情结算历史决策命中率，并把教训回灌专家复盘提示词 | `core/decision_ledger.py`（append-only 账本 + pending/settled 折叠统计）、`report/decision_settlement.py`（到期结算，幂等：同 decision 只结一次，行情不可得保持 pending）、`report/decision_review_block.py`（「历史决策复盘」区块数据契约，HTML/Excel 双端消费）、`report/_experimental_seams.py` 挂载点 | `experiment_stats` 启用计数、`data/state/decision_ledger.jsonl` 已结算样本、`doctor` 复盘账本概览 | 计划文档「决策跨期反思闭环（`decision_reflection`）转正判据」小节（两级门槛与观察进度在该条维护） |
+| `report_qa`（报告对话式追问） | 报告页内会话式追问，验证「零新增取数的报告内问答」的可用性与回答忠实度 | `qa/` 会话层（上下文只读当期报告、轮数上限）、`QaSession` 持久化（问答样本与用量留痕）、`qa/telemetry.py` 每次提问记一行账本、HTML 报告页内追问区块 | `experiment_stats` 启用计数、`QaSession.usage`（token 口径，费用口径待接）、`doctor` 的「报告追问效果」卡片 | 计划文档「`report_qa` 转正评估」条目（判据与执行清单在该条维护；历史评估记录见版本归档挂账） |
 
-**行维护约定**：新增实验项时按上表七列补行（列结构固定，行随实验项增长）；判据/清单的详文留在各自的计划或归档文档，本表只收结构化的「条件—数据—态」三元组，避免两处口径漂移。
-
-[↑ 回到顶部](#目录)
-
----
+**行维护约定**：新增实验项时按上表五列补行（列结构固定，行随实验项增长）；判据、转正/撤销条件与当前态写在计划文档对应条目，本表只收结构化的「机制—数据源—指针」三元组。
 
 ## 7. 模块间依赖关系
 
@@ -3944,7 +3952,7 @@ investor-review/
 | 财经新闻 | 5 源并行：新浪/东方财富/财联社/华尔街见闻/akshare | 各 `*_news.py` |
 | 行业分类/概念板块 | 东方财富 push2（主）→ quotedata 回退 | `eastmoney_industry.py` / `eastmoney_industry_rest.py` |
 | 机构盈利预测 | akshare 全量获取（直达） | `fetcher/akshare.py`（封装 `akshare_extras.py`） |
-| 行业资金流向 | akshare 今日排名（直达） | `fetcher/akshare.py`（封装 `akshare_extras.py`） |
+| 行业资金流向 | akshare：东财 push2 今日排名（主通道）→ 同花顺行业资金流（备用通道，金额亿元→元、净占比派生） | `fetcher/akshare.py`（封装 `akshare_extras.py`） |
 | 股票历史分红 | akshare 无参全量拉取后按代码过滤（直达） | `fetcher/akshare.py`（封装 `akshare_extras.py`） |
 | 基金经理数据 | 天天基金 HTML 解析（主）→ 档案页回退 | `fetcher/fund_manager.py` |
 | 无风险利率（Rf） | akshare `bond_zh_us_rate`（Sina 国债收益率，单值 + 历史序列双键）→ 手动配置兜底 | `fetcher/bond_yield.py` |
@@ -3966,12 +3974,13 @@ investor-review/
 | `index` | `index_{code}.json` | 24h | 交易时段 30s | — | preload |
 | `news` | `news_{md5}.json` | 15 分钟 | — | 新闻源参数+关键词 | refresh |
 | `sector_flow` | `sector_flow_{fingerprint}.json` | 15 分钟 | — | A 股+美股指数 | refresh |
+| `sector_flow`（异构键） | `sector_flow_last_good`（3 天）/ `sector_flow_negative`（30 分钟） | 按注册表 `exact_key_ttls` 独立声明 | — | — | refresh |
 | `rank` | `fund_perf_{code}.json` | 24h | — | — | refresh |
 | `profit_forecast` | `profit_forecast_{fingerprint}.json` | 24h | — | A 股+美股指数 | refresh |
 | `hold` | `fund_hold_{code}.json` | 7 天 | — | — | refresh |
 | `industry` | `industry_{code}.json` | 14 天 | — | — | refresh |
 | `sentiment` | `sentiment_dragon_tiger.json` + `sentiment_ladder.json` | 1h | — | — | refresh |
-| `report` | `report_datasink_index_{symbol}.json` + `report_datasink_sections_{doc_id}.json` + `report_cninfo_index_*` + `report_datasink_doc_miss_{doc_id}_{section}.json`（确定性空正文负缓存） | 24h | — | — | refresh |
+| `report` | `report_datasink_index_{symbol}.json` + `report_datasink_sections_{doc_id}.json` + `report_cninfo_index_*` + `report_datasink_doc_miss_{doc_id}_{section}.json`（确定性空正文负缓存）+ `report_sections_miss_{doc_id}.json`（章节清单不可得负缓存，TTL 走 `report_symbol_miss`） | 24h | — | — | refresh |
 | `report_doc` | `report_datasink_doc_{doc_id}_{section}.json` | 30 天 | — | — | refresh |
 | `fin_indicator` | `fin_indicator_{code}.json` + `fin_indicator_hist_{code}.json` | 24h | — | — | refresh |
 | `dividend` | `dividend_{fingerprint}.json` | 7 天 | — | 持仓+穿透 A 股代码 | refresh |
@@ -4020,6 +4029,8 @@ investor-review/
 | `idx_valuation` | `idx_valuation_`（前缀，当前仅 sh000300） | 7 天 | — | — | refresh |
 | `datasink_probe_miss` | `datasink_probe_miss_{hash}.json` | 12h | — | — | 无分组 |
 | `report_symbol_miss` | `report_symbol_miss_{hash}.json` | 6h | — | — | 无分组 |
+| `report_sections_miss` | `report_sections_miss_{doc_id}.json`（章节清单不可得负缓存） | 6h | — | — | 无分组 |
+| `report_sections_backoff` | `report_sections_backoff_{doc_id}.json`（章节清单探测**传输级失败**的短退避） | 30min | — | — | 无分组 |
 
 > `—` 表示精确键名（无指纹后缀），TTL 到期后刷新。
 > **缺失探测负缓存**（`datasink_probe_miss` / `report_symbol_miss`）：只在**确定性**缺失时写入（已发布静态文档的章节 404、章节阶与备源均无正文），瞬时网络错误不写；TTL 短于「当天多次报告」周期、长于单次链路重试。

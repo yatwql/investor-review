@@ -101,6 +101,9 @@ def _record_llm_context(perf, sink=None, baseline: dict | None = None) -> None:
                     "cached": bool(entry.get("cached")),
                     "input_tokens": int(entry.get("input_tokens", 0)),
                     "output_tokens": int(entry.get("output_tokens", 0)),
+                    # 逐模块单次/累计耗时（秒）：回答「关键路径卡在哪个模块」的唯一证据，
+                    # 缺它只能靠日志时间戳反推。
+                    "duration_seconds": round(float(entry.get("duration", 0.0) or 0.0), 3),
                     "costs": {code: round(float(amount), 6) for code, amount in (entry.get("costs") or {}).items()},
                 }
                 for key, entry in sorted(per_module.items())

@@ -409,3 +409,41 @@ class TestRecomputeReasonDomain:
         with caplog.at_level("WARNING"):
             sink.note_recompute_reason("global_macro", RECOMPUTE_TTL_EXPIRED)
         assert not [r for r in caplog.records if "未知的重算原因" in r.message]
+
+
+class TestPerfModuleLatency:
+    """逐模块耗时写入 perf：回答「关键路径卡在哪个模块」的唯一证据。"""
+
+    def test_duration_recorded_per_module(self):
+        from src.python.report._generation_shared import _record_llm_context
+        from src.python.llm.session import record_per_module
+
+        recorded: dict = {}
+
+        class _Perf:
+            def set_llm_context(self, ctx):
+                recorded.update(ctx or {})
+
+        record_per_module("expert_review", "deepseek-v4-flash", inp=100, out=200, duration=81.5)
+        _record_llm_context(_Perf())
+
+        modules = recorded.get("modules") or {}
+        assert modules.get("expert_review", {}).get("duration_seconds") == 81.5
+
+    def test_cached_module_records_zero_duration(self):
+        """缓存命中没有调用耗时 → 记 0，不能与「很快的调用」混淆成同一读数。"""
+        from src.python.report._generation_shared import _record_llm_context
+        from src.python.llm.session import record_per_module
+
+        recorded: dict = {}
+
+        class _Perf:
+            def set_llm_context(self, ctx):
+                recorded.update(ctx or {})
+
+        record_per_module("global_macro", "deepseek-v4-flash", cached=True)
+        _record_llm_context(_Perf())
+
+        entry = (recorded.get("modules") or {}).get("global_macro") or {}
+        assert entry.get("cached") is True
+        assert entry.get("duration_seconds") == 0.0

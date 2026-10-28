@@ -9,8 +9,11 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Callable
 from typing import Any
+
+import httpx
 
 logger = logging.getLogger("invest")
 
@@ -30,10 +33,27 @@ def get_source_label(name: str) -> str:
     return _SOURCE_LABELS.get(name, name)
 
 
+#: 新浪整源预算（秒）：6 类×翻页都是串行请求，单类偶发挂起会把整段拉长。
+#: 预算内能取多少算多少，超预算即收尾——已取到的条目照常参与聚合，不整源丢弃。
+_SINA_SOURCE_BUDGET = 20.0
+
+#: 单请求的上限（与 `sina_news._TIMEOUT` 同量级）；剩余预算更小时按剩余收紧。
+_SINA_REQUEST_READ_TIMEOUT = 6.0
+_SINA_REQUEST_CONNECT_TIMEOUT = 3.0
+
+
+def _sina_request_timeout(remaining: float) -> httpx.Timeout:
+    """按整源剩余预算收缩单请求超时（预算见底时不再给满额等待）。"""
+    read = max(1.0, min(_SINA_REQUEST_READ_TIMEOUT, remaining))
+    connect = max(1.0, min(_SINA_REQUEST_CONNECT_TIMEOUT, remaining))
+    return httpx.Timeout(connect=connect, read=read, write=connect, pool=connect)
+
+
 def _fetch_from_sina(num: int) -> list[dict[str, Any]]:
     """从新浪财经获取新闻，均匀覆盖多个分类（支持翻页）。
 
     各分类通过 page 参数逐页获取，突破单次 50 条上限。
+    整源受 `_SINA_SOURCE_BUDGET` 预算约束：超预算即停止翻页并返回已取条目。
     """
     try:
         from src.python.providers.sina_news import fetch_news as sina_fetch
@@ -47,12 +67,18 @@ def _fetch_from_sina(num: int) -> list[dict[str, Any]]:
 
     all_items: list[dict[str, Any]] = []
     seen_urls: set[str] = set()
+    deadline = time.monotonic() + _SINA_SOURCE_BUDGET
+    budget_exhausted = False
     for lid in lids:
         page = 1
         category_fetched = 0
         while category_fetched < per_category:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                budget_exhausted = True
+                break
             need = min(per_page, per_category - category_fetched)
-            items = sina_fetch(lid=lid, num=need, page=page)
+            items = sina_fetch(lid=lid, num=need, page=page, timeout=_sina_request_timeout(remaining))
             if not items:
                 break
             prev_fetched = category_fetched
@@ -68,7 +94,15 @@ def _fetch_from_sina(num: int) -> list[dict[str, Any]]:
                 break
             if len(items) < need:
                 break  # 该分类无更多数据
+        if budget_exhausted:
+            break
 
+    if budget_exhausted:
+        logger.warning(
+            "新浪财经取数预算耗尽（%.0fs），已取 %d 条后收尾（其余源不受影响）",
+            _SINA_SOURCE_BUDGET,
+            len(all_items),
+        )
     logger.info("新浪财经: 获取 %d 条 (去重后)", len(all_items))
     return all_items
 

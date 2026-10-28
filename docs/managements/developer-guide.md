@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.16.7
+> 文档版本：0.16.8
 
 ## 概述
 
@@ -173,6 +173,8 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 
 **辅助（非阻塞）**：`.venv/bin/ruff check`（lint 基线，选择项与刻意豁免均在 `pyproject.toml` 显式声明）+ `.venv/bin/ruff format --check`（代码格式一致性）——问题可经 `.venv/bin/ruff check --fix` / `.venv/bin/ruff format` 自动修复，不阻止合并/发布。当前两者均为零告警基线，新增代码应在提交前保持干净。
 
+**归档区冻结**：`docs/` 下为历史快照（含各版本归档里的脚本副本），**不得被 lint/format 重排**。配置已声明 `extend-exclude` + `force-exclude = true`——后者是关键：ruff 的 `exclude` 只在整树扫描时生效，命令行显式给目录（`ruff format docs`）会绕过它、把归档脚本一并重排（实测曾误改 7 个文件）。因此需要格式化的只能是 `src/` / `scripts/` 等活代码路径；契约由 `src/test/unit/test_ruff_exclude_contract.py` 锁定。
+
 **CI 同步执行（`.github/workflows/ci.yml`）**：三档测试按分支/标签分流——`dev` 推送跑 P0（`dev-verify`）、`master` 推送或 PR 跑 P1（`verify`）、打 `v*` tag 跑 P2（`regression`），矩阵覆盖 Python 3.11/3.12/3.13；另有三个独立 job：`guards`（**阻塞**，10 个 `--ci` 守护脚本即上方 P0/P2 清单全量——job 内按 pre-commit 同款后台并行回放，任一守护非零退出折叠为 FAIL 分组并使 job 红；守护经 src.python 链依赖项目运行时包（如 check-doc-drift → httpx），故 editable 安装保留）、`portability`（**阻塞**，非 UTF-8 locale + 隐式编码双探针，见下方「编码/locale 自检」）与 `format`（非阻塞，`ruff format --check src/python/ scripts/` + `ruff check`）。
 
 ### 编码/locale 自检（旧 pip 回退解码 / 隐式编码）
@@ -233,7 +235,8 @@ PYTHONWARNDEFAULTENCODING=1 .venv/bin/python -m pytest src/test/unit -q
 | 新增终端打印文本（提示/面板/列表） | 一律用 `tui/text_layout.py` 原语折行（`wrap_display` / `wrap_hanging` / `wrap_with_prefix` / `truncate_display`）并按 `terminal_columns()` 取宽——手机窄屏（40~60 列）与笔记本宽屏同一份代码；盒线面板经 `switch_panel.render_titled_panel`（宽/中档画框、窄档无框截断），表格/日志/统计等长输出在窄档折行；**新增或改动任何面板渲染后，必须在 `test_narrow_panel_render.py` 登记同一面板**（`COLUMNS=40` 逐行断言不超宽）；提示语成分与上屏词先对 `DESIGN-TUI.md`（键分工总表 / 提示三段式 / 术语对照）；新增用例须覆盖窄宽两档与「不越界」不变式 |
 | 新增/改动 TUI 交互（键义、提示、反馈、配色） | `DESIGN-TUI.md`（唯一判据：键分工总表 / 提示模板 / 默认项标注 / 配色一色一职责 / 术语表）→ 契约结构测试 `test_design_tui_doc.py`（必备小节若扬则同步）→ 机检 `test_prompt_contract.py`（提示成分 / 禁用词 / 闸门白名单）→ `how-to-use-tui-menu.md` 对应面板章 → `test_keystroke_baseline.py` 击键基线（多一次按键即刷新快照）→ `requirements.md` R-TUI |
 | 新配置入口（新增面板/子菜单项） | `_CONFIG_ENTRY_MAP`（`[D]` 配置入口地图，键位真实性由单测对 `MENU_ITEMS` 兜底）→ 对应手册章节 → `requirements.md` 菜单表行 |
-| 新文件/目录 | `folders.md` 目录树（`check-doc-drift --sync` 回写统计表）→ 若为 `scripts/*`：[scripts-reference.md](scripts-reference.md) 的一览与分类段 |
+| 新文件/目录 | `folders.md` 目录树（`check-doc-drift --sync` 回写统计表）→ 若为 `scripts/*`：[scripts-reference.md](scripts-reference.md) 的一览与分类段；**模块拆分（实体下沉子模块 + 门面 re-export）**还要同步 `technical.md` 结构/模块表，并把所有 `monkeypatch/patch` 目标与众 `conftest` 隔离点改到新持有者（见「测试指南」的分片后 patch 纪律） |
+| 新增负缓存（确定性缺失结论） | `cache/_negative.py::NegativeCache` 登记实例（标签 + 键前缀 + TTL 类型）→ `core/data_registry.py` 注册该缓存类型（默认 TTL）→ `technical.md` 数据/缓存章的「负缓存同源」与 TTL 表 → `how-to-config.md` 的 `cache_ttl` 可调参数表 → `manuals/datasource.md` 负缓存清单（若属数据源侧） |
 | 新测试 | `conftest.py` marker 注册（若需）→ `.venv/bin/python scripts/test-collect-coverage.py --update-docs` 回写 `test-coverage.md`/`folders.md` 计数行（不带标志仅输出供人工对照）→ 边缘用例入 `*_edge.py` |
 | 新 LLM 模块/seam | `registry.py` + 统一附录（`skeleton._build_prompt_appendix`）+ `technical.md`（语义命名表/seam 表/附录 H）→ 指纹条件并入用例 |
 | 每个计划收尾（通用） | `plan.md`（状态翻转+归档 note）→ 当期计划归档文档（归档段+设计文档索引，入 0.12 期归档）→ `review-findings.md`（rf 登记，rf-next 递增）→ `changelog.md`（含 rf token）→ `test-coverage.md`/`folders.md` 计数刷新 → 涉版本时 `check-version-consistency` |
@@ -861,6 +864,7 @@ mod = load_script("_test_runner/modes.py", module_name="modes_under_test")   # �
 - **不得读真实 `data/`、`reports/`、`logs/` 做断言**：隔离类断言（「测试没有写真实目录」）用注入的隔离目录（`HISTORY_SNAPSHOT_DIR` 等已由 conftest 重定向）即可，不要额外读取 `PROJECT_ROOT/data/...` 的现状——那既引入对开发者本地数据的依赖，也让用例在 CI（无该目录）与本地表现不同。
 - **共享 fixture 放目录级 `conftest.py`**：同一目录多文件共用、且需要 `tmp_path`/`monkeypatch` 的装配（如 `src/test/unit/llm/conftest.py::llm_cache_dir` 统一重定向缓存目录并复位日志去重）放这里，而不是在每个测试文件各写一份或塞进 `_fixtures.py`（后者只放纯函数与常量）；
 - **分片后 patch 目标须重定向**：实现下沉到子模块（如 `_perf_report/report.py`、`_traces_doc/deleted_refs.py`）后，`monkeypatch.setattr(入口模块, "_常量", ...)` 对写入无效——必须 patch **调用点所在子模块**，并同步迁移该模块的进程级缓存重置点（`_HIST_DEFS = None` 一类）；
+- **门面 re-export 是「同名副本」，不是代理**：`from X import a` 之后 `patch(门面, "a", ...)` 只改了门面里那个名字，X 内部仍绑定原对象。实测后果：锚点文件隔离打在门面 `news_dedup._ANCHOR_PATH` 上，`pytest` 一路追写真实 `data/calibration/dedup_anchors-YYYYMM.jsonl.gz` 而用例断言只看 tmp 目录（全绿但污染用户数据）。判据：**凡 patch/隔离的是模块级变量或函数，先确认谁在运行期读它**，打在持有者模块上；门面只保证 import 路径不变。
 - 分片不新增/删除用例：原文件的 `def test_` 总数须等于各分片之和，收尾用 `grep -c 'def test_'` 对拍，并同步 `folders.md` 目录树与 `test-coverage.md` 计数。
 
 **新增后必须更新的文件**：
@@ -965,7 +969,7 @@ INVEST_CACHE_DIR=docs/tmp/screenshots/demo/data/cache \    # 缓存改落（不�
 
 **LLM 总时间预算**：`llm_settings.json → llm_total_time_budget_sec`（秒，`0`=不启用）。超预算后**不再启动新模块**（已在跑的模块不打断），日志回显已用时与预算值，报告按已生成内容呈现。用于兜住「单模块卡住 + 重试叠加」把一次 full 拖成小时级（审计实测曾出现 6,623s 的 LLM+新闻阶段）。
 
-**去重锚点默认采集、写侧零读取**：`data/calibration/dedup_anchors.jsonl` 每次报告只追加边界案例（单次 `write`+`fsync`，不解析旧文件）；跨轮重复由 `eval-dedup-threshold.py::load_anchors` 按键去重（保留最早一条），诊断结论不受重复行影响。`INVEST_DEDUP_COLLECT_ANCHORS=0` 可关闭采集。文件超过 32MB 时只记提示，不自动压缩——压缩由 `scripts/eval-dedup-threshold.py` 评估后**默认顺带执行**（分析用完整样本，随后每 key 最新 + 近 120 天，`--no-compact` 关闭、`--retention-days 0` 只按键去重）或 `INVEST_DEDUP_MAINTENANCE=1` 显式触发；压缩前 `.bak` 与主文件等大，默认校验后清理（`INVEST_DEDUP_KEEP_BACKUP=1` 保留）。
+**去重锚点默认采集、写侧零读取**：`data/calibration/dedup_anchors-YYYYMM.jsonl.gz`（按月 gzip 分片；写侧按 multi-member gzip 追加，不重写既有压缩块，也不解析旧文件——读侧 `gzip.open` 透明解压，损坏分片只跳过其余内容）每次报告只追加边界案例；同源（`same_src`）样本按标题对哈希 **1/50 确定性采样**（同源 2~5 bigram 区间样本极密，全量采集曾占文件 61% 而 `ratio` 恒为占位值），其余规则全量采集；跨轮重复由 `eval-dedup-threshold.py::load_anchors` 按键去重（保留最早一条），诊断结论不受重复行影响。`INVEST_DEDUP_COLLECT_ANCHORS=0` 可关闭采集。文件超过 32MB 时只记提示，不自动压缩——压缩由 `scripts/eval-dedup-threshold.py` 评估后**默认顺带执行**（分析用完整样本，随后按三条件维护：① 每 key 最新；② 保留期 30 天——`ts`（发布时间）或 `written_at`（写入时刻）任一在窗口内即保留，补录/回溯抓到的老新闻不被秒裁，`INVEST_DEDUP_ANCHOR_RETENTION_DAYS` 可覆盖、`0` = 不按时间裁剪；③ 体积上限 24MB——超目标按最旧裁剪，每分支至少保留最新 50 条，小分支（方向对立等）不被整类裁光；`--no-compact` 关闭、`--retention-days` 指定窗口）或 `INVEST_DEDUP_MAINTENANCE=1` 显式触发。压缩前后比对 `(size, mtime)`，期间被并发追加则放弃本次压缩（不吞另一个进程写入的行）；无行可裁且无需补标注时不重写文件。压缩前 `.bak` 与主文件等大，默认校验后清理（`INVEST_DEDUP_KEEP_BACKUP=1` 保留）。
 
 ### 兼容层纪律（不保留旧形态支持）
 

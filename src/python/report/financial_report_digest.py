@@ -14,13 +14,13 @@ import logging
 from typing import Any, Sequence
 
 from src.python.core.num_utils import ms_to_date_str
+from src.python.cache import nonzero_summaries
 from src.python.fetcher.financial_report import (
     DEFAULT_DOC_TYPES,
     DEFAULT_MAX_CHARS,
     DEFAULT_SECTIONS,
     collect_a_share_targets,
     datasink_credential_missing,
-    doc_miss_hits,
     reset_doc_miss_hits,
     fetch_symbol_report_detailed,
     target_source_label,
@@ -134,14 +134,11 @@ def build_financial_report_digest(
         return result
 
     logger.info("[financial_report_digest] 取到 %d/%d 只 A 股财报摘要", len(rows), len(targets))
-    _miss_hits = doc_miss_hits()
-    if _miss_hits:
-        # 一行 INFO：说明「这轮省掉了多少次重复的空请求」，便于无 DEBUG 时确认负缓存生效
-        logger.info(
-            "[financial_report_digest] 正文空结果命中负缓存 %d 次（跳过 %d 次重复请求，确定性缺失，非故障）",
-            _miss_hits,
-            _miss_hits,
-        )
+    # 负缓存命中汇总：按 `cache.NegativeCache` 的统一清单逐类打一行（新增一类负缓存
+    # 无需在此加分支）。这些命中是**省掉的重复请求**而非错误，是「全缓存运行还剩多少
+    # 固定网络开销」的直接解释项，故用 INFO 而非 DEBUG
+    for _summary in nonzero_summaries():
+        logger.info("[financial_report_digest] %s（确定性缺失，非故障）", _summary)
     return {
         "available": True,
         "reason": "",

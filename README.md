@@ -32,7 +32,7 @@
 - 🔁 **决策有闭环** — 建议 → 登记 → 真实行情结算命中率 → 教训回灌提示词，越用越懂你的组合
 - 🔒 **隐私优先** — 数据全部本地处理，支持 4 档匿名化，凭据永不落日志与报告
 
-> 当前版本：0.16.7（[版本历史](docs/managements/changelog.md)）
+> 当前版本：0.16.8（[版本历史](docs/managements/changelog.md)）
 
 ## ✨ 核心亮点
 
@@ -186,7 +186,7 @@ git clone https://github.com/yatwql/investor-review.git && cd investor-review
 
 **这是一个把工程质量当真的一人项目**，对贡献者意味着：
 
-- ✅ **上万条测试用例**（提交门禁 dev-verify 覆盖其中七千余项）+ 场景化回归套件，改动有底气（实时数字见 [测试覆盖率文档](docs/managements/test-coverage.md)）
+- ✅ **上万条测试用例**（提交门禁 dev-verify 覆盖其中八千余项）+ 场景化回归套件，改动有底气（实时数字见 [测试覆盖率文档](docs/managements/test-coverage.md)）
 - ✅ **10 个 CI 守护脚本**把历史教训变成硬门禁：代码/文档痕迹、任务编号、语义命名、文档一致性、测试冗余、需求追溯、版本号、文档链接、行数红线——文档与代码永不漂移
 - ✅ **P0/P1/P2 三级门禁**：提交、合并、发布各有明确的通过标准，CI 矩阵覆盖 Python 3.11/3.12/3.13 + Windows 可移植性 + 非 UTF-8 locale 探测
 - ✅ **清晰的协作契约**：[开发者指南](docs/managements/developer-guide.md) 写明了工作流、任务编号规范与发布流程；[需求文档](docs/managements/requirements.md) 与 [测试标准](docs/managements/testplan.md) 让每个需求可追溯、每个缺陷有回归用例

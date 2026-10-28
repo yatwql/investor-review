@@ -316,6 +316,37 @@ class PerfCollector:
         with self._lock:
             self._counters[key] = self._counters.get(key, 0) + int(n)
 
+    def track_cache_counters(self, prefix: str = "prep_cache") -> Any:
+        """上下文管理器：统计块内的缓存命中/未命中增量，写入 `counters`。
+
+        用途：给某个阶段贴「冷热」标签——同一阶段的耗时在缓存全命中与全落空时能差
+        一个数量级（实测数据准备 19s 与 28s、财报摘要 1s 与 30s），没有这个标记时
+        跨运行对拍只能靠猜。计数是**增量**（块前后快照相减），可多段并行使用。
+
+        Args:
+            prefix: 计数键前缀，默认 ``prep_cache`` → ``prep_cache_hits`` / ``prep_cache_misses``。
+
+        Yields:
+            无（仅为块语义）。
+        """
+        from contextlib import contextmanager
+
+        from src.python.cache import get_cache_hit_rate
+
+        @contextmanager
+        def _ctx() -> Any:
+            before = get_cache_hit_rate()
+            try:
+                yield
+            finally:
+                after = get_cache_hit_rate()
+                hits = max(0, int(after.get("hits", 0)) - int(before.get("hits", 0)))
+                misses = max(0, int(after.get("misses", 0)) - int(before.get("misses", 0)))
+                self.count(f"{prefix}_hits", hits)
+                self.count(f"{prefix}_misses", misses)
+
+        return _ctx()
+
     def counts(self) -> dict[str, int]:
         """诊断计数快照（副本）。"""
         with self._lock:

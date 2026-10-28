@@ -147,11 +147,21 @@ def _compute_module_cache_info(
     )
 
     _components = fingerprint_components(_inputs)
-    _changed = diff_fingerprint_components(_LAST_FP_COMPONENTS, _components)
-    # 变化组件集合供缓存未命中归因（"内容变了" vs "只是 TTL 到点"），不参与键构造
-    _FINGERPRINT_CHANGED_MODULES["__changed__"] = frozenset(_changed)
-    if _changed:
-        logger.info("[fingerprint] 指纹组件变化（相对上次报告）: %s", _changed)
+    # 基线优先取进程内上轮快照；同进程多份报告（TUI 连续生成）走这条路。
+    # 进程重启后回落读上次进程落盘的基线——否则键变了也只能归因成 ttl_expired，
+    # 「哪一段输入变了」无从回答（诊断输入，缺基线即冷启动，不做任何推断）。
+    from src.python.llm.fingerprint_baseline import baseline_components
+
+    _prev_components = _LAST_FP_COMPONENTS or baseline_components()
+    _baseline_source = "上次报告" if _LAST_FP_COMPONENTS else "上次进程"
+    if _prev_components:
+        _changed = diff_fingerprint_components(_prev_components, _components)
+        # 变化组件集合供缓存未命中归因（"内容变了" vs "只是 TTL 到点"），不参与键构造
+        _FINGERPRINT_CHANGED_MODULES["__changed__"] = frozenset(_changed)
+        if _changed:
+            logger.info("[fingerprint] 指纹组件变化（相对%s）: %s", _baseline_source, _changed)
+    else:
+        _FINGERPRINT_CHANGED_MODULES.pop("__changed__", None)
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug("[fingerprint] 组件哈希: %s", _components)
     _LAST_FP_COMPONENTS = _components
@@ -260,6 +270,22 @@ _MODULE_FINGERPRINT_COMPONENTS: dict[str, frozenset[str]] = {
 }
 
 
+def _key_changed_from_baseline(current_key: str, module_key: str) -> bool | None:
+    """该模块当前的缓存键相对**上轮键**是否变化（进程内优先，其次跨进程快照）。
+
+    Returns:
+        ``True`` 键变了（输入变）；``False`` 键未变（只是内容读不到 ⇒ 老化）；
+        ``None`` 无任何上轮基线（冷启动，不臆测原因）。
+    """
+    from src.python.llm.fingerprint_baseline import baseline_module_key
+    from src.python.llm.skeleton import module_cache_key
+
+    prev = module_cache_key(module_key) or baseline_module_key(module_key)
+    if not prev:
+        return None
+    return prev != current_key
+
+
 def _inputs_fingerprint_changed(module_key: str) -> bool | None:
     """该模块依赖的指纹组件相对上次报告是否变化。
 
@@ -328,12 +354,15 @@ def _precheck_one_cache(
     if not cached:
         # 重算原因归因（**观测**，不改变控制流）：知道「为什么没命中」才能回答
         # 「4h 的 TTL 到底卡掉了多少本该复用的调用」——内容真变了还是只是到点重算，
-        # 直接决定 TTL 该不该放宽。指纹未变却未命中 ⇒ `ttl_expired`。
+        # 直接决定 TTL 该不该放宽。
+        # **判据以「键是否变化」为准**：键=生成输入的内容地址，键变即输入变；组件映射
+        # 表只是解释用的细分（可能滞后于指纹函数的实际入参），单看它会把换键误报成 ttl_expired。
+        # 基线先取进程内上轮键，再取上次进程落盘的键；两者皆无 ⇒ 冷启动（不臆测）。
         _module_key = module_key or cache_info["key"]
         _note_recompute_reason(
             _sink,
             _module_key,
-            _recompute_reason(cache_info, _inputs_fingerprint_changed(_module_key)),
+            _recompute_reason(cache_info, _key_changed_from_baseline(cache_info["key"], _module_key)),
         )
         return (None, False)
     thinking_enabled = llm_config.get(cache_info["thinking_key"], False)
@@ -675,6 +704,11 @@ def generate_all_llm(
     if is_feature_enabled("llm_debate_procon"):
         needs["expert_review"] = depth_gate(is_llm_module_enabled(llm_config, "expert_review"), "expert_review", _depth)
 
+    # ── 持仓变动复盘归因并入并行批 ──────────────────────
+    # 只吃持仓变动契约、不依赖四模块产出，无串行后置的必要；其单次 4~25s 原先完全
+    # 叠加在 expert_review 之后的关键路径上。契约缺席/开关关闭由模块内部跳过。
+    needs.setdefault("holding_change", True)
+
     # ── 辩论模式容器（用于闭包捕获 debate_info） ────────
     _debate_info_container: list[dict | None] = [None]
     _has_debate = is_feature_enabled("llm_debate_procon")
@@ -780,6 +814,19 @@ def generate_all_llm(
                 )
                 # 用修正后的内容替换原结果
                 if _corrected != _result and _corrected != _summary:
+                    # 修正只改产出不改输入：缓存键（内容寻址生成输入）不变，但缓存里的
+                    # 正文仍是修正前的——不回写则每次运行都重做同一批修正，且展示正文
+                    # 与缓存正文口径不一致（不可复现）。回写时机在此（摘要拼接前）：
+                    # 摘要属当轮元信息，不能混进缓存正文。键取预检/写侧同源的
+                    # `cache_info[mk]["key"]`（仅预检命中的模块不经骨架，骨架那边无记录）。
+                    from src.python.llm.skeleton import write_back_module_cache
+
+                    write_back_module_cache(
+                        _corrected,
+                        cache_key=(cache_info.get(_mk) or {}).get("key", ""),
+                        module_key=_mk,
+                        cached=_cached,
+                    )
                     _result = _corrected
                 if _summary and _summary not in _result:
                     _result = _result + "\n" + _summary
@@ -796,14 +843,28 @@ def generate_all_llm(
     # ── 生成后自检（开关开启时执行；自检输入是上面四个模块的产出，必须在它们之后）──
     # 不属线程池并行调度模块，故**不登记**进 _MODULE_FNS（注册纪律：无独立调度语义的
     # 编排注册属注册漂移）；模块本身仍在 core/registry.py 登记以复用缓存/统计/失败载体。
+    from src.python.llm.fact_checker import strip_fact_check_blocks
     from src.python.llm.self_review import run_self_review
+    from src.python.llm.skeleton import strip_llm_footer
+
+    def _review_text(html: str | None) -> str | None:
+        """自检输入只取分析正文：剥离用量页脚与事实校验产物段落。
+
+        两者都是「本次运行的元信息」而非分析结论：页脚随缓存态必然不同（新生成含
+        Token/耗时/费用，命中含"使用缓存"），校验摘要的检查项计数随缓存态变化、
+        修正条数随正文变化。任一混进自检输入，同一份分析正文都会算出不同的缓存键，
+        表现为「上游重算后必多一次自检调用」。报告渲染仍用含这两段的完整正文。
+        """
+        if not html:
+            return html
+        return strip_fact_check_blocks(strip_llm_footer(html))
 
     run_self_review(
         {
-            "global_macro": gm_r,
-            "expert_review": er_r,
-            "health_check": hc_r,
-            "penetration_deep": pd_r,
+            "global_macro": _review_text(gm_r),
+            "expert_review": _review_text(er_r),
+            "health_check": _review_text(hc_r),
+            "penetration_deep": _review_text(pd_r),
         },
         holdings_details,
         penetrated_assets,
@@ -815,18 +876,10 @@ def generate_all_llm(
         schedule_replay_block=schedule_replay_block,
     )
 
-    # ── 持仓变动复盘归因（章内块；与自检同为串行后置调用）──
-    # 契约缺席（开关关闭/准入未过）时 run_holding_change_review 内部直接跳过——
-    # 不进 LLM、不写载体，`llm_review` 保持 None，报告归因块隐藏（双端同构）。
-    from src.python.llm.holding_change_review import run_holding_change_review
-
-    run_holding_change_review(
-        pipeline_data,
-        llm_config,
-        force="holding_change" in _force_scope,
-        holdings_details=holdings_details,
-        purchase_constraint_block=purchase_constraint_block,
-    )
+    # ── 持仓变动复盘归因：已在上面并入并行批（`_MODULE_FNS["holding_change"]`）──
+    # 早先串行后置是因为它与自检同属「章内块」，但它只吃持仓变动契约、不依赖四模块
+    # 产出，串行只是把 4~25s 白加到关键路径上。契约缺席（开关关闭/准入未过）时内部
+    # 直接跳过：不进 LLM、不写载体，`llm_review` 保持 None，报告归因块隐藏（双端同构）。
 
     logger.info(
         "LLM 生成完成: %s=%s, %s=%s, %s=%s, %s=%s",
@@ -838,6 +891,13 @@ def generate_all_llm(
         "OK" if hc_r else "跳过",
         _MN("penetration_deep"),
         "OK" if pd_r else "跳过",
+    )
+    # 落盘跨进程基线（组件哈希 + 各模块本轮缓存键）：下个进程据此判定「键变了还是只是老化」
+    from src.python.llm.fingerprint_baseline import save_baseline
+
+    save_baseline(
+        _LAST_FP_COMPONENTS,
+        {mk: str((info.get("key") or "")) for mk, info in (cache_info or {}).items() if isinstance(info, dict)},
     )
     _raw_debate_info = _debate_info_container[0] if _has_debate else None
     if _has_debate:

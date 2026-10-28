@@ -124,3 +124,33 @@ def test_self_review_row_appears_with_skip_reason():
     rows = build_llm_module_info({"self_review": "无有效内容可自检"}, {}, skip_unknown=True)
     entry = next(r for r in rows if r["key"] == "self_review")
     assert entry["status"] == "failed"
+
+
+def test_holding_change_row_hidden_when_not_used():
+    """归因未启用/未运行 → 明细表不留空行。"""
+    from src.python.report.llm_module_info import build_llm_module_info
+
+    rows = build_llm_module_info({}, {}, skip_unknown=True)
+    assert "holding_change" not in [r["key"] for r in rows]
+
+
+def test_holding_change_row_appears_when_it_ran():
+    """归因实际运行（有用量）→ 必须出现在明细表，否则行合计与用量总计对不上。"""
+    from src.python.report.llm_module_info import build_llm_module_info
+
+    per_module = {
+        "holding_change": {
+            "model": "test-model",
+            "input_tokens": 200,
+            "output_tokens": 80,
+            "costs": {"CNY": 0.002},
+            "cached": False,
+            "thinking": False,
+            "endpoint": "",
+        }
+    }
+    rows = build_llm_module_info({}, per_module, skip_unknown=True)
+    entry = next(r for r in rows if r["key"] == "holding_change")
+    assert entry["status"] == "success"
+    assert entry["total_tokens"] == 280
+    assert entry["cost_display"] == "¥0.0020"
