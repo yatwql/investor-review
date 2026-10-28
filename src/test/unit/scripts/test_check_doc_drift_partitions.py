@@ -130,24 +130,14 @@ class TestManagementPartitions:
 
         回归场景：某任务小节被删而概述仍引用，长期「有编号无正文」无人发现。
         """
-        plan = (
-            "## 概述\n\n在办 2 项（**plan-70**、**plan-92**）。\n\n"
-            "## 当前迭代待办\n\n#### `plan-92` x\n\n## 归档\n"
-        )
-        findings = drift.audit_management_partitions(
-            review_findings="", plan=plan, changelog=self._CHANGELOG_OK
-        )
+        plan = "## 概述\n\n在办 2 项（**plan-70**、**plan-92**）。\n\n## 当前迭代待办\n\n#### `plan-92` x\n\n## 归档\n"
+        findings = drift.audit_management_partitions(review_findings="", plan=plan, changelog=self._CHANGELOG_OK)
         assert any("plan-70" in f and "孤儿编号" in f for f in findings)
 
     def test_overview_id_in_body_passes(self, drift):
         """概述引用的编号在正文存在 → 不误报。"""
-        plan = (
-            "## 概述\n\n在办 1 项（**plan-70**）。\n\n"
-            "## 当前迭代待办\n\n#### `plan-70` x\n\n## 归档\n"
-        )
-        findings = drift.audit_management_partitions(
-            review_findings="", plan=plan, changelog=self._CHANGELOG_OK
-        )
+        plan = "## 概述\n\n在办 1 项（**plan-70**）。\n\n## 当前迭代待办\n\n#### `plan-70` x\n\n## 归档\n"
+        findings = drift.audit_management_partitions(review_findings="", plan=plan, changelog=self._CHANGELOG_OK)
         assert [f for f in findings if "孤儿编号" in f] == []
 
     def test_correct_section_layout_passes(self, drift):
