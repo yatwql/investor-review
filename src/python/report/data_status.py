@@ -151,7 +151,22 @@ def get_tracker(persist_path: str | None = None) -> DegradationTracker:
     return _tracker_instance
 
 
-def mark_data_used(source_key: str, tier: str = "T2") -> None:
+def _detail_of(message: str | None, freshness: str) -> dict[str, str] | None:
+    """事件 ``detail`` 载荷：只放非空字段，全空返回 ``None``（与既往「无附加信息」等价）。"""
+    detail: dict[str, str] = {}
+    if message:
+        detail["message"] = message
+    if freshness:
+        detail["freshness"] = freshness
+    return detail or None
+
+
+def mark_data_used(
+    source_key: str,
+    tier: str = "T2",
+    *,
+    freshness: str = "",
+) -> None:
     """标记「本次运行取用了该类别数据」（只记成功事件，**不参与降级计数**）。
 
     用途：「数据源说明表」的「本次使用」列（由 ``report.data_source_matrix`` 依据
@@ -163,13 +178,19 @@ def mark_data_used(source_key: str, tier: str = "T2") -> None:
     会把预期内空结果误报为源故障降级；失败与降级仍由各域既有机制披露
     （provider 日志、章节失败清单、链路 FailureDiagnostics）。
 
+    Args:
+        source_key: 数据源/类别标识。
+        tier: 层级 ``"T2"`` / ``"T3"`` / ``"T4"``。
+        freshness: 新鲜度标记（``""`` = 本次实时取到；``"stale"`` = 陈旧回退，
+            即源不可达后回退上次成功载荷）。**只用于如实标注**，不改变降级判定。
+
     自身不抛异常（观测性副作用不得影响取数）。
     """
     try:
         # 成功事件不带失败类型：下游数据质量块按 failure_type 统计「连接失败/数据为空」，
         # 若成功事件沿用默认 "unreachable"，每次正常取数都会被计成一次连接失败
         # （既与事实相反，也让「缓存命中数不同」的报告产出不同的质量文本）。
-        get_tracker().record(source_key, tier, success=True, failure_type="ok")
+        get_tracker().record(source_key, tier, success=True, failure_type="ok", freshness=freshness)
     except Exception:  # 观测失败不影响主链路
         logger.debug("[data_status] 取用标记失败（非关键）: %s", source_key, exc_info=True)
 
@@ -383,6 +404,7 @@ class DegradationTracker:
         cache_age_hours: float | None = None,
         cache_ttl_hours: float | None = None,
         message: str | None = None,
+        freshness: str = "",
     ) -> tuple[bool, int, int]:
         """记录一次数据获取结果，判断是否应降级。
 
@@ -396,6 +418,9 @@ class DegradationTracker:
             cache_ttl_hours: 缓存标准 TTL（小时），用于自适应调节
             message: 人类可读的失败原因（如 ``"腾讯财经(连接超时)"``）。
                      仅作诊断展示，不参与降级判定；不传时行为与既往完全一致。
+            freshness: 新鲜度标记（``""`` / ``"stale"``）。``"stale"`` 表示本次用的是
+                     陈旧回退数据（源不可达 → 上次成功载荷）。只进事件 detail
+                     供上屏/提示词如实标注，不参与降级计数。
 
         Returns:
             (是否降级, 当前最大失败计数, 最低有效阈值)
@@ -416,6 +441,7 @@ class DegradationTracker:
                 cache_age_hours,
                 cache_ttl_hours,
                 message,
+                freshness,
             )
 
     def reset(self, source_key: str) -> None:
@@ -558,6 +584,7 @@ class DegradationTracker:
         cache_age_hours: float | None,
         cache_ttl_hours: float | None,
         message: str | None = None,
+        freshness: str = "",
     ) -> tuple[bool, int, int]:
         # 成功 → 全部归零 + 更新持久化时间戳（带写节流）
         if success:
@@ -575,6 +602,8 @@ class DegradationTracker:
                     count=0,
                     effective_threshold=0,
                     timestamp=time.time(),
+                    # 成功事件不带失败原因（失败原因只属于失败事件）；只带新鲜度标记
+                    detail=_detail_of(None, freshness),
                 )
             )
             return False, 0, 0
@@ -614,7 +643,7 @@ class DegradationTracker:
                 count=max_count,
                 effective_threshold=min_eff,
                 timestamp=time.time(),
-                detail={"message": message} if message else None,
+                detail=_detail_of(message, freshness),
             )
         )
         return degraded, max_count, min_eff

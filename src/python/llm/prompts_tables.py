@@ -292,12 +292,18 @@ def _build_data_quality_detail_block(
     unreachable: dict[str, int] = {}
     empty: dict[str, int] = {}
     degraded_events: list[dict] = []
+    stale_sources: set[str] = set()
 
     for e in degradation_events:
         # 只统计**失败**事件：成功取用事件（mark_data_used）也进事件日志，
         # 若一并按 failure_type 计数，正常取数会被写成「连接失败 N 次」——
         # 表述与事实相反，且缓存命中数不同的两次报告会因此得到不同的质量文本。
+        # 唯一例外是成功事件上的 `freshness=stale`：那是「陈旧回退」的如实标注，
+        # 不标会让模型把 1~3 天前的资金流向当今日数据评。
         if e.get("success", False):
+            detail = e.get("detail")
+            if isinstance(detail, dict) and detail.get("freshness") == "stale":
+                stale_sources.add(str(e.get("source_key", "?")))
             continue
         sk = e.get("source_key", "?")
         ft = e.get("failure_type", "?")
@@ -318,8 +324,10 @@ def _build_data_quality_detail_block(
         lines.append(f"数据为空: {'、'.join(sorted(empty))}")
     if degraded_events:
         lines.append(f"触发降级: {'、'.join(sorted({e.get('source_key', '?') for e in degraded_events}))}")
+    if stale_sources:
+        lines.append(f"陈旧回退（源不可达，用上次成功数据）: {'、'.join(sorted(stale_sources))}")
 
-    if not unreachable and not empty and not degraded_events:
+    if not unreachable and not empty and not degraded_events and not stale_sources:
         lines.append("今日无降级事件")
 
     return "\n".join(lines)

@@ -762,3 +762,35 @@ class TestDiffContextBaselineBlock(unittest.TestCase):
         block = _build_difpipeline_data_block({"diff": self._diff(baseline_trading_day="", baseline_generated_at="")})
         self.assertNotIn("【对比基准】", block)
         self.assertIn("【环比对比】", block)
+
+
+class TestStaleUsageInQualityBlock:
+    """数据质量块要如实披露「陈旧回退」：成功事件上的 freshness=stale。"""
+
+    @staticmethod
+    def _block(events):
+        from src.python.llm.prompts_tables import _build_data_quality_detail_block
+
+        return _build_data_quality_detail_block(events, None)
+
+    def test_stale_success_event_listed(self):
+        """源不可达回退上次成功载荷 → 提示词里点明陈旧，避免模型当今日数据评。"""
+        text = self._block([{"source_key": "ff_sector_flow", "success": True, "detail": {"freshness": "stale"}}])
+        assert "陈旧回退" in text
+        assert "ff_sector_flow" in text
+
+    def test_plain_success_event_not_listed(self):
+        text = self._block([{"source_key": "ff_sector_flow", "success": True, "detail": None}])
+        assert "陈旧回退" not in text
+        assert "今日无降级事件" in text
+
+    def test_stale_and_failure_coexist(self):
+        """同一报里既有失败降级又有陈旧回退：两行都在，互不吞并。"""
+        text = self._block(
+            [
+                {"source_key": "ff_sector_flow", "success": True, "detail": {"freshness": "stale"}},
+                {"source_key": "industry", "success": False, "failure_type": "unreachable", "degraded": True},
+            ]
+        )
+        assert "连接失败: industry" in text
+        assert "陈旧回退" in text
