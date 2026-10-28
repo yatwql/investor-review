@@ -157,6 +157,26 @@ class TestFetchNews(unittest.TestCase):
         self.assertEqual(result[0]["title"], "新闻1")
         self.assertEqual(result[0]["ctime"], "2026-07-01 10:30")
 
+    # ── 超时口径 ──────────────────────────────────────────
+
+    @patch("src.python.providers.sina_news.make_http_client")
+    def test_default_timeout_split_by_phase(self, mock_factory):
+        """默认超时按连接/读取拆分（读超时秒级，避免单类挂起拖到十几秒）。"""
+        mock_resp = self._mock_response({"result": {"data": []}})
+        self._setup_mock(mock_factory, mock_resp)
+        fetch_news(lid="2516")
+        timeout = mock_factory.call_args.kwargs["timeout"]
+        assert timeout.read == 6.0
+        assert timeout.connect == 3.0
+
+    @patch("src.python.providers.sina_news.make_http_client")
+    def test_caller_timeout_override_used(self, mock_factory):
+        """调用方按整源剩余预算收紧时，覆盖值必须生效。"""
+        mock_resp = self._mock_response({"result": {"data": []}})
+        self._setup_mock(mock_factory, mock_resp)
+        fetch_news(lid="2516", timeout=2.0)
+        assert mock_factory.call_args.kwargs["timeout"] == 2.0
+
     # ── 空数据 ───────────────────────────────────────────
 
     @patch("src.python.providers.sina_news.make_http_client")

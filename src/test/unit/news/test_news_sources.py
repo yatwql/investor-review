@@ -128,6 +128,44 @@ class TestFetchFunctionBehavior(unittest.TestCase):
         mock_fetch.assert_called_once_with(num=5)
 
 
+class TestSinaSourceBudget(unittest.TestCase):
+    """新浪分类抓取的预算治理：单类挂起不得把整段拉长、已取条目不得丢。"""
+
+    def test_request_timeout_shrinks_with_remaining_budget(self) -> None:
+        from src.python.providers.news_sources import _sina_request_timeout
+
+        assert _sina_request_timeout(30.0).read == 6.0, "预算充足时用模块上限"
+        assert _sina_request_timeout(1.5).read == 1.5, "预算见底时按剩余收紧"
+
+    @patch("src.python.providers.sina_news.fetch_news")
+    def test_budget_exhausted_stops_and_keeps_collected(self, mock_fetch: MagicMock) -> None:
+        """预算耗尽 → 停止翻页并保留已取条目（不整源丢弃）。"""
+        from src.python.providers import news_sources
+
+        mock_fetch.return_value = [{"title": "t", "url": "http://u"}]
+        clock = MagicMock(side_effect=[0.0, 0.1, 999.0])
+        with patch.object(news_sources, "time") as fake_time:
+            fake_time.monotonic = clock
+            result = news_sources._fetch_from_sina(num=90)
+        assert len(result) >= 1, "预算耗尽前取到的条目必须保留"
+        assert mock_fetch.call_count < 6, "预算耗尽后不得继续翻页"
+        for call in mock_fetch.call_args_list:
+            assert "timeout" in call.kwargs, "每次请求都带按预算收紧的超时"
+
+    @patch("src.python.providers.sina_news.fetch_news")
+    def test_within_budget_keeps_normal_flow(self, mock_fetch: MagicMock) -> None:
+        """预算充足时不改变原有取数行为（逐页取满即止）。"""
+        from src.python.providers import news_sources
+
+        mock_fetch.side_effect = [
+            [{"title": "a", "url": "http://a"}],
+            [{"title": "b", "url": "http://b"}],
+            [{"title": "c", "url": "http://c"}],
+        ]
+        result = news_sources._fetch_from_sina(num=3)
+        assert len(result) == 3
+
+
 class TestDedupByTitle(unittest.TestCase):
     """_dedup_by_title 标题模糊去重测试。"""
 

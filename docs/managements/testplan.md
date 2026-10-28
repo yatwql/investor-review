@@ -452,6 +452,8 @@
 | R-NWS-04 | `src/test/unit/report/test_news_correlation.py` | 批 3 |
 | R-NWS-05 | `src/test/unit/news/test_news_sources.py` | 批 3 |
 | R-NWS-06 | `src/test/unit/news/test_news_correlator.py` + `src/test/unit/report/test_news_correlation.py` | 批 3 |
+| R-NWS-07 | `src/test/unit/news/test_news_sources.py`（预算耗尽收尾 / 预算内正常流程 / 超时按剩余收紧）+ `src/test/unit/news/test_sina_news.py`（默认分档超时 / 调用方覆盖） | 批 3 |
+ `src/test/unit/news/test_news_correlator.py` + `src/test/unit/report/test_news_correlation.py` | 批 3 |
 | R-DATA-01 | `src/test/unit/fetcher/test_chain.py` + `src/test/scenario/resilience/test_scenario_resilience_flows.py` | 批 3 |
 | R-DATA-02 | `src/test/unit/fetcher/test_batch.py` | 批 3 |
 | R-DATA-03 | `src/test/unit/core/test_provider_registry.py` | 批 3 |
