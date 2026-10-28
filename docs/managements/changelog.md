@@ -32,6 +32,7 @@
 - **实测收益**（4 次完整报告，2026-10-28 19:45~19:49，闲时）：串行尾残差 0.02 / 0.01 / 0.04s（判定阈值 5s）；`expert_review` p50 61.5s（阈值 83.6s）；归因 5.7–6.5s 完全落在并行批内；`LLM+新闻` 88.3 / 74.1 / 61.6s（缓存全命中运行 12.5s、归因 0.0s）。
 
 ### 变更
+- **LLM 换键归因跨进程可见**（rf-954）：新增 `llm/fingerprint_baseline.py`——编排收尾把「各模块本轮缓存键 + 指纹组件哈希」落盘 `data/state/llm_fingerprint_snapshot.json`，下次预检读取作基线；归因主信号改为「键是否变化」（键变 ⇒ `fingerprint_changed` 并打出变化组件；键未变而读不到内容才是 `ttl_expired`；无基线 ⇒ `cache_miss`）。此前基线只在进程内存，重启后换键只能记成 `ttl_expired`（实测 expert_review 键 `bb5e0593dabe…` → `d86f4195c09f…` 被误归因），且「哪一段输入变了」无据可查。
 - **`perf-history` 跨版本键名归一**（rf-950）：`breakdown` 的历史合并段「财报摘要与指标」在读取侧别名为 `财报摘要+财务指标（旧·合并段）` 单列，**不与拆分后的新子项混算**（合并段一次计时覆盖两子项，与逐子项均值量级不等价）；scripts-reference 的阶段细分表标注版本分界。
 - 测试隔离补正：锚点路径隔离打在实际持有者 `news_dedup_anchor_store._ANCHOR_PATH` 上（此前打在门面 `news_dedup` 上只换同名变量，测试仍会追写真实 `data/calibration/`）；批内缓冲与「已告警」标记改由 `news_dedup_anchor_policy` 的单例复位，不再改门面副本。
 - 压缩实现收口为 `news_dedup.compact_anchor_file` 单一份（生产维护与 `eval-dedup-threshold.py` 共用），工具侧只打印结果，不再自带第二份裁剪逻辑。

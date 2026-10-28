@@ -1275,7 +1275,7 @@ LLM 五维度量化评分，每项满分 100：
 | R-PERF-08 | 历史走势获取应阶段超时保护（超时后已完成部分保留，未完成部分以占位处理） |
 | R-PERF-09 | 每次报告生成应自动记录各阶段耗时（含**逐模块** `llm.modules[*].duration_seconds`，缓存命中记 0）（行情获取/数据准备/HTML生成/Excel生成/LLM+新闻等）及子阶段 `breakdown`（数据准备：行情与明细/指数获取/穿透/风格与因子/覆盖与新鲜度/估值与温度/财报摘要/财务指标/申购与成本位置/明细装配与建议；LLM+新闻：新闻源抓取/去重与关联/锚点维护/事件窗装配/LLM 模块；HTML 生成：图表数据装配/页面写入），并以 `counters.prep_cache_hits` / `prep_cache_misses` 标注数据准备的**缓存冷热**（无此标记时冷/热两种运行的耗时不可比），持久化到 `data/state/perf_history.jsonl` 用于跨版本性能趋势追踪与瓶颈归因 |
 | R-PERF-10 | 每次报告生成应在后台自动执行数据源健康检查（HTTP 连通性+延迟），结果存入 `data/state/datasource_health.jsonl` 并注入 DegradationTracker 供数据源可用性矩阵展示 |
-| R-PERF-11 | **LLM 缓存未命中须归因到四态**（观测，不改控制流）：`forced`（用户强刷）、`fingerprint_changed`（输入指纹变了，放宽 TTL 也省不下）、`ttl_expired`（内容没变、纯到点，放宽 TTL 可省）、`cache_miss`（无上轮指纹快照的冷启动）。**冷启动不得记为 `ttl_expired`**：那是「内容没变只是到点」的结论，与「压根无上轮缓存可命中」相反，混同会让「放宽 TTL 能省钱」的判断系统性偏离。分布写入 perf（`llm.recompute_reasons` 聚合 + `llm.module_recompute_reasons` 逐模块） |
+| R-PERF-11 | **LLM 缓存未命中须归因到四态**（观测，不改控制流）：`forced`（用户强刷）、`fingerprint_changed`（输入指纹变了，放宽 TTL 也省不下）、`ttl_expired`（内容没变、纯到点，放宽 TTL 可省）、`cache_miss`（无上轮指纹快照的冷启动）；**归因主信号为「键是否变化」**（进程内上轮键优先，其次上次进程落盘基线 `data/state/llm_fingerprint_snapshot.json`），键变即 `fingerprint_changed` 并打出变化组件名，键未变而读不到内容才是 `ttl_expired`。**冷启动不得记为 `ttl_expired`**：那是「内容没变只是到点」的结论，与「压根无上轮缓存可命中」相反，混同会让「放宽 TTL 能省钱」的判断系统性偏离。分布写入 perf（`llm.recompute_reasons` 聚合 + `llm.module_recompute_reasons` 逐模块） |
 
 ---
 

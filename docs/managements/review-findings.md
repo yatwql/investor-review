@@ -20,7 +20,6 @@
 | # | 问题 | 修复方向 |
 | --- | --- | --- |
 | **rf-953** | `HTML 生成` 阶段耗时异常分化：同一台机器、同一持仓，20:52 为 0.3s，22:20 为 **17.3s**，日志内找不到对应的耗时动作（该段只有开发期一次穿透回显）；期间同时段其它阶段正常，故非 CPU 饥饿的可解释形态 | 已加**阶段细分计时**（`_report_output` 的 `图表数据装配` / `页面写入` 两段，见 perf breakdown），下次复现即可判定是图表数据装配还是渲染/落盘；若落在「页面写入」，再按模板渲染与文件写入二次细分（`write_html_report` 内部）|
-| **rf-954** | LLM 缓存换键归因跨进程不可见：指纹/键的对比基线只存在进程内存（`_LAST_FP_COMPONENTS` / `_PREV_MODULE_CACHE_KEY`），进程重启后无上一轮基线 → 键变了却只能落到 `ttl_expired` 分支（实测 22:52 四个模块记为 `ttl_expired`，实际是 expert_review 键 `bb5e0593dabe…` → `d86f4195c09f…`），且「哪一段输入变了」拿不到证据。用户据此判断「缓存没生效」时无法自证 | ① 把上一轮各模块的**键 + 指纹组件哈希**落盘（`data/state/llm_fingerprint_snapshot.json`，进程启动/预检时读，本轮结束后写）；② 归因改为「跨进程键不同 ⇒ `fingerprint_changed`并打出变化的组件名」「key 相同但读不到内容 ⇒ `ttl_expired`」；③ 回归：同键跨进程命中判 `cache_hit`、换输入判 `fingerprint_changed` 且组件名可读、仅老化判 `ttl_expired` |
 
 ### P3 — 持续监控：兼容残留
 
@@ -63,6 +62,7 @@
 | **rf-950** | `perf_history.jsonl` 历史记录的 `breakdown["数据准备"]["财报摘要与指标"]` 在新版被拆成「财报摘要」「财务指标」两键，跨版本对拍时旧键孤立存在、与新键混算会让均值失真 | 读取侧加别名归一 `_LEGACY_BREAKDOWN_ALIASES`（旧合并段 → `财报摘要+财务指标（旧·合并段）` **单列**，不与新子项混算），scripts-reference 的阶段细分表标注版本分界；回归 1 例 |
 | **rf-951** | 历史 K 线主机不可达时按标的白等：腾讯 K 线单标的耗时 2 分钟级（超时预算 60s × 同源重试 3 次，且挂起也算可重试失败）→ 「历史走势」阶段十余个持仓累计二十分钟；日志实证 `Tencent K 线 sz300502 传输级失败（ConnectTimeout）` 连续出现 | 分两档收敛：provider 内 `_KLINE_TIMEOUT` 60s→10s、attempts 3→2 且挂起（≥ 预算一半）不重试；链级新增 `_HANG_ELAPSED_SECONDS=20s` 判据，挂起型直接落下一槽（不重试）。回归 3 例（挂起不重试 / 快速失败仍重试） |
 | **rf-952** | `/documents/{id}/sections` 传输级失败不留状态：每份报告都为同一篇文档再付一次超时预算（实测 817432 单篇挂起 20.7s，`财报摘要` 阶段 30.5s 中占 2/3），而探测本身只是取数优选路径 | 新增 30min **短退避**负缓存（`report_sections_backoff_{doc_id}`，注册表类型 `report_sections_backoff`），探测成功即清；与「确定性缺失 6h 负缓存」语义分离。回归 3 例（开退避不进确定性缓存 / 成功解除 / 失效可恢复） |
+| **rf-954** | LLM 缓存换键归因跨进程不可见：指纹/键基线只存进程内存（`_LAST_FP_COMPONENTS` / `_PREV_MODULE_CACHE_KEY`），重启后无上轮基线 → 键变了也只能落进 `ttl_expired`（实测 22:52 四模块被记 ttl_expired，实际 expert_review 键 `bb5e0593dabe…` → `d86f4195c09f…`），「哪一段输入变了」无据可查 | 新增 `llm/fingerprint_baseline.py`：编排收尾落盘「各模块键 + 指纹组件哈希」到 `data/state/llm_fingerprint_snapshot.json`，下次预检读作基线；归因主信号改为「键是否变化」（键变 ⇒ `fingerprint_changed` 并打出变化组件；键未变而读不到内容 ⇒ `ttl_expired`；无基线 ⇒ `cache_miss`）。快照读写失败降级为无基线，不参与键构造；测试隔离加基线路径重定向 + 进程内复位。回归 10 例 |
 | **rf-944** | LLM 关键路径：`expert_review` 独占 57–110s（≈6.1ms/输出 token），串行尾再叠加 `self_review` 11s + 归因 4–25s；且台账无逐模块耗时，关键路径只能靠日志时间戳反推 | ① 逐模块耗时入台账（`perf_history.llm.modules[*].duration_seconds`，命中记 0）；② 归因并入并行批（`_MODULE_FNS["holding_change"]` + 共享客户端 + 异常隔离，`self_review` 仍后置）；③ 注释/文档同步为并行口径并由用例机检。实测 4 次完整报告：串行尾残差 0.02/0.01/0.04s（阈值 5s）、`expert_review` p50 61.5s（阈值 83.6s）、归因 5.7–6.5s 全在并行批内、缓存全命中运行归因 0.0s；设计见归档 `llm-critical-path-instrumentation-design.md`。评估后不实施：TTL 调值、输出预算削减、thinking 降档、并发 3→4
 | **rf-938** | 去重锚点 61% 是零信息量记录（`same_src` 57,899/94,706，`ratio` 恒 0.0、`merged` 恒 false），主导体积增长 | 写侧按标题对 SHA-256 哈希 **1/50 确定性采样**同源锚点（同一样本对恒定入选，`_SAME_SRC_ANCHOR_SAMPLE` 可调，1=全量）；实测存量 94,706 → 37,913 条（40%）；回归 4 例 |
 | **rf-939** | 锚点保留期 120 天大于数据实际年龄（59 天）→ 压缩保留 100%，零缩减，自检压缩建议无效 | 保留期默认降到 **30 天**；保留判定改为 `ts`（发布时间）**或** `written_at`（写入时刻）任一在窗口内即保留——补录/回溯老新闻不被秒裁；回归 5 例 |

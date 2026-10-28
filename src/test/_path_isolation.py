@@ -180,6 +180,12 @@ def seed_sensitive_path_isolation(monkeypatch, tmp_path, _doctor_probe_targets) 
         "src.python.providers.news_dedup_anchor_store._ANCHOR_PATH",
         str(tmp_path / "data/calibration/dedup_anchors.jsonl"),
     )
+    # LLM 指纹基线快照（data/state/llm_fingerprint_snapshot.json —— 跨进程缓存归因用；
+    # 不隔离会让用例读到开发者本机的上一轮键，归因断言随本地状态漂移）
+    monkeypatch.setattr(
+        "src.python.llm.fingerprint_baseline.BASELINE_FILE",
+        str(tmp_path / "data/state/llm_fingerprint_snapshot.json"),
+    )
     # 清空配置缓存，使下次 get_config() 使用新路径
     import src.python.config._config_defaults as _cfg_defaults
     import src.python.config._core as _cfg_core

@@ -507,6 +507,20 @@ def _auto_reset_hithink_limiter():
 
 
 @pytest.fixture(autouse=True)
+def _auto_reset_llm_fingerprint_baseline():
+    """复位跨进程指纹基线的进程内缓存（防用例间串基线）。
+
+    快照文件本身已由 `_isolate_sensitive_paths` 重定向到 tmp_path；这里只清读缓存，
+    保证「同一用例内多次调用读到同一份落盘结果」而不会读到上一个用例的快照。
+    """
+    from src.python.llm.fingerprint_baseline import reset_baseline_cache
+
+    reset_baseline_cache()
+    yield
+    reset_baseline_cache()
+
+
+@pytest.fixture(autouse=True)
 def _auto_reset_anchor_state():
     """自动重置新闻去重锚点模块单例状态，防止测试间状态污染。
 

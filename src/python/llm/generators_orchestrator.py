@@ -147,11 +147,21 @@ def _compute_module_cache_info(
     )
 
     _components = fingerprint_components(_inputs)
-    _changed = diff_fingerprint_components(_LAST_FP_COMPONENTS, _components)
-    # 变化组件集合供缓存未命中归因（"内容变了" vs "只是 TTL 到点"），不参与键构造
-    _FINGERPRINT_CHANGED_MODULES["__changed__"] = frozenset(_changed)
-    if _changed:
-        logger.info("[fingerprint] 指纹组件变化（相对上次报告）: %s", _changed)
+    # 基线优先取进程内上轮快照；同进程多份报告（TUI 连续生成）走这条路。
+    # 进程重启后回落读上次进程落盘的基线——否则键变了也只能归因成 ttl_expired，
+    # 「哪一段输入变了」无从回答（诊断输入，缺基线即冷启动，不做任何推断）。
+    from src.python.llm.fingerprint_baseline import baseline_components
+
+    _prev_components = _LAST_FP_COMPONENTS or baseline_components()
+    _baseline_source = "上次报告" if _LAST_FP_COMPONENTS else "上次进程"
+    if _prev_components:
+        _changed = diff_fingerprint_components(_prev_components, _components)
+        # 变化组件集合供缓存未命中归因（"内容变了" vs "只是 TTL 到点"），不参与键构造
+        _FINGERPRINT_CHANGED_MODULES["__changed__"] = frozenset(_changed)
+        if _changed:
+            logger.info("[fingerprint] 指纹组件变化（相对%s）: %s", _baseline_source, _changed)
+    else:
+        _FINGERPRINT_CHANGED_MODULES.pop("__changed__", None)
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug("[fingerprint] 组件哈希: %s", _components)
     _LAST_FP_COMPONENTS = _components
@@ -260,6 +270,22 @@ _MODULE_FINGERPRINT_COMPONENTS: dict[str, frozenset[str]] = {
 }
 
 
+def _key_changed_from_baseline(current_key: str, module_key: str) -> bool | None:
+    """该模块当前的缓存键相对**上轮键**是否变化（进程内优先，其次跨进程快照）。
+
+    Returns:
+        ``True`` 键变了（输入变）；``False`` 键未变（只是内容读不到 ⇒ 老化）；
+        ``None`` 无任何上轮基线（冷启动，不臆测原因）。
+    """
+    from src.python.llm.fingerprint_baseline import baseline_module_key
+    from src.python.llm.skeleton import module_cache_key
+
+    prev = module_cache_key(module_key) or baseline_module_key(module_key)
+    if not prev:
+        return None
+    return prev != current_key
+
+
 def _inputs_fingerprint_changed(module_key: str) -> bool | None:
     """该模块依赖的指纹组件相对上次报告是否变化。
 
@@ -328,12 +354,15 @@ def _precheck_one_cache(
     if not cached:
         # 重算原因归因（**观测**，不改变控制流）：知道「为什么没命中」才能回答
         # 「4h 的 TTL 到底卡掉了多少本该复用的调用」——内容真变了还是只是到点重算，
-        # 直接决定 TTL 该不该放宽。指纹未变却未命中 ⇒ `ttl_expired`。
+        # 直接决定 TTL 该不该放宽。
+        # **判据以「键是否变化」为准**：键=生成输入的内容地址，键变即输入变；组件映射
+        # 表只是解释用的细分（可能滞后于指纹函数的实际入参），单看它会把换键误报成 ttl_expired。
+        # 基线先取进程内上轮键，再取上次进程落盘的键；两者皆无 ⇒ 冷启动（不臆测）。
         _module_key = module_key or cache_info["key"]
         _note_recompute_reason(
             _sink,
             _module_key,
-            _recompute_reason(cache_info, _inputs_fingerprint_changed(_module_key)),
+            _recompute_reason(cache_info, _key_changed_from_baseline(cache_info["key"], _module_key)),
         )
         return (None, False)
     thinking_enabled = llm_config.get(cache_info["thinking_key"], False)
@@ -862,6 +891,13 @@ def generate_all_llm(
         "OK" if hc_r else "跳过",
         _MN("penetration_deep"),
         "OK" if pd_r else "跳过",
+    )
+    # 落盘跨进程基线（组件哈希 + 各模块本轮缓存键）：下个进程据此判定「键变了还是只是老化」
+    from src.python.llm.fingerprint_baseline import save_baseline
+
+    save_baseline(
+        _LAST_FP_COMPONENTS,
+        {mk: str((info.get("key") or "")) for mk, info in (cache_info or {}).items() if isinstance(info, dict)},
     )
     _raw_debate_info = _debate_info_container[0] if _has_debate else None
     if _has_debate:
