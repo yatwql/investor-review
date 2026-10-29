@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -43,10 +44,19 @@ logger = setup_logger()
 
 @dataclass
 class _ConfigChange:
-    """一次配置变更的「变更前值」（撤销只需它，不必存全量配置）。"""
+    """一次配置变更的**逆操作载荷**（值型记 ``{"key","value"}``，动作型记逆向 action）。
+
+    只存逆操作，不必存全量配置：值型键的逆操作是「写回旧值」，动作型键（如线路
+    重排、指数增删）的逆操作是「重放相反动作」。
+    """
 
     key: str
-    before: Any
+    payload: dict
+
+    @property
+    def before(self) -> Any:
+        """值型键的变更前值（动作型键为 None）。"""
+        return self.payload.get("value")
 
 
 class ConfigSession:
@@ -74,29 +84,30 @@ class ConfigSession:
         return seen
 
     def record(self, key: str, before: Any) -> None:
-        """记录一次变更的前值（`_apply_edit` 成功后调用）。"""
-        self._changes.append(_ConfigChange(key, before))
+        """记录一次值型变更的前值（`_apply_edit` 成功后自动调用）。"""
+        self._changes.append(_ConfigChange(key, {"key": key, "value": before}))
+
+    def record_payload(self, payload: dict) -> None:
+        """记录一次动作型变更的逆操作载荷（面板自行计算逆动作时调用）。"""
+        self._changes.append(_ConfigChange(str(payload.get("key") or ""), dict(payload)))
 
     def undo_last(self) -> str | None:
         """退回最近一次改动（返回被退回的键；无可退时 None）。"""
         while self._changes:
             change = self._changes.pop()
-            if not _write_value(change.key, change.before):
+            if not _apply_inverse(change.payload):
                 return None
             return change.key
         return None
 
     def restore_all(self) -> int:
-        """把会话内所有改动退回**进入时**的状态（返回成功退回的键数）。"""
-        firsts: dict[str, Any] = {}
-        for change in self._changes:
-            firsts.setdefault(change.key, change.before)
-        restored = 0
-        for key, value in firsts.items():
-            if _write_value(key, value):
-                restored += 1
-        self._changes.clear()
-        return restored
+        """把会话内所有改动按逆序退回**进入时**的状态（返回成功退回的键数）。"""
+        touched: set[str] = set()
+        while self._changes:
+            change = self._changes.pop()
+            if _apply_inverse(change.payload):
+                touched.add(change.key)
+        return len(touched)
 
 
 _session: ConfigSession | None = None
@@ -115,14 +126,45 @@ def close_config_session() -> None:
     _session = None
 
 
-def _write_value(key: str, value: Any) -> bool:
-    """按共享编辑层写回单个键（撤销路径；失败只记日志不打断面板）。"""
+def handle_config_undo(choice: str, session: ConfigSession, emit: Callable[[str], None]) -> bool:
+    """处理配置面板的 ``u`` / ``U``（各面板 ``on_text`` 首行调用）。
+
+    Args:
+        choice: 原始输入（区分大小写：``U`` 全还原、``u`` 撤一条）。
+        session: 当前配置会话。
+        emit: 输出回调（面板各自的 ``_emit``，已按内宽折行）。
+
+    Returns:
+        True = 已消费该输入。
+    """
+    if choice == "U":
+        restored = session.restore_all()
+        refresh_config()
+        emit(
+            f"  {GREEN}[OK]{RESET} 已全部还原到进入本面板时（{restored} 项）" if restored else "  [!] 本次会话尚无改动"
+        )
+        return True
+    if choice == "u":
+        undone = session.undo_last()
+        refresh_config()
+        emit(f"  {GREEN}[OK]{RESET} 已撤销上次改动（{undone}）" if undone else "  [!] 本次会话尚无改动")
+        return True
+    return False
+
+
+def config_undo_footer(session: ConfigSession) -> str | None:
+    """配置面板页脚事实行（无改动时返回 None，不向「什么都没改」喊话）。"""
+    return f"  本次改动 {session.count} 项（u 撤销上次 · U 全部还原）" if session.count else None
+
+
+def _apply_inverse(payload: dict) -> bool:
+    """按共享编辑层重放一次逆操作（撤销路径；失败只记日志不打断面板）。"""
     from src.python.config.edit_ops import apply_config_edit
 
     try:
-        apply_config_edit({"key": key, "value": value})
+        apply_config_edit(dict(payload))
     except Exception:
-        logger.exception("[config] 撤销写回失败: %s", key)
+        logger.exception("[config] 撤销写回失败: %s", payload.get("key"))
         return False
     from src.python.tui.status_line import reset_status_memo
 
@@ -375,10 +417,14 @@ def _cmd_config_llm_tuning() -> None:
 
         return _run
 
+    session = reset_config_session()
+
     def _render(nav: NavState) -> list[str]:
         print()
         print(style_heading("  ── LLM 调优参数 ──"))
         for i, key in enumerate(keys, 1):
+            if not nav.is_visible(i - 1):
+                continue  # 筛选态：命中项之外的参数不渲染（索引仍占位）
             spec = LLM_TUNING_SPECS[key]
             print(
                 f" {nav.marker(i - 1)} {i}. {spec['label']}"
@@ -386,6 +432,9 @@ def _cmd_config_llm_tuning() -> None:
             )
         print(f" {nav.marker(len(keys))} {len(keys) + 1}. LLM 多链线路优先级")
         print(f" {nav.marker(len(keys) + 1)} 0. 返回全局设置")
+        footer = config_undo_footer(session)
+        if footer:
+            print(footer)
         print()
         return []
 
@@ -406,11 +455,15 @@ def _cmd_config_llm_tuning() -> None:
             render=_render,
             prompt=panel_prompt("输入编号修改", example="1 改 thinking 并发", help_hint=None),
             read=input_choice,
-            on_text=lambda _t: print("  [!] 无效选择，请输入编号或 0"),
+            on_text=lambda text: (
+                None if handle_config_undo(text, session, print) else print("  [!] 无效选择，请输入编号或 0")
+            ),
             default_key="0",
         )
     except (EOFError, KeyboardInterrupt):
         print()
+    finally:
+        close_config_session()
 
 
 def _cmd_config_content_options() -> None:
@@ -620,20 +673,29 @@ def _cmd_config_anonymization_mode() -> None:
         elif _apply_edit({"key": "anonymization.mode", "value": new_mode}):
             print(f"  {GREEN}[OK]{RESET} 持仓匿名化已切换为: {new_mode}")
 
+    session = reset_config_session()
+
     def _render(nav: NavState) -> list[str]:
         current = get_anonymization_mode()
         rows: list[str | None] = [f"当前模式: {current}", None]
         for i, mode_key in enumerate(_ORDERED_KEYS):
+            if not nav.is_visible(i):
+                continue  # 筛选态：命中项之外的模式不渲染（索引仍占位）
             desc = ANONYMIZATION_MODE_DESCRIPTIONS.get(mode_key, mode_key)
             mode_marker = "►" if mode_key == current else " "
             rows.append(f"{nav.marker(i)}{mode_marker} {i + 1}. {pad_right(desc, desc_column)}")
         rows += [None, f"{nav.marker(4)}0. 返回主菜单"]
+        footer = config_undo_footer(session)
+        if footer:
+            rows.append(footer)
         print()
         print("\n".join(render_titled_panel("配置持仓匿名化", rows)))
         print()
         return []
 
     def _on_text(t: str) -> None:
+        if handle_config_undo(t, session, print):
+            return
         try:
             idx = int(t)
         except (ValueError, TypeError):
@@ -665,6 +727,8 @@ def _cmd_config_anonymization_mode() -> None:
         )
     except (EOFError, KeyboardInterrupt):
         print()
+    finally:
+        close_config_session()
 
 
 def _cmd_config_llm_providers() -> None:

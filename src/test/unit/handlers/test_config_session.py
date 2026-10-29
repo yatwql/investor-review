@@ -215,3 +215,74 @@ class TestSessionScope:
         ):
             handlers_config._apply_edit({"key": "report_qa", "value": True})
         read.assert_not_called()
+
+
+class TestActionPayloadUndo:
+    """动作型键（线路重排等）：逆操作是「重放相反动作」，按逆序回放。"""
+
+    def test_record_payload_undo_replays_payload(self):
+        session = ConfigSession()
+        session.record_payload({"key": "llm_providers.priority", "action": "reorder", "order": ["A", "B", "C"]})
+        with patch("src.python.config.edit_ops.apply_config_edit") as apply:
+            undone = session.undo_last()
+        assert undone == "llm_providers.priority"
+        assert apply.call_args.args[0] == {
+            "key": "llm_providers.priority",
+            "action": "reorder",
+            "order": ["A", "B", "C"],
+        }
+
+    def test_restore_all_replays_in_reverse_order(self):
+        """多次改动按逆序回放（动作型键的语义只有逆序回放才对得上进入时状态）。"""
+        session = ConfigSession()
+        session.record("a", 1)
+        session.record_payload({"key": "llm_providers.priority", "action": "reorder", "order": ["X", "Y"]})
+        session.record("a", 2)
+        with patch("src.python.config.edit_ops.apply_config_edit") as apply:
+            restored = session.restore_all()
+        assert restored == 2, "两个键各退回一次"
+        payloads = [call.args[0] for call in apply.call_args_list]
+        assert payloads[0] == {"key": "a", "value": 2}, "最后一条先回放"
+        assert payloads[1]["action"] == "reorder"
+        assert payloads[2] == {"key": "a", "value": 1}, "最早一条最后回放（回到进入时）"
+
+
+class TestProvidersPanelUndo:
+    """`[M]` 线路面板端到端：交换 → `u` 重放逆序动作（动作型键靠逆操作回退）。"""
+
+    def _drive(self, keys: list[str]) -> list[dict]:
+        from src.python.tui import handlers_config, handlers_llm_providers
+
+        seq = iter(keys)
+        writes: list[dict] = []
+
+        def _apply(payload: dict) -> bool:
+            writes.append(payload)
+            return True
+
+        with (
+            patch("src.python.config.order_providers_by_chain", side_effect=lambda raw: list(raw)),
+            # 局部导入：patch 必须指向导入源（config 模块），而非消费方
+            patch(
+                "src.python.config.get_llm_providers",
+                return_value={
+                    "strategy": "priority",
+                    "providers": [{"name": "甲", "priority": 1}, {"name": "乙", "priority": 2}],
+                },
+            ),
+            patch.object(handlers_llm_providers, "input_choice", lambda prompt="", arrows=False: next(seq, "0")),
+            patch.object(handlers_config, "_apply_edit", side_effect=_apply),
+            # 退回路径走共享编辑层（_apply_inverse → apply_config_edit），同样收进写盘记录
+            patch(
+                "src.python.config.edit_ops.apply_config_edit",
+                side_effect=lambda payload: (writes.append(payload), {"key": payload.get("key")})[1],
+            ),
+        ):
+            handlers_llm_providers.run_llm_providers_panel()
+        return writes
+
+    def test_swap_then_undo_replays_previous_order(self):
+        writes = self._drive(["1 2", "u", "0"])
+        assert len(writes) == 2, writes
+        assert writes[0]["order"] == ["乙", "甲"], "交换写入新顺序"
+        assert writes[1]["order"] == ["甲", "乙"], "u 应重放交换前的顺序"

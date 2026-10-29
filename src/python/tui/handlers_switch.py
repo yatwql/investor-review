@@ -243,20 +243,7 @@ def run_content_options_panel() -> None:
 
     def _on_text(choice: str) -> None:
         tuples = state["tuples"]
-        if choice == "U":
-            restored = session.restore_all()
-            hc.refresh_config()
-            _emit(
-                f"  {GREEN}[OK]{RESET} 已全部还原到进入本面板时（{restored} 项）"
-                if restored
-                else "  [!] 本次会话尚无改动"
-            )
-            state["repaint"] = True
-            return
-        if choice == "u":
-            undone = session.undo_last()
-            hc.refresh_config()
-            _emit(f"  {GREEN}[OK]{RESET} 已撤销上次改动（{undone}）" if undone else "  [!] 本次会话尚无改动")
+        if hc.handle_config_undo(choice, session, _emit):
             state["repaint"] = True
             return
         if choice.lower() == "p":

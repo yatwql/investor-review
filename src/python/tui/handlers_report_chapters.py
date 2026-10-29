@@ -207,7 +207,11 @@ def run_report_chapters_panel() -> None:
             )
     panel_items.append(PanelItem("0", "返回主菜单", kind="return"))
 
+    session = hc.reset_config_session()
+
     def _on_text(token: str) -> None:
+        if hc.handle_config_undo(token, session, _emit):
+            return
         _emit(f"  {YELLOW}[!]{RESET} 无效编号「{token}」（{invalid_number_hint()}，? 看说明）")
 
     def _help(target: str) -> bool:
@@ -264,23 +268,24 @@ def run_report_chapters_panel() -> None:
                 notes = f"（{entry.artifact_note}）" if entry.artifact_note else ""
                 if entry.source == SOURCE_LLM:
                     notes += _cost_notes(entry.key, cost_history)
-                rows.extend(
-                    _format_row(
-                        cursor=nav.marker(index),
-                        number=str(number),
-                        label=labels[entry.key],
-                        key=entry.key,
-                        status=status_text(enabled, tier),
-                        star="" if enabled == chapter_default(entry) else "*",
-                        notes=notes,
-                        columns=columns,
-                        name_column=name_column,
-                        key_column=key_column,
-                        number_width=number_width,
-                        indent=0,
-                        grey=False,
+                if nav.is_visible(index):
+                    rows.extend(
+                        _format_row(
+                            cursor=nav.marker(index),
+                            number=str(number),
+                            label=labels[entry.key],
+                            key=entry.key,
+                            status=status_text(enabled, tier),
+                            star="" if enabled == chapter_default(entry) else "*",
+                            notes=notes,
+                            columns=columns,
+                            name_column=name_column,
+                            key_column=key_column,
+                            number_width=number_width,
+                            indent=0,
+                            grey=False,
+                        )
                     )
-                )
                 index += 1
                 for offset, flag in enumerate(entry.sub_items, 1):
                     definition = feature_switch_registry.get(flag)
@@ -296,26 +301,32 @@ def run_report_chapters_panel() -> None:
                             )
                     if not enabled:
                         sub_notes += "（启用本章节后可切换）"
-                    rows.extend(
-                        _format_row(
-                            cursor=nav.marker(index),
-                            number=f"{number}.{offset}",
-                            label=label,
-                            key=flag,
-                            status=status_text(enabled and sub_enabled, tier),
-                            star="" if definition is None or (enabled and sub_enabled) == definition.default else "*",
-                            notes=sub_notes,
-                            columns=columns,
-                            name_column=name_column,
-                            key_column=key_column,
-                            number_width=number_width,
-                            indent=2,
-                            grey=not enabled,
+                    if nav.is_visible(index):
+                        rows.extend(
+                            _format_row(
+                                cursor=nav.marker(index),
+                                number=f"{number}.{offset}",
+                                label=label,
+                                key=flag,
+                                status=status_text(enabled and sub_enabled, tier),
+                                star=""
+                                if definition is None or (enabled and sub_enabled) == definition.default
+                                else "*",
+                                notes=sub_notes,
+                                columns=columns,
+                                name_column=name_column,
+                                key_column=key_column,
+                                number_width=number_width,
+                                indent=2,
+                                grey=not enabled,
+                            )
                         )
-                    )
                     index += 1
             rows.append("")
         rows.append(f"{nav.marker(index)}0. 返回主菜单")
+        footer = hc.config_undo_footer(session)
+        if footer:
+            rows.append(footer)
         return [
             None,
             *render_titled_panel("报告章节显隐", rows, columns=columns),
@@ -341,6 +352,8 @@ def run_report_chapters_panel() -> None:
         )
     except (EOFError, KeyboardInterrupt):
         print()
+    finally:
+        hc.close_config_session()
 
     hc.refresh_config()
 
