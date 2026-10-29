@@ -1045,3 +1045,100 @@ class TestBracketScopeNearestCode:
         _issues, _checked, _passed, corrections = check_numerical_consistency(text, holdings)
         assert len(corrections) == 1, f"应纠正 561910 的错值: {corrections}"
         assert corrections[0][0] == "99.9" and corrections[0][1] == "-36.2", corrections[0]
+
+
+class TestWeightSurfacesNotRates:
+    """权重类表述（「占 X%」与表格并列裸百分比单元格）不得按收益率改写。
+
+    实盘事故：智囊团模块单轮产生 9 处「修正」，全部是把权重改写成收益率——
+    「它现在仍占 7.3%」若按收益率处理即变成 561910 的 -36.2%；「| 建设银行 |
+    601939 | 8.8% | 6.5% |」的两个权重列同理会被按 241.5% 改写。中文投资写作里「占 X%」是最常见的权重
+    表达，而 `_NON_RATE_PRE_WORDS` 只收了「占比」，「占」单独出现时未识别；
+    表格行的权重列/目标列是裸百分比、单元格内无任何语境词，只能靠「同行多列并列
+    裸百分比即数值列」判据整体跳过。
+    """
+
+    pytestmark = [
+        pytest.mark.unit,
+        pytest.mark.unit_llm,
+        pytest.mark.llm,
+    ]
+
+    @pytest.fixture
+    def holdings(self) -> list[dict]:
+        return [
+            {"name": "建设银行", "code": "601939", "market_value": 19800.0, "cost": 5800.0, "profit_rate": 241.5},
+            {
+                "name": "华宝增强收益债券A",
+                "code": "240012",
+                "market_value": 15950.0,
+                "cost": 17343.0,
+                "profit_rate": -8.03,
+            },
+            {
+                "name": "招商中证电池主题ETF",
+                "code": "561910",
+                "market_value": 20680.0,
+                "cost": 32414.0,
+                "profit_rate": -36.2,
+            },
+        ]
+
+    def test_zhan_weight_not_corrected(self, holdings):
+        """「仍占 7.3%」是权重，不改写成品种收益率。"""
+        text = "它现在仍占 7.3%，是组合第 9 大持仓，而它是唯一一个 -36.20% 的品种。"
+        _issues, _checked, _passed, corrections = check_numerical_consistency(text, holdings)
+        assert corrections == [], f"权重表述被改写成收益率: {corrections}"
+
+    def test_zhan_weight_bracket_list_not_corrected(self, holdings):
+        """「（012325 占 12.5%、011506 占 11.1%）」并列权重全部跳过。"""
+        text = "前三持仓（601939 占 8.8%、240012 占 5.9%）合计约三成，集中度不极端。"
+        _issues, _checked, _passed, corrections = check_numerical_consistency(text, holdings)
+        assert corrections == [], f"并列权重被改写: {corrections}"
+
+    def test_table_parallel_percent_cells_not_corrected(self, holdings):
+        """表格行并列裸百分比（权重列 + 目标列）整体跳过，不按就近代码改写。"""
+        text = "| 建设银行 | 601939 | 8.8% | 6.5% | 减仓 | 持仓收益率 -8.03% |"
+        _issues, _checked, _passed, corrections = check_numerical_consistency(text, holdings)
+        rewritten = {c[0] for c in corrections}
+        assert "8.8" not in rewritten and "6.5" not in rewritten, f"表格权重列被改写: {corrections}"
+
+    def test_single_percent_table_cell_still_checked(self, holdings):
+        """守卫不过度：行内只有一个百分比单元格（带收益率标签）时仍按主体纠正错值。"""
+        text = "| 建设银行 | 601939 | 持仓收益率 123.4% |"
+        _issues, _checked, _passed, corrections = check_numerical_consistency(text, holdings)
+        assert len(corrections) == 1 and corrections[0][1] == "241.5", f"单列百分比仍应纠正: {corrections}"
+
+
+class TestAppliedCorrectionReporting:
+    """「已修正明细」只列真正生效的改写。
+
+    检查阶段判定与改写阶段落笔是两件事：归属不可知的数值（同值异义/同句多义/表格
+    并列裸百分比）在改写阶段被跳过，若摘要仍按判定列表生成，报告会宣称「已修正 9
+    处」而实际一处未动，读者无法判断正文是否被改过。
+    """
+
+    pytestmark = [
+        pytest.mark.unit,
+        pytest.mark.unit_llm,
+        pytest.mark.llm,
+    ]
+
+    def test_skipped_value_not_claimed_as_corrected(self):
+        """同句同值多义 → 改写阶段跳过：摘要不得宣称已修正该值。"""
+        holdings = [
+            {"name": "工商银行", "code": "601398", "market_value": 15000.0, "cost": 8814.0, "profit_rate": 70.18},
+        ]
+        html = "<p>止盈约30%持仓，收益率30%。</p>"
+        corrected, summary = run_fact_check(html, holdings, module_label="智囊团深度复盘")
+        assert corrected == html, "同值异义不得改写"
+        assert "已修正明细" not in summary, f"未改写却在摘要里宣称已修正: {summary}"
+
+    def test_unapplied_value_not_listed_as_warning(self):
+        """归属不可知而未改写的数值也不列为告警（检查器未判定其为错值）。"""
+        holdings = [
+            {"name": "工商银行", "code": "601398", "market_value": 15000.0, "cost": 8814.0, "profit_rate": 70.18},
+        ]
+        html = "<p>止盈约30%持仓，收益率30%。</p>"
+        _corrected, summary = run_fact_check(html, holdings, module_label="智囊团深度复盘")
+        assert "30" not in summary or "修正" not in summary, f"跳过项不应出现在摘要告警里: {summary}"

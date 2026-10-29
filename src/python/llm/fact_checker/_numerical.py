@@ -30,6 +30,7 @@ from src.python.llm.fact_checker._context import (
     _is_portfolio_level_context,
     _is_position_weight_context,
     _is_replay_context,
+    _is_table_weight_cell_context,
     _is_target_value_context,
     _is_trim_target_context,
     _is_weight_context,
@@ -94,6 +95,7 @@ class PercentContext:
     is_target_value: bool = False
     is_breakdown_sum: bool = False
     is_non_rate_metric: bool = False
+    is_table_weight_cell: bool = False
     confirmed_rates: dict[str, str] | None = None
 
 
@@ -120,6 +122,7 @@ def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, 
         or ctx.is_trim_target
         or ctx.is_target_value
         or ctx.is_breakdown_sum
+        or ctx.is_table_weight_cell
     ):
         return None, None
 
@@ -411,6 +414,8 @@ def check_numerical_consistency(
                     is_breakdown_sum=_is_breakdown_sum_context(sentence, match.start(), value),
                     # 同句内已确认的品种收益率（同品种第二个百分数只能是别的口径）
                     confirmed_rates=confirmed_rates,
+                    # 表格并列裸百分比单元格（权重列/目标列）：归属不可知，不改写
+                    is_table_weight_cell=_is_table_weight_cell_context(sentence, match.start()),
                     # 数值前文语义（占比/份额/市值/仓位）：局部窗口判定，优先于整句收益语境
                     is_non_rate_metric=_is_non_rate_pre_word_context(sentence, match.start()),
                 )

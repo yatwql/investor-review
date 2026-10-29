@@ -78,6 +78,7 @@ def reset_auto_correction_counts() -> None:
 def apply_numerical_corrections(
     html: str,
     corrections: Sequence[tuple[str, ...]],
+    applied: list[str] | None = None,
 ) -> str:
     """对 HTML 内容中的错误百分比数值执行自动替换。
 
@@ -88,6 +89,9 @@ def apply_numerical_corrections(
         html: 原始 HTML 内容。
         corrections: [(wrong_value_str, correct_value_str, context_sentence[, reason]), ...]——
             前三元为替换所必需，reason 仅用于修正明细展示，故接受 3/4 元两种形态。
+        applied: 可选的出参——实际执行了替换的 wrong_value 逐个追加。**必须传**才能
+            让「已修正明细」只列真正改过的项：无法安全定位的（同值异义/同句多义）会被
+            跳过，不区分就会把未生效的判定逐条列进摘要。
 
     Returns:
         修正后的 HTML 内容。
@@ -139,7 +143,7 @@ def apply_numerical_corrections(
         ambiguous = any(len(value_pattern.findall(s)) > 1 for s in judged_sentences)
         judged_occurrences = sum(len(value_pattern.findall(s)) for s in judged_sentences)
         if ambiguous or judged_occurrences != doc_occurrences or doc_occurrences == 0:
-            logger.info(
+            logger.debug(
                 "[fact-check] 数值 %s%% 无法安全定位（判定 %d/%d 处%s），整值跳过改写",
                 wrong_val,
                 judged_occurrences,
@@ -148,12 +152,16 @@ def apply_numerical_corrections(
             )
             continue
         result = pattern.sub(_replace, result)
+        if applied is not None:
+            applied.append(wrong_val)
 
     # 畸形数值自检：修正后的正文不得出现连续符号。命中即说明符号未归一
     # （旧值 `+4.55%` 被换成 `-9.0` → `+-9.0%`），用户视觉上会读到错误数字，
     # 一律判本批修正失败、整批不写回（保留原文比写入畸形值安全）。
     if _MALFORMED_NUMBER_RE.search(result) and not _MALFORMED_NUMBER_RE.search(html):
         logger.warning("[fact-check] 自动修正会产生畸形数值（连续符号），已放弃写回：%d 处", len(corrections))
+        if applied is not None:
+            applied.clear()
         return html
 
     return result

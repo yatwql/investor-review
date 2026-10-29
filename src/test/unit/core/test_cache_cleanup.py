@@ -656,3 +656,54 @@ class TestCacheMissSummary:
         with caplog.at_level(logging.INFO, logger="invest"):
             log_cache_summary()
         assert not [r for r in caplog.records if r.getMessage().startswith("[cache] 本次命中")]
+
+
+class TestNegativeCacheProbeNotCounted:
+    """负缓存探测不计入全局命中率。
+
+    「负缓存里没有这条记录」是**正常预期**（说明该确定性缺失不存在，应照常取数），
+    计入未命中会让命中率虚低、未命中前缀分布失真，并误触发「同前缀未命中 ≥N 次」
+    告警——实测单次运行虚计 7~13 次（report_symbol_* / report_sections_miss_* 等）。
+    """
+
+    pytestmark = pytestmark_summary
+
+    @pytest.fixture(autouse=True)
+    def _clean_stats(self):
+        from src.python.cache._stats import reset_cache_stats
+
+        reset_cache_stats()
+        yield
+        reset_cache_stats()
+
+    def test_negative_cache_miss_not_recorded(self, tmp_path, monkeypatch):
+        """负缓存 probe 未命中 → 全局未命中计数与前缀分布都不增加。"""
+        from src.python.cache import _negative, _store
+        from src.python.cache._stats import get_cache_hit_rate, get_cache_miss_prefixes
+
+        monkeypatch.setattr(_store, "_cache_path", lambda key: str(tmp_path / f"{key}.json"))
+        probe = _negative.NegativeCache("测试缺失", "probe_miss_", "report_symbol_miss")
+        assert probe.probe("probe_miss_600900.SS") is None
+        assert get_cache_hit_rate()["misses"] == 0
+        assert get_cache_miss_prefixes() == {}
+
+    def test_negative_cache_hit_not_recorded(self, tmp_path, monkeypatch):
+        """负缓存命中同样不进全局统计（它有自己的 hits 计数与报告级汇总）。"""
+        from src.python.cache import _negative, _store
+        from src.python.cache._stats import get_cache_hit_rate
+
+        monkeypatch.setattr(_store, "_cache_path", lambda key: str(tmp_path / f"{key}.json"))
+        probe = _negative.NegativeCache("测试缺失二", "probe_hit_", "report_symbol_miss")
+        probe.mark("probe_hit_1", "确定性缺失")
+        assert probe.probe("probe_hit_1") == "确定性缺失"
+        assert probe.hits() == 1
+        assert get_cache_hit_rate()["hits"] == 0
+
+    def test_normal_get_still_counted(self, tmp_path, monkeypatch):
+        """守卫不过度：常规正缓存的未命中仍计入统计。"""
+        from src.python.cache import _store
+        from src.python.cache._stats import get_cache_hit_rate
+
+        monkeypatch.setattr(_store, "_cache_path", lambda key: str(tmp_path / f"{key}.json"))
+        _store.get("normal_missing_key", 60)
+        assert get_cache_hit_rate()["misses"] == 1

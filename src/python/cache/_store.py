@@ -47,12 +47,17 @@ def reset_debug_log_state() -> None:
         _log_seen.clear()
 
 
-def get(key: str, max_age_seconds: float) -> Any | None:
+def get(key: str, max_age_seconds: float, *, record_stats: bool = True) -> Any | None:
     """读取缓存，过期或不存在时返回 None。
 
     Args:
         key: 缓存键名（对应文件名，不含扩展名）
         max_age_seconds: 最大有效期（秒）
+        record_stats: 是否计入全局命中率统计。**负缓存探测器传 False**——
+            「负缓存里没有这条记录」是正常预期（说明该缺失不存在），把它记成
+            缓存未命中会让命中率与未命中前缀分布失真（实测 7~13 次/轮），
+            并误触发「同前缀未命中 ≥N 次」告警。负缓存自身命中另有
+            `NegativeCache` 计数与报告级汇总。
 
     Returns:
         缓存的数据（反序列化后的 Python 对象），过期/不存在返回 None
@@ -73,25 +78,29 @@ def get(key: str, max_age_seconds: float) -> Any | None:
                 os.remove(fpath)
             except OSError:
                 pass
-            _record_cache_miss(key)
+            if record_stats:
+                _record_cache_miss(key)
             return None
 
         timestamp = data.get("_ts", 0)
         age = time.time() - timestamp
         if age > max_age_seconds:
             _debug_once("缓存已过期", key, age, max_age_seconds)
-            _record_cache_miss(key)
+            if record_stats:
+                _record_cache_miss(key)
             return None
 
         _debug_once("缓存命中", key, age, max_age_seconds)
-        _record_cache_hit()
+        if record_stats:
+            _record_cache_hit()
         return data.get("_data")
 
     # 文件不存在与「读失败」在此合流：逐键明细只到 DEBUG——运行收尾的
     # `_stats.log_cache_summary()` 以一行 INFO 给出命中率与未命中前缀分布，
     # 逐键刷屏（真实运行占日志 10%~30%）不再占用 INFO 通道。
     _debug_once("缓存未命中（无此缓存文件）", key)
-    _record_cache_miss(key)
+    if record_stats:
+        _record_cache_miss(key)
     return None
 
 

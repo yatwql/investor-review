@@ -37,6 +37,12 @@ _BREAKDOWN_PART_PATTERN = re.compile(r"(\d+(?:\.\d+)?)\s*%")
 _BREAKDOWN_SUM_TOLERANCE = 0.2
 
 
+#: 表格里「独立百分比单元格」（``| 8.8% |``）：左右紧邻竖线、中间只有空白与数值。
+#: 用前瞻断言收尾而非吃掉右侧竖线——相邻单元格共享竖线（``| 8.8% | 6.5% |``），
+#: 消费掉闭合竖线会让第二个单元格永远匹配不到。
+_TABLE_PERCENT_CELL = re.compile(r"\|\s*[+-]?\d[\d.]*\s*%(?=\s*\|)")
+
+
 def _is_drawdown_context(sentence: str, match_start: int) -> bool:
     """判断百分比数值是否在回撤语境中（如"历史最大回撤...19.0%"）。
 
@@ -178,6 +184,31 @@ def _is_trim_target_context(sentence: str, match_start: int) -> bool:
         if any(kw in _after for kw in _TRIM_TARGET_KEYWORDS):
             return True
     return False
+
+
+def _is_table_weight_cell_context(sentence: str, match_start: int) -> bool:
+    """判断百分比是否为**表格里并列的裸数值单元格**（权重列/目标列，非收益率）。
+
+    表格行（``| 建设银行 | 601939 | 8.8% | 6.5% | 减仓 | …持仓收益率 −8.03%…``）
+    里权重列与目标列都是裸百分比，与同行后段的真实收益率混在一句内。整句判定含
+    「收益」必然误判，而单元格本身没有任何语境词可依，**归属不可知**——此时按就近
+    代码归因就会把权重列当作收益率改写（如 8.8%/6.5% 被按 601939 的 241.5% 改写）。
+
+    判据：该数值是独立的表格单元格（左右紧邻 ``|``，中间只有空白）**且**同一行还有
+    另一个独立百分比单元格——多列并列裸百分比即表格数值列，不做收益率改写。
+    单列表格的收益率单元格（行内只有一个百分比）不受影响，仍按主体校验。
+
+    Args:
+        sentence: 所在句子（表格行通常整行为一句）。
+        match_start: 数值在句中的起始位置。
+
+    Returns:
+        命中「表格并列裸百分比单元格」时为 True。
+    """
+    cells = list(_TABLE_PERCENT_CELL.finditer(sentence))
+    if not any(cell.start() <= match_start < cell.end() for cell in cells):
+        return False
+    return len(cells) >= 2
 
 
 def _is_portfolio_level_context(sentence: str, match_start: int) -> bool:

@@ -145,9 +145,16 @@ def run_fact_check(
     _auto_part = ""
     corrected_html = html_content
     correction_lines = ""
+    # 归属不可知而被跳过的数值（同值异义/同句多义/表格并列裸百分比）：它们既不算
+    # 修正，也不该作为告警列出——检查器本来就没能判定它们是错的（宁漏改不误改）。
+    _skipped_values: set[str] = set()
     if auto_correct and (all_corrections or code_corrections):
         if all_corrections:
-            corrected_html = apply_numerical_corrections(corrected_html, all_corrections)
+            _judged_values = {c[0] for c in all_corrections}
+            _applied_values: list[str] = []
+            corrected_html = apply_numerical_corrections(corrected_html, all_corrections, _applied_values)
+            _skipped_values = _judged_values - set(_applied_values)
+            all_corrections = [c for c in all_corrections if c[0] in set(_applied_values)]
         if code_corrections:
             corrected_html = apply_code_corrections(corrected_html, code_corrections)
         # 修正明细：日志记录 + HTML 摘要灰色行（供用户直接查看具体修正了什么）。
@@ -208,6 +215,9 @@ def run_fact_check(
     for issue in all_issues:
         # 跳过已自动修正的数值/代码的告警（用户在内容中已看不到该值/码，列出徒增困惑）
         if any(cv in issue for cv in corrected_values):
+            continue
+        # 归属不可知而未改写的数值：检查器未判定其为错值，不列为告警
+        if any(sv in issue for sv in _skipped_values):
             continue
         if any(cc in issue for cc in corrected_codes):
             continue
