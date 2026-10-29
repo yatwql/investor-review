@@ -172,7 +172,7 @@ def capture_snapshot(
         )
         if not _diff.is_first_check:
             # 基线时间戳仅接受字符串（防御非标对象/桩），不可解析时标签降级为 ""
-            _raw_ts = _old.timestamp if isinstance(_old.timestamp, str) else ""
+            _raw_ts = _old.timestamp if _old is not None and isinstance(_old.timestamp, str) else ""
             _baseline_td, _baseline_gen = _baseline_labels(_raw_ts)
             # 首次运行无基线：QDII 分项无意义，计算只在有环比时进行
             _qdii_value_diff, _qdii_lagged = _classify_qdii_value_diff(details, _old)
@@ -246,6 +246,7 @@ def fetch_history_data(
     config: dict | None,
     reporter: ProgressReporter,
     fetch: bool = True,
+    latest_quotes: dict[str, tuple[float, str]] | None = None,
 ) -> dict | None:
     """获取组合历史走势数据（as-if 模拟），纯业务逻辑，不含用户交互。
 
@@ -254,6 +255,8 @@ def fetch_history_data(
         config: 配置字典（含 history 子段）
         reporter: 进度报告接口
         fetch: 是否执行获取，False 直接返回 None
+        latest_quotes: {code: (价格, 估值日)}，历史末条更早时回填终点 bar，
+            消除「走势终值 vs 报告头市值」口径差；None 时不回填
 
     Returns:
         history_data 字典，获取失败或不可用时返回 None。
@@ -285,7 +288,7 @@ def fetch_history_data(
             benchmark_indices=_benchmark_indices,
         )
         _holdings_tuples = [(h.code, h.name, h.shares) for h in holdings]
-        history_data = _calc.get_combined_timeseries(_holdings_tuples, days=_lookback_days)
+        history_data = _calc.get_combined_timeseries(_holdings_tuples, days=_lookback_days, latest_quotes=latest_quotes)
         if history_data and history_data.get("status") != "unavailable":
             reporter.ok("组合历史走势数据获取完成")
         else:
@@ -323,10 +326,40 @@ def _crisis_index_days() -> int:
     return max(0, min(_CRISIS_INDEX_DAYS_MAX, int(span * 252 / 365) + 60))
 
 
+def latest_quotes_from_detail_rows(rows: list | None) -> dict[str, tuple[float, str]]:
+    """持仓明细行 → {code: (最新价/净值, 估值日)}（历史走势终点回填用）。
+
+    兼容两种形态：``DetailRow`` 对象与明细字典（``build_holding_detail_rows``
+    的 ``with_market_fields=True`` 输出）。无价格 / 无估值日的行不入表——
+    没有可信估值日就不可当作终点 bar（否则会把未知时点的值伪装成当日估值）。
+
+    Args:
+        rows: DetailRow 列表或明细行字典列表（可为 None）
+
+    Returns:
+        {code: (price, nav_date)}，仅含有有效价格与估值日的标的
+    """
+    quotes: dict[str, tuple[float, str]] = {}
+    for row in rows or []:
+        if isinstance(row, dict):
+            code = str(row.get("code") or "").strip()
+            price = row.get("price")
+            nav_date = str(row.get("nav_date") or "").strip()
+        else:
+            code = str(getattr(row, "code", "") or "").strip()
+            price = getattr(row, "price", None)
+            nav_date = str(getattr(row, "nav_date", "") or "").strip()
+        if not code or not nav_date or not isinstance(price, (int, float)) or price <= 0:
+            continue
+        quotes[code] = (float(price), nav_date)
+    return quotes
+
+
 def fetch_extended_history(
     holdings: list,
     config: dict | None,
     reporter: ProgressReporter,
+    latest_quotes: dict[str, tuple[float, str]] | None = None,
 ) -> dict | None:
     """获取子块独立长窗历史（as-if），供风险调整超额/危机回放计算。
 
@@ -340,6 +373,8 @@ def fetch_extended_history(
         holdings: 持仓列表（code/name/shares 属性）
         config: 配置字典（含 history 子段）
         reporter: 进度报告接口
+        latest_quotes: {code: (价格, 估值日)}，用于终点回填（见
+            ``PortfolioHistoryCalculator.get_combined_timeseries``）
 
     Returns:
         history_data 契约 dict；不可用/异常返回 None（子块落 §1.4.5 降级）。
@@ -362,7 +397,14 @@ def fetch_extended_history(
             benchmark_indices=_cfg.get("benchmark_indices", {}) or {},
         )
         _tuples = [(h.code, h.name, h.shares) for h in holdings]
-        data = _calc.get_combined_timeseries(_tuples, days=_days)
+        # 长窗与主窗是同一批标的：终点滞后已在主窗报过（WARNING），此处只保留
+        # 契约字段、不再重复打日志（同一事实一次运行报两遍属日志噪声）
+        data = _calc.get_combined_timeseries(
+            _tuples,
+            days=_days,
+            latest_quotes=latest_quotes,
+            warn_on_terminal_staleness=False,
+        )
         if data and data.get("status") != "unavailable":
             reporter.ok("子块长窗历史获取完成")
             return data
@@ -410,6 +452,7 @@ def assemble_history_augmented_data(
     reporter: ProgressReporter,
     history_data: dict | None,
     pipeline_data: dict | None,
+    latest_quotes: dict[str, tuple[float, str]] | None = None,
 ) -> None:
     """装配历史增强契约：危机区间标注（含回放态）+ 风险调整超额。
 
@@ -431,6 +474,7 @@ def assemble_history_augmented_data(
         history_data: 主窗口历史走势契约（可为 None）
         pipeline_data: 管线数据字典（就地写入 crisis_annotation_data /
             risk_adjusted_excess_data）；None 时直接返回
+        latest_quotes: {code: (价格, 估值日)}，透传给子块长窗的终点回填
     """
     if pipeline_data is None:
         return
@@ -442,7 +486,7 @@ def assemble_history_augmented_data(
 
     extended_history = None
     if (crisis_replay_on or excess_on) and history_data and history_data.get("status") != "unavailable":
-        extended_history = fetch_extended_history(holdings, config, reporter)
+        extended_history = fetch_extended_history(holdings, config, reporter, latest_quotes=latest_quotes)
 
     if crisis_replay_on:
         pipeline_data["crisis_annotation_data"] = build_crisis_annotation(

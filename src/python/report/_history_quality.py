@@ -44,7 +44,7 @@ def _validate_bars(bars: list[dict]) -> list[str]:
 
 
 def _detect_terminal_staleness(
-    labelled_series: list[tuple[str, list[dict]]],
+    series_entries: list[tuple[str, str, list[dict]]],
     merged_dates: list[str],
     terminal_total: float,
     min_lag_trading_days: int = 2,
@@ -58,7 +58,7 @@ def _detect_terminal_staleness(
     终值高出最新市值 3261 元 / 1.2%）。
 
     Args:
-        labelled_series: [(标签, bars), ...]，标签用于提示文案（如「名称(代码)」）
+        series_entries: [(标签, 代码, bars), ...]，标签用于提示文案（如「名称(代码)」）
         merged_dates: 合并后的交易日列表（升序），用于换算滞后交易日数
         terminal_total: 走势终点总市值，用于计算滞后标的占比
         min_lag_trading_days: 触发提示的最小滞后交易日数（默认 2）
@@ -67,21 +67,21 @@ def _detect_terminal_staleness(
         {"latest_date", "max_lag_trading_days", "assets": [...], "warning": str}；
         无滞后或滞后未达阈值时返回 None。
     """
-    observed: list[tuple[str, str, float]] = []
-    for label, series in labelled_series:
+    observed: list[tuple[str, str, str, float]] = []
+    for label, code, series in series_entries:
         if not series:
             continue
         last_bar = series[-1]
-        observed.append((label, str(last_bar.get("date", "")), float(last_bar.get("value") or 0.0)))
+        observed.append((label, code, str(last_bar.get("date", "")), float(last_bar.get("value") or 0.0)))
     if not observed:
         return None
 
-    latest_date = max(date for _, date, _ in observed)
+    latest_date = max(date for _label, _code, date, _value in observed)
     date_index = {d: i for i, d in enumerate(merged_dates)}
     last_idx = len(merged_dates) - 1
 
     stale: list[dict] = []
-    for label, last_date, value in observed:
+    for label, code, last_date, value in observed:
         idx = date_index.get(last_date)
         # 未出现在合并时间线上（被有效区间截断掉）时，按「终点之后的交易日数」计数
         lag = (last_idx - idx) if idx is not None else sum(1 for d in merged_dates if d > last_date)
@@ -90,6 +90,7 @@ def _detect_terminal_staleness(
         stale.append(
             {
                 "label": label,
+                "code": code,
                 "last_date": last_date,
                 "lag_trading_days": lag,
                 "value": round(value, 2),

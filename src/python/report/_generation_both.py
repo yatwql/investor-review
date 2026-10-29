@@ -71,7 +71,7 @@ def _generate_report_both(
     from src.python.core.perf import PerfCollector
     from src.python.core.registry import get_report_section_order
     from src.python.llm.depth_profile import effective_news_limit, resolve_depth_profile
-    from src.python.report._snapshot import capture_snapshot, fetch_history_data
+    from src.python.report._snapshot import capture_snapshot, fetch_history_data, latest_quotes_from_detail_rows
     from src.python.report.excel_generator import generate_excel_report
     from src.python.report.html_writer import write_html_report
     from src.python.report.orchestrator import ReportResult
@@ -202,7 +202,15 @@ def _generate_report_both(
     # ── 3. 历史走势（条件获取） ──
     if _enable_history:
         perf.start("历史走势")
-        history_data = fetch_history_data(holdings, config, reporter, fetch=fetch_history)
+        # 行情明细作」最新估值「来源：历史净值链路 T+1~T+2 滞后时回填终点 bar，
+        # 令走势终值与报告头总市值同口径（不回填时两者会对不上）
+        history_data = fetch_history_data(
+            holdings,
+            config,
+            reporter,
+            fetch=fetch_history,
+            latest_quotes=latest_quotes_from_detail_rows(details),
+        )
         perf.stop()
     else:
         history_data = None
@@ -213,7 +221,14 @@ def _generate_report_both(
     # 取数集中，开关全关时仅写 crisis 关态契约（零新增取数，关态产物逐字节不变）
     from src.python.report._snapshot import assemble_history_augmented_data
 
-    assemble_history_augmented_data(holdings, config, reporter, history_data, pipeline_data)
+    assemble_history_augmented_data(
+        holdings,
+        config,
+        reporter,
+        history_data,
+        pipeline_data,
+        latest_quotes=latest_quotes_from_detail_rows(details),
+    )
 
     # 尾部风险统计（tail_risk_data）：复用历史日收益序列，样本不足时 available=False
     from src.python.analysis.tail_risk import compute_tail_risk

@@ -68,6 +68,7 @@ def write_data_quality_sheet(
     matrix: list[dict],
     position_status: dict | None,
     data_freshness: dict | None = None,
+    history_staleness: dict | None = None,
 ) -> int:
     """写入数据质量仪表盘页签（源健康 + 品种覆盖 + 可信度三区块）。
 
@@ -77,19 +78,58 @@ def write_data_quality_sheet(
         position_status: `position_status` 契约 dict，None 表示无行情数据
         data_freshness: `data_freshness` 契约 dict（新鲜度 + 单日跳变），
             None 表示可信度数据不可用
+        history_staleness: `history_data.terminal_staleness` 契约（终点由滞后净值
+            构成的标的明细），None 表示无滞后。非空时在源健康行标降级、在品种
+            覆盖行逐标的标出滞后交易日数（与 HTML 数据状态同事实）
 
     Returns:
         写入结束行号
     """
     ncols = 5
     row = write_title_row(ws, 1, "数据质量仪表盘", ncols)
-    row = _write_source_health_block(ws, row, matrix)
+    row = _write_source_health_block(ws, row, _apply_history_staleness(matrix, history_staleness))
     row = write_source_catalog_block(ws, row)
-    row = _write_coverage_block(ws, row, position_status, ncols)
+    row = _write_coverage_block(ws, row, position_status, ncols, history_staleness)
     row = _write_freshness_block(ws, row, data_freshness, ncols)
     auto_width(ws)
     logger.info("数据质量仪表盘页签已写入")
     return row
+
+
+def _apply_history_staleness(matrix: list[dict], history_staleness: dict | None) -> list[dict]:
+    """把历史走势终点滞后叠到矩阵的「历史走势」行（转降级 + 降级明细）。
+
+    不改入参矩阵：返回浅拷贝行，避免同一矩阵实例被多处复用后状态串改。
+
+    Args:
+        matrix: 源健康矩阵行列表
+        history_staleness: `history_data.terminal_staleness` 契约（可为 None）
+
+    Returns:
+        叠加后的新矩阵列表（无滞时时逐行原样返回）
+    """
+    assets = (history_staleness or {}).get("assets") or []
+    if not matrix or not assets:
+        return matrix
+    max_lag = int((history_staleness or {}).get("max_lag_trading_days") or 0)
+    reasons = [
+        f"{a.get('label', '?')}: 最新数据日 {a.get('last_date', '?')}"
+        f"（滞后 {a.get('lag_trading_days', 0)} 个交易日，占 {a.get('weight_pct', 0):.1f}%）"
+        for a in assets
+    ]
+    out: list[dict] = []
+    for m in matrix:
+        if m.get("key") != "history":
+            out.append(m)
+            continue
+        row = dict(m)
+        if row.get("status") == "ok":
+            row["status"] = "degraded"
+        row["degraded"] = max(int(row.get("degraded") or 0), len(assets))
+        row["detail"] = f"{row.get('detail', '')}；终点净值滞后 {max_lag} 个交易日（{len(assets)} 只标的）"
+        row["degraded_list"] = list(row.get("degraded_list") or []) + reasons
+        out.append(row)
+    return out
 
 
 def _write_source_health_block(ws, row: int, matrix: list[dict]) -> int:
@@ -190,10 +230,18 @@ def write_source_catalog_block(ws, row: int, catalog: list[dict] | None = None) 
     return row
 
 
-def _write_coverage_block(ws, row: int, position_status: dict | None, ncols: int) -> int:
+def _write_coverage_block(
+    ws,
+    row: int,
+    position_status: dict | None,
+    ncols: int,
+    history_staleness: dict | None = None,
+) -> int:
     """写入区块 B：品种覆盖（逐品种数据状态清单）。
 
     position_status 不可用（None / available=False）时写降级占位。
+    history_staleness 非空时，逐标的用它标注「净值数据滞后 N 个交易日」
+    （仅限当前状态为 ok 的标的：已有更严重异常时保留原原因）。
 
     Returns:
         区块结束行号
@@ -205,13 +253,20 @@ def _write_coverage_block(ws, row: int, position_status: dict | None, ncols: int
         row = write_data_row(ws, row, [_COVERAGE_PLACEHOLDER, "", "", "", ""])
         return row
 
+    stale_by_code = {a.get("code"): a for a in (history_staleness or {}).get("assets") or [] if a.get("code")}
     row = write_header_row(ws, row, ["代码", "名称", "账户", "状态", "原因"])
     for item in block["items"]:
+        stale = stale_by_code.get(item["code"])
+        status_label, reason = item["status_label"], item["reason"]
         abnormal = item["status"] != "ok"
+        if stale and not abnormal:
+            status_label = f"净值数据滞后 {stale.get('lag_trading_days', 0)} 个交易日"
+            reason = f"历史净值最新数据日 {stale.get('last_date', '?')}；走势终点已按最新行情回填"
+            abnormal = True
         row = write_data_row(
             ws,
             row,
-            [item["code"], item["name"], item["account"], item["status_label"], item["reason"]],
+            [item["code"], item["name"], item["account"], status_label, reason],
         )
         if abnormal:
             for col in range(1, 6):

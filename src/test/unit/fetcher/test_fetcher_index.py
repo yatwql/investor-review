@@ -419,6 +419,23 @@ class TestFetchIndexHistory(unittest.TestCase):
 
     @patch("src.python.core.provider_registry.get_registry")
     @patch("src.python.fetcher.chain.fetch_with_incremental_fallback")
+    def test_session_cache_reuse_is_logged(self, mock_fetch, mock_get_reg):
+        """复用打「会话缓存复用」日志：调用方「获取完成」行不再被误读成又取了一次。"""
+        mock_reg = MagicMock()
+        cached = [self._SAMPLE_KLINE_1] * 2000
+        mock_reg.session_cache_get.return_value = (90, cached)
+        mock_get_reg.return_value = mock_reg
+
+        from src.python.fetcher.index import fetch_index_history
+
+        with self.assertLogs("invest", level="INFO") as captured:
+            fetch_index_history("sh000300", 730)
+
+        mock_fetch.assert_not_called()
+        self.assertTrue(any("会话缓存复用" in line for line in captured.output))
+
+    @patch("src.python.core.provider_registry.get_registry")
+    @patch("src.python.fetcher.chain.fetch_with_incremental_fallback")
     def test_session_cache_refetches_when_window_too_short(self, mock_fetch, mock_get_reg):
         """缓存窗口不足 → 重取（避免「短窗口先取过 → 长窗口调用者拿到更短序列」）。"""
 

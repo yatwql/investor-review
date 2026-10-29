@@ -259,6 +259,9 @@ def fetch_index_history(code: str, days: int = 365) -> list[dict] | None:
             or len(cached_bars) >= days
             or len(cached_bars) >= _SOURCE_HISTORY_CAP
         ):
+            # 显式标注复用：调用方（如基准归一化）无论是否真取数都会打「获取完成」，
+            # 不标这一行会让日志看起来像同一指数在一份报告里被取了多次
+            logger.info("[index] %s 会话缓存复用（已有 %d 根，请求 %d 天）", code, len(cached_bars), days)
             return cached_bars
 
     # 美股指数使用独立 chain（新浪优先，腾讯备用；腾讯 K-line 对 gb_* 支持有限）
