@@ -31,6 +31,7 @@ from src.python.core.holdings_editor import (
     load_book,
 )
 from src.python.core.logger import setup_logger
+from src.python.tui.error_tail import emit_error
 from src.python.tui.panel_runtime import NavState, PanelItem, panel_loop
 from src.python.tui.prompt_text import panel_prompt
 from src.python.tui.text_layout import group_heading, style_heading, terminal_columns, wrap_hanging, wrap_prompt
@@ -715,8 +716,7 @@ def _save(session: _Session) -> None:
     try:
         book.save(append_flows=append_flows)
     except (ValueError, OSError) as e:
-        print(f"  {RED}[ERR]{RESET} {e}")
-        print(f"  [!] 草稿保留，可修正后重试（备份: {backup or '无'}）")
+        emit_error(str(e), "config", advice=f"草稿保留，可修正后重试（备份: {backup or '无'}）")
         return
     session.mtime = os.path.getmtime(book.filepath)
     print(f"  {GREEN}[OK]{RESET} 已写入并回读校验通过：{os.path.basename(book.filepath)}")
@@ -746,10 +746,10 @@ def _file_unchanged(session: _Session) -> bool:
     try:
         current = os.path.getmtime(session.book.filepath)
     except OSError as e:
-        print(f"  {RED}[ERR]{RESET} 持仓文件不可访问: {e}")
+        emit_error(f"持仓文件不可访问: {e}", "config")
         return False
     if abs(current - session.mtime) > 1e-6:
-        print(f"  {RED}[ERR]{RESET} 持仓文件已被其他程序修改，请返回后重新载入，避免覆盖改动")
+        emit_error("持仓文件已被其他程序修改", "config", advice="请返回后重新载入，避免覆盖改动")
         return False
     return True
 

@@ -13,7 +13,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from src.python.report.progress import ProgressReporter
-from src.python.report.run_integrity import bind_health, bind_perf, guard_run
+from src.python.report.run_integrity import bind_health, bind_perf, guard_run, handle_interruption
+from src.python.core.cancel import StageCancelled, token_of
 
 # ── 子模块 re-export ────────────────────────────────────
 from src.python.report._report_aux_metrics import (  # noqa: F401
@@ -117,8 +118,7 @@ def artifacts_for_report_type(report_type: str) -> tuple[str, ...]:
 # ── generate_report ──
 
 
-@guard_run
-def generate_report(
+def _generate_report_impl(
     holdings: list,
     config: dict,
     reporter: ProgressReporter,
@@ -179,7 +179,12 @@ def generate_report(
         from src.python.report._report_health import _collect_health_checks, _spawn_health_checks
         from src.python.report.excel_generator import generate_excel_report
 
-        perf = PerfCollector(report_type="basic", holdings=holdings, stage_announcer=reporter.stage_progress)
+        perf = PerfCollector(
+            report_type="basic",
+            holdings=holdings,
+            stage_announcer=reporter.stage_progress,
+            cancel_token=token_of(reporter),
+        )
         bind_perf(perf)
         sec_order = get_report_section_order(config)
         output = output_dir or resolve_output_dir(config)
@@ -253,3 +258,49 @@ def generate_report(
     result.report_generated = True
     reporter.info("generate_report: 骨架模式—未知 report_type")
     return result
+
+
+@guard_run
+def generate_report(
+    holdings: list,
+    config: dict,
+    reporter: ProgressReporter,
+    report_type: str = "basic",
+    fetch_history: bool | None = None,
+    force_llm: bool = False,
+    force_llm_modules: list[str] | None = None,
+    output_dir: str | None = None,
+    transactions: list | None = None,
+    dividends: list | None = None,
+    *,
+    snapshot_namespace: str | None = None,
+) -> ReportResult:
+    """生成投资分析报告（对外入口；阶段边界取消的收口点）。
+
+    取消（`CancelToken` 置位）由 ``PerfCollector.start`` 在下一个阶段边界抛
+    ``StageCancelled``；本入口捕获后走与终端中断相同的收口
+    （``run_integrity.handle_interruption``：清临时产物 / 落 status=interrupted
+    运行记录 / 打印已写盘明细），随后返回**正常结果对象**而不是抛异常——渠道层
+    据此回菜单，不必为「取消」与「失败」各写一套控制流。
+
+    参数语义见 :func:`_generate_report_impl`。
+    """
+    try:
+        return _generate_report_impl(
+            holdings,
+            config,
+            reporter,
+            report_type=report_type,
+            fetch_history=fetch_history,
+            force_llm=force_llm,
+            force_llm_modules=force_llm_modules,
+            output_dir=output_dir,
+            transactions=transactions,
+            dividends=dividends,
+            snapshot_namespace=snapshot_namespace,
+        )
+    except StageCancelled as exc:
+        logger.warning("[cancel] 生成在阶段边界中止: %s", exc.reason)
+        handle_interruption(reporter)
+        reporter.warn(f"已中止（{exc.reason}）——已完成部分与缓存已保留，重跑只补缺失")
+        return ReportResult()

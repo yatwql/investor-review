@@ -19,7 +19,6 @@ from src.python.config import init_config, get_default
 from src.python.llm.pricing import format_costs
 from src.python.core.logger import log_app_boundary, setup_logger
 from src.python.tui.panel_runtime import NavState
-from src.python.tui.switch_panel import layout_tier
 from src.python.tui.text_layout import terminal_columns
 from src.python.tui.tui_keys import KEY_CTRL_C, KEY_DOWN, KEY_ENTER, KEY_ESC, KEY_UP, get_key
 from src.python.tui.tui_handlers import execute_item
@@ -165,6 +164,9 @@ def _can_repaint_inplace() -> bool:
 
 _ESC_EXIT_CONFIRM_WINDOW = 3.0  # 主菜单 Esc 连按两次确认窗口（秒）
 
+#: 方向键别名（vim 手感）：主菜单与列表面板共用的单字母等价键
+_NAV_ALIASES = {"j": KEY_DOWN, "k": KEY_UP}
+
 
 def _print_hint(text: str) -> int:
     """主菜单按键反馈单行（按宽度折行，不整屏重绘）。
@@ -226,8 +228,7 @@ def _ask_menu_filter(current: str) -> str:
 def main() -> None:
     """TUI 主循环。方向键导航 + Enter 确认（全档可用）；窄屏直达并存。
 
-    窄屏档（<64 列）交互主路径仍是「按字母/数字键直达」（未登记键静默忽略
-    且不重绘）；方向键/Enter 同样可用——移动选中态后**原地重绘**（ANSI 光标
+    窄屏档（<64 列）交互主路径仍是「按字母/数字键直达」（未登记键给一行反馈、帧保持不动）；方向键/Enter 同样可用——移动选中态后**原地重绘**（ANSI 光标
     上移+清屏，菜单不滚屏），不支持 ANSI 的环境（管道/测试/旧控制台）回退
     整屏追加。Esc 需连按两次确认（3 秒窗口；防高延迟链路方向键拆包把孤 ESC 误判为退出），0/X 单次即退。
     """
@@ -292,7 +293,7 @@ def main() -> None:
         # 全档导航——窄屏优先原地重绘（菜单不滚屏），不可用时回退整屏追加
         while True:
             key = get_key()
-            narrow = layout_tier(terminal_columns()) == "narrow"
+            key = _NAV_ALIASES.get(key, key)
             if key != KEY_ESC and esc_exit_armed is not None:
                 # 任何非 Esc 按键解除退出确认态：拆包孤 ESC 挂起的确认不被后续按键引爆
                 esc_exit_armed = None
@@ -330,12 +331,10 @@ def main() -> None:
                     nav.sync(idx)
                     execute_item(idx)
                     break  # 直达执行后回到重绘点（子菜单关闭 → 刷新首页）
-                if narrow:
-                    # 窄屏直达模式：未登记字母给单行反馈（不整屏重绘）——与宽档「重绘即
-                    # 反馈」同语义：任何按键都有可观察结果（分档只改版式不改语义）
-                    hint_lines += _print_hint(f"「{key.upper()}」未登记（键位见上方菜单）")
-                    continue
-                break
+                # 未登记的字母：一行反馈即可（全档同语义——任何按键都有可观察结果；
+                # 不为一次按错重绘一整屏，帧保持不动）
+                hint_lines += _print_hint(f"「{key.upper()}」未登记（键位见上方菜单）")
+                continue
             if key == KEY_ENTER:
                 if menu_filter and nav.cursor not in visible:
                     target = next_matching(visible, nav.cursor, 1)
@@ -361,12 +360,9 @@ def main() -> None:
                     hint_lines = 0
                     continue
                 break  # 非 TTY/旧控制台：回退整屏追加
-            if narrow:
-                # 窄屏未知键：单行反馈（不整屏重绘），与宽档「重绘一屏」同语义
-                hint_lines += _print_hint("未识别按键")
-                continue
-            # 宽/中档未知键：重绘一屏给出反馈
-            break
+            # 未识别按键：全档一行反馈（帧保持不动），与未登记字母同一口径
+            hint_lines += _print_hint("未识别按键")
+            continue
 
 
 if __name__ == "__main__":

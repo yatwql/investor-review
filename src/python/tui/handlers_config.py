@@ -9,9 +9,9 @@ import os
 
 from src.python.core.logger import setup_logger
 from src.python.core.reader import list_xlsx_files
+from src.python.tui.error_tail import emit_error
 from src.python.tui.tui_menu import (
     GREEN,
-    RED,
     RESET,
     YELLOW,
     get_config_cache,
@@ -65,7 +65,7 @@ def _apply_edit(payload: dict) -> bool:
         return False
     except Exception:
         logger.exception("配置写入失败")
-        print(f"  {RED}[ERR]{RESET} 配置写入失败，详情请查看日志 logs/app.log")
+        emit_error("配置写入失败", "config", advice="详情见 logs/app.log")
         return False
 
 
@@ -79,7 +79,7 @@ def _read_llm_settings() -> tuple[dict, str] | None:
 
     snapshot = read_llm_settings_file()
     if snapshot is None:
-        print(f"  {RED}[ERR]{RESET} 无法读取 llm_settings.json")
+        emit_error("无法读取 llm_settings.json", "config", advice="检查文件是否为有效 JSON（或以默认值重新生成）")
         return None
     return snapshot
 

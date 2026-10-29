@@ -3516,6 +3516,10 @@ make_http_client(timeout=10.0) → httpx.Client
 | `config_edit_whitelist` | 可编辑配置项白名单（键→类型/枚举→目标文件→写入原语；定义于共享编辑层，TUI/Web/CLI 同源） | 配置管理 | 配置编辑 | 无（校验面） |
 | `edit_ops` | 配置编辑共享层（白名单 + 值规则 + 写入分派 + 写前备份，TUI/Web/CLI 唯一编辑通道） | 配置管理 | 配置编辑 | 无（校验面） |
 | `system_info` | 系统状态组装与展示原语（Web 状态卡 / TUI 首页共用数据源：熔断/路由/凭据回填/匿名化标签） | 核心基础设施 | 状态展示 | 无（展示面） |
+| `action_hints` | 动作短语单源（语义名 → 带菜单键的下一步短语；页头状态行与 `[ERR]` 错误行共用，首键须为主菜单顶层键） | 核心基础设施 | 交互反馈 | 无（展示面） |
+| `error_tail` | 错误尾巴拼装（`[ERR] 原因 → 下一步动作` + 可选建议行，按终端宽度折行；与页头同一短语源） | 核心基础设施 | 交互反馈 | 无（展示面） |
+| `live_status` | 长任务状态条（单行原地刷新的阶段/已耗时/ETA/中止键；落地行前后挂起恢复，非 TTY 退回逐行输出） | 核心基础设施 | 交互反馈 | 无（展示面） |
+| `cancel_token` | 阶段边界协作式取消（令牌 + `StageCancelled`，`PerfCollector.start` 为唯一生效点；编排层收口复用中断收尾，已完成产物与缓存保留） | 核心基础设施 | 交互反馈 | 无（运行期对象，随渠道创建） |
 | `history_policy` | 历史走势获取策略解析（off/auto/prompt 单源，三渠道共用，TUI 注入询问回调） | 报告生成 | 组合历史走势 | `history.fetch_mode` |
 | `run_integrity` | 生成运行一致性守卫（`guard_run` 装饰 `generate_report` 中断收口：临时产物清扫/已写盘登记/`status=interrupted` 运行记录/健康检查收敛；ContextVar 按线程隔离，写盘方 `note_temp`·`note_artifact` 登记） | 报告生成 | 报告输出 | 无（设施模块，中断时经 reporter 输出明细） |
 | `config_backup` | 配置写前备份（`.bak` 单槽轮转） | Web 配置 | 配置编辑 | 无（安全面） |

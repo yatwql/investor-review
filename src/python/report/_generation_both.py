@@ -68,6 +68,7 @@ def _generate_report_both(
         is_enable_stock_fundamentals,
     )
     from src.python.config.features import is_feature_enabled
+    from src.python.core.cancel import token_of
     from src.python.core.perf import PerfCollector
     from src.python.core.registry import get_report_section_order
     from src.python.llm.depth_profile import effective_news_limit, resolve_depth_profile
@@ -78,7 +79,12 @@ def _generate_report_both(
 
     from src.python.report._run_scope import finish_report_run, start_report_run
 
-    perf = PerfCollector(report_type="both", holdings=holdings, stage_announcer=reporter.stage_progress)
+    perf = PerfCollector(
+        report_type="both",
+        holdings=holdings,
+        stage_announcer=reporter.stage_progress,
+        cancel_token=token_of(reporter),
+    )
     bind_perf(perf)
     # 报告运行边界：清本轮降级事件与自检载体（both 路径不调 LLM，无需用量基线）
     start_report_run()

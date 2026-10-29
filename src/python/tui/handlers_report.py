@@ -109,7 +109,10 @@ def _run_generate(
     Returns:
         TuiProgressReporter 实例（成功时）或 None（持仓未就绪时）
     """
-    reporter = TuiProgressReporter()
+    # 生成期启用状态条与中止键：状态条只在 TTY 上出现，非 TTY 自动退回逐行输出
+    from src.python.core.cancel import CancelToken
+
+    reporter = TuiProgressReporter(live=True, cancel_token=CancelToken("用户取消"))
     config = get_config_cache() or {}
     prepared = prepare_holdings()
     if not prepared:

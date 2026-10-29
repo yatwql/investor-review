@@ -322,6 +322,7 @@ def run_content_options_panel() -> None:
             on_text=_on_text,
             on_help=_on_help,
             on_nav_moved=lambda: state.update(repaint=True),
+            nav_keys=False,  # 本面板 ``k`` 已用于「窄档显示键名列」
         )
     except (EOFError, KeyboardInterrupt):
         print()

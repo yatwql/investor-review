@@ -24,6 +24,9 @@ from typing import Callable, Iterable, Literal
 from src.python.core.ansi_colors import CYAN, RESET
 from src.python.tui.tui_keys import KEY_DOWN, KEY_UP, input_choice
 
+#: 方向键别名（vim 手感）：与主菜单同一套（``j`` = ↓、``k`` = ↑）
+_NAV_ALIASES = {"j": KEY_DOWN, "k": KEY_UP}
+
 
 class NavState:
     """列表面板方向键导航态（游标 + engaged 标记）。
@@ -123,6 +126,7 @@ def panel_loop(
     direct: bool = True,
     pick: int = 1,
     on_picked: Callable[[tuple[str, ...]], None] | None = None,
+    nav_keys: bool = True,
 ) -> None:
     """统一列表面板交互循环：读键 → 导航态 → 派发 → 反馈/重绘，直到 Esc/返回项。
 
@@ -156,6 +160,8 @@ def panel_loop(
         pick: Enter 收集个数（M 面板交换优先级需 2 项）；>1 时逐次 Enter 收集，
             收满调 `on_picked`。
         on_picked: 收满 `pick` 项后的回调（如执行交换）。
+        nav_keys: 是否把 ``j``/``k`` 归一为 ↓/↑（默认开）。面板已占用这两个字母时置 False
+            （如 ``[S]`` 的 ``k`` 用于切键名列），否则它们原样交 `on_text`。
 
     Raises:
         KeyboardInterrupt / EOFError: 原样上抛（不被吞）。
@@ -173,6 +179,9 @@ def panel_loop(
 
         if choice is None:  # Esc：误入面板即时返回
             return
+
+        if nav_keys:
+            choice = _NAV_ALIASES.get(choice, choice)
 
         # ── ? 帮助（运行时单源：无参=可用键一览，?N=单项详情；全面板一致）──
         if choice[:1] in ("?", "？"):

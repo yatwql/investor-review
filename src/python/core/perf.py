@@ -40,6 +40,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 
+from src.python.core.cancel import CancelToken, StageCancelled
 from src.python.core.constants import APP_VERSION, PROJECT_ROOT
 from src.python.core.jsonl_store import append_jsonl_atomic
 
@@ -220,6 +221,7 @@ class PerfCollector:
         holdings: list,
         *,
         stage_announcer: Callable[["PerfCollector"], None] | None = None,
+        cancel_token: CancelToken | None = None,
     ) -> None:
         self._report_type = report_type
         self._holdings_count = len(holdings)
@@ -231,6 +233,7 @@ class PerfCollector:
         self._current_name: str | None = None
         self._current_start: float | None = None
         self._stage_announcer = stage_announcer
+        self._cancel_token = cancel_token
         self._interrupted = False
         self._interrupted_stage: str | None = None
         self._saved = False
@@ -257,6 +260,10 @@ class PerfCollector:
         self._current_name = phase_name
         self._current_start = time.perf_counter()
         self._announce_stage()
+        # 协作式取消的**唯一**生效点：阶段边界。置位后不在阶段中途硬切，
+        # 已完成阶段的产物与缓存全部保留（收口由编排层的 handle_interruption 负责）。
+        if self._cancel_token is not None and self._cancel_token.cancelled:
+            raise StageCancelled(self._cancel_token.reason)
 
     def stage_status(self) -> dict[str, Any] | None:
         """当前活跃阶段状态 {"phase": 阶段名, "elapsed": 已耗时秒}；无活跃阶段时 None。"""

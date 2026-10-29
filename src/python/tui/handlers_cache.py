@@ -16,11 +16,12 @@ import os
 from src.python.core.num_utils import format_size
 from src.python.core.logger import setup_logger
 from src.python.core.reader import read_holdings, require_holdings
+from src.python.tui.error_tail import emit_error
 from src.python.tui.tui_handlers import print_error_with_hint, select_holdings_file
 from src.python.tui.tui_keys import input_choice
 from src.python.tui.panel_runtime import NavState, PanelItem, panel_loop
 from src.python.tui.prompt_text import panel_prompt
-from src.python.tui.tui_menu import GREEN, RED, RESET, YELLOW, press_any_key, refresh_config
+from src.python.tui.tui_menu import GREEN, RESET, YELLOW, press_any_key, refresh_config
 
 logger = setup_logger()
 
@@ -49,7 +50,7 @@ def _read_holdings_and_clear_cache(group_name: str) -> list | None:
         try:
             require_holdings(holdings, filepath)
         except ValueError as e:
-            print(f"  {RED}[ERR]{RESET} {e}")
+            emit_error(str(e), "cache")
             return None
         print(f"  {GREEN}[OK]{RESET} 共 {len(holdings)} 条持仓记录")
         print("  [..] 清除旧缓存...")

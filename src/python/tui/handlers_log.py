@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from src.python.core.ansi_colors import MAGENTA
 from src.python.core.doctor import NETWORK_TIMEOUT_DEFAULT
+from src.python.tui.error_tail import emit_error
 from src.python.core.logger import is_llm_call_message, setup_logger
 from src.python.tui.text_layout import terminal_columns, wrap_hanging, wrap_prompt
 from src.python.tui.tui_keys import PromptCancelledError, input_choice
@@ -99,7 +100,7 @@ def _cmd_log_settings() -> None:
         try:
             config = read_logger_config()
         except LoggerConfigError as e:
-            print(f"  {RED}[ERR]{RESET} {e}")
+            emit_error(f"读取日志设置失败: {e}", "logs")
             return
         print()
         print(style_heading("  ── 日志设置 ──"))
@@ -147,7 +148,7 @@ def _cmd_view_logs() -> None:
         entries = read_log(limit=_DISPLAY_LINES, level=level)
     except (ValueError, OSError):
         logger.exception("读取运行日志失败")
-        print(f"  {RED}[ERR]{RESET} 读取运行日志失败")
+        emit_error("读取运行日志失败", "logs")
         return
 
     if not entries:
@@ -190,7 +191,7 @@ def _cmd_view_health_history() -> None:
         summaries = summarize_health_history(limit=10)
     except OSError:
         logger.exception("读取数据源健康历史失败")
-        print(f"  {RED}[ERR]{RESET} 读取数据源健康历史失败")
+        emit_error("读取数据源健康历史失败", "logs")
         return
 
     if not summaries:
@@ -253,7 +254,7 @@ def _cmd_run_doctor() -> None:
         results = run_doctor_checks(include_network=include_network, max_timeout=_DOCTOR_NETWORK_TIMEOUT)
     except Exception:
         logger.exception("系统自检执行失败")
-        print(f"  {RED}[ERR]{RESET} 系统自检执行失败（详见日志）")
+        emit_error("系统自检执行失败", "logs", advice="详情见 logs/app.log")
         return
 
     print()

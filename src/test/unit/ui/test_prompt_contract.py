@@ -428,3 +428,48 @@ class TestFirstRunHintsPointToRealMenus:
         llm_line = next(line for line in text.splitlines() if "llm_key.json" in line)
         assert "[G]" in llm_line and "[L]" in llm_line
         assert "[S]" not in llm_line, f"LLM 设置不在 [S]（章节内容面板），实际：{llm_line}"
+
+
+# ── 规则 7：错误行必须给下一步动作 ─────────────────────────────
+
+#: 就地纠正类输入校验的首词（用户下一步就是在同一条提示里重输，键路径反而是噪声）
+_VALIDATION_HEADS = ("应为", "必须", "不能", "无效", "请")
+
+
+def _err_literals():
+    """扫描 TUI 全量调用点中含 ``[ERR]`` 的字符串字面量，产出 (文件名, 行号, 文本)。"""
+    for path in _tui_sources():
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            for arg in node.args:
+                for sub in ast.walk(arg):
+                    if isinstance(sub, ast.Constant) and isinstance(sub.value, str) and "[ERR]" in sub.value:
+                        yield path.name, sub.lineno, sub.value
+
+
+class TestErrorTailHasAction:
+    """规则 7：``[ERR]`` 行须带「→ 下一步动作」，或明确属就地纠正的输入校验。
+
+    三类合法形态：
+      - 含 ``→``（动作短语经 ``error_tail.emit_error`` 拼装）；
+      - 校验类首词（应为/必须/不能/无效/请）——用户当场重输即可；
+      - 纯 ``{e}`` 透传（字面量不含中文）：文案由被调层决定，交由该层校验。
+    """
+
+    def test_error_lines_have_action_tail(self):
+        offenders = []
+        for fname, lineno, text in _err_literals():
+            body = text.split("[ERR]", 1)[1]
+            if "→" in text:
+                continue
+            if any(head in body for head in _VALIDATION_HEADS):
+                continue
+            if not any("\u4e00" <= ch <= "\u9fff" for ch in body):
+                continue
+            offenders.append(f"{fname}:{lineno}: {text.strip()}")
+        assert not offenders, (
+            "错误行缺少下一步动作（改用 error_tail.emit_error 并在 DESIGN-TUI Feedback 节选短语）：\n"
+            + "\n".join(offenders)
+        )

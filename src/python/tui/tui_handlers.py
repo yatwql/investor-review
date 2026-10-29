@@ -18,6 +18,7 @@ from src.python.llm.pricing import format_costs
 from src.python.core.logger import setup_logger
 from src.python.core.reader import get_xlsx_info, list_xlsx_files, read_holdings_with_flows, require_holdings
 from src.python.report.progress import TuiProgressReporter
+from src.python.tui.error_tail import emit_error
 from src.python.tui.tui_keys import PromptCancelledError, input_choice
 from src.python.tui.tui_menu import MENU_ITEMS, get_config_cache, refresh_config
 
@@ -58,18 +59,19 @@ def print_timing_summary() -> None:
     timing_records.clear()
 
 
-def print_error_with_hint(e: Exception, prefix: str = "操作失败") -> None:
-    """输出带友好提示的错误信息（映射单源于 `core.error_hints`，Web/CLI 取同一句）。"""
+def print_error_with_hint(e: Exception, prefix: str = "操作失败", action_key: str = "logs") -> None:
+    """输出带友好提示的错误信息（映射单源于 `core.error_hints`，Web/CLI 取同一句）。
+
+    动作尾巴统一由 ``error_tail.emit_error`` 拼装：通用异常默认指向运行日志（``[D]→L``）。
+    """
     from src.python.core.error_hints import hint_for
 
     hint = hint_for(e)
     msg = str(e)
     if hint.log_detail:
         logger.warning("%s: %s", prefix, msg, exc_info=True)
-    print(f"  [ERR] {prefix}: {hint.message}")
-    if hint.advice:
-        print(f"        {hint.advice}")
-    elif "网络" in hint.message and msg:
+    emit_error(f"{prefix}: {hint.message}", action_key, advice=hint.advice or None)
+    if not hint.advice and "网络" in hint.message and msg:
         # 网络类保留详情行，便于用户核对具体超时/断连；其余不暴露原始异常串
         print(f"        详情: {msg}")
 
@@ -114,6 +116,7 @@ def finish_report(reporter: TuiProgressReporter) -> None:
     单键作答即返回菜单：长输出仍停在一屏（先读完再重绘），用户看完顺手按 y 打开、
     直接回车或按其它键则跳过——只按一次，不多一步。
     """
+    reporter.close()  # 先停状态条心跳并恢复终端属性，再做落地输出
     reporter.print_error_summary()
     reporter.print_timing_summary()
     from src.python.tui.report_artifacts import collect_artifacts, prompt_open_artifacts
@@ -133,10 +136,10 @@ def select_holdings_file() -> str | None:
     specific_path = resolve_holdings_path(config)
     if os.path.exists(specific_path):
         return os.path.abspath(specific_path)
-    dir_path = config.get("holdings_dir") or get_default("holdings_dir")
+    dir_path = str(config.get("holdings_dir") or get_default("holdings_dir") or "")
     files = list_xlsx_files(dir_path)
     if not files:
-        print(f"  [ERR] 目录 '{dir_path}' 下未找到 xlsx 文件")
+        emit_error(f"目录 '{dir_path}' 下未找到 xlsx 文件", "config")
         print("     请先配置正确的持仓目录（菜单选项 C）")
         return None
     if len(files) == 1:

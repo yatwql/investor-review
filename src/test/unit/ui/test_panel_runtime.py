@@ -390,3 +390,35 @@ class TestPanelLoopRender:
         assert "行A" in out and "行B" in out
         assert "" in out.splitlines(), "None 行按空行打印"
         assert len(seen) == 2, "方向键移动后回到循环顶重建渲染"
+
+
+class TestNavKeyAliases:
+    """`j`/`k` 方向键别名：与 ↑/↓ 同一语义，占用字母的面板可关闭（`nav_keys=False`）。"""
+
+    def test_j_k_move_cursor_like_arrows(self):
+        """`jj` 等价 `↓↓`：导航后 Enter 派发同一项。"""
+        calls: list[str] = []
+        panel_loop(
+            _simple_items(calls),
+            render=_render_blank,
+            prompt="> ",
+            read=_reader(["j", "j", "", "0"]),
+        )
+        assert calls == ["3"], "j 应等价 ↓"
+
+    def test_nav_keys_disabled_passes_letters_to_on_text(self):
+        """关掉别名后 `k` 不移动游标，原样交 `on_text`（面板自有词法优先）。"""
+        seen: list[str] = []
+
+        def _on_text(text: str) -> None:
+            seen.append(text)
+
+        panel_loop(
+            _simple_items([]),
+            render=_render_blank,
+            prompt="> ",
+            read=_reader(["k", "0"]),
+            on_text=_on_text,
+            nav_keys=False,
+        )
+        assert seen == ["k"], "nav_keys=False 时 k 必须交给 on_text"
