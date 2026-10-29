@@ -60,6 +60,23 @@ class TestStartReportRun:
         assert get_self_review_block() is None, "上一轮自检区块不得残留"
         assert isinstance(baseline, dict), "必须返回用量基线（供收尾算 delta）"
 
+    def test_resets_cache_hit_rate_counters(self):
+        """报告边界重置缓存命中率计数（汇总行与「同前缀未命中」告警都按轮口径）。
+
+        长驻进程（Web/TUI）连跑多份报告时不清零会把「本次命中 X / 未命中 Y」
+        累计成进程累计值（实测 5→10→15 递进），告警阈值也随之失真。
+        """
+        from src.python.cache import get_cache_hit_rate
+        from src.python.cache._stats import _record_cache_miss
+        from src.python.report._run_scope import start_report_run
+
+        _record_cache_miss("report_datasink_index_600900.SS")
+        assert get_cache_hit_rate()["misses"] >= 1
+
+        start_report_run()
+
+        assert get_cache_hit_rate()["misses"] == 0, "报告边界应把命中率计数清零"
+
     def test_resets_self_review_carrier(self):
         from src.python.llm.self_review import get_self_review_block, set_self_review_block
         from src.python.report._run_scope import start_report_run

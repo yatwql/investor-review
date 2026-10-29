@@ -1142,3 +1142,50 @@ class TestAppliedCorrectionReporting:
         html = "<p>止盈约30%持仓，收益率30%。</p>"
         _corrected, summary = run_fact_check(html, holdings, module_label="智囊团深度复盘")
         assert "30" not in summary or "修正" not in summary, f"跳过项不应出现在摘要告警里: {summary}"
+
+
+class TestMarketScopeNoSubject:
+    """市场/板块口径且分句内无持仓主体 → 不改写。
+
+    实盘事故：「银行板块净流出15.06亿、跌0.35%，白酒净流出16.86亿、跌2.35%」——
+    板块单日涨跌被全局最近邻兜底改写成某品种收益率（先是 102.0%、后是 4.6%，随
+    最近邻漂移）。更贵的是它**回写缓存**：下一轮自检的输入段随之变化，每轮多付一次
+    11~17s 的自检调用（长驻进程连跑三份报告时稳定复现）。
+    """
+
+    pytestmark = [
+        pytest.mark.unit,
+        pytest.mark.unit_llm,
+        pytest.mark.llm,
+    ]
+
+    @pytest.fixture
+    def holdings(self) -> list[dict]:
+        return [
+            {
+                "name": "兴全恒慧30天持有超短债C",
+                "code": "012325",
+                "market_value": 34203.0,
+                "cost": 32700.0,
+                "profit_rate": 4.6,
+            },
+            {"name": "建设银行", "code": "601939", "market_value": 19800.0, "cost": 5800.0, "profit_rate": 241.5},
+        ]
+
+    def test_sector_daily_move_not_corrected(self, holdings):
+        """板块净流出与涨跌幅（无持仓主体）不改写为品种收益率。"""
+        text = "而银行板块净流出15.06亿、跌0.35%，白酒净流出16.86亿、跌2.35%。"
+        _issues, _checked, _passed, corrections = check_numerical_consistency(text, holdings)
+        assert corrections == [], f"板块涨跌被改写: {corrections}"
+
+    def test_index_moves_not_corrected(self, holdings):
+        """指数/大盘涨跌（无持仓主体）不改写。"""
+        text = "沪深300涨1.2%，创业板跌0.8%，两市成交额萎缩。"
+        _issues, _checked, _passed, corrections = check_numerical_consistency(text, holdings)
+        assert corrections == [], f"指数涨跌被改写: {corrections}"
+
+    def test_holding_rate_in_market_sentence_still_corrected(self, holdings):
+        """守卫不过度：含持仓主体的分句仍按其自身收益率纠正。"""
+        text = "建设银行 持仓收益率 123.4%，领先同板块同业。"
+        _issues, _checked, _passed, corrections = check_numerical_consistency(text, holdings)
+        assert len(corrections) == 1 and corrections[0][1] == "241.5", f"持仓错值应纠正: {corrections}"

@@ -54,6 +54,15 @@ def start_report_run() -> dict[str, Any]:
         get_tracker().begin_report()
     except Exception:  # 观测隔离失败不阻断主链路
         logger.debug("[run_scope] 降级事件日志重置失败，已忽略", exc_info=True)
+    # 缓存命中率是**按轮**口径：运行收尾的 `[cache] 本次命中 …` 汇总与「同前缀未命中
+    # ≥N 次」告警都读这份计数，长驻进程（Web/TUI）连跑多份报告时不清零会累计成
+    # 「本次」累计值（实测 5→10→15 递进），汇总与告警随之失真。
+    try:
+        from src.python.cache import reset_cache_stats
+
+        reset_cache_stats()
+    except Exception:  # 观测隔离失败不阻断主链路
+        logger.debug("[run_scope] 缓存命中率计数重置失败，已忽略", exc_info=True)
     try:
         from src.python.llm.self_review import reset_self_review
 

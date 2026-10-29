@@ -14,6 +14,7 @@ from src.python.llm.fact_checker._constants import (
     _EXPOSURE_KEYWORDS,
     _INDEX_CODES,
     _PROFIT_KEYWORDS,
+    _MARKET_SCOPE_NOUNS,
     _PROPORTION_KEYWORDS,
     _REBALANCE_TARGET_KEYWORDS,
 )
@@ -42,6 +43,8 @@ from src.python.llm.fact_checker._utils import (
     _build_stock_rate_map,
     _calc_portfolio_values,
     _extract_holding_map,
+    _clause_span,
+    _has_subject_candidate,
     _locate_subject_code,
     _sentence_snippet,
     _split_sentences,
@@ -97,6 +100,32 @@ class PercentContext:
     is_non_rate_metric: bool = False
     is_table_weight_cell: bool = False
     confirmed_rates: dict[str, str] | None = None
+
+
+def _is_market_scope_no_subject(
+    sentence: str,
+    anchor: int,
+    holding_codes: set[str],
+    name_to_code: dict[str, str] | None,
+) -> bool:
+    """判断数值是否落在「市场/板块口径且无持仓主体」的分句里。
+
+    分句含板块/指数/大盘类名词，同时分句内出现不了任何持仓主体（代码/全名/简称/
+    描述性尾名）时，该数值讲的是市场涨跌，不是持仓收益率——**归属不可知**，不能
+    按收益率改写。
+
+    实盘事故：「银行板块净流出15.06亿、跌0.35%，白酒净流出16.86亿、跌2.35%」——
+    板块单日涨跌被全局最近邻兜底改写成某品种收益率（先是 102.0%、后是 4.6%，随
+    最近邻漂移），回写缓存后每轮让自检输入变化，多付一次 11~17s 的自检调用。
+
+    Returns:
+        命中「市场口径且无持仓主体」时为 True。
+    """
+    clause_start, clause_end = _clause_span(sentence, anchor)
+    clause = sentence[clause_start:clause_end]
+    if not any(noun in clause for noun in _MARKET_SCOPE_NOUNS):
+        return False
+    return not _has_subject_candidate(clause, holding_codes, name_to_code, anchor - clause_start)
 
 
 def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, str, str] | None]:
@@ -220,6 +249,10 @@ def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, 
         best_code = None
 
     closest_ref = min(ref_rates, key=lambda k: abs(ctx.value - ref_rates[k]))
+
+    # 市场/板块口径且分句内无持仓主体 → 数值是市场涨跌，归属不可知，不改写。
+    if _is_market_scope_no_subject(ctx.sentence, ctx.anchor, ctx.holding_codes, ctx.name_to_code):
+        return None, None
 
     # 同句同品种只有一个持仓收益率：该品种的收益率已在同一句内确认过，本数值只能是
     # 别的口径（括号里的占比/贡献等），不参与收益率改写。
