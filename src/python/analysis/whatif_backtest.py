@@ -20,11 +20,11 @@ from datetime import date, datetime
 from typing import Any
 
 from src.python.analysis.metrics import (
-    _MIN_SAMPLE_DAYS,
     annualized_return,
     max_drawdown_pct,
     sharpe_ratio,
 )
+from src.python.analysis.metrics_returns import _MIN_SAMPLE_DAYS
 from src.python.analysis.whatif import _arrow
 from src.python.core.trading_calendar import count_trading_days_elapsed
 

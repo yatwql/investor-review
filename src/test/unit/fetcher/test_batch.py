@@ -593,19 +593,18 @@ class TestRateLimiter(unittest.TestCase):
         self.assertLess(elapsed, 0.05)
 
 
-class TestGetRateLimiterCacheClear(unittest.TestCase):
-    """get_rate_limiter.cache_clear() 单例重建测试。"""
+class TestClearRateLimiterCache(unittest.TestCase):
+    """clear_rate_limiter_cache() 单例重建测试。"""
 
-    def test_cache_clear_returns_new_instance(self):
-        """cache_clear() 后 get_rate_limiter() 返回新实例。"""
-        from src.python.fetcher.batch import get_rate_limiter
+    def test_clear_returns_new_instance(self):
+        """clear_rate_limiter_cache() 后 get_rate_limiter() 返回新实例。"""
+        from src.python.fetcher.batch import clear_rate_limiter_cache, get_rate_limiter
 
         # 清除全局单例以确保干净的起点
-        get_rate_limiter.cache_clear()
+        clear_rate_limiter_cache()
         inst_a = get_rate_limiter()
 
-        # cache_clear 后重建
-        get_rate_limiter.cache_clear()
+        clear_rate_limiter_cache()
         inst_b = get_rate_limiter()
 
         self.assertIsNot(inst_a, inst_b)
@@ -614,15 +613,15 @@ class TestGetRateLimiterCacheClear(unittest.TestCase):
 
         self.assertIsInstance(inst_b, RateLimiter)
 
-    def test_cache_clear_after_get_returns_new_config(self):
-        """cache_clear 后重建的实例独立于旧实例（内部状态不共享）。"""
-        from src.python.fetcher.batch import get_rate_limiter
+    def test_clear_after_get_returns_new_config(self):
+        """清除后重建的实例独立于旧实例（内部状态不共享）。"""
+        from src.python.fetcher.batch import clear_rate_limiter_cache, get_rate_limiter
 
-        get_rate_limiter.cache_clear()
+        clear_rate_limiter_cache()
         inst_a = get_rate_limiter()
         inst_a.acquire("eastmoney")  # 在 inst_a 上产生副作用
 
-        get_rate_limiter.cache_clear()
+        clear_rate_limiter_cache()
         inst_b = get_rate_limiter()
         # inst_b 的 eastmoney 不应有上次调用记录（无等待）
         import time as _time2
@@ -632,12 +631,11 @@ class TestGetRateLimiterCacheClear(unittest.TestCase):
         elapsed = _time2.monotonic() - t0
         self.assertLess(elapsed, 0.05)
 
-    def test_cache_clear_function_attribute_exists(self):
-        """get_rate_limiter 函数本身具有 cache_clear 属性且可调用。"""
+    def test_no_function_attribute_shim(self):
+        """公开入口是模块级函数：get_rate_limiter 上不再挂 cache_clear 属性。"""
         from src.python.fetcher.batch import get_rate_limiter as _fn
 
-        self.assertTrue(hasattr(_fn, "cache_clear"))
-        self.assertTrue(callable(_fn.cache_clear))
+        self.assertFalse(hasattr(_fn, "cache_clear"))
 
 
 # ═══════════════════════════════════════════════════════════════

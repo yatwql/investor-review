@@ -295,13 +295,7 @@ def compact_anchor_file(
     stats["after_bytes"] = len(gzip.compress(body.encode("utf-8"))) if body else 0
     if dry_run:
         return stats
-    legacy_present = target_path in snapshot  # 未分片单文件待并入分片
-    if (
-        stats["after_lines"] == stats["before_lines"]
-        and not stats["trimmed"]
-        and not stats["unattributed"]
-        and not legacy_present
-    ):
+    if stats["after_lines"] == stats["before_lines"] and not stats["trimmed"] and not stats["unattributed"]:
         return stats  # 无事可做：不重写任何分片
 
     directory = os.path.dirname(target_path) or "."
@@ -328,7 +322,7 @@ def compact_anchor_file(
                 backups.append(backup)
             os.replace(tmp_path, shard_path)
             written.append(name)
-        # 整月被裁空的分片与未分片单文件：删掉，否则读侧会把已裁掉的样本再读回来。
+        # 整月被裁空的分片：删掉，否则读侧会把已裁掉的样本再读回来。
         # 删除前按 `INVEST_DEDUP_KEEP_BACKUP` 留一份备份——否则「整月被裁空」这条路径
         # 会绕过重写前的 .bak，用户没有任何回滚点。
         for stale in anchor_shard_paths(target_path):

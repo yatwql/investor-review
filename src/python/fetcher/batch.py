@@ -477,7 +477,7 @@ def get_rate_limiter() -> RateLimiter:
     """获取模块级 RateLimiter 单例（从 config.json batch_rate_limit 加载）。
 
     首次调用时从 config 读取 batch_rate_limit 配置，后续复用。
-    菜单 R 刷新配置后调用 get_rate_limiter.cache_clear() 可重建实例。
+    菜单 R 刷新配置后调用 ``clear_rate_limiter_cache()`` 可重建实例。
     """
     global _DEFAULT_RATE_LIMITER
     if _DEFAULT_RATE_LIMITER is None:
@@ -497,10 +497,6 @@ def _clear_rate_limiter_cache() -> None:
         _DEFAULT_RATE_LIMITER = None
 
 
-# 将 cache_clear 挂到 get_rate_limiter 上，方便调用方发现（兼容旧调用点）
-get_rate_limiter.cache_clear = _clear_rate_limiter_cache  # type: ignore[attr-defined]
-
-
 def clear_rate_limiter_cache() -> None:
     """清除 RateLimiter 单例缓存（公开入口，供 TUI/CLI 刷新配置后重建）。"""
     _clear_rate_limiter_cache()
@@ -509,7 +505,7 @@ def clear_rate_limiter_cache() -> None:
 def _build_rate_limiter_from_config() -> RateLimiter:
     """从 config.json batch_rate_limit 段构造 RateLimiter。
 
-    支持热重载：调用方在菜单 R 刷新后调用 get_rate_limiter.cache_clear() 可重建。
+    支持热重载：调用方在菜单 R 刷新后调用 ``clear_rate_limiter_cache()`` 可重建。
     """
     try:
         from src.python.config import get_config

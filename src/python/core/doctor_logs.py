@@ -84,7 +84,7 @@ def _check_log_volume() -> dict[str, Any]:
 
 
 def _anchor_files() -> list[str]:
-    """锚点分片（`dedup_anchors-YYYYMM.jsonl.gz`）+ 未分片单文件（若仍存在）。"""
+    """锚点分片路径（`dedup_anchors-YYYYMM.jsonl.gz`）。"""
     directory = os.path.dirname(_DEDUP_ANCHOR_PATH)
     try:
         names = sorted(
@@ -93,8 +93,6 @@ def _anchor_files() -> list[str]:
     except OSError:
         names = []
     paths = [os.path.join(directory, name) for name in names]
-    if os.path.exists(_DEDUP_ANCHOR_PATH):
-        paths.append(_DEDUP_ANCHOR_PATH)
     return paths
 
 
@@ -121,7 +119,6 @@ def _check_dedup_anchor() -> dict[str, Any]:
     except OSError as e:
         return _item(GROUP_LOG_CACHE, "去重锚点", False, f"读取失败：{e}", hint="检查 data/calibration/ 权限")
     shards = sum(1 for path in paths if path.endswith(".gz"))
-    legacy = "（含旧版单文件，下次压缩并入分片）" if any(path.endswith(".jsonl") for path in paths) else ""
     bak = "（已保留 .bak 备份）" if any(os.path.exists(path + ".bak") for path in paths) else ""
     ok = size <= _ANCHOR_COMPACT_BYTES
     return _item(
@@ -129,7 +126,7 @@ def _check_dedup_anchor() -> dict[str, Any]:
         "去重锚点",
         ok,
         f"{size / 1024 / 1024:.1f} MB / {lines} 行 / {shards} 个分片"
-        f"（告警线 {_ANCHOR_COMPACT_BYTES / 1024 / 1024:.0f} MB）{legacy}{bak}",
+        f"（告警线 {_ANCHOR_COMPACT_BYTES / 1024 / 1024:.0f} MB）{bak}",
         hint=""
         if ok
         else "超过阈值：运行评估默认压缩（`python scripts/eval-dedup-threshold.py`，会裁到体积目标内并打印裁剪分布），"

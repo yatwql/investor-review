@@ -42,7 +42,11 @@ _ANCHOR_SHARD_SUFFIX = ".jsonl.gz"
 
 
 def anchor_shard_paths(base: str | None = None) -> list[str]:
-    """锚点分片路径列表（月份升序；末尾追加仍存在的未分片文件）。"""
+    """锚点分片路径列表（月份升序）。
+
+    只认按月分片 ``dedup_anchors-YYYYMM.jsonl.gz``；未分片的早期单文件不参与
+    读取、压缩或清理。
+    """
     target = base or _ANCHOR_PATH
     directory = os.path.dirname(target) or "."
     try:
@@ -53,14 +57,11 @@ def anchor_shard_paths(base: str | None = None) -> list[str]:
         )
     except OSError:
         names = []
-    paths = [os.path.join(directory, name) for name in names]
-    if os.path.exists(target):
-        paths.append(target)
-    return paths
+    return [os.path.join(directory, name) for name in names]
 
 
 def anchor_total_bytes(base: str | None = None) -> int:
-    """锚点总体积（各分片 + 未分片文件之和；不含 `.bak` 与临时文件）。"""
+    """锚点总体积（各月分片之和；不含 `.bak` 与临时文件）。"""
     total = 0
     for path in anchor_shard_paths(base):
         try:
@@ -71,7 +72,7 @@ def anchor_total_bytes(base: str | None = None) -> int:
 
 
 def read_anchor_lines(base: str | None = None) -> list[str]:
-    """读取全部锚点行（各月分片 + 未分片文件）。
+    """读取全部锚点行（各月分片）。
 
     分片为 gzip，透明解压；单个分片损坏/截断时保留已读出的行并告警，不影响其它分片
     ——锚点只是校准样本，宁可少几行也不让整份历史不可读。

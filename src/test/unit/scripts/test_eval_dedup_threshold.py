@@ -62,25 +62,30 @@ def _record(
 
 
 def _rows(directory) -> list[dict]:
-    """读取锚点目录下全部分片与未分片单文件（gzip 分片透明解压）。"""
+    """读取锚点目录下的全部分片（gzip 透明解压）。"""
     import gzip
     import os
 
     rows: list[dict] = []
     for name in sorted(os.listdir(directory)):
         path = os.path.join(directory, name)
-        if name.endswith(".jsonl.gz"):
-            with gzip.open(path, "rt", encoding="utf-8") as f:
-                rows.extend(json.loads(line) for line in f if line.strip())
-        elif name.endswith(".jsonl"):
-            with open(path, encoding="utf-8") as f:
-                rows.extend(json.loads(line) for line in f if line.strip())
+        if not name.endswith(".jsonl.gz"):
+            continue
+        with gzip.open(path, "rt", encoding="utf-8") as f:
+            rows.extend(json.loads(line) for line in f if line.strip())
     return rows
 
 
-def _write(tmp_path: Path, records: list[dict], name: str = "anchors.jsonl") -> str:
-    path = tmp_path / name
-    path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in records), encoding="utf-8")
+_SHARD_MONTH = "202601"
+
+
+def _write(tmp_path: Path, records: list[dict], name: str = "") -> str:
+    """写入一个按月分片（锚点只认 ``dedup_anchors-YYYYMM.jsonl.gz``）。"""
+    import gzip
+
+    path = tmp_path / (name or f"dedup_anchors-{_SHARD_MONTH}.jsonl.gz")
+    with gzip.open(path, "wt", encoding="utf-8") as f:
+        f.writelines(json.dumps(r, ensure_ascii=False) + "\n" for r in records)
     return str(path)
 
 
@@ -327,16 +332,14 @@ class TestMainMaintenance:
         assert len(_rows(tmp_path)) == 2, "重复标题对应被压成一条（写入按月分片）"
 
     def test_no_compact_keeps_duplicates(self, tool, monkeypatch, tmp_path, capsys):
-        path = self._run(tool, monkeypatch, tmp_path, "--no-compact")
+        self._run(tool, monkeypatch, tmp_path, "--no-compact")
         assert "评估后维护压缩" not in capsys.readouterr().out
-        with open(path, encoding="utf-8") as f:
-            assert len(f.readlines()) == 3
+        assert len(_rows(tmp_path)) == 3
 
     def test_dry_run_does_not_write(self, tool, monkeypatch, tmp_path, capsys):
-        path = self._run(tool, monkeypatch, tmp_path, "--dry-run")
+        self._run(tool, monkeypatch, tmp_path, "--dry-run")
         assert "未写盘" in capsys.readouterr().out
-        with open(path, encoding="utf-8") as f:
-            assert len(f.readlines()) == 3
+        assert len(_rows(tmp_path)) == 3
 
 
 class TestLegacyEraMarking:

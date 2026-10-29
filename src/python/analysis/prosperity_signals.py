@@ -91,20 +91,14 @@ def _turnover_proxy_pct(snapshots: list[Any] | None) -> float | None:
 def _benchmark_returns(benchmarks: Any) -> list[tuple[str, float]]:
     """提取对比基准的区间收益率，返回 [(名称, 收益率%), ...]。
 
-    兼容两种形态（**生产为 list**，见 `PortfolioHistoryCalculator.get_combined_timeseries`
-    的 `benchmarks` 契约：`[{code, name, bars, total_return_pct, ...}, ...]`）：
-
-      - list/tuple[dict]：生产形态
-      - dict[str, dict]：测试/外部注入形态
+    `benchmarks` 契约由 `PortfolioHistoryCalculator.get_combined_timeseries` 定义：
+    `[{code, name, bars, total_return_pct, ...}, ...]`（list[dict]）。
 
     非 dict 元素、缺 `total_return_pct`、非有限数值一律跳过（**不得抛异常**）。
     """
-    if isinstance(benchmarks, dict):
-        items: list[Any] = list(benchmarks.values())
-    elif isinstance(benchmarks, (list, tuple)):
-        items = list(benchmarks)
-    else:
+    if not isinstance(benchmarks, (list, tuple)):
         return []
+    items: list[Any] = list(benchmarks)
 
     out: list[tuple[str, float]] = []
     for item in items:
