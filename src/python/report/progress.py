@@ -185,6 +185,10 @@ class TuiProgressReporter(AnnouncingProgressReporter):
         self._ticker: threading.Thread | None = None
         self._stop = threading.Event()
         self._last_perf: Any = None
+        # ETA 按「阶段 → 预计完成时刻」缓存：心跳每 5s 估一次会反复读 perf_history，
+        # 而同一阶段的 ETA 基准（历史中位数）在一次运行内不会变
+        self._eta_deadline: dict[tuple[str, str], float] = {}
+        self._eta_unknown: set[tuple[str, str]] = set()
         if live:
             self._start_live_status()
 
@@ -233,10 +237,16 @@ class TuiProgressReporter(AnnouncingProgressReporter):
             status = self._last_perf.stage_status()
             if not status:
                 return
-            eta = estimate_stage_eta(status["phase"], status["elapsed"], report_type=self._last_perf.report_type)
-            self._bar.update(
-                status_bar_text(status["phase"], status["elapsed"], eta, cancel_hint=self._bar.cancel_hint)
-            )
+            key = (str(self._last_perf.report_type), str(status["phase"]))
+            elapsed = float(status["elapsed"])
+            if key not in self._eta_deadline and key not in self._eta_unknown:
+                first = estimate_stage_eta(str(status["phase"]), elapsed, report_type=key[0])
+                if first is None:
+                    self._eta_unknown.add(key)
+                else:
+                    self._eta_deadline[key] = elapsed + first
+            eta = None if key in self._eta_unknown else max(0.0, self._eta_deadline[key] - elapsed)
+            self._bar.update(status_bar_text(status["phase"], elapsed, eta, cancel_hint=self._bar.cancel_hint))
         except Exception:
             logger.debug("[tui] 状态条绘制失败，已忽略", exc_info=True)
 

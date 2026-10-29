@@ -222,3 +222,35 @@ class TestWatcherInstance:
             assert "Ctrl+C" in reporter._bar.cancel_hint
         finally:
             reporter.close()
+
+
+class TestEtaCaching:
+    """ETA 估算按阶段缓存：心跳每 5s 排队时不重复读 perf_history。"""
+
+    def test_estimate_called_once_per_phase(self, monkeypatch):
+        from unittest.mock import patch as _patch
+
+        from src.python.report.progress import TuiProgressReporter
+
+        class _Perf:
+            report_type = "full"
+
+            def __init__(self):
+                self.elapsed = 1.0
+
+            def stage_status(self):
+                return {"phase": "行情获取", "elapsed": self.elapsed}
+
+        perf = _Perf()
+        sink = _TtyStream()
+        reporter = TuiProgressReporter()
+        reporter._bar = LiveStatusBar(sink)
+        reporter._last_perf = perf
+        with _patch("src.python.core.perf.estimate_stage_eta", return_value=30.0) as estimate:
+            reporter._draw()
+            perf.elapsed = 6.0
+            reporter._draw()
+            perf.elapsed = 12.0
+            reporter._draw()
+        assert estimate.call_count == 1, "同一阶段只估一次（其余帧用缓存的预计完成时刻推算）"
+        assert "预计剩余" in sink.getvalue(), "ETA 仍随已耗时递减显示"
