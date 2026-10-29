@@ -195,7 +195,9 @@ def fetch_with_incremental_fallback(
 
         if needs_refresh and cached:
             streak_key = f"{cache_key}_correction_streak"
-            streak = int(cache_get(streak_key, CACHE_WEEKLY) or 0)
+            # record_stats=False：连续触发计数是**状态量探针**，读不到即「未连续触发」
+            # （正常预期），计入缓存未命中会让命中率虚低并触发「同前缀反复未命中」告警。
+            streak = int(cache_get(streak_key, CACHE_WEEKLY, record_stats=False) or 0)
             cache_set(streak_key, streak + 1)  # 每次检出都计数：若全量刷新无法根治，下次继续累计
             if streak + 1 >= _CORRECTION_STREAK_SKIP:
                 # 结构性回看：全量刷新未能消除重叠（源对增量固定向前多看若干天），
@@ -220,7 +222,7 @@ def fetch_with_incremental_fallback(
             # 全量刷新失败或冷却跳过 → 降级：用合并结果继续（merged 已含重叠窗口新数据）
         if not needs_refresh:
             streak_key = f"{cache_key}_correction_streak"
-            if cache_get(streak_key, CACHE_WEEKLY):
+            if cache_get(streak_key, CACHE_WEEKLY, record_stats=False):
                 cache_set(streak_key, 0)  # 正常合并（无重叠检出）→ 重置连续触发计数
         cache_set(cache_key, merged)
         _RUN_HISTORY_MEMO[_memo_key] = (max(days, len(merged)), merged)
