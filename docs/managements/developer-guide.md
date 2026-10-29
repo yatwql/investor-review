@@ -967,6 +967,8 @@ INVEST_CACHE_DIR=docs/tmp/screenshots/demo/data/cache \    # 缓存改落（不�
 
 **追踪类 DEBUG 的两条纪律**：① 同一状态不重复刷（市场时段判定按「结果变化」记，进程级去重）；② 同一 key 的命中/写入只记首见一次（其余由 `_stats` 命中率与报告「缓存命中率」行承担汇总），否则单周就能刷出万行。
 
+**缓存逐键日志只到 DEBUG**：`缓存未命中（无此缓存文件）` / `缓存已过期` 在真实报告里逐文档 × 逐缓存键出现，曾占单次运行日志 10%~30%，而单条几乎不携带信息。现口径：逐键明细降 DEBUG（每进程每 key 首见一次，排查时把级别调到 DEBUG 即恢复逐键视图），INFO 由运行收尾的 `cache._stats.log_cache_summary()` **一行**承担——命中/未命中总量 + 未命中前缀 Top5；同一前缀未命中 ≥5 次另升一条 WARNING（那是「每轮重取同一批键」的真实信号，如每份报告都为同一文档重探章节清单）。缓存清理的「共 0 个文件」同样降 DEBUG。
+
 **LLM 总时间预算**：`llm_settings.json → llm_total_time_budget_sec`（秒，`0`=不启用）。超预算后**不再启动新模块**（已在跑的模块不打断），日志回显已用时与预算值，报告按已生成内容呈现。用于兜住「单模块卡住 + 重试叠加」把一次 full 拖成小时级（审计实测曾出现 6,623s 的 LLM+新闻阶段）。
 
 **去重锚点默认采集、写侧零读取**：`data/calibration/dedup_anchors-YYYYMM.jsonl.gz`（按月 gzip 分片；写侧按 multi-member gzip 追加，不重写既有压缩块，也不解析旧文件——读侧 `gzip.open` 透明解压，损坏分片只跳过其余内容）每次报告只追加边界案例；同源（`same_src`）样本按标题对哈希 **1/50 确定性采样**（同源 2~5 bigram 区间样本极密，全量采集曾占文件 61% 而 `ratio` 恒为占位值），其余规则全量采集；跨轮重复由 `eval-dedup-threshold.py::load_anchors` 按键去重（保留最早一条），诊断结论不受重复行影响。`INVEST_DEDUP_COLLECT_ANCHORS=0` 可关闭采集。文件超过 32MB 时只记提示，不自动压缩——压缩由 `scripts/eval-dedup-threshold.py` 评估后**默认顺带执行**（分析用完整样本，随后按三条件维护：① 每 key 最新；② 保留期 30 天——`ts`（发布时间）或 `written_at`（写入时刻）任一在窗口内即保留，补录/回溯抓到的老新闻不被秒裁，`INVEST_DEDUP_ANCHOR_RETENTION_DAYS` 可覆盖、`0` = 不按时间裁剪；③ 体积上限 24MB——超目标按最旧裁剪，每分支至少保留最新 50 条，小分支（方向对立等）不被整类裁光；`--no-compact` 关闭、`--retention-days` 指定窗口）或 `INVEST_DEDUP_MAINTENANCE=1` 显式触发。压缩前后比对 `(size, mtime)`，期间被并发追加则放弃本次压缩（不吞另一个进程写入的行）；无行可裁且无需补标注时不重写文件。压缩前 `.bak` 与主文件等大，默认校验后清理（`INVEST_DEDUP_KEEP_BACKUP=1` 保留）。

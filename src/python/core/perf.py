@@ -431,6 +431,11 @@ class PerfCollector:
         self._saved = True
         self._detach_log_capture()
         logger.info("[perf] 耗时已记录到 %s", _PERF_HISTORY_FILE)
+        # 缓存命中率一行汇总（逐键明细在 DEBUG）：日志噪声治理的收口点，见
+        # `cache._stats.log_cache_summary`。
+        from src.python.cache import log_cache_summary
+
+        log_cache_summary()
 
 
 # ── 原子写入工具 ────────────────────────────

@@ -633,7 +633,7 @@ _DEBATE_APPENDIX_SAMPLES = {
 # 条件并入之前以本文件样例输入录制的辩论基础指纹（四块皆空时键必须与引入前
 # 逐字节一致——抓「空串 + 分隔符改变哈希」陷阱，存量辩论缓存不无谓失效）。
 # 后缀逻辑有意变更时应同步更新（黄金值例外登记）。
-_DEBATE_PRE_WIRE_BASELINE = "f3355ed85378_c"
+_DEBATE_PRE_WIRE_BASELINE = "ecde89435d19_c"
 
 
 def test_debate_appendix_blocks_empty_equals_pre_wire_baseline():
@@ -673,14 +673,14 @@ _PURCHASE_BLOCK_CHANGED = _PURCHASE_BLOCK.replace("100 元", "200 元")
 # 接线前（purchase_block 字段引入之前）以本文件样例输入录制的四模块指纹基线。
 # 唯一目的：抓「空串 + 分隔符改变哈希」陷阱——块空时键必须与引入前逐字节一致，
 # 否则存量缓存无谓全量失效。后缀逻辑有意变更时应同步更新本表（黄金值例外登记）。
-# 基线含「提示词文本版本」（rate-caliber-1）与「事实校验规则版本」（fact-rules-2）：
+# 基线含「提示词文本版本」（rate-caliber-1）与「事实校验规则版本」（fact-rules-3）：
 # 标签/表头等静态文案改动、或校验修正语义（会影响回写的缓存正文）改动，均须换键，
 # 否则预检会命中按旧口径生成/旧规则改过的缓存。该表随版本号一次性刷新，属预期。
 _PRE_WIRE_BASELINE = {
-    "global_macro": "92d4304cff04",
-    "expert_review": "00793de52668_c_dh",
-    "health_check": "53e93015abb9",
-    "penetration_deep": "3cf614bfa6d4",
+    "global_macro": "685eca9c83d8",
+    "expert_review": "60ec142abcbf_c_dh",
+    "health_check": "f2e9272a807c",
+    "penetration_deep": "007d719b8432",
 }
 
 

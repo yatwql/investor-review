@@ -383,9 +383,16 @@ def _locate_subject_code(
     """
     span = _enclosing_bracket_span(sentence, anchor)
     if span is not None:
-        for cm in _CODE_PATTERN.finditer(sentence, span[0], span[1]):
-            if cm.group(0) in holding_codes:
-                return cm.group(0)
+        # 括号内多个代码时取**最近**一个（不取第一个）：括号常并列多只品种
+        # （「（240012 -8.03%、561910 -36.20%）」），取首个会把第二个品种的正确
+        # 数值改写成第一个品种的收益率。
+        bracket_codes = [
+            (cm.group(0), min(abs(cm.start() - anchor), abs(cm.end() - anchor)))
+            for cm in _CODE_PATTERN.finditer(sentence, span[0], span[1])
+            if cm.group(0) in holding_codes
+        ]
+        if bracket_codes:
+            return min(bracket_codes, key=lambda item: item[1])[0]
 
     clause_start, clause_end = _clause_span(sentence, anchor)
     clause = sentence[clause_start:clause_end]

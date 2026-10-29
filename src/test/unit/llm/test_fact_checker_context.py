@@ -433,11 +433,12 @@ class TestWarningThresholdContext:
 
 
 class TestApplyCorrectionSingleReplace:
-    """数值自动修正只替换判定处一次，不连带替换同值异义的其他出现处。
+    """数值自动修正按「全有或全无」执行：无法唯一定位的同值异义整值跳过。
 
-    apply_numerical_corrections 用 re.sub 全局替换，一处修正会误伤 HTML 中
-    同数值的其他语义出现处（如"止盈约30%"与"收益率30%"并存时，只应修被
-    判定为错误的收益率处）。count=1 限制为只替换一处。
+    只替换首次出现，会让同一数值在正文里「动一处、留其余」；叠加回写后逐轮把同一
+    事实变成两个不同的数字（561910 一处 -8.0%、其余 -36.20%），报告自相矛盾。
+    现口径：同一 wrong_value 的全部出现处都判为错值才整体替换，否则一处也不动
+    （宁可漏改，不可只改一半）。
     """
 
     pytestmark = [
@@ -446,8 +447,8 @@ class TestApplyCorrectionSingleReplace:
         pytest.mark.llm,
     ]
 
-    def test_same_value_multiple_contexts_replaces_only_once(self):
-        """HTML 中同值出现在两个语境 → 只替换一处，另一处保留。"""
+    def test_same_value_multiple_contexts_replaces_nothing(self):
+        """同句同值出现两处（一处止盈比例、一处收益率）→ 无法唯一定位，整值不改。"""
         from src.python.llm.fact_checker._corrections import apply_numerical_corrections
 
         html = "<p>止盈约30%持仓，收益率30%。</p>"
@@ -455,8 +456,21 @@ class TestApplyCorrectionSingleReplace:
             html,
             [("30", "70.2", "止盈约30%持仓，收益率30%。", "601398实际收益率70.2%")],
         )
-        assert out.count("70.2%") == 1  # 只替换一处
-        assert out.count("30%") == 1  # 另一处同值数字保留
+        assert out == html, "同值异义无法唯一定位时必须整值放弃"
+
+    def test_all_occurrences_replaced_when_all_judged(self):
+        """同一错值出现在两句且都判为错 → 两处一起替换（不留半改状态）。"""
+        from src.python.llm.fact_checker._corrections import apply_numerical_corrections
+
+        html = "<p>持仓收益率 9.9%，领先。</p><p>再看另一段：收益率 9.9%。</p>"
+        out = apply_numerical_corrections(
+            html,
+            [
+                ("9.9", "4.6", "持仓收益率 9.9%，领先。", "012325实际收益率4.6%"),
+                ("9.9", "4.6", "再看另一段：收益率 9.9%。", "012325实际收益率4.6%"),
+            ],
+        )
+        assert out.count("9.9%") == 0 and out.count("4.6%") == 2
 
     def test_no_corrections_returns_original(self):
         """无修正列表 → 原样返回。"""
@@ -977,3 +991,57 @@ class TestNonRateValueGuards:
         text = "兴全恒慧30天持有超短债C（012325）本季度收益率为 11.0%，表现稳健。"
         _issues, _checked, _passed, corrections = check_numerical_consistency(text, holdings)
         assert len(corrections) == 1 and corrections[0][1] == "4.6", f"主体可解析时应纠正: {corrections}"
+
+
+class TestBracketScopeNearestCode:
+    """括号内并列多只品种时，数值归**最近**代码而非括号内首个代码。
+
+    实盘事故：「（240012 -8.03%、561910 -36.20%）」——`_locate_subject_code` 的
+    括号作用域取括号内首个代码 240012，把 561910 **正确**的 -36.20% 改写成 240012
+    的 -8.0%；叠加回写与按数值去重，逐轮把同一事实的其他句子逐个改错，最终同一份
+    报告里并存 -8.0% 与 -36.20%，缓存里也是自相矛盾的。
+    """
+
+    pytestmark = [
+        pytest.mark.unit,
+        pytest.mark.unit_llm,
+        pytest.mark.llm,
+    ]
+
+    @pytest.fixture
+    def holdings(self) -> list[dict]:
+        return [
+            {
+                "name": "华宝增强收益债券A",
+                "code": "240012",
+                "market_value": 15950.0,
+                "cost": 17343.0,
+                "profit_rate": -8.03,
+            },
+            {
+                "name": "招商中证电池主题ETF",
+                "code": "561910",
+                "market_value": 20680.0,
+                "cost": 32414.0,
+                "profit_rate": -36.20,
+            },
+        ]
+
+    def test_second_code_in_bracket_keeps_its_own_rate(self, holdings):
+        """事故原句：561910 的 -36.20% 不再被改写成 240012 的 -8.0%。"""
+        text = "12 只中 10 只盈利、2 只亏损（240012 -8.03%、561910 -36.20%），浮盈浮亏结构健康。"
+        _issues, _checked, _passed, corrections = check_numerical_consistency(text, holdings)
+        assert corrections == [], f"括号内第二个品种的正确数值被改写: {corrections}"
+
+    def test_bracket_value_without_code_keeps_nearest_subject(self, holdings):
+        """代码在括号外紧邻时仍按最近主体归因（如「561910（-36.20%，7.3%）」）。"""
+        text = "561910（-36.20%，7.3%）仍是唯一深度亏损品种。"
+        _issues, _checked, _passed, corrections = check_numerical_consistency(text, holdings)
+        assert corrections == [], f"紧邻代码的主体不应被改写: {corrections}"
+
+    def test_wrong_rate_of_bracketed_second_code_still_corrected(self, holdings):
+        """守卫不过度：括号内第二个品种的**错误**数值仍按其自身收益率纠正。"""
+        text = "2 只亏损（240012 -8.03%、561910 -99.9%），结构与预期不符。"
+        _issues, _checked, _passed, corrections = check_numerical_consistency(text, holdings)
+        assert len(corrections) == 1, f"应纠正 561910 的错值: {corrections}"
+        assert corrections[0][0] == "99.9" and corrections[0][1] == "-36.2", corrections[0]

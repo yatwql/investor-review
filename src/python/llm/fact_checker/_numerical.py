@@ -94,6 +94,7 @@ class PercentContext:
     is_target_value: bool = False
     is_breakdown_sum: bool = False
     is_non_rate_metric: bool = False
+    confirmed_rates: dict[str, str] | None = None
 
 
 def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, str, str] | None]:
@@ -217,11 +218,21 @@ def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, 
 
     closest_ref = min(ref_rates, key=lambda k: abs(ctx.value - ref_rates[k]))
 
+    # 同句同品种只有一个持仓收益率：该品种的收益率已在同一句内确认过，本数值只能是
+    # 别的口径（括号里的占比/贡献等），不参与收益率改写。
+    # 实盘事故：「561910（-36.20%，7.3%）」——7.3% 是占比，却被改写成 -36.2%。
+    if ctx.confirmed_rates is not None:
+        _prev = ctx.confirmed_rates.get(best_code or "")
+        if _prev is not None and _prev != ctx.value_str:
+            return None, None
+
     # 策略 1：句中有明确持仓主体 → 按该主体实际收益率校验（容差内通过）；
     # 主体无收益率数据（ref 为 None）或无主体 → 回退全局最近邻（历史语义）。
     if best_code is not None:
         ref = ctx.stock_rates_abs.get(best_code)
         if ref is not None and abs(ctx.value - ref) <= ctx.tolerance_pct:
+            if ctx.confirmed_rates is not None:
+                ctx.confirmed_rates[best_code] = ctx.value_str
             return None, None
         if ref is None and abs(ctx.value - ref_rates[closest_ref]) <= ctx.tolerance_pct:
             return None, None
@@ -333,7 +344,13 @@ def check_numerical_consistency(
 
     total_checked = 0
     passed = 0
-    seen_values: set[str] = set()
+    # 去重粒度是「(数值, 所在句)」而非仅数值：同一数值出现在多个句子里时，各句语境
+    # 不同（「止盈约30%」与「收益率30%」），必须逐句各自判定；只按数值去重会让
+    # 后续出现处永远不被检查，再叠加回写就形成「改一处、留其余」的自相矛盾正文。
+    seen_values: set[tuple[str, str]] = set()
+    # 逐句重置：句内已确认的「品种代码 → 收益率文本」（见 PercentContext.confirmed_rates）
+    confirmed_rates: dict[str, str] = {}
+    confirmed_sentence = ""
 
     for sentence in _split_sentences(text):
         # 跳过收益归因段落（贡献度占比不可与收益率直接比较）
@@ -343,11 +360,16 @@ def check_numerical_consistency(
         if _is_replay_context(sentence):
             continue
 
+        if sentence != confirmed_sentence:
+            confirmed_rates = {}
+            confirmed_sentence = sentence
+
         for match in re.finditer(_PERCENT_PATTERN, sentence):
             value_str = match.group(1)
-            if value_str in seen_values:
+            occurrence_key = (value_str, sentence)
+            if occurrence_key in seen_values:
                 continue
-            seen_values.add(value_str)
+            seen_values.add(occurrence_key)
             value = float(value_str)
 
             total_checked += 1
@@ -387,6 +409,8 @@ def check_numerical_consistency(
                     # 目标位/估计值（"提到 25% 附近"）与「合计 = 分项之和」（"18.3%（12.5%+5.8%）"）
                     is_target_value=_is_target_value_context(sentence, match.start()),
                     is_breakdown_sum=_is_breakdown_sum_context(sentence, match.start(), value),
+                    # 同句内已确认的品种收益率（同品种第二个百分数只能是别的口径）
+                    confirmed_rates=confirmed_rates,
                     # 数值前文语义（占比/份额/市值/仓位）：局部窗口判定，优先于整句收益语境
                     is_non_rate_metric=_is_non_rate_pre_word_context(sentence, match.start()),
                 )

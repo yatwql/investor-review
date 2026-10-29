@@ -160,7 +160,7 @@ def cleanup_expired(dry_run: bool = False) -> int:
                 free_bytes / 1024,
             )
         else:
-            logger.info("缓存清理%s: 共 0 个文件", label)
+            logger.debug("缓存清理%s: 共 0 个文件", label)
         return removed
 
 
@@ -250,5 +250,8 @@ def clean_sensitive(older_than_days: int = 90, dry_run: bool = False) -> int:
             )
             removed += 1
 
-        logger.info("敏感缓存清理%s: 共 %d 个文件", "预览" if dry_run else "完成", removed)
+        if removed:
+            logger.info("敏感缓存清理%s: 共 %d 个文件", "预览" if dry_run else "完成", removed)
+        else:
+            logger.debug("敏感缓存清理%s: 共 0 个文件", "预览" if dry_run else "完成")
         return removed

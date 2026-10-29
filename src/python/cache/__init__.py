@@ -21,7 +21,9 @@ from ._paths import (
 )
 from ._stats import (
     get_cache_hit_rate,
+    get_cache_miss_prefixes,
     get_cache_stats,
+    log_cache_summary,
     reset_cache_stats,
 )
 from ._store import clear, get, set
@@ -46,6 +48,8 @@ __all__ = [
     "set",
     "clear",
     "get_cache_hit_rate",
+    "get_cache_miss_prefixes",
+    "log_cache_summary",
     "reset_cache_stats",
     "get_cache_stats",
     "get_ttl",

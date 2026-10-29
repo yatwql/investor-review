@@ -131,11 +131,21 @@ class TestCheckNumericalConsistency:
         assert corrections == []
 
     def test_deduplicate_same_value(self, sample_holdings):
-        """同一数值多次出现只检一次。"""
-        text = "累计收益率为 30.3%。表现不错，收益率 30.3%。"
-        issues, checked, passed, corrections = check_numerical_consistency(text, sample_holdings)
-        assert checked == 1  # 只检一次
+        """去重粒度是「(数值, 所在句)」：同句内重复值只检一次，跨句各自判定。
+
+        仅按数值去重会让后续句里的同一数值永远不被检查，再叠加回写就是
+        「改一处、留其余」的自相矛盾正文（同一事实两个数字）。
+        """
+        same_sentence = "累计收益率 30.3%，收益率 30.3%。"
+        _i, checked, passed, corrections = check_numerical_consistency(same_sentence, sample_holdings)
+        assert checked == 1  # 同句重复值只检一次
         assert passed == 1
+        assert corrections == []
+
+        two_sentences = "累计收益率为 30.3%。表现不错，收益率 30.3%。"
+        _i, checked, passed, corrections = check_numerical_consistency(two_sentences, sample_holdings)
+        assert checked == 2  # 跨句各自判定
+        assert passed == 2
         assert corrections == []
 
     def test_negative_profit_rate(self, sample_holdings):
