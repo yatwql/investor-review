@@ -955,6 +955,31 @@ INVEST_CACHE_DIR=docs/tmp/screenshots/demo/data/cache \    # 缓存改落（不�
 
 不隔离的后果是**分析面**污染：演示持仓的告警（源侧名称对不上/缺凭据/陈旧锁）混进真实日志，按「读了哪个持仓文件」事后反推才能区分；演示取数结果与真实缓存互串还会让截图与真机不一致。`scripts/make-screenshots.py` 已自动注入这三个变量（`scripts/_screenshots/demo_workspace.py::isolation_env`）。
 
+**隔离升级为「整体搬项目根」**（只隔离日志/缓存不够）：配置与持仓路径由 `core/constants.PROJECT_ROOT` 解析，与 cwd 无关——只改日志/缓存时，`web`/`cli` 子命令仍会读到真实 `data/config` 与真实持仓（截图里出现过真实账户名与市值）。现在 `PROJECT_ROOT` 支持 `INVEST_PROJECT_ROOT` 覆盖，`isolation_env` 已注入该变量，**配置 / 持仓 / 产物 / 日志 / 缓存全部落在演示根**，真实 `data/` 与 `logs/` 零接触。
+
+演示根只隔离「数据面」，代码与模板资产仍从仓库读取：`build()` 会在演示根建 `src/` 软链指向仓库 `src/`（不复制第二份源码树，避免与仓库漂移）。
+
+> **Windows 限制**：未开启开发者模式时创建符号链接失败，报告 HTML 会因 `TemplateNotFound: report_template.html` 失败（Excel 仍能生成）。两种解法任选其一：① 开启开发者模式（设置 → 隐私和安全性 → 开发者选项）；② 手工建目录联接：`mklink /J <demo>\src <repo>\src`。设置后重跑 `make-screenshots.py demo` 即可。
+
+**一条可重复的配图流水线**（README / 手册配图刷新，全部来自虚构演示持仓）：
+
+```bash
+.venv/bin/python scripts/make-screenshots.py demo      # 建/刷新演示工作区（含 src 软链）
+.venv/bin/python scripts/make-screenshots.py report    # 在演示根生成 Excel + HTML
+.venv/bin/python scripts/make-screenshots.py tui src/static/tui-menu.png
+.venv/bin/python scripts/make-screenshots.py cli src/static/cli-report.png
+# Web：--serve-demo 自起演示服务（env 统一走 isolation_env），端口自动替换
+.venv/bin/python scripts/make-screenshots.py web "http://127.0.0.1/#generate" src/static/web-workbench.png --serve-demo --scroll-y 0
+.venv/bin/python scripts/make-screenshots.py web "http://127.0.0.1/#holdings" src/static/web-holdings.png --serve-demo --scroll-y 0
+.venv/bin/python scripts/make-screenshots.py web "http://127.0.0.1/#config"   src/static/web-config.png   --serve-demo --scroll-y 0
+# 报告图直接截演示根的 HTML（章节锚点定位）
+.venv/bin/python scripts/make-screenshots.py web "file://<demo>/reports/个人投资分析报告.html"              src/static/report-overview.png --scroll-y 0
+.venv/bin/python scripts/make-screenshots.py web "file://<demo>/reports/个人投资分析报告.html#sec-summary"     src/static/report-toc.png
+.venv/bin/python scripts/make-screenshots.py web "file://<demo>/reports/个人投资分析报告.html#sec-penetration" src/static/report-charts.png
+```
+
+**出图护栏**：所有子命令入口先跑 `demo_workspace.assert_demo_holdings()`——演示持仓必须存在且位于演示目录内，否则直接拒绝出图（宁可报错，不出带真实数据的图）。
+
 **写日志时的三级语义（新增日志按此选级）**：
 
 | 级别 | 用在哪 | 例子 |
