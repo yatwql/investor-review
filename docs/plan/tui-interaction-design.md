@@ -203,6 +203,36 @@
 
 ---
 
-## 7. 一句话结论
+## 7. 迭代状态
+
+按三批推进，落点文档与代码位置一并登记（状态只反映当前事实）：
+
+| 议题 | 批次 | 状态 | 落点 |
+|:--|:--|:--|:--|
+| 3.1 长任务状态条 + 有序中止 | 第一批 | 已落地 | `report/progress.py`（`TuiProgressReporter(live=)`）、`core/perf.py`（阶段边界检查）、`core/cancel.py`、`tui/live_status.py`、`report/run_integrity.handle_interruption` 复用 |
+| 3.3 错误尾巴单源 | 第一批 | 已落地 | `tui/action_hints.py`、`tui/error_tail.py`（`[ERR] 原因 → 下一步动作`），页头状态行与错误行共用一份短语表 |
+| 3.4 未知键全档单行 | 第一批 | 已落地 | `tui.py` 内层循环统一为一行动反馈（反馈与重绘解耦） |
+| 3.7 `j/k` 导航 | 第一批 | 已落地 | `tui.py` 与 `panel_runtime.panel_loop(nav_keys=)` 共用别名表；`[S]` 关闭别名（`k` 另有职责） |
+| 3.2 分页查看器 | 第二批 | 已落地 | `tui/pager.py` + `text_layout.terminal_rows()`；日志/健康历史/自检三处改走分页，闸门白名单 5 → 2 |
+| 3.6 首页 `?` 速查 | 第二批 | 已落地 | `tui_menu.menu_help_items()` / `menu_group_lines()` 投影复用面板帮助渲染 |
+| 3.6 `/` 筛选通用化 | 第三批 | 已落地（面板按需接入） | `NavState.visible` / `apply_filter` / `clear_filter` + `panel_loop(filter_reader=)`；`[S]`、`[M]` 已接入，其余面板接一行 `if not nav.is_visible(index): continue` 即可启用 |
+| 3.9 `TUI_PLAIN` | 第二批 | 已落地 | `tui._can_repaint_inplace()` 环境判据；`live_status` / `KeyWatcher` 同认此开关 |
+| 3.9 `TUI_ASCII` | 第三批 | 已落地 | `tui/symbols.py`：写出层一字符换一字符映射，列宽按定义不变 |
+| 3.5 配置面板「可试可退」 | 第三批 | 已落地（机制通用） | `handlers_config.ConfigSession` + `_apply_edit` 自动记录；`[S]` 面板 `u` / `U` 与页脚事项行 |
+| 3.8 页头瘦身 | 第三批 | 已落地 | `tui_menu.first_run_notices()`（TTL 记忆 + 配置刷新时失效）+ 首页 `?` 富详情 |
+| 3.10 会话连续性 | — | 不做 | 见 6 节决策 6；用户对「从哪开始」不敏感，收益低于维护面 |
+
+**决策结果（对 6 节四项的落地口径）**：
+
+1. 中止语义：**只保缓存 + 给建议**（不做续跑编排），中止后提示「重跑只补缺失」。
+2. 分页器范围：**纯文本行**，不承载报告产物预览。
+3. 撤销粒度：**单面板会话快照**（`ConfigSession`），不做跨面板撤销栈。
+4. ASCII 档：**仅环境变量** `TUI_ASCII` / `TUI_PLAIN`，不新增启动参数。
+
+各批的触点、用例与契约批复见：第一批 [`tui-interaction-batch1-plan.md`](tui-interaction-batch1-plan.md)、第二批 [`tui-interaction-batch2-plan.md`](tui-interaction-batch2-plan.md)、第三批 [`tui-interaction-batch3-plan.md`](tui-interaction-batch3-plan.md)。
+
+---
+
+## 8. 一句话结论
 
 现有 TUI 的**入口层**（分组菜单、状态行、`?`、`/`、原地重绘）已经相当完整，真正的空档在**过程层**：长任务看不见进度也停不下来、长输出只能靠闸门停屏、错误只给原因不给下一步。因此建议把改进重心放在「过程可见性 + 可中止 + 反馈闭环」，而不是继续对主菜单做结构调整。
