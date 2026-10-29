@@ -6,6 +6,8 @@
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
+from typing import Any
 
 from src.python.core.logger import setup_logger
 from src.python.core.reader import list_xlsx_files
@@ -39,6 +41,89 @@ from src.python.tui.tui_keys import input_choice
 logger = setup_logger()
 
 
+@dataclass
+class _ConfigChange:
+    """一次配置变更的「变更前值」（撤销只需它，不必存全量配置）。"""
+
+    key: str
+    before: Any
+
+
+class ConfigSession:
+    """配置面板会话快照：让「先试试」不必靠记忆手工改回。
+
+    与草稿态的区别：改动仍然**即时写盘**（功能开关要立刻影响菜单裁剪），本类只
+    记录每个键的变更前值，因而 `u` / `U` 是「退回」而不是「取消未提交」。
+    """
+
+    def __init__(self) -> None:
+        self._changes: list[_ConfigChange] = []
+
+    @property
+    def count(self) -> int:
+        """本次会话改动过的配置项数（按键去重）。"""
+        return len({change.key for change in self._changes})
+
+    @property
+    def keys(self) -> list[str]:
+        """本次会话改动过的键（按首次出现顺序）。"""
+        seen: list[str] = []
+        for change in self._changes:
+            if change.key not in seen:
+                seen.append(change.key)
+        return seen
+
+    def record(self, key: str, before: Any) -> None:
+        """记录一次变更的前值（`_apply_edit` 成功后调用）。"""
+        self._changes.append(_ConfigChange(key, before))
+
+    def undo_last(self) -> str | None:
+        """退回最近一次改动（返回被退回的键；无可退时 None）。"""
+        while self._changes:
+            change = self._changes.pop()
+            if not _write_value(change.key, change.before):
+                return None
+            return change.key
+        return None
+
+    def restore_all(self) -> int:
+        """把会话内所有改动退回**进入时**的状态（返回成功退回的键数）。"""
+        firsts: dict[str, Any] = {}
+        for change in self._changes:
+            firsts.setdefault(change.key, change.before)
+        restored = 0
+        for key, value in firsts.items():
+            if _write_value(key, value):
+                restored += 1
+        self._changes.clear()
+        return restored
+
+
+_session: ConfigSession | None = None
+
+
+def reset_config_session() -> ConfigSession:
+    """开启新的配置会话（面板进入时调用：清掉上一屏的撤销记录）。"""
+    global _session
+    _session = ConfigSession()
+    return _session
+
+
+def _write_value(key: str, value: Any) -> bool:
+    """按共享编辑层写回单个键（撤销路径；失败只记日志不打断面板）。"""
+    from src.python.config.edit_ops import apply_config_edit
+
+    try:
+        apply_config_edit({"key": key, "value": value})
+    except Exception:
+        logger.exception("[config] 撤销写回失败: %s", key)
+        return False
+    from src.python.tui.status_line import reset_status_memo
+
+    reset_status_memo()
+    return True
+
+
 def _apply_edit(payload: dict) -> bool:
     """经共享编辑层（config.edit_ops）应用配置变更。
 
@@ -53,12 +138,23 @@ def _apply_edit(payload: dict) -> bool:
     """
     from src.python.config.edit_ops import ConfigEditError, apply_config_edit
 
+    key = str(payload.get("key") or "")
+    before: Any = None
+    if _session is not None and key:
+        try:
+            from src.python.config.edit_ops import read_config_value
+
+            before = read_config_value(key)
+        except Exception:
+            logger.debug("[config] 读取变更前值失败（撤销将跳过该键）: %s", key, exc_info=True)
     try:
         apply_config_edit(payload)
         # 配置已变：清页头状态行记忆（否则 TTL 内回首页仍显示旧值）
         from src.python.tui.status_line import reset_status_memo
 
         reset_status_memo()
+        if _session is not None and key and before is not None:
+            _session.record(key, before)
         return True
     except ConfigEditError as e:
         print(f"  {YELLOW}[!]{RESET} {e}")

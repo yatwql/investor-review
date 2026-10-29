@@ -137,6 +137,8 @@ def run_content_options_panel() -> None:
     number_width = len(str(len(numbered)))
 
     state = {"repaint": True, "reveal_keys": False, "tuples": []}
+    # 会话快照：改动仍即时写盘，仅记录变更前值，供 u / U 退回
+    session = hc.reset_config_session()
 
     def _emit(message: str) -> None:
         """按当前内宽输出一行提示（窄屏上 `[!]`/`[OK]` 长句也不越界折行）。"""
@@ -200,6 +202,8 @@ def run_content_options_panel() -> None:
                 )
         rows.append("")
         rows.append(f"{nav.marker(len(tuples))}0. 返回主菜单")
+        if session.count:
+            rows.append(f"  本次改动 {session.count} 项（u 撤销上次 · U 全部还原）")
         state["tuples"] = tuples
         print()
         panel_rows = [
@@ -237,6 +241,22 @@ def run_content_options_panel() -> None:
 
     def _on_text(choice: str) -> None:
         tuples = state["tuples"]
+        if choice == "U":
+            restored = session.restore_all()
+            hc.refresh_config()
+            _emit(
+                f"  {GREEN}[OK]{RESET} 已全部还原到进入本面板时（{restored} 项）"
+                if restored
+                else "  [!] 本次会话尚无改动"
+            )
+            state["repaint"] = True
+            return
+        if choice == "u":
+            undone = session.undo_last()
+            hc.refresh_config()
+            _emit(f"  {GREEN}[OK]{RESET} 已撤销上次改动（{undone}）" if undone else "  [!] 本次会话尚无改动")
+            state["repaint"] = True
+            return
         if choice.lower() == "p":
             state["repaint"] = True
             return
