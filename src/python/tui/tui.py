@@ -29,6 +29,8 @@ from src.python.tui.tui_menu import (
     index_by_key,
     match_menu_items,
     next_matching,
+    menu_group_lines,
+    menu_help_items,
     print_header,
     render_menu,
     show_config,
@@ -152,10 +154,13 @@ def _render_menu_frame(sel: int, filter_text: str = "") -> int:
 
 
 def _can_repaint_inplace() -> bool:
-    """窄屏原地重绘可用性：POSIX + TTY（需 ANSI 光标控制）。
+    """原地重绘可用性：POSIX + TTY（需 ANSI 光标控制）且未要求纯追加模式。
 
-    管道/测试（非 TTY）与旧控制台（无 ANSI）回退整屏追加重绘。
+    管道/测试（非 TTY）、无 ANSI 的旧控制台、以及设了 ``TUI_PLAIN=1`` 的会话一律
+    回退整屏追加——每帧都完整落到滚动区，便于日志抓取、屏幕阅读器与录制。
     """
+    if os.environ.get("TUI_PLAIN"):
+        return False
     try:
         return os.name == "posix" and sys.stdout.isatty()
     except Exception:
@@ -313,6 +318,16 @@ def main() -> None:
                 # 关键词筛选：回车提交（空=清除），Esc 保持原有筛选不变
                 menu_filter = _ask_menu_filter(menu_filter)
                 break  # 重绘（带/不带筛选）
+            if key == "?":
+                # 首页键位速查：与面板内 `?` 同一形状（可用键一览），不改变任何状态
+                from src.python.tui.prompt_text import keys_help_lines
+
+                for line in keys_help_lines(menu_help_items()):
+                    print(line)
+                for line in menu_group_lines():
+                    print(line)
+                _print_hint("常用动线：生成报告 B · 改配置 G · 找不到项按 / 筛选")
+                break  # 帮助屏留在上方，下方重绘一帧菜单
             if key == "0":
                 if menu_filter:
                     # 有筛选时 0 先清筛选（退出仍可 X / 再按 0 / Esc）

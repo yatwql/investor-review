@@ -360,3 +360,20 @@ class TestNavKeyAliases(unittest.TestCase):
         via_arrow = self._drive(["KEY_UP", "KEY_ENTER", "0"], columns=100)
         self.assertEqual(via_k[2], via_arrow[2], "k 未等价于 ↑")
         self.assertTrue(via_k[2])
+
+
+class TestPlainMode(unittest.TestCase):
+    """`TUI_PLAIN=1`：关掉原地重绘，改走整屏追加（日志抓取/朗读场景）。"""
+
+    _drive = staticmethod(TestNarrowMainLoopDirectNav._drive)
+
+    def test_plain_mode_disables_inplace_repaint(self):
+        """即使 TTY 可用，纯追加模式下方向键也不触发清帧（改走整屏追加）。"""
+        import os
+        from unittest.mock import patch as _patch
+
+        with _patch.dict(os.environ, {"TUI_PLAIN": "1"}):
+            fired, renders, _executed, _out, cleared = self._drive(["KEY_DOWN", "0"], columns=100, tty=True)
+        self.assertEqual(fired, ["exit"])
+        cleared.assert_not_called()
+        self.assertEqual(renders, 2, "回退整屏追加：初帧 + 一次重绘")

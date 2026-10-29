@@ -235,11 +235,34 @@ class TestForbiddenVocabulary:
 # 保留闸门的唯一合法位置 =「长输出后」（契约 Feedback 节「按键闸门白名单」）
 GATE_WHITELIST = {
     ("handlers_cache.py", "_run_cache_update"),  # 缓存更新结果摘要（多行统计块）
-    ("handlers_log.py", "_cmd_view_logs"),  # 运行日志详情
-    ("handlers_log.py", "_cmd_view_health_history"),  # 数据源健康历史
-    ("handlers_log.py", "_cmd_run_doctor"),  # 系统自检结果
     ("report_artifacts.py", "_wait_any_key"),  # 远程/无图形会话报告产物清单（无 y/N 询问）
 }
+
+
+#: 分页视图调用点白名单（浏览型长输出；与 DESIGN-TUI「分页视图」节同源比对）
+PAGER_WHITELIST = {
+    ("handlers_log.py", "_cmd_view_logs"),  # 运行日志详情（逐页浏览 + 搜索）
+    ("handlers_log.py", "_cmd_view_health_history"),  # 数据源健康历史
+    ("handlers_log.py", "_cmd_run_doctor"),  # 系统自检结果（逐项 + 修复建议）
+}
+
+
+def _pager_call_sites() -> set[tuple[str, str]]:
+    """扫描 ``pager.view(...)`` 调用点，返回 (文件名, 所在函数名) 集合。"""
+    sites: set[tuple[str, str]] = set()
+    for path in _tui_sources():
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for func in [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
+            for node in ast.walk(func):
+                if isinstance(node, ast.Call) and _call_name(node) == "view":
+                    if isinstance(node.func, ast.Attribute) and _call_name_name(node.func.value) == "pager":
+                        sites.add((path.name, func.name))
+    return sites
+
+
+def _call_name_name(node: ast.AST) -> str:
+    """取表达式名（``pager.view`` 的接收者 ``pager``）。"""
+    return node.id if isinstance(node, ast.Name) else ""
 
 
 def _gate_call_sites() -> set[tuple[str, str]]:
@@ -473,3 +496,16 @@ class TestErrorTailHasAction:
             "错误行缺少下一步动作（改用 error_tail.emit_error 并在 DESIGN-TUI Feedback 节选短语）：\n"
             + "\n".join(offenders)
         )
+
+
+class TestPagerWhitelist:
+    """分页视图白名单：浏览型长输出才走分页，代码调用点须与契约一致。"""
+
+    def test_pager_sites_match_whitelist(self):
+        sites = _pager_call_sites()
+        extra = sites - PAGER_WHITELIST
+        missing = PAGER_WHITELIST - sites
+        assert not extra, "新增了分页视图调用——须先在 DESIGN-TUI「分页视图」节登记理由，再更新白名单：\n" + "\n".join(
+            sorted(map(str, extra))
+        )
+        assert not missing, "白名单条目已无对应分页调用（白名单只减不增）：\n" + "\n".join(sorted(map(str, missing)))

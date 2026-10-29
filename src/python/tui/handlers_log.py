@@ -16,7 +16,7 @@ from src.python.tui.error_tail import emit_error
 from src.python.core.logger import is_llm_call_message, setup_logger
 from src.python.tui.text_layout import terminal_columns, wrap_hanging, wrap_prompt
 from src.python.tui.tui_keys import PromptCancelledError, input_choice
-from src.python.tui.tui_menu import GREEN, RED, RESET, YELLOW, press_any_key
+from src.python.tui.tui_menu import GREEN, RED, RESET, YELLOW
 
 logger = setup_logger()
 
@@ -155,6 +155,7 @@ def _cmd_view_logs() -> None:
         print(f"  {YELLOW}[!]{RESET} 无匹配日志条目")
         return
 
+    from src.python.tui import pager
     from src.python.tui.switch_panel import inner_width, narrow_rule, use_panel_box
 
     columns = terminal_columns()
@@ -163,24 +164,22 @@ def _cmd_view_logs() -> None:
     rule = narrow_rule(columns)
 
     level_label = level or "全部"
-    print()
-    print(rule)
-    print(f"  最近日志（级别: {level_label}）")
-    print(rule)
+    lines: list[str] = [rule]
     for entry in entries:
         color = _level_color(entry.level, entry.message)
         line = f"  {entry.time} [{entry.level}] {entry.message}"
         if narrow:
             # 窄档：先按内宽悬挂折行，再逐行上色（着色放在折行之后，ANSI 不被截断）
             for piece in wrap_hanging(line, inner):
-                print(f"{color}{piece}{RESET}" if color else piece)
+                lines.append(f"{color}{piece}{RESET}" if color else piece)
         else:
-            print(f"{color}{line}{RESET}" if color else line)
+            lines.append(f"{color}{line}{RESET}" if color else line)
         # traceback 等续行折叠为一行提示，避免刷屏
         body_lines = entry.body.splitlines()[1:]
         if body_lines:
-            print(f"    ⤷ 堆栈详情 +{len(body_lines)} 行")
-    press_any_key()
+            lines.append(f"    ⤷ 堆栈详情 +{len(body_lines)} 行")
+    lines.append(rule)
+    pager.view(f"最近日志（级别: {level_label}）", lines)
 
 
 def _cmd_view_health_history() -> None:
@@ -198,6 +197,7 @@ def _cmd_view_health_history() -> None:
         print(f"  {YELLOW}[!]{RESET} 暂无数据源健康历史记录")
         return
 
+    from src.python.tui import pager
     from src.python.tui.switch_panel import inner_width, narrow_rule, use_panel_box
 
     columns = terminal_columns()
@@ -205,10 +205,7 @@ def _cmd_view_health_history() -> None:
     narrow = not use_panel_box(columns)
     rule = narrow_rule(columns)
 
-    print()
-    print(rule)
-    print("  数据源健康历史（最近 10 次检查）")
-    print(rule)
+    lines: list[str] = [rule]
     for summary in summaries:
         ts = summary["timestamp"].replace("T", " ")
         ok_count = summary["ok_count"]
@@ -219,14 +216,14 @@ def _cmd_view_health_history() -> None:
         head = f"  {ts}  {status}{ok_count}/{total} 正常{RESET}{extra}  |  失败 {fail_count}"
         if narrow:
             # 窄档：一条记录压成「时间 + 结果」行，失败源悬挂折行，不留列错位
-            print(ts)
-            print(f"  {status}{ok_count}/{total} 正常{RESET} · 失败 {fail_count}{extra}")
+            lines.append(ts)
+            lines.append(f"  {status}{ok_count}/{total} 正常{RESET} · 失败 {fail_count}{extra}")
         else:
-            print(head)
+            lines.append(head)
         if summary["failed_sources"]:
-            for line in wrap_hanging(f"      失败源: {', '.join(summary['failed_sources'])}", inner, indent="      "):
-                print(line)
-    press_any_key()
+            lines.extend(wrap_hanging(f"      失败源: {', '.join(summary['failed_sources'])}", inner, indent="      "))
+    lines.append(rule)
+    pager.view("数据源健康历史（最近 10 次检查）", lines)
 
 
 # ── 系统自检（恒上屏）────────────────────────────────────
@@ -257,12 +254,12 @@ def _cmd_run_doctor() -> None:
         emit_error("系统自检执行失败", "logs", advice="详情见 logs/app.log")
         return
 
-    print()
-    print(format_doctor_report(results))
+    from src.python.tui import pager
 
+    lines = format_doctor_report(results).splitlines()
     _ok_count, bad_count = summarize_doctor_results(results)
     if bad_count:
-        print(f"  {RED}[!]{RESET} 有 {bad_count} 项未通过——按上方 → 建议逐项处理")
+        lines.append(f"  {RED}[!]{RESET} 有 {bad_count} 项未通过——按上方 → 建议逐项处理")
     else:
-        print(f"  {GREEN}[OK]{RESET} 全部通过")
-    press_any_key()
+        lines.append(f"  {GREEN}[OK]{RESET} 全部通过")
+    pager.view(f"系统自检结果{scope}", lines)

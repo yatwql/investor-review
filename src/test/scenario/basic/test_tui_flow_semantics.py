@@ -124,8 +124,9 @@ class TestToggleFeatureSwitch:
 class TestFilterLogsByLevel:
     """动线 3：按级别筛日志（筛选条件与结果标题同屏可核对）。
 
-    击键数快照为 6（不是 4）：日志入口按 TUI 菜单分层收在 `[D]` 诊断二级之下
-    （多一次菜单选择 + 一次 `0` 返回），属菜单结构决策的结果，不是新增确认屏。
+    击键数快照为 5：日志入口按 TUI 菜单分层收在 `[D]` 诊断二级之下（多一次菜单
+    选择 + 一次 `0` 返回），属菜单结构决策的结果，不是新增确认屏；浏览型长输出
+    改走分页视图后不再消费「按任意键」，故比旧快照少一键。
     """
 
     def test_flow_counts_and_level_visible(self):
@@ -135,10 +136,10 @@ class TestFilterLogsByLevel:
             _Entry(time="2026-10-20 09:00:00,001", level="ERROR", message="读取行情失败", body="读取行情失败"),
         ]
         read_log = MagicMock(return_value=entries)
-        # 路径：主菜单 [D] 诊断与排查 → [V] 运行日志 → 级别 ERROR → 按键返回
-        #       → 诊断面板 [0] 返回主菜单 → [X] 退出
+        # 路径：主菜单 [D] 诊断与排查 → [V] 运行日志 → 级别 ERROR
+        #       → 诊断面板 [0] 返回主菜单 → [X] 退出（长输出不再等「按任意键」）
         feeder = run_flow(
-            ["D", "V", "ERROR", " ", "0", "X"],
+            ["D", "V", "ERROR", "0", "X"],
             pre_patches=common_patches(),
             handler_patches=[patch("src.python.core.log_reader.read_log", read_log)],
         )

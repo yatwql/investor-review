@@ -91,6 +91,41 @@ def get_config_cache() -> dict | None:
     return _config_cache
 
 
+def menu_group_lines(*, columns: int | None = None) -> list[str]:
+    """首页帮助的分组索引行（``分组：生成报告 [E B L W Q] · …``，按宽度折行）。
+
+    键一览回答「能按什么」，分组索引回答「东西在哪一摊」——两者合用才像速查。
+    """
+    from src.python.tui.text_layout import terminal_columns, wrap_hanging
+
+    cols = columns or terminal_columns()
+    parts: list[str] = []
+    for title, keys in MENU_GROUPS:
+        members = [key for key in keys if index_by_key(key) is not None]
+        if members:
+            parts.append(f"{title} [{' '.join(members)}]")
+    return wrap_hanging("  分组： " + " · ".join(parts), cols, indent="        ")
+
+
+def menu_help_items() -> list:
+    """主菜单 → ``PanelItem`` 投影（供首页 ``?`` 复用面板帮助渲染单源）。
+
+    投影而非新建渲染器：首页帮助与面板帮助共用 ``prompt_text.keys_help_lines`` 的
+    相同形状（``键 — 作用``），两处不会长成两套。
+
+    Returns:
+        ``PanelItem`` 列表：`key`=菜单键、`label`=菜单标签、`detail`=「分组 · 标签」。
+    """
+    from src.python.tui.panel_runtime import PanelItem
+
+    items = []
+    for key, label, _cb, _is_exit in MENU_ITEMS:
+        group = next((title for title, keys in MENU_GROUPS if key in keys), None)
+        detail = f"{group} · {label}" if group else label
+        items.append(PanelItem(key, label, kind="info", detail=detail))
+    return items
+
+
 def filter_menu_llm_modules(module_names: dict[str, str]) -> dict[str, str]:
     """菜单 LLM 模块清单门面（恒等返回）。
 
