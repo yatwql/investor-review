@@ -26,6 +26,7 @@ from src.python.tui.tui_menu import (
     MENU_ITEMS,
     _apply_feature_gates,
     exit_app,
+    first_run_hint_lines,
     index_by_key,
     match_menu_items,
     next_matching,
@@ -237,6 +238,10 @@ def main() -> None:
     上移+清屏，菜单不滚屏），不支持 ANSI 的环境（管道/测试/旧控制台）回退
     整屏追加。Esc 需连按两次确认（3 秒窗口；防高延迟链路方向键拆包把孤 ESC 误判为退出），0/X 单次即退。
     """
+    # ASCII 降级（TUI_ASCII=1）：在写出层做一字符换一字符的符号替换，版面代码不动
+    from src.python.tui.symbols import install_ascii_stream
+
+    install_ascii_stream()
     init_config()
     _apply_feature_gates()  # 必须在 _bind_callbacks 之前：裁剪后索引才与渲染一致
     _bind_callbacks()
@@ -326,6 +331,11 @@ def main() -> None:
                     print(line)
                 for line in menu_group_lines():
                     print(line)
+                hints = first_run_hint_lines()
+                if hints:
+                    print("  待配置项：")
+                    for line in hints:
+                        print(line)
                 _print_hint("常用动线：生成报告 B · 改配置 G · 找不到项按 / 筛选")
                 break  # 帮助屏留在上方，下方重绘一帧菜单
             if key == "0":

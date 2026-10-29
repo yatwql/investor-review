@@ -80,9 +80,10 @@ _config_cache: dict | None = None
 
 
 def refresh_config() -> dict:
-    """刷新并返回配置缓存。"""
+    """刷新并返回配置缓存（连带失效首用检测记忆）。"""
     global _config_cache
     _config_cache = get_config()
+    reset_first_run_memo()
     return _config_cache
 
 
@@ -143,6 +144,47 @@ def print_sep(char: str = "=", width: int = 56) -> None:
     print(f"{DIM}{char * width}{RESET}")
 
 
+#: 首用未就绪项 → 富详情（页头只显示短标签，细节进首页 `?`；文案单源在本表）
+FIRST_RUN_HINTS: dict[str, str] = {
+    "持仓文件": "通过 [G] 全局设置配置持仓目录 / 文件名（[H] / [F]），或把文件放到默认目录",
+    "LLM": "如需 LLM 分析，请配置 data/config/llm_key.json 或 llm_providers.json（[G] → [L] LLM 设置）",
+}
+
+_FIRST_RUN_TTL = 30.0
+_first_run_memo: dict = {}
+
+
+def reset_first_run_memo() -> None:
+    """清空首用检测记忆（配置刷新 / 配置变更后立即重算；亦供测试用）。"""
+    _first_run_memo.clear()
+
+
+def first_run_notices() -> list[str]:
+    """首用未就绪项短标签（页头折叠为一行；TTL 内记忆化，不在每帧做文件/LLM 检测）。"""
+    import time
+
+    now = time.monotonic()
+    if _first_run_memo.get("labels") is not None and now - _first_run_memo.get("ts", 0.0) < _FIRST_RUN_TTL:
+        return list(_first_run_memo["labels"])
+    config = _config_cache if _config_cache is not None else refresh_config()
+    holdings = os.path.join(config.get("holdings_dir", ""), config.get("holdings_filename", ""))
+    labels: list[str] = []
+    if not os.path.exists(holdings):
+        labels.append("持仓文件")
+    from src.python.core.system_info import llm_status
+
+    if not llm_status()["configured"]:
+        labels.append("LLM")
+    _first_run_memo["labels"] = labels
+    _first_run_memo["ts"] = now
+    return list(labels)
+
+
+def first_run_hint_lines() -> list[str]:
+    """首用未就绪的详细引导行（首页 `?` 速查尾部用；与页头同源派生）。"""
+    return [f"    • {FIRST_RUN_HINTS[label]}" for label in first_run_notices() if label in FIRST_RUN_HINTS]
+
+
 def print_header() -> None:
     """打印程序标题头（每次主循环迭代时重绘）。"""
     from src.python.core.constants import APP_NAME, APP_VERSION
@@ -159,23 +201,11 @@ def print_header() -> None:
     print(f"  {build_status_line()}")
     print()
 
-    # 首次运行引导：检测是否缺少关键资源
-    config = _config_cache if _config_cache is not None else refresh_config()
-    holdings = os.path.join(config.get("holdings_dir", ""), config.get("holdings_filename", ""))
-    _first_run_hints = []
-    if not os.path.exists(holdings):
-        _first_run_hints.append("• 请先通过菜单 [G] 全局设置配置持仓目录 / 文件名（[H] / [F]），或放置文件到默认目录")
-    from src.python.core.system_info import llm_status
-
-    if not llm_status()["configured"]:
-        _first_run_hints.append(
-            "• 如需 LLM 分析，请配置 data/config/llm_key.json 或 llm_providers.json（菜单 [G] → [L] LLM 设置；页头 LLM ○ 为当前状态）"
-        )
-    if _first_run_hints:
-        print("  📋 首次使用指引：")
-        for hint in _first_run_hints:
-            print(f"    {hint}")
-        print()
+    # 首用未就绪摘要：只占一行（详情按 `?` 看），检测结果 TTL 内记忆化
+    notices = first_run_notices()
+    if notices:
+        print(f"  📋 未就绪：{' · '.join(notices)}（[G] 配置 · ? 看指引）")
+    print()
 
 
 def render_menu(sel: int, filter_text: str = "") -> None:

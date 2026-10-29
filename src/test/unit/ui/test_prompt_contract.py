@@ -423,7 +423,20 @@ class TestFirstRunHintsPointToRealMenus:
 
     @staticmethod
     def _hints(monkeypatch, tmp_path) -> str:
-        """在「持仓文件不存在 + LLM 未配置」条件下捕获指引文本。"""
+        """在「持仓文件不存在 + LLM 未配置」条件下捕获富详情指引（首页 `?` 尾部文本）。"""
+        from src.python.tui import tui_menu
+
+        monkeypatch.setattr(
+            tui_menu, "_config_cache", {"holdings_dir": str(tmp_path), "holdings_filename": "missing.xlsx"}
+        )
+        import src.python.core.system_info as system_info
+
+        monkeypatch.setattr(system_info, "llm_status", lambda: {"configured": False})
+        tui_menu.reset_first_run_memo()
+        return "\n".join(tui_menu.first_run_hint_lines())
+
+    def test_header_shows_single_line_summary(self, monkeypatch, tmp_path):
+        """页头只占一行摘要（细节移入 `?`，不再每帧刷两条长 bullet）。"""
         import io
 
         from src.python.tui import tui_menu
@@ -434,10 +447,14 @@ class TestFirstRunHintsPointToRealMenus:
         import src.python.core.system_info as system_info
 
         monkeypatch.setattr(system_info, "llm_status", lambda: {"configured": False})
+        tui_menu.reset_first_run_memo()
         out = io.StringIO()
         monkeypatch.setattr("sys.stdout", out)
         tui_menu.print_header()
-        return out.getvalue()
+        header_lines = [line for line in out.getvalue().splitlines() if "未就绪" in line]
+        assert len(header_lines) == 1, out.getvalue()
+        assert "持仓文件" in header_lines[0] and "LLM" in header_lines[0]
+        assert "? 看指引" in header_lines[0]
 
     def test_holdings_hint_points_to_global_settings(self, monkeypatch, tmp_path):
         text = self._hints(monkeypatch, tmp_path)

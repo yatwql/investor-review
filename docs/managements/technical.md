@@ -3521,6 +3521,8 @@ make_http_client(timeout=10.0) → httpx.Client
 | `live_status` | 长任务状态条（单行原地刷新的阶段/已耗时/ETA/中止键；落地行前后挂起恢复，非 TTY 退回逐行输出） | 核心基础设施 | 交互反馈 | 无（展示面） |
 | `pager` | 行分页查看器（一屏 + 页脚键位行，翻页/首末/搜索；不足一屏或非 TTY 整段直打，不读键） | 核心基础设施 | 交互反馈 | 无（展示面） |
 | `menu_help` | 首页键位速查（主菜单投影成 `PanelItem` 后复用面板帮助渲染 + 分组索引行） | 核心基础设施 | 交互反馈 | 无（展示面） |
+| `first_run_notices` | 首用未就绪摘要（页头一行短标签 + 首页 `?` 富详情，同源派生并 TTL 记忆化） | 核心基础设施 | 交互反馈 | 无（展示面） |
+| `symbols` | 符号表与 ASCII 降级（`TUI_ASCII` 时在写出层按一字符换一字符替换装饰符，宽度不变） | 核心基础设施 | 交互反馈 | 环境变量 `TUI_ASCII` |
 | `cancel_token` | 阶段边界协作式取消（令牌 + `StageCancelled`，`PerfCollector.start` 为唯一生效点；编排层收口复用中断收尾，已完成产物与缓存保留） | 核心基础设施 | 交互反馈 | 无（运行期对象，随渠道创建） |
 | `history_policy` | 历史走势获取策略解析（off/auto/prompt 单源，三渠道共用，TUI 注入询问回调） | 报告生成 | 组合历史走势 | `history.fetch_mode` |
 | `run_integrity` | 生成运行一致性守卫（`guard_run` 装饰 `generate_report` 中断收口：临时产物清扫/已写盘登记/`status=interrupted` 运行记录/健康检查收敛；ContextVar 按线程隔离，写盘方 `note_temp`·`note_artifact` 登记） | 报告生成 | 报告输出 | 无（设施模块，中断时经 reporter 输出明细） |
