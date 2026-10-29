@@ -31,7 +31,6 @@ from src.python.tui.tui_menu import (
     match_menu_items,
     next_matching,
     menu_group_lines,
-    menu_help_items,
     print_header,
     render_menu,
     show_config,
@@ -172,6 +171,9 @@ _ESC_EXIT_CONFIRM_WINDOW = 3.0  # 主菜单 Esc 连按两次确认窗口（秒�
 
 #: 方向键别名（vim 手感）：主菜单与列表面板共用的单字母等价键
 _NAV_ALIASES = {"j": KEY_DOWN, "k": KEY_UP}
+
+#: 首页 `?` 的一行键位摘要（详细键位在手册，不在这里刷屏）
+_HOME_KEYS_LINE = "  键位：字母/数字 直达 · ↑↓ 或 j k 移动 · 回车 执行 · / 筛选 · ? 帮助 · Esc×2 / 0 / X 退出"
 
 
 def _print_hint(text: str) -> int:
@@ -324,20 +326,15 @@ def main() -> None:
                 menu_filter = _ask_menu_filter(menu_filter)
                 break  # 重绘（带/不带筛选）
             if key == "?":
-                # 首页键位速查：与面板内 `?` 同一形状（可用键一览），不改变任何状态
-                from src.python.tui.prompt_text import keys_help_lines
-
-                for line in keys_help_lines(menu_help_items()):
-                    print(line)
-                for line in menu_group_lines():
+                # 首页速查：只打固定几行（不把菜单顶出可视区），详细键位见手册
+                for line in [_HOME_KEYS_LINE, *menu_group_lines()]:
                     print(line)
                 hints = first_run_hint_lines()
                 if hints:
                     print("  待配置项：")
                     for line in hints:
                         print(line)
-                _print_hint("常用动线：生成报告 B · 改配置 G · 找不到项按 / 筛选")
-                break  # 帮助屏留在上方，下方重绘一帧菜单
+                break  # 摘要留在上方，下方重绘一帧菜单
             if key == "0":
                 if menu_filter:
                     # 有筛选时 0 先清筛选（退出仍可 X / 再按 0 / Esc）

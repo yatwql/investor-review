@@ -109,14 +109,12 @@ def _run_generate(
     Returns:
         TuiProgressReporter 实例（成功时）或 None（持仓未就绪时）
     """
-    # 生成期启用状态条与中止键：状态条只在 TTY 上出现，非 TTY 自动退回逐行输出
-    from src.python.core.cancel import CancelToken
-
-    reporter = TuiProgressReporter(live=True, cancel_token=CancelToken("用户取消"))
     config = get_config_cache() or {}
     prepared = prepare_holdings()
     if not prepared:
         return None
+    # 状态条在持仓就绪后才启用：生成前的交互提示期间不碰终端、不起线程
+    reporter = TuiProgressReporter(live=True)
     holdings, transactions, dividends = prepared
     kwargs: dict = {
         "holdings": holdings,
@@ -137,7 +135,8 @@ def _run_generate(
     except Exception as e:
         logger.exception("生成 %s 报告失败", report_type)
         print_error_with_hint(e, "生成失败")
-    finish_report(reporter)
+    finally:
+        finish_report(reporter)  # 内含 close()：异常/中断路径同样清掉状态条
     return reporter
 
 

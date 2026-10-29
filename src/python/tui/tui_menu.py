@@ -108,25 +108,6 @@ def menu_group_lines(*, columns: int | None = None) -> list[str]:
     return wrap_hanging("  分组： " + " · ".join(parts), cols, indent="        ")
 
 
-def menu_help_items() -> list:
-    """主菜单 → ``PanelItem`` 投影（供首页 ``?`` 复用面板帮助渲染单源）。
-
-    投影而非新建渲染器：首页帮助与面板帮助共用 ``prompt_text.keys_help_lines`` 的
-    相同形状（``键 — 作用``），两处不会长成两套。
-
-    Returns:
-        ``PanelItem`` 列表：`key`=菜单键、`label`=菜单标签、`detail`=「分组 · 标签」。
-    """
-    from src.python.tui.panel_runtime import PanelItem
-
-    items = []
-    for key, label, _cb, _is_exit in MENU_ITEMS:
-        group = next((title for title, keys in MENU_GROUPS if key in keys), None)
-        detail = f"{group} · {label}" if group else label
-        items.append(PanelItem(key, label, kind="info", detail=detail))
-    return items
-
-
 def filter_menu_llm_modules(module_names: dict[str, str]) -> dict[str, str]:
     """菜单 LLM 模块清单门面（恒等返回）。
 
@@ -258,9 +239,9 @@ def render_menu(sel: int, filter_text: str = "") -> None:
     print()
     # 页脚按终端宽度折行：窄屏（手机）上不硬折，键位提示也不会被右边界切掉
     footer = (
-        "窄屏直达 · ↑↓/j k 选择 · 回车执行 | / 筛选 | ? 帮助 | Esc / 0 / X 退出 | Ctrl+C 退出"
+        "窄屏直达 · ↑↓ 选择 · 回车执行 | / 筛选 | Esc / 0 / X 退出 | Ctrl+C 退出"
         if narrow
-        else "↑↓/j k 移动 | 回车执行 | 字母/数字键直达 | / 筛选 | ? 帮助 | Esc / 0 / X 退出 | Ctrl+C 退出"
+        else "↑↓ 移动 | 回车执行 | 字母/数字键直达 | / 筛选 | Esc / 0 / X 退出 | Ctrl+C 退出"
     )
     print("\n".join(f"{DIM}{_line}{RESET}" for _line in wrap_with_prefix("  ", footer, terminal_columns())))
     print()

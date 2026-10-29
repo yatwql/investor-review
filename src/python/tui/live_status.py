@@ -22,7 +22,13 @@ from src.python.tui.text_layout import terminal_columns, truncate_display
 _CLEAR_LINE = "\r\x1b[K"
 
 
-def status_bar_text(phase: str, elapsed: float, eta: float | None, *, cancel_hint: str = "q 中止") -> str:
+def status_bar_text(
+    phase: str,
+    elapsed: float | None = None,
+    eta: float | None = None,
+    *,
+    hint: str = "Ctrl+C 中断",
+) -> str:
     """状态条正文（阶段文案复用 ``perf.format_stage_status``，本函数只加前缀与中止键）。
 
     阶段/已耗时/ETA 的措辞在 ``core.perf`` 单源——CLI、Web、TUI 三渠道看到的是同一句话，
@@ -39,9 +45,12 @@ def status_bar_text(phase: str, elapsed: float, eta: float | None, *, cancel_hin
     """
     from src.python.core.perf import format_stage_status
 
-    parts = [f"[..] {format_stage_status({'phase': phase, 'elapsed': elapsed}, eta)}"]
-    if cancel_hint:
-        parts.append(cancel_hint)
+    detail = (
+        format_stage_status({"phase": phase, "elapsed": elapsed or 0.0}, eta) if elapsed is not None else f"「{phase}」"
+    )
+    parts = [f"[..] {detail}"]
+    if hint:
+        parts.append(hint)
     return " · ".join(parts)
 
 
@@ -109,64 +118,3 @@ class LiveStatusBar:
         self.suspend()
         self._closed = True
         self._last = ""
-
-
-class KeyWatcher:
-    """单键轮询（POSIX TTY，cbreak）：供后台心跳检测中止键。
-
-    只在报告生成期间开启：把终端从行缓冲切到 cbreak（不等回车、不回显），
-    :meth:`close` 恢复原属性。异常路径也必须走到 close——条带外的按键仍按原语义
-    交给主循环。
-    """
-
-    def __init__(self, fd: int = 0) -> None:
-        self._fd = fd
-        self._saved: list | None = None
-
-    @staticmethod
-    def supported() -> bool:
-        """当前环境能否单键轮询（POSIX + stdin 是 TTY + 未禁用纯文本模式）。"""
-        if os.name != "posix" or os.environ.get("TUI_PLAIN"):
-            return False
-        try:
-            return bool(sys.stdin.isatty())
-        except Exception:
-            return False
-
-    def open(self) -> bool:
-        """切 cbreak 模式；失败返回 False（调用方据此退化为「只显示不可中止」）。"""
-        try:
-            import termios
-            import tty
-
-            self._saved = termios.tcgetattr(self._fd)
-            tty.setcbreak(self._fd)
-            return True
-        except Exception:
-            self._saved = None
-            return False
-
-    def poll(self) -> str | None:
-        """非阻塞取一个按键；无按键/读失败返回 None。"""
-        try:
-            import select
-
-            ready, _, _ = select.select([self._fd], [], [], 0)
-            if not ready:
-                return None
-            data = os.read(self._fd, 1)
-            return data.decode(errors="ignore") if data else None
-        except (OSError, ValueError):
-            return None
-
-    def close(self) -> None:
-        """恢复终端原属性（未成功 open 时为空操作）。"""
-        if self._saved is None:
-            return
-        try:
-            import termios
-
-            termios.tcsetattr(self._fd, termios.TCSADRAIN, self._saved)
-        except Exception:
-            pass
-        self._saved = None

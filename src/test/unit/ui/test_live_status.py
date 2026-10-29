@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """长任务状态条（`tui/live_status.py`）：正文拼装、环境判据、覆写与挂起/恢复序列。
 
-状态条只允许在 TTY 上出现，且必须能被落地行安全打断（suspend/resume）——这两条
-是「不出现鬼影行」与「管道输出逐字节不变」的关键前提。
+设计约束（与后台轮询的取舍）：状态条**只报当前阶段**，不启后台线程、不读 stdin、
+不切 terminal 模式——后台读键会与生成前的交互提示抢输入，cbreak 泄漏会让终端失去
+回显。因此本文件不测「心跳」，只测单帧渲染与生命周期幂等。
 """
 
 from __future__ import annotations
@@ -29,23 +30,22 @@ class _TtyStream(io.StringIO):
 
 
 class TestStatusBarText:
-    """正文拼装（阶段 / 已耗时 / ETA / 中止键）。"""
+    """正文拼装：只报阶段；给出耗时/剩余时才带进度细节。"""
 
-    def test_includes_eta_when_available(self):
+    def test_phase_only(self):
+        """默认形态只报阶段与中断方式（不猜剩余时间）。"""
+        text = status_bar_text("行情获取")
+        assert text == "[..] 「行情获取」 · Ctrl+C 中断"
+
+    def test_with_elapsed_and_eta(self):
+        """给了已耗时与 ETA 时复用 `format_stage_status` 的措辞（三渠道同源）。"""
         text = status_bar_text("行情获取", 12.4, 40.2)
-        assert "「行情获取」" in text
         assert "已耗时 12s" in text
         assert "预计剩余 ~40s" in text
-        assert "q 中止" in text
 
-    def test_omits_eta_when_unknown(self):
-        """历史样本不足时只报已耗时（不显示凭空的剩余时间）。"""
-        text = status_bar_text("行情获取", 8.0, None)
-        assert "预计剩余" not in text
-
-    def test_omits_cancel_hint_when_unavailable(self):
-        """环境无法按键中止时不留一个按不了的键提示。"""
-        assert "中止" not in status_bar_text("行情获取", 1.0, None, cancel_hint="")
+    def test_hint_can_be_dropped(self):
+        """hint 为空串时不出现中断方式（非交互场景）。"""
+        assert "Ctrl+C" not in status_bar_text("行情获取", hint="")
 
 
 class TestSupported:
@@ -76,7 +76,6 @@ class TestRenderSequence:
         assert stream.getvalue() == _CLEAR + "  第一帧"
 
     def test_repeated_update_keeps_single_line(self):
-        """连续刷新不产生换行（状态条始终占一行）。"""
         stream = _TtyStream()
         bar = LiveStatusBar(stream)
         bar.update("第一帧")
@@ -85,11 +84,10 @@ class TestRenderSequence:
         assert stream.getvalue().endswith("第二帧")
 
     def test_narrow_terminal_truncates(self):
-        """窄屏按列宽截断，不硬折成两行。"""
         stream = _TtyStream()
         bar = LiveStatusBar(stream)
         with patch("src.python.tui.live_status.terminal_columns", return_value=40):
-            bar.update(status_bar_text("一个非常非常长的阶段名称用于触发截断", 12.0, 40.0))
+            bar.update(status_bar_text("一个非常非常长的阶段名称用于触发截断"))
         line = stream.getvalue().split(_CLEAR)[-1]
         assert "\n" not in line
         assert display_width(line) <= 40
@@ -122,7 +120,6 @@ class TestSuspendResume:
         assert stream.getvalue() == before, "关闭后不得再有状态条输出"
 
     def test_suspend_twice_clears_once(self):
-        """重复挂起不重复清行（避免清到上一行内容）。"""
         stream = _TtyStream()
         bar = LiveStatusBar(stream)
         bar.update("阶段一")
@@ -155,102 +152,10 @@ class TestReporterLiveWiring:
         assert "\r" not in actual
 
     def test_close_is_idempotent(self):
-        """收尾与异常路径都可能调 close：重复调用不得抛错、不得再输出。"""
+        """收尾与异常路径都可能调 close：重复调用不抛错。"""
         from src.python.report.progress import TuiProgressReporter
 
         reporter = TuiProgressReporter(live=True)
         reporter.close()
         reporter.close()
-        assert reporter._bar is None and reporter._watcher is None, "close 后状态条与轮询器都已释放"
-
-
-class TestWatcherInstance:
-    """D1 回归：状态条保留的轮询器必须是**已 open** 的实例（否则 cbreak 没生效，q 不响应）。"""
-
-    def test_opened_instance_is_the_retained_one(self, monkeypatch):
-        opened: list[object] = []
-
-        class _FakeWatcher:
-            def open(self) -> bool:
-                opened.append(self)
-                return True
-
-            def poll(self) -> str:
-                return ""
-
-            def close(self) -> None:
-                pass
-
-        monkeypatch.setattr("src.python.tui.live_status.LiveStatusBar.supported", lambda *a, **k: True)
-        monkeypatch.setattr("src.python.tui.live_status.KeyWatcher", _FakeWatcher)
-        monkeypatch.setattr(
-            "src.python.tui.live_status.KeyWatcher.supported", staticmethod(lambda *a, **k: True), raising=False
-        )
-
-        from src.python.core.cancel import CancelToken
-        from src.python.report.progress import TuiProgressReporter
-
-        reporter = TuiProgressReporter(live=True, cancel_token=CancelToken("用户取消"))
-        try:
-            assert len(opened) == 1, f"open() 应只调用一次，实际 {len(opened)}"
-            assert reporter._watcher is opened[0], "保留的实例必须就是已 open 的那个"
-        finally:
-            reporter.close()
-
-    def test_unopenable_watcher_degrades_hint(self, monkeypatch):
-        """切不了 cbreak → 不给中止键，状态条提示降级为 Ctrl+C。"""
-
-        class _FakeWatcher:
-            def open(self) -> bool:
-                return False
-
-            def close(self) -> None:
-                pass
-
-        monkeypatch.setattr("src.python.tui.live_status.LiveStatusBar.supported", lambda *a, **k: True)
-        monkeypatch.setattr("src.python.tui.live_status.KeyWatcher", _FakeWatcher)
-        monkeypatch.setattr(
-            "src.python.tui.live_status.KeyWatcher.supported", staticmethod(lambda *a, **k: True), raising=False
-        )
-
-        from src.python.core.cancel import CancelToken
-        from src.python.report.progress import TuiProgressReporter
-
-        reporter = TuiProgressReporter(live=True, cancel_token=CancelToken("用户取消"))
-        try:
-            assert reporter._watcher is None
-            assert "Ctrl+C" in reporter._bar.cancel_hint
-        finally:
-            reporter.close()
-
-
-class TestEtaCaching:
-    """ETA 估算按阶段缓存：心跳每 5s 排队时不重复读 perf_history。"""
-
-    def test_estimate_called_once_per_phase(self, monkeypatch):
-        from unittest.mock import patch as _patch
-
-        from src.python.report.progress import TuiProgressReporter
-
-        class _Perf:
-            report_type = "full"
-
-            def __init__(self):
-                self.elapsed = 1.0
-
-            def stage_status(self):
-                return {"phase": "行情获取", "elapsed": self.elapsed}
-
-        perf = _Perf()
-        sink = _TtyStream()
-        reporter = TuiProgressReporter()
-        reporter._bar = LiveStatusBar(sink)
-        reporter._last_perf = perf
-        with _patch("src.python.core.perf.estimate_stage_eta", return_value=30.0) as estimate:
-            reporter._draw()
-            perf.elapsed = 6.0
-            reporter._draw()
-            perf.elapsed = 12.0
-            reporter._draw()
-        assert estimate.call_count == 1, "同一阶段只估一次（其余帧用缓存的预计完成时刻推算）"
-        assert "预计剩余" in sink.getvalue(), "ETA 仍随已耗时递减显示"
+        assert reporter._bar is None

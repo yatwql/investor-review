@@ -142,7 +142,7 @@ class TestRenderMenuNarrowDirect(unittest.TestCase):
         out = self._render(40)
         footer = " ".join(out.split("窄屏直达", 1)[1].split())
         self.assertIn("窄屏直达", out)
-        self.assertIn("↑↓/j k 选择", footer)
+        self.assertIn("↑↓ 选择", footer)
         self.assertIn("回车执行", footer)
         self.assertIn("Esc / 0 /", footer)
         self.assertIn("X 退出", footer)
@@ -153,7 +153,7 @@ class TestRenderMenuNarrowDirect(unittest.TestCase):
         """宽屏（100 列）保留 `>` 选中态与方向键页脚（导航主路径不变）。"""
         out = self._render(100)
         self.assertIn(">", out)
-        self.assertIn("↑↓/j k 移动", out)
+        self.assertIn("↑↓ 移动", out)
         self.assertIn("Esc / 0 / X 退出", out)
 
 

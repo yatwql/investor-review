@@ -7,13 +7,11 @@
 from __future__ import annotations
 
 import logging
-import threading
 import time as _time_module
 from collections.abc import Callable
 from typing import Any
 
 from src.python.core.ansi_colors import CYAN, GREEN, RED, RESET, YELLOW
-from src.python.core.cancel import CancelToken
 
 logger = logging.getLogger("invest")
 
@@ -161,10 +159,6 @@ class AnnouncingProgressReporter(ProgressReporter):
         return True
 
 
-#: 状态条心跳间隔（秒）：阶段切换即时刷新，阶段内按此节拍更新已耗时/ETA
-_HEARTBEAT_SECONDS = 5.0
-
-
 class TuiProgressReporter(AnnouncingProgressReporter):
     """终端进度报告器 — 将进度消息格式化为 [..]/[OK]/[ERR]/[!] 前缀输出。
 
@@ -172,93 +166,45 @@ class TuiProgressReporter(AnnouncingProgressReporter):
     不再逐行追加；落地行（``[OK]/[!]/[ERR]``）打印前后自动挂起/恢复状态条，两者
     不会互相覆盖。仅 TTY 生效，非 TTY / ``TUI_PLAIN`` 下行为与未启用时逐字节一致。
 
-    ``cancel_token`` 由渠道层创建并传到 ``PerfCollector``；状态条心跳轮询 ``q`` 键，
-    置位后由 ``PerfCollector.start`` 在下一阶段边界中止（有序取消）。
+    状态条只在阶段切换时刷新一帧，写明当前阶段与中断方式（``Ctrl+C``）；不启后台线程、
+    不读 stdin。
     """
 
-    def __init__(self, *, live: bool = False, cancel_token: CancelToken | None = None) -> None:
+    def __init__(self, *, live: bool = False) -> None:
         super().__init__()
         self._errors: list[str] = []
-        self.cancel_token = cancel_token
         self._bar: Any = None
-        self._watcher: Any = None
-        self._ticker: threading.Thread | None = None
-        self._stop = threading.Event()
         self._last_perf: Any = None
-        # ETA 按「阶段 → 预计完成时刻」缓存：心跳每 5s 估一次会反复读 perf_history，
-        # 而同一阶段的 ETA 基准（历史中位数）在一次运行内不会变
-        self._eta_deadline: dict[tuple[str, str], float] = {}
-        self._eta_unknown: set[tuple[str, str]] = set()
         if live:
             self._start_live_status()
 
     # ── 状态条生命周期 ──
 
     def _start_live_status(self) -> None:
-        """启用状态条（仅 TTY）；能单键轮询时同时启动心跳线程监听中止键。"""
-        from src.python.tui.live_status import KeyWatcher, LiveStatusBar
+        """启用状态条（仅 TTY）。"""
+        from src.python.tui.live_status import LiveStatusBar
 
-        if not LiveStatusBar.supported():
-            return
-        pollable = self.cancel_token is not None and KeyWatcher.supported()
-        watcher: Any = None
-        if pollable:
-            candidate = KeyWatcher()
-            if candidate.open():
-                watcher = candidate  # 保留**已切 cbreak 的**那个实例
-            else:
-                pollable = False  # 切不了 cbreak → 不提供中止键，提示降级为 Ctrl+C
-        self._watcher = watcher
-        self._bar = LiveStatusBar(cancel_hint="q 中止" if pollable else "Ctrl+C 中断")
-        if pollable:
-            self._ticker = threading.Thread(target=self._heartbeat, name="tui-live-status", daemon=True)
-            self._ticker.start()
-
-    def _heartbeat(self) -> None:
-        """后台心跳：按节拍刷新已耗时/ETA，并轮询中止键（异常一律静默）。"""
-        while not self._stop.wait(_HEARTBEAT_SECONDS):
-            try:
-                if self._watcher is not None and self.cancel_token is not None:
-                    key = self._watcher.poll()
-                    if key and key.lower() == "q" and not self.cancel_token.cancelled:
-                        self.cancel_token.cancel("用户按 q")
-                self._draw()
-            except Exception:
-                logger.debug("[tui] 状态条心跳失败，已忽略", exc_info=True)
+        # 刻意不启后台线程、不切 terminal 模式、不读 stdin：后台读键会与生成前的
+        # 交互提示抢输入，cbreak 泄漏会让终端失去回显——与该行的收益不成比例。
+        if LiveStatusBar.supported():
+            self._bar = LiveStatusBar()
 
     def _draw(self) -> None:
-        """按当前阶段重画状态条（无活跃阶段时不动）。"""
+        """按当前阶段刷新状态条（只报阶段，不猜剩余时间）。"""
         if self._bar is None or self._last_perf is None:
             return
-        from src.python.core.perf import estimate_stage_eta
         from src.python.tui.live_status import status_bar_text
 
         try:
             status = self._last_perf.stage_status()
             if not status:
                 return
-            key = (str(self._last_perf.report_type), str(status["phase"]))
-            elapsed = float(status["elapsed"])
-            if key not in self._eta_deadline and key not in self._eta_unknown:
-                first = estimate_stage_eta(str(status["phase"]), elapsed, report_type=key[0])
-                if first is None:
-                    self._eta_unknown.add(key)
-                else:
-                    self._eta_deadline[key] = elapsed + first
-            eta = None if key in self._eta_unknown else max(0.0, self._eta_deadline[key] - elapsed)
-            self._bar.update(status_bar_text(status["phase"], elapsed, eta, cancel_hint=self._bar.cancel_hint))
+            self._bar.update(status_bar_text(str(status["phase"]), hint=self._bar.cancel_hint))
         except Exception:
             logger.debug("[tui] 状态条绘制失败，已忽略", exc_info=True)
 
     def close(self) -> None:
-        """收尾：停心跳、恢复终端属性、清掉状态条（生成结束/异常路径必调）。"""
-        self._stop.set()
-        if self._ticker is not None:
-            self._ticker.join(timeout=1.0)
-            self._ticker = None
-        if self._watcher is not None:
-            self._watcher.close()
-            self._watcher = None
+        """收尾：清掉状态条（幂等；生成结束与异常路径都可调用）。"""
         if self._bar is not None:
             self._bar.close()
             self._bar = None
