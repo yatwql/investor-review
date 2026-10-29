@@ -33,6 +33,7 @@ MENU_ITEMS: list[MenuItem] = [
     ("C", "配置报告章节显隐", None, False),
     ("S", "配置报告章节内容呈现", None, False),
     ("G", "全局设置", None, False),
+    ("U", "持仓录入（买入 / 卖出 / 保存）", None, False),
     ("R", "刷新配置", None, False),
     ("D", "诊断与排查", None, False),
     ("X", "退出（0 亦可）", None, True),
@@ -48,6 +49,7 @@ FEATURE_GATED_ITEMS: dict[str, str] = {"Q": "report_qa"}
 MENU_GROUPS: list[tuple[str, tuple[str, ...]]] = [
     ("生成报告", ("E", "B", "L", "W", "Q")),
     ("数据与查看", ("1", "2", "3")),
+    ("持仓维护", ("U",)),
     ("配置", ("C", "S", "G", "R")),
     ("诊断与排查", ("D",)),
 ]

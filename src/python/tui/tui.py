@@ -93,6 +93,7 @@ def _bind_callbacks() -> None:
         _cmd_global_settings,
         _cmd_refresh_config,
     )
+    from src.python.tui.handlers_holdings import run_holdings_entry_panel
     from src.python.tui.handlers_log import _cmd_diagnose_menu
     from src.python.tui.handlers_report import (
         _cmd_generate_both,
@@ -114,6 +115,7 @@ def _bind_callbacks() -> None:
         "C": _cmd_config_report_boards,
         "S": _cmd_config_content_options,
         "G": _cmd_global_settings,
+        "U": run_holdings_entry_panel,
         "R": _cmd_refresh_config,
         "D": _cmd_diagnose_menu,
     }

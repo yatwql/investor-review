@@ -613,6 +613,14 @@
 | R-HLD-03 | `src/test/unit/core/test_reader.py` | 批 6 |
 | R-HLD-04 | `src/test/unit/core/test_reader.py` | 批 6 |
 | R-HLD-05 | `src/test/unit/core/test_code_utils.py` | 批 6 |
+| R-HLD-06 | `src/test/unit/ui/test_handlers_holdings.py` + `src/test/unit/core/test_holdings_editor.py` | 持仓录入 |
+| R-HLD-07 | `src/test/unit/core/test_holdings_editor.py` | 持仓录入 |
+| R-HLD-08 | `src/test/unit/core/test_holdings_editor.py` + `src/test/unit/core/test_holdings_editor_edge.py` | 持仓录入 |
+| R-HLD-09 | `src/test/unit/ui/test_handlers_holdings.py` + `src/test/unit/fetcher/test_nav_lookup.py` | 持仓录入 |
+| R-HLD-10 | `src/test/unit/fetcher/test_nav_lookup.py` + `src/test/unit/ui/test_handlers_holdings.py` | 持仓录入 |
+| R-HLD-11 | `src/test/unit/ui/test_handlers_holdings.py` + `src/test/unit/core/test_holdings_editor_edge.py` + `src/test/unit/core/test_holdings_editor.py` | 持仓录入 |
+| R-HLD-12 | `src/test/unit/ui/test_handlers_holdings.py` + `src/test/unit/core/test_holdings_editor.py` | 持仓录入 |
+| R-HLD-13 | `src/test/unit/ui/test_handlers_holdings.py` + `src/test/unit/core/test_holdings_editor.py` | 持仓录入 |
 | R-DIS-01 | `src/test/unit/analysis/test_trade_discipline.py` | 批 6 |
 | R-DIS-02 | `src/test/unit/analysis/test_trade_discipline.py` | 批 6 |
 | R-DIS-03 | `src/test/unit/analysis/test_trade_discipline.py` | 批 6 |

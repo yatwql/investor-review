@@ -50,7 +50,7 @@ class TestMenuItems(unittest.TestCase):
         """菜单键集合完整（会话/报告/缓存/配置/诊断/退出各域齐备，逐键断言不写死条数）。"""
         expected = {
             "E", "B", "L", "W", "Q", "D",
-            "1", "2", "3",
+            "1", "2", "3", "U",
             "C", "S", "G", "R",
             "X",
         }  # fmt: skip
