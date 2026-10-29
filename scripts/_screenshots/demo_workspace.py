@@ -160,10 +160,32 @@ def isolation_env(demo: Path) -> dict[str, str]:
         需并入子进程 env 的键值对。
     """
     return {
+        "INVEST_PROJECT_ROOT": str(demo),
         "INVEST_LOG_PATH": str(demo / "logs" / "app.log"),
         "INVEST_RUN_CONTEXT": DEMO_RUN_CONTEXT,
         "INVEST_CACHE_DIR": str(demo / "data" / "cache"),
     }
+
+
+def assert_demo_holdings(output_root: Path | None = None) -> Path:
+    """护栏：演示持仓文件存在且位于演示目录内，否则拒绝继续（防截图读到真实持仓）。
+
+    隔离方式是整体搬项目根（``INVEST_PROJECT_ROOT``）：配置、持仓、产物同在演示目录。
+    本断言兜住「环境没带上」的情形——宁可报错，不出带真实数据的图。
+
+    Returns:
+        演示工作区目录。
+
+    Raises:
+        RuntimeError: 演示持仓缺失，或调用方解析出的路径逃出演示目录。
+    """
+    demo = demo_dir(output_root).resolve()
+    holdings = (demo / "data" / "holdings" / HOLDINGS_FILENAME).resolve()
+    if demo not in holdings.parents:
+        raise RuntimeError(f"演示隔离失效：{holdings} 不在演示目录内，拒绝截图")
+    if not holdings.is_file():
+        raise RuntimeError(f"演示持仓文件不存在（{holdings}），先跑 make-screenshots.py demo")
+    return demo
 
 
 def build(output_root: Path | None = None) -> Path:

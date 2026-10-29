@@ -30,7 +30,9 @@ def _find_project_root() -> str:
 
 # ── 项目根路径（单一来源，所有模块从此导入） ─────────────
 # 使用标记文件查找法（pyproject.toml / .git），不依赖目录树深度。
-PROJECT_ROOT = _find_project_root()
+# ``INVEST_PROJECT_ROOT`` 覆盖仅用于隔离场景（演示工作区截图 / 回归夹具）：把
+# data/ 与 reports/ 整体搬到另一个根，真实持仓与产物零接触。缺省行为不变。
+PROJECT_ROOT = os.environ.get("INVEST_PROJECT_ROOT") or _find_project_root()
 
 # ── 项目名称与版本 ─────────────────────────────────────────
 

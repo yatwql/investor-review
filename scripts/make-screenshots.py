@@ -47,10 +47,12 @@ def _demo(_: argparse.Namespace) -> int:
 
 
 def _report(_: argparse.Namespace) -> int:
+    demo_workspace.assert_demo_holdings()
     return demo_workspace.run_report()
 
 
 def _tui(args: argparse.Namespace) -> int:
+    demo_workspace.assert_demo_holdings()
     argv = [str(args.output)]
     if args.config is not None:
         argv += ["--config", str(args.config)]
@@ -63,6 +65,7 @@ def _cli(args: argparse.Namespace) -> int:
     """把一帧 CLI 生成输出渲染成 PNG（伪终端采集 + 状态护栏）。"""
     from _screenshots import tui_frame
 
+    demo_workspace.assert_demo_holdings()
     text = demo_workspace.capture_report_text()
     if args.text is not None:
         text = Path(args.text).read_text(encoding="utf-8")
@@ -72,6 +75,16 @@ def _cli(args: argparse.Namespace) -> int:
 
 
 def _web(args: argparse.Namespace) -> int:
+    # 截图只允许对演示工作区（服务端须带 isolation_env 启动，见 demo_workspace 文档）
+    import os as _os
+
+    demo_workspace.assert_demo_holdings()
+    if (
+        _os.environ.get("INVEST_PROJECT_ROOT")
+        and Path(_os.environ["INVEST_PROJECT_ROOT"]).resolve() != demo_workspace.demo_dir().resolve()
+    ):
+        print("  [ERR] INVEST_PROJECT_ROOT 未指向演示工作区，拒绝截图（防真实持仓入图）")
+        return 2
     return web_shot.run(
         args.url,
         args.output,

@@ -25,6 +25,8 @@
 
 - Web 渠道持仓录入（`plan-239`）：新增「持仓录入」页签与 `GET /api/holdings`、`POST /api/holdings/preview`、`POST /api/holdings/save`；与 TUI `[U]` 共用 `core/holdings_editor` + `fetcher/nav_lookup`，支持账户/新代码/场内场外/份额或申购金额/价格留空取行情或净值；预览不落盘，写回走 mtime 闸门（409 `HOLDINGS_STALE`）+ `.bak` + 原子写 + 回读校验，可选记入交易流水。
 
+- 截图/演示隔离补全（rf-973）：`PROJECT_ROOT` 支持 `INVEST_PROJECT_ROOT` 覆盖，演示工作区整体搬根（配置/持仓/产物同在演示目录）；`make-screenshots.py` 增加 `assert_demo_holdings()` 护栏，环境没带上即拒绝出图，杜绝真实持仓入图。
+
 ### 重构
 
 - 持仓录入两日的技术债清理：① 主表表头判定（四列 + 跳过流水页签）上收为 `reader.match_holdings_header` / `reader.is_holdings_sheet` 公开单源，编辑层不再跨模块引私有 `_match_header`/`_EXPECTED_HEADER`，也不再自带一份重复判定；② 交易流水表头提为 `reader.TRADE_HEADER` 公开常量，写回侧不再复制字面量；③ 「按行情源反推品种形态」从 `core/holdings_editor` 下沉到 `fetcher/price.price_kind_from_quote`（`source_api` 属取数层内部标识，core 不解析 provider 名）；④ 三个测试文件各自的持仓 xlsx 构造器收敛为 `src/test/_holdings_fixture.py`（表头/账户/流水页签单源）；⑤ `list_xlsx_files` 的文件枚举加目录与 mtime 容错（并发删除不再抛错打断枚举）。
