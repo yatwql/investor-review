@@ -574,10 +574,11 @@ Web 渠道是第三种交互入口：**浏览器内完成「上传持仓 Excel �
 | `web/handlers.py` | API 路由 | 页面/上传/生成/轮询/预览/下载/历史/健康/日志/缓存统计与清理/What-if/报告追问/配置编辑；`_run_generation` 薄包装器（委托 `_run_generation_impl` + `result_box` 回传产物标志，收尾经 `_notify_web_completion` 按 `notify` 配置门控派发完成通知——Web 手动 + 内置定时调度共用，与 CLI 同构尽力而为不改退出码）；`_build_system_info` 委托 `core/system_info.build_system_info` 单源组装状态区系统信息（版本/本机 IP/持仓输出摘要/LLM 含多链/自检卡片可见性，与 TUI 同组展示原语）；`_handle_logs`/`_handle_health_history` 薄展示（委托 `core/log_reader.py` + `core/perf.py`，无解析逻辑）；`_handle_doctor` 薄展示（委托 `core/doctor.py`）；`_handle_config_edit` 同源守卫（`_is_same_origin`）；`_build_artifacts` 委托 `orchestrator.artifacts_for_report_type` 类型语义与 `core/constants` 最新产物名（不镜像 CLI --type 规则与文件名字面量）；空持仓门经 `core/reader.require_holdings` 单源（HTTP 端不带服务端路径） |
 | `web/run_generation.py` | Web 生成执行体 | `_run_generation` 薄入口（委托 `_run_generation_impl` + `result_box` 回传产物标志，收尾经 `_notify_web_completion` 按 `notify` 配置门控派发完成通知——Web 手动 + 内置定时调度共用，与 CLI 同构尽力而为不改退出码）；`_run_generation_impl` 读持仓/输入模式分派（试算→`web/` 隔离域、正式→共享主目录）/LLM 日预算硬闸/`generate_report` 调用/退出码映射/上传临时文件清理；`_build_artifacts` 委托 `orchestrator.artifacts_for_report_type` 类型语义与 `core/constants` 最新产物名；`_web_input_mode_snapshot_domain` 模式↔隔离域唯一事实来源 |
 | `web/upload.py` | 上传安全 | 服务端 uuid 重命名、扩展名白名单、大小上限、PK 魔数、原子落盘、TTL 清理 |
+| `web/holdings_edit.py` | 持仓录入编排 | 变更清单重放 → 预览（不落盘）/ 写回（mtime 闸门 409 + `.bak` + 原子写 + 回读校验）；与 TUI 同源 `core/holdings_editor` + `fetcher/nav_lookup` |
 | `web/config_edit.py` | 配置编辑 | 薄外观：再导出共享层 `config/edit_ops.py` 符号（`apply_config_edit`/`config_edit_whitelist`/`config_backup_file`）+ `get_config_edit_surface` 组装呈现面：`domains`（五域 → 块清单，块 id 含 `features.<组键>`）、`labels`/`descriptions`/`defaults`/`needs_hint` 元数据（全部由注册表与共享白名单派生，前端零中文表）、`logging`（六项含枚举/范围）、`reference`（只读计价参考）；规则与写入单源在共享层，与 TUI/CLI 同一函数 |
 | `web/runs.py` | 运行管理 | RunManager 单 worker 串行队列 + run 状态/事件注册表（Lock 保护） |
 | `web/progress.py` | 进度报告 | WebProgressReporter（ProgressReporter 子类 → RunState 事件缓冲） |
-| `src/static/web/` | 前端单页 | 原生 ES6 无框架、上传表单/进度事件/状态区/历史记录/配置编辑面板 |
+| `src/static/web/` | 前端单页 | 原生 ES6 无框架、上传表单/进度事件/状态区/历史记录/配置编辑面板/持仓录入页签（变更清单在浏览器侧） |
 
 #### 1.8.2 启动流程与启动防护
 

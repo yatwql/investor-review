@@ -27,7 +27,7 @@
 | `test-extract-failures.py` | 测试 | 从 pytest-html 报告提取失败用例详情 |
 | `test-find-order-dependent.py` | 测试 | 单跑绿合跑红的顺序依赖污染源二分定位 |
 | `make-assets.py` | 文档 | 仓库视觉资产维护：社交预览图生成 + README 架构图渲染体检（几何/像素/文字越界；需 cairosvg / Pillow） |
-| `make-screenshots.py` | 文档 | README/手册演示截图生成：隔离演示工作区（自造持仓 + 占位凭据）/ 演示报告 / TUI 帧渲染 / Web CDP 截图（需 Pillow + 等宽 CJK 字体；Web 档需 Node ≥22 + Chromium） |
+| `make-screenshots.py` | 文档 | README/手册演示截图生成：隔离演示工作区（`INVEST_PROJECT_ROOT` 整体搬根 + 自造持仓 + 占位凭据）/ 演示报告 / TUI 帧渲染 / Web CDP 截图（`--serve-demo` 自起演示服务）；需 Pillow + 等宽 CJK 字体，Web 档另需 Node ≥22 + Chromium |
 | `check-code-traces.py` | 质量 | 代码注释/文档字符串中历史变更痕迹检查 + AST 守卫（分层/日志/配置默认值单源） |
 | `check-doc-traces.py` | 文档 | 面向读者文档（.md）历史变更痕迹 + 结构性冗余（DUPLICATE）检查 |
 | `check-test-markers.py` | 测试 | AST 静态扫描验证测试标记合规性 |
@@ -542,7 +542,7 @@ README / 手册配图的可复现来源。五个子命令（demo / report / tui 
 .venv/bin/python scripts/make-screenshots.py cli src/static/cli-report.png
 
 # ⑤ Web 页面截图（导航 → 可选文本替换 → 定位 → 截视口；固定侧栏不丢）
-#    工作台首页在 `/`（五区用 hash 深链：#generate / #config / #whatif …）
+#    工作台首页在 `/`（六区用 hash 深链：#generate / #whatif / #holdings / #config …）
 .venv/bin/python scripts/make-screenshots.py web http://127.0.0.1:8000/ \
     docs/tmp/screenshots/demo/web-workbench.png --width 1440 --height 940 \
     --replace '临时文本=>演示文本'
@@ -570,7 +570,22 @@ perf 台账 / 数据源健康历史的**读路径指向演示工作区**（页�
 显示列计（`text_layout.display_width`，与生产同源）。
 
 **Web 截图**（`web_shot.py` + `cdp_shot.mjs`）：按「导航 → 可选文本替换 → 滚动到目标位置 →
-截视口」取图；滚动后再截而非整页截图，固定侧栏才会停在视口里。浏览器按「`--chrome` →
+截视口」取图；滚动后再截而非整页截图，固定侧栏才会停在视口里。加 `--serve-demo` 时脚本按
+演示工作区环境自起 Web 服务（环境统一走 `demo_workspace.isolation_env`，URL 的 host:port 换成
+本机临时端口），截完自动收进程——不要手工拼 env 起服务，漏一个变量就会读到真实配置与持仓：
+
+```bash
+.venv/bin/python scripts/make-screenshots.py web "http://127.0.0.1/#holdings" \
+    src/static/web-holdings.png --serve-demo --scroll-y 0
+```
+
+**隔离口径**：`INVEST_PROJECT_ROOT` 把 `PROJECT_ROOT` 整体指向演示根（配置 / 持仓 / 产物 /
+日志 / 缓存全在演示目录），演示根内建 `src/` 软链指向仓库 `src/` 以解析模板与静态资产
+（Windows 未开开发者模式时改用目录联接 `mklink /J`，否则报告 HTML 会 `TemplateNotFound`）。
+详见 `developer-guide.md`「非真实运行的日志/缓存隔离」。
+
+**出图护栏**：`demo` / `report` / `tui` / `cli` / `web` 入口统一先跑
+`demo_workspace.assert_demo_holdings()`——演示持仓缺失或逃出演示目录即拒绝出图。浏览器按「`--chrome` →
 `CHROME_BIN` → Playwright 下载的 Chromium → 常见系统路径」解析，`node` 用系统 PATH（需 ≥22，
 内置 WebSocket，无需 playwright）。
 

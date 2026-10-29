@@ -1142,7 +1142,7 @@ time.sleep = _sleep
 | 3 | 单 worker 纪律 | 触发生成/模拟的接口必须走同一串行队列与互斥锁（忙碌返回 429 `*_BUSY`） |
 | 4 | 前端 | `src/static/` 下的模板/JS：动态内容一律 `textContent`；图表走 chart 封装（主题切换/打印/导出同步） |
 | 5 | 测试 | `src/test/unit/web/`：成功/非法参数/错误信封/同源拒绝；契约测试与 `scripts/test-smoke-web.py` 同步 |
-| 6 | 文档 | 手册 [how-to-use-web-mode.md](../manuals/how-to-use-web-mode.md)（五区工作台对应位置）+ `requirements.md` §3.4（`R-WEB-*`）+ `technical.md` 接口表 |
+| 6 | 文档 | 手册 [how-to-use-web-mode.md](../manuals/how-to-use-web-mode.md)（六区工作台对应位置）+ `requirements.md` §3.4（`R-WEB-*`）+ `technical.md` 接口表 |
 
 ### 新增功能开关 / LLM 模块
 

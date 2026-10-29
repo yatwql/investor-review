@@ -288,6 +288,7 @@ TUI 菜单与 CLI 子命令落到**同一个业务编排函数**（`report/orche
 | **[B]** 生成标准报告（Excel+HTML，按章节配置） | `report --type both --history auto` |
 | **[L]** 生成完整报告（Excel+HTML，含 LLM） | `report --type full --history auto` |
 | **[W]** 调仓 What-if 模拟 | `whatif --base <调仓前.xlsx> --candidate <调仓后.xlsx>` |
+| **[U]** 持仓录入（买入/卖出/保存） | —（无 CLI 子命令：逐笔交互式录入只在 TUI / Web 提供，CLI 侧请直接编辑持仓 xlsx） |
 | **[C]** 报告章节显隐 | 一次性：`--chapter enable_news=off`；持久化：`config set enable_news false` / `config set enabled_llm.health_check false` |
 | **[S]** 报告章节内容呈现 | 一次性：`--feature cost_position=off`；持久化：`config set cost_position false` |
 | **[G]** 全局设置 | 输出目录 `--output DIR`；多链调序 `--llm-provider-order`；持仓/基准/匿名化等 `config set holdings_dir …` / `--anonymize …` |
