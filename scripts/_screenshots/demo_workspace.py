@@ -167,6 +167,24 @@ def isolation_env(demo: Path) -> dict[str, str]:
     }
 
 
+def _link_repo_src(demo: Path) -> None:
+    """把仓库 ``src/`` 软链进演示根：``PROJECT_ROOT`` 指向演示根后，模板与静态资产仍可解析。
+
+    隔离的是「数据面」（``data/`` / ``reports/``），代码与模板资产不复制——
+    否则演示根会变成第二份源码树，容易与仓库漂移。
+    """
+    import os
+
+    link = demo / "src"
+    target = REPO_ROOT / "src"
+    if link.is_symlink() or link.exists():
+        return
+    try:
+        os.symlink(target, link, target_is_directory=True)
+    except OSError:
+        print(f"  [!] 无法创建 src 软链（Windows 需开发者模式）：{link}")
+
+
 def assert_demo_holdings(output_root: Path | None = None) -> Path:
     """护栏：演示持仓文件存在且位于演示目录内，否则拒绝继续（防截图读到真实持仓）。
 
@@ -195,6 +213,7 @@ def build(output_root: Path | None = None) -> Path:
     for path in (config_dir, demo / "reports"):
         path.mkdir(parents=True, exist_ok=True)
 
+    _link_repo_src(demo)
     _write_holdings(demo)
     _write_llm_files(demo)
     config = _config(demo)

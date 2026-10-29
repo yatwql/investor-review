@@ -71,6 +71,8 @@
 
 **Web 配置编辑面板**（与 TUI 菜单同源，即改即存）：
 
+![Web 持仓录入：选账户/标的、填份额或申购金额，变更清单确认后写回](src/static/web-holdings.png)
+
 ![Web 配置编辑](src/static/web-config.png)
 
 **CLI 命令行模式**——参数驱动（`report --type basic|both|full`），产物路径、总盈亏与模块耗时排行直接回显，适合 cron / Windows 任务计划无人值守：

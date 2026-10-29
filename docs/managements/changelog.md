@@ -25,6 +25,7 @@
 
 - Web 渠道持仓录入（`plan-239`）：新增「持仓录入」页签与 `GET /api/holdings`、`POST /api/holdings/preview`、`POST /api/holdings/save`；与 TUI `[U]` 共用 `core/holdings_editor` + `fetcher/nav_lookup`，支持账户/新代码/场内场外/份额或申购金额/价格留空取行情或净值；预览不落盘，写回走 mtime 闸门（409 `HOLDINGS_STALE`）+ `.bak` + 原子写 + 回读校验，可选记入交易流水。
 
+- 演示截图流水线可重复执行：`demo` 工作区补 `src/` 软链（`PROJECT_ROOT` 搬到演示根后模板/静态资产仍可解析，报告 HTML 不再 `TemplateNotFound`）；`make-screenshots.py web --serve-demo` 自起演示服务（环境统一走 `isolation_env`，不再手工拼 env）；README 配图按虚构持仓重拍（TUI / Web 工作台·持仓录入·配置 / 报告首屏·汇总·图表 / CLI），新增 `web-holdings.png`。
 - 截图/演示隔离补全（rf-973）：`PROJECT_ROOT` 支持 `INVEST_PROJECT_ROOT` 覆盖，演示工作区整体搬根（配置/持仓/产物同在演示目录）；`make-screenshots.py` 增加 `assert_demo_holdings()` 护栏，环境没带上即拒绝出图，杜绝真实持仓入图。
 
 ### 重构

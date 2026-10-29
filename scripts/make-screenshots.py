@@ -75,25 +75,69 @@ def _cli(args: argparse.Namespace) -> int:
 
 
 def _web(args: argparse.Namespace) -> int:
-    # 截图只允许对演示工作区（服务端须带 isolation_env 启动，见 demo_workspace 文档）
-    import os as _os
-
+    """无头截图；``--serve-demo`` 时自起演示服务（环境与工作区由本脚本统一注入）。"""
     demo_workspace.assert_demo_holdings()
-    if (
-        _os.environ.get("INVEST_PROJECT_ROOT")
-        and Path(_os.environ["INVEST_PROJECT_ROOT"]).resolve() != demo_workspace.demo_dir().resolve()
-    ):
-        print("  [ERR] INVEST_PROJECT_ROOT 未指向演示工作区，拒绝截图（防真实持仓入图）")
-        return 2
-    return web_shot.run(
-        args.url,
-        args.output,
-        scroll_y=args.scroll_y,
-        width=args.width,
-        height=args.height,
-        replace=args.replace,
-        chrome=args.chrome,
+    server = None
+    url = args.url
+    if args.serve_demo:
+        server, url = _start_demo_server(args.url)
+    try:
+        return web_shot.run(
+            url,
+            args.output,
+            scroll_y=args.scroll_y,
+            width=args.width,
+            height=args.height,
+            replace=args.replace,
+            chrome=args.chrome,
+        )
+    finally:
+        if server is not None:
+            server.terminate()
+            try:
+                server.wait(timeout=10)
+            except Exception:  # 收尾失败不影响截图结果
+                server.kill()
+
+
+def _start_demo_server(url: str) -> tuple:
+    """按演示工作区环境起 Web 服务，返回 (进程, 换成实际端口的 URL)。
+
+    环境统一走 ``demo_workspace.isolation_env``（含 ``INVEST_PROJECT_ROOT``），
+    避免手工拼 env 时漏项导致服务读到真实持仓。
+    """
+    import os as _os
+    import socket
+    import subprocess
+    import time
+    import urllib.request
+    from urllib.parse import urlparse, urlunparse
+
+    demo = demo_workspace.demo_dir()
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    env = {
+        **_os.environ,
+        "PYTHONPATH": str(demo_workspace.REPO_ROOT),
+        **demo_workspace.isolation_env(demo),
+    }
+    server = subprocess.Popen(
+        [_os.sys.executable, "-m", "src.python.web", "--port", str(port)],
+        cwd=str(demo),
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
+    parsed = urlparse(url)
+    target = urlunparse(parsed._replace(netloc=f"127.0.0.1:{port}"))
+    for _ in range(60):
+        try:
+            urllib.request.urlopen(target, timeout=1).read(64)
+            break
+        except Exception:
+            time.sleep(0.5)
+    return server, target
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -135,6 +179,11 @@ def build_parser() -> argparse.ArgumentParser:
     web.add_argument("--height", type=int, default=940, help="视口高（默认 940）")
     web.add_argument("--replace", default="", help="截图前替换文本，写法 `原文=>替换`（用于抹除临时数据）")
     web.add_argument("--chrome", default=None, help="Chromium/Chrome 可执行文件（缺省按 CHROME_BIN 等次序解析）")
+    web.add_argument(
+        "--serve-demo",
+        action="store_true",
+        help="先按演示工作区环境自起 Web 服务再截图（URL 的 host:port 被替换为本机临时端口）",
+    )
     web.set_defaults(handler=_web)
     return parser
 
