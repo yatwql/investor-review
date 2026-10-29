@@ -87,6 +87,12 @@ def _build_system_info() -> dict:
 # ── 同源校验（轻量，副作用操作用）────────────────────
 
 
+def _json_payload() -> dict | None:
+    """请求体 JSON → dict；非对象/解析失败返回 None（调用方映射 BAD_PARAM）。"""
+    payload = request.get_json(silent=True)
+    return payload if isinstance(payload, dict) else None
+
+
 def _is_same_origin() -> bool:
     """轻量同源校验：Sec-Fetch-Site / Origin 与请求 host 一致性。
 
@@ -463,8 +469,8 @@ def _handle_holdings_preview():
 
     if not _is_same_origin():
         return _err("BAD_PARAM", "同源校验失败，拒绝提交"), 403
-    payload = request.get_json(silent=True) or {}
-    if not isinstance(payload, dict):
+    payload = _json_payload()
+    if payload is None:
         return _err("BAD_PARAM", "请求体格式不合法"), 400
     try:
         return _ok(preview(payload))
@@ -481,8 +487,8 @@ def _handle_holdings_save():
 
     if not _is_same_origin():
         return _err("BAD_PARAM", "同源校验失败，拒绝提交"), 403
-    payload = request.get_json(silent=True) or {}
-    if not isinstance(payload, dict):
+    payload = _json_payload()
+    if payload is None:
         return _err("BAD_PARAM", "请求体格式不合法"), 400
     try:
         return _ok(save(payload))

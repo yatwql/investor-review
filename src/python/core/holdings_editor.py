@@ -297,6 +297,27 @@ def ambiguous_price_kind(code: str, name: str = "") -> bool:
     return not is_otc_fund_by_name(name, raw)
 
 
+def resolve_entry_kind(code: str, name: str = "", declared: str | None = None) -> str:
+    """录入期品种价格形态：显式声明优先，其次按代码/名称判定，歧义区抛错交调用方确认。
+
+    Args:
+        code: 证券代码。
+        name: 名称（00 重叠区用于识别基金特征词）。
+        declared: 调用方已明确的形态（``exchange`` / ``otc``），可为 None。
+
+    Returns:
+        ``PRICE_KIND_EXCHANGE`` 或 ``PRICE_KIND_OTC``。
+
+    Raises:
+        ValueError: 处于场内/场外重叠区且调用方未声明形态（需向用户/前端确认一次）。
+    """
+    if declared in (PRICE_KIND_EXCHANGE, PRICE_KIND_OTC):
+        return declared
+    if ambiguous_price_kind(code, name):
+        raise ValueError("该代码处于场内/场外重叠区（00 段），需明确品种属性")
+    return price_kind(code, name)
+
+
 def load_book(filepath: str) -> HoldingsBook:
     """读取持仓文件构造内存副本。
 

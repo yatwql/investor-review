@@ -29,7 +29,6 @@ from src.python.core.holdings_editor import (
     HoldingsBook,
     TradeIntent,
     load_book,
-    price_kind,
 )
 from src.python.core.logger import setup_logger
 from src.python.tui.panel_runtime import NavState, PanelItem, panel_loop
@@ -478,11 +477,13 @@ def _resolve_price_kind(code: str, name: str) -> str | None:
     Returns:
         ``PRICE_KIND_EXCHANGE`` / ``PRICE_KIND_OTC``；用户取消返回 ``None``。
     """
-    from src.python.core.holdings_editor import ambiguous_price_kind
+    from src.python.core.holdings_editor import resolve_entry_kind
     from src.python.fetcher.price import price_kind_from_quote
 
-    if not ambiguous_price_kind(code, name):
-        return price_kind(code, name)
+    try:
+        return resolve_entry_kind(code, name)
+    except ValueError:
+        pass  # 00 重叠区：先按行情源反推，仍不确定再问用户
     hint = price_kind_from_quote(_market_data(code))
     if hint == PRICE_KIND_OTC:
         print("  [..] 行情源判定为场外基金（按交易日取官方净值）")

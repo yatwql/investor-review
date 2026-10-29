@@ -23,6 +23,7 @@ from src.python.core.holdings_editor import (
     build_workbook_bytes,
     load_book,
     price_kind,
+    resolve_entry_kind,
 )
 from src.python.core.reader import read_holdings
 from src.test._holdings_fixture import make_holdings_file
@@ -327,3 +328,23 @@ def test_save_verifies_written_file_and_keeps_drafts_on_mismatch(tmp_path: Path,
 )
 def test_ambiguous_price_kind_detects_00_overlap(code: str, name: str, ambiguous: bool):
     assert ambiguous_price_kind(code, name) is ambiguous
+
+
+@pytest.mark.parametrize(
+    ("code", "name", "declared", "expected"),
+    [
+        ("600900", "长江电力", None, PRICE_KIND_EXCHANGE),
+        ("007301", "华夏成长混合", None, "otc"),
+        ("005827", "易方达蓝筹", PRICE_KIND_OTC, "otc"),  # 歧义区：显式声明优先
+        ("000001", "平安银行", PRICE_KIND_EXCHANGE, PRICE_KIND_EXCHANGE),
+    ],
+)
+def test_resolve_entry_kind_shared_rule(code: str, name: str, declared: str | None, expected: str):
+    """品种形态判定单源：显式声明优先，非歧义按代码/名称判定。"""
+    assert resolve_entry_kind(code, name, declared) == expected
+
+
+def test_resolve_entry_kind_rejects_ambiguous_without_declaration():
+    """00 重叠区未声明形态 → 抛错交调用方确认（TUI 问用户 / Web 报 400）。"""
+    with pytest.raises(ValueError, match="重叠区"):
+        resolve_entry_kind("005827", "易方达蓝筹")

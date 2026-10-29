@@ -32,6 +32,8 @@
 
 - 持仓录入两日的技术债清理：① 主表表头判定（四列 + 跳过流水页签）上收为 `reader.match_holdings_header` / `reader.is_holdings_sheet` 公开单源，编辑层不再跨模块引私有 `_match_header`/`_EXPECTED_HEADER`，也不再自带一份重复判定；② 交易流水表头提为 `reader.TRADE_HEADER` 公开常量，写回侧不再复制字面量；③ 「按行情源反推品种形态」从 `core/holdings_editor` 下沉到 `fetcher/price.price_kind_from_quote`（`source_api` 属取数层内部标识，core 不解析 provider 名）；④ 三个测试文件各自的持仓 xlsx 构造器收敛为 `src/test/_holdings_fixture.py`（表头/账户/流水页签单源）；⑤ `list_xlsx_files` 的文件枚举加目录与 mtime 容错（并发删除不再抛错打断枚举）。
 
+- 技术债清理：① 品种形态判定抽为 `core/holdings_editor.resolve_entry_kind` 单源（显式声明优先 / 歧义区统一抛错），TUI 与 Web 不再各写一份；② 测试持仓构造器复用 `reader.HOLDINGS_HEADER` / `TRADE_HEADER`（不再复制字面量）；③ Web 路由的请求体解析收敛为 `_json_payload()`（新增路由复用，非对象统一 400）；④ 补 `INVEST_PROJECT_ROOT` 覆盖回归 2 例（未设置回落仓库根 / 设置后持仓与产物随根切换）。
+
 ### 修复
 
 - 生成后自检输出上限默认 `max_tokens_self_review` 4608 → 8192（rf-970）：满编持仓下 4608 仍被截断触发自动重生成，同一份自检付两次 LLM 调用。

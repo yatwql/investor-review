@@ -12,8 +12,7 @@ from typing import Mapping, Sequence
 
 import openpyxl
 
-HOLDINGS_HEADER: list[str] = ["名称", "代码", "持仓份额", "每份成本"]
-TRADE_HEADER: list[str] = ["日期", "代码", "操作", "份额", "价格"]
+from src.python.core.reader import HOLDINGS_HEADER, TRADE_HEADER
 
 #: 默认股票账户行（两行：一只 A 股 + 一只场外基金，覆盖两类价格形态）
 DEFAULT_STOCK_ROWS: list[list[object]] = [

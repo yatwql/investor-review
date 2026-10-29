@@ -30,9 +30,8 @@ from src.python.core.holdings_editor import (
     SIDE_SELL,
     HoldingsBook,
     TradeIntent,
-    ambiguous_price_kind,
     load_book,
-    price_kind,
+    resolve_entry_kind,
 )
 from src.python.core.reader import HOLDINGS_HEADER
 
@@ -153,12 +152,11 @@ def _parse_intent(raw: dict, index: int) -> TradeIntent:
 
 def _resolve_kind(raw: dict, code: str, name: str, index: int) -> str:
     """品种价格形态：歧义区（00 重叠）要求前端显式给出 asset_kind。"""
-    declared = str(raw.get("asset_kind") or "").strip()
-    if declared in (PRICE_KIND_EXCHANGE, PRICE_KIND_OTC):
-        return declared
-    if not ambiguous_price_kind(code, name):
-        return price_kind(code, name)
-    raise HoldingsEditError(f"第 {index} 笔（{name or code}）需选择品种属性：场内证券 或 场外基金")
+    declared = str(raw.get("asset_kind") or "").strip() or None
+    try:
+        return resolve_entry_kind(code, name, declared)
+    except ValueError as e:
+        raise HoldingsEditError(f"第 {index} 笔（{name or code}）需选择品种属性：场内证券 或 场外基金") from e
 
 
 def _resolve_trade_date(raw: dict, kind: str, index: int) -> str:
