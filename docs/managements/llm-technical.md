@@ -1370,7 +1370,7 @@ reload_pricing() → 读 llm_pricing_ref.json
 
 **产物交付**：不扩宽 4 元组 `llm_content` 契约（报告层多处按位置解包），改用**运行作用域载体 + 报告层零参 pull**（与 `report/experimental_notice` 同源模式）：`set_self_review_block()` 写入本轮区块，Excel 用量页签与 HTML「生成后自检（附录）」区块以零参函数取用。HTML 落点为附录区块（不占章节号、不参与目录导航）。
 
-**默认参数**：`max_tokens_self_review=4608` / `timeout_self_review=90` / `temperature_self_review=0.1` / `reasoning_effort_self_review=low`（出厂默认开；未产出时仍计入失败原因载体）。
+**默认参数**：`max_tokens_self_review=8192` / `timeout_self_review=90` / `temperature_self_review=0.1` / `reasoning_effort_self_review=low`（出厂默认开；未产出时仍计入失败原因载体）。
 
 **指纹**：`module_fingerprint.self_review_fingerprint()` 为**内容寻址**（各模块产出正文 + 持仓/穿透摘要），仅写侧使用、不进 `MODULE_FINGERPRINT_BUILDERS`（该表供预检/写两侧共享同一 `ModuleFingerprintInputs` 形状）——产出未变（含全部缓存命中）时键不变，自检同样命中缓存。
 

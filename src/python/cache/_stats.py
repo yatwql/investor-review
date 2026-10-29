@@ -25,9 +25,20 @@ _cache_miss_prefixes: dict[str, int] = {}
 _cache_miss_keys: dict[str, int] = {}
 _MISS_KEY_TRACK_LIMIT = 500
 
-#: 同一前缀在一次运行内未命中达到该次数 → 视为异常信号（每轮重取/缓存键失效），
-#: 单独升为 WARNING。常规冷启动的长尾前缀（每前缀 1~2 次）不告警。
-_SUSPICIOUS_PREFIX_MISSES = 5
+#: 同一**键**在一次运行内未命中达到该次数 → 视为异常信号（每轮重取/缓存键失效），
+#: 单独升为 WARNING。判据取「同键」而非「同前缀」：冷启动时一批新资产各取一次
+#: （如 20 只基金各未命中 1 次）属正常首次取数，按前缀累计会把它误报成故障。
+_SUSPICIOUS_KEY_MISSES = 3
+
+#: 负缓存与纠偏计数探测键：未命中即「尚无该记录」，属预期缺失（命中反而是坏消息），
+#: 不计入未命中分桶——否则每轮都会把 `report_symbol_miss_*` / `*_correction_streak`
+#: 这类正常探测报成「同前缀未命中」。
+_PROBE_KEY_MARKERS = ("_miss_", "_correction_streak")
+
+
+def is_probe_key(key: str) -> bool:
+    """该键是否为「预期缺失」探测键（负缓存查询 / 纠偏计数读取）。"""
+    return any(marker in key for marker in _PROBE_KEY_MARKERS)
 
 
 def _key_prefix(key: str) -> str:
@@ -48,7 +59,7 @@ def _record_cache_miss(key: str = "") -> None:
     global _cache_misses
     with _cache_stats_lock:
         _cache_misses += 1
-        if key:
+        if key and not is_probe_key(key):
             prefix = _key_prefix(key)
             _cache_miss_prefixes[prefix] = _cache_miss_prefixes.get(prefix, 0) + 1
             if len(_cache_miss_keys) < _MISS_KEY_TRACK_LIMIT:
@@ -92,9 +103,10 @@ def log_cache_summary(top: int = 5, salts_note: str = "") -> str:
     逐键「缓存未命中（无此缓存文件）: <key>」在真实运行里占日志的 10%~30%
     （逐文档 × 逐缓存键刷屏），但单条几乎不携带信息——有价值的是「命中率」与
     「哪一类键在反复未命中」。故逐键明细降到 DEBUG（排查时调级别即可），INFO 只留：
-    命中/未命中总量 + 未命中最多前缀 Top N；同类前缀未命中达
-    `_SUSPICIOUS_PREFIX_MISSES` 次时另打一条 WARNING（那是缓存键设计或 TTL 出问题的信号，
-    如「每份报告都为同一文档重探章节清单」）。
+    命中/未命中总量 + 未命中最多前缀 Top N；**同一键**未命中达
+    `_SUSPICIOUS_KEY_MISSES` 次时另打一条 WARNING（那是缓存键设计或 TTL 出问题的信号，
+    如「每份报告都为同一文档重探章节清单」）。负缓存探测键（`_miss_` / `_correction_streak`）
+    不计入分桶——它们未命中即「尚无该记录」，属预期缺失。
 
     Args:
         top: 摘要里列出的前缀数量。
@@ -122,21 +134,14 @@ def log_cache_summary(top: int = 5, salts_note: str = "") -> str:
         _note,
     )
     suspicious = sorted(
-        (prefix for prefix, count in prefixes.items() if count >= _SUSPICIOUS_PREFIX_MISSES),
-    )
+        ((key, count) for key, count in _cache_miss_keys.items() if count >= _SUSPICIOUS_KEY_MISSES),
+        key=lambda kv: (-kv[1], kv[0]),
+    )[:5]
     if suspicious:
-        # 附带这些前缀下未命中次数最多的键：告警要能直接看出「是哪几个键」，
-        # 否则还得回 DEBUG 里翻逐键明细（实测 report_datasink 5 每次运行都有）。
-        _top_keys = sorted(
-            ((key, count) for key, count in _cache_miss_keys.items() if _key_prefix(key) in suspicious),
-            key=lambda kv: (-kv[1], kv[0]),
-        )[:5]
-        _key_note = "；Top 键：" + "、".join(f"{key}×{count}" for key, count in _top_keys) if _top_keys else ""
         logger.warning(
-            "[cache] 同前缀未命中 ≥%d 次（疑似每轮重取或缓存键失效）：%s%s",
-            _SUSPICIOUS_PREFIX_MISSES,
-            "、".join(f"{prefix} {prefixes[prefix]}" for prefix in suspicious),
-            _key_note,
+            "[cache] 同键未命中 ≥%d 次（疑似每轮重取或缓存键失效）：%s",
+            _SUSPICIOUS_KEY_MISSES,
+            "、".join(f"{key}×{count}" for key, count in suspicious),
         )
     return detail
 

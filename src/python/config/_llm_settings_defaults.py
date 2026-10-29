@@ -82,12 +82,13 @@ _FLAT_DEFAULTS: dict[str, Any] = {
     "thinking_budget_penetration_deep": 12000,
     "reasoning_effort_penetration_deep": "low",
     # ── 生成后自检（出厂默认开：每次报告额外调用一次 LLM）──
-    # max_tokens 4608：3072 实测反复触顶（截断 → 自动以 4608 重生成，等于同一份
-    # 自检付两次调用并多等 5~8s）。自检输出是结构化复核清单，长度随持仓与事件表增长。
+    # max_tokens 8192：3072 → 4608 两次实测都在满编持仓下触顶（截断 → 自动放大量重生成，
+    # 等于同一份自检付两次调用并多等 5~8s）。自检输出是结构化复核清单，长度随持仓与
+    # 事件表单调增长，故直接抬到常见模型输出上限区间，留足余量。
     "system_prompt_self_review": None,
     "model_self_review": None,
     "temperature_self_review": 0.1,
-    "max_tokens_self_review": 4608,
+    "max_tokens_self_review": 8192,
     "timeout_self_review": 90,
     "cache_enabled_self_review": True,
     "output_brief_self_review": False,
