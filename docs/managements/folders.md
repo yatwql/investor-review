@@ -16,8 +16,8 @@
 | 源代码合计 | — | 578 | 145,113 | 主程序 + 模板 + 脚本 + SVG |
 | 测试代码 | Python | 689 | 187,823 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
 | 测试用例 | — | — | 12,935 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
-| 用户文档 | Markdown | 15 | 6,862 | 含 README.md；行数为 README + manuals 之和 |
-| ├ manuals/ | 用户手册分册 | 14 | 6,642 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
+| 用户文档 | Markdown | 15 | 6,869 | 含 README.md；行数为 README + manuals 之和 |
+| ├ manuals/ | 用户手册分册 | 14 | 6,649 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
 | 项目文档 | Markdown | 207 | 71,429 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
 | ├ managements/ | 管理文档 | 13 | 13,955 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 189 | 56,706 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
