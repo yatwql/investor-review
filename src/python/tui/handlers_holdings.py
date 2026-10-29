@@ -478,7 +478,8 @@ def _resolve_price_kind(code: str, name: str) -> str | None:
     Returns:
         ``PRICE_KIND_EXCHANGE`` / ``PRICE_KIND_OTC``；用户取消返回 ``None``。
     """
-    from src.python.core.holdings_editor import ambiguous_price_kind, price_kind_from_quote
+    from src.python.core.holdings_editor import ambiguous_price_kind
+    from src.python.fetcher.price import price_kind_from_quote
 
     if not ambiguous_price_kind(code, name):
         return price_kind(code, name)

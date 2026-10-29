@@ -37,10 +37,12 @@ from src.python.core.code_utils import (
 )
 from src.python.core.models import Holding
 from src.python.core.reader import (
+    HOLDINGS_HEADER,
+    TRADE_HEADER,
     _DIVIDEND_SHEET_NAME,
-    _EXPECTED_HEADER,
     _TRADE_SHEET_NAME,
-    _match_header,
+    is_holdings_sheet,
+    match_holdings_header,
     read_holdings,
 )
 
@@ -295,28 +297,6 @@ def ambiguous_price_kind(code: str, name: str = "") -> bool:
     return not is_otc_fund_by_name(name, raw)
 
 
-def price_kind_from_quote(data: dict | None) -> str | None:
-    """按行情取数结果反推品种价格形态（歧义区消歧用）。
-
-    行情链路已按代码类型路由：命中场外净值源（``eastmoney`` / ``sina_fund``）即场外；
-    命中行情源（``tencent`` / ``sina`` 等）即场内。无数据返回 ``None``（交用户确认）。
-
-    Args:
-        data: ``fetch_market_data`` 的返回字典（可为 None）。
-
-    Returns:
-        ``PRICE_KIND_OTC`` / ``PRICE_KIND_EXCHANGE`` / ``None``。
-    """
-    if not data:
-        return None
-    source_api = str(data.get("source_api") or "").strip()
-    if not source_api:
-        return None
-    if source_api in ("eastmoney", "sina_fund"):
-        return PRICE_KIND_OTC
-    return PRICE_KIND_EXCHANGE
-
-
 def load_book(filepath: str) -> HoldingsBook:
     """读取持仓文件构造内存副本。
 
@@ -340,7 +320,7 @@ def load_book(filepath: str) -> HoldingsBook:
             header = [
                 str(cell.value or "").strip() for cell in next(wb[sheet_name].iter_rows(min_row=1, max_row=1), ())
             ]
-            if _match_header(header, _EXPECTED_HEADER):
+            if match_holdings_header(header):
                 accounts.setdefault(sheet_name.strip(), [])
     finally:
         wb.close()
@@ -370,7 +350,7 @@ def build_workbook_bytes(book: HoldingsBook, *, append_flows: bool = False) -> b
         other_titles: set[str] = set()
         for ws in wb.worksheets:
             title = ws.title.strip()
-            if _is_holding_sheet(ws):
+            if is_holdings_sheet(ws):
                 holding_sheets[title] = ws
             else:
                 other_titles.add(title)
@@ -381,7 +361,7 @@ def build_workbook_bytes(book: HoldingsBook, *, append_flows: bool = False) -> b
                 if account in other_titles:
                     raise ValueError(f"账户「{account}」与持仓文件中已有的非持仓页签同名，请换一个账户名")
                 ws = wb.create_sheet(title=account)
-                ws.append(list(_EXPECTED_HEADER))
+                ws.append(list(HOLDINGS_HEADER))
             elif ws.max_row is not None and ws.max_row > 1:
                 ws.delete_rows(2, ws.max_row - 1)
             for row in rows:
@@ -414,10 +394,10 @@ def _append_flow_rows(wb, drafts: list[TradeIntent]) -> None:
     has_fee = False
     if ws is None:
         ws = wb.create_sheet(title=_TRADE_SHEET_NAME)
-        ws.append(["日期", "代码", "操作", "份额", "价格"])
+        ws.append(list(TRADE_HEADER))
     else:
         header = [str(c.value or "").strip() for c in next(ws.iter_rows(min_row=1, max_row=1))]
-        if header[:5] != ["日期", "代码", "操作", "份额", "价格"]:
+        if header[: len(TRADE_HEADER)] != TRADE_HEADER:
             raise ValueError(f"「{_TRADE_SHEET_NAME}」页签表头不匹配，无法追加记录（应为 日期/代码/操作/份额/价格）")
         has_fee = len(header) >= 6 and header[5] == "费用"
     for intent in drafts:
@@ -439,13 +419,3 @@ def _find_row(rows: list[Holding], code: str) -> Holding | None:
 def _is_flow_sheet_name(sheet_name: str) -> bool:
     """是否为流水类页签（非账户主表）。"""
     return sheet_name.strip() in (_TRADE_SHEET_NAME, _DIVIDEND_SHEET_NAME)
-
-
-def _is_holding_sheet(ws) -> bool:
-    """工作表是否为持仓主表（表头须为 名称/代码/持仓份额/每份成本）。"""
-    if _is_flow_sheet_name(ws.title):
-        return False
-    if ws.max_row is None:
-        return False
-    header = [str(cell.value or "").strip() for cell in next(ws.iter_rows(min_row=1, max_row=1))]
-    return _match_header(header, _EXPECTED_HEADER)

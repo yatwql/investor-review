@@ -10,27 +10,23 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-import openpyxl
 import pytest
 
 from src.python.core.holdings_editor import SIDE_BUY, TradeIntent, load_book
+from src.test._holdings_fixture import make_holdings_file
 from src.python.tui import handlers_holdings as hh
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_ui]
 
 
-def _make_holdings_file(tmp_path: Path) -> Path:
-    wb = openpyxl.Workbook()
-    stock = wb.worksheets[0]
-    stock.title = "股票账户"
-    stock.append(["名称", "代码", "持仓份额", "每份成本"])
-    stock.append(["长江电力", "600900", 1000, 20.0])
-    fund = wb.create_sheet("基金账户")
-    fund.append(["名称", "代码", "持仓份额", "每份成本"])
-    fund.append(["易方达蓝筹精选混合", "005827", 200, 2.0])
-    path = tmp_path / "持仓.xlsx"
-    wb.save(path)
-    return path
+def _ui_file(tmp_path: Path) -> Path:
+    """面板用例基线：一个 A 股账户 + 一个场外基金账户，无流水页签。"""
+    return make_holdings_file(
+        tmp_path,
+        stock_rows=[["长江电力", "600900", 1000, 20.0]],
+        fund_rows=[["易方达蓝筹精选混合", "005827", 200, 2.0]],
+        with_flow_sheet=False,
+    )
 
 
 @pytest.fixture
@@ -54,7 +50,7 @@ def feed(monkeypatch: pytest.MonkeyPatch):
 def test_buy_new_exchange_asset_enters_draft_without_touching_file(
     tmp_path: Path, feed, monkeypatch: pytest.MonkeyPatch
 ):
-    path = _make_holdings_file(tmp_path)
+    path = _ui_file(tmp_path)
     before = path.read_bytes()
     session = hh._Session(book=load_book(str(path)), mtime=os.path.getmtime(path))
     monkeypatch.setattr(
@@ -72,7 +68,7 @@ def test_buy_new_exchange_asset_enters_draft_without_touching_file(
 
 
 def test_otc_buy_by_amount_derives_shares_from_nav(tmp_path: Path, feed, monkeypatch: pytest.MonkeyPatch):
-    path = _make_holdings_file(tmp_path)
+    path = _ui_file(tmp_path)
     session = hh._Session(book=load_book(str(path)), mtime=os.path.getmtime(path))
     monkeypatch.setattr(
         "src.python.fetcher.nav_lookup.resolve_purchase_shares",
@@ -96,7 +92,7 @@ def test_otc_buy_by_amount_derives_shares_from_nav(tmp_path: Path, feed, monkeyp
 def test_otc_buy_by_amount_rejected_when_nav_not_published(
     tmp_path: Path, feed, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ):
-    path = _make_holdings_file(tmp_path)
+    path = _ui_file(tmp_path)
     session = hh._Session(book=load_book(str(path)), mtime=os.path.getmtime(path))
     monkeypatch.setattr("src.python.fetcher.nav_lookup.resolve_purchase_shares", lambda *a, **k: None)
     feed("2", "1", "", "2026-07-01", "1000")
@@ -110,7 +106,7 @@ def test_otc_buy_by_amount_rejected_when_nav_not_published(
 def test_save_refuses_when_file_modified_after_load(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ):
-    path = _make_holdings_file(tmp_path)
+    path = _ui_file(tmp_path)
     session = hh._Session(book=load_book(str(path)), mtime=os.path.getmtime(path) - 5)
     session.book.apply(
         TradeIntent(
@@ -133,7 +129,7 @@ def test_save_refuses_when_file_modified_after_load(
 
 
 def test_save_writes_only_after_confirmation(tmp_path: Path, feed, capsys: pytest.CaptureFixture[str]):
-    path = _make_holdings_file(tmp_path)
+    path = _ui_file(tmp_path)
     session = hh._Session(book=load_book(str(path)), mtime=os.path.getmtime(path))
     session.book.apply(
         TradeIntent(
@@ -166,7 +162,7 @@ def test_save_writes_only_after_confirmation(tmp_path: Path, feed, capsys: pytes
 
 def test_list_positions_marks_unsaved_rows_only(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     """查看持仓：本次未保存的行标 ``*`` 并给图例，已保存的行不标。"""
-    path = _make_holdings_file(tmp_path)
+    path = _ui_file(tmp_path)
     book = load_book(str(path))
     book.apply(
         TradeIntent(
@@ -192,7 +188,7 @@ def test_list_positions_marks_unsaved_rows_only(tmp_path: Path, capsys: pytest.C
 
 def test_panel_items_use_numbers_with_letter_aliases(tmp_path: Path):
     """二级菜单编号为主入口、字母作别名；卖出用 S（Sell）而非 B（Bid 是买方出价）。"""
-    session = hh._Session(book=load_book(str(_make_holdings_file(tmp_path))), mtime=0.0)
+    session = hh._Session(book=load_book(str(_ui_file(tmp_path))), mtime=0.0)
     items = hh._panel_items(session)
 
     assert [item.key for item in items] == ["1", "2", "3", "4", "5", "0"]
@@ -219,7 +215,7 @@ def test_letter_alias_dispatches_same_action():
 
 
 def test_unknown_text_gives_invalid_feedback(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
-    session = hh._Session(book=load_book(str(_make_holdings_file(tmp_path))), mtime=0.0)
+    session = hh._Session(book=load_book(str(_ui_file(tmp_path))), mtime=0.0)
     hh._dispatch_alias("Z", hh._panel_items(session))
     assert "无效选择" in capsys.readouterr().out
 
@@ -279,7 +275,7 @@ def test_price_deviation_requires_confirmation(feed):
 
 def test_duplicate_entry_needs_explicit_confirmation(tmp_path: Path, feed, monkeypatch: pytest.MonkeyPatch):
     """连录两笔完全相同 → 第二次必须显式确认，拒绝则不新增。"""
-    path = _make_holdings_file(tmp_path)
+    path = _ui_file(tmp_path)
     session = hh._Session(book=load_book(str(path)), mtime=os.path.getmtime(path))
     monkeypatch.setattr(
         "src.python.fetcher.price.fetch_market_data",
@@ -298,7 +294,7 @@ def test_duplicate_entry_needs_explicit_confirmation(tmp_path: Path, feed, monke
 
 def test_undo_last_removes_entry_and_restores_book(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     """撤销上一笔：回到上一笔之前的状态（以文件为基线重放剩余变更）。"""
-    path = _make_holdings_file(tmp_path)
+    path = _ui_file(tmp_path)
     session = hh._Session(book=load_book(str(path)), mtime=os.path.getmtime(path))
     original = session.book.rows("股票账户")[0].shares
     session.book.apply(
@@ -338,7 +334,7 @@ def test_undo_last_removes_entry_and_restores_book(tmp_path: Path, capsys: pytes
 
 def test_exit_guard_offers_three_ways(tmp_path: Path, feed, monkeypatch: pytest.MonkeyPatch):
     """退出守卫：回车=继续编辑，2=丢弃退出，1=保存后退出（保存成功才退出）。"""
-    path = _make_holdings_file(tmp_path)
+    path = _ui_file(tmp_path)
     session = hh._Session(book=load_book(str(path)), mtime=os.path.getmtime(path))
     session.book.apply(
         TradeIntent(

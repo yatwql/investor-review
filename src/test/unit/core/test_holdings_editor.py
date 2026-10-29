@@ -23,34 +23,15 @@ from src.python.core.holdings_editor import (
     build_workbook_bytes,
     load_book,
     price_kind,
-    price_kind_from_quote,
 )
 from src.python.core.reader import read_holdings
+from src.test._holdings_fixture import make_holdings_file
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
 
 
-def _make_holdings_file(tmp_path: Path) -> Path:
-    """建一份两账户 + 交易流水页签的持仓文件。"""
-    wb = openpyxl.Workbook()
-    stock = wb.worksheets[0]
-    stock.title = "股票账户"
-    stock.append(["名称", "代码", "持仓份额", "每份成本"])
-    stock.append(["长江电力", "600900", 1000, 20.0])
-    stock.append(["华夏成长", "007301", 500, 1.5])
-    fund = wb.create_sheet("基金账户")
-    fund.append(["名称", "代码", "持仓份额", "每份成本"])
-    fund.append(["易方达蓝筹", "005827", 200, 2.0])
-    flow = wb.create_sheet("交易流水")
-    flow.append(["日期", "代码", "操作", "份额", "价格"])
-    flow.append(["2026-06-01", "600900", "买入", 100, 19.0])
-    path = tmp_path / "持仓.xlsx"
-    wb.save(path)
-    return path
-
-
 def test_load_book_keeps_account_order_and_rows(tmp_path: Path):
-    book = load_book(str(_make_holdings_file(tmp_path)))
+    book = load_book(str(make_holdings_file(tmp_path)))
     assert book.account_names == ["股票账户", "基金账户"]
     assert book.total_rows() == 3
     assert [row.code for row in book.rows("股票账户")] == ["600900", "007301"]
@@ -58,7 +39,7 @@ def test_load_book_keeps_account_order_and_rows(tmp_path: Path):
 
 
 def test_buy_existing_asset_uses_weighted_average_cost(tmp_path: Path):
-    book = load_book(str(_make_holdings_file(tmp_path)))
+    book = load_book(str(make_holdings_file(tmp_path)))
     book.apply(
         TradeIntent(
             account="股票账户",
@@ -76,7 +57,7 @@ def test_buy_existing_asset_uses_weighted_average_cost(tmp_path: Path):
 
 
 def test_buy_new_asset_appends_row(tmp_path: Path):
-    book = load_book(str(_make_holdings_file(tmp_path)))
+    book = load_book(str(make_holdings_file(tmp_path)))
     book.apply(
         TradeIntent(
             account="基金账户",
@@ -94,7 +75,7 @@ def test_buy_new_asset_appends_row(tmp_path: Path):
 
 
 def test_sell_partial_keeps_original_cost(tmp_path: Path):
-    book = load_book(str(_make_holdings_file(tmp_path)))
+    book = load_book(str(make_holdings_file(tmp_path)))
     book.apply(
         TradeIntent(
             account="股票账户",
@@ -112,7 +93,7 @@ def test_sell_partial_keeps_original_cost(tmp_path: Path):
 
 
 def test_sell_all_removes_row(tmp_path: Path):
-    book = load_book(str(_make_holdings_file(tmp_path)))
+    book = load_book(str(make_holdings_file(tmp_path)))
     book.apply(
         TradeIntent(
             account="基金账户",
@@ -130,7 +111,7 @@ def test_sell_all_removes_row(tmp_path: Path):
 
 def test_dirty_tracking_marks_only_touched_rows(tmp_path: Path):
     """未保存标注按 (账户, 归一代码) 记录：只标被本次录入改过的行，保存后清空。"""
-    path = _make_holdings_file(tmp_path)
+    path = make_holdings_file(tmp_path)
     book = load_book(str(path))
     book.apply(
         TradeIntent(
@@ -154,7 +135,7 @@ def test_dirty_tracking_marks_only_touched_rows(tmp_path: Path):
 
 
 def test_save_writes_rows_and_keeps_other_sheets(tmp_path: Path):
-    path = _make_holdings_file(tmp_path)
+    path = make_holdings_file(tmp_path)
     book = load_book(str(path))
     book.apply(
         TradeIntent(
@@ -185,7 +166,7 @@ def test_save_writes_rows_and_keeps_other_sheets(tmp_path: Path):
 
 
 def test_save_appends_trade_flow_when_enabled(tmp_path: Path):
-    path = _make_holdings_file(tmp_path)
+    path = make_holdings_file(tmp_path)
     book = load_book(str(path))
     book.apply(
         TradeIntent(
@@ -213,7 +194,7 @@ def test_save_appends_trade_flow_when_enabled(tmp_path: Path):
 
 
 def test_save_creates_new_account_sheet(tmp_path: Path):
-    path = _make_holdings_file(tmp_path)
+    path = make_holdings_file(tmp_path)
     book = load_book(str(path))
     book.apply(
         TradeIntent(
@@ -233,7 +214,7 @@ def test_save_creates_new_account_sheet(tmp_path: Path):
 
 
 def test_build_workbook_bytes_is_pure(tmp_path: Path):
-    path = _make_holdings_file(tmp_path)
+    path = make_holdings_file(tmp_path)
     before = path.read_bytes()
     book = load_book(str(path))
     book.apply(
@@ -269,7 +250,7 @@ def test_price_kind_classifies_by_asset_type(code: str, name: str, expected: str
 
 def test_revert_last_replays_remaining_changes(tmp_path: Path):
     """撤销最后一笔：以文件为基线重放剩余变更，份额回到撤销前一步的状态。"""
-    path = _make_holdings_file(tmp_path)
+    path = make_holdings_file(tmp_path)
     book = load_book(str(path))
     book.apply(
         TradeIntent(
@@ -313,7 +294,7 @@ def test_save_verifies_written_file_and_keeps_drafts_on_mismatch(tmp_path: Path,
     """回读校验不一致 → 抛错且保留变更（不当作保存成功）。"""
     from src.python.core import holdings_editor
 
-    path = _make_holdings_file(tmp_path)
+    path = make_holdings_file(tmp_path)
     book = load_book(str(path))
     book.apply(
         TradeIntent(
@@ -346,18 +327,3 @@ def test_save_verifies_written_file_and_keeps_drafts_on_mismatch(tmp_path: Path,
 )
 def test_ambiguous_price_kind_detects_00_overlap(code: str, name: str, ambiguous: bool):
     assert ambiguous_price_kind(code, name) is ambiguous
-
-
-@pytest.mark.parametrize(
-    ("data", "expected"),
-    [
-        ({"source_api": "eastmoney"}, PRICE_KIND_OTC),
-        ({"source_api": "sina_fund"}, PRICE_KIND_OTC),
-        ({"source_api": "tencent"}, PRICE_KIND_EXCHANGE),
-        ({"source_api": "sina"}, PRICE_KIND_EXCHANGE),
-        ({}, None),
-        (None, None),
-    ],
-)
-def test_price_kind_from_quote_maps_source_api(data: dict | None, expected: str | None):
-    assert price_kind_from_quote(data) == expected

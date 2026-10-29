@@ -23,6 +23,10 @@
 - 管理文档同步：`requirements.md`（§3.2 菜单表新增「持仓维护」组 + R-HLD-06~13，R-HLD-06 键位按最终编号/字母表述）、`testplan.md`（新增三条需求追溯映射）、`technical.md`（功能语义命名表新增 `holdings_editor` / `price_kind` / `nav_lookup` / `resolve_nav_on_trade_date` / `resolve_purchase_shares` / `ambiguous_price_kind` / `price_kind_from_quote` / `revert_last`）、`folders.md`（新增 3 个源码 + 4 个测试 + 设计文件条目）、`test-coverage.md` 与统计行、`plan.md`（plan-238 / plan-239 仅留任务号与简述，设计细节归 `docs/plan/holdings-entry-design.md`）。
 - 用户文档同步：`README.md`（主菜单四组 14 项 → 五组 15 项，补 `[U]` 说明）、`how-to-start.md` 与 `how-to-use-tui-menu.md` 主菜单块 + 「持仓录入类」详解（别名、未保存标记、撤销、三选一退出、三项录入期校验、保存后回读校验）、`how-to-use-web-mode.md`（在线改持仓当前仅 TUI，Web 走上传覆盖）、`faq.md`（新增 2 问：能否不手改 Excel 改持仓 / 改完为何报告仍是旧数据）。
 
+### 重构
+
+- 持仓录入两日的技术债清理：① 主表表头判定（四列 + 跳过流水页签）上收为 `reader.match_holdings_header` / `reader.is_holdings_sheet` 公开单源，编辑层不再跨模块引私有 `_match_header`/`_EXPECTED_HEADER`，也不再自带一份重复判定；② 交易流水表头提为 `reader.TRADE_HEADER` 公开常量，写回侧不再复制字面量；③ 「按行情源反推品种形态」从 `core/holdings_editor` 下沉到 `fetcher/price.price_kind_from_quote`（`source_api` 属取数层内部标识，core 不解析 provider 名）；④ 三个测试文件各自的持仓 xlsx 构造器收敛为 `src/test/_holdings_fixture.py`（表头/账户/流水页签单源）；⑤ `list_xlsx_files` 的文件枚举加目录与 mtime 容错（并发删除不再抛错打断枚举）。
+
 ### 修复
 
 - 生成后自检输出上限默认 `max_tokens_self_review` 4608 → 8192（rf-970）：满编持仓下 4608 仍被截断触发自动重生成，同一份自检付两次 LLM 调用。
