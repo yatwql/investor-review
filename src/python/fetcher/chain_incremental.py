@@ -53,6 +53,26 @@ def reset_run_history_state() -> None:
     _EMPTY_SKIP_LOGGED.clear()
 
 
+def _correction_streak_key(cache_key: str) -> str:
+    """连续检出历史重叠的计数键（缓存键派生，随缓存键一同清理）。"""
+    return f"{cache_key}_correction_streak"
+
+
+def _read_correction_streak(cache_key: str) -> int:
+    """读连续触发计数；读不到即「从未连续触发」（正常预期）。
+
+    `record_stats=False`：这是**状态量探针**，不是缓存条目——计入全局缓存未命中会
+    让命中率虚低并触发「同前缀反复未命中」告警（实测单轮虚计 17 次）。
+    """
+    value = cache_get(_correction_streak_key(cache_key), CACHE_WEEKLY, record_stats=False)
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        # 计数键里出现非数值（脏数据/被别的载荷复用同名键）→ 按「未连续触发」处理，
+        # 与「缓存坏了就当没缓存」的契约一致，不让旁路状态量中断取数主链。
+        return 0
+
+
 def _try_providers(
     providers: list[str],
     registry: Any,
@@ -194,11 +214,8 @@ def fetch_with_incremental_fallback(
             logger.warning("[%s] 连续性校验异常（不影响合并）", cache_key)
 
         if needs_refresh and cached:
-            streak_key = f"{cache_key}_correction_streak"
-            # record_stats=False：连续触发计数是**状态量探针**，读不到即「未连续触发」
-            # （正常预期），计入缓存未命中会让命中率虚低并触发「同前缀反复未命中」告警。
-            streak = int(cache_get(streak_key, CACHE_WEEKLY, record_stats=False) or 0)
-            cache_set(streak_key, streak + 1)  # 每次检出都计数：若全量刷新无法根治，下次继续累计
+            streak = _read_correction_streak(cache_key)
+            cache_set(_correction_streak_key(cache_key), streak + 1)  # 每次检出都计数：若全量刷新无法根治，下次继续累计
             if streak + 1 >= _CORRECTION_STREAK_SKIP:
                 # 结构性回看：全量刷新未能消除重叠（源对增量固定向前多看若干天），
                 # 按日合并的同日覆盖已能吸收窗口内修正——跳过多拉一次全量
@@ -221,9 +238,8 @@ def fetch_with_incremental_fallback(
 
             # 全量刷新失败或冷却跳过 → 降级：用合并结果继续（merged 已含重叠窗口新数据）
         if not needs_refresh:
-            streak_key = f"{cache_key}_correction_streak"
-            if cache_get(streak_key, CACHE_WEEKLY, record_stats=False):
-                cache_set(streak_key, 0)  # 正常合并（无重叠检出）→ 重置连续触发计数
+            if _read_correction_streak(cache_key):
+                cache_set(_correction_streak_key(cache_key), 0)  # 正常合并（无重叠检出）→ 重置计数
         cache_set(cache_key, merged)
         _RUN_HISTORY_MEMO[_memo_key] = (max(days, len(merged)), merged)
         return merged[-days:]
@@ -445,7 +461,8 @@ def _validate_continuity(cached: list[dict], new_data: list[dict], cache_key: st
     first_new = new_data[0]
 
     # 日期重叠：新数据首日早于旧数据末日（相等=API 包含边界日，属正常衔接）
-    if first_new.get("date") < last_old.get("date"):
+    _first_date, _last_date = first_new.get("date"), last_old.get("date")
+    if isinstance(_first_date, str) and isinstance(_last_date, str) and _first_date < _last_date:
         if _overlap_values_changed(cached, new_data):
             logger.warning("[%s] 新旧数据重叠且重叠段数值变化——判定为历史修正，自动全量刷新", cache_key)
             cache_set(f"{cache_key}_correction_flag", True)

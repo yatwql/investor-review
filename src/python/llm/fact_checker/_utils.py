@@ -337,6 +337,54 @@ def _unresolved_attached_subject(
     return not _has_subject_candidate(token, holding_codes, name_to_code, len(token) - 1)
 
 
+def _subject_spans(
+    text: str,
+    holding_codes: set[str],
+    name_to_code: dict[str, str] | None,
+    anchor: int = 0,
+) -> list[tuple[int, int, str]]:
+    """主体出现区间 ``[(start, end, code), ...]``——代码/全名/简称归一的**单源实现**。
+
+    主体匹配此前有三份各写一遍（``_locate_subject_in`` 取代码、``_has_subject_candidate``
+    取布尔、数值检查器还要取区间判「市场名词是否其实属于某持仓名」）。三处口径一旦分叉，
+    就会出现「主体解析得到、但距离算不出」这类内部不一致。此处按文本产出区间，
+    三者按需消费。
+
+    简称的位置按别名替换的长度增量近似映射回原文本，仅用于距离/重叠比较。
+
+    Args:
+        text: 待匹配文本（通常是分句）。
+        holding_codes: 持仓代码集合。
+        name_to_code: 「持仓名 → 代码」映射。
+        anchor: 数值位置（预留：描述性尾名不走本函数，当前实现不消费此参数）。
+
+    Returns:
+        区间列表（可能为空）。描述性尾名不在其中——它只有距离没有区间，
+        需区间的调用方应另行判断。
+    """
+    spans: list[tuple[int, int, str]] = []
+    for m in _CODE_PATTERN.finditer(text):
+        if m.group(0) in holding_codes:
+            spans.append((m.start(), m.end(), m.group(0)))
+    for name, code in (name_to_code or {}).items():
+        idx = text.find(name)
+        if idx != -1:
+            spans.append((idx, idx + len(name), code))
+    norm = _alias_normalized(text)
+    if norm != text:
+        for name, code in (name_to_code or {}).items():
+            core = _extract_core_name(name)
+            if len(core) < 2:
+                continue
+            idx = norm.find(core)
+            if idx == -1:
+                continue
+            _extra = sum((len(_c) - len(_a)) * norm[:idx].count(_c) for _a, _c in _NAME_ALIAS_MAP.items())
+            _pos = max(0, idx - _extra)
+            spans.append((_pos, _pos + len(core), code))
+    return spans
+
+
 def _has_subject_candidate(
     text: str,
     holding_codes: set[str],
@@ -348,17 +396,9 @@ def _has_subject_candidate(
     简称与尾名用与 :func:`_locate_subject_in` 同源的口径探测，避免「分句里有主体
     但没识别出来」而错误回退全句、被远处的另一个主体抢走归属。
     """
-    if any(code in holding_codes for code in _CODE_PATTERN.findall(text)):
+    if _subject_spans(text, holding_codes, name_to_code, anchor):
         return True
-    for name in name_to_code or {}:
-        if name in text:
-            return True
-    norm = _alias_normalized(text)
-    if norm != text:
-        for name in name_to_code or {}:
-            core = _extract_core_name(name)
-            if len(core) >= 2 and core in norm:
-                return True
+    # 描述性尾名（"电池主题ETF"→561910）只有距离没有区间，单独兜底
     return _match_descriptive_tail(text, name_to_code, anchor) is not None
 
 

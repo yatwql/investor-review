@@ -391,7 +391,7 @@ class TestCacheKeySaltLogging:
         reset_cache_stats()
         _record_cache_hit()
         with caplog.at_level(logging.INFO, logger="invest"):
-            log_cache_summary()
+            log_cache_summary(salts_note="缓存键版本盐：提示词=p 校验规则=fact-rules-9")
         rows = [r for r in caplog.records if r.getMessage().startswith("[cache] 本次命中")]
-        assert len(rows) == 1 and "校验规则=fact-rules" in rows[0].getMessage()
+        assert len(rows) == 1 and "校验规则=fact-rules-9" in rows[0].getMessage()
         reset_cache_stats()

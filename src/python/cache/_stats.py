@@ -31,7 +31,7 @@ _SUSPICIOUS_PREFIX_MISSES = 5
 
 
 def _key_prefix(key: str) -> str:
-    """缓存键 → 统计前缀（前两段，如 ``report_datasink_index`` → ``report_datasink``）。"""
+    """缓存键 → 统计前缀（取前两段：``llm_expert_review_…`` → ``llm_expert_review``）。"""
     segments = [seg for seg in key.split("_") if seg]
     return "_".join(segments[:2]) if len(segments) >= 2 else (segments[0] if segments else "other")
 
@@ -86,7 +86,7 @@ def get_cache_miss_prefixes() -> dict[str, int]:
         return dict(_cache_miss_prefixes)
 
 
-def log_cache_summary(top: int = 5) -> str:
+def log_cache_summary(top: int = 5, salts_note: str = "") -> str:
     """以**一行 INFO** 汇总本次运行的缓存命中情况，取代逐键未命中日志。
 
     逐键「缓存未命中（无此缓存文件）: <key>」在真实运行里占日志的 10%~30%
@@ -98,6 +98,9 @@ def log_cache_summary(top: int = 5) -> str:
 
     Args:
         top: 摘要里列出的前缀数量。
+        salts_note: 追加到汇总行尾的补充说明（缓存键版本盐）。**由调用方传入**——
+            `cache` 是基础层，不得反向 import `llm` 取版本号（分层纪律：只能依赖
+            下层与贯穿层）；报告层为本函数的调用方，版本信息由它组织。
 
     Returns:
         摘要文本（无可观测数据时为空串）。
@@ -108,15 +111,7 @@ def log_cache_summary(top: int = 5) -> str:
     prefixes = get_cache_miss_prefixes()
     ranked = sorted(prefixes.items(), key=lambda kv: (-kv[1], kv[0]))[:top]
     detail = "、".join(f"{prefix} {count}" for prefix, count in ranked) or "无"
-    # 版本盐尾注：命中率高而模块仍整批重算时，一眼可辨是「规则/文案版本递增换了键」
-    # 而非缓存被裁掉（cache→llm 的惰性读取与 TTL 归因同源）。
-    try:
-        from src.python.llm.fingerprint import cache_key_salts
-
-        _salts = cache_key_salts()
-        salts_note = f"；缓存键版本盐：提示词={_salts['prompt_schema']} 校验规则={_salts['fact_rules']}"
-    except Exception:  # 观测增强失败不影响汇总行本体
-        salts_note = ""
+    _note = f"；{salts_note}" if salts_note else ""
     logger.info(
         "[cache] 本次命中 %d / 未命中 %d（命中率 %.0f%%）；未命中前缀 Top%d：%s%s",
         stats["hits"],
@@ -124,7 +119,7 @@ def log_cache_summary(top: int = 5) -> str:
         stats["rate"] * 100,
         len(ranked),
         detail,
-        salts_note,
+        _note,
     )
     suspicious = sorted(
         (prefix for prefix, count in prefixes.items() if count >= _SUSPICIOUS_PREFIX_MISSES),

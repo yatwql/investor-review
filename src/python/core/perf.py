@@ -431,11 +431,6 @@ class PerfCollector:
         self._saved = True
         self._detach_log_capture()
         logger.info("[perf] 耗时已记录到 %s", _PERF_HISTORY_FILE)
-        # 缓存命中率一行汇总（逐键明细在 DEBUG）：日志噪声治理的收口点，见
-        # `cache._stats.log_cache_summary`。
-        from src.python.cache import log_cache_summary
-
-        log_cache_summary()
 
 
 # ── 原子写入工具 ────────────────────────────
@@ -499,14 +494,19 @@ def load_health_history(path: str | None = None) -> list[dict[str, Any]]:
     if not os.path.isfile(path):
         return []
     records: list[dict[str, Any]] = []
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                try:
-                    records.append(json.loads(line))
-                except json.JSONDecodeError:
-                    logger.warning("[health] 忽略损坏行: %s", line[:80])
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            _raw_lines = f.readlines()
+    except OSError:
+        # 台账是旁路数据：读失败按空历史处理，不向上抛（文件可能正被另一进程换名）
+        return []
+    for line in _raw_lines:
+        line = line.strip()
+        if line:
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError:
+                logger.warning("[health] 忽略损坏行: %s", line[:80])
     return records
 
 
@@ -559,14 +559,19 @@ def load_history(path: str | None = None) -> list[dict[str, Any]]:
     if not os.path.isfile(path):
         return []
     records: list[dict[str, Any]] = []
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                try:
-                    records.append(json.loads(line))
-                except json.JSONDecodeError:
-                    logger.warning("[perf] 忽略损坏行: %s", line[:80])
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            _raw_lines = f.readlines()
+    except OSError:
+        # 台账是旁路数据：读失败按空历史处理，不向上抛（文件可能正被另一进程换名）
+        return []
+    for line in _raw_lines:
+        line = line.strip()
+        if line:
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError:
+                logger.warning("[perf] 忽略损坏行: %s", line[:80])
     return records
 
 

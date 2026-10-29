@@ -214,7 +214,9 @@ def generate_report(
             logger.exception("生成 Excel 报告失败")
             result.errors.append("Excel 报告生成失败")
 
-        perf.save()
+        from src.python.report._run_scope import finish_report_run
+
+        finish_report_run(perf)
         _collect_health_checks(_health_fut, "basic", holdings)
         return result
 

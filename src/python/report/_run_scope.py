@@ -27,7 +27,7 @@ from typing import Any
 
 logger = logging.getLogger("invest")
 
-__all__ = ["start_report_run"]
+__all__ = ["start_report_run", "finish_report_run"]
 
 
 def start_report_run() -> dict[str, Any]:
@@ -90,3 +90,37 @@ def start_report_run() -> dict[str, Any]:
     except Exception:
         logger.debug("[run_scope] 历史取数单轮状态重置失败，已忽略", exc_info=True)
     return baseline
+
+
+def finish_report_run(perf: Any | None = None) -> None:
+    """收尾一次报告运行：落耗时台账 + 打本轮结束日志（版本盐 + 缓存命中汇总）。
+
+    **为什么收口在这里**：这两个信息一个属 `llm`、一个属 `cache`，而 `cache` 是基础层，
+    不得反向 import `llm` 取版本号（分层纪律：只能依赖下层与贯穿层）。本模块属报告层，
+    同时依赖二者，是唯一能合法把两者组合到同一行日志的位置。
+
+    为什么要在收尾也打一次版本盐：模块整批重算的归因只有「键变了」这一信号，末行能
+    与首行直接对拍「这轮前后版本盐是否变过」，不必回翻首行或比对指纹。
+
+    Args:
+        perf: 本次运行的耗时记录器（`core.perf.PerfRun`）；None 时只打日志不落盘。
+    """
+    if perf is not None:
+        try:
+            perf.save()
+        except Exception:  # 台账落盘失败不阻断收尾日志
+            logger.debug("[run_scope] 耗时台账落盘失败，已忽略", exc_info=True)
+    _salts_note = ""
+    try:
+        from src.python.llm.fingerprint import cache_key_salts
+
+        _salts = cache_key_salts()
+        _salts_note = f"缓存键版本盐：提示词={_salts['prompt_schema']} 校验规则={_salts['fact_rules']}"
+    except Exception:
+        logger.debug("[run_scope] 版本盐读取失败，已忽略", exc_info=True)
+    try:
+        from src.python.cache import log_cache_summary
+
+        log_cache_summary(salts_note=_salts_note)
+    except Exception:
+        logger.debug("[run_scope] 缓存命中汇总失败，已忽略", exc_info=True)
