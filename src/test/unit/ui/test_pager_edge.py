@@ -58,3 +58,17 @@ class TestInplaceRedraw:
             "标题", [f"行{i}" for i in range(40)], rows=12, key_reader=lambda: next(seq), echo=out.append, inplace=True
         ).run()
         assert any(line.startswith("\x1b[12A\x1b[0J") for line in out), out[:3]
+
+
+class TestStateInitialised:
+    """D2 回归：分页器状态在构造期初始化（不靠 run() 首次赋值兜底）。"""
+
+    def test_start_rendered_initialised_in_constructor(self):
+        pager = Pager("标题", ["a", "b"], rows=10, echo=lambda _l: None, inplace=True)
+        assert pager._start_rendered is False
+
+    def test_draw_before_run_does_not_raise(self):
+        out: list[str] = []
+        pager = Pager("标题", ["a", "b"], rows=10, echo=out.append, inplace=True)
+        pager._draw()  # 首次绘制不应依赖 run() 先跑
+        assert out, "至少要画出一屏"

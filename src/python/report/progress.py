@@ -197,9 +197,13 @@ class TuiProgressReporter(AnnouncingProgressReporter):
         if not LiveStatusBar.supported():
             return
         pollable = self.cancel_token is not None and KeyWatcher.supported()
-        watcher = KeyWatcher() if pollable and KeyWatcher().open() else None
-        if pollable and watcher is None:
-            pollable = False
+        watcher: Any = None
+        if pollable:
+            candidate = KeyWatcher()
+            if candidate.open():
+                watcher = candidate  # 保留**已切 cbreak 的**那个实例
+            else:
+                pollable = False  # 切不了 cbreak → 不提供中止键，提示降级为 Ctrl+C
         self._watcher = watcher
         self._bar = LiveStatusBar(cancel_hint="q 中止" if pollable else "Ctrl+C 中断")
         if pollable:

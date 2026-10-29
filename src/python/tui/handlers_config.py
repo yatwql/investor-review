@@ -109,6 +109,12 @@ def reset_config_session() -> ConfigSession:
     return _session
 
 
+def close_config_session() -> None:
+    """结束当前会话（面板退出时调用：会话作用域限定为「一次面板进入」）。"""
+    global _session
+    _session = None
+
+
 def _write_value(key: str, value: Any) -> bool:
     """按共享编辑层写回单个键（撤销路径；失败只记日志不打断面板）。"""
     from src.python.config.edit_ops import apply_config_edit

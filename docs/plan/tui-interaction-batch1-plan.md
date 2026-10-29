@@ -106,7 +106,7 @@
 3. **`live_status`**（`tui/live_status.py`，约 150 行）：单行状态条。
    - `supported()`：`os.name == "posix"` + `sys.stdout.isatty()` + 未设 `TUI_PLAIN`；不满足则整套不启用（退回当前逐行 `[..]` 输出，**逐字节等价**）。
    - `enter()/update(text)/suspend()/close()`：`update` 用 `\r` + 行尾 `\x1b[K` 覆写；`suspend` 供所有 reporter 落地行（`info/ok/warn/error`）在 `print` 前清掉状态条、`print` 后重画。
-   - 内容：`[..] 「LLM+新闻」· 已 12s · 约剩 40s · q 中止`（阶段名/已耗时/ETA 取 `format_stage_status`，尾部再加中止提示）。
+   - 内容：`[..] 「LLM+新闻」· 已耗时 12s · 预计剩余 ~40s · q 中止`（阶段名/已耗时/ETA 取 `format_stage_status`，尾部再加中止提示）。
    - 刷新时机：阶段切换（`_announce_stage`）+ 后台 daemon 线程每 5s 一次心跳（只在 TTY 启动；`close()` 必定 join）。**不做**每 100ms 动画。
 4. **按键检**：心跳线程内非阻塞轮询 stdin——POSIX 用 `select.select([sys.stdin], [], [], 0)`，Windows 用 `msvcrt.kbhit()`；命中 `q` 则 `token.cancel()`。检不到键的环境（管道/无 termios）自动退化为「只显示，不提供 q」，状态条尾部改显示 `Ctrl+C 中断`。
 5. **收口**：`orchestrator` 顶层新增 `except StageCancelled:` → `run_integrity.handle_interruption(reporter)`（清临时产物 + 落 `interrupted` 记录 + 打印已写盘明细）→ 返回「本次中止」结果（**不抛、不退程序**）。TUI 侧打印 `[!] 已中止（完成 3/7 项，缓存已保留）→ [B] 重跑只补缺失`，随后照常打印耗时排行。

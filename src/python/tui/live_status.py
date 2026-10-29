@@ -23,7 +23,10 @@ _CLEAR_LINE = "\r\x1b[K"
 
 
 def status_bar_text(phase: str, elapsed: float, eta: float | None, *, cancel_hint: str = "q 中止") -> str:
-    """状态条正文（阶段 + 已耗时 + 可选 ETA + 中止提示）。
+    """状态条正文（阶段文案复用 ``perf.format_stage_status``，本函数只加前缀与中止键）。
+
+    阶段/已耗时/ETA 的措辞在 ``core.perf`` 单源——CLI、Web、TUI 三渠道看到的是同一句话，
+    不会出现「已 12s」与「已耗时 12s」两种说法。
 
     Args:
         phase: 当前阶段名（如「行情获取」）。
@@ -34,9 +37,9 @@ def status_bar_text(phase: str, elapsed: float, eta: float | None, *, cancel_hin
     Returns:
         单行文本（未着色、未截断）。
     """
-    parts = [f"[..] 「{phase}」", f"已 {elapsed:.0f}s"]
-    if eta is not None:
-        parts.append(f"约剩 {eta:.0f}s")
+    from src.python.core.perf import format_stage_status
+
+    parts = [f"[..] {format_stage_status({'phase': phase, 'elapsed': elapsed}, eta)}"]
     if cancel_hint:
         parts.append(cancel_hint)
     return " · ".join(parts)

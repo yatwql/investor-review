@@ -348,3 +348,5 @@ def run_content_options_panel() -> None:
         )
     except (EOFError, KeyboardInterrupt):
         print()
+    finally:
+        hc.close_config_session()  # 会话作用域 = 一次面板进入，退出即失效

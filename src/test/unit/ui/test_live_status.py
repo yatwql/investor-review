@@ -34,14 +34,14 @@ class TestStatusBarText:
     def test_includes_eta_when_available(self):
         text = status_bar_text("行情获取", 12.4, 40.2)
         assert "「行情获取」" in text
-        assert "已 12s" in text
-        assert "约剩 40s" in text
+        assert "已耗时 12s" in text
+        assert "预计剩余 ~40s" in text
         assert "q 中止" in text
 
     def test_omits_eta_when_unknown(self):
         """历史样本不足时只报已耗时（不显示凭空的剩余时间）。"""
         text = status_bar_text("行情获取", 8.0, None)
-        assert "约剩" not in text
+        assert "预计剩余" not in text
 
     def test_omits_cancel_hint_when_unavailable(self):
         """环境无法按键中止时不留一个按不了的键提示。"""
@@ -162,3 +162,63 @@ class TestReporterLiveWiring:
         reporter.close()
         reporter.close()
         assert reporter._bar is None and reporter._watcher is None, "close 后状态条与轮询器都已释放"
+
+
+class TestWatcherInstance:
+    """D1 回归：状态条保留的轮询器必须是**已 open** 的实例（否则 cbreak 没生效，q 不响应）。"""
+
+    def test_opened_instance_is_the_retained_one(self, monkeypatch):
+        opened: list[object] = []
+
+        class _FakeWatcher:
+            def open(self) -> bool:
+                opened.append(self)
+                return True
+
+            def poll(self) -> str:
+                return ""
+
+            def close(self) -> None:
+                pass
+
+        monkeypatch.setattr("src.python.tui.live_status.LiveStatusBar.supported", lambda *a, **k: True)
+        monkeypatch.setattr("src.python.tui.live_status.KeyWatcher", _FakeWatcher)
+        monkeypatch.setattr(
+            "src.python.tui.live_status.KeyWatcher.supported", staticmethod(lambda *a, **k: True), raising=False
+        )
+
+        from src.python.core.cancel import CancelToken
+        from src.python.report.progress import TuiProgressReporter
+
+        reporter = TuiProgressReporter(live=True, cancel_token=CancelToken("用户取消"))
+        try:
+            assert len(opened) == 1, f"open() 应只调用一次，实际 {len(opened)}"
+            assert reporter._watcher is opened[0], "保留的实例必须就是已 open 的那个"
+        finally:
+            reporter.close()
+
+    def test_unopenable_watcher_degrades_hint(self, monkeypatch):
+        """切不了 cbreak → 不给中止键，状态条提示降级为 Ctrl+C。"""
+
+        class _FakeWatcher:
+            def open(self) -> bool:
+                return False
+
+            def close(self) -> None:
+                pass
+
+        monkeypatch.setattr("src.python.tui.live_status.LiveStatusBar.supported", lambda *a, **k: True)
+        monkeypatch.setattr("src.python.tui.live_status.KeyWatcher", _FakeWatcher)
+        monkeypatch.setattr(
+            "src.python.tui.live_status.KeyWatcher.supported", staticmethod(lambda *a, **k: True), raising=False
+        )
+
+        from src.python.core.cancel import CancelToken
+        from src.python.report.progress import TuiProgressReporter
+
+        reporter = TuiProgressReporter(live=True, cancel_token=CancelToken("用户取消"))
+        try:
+            assert reporter._watcher is None
+            assert "Ctrl+C" in reporter._bar.cancel_hint
+        finally:
+            reporter.close()

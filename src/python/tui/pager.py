@@ -85,6 +85,7 @@ class Pager:
         self._page_size = max(1, self._rows - 2)
         self._start = 0
         self._hit_note = ""
+        self._start_rendered = False
 
     # ── 视图 ──
 

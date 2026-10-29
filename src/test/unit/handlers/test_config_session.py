@@ -186,3 +186,32 @@ class TestSwitchPanelUndoKeys:
         restored = {write["key"]: write["value"] for write in writes[2:]}
         assert set(restored) == set(touched), restored
         assert all(value is False for value in restored.values()), "每个键都退回进入时的关"
+
+
+class TestSessionScope:
+    """D3 回归：会话作用域限定为「一次面板进入」，面板退出即失效。"""
+
+    def test_panel_exit_closes_session(self):
+        from unittest.mock import MagicMock
+
+        from src.python.tui import handlers_config, handlers_switch
+
+        with (
+            patch.object(handlers_config, "input_choice", return_value="0"),
+            patch.object(handlers_config, "refresh_config"),
+            patch.object(handlers_config, "_read_llm_settings", return_value=({"enabled_llm": {}}, "/tmp/x.json")),
+            patch.object(handlers_config, "panel_loop", MagicMock(return_value=None)),
+        ):
+            handlers_switch.run_content_options_panel()
+        assert handlers_config._session is None, "面板退出后会话必须失效（避免后续面板写盘记进旧会话）"
+
+    def test_writes_after_panel_exit_are_not_recorded(self):
+        from src.python.tui import handlers_config
+
+        assert handlers_config._session is None
+        with (
+            patch("src.python.config.edit_ops.read_config_value") as read,
+            patch("src.python.config.edit_ops.apply_config_edit"),
+        ):
+            handlers_config._apply_edit({"key": "report_qa", "value": True})
+        read.assert_not_called()
