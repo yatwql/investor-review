@@ -28,6 +28,8 @@
 | 面板渲染 | 渲染循环加一行 `if not nav.is_visible(i): continue`（8 个面板各一处） |
 | 分派 | 单字符直达只对可见项生效；按到被隐藏项给一行提示（与首页口径一致） |
 | 入口 | `panel_loop(..., filter_reader=None)`：`/` 调行输入取关键词，空回车清除，`Esc` 保持原筛选 |
+
+接入节奏：`[S]`（18 项）与 `[M]`（线路表）已按上式接入；其余面板接一行 `if not nav.is_visible(index): continue` 即可启用，未接入者 `visible=None` 行为与现状一致。 |
 | 页脚 | 运行时在帧前打一行筛选状态（`筛选「x」：3/18 项（/ 改词 · 0 清除）`），面板不感知文案 |
 
 兼容口径：`visible=None` 时 `is_visible` 恒真、`move` 行为与现状逐字节一致——未接筛选的面板零改动。

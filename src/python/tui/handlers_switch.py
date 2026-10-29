@@ -183,6 +183,8 @@ def run_content_options_panel() -> None:
                         date = str(entry.get("last_enabled_date") or "")[5:]
                         notes += f"（启用 {entry['enabled_count']} 次" + (f" · 最近 {date}" if date else "") + "）"
                 tuples.append((num, flag, definition.label, status))
+                if not nav.is_visible(len(tuples) - 1):
+                    continue  # 筛选态：命中项之外的开关不渲染（索引仍占位）
                 rows.extend(
                     format_item(
                         number=num,

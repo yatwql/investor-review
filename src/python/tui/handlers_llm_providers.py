@@ -60,6 +60,8 @@ def run_llm_providers_panel() -> None:
         print()
         print(style_heading(truncate_display(f"  ── LLM 多链线路优先级（strategy: {strategy}） ──", width)))
         for num, (_i, provider) in enumerate(ordered, 1):
+            if not nav.is_visible(num - 1):
+                continue  # 筛选态：命中项之外的线路不渲染（编号仍占位）
             row = (
                 f"  {nav.marker(num - 1)}{num}. {provider.get('name')}（{provider.get('provider')}）priority "
                 f"{provider.get('priority', DEFAULT_PROVIDER_PRIORITY)}"
