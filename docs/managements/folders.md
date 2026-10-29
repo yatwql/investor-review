@@ -1632,7 +1632,7 @@ investor-review/
 │   │   │   │   └── plan-whatif-backtest.md      #     调仓 What-if 指定生效日时序回测设计
 │   │   │   ├── portfolio-evolution/             #   多快照趋势追踪/组合演进设计
 │   │   │   │   └── plan-portfolio-evolution.md  #     多快照趋势追踪设计
-│   │   │   ├── html-dark-mode/                  # 报告只有浅色且颜色全硬编码、晚间查看刺眼 → 明暗双主题
+│   │   │   ├── html-dark-mode/                  # 报告浅色单主题与硬编码配色的明暗双主题改造
 │   │   │   │   ├── dark-mode-implementation.md  #     暗色模式实施记录
 │   │   │   │   └── dark-mode-plan.md    #     暗色模式实施计划
 │   │   │   ├── fix-deepseek-thinking/           #   DeepSeek thinking 思考耗尽修复设计
@@ -1660,7 +1660,7 @@ investor-review/
 │   │   │   │   └── plan-web-holdings-input-modes.md # Web 持仓输入模式试算隔离/正式共享实现设计
 │   │   │   ├── web-config-edit/              #   Web 配置编辑实施归档
 │   │   │   │   └── web-config-edit.md        #   Web 配置编辑设计（完整镜像 TUI 可编辑配置全集）
-│   │   │   ├── readme-svg-layout/            # README 是纯文字墙、无任何可视化 → SVG 结构图与排版重排
+│   │   │   ├── readme-svg-layout/            # README 排版重排与 SVG 结构图改造
 │   │   │   │   └── plan-readme-svg-layout.md #     README 嵌入 SVG 架构图 + 排版优化设计
 │   │   │   ├── env-benchmark-doc-update/     #   环境耗时对照文档自动更新
 │   │   │   │   └── plan-env-benchmark-doc-update.md # test-coverage.md 环境耗时表按主机名自动回填
@@ -1709,7 +1709,7 @@ investor-review/
 │   │   │   │   └── prosperity-framework-design.md # 上游归属与许可/数据可得性映射/六维口径（含两轮修订）/契约/约束对照/验收
 │   │   │   ├── hithink-data-source/       # 同花顺官方数据接入设计归档（五阶段接入方案）
 │   │   │       └── hithink-financial-data-design.md # 覆盖边界/四域接入方案/实测字段与限流/验证计划/架构约束自查标准
-│   │   │   ├── dedup-anchor-calibration/  # 旧样本无规则版本字段、与新样本混算 → 分时代校准复核
+│   │   │   ├── dedup-anchor-calibration/  # 无规则版本旧样本与新样本混算的分时代校准
 │   │   │   │   └── dedup-anchor-calibration.md # 锚点混代证据、规则重判分布、建议处置清单
 │   │   │   ├── tradingagents-cn-borrow-research/ # 借鉴批候选研究归档（现状比对 + 终态标注）
 │   │   │   │   └── tradingagents-cn-borrow-candidates-research.md # 候选借鉴分析（落地项/未采纳项/共性教训）
@@ -1723,7 +1723,7 @@ investor-review/
 │   │   │   │   └── awesome-design-md-borrow-candidates-research.md # 73 份 DESIGN.md 骨架与样板要点 + 我方两面样式差距映射（6 立项 / 5 不采纳）
 │   │   │   ├── gs-quant-borrow-research/      # gs-quant 借鉴研究归档
 │   │   │   │   └── gs-quant-borrow-candidates-research.md # 高盛量化库剖析与候选清单（2 立项 / 1 参照 / 10 不采纳）
-│   │   │   ├── llm-token-optimization/        # token 花在哪、能否省 → 实测画像与计费口径纠正（结论：维持现状）
+│   │   │   ├── llm-token-optimization/        # token 消耗实测画像与计费口径纠正（结论：维持现状）
 │   │   │   │   └── llm-token-optimization-research.md # 真实运行画像 + 共享前缀前移评估 + provider/pacing 差异（结论维持现状）
 │   │   │   ├── vibe-trading-borrow-research/  # Vibe-Trading 借鉴研究归档
 │   │   │   │   └── vibe-trading-borrow-candidates-research.md # 项目剖析与候选清单（4 立项 / 6 不采纳）
@@ -1731,33 +1731,33 @@ investor-review/
 │   │   │   │   ├── fund-purchase-limit-design.md # 申购限购接入设计（天天基金单口径/四层稳定性保障/持仓展示/合并联动二期）
 │   │   │   │   ├── fund-purchase-limit-llm-context-design.md # 限购信息接入 LLM 分析维度设计（全章节单源块/统一附录注入/指纹与降级矩阵）
 │   │   │       └── fund-purchase-limit-advice-design.md # 限购接入调仓/建议可行性设计（三真实面重定位/受限索引单源/四迭代验收）
-│   │   │   ├── holding-change-review/         # 只有持仓快照、回答不了「这次变了什么、为什么」→ 变动复盘归因
+│   │   │   ├── holding-change-review/         # 仅有持仓快照、缺失变动归因的复盘补齐
 │   │   │   │   └── holding-change-review-design.md # 持仓变动复盘设计（快照事件级：change_event 契约/先决门槛/四迭代）
-│   │   │   └── whatif-cost-benchmark/          # 截面比较回答不了「生效日后 as-if 净值怎么走」→ 窗口回测与基准对比
+│   │   │   └── whatif-cost-benchmark/          # 截面成本比较之外的生效日窗口回测与基准对照
 │   │   │       ├── whatif-cost-benchmark-design.md # What-if 回放成本建模与基准对比设计（FIFO 成本模型/费率三级可得/基准三线）
-│   │   │   ├── factor-zoo-catalog/             # 确定性信号源全靠手写注册、无法横向评估取舍 → 因子目录化评测
+│   │   │   ├── factor-zoo-catalog/             # 手写注册信号源的横向评估缺口补齐（因子目录化与取舍评测）
 │   │   │       ├── factor-zoo-catalog-design.md    # 因子动物园目录评测设计（25 因子五族 × A/B/C 三指标 go-no-go 评测方案与判定）
-│   │   │   ├── event-window-impact/                # 只答「文本上相关」不答「事件后真的动了吗」→ 事件窗对照补数据侧证据
+│   │   │   ├── event-window-impact/                # 文本相关性判定之外的数据侧证据（事件窗收益对照）
 │   │   │       ├── event-window-impact-design.md # 事件窗对照设计（event_study 参照/先决门槛/四迭代）
-│   │   │   └── rebalance-schedule-replay/         # 约束检查只答「能不能调」不答「调了会怎样」→ 纪律回放
+│   │   │   └── rebalance-schedule-replay/         # 约束检查之外的执行后果评估（纪律回放）
 │   │   │       └── rebalance-schedule-replay-design.md # 调仓纪律回放设计（规则契约/成本软依赖/四迭代）
 │   │   ├── v0.13.x/                         # v0.13.x 版本归档（changelog/plan/review-findings + 设计文档）
 │   │   │   ├── archived_changelog.0.13.x.md       # 变更日志归档 v0.13.x
 │   │   │   ├── archived_plan.0.13.x.md            # 实现计划归档 v0.13.x
 │   │   │   ├── archived_review-findings.0.13.x.md # 自审记录归档 v0.13.x
-│   │   │   ├── holding-cost-position/      # 4 列持仓看不出「成本买在历史区间什么位置」→ 追涨/摊薄定位
+│   │   │   ├── holding-cost-position/      # 成本价在历史价格区间中的相对位置定位（追涨与摊薄识别）
 │   │   │   │   └── holding-cost-position-design.md # 持仓成本相对历史价格区间位置设计
 │   │   │   ├── llm-cost-optimization/       # LLM 调用成本优化分析归档
 │   │   │   │   └── llm-cost-optimization.md # 实测画像 + 行动清单（计费口径/闲时调度/模型映射/output_brief 机制）
-│   │   │   ├── perf-observability/          # 让台账能回答「时间花在哪、为什么花、是否退化」（原先只有 8 个阶段名，LLM 单桶占 91%）
+│   │   │   ├── perf-observability/          # 运行时台账归因能力补齐（原阶段粒度过粗：8 个阶段名、LLM 单桶占 91%）
 │   │   │   │   └── perf-observability-design.md # perf_history 观测面设计（细分/计数/上下文维度/对比门禁）
-│   │   │   ├── report-browser-verification/ # 报告产物跨环境可读性验收（自包含/断网/打印/窄屏/微信 X5）：生成的单文件 HTML 到别人机器上还看得清吗
-│   │   │   │   └── report-browser-verification.md # 六项拆「可自动化 / 须人工」+ 逐项实测结论与复跑命令（模板或 Chart.js 改动后照此复跑）
-│   │   │   ├── trace-vocabulary-single-source/ # 两检查脚本的痕迹词表 31 条正则逐字节重复、判定口径易分叉 → 单源化
+│   │   │   ├── report-browser-verification/ # 报告产物跨环境可读性验收（自包含/断网/打印/窄屏/微信 X5）
+│   │   │   │   └── report-browser-verification.md # 六项拆分为可自动化与人工两类，含逐项实测结论与复跑命令
+│   │   │   ├── trace-vocabulary-single-source/ # 两检查脚本痕迹词表重复（31 条正则逐字节相同）的单一来源收敛
 │   │   │   │   └── trace-vocabulary-single-source.md # 共享正则与文档域模式表的单一来源（`_traces_common`、`_traces_doc/patterns.py`）
-│   │   │   ├── tui-interaction-hci/         # 13 个面板各自手写的「文案↔按键」收敛为可机检契约（与 DESIGN.md 对称）
+│   │   │   ├── tui-interaction-hci/         # 13 个面板手写文案与键义的契约化（机检载体与 DESIGN.md 对称）
 │   │   │   │   └── tui-interaction-hci-design.md # HCI 原则对照 + 交互契约 v0 + M1~M10 措施与机检载体
-│   │   │   └── tui-panel-runtime/           # 13 处面板各自手写的「读键→导航→派发→重绘」抽成单一运行时（C29 构造性成立）
+│   │   │   └── tui-panel-runtime/           # 13 处面板手写交互循环的单一运行时抽取（约束 C29 构造性成立）
 │   │   │       └── tui-panel-runtime-design.md # NavState/PanelItem/panel_loop 契约 + 13 面板清单 + 8 迭代
 │   │   ├── v0.14.x/                         # v0.14.x 版本归档（changelog/plan/review-findings + 设计文档）
 │   │   │   ├── archived_changelog.0.14.x.md       # 变更日志归档 v0.14.x
@@ -1767,7 +1767,7 @@ investor-review/
 │   │   │   ├── archived_changelog.0.15.x.md       # 变更日志归档 v0.15.x
 │   │   │   ├── archived_plan.0.15.x.md            # 实现计划归档 v0.15.x
 │   │   │   ├── archived_review-findings.0.15.x.md # 自审记录归档 v0.15.x
-│   │   │   ├── cache-ttl-layering/                      # 同一条目的有效期由 6 层规则合成、不同调用点取到不同值（已致两次事故）→ 分层收敛
+│   │   │   ├── cache-ttl-layering/                      # 缓存有效期多层合成致跨调用点取值不一致（两次事故）的分层收敛
 │   │   │   │   ├── cache-ttl-layering.md                # 各 TTL 的决定方、分层必要性、维持四层与只读注册表对比
 │   │   │   ├── config-rework/                           # 配置体系重构（文件划分、键名与界面映射、TUI/Web 面板）
 │   │   │   │   ├── config-rework-iteration-plan.md      # 分轮推进表（各轮范围、验收基准、门禁与契约）
@@ -1796,13 +1796,13 @@ investor-review/
 │   │   │   │   └── pricing-native-currency.md           # 币种桶存储、金额格式化、展示层不做汇率换算
 │   │   │   ├── tui-display-modes/                       # TUI 显示模式统一（行型、状态色、关闭恒红、ANSI 截断）
 │   │   │   │   └── tui-display-modes.md                 # 行型判定与分组、颜色语义、关闭恒红与截断规则
-│   │   │   └── web-browser-verification/                # Web 工作台真人操作路径验收（上传/拖拽/进度/禁用态/窄屏）：浏览器里点得动、看得对吗
-│   │   │       └── web-browser-verification.md         # 五类断言的可复现验证（启动 / HTTP 层证据 / headless CDP 实测 / 人工余项），红线是全程不触发生成
+│   │   │   └── web-browser-verification/                # Web 工作台交互路径验收（上传/拖拽/进度/禁用态/窄屏）
+│   │   │       └── web-browser-verification.md         # 五类断言的可复现验证（启动/HTTP 层证据/headless CDP 实测/人工余项），约束为不触发生成
 │   │   └── v0.16.x/                         # v0.16.x 版本归档（changelog/plan/review-findings + 设计文档）
 │   │       ├── archived_changelog.0.16.x.md       # 变更日志归档 v0.16.x
 │   │       ├── archived_plan.0.16.x.md            # 实现计划归档 v0.16.x
 │   │       ├── archived_review-findings.0.16.x.md # 自审记录归档 v0.16.x
-│   │       ├── dedup-anchor-storage/               # append-only 采集文件单消费者却无限增长 → 分片/体积目标/保留期治理
+│   │       ├── dedup-anchor-storage/               # append-only 采集文件的增长治理（按月分片/体积目标/保留期）
 │   │       │   └── dedup-anchor-storage-design.md  # 采样/保留期+写入时刻/体积目标与分支配额/月 gzip 分片/迁移与回滚
 │   │       ├── llm-critical-path-instrumentation/   # LLM 关键路径测量与调度设计归档
 │   │       │   └── llm-critical-path-instrumentation-design.md # 逐模块耗时入台账/归因并入并行批/A1~A6 实测与风险
