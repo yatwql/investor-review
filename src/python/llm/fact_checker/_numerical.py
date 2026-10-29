@@ -11,6 +11,7 @@ import re
 
 from src.python.llm.fact_checker._constants import (
     _DEFAULT_TOLERANCE_PCT,
+    _NAME_ALIAS_MAP,
     _EXPOSURE_KEYWORDS,
     _INDEX_CODES,
     _PROFIT_KEYWORDS,
@@ -39,13 +40,15 @@ from src.python.llm.fact_checker._context import (
 )
 from src.python.llm.fact_checker._patterns import _CODE_PATTERN, _PERCENT_PATTERN
 from src.python.llm.fact_checker._utils import (
+    _alias_normalized,
     _build_stock_change_map,
     _build_stock_rate_map,
     _calc_portfolio_values,
-    _extract_holding_map,
     _clause_span,
-    _has_subject_candidate,
+    _extract_core_name,
+    _extract_holding_map,
     _locate_subject_code,
+    _locate_subject_in,
     _sentence_snippet,
     _split_sentences,
     _unresolved_attached_subject,
@@ -102,6 +105,52 @@ class PercentContext:
     confirmed_rates: dict[str, str] | None = None
 
 
+def _subject_spans(
+    clause: str,
+    holding_codes: set[str],
+    name_to_code: dict[str, str] | None,
+) -> list[tuple[int, int, str]]:
+    """分句内持仓主体的出现区间 ``[(start, end, code), ...]``（代码 / 全名 / 简称归一口径）。
+
+    与 :func:`_locate_subject_in` 同源的三级主体来源：代码 → 全名 → 简称（经别名归一后的
+    核心名）。简称的位置按别名替换带来的长度增量近似映射回原句，仅用于距离比较，不需要
+    逐字节精确。返回区间而不是单一代码，是因为「市场名词是否其实属于某个持仓名」只能
+    按**位置重叠**判断（「华安纳指」里的「纳指」是持仓 040046 的简称，不是市场简称）。
+    """
+    spans: list[tuple[int, int, str]] = []
+    for m in _CODE_PATTERN.finditer(clause):
+        if m.group(0) in holding_codes:
+            spans.append((m.start(), m.end(), m.group(0)))
+    for name, code in (name_to_code or {}).items():
+        idx = clause.find(name)
+        if idx != -1:
+            spans.append((idx, idx + len(name), code))
+    norm = _alias_normalized(clause)
+    if norm != clause:
+        for name, code in (name_to_code or {}).items():
+            core = _extract_core_name(name)
+            if len(core) < 2:
+                continue
+            idx = norm.find(core)
+            if idx == -1:
+                continue
+            _extra = sum((len(_c) - len(_a)) * norm[:idx].count(_c) for _a, _c in _NAME_ALIAS_MAP.items())
+            _pos = max(0, idx - _extra)
+            spans.append((_pos, _pos + len(core), code))
+    return spans
+
+
+def _subject_distance(spans: list[tuple[int, int, str]], code: str, anchor: int) -> int:
+    """该主体到数值的最小**边缘距离**；分句内找不到其出现处时返回极大值。"""
+    best: int | None = None
+    for start, end, mapped in spans:
+        if mapped != code:
+            continue
+        dist = min(abs(start - anchor), abs(end - anchor))
+        best = dist if best is None else min(best, dist)
+    return best if best is not None else 10**6
+
+
 def _is_market_scope_no_subject(
     sentence: str,
     anchor: int,
@@ -123,9 +172,33 @@ def _is_market_scope_no_subject(
     """
     clause_start, clause_end = _clause_span(sentence, anchor)
     clause = sentence[clause_start:clause_end]
-    if not any(noun in clause for noun in _MARKET_SCOPE_NOUNS):
+    _rel = anchor - clause_start
+
+    spans = _subject_spans(clause, holding_codes, name_to_code)
+
+    _noun_dist: int | None = None
+    for noun in _MARKET_SCOPE_NOUNS:
+        idx = clause.find(noun)
+        while idx != -1:
+            end = idx + len(noun)
+            # 该出现处落在某持仓主体区间内 → 它是主体的一部分而非市场简称
+            # （「华安纳指」里的「纳指」指 040046，不是纳指市场）。
+            if not any(start < end and idx < span_end for start, span_end, _c in spans):
+                dist = abs(end - _rel) if end <= _rel else abs(idx - _rel)
+                _noun_dist = dist if _noun_dist is None else min(_noun_dist, dist)
+            idx = clause.find(noun, idx + 1)
+    if _noun_dist is None:
         return False
-    return not _has_subject_candidate(clause, holding_codes, name_to_code, anchor - clause_start)
+    if not spans:
+        return True
+
+    # 分句里既有市场名词也有持仓主体：按**谁更近**判定。指数中文名常与基金名重叠
+    # （「纳斯达克100涨1.18%」——「纳斯达克100」同时是 016055 名称的一部分），
+    # 只看「有没有主体」会把它当成持仓收益率；距离相等时判为市场口径（宁漏改）。
+    subject_code = _locate_subject_in(clause, holding_codes, name_to_code, _rel)
+    if subject_code is None:
+        return True
+    return _subject_distance(spans, subject_code, _rel) >= _noun_dist
 
 
 def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, str, str] | None]:

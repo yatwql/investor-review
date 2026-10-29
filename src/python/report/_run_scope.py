@@ -57,6 +57,14 @@ def start_report_run() -> dict[str, Any]:
     # 缓存命中率是**按轮**口径：运行收尾的 `[cache] 本次命中 …` 汇总与「同前缀未命中
     # ≥N 次」告警都读这份计数，长驻进程（Web/TUI）连跑多份报告时不清零会累计成
     # 「本次」累计值（实测 5→10→15 递进），汇总与告警随之失真。
+    # 版本盐（提示词文本版本 / 事实校验规则版本）进 LLM 缓存键：本轮首尾各打一行，
+    # 「四个模块为何整批重算」才不用翻代码比对指纹。
+    try:
+        from src.python.llm.fingerprint import log_cache_key_salts
+
+        log_cache_key_salts("本轮开始")
+    except Exception:  # 观测隔离失败不阻断主链路
+        logger.debug("[run_scope] 版本盐日志失败，已忽略", exc_info=True)
     try:
         from src.python.cache import reset_cache_stats
 

@@ -707,3 +707,43 @@ class TestNegativeCacheProbeNotCounted:
         monkeypatch.setattr(_store, "_cache_path", lambda key: str(tmp_path / f"{key}.json"))
         _store.get("normal_missing_key", 60)
         assert get_cache_hit_rate()["misses"] == 1
+
+
+class TestSuspiciousPrefixTopKeys:
+    """「同前缀未命中 ≥N 次」告警要带具体键（否则还得回 DEBUG 翻逐键明细）。"""
+
+    pytestmark = pytestmark_summary
+
+    @pytest.fixture(autouse=True)
+    def _clean_stats(self):
+        from src.python.cache._stats import reset_cache_stats
+
+        reset_cache_stats()
+        yield
+        reset_cache_stats()
+
+    def test_warning_lists_top_keys(self, caplog):
+        import logging
+
+        from src.python.cache._stats import _record_cache_miss, log_cache_summary
+
+        for _ in range(3):
+            _record_cache_miss("report_datasink_index_601398.SS")
+        for _ in range(2):
+            _record_cache_miss("report_datasink_index_601939.SS")
+        with caplog.at_level(logging.INFO, logger="invest"):
+            log_cache_summary()
+        warns = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warns) == 1
+        msg = warns[0].getMessage()
+        assert "report_datasink_index_601398.SS×3" in msg
+        assert "report_datasink_index_601939.SS×2" in msg
+
+    def test_key_tracking_is_bounded(self, caplog):
+        """键名计数有界：海量不同键不会无界增长（超出上限后不再新登记）。"""
+        from src.python.cache import _stats
+        from src.python.cache._stats import _record_cache_miss
+
+        for i in range(_stats._MISS_KEY_TRACK_LIMIT + 50):
+            _record_cache_miss(f"bulk_prefix_{i}")
+        assert len(_stats._cache_miss_keys) == _stats._MISS_KEY_TRACK_LIMIT

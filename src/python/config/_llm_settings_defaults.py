@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 from typing import Any
 
@@ -81,10 +82,12 @@ _FLAT_DEFAULTS: dict[str, Any] = {
     "thinking_budget_penetration_deep": 12000,
     "reasoning_effort_penetration_deep": "low",
     # ── 生成后自检（出厂默认开：每次报告额外调用一次 LLM）──
+    # max_tokens 4608：3072 实测反复触顶（截断 → 自动以 4608 重生成，等于同一份
+    # 自检付两次调用并多等 5~8s）。自检输出是结构化复核清单，长度随持仓与事件表增长。
     "system_prompt_self_review": None,
     "model_self_review": None,
     "temperature_self_review": 0.1,
-    "max_tokens_self_review": 3072,
+    "max_tokens_self_review": 4608,
     "timeout_self_review": 90,
     "cache_enabled_self_review": True,
     "output_brief_self_review": False,
@@ -197,7 +200,7 @@ def _build_defaults_v2(flat: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "schema_version": 2,
-        "defaults": json.loads(json.dumps(_MODULE_DEFAULT_PARAMS, ensure_ascii=False)),
+        "defaults": copy.deepcopy(_MODULE_DEFAULT_PARAMS),
         "modules": modules,
         "runtime": runtime,
         "advanced": advanced,

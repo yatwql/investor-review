@@ -20,6 +20,10 @@ _cache_hits: int = 0
 _cache_misses: int = 0
 #: 未命中按键前缀分桶：逐键明细只到 DEBUG，运行收尾用这一份汇总代替逐条 INFO。
 _cache_miss_prefixes: dict[str, int] = {}
+#: 未命中键名计数（有界）——「同前缀未命中 ≥N 次」时列出具体键，否则看到告警还得
+#: 自己翻 DEBUG 才知道是哪几个。
+_cache_miss_keys: dict[str, int] = {}
+_MISS_KEY_TRACK_LIMIT = 500
 
 #: 同一前缀在一次运行内未命中达到该次数 → 视为异常信号（每轮重取/缓存键失效），
 #: 单独升为 WARNING。常规冷启动的长尾前缀（每前缀 1~2 次）不告警。
@@ -47,6 +51,8 @@ def _record_cache_miss(key: str = "") -> None:
         if key:
             prefix = _key_prefix(key)
             _cache_miss_prefixes[prefix] = _cache_miss_prefixes.get(prefix, 0) + 1
+            if len(_cache_miss_keys) < _MISS_KEY_TRACK_LIMIT:
+                _cache_miss_keys[key] = _cache_miss_keys.get(key, 0) + 1
 
 
 def get_cache_hit_rate() -> dict[str, int | float]:
@@ -71,6 +77,7 @@ def reset_cache_stats() -> None:
         _cache_hits = 0
         _cache_misses = 0
         _cache_miss_prefixes.clear()
+        _cache_miss_keys.clear()
 
 
 def get_cache_miss_prefixes() -> dict[str, int]:
@@ -101,22 +108,40 @@ def log_cache_summary(top: int = 5) -> str:
     prefixes = get_cache_miss_prefixes()
     ranked = sorted(prefixes.items(), key=lambda kv: (-kv[1], kv[0]))[:top]
     detail = "、".join(f"{prefix} {count}" for prefix, count in ranked) or "无"
+    # 版本盐尾注：命中率高而模块仍整批重算时，一眼可辨是「规则/文案版本递增换了键」
+    # 而非缓存被裁掉（cache→llm 的惰性读取与 TTL 归因同源）。
+    try:
+        from src.python.llm.fingerprint import cache_key_salts
+
+        _salts = cache_key_salts()
+        salts_note = f"；缓存键版本盐：提示词={_salts['prompt_schema']} 校验规则={_salts['fact_rules']}"
+    except Exception:  # 观测增强失败不影响汇总行本体
+        salts_note = ""
     logger.info(
-        "[cache] 本次命中 %d / 未命中 %d（命中率 %.0f%%）；未命中前缀 Top%d：%s",
+        "[cache] 本次命中 %d / 未命中 %d（命中率 %.0f%%）；未命中前缀 Top%d：%s%s",
         stats["hits"],
         stats["misses"],
         stats["rate"] * 100,
         len(ranked),
         detail,
+        salts_note,
     )
     suspicious = sorted(
         (prefix for prefix, count in prefixes.items() if count >= _SUSPICIOUS_PREFIX_MISSES),
     )
     if suspicious:
+        # 附带这些前缀下未命中次数最多的键：告警要能直接看出「是哪几个键」，
+        # 否则还得回 DEBUG 里翻逐键明细（实测 report_datasink 5 每次运行都有）。
+        _top_keys = sorted(
+            ((key, count) for key, count in _cache_miss_keys.items() if _key_prefix(key) in suspicious),
+            key=lambda kv: (-kv[1], kv[0]),
+        )[:5]
+        _key_note = "；Top 键：" + "、".join(f"{key}×{count}" for key, count in _top_keys) if _top_keys else ""
         logger.warning(
-            "[cache] 同前缀未命中 ≥%d 次（疑似每轮重取或缓存键失效）：%s",
+            "[cache] 同前缀未命中 ≥%d 次（疑似每轮重取或缓存键失效）：%s%s",
             _SUSPICIOUS_PREFIX_MISSES,
             "、".join(f"{prefix} {prefixes[prefix]}" for prefix in suspicious),
+            _key_note,
         )
     return detail
 
@@ -139,7 +164,13 @@ def get_cache_stats() -> dict:
     if not os.path.isdir(_CACHE_DIR):
         return stats
     _sized_items: list[tuple[str, int]] = []
-    for fname in os.listdir(_CACHE_DIR):
+    try:
+        _names = os.listdir(_CACHE_DIR)
+    except OSError:
+        # isdir 与 listdir 之间目录可能被删/无权限（TOCTOU）：统计是旁路，
+        # 取不到就按空目录返回，不向上抛。
+        return stats
+    for fname in _names:
         if fname.endswith(".json.gz"):
             stem = fname[:-8]  # 去掉 .json.gz
         elif fname.endswith(".json"):
