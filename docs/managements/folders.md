@@ -1751,8 +1751,8 @@ investor-review/
 │   │   │   │   └── llm-cost-optimization.md # 实测画像 + 行动清单（计费口径/闲时调度/模型映射/output_brief 机制）
 │   │   │   ├── perf-observability/          # 运行观测与性能归因设计归档
 │   │   │   │   └── perf-observability-design.md # perf_history 观测面设计（细分/计数/上下文维度/对比门禁）
-│   │   │   ├── report-browser-verification/ # 报告浏览器验证归档
-│   │   │   │   └── report-browser-verification.md # 验证方法与实测结论（CDP 自动化子项实测 + 人工步骤 + 复验清单）
+│   │   │   ├── report-browser-verification/ # 报告产物跨环境可读性验收（自包含/断网/打印/窄屏/微信 X5）：生成的单文件 HTML 到别人机器上还看得清吗
+│   │   │   │   └── report-browser-verification.md # 六项拆「可自动化 / 须人工」+ 逐项实测结论与复跑命令（模板或 Chart.js 改动后照此复跑）
 │   │   │   ├── trace-vocabulary-single-source/ # 检查脚本共享词表单一来源设计归档
 │   │   │   │   └── trace-vocabulary-single-source.md # 共享正则与文档域模式表的单一来源（`_traces_common`、`_traces_doc/patterns.py`）
 │   │   │   ├── tui-interaction-hci/         # TUI 交互 HCI 治理设计归档
@@ -1796,8 +1796,8 @@ investor-review/
 │   │   │   │   └── pricing-native-currency.md           # 币种桶存储、金额格式化、展示层不做汇率换算
 │   │   │   ├── tui-display-modes/                       # TUI 显示模式统一（行型、状态色、关闭恒红、ANSI 截断）
 │   │   │   │   └── tui-display-modes.md                 # 行型判定与分组、颜色语义、关闭恒红与截断规则
-│   │   │   └── web-browser-verification/                # Web 模式真机验证（无头 Chromium 自动化、结论可复现）
-│   │   │       └── web-browser-verification.md         # 启动步骤、接口层证据、自动化实测、鼠标悬停复核
+│   │   │   └── web-browser-verification/                # Web 工作台真人操作路径验收（上传/拖拽/进度/禁用态/窄屏）：浏览器里点得动、看得对吗
+│   │   │       └── web-browser-verification.md         # 五类断言的可复现验证（启动 / HTTP 层证据 / headless CDP 实测 / 人工余项），红线是全程不触发生成
 │   │   └── v0.16.x/                         # v0.16.x 版本归档（changelog/plan/review-findings + 设计文档）
 │   │       ├── archived_changelog.0.16.x.md       # 变更日志归档 v0.16.x
 │   │       ├── archived_plan.0.16.x.md            # 实现计划归档 v0.16.x
