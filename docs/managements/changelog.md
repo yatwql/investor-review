@@ -23,6 +23,8 @@
 - **自检输出上限 3072 → 4608**（rf-965）：实测自检输出恰好触顶 3072 被截断，自动以 4608 重生成——同一份自检付两次调用并多等 5~8s。
 - **「同前缀未命中」告警带具体键**（rf-965）：告警此前只说前缀与次数，还得回 DEBUG 翻逐键明细；现追加该前缀下未命中次数最多的 5 个键（键名计数有界 500，不无界增长）。
 
+- **CI portability 档连红 8 次**（rf-967）：`test_ruff_exclude_contract.py` 两例用 `subprocess.run(..., text=True)` 未传 `encoding=`，在 `PYTHONWARNDEFAULTENCODING=1` + `error::EncodingWarning` 下直接抛异常；本地门禁不设该环境变量故全绿，属环境差异型缺陷。两处补 `encoding="utf-8"`，并新增 AST 静态守卫 `test_subprocess_text_encoding_contract.py`——`src/python`/`scripts`/`src/test` 下凡开文本模式而缺 `encoding=` 即失败（含扫描器自检 4 例，防用例恒真）。
+
 ### 重构
 - **运行收尾日志收口到单一 hook**（rf-966）：新增 `report._run_scope.finish_report_run(perf)`，一次完成「落耗时台账 + 本轮结束版本盐 + 缓存命中汇总」；`core/perf.save()` 不再打缓存汇总，4 处调用点改走该 hook。同时 `cache._stats.log_cache_summary()` 的版本盐改由调用方传入——`cache` 是基础层，不再反向 `import llm.fingerprint` 取版本号（分层纪律：只能依赖下层与贯穿层）。
 - **持仓主体匹配收敛为单源**（rf-966）：`_locate_subject_in`（取代码）/ `_has_subject_candidate`（取布尔）/ 数值检查器的 `_subject_spans`（取区间）此前各写一遍同一套「代码→全名→简称归一」匹配，口径一分叉就会出现「主体解析得到、距离算不出」的内部不一致。现 `_subject_spans` 下沉 `_utils` 作单源，`_has_subject_candidate` 由它派生（描述性尾名单独兜底）。

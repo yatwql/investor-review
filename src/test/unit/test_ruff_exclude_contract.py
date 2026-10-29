@@ -64,6 +64,7 @@ class TestRuffArchiveBehaviour:
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=False,
         )
         combined = completed.stdout + completed.stderr
@@ -78,6 +79,7 @@ class TestRuffArchiveBehaviour:
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=False,
         )
         assert completed.returncode == 0, completed.stdout[-400:]
