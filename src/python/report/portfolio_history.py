@@ -38,7 +38,11 @@ from src.python.analysis.drawdown_events import (
 from src.python.analysis.metrics import compute_daily_returns
 from src.python.analysis.monthly_returns import aggregate_monthly_returns
 from src.python.fetcher.chain import fetch_with_incremental_fallback
-from src.python.report._history_quality import _diagnose_return, _validate_bars
+from src.python.report._history_quality import (
+    _detect_terminal_staleness,
+    _diagnose_return,
+    _validate_bars,
+)
 from src.python.report.benchmark import fetch_benchmarks, normalize_benchmarks
 
 logger = logging.getLogger("invest")
@@ -184,6 +188,7 @@ class PortfolioHistoryCalculator:
                 "monthly_returns": {...},  # 月度收益日历（analysis/monthly_returns 数据契约）
                 "status": "ok" | "degraded" | "unavailable",
                 "warnings": [str, ...],
+                "terminal_staleness": dict | None,  # 终点由滞后净值构成的标的明细
                 "benchmarks": [{code, name, bars, total_return_pct,
                                 max_drawdown_pct, data_start, data_end, status}, ...],
             }
@@ -251,6 +256,18 @@ class PortfolioHistoryCalculator:
         # 7) 诊断 + 质量校验
         _diagnose_return(bars, 0, fund_count_on_date, total_return_pct, len(all_series))
         warnings.extend(_validate_bars(bars))
+        # 终点口径校验：LOCF 会把未刷新的标的沿用上次净值，滞后 ≥2 个交易日即说明
+        # 走势终值混用了不同日期的估值（与报告头「最新市值」对不上），须显式提示
+        staleness = _detect_terminal_staleness(
+            list(zip(successful_holdings, all_series, strict=False)),
+            [b["date"] for b in bars],
+            bars[-1]["total_value"],
+        )
+        terminal_staleness: dict | None = None
+        if staleness:
+            warnings.append(staleness["warning"])
+            terminal_staleness = {k: v for k, v in staleness.items() if k != "warning"}
+            logger.warning("[history] %s", staleness["warning"])
 
         # 8) 基准指数历史走势
         benchmarks = self._fetch_benchmarks(bars, days)
@@ -279,6 +296,7 @@ class PortfolioHistoryCalculator:
             "data_end": sorted_dates[-1],
             "status": status,
             "warnings": warnings,
+            "terminal_staleness": terminal_staleness,
             "failed_holdings": failed_holdings,
             "successful_holdings": successful_holdings,
             "benchmarks": benchmarks,

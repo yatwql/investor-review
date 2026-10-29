@@ -883,3 +883,27 @@ class TestMarkDataUnavailable:
         monkeypatch.setattr(ds, "get_tracker", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
         result = ds.mark_data_unavailable("fund_flow", "T4")  # 观测副作用不得打断主链路
         assert result is None
+
+
+class TestHistoryStatusMapping:
+    """history_data.warnings → 数据状态项的映射（净值滞后提示可上屏）。"""
+
+    def test_nav_stale_warning_maps_to_status_item(self):
+        from src.python.report.html_writer_status import _build_history_data_status
+
+        history_data = {
+            "status": "ok",
+            "warnings": [
+                "历史走势终点净值滞后：永赢科技智选混合C(022365) 的最新数据日为 2026-10-27"
+                "（落后 2 个交易日，合计占组合 50.0%），走势终值与最新市值口径不同"
+            ],
+        }
+        status = _build_history_data_status(history_data)
+        assert "history_nav_stale" in status
+        assert status["history_nav_stale"]["message"] == STATUS_MESSAGES["history_nav_stale"]
+
+    def test_no_nav_stale_item_without_warning(self):
+        from src.python.report.html_writer_status import _build_history_data_status
+
+        status = _build_history_data_status({"status": "ok", "warnings": []})
+        assert "history_nav_stale" not in status
