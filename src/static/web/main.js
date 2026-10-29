@@ -1632,7 +1632,9 @@
         label = label + '（影响报告）';
       }
       // 「已改」标记：当前值 ≠ 服务端下发的出厂默认（前端不自算基准）
-      if (Object.prototype.hasOwnProperty.call(defaults, fullKey) && !!items[key] !== !!defaults[fullKey]) {
+      var currentOn = Boolean(items[key]);
+      var defaultOn = Boolean(defaults[fullKey]);
+      if (Object.prototype.hasOwnProperty.call(defaults, fullKey) && currentOn !== defaultOn) {
         label = label + ' ✻';
       }
       var row = document.createElement('label');
@@ -2206,7 +2208,7 @@
    * 一次只专注一个工作区；支持点击、方向键（WAI-ARIA tabs 模式）与
    * #whatif 等 hash 深链（手册可直接链接到指定工作区）。
    */
-  var TAB_NAMES = ['generate', 'whatif', 'config', 'status', 'logs'];
+  var TAB_NAMES = ['generate', 'whatif', 'holdings', 'config', 'status', 'logs'];
 
   function activateTab(name, updateHash) {
     if (TAB_NAMES.indexOf(name) === -1) {
@@ -2540,6 +2542,288 @@
         }
       });
     }
+  })();
+
+
+  /* ── 持仓录入（在线改持仓文件；与 TUI [U] 同一套编解码与校验）─────────
+     变更清单只存在浏览器内存里，服务端每次 preview/save 重放；
+     保存前有 mtime 闸门与 .bak 备份（与 TUI 一致），不覆盖他人的手改。 */
+  (function () {
+    var state = { overview: null, baseMtime: null, draft: [] };
+    var box = document.getElementById('panel-holdings');
+    if (!box) {
+      return;
+    }
+    var $ = function (id) { return document.getElementById(id); };
+    var els = {
+      note: $('holdings-file-note'),
+      account: $('holdings-account'),
+      accountNew: $('holdings-account-new'),
+      asset: $('holdings-asset'),
+      code: $('holdings-code'),
+      name: $('holdings-name'),
+      kind: $('holdings-kind'),
+      side: $('holdings-side'),
+      shares: $('holdings-shares'),
+      amount: $('holdings-amount'),
+      price: $('holdings-price'),
+      date: $('holdings-date'),
+      add: $('holdings-add'),
+      error: $('holdings-error'),
+      wrap: $('holdings-draft-wrap'),
+      list: $('holdings-draft'),
+      flows: $('holdings-flows'),
+      preview: $('holdings-preview'),
+      save: $('holdings-save'),
+      previewBox: $('holdings-preview-box'),
+    };
+
+    function setMsg(el, text, kind) {
+      el.textContent = text || '';
+      el.className = 'status-text' + (kind ? ' status-' + kind : '');
+    }
+
+    function postJson(url, body) {
+      return fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body || {}),
+        signal: AbortSignal.timeout(120000),
+      }).then(function (res) {
+        return res.json().then(function (payload) {
+          if (!payload || payload.ok !== true) {
+            var err = new Error((payload && payload.error) || '请求失败');
+            err.errorCode = payload && payload.error_code;
+            throw err;
+          }
+          return payload.data;
+        });
+      });
+    }
+
+    function accountNames() {
+      return (state.overview ? state.overview.accounts : []).map(function (a) { return a.account; });
+    }
+
+    function rowsOf(account) {
+      var found = (state.overview ? state.overview.accounts : []).filter(function (a) {
+        return a.account === account;
+      })[0];
+      return found ? found.rows : [];
+    }
+
+    function fillAccounts() {
+      var names = accountNames();
+      els.account.replaceChildren();
+      names.forEach(function (name) {
+        var opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        els.account.appendChild(opt);
+      });
+      fillAssets();
+    }
+
+    function fillAssets() {
+      var rows = rowsOf(els.account.value);
+      els.asset.replaceChildren();
+      var blank = document.createElement('option');
+      blank.value = '';
+      blank.textContent = rows.length ? '（选择已有持仓）' : '（该账户暂无持仓）';
+      els.asset.appendChild(blank);
+      rows.forEach(function (row, index) {
+        var opt = document.createElement('option');
+        opt.value = String(index);
+        opt.textContent = row.name + '（' + row.code + '）份额 ' + row.shares;
+        els.asset.appendChild(opt);
+      });
+    }
+
+    function loadOverview() {
+      setMsg(els.error, '', null);
+      return fetch('/api/holdings', { signal: AbortSignal.timeout(30000) })
+        .then(function (res) { return res.json(); })
+        .then(function (payload) {
+          if (!payload || payload.ok !== true) {
+            throw new Error((payload && payload.error) || '读取持仓文件失败');
+          }
+          state.overview = payload.data;
+          state.baseMtime = payload.data.mtime;
+          els.note.textContent =
+            '文件：' + payload.data.file + ' · ' + payload.data.rows_total + ' 条持仓 · 未保存的变更不会写入文件';
+          fillAccounts();
+        })
+        .catch(function (err) {
+          state.overview = null;
+          els.note.textContent = '持仓文件不可用';
+          setMsg(els.error, err.message, 'error');
+        });
+    }
+
+    function currentTarget() {
+      var code = (els.code.value || '').trim();
+      if (code) {
+        return { code: code, name: (els.name.value || '').trim() };
+      }
+      var rows = rowsOf(els.account.value);
+      var picked = els.asset.value === '' ? null : rows[Number(els.asset.value)];
+      return picked ? { code: picked.code, name: picked.name } : null;
+    }
+
+    function currentAccount() {
+      var typed = (els.accountNew.value || '').trim();
+      return typed || (els.account.value || '').trim();
+    }
+
+    function buildIntent() {
+      var account = currentAccount();
+      if (!account) {
+        throw new Error('请先选择账户，或输入新账户名');
+      }
+      var target = currentTarget();
+      if (!target) {
+        throw new Error('请选择已有持仓，或输入证券代码');
+      }
+      var shares = (els.shares.value || '').trim();
+      var amount = (els.amount.value || '').trim();
+      if (!shares && !amount) {
+        throw new Error('请填写份额；场外买入可只填申购金额');
+      }
+      return {
+        account: account,
+        code: target.code,
+        name: target.name,
+        side: els.side.value,
+        shares: shares || null,
+        amount: amount || null,
+        price: (els.price.value || '').trim() || null,
+        trade_date: (els.date.value || '').trim() || null,
+        asset_kind: els.kind.value || null,
+      };
+    }
+
+    function intentLabel(intent) {
+      var side = intent.side === 'buy' ? '买入' : '卖出';
+      var qty = intent.shares ? intent.shares + ' 份' : intent.amount + ' 元';
+      return intent.account + ' · ' + side + ' ' + (intent.name || intent.code) + '（' + intent.code + '）' + qty;
+    }
+
+    function renderDraft() {
+      els.list.replaceChildren();
+      state.draft.forEach(function (intent, index) {
+        var item = document.createElement('li');
+        var text = document.createElement('span');
+        text.textContent = intentLabel(intent);
+        var remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'btn btn-ghost holdings-remove';
+        remove.textContent = '移除';
+        remove.addEventListener('click', function () {
+          state.draft.splice(index, 1);
+          renderDraft();
+        });
+        item.appendChild(text);
+        item.appendChild(remove);
+        els.list.appendChild(item);
+      });
+      els.wrap.hidden = state.draft.length === 0;
+      if (state.draft.length === 0) {
+        els.previewBox.hidden = true;
+      }
+    }
+
+    function renderPreview(data) {
+      var diff = data.diff || { added: 0, updated: 0, removed: 0 };
+      var lines = [
+        '写回后共 ' + data.rows_total + ' 条持仓 · 新增 ' + diff.added +
+          ' / 更新 ' + diff.updated + ' / 移除 ' + diff.removed,
+      ];
+      (data.accounts || []).forEach(function (account) {
+        lines.push('── ' + account.account + '（' + account.rows.length + ' 条）' + (account.dirty ? ' *' : ''));
+        account.rows.forEach(function (row) {
+          lines.push('  ' + (row.dirty ? '* ' : '  ') + row.name + '（' + row.code + '）份额 ' + row.shares + ' · 成本 ' + row.cost);
+        });
+      });
+      els.previewBox.textContent = lines.join('\n');
+      els.previewBox.hidden = false;
+    }
+
+    els.add.addEventListener('click', function () {
+      try {
+        var intent = buildIntent();
+        state.draft.push(intent);
+        setMsg(els.error, '', null);
+        els.shares.value = '';
+        els.amount.value = '';
+        if (els.code.value) {
+          els.code.value = '';
+          els.name.value = '';
+        }
+        renderDraft();
+      } catch (err) {
+        setMsg(els.error, err.message, 'error');
+      }
+    });
+
+    els.account.addEventListener('change', fillAssets);
+    els.accountNew.addEventListener('input', fillAssets);
+
+    els.preview.addEventListener('click', function () {
+      setMsg(els.error, '', null);
+      postJson('/api/holdings/preview', { intents: state.draft }).then(renderPreview, function (err) {
+        setMsg(els.error, err.message, 'error');
+      });
+    });
+
+    els.save.addEventListener('click', function () {
+      var summary = state.draft.map(intentLabel).join('\n');
+      if (!window.confirm('确认写入持仓文件？\n\n' + summary + '\n\n写前会自动备份为 .bak。')) {
+        return;
+      }
+      postJson('/api/holdings/save', {
+        intents: state.draft,
+        base_mtime: state.baseMtime,
+        append_flows: els.flows.checked,
+      }).then(
+        function (data) {
+          state.draft = [];
+          renderDraft();
+          setMsg(
+            els.error,
+            '已写入 ' + data.file + '：' + data.saved + ' 笔变更' +
+              (data.append_flows ? '（含交易流水）' : '') +
+              (data.backup ? '，备份 ' + data.backup : ''),
+            'ok'
+          );
+          loadOverview();
+        },
+        function (err) {
+          setMsg(els.error, err.message, 'error');
+          if (err.errorCode === 'HOLDINGS_STALE') {
+            loadOverview();
+          }
+        }
+      );
+    });
+
+    // 切到本页签时懒加载总览（首次与每次进入都刷新，避免看到旧文件状态）；
+    // 深链 (#holdings) 直接进入时也要加载，否则面板停在「正在读取…」
+    function loadIfVisible() {
+      if ((window.location.hash || '').slice(1) === 'holdings') {
+        loadOverview();
+      }
+    }
+    var tabBtn = document.getElementById('tab-holdings');
+    if (tabBtn) {
+      tabBtn.addEventListener('click', loadOverview);
+      tabBtn.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+          loadOverview();
+        }
+      });
+    }
+    window.addEventListener('hashchange', loadIfVisible);
+    loadIfVisible();
   })();
 
   document.addEventListener('DOMContentLoaded', init);

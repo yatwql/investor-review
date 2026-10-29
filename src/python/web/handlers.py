@@ -149,8 +149,10 @@ def _handle_upload():
     file = request.files.get("file")
     if file is None or not file.filename:
         return _err("UPLOAD_BAD_FILE", "未选择文件"), 400
+    from typing import BinaryIO, cast
+
     try:
-        data = save_upload(file.stream, file.filename)
+        data = save_upload(cast(BinaryIO, file.stream), file.filename)
     except UploadError as e:
         return _err(e.error_code, e.message), 400
     return _ok(data)
@@ -445,6 +447,53 @@ def _handle_cache_cleanup():
     return _ok({"removed": removed})
 
 
+def _handle_holdings_overview():
+    """GET /api/holdings — 持仓总览（账户 / 行 / 文件 mtime），供录入表单选择。"""
+    from src.python.web.holdings_edit import HoldingsEditError, build_overview
+
+    try:
+        return _ok(build_overview())
+    except HoldingsEditError as e:
+        return _err("HOLDINGS_UNAVAILABLE", str(e)), 400
+
+
+def _handle_holdings_preview():
+    """POST /api/holdings/preview — 变更清单重放到内存副本，返回结果与差异（不写文件）。"""
+    from src.python.web.holdings_edit import HoldingsEditError, preview
+
+    if not _is_same_origin():
+        return _err("BAD_PARAM", "同源校验失败，拒绝提交"), 403
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return _err("BAD_PARAM", "请求体格式不合法"), 400
+    try:
+        return _ok(preview(payload))
+    except HoldingsEditError as e:
+        return _err(getattr(e, "code", "BAD_PARAM"), str(e)), 400
+    except Exception:
+        logger.exception("[web-holdings] 预览失败")
+        return _err("HOLDINGS_PREVIEW_FAILED", "预览失败（详情请查看日志）"), 500
+
+
+def _handle_holdings_save():
+    """POST /api/holdings/save — 确认写回（mtime 闸门 + .bak + 原子写 + 回读校验）。"""
+    from src.python.web.holdings_edit import HoldingsEditError, save
+
+    if not _is_same_origin():
+        return _err("BAD_PARAM", "同源校验失败，拒绝提交"), 403
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return _err("BAD_PARAM", "请求体格式不合法"), 400
+    try:
+        return _ok(save(payload))
+    except HoldingsEditError as e:
+        status = 409 if getattr(e, "code", "") == "HOLDINGS_STALE" else 400
+        return _err(getattr(e, "code", "BAD_PARAM"), str(e)), status
+    except Exception:
+        logger.exception("[web-holdings] 写回失败")
+        return _err("HOLDINGS_SAVE_FAILED", "写回失败（详情请查看日志）"), 500
+
+
 def _handle_config_edit():
     """配置编辑：GET 返回可编辑面，POST 应用单次编辑（副作用，同源守卫）。
 
@@ -514,7 +563,7 @@ def _handle_report_qa_ask():
         channel="web",
     )
     if not result.get("ok"):
-        code = result.get("error_code")
+        code = str(result.get("error_code") or "QA_FAILED")
         return _err(code, result.get("error")), _QA_STATUS_BY_CODE.get(code, 400)
     return _ok(result)
 
@@ -606,6 +655,10 @@ def create_handlers(app, run_manager) -> None:
     app.add_url_rule("/api/health/history", "health_history", _handle_health_history, methods=["GET"])
     app.add_url_rule("/api/doctor", "doctor", _handle_doctor, methods=["GET"])
     app.add_url_rule("/api/logs", "logs", _handle_logs, methods=["GET"])
+
+    app.add_url_rule("/api/holdings", "holdings_overview", _handle_holdings_overview, methods=["GET"])
+    app.add_url_rule("/api/holdings/preview", "holdings_preview", _handle_holdings_preview, methods=["POST"])
+    app.add_url_rule("/api/holdings/save", "holdings_save", _handle_holdings_save, methods=["POST"])
 
     app.add_url_rule("/api/config/edit", "config_edit", _handle_config_edit, methods=["GET", "POST"])
     app.add_url_rule("/api/scheduler", "scheduler_get", _handle_scheduler_get, methods=["GET"])

@@ -590,6 +590,7 @@
 | R-WEB-07 | `src/test/unit/web/test_upload.py` + `src/test/unit/web/test_runs.py` | 批 6 |
 | R-WEB-08 | `src/test/unit/web/test_config_edit.py` + `src/test/unit/web/test_config_edit_edge.py` | 批 6 |
 | R-WEB-09 | `src/test/unit/web/test_holdings_update.py` + `src/test/unit/web/test_holdings_update_edge.py` | 批 6 |
+| R-WEB-13 | `src/test/unit/web/test_holdings_edit_api.py` + `src/test/unit/core/test_holdings_editor.py` | 持仓录入 |
 | R-WEB-10 | `src/test/unit/web/test_whatif_api.py` + `src/test/unit/web/test_whatif_api_edge.py` | 批 6 |
 | R-WEB-11 | `src/test/unit/web/test_cache_api.py` | 批 6 |
 | R-WEB-12 | `src/test/unit/web/test_scheduler.py` | 批 10 |

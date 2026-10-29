@@ -24,7 +24,7 @@
 
 首页「持仓维护」组新增 `[U] 持仓录入（买入 / 卖出 / 保存）`（二级 `1`/`L` 查看持仓、`2`/`P` 录入买入、`3`/`S` 录入卖出、`4`/`W` 保存、`0` 返回）；录入只改内存变更清单，保存回显确认后原子写回持仓文件。设计、录入与成本口径、写回契约、验收载体全文见 [`holdings-entry-design.md`](../plan/holdings-entry-design.md)；需求条目 R-HLD-06~11。
 
-#### `plan-239` WEB 渠道持仓录入（复用同一编解码与变更层）
+#### `plan-239` WEB 渠道持仓录入（已落地，待真机验收）
 
 在 plan-238 落地的 `holdings_editor` / `nav_lookup` 之上提供 Web 录入表单与保存确认，校验与写回语义与 TUI 一致（不得各自实现一份写入逻辑）；前置 plan-238。设计见 [`holdings-entry-design.md`](../plan/holdings-entry-design.md) §9。
 

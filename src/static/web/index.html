@@ -36,6 +36,8 @@
               data-tab="generate" aria-controls="panel-generate" aria-selected="true">生成报告</button>
       <button type="button" class="tab-btn" role="tab" id="tab-whatif"
               data-tab="whatif" aria-controls="panel-whatif" aria-selected="false" tabindex="-1">调仓模拟</button>
+      <button type="button" class="tab-btn" role="tab" id="tab-holdings"
+              data-tab="holdings" aria-controls="panel-holdings" aria-selected="false" tabindex="-1">持仓录入</button>
       <button type="button" class="tab-btn" role="tab" id="tab-config"
               data-tab="config" aria-controls="panel-config" aria-selected="false" tabindex="-1">配置</button>
       <button type="button" class="tab-btn" role="tab" id="tab-status"
@@ -194,6 +196,74 @@
           <a id="whatif-link-html" class="btn btn-secondary" href="#" target="_blank" rel="noopener">预览 HTML</a>
           <a id="whatif-link-excel" class="btn btn-secondary" href="#">下载 Excel</a>
           <span id="whatif-result-meta" class="result-tip"></span>
+        </div>
+      </section>
+    </div>
+
+    <!-- ══ 工作区：持仓录入（在线改持仓文件） ══ -->
+    <div class="tab-panel" id="panel-holdings" role="tabpanel" aria-labelledby="tab-holdings" hidden>
+      <section class="card" aria-labelledby="holdings-heading">
+        <h2 id="holdings-heading">持仓录入（在线改持仓文件）</h2>
+        <p class="config-note" id="holdings-file-note">正在读取持仓文件…</p>
+        <form id="holdings-form" class="generate-form holdings-form" autocomplete="off">
+          <div class="field-row">
+            <label for="holdings-account">账户</label>
+            <select id="holdings-account" aria-label="选择账户"></select>
+            <input type="text" id="holdings-account-new" placeholder="或输入新账户名" maxlength="40">
+          </div>
+          <div class="field-row">
+            <label for="holdings-asset">标的</label>
+            <select id="holdings-asset" aria-label="选择已有持仓"></select>
+            <input type="text" id="holdings-code" placeholder="或输入 6 位代码" maxlength="6" inputmode="numeric">
+            <input type="text" id="holdings-name" placeholder="名称（输入新代码时填）" maxlength="40">
+          </div>
+          <div class="field-row">
+            <label for="holdings-kind">品种</label>
+            <select id="holdings-kind">
+              <option value="">自动判定</option>
+              <option value="exchange">场内证券</option>
+              <option value="otc">场外基金</option>
+            </select>
+            <span class="field-hint">00 开头的代码需明确选一次场内 / 场外</span>
+          </div>
+          <div class="field-row">
+            <label for="holdings-side">方向</label>
+            <select id="holdings-side">
+              <option value="buy">买入</option>
+              <option value="sell">卖出</option>
+            </select>
+          </div>
+          <div class="field-row">
+            <label for="holdings-shares">份额</label>
+            <input type="text" id="holdings-shares" inputmode="decimal" placeholder="如 100 份">
+          </div>
+          <div class="field-row">
+            <label for="holdings-amount">申购金额</label>
+            <input type="text" id="holdings-amount" inputmode="decimal" placeholder="场外买入可只填金额（按当日净值折算份额）">
+          </div>
+          <div class="field-row">
+            <label for="holdings-price">价格</label>
+            <input type="text" id="holdings-price" inputmode="decimal" placeholder="留空 = 取当前行情 / 该日官方净值">
+          </div>
+          <div class="field-row">
+            <label for="holdings-date">交易日</label>
+            <input type="text" id="holdings-date" placeholder="YYYY-MM-DD（留空 = 今天；场外必填）" maxlength="10">
+          </div>
+          <button type="button" id="holdings-add" class="btn btn-secondary">加入变更清单</button>
+        </form>
+        <p id="holdings-error" class="status-text status-error" role="alert" aria-live="polite"></p>
+        <div id="holdings-draft-wrap" hidden>
+          <h3>本次变更清单</h3>
+          <ul id="holdings-draft" class="holdings-draft"></ul>
+          <label class="checkbox-label">
+            <input type="checkbox" id="holdings-flows">
+            <span>同时记入「交易流水」页签</span>
+          </label>
+          <div class="result-actions">
+            <button type="button" id="holdings-preview" class="btn btn-secondary">预览写回结果</button>
+            <button type="button" id="holdings-save" class="btn btn-primary">确认写入持仓文件</button>
+          </div>
+          <div id="holdings-preview-box" class="holdings-preview" hidden></div>
         </div>
       </section>
     </div>
