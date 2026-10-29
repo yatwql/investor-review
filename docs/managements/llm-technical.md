@@ -877,6 +877,8 @@ penetrated_assets ──→ extract_stable_penetration()
 
 **提示词文本版本（`rate_caliber.PROMPT_SCHEMA_VERSION`）**：标签、表头、口径说明等**静态文案**改动不改变持仓/行情数据，哪怕提示词内容变了，结构化输入的指纹也可能不变——预检会命中按旧口径生成的缓存，静默复用错口径结论。故 `build_llm_fingerprint()` 把该版本号并入哈希输入：改文案即递增版本（一次性换键，旧缓存自动重算）。标签本身收敛在 `llm/rate_caliber.py` 单一声明点，供 `prompts_action` / `prompts_tables` / `prompts_data_blocks` 共同引用。
 
+**事实校验规则版本（`fact_checker.FACT_CHECK_RULES_VERSION`）**：校验修正后的正文会**回写模块缓存**（`llm.skeleton.write_back_module_cache`，键刻意不变），缓存正文因此与「哪一版校验规则改过它」绑定。规则语义变更（新增/收窄非收益率豁免、改写策略变化）而不换键，旧缓存里被旧规则改错的正文会继续被复用，修复对存量缓存不生效、只能等 TTL 过期。故该版本号并入四可回写模块（`global_macro` / `expert_review` / `health_check` / `penetration_deep`）与辩论键的指纹：改规则语义即递增版本，一次性换键重算。
+
 **两个结构性保证**：
 
 1. **覆盖以提示词为准，而非以「是否与持仓相关」为准**：每段只进「提示词确实含该段」的模块——`competitive_context` / `metrics` 不进 `health_check` / `penetration_deep`（其提示词不含这两段），`data_quality_text` 只进 `health_check`（仅它的提示词含数据质量段）。反向的 `history_data`/信号后缀也遵循同一判据：进提示词的进键，没进的不进键。

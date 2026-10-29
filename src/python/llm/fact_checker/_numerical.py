@@ -19,6 +19,7 @@ from src.python.llm.fact_checker._constants import (
 )
 from src.python.llm.fact_checker._context import (
     _is_benchmark_relative_context,
+    _is_breakdown_sum_context,
     _is_contribution_sentence,
     _is_change_rate_context,
     _is_daily_change_context,
@@ -29,6 +30,7 @@ from src.python.llm.fact_checker._context import (
     _is_portfolio_level_context,
     _is_position_weight_context,
     _is_replay_context,
+    _is_target_value_context,
     _is_trim_target_context,
     _is_weight_context,
     _is_win_rate_context,
@@ -42,6 +44,7 @@ from src.python.llm.fact_checker._utils import (
     _locate_subject_code,
     _sentence_snippet,
     _split_sentences,
+    _unresolved_attached_subject,
 )
 
 
@@ -88,6 +91,8 @@ class PercentContext:
     is_weight: bool = False
     is_benchmark_relative: bool = False
     is_trim_target: bool = False
+    is_target_value: bool = False
+    is_breakdown_sum: bool = False
     is_non_rate_metric: bool = False
 
 
@@ -102,10 +107,19 @@ def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, 
         correction = (wrong_value_str, correct_value_str, context_sentence, reason)
         reason 为修正语义（如"601939实际收益率187.1%"），供修正明细展示。
     """
-    # 环比/同比变化率、胜率、评分权重、相对基准跑输/跑赢、止盈/减仓目标比例
+    # 环比/同比变化率、胜率、评分权重、相对基准跑输/跑赢、止盈/减仓目标比例、
+    # 目标位/估计值、合计=分项之和
     # → 数值均非收益率，不可比较。均用近邻窗口检测（数值紧邻对应语境词），
     # 避免同句其他真实收益率被连带跳过。
-    if ctx.is_change_rate or ctx.is_win_rate or ctx.is_weight or ctx.is_benchmark_relative or ctx.is_trim_target:
+    if (
+        ctx.is_change_rate
+        or ctx.is_win_rate
+        or ctx.is_weight
+        or ctx.is_benchmark_relative
+        or ctx.is_trim_target
+        or ctx.is_target_value
+        or ctx.is_breakdown_sum
+    ):
         return None, None
 
     # 数值前文是占比/份额/市值/仓位类度量 → 该数值不是收益率。
@@ -167,9 +181,14 @@ def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, 
         return issue, (ctx.value_str, correct_str, ctx.sentence, f"组合实际收益率{correct_str}%")
 
     # 组合单日/当日表现语境（"今日组合 +0.21%"）→ 数值为组合当日收益，非个股收益率，
-    # 且无组合当日收益基准数据可校验 → 跳过。必须在此判定：否则回退全局最近邻会把
+    # 且无组合当日收益基准数据可校验 → 跳过。必须在此判定：否则回退全局最近邻会将
     # 当日收益（如 0.21%）误修正为数值最接近的品种收益率（如 561910 的 -2.3%）。
     if _is_portfolio_daily_change_context(ctx.sentence, ctx.anchor):
+        return None, None
+
+    # 数值紧贴一个解析不出持仓的名称（如简称「建信装备」）→ 主体归属不可知，
+    # 不可用同句其他持仓的收益率去改写（宁漏改不误改）。
+    if _unresolved_attached_subject(ctx.sentence, ctx.anchor, ctx.holding_codes, ctx.name_to_code):
         return None, None
 
     # 定位句中明确持仓主体：统一按 _locate_subject_code「紧邻优先 + 代码/全名最近兜底」
@@ -365,6 +384,9 @@ def check_numerical_consistency(
                     is_weight=_is_weight_context(sentence, match.start()),
                     is_benchmark_relative=_is_benchmark_relative_context(sentence, match.start()),
                     is_trim_target=_is_trim_target_context(sentence, match.start()),
+                    # 目标位/估计值（"提到 25% 附近"）与「合计 = 分项之和」（"18.3%（12.5%+5.8%）"）
+                    is_target_value=_is_target_value_context(sentence, match.start()),
+                    is_breakdown_sum=_is_breakdown_sum_context(sentence, match.start(), value),
                     # 数值前文语义（占比/份额/市值/仓位）：局部窗口判定，优先于整句收益语境
                     is_non_rate_metric=_is_non_rate_pre_word_context(sentence, match.start()),
                 )

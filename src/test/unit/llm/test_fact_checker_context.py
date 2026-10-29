@@ -889,3 +889,91 @@ class TestNonReturnMetricAndSignNormalization:
         html = "<p>超短债（012325，最大持仓12.3%，持仓收益率+45.5%）表现稳健。</p>"
         _report, corrected = run_fact_check(html, holdings)
         assert "+-" not in corrected and "-+" not in corrected, f"出现畸形数值: {corrected}"
+
+
+class TestNonRateValueGuards:
+    """非收益率数值的三类守卫：目标位 / 合计=分项之和 / 主体未解析。
+
+    实盘事故（一次真实报告的 4 处「修正」里 3 处是误伤）：校验器把
+    **仓位占比与目标权重**按最近邻改写成某品种收益率，又因口语简称
+    「建信装备」解析不到 011506，把该品种**正确**的 +21.91% 换成同句 016055
+    的 18.7%。修正直接进用户可见正文，下游 `self_review` 再把改错后的矛盾
+    当模型错误报出——把正确文本改错比漏改代价大得多。
+    """
+
+    pytestmark = [
+        pytest.mark.unit,
+        pytest.mark.unit_llm,
+        pytest.mark.llm,
+    ]
+
+    @pytest.fixture
+    def holdings(self) -> list[dict]:
+        """事故句涉及的四个品种（profit_rate 取真实口径百分值）。"""
+        return [
+            {
+                "name": "兴全恒慧30天持有超短债C",
+                "code": "012325",
+                "market_value": 34203.0,
+                "cost": 32700.0,
+                "profit_rate": 4.6,
+            },
+            {
+                "name": "华宝增强收益债券A",
+                "code": "240012",
+                "market_value": 15950.0,
+                "cost": 17337.0,
+                "profit_rate": -8.0,
+            },
+            {
+                "name": "建信高端装备股票A",
+                "code": "011506",
+                "market_value": 30000.0,
+                "cost": 24607.0,
+                "profit_rate": 21.91,
+            },
+            {
+                "name": "博时纳斯达克100联接A",
+                "code": "016055",
+                "market_value": 21100.0,
+                "cost": 17779.0,
+                "profit_rate": 18.66,
+            },
+        ]
+
+    def test_target_weight_and_breakdown_not_corrected(self, holdings):
+        """事故原句：占比 18.3% = 括号内 12.5%+5.8%，25% 是目标权重 → 都不改写。"""
+        text = "方向：把低风险资产从当前的 18.3%（012325 12.5% + 240012 5.8%）提到 25% 附近，代价是牺牲部分上行。"
+        _issues, _checked, _passed, corrections = check_numerical_consistency(text, holdings)
+        assert corrections == [], f"占比/目标权重不应被改写成收益率: {corrections}"
+
+    def test_breakdown_sum_guard_alone(self, holdings):
+        """仅「合计 = 分项之和」结构（无「附近」目标位）也不改写。"""
+        text = "固收部分合计 18.3%（012325 12.5% + 240012 5.8%）是压舱石。"
+        _issues, _checked, _passed, corrections = check_numerical_consistency(text, holdings)
+        assert corrections == [], f"合计=分项之和不应被改写: {corrections}"
+
+    def test_unresolved_short_name_not_rewritten(self, holdings):
+        """口语简称解析不到持仓时，不得改用同句其他品种的收益率。"""
+        text = "各品种持仓收益率分层合理：纳指联接 016055 +18.66%、建信装备 +21.91% 属中等偏上。"
+        _issues, _checked, _passed, corrections = check_numerical_consistency(text, holdings)
+        assert corrections == [], f"主体未解析的数值不可改写成同句他品种收益率: {corrections}"
+
+    def test_resolvable_subject_still_corrected_in_same_sentence(self, holdings):
+        """守卫不过度：同句里主体可解析的错误数值仍须纠正。"""
+        text = "各品种持仓收益率分层合理：纳指联接 016055 +99.9%、建信装备 +21.91% 属中等偏上。"
+        _issues, _checked, _passed, corrections = check_numerical_consistency(text, holdings)
+        assert len(corrections) == 1, f"应只纠正 99.9 一处: {corrections}"
+        assert corrections[0][0] == "99.9" and corrections[0][1] == "18.7"
+
+    def test_resolved_full_name_still_corrected(self, holdings):
+        """全名主体（省略类型尾缀「股票A」）解析得到 → 错值仍须纠正。"""
+        text = "建信高端装备持仓收益率 +25.0% 领先。"
+        _issues, _checked, _passed, corrections = check_numerical_consistency(text, holdings)
+        assert len(corrections) == 1 and corrections[0][1] == "21.9", f"全名主体错值应被纠正: {corrections}"
+
+    def test_time_filler_does_not_shield_real_rate(self, holdings):
+        """时间填充词（本季度）不遮蔽主体：主体在更左侧仍能解析并纠正。"""
+        text = "兴全恒慧30天持有超短债C（012325）本季度收益率为 11.0%，表现稳健。"
+        _issues, _checked, _passed, corrections = check_numerical_consistency(text, holdings)
+        assert len(corrections) == 1 and corrections[0][1] == "4.6", f"主体可解析时应纠正: {corrections}"

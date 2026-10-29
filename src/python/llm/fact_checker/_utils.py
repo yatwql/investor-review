@@ -7,8 +7,20 @@ from __future__ import annotations
 
 import re
 
-from src.python.llm.fact_checker._constants import _ATTACHED_SUBJECT_MAX_DIST, _NAME_ALIAS_MAP
+from src.python.llm.fact_checker._constants import (
+    _ATTACHED_SUBJECT_MAX_DIST,
+    _ATTACHED_SUBJECT_STRIP_WORDS,
+    _NAME_ALIAS_MAP,
+    _NON_SUBJECT_FILLER_WORDS,
+)
 from src.python.llm.fact_checker._patterns import _CODE_PATTERN
+
+#: 叮在数值前的分隔/符号：剥掉后才能看到紧贴的「主体名称」汉字串。
+_ATTACHED_SUBJECT_SEPARATORS = " \u3000\t:：，,、（）()「」“”\"'+-~≈%"
+
+#: 剥离时依次尝试的词表：度量词（收益率/涨幅…）与时间/范围填充词（本季度/近期…）。
+#: 两类都剥完后剩下的末尾汉字串才当作「主体名称」看待。
+_ATTACHED_SUBJECT_PREFIX_WORDS: tuple[str, ...] = _ATTACHED_SUBJECT_STRIP_WORDS + _NON_SUBJECT_FILLER_WORDS
 
 
 def _strip_html(html: str) -> str:
@@ -222,7 +234,9 @@ def _match_descriptive_tail(
                     dist = min(abs(m.start() - anchor), abs(m.end() - anchor))
                     if best_dist is None or dist < best_dist or (dist == best_dist and len(cand_short) > best_len):
                         best_code, best_dist, best_len = code, dist, len(cand_short)
-    return (best_code, best_dist) if best_code is not None else None
+    if best_code is None or best_dist is None:
+        return None
+    return best_code, best_dist
 
 
 #: 分句符（与 `_split_sentences` 的断句口径一致，另含顿号与换行）
@@ -273,6 +287,54 @@ def _alias_normalized(text: str) -> str:
     for alias, canon in sorted(_NAME_ALIAS_MAP.items(), key=lambda kv: -len(kv[0])):
         text = text.replace(alias, canon)
     return text
+
+
+def _unresolved_attached_subject(
+    sentence: str,
+    anchor: int,
+    holding_codes: set[str],
+    name_to_code: dict[str, str] | None,
+) -> bool:
+    """判断数值是否紧贴一个「未识别为持仓」的主体名（无法安全归因）。
+
+    从数值向前取一段字符，反复剥掉分隔符与「收益率/涨幅/约/达」等度量词，剩下的
+    末尾汉字串即为数值的紧邻主体（如「建信装备 +21.91%」→「建信装备」）。该串
+    若不能被识别为任意持仓（代码/全名/简称/描述尾名），则数值的主体是一个检查器
+    看不懂的名称，**归属不可知**——此时不能用同句其他持仓的收益率去改写它。
+
+    实盘事故：「纳指联接 016055 +18.66%、建信装备 +21.91%」——「建信装备」是
+    011506（建信高端装备）的口语简称，未能解析 → 回退到同句代码 016055，把正确
+    的 +21.91% 改写成 016055 的 18.7%，同一句里两个品种报出同一数字。
+
+    设计取舍：宁可漏改（不修正），不可误改（把对的改错）——改写会直接进入用户
+    可见正文，而漏改只是保守。
+
+    Args:
+        sentence: 所在句子。
+        anchor: 数值在句中的起始位置。
+        holding_codes: 持仓代码集合。
+        name_to_code: 「名称 → 代码」映射。
+
+    Returns:
+        紧邻主体存在但解析不出持仓时为 True（该数值应跳过校验）。
+    """
+    prefix = sentence[max(0, anchor - 24) : anchor].rstrip(_ATTACHED_SUBJECT_SEPARATORS)
+    changed = True
+    while changed:
+        changed = False
+        for word in _ATTACHED_SUBJECT_PREFIX_WORDS:
+            if prefix.endswith(word):
+                prefix = prefix[: -len(word)].rstrip(_ATTACHED_SUBJECT_SEPARATORS)
+                changed = True
+    token_match = re.search(r"[\u4e00-\u9fff]{2,12}$", prefix)
+    if not token_match:
+        return False
+    token = token_match.group(0)
+    # 可归因三选一：持仓名称包含该串（如「建信高端装备」⊂「建信高端装备股票A」，
+    # 省略类型尾缀的完整核心名）、或常规主体匹配（代码/别名/描述尾名）能解析。
+    if any(token in name for name in (name_to_code or {})):
+        return False
+    return not _has_subject_candidate(token, holding_codes, name_to_code, len(token) - 1)
 
 
 def _has_subject_candidate(

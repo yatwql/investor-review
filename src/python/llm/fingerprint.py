@@ -7,6 +7,7 @@ import json
 import logging
 from typing import Any
 
+from src.python.llm.fact_checker._constants import FACT_CHECK_RULES_VERSION
 from src.python.llm.rate_caliber import PROMPT_SCHEMA_VERSION
 
 logger = logging.getLogger("invest")
@@ -129,6 +130,9 @@ def build_llm_fingerprint(
         _risk_signals,
         # 提示词文本版本：标签/表头等静态文案改动也须换键（否则复用按旧口径生成的结论）
         PROMPT_SCHEMA_VERSION,
+        # 事实校验规则版本：校验修正的正文会回写模块缓存（键不变），故规则语义变化
+        # 也须换键，否则旧缓存里被旧规则改错的正文会继续被复用
+        FACT_CHECK_RULES_VERSION,
     )
 
 

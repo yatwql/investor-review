@@ -11,6 +11,8 @@ import threading
 
 import re
 
+from collections.abc import Sequence
+
 from src.python.llm.fact_checker._constants import (
     _DEFAULT_TOLERANCE_PCT,
     _INDEX_CODES,
@@ -75,7 +77,7 @@ def reset_auto_correction_counts() -> None:
 
 def apply_numerical_corrections(
     html: str,
-    corrections: list[tuple[str, str, str, str]],
+    corrections: Sequence[tuple[str, ...]],
 ) -> str:
     """对 HTML 内容中的错误百分比数值执行自动替换。
 
@@ -84,7 +86,8 @@ def apply_numerical_corrections(
 
     Args:
         html: 原始 HTML 内容。
-        corrections: [(wrong_value_str, correct_value_str, context_sentence, reason), ...]。
+        corrections: [(wrong_value_str, correct_value_str, context_sentence[, reason]), ...]——
+            前三元为替换所必需，reason 仅用于修正明细展示，故接受 3/4 元两种形态。
 
     Returns:
         修正后的 HTML 内容。
