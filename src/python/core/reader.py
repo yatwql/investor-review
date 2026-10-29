@@ -147,6 +147,11 @@ def _parse_workbook(wb) -> list[Holding]:
     holdings: list[Holding] = []
 
     for sheet_name in wb.sheetnames:
+        # 流水页签由 read_flow_sheets 单独解析，不属于账户主表——不参与四列表头校验也不告警
+        # （否则每次读持仓都会刷一条「表头不匹配」，把人误导成流水页签坏了）
+        if sheet_name.strip() in (_TRADE_SHEET_NAME, _DIVIDEND_SHEET_NAME):
+            logger.debug("跳过流水页签: %s", sheet_name)
+            continue
         ws = wb[sheet_name]
         logger.debug("处理工作表: %s (行数=%s)", sheet_name, ws.max_row)
 

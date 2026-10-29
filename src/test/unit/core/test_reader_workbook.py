@@ -111,6 +111,35 @@ class TestParseWorkbook(unittest.TestCase):
         holdings = reader._parse_workbook(wb)
         self.assertEqual(len(holdings), 1)
 
+    def test_flow_sheets_skipped_without_warning(self):
+        """流水页签不按账户主表校验：不解析成账户、也不刷「表头不匹配」告警。"""
+        header = ["名称", "代码", "持仓份额", "每份成本"]
+        data = [["长江电力", "600900", 200, 50.0]]
+        wb = self._make_workbook(
+            {
+                "证券账户": (header, data),
+                "交易流水": (["日期", "代码", "操作", "份额", "价格"], [["2026-01-05", "600900", "买入", 200, 25.0]]),
+                "分红流水": (["日期", "代码", "每份分红"], [["2026-01-05", "600900", 0.5]]),
+            }
+        )
+        with patch.object(reader.logger, "warning") as warn:
+            holdings = reader._parse_workbook(wb)
+
+        self.assertEqual([h.code for h in holdings], ["600900"])
+        messages = [str(call.args[0]) % tuple(call.args[1:]) for call in warn.call_args_list]
+        self.assertFalse(any("表头不匹配" in msg for msg in messages), messages)
+
+    def test_unknown_sheet_still_warns_header_mismatch(self):
+        """非流水页签的表头不匹配仍要告警（跳过范围只限已知流水页签）。"""
+        header = ["名称", "代码", "持仓份额", "每份成本"]
+        data = [["长江电力", "600900", 200, 50.0]]
+        wb = self._make_workbook({"证券账户": (header, data), "备注": (["说明"], [["自定义页签"]])})
+        with self.assertLogs("invest", level="WARNING") as captured:
+            holdings = reader._parse_workbook(wb)
+
+        self.assertEqual(len(holdings), 1)
+        self.assertTrue(any("备注" in line and "表头不匹配" in line for line in captured.output))
+
     def test_header_mismatch_skipped(self):
         """表头不匹配 -> 整表跳过。"""
         header_ok = ["名称", "代码", "持仓份额", "每份成本"]
