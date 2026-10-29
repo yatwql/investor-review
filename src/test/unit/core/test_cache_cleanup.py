@@ -634,18 +634,18 @@ class TestCacheMissSummary:
         assert len(rows) == 1 and rows[0].levelno == logging.INFO
         assert "report_datasink 2" in rows[0].getMessage()
 
-    def test_repeated_prefix_raises_warning(self, caplog):
-        """同一前缀未命中 ≥5 次 → 单独一条 WARNING（每轮重取/缓存键失效的信号）。"""
+    def test_repeated_same_key_raises_warning(self, caplog):
+        """同一键未命中 ≥3 次 → 单独一条 WARNING（每轮重取/缓存键失效的信号）。"""
         import logging
 
         from src.python.cache._stats import _record_cache_miss, log_cache_summary
 
-        for i in range(5):
-            _record_cache_miss(f"report_sections_miss_{i}")
+        for _ in range(3):
+            _record_cache_miss("report_sections_industry_beta")
         with caplog.at_level(logging.INFO, logger="invest"):
             log_cache_summary()
         warns = [r for r in caplog.records if r.levelno == logging.WARNING]
-        assert len(warns) == 1 and "report_sections" in warns[0].getMessage()
+        assert len(warns) == 1 and "report_sections_industry_beta" in warns[0].getMessage()
 
     def test_summary_silent_without_samples(self, caplog):
         """无可观测命中/未命中时不打汇总行（避免空噪声）。"""
@@ -709,8 +709,8 @@ class TestNegativeCacheProbeNotCounted:
         assert get_cache_hit_rate()["misses"] == 1
 
 
-class TestSuspiciousPrefixTopKeys:
-    """「同前缀未命中 ≥N 次」告警要带具体键（否则还得回 DEBUG 翻逐键明细）。"""
+class TestSuspiciousKeyMisses:
+    """「同键未命中 ≥N 次」告警：判据按同键重复（重复取数），不按前缀累计（首次取数）。"""
 
     pytestmark = pytestmark_summary
 
@@ -722,22 +722,49 @@ class TestSuspiciousPrefixTopKeys:
         yield
         reset_cache_stats()
 
-    def test_warning_lists_top_keys(self, caplog):
+    def test_warning_lists_repeated_keys(self, caplog):
+        """同键重复未命中 → 告警并点出键；同前缀下的不同键各 1 次不算。"""
         import logging
 
         from src.python.cache._stats import _record_cache_miss, log_cache_summary
 
         for _ in range(3):
-            _record_cache_miss("report_datasink_index_601398.SS")
+            _record_cache_miss("price_fund_otc_011506")
         for _ in range(2):
-            _record_cache_miss("report_datasink_index_601939.SS")
+            _record_cache_miss("price_fund_otc_012325")
         with caplog.at_level(logging.INFO, logger="invest"):
             log_cache_summary()
         warns = [r for r in caplog.records if r.levelno == logging.WARNING]
         assert len(warns) == 1
         msg = warns[0].getMessage()
-        assert "report_datasink_index_601398.SS×3" in msg
-        assert "report_datasink_index_601939.SS×2" in msg
+        assert "price_fund_otc_011506×3" in msg
+        assert "price_fund_otc_012325" not in msg
+
+    def test_spread_first_fetch_does_not_warn(self, caplog):
+        """冷启动一批新资产各未命中 1 次 → 不告警（按前缀累计会误报成故障）。"""
+        import logging
+
+        from src.python.cache._stats import _record_cache_miss, log_cache_summary
+
+        for i in range(8):
+            _record_cache_miss(f"price_fund_otc_{i:06d}")
+        with caplog.at_level(logging.INFO, logger="invest"):
+            log_cache_summary()
+        assert not [r for r in caplog.records if r.levelno == logging.WARNING]
+
+    def test_probe_keys_not_counted(self, caplog):
+        """负缓存 / 纠偏计数探测键未命中属预期缺失，不进分桶、不告警。"""
+        import logging
+
+        from src.python.cache._stats import _record_cache_miss, get_cache_miss_prefixes, log_cache_summary
+
+        for i in range(5):
+            _record_cache_miss(f"report_symbol_miss_{i:06d}.SZ")
+            _record_cache_miss(f"history_history_stock_60090{i}_correction_streak")
+        with caplog.at_level(logging.INFO, logger="invest"):
+            log_cache_summary()
+        assert not [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert get_cache_miss_prefixes() == {}
 
     def test_key_tracking_is_bounded(self, caplog):
         """键名计数有界：海量不同键不会无界增长（超出上限后不再新登记）。"""

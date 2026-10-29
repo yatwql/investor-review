@@ -20,6 +20,26 @@ import pytest
 pytestmark = [pytest.mark.unit, pytest.mark.unit_fetcher, pytest.mark.usefixtures("offline_external_sources")]
 
 
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        ({"source_api": "eastmoney"}, "otc"),
+        ({"source_api": "sina_fund"}, "otc"),
+        ({"source_api": "tencent"}, "exchange"),
+        ({"source_api": "sina"}, "exchange"),
+        ({}, None),
+        (None, None),
+    ],
+)
+def test_price_kind_from_quote_maps_source_api(data, expected):
+    """按行情源反推品种形态：场外净值源 → otc，行情源 → exchange，无数据 → None。"""
+    from src.python.core.holdings_editor import PRICE_KIND_EXCHANGE, PRICE_KIND_OTC
+    from src.python.fetcher.price import price_kind_from_quote
+
+    want = {"otc": PRICE_KIND_OTC, "exchange": PRICE_KIND_EXCHANGE}.get(expected, expected)
+    assert price_kind_from_quote(data) == want
+
+
 def _epoch(year: int, month: int, day: int, hour: int, minute: int) -> float:
     """北京时间某时刻的 epoch 秒（测试固定时点用，避免依赖宿主时钟）。"""
     from datetime import datetime

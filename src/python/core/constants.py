@@ -30,14 +30,16 @@ def _find_project_root() -> str:
 
 # ── 项目根路径（单一来源，所有模块从此导入） ─────────────
 # 使用标记文件查找法（pyproject.toml / .git），不依赖目录树深度。
-PROJECT_ROOT = _find_project_root()
+# ``INVEST_PROJECT_ROOT`` 覆盖仅用于隔离场景（演示工作区截图 / 回归夹具）：把
+# data/ 与 reports/ 整体搬到另一个根，真实持仓与产物零接触。缺省行为不变。
+PROJECT_ROOT = os.environ.get("INVEST_PROJECT_ROOT") or _find_project_root()
 
 # ── 项目名称与版本 ─────────────────────────────────────────
 
 # 应用名称（单一来源，TUI 首页 / 启动日志 / Web 首页 / HTML 报告首页 / Excel 首页统一引用）
 APP_NAME = "投资复盘助手"
 
-APP_VERSION = "0.16.10"
+APP_VERSION = "0.16.11"
 
 # ── 报告产物文件名（单一来源：Excel/HTML 写入器与 Web 预览下载统一引用） ──
 # 报告产物文件基名（归档名 = 基名 + 时间戳后缀）

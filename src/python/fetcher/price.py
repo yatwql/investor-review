@@ -410,6 +410,31 @@ def _fetch_price_with_cache_refresh(
     return r
 
 
+def price_kind_from_quote(data: dict | None) -> str | None:
+    """按行情取数结果反推品种价格形态（``00`` 重叠区消歧用）。
+
+    行情链路已按代码类型路由：命中场外净值源（``eastmoney`` / ``sina_fund``）即场外；
+    命中行情源（``tencent`` / ``sina`` 等）即场内。``source_api`` 是本层（取数层）的
+    内部标识，故判定也留在本层——上层（core/tui）不解析 provider 名。
+
+    Args:
+        data: :func:`fetch_market_data` 的返回字典（可为 None）。
+
+    Returns:
+        ``PRICE_KIND_OTC`` / ``PRICE_KIND_EXCHANGE`` / ``None``（无数据）。
+    """
+    from src.python.core.holdings_editor import PRICE_KIND_EXCHANGE, PRICE_KIND_OTC
+
+    if not data:
+        return None
+    source_api = str(data.get("source_api") or "").strip()
+    if not source_api:
+        return None
+    if source_api in ("eastmoney", "sina_fund"):
+        return PRICE_KIND_OTC
+    return PRICE_KIND_EXCHANGE
+
+
 def fetch_market_data(code: str, expected_name: str = "") -> dict[str, Any] | None:
     """获取一只证券的市场行情（按代码类型自动路由 Provider Chain）。
 

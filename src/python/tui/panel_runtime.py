@@ -24,6 +24,9 @@ from typing import Callable, Iterable, Literal
 from src.python.core.ansi_colors import CYAN, RESET
 from src.python.tui.tui_keys import KEY_DOWN, KEY_UP, input_choice
 
+#: 方向键别名（vim 手感）：与主菜单同一套（``j`` = ↓、``k`` = ↑）
+_NAV_ALIASES = {"j": KEY_DOWN, "k": KEY_UP}
+
 
 class NavState:
     """列表面板方向键导航态（游标 + engaged 标记）。
@@ -35,12 +38,43 @@ class NavState:
     仍走各面板原「无效/默认」语义，不误触二次切换（见设计 §3.6）。
     """
 
-    __slots__ = ("count", "cursor", "engaged")
+    __slots__ = ("count", "cursor", "engaged", "visible", "_keyword")
 
     def __init__(self, count: int = 0, cursor: int = 0, engaged: bool = False) -> None:
         self.count = count
         self.cursor = cursor
         self.engaged = engaged
+        #: 筛选态可见项下标（None = 全部可见，未筛选面板行为与不接筛选时逐字节一致）
+        self.visible: set[int] | None = None
+        self._keyword = ""
+
+    # ── 筛选态 ──
+
+    @property
+    def filtered(self) -> bool:
+        """当前是否处于筛选态。"""
+        return self.visible is not None
+
+    @property
+    def keyword(self) -> str:
+        """当前筛选关键词（未筛选时为空串）。"""
+        return self._keyword
+
+    def is_visible(self, index: int) -> bool:
+        """该项当前是否可见（面板渲染循环据此跳过隐藏行）。"""
+        return self.visible is None or index in self.visible
+
+    def apply_filter(self, indices: list[int], keyword: str = "") -> None:
+        """进入筛选态：把可见集合限定为命中项，并把游标夹到最近的命中项。"""
+        self.visible = set(indices)
+        self._keyword = keyword
+        if self.visible and self.cursor not in self.visible:
+            self.cursor = min(self.visible)
+
+    def clear_filter(self) -> None:
+        """退出筛选态（游标保留在当前位置）。"""
+        self.visible = None
+        self._keyword = ""
 
     def sync(self, index: int) -> None:
         """游标同步到指定项（不置 engaged；供直达键对齐视觉位置）。"""
@@ -68,6 +102,9 @@ class NavState:
             return False
         step = -1 if key == KEY_UP else 1
         if navigable is None:
+            # 无谓词时也要尊重筛选态：只在可见项之间回绕
+            if self.visible is not None:
+                return self.move(key, navigable=self.is_visible)
             self.engaged = True
             self.cursor = (self.cursor + step) % self.count
             return True
@@ -123,6 +160,8 @@ def panel_loop(
     direct: bool = True,
     pick: int = 1,
     on_picked: Callable[[tuple[str, ...]], None] | None = None,
+    nav_keys: bool = True,
+    filter_reader: Callable[..., str | None] | None = None,
 ) -> None:
     """统一列表面板交互循环：读键 → 导航态 → 派发 → 反馈/重绘，直到 Esc/返回项。
 
@@ -156,6 +195,10 @@ def panel_loop(
         pick: Enter 收集个数（M 面板交换优先级需 2 项）；>1 时逐次 Enter 收集，
             收满调 `on_picked`。
         on_picked: 收满 `pick` 项后的回调（如执行交换）。
+        nav_keys: 是否把 ``j``/``k`` 归一为 ↓/↑（默认开）。面板已占用这两个字母时置 False
+            （如 ``[S]`` 的 ``k`` 用于切键名列），否则它们原样交 `on_text`。
+        filter_reader: ``/`` 筛选的行输入源（缺省 ``tui_keys.input_choice``）。空回车清除
+            筛选、Esc 保持原筛选、无命中时不改动当前筛选。
 
     Raises:
         KeyboardInterrupt / EOFError: 原样上抛（不被吞）。
@@ -166,6 +209,8 @@ def panel_loop(
     picked: list[str] = []
 
     while True:
+        if nav.filtered:
+            print(f"  筛选「{nav.keyword}」：{len(nav.visible or ())}/{len(items)} 项（/ 改词 · 0 清除）")
         for row in render(nav):
             print(row if row is not None else "")
 
@@ -174,6 +219,18 @@ def panel_loop(
         if choice is None:  # Esc：误入面板即时返回
             return
 
+        if nav_keys:
+            choice = _NAV_ALIASES.get(choice, choice)
+
+        # ── / 筛选（当前屏通用：标签子串或单键精确命中）──
+        if choice == "/":
+            _apply_panel_filter(nav, items, filter_reader)
+            continue
+        # 筛选态下 0 先清筛选（与首页「0 先清筛选再退出」同一口径）
+        if choice == "0" and nav.filtered:
+            nav.clear_filter()
+            continue
+
         # ── ? 帮助（运行时单源：无参=可用键一览，?N=单项详情；全面板一致）──
         if choice[:1] in ("?", "？"):
             _emit_help(choice[1:].strip(), items, on_help)
@@ -181,7 +238,7 @@ def panel_loop(
 
         # ── 方向键导航：移动游标（跳过 return 项），回调面板置重绘，按 repaint 策略补位置反馈 ──
         if choice in (KEY_UP, KEY_DOWN):
-            if nav.move(choice, navigable=lambda i: items[i].kind != "return"):
+            if nav.move(choice, navigable=lambda i: items[i].kind != "return" and nav.is_visible(i)):
                 if on_nav_moved is not None:
                     on_nav_moved()  # 面板据以置重绘（窄档导航后强制重绘，行内 ▸ 移动）
                 if repaint == "feedback":
@@ -220,6 +277,9 @@ def panel_loop(
         # ── 单字符直达派发：键入即选中并派发（游标同步，视觉与派发一致）──
         idx = _index_by_key(choice, items) if (direct and len(choice) == 1) else None
         if idx is not None:
+            if not nav.is_visible(idx):
+                print(f"  「{choice}」不在当前筛选结果中（/ 改词 · 0 清除）")
+                continue
             nav.sync(idx)  # 只同步游标、不置 engaged（保「键入后裸回车不误触」）
             choice = items[idx].key
 
@@ -300,6 +360,35 @@ def _emit_help(
         return
     for line in item_detail_lines(item, hint=item.detail):
         print(line)
+
+
+def _apply_panel_filter(
+    nav: NavState,
+    items: list[PanelItem],
+    reader: Callable[..., str | None] | None = None,
+) -> None:
+    """读取关键词并进入/退出筛选态（标签子串或单键精确命中，与首页同口径）。"""
+    read_line = reader or input_choice
+    try:
+        keyword = read_line("  筛选关键词（回车确认 · 空=清除 · Esc 保持）: ")
+    except (EOFError, KeyboardInterrupt):
+        return
+    if keyword is None:  # Esc：保持原筛选
+        return
+    word = keyword.strip()
+    if not word:
+        nav.clear_filter()
+        return
+    lowered = word.lower()
+    hits = [
+        index
+        for index, item in enumerate(items)
+        if lowered in item.label.lower() or (len(item.key) == 1 and item.key.lower() == lowered)
+    ]
+    if not hits:
+        print(f"  [!] 无匹配项「{word}」，保持当前筛选")
+        return
+    nav.apply_filter(hits, word)
 
 
 def _emit_invalid() -> None:

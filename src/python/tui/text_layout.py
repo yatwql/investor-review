@@ -43,6 +43,8 @@ _WIDE = ("W", "F")
 
 # 内容行可用列数的下限——面板至少这么宽，窄面板不至于缩成一条
 MIN_TERMINAL_COLUMNS = 40
+#: 终端行数下限：低于此值分页无意义（分页器退化为整段直打）
+MIN_TERMINAL_ROWS = 8
 """终端列数下限（同时是全部上屏文案的窄屏设计基准与机检口径）。"""
 
 MIN_FIELD_WIDTH = 41
@@ -86,6 +88,30 @@ def terminal_columns(default: int = 100) -> int:
     if env and env.isdigit() and int(env) > 0:
         return max(MIN_TERMINAL_COLUMNS, int(env))
     return max(MIN_TERMINAL_COLUMNS, default)
+
+
+def terminal_rows(default: int = 24) -> int:
+    """当前终端行数（实时尺寸优先，其次 `LINES` 环境变量，最后兜底值）。
+
+    与 :func:`terminal_columns` 同优先级：实时 ioctl 反映 resize 后的真实高度，
+    `LINES` 是会话建立时的快照，故只在探测失败时作次选。下限 ``MIN_TERMINAL_ROWS``
+    ——低于该值分页器退化为整段直打。
+
+    Args:
+        default: 探测不到时的兜底行数。
+
+    Returns:
+        终端行数（≥ ``MIN_TERMINAL_ROWS``）。
+    """
+    for fd in (1, 2):
+        try:
+            return max(MIN_TERMINAL_ROWS, os.get_terminal_size(fd).lines)
+        except OSError:
+            continue
+    env = os.environ.get("LINES")
+    if env and env.isdigit() and int(env) > 0:
+        return max(MIN_TERMINAL_ROWS, int(env))
+    return max(MIN_TERMINAL_ROWS, default)
 
 
 def pad_right(text: str, columns: int) -> str:

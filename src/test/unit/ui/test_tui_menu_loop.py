@@ -214,7 +214,7 @@ class TestNarrowMainLoopDirectNav(unittest.TestCase):
         return fired, render_mock.call_count, executed, buf.getvalue(), clear_mock
 
     def test_narrow_nav_keys_move_selection_and_rerender(self):
-        """窄屏（40 列）方向键移动选中态并重绘（非 TTY 回退整屏追加）；未登记字母仍零重绘。"""
+        """窄屏（40 列）方向键移动选中态并重绘（非 TTY 回退整屏追加）；未登记字母零重绘。"""
         fired, renders, executed, _, _ = self._drive(["KEY_DOWN", "KEY_UP", "Z", "0"], columns=40)
         self.assertEqual(fired, ["exit"])
         self.assertEqual(executed, [])
@@ -319,18 +319,20 @@ class TestTierSemanticParity(unittest.TestCase):
         self.assertTrue(narrow[2])
 
     def test_unregistered_letter_feedback_both_tiers(self):
-        """未登记字母：两档都有可观察反馈（窄 = 单行提示文本，宽 = 重绘一屏）。"""
+        """未登记字母：两档都是一行反馈、帧保持不动（不靠重绘当反馈）。"""
         narrow = self._drive(["Z", "0"], columns=40)
         wide = self._drive(["Z", "0"], columns=100)
         self.assertIn("未登记", narrow[3], "窄屏未登记键须有单行反馈")
-        self.assertEqual(wide[1], 2, "宽档未登记键反馈 = 重绘一屏")
+        self.assertIn("未登记", wide[3], "宽档未登记键须有单行反馈")
+        self.assertEqual((narrow[1], wide[1]), (1, 1), "两档均只渲染初帧（按错键不重绘）")
 
     def test_unknown_key_feedback_both_tiers(self):
-        """未知键（KEY_RIGHT）：两档都有可观察反馈（窄 = 单行提示，宽 = 重绘）。"""
+        """未知键（KEY_RIGHT）：两档都是一行提示、帧保持不动。"""
         narrow = self._drive(["KEY_RIGHT", "0"], columns=40)
         wide = self._drive(["KEY_RIGHT", "0"], columns=100)
         self.assertIn("未识别按键", narrow[3], "窄屏未知键须有单行反馈")
-        self.assertEqual(wide[1], 2, "宽档未知键反馈 = 重绘一屏")
+        self.assertIn("未识别按键", wide[3], "宽档未知键须有单行反馈")
+        self.assertEqual((narrow[1], wide[1]), (1, 1), "两档均只渲染初帧（按错键不重绘）")
 
     def test_esc_exit_parity(self):
         """Esc 连按两次退出：两档一致。"""
@@ -338,3 +340,40 @@ class TestTierSemanticParity(unittest.TestCase):
         wide = self._drive(["KEY_ESC", "KEY_ESC"], columns=100)
         self.assertEqual(narrow[0], ["exit"])
         self.assertEqual(wide[0], ["exit"])
+
+
+class TestNavKeyAliases(unittest.TestCase):
+    """`j`/`k` 与 ↓/↑ 等价（主菜单同一套别名，不改击键数）。"""
+
+    _drive = staticmethod(TestNarrowMainLoopDirectNav._drive)
+
+    def test_j_equals_down_arrow(self):
+        """`j` + Enter 与 ↓ + Enter 派发同一项。"""
+        via_j = self._drive(["j", "KEY_ENTER", "0"], columns=100)
+        via_arrow = self._drive(["KEY_DOWN", "KEY_ENTER", "0"], columns=100)
+        self.assertEqual(via_j[2], via_arrow[2], "j 未等价于 ↓")
+        self.assertTrue(via_j[2], "确实派发了一项")
+
+    def test_k_equals_up_arrow(self):
+        """`k` + Enter 与 ↑ + Enter 派发同一项（含回绕到末项）。"""
+        via_k = self._drive(["k", "KEY_ENTER", "0"], columns=100)
+        via_arrow = self._drive(["KEY_UP", "KEY_ENTER", "0"], columns=100)
+        self.assertEqual(via_k[2], via_arrow[2], "k 未等价于 ↑")
+        self.assertTrue(via_k[2])
+
+
+class TestPlainMode(unittest.TestCase):
+    """`TUI_PLAIN=1`：关掉原地重绘，改走整屏追加（日志抓取/朗读场景）。"""
+
+    _drive = staticmethod(TestNarrowMainLoopDirectNav._drive)
+
+    def test_plain_mode_disables_inplace_repaint(self):
+        """即使 TTY 可用，纯追加模式下方向键也不触发清帧（改走整屏追加）。"""
+        import os
+        from unittest.mock import patch as _patch
+
+        with _patch.dict(os.environ, {"TUI_PLAIN": "1"}):
+            fired, renders, _executed, _out, cleared = self._drive(["KEY_DOWN", "0"], columns=100, tty=True)
+        self.assertEqual(fired, ["exit"])
+        cleared.assert_not_called()
+        self.assertEqual(renders, 2, "回退整屏追加：初帧 + 一次重绘")

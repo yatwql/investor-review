@@ -79,6 +79,13 @@ _ERROR_HINTS: dict[int, str] = {
     5003: "数据源不可用",
 }
 
+#: 业务错误码 → 「该源没有这个标的/这项能力」，属**预期缺失**：链路会继续递补下一源，
+#: 不是链路故障。这类错误只记 INFO（每轮按标的数出现，升 WARNING 会把日志刷满并让
+#: 「源不支持」看起来像故障）；其余错误码仍按 WARNING。
+#: ``1002``（参数格式错误）列入其中：实测中证 800 行业指数（000919/000925/000930）
+#: 的 thscode 不被该源识别，返回的正是 1002 而非 3001。
+_EXPECTED_ABSENCE_CODES: frozenset[int] = frozenset({1002, 3001, 3002, 3004})
+
 _register_credential_spec(
     CredentialSpec(
         source_id=SOURCE_ID,
@@ -192,7 +199,10 @@ def _request(path: str, params: dict[str, Any]) -> dict[str, Any] | None:
     code = body.get("code")
     if code != 0:
         hint = _ERROR_HINTS.get(code, "未知错误") if isinstance(code, int) else "未知错误"
-        logger.warning("[hithink] 业务错误 code=%s（%s）%s：%s", code, hint, path, body.get("message"))
+        if isinstance(code, int) and code in _EXPECTED_ABSENCE_CODES:
+            logger.info("[hithink] 该源无此标的/能力（code=%s %s）%s：%s", code, hint, path, body.get("message"))
+        else:
+            logger.warning("[hithink] 业务错误 code=%s（%s）%s：%s", code, hint, path, body.get("message"))
         return None
     data = body.get("data")
     return data if isinstance(data, dict) else None

@@ -246,7 +246,22 @@ def fetch_index_history(code: str, days: int = 365) -> list[dict] | None:
     cached = reg.session_cache_get("history_index", code)
     if cached is not NOT_FOUND:
         cached_days, cached_bars = cached if isinstance(cached, tuple) else (0, cached)
-        if cached_days == 0 or cached_days >= days:
+        # 复用判据（三者任一满足即视为已覆盖本次窗口）：
+        #   ① 记下的请求窗口 ≥ 本次需求；
+        #   ② 已存序列长度 ≥ 本次需求天数——日线是截至今日的连续序列，
+        #      根数 ≥ 天数即覆盖该日历窗口（短窗口请求常已拿到源上限长序列，
+        #      此时再按 ① 重取只会在同一次运行内重复请求同一指数）；
+        #   ③ 已存序列已达源单次上限——更长窗口也只会拿到同样长度。
+        # 否则短窗口先取过的调用者会把后续长窗口调用者钉在更短序列上（窗口缩水）。
+        if (
+            cached_days == 0
+            or cached_days >= days
+            or len(cached_bars) >= days
+            or len(cached_bars) >= _SOURCE_HISTORY_CAP
+        ):
+            # 显式标注复用：调用方（如基准归一化）无论是否真取数都会打「获取完成」，
+            # 不标这一行会让日志看起来像同一指数在一份报告里被取了多次
+            logger.info("[index] %s 会话缓存复用（已有 %d 根，请求 %d 天）", code, len(cached_bars), days)
             return cached_bars
 
     # 美股指数使用独立 chain（新浪优先，腾讯备用；腾讯 K-line 对 gb_* 支持有限）

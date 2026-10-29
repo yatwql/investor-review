@@ -122,6 +122,21 @@ class TestEnvelope:
         _prepare(monkeypatch, _FakeResp(payload=None, json_error=True))
         assert ht.fetch_trading_days() is None
 
+    @pytest.mark.parametrize("code", [1002, 3001, 3002, 3004])
+    def test_expected_absence_codes_logged_as_info(self, monkeypatch, caplog, code):
+        """「该源无此标的/能力」只记 INFO：链路按预期递补下一源，不算故障。
+
+        实测中证 800 行业指数（000919/000925/000930）的 thscode 不被该源识别，
+        返回 code=1002；若记 WARNING，每份报告会刷十几条并把「源不支持」看成故障。
+        """
+        import logging
+
+        _prepare(monkeypatch, _FakeResp(payload={"code": code, "message": "unknown thscode"}))
+        with caplog.at_level(logging.INFO, logger="invest"):
+            assert ht.fetch_trading_days() is None
+        assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
+        assert any("该源无此标的" in r.getMessage() for r in caplog.records)
+
     def test_business_error_logged_with_hint(self, monkeypatch, caplog):
         _prepare(monkeypatch, _FakeResp(payload={"code": 2001, "message": "unauthorized"}))
         with caplog.at_level("WARNING"):

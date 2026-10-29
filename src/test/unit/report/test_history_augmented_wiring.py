@@ -282,3 +282,33 @@ class TestSnapshotHelpers:
         with patch("src.python.report.benchmark.fetch_benchmarks", side_effect=RuntimeError("boom")):
             out = fetch_crisis_index_series({"history": {"benchmark_indices": {"sh000300": "沪深300"}}})
         assert out is None
+
+
+class TestLatestQuotesFromDetailRows:
+    """明细行 → 终点回填用的 {code: (价格, 估值日)}（无估值日不入表）。"""
+
+    def test_detail_row_objects(self):
+        from types import SimpleNamespace
+
+        from src.python.report._snapshot import latest_quotes_from_detail_rows
+
+        rows = [
+            SimpleNamespace(code="022365", price=3.9825, nav_date="2026-10-29"),
+            SimpleNamespace(code="017730", price=0.0, nav_date="2026-10-28"),  # 无有效价格
+            SimpleNamespace(code="600900", price=29.99, nav_date=""),  # 无估值日
+        ]
+        assert latest_quotes_from_detail_rows(rows) == {"022365": (3.9825, "2026-10-29")}
+
+    def test_detail_dict_rows(self):
+        from src.python.report._snapshot import latest_quotes_from_detail_rows
+
+        rows = [
+            {"code": "011506", "price": 1.336, "nav_date": "2026-10-29"},
+            {"code": "096001", "price": "2.8109", "nav_date": "2026-10-28"},  # 字符串价格不采信
+        ]
+        assert latest_quotes_from_detail_rows(rows) == {"011506": (1.336, "2026-10-29")}
+
+    def test_none_input(self):
+        from src.python.report._snapshot import latest_quotes_from_detail_rows
+
+        assert latest_quotes_from_detail_rows(None) == {}

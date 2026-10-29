@@ -425,6 +425,7 @@ class TestFetchHistoryData:
 
         mock_calc.get_combined_timeseries.assert_called_once_with(
             [("SH600001", "测试", 100)],
+            latest_quotes=None,
             days=120,
         )
 
@@ -450,5 +451,6 @@ class TestFetchHistoryData:
 
         mock_calc.get_combined_timeseries.assert_called_once_with(
             [("SH600001", "测试", 100)],
+            latest_quotes=None,
             days=90,
         )

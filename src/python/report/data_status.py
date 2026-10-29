@@ -99,6 +99,7 @@ STATUS_MESSAGES: dict[str, str] = {
     "history_degraded": "历史走势部分数据来自降级链路，精度可能降低",
     "history_correction": "检测到历史数据修正（重叠覆盖），走势可能已重新计算",
     "history_zero_value": "部分交易日存在零收盘价，可能涉及停牌或节假日数据",
+    "history_nav_stale": "部分持仓净值刷新滞后（落后组合终点≥2 个交易日），走势终值与最新市值口径不同",
 }
 
 # 按层级的前缀符号：T2 → ⚠（橙色警告），T3/T4 → ℹ（蓝色提示）

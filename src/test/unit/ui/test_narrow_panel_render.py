@@ -123,14 +123,12 @@ def test_cache_panel_fits_narrow_floor():
 def test_health_history_fits_narrow_floor():
     from src.python.tui.handlers_log import _cmd_view_health_history
 
-    with patch("src.python.tui.handlers_log.press_any_key"):
-        text = _render(_cmd_view_health_history, "src.python.tui.handlers_log")
+    text = _render(_cmd_view_health_history, "src.python.tui.handlers_log")
     _assert_fits("[H] 数据源健康历史", text)
 
 
 def test_run_logs_fit_narrow_floor():
     from src.python.tui.handlers_log import _cmd_view_logs
 
-    with patch("src.python.tui.handlers_log.press_any_key"):
-        text = _render(_cmd_view_logs, "src.python.tui.handlers_log")
+    text = _render(_cmd_view_logs, "src.python.tui.handlers_log")
     _assert_fits("[V] 运行日志", text)

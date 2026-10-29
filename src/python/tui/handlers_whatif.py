@@ -16,6 +16,7 @@ from src.python.core.num_utils import format_size
 from src.python.config import get_config, get_default, resolve_output_dir
 from src.python.core.logger import setup_logger
 from src.python.core.reader import get_xlsx_info, list_xlsx_files, read_holdings
+from src.python.tui.error_tail import emit_error
 from src.python.report.progress import TuiProgressReporter
 from src.python.tui.text_layout import wrap_prompt
 from src.python.tui.tui_keys import PromptCancelledError, input_choice
@@ -32,7 +33,7 @@ def _select_candidate_file(base_file: str) -> str | None:
     目录下无候选文件时引导选择目标（自动复制模板 / 手动输入完整路径）。
     """
     config = get_config_cache() or get_config()
-    dir_path = config.get("holdings_dir") or get_default("holdings_dir")
+    dir_path = str(config.get("holdings_dir") or get_default("holdings_dir") or "")
     base_abs = os.path.abspath(base_file)
     files = [f for f in list_xlsx_files(dir_path) if os.path.abspath(f) != base_abs]
     if not files:
@@ -75,7 +76,7 @@ def _input_candidate_path(base_file: str) -> str | None:
       2) 手动输入目标文件完整路径（可位于任意位置）
       3) 回车=取消（Esc 亦可）
     """
-    print("  [ERR] 持仓目录下未找到基准之外的 xlsx 文件")
+    emit_error("持仓目录下未找到基准之外的 xlsx 文件", "config")
     print("     可复制基准持仓文件并修改后作为目标（调仓后/假设）")
     while True:
         print("  [1] 自动复制基准文件为可编辑目标模板（调仓后）")
@@ -109,7 +110,7 @@ def _manual_input_path() -> str | None:
         return None
     path = os.path.abspath(path)
     if not os.path.isfile(path):
-        print("  [ERR] 文件不存在，请检查路径")
+        emit_error("文件不存在", "config", advice="请检查路径是否正确")
         return _manual_input_path()
     return path
 
@@ -121,9 +122,9 @@ def _copy_base_as_template(base_file: str) -> str | None:
     用户已编辑的模板）。复制后提示编辑份额；当前副本对比为「无变动」。
     """
     config = get_config_cache() or get_config()
-    holdings_dir = config.get("holdings_dir") or get_default("holdings_dir")
+    holdings_dir = str(config.get("holdings_dir") or get_default("holdings_dir") or "")
     if not holdings_dir or not os.path.isdir(holdings_dir):
-        print(f"  [ERR] 持仓目录不可用: {holdings_dir or '未配置'}")
+        emit_error(f"持仓目录不可用: {holdings_dir or '未配置'}", "config")
         return None
     stem, ext = os.path.splitext(os.path.basename(base_file))
     target = os.path.join(holdings_dir, f"{stem}-调仓后模板{ext}")
@@ -134,7 +135,7 @@ def _copy_base_as_template(base_file: str) -> str | None:
     try:
         shutil.copy2(base_file, target)
     except OSError as e:
-        print(f"  [ERR] 复制基准文件失败: {e}")
+        emit_error(f"复制基准文件失败: {e}", "config")
         return None
     print(f"  [OK] 已创建可编辑目标模板: {target}")
     print("      当前为基准文件副本（对比无变动）；请编辑份额后再运行 W 查看调仓效果")
@@ -193,10 +194,10 @@ def _cmd_whatif() -> None:
         base = read_holdings(base_file)
         cand = read_holdings(cand_file)
         if not base:
-            print(f"  [ERR] 基准持仓读取失败或为空: {base_file}")
+            emit_error(f"基准持仓读取失败或为空: {base_file}", "config")
             return
         if not cand:
-            print(f"  [ERR] 目标持仓读取失败或为空: {cand_file}")
+            emit_error(f"目标持仓读取失败或为空: {cand_file}", "config")
             return
         print(f"  [OK] 基准 {len(base)} 条 / 目标 {len(cand)} 条持仓")
         eff = _prompt_effective_date()
@@ -210,7 +211,7 @@ def _cmd_whatif() -> None:
             effective_date=eff or None,
         )
         if not result.ok:
-            print(f"  [ERR] 调仓对比数据不可用: {result.reason}")
+            emit_error(f"调仓对比数据不可用: {result.reason}", "report")
             return
         print("  [OK] 调仓模拟报告已生成（独立产物，不并入主报告）")
         print(f"       Excel: {result.excel}")

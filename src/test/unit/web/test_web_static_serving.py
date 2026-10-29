@@ -92,7 +92,7 @@ class TestTabWorkbenchStructure:
     """
 
     # 五区契约：生成 / 调仓 / 配置 / 状态 / 日志（集合相等，非写死条数）
-    _TABS = {"generate", "whatif", "config", "status", "logs"}
+    _TABS = {"generate", "whatif", "holdings", "config", "status", "logs"}
 
     @pytest.fixture
     def index_html(self, app_client):

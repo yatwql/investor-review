@@ -38,7 +38,11 @@ from src.python.analysis.drawdown_events import (
 from src.python.analysis.metrics import compute_daily_returns
 from src.python.analysis.monthly_returns import aggregate_monthly_returns
 from src.python.fetcher.chain import fetch_with_incremental_fallback
-from src.python.report._history_quality import _diagnose_return, _validate_bars
+from src.python.report._history_quality import (
+    _detect_terminal_staleness,
+    _diagnose_return,
+    _validate_bars,
+)
 from src.python.report.benchmark import fetch_benchmarks, normalize_benchmarks
 
 logger = logging.getLogger("invest")
@@ -159,6 +163,8 @@ class PortfolioHistoryCalculator:
         self,
         holdings: list[tuple[str, str, float]],
         days: int = 30,
+        latest_quotes: dict[str, tuple[float, str]] | None = None,
+        warn_on_terminal_staleness: bool = True,
     ) -> dict[str, Any]:
         """计算组合全部持仓的综合走势。
 
@@ -166,6 +172,12 @@ class PortfolioHistoryCalculator:
             holdings: [(code, name, shares), ...] 持仓列表
             days: 历史天数，同时决定持仓历史长度（_fetch_all_histories 透传）
                   与基准指数历史长度（_fetch_benchmarks）。
+            latest_quotes: {code: (最新价/净值, 估值日)}，用更新鲜的实时行情补齐
+                各标的历史末端（as-if 口径不变：份额恒定）。历史净值链路带 T+1~T+2
+                滞后时，不回填会让走势终值与报告头「最新市值」口径不同；None 时不回填。
+            warn_on_terminal_staleness: 终点滞后是否打 WARNING。同一次运行会算两遍
+                全量走势（主窗口 + 子块长窗），长窗应传 False 只保留契约字段，
+                避免同一事实在日志里报两遍。
 
         Returns:
             {
@@ -184,12 +196,15 @@ class PortfolioHistoryCalculator:
                 "monthly_returns": {...},  # 月度收益日历（analysis/monthly_returns 数据契约）
                 "status": "ok" | "degraded" | "unavailable",
                 "warnings": [str, ...],
+                "terminal_staleness": dict | None,  # 终点由滞后净值构成的标的明细
                 "benchmarks": [{code, name, bars, total_return_pct,
                                 max_drawdown_pct, data_start, data_end, status}, ...],
             }
         """
         # 1) 收集每只持仓的走势（并行获取，显著提速）
-        all_series, success_count, failed_holdings, successful_holdings = self._fetch_all_histories(holdings, days)
+        all_series, success_count, failed_holdings, successful_holdings = self._fetch_all_histories(
+            holdings, days, latest_quotes
+        )
         warnings: list[str] = []
 
         if not all_series:
@@ -251,6 +266,23 @@ class PortfolioHistoryCalculator:
         # 7) 诊断 + 质量校验
         _diagnose_return(bars, 0, fund_count_on_date, total_return_pct, len(all_series))
         warnings.extend(_validate_bars(bars))
+        # 终点口径校验：LOCF 会把未刷新的标的沿用上次净值，滞后 ≥2 个交易日即说明
+        # 走势终值混用了不同日期的估值（与报告头「最新市值」对不上），须显式提示
+        _label_to_code = {f"{name}({code})": code for code, name, _shares in holdings}
+        staleness = _detect_terminal_staleness(
+            [
+                (label, _label_to_code.get(label, ""), series)
+                for label, series in zip(successful_holdings, all_series, strict=False)
+            ],
+            [b["date"] for b in bars],
+            bars[-1]["total_value"],
+        )
+        terminal_staleness: dict | None = None
+        if staleness:
+            warnings.append(staleness["warning"])
+            terminal_staleness = {k: v for k, v in staleness.items() if k != "warning"}
+            if warn_on_terminal_staleness:
+                logger.warning("[history] %s", staleness["warning"])
 
         # 8) 基准指数历史走势
         benchmarks = self._fetch_benchmarks(bars, days)
@@ -279,6 +311,7 @@ class PortfolioHistoryCalculator:
             "data_end": sorted_dates[-1],
             "status": status,
             "warnings": warnings,
+            "terminal_staleness": terminal_staleness,
             "failed_holdings": failed_holdings,
             "successful_holdings": successful_holdings,
             "benchmarks": benchmarks,
@@ -290,12 +323,14 @@ class PortfolioHistoryCalculator:
         self,
         holdings: list[tuple[str, str, float]],
         days: int = 30,
+        latest_quotes: dict[str, tuple[float, str]] | None = None,
     ) -> tuple[list[list[dict]], int, list[str], list[str]]:
         """并行收集每只持仓的历史走势。
 
         Args:
             holdings: [(code, name, shares), ...] 持仓列表
             days: 历史天数（透传给 calculate_for_holding）
+            latest_quotes: {code: (价格, 估值日)}，比历史末条更新时回填一条终点 bar
 
         Returns:
             (all_series, success_count, failed_holdings, successful_holdings)
@@ -325,8 +360,11 @@ class PortfolioHistoryCalculator:
         success_count = 0
         failed_holdings: list[str] = []
         successful_holdings: list[str] = []
+        _shares_by_code = {code: shares for code, _name, shares in holdings}
         for code, name, _shares in holdings:
-            series = series_by_code.get(code)
+            series = self._apply_latest_quote(
+                series_by_code.get(code), latest_quotes, code, _shares_by_code.get(code, 0.0)
+            )
             if series:
                 all_series.append(series)
                 success_count += 1
@@ -335,6 +373,53 @@ class PortfolioHistoryCalculator:
                 failed_holdings.append(f"{name}({code})")
 
         return all_series, success_count, failed_holdings, successful_holdings
+
+    @staticmethod
+    def _apply_latest_quote(
+        series: list[dict] | None,
+        latest_quotes: dict[str, tuple[float, str]] | None,
+        code: str,
+        shares: float,
+    ) -> list[dict] | None:
+        """用比历史末条更新的实时行情/净值补齐终点 bar（as-if 口径不变：份额恒定）。
+
+        历史净值链路（天天基金/腾讯）比实时行情源晚 T+1~T+2 时，LOCF 会把终点钉在
+        旧净值上——走势终值与报告头「最新市值」口径不同（实测差 1,608 元 / 0.6%），
+        末端日收益与回撤偏低。回填只追加一条“估值日 = 行情日”的真实估值 bar，
+        不改历史序列；份额恒定的 as-if 语义不变。
+
+        Args:
+            series: 单只持仓的 as-if 市值序列（可为 None）
+            latest_quotes: {code: (价格, 估值日)}；None / 缺该 code 时不回填
+            code: 持仓代码
+            shares: 当前持有份额
+
+        Returns:
+            回填后的新列表（不修改 session 缓存里的原序列）
+        """
+        if not series or not latest_quotes or shares <= 0:
+            return series
+        quote = latest_quotes.get(code)
+        if not quote:
+            return series
+        try:
+            price, quote_date = quote
+        except (TypeError, ValueError):
+            logger.debug("[history] %s 最新行情格式异常，跳过回填: %r", code, quote)
+            return series
+        if not price or price <= 0 or not quote_date or quote_date <= series[-1]["date"]:
+            return series
+        patched = [dict(bar) for bar in series]
+        patched.append({"date": quote_date, "close": float(price), "value": round(float(price) * shares, 2)})
+        logger.info(
+            "[history] %s 历史末条 %s 落后最新行情 %s，按最新价回填终点（%d→%d 条）",
+            code,
+            series[-1]["date"],
+            quote_date,
+            len(series),
+            len(patched),
+        )
+        return patched
 
     @staticmethod
     def _merge_locf(

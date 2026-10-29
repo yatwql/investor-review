@@ -34,6 +34,7 @@ from datetime import datetime
 from typing import Any
 
 from src.python.core.ansi_colors import DIM, GREEN, RESET, YELLOW
+from src.python.tui.action_hints import ACTION_TEMPLATES as _ALL_ACTION_TEMPLATES
 from src.python.tui.text_layout import terminal_columns, wrap_with_prefix
 
 logger = logging.getLogger("invest")
@@ -43,16 +44,18 @@ _STATUS_TTL = 45.0  # 页头重绘频繁，缓存/健康历史等重取限频（
 
 _memo: dict[str, Any] = {}
 
-#: 异常态动作提示（含菜单键）：键 = 语义名，值 = 上屏短语。
-#: 短语的首个括号键必须是主菜单顶层键（``[G]→L`` 这类二级入口只校验首键），
-#: 由 ``test_tui_menu_status`` 对主菜单键做子集校验——菜单改键即红。
+#: 页头状态行实际引用的动作短语（短语单源在 ``action_hints``；本表只收状态行用到的
+#: 那几个键——「死条目」用例按本表逐项校验引用，收全量会把错误行专用短语误判为死条目）。
 ACTION_TEMPLATES: dict[str, str] = {
-    "report_missing": "[B] 生成标准报告",
-    "report_interrupted": "[B] 重新生成",
-    "cache_expired": "[3] 清理过期缓存",
-    "freshness": "[2] 更新行情缓存",
-    "degraded_sources": "[D]→V 看数据源记录",
-    "llm_unconfigured": "[G]→L 配置 LLM",
+    key: _ALL_ACTION_TEMPLATES[key]
+    for key in (
+        "report_missing",
+        "report_interrupted",
+        "cache_expired",
+        "freshness",
+        "degraded_sources",
+        "llm_unconfigured",
+    )
 }
 
 #: 动作提示行的缩进与续行对齐（首行带 ``└`` 标记，续行对齐到正文起始列）

@@ -51,6 +51,11 @@ def run_llm_providers_panel() -> None:
             print(line)
         return
 
+    # 会话快照：线路重排是动作型写盘，逆操作 = 重放交换前的顺序
+    from src.python.tui import handlers_config as _hc
+
+    session = _hc.reset_config_session()
+
     def _render(nav: NavState) -> list[str]:
         strategy, ordered = _load()
         columns = terminal_columns()
@@ -60,6 +65,8 @@ def run_llm_providers_panel() -> None:
         print()
         print(style_heading(truncate_display(f"  ── LLM 多链线路优先级（strategy: {strategy}） ──", width)))
         for num, (_i, provider) in enumerate(ordered, 1):
+            if not nav.is_visible(num - 1):
+                continue  # 筛选态：命中项之外的线路不渲染（编号仍占位）
             row = (
                 f"  {nav.marker(num - 1)}{num}. {provider.get('name')}（{provider.get('provider')}）priority "
                 f"{provider.get('priority', DEFAULT_PROVIDER_PRIORITY)}"
@@ -67,6 +74,9 @@ def run_llm_providers_panel() -> None:
             for line in wrap_hanging(row, width):
                 print(line)
         print(f"  {nav.marker(len(ordered))}0. 返回主菜单")
+        footer = _hc.config_undo_footer(session)
+        if footer:
+            print(footer)
         if strategy not in ("priority", "fallback_only"):
             for line in wrap_hanging(
                 f"  提示：当前策略 {strategy} 下实际链序由权重/成本决定，此处顺序仅在 priority / fallback_only 策略下生效",
@@ -85,8 +95,10 @@ def run_llm_providers_panel() -> None:
         if not (1 <= a <= len(ordered) and 1 <= b <= len(ordered) and a != b):
             return False
         names = [str(p.get("name")) for _i, p in ordered]
+        previous = list(names)
         names[a - 1], names[b - 1] = names[b - 1], names[a - 1]
         if _apply_edit({"key": "llm_providers.priority", "action": "reorder", "order": names}):
+            session.record_payload({"key": "llm_providers.priority", "action": "reorder", "order": previous})
             for line in wrap_hanging(
                 f"  {GREEN}[OK]{RESET} 已交换 {ordered[a - 1][1].get('name')} 与 {ordered[b - 1][1].get('name')} 的优先级",
                 width,
@@ -104,6 +116,8 @@ def run_llm_providers_panel() -> None:
             print(line)
 
     def _on_text(choice: str) -> None:
+        if _hc.handle_config_undo(choice, session, print):
+            return
         parts = choice.split()
         if len(parts) == 2:
             try:
@@ -148,3 +162,5 @@ def run_llm_providers_panel() -> None:
         )
     except (EOFError, KeyboardInterrupt):
         print()
+    finally:
+        _hc.close_config_session()

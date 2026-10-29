@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.16.10
+> 文档版本：0.16.11
 
 ## 目录
 
@@ -574,10 +574,11 @@ Web 渠道是第三种交互入口：**浏览器内完成「上传持仓 Excel �
 | `web/handlers.py` | API 路由 | 页面/上传/生成/轮询/预览/下载/历史/健康/日志/缓存统计与清理/What-if/报告追问/配置编辑；`_run_generation` 薄包装器（委托 `_run_generation_impl` + `result_box` 回传产物标志，收尾经 `_notify_web_completion` 按 `notify` 配置门控派发完成通知——Web 手动 + 内置定时调度共用，与 CLI 同构尽力而为不改退出码）；`_build_system_info` 委托 `core/system_info.build_system_info` 单源组装状态区系统信息（版本/本机 IP/持仓输出摘要/LLM 含多链/自检卡片可见性，与 TUI 同组展示原语）；`_handle_logs`/`_handle_health_history` 薄展示（委托 `core/log_reader.py` + `core/perf.py`，无解析逻辑）；`_handle_doctor` 薄展示（委托 `core/doctor.py`）；`_handle_config_edit` 同源守卫（`_is_same_origin`）；`_build_artifacts` 委托 `orchestrator.artifacts_for_report_type` 类型语义与 `core/constants` 最新产物名（不镜像 CLI --type 规则与文件名字面量）；空持仓门经 `core/reader.require_holdings` 单源（HTTP 端不带服务端路径） |
 | `web/run_generation.py` | Web 生成执行体 | `_run_generation` 薄入口（委托 `_run_generation_impl` + `result_box` 回传产物标志，收尾经 `_notify_web_completion` 按 `notify` 配置门控派发完成通知——Web 手动 + 内置定时调度共用，与 CLI 同构尽力而为不改退出码）；`_run_generation_impl` 读持仓/输入模式分派（试算→`web/` 隔离域、正式→共享主目录）/LLM 日预算硬闸/`generate_report` 调用/退出码映射/上传临时文件清理；`_build_artifacts` 委托 `orchestrator.artifacts_for_report_type` 类型语义与 `core/constants` 最新产物名；`_web_input_mode_snapshot_domain` 模式↔隔离域唯一事实来源 |
 | `web/upload.py` | 上传安全 | 服务端 uuid 重命名、扩展名白名单、大小上限、PK 魔数、原子落盘、TTL 清理 |
+| `web/holdings_edit.py` | 持仓录入编排 | 变更清单重放 → 预览（不落盘）/ 写回（mtime 闸门 409 + `.bak` + 原子写 + 回读校验）；与 TUI 同源 `core/holdings_editor` + `fetcher/nav_lookup` |
 | `web/config_edit.py` | 配置编辑 | 薄外观：再导出共享层 `config/edit_ops.py` 符号（`apply_config_edit`/`config_edit_whitelist`/`config_backup_file`）+ `get_config_edit_surface` 组装呈现面：`domains`（五域 → 块清单，块 id 含 `features.<组键>`）、`labels`/`descriptions`/`defaults`/`needs_hint` 元数据（全部由注册表与共享白名单派生，前端零中文表）、`logging`（六项含枚举/范围）、`reference`（只读计价参考）；规则与写入单源在共享层，与 TUI/CLI 同一函数 |
 | `web/runs.py` | 运行管理 | RunManager 单 worker 串行队列 + run 状态/事件注册表（Lock 保护） |
 | `web/progress.py` | 进度报告 | WebProgressReporter（ProgressReporter 子类 → RunState 事件缓冲） |
-| `src/static/web/` | 前端单页 | 原生 ES6 无框架、上传表单/进度事件/状态区/历史记录/配置编辑面板 |
+| `src/static/web/` | 前端单页 | 原生 ES6 无框架、上传表单/进度事件/状态区/历史记录/配置编辑面板/持仓录入页签（变更清单在浏览器侧） |
 
 #### 1.8.2 启动流程与启动防护
 
@@ -3515,6 +3516,16 @@ make_http_client(timeout=10.0) → httpx.Client
 | `config_edit_whitelist` | 可编辑配置项白名单（键→类型/枚举→目标文件→写入原语；定义于共享编辑层，TUI/Web/CLI 同源） | 配置管理 | 配置编辑 | 无（校验面） |
 | `edit_ops` | 配置编辑共享层（白名单 + 值规则 + 写入分派 + 写前备份，TUI/Web/CLI 唯一编辑通道） | 配置管理 | 配置编辑 | 无（校验面） |
 | `system_info` | 系统状态组装与展示原语（Web 状态卡 / TUI 首页共用数据源：熔断/路由/凭据回填/匿名化标签） | 核心基础设施 | 状态展示 | 无（展示面） |
+| `action_hints` | 动作短语单源（语义名 → 带菜单键的下一步短语；页头状态行与 `[ERR]` 错误行共用，首键须为主菜单顶层键） | 核心基础设施 | 交互反馈 | 无（展示面） |
+| `error_tail` | 错误尾巴拼装（`[ERR] 原因 → 下一步动作` + 可选建议行，按终端宽度折行；与页头同一短语源） | 核心基础设施 | 交互反馈 | 无（展示面） |
+| `live_status` | 长任务状态条（单行原地刷新的阶段/已耗时/ETA/中止键；落地行前后挂起恢复，非 TTY 退回逐行输出） | 核心基础设施 | 交互反馈 | 无（展示面） |
+| `pager` | 行分页查看器（一屏 + 页脚键位行，翻页/首末/搜索；不足一屏或非 TTY 整段直打，不读键） | 核心基础设施 | 交互反馈 | 无（展示面） |
+| `menu_help` | 首页键位速查（主菜单投影成 `PanelItem` 后复用面板帮助渲染 + 分组索引行） | 核心基础设施 | 交互反馈 | 无（展示面） |
+| `first_run_notices` | 首用未就绪摘要（页头一行短标签 + 首页 `?` 富详情，同源派生并 TTL 记忆化） | 核心基础设施 | 交互反馈 | 无（展示面） |
+| `symbols` | 符号表与 ASCII 降级（`TUI_ASCII` 时在写出层按一字符换一字符替换装饰符，宽度不变） | 核心基础设施 | 交互反馈 | 环境变量 `TUI_ASCII` |
+| `apply_filter` | 面板筛选态（`NavState.visible` 可见集合 + `clear_filter`/`is_visible`；渲染跳过隐藏项、移动与直达只在命中项内） | 核心基础设施 | 交互反馈 | 无 |
+| `ConfigSession` | 配置面板会话快照（记录每个键的变更前值：记录每个键的变更前值，`u` 退回上次、`U` 还原进入时；改动仍即时写盘） | 配置管理 | 配置编辑 | 无 |
+| `cancel_token` | 阶段边界协作式取消（令牌 + `StageCancelled`，`PerfCollector.start` 为唯一生效点；编排层收口复用中断收尾，已完成产物与缓存保留） | 核心基础设施 | 交互反馈 | 无（运行期对象，随渠道创建） |
 | `history_policy` | 历史走势获取策略解析（off/auto/prompt 单源，三渠道共用，TUI 注入询问回调） | 报告生成 | 组合历史走势 | `history.fetch_mode` |
 | `run_integrity` | 生成运行一致性守卫（`guard_run` 装饰 `generate_report` 中断收口：临时产物清扫/已写盘登记/`status=interrupted` 运行记录/健康检查收敛；ContextVar 按线程隔离，写盘方 `note_temp`·`note_artifact` 登记） | 报告生成 | 报告输出 | 无（设施模块，中断时经 reporter 输出明细） |
 | `config_backup` | 配置写前备份（`.bak` 单槽轮转） | Web 配置 | 配置编辑 | 无（安全面） |
@@ -3622,6 +3633,16 @@ make_http_client(timeout=10.0) → httpx.Client
 | `purchase_constraint_block` | 约束块透传形参（提取同一实例交统一附录 / 指纹 / 新闻批量 hooks，全程不重拼） | 申购限购 | LLM 生成 | 无 |
 | `purchase_block` | 指纹输入字段（条件并入：进提示词必进指纹，块空不追加 part 逐字节回退，接线前基线锁定） | 申购限购 | LLM 生成 | 无 |
 | `extract_purchase_constraint_block` | 约束块提取唯一单源（编排层与新闻链两侧共用，契约键/嵌套调整只改此处） | 申购限购 | LLM 生成 | 无 |
+| `holdings_editor` | 持仓录入编辑层（读→内存草稿→原子写回单源；账户=工作表名、保留非持仓页签、买入加权平均成本/卖出保留原成本） | 持仓录入 | 数据获取 | 无 |
+| `price_kind` | 品种价格形态判定（场内需录成交价 / 场外按交易日取官方净值；复用 `code_utils` 资产类型判定，不重写前缀知识） | 持仓录入 | 数据获取 | 无 |
+| `nav_lookup` | 按交易日取场外官方净值（复用既有历史净值链，不新增网络源；当日无净值取之前最近净值日并标明实际日期，取不到返回空） | 持仓录入 | 数据获取 | 无 |
+| `resolve_nav_on_trade_date` | 交易日→官方净值解析（交易日归一 + 当日前最近净值回溯 + 取不到即空，不猜价） | 持仓录入 | 数据获取 | 无 |
+| `resolve_purchase_shares` | 场外申购金额→份额换算（份额只在当日净值公布后成立；净值未公布返回空，交互层据此拒绝写入估算净值） | 持仓录入 | 数据获取 | 无 |
+| `ambiguous_price_kind` | 品种形态歧义判定（`00` 代码重叠区且名称无基金特征词 → 场内/场外无法只凭代码判定，交交互层反推或确认） | 持仓录入 | 数据获取 | 无 |
+| `price_kind_from_quote` | 按行情取数结果反推品种形态（命中场外净值源即场外，命中原生行情源即场内，无数据返回空） | 持仓录入 | 数据获取 | 无 |
+| `resolve_entry_kind` | 录入期品种形态判定单源（显式声明优先 → 代码/名称判定 → 00 重叠区抛错交调用方确认；TUI 提问、Web 报 400） | 持仓录入 | 数据获取 | 无 |
+| `holdings_edit` | Web 持仓录入编排（变更清单重放 → 预览 / 写回；无服务端会话态，mtime 闸门与 .bak 与 TUI 同口径） | 持仓录入 | 报告输出 | 无 |
+| `revert_last` | 撤销最后一笔录入（弹出变更后以文件为基线重放剩余变更，保证内存状态与文件一致） | 持仓录入 | 数据获取 | 无 |
 <!-- semantic-index:end -->
 
 > **registry.number 重排**：`registry._REPORT_SECTION_DEFAULT` 的 `number` 连续编号 1~19（历次章节合并与新增后整体重排；`llm_usage` 强制末位）。
@@ -4159,7 +4180,7 @@ investor-review/
 
 > `evolution_data`（组合演进，C19 契约，多快照趋势聚合）：`{"available": bool, "snapshot_count": int, "min_snapshots": int, "periods": list[str], "total_value": list[float], "total_cost": list[float], "total_pnl": list[float], "holding_counts": list[int], "account_flows": {account: list[float]}, "hhi": list[float\|None], "top_holdings": list[dict], "reason": str}`。`top_holdings` 每项含 code/name/weights（各期占比 %）/present_count（出现期数）；历史快照 `market_value=0.0` 时权重回退成本口径。由 `analysis/portfolio_evolution.py` 计算、`report/orchestrator.py` 注入（C7 注册 type=`evolution`、data_flag=`evolution_data`，见 §4.12），有效快照 < MIN_SNAPSHOTS=3 时 `available=false` 落 §1.4.5 降级。
 
-> `history_data`（组合历史走势 + 回撤，C19 契约，供组合历史走势与回撤章复用）：`{"bars": list[dict], "max_drawdown": float, "max_drawdown_pct": float, "drawdown_events": list[dict], "recovery_times": list[dict], "drawdown_available": bool, "annualized_volatility": float, "total_return": float, "daily_returns": list[float], "monthly_returns": dict, "warnings": list[str], "benchmarks": list[dict], "successful_holdings": list}`。`drawdown_events`（独立回撤事件）含 peak_date/trough_date/recovery_date/drawdown_pct/duration_days/recovery_days/recovered；`recovery_times`（恢复耗时明细）含 start_date/end_date/days。由 `report/portfolio_history.py` 组装（C7 注册 type=`history`），`drawdown_available` 表示有效交易日 ≥ MIN_SPAN 才渲染回撤明细，否则落 §1.4.5 降级。消费方为「组合历史走势与回撤」（`portfolio_history_drawdown`，一章多区块，Excel 见 `report/portfolio_history_drawdown_sheet.py`、HTML 见模板 `report_template.html`），区块数据由本契约 + 下方 `crisis_annotation_data`/`tail_risk_data` 提供。
+> `history_data`（组合历史走势 + 回撤，C19 契约，供组合历史走势与回撤章复用）：`{"bars": list[dict], "max_drawdown": float, "max_drawdown_pct": float, "drawdown_events": list[dict], "recovery_times": list[dict], "drawdown_available": bool, "annualized_volatility": float, "total_return": float, "daily_returns": list[float], "monthly_returns": dict, "warnings": list[str], "terminal_staleness": dict|None, "benchmarks": list[dict], "successful_holdings": list}`。`drawdown_events`（独立回撤事件）含 peak_date/trough_date/recovery_date/drawdown_pct/duration_days/recovery_days/recovered；`recovery_times`（恢复耗时明细）含 start_date/end_date/days。`terminal_staleness` 为走势终点口径校验结果（`latest_date`/`max_lag_trading_days`/`assets`），只有存在标的净值落后组合终点 ≥2 个交易日时才有值：LOCF 合并会把未刷新的标的沿用上次净值，落在「QDII/场外基金 T-1」属常态不提示，落后 2 个交易日以上则走势终值与最新市值口径不同（末端日收益/回撤偏低），此时同步追加一条 `warnings` 并在数据状态区显示 `history_nav_stale`。**终点回填（消除口径差）**：`get_combined_timeseries(latest_quotes=...)` 接收`{code: (最新价/净值, 估值日)}`（由 `_snapshot.latest_quotes_from_detail_rows` 从持仓明细行派生，估值日缺失不入表），某标的历史末条早于其估值日时按最新价追加一条「估值日 = 行情日」的 bar（份额恒定的 as-if 语义不变、走副本不改会话缓存序列），使走势终值与报告头总市值同口径；回填后仍滞后的标的才进 `terminal_staleness`。同一次运行的两遍全量计算（主窗口 + 子块长窗）里长窗传`warn_on_terminal_staleness=False`，只保留契约字段不重复打 WARNING。由 `report/portfolio_history.py` 组装（C7 注册 type=`history`），`drawdown_available` 表示有效交易日 ≥ MIN_SPAN 才渲染回撤明细，否则落 §1.4.5 降级。消费方为「组合历史走势与回撤」（`portfolio_history_drawdown`，一章多区块，Excel 见 `report/portfolio_history_drawdown_sheet.py`、HTML 见模板 `report_template.html`），区块数据由本契约 + 下方 `crisis_annotation_data`/`tail_risk_data` 提供。
 
 > `crisis_annotation_data`（危机区间标注，C19 契约，关态 2 键 + 回放态 4 键）：`{"available": bool, "intervals": list[dict]}`，回放态（开关 `crisis_replay`）顶层追加 `"replay": true` 与可选 `"index_reason"`（指数层不可用原因）。`intervals` 每项含 name/start/end/desc/in_range/interval_drawdown_pct/trough_date/recovery_days/recovered——基于 `history_data.bars` 对预设历史危机区间（2015 股灾 / 2018 贸易摩擦 / 2020 疫情 / 2022 调整 / 2025 关税冲击，`analysis/crisis_annotation.py::CRISIS_INTERVALS` 静态历史事实表，新增区间只改该表、全端清单动态跟随）做窗口重叠裁剪与区间统计：`in_range` 表示与报告数据窗口重叠；`interval_drawdown_pct` 为区间内 running-peak 最大回撤（正数 %，窗口内无 bar 时为 None）；`trough_date` 为区间最深日；`recovery_days` 为最深日→首个回到峰值的恢复耗时（数据窗口内未恢复为 None）；`recovered` 为是否已恢复。回放态每区间另含 `portfolio_return_pct`（组合窗内区间首尾净值收益，窗外 None）、`index_return_pct`/`index_drawdown_pct`（指数层区间收益与区间最大回撤，来自基准长窗日线 LOCF 序列，不可用 None）与 `index_available`——**双层回放**：指数层覆盖全部静态区间（指数源可回溯 3650 交易日），组合层仅覆盖子块扩展窗（`max(lookback_days, 365)`）内区间，窗外行状态标「组合窗口外」。由 `analysis/crisis_annotation.py::build_crisis_annotation(history_data, replay, index_series)` 计算（纯标准库、analysis 层隔离，无 report/llm 依赖），full/both 两路径统一由 `report/_snapshot.py::assemble_history_augmented_data` 注入 pipeline_data（回放开关开时指数层随 `_crisis_index_days()`（按静态表最早起点动态推算、封顶 3650）经 `fetch_benchmarks` 取数），Chart.js 净值图阴影带（`chart_data_builder.py` 计算起止索引 → `chart-init.js::buildCrisisBandPlugin`）与 HTML 危机表/Excel 危机区块消费。危机标注净值图必须 C20 图下说明（`.chart-caption` 跟随是否有 in_range 区间数据）。
 

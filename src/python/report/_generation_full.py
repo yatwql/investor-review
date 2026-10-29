@@ -77,6 +77,7 @@ def _generate_report_full(
         is_enable_stock_fundamentals,
     )
     from src.python.fetcher.akshare import get_sector_fund_flow
+    from src.python.core.cancel import token_of
     from src.python.core.perf import PerfCollector
     from src.python.core.registry import get_report_section_order
     from src.python.report._llm_news import _fetch_llm_and_news
@@ -85,7 +86,12 @@ def _generate_report_full(
 
     from src.python.report._run_scope import finish_report_run, start_report_run
 
-    perf = PerfCollector(report_type="full", holdings=holdings, stage_announcer=reporter.stage_progress)
+    perf = PerfCollector(
+        report_type="full",
+        holdings=holdings,
+        stage_announcer=reporter.stage_progress,
+        cancel_token=token_of(reporter),
+    )
     bind_perf(perf)
     # 报告运行边界：清本轮降级事件与自检载体，取 LLM 用量基线（缓存状态按报告隔离）
     _usage_baseline = start_report_run()

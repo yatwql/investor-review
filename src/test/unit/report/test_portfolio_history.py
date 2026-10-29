@@ -12,16 +12,17 @@
 from __future__ import annotations
 
 import unittest
+from typing import Any
 from unittest.mock import patch
 import pytest
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_report, pytest.mark.usefixtures("offline_external_sources")]
 
 
 class TestCalculateForHolding(unittest.TestCase):
     """calculate_for_holding 路由与降级逻辑测试。"""
 
-    def _make_calculator(self, session_cache: dict | None = None) -> object:
+    def _make_calculator(self, session_cache: dict | None = None) -> Any:
         from src.python.report.portfolio_history import PortfolioHistoryCalculator
 
         return PortfolioHistoryCalculator(session_cache or {})
@@ -373,6 +374,146 @@ class TestGetCombinedTimeseries(unittest.TestCase):
         mock_norm.assert_not_called()
         self.assertEqual(result["benchmarks"], [])
         self.assertEqual(result["status"], "ok")  # 基准异常不影响组合走势
+
+
+class TestTerminalStaleness(unittest.TestCase):
+    """走势终点口径校验：LOCF 造成的滞后终值必须显式提示。"""
+
+    _DATES = ["2026-07-01", "2026-07-02", "2026-07-03", "2026-07-06"]
+
+    def _make_calculator(self):
+        from src.python.report.portfolio_history import PortfolioHistoryCalculator
+
+        return PortfolioHistoryCalculator({})
+
+    @staticmethod
+    def _series(values: list[float], dates: list[str]) -> list[dict]:
+        return [{"date": d, "close": 1.0, "value": v} for d, v in zip(dates, values, strict=True)]
+
+    def _run(self, series_by_code: dict[str, list[dict]]) -> dict:
+        holdings = [
+            ("600900", "长江电力", 100.0),
+            ("601398", "工商银行", 100.0),
+            ("022365", "永赢科技智选混合C", 100.0),
+        ]
+        # 按 code 分发而非按列表顺序：并行取数下 side_effect 的消耗顺序不确定
+        with patch(
+            "src.python.report.portfolio_history.PortfolioHistoryCalculator.calculate_for_holding",
+            side_effect=lambda code, *_args, **_kwargs: series_by_code[code],
+        ):
+            return self._make_calculator().get_combined_timeseries(holdings, days=4)
+
+    def test_lag_two_trading_days_warns(self):
+        """某标的净值停在 2 个交易日前 → 告警 + 契约字段带上滞后明细。"""
+        result = self._run(
+            {
+                "600900": self._series([100.0] * 4, self._DATES),
+                "601398": self._series([200.0] * 3, self._DATES[:3]),  # 落后 1 个交易日（T-1 常态）
+                "022365": self._series([300.0] * 2, self._DATES[:2]),  # 落后 2 个交易日 → 告警
+            }
+        )
+
+        self.assertTrue(any("净值滞后" in w for w in result["warnings"]))
+        staleness = result["terminal_staleness"]
+        self.assertIsNotNone(staleness)
+        self.assertEqual(staleness["max_lag_trading_days"], 2)
+        self.assertEqual([a["label"] for a in staleness["assets"]], ["永赢科技智选混合C(022365)"])
+        # 终值 600 = 100 + 200 + 300，滞后标的 300 → 50%
+        self.assertAlmostEqual(staleness["assets"][0]["weight_pct"], 50.0, places=2)
+
+    def test_t_minus_one_lag_not_warned(self):
+        """仅落后 1 个交易日（QDII/场外基金常态）→ 不告警。"""
+        result = self._run(
+            {
+                "600900": self._series([100.0] * 4, self._DATES),
+                "601398": self._series([200.0] * 3, self._DATES[:3]),
+                "022365": self._series([300.0] * 3, self._DATES[:3]),
+            }
+        )
+
+        self.assertFalse(any("净值滞后" in w for w in result["warnings"]))
+        self.assertIsNone(result["terminal_staleness"])
+
+    def test_same_last_date_no_staleness(self):
+        """全部标的终点同日 → 无滞后（不产生噪声告警）。"""
+        result = self._run(
+            {
+                "600900": self._series([100.0] * 4, self._DATES),
+                "601398": self._series([200.0] * 4, self._DATES),
+                "022365": self._series([300.0] * 4, self._DATES),
+            }
+        )
+
+        self.assertFalse(any("净值滞后" in w for w in result["warnings"]))
+        self.assertIsNone(result["terminal_staleness"])
+
+
+class TestLatestQuoteBackfill(unittest.TestCase):
+    """历史末条落后最新行情时，按最新估值回填终点（as-if 口径不变）。"""
+
+    _DATES = ["2026-07-01", "2026-07-02", "2026-07-03"]
+    _HOLDINGS = [("600900", "长江电力", 100.0), ("601398", "工商银行", 100.0), ("022365", "永赢科技智选混合C", 100.0)]
+
+    @staticmethod
+    def _series(values: list[float], dates: list[str]) -> list[dict]:
+        return [{"date": d, "close": 1.0, "value": v} for d, v in zip(dates, values, strict=True)]
+
+    def _run(self, series_by_code: dict[str, list[dict]], **kwargs) -> dict:
+        with patch(
+            "src.python.report.portfolio_history.PortfolioHistoryCalculator.calculate_for_holding",
+            side_effect=lambda code, *_args, **_kwargs: series_by_code[code],
+        ):
+            from src.python.report.portfolio_history import PortfolioHistoryCalculator
+
+            return PortfolioHistoryCalculator({}).get_combined_timeseries(self._HOLDINGS, days=3, **kwargs)
+
+    def test_quote_fills_terminal_bar(self):
+        """滞后 1 个交易日的标的按最新价补齐 → 终值含最新估值、且不再报滞后。"""
+        lagging = self._series([300.0, 300.0], self._DATES[:2])
+        result = self._run(
+            {
+                "600900": self._series([100.0] * 3, self._DATES),
+                "601398": self._series([200.0] * 3, self._DATES),
+                "022365": lagging,
+            },
+            latest_quotes={"022365": (3.5, self._DATES[2])},
+        )
+
+        # 回填值 = 3.5 × 100 份 = 350（original 300 停在 07-02）
+        self.assertAlmostEqual(result["bars"][-1]["total_value"], 100.0 + 200.0 + 350.0, places=2)
+        self.assertIsNone(result["terminal_staleness"])
+        self.assertFalse(any("净值滞后" in w for w in result["warnings"]))
+        # 会话缓存里的原序列不被就地修改（回填走副本）
+        self.assertEqual(len(lagging), 2)
+
+    def test_quote_not_newer_skips_backfill(self):
+        """行情日不晚于历史末条 → 不回填（不重复追加同日 bar）。"""
+        result = self._run(
+            {
+                "600900": self._series([100.0] * 3, self._DATES),
+                "601398": self._series([200.0] * 3, self._DATES),
+                "022365": self._series([300.0] * 3, self._DATES),
+            },
+            latest_quotes={"022365": (3.5, self._DATES[2])},
+        )
+
+        self.assertEqual(result["bars"][-1]["date"], self._DATES[2])
+        self.assertAlmostEqual(result["bars"][-1]["total_value"], 600.0, places=2)
+
+    def test_long_window_suppresses_duplicate_warning(self):
+        """长窗（同一次运行的第二次全量计算）不打 WARNING，但契约字段照常给出。"""
+        with self.assertNoLogs("invest", level="WARNING"):
+            result = self._run(
+                {
+                    "600900": self._series([100.0] * 3, self._DATES),
+                    "601398": self._series([200.0] * 3, self._DATES),
+                    "022365": self._series([300.0] * 1, self._DATES[:1]),
+                },
+                warn_on_terminal_staleness=False,
+            )
+
+        self.assertIsNotNone(result["terminal_staleness"])
+        self.assertEqual(result["terminal_staleness"]["max_lag_trading_days"], 2)
 
 
 class TestComputeAnnualizedVolatility(unittest.TestCase):

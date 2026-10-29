@@ -452,6 +452,9 @@ def generate_excel_report(
                 build_data_source_matrix(),
                 (pipeline_data or {}).get("position_status"),
                 (pipeline_data or {}).get("data_freshness"),
+                # 历史走势终点滞后：与 HTML 数据状态同一事实，双端同文（源健康标降级 +
+                # 逐品种标出滞后交易日数）
+                (history_data or {}).get("terminal_staleness"),
             )
         except Exception:
             logger.debug("[excel] 数据质量仪表盘页签写入失败（非关键）", exc_info=True)

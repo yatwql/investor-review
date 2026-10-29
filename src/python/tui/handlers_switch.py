@@ -137,6 +137,8 @@ def run_content_options_panel() -> None:
     number_width = len(str(len(numbered)))
 
     state = {"repaint": True, "reveal_keys": False, "tuples": []}
+    # 会话快照：改动仍即时写盘，仅记录变更前值，供 u / U 退回
+    session = hc.reset_config_session()
 
     def _emit(message: str) -> None:
         """按当前内宽输出一行提示（窄屏上 `[!]`/`[OK]` 长句也不越界折行）。"""
@@ -181,6 +183,8 @@ def run_content_options_panel() -> None:
                         date = str(entry.get("last_enabled_date") or "")[5:]
                         notes += f"（启用 {entry['enabled_count']} 次" + (f" · 最近 {date}" if date else "") + "）"
                 tuples.append((num, flag, definition.label, status))
+                if not nav.is_visible(len(tuples) - 1):
+                    continue  # 筛选态：命中项之外的开关不渲染（索引仍占位）
                 rows.extend(
                     format_item(
                         number=num,
@@ -200,6 +204,8 @@ def run_content_options_panel() -> None:
                 )
         rows.append("")
         rows.append(f"{nav.marker(len(tuples))}0. 返回主菜单")
+        if session.count:
+            rows.append(f"  本次改动 {session.count} 项（u 撤销上次 · U 全部还原）")
         state["tuples"] = tuples
         print()
         panel_rows = [
@@ -237,6 +243,9 @@ def run_content_options_panel() -> None:
 
     def _on_text(choice: str) -> None:
         tuples = state["tuples"]
+        if hc.handle_config_undo(choice, session, _emit):
+            state["repaint"] = True
+            return
         if choice.lower() == "p":
             state["repaint"] = True
             return
@@ -322,6 +331,9 @@ def run_content_options_panel() -> None:
             on_text=_on_text,
             on_help=_on_help,
             on_nav_moved=lambda: state.update(repaint=True),
+            nav_keys=False,  # 本面板 ``k`` 已用于「窄档显示键名列」
         )
     except (EOFError, KeyboardInterrupt):
         print()
+    finally:
+        hc.close_config_session()  # 会话作用域 = 一次面板进入，退出即失效

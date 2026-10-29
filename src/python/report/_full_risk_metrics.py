@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import logging
 
+from typing import Any
+
 from src.python.report.progress import ProgressReporter
 
 logger = logging.getLogger("invest")
@@ -23,7 +25,7 @@ def _prepare_full_risk_metrics(
     holdings: list,
     config: dict,
     reporter: ProgressReporter,
-    perf: object,
+    perf: Any,
     fetch_history: bool,
     enable_history: bool,
     prep: dict,
@@ -37,14 +39,16 @@ def _prepare_full_risk_metrics(
     from src.python.analysis.alignment_correction import compute_alignment_factors
     from src.python.analysis.metrics import compute_all_metrics
     from src.python.analysis.scenario import scenario_analysis
-    from src.python.report._snapshot import fetch_history_data
+    from src.python.report._snapshot import fetch_history_data, latest_quotes_from_detail_rows
 
     if not enable_history:
         reporter.info("[章节配置] 历史走势已关闭，跳过")
         return None, None
 
     perf.start("历史走势")
-    history_data = fetch_history_data(holdings, config, reporter, fetch=fetch_history)
+    # 明细行（with_market_fields=True）带 price / nav_date：作终点回填的最新估值来源
+    _latest_quotes = latest_quotes_from_detail_rows(prep.get("holdings_details"))
+    history_data = fetch_history_data(holdings, config, reporter, fetch=fetch_history, latest_quotes=_latest_quotes)
     perf.stop()
 
     # 历史增强契约装配（危机区间标注[含回放态] + 风险调整超额）：full/both 两路径
@@ -53,7 +57,9 @@ def _prepare_full_risk_metrics(
     if pipeline_data is not None:
         from src.python.report._snapshot import assemble_history_augmented_data
 
-        assemble_history_augmented_data(holdings, config, reporter, history_data, pipeline_data)
+        assemble_history_augmented_data(
+            holdings, config, reporter, history_data, pipeline_data, latest_quotes=_latest_quotes
+        )
 
         # 尾部风险统计（tail_risk_data）：复用历史日收益序列计算 VaR/最大单日跌幅/
         # 连续下跌/恢复天数；样本不足时 available=False（§1.4.5 数据降级）
@@ -97,8 +103,8 @@ def _prepare_full_risk_metrics(
             rf_annual=0.02,
         )
 
-        _mdd_pct = history_data.get("max_drawdown_pct", 0)
-        _metrics["annualized_volatility"] = history_data.get("annualized_volatility")
+        _mdd_pct = (history_data or {}).get("max_drawdown_pct", 0)
+        _metrics["annualized_volatility"] = (history_data or {}).get("annualized_volatility")
         _metrics["max_drawdown"] = -(_mdd_pct / 100) if _mdd_pct else None
 
         _alignment = compute_alignment_factors(

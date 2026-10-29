@@ -235,11 +235,34 @@ class TestForbiddenVocabulary:
 # 保留闸门的唯一合法位置 =「长输出后」（契约 Feedback 节「按键闸门白名单」）
 GATE_WHITELIST = {
     ("handlers_cache.py", "_run_cache_update"),  # 缓存更新结果摘要（多行统计块）
-    ("handlers_log.py", "_cmd_view_logs"),  # 运行日志详情
-    ("handlers_log.py", "_cmd_view_health_history"),  # 数据源健康历史
-    ("handlers_log.py", "_cmd_run_doctor"),  # 系统自检结果
     ("report_artifacts.py", "_wait_any_key"),  # 远程/无图形会话报告产物清单（无 y/N 询问）
 }
+
+
+#: 分页视图调用点白名单（浏览型长输出；与 DESIGN-TUI「分页视图」节同源比对）
+PAGER_WHITELIST = {
+    ("handlers_log.py", "_cmd_view_logs"),  # 运行日志详情（逐页浏览 + 搜索）
+    ("handlers_log.py", "_cmd_view_health_history"),  # 数据源健康历史
+    ("handlers_log.py", "_cmd_run_doctor"),  # 系统自检结果（逐项 + 修复建议）
+}
+
+
+def _pager_call_sites() -> set[tuple[str, str]]:
+    """扫描 ``pager.view(...)`` 调用点，返回 (文件名, 所在函数名) 集合。"""
+    sites: set[tuple[str, str]] = set()
+    for path in _tui_sources():
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for func in [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
+            for node in ast.walk(func):
+                if isinstance(node, ast.Call) and _call_name(node) == "view":
+                    if isinstance(node.func, ast.Attribute) and _call_name_name(node.func.value) == "pager":
+                        sites.add((path.name, func.name))
+    return sites
+
+
+def _call_name_name(node: ast.AST) -> str:
+    """取表达式名（``pager.view`` 的接收者 ``pager``）。"""
+    return node.id if isinstance(node, ast.Name) else ""
 
 
 def _gate_call_sites() -> set[tuple[str, str]]:
@@ -400,7 +423,20 @@ class TestFirstRunHintsPointToRealMenus:
 
     @staticmethod
     def _hints(monkeypatch, tmp_path) -> str:
-        """在「持仓文件不存在 + LLM 未配置」条件下捕获指引文本。"""
+        """在「持仓文件不存在 + LLM 未配置」条件下捕获富详情指引（首页 `?` 尾部文本）。"""
+        from src.python.tui import tui_menu
+
+        monkeypatch.setattr(
+            tui_menu, "_config_cache", {"holdings_dir": str(tmp_path), "holdings_filename": "missing.xlsx"}
+        )
+        import src.python.core.system_info as system_info
+
+        monkeypatch.setattr(system_info, "llm_status", lambda: {"configured": False})
+        tui_menu.reset_first_run_memo()
+        return "\n".join(tui_menu.first_run_hint_lines())
+
+    def test_header_shows_single_line_summary(self, monkeypatch, tmp_path):
+        """页头只占一行摘要（细节移入 `?`，不再每帧刷两条长 bullet）。"""
         import io
 
         from src.python.tui import tui_menu
@@ -411,10 +447,14 @@ class TestFirstRunHintsPointToRealMenus:
         import src.python.core.system_info as system_info
 
         monkeypatch.setattr(system_info, "llm_status", lambda: {"configured": False})
+        tui_menu.reset_first_run_memo()
         out = io.StringIO()
         monkeypatch.setattr("sys.stdout", out)
         tui_menu.print_header()
-        return out.getvalue()
+        header_lines = [line for line in out.getvalue().splitlines() if "未就绪" in line]
+        assert len(header_lines) == 1, out.getvalue()
+        assert "持仓文件" in header_lines[0] and "LLM" in header_lines[0]
+        assert "? 看指引" in header_lines[0]
 
     def test_holdings_hint_points_to_global_settings(self, monkeypatch, tmp_path):
         text = self._hints(monkeypatch, tmp_path)
@@ -428,3 +468,61 @@ class TestFirstRunHintsPointToRealMenus:
         llm_line = next(line for line in text.splitlines() if "llm_key.json" in line)
         assert "[G]" in llm_line and "[L]" in llm_line
         assert "[S]" not in llm_line, f"LLM 设置不在 [S]（章节内容面板），实际：{llm_line}"
+
+
+# ── 规则 7：错误行必须给下一步动作 ─────────────────────────────
+
+#: 就地纠正类输入校验的首词（用户下一步就是在同一条提示里重输，键路径反而是噪声）
+_VALIDATION_HEADS = ("应为", "必须", "不能", "无效", "请")
+
+
+def _err_literals():
+    """扫描 TUI 全量调用点中含 ``[ERR]`` 的字符串字面量，产出 (文件名, 行号, 文本)。"""
+    for path in _tui_sources():
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            for arg in node.args:
+                for sub in ast.walk(arg):
+                    if isinstance(sub, ast.Constant) and isinstance(sub.value, str) and "[ERR]" in sub.value:
+                        yield path.name, sub.lineno, sub.value
+
+
+class TestErrorTailHasAction:
+    """规则 7：``[ERR]`` 行须带「→ 下一步动作」，或明确属就地纠正的输入校验。
+
+    三类合法形态：
+      - 含 ``→``（动作短语经 ``error_tail.emit_error`` 拼装）；
+      - 校验类首词（应为/必须/不能/无效/请）——用户当场重输即可；
+      - 纯 ``{e}`` 透传（字面量不含中文）：文案由被调层决定，交由该层校验。
+    """
+
+    def test_error_lines_have_action_tail(self):
+        offenders = []
+        for fname, lineno, text in _err_literals():
+            body = text.split("[ERR]", 1)[1]
+            if "→" in text:
+                continue
+            if any(head in body for head in _VALIDATION_HEADS):
+                continue
+            if not any("\u4e00" <= ch <= "\u9fff" for ch in body):
+                continue
+            offenders.append(f"{fname}:{lineno}: {text.strip()}")
+        assert not offenders, (
+            "错误行缺少下一步动作（改用 error_tail.emit_error 并在 DESIGN-TUI Feedback 节选短语）：\n"
+            + "\n".join(offenders)
+        )
+
+
+class TestPagerWhitelist:
+    """分页视图白名单：浏览型长输出才走分页，代码调用点须与契约一致。"""
+
+    def test_pager_sites_match_whitelist(self):
+        sites = _pager_call_sites()
+        extra = sites - PAGER_WHITELIST
+        missing = PAGER_WHITELIST - sites
+        assert not extra, "新增了分页视图调用——须先在 DESIGN-TUI「分页视图」节登记理由，再更新白名单：\n" + "\n".join(
+            sorted(map(str, extra))
+        )
+        assert not missing, "白名单条目已无对应分页调用（白名单只减不增）：\n" + "\n".join(sorted(map(str, missing)))

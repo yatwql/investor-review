@@ -141,6 +141,24 @@ class TestBuildCoverageBlock(unittest.TestCase):
         self.assertEqual(block["abnormal_count"], 0)
 
 
+def _history_staleness() -> dict:
+    """构造 history_data.terminal_staleness 契约。"""
+    return {
+        "latest_date": "2026-10-29",
+        "max_lag_trading_days": 2,
+        "assets": [
+            {
+                "label": "永赢科技智选混合C(022365)",
+                "code": "022365",
+                "last_date": "2026-10-27",
+                "lag_trading_days": 2,
+                "value": 20697.81,
+                "weight_pct": 7.7,
+            }
+        ],
+    }
+
+
 class TestWriteDataQualitySheet(unittest.TestCase):
     """write_data_quality_sheet Excel 写入测试。"""
 
@@ -276,3 +294,55 @@ class TestWriteDataQualitySheet(unittest.TestCase):
         )
         cells = [str(self.ws.cell(row=r, column=c).value or "") for r in range(1, end_row + 1) for c in range(1, 6)]
         self.assertIn(_FRESHNESS_PLACEHOLDER, "|".join(cells))
+
+
+class TestHistoryStalenessOverlay(unittest.TestCase):
+    """终点净值滞后在 Excel 双区块留痕（与 HTML 数据状态同事实）。"""
+
+    def setUp(self):
+        self.wb = openpyxl.Workbook()
+        self.ws = self.wb.active
+
+    def _joined(self, max_col: int = 6) -> str:
+        cells = [
+            str(self.ws.cell(row=r, column=c).value or "")
+            for r in range(1, self.ws.max_row + 1)
+            for c in range(1, max_col + 1)
+        ]
+        return "|".join(cells)
+
+    def test_source_health_row_marked_degraded(self):
+        """源健康「历史走势」行由正常转降级，降级明细给出标的与滞后天数。"""
+        history_row = {**_matrix_row("历史走势", "ok", "取数 19 次（无降级事件）"), "key": "history"}
+        write_data_quality_sheet(
+            self.ws,
+            [history_row],
+            _coverage_status([_coverage_item("022365", "永赢科技智选混合C", "ok")]),
+            history_staleness=_history_staleness(),
+        )
+        joined = self._joined()
+        self.assertIn("终点净值滞后 2 个交易日", joined)
+        self.assertIn("永赢科技智选混合C(022365)", joined)
+        self.assertIn("滞后 2 个交易日", joined)
+
+    def test_coverage_row_shows_stale_lag(self):
+        """品种覆盖行写明该标的净值滞后交易日数（不再是「正常」）。"""
+        write_data_quality_sheet(
+            self.ws,
+            [_matrix_row("历史走势")],
+            _coverage_status(
+                [_coverage_item("022365", "永赢科技智选混合C", "ok"), _coverage_item("600900", "长江电力", "ok")]
+            ),
+            history_staleness=_history_staleness(),
+        )
+        joined = self._joined(5)
+        self.assertIn("净值数据滞后 2 个交易日", joined)
+        # 未滞后的标的保持原状态
+        self.assertIn("正常", joined)
+
+    def test_no_staleness_keeps_matrix_intact(self):
+        """无滞后契约 → 源健康行原文不变（关态零变化）。"""
+        history_row = {**_matrix_row("历史走势", "ok", "取数 19 次（无降级事件）"), "key": "history"}
+        write_data_quality_sheet(self.ws, [history_row], None, history_staleness=None)
+        self.assertEqual(history_row["status"], "ok")
+        self.assertNotIn("终点净值滞后", self._joined())

@@ -22,14 +22,18 @@ def _fixed_width(monkeypatch):
 
 @pytest.mark.unit
 class TestMainMenuStructure:
-    def test_fourteen_items(self):
-        assert len(tui_menu.MENU_ITEMS) == 14
+    def test_menu_items_are_unique_and_well_formed(self):
+        """菜单项键唯一、标签非空（不写死条数：新增菜单项属良性变更）。"""
+        keys = [key for key, _label, _cb, _exit in tui_menu.MENU_ITEMS]
+        assert len(keys) == len(set(keys))
+        assert all(label.strip() for _key, label, _cb, _exit in tui_menu.MENU_ITEMS)
 
     def test_group_keys_and_order(self):
         groups = dict(tui_menu.MENU_GROUPS)
-        assert list(groups) == ["生成报告", "数据与查看", "配置", "诊断与排查"]
+        assert list(groups) == ["生成报告", "数据与查看", "持仓维护", "配置", "诊断与排查"]
         assert groups["生成报告"] == ("E", "B", "L", "W", "Q")
         assert groups["数据与查看"] == ("1", "2", "3")
+        assert groups["持仓维护"] == ("U",)
         assert groups["配置"] == ("C", "S", "G", "R")
         assert groups["诊断与排查"] == ("D",)
 

@@ -342,7 +342,7 @@ class TestFetchIndexHistory(unittest.TestCase):
         from src.python.fetcher.index import fetch_index_history
 
         self.assertIsNone(fetch_index_history(""))
-        self.assertIsNone(fetch_index_history(None))
+        self.assertIsNone(fetch_index_history(None))  # type: ignore[arg-type]  # 防御非 str 输入
         # 空代码在导入前就返回了，注册表不应被调用
         mock_get_reg.assert_not_called()
 
@@ -419,6 +419,23 @@ class TestFetchIndexHistory(unittest.TestCase):
 
     @patch("src.python.core.provider_registry.get_registry")
     @patch("src.python.fetcher.chain.fetch_with_incremental_fallback")
+    def test_session_cache_reuse_is_logged(self, mock_fetch, mock_get_reg):
+        """复用打「会话缓存复用」日志：调用方「获取完成」行不再被误读成又取了一次。"""
+        mock_reg = MagicMock()
+        cached = [self._SAMPLE_KLINE_1] * 2000
+        mock_reg.session_cache_get.return_value = (90, cached)
+        mock_get_reg.return_value = mock_reg
+
+        from src.python.fetcher.index import fetch_index_history
+
+        with self.assertLogs("invest", level="INFO") as captured:
+            fetch_index_history("sh000300", 730)
+
+        mock_fetch.assert_not_called()
+        self.assertTrue(any("会话缓存复用" in line for line in captured.output))
+
+    @patch("src.python.core.provider_registry.get_registry")
+    @patch("src.python.fetcher.chain.fetch_with_incremental_fallback")
     def test_session_cache_refetches_when_window_too_short(self, mock_fetch, mock_get_reg):
         """缓存窗口不足 → 重取（避免「短窗口先取过 → 长窗口调用者拿到更短序列」）。"""
 
@@ -433,6 +450,40 @@ class TestFetchIndexHistory(unittest.TestCase):
         self.assertEqual(fetch_index_history("sh000300", 750), longer)
         mock_fetch.assert_called_once_with("history_index", "sh000300", 750, diagnostics=ANY)
         mock_reg.session_cache_set.assert_called_once_with("history_index", "sh000300", (750, longer), source="api")
+
+    @patch("src.python.core.provider_registry.get_registry")
+    @patch("src.python.fetcher.chain.fetch_with_incremental_fallback")
+    def test_session_cache_reused_when_series_covers_window(self, mock_fetch, mock_get_reg):
+        """短窗口请求已拿到长序列 → 后续长窗口调用复用，不重复请求同一指数。
+
+        回归：先前只比较「记下的请求窗口天数」，同一次运行内先按 90 天取过、
+        再按 730 天取时仍会命中源上限再发一次（实测同一报告内沪深300 被取 3 次，
+        且第二次重新取回不同长度的序列）。
+        """
+        mock_reg = MagicMock()
+        long_series = [self._SAMPLE_KLINE_1] * 2000  # 短窗口请求已返回源上限长序列
+        mock_reg.session_cache_get.return_value = (90, long_series)
+        mock_get_reg.return_value = mock_reg
+
+        from src.python.fetcher.index import fetch_index_history
+
+        self.assertEqual(fetch_index_history("sh000300", 730), long_series)
+        mock_fetch.assert_not_called()
+        mock_reg.session_cache_set.assert_not_called()
+
+    @patch("src.python.core.provider_registry.get_registry")
+    @patch("src.python.fetcher.chain.fetch_with_incremental_fallback")
+    def test_session_cache_reused_at_source_cap(self, mock_fetch, mock_get_reg):
+        """已存序列达源单次上限 → 更长窗口也只会拿到同样长度，直接复用。"""
+        mock_reg = MagicMock()
+        capped = [self._SAMPLE_KLINE_1] * 2000
+        mock_reg.session_cache_get.return_value = (90, capped)
+        mock_get_reg.return_value = mock_reg
+
+        from src.python.fetcher.index import fetch_index_history
+
+        self.assertEqual(fetch_index_history("sh000300", 3650), capped)
+        mock_fetch.assert_not_called()
 
     @patch("src.python.core.provider_registry.get_registry")
     @patch("src.python.fetcher.chain.fetch_with_incremental_fallback")
@@ -483,6 +534,7 @@ class TestFetchIndexHistory(unittest.TestCase):
 
         result = fetch_index_history("gb_inx", days=200)
 
+        assert result is not None
         self.assertEqual(len(result), 1)
         mock_fetch.assert_called_once_with("history_index_us", "gb_inx", 200, diagnostics=ANY)
 
@@ -530,6 +582,7 @@ class TestFetchIndexHistory(unittest.TestCase):
         with patch("src.python.fetcher.chain.clear_incremental_cache") as mock_clear:
             result = fetch_index_history("sh000300", days=2927)
 
+        assert result is not None
         self.assertEqual(len(result), 2001)
         self.assertEqual(mock_fetch.call_count, 1, "达源上限不得重取")
         mock_clear.assert_not_called()

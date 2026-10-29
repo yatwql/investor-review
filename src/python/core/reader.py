@@ -14,14 +14,16 @@ from src.python.core.num_utils import safe_num
 
 logger = logging.getLogger("invest")
 
-# 预期表头
-_EXPECTED_HEADER = ["名称", "代码", "持仓份额", "每份成本"]
+# 主表固定四列表头（唯一事实源：解析 / 写回 / 校验共用）
+HOLDINGS_HEADER: list[str] = ["名称", "代码", "持仓份额", "每份成本"]
+_EXPECTED_HEADER = HOLDINGS_HEADER  # 模块内既有引用（含测试）沿用
 
 # 可选流水页签名与表头（持仓文件扩展——不触碰主表 4 列语义）
 _TRADE_SHEET_NAME = "交易流水"
 _DIVIDEND_SHEET_NAME = "分红流水"
 # 交易流水列：日期/代码/操作/份额/价格 + 可选费用列（费用列缺失时按 0 处理）
-_TRADE_HEADER = ["日期", "代码", "操作", "份额", "价格"]
+TRADE_HEADER: list[str] = ["日期", "代码", "操作", "份额", "价格"]
+_TRADE_HEADER = TRADE_HEADER  # 模块内既有引用（含测试）沿用
 # 分红流水列：日期/代码/每份分红
 _DIVIDEND_HEADER = ["日期", "代码", "每份分红"]
 
@@ -45,13 +47,27 @@ def list_xlsx_files(directory: str) -> list[str]:
     if not os.path.isdir(directory):
         return []
 
+    try:
+        entries = os.listdir(directory)
+    except OSError:
+        logger.warning("目录不可读，跳过文件枚举: %s", directory)
+        return []
+
     files = [
-        os.path.join(directory, f)
-        for f in os.listdir(directory)
-        if f.lower().endswith(".xlsx") and not f.startswith("~$")
+        os.path.join(directory, name)
+        for name in entries
+        if name.lower().endswith(".xlsx") and not name.startswith("~$")
     ]
-    files.sort(key=os.path.getmtime, reverse=True)
+    files.sort(key=_file_mtime, reverse=True)
     return files
+
+
+def _file_mtime(path: str) -> float:
+    """文件 mtime（并发删除/改名时退化为 0，不打断文件枚举）。"""
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return 0.0
 
 
 def get_xlsx_info(filepath: str) -> dict:
@@ -147,6 +163,11 @@ def _parse_workbook(wb) -> list[Holding]:
     holdings: list[Holding] = []
 
     for sheet_name in wb.sheetnames:
+        # 流水页签由 read_flow_sheets 单独解析，不属于账户主表——不参与四列表头校验也不告警
+        # （否则每次读持仓都会刷一条「表头不匹配」，把人误导成流水页签坏了）
+        if sheet_name.strip() in (_TRADE_SHEET_NAME, _DIVIDEND_SHEET_NAME):
+            logger.debug("跳过流水页签: %s", sheet_name)
+            continue
         ws = wb[sheet_name]
         logger.debug("处理工作表: %s (行数=%s)", sheet_name, ws.max_row)
 
@@ -156,7 +177,7 @@ def _parse_workbook(wb) -> list[Holding]:
 
         # 校验表头
         header = [_safe_str(cell.value) for cell in next(ws.iter_rows(min_row=1, max_row=1))]
-        if not _match_header(header, _EXPECTED_HEADER):
+        if not match_holdings_header(header):
             logger.warning("工作表 '%s' 表头不匹配: %s，跳过", sheet_name, header)
             continue
 
@@ -407,6 +428,32 @@ def _safe_float(value, field: str, sheet: str, row: int) -> float | None:
         logger.warning("工作表 '%s' 第 %d 行 '%s' 无法解析 (%s)，跳过该行", sheet, row, field, value)
         return None
     return float(parsed)
+
+
+def match_holdings_header(header: list[str]) -> bool:
+    """表头是否为主表四列（允许尾部多出列，如附加备注列）。
+
+    Args:
+        header: 首行单元格文本列表。
+
+    Returns:
+        True 表示可当持仓主表解析/写回。
+    """
+    return _match_header(header, HOLDINGS_HEADER)
+
+
+def is_holdings_sheet(ws) -> bool:
+    """工作表是否为持仓主表（流水页签与表头不匹配的页签均返回 False）。
+
+    解析（`_parse_workbook`）、录入写回（`holdings_editor`）与账户枚举共用本判定，
+    避免各处自行重写「四列表头 + 跳过流水页签」的规则。
+    """
+    if ws.title.strip() in (_TRADE_SHEET_NAME, _DIVIDEND_SHEET_NAME):
+        return False
+    if ws.max_row is None:
+        return False
+    header = [_safe_str(cell.value) for cell in next(ws.iter_rows(min_row=1, max_row=1), ())]
+    return match_holdings_header(header)
 
 
 def _match_header(actual: list[str], expected: list[str]) -> bool:

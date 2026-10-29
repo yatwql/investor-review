@@ -124,11 +124,13 @@ def _build_history_data_status(history_data: dict | None) -> DataStatus:
                 key = "history_zero_value"
             elif "修正" in w or "重叠" in w:
                 key = "history_correction"
+            elif "净值滞后" in w:
+                key = "history_nav_stale"
             else:
                 continue
             data_status_history[key] = DataStatusItem(
                 available=True,
                 tier="T3",
-                message=STATUS_MESSAGES.get(key, w),
+                message=STATUS_MESSAGES.get(key) or w,
             )
     return data_status_history

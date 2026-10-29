@@ -390,3 +390,159 @@ class TestPanelLoopRender:
         assert "行A" in out and "行B" in out
         assert "" in out.splitlines(), "None 行按空行打印"
         assert len(seen) == 2, "方向键移动后回到循环顶重建渲染"
+
+
+class TestNavKeyAliases:
+    """`j`/`k` 方向键别名：与 ↑/↓ 同一语义，占用字母的面板可关闭（`nav_keys=False`）。"""
+
+    def test_j_k_move_cursor_like_arrows(self):
+        """`jj` 等价 `↓↓`：导航后 Enter 派发同一项。"""
+        calls: list[str] = []
+        panel_loop(
+            _simple_items(calls),
+            render=_render_blank,
+            prompt="> ",
+            read=_reader(["j", "j", "", "0"]),
+        )
+        assert calls == ["3"], "j 应等价 ↓"
+
+    def test_nav_keys_disabled_passes_letters_to_on_text(self):
+        """关掉别名后 `k` 不移动游标，原样交 `on_text`（面板自有词法优先）。"""
+        seen: list[str] = []
+
+        def _on_text(text: str) -> None:
+            seen.append(text)
+
+        panel_loop(
+            _simple_items([]),
+            render=_render_blank,
+            prompt="> ",
+            read=_reader(["k", "0"]),
+            on_text=_on_text,
+            nav_keys=False,
+        )
+        assert seen == ["k"], "nav_keys=False 时 k 必须交给 on_text"
+
+
+class TestPanelFilter:
+    """`/` 筛选进面板（NavState 可见集合协议）：隐藏项不渲染、不可直达、移动只在命中项间。"""
+
+    @staticmethod
+    def _items(calls: list[str]) -> list[PanelItem]:
+        return [
+            PanelItem("1", "生成基础报告", action=lambda: calls.append("1")),
+            PanelItem("2", "生成标准报告", action=lambda: calls.append("2")),
+            PanelItem("3", "缓存管理", action=lambda: calls.append("3")),
+            PanelItem("0", "返回", kind="return"),
+        ]
+
+    def test_filter_limits_rendering_and_navigation(self):
+        """筛选后只渲染命中项，方向键只在命中项间移动。"""
+        calls: list[str] = []
+        rendered: list[str] = []
+
+        def _render(nav: NavState) -> list[str]:
+            rows = [f"item-{i}" for i in range(4) if nav.is_visible(i)]
+            rendered.append("|".join(rows))
+            return rows
+
+        panel_loop(
+            self._items(calls),
+            render=_render,
+            prompt="> ",
+            read=_reader(["/", KEY_DOWN, "", "0"]),
+            filter_reader=lambda _p="": "生成",
+        )
+        assert "item-0|item-1" in " ".join(rendered[:1]) or any("item-0|item-1" == row for row in rendered)
+        assert calls == ["2"], "命中项间 ↓ 后 Enter 派发第二项"
+
+    def test_zero_clears_filter_before_returning(self):
+        """筛选态下 0 先清筛选（不返回），再按 0 才走返回项。"""
+        calls: list[str] = []
+        states: list[bool] = []
+
+        def _render(nav: NavState) -> list[str]:
+            states.append(nav.filtered)
+            return ["row"]
+
+        panel_loop(
+            self._items(calls),
+            render=_render,
+            prompt="> ",
+            read=_reader(["/", "0", "0"]),
+            filter_reader=lambda _p="": "缓存",
+        )
+        assert states[0] is False and True in states, "中间出现过筛选态"
+        assert states[-1] is False, "0 清掉筛选"
+
+    def test_hidden_item_direct_key_does_not_dispatch(self):
+        """按到被隐藏项的直达键：给提示、不派发。"""
+        calls: list[str] = []
+        panel_loop(
+            self._items(calls),
+            render=lambda nav: ["row"],
+            prompt="> ",
+            read=_reader(["/", "3", "0", "0"]),
+            filter_reader=lambda _p="": "生成",
+        )
+        assert "3" not in calls, "被隐藏项不得被直达派发"
+
+    def test_empty_keyword_clears_filter(self):
+        """空回车清除筛选（可见集合回到全量）。"""
+        calls: list[str] = []
+        seen: list[bool] = []
+
+        def _render(nav: NavState) -> list[str]:
+            seen.append(nav.filtered)
+            return ["row"]
+
+        panel_loop(
+            self._items(calls),
+            render=_render,
+            prompt="> ",
+            read=_reader(["/", "/", "0"]),
+            filter_reader=lambda _p="": "",
+        )
+        assert seen[0] is False, "空关键词不进入筛选态"
+
+    def test_no_match_keeps_current_state(self):
+        """无命中时保持当前筛选（不把列表清空）。"""
+        calls: list[str] = []
+        seen: list[bool] = []
+
+        def _render(nav: NavState) -> list[str]:
+            seen.append(nav.filtered)
+            return ["row"]
+
+        panel_loop(
+            self._items(calls),
+            render=_render,
+            prompt="> ",
+            read=_reader(["/", "0", "0"]),
+            filter_reader=lambda _p="": "不存在的关键词",
+        )
+        assert seen[0] is False and all(state is False for state in seen), "无命中不进入筛选态"
+
+    def test_esc_during_keyword_keeps_previous_filter(self):
+        """关键词输入按 Esc（返回 None）：保持原有筛选不变。"""
+        calls: list[str] = []
+        seen: list[bool] = []
+
+        def _render(nav: NavState) -> list[str]:
+            seen.append(nav.filtered)
+            return ["row"]
+
+        panel_loop(
+            self._items(calls),
+            render=_render,
+            prompt="> ",
+            read=_reader(["/", "/", "0", "0"]),
+            filter_reader=lambda _p="": None,
+        )
+        assert all(state is False for state in seen)
+
+    def test_unfiltered_panel_behaves_as_before(self):
+        """未筛选时全部可见（协议默认口径与不接筛选逐字节一致）。"""
+        nav = NavState(3)
+        assert all(nav.is_visible(i) for i in range(3))
+        assert nav.filtered is False
