@@ -57,7 +57,9 @@ class NegativeCache:
     # ── 读 ────────────────────────────────────────────────
     def probe(self, key: str) -> Any | None:
         """读取负缓存；命中时累计一次命中并返回缓存值（未命中返回 None）。"""
-        value = get(key, get_ttl(self.ttl_type))
+        # record_stats=False：负缓存「没有这条记录」是正常预期，计入全局命中率会
+        # 让未命中数虚高并触发「同前缀反复未命中」告警（见 `_store.get` 文档）。
+        value = get(key, get_ttl(self.ttl_type), record_stats=False)
         if value is not None:
             with self._lock:
                 self._hits += 1

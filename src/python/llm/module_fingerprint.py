@@ -42,6 +42,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from src.python.config.features import is_feature_enabled
+from src.python.llm.fact_checker._constants import FACT_CHECK_RULES_VERSION
 from src.python.core import decision_ledger
 from src.python.core import signal_ledger
 from src.python.core.decision_header import structured_header_cache_suffix
@@ -299,6 +300,10 @@ def global_macro_fingerprint(inputs: ModuleFingerprintInputs) -> str:
         inputs.total_profit,
         inputs.categories,
         inputs.competitive_context,
+        # 事实校验规则版本：修正正文会回写模块缓存（键不变），故规则语义变化也须
+        # 换键，否则旧缓存里被旧规则改错的正文会继续被复用。本模块不走
+        # build_llm_fingerprint，故在此单列（与那边同一常量，口径同源）。
+        FACT_CHECK_RULES_VERSION,
     ]
     if inputs.purchase_block:
         _parts.append(inputs.purchase_block)

@@ -433,11 +433,12 @@ class TestWarningThresholdContext:
 
 
 class TestApplyCorrectionSingleReplace:
-    """数值自动修正只替换判定处一次，不连带替换同值异义的其他出现处。
+    """数值自动修正按「全有或全无」执行：无法唯一定位的同值异义整值跳过。
 
-    apply_numerical_corrections 用 re.sub 全局替换，一处修正会误伤 HTML 中
-    同数值的其他语义出现处（如"止盈约30%"与"收益率30%"并存时，只应修被
-    判定为错误的收益率处）。count=1 限制为只替换一处。
+    只替换首次出现，会让同一数值在正文里「动一处、留其余」；叠加回写后逐轮把同一
+    事实变成两个不同的数字（561910 一处 -8.0%、其余 -36.20%），报告自相矛盾。
+    现口径：同一 wrong_value 的全部出现处都判为错值才整体替换，否则一处也不动
+    （宁可漏改，不可只改一半）。
     """
 
     pytestmark = [
@@ -446,8 +447,8 @@ class TestApplyCorrectionSingleReplace:
         pytest.mark.llm,
     ]
 
-    def test_same_value_multiple_contexts_replaces_only_once(self):
-        """HTML 中同值出现在两个语境 → 只替换一处，另一处保留。"""
+    def test_same_value_multiple_contexts_replaces_nothing(self):
+        """同句同值出现两处（一处止盈比例、一处收益率）→ 无法唯一定位，整值不改。"""
         from src.python.llm.fact_checker._corrections import apply_numerical_corrections
 
         html = "<p>止盈约30%持仓，收益率30%。</p>"
@@ -455,8 +456,21 @@ class TestApplyCorrectionSingleReplace:
             html,
             [("30", "70.2", "止盈约30%持仓，收益率30%。", "601398实际收益率70.2%")],
         )
-        assert out.count("70.2%") == 1  # 只替换一处
-        assert out.count("30%") == 1  # 另一处同值数字保留
+        assert out == html, "同值异义无法唯一定位时必须整值放弃"
+
+    def test_all_occurrences_replaced_when_all_judged(self):
+        """同一错值出现在两句且都判为错 → 两处一起替换（不留半改状态）。"""
+        from src.python.llm.fact_checker._corrections import apply_numerical_corrections
+
+        html = "<p>持仓收益率 9.9%，领先。</p><p>再看另一段：收益率 9.9%。</p>"
+        out = apply_numerical_corrections(
+            html,
+            [
+                ("9.9", "4.6", "持仓收益率 9.9%，领先。", "012325实际收益率4.6%"),
+                ("9.9", "4.6", "再看另一段：收益率 9.9%。", "012325实际收益率4.6%"),
+            ],
+        )
+        assert out.count("9.9%") == 0 and out.count("4.6%") == 2
 
     def test_no_corrections_returns_original(self):
         """无修正列表 → 原样返回。"""

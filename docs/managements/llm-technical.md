@@ -1,5 +1,5 @@
 # LLM 集成层技术设计
-> 文档版本：0.16.8
+> 文档版本：0.16.9
 
 本文档是 `technical.md` 的 LLM 集成层专项技术设计补充，对应 `technical.md` §5（LLM 集成层概要设计）。
 `technical.md` §5 提供 LLM 层的总体架构、模块清单、调用链概览、多 Provider 链模式概要及关键机制速览；
@@ -877,6 +877,10 @@ penetrated_assets ──→ extract_stable_penetration()
 
 **提示词文本版本（`rate_caliber.PROMPT_SCHEMA_VERSION`）**：标签、表头、口径说明等**静态文案**改动不改变持仓/行情数据，哪怕提示词内容变了，结构化输入的指纹也可能不变——预检会命中按旧口径生成的缓存，静默复用错口径结论。故 `build_llm_fingerprint()` 把该版本号并入哈希输入：改文案即递增版本（一次性换键，旧缓存自动重算）。标签本身收敛在 `llm/rate_caliber.py` 单一声明点，供 `prompts_action` / `prompts_tables` / `prompts_data_blocks` 共同引用。
 
+**事实校验规则版本（`fact_checker.FACT_CHECK_RULES_VERSION`）**：校验修正后的正文会**回写模块缓存**（`llm.skeleton.write_back_module_cache`，键刻意不变），缓存正文因此与「哪一版校验规则改过它」绑定。规则语义变更（新增/收窄非收益率豁免、改写策略变化）而不换键，旧缓存里被旧规则改错的正文会继续被复用，修复对存量缓存不生效、只能等 TTL 过期。故该版本号并入四可回写模块（`global_macro` / `expert_review` / `health_check` / `penetration_deep`）与辩论键的指纹：改规则语义即递增版本，一次性换键重算。
+
+**版本盐首尾日志**：两个版本号（`PROMPT_SCHEMA_VERSION` / `FACT_CHECK_RULES_VERSION`）都会改变四可回写模块与辩论键的缓存键，但**运行日志里看不出来**——模块整批重算的归因只有「键变了」这一信号，看不到版本盐就只能翻代码比对指纹才能确认「这次全量重算是改了规则还是缓存被裁」。故单源出口 `llm.fingerprint.cache_key_salts()` / `log_cache_key_salts()` 在**本轮开始**（报告边界）打一行 INFO，并在**本轮结束**的 `[cache] 本次命中 …` 汇总行带上尾注（`；缓存键版本盐：提示词=… 校验规则=…`）。收尾行从 `cache._stats` 惰性读 `llm.fingerprint`（cache → llm 单向、无环）。
+
 **两个结构性保证**：
 
 1. **覆盖以提示词为准，而非以「是否与持仓相关」为准**：每段只进「提示词确实含该段」的模块——`competitive_context` / `metrics` 不进 `health_check` / `penetration_deep`（其提示词不含这两段），`data_quality_text` 只进 `health_check`（仅它的提示词含数据质量段）。反向的 `history_data`/信号后缀也遵循同一判据：进提示词的进键，没进的不进键。
@@ -1366,7 +1370,7 @@ reload_pricing() → 读 llm_pricing_ref.json
 
 **产物交付**：不扩宽 4 元组 `llm_content` 契约（报告层多处按位置解包），改用**运行作用域载体 + 报告层零参 pull**（与 `report/experimental_notice` 同源模式）：`set_self_review_block()` 写入本轮区块，Excel 用量页签与 HTML「生成后自检（附录）」区块以零参函数取用。HTML 落点为附录区块（不占章节号、不参与目录导航）。
 
-**默认参数**：`max_tokens_self_review=3072` / `timeout_self_review=90` / `temperature_self_review=0.1` / `reasoning_effort_self_review=low`（出厂默认开；未产出时仍计入失败原因载体）。
+**默认参数**：`max_tokens_self_review=4608` / `timeout_self_review=90` / `temperature_self_review=0.1` / `reasoning_effort_self_review=low`（出厂默认开；未产出时仍计入失败原因载体）。
 
 **指纹**：`module_fingerprint.self_review_fingerprint()` 为**内容寻址**（各模块产出正文 + 持仓/穿透摘要），仅写侧使用、不进 `MODULE_FINGERPRINT_BUILDERS`（该表供预检/写两侧共享同一 `ModuleFingerprintInputs` 形状）——产出未变（含全部缓存命中）时键不变，自检同样命中缓存。
 

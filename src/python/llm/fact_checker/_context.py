@@ -23,11 +23,24 @@ from src.python.llm.fact_checker._constants import (
     _PROFIT_KEYWORDS,
     _REPLAY_KEYWORDS,
     _SUGGESTION_KEYWORDS,
+    _TARGET_VALUE_SUFFIXES,
+    _TARGET_VALUE_VERBS,
     _TRIM_TARGET_KEYWORDS,
     _WARNING_THRESHOLD_KEYWORDS,
     _WEIGHT_KEYWORDS,
     _WIN_RATE_KEYWORDS,
 )
+
+#: 「合计 = 分项之和」判定：括号内分项只取带百分号的数值（持仓代码等裸数字不参与），
+#: 容差 0.2 覆盖四舍五入（分项各留 1 位小数时合计误差 ≤0.1）。
+_BREAKDOWN_PART_PATTERN = re.compile(r"(\d+(?:\.\d+)?)\s*%")
+_BREAKDOWN_SUM_TOLERANCE = 0.2
+
+
+#: 表格里「独立百分比单元格」（``| 8.8% |``）：左右紧邻竖线、中间只有空白与数值。
+#: 用前瞻断言收尾而非吃掉右侧竖线——相邻单元格共享竖线（``| 8.8% | 6.5% |``），
+#: 消费掉闭合竖线会让第二个单元格永远匹配不到。
+_TABLE_PERCENT_CELL = re.compile(r"\|\s*[+-]?\d[\d.]*\s*%(?=\s*\|)")
 
 
 def _is_drawdown_context(sentence: str, match_start: int) -> bool:
@@ -173,6 +186,31 @@ def _is_trim_target_context(sentence: str, match_start: int) -> bool:
     return False
 
 
+def _is_table_weight_cell_context(sentence: str, match_start: int) -> bool:
+    """判断百分比是否为**表格里并列的裸数值单元格**（权重列/目标列，非收益率）。
+
+    表格行（``| 建设银行 | 601939 | 8.8% | 6.5% | 减仓 | …持仓收益率 −8.03%…``）
+    里权重列与目标列都是裸百分比，与同行后段的真实收益率混在一句内。整句判定含
+    「收益」必然误判，而单元格本身没有任何语境词可依，**归属不可知**——此时按就近
+    代码归因就会把权重列当作收益率改写（如 8.8%/6.5% 被按 601939 的 241.5% 改写）。
+
+    判据：该数值是独立的表格单元格（左右紧邻 ``|``，中间只有空白）**且**同一行还有
+    另一个独立百分比单元格——多列并列裸百分比即表格数值列，不做收益率改写。
+    单列表格的收益率单元格（行内只有一个百分比）不受影响，仍按主体校验。
+
+    Args:
+        sentence: 所在句子（表格行通常整行为一句）。
+        match_start: 数值在句中的起始位置。
+
+    Returns:
+        命中「表格并列裸百分比单元格」时为 True。
+    """
+    cells = list(_TABLE_PERCENT_CELL.finditer(sentence))
+    if not any(cell.start() <= match_start < cell.end() for cell in cells):
+        return False
+    return len(cells) >= 2
+
+
 def _is_portfolio_level_context(sentence: str, match_start: int) -> bool:
     """判断百分比数值是否在组合级收益语境中（如"组合累计收益约10.0%"）。
 
@@ -229,6 +267,49 @@ def _is_non_rate_pre_word_context(sentence: str, match_start: int, window: int =
 def _is_position_weight_context(sentence: str) -> bool:
     """判断是否为仓位/占比语境，数值为权重而非收益率。"""
     return any(kw in sentence for kw in _POSITION_WEIGHT_KEYWORDS)
+
+
+def _is_target_value_context(sentence: str, match_start: int) -> bool:
+    """判断百分比数值是否为目标位/估计值（如「提到 25% 附近」「止盈至 8% 左右」）。
+
+    目标位与估计值不是对当前收益率的陈述，不可与持仓收益率比较。判定两选一：
+      - 数值后紧跟「附近/左右/上下/区间」（目标位惯用后缀）；
+      - 数值前 6 字符内出现「提到/提至/提高到」等目标动词（补足
+        `_REBALANCE_TARGET_KEYWORDS` 只收「降至/升至」的缺口）。
+
+    实盘事故：「把低风险资产从当前的 18.3%（…12.5%+5.8%）提到 25% 附近」里的
+    25% 被当作收益率改写成 -8.0%，句子变成「从 4.6% 提到 -8.0% 附近」——正确
+    文本被改错。真实收益率陈述不会写「收益率 25% 附近」这类目标位体。
+    """
+    if any(kw in sentence[match_start : match_start + 8] for kw in _TARGET_VALUE_SUFFIXES):
+        return True
+    nearby = sentence[max(0, match_start - 6) : match_start]
+    return any(kw in nearby for kw in _TARGET_VALUE_VERBS)
+
+
+def _is_breakdown_sum_context(sentence: str, match_start: int, value: float) -> bool:
+    """判断百分比数值是否为「合计 = 分项之和」结构（如「18.3%（12.5% + 5.8%）」）。
+
+    合计值与其后括号内分项百分比之和相等时，该数值是占比/合计口径，不是任何
+    单个品种的收益率。实盘事故：18.3% 与括号内 12.5%+5.8% 自洽，若按品种
+    收益率改写为 4.6%，句子随即自相矛盾。
+
+    Args:
+        sentence: 所在句子。
+        match_start: 数值起始位置。
+        value: 数值本身（与分项之和比较）。
+
+    Returns:
+        命中「合计 = 分项之和」时为 True。
+    """
+    after = sentence[match_start : match_start + 80]
+    m = re.match(r"^[^（(]{0,3}[（(]([^）)]{0,80})[）)]", after)
+    if not m:
+        return False
+    parts = [float(x) for x in _BREAKDOWN_PART_PATTERN.findall(m.group(1))]
+    if len(parts) < 2:
+        return False
+    return abs(sum(parts) - value) <= _BREAKDOWN_SUM_TOLERANCE
 
 
 def _is_hypothetical_context(sentence: str) -> bool:

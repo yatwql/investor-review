@@ -251,7 +251,9 @@ def handle_interruption(reporter: Any = None) -> None:
     try:
         if ctx.perf is not None:
             ctx.perf.mark_interrupted()
-            ctx.perf.save()
+            from src.python.report._run_scope import finish_report_run
+
+            finish_report_run(ctx.perf)
     except Exception:
         logger.warning("[run_integrity] 中断运行记录落盘失败", exc_info=True)
 

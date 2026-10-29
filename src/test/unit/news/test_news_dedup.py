@@ -558,12 +558,10 @@ class TestAnchorAppendAndRetention(unittest.TestCase):
             ),
         ]
         rows[0]["written_at"] = old_ts  # 发布时间与写入时刻都过期，才算超保留期
-        with open(self._anchor_path, "w", encoding="utf-8") as f:
-            for row in rows:
-                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        shard = _write_shard_rows(self._tmpdir, rows)
 
         with patch.object(news_dedup_anchor_policy, "_ANCHOR_SIZE_WARN_BYTES", 1):
-            news_dedup_anchor_policy._compact_anchor_file(os.path.getsize(self._anchor_path))
+            news_dedup_anchor_policy._compact_anchor_file(os.path.getsize(shard))
 
         remaining = "".join(_anchor_lines(self._tmpdir))
         self.assertIn("新新闻一", remaining)
@@ -586,11 +584,10 @@ class TestAnchorAppendAndRetention(unittest.TestCase):
             False,
             "cross_skip",
         )
-        with open(self._anchor_path, "w", encoding="utf-8") as f:
-            f.write(json.dumps(backlog, ensure_ascii=False) + "\n")
+        shard = _write_shard_rows(self._tmpdir, [backlog])
 
         with patch.object(news_dedup_anchor_policy, "_ANCHOR_SIZE_WARN_BYTES", 1):
-            news_dedup_anchor_policy._compact_anchor_file(os.path.getsize(self._anchor_path))
+            news_dedup_anchor_policy._compact_anchor_file(os.path.getsize(shard))
 
         remaining = "".join(_anchor_lines(self._tmpdir))
         self.assertIn("补录新闻一", remaining, "刚写入的样本不应因发布时间老而被裁掉")
@@ -608,14 +605,13 @@ class TestAnchorAppendAndRetention(unittest.TestCase):
             False,
             "cross_skip",
         )
-        with open(self._anchor_path, "w", encoding="utf-8") as f:
-            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        shard = _write_shard_rows(self._tmpdir, [row])
 
         with (
             patch.object(news_dedup_anchor_policy, "_ANCHOR_SIZE_WARN_BYTES", 1),
             patch.dict(os.environ, {news_dedup._ANCHOR_RETENTION_ENV: "0"}),
         ):
-            news_dedup_anchor_policy._compact_anchor_file(news_dedup.anchor_total_bytes(self._anchor_path))
+            news_dedup_anchor_policy._compact_anchor_file(os.path.getsize(shard))
 
         self.assertIn("很老的新闻甲", "".join(_anchor_lines(self._tmpdir)))
 
@@ -672,17 +668,25 @@ def _anchor_shard(directory: str) -> str:
     return os.path.join(directory, names[-1])
 
 
+def _write_shard_rows(directory: str, rows: list[dict], month: str = "202601") -> str:
+    """把记录写成按月分片（锚点只认 ``dedup_anchors-YYYYMM.jsonl.gz``）。"""
+    import gzip
+
+    path = os.path.join(directory, f"dedup_anchors-{month}.jsonl.gz")
+    with gzip.open(path, "wt", encoding="utf-8") as f:
+        for row in rows:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    return path
+
+
 def _anchor_lines(directory: str) -> list[str]:
-    """读取锚点目录下全部分片与未分片单文件的行（gzip 分片透明解压）。"""
+    """读取锚点目录下全部分片的行（gzip 透明解压）。"""
     import gzip
 
     lines: list[str] = []
     for name in sorted(os.listdir(directory)):
-        path = os.path.join(directory, name)
-        if name.endswith(".jsonl.gz"):
-            with gzip.open(path, "rt", encoding="utf-8") as f:
-                lines.extend(f.readlines())
-        elif name.endswith(".jsonl"):
-            with open(path, encoding="utf-8") as f:
-                lines.extend(f.readlines())
+        if not name.endswith(".jsonl.gz"):
+            continue
+        with gzip.open(os.path.join(directory, name), "rt", encoding="utf-8") as f:
+            lines.extend(f.readlines())
     return lines

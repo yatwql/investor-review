@@ -499,7 +499,7 @@ class TestGetCacheAge(CacheTestBase):
         set("age_test", "data")
 
         age = get_cache_age("age_test")
-        self.assertIsNotNone(age)
+        assert age is not None  # 类型收窄（get_cache_age 缺文件时返回 None）
         self.assertAlmostEqual(age, 0, delta=0.1)
 
     @patch("src.python.cache._ttl.time.time")
@@ -512,7 +512,7 @@ class TestGetCacheAge(CacheTestBase):
 
         mock_time.return_value = 2000.0
         age = get_cache_age("age_test2")
-        self.assertIsNotNone(age)
+        assert age is not None
         self.assertAlmostEqual(age, 1000.0, delta=0.1)
 
     def test_get_cache_age_missing(self):
@@ -528,7 +528,7 @@ class TestGetCacheAge(CacheTestBase):
         from src.python.cache import get_cache_age
 
         age = get_cache_age("gz_age")
-        self.assertIsNotNone(age)
+        assert age is not None
         self.assertGreaterEqual(age, 0)
 
 
@@ -585,3 +585,165 @@ class TestCleanupUnmanagedAndLogNoise(CacheTestBase):
         assert _fmt_span(30) == "30.0s"
         assert _fmt_span(600) == "10.0min"
         assert _fmt_span(7200) == "2.0h"
+
+
+# ═══════════════════════════════════════════════════════════
+#  未命中前缀聚合 + 收尾汇总行（日志噪声治理）
+# ═══════════════════════════════════════════════════════════
+
+pytestmark_summary = [pytest.mark.unit, pytest.mark.unit_core]
+
+
+class TestCacheMissSummary:
+    """逐键未命中只留 DEBUG，INFO 由一行汇总（命中率 + 前缀 Top）承担。
+
+    动机：真实运行里「缓存未命中（无此缓存文件）: <key>」逐键刷屏，占日志
+    10%~30%，单条几乎无信息；有价值的是命中率与「哪一类键在反复未命中」。
+    """
+
+    pytestmark = pytestmark_summary
+
+    @pytest.fixture(autouse=True)
+    def _clean_stats(self):
+        from src.python.cache._stats import reset_cache_stats
+
+        reset_cache_stats()
+        yield
+        reset_cache_stats()
+
+    def test_miss_prefixes_bucket_by_two_segments(self):
+        """未命中按「前两段」前缀分桶（report_datasink_index_x → report_datasink）。"""
+        from src.python.cache._stats import _record_cache_miss, get_cache_miss_prefixes
+
+        for key in ("report_datasink_index_600900.SS", "report_datasink_sections_4493", "sector_flow_abc"):
+            _record_cache_miss(key)
+        assert get_cache_miss_prefixes() == {"report_datasink": 2, "sector_flow": 1}
+
+    def test_summary_is_single_info_line_with_prefixes(self, caplog):
+        """汇总只打一行 INFO，含命中/未命中数与未命中前缀分布。"""
+        import logging
+
+        from src.python.cache._stats import _record_cache_hit, _record_cache_miss, log_cache_summary
+
+        _record_cache_hit()
+        _record_cache_miss("report_datasink_sections_1")
+        _record_cache_miss("report_datasink_sections_2")
+        with caplog.at_level(logging.INFO, logger="invest"):
+            log_cache_summary()
+        rows = [r for r in caplog.records if r.getMessage().startswith("[cache] 本次命中")]
+        assert len(rows) == 1 and rows[0].levelno == logging.INFO
+        assert "report_datasink 2" in rows[0].getMessage()
+
+    def test_repeated_prefix_raises_warning(self, caplog):
+        """同一前缀未命中 ≥5 次 → 单独一条 WARNING（每轮重取/缓存键失效的信号）。"""
+        import logging
+
+        from src.python.cache._stats import _record_cache_miss, log_cache_summary
+
+        for i in range(5):
+            _record_cache_miss(f"report_sections_miss_{i}")
+        with caplog.at_level(logging.INFO, logger="invest"):
+            log_cache_summary()
+        warns = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warns) == 1 and "report_sections" in warns[0].getMessage()
+
+    def test_summary_silent_without_samples(self, caplog):
+        """无可观测命中/未命中时不打汇总行（避免空噪声）。"""
+        import logging
+
+        from src.python.cache._stats import log_cache_summary
+
+        with caplog.at_level(logging.INFO, logger="invest"):
+            log_cache_summary()
+        assert not [r for r in caplog.records if r.getMessage().startswith("[cache] 本次命中")]
+
+
+class TestNegativeCacheProbeNotCounted:
+    """负缓存探测不计入全局命中率。
+
+    「负缓存里没有这条记录」是**正常预期**（说明该确定性缺失不存在，应照常取数），
+    计入未命中会让命中率虚低、未命中前缀分布失真，并误触发「同前缀未命中 ≥N 次」
+    告警——实测单次运行虚计 7~13 次（report_symbol_* / report_sections_miss_* 等）。
+    """
+
+    pytestmark = pytestmark_summary
+
+    @pytest.fixture(autouse=True)
+    def _clean_stats(self):
+        from src.python.cache._stats import reset_cache_stats
+
+        reset_cache_stats()
+        yield
+        reset_cache_stats()
+
+    def test_negative_cache_miss_not_recorded(self, tmp_path, monkeypatch):
+        """负缓存 probe 未命中 → 全局未命中计数与前缀分布都不增加。"""
+        from src.python.cache import _negative, _store
+        from src.python.cache._stats import get_cache_hit_rate, get_cache_miss_prefixes
+
+        monkeypatch.setattr(_store, "_cache_path", lambda key: str(tmp_path / f"{key}.json"))
+        probe = _negative.NegativeCache("测试缺失", "probe_miss_", "report_symbol_miss")
+        assert probe.probe("probe_miss_600900.SS") is None
+        assert get_cache_hit_rate()["misses"] == 0
+        assert get_cache_miss_prefixes() == {}
+
+    def test_negative_cache_hit_not_recorded(self, tmp_path, monkeypatch):
+        """负缓存命中同样不进全局统计（它有自己的 hits 计数与报告级汇总）。"""
+        from src.python.cache import _negative, _store
+        from src.python.cache._stats import get_cache_hit_rate
+
+        monkeypatch.setattr(_store, "_cache_path", lambda key: str(tmp_path / f"{key}.json"))
+        probe = _negative.NegativeCache("测试缺失二", "probe_hit_", "report_symbol_miss")
+        probe.mark("probe_hit_1", "确定性缺失")
+        assert probe.probe("probe_hit_1") == "确定性缺失"
+        assert probe.hits() == 1
+        assert get_cache_hit_rate()["hits"] == 0
+
+    def test_normal_get_still_counted(self, tmp_path, monkeypatch):
+        """守卫不过度：常规正缓存的未命中仍计入统计。"""
+        from src.python.cache import _store
+        from src.python.cache._stats import get_cache_hit_rate
+
+        monkeypatch.setattr(_store, "_cache_path", lambda key: str(tmp_path / f"{key}.json"))
+        _store.get("normal_missing_key", 60)
+        assert get_cache_hit_rate()["misses"] == 1
+
+
+class TestSuspiciousPrefixTopKeys:
+    """「同前缀未命中 ≥N 次」告警要带具体键（否则还得回 DEBUG 翻逐键明细）。"""
+
+    pytestmark = pytestmark_summary
+
+    @pytest.fixture(autouse=True)
+    def _clean_stats(self):
+        from src.python.cache._stats import reset_cache_stats
+
+        reset_cache_stats()
+        yield
+        reset_cache_stats()
+
+    def test_warning_lists_top_keys(self, caplog):
+        import logging
+
+        from src.python.cache._stats import _record_cache_miss, log_cache_summary
+
+        for _ in range(3):
+            _record_cache_miss("report_datasink_index_601398.SS")
+        for _ in range(2):
+            _record_cache_miss("report_datasink_index_601939.SS")
+        with caplog.at_level(logging.INFO, logger="invest"):
+            log_cache_summary()
+        warns = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warns) == 1
+        msg = warns[0].getMessage()
+        assert "report_datasink_index_601398.SS×3" in msg
+        assert "report_datasink_index_601939.SS×2" in msg
+
+    def test_key_tracking_is_bounded(self, caplog):
+        """键名计数有界：海量不同键不会无界增长（超出上限后不再新登记）。"""
+        from src.python.cache import _stats
+        from src.python.cache._stats import _record_cache_miss
+
+        for i in range(_stats._MISS_KEY_TRACK_LIMIT + 50):
+            _record_cache_miss(f"bulk_prefix_{i}")
+        assert len(_stats._cache_miss_keys) == _stats._MISS_KEY_TRACK_LIMIT

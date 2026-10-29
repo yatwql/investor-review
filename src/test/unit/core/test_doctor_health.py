@@ -72,14 +72,26 @@ class TestDedupAnchor:
         assert "未生成" in item["message"]
 
     def test_oversized_anchor_flagged_with_compact_hint(self, monkeypatch):
+        """超过阈值 → 提示维护压缩（锚点只认按月分片，故写分片）。"""
+        import gzip
         import pathlib
 
         tmp = pathlib.Path(doctor_logs._DEDUP_ANCHOR_PATH)
-        tmp.write_text("{}\n" * 10, encoding="utf-8")
+        shard = tmp.parent / "dedup_anchors-202610.jsonl.gz"
+        with gzip.open(shard, "wt", encoding="utf-8") as f:
+            f.write("{}\n" * 10)
         monkeypatch.setattr(doctor_logs, "_ANCHOR_COMPACT_BYTES", 10)
         item = doctor_logs._check_dedup_anchor()
         assert item["ok"] is False
         assert "eval-dedup-threshold.py --compact" in item["hint"]
+
+    def test_unsplit_single_file_not_counted(self, monkeypatch, tmp_path):
+        """锚点体积只统计按月分片：未分片的单文件不计入。"""
+
+        monkeypatch.setattr(doctor_logs, "_DEDUP_ANCHOR_PATH", str(tmp_path / "dedup_anchors.jsonl"))
+        (tmp_path / "dedup_anchors.jsonl").write_text("{}\n" * 1000, encoding="utf-8")
+        item = doctor_logs._check_dedup_anchor()
+        assert item["ok"] is True and any("未生成" in str(v) for v in item.values())
 
 
 class TestPerfLedger:

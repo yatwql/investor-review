@@ -83,7 +83,7 @@ def _generate_report_full(
     from src.python.report._snapshot import capture_snapshot
     from src.python.report.orchestrator import ReportResult, prepare_report_data
 
-    from src.python.report._run_scope import start_report_run
+    from src.python.report._run_scope import finish_report_run, start_report_run
 
     perf = PerfCollector(report_type="full", holdings=holdings, stage_announcer=reporter.stage_progress)
     bind_perf(perf)
@@ -425,6 +425,6 @@ def _generate_report_full(
     result.news_ok = news_ok
     result.report_generated = result.html_ok or result.excel_ok
     _record_llm_context(perf, _llm_sink, _usage_baseline)
-    perf.save()
+    finish_report_run(perf)
     _collect_health_checks(_health_fut, "full", holdings)
     return result

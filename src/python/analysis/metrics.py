@@ -82,21 +82,6 @@ __all__ = [
     "get_confidence_level",
 ]
 
-# ── 常量（兼容外部直接引用，实现以 metrics_returns/metrics_risk 为准）──
-
-_TRADING_DAYS_PER_YEAR = 252
-"""A 股年化交易日数（用于年化波动率和夏普比率）。"""
-
-_MIN_SAMPLE_DAYS = 20
-"""最小样本天数：不足此天数的指标置信度降为 low 或返回 None。"""
-
-_MAX_DRAWDOWN_EPSILON = 0.001
-"""最大回撤下限：当 max_drawdown < 0.1% 时卡玛比率返回 None。"""
-
-_RISK_FREE_RATE_DEFAULT = 0.015
-"""无风险利率默认值（当传入的 rf 为 None 时使用，约 1.5%）。"""
-
-
 # ── 全量指标聚合 ────────────────────────────────
 
 

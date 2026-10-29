@@ -7,8 +7,20 @@ from __future__ import annotations
 
 import re
 
-from src.python.llm.fact_checker._constants import _ATTACHED_SUBJECT_MAX_DIST, _NAME_ALIAS_MAP
+from src.python.llm.fact_checker._constants import (
+    _ATTACHED_SUBJECT_MAX_DIST,
+    _ATTACHED_SUBJECT_STRIP_WORDS,
+    _NAME_ALIAS_MAP,
+    _NON_SUBJECT_FILLER_WORDS,
+)
 from src.python.llm.fact_checker._patterns import _CODE_PATTERN
+
+#: 叮在数值前的分隔/符号：剥掉后才能看到紧贴的「主体名称」汉字串。
+_ATTACHED_SUBJECT_SEPARATORS = " \u3000\t:：，,、（）()「」“”\"'+-~≈%"
+
+#: 剥离时依次尝试的词表：度量词（收益率/涨幅…）与时间/范围填充词（本季度/近期…）。
+#: 两类都剥完后剩下的末尾汉字串才当作「主体名称」看待。
+_ATTACHED_SUBJECT_PREFIX_WORDS: tuple[str, ...] = _ATTACHED_SUBJECT_STRIP_WORDS + _NON_SUBJECT_FILLER_WORDS
 
 
 def _strip_html(html: str) -> str:
@@ -222,7 +234,9 @@ def _match_descriptive_tail(
                     dist = min(abs(m.start() - anchor), abs(m.end() - anchor))
                     if best_dist is None or dist < best_dist or (dist == best_dist and len(cand_short) > best_len):
                         best_code, best_dist, best_len = code, dist, len(cand_short)
-    return (best_code, best_dist) if best_code is not None else None
+    if best_code is None or best_dist is None:
+        return None
+    return best_code, best_dist
 
 
 #: 分句符（与 `_split_sentences` 的断句口径一致，另含顿号与换行）
@@ -275,6 +289,102 @@ def _alias_normalized(text: str) -> str:
     return text
 
 
+def _unresolved_attached_subject(
+    sentence: str,
+    anchor: int,
+    holding_codes: set[str],
+    name_to_code: dict[str, str] | None,
+) -> bool:
+    """判断数值是否紧贴一个「未识别为持仓」的主体名（无法安全归因）。
+
+    从数值向前取一段字符，反复剥掉分隔符与「收益率/涨幅/约/达」等度量词，剩下的
+    末尾汉字串即为数值的紧邻主体（如「建信装备 +21.91%」→「建信装备」）。该串
+    若不能被识别为任意持仓（代码/全名/简称/描述尾名），则数值的主体是一个检查器
+    看不懂的名称，**归属不可知**——此时不能用同句其他持仓的收益率去改写它。
+
+    实盘事故：「纳指联接 016055 +18.66%、建信装备 +21.91%」——「建信装备」是
+    011506（建信高端装备）的口语简称，未能解析 → 回退到同句代码 016055，把正确
+    的 +21.91% 改写成 016055 的 18.7%，同一句里两个品种报出同一数字。
+
+    设计取舍：宁可漏改（不修正），不可误改（把对的改错）——改写会直接进入用户
+    可见正文，而漏改只是保守。
+
+    Args:
+        sentence: 所在句子。
+        anchor: 数值在句中的起始位置。
+        holding_codes: 持仓代码集合。
+        name_to_code: 「名称 → 代码」映射。
+
+    Returns:
+        紧邻主体存在但解析不出持仓时为 True（该数值应跳过校验）。
+    """
+    prefix = sentence[max(0, anchor - 24) : anchor].rstrip(_ATTACHED_SUBJECT_SEPARATORS)
+    changed = True
+    while changed:
+        changed = False
+        for word in _ATTACHED_SUBJECT_PREFIX_WORDS:
+            if prefix.endswith(word):
+                prefix = prefix[: -len(word)].rstrip(_ATTACHED_SUBJECT_SEPARATORS)
+                changed = True
+    token_match = re.search(r"[\u4e00-\u9fff]{2,12}$", prefix)
+    if not token_match:
+        return False
+    token = token_match.group(0)
+    # 可归因三选一：持仓名称包含该串（如「建信高端装备」⊂「建信高端装备股票A」，
+    # 省略类型尾缀的完整核心名）、或常规主体匹配（代码/别名/描述尾名）能解析。
+    if any(token in name for name in (name_to_code or {})):
+        return False
+    return not _has_subject_candidate(token, holding_codes, name_to_code, len(token) - 1)
+
+
+def _subject_spans(
+    text: str,
+    holding_codes: set[str],
+    name_to_code: dict[str, str] | None,
+    anchor: int = 0,
+) -> list[tuple[int, int, str]]:
+    """主体出现区间 ``[(start, end, code), ...]``——代码/全名/简称归一的**单源实现**。
+
+    主体匹配此前有三份各写一遍（``_locate_subject_in`` 取代码、``_has_subject_candidate``
+    取布尔、数值检查器还要取区间判「市场名词是否其实属于某持仓名」）。三处口径一旦分叉，
+    就会出现「主体解析得到、但距离算不出」这类内部不一致。此处按文本产出区间，
+    三者按需消费。
+
+    简称的位置按别名替换的长度增量近似映射回原文本，仅用于距离/重叠比较。
+
+    Args:
+        text: 待匹配文本（通常是分句）。
+        holding_codes: 持仓代码集合。
+        name_to_code: 「持仓名 → 代码」映射。
+        anchor: 数值位置（预留：描述性尾名不走本函数，当前实现不消费此参数）。
+
+    Returns:
+        区间列表（可能为空）。描述性尾名不在其中——它只有距离没有区间，
+        需区间的调用方应另行判断。
+    """
+    spans: list[tuple[int, int, str]] = []
+    for m in _CODE_PATTERN.finditer(text):
+        if m.group(0) in holding_codes:
+            spans.append((m.start(), m.end(), m.group(0)))
+    for name, code in (name_to_code or {}).items():
+        idx = text.find(name)
+        if idx != -1:
+            spans.append((idx, idx + len(name), code))
+    norm = _alias_normalized(text)
+    if norm != text:
+        for name, code in (name_to_code or {}).items():
+            core = _extract_core_name(name)
+            if len(core) < 2:
+                continue
+            idx = norm.find(core)
+            if idx == -1:
+                continue
+            _extra = sum((len(_c) - len(_a)) * norm[:idx].count(_c) for _a, _c in _NAME_ALIAS_MAP.items())
+            _pos = max(0, idx - _extra)
+            spans.append((_pos, _pos + len(core), code))
+    return spans
+
+
 def _has_subject_candidate(
     text: str,
     holding_codes: set[str],
@@ -286,17 +396,9 @@ def _has_subject_candidate(
     简称与尾名用与 :func:`_locate_subject_in` 同源的口径探测，避免「分句里有主体
     但没识别出来」而错误回退全句、被远处的另一个主体抢走归属。
     """
-    if any(code in holding_codes for code in _CODE_PATTERN.findall(text)):
+    if _subject_spans(text, holding_codes, name_to_code, anchor):
         return True
-    for name in name_to_code or {}:
-        if name in text:
-            return True
-    norm = _alias_normalized(text)
-    if norm != text:
-        for name in name_to_code or {}:
-            core = _extract_core_name(name)
-            if len(core) >= 2 and core in norm:
-                return True
+    # 描述性尾名（"电池主题ETF"→561910）只有距离没有区间，单独兜底
     return _match_descriptive_tail(text, name_to_code, anchor) is not None
 
 
@@ -321,9 +423,16 @@ def _locate_subject_code(
     """
     span = _enclosing_bracket_span(sentence, anchor)
     if span is not None:
-        for cm in _CODE_PATTERN.finditer(sentence, span[0], span[1]):
-            if cm.group(0) in holding_codes:
-                return cm.group(0)
+        # 括号内多个代码时取**最近**一个（不取第一个）：括号常并列多只品种
+        # （「（240012 -8.03%、561910 -36.20%）」），取首个会把第二个品种的正确
+        # 数值改写成第一个品种的收益率。
+        bracket_codes = [
+            (cm.group(0), min(abs(cm.start() - anchor), abs(cm.end() - anchor)))
+            for cm in _CODE_PATTERN.finditer(sentence, span[0], span[1])
+            if cm.group(0) in holding_codes
+        ]
+        if bracket_codes:
+            return min(bracket_codes, key=lambda item: item[1])[0]
 
     clause_start, clause_end = _clause_span(sentence, anchor)
     clause = sentence[clause_start:clause_end]

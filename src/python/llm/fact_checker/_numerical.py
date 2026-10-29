@@ -14,11 +14,13 @@ from src.python.llm.fact_checker._constants import (
     _EXPOSURE_KEYWORDS,
     _INDEX_CODES,
     _PROFIT_KEYWORDS,
+    _MARKET_SCOPE_NOUNS,
     _PROPORTION_KEYWORDS,
     _REBALANCE_TARGET_KEYWORDS,
 )
 from src.python.llm.fact_checker._context import (
     _is_benchmark_relative_context,
+    _is_breakdown_sum_context,
     _is_contribution_sentence,
     _is_change_rate_context,
     _is_daily_change_context,
@@ -29,6 +31,8 @@ from src.python.llm.fact_checker._context import (
     _is_portfolio_level_context,
     _is_position_weight_context,
     _is_replay_context,
+    _is_table_weight_cell_context,
+    _is_target_value_context,
     _is_trim_target_context,
     _is_weight_context,
     _is_win_rate_context,
@@ -38,10 +42,14 @@ from src.python.llm.fact_checker._utils import (
     _build_stock_change_map,
     _build_stock_rate_map,
     _calc_portfolio_values,
+    _clause_span,
     _extract_holding_map,
     _locate_subject_code,
+    _locate_subject_in,
     _sentence_snippet,
     _split_sentences,
+    _subject_spans,
+    _unresolved_attached_subject,
 )
 
 
@@ -88,7 +96,72 @@ class PercentContext:
     is_weight: bool = False
     is_benchmark_relative: bool = False
     is_trim_target: bool = False
+    is_target_value: bool = False
+    is_breakdown_sum: bool = False
     is_non_rate_metric: bool = False
+    is_table_weight_cell: bool = False
+    confirmed_rates: dict[str, str] | None = None
+
+
+def _subject_distance(spans: list[tuple[int, int, str]], code: str, anchor: int) -> int:
+    """该主体到数值的最小**边缘距离**；分句内找不到其出现处时返回极大值。"""
+    best: int | None = None
+    for start, end, mapped in spans:
+        if mapped != code:
+            continue
+        dist = min(abs(start - anchor), abs(end - anchor))
+        best = dist if best is None else min(best, dist)
+    return best if best is not None else 10**6
+
+
+def _is_market_scope_no_subject(
+    sentence: str,
+    anchor: int,
+    holding_codes: set[str],
+    name_to_code: dict[str, str] | None,
+) -> bool:
+    """判断数值是否落在「市场/板块口径且无持仓主体」的分句里。
+
+    分句含板块/指数/大盘类名词，同时分句内出现不了任何持仓主体（代码/全名/简称/
+    描述性尾名）时，该数值讲的是市场涨跌，不是持仓收益率——**归属不可知**，不能
+    按收益率改写。
+
+    实盘事故：「银行板块净流出15.06亿、跌0.35%，白酒净流出16.86亿、跌2.35%」——
+    板块单日涨跌被全局最近邻兜底改写成某品种收益率（先是 102.0%、后是 4.6%，随
+    最近邻漂移），回写缓存后每轮让自检输入变化，多付一次 11~17s 的自检调用。
+
+    Returns:
+        命中「市场口径且无持仓主体」时为 True。
+    """
+    clause_start, clause_end = _clause_span(sentence, anchor)
+    clause = sentence[clause_start:clause_end]
+    _rel = anchor - clause_start
+
+    spans = _subject_spans(clause, holding_codes, name_to_code)
+
+    _noun_dist: int | None = None
+    for noun in _MARKET_SCOPE_NOUNS:
+        idx = clause.find(noun)
+        while idx != -1:
+            end = idx + len(noun)
+            # 该出现处落在某持仓主体区间内 → 它是主体的一部分而非市场简称
+            # （「华安纳指」里的「纳指」指 040046，不是纳指市场）。
+            if not any(start < end and idx < span_end for start, span_end, _c in spans):
+                dist = abs(end - _rel) if end <= _rel else abs(idx - _rel)
+                _noun_dist = dist if _noun_dist is None else min(_noun_dist, dist)
+            idx = clause.find(noun, idx + 1)
+    if _noun_dist is None:
+        return False
+    if not spans:
+        return True
+
+    # 分句里既有市场名词也有持仓主体：按**谁更近**判定。指数中文名常与基金名重叠
+    # （「纳斯达克100涨1.18%」——「纳斯达克100」同时是 016055 名称的一部分），
+    # 只看「有没有主体」会把它当成持仓收益率；距离相等时判为市场口径（宁漏改）。
+    subject_code = _locate_subject_in(clause, holding_codes, name_to_code, _rel)
+    if subject_code is None:
+        return True
+    return _subject_distance(spans, subject_code, _rel) >= _noun_dist
 
 
 def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, str, str] | None]:
@@ -102,10 +175,20 @@ def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, 
         correction = (wrong_value_str, correct_value_str, context_sentence, reason)
         reason 为修正语义（如"601939实际收益率187.1%"），供修正明细展示。
     """
-    # 环比/同比变化率、胜率、评分权重、相对基准跑输/跑赢、止盈/减仓目标比例
+    # 环比/同比变化率、胜率、评分权重、相对基准跑输/跑赢、止盈/减仓目标比例、
+    # 目标位/估计值、合计=分项之和
     # → 数值均非收益率，不可比较。均用近邻窗口检测（数值紧邻对应语境词），
     # 避免同句其他真实收益率被连带跳过。
-    if ctx.is_change_rate or ctx.is_win_rate or ctx.is_weight or ctx.is_benchmark_relative or ctx.is_trim_target:
+    if (
+        ctx.is_change_rate
+        or ctx.is_win_rate
+        or ctx.is_weight
+        or ctx.is_benchmark_relative
+        or ctx.is_trim_target
+        or ctx.is_target_value
+        or ctx.is_breakdown_sum
+        or ctx.is_table_weight_cell
+    ):
         return None, None
 
     # 数值前文是占比/份额/市值/仓位类度量 → 该数值不是收益率。
@@ -167,9 +250,14 @@ def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, 
         return issue, (ctx.value_str, correct_str, ctx.sentence, f"组合实际收益率{correct_str}%")
 
     # 组合单日/当日表现语境（"今日组合 +0.21%"）→ 数值为组合当日收益，非个股收益率，
-    # 且无组合当日收益基准数据可校验 → 跳过。必须在此判定：否则回退全局最近邻会把
+    # 且无组合当日收益基准数据可校验 → 跳过。必须在此判定：否则回退全局最近邻会将
     # 当日收益（如 0.21%）误修正为数值最接近的品种收益率（如 561910 的 -2.3%）。
     if _is_portfolio_daily_change_context(ctx.sentence, ctx.anchor):
+        return None, None
+
+    # 数值紧贴一个解析不出持仓的名称（如简称「建信装备」）→ 主体归属不可知，
+    # 不可用同句其他持仓的收益率去改写（宁漏改不误改）。
+    if _unresolved_attached_subject(ctx.sentence, ctx.anchor, ctx.holding_codes, ctx.name_to_code):
         return None, None
 
     # 定位句中明确持仓主体：统一按 _locate_subject_code「紧邻优先 + 代码/全名最近兜底」
@@ -198,11 +286,25 @@ def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, 
 
     closest_ref = min(ref_rates, key=lambda k: abs(ctx.value - ref_rates[k]))
 
+    # 市场/板块口径且分句内无持仓主体 → 数值是市场涨跌，归属不可知，不改写。
+    if _is_market_scope_no_subject(ctx.sentence, ctx.anchor, ctx.holding_codes, ctx.name_to_code):
+        return None, None
+
+    # 同句同品种只有一个持仓收益率：该品种的收益率已在同一句内确认过，本数值只能是
+    # 别的口径（括号里的占比/贡献等），不参与收益率改写。
+    # 实盘事故：「561910（-36.20%，7.3%）」——7.3% 是占比，却被改写成 -36.2%。
+    if ctx.confirmed_rates is not None:
+        _prev = ctx.confirmed_rates.get(best_code or "")
+        if _prev is not None and _prev != ctx.value_str:
+            return None, None
+
     # 策略 1：句中有明确持仓主体 → 按该主体实际收益率校验（容差内通过）；
     # 主体无收益率数据（ref 为 None）或无主体 → 回退全局最近邻（历史语义）。
     if best_code is not None:
         ref = ctx.stock_rates_abs.get(best_code)
         if ref is not None and abs(ctx.value - ref) <= ctx.tolerance_pct:
+            if ctx.confirmed_rates is not None:
+                ctx.confirmed_rates[best_code] = ctx.value_str
             return None, None
         if ref is None and abs(ctx.value - ref_rates[closest_ref]) <= ctx.tolerance_pct:
             return None, None
@@ -314,7 +416,13 @@ def check_numerical_consistency(
 
     total_checked = 0
     passed = 0
-    seen_values: set[str] = set()
+    # 去重粒度是「(数值, 所在句)」而非仅数值：同一数值出现在多个句子里时，各句语境
+    # 不同（「止盈约30%」与「收益率30%」），必须逐句各自判定；只按数值去重会让
+    # 后续出现处永远不被检查，再叠加回写就形成「改一处、留其余」的自相矛盾正文。
+    seen_values: set[tuple[str, str]] = set()
+    # 逐句重置：句内已确认的「品种代码 → 收益率文本」（见 PercentContext.confirmed_rates）
+    confirmed_rates: dict[str, str] = {}
+    confirmed_sentence = ""
 
     for sentence in _split_sentences(text):
         # 跳过收益归因段落（贡献度占比不可与收益率直接比较）
@@ -324,11 +432,16 @@ def check_numerical_consistency(
         if _is_replay_context(sentence):
             continue
 
+        if sentence != confirmed_sentence:
+            confirmed_rates = {}
+            confirmed_sentence = sentence
+
         for match in re.finditer(_PERCENT_PATTERN, sentence):
             value_str = match.group(1)
-            if value_str in seen_values:
+            occurrence_key = (value_str, sentence)
+            if occurrence_key in seen_values:
                 continue
-            seen_values.add(value_str)
+            seen_values.add(occurrence_key)
             value = float(value_str)
 
             total_checked += 1
@@ -365,6 +478,13 @@ def check_numerical_consistency(
                     is_weight=_is_weight_context(sentence, match.start()),
                     is_benchmark_relative=_is_benchmark_relative_context(sentence, match.start()),
                     is_trim_target=_is_trim_target_context(sentence, match.start()),
+                    # 目标位/估计值（"提到 25% 附近"）与「合计 = 分项之和」（"18.3%（12.5%+5.8%）"）
+                    is_target_value=_is_target_value_context(sentence, match.start()),
+                    is_breakdown_sum=_is_breakdown_sum_context(sentence, match.start(), value),
+                    # 同句内已确认的品种收益率（同品种第二个百分数只能是别的口径）
+                    confirmed_rates=confirmed_rates,
+                    # 表格并列裸百分比单元格（权重列/目标列）：归属不可知，不改写
+                    is_table_weight_cell=_is_table_weight_cell_context(sentence, match.start()),
                     # 数值前文语义（占比/份额/市值/仓位）：局部窗口判定，优先于整句收益语境
                     is_non_rate_metric=_is_non_rate_pre_word_context(sentence, match.start()),
                 )

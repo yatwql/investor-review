@@ -11,6 +11,8 @@ import threading
 
 import re
 
+from collections.abc import Sequence
+
 from src.python.llm.fact_checker._constants import (
     _DEFAULT_TOLERANCE_PCT,
     _INDEX_CODES,
@@ -75,7 +77,8 @@ def reset_auto_correction_counts() -> None:
 
 def apply_numerical_corrections(
     html: str,
-    corrections: list[tuple[str, str, str, str]],
+    corrections: Sequence[tuple[str, ...]],
+    applied: list[str] | None = None,
 ) -> str:
     """对 HTML 内容中的错误百分比数值执行自动替换。
 
@@ -84,7 +87,11 @@ def apply_numerical_corrections(
 
     Args:
         html: 原始 HTML 内容。
-        corrections: [(wrong_value_str, correct_value_str, context_sentence, reason), ...]。
+        corrections: [(wrong_value_str, correct_value_str, context_sentence[, reason]), ...]——
+            前三元为替换所必需，reason 仅用于修正明细展示，故接受 3/4 元两种形态。
+        applied: 可选的出参——实际执行了替换的 wrong_value 逐个追加。**必须传**才能
+            让「已修正明细」只列真正改过的项：无法安全定位的（同值异义/同句多义）会被
+            跳过，不区分就会把未生效的判定逐条列进摘要。
 
     Returns:
         修正后的 HTML 内容。
@@ -96,9 +103,20 @@ def apply_numerical_corrections(
     sorted_cx = sorted(corrections, key=lambda c: -len(c[0]))
     stripped = _strip_html(html)
 
+    # 同一 wrong_value 对应的正确值必须唯一，否则语义不确定（同值异义）→ 整值放弃。
+    _targets: dict[str, set[str]] = {}
+    _sentences: dict[str, set[str]] = {}
+    for cx in sorted_cx:
+        _targets.setdefault(cx[0], set()).add(cx[1])
+        if len(cx) > 2:
+            _sentences.setdefault(cx[0], set()).add(cx[2])
+
     result = html
     for cx in sorted_cx:
         wrong_val, correct_val, sentence = cx[0], cx[1], cx[2]
+        if len(_targets.get(wrong_val, ())) > 1:
+            logger.info("[fact-check] 数值 %s%% 的多处判定对应不同正确值，整值跳过改写", wrong_val)
+            continue
         if sentence not in stripped:
             continue
 
@@ -114,16 +132,36 @@ def apply_numerical_corrections(
             explicit_plus = match.group(0).lstrip().startswith("+")
             return ("+" if explicit_plus else "") + _new + "%"
 
-        # count=1：check 阶段按数值全局去重，每个 wrong_val 在 corrections 中唯一，
-        # 只替换判定处一次，避免误伤 HTML 中同值异义的其他出现处
-        # （如"止盈约30%"与"收益率30%"并存时只修被判为错误的收益率处）。
-        result = pattern.sub(_replace, result, count=1)
+        # 全有或全无：同一 wrong_val 在正文中可能多处出现。仅当「已判为错值的句子里的
+        # 出现次数 == 全文出现次数」时整体替换；否则整值跳过。
+        # 为什么不能 `count=1` 逐个替换：check 阶段按数值去重时每轮只判一处，
+        # 回写后下一轮再判下一处，多轮后同一事实在报告里变成两个不同的数字
+        # （561910 一处 -8.0%、其余 -36.20%），自相矛盾且逐轮固化进缓存。
+        value_pattern = re.compile(r"(?<![\d.])[+-]?" + re.escape(wrong_val) + r"\s*%")
+        doc_occurrences = len(value_pattern.findall(stripped))
+        judged_sentences = _sentences.get(wrong_val, set())
+        ambiguous = any(len(value_pattern.findall(s)) > 1 for s in judged_sentences)
+        judged_occurrences = sum(len(value_pattern.findall(s)) for s in judged_sentences)
+        if ambiguous or judged_occurrences != doc_occurrences or doc_occurrences == 0:
+            logger.debug(
+                "[fact-check] 数值 %s%% 无法安全定位（判定 %d/%d 处%s），整值跳过改写",
+                wrong_val,
+                judged_occurrences,
+                doc_occurrences,
+                "，同句多义" if ambiguous else "，同值异义",
+            )
+            continue
+        result = pattern.sub(_replace, result)
+        if applied is not None:
+            applied.append(wrong_val)
 
     # 畸形数值自检：修正后的正文不得出现连续符号。命中即说明符号未归一
     # （旧值 `+4.55%` 被换成 `-9.0` → `+-9.0%`），用户视觉上会读到错误数字，
     # 一律判本批修正失败、整批不写回（保留原文比写入畸形值安全）。
     if _MALFORMED_NUMBER_RE.search(result) and not _MALFORMED_NUMBER_RE.search(html):
         logger.warning("[fact-check] 自动修正会产生畸形数值（连续符号），已放弃写回：%d 处", len(corrections))
+        if applied is not None:
+            applied.clear()
         return html
 
     return result

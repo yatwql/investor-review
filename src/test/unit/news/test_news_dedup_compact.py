@@ -20,20 +20,44 @@ from src.python.providers import news_dedup, news_dedup_anchor_policy, news_dedu
 pytestmark = [pytest.mark.unit, pytest.mark.unit_news]
 
 
+def _write_shard(directory, rows: list[dict], month: str = "") -> list[str]:
+    """把行按 ``ts`` 月份写入按月分片（锚点只认 ``dedup_anchors-YYYYMM.jsonl.gz``）。
+
+    Args:
+        directory: 锚点目录。
+        rows: 记录列表。
+        month: 强制指定月份（``YYYYMM``）；空则逐条按 ``ts`` 的月份分组。
+
+    Returns:
+        写入的分片路径列表。
+    """
+    import gzip
+    import os
+
+    grouped: dict[str, list[dict]] = {}
+    for row in rows:
+        key = month or str(row.get("ts", ""))[:7].replace("-", "") or "202610"
+        grouped.setdefault(key, []).append(row)
+    paths: list[str] = []
+    for key, items in sorted(grouped.items()):
+        path = os.path.join(directory, f"dedup_anchors-{key}.jsonl.gz")
+        with gzip.open(path, "wt", encoding="utf-8") as f:
+            f.writelines(json.dumps(r, ensure_ascii=False) + "\n" for r in items)
+        paths.append(path)
+    return paths
+
+
 def _rows(directory) -> list[dict]:
-    """读取锚点目录下全部分片与未分片单文件（gzip 分片透明解压）。"""
+    """读取锚点目录下全部分片（gzip 透明解压）。"""
     import gzip
     import os
 
     rows: list[dict] = []
     for name in sorted(os.listdir(directory)):
-        path = os.path.join(directory, name)
-        if name.endswith(".jsonl.gz"):
-            with gzip.open(path, "rt", encoding="utf-8") as f:
-                rows.extend(json.loads(line) for line in f if line.strip())
-        elif name.endswith(".jsonl"):
-            with open(path, encoding="utf-8") as f:
-                rows.extend(json.loads(line) for line in f if line.strip())
+        if not name.endswith(".jsonl.gz"):
+            continue
+        with gzip.open(os.path.join(directory, name), "rt", encoding="utf-8") as f:
+            rows.extend(json.loads(line) for line in f if line.strip())
     return rows
 
 
@@ -44,13 +68,10 @@ def _raw(directory) -> str:
 
     chunks: list[str] = []
     for name in sorted(os.listdir(directory)):
-        path = os.path.join(directory, name)
-        if name.endswith(".jsonl.gz"):
-            with gzip.open(path, "rt", encoding="utf-8") as f:
-                chunks.append(f.read())
-        elif name.endswith(".jsonl"):
-            with open(path, encoding="utf-8") as f:
-                chunks.append(f.read())
+        if not name.endswith(".jsonl.gz"):
+            continue
+        with gzip.open(os.path.join(directory, name), "rt", encoding="utf-8") as f:
+            chunks.append(f.read())
     return "".join(chunks)
 
 
@@ -70,21 +91,23 @@ def _record(source: str, title: str, ratio: float) -> str:
 class TestAnchorCompaction:
     def _anchor_file(self, tmp_path, monkeypatch):
         path = tmp_path / "anchors.jsonl"
-        path.write_text(
-            "\n".join(
-                [
-                    _record("sina", "标题A", 0.5),  # 旧
-                    _record("sina", "标题B", 0.5),
-                    _record("sina", "标题A", 0.9),  # 新 → 应保留这条
-                    "",
-                ]
-            ),
-            encoding="utf-8",
-        )
+        import gzip
+
+        with gzip.open(tmp_path / "dedup_anchors-202610.jsonl.gz", "wt", encoding="utf-8") as f:
+            f.write(
+                "\n".join(
+                    [
+                        _record("sina", "标题A", 0.5),  # 旧
+                        _record("sina", "标题B", 0.5),
+                        _record("sina", "标题A", 0.9),  # 新 → 应保留这条
+                        "",
+                    ]
+                )
+            )
         monkeypatch.setattr(news_dedup_anchor_store, "_ANCHOR_PATH", str(path))
         monkeypatch.setattr(news_dedup_anchor_policy, "_ANCHOR_SIZE_WARN_BYTES", 1)  # 强制超阈值
         monkeypatch.delenv(news_dedup._ANCHOR_COMPACT_ENV, raising=False)
-        return path
+        return tmp_path / "dedup_anchors-202610.jsonl.gz"
 
     def test_keeps_latest_per_title_pair(self, tmp_path, monkeypatch):
         path = self._anchor_file(tmp_path, monkeypatch)
@@ -115,17 +138,17 @@ class TestAnchorCompaction:
     def test_env_disables_compaction(self, tmp_path, monkeypatch):
         path = self._anchor_file(tmp_path, monkeypatch)
         monkeypatch.setenv(news_dedup._ANCHOR_COMPACT_ENV, "0")
-        before = path.read_text(encoding="utf-8")
+        before = path.read_bytes()
         news_dedup_anchor_policy._compact_anchor_file(path.stat().st_size)
-        assert path.read_text(encoding="utf-8") == before
+        assert path.read_bytes() == before
         assert not list(tmp_path.glob("*.bak"))
 
     def test_below_threshold_is_noop(self, tmp_path, monkeypatch):
         path = self._anchor_file(tmp_path, monkeypatch)
         monkeypatch.setattr(news_dedup_anchor_policy, "_ANCHOR_SIZE_WARN_BYTES", 10**9)
-        before = path.read_text(encoding="utf-8")
+        before = path.read_bytes()
         news_dedup_anchor_policy._compact_anchor_file(path.stat().st_size)
-        assert path.read_text(encoding="utf-8") == before
+        assert path.read_bytes() == before
 
     def test_marks_unattributed_rows_as_legacy(self, tmp_path, monkeypatch):
         """无规则指纹的早期行补 legacy 标注后保留（不丢历史，也不与在用指纹混算）。"""
@@ -160,9 +183,8 @@ class TestSizeCap:
         }
 
     def _write(self, tmp_path, rows):
-        path = tmp_path / "anchors.jsonl"
-        path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
-        return path
+        """写入按月分片（锚点只认分片形态），返回首个分片路径。"""
+        return Path(_write_shard(tmp_path, rows)[0])
 
     def test_branch_quota_protects_small_branch(self, tmp_path):
         """体积裁剪不得把小分支整类裁光（否则校准报告会误报「该规则没生效」）。"""
@@ -182,10 +204,12 @@ class TestSizeCap:
         path = self._write(tmp_path, [self._row("cross_skip", "甲", "2026-10-01 10:00")])
         real_read = news_dedup.read_anchor_lines
 
+        import gzip
+
         def racing_read(base=None):
             lines = real_read(base)
-            # 读取完成、写回之前，另一个进程追加了一行
-            with open(path, "a", encoding="utf-8") as f:
+            # 读取完成、写回之前，另一个进程追加了一行（gzip 追加 = 新 member）
+            with gzip.open(path, "at", encoding="utf-8") as f:
                 f.write(json.dumps(self._row("cross_skip", "并发写入", "2026-10-02 10:00"), ensure_ascii=False) + "\n")
             return lines
 
@@ -194,7 +218,8 @@ class TestSizeCap:
 
         assert result["aborted"] == "concurrent-write"
         assert result["written"] is False
-        assert "并发写入" in path.read_text(encoding="utf-8"), "并发写入的行必须保留"
+        with gzip.open(path, "rt", encoding="utf-8") as f:
+            assert "并发写入" in f.read(), "并发写入的行必须保留"
 
     def test_no_rewrite_when_nothing_to_trim(self, tmp_path):
         """无行可裁、无需补标注时不重写文件（避免几十 MB 的空转重写）。"""
@@ -259,9 +284,7 @@ class TestSharding:
         this_month = dt.datetime.now().strftime("%Y-%m")
         old_row = self._row("旧月新闻", f"{old_month}-05 10:00")
         new_row = self._row("本月新闻", f"{this_month}-05 10:00")
-        Path(base).write_text(
-            "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in (old_row, new_row)), encoding="utf-8"
-        )
+        _write_shard(tmp_path, [old_row, new_row])
 
         result = news_dedup.compact_anchor_file(base, retention_days=0, target_bytes=10**9)
 
@@ -272,7 +295,7 @@ class TestSharding:
                 f"dedup_anchors-{this_month.replace('-', '')}.jsonl.gz",
             ]
         )
-        assert result["shards"] and not Path(base).exists(), "旧单文件已并入分片并删除"
+        assert result["written"] is False, "已是按月份片的形态，无需重写（两月分片已在位）"
 
     def test_expired_month_shard_is_removed(self, tmp_path, monkeypatch):
         """整月样本全部超出保留期 → 该月分片被删，读侧不再返回。"""
@@ -281,13 +304,7 @@ class TestSharding:
         base = self._base(tmp_path, monkeypatch)
         stale_ts = (dt.datetime.now() - dt.timedelta(days=70)).strftime("%Y-%m-%d %H:%M")
         fresh_ts = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
-        Path(base).write_text(
-            "".join(
-                json.dumps(r, ensure_ascii=False) + "\n"
-                for r in (self._row("过期新闻", stale_ts), self._row("新鲜新闻", fresh_ts))
-            ),
-            encoding="utf-8",
-        )
+        _write_shard(tmp_path, [self._row("过期新闻", stale_ts), self._row("新鲜新闻", fresh_ts)])
         news_dedup.compact_anchor_file(base, retention_days=0, target_bytes=10**9)  # 先分成两个月
         assert len(list(tmp_path.glob("dedup_anchors-*.jsonl.gz"))) == 2
 
@@ -296,14 +313,12 @@ class TestSharding:
         assert len(list(tmp_path.glob("dedup_anchors-*.jsonl.gz"))) == 1
         assert [r["title_a"] for r in _rows(tmp_path)] == ["新鲜新闻"]
 
-    def test_legacy_single_file_still_readable(self, tmp_path, monkeypatch):
-        """未压缩单文件仍可读（分片共存期不丢历史）。"""
+    def test_unsplit_single_file_is_ignored(self, tmp_path, monkeypatch):
+        """未分片的单文件不参与读取与体积统计（锚点只认按月分片）。"""
         base = self._base(tmp_path, monkeypatch)
         Path(base).write_text(
-            json.dumps(self._row("旧版新闻", "2026-10-01 10:00"), ensure_ascii=False) + "\n", encoding="utf-8"
+            json.dumps(self._row("早期新闻", "2026-10-01 10:00"), ensure_ascii=False) + "\n", encoding="utf-8"
         )
 
-        lines = news_dedup.read_anchor_lines(base)
-
-        assert len(lines) == 1 and "旧版新闻" in lines[0]
-        assert news_dedup.anchor_total_bytes(base) == Path(base).stat().st_size
+        assert news_dedup.read_anchor_lines(base) == []
+        assert news_dedup.anchor_total_bytes(base) == 0

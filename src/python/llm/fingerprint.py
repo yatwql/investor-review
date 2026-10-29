@@ -7,11 +7,13 @@ import json
 import logging
 from typing import Any
 
+from src.python.llm.fact_checker._constants import FACT_CHECK_RULES_VERSION
 from src.python.llm.rate_caliber import PROMPT_SCHEMA_VERSION
 
 logger = logging.getLogger("invest")
 
 __all__ = [
+    "cache_key_salts",
     "compute_fingerprint",
     "extract_stable_holdings",
     "extract_stable_penetration",
@@ -129,6 +131,35 @@ def build_llm_fingerprint(
         _risk_signals,
         # 提示词文本版本：标签/表头等静态文案改动也须换键（否则复用按旧口径生成的结论）
         PROMPT_SCHEMA_VERSION,
+        # 事实校验规则版本：校验修正的正文会回写模块缓存（键不变），故规则语义变化
+        # 也须换键，否则旧缓存里被旧规则改错的正文会继续被复用
+        FACT_CHECK_RULES_VERSION,
+    )
+
+
+def cache_key_salts() -> dict[str, str]:
+    """LLM 缓存键里的**版本盐**（进键但不进数据）——单源出口，供首尾日志与排障引用。
+
+    两个版本号都会改变四个可回写模块与辩论键的缓存键：
+      - 提示词文本版本（`rate_caliber.PROMPT_SCHEMA_VERSION`）：静态文案改动换键；
+      - 事实校验规则版本（`fact_checker.FACT_CHECK_RULES_VERSION`）：校验修正会回写
+        模块缓存且键不变，规则语义变化须换键，否则旧缓存里按先前规则写过的正文继续复用。
+
+    为什么要在运行首尾打出来：模块重算的归因只有「键变了」这一信号，而版本盐是最
+    省事的解释项——看不到它就要靠翻代码与比对指纹，才能判断这次整批重算是版本递增
+    所致还是缓存被清理所致。
+    """
+    return {"prompt_schema": PROMPT_SCHEMA_VERSION, "fact_rules": FACT_CHECK_RULES_VERSION}
+
+
+def log_cache_key_salts(where: str) -> None:
+    """把版本盐打成一行 INFO（`where` 为「本轮开始」/「本轮结束」等位置描述）。"""
+    salts = cache_key_salts()
+    logger.info(
+        "[llm] LLM 缓存键版本盐（%s）：提示词=%s 校验规则=%s（任一递增即整批改键重算）",
+        where,
+        salts["prompt_schema"],
+        salts["fact_rules"],
     )
 
 

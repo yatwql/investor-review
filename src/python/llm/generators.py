@@ -465,8 +465,12 @@ def generate_self_review(
             event_impact_block=event_impact_block or "",
             schedule_replay_block=schedule_replay_block or "",
         )
+        # `outputs` 合并摘要之外另列逐模块摘要：四模块产出是自检键里唯一会随上游
+        # 重算/事实校验回写而变化的段，只看合并摘要无法判断是哪一段变了。
+        _per_module = _parts.get("outputs") or {}
         logger.info(
-            "[llm/self_review] 未命中缓存，输入分段摘要：%s",
+            "[llm/self_review] 未命中缓存，输入分段摘要：%s；逐模块：%s",
             " ".join(f"{name}={compute_fingerprint(value)[:8]}" for name, value in _parts.items()),
+            " ".join(f"{name}={compute_fingerprint(text)[:8]}" for name, text in sorted(_per_module.items())) or "-",
         )
     return _result
