@@ -41,6 +41,7 @@ from src.python.report.excel_writer import (
 )
 from src.python.report.market_value import DetailRow
 from src.python.report.styles import BLUE_FONT, FMT_MONEY, FMT_PERCENT, FMT_PRICE, FMT_SHARES, profit_font
+from src.python.report.market_value import PRICE_TYPE_OFFICIAL_NAV_T1
 
 logger = logging.getLogger("invest")
 
@@ -168,7 +169,7 @@ def _detail_to_row_values(d: DetailRow) -> list[Any]:
 
 def _mv_num_formats(has_flow: bool = False, has_purchase: bool = False, has_cost_pos: bool = False) -> list[str | None]:
     """区块①每列的 Excel 数字格式（15 列 + 可选资金加权成本/申购状态/成本区间位置）。"""
-    fmt = [
+    fmt: list[str | None] = [
         "",  # 1  账户
         "",  # 2  名称
         "",  # 3  代码
@@ -250,7 +251,7 @@ def _apply_price_type_colors(ws, start_row: int, end_row: int) -> None:
         val = str(cell.value) if cell.value else ""
         if val in ("场内收盘价(T)", "场内午市收盘(T)", "官方净值(T)"):
             cell.font = BLUE_FONT
-        elif val == "官方净值(T-1)":
+        elif val == PRICE_TYPE_OFFICIAL_NAV_T1:
             name_cell = ws.cell(row=r, column=_NAME_COL)
             name = str(name_cell.value) if name_cell.value else ""
             if is_qdii_extended(name):

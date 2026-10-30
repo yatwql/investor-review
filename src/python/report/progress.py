@@ -13,6 +13,10 @@ from typing import Any
 
 from src.python.core.ansi_colors import CYAN, GREEN, RED, RESET, YELLOW
 
+#: 行情获取进度提示（Excel / HTML / 编排三条路径共用同一句话）
+MSG_FETCHING_MARKET = "正在获取行情数据..."
+MSG_FETCHING_MARKET_FIRST = "正在获取行情数据（首次耗时较长，后续使用缓存）..."
+
 logger = logging.getLogger("invest")
 
 # ── 模块耗时记录（跨模块共享，供直接使用 Timer() 的场景） ──

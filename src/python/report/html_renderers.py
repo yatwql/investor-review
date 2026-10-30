@@ -32,6 +32,7 @@ from src.python.report.market_value import (
 )
 from src.python.report.penetration import compute_penetration_top10
 from src.python.report.progress import ProgressReporter
+from src.python.report.progress import MSG_FETCHING_MARKET
 
 logger = logging.getLogger("invest")
 
@@ -51,7 +52,7 @@ def _render_market_value_section(
     if details is not None:
         logger.info("复用外部传入的市值核算数据，共 %d 条", len(details))
     else:
-        prog.info("正在获取行情数据...")
+        prog.info(MSG_FETCHING_MARKET)
         logger.info("HTML 报告生成开始，共 %d 条持仓", len(holdings))
         prog.info("正在计算市值核算...")
         details = _generate_details(holdings, today_str)

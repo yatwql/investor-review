@@ -195,6 +195,11 @@ def price_update_status(details: list[DetailRow], trading_day: str) -> tuple[int
 # ── A 股交易时段判断（委派 market_hours 实现） ──────────
 
 
+#: 取价方式枚举（模板着色与持仓明细渲染的判定依据，单源在此；
+#: 消费方 html_jinja_env / _holdings_detail_blocks 只引用常量，不重复字面量）
+PRICE_TYPE_OFFICIAL_NAV_T1 = "官方净值(T-1)"
+
+
 def is_market_open() -> bool:
     """委派 market_hours.is_market_open（含 config/API/fallback 三层判断）。"""
     return _mh_is_market_open()
@@ -255,7 +260,7 @@ def _determine_price_type(source_api: str, nav_date: str, trading_day: str) -> s
     if nav_date == trading_day:
         return "官方净值(T)"
     elif prev_td and nav_date == prev_td:
-        return "官方净值(T-1)"
+        return PRICE_TYPE_OFFICIAL_NAV_T1
 
     # 未来净值日期（数据异常）→ 视为当日
     try:

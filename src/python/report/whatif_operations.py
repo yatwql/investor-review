@@ -33,6 +33,15 @@ from src.python.report.whatif_writer import write_whatif_report
 logger = logging.getLogger("invest")
 
 
+#: 调仓对比不可用的一句话（CLI / TUI / Web 三渠道共用，避免同一句四份拷贝）
+WHATIF_UNAVAILABLE = "调仓对比数据不可用"
+
+
+def whatif_unavailable_message(reason: str) -> str:
+    """把失败原因拼成渠道统一的提示行（三渠道只换输出方式，不换措辞）。"""
+    return f"{WHATIF_UNAVAILABLE}: {reason}"
+
+
 @dataclass
 class WhatifRunResult:
     """调仓模拟运行结果（CLI/TUI 共用）。
@@ -41,7 +50,7 @@ class WhatifRunResult:
         ok: 是否成功生成报告
         excel: 成功时最新 Excel 绝对路径
         html: 成功时最新 HTML 绝对路径
-        reason: 失败原因（ok=False 时，如"调仓对比数据不可用"）
+        reason: 失败原因（ok=False 时，如 WHATIF_UNAVAILABLE）
     """
 
     ok: bool
@@ -197,7 +206,7 @@ def run_whatif_simulation(
     if not data.get("available"):
         return WhatifRunResult(
             ok=False,
-            reason=data.get("reason", "调仓对比数据不可用"),
+            reason=data.get("reason", WHATIF_UNAVAILABLE),
         )
 
     if effective_date:

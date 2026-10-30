@@ -10,6 +10,7 @@ from jinja2 import Environment, FileSystemLoader, pass_context
 from src.python.core.code_utils import is_qdii_extended
 from src.python.core.registry import _REPORT_SECTION_DEFAULT
 from src.python.core.constants import PROJECT_ROOT
+from src.python.report.market_value import PRICE_TYPE_OFFICIAL_NAV_T1
 
 # ── 路径 & Jinja2 环境 ─────────────────────────────────────
 
@@ -70,12 +71,12 @@ def _jinja_price_type_color(price_type: str, name: str = "") -> str:
 
     着色规则同 Excel 端 _apply_price_type_colors：
       - "场内收盘价(T)"、"场内午市收盘(T)"、"官方净值(T)" → var(--rating-stable)
-      - QDII 基金 "官方净值(T-1)" → var(--rating-stable)
+      - QDII 基金（取价方式常量为「官方净值」旧一日口径）→ var(--rating-stable)
     返回 CSS 变量表达式（暗色模式（主题切换）），模板中直接用于 style="color: ..."。
     """
     if price_type in ("场内收盘价(T)", "场内午市收盘(T)", "官方净值(T)"):
         return "var(--rating-stable)"
-    if price_type == "官方净值(T-1)" and name and is_qdii_extended(name):
+    if price_type == PRICE_TYPE_OFFICIAL_NAV_T1 and name and is_qdii_extended(name):
         return "var(--rating-stable)"
     return ""
 

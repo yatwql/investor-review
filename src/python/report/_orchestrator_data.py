@@ -27,6 +27,7 @@ from src.python.report._report_factor_metrics import (  # noqa: F401
 )
 
 from src.python.config import get_default, resolve_output_dir
+from src.python.report.progress import MSG_FETCHING_MARKET
 
 logger = logging.getLogger("invest")
 
@@ -74,7 +75,7 @@ def prepare_report_data(
     today_str = datetime.now().strftime("%Y-%m-%d")
 
     _t0 = time.perf_counter()
-    reporter.info("正在获取行情数据...")
+    reporter.info(MSG_FETCHING_MARKET)
     details = _generate_details(holdings, today_str)
     total_mv = sum(d.market_value for d in details)
     total_cost = sum(d.cost for d in details)

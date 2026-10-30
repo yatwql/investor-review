@@ -125,3 +125,36 @@ class TestSharedLayerRouting:
         assert "config_edit_whitelist" in text
         # 不在 Web 层重建规则字典
         assert "配置键不在白名单" not in text
+
+
+class TestSharedCopyIsSingleSource:
+    """渠道共用文案与枚举值只允许一份来源。"""
+
+    @pytest.mark.unit_core
+    def test_whatif_unavailable_message_not_duplicated_in_channels(self):
+        """调仓不可用提示：三渠道都走 whatif_operations 的单源拼装，不各自写字面量。"""
+        from src.python.report.whatif_operations import whatif_unavailable_message
+
+        assert whatif_unavailable_message("持仓不足") == "调仓对比数据不可用: 持仓不足"
+        root = Path(__file__).resolve().parents[3]
+        for rel in ("src/python/cli/_handlers.py", "src/python/tui/handlers_whatif.py", "src/python/web/handlers.py"):
+            text = (root / rel).read_text(encoding="utf-8")
+            assert "whatif_unavailable_message" in text, rel
+            assert "调仓对比数据不可用: " not in text, f"{rel} 仍有重复字面量"
+
+    @pytest.mark.unit_core
+    def test_price_type_label_has_one_definition(self):
+        """取价方式标签「官方净值(T-1)」只在 market_value 定义，消费方引用常量。"""
+        from src.python.report import html_jinja_env, market_value
+        from src.python.report import _holdings_detail_blocks as blocks
+
+        assert market_value.PRICE_TYPE_OFFICIAL_NAV_T1 == "官方净值(T-1)"
+        for mod in (html_jinja_env, blocks):
+            text = Path(mod.__file__).read_text(encoding="utf-8")
+            assert "PRICE_TYPE_OFFICIAL_NAV_T1" in text, mod.__name__
+            code_lines = [
+                line
+                for line in text.splitlines()
+                if not line.lstrip().startswith(("#", '"""', "*")) and '"官方净值(T-1)"' in line
+            ]
+            assert not code_lines, f"{mod.__name__} 仍有重复字面量：{code_lines[:2]}"

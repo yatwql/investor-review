@@ -11,6 +11,7 @@ from typing import Any
 from src.python.core.logger import setup_logger
 from src.python.core.registry import get_report_sheet_name
 from src.python.report.progress import ProgressReporter, Timer
+from src.python.report.progress import MSG_FETCHING_MARKET_FIRST
 
 logger = setup_logger()
 
@@ -101,7 +102,7 @@ def resolve_market_data(
         data["fund_flow_data"] = _build_flow_data(enable_cost_lots, transactions, dividends, holdings, details)
     else:
         with Timer("行情数据获取 (" + get_report_sheet_name("holdings_detail") + ")"):
-            prog.info("正在获取行情数据（首次耗时较长，后续使用缓存）...")
+            prog.info(MSG_FETCHING_MARKET_FIRST)
             if gen_details is None:
                 prog.add_error("行情市值计算模块缺失，行情明细为空")
                 details = []

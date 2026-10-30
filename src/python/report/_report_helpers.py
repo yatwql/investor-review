@@ -15,6 +15,7 @@ import logging
 from typing import Any, cast
 
 from src.python.report.progress import ProgressReporter
+from src.python.report.progress import MSG_FETCHING_MARKET
 
 logger = logging.getLogger("invest")
 
@@ -29,7 +30,7 @@ def _compute_details(holdings: list, reporter: ProgressReporter) -> list:
     """
     from src.python.report.market_value import _generate_details
 
-    reporter.info("正在获取行情数据...")
+    reporter.info(MSG_FETCHING_MARKET)
     details = _generate_details(holdings)
     reporter.ok(f"行情数据获取完成，共 {len(details)} 条")
     return details

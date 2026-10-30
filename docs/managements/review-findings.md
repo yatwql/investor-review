@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.16.15-dev
-> **编号源**：`rf-next = 999`（新增问题提出后更新为 +1；已用最大 rf-998，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1000`（新增问题提出后更新为 +1；已用最大 rf-999，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -53,6 +53,7 @@
 | **rf-997** | 单次运行写盘相位异常：HTML 18.1s / Excel 10.6s（同口径中位 0.2 / 0.3s），产物尺寸与历史一致 | 同环境复跑两次均 0.03 / 0.23s，宿主 I/O 探针（顺序写 2905 MB/s、905K 落盘 1.1ms）正常 → 瞬时宿主负载、非代码缺陷，观察关闭 |
 | **rf-998** | 命中内容缓存的模块仍带费用、「使用缓存」标记失真：会话累计值未按本次裁剪，逐模块 `costs` 整字典照搬，汇总表与用量页签同源失真 | `_usage_delta` 逐模块 `costs` 按币种做差、`cached` 按本次有无 token 增量判定；`record_per_module` 真调用时翻回 `False`；历史台账按各次真实花费重分配；回归 1 例 |
 | **rf-980** | 版切首跑「明细装配与建议」长尾：10.5s vs 常规 0.45s | 两次版切首跑 0.544s / 0.948s 不复现；该阶段长尾散见多版本、与版切无关 → 观察关闭 |
+| **rf-999** | 报告层结构性债：单函数 >120 行 57 个（最大 `generate_excel_report` 466 行、`_generate_report_full` 391、`write_html_report` 378、`generate_all_llm` 372），签名 ≥13 参数 31 个（最劣 `_render_template` 80 个关键字参数、`write_html_report` 49、`_generate_full_html_report` 44、`generate_excel_report` 32）——参数镜像模板上下文，改一个字段要动签名与调用两侧；`check-file-length` 只看文件行数，函数级/签名级阈值不在守护域内，故长期未被拦 | 分两刀走：① 先给 `_render_template` 引入 `RenderContext` 数据类（单调用点：`html_writer` + 用例内 `_build_minimal_render_data`），把 80 参数收成一个入参；② 再按域拆 `generate_excel_report` / `write_html_report`（页签族上下沉），每刀以「模板 golden hash 不变」为验收；拆完补一条函数级行数与签名参数数的守护（阈值待定，先观察） |
 
 ### 归档档案
 - [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-10-30）

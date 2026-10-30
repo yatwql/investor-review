@@ -340,7 +340,7 @@ def _handle_whatif():
     成功返回产物 basename，前端经 /api/reports/<filename> 预览下载。
     """
     from src.python.core.reader import read_holdings
-    from src.python.report.whatif_operations import run_whatif_simulation
+    from src.python.report.whatif_operations import run_whatif_simulation, whatif_unavailable_message
     from src.python.web.upload import resolve_file
 
     payload = request.get_json(silent=True) or {}
@@ -414,7 +414,7 @@ def _handle_whatif():
         _whatif_lock.release()
 
     if not result.ok:
-        return _err("WHATIF_UNAVAILABLE", f"调仓对比数据不可用: {result.reason}"), 422
+        return _err("WHATIF_UNAVAILABLE", whatif_unavailable_message(result.reason)), 422
     return _ok(
         {
             "excel": os.path.basename(result.excel),

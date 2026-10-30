@@ -436,7 +436,7 @@ def _handle_whatif(args: argparse.Namespace, config: dict) -> int:
     from src.python.config import resolve_holdings_path
     from src.python.core.reader import read_holdings
     from src.python.report.cli_progress import CliProgressReporter
-    from src.python.report.whatif_operations import run_whatif_simulation
+    from src.python.report.whatif_operations import run_whatif_simulation, whatif_unavailable_message
 
     reporter = CliProgressReporter(verbose=args.verbose)
 
@@ -469,7 +469,7 @@ def _handle_whatif(args: argparse.Namespace, config: dict) -> int:
         effective_date=args.effective_date,
     )
     if not result.ok:
-        reporter.error(f"调仓对比数据不可用: {result.reason}")
+        reporter.error(whatif_unavailable_message(result.reason))
         return _EXIT_SEVERE
 
     reporter.print_timing_summary()
