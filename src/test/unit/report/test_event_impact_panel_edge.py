@@ -42,7 +42,7 @@ def test_empty_news_hides_section():
         "available": False,
         "events": [],
         "degraded": [],
-        "skipped": {"bad_date": 0, "unmatched": 0, "capped": 0},
+        "skipped": {"bad_date": 0, "unmatched": 0, "no_keywords": 0, "not_in_holdings": 0, "capped": 0},
         "degraded_count": 0,
     }
 

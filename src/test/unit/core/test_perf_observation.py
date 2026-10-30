@@ -138,6 +138,32 @@ class TestCollectorRecorderRegistry:
         perf.count("retry")
         assert perf.snapshot().to_json()["counters"]["retry"] == 3
 
+    def test_phase_log_line_carries_slowest_spans(self, caplog):
+        """阶段汇总行附带最慢子项：日志分析不必再翻 perf 台账才能归因。"""
+        perf = PerfCollector(report_type="full", holdings=[])
+        rec = perf.recorder("LLM+新闻")
+        rec.record("智囊团深度复盘", 75.7)
+        rec.record("持仓体检报告", 40.2)
+        rec.record("穿透深度分析", 9.2)
+        rec.record("全球政经局势", 5.6)
+        perf.start("LLM+新闻")
+        with caplog.at_level(logging.INFO, logger="invest"):
+            perf.stop()
+        line = next(r.message for r in caplog.records if r.message.startswith("[perf] LLM+新闻"))
+        assert "智囊团深度复盘 75.7s" in line
+        assert "持仓体检报告 40.2s" in line
+        assert "穿透深度分析 9.2s" in line
+        assert "全球政经局势" not in line  # 只带最慢三项
+
+    def test_phase_log_line_plain_without_spans(self, caplog):
+        """无子项记录时阶段行保持原样（不追加空括号）。"""
+        perf = PerfCollector(report_type="full", holdings=[])
+        perf.start("数据准备")
+        with caplog.at_level(logging.INFO, logger="invest"):
+            perf.stop()
+        line = next(r.message for r in caplog.records if r.message.startswith("[perf] 数据准备"))
+        assert "（" not in line
+
 
 class TestDiagnosticCounters:
     """诊断计数：warnings/errors 与 errors 截断。"""

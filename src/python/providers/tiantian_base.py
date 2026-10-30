@@ -24,6 +24,14 @@ _HEADERS = {
     "Referer": "https://fund.eastmoney.com/",
 }
 _TIMEOUT = 15.0
+_CONNECT_TIMEOUT = 8.0
+"""连接阶段（含 SSL 握手）超时：东财偶发握手挂死可达 20s 以上，连接单独收紧后
+单跳失败能在 10s 级返回并交给下一跳，而不是白等一个浮点总超时。"""
+
+
+def _phase_timeout() -> httpx.Timeout:
+    """分阶段超时：连接（含握手）收紧，读写沿用总超时。"""
+    return httpx.Timeout(connect=_CONNECT_TIMEOUT, read=_TIMEOUT, write=_TIMEOUT, pool=_TIMEOUT)
 
 
 def _request_fund_html(code: str) -> str | None:
@@ -80,7 +88,7 @@ def _request_quarterly_api(code: str, api_type: str, year: int | None = None, mo
         "rt": str(random.random()),
     }
     try:
-        with make_http_client(timeout=_TIMEOUT) as client:
+        with make_http_client(timeout=_phase_timeout()) as client:
             resp = client.get(url, params=params, headers=headers)
             resp.encoding = "utf-8"
             text = resp.text

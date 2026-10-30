@@ -267,6 +267,37 @@ class TestFetchNews(unittest.TestCase):
         self.assertEqual(len(result), 3)
 
 
+class TestChannelAttribution:
+    """渠道归因：条目带 `_channel`，空渠道单独成行（不再静默）。"""
+
+    @patch("src.python.providers.akshare_news._fetch_cctv_news", return_value=[])
+    @patch("src.python.providers.akshare_news._fetch_from_caixin")
+    def test_empty_channel_logged_as_empty_source(self, mock_caixin, _mock_cctv, caplog):
+        """CCTV 当日 0 条 → INFO 一行「0 条（空源）」，不静默也不误判为接口失败。"""
+        mock_caixin.return_value = [
+            {"title": "财新新闻", "url": "http://caixin.com/1", "ctime": "2026-07-01 10:00", "media_name": "财新网"},
+        ]
+        from src.python.providers.akshare_news import fetch_news
+
+        with caplog.at_level("INFO", logger="invest"):
+            fetch_news(num=10)
+        assert "CCTV: 0 条（空源）" in caplog.text
+
+    @patch("src.python.providers.akshare_news._fetch_cctv_news")
+    @patch("src.python.providers.akshare_news._fetch_from_caixin")
+    def test_items_tagged_with_channel(self, mock_caixin, mock_cctv):
+        """两渠道条目各自带 `_channel`，供聚合器按真实命中渠道拼标签。"""
+        mock_caixin.return_value = [
+            {"title": "财新新闻", "url": "http://caixin.com/1", "ctime": "2026-07-01 10:00", "media_name": "财新网"}
+        ]
+        mock_cctv.return_value = [{"title": "央视新闻", "url": "", "ctime": "2026-07-01 11:00", "media_name": "央视新闻"}]
+        from src.python.providers.akshare_news import fetch_news
+
+        channels = {item["title"]: item.get("_channel") for item in fetch_news(num=10)}
+        assert channels["财新新闻"] == "财新网"
+        assert channels["央视新闻"] == "CCTV"
+
+
 class TestFetchNewsInterfaceDegradation(unittest.TestCase):
     """fetch_news 源内接口降级契约：单接口故障不得拖垮整源。
 

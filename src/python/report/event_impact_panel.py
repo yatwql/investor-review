@@ -25,6 +25,7 @@ from src.python.analysis.event_window_impact import (
     compute_event_impact,
 )
 from src.python.core.code_utils import is_a_share_code, is_a_share_stock
+from src.python.core.log_dedupe import log_throttled
 
 logger = logging.getLogger("invest")
 
@@ -125,7 +126,7 @@ def build_event_rows(
     Returns:
         {"available": bool, "events": [...], "degraded": [...], "skipped": {...}}
     """
-    skipped = {"bad_date": 0, "unmatched": 0, "capped": 0}
+    skipped = {"bad_date": 0, "unmatched": 0, "no_keywords": 0, "not_in_holdings": 0, "capped": 0}
     events: list[dict[str, Any]] = []
     degraded: list[dict[str, Any]] = []
     index = _build_keyword_index(holdings, penetrated_assets)
@@ -142,6 +143,11 @@ def build_event_rows(
             skipped["bad_date"] += 1
             continue
         keywords = [k for k in (item.get("matched_keywords") or []) if isinstance(k, str)]
+        if not keywords:
+            # 「未关联到任何关键词」与「关联了但不在持仓索引」是两类不同问题：
+            # 前者是新闻关联环节召回为 0，后者是索引（持仓/穿透关键词）没覆盖到。
+            skipped["no_keywords"] += 1
+            continue
         hit_codes: list[tuple[str, str]] = []  # (code, 命中关键词)
         for kw in keywords:
             for code in index.get(kw, []):
@@ -149,6 +155,7 @@ def build_event_rows(
                     hit_codes.append((code, kw))
         if not hit_codes:
             skipped["unmatched"] += 1
+            skipped["not_in_holdings"] += 1
             continue
 
         polarity = extract_text_polarity(item)
@@ -202,7 +209,9 @@ def build_event_rows(
         "skipped": skipped,
         "degraded_count": len(degraded),
     }
-    logger.info(
+    log_throttled(
+        logger,
+        "event_rows_ready",
         "事件窗事件表: 可出行 %d 条、降级 %d 条、跳过 %s",
         len(events),
         len(degraded),
@@ -297,7 +306,9 @@ def build_event_impact_view(contract: dict[str, Any] | None) -> dict[str, Any]:
             f"新闻 {contract.get('news_total', 0)} 条（极性已判定 "
             f"{contract.get('polarity_known', 0)} 条） → 可出行 {len(events)} 条；"
             f"降级 {contract.get('degraded_count', 0)} 条"
-            f"（跳过：无品种关联 {skipped.get('unmatched', 0)} 条）"
+            f"（跳过：无品种关联 {skipped.get('not_in_holdings', 0)} 条、"
+            f"无关键词召回 {skipped.get('no_keywords', 0)} 条、"
+            f"日期不可解析 {skipped.get('bad_date', 0)} 条）"
         ),
     ]
     partial_events = [e for e in events if e.get("window_partial")]
@@ -387,26 +398,32 @@ def build_event_impact_panel(
 
         _bars_memo: dict[str, Any] = {}
 
-        def fetch_bars(code: str) -> Any:
+        def _default_fetch_bars(code: str) -> Any:
             if code not in _bars_memo:
                 _bars_memo[code] = fetch_with_incremental_fallback("history_stock", code, days=365)
             return _bars_memo[code]
 
+        fetch_bars = _default_fetch_bars
+
     if fetch_index is None:
         from src.python.fetcher.index import fetch_index_history
 
-        def fetch_index(code: str) -> Any:
+        def _default_fetch_index(code: str) -> Any:
             return fetch_index_history(code, days=365)
+
+        fetch_index = _default_fetch_index
 
     if benchmark_text_getter is None:
         from src.python.fetcher.fund import fetch_fund_benchmark
 
         _benchmark_memo: dict[str, Any] = {}
 
-        def benchmark_text_getter(code: str) -> Any:
+        def _default_benchmark_text(code: str) -> Any:
             if code not in _benchmark_memo:
                 _benchmark_memo[code] = fetch_fund_benchmark(code)
             return _benchmark_memo[code]
+
+        benchmark_text_getter = _default_benchmark_text
 
     holdings_map = [
         {
@@ -457,10 +474,14 @@ def build_event_impact_panel(
     }
     view = build_event_impact_view(contract)
     contract["prompt_block"] = _build_prompt_block(view)
-    logger.info(
-        "[event_impact] 事件表装配完成: 可出行 %d / 降级 %d / 分歧例块 %d 字符",
+    log_throttled(
+        logger,
+        "event_impact_assembled",
+        "[event_impact] 事件表装配完成: 可出行 %d / 降级 %d / 跳过 %s / 比对 %s / 分歧例块 %d 字符",
         len(events),
         contract["degraded_count"],
+        contract["skipped"],
+        contract["match_counts"],
         len(contract["prompt_block"]),
     )
     return contract

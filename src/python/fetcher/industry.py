@@ -14,6 +14,7 @@ from typing import Any
 from src.python.cache import get as cache_get
 from src.python.cache import get_ttl
 from src.python.core.code_utils import is_a_share_code
+from src.python.core.log_dedupe import log_throttled
 from src.python.fetcher.chain import FailureDiagnostics, fetch_with_fallback, is_provider_chain_broken
 from src.python.providers import eastmoney_industry, eastmoney_industry_rest
 
@@ -230,5 +231,11 @@ def batch_fetch_industry_data(codes: list[str]) -> dict[str, dict]:
     failed = sum(1 for r in results if not r.success and not r.skipped)
     if failed:
         logger.warning("[industry] 行业数据批量失败 %d/%d（push2 已回落备用链路）", failed, len(a_codes))
-    logger.info("批量行业数据就绪: %d/%d 个代码（含缓存命中）", len(result_map), len(a_codes))
+    log_throttled(
+        logger,
+        "industry_batch_ready",
+        "批量行业数据就绪: %d/%d 个代码（含缓存命中）",
+        len(result_map),
+        len(a_codes),
+    )
     return result_map

@@ -362,10 +362,14 @@ def _fetch_dated_quarterly(code: str) -> dict[str, Any] | None:
     返回 JavaScript 变量 apidata.content，内含按报告期分区的 HTML 持仓表格；
     首表即最新分区，其「截止至」标注紧随该表，故取首表 + 取首个截止至是自洽的。
     """
-    for year, month in _recent_quarters(_QUARTER_LOOKBACK):
+    quarters = _recent_quarters(_QUARTER_LOOKBACK)
+    for index, (year, month) in enumerate(quarters):
         result = _fetch_single_quarter(code, year, month)
         if result is not None:
             return result
+        if index + 1 < len(quarters):
+            # 回溯路径必须可见：否则单只基金多跳重试在日志上是一段无解释的空白
+            logger.info("[fund_hold] %s（%04d-%02d）无持仓，回溯上一季度", code, year, month)
     return None
 
 
@@ -404,6 +408,11 @@ def fetch_quarterly_holdings(code: str) -> dict[str, Any] | None:
     return legacy
 
 
+def _quarter_label(year: int | None, month: int | None) -> str:
+    """季度请求的日志标签（日志与成功回显共用同一口径）。"""
+    return f"{year}-{month:02d}" if year is not None and month is not None else "默认"
+
+
 def _fetch_single_quarter(code: str, year: int | None = None, month: int | None = None) -> dict[str, Any] | None:
     """尝试获取指定季度的持仓数据，返回结构化结果或 None。"""
     all_holdings: list[dict[str, Any]] = []
@@ -413,6 +422,9 @@ def _fetch_single_quarter(code: str, year: int | None = None, month: int | None 
     for api_type in ("jjcc", "zqcc"):
         html_content = _request_quarterly_api(code, api_type, year=year, month=month)
         if html_content is None:
+            if api_type == "jjcc":
+                # 同一季度的通道递补同样要可见（jjcc 挂掉后 zqcc 才是真正耗时的那一跳）
+                logger.info("[fund_hold] %s jjcc 无数据（%s），改用 zqcc", code, _quarter_label(year, month))
             continue
 
         if not fund_name:
@@ -429,7 +441,7 @@ def _fetch_single_quarter(code: str, year: int | None = None, month: int | None 
     if not all_holdings:
         return None
 
-    label = f"{year}-{month:02d}" if year is not None else "默认"
+    label = _quarter_label(year, month)
     logger.info(
         "基金持仓 API %s（%s）: %d 条持仓, 报告期 %s（%s）",
         fund_name or code,

@@ -296,6 +296,40 @@ class TestFetchFromAllSources(unittest.TestCase):
         self.assertEqual(all_raw[0]["title"], "相同新闻")
 
 
+class TestSourceLabelFollowsChannels:
+    """akshare 一源两渠道：展示标签按本次真正出条目的渠道拼接。"""
+
+    def test_label_lists_only_hit_channels(self):
+        from src.python.providers.news_aggregator import _fetch_from_all_sources, _label_for
+
+        seen: list[str] = []
+        with patch("src.python.providers.news_aggregator._FETCH_MAP") as mock_map:
+            mock_map.get.side_effect = lambda key: (
+                lambda n: [
+                    {"title": "财新新闻", "url": "http://caixin.com/1", "ctime": "2026-07-08", "_channel": "财新网"},
+                ]
+            )
+            all_raw, _ = _fetch_from_all_sources(["akshare"], per_source=10, progress_callback=lambda lb, c, s: seen.append(lb))
+
+        assert seen == ["财新网"]  # CCTV 当日 0 条，标签不并写「财新网 / CCTV」
+        assert all_raw[0]["_source"] == "财新网"
+        assert _label_for("akshare") == "财新网"
+
+    def test_label_lists_both_channels_when_both_hit(self):
+        from src.python.providers.news_aggregator import _fetch_from_all_sources, _label_for
+
+        with patch("src.python.providers.news_aggregator._FETCH_MAP") as mock_map:
+            mock_map.get.side_effect = lambda key: (
+                lambda n: [
+                    {"title": "财新新闻", "url": "http://caixin.com/1", "ctime": "2026-07-08", "_channel": "财新网"},
+                    {"title": "央视新闻", "url": "http://cctv.com/1", "ctime": "2026-07-08", "_channel": "CCTV"},
+                ]
+            )
+            _fetch_from_all_sources(["akshare"], per_source=10)
+
+        assert _label_for("akshare") == "财新网 + CCTV"
+
+
 class _SpanRecorder:
     """记录 span 名称与耗时（仅验证子阶段接线，不参与业务断言）。"""
 

@@ -19,6 +19,8 @@ from typing import Any
 
 logger = logging.getLogger("invest")
 
+CAIXIN_CHANNEL = "财新网"
+CCTV_CHANNEL = "CCTV"
 _TIMEOUT = 30.0
 
 
@@ -184,6 +186,7 @@ def fetch_news(num: int = 100) -> list[dict[str, Any]]:
         logger.warning("财新接口异常，源内降级为仅 CCTV 渠道: %s", e)
         caixin_items = []
     for item in caixin_items:
+        item.setdefault("_channel", CAIXIN_CHANNEL)
         url = item.get("url", "")
         if url and url not in seen_urls:
             seen_urls.add(url)
@@ -196,19 +199,18 @@ def fetch_news(num: int = 100) -> list[dict[str, Any]]:
         logger.warning("CCTV 接口异常，源内降级为仅财新渠道: %s", e)
         cctv_items = []
     for item in cctv_items:
+        item.setdefault("_channel", CCTV_CHANNEL)
         title = item.get("title", "")
         if title and title not in seen_urls:
             seen_urls.add(title)
             all_items.append(item)
 
     if not caixin_items or not cctv_items:
-        # 0 条可能来自接口失败、也可能来自「该渠道当日确实无新内容」——不在此断言降级；
-        # 接口级失败由各接口自身的 WARNING 日志给出（此处只提供两接口条数对比）。
-        logger.debug(
-            "akshare 新闻两接口条数: 财新 %d / CCTV %d（任一为 0 请结合上方日志判断是否接口失败）",
-            len(caixin_items),
-            len(cctv_items),
-        )
+        # 空渠道单独成行：汇总行只说总数，不区分「接口失败」与「当日无内容」；
+        # 渠道级失败/为空在这里如实上屏（接口级异常另有 WARNING）。
+        for channel_label, channel_items in (("财新网", caixin_items), ("CCTV", cctv_items)):
+            if not channel_items:
+                logger.info("akshare 新闻渠道 %s: 0 条（空源）", channel_label)
 
     logger.info("akshare 新闻汇总: 财新 %d 条 + CCTV %d 条 = %d 条", len(caixin_items), len(cctv_items), len(all_items))
 
