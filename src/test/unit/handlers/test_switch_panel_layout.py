@@ -72,6 +72,17 @@ class TestFormatItemTiers:
         assert "rebalance_schedule_replay" in lines[0]
         assert "[关闭]*" in lines[0]
 
+    def test_wide_puts_status_right_after_name(self):
+        """宽档列序：名称 → 状态 → 键名。长列表靠状态扫读，键名不得把状态推到远端。"""
+        line = format_item(columns=120, **_ITEM)[0]
+        assert line.index("[关闭]") < line.index("rebalance_schedule_replay")
+        assert line.index("调仓纪律回放") < line.index("[关闭]")
+
+    def test_narrow_puts_status_right_after_name(self):
+        """窄档同理：名称紧接状态（键名不占版面）。"""
+        line = format_item(columns=46, **_ITEM)[0]
+        assert line.index("调仓纪律回放") < line.index("[关]")
+
     def test_medium_splits_into_two_rows_keeping_key(self):
         lines = format_item(columns=80, **_ITEM)
         assert len(lines) >= 2

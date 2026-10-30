@@ -212,7 +212,7 @@ class TestSwitchPanelReadonlyInfo:
         try:
             _cmd_config_content_options()
             out = capsys.readouterr().out
-            assert re.search(r"决策跨期反思闭环\s+decision_reflection\s+\[开启\]\*", out), (
+            assert re.search(r"决策跨期反思闭环\s+\[开启\]\*\s+decision_reflection", out), (
                 f"应有 [开启]* 漂移标记:\n{out}"
             )
         finally:

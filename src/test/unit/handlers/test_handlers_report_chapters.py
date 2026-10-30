@@ -172,6 +172,13 @@ class TestChapterPanelRendering:
         assert "报告章节显隐" in out
         assert "次 ¥" not in out
 
+    def test_status_column_sits_next_to_name(self, monkeypatch, llm_settings):
+        """行序契约：状态紧跟名称，键名在状态之后（长列表靠状态扫读）。"""
+        llm_settings({"global_macro": False})
+        out = _run(monkeypatch, ["0"])
+        row = next(line for line in out.splitlines() if "global_macro" in line)
+        assert row.index("[关闭]") < row.index("global_macro")
+
     def test_non_default_chapter_is_star_marked(self, monkeypatch, llm_settings):
         """LLM 章节当前值 ≠ 出厂默认时行尾标 *（关闭的默认开章节）。"""
         llm_settings({"global_macro": False})
@@ -222,11 +229,11 @@ class TestChapterSubItems:
         assert "llm_debate_procon" not in _features_file()
 
     def test_greyed_sub_row_hints_reason(self, monkeypatch, llm_settings):
-        """置灰子项行带「启用本章节后可切换」提示（不只靠颜色表达不可用）。"""
+        """置灰子项行带「（父章未开）」提示（不只靠颜色表达不可用）。"""
         llm_settings({"expert_review": False})
         out = _run(monkeypatch, ["0"])
         sub_lines = [line for line in out.splitlines() if "llm_debate_procon" in line]
-        assert sub_lines and "启用本章节后可切换" in sub_lines[0]
+        assert sub_lines and "（父章未开）" in sub_lines[0]
 
 
 class TestChapterStatusColor:
@@ -261,7 +268,7 @@ class TestChapterStatusColor:
         out = _run(monkeypatch, ["0"])
         line = next(line for line in out.splitlines() if "llm_debate_procon" in line)
         assert "\033[91m关闭\033[0m" in line
-        assert "启用本章节后可切换" in line
+        assert "（父章未开）" in line
 
 
 class TestChapterPanelReadonly:

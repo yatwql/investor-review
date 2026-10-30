@@ -89,7 +89,7 @@ def _format_row(
         if grey
         else pad_right(label, max(0, name_column - indent))
     )
-    head = f"{cursor}{prefix}{shown_label} {DIM}{pad_right(key, key_column)}{RESET} {status}{star}"
+    head = f"{cursor}{prefix}{shown_label} {status}{star} {DIM}{pad_right(key, key_column)}{RESET}"
     if notes:
         head += f"{DIM}{notes}{RESET}"
     return [truncate_display(head, limit)]
@@ -300,7 +300,7 @@ def run_report_chapters_panel() -> None:
                                 f"（启用 {usage['enabled_count']} 次" + (f" · 最近 {date}" if date else "") + "）"
                             )
                     if not enabled:
-                        sub_notes += "（启用本章节后可切换）"
+                        sub_notes += "（父章未开）"
                     if nav.is_visible(index):
                         rows.extend(
                             _format_row(
