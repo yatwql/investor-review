@@ -16,13 +16,26 @@ from __future__ import annotations
 
 import builtins
 import unittest
+from typing import Any
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_news]
 
 
-def _make_df(rows: list[dict]) -> MagicMock:
+def _ak_module() -> Any:
+    """取（sys.modules 注入的）akshare 模块句柄。
+
+    akshare 在生产代码里是延迟导入、在用例里由 ``patch.dict(sys.modules)`` 注入
+    MagicMock；静态检查器看到的是真实模块类型，故统一按 ``Any`` 取用。
+    """
+    import akshare
+
+    return akshare
+
+
+def _make_df(rows: list[dict]) -> Any:
     """创建一个模拟的 pandas DataFrame，支持 iterrows()。"""
     import pandas as pd
 
@@ -59,7 +72,7 @@ class TestFetchFromCaixin(unittest.TestCase):
     @patch.dict("sys.modules", {"akshare": MagicMock()})
     def test_api_exception(self):
         """akshare API 抛出异常 → 返回空列表。"""
-        import akshare
+        akshare = _ak_module()
 
         akshare.stock_news_main_cx.side_effect = Exception("API error")
         from src.python.providers.akshare_news import _fetch_from_caixin
@@ -71,7 +84,7 @@ class TestFetchFromCaixin(unittest.TestCase):
     @patch.dict("sys.modules", {"akshare": MagicMock()})
     def test_empty_dataframe(self):
         """空的 DataFrame → 返回空列表。"""
-        import akshare
+        akshare = _ak_module()
 
         akshare.stock_news_main_cx.return_value = _make_df([])
         from src.python.providers.akshare_news import _fetch_from_caixin
@@ -81,7 +94,7 @@ class TestFetchFromCaixin(unittest.TestCase):
     @patch.dict("sys.modules", {"akshare": MagicMock()})
     def test_none_dataframe(self):
         """返回 None → 返回空列表。"""
-        import akshare
+        akshare = _ak_module()
 
         akshare.stock_news_main_cx.return_value = None
         from src.python.providers.akshare_news import _fetch_from_caixin
@@ -93,7 +106,7 @@ class TestFetchFromCaixin(unittest.TestCase):
     @patch.dict("sys.modules", {"akshare": MagicMock()})
     def test_normal_parse(self):
         """正常数据 → 正确解析标题、摘要、URL。"""
-        import akshare
+        akshare = _ak_module()
 
         akshare.stock_news_main_cx.return_value = _make_df(
             [
@@ -112,7 +125,7 @@ class TestFetchFromCaixin(unittest.TestCase):
     @patch.dict("sys.modules", {"akshare": MagicMock()})
     def test_dedup_by_url(self):
         """相同 URL → 去重。"""
-        import akshare
+        akshare = _ak_module()
 
         akshare.stock_news_main_cx.return_value = _make_df(
             [
@@ -128,7 +141,7 @@ class TestFetchFromCaixin(unittest.TestCase):
     @patch.dict("sys.modules", {"akshare": MagicMock()})
     def test_max_limit(self):
         """超过 num 条 → 截断。"""
-        import akshare
+        akshare = _ak_module()
 
         rows = [{"tag": "", "summary": f"新闻{i}", "url": f"http://caixin.com/{i}"} for i in range(10)]
         akshare.stock_news_main_cx.return_value = _make_df(rows)
@@ -140,7 +153,7 @@ class TestFetchFromCaixin(unittest.TestCase):
     @patch.dict("sys.modules", {"akshare": MagicMock()})
     def test_no_summary_no_url_skipped(self):
         """无摘要且无URL → 跳过。"""
-        import akshare
+        akshare = _ak_module()
 
         akshare.stock_news_main_cx.return_value = _make_df(
             [
@@ -156,7 +169,7 @@ class TestFetchFromCaixin(unittest.TestCase):
     @patch.dict("sys.modules", {"akshare": MagicMock()})
     def test_long_summary_truncated(self):
         """超长摘要 → 截断到 300 字。"""
-        import akshare
+        akshare = _ak_module()
 
         long_summary = "字" * 500
         akshare.stock_news_main_cx.return_value = _make_df(
@@ -176,7 +189,7 @@ class TestFetchCctvNews(unittest.TestCase):
     @patch.dict("sys.modules", {"akshare": MagicMock()})
     def test_normal_parse(self):
         """正常数据 → 正确解析标题、内容。"""
-        import akshare
+        akshare = _ak_module()
 
         akshare.news_cctv.return_value = _make_df(
             [
@@ -194,7 +207,7 @@ class TestFetchCctvNews(unittest.TestCase):
     @patch.dict("sys.modules", {"akshare": MagicMock()})
     def test_empty_title_skipped(self):
         """空标题 → 跳过。"""
-        import akshare
+        akshare = _ak_module()
 
         akshare.news_cctv.return_value = _make_df(
             [
@@ -209,7 +222,7 @@ class TestFetchCctvNews(unittest.TestCase):
     @patch.dict("sys.modules", {"akshare": MagicMock()})
     def test_api_exception(self):
         """ake 异常 → 返回空列表。"""
-        import akshare
+        akshare = _ak_module()
 
         akshare.news_cctv.side_effect = Exception("API error")
         from src.python.providers.akshare_news import _fetch_cctv_news
@@ -219,7 +232,7 @@ class TestFetchCctvNews(unittest.TestCase):
     @patch.dict("sys.modules", {"akshare": MagicMock()})
     def test_none_dataframe(self):
         """返回 None → 返回空列表。"""
-        import akshare
+        akshare = _ak_module()
 
         akshare.news_cctv.return_value = None
         from src.python.providers.akshare_news import _fetch_cctv_news
@@ -290,7 +303,9 @@ class TestChannelAttribution:
         mock_caixin.return_value = [
             {"title": "财新新闻", "url": "http://caixin.com/1", "ctime": "2026-07-01 10:00", "media_name": "财新网"}
         ]
-        mock_cctv.return_value = [{"title": "央视新闻", "url": "", "ctime": "2026-07-01 11:00", "media_name": "央视新闻"}]
+        mock_cctv.return_value = [
+            {"title": "央视新闻", "url": "", "ctime": "2026-07-01 11:00", "media_name": "央视新闻"}
+        ]
         from src.python.providers.akshare_news import fetch_news
 
         channels = {item["title"]: item.get("_channel") for item in fetch_news(num=10)}

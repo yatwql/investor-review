@@ -309,7 +309,9 @@ class TestSourceLabelFollowsChannels:
                     {"title": "财新新闻", "url": "http://caixin.com/1", "ctime": "2026-07-08", "_channel": "财新网"},
                 ]
             )
-            all_raw, _ = _fetch_from_all_sources(["akshare"], per_source=10, progress_callback=lambda lb, c, s: seen.append(lb))
+            all_raw, _ = _fetch_from_all_sources(
+                ["akshare"], per_source=10, progress_callback=lambda lb, c, s: seen.append(lb)
+            )
 
         assert seen == ["财新网"]  # CCTV 当日 0 条，标签不并写「财新网 / CCTV」
         assert all_raw[0]["_source"] == "财新网"

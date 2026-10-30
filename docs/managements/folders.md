@@ -14,7 +14,7 @@
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
 | 辅助脚本 | Python | 135 | 26,756 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
 | 源代码合计 | — | 579 | 145,220 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 690 | 188,186 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试代码 | Python | 690 | 188,203 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
 | 测试用例 | — | — | 12,956 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 6,873 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,653 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
