@@ -1,15 +1,15 @@
 # 自审记录归档 — v0.14.x
 
-> 归档时间：2026-10-21（v0.14.0 发布，0.14 系列首批开发期已修复批次并入）；2026-10-21 v0.14.0 本批原表搬运；2026-10-22 v0.14.1 本批原表搬运；2026-10-22 v0.14.2 本批原表搬运；2026-10-22 v0.14.3 本批原表搬运；2026-10-23 v0.14.6 本批原表搬运；2026-10-23 v0.14.7 本批原表搬运
+> 归档时间：2026-10-21（v0.14.0 发布，0.14 系列首批开发期已修复批次并入）；2026-10-21 v0.14.0 本批原表搬运；2026-10-22 v0.14.1 本批原表搬运；2026-10-22 v0.14.2 本批原表搬运；2026-10-22 v0.14.3 本批原表搬运；2026-10-23 v0.14.6 本批原表搬运；2026-10-23 v0.14.7 本批原表搬运；2026-10-30 补录 changelog-only 条目 5 条（rf-711、rf-790、rf-822、rf-823、rf-829）
 > 原始文件：`docs/managements/review-findings.md`
 > 涵盖版本：v0.14.x 开发期已修复项（v0.14.0 → ）（含 v0.14.7）
 > 归档内容：台账表格经 `release.py prepare` 整块搬运（无损）；表外散文留主台账
 
 ---
 
-## 开发期已修复（0.14.0-dev）
+## 已修复（0.14.0）
 
-> 完整复盘见 `changelog.md` 0.14.0-dev 段；此处为台账原表搬运（无损），本批发布日 2026-10-21。
+> 完整复盘见 `changelog.md` 0.14.0 段；此处为台账原表搬运（无损），本批发布日 2026-10-21。
 
 | # | 问题 | 处理 |
 |---|------|------|
@@ -20,9 +20,9 @@
 | **rf-804** | 降级跟踪器在模块级缓存单例实例（`report/{fund_performance,penetration_sheet,summary}.py` 的 `_tracker = get_tracker()`）——`reset_tracker()` 只销毁工厂内的当前实例，缓存引用仍指向旧对象，测试隔离失效、运行期重置同样失效；表现：切分后重排执行顺序，`test_all_funds_fail` 因前序用例累计的降级计数而写出状态脚注（原断言 `ws.cell.call_count == 0` 失败 2≠0） | 已修复：三处改为 `_tracker()` 惰性取当前单例（不缓存引用）；回归用例 `report/test_data_status.py::TestTrackerNotCachedAtModuleLevel` 2 例（全仓 AST 扫描禁止模块级 `= get_tracker()` 缓存 + 三模块取用点必须落在 reset 后的新单例） |
 | **rf-805** | plan 台账已完成节永远搬不走：归档清单只认 `^## `（二级）标题，而台账里的任务节嵌在 `### P1~P4` 分组下、实际是 `####` —— 本次发布 prepare 报「plan：0 个已完成任务节」而 plan.md 仍残留 `plan-170 … ✅`（人工不核对就会漏归档，且 doc-drift 只查「归档节存在」不查「主台账残留」） | 已修复：`_PLAN_DONE_HEAD_RE` / `_PLAN_ANY_HEAD_RE` 支持 2~4 级标题；入档时把节头统一降为 `## plan-N … ✅`（归档按版本批次堆叠，不需要优先级分层）；同时把归档完成提示里的「上方」方向词去掉。回归用例 `test_release_archive.py::TestPlanArchiveHeadingLevels` 2 例（`####` 完成节被识别 / 搬离主台账并入档降为二级） |
 
-## 开发期已修复（0.14.1-dev）
+## 已修复（0.14.1）
 
-> 完整复盘见 `changelog.md` 0.14.1-dev 段；此处为台账原表搬运（无损），本批发布日 2026-10-22。
+> 完整复盘见 `changelog.md` 0.14.1 段；此处为台账原表搬运（无损），本批发布日 2026-10-22。
 
 | # | 问题 | 处理 |
 |---|------|------|
@@ -34,10 +34,12 @@
 | **rf-808** | 新小版本首发缺归档骨架且构建知识隐含：需手工建三份归档 + folders 目录树块 + plan/rf/changelog 三处索引行，每补一处都要重跑 `check`（实测一次发布 4 次 check、4 次 prepare）；索引行还需区间口径，格式不符时只在 prepare 阶段报错且不附期望格式 | 已修复：新增 `release.py archive-init [--version] [--date] [--dry]`（`_release/_archive_init.py`），一次建齐三类空位并幂等；建完自动跑 `check-doc-drift --sync`；回归用例 `test_release_tool_gate.py::TestArchiveInit` 2 例（建齐文件/目录树/索引且前置就绪 / 二次运行零改动） |
 | **rf-809** | 真实仓库契约测试断言了「随开发周期变化」的仓库状态：`test_real_rf_sections_are_migrated_or_absent` 要求主台账「至少有一节开发期已修复」，而 `devbump` 清空占位后新周期台账为空 → v0.14.0 发版当日的 `dev` 提交 CI 全红（test 3.11/3.12/3.13 + portability；本地因已补 rf-806 节而侥幸通过） | 已修复：该用例只约束「存在的每一节」（当前开发版待迁/已迁、更早批次只允许已迁档），空台账合法；同批把 `TestCliSurface` 的处理器集合改为从 `cmd_*` 派生（新增子命令无需改测试） |
 | **rf-806** | changelog 指针行的归档链接不随小版本换名：`apply_changelog_release` 只写版本号与日期，归档文件名沿上一系列的值（v0.14.0 指针指向 `archived_changelog.0.13.x.md`，而该版段落实入 0.14.x）——指针仅在本系列首个版本恰好正确，其余每版都留一处失准链接 | 已修复：改写指针行时同步换名为 `archive_name_for(release_version)`，格式不符即报错中止；主文件指针已校正。回归用例 `test_release_tool.py::TestChangelogPointerLinkFollowsArchive` 2 例 |
+| **rf-711** | 原问题描述未单独留存（回填自 changelog 段） | **Web 生成执行体下沉（`rf-711`）**：`src/python/web/handlers.py` 910 → **710 行**，生成链路（执行体 / 产物清单 / 完成通知 / 输入模式→快照域映射 / 退出码）拆到 `src/python/web/run_generation.py`（235 行）。`handlers.py` 保留同名 re-export 维持既有导入面，`app.py` 改为从新模块注入 `RunManager.executor` |
+| **rf-790** | 原问题描述未单独留存（回填自 changelog 段） | **时间戳 helper 三份拷贝维持现状（`rf-790`，已决策）**：`core/decision_ledger.py::_now_iso` 与 `core/signal_ledger.py::_now_iso` 逐字相同（各 1 行表达式），`scripts/_release/_timing.py::now_iso` 带时区偏移（跨机/跨时区对拍用，不能合并）。复核确认全仓无第三份语义相同的 naive 实现，为 1 行表达式新开 `core/timeutil.py` 需同步目录树与文档，收益低于成本 → **保持两处各写一行，不排期** |
 
-## 开发期已修复（0.14.2-dev）
+## 已修复（0.14.2）
 
-> 完整复盘见 `changelog.md` 0.14.2-dev 段；此处为台账原表搬运（无损），本批发布日 2026-10-22。
+> 完整复盘见 `changelog.md` 0.14.2 段；此处为台账原表搬运（无损），本批发布日 2026-10-22。
 
 | # | 问题 | 处理 |
 |---|------|------|
@@ -51,9 +53,9 @@
 | **rf-665** | `src/python/config/features.py` 840 行：功能开关注册表（`feature_switch_registry` 206 行 + `FeatureSwitchDef` + 分组常量 + 纯注册表视图）与运行时状态（features.json 读写/迁移/日志）混在一处，每个新开关约十行、持续挤压余量 | 已修复：注册表与定义下沉 `config/_feature_registry.py`（298 行）——分组常量 / `GROUP_LABELS` / `GROUP_ORDER` / `FeatureSwitchDef` / `feature_switch_registry` / `_FEATURE_FLAGS_DEFAULT` / `switches_in_group` / `experimental_flags` / `is_experimental_switch` / `EXPERIMENT_ALL`；`features.py` **574 行**，只留运行时状态（覆写读写、合并键迁移、开关解析与日志）并 re-export 注册表符号。单向依赖：运行时 → 注册表，`feature_switch_registry is ...` 同一对象（无副本）。同族两文件维持（`tui/handlers_config.py` / `scripts/_doc_drift/_format.py` 各自域内聚） |
 | **rf-773**（完成） | 8 个模块内职责混杂、逼近 700 行登记线（LLM / 配置 / 报告 / 分析 / 数据源五域） | 已全部拆分：`llm/api_base` 770→**501**（响应解析 → `_api_responses.py` 314）、`config/_validation` 723→**119**（三域 `_validation_scalars/sections/llm` + 共用原语 `_validation_common`）、`report/holdings_detail_sheet` 716→**171**（分区块写入器 → `_holdings_detail_blocks.py` 632）、`analysis/prosperity_scoring` 711→**476**（输入与权重 → `_prosperity_inputs.py` 270）、`providers/news_dedup_rules` 710→**331**（纯词表 → `_news_dedup_tables.py` 404）。另前一批已拆 `orchestrator` 734→255 / `_report_generation` 751→52 / `fund_performance` 728→595。全部保留门面 re-export；测试 patch 与结构断言按「调用点所在模块」改指（含区块注册表载体列、章节-区块矩阵同步）。 |
 
-## 开发期已修复（0.14.3-dev）
+## 已修复（0.14.3）
 
-> 完整复盘见 `changelog.md` 0.14.3-dev 段；此处为台账原表搬运（无损），本批发布日 2026-10-22。
+> 完整复盘见 `changelog.md` 0.14.3 段；此处为台账原表搬运（无损），本批发布日 2026-10-22。
 
 | # | 问题 | 处理 |
 |---|------|------|
@@ -65,9 +67,16 @@
 | **rf-816** | 发布流程缺陷：`publish` 提交前不校验统计快照，而 pre-commit 钩子对含 `src/test` 变更的提交走 `--sync --ci --with-test-count`——只跑 `--sync` 时 `test-coverage.md` 的收集派生计数不被校验，本地「通过」、钩子里仍红，v0.14.2 因此连败两次 publish（多耗 34s 间隙 + 2 轮脚本） | 已修复：`publish` 在 `git add/commit` 之前自动执行 `check-doc-drift.py --sync --ci --with-test-count`（与钩子同源参数），失败即中止并提示；补 2 例回归（参数同源 + 先于提交、失败不提交/不合并/不打 tag）；CLAUDE.md / developer-guide / scripts-reference 三处流程描述同步（参考文档补一览行、命令注释与「publish 提交前先同步统计快照」说明段） |
 | **rf-815** | v0.14.2 master 档 CI 在 `test (3.11)` 红 1 例：`test_unequal_lengths_uses_shorter` 用**逐位相等**断言`beta == portfolio_beta(portfolio[:200], benchmark)`，而两条路径的对齐和式顺序不同，末位差 1.6e-17 —— 本机 3.13 恰好相等、3.11 不等（跨实现浮点不可依赖逐位相等）。该断言是本轮 `rf-813` 强化时引入的 | 已修复：改 `pytest.approx(..., abs=1e-12)` 保留「对齐到较短者」语义，长度敏感反例改 `> 1e-6`；本地 3.11 解释器实测差值 1.6e-17、长度敏感 1.25e-2，两侧都稳。教训：浮点断言一律容差，禁 `==`（含「同一算式不同输入长度」这类看似等价的比较）——该纪律已落到三处：CLAUDE.md 测试纪律条目、`developer-guide.md` 测试写作规范（正反例）、`testplan.md` §1.2 边界清单「浮点比较边界」行 |
 
-## 开发期已修复（0.14.6-dev）
+## 已修复（0.14.5）
 
-> 完整复盘见 `changelog.md` 0.14.6-dev 段；此处为台账原表搬运（无损），本批发布日 2026-10-23。
+> 补录（2026-10-30）：本批条目原先只随 changelog 变更记录留痕、未逐条登记台账；此处按 v0.14.5 changelog 段回填，问题描述未单独留存（修复列即当日变更摘要，发布日期 2026-10-22）。
+
+| # | 问题 | 修复 |
+|---|------|------|
+| **rf-822** | 原问题描述未单独留存（回填自 changelog 段） | **章节清单缓存持久化失效章节名**（rf-822，诊断经日志复核后收窄）：原判断「陈旧 doc-id 导致 `全链路失败` WARNING」不成立——该 WARNING 分支已随日志治理改为按传输级失败分级（`各源均无可用结果` 走 INFO），且 404 落在**章节探测**（`?section=`）而非文档级、每个 doc id 仅 2 次尝试（主/备各一，无重复探测）。真实残留缺陷是：章节名清单为 14 天缓存，命中后若该批章节全部取不到正文，旧名字会持续 404 且永不恢复（实测单轮 5 例 × 约 1.3s 无效往返）。修法：取正文全空时失效该文档的清单缓存（`_invalidate_sections_cache`），下 |
+## 已修复（0.14.6）
+
+> 完整复盘见 `changelog.md` 0.14.6 段；此处为台账原表搬运（无损），本批发布日 2026-10-23。
 
 | # | 问题 | 处理 |
 |---|------|------|
@@ -75,12 +84,15 @@
 | **rf-831** | 近 12h 实施变更技术债核查（40 次提交 / 266 文件）发现 5 类：① `scripts/_eval_factor_zoo/metrics.py` 在「因子公式与生产层同源」接线下仍自留 `_pearson`/`_ema` 本地副本，遮蔽同文件从 `analysis._factor_formulas` 导入的同源符号；② `core/holding_status.py` 与 `core/data_freshness.py` 各持一份 `_detail_value` / `_has_effective_quote`；③ `TuiProgressReporter.call_sheet` 与 `WebProgressReporter.call_sheet` 逐字重复约 20 行；④ README「报告与行情」行写「HTML 10 图」，与同文件「最多 12 张」及模板实测 12 个 canvas 矛盾；⑤ `d65c638a` 把 `plan-181` 从 plan.md 删除且未归档（changelog 仍记有该任务条目），同时把其正文留成孤儿段挂在新的 plan-185 节下 | 已修复：① 改从 `analysis._factor_formulas` 导入 `_pearson`/`_ema`，删本地副本（`eval-factor-zoo` 原面 re-export 不变）；② `holding_status` 改为从 `data_freshness` 导入两个行情明细辅助；③ 新增 `AnnouncingProgressReporter` 承载唯一实现，TUI/Web 同时继承，并补结构断言「两渠道 `call_sheet` 为同一函数对象」；④ README 10→12；⑤ plan.md 恢复 `plan-181` ✅ 节并删除孤儿正文。复核：全仓重复函数体扫描 0 组、`pytest src/test/unit/{core,report,web,scripts}` 相关域通过、`check-style-guardrails` E 级 / `check-test-markers` / `check-script-contract` 均无新增 finding。 |
 | **rf-830** | TUI 按 `Q` 追问稳定返回「服务暂不可用」：日志为 `'utf-8' codec can't encode characters … surrogates not allowed`，且两个 provider 的失败位置只差模型名长度（`55414` / `55410`）→ 失败发生在建连前的请求体序列化，**不是**网络/配额。根因：POSIX 下 `sys.stdin.errors == 'surrogateescape'`，终端送入的非法 UTF-8 字节被 `input()` 解成孤立代理项（U+D800~U+DFFF），问题首字命中时 httpx 以 `ensure_ascii=False` 序列化请求体，`.encode("utf-8")` 抛 `UnicodeEncodeError`；该异常是 `ValueError` 子类，被 `_attempt_api_call` 的 `except (ValueError, KeyError)` 归为「响应解析失败 / api_error」，导致整条 provider 链无谓失败 | 已修复：新增 `core/text_safety.py`（合法代理对折叠为星平面字符、孤立代理项→U+FFFD，与 UTF-8 `errors="replace"` 同口径），在 **LLM 请求体**（`call_llm_with_retry` 入口递归净化全部字符串）、**LLM 响应正文**（`_process_success_response`，防响应 `\udXXX` 写 HTML 时再炸）与**追问入口**（`qa.session` 问题入库/入日志前净化）三处过关。回归用例：`test_text_safety`（净化口径/递归载荷）+ `TestLoneSurrogateBoundary`（真实 `httpx.MockTransport` 下带孤立代理项的请求体能发出、响应正文可编码）+ `TestQuestionSurrogateSafety`（问题与历史存净化后文本） |
 | **rf-833** | 发布期 `refresh` 连续失败且报不出失败用例名：`unit` 档 1 例失败（`test_snapshot_source_guard_edge::test_resolve_failure_fails_closed`），但 `test-runner` 摘要过滤只认小写 `failed`，pytest 的 `FAILED <用例>` 行被整行吞掉 → 只剩一行计数，定位须重跑全量单元。根因：`is_formal_holdings_source` 下沉 `config/_config_api.py` 后用例仍 patch 包入口同名符号，异常分支不触发 | 已修复：① `_test_runner/runner.py` 摘要过滤补 `FAILED` / `ERROR` 关键字（失败用例名直达输出）；② 用例 patch 目标改指调用点 `config._config_api.resolve_holdings_path`。复核：该边缘用例 3 例 + `unit/scripts` + `unit/config` 544 例通过 |
+| **rf-823** | 原问题描述未单独留存（回填自 changelog 段） | **渠道层常量/回退链/展示规则单源化（rf-823~828）**： |
+| **rf-829** | 原问题描述未单独留存（回填自 changelog 段） | **文件膨胀登记逐项处置（rf-829）落地**：按「行数 × 近 90 天改动次数」优先级把三域全部拉回警告线以内——**主程序** `web/handlers.py` 709 → 616（只读观测路由 → `handlers_health.py`）、`core/doctor.py` 734 → 608（日志与缓存探针 → `doctor_logs.py`）、`config/__init__.py` 269 → 195（渠道共享 API → `_config_api.py`） |
 
-## 开发期已修复（0.14.7-dev）
+## 已修复（0.14.7）
 
-> 完整复盘见 `changelog.md` 0.14.7-dev 段；此处为台账原表搬运（无损），本批发布日 2026-10-23。
+> 完整复盘见 `changelog.md` 0.14.7 段；此处为台账原表搬运（无损），本批发布日 2026-10-23。
 
 | # | 问题 | 处理 |
 |---|------|------|
 | **rf-835** | `devbump` 后主台账「已解决问题」区残留**空壳批次节**：`prepare` 迁档时保留的批次节内含标准说明行（`> 完整复盘见 changelog.md X-dev 段…`），占位行被清掉后该节只剩这行说明——`drop_migration_placeholders` 把任何非空行都当「人工备注」而保留节头，于是主台账长期挂着一个指向已归档版本的空节 | 已修复：① 标准说明行按正则识别为机器生成内容（`_PLACEHOLDER_NOTE_RE`），非本版即随占位一并摘除；② 批次节在摘除后若已无台账行（且只剩空行/占位/标准说明）则整节删除，人工备注仍保留节头不丢。回归 2 例（只剩标准说明 → 整节消失 / 含人工备注 → 备注保留、说明行摘除）；当前台账已按该函数清理 |
 | **rf-834** | `test-runner` 多档并行时一档失败仍要等其余各档跑完才返回（`refresh` 实测 53s 中约 40s 是白等），发版窗口需要「首个失败立刻回报」的能力 | 已修复：新增 `--fail-fast`——首个非零结果即取消**尚未启动**的档（已启动的不打断：强杀 pytest 子进程会留下半截报告并丢失败详情），被跳过的档在摘要中显式列出（静默跳过与「跑完了」不可区分）；串行/并行共用 `run_modes_concurrently` 调度器，行为只有一处实现；`refresh` 的 bench 步默认带该参数。回归 2 例（失败后即停止启动后续档且返回跳过清单 / 未启用时跑完全部且结果按计划序） |
+

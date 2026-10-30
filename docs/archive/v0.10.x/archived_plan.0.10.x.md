@@ -7,57 +7,6 @@
 
 ---
 
-## v0.10.x 设计文档
-
-本迭代完成项对应的中间设计文档：
-
-- [`plan-investment-features.md`](investment-features/plan-investment-features.md) — plan-17~24 投资分析功能优化设计（需求 × 数据源可行性 × 章节归并，§4 章节归并方案 + §4.4 架构合规自查表 + §5 实施次序）
-- [`plan-investment-iteration.md`](investment-features/plan-investment-iteration.md) — plan-17~24 迭代实施计划（21 轮 / 8 阶段，每轮量化验收 + 验收签字）
-- [`plan-task-code-traces-gate.md`](task-code-traces-gate/plan-task-code-traces-gate.md) — rf-208 任务编号标识符/注释门禁增强设计（check-code-traces.py 扩展 IDENT 维度 + 系列代号模式）
-- [`plan-web-ui.md`](web-ui/plan-web-ui.md) — plan-8 轻量 Web UI / plan-10 日志可视化计划（2026-08-06 三阶段完成后由 `docs/plan/` 归档）
-- [`plan-web-ui-implementation.md`](web-ui/plan-web-ui-implementation.md) — plan-8 Web UI 实施拆分设计（评估/风险/约束符合性/模块拆分/安全/API/测试/阶段，2026-08-06 归档）
-- [`plan-web-holdings-input-modes.md`](web-holdings-input-modes/plan-web-holdings-input-modes.md) — plan-25 Web 持仓输入模式（试算隔离/正式共享）实现设计（命名空间隔离 + 双模式输入，2026-08-07 完成归档）
-- [`web-config-edit.md`](web-config-edit/web-config-edit.md) — plan-26 Web 配置编辑（完整镜像 TUI 可编辑配置全集）设计定稿（白名单 + 7 组控件 + 原子写备份，2026-08-07 完成归档）
-- [`plan-readme-svg-layout.md`](readme-svg-layout/plan-readme-svg-layout.md) — README 嵌入 SVG 架构图 + 排版优化设计（3 张深色科技风图 + folders 同步，2026-08-07 完成归档）
-- [`plan-env-benchmark-doc-update.md`](env-benchmark-doc-update/plan-env-benchmark-doc-update.md) — 环境耗时对照文档自动更新设计（`--mode bench --update-docs` 自动回填 test-coverage.md 环境耗时表，2026-08-08 归档）
-
-### 外部借鉴系列（plan-30~plan-38 + 指纹提示词覆盖，2026-09-11 归档）
-
-2026-09-04 ~ 2026-09-09 对三个外部仓库做借鉴评估，识别出的可借用点全部落地后，14 份「评估分析 + 实现设计」文档按**借鉴来源**分四目录归档：
-
-**借鉴 TradingAgents-astock → `tradingagents-borrowing/`**（LLM 输入/输出质量治理 + 决策闭环）
-
-- [`reflection-decision-loop-analysis.md`](tradingagents-borrowing/reflection-decision-loop-analysis.md) — plan-30 决策跨期反思闭环机理分析（两阶段延迟反馈：先记 `pending`，同标的再现时用真实行情结算方向正确率与超额 alpha）
-- [`decision-reflection-implementation.md`](tradingagents-borrowing/decision-reflection-implementation.md) — plan-30 实现设计（`decision_reflection` 开关，`decision_ledger` 账本 + `decision_settlement` 结算）
-- [`experimental-features-ui-surfacing.md`](tradingagents-borrowing/experimental-features-ui-surfacing.md) — 实验开关上屏改为由 `features.EXPERIMENTAL_FEATURES` 注册表统一驱动（TUI 菜单 S / Web 配置面板 / CLI `--experiment` 三面同源）
-- [`llm-quality-signal-analysis.md`](tradingagents-borrowing/llm-quality-signal-analysis.md) — plan-31/32/33 三层质量治理分析（输入侧预消化 → 输出侧分级 → 决策头结构化）
-- [`signal-pre-digestion-implementation.md`](tradingagents-borrowing/signal-pre-digestion-implementation.md) — plan-31 信号预消化实现设计（`signal_pre_digest` 开关 + 行业资金流向默认路径缺陷修复）
-- [`decision-header-parse-implementation.md`](tradingagents-borrowing/decision-header-parse-implementation.md) — plan-33 决策头结构化与决策词归一解析实现设计（`decision_header_parse` 开关 + 边界纪律解析器）
-
-**借鉴 BruceLanLan/augur → `augur-borrowing/`**（决策结算纪律 + 健壮性）
-
-- [`augur-borrowing-analysis.md`](augur-borrowing/augur-borrowing-analysis.md) — augur 借鉴评估（决策-结算学习闭环 / 确定性数值信号沉淀 + live/demo 标签 / 健壮性三件套）
-- [`signal-ledger-implementation.md`](augur-borrowing/signal-ledger-implementation.md) — plan-34 确定性数值信号账本实现设计（`signal_ledger` 开关，五类评级沉淀 + 默认 `live_only`）
-- [`robustness-suite-implementation.md`](augur-borrowing/robustness-suite-implementation.md) — plan-35 健壮性三件套实现设计（数值归一防线 / 失败原因可读 / `doctor_check` 系统自检）
-
-**借鉴 OpenBB Platform → `openbb-borrowing/`**（数据层适配 + 测试基建 + 凭据声明）
-
-- [`openbb-data-provider-analysis.md`](openbb-borrowing/openbb-data-provider-analysis.md) — OpenBB 数据层工程借鉴评估（Fetcher 三段式 / 响应记录-回放 / 凭据就绪矩阵）
-- [`datasource-adapter-contract-design.md`](openbb-borrowing/datasource-adapter-contract-design.md) — plan-36 数据源适配契约实现设计（三段式 TET + 标准字段 schema + alias 声明式归一，行情域三源试点）
-- [`datasource-cassette-replay-design.md`](openbb-borrowing/datasource-cassette-replay-design.md) — plan-37 数据源记录-回放测试实现设计（自研轻量 cassette 引擎，真实响应进仓库离线回放）
-- [`datasource-credential-ready-design.md`](openbb-borrowing/datasource-credential-ready-design.md) — plan-38 数据源凭据声明与就绪指引实现设计（`datasource_credential_ready` 开关，缺凭据主动跳过并给可读指引）
-
-**自审缺陷修复 → `llm-fingerprint-prompt-coverage/`**
-
-- [`llm-fingerprint-prompt-coverage-design.md`](llm-fingerprint-prompt-coverage/llm-fingerprint-prompt-coverage-design.md) — LLM 模块缓存指纹的提示词覆盖设计（提示词实际承载的派生段进指纹 + 辩论综合键覆盖白脸/黑脸完整正文，无开关）
-
-### 功能开关与基金取数（plan-39 / plan-40，2026-09-12 批准）
-
-两份设计实现落地后由 `docs/plan/` 按主题子目录迁入：
-
-- [`feature-switch-registry-unification-design.md`](feature-switch-registry/feature-switch-registry-unification-design.md) — plan-39 功能开关注册表统一设计（面板可见性 / 默认值 / 产物自述三事解耦为单条开关声明 + 分组属性，TUI / Web / CLI 三渠道入口由注册表派生）
-- [`feeder-penetration-and-holdings-fetch-design.md`](feeder-fund-penetration/feeder-penetration-and-holdings-fetch-design.md) — plan-40 联接基金穿透与基金持仓取数通道修正设计（取数阶梯次序修正 + 目标 ETF 代理底层暴露）
-
 ## v0.10.x 已完成项
 
 | # | 项目 | 内容 | 工作量 | 状态 |
@@ -204,6 +153,57 @@ plan-8/25/26/27 实现后用户文档从「单份菜单手册 + 定时任务手�
 接入 [DataSinking](https://github.com/heubme2020/datasinking) 全文本财报渠道：仅 A 股（SSE/SZSE/BSE）；凭据走通用数据源密钥文件 `data/config/data_key.json`（以 provider 名为节，如 `{"datasink": {"api_key": "..."}}`；环境变量 `DATASINK_API_KEY` 可覆盖）；免费档限速按套餐派生（3 请求/秒）+ 日配额护栏（8,191 篇/日）；新增报告章节「持仓个股财报摘要」（`report_submodules.financial_report_digest` 默认关，数据驱动型）。数据层（凭据/provider+限速/契约+链路+缓存）、章节装配、渲染接线（Excel 页签 + HTML 章节）均已完成并提交。
 
 设计文档：[`datasink-financial-report-digest-design.md`](datasink-financial-report-digest/datasink-financial-report-digest-design.md)（含语义命名索引、文件级落点、限速与配额设计、配置 Schema、测试计划与风险）。
+
+## v0.10.x 设计文档
+
+本迭代完成项对应的中间设计文档：
+
+- [`plan-investment-features.md`](investment-features/plan-investment-features.md) — plan-17~24 投资分析功能优化设计（需求 × 数据源可行性 × 章节归并，§4 章节归并方案 + §4.4 架构合规自查表 + §5 实施次序）
+- [`plan-investment-iteration.md`](investment-features/plan-investment-iteration.md) — plan-17~24 迭代实施计划（21 轮 / 8 阶段，每轮量化验收 + 验收签字）
+- [`plan-task-code-traces-gate.md`](task-code-traces-gate/plan-task-code-traces-gate.md) — rf-208 任务编号标识符/注释门禁增强设计（check-code-traces.py 扩展 IDENT 维度 + 系列代号模式）
+- [`plan-web-ui.md`](web-ui/plan-web-ui.md) — plan-8 轻量 Web UI / plan-10 日志可视化计划（2026-08-06 三阶段完成后由 `docs/plan/` 归档）
+- [`plan-web-ui-implementation.md`](web-ui/plan-web-ui-implementation.md) — plan-8 Web UI 实施拆分设计（评估/风险/约束符合性/模块拆分/安全/API/测试/阶段，2026-08-06 归档）
+- [`plan-web-holdings-input-modes.md`](web-holdings-input-modes/plan-web-holdings-input-modes.md) — plan-25 Web 持仓输入模式（试算隔离/正式共享）实现设计（命名空间隔离 + 双模式输入，2026-08-07 完成归档）
+- [`web-config-edit.md`](web-config-edit/web-config-edit.md) — plan-26 Web 配置编辑（完整镜像 TUI 可编辑配置全集）设计定稿（白名单 + 7 组控件 + 原子写备份，2026-08-07 完成归档）
+- [`plan-readme-svg-layout.md`](readme-svg-layout/plan-readme-svg-layout.md) — README 嵌入 SVG 架构图 + 排版优化设计（3 张深色科技风图 + folders 同步，2026-08-07 完成归档）
+- [`plan-env-benchmark-doc-update.md`](env-benchmark-doc-update/plan-env-benchmark-doc-update.md) — 环境耗时对照文档自动更新设计（`--mode bench --update-docs` 自动回填 test-coverage.md 环境耗时表，2026-08-08 归档）
+
+### 外部借鉴系列（plan-30~plan-38 + 指纹提示词覆盖，2026-09-11 归档）
+
+2026-09-04 ~ 2026-09-09 对三个外部仓库做借鉴评估，识别出的可借用点全部落地后，14 份「评估分析 + 实现设计」文档按**借鉴来源**分四目录归档：
+
+**借鉴 TradingAgents-astock → `tradingagents-borrowing/`**（LLM 输入/输出质量治理 + 决策闭环）
+
+- [`reflection-decision-loop-analysis.md`](tradingagents-borrowing/reflection-decision-loop-analysis.md) — plan-30 决策跨期反思闭环机理分析（两阶段延迟反馈：先记 `pending`，同标的再现时用真实行情结算方向正确率与超额 alpha）
+- [`decision-reflection-implementation.md`](tradingagents-borrowing/decision-reflection-implementation.md) — plan-30 实现设计（`decision_reflection` 开关，`decision_ledger` 账本 + `decision_settlement` 结算）
+- [`experimental-features-ui-surfacing.md`](tradingagents-borrowing/experimental-features-ui-surfacing.md) — 实验开关上屏改为由 `features.EXPERIMENTAL_FEATURES` 注册表统一驱动（TUI 菜单 S / Web 配置面板 / CLI `--experiment` 三面同源）
+- [`llm-quality-signal-analysis.md`](tradingagents-borrowing/llm-quality-signal-analysis.md) — plan-31/32/33 三层质量治理分析（输入侧预消化 → 输出侧分级 → 决策头结构化）
+- [`signal-pre-digestion-implementation.md`](tradingagents-borrowing/signal-pre-digestion-implementation.md) — plan-31 信号预消化实现设计（`signal_pre_digest` 开关 + 行业资金流向默认路径缺陷修复）
+- [`decision-header-parse-implementation.md`](tradingagents-borrowing/decision-header-parse-implementation.md) — plan-33 决策头结构化与决策词归一解析实现设计（`decision_header_parse` 开关 + 边界纪律解析器）
+
+**借鉴 BruceLanLan/augur → `augur-borrowing/`**（决策结算纪律 + 健壮性）
+
+- [`augur-borrowing-analysis.md`](augur-borrowing/augur-borrowing-analysis.md) — augur 借鉴评估（决策-结算学习闭环 / 确定性数值信号沉淀 + live/demo 标签 / 健壮性三件套）
+- [`signal-ledger-implementation.md`](augur-borrowing/signal-ledger-implementation.md) — plan-34 确定性数值信号账本实现设计（`signal_ledger` 开关，五类评级沉淀 + 默认 `live_only`）
+- [`robustness-suite-implementation.md`](augur-borrowing/robustness-suite-implementation.md) — plan-35 健壮性三件套实现设计（数值归一防线 / 失败原因可读 / `doctor_check` 系统自检）
+
+**借鉴 OpenBB Platform → `openbb-borrowing/`**（数据层适配 + 测试基建 + 凭据声明）
+
+- [`openbb-data-provider-analysis.md`](openbb-borrowing/openbb-data-provider-analysis.md) — OpenBB 数据层工程借鉴评估（Fetcher 三段式 / 响应记录-回放 / 凭据就绪矩阵）
+- [`datasource-adapter-contract-design.md`](openbb-borrowing/datasource-adapter-contract-design.md) — plan-36 数据源适配契约实现设计（三段式 TET + 标准字段 schema + alias 声明式归一，行情域三源试点）
+- [`datasource-cassette-replay-design.md`](openbb-borrowing/datasource-cassette-replay-design.md) — plan-37 数据源记录-回放测试实现设计（自研轻量 cassette 引擎，真实响应进仓库离线回放）
+- [`datasource-credential-ready-design.md`](openbb-borrowing/datasource-credential-ready-design.md) — plan-38 数据源凭据声明与就绪指引实现设计（`datasource_credential_ready` 开关，缺凭据主动跳过并给可读指引）
+
+**自审缺陷修复 → `llm-fingerprint-prompt-coverage/`**
+
+- [`llm-fingerprint-prompt-coverage-design.md`](llm-fingerprint-prompt-coverage/llm-fingerprint-prompt-coverage-design.md) — LLM 模块缓存指纹的提示词覆盖设计（提示词实际承载的派生段进指纹 + 辩论综合键覆盖白脸/黑脸完整正文，无开关）
+
+### 功能开关与基金取数（plan-39 / plan-40，2026-09-12 批准）
+
+两份设计实现落地后由 `docs/plan/` 按主题子目录迁入：
+
+- [`feature-switch-registry-unification-design.md`](feature-switch-registry/feature-switch-registry-unification-design.md) — plan-39 功能开关注册表统一设计（面板可见性 / 默认值 / 产物自述三事解耦为单条开关声明 + 分组属性，TUI / Web / CLI 三渠道入口由注册表派生）
+- [`feeder-penetration-and-holdings-fetch-design.md`](feeder-fund-penetration/feeder-penetration-and-holdings-fetch-design.md) — plan-40 联接基金穿透与基金持仓取数通道修正设计（取数阶梯次序修正 + 目标 ETF 代理底层暴露）
 
 ## 归档说明
 

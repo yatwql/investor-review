@@ -40,7 +40,7 @@ _SAMPLE_RF_ARCHIVE = (
     "# 自审记录归档 — v0.12.x\n\n"
     "> 归档时间：2026-10-05（v0.12.5 发布）\n"
     "> 涵盖版本：v0.12.x 开发期已修复项（v0.12.1 → v0.12.5）\n\n---\n\n"
-    "## 开发期已修复（0.12.5-dev）\n\n> 完整复盘见 `changelog.md` 0.12.5-dev 段；此处仅摘要行。\n\n"
+    "## 已修复（0.12.5）\n\n> 完整复盘见 `changelog.md` 0.12.5 段；此处仅摘要行。\n\n"
     "- rf-900 已修复（2026-10-05）：旧条目\n"
 )
 
@@ -113,6 +113,24 @@ class TestLedgerArchive:
         main, _arch, _n = rel.apply_rf_archive(_SAMPLE_RF, _SAMPLE_RF_ARCHIVE, "0.12.6", "2026-10-08")
         assert rel.rf_archive_status(main, "0.12.6")[0] == "archived"
 
+    def test_apply_rf_archive_falls_back_to_flat_table(self, rel):
+        """漏写版本节头（表直接落在 `## 已解决问题` 直属层）时按本版归位，不得静默跳过。
+
+        回归场景：跨 9 个发布周期漏写 `### 开发期已修复（X-dev）` 节头，归档按「本版
+        无该节 = 无待迁档」放行，53 条已解决台账滞留在主文件。
+        """
+        flat = _SAMPLE_RF.replace("### 开发期已修复（0.12.6-dev）\n\n", "")
+        assert rel.rf_archive_status(flat, "0.12.6")[0] == "unfiled"
+        main, arch, moved = rel.apply_rf_archive(flat, _SAMPLE_RF_ARCHIVE, "0.12.6", "2026-10-08")
+        assert moved == 2
+        assert "rf-901" not in main and "rf-902" not in main
+        assert "| **rf-901** | 问题甲 | 处理甲 |" in arch
+        assert "## 已修复（0.12.6）" in arch  # 归档按发布版号建批次
+        assert "### 归档档案" in main  # 归档索引不被吞进迁档区
+        assert rel.rf_archive_status(main, "0.12.6")[0] == "archived"
+        again_main, again_arch, moved_again = rel.apply_rf_archive(main, arch, "0.12.6", "2026-10-08")
+        assert (moved_again, again_main, again_arch) == (0, main, arch)  # 幂等
+
     def test_table_block_moved_verbatim_with_separator(self, rel):
         """表块逐行原样搬（含原分隔行），非 rf 起头的行也在块内不被落下。"""
         body = "\n\n| # | 问题 | 处理 |\n|:--|:--|:--|\n| **rf-901** | 甲 | 处理甲 |\n| — | 汇总行 | 未分类 |\n"
@@ -133,11 +151,16 @@ class TestLedgerArchive:
         assert "> 备注：本节按批次处理。" in new_main
         assert "rf-901" not in new_main
 
-    def test_archive_heading_follows_existing_convention(self, rel):
-        """批次标题/说明行随既有归档格式（`## 开发期已修复（X-dev）` + changelog 指路）。"""
+    def test_archive_heading_uses_release_version(self, rel):
+        """批次标题/说明行随既有归档格式（`## 已修复（X.Y.Z）` + changelog 指路）。
+
+        版号用**发布版**而非开发周期号：归档描述的是已发布的那个版本，
+        写 `-dev` 会让读者把已发布批次当成开发中状态。
+        """
         _main, arch, _n = rel.apply_rf_archive(_SAMPLE_RF, _SAMPLE_RF_ARCHIVE, "0.12.6", "2026-10-08")
-        assert "## 开发期已修复（0.12.6-dev）" in arch
-        assert "> 完整复盘见 `changelog.md` 0.12.6-dev 段" in arch
+        assert "## 已修复（0.12.6）" in arch
+        assert "-dev" not in arch.split("## 已修复（0.12.6）")[1]
+        assert "> 完整复盘见 `changelog.md` 0.12.6 段" in arch
 
 
 class TestPlaceholderCollapse:
@@ -237,7 +260,7 @@ class TestPlaceholderCollapse:
     def test_archive_header_findings_report_missing_lines(self, rel):
         """头部缺行会让区间/日期无法派生——报 finding 而非静默放行。"""
         assert rel.archive_header_findings(_SAMPLE_RF_ARCHIVE) == []
-        bare = "# 归档\n\n## 开发期已修复（0.12.5-dev）\n"
+        bare = "# 归档\n\n## 已修复（0.12.5）\n"
         findings = rel.archive_header_findings(bare)
         assert len(findings) == 2
         assert any("涵盖版本" in f for f in findings) and any("归档时间" in f for f in findings)
@@ -313,11 +336,15 @@ class TestRealArchiveContract:
         }
 
     def test_batch_heading_matches_real_archives(self, real):
-        """真实归档的批次标题全部是脚本产出的那一种形态（`## 开发期已修复（X-dev）`）。"""
+        """真实归档的批次标题全部是脚本产出的那一种形态（`## 已修复（X.Y.Z）` / 历史 `## vX.Y.Z …`）。"""
         rel = real["rel"]
         name, text = real["rf_archive"]
         fmt_pattern = re.escape(rel._RF_ARCHIVE_HEAD_FMT).replace(r"\{version\}", r"\d+\.\d+\.\d+")
-        headings = [line for line in text.splitlines() if line.startswith("## 开发期已修复")]
+        headings = [
+            line
+            for line in text.splitlines()
+            if line.startswith("## ") and (line.startswith("## 已修复") or "开发期已修复" in line)
+        ]
         # 新小版本骨架由 `archive-init` 建出、首个版本发布时才写入批次节：
         # 最新归档为空属预期（有则必同形，无则跳过）
         for heading in headings:
@@ -371,6 +398,8 @@ class TestRealArchiveContract:
         assert states.pop(current) in {"pending", "archived"}, current
         # 更早批次：只允许已迁档（发布后不得残留待迁表格）
         assert set(states.values()) <= {"archived", "absent"}, states
+        # 任何版本都不允许「条目漏写版本节头」——那会让归档整批静默漏搬
+        assert all(rel.rf_archive_status(real["rf_main"], v)[0] != "unfiled" for v in versions)
 
     def test_real_plan_headings_roundtrip(self, real):
         """真实计划归档的完成节标题能被脚本的完成判定识别（反向：判定尺子有效）。"""

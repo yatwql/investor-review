@@ -563,7 +563,7 @@ def check_chain_table(doc_text: str) -> list[str]:
 _CACHE_TTL_ROW = re.compile(r"^\|\s*`([a-z_]+)`\s*\|\s*[^|]*(?:\.json|\.gz|_\{|精确键名|前缀)[^|]*\|\s*([^|]+)\|")
 
 
-def check_cache_ttl_tables(*docs: tuple[str, str]) -> list[str]:
+def check_cache_ttl_tables(*docs: tuple[Path | str, str]) -> list[str]:
     """缓存 TTL 表（管理/用户文档）与注册表默认值必须一致。
 
     为什么需要：默认值只存在于 `core/data_registry.py`，但 `technical.md` 与

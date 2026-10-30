@@ -1,6 +1,6 @@
 # 自我审查问题记录归档 — v0.8.x
 
-> 归档时间：2026-07-30
+> 归档时间：2026-07-30；2026-10-30 补录 changelog-only 条目 12 条（rf-37、rf-38、rf-39、rf-40、rf-41、rf-43、rf-44、rf-46、rf-47、rf-48、rf-49、rf-50）
 > 原始文件：`docs/managements/review-findings.md`
 > 涵盖版本：v0.8.0 ~ v0.8.10（2026-07-21 ~ 2026-07-30）
 
@@ -133,3 +133,22 @@
 | rf-134 | **P2D 测试覆盖缺口** | `llm/fallback.py` 无独立单元测试 |
 | rf-135 | **P2D 测试覆盖缺口（批量低风险）** | `circuit_breaker_wrapper.py`, `cache/_io.py`, `llm/prompts_core.py`, `report/… |
 | rf-106 | **P2D 已废弃** | 10+ 模块无对应测试 |
+
+## 已修复（0.8.10）
+
+> 补录（2026-10-30）：本批条目原先只随 changelog 变更记录留痕、未逐条登记台账；此处按 v0.8.10 changelog 段回填，问题描述未单独留存（修复列即当日变更摘要，发布日期 2026-07-30）。
+
+| # | 问题 | 修复 |
+|---|------|------|
+| **rf-38** | 原问题描述未单独留存（回填自 changelog 段） | rf-38: `fund_manager.py` `parse_manager_from_html`(~139→~35 行) 拆出 4 个子函数 |
+| **rf-39** | 原问题描述未单独留存（回填自 changelog 段） | rf-39/42/45: `rebalance.py` 拆出 5 个子函数 |
+| **rf-40** | 原问题描述未单独留存（回填自 changelog 段） | rf-40: `alignment_correction.py` 现金识别+剥离+费率估算拆分 |
+| **rf-41** | 原问题描述未单独留存（回填自 changelog 段） | rf-41: `scenario.py` `scenario_analysis`(~123→~61 行) 拆出 `_build_scenario_entry` |
+| **rf-43** | 原问题描述未单独留存（回填自 changelog 段） | rf-43: `price.py` `fetch_market_data`(~97→~25 行) 拆出 3 个子函数 |
+| **rf-44** | 原问题描述未单独留存（回填自 changelog 段） | rf-44: `fund_style_classify.py` `classify_fund_style`(~116→~30 行) 拆出 3 个子函数 |
+| **rf-46** | 原问题描述未单独留存（回填自 changelog 段） | rf-36/rf-46: `orchestrator.py` `_generate_report_full`(~272→~85 行) 拆出 `_prepare_full_risk_metrics`/`_generate_full_html_report`/`_generate_full_excel_report` |
+| **rf-47** | 原问题描述未单独留存（回填自 changelog 段） | **rf-83: news_aggregator.py 去重逻辑提取**（已在上一轮 rf-47 中完成）：`news_dedup.py` 独立管理标题去重和锚点持久化，news_aggregator.py 降至 236 行 |
+| **rf-48** | 原问题描述未单独留存（回填自 changelog 段） | rf-48: `fact_checker.py` `check_numerical_consistency`(~142→~45 行) 拆出 `_evaluate_percent_value` |
+| **rf-49** | 原问题描述未单独留存（回填自 changelog 段） | rf-49: `skeleton.py` `generate_llm_content`(~118→~40 行) 拆出 2 个子函数 |
+| **rf-50** | 原问题描述未单独留存（回填自 changelog 段） | **P1D 函数过长批量拆分（rf-36 ~ rf-50 共 15 项）**： |
+| **rf-37** | 原问题描述未单独留存（回填自 changelog 段） | rf-37: `portfolio_history.py` `get_combined_timeseries`（~232→~112 行）拆出 7 个子函数 |

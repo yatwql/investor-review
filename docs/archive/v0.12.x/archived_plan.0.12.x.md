@@ -45,6 +45,8 @@
 
 ---
 
+## plan-73 限购信息接入 LLM 分析维度（智囊团复盘 / 穿透深析提示词扩展）— ✅ 已完成（2026-10-03）
+
 ## plan-74 基金申购限购合并/调仓联动（plan-72 迭代 4）— ✅ 已完成（2026-10-03）
 
 > 设计文档：[`docs/archive/v0.12.x/fund-purchase-limit/fund-purchase-limit-advice-design.md`](fund-purchase-limit/fund-purchase-limit-advice-design.md)（设计 + 已实施）。
@@ -57,8 +59,6 @@
 4. **文档登记**：`technical.md` §6.7 语义表 10 行 + 附录 H `purchase_status_data` 6 键与 What-if 消费方；`testplan.md` §1.1 模块行；`folders.md` 目录树（3 新文件）；`test-coverage.md` 计数刷新；`changelog.md` Added 条目；设计文档改完成态。
 
 **范围决策**：调仓建议与行动摘要**不在范围**（三种候选操作全为卖出，申购限购不约束卖出；摘要是计数拼接无注入落点）；what-if 目标持仓为唯一注入面。
-
-## plan-73 限购信息接入 LLM 分析维度（智囊团复盘 / 穿透深析提示词扩展）— ✅ 已完成（2026-10-03）
 
 ## plan-75 持仓分类汇总区块追加申购状态列 — ✅ 已完成（2026-10-03）
 
@@ -179,17 +179,17 @@
 
 **结果**：七子命令落地（`scripts/release.py`，全部子进程显式 UTF-8 解码、路径注入可测试），`test_release_tool.py` 49 项单测全绿（版本纯函数 / changelog 归档迁移 / 预检条件 / 演进统计与表格渲染 / 门禁编排 / publish 序列与失败中止 / devbump，子进程经 `FakeRunner` 替身不触真实 git 网络）；实现期修正四处设计缺陷（publish 预检放行待提交改动、演进行数增长基准取行数而非文件数、归档索引区间保留起始版本号、devbump 按发布形态而非开发形态）；文档触点同源登记（CLAUDE 发布编排脚本 bullet、developer-guide「发布类」速查 + 一览行 + 版本发布流程编排提示、technical 约束外参照、folders 目录树、changelog 条目）。
 
-## plan-97 生成进行中 ETA / 阶段预估 — ✅ 已完成（2026-10-07）
+## plan-86 月度收益日历（双口径并排第一步）— ✅ 已完成（2026-10-07）
 
-**动作**：`core/perf.py` 新增 `estimate_stage_eta()`（取 perf 历史最近 20 次运行的同名阶段耗时中位数减已耗时，严格按报告类型筛样本、负值钳 0、历史或类型无样本返回 None，读档/计算异常一律 `logger.debug` 后静默降级为无 ETA）与 `format_stage_status()`（「「阶段」· 已耗时 Ns · 预计剩余 ~Ns」的唯一格式化点）；`PerfCollector` 增 `stage_status()`/`report_type` property 与可选 `stage_announcer` 回调（`start()` 置位后广播、回调异常隔离吞掉），basic/both/full 三处管线构造点以 `stage_announcer=reporter.stage_progress` 接线、调用点零改动；`ProgressReporter.stage_progress()` 基类单一实现使 CLI verbose / Web / TUI 同源——无活跃阶段不输出、ETA 不可得且已耗时 <1s 静默（首跑无历史不刷屏）、ETA 可得但预估剩余 <1s 不输出（瞬时阶段如快照对比）、ETA 不可得且已耗时 ≥1s 仅显已耗时，整体 try/except 静默降级。测试 24 项（`unit/core/test_perf_stage_eta.py` 17 项：中位数口径/类型不匹配/窗口外历史剔除/负样本忽略/早期 list 形状兼容/异常静默；`unit/report/test_progress.py` 扩 7 项：格式器/四类不输出分支/CLI verbose stderr 落点），test-coverage 计数与 folders 目录树同步。
+**动作**：新增 `analysis/monthly_returns.py` 纯计算聚合——月度收益 = 月末总市值 / 上月末总市值 − 1（百分数契约，Excel 端 ÷100 配 FMT_PERCENT），首月 `baseline="inception"`（以其首根 bar 为基线）、默认 24 个月窗口且**首窗月保持真实上窗基线**（截窗不改口径）、|收益| < 0.005pct 计平月；输出年 × 12 格结构 + 胜/亏/平、最佳/最差、最长连亏（平月打断）统计；`caliber`/`caliber_label` 携带口径——as-if 现行、realized 预留常量，**双口径并排结构就绪**（完整成交回放数据就绪后第二口径同契约接入并排渲染）。`PortfolioHistoryCalculator` 三处返回点（两 unavailable + 主返回）统一注入 `history_data.monthly_returns` 单源。双端呈现：HTML 端 partial 内纯 HTML 表格热力格（`change`/`profit_color` 滤镜，正值红/负值绿遵循中文配色，无 JS 依赖天然具备无脚本回退）+ 口径与胜亏平统计图下说明；Excel 端页签第四区块「四、月度收益日历」（年行 × 月格红绿字 `profit_font` 单源、说明行斜体、样本不足写占位），`_compute_ncols` 纳入 13 列。区块契约三向同步（注册表四区块 / technical 矩阵行 13 改 4 / 双端提取）+ 语义命名表 `monthly_returns` 行 + history_data 契约键 + 需求 §6.4.13 改一章四区块 + reports-instruction 四处 + faq + folders 目录树。测试 13 项（`unit/analysis/test_monthly_returns.py` 9 项纯计算 + `unit/report/test_drawdown_html_excel.py` 扩 4 项双端渲染）。
 
 ## plan-96 主菜单页头状态仪表盘 — ✅ 已完成（2026-10-07）
 
 **动作**：新增 `tui/status_line.py` 五项本地单源组装——上次报告时间（perf 历史末条时间戳 → MM-DD HH:MM）、缓存过期数（与菜单 [4] 同一 `get_cache_stats().expired` 口径）、数据新鲜度（最新价格缓存的 `price_date` 数据日期 + 自然日龄）、降级源数（datasource_health 末条 `fail_count`，无记录 `—`）、LLM 状态点（`llm_status` 与 [S] 同源判定 ●/○）；`print_header` 标题下常驻单行并附详情菜单指引 `〔详情 [4][H][S]〕`。契约：逐项独立 try/except 降级为「—」、整行组装异常降级为 `状态 │ —` 永不向调用方抛出、TTL 45s 记忆化（页头随主循环重绘，重取限频）、零外部网络调用。**设计取舍**：数据新鲜度原拟用 `data_freshness.classify_freshness` × 交易日历，但 `trading_calendar` 日历缓存未命中会走 akshare 触网（违反「不新增任何外部调用」且撞测试网络守卫的 BaseException），故页头改呈纯本地读数（数据日期 + 自然日龄），分类器仍留给报告管线。测试 12 项（`unit/ui/test_tui_menu.py` 扩：五项取数正常/降级分支、整行拼接与菜单指引、五路全挂逐项 `—`、TTL 记忆化复用与过期重取、print_header 接线）。
 
-## plan-86 月度收益日历（双口径并排第一步）— ✅ 已完成（2026-10-07）
+## plan-97 生成进行中 ETA / 阶段预估 — ✅ 已完成（2026-10-07）
 
-**动作**：新增 `analysis/monthly_returns.py` 纯计算聚合——月度收益 = 月末总市值 / 上月末总市值 − 1（百分数契约，Excel 端 ÷100 配 FMT_PERCENT），首月 `baseline="inception"`（以其首根 bar 为基线）、默认 24 个月窗口且**首窗月保持真实上窗基线**（截窗不改口径）、|收益| < 0.005pct 计平月；输出年 × 12 格结构 + 胜/亏/平、最佳/最差、最长连亏（平月打断）统计；`caliber`/`caliber_label` 携带口径——as-if 现行、realized 预留常量，**双口径并排结构就绪**（完整成交回放数据就绪后第二口径同契约接入并排渲染）。`PortfolioHistoryCalculator` 三处返回点（两 unavailable + 主返回）统一注入 `history_data.monthly_returns` 单源。双端呈现：HTML 端 partial 内纯 HTML 表格热力格（`change`/`profit_color` 滤镜，正值红/负值绿遵循中文配色，无 JS 依赖天然具备无脚本回退）+ 口径与胜亏平统计图下说明；Excel 端页签第四区块「四、月度收益日历」（年行 × 月格红绿字 `profit_font` 单源、说明行斜体、样本不足写占位），`_compute_ncols` 纳入 13 列。区块契约三向同步（注册表四区块 / technical 矩阵行 13 改 4 / 双端提取）+ 语义命名表 `monthly_returns` 行 + history_data 契约键 + 需求 §6.4.13 改一章四区块 + reports-instruction 四处 + faq + folders 目录树。测试 13 项（`unit/analysis/test_monthly_returns.py` 9 项纯计算 + `unit/report/test_drawdown_html_excel.py` 扩 4 项双端渲染）。
+**动作**：`core/perf.py` 新增 `estimate_stage_eta()`（取 perf 历史最近 20 次运行的同名阶段耗时中位数减已耗时，严格按报告类型筛样本、负值钳 0、历史或类型无样本返回 None，读档/计算异常一律 `logger.debug` 后静默降级为无 ETA）与 `format_stage_status()`（「「阶段」· 已耗时 Ns · 预计剩余 ~Ns」的唯一格式化点）；`PerfCollector` 增 `stage_status()`/`report_type` property 与可选 `stage_announcer` 回调（`start()` 置位后广播、回调异常隔离吞掉），basic/both/full 三处管线构造点以 `stage_announcer=reporter.stage_progress` 接线、调用点零改动；`ProgressReporter.stage_progress()` 基类单一实现使 CLI verbose / Web / TUI 同源——无活跃阶段不输出、ETA 不可得且已耗时 <1s 静默（首跑无历史不刷屏）、ETA 可得但预估剩余 <1s 不输出（瞬时阶段如快照对比）、ETA 不可得且已耗时 ≥1s 仅显已耗时，整体 try/except 静默降级。测试 24 项（`unit/core/test_perf_stage_eta.py` 17 项：中位数口径/类型不匹配/窗口外历史剔除/负样本忽略/早期 list 形状兼容/异常静默；`unit/report/test_progress.py` 扩 7 项：格式器/四类不输出分支/CLI verbose stderr 落点），test-coverage 计数与 folders 目录树同步。
 
 ## plan-98 生成中断缺清理与产物一致性保障 — ✅ 已完成（2026-10-07）
 

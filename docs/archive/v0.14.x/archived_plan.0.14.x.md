@@ -7,6 +7,12 @@
 
 ---
 
+## `plan-95` 生成完成后无一键打开 ✅
+
+**现状与问题**：`finish_report` 仅错误摘要 + 耗时排行 + 按任意键；全仓无 `webbrowser`/`os.startfile`/`xdg-open`——生成完仍要手动进目录找文件（HTML 路径虽有打印但不可直接操作）
+
+**动作**：收尾打印本次产物路径清单 + 询问「按 O 打开输出目录」（跨平台 start/explorer/xdg-open，失败回退打印路径不报错）；Web 侧已有下载入口不受影响
+
 ## `plan-170` 提交期 dev-verify 墙钟治理（离线桩接管等待型 sleep）✅
 
 **完成（2026-10-21，v0.13.13-dev）**：P0 `dev-verify` 中位 37.3s 里，跨 worker `time.sleep` 累计 104.9s 全属「离线桩已声明、却仍在白等注定取不到的源」——`core/throttle.py:102` 间隔节流 31.9s、`core/retry.py:182/191` 多策略退避 26.2s、`providers/{cninfo,datasink}` 429 限速窗口 3s。动作：`_network_guard` 新增 `_NoWaitClock`（`time` 模块代理，只接管 `sleep`，`monotonic`/`perf_counter` 原样透传），`apply_offline_stubs` 用它替换 `core.throttle` / `core.retry` / `providers.cninfo` / `providers.datasink` 的**模块级 `time`**——作用域限于声明 `offline_external_sources` 的文件，测试自身 `time.sleep` 与验证等待语义的用例（`test_throttle` / `test_phase_timeout` / `test_batch::TestRateLimiter` / `test_handlers::test_queue_full_429`）不受影响，未声明离线的文件等待语义逐字节不变。效果（16 核/load 3~5 交替 3 轮）：**37.3s → 24.0s（−13.3s / −36%）**，用例数与断言强度不变（7481 passed）；并行度复核 `-n 12` 反而更慢（墙钟 27.4~29.4s、user CPU 235s vs 145s）→ 维持 `medium=50% 核数`、不加并发。剩余睡眠 57.8s 中 30s 在 daemon 线程、22.2s 属未声明离线的 provider/fetcher 用例；全局禁睡上限实测中位 22.2s，即剩余可压缩空间 ≤2s，无性价比。测试：`unit/core/test_network_guard.py` 新增 4 例（节流零等待且算式返回值不变 / 退避零等待且重试次数不变 / 代理保留真实 monotonic·perf_counter / 未声明离线时等待语义原样）+ 桩目标存在性补四个模块的 `time.sleep` 断言。
@@ -79,11 +85,17 @@
 
 **实施结果**：报告层 LLM 阶段前清零、结束后汇入 counters；`doctor` 运行台账行在最近运行有修正时追加「事实校验自动修正中位 N 处」（为 0 时不刷噪声）。回归 3 例（累计/无修正不计数/清零）+ doctor 2 例（中位可见/无修正不刷）。
 
-## `plan-95` 生成完成后无一键打开 ✅
+## `plan-181` CLI 缺「数据源健康历史」视图（TUI `[H]` / Web `/api/health/history` 已有） ✅
 
-**现状与问题**：`finish_report` 仅错误摘要 + 耗时排行 + 按任意键；全仓无 `webbrowser`/`os.startfile`/`xdg-open`——生成完仍要手动进目录找文件（HTML 路径虽有打印但不可直接操作）
+**现状与问题**：健康历史（最近 10 次采集的成功/失败源与降级原因）在 TUI 是 `[H]`、Web 是 `GET /api/health/history`，CLI 只有 `check-sources`（当前态快照）——同一事实在 CLI 侧不可得，排查「昨天那次为什么降级」只能靠翻 `data/state/` JSON 或日志。
 
-**动作**：收尾打印本次产物路径清单 + 询问「按 O 打开输出目录」（跨平台 start/explorer/xdg-open，失败回退打印路径不报错）；Web 侧已有下载入口不受影响
+**动作**：CLI 增 `health-history` 子命令（`--limit` 默认 10、`--json`），渲染委托 `core/perf.summarize_health_history`（TUI/Web 同源，不新写聚合）；无需 config（配置损坏仍可查）
+
+## `plan-182` CLI 缺「报告对话式追问」入口 ❌ 决策不做
+
+**现状与问题**：`report_qa` 的会话内多轮追问在 TUI（`[Q]` 文本循环）与 Web（`POST /api/qa/ask`）可用，CLI 无入口——自动化/脚本场景无法对当期报告提问，三渠道能力不一致（该功能默认关，开关与用量口径已在 `qa/session.py` 统一）。
+
+**决策（不做）**：追问的产品形态是「看报告 → 就地追问 → 连续追问」，CLI 的一次性命令/管道范式与之不匹配——要复刻就得引入交互式 REPL（与 TUI 重复）或把多轮状态塞进命令行参数（用户负担反而更大）。保留 TUI/Web 两个自然入口，CLI 侧不提供；如需脚本化问答，走 Web 的 `/api/qa/ask`。
 
 ## `plan-183` 报告产物「定位/打开」能力三渠道不一致 ✅
 
@@ -96,18 +108,6 @@
 **现状与问题**：本轮把 `llm_max_thinking_concurrency` 默认改为 2，并把「端点偶发空内容 → 改回 1」写成回滚手段；但 Web 配置面板与 TUI `[S]` 只暴露 `enabled_llm` 与 features，**调优项（thinking 并发/总时间预算/日预算/重试/超时）只能手改 JSON**——用户按提示回滚时要开编辑器找键，且无校验。
 
 **动作**：把这批「用户可以合理调整」的键纳入 `config/edit_ops` 共享白名单（含取值范围与非法值提示），Web 面板与 TUI 配置面板同时出现（同一白名单驱动，与功能开关注册表的「唯一事实来源」纪律同源）；每项带一句「什么时候该改」的说明（如 thinking 并发：端点偶发空响应时改回 1）；补「三渠道都能改同一键且校验一致」用例
-
-## `plan-181` CLI 缺「数据源健康历史」视图（TUI `[H]` / Web `/api/health/history` 已有） ✅
-
-**现状与问题**：健康历史（最近 10 次采集的成功/失败源与降级原因）在 TUI 是 `[H]`、Web 是 `GET /api/health/history`，CLI 只有 `check-sources`（当前态快照）——同一事实在 CLI 侧不可得，排查「昨天那次为什么降级」只能靠翻 `data/state/` JSON 或日志。
-
-**动作**：CLI 增 `health-history` 子命令（`--limit` 默认 10、`--json`），渲染委托 `core/perf.summarize_health_history`（TUI/Web 同源，不新写聚合）；无需 config（配置损坏仍可查）
-
-## `plan-182` CLI 缺「报告对话式追问」入口 ❌ 决策不做
-
-**现状与问题**：`report_qa` 的会话内多轮追问在 TUI（`[Q]` 文本循环）与 Web（`POST /api/qa/ask`）可用，CLI 无入口——自动化/脚本场景无法对当期报告提问，三渠道能力不一致（该功能默认关，开关与用量口径已在 `qa/session.py` 统一）。
-
-**决策（不做）**：追问的产品形态是「看报告 → 就地追问 → 连续追问」，CLI 的一次性命令/管道范式与之不匹配——要复刻就得引入交互式 REPL（与 TUI 重复）或把多轮状态塞进命令行参数（用户负担反而更大）。保留 TUI/Web 两个自然入口，CLI 侧不提供；如需脚本化问答，走 Web 的 `/api/qa/ask`。
 
 ## `plan-186` 功能开关按内容位置分八组并转出域模型 ✅
 

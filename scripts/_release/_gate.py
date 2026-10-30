@@ -193,10 +193,15 @@ def run_gate(args, ctx, runner=None) -> int:
         print(f"[ERR] review-findings 该版本仍有 {pending} 条已解决条目未迁档")
         print("[ERR] 先执行 scripts/release.py archive（或人工迁档）后重跑 gate")
         return 2
+    if status == "unfiled":
+        print(f"[ERR] review-findings「已解决」区有 {pending} 条台账行漏写版本节头（落在 `## 已解决问题` 直属层）")
+        print("[ERR] 归档按「本版无该节 = 无待迁档」处理会整批漏搬：先执行 scripts/release.py archive")
+        print("[ERR] 或人工把条目移入 `### 开发期已修复（<本版>-dev）` 节后重跑 gate")
+        return 2
     if status == "archived":
         archived_ok = rf_archive.exists() and ctx.has_archive_section(rf_archive.read_text(encoding="utf-8"), version)
         if not archived_ok:
-            print(f"[ERR] 主台账已留迁档占位，但 {rf_archive.name} 缺 `## v{version} 开发期已修复` 批次节")
+            print(f"[ERR] 主台账已留迁档占位，但 {rf_archive.name} 缺 `## 已修复（{version}）` 批次节")
             print("[ERR] 先执行 scripts/release.py archive（或人工迁档）后重跑 gate")
             return 2
     else:  # absent：本版没有自审条目，无待迁档内容
@@ -234,7 +239,7 @@ def run_gate(args, ctx, runner=None) -> int:
         fut_regression = pool.submit(
             ctx.exec_fn, [sys.executable, "scripts/test-runner.py", "--mode", "regression"], ctx.root, runner
         )
-        if bench_stamp:
+        if fut_verify is None:  # bench 已实跑过 unit（verify 严格超集）且代码指纹一致：无需再跑
             rc_v, out_v, err_v = 0, "", ""
         else:
             rc_v, out_v, err_v = fut_verify.result()

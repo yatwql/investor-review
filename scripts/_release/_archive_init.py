@@ -44,9 +44,9 @@ def _archive_file_body(kind: str, version: str, date: str) -> str:
     if kind == "review-findings":
         return (
             f"# 自审记录归档 — v{minor}.x\n\n"
-            f"> 归档时间：{date}（v{version} 发布，本系列首批开发期已修复批次并入）\n"
+            f"> 归档时间：{date}（v{version} 发布，本系列首批已修复批次并入）\n"
             "> 原始文件：`docs/managements/review-findings.md`\n"
-            f"> 涵盖版本：v{minor}.x 开发期已修复项（v{version} → ）\n"
+            f"> 涵盖版本：v{minor}.x 已修复项（按发布版号批次，v{version} → ）\n"
             "> 归档内容：台账表格经 `release.py prepare` 整块搬运（无损）；表外散文留主台账\n\n---\n"
         )
     return (

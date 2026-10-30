@@ -24,6 +24,7 @@ class FakeRunner:
         self.responses = list(responses or [])
         self.default = default
         self.calls: list[list[str]] = []
+        self.dirty = False  # 用例可翻转：模拟 `git status --porcelain` 出现脏文件
 
     def run(self, cmd, root, capture=True):
         cmd = [str(c) for c in cmd]
@@ -102,7 +103,7 @@ def _sample_rf_archive() -> str:
         "# 自审记录归档 — v0.12.x\n\n"
         "> 归档时间：2026-10-05（v0.12.5 发布）\n"
         "> 涵盖版本：v0.12.x 开发期已修复项（v0.12.1 → v0.12.5）\n\n---\n\n"
-        "## 开发期已修复（0.12.5-dev）\n\n> 完整复盘见 `changelog.md` 0.12.5-dev 段；此处仅摘要行。\n\n"
+        "## 已修复（0.12.5）\n\n> 完整复盘见 `changelog.md` 0.12.5 段；此处仅摘要行。\n\n"
         "- rf-900 已修复（2026-10-05）：旧条目\n"
     )
 

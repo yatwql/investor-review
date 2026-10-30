@@ -13,9 +13,9 @@
   - `rewrite_doc_refs`：设计文件迁档后的路径引用改写（`[文字](旧路径)` 与裸路径）
   - `move_tree_entry`：folders.md 目录树行的「plan 子树 → 版本归档子树」搬迁
 
-**格式随既有归档走**（不另立规范）：批次标题 `## 开发期已修复（X.Y.Z-dev）`、
-说明行 `> 完整复盘见 changelog.md X.Y.Z-dev 段；…`、归档头部两行与主文件「归档档案」
-索引区间；本模块只做「把已有格式的下一个批次写出来」。
+**格式随既有归档走**（不另立规范）：批次标题 `## 已修复（X.Y.Z）`（**发布版号**，不是开发周期号——
+归档描述的是已经发布的版本）、说明行 `> 完整复盘见 changelog.md X.Y.Z 段；…`、归档头部两行与主文件
+「归档档案」索引区间；本模块只做「把已有格式的下一个批次写出来」。
 
 判定边界（**脚本不替人决定**）：条目内容是否真的该归档、完成标记是否打对、设计文件
 是否真的完成、摘要要不要精简，仍由人复核；脚本只保证机械动作一致、可重复（幂等）
@@ -32,12 +32,14 @@ from _release._common import ReleaseError
 #: 主台账里的目标节标题：`### 开发期已修复（X.Y.Z-dev）`
 #: 节标题（`[ \t]*$` 而非 `\s*$`：避免把标题后的空行吞进匹配、占位前多出空行）
 _RF_SECTION_RE = re.compile(r"^### 开发期已修复（(?P<dev>\d+\.\d+\.\d+)-dev）[ \t]*$", re.M)
+#: 主台账「已解决」区标题：其**直属层**（第一个 `### ` 之前）的表格 = 漏写版本节头的条目
+_SOLVED_HEAD_RE = re.compile(r"^## 已解决问题[ \t]*$", re.M)
 #: 已解决表数据行（只认 `| **rf-N**` 开头，用于计数与「有没有表」的判定）
 _RF_ROW_RE = re.compile(r"^\|\s*\*\*rf-\d+\*\*\s*\|", re.M)
 #: 表格行（表块边界判定：任意 `|` 起头行，保留原分隔行/续行）
 _TABLE_LINE_RE = re.compile(r"^\s*\|")
-#: 归档内各批次节标题（既有格式，随版本批次追加）：`## 开发期已修复（X.Y.Z-dev）`
-_RF_ARCHIVE_HEAD_FMT = "## 开发期已修复（{version}-dev）"
+#: 归档内各批次节标题（按归档所属版本号，不写 `-dev` 开发周期号）
+_RF_ARCHIVE_HEAD_FMT = "## 已修复（{version}）"
 _HEADER_SPAN_RE = re.compile(r"^> 涵盖版本：.*$", re.M)
 _HEADER_TIME_RE = re.compile(r"^> 归档时间：.*$", re.M)
 _TRAILING_VERSION_RE = re.compile(r"(v\d+\.\d+\.\d+)\s*）\s*$")
@@ -57,10 +59,32 @@ _PLACEHOLDER_LINE_RE = re.compile(
 _PLACEHOLDER_NOTE_RE = re.compile(r"^> 完整复盘见 `changelog\.md` (?P<version>\d+\.\d+\.\d+)-dev 段；此处为台账原表.*$")
 #: 占位节的节头（仅当节内只剩占位时才随占位一起删除）
 _PLACEHOLDER_HEAD_RE = re.compile(r"^### 开发期已修复（(?P<dev>\d+\.\d+\.\d+)-dev）[ \t]*$")
-RF_SECTION_NOTE = "> 完整复盘见 `changelog.md` {version}-dev 段；此处为台账原表搬运（无损），本批发布日 {date}。"
+RF_SECTION_NOTE = "> 完整复盘见 `changelog.md` {version} 段；此处为台账原表搬运（无损），本批发布日 {date}。"
 
 
 # ─────────────────────────── review-findings ───────────────────────────
+
+
+def _flat_section_bounds(text: str) -> tuple[int, int] | None:
+    """「## 已解决问题」直属层正文（第一个 `### `/`## ` 之前）的 (起点, 终点)。
+
+    该层出现 `| **rf-N** |` 行即「条目漏写版本节头」——归档与门禁都曾把它当作
+    「本版无自审条目」静默放行，是台账整批漏搬的入口。
+    """
+    m = _SOLVED_HEAD_RE.search(text)
+    if m is None:
+        return None
+    tail = re.search(r"^(?:###|## )", text[m.end() :], re.M)
+    end = m.end() + tail.start() if tail else len(text)
+    return m.end(), end
+
+
+def _flat_rf_rows(text: str) -> int:
+    """「已解决」区直属层里未归入任何版本节的台账行数（0 = 无漏写）。"""
+    bounds = _flat_section_bounds(text)
+    if bounds is None:
+        return 0
+    return count_rf_rows(text[bounds[0] : bounds[1]])
 
 
 def _rf_section_or_none(text: str, dev_version: str) -> tuple[int, int] | None:
@@ -115,8 +139,15 @@ def count_rf_rows(section_body: str) -> int:
 
 
 def apply_rf_archive(main_text: str, archive_text: str, version: str, date: str) -> tuple[str, str, int]:
-    """把该版本已解决表格块搬进归档，主台账留占位。幂等：已迁档时原样返回（计数 0）。"""
+    """把该版本已解决表格块搬进归档，主台账留占位。幂等：已迁档时原样返回（计数 0）。
+
+    本版节缺失时**回落到「已解决」区直属层表**：条目漏写 `### 开发期已修复（X-dev）`
+    节头时不再静默跳过，而是按本版归位（漏写是书写失误，条目本身仍是本周期产出）。
+    """
     bounds = _rf_section_or_none(main_text, version)
+    healed_head = bounds is None  # 漏写版本节头：归位后补出节头，台账版式与常规批次一致
+    if healed_head:
+        bounds = _flat_section_bounds(main_text)
     if bounds is None:  # 本版无自审条目：无待迁档内容，原样返回（幂等）
         return main_text, archive_text, 0
     start, end = bounds
@@ -129,6 +160,8 @@ def apply_rf_archive(main_text: str, archive_text: str, version: str, date: str)
     placeholder = RF_PLACEHOLDER.format(version=version)
     kept_prose = [block.strip("\n") for block in (before, after) if block.strip()]
     body = "\n\n".join([*kept_prose, placeholder]) + "\n\n"
+    if healed_head:
+        body = f"### 开发期已修复（{version}-dev）\n\n" + body
     new_main = main_text[:start] + "\n\n" + body + main_text[end:].lstrip("\n")
 
     section = (
@@ -255,12 +288,20 @@ def _bump_archive_header(text: str, version: str, date: str) -> str:
 
 
 def rf_archive_status(text: str, version: str) -> tuple[str, int]:
-    """该版本已解决节的迁档状态：`absent`（无本节）/ `pending`（还有 N 条未搬）/ `archived`（已搬空）。"""
+    """该版本已解决节的迁档状态。
+
+    `pending`（本版节还有 N 条未搬）/ `unfiled`（N 条漏写节头，落在已解决区直属层）/
+    `archived`（本版节已搬空）/ `absent`（既无本版节也无直属层台账行）。
+    """
     bounds = _rf_section_or_none(text, version)
-    if bounds is None:
-        return "absent", 0
-    rows = count_rf_rows(text[bounds[0] : bounds[1]])
-    return ("pending", rows) if rows else ("archived", 0)
+    if bounds is not None:
+        rows = count_rf_rows(text[bounds[0] : bounds[1]])
+        if rows:
+            return "pending", rows
+    stray = _flat_rf_rows(text)
+    if stray:
+        return "unfiled", stray
+    return ("archived", 0) if bounds is not None else ("absent", 0)
 
 
 def pending_rf_rows(text: str, version: str) -> int:
@@ -269,7 +310,7 @@ def pending_rf_rows(text: str, version: str) -> int:
 
 
 def has_archive_section(archive_text: str, version: str) -> bool:
-    """归档文件内是否已有该版本批次节（`## 开发期已修复（X.Y.Z-dev）`）。"""
+    """归档文件内是否已有该版本批次节（`## 已修复（X.Y.Z）`，版号为发布版）。"""
     return _RF_ARCHIVE_HEAD_FMT.format(version=version) in archive_text
 
 

@@ -8,111 +8,46 @@
 
 ---
 
-## [0.3.10] - 2026-07-12
-
-### Fixed
-
-- **分红 API akshare 1.18.64 签名兼容**：`stock_history_dividend()` 新版不接受参数且返回全量聚合数据（列名从"每股股利"改为"年均股息"），改为一次拉取全量后按代码过滤，移除旧版逐股并发请求逻辑。
-- **Tencent API 超时/网络错误自动重试**：`fetch_price()` 对 `TimeoutException`/`RequestError` 自动重试一次后再放弃，降低备用链路的偶发超时影响。
-- **日志噪音压缩**：移除 `fetcher/chain.py` 和 `report/market_value.py` 中与 `cache.py` 重复的"缓存命中"DEBUG 日志。
-- **TUI 主循环标题丢失**：`_print_header()` 从主循环前移至循环内调用，确保生成报告/刷新缓存等操作返回后，软件名称和版本号仍然显示在屏幕顶部。
-- **测试文档 `--lf` 错误示例**：`how-to-test-my-code.md` 中原示例 `test_runner.py -- --lf` 实际因 argparse 不支持 `--` 透传而报错。改为直接调 `pytest -m` 复现标记表达式后组合 `--lf`，并补充 `test_runner.py` 与 `--lf` 的分工说明。
+## [0.3.0] - 2026-07-08
 
 ### Changed
 
-- **缓存引擎 Strangler Fig 重构完成**：667 行的单体 `cache.py` 拆分为 `cache/` 子包（9 个文件 + services 子包），职责解耦为路径/IO/存取/TTL/统计/清理/组管理/持仓跟踪。过渡文件 `_legacy.py` 已删除。对外 API 保持完全兼容，`from cache import get/set/clear` 等不变。
-- **T4 stale_days 配置收紧：14→7 天**：盈利预测/分红/风格等补充数据级不再容忍 2 周旧缓存。`config.json`、`data_status.py` 默认值、`how-to-config.md`、`requirements.md` 同步更新。
+- **版本号统一更新**：0.2.91 → 0.3.0（constants.py / README.md / pyproject.toml / 管理文档 / 用户手册共 10 处同步）。
+- **管理文档归档**：changelog.md / plan.md / review-findings.md 的 v0.2.x 详细记录迁移至 `docs/archive/` 对应 `archived_*.0.2.x.md` 文件，主文件保留简洁归档引用。
+- **datasource-and-folders.md**：目录树补入 3 个新存档文件描述。
 
----
+### Added
 
-## [0.3.9] - 2026-07-12
+- **testplan.md 8 个 gap 全量覆盖补齐（共 52 项新增测试）：**
+  - **HTML 打印样式**（9 项）：`@media print` 规则完整性检测 — 黑白友好/隐藏导航/展开折叠/热力图覆盖
+  - **首次运行引导**（4 项 edge）：配置缺失自动初始化/目录创建/损坏降级/菜单可用
+  - **Excel 数字格式**（7 项 edge）：styles.py 常量验证 — 金额/百分比/份额千分位
+  - **LLM 三态占位区分**（6 项 edge）：NOT_CONFIGURED/MODULE_DISABLED/API_ERROR 互斥 + 内容引导
+  - **日志分级输出**（5 项）：INFO/WARNING/ERROR 均落盘 + 级别前缀
+  - **错误隔离业务语义**（1 项）：sheet 失败后穿透/市值模块仍被调用
+  - **新闻流水线全链路**（2 项 edge+integration）：聚合→去重→关联端到端 + 关联度排序
+  - **TUI 错误友好提示**（18 项 edge）：_print_error_with_hint 7 种异常分类 + 菜单调度异常捕获，不暴露原始异常类型名
+## [0.3.4] - 2026-07-09
 
-### Fixed
+### Added
 
-- **price_stock 测试 mock 未同步 v0.3.8 链路拆分**：`test_api_edge.py`（3 项）和 `test_fetcher.py`（1 项）仍 mock `eastmoney` 为 fallback provider，但 v0.3.8 已将 `price_stock` 链改为 `tencent→sina`。mock 未命中时实际调用新浪 API 返回实时数据，导致断言失败。统一替换为 `sina` mock，返回字段同步适配 `_price_transform_sina`（`nav`/`nav_date` → `price`/`price_date`）。
-
----
-
-## [0.3.8] - 2026-07-12
-
-### Fixed
-
-- **Provider Chain 行情链路优化**：价格获取按代码类型拆分为 `price_stock`（腾讯财经 → 新浪财经备用）和 `price_fund_otc`（东方财富直达），解决腾讯行情中断时股票/ETF 价格全链路不可用的问题。新增新浪财经 A 股/ETF 实时行情获取。
-- **NoneType 格式化崩溃修复**：`DetailRow.profit_rate` 在成本为 0 时为 `None`，导致 LLM 模板和 HTML 报告中的 `format()` 调用崩溃。统一使用 `is not None` 守卫替代 `.get("key", 0)` 默认值模式。
-- **穿透 TOP10 "年均股息率" 列名修正**：该列显示为年均股息金额（元/年）而非比率，栏头 `年均股息率` → `年均股息`，同步更新模板、文档和日志。持仓分类表（实际计算 股息/市值×100%）保留 `年均股息率` 不变。
-- **`technical.md` 价格链路描述陈旧**：6 处仍引用旧版 `price→tencent→eastmoney` 链，同步更新为 `price_stock→tencent,sina` / `price_fund_otc→eastmoney` 拆分架构。
-- **`faq.md` 三处陈旧内容**：价格链路降级描述更新为拆分架构、成本为 0 时收益率显示修正（`+∞%` → `--`）、锚点链接同步到最新格式。
-- **`requirements.md` 备用数据源指代修正**：东方财富 → 新浪财经。
-
-### Changed
-
-- 价格获取架构：按代码类型（`price_stock`/`price_fund_otc`）路由，取代单一 `price` chain。
-- **`datasource-and-folders.md` 目录树同步**：新增 `handlers/` 测试组、4 个 LLM 测试文件、2 个归档目录，文件计数同步更新。
-- **`how-to-use-registry.md` 消除历史痕迹**：移除"不再有旧版 1-7→13-16→8-11→12 的错位问题"等历史对比描述，仅保留当前状态。
-- **`test-coverage.md` 文件计数刷新**：报告 25→41 文件、LLM 12→20 文件、场景 basic 5→6 文件、场景合计 9→10 文件。
-- **`reports-instruction.md` / `README.md` 股息表述同步**：穿透页签/内容中股息描述区分分类表（率）与穿透（金额）。
-
----
-
-## [0.3.7] - 2026-07-12
+- **溢价率真实计算**：`market_value.py` 新增 `_compute_premium()` 函数，QDII 基金（含隐式海外基金如标普500ETF/纳指ETF）的溢价率从固定占位符 `"--"` 改为 `(现价-参考净值)/参考净值` 实时计算，输出格式 `"+X.XX%"`。非 QDII 或无参考净值时保持 `"--"`。新增 4 项 `@pytest.mark.data` 测试覆盖正/负/非QDII/零净值场景。
+- **版本号一致性检查脚本**：`scripts/check-version-consistency.py` 以 `constants.py` 的 `APP_VERSION` 为单一事实源，自动校验 `pyproject.toml` + 7 份管理/用户文档的版本号一致性。已同步修复 `pyproject.toml` 从 `0.3.0` → `0.3.4` 的过期问题。`CLAUDE.md` 发布流程引用该脚本。
 
 ### Fixed
 
-- **文档双向校验修正**：`how-to-config.md` 中 `degradation.t4.stale_days` 统一为 14（代码默认值），市场时段缓存 TTL 表格改为按时段描述匹配代码实现。`how-to-use-registry.md` 公共 API 补全 6 个缺失函数、消费者清单修正并补全 10 个遗漏消费者、LLM 新增模块检查清单改为实际代码模式（`_MODULE_FNS` + `_compute_module_cache_info()`）、去除历史变更叙述纯当前状态描述。
-- **`technical.md` 设计约束章节**：C9 注册点修正（`skeleton.py` → `generators_orchestrator.py`）、C12 移除 testplan.md 跨文档引用、C4/C14 参考来源列格式统一为锚点链接。
-- **`technical.md` cache.py 陈旧引用**：Z6 重构后 8 处 `cache.py` → `cache/` 子包、`_read_cache()` → `_read_cache_data()` 同步更新。
+- **R-178 html_writer.py 5 步分拆完成**：`html_writer.py` 从 996 行/5 重职责精简为专注编排。Step 1：`_save_html_report` → `html_save.py`；Step 2：Jinja2 环境 → `html_jinja_env.py`；Step 3：14 个 `_render_*` 函数 → `html_renderers.py`；Step PF：修复 `_ENV.globals` 运行时变异；Step 4：编排器精简。设计文档归档至 `docs/archive/refactor-html_writer/`。
+- **R-211 测试隔离补完**：`test_excel_generator_edge.py` 调用 `generate_excel_report` 补传 `output_dir=tmp_path`，消除测试报告对 `reports/` 目录的污染。`logger.py` 新增 `INVEST_RUNNING_TESTS` 环境变量检测 + `"pytest" in sys.modules` 回退，修复 xdist worker 子进程日志误写入 `app.log`。`test_runner.py` 子进程显式设置 `INVEST_RUNNING_TESTS=1` 确保全链路继承。
 
----
-
-## [0.3.6] - 2026-07-11
-
-### Fixed
-
-- **check-test-markers.py 标记检查脚本 3 项自检缺陷**：
-  1. `EXPECTED_DIR_MARKERS` 中键 `"llm"` 重复，Python dict 后键覆盖前键 → `unit/llm/` 下 3 个文件被误要求有 `scenario` 标记。改用完整二级路径 `"unit/llm"` / `"scenario/llm"` 消除歧义
-  2. `_get_relative_dir()` 取 `parts[1]` 而非完整父路径，`unit/llm` 与 `scenario/llm` 不可区分。改用 `rel.parent` 返回全路径
-  3. `KNOWN_MARKERS` 缺少 `integration_*` 系 6 个子标记；`DEPRECATED_MARKERS` 包含仍在活跃使用的 `integration`。补全标记集，清空废弃集
-- 修复后全量 120 项测试标记合规性检查全部通过，0 违规。
-
-- **缓存路径偏移导致"每次都是新增资产"**：`cache.py` 从 `src/cache.py` 重构移动到 `src/python/cache.py` 时，`_PROJECT_ROOT` 的 `dirname` 次数未同步更新（少了一层），导致缓存目录偏移到 `src/data/cache/`，`holdings_tracking.json` 每次都读不到，全部代码被误判为"新增"。修复：在 `constants.py` 用**标记文件查找法**（向上找 `pyproject.toml` / `.git`）替代 `dirname` 深度计数，`cache.py` 统一从此导入。清理了残留的 `src/data/cache/` 目录。
-
-- **`_fetch_from_sina()` 死循环导致 xdist worker OOM crash**：新浪财经翻页后新增跨分类 URL 去重逻辑（`seen_urls`），但当全部条目均被去重命中时，`category_fetched` 永不增长且 `len(items) >= need` 永不触发 break，导致 `while` 死循环 → worker OOM kill。新增 stale-iteration guard：一轮无新增条目时 `break`。修复 2 项测试（`test_fetch_from_sina_returns_list` / `test_fetch_from_sina_dedup_by_url`），全量 2956/2956 通过。
-
-- **新闻源翻页能力不足**：东方财富（单次上限 200）、华尔街见闻（硬编码 `min(num,100)`）、新浪财经（单页 50 条×只取第 1 页）三源实际获取数远低于 `build_news_data` 传入的 `per_source` 值，导致 `news_top_count=300` 时原始候选池不够。改为游标/多页循环翻页，各源现在可达 `per_source` 目标量。
-- **修复 22 项预存测试失败**：R-178 分拆后 18 项 `html_writer` mock 路径未同步更新（`akshare_extras.*` → `html_renderers.*`，`html_writer.*` → `html_renderers.*`），修复 `test_api_status_trading` 缓存断言与 autouse fixture 冲突，修复 3 项 TUI ESC 序列 `side_effect` 不足 StopIteration 崩溃。全量 2956/2956 回归通过。
-- **provider_registry.py 移除旧测试接口**：删除 `get_skip_set_copy()` / `get_skip_time_copy()` 两个标注"兼容旧测试接口"的方法，对应测试改用 `generate_status_report()` 验证熔断状态。
-
-### Changed
-
-- **R-206 excel_generator.py 拆分（692→98 行，-86%）**：按 7 轮迭代拆出 7 个专业模块（excel_module_loader/sheet_factory/market_data/content_sheets/news_warning/b_series/llm_usage）。excel_generator.py 从 12 函数/692 行精简为核心编排器 5 函数/98 行。`_process_b_module` 消除重合度/集中度/风格 3 模块的重复数据准备模板（~90 行→30 行）。更新 5 个测试文件的 import/mock 路径，零行为变更。全量 989 项报告单元测试通过。设计文档已归档至 `docs/archive/refactor-excel-generator/`。
-
-- **R-207 summary.py LLM 用量拆分（617→350 行，-43%）**：8 个 LLM 用量函数（`write_llm_usage_sheet`/`_init_llm_usage_sheet`/`_write_llm_summary_section`/`_write_module_table_header`/`_write_module_data_rows`/`_write_legend`/`_write_cache_stats_section`/`_set_column_widths`）迁出至 `summary_llm_usage.py`。summary.py 通过 re-export 保持向后兼容。3 个测试文件 import 路径同步更新。设计文档已归档至 `docs/archive/refactor-summary-llm-usage/`。
-
-- **akshare 依赖版本区间锁定**：`requirements.txt` 从 `==1.18.64` 改为 `>=1.16,<2.0`，允许非破坏性更新同时防止大版本兼容风险（R-199）。
-
-- **technical.md 迭代历史痕迹清理**：移除 16 处 A 类（纯迭代记录）和 B 类（版本标记）历史痕迹，恢复为永恒技术设计文档。
-- **how-to-config.md 版本标记清理**：移除 2 处 v0.2.xx 版本标记。
-- **用户文档全局迭代/版本标记清理**：`reports-instruction.md`、`how-to-use-registry.md`、`how-to-config-llm.md` 共 6 处版本后缀/迭代名称（`B 迭代`/`C 迭代后`/`v0.2.15+`/`v0.2.29+`/`v0.2.30+`/`v0.2.85+`）替换或删除，用户文档不再出现具体迭代引用。
-- **technical.md LLM 模块计数同步**：LLM 子模块从 `9` 修正为 `12`，模块职责表新增 `api_base.py` 和 `generators_news.py`。
-- **how-to-use-registry.md 消费方表校正**：`generators.py` → `generators_orchestrator.py`，`market_value.py` → `market_value_sheet.py`，新增 `fund_overlap_sheet.py` 和 `fund_concentration_sheet.py`。新增 LLM 模块步骤增加 `generators_orchestrator.py` 调度注册环节。
+- **technical.md C12 约束老化引用**：`testplan.md §1.9` → `§1.8`（随 testplan.md 编号修复同步）。
 
 ### Docs
 
-- **datasource-and-folders.md 目录树描述全面润色**：移除所有历史变更痕迹（如"从 xxx.py 拆分"）、迭代标记（D-7b/D-8）和生硬的三段式堆砌，统一改为自然的功能描述语句。涉及约 40 条文件/目录描述更新，涵盖 llm/、report/、test/ 等核心子目录。
-
-- **代码库兼容性/死代码审计**：全局扫描 `src/python/` 中 config.json/llm_settings.json/缓存/API 响应的历史兼容代码，结论：代码库干净，仅 4 处微小负担，已处理其中 1 处（`get_skip_*_copy` 旧测试接口）。
-- **配置 + 代码全局一致性检查**：config.json 17 键 / llm_settings.json 53 键 / registry 21 缓存 TTL 项 / 所有 `.py` 文件导入引用 — 无死键、无死文件、无冲突。
-
-- **technical.md 组织修复**：补充 H2 间缺失 `---` 分隔线（功能模块详解 → LLM 客户端技术要点）；移除功能模块详解内部两处多余 `---` 分组线（B 系列、报告序号可配置前），与全文其他 H2 章节格式统一。
-- **how-to-test-my-code.md 组织修复**：H4 多模式组合补 `🔷` 前缀（与其他 4 个子节一致）；目录树 `scenario_extreme/` 移入场景组（紧接 `scenario/` 后）；快速开始专项验证区新增 `--mode scenario_extreme` 示例。
-- **how-to-test-my-code.md / technical.md 交叉核对**：faq.md 组织正常无需调整；how-to-test-my-code.md 4 项建议中实施 3 项（dev-verify 时序复查后确认正确，撤回）。
-- **test-coverage.md 核对**：all=2972/unit=2665/scenario=269/edge=335，全部吻合无需修改。
-
-- **technical.md 报告管线/依赖树/LLM 用量引用更新**：反映 R-206（7 个 excel_* 中间模块）和 R-207（summary_llm_usage.py）拆分后的新模块结构。Excel 管线从单行描述改为分步编排架构。`build_llm_usage_sheet`/`_write_cache_stats_section` 引用路径从 `summary.py` 更新至 `excel_llm_usage.py`/`summary_llm_usage.py`。
-- **test-coverage.md 报告生成模块列表更新**：补充 R-206/R-207 新增的 8 个模块（excel_module_loader/sheet_factory/market_data/content_sheets/news_warning/b_series/llm_usage/summary_llm_usage）。
-- **datasource-and-folders.md 目录树同步**：新增 `summary_llm_usage.py` 文件条目 + 2 个归档目录（refactor-excel-generator、refactor-summary-llm-usage）。`summary.py` 描述修正为"不含 LLM 用量"。
-- **review-findings.md 全部清空**：24 项自审问题已全部修复/归档，当前无待修复问题。R-187（TUI Windows 12 测试跳过，平台限制已标记 `skipIf`）/R-199（akshare 版本区间锁定）/R-201（HTML 打印预览 Playwright 测试，低优先级暂不修复）已处理归档。
-- **R-206/R-207 设计文档归档**：plan/ 下 2 份迭代设计文件迁至 `docs/archive/refactor-excel-generator/` 和 `docs/archive/refactor-summary-llm-usage/`。
+- **R-194 technical.md push2 熔断标记同步**：`technical.md` 三层熔断对比表的 push2 实现位置从"模块级全局变量（待迁移）"修正为"已迁移，见 R-188"，与代码实况保持一致。
+- **test-coverage-map.md 归档**：`test-coverage-map.md` + `validate_coverage_map.py` 迁移至 `docs/archive/test-coverage-map/`，缩略条目对应更新。
+- **testplan.md 组织清理**：已归档的旧 §1.8（场景-测试文件覆盖率映射）移除，后续 §1.9→§1.8 重编号；§6.2.8、§8.3.1 老化引用同步更新。
+- **plan.md R-188~R-191 引用更新**：blockquote 标记为已完成，移除"剩余待修复问题"描述。
+- **多批计划文件/设计文档归档**：B1-fund-deep-analysis / C-P1b / A5-test-runtime-optimization / 数据降级复盘文档迁入 `archive/` 子目录归类。
 
 ---
 
@@ -223,46 +158,111 @@
 - **R-205 cache.py `_CACHE_DIR` cwd 依赖消除**：`_CACHE_DIR` 从相对路径 `"data/cache"` 改为 `os.path.join(_PROJECT_ROOT, "data/cache")`，以 `cache.py` 文件位置（`src/python/cache.py`）推导项目根目录绝对路径。消除 cwd 依赖后，`DegradationTracker` 的 `.degradation_state.json` 持久化文件始终写入正确目录，跨会话降级记忆恢复生效。同时 `os.path.abspath(_CACHE_DIR)` 对已绝对路径无影响
 - **R-197/R-198 审计修复（5 项技术债）**：代码复盘发现并修复 5 项低/中优先级代码质量问题。MEDIUM：`market_value_sheet.py` 移除重复的 `_FUND_PREMIUM_PLACEHOLDER` 常量定义（已由 `market_value.py` 提供），更新过期注释。LOW：`market_value.py` + `market_value_sheet.py` 新增 `__all__`，明确公共 API 边界。LOW：`generators_news.py` 移除未使用的 `_is_llm_module_enabled` 导入。LOW：`generators_orchestrator.py` 惰性导入（Phase 1+2 临时措施）改为模块级导入，同步修正 3 处 mock 路径。
 
-## [0.3.4] - 2026-07-09
-
-### Added
-
-- **溢价率真实计算**：`market_value.py` 新增 `_compute_premium()` 函数，QDII 基金（含隐式海外基金如标普500ETF/纳指ETF）的溢价率从固定占位符 `"--"` 改为 `(现价-参考净值)/参考净值` 实时计算，输出格式 `"+X.XX%"`。非 QDII 或无参考净值时保持 `"--"`。新增 4 项 `@pytest.mark.data` 测试覆盖正/负/非QDII/零净值场景。
-- **版本号一致性检查脚本**：`scripts/check-version-consistency.py` 以 `constants.py` 的 `APP_VERSION` 为单一事实源，自动校验 `pyproject.toml` + 7 份管理/用户文档的版本号一致性。已同步修复 `pyproject.toml` 从 `0.3.0` → `0.3.4` 的过期问题。`CLAUDE.md` 发布流程引用该脚本。
+## [0.3.6] - 2026-07-11
 
 ### Fixed
 
-- **R-178 html_writer.py 5 步分拆完成**：`html_writer.py` 从 996 行/5 重职责精简为专注编排。Step 1：`_save_html_report` → `html_save.py`；Step 2：Jinja2 环境 → `html_jinja_env.py`；Step 3：14 个 `_render_*` 函数 → `html_renderers.py`；Step PF：修复 `_ENV.globals` 运行时变异；Step 4：编排器精简。设计文档归档至 `docs/archive/refactor-html_writer/`。
-- **R-211 测试隔离补完**：`test_excel_generator_edge.py` 调用 `generate_excel_report` 补传 `output_dir=tmp_path`，消除测试报告对 `reports/` 目录的污染。`logger.py` 新增 `INVEST_RUNNING_TESTS` 环境变量检测 + `"pytest" in sys.modules` 回退，修复 xdist worker 子进程日志误写入 `app.log`。`test_runner.py` 子进程显式设置 `INVEST_RUNNING_TESTS=1` 确保全链路继承。
+- **check-test-markers.py 标记检查脚本 3 项自检缺陷**：
+  1. `EXPECTED_DIR_MARKERS` 中键 `"llm"` 重复，Python dict 后键覆盖前键 → `unit/llm/` 下 3 个文件被误要求有 `scenario` 标记。改用完整二级路径 `"unit/llm"` / `"scenario/llm"` 消除歧义
+  2. `_get_relative_dir()` 取 `parts[1]` 而非完整父路径，`unit/llm` 与 `scenario/llm` 不可区分。改用 `rel.parent` 返回全路径
+  3. `KNOWN_MARKERS` 缺少 `integration_*` 系 6 个子标记；`DEPRECATED_MARKERS` 包含仍在活跃使用的 `integration`。补全标记集，清空废弃集
+- 修复后全量 120 项测试标记合规性检查全部通过，0 违规。
 
-- **technical.md C12 约束老化引用**：`testplan.md §1.9` → `§1.8`（随 testplan.md 编号修复同步）。
+- **缓存路径偏移导致"每次都是新增资产"**：`cache.py` 从 `src/cache.py` 重构移动到 `src/python/cache.py` 时，`_PROJECT_ROOT` 的 `dirname` 次数未同步更新（少了一层），导致缓存目录偏移到 `src/data/cache/`，`holdings_tracking.json` 每次都读不到，全部代码被误判为"新增"。修复：在 `constants.py` 用**标记文件查找法**（向上找 `pyproject.toml` / `.git`）替代 `dirname` 深度计数，`cache.py` 统一从此导入。清理了残留的 `src/data/cache/` 目录。
 
-### Docs
+- **`_fetch_from_sina()` 死循环导致 xdist worker OOM crash**：新浪财经翻页后新增跨分类 URL 去重逻辑（`seen_urls`），但当全部条目均被去重命中时，`category_fetched` 永不增长且 `len(items) >= need` 永不触发 break，导致 `while` 死循环 → worker OOM kill。新增 stale-iteration guard：一轮无新增条目时 `break`。修复 2 项测试（`test_fetch_from_sina_returns_list` / `test_fetch_from_sina_dedup_by_url`），全量 2956/2956 通过。
 
-- **R-194 technical.md push2 熔断标记同步**：`technical.md` 三层熔断对比表的 push2 实现位置从"模块级全局变量（待迁移）"修正为"已迁移，见 R-188"，与代码实况保持一致。
-- **test-coverage-map.md 归档**：`test-coverage-map.md` + `validate_coverage_map.py` 迁移至 `docs/archive/test-coverage-map/`，缩略条目对应更新。
-- **testplan.md 组织清理**：已归档的旧 §1.8（场景-测试文件覆盖率映射）移除，后续 §1.9→§1.8 重编号；§6.2.8、§8.3.1 老化引用同步更新。
-- **plan.md R-188~R-191 引用更新**：blockquote 标记为已完成，移除"剩余待修复问题"描述。
-- **多批计划文件/设计文档归档**：B1-fund-deep-analysis / C-P1b / A5-test-runtime-optimization / 数据降级复盘文档迁入 `archive/` 子目录归类。
-
----
-
-## [0.3.0] - 2026-07-08
+- **新闻源翻页能力不足**：东方财富（单次上限 200）、华尔街见闻（硬编码 `min(num,100)`）、新浪财经（单页 50 条×只取第 1 页）三源实际获取数远低于 `build_news_data` 传入的 `per_source` 值，导致 `news_top_count=300` 时原始候选池不够。改为游标/多页循环翻页，各源现在可达 `per_source` 目标量。
+- **修复 22 项预存测试失败**：R-178 分拆后 18 项 `html_writer` mock 路径未同步更新（`akshare_extras.*` → `html_renderers.*`，`html_writer.*` → `html_renderers.*`），修复 `test_api_status_trading` 缓存断言与 autouse fixture 冲突，修复 3 项 TUI ESC 序列 `side_effect` 不足 StopIteration 崩溃。全量 2956/2956 回归通过。
+- **provider_registry.py 移除旧测试接口**：删除 `get_skip_set_copy()` / `get_skip_time_copy()` 两个标注"兼容旧测试接口"的方法，对应测试改用 `generate_status_report()` 验证熔断状态。
 
 ### Changed
 
-- **版本号统一更新**：0.2.91 → 0.3.0（constants.py / README.md / pyproject.toml / 管理文档 / 用户手册共 10 处同步）。
-- **管理文档归档**：changelog.md / plan.md / review-findings.md 的 v0.2.x 详细记录迁移至 `docs/archive/` 对应 `archived_*.0.2.x.md` 文件，主文件保留简洁归档引用。
-- **datasource-and-folders.md**：目录树补入 3 个新存档文件描述。
+- **R-206 excel_generator.py 拆分（692→98 行，-86%）**：按 7 轮迭代拆出 7 个专业模块（excel_module_loader/sheet_factory/market_data/content_sheets/news_warning/b_series/llm_usage）。excel_generator.py 从 12 函数/692 行精简为核心编排器 5 函数/98 行。`_process_b_module` 消除重合度/集中度/风格 3 模块的重复数据准备模板（~90 行→30 行）。更新 5 个测试文件的 import/mock 路径，零行为变更。全量 989 项报告单元测试通过。设计文档已归档至 `docs/archive/refactor-excel-generator/`。
 
-### Added
+- **R-207 summary.py LLM 用量拆分（617→350 行，-43%）**：8 个 LLM 用量函数（`write_llm_usage_sheet`/`_init_llm_usage_sheet`/`_write_llm_summary_section`/`_write_module_table_header`/`_write_module_data_rows`/`_write_legend`/`_write_cache_stats_section`/`_set_column_widths`）迁出至 `summary_llm_usage.py`。summary.py 通过 re-export 保持向后兼容。3 个测试文件 import 路径同步更新。设计文档已归档至 `docs/archive/refactor-summary-llm-usage/`。
 
-- **testplan.md 8 个 gap 全量覆盖补齐（共 52 项新增测试）：**
-  - **HTML 打印样式**（9 项）：`@media print` 规则完整性检测 — 黑白友好/隐藏导航/展开折叠/热力图覆盖
-  - **首次运行引导**（4 项 edge）：配置缺失自动初始化/目录创建/损坏降级/菜单可用
-  - **Excel 数字格式**（7 项 edge）：styles.py 常量验证 — 金额/百分比/份额千分位
-  - **LLM 三态占位区分**（6 项 edge）：NOT_CONFIGURED/MODULE_DISABLED/API_ERROR 互斥 + 内容引导
-  - **日志分级输出**（5 项）：INFO/WARNING/ERROR 均落盘 + 级别前缀
-  - **错误隔离业务语义**（1 项）：sheet 失败后穿透/市值模块仍被调用
-  - **新闻流水线全链路**（2 项 edge+integration）：聚合→去重→关联端到端 + 关联度排序
-  - **TUI 错误友好提示**（18 项 edge）：_print_error_with_hint 7 种异常分类 + 菜单调度异常捕获，不暴露原始异常类型名
+- **akshare 依赖版本区间锁定**：`requirements.txt` 从 `==1.18.64` 改为 `>=1.16,<2.0`，允许非破坏性更新同时防止大版本兼容风险（R-199）。
+
+- **technical.md 迭代历史痕迹清理**：移除 16 处 A 类（纯迭代记录）和 B 类（版本标记）历史痕迹，恢复为永恒技术设计文档。
+- **how-to-config.md 版本标记清理**：移除 2 处 v0.2.xx 版本标记。
+- **用户文档全局迭代/版本标记清理**：`reports-instruction.md`、`how-to-use-registry.md`、`how-to-config-llm.md` 共 6 处版本后缀/迭代名称（`B 迭代`/`C 迭代后`/`v0.2.15+`/`v0.2.29+`/`v0.2.30+`/`v0.2.85+`）替换或删除，用户文档不再出现具体迭代引用。
+- **technical.md LLM 模块计数同步**：LLM 子模块从 `9` 修正为 `12`，模块职责表新增 `api_base.py` 和 `generators_news.py`。
+- **how-to-use-registry.md 消费方表校正**：`generators.py` → `generators_orchestrator.py`，`market_value.py` → `market_value_sheet.py`，新增 `fund_overlap_sheet.py` 和 `fund_concentration_sheet.py`。新增 LLM 模块步骤增加 `generators_orchestrator.py` 调度注册环节。
+
+### Docs
+
+- **datasource-and-folders.md 目录树描述全面润色**：移除所有历史变更痕迹（如"从 xxx.py 拆分"）、迭代标记（D-7b/D-8）和生硬的三段式堆砌，统一改为自然的功能描述语句。涉及约 40 条文件/目录描述更新，涵盖 llm/、report/、test/ 等核心子目录。
+
+- **代码库兼容性/死代码审计**：全局扫描 `src/python/` 中 config.json/llm_settings.json/缓存/API 响应的历史兼容代码，结论：代码库干净，仅 4 处微小负担，已处理其中 1 处（`get_skip_*_copy` 旧测试接口）。
+- **配置 + 代码全局一致性检查**：config.json 17 键 / llm_settings.json 53 键 / registry 21 缓存 TTL 项 / 所有 `.py` 文件导入引用 — 无死键、无死文件、无冲突。
+
+- **technical.md 组织修复**：补充 H2 间缺失 `---` 分隔线（功能模块详解 → LLM 客户端技术要点）；移除功能模块详解内部两处多余 `---` 分组线（B 系列、报告序号可配置前），与全文其他 H2 章节格式统一。
+- **how-to-test-my-code.md 组织修复**：H4 多模式组合补 `🔷` 前缀（与其他 4 个子节一致）；目录树 `scenario_extreme/` 移入场景组（紧接 `scenario/` 后）；快速开始专项验证区新增 `--mode scenario_extreme` 示例。
+- **how-to-test-my-code.md / technical.md 交叉核对**：faq.md 组织正常无需调整；how-to-test-my-code.md 4 项建议中实施 3 项（dev-verify 时序复查后确认正确，撤回）。
+- **test-coverage.md 核对**：all=2972/unit=2665/scenario=269/edge=335，全部吻合无需修改。
+
+- **technical.md 报告管线/依赖树/LLM 用量引用更新**：反映 R-206（7 个 excel_* 中间模块）和 R-207（summary_llm_usage.py）拆分后的新模块结构。Excel 管线从单行描述改为分步编排架构。`build_llm_usage_sheet`/`_write_cache_stats_section` 引用路径从 `summary.py` 更新至 `excel_llm_usage.py`/`summary_llm_usage.py`。
+- **test-coverage.md 报告生成模块列表更新**：补充 R-206/R-207 新增的 8 个模块（excel_module_loader/sheet_factory/market_data/content_sheets/news_warning/b_series/llm_usage/summary_llm_usage）。
+- **datasource-and-folders.md 目录树同步**：新增 `summary_llm_usage.py` 文件条目 + 2 个归档目录（refactor-excel-generator、refactor-summary-llm-usage）。`summary.py` 描述修正为"不含 LLM 用量"。
+- **review-findings.md 全部清空**：24 项自审问题已全部修复/归档，当前无待修复问题。R-187（TUI Windows 12 测试跳过，平台限制已标记 `skipIf`）/R-199（akshare 版本区间锁定）/R-201（HTML 打印预览 Playwright 测试，低优先级暂不修复）已处理归档。
+- **R-206/R-207 设计文档归档**：plan/ 下 2 份迭代设计文件迁至 `docs/archive/refactor-excel-generator/` 和 `docs/archive/refactor-summary-llm-usage/`。
+
+---
+
+## [0.3.7] - 2026-07-12
+
+### Fixed
+
+- **文档双向校验修正**：`how-to-config.md` 中 `degradation.t4.stale_days` 统一为 14（代码默认值），市场时段缓存 TTL 表格改为按时段描述匹配代码实现。`how-to-use-registry.md` 公共 API 补全 6 个缺失函数、消费者清单修正并补全 10 个遗漏消费者、LLM 新增模块检查清单改为实际代码模式（`_MODULE_FNS` + `_compute_module_cache_info()`）、去除历史变更叙述纯当前状态描述。
+- **`technical.md` 设计约束章节**：C9 注册点修正（`skeleton.py` → `generators_orchestrator.py`）、C12 移除 testplan.md 跨文档引用、C4/C14 参考来源列格式统一为锚点链接。
+- **`technical.md` cache.py 陈旧引用**：Z6 重构后 8 处 `cache.py` → `cache/` 子包、`_read_cache()` → `_read_cache_data()` 同步更新。
+
+---
+
+## [0.3.8] - 2026-07-12
+
+### Fixed
+
+- **Provider Chain 行情链路优化**：价格获取按代码类型拆分为 `price_stock`（腾讯财经 → 新浪财经备用）和 `price_fund_otc`（东方财富直达），解决腾讯行情中断时股票/ETF 价格全链路不可用的问题。新增新浪财经 A 股/ETF 实时行情获取。
+- **NoneType 格式化崩溃修复**：`DetailRow.profit_rate` 在成本为 0 时为 `None`，导致 LLM 模板和 HTML 报告中的 `format()` 调用崩溃。统一使用 `is not None` 守卫替代 `.get("key", 0)` 默认值模式。
+- **穿透 TOP10 "年均股息率" 列名修正**：该列显示为年均股息金额（元/年）而非比率，栏头 `年均股息率` → `年均股息`，同步更新模板、文档和日志。持仓分类表（实际计算 股息/市值×100%）保留 `年均股息率` 不变。
+- **`technical.md` 价格链路描述陈旧**：6 处仍引用旧版 `price→tencent→eastmoney` 链，同步更新为 `price_stock→tencent,sina` / `price_fund_otc→eastmoney` 拆分架构。
+- **`faq.md` 三处陈旧内容**：价格链路降级描述更新为拆分架构、成本为 0 时收益率显示修正（`+∞%` → `--`）、锚点链接同步到最新格式。
+- **`requirements.md` 备用数据源指代修正**：东方财富 → 新浪财经。
+
+### Changed
+
+- 价格获取架构：按代码类型（`price_stock`/`price_fund_otc`）路由，取代单一 `price` chain。
+- **`datasource-and-folders.md` 目录树同步**：新增 `handlers/` 测试组、4 个 LLM 测试文件、2 个归档目录，文件计数同步更新。
+- **`how-to-use-registry.md` 消除历史痕迹**：移除"不再有旧版 1-7→13-16→8-11→12 的错位问题"等历史对比描述，仅保留当前状态。
+- **`test-coverage.md` 文件计数刷新**：报告 25→41 文件、LLM 12→20 文件、场景 basic 5→6 文件、场景合计 9→10 文件。
+- **`reports-instruction.md` / `README.md` 股息表述同步**：穿透页签/内容中股息描述区分分类表（率）与穿透（金额）。
+
+---
+
+## [0.3.9] - 2026-07-12
+
+### Fixed
+
+- **price_stock 测试 mock 未同步 v0.3.8 链路拆分**：`test_api_edge.py`（3 项）和 `test_fetcher.py`（1 项）仍 mock `eastmoney` 为 fallback provider，但 v0.3.8 已将 `price_stock` 链改为 `tencent→sina`。mock 未命中时实际调用新浪 API 返回实时数据，导致断言失败。统一替换为 `sina` mock，返回字段同步适配 `_price_transform_sina`（`nav`/`nav_date` → `price`/`price_date`）。
+
+---
+
+## [0.3.10] - 2026-07-12
+
+### Fixed
+
+- **分红 API akshare 1.18.64 签名兼容**：`stock_history_dividend()` 新版不接受参数且返回全量聚合数据（列名从"每股股利"改为"年均股息"），改为一次拉取全量后按代码过滤，移除旧版逐股并发请求逻辑。
+- **Tencent API 超时/网络错误自动重试**：`fetch_price()` 对 `TimeoutException`/`RequestError` 自动重试一次后再放弃，降低备用链路的偶发超时影响。
+- **日志噪音压缩**：移除 `fetcher/chain.py` 和 `report/market_value.py` 中与 `cache.py` 重复的"缓存命中"DEBUG 日志。
+- **TUI 主循环标题丢失**：`_print_header()` 从主循环前移至循环内调用，确保生成报告/刷新缓存等操作返回后，软件名称和版本号仍然显示在屏幕顶部。
+- **测试文档 `--lf` 错误示例**：`how-to-test-my-code.md` 中原示例 `test_runner.py -- --lf` 实际因 argparse 不支持 `--` 透传而报错。改为直接调 `pytest -m` 复现标记表达式后组合 `--lf`，并补充 `test_runner.py` 与 `--lf` 的分工说明。
+
+### Changed
+
+- **缓存引擎 Strangler Fig 重构完成**：667 行的单体 `cache.py` 拆分为 `cache/` 子包（9 个文件 + services 子包），职责解耦为路径/IO/存取/TTL/统计/清理/组管理/持仓跟踪。过渡文件 `_legacy.py` 已删除。对外 API 保持完全兼容，`from cache import get/set/clear` 等不变。
+- **T4 stale_days 配置收紧：14→7 天**：盈利预测/分红/风格等补充数据级不再容忍 2 周旧缓存。`config.json`、`data_status.py` 默认值、`how-to-config.md`、`requirements.md` 同步更新。
+
+---
+
