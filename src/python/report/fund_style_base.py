@@ -41,6 +41,12 @@ _PE_GROWTH_THRESHOLD = 1.3  # PE > 行业均值的 130% → 成长型
 _tencent_registered: bool = False
 
 
+def reset_tencent_registration() -> None:
+    """复位惰性注册标记（测试隔离：注册痕迹不得跨用例）。"""
+    global _tencent_registered
+    _tencent_registered = False
+
+
 def _ensure_tencent_provider_registered() -> None:
     """惰性注册 Tencent 风格数据 Provider（避免模块导入时副作用）。"""
     global _tencent_registered

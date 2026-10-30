@@ -36,6 +36,14 @@ logger = logging.getLogger("invest")
 _QUARTER_LOOKBACK = 4
 
 _quarter_walk_anchor: datetime | None = None
+
+
+def reset_quarter_walk_anchor() -> None:
+    """清记录-回放锚点（回放下一次运行与测试隔离共用）。"""
+    global _quarter_walk_anchor
+    _quarter_walk_anchor = None
+
+
 """季度回溯窗口的锚点时间；None = 当前时间（生产默认）。
 
 仅用于「数据源记录-回放」：录制内容固定在录制当日，而季报窗口按当前日期推进，

@@ -82,6 +82,9 @@ def _breaker_snapshot(category: str) -> Any:
 #: core 既不反向 import 上层，也不复制一份归一规则，故由上游把判定函数注册进来。
 _CIRCUIT_TEXT_PROVIDER: Callable[[str], str] | None = None
 
+#: 上游导入期首次注册的那份判定（复位目标；装配期接线不可被测试隔离清掉）
+_CIRCUIT_TEXT_BASELINE: Callable[[str], str] | None = None
+
 
 def register_circuit_text(provider: Callable[[str], str]) -> None:
     """注册上游的「端点 → 熔断展示文案」判定（上游模块导入时自行调用）。
@@ -89,8 +92,20 @@ def register_circuit_text(provider: Callable[[str], str]) -> None:
     Args:
         provider: 接收 endpoint 原文（未归一），返回展示文案
     """
-    global _CIRCUIT_TEXT_PROVIDER
+    global _CIRCUIT_TEXT_PROVIDER, _CIRCUIT_TEXT_BASELINE
     _CIRCUIT_TEXT_PROVIDER = provider
+    if _CIRCUIT_TEXT_BASELINE is None:
+        _CIRCUIT_TEXT_BASELINE = provider
+
+
+def reset_circuit_text() -> None:
+    """复位到上游导入期注册的那份判定（测试隔离：注入的假判定不得跨用例）。
+
+    复位目标是**基线**而不是 ``None``：这份判定是装配期接线，清空会让展示退化成
+    「正常」，把「未装配」与「已装配但被撤走」两回事搅在一起。
+    """
+    global _CIRCUIT_TEXT_PROVIDER
+    _CIRCUIT_TEXT_PROVIDER = _CIRCUIT_TEXT_BASELINE
 
 
 def circuit_text(endpoint: str) -> str:

@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -34,6 +35,12 @@ def fixture_tui():
 def fixture_web():
     """加载 Web 截图模块。"""
     return load_script("_screenshots/web_shot.py", module_name="_screenshots_web_shot_under_test")
+
+
+@pytest.fixture(name="xlsx")
+def fixture_xlsx():
+    """加载 Excel 页签渲染模块。"""
+    return load_script("_screenshots/xlsx_frame.py", module_name="_screenshots_xlsx_frame_under_test")
 
 
 class TestDemoWorkspace:
@@ -288,6 +295,82 @@ class TestWebShot:
         assert "remote-debugging-port" in source
 
 
+class TestXlsxFrame:
+    """Excel 页签 → 表格图：显示值换算、超链接取文本、合并区与列宽收敛。"""
+
+    @pytest.mark.unit_scripts
+    def test_number_format_follows_cell_display_rules(self, xlsx):
+        """百分比/千分位/通用格式各自按 Excel 显示口径收敛。"""
+        assert xlsx.format_value(-0.0286, "0.00%") == "-2.86%"
+        assert xlsx.format_value(368152.5, "#,##0.00") == "368,152.50"
+        assert xlsx.format_value(0.0, "0.00%") == "0.00%"
+        assert xlsx.format_value(6, "General") == "6"
+        assert xlsx.format_value(4.065, "General") == "4.065"
+        assert xlsx.format_value(None, "General") == ""
+        assert xlsx.format_value("--", "General") == "--"
+
+    @pytest.mark.unit_scripts
+    def test_hyperlink_formula_renders_its_display_text(self, xlsx):
+        """页签导航整行是 HYPERLINK 公式：上屏取第二个参数，不是公式原文。"""
+        value = '=HYPERLINK("#\'1.投资分析汇总\'!A1","1.投资分析汇总")'
+        assert xlsx.hyperlink_text(value) == "1.投资分析汇总"
+        assert xlsx.format_value(value, "General") == "1.投资分析汇总"
+        assert xlsx.hyperlink_text("=SUM(A1:A2)") is None
+        assert xlsx.hyperlink_text(3) is None
+
+    @pytest.mark.unit_scripts
+    def test_column_letter_extends_past_single_letter(self, xlsx):
+        """列标 A→Z→AA 连续，超过 26 列不失序。"""
+        assert xlsx.column_letter(1) == "A"
+        assert xlsx.column_letter(26) == "Z"
+        assert xlsx.column_letter(27) == "AA"
+
+    @pytest.mark.unit_scripts
+    def test_html_keeps_merges_tabs_and_escapes_content(self, xlsx, tmp_path):
+        """合并区出 colspan、页签条列出全部页签且标出当前页、单元格文本被转义。"""
+        from openpyxl import Workbook
+
+        workbook = Workbook()
+        first = workbook.worksheets[0]
+        first.title = "汇总"
+        first["A1"] = "<b>标题</b>"
+        first.merge_cells("A1:B1")
+        first["A2"] = 0.1234
+        first["A2"].number_format = "0.00%"
+        second = workbook.create_sheet("明细")
+        second["A1"] = 1
+        path = tmp_path / "报告.xlsx"
+        workbook.save(path)
+
+        markup = xlsx.build_html(path, viewport_width=1200)
+
+        assert 'colspan="2"' in markup
+        assert "&lt;b&gt;标题&lt;/b&gt;" in markup
+        assert "12.34%" in markup
+        assert 'class="tab active">汇总<' in markup
+        assert '<span class="tab">明细</span>' in markup
+
+    @pytest.mark.unit_scripts
+    def test_wide_sheet_shrinks_to_viewport(self, xlsx, tmp_path):
+        """列总宽超视口时等比收缩，保证整行不被截断（列标数仍等于请求列数）。"""
+        from openpyxl import Workbook
+
+        workbook = Workbook()
+        sheet = workbook.worksheets[0]
+        sheet.title = "宽表"
+        for col in range(1, 21):
+            sheet.cell(row=1, column=col, value="很长的中文说明文本" * 2)
+        path = tmp_path / "宽表.xlsx"
+        workbook.save(path)
+
+        markup = xlsx.build_html(path, max_cols=20, viewport_width=1200)
+        widths = [int(value) for value in re.findall(r'col style="width:(\d+)px"', markup)]
+
+        assert len(widths) == 20
+        assert sum(widths) <= 1200 - 2 * 24 - xlsx._ROWNO_PX
+        assert sum(1 for _ in markup.split('<th class="colno">')) - 1 == 20
+
+
 class TestEntry:
     """入口：子命令分发与参数错误口径。"""
 
@@ -334,4 +417,32 @@ class TestEntry:
             entry.main(["--help"])
         assert caught.value.code == 0
         printed = capsys.readouterr().out
-        assert {"demo", "report", "tui", "web"} <= set(printed.split())
+        assert {"demo", "report", "tui", "web", "xlsx"} <= set(printed.split())
+
+    @pytest.mark.unit_scripts
+    def test_xlsx_rows_default_comes_from_renderer_constant(self, xlsx, tmp_path):
+        """`--rows` 缺省值取自渲染模块常量（行数口径只有一个来源）。"""
+        entry = load_script("make-screenshots.py", module_name="_make_screenshots_under_test")
+        parser = entry.build_parser()
+        parsed = parser.parse_args(["xlsx", str(tmp_path / "a.xlsx"), str(tmp_path / "a.png")])
+        assert parsed.rows == xlsx.DEFAULT_MAX_ROWS
+
+    @pytest.mark.unit_scripts
+    def test_xlsx_subcommand_forwards_sheet_and_size(self, tmp_path, monkeypatch):
+        """`xlsx` 子命令把页签名与目标尺寸原样传下去（护栏不过则不出图）。"""
+        entry = load_script("make-screenshots.py", module_name="_make_screenshots_under_test")
+        monkeypatch.setattr(entry.demo_workspace, "DEFAULT_ROOT", tmp_path / "shots")
+        assert entry.main(["demo"]) == 0
+        captured: dict[str, object] = {}
+
+        def fake_render(workbook, output, **kwargs):
+            captured.update({"workbook": workbook, "output": output, **kwargs})
+            return 0
+
+        monkeypatch.setattr(entry.xlsx_frame, "render", fake_render)
+        workbook = tmp_path / "报告.xlsx"
+        workbook.write_bytes(b"")
+        assert entry.main(["xlsx", str(workbook), str(tmp_path / "out.png"), "--sheet", "明细", "--rows", "9"]) == 0
+        assert captured["sheet_name"] == "明细"
+        assert captured["max_rows"] == 9
+        assert captured["output"] == tmp_path / "out.png"

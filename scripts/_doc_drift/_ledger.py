@@ -31,6 +31,10 @@ _RF_ROW_ID = re.compile(r"^\|\s*\*\*(rf-\d+)\*\*", re.M)
 _MIGRATION_PLACEHOLDER = re.compile(r"已随\s*v(\d+\.\d+\.\d+)\s*发布迁入")
 
 
+#: 归档批次节标题（发布版号）：`## 已修复（X.Y.Z）`——同一文件内须按版本升序
+_ARCHIVE_BATCH_HEAD = re.compile(r"^## 已修复（(\d+\.\d+\.\d+)）[ \t]*$", re.M)
+
+
 #: review-findings 三级标题与「已修复节」标记（节归属纪律 D：已修复节只允许出现在已解决区）
 _H3_HEADING = re.compile(r"(?m)^###\s+(.+)$")
 
@@ -103,6 +107,12 @@ def audit_management_partitions(
       D. review-findings 节归属：**「开发期已修复」节必须位于已解决区**、P 档标题必须位于待处理区——
          两区标题混放会把已修复项读成未完成（三条已修复节夹在 P2 与 P3 之间、归档占位落到索引
          之后即此型失误）；A 条按「rf 标识」比对，标题错位时完全静默，故单独成条。
+      E. review-findings 台账行必须在版本节内：`## 已解决问题` 直属层（第一个 `### ` 之前）
+         出现 `| **rf-N** |` 行即属漏写 `### 开发期已修复（X-dev）` 节头——发布归档按
+         「本版无该节 = 无待迁档」处理，整批台账会静默漏搬（跨 9 个版本累积 53 条才发现）。
+      F. 现行 changelog（本开发周期）提到的 `plan-N` 必须在 plan.md 在办条目或计划归档中有条目——
+         实现完成时把台账节直接删除而不入档，任务会从两面消失（只剩 changelog 一句残迹）。
+         只查**现行**段：历史 trains 多采无编号标题的旧格式，不追溯。
     """
     findings: list[str] = []
 
@@ -119,6 +129,14 @@ def audit_management_partitions(
             findings.append(
                 f"{rel(_REVIEW_FINDINGS_MD)}: 已解决区出现「{heading.strip()}」——未完成档位于已解决区（节归属错置）"
             )
+    flat_resolved = re.split(r"^### ", resolved, maxsplit=1, flags=re.M)[0]
+    stray_ids = sorted(set(_RF_ROW_ID.findall(flat_resolved)))
+    if stray_ids:
+        findings.append(
+            f"{rel(_REVIEW_FINDINGS_MD)}: 已解决区有 {len(stray_ids)} 条台账行落在版本节之外"
+            f"（{'、'.join(stray_ids[:3])}…）——条目须写在 `### 开发期已修复（<当前版本>-dev）` 节内，否则发布归档按"
+            "「本版无该节」静默漏搬"
+        )
     pending_ids = set(_RF_ROW_ID.findall(pending))
     resolved_ids = set(_RF_ROW_ID.findall(resolved))
     for rid in sorted(pending_ids & resolved_ids):
@@ -141,11 +159,19 @@ def audit_management_partitions(
     for pid in sorted(todo_ids & archived_plan_ids):
         findings.append(f"{rel(_PLAN_MD)}: `{pid}` 已归档却仍列在未完成区（分区互斥）")
 
+    # F. 本开发周期 changelog 提到的计划项必须在台账或计划归档里有条目
     # 概述行是「在办清单」的索引，正文小节是唯一事实位：只校验一个方向（正文↔归档互斥）
     # 时，小节被误删而概述仍引用会长期静默，故双向都查。
     overview = _doc_section(plan, "## 概述", "## 当前迭代待办")
     overview_ids = {f"plan-{n}" for n in _PLAN_ID.findall(overview)}
     body_ids = set(_PLAN_ANY_HEADING_ID.findall(todo))
+    known_plan_ids = body_ids | set(_PLAN_ANY_HEADING_ID.findall("".join(archived_plans or [])))
+    cycle_plan_ids = {f"plan-{n}" for n in _PLAN_ID.findall(changelog)}
+    for pid in sorted(cycle_plan_ids - known_plan_ids, key=lambda p: int(p.split("-")[1])):
+        findings.append(
+            f"{rel(_CHANGELOG_MD)}: 本开发周期提到的 `{pid}` 在 plan.md 与计划归档都找不到"
+            "——完成项须按节迁入归档，直接删除会让任务从台账与归档两面消失"
+        )
     for pid in sorted(overview_ids - (body_ids | archived_plan_ids)):
         findings.append(
             f"{rel(_PLAN_MD)}: 概述引用的 `{pid}` 在正文小节与计划归档中都找不到"
@@ -317,3 +343,64 @@ def check_migration_placeholders(review_findings: str | None = None, archive_roo
                 " 无对应版本归档节——占位已写、归档正文缺失（发布归档迁移须同步写入归档节）"
             )
     return findings
+
+
+#: 台账「版本段」标题：review-findings（现行 dev 节 / 归档发布批次）与 changelog（版本段）
+_RF_LIVE_HEAD = re.compile(r"^### 开发期已修复（(\d+\.\d+\.\d+)-dev）[ \t]*$", re.M)
+_RF_ARCHIVE_HEAD = re.compile(r"^## 已修复（(\d+\.\d+\.\d+)）[ \t]*$", re.M)
+_CHANGELOG_VER_HEAD = re.compile(r"^## \[(\d+\.\d+\.\d+)(?:-dev)?\]", re.M)
+#: plan 的条目标题（现行台账 `#### plan-N` / 归档扁平 `## plan-N`）
+
+
+def _ver_tuple(text: str) -> tuple[int, ...]:
+    return tuple(int(x) for x in text.split("."))
+
+
+def _descending_versions(versions: list[str], label: str) -> list[str]:
+    """返回段序违规描述（只报第一处倒序，避免同文件刷屏）。"""
+    keys = [_ver_tuple(v) for v in versions]
+    for prev, cur, pv, cv in zip(keys, keys[1:], versions, versions[1:]):
+        if cur < prev:
+            return [f"{label}: 版本段未按升序排列（`{pv}` 之后出现 `{cv}`）"]
+    return []
+
+
+def check_ledger_order(managements: dict[Path, str] | None = None, archive_root: Path | None = None) -> list[str]:
+    """三份台账的段序统一升序（旧 → 新），现行文件与归档文件同一口径。
+
+    规则（统一适用于 `review-findings.md` / `changelog.md` / `plan.md`，无论在不在
+    `docs/archive/`）：version 段按版本号升序；plan 条目按 `plan-N` 序号升序
+    （现行台账按 P1~P4 分组，组内升序）。为什么统一：归档追加与人工补录混用时，
+    较新批次排在较旧批次之前会让读者把两批的先后关系读反，且无法靠肉眼核对全量。
+    """
+    docs = managements or {}
+    root = archive_root if archive_root is not None else REPO_ROOT / "docs" / "archive"
+    findings: list[str] = []
+
+    def _live(name: str, fallback: Path) -> str:
+        for path, text in docs.items():
+            if path.name == name:
+                return text
+        return _read_or_empty(fallback)
+
+    live_rf = _live("review-findings.md", _REVIEW_FINDINGS_MD)
+    live_chg = _live("changelog.md", _CHANGELOG_MD)
+
+    findings += _descending_versions(_RF_LIVE_HEAD.findall(live_rf), rel(_REVIEW_FINDINGS_MD))
+    findings += _descending_versions(_CHANGELOG_VER_HEAD.findall(live_chg), rel(_CHANGELOG_MD))
+
+    # plan 条目：以**条目自带完成版本**为序（同一文件内升序）。现行 plan.md 以 P 档
+    # 分组、条目不携带版本标记，由分组纪律（分区检查）管，不做版本序比较。
+    plan_entry_version = re.compile(r"^#{2,4}\s[^\n]*?`?plan-\d+[^\n]*?(?:\(|（)v(\d+\.\d+\.\d+)", re.M)
+    for path in sorted(root.rglob("archived_plan.*.md")):
+        findings += _descending_versions(plan_entry_version.findall(_read_or_empty(path)), rel(path))
+
+    for path in sorted(root.rglob("archived_review-findings.*.md")):
+        findings += _descending_versions(_RF_ARCHIVE_HEAD.findall(_read_or_empty(path)), rel(path))
+    for path in sorted(root.rglob("archived_changelog.*.md")):
+        findings += _descending_versions(_CHANGELOG_VER_HEAD.findall(_read_or_empty(path)), rel(path))
+    return findings
+
+
+def _read_or_empty(path: Path) -> str:
+    return path.read_text(encoding="utf-8") if path.exists() else ""

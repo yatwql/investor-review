@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.16.13
+> 文档版本：0.16.14
 
 ## 概述
 
@@ -978,6 +978,9 @@ INVEST_CACHE_DIR=docs/tmp/screenshots/demo/data/cache \    # 缓存改落（不�
 .venv/bin/python scripts/make-screenshots.py web "file://<demo>/reports/个人投资分析报告.html"              src/static/report-overview.png --scroll-y 0
 .venv/bin/python scripts/make-screenshots.py web "file://<demo>/reports/个人投资分析报告.html#sec-summary"     src/static/report-toc.png
 .venv/bin/python scripts/make-screenshots.py web "file://<demo>/reports/个人投资分析报告.html#sec-penetration" src/static/report-charts.png
+# Excel 页签：读演示根的真实 xlsx 重排成表格图（带列标/行号/页签条；路径栏抹掉演示前缀）
+.venv/bin/python scripts/make-screenshots.py xlsx "<demo>/reports/个人投资分析报告.xlsx" src/static/excel-report.png \\
+    --sheet '2.持仓明细与分类' --rows 14 --cols 13 --width 1500 --height 468
 ```
 
 **出图护栏**：所有子命令入口先跑 `demo_workspace.assert_demo_holdings()`——演示持仓必须存在且位于演示目录内，否则直接拒绝出图（宁可报错，不出带真实数据的图）。
@@ -1547,7 +1550,13 @@ git push origin --tags
 
 `release.py devbump` 会把这条链一次走完（版本号 + 文档版本头 + 提交），并在同一提交里**清空上一版的迁档占位节**（`### 开发期已修复（X-dev）` 只余一行「本版已随 vX 发布迁入归档档案」）——新开发周期的台账从空开始，上一版的归档信息只在归档文件与「归档档案」索引里。收尾的**发布闭环校验**把下面⑥的纪律变成机检：`v{发布版}` 必须落在 `master` 历史内、`master` 的 `APP_VERSION` 为发布版、本分支为下一开发版，不符即退出 1 并逐项点名（无 tag 只告警，供 `--no-push` 试跑）。
 
-**⑥ 合并入 master**
+**⑥ 台账写入纪律（已由机检强制）**
+
+- review-findings 的已解决条目**必须**写在 `## 已解决问题` 下的 `### 开发期已修复（<当前开发版>-dev）` 节内；条目直接落在 `## 已解决问题` 直属层时，归档按「本版无该节 = 无待迁档」处理，会整批静默漏搬（曾跨 9 个版本累积 53 条才发现）。提交期由 `check-doc-drift` 分区纪律 E 条拦住，`gate` 对 `unfiled` 状态直接报错，`prepare` 仍会按本版归位兜底。
+- 归档侧的批次标题用**发布版号**（`## 已修复（X.Y.Z）`，不带 `-dev`）：归档记录的是已发布版本，开发周期号只在主台账的待迁节里出现。
+- **段序统一升序（旧 → 新）**：review-findings / changelog / plan 的版本段（`## 已修复（X.Y.Z）`、`## [X.Y.Z]`、`### 开发期已修复（X-dev）`）与 plan 条目自带的完成版本，在**同一文件内**必须升序；现行文件与版本归档子树中的归档文件同一口径。新批次只能追加到末尾，人工补录也要按版本归位——倒序会让版本先后关系被读反。提交期由 `check-doc-drift` 第 23 项 `check_ledger_order` 守卫。
+
+**⑦ 合并入 master**
 
 发布并打 tag 后，**必须**把 `dev` 合并入 `master` 并推送（`master` 是发布分支，只存放已发布状态；不得只打 tag 而不更新 master）：
 
@@ -1557,7 +1566,7 @@ git checkout master && git merge --no-ff dev -m "Merge branch 'dev' — v{x.y.z}
 git checkout dev
 ```
 
-合入后确认 tag 所指提交已在 `master` 可达（`git merge-base --is-ancestor v{x.y.z} origin/master`）；`master` 推送会触发 CI 的 P1（`verify`）档。本步与步骤⑤互不替代：⑤ 是让 dev 进入下一个开发周期，⑥ 是把已发布状态同步到发布分支。
+合入后确认 tag 所指提交已在 `master` 可达（`git merge-base --is-ancestor v{x.y.z} origin/master`）；`master` 推送会触发 CI 的 P1（`verify`）档。本步与步骤⑤互不替代：⑤ 是让 dev 进入下一个开发周期，⑦ 是把已发布状态同步到发布分支。
 
 ### 发布前本地门禁前置（`release.py check` 已内置）
 

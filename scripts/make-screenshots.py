@@ -12,6 +12,8 @@
   web <url> <out.png> [--scroll-y N] [--width W] [--height H] [--replace from=>to] [--chrome P]
                                     无头 Chromium CDP 截图（滚动后截视口，固定侧栏不丢；
                                     省略 --scroll-y 时保留 URL 锚点定位，适合报告章节截图）
+  xlsx <in.xlsx> <out.png> [--sheet NAME] [--rows N] [--cols N]
+                                    把一个 Excel 页签按真实内容排成表格图（列标/行号/页签条）
 
 典型用法（README 配图刷新）：
 
@@ -20,6 +22,8 @@
   .venv/bin/python scripts/make-screenshots.py tui docs/tmp/screenshots/demo/tui-menu.png
   .venv/bin/python scripts/make-screenshots.py web http://127.0.0.1:8000/workbench \\
       docs/tmp/screenshots/demo/web-workbench.png --scroll-y 0
+  .venv/bin/python scripts/make-screenshots.py xlsx \\
+      docs/tmp/screenshots/demo/reports/个人投资分析报告.xlsx src/static/excel-report.png
 
 TUI 渲染需 Pillow + 等宽 CJK 字体（Noto Sans Mono CJK）；Web 截图需 Node ≥22 与本机
 Chromium（`--chrome` / `CHROME_BIN`）。两者都只在本机手工运行，不进提交与发布门禁。
@@ -38,7 +42,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # scripts/ 与内部包导入面
 
-from _screenshots import demo_workspace, tui_frame, web_shot  # noqa: E402
+from _screenshots import demo_workspace, tui_frame, web_shot, xlsx_frame  # noqa: E402
 
 
 def _demo(_: argparse.Namespace) -> int:
@@ -100,6 +104,21 @@ def _web(args: argparse.Namespace) -> int:
                 server.kill()
 
 
+def _xlsx(args: argparse.Namespace) -> int:
+    """把一个 Excel 页签按内容排成表格图（数字全部取自该工作簿）。"""
+    demo_workspace.assert_demo_holdings()
+    return xlsx_frame.render(
+        args.workbook,
+        args.output,
+        sheet_name=args.sheet,
+        width=args.width,
+        height=args.height,
+        max_rows=args.rows,
+        max_cols=args.cols,
+        chrome=args.chrome,
+    )
+
+
 def _start_demo_server(url: str) -> tuple:
     """按演示工作区环境起 Web 服务，返回 (进程, 换成实际端口的 URL)。
 
@@ -109,6 +128,7 @@ def _start_demo_server(url: str) -> tuple:
     import os as _os
     import socket
     import subprocess
+    import sys as _sys
     import time
     import urllib.request
     from urllib.parse import urlparse, urlunparse
@@ -123,7 +143,7 @@ def _start_demo_server(url: str) -> tuple:
         **demo_workspace.isolation_env(demo),
     }
     server = subprocess.Popen(
-        [_os.sys.executable, "-m", "src.python.web", "--port", str(port)],
+        [_sys.executable, "-m", "src.python.web", "--port", str(port)],
         cwd=str(demo),
         env=env,
         stdout=subprocess.DEVNULL,
@@ -185,6 +205,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="先按演示工作区环境自起 Web 服务再截图（URL 的 host:port 被替换为本机临时端口）",
     )
     web.set_defaults(handler=_web)
+
+    xlsx = subparsers.add_parser("xlsx", help="把 Excel 页签按内容排成表格图（列标/行号/页签条）")
+    xlsx.add_argument("workbook", type=Path, help="报告工作簿（.xlsx）路径")
+    xlsx.add_argument("output", type=Path, help="输出 PNG 路径")
+    xlsx.add_argument("--sheet", default=None, help="页签名（缺省取第一个页签）")
+    xlsx.add_argument("--rows", type=int, default=xlsx_frame.DEFAULT_MAX_ROWS, help="最多渲染行数（默认 26）")
+    xlsx.add_argument("--cols", type=int, default=None, help="最多渲染列数（缺省取该页全部列）")
+    xlsx.add_argument("--width", type=int, default=1440, help="视口宽（默认 1440）")
+    xlsx.add_argument("--height", type=int, default=940, help="视口高（默认 940）")
+    xlsx.add_argument("--chrome", default=None, help="Chromium/Chrome 可执行文件（缺省按 CHROME_BIN 等次序解析）")
+    xlsx.set_defaults(handler=_xlsx)
     return parser
 
 

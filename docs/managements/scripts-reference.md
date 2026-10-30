@@ -27,7 +27,7 @@
 | `test-extract-failures.py` | 测试 | 从 pytest-html 报告提取失败用例详情 |
 | `test-find-order-dependent.py` | 测试 | 单跑绿合跑红的顺序依赖污染源二分定位 |
 | `make-assets.py` | 文档 | 仓库视觉资产维护：社交预览图生成 + README 架构图渲染体检（几何/像素/文字越界；需 cairosvg / Pillow） |
-| `make-screenshots.py` | 文档 | README/手册演示截图生成：隔离演示工作区（`INVEST_PROJECT_ROOT` 整体搬根 + 自造持仓 + 占位凭据）/ 演示报告 / TUI 帧渲染 / Web CDP 截图（`--serve-demo` 自起演示服务）；需 Pillow + 等宽 CJK 字体，Web 档另需 Node ≥22 + Chromium |
+| `make-screenshots.py` | 文档 | README/手册演示截图生成：隔离演示工作区（`INVEST_PROJECT_ROOT` 整体搬根 + 自造持仓 + 占位凭据）/ 演示报告 / TUI 帧渲染 / CLI 伪终帧采集 / Web CDP 截图（`--serve-demo` 自起演示服务）/ Excel 页签表格图；需 Pillow + 等宽 CJK 字体，Web 与 Excel 档另需 Node ≥22 + Chromium |
 | `check-code-traces.py` | 质量 | 代码注释/文档字符串中历史变更痕迹检查 + AST 守卫（分层/日志/配置默认值单源） |
 | `check-doc-traces.py` | 文档 | 面向读者文档（.md）历史变更痕迹 + 结构性冗余（DUPLICATE）检查 |
 | `check-test-markers.py` | 测试 | AST 静态扫描验证测试标记合规性 |
@@ -55,7 +55,7 @@
 | `probe.py` | 运维 | 探测统一入口（按 target 分发到 `_probes/` 子模块；新探针实现契约面登记即用） |
 | `eval-factor-zoo.py` | 评测 | 因子动物园目录评测（非生产代码；五个来源族各抽 5 个因子，评测 A 字段可得率 / B 与既有信号族增量 / C 全量计算耗时占比三项指标，A/B/C 全过才转正立项；子命令 catalog / fields / signals / timing / verdict / all，产物只落 `docs/tmp/factor-zoo/`；实现拆在 `_eval_factor_zoo/`） |
 | `_assets/` | 内部 | 视觉资产实现包（`social_preview.py` 预览图绘制与栅格化 / `svg_check.py` 架构图渲染体检） |
-| `_screenshots/` | 内部 | 演示截图实现包（`demo_workspace.py` 隔离工作区与报告 / `tui_frame.py` 帧文本折行保色与渲染 / `web_shot.py` CDP 封装 + `cdp_shot.mjs`） |
+| `_screenshots/` | 内部 | 演示截图实现包（`demo_workspace.py` 隔离工作区与报告 / `tui_frame.py` 帧文本折行保色与渲染 / `web_shot.py` CDP 封装 + `cdp_shot.mjs` / `xlsx_frame.py` Excel 页签 → HTML 网格 → PNG） |
 | `_shared/` | 内部 | 跨脚本共享设施包（`checklib.py` CLI 契约与输出/路径/区间解析；`traces_common.py` 两域共用痕迹词表） |
 | `_test_runner/` | 内部 | 测试驱动内部实现包（paths / modes / pytest_env / machine_info / doc_writer / report_html / runner） |
 | `launch.sh` / `launch.ps1` | 启动 | Linux/macOS / Windows 一键启动脚本（无参数启动 TUI；`web` 子命令启动 Web 浏览器模式） |
@@ -393,7 +393,9 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
     `archived_*` 文件**双向**比对（漏列 → 「缺少」；幽灵引用 → 「不存在」）
 13. 管理文档分区纪律：review-findings 未完成/已解决分区互斥且已解决项须在 changelog 有修复记录；
     「开发期已修复」节只允许出现在已解决区、P 档标题只允许出现在未完成区（节归属，标题错位时
-    rf 标识比对完全静默）；plan 未完成区不得含 ✅/已归档项；现行 changelog 只允许一个 `-dev` 段头
+    rf 标识比对完全静默）；已解决区的台账行必须写在版本节内（落在直属层 = 发布归档会静默漏搬）；
+    本开发周期 changelog 提到的 plan-N 须在 plan.md 或计划归档有对应条目（完成项被直接删除即丢任务）；
+    plan 未完成区不得含 ✅/已归档项；现行 changelog 只允许一个 `-dev` 段头
 14. Extended Thinking 支持矩阵：手册对比表须覆盖代码支持的全部厂商族、「仅」式预算枚举句须列全、
     默认开思考族须有提示（权威源为 `llm/api_base.py` 的前缀名单）
 15. Provider Chain 降级表：`fetcher/chain_config.py::_DEFAULT_CHAINS` 的 15 条链 ↔
@@ -411,6 +413,9 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
 22. 缓存 TTL 表（`technical.md` 缓存各表 + `how-to-config.md`「cache_ttl 可调参数」）↔ 缓存注册表 `DataModuleDef.cache_ttl`
     逐类型对账（实现 `_doc_drift/_format.py::check_cache_ttl_tables`）。默认值只存在注册表一处、两份文档各维护只读参考表，
     改默认值漏同步时读者会被误导（如以为财报索引 30 天才刷新）；表内新增类型自动纳入核对，解析不出 TTL 文本的行跳过）
+23. 台账段序升序：review-findings / changelog / plan 的版本段（`## 已修复（X.Y.Z）`、`## [X.Y.Z]`、
+    `### 开发期已修复（X-dev）`）与 plan 条目自带完成版本，在**同一文件内**一律升序（旧 → 新）；
+    现行文件与版本归档子树中的归档文件同一口径（实现 `_doc_drift/_ledger.py::check_ledger_order`）
 
 **使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
 
@@ -522,9 +527,9 @@ sym |= set(re.findall(r'^\s{0,8}["\']([a-z][a-z0-9_]{2,})["\']\s*:', src, re.M))
 
 > **何时跑**：`git commit` 时由 pre-commit 钩子按暂存域自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` job 恒跑全量兜底。
 
-**`make-screenshots.py` — 演示截图生成（隔离演示工作区 + TUI 帧渲染 + Web CDP 截图）**
+**`make-screenshots.py` — 演示截图生成（隔离演示工作区 + TUI/CLI 帧渲染 + Web/Excel 截图）**
 
-README / 手册配图的可复现来源。五个子命令（demo / report / tui / cli / web）串成一条流水线，产物全部落 `docs/tmp/screenshots/`
+README / 手册配图的可复现来源。六个子命令（demo / report / tui / cli / web / xlsx）串成一条流水线，产物全部落 `docs/tmp/screenshots/`
 （git 忽略域），真实 `data/`（持仓 / 配置 / 密钥）零接触：
 
 ```bash
@@ -552,6 +557,12 @@ README / 手册配图的可复现来源。五个子命令（demo / report / tui 
 .venv/bin/python scripts/make-screenshots.py web \
     "http://127.0.0.1:8000/api/reports/个人投资分析报告.html#sec-summary" \
     src/static/report-toc.png
+
+# ⑥ Excel 报告截图（.xlsx 无界面可截：读真实演示产物的单元格，按显示值/合并区/列宽
+#    重排成带列标与页签条的表格图，再用同一套无头 Chromium 出图）
+.venv/bin/python scripts/make-screenshots.py xlsx \
+    docs/tmp/screenshots/demo/reports/个人投资分析报告.xlsx src/static/excel-report.png \
+    --sheet '2.持仓明细与分类' --rows 14 --cols 13 --width 1500 --height 468
 ```
 
 **运行状态护栏**：`report` / `cli` 会跑一次真实报告生成，而该流程会写 `data/state/`（perf 台账 / 数据源健康历史 / 实验与熔断状态）与 `data/calibration/`（去重锚点）。为兑现「真实 data/ 零接触」，脚本在跑前快照这两个目录、跑后原样还原（含删除运行期新增文件），演示数据不会进入真实统计与阈值校准。
@@ -584,14 +595,16 @@ perf 台账 / 数据源健康历史的**读路径指向演示工作区**（页�
 （Windows 未开开发者模式时改用目录联接 `mklink /J`，否则报告 HTML 会 `TemplateNotFound`）。
 详见 `developer-guide.md`「非真实运行的日志/缓存隔离」。
 
-**出图护栏**：`demo` / `report` / `tui` / `cli` / `web` 入口统一先跑
+**Excel 页签**（`xlsx_frame.py`）：`.xlsx` 不是可截屏的界面，本机也不一定有 LibreOffice，因此按**工作簿内容重排**：逐格取显示值（百分比 / 千分位按 `number_format` 换算，`=HYPERLINK(...,"文本")` 取第二个参数而不是公式原文）、填充色 / 字色 / 加粗 / 合并区 / 内容宽度，写成带列标行号与页签条的 HTML 网格再交给 `web_shot` 截图。列总宽超视口时整表等比收缩（下限 48px），保证整行不被截断。图里不仿 Excel 窗口边框与功能区——它是「内容渲染」，不是软件截图（README 已标注口径）。
+
+**出图护栏**：`demo` / `report` / `tui` / `cli` / `web` / `xlsx` 入口统一先跑
 `demo_workspace.assert_demo_holdings()`——演示持仓缺失或逃出演示目录即拒绝出图。浏览器按「`--chrome` →
 `CHROME_BIN` → Playwright 下载的 Chromium → 常见系统路径」解析，`node` 用系统 PATH（需 ≥22，
 内置 WebSocket，无需 playwright）。
 
 > **何时跑**：README/手册配图需要刷新时（如界面改版）。不进提交与发布门禁，只在本机手工运行。
 
-**退出码**：`0` 成功；`1` 环境缺失（TUI 需 Pillow + 等宽 CJK 字体；Web 需 Node ≥22 与本机
+**退出码**：`0` 成功；`1` 环境缺失（TUI 需 Pillow + 等宽 CJK 字体；Web/Excel 需 Node ≥22 与本机
 Chromium）或运行失败；`2` 参数或子命令错误。
 
 **`make-assets.py` — 仓库视觉资产维护（社交预览图 + 架构图渲染体检）**
@@ -938,7 +951,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 | `docs/plan` 设计文件 | 引用编号**全部已归档**者判定为候选（强信号）、`git mv` 到该版本归档子目录 `<stem>/`、改写 changelog/plan/rf/folders/README/CLAUDE 与同级设计文档引用、folders 目录树条目搬迁 | 候选是否真完成；未引用任何任务编号的设计文件只列提示、不自动迁档 |
 | changelog 发布段 + 主文件指针 | 发布段正文整段迁入该版本 changelog 归档、归档头部两行由段列表派生、主文件「最近发布」指针的**版本号 / 日期 / 归档文件名三者同步改写**（跨小版本时文件名会变，如 `0.13.x → 0.14.x`） | 发布段正文是否确实属于本版（摘要与措辞） |
 
-**格式随既有归档走（不另立一套）**：批次标题 `## 开发期已修复（X.Y.Z-dev）`、说明行 `> 完整复盘见 changelog.md X.Y.Z-dev 段；此处为台账原表搬运（无损），本批发布日 DATE。`、plan 归档扁平 `## plan-N … ✅`、归档头部 `涵盖版本` 只延展区间尾（`vA → vB`）、`归档时间` **只追加**本批戳记（既有逐批叙述只读）。头部缺行（无 `> 涵盖版本：` / `> 归档时间：`）时脚本报 `[!]` 提示补，不静默放行。
+**格式随既有归档走（不另立一套）**：批次标题 `## 已修复（X.Y.Z）`（**发布版号**，归档只记录已发布版本，不写 `-dev`）、说明行 `> 完整复盘见 changelog.md X.Y.Z 段；此处为台账原表搬运（无损），本批发布日 DATE。`、plan 归档扁平 `## plan-N … ✅`、归档头部 `涵盖版本` 只延展区间尾（`vA → vB`）、`归档时间` **只追加**本批戳记（既有逐批叙述只读）。头部缺行（无 `> 涵盖版本：` / `> 归档时间：`）时脚本报 `[!]` 提示补，不静默放行。
 
 **何时跑 / 失败怎么办**：
 

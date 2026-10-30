@@ -118,7 +118,7 @@ def create_sheets(
         wb: openpyxl Workbook
         section_order: 注册表模块顺序列表
         enable_fund_deep_analysis: board 层 — 基金深度分析是否开启（配置驱动）
-        enable_news: board 层 — 市场新闻是否开启（配置驱动）
+        enable_news: board 层 — 财经热点关联分析章是否开启（配置驱动）
         enable_history: board 层 — 历史走势章节是否开启
         enable_action: board 层 — 行动建议章节是否开启（config 默认开）
         enable_llm: board 层 — LLM 分析章节是否开启

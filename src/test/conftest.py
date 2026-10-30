@@ -310,6 +310,126 @@ def _restore_menu_items():
 
 
 @pytest.fixture(autouse=True)
+def _auto_reset_module_state():
+    """复位各模块级会话态 / 注册标志 / 限速器单例（进/出两侧），防跨用例串扰。
+
+    这些状态都不是「配置」，而是**运行期会话痕迹**：注入的传输层工厂、惰性注册标记、
+    上一次取数的源命中快照、按键解析残留、失败标记……单个模块各自持有，一旦上一条用例
+    写入、本用例读到，断言就变成顺序相关的隐式依赖（xdist 换分片即随机红）。
+
+    口径与 ``_auto_reset_provider_registry`` 一致：复位只是把状态置回「未载入」，
+    不改变任何默认值、不发起取数。需要某项携住状态跑完整个用例的，自行 patch。
+    """
+
+    def _reset() -> None:
+        from src.python.cache import _stats as cache_stats
+        from src.python.config._llm_pricing import invalidate_pricing_cache
+        from src.python.config._llm_settings import invalidate_llm_config_cache
+        from src.python.core import circuit_breaker, doctor, http_client
+        from src.python.fetcher import batch, factor_catalog_loader, source_adapter
+        from src.python.llm import observation, pacing
+        from src.python.providers import (
+            akshare_extras,
+            cninfo,
+            eastmoney,
+            eastmoney_industry,
+            news_aggregator,
+            tiantian_holdings,
+        )
+        from src.python.report import fund_style_base
+        from src.python.tui import report_artifacts, tui_handlers, tui_keys
+
+        cache_stats.reset_cache_stats()
+        invalidate_llm_config_cache()
+        invalidate_pricing_cache()
+        circuit_breaker.reset_circuit_text()
+        doctor.reset_adapter_survey()
+        http_client.reset_transport_factory()
+        batch.clear_rate_limiter_cache()
+        factor_catalog_loader.invalidate_catalog_cache()
+        source_adapter.reset_adapter_registry()
+        observation.clear_llm_observation()
+        pacing.reset_policies()
+        akshare_extras.reset_failure_state()
+        cninfo.reset_cninfo_limiter()
+        cninfo.reset_cninfo_unreachable()
+        eastmoney.reset_eastmoney_pager_limiter()
+        eastmoney_industry.reset_eastmoney_industry_limiter()
+        news_aggregator.reset_last_source_results()
+        tiantian_holdings.reset_quarter_walk_anchor()
+        fund_style_base.reset_tencent_registration()
+        report_artifacts.reset_open_failure_memo()
+        tui_handlers.reset_busy_state()
+        tui_keys.reset_key_parser_state()
+
+    _reset()
+    yield
+    _reset()
+
+
+@pytest.fixture(autouse=True)
+def _restore_logger_state():
+    """隔离 ``core.logger`` 的模块级生效值，免日志配置用例把临时路径/级别留给后续用例。
+
+    这六个常量由 ``_apply_logger_config`` 从 env + ``logger.json`` 推导后**原地改写**：
+    用例 monkeypatch 的只是输入（配置路径 / 环境变量），推导结果不会跟着回退。历史同类
+    事故见 ``_restore_llm_pricing_state``（定价时段串到下一条用例，单跑绿、并行偶发红）。
+
+    不给它接 ``reload_logger_config()``：那每次都要读文件并重配 handler——全量套件会因此多出上万次
+    读盘，还会与 pytest 自己的捕获 handler 抢位置。只回填常量，零 I/O。
+    """
+    from src.python.core import logger as logger_mod
+
+    log_file = logger_mod._LOG_FILE
+    max_bytes = logger_mod._LOG_MAX_BYTES
+    backup_count = logger_mod._LOG_BACKUP_COUNT
+    console_color = logger_mod._CONSOLE_COLOR
+    file_level = logger_mod._CONFIG_FILE_LEVEL
+    console_level = logger_mod._CONFIG_CONSOLE_LEVEL
+    yield
+    logger_mod._LOG_FILE = log_file
+    logger_mod._LOG_MAX_BYTES = max_bytes
+    logger_mod._LOG_BACKUP_COUNT = backup_count
+    logger_mod._CONSOLE_COLOR = console_color
+    logger_mod._CONFIG_FILE_LEVEL = file_level
+    logger_mod._CONFIG_CONSOLE_LEVEL = console_level
+
+
+@pytest.fixture(autouse=True)
+def _auto_reset_config_cache():
+    """自动丢弃 ``tui_menu._config_cache``，防止配置缓存跨用例串扰。
+
+    该缓存是模块级字典，首次 ``refresh_config()`` 后一直存在；用例读取时如走
+    ``get_config_cache()``（渲染页头/菜单的路径），拿到的就是**上一条用例**载入的
+    那份配置（含它自己的 monkeypatch 结果）。故与 ``_restore_menu_items`` 同习语，
+    在每个用例前后都回到「未载入」基线。
+    """
+    from src.python.tui import tui_menu
+
+    tui_menu.reset_config_cache()
+    yield
+    tui_menu.reset_config_cache()
+
+
+@pytest.fixture(autouse=True)
+def _auto_reset_config_session():
+    """自动关闭配置面板会话，防止撤销记录跨用例串扰。
+
+    ``handlers_config._session`` 是模块级可变单例，``_apply_edit`` 在它非空时
+    **必然**把每次写盘记入撤销栈。面板自身在进入/退出时 ``reset``/``close``，
+    但直接调 ``_apply_edit`` 的用例并不进面板——上一用例留下的会话会让本用例的
+    写入记入别人栈里（后续 ``u`` 用例据此误掽到不存在的改动）。
+
+    故意不依赖面板进出：连直接调用写盘路径的用例也回到「无会话」基线。
+    """
+    from src.python.tui import handlers_config
+
+    handlers_config.close_config_session()
+    yield
+    handlers_config.close_config_session()
+
+
+@pytest.fixture(autouse=True)
 def _auto_reset_last_reason():
     """自动清除「provider 失败原因」线程本地载体，防止测试间状态污染。
 

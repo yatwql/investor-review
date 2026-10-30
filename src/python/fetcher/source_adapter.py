@@ -270,6 +270,12 @@ ADAPTER_MODULES: tuple[str, ...] = (
 _ADAPTERS_LOADED = False
 
 
+def reset_adapter_registry() -> None:
+    """把「适配器已载入」标记复位（测试隔离；重载后按需再次扫描）。"""
+    global _ADAPTERS_LOADED
+    _ADAPTERS_LOADED = False
+
+
 def _ensure_adapters_loaded() -> None:
     """惰性导入全部适配器模块，触发其注册。失败仅告警，不中断调用方。"""
     global _ADAPTERS_LOADED

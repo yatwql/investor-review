@@ -181,17 +181,17 @@ def format_item(
     num = f"{number:>{number_width}}"
 
     if tier == "wide":
-        head = f"{cursor}{num}. {marker}{pad_right(label, name_column)} {DIM}{pad_right(key, key_column)}{RESET} {status}{star}"
+        head = f"{cursor}{num}. {marker}{pad_right(label, name_column)} {status}{star} {DIM}{pad_right(key, key_column)}{RESET}"
         line = head + (f"{DIM}{notes}{RESET}" if notes else "")
         return [truncate_display(line, limit)]
 
     if tier == "medium":
         # 逐行判断：单行放得下就单行（纵向稀缺优先，短条目不必占两行）；放不下才换行
         # ——名称+状态一行，键名(淡色)+备注缩进一行，键名可见性不牺牲。
-        single = f"{cursor}{num}. {marker}{label} {DIM}{key}{RESET} {status}{star}"
+        single = f"{cursor}{num}. {marker}{label} {status}{star} {DIM}{key}{RESET}"
         if display_width(single) + display_width(notes) <= limit:
             return [single + (f"{DIM}{notes}{RESET}" if notes else "")]
-        first = f"{cursor}{num}. {marker}{truncate_display(label, limit - display_width(f'{num}. {marker} ') - 8)}{star} {status}"
+        first = f"{cursor}{num}. {marker}{truncate_display(label, limit - display_width(f'{num}. {marker} ') - 8)} {status}{star}"
         indent = " " * (display_width(num) + 2)
         second = f"{indent}{DIM}{key}{RESET}"
         if notes:

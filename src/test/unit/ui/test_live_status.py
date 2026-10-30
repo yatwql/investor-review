@@ -128,6 +128,34 @@ class TestSuspendResume:
         assert stream.getvalue().count(_CLEAR) == 2  # 一次 update + 一次 suspend
 
 
+class TestCancelHint:
+    """中止键提示单源：代码与手册说的是同一个键（``Ctrl+C``）。"""
+
+    def test_bar_default_hint_matches_documented_key(self):
+        """状态条自带的提示就是文档口径的中止键（曾经默认写「q 中止」——
+        那个键根本没有监听方，用户照着按什么都不会发生）。"""
+        from src.python.tui.live_status import CANCEL_HINT
+
+        assert LiveStatusBar().cancel_hint == CANCEL_HINT
+        assert CANCEL_HINT == "Ctrl+C 中断"
+
+    def test_reporter_draw_uses_bar_hint(self):
+        """报告器拼状态条时直接取状态条提示，两条路径不会给出两种中止键。"""
+        from src.python.tui.live_status import CANCEL_HINT
+
+        text = status_bar_text("行情获取", hint=LiveStatusBar().cancel_hint)
+        assert text.endswith(CANCEL_HINT)
+        assert "q " not in text
+
+    def test_module_carries_no_key_that_nobody_listens_for(self):
+        """源码里不得再出现已撤回的有序中止键（``q``）作提示文案。"""
+        import inspect
+
+        from src.python.tui import live_status
+
+        assert "q 中止" not in inspect.getsource(live_status)
+
+
 class TestReporterLiveWiring:
     """报告器接线：非 TTY 下 live=True 与不启用时逐行输出一致（管道等价前提）。"""
 

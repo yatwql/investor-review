@@ -77,7 +77,7 @@ _STANDARD_LLM_MODULES = {
     "expert_review": "智囊团深度复盘",
     "health_check": "持仓体检报告",
     "penetration_deep": "穿透深度分析",
-    "news_correlation": "财经新闻热点与持仓关联分析",
+    "news_correlation": "财经热点关联分析",
 }
 
 _SUB_BASE_CONFIG: dict = {}

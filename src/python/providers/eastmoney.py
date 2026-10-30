@@ -32,6 +32,13 @@ _pager_limiter: RateLimiter | None = None
 _pager_limiter_lock = threading.Lock()
 
 
+def reset_eastmoney_pager_limiter() -> None:
+    """丢弃分页限速器单例（测试隔离：节流窗口不得跨用例累计）。"""
+    global _pager_limiter
+    with _pager_limiter_lock:
+        _pager_limiter = None
+
+
 def _get_pager_limiter() -> RateLimiter:
     """分页限速器（惰性单例，页间间隔统一走 RateLimiter 表达）。"""
     global _pager_limiter

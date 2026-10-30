@@ -377,7 +377,7 @@ def _build_holdings_summary(
     penetrated_assets: list | None = None,
     industry_data: dict[str, dict] | None = None,
 ) -> str:
-    """构建持仓摘要文本（紧凑格式），供财经新闻热点与持仓关联分析 Prompt 使用。
+    """构建持仓摘要文本（紧凑格式），供财经热点关联分析 Prompt 使用。
 
     可选注入行业分类和概念板块信息（industry_data），
     使 LLM 能更准确判断新闻对持仓的利好/利空影响。
@@ -426,7 +426,7 @@ def _build_holdings_summary(
 
 
 def _build_news_correlation_summary(news_data: list[dict]) -> str:
-    """构建新闻摘要文本（紧凑格式），供财经新闻热点与持仓关联分析 Prompt 使用。
+    """构建新闻摘要文本（紧凑格式），供财经热点关联分析 Prompt 使用。
 
     Args:
         news_data: 关键词匹配后的新闻列表，取前 30 条

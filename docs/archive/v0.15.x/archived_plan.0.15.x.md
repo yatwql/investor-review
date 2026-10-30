@@ -1,11 +1,15 @@
 # 计划归档 — v0.15.x
 
-> 归档时间：2026-10-24（v0.15.0 发布，本系列首份）；2026-10-24 v0.15.0 本批原表搬运；2026-10-24 v0.15.1 本批原表搬运；2026-10-25 v0.15.5 本批原表搬运；2026-10-25 v0.15.7 本批原表搬运
+> 归档时间：2026-10-24（v0.15.0 发布，本系列首份）；2026-10-24 v0.15.0 本批原表搬运；2026-10-24 v0.15.1 本批原表搬运；2026-10-25 v0.15.5 本批原表搬运；2026-10-25 v0.15.7 本批原表搬运；2026-10-30 补录 plan-208/209/225/226/228（发布时台账节被直接删除、未入档）
 > 原始文件：`docs/managements/plan.md`
 > 涵盖版本：v0.15.x 开发期完成项（含 v0.15.7）
 > 归档内容：已完成任务节经 `release.py prepare` 自动搬入
 
 ---
+
+## `plan-185` 收益率指标缺口径标签，模型反复写错 ✅
+
+交付：口径标签生效，`fact_fix_total` 连续 8 轮为 1（≤3 达标）。
 
 ## ✅ `plan-195` Web 配置面契约（domains / labels / blocks）——已实施，待发布归档
 
@@ -39,25 +43,63 @@
 
 **状态**：入口 `scripts/make-screenshots.py`（`demo` / `report` / `tui` / `web`）+ 实现包 `scripts/_screenshots/`；16 例回归；参考文档与目录树三处登记。记录见 changelog。
 
-## `plan-207` 清理旧配置形参兼容——已完成，待发布归档
+## `plan-203` 发布流程四处改进（失败前移 / 台账自证 / 预检前移 / 记账补全）——已完成，待发布归档
 
-**状态**：移除 10 个功能开关访问器（`is_enable_data_quality` / `candidate_compare` / `stock_fundamentals` / `market_sentiment` / `cost_lots` / `valuation_percentile` / `market_temperature` / `industry_beta` / `fund_purchase_limit` / `cost_position`）的 `config` 形参——该参数在功能开关迁入 `features.json` 后已不参与取值，仅为旧调用签名保留；同步更新 26 处调用点与测试，删除「旧 config 入参被忽略」的兼容用例。保留当前规格内的降级回退（快照缺市值按 R-EVO-02 回退成本口径、LLM flat 单凭据模式）——它们不是旧数据兼容。
-
-## `plan-206` 报告运行观测三项整改（锚点开销 / 归因粒度 / full 提示）——已完成，待发布归档
-
-**状态**：按最近一次真实运行（44.4s 管线，去重锚点占 18.5s）落地三项——① **rf-858** 锚点**采集保持默认开启**、写侧改为纯追加（不读旧文件；`INVEST_DEDUP_COLLECT_ANCHORS=0` 可关），跨轮重复交给校准工具按键去重，39MB 文件的加载/压缩移出报告主流程（采集、诊断数据持续积累，报告零读取开销）；② **rf-859** `perf_history.breakdown` 补数据准备九项与新闻源抓取/去重与关联/锚点维护/事件窗装配子计时；③ **rf-860** 新增 `llm_report_unavailable_reason()`，full 在 LLM 未配置或章节全关时显式提示「按不含 LLM 内容生成（full 等同 both）」。回归覆盖锚点默认采集/批内去重/跨轮由校准去重、新闻子阶段、LLM 不可用判定与 full 提示；评估默认顺带压缩锚点（`--no-compact` 关闭）；文档同步技术设计、需求（R-DATA-09 / R-PERF-09）、脚本参考与 CLI/TUI 手册。
-
-## `plan-205` CLI 配置面补齐（config 子命令 + 章节/匿名化一次性覆写）——已完成，待发布归档
-
-**状态**：CLI 补齐与 TUI/Web 配置面同源的命令行入口——新增 `config list/get/set`（白名单 + 校验 + `.bak`，复用 `config/edit_ops.py`；`--dry-run` 只校验；调度四个字段走严格校验）与全局 `--chapter KEY=on|off` / `--anonymize MODE`（进程内覆写，不写盘，覆盖 `config.json` / `enabled_llm.*` / features 三类来源）。`--chapter` 的运行时叠加层为 `config/_runtime_overrides.py`，`get_config()` / `get_llm_config()` 返回前叠加；scheduler 归一化/严格校验上收 `config/_scheduler.py`（Web 面板与 CLI 共用）。报告追问 `[Q]` 按决策不提供 CLI 入口（对话式交互不适合命令行）。文档同步 CLI 手册 §2/§10.1/§14、配置手册与脚本参考。
+**状态**：日志动线进 dev-verify + 打点矩阵自证；bench 场景档前置；台账失败写 `failure`；`check` 预演 changelog 派生；publish 分段计时并在 gate 戳失效时点名改动的代码文件；`[C]` 无效编号提示由注册表派生。回归 9 例。记录见 changelog。
 
 ## `plan-204` 测试用例全量审计与整改——已完成，待发布归档
 
 **状态**：扫描 586 个测试文件 / 11,111 个 `def test_` 定义，机检覆盖「完全重复、死用例、无断言、自证、弱 mock」之外的四类人工判据（自证式用例、双结果放行、弱断言、命名与内容不一致）；整改 23 例（1 例重复合并）：安全基线 3 例自证式改为触生产（缓存写入器 / LLM 源码静态守卫 / HTML 模板扫描）、文件系统边缘 4 例双结果放行改为按契约断言、配置崩溃清理 1 例补 `assertRaises`、弱断言 11 例补足语义、启动向导 2 例合并、2 处死变量清理。记录见 changelog / 台账 rf-851~rf-855。
 
-## `plan-203` 发布流程四处改进（失败前移 / 台账自证 / 预检前移 / 记账补全）——已完成，待发布归档
+## `plan-205` CLI 配置面补齐（config 子命令 + 章节/匿名化一次性覆写）——已完成，待发布归档
 
-**状态**：日志动线进 dev-verify + 打点矩阵自证；bench 场景档前置；台账失败写 `failure`；`check` 预演 changelog 派生；publish 分段计时并在 gate 戳失效时点名改动的代码文件；`[C]` 无效编号提示由注册表派生。回归 9 例。记录见 changelog。
+**状态**：CLI 补齐与 TUI/Web 配置面同源的命令行入口——新增 `config list/get/set`（白名单 + 校验 + `.bak`，复用 `config/edit_ops.py`；`--dry-run` 只校验；调度四个字段走严格校验）与全局 `--chapter KEY=on|off` / `--anonymize MODE`（进程内覆写，不写盘，覆盖 `config.json` / `enabled_llm.*` / features 三类来源）。`--chapter` 的运行时叠加层为 `config/_runtime_overrides.py`，`get_config()` / `get_llm_config()` 返回前叠加；scheduler 归一化/严格校验上收 `config/_scheduler.py`（Web 面板与 CLI 共用）。报告追问 `[Q]` 按决策不提供 CLI 入口（对话式交互不适合命令行）。文档同步 CLI 手册 §2/§10.1/§14、配置手册与脚本参考。
+
+## `plan-206` 报告运行观测三项整改（锚点开销 / 归因粒度 / full 提示）——已完成，待发布归档
+
+**状态**：按最近一次真实运行（44.4s 管线，去重锚点占 18.5s）落地三项——① **rf-858** 锚点**采集保持默认开启**、写侧改为纯追加（不读旧文件；`INVEST_DEDUP_COLLECT_ANCHORS=0` 可关），跨轮重复交给校准工具按键去重，39MB 文件的加载/压缩移出报告主流程（采集、诊断数据持续积累，报告零读取开销）；② **rf-859** `perf_history.breakdown` 补数据准备九项与新闻源抓取/去重与关联/锚点维护/事件窗装配子计时；③ **rf-860** 新增 `llm_report_unavailable_reason()`，full 在 LLM 未配置或章节全关时显式提示「按不含 LLM 内容生成（full 等同 both）」。回归覆盖锚点默认采集/批内去重/跨轮由校准去重、新闻子阶段、LLM 不可用判定与 full 提示；评估默认顺带压缩锚点（`--no-compact` 关闭）；文档同步技术设计、需求（R-DATA-09 / R-PERF-09）、脚本参考与 CLI/TUI 手册。
+
+## `plan-207` 清理旧配置形参兼容——已完成，待发布归档
+
+**状态**：移除 10 个功能开关访问器（`is_enable_data_quality` / `candidate_compare` / `stock_fundamentals` / `market_sentiment` / `cost_lots` / `valuation_percentile` / `market_temperature` / `industry_beta` / `fund_purchase_limit` / `cost_position`）的 `config` 形参——该参数在功能开关迁入 `features.json` 后已不参与取值，仅为旧调用签名保留；同步更新 26 处调用点与测试，删除「旧 config 入参被忽略」的兼容用例。保留当前规格内的降级回退（快照缺市值按 R-EVO-02 回退成本口径、LLM flat 单凭据模式）——它们不是旧数据兼容。
+
+## `plan-208` 跨模块导入面收窄 ✅
+
+**完成（2026-10-24，v0.15.2；2026-10-30 补录）**：`config/cache/cli/providers` 公共面移除私有 `__all__`、兼容转发注释清零、生产代码跨包私有导入清零；`providers/_utils.py` → `providers/utils.py`。条目发布时未随节迁档（台账节被直接删除），补录以 `archived_changelog.0.15.x.md` v0.15.2 段为准。
+
+## `plan-209` TUI 显示模式统一 ✅
+
+**完成（2026-10-24，v0.15.2；2026-10-30 补录）**：状态标签收敛到 `switch_panel.status_text`、`truncate_display` 改 ANSI 感知并补 `RESET`、`DESIGN-TUI.md` 新增「Display Modes」契约。同上，发布时未入档，按 v0.15.2 changelog 段补录。
+
+## `plan-210` 报告重复运行耗时优化（LLM / 新闻） ✅
+
+交付：同进程连跑四份，`LLM+新闻` 138.7s → 0.0s；历史走势并发取数改按输入顺序汇总（内容可复现）。
+
+## `plan-211` 数据源降级与告警分级（行业资金流向 / K 线） ✅
+
+交付：`warnings_count` ≤5、`Unknown thscode` 0；行业资金流向失败负缓存 + 单条告警；备用源评估＝免 key 无可靠第二源。
+
+## `plan-212` 报告级 LLM 缓存状态隔离与指纹审计 ✅
+
+交付：报告边界、用量 delta、指纹组件审计落地；连跑三份无指纹误变、无上一轮残留。
+
+## `plan-213` 发布标题剥掉裸版本前缀 ✅
+
+**问题**：`publish --title "v0.15.4 —— …"` 拼出 `release: v0.15.4 —— v0.15.4 —— …`（v0.15.4 发布实测）；`normalize_release_title` 只剥 `release: v… —— ` 一类。
+**动作**：补裸版本前缀（含 `-dev` 后缀）剥离；`v2 —— …` 这类非版本数字串不误伤。
+**验收**：`normalize_release_title("v0.15.4 —— 主题") == "主题"`，release 提交标题只出现一次版本号。
+
+## `plan-214` devbump 分步耗时埋点 ✅
+
+**问题**：`logs/release.jsonl` 中 devbump 的 `steps` 恒空（只有总墙钟 14.1s），无法区分版本改写 / 一致性收敛 / 推送各占多少，跨版本对拍缺一环。
+**动作**：按 `_timer().mark_elapsed()` 补「版本全链改写 + 一致性收敛 / 迁档占位清理 / 切版提交 / 推送 dev / 发布闭环校验」五步，与其余发布命令同口径。
+**验收**：devbump 后台账 `steps` 非空且步骤可读；回归用例断言步骤名存在。
+
+## `plan-215` 发布闭环机器校验 ✅
+
+**问题**：CLAUDE.md 的「每次正式发布都必须把 dev 合并入 master 并推送、不得只打 tag 不更新 master」此前只靠人看终端，没有任何机检；tag 打错分支 / master 未跟版都要等到下版才发现。
+**动作**：`devbump` 收尾新增闭环校验：`tag vX` 存在且在 master 历史内（`merge-base --is-ancestor`）、`master:<constants>` 的 `APP_VERSION == X`、当前分支为下一开发版；不一致即硬失败并给出逐项修复提示。无 tag 仅告警（`--no-push` 试跑 / 非发布库不误拦）。
+**验收**：三类缺口（tag 不在 master、master 版本不符、dev 未切版）均退出 1 且打印具体项；闭合时打印「发布闭环闭合」；回归用例覆盖三种缺口与无 tag 只告警。
 
 ## `plan-216` LLM 预检缓存键与写侧不同源（每份报告四模块全判 miss） ✅
 
@@ -92,24 +134,6 @@
 
 **遗留（设计使然）**：`self_review` 内容寻址于其余模块产出，任一上游重算即 miss；`health_check` 在当日盈亏或数据源可用集合实际变化时重算。
 
-## `plan-213` 发布标题剥掉裸版本前缀 ✅
-
-**问题**：`publish --title "v0.15.4 —— …"` 拼出 `release: v0.15.4 —— v0.15.4 —— …`（v0.15.4 发布实测）；`normalize_release_title` 只剥 `release: v… —— ` 一类。
-**动作**：补裸版本前缀（含 `-dev` 后缀）剥离；`v2 —— …` 这类非版本数字串不误伤。
-**验收**：`normalize_release_title("v0.15.4 —— 主题") == "主题"`，release 提交标题只出现一次版本号。
-
-## `plan-214` devbump 分步耗时埋点 ✅
-
-**问题**：`logs/release.jsonl` 中 devbump 的 `steps` 恒空（只有总墙钟 14.1s），无法区分版本改写 / 一致性收敛 / 推送各占多少，跨版本对拍缺一环。
-**动作**：按 `_timer().mark_elapsed()` 补「版本全链改写 + 一致性收敛 / 迁档占位清理 / 切版提交 / 推送 dev / 发布闭环校验」五步，与其余发布命令同口径。
-**验收**：devbump 后台账 `steps` 非空且步骤可读；回归用例断言步骤名存在。
-
-## `plan-215` 发布闭环机器校验 ✅
-
-**问题**：CLAUDE.md 的「每次正式发布都必须把 dev 合并入 master 并推送、不得只打 tag 不更新 master」此前只靠人看终端，没有任何机检；tag 打错分支 / master 未跟版都要等到下版才发现。
-**动作**：`devbump` 收尾新增闭环校验：`tag vX` 存在且在 master 历史内（`merge-base --is-ancestor`）、`master:<constants>` 的 `APP_VERSION == X`、当前分支为下一开发版；不一致即硬失败并给出逐项修复提示。无 tag 仅告警（`--no-push` 试跑 / 非发布库不误拦）。
-**验收**：三类缺口（tag 不在 master、master 版本不符、dev 未切版）均退出 1 且打印具体项；闭合时打印「发布闭环闭合」；回归用例覆盖三种缺口与无 tag 只告警。
-
 ## `plan-219` 缓存 TTL 分层收敛 ✅
 
 交付：TTL 收敛为「注册表默认 + config 稀疏覆盖」两层，且 TTL 与缓存键无关（读侧/清理侧同值）；契约 24 例。
@@ -118,18 +142,14 @@
 
 交付：`datasource.md` 的 LLM 缓存 TTL 行按前缀反查注册表校验；`faq.md` 数字列举改为引用配置文档。
 
-## `plan-210` 报告重复运行耗时优化（LLM / 新闻） ✅
+## `plan-225` 缓存 TTL 机制收敛 ✅
 
-交付：同进程连跑四份，`LLM+新闻` 138.7s → 0.0s；历史走势并发取数改按输入顺序汇总（内容可复现）。
+**完成（2026-10-25，v0.15.8；2026-10-30 补录）**：盘中敏感性改为注册表数据属性 `DataModuleDef.market_ttl`（`price`/`index` = 30s），`config.market_hour_aware` 退役，配置只保留 `market_hour_ttl` 数值覆盖。按 v0.15.8 changelog 段补录。
 
-## `plan-211` 数据源降级与告警分级（行业资金流向 / K 线） ✅
+## `plan-226` 财报类缓存节奏对齐披露周期 ✅
 
-交付：`warnings_count` ≤5、`Unknown thscode` 0；行业资金流向失败负缓存 + 单条告警；备用源评估＝免 key 无可靠第二源。
+**完成（2026-10-25，v0.15.8；2026-10-30 补录）**：`report`/`fin_indicator` TTL 30 天 → 1 天、`dividend` 30 天 → 7 天，`report_doc` 保持 30 天。按 v0.15.8 changelog 段补录。
 
-## `plan-212` 报告级 LLM 缓存状态隔离与指纹审计 ✅
+## `plan-228` 决策/信号账本按龄保留 ✅
 
-交付：报告边界、用量 delta、指纹组件审计落地；连跑三份无指纹误变、无上一轮残留。
-
-## `plan-185` 收益率指标缺口径标签，模型反复写错 ✅
-
-交付：口径标签生效，`fact_fix_total` 连续 8 轮为 1（≤3 达标）。
+**完成（2026-10-25，v0.15.8；2026-10-30 补录）**：`core/jsonl_store` 新增 `prune_jsonl_by_age`（按龄裁剪 + `keep` 谓词），决策账本与信号账本追加后按 730 天裁剪，已结算事件永久保留。按 v0.15.8 changelog 段补录。

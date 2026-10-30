@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.16.13
+> 文档版本：0.16.14
 
 ## 目录
 
@@ -37,7 +37,7 @@
   - [4.7 组合历史走势计算算法](#47-组合历史走势计算算法)
   - [4.8 基金深度分析](#48-基金深度分析)
   - [4.9 资产穿透 TOP10](#49-资产穿透-top10)
-  - [4.10 财经新闻热点与持仓关联分析](#410-财经新闻热点与持仓关联分析)
+  - [4.10 财经热点关联分析](#410-财经热点关联分析)
   - [4.11 数据降级治理体系](#411-数据降级治理体系)
   - [4.12 组合演进（多快照趋势）](#412-组合演进多快照趋势)
   - [4.13 调仓 What-if 模拟](#413-调仓-what-if-模拟)
@@ -2298,7 +2298,7 @@ industry_{code}.json
                              → 显示 "XX[概念]"
 ```
 
-### 4.10 财经新闻热点与持仓关联分析
+### 4.10 财经热点关联分析
 
 #### 整体流程
 
@@ -2983,7 +2983,7 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
 | 章节 | sheet key | 提示条关键摘要 |
 |:--|:--|:--|
 | 组合历史走势与回撤 | `portfolio_history_drawdown` | 累计收益/最大回撤/年化波动 |
-| 财经新闻热点与持仓关联分析 | `news_correlation` | 关联新闻条数 |
+| 财经热点关联分析 | `news_correlation` | 关联新闻条数 |
 | 组合演进 | `portfolio_evolution` | 快照数与观察日数 |
 | 持仓基本面 | `fundamental_snapshot` | 财务指标/财报摘标的数 |
 | 持仓结构与集中度 | `position_structure` | 基金数与组合对数 |
@@ -3530,12 +3530,12 @@ make_http_client(timeout=10.0) → httpx.Client
 | `run_integrity` | 生成运行一致性守卫（`guard_run` 装饰 `generate_report` 中断收口：临时产物清扫/已写盘登记/`status=interrupted` 运行记录/健康检查收敛；ContextVar 按线程隔离，写盘方 `note_temp`·`note_artifact` 登记） | 报告生成 | 报告输出 | 无（设施模块，中断时经 reporter 输出明细） |
 | `config_backup` | 配置写前备份（`.bak` 单槽轮转） | Web 配置 | 配置编辑 | 无（安全面） |
 | `report_section_order` | 报告模块序号配置（键=模块标识，值=序号；空对象用默认 19 项顺序） | 报告编排 | 报告配置 | 顶层配置键 `report_section_order`（`get_report_section_order()` 读取，`llm_usage` 强制末位） |
-| `generators_news` | 财经新闻 LLM 关联分析（新闻热词→持仓关联二次生成） | 财经新闻热点与持仓关联分析 | LLM 生成 | 随 `enable_news` + LLM 启用 |
-| `_pair_similarity` | 标题相似度口径的唯一实现（归一化 → 日期剥离 → 英文分桶占位 → 双向 ratio + 实体 bigram 交集；链路判定与校准工具共用，防两套口径漂移） | 财经新闻热点与持仓关联分析 | 数据获取 | 随 `enable_news` |
-| `anchor_rules_version` | 锚点规则时代指纹字段（`_rules_fingerprint()` 由阈值/模板词表/方向词对/正则 + 行为探针派生，规则一改自动变，供校准工具区分时代） | 财经新闻热点与持仓关联分析 | 数据获取 | 随 `enable_news` |
-| `news_dedup_rules` | 去重规则原语模块（阈值常量 / 模板词表与掩码 / 标题归一化 / 实体 bigram / 相似度口径 / 方向词对 / 规则指纹的唯一实现） | 财经新闻热点与持仓关联分析 | 数据获取 | 随 `enable_news` |
-| `news_dedup_anchor_store` | 锚点**存储层**（分片命名 `dedup_anchors-YYYYMM.jsonl.gz` / 路径与汇总体积 / 容错读取 / multi-member gzip 追加 / 校验后原子替换） | 财经新闻热点与持仓关联分析 | 数据获取 | 随 `enable_news` |
-| `news_dedup_anchor_policy` | 锚点**策略层**（保留期 30 天 / 体积目标 24 MB / 每分支保底 50 条 / 同源 1/50 确定性采样 / `compact_anchor_file` 裁剪编排与维护开关） | 财经新闻热点与持仓关联分析 | 数据获取 | 随 `enable_news` |
+| `generators_news` | 财经新闻 LLM 关联分析（新闻热词→持仓关联二次生成） | 财经热点关联分析 | LLM 生成 | 随 `enable_news` + LLM 启用 |
+| `_pair_similarity` | 标题相似度口径的唯一实现（归一化 → 日期剥离 → 英文分桶占位 → 双向 ratio + 实体 bigram 交集；链路判定与校准工具共用，防两套口径漂移） | 财经热点关联分析 | 数据获取 | 随 `enable_news` |
+| `anchor_rules_version` | 锚点规则时代指纹字段（`_rules_fingerprint()` 由阈值/模板词表/方向词对/正则 + 行为探针派生，规则一改自动变，供校准工具区分时代） | 财经热点关联分析 | 数据获取 | 随 `enable_news` |
+| `news_dedup_rules` | 去重规则原语模块（阈值常量 / 模板词表与掩码 / 标题归一化 / 实体 bigram / 相似度口径 / 方向词对 / 规则指纹的唯一实现） | 财经热点关联分析 | 数据获取 | 随 `enable_news` |
+| `news_dedup_anchor_store` | 锚点**存储层**（分片命名 `dedup_anchors-YYYYMM.jsonl.gz` / 路径与汇总体积 / 容错读取 / multi-member gzip 追加 / 校验后原子替换） | 财经热点关联分析 | 数据获取 | 随 `enable_news` |
+| `news_dedup_anchor_policy` | 锚点**策略层**（保留期 30 天 / 体积目标 24 MB / 每分支保底 50 条 / 同源 1/50 确定性采样 / `compact_anchor_file` 裁剪编排与维护开关） | 财经热点关联分析 | 数据获取 | 随 `enable_news` |
 | `record_prosperity_diagnosis` | 景气度框架诊断挂载点（市场与估值组开关；守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供） | 行动建议（章内嵌块） | 报告输出 | 分析增强开关 `prosperity_framework`（默认开） |
 | `inject_holding_change_data` | 持仓变动复盘挂载点（独立章节与回放组开关；守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供） | 持仓变动复盘（报告独立章，type=holding_change） | 报告输出 | 独立章节与回放开关 `holding_change_review`（默认关） |
 | `inject_event_impact_data` | 事件窗对照挂载点（事件与摘要组开关；守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供；新闻先行串行段内注入，供分歧例附录块同轮进 LLM） | 事件窗对照（财经新闻章内区块，随父章；注册表无独立条目） | 报告输出 | 报告章节与增强开关 `event_window_impact`（默认关） |

@@ -7,9 +7,9 @@
 
 ---
 
-## 开发期已修复（0.13.2-dev）
+## 已修复（0.13.2）
 
-> 完整复盘见 `changelog.md` 0.13.2-dev 段；此处仅摘要行。
+> 完整复盘见 `changelog.md` 0.13.2 段；此处仅摘要行。
 
 - rf-680 已修复（2026-10-14）：technical.md §1.6.3 TUI 菜单体系与实现对齐（含 TUI 手册同步）
 - rf-681 已修复（2026-10-14）：technical.md §1.7/§1.8 与 Web/CLI 手册的路由、配置面板、LLM 章节对齐
@@ -18,20 +18,20 @@
 - rf-684 已修复（2026-10-14）：`check-test-redundancy.py` 完全重复比对三档绑定解析，根治 62 例跳过盲区
 - rf-685 已修复（2026-10-14）：`cost_position` 收盘价提取消除同名二次实现——复用 `valuation_percentile.extract_closes` 共享单一事实来源，区间有效性过滤收敛至 `compute_window_position`
 
-## 开发期已修复（0.13.3-dev）
+## 已修复（0.13.3）
 
-> 完整复盘见 `changelog.md` 0.13.3-dev 段；此处仅摘要行。
+> 完整复盘见 `changelog.md` 0.13.3 段；此处仅摘要行。
 
 - rf-686 已修复（2026-10-15）：release 编排 `prepare`/`evolution` 改文档后未同步 folders.md 统计表，导致 refresh 的 bench 因 crosscheck 过期红而重跑整套——两步各补收尾 `check-doc-drift --sync`，从源头消除发布期重复 bench
 - rf-687 已修复（2026-10-15）：LLM provider 故障切换迟滞（read 超时被服务端滴流骗过挂足 900s + 错误信封误判安全网对死端点无效重试，最坏 15~30 分钟才切备用）——新增 `post_with_deadline` 墙钟原语 + 信封标志让安全网只对服务端正常返回的空响应触发
 
-## 开发期已修复（0.13.4-dev）
+## 已修复（0.13.4）
 
-> 完整复盘见 `changelog.md` 0.13.4-dev 段；此处仅摘要行。
+> 完整复盘见 `changelog.md` 0.13.4 段；此处仅摘要行。
 
 - rf-688 已修复（2026-10-16）：`scripts/perf-view.py` 行数破线豁免——拆分 `_perf_view/` 子包（stats 纯函数先行）后主文件回落 1000 行红线内，`check-file-length.py` 的 `EXEMPTIONS` 豁免登记与 P3 挂账行同步移除
 
-## 开发期已修复（0.13.5-dev）
+## 已修复（0.13.5）
 
 > 完整复盘见 `changelog.md` 0.13.5 段；此处仅摘要行。
 
@@ -48,9 +48,9 @@
 - rf-698 已处置（2026-10-17，用户裁决口径清理）：按「不对旧配置项/旧缓存文件/旧数据结构做兼容」移除 5 处残留兼容分支——① `config/anonymizer.py` 的 `profit_rate_pct`「旧键兼容」注释修正（经核该键实为汇总取数/渲染的现役键，同步分支保留防残留原精度，仅删误导口径）；② `core/perf.py` `_phase_seconds` 早期 list 形状死分支（ETA 仅采样最近 20 条，旧形状自然出窗）；③ `fetcher/industry.py` 缓存载荷 schema 迁移清理链全删（函数 + 3 处调用，迁移窗口≤两周已过）；④ `datasource_credential._read_key_file` 顶层平铺回退（生产调用点恒传非空 section，旧单源文件形态失效）；⑤ `deepseek-chat`/`deepseek-reasoner` 停用别名全部兼容移除（价目两条目 + thinking 三名单；旧名历史费用改显 `-`、存量旧配置不获思考安全网，均经用户确认）。手册与 `llm-technical.md` 价目/峰谷枚举/effort 名单同源刷新；别名价格锁改负向锁（锁定移除行为防回填）、删 3 个旧形状/旧载荷正测、凭据测试改写节结构；dev-verify 6,975 通过。
 - rf-699 已处置（2026-10-17，设计契约审计）：全量 UI/报告样式人工比对 DESIGN.md，按基线对拍（契约落稿 commit a17b26f5 → HEAD）定位新增违规仅 3 行（均在 `summary_section.html`：市场温度两行内联 `#888` 裸色值 + QDII 注 `opacity:0.75` 档外），已修（→`var(--text-muted)`/0.7 档内，顺手消同模式存量 1 行）；护栏盲区增设 W3 内联色值/W4 档外字号/W5 档外间距三维观察（W1 引号整行豁免为 JS 图表配置设计、测试钉死不可收窄，W3 按位置级找回 HTML 内联色值盲区——原「裸色值 0」对内联域属假零），实测存量 40/8/175 入 `TestBaselineNoGrowth` 只减不增基线并入契约 Known Gaps；DESIGN.md 基线数字刷新（700 存量 3→9、600 25→63、工作台旧 `--color-*` 描述改角色名体系），`--color-*` 兼容映射到期删除（实测零消费者）并由 `TestLegacyMappingRemoved` 负向锁防回填；新增护栏测试 5 用例，unit_report/unit_web/scenario_basic 全绿。
 
-## 开发期已修复（0.13.6-dev）
+## 已修复（0.13.6）
 
-> 完整复盘见 `changelog.md` 0.13.6-dev 段；此处仅摘要行。
+> 完整复盘见 `changelog.md` 0.13.6 段；此处仅摘要行。
 
 > rf-708 已修复（2026-10-18）：完成通知 Web 渠道接线——`_run_generation` 改薄包装器（委托 `_run_generation_impl` + `result_box` 回传产物标志），收尾经 `_notify_web_completion` 按 `notify` 配置门控派发（Web 手动生成 + 内置定时调度共用，无人值守定时失败不静默）；降级摘要单源下沉 `report/data_status.degradation_summary()`，CLI `_collect_degradation_summary` 改委托
 >
@@ -82,9 +82,9 @@
 >
 > rf-700 已修复（2026-10-17）：LLM 模型定价表多处偏离官方现价——逐家官方定价页核实后统一修正，并同步 `llm-technical.md` 附录 B 与 `how-to-config-llm.md` 定价表（明细详见 changelog）
 
-## 开发期已修复（0.13.7-dev）
+## 已修复（0.13.7）
 
-> > 完整复盘见 `changelog.md` 0.13.7-dev 段；此处仅摘要行。
+> > 完整复盘见 `changelog.md` 0.13.7 段；此处仅摘要行。
 >
 > rf-719 已修复（2026-10-18）：用户文档残留不存在的交互图表开关 `enable_interactive_charts` 与静态回退描述（FAQ 图表空白排查建议、CLI 手册 `--feature` 示例注释），与「Chart.js 唯一渲染、单文件自包含」口径自相矛盾——FAQ 排查项改按文件完整性/单文件自包含口径，示例注释改按实际开关（数据质量仪表盘）
 > rf-720 已修复（2026-10-19）：窄屏直达改造重写首页主循环时宽/中档 `KEY_ENTER` 分支被静默丢弃（Enter 不执行选中项，宽屏回归）——自审 diff 当场捕获并补回分支；`TestNarrowMainLoopDirectNav` 的宽/窄两档驱动用例锁住重绘次数，同类分派遗漏不可能静默过审
@@ -138,7 +138,7 @@
 
 ## v0.13.11 开发期已修复（2026-10-21）
 
-> 完整复盘见 `changelog.md` 0.13.11-dev 段；此处仅摘要行。
+> 完整复盘见 `changelog.md` 0.13.11 段；此处仅摘要行。
 
 - **rf-756**：发布归档迁移（人工步骤）无机检——占位声明「已随 vX.Y.Z 发布迁入」与归档正文脱钩（曾整批 11 条只删不写）。处理：`check-doc-drift` 新增第 20 项「迁档占位↔归档节」断言，占位已写而归档缺节即当场报出
 - **rf-757**：`folders.md` 树描述写死易漂移计数（开关项数/菜单项数/文件数等 14 处），实现演进时静默过时。处理：改定性措辞 + 第 21 项「树描述计数禁令」（docs/archive 记录域豁免、中文数词常量不入检）
@@ -176,9 +176,9 @@
 - **rf-788**：`logs/release.jsonl` 三处不符既有约定（无界增长、非原子写、无保留上限）。处理：改走 `core/jsonl_store` 原子追加 + 保留上限
 - **rf-789**：`[D]` 面板二级键双处登记（函数内 `_handlers` 与 `CONFIG_DIR_INFO_KEYS` 各一份）。处理：键集合收敛为单一登记，`doc-drift` 校验同源
 
-## 开发期已修复（0.13.12-dev）
+## 已修复（0.13.12）
 
-> 完整复盘见 `changelog.md` 0.13.12-dev 段；此处为台账原表搬运（无损），本批发布日 2026-10-21。
+> 完整复盘见 `changelog.md` 0.13.12 段；此处为台账原表搬运（无损），本批发布日 2026-10-21。
 
 | # | 问题 | 处理 |
 |---|------|------|

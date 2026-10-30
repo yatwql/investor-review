@@ -45,7 +45,7 @@ class TestHelpLines:
     def _items(self):
         return [
             PanelItem("1", "基金深度分析"),
-            PanelItem("2", "市场新闻"),
+            PanelItem("2", "财经热点关联分析"),
             PanelItem("0", "返回主菜单", kind="return"),
         ]
 

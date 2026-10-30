@@ -141,6 +141,30 @@ class TestApplyEditRecording:
         assert session.count == 0
 
 
+class TestSessionIsolation:
+    """会话不得跨用例残留（``conftest._auto_reset_config_session`` 兜底）。"""
+
+    def test_session_is_clean_at_test_entry(self):
+        """上一条用例把会话开着也不影响本用例（``_apply_edit`` 先读这个全局）。"""
+        from src.python.tui import handlers_config
+
+        assert handlers_config._session is None
+
+    def test_fixture_clears_polluted_session(self):
+        """复现 autouse fixture：进/出两侧都把模块级会话复位。"""
+        from src.python.tui import handlers_config
+        from src.test.conftest import _auto_reset_config_session
+
+        reset_config_session()
+        assert handlers_config._session is not None
+        steps = getattr(_auto_reset_config_session, "__wrapped__")()
+        next(steps)
+        assert handlers_config._session is None
+        handlers_config.reset_config_session()  # 模拟本用例自己的面板进/出
+        next(steps, None)
+        assert handlers_config._session is None
+
+
 class TestSwitchPanelUndoKeys:
     """`[S]` 面板端到端：改一项 → `u` 撤销 → `U` 全还原（写回值须正确）。"""
 

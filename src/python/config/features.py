@@ -103,7 +103,7 @@ FEATURES_FILE = os.path.join(PROJECT_ROOT, "data/config/features.json")
 #     标准模块区、Web 配置面板「LLM 分析章节」组）
 #   - 新闻源启停 → config.json 的 news_sources
 #   - 历史走势与回撤 → config.json 的 enable_history
-#   - 基础报告章节（基金深度分析/市场新闻/组合演进/行动建议）→ config.json 的 enable_*
+#   - 基础报告章节（基金深度分析/财经热点关联分析/组合演进/行动建议）→ config.json 的 enable_*
 #   - 匿名化模式 → config.json 的 anonymization.mode
 # 注：报告增强子模块（数据质量/行业Beta/候选比较/成本流水/估值分位/市场温度/财报摘要/
 # 财务指标）登记于本注册表 GROUP_FUND_STYLE / GROUP_STANDALONE 分组，取值落 features.json。

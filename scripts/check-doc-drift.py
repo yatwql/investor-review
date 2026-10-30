@@ -20,7 +20,7 @@
   10. 项目统计表        文件系统实测（文件数/行数）+ 可选 pytest 收集数 → managements/folders.md
   11. 测试覆盖计数表    `scripts/test-collect-coverage.py` 快照 → managements/test-coverage.md（仅 `--with-test-count`）
   12. 归档索引完整性    changelog / plan / review-findings 的「归档」索引 ↔ 归档目录 `archived_*` 文件（双向）
-  13. 管理文档分区纪律  未完成/已解决/已归档三分区互斥 + 「开发期已修复」节须在已解决区（节归属）；现行 changelog 只允许一个 `-dev` 段头
+  13. 管理文档分区纪律  未完成/已解决/已归档三分区互斥 + 「开发期已修复」节须在已解决区（节归属）+ 已解决区台账行须在版本节内（直属层台账行 = 归档会静默漏搬）+ 现行 changelog 提到的 plan-N 须在台账或计划归档有条目；现行 changelog 只允许一个 `-dev` 段头
   14. Extended Thinking 支持矩阵  手册对比表/「仅」式枚举/默认开思考提示 ↔ `llm/api_base` 前缀名单
   15. Provider Chain 降级表  `fetcher/chain.py` `_DEFAULT_CHAINS` → manuals/datasource-reliability.md（逐链双向）
   16. 守护清单同源        developer-guide P0/P2 门禁块 + ci.yml guards steps + CLAUDE.md/testplan.md 清单 + .githooks/pre-commit（五处）`check-*.py --ci` 引用集合两两一致
@@ -31,6 +31,8 @@
   19. 需求菜单表        requirements.md §3.2 菜单表（键集合/分组标题/组内顺序）→ tui/tui_menu.py MENU_ITEMS + MENU_GROUPS（历史漂移：组重排未跟、M/Q 整行缺失、缓存编号错）
   20. 迁档占位↔归档节    review-findings「已随 vX.Y.Z 发布迁入」占位 ↔ archived_review-findings.{X.Y}.x.md 含该版本二级标题归档节（防占位已写、归档正文缺失）
   21. 树描述计数禁令    folders.md 目录树描述禁写「阿拉伯数字+量词」易漂移计数（docs/archive 记录域豁免；中文数词设计常量不入检）
+  22. 台账段序升序      review-findings / changelog / plan 的版本段与计划条目（现行 + 归档）一律升序（旧→新）：
+                        版本号段升序、plan 条目按编号升序（现行台账按 P1~P4 分组，组内升序）
 
 按设计豁免的历史记录文档：`changelog.md` / `review-findings.md`（会如实引用旧数字作为变更记录）
 与 `docs/archive/**`（版本快照）不参与第 2/4/5 项扫描。
@@ -187,6 +189,7 @@ from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc
     _ARCHIVE_INDEX_PAIRS,
     check_archive_index,
     check_migration_placeholders,
+    check_ledger_order,
     audit_management_partitions,
     check_management_partitions,
     _THINKING_MANUAL,
@@ -214,6 +217,7 @@ def run_checks(with_test_count: bool = False, docs: dict | None = None) -> list[
     """
     if docs is None:
         docs = _scan_docs()
+    assert docs is not None  # 类型收敛：扫描器恒返回映射，None 只表示「未传入」
     snapshot = _collect_test_snapshot(full_buckets=True) if with_test_count else {}
     findings: list[str] = []
     findings += check_section_table(docs[_REPORTS_MD])
@@ -242,6 +246,7 @@ def run_checks(with_test_count: bool = False, docs: dict | None = None) -> list[
     findings += check_chain_table(docs[_RELIABILITY_MD])
     findings += check_archive_index()
     findings += check_migration_placeholders()
+    findings += check_ledger_order(docs)
     findings += check_management_partitions()
     findings += check_thinking_support_matrix(docs.get(_THINKING_MANUAL))
     findings += check_guard_parity()
@@ -285,6 +290,7 @@ def _run_checks_phase(args: argparse.Namespace) -> int:
     findings = run_checks(with_test_count=args.with_test_count, docs=scanned_docs)
 
     if args.verbose:
+        assert scanned_docs is not None  # verbose 分支已扫描（与上方扫描同源，不重复读盘）
         docs = scanned_docs
         actual = _stats_actual()
         print(f"  受检文档 {len(docs)} 份（历史记录类 changelog/review-findings 不参与计数扫描）")

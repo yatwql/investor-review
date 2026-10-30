@@ -6,32 +6,148 @@
 
 ---
 
-## [0.8.11] - 2026-07-30
+## [0.8.0] - 2026-07-21
 
-### 修复
+### Changed
+- 版本号发布 v0.8.0
+- **review-findings.md**：新增 P2 段，记录 Beta 置信区间（P2-11b）和口径修正因子（P3-09b）两项技术债务
+## [0.8.1] - 2026-07-22
 
-- **dev-verify Phase B 超时** — 旧余 `_enrich_with_industry_api` mock 打在死代码路径上，9 个文件共 36 处穿透测试 mock 失效，每条测试真实请求东方财富 API 10-35s，串行合计 455s 导致 Phase B 300s 超时。全局替换为 `batch_fetch_industry_data` mock + xdist 4 核并行，Phase B 降至 101s，dev-verify 整体 145s。修复文件：`test_scenario_penetration_basic.py`、`test_scenario_penetration_advanced.py`、`test_scenario_penetration_mixed.py`、`test_scenario_penetration_edge.py`、`test_scenario_holdings_quality.py`、`test_scenario_basic_flows.py`、`test_scenario_resilience_flows.py`、`test_penetration.py`、`test_data_integrity.py`、`test_integration_coverage.py`
-- **回归测试：`test_llm_content_none_when_disabled` 顺序依赖失败** — `_render_llm_module_info` 在所有条件下均读取全局 `LLM_MODULE_FAILURE`，前序测试（test_llm_all_fail）设值后污染状态导致 module_disabled 出现非预期值。增加 `patch("src.python.llm.prompts.LLM_MODULE_FAILURE", {})` 隔离。（`test_llm_disabled.py`）
-- **文档引用修复** — testplan.md 中 `test_scenario_penetration.py` 和 `test_cache.py` 引用已拆分的旧文件名，how-to-test-my-code.md 中示例同样引用已删除的 `test_cache.py`；technical.md 中"30 个数据模块"（实际 29）数字错误；folders.md 测试代码行数、脚本行数等统计更新，目录树补充缺失的 `check-history-traces.py`、`test_data_source_matrix.py`、`test_excel_b_series.py`、`test_pipeline_utils.py` 并修复 `batch-parallel-iteration-plan.md` 缩进错位。全部已修正。
+### Fixed
+- **P3-13**: `llm/generators.py` `_filter_hallucinated_codes` — 英文词误杀修复
+- **P2-11b**: `analysis/metrics.py` 新增 `portfolio_beta_analysis()`
+- **P3-09b**: `analysis/alignment_correction.py` 实现三项口径修正因子
+- **P2-12**: `config/_core.py` 验证函数提取至 `config/_validation.py`
 
-### 重构
+### Changed
+- 版本号更新至 v0.8.1
+- `check-version-consistency.py` 加入 review-findings.md、llm-technical.md
 
-- **测试文件重命名 — `scenario/llm/`（7 文件）**：`test_s11_mixed_cache.py` → `test_llm_mixed_cache.py`、`test_s12_all_fail.py` → `test_llm_all_fail.py`、`test_s13_extended_thinking.py` → `test_llm_extended_thinking.py`、`test_s14_llm_disabled.py` → `test_llm_disabled.py`、`test_s15_disabled_cache.py` → `test_llm_disabled_cache.py`、`test_s16_network_error.py` → `test_llm_network_error.py`、`test_s17_partial_cache.py` → `test_llm_partial_cache.py`
-- **`test_llm_scenarios_misc.py` 拆分（→ 4 文件）**：拆为 `test_llm_empty_holdings.py`（S18-S19）、`test_llm_output_consistency.py`（S20）、`test_llm_non_trading_day.py`、`test_llm_multi_account.py`，原文件删除
-- **测试文件重命名 — 其余 6 文件**：`scenario/basic/test_integration.py` → `test_scenario_basic_flows.py`、`scenario/resilience/test_integration_scenarios.py` → `test_scenario_resilience_flows.py`、`unit/llm/test_prompts.py` → `test_llm_prompt_builders.py`、`unit/llm/test_session.py` → `test_llm_session_usage.py`、`unit/llm/test_cache_multi.py` → `test_llm_cache_multi.py`、`unit/analysis/test_scenario.py` → `test_scenario_analysis.py`
-- **删除冗余单体测试文件（4 文件）**：删除 `test_cache.py`（1261 行，内容已迁移至 `test_cache_core.py`/`test_cache_cleanup.py`/`test_cache_format.py`/`test_cache_edge.py`）、`test_penetration_core.py`（561 行）和 `test_penetration_portfolio.py`（575 行，内容已迁移至 `test_scenario_penetration_basic.py`/`test_scenario_penetration_advanced.py`/`test_scenario_penetration_mixed.py`/`test_scenario_penetration_edge.py`）、`test_scenario_penetration.py`（30 行，空壳转发文件）
+## [0.8.2] - 2026-07-22
 
-### 新增
+### Fixed
+- **新闻去重算法优化**：`_extract_entity_bigrams()` 加入英数 token 提取
+- **校准工具错误建议修正**：`calibrate-dedup-threshold.py` 分档分析
 
-- **`test_cache_core.py` 新增测试类**：增加 `TestGetTTL`（10 项：配置读取/未知类型/默认值/零值/负数/异常兜底）、`TestGetCacheDir`（2 项：绝对路径/cache 后缀）、`TestCacheConstants`（3 项：DAILY/WEEKLY/MONTHLY 常量值），原 `test_cache.py` 中重复内容已清理
-- **`test_tui_handlers.py` 注释规范化**：将所有"新增测试 — Xxx"注释改为"Xxx 测试"描述性标题，消除遗留开发标记
+### Changed
+- **术语统一**：全项目范围将内部架构术语替换为用户友好术语
+- **测试隔离增强**：conftest.py 新增 `_auto_reset_feature_flags` fixture
 
-### 杂项
+## [0.8.3] - 2026-07-22
 
-- 同步更新 `testplan.md`、`test-coverage.md`、`how-to-test-my-code.md`、`folders.md` 中所有文件引用、统计数字和 Sxx 注释
-- 更新各重命名文件的 docstring 运行命令
+### Fixed
+- **P3-12 CI 测试持续失败**：修复依赖版本锁死、Ruff 格式检查和超时截断
+- **辩论模式 HTML 报告编码错误**：Jinja2 模板变量补充 `| safe` 过滤器
+- **新闻去重算法优化**：扩展 STOP 集，增加前缀/数字模式过滤
+
+### Changed
+- **辩论模式防幻觉增强**：pro/con 系统提示词新增严格约束
+- **事实校验器防误报**：新增 `_PROPORTION_KEYWORDS` 策略
+- **历史走势基准指数移除标普500(gb_inx)**：Sina/Tencent K-line 均不可用
+
+## [0.8.4] - 2026-07-22
+
+### Fixed
+- **`metrics.py` 零方差浮点精度（Linux CI）**：改为 `< 1e-15` epsilon 容差
+- **`test_fund.py` threading.Lock 类型检查兼容**：改用 `type(threading.Lock())` 动态获取实际类型
+- **`fallback.py` 占位文本缺字**：补回"成"字
+- **`handlers_config.py` 辩论模式说明缺字**：补全"深度"二字
+
+### Changed
+- **`generators_orchestrator.py` 消除硬编码模块标签**：改为调用 `get_llm_module_names()`
+
+### Chore
+- **ruff format 全量对齐**：33 个源码文件
+
+## [0.8.5] - 2026-07-24
+
+### Fixed
+- **CI 超时 & 退出码混乱**：增加默认超时到 1200s，CI 全部加 `--no-timeout` 禁用超时，超时退出码改为标准 124
+
+### Changed
+- **P0 提交门禁优化**：`regression`（~6min 全场景）改 `dev-verify`（~1min 核心单元+基础场景）
+- **verify 模式瘦身**：移除 Phase B 场景测试，仅保留单元测试
+- **P2 发布门禁优化**：`all`（3741 测试，~6.5min）改 `verify,regression`（单元+场景，1306 测试，~3min）
+- **`src/test/` 目录结构全面重组**：9 个分析计算测试文件从根目录移入 `unit/analysis/` 等
+
+### Docs
+- **门禁文档同步**：CLAUDE.md、how-to-test-my-code.md 等
+- **目录树全量同步**：folders.md
 
 ---
+
+## [0.8.6] - 2026-07-27
+
+### Added
+- **数据源可用性矩阵**：新增报告章节 #17（always 类型），在 Excel/HTML 报告末尾统一展示所有数据源运行状态（正常/降级/失败），聚合 DegradationTracker 会话事件按类别（行情/基金排名/行业分类/指数等）归总；Excel 页签含颜色标注和失败明细，HTML 表格含状态图标和详情列
+
+### Fixed
+- **cost_tracker 全局预算 xdist 竞态**：`_input_budget` 和 `_budget_warned` 为模块级全局变量，xdist 并行时其他测试通过 `patch("src.python.llm.session.get_session_usage")` 污染 worker，导致 `get_budget_status()` 中 `usage.get("input_tokens", 0)` 返回 MagicMock 而非 int，`max(0, input_budget - MagicMock)` 抛出 TypeError。修复：`_auto_reset_cost_tracker` autouse fixture 增加 `reset_session_usage()` 调用，每次测试前同时重置 session 用量 + budget，确保 `get_budget_status()` 读取到干净的 int 数据；修复 4 个失败用例（`test_cost_tracker.py::TestBudgetManagement`）
+- **穿透测试 HTTP 请求遗漏 mock**：`_prefetch_manager_data()` 在 `compute_penetration_top10()` 中遍历基金调用 `fetch_fund_manager(code)`（每只基金一次 HTTP 请求），`mock_all_apis` 未 mock 该函数导致穿透性能测试实际发出 10 次网络请求耗时 17s — 在 `test_e2e_perf.py::mock_all_apis` 中补回 `patch("src.python.report.penetration.fetch_fund_manager", return_value=None)`
+
+### Changed
+- **`_extract_entity_bigrams()` 英数专名 `_tk:` 加权**：长度 ≥4 的英文专名（Anthropic/Meta/Helios 等）在实体 bigram 中额外插入 `_tk:` 前缀虚拟 bigram，使 `Anthropic+Meta` 等英数专名重叠的跨源标题即使 ratio<0.40 也能通过 bg≥3 候选区合并，无需降低 ratio 阈值
+
+### Docs
+- **内部文档序号/组织校对**：全量审核 6 份文档并修复不一致
+- **统计数据全量刷新**：folders.md、test-coverage.md
+
+## [0.8.7] - 2026-07-27
+
+### Added
+- **三层性能基准体系（P3-13）**：① `perf.py` PerfCollector 在 `generate_report()` 三路径（basic/both/full）嵌入轻量计时埋点，每次运行自动记录各阶段耗时到 `data/state/perf_history.jsonl` ② `scripts/perf_report.py` 保留独立基准脚本（mock 外部源）用于精准回归检测 ③ `scripts/perf_view.py` 趋势查看工具读取历史文件输出版本间耗时对比 Markdown 表格。遵循 C3（原子写入）、C8（统一日志）、C14（局部实例非单例）、C16（路径绝对化）约束
+- **数据源健康检查自动收集**：每次客户端生成报告时，后台并行运行全量数据源健康检查（HTTP 连通性+延迟），结果存入 `data/state/datasource_health.jsonl` 并注入 DegradationTracker，供数据源可用性矩阵章节（#17）实时展示。`handlers_check_sources.py` 提取 `run_health_checks()` 返回结构化数据，CLI `check-sources` 命令保持不变
+
+### Fixed
+- **excel_b_series.py `NameError: _fetch_fund_holdings_cached`**：P2-6（提交 `259e4b4`）将本地私有函数 `_fetch_fund_holdings_cached` 提取到 `fetcher/fund.py` 为公开函数 `fetch_fund_holdings_cached`，删除了本地定义并更新了导入名，但调用点（`_process_b_module` 第 36 行）仍使用旧私有名 `_fetch_fund_holdings_cached`，导致 `enable_b_series=True` 且持有基金时触发 `NameError`，持仓重合度/集中度/风格分析三个模块均回退为占位。修复：导入 `fetch_fund_holdings_cached` 并修正调用名
+
+### Changed
+- **代码/测试注释历史迭代痕迹清理（6 轮）**：全面清除源码注释、测试注释/描述、管理文档正文（changelog.md/plan.md/review-findings.md 除外）、用户文档中的所有历史变更痕迹。覆盖模式包括「不再」「向后兼容」「保留供兼容」「已废弃」「原有的」「此前」「曾」「已迁」「已拆分」「已改为」等，累计修复 50+ 处。涉及 8 个源码文件、5 个测试文件、3 份管理文档、3 份用户文档。豁免文件按约定保留历史记录
+- **P3-11 问题描述修正**：`review-findings.md` P3-11 从错误描述的"async 异步化"修正为 ThreadPoolExecutor 批量并行方案，对齐 C5/C6/C2/C3/§1.4.5 架构约束
+- **迭代计划文件同步**：`plan-engineering.md` 大文件拆分/性能基准段标记为已完成，异步化段重写为 TPE 并行方案并补齐架构约束分析；`plan-documentation.md` ADR 段标记为搁置并记录原因；`perf-three-layer-plan.md` 归档至 `archive/v0.8.x/perf_report/`
+
+### Docs
+- `review-findings.md` P3-11 补充架构耦合约束脚注（C5/C6/C2/C3/1.4.2/1.4.5）
+
+## [0.8.8] - 2026-07-29
+
+### Changed
+- **辩论模式三位一体命名重构（M1→正反辩论，M2→条件推理，M3→集中度问答）**：TUI 菜单显示名、HTML/Excel 报告标签、代码内参数名、管理文档描述全面替换。涉及 `features.py`、`handlers_config.py`、`generators.py`、`prompts_action.py`、`_llm_defaults.py` 及 `test_debate_conditional.py` 等 15 个文件。需求 ID（R-LLM-DB-M[1-3]-xx）、配置键（`mode_1_procon`/`mode_2_conditional`/`mode_3_qa_concentration`）和 Feature Flag 名不变
+- **辩论模式组合标识**：HTML 报告页脚和 LLM 用量汇总表新增当前启用的辩论模式组合标识（如"🧪 辩论模式 · 正反辩论+条件推理"），Excel 报告 LLM 用量行同步展示
+- **industry.py 批量并行重构**：`batch_fetch_industry_data()` 从自定义 ThreadPoolExecutor + 手动锁 + 逐条重试迁移为统一 BatchDispatcher（`execute_with_cache_check` + `retry_failed`），移除 threading、random、time、as_completed 等 6 项手动导入，保持非 A 股过滤/熔断预检/None 重试语义不变（rf-1 迭代 7）
+- **Python 最低版本锁定 ≥3.11**：3.10 已于 2026-10 EOL，CI 中反复出现 3.10 特有的兼容性问题。CI matrix 移除 3.10，pyproject.toml requires-python 同步更新，README.md 新增环境要求章节，faq.md 版本号更新
+- **LLM 模块温度调低**：expert_review 0.8→0.3、health_check 0.5→0.1、penetration_deep 0.4→0.1，降低数值幻觉概率，减少事实校验 false positive。`_llm_defaults.py` 模板与 `llm_settings.json` 默认值同步更新，`how-to-config-llm.md` 说明文档同步
+- **`history.analysis` 默认值改为 `"auto"`**（原 `"off"`），新用户开箱即用组合历史走势分析与回撤统计。涉及 `_config_defaults.py`、`config.json`、`handlers_report.py`、`how-to-config.md`
+
+### Fixed
+- **辩论模式缓存预检导致 M1 被静默跳过**：`_compute_module_cache_info()` 为 orchestrator 预检构建的 expert_review 缓存键不包含 Feature Flag 指纹后缀（`_fp_suffix`），导致存在非辩论模式的缓存结果时 `needs["expert_review"] = False`，辩论路由（_debate_wrapper）不被应用，用户开启 M1+M2 后仅 M2 生效。修复：`generate_all_llm()` 中辩论模式启用时绕过缓存预检，强制走辩论生成路径
+- **收益归因贡献占比与收益率混淆导致 LLM 事实校验告警**：`_build_profit_attribution_block()` 使用 `%` 标注贡献占比（品种利润/全品种绝对利润之和），LLM 在持仓体检报告/智囊团深度复盘中误作个股收益率引用。贡献占比改为 `pp`（百分点）后缀，与收益率 `%` 视觉区分。涉及 2 个 LLM 模块、14 条事实校验告警
+- **rf-1 技术债清理（4 项）**：① `BatchDispatcher.execute_with_cache_check` 新增 `strict_none` 参数，消除 industry.py None 后检胶水代码 ② 新增 `fetch_fund_rankings_cached` 为 fund 排名添加 session_cache，消除双管线间文件 IO ③ `compute_penetration_top10()` 实现 fund 持仓与已知 A 股行业分类并行预取，重叠 ~5s IO 等待 ④ 拆出 `_apply_industry_data` 纯函数供并行预取复用
+- **穿透深度分析 LLM 虚构收益率**：prompt 缺少 `total_profit_rate` 字段（总收益率），LLM 在无数据约束下虚构 ~18% 而非实际 28.6%。`prompts_action.py` prompt 补充总收益率字段
+- **辩论模式白脸/黑脸观点相同**：`generate_debate_procon()` 中 pro 和 con 两次调用 `generate_llm_module(module_key="expert_review")` 均未传递 `fingerprint_fn`，导致内部缓存键均为 `llm_expert_review_`（空指纹），con 调用命中 pro 的缓存结果。修复：pro/con/synthesis 各次调用分别传入含角色后缀的 `fingerprint_fn`，确保内部缓存键隔离
+
+### Added
+- **数据源可用性矩阵降级明细展示**：矩阵下方新增"降级明细"节，分行列出每个降级的具体数据源及其失败类型。HTML 页面使用橙色边框 `.data-status-warn` 样式区分于已有的"失败明细"；Excel 页签同步输出降级列表。涉及 `data_source_matrix.py`（新增 `degraded_list` 字段）、`report_template.html`、`excel_generator.py`
+- **测试覆盖补全（3 组 15 项）**：① `get_rate_limiter.cache_clear()` 单例重建（3 项） ② price.py OTC 三路路由（直通/空名称降级/纯 A 股/ETF，4 项） ③ `build_data_source_matrix()` degraded_list（8 项：纯 degraded/纯 failed/混合/全 ok/多条同类别/全 failed/空事件/格式验证）
+
+### Docs
+- **回撤分析占位提示补充配置说明**：`report_template.html` 回撤分析数据暂不可用提示增加 `history.analysis: "auto"` 脚注
+- **测试覆盖统计全量刷新**：test-coverage.md 项数更新（all 3849，unit 3478，unit_fetcher 270，unit_report 1070，快照日期 2026-07-29）
+- **目录结构同步**：folders.md 修复 test/handlers/ 下误入的 `handlers_check_sources.py` 重复行，补充 source tree fetcher/ 下 `batch.py`、test tree 下 `test_batch.py` 和 `test_cost_tracker.py`、`test_data_source_matrix.py`
+
+## [0.8.9] - 2026-07-29
+
+### Changed
+- **辩论模式配置键重命名（`procon`/`conditional`/`qa_concentration`）**：`llm_settings.json` 的辩论模式配置键从 `mode_1_procon`/`mode_2_conditional`/`mode_3_qa_concentration` 重命名为 `procon`/`conditional`/`qa_concentration`，无向后兼容。代码内变量同步：`raw_m1`→`raw_procon`、`enable_mode_2`→`enable_conditional`、`enable_mode_3`→`enable_qa_concentration` 等。涉及 `_core.py`、`_llm_defaults.py`、`generators.py`、`prompts_action.py`、`prompts_core.py`、`features.py`、`handlers_config.py`、`report/html_writer.py`、`report/excel_generator.py` 及 3 个测试文件
+- **需求 ID 去冗余重命名**：`requirements.md` 中 `R-LLM-DB-DEBATE-xx` 全部改为 `R-LLM-DB-PROCON-xx`，消除 DB（Debate）+ DEBATE 语义冗余。`llm-technical.md`、`how-to-config-llm.md` 同步更新
+- **辩论模块内部函数提取**：`generators.py` 新增 `_build_feature_suffix()`（确定性缓存指纹后缀生成）和 `_compute_industry_concentration()`（穿透资产行业集中度计算），为集中度问答（qa_concentration）模式提供前置数据
+
+### Fixed
+- **持仓体检报告 LLM 虚构收益率**：`_build_health_check_prompt()` 缺少持仓排名约束，LLM 猜测"601939 收益率 10.0%/13.0%"虚构数据（实际 1.9%）。修复：新增 `_build_top3_block()` 显式输出按市值降序的 TOP3 排名；`_SYSTEM_HEALTH_CHECK` 顶部新增 ⚠ 数据纪律约束块（明令不得虚构百分比数字），与正反辩论/条件推理系统提示保持一致。涉及 `prompts_action.py`、`prompts_core.py`
+- **辩论模块参数名对齐**：`_build_expert_review_prompt()` 参数 `enable_mode_2`/`enable_mode_3` 改为 `enable_conditional`/`enable_qa_concentration`，消除与配置键的命名差异
+
+### Docs
+- **目录结构与测试覆盖统计全量刷新**：folders.md（源码 153/40,874、测试 191/59,441、用例 3849、文档 95）、test-coverage.md 项数同步
 
 ## [0.8.10] - 2026-07-30
 
@@ -171,146 +287,30 @@
 
 ---
 
-## [0.8.9] - 2026-07-29
+## [0.8.11] - 2026-07-30
 
-### Changed
-- **辩论模式配置键重命名（`procon`/`conditional`/`qa_concentration`）**：`llm_settings.json` 的辩论模式配置键从 `mode_1_procon`/`mode_2_conditional`/`mode_3_qa_concentration` 重命名为 `procon`/`conditional`/`qa_concentration`，无向后兼容。代码内变量同步：`raw_m1`→`raw_procon`、`enable_mode_2`→`enable_conditional`、`enable_mode_3`→`enable_qa_concentration` 等。涉及 `_core.py`、`_llm_defaults.py`、`generators.py`、`prompts_action.py`、`prompts_core.py`、`features.py`、`handlers_config.py`、`report/html_writer.py`、`report/excel_generator.py` 及 3 个测试文件
-- **需求 ID 去冗余重命名**：`requirements.md` 中 `R-LLM-DB-DEBATE-xx` 全部改为 `R-LLM-DB-PROCON-xx`，消除 DB（Debate）+ DEBATE 语义冗余。`llm-technical.md`、`how-to-config-llm.md` 同步更新
-- **辩论模块内部函数提取**：`generators.py` 新增 `_build_feature_suffix()`（确定性缓存指纹后缀生成）和 `_compute_industry_concentration()`（穿透资产行业集中度计算），为集中度问答（qa_concentration）模式提供前置数据
+### 修复
 
-### Fixed
-- **持仓体检报告 LLM 虚构收益率**：`_build_health_check_prompt()` 缺少持仓排名约束，LLM 猜测"601939 收益率 10.0%/13.0%"虚构数据（实际 1.9%）。修复：新增 `_build_top3_block()` 显式输出按市值降序的 TOP3 排名；`_SYSTEM_HEALTH_CHECK` 顶部新增 ⚠ 数据纪律约束块（明令不得虚构百分比数字），与正反辩论/条件推理系统提示保持一致。涉及 `prompts_action.py`、`prompts_core.py`
-- **辩论模块参数名对齐**：`_build_expert_review_prompt()` 参数 `enable_mode_2`/`enable_mode_3` 改为 `enable_conditional`/`enable_qa_concentration`，消除与配置键的命名差异
+- **dev-verify Phase B 超时** — 旧余 `_enrich_with_industry_api` mock 打在死代码路径上，9 个文件共 36 处穿透测试 mock 失效，每条测试真实请求东方财富 API 10-35s，串行合计 455s 导致 Phase B 300s 超时。全局替换为 `batch_fetch_industry_data` mock + xdist 4 核并行，Phase B 降至 101s，dev-verify 整体 145s。修复文件：`test_scenario_penetration_basic.py`、`test_scenario_penetration_advanced.py`、`test_scenario_penetration_mixed.py`、`test_scenario_penetration_edge.py`、`test_scenario_holdings_quality.py`、`test_scenario_basic_flows.py`、`test_scenario_resilience_flows.py`、`test_penetration.py`、`test_data_integrity.py`、`test_integration_coverage.py`
+- **回归测试：`test_llm_content_none_when_disabled` 顺序依赖失败** — `_render_llm_module_info` 在所有条件下均读取全局 `LLM_MODULE_FAILURE`，前序测试（test_llm_all_fail）设值后污染状态导致 module_disabled 出现非预期值。增加 `patch("src.python.llm.prompts.LLM_MODULE_FAILURE", {})` 隔离。（`test_llm_disabled.py`）
+- **文档引用修复** — testplan.md 中 `test_scenario_penetration.py` 和 `test_cache.py` 引用已拆分的旧文件名，how-to-test-my-code.md 中示例同样引用已删除的 `test_cache.py`；technical.md 中"30 个数据模块"（实际 29）数字错误；folders.md 测试代码行数、脚本行数等统计更新，目录树补充缺失的 `check-history-traces.py`、`test_data_source_matrix.py`、`test_excel_b_series.py`、`test_pipeline_utils.py` 并修复 `batch-parallel-iteration-plan.md` 缩进错位。全部已修正。
 
-### Docs
-- **目录结构与测试覆盖统计全量刷新**：folders.md（源码 153/40,874、测试 191/59,441、用例 3849、文档 95）、test-coverage.md 项数同步
+### 重构
 
-## [0.8.8] - 2026-07-29
+- **测试文件重命名 — `scenario/llm/`（7 文件）**：`test_s11_mixed_cache.py` → `test_llm_mixed_cache.py`、`test_s12_all_fail.py` → `test_llm_all_fail.py`、`test_s13_extended_thinking.py` → `test_llm_extended_thinking.py`、`test_s14_llm_disabled.py` → `test_llm_disabled.py`、`test_s15_disabled_cache.py` → `test_llm_disabled_cache.py`、`test_s16_network_error.py` → `test_llm_network_error.py`、`test_s17_partial_cache.py` → `test_llm_partial_cache.py`
+- **`test_llm_scenarios_misc.py` 拆分（→ 4 文件）**：拆为 `test_llm_empty_holdings.py`（S18-S19）、`test_llm_output_consistency.py`（S20）、`test_llm_non_trading_day.py`、`test_llm_multi_account.py`，原文件删除
+- **测试文件重命名 — 其余 6 文件**：`scenario/basic/test_integration.py` → `test_scenario_basic_flows.py`、`scenario/resilience/test_integration_scenarios.py` → `test_scenario_resilience_flows.py`、`unit/llm/test_prompts.py` → `test_llm_prompt_builders.py`、`unit/llm/test_session.py` → `test_llm_session_usage.py`、`unit/llm/test_cache_multi.py` → `test_llm_cache_multi.py`、`unit/analysis/test_scenario.py` → `test_scenario_analysis.py`
+- **删除冗余单体测试文件（4 文件）**：删除 `test_cache.py`（1261 行，内容已迁移至 `test_cache_core.py`/`test_cache_cleanup.py`/`test_cache_format.py`/`test_cache_edge.py`）、`test_penetration_core.py`（561 行）和 `test_penetration_portfolio.py`（575 行，内容已迁移至 `test_scenario_penetration_basic.py`/`test_scenario_penetration_advanced.py`/`test_scenario_penetration_mixed.py`/`test_scenario_penetration_edge.py`）、`test_scenario_penetration.py`（30 行，空壳转发文件）
 
-### Changed
-- **辩论模式三位一体命名重构（M1→正反辩论，M2→条件推理，M3→集中度问答）**：TUI 菜单显示名、HTML/Excel 报告标签、代码内参数名、管理文档描述全面替换。涉及 `features.py`、`handlers_config.py`、`generators.py`、`prompts_action.py`、`_llm_defaults.py` 及 `test_debate_conditional.py` 等 15 个文件。需求 ID（R-LLM-DB-M[1-3]-xx）、配置键（`mode_1_procon`/`mode_2_conditional`/`mode_3_qa_concentration`）和 Feature Flag 名不变
-- **辩论模式组合标识**：HTML 报告页脚和 LLM 用量汇总表新增当前启用的辩论模式组合标识（如"🧪 辩论模式 · 正反辩论+条件推理"），Excel 报告 LLM 用量行同步展示
-- **industry.py 批量并行重构**：`batch_fetch_industry_data()` 从自定义 ThreadPoolExecutor + 手动锁 + 逐条重试迁移为统一 BatchDispatcher（`execute_with_cache_check` + `retry_failed`），移除 threading、random、time、as_completed 等 6 项手动导入，保持非 A 股过滤/熔断预检/None 重试语义不变（rf-1 迭代 7）
-- **Python 最低版本锁定 ≥3.11**：3.10 已于 2026-10 EOL，CI 中反复出现 3.10 特有的兼容性问题。CI matrix 移除 3.10，pyproject.toml requires-python 同步更新，README.md 新增环境要求章节，faq.md 版本号更新
-- **LLM 模块温度调低**：expert_review 0.8→0.3、health_check 0.5→0.1、penetration_deep 0.4→0.1，降低数值幻觉概率，减少事实校验 false positive。`_llm_defaults.py` 模板与 `llm_settings.json` 默认值同步更新，`how-to-config-llm.md` 说明文档同步
-- **`history.analysis` 默认值改为 `"auto"`**（原 `"off"`），新用户开箱即用组合历史走势分析与回撤统计。涉及 `_config_defaults.py`、`config.json`、`handlers_report.py`、`how-to-config.md`
+### 新增
 
-### Fixed
-- **辩论模式缓存预检导致 M1 被静默跳过**：`_compute_module_cache_info()` 为 orchestrator 预检构建的 expert_review 缓存键不包含 Feature Flag 指纹后缀（`_fp_suffix`），导致存在非辩论模式的缓存结果时 `needs["expert_review"] = False`，辩论路由（_debate_wrapper）不被应用，用户开启 M1+M2 后仅 M2 生效。修复：`generate_all_llm()` 中辩论模式启用时绕过缓存预检，强制走辩论生成路径
-- **收益归因贡献占比与收益率混淆导致 LLM 事实校验告警**：`_build_profit_attribution_block()` 使用 `%` 标注贡献占比（品种利润/全品种绝对利润之和），LLM 在持仓体检报告/智囊团深度复盘中误作个股收益率引用。贡献占比改为 `pp`（百分点）后缀，与收益率 `%` 视觉区分。涉及 2 个 LLM 模块、14 条事实校验告警
-- **rf-1 技术债清理（4 项）**：① `BatchDispatcher.execute_with_cache_check` 新增 `strict_none` 参数，消除 industry.py None 后检胶水代码 ② 新增 `fetch_fund_rankings_cached` 为 fund 排名添加 session_cache，消除双管线间文件 IO ③ `compute_penetration_top10()` 实现 fund 持仓与已知 A 股行业分类并行预取，重叠 ~5s IO 等待 ④ 拆出 `_apply_industry_data` 纯函数供并行预取复用
-- **穿透深度分析 LLM 虚构收益率**：prompt 缺少 `total_profit_rate` 字段（总收益率），LLM 在无数据约束下虚构 ~18% 而非实际 28.6%。`prompts_action.py` prompt 补充总收益率字段
-- **辩论模式白脸/黑脸观点相同**：`generate_debate_procon()` 中 pro 和 con 两次调用 `generate_llm_module(module_key="expert_review")` 均未传递 `fingerprint_fn`，导致内部缓存键均为 `llm_expert_review_`（空指纹），con 调用命中 pro 的缓存结果。修复：pro/con/synthesis 各次调用分别传入含角色后缀的 `fingerprint_fn`，确保内部缓存键隔离
+- **`test_cache_core.py` 新增测试类**：增加 `TestGetTTL`（10 项：配置读取/未知类型/默认值/零值/负数/异常兜底）、`TestGetCacheDir`（2 项：绝对路径/cache 后缀）、`TestCacheConstants`（3 项：DAILY/WEEKLY/MONTHLY 常量值），原 `test_cache.py` 中重复内容已清理
+- **`test_tui_handlers.py` 注释规范化**：将所有"新增测试 — Xxx"注释改为"Xxx 测试"描述性标题，消除遗留开发标记
 
-### Added
-- **数据源可用性矩阵降级明细展示**：矩阵下方新增"降级明细"节，分行列出每个降级的具体数据源及其失败类型。HTML 页面使用橙色边框 `.data-status-warn` 样式区分于已有的"失败明细"；Excel 页签同步输出降级列表。涉及 `data_source_matrix.py`（新增 `degraded_list` 字段）、`report_template.html`、`excel_generator.py`
-- **测试覆盖补全（3 组 15 项）**：① `get_rate_limiter.cache_clear()` 单例重建（3 项） ② price.py OTC 三路路由（直通/空名称降级/纯 A 股/ETF，4 项） ③ `build_data_source_matrix()` degraded_list（8 项：纯 degraded/纯 failed/混合/全 ok/多条同类别/全 failed/空事件/格式验证）
+### 杂项
 
-### Docs
-- **回撤分析占位提示补充配置说明**：`report_template.html` 回撤分析数据暂不可用提示增加 `history.analysis: "auto"` 脚注
-- **测试覆盖统计全量刷新**：test-coverage.md 项数更新（all 3849，unit 3478，unit_fetcher 270，unit_report 1070，快照日期 2026-07-29）
-- **目录结构同步**：folders.md 修复 test/handlers/ 下误入的 `handlers_check_sources.py` 重复行，补充 source tree fetcher/ 下 `batch.py`、test tree 下 `test_batch.py` 和 `test_cost_tracker.py`、`test_data_source_matrix.py`
-
-## [0.8.7] - 2026-07-27
-
-### Added
-- **三层性能基准体系（P3-13）**：① `perf.py` PerfCollector 在 `generate_report()` 三路径（basic/both/full）嵌入轻量计时埋点，每次运行自动记录各阶段耗时到 `data/state/perf_history.jsonl` ② `scripts/perf_report.py` 保留独立基准脚本（mock 外部源）用于精准回归检测 ③ `scripts/perf_view.py` 趋势查看工具读取历史文件输出版本间耗时对比 Markdown 表格。遵循 C3（原子写入）、C8（统一日志）、C14（局部实例非单例）、C16（路径绝对化）约束
-- **数据源健康检查自动收集**：每次客户端生成报告时，后台并行运行全量数据源健康检查（HTTP 连通性+延迟），结果存入 `data/state/datasource_health.jsonl` 并注入 DegradationTracker，供数据源可用性矩阵章节（#17）实时展示。`handlers_check_sources.py` 提取 `run_health_checks()` 返回结构化数据，CLI `check-sources` 命令保持不变
-
-### Fixed
-- **excel_b_series.py `NameError: _fetch_fund_holdings_cached`**：P2-6（提交 `259e4b4`）将本地私有函数 `_fetch_fund_holdings_cached` 提取到 `fetcher/fund.py` 为公开函数 `fetch_fund_holdings_cached`，删除了本地定义并更新了导入名，但调用点（`_process_b_module` 第 36 行）仍使用旧私有名 `_fetch_fund_holdings_cached`，导致 `enable_b_series=True` 且持有基金时触发 `NameError`，持仓重合度/集中度/风格分析三个模块均回退为占位。修复：导入 `fetch_fund_holdings_cached` 并修正调用名
-
-### Changed
-- **代码/测试注释历史迭代痕迹清理（6 轮）**：全面清除源码注释、测试注释/描述、管理文档正文（changelog.md/plan.md/review-findings.md 除外）、用户文档中的所有历史变更痕迹。覆盖模式包括「不再」「向后兼容」「保留供兼容」「已废弃」「原有的」「此前」「曾」「已迁」「已拆分」「已改为」等，累计修复 50+ 处。涉及 8 个源码文件、5 个测试文件、3 份管理文档、3 份用户文档。豁免文件按约定保留历史记录
-- **P3-11 问题描述修正**：`review-findings.md` P3-11 从错误描述的"async 异步化"修正为 ThreadPoolExecutor 批量并行方案，对齐 C5/C6/C2/C3/§1.4.5 架构约束
-- **迭代计划文件同步**：`plan-engineering.md` 大文件拆分/性能基准段标记为已完成，异步化段重写为 TPE 并行方案并补齐架构约束分析；`plan-documentation.md` ADR 段标记为搁置并记录原因；`perf-three-layer-plan.md` 归档至 `archive/v0.8.x/perf_report/`
-
-### Docs
-- `review-findings.md` P3-11 补充架构耦合约束脚注（C5/C6/C2/C3/1.4.2/1.4.5）
-
-## [0.8.6] - 2026-07-27
-
-### Added
-- **数据源可用性矩阵**：新增报告章节 #17（always 类型），在 Excel/HTML 报告末尾统一展示所有数据源运行状态（正常/降级/失败），聚合 DegradationTracker 会话事件按类别（行情/基金排名/行业分类/指数等）归总；Excel 页签含颜色标注和失败明细，HTML 表格含状态图标和详情列
-
-### Fixed
-- **cost_tracker 全局预算 xdist 竞态**：`_input_budget` 和 `_budget_warned` 为模块级全局变量，xdist 并行时其他测试通过 `patch("src.python.llm.session.get_session_usage")` 污染 worker，导致 `get_budget_status()` 中 `usage.get("input_tokens", 0)` 返回 MagicMock 而非 int，`max(0, input_budget - MagicMock)` 抛出 TypeError。修复：`_auto_reset_cost_tracker` autouse fixture 增加 `reset_session_usage()` 调用，每次测试前同时重置 session 用量 + budget，确保 `get_budget_status()` 读取到干净的 int 数据；修复 4 个失败用例（`test_cost_tracker.py::TestBudgetManagement`）
-- **穿透测试 HTTP 请求遗漏 mock**：`_prefetch_manager_data()` 在 `compute_penetration_top10()` 中遍历基金调用 `fetch_fund_manager(code)`（每只基金一次 HTTP 请求），`mock_all_apis` 未 mock 该函数导致穿透性能测试实际发出 10 次网络请求耗时 17s — 在 `test_e2e_perf.py::mock_all_apis` 中补回 `patch("src.python.report.penetration.fetch_fund_manager", return_value=None)`
-
-### Changed
-- **`_extract_entity_bigrams()` 英数专名 `_tk:` 加权**：长度 ≥4 的英文专名（Anthropic/Meta/Helios 等）在实体 bigram 中额外插入 `_tk:` 前缀虚拟 bigram，使 `Anthropic+Meta` 等英数专名重叠的跨源标题即使 ratio<0.40 也能通过 bg≥3 候选区合并，无需降低 ratio 阈值
-
-### Docs
-- **内部文档序号/组织校对**：全量审核 6 份文档并修复不一致
-- **统计数据全量刷新**：folders.md、test-coverage.md
-
-## [0.8.5] - 2026-07-24
-
-### Fixed
-- **CI 超时 & 退出码混乱**：增加默认超时到 1200s，CI 全部加 `--no-timeout` 禁用超时，超时退出码改为标准 124
-
-### Changed
-- **P0 提交门禁优化**：`regression`（~6min 全场景）改 `dev-verify`（~1min 核心单元+基础场景）
-- **verify 模式瘦身**：移除 Phase B 场景测试，仅保留单元测试
-- **P2 发布门禁优化**：`all`（3741 测试，~6.5min）改 `verify,regression`（单元+场景，1306 测试，~3min）
-- **`src/test/` 目录结构全面重组**：9 个分析计算测试文件从根目录移入 `unit/analysis/` 等
-
-### Docs
-- **门禁文档同步**：CLAUDE.md、how-to-test-my-code.md 等
-- **目录树全量同步**：folders.md
+- 同步更新 `testplan.md`、`test-coverage.md`、`how-to-test-my-code.md`、`folders.md` 中所有文件引用、统计数字和 Sxx 注释
+- 更新各重命名文件的 docstring 运行命令
 
 ---
 
-## [0.8.4] - 2026-07-22
-
-### Fixed
-- **`metrics.py` 零方差浮点精度（Linux CI）**：改为 `< 1e-15` epsilon 容差
-- **`test_fund.py` threading.Lock 类型检查兼容**：改用 `type(threading.Lock())` 动态获取实际类型
-- **`fallback.py` 占位文本缺字**：补回"成"字
-- **`handlers_config.py` 辩论模式说明缺字**：补全"深度"二字
-
-### Changed
-- **`generators_orchestrator.py` 消除硬编码模块标签**：改为调用 `get_llm_module_names()`
-
-### Chore
-- **ruff format 全量对齐**：33 个源码文件
-
-## [0.8.3] - 2026-07-22
-
-### Fixed
-- **P3-12 CI 测试持续失败**：修复依赖版本锁死、Ruff 格式检查和超时截断
-- **辩论模式 HTML 报告编码错误**：Jinja2 模板变量补充 `| safe` 过滤器
-- **新闻去重算法优化**：扩展 STOP 集，增加前缀/数字模式过滤
-
-### Changed
-- **辩论模式防幻觉增强**：pro/con 系统提示词新增严格约束
-- **事实校验器防误报**：新增 `_PROPORTION_KEYWORDS` 策略
-- **历史走势基准指数移除标普500(gb_inx)**：Sina/Tencent K-line 均不可用
-
-## [0.8.2] - 2026-07-22
-
-### Fixed
-- **新闻去重算法优化**：`_extract_entity_bigrams()` 加入英数 token 提取
-- **校准工具错误建议修正**：`calibrate-dedup-threshold.py` 分档分析
-
-### Changed
-- **术语统一**：全项目范围将内部架构术语替换为用户友好术语
-- **测试隔离增强**：conftest.py 新增 `_auto_reset_feature_flags` fixture
-
-## [0.8.1] - 2026-07-22
-
-### Fixed
-- **P3-13**: `llm/generators.py` `_filter_hallucinated_codes` — 英文词误杀修复
-- **P2-11b**: `analysis/metrics.py` 新增 `portfolio_beta_analysis()`
-- **P3-09b**: `analysis/alignment_correction.py` 实现三项口径修正因子
-- **P2-12**: `config/_core.py` 验证函数提取至 `config/_validation.py`
-
-### Changed
-- 版本号更新至 v0.8.1
-- `check-version-consistency.py` 加入 review-findings.md、llm-technical.md
-
-## [0.8.0] - 2026-07-21
-
-### Changed
-- 版本号发布 v0.8.0
-- **review-findings.md**：新增 P2 段，记录 Beta 置信区间（P2-11b）和口径修正因子（P3-09b）两项技术债务

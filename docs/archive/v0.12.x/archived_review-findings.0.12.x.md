@@ -1,6 +1,6 @@
 # 自我审查问题记录归档 — v0.12.x
 
-> 归档时间：2026-10-03（v0.12.1 发布当日并入，0.12 系列首份）
+> 归档时间：2026-10-03（v0.12.1 发布当日并入，0.12 系列首份）；2026-10-30 补录 changelog-only 条目 1 条（rf-565）
 > 原始文件：`docs/managements/review-findings.md`
 > 涵盖版本：v0.12.1 ~ v0.12.12（2026-10-03 ~ 2026-10-12）
 > 追加归档：2026-10-09（v0.12.7 发布当日，v0.12.7 批次 20 条并入：rf-624 ~ rf-643 与历史编号 rf-75）
@@ -155,3 +155,11 @@
 - rf-677 已修复（2026-10-13，C14 例外口径缺失）：约束表未覆盖 `html_jinja_env.py` 的 env 初始化期注册。修复：C 表后增「env 初始化期注册」例外脚注（无状态过滤器注册与 fail-closed 默认值属模板基础设施装配，渲染期数据仍禁入全局），核实 `_ENV.globals/filters` 写点仅 html_jinja_env.py；纯文档口径变更。
 - rf-678 已修复（2026-10-13，schemas/history.py docstring 失实）：模块 docstring 自称使用 mkstemp 写盘，实际模块仅数据契约不执行 I/O。修复：改述为「原子写入由 `report/history_snapshot.py::save` 经 `core/atomic_write` 唯一原语承担」；纯 docstring 修正。
 - rf-679 已挂账（2026-10-13，style 护栏观察项无挂账）：裸色值/圆角档外观察项（E 级不判 finding）缺治理归宿。处置：plan.md P3 增 `plan-121` 报告样式 token 收敛任务，退出判据=观察期后不再增长 + 存量收敛计划或白名单；rf 本体不改代码。
+
+## 已修复（0.12.2）
+
+> 补录（2026-10-30）：本批条目原先只随 changelog 变更记录留痕、未逐条登记台账；此处按 v0.12.2 changelog 段回填，问题描述未单独留存（修复列即当日变更摘要，发布日期 2026-10-04）。
+
+| # | 问题 | 修复 |
+|---|------|------|
+| **rf-565** | 原问题描述未单独留存（回填自 changelog 段） | **P0/P1 门禁并入 `unit_report` 域（rf-564 / rf-565）**：报告生成域（98 文件 / 2,120 用例）此前不在 `dev-verify`、`verify`、`verify,regression` 任何档（modes.py `report` 专用模式零调用方），What-if 页面级测试「⑦/⑧ 说明」编号漂移因此带病提交——`dev-verify`（3,638→5,454）与 `verify`（5,796→7,917）marker 并入 `unit_report`，`test-runner modes.py` 与 `collect-test-coverage.py` 双处 marker 定义同 |

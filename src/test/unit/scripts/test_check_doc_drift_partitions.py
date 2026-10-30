@@ -94,7 +94,7 @@ class TestManagementPartitions:
 
     def test_resolved_item_backed_by_archived_changelog(self, drift):
         """修复记录在归档 changelog 中亦算有记录（不误报）。"""
-        rf = "## 已解决问题\n\n| # | 问题 |\n| **rf-997** | y |\n\n### 归档档案\n"
+        rf = "## 已解决问题\n\n### 开发期已修复（1.2.3-dev）\n\n| # | 问题 |\n| **rf-997** | y |\n\n### 归档档案\n"
         findings = drift.audit_management_partitions(
             review_findings=rf,
             plan="",
@@ -148,6 +148,67 @@ class TestManagementPartitions:
         )
         findings = drift.audit_management_partitions(review_findings=rf, plan="", changelog=self._CHANGELOG_OK)
         assert [f for f in findings if "节归属错置" in f] == []
+
+    def test_resolved_rows_outside_version_section(self, drift):
+        """台账行落在已解决区直属层（漏写版本节头）→ 报 finding。
+
+        回归场景：跨 9 个发布周期的 53 条已解决台账全部堆在直属层，发布归档按
+        「本版无该节」静默漏搬；本规则在提交时即拦住。
+        """
+        rf = (
+            "## 当前待处理问题\n\n### P1 — 高优先\n\n| # | 问题 |\n\n"
+            "## 已解决问题\n\n| # | 问题 |\n| **rf-994** | y |\n\n### 归档档案\n"
+        )
+        findings = drift.audit_management_partitions(
+            review_findings=rf,
+            plan="",
+            changelog=self._CHANGELOG_OK + "\n修复 rf-994\n",
+        )
+        assert any("rf-994" in f and "版本节之外" in f for f in findings)
+
+    def test_resolved_rows_inside_version_section_pass(self, drift):
+        """台账行写在 `### 开发期已修复（X-dev）` 节内 → 无漏搬 finding（不误报）。"""
+        rf = "## 已解决问题\n\n### 开发期已修复（1.2.3-dev）\n\n| # | 问题 |\n| **rf-993** | y |\n\n### 归档档案\n"
+        findings = drift.audit_management_partitions(
+            review_findings=rf,
+            plan="",
+            changelog=self._CHANGELOG_OK + "\n修复 rf-993\n",
+        )
+        assert [f for f in findings if "版本节之外" in f] == []
+
+    def test_cycle_changelog_plan_id_without_ledger_entry(self, drift):
+        """本开发周期 changelog 提到的计划项在台账/归档均无条目 → 报 finding。
+
+        回归场景：任务完成时把 plan.md 的台账节直接删掉而不走迁档，任务从台账与
+        归档两面消失（只剩 changelog 一句残迹，无法反查）。
+        """
+        plan = "## 当前迭代待办\n\n#### `plan-77` 在办\n\n## 归档\n"
+        findings = drift.audit_management_partitions(
+            review_findings="",
+            plan=plan,
+            changelog=self._CHANGELOG_OK + "\n- 完成 `plan-66` 的改造\n",
+        )
+        assert any("plan-66" in f and "计划归档都找不到" in f for f in findings)
+
+    def test_cycle_changelog_plan_id_present_in_ledger(self, drift):
+        """提到的编号在 plan.md 在办条目里 → 不误报。"""
+        plan = "## 当前迭代待办\n\n#### `plan-66` 在办\n\n## 归档\n"
+        findings = drift.audit_management_partitions(
+            review_findings="",
+            plan=plan,
+            changelog=self._CHANGELOG_OK + "\n- `plan-66` 第二批待做\n",
+        )
+        assert [f for f in findings if "计划归档都找不到" in f] == []
+
+    def test_cycle_changelog_plan_id_present_in_archive(self, drift):
+        """提到的编号已随本周期迁档 → 不误报（准备发布时的正常形态）。"""
+        findings = drift.audit_management_partitions(
+            review_findings="",
+            plan="## 当前迭代待办\n\n## 归档\n",
+            changelog=self._CHANGELOG_OK + "\n- `plan-65` 已完成\n",
+            archived_plans=["## `plan-65` 某任务 ✅\n"],
+        )
+        assert [f for f in findings if "计划归档都找不到" in f] == []
 
     def test_completed_plan_left_in_todo(self, drift):
         """未完成区出现 ✅ 已完成项 → 报 finding。"""
@@ -250,3 +311,54 @@ class TestMigrationPlaceholders:
             "已随 v9.9.9 发布迁入\n已随 v9.9.9 发布迁入", archive_root=tmp_path
         )
         assert len(findings) == 1
+
+
+class TestLedgerOrder:
+    """台账段序升序：review-findings / changelog / plan（现行 + 归档）同一口径。
+
+    回归背景：归档追加与人工补录混用后，较新批次排到较旧批次之前——版本先后
+    关系被读反，且靠肉眼无法核对全量。
+    """
+
+    def test_real_repo_ordered(self, drift):
+        assert drift.check_ledger_order() == []
+
+    def test_review_findings_live_sections_descending(self, drift, tmp_path):
+        rf = (
+            "## 已解决问题\n\n### 开发期已修复（1.0.2-dev）\n\n"
+            "（本版开发期已修复项已随 v1.0.2 发布迁入归档档案）\n\n"
+            "### 开发期已修复（1.0.1-dev）\n\n"
+            "（本版开发期已修复项已随 v1.0.1 发布迁入归档档案）\n\n### 归档档案\n"
+        )
+        findings = drift.check_ledger_order(managements={drift._REVIEW_FINDINGS_MD: rf}, archive_root=tmp_path)
+        assert any("1.0.2" in f and "1.0.1" in f and "升序" in f for f in findings)
+
+    def test_changelog_archive_versions_descending(self, drift, tmp_path):
+        arch = tmp_path / "v1.0.x"
+        arch.mkdir()
+        (arch / "archived_changelog.1.0.x.md").write_text(
+            "# 变更日志归档\n\n## [1.0.2] - 2026-01-02\n\n## [1.0.1] - 2026-01-01\n", encoding="utf-8"
+        )
+        findings = drift.check_ledger_order(managements={}, archive_root=tmp_path)
+        assert any("archived_changelog" in f and "1.0.2" in f for f in findings)
+
+    def test_plan_archive_entry_versions_descending(self, drift, tmp_path):
+        arch = tmp_path / "v1.0.x"
+        arch.mkdir()
+        (arch / "archived_plan.1.0.x.md").write_text(
+            "# 计划归档\n\n## `plan-9` 后完成的项 ✅（v1.0.2）\n\n## `plan-8` 先完成的项 ✅（v1.0.1）\n",
+            encoding="utf-8",
+        )
+        findings = drift.check_ledger_order(managements={}, archive_root=tmp_path)
+        assert any("archived_plan" in f and "升序" in f for f in findings)
+
+    def test_ordered_archives_pass(self, drift, tmp_path):
+        arch = tmp_path / "v1.0.x"
+        arch.mkdir()
+        (arch / "archived_changelog.1.0.x.md").write_text(
+            "# 变更日志归档\n\n## [1.0.1] - 2026-01-01\n\n## [1.0.2] - 2026-01-02\n", encoding="utf-8"
+        )
+        (arch / "archived_review-findings.1.0.x.md").write_text(
+            "# 自审归档\n\n## 已修复（1.0.1）\n\n## 已修复（1.0.2）\n", encoding="utf-8"
+        )
+        assert drift.check_ledger_order(managements={}, archive_root=tmp_path) == []

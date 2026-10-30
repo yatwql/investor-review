@@ -484,6 +484,12 @@ def _check_review_ledger_overview() -> list[dict[str, Any]]:
 _adapter_survey: Callable[[], list] | None = None
 
 
+def reset_adapter_survey() -> None:
+    """注销已注入的适配器巡检函数（测试隔离：注入的假函数不得带到下一条用例）。"""
+    global _adapter_survey
+    _adapter_survey = None
+
+
 def register_adapter_survey(fn: Callable[[], list]) -> None:
     """注册上游模块的适配器巡检函数（fetcher/source_adapter 导入时调用）。"""
     global _adapter_survey

@@ -49,7 +49,7 @@ def _compute_section_visibility(
     include_news: bool,
     llm_enabled_flag: bool,
     # ↓↓↓ board 层新增参数 ↓↓↓
-    enable_news: bool = True,  # board 层：市场新闻是否开启（配置驱动，不是 include_news！）
+    enable_news: bool = True,  # board 层：财经热点关联分析章是否开启（配置驱动，不是 include_news！）
     enable_fund_deep_analysis: bool = True,  # board 层：基金深度分析是否开启
     enable_history: bool = True,  # board 层：历史走势章节是否开启
     enable_portfolio_evolution: bool = True,  # board 层：组合演进章节是否开启

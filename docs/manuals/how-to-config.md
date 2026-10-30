@@ -26,7 +26,7 @@
 
   // ── B. 报告章节可见性 ──
   "enable_fund_deep_analysis": true,  // 基金深度分析+因子暴露+相关性
-  "enable_news": true,      // 市场新闻
+  "enable_news": true,      // 财经热点关联分析（章节本体）
   "enable_history": true,   // 组合历史走势与回撤
   "enable_portfolio_evolution": true,  // 组合演进
   "enable_action": true,     // 行动建议（默认开，可在菜单 C 关闭）
@@ -153,7 +153,7 @@
 | `llm_settings_file` | `data/config/llm_settings.json` | LLM 非敏感配置文件路径 | 手动编辑 |
 | `llm_providers_file` | `data/config/llm_providers.json` | LLM 多 Provider 链式服务配置文件路径，参见 [LLM 配置指引](how-to-config-llm.md) | 手动编辑 |
 | `data_key_file` | `data/config/data_key.json` | 数据源密钥文件路径（**通用**：以 provider 名为节，节内字段默认 `api_key`，如 `{"datasink": {"api_key": "..."}, "hithink": {"api_key": "..."}}`；一个文件容纳多个数据源的 key。各源申请地址见数据源可用性矩阵。环境变量如 `DATASINK_API_KEY` / `HITHINK_FINANCE_API_KEY` 可覆盖对应源） | 手动编辑 |
-| `news_top_count` | `300` | 财经新闻热点与持仓关联分析输出条目上限（各源原始获取量 = max(500, news_top_count × 2)，华尔街见闻硬上限 100 条除外） | 手动编辑 |
+| `news_top_count` | `300` | 财经热点关联分析输出条目上限（各源原始获取量 = max(500, news_top_count × 2)，华尔街见闻硬上限 100 条除外） | 手动编辑 |
 | `llm_report_depth` | `"standard"` | 报告深度档位：`brief`（仅全球政经，采集与调用最少）/ `standard`（按各模块开关参与）/ `deep`（全模块 + 新闻采集不少于 500 条）。档位只**收窄**模块集合与新闻采集规模，**不得打开已关闭的模块**；`brief` 下若与开关交集为空则 LLM 章节以占位呈现。取值非法时按 `standard` 处理并告警 | 手动编辑 |
 | `news_sources` | 见下方 | 各新闻数据源启停开关 | 手动编辑 |
 | `preferred_provider` | `{}` | 各数据类型的首选提供商覆写 | 手动编辑 |
@@ -191,7 +191,7 @@
 | `fund_fee_fallback` | `{}` | 申赎费率配置兑底（键=6 位基金代码，值=`{purchase_rate: 0≤r<1 小数单档申购费率, redemption_tiers: [{"max_days": 上界交易日\|null, "rate": 0≤r<1 小数}]}`；档位按交易日上界严格递增、末档 `max_days` 为 `null`）。**仅当在线来源（F10 费用页/申购状态全量表）不可得时生效，不覆盖在线结果**；仅服务 What-if 交易成本估算（`whatif_trade_cost` 开关），条目非法时告警忽略 | 手动编辑 |
 | `anonymization.mode` | `"off"` | 匿名化模式：`off`（关闭，显示真实名称代码）/ `code_display`（名称→"品种X"，保留代码和盈亏）/ `full_anonymous`（名称→"品种X"，代码→"000XXX"（明细页/Excel 单元格），盈亏金额千位模糊）/ `summary`（明细按大类汇总折叠） | 菜单 `G` → `A` |
 | `enable_fund_deep_analysis` | `true` | 基金深度分析章节可见性，关闭后对应章节完全隐藏，不产生序号空缺 | 菜单 `C` |
-| `enable_news` | `true` | 市场新闻章节可见性，关闭后对应章节完全隐藏。与 `news_sources` 区别：前者控制章节在报告中的显示/隐藏，后者控制数据源启停 | 菜单 `C` |
+| `enable_news` | `true` | 财经热点关联分析章节可见性（章节本体含新闻取数与事件窗；LLM 增强由 `enabled_llm.news_correlation` 控制），关闭后对应章节完全隐藏。与 `news_sources` 区别：前者控制章节在报告中的显示/隐藏，后者控制数据源启停 | 菜单 `C` |
 | `enable_history` | `true` | 历史走势章节可见性（组合历史走势与回撤，一章两区块：走势表 + 回撤矩阵 + 危机区间标注），关闭后对应章节完全隐藏。持仓快照不受影响，始终自动执行 | 菜单 `C` |
 | `enable_portfolio_evolution` | `true` | 组合演进章节可见性，关闭后对应章节完全隐藏。持仓快照仍照常记录，仅影响报告展示 | 菜单 `C` |
 | `enable_action` | `true` | 行动建议章节可见性，**默认开启**，关闭后隐藏 再平衡信号/交易纪律/调仓建议/收益归因 行动板块（纯算法，basic/both/full 均可见）。智囊团深度复盘同步隐藏「行动摘要」子块 | 菜单 `C` |
@@ -265,7 +265,7 @@
 | 键名 | 文件名模式 | 默认 TTL | 指纹来源 | 说明 |
 |------|-----------|:--------:|----------|------|
 | `llm_expert_review` | `llm_expert_review_{fingerprint}.json` | 4h | 持仓汇总 + 分类计数 + 穿透 TOP10 + 持仓明细 | 智囊团深度复盘 |
-| `llm_news_correlation` | `llm_news_item_{hash}.json`（逐条） | 4h | 标题前 80 字 + 持仓指纹 | 财经新闻热点与持仓关联分析 |
+| `llm_news_correlation` | `llm_news_item_{hash}.json`（逐条） | 4h | 标题前 80 字 + 持仓指纹 | 财经热点关联分析 |
 | `llm_global_macro` | `llm_global_macro_{fingerprint}.json` | 24h | A股/美股指数 + 持仓汇总 | 全球政经局势 |
 | `llm_health_check` | `llm_health_check_{fingerprint}.json` | 4h | 持仓明细（排除行情波动） | 持仓体检报告 |
 | `llm_penetration_deep` | `llm_penetration_deep_{fingerprint}.json` | 4h | 持仓明细（排除行情波动） | 穿透深度分析 |

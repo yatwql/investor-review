@@ -45,6 +45,12 @@ _SSL_VERIFY = _should_verify()
 _TRANSPORT_FACTORY: Callable[[], httpx.BaseTransport | None] | None = None
 
 
+def reset_transport_factory() -> None:
+    """清掉注入的传输层工厂（测试隔离：残留的桩会让后续用例不走真实传输层）。"""
+    global _TRANSPORT_FACTORY
+    _TRANSPORT_FACTORY = None
+
+
 @contextmanager
 def use_transport_factory(factory: Callable[[], httpx.BaseTransport | None]) -> Iterator[None]:
     """在 ``with`` 块内为 ``make_http_client()`` 安装自定义传输层工厂。

@@ -56,7 +56,9 @@ class ChapterEntry:
             ``?键名`` 查询与写路径都以它为锚，编号漂移不影响定位
         block: 所属分块（``BLOCK_*``，决定 ``[C]`` 面板的四块排版）
         source: 取值来源（``SOURCE_*``，决定读写落到哪份配置文件）
-        label: 显示名；空串表示由来源注册表派生（LLM 模块名 / 功能开关显示名）
+        label: 显示名；空串表示由来源注册表派生（LLM 模块名 / 功能开关显示名）。
+            非空时用于同一报告章分两行呈现的场景（如章节本体 + 其 LLM 增强），
+            须与来源注册表名同源（以其为前缀，可加括注），不得另起别名
         sub_items: 章节下的生成选项（功能开关键，按显示顺序；只影响章内内容）
         artifact_note: 关联产物的归属说明（仅 ``BLOCK_ARTIFACT`` 非空）
     """
@@ -72,7 +74,7 @@ class ChapterEntry:
 #: 章节清单（顺序即 ``[C]`` 编号序，四块按 ``BLOCK_ORDER`` 连续排列）
 chapter_registry: tuple[ChapterEntry, ...] = (
     ChapterEntry("enable_fund_deep_analysis", BLOCK_TOP, SOURCE_CONFIG, "基金深度分析"),
-    ChapterEntry("enable_news", BLOCK_TOP, SOURCE_CONFIG, "市场新闻"),
+    ChapterEntry("enable_news", BLOCK_TOP, SOURCE_CONFIG, "财经热点关联分析"),
     ChapterEntry("enable_history", BLOCK_TOP, SOURCE_CONFIG, "组合历史走势+回撤"),
     ChapterEntry("enable_portfolio_evolution", BLOCK_TOP, SOURCE_CONFIG, "组合演进"),
     ChapterEntry("enable_action", BLOCK_TOP, SOURCE_CONFIG, "行动建议"),
@@ -83,7 +85,8 @@ chapter_registry: tuple[ChapterEntry, ...] = (
         SOURCE_LLM,
         sub_items=("llm_debate_procon", "llm_debate_conditional"),
     ),
-    ChapterEntry("news_correlation", BLOCK_LLM, SOURCE_LLM),
+    # 与顶层 `enable_news` 指向同一报告章（本体由 enable_news 控制，此处切其 LLM 增强）
+    ChapterEntry("news_correlation", BLOCK_LLM, SOURCE_LLM, "财经热点关联分析（LLM）"),
     ChapterEntry("health_check", BLOCK_LLM, SOURCE_LLM),
     ChapterEntry("penetration_deep", BLOCK_LLM, SOURCE_LLM),
     ChapterEntry("self_review", BLOCK_LLM, SOURCE_LLM),

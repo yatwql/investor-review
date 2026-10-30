@@ -151,7 +151,7 @@ class TestChangelogRelease:
 
     def test_link_validation_rejects_missing_v(self, rel):
         """派生链接缺 v 前缀（跨小版本目录）必须在纯文本阶段拒绝。"""
-        from _release import _changelog_archive as archive_mod
+        from _release import _changelog_archive as archive_mod  # type: ignore[import-not-found]
 
         bad = (
             "> **最近发布 [0.13.1]**（2026-10-09）——已发布版本段随发布移入 "
@@ -541,11 +541,11 @@ class TestPrepare:
         rf_arch = (fx.root / "docs" / "archive" / "v0.12.x" / "archived_review-findings.0.12.x.md").read_text(
             encoding="utf-8"
         )
-        assert "## 开发期已修复（0.12.6-dev）" in rf_arch
+        assert "## 已修复（0.12.6）" in rf_arch
         assert "| **rf-901** | 问题甲 | 处理甲 |" in rf_arch  # 原表逐行无损
         assert "（v0.12.1 → v0.12.6）" in rf_arch  # 归档头部涵盖版本延展
         assert "2026-09-01 ~ 2026-10-08" in rf_main  # 归档档案索引区间延展
-        assert "## 开发期已修复（0.12.5-dev）" in rf_arch  # 既有批次保留
+        assert "## 已修复（0.12.5）" in rf_arch  # 既有批次保留
 
         plan_main = fx.PLAN_FILE.read_text(encoding="utf-8")
         assert "plan-42" not in plan_main and "plan-77" in plan_main  # 只搬已完成节
