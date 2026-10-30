@@ -6,8 +6,12 @@
 模块级变量，要求所在模块提供复位入口**且**该入口被 ``conftest`` 调用——新增状态忘了
 接线就直接红，不必等某次 CI 分片炸。
 
-豁免只给「导入期常量」：它们的值来自环境/配置文件解析结果，用例改它属于改环境，
-复位入口由各自的 reload/invalidate API 承担（已在表内注明理由）。
+复位接线有两种形态，判据都认：调用模块的 ``reset_*()``，或在 fixture 里快照后
+逐属性回填（日志生效值与定价时段走后者——它们由配置推导后原地改写，用 reload API
+复位等于每条用例都读一次文件并重配 handler）。
+
+豁免只留「无跨用例语义」的少数常量（如按需创建的线程池），表内注明理由；另有案例
+断言豁免项仍然持有状态，防止表被当成免死金牌长期挂着。
 """
 
 from __future__ import annotations
@@ -29,8 +33,6 @@ _RESET_NAME = re.compile(r"(reset|clear|invalidate|reload|discard|close)", re.IG
 
 #: 导入期常量：值在 import 时定稿，用例改它属于改环境，复位由各自 API 承担
 _INIT_TIME_CONSTANTS: dict[str, str] = {
-    "src/python/core/logger.py": "日志路径/级别/颜色在导入期由环境解析，改动走 reload_logger_config()",
-    "src/python/llm/pricing.py": "定价时区与时段常量由 reload_pricing() 整体重建（该入口已在 conftest）",
     "src/python/config/_config_defaults.py": "配置路径覆写由专用 setter 显式设置，用例自带复位",
     "src/python/config/_core.py": "配置缓存由 _clear_config_cache() 复位（该入口已在 conftest）",
     "src/python/cache/_cache_refresh.py": "按需创建的线程池单例：无结果缓存、不跨用例保留语义",
@@ -45,6 +47,21 @@ def _module_globals(path: Path) -> set[str]:
         if isinstance(node, ast.Global):
             names.update(node.names)
     return names
+
+
+def _snapshot_restored(rel: str, names: set[str], conftest_source: str) -> bool:
+    """该模块的状态是否由 conftest 以「属性级快照回填」的方式复位。
+
+    两种接线形态都成立：调模块的 ``reset_*()``，或在 fixture 里快照后逐属性回填
+    （``logger_mod._LOG_FILE = ...`` / ``pricing.PRICING_TZ = snapshot[...]``）。后者无法
+    用「函数名出现」判定，故按「全限定属性名出现在赋值左侧」认。
+    """
+    stem = Path(rel).stem.lstrip("_")
+    for name in names:
+        qualified = rf"\b\w*(?:{re.escape(stem)})\w*\.{re.escape(name)}\s*(?:=|[:+]?=|\.clear\(|\.update\()"
+        if re.search(qualified, conftest_source):
+            return True
+    return False
 
 
 def _reset_functions(path: Path) -> list[str]:
@@ -74,7 +91,7 @@ class TestModuleStateResetContract:
                 continue
             resets = _reset_functions(_REPO_ROOT / rel)
             wired = [name for name in resets if f"{name}(" in conftest_source]
-            if not wired:
+            if not wired and not _snapshot_restored(rel, names, conftest_source):
                 offenders.append(f"{rel} :: globals={sorted(names)} resets={resets}")
         assert not offenders, "以下模块级状态没有接入 conftest 复位：\n" + "\n".join(offenders)
 
@@ -114,6 +131,30 @@ class TestResetFixtureBehaviour:
         assert tui_keys._esc_residue_pending is False
         assert tui_keys._seq_prefix_pending == ""
         next(steps, None)  # 收尾段同样可跑（不抛错）
+
+    def test_logger_constants_roll_back_after_pollution(self):
+        """回归：日志生效值由配置推导后原地改写，用例改了必须回填。
+
+        实例：``test_logging_config`` 用临时 ``_LOGGER_CONFIG_PATH`` 调
+        ``reload_logger_config()``，monkeypatch 只还原路径、不还原推导结果——不回填就
+        把临时日志路径与 DEBUG 级别留给同 worker 的后续用例。
+        """
+        from src.python.core import logger as logger_mod
+        from src.test.conftest import _restore_logger_state
+
+        baseline = (logger_mod._LOG_FILE, logger_mod._CONFIG_FILE_LEVEL, logger_mod._LOG_MAX_BYTES)
+        steps = getattr(_restore_logger_state, "__wrapped__")()
+        next(steps)  # 进入阶段：快照
+        logger_mod._LOG_FILE = "/tmp/上一条用例留下的日志.log"
+        logger_mod._CONFIG_FILE_LEVEL = "DEBUG"
+        logger_mod._LOG_MAX_BYTES = 123
+        next(steps, None)  # 收尾阶段：回填
+
+        assert (
+            logger_mod._LOG_FILE,
+            logger_mod._CONFIG_FILE_LEVEL,
+            logger_mod._LOG_MAX_BYTES,
+        ) == baseline
 
     def test_injected_transport_factory_does_not_survive_a_test(self):
         """回归：注入的传输层工厂不得带到下一条用例（否则后续用例静默不走真实传输层）。"""

@@ -368,6 +368,34 @@ def _auto_reset_module_state():
 
 
 @pytest.fixture(autouse=True)
+def _restore_logger_state():
+    """隔离 ``core.logger`` 的模块级生效值，免日志配置用例把临时路径/级别留给后续用例。
+
+    这六个常量由 ``_apply_logger_config`` 从 env + ``logger.json`` 推导后**原地改写**：
+    用例 monkeypatch 的只是输入（配置路径 / 环境变量），推导结果不会跟着回退。历史同类
+    事故见 ``_restore_llm_pricing_state``（定价时段串到下一条用例，单跑绿、并行偶发红）。
+
+    不给它接 ``reload_logger_config()``：那每次都要读文件并重配 handler——全量套件会因此多出上万次
+    读盘，还会与 pytest 自己的捕获 handler 抢位置。只回填常量，零 I/O。
+    """
+    from src.python.core import logger as logger_mod
+
+    log_file = logger_mod._LOG_FILE
+    max_bytes = logger_mod._LOG_MAX_BYTES
+    backup_count = logger_mod._LOG_BACKUP_COUNT
+    console_color = logger_mod._CONSOLE_COLOR
+    file_level = logger_mod._CONFIG_FILE_LEVEL
+    console_level = logger_mod._CONFIG_CONSOLE_LEVEL
+    yield
+    logger_mod._LOG_FILE = log_file
+    logger_mod._LOG_MAX_BYTES = max_bytes
+    logger_mod._LOG_BACKUP_COUNT = backup_count
+    logger_mod._CONSOLE_COLOR = console_color
+    logger_mod._CONFIG_FILE_LEVEL = file_level
+    logger_mod._CONFIG_CONSOLE_LEVEL = console_level
+
+
+@pytest.fixture(autouse=True)
 def _auto_reset_config_cache():
     """自动丢弃 ``tui_menu._config_cache``，防止配置缓存跨用例串扰。
 
