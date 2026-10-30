@@ -20,9 +20,9 @@
             {% endif %}
 
             {% if llm_module_info %}
-            <div style="margin-top: 14px; font-size: var(--fs-table); color: var(--text-secondary);">
+            <div style="margin-top: 12px; font-size: var(--fs-table); color: var(--text-secondary);">
                 <strong>各模块明细：</strong>
-                <table class="kv-table" style="margin-top: 6px;">
+                <table class="kv-table" style="margin-top: 4px;">
                     <tr style="background: var(--row-first-check-bg);">
                         <th style="padding: 4px 8px; text-align: left;">模块</th>
                         <th style="padding: 4px 8px; text-align: left;">状态</th>
@@ -98,7 +98,7 @@
             {% if cache_stats and cache_stats.get("total", 0) > 0 %}
             <div style="margin-top: 16px; font-size: var(--fs-table); color: var(--text-secondary);">
                 <strong>系统数据缓存：</strong>
-                <table class="kv-table" style="margin-top: 6px;">
+                <table class="kv-table" style="margin-top: 4px;">
                     <tr><td>缓存命中</td><td>{{ cache_stats["hits"] }} 次</td></tr>
                     <tr><td>缓存未命中</td><td>{{ cache_stats["misses"] }} 次</td></tr>
                     <tr><td>总请求</td><td>{{ cache_stats["total"] }} 次</td></tr>

@@ -74,7 +74,7 @@
                         <td>{{ sf_data["t_stats"].get(f, "--") }}</td>
                         <td>{% if sf_data["significant"].get(f) %}✅ 显著{% else %}—{% endif %}</td>
                         <td>
-                            <div style="display:flex; align-items:center; gap:6px;">
+                            <div style="display:flex; align-items:center; gap:4px;">
                                 <div style="flex:1; background:var(--progress-track); border-radius:4px; height:14px;">
                                     <div style="width: {{ _bar_w }}%; height:14px; background:{% if _alloc >= 0.5 %}var(--primary){% elif _alloc >= 0.3 %}var(--alloc-mid){% else %}var(--alloc-low){% endif %}; border-radius:4px;"></div>
                                 </div>
@@ -95,7 +95,7 @@
             </div>
             {% endif %}
             {% if sf_data.get("baseline_betas") %}
-            <div class="summary-tag" style="margin: 10px 0 4px;">基准对照（沪深300 同窗口回归）</div>
+            <div class="summary-tag" style="margin: 8px 0 4px;">基准对照（沪深300 同窗口回归）</div>
             <table>
                 <thead>
                     <tr><th>风格因子</th><th>组合 β</th><th>基准 β</th><th>相对暴露</th></tr>

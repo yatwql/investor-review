@@ -150,24 +150,24 @@
         @media print { .report-print-btn { display: none !important; } }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: var(--font-stack); background: var(--bg); color: var(--text); font-size: var(--fs-body); line-height: var(--lh-body); }
-        .container { max-width: 1200px; margin: 0 auto; padding: 20px; display: flex; flex-direction: column; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; }
 
-        .report-header { background: var(--primary); color: #fff; padding: 20px 30px; border-radius: 8px; margin-bottom: 24px; }
+        .report-header { background: var(--primary); color: #fff; padding: 16px 32px; border-radius: 8px; margin-bottom: 24px; }
         .report-header h1 { font-size: var(--fs-h1); margin-bottom: 4px; }
         .report-header .subtitle { font-size: var(--fs-body); opacity: 0.85; }
 
         .section p { max-width: 78ch; }
         .section { background: var(--surface); border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 24px; overflow-x: auto; }
-        .section-title { background: var(--primary); color: #fff; padding: 12px 20px; font-size: var(--fs-h3); font-weight: 600; }
-        .section-content { padding: 16px 20px; }
+        .section-title { background: var(--primary); color: #fff; padding: 12px 16px; font-size: var(--fs-h3); font-weight: 600; }
+        .section-content { padding: 16px 16px; }
         .report-footer { background: var(--surface); border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 24px; }
         .back-to-top-link { text-align: center; padding: 12px 0; }
         .back-to-top-link a { color: var(--primary); text-decoration: none; font-size: var(--fs-table-sm); }
 
         /* ── 文件对比 ───────────────────────────── */
         .compare-files { display: flex; align-items: stretch; gap: 16px; }
-        .file-card { flex: 1; background: var(--file-card-bg); border: 1px solid var(--file-card-border); border-radius: 8px; padding: 14px 18px; }
-        .file-card .file-role { font-size: var(--fs-table-sm); color: var(--text-muted); margin-bottom: 6px; }
+        .file-card { flex: 1; background: var(--file-card-bg); border: 1px solid var(--file-card-border); border-radius: 8px; padding: 12px 16px; }
+        .file-card .file-role { font-size: var(--fs-table-sm); color: var(--text-muted); margin-bottom: 4px; }
         .file-card .file-name { font-size: var(--fs-h3); font-weight: 600; color: var(--primary); word-break: break-all; }
         .file-arrow { display: flex; align-items: center; font-size: 28px; color: var(--file-arrow); }
         .summary-tag { font-size: var(--fs-table); color: var(--text-secondary); }
@@ -175,11 +175,11 @@
 
         /* ── 汇总指标卡 ─────────────────────────── */
         .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-        .summary-card { background: var(--surface-2); border-radius: 6px; padding: 14px 18px; }
-        .summary-card h3 { font-size: var(--fs-table); color: var(--text-tertiary); margin-bottom: 6px; }
+        .summary-card { background: var(--surface-2); border-radius: 6px; padding: 12px 16px; }
+        .summary-card h3 { font-size: var(--fs-table); color: var(--text-tertiary); margin-bottom: 4px; }
         .summary-card .value { font-size: var(--fs-h1); font-weight: 700; }
         .summary-card .meta { font-size: var(--fs-table-sm); color: var(--text-faint); margin-top: 4px; }
-        .arrow { font-weight: 700; margin-left: 6px; font-size: var(--fs-h3); }
+        .arrow { font-weight: 700; margin-left: 4px; font-size: var(--fs-h3); }
         .arrow-up { color: var(--arrow-up); }
         .arrow-down { color: var(--arrow-down); }
         .arrow-flat { color: var(--arrow-flat); }
@@ -187,12 +187,12 @@
         /* ── 资产配置对比图 ─────────────────────── */
         .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
         .chart-col .chart-box { position: relative; height: 280px; }
-        .chart-caption { font-size: var(--fs-table-sm); color: var(--text-muted); text-align: center; padding: 6px 0 2px; }
+        .chart-caption { font-size: var(--fs-table-sm); color: var(--text-muted); text-align: center; padding: 4px 0 0px; }
 
         /* ── 表格 ───────────────────────────────── */
         table { width: 100%; border-collapse: collapse; font-size: var(--fs-table); font-variant-numeric: tabular-nums; min-width: 640px; }
-        th { background: var(--table-th-bg); padding: 8px 10px; text-align: center; font-weight: 600; border-bottom: 2px solid var(--border); white-space: nowrap; }
-        td { padding: 6px 10px; text-align: center; border-bottom: 1px solid var(--border-light); }
+        th { background: var(--table-th-bg); padding: 8px 8px; text-align: center; font-weight: 600; border-bottom: 2px solid var(--border); white-space: nowrap; }
+        td { padding: 4px 8px; text-align: center; border-bottom: 1px solid var(--border-light); }
         tr:nth-child(even) { background: var(--table-even); }
         tr:hover { background: var(--table-hover); }
 
@@ -212,16 +212,16 @@
         tr.whatif-decreased td { background: var(--whatif-decreased-bg); }
         tr.whatif-unchanged td { background: var(--whatif-unchanged-bg); }
         tr.whatif-unchanged:hover td { background: var(--table-hover); }
-        .action-badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: var(--fs-table-sm); font-weight: 600; }
+        .action-badge { display: inline-block; padding: 0px 8px; border-radius: 999px; font-size: var(--fs-table-sm); font-weight: 600; }
         .badge-added { background: var(--badge-added-bg); color: var(--badge-added-text); }
         .badge-removed { background: var(--badge-removed-bg); color: var(--badge-removed-text); }
         .badge-increased { background: var(--badge-increased-bg); color: var(--badge-increased-text); }
         .badge-decreased { background: var(--badge-decreased-bg); color: var(--badge-decreased-text); }
         .badge-unchanged { background: var(--badge-unchanged-bg); color: var(--badge-unchanged-text); }
 
-        .notice-banner { background: var(--notice-bg); border-left: 4px solid var(--notice-border); padding: 10px 14px; font-size: var(--fs-table); border-radius: 4px; }
+        .notice-banner { background: var(--notice-bg); border-left: 4px solid var(--notice-border); padding: 8px 12px; font-size: var(--fs-table); border-radius: 4px; }
         /* 单元级空态/提示（三档空态族之单元级；占位框并入） */
-        .empty-note { padding: 20px; text-align: center; color: var(--text-faint); background: var(--empty-section-bg); border: 1px dashed var(--border-dashed); border-radius: 6px; }
+        .empty-note { padding: 16px; text-align: center; color: var(--text-faint); background: var(--empty-section-bg); border: 1px dashed var(--border-dashed); border-radius: 6px; }
         .chart-export-actions { position: absolute; top: 6px; right: 6px; z-index: 5; display: flex; gap: 8px; }
         .chart-title .chart-export-actions { position: static; margin-left: auto; }
         .chart-export-btn { font-size: var(--fs-footnote); }
@@ -235,7 +235,7 @@
             .report-header h1 { font-size: var(--fs-h3); }
             .section-title { font-size: var(--fs-table); }
             table { font-size: var(--fs-footnote); }
-            td, th { padding: 3px 4px; }
+            td, th { padding: 4px 4px; }
             .summary-card .value { font-size: var(--fs-h3); }
         }
     </style>
@@ -379,7 +379,7 @@
             <script type="application/json" id="whatif-backtest-chart-data">{{ whatif_backtest_chart_data | tojson }}</script>
             <div class="notice-banner" style="margin-top:12px;">
                 <div>* 口径：as-if 市值 = 份额 × 每日价格；生效日后各自归一化到 100 基点后比较。</div>
-                <div style="margin-top:6px;">* 局限：假设推演、不构成收益承诺；数据不足时回测降级，不阻塞主报告。</div>
+                <div style="margin-top:4px;">* 局限：假设推演、不构成收益承诺；数据不足时回测降级，不阻塞主报告。</div>
             </div>
         </div>
     </div>
@@ -622,8 +622,8 @@
         <div class="section-content">
             <div class="notice-banner">
                 <div>* 口径：权重基于成本 = 份额 × 每份成本（成本口径截面比较，本地计算、零网络请求）。</div>
-                <div style="margin-top:6px;">* 时序回测：指定调仓生效日时 opt-in 联网取生效日后行情，追加④时序回测区（假设推演、不构成收益承诺）；数据不足时回测降级，不阻塞主报告。</div>
-                <div style="margin-top:6px;">* 数据来源：本地两份持仓文件；仅启用时序回测时联网。</div>
+                <div style="margin-top:4px;">* 时序回测：指定调仓生效日时 opt-in 联网取生效日后行情，追加④时序回测区（假设推演、不构成收益承诺）；数据不足时回测降级，不阻塞主报告。</div>
+                <div style="margin-top:4px;">* 数据来源：本地两份持仓文件；仅启用时序回测时联网。</div>
             </div>
         </div>
     </div>

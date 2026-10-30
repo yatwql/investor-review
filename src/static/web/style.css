@@ -64,7 +64,7 @@
   width: 1px;
   height: 1px;
   padding: 0;
-  margin: -1px;
+  margin: 0;
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
@@ -90,7 +90,7 @@ body {
 }
 
 .app-header {
-  padding: 34px var(--space-card) 10px;
+  padding: 32px var(--space-card) 8px;
   max-width: 760px;
   margin: 0 auto;
 }
@@ -117,15 +117,15 @@ body {
 }
 
 .subtitle {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   color: var(--text-secondary);
-  font-size: 0.95rem;
+  font-size: 1rem;
 }
 
 .app-main {
   max-width: 760px;
   margin: 0 auto;
-  padding: 16px var(--space-card) 48px;
+  padding: 16px var(--space-card) 32px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -135,7 +135,7 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 20px var(--space-card);
+  padding: 16px var(--space-card);
   box-shadow: var(--shadow-card);
   transition: box-shadow 0.18s ease, transform 0.18s ease;
 }
@@ -145,7 +145,7 @@ body {
 }
 
 .card h2 {
-  margin: 0 0 14px;
+  margin: 0 0 12px;
   font-size: 1.05rem;
   color: var(--text);
 }
@@ -154,7 +154,7 @@ body {
 .upload-zone {
   border: 2px dashed var(--border);
   border-radius: var(--radius);
-  padding: 30px 16px;
+  padding: 32px 16px;
   text-align: center;
   background: linear-gradient(180deg, #fafbfc, #f6f8fa);
   transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
@@ -179,7 +179,7 @@ body {
   gap: 8px;
   cursor: pointer;
   color: var(--text-secondary);
-  font-size: 0.95rem;
+  font-size: 1rem;
 }
 
 .upload-icon {
@@ -188,7 +188,7 @@ body {
 }
 
 .status-text {
-  margin: 10px 0 0;
+  margin: 8px 0 0;
   font-size: 0.9rem;
   min-height: 1.2em;
 }
@@ -224,7 +224,7 @@ body {
 .field-row {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .field-row label {
@@ -235,8 +235,8 @@ body {
 .field-check {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 2px 0 6px;
+  gap: 4px;
+  padding: 0px 0 4px;
 }
 
 .check-label {
@@ -260,7 +260,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 2px 0 6px;
+  padding: 0px 0 4px;
 }
 
 /* hidden 属性优先于 field-block 的 display:flex（否则展开区收起失效） */
@@ -286,7 +286,7 @@ body {
 .radio-label input[type='radio'] {
   width: 15px;
   height: 15px;
-  margin-top: 3px;
+  margin-top: 4px;
   accent-color: var(--primary);
 }
 
@@ -298,7 +298,7 @@ body {
 }
 
 #formal-options {
-  padding: 12px 14px;
+  padding: 12px 12px;
   border: 1px dashed var(--border);
   border-radius: var(--radius-sm);
   background: #fafbfc;
@@ -318,8 +318,8 @@ body {
 
 select {
   font-family: inherit;
-  font-size: 0.95rem;
-  padding: 8px 10px;
+  font-size: 1rem;
+  padding: 8px 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--surface);
@@ -341,8 +341,8 @@ select:focus,
 .btn {
   display: inline-block;
   font-family: inherit;
-  font-size: 0.95rem;
-  padding: 9px 18px;
+  font-size: 1rem;
+  padding: 8px 16px;
   border-radius: 6px;
   border: 1px solid transparent;
   cursor: pointer;
@@ -376,13 +376,13 @@ select:focus,
 
 .btn-sm {
   font-size: 0.85rem;
-  padding: 6px 12px;
-  margin-top: 10px;
+  padding: 4px 12px;
+  margin-top: 8px;
 }
 
 /* ── 进度区 ── */
 .progress-phase {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   font-size: 0.9rem;
   color: var(--text-secondary);
 }
@@ -414,7 +414,7 @@ select:focus,
 .progress-events li {
   display: flex;
   gap: 8px;
-  padding: 3px 0;
+  padding: 4px 0;
   align-items: baseline;
 }
 
@@ -454,7 +454,7 @@ select:focus,
 }
 
 .result-badge {
-  margin: 14px 0 6px;
+  margin: 12px 0 4px;
   font-weight: 600;
 }
 
@@ -472,19 +472,19 @@ select:focus,
 
 .result-errors ul {
   margin: 0;
-  padding-left: 20px;
+  padding-left: 16px;
   color: var(--text-secondary);
   font-size: 0.9rem;
 }
 
 .result-tip {
-  margin: 10px 0 0;
+  margin: 8px 0 0;
   font-size: 0.9rem;
   color: var(--text-secondary);
 }
 
 .result-footer {
-  margin-top: 14px;
+  margin-top: 12px;
 }
 
 /* ── 状态区：数据源健康 + 历史记录 ── */
@@ -496,7 +496,7 @@ select:focus,
 
 .status-card h3 {
   margin: 0 0 8px;
-  font-size: 0.95rem;
+  font-size: 1rem;
   color: var(--text);
 }
 
@@ -564,14 +564,14 @@ select:focus,
 .system-llm-hint {
   display: block;
   color: var(--text-secondary);
-  margin-top: 2px;
+  margin-top: 0px;
   word-break: break-all;
 }
 
 .system-llm-detail {
-  margin-top: 6px;
+  margin-top: 4px;
   border-top: 1px dashed var(--border);
-  padding-top: 6px;
+  padding-top: 4px;
 }
 
 .health-row {
@@ -597,7 +597,7 @@ select:focus,
   font-weight: 600;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
 }
 
 .health-status::before {
@@ -662,8 +662,8 @@ select:focus,
 
 /* 代理诊断提示（全数据源被拒时服务端追加） */
 .health-hint {
-  margin-top: 6px;
-  padding: 6px 8px;
+  margin-top: 4px;
+  padding: 4px 8px;
   font-size: 0.8rem;
   line-height: 1.4;
   color: var(--text);
@@ -686,7 +686,7 @@ select:focus,
 }
 
 .doctor-group {
-  margin: 10px 0 2px;
+  margin: 8px 0 0px;
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--text-secondary);
@@ -698,8 +698,8 @@ select:focus,
 }
 
 .doctor-hint {
-  margin: 2px 0 6px;
-  padding: 5px 8px;
+  margin: 0px 0 4px;
+  padding: 4px 8px;
   font-size: 0.8rem;
   line-height: 1.4;
   color: var(--text);
@@ -712,7 +712,7 @@ select:focus,
 .log-controls {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
   margin-bottom: 12px;
   font-size: 0.9rem;
@@ -723,7 +723,7 @@ select:focus,
 }
 
 .log-level-select {
-  padding: 6px 10px;
+  padding: 4px 8px;
   font-size: 0.9rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -763,13 +763,13 @@ select:focus,
 }
 
 .log-entry summary {
-  padding: 6px 10px;
+  padding: 4px 8px;
   cursor: pointer;
   user-select: none;
   color: var(--text);
   word-break: break-all;
   display: flex;
-  gap: 6px;
+  gap: 4px;
 }
 
 .log-entry summary:hover {
@@ -782,7 +782,7 @@ select:focus,
 
 .log-body {
   margin: 0;
-  padding: 8px 10px;
+  padding: 8px 8px;
   white-space: pre-wrap;
   word-break: break-all;
   color: var(--text-secondary);
@@ -816,7 +816,7 @@ select:focus,
 }
 
 .config-actions {
-  margin-top: 14px;
+  margin-top: 12px;
   display: flex;
   justify-content: flex-end;
 }
@@ -955,7 +955,7 @@ select:focus,
 }
 
 .config-row {
-  padding: 3px 0;
+  padding: 4px 0;
 }
 
 /* 路径与文件：标签 + 输入框 + 保存按钮 + 行内状态 */
@@ -1006,7 +1006,7 @@ select:focus,
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 3px 0;
+  padding: 4px 0;
 }
 
 .config-index-name {
@@ -1032,7 +1032,7 @@ select:focus,
 }
 
 .config-index-reset {
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
 .config-error {
@@ -1042,8 +1042,8 @@ select:focus,
 /* 文本框通用样式（与 select 视觉对齐） */
 input[type='text'] {
   font-family: inherit;
-  font-size: 0.95rem;
-  padding: 8px 10px;
+  font-size: 1rem;
+  padding: 8px 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--surface);
@@ -1067,22 +1067,22 @@ input[type='text']:focus {
 .tab-bar-inner {
   max-width: 760px;
   margin: 0 auto;
-  padding: 10px var(--space-card);
+  padding: 8px var(--space-card);
   display: flex;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
 }
 
 .tab-btn {
   appearance: none;
   font-family: inherit;
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--text-secondary);
   background: transparent;
   border: 1px solid transparent;
   border-radius: 999px;
-  padding: 7px 16px;
+  padding: 8px 16px;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
 }
@@ -1148,8 +1148,8 @@ input[type='text']:focus {
 
 .file-input-plain {
   font-family: inherit;
-  font-size: 0.95rem;
-  padding: 6px 8px;
+  font-size: 1rem;
+  padding: 4px 8px;
   border: 1px dashed var(--border);
   border-radius: 6px;
   background: var(--surface);
@@ -1173,13 +1173,13 @@ input[type='text']:focus {
 /* ── 状态卡操作行（缓存统计等）── */
 .status-card-actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
   margin-top: 4px;
 }
 
 .status-card-actions .btn-sm {
-  margin-top: 6px;
+  margin-top: 4px;
   white-space: nowrap;
 }
 
@@ -1196,7 +1196,7 @@ input[type='text']:focus {
 .theme-toggle {
   margin-left: auto;
   align-self: center;
-  padding: 8px 14px;
+  padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
@@ -1250,7 +1250,7 @@ textarea:focus-visible,
   color: var(--text-secondary);
   font-size: 0.85rem;
   line-height: 1.5;
-  padding: 6px 0;
+  padding: 4px 0;
 }
 
 /* 链接态 */

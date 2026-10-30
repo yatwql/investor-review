@@ -43,6 +43,7 @@ class TestHtmlCssStructure(unittest.TestCase):
             self.tmpl,
         )
         self.assertIsNotNone(match, ".section-nav CSS 中未找到 flex-wrap 属性")
+        assert match is not None  # 收窄类型：下方直接取捕获组
         wrap_value = match.group(1).strip()
         self.assertEqual(wrap_value, "wrap", f".section-nav flex-wrap 应为 wrap，当前为 '{wrap_value}'")
 
@@ -50,6 +51,7 @@ class TestHtmlCssStructure(unittest.TestCase):
         """.section-nav 不应包含 nowrap 或 overflow-x: auto。"""
         nav_css = re.search(r"\.section-nav\s*\{[^}]*\}", self.tmpl)
         self.assertIsNotNone(nav_css)
+        assert nav_css is not None  # 收窄类型：下方直接取捕获组
         block = nav_css.group(0)
         self.assertNotIn("nowrap", block, ".section-nav 中不应有 nowrap，否则导航不换行")
         self.assertNotIn("overflow-x", block, ".section-nav 中不应有 overflow-x，否则导航不换行")
@@ -63,6 +65,7 @@ class TestHtmlCssStructure(unittest.TestCase):
             self.tmpl,
         )
         self.assertIsNotNone(match, ".section-nav a 中未找到 white-space 属性")
+        assert match is not None  # 收窄类型：下方直接取捕获组
         ws_value = match.group(1).strip()
         self.assertEqual(ws_value, "nowrap", f".section-nav a white-space 应为 nowrap，当前为 '{ws_value}'")
 
@@ -172,6 +175,7 @@ class TestHtmlRegressionChecks(unittest.TestCase):
             self.tmpl,
         )
         self.assertIsNotNone(match, ".section-nav 应设置 scrollbar-width: none 以避免滚动条占位")
+        assert match is not None  # 收窄类型：下方直接取捕获组
 
     def test_print_hides_nav(self):
         """打印样式应隐藏导航栏（.section-nav { display: none }）。"""
@@ -197,6 +201,7 @@ class TestHtmlBackToTopStatic(unittest.TestCase):
         """报告头部 div 应含 id="report-top" 锚点。"""
         match = re.search(r'<div\s+class="report-header"[^>]*id="report-top"', self.tmpl)
         self.assertIsNotNone(match, 'report-header 应含 id="report-top" 锚点')
+        assert match is not None  # 收窄类型：下方直接取捕获组
 
     def test_back_to_top_css_defined(self):
         """.back-to-top-link CSS 类已定义（居中 + 链接配色）。"""
@@ -235,6 +240,7 @@ class TestHtmlTocStatic(unittest.TestCase):
         """.toc-sidebar 应为 fixed 定位（独立于页面滚动）。"""
         match = re.search(r"\.toc-sidebar\s*\{[^}]*position\s*:\s*fixed", self.tmpl)
         self.assertIsNotNone(match, ".toc-sidebar 应使用 position: fixed")
+        assert match is not None  # 收窄类型：下方直接取捕获组
 
     def test_toc_collapsed_state_css(self):
         """存在 body.toc-collapsed 折叠状态规则（侧栏移出 + 展开按钮显示）。"""
@@ -253,6 +259,7 @@ class TestHtmlTocStatic(unittest.TestCase):
             re.DOTALL,
         )
         self.assertIsNotNone(match, "应存在 max-width: 1023px 响应式块")
+        assert match is not None  # 收窄类型：下方直接取捕获组
         block = match.group(1)
         self.assertIn(".toc-sidebar", block, "窄屏块应隐藏 .toc-sidebar")
         self.assertIn(".toc-toggle-btn", block, "窄屏块应隐藏展开按钮")
@@ -265,8 +272,10 @@ class TestHtmlTocStatic(unittest.TestCase):
             re.DOTALL,
         )
         self.assertIsNotNone(match, "应存在 min-width: 1024px 响应式块")
+        assert match is not None  # 收窄类型：下方直接取捕获组
         block = match.group(1)
-        self.assertIn("margin-left: 220px", block, "宽屏展开时 .container 应让出 220px 左侧栏")
+        self.assertIn("margin-left: var(--toc-width)", block, "宽屏展开时 .container 应按侧栏宽度让位（token 单源）")
+        self.assertIn("--toc-width: 220px", self.tmpl, "侧栏宽度 token 须声明为 220px（让位与栏宽同一来源）")
 
     def test_toc_print_hidden(self):
         """打印样式应隐藏左侧目录（.toc-sidebar / .toc-toggle-btn，存在含二者的 print 块）。"""
@@ -288,6 +297,7 @@ class TestHtmlTocStatic(unittest.TestCase):
             re.DOTALL,
         )
         self.assertIsNotNone(match, "应存在 prefers-reduced-motion: no-preference 块")
+        assert match is not None  # 收窄类型：下方直接取捕获组
         self.assertIn("scroll-behavior: smooth", match.group(1), "平滑滚动应尊重减少动态偏好")
 
 
