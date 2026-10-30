@@ -92,6 +92,17 @@ def get_config_cache() -> dict | None:
     return _config_cache
 
 
+def reset_config_cache() -> None:
+    """丢弃配置缓存（测试隔离与「下一次读取重读」共用入口）。
+
+    与 :func:`refresh_config` 的区别：本函数不做读取、不动首用检测记忆，只把模块级
+    缓存置回「未载入」——否则上一条用例缓存的配置字典会带到下一条（渲染页头/菜单
+    的用例据它断言，读到别人的值就变成顺序相关的隐式依赖）。
+    """
+    global _config_cache
+    _config_cache = None
+
+
 def menu_group_lines(*, columns: int | None = None) -> list[str]:
     """首页帮助的分组索引行（``分组：生成报告 [E B L W Q] · …``，按宽度折行）。
 

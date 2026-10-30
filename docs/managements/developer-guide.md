@@ -978,6 +978,9 @@ INVEST_CACHE_DIR=docs/tmp/screenshots/demo/data/cache \    # 缓存改落（不�
 .venv/bin/python scripts/make-screenshots.py web "file://<demo>/reports/个人投资分析报告.html"              src/static/report-overview.png --scroll-y 0
 .venv/bin/python scripts/make-screenshots.py web "file://<demo>/reports/个人投资分析报告.html#sec-summary"     src/static/report-toc.png
 .venv/bin/python scripts/make-screenshots.py web "file://<demo>/reports/个人投资分析报告.html#sec-penetration" src/static/report-charts.png
+# Excel 页签：读演示根的真实 xlsx 重排成表格图（带列标/行号/页签条；路径栏抹掉演示前缀）
+.venv/bin/python scripts/make-screenshots.py xlsx "<demo>/reports/个人投资分析报告.xlsx" src/static/excel-report.png \\
+    --sheet '2.持仓明细与分类' --rows 14 --cols 13 --width 1500 --height 468
 ```
 
 **出图护栏**：所有子命令入口先跑 `demo_workspace.assert_demo_holdings()`——演示持仓必须存在且位于演示目录内，否则直接拒绝出图（宁可报错，不出带真实数据的图）。

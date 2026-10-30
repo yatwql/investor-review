@@ -21,13 +21,18 @@ from src.python.tui.text_layout import terminal_columns, truncate_display
 #: 清到行尾（状态条每帧先回车归位、再清残影，避免上一帧更长时留尾）
 _CLEAR_LINE = "\r\x1b[K"
 
+#: 中止键提示（单源）：状态条与各渠道文档说的是同一句话——中止走 ``Ctrl+C``。
+#: 有序中止键 ``q`` 当前**无渠道启用**（TUI 侧需后台轮询 stdin，与生成前的交互
+#: 提示抢输入），因此不得在此处另写一个实际无人监听的按键。
+CANCEL_HINT = "Ctrl+C 中断"
+
 
 def status_bar_text(
     phase: str,
     elapsed: float | None = None,
     eta: float | None = None,
     *,
-    hint: str = "Ctrl+C 中断",
+    hint: str = CANCEL_HINT,
 ) -> str:
     """状态条正文（阶段文案复用 ``perf.format_stage_status``，本函数只加前缀与中止键）。
 
@@ -38,7 +43,7 @@ def status_bar_text(
         phase: 当前阶段名（如「行情获取」）。
         elapsed: 本阶段已耗时（秒）。
         eta: 预计剩余秒数；None = 历史样本不足，只报已耗时。
-        cancel_hint: 中止键提示；空串表示当前环境无法按键中止。
+        hint: 中止键提示（缺省取 ``CANCEL_HINT``）；空串表示当前环境无法按键中止。
 
     Returns:
         单行文本（未着色、未截断）。
@@ -57,7 +62,7 @@ def status_bar_text(
 class LiveStatusBar:
     """单行原地刷新的状态条（非线程安全：由调用方串行 update/suspend/resume）。"""
 
-    def __init__(self, stream: TextIO | None = None, *, cancel_hint: str = "q 中止") -> None:
+    def __init__(self, stream: TextIO | None = None, *, cancel_hint: str = CANCEL_HINT) -> None:
         self._stream = stream if stream is not None else sys.stdout
         self._cancel_hint = cancel_hint
         self._last: str = ""
@@ -79,7 +84,7 @@ class LiveStatusBar:
 
     @property
     def cancel_hint(self) -> str:
-        """中止键提示（心跳层据环境把 ``q 中止`` 降级为 ``Ctrl+C 中断``）。"""
+        """中止键提示（缺省即 ``CANCEL_HINT``；调用方据此拼状态条正文）。"""
         return self._cancel_hint
 
     def _write(self, text: str) -> None:

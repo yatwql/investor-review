@@ -310,6 +310,40 @@ def _restore_menu_items():
 
 
 @pytest.fixture(autouse=True)
+def _auto_reset_config_cache():
+    """自动丢弃 ``tui_menu._config_cache``，防止配置缓存跨用例串扰。
+
+    该缓存是模块级字典，首次 ``refresh_config()`` 后一直存在；用例读取时如走
+    ``get_config_cache()``（渲染页头/菜单的路径），拿到的就是**上一条用例**载入的
+    那份配置（含它自己的 monkeypatch 结果）。故与 ``_restore_menu_items`` 同习语，
+    在每个用例前后都回到「未载入」基线。
+    """
+    from src.python.tui import tui_menu
+
+    tui_menu.reset_config_cache()
+    yield
+    tui_menu.reset_config_cache()
+
+
+@pytest.fixture(autouse=True)
+def _auto_reset_config_session():
+    """自动关闭配置面板会话，防止撤销记录跨用例串扰。
+
+    ``handlers_config._session`` 是模块级可变单例，``_apply_edit`` 在它非空时
+    **必然**把每次写盘记入撤销栈。面板自身在进入/退出时 ``reset``/``close``，
+    但直接调 ``_apply_edit`` 的用例并不进面板——上一用例留下的会话会让本用例的
+    写入记入别人栈里（后续 ``u`` 用例据此误掽到不存在的改动）。
+
+    故意不依赖面板进出：连直接调用写盘路径的用例也回到「无会话」基线。
+    """
+    from src.python.tui import handlers_config
+
+    handlers_config.close_config_session()
+    yield
+    handlers_config.close_config_session()
+
+
+@pytest.fixture(autouse=True)
 def _auto_reset_last_reason():
     """自动清除「provider 失败原因」线程本地载体，防止测试间状态污染。
 

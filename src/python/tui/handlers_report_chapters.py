@@ -14,6 +14,7 @@ patch 点有效（与 ``[S]`` 面板同一手法）。
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from src.python.core.ansi_colors import DIM, GREEN, RESET, YELLOW
 from src.python.tui.panel_runtime import NavState, PanelItem, panel_loop
 from src.python.tui.prompt_text import panel_prompt
@@ -55,45 +56,65 @@ def _cost_notes(key: str, cost_history: dict) -> str:
     return f" · {runs}次 " + " + ".join(parts)
 
 
-def _format_row(
-    *,
-    cursor: str,
-    number: str,
-    label: str,
-    key: str,
-    status: str,
-    star: str,
-    notes: str,
-    columns: int,
-    name_column: int,
-    key_column: int,
-    number_width: int,
-    indent: int,
-    grey: bool,
-) -> list[str]:
+@dataclass(frozen=True)
+class _RowLayout:
+    """一次渲染内不变的行排版预算（终端宽度 + 各列宽 + 编号宽度）。"""
+
+    columns: int
+    name_column: int
+    key_column: int
+    number_width: int
+
+
+@dataclass(frozen=True)
+class _ChapterRow:
+    """一章或一个子项的上屏内容（内容逐行变，排版预算整屏不变）。"""
+
+    cursor: str
+    number: str
+    label: str
+    key: str
+    status: str
+    star: str = ""
+    notes: str = ""
+    indent: int = 0
+    grey: bool = False
+
+
+def _format_row(row: _ChapterRow, layout: _RowLayout) -> list[str]:
     """章节行排版：宽/中档单行；窄档两行（名称+状态 / 键名+备注），键名恒可见。"""
+    columns = layout.columns
     tier = layout_tier(columns)
     limit = inner_width(columns) - 2
-    pad = " " * indent
-    suffix = "." if "." not in number else ""
-    prefix = f"{f'{number:>{number_width}}{suffix}'}{pad} "
+    pad = " " * row.indent
+    suffix = "." if "." not in row.number else ""
+    prefix = f"{f'{row.number:>{layout.number_width}}{suffix}'}{pad} "
     # 名称按剩余宽度截断：状态与 `*` 是扫读依据（窄屏/手机终端也一样），
     # 长章名不得把它们挤出屏幕。预留 = 前缀 + 名称后空格 + 状态 + `*`。
-    budget = limit - display_width(cursor) - display_width(prefix) - 1 - display_width(status) - display_width(star)
+    budget = (
+        limit
+        - display_width(row.cursor)
+        - display_width(prefix)
+        - 1
+        - display_width(row.status)
+        - display_width(row.star)
+    )
     budget = max(4, budget)
-    label = truncate_display(label, budget)
+    label = truncate_display(row.label, budget)
     if tier == "narrow":
-        shown_label = f"{DIM}{label}{RESET}" if grey else label
-        head = f"{cursor}{prefix}{shown_label} {status}{star}"
-        second = f"{' ' * display_width(prefix)}{DIM}{key}{RESET}"
-        if notes:
-            second += f"{DIM}{notes}{RESET}"
+        shown_label = f"{DIM}{label}{RESET}" if row.grey else label
+        head = f"{row.cursor}{prefix}{shown_label} {row.status}{row.star}"
+        second = f"{' ' * display_width(prefix)}{DIM}{row.key}{RESET}"
+        if row.notes:
+            second += f"{DIM}{row.notes}{RESET}"
         return [truncate_display(head, limit), truncate_display(second, limit)]
-    pad_to = max(0, min(name_column - indent, budget))
-    shown_label = f"{DIM}{pad_right(label, pad_to)}{RESET}" if grey else pad_right(label, pad_to)
-    head = f"{cursor}{prefix}{shown_label} {status}{star} {DIM}{pad_right(key, key_column)}{RESET}"
-    if notes:
-        head += f"{DIM}{notes}{RESET}"
+    pad_to = max(0, min(layout.name_column - row.indent, budget))
+    shown_label = f"{DIM}{pad_right(label, pad_to)}{RESET}" if row.grey else pad_right(label, pad_to)
+    head = (
+        f"{row.cursor}{prefix}{shown_label} {row.status}{row.star} {DIM}{pad_right(row.key, layout.key_column)}{RESET}"
+    )
+    if row.notes:
+        head += f"{DIM}{row.notes}{RESET}"
     return [truncate_display(head, limit)]
 
 
@@ -111,113 +132,124 @@ def invalid_number_hint() -> str:
     return f"可输入 {span}" + (f" 或子项 {' / '.join(subs)}" if subs else "")
 
 
-def run_report_chapters_panel() -> None:
-    """报告章节显隐面板主循环（编号或子项编号切换；``?编号`` / ``?键名`` 看详情）。"""
-    from src.python.tui import handlers_config as hc
+class _ChaptersPanel:
+    """``[C]`` 面板的会话态：llm 快照、费用摘要、撤销会话、项表与渲染。
 
-    from src.python.config import default_enabled_llm, get_config
-    from src.python.config.chapter_registry import (
-        BLOCK_LABELS,
-        BLOCK_ORDER,
-        SOURCE_CONFIG,
-        SOURCE_FILES,
-        SOURCE_LLM,
-        chapter_by_key,
-        chapter_default,
-        chapter_edit_key,
-        chapter_label,
-        chapter_number,
-        chapter_numbers,
-        chapters_in_block,
-        sub_item_numbers,
-    )
-    from src.python.config.features import feature_switch_registry, is_feature_enabled
-    from src.python.core.experiment_stats import load_experiment_usage
-    from src.python.core.registry import get_llm_module_names
-    from src.python.tui.tui_menu import filter_menu_llm_modules
+    一次进入内的状态收在实例上，读快照 / 切开关 / 渲染 / 帮助共用同一份，
+    主循环只剩编排。行为与单函数版本一致（既有渲染、写盘、闸门、帮助用例覆盖）。
+    """
 
-    # ``llm_settings.json`` 读不到时仍让顶层章节 / 功能开关可用：LLM 块按出厂默认展示，
-    # 切换时由编辑层给出具体错误（不静默回落，也不整面板罢工）。
-    snapshot = hc._read_llm_settings()
-    settings = snapshot[0] if snapshot else {}
-    enabled_llm: dict[str, bool] = dict(settings.get("enabled_llm") or {})
-    llm_defaults = default_enabled_llm()
-    llm_names = filter_menu_llm_modules(get_llm_module_names())
+    def __init__(self, hc) -> None:  # noqa: ANN001 — handlers_config（调用方传入，避免导入环）
+        from src.python.config import default_enabled_llm
+        from src.python.core.registry import get_llm_module_names
+        from src.python.tui.tui_menu import filter_menu_llm_modules
 
-    try:
-        from src.python.core.perf import module_cost_summary
+        self._hc = hc
+        # ``llm_settings.json`` 读不到时仍让顶层章节 / 功能开关可用：LLM 块按出厂默认展示，
+        # 切换时由编辑层给出具体错误（不静默回落，也不整面板罢工）。
+        snapshot = hc._read_llm_settings()
+        settings = snapshot[0] if snapshot else {}
+        self.enabled_llm: dict[str, bool] = dict(settings.get("enabled_llm") or {})
+        self.llm_defaults = default_enabled_llm()
+        self.llm_names = filter_menu_llm_modules(get_llm_module_names())
+        self.cost_history = self._read_cost_history()
+        self.session = hc.reset_config_session()
 
-        cost_history = module_cost_summary(COST_HISTORY_DAYS)
-    except Exception:
-        hc.logger.debug("[C] LLM 章节费用摘要读取失败，静默省略", exc_info=True)
-        cost_history = {}
+    def _read_cost_history(self) -> dict:
+        """近 N 日模块费用摘要（读不到即省掉行尾摘要，不让面板罢工）。"""
+        try:
+            from src.python.core.perf import module_cost_summary
 
-    def _status(entry) -> bool:  # noqa: ANN001 — ChapterEntry（运行时取值，避免导入环）
+            return module_cost_summary(COST_HISTORY_DAYS)
+        except Exception:
+            self._hc.logger.debug("[C] LLM 章节费用摘要读取失败，静默省略", exc_info=True)
+            return {}
+
+    def status(self, entry) -> bool:  # noqa: ANN001 — ChapterEntry（运行时取值，避免导入环）
+        """当前开关态：三块各按自己的来源读（config / llm_settings / features）。"""
+        from src.python.config import get_config
+        from src.python.config.chapter_registry import SOURCE_CONFIG, SOURCE_LLM
+        from src.python.config.features import is_feature_enabled
+
         if entry.source == SOURCE_CONFIG:
             return bool((get_config() or {}).get(entry.key, True))
         if entry.source == SOURCE_LLM:
-            return bool(enabled_llm.get(entry.key, llm_defaults.get(entry.key, True)))
+            return bool(self.enabled_llm.get(entry.key, self.llm_defaults.get(entry.key, True)))
         return is_feature_enabled(entry.key)
 
-    def _emit(message: str) -> None:
+    def emit(self, message: str) -> None:
+        """面板输出（按内宽折行）。"""
         for line in wrap_hanging(message, inner_width(terminal_columns())):
             print(line)
 
-    def _toggle_chapter(entry) -> None:  # noqa: ANN001
-        current = _status(entry)
-        label = chapter_label(entry, llm_names)
-        if hc._apply_edit({"key": chapter_edit_key(entry), "value": not current}):
-            if entry.source == SOURCE_LLM:
-                enabled_llm[entry.key] = not current
-            _emit(f"  {GREEN}[OK]{RESET} {label}已{'启用' if not current else '禁用'}")
-            hc.refresh_config()
+    def toggle_chapter(self, entry) -> None:  # noqa: ANN001
+        """切一章（LLM 章同步内存态，避免同屏继续读到旧值）。"""
+        from src.python.config.chapter_registry import SOURCE_LLM, chapter_edit_key, chapter_label
 
-    def _toggle_sub(flag: str, parent) -> None:  # noqa: ANN001
+        current = self.status(entry)
+        label = chapter_label(entry, self.llm_names)
+        if self._hc._apply_edit({"key": chapter_edit_key(entry), "value": not current}):
+            if entry.source == SOURCE_LLM:
+                self.enabled_llm[entry.key] = not current
+            self.emit(f"  {GREEN}[OK]{RESET} {label}已{'启用' if not current else '禁用'}")
+            self._hc.refresh_config()
+
+    def toggle_sub(self, flag: str, parent) -> None:  # noqa: ANN001
+        """切一个生成子项（父章未开时只提示、不写盘）。"""
+        from src.python.config.chapter_registry import chapter_label, chapter_number
+        from src.python.config.features import feature_switch_registry, is_feature_enabled
+
         definition = feature_switch_registry.get(flag)
         label = definition.label if definition is not None else flag
-        if not _status(parent):
-            _emit(
+        if not self.status(parent):
+            self.emit(
                 f"  {YELLOW}[!]{RESET} 先启用第 {chapter_number(parent.key)} 项"
-                f"（{chapter_label(parent, llm_names)}）后可切换{label}"
+                f"（{chapter_label(parent, self.llm_names)}）后可切换{label}"
             )
             return
         current = is_feature_enabled(flag)
-        if hc._apply_edit({"key": flag, "value": not current}):
-            _emit(f"  {GREEN}[OK]{RESET} {label}已{'启用' if not current else '禁用'}")
-            hc.refresh_config()
+        if self._hc._apply_edit({"key": flag, "value": not current}):
+            self.emit(f"  {GREEN}[OK]{RESET} {label}已{'启用' if not current else '禁用'}")
+            self._hc.refresh_config()
 
-    # 面板项序 = 渲染行序（章节后紧跟其子项），方向键游标按同一序推进
-    panel_items: list[PanelItem] = []
-    for number, entry in chapter_numbers():
-        panel_items.append(
-            PanelItem(
-                str(number),
-                chapter_label(entry, llm_names),
-                action=lambda e=entry: _toggle_chapter(e),
-                detail=_chapter_detail(entry, llm_names),
-            )
-        )
-        for offset, flag in enumerate(entry.sub_items, 1):
-            definition = feature_switch_registry.get(flag)
-            panel_items.append(
+    def build_items(self) -> list[PanelItem]:
+        """面板项序 = 渲染行序（章节后紧跟其子项），方向键游标按同一序推进。"""
+        from src.python.config.chapter_registry import SOURCE_FILES, chapter_label, chapter_numbers
+        from src.python.config.features import feature_switch_registry
+
+        items: list[PanelItem] = []
+        for number, entry in chapter_numbers():
+            items.append(
                 PanelItem(
-                    f"{number}.{offset}",
-                    definition.label if definition is not None else flag,
-                    action=lambda f=flag, p=entry: _toggle_sub(f, p),
-                    detail=f"智囊团深度复盘生成选项 · {SOURCE_FILES['features']} → {flag}",
+                    str(number),
+                    chapter_label(entry, self.llm_names),
+                    action=lambda e=entry: self.toggle_chapter(e),
+                    detail=_chapter_detail(entry, self.llm_names),
                 )
             )
-    panel_items.append(PanelItem("0", "返回主菜单", kind="return"))
+            for offset, flag in enumerate(entry.sub_items, 1):
+                definition = feature_switch_registry.get(flag)
+                items.append(
+                    PanelItem(
+                        f"{number}.{offset}",
+                        definition.label if definition is not None else flag,
+                        action=lambda f=flag, p=entry: self.toggle_sub(f, p),
+                        detail=f"智囊团深度复盘生成选项 · {SOURCE_FILES['features']} → {flag}",
+                    )
+                )
+        items.append(PanelItem("0", "返回主菜单", kind="return"))
+        return items
 
-    session = hc.reset_config_session()
-
-    def _on_text(token: str) -> None:
-        if hc.handle_config_undo(token, session, _emit):
+    def on_text(self, token: str) -> None:
+        """非编号输入：先给 ``u`` / ``U`` 撤回，再按无效编号提示。"""
+        if self._hc.handle_config_undo(token, self.session, self.emit):
             return
-        _emit(f"  {YELLOW}[!]{RESET} 无效编号「{token}」（{invalid_number_hint()}，? 看说明）")
+        self.emit(f"  {YELLOW}[!]{RESET} 无效编号「{token}」（{invalid_number_hint()}，? 看说明）")
 
-    def _help(target: str) -> bool:
+    def help(self, target: str) -> bool:
         """``?编号`` / ``?7.1`` / ``?键名`` 富详情（只读，不写配置）。"""
+        from src.python.config.chapter_registry import chapter_by_key, chapter_numbers, sub_item_numbers
+
         raw = target.strip()
         if not raw:
             return False
@@ -234,14 +266,16 @@ def run_report_chapters_panel() -> None:
                 flag = raw
         if chapter is None:
             return False
-        return _print_detail(chapter, flag, llm_names, cost_history)
+        return _print_detail(chapter, flag, self.llm_names, self.cost_history)
 
-    def _render(nav: NavState) -> list[str | None]:
+    def layout(self, numbered: dict) -> _RowLayout:
+        """整屏排版预算：名称列 / 键名列取最长项，编号列取最大编号位宽。"""
+        from src.python.config.chapter_registry import chapter_label
+        from src.python.config.features import feature_switch_registry
+
         columns = terminal_columns()
-        tier = layout_tier(columns)
-        numbered = dict(chapter_numbers())
         sub_flags = [f for e in numbered.values() for f in e.sub_items]
-        labels = {e.key: chapter_label(e, llm_names) for e in numbered.values()}
+        labels = {e.key: chapter_label(e, self.llm_names) for e in numbered.values()}
         name_column = max(
             [
                 *(display_width(v) for v in labels.values()),
@@ -249,7 +283,34 @@ def run_report_chapters_panel() -> None:
             ]
         )
         key_column = max([*(display_width(e.key) for e in numbered.values()), *(display_width(f) for f in sub_flags)])
-        number_width = len(str(len(numbered)))
+        return _RowLayout(
+            columns=columns,
+            name_column=name_column,
+            key_column=key_column,
+            number_width=len(str(len(numbered))),
+        )
+
+    def render(self, nav: NavState) -> list[str | None]:
+        """整屏渲染：四块标题（含开启计数）+ 章节行 + 子项行 + 返回项 + 撤回页脚。"""
+        from src.python.config.chapter_registry import (
+            BLOCK_LABELS,
+            BLOCK_ORDER,
+            SOURCE_LLM,
+            chapter_default,
+            chapter_label,
+            chapter_number,
+            chapter_numbers,
+            chapters_in_block,
+        )
+        from src.python.config.features import feature_switch_registry, is_feature_enabled
+        from src.python.core.experiment_stats import load_experiment_usage
+
+        columns = terminal_columns()
+        tier = layout_tier(columns)
+        numbered = dict(chapter_numbers())
+        layout = self.layout(numbered)
+        labels = {e.key: chapter_label(e, self.llm_names) for e in numbered.values()}
+        sub_flags = [f for e in numbered.values() for f in e.sub_items]
         experimental_subs = {
             f for f in sub_flags if f in feature_switch_registry and feature_switch_registry[f].experimental
         }
@@ -261,31 +322,28 @@ def run_report_chapters_panel() -> None:
             entries = chapters_in_block(block)
             if not entries:
                 continue
-            enabled_count = sum(1 for e in entries if _status(e))
+            enabled_count = sum(1 for e in entries if self.status(e))
             heading = f"── {BLOCK_LABELS[block]}（{enabled_count}/{len(entries)} 开）"
             rows.extend(group_heading(heading, inner_width(columns), prefix=""))
             for entry in entries:
                 number = chapter_number(entry.key)
-                enabled = _status(entry)
+                enabled = self.status(entry)
                 notes = f"（{entry.artifact_note}）" if entry.artifact_note else ""
                 if entry.source == SOURCE_LLM:
-                    notes += _cost_notes(entry.key, cost_history)
+                    notes += _cost_notes(entry.key, self.cost_history)
                 if nav.is_visible(index):
                     rows.extend(
                         _format_row(
-                            cursor=nav.marker(index),
-                            number=str(number),
-                            label=labels[entry.key],
-                            key=entry.key,
-                            status=status_text(enabled, tier),
-                            star="" if enabled == chapter_default(entry) else "*",
-                            notes=notes,
-                            columns=columns,
-                            name_column=name_column,
-                            key_column=key_column,
-                            number_width=number_width,
-                            indent=0,
-                            grey=False,
+                            _ChapterRow(
+                                cursor=nav.marker(index),
+                                number=str(number),
+                                label=labels[entry.key],
+                                key=entry.key,
+                                status=status_text(enabled, tier),
+                                star="" if enabled == chapter_default(entry) else "*",
+                                notes=notes,
+                            ),
+                            layout,
                         )
                     )
                 index += 1
@@ -306,27 +364,26 @@ def run_report_chapters_panel() -> None:
                     if nav.is_visible(index):
                         rows.extend(
                             _format_row(
-                                cursor=nav.marker(index),
-                                number=f"{number}.{offset}",
-                                label=label,
-                                key=flag,
-                                status=status_text(enabled and sub_enabled, tier),
-                                star=""
-                                if definition is None or (enabled and sub_enabled) == definition.default
-                                else "*",
-                                notes=sub_notes,
-                                columns=columns,
-                                name_column=name_column,
-                                key_column=key_column,
-                                number_width=number_width,
-                                indent=2,
-                                grey=not enabled,
+                                _ChapterRow(
+                                    cursor=nav.marker(index),
+                                    number=f"{number}.{offset}",
+                                    label=label,
+                                    key=flag,
+                                    status=status_text(enabled and sub_enabled, tier),
+                                    star=""
+                                    if definition is None or (enabled and sub_enabled) == definition.default
+                                    else "*",
+                                    notes=sub_notes,
+                                    indent=2,
+                                    grey=not enabled,
+                                ),
+                                layout,
                             )
                         )
                     index += 1
             rows.append("")
         rows.append(f"{nav.marker(index)}0. 返回主菜单")
-        footer = hc.config_undo_footer(session)
+        footer = self._hc.config_undo_footer(self.session)
         if footer:
             rows.append(footer)
         return [
@@ -343,21 +400,29 @@ def run_report_chapters_panel() -> None:
             None,
         ]
 
-    try:
-        panel_loop(
-            panel_items,
-            render=_render,
-            prompt=panel_prompt("输入章节编号切换", example="7 或 7.1", help_hint="?7 查看说明"),
-            read=hc.input_choice,
-            on_text=_on_text,
-            on_help=_help,
-        )
-    except (EOFError, KeyboardInterrupt):
-        print()
-    finally:
-        hc.close_config_session()
+    def run(self) -> None:
+        """跑主循环：退出/中断都收会话，随后刷新配置让菜单按新显隐裁剪。"""
+        try:
+            panel_loop(
+                self.build_items(),
+                render=self.render,
+                prompt=panel_prompt("输入章节编号切换", example="7 或 7.1", help_hint="?7 查看说明"),
+                read=self._hc.input_choice,
+                on_text=self.on_text,
+                on_help=self.help,
+            )
+        except (EOFError, KeyboardInterrupt):
+            print()
+        finally:
+            self._hc.close_config_session()
+        self._hc.refresh_config()
 
-    hc.refresh_config()
+
+def run_report_chapters_panel() -> None:
+    """报告章节显隐面板主循环（编号或子项编号切换；``?编号`` / ``?键名`` 看详情）。"""
+    from src.python.tui import handlers_config as hc
+
+    _ChaptersPanel(hc).run()
 
 
 def _chapter_detail(entry, llm_names) -> str:  # noqa: ANN001

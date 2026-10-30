@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.16.14-dev
-> **编号源**：`rf-next = 988`（新增问题提出后更新为 +1；已用最大 rf-987，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 993`（新增问题提出后更新为 +1；已用最大 rf-992，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -54,6 +54,11 @@
 | **rf-985** | 台账段序无统一口径也无断言：归档追加与人工补录混用后，review-findings 归档把 0.16.2 批次排到 0.16.13 之后，changelog 归档 v0.2~v0.11 多为倒序（新→旧）、v0.12 起为正序，plan 归档按 plan-N 乱序——同一事实在不同文件里读法相反 | 定口径：version 段（`## 已修复（X.Y.Z）` / `## [X.Y.Z]` / `### 开发期已修复（X-dev）`）与 plan 条目自带完成版本，在**同一文件内**一律升序（旧→新），现行文件与归档文件同口径；① 归一现存文件（changelog 归档 9 份、review-findings 归档 4 份、plan 归档 7 份按口径重排）② `check-doc-drift` 新增第 23 项 `check_ledger_order` 每次提交守卫（现行 + 归档全扫） |
 | **rf-986** | 章节改名后未同步配置面板显示名：报告章节已改「财经热点关联分析」，而 `[C]` 面板第 2 项仍叫「市场新闻」，同一章两处叫法不一致（用户按 C 一眼即见） | `config/chapter_registry` 的 `enable_news` 显示名改为报告章节名；同一章的 LLM 增强行（`news_correlation`）显式标「（LLM）」区分本体与增强；config 模板行尾注释、CLI 示例、手册（配置参考/配置手册/FAQ/报告说明/TUI 菜单）同步；回归 1 例锁定「面板章节名 == 报告产物章节名」 |
 | **rf-987** | `[C]` 面板长章名把开关状态挤出屏幕：行排版先拼 `名称 + 状态 + 键名` 再整行截断，窄屏（手机终端 34~40 列）上「是否开启」被切掉，用户看不到开关态 | `_format_row` 先按剩余宽度截断名称（预留 光标 + 编号前缀 + 间距 + 状态 + `*`），状态与 `*` 永不被截；同一报告章的 LLM 增强行标签缩短为「财经热点关联分析（LLM）」；回归 1 例按多种列宽 × 置灰 × `*` 断言状态可见 |
+| **rf-988** | 状态条中止键与文档相反：`LiveStatusBar` 的 `cancel_hint` 缺省值是已撤回的「q 中止」（有序中止键当前无渠道监听），而 `progress._draw` 直接取该缺省值拼状态条——TTY 上实显「… · q 中止」，用户按 `q` 无任何反应；而 DESIGN-TUI 与两本手册统一写 `Ctrl+C 中断`，且 `status_bar_text` 的 docstring 参数名（`cancel_hint`）与形参（`hint`）不符 | 新增模块常量 `CANCEL_HINT` 作单一来源，`status_bar_text` 与 `LiveStatusBar` 两处缺省同取该常量，docstring 参数名对齐；回归 3 例（状态条缺省 == 文档口径 / 报告器拼接走同一常量 / 模块源码不含无监听方的键） |
+| **rf-989** | 配置面板会话是模块级单例，但 conftest 无 autouse 复位：`handlers_config._session` 非空时 `_apply_edit` 必然把写盘记入撤销栈，而直接调 `_apply_edit` 的用例不进面板、不复位——上一用例遗留的会话让本用例的写入记入别人的栈（部分用例靠手写 `_session = None` 绕开，即该缺口的旁证） | conftest 新增 `_auto_reset_config_session`（进/出两侧均关闭会话），与 `_auto_reset_provider_registry` 同习语；回归 2 例（进入用例时会话恒为空 / fixture 进出两侧都复位污染态） |
+| **rf-990** | 截图入口 `xlsx` 的 `--rows` 缺省写死 26，与渲染模块 `DEFAULT_MAX_ROWS` 双源（改一处即漂）；同文件里列上限 `26` 以裸数字在判定与文档串各写一遍 | 入口缺省改取 `xlsx_frame.DEFAULT_MAX_ROWS`，列上限收敛为模块常量 `_MAX_COLUMNS`；回归 1 例（解析缺省值 == 渲染常量） |
+| **rf-991** | `tui_menu._config_cache` 同为模块级单例且无测试复位（与 rf-989 同类）：首次 `refresh_config()` 后缓存常驻，而页头/菜单渲染走 `get_config_cache()`——不主动 `refresh` 的用例会读到上一条用例 monkeypatch 过的配置快照，断言随执行顺序漂移 | `tui_menu` 新增 `reset_config_cache()`（只丢缓存、不读盘、不动首用检测记忆），conftest 新增 `_auto_reset_config_cache` autouse（进/出两侧复位），与 `_restore_menu_items` 同习语；回归 3 例（进入用例缓存恒未载入 / reset 不触发读盘 / fixture 双侧清污染态） |
+| **rf-992** | `[C]` 面板可读性债：`run_report_chapters_panel` 单函数 247 行（项表拼装 + 快照读取 + 开关派发 + 帮助解析 + 整屏渲染 + 主循环混在一起，定位任一行为都要滚完整段），`_format_row` 声明 13 个关键字参数（排版预算与逐行内容混在同一签名，调用点两处各写 13 行） | 拆为 `_ChaptersPanel`（会话态：llm 快照 / 费用摘要 / 撤销会话；方法 `status`·`toggle_chapter`·`toggle_sub`·`build_items`·`on_text`·`help`·`layout`·`render`·`run`），入口函数只剩两行编排；排版预算与行内容分家——`_RowLayout`（整屏不变）+ `_ChapterRow`（逐行变），`_format_row(row, layout)` 两参数。行为不变：既有渲染/写盘/闸门/帮助 113 例全过 |
 
 ### 归档档案
 - [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-10-30）

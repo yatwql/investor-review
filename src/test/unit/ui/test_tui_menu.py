@@ -26,6 +26,18 @@ import pytest
 pytestmark = [pytest.mark.unit, pytest.mark.unit_ui]
 
 
+def _index(key):
+    """按快捷键取位序（``index_by_key`` 可能给 None：取不到即失败，不静默当 0）。"""
+    index = index_by_key(key)
+    assert index is not None, f"主菜单缺失快捷键 {key}"
+    return index
+
+
+def _menu_item(key):
+    """按快捷键取菜单项（与 ``_index`` 同一断言口径）。"""
+    return MENU_ITEMS[_index(key)]
+
+
 class TestMenuItems(unittest.TestCase):
     """MENU_ITEMS 结构完整性测试。"""
 
@@ -83,7 +95,7 @@ class TestMenuItems(unittest.TestCase):
 
     def test_whatif_item(self) -> None:
         """What-if 菜单项在报告生成组后（快捷键 W）。"""
-        key, label, cb, is_exit = MENU_ITEMS[index_by_key("W")]
+        key, label, cb, is_exit = _menu_item("W")
         self.assertEqual(key, "W")
         self.assertIn("What-if", label)
         self.assertIsNone(cb)
@@ -91,7 +103,7 @@ class TestMenuItems(unittest.TestCase):
 
     def test_first_item_excel(self) -> None:
         """第一项快捷键 E。"""
-        key, label, cb, is_exit = MENU_ITEMS[index_by_key("E")]
+        key, label, cb, is_exit = _menu_item("E")
         self.assertEqual(key, "E")
         self.assertIn("Excel", label)
         self.assertIsNone(cb)
@@ -99,7 +111,7 @@ class TestMenuItems(unittest.TestCase):
 
     def test_qa_item(self) -> None:
         """报告追问项在 What-if 后（快捷键 Q）。"""
-        key, label, cb, is_exit = MENU_ITEMS[index_by_key("Q")]
+        key, label, cb, is_exit = _menu_item("Q")
         self.assertEqual(key, "Q")
         self.assertIn("追问", label)
         self.assertIsNone(cb)
@@ -115,7 +127,7 @@ class TestMenuItems(unittest.TestCase):
 
     def test_diagnose_item(self) -> None:
         """诊断与排查聚合为一项（L/V/H/T 均下沉到二级）。"""
-        key, label, cb, is_exit = MENU_ITEMS[index_by_key("D")]
+        key, label, cb, is_exit = _menu_item("D")
         self.assertEqual(key, "D")
         self.assertIn("诊断", label)
         self.assertIsNone(cb)
@@ -125,7 +137,7 @@ class TestMenuItems(unittest.TestCase):
 
     def test_global_settings_item(self) -> None:
         """全局设置聚合为一项（D/F/O/L/I/A/M 下沉）。"""
-        key, label, _cb, is_exit = MENU_ITEMS[index_by_key("G")]
+        key, label, _cb, is_exit = _menu_item("G")
         self.assertEqual(key, "G")
         self.assertIn("全局设置", label)
         self.assertFalse(is_exit)
@@ -134,7 +146,7 @@ class TestMenuItems(unittest.TestCase):
 
     def test_config_dir_info_item(self) -> None:
         """配置与目录信息已下沉为 [G] 子项，顶层不单列（顶层 C 是章节显隐）。"""
-        key, label, _cb, _is_exit = MENU_ITEMS[index_by_key("C")]
+        key, label, _cb, _is_exit = _menu_item("C")
         self.assertEqual(key, "C")
         self.assertIn("章节显隐", label)
         self.assertNotIn("目录", label)
@@ -166,18 +178,16 @@ class TestIndexByKey(unittest.TestCase):
     def test_every_key_resolves_to_itself(self) -> None:
         """每个菜单键经 index_by_key 定位回自身（键↔索引双向一致）。"""
         for key, _label, _cb, _ex in MENU_ITEMS:
-            idx = index_by_key(key)
-            self.assertIsNotNone(idx, key)
-            self.assertEqual(MENU_ITEMS[idx][0], key)
+            self.assertEqual(_menu_item(key)[0], key)
 
     def test_first_and_last_positions(self) -> None:
         """首项为 E、末项为退出键 X（位序语义，不写死条数）。"""
-        self.assertEqual(index_by_key("E"), 0)
-        self.assertEqual(index_by_key("X"), len(MENU_ITEMS) - 1)
+        self.assertEqual(_index("E"), 0)
+        self.assertEqual(_index("X"), len(MENU_ITEMS) - 1)
 
     def test_whatif_after_llm(self) -> None:
         """What-if 紧跟完整报告之后。"""
-        self.assertEqual(index_by_key("W"), index_by_key("L") + 1)
+        self.assertEqual(_index("W"), _index("L") + 1)
 
     def test_find_nonexistent(self) -> None:
         self.assertIsNone(index_by_key("Z"))
@@ -188,9 +198,7 @@ class TestIndexByKey(unittest.TestCase):
 
     def test_find_number(self) -> None:
         """数字快捷键可定位（缓存类命令项）。"""
-        idx = index_by_key("1")
-        self.assertIsNotNone(idx)
-        self.assertEqual(MENU_ITEMS[idx][0], "1")
+        self.assertEqual(_menu_item("1")[0], "1")
 
     def test_find_empty(self) -> None:
         self.assertIsNone(index_by_key(""))
@@ -412,6 +420,44 @@ class TestRenderMenuGroups(unittest.TestCase):
         out = self._render("不存在的关键词")
         assert "筛选「不存在的关键词」：0 项" in out
         assert "[X]" not in out and "[E]" not in out
+
+
+class TestConfigCacheIsolation:
+    """配置缓存是模块级字典：不得跨用例串扰（``conftest._auto_reset_config_cache``）。"""
+
+    @pytest.mark.unit_ui
+    def test_cache_is_empty_at_test_entry(self):
+        """进入用例时缓存未载入——上一条用例 monkeypatch 的配置不会跟过来。"""
+        assert get_config_cache() is None
+
+    @pytest.mark.unit_ui
+    def test_reset_discards_cached_snapshot(self):
+        """``reset_config_cache`` 只丢缓存、不读盘（与 ``refresh_config`` 分工不混）。"""
+        from src.python.tui import tui_menu
+
+        with patch.object(tui_menu, "get_config", return_value={"holdings_filename": "演示持仓.xlsx"}):
+            assert tui_menu.refresh_config() == {"holdings_filename": "演示持仓.xlsx"}
+        assert get_config_cache() is not None
+        with patch.object(tui_menu, "get_config") as reader:
+            tui_menu.reset_config_cache()
+        reader.assert_not_called()
+        assert get_config_cache() is None
+
+    @pytest.mark.unit_ui
+    def test_fixture_clears_polluted_cache(self):
+        """复现 autouse fixture：进/出两侧都把污染态清回未载入。"""
+        from src.python.tui import tui_menu
+        from src.test.conftest import _auto_reset_config_cache
+
+        with patch.object(tui_menu, "get_config", return_value={"a": 1}):
+            tui_menu.refresh_config()
+        steps = getattr(_auto_reset_config_cache, "__wrapped__")()
+        next(steps)
+        assert get_config_cache() is None
+        with patch.object(tui_menu, "get_config", return_value={"b": 2}):
+            tui_menu.refresh_config()
+        next(steps, None)
+        assert get_config_cache() is None
 
 
 if __name__ == "__main__":
