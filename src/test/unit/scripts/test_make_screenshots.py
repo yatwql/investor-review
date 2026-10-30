@@ -300,10 +300,25 @@ class TestEntry:
         assert (holdings / entry.demo_workspace.HOLDINGS_FILENAME).is_file()
 
     @pytest.mark.unit_scripts
-    def test_report_subcommand_returns_underlying_exit_code(self, monkeypatch):
+    def test_report_subcommand_returns_underlying_exit_code(self, tmp_path, monkeypatch):
         entry = load_script("make-screenshots.py", module_name="_make_screenshots_under_test")
+        # 入口的演示持仓护栏读 DEFAULT_ROOT：必须指到 tmp 并真建工作区，
+        # 否则用例会依赖本地 git 忽略的 docs/tmp/screenshots 产物（CI 上必红）
+        monkeypatch.setattr(entry.demo_workspace, "DEFAULT_ROOT", tmp_path / "shots")
+        assert entry.main(["demo"]) == 0
         monkeypatch.setattr(entry.demo_workspace, "run_report", lambda root=None: 3)
         assert entry.main(["report"]) == 3
+
+    @pytest.mark.unit_scripts
+    def test_report_subcommand_refuses_without_demo_holdings(self, tmp_path, monkeypatch):
+        """演示工作区缺失时入口护栏直接拒绝，不落到报告生成（零真实数据接触）。"""
+        entry = load_script("make-screenshots.py", module_name="_make_screenshots_under_test")
+        monkeypatch.setattr(entry.demo_workspace, "DEFAULT_ROOT", tmp_path / "shots")
+        called: list[int] = []
+        monkeypatch.setattr(entry.demo_workspace, "run_report", lambda root=None: called.append(1) or 0)
+        with pytest.raises(RuntimeError):
+            entry.main(["report"])
+        assert called == []
 
     @pytest.mark.unit_scripts
     def test_unknown_subcommand_exits_with_usage_error(self):

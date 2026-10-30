@@ -122,6 +122,41 @@ class TestCircuitBreaker:
         with mock.patch("time.time", return_value=1030.0):
             assert r.is_circuit_broken("t1") is True
 
+    def test_burst_within_open_window_does_not_escalate(self):
+        """熔断期内的在途失败不升级退避：一次并发故障风暴只算一次熔断。"""
+        r = _fresh_registry()
+        r.register_provider("t1")
+        with mock.patch("time.time", return_value=1000.0):
+            for _ in range(3):
+                r.record_failure("t1", "push2:600519")
+            state = r._providers["t1"]
+            assert state.backoff_level == 1  # 首次熔断只升到级别 0
+            assert state.cooldown_secs == 60
+            # 同一批剩余代码陆续返回失败（在冷却窗口内）
+            for index in range(10):
+                r.record_failure("t1", f"push2:{index}")
+            assert state.backoff_level == 1, "同批并发失败不得逐条升级退避"
+            assert state.cooldown_secs == 60, "主通道不应被单次抖动关停一小时"
+            assert r.is_circuit_broken("t1") is True
+
+    def test_escalates_once_per_retrip_after_cooldown(self):
+        """冷却期满后重新熔断才逐级升级（一个投掷一级）。"""
+        r = _fresh_registry()
+        r.register_provider("t1")
+        with mock.patch("time.time", return_value=1000.0):
+            for _ in range(3):
+                r.record_failure("t1", "timeout")
+            for _ in range(5):
+                r.record_failure("t1", "in-flight")
+        with mock.patch("time.time", return_value=1061.0):
+            assert r.is_circuit_broken("t1") is False  # 冷却期满放行试探
+        with mock.patch("time.time", return_value=1070.0):
+            for _ in range(3):
+                r.record_failure("t1", "timeout")
+            state = r._providers["t1"]
+            assert state.backoff_level == 2, "跨批次重新熔断应升一级"
+            assert state.cooldown_secs == 300
+
     def test_is_chain_broken_all(self):
         """全链熔断返回 True。"""
         r = _fresh_registry()

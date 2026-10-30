@@ -71,7 +71,36 @@ def _save_news_cache(cache_key: str, result: list[dict]) -> None:
 # ── 上次获取的各源状态（用于 空态占位） ──────────────────
 
 _last_src_results: dict[str, tuple[int, str]] = {}
+_last_src_labels: dict[str, str] = {}
 _src_results_lock = threading.Lock()
+
+
+def _channel_label(src: str, items: list[dict[str, Any]]) -> str:
+    """源标签按「本次真正出条目的子渠道」拼接。
+
+    ``akshare`` 一个源内含财新网与 CCTV 两个渠道，静态标签会把两渠道并写
+    （``财新网 / CCTV``）——CCTV 当日为空时，日志读起来像两个源都有产出。
+    这里以条目的 ``_channel`` 为准拼真实命中渠道；无标记时回退静态标签。
+    """
+    channels: list[str] = []
+    for item in items:
+        channel = item.get("_channel")
+        if isinstance(channel, str) and channel and channel not in channels:
+            channels.append(channel)
+    return " + ".join(channels) if channels else _SOURCE_LABELS.get(src, src)
+
+
+def _remember_label(src: str, label: str) -> None:
+    """登记本次运行的源展示标签（与 ``_last_src_results`` 同锁）。"""
+    with _src_results_lock:
+        _last_src_labels[src] = label
+
+
+def _label_for(src: str) -> str:
+    """取本次运行的源展示标签（未登记时回退静态标签）。"""
+    with _src_results_lock:
+        label = _last_src_labels.get(src)
+    return label or _SOURCE_LABELS.get(src, src)
 
 
 def get_last_source_status() -> dict[str, dict]:
@@ -83,7 +112,7 @@ def get_last_source_status() -> dict[str, dict]:
     """
     result: dict[str, dict] = {}
     for src, (count, status) in _last_src_results.items():
-        label = _SOURCE_LABELS.get(src, src)
+        label = _label_for(src)
         result[src] = {
             "label": label,
             "success": status == "OK",
@@ -115,9 +144,10 @@ def _fetch_from_all_sources(
 
         for future in as_completed(fut_to_src):
             src = fut_to_src[future]
-            label = _SOURCE_LABELS.get(src, src)
             try:
                 items = future.result()
+                label = _channel_label(src, items)
+                _remember_label(src, label)
                 count = 0
                 for item in items:
                     url = item.get("url", "")
@@ -133,7 +163,8 @@ def _fetch_from_all_sources(
                 err_msg = f"失败({e})"
                 src_results[src] = (0, err_msg)
                 if progress_callback:
-                    progress_callback(label, 0, err_msg)
+                    # 失败时未拿到条目，按静态标签报（不复用上一轮登记的子渠道标签）
+                    progress_callback(_SOURCE_LABELS.get(src, src), 0, err_msg)
 
     return all_raw, src_results
 
@@ -142,7 +173,7 @@ def _log_source_status(src_results: dict[str, tuple[int, str]]) -> None:
     """输出各新闻源状态汇总日志。"""
     status_parts = []
     for s, (n, st) in src_results.items():
-        label = _SOURCE_LABELS.get(s, s)
+        label = _label_for(s)
         if st == "OK":
             status_parts.append(f"{label} {n}条")
         else:

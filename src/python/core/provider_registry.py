@@ -329,6 +329,13 @@ class DataSourceRegistry:
             state.last_failure_time = now
             state.last_failure_context = context
             state.total_failures += 1
+            if state.is_skipped:
+                # 熔断期内的在途失败只计数、不升级退避：同一批并发请求（如 41 个代码
+                # 同时刷行业接口）在通道挂掉时会在几百毫秒里接连失败，若无此闸门，
+                # 一次掉线就能把退避从 60s 一路打到 3600s，主通道被单次抖动关停一小时。
+                # 升级只发生在「冷却期满后重新熔断」时（一次投掷只升一级）。
+                logger.debug("[registry] %s 熔断期内失败（%s），不升级退避级别", provider, context)
+                return
             if state.consecutive_failures >= state.failure_threshold:
                 state.is_skipped = True
                 # 指数退避：每次熔断递增退避级别，上限 _BACKOFF_LEVELS[-1]

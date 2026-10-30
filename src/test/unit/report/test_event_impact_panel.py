@@ -199,6 +199,40 @@ def test_fund_holding_not_in_index():
     fetch_bars.assert_not_called()
 
 
+def test_no_keywords_counted_separately():
+    """未关联到任何关键词 → 计 no_keywords（召回为 0），不混入 unmatched。"""
+    fetch_bars, fetch_index, resolve = _providers()
+    res = build_event_rows(
+        _HOLDINGS,
+        [{"ctime": "2026-09-15", "matched_keywords": [], "title": "无关键词新闻"}],
+        None,
+        fetch_bars=fetch_bars,
+        fetch_index=fetch_index,
+        benchmark_code_for=resolve,
+    )
+    assert res["skipped"]["no_keywords"] == 1
+    assert res["skipped"]["unmatched"] == 0
+    assert res["skipped"]["not_in_holdings"] == 0
+    fetch_bars.assert_not_called()
+
+
+def test_keywords_miss_holdings_index_counted_separately():
+    """有关键词但都不在持仓/穿透索引里 → 计 not_in_holdings（索引未覆盖）。"""
+    fetch_bars, fetch_index, resolve = _providers()
+    res = build_event_rows(
+        _HOLDINGS,
+        [{"ctime": "2026-09-15", "matched_keywords": ["不在持仓里的关键词"], "title": "t"}],
+        None,
+        fetch_bars=fetch_bars,
+        fetch_index=fetch_index,
+        benchmark_code_for=resolve,
+    )
+    assert res["skipped"]["unmatched"] == 1
+    assert res["skipped"]["not_in_holdings"] == 1
+    assert res["skipped"]["no_keywords"] == 0
+    fetch_bars.assert_not_called()
+
+
 def test_row_cap_counts_overflow():
     """行数上限：超额新闻计入 capped，不无限膨胀。"""
     items = [_news(title=f"新闻{i}", url=f"https://example.com/{i}") for i in range(4)]

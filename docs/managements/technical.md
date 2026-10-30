@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.16.12
+> 文档版本：0.16.13
 
 ## 目录
 
@@ -244,9 +244,10 @@ llm/generators_orchestrator.py ──→ cache/（可选）
 | **贯穿** | 代码类型判定 | 资产识别原语 | `core/code_utils.py` |
 | **贯穿** | 交易时段判断 | A 股时段、午间休市 | `core/market_hours.py` |
 | **贯穿** | HTTP 客户端 | 统一工厂 | `core/http_client.py` |
-| **贯穿** | 性能收集 | PerfCollector 三路径计时 + 子阶段 `breakdown`（数据准备：行情与明细/指数获取/穿透/风格与因子/覆盖与新鲜度/估值与温度/财报摘要/财务指标/申购与成本位置/明细装配与建议；LLM+新闻：新闻源抓取/去重与关联/锚点维护/事件窗装配/LLM 模块 span；HTML 生成：图表数据装配/页面写入）；数据准备另记**缓存冷热**增量（`counters.prep_cache_hits` / `prep_cache_misses`，阶段前后快照相减——同一阶段耗时在冷/热两态差一个数量级，跨运行对拍必须先看这两个数）+ perf_history.jsonl 持久化 + 数据源健康历史聚合 `summarize_health_history()`；`counters` 除 warnings/errors 外含**事实校验自动修正计数**（`fact_fix_total` / `fact_fix_numeric` / `fact_fix_code` / `fact_fix:<模块>`，由 `llm/fact_checker` 线程安全累加、报告层 LLM 阶段前清零后汇入——修正次数是模型口径偏差的直接信号，单次只进日志时无法跨期对拍。**计数口径 = 新生成正文的修正**：命中轮次的正文已由回写（`skeleton.write_back_module_cache`）带去修正结果，故稳态运行该计数为 0，不是「模型变准了」；跨期对拍照样以首轮生成样本为准，`action_fix` 归零时需回看 `llm.cache_hits` 确认是命中轮）；`llm` 段除各模块 model/token/费用外记 **`duration_seconds`**（逐模块耗时；缓存命中记 0，统计口径只取非命中样本——关键路径分析的机读依据，span 只覆盖经 `_MODULE_FNS` 调度的模块）；另有 `llm_thinking_wait_ms`（thinking 并发槽串行等待累计——默认上限已为 2；配回 1 时据此量化串行代价） | `core/perf.py` + `llm/fact_checker/_corrections.py` |
+| **贯穿** | 性能收集 | PerfCollector 三路径计时 + 子阶段 `breakdown`（数据准备：行情与明细/指数获取/穿透/风格与因子/覆盖与新鲜度/估值与温度/财报摘要/财务指标/申购与成本位置/明细装配与建议；LLM+新闻：新闻源抓取/去重与关联/锚点维护/事件窗装配/LLM 模块 span；HTML 生成：图表数据装配/页面写入）；数据准备另记**缓存冷热**增量（`counters.prep_cache_hits` / `prep_cache_misses`，阶段前后快照相减——同一阶段耗时在冷/热两态差一个数量级，跨运行对拍必须先看这两个数）+ perf_history.jsonl 持久化 + 数据源健康历史聚合 `summarize_health_history()`；`counters` 除 warnings/errors 外含**事实校验自动修正计数**（`fact_fix_total` / `fact_fix_numeric` / `fact_fix_code` / `fact_fix:<模块>`，由 `llm/fact_checker` 线程安全累加、报告层 LLM 阶段前清零后汇入——修正次数是模型口径偏差的直接信号，单次只进日志时无法跨期对拍。**计数口径 = 新生成正文的修正**：命中轮次的正文已由回写（`skeleton.write_back_module_cache`）带去修正结果，故稳态运行该计数为 0，不是「模型变准了」；跨期对拍照样以首轮生成样本为准，`action_fix` 归零时需回看 `llm.cache_hits` 确认是命中轮）；`llm` 段除各模块 model/token/费用外记 **`duration_seconds`**（逐模块耗时；缓存命中记 0，统计口径只取非命中样本——关键路径分析的机读依据，span 只覆盖经 `_MODULE_FNS` 调度的模块）；另有 `llm_thinking_wait_ms`（thinking 并发槽串行等待累计——默认上限已为 2；配回 1 时据此量化串行代价）；控制台阶段汇总行附带**最慢三项子耗时**（`[perf] LLM+新闻: 94.3s（智囊团深度复盘 75.7s / …）`），日志本身即可归因，台账仍为机读事实位 | `core/perf.py` + `llm/fact_checker/_corrections.py` |
 | **贯穿** | 运行一致性 | 生成中断收口（KeyboardInterrupt 安全落点：临时产物清扫 + `status=interrupted` 运行记录 + 已写盘/已丢弃明细）+ HTML/Excel 产物原子落盘登记 | `report/run_integrity.py` |
 | **贯穿** | 日志可视化 | 结构化日志读取（parse_log/tail_log/read_log），CLI/TUI/Web 三端共享 | `core/log_reader.py` |
+| **贯穿** | 日志去重 | 同 key 时间窗内折叠重复日志（同窗口重复降 DEBUG）：报告多阶段重复装配同一批数据时只留一行，跨窗（下一次报告）照常上屏；窗口默认 60s，键不足 64 个 | `core/log_dedupe.py` |
 | **贯穿** | 系统自检 | 运行环境/配置/目录/日志与缓存/功能开关/数据源适配/数据源凭据/数据源八组一次性盘点（恒上屏，无开关），CLI/TUI/Web 三端共享；自身永不抛异常、零重依赖 | `core/doctor.py` |
 | **贯穿** | 数值归一 | 非有限值（NaN/±inf）防线收敛点：`safe_num` / `strict_num` / `finite_or` / `is_finite_number`；纯 stdlib、零项目内依赖，providers/analysis/report 任一侧可安全导入 | `core/num_utils.py` |
 | **贯穿** | 文本安全边界 | 孤立代理项净化（合法代理对折叠为星平面字符、孤立项 → U+FFFD）：stdin 的 `surrogateescape` 与 JSON `\udXXX` 产物在进入 LLM 请求体 / 响应正文 / 追问输入前统一过关，避免 `UnicodeEncodeError` 被误分类为 provider 故障 | `core/text_safety.py` |
@@ -337,7 +338,7 @@ section_visible = board_enabled(section.type) AND data_available(section.data_fl
 
 | 系统 | 层级 | 管什么 | 粒度 | 恢复方式 |
 |:-----|:-----|:-------|:-----|:---------|
-| DataSourceRegistry | 熔断层（HTTP 级） | 这个 Provider 能不能调用 | per-provider | 指数退避冷却（60s→300s→900s→3600s） |
+| DataSourceRegistry | 熔断层（HTTP 级） | 这个 Provider 能不能调用 | per-provider | 指数退避冷却（60s→300s→900s→3600s；每次重新熔断升一档，同一次熔断期内的在途失败不升档） |
 | DegradationTracker | 降级决策层（数据质量级） | 这批数据能不能信任 | per-source | 跨会话持久化 |
 
 [↑ 回到顶部](#目录)
@@ -897,7 +898,7 @@ Provider Chain 采用**职责链（Chain of Responsibility）模式**：每个�
 | 恢复条件 | 试探成功 → record_success | 试探成功 → record_success | 半开成功 → 关闭熔断 | record_success → 复位计数 |
 | 持久化 | `data/state/circuit_breaker.json` | `data/state/circuit_breaker.json` | 会话级（无持久化） | `data/state/metrics_breaker.json` |
 
-**指数退避**：单股票 API 熔断器冷却时间采用指数退避策略（60s→300s→900s→3600s），每次连续失败冷却时长按退避等级递增，成功恢复后重置为基础值。
+**指数退避**：单股票 API 熔断器冷却时间采用指数退避策略（60s→300s→900s→3600s），每次**重新熔断**按退避等级递增一档，成功恢复后重置为基础值。熔断期内到达的并发在途失败只累加计数、不再升档——否则一批并发请求（如 41 个代码同时刷行业接口）在通道掉线时会在 1 秒内把退避从 60s 打到 3600s，等于用一次抖动关停主通道一小时。
 
 **跨会话持久化**：熔断器状态持久化到 `data/state/circuit_breaker.json`，与 `data/cache/` 隔离，避免缓存清理误删。会话重启后恢复熔断记忆。
 

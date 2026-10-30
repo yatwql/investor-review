@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 from src.python.core.code_utils import is_a_share_code
+from src.python.core.log_dedupe import log_throttled
 from src.python.fetcher.akshare import get_dividend_data, get_profit_forecast
 from src.python.fetcher.fund import fetch_fund_holdings_cached
 from src.python.fetcher.index import fetch_indices, fetch_us_indices
@@ -496,7 +497,12 @@ def _render_news_section(
             news_data = []
             logger.info("财经新闻热点与持仓关联分析：无数据")
         else:
-            logger.info("财经新闻热点与持仓关联分析完成，%d 条", len(news_data))
+            log_throttled(
+                logger,
+                "news_correlation_ready",
+                "财经新闻热点与持仓关联分析完成，%d 条",
+                len(news_data),
+            )
         return news_data, _news_llm_meta
     except Exception as e:
         logger.warning("新闻获取失败: %s", e)

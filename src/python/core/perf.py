@@ -293,10 +293,27 @@ class PerfCollector:
             return None
         elapsed = round(time.perf_counter() - self._current_start, 3)
         self._phases.append(_PhaseRecord(name=self._current_name, seconds=elapsed))
-        logger.info("[perf] %s: %.3fs", self._current_name, elapsed)
+        logger.info("[perf] %s: %.3fs%s", self._current_name, elapsed, self._slowest_spans_note(self._current_name))
         self._current_name = None
         self._current_start = None
         return elapsed
+
+    def _slowest_spans_note(self, phase_name: str, top: int = 3) -> str:
+        """阶段行附带最慢子项（无子项记录时返回空串）。
+
+        父阶段汇总行只给总数，日志分析无法归因到具体子项（如 ``LLM+新闻 94s``
+        到底慢在哪一步）；把最慢的几项直接带在同一行，排查不必再翻 perf 台账。
+        """
+        with self._lock:
+            recorder = self._recorders.get(phase_name)
+        if recorder is None:
+            return ""
+        spans = recorder.spans()
+        if not spans:
+            return ""
+        ranked = sorted(spans.items(), key=lambda item: -item[1])[:top]
+        detail = " / ".join(f"{name} {seconds:.1f}s" for name, seconds in ranked)
+        return f"（{detail}）"
 
     # ── 辅助记录 ──
 
