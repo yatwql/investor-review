@@ -128,7 +128,7 @@ def test_save_refuses_when_file_modified_after_load(
     assert "已被其他程序修改" in capsys.readouterr().out
 
 
-def test_save_writes_only_after_confirmation(tmp_path: Path, feed, capsys: pytest.CaptureFixture[str]):
+def test_save_single_decision_prompt(tmp_path: Path, feed, capsys: pytest.CaptureFixture[str]):
     path = _ui_file(tmp_path)
     session = hh._Session(book=load_book(str(path)), mtime=os.path.getmtime(path))
     session.book.apply(
@@ -143,7 +143,7 @@ def test_save_writes_only_after_confirmation(tmp_path: Path, feed, capsys: pytes
         )
     )
     before = path.read_bytes()
-    feed("n", "n")  # 不记流水、不确认写入
+    feed("0")  # 0 = 取消保存（草稿保留）
 
     hh._save(session)
 
@@ -153,7 +153,24 @@ def test_save_writes_only_after_confirmation(tmp_path: Path, feed, capsys: pytes
     assert "本次待保存变更（1 笔）" in out
     assert "已取消保存" in out
 
-    feed("", "y")  # 默认不记流水、确认写入
+    feed("2")  # 2 = 丢弃草稿（文件不动）
+    hh._save(session)
+    assert path.read_bytes() == before
+    assert session.book.drafts == []
+    assert "已丢弃 1 笔草稿" in capsys.readouterr().out
+
+    session.book.apply(
+        TradeIntent(
+            account="股票账户",
+            name="长江电力",
+            code="600900",
+            side=SIDE_BUY,
+            shares=100,
+            price=21.0,
+            trade_date="2026-07-01",
+        )
+    )
+    feed("")  # 回车 = 写入文件（不记流水）
     hh._save(session)
 
     assert session.book.drafts == []
@@ -192,7 +209,7 @@ def test_panel_items_use_numbers_with_letter_aliases(tmp_path: Path):
     items = hh._panel_items(session)
 
     assert [item.key for item in items] == ["1", "2", "3", "4", "5", "0"]
-    assert hh._ALIAS_BY_KEY == {"1": "L", "2": "P", "3": "S", "4": "W", "5": "U"}
+    assert hh._ALIAS_BY_KEY == {"1": "L", "2": "P", "3": "S", "4": "W", "5": "U", "6": "C"}
     assert "B" not in hh._ALIAS_BY_KEY.values()
     labels = {item.key: item.label for item in items}
     assert labels["1"].startswith("查看持仓")
@@ -281,7 +298,7 @@ def test_duplicate_entry_needs_explicit_confirmation(tmp_path: Path, feed, monke
         "src.python.fetcher.price.fetch_market_data",
         lambda code, expected_name="": {"name": "贵州茅台", "code": code, "price": 1700.0},
     )
-    answers = ("1", "N", "600519", "10", "2026-07-01", "", "y")
+    answers = ("1", "N", "600519", "10", "2026-07-01", "")
 
     feed(*answers)
     hh._record(session, SIDE_BUY)
@@ -356,3 +373,73 @@ def test_exit_guard_offers_three_ways(tmp_path: Path, feed, monkeypatch: pytest.
     feed("1", "n", "y")  # 1=保存后退出：不记流水、确认写入
     assert hh._exit_guard(session) is True
     assert session.book.drafts == []
+
+
+def test_record_does_not_ask_extra_confirmation(tmp_path: Path, feed, monkeypatch: pytest.MonkeyPatch):
+    """一笔录入只回显不二次确认（保护点在保存与撤销，少一次击键）。"""
+    path = _ui_file(tmp_path)
+    session = hh._Session(book=load_book(str(path)), mtime=os.path.getmtime(path))
+    monkeypatch.setattr(
+        "src.python.fetcher.price.fetch_market_data",
+        lambda code, expected_name="": {"name": "贵州茅台", "code": code, "price": 1700.0},
+    )
+    from unittest.mock import MagicMock
+
+    confirm = MagicMock(return_value=True)  # 任何确认调用都算回退
+    monkeypatch.setattr(hh, "_confirm", confirm)
+
+    feed("1", "N", "600519", "10", "2026-07-01", "")
+    hh._record(session, SIDE_BUY)
+    assert len(session.book.drafts) == 1
+    confirm.assert_not_called()
+
+
+def test_continue_previous_entry_shortens_flow(tmp_path: Path, feed, monkeypatch: pytest.MonkeyPatch):
+    """「继续录上一笔」复用账户与标的：不再问账户/标的，且菜单上出现 6/C。"""
+    path = _ui_file(tmp_path)
+    session = hh._Session(book=load_book(str(path)), mtime=os.path.getmtime(path))
+    monkeypatch.setattr(
+        "src.python.fetcher.price.fetch_market_data",
+        lambda code, expected_name="": {"name": "贵州茅台", "code": code, "price": 1700.0},
+    )
+    feed("1", "N", "600519", "10", "2026-07-01", "")
+    hh._record(session, SIDE_BUY)
+    assert session.last is not None
+
+    keys = [item.key for item in hh._panel_items(session)]
+    assert "6" in keys and keys[-1] == "0", keys
+    continue_item = next(item for item in hh._panel_items(session) if item.key == "6")
+    assert "贵州茅台" in continue_item.label
+
+    feed("20", "2026-07-02", "")  # 只填份额/交易日/价格（账户与标的沿用）
+    continue_item.action()
+    assert len(session.book.drafts) == 2
+    assert {d.code for d in session.book.drafts} == {"600519"}
+
+
+def test_save_f_records_flow_sheet(tmp_path: Path, feed, monkeypatch: pytest.MonkeyPatch):
+    """保存时按 f：一次输入即表达「记入交易流水 + 写入」。"""
+    path = _ui_file(tmp_path)
+    session = hh._Session(book=load_book(str(path)), mtime=os.path.getmtime(path))
+    session.book.apply(
+        TradeIntent(
+            account="股票账户",
+            name="长江电力",
+            code="600900",
+            side=SIDE_BUY,
+            shares=100,
+            price=21.0,
+            trade_date="2026-07-01",
+        )
+    )
+    calls: list[bool] = []
+    original = session.book.save
+
+    def _spy_save(**kwargs) -> None:
+        calls.append(bool(kwargs.get("append_flows")))
+        original(**kwargs)
+
+    monkeypatch.setattr(session.book, "save", _spy_save)
+    feed("f")
+    hh._save(session)
+    assert calls == [True], calls

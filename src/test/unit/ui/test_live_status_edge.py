@@ -1,88 +1,67 @@
 # -*- coding: utf-8 -*-
-"""长任务状态条边缘：心跳线程生命周期与中止键轮询的容错（`@pytest.mark.edge`）。"""
+"""状态条边缘（`@pytest.mark.edge`）：真实伪终端上的写入与终端属性不变式。
+
+为什么用 pty：状态条的写入序列与「有没有动终端模式」只有真终端才测得准。这一组
+正是用来钉住「状态条不得触碰 termios / stdin」：后台读键与 cbreak 一旦存在，就会把
+终端留在无回显状态，而假流覆盖不到这类问题。
+"""
 
 from __future__ import annotations
 
-import time
-from unittest.mock import MagicMock, patch
+import os
+import pty
+import termios
 
 import pytest
 
-from src.python.core.cancel import CancelToken
+from src.python.tui.live_status import LiveStatusBar, status_bar_text
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_ui, pytest.mark.edge]
 
 
-class _FakePerf:
-    """最小 perf 替身：恒有活跃阶段。"""
-
-    report_type = "basic"
-
-    def stage_status(self) -> dict:
-        return {"phase": "行情获取", "elapsed": 1.0}
-
-
-def _live_reporter(token: CancelToken):
-    """在「伪 TTY + 可轮询」条件下构造启用状态条的报告器（心跳节拍压到毫秒级）。"""
-    from src.python.report.progress import TuiProgressReporter
-    from src.python.tui import live_status
-
-    watcher = MagicMock()
-    watcher.open.return_value = True
-    watcher.poll.return_value = "q"
-    patcher = [
-        patch.object(live_status.LiveStatusBar, "supported", return_value=True),
-        patch.object(live_status.KeyWatcher, "supported", return_value=True),
-        patch.object(live_status, "KeyWatcher", return_value=watcher),
-        patch("src.python.report.progress._HEARTBEAT_SECONDS", 0.01),
-    ]
-    for p in patcher:
-        p.start()
-    reporter = TuiProgressReporter(live=True, cancel_token=token)
-    return reporter, patcher, watcher
+@pytest.fixture()
+def pty_pair():
+    """(master, slave) 伪终端对；用例结束关闭。"""
+    master, slave = pty.openpty()
+    try:
+        yield master, slave
+    finally:
+        os.close(master)
+        os.close(slave)
 
 
-class TestHeartbeatLifecycle:
-    def test_q_key_sets_cancel_token(self):
-        """心跳轮询到 `q` 即置位令牌（有序中止的触发点）。"""
-        token = CancelToken("用户取消")
-        reporter, patchers, _watcher = _live_reporter(token)
-        try:
-            reporter.stage_progress(_FakePerf())
-            deadline = time.monotonic() + 2.0
-            while not token.cancelled and time.monotonic() < deadline:
-                time.sleep(0.01)
-            assert token.cancelled is True
-            assert reporter.cancel_token is token
-        finally:
-            reporter.close()
-            for p in patchers:
-                p.stop()
+class TestRealTerminal:
+    def test_writes_reach_terminal(self, pty_pair):
+        """状态条写入能到达终端（不是被缓冲丢弃）。"""
+        master, slave = pty_pair
+        with os.fdopen(os.dup(slave), "w", buffering=1, encoding="utf-8") as stream:
+            bar = LiveStatusBar(stream)
+            bar.update(status_bar_text("行情获取"))
+            bar.close()
+        data = os.read(master, 4096).decode(errors="ignore")
+        assert "行情获取" in data or "\x1b[K" in data
 
-    def test_thread_stops_after_close(self):
-        """close 后心跳线程结束（不留后台线程）。"""
-        token = CancelToken("用户取消")
-        reporter, patchers, _watcher = _live_reporter(token)
-        try:
-            reporter.stage_progress(_FakePerf())
-            ticker = reporter._ticker
-            assert ticker is not None and ticker.is_alive()
-            reporter.close()
-            assert not ticker.is_alive(), "close 后心跳线程必须退出"
-        finally:
-            for p in patchers:
-                p.stop()
+    def test_termios_untouched(self, pty_pair):
+        """状态条不得改动终端属性（cbreak 泄漏会让终端失去回显）。"""
+        _master, slave = pty_pair
+        before = termios.tcgetattr(slave)
+        bar = LiveStatusBar(os.fdopen(os.dup(slave), "w", buffering=1, encoding="utf-8"))
+        bar.update(status_bar_text("行情获取"))
+        bar.close()
+        assert termios.tcgetattr(slave) == before
 
-    def test_poll_error_does_not_break_generation(self):
-        """轮询抛错被吞掉：状态条/中止键的问题不得影响生成流程。"""
-        token = CancelToken("用户取消")
-        reporter, patchers, watcher = _live_reporter(token)
-        watcher.poll.side_effect = OSError("读终端失败")
-        try:
-            reporter.stage_progress(_FakePerf())
-            time.sleep(0.05)
-            assert token.cancelled is False
-        finally:
-            reporter.close()
-            for p in patchers:
-                p.stop()
+    def test_no_stdin_read(self, pty_pair, monkeypatch):
+        """状态条生命周期内不得读 stdin（后台读键会与交互提示抢输入）。"""
+        _master, slave = pty_pair
+        read_calls: list[int] = []
+        real_read = os.read
+
+        def _spy(fd, n):
+            read_calls.append(fd)
+            return real_read(fd, n)
+
+        monkeypatch.setattr(os, "read", _spy)
+        bar = LiveStatusBar(os.fdopen(os.dup(slave), "w", buffering=1, encoding="utf-8"))
+        bar.update(status_bar_text("行情获取"))
+        bar.close()
+        assert read_calls == [], f"状态条不得读 stdin，实际读了 fd={read_calls}"

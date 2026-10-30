@@ -1,5 +1,5 @@
 # 投资复盘助手 — 质量控制与测试标准
-> 文档版本：0.16.11
+> 文档版本：0.16.12
 
 ---
 
@@ -600,15 +600,14 @@
 | R-TUI-09 | `src/test/unit/ui/test_report_artifacts.py` + `src/test/unit/ui/test_tui_handlers.py` | 批 6 |
 | R-TUI-10 | `src/test/unit/ui/test_tui_menu_status.py` | 批 6 |
 | R-TUI-11 | `src/test/unit/ui/test_live_status.py` | 批 7 |
-| R-TUI-12 | `src/test/unit/report/test_stage_cancel.py` + `src/test/unit/ui/test_live_status.py` | 批 7 |
-| R-TUI-13 | `src/test/unit/ui/test_pager.py` + `src/test/unit/ui/test_pager_edge.py` + `src/test/unit/ui/test_handlers_log.py` | 批 7 |
-| R-TUI-14 | `src/test/unit/ui/test_tui_menu_help.py` | 批 7 |
-| R-TUI-15 | `src/test/unit/ui/test_panel_runtime.py` | 批 7 |
-| R-TUI-16 | `src/test/unit/handlers/test_config_session.py` | 批 7 |
-| R-TUI-17 | `src/test/unit/ui/test_tui_menu_loop.py` | 批 7 |
-| R-TUI-18 | `src/test/unit/ui/test_symbols.py` + `src/test/unit/ui/test_tui_layout_baseline.py` + `src/test/unit/ui/test_live_status.py` | 批 7 |
-| R-TUI-19 | `src/test/unit/ui/test_tui_layout_baseline.py` | 批 7 |
-| R-TUI-20 | `src/test/unit/ui/test_error_tail.py` + `src/test/unit/ui/test_prompt_contract.py` | 批 7 |
+| R-TUI-12 | `src/test/unit/ui/test_pager.py` + `src/test/unit/ui/test_pager_edge.py` + `src/test/unit/ui/test_handlers_log.py` | 批 7 |
+| R-TUI-13 | `src/test/unit/ui/test_tui_menu_help.py` | 批 7 |
+| R-TUI-14 | `src/test/unit/ui/test_panel_runtime.py` | 批 7 |
+| R-TUI-15 | `src/test/unit/handlers/test_config_session.py` | 批 7 |
+| R-TUI-16 | `src/test/unit/ui/test_tui_menu_loop.py` | 批 7 |
+| R-TUI-17 | `src/test/unit/ui/test_symbols.py` + `src/test/unit/ui/test_tui_layout_baseline.py` + `src/test/unit/ui/test_live_status.py` | 批 7 |
+| R-TUI-18 | `src/test/unit/ui/test_tui_layout_baseline.py` | 批 7 |
+| R-TUI-19 | `src/test/unit/ui/test_error_tail.py` + `src/test/unit/ui/test_prompt_contract.py` | 批 7 |
 | R-TUI-06 | `src/test/unit/ui/test_tui_menu.py` + `src/test/unit/config/test_config.py` | 批 6 |
 | R-TUI-07 | `src/test/unit/ui/test_tui_menu.py::TestMainLoopExitKeys` | 批 6 |
 | R-TUI-03 | `src/test/unit/ui/test_tui_handlers.py` | 批 6 |
@@ -632,6 +631,7 @@
 | R-HLD-11 | `src/test/unit/ui/test_handlers_holdings.py` + `src/test/unit/core/test_holdings_editor_edge.py` + `src/test/unit/core/test_holdings_editor.py` | 持仓录入 |
 | R-HLD-12 | `src/test/unit/ui/test_handlers_holdings.py` + `src/test/unit/core/test_holdings_editor.py` | 持仓录入 |
 | R-HLD-13 | `src/test/unit/ui/test_handlers_holdings.py` + `src/test/unit/core/test_holdings_editor.py` | 持仓录入 |
+| R-HLD-14 | `src/test/unit/ui/test_handlers_holdings.py` | 批 7 |
 | R-DIS-01 | `src/test/unit/analysis/test_trade_discipline.py` | 批 6 |
 | R-DIS-02 | `src/test/unit/analysis/test_trade_discipline.py` | 批 6 |
 | R-DIS-03 | `src/test/unit/analysis/test_trade_discipline.py` | 批 6 |
