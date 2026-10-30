@@ -73,7 +73,7 @@ def correlate_news_with_holdings(
             break
 
     logger.info(
-        "新闻关联: 输入 %d 条, 关联 %d 条, 关键词 %d 个",
+        "财经热点关联: 输入 %d 条, 关联 %d 条, 关键词 %d 个",
         len(news_list),
         len(result),
         len(keywords),

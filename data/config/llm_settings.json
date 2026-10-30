@@ -68,9 +68,9 @@
         }
       }
     },
-    // 财经新闻热点与持仓关联分析（news_correlation）
+    // 财经热点关联分析（news_correlation）
     "news_correlation": {
-      "enabled": false,  // 是否启用（模块启停 / 思考模式）
+      "enabled": true,  // 是否启用（模块启停 / 思考模式）
       "temperature": 0.1,  // 采样温度（越低越确定）
       "max_tokens": 3000,  // 单次调用最大输出 token
       "output_brief": null,  // 是否要求精简输出
@@ -108,6 +108,7 @@
     "self_review": {
       "enabled": true,  // 是否启用（模块启停 / 思考模式）
       "temperature": 0.1,  // 采样温度（越低越确定）
+      "max_tokens": 8192,  // 单次调用最大输出 token
       "timeout": 90,  // 单次调用超时（秒）
       "thinking": {
         "enabled": false,  // 是否启用（模块启停 / 思考模式）
