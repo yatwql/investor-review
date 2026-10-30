@@ -2573,6 +2573,7 @@
       wrap: $('holdings-draft-wrap'),
       list: $('holdings-draft'),
       flows: $('holdings-flows'),
+      clear: $('holdings-clear'),
       preview: $('holdings-preview'),
       save: $('holdings-save'),
       previewBox: $('holdings-preview-box'),
@@ -2726,8 +2727,12 @@
         item.appendChild(remove);
         els.list.appendChild(item);
       });
-      els.wrap.hidden = state.draft.length === 0;
-      if (state.draft.length === 0) {
+      var empty = state.draft.length === 0;
+      els.wrap.hidden = empty;
+      els.save.disabled = empty;
+      els.preview.disabled = empty;
+      els.clear.disabled = empty;
+      if (empty) {
         els.previewBox.hidden = true;
       }
     }
@@ -2755,10 +2760,7 @@
         setMsg(els.error, '', null);
         els.shares.value = '';
         els.amount.value = '';
-        if (els.code.value) {
-          els.code.value = '';
-          els.name.value = '';
-        }
+        // 保留账户/标的：分批卖出、加仓时可直接改份额继续录（对齐 TUI 的「继续录上一笔」）
         renderDraft();
       } catch (err) {
         setMsg(els.error, err.message, 'error');
@@ -2776,11 +2778,27 @@
     });
 
     els.save.addEventListener('click', function () {
-      var summary = state.draft.map(intentLabel).join('\n');
-      if (!window.confirm('确认写入持仓文件？\n\n' + summary + '\n\n写前会自动备份为 .bak。')) {
+      if (state.draft.length === 0) {
         return;
       }
-      postJson('/api/holdings/save', {
+      var summary = state.draft.map(intentLabel).join('\n');
+      setMsg(els.error, '', null);
+      postJson('/api/holdings/preview', { intents: state.draft }).then(function (preview) {
+        var diff = preview.diff || {};
+        var head =
+          '写回后共 ' + preview.rows_total + ' 条持仓（新增 ' + (diff.added || 0) +
+          ' / 更新 ' + (diff.updated || 0) + ' / 移除 ' + (diff.removed || 0) + '）';
+        if (!window.confirm('确认写入持仓文件？\n\n' + head + '\n\n' + summary + '\n\n写前会自动备份为 .bak。')) {
+          return;
+        }
+        return doSave();
+      }, function (err) {
+        setMsg(els.error, err.message, 'error');
+      });
+    });
+
+    function doSave() {
+      return postJson('/api/holdings/save', {
         intents: state.draft,
         base_mtime: state.baseMtime,
         append_flows: els.flows.checked,
@@ -2804,6 +2822,33 @@
           }
         }
       );
+    }
+
+    // 清空本次变更清单（不写文件）；与 TUI 的「2=丢弃草稿」同义
+    els.clear.addEventListener('click', function () {
+      if (state.draft.length === 0) {
+        return;
+      }
+      if (!window.confirm('清空本次 ' + state.draft.length + ' 笔变更？持仓文件不会被改动。')) {
+        return;
+      }
+      state.draft = [];
+      renderDraft();
+      setMsg(els.error, '已清空变更清单（持仓文件未改动）', 'ok');
+    });
+
+    // 记住「同时记入交易流水」的选择，省去每次重勾
+    try {
+      els.flows.checked = localStorage.getItem('holdings:flows') === '1';
+    } catch (e) {
+      /* 隐私模式下 localStorage 不可用，保持默认未勾选 */
+    }
+    els.flows.addEventListener('change', function () {
+      try {
+        localStorage.setItem('holdings:flows', els.flows.checked ? '1' : '0');
+      } catch (e) {
+        /* ignore */
+      }
     });
 
     // 切到本页签时懒加载总览（首次与每次进入都刷新，避免看到旧文件状态）；
