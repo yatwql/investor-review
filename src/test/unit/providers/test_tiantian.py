@@ -49,7 +49,7 @@ class TestFindHoldingsTable(unittest.TestCase):
         <tr><td>五粮液</td><td>5.20%</td></tr></table>
         """
         result = _find_holdings_table(html)
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertIsNotNone(result)
         self.assertIn("贵州茅台", result)
 
@@ -62,7 +62,7 @@ class TestFindHoldingsTable(unittest.TestCase):
         <tr><td>E</td><td>5.0%</td></tr></table>
         """
         result = _find_holdings_table(html)
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertIsNotNone(result)
         self.assertIn("1.0%", result)
 
@@ -83,7 +83,7 @@ class TestParseHoldingsRows(unittest.TestCase):
         <tr><td><a stockcode="stock_600519">贵州茅台</a></td><td>9.50%</td></tr>
         """
         result = _parse_holdings_rows(table)
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["name"], "贵州茅台")
         self.assertEqual(result[0]["code"], "600519")
@@ -95,7 +95,7 @@ class TestParseHoldingsRows(unittest.TestCase):
         <tr><td><a stockcode="stock_000858">五粮液</a></td><td>5.20%</td></tr>
         """
         result = _parse_holdings_rows(table)
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertEqual(len(result), 2)
         self.assertEqual(result[1]["name"], "五粮液")
 
@@ -104,7 +104,7 @@ class TestParseHoldingsRows(unittest.TestCase):
         <tr><td><a href="//quote.eastmoney.com/unify/r/0.300604">东方财富</a></td><td>3.0%</td></tr>
         """
         result = _parse_holdings_rows(table)
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["code"], "300604")
 
@@ -222,7 +222,7 @@ class TestFetchFundHoldingsLadder(unittest.TestCase):
     def test_hop1_hit_skips_main_page(self, mock_html, _mock_dated):
         """第 1 跳（年份域季报）命中：不请求主页面。"""
         result = fetch_fund_holdings("110022")
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertEqual(result["date"], "2026-06-30")
         mock_html.assert_not_called()
 
@@ -240,7 +240,7 @@ class TestFetchFundHoldingsLadder(unittest.TestCase):
         """联接基金：带回目标 ETF，且绝不落到第 3 跳的陈年报告。"""
         mock_html.return_value = self._FEEDER_HTML
         result = fetch_fund_holdings("016055")
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertEqual(result["feeder_target_code"], "513390")
         self.assertEqual(result["holdings"], [])
         mock_legacy.assert_not_called()
@@ -256,7 +256,7 @@ class TestFetchFundHoldingsLadder(unittest.TestCase):
         """
         mock_html.return_value = self._NORMAL_ETF_HTML
         result = fetch_fund_holdings("510050")
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertNotIn("feeder_target_code", result)
         self.assertEqual(len(result["holdings"]), 3)
         mock_legacy.assert_not_called()
@@ -268,7 +268,7 @@ class TestFetchFundHoldingsLadder(unittest.TestCase):
         """主页面取到前十大即返回，不再落到无年份兜底。"""
         mock_html.return_value = self._NORMAL_ETF_HTML
         result = fetch_fund_holdings("510050")
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertEqual(result["holdings"][0]["name"], "贵州茅台")
         mock_legacy.assert_not_called()
 
@@ -279,7 +279,7 @@ class TestFetchFundHoldingsLadder(unittest.TestCase):
         """主页面无持仓且无锚点：退回无年份兜底（其陈旧性由报告层时效闸门裁决）。"""
         mock_html.return_value = "<title>某基金(016055)</title><div>无持仓表</div>"
         result = fetch_fund_holdings("016055")
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertEqual(result["date"], "2023-09-30")
         mock_legacy.assert_called_once()
 
@@ -290,7 +290,7 @@ class TestFetchFundHoldingsLadder(unittest.TestCase):
         """三跳皆空：返回带名称的空持仓（供报告层判「持仓不可用」）。"""
         mock_html.return_value = "<title>某基金(016055)</title><div>无持仓表</div>"
         result = fetch_fund_holdings("016055")
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertEqual(result["name"], "某基金")
         self.assertEqual(result["holdings"], [])
 
@@ -306,7 +306,7 @@ class TestParseQuarterlyHoldings(unittest.TestCase):
         </table>
         """
         result = _parse_quarterly_holdings(html)
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["name"], "贵州茅台")
         self.assertEqual(result[0]["code"], "600519")
@@ -357,7 +357,7 @@ class TestParseSylReturns(unittest.TestCase):
         var syl_1n = "12.34";
         """
         result = _parse_syl_returns(js)
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertIn("近1月", result)
         self.assertAlmostEqual(result["近1月"]["return"], 1.23)
         self.assertAlmostEqual(result["近3月"]["return"], 3.45)
@@ -372,7 +372,7 @@ class TestParseSylReturns(unittest.TestCase):
         var syl_5n = "25.00";
         """
         result = _parse_syl_returns(js)
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertIn("近2年", result)
         self.assertAlmostEqual(result["近2年"]["return"], 8.50)
         self.assertIn("近3年", result)
@@ -384,7 +384,7 @@ class TestParseSylReturns(unittest.TestCase):
         """'--' 应跳过而非解析为 0。"""
         js = 'var syl_1y = "--";'
         result = _parse_syl_returns(js)
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertNotIn("近1月", result)
 
     def test_mixed_dash_and_value(self):
@@ -395,7 +395,7 @@ class TestParseSylReturns(unittest.TestCase):
         var syl_3n = "18.20";
         """
         result = _parse_syl_returns(js)
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertIn("近1月", result)
         self.assertNotIn("近2年", result)  # -- 跳过
         self.assertIn("近3年", result)
@@ -408,7 +408,7 @@ class TestParseSylReturns(unittest.TestCase):
     def test_handles_numeric_value(self):
         js = "var syl_1y = 2.5;"
         result = _parse_syl_returns(js)
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertAlmostEqual(result["近1月"]["return"], 2.5)
 
     def test_empty_text(self):
@@ -424,7 +424,7 @@ class TestParseRankEntry(unittest.TestCase):
         var Data_rateInSimilarPersent = [[1, 6.25], [2, 5.50]];
         """
         result = _parse_rank_entry(js)
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertEqual(result["rank"], "45")
         self.assertEqual(result["total"], "800")
         self.assertEqual(result["percentile"], "5.5")
@@ -432,7 +432,7 @@ class TestParseRankEntry(unittest.TestCase):
     def test_no_rank_data(self):
         js = "var nothing = 1;"
         result = _parse_rank_entry(js)
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertEqual(result["rank"], "--")
         self.assertEqual(result["total"], "--")
         self.assertEqual(result["percentile"], "--")
@@ -440,7 +440,7 @@ class TestParseRankEntry(unittest.TestCase):
     def test_empty_rank_array(self):
         js = "var Data_rateInSimilarType = [];"
         result = _parse_rank_entry(js)
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertEqual(result["rank"], "--")
         self.assertEqual(result["total"], "--")
 
@@ -451,7 +451,7 @@ class TestParseRankEntry(unittest.TestCase):
             "var Data_rateInSimilarPersent = [[1790524800000,36.19]];"
         )
         result = _parse_rank_entry(js)
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertEqual((result["rank"], result["total"], result["percentile"]), ("231", "362", "36.19"))
         self.assertEqual(result["data_date"], "2026-09-28")
 
@@ -466,7 +466,7 @@ class TestParseRankEntry(unittest.TestCase):
         )
         with self.assertLogs("invest", level="WARNING") as cm:
             result = _parse_rank_entry(js)
-            assert result is not None  # 类型收窄：下方按下标/成员断言
+            assert result is not None
         self.assertEqual((result["rank"], result["total"]), ("231", "362"))
         self.assertEqual(result["percentile"], "--")
         self.assertEqual(result["data_date"], "2026-09-28")
@@ -479,7 +479,7 @@ class TestParseRankEntry(unittest.TestCase):
             "var Data_rateInSimilarPersent = [[1790524800000,36.19]];"
         )
         result = _parse_rank_entry(js)
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertEqual(result["rank"], "--")
         self.assertEqual(result["total"], "--")
         self.assertEqual(result["percentile"], "36.19")
@@ -489,7 +489,7 @@ class TestParseRankEntry(unittest.TestCase):
         """无日期（未知期次，旧格式/精简载荷）不得被当作「不同期」而丢弃数据。"""
         js = 'var Data_rateInSimilarType = [{"y":"45","sc":"800"}];\nvar Data_rateInSimilarPersent = [[1, 6.25]];'
         result = _parse_rank_entry(js)
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertEqual((result["rank"], result["total"], result["percentile"]), ("45", "800", "6.25"))
         self.assertEqual(result["data_date"], "--")
 
@@ -503,7 +503,7 @@ class TestParseRankEntry(unittest.TestCase):
         )
         with self.assertLogs("invest", level="WARNING") as cm:
             result = _parse_rank_entry(js)
-            assert result is not None  # 类型收窄：下方按下标/成员断言
+            assert result is not None
         self.assertEqual((result["rank"], result["total"], result["percentile"]), ("--", "--", "--"))
         self.assertEqual(result["data_date"], "--")
         self.assertTrue(any("数据陈旧" in m for m in cm.output))
@@ -517,7 +517,7 @@ class TestParseRankEntry(unittest.TestCase):
         )
         with self.assertNoLogs("invest", level="WARNING"):
             result = _parse_rank_entry(js)
-            assert result is not None  # 类型收窄：下方按下标/成员断言
+            assert result is not None
         self.assertEqual((result["rank"], result["total"]), ("231", "362"))
 
     def test_missing_nav_series_skips_stale_gate(self):
@@ -527,7 +527,7 @@ class TestParseRankEntry(unittest.TestCase):
             "var Data_rateInSimilarPersent = [[1790524800000,36.19]];"
         )
         result = _parse_rank_entry(js)
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertEqual((result["rank"], result["total"]), ("231", "362"))
 
 
@@ -766,7 +766,7 @@ class TestFetchFundRankingsTypeAwareRating(unittest.TestCase):
         """债券型 14%：默认阈值下为良好，债券宽松阈值下为优秀。"""
         mock_req.return_value = _build_pingzhong_js("招商产业债券A", rank=14)
         result = fetch_fund_rankings("110003")
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertEqual(result["type"], "bond")
         self.assertEqual(result["rating"], "优秀")
 
@@ -775,7 +775,7 @@ class TestFetchFundRankingsTypeAwareRating(unittest.TestCase):
         """指数型 27%：默认阈值下为良好，指数严格阈值下为稳定。"""
         mock_req.return_value = _build_pingzhong_js("华泰柏瑞沪深300ETF联接A", rank=27)
         result = fetch_fund_rankings("000961")
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertEqual(result["type"], "index")
         self.assertEqual(result["rating"], "稳定")
 
@@ -784,7 +784,7 @@ class TestFetchFundRankingsTypeAwareRating(unittest.TestCase):
         """QDII 14%：宽松阈值下为优秀。"""
         mock_req.return_value = _build_pingzhong_js("广发纳斯达克100指数A", rank=14)
         result = fetch_fund_rankings("270042")
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertEqual(result["type"], "qdii")
         self.assertEqual(result["rating"], "优秀")
 
@@ -793,7 +793,7 @@ class TestFetchFundRankingsTypeAwareRating(unittest.TestCase):
         """主动权益 14%：默认阈值下为良好。"""
         mock_req.return_value = _build_pingzhong_js("华夏成长混合A", rank=14)
         result = fetch_fund_rankings("000001")
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertEqual(result["type"], "")
         self.assertEqual(result["rating"], "良好")
 
@@ -802,7 +802,7 @@ class TestFetchFundRankingsTypeAwareRating(unittest.TestCase):
         """返回结构包含 name 与 type 字段。"""
         mock_req.return_value = _build_pingzhong_js("南方原油(QDII)", rank=14)
         result = fetch_fund_rankings("501018")
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertEqual(result["name"], "南方原油(QDII)")
         self.assertEqual(result["type"], "qdii")
 
@@ -812,7 +812,7 @@ class TestFetchFundRankingsTypeAwareRating(unittest.TestCase):
         js = 'var fS_name = "招商产业债券A";\nvar syl_1y = "2.1";\n'
         mock_req.return_value = js
         result = fetch_fund_rankings("110003")
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertEqual(result["type"], "bond")
         self.assertEqual(result["rating"], "")
 
@@ -823,7 +823,7 @@ class TestParsePerfEvaluation(unittest.TestCase):
     def test_parse_valid_json(self):
         js = 'var Data_performanceEvaluation = {"categories": ["超额收益"], "data": [85]};'
         result = _parse_perf_evaluation(js)
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertIsNotNone(result)
         self.assertEqual(result["categories"], ["超额收益"])
         self.assertEqual(result["data"], [85])
@@ -844,7 +844,7 @@ class TestParseRiskAnalysis(unittest.TestCase):
         """JSON 对象格式：categories + data 双数组。"""
         js = 'var Data_riskAnalysis = {"categories": ["年化波动率","最大回撤","夏普比率"],"data": [15.2,-18.5,0.85]};'
         result = _parse_risk_analysis(js)
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertIsNotNone(result)
         self.assertAlmostEqual(result["年化波动率"], 15.2)
         self.assertAlmostEqual(result["最大回撤"], -18.5)
@@ -854,7 +854,7 @@ class TestParseRiskAnalysis(unittest.TestCase):
         """数组格式：[["名称", 值], ...]。"""
         js = 'var Data_riskAnalysis = [["最大回撤", -25.3], ["夏普比率", 1.2], ["年化波动率", 18.5]];'
         result = _parse_risk_analysis(js)
-        assert result is not None  # 类型收窄：下方按下标/成员断言
+        assert result is not None
         self.assertIsNotNone(result)
         self.assertAlmostEqual(result["最大回撤"], -25.3)
         self.assertAlmostEqual(result["夏普比率"], 1.2)

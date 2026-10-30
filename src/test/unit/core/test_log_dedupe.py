@@ -77,3 +77,13 @@ def test_level_override_used_on_first_call(caplog):
     with caplog.at_level(logging.WARNING, logger="invest"):
         log_dedupe.log_throttled(logger, "k", "告警行", level=logging.WARNING)
     assert any(r.levelno == logging.WARNING for r in caplog.records)
+
+
+def test_folded_branch_tolerates_literal_percent(caplog, monkeypatch):
+    """折叠分支不得二次格式化：模板含字面量 % 时只降级为 DEBUG，不抛异常。"""
+    logger = logging.getLogger("invest")
+    monkeypatch.setattr(log_dedupe.time, "monotonic", lambda: 30.0)
+    assert log_dedupe.log_throttled(logger, "pct", "缓存命中率 99%") is True
+    with caplog.at_level(logging.DEBUG, logger="invest"):
+        assert log_dedupe.log_throttled(logger, "pct", "缓存命中率 99%") is False
+    assert "缓存命中率 99%（同窗口重复，已折叠）" in caplog.text

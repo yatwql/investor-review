@@ -163,7 +163,8 @@ def _fetch_from_all_sources(
                 err_msg = f"失败({e})"
                 src_results[src] = (0, err_msg)
                 if progress_callback:
-                    progress_callback(_label_for(src), 0, err_msg)
+                    # 失败时未拿到条目，按静态标签报（不复用上一轮登记的子渠道标签）
+                    progress_callback(_SOURCE_LABELS.get(src, src), 0, err_msg)
 
     return all_raw, src_results
 

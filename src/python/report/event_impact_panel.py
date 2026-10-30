@@ -125,6 +125,10 @@ def build_event_rows(
 
     Returns:
         {"available": bool, "events": [...], "degraded": [...], "skipped": {...}}
+
+        ``skipped`` 口径：``unmatched`` 是「未匹配到品种」的**合计**（口径兼容），
+        ``not_in_holdings``（关键词不在持仓/穿透索引）与 ``no_keywords``
+        （新闻关联环节召回为 0）是它的两个成因细分，二者之和即 ``unmatched``。
     """
     skipped = {"bad_date": 0, "unmatched": 0, "no_keywords": 0, "not_in_holdings": 0, "capped": 0}
     events: list[dict[str, Any]] = []

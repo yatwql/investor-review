@@ -59,7 +59,8 @@ def log_throttled(
             _last_logged[key] = now
             folded = False
     if folded:
-        logger.log(logging.DEBUG, "%s（同窗口重复，已折叠）", msg % args)
+        # 不在此处二次格式化：模板里出现字面量 % 时 ``msg % args`` 会抛异常/错位。
+        logger.log(logging.DEBUG, msg + "（同窗口重复，已折叠）", *args)
         return False
     logger.log(level, msg, *args)
     return True
