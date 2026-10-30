@@ -153,9 +153,7 @@ class TestPanelMatchesReportChapterNames:
         from src.python.config.chapter_registry import chapter_by_key, chapter_label
         from src.python.core.report_section_registry import get_report_section_order
 
-        report_name = next(
-            sec["name"] for sec in get_report_section_order() if sec["key"] == "news_correlation"
-        )
+        report_name = next(sec["name"] for sec in get_report_section_order() if sec["key"] == "news_correlation")
         top = chapter_by_key("enable_news")
         llm = chapter_by_key("news_correlation")
         assert top is not None and llm is not None
