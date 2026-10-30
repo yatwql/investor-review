@@ -77,6 +77,11 @@ def _format_row(
     pad = " " * indent
     suffix = "." if "." not in number else ""
     prefix = f"{f'{number:>{number_width}}{suffix}'}{pad} "
+    # 名称按剩余宽度截断：状态与 `*` 是扫读依据（窄屏/手机终端也一样），
+    # 长章名不得把它们挤出屏幕。预留 = 前缀 + 名称后空格 + 状态 + `*`。
+    budget = limit - display_width(cursor) - display_width(prefix) - 1 - display_width(status) - display_width(star)
+    budget = max(4, budget)
+    label = truncate_display(label, budget)
     if tier == "narrow":
         shown_label = f"{DIM}{label}{RESET}" if grey else label
         head = f"{cursor}{prefix}{shown_label} {status}{star}"
@@ -84,11 +89,8 @@ def _format_row(
         if notes:
             second += f"{DIM}{notes}{RESET}"
         return [truncate_display(head, limit), truncate_display(second, limit)]
-    shown_label = (
-        f"{DIM}{pad_right(label, max(0, name_column - indent))}{RESET}"
-        if grey
-        else pad_right(label, max(0, name_column - indent))
-    )
+    pad_to = max(0, min(name_column - indent, budget))
+    shown_label = f"{DIM}{pad_right(label, pad_to)}{RESET}" if grey else pad_right(label, pad_to)
     head = f"{cursor}{prefix}{shown_label} {status}{star} {DIM}{pad_right(key, key_column)}{RESET}"
     if notes:
         head += f"{DIM}{notes}{RESET}"

@@ -225,7 +225,7 @@ A: 编辑 `data/config/config.json` 的 `report_section_order` 字段，格式�
 A: 菜单 C 提供交互式配置界面，可独立控制报告中的五个章节组是否显示：
 
 - **基金深度分析**（持仓结构与集中度/风格与因子分析，以及「基金业绩分析」章末尾的基金经理变更监控块）—— 对应 `enable_fund_deep_analysis`
-- **财经热点关联分析**（章节本体含新闻取数与事件窗，LLM 增强另由 `enabled_llm.news_correlation` 控制）—— 对应 `enable_news`
+- **财经热点关联分析**（章节本体含新闻取数与事件窗，LLM 增强（`[C]` 面板显示「财经热点关联分析（LLM）」）另由 `enabled_llm.news_correlation` 控制）—— 对应 `enable_news`
 - **历史走势**（组合历史走势与回撤，一章多区块：走势表 + 回撤矩阵 + 危机区间标注 + 月度收益日历 + 尾部风险统计）—— 对应 `enable_history`
 - **组合演进**（组合演进/多快照趋势）—— 对应 `enable_portfolio_evolution`
 - **行动建议**（再平衡信号/交易纪律/调仓建议/收益归因）—— 对应 `enable_action`

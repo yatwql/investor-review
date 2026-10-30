@@ -303,3 +303,36 @@ class TestChapterPanelReadonly:
         llm_settings({})
         out = _run(monkeypatch, ["99", "0"])
         assert "无效编号" in out
+
+
+class TestNarrowStatusVisibility:
+    """窄屏（手机终端）上开关状态不得被长章名挤出屏幕。"""
+
+    @pytest.mark.parametrize("columns", [100, 60, 40, 34])
+    def test_every_row_keeps_status(self, monkeypatch, llm_settings, columns):
+        llm_settings({"global_macro": False})
+        out = _run(monkeypatch, ["0"], columns=columns)
+        lines = out.splitlines()
+        key_lines = [i for i, line in enumerate(lines) if "enable_news" in line or "news_correlation" in line]
+        assert key_lines, out
+        for i in key_lines:
+            # 窄档键名移到第二行，状态在上一行（名称行）；两行都须在列宽内
+            assert len(lines[i]) <= columns
+            label_line = lines[i]
+            if not ("[开" in label_line or "[关" in label_line):
+                label_line = lines[i - 1]
+            assert "[开" in label_line or "[关" in label_line, f"{columns} 列下状态被截断：{lines[i]!r}"
+            assert len(label_line) <= columns
+
+    def test_llm_enhancement_label_is_short(self):
+        """同一报告章的 LLM 增强行：名称同源 + 短括注（太长会把状态挤走）。"""
+        from src.python.config.chapter_registry import chapter_by_key, chapter_label
+        from src.python.core.report_section_registry import get_report_section_order
+        from src.python.tui.text_layout import display_width
+
+        report_name = next(sec["name"] for sec in get_report_section_order() if sec["key"] == "news_correlation")
+        entry = chapter_by_key("news_correlation")
+        assert entry is not None
+        label = chapter_label(entry)
+        assert label.startswith(report_name)
+        assert display_width(label) - display_width(report_name) <= 8, label

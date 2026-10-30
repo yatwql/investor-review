@@ -156,7 +156,7 @@ TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一�
 | 5 | `position_structure` | 持仓结构与集中度 | 基金深度分析（enable_fund_deep_analysis 控制；一章三区块：重合度 + 相关性 + 集中度，任一区块有数据即显示） |
 | 6 | `style_factor` | 风格与因子分析 | 基金深度分析（enable_fund_deep_analysis 控制；有数据才显示，一章三区块：基金风格表 + 风格因子回归 + 行业 Beta 子表） |
 | 7 | `action` | 行动建议 | 行动建议（enable_action 控制，**默认开**；再平衡信号/交易纪律/调仓建议/收益归因） |
-| 8 | `news_correlation` | 财经热点关联分析 | 章节本体由 `enable_news` 控制；LLM 增强另由 `enabled_llm.news_correlation` 控制 |
+| 8 | `news_correlation` | 财经热点关联分析 | 章节本体由 `enable_news` 控制；LLM 增强（`[C]` 面板显示「财经热点关联分析（LLM）」）另由 `enabled_llm.news_correlation` 控制 |
 | 9 | `global_macro` | 全球政经局势 | LLM |
 | 10 | `expert_review` | 智囊团深度复盘 | LLM |
 | 11 | `health_check` | 持仓体检报告 | LLM |

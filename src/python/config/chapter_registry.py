@@ -86,7 +86,7 @@ chapter_registry: tuple[ChapterEntry, ...] = (
         sub_items=("llm_debate_procon", "llm_debate_conditional"),
     ),
     # 与顶层 `enable_news` 指向同一报告章（本体由 enable_news 控制，此处切其 LLM 增强）
-    ChapterEntry("news_correlation", BLOCK_LLM, SOURCE_LLM, "财经热点关联分析（LLM 增强）"),
+    ChapterEntry("news_correlation", BLOCK_LLM, SOURCE_LLM, "财经热点关联分析（LLM）"),
     ChapterEntry("health_check", BLOCK_LLM, SOURCE_LLM),
     ChapterEntry("penetration_deep", BLOCK_LLM, SOURCE_LLM),
     ChapterEntry("self_review", BLOCK_LLM, SOURCE_LLM),
