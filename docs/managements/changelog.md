@@ -9,8 +9,9 @@
 
 ## [0.16.13-dev] - 开发中（未发布）
 
+### 修复
 
-（本次发布内容见下方归档索引）
+- 截图入口用例改为 hermetic（rf-981）：`test_report_subcommand_returns_underlying_exit_code` 原先只 mock `run_report`，入口护栏仍读默认 `docs/tmp/screenshots/demo`（git 忽略域）——本地跑过 `make-screenshots.py demo` 就假绿，CI 四条流水线（3.11/3.12/3.13 + portability）自 v0.16.11 发布链起连红。现改为把 `DEFAULT_ROOT` 指到 `tmp_path` 并先真建演示工作区，另补回归用例「工作区缺失时入口拒绝且不调用 `run_report`」。
 
 ## 归档
 
