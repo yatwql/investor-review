@@ -41,7 +41,7 @@ _DEFAULT_CONFIG = {
     "data_key_file": os.path.join(PROJECT_ROOT, "data/config/data_key.json"),
     # ── B. 报告章节可见性 ──
     "enable_fund_deep_analysis": True,  # 基金深度分析（业绩/经理变更/持仓关系/集中度/风格因子）
-    "enable_news": True,  # 市场新闻
+    "enable_news": True,  # 财经热点关联分析（章节本体，含新闻取数与事件窗）
     "enable_history": True,  # 组合历史走势+回撤
     "enable_portfolio_evolution": True,  # 组合演进
     "enable_action": True,  # 行动建议独立章（再平衡信号+交易纪律+调仓建议+收益归因，默认开，菜单 C 可切换）
@@ -287,7 +287,7 @@ def _build_template_from_defaults() -> str:
         # ── B ──
         "  // ── B. 报告可选章节（关闭后对应页签/章节完全隐藏）──",
         f'  "enable_fund_deep_analysis": {json.dumps(d["enable_fund_deep_analysis"])},  // 基金深度分析（业绩/经理变更/持仓关系/集中度/风格因子）',
-        f'  "enable_news": {json.dumps(d["enable_news"])},  // 市场新闻',
+        f'  "enable_news": {json.dumps(d["enable_news"])},  // 财经热点关联分析（章节本体）',
         f'  "enable_history": {json.dumps(d["enable_history"])},  // 组合历史走势+回撤',
         f'  "enable_portfolio_evolution": {json.dumps(d["enable_portfolio_evolution"])},  // 组合演进',
         f'  "enable_action": {json.dumps(d["enable_action"])},  // 行动建议独立章（决策行动，默认开，菜单 C 可切换）',

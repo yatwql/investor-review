@@ -10,7 +10,7 @@
 > - [页面/章节分组](#页面章节分组)
 >   - [基础核心（type=always）](#基础核心typealways)
 >   - [基金深度分析（type=fund_deep_analysis）](#基金深度分析typefund_deep_analysis)
->   - [市场新闻（type=news）](#市场新闻typenews)
+>   - [财经热点关联分析（type=news）](#财经热点关联分析typenews)
 >   - [LLM 分析（type=llm）](#llm-分析typellm)
 >   - [历史走势（type=history）](#历史走势typehistory)
 >   - [组合演进（type=evolution）](#组合演进typeevolution)
@@ -56,7 +56,7 @@
 ## 目录
 
 - [Excel 报告](#excel-报告) · [功能与报告位置对照表](#功能与报告位置对照表)（[投资分析与风控](#投资分析与风控) · [基金评价](#基金评价) · [按菜单快速索引](#按菜单快速索引)）
-- [页面/章节分组](#页面章节分组)（[① 基础核心（type=always）](#基础核心typealways) · [② 基金深度分析（type=fund_deep_analysis）](#基金深度分析typefund_deep_analysis) · [③ 市场新闻（type=news）](#市场新闻typenews) · [④ LLM 分析（type=llm）](#llm-分析typellm) · [⑤ 历史走势（type=history）](#历史走势typehistory) · [⑥ 组合演进（type=evolution）](#组合演进typeevolution) · [⑦ 行动建议（type=action）](#行动建议typeaction) · [⑧ 基本面分析（type=fundamental_snapshot，默认关）](#基本面分析typefundamental_snapshot默认关) · [⑨ 持仓变动复盘（type=holding_change，默认关）](#持仓变动复盘typeholding_change默认关) · [⑩ 调仓纪律回放（type=schedule_replay，默认关）](#调仓纪律回放typeschedule_replay默认关) · [可见性规则总览](#可见性规则总览)） · [调仓 What-if 模拟（独立报告）](#调仓-what-if-模拟独立报告)
+- [页面/章节分组](#页面章节分组)（[① 基础核心（type=always）](#基础核心typealways) · [② 基金深度分析（type=fund_deep_analysis）](#基金深度分析typefund_deep_analysis) · [③ 财经热点关联分析（type=news）](#财经热点关联分析typenews) · [④ LLM 分析（type=llm）](#llm-分析typellm) · [⑤ 历史走势（type=history）](#历史走势typehistory) · [⑥ 组合演进（type=evolution）](#组合演进typeevolution) · [⑦ 行动建议（type=action）](#行动建议typeaction) · [⑧ 基本面分析（type=fundamental_snapshot，默认关）](#基本面分析typefundamental_snapshot默认关) · [⑨ 持仓变动复盘（type=holding_change，默认关）](#持仓变动复盘typeholding_change默认关) · [⑩ 调仓纪律回放（type=schedule_replay，默认关）](#调仓纪律回放typeschedule_replay默认关) · [可见性规则总览](#可见性规则总览)） · [调仓 What-if 模拟（独立报告）](#调仓-what-if-模拟独立报告)
 - [快照对比与历史走势数据机制](#快照对比与历史走势数据机制)（[持仓快照对比](#持仓快照对比) · [组合历史走势与回撤](#组合历史走势与回撤) · [常见收益率误解](#常见收益率误解) · [快照对比 vs 历史走势](#快照对比-vs-历史走势)） · [LLM API 用量页签/章节说明](#llm-api-用量页签章节说明)（[触发条件](#触发条件) · [与 LLM 分析章节的关系](#与-llm-分析章节的关系) · [Excel 格式](#excel-格式) · [HTML 格式](#html-格式) · [汇总页补充信息](#汇总页补充信息)）
 - [HTML 报告](#html-报告) · [报告对话式追问](#报告对话式追问)
 - [基金业绩评价标准](#基金业绩评价标准)（[第 1 层：基础评级](#第-1-层基础评级) · [第 2 层：超额收益修正](#第-2-层超额收益修正) · [第 3 层：显示与标色](#第-3-层显示与标色) · [候选基金比较子表（opt-in）](#候选基金比较子表opt-in)） · [附录：投资产品知识点](#附录投资产品知识点)（[基础概念](#基础概念) · [资产穿透](#资产穿透) · [基金业绩评价](#基金业绩评价) · [组合分析指标](#组合分析指标) · [持仓分析指标](#持仓分析指标)）
@@ -163,7 +163,7 @@
 
 > 菜单 B/L 可输出，有基金持仓数据且基金深度分析计算完成后才渲染。
 
-### ③ 市场新闻（type=news）<a id="市场新闻typenews"></a>
+### ③ 财经热点关联分析（type=news）<a id="财经热点关联分析typenews"></a>
 
 需要启用新闻功能。共 1 个模块：
 

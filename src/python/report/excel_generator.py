@@ -115,7 +115,7 @@ def generate_excel_report(
     news_data: list | None = None,
     news_llm_meta: dict | None = None,
     enable_fund_deep_analysis: bool = False,  # board 层：基金深度分析是否开启
-    enable_news: bool = True,  # board 层：市场新闻是否开启（配置值）
+    enable_news: bool = True,  # board 层：财经热点关联分析章是否开启（配置值）
     enable_llm: bool = True,  # board 层：LLM 分析章节是否开启
     enable_history: bool = True,  # board 层：历史走势章节是否开启
     enable_portfolio_evolution: bool = True,  # board 层：组合演进章节是否开启
@@ -155,7 +155,7 @@ def generate_excel_report(
         news_data: 预获取的新闻数据
         news_llm_meta: 新闻 LLM 元数据
         enable_fund_deep_analysis: board 层 — 基金深度分析是否开启
-        enable_news: board 层 — 市场新闻是否开启（配置值）
+        enable_news: board 层 — 财经热点关联分析章是否开启（配置值）
         enable_llm: board 层 — LLM 分析章节是否开启
         enable_history: board 层 — 历史走势章节是否开启
         enable_portfolio_evolution: board 层 — 组合演进章节是否开启

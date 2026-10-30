@@ -227,7 +227,7 @@ def _fetch_llm_and_news(
         return llm_content, news_data, news_llm_meta, news_ok, debate_info
 
     if not enable_news:
-        reporter.info("[章节配置] 市场新闻已关闭，跳过新闻获取")
+        reporter.info("[章节配置] 财经热点关联分析已关闭，跳过新闻获取")
     if not enable_llm:
         reporter.info("[章节配置] LLM 分析章节已关闭，跳过 LLM 内容生成")
 

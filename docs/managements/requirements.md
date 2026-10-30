@@ -1322,7 +1322,7 @@ LLM 五维度量化评分，每项满分 100：
 | `report_section_order` | dict | 空 | — | 报告模块序号自定义 |
 | `anonymization.mode` | str | `"off"` | ✅ A | 匿名化模式：`off` / `code_display` / `full_anonymous` / `summary` |
 | `enable_fund_deep_analysis` | bool | true | ✅ P | 基金深度分析启停 |
-| `enable_news` | bool | true | ✅ P | 市场新闻启停 |
+| `enable_news` | bool | true | ✅ P | 财经热点关联分析章启停 |
 | `enable_history` | bool | true | ✅ P | 历史走势启停 |
 | `enable_portfolio_evolution` | bool | true | ✅ P | 组合演进启停 |
 | `enable_action` | bool | true | ✅ P | 行动建议启停（默认开；再平衡信号/交易纪律/调仓建议/收益归因） |

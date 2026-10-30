@@ -409,7 +409,7 @@ class TestSetConfigSingleKeyPatch(unittest.TestCase):
         self.assertIn("// ── A. 路径与文件 ──", raw)
         self.assertIn("// ── L. 批量并行调度 ──", raw)
         # enable_news 行尾注释保留
-        self.assertIn("// 市场新闻", raw)
+        self.assertIn("// 财经热点关联分析（章节本体）", raw)
         # 值已更新
         data = json.loads(_strip_json_comments(raw))
         self.assertFalse(data["enable_news"])

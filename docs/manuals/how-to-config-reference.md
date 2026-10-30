@@ -23,7 +23,7 @@ TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一�
 
 | 块 | 编号 | 内容 | 存放 |
 |:--|:--|:--|:--|
-| 顶层章节 | 1-5 | 基金深度分析 / 市场新闻 / 组合历史走势+回撤 / 组合演进 / 行动建议 | `config.json` → `enable_*`（本节表格） |
+| 顶层章节 | 1-5 | 基金深度分析 / 财经热点关联分析 / 组合历史走势+回撤 / 组合演进 / 行动建议 | `config.json` → `enable_*`（本节表格） |
 | LLM 章节 | 6-12 | 全球政经局势 / 智囊团深度复盘（子项 `7.1`/`7.2`）/ 财经热点关联与持仓关联 / 持仓体检报告 / 穿透深度分析 / 生成后自检 / 持仓变动复盘归因 | `llm_settings.json` → `enabled_llm` |
 | 默认关闭的整章 | 13-15 | 调仓纪律回放 / 持仓变动复盘 / 个股基本面 | `features.json` |
 | 关联产物 | 16 | What-if 交易成本对比（仅调仓模拟报告页签） | `features.json` |
@@ -37,7 +37,7 @@ TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一�
 | 字段 | 默认值 | 配置来源 | 控制章节 | 说明 |
 |:-----|:------:|:---------|:---------|:-----|
 | `enable_fund_deep_analysis` | `true` | `config.json` | 持仓结构与集中度、风格与因子分析（+「基金业绩分析」章末尾的基金经理变更监控块） | 基金深度分析章节组 |
-| `enable_news` | `true` | `config.json` | 财经热点关联分析 | 市场新闻章节组 |
+| `enable_news` | `true` | `config.json` | 财经热点关联分析 | 章节本体（新闻取数 + 事件窗） |
 | `enable_history` | `true` | `config.json` | 组合历史走势与回撤 | 历史走势章节组（持仓快照不受影响，始终自动执行） |
 | `enable_portfolio_evolution` | `true` | `config.json` | 组合演进 | 组合演进章节组（持仓快照不受影响，始终自动执行） |
 | `enable_action` | `true` | `config.json` | 行动建议 | 行动建议章节组（再平衡信号/交易纪律/调仓建议/收益归因，纯算法） |
@@ -156,7 +156,7 @@ TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一�
 | 5 | `position_structure` | 持仓结构与集中度 | 基金深度分析（enable_fund_deep_analysis 控制；一章三区块：重合度 + 相关性 + 集中度，任一区块有数据即显示） |
 | 6 | `style_factor` | 风格与因子分析 | 基金深度分析（enable_fund_deep_analysis 控制；有数据才显示，一章三区块：基金风格表 + 风格因子回归 + 行业 Beta 子表） |
 | 7 | `action` | 行动建议 | 行动建议（enable_action 控制，**默认开**；再平衡信号/交易纪律/调仓建议/收益归因） |
-| 8 | `news_correlation` | 财经热点关联分析 | 市场新闻（enable_news 控制） |
+| 8 | `news_correlation` | 财经热点关联分析 | 章节本体由 `enable_news` 控制；LLM 增强另由 `enabled_llm.news_correlation` 控制 |
 | 9 | `global_macro` | 全球政经局势 | LLM |
 | 10 | `expert_review` | 智囊团深度复盘 | LLM |
 | 11 | `health_check` | 持仓体检报告 | LLM |

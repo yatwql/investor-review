@@ -85,7 +85,7 @@ class TestSubmenuArrowNav:
     @patch("src.python.tui.handlers_config._read_llm_settings", return_value=({}, "/fake/llm_settings.json"))
     @patch("src.python.config.get_config", return_value={})
     def test_report_boards_arrow_down_enter_toggles_selected(self, _mock_get, _mock_read, mock_apply, _mock_refresh):
-        """[C] ↓ 移到第 2 项（市场新闻）后 Enter 按其编号派发切换。"""
+        """[C] ↓ 移到第 2 项（财经热点关联分析）后 Enter 按其编号派发切换。"""
         from src.python.tui.handlers_config import _cmd_config_report_boards
         from src.python.tui.tui_keys import KEY_DOWN
 
@@ -94,7 +94,7 @@ class TestSubmenuArrowNav:
 
         assert mock_input.call_args_list[0].kwargs.get("arrows") is True, "面板行输入须启用方向键"
         assert mock_apply.called, "Enter 应按选中项触发既有切换派发"
-        assert mock_apply.call_args.args[0]["key"] == "enable_news", "↓ 后 Enter 命中第 2 项（市场新闻）"
+        assert mock_apply.call_args.args[0]["key"] == "enable_news", "↓ 后 Enter 命中第 2 项（财经热点关联分析）"
 
     @patch("src.python.tui.handlers_config._apply_edit", return_value=True)
     @patch("src.python.config.anonymizer.get_anonymization_mode", return_value="off")

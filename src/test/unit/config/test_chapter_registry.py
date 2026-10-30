@@ -108,7 +108,8 @@ class TestChapterRegistrySources:
             label = chapter_label(entry, llm_names)
             assert label
             if entry.source == "llm_settings":
-                assert label == llm_names[entry.key]
+                # 显式 label 仅允许「同源 + 括注」（同一报告章拆成本体/增强两行时用）
+                assert label.startswith(llm_names[entry.key])
             elif entry.source == "features":
                 assert label == feature_switch_registry[entry.key].label
             else:
@@ -143,3 +144,24 @@ class TestChapterWritability:
             storage = chapter_storage(entry)
             assert storage.startswith(SOURCE_FILES[entry.source])
             assert entry.key in storage
+
+
+class TestPanelMatchesReportChapterNames:
+    """C 面板显示名须与报告产物章节名一致（同一章不得两种叫法）。"""
+
+    def test_news_chapter_label_matches_report_chapter(self):
+        from src.python.config.chapter_registry import chapter_by_key, chapter_label
+        from src.python.core.report_section_registry import get_report_section_order
+
+        report_name = next(
+            sec["name"] for sec in get_report_section_order() if sec["key"] == "news_correlation"
+        )
+        top = chapter_by_key("enable_news")
+        llm = chapter_by_key("news_correlation")
+        assert top is not None and llm is not None
+        # 章节本体：显示名即报告产物里的章节名（改名前曾叫「市场新闻」，与产物不一致）
+        assert chapter_label(top) == report_name
+        # 同一报告章的 LLM 增强行：同源 + 括注，不另起别名
+        llm_label = chapter_label(llm)
+        assert llm_label.startswith(report_name)
+        assert llm_label != report_name

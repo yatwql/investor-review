@@ -342,7 +342,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "示例:\n"
         "  config list                              列出全部可编辑键与当前值\n"
         "  config get holdings_dir                  读取单个键\n"
-        "  config set enable_news off               关闭「市场新闻」章节（持久化）\n"
+        "  config set enable_news off               关闭「财经热点关联分析」章节（持久化）\n"
         "  config set anonymization.mode summary    设置匿名化模式（持久化）\n"
         "  config set scheduler.enabled on          启用 Web 内置定时生成\n"
         "  config set scheduler.weekdays 0,1,2,3,4  设置执行日（0=周一）\n"
