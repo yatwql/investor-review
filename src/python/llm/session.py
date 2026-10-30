@@ -202,6 +202,10 @@ def record_per_module(
             entry["endpoint"] = endpoint
         if cached:
             entry["cached"] = True
+        elif inp or out or cost:
+            # 本次真的调用了（有 token/费用）：盖掉会话里先前的命中标记，
+            # 否则同一会话的后续报告会把它继续显示成「使用缓存」
+            entry["cached"] = False
         if thinking:
             entry["thinking"] = True
         if model_name and model_name not in _session_usage["models"]:

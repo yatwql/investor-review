@@ -39,6 +39,73 @@ def _write(cache_dir, key: str, age_seconds: float, data=None) -> None:
     payload = {"_ts": time.time() - age_seconds, "_data": data if data is not None else {"v": 1}}
     (cache_dir / f"{key}_{_CACHE_KEY_VERSION}.json").write_text(json.dumps(payload), encoding="utf-8")
 
+    @pytest.mark.unit_cache
+    def test_per_module_cost_and_cache_flag_are_per_report(self):
+        """逐模块费用同样只算本次；「本次命中缓存」按本次有无真实调用判定。
+
+        实例（2026-10-30 两次运行）：第二份报告全部命中内容缓存（token 与调用数均无增量），
+        明细却沿用了上一份报告的模块费用，看起来「没调用却花了钱」；反过来真跑的模块
+        因命中标记在会话内粘着，被继续标成「使用缓存」。
+        """
+        from src.python.report._generation_shared import _usage_delta
+
+        baseline = {
+            "input_tokens": 6000,
+            "output_tokens": 14000,
+            "call_count": 7,
+            "per_module": {
+                "expert_review": {
+                    "input_tokens": 6000,
+                    "output_tokens": 14000,
+                    "cached": True,
+                    "costs": {"CNY": 0.0610},
+                    "duration": 86.0,
+                },
+                "self_review": {
+                    "input_tokens": 9000,
+                    "output_tokens": 2500,
+                    "cached": False,
+                    "costs": {"CNY": 0.0270},
+                    "duration": 14.0,
+                },
+            },
+        }
+        current = {
+            "input_tokens": 6000 + 900,
+            "output_tokens": 14000 + 300,
+            "call_count": 7 + 1,
+            "per_module": {
+                # 本次整块命中内容缓存：token/费用/耗时都无增量
+                "expert_review": {
+                    "input_tokens": 6000,
+                    "output_tokens": 14000,
+                    "cached": True,
+                    "costs": {"CNY": 0.0610},
+                    "duration": 86.0,
+                },
+                # 本次真跑（token 有增量）：标记须翻成「非缓存」
+                "self_review": {
+                    "input_tokens": 9000 + 900,
+                    "output_tokens": 2500 + 300,
+                    "cached": True,
+                    "costs": {"CNY": 0.0270 + 0.0043},
+                    "duration": 14.0 + 3.0,
+                },
+            },
+        }
+
+        delta = _usage_delta(current, baseline)
+
+        hit = delta["per_module"]["expert_review"]
+        assert hit["costs"] == {}
+        assert hit["cached"] is True
+        assert hit["input_tokens"] == 0 and hit["output_tokens"] == 0
+
+        ran = delta["per_module"]["self_review"]
+        assert ran["costs"] == {"CNY": pytest.approx(0.0043)}
+        assert ran["cached"] is False
+        assert (ran["input_tokens"], ran["output_tokens"]) == (900, 300)
+
 
 class TestReportUsageBoundary:
     """报告级用量增量：第二份报告不得把第一份的费用算进自己。"""

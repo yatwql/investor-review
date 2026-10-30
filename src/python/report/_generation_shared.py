@@ -56,6 +56,21 @@ def _usage_delta(current: dict, baseline: dict | None) -> dict:
         for key in ("input_tokens", "output_tokens", "cache_hit_tokens", "cost", "duration"):
             if key in delta_entry:
                 delta_entry[key] = delta_entry.get(key, 0) - base.get(key, 0)
+        # 逐模块费用同样按币种做差（与顶层同口径）：累计值里上一份报告的花费若照样带出，
+        # 命中缓存的本次会显示成「没调用却花了钱」
+        cur_module_costs = entry.get("costs") or {}
+        base_module_costs = base.get("costs") or {}
+        module_costs: dict[str, float] = {}
+        for code in set(cur_module_costs) | set(base_module_costs):
+            diff = float(cur_module_costs.get(code, 0.0)) - float(base_module_costs.get(code, 0.0))
+            if diff:
+                module_costs[str(code).upper()] = diff
+        delta_entry["costs"] = module_costs
+        # 「本次命中缓存」= 累计标记为真 且 本次没有真实调用（token 无增量）；
+        # 标记本身在会话内是粘性的，直接沿用会把重算过的模块仍标成「缓存」
+        delta_entry["cached"] = bool(entry.get("cached")) and not (
+            delta_entry.get("input_tokens") or delta_entry.get("output_tokens")
+        )
         per_module[module_key] = delta_entry
     delta["per_module"] = per_module
     if current.get("models"):
