@@ -631,6 +631,7 @@
 | R-HLD-11 | `src/test/unit/ui/test_handlers_holdings.py` + `src/test/unit/core/test_holdings_editor_edge.py` + `src/test/unit/core/test_holdings_editor.py` | 持仓录入 |
 | R-HLD-12 | `src/test/unit/ui/test_handlers_holdings.py` + `src/test/unit/core/test_holdings_editor.py` | 持仓录入 |
 | R-HLD-13 | `src/test/unit/ui/test_handlers_holdings.py` + `src/test/unit/core/test_holdings_editor.py` | 持仓录入 |
+| R-HLD-14 | `src/test/unit/ui/test_handlers_holdings.py` | 批 7 |
 | R-DIS-01 | `src/test/unit/analysis/test_trade_discipline.py` | 批 6 |
 | R-DIS-02 | `src/test/unit/analysis/test_trade_discipline.py` | 批 6 |
 | R-DIS-03 | `src/test/unit/analysis/test_trade_discipline.py` | 批 6 |

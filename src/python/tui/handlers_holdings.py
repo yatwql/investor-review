@@ -52,6 +52,8 @@ class _Session:
 
     book: HoldingsBook
     mtime: float
+    #: 上一笔录入的 (账户, 代码, 名称, 方向)；菜单据此提供「继续录上一笔」
+    last: tuple[str, str, str, str] | None = None
 
 
 def run_holdings_entry_panel() -> None:
@@ -66,8 +68,8 @@ def run_holdings_entry_panel() -> None:
         return
 
     print(f"  {GREEN}[OK]{RESET} 已载入 {os.path.basename(filepath)}：{session.book.total_rows()} 条持仓")
-    items = _panel_items(session)
     while True:
+        items = _panel_items(session)
         panel_loop(
             items,
             render=lambda nav: _render_frame(session, nav, items),
@@ -82,12 +84,12 @@ def run_holdings_entry_panel() -> None:
 
 
 #: 二级菜单键位：编号为主入口，字母为别名（数字先行、字母快路）。
-_ALIAS_BY_KEY: dict[str, str] = {"1": "L", "2": "P", "3": "S", "4": "W", "5": "U"}
+_ALIAS_BY_KEY: dict[str, str] = {"1": "L", "2": "P", "3": "S", "4": "W", "5": "U", "6": "C"}
 
 
 def _panel_items(session: _Session) -> list[PanelItem]:
     """二级菜单项（键位与录入规则的事实位在设计文件「持仓录入」篇）。"""
-    return [
+    items = [
         PanelItem(
             "1",
             "查看持仓（含未保存变更）",
@@ -118,8 +120,19 @@ def _panel_items(session: _Session) -> list[PanelItem]:
             detail="撤回本次最后一笔录入（不写文件、可重复执行；字母别名 U）",
             action=lambda: _undo_last(session),
         ),
-        PanelItem("0", "返回主菜单", kind="return", detail="有未保存变更时会先问「保存 / 丢弃 / 继续」"),
     ]
+    if session.last is not None:
+        account, code, name, side = session.last
+        items.append(
+            PanelItem(
+                "6",
+                f"继续录上一笔（{name} · {SIDE_LABELS[side]}）",
+                detail=f"沿用账户「{account}」与标的 {name}（{code}），只重填份额/价格/交易日（字母别名 C）",
+                action=lambda: _record(session, side, preset=(account, code, name)),
+            )
+        )
+    items.append(PanelItem("0", "返回主菜单", kind="return", detail="有未保存变更时会先问「保存 / 丢弃 / 继续」"))
+    return items
 
 
 def _dispatch_alias(text: str, items: list[PanelItem]) -> None:
@@ -143,6 +156,10 @@ def _render_frame(session: _Session, nav: NavState, items: list[PanelItem]) -> l
         lines.append(f"  {YELLOW}[!]{RESET} {len(session.book.drafts)} 笔变更待保存（按 4 保存才写入文件）")
     else:
         lines.append("  当前无未保存变更")
+    lines += wrap_hanging(
+        "  提示：账户与标的都可输编号或名称；金额单位元；价格示例 1.234（场外净值 1.2345）；多数提示回车取默认值",
+        columns,
+    )
     for index, item in enumerate(items):
         alias = _ALIAS_BY_KEY.get(item.key)
         label = f"[{alias}] {item.label}" if alias else item.label
@@ -182,19 +199,33 @@ def _list_positions(book: HoldingsBook) -> None:
 # ── P / B：录入一笔买卖（只进草稿）─────────────────────────
 
 
-def _record(session: _Session, side: str) -> None:
-    """录入一笔买卖意图并应用到内存草稿；任一步取消都不改任何状态。"""
+def _record(session: _Session, side: str, *, preset: tuple[str, str, str] | None = None) -> None:
+    """录入一笔买卖意图并应用到内存草稿；任一步取消都不改任何状态。
+
+    Args:
+        session: 面板会话（草稿工作副本）。
+        side: 买入 / 卖出。
+        preset: 复用上一笔的 (账户, 代码, 名称)，跳过账户与标的选择（「继续录上一笔」）。
+
+    Results:
+        成功即生成一笔草稿；用户随时可用「撤销上一笔」回退。写入文件只在保存时发生，
+        因此本笔**不再二次确认**——保护点在保存（回显 + 一次确认 + .bak）与撤销。
+    """
     book = session.book
     label = SIDE_LABELS[side]
-    account = _pick_account(book)
-    if account is None:
-        print("  [!] 已取消本笔录入")
-        return
-    picked = _pick_asset(book, account, side)
-    if picked is None:
-        print("  [!] 已取消本笔录入")
-        return
-    name, code = picked
+    if preset is not None:
+        account, code, name = preset
+    else:
+        picked_account = _pick_account(book)
+        if picked_account is None:
+            print("  [!] 已取消本笔录入")
+            return
+        account = picked_account
+        picked = _pick_asset(book, account, side)
+        if picked is None:
+            print("  [!] 已取消本笔录入")
+            return
+        name, code = picked
 
     kind = _resolve_price_kind(code, name)
     if kind is None:
@@ -215,10 +246,6 @@ def _record(session: _Session, side: str) -> None:
             print("  [!] 已取消本笔录入")
             return
 
-    _print_intent_summary(account, name, code, side, shares, price, trade_date, extra_lines)
-    if not _confirm("确认加入本次变更？"):
-        print("  [!] 已取消本笔录入")
-        return
     try:
         book.apply(
             TradeIntent(
@@ -234,7 +261,13 @@ def _record(session: _Session, side: str) -> None:
     except ValueError as e:
         print(f"  {RED}[ERR]{RESET} {e}")
         return
-    print(f"  {GREEN}[OK]{RESET} {label}已加入草稿（{len(book.drafts)} 笔待保存，按 S 保存才写入文件）")
+    for line in extra_lines:
+        print(f"     {line.strip()}")
+    print(
+        f"  {GREEN}[OK]{RESET} {label} 已加入草稿：{name}（{code}）{shares:g} 份 @ {price:g} · {trade_date}"
+        f" — 共 {len(book.drafts)} 笔待保存（按 4 保存才写入文件）"
+    )
+    session.last = (account, code, name, side)
 
 
 def _pick_account(book: HoldingsBook) -> str | None:
@@ -246,7 +279,7 @@ def _pick_account(book: HoldingsBook) -> str | None:
         print(f"    {index}. {name}")
     if not names:
         print("    （暂无账户，输入新账户名即可新建）")
-    raw = _ask("  回车=取消本笔 · 账户编号（如 1），或直接输入新账户名 · 0 返回: ")
+    raw = _ask("  回车=取消本笔 · 账户编号或新账户名 · 0 返回: ")
     if raw is None or raw == "0":
         return None
     token = raw.strip()
@@ -275,7 +308,7 @@ def _pick_asset(book: HoldingsBook, account: str, side: str) -> tuple[str, str] 
         print(f"  {YELLOW}[!]{RESET} 该账户没有可卖出的持仓")
         return None
     print("    N. 输入新代码（当前未持有的证券/基金）")
-    raw = _ask("  回车=取消本笔 · 编号或 N（如 1）· 0 返回: ")
+    raw = _ask("  回车=取消本笔 · 标的编号或 N（新标的）· 0 返回: ")
     if raw is None or raw == "0":
         return None
     token = raw.strip()
@@ -296,7 +329,7 @@ def _pick_asset(book: HoldingsBook, account: str, side: str) -> tuple[str, str] 
 
 def _input_new_asset() -> tuple[str, str] | None:
     """录入新代码（名称可自动带出，取不到再手输）。"""
-    raw = _ask("  回车=取消本笔 · 证券代码（如 007301）· 0 返回: ")
+    raw = _ask("  回车=取消本笔 · 证券代码 · 0 返回: ")
     if raw is None or raw == "0":
         return None
     code = raw.strip()
@@ -305,7 +338,7 @@ def _input_new_asset() -> tuple[str, str] | None:
         return None
     name = _resolve_name(code)
     if not name:
-        typed = _ask("  回车=取消本笔 · 证券名称（如 华夏成长）· 0 返回: ")
+        typed = _ask("  回车=取消本笔 · 证券名称 · 0 返回: ")
         if typed is None or typed == "0" or not typed.strip():
             return None
         name = typed.strip()
@@ -414,7 +447,7 @@ def _ask_entry_mode() -> str | None:
 
 def _ask_amount() -> float | None:
     """申购金额（元）。"""
-    raw = _ask("  回车=取消本笔 · 申购金额（元，如 1000）· 0 返回: ")
+    raw = _ask("  回车=取消本笔 · 申购金额（元）· 0 返回: ")
     if raw is None or raw == "0" or not raw.strip():
         return None
     try:
@@ -435,7 +468,7 @@ def _ask_shares(label: str, available: float | None = None) -> float | None:
         label: 方向中文（买入 / 卖出），用于提示。
         available: 当前持有份额（卖出时非 None，供 ``a`` 换算）。
     """
-    raw = _ask(f"  回车=取消本笔 · {label}份额（如 100，a=全部）· 0 返回: ")
+    raw = _ask(f"  回车=取消本笔 · {label}份额（a=全部）· 0 返回: ")
     if raw is None or raw == "0" or not raw.strip():
         return None
     token = raw.strip()
@@ -574,7 +607,7 @@ def _ask_trade_date() -> str | None:
 
     from src.python.fetcher.nav_lookup import normalize_trade_date
 
-    raw = _ask("  回车=今天 · 交易日（如 2026-07-01）· 0 返回: ")
+    raw = _ask("  回车=今天 · 交易日（YYYY-MM-DD）· 0 返回: ")
     if raw is None or raw == "0":
         return None
     if not raw.strip():
@@ -599,7 +632,7 @@ def _ask_price(code: str, name: str, kind: str, trade_date: str) -> tuple[float,
 
 def _ask_exchange_price(code: str, name: str) -> tuple[float, float] | None:
     """场内成交价（回车取当前行情，取不到再手输）。"""
-    raw = _ask("  回车=取当前行情 · 成交价（如 1.234）· 0 返回: ")
+    raw = _ask("  回车=取当前行情 · 成交价 · 0 返回: ")
     if raw is None or raw == "0":
         return None
     if raw.strip():
@@ -610,7 +643,7 @@ def _ask_exchange_price(code: str, name: str) -> tuple[float, float] | None:
         print(f"  {GREEN}[OK]{RESET} 当前行情 {quote:g}（{name}）")
         return quote, quote
     print(f"  {YELLOW}[!]{RESET} 未取到当前行情，请手填成交价")
-    typed = _ask("  回车=放弃本笔 · 成交价（如 1.234）· 0 返回: ")
+    typed = _ask("  回车=放弃本笔 · 成交价 · 0 返回: ")
     if typed is None or typed == "0" or not typed.strip():
         return None
     price = _parse_price(typed)
@@ -619,7 +652,7 @@ def _ask_exchange_price(code: str, name: str) -> tuple[float, float] | None:
 
 def _ask_otc_price(code: str, trade_date: str) -> tuple[float, float] | None:
     """场外价格：可手填；留空则按交易日取官方净值（取不到允许手填或放弃）。"""
-    raw = _ask("  回车=按交易日取官方净值 · 价格（可选，如 1.2345）· 0 返回: ")
+    raw = _ask("  回车=按交易日取官方净值 · 价格（可选）· 0 返回: ")
     if raw is None or raw == "0":
         return None
     reference = _nav_reference(code, trade_date) if raw.strip() else 0.0
@@ -632,7 +665,7 @@ def _ask_otc_price(code: str, trade_date: str) -> tuple[float, float] | None:
     result = resolve_nav_on_trade_date(code, trade_date)
     if result is None:
         print(f"  {YELLOW}[!]{RESET} 本笔标失败：取不到 {trade_date} 的官方净值")
-        typed = _ask("  回车=放弃本笔 · 手填价格（如 1.2345）· 0 返回: ")
+        typed = _ask("  回车=放弃本笔 · 手填价格 · 0 返回: ")
         if typed is None or typed == "0" or not typed.strip():
             return None
         price = _parse_price(typed)
@@ -708,10 +741,18 @@ def _save(session: _Session) -> None:
     if not _file_unchanged(session):
         return
     _print_draft_summary(book)
-    append_flows = _confirm("是否同时记入「交易流水」页签？")
-    if not _confirm("确认写入持仓文件？"):
+    count = len(book.drafts)
+    target = os.path.basename(book.filepath)
+    raw = _ask(f"  回车=写入 {target}（自动 .bak）· f=记入「交易流水」后写入 · 2=丢弃草稿 · 0 返回: ")
+    token = (raw or "").strip().lower()
+    if raw is None or token == "0":
         print("  [!] 已取消保存，草稿保留")
         return
+    if token == "2":
+        del book.drafts[:]
+        print(f"  {YELLOW}[!]{RESET} 已丢弃 {count} 笔草稿（持仓文件未改动）")
+        return
+    append_flows = token == "f"
     backup = _backup_file(book.filepath)
     try:
         book.save(append_flows=append_flows)
