@@ -44,6 +44,12 @@ LOOKBACK_DAYS = 365  # 回看窗口（自然日，K 线链路按此折算交易�
 _CATALOG_CACHE: dict[str, Any] | None = None
 
 
+def invalidate_catalog_cache() -> None:
+    """丢弃因子目录缓存（目录版本变更与测试隔离共用）。"""
+    global _CATALOG_CACHE
+    _CATALOG_CACHE = None
+
+
 def load_factor_catalog() -> dict[str, Any] | None:
     """装载并校验目录；拒载返回 None（调用方降级，不进计算）。
 

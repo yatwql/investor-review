@@ -76,6 +76,17 @@ _esc_residue_pending = False
 _seq_prefix_pending = ""
 
 
+def reset_key_parser_state() -> None:
+    """清空按键解析残留（ESC 待定态 + 半途序列前缀）。
+
+    两个标志都是「上一按键没读完」的延续状态：不清会把上一条用例拆包到一半的
+    ESC 序列带进下一条（测试间随机把 ``B`` 读成直达键），也让同进程重试共用脏态。
+    """
+    global _esc_residue_pending, _seq_prefix_pending
+    _esc_residue_pending = False
+    _seq_prefix_pending = ""
+
+
 def _mark_seq_prefix(prefix: str) -> None:
     """记录半途序列前缀（下一次读键强制按补全处理）。"""
     global _seq_prefix_pending

@@ -407,6 +407,15 @@ def sector_flow_degraded_state() -> str:
 _DIVIDEND_FAILURE: str = ""
 
 
+def reset_failure_state() -> None:
+    """清三个「上次失败」标记与记忆缓存（测试隔离与重试口径复位共用）。"""
+    global _DIVIDEND_FAILURE, _SECTOR_FLOW_DEGRADED, _SECTOR_FLOW_FAILURE
+    _DIVIDEND_FAILURE = ""
+    _SECTOR_FLOW_DEGRADED = ""
+    _SECTOR_FLOW_FAILURE = ""
+    _memo_clear()
+
+
 def dividend_failure() -> str:
     """返回分红数据最近一次失败类型（公开只读访问器；空串=最近成功）。"""
     return _DIVIDEND_FAILURE

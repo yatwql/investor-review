@@ -32,6 +32,12 @@ _YES_KEYS = frozenset({"Y", "y"})
 _OPEN_FAILED_IN_SESSION = False
 
 
+def reset_open_failure_memo() -> None:
+    """清「本会话已试过打开且失败」记忆（换会话重来与测试隔离共用）。"""
+    global _OPEN_FAILED_IN_SESSION
+    _OPEN_FAILED_IN_SESSION = False
+
+
 def _remote_hint(echo: Callable[[str], None]) -> None:
     """打印远端/无图形会话的传输指引（两处分支共用，文案只声明一次）。"""
     echo("      产物已保存在上方路径；请使用 Web 工作台下载，或通过 scp/sftp 获取。")

@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.16.14-dev
-> **编号源**：`rf-next = 993`（新增问题提出后更新为 +1；已用最大 rf-992，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 994`（新增问题提出后更新为 +1；已用最大 rf-993，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -59,6 +59,7 @@
 | **rf-990** | 截图入口 `xlsx` 的 `--rows` 缺省写死 26，与渲染模块 `DEFAULT_MAX_ROWS` 双源（改一处即漂）；同文件里列上限 `26` 以裸数字在判定与文档串各写一遍 | 入口缺省改取 `xlsx_frame.DEFAULT_MAX_ROWS`，列上限收敛为模块常量 `_MAX_COLUMNS`；回归 1 例（解析缺省值 == 渲染常量） |
 | **rf-991** | `tui_menu._config_cache` 同为模块级单例且无测试复位（与 rf-989 同类）：首次 `refresh_config()` 后缓存常驻，而页头/菜单渲染走 `get_config_cache()`——不主动 `refresh` 的用例会读到上一条用例 monkeypatch 过的配置快照，断言随执行顺序漂移 | `tui_menu` 新增 `reset_config_cache()`（只丢缓存、不读盘、不动首用检测记忆），conftest 新增 `_auto_reset_config_cache` autouse（进/出两侧复位），与 `_restore_menu_items` 同习语；回归 3 例（进入用例缓存恒未载入 / reset 不触发读盘 / fixture 双侧清污染态） |
 | **rf-992** | `[C]` 面板可读性债：`run_report_chapters_panel` 单函数 247 行（项表拼装 + 快照读取 + 开关派发 + 帮助解析 + 整屏渲染 + 主循环混在一起，定位任一行为都要滚完整段），`_format_row` 声明 13 个关键字参数（排版预算与逐行内容混在同一签名，调用点两处各写 13 行） | 拆为 `_ChaptersPanel`（会话态：llm 快照 / 费用摘要 / 撤销会话；方法 `status`·`toggle_chapter`·`toggle_sub`·`build_items`·`on_text`·`help`·`layout`·`render`·`run`），入口函数只剩两行编排；排版预算与行内容分家——`_RowLayout`（整屏不变）+ `_ChapterRow`（逐行变），`_format_row(row, layout)` 两参数。行为不变：既有渲染/写盘/闸门/帮助 113 例全过 |
+| **rf-993** | 模块级会话态大量存在但复位口径靠人记：21 类运行期状态（注入的传输层工厂、适配器巡检函数、熔断展示判定、因子目录缓存、新闻源命中快照、季度回放锚点、按键解析残留、防连按保护位、惰性注册标记、各类限速器与统计计数器等）分散在各模块，其中 13 类连复位入口都没有，conftest 仅覆盖了少数早先暴露的那几个——漏接的后果是测试顺序相关（上一条用例注入的桩或残留标志带到下一条，xdist 换分片即随机红），而本地单进程顺序常常看不出来 | ① 补 13 个复位入口（`tui_keys.reset_key_parser_state` / `tui_handlers.reset_busy_state` / `report_artifacts.reset_open_failure_memo` / `fund_style_base.reset_tencent_registration` / `news_aggregator.reset_last_source_results` / `tiantian_holdings.reset_quarter_walk_anchor` / `doctor.reset_adapter_survey` / `http_client.reset_transport_factory` / `source_adapter.reset_adapter_registry` / `factor_catalog_loader.invalidate_catalog_cache` / `eastmoney.reset_eastmoney_pager_limiter` / `akshare_extras.reset_failure_state` / `circuit_breaker.reset_circuit_text`）；② conftest 新增 `_auto_reset_module_state`（进/出两侧，共 21 项，含已有 API 的 8 项）；③ `circuit_breaker` 复位到**导入期基线**而非 `None`（装配期接线不可被测试隔离清掉，否则展示退化成「正常」）；④ 新增契约用例 `test_module_state_reset`：反向枚举 `src/python` 全部 `global` 改写变量，要求所在模块有复位入口**且**被 conftest 调用，导入期常量走带理由的豁免表（并对豁免项做陈旧校验） |
 
 ### 归档档案
 - [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-10-30）

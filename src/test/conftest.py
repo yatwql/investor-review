@@ -310,6 +310,64 @@ def _restore_menu_items():
 
 
 @pytest.fixture(autouse=True)
+def _auto_reset_module_state():
+    """复位各模块级会话态 / 注册标志 / 限速器单例（进/出两侧），防跨用例串扰。
+
+    这些状态都不是「配置」，而是**运行期会话痕迹**：注入的传输层工厂、惰性注册标记、
+    上一次取数的源命中快照、按键解析残留、失败标记……单个模块各自持有，一旦上一条用例
+    写入、本用例读到，断言就变成顺序相关的隐式依赖（xdist 换分片即随机红）。
+
+    口径与 ``_auto_reset_provider_registry`` 一致：复位只是把状态置回「未载入」，
+    不改变任何默认值、不发起取数。需要某项携住状态跑完整个用例的，自行 patch。
+    """
+
+    def _reset() -> None:
+        from src.python.cache import _stats as cache_stats
+        from src.python.config._llm_pricing import invalidate_pricing_cache
+        from src.python.config._llm_settings import invalidate_llm_config_cache
+        from src.python.core import circuit_breaker, doctor, http_client
+        from src.python.fetcher import batch, factor_catalog_loader, source_adapter
+        from src.python.llm import observation, pacing
+        from src.python.providers import (
+            akshare_extras,
+            cninfo,
+            eastmoney,
+            eastmoney_industry,
+            news_aggregator,
+            tiantian_holdings,
+        )
+        from src.python.report import fund_style_base
+        from src.python.tui import report_artifacts, tui_handlers, tui_keys
+
+        cache_stats.reset_cache_stats()
+        invalidate_llm_config_cache()
+        invalidate_pricing_cache()
+        circuit_breaker.reset_circuit_text()
+        doctor.reset_adapter_survey()
+        http_client.reset_transport_factory()
+        batch.clear_rate_limiter_cache()
+        factor_catalog_loader.invalidate_catalog_cache()
+        source_adapter.reset_adapter_registry()
+        observation.clear_llm_observation()
+        pacing.reset_policies()
+        akshare_extras.reset_failure_state()
+        cninfo.reset_cninfo_limiter()
+        cninfo.reset_cninfo_unreachable()
+        eastmoney.reset_eastmoney_pager_limiter()
+        eastmoney_industry.reset_eastmoney_industry_limiter()
+        news_aggregator.reset_last_source_results()
+        tiantian_holdings.reset_quarter_walk_anchor()
+        fund_style_base.reset_tencent_registration()
+        report_artifacts.reset_open_failure_memo()
+        tui_handlers.reset_busy_state()
+        tui_keys.reset_key_parser_state()
+
+    _reset()
+    yield
+    _reset()
+
+
+@pytest.fixture(autouse=True)
 def _auto_reset_config_cache():
     """自动丢弃 ``tui_menu._config_cache``，防止配置缓存跨用例串扰。
 

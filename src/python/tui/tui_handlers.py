@@ -28,6 +28,13 @@ _busy: bool = False  # 防连续按键保护
 _busy_lock = threading.Lock()  # _busy 标志位锁保护
 
 
+def reset_busy_state() -> None:
+    """清「防连续按键」保护位（异常路径收尾与测试隔离共用）。"""
+    global _busy
+    with _busy_lock:
+        _busy = False
+
+
 # ── LLM 用量 / 耗时 / 错误提示 ──────────────────────────────
 
 

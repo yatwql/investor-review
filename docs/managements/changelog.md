@@ -11,6 +11,7 @@
 
 ### 修复
 
+- **模块级会话态复位契约**（rf-993）：13 类运行期状态补齐复位入口（按键解析残留 / 防连按保护位 / 打开失败记忆 / 惰性注册标记 / 新闻源命中快照 / 季度回放锚点 / 适配器巡检与注册表 / 传输层工厂 / 熔断展示判定 / 因子目录缓存 / 东财分页限速器 / akshare 失败标记），conftest 新增 `_auto_reset_module_state`（进/出两侧共 21 项，含已有 API 的 8 项）；`circuit_breaker` 复位到导入期基线（而非 `None`，避开把装配期接线当测试残留清掉）；新增契约用例反向枚举全部 `global` 改写变量，未接线即红。回归 4 例
 - **状态条中止键与文档对齐**（rf-988）：`LiveStatusBar` 缺省 `cancel_hint` 仍是已撤回的「q 中止」，报告器直接把它拼进状态条——TTY 上实显「… · q 中止」而该键无人监听。新增 `live_status.CANCEL_HINT` 作单一来源（`Ctrl+C 中断`），`status_bar_text` 与 `LiveStatusBar` 两处缺省同取；docstring 参数名（`cancel_hint` → `hint`）对齐。回归 3 例
 - **配置面板会话测试间复位**（rf-989）：`handlers_config._session` 是模块级单例且 `_apply_edit` 非空时必然记撤销，conftest 补齐 `_auto_reset_config_session` autouse（进/出两侧均关闭）。回归 2 例
 - **截图 `xlsx` 行数缺省单源**（rf-990）：入口 `--rows` 缺省改取 `xlsx_frame.DEFAULT_MAX_ROWS`，列上限收敛为 `_MAX_COLUMNS` 常量。回归 1 例

@@ -75,6 +75,14 @@ _last_src_labels: dict[str, str] = {}
 _src_results_lock = threading.Lock()
 
 
+def reset_last_source_results() -> None:
+    """清「上一次运行的源命中快照」（下一轮重新统计；测试间不互相污染）。"""
+    global _last_src_results
+    with _src_results_lock:
+        _last_src_results = {}
+        _last_src_labels.clear()
+
+
 def _channel_label(src: str, items: list[dict[str, Any]]) -> str:
     """源标签按「本次真正出条目的子渠道」拼接。
 
