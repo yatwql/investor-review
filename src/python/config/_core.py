@@ -351,7 +351,7 @@ def is_enable_action(config: dict | None = None) -> bool:
 
 
 def is_enable_news(config: dict | None = None) -> bool:
-    """市场新闻（财经新闻热点与持仓关联分析）是否启用。缺失时返回 True。"""
+    """市场新闻（财经热点关联分析）是否启用。缺失时返回 True。"""
     if config is None:
         config = get_config()
     val = config.get("enable_news")

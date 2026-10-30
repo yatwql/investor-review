@@ -1,4 +1,4 @@
-"""财经新闻热点与持仓关联分析模块 — 报告增补页签。
+"""财经热点关联分析模块 — 报告增补页签。
 
 从新浪财经/东方财富/财联社三个源获取最新财经新闻，
 与持仓名称/代码以及穿透 TOP10 资产名称进行关键词匹配，
@@ -384,7 +384,7 @@ def _apply_llm_enhancement(
             force=force,
         )
     except Exception:
-        logger.warning("财经新闻热点与持仓关联分析（LLM）失败，降级为传统关键词匹配", exc_info=True)
+        logger.warning("财经热点关联分析（LLM）失败，降级为传统关键词匹配", exc_info=True)
         cached = False
         token_usage = {}
     meta["llm_cached"] = cached
@@ -630,7 +630,7 @@ def write_news_sheet(
     news_data: list[dict[str, Any]],
     llm_meta: dict | None = None,
 ) -> None:
-    """写入财经新闻热点与持仓关联分析页签。
+    """写入财经热点关联分析页签。
 
     这是 Excel 的增补页签（仅在 N 选项时生成）。
     若有 LLM 分析数据，自动增加 "LLM 关联分析" 列。

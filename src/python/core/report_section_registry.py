@@ -108,7 +108,7 @@ _REPORT_SECTION_DEFAULT: list[dict] = [
     # ── news 类型（需启用新闻功能） ──
     {
         "key": "news_correlation",
-        "name": "财经新闻热点与持仓关联分析",
+        "name": "财经热点关联分析",
         "number": 8,
         "type": "news",
         "nav_group": "llm",
@@ -187,7 +187,7 @@ _REPORT_SECTION_DEFAULT: list[dict] = [
         "nav_group": "history",
         "data_flag": "holding_change_data",
     },
-    # 事件窗对照：并入「财经新闻热点与持仓关联分析」章内区块（partial 在新闻章内以
+    # 事件窗对照：并入「财经热点关联分析」章内区块（partial 在新闻章内以
     # block-title 渲染，可见性由契约 event_impact_view 决定），不占独立注册表条目、不消耗
     # 连续编号；报告章节与增强开关 event_window_impact 经实验挂载点注入 pipeline_data["event_impact_data"]。
     # ── schedule_replay 类型（实验开关 rebalance_schedule_replay 控制，经实验挂载点注入）：调仓纪律回放——月度定期/阈值偏离纪律多期回放 vs 买入持有；data_flag 控制双端可见性（关态键缺席隐藏 / 开启但数据不足双端占位） ──

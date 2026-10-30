@@ -248,7 +248,7 @@ class TestDatasourceLlmTtl:
         doc = (
             "| 全球政经局势 | `llm_global_macro_` | 24h | 持仓类 |\n"
             "| 智囊团深度复盘 | `llm_expert_review_` | 4h | 持仓类 |\n"
-            "| 财经新闻热点与持仓关联分析（LLM 二次关联） | `llm_news_item_` | 4h | 基础类 |\n"
+            "| 财经热点关联分析（LLM 二次关联） | `llm_news_item_` | 4h | 基础类 |\n"
             "| 辩论三段 | `llm_debate_pro_` / `llm_debate_con_` / `llm_debate_synthesis_` | 24h | 持仓类 |\n"
         )
         assert drift.check_datasource_llm_ttl(doc) == []

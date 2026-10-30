@@ -225,7 +225,7 @@ A: 编辑 `data/config/config.json` 的 `report_section_order` 字段，格式�
 A: 菜单 C 提供交互式配置界面，可独立控制报告中的五个章节组是否显示：
 
 - **基金深度分析**（持仓结构与集中度/风格与因子分析，以及「基金业绩分析」章末尾的基金经理变更监控块）—— 对应 `enable_fund_deep_analysis`
-- **市场新闻**（财经新闻热点与持仓关联分析）—— 对应 `enable_news`
+- **市场新闻**（财经热点关联分析）—— 对应 `enable_news`
 - **历史走势**（组合历史走势与回撤，一章多区块：走势表 + 回撤矩阵 + 危机区间标注 + 月度收益日历 + 尾部风险统计）—— 对应 `enable_history`
 - **组合演进**（组合演进/多快照趋势）—— 对应 `enable_portfolio_evolution`
 - **行动建议**（再平衡信号/交易纪律/调仓建议/收益归因）—— 对应 `enable_action`
@@ -423,7 +423,7 @@ A: 编辑 `data/config/llm_key.json`，修改 `provider` 字段为 `"claude"` �
 
 A: 编辑 `data/config/llm_settings.json`，将对应模块的 `thinking_enabled_{模块键}` 设为 `true`/`false`（如 `"thinking_enabled_expert_review": true`）。目前支持 Claude、DeepSeek（Anthropic 兼容端点）、Kimi（Anthropic 兼容端点）和 Gemini 2.5。推荐仅在智囊团深度复盘模块开启，其他模块收益不大且会增加响应时间。
 
-**Q: 如何开启财经新闻热点与持仓关联分析？**
+**Q: 如何开启财经热点关联分析？**
 
 A: 菜单 `S` 可交互切换各 LLM 模块的启停状态（立即生效），或将 `data/config/llm_settings.json` 中的 `enabled_llm.news_correlation` 设为 `true`。开启后菜单 B / L 生成的报告增加"LLM 关联分析"列，每条新闻获得 LLM 判定的关联度（高/中/低/无关）和原因分析。默认关闭以节省费用。
 

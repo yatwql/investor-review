@@ -1,9 +1,9 @@
-"""财经新闻热点与持仓关联分析 LLM 增强测试。
+"""财经热点关联分析 LLM 增强测试。
 
 测试目标：
   - _apply_llm_news_correlation — LLM JSON 响应解析
-  - 批次 财经新闻热点与持仓关联分析（TestBatchNewsAnalysis）
-  - enhance_news_correlation — 财经新闻热点与持仓关联分析 LLM 增强
+  - 批次 财经热点关联分析（TestBatchNewsAnalysis）
+  - enhance_news_correlation — 财经热点关联分析 LLM 增强
   - enhance_news_correlation 接受 llm_config 参数
   - enhance_news_correlation 逐条缓存
 
@@ -108,12 +108,12 @@ class TestApplyLLMAnalysis(unittest.TestCase):
 
 
 # ═══════════════════════════════════════════════════════════
-#  批次 财经新闻热点与持仓关联分析（TestBatchNewsAnalysis）
+#  批次 财经热点关联分析（TestBatchNewsAnalysis）
 # ═══════════════════════════════════════════════════════════
 
 
 class TestBatchNewsAnalysis(unittest.TestCase):
-    """测试批次 财经新闻热点与持仓关联分析功能。"""
+    """测试批次 财经热点关联分析功能。"""
 
     def setUp(self) -> None:
         self.news_5 = [{"title": f"新闻{i}", "matched_keywords": ["茅台"]} for i in range(5)]
@@ -167,7 +167,7 @@ class TestBatchNewsAnalysis(unittest.TestCase):
 
 
 # ═══════════════════════════════════════════════════════════
-#  enhance_news_correlation — 财经新闻热点与持仓关联分析 LLM 增强
+#  enhance_news_correlation — 财经热点关联分析 LLM 增强
 # ═══════════════════════════════════════════════════════════
 
 
@@ -305,7 +305,7 @@ class TestEnhanceNewsCorrelationUsesLlmConfig(unittest.TestCase):
 
 @patch("src.python.llm.skeleton.get_llm_config")
 class TestEnhanceNewsCorrelationGranularCache(unittest.TestCase):
-    """测试财经新闻热点与持仓关联分析的逐条缓存行为。"""
+    """测试财经热点关联分析的逐条缓存行为。"""
 
     @classmethod
     def setUpClass(cls) -> None:

@@ -110,7 +110,7 @@ class TestFormatItemTiers:
         """不变式：任何档位、任何宽度下每行都不超过内宽（窄终端不撑破右边框）。"""
         for lines in (
             format_item(columns=columns, **_ITEM),
-            format_item(columns=columns, **{**_ITEM, "number": 7, "label": "财经新闻热点与持仓关联分析"}),
+            format_item(columns=columns, **{**_ITEM, "number": 7, "label": "财经热点关联分析"}),
             format_heading("🔍 分析增强·既有章内追加", 14, 16, columns),
             legend_lines(7, columns),
         ):

@@ -29,7 +29,7 @@ _REPORT_SECTION_DEFAULT: list[dict] = [
     {"key": "fund_performance", "name": "基金业绩分析", "number": 4, "type": "always"},
     {"key": "position_structure", "name": "持仓结构与集中度", "number": 5, "type": "fund_deep_analysis"},
     {"key": "style_factor", "name": "风格与因子分析", "number": 6, "type": "fund_deep_analysis"},
-    {"key": "news_correlation", "name": "财经新闻热点与持仓关联分析", "number": 8, "type": "news"},
+    {"key": "news_correlation", "name": "财经热点关联分析", "number": 8, "type": "news"},
     {"key": "global_macro", "name": "全球政经局势", "number": 9, "type": "llm"},
     {"key": "expert_review", "name": "智囊团深度复盘", "number": 10, "type": "llm"},
     {"key": "health_check", "name": "持仓体检报告", "number": 11, "type": "llm"},

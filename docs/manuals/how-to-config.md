@@ -153,7 +153,7 @@
 | `llm_settings_file` | `data/config/llm_settings.json` | LLM 非敏感配置文件路径 | 手动编辑 |
 | `llm_providers_file` | `data/config/llm_providers.json` | LLM 多 Provider 链式服务配置文件路径，参见 [LLM 配置指引](how-to-config-llm.md) | 手动编辑 |
 | `data_key_file` | `data/config/data_key.json` | 数据源密钥文件路径（**通用**：以 provider 名为节，节内字段默认 `api_key`，如 `{"datasink": {"api_key": "..."}, "hithink": {"api_key": "..."}}`；一个文件容纳多个数据源的 key。各源申请地址见数据源可用性矩阵。环境变量如 `DATASINK_API_KEY` / `HITHINK_FINANCE_API_KEY` 可覆盖对应源） | 手动编辑 |
-| `news_top_count` | `300` | 财经新闻热点与持仓关联分析输出条目上限（各源原始获取量 = max(500, news_top_count × 2)，华尔街见闻硬上限 100 条除外） | 手动编辑 |
+| `news_top_count` | `300` | 财经热点关联分析输出条目上限（各源原始获取量 = max(500, news_top_count × 2)，华尔街见闻硬上限 100 条除外） | 手动编辑 |
 | `llm_report_depth` | `"standard"` | 报告深度档位：`brief`（仅全球政经，采集与调用最少）/ `standard`（按各模块开关参与）/ `deep`（全模块 + 新闻采集不少于 500 条）。档位只**收窄**模块集合与新闻采集规模，**不得打开已关闭的模块**；`brief` 下若与开关交集为空则 LLM 章节以占位呈现。取值非法时按 `standard` 处理并告警 | 手动编辑 |
 | `news_sources` | 见下方 | 各新闻数据源启停开关 | 手动编辑 |
 | `preferred_provider` | `{}` | 各数据类型的首选提供商覆写 | 手动编辑 |
@@ -265,7 +265,7 @@
 | 键名 | 文件名模式 | 默认 TTL | 指纹来源 | 说明 |
 |------|-----------|:--------:|----------|------|
 | `llm_expert_review` | `llm_expert_review_{fingerprint}.json` | 4h | 持仓汇总 + 分类计数 + 穿透 TOP10 + 持仓明细 | 智囊团深度复盘 |
-| `llm_news_correlation` | `llm_news_item_{hash}.json`（逐条） | 4h | 标题前 80 字 + 持仓指纹 | 财经新闻热点与持仓关联分析 |
+| `llm_news_correlation` | `llm_news_item_{hash}.json`（逐条） | 4h | 标题前 80 字 + 持仓指纹 | 财经热点关联分析 |
 | `llm_global_macro` | `llm_global_macro_{fingerprint}.json` | 24h | A股/美股指数 + 持仓汇总 | 全球政经局势 |
 | `llm_health_check` | `llm_health_check_{fingerprint}.json` | 4h | 持仓明细（排除行情波动） | 持仓体检报告 |
 | `llm_penetration_deep` | `llm_penetration_deep_{fingerprint}.json` | 4h | 持仓明细（排除行情波动） | 穿透深度分析 |

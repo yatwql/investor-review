@@ -26,7 +26,7 @@ pytestmark = [pytest.mark.unit, pytest.mark.unit_report, pytest.mark.usefixtures
 
 
 # ============================================================
-#  Template rendering — 财经新闻热点与持仓关联分析
+#  Template rendering — 财经热点关联分析
 # ============================================================
 
 

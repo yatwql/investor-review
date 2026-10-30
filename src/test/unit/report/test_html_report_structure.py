@@ -335,7 +335,7 @@ class TestHtmlCustomOrder(unittest.TestCase):
             {"key": "position_structure", "name": "持仓结构与集中度", "number": 5},
             {"key": "style_factor", "name": "风格与因子分析", "number": 6},
             # news 保持默认
-            {"key": "news_correlation", "name": "财经新闻热点与持仓关联分析", "number": 7},
+            {"key": "news_correlation", "name": "财经热点关联分析", "number": 7},
             # llm 保持默认
             {"key": "global_macro", "name": "全球政经局势", "number": 8},
             {"key": "expert_review", "name": "智囊团深度复盘", "number": 9},

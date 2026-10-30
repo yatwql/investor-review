@@ -468,7 +468,7 @@ def _render_news_section(
     penetration: dict | None,
     prog: ProgressReporter,
 ) -> tuple[list, dict]:
-    """财经新闻热点与持仓关联分析数据。
+    """财经热点关联分析数据。
 
     Returns:
         (news_data, news_llm_meta)
@@ -495,12 +495,12 @@ def _render_news_section(
         news_data, _news_llm_meta = build_news_data(holdings, top_n=news_top_count, penetrated_assets=penetrated_assets)
         if not news_data:
             news_data = []
-            logger.info("财经新闻热点与持仓关联分析：无数据")
+            logger.info("财经热点关联分析：无数据")
         else:
             log_throttled(
                 logger,
                 "news_correlation_ready",
-                "财经新闻热点与持仓关联分析完成，%d 条",
+                "财经热点关联分析完成，%d 条",
                 len(news_data),
             )
         return news_data, _news_llm_meta

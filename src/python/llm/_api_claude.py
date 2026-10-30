@@ -51,7 +51,7 @@ def call_claude(
 
     支持 Extended Thinking（thinking 参数），通过 llm_settings.json 中
     thinking_enabled_{模块} / thinking_budget_{模块} 配置开启。
-    推荐仅在智囊团深度复盘（expert_review）场景开启，全球政经局势和财经新闻热点与持仓关联分析收益有限。
+    推荐仅在智囊团深度复盘（expert_review）场景开启，全球政经局势和财经热点关联分析收益有限。
     若模型不支持 Extended Thinking（如 claude-sonnet-3-5），自动降级跳过。
 
     Args:
