@@ -143,6 +143,19 @@ class TestMergeBreakdownStats:
         names = list(mod._merge_breakdown_stats(records)["LLM+新闻"])
         assert names == ["新闻获取", "持仓体检报告"]
 
+    def test_legacy_style_factor_span_kept_as_separate_bucket(self, mod):
+        """旧「风格与因子」合并段单列展示，不与拆开后的三子项混算。"""
+        records = [
+            {"breakdown": {"数据准备": {"风格与因子": 6.0}}},
+            {"breakdown": {"数据准备": {"因子暴露": 2.0, "行业 Beta": 1.0, "相关性矩阵": 0.5}}},
+        ]
+        stats = mod._merge_breakdown_stats(records)["数据准备"]
+        legacy_name = mod._LEGACY_BREAKDOWN_ALIASES["风格与因子"]
+        assert legacy_name in stats
+        assert stats[legacy_name]["avg"] == pytest.approx(6.0)
+        assert stats["因子暴露"]["avg"] == pytest.approx(2.0)
+        assert "风格与因子" not in stats
+
     def test_legacy_merged_span_is_renamed_not_mixed(self, mod):
         """跨版本键名：旧「合并段」带显式标记单列，不与拆分后的新子项混算。
 
@@ -520,3 +533,46 @@ class TestOutlierAndTailSections:
         with_outlier = _overview_row(mod.build_trend_report(records), "合计（当前口径）")
         without = _overview_row(mod.build_trend_report(records, exclude_outlier=True), "合计（当前口径）")
         assert int(without[1]) == int(with_outlier[1]) - 1
+
+
+class TestConcurrencySection:
+    """并发预算段：档位/预算/峰值/缩容 与「跨档位不可比」提示。"""
+
+    def test_concurrency_table_rendered(self, mod):
+        records = [
+            {
+                "version": "0.16.15-dev",
+                "report_type": "full",
+                "timestamp": "2026-11-01T11:40:00",
+                "total_seconds": 100.0,
+                "counters": {
+                    "concurrency_budget": 15,
+                    "concurrency_peak": 12,
+                    "concurrency_clamps": 2,
+                    "concurrency_profile_pct": 100,
+                },
+            },
+            {
+                "version": "0.16.15-dev",
+                "report_type": "full",
+                "timestamp": "2026-11-01T12:40:00",
+                "total_seconds": 110.0,
+                "counters": {
+                    "concurrency_budget": 15,
+                    "concurrency_peak": 8,
+                    "concurrency_clamps": 0,
+                    "concurrency_profile_pct": 100,
+                },
+            },
+        ]
+        report = mod.build_trend_report(records)
+        assert "## 并发预算" in report
+        assert "| 0.16.15-dev | 2 | 100% | 15 |" in report
+        assert "缩容合计" in report
+        assert "跨档位不要直接比耗时" in report
+
+    def test_no_concurrency_counters_skips_section(self, mod):
+        records = [
+            {"version": "0.16.0", "report_type": "full", "timestamp": "2026-10-01T10:00:00", "total_seconds": 60.0}
+        ]
+        assert "## 并发预算" not in mod.build_trend_report(records)

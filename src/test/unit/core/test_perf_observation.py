@@ -368,3 +368,43 @@ class TestModuleCostHistory:
         out = module_cost_summary(days=7, path=path)
         assert "self_review" not in out
         assert out["global_macro"]["costs"]["CNY"]["total"] == 0.25
+
+
+class TestSlowWriteWarning:
+    """落盘阶段慢告警：超阈值才响，且必须带得出「产物多大、落在哪」。"""
+
+    def test_below_threshold_is_silent(self, caplog):
+        from src.python.core.perf import warn_slow_write
+
+        with caplog.at_level(logging.WARNING, logger="invest"):
+            warn_slow_write("HTML 页面写入", 0.23, "/tmp/不存在也无所谓.html")
+        assert not [r for r in caplog.records if r.levelno == logging.WARNING]
+
+    def test_above_threshold_reports_size_and_path(self, tmp_path, caplog):
+        from src.python.core.perf import SLOW_WRITE_WARN_SECONDS, warn_slow_write
+
+        target = tmp_path / "report.html"
+        target.write_bytes(b"x" * (2 * 1024 * 1024))
+
+        with caplog.at_level(logging.WARNING, logger="invest"):
+            warn_slow_write("HTML 页面写入", SLOW_WRITE_WARN_SECONDS + 13.0, target)
+
+        messages = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(messages) == 1, messages
+        message = messages[0]
+        assert "HTML 页面写入" in message
+        assert f"{SLOW_WRITE_WARN_SECONDS + 13.0:.2f}s" in message
+        assert "2.00 MB" in message
+        assert str(target) in message
+
+    def test_directory_path_reports_without_size(self, tmp_path, caplog):
+        """给目录（Excel 侧只知道输出目录）时仍要告警，只是不报产物大小。"""
+        from src.python.core.perf import warn_slow_write
+
+        with caplog.at_level(logging.WARNING, logger="invest"):
+            warn_slow_write("Excel 报告生成", 10.6, tmp_path)
+
+        message = "\n".join(r.getMessage() for r in caplog.records if r.levelno == logging.WARNING)
+        assert "Excel 报告生成" in message
+        assert "MB" not in message
+        assert str(tmp_path) in message

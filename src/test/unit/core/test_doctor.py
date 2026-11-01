@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import os
+from datetime import date, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -227,7 +228,9 @@ class TestReviewLedgerOverview:
             name="浦发银行",
             direction=dl.DIRECTION_LONG,
             carrier=dl.CARRIER_GENERIC,
-            report_date="2026-09-01",
+            # 决策账本按保留期裁剪（`prune_jsonl_by_age`）——日期从当天回推派生，
+            # 写死绝对日期会在保留期过后被清掉，上屏变成「账本为空」
+            report_date=(date.today() - timedelta(days=30)).isoformat(),
         )
         dl.append_settlement(
             decision_id=decision_id,

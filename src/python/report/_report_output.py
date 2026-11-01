@@ -48,6 +48,7 @@ def _generate_full_excel_report(
     enable_fundamental_snapshot: bool = False,
 ) -> bool:
     """full 路径的 Excel 报告生成，返回是否成功。"""
+    from src.python.core.perf import warn_slow_write
     from src.python.report.excel_generator import generate_excel_report
     from src.python.report.run_integrity import current_perf
 
@@ -55,6 +56,8 @@ def _generate_full_excel_report(
     reporter.info("正在生成 Excel 报告...")
     if _perf is not None:
         _perf.start("Excel 生成")
+    _t0 = time.perf_counter()
+    excel_dir = output_dir or prep["output_dir"]
     try:
         generate_excel_report(
             holdings,
@@ -87,6 +90,7 @@ def _generate_full_excel_report(
             financial_indicator_data=(pipeline_data or {}).get("financial_indicator_data"),
         )
         reporter.ok("Excel 报告已生成")
+        warn_slow_write("Excel 报告生成", time.perf_counter() - _t0, excel_dir)
         return True
     except Exception:
         reporter.add_error("Excel 报告生成失败（详情请查看日志文件 logs/app.log）")
@@ -175,6 +179,7 @@ def _generate_full_html_report(
             与 Excel 侧同源，由编排层 `_generate_report_full` 注入——须在写 HTML 之前完成
             取数，否则本类别既不出现在矩阵、说明表也记「未使用」（与 Excel 自相矛盾）。
     """
+    from src.python.core.perf import warn_slow_write
     from src.python.report.html_writer import write_html_report
     from src.python.report.run_integrity import current_perf
 
@@ -184,6 +189,7 @@ def _generate_full_html_report(
     if _perf is not None:
         _perf.start("HTML 生成")
     _html_recorder = _perf.recorder("HTML 生成") if _perf is not None else None
+    html_path: str | None = None
     _t0 = time.perf_counter()
     try:
         chart_datasets = _build_chart_datasets_for_report(
@@ -197,7 +203,7 @@ def _generate_full_html_report(
             # 0.3s 与 17.3s 两档），先看是数据装配还是渲染/落盘，否则无从下手
             _html_recorder.record("图表数据装配", time.perf_counter() - _t0)
             _t0 = time.perf_counter()
-        path = write_html_report(
+        html_path = write_html_report(
             holdings,
             output_dir=output_dir or prep["output_dir"],
             news_top_count=prep["news_top_count"],
@@ -245,7 +251,7 @@ def _generate_full_html_report(
             schedule_replay_data=schedule_replay_data,
             summary_highlights_data=summary_highlights_data,
         )
-        reporter.ok(f"HTML 报告已生成: {path}")
+        reporter.ok(f"HTML 报告已生成: {html_path}")
         return True
     except Exception:
         reporter.add_error("HTML 报告生成失败（详情请查看日志文件 logs/app.log）")
@@ -255,5 +261,7 @@ def _generate_full_html_report(
     finally:
         if _perf is not None:
             if _html_recorder is not None:
-                _html_recorder.record("页面写入", time.perf_counter() - _t0)
+                page_write = time.perf_counter() - _t0
+                _html_recorder.record("页面写入", page_write)
+                warn_slow_write("HTML 页面写入", page_write, html_path)
             _perf.stop()

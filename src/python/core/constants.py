@@ -39,7 +39,7 @@ PROJECT_ROOT = os.environ.get("INVEST_PROJECT_ROOT") or _find_project_root()
 # 应用名称（单一来源，TUI 首页 / 启动日志 / Web 首页 / HTML 报告首页 / Excel 首页统一引用）
 APP_NAME = "投资复盘助手"
 
-APP_VERSION = "0.16.14"
+APP_VERSION = "0.16.15"
 
 # ── 报告产物文件名（单一来源：Excel/HTML 写入器与 Web 预览下载统一引用） ──
 # 报告产物文件基名（归档名 = 基名 + 时间戳后缀）
@@ -57,6 +57,19 @@ CACHE_DAILY = 86400  # 每日（24h）
 CACHE_WEEKLY = 604800  # 每周（7d）
 CACHE_TWO_WEEKS = 1209600  # 两周（14d）
 CACHE_MONTHLY = 2592000  # 每月（30d）
+
+# ── 跨模块共享的分析口径与枚举（单一来源：各模块 import，不得就地重定义） ──
+# 回看窗口（交易日 ≈ 3 个月）默认值：行业 Beta、风格因子回归、相关性分析同口径，
+# 调整口径只改此处，避免三处字面量各自漂移。
+DEFAULT_WINDOW: int = 60
+# 三档估值刻度中文名（估值分位与市场温度统一口径，UI/文档不得另写字面量）。
+# 注意：与 valuation_percentile / correlation 各自的 MIN_SAMPLES（样本下限）无关。
+TIER_UNDERVALUED = "低估"
+TIER_FAIR = "合理"
+TIER_OVERVALUED = "高估"
+# 交易方向枚举（费用模型的腿侧别与持仓编辑器的录入方向共用同一取值）。
+SIDE_BUY = "buy"
+SIDE_SELL = "sell"
 
 # ── 组合历史走势 ─────────────────────────────────
 

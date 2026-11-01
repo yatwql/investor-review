@@ -1,9 +1,8 @@
-"""HTML 报告前端 JS 资产复制/内嵌子模块。
+"""HTML 报告前端 JS 资产内嵌子模块。
 
-承载 Chart.js 前端静态资产（src/static/）的两条产出路径：
-1. `_copy_js_assets`：将资产复制到报告输出目录（松散文件，配合外链引用）；
-2. `_inline_js_assets`：将资产内容内嵌进报告 HTML 的行内 <script>（单文件
-   完全自包含——下载/移动/单发移动端浏览不再依赖同目录 JS 文件）。
+承载 Chart.js 前端静态资产（src/static/）的产出路径：`_inline_js_assets` 将资产
+内容内嵌进报告 HTML 的行内 <script>（单文件完全自包含——下载/移动/单发移动端浏览
+不再依赖同目录松散 JS 文件；不产出松散副本）。
 
 由 `html_writer.py`（聚合门面）re-export 对外提供。
 """
@@ -15,7 +14,7 @@ import os
 
 logger = logging.getLogger("invest")
 
-# 本地 JS bundle 资产清单（单一事实来源）：模板外链引用、复制与内嵌两条产出路径
+# 本地 JS bundle 资产清单（单一事实来源）：模板外链引用与内嵌路径
 # 同引此元组；测试（真值派生）与目录说明均由此派生，禁止各自维护副本。
 JS_ASSETS: tuple[str, ...] = (
     "chart.min.js",
@@ -28,34 +27,6 @@ JS_ASSETS: tuple[str, ...] = (
     "fold.js",
     "theme.js",
 )
-
-
-def _copy_js_assets(output_dir: str) -> None:
-    """将 src/static/ 下 Chart.js 前端 JS 资产复制到报告输出目录（本地 bundle）。
-
-    模板以相对路径引用（chart.min.js / chart-print.js / chart-config.js /
-    chart-export.js / chart-common.js / chart-init.js / toc.js / fold.js /
-    theme.js），报告完全离线自包含。文件缺失时仅告警，不阻断报告生成（防御性）。
-
-    Args:
-        output_dir: 报告输出目录（与 HTML 同目录）
-    """
-    import shutil
-
-    from src.python.core.constants import PROJECT_ROOT
-
-    # 资产清单见模块级 JS_ASSETS（单一事实来源）
-    src_dir = os.path.join(PROJECT_ROOT, "src", "static")
-    os.makedirs(output_dir, exist_ok=True)
-    for fname in JS_ASSETS:
-        src = os.path.join(src_dir, fname)
-        if not os.path.exists(src):
-            logger.warning("[chart] JS 资产缺失（跳过复制）: %s", src)
-            continue
-        try:
-            shutil.copy2(src, os.path.join(output_dir, fname))
-        except OSError as e:
-            logger.warning("[chart] JS 资产复制失败: %s", e)
 
 
 def _inline_js_assets(html: str) -> str:
@@ -72,9 +43,8 @@ def _inline_js_assets(html: str) -> str:
     使报告 HTML 完全自包含——下载/移动到其他目录/单发移动端浏览时，
     不再依赖同目录的松散 JS 文件即可渲染图表。
 
-    防御性：文件缺失、读取失败或内容含 ``</script`` 序列时，跳过该资产
-    （其外链标签保留原位，配合 ``_copy_js_assets`` 复制的松散文件仍可
-    加载），不阻断报告生成。非本地 bundle 的外链脚本（其他 .js）保持原样。
+    防御性：文件缺失、读取失败或内容含 ``</script`` 序列时跳过该资产（不产出
+    松散副本兜底），不阻断报告生成。非本地 bundle 的外链脚本（其他 .js）保持原样。
     已内嵌的 HTML 再次调用时无匹配标签，幂等。
 
     Args:

@@ -4,17 +4,21 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "investor-review"
-version = "0.16.14"
+version = "0.16.15"
 description = "投资复盘助手：读取持仓 Excel，生成 Excel/HTML 投资分析报告（含行情、穿透、基金业绩、财经热点关联关联分析与 LLM 深度复盘）"
 requires-python = ">=3.11"
 dependencies = [
+    # 运行时直接依赖：版本约束与 requirements.txt 中同名行**逐字一致**（单源契约，
+    # 由 src/test/unit/test_dependency_declarations.py 守卫）；requirements.txt
+    # 另含 flask 传递依赖锁定与开发/工具依赖，那些不在此重复声明。
     "openpyxl==3.1.5",
     "httpx==0.28.1",
+    "h2>=4.2.0",
     "jinja2==3.1.6",
-    "akshare==1.18.64",
+    "akshare>=1.16,<2.0",
     "lxml==6.1.1",
     "flask==3.1.2",
-    "pdfplumber==0.11.10",
+    "pdfplumber>=0.11,<1.0",
 ]
 
 [project.optional-dependencies]

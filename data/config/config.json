@@ -124,7 +124,7 @@
     "max_total_workers": 15,  // 全局 batch 线程硬上限（已有池不计入）
     "fund_workers": 3,  // 基金排名/持仓批量并发数
     "industry_workers": 8,  // 行业分类批量并发数
-    "datasink_workers": 2,  // 财报取数并发数（免费档批量上限 ≤3）
+    "datasink_workers": null,  // null 或省略该键 = 跟随默认（当前默认 3：免费档 3 请求/秒，≥3 才吃满）；显式数字才覆盖
     "akshare_workers": 2  // akshare 财务指标取数并发数（财务指标章 + 基金重仓 ROE 推演）
   },
   "batch_rate_limit": {  // Provider 级别请求间隔（秒），0=不限速

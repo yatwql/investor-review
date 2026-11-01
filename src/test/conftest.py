@@ -294,6 +294,18 @@ def _auto_reset_provider_registry():
 
 
 @pytest.fixture(autouse=True)
+def _auto_reset_concurrency_governor():
+    """自动重置进程级并发预算账本。
+
+    租约跨用例残留会让后续池被误缩容（表现为「偶发」少一个 worker 的诡异时序），
+    口径与 provider registry 单例重置一致：只清账本，不改任何配置值。
+    """
+    from src.python.core.concurrency import GOVERNOR
+
+    GOVERNOR.reset()
+
+
+@pytest.fixture(autouse=True)
 def _restore_menu_items():
     """自动还原 ``MENU_ITEMS``（模块级可变列表），防止功能开关裁剪串扰。
 

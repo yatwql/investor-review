@@ -15,11 +15,22 @@ from src.python.config.features import set_feature_enabled, reset_feature_flags
 from src.python.core import decision_ledger as dl
 from src.python.report import decision_settlement as ds
 
+from src.test._relative_dates import day as _day
+
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
+#: 账本样本日期：结算服务写读决策账本（730 天写侧裁剪）
+#: 写死绝对日期会在「日期 + 保留期」之后被 `prune_jsonl_by_age` 当过期记录清掉，
+#: 用例静默变成「账本为空 / 键缺失」，失败信息完全看不出是日期过期——故从当天回推派生。
+
+
+def _d(offset: int) -> str:
+    """相对锚点（60 天前）的日期串，保留本文件原有的窗口起点。"""
+    return _day(offset, shift_days=60)
+
 
 # 决策日与固定交易日窗口：决策日 08-20，其后 08-21/22/25/26/27 恰好 5 个交易日
-_REP = "2026-08-20"
-_DATES = ["2026-08-18", "2026-08-21", "2026-08-22", "2026-08-25", "2026-08-26", "2026-08-27"]
+_REP = _d(0)
+_DATES = [_d(-2), _d(1), _d(2), _d(5), _d(6), _d(7)]
 
 
 @pytest.fixture(autouse=True)
@@ -88,11 +99,11 @@ class TestSettleMaturity:
 
     def test_not_mature_deferred(self, tmp_path):
         lp = str(tmp_path / "ledger.jsonl")
-        _seed_decision(lp, rep="2026-09-01", baseline=10.0)  # direction short
+        _seed_decision(lp, rep=_d(12), baseline=10.0)  # direction short
         # 决策日 09-01 之后仅 3 个 bar（09-02/03/04 < 5）→ 未到期
-        series = _bars(["2026-08-25", "2026-09-02", "2026-09-03", "2026-09-04"], [10.0, 9.8, 9.7, 9.6])
+        series = _bars([_d(5), _d(13), _d(14), _d(15)], [10.0, 9.8, 9.7, 9.6])
         out = ds.settle_pending_decisions(
-            report_date="2026-09-09",
+            report_date=_d(20),
             ledger_path=lp,
             price_series_fn=_FakePrices(series),
             index_series_fn=_FakeIndex([]),
@@ -103,9 +114,9 @@ class TestSettleMaturity:
 
     def test_mature_hit(self, tmp_path):
         lp = str(tmp_path / "ledger.jsonl")
-        _seed_decision(lp, rep="2026-08-20", baseline=10.0)  # short
+        _seed_decision(lp, rep=_d(0), baseline=10.0)  # short
         out = ds.settle_pending_decisions(
-            report_date="2026-08-28",
+            report_date=_d(8),
             ledger_path=lp,
             price_series_fn=_FakePrices(_mature([10.0, 9.9, 9.8, 9.7, 9.6, 9.5])),
             index_series_fn=_FakeIndex([]),
@@ -115,7 +126,7 @@ class TestSettleMaturity:
         assert out["summary"][0]["raw_return"] == pytest.approx(9.5 / 10.0 - 1)
         # 已结 → 幂等：再次调用不重结
         out2 = ds.settle_pending_decisions(
-            report_date="2026-08-29",
+            report_date=_d(9),
             ledger_path=lp,
             price_series_fn=_FakePrices(_mature([10.0, 9.9, 9.8, 9.7, 9.6, 9.5])),
             index_series_fn=_FakeIndex([]),
@@ -130,7 +141,7 @@ class TestSettleOutcomes:
         lp = str(tmp_path / "ledger.jsonl")
         _seed_decision(lp, direction=direction, baseline=10.0)
         return ds.settle_pending_decisions(
-            report_date="2026-08-28",
+            report_date=_d(8),
             ledger_path=lp,
             price_series_fn=_FakePrices(_mature(closes)),
             index_series_fn=_FakeIndex([]),
@@ -155,9 +166,9 @@ class TestSettleOutcomes:
 
     def test_gap_when_no_price(self, tmp_path):
         lp = str(tmp_path / "ledger.jsonl")
-        _seed_decision(lp, rep="2026-08-20", baseline=10.0)
+        _seed_decision(lp, rep=_d(0), baseline=10.0)
         out = ds.settle_pending_decisions(
-            report_date="2026-08-28",
+            report_date=_d(8),
             ledger_path=lp,
             price_series_fn=_FakePrices([]),  # 全链路无行情
             index_series_fn=_FakeIndex([]),
@@ -172,12 +183,12 @@ class TestSettleOutcomes:
             name="x",
             direction=dl.DIRECTION_FLAT,
             carrier=dl.CARRIER_EXPERT_REVIEW,
-            report_date="2026-08-20",
+            report_date=_d(0),
             baseline_close=10.0,
             path=lp,
         )
         out = ds.settle_pending_decisions(
-            report_date="2026-08-28",
+            report_date=_d(8),
             ledger_path=lp,
             price_series_fn=_FakePrices(_mature([10.0, 10.2, 10.4, 10.6, 10.8, 11.0])),
             index_series_fn=_FakeIndex([]),
@@ -191,11 +202,11 @@ class TestSettleBenchmark:
 
     def test_benchmark_computed(self, tmp_path):
         lp = str(tmp_path / "ledger.jsonl")
-        _seed_decision(lp, rep="2026-08-20", baseline=10.0)  # short
+        _seed_decision(lp, rep=_d(0), baseline=10.0)  # short
         # 基准：决策日(LOCF 08-18) close=4000，末 08-27 close=3800 → -5%
-        idx = _bars(["2026-08-18", "2026-08-25", "2026-08-27"], [4000.0, 3900.0, 3800.0])
+        idx = _bars([_d(-2), _d(5), _d(7)], [4000.0, 3900.0, 3800.0])
         out = ds.settle_pending_decisions(
-            report_date="2026-08-28",
+            report_date=_d(8),
             ledger_path=lp,
             price_series_fn=_FakePrices(_mature([10.0, 9.9, 9.8, 9.7, 9.6, 9.5])),
             index_series_fn=_FakeIndex(idx),
@@ -208,9 +219,9 @@ class TestSettleBenchmark:
     def test_benchmark_missing_is_none(self, tmp_path):
         # 基准拉取失败 → bench_return None，方向判定不受影响
         lp = str(tmp_path / "ledger.jsonl")
-        _seed_decision(lp, rep="2026-08-20", baseline=10.0)
+        _seed_decision(lp, rep=_d(0), baseline=10.0)
         out = ds.settle_pending_decisions(
-            report_date="2026-08-28",
+            report_date=_d(8),
             ledger_path=lp,
             price_series_fn=_FakePrices(_mature([10.0, 9.9, 9.8, 9.7, 9.6, 9.5])),
             index_series_fn=_FakeIndex([]),
@@ -226,17 +237,17 @@ class TestSettleGating:
     def test_flag_off_noop(self, tmp_path):
         reset_feature_flags()
         lp = str(tmp_path / "ledger.jsonl")
-        _seed_decision(lp, rep="2026-08-20", baseline=10.0)
-        out = ds.settle_pending_decisions(report_date="2026-08-28", ledger_path=lp)
+        _seed_decision(lp, rep=_d(0), baseline=10.0)
+        out = ds.settle_pending_decisions(report_date=_d(8), ledger_path=lp)
         assert out == {"settled": 0, "ids": [], "deferred": 0, "skipped": 0, "summary": []}
 
     def test_already_settled_idempotent(self, tmp_path):
         lp = str(tmp_path / "ledger.jsonl")
-        _seed_decision(lp, rep="2026-08-20", baseline=10.0, code="600001")
-        _seed_decision(lp, rep="2026-08-20", baseline=10.0, code="600002")
+        _seed_decision(lp, rep=_d(0), baseline=10.0, code="600001")
+        _seed_decision(lp, rep=_d(0), baseline=10.0, code="600002")
         price = _mature([10.0, 9.9, 9.8, 9.7, 9.6, 9.5])
         out1 = ds.settle_pending_decisions(
-            report_date="2026-08-28",
+            report_date=_d(8),
             ledger_path=lp,
             price_series_fn=_FakePrices(price),
             index_series_fn=_FakeIndex([]),
@@ -244,7 +255,7 @@ class TestSettleGating:
         assert out1["settled"] == 2
         # 两个已结 → 再次调用 settled=0
         out2 = ds.settle_pending_decisions(
-            report_date="2026-08-29",
+            report_date=_d(9),
             ledger_path=lp,
             price_series_fn=_FakePrices(price),
             index_series_fn=_FakeIndex([]),

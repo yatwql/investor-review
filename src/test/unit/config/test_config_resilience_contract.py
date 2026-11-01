@@ -143,3 +143,22 @@ class TestNonCurrentStructureRejected:
         message = str(exc.value)
         assert expect in message, message
         assert "重新生成" in message, message
+
+
+class TestLLMSettingsFailureDiagnostics:
+    """读取失败必须留下可定位原因（类型 + 路径），不能只说「按默认展示」。"""
+
+    def test_read_failure_warning_carries_reason_and_path(self, tmp_path, monkeypatch, caplog):
+        import src.python.config._llm_settings as ls
+
+        path = tmp_path / "llm_settings.json"
+        path.write_text("{ 半写", encoding="utf-8")
+        monkeypatch.setattr(ls, "get_llm_settings_path", lambda: str(path))
+
+        with caplog.at_level(logging.WARNING, logger="invest"):
+            assert ls.read_llm_settings_file() is None
+
+        warning = "\n".join(r.getMessage() for r in caplog.records if r.levelno == logging.WARNING)
+        assert "llm_settings.json" in warning
+        assert "JSONDecodeError" in warning or "ValueError" in warning, warning
+        assert str(path) in warning

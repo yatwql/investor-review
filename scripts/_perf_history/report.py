@@ -276,9 +276,15 @@ def _bucket_lines(records: list[dict[str, Any]], by: str) -> list[str]:
     """
     buckets: dict[str, list[float]] = defaultdict(list)
     costs: dict[str, dict[str, float]] = defaultdict(dict)
+    clamps: dict[str, int] = defaultdict(int)
+    has_clamp = False
     for r in records:
         key = _bucket_key(r.get("timestamp", ""), by)
         buckets[key].append(float(r.get("total_seconds") or 0))
+        raw_clamps = (r.get("counters") or {}).get("concurrency_clamps")
+        if raw_clamps is not None:
+            has_clamp = True
+            clamps[key] += int(raw_clamps)
         llm = r.get("llm")
         if isinstance(llm, dict):
             add_cost_bucket(costs[key], _record_costs(llm) or {PRICING_CURRENCY: 0.0})
@@ -290,17 +296,17 @@ def _bucket_lines(records: list[dict[str, Any]], by: str) -> list[str]:
     if has_cost:
         lines.extend(
             [
-                "| 时段 | 样本数 | 中位 | P95 | 最长 | 费用合计 | 费用环比 |",
-                "|:-----|------:|----:|----:|-----:|--------:|--------:|",
+                "| 时段 | 样本数 | 中位 | P95 | 最长 | 费用合计 | 费用环比 | 缩容 |",
+                "|:-----|------:|----:|----:|-----:|--------:|--------:|-----:|",
             ]
         )
     else:
-        lines.extend(
-            [
-                "| 时段 | 样本数 | 中位 | P95 | 最长 |",
-                "|:-----|------:|----:|----:|-----:|",
-            ]
-        )
+        header = "| 时段 | 样本数 | 中位 | P95 | 最长 |"
+        rule = "|:-----|------:|----:|----:|-----:|"
+        if has_clamp:
+            header += " 缩容 |"
+            rule += "-----:|"
+        lines.extend([header, rule])
     keys = sorted(buckets)
     prev_cost: dict[str, float] | None = None
     for key in keys:
@@ -308,11 +314,15 @@ def _bucket_lines(records: list[dict[str, Any]], by: str) -> list[str]:
         row = (
             f"| {key} | {len(vals)} | {_median(vals):.1f}s | {_percentile(vals, 95):.1f}s | {_min_max(vals)[1]:.1f}s |"
         )
+        if has_clamp:
+            row += f" {clamps.get(key, 0)} |"
         if has_cost:
             cur_costs = costs.get(key) or {}
             delta_cell = "—" if prev_cost is None else _cost_delta(prev_cost, cur_costs)
             row += f" {_format_bucket(cur_costs)} | {delta_cell} |"
             prev_cost = cur_costs
+        if has_clamp:
+            row += f" {clamps.get(key, 0)} |"
         lines.append(row)
     if has_cost and len(keys) >= 2:
         last_costs = costs.get(keys[-1]) or {}
@@ -385,6 +395,58 @@ def _llm_context_lines(records: list[dict[str, Any]]) -> list[str]:
         if models:
             lines.append("| 模型 | " + "、".join(f"{k}×{v}" for k, v in sorted(models.items())) + " |")
         lines.append("")
+    return lines
+
+
+def _concurrency_lines(records: list[dict[str, Any]]) -> list[str]:
+    """并发预算观测段（`counters.concurrency_budget/peak/clamps`）。
+
+    回答「预算是多少、有没有用满、有没有池被削」——缩容次数 > 0 且对应阶段变慢时，
+    才需要动 `batch.max_total_workers` 或该阶段自己的 worker 键；缩容为 0 而阶段仍慢，
+    多半与并发无关（单请求挂起 / 串行扇出）。
+    """
+    with_counts = [r for r in records if isinstance(r.get("counters"), dict) and "concurrency_budget" in r["counters"]]
+    if not with_counts:
+        return []
+
+    def _int(record: dict[str, Any], key: str) -> int:
+        return int((record.get("counters") or {}).get(key) or 0)
+
+    by_version: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for record in with_counts:
+        by_version[str(record.get("version") or "?")].append(record)
+
+    lines = [
+        "## 并发预算",
+        "",
+        f"样本：{len(with_counts)} 条含并发计数（共 {len(records)} 条）。",
+        "",
+        "| 版本 | 次数 | 档位 | 预算(中位) | 峰值(中位) | 峰值(max) | 缩容合计 | 缩容运行 |",
+        "|:-----|-----:|-----:|----------:|----------:|---------:|--------:|--------:|",
+    ]
+    for version, group in sorted(by_version.items()):
+        budgets = [float(_int(r, "concurrency_budget")) for r in group]
+        peaks = [float(_int(r, "concurrency_peak")) for r in group]
+        clamps = [_int(r, "concurrency_clamps") for r in group]
+        clamped_runs = sum(1 for c in clamps if c > 0)
+        pcts = [
+            float(int((r.get("counters") or {}).get("concurrency_profile_pct") or 0))
+            for r in group
+            if (r.get("counters") or {}).get("concurrency_profile_pct") is not None
+        ]
+        profile_cell = f"{_median(pcts):.0f}%" if pcts else "—"
+        lines.append(
+            f"| {version} | {len(group)} | {profile_cell} | {_median(budgets):.0f} | {_median(peaks):.0f} | "
+            f"{_min_max(peaks)[1]:.0f} | {sum(clamps)} | {clamped_runs}/{len(group)} |"
+        )
+    lines.append("")
+    lines.append(
+        "判读：预算 = min(`batch.max_total_workers`, 本机核数)；**档位** = `batch.profile` 系数"
+        "（high=100% / medium=50% / low=25%，只缩各池申请值）；**峰值≈预算**说明额度用满；"
+        "**缩容合计 > 0** 且对应阶段变慢时，调大预算或该阶段自己的 `batch.*_workers`；"
+        "**跨档位不要直接比耗时**（medium/low 是主动降并发）。"
+    )
+    lines.append("")
     return lines
 
 
@@ -494,6 +556,9 @@ def build_trend_report(
     # ── 异常运行与同版本渐进漂移 ──
     lines.extend(_abnormal_lines(scoped))
     lines.extend(_drift_lines(scoped))
+
+    # ── 并发预算（预算/峰值/缩容次数：判断「慢」是否与并发收敛有关） ──
+    lines.extend(_concurrency_lines(scoped))
 
     # ── LLM 运行上下文（等待/重试/降级/缓存/用量） ──
     llm_ctx_lines = _llm_context_lines(scoped)

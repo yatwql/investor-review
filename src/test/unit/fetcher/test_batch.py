@@ -84,7 +84,7 @@ class TestBatchDispatcherExecute(unittest.TestCase):
             lambda: task(2, 0.05),
             lambda: task(3, 0.10),
         ]
-        results = self.dispatcher.execute(tasks)
+        results = self.dispatcher.execute(tasks=tasks)
         values = [r.result for r in results]
         self.assertEqual(values, [1, 2, 3])
 
@@ -125,7 +125,7 @@ class TestBatchDispatcherExecute(unittest.TestCase):
                 lambda: task(2, 0.03),
                 lambda: task(3, 0.01),
             ]
-            disp.execute(tasks)
+            disp.execute(tasks=tasks)
             # 串行时先提交的先完成
             self.assertEqual(order, [1, 2, 3])
         finally:
@@ -524,7 +524,7 @@ class TestGetStrategyHook(unittest.TestCase):
         from src.python.fetcher.batch import get_strategy_hook
 
         hook = get_strategy_hook("nonexistent_type")
-        self.assertIsNotNone(hook)
+        assert hook is not None, "未知 code_type 也应可构造"
         # 构造后可调用，返回 "live" 或 "cache"
         result = hook()
         self.assertIn(result, ("live", "cache"))
@@ -840,3 +840,61 @@ class TestBatchDispatcherRetryPolicyDelegation(unittest.TestCase):
         updated = self.dispatcher.retry_failed(results, task_factory, max_retries=2, delay=0.01, jitter=0.0)
         self.assertFalse(updated[0].success)
         self.assertEqual(updated[0].error, "err")
+
+
+class TestWorkerCountClamp:
+    """并发度上界：配置 max_total_workers 与本机 CPU 核数双钳位（弱机器不多开线程）。"""
+
+    @staticmethod
+    def _patch_config(monkeypatch, batch_cfg):
+        monkeypatch.setattr("src.python.config.get_config", lambda: {"batch": batch_cfg})
+
+    def test_requested_clamped_by_cpu_core_count(self, monkeypatch):
+        import src.python.fetcher.batch as batch
+
+        self._patch_config(monkeypatch, {"industry_workers": 8, "max_total_workers": 15})
+        monkeypatch.setattr(batch.os, "cpu_count", lambda: 2)
+        assert batch.get_batch_worker_count("industry_workers", 8) == 2
+
+    def test_requested_clamped_by_max_total_workers(self, monkeypatch):
+        import src.python.fetcher.batch as batch
+
+        self._patch_config(monkeypatch, {"industry_workers": 8, "max_total_workers": 3})
+        monkeypatch.setattr(batch.os, "cpu_count", lambda: 16)
+        assert batch.get_batch_worker_count("industry_workers", 8) == 3
+
+    def test_small_request_is_not_raised_by_core_count(self, monkeypatch):
+        import src.python.fetcher.batch as batch
+
+        self._patch_config(monkeypatch, {"fund_workers": 1, "max_total_workers": 15})
+        monkeypatch.setattr(batch.os, "cpu_count", lambda: 32)
+        assert batch.get_batch_worker_count("fund_workers", 3) == 1
+
+    def test_null_value_follows_default(self, monkeypatch):
+        """`null`/省略 = 跟随默认值（默认调优能直接生效，无需逐项手改配置文件）。"""
+        import src.python.fetcher.batch as batch
+
+        self._patch_config(monkeypatch, {"datasink_workers": None, "max_total_workers": 15})
+        monkeypatch.setattr(batch.os, "cpu_count", lambda: 16)
+        assert batch.get_batch_worker_count("datasink_workers", 3) == 3
+
+    def test_unknown_cpu_count_falls_back_to_one(self, monkeypatch):
+        import src.python.fetcher.batch as batch
+
+        self._patch_config(monkeypatch, {"industry_workers": 8, "max_total_workers": 15})
+        monkeypatch.setattr(batch.os, "cpu_count", lambda: None)
+        assert batch.get_batch_worker_count("industry_workers", 8) == 1
+
+
+class TestGovernorLease:
+    """BatchDispatcher 建池占预算、shutdown 释放（同名池幂等）。"""
+
+    def test_lease_acquired_and_released(self):
+        from src.python.core.concurrency import GOVERNOR
+
+        disp = BatchDispatcher(max_workers=2, thread_name_prefix="lease_probe")
+        try:
+            assert GOVERNOR.snapshot()["pools"].get("batch:lease_probe") == 2
+        finally:
+            disp.shutdown()
+        assert "batch:lease_probe" not in GOVERNOR.snapshot()["pools"]

@@ -17,6 +17,7 @@ import logging
 import math
 
 from src.python.analysis._math_utils import _t_cdf
+from src.python.core.constants import DEFAULT_WINDOW
 
 logger = logging.getLogger("invest")
 
@@ -24,9 +25,9 @@ logger = logging.getLogger("invest")
 #  常量
 # ═══════════════════════════════════════════════════════════════
 
-# 计算窗口（交易日 ≈ 3 个月）
-DEFAULT_WINDOW: int = 60
-# 对齐后有效样本下限：低于此判数据不足（灰色 N/A）
+# 对齐后有效样本下限：低于此判数据不足（灰色 N/A）。
+# 注：与 valuation_percentile.MIN_SAMPLES 同值但不同义（此处为两序列对齐后的重叠样本，
+# 该处为估值序列的样本下限），口径各自独立，勿合并为同一常量。
 MIN_SAMPLES: int = 60
 # 有效品种下限：< 2 只无法成对
 MIN_HOLDINGS: int = 2

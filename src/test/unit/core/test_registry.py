@@ -736,6 +736,9 @@ class TestCacheOnlyDebateRegistry:
         "report_symbol_miss",
         "report_sections_miss",
         "report_sections_backoff",
+        "hold_qmiss",
+        "idx_hist_miss",
+        "idx_hist_backoff",
     }
 
     def test_cache_registry_is_registry_plus_cache_only(self) -> None:

@@ -22,11 +22,13 @@ BatchDispatcher 封装 ThreadPoolExecutor，提供链级并行执行、缓存优
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from src.python.core.concurrency import GOVERNOR, PRIORITY_BATCH, scale_workers
 from src.python.core.retry import STRATEGY_LINEAR, RetryPolicy, retry_transient
 from src.python.core.throttle import RateLimiter  # 实现见 core/throttle.py（数据/调度/LLM 三层共用）
 from src.python.config import get_default
@@ -90,9 +92,14 @@ class BatchDispatcher:
         thread_name_prefix: str = "batch",
         *,
         rate_limit_provider: str | None = None,
+        priority: int = PRIORITY_BATCH,
     ):
+        # 进程级预算：逐池钳位（get_batch_worker_count）之上再加一层共享天花板，
+        # 多池叠加时按申请顺序缩池到至少 1（不抢占已运行的池）。
+        self._lease_name = f"batch:{thread_name_prefix}"
+        granted = GOVERNOR.acquire(self._lease_name, max_workers, priority=priority)
         self._executor = ThreadPoolExecutor(
-            max_workers=max_workers,
+            max_workers=granted,
             thread_name_prefix=thread_name_prefix,
         )
         # _registry 初始化为 None，execute_with_chain_precheck 中惰性加载
@@ -163,8 +170,9 @@ class BatchDispatcher:
         return results  # type: ignore[return-value]
 
     def shutdown(self, wait: bool = True) -> None:
-        """关闭线程池。shutdown 后调用 execute 抛 RuntimeError。"""
+        """关闭线程池并释放全局预算额度（幂等）。shutdown 后调用 execute 抛 RuntimeError。"""
         self._executor.shutdown(wait=wait)
+        GOVERNOR.release(self._lease_name)
 
     # ── 辅助方法 ──
 
@@ -380,7 +388,7 @@ class BatchDispatcher:
 
         # ── 执行未命中部分 ──
         if pending_tasks:
-            p_results = self.execute(pending_tasks)
+            p_results = self.execute(tasks=pending_tasks)
             for orig_idx, pr in zip(pending_indices, p_results):
                 results[orig_idx] = pr
 
@@ -420,11 +428,21 @@ def get_batch_worker_count(config_key: str, default: int = 3) -> int:
         if not isinstance(max_total, (int, float)) or max_total < 1:
             max_total = 15
 
+        # 档位缩放（high=1.0 → 原样；medium=0.5 / low=0.25 按比例缩，至少 1）
+        raw_requested = int(requested)
+        requested = scale_workers(raw_requested)
         clamped = min(int(requested), int(max_total))
+        # CPU 钳位：并发线程做的是网络等待 + 解析，弱机器（2~4 核）按 max_total 放行
+        # 会开出一堆争 CPU 的线程反而更慢；以核数为上界，配置可以更小但不能更大。
+        cpu = os.cpu_count() or 1
+        if clamped > cpu:
+            logger.debug("[batch] %s 请求 %d workers 超过本机核数 %d，已钳位至 %d", config_key, clamped, cpu, cpu)
+            clamped = cpu
         if clamped != int(requested):
             logger.warning(
-                "[batch] %s 请求 %d workers 超过上限 %d，已钳位至 %d",
+                "[batch] %s 请求 %d workers（档位缩放后 %d）超过上限 %d，已钳位至 %d",
                 config_key,
+                raw_requested,
                 int(requested),
                 int(max_total),
                 clamped,

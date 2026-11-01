@@ -88,7 +88,7 @@ def _handle_logs():
     所有解析/过滤/尾部读取逻辑委托核心层 read_log()，本 handler 仅做
     参数校验与 JSON 渲染。
     """
-    from src.python.core.log_reader import LOG_LEVELS, read_log
+    from src.python.core.log_reader import LOG_LEVELS, LOG_READ_FAILED_MESSAGE, read_log
     from src.python.web.handlers import _err, _ok
 
     level = request.args.get("level")
@@ -109,7 +109,7 @@ def _handle_logs():
         entries = read_log(limit=lines, level=level, since=since, until=until)
     except (ValueError, OSError):
         logger.exception("[logs] 读取运行日志失败")
-        return _err("LOG_READ_FAILED", "读取运行日志失败（详情请查看日志）"), 500
+        return _err("LOG_READ_FAILED", LOG_READ_FAILED_MESSAGE), 500
 
     return _ok([e.to_dict() for e in entries])
 
@@ -120,14 +120,14 @@ def _handle_health_history():
     与 /api/health（实时探测）解耦：本接口只读历史快照文件（零网络探测），
     聚合逻辑委托核心层 summarize_health_history()。
     """
-    from src.python.core.perf import summarize_health_history
+    from src.python.core.perf import HEALTH_HISTORY_READ_FAILED_MESSAGE, summarize_health_history
     from src.python.web.handlers import _err, _ok
 
     try:
         summaries = summarize_health_history(limit=10)
     except OSError:
         logger.exception("[health] 读取健康历史失败")
-        return _err("HEALTH_HISTORY_READ_FAILED", "读取健康历史失败（详情请查看日志）"), 500
+        return _err("HEALTH_HISTORY_READ_FAILED", HEALTH_HISTORY_READ_FAILED_MESSAGE), 500
 
     return _ok(summaries)
 

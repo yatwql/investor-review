@@ -239,12 +239,6 @@ def _request_fund_html_status(code: str) -> tuple[str | None, bool]:
         return None, False
 
 
-def _request_fund_html(code: str) -> str | None:
-    """请求基金主页面 HTML（兼容既有调用方：只取 HTML，丢弃超时标记）。"""
-    html, _unreachable = _request_fund_html_status(code)
-    return html
-
-
 # ── 回退：从档案页解析（当主页解析失败时） ─────────────────────
 
 

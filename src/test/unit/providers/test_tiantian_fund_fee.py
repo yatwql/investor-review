@@ -193,7 +193,7 @@ class _FakeClient:
     def __enter__(self) -> _FakeClient:
         return self
 
-    def __exit__(self, *exc_info: object) -> bool:
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> bool:
         return False
 
     def get(self, url: str, headers: dict | None = None) -> _FakeResponse:
@@ -292,3 +292,14 @@ class TestAkshareBackupParse:
             _FakeFeeAkshare(_FakeFeeDataFrame(["适用期限", "赎回费率"], [{"适用期限": "  ", "赎回费率": ""}])),
         )
         assert tf.fetch_fund_fee_page_via_akshare("002943") is None
+
+
+class TestFeeRequestBudget:
+    """费页请求预算：读 15s / 建连 4s（站点不可达按 4s 快速失败）。"""
+
+    def test_connect_timeout_is_short(self):
+        import httpx
+
+        assert isinstance(tf._TIMEOUT, httpx.Timeout)
+        assert tf._TIMEOUT.connect == 4.0
+        assert tf._TIMEOUT.read == 15.0

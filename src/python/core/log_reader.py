@@ -34,6 +34,9 @@ LOG_LEVELS = {
 }
 
 # tail_log 反向分块读取的块大小（64KB）
+#: 日志读取失败的用户提示（CLI / TUI / Web 共用同一句，渠道只换呈现方式与错误码）
+LOG_READ_FAILED_MESSAGE = "读取运行日志失败"
+
 _TAIL_CHUNK_SIZE = 64 * 1024
 
 
@@ -214,4 +217,12 @@ def read_log(
     return entries
 
 
-__all__ = ["LOG_LEVELS", "LogEntry", "default_log_path", "parse_log", "read_log", "tail_log"]
+__all__ = [
+    "LOG_LEVELS",
+    "LOG_READ_FAILED_MESSAGE",
+    "LogEntry",
+    "default_log_path",
+    "parse_log",
+    "read_log",
+    "tail_log",
+]

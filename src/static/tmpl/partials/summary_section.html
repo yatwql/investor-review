@@ -18,9 +18,9 @@
             {% set _sh = summary_highlights_data %}
             {% if _sh %}
             <div class="notice-banner" style="margin: 4px 0;">
-                <div style="font-weight: bold; font-size: var(--fs-body); margin-bottom: 6px;">本期要点（距上次报告 {{ _sh.days_since_last_report }} 天）</div>
+                <div style="font-weight: bold; font-size: var(--fs-body); margin-bottom: 4px;">本期要点（距上次报告 {{ _sh.days_since_last_report }} 天）</div>
                 {% if _sh.baseline_generated_at %}
-                <div style="font-size: var(--fs-table); line-height: 1.5; opacity: 0.75; margin: -2px 0 6px;">对比基准：交易日 {{ _sh.baseline_trading_day }} · 报告生成 {{ _sh.baseline_generated_at }}</div>
+                <div style="font-size: var(--fs-table); line-height: 1.5; opacity: 0.75; margin: 0 0 8px;">对比基准：交易日 {{ _sh.baseline_trading_day }} · 报告生成 {{ _sh.baseline_generated_at }}</div>
                 {% endif %}
                 <table class="kv-table">
                     <tr>
@@ -48,7 +48,7 @@
                 </div>
                 {% endif %}
                 {% if _sh.changes %}
-                <div style="font-size: var(--fs-table); line-height: 1.9; margin-top: 6px;">
+                <div style="font-size: var(--fs-table); line-height: 1.9; margin-top: 4px;">
                     {% for c in _sh.changes %}
                     <div>{{ c.action }}「{{ c.name }}」<span style="color: {{ c.value_diff | profit_color }};">{{ "+" if c.value_diff > 0 }}{{ c.value_diff | money }} 元</span></div>
                     {% endfor %}

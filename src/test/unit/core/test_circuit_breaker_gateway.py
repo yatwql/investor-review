@@ -31,10 +31,13 @@ class TestGatewayGet:
     """gateway.get() 各分支返回类型。"""
 
     def test_get_data_source_returns_registry(self):
-        """get("data_source") → DataSourceRegistry 实例。"""
+        """get("data_source") → DataSourceRegistry 实例（且多次取到同一实例）。"""
         from src.python.core.provider_registry import DataSourceRegistry
 
-        assert isinstance(gateway.get("data_source"), DataSourceRegistry)
+        registry = gateway.get("data_source")
+        assert isinstance(registry, DataSourceRegistry)
+        # 同一实例：证明网关缓存注册表而非每次新建（否则熔断状态无法共享）
+        assert gateway.get("data_source") is registry
 
     def test_get_indicator_returns_breaker(self):
         """get("indicator") → IndicatorBreaker 实例。"""
@@ -42,11 +45,16 @@ class TestGatewayGet:
 
         breaker = gateway.get("indicator")
         assert isinstance(breaker, IndicatorBreaker)
+        # 同一实例：熔断状态必须共享，否则计数不累积
+        assert gateway.get("indicator") is breaker
 
     def test_get_llm_returns_dict(self):
         """get("llm") → 状态字典（可能为空）。"""
         llm_status = gateway.get("llm")
         assert isinstance(llm_status, dict)
+        # 端点名 => 状态字典：键必为字符串，且多次读取内容一致
+        assert all(isinstance(key, str) for key in llm_status)
+        assert gateway.get("llm") == llm_status
 
     def test_get_unknown_returns_none(self):
         """get(未知名称) → None。"""
@@ -94,6 +102,8 @@ class TestGatewayWrappers:
         """get_indicator_breaker_status() 返回 {indicator_name: 状态} 字典。"""
         status = get_indicator_breaker_status()
         assert isinstance(status, dict)
+        # {指标名: 状态}：键必为字符串（空字典在无失败记录时也合法）
+        assert all(isinstance(key, str) for key in status)
 
     def test_get_indicator_breaker_status_reflects_failure(self):
         """指标失败后 get_indicator_breaker_status() 包含该指标。"""

@@ -36,7 +36,7 @@
         </div>
 
         <!-- ① 双线图：纪律回放 vs 买入持有（交互图表开启时渲染） -->
-        <div style="font-weight: bold; font-size: var(--fs-body); margin: 10px 0 6px;">① 纪律回放 vs 买入持有</div>
+        <div style="font-weight: bold; font-size: var(--fs-body); margin: 8px 0 4px;">① 纪律回放 vs 买入持有</div>
         {% if _sr.get("chart") %}
         <script type="application/json" id="schedule-replay-chart-data">{{ _sr.get("chart") | tojson }}</script>
         <div class="chart-box" style="height:300px;">
@@ -58,7 +58,7 @@
         </div>
 
         <!-- ② 规则 A 逐期调仓与成本 -->
-        <div style="font-weight: bold; font-size: var(--fs-body); margin: 14px 0 6px;">② 规则 A 逐期调仓与成本</div>
+        <div style="font-weight: bold; font-size: var(--fs-body); margin: 12px 0 4px;">② 规则 A 逐期调仓与成本</div>
         <div style="overflow-x:auto;">
         <table>
             <thead>
@@ -80,7 +80,7 @@
         <div style="font-size: var(--fs-table); margin-top: 8px;">{{ line }}</div>
         {% endfor %}
         {% for line in _sr.get("notes", []) %}
-        <div class="notice-banner" style="margin: 6px 0 2px;">{{ line }}</div>
+        <div class="notice-banner" style="margin: 4px 0 0px;">{{ line }}</div>
         {% endfor %}
         <div class="notice-banner" style="margin: 8px 0 4px;">{{ _sr.get("limitations_note") }}</div>
     </div>

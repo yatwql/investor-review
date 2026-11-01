@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import ast
+import importlib
 import json
 from pathlib import Path
 
@@ -348,7 +349,9 @@ class TestFactsCache:
     def tmp_tree(self, redundancy, tmp_path, monkeypatch):
         root = tmp_path / "src" / "test"
         (root / "unit").mkdir(parents=True, exist_ok=True)
-        from _test_redundancy import _common  # 扫描根在实现模块，patch 须指向调用点
+        # 扫描根在实现模块，patch 须指向调用点；`_test_redundancy` 在 scripts/ 下、由
+        # load_script 注入 sys.path 后才可解析，故用运行时 import_module 而非静态 import。
+        _common = importlib.import_module("_test_redundancy._common")
 
         monkeypatch.setattr(_common, "_TEST_ROOT", root)
         monkeypatch.setattr(_common, "_LIVE_DIR", root / "live")
@@ -414,7 +417,9 @@ def quality_tree(redundancy, tmp_path, monkeypatch):
     monkeypatch.setenv("TEST_REDUNDANCY_CACHE", str(tmp_path / "data" / "cache" / "facts.json"))
     root = tmp_path / "src" / "test"
     (root / "unit").mkdir(parents=True, exist_ok=True)
-    from _test_redundancy import _common  # 扫描根在实现模块，patch 须指向调用点
+    # 扫描根在实现模块，patch 须指向调用点（`_test_redundancy` 在 scripts/ 下，
+    # load_script 注入 sys.path 后才可解析 → 运行时 import_module）
+    _common = importlib.import_module("_test_redundancy._common")
 
     monkeypatch.setattr(_common, "_TEST_ROOT", root)
     monkeypatch.setattr(_common, "_LIVE_DIR", root / "live")
@@ -537,3 +542,57 @@ class TestQualityChecksAndAudit:
         lines, stats = redundancy.audit_similar_bodies()
         assert stats["groups"] == 0
         assert lines == []
+
+
+# ═══ 账本日期写死绝对日期（时间炸弹） ═══
+
+
+class TestLedgerDateBombs:
+    """I 类：账本类调用的日期实参不得写死近期绝对日期（保留期像墙钟一样会走过它）。"""
+
+    @staticmethod
+    def _find(redundancy, src: str) -> list[str]:
+        return redundancy.check_ledger_absolute_dates(ast.parse(src), Path("t.py"))
+
+    def test_flags_absolute_report_date_in_ledger_call(self, redundancy):
+        src = 'def test_x():\n    dl.append_decision(code="600000", report_date="2026-09-01")\n'
+        findings = self._find(redundancy, src)
+        assert len(findings) == 1
+        assert "append_decision" in findings[0] and "2026-09-01" in findings[0]
+
+    def test_flags_module_level_date_constant_passed_through(self, redundancy):
+        """经过模块级常量转手的日期同样要报（常见写法：`_REP = "2026-08-20"`）。"""
+        src = '_REP = "2026-08-20"\n\ndef test_x():\n    dl.append_decision(report_date=_REP)\n'
+        assert len(self._find(redundancy, src)) == 1
+
+    def test_ignores_relative_dates(self, redundancy):
+        src = (
+            "from datetime import date, timedelta\n"
+            "def _d(n):\n    return (date.today() - timedelta(days=30 - n)).isoformat()\n"
+            "def test_x():\n    dl.append_decision(report_date=_d(0))\n"
+        )
+        assert self._find(redundancy, src) == []
+
+    def test_ignores_far_past_anchor(self, redundancy):
+        """`2020-01-02` 语义是「必过期」，不会随墙钟腐化，不报。"""
+        src = 'def test_x():\n    dl.append_decision(report_date="2020-01-02")\n'
+        assert self._find(redundancy, src) == []
+
+    def test_ignores_non_ledger_calls(self, redundancy):
+        """普通调用（非账本写入/裁剪）的日期实参不在本类管辖范围。"""
+        src = 'def test_x():\n    build_chart(title="x", date="2026-09-01")\n'
+        assert self._find(redundancy, src) == []
+
+    def test_flags_ledger_write_wrapper_calls(self, redundancy):
+        """账本写入包装层（`register_action_decisions` / `register_llm_decisions`）同样受管。"""
+        src = (
+            "def test_x():\n"
+            '    rec.register_action_decisions(ad, report_date="2026-09-01")\n'
+            '    cap.register_llm_decisions(html, holdings, report_date="2026-10-17")\n'
+        )
+        assert len(self._find(redundancy, src)) == 2
+
+    def test_real_repo_has_no_ledger_date_bombs(self, redundancy):
+        """仓库现状自检：账本用例日期都从当天派生（回归防线）。"""
+        findings, _stats = redundancy.run_checks()
+        assert [f for f in findings if "账本日期实参" in f] == []

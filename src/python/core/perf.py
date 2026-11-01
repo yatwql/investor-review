@@ -46,6 +46,45 @@ from src.python.core.jsonl_store import append_jsonl_atomic
 
 logger = logging.getLogger("invest")
 
+#: 慢阶段告警阈值（秒）：正常产物/取数 0.2~0.4s；实测写盘偶发 18s、单路取数 9.4s
+SLOW_SPAN_WARN_SECONDS = 5.0
+
+#: 兼容旧名（写盘侧历史引用；新代码用 SLOW_SPAN_WARN_SECONDS）
+SLOW_WRITE_WARN_SECONDS = SLOW_SPAN_WARN_SECONDS
+
+
+def warn_slow_write(label: str, seconds: float, path: Any = None) -> None:
+    """落盘阶段超阈值时告警，并带上可定位的现场（耗时/阈值/产物大小/路径）。
+
+    为什么单独一条 WARNING：偶发十几秒的「页面写入」在 perf 里只是一个分阶段数字，
+    事后只能人工比对历史；有了带阈值与产物大小的告警，日志本身就能区分
+    「产物变大」与「磁盘/挂载抖动」。
+
+    Args:
+        label: 阶段名（如 ``HTML 页面写入``）。
+        seconds: 该阶段耗时（秒）。
+        path: 产物路径；给目录时只报路径不报大小。
+    """
+    if seconds < SLOW_WRITE_WARN_SECONDS:
+        return
+    size_text = ""
+    if path is not None:
+        try:
+            target = os.fspath(path)
+            if os.path.isfile(target):
+                size_text = f"产物 {os.path.getsize(target) / 1024 / 1024:.2f} MB，"
+        except OSError:
+            size_text = ""
+    logger.warning(
+        "[perf] %s 落盘偏慢：%.2fs（阈值 %.1fs，%s路径 %s）——排查磁盘/挂载与 fsync 等待",
+        label,
+        seconds,
+        SLOW_WRITE_WARN_SECONDS,
+        size_text,
+        path,
+    )
+
+
 # ── 持久化路径 ──────────────────────────────────────────
 # module-level 变量，测试时可通过 setattr 重定向（测试隔离模式）
 _PERF_HISTORY_DIR = os.path.join(PROJECT_ROOT, "data", "state")
@@ -237,6 +276,13 @@ class PerfCollector:
         self._interrupted = False
         self._interrupted_stage: str | None = None
         self._saved = False
+        # 并发预算观测：每份报告开一条新账（只重置观测计数，不动存活租约）
+        try:
+            from src.python.core.concurrency import GOVERNOR
+
+            GOVERNOR.begin_run()
+        except Exception:  # 观测失败绝不影响报告
+            logger.debug("[perf] 并发预算观测初始化失败", exc_info=True)
         self._log_handler: logging.Handler | None = None
         self._llm_context: dict[str, Any] = {}
 
@@ -427,6 +473,17 @@ class PerfCollector:
                 breakdown[rec.parent_phase] = spans
             for key, n in rec.counters().items():
                 counters[key] = counters.get(key, 0) + n
+        # 并发预算的机读事实位：预算 / 峰值占用 / 缩池次数（弱机器与多池叠加的直接证据）
+        try:
+            from src.python.core.concurrency import GOVERNOR
+
+            gov = GOVERNOR.snapshot()
+            counters["concurrency_budget"] = int(gov["budget"])
+            counters["concurrency_peak"] = max(int(counters.get("concurrency_peak", 0)), int(gov["peak"]))
+            counters["concurrency_clamps"] = int(gov["clamps"])
+            counters["concurrency_profile_pct"] = int(round(100 * GOVERNOR.profile_factor()))
+        except Exception:
+            logger.debug("[perf] 读取并发预算快照失败", exc_info=True)
         return ReportRunSnapshot(
             version=APP_VERSION,
             timestamp=datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
@@ -532,6 +589,10 @@ def load_health_history(path: str | None = None) -> list[dict[str, Any]]:
             except json.JSONDecodeError:
                 logger.warning("[health] 忽略损坏行: %s", line[:80])
     return records
+
+
+#: 健康历史读取失败的用户提示（CLI / TUI / Web 共用同一句）
+HEALTH_HISTORY_READ_FAILED_MESSAGE = "读取数据源健康历史失败"
 
 
 def summarize_health_history(limit: int = 10) -> list[dict[str, Any]]:

@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import as_completed
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -26,6 +26,7 @@ from src.python.fetcher.price import (
 from src.python.core.market_hours import is_market_open as _mh_is_market_open
 from src.python.core.market_hours import is_midday_break as _mh_is_midday_break
 from src.python.core.num_utils import finite_or, is_finite_number
+from src.python.core.concurrency import worker_pool
 from src.python.core.models import Holding
 from src.python.core.provider_registry import FetchStrategy, get_registry
 
@@ -38,6 +39,7 @@ from src.python.core.trading_calendar import (
     get_last_trading_day,
     get_prev_trading_day,
 )
+
 
 logger = logging.getLogger("invest")
 
@@ -195,6 +197,11 @@ def price_update_status(details: list[DetailRow], trading_day: str) -> tuple[int
 # ── A 股交易时段判断（委派 market_hours 实现） ──────────
 
 
+#: 取价方式枚举（模板着色与持仓明细渲染的判定依据，单源在此；
+#: 消费方 html_jinja_env / _holdings_detail_blocks 只引用常量，不重复字面量）
+PRICE_TYPE_OFFICIAL_NAV_T1 = "官方净值(T-1)"
+
+
 def is_market_open() -> bool:
     """委派 market_hours.is_market_open（含 config/API/fallback 三层判断）。"""
     return _mh_is_market_open()
@@ -255,7 +262,7 @@ def _determine_price_type(source_api: str, nav_date: str, trading_day: str) -> s
     if nav_date == trading_day:
         return "官方净值(T)"
     elif prev_td and nav_date == prev_td:
-        return "官方净值(T-1)"
+        return PRICE_TYPE_OFFICIAL_NAV_T1
 
     # 未来净值日期（数据异常）→ 视为当日
     try:
@@ -420,7 +427,13 @@ def _generate_details(holdings: list[Holding], today_str: str = "") -> list[Deta
 
     # 4. 并行 HTTP 路径
     if live_holdings:
-        with ThreadPoolExecutor(max_workers=8) as executor:
+        from src.python.fetcher.batch import get_batch_worker_count
+
+        with worker_pool(
+            "batch:market_price",
+            get_batch_worker_count("market_price_workers", 8),  # 弱机器可配小
+            thread_name_prefix="market_price",
+        ) as executor:
             future_map = {}
             for h in live_holdings:
                 future = executor.submit(fetch_market_data, h.code, h.name)

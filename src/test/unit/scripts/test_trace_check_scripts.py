@@ -124,35 +124,35 @@ class TestCodeTraceDetection:
     """补强后 check-code-traces 应能检出此前/曾经/原始/历史/旧逻辑/迁移等痕迹。"""
 
     def test_prior_state_narrative(self, code_traces):
-        assert _code_hit(code_traces, "之前是直接读取文件") is not None
+        assert _code_cat(code_traces, "之前是直接读取文件") == "HIGH"
 
     def test_prior_noun(self, code_traces):
-        assert _code_hit(code_traces, "此前的判断逻辑") is not None
-        assert _code_hit(code_traces, "以前的实现方案") is not None
+        assert _code_cat(code_traces, "此前的判断逻辑") == "HIGH"
+        assert _code_cat(code_traces, "以前的实现方案") == "HIGH"
 
     def test_once_implemented(self, code_traces):
-        assert _code_hit(code_traces, "曾经的实现逻辑") is not None
+        assert _code_cat(code_traces, "曾经的实现逻辑") == "HIGH"
 
     def test_considered_alternative(self, code_traces):
-        assert _code_hit(code_traces, "曾考虑过A方案") is not None
+        assert _code_cat(code_traces, "曾考虑过A方案") == "HIGH"
 
     def test_original_version(self, code_traces):
-        assert _code_hit(code_traces, "原始版本") is not None
+        assert _code_cat(code_traces, "原始版本") == "HIGH"
 
     def test_historical_implementation(self, code_traces):
-        assert _code_hit(code_traces, "历史实现") is not None
+        assert _code_cat(code_traces, "历史实现") == "HIGH"
 
     def test_old_logic(self, code_traces):
-        assert _code_hit(code_traces, "旧逻辑") is not None
+        assert _code_cat(code_traces, "旧逻辑") == "HIGH"
 
     def test_refactored_before(self, code_traces):
-        assert _code_hit(code_traces, "重构前逻辑") is not None
+        assert _code_cat(code_traces, "重构前逻辑") == "HIGH"
 
     def test_migrated_to_new(self, code_traces):
-        assert _code_hit(code_traces, "迁移到新模块") is not None
+        assert _code_cat(code_traces, "迁移到新模块") == "HIGH"
 
     def test_replaced_old(self, code_traces):
-        assert _code_hit(code_traces, "替代了旧方案") is not None
+        assert _code_cat(code_traces, "替代了旧方案") == "HIGH"
 
     def test_original_contract_migration_flagged(self, code_traces):
         """契约改名叙述（历史主键名变迁）须检出，当前只描述 style_factor_data。"""
@@ -163,7 +163,7 @@ class TestCodeTraceDetection:
             "原 contract_a 改称 contract_b",
         ]
         for line in flagged:
-            assert _code_hit(code_traces, line) is not None, f"契约改名叙述未检出: {line}"
+            assert _code_cat(code_traces, line) == "HIGH", f"契约改名叙述未检出: {line}"
 
     # ── 合法运行时/当前状态描述不应误伤 ──
 
@@ -184,13 +184,13 @@ class TestCodeTraceDetection:
     # ── 既有模式仍工作 ──
 
     def test_version_marker(self, code_traces):
-        assert _code_hit(code_traces, "该功能在 v0.9.9 引入") is not None
+        assert _code_cat(code_traces, "该功能在 v0.9.9 引入") == "VERSION"
 
     def test_task_id(self, code_traces):
-        assert _code_hit(code_traces, "见 rf-117 修复") is not None
+        assert _code_cat(code_traces, "见 rf-117 修复") == "CODE"
 
     def test_source_narrative(self, code_traces):
-        assert _code_hit(code_traces, "从 utils.py 拆分而来") is not None
+        assert _code_cat(code_traces, "从 utils.py 拆分而来") == "HIGH"
 
     def test_split_out_narrative(self, code_traces):
         """「拆出」来源归属叙述须检出（含反引号包裹模块路径）。"""
@@ -202,7 +202,7 @@ class TestCodeTraceDetection:
             "拆出自 metrics.py",
         ]
         for line in flagged:
-            assert _code_hit(code_traces, line) is not None, f"拆出来源叙述未检出: {line}"
+            assert _code_cat(code_traces, line) == "HIGH", f"拆出来源叙述未检出: {line}"
 
 
 class TestTestFileMetaExemption:
@@ -262,7 +262,7 @@ class TestTestFileMetaExemption:
     def test_not_exempted_outside_test_file(self, code_traces):
         """同样的旧实现叙述在非测试文件（test_file=False）仍应被检出——工具应检出此历史痕迹，源码侧不削弱。"""
         assert code_traces._is_excluded("旧实现把 3.41/4.43 修正成 1.9", test_file=False) is False
-        assert _code_hit(code_traces, "旧实现把 3.41/4.43 修正成 1.9") is not None
+        assert _code_cat(code_traces, "旧实现把 3.41/4.43 修正成 1.9") == "HIGH"
 
 
 class TestReleaseTagExemption:
@@ -276,7 +276,7 @@ class TestReleaseTagExemption:
 
     def test_version_in_prose_still_flagged(self, doc_traces):
         """豁免不外溢：无「最近发布 tag」上下文的行中版本号叙述仍须检出。"""
-        assert _doc_hit(doc_traces, "该缺陷在 v0.12.0 中修复") is not None
+        assert _doc_cat(doc_traces, "该缺陷在 v0.12.0 中修复") == "HIGH"
 
 
 class TestEvolutionDevVersionExemption:
@@ -287,7 +287,7 @@ class TestEvolutionDevVersionExemption:
 
     def test_version_in_prose_still_flagged(self, doc_traces):
         """豁免不外溢：无「当前开发版（」锚点的行中版本号叙述仍须检出。"""
-        assert _doc_hit(doc_traces, "该缺陷在 0.99.0 中已修复") is not None
+        assert _doc_cat(doc_traces, "该缺陷在 0.99.0 中已修复") == "HIGH"
 
 
 class TestCodeChapterDetection:
@@ -308,7 +308,7 @@ class TestCodeChapterDetection:
             "4 章估值分位",
         ]
         for line in flagged:
-            assert _code_hit(code_traces, line) is not None, f"章节编号暗号未检出: {line}"
+            assert _code_cat(code_traces, line) == "CHAPTER", f"章节编号暗号未检出: {line}"
 
     def test_chapter_codes_chinese_flagged(self, code_traces):
         """中文数字章节编号（第X章 / 裸X章式）指代报告具体章节须检出。"""
@@ -319,7 +319,7 @@ class TestCodeChapterDetection:
             "第四章摘要引用",
         ]
         for line in flagged:
-            assert _code_hit(code_traces, line) is not None, f"中文数字章节暗号未检出: {line}"
+            assert _code_cat(code_traces, line) == "CHAPTER", f"中文数字章节暗号未检出: {line}"
 
     def test_chapter_count_exempted(self, code_traces):
         legit = [
@@ -379,7 +379,7 @@ class TestCodeRoundDetection:
             "对应轮6/轮7",
         ]
         for line in flagged:
-            assert _code_hit(code_traces, line) is not None, f"迭代轮次暗号未检出: {line}"
+            assert _code_cat(code_traces, line) == "ROUND", f"迭代轮次暗号未检出: {line}"
 
     def test_round_codes_chinese_flagged(self, code_traces):
         """中文数字迭代轮次（第 X 轮式——X 为中文数字三及以上；及"轮 X"式）指代
@@ -392,7 +392,7 @@ class TestCodeRoundDetection:
             "对应轮四/轮五",
         ]
         for line in flagged:
-            assert _code_hit(code_traces, line) is not None, f"中文数字轮次暗号未检出: {line}"
+            assert _code_cat(code_traces, line) == "ROUND", f"中文数字轮次暗号未检出: {line}"
 
     def test_round_count_exempted(self, code_traces):
         legit = [
@@ -446,7 +446,7 @@ class TestCodeRoundDetection:
             "两页签已物理合并为统一渲染模块",
         ]
         for line in flagged:
-            assert _code_hit(code_traces, line) is not None, f"物理合并痕迹未检出: {line}"
+            assert _code_cat(code_traces, line) == "CHANGE", f"物理合并痕迹未检出: {line}"
 
 
 class TestCommentExtraction:
@@ -471,6 +471,26 @@ class TestCommentExtraction:
         assert '历史实现" is not None' not in "".join(extracted), "docstring 状态泄漏到 assert 行"
 
 
+def _code_cat(mod, line: str) -> str | None:
+    """返回 check-code-traces 命中的**分类**（HIGH/VERSION/CODE/CHAPTER/ROUND/MAGIC…）。
+
+    只断言「有命中」无法区分命中哪条规则——规则顺序调整或跨类误匹配都会被漏掉，
+    故断言落到分类上（desc → cat 由模式表反查，与 `_code_hit` 同源）。
+    """
+    desc = _code_hit(mod, line)
+    if desc is None:
+        return None
+    return next((cat for _pat, cat, d in mod.PATTERNS if d == desc), None)
+
+
+def _doc_cat(mod, line: str, task_record: bool = False) -> str | None:
+    """返回 check-doc-traces 命中的**分类**（HIGH/ARCHIVE/CODE/CHAPTER/ROUND…）。"""
+    desc = _doc_hit(mod, line, task_record)
+    if desc is None:
+        return None
+    return next((cat for _pat, cat, d in mod._DOC_PATTERNS if d == desc), None)
+
+
 def _ident_hit(code_traces, source: str) -> str | None:
     """返回 _scan_identifiers 对临时 .py 代码片段的命中 desc；未命中返回 None。
 
@@ -491,15 +511,15 @@ class TestTaskCodeCommentPatterns:
     """注释 CODE 模式应检出任务编号/系列代号，不误伤合法字母+数字引用。"""
 
     def test_series_alias_english(self, code_traces):
-        assert _code_hit(code_traces, "b_series 说明") is not None
+        assert _code_cat(code_traces, "b_series 说明") == "CODE"
 
     def test_series_alias_chinese(self, code_traces):
-        assert _code_hit(code_traces, "G系列 方案") is not None
-        assert _code_hit(code_traces, "B系列 批次") is not None
+        assert _code_cat(code_traces, "G系列 方案") == "CODE"
+        assert _code_cat(code_traces, "B系列 批次") == "CODE"
 
     def test_existing_task_id_patterns_still_work(self, code_traces):
-        assert _code_hit(code_traces, "见 rf-117 修复") is not None
-        assert _code_hit(code_traces, "plan-18 任务") is not None
+        assert _code_cat(code_traces, "见 rf-117 修复") == "CODE"
+        assert _code_cat(code_traces, "plan-18 任务") == "CODE"
 
     def test_legit_series_words_not_flagged(self, code_traces):
         legit = [
@@ -526,7 +546,7 @@ class TestTaskCodeCommentPatterns:
             "C25 交易日基准",
         ]
         for line in flagged:
-            assert _code_hit(code_traces, line) is not None, f"架构约束代号未检出: {line}"
+            assert _code_cat(code_traces, line) == "CODE", f"架构约束代号未检出: {line}"
 
     def test_arch_constraint_code_false_positives(self, code_traces):
         """非约束 C+数字不误伤：十六进制色值（#C00000）、标识符内嵌（x_c20_style）。"""
@@ -719,8 +739,8 @@ class TestLegitimateDomainValueExemption:
 
     def test_neighbour_violation_on_same_line_still_flagged(self, code_traces):
         """合法值与违规 token 同行 → 仍必须报出（行级豁免不吞 token）。"""
-        assert _code_hit(code_traces, "# F10 与 P1 之外还有 R11") is not None
-        assert _code_hit(code_traces, "# 127.0.0.1 另有 0.12.6 版本痕迹") is not None
+        assert _code_cat(code_traces, "# F10 与 P1 之外还有 R11") == "MAGIC"
+        assert _code_cat(code_traces, "# 127.0.0.1 另有 0.12.6 版本痕迹") == "VERSION"
 
 
 class TestSharedCliContract:

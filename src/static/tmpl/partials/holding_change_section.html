@@ -37,7 +37,7 @@
         </div>
 
         <!-- ① 变动事件清单 + 「区间净额推断、非逐笔」标注（同现） -->
-        <div style="font-weight: bold; font-size: var(--fs-body); margin: 10px 0 6px;">① 变动事件清单（区间净额推断）</div>
+        <div style="font-weight: bold; font-size: var(--fs-body); margin: 8px 0 4px;">① 变动事件清单（区间净额推断）</div>
         <div style="overflow-x:auto;">
         <table>
             <thead>
@@ -57,7 +57,7 @@
 
         <!-- ② 频率与结构演变 -->
         {% if _hc.get("metrics_lines") %}
-        <div style="font-weight: bold; font-size: var(--fs-body); margin: 18px 0 6px;">② 频率与结构演变</div>
+        <div style="font-weight: bold; font-size: var(--fs-body); margin: 16px 0 4px;">② 频率与结构演变</div>
         <div style="font-size: var(--fs-table); line-height: 1.9;">
             {% for line in _hc.get("metrics_lines") %}<div>{{ line }}</div>{% endfor %}
         </div>
@@ -65,7 +65,7 @@
 
         <!-- ③ 意图对账（决策账本只读对照） -->
         {% if _hc.get("intent_rows") or _hc.get("intent_lines") %}
-        <div style="font-weight: bold; font-size: var(--fs-body); margin: 18px 0 6px;">③ 意图对账（决策账本只读对照）</div>
+        <div style="font-weight: bold; font-size: var(--fs-body); margin: 16px 0 4px;">③ 意图对账（决策账本只读对照）</div>
         {% if _hc.get("intent_rows") %}
         <div style="overflow-x:auto;">
         <table>
@@ -89,7 +89,7 @@
         <!-- 归因内容为 HTML（markdown_to_html + 尾部标识行）：与其他 LLM 章节
              同构 | safe 原文直出，禁 autoescape（否则标签被转成可见乱码） -->
         {% if _hc.get("llm_review_html") %}
-        <div style="font-weight: bold; font-size: var(--fs-body); margin: 18px 0 6px;">④ 变动动因 LLM 归因</div>
+        <div style="font-weight: bold; font-size: var(--fs-body); margin: 16px 0 4px;">④ 变动动因 LLM 归因</div>
         <div style="font-size: var(--fs-table); line-height: 1.9;">
             {{ _hc.get("llm_review_html") | safe }}
         </div>

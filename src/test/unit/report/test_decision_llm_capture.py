@@ -11,12 +11,19 @@
 
 from __future__ import annotations
 
+from src.test._relative_dates import day as _day
+
 import pytest
 
 from src.python.config.features import set_feature_enabled, reset_feature_flags
 from src.python.core import decision_ledger as dl
 from src.python.report import decision_llm_capture as cap
 
+
+#: 账本写入包装层按保留期（730 天）在写侧裁剪，样本日期须从当天回推派生
+#: （写死绝对日期会在「日期 + 保留期」后静默变成空账本）。
+_REPORT_DATE = _day(0)
+_NEXT_DATE = _day(1)
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
 # 与 fact_checker 真实用例同款持仓白名单（见 test_fact_checker.py table_holdings）
@@ -79,6 +86,7 @@ class TestIterAndParseRows:
 
     def test_parse_short_high_row(self):
         row = cap._parse_table_row("| 🔴 高 | 561910 招商中证电池主题ETF | 减仓 | 市场占比10.6%，负收益 |")
+        assert row is not None, "表行应可解析"
         assert row["code"] == "561910"
         assert row["direction"] == dl.DIRECTION_SHORT
         assert row["magnitude"] == "high"
@@ -87,6 +95,7 @@ class TestIterAndParseRows:
 
     def test_parse_long_and_mid(self):
         row = cap._parse_table_row("| 🟡 中 | 600900 长江电力 | 加仓 | 分红稳定 |")
+        assert row is not None, "表行应可解析"
         assert row["direction"] == dl.DIRECTION_LONG
         assert row["magnitude"] == "mid"
 
@@ -98,6 +107,7 @@ class TestIterAndParseRows:
     def test_flat_extended_word_parsed_as_neutral(self):
         # 扩展词观望 → 中性（0），可解析但不具方向语义（登记侧剔除）
         row = cap._parse_table_row("| 🔴 高 | 600900 长江电力 | 观望 | 理由 |")
+        assert row is not None, "表行应可解析"
         assert row is not None and row["direction"] == dl.DIRECTION_FLAT
 
     def test_negated_operation_parsed_as_unknown(self):
@@ -109,11 +119,13 @@ class TestIterAndParseRows:
     def test_no_code_row_skipped(self):
         # 表头行有「品种」列但无 code → 跳过（已在 header 用例验证）；此处验证理由含代码不影响
         row = cap._parse_table_row("| 🟢 低 | 600900 | 减仓 | 建议关注 561910 走势 |")
+        assert row is not None, "表行应可解析"
         assert row is not None and row["code"] == "600900"  # code 只从品种格取
 
     def test_reason_with_inner_pipe_merged(self):
         # 理由格内含竖线（markdown_to_html 不转义）→ 剩余列并入 detail
         row = cap._parse_table_row("| 🔴 高 | 600900 长江电力 | 减仓 | 触发 10% | 双止损线 |")
+        assert row is not None, "表行应可解析"
         assert row is not None
         assert "触发 10%" in row["detail"]
         assert "双止损线" in row["detail"]
@@ -259,7 +271,7 @@ class TestStructuredHeader:
         # 被挂载点守护吞成告警，整批 LLM 建议全部登记失效（perf 运行明细「错误」现形）
         html = _HTML_HEADER + ('<p>决策头：{"decisions":[{"code":"600900","action":"减仓","priority":"中"}]}</p>')
         lp = str(tmp_path / "ledger.jsonl")
-        out = cap.register_llm_decisions(html, _HOLDINGS, report_date="2026-10-17", path=lp)
+        out = cap.register_llm_decisions(html, _HOLDINGS, report_date=_REPORT_DATE, path=lp)
         assert out["registered"] == 1
         d = dl.fold_ledger(path=lp)["decisions"][0]
         assert d["detail"] == ""
@@ -272,7 +284,7 @@ class TestRegister:
 
     def test_register_appends_pending(self, tmp_path):
         lp = str(tmp_path / "ledger.jsonl")
-        out = cap.register_llm_decisions(_HTML_TWO_ROWS, _HOLDINGS, report_date="2026-09-01", path=lp)
+        out = cap.register_llm_decisions(_HTML_TWO_ROWS, _HOLDINGS, report_date=_REPORT_DATE, path=lp)
         assert out["registered"] == 1
         assert len(out["ids"]) == 1
         stats = dl.fold_ledger(path=lp)

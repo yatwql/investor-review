@@ -59,6 +59,11 @@ _STATUS_SHORT = {True: "开", False: "关"}
 _STATUS_LONG = {True: "开启", False: "关闭"}
 
 
+def change_footer(count: int) -> str | None:
+    """配置面板页脚「本次改动 N 项」行（无改动返回 None，不向「什么都没改」喊话）。"""
+    return f"  本次改动 {count} 项（u 撤销上次 · U 全部还原）" if count else None
+
+
 def narrow_rule(columns: int | None = None) -> str:
     """窄档分隔线：宽度随内宽自适应（不硬折成两截）。
 
@@ -253,6 +258,7 @@ def legend_lines(cost_days: int, columns: int, *, tier: str | None = None, revea
 __all__ = [
     "MEDIUM_MIN_COLUMNS",
     "WIDE_MIN_COLUMNS",
+    "change_footer",
     "format_heading",
     "format_item",
     "inner_width",

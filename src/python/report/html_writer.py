@@ -30,7 +30,7 @@ from src.python.report.data_status import DataStatus
 from src.python.report.progress import ProgressReporter, SilentProgressReporter
 
 # ── 子模块 re-export ────────────────────────────────────
-from src.python.report.html_writer_assets import _copy_js_assets, _inline_js_assets
+from src.python.report.html_writer_assets import _inline_js_assets
 from src.python.report.html_writer_display import (
     _attach_valuation_to_penetration,
     _build_flow_display,
@@ -639,9 +639,8 @@ def write_html_report(
         summary_highlights_data=summary_highlights_data,
     )
 
-    _copy_js_assets(output_dir)
     # 内嵌 Chart.js 资产 → HTML 单文件自包含（下载/移动/单发移动端浏览
-    # 不再依赖同目录松散 JS；_copy_js_assets 仍保留以兼容既有产物布局）
+    # 不再依赖同目录松散 JS；不产出松散副本）
     html = _inline_js_assets(html)
 
     # 产物文本清扫（匿名化）：字段层未覆盖的派生面（分类/业绩/管理人等从

@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from collections.abc import Callable
 from typing import Any
@@ -50,10 +51,11 @@ def _sina_request_timeout(remaining: float) -> httpx.Timeout:
 
 
 def _fetch_from_sina(num: int) -> list[dict[str, Any]]:
-    """从新浪财经获取新闻，均匀覆盖多个分类（支持翻页）。
+    """从新浪财经获取新闻，均匀覆盖多个分类（分类并发 + 分类内翻页）。
 
-    各分类通过 page 参数逐页获取，突破单次 50 条上限。
-    整源受 `_SINA_SOURCE_BUDGET` 预算约束：超预算即停止翻页并返回已取条目。
+    三个分类（财经要闻/国内财经/国际财经）各走 `worker_pool` 并发、分类内仍逐页取；
+    整源共享 `_SINA_SOURCE_BUDGET` 预算（先到先得，耗尽即收尾），合并时按分类顺序
+    做 URL 去重。实测串行时单源 3.70s（其余源 0.29~1.33s），并发后墙钟取最慢分类。
     """
     try:
         from src.python.providers.sina_news import fetch_news as sina_fetch
@@ -64,40 +66,60 @@ def _fetch_from_sina(num: int) -> list[dict[str, Any]]:
     lids = ["2516", "2509", "2510"]  # 财经要闻, 国内财经, 国际财经
     per_category = max(1, num // len(lids))
     per_page = 50  # API 每页上限
-
-    all_items: list[dict[str, Any]] = []
-    seen_urls: set[str] = set()
     deadline = time.monotonic() + _SINA_SOURCE_BUDGET
-    budget_exhausted = False
-    for lid in lids:
+    exhausted = threading.Event()
+
+    def _fetch_category(lid: str, target: int) -> list[dict[str, Any]]:
+        """单个分类内翻页；分类内先按 URL 去重（无新增即止，避免死循环）。"""
         page = 1
-        category_fetched = 0
-        while category_fetched < per_category:
+        fetched: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        while len(fetched) < target:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                budget_exhausted = True
+                exhausted.set()
                 break
-            need = min(per_page, per_category - category_fetched)
+            need = min(per_page, target - len(fetched))
             items = sina_fetch(lid=lid, num=need, page=page, timeout=_sina_request_timeout(remaining))
             if not items:
                 break
-            prev_fetched = category_fetched
+            added = 0
             for item in items:
                 url = item.get("url", "")
-                if url and url not in seen_urls:
-                    seen_urls.add(url)
-                    all_items.append(item)
-                    category_fetched += 1
+                if url and url not in seen:
+                    seen.add(url)
+                    fetched.append(item)
+                    added += 1
             page += 1
-            # 无新增条目（全部被去重命中），避免死循环
-            if category_fetched == prev_fetched:
+            if added == 0 or len(items) < need:
                 break
-            if len(items) < need:
-                break  # 该分类无更多数据
-        if budget_exhausted:
-            break
+        return fetched
 
-    if budget_exhausted:
+    from src.python.core.concurrency import worker_pool
+
+    per_lid: dict[str, list[dict[str, Any]]] = {}
+    with worker_pool("batch:sina_news", len(lids), thread_name_prefix="sina_news") as pool:
+        futures = {pool.submit(_fetch_category, lid, per_category): lid for lid in lids}
+        for fut, lid in futures.items():
+            try:
+                per_lid[lid] = fut.result()
+            except Exception:  # 单分类异常不影响其余分类
+                logger.debug("[news] 新浪分类 %s 取数异常", lid, exc_info=True)
+                per_lid[lid] = []
+
+    # 合并（保持分类顺序；跨分类按 URL 去重，与串行实现的全局去重口径一致）
+    all_items: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
+    for lid in lids:
+        for item in per_lid.get(lid, []):
+            url = item.get("url", "")
+            if url:
+                if url in seen_urls:
+                    continue
+                seen_urls.add(url)
+            all_items.append(item)
+
+    if exhausted.is_set():
         logger.warning(
             "新浪财经取数预算耗尽（%.0fs），已取 %d 条后收尾（其余源不受影响）",
             _SINA_SOURCE_BUDGET,

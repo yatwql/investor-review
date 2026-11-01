@@ -175,10 +175,10 @@ class TestGetConfig(unittest.TestCase):
         self.assertEqual(result["holdings_dir"], "/a")
         self.assertEqual(result["news_top_count"], 50)
 
-    def test_legacy_history_analysis_ignored(self):
-        """旧配置键 history.analysis 不再迁移，fetch_mode 取默认值。"""
+    def test_unknown_history_option_ignored(self):
+        """history 段内的未知选项被忽略，fetch_mode 取默认值。"""
         os.makedirs(self.tmp.name, exist_ok=True)
-        legacy = {"history": {"analysis": "off"}}
+        legacy = {"history": {"unused_option": "off"}}
         with open(cfg._config_defaults._CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(legacy, f)
         result = cfg.get_config()

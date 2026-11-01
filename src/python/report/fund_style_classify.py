@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import contextlib
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import as_completed
+
+from src.python.core.concurrency import worker_pool
 from typing import Any
 
 from src.python.core.code_utils import is_a_share_code, is_a_share_stock
@@ -18,6 +20,7 @@ from src.python.report.fund_style_base import (
     _market_cap_to_size,
     _pe_to_style,
 )
+
 
 logger = logging.getLogger("invest")
 
@@ -255,7 +258,13 @@ def _batch_tencent_extended(codes: list[str]) -> dict[str, dict[str, Any]]:
     if not codes:
         return {}
     results: dict[str, dict[str, Any]] = {}
-    with ThreadPoolExecutor(max_workers=8) as ex:
+    from src.python.fetcher.batch import get_batch_worker_count
+
+    with worker_pool(
+        "batch:fund_style",
+        get_batch_worker_count("fund_style_workers", 8),  # 弱机器可配小
+        thread_name_prefix="fund_style",
+    ) as ex:
         fut_map = {ex.submit(_tencent_extended, c): c for c in codes}
         for fut in as_completed(fut_map):
             c = fut_map[fut]
@@ -333,7 +342,7 @@ def _classify_stock_styles(
         ext_data = _cached if _cached is not NOT_FOUND else None
         industry_avg_pe = industry_avg_pe_map.get(code)
 
-        if ext_data:
+        if isinstance(ext_data, dict) and ext_data:
             mc = ext_data.get("market_cap")
             pe = ext_data.get("pe")
             result = _classify_stock(code, mc, pe, industry_avg_pe)

@@ -173,7 +173,12 @@ def _cmd_whatif() -> None:
     业务链（build→校验→输出）委托共享层 run_whatif_simulation，
     本函数仅保留文件选择、生效日交互采集、判空与结果呈现。
     """
-    from src.python.report.whatif_operations import run_whatif_simulation
+    from src.python.report.whatif_operations import (
+        WHATIF_BASE_HOLDINGS_UNREADABLE,
+        WHATIF_TARGET_HOLDINGS_UNREADABLE,
+        run_whatif_simulation,
+        whatif_unavailable_message,
+    )
 
     reporter = TuiProgressReporter()
     config = get_config_cache() or get_config()
@@ -194,10 +199,10 @@ def _cmd_whatif() -> None:
         base = read_holdings(base_file)
         cand = read_holdings(cand_file)
         if not base:
-            emit_error(f"基准持仓读取失败或为空: {base_file}", "config")
+            emit_error(f"{WHATIF_BASE_HOLDINGS_UNREADABLE}: {base_file}", "config")
             return
         if not cand:
-            emit_error(f"目标持仓读取失败或为空: {cand_file}", "config")
+            emit_error(f"{WHATIF_TARGET_HOLDINGS_UNREADABLE}: {cand_file}", "config")
             return
         print(f"  [OK] 基准 {len(base)} 条 / 目标 {len(cand)} 条持仓")
         eff = _prompt_effective_date()
@@ -211,7 +216,7 @@ def _cmd_whatif() -> None:
             effective_date=eff or None,
         )
         if not result.ok:
-            emit_error(f"调仓对比数据不可用: {result.reason}", "report")
+            emit_error(whatif_unavailable_message(result.reason), "report")
             return
         print("  [OK] 调仓模拟报告已生成（独立产物，不并入主报告）")
         print(f"       Excel: {result.excel}")

@@ -97,8 +97,7 @@ def _split_html_blocks(html: str) -> list[str]:
     真实 LLM 内容由 ``markdown_to_html`` 以无换行方式拼接 ``<p>`` 标签，
     按 ``\\n\\n`` 分段会把整模块坍缩进一个单元格，且 footer、事实校验
     摘要无法独立成行。本函数以块级标签为切分点；游离文本
-    （如校验摘要尾部的 ``<span>`` 附属行）并入前一块，纯文本输入则回退
-    按 ``\\n\\n`` 分段以兼容历史输入。
+    （如校验摘要尾部的 ``<span>`` 附属行）并入前一块；无块级标签的纯文本整段返回一块。
 
     Returns:
         按出现顺序排列的 HTML 块片段列表（含标签）。
@@ -128,12 +127,7 @@ def _split_html_blocks(html: str) -> list[str]:
                 pending += part
     if pending:
         blocks.append(pending)
-    # 纯文本段（无块级标签）回退按 \n\n 分段，兼容历史输入
-    result: list[str] = []
-    for block in blocks:
-        sub = [seg.strip() for seg in block.split("\n\n") if seg.strip()]
-        result.extend(sub)
-    return result
+    return blocks
 
 
 def _calc_row_height(text: str) -> int:

@@ -24,6 +24,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import Any
 
+from src.python.cache import NegativeCache
 from src.python.core.code_utils import is_exchange_fund_code, is_index_link_by_name
 from src.python.providers.tiantian_base import (
     _request_fund_html,
@@ -34,6 +35,21 @@ from src.python.providers.tiantian_base import (
 logger = logging.getLogger("invest")
 
 _QUARTER_LOOKBACK = 4
+
+#: 空季度负缓存：某基金某季度 jjcc / zqcc 双通道都确认无持仓时登记，6h 内后续报告
+#: 直接跳过该季度重探（季报半年才更新一次，短 TTL 不会错过新披露；键含年月，
+#: 新季度天然是新键，不受旧结论影响）。
+QUARTER_MISS = NegativeCache(
+    "季报空季度",
+    "hold_qmiss_",
+    "hold_qmiss",
+    hit_note="跳过无数据季度重探",
+)
+
+#: jjcc 对冲时限（秒）：jjcc 迟迟未返回时提前并发发出 zqcc，谁先带回非空内容先用谁。
+#: 债券/超短债基金的 jjcc 常空回——实测 012325 在空回前挂了 6.9s，串行等于让单只
+#: 基金白等一整段预算；成功路径实测 0.1~0.3s，1.5s 不误伤正常请求。
+_HEDGE_AFTER_SECONDS = 1.5
 
 _quarter_walk_anchor: datetime | None = None
 
@@ -372,13 +388,75 @@ def _fetch_dated_quarterly(code: str) -> dict[str, Any] | None:
     """
     quarters = _recent_quarters(_QUARTER_LOOKBACK)
     for index, (year, month) in enumerate(quarters):
+        miss_key = QUARTER_MISS.key(code, f"{year:04d}{month:02d}")
+        if QUARTER_MISS.is_missing(miss_key):
+            logger.debug("[fund_hold] %s（%04d-%02d）命中空季度负缓存，跳过重探", code, year, month)
+            continue
         result = _fetch_single_quarter(code, year, month)
         if result is not None:
             return result
+        QUARTER_MISS.mark(miss_key, "jjcc/zqcc 双通道均无持仓")
         if index + 1 < len(quarters):
             # 回溯路径必须可见：否则单只基金多跳重试在日志上是一段无解释的空白
             logger.info("[fund_hold] %s（%04d-%02d）无持仓，回溯上一季度", code, year, month)
     return None
+
+
+def _quarter_channel_payloads(code: str, year: int | None, month: int | None):
+    """按偏好产出 ``(api_type, html)``：jjcc 优先，zqcc 兜底。
+
+    对冲：jjcc 超过 :data:`_HEDGE_AFTER_SECONDS` 仍未返回时并发发出 zqcc——债券基金的
+    jjcc 常空回（实测空回前挂起 6.9s），串行会让单只基金白等一整段超时预算；
+    正常路径（jjcc 快速返回）不发额外请求。调用方解析出 0 条持仓会继续消费下一项，
+    与原先「jjcc 有页面但无持仓 → 再试 zqcc」的阶梯一致。
+
+    并发上界：本函数每只基金最多 2 路请求（jjcc + zqcc），而基金层已由
+    ``batch.fund_workers`` 限制同时探测的基金数，故全局季度请求并发 ≤ fund_workers × 2；
+    弱机器把 ``fund_workers`` 配 1 即只剩 2 路。两路请求各自独立、无共享写状态
+    （解析结果由调用方线程汇总），不存在竞态。
+    """
+    from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+    from concurrent.futures import TimeoutError as FuturesTimeout
+
+    def _call(api_type: str) -> str | None:
+        try:
+            return _request_quarterly_api(code, api_type, year=year, month=month)
+        except Exception:  # 单通道异常按空结果处理（调用方继续递补/记负缓存）
+            logger.debug("[fund_hold] %s %s 请求异常", code, api_type, exc_info=True)
+            return None
+
+    pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="fund_hold_q")
+    try:
+        jj_fut = pool.submit(_call, "jjcc")
+        try:
+            jj_html = jj_fut.result(timeout=_HEDGE_AFTER_SECONDS)
+        except FuturesTimeout:
+            zq_fut = pool.submit(_call, "zqcc")
+            pending = {jj_fut, zq_fut}
+            while pending:
+                done, pending = wait(pending, return_when=FIRST_COMPLETED)
+                for fut in sorted(done, key=lambda f: 0 if f is jj_fut else 1):
+                    html = fut.result()
+                    if html:
+                        yield ("jjcc" if fut is jj_fut else "zqcc"), html
+                        other = zq_fut if fut is jj_fut else jj_fut
+                        other_html = other.result()
+                        if other_html:
+                            yield ("zqcc" if fut is jj_fut else "jjcc"), other_html
+                        return
+            yield "jjcc", None
+            yield "zqcc", None
+            return
+        if jj_html:
+            yield "jjcc", jj_html
+            yield "zqcc", _call("zqcc")
+            return
+        yield "jjcc", None
+        yield "zqcc", _call("zqcc")
+    finally:
+        # 不等在途请求（对冲已拿到数据时 jjcc 可能仍在跑）：wait=True 会把
+        # 「先到先得」的收益又等回去（实测 1.5s 对冲后仍要等到 2.0s 才返回）。
+        pool.shutdown(wait=False, cancel_futures=True)
 
 
 def _fetch_legacy_quarterly(code: str) -> dict[str, Any] | None:
@@ -427,8 +505,7 @@ def _fetch_single_quarter(code: str, year: int | None = None, month: int | None 
     fund_name = ""
     report_date = ""
 
-    for api_type in ("jjcc", "zqcc"):
-        html_content = _request_quarterly_api(code, api_type, year=year, month=month)
+    for api_type, html_content in _quarter_channel_payloads(code, year, month):
         if html_content is None:
             if api_type == "jjcc":
                 # 同一季度的通道递补同样要可见（jjcc 挂掉后 zqcc 才是真正耗时的那一跳）

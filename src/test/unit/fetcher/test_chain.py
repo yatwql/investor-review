@@ -8,6 +8,8 @@
   pytest src/test/unit/fetcher/test_chain.py -v"""
 
 from __future__ import annotations
+
+from typing import Any
 import unittest
 from unittest.mock import MagicMock, patch
 from src.python.fetcher import chain
@@ -154,12 +156,13 @@ class TestHistoryIndexChain(unittest.TestCase):
     def test_chain_defined(self):
         """_DEFAULT_CHAINS 中包含 history_index，且补入两个独立备源。
 
-        腾讯（主）→ 东方财富 push2his（免 key 独立厂商备源）→ 新浪（代码级备用）
-        → 同花顺官方（需 key）。新浪指数端点实测不可用，故东方财富是唯一可用的
-        第二源——防止整链退化为事实单源后「抖动即整链空」。
+        腾讯（主）→ 东方财富 push2his（免 key 独立厂商备源）→ 新浪（代码级备用）。
+        同花顺不在本链：其指数 K 线只能走 A 股端点，指数 thscode 被上游拒收
+        （code=1002 Unknown thscode），保留即「必然失败的兜底」。
         """
         chain = _get_chain("history_index")
-        self.assertEqual(chain, ["tencent", "eastmoney", "sina", "hithink"])
+        self.assertEqual(chain, ["tencent", "eastmoney", "sina"])
+        self.assertNotIn("hithink", chain)
         # 结构性断言：两个免 key 源同列（腾讯 + 东方财富）——守住「非单源」不受链序变动影响
         self.assertLessEqual({"tencent", "eastmoney"}, set(chain))
 
@@ -439,9 +442,14 @@ class TestProviderEmptyReasonSurfaced(unittest.TestCase):
 class TestDocIdLogTag(unittest.TestCase):
     """失败日志定位标识：无 code 的链路（财报 doc 维度）以 doc_id 入日志。"""
 
+    @staticmethod
+    def _empty_provider(**_kw: Any) -> dict[str, Any] | None:
+        """链路契约：provider 返回 ``dict | None``；本测试只用空结果触发全链失败。"""
+        return None
+
     def test_full_chain_failure_log_carries_doc_id(self):
         """fn_kwargs 无 code 时以 doc_id 定位：全链路失败日志带 [doc_id]，可反查文档。"""
-        provider_map = {"fake": ("FakeSource", lambda **_kw: None)}
+        provider_map: dict[str, tuple[str, Any]] = {"fake": ("FakeSource", self._empty_provider)}
 
         with self.assertLogs(chain.logger, level="WARNING") as cm:
             result = chain.fetch_with_fallback(
@@ -457,7 +465,7 @@ class TestDocIdLogTag(unittest.TestCase):
 
     def test_code_takes_precedence_over_doc_id(self):
         """code 与 doc_id 同在时以 code 优先（有 code 的链路日志语义不变）。"""
-        provider_map = {"fake": ("FakeSource", lambda **_kw: None)}
+        provider_map: dict[str, tuple[str, Any]] = {"fake": ("FakeSource", self._empty_provider)}
 
         with self.assertLogs(chain.logger, level="WARNING") as cm:
             result = chain.fetch_with_fallback(

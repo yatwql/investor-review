@@ -335,8 +335,12 @@ class TestSwitchOffGoldenBaseline(unittest.TestCase):
     # 基线复核记录（2026-10-18，单图导出 CSV 批次）：字节差异仅来自 whatif 模板导出按钮
     # CSS 收敛（.chart-export-btn 绝对定位移入 .chart-export-actions 组容器，PNG/CSV 双按钮
     # 并排布局）与内联 chart-export.js 的 CSV 导出逻辑增补；关态业务字节面零变化。
-    _GOLDEN_BASE_SHA256 = "f4457a5d07c00630175e08d8c8260824075d5f11bc5bebe57775c8b3fcd73d15"
-    _GOLDEN_FULL_SHA256 = "c3f6179600a387b9a557d1c508337d79282bd32c783a6f1517f1eca62404eb00"
+    #
+    # 基线复核记录（2026-10-30，设计护栏 W 级清零批次）：字节差异仅来自模板 CSS 的间距/字号收敛
+    # （阶外 6/10/14/18/20 → 4/8/12/16、0.95rem → 1rem、侧栏 220px 提取为 --toc-width token）与
+    # 汇总片负值内联 margin 归零；关态业务字节面（数据、文案、结构）零变化，仅样式字面量对齐契约。
+    _GOLDEN_BASE_SHA256 = "a43fa88ffb686b8cfd16c8ae18245c0db604dcc5ef48f2bf0fb707346883aaec"
+    _GOLDEN_FULL_SHA256 = "50d52ecced011c768e40cdb15745cffb260df1f642ec4ef639232b61131acd7a"
 
     def _render(self, **extra) -> str:
         from unittest.mock import patch

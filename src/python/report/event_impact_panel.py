@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime
 from typing import Any, Callable
 
@@ -26,6 +27,7 @@ from src.python.analysis.event_window_impact import (
 )
 from src.python.core.code_utils import is_a_share_code, is_a_share_stock
 from src.python.core.log_dedupe import log_throttled
+from src.python.core.perf import SLOW_SPAN_WARN_SECONDS
 
 logger = logging.getLogger("invest")
 
@@ -262,6 +264,38 @@ def _short_title(title: str, limit: int = 32) -> str:
     return title if len(title) <= limit else title[: limit - 1] + "…"
 
 
+#: 无 K 线数据的基准（债券指数）：中证全债等在本项目 K 线链三源皆空
+#: （实测 tencent SSL 握手 10s 超时 + 东方财富/新浪 0 条），事件窗对其不取 K 线，
+#: 直接按缺基准降级——每轮省一次 10s 白等；数据源能力变化时可从集合移除恢复。
+_NO_KLINE_BENCHMARKS = frozenset({"sh000012"})
+
+
+def _make_default_index_fetcher() -> Callable[[str], Any]:
+    """事件窗默认基准取数：同码 memo + 无 K 线品种跳过 + 单路慢告警。"""
+    from src.python.fetcher.index import fetch_index_history
+
+    memo: dict[str, Any] = {}
+
+    def _fetch(code: str) -> Any:
+        if code in _NO_KLINE_BENCHMARKS:
+            logger.info("[event_impact] 基准 %s 无 K 线数据（债券指数），按缺基准降级、不取数", code)
+            return []
+        if code not in memo:
+            started = time.perf_counter()
+            memo[code] = fetch_index_history(code, days=365)
+            elapsed = time.perf_counter() - started
+            if elapsed >= SLOW_SPAN_WARN_SECONDS:
+                logger.warning(
+                    "[event_impact] 基准指数取数偏慢：%s %.2fs（阈值 %.0fs）——慢/空的基准会拖住事件窗表",
+                    code,
+                    elapsed,
+                    SLOW_SPAN_WARN_SECONDS,
+                )
+        return memo[code]
+
+    return _fetch
+
+
 def build_event_impact_view(contract: dict[str, Any] | None) -> dict[str, Any]:
     """契约 → 双端共用展示视图（全部字段为预格式化字符串，双端逐字节同文）。
 
@@ -410,12 +444,7 @@ def build_event_impact_panel(
         fetch_bars = _default_fetch_bars
 
     if fetch_index is None:
-        from src.python.fetcher.index import fetch_index_history
-
-        def _default_fetch_index(code: str) -> Any:
-            return fetch_index_history(code, days=365)
-
-        fetch_index = _default_fetch_index
+        fetch_index = _make_default_index_fetcher()
 
     if benchmark_text_getter is None:
         from src.python.fetcher.fund import fetch_fund_benchmark

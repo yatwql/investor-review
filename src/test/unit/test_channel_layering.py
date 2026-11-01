@@ -125,3 +125,85 @@ class TestSharedLayerRouting:
         assert "config_edit_whitelist" in text
         # 不在 Web 层重建规则字典
         assert "配置键不在白名单" not in text
+
+
+class TestSharedCopyIsSingleSource:
+    """渠道共用文案与枚举值只允许一份来源。"""
+
+    @pytest.mark.unit_core
+    def test_whatif_holdings_unreadable_messages_not_duplicated_in_channels(self):
+        """调仓输入持仓读取失败提示：三渠道引用 whatif_operations 常量，不自写句子。"""
+        from src.python.report import whatif_operations as wops
+
+        assert wops.WHATIF_BASE_HOLDINGS_UNREADABLE == "基准持仓读取失败或为空"
+        assert wops.WHATIF_TARGET_HOLDINGS_UNREADABLE == "目标持仓读取失败或为空"
+        root = Path(__file__).resolve().parents[3]
+        for rel in ("src/python/cli/_handlers.py", "src/python/tui/handlers_whatif.py", "src/python/web/handlers.py"):
+            text = (root / rel).read_text(encoding="utf-8")
+            assert "WHATIF_BASE_HOLDINGS_UNREADABLE" in text, rel
+            assert "WHATIF_TARGET_HOLDINGS_UNREADABLE" in text, rel
+            for literal in ("基准持仓读取失败或为空", "目标持仓读取失败或为空"):
+                assert f'"{literal}' not in text, f"{rel} 仍有重复字面量：{literal}"
+
+    @pytest.mark.unit_core
+    def test_log_and_health_failure_messages_not_duplicated_in_channels(self):
+        """日志/健康历史读取失败提示：三渠道引用核心层常量，措辞不得各自演化。"""
+        from src.python.core import log_reader, perf
+
+        assert log_reader.LOG_READ_FAILED_MESSAGE == "读取运行日志失败"
+        assert perf.HEALTH_HISTORY_READ_FAILED_MESSAGE == "读取数据源健康历史失败"
+        root = Path(__file__).resolve().parents[3]
+        cases = (
+            ("src/python/cli/_handlers.py", "LOG_READ_FAILED_MESSAGE"),
+            ("src/python/tui/handlers_log.py", "LOG_READ_FAILED_MESSAGE"),
+            ("src/python/web/handlers_health.py", "LOG_READ_FAILED_MESSAGE"),
+            ("src/python/cli/_handlers.py", "HEALTH_HISTORY_READ_FAILED_MESSAGE"),
+            ("src/python/tui/handlers_log.py", "HEALTH_HISTORY_READ_FAILED_MESSAGE"),
+            ("src/python/web/handlers_health.py", "HEALTH_HISTORY_READ_FAILED_MESSAGE"),
+        )
+        for rel, symbol in cases:
+            text = (root / rel).read_text(encoding="utf-8")
+            assert symbol in text, f"{rel} 应引用 {symbol}"
+
+    @pytest.mark.unit_core
+    def test_tui_config_change_footer_has_one_definition(self):
+        """「本次改动 N 项」页脚句只在 switch_panel 定义，配置/导航面板共用。"""
+        from src.python.tui import switch_panel
+
+        assert switch_panel.change_footer(0) is None
+        assert switch_panel.change_footer(2) == "  本次改动 2 项（u 撤销上次 · U 全部还原）"
+        root = Path(__file__).resolve().parents[3]
+        for rel in ("src/python/tui/handlers_config.py", "src/python/tui/handlers_switch.py"):
+            text = (root / rel).read_text(encoding="utf-8")
+            assert "change_footer" in text, rel
+            assert "本次改动" not in text, f"{rel} 仍有重复字面量"
+
+    @pytest.mark.unit_core
+    def test_whatif_unavailable_message_not_duplicated_in_channels(self):
+        """调仓不可用提示：三渠道都走 whatif_operations 的单源拼装，不各自写字面量。"""
+        from src.python.report.whatif_operations import whatif_unavailable_message
+
+        assert whatif_unavailable_message("持仓不足") == "调仓对比数据不可用: 持仓不足"
+        root = Path(__file__).resolve().parents[3]
+        for rel in ("src/python/cli/_handlers.py", "src/python/tui/handlers_whatif.py", "src/python/web/handlers.py"):
+            text = (root / rel).read_text(encoding="utf-8")
+            assert "whatif_unavailable_message" in text, rel
+            assert "调仓对比数据不可用: " not in text, f"{rel} 仍有重复字面量"
+
+    @pytest.mark.unit_core
+    def test_price_type_label_has_one_definition(self):
+        """取价方式标签「官方净值(T-1)」只在 market_value 定义，消费方引用常量。"""
+        from src.python.report import html_jinja_env, market_value
+        from src.python.report import _holdings_detail_blocks as blocks
+
+        assert market_value.PRICE_TYPE_OFFICIAL_NAV_T1 == "官方净值(T-1)"
+        for mod in (html_jinja_env, blocks):
+            assert mod.__file__ is not None
+            text = Path(mod.__file__).read_text(encoding="utf-8")
+            assert "PRICE_TYPE_OFFICIAL_NAV_T1" in text, mod.__name__
+            code_lines = [
+                line
+                for line in text.splitlines()
+                if not line.lstrip().startswith(("#", '"""', "*")) and '"官方净值(T-1)"' in line
+            ]
+            assert not code_lines, f"{mod.__name__} 仍有重复字面量：{code_lines[:2]}"

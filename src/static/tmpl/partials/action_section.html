@@ -33,7 +33,7 @@
 
         <!-- ① 再平衡信号（单品占比超警戒线） -->
         {% set _rb = _action.get("rebalance_signals") or [] %}
-        <div style="font-weight: bold; font-size: var(--fs-body); margin: 10px 0 6px;">① 再平衡信号（单品占比超警戒线）</div>
+        <div style="font-weight: bold; font-size: var(--fs-body); margin: 8px 0 4px;">① 再平衡信号（单品占比超警戒线）</div>
         {% if _rb %}
         <div style="overflow-x:auto;">
         <table>
@@ -59,7 +59,7 @@
 
         <!-- ② 交易纪律（止盈/止损/回撤，后续轮次填充） -->
         {% set _ds = _action.get("discipline_signals") or [] %}
-        <div style="font-weight: bold; font-size: var(--fs-body); margin: 18px 0 6px;">② 交易纪律（止盈/止损/回撤）</div>
+        <div style="font-weight: bold; font-size: var(--fs-body); margin: 16px 0 4px;">② 交易纪律（止盈/止损/回撤）</div>
         {% if _ds %}
         <div style="overflow-x:auto;">
         <table>
@@ -85,7 +85,7 @@
 
         <!-- ③ 调仓建议（可行化清单：份额取整一手/费用估算/现金缓冲） -->
         {% set _adv = _action.get("rebalance_advice") or [] %}
-        <div style="font-weight: bold; font-size: var(--fs-body); margin: 18px 0 6px;">③ 调仓建议清单</div>
+        <div style="font-weight: bold; font-size: var(--fs-body); margin: 16px 0 4px;">③ 调仓建议清单</div>
         {% if _adv %}
         <div style="overflow-x:auto;">
         <table>
@@ -117,7 +117,7 @@
 
         <!-- ④ 收益归因（大类 → 品种两级贡献占比，同口径分层 + 净额合计 + 口径脚注） -->
         {% set _attr = _action.get("attribution") %}
-        <div style="font-weight: bold; font-size: var(--fs-body); margin: 18px 0 6px;">④ 收益归因（大类 → 品种贡献占比）</div>
+        <div style="font-weight: bold; font-size: var(--fs-body); margin: 16px 0 4px;">④ 收益归因（大类 → 品种贡献占比）</div>
         {% if _attr and _attr.get("available") %}
         <div style="overflow-x:auto;">
         <table>
@@ -152,7 +152,7 @@
         <div class="summary-tag" style="margin-top: 8px;">净额合计：{{ _attr["summary"] }}</div>
         {% endif %}
         {% if _attr.get("note") %}
-        <div class="penetration-notes" style="margin-top: 6px;">{{ _attr["note"] }}</div>
+        <div class="penetration-notes" style="margin-top: 4px;">{{ _attr["note"] }}</div>
         {% endif %}
         {% else %}
         <div class="empty-note"><p>待生成</p></div>
@@ -167,7 +167,7 @@
         <!-- ⑦ 市场情绪与持仓热点（报告增强开关 market_sentiment，默认关闭） -->
         {% set _ms = market_sentiment_data or {} %}
         {% if market_sentiment_data is not none %}
-        <div style="font-weight: bold; font-size: var(--fs-body); margin: 18px 0 6px;">⑦ 市场情绪与持仓热点</div>
+        <div style="font-weight: bold; font-size: var(--fs-body); margin: 16px 0 4px;">⑦ 市场情绪与持仓热点</div>
         {% if _ms.get("available") %}
         <div class="summary-tag" style="margin-bottom: 8px;">
             📣 交易日 <strong>{{ _ms.get("trade_date") or "未知" }}</strong>
@@ -221,7 +221,7 @@
         <!-- ⑥ 景气度框架诊断（实验性功能 prosperity_framework，默认关闭） -->
         {% set _pf = prosperity_framework_data or {} %}
         {% if _pf.get("available") %}
-        <div style="font-weight: bold; font-size: var(--fs-body); margin: 18px 0 6px;">⑥ 景气度框架诊断（实验性）</div>
+        <div style="font-weight: bold; font-size: var(--fs-body); margin: 16px 0 4px;">⑥ 景气度框架诊断（实验性）</div>
         <div class="summary-tag" style="margin-bottom: 8px;">
             🧭 总分 <strong>{{ _pf.get("total_score", 0) }}</strong>/{{ _pf.get("scored_weight", 0) }}
             （{{ _pf.get("total_score_pct", 0) }}%）—— 评级：<strong>{{ _pf.get("rating_label", "") }}</strong>
@@ -252,7 +252,7 @@
         </table>
         </div>
         {% if _pf.get("holdings_view") %}
-        <div style="font-weight: bold; font-size: var(--fs-table); margin: 12px 0 6px;">持仓视角（按权重降序，前 10）</div>
+        <div style="font-weight: bold; font-size: var(--fs-table); margin: 12px 0 4px;">持仓视角（按权重降序，前 10）</div>
         <table>
             <thead><tr><th>名称（代码）</th><th>权重</th><th>板块</th><th>ROE / 备注</th></tr></thead>
             <tbody>
@@ -270,7 +270,7 @@
             </tbody>
         </table>
         {% endif %}
-        <div class="penetration-notes" style="margin-top: 10px;">
+        <div class="penetration-notes" style="margin-top: 8px;">
             {% for u in _pf.get("unverified", []) %}<div>* 需核实：{{ u }}</div>{% endfor %}
             {% for n in _pf.get("notes", []) %}<div>* {{ n }}</div>{% endfor %}
         </div>
@@ -279,8 +279,8 @@
         <!-- ⑤ 历史决策复盘（决策跨期反思闭环，默认关闭） -->
         {% set _rev = decision_review_data or {} %}
         {% if _rev.get("available") %}
-        <div style="font-weight: bold; font-size: var(--fs-body); margin: 18px 0 6px;">⑤ 历史决策复盘（非回测，仅供反思参考）</div>
-        <div style="font-size: var(--fs-table);color:var(--text-muted);margin: 2px 0 8px;">{{ _rev.get("disclaimer", "") }}</div>
+        <div style="font-weight: bold; font-size: var(--fs-body); margin: 16px 0 4px;">⑤ 历史决策复盘（非回测，仅供反思参考）</div>
+        <div style="font-size: var(--fs-table);color:var(--text-muted);margin: 0px 0 8px;">{{ _rev.get("disclaimer", "") }}</div>
         <table>
             <thead>
                 <tr>

@@ -289,7 +289,7 @@ def _build_sector_flow_block(sector_flow: list[dict] | None) -> str:
 
 def _temperature_signal(pipeline_data: dict) -> str | None:
     """市场温度档位 → 信号行（低估=看多 / 合理=中性 / 高估=看空）。"""
-    from src.python.analysis.market_temperature import (
+    from src.python.core.constants import (
         TIER_OVERVALUED,
         TIER_UNDERVALUED,
     )

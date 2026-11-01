@@ -195,6 +195,7 @@ def _outlier_records(records: list[dict[str, Any]], k: float = _OUTLIER_K) -> li
 #: 两个新子项）与其后逐个新子项在数量级上不等价，故给旧键加显式标记而不是静默合并。
 _LEGACY_BREAKDOWN_ALIASES: dict[str, str] = {
     "财报摘要与指标": "财报摘要+财务指标（旧·合并段）",
+    "风格与因子": "因子暴露+行业Beta+相关性（旧·合并段）",
 }
 
 
@@ -219,6 +220,8 @@ def _merge_breakdown_stats(
             if not isinstance(spans, dict):
                 continue
             for name, sec in spans.items():
+                if not isinstance(name, str):
+                    continue
                 if isinstance(sec, bool) or not isinstance(sec, (int, float)):
                     continue
                 values[parent][_LEGACY_BREAKDOWN_ALIASES.get(name, name)].append(float(sec))

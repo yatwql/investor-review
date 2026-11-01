@@ -8,9 +8,12 @@
 from __future__ import annotations
 
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import as_completed
+
+from src.python.core.concurrency import worker_pool
 from typing import Any
 
+from src.python.cache import NegativeCache
 from src.python.cache import get as cache_get
 from src.python.cache import get_ttl
 from src.python.cache import set as cache_set
@@ -21,7 +24,36 @@ from src.python.core.constants import CACHE_WEEKLY
 from src.python.core.retry import STRATEGY_FIXED, RetryPolicy, retry_transient
 from src.python.providers import sina, tencent
 
+
 logger = logging.getLogger("invest")
+
+#: 指数历史「全链空」两级负缓存：
+#:   - 确定性空（各源均正常应答但无该品种数据，如债券指数无 K 线）：12h；
+#:   - 含传输级失败的全链空（可能只是源抖动）：1h 短退避，恢复后自动重取。
+#: 实测 sh000012 每轮要白等 tencent SSL 握手 10s 才轮到东财/新浪，且两者同样 0 条。
+INDEX_HISTORY_MISS = NegativeCache(
+    "指数历史全链空（确定性）",
+    "idx_hist_miss_",
+    "idx_hist_miss",
+    hit_note="跳过无数据指数重取",
+)
+INDEX_HISTORY_BACKOFF = NegativeCache(
+    "指数历史全链空（含传输失败）",
+    "idx_hist_backoff_",
+    "idx_hist_backoff",
+    hit_note="短退避，恢复后自动重取",
+)
+
+#: 判定「确定性空」的链路失败原因：这些原因代表源侧确实无该品种数据（非传输故障）。
+_DETERMINISTIC_EMPTY_REASONS = frozenset({"返回空", "无结果"})
+
+
+def _empty_is_deterministic(diag) -> bool:
+    """全链空是否为**确定性**（各源应答但无数据）——只有这类才配 12h 负缓存。"""
+    if not diag.has_failure:
+        return True
+    return all(reason in _DETERMINISTIC_EMPTY_REASONS for _, reason in diag.attempts)
+
 
 #: 上游指数日线单次返回上限（腾讯/新浪均约 2000 根）：结果达到该长度即视为
 #: 源上限而非缓存钉死，短于请求窗口属正常（见 fetch_index_history 的自愈判据）
@@ -84,7 +116,13 @@ def _fetch_indices_from_tencent(uncached: list[str]) -> dict[str, dict[str, Any]
             return index_code, data
         return None
 
-    with ThreadPoolExecutor(max_workers=5) as executor:
+    from src.python.fetcher.batch import get_batch_worker_count
+
+    with worker_pool(
+        "batch:index_history",
+        get_batch_worker_count("index_workers", 5),  # 弱机器可配小
+        thread_name_prefix="index_history",
+    ) as executor:
         futures = {executor.submit(_fetch_one, code): code for code in uncached}
         for future in as_completed(futures):
             result = future.result()
@@ -268,6 +306,13 @@ def fetch_index_history(code: str, days: int = 365) -> list[dict] | None:
     from src.python.core.code_utils import is_us_index_code
 
     chain_name = "history_index_us" if is_us_index_code(code) else "history_index"
+    miss_id = f"{chain_name}:{code}"
+    if INDEX_HISTORY_MISS.is_missing(INDEX_HISTORY_MISS.key(miss_id)):
+        logger.debug("[index] %s 命中全链空负缓存（12h），跳过取数", code)
+        return []
+    if INDEX_HISTORY_BACKOFF.is_missing(INDEX_HISTORY_BACKOFF.key(miss_id)):
+        logger.debug("[index] %s 命中全链空短退避（1h），跳过取数", code)
+        return []
     diag = FailureDiagnostics()
     try:
         result = fetch_with_incremental_fallback(chain_name, code, days, diagnostics=diag)
@@ -301,6 +346,13 @@ def fetch_index_history(code: str, days: int = 365) -> list[dict] | None:
         _t.record(_src_key, "T2", success=True)
     else:
         _t.record(_src_key, "T2", success=False, failure_type="unreachable", message=diag.summary())
+
+    # 全链空 → 负缓存（确定性 12h / 含传输失败 1h），避免每轮都为无数据品种白等超时
+    if not result:
+        if _empty_is_deterministic(diag):
+            INDEX_HISTORY_MISS.mark(INDEX_HISTORY_MISS.key(miss_id), "各源应答但无该指数数据")
+        else:
+            INDEX_HISTORY_BACKOFF.mark(INDEX_HISTORY_BACKOFF.key(miss_id), diag.summary())
 
     # 写入会话缓存（即使为空也缓存，避免重复请求；同时记下窗口天数供后续调用者判断）
     reg.session_cache_set("history_index", code, (days, result), source="api")

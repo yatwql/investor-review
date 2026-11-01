@@ -38,9 +38,10 @@
 | `check-doc-links.py` | 文档 | 文档链接与结构一致性校验（死链/死锚点/重复标题/层级/编号序列/§引用） |
 | `check-import-surface.py` | 质量 | 导入面契约观察（compat-comment 兼容注释 / private-all 私有 `__all__` / cross-private 跨包私有导入 / dynamic-target 动态导入字面量；例外表 `_import_surface_exceptions.json`，观察期未入钩子与 CI） |
 | `check-file-length.py` | 质量 | 单文件行数红线守护（主程序/脚本 >1000 行 / 测试 >1200 行；豁免登记与 review-findings 挂账同步，`-v` 输出可选优化区间清单与「行数 × 近 90 天改动」优先级，供登记表派生） |
-| `check-test-redundancy.py` | 测试 | 测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言；实现拆在 `_test_redundancy/`——八类检查各一模块 + 共用 AST 原语 + 事实缓存 + 编排，入口只留 CLI） |
+| `check-test-redundancy.py` | 测试 | 测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言 / 账本日期写死绝对日期；实现拆在 `_test_redundancy/`——九类检查各一模块 + 共用 AST 原语 + 事实缓存 + 编排，入口只留 CLI） |
 | `check-requirement-trace.py` | 质量 | 需求 ID ↔ 验证载体追溯（单段 ID 全域覆盖 / 载体文件存在 / ID 双向一致） |
 | `hook-install-claude.py` | 质量 | 安装/卸载 Claude Code PostToolUse hook（任务编号一致性自动校验） |
+| `probe-date-bombs.py` | 测试 | 时间炸弹经验筛查（变异法）：把候选测试文件里的绝对日期整体回移 N 年再逐个跑 pytest，失败即「依赖日期处于近期」（rot-suspect）；改写前备份、`finally`/`atexit` 双兜底还原并校验 sha256，脏文件默认跳过；结果需人工判读（生产侧显式注入 today / 星期-财季语义 / 断言目标在未变异 fixture 均为伪信号）；不入门禁 |
 | `eval-llm-hallucination.py` | 评测 | 10 组标准持仓 × LLM 幻觉率采样（薄 CLI，实现在 `_eval_halluc_sampler/` 包） |
 | `eval-dedup-threshold.py` | 评测 | 新闻去重阈值校准分析 |
 | `eval-llm-budget.py` | 评测 | LLM 表达预算校准（冻结持仓样本 × 预算档位 × 模式矩阵；墙钟/输出 tokens/分段字数/要素机检/操作建议行数；`freeze` 建样本、`run --dry-run` 零费用；产物落 `docs/tmp/llm-budget/`，实现在 `_eval_llm_budget/`） |
@@ -51,7 +52,7 @@
 | `check-script-contract.py` | 质量 | scripts 顶层脚本契约机检（退出码声明 ⊆ {0,2} 白名单、check-* 统一 `add_common_args` CLI 面、文本 I/O 显式 encoding、脚本↔测试覆盖映射，四条规则——**观察期**未入钩子与 CI） |
 | `release.py` | 发布 | 发布流程分步编排（check / archive-init〔新小版本归档骨架：三份归档 + 目录树块 + 三处索引行，幂等〕/ prepare〔含台账与设计文件归档迁移；不跨版本发布，`--version` 与推导值不一致即中止并给指引〕/ refresh / evolution / gate / publish〔提交前按 pre-commit 钩子同源参数 `--sync --ci --with-test-count` 同步统计快照，失败即中止；`--title` 自带的 `release: v… —— ` 或裸 `v… —— ` 前缀自动剥离，避免提交标题重版版本号〕/ devbump〔切版 + 默认推送 + **发布闭环校验**：tag 在 master 历史内、master 的 `APP_VERSION` 为发布版、本分支为下一开发版，不一致退出 1；无 tag 仅告警〕，每步独立可审阅、失败即停；refresh 纯文档变更跳过 bench+collect（`--force-refresh` 强制）、bench 默认只测发布子集四档且按「场景档先、长尾档后」排序（`--full-bench` 全量、`--bench-jobs N` 调并行度）、gate 十守护并行且随核数收敛 ≤4 路并断言归档已迁完、gate 戳存逐文件代码哈希（publish 点名 gate 后改动并说明重跑 verify）；check 预演 changelog 派生（只算不写）；publish 提交/合并/tag/推送分段计时；每命令（含 devbump）耗时与失败原因（`failure`：失败步/报告目录/失败用例名）入 `logs/release.jsonl`；devbump 切版后清空上一版迁档占位节） |
 | `test-perf-report.py` | 评测 | 端到端报告生成管线性能基准（独立脚本，mock 外部数据源） |
-| `perf-history.py` | 运维 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 时段聚合（耗时与费用合计/环比）/机读输出（llm_cost、by_period 费用字段）；实现拆在 `_perf_history/`——`stats.py` 统计原语 / `data.py` 派生 / `report.py` 渲染 / `cli.py` 入口，主入口只留 docstring 与 re-export） |
+| `perf-history.py` | 运维 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 并发预算段（档位/预算/峰值/缩容合计，标注跨档位不可直接比耗时）+ 时段聚合（耗时与费用合计/环比/缩容列）/机读输出（llm_cost、by_period 费用字段、CSV 增 budget/peak/clamps 三列）；实现拆在 `_perf_history/`——`stats.py` 统计原语 / `data.py` 派生 / `report.py` 渲染 / `cli.py` 入口，主入口只留 docstring 与 re-export） |
 | `probe.py` | 运维 | 探测统一入口（按 target 分发到 `_probes/` 子模块；新探针实现契约面登记即用） |
 | `eval-factor-zoo.py` | 评测 | 因子动物园目录评测（非生产代码；五个来源族各抽 5 个因子，评测 A 字段可得率 / B 与既有信号族增量 / C 全量计算耗时占比三项指标，A/B/C 全过才转正立项；子命令 catalog / fields / signals / timing / verdict / all，产物只落 `docs/tmp/factor-zoo/`；实现拆在 `_eval_factor_zoo/`） |
 | `_assets/` | 内部 | 视觉资产实现包（`social_preview.py` 预览图绘制与栅格化 / `svg_check.py` 架构图渲染体检） |
@@ -85,7 +86,7 @@
 | `test-*` | 测试 | 测试执行与测试工程：驱动、覆盖计数、失败提取、顺序依赖定位、Web 冒烟、性能**测试**报告 |
 | `eval-*` | 评测与基准 | 离线评测/采样/阈值校准：不入门禁，产物落 `docs/tmp/` 或只输出计分 |
 | `perf-*` | 运维观测 | 读生产运行台账的性能历史查看（被动统计，不用于门禁） |
-| `probe-*` | 运维观测 | 连通性/可用性探测，纯只读无副作用 |
+| `probe-*` | 运维观测 | 探测类：连通性/可用性探测与一次性经验筛查。**默认纯只读无副作用**；确需改写数据的筛查（如 `probe-date-bombs.py`）须在 docstring 显式声明，并自带备份 + `finally`/`atexit` 还原兜底，且不入门禁 |
 | `hook-*` | 工具链 | 编辑器 / 版本钩子接线（安装、卸载） |
 | `make-*` | 文档（资产） | 仓库视觉资产的「造」与「检」（本机手工运行，不进钩子/CI） |
 | 无前缀 | 单件 | `release.py`（发布编排，全流程唯一入口） |
@@ -246,7 +247,7 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 
 **设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
 
-静态分析 `src/test/`（默认跳过 `pytest.ini` 刻意排除的 `live/` 真网套件），抓八类「看着有测试其实没测住」的问题：
+静态分析 `src/test/`（默认跳过 `pytest.ini` 刻意排除的 `live/` 真网套件），抓九类「看着有测试其实没测住」的问题：
 
 1. **死用例**：同文件同类同名重复定义（后者覆盖前者）、类名不以 `Test` 开头的方法形式 `test_*`、`Test*` 类定义了 `__init__`（pytest 整类跳过）
 2. **无断言用例**：既无 `assert`、也无 `pytest.raises/warns/fail`、也无 `assertEqual` 等 `assert*` / `assert_called*`，且不经同类辅助方法（如 `self._assert_pairs_contain(...)`，其内部含断言）——断言落在辅助方法里同样算数
@@ -259,11 +260,12 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 6. **恒真断言**：`assert True` / `assert x == x`——形式上有断言、实际不验证任何行为
 7. **死 fixture**：test 文件内定义（排除 conftest 自身与 autouse）且全仓语料（测试 + conftest）无任何引用——定义后从未被消费的死代码
 8. **弱 mock 断言**：`assert <mock>.<属性>` 作真值 / `assertIsNotNone(<mock>)`——Mock 恒真且恒不为 None，断言恒成立不验证行为（`.called` / `assert_called*` 等专用断言不算弱）
+9. **账本日期写死绝对日期（时间炸弹）**：账本写入/裁剪类调用（`append_signals` / `append_decision` / `register_deterministic_signals` / `prune_jsonl_by_age` …）的 `report_date` / `settle_date` / `date` 实参写死「当前年 ±2 年」内的绝对日期字面量（含经模块级常量转手）。账本按保留期（730 天）在**写侧即裁剪**并按 `now()` 判定，这类用例会在「日期 + 保留期」之后静默退化成「空账本 / 键缺失」。远过去锚点（`"2020-01-02"` 表「必过期」）不报；正确写法是从当天回推派生。经验筛查（真跑、不入门禁）见 `probe-date-bombs.py`
 
 **使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
 
 ```bash
-.venv/bin/python scripts/check-test-redundancy.py                 # 八类全查
+.venv/bin/python scripts/check-test-redundancy.py                 # 九类全查
 .venv/bin/python scripts/check-test-redundancy.py -v              # 详细输出（扫描规模 + 各类计数 + 跳过的间接调用用例数）
 .venv/bin/python scripts/check-test-redundancy.py --ci            # CI 模式（只输出 文件:描述，退出码 2）
 .venv/bin/python scripts/check-test-redundancy.py --include-live  # 连带扫描 src/test/live/
@@ -1009,7 +1011,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 | 次数 | 该阶段出现次数（条件阶段如历史走势仅在启用时出现）；行序按**中位降序**（最慢阶段在前，同分按名） |
 | 缓存冷热 | `counters.prep_cache_hits` / `prep_cache_misses`：数据准备阶段内的缓存命中/未命中**增量**（阶段前后快照相减）；同一阶段耗时在冷/热两态能差一个数量级，对拍「这轮为什么慢」先看这两个数 |
 | 占比 | 阶段均值 ÷ 组平均总耗时；并行执行的阶段之和可超 100% |
-| 阶段细分 | 父阶段下的子项自身耗时（`数据准备` → 行情与明细/指数获取/穿透/风格与因子/覆盖与新鲜度/估值与温度/财报摘要/财务指标/申购与成本位置/明细装配与建议；`LLM+新闻` → 新闻源抓取/去重与关联/锚点维护/事件窗装配/四个 LLM 模块；`HTML 生成` → 图表数据装配/页面写入）；子项可并行，**之和不等于父阶段耗时**，仅用于定位瓶颈（子项按平均耗时降序）。**跨版本键名**：「财报摘要与指标」已拆为「财报摘要」+「财务指标」两子项（拆分见 changelog）；历史记录的旧合并段在读取侧按别名归一为 `财报摘要+财务指标（旧·合并段）` 单列展示（`_perf_history/stats.py::_LEGACY_BREAKDOWN_ALIASES`），**不与拆分后的新子项混算**——合并段一次计时覆盖两子项，与逐子项均值量级不等价 |
+| 阶段细分 | 父阶段下的子项自身耗时（`数据准备` → 行情与明细/指数获取/穿透/因子暴露/行业 Beta/相关性矩阵/覆盖与新鲜度/估值与温度/财报摘要/财务指标/申购与成本位置/明细装配与建议；`LLM+新闻` → 新闻源抓取/去重与关联/锚点维护/事件窗装配/四个 LLM 模块；`HTML 生成` → 图表数据装配/页面写入）；子项可并行，**之和不等于父阶段耗时**，仅用于定位瓶颈（子项按平均耗时降序）。**跨版本键名**：「财报摘要与指标」已拆为「财报摘要」+「财务指标」两子项（拆分见 changelog）；历史记录的旧合并段在读取侧按别名归一为 `财报摘要+财务指标（旧·合并段）` 单列展示（`_perf_history/stats.py::_LEGACY_BREAKDOWN_ALIASES`），**不与拆分后的新子项混算**——合并段一次计时覆盖两子项，与逐子项均值量级不等价 |
 
 **分位口径**：`总体分位概览`与各分组的 P95/P99 均为**最近秩**（nearest-rank）分位——取 `ceil(pct% × n)` 位样本值，统一表述为「95% 的报告在 Xs 内完成，99% 的报告在 Ys 内完成」（概览口径行同句式：P95 即 95% 的报告在该耗时内完成，P99 即 99% 的报告在该耗时内完成；两段均带全主语，不分省略变体）。概览口径与分组一致（受 `--report-type` / `--last` 影响）；仅单一报告类型时只渲染合计行（不重复出类型行）。
 
@@ -1118,7 +1120,7 @@ curl 对照命令：`curl -s "https://push2.eastmoney.com/api/qt/stock/get?secid
 
 **`eval-dedup-threshold.py` — 新闻去重阈值校准**
 
-新闻标题去重（同源/跨源安全区分级 + 候选区阶梯 + 方向对立防护，阈值见 `news_dedup.py` 校准常量）的"边界案例"**默认采集**到 `data/calibration/dedup_anchors-YYYYMM.jsonl.gz`（按月 gzip 分片，写侧按 multi-member gzip 追加、不读旧文件；读侧 `gzip.open` 透明解压，跨轮重复由本脚本 `load_anchors` 按键去重），`INVEST_DEDUP_COLLECT_ANCHORS=0` 可关闭采集。积累足够锚点后，用此脚本分析当前阈值是否合理。**评估默认在分析完成后压缩一次锚点文件**（每 key 最新 + 保留期 30 天 + 体积目标 24MB 与分支配额，实现在 `news_dedup.compact_anchor_file`，与本工具同源），顺带完成体积维护；压缩结果会打印超期/体积裁剪（含分支分布）/无指纹补标注/并发放弃四类计数。`--no-compact` 只读分析，`--dry-run` 演练不写盘，`--compact` 仅压缩不分析。报告路径仍不自动压缩。
+新闻标题去重（同源/跨源安全区分级 + 候选区阶梯 + 方向对立防护，阈值见 `news_dedup.py` 校准常量）的"边界案例"**默认采集**到 `data/calibration/dedup_anchors-YYYYMM.jsonl.gz`（按月 gzip 分片，写侧按 multi-member gzip 追加、不读旧文件；读侧 `gzip.open` 透明解压，跨轮重复由本脚本 `load_anchors` 按键去重），`INVEST_DEDUP_COLLECT_ANCHORS=0` 可关闭采集。积累足够锚点后，用此脚本分析当前阈值是否合理。**评估默认在分析完成后压缩一次锚点文件**（每 key 最新 + 保留期 30 天 + 体积目标 24MB 与分支配额，实现在 `news_dedup.compact_anchor_file`，与本工具同源），顺带完成体积维护；压缩结果会打印超期/体积裁剪（含分支分布）/无指纹旧行丢弃/并发放弃四类计数。`--no-compact` 只读分析，`--dry-run` 演练不写盘，`--compact` 仅压缩不分析。报告路径仍不自动压缩。
 
 ```bash
 # 分析全部锚点，输出建议
@@ -1193,7 +1195,7 @@ curl 对照命令：`curl -s "https://push2.eastmoney.com/api/qt/stock/get?secid
 .\scripts\launch.ps1
 ```
 
-两者均负责：激活虚拟环境（如存在）、设置 `PYTHONPATH`、启动主程序 TUI。
+两者均负责：激活虚拟环境（如存在）、按 `requirements.txt` 安装依赖、设置 `PYTHONPATH`、启动主程序 TUI。`launch.sh` 额外兼容**只读外部虚拟环境**：依赖已满足时跳过 `pip install`、仅校验已装版本，依赖标记写入 `data/cache/.deps_installed`（不写不可写的 venv 目录）。
 
 **`launch.sh web` / `launch.ps1 web` — Web 浏览器模式**
 
@@ -1400,3 +1402,22 @@ CLI 模式的便捷入口，跳过 TUI 界面，直接以命令行模式运行�
 
 **注意**：事实校验器对仓位占比百分比和情景假设百分比设跳过策略（`_POSITION_WEIGHT_KEYWORDS` / `_HYPOTHETICAL_KEYWORDS`），避免将百分比陈述误报为幻觉。最终幻觉率以 `docs/tmp/hallucination-report.md` 为准。
 
+
+**`probe-date-bombs.py` — 时间炸弹经验筛查**
+
+测试写死绝对日期后，用例会随墙上时钟走过去而静默腐化（典型案例：账本保留期 730 天在**写侧即裁剪**，样本日期一过期，用例就退化成「空账本 / 键缺失」，失败信息完全看不出原因）。本工具用**变异法**找出这一整类：把候选测试文件里的绝对日期整体回移 N 年，再逐个跑 pytest——只有「要求日期处于近期（相对 `now()`）」的用例才会因此失败。
+
+静态窄口径守卫是 `check-test-redundancy.py` 第 9 类（入门禁）；本工具覆盖面更宽但**不入门禁**：要改写真实测试文件、单文件秒级全集分钟级、且结果含变异伪信号（生产侧显式注入 `today` 参数、星期/财季语义随日期位移改变、断言目标在未被替换的 fixture 模块里），必须人工判读。
+
+```bash
+# 默认候选：含绝对日期且与保留期/TTL 关键词同现的测试文件
+.venv/bin/python scripts/probe-date-bombs.py -v
+
+# 全部含绝对日期的测试文件（慢）
+.venv/bin/python scripts/probe-date-bombs.py --all
+
+# 只查指定文件 / 调整回移年数与超时
+.venv/bin/python scripts/probe-date-bombs.py --files src/test/unit/core/test_doctor.py --years 3 --timeout 600
+```
+
+**安全约定**（改写真实文件是唯一风险点）：只处理 git 工作区干净的文件（`--allow-dirty` 可强制）；改写前备份原文、`finally` 还原并校验 `sha256`、`atexit` 兜底（Ctrl-C / 用例崩溃也不留脏文件）；退出码 0 = 无 rot-suspect，2 = 有 rot-suspect 或超时。

@@ -601,14 +601,13 @@ class TestUnknownOverrideWarning:
             assert FEATURE_FLAGS["cost_position"] is False, "已登记开关的覆写仍须正常生效"
 
     @pytest.mark.unit
-    def test_legacy_metrics_flags_warn_as_unknown(self, tmp_path):
-        """旧 ``metrics_*`` 逐项键 → 按无消费者告警（不静默生效）。
+    def test_unknown_flag_warns_as_no_consumer(self, tmp_path):
+        """未注册的开关名 → 按无消费者告警（不静默生效）。
 
-        量化指标逐项开关已整体删除（指标始终全量渲染），用户 features.json 中残留的
-        旧键必须可见地失效，否则「配置了却没效果」会以静默方式复现。
+        配置里残留的旧键/拼错键必须可见地失效，否则「配置了却没效果」会以静默方式复现。
         """
         fpath = tmp_path / "features.json"
-        fpath.write_text(json.dumps({"metrics_hhi": False, "metrics_beta": False}), encoding="utf-8")
+        fpath.write_text(json.dumps({"no_such_flag_a": False, "no_such_flag_b": False}), encoding="utf-8")
 
         with (
             patch("src.python.config.features.FEATURES_FILE", str(fpath)),
@@ -619,10 +618,10 @@ class TestUnknownOverrideWarning:
             warnings = [text for text in self._rendered_warnings(mock_logger) if "无消费者" in text]
 
             assert len(warnings) == 1
-            assert "metrics_hhi" in warnings[0]
-            assert "metrics_beta" in warnings[0]
+            assert "no_such_flag_a" in warnings[0]
+            assert "no_such_flag_b" in warnings[0]
             # 值仍加载（不报错），但没有任何消费点读取 → 告警是唯一反馈通道
-            assert FEATURE_FLAGS["metrics_hhi"] is False
+            assert FEATURE_FLAGS["no_such_flag_a"] is False
 
 
 @pytest.mark.unit

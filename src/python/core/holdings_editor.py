@@ -35,6 +35,7 @@ from src.python.core.code_utils import (
     is_hk_stock_code,
     is_otc_fund_by_name,
 )
+from src.python.core.constants import SIDE_BUY, SIDE_SELL
 from src.python.core.models import Holding
 from src.python.core.reader import (
     HOLDINGS_HEADER,
@@ -48,8 +49,6 @@ from src.python.core.reader import (
 
 logger = logging.getLogger("invest")
 
-SIDE_BUY = "buy"
-SIDE_SELL = "sell"
 SIDE_LABELS: dict[str, str] = {SIDE_BUY: "买入", SIDE_SELL: "卖出"}
 
 PRICE_KIND_EXCHANGE = "exchange"

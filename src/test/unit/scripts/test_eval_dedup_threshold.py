@@ -18,7 +18,6 @@ from pathlib import Path
 import pytest
 
 from src.python.providers.news_dedup_rules import (
-    ANCHOR_LEGACY_ERA,
     ANCHOR_RULES_FIELD,
     _ANCHOR_RULES_VERSION,
     _CROSS_BG2_RATIO,
@@ -58,6 +57,7 @@ def _record(
         "bigram_overlap": overlap,
         "merged": rule in ("cross_merge", "cross_merge_bg2", "cross_safe"),
         "rule": rule,
+        ANCHOR_RULES_FIELD: _ANCHOR_RULES_VERSION,
     }
 
 
@@ -342,15 +342,16 @@ class TestMainMaintenance:
         assert len(_rows(tmp_path)) == 3
 
 
-class TestLegacyEraMarking:
-    """无规则指纹的早期行：压缩时补 legacy 标注后保留（不丢历史、不混算口径）。"""
+class TestUnattributedRowsDropped:
+    """无规则指纹的早期行：压缩时直接丢弃（不保留旧数据文件形态）。"""
 
-    def test_compaction_marks_unattributed_rows(self, tmp_path, tool):
-        path = _write(tmp_path, [_record("A", "B", 0.4, 2, "cross_skip")])
+    def test_compaction_drops_unattributed_rows(self, tmp_path, tool):
+        legacy = _record("A", "B", 0.4, 2, "cross_skip")
+        legacy.pop(ANCHOR_RULES_FIELD)  # 旧文件格式：无规则指纹
+        path = _write(tmp_path, [legacy])
         result = tool.compact_anchors(path)
         assert result["unattributed"] == 1
-        kept = _rows(tmp_path)[0]
-        assert kept[ANCHOR_RULES_FIELD] == ANCHOR_LEGACY_ERA
+        assert _rows(tmp_path) == [], "无指纹旧行不应被保留"
 
     def test_compaction_keeps_current_fingerprint_untouched(self, tmp_path, tool):
         record = _record("A", "B", 0.4, 2, "cross_skip")

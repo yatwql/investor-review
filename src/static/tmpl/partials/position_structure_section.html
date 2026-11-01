@@ -66,7 +66,7 @@
             <!-- 配对明细 -->
             {% if _pairs %}
             <br>
-            <div style="font-weight: bold; font-size: var(--fs-body); margin-bottom: 6px;">配对明细（按重合度降序）</div>
+            <div style="font-weight: bold; font-size: var(--fs-body); margin-bottom: 4px;">配对明细（按重合度降序）</div>
             <table>
                 <thead>
                     <tr>
@@ -177,21 +177,21 @@
             <!-- 图例 -->
             <div class="penetration-notes" style="margin-top: 8px;">
                 <div>
-                    图例：<span style="display:inline-block; width:16px; height:12px; background: var(--corr-pos-strong); margin-right:3px; vertical-align:middle;"></span> 强正相关(r≥0.5)
-                    <span style="display:inline-block; width:16px; height:12px; background: var(--corr-pos); margin:0 3px 0 10px; vertical-align:middle;"></span> 正相关
-                    <span style="display:inline-block; width:16px; height:12px; background: var(--corr-pos-weak); margin:0 3px 0 10px; vertical-align:middle;"></span> 弱正相关
-                    <span style="display:inline-block; width:16px; height:12px; background: var(--corr-neg-strong); margin:0 3px 0 10px; vertical-align:middle;"></span> 强负相关(r≤-0.5)
-                    <span style="display:inline-block; width:16px; height:12px; background: var(--corr-neg); margin:0 3px 0 10px; vertical-align:middle;"></span> 负相关
-                    <span style="display:inline-block; width:16px; height:12px; background: var(--corr-neg-weak); margin:0 3px 0 10px; vertical-align:middle;"></span> 弱负相关
-                    <span style="display:inline-block; width:16px; height:12px; background: var(--surface); border:1px solid var(--border-strong); margin:0 3px 0 10px; vertical-align:middle;"></span> 不显著(p≥0.05)
-                    <span style="display:inline-block; width:16px; height:12px; background: var(--cell-na-bg); margin:0 3px 0 10px; vertical-align:middle;"></span> 数据不足
+                    图例：<span style="display:inline-block; width:16px; height:12px; background: var(--corr-pos-strong); margin-right:4px; vertical-align:middle;"></span> 强正相关(r≥0.5)
+                    <span style="display:inline-block; width:16px; height:12px; background: var(--corr-pos); margin:0 4px 0 8px; vertical-align:middle;"></span> 正相关
+                    <span style="display:inline-block; width:16px; height:12px; background: var(--corr-pos-weak); margin:0 4px 0 8px; vertical-align:middle;"></span> 弱正相关
+                    <span style="display:inline-block; width:16px; height:12px; background: var(--corr-neg-strong); margin:0 4px 0 8px; vertical-align:middle;"></span> 强负相关(r≤-0.5)
+                    <span style="display:inline-block; width:16px; height:12px; background: var(--corr-neg); margin:0 4px 0 8px; vertical-align:middle;"></span> 负相关
+                    <span style="display:inline-block; width:16px; height:12px; background: var(--corr-neg-weak); margin:0 4px 0 8px; vertical-align:middle;"></span> 弱负相关
+                    <span style="display:inline-block; width:16px; height:12px; background: var(--surface); border:1px solid var(--border-strong); margin:0 4px 0 8px; vertical-align:middle;"></span> 不显著(p≥0.05)
+                    <span style="display:inline-block; width:16px; height:12px; background: var(--cell-na-bg); margin:0 4px 0 8px; vertical-align:middle;"></span> 数据不足
                 </div>
             </div>
 
             <!-- 配对明细 -->
             {% if _corr_pairs %}
             <br>
-            <div style="font-weight: bold; font-size: var(--fs-body); margin-bottom: 6px;">配对明细（按 |r| 降序）</div>
+            <div style="font-weight: bold; font-size: var(--fs-body); margin-bottom: 4px;">配对明细（按 |r| 降序）</div>
             <table>
                 <thead>
                     <tr>

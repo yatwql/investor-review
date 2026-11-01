@@ -147,7 +147,7 @@ def save(snapshot: SnapshotData, namespace: str | None = None) -> str:
     """将 SnapshotData 保存为快照 JSON 文件。
 
     原子写入委托 `core/atomic_write`（同目录临时文件 + os.replace）。
-    文件名格式：snapshot_{timestamp}.json（timestamp = ISO 格式）。
+    文件名格式：snapshot_{timestamp}.json（timestamp = ``YYYYMMDDTHHMMSS``）。
 
     Args:
         snapshot: 要保存的快照数据
@@ -161,7 +161,10 @@ def save(snapshot: SnapshotData, namespace: str | None = None) -> str:
         ValueError: namespace 含非法字符时
     """
     snap_dir = _namespace_dir(namespace)
-    os.makedirs(snap_dir, exist_ok=True)
+    try:
+        os.makedirs(snap_dir, exist_ok=True)
+    except OSError as e:  # 带上目标路径，便于定位权限/路径问题
+        raise OSError(f"快照目录创建失败: {snap_dir}") from e
 
     ts = snapshot.timestamp or datetime.now().strftime("%Y%m%dT%H%M%S")
     filename = f"snapshot_{ts}.json"
@@ -210,23 +213,16 @@ def load_latest(namespace: str | None = None) -> SnapshotData | None:
     return _load_file(latest)
 
 
-#: 快照时间戳可解析格式族（紧凑格式在前，与 save() 写盘格式一致）
-_SNAPSHOT_TS_FORMATS = (
-    "%Y%m%dT%H%M%S",
-    "%Y-%m-%dT%H:%M:%S",
-    "%Y-%m-%d",
-    "%Y%m%d",
-)
+#: 快照时间戳格式（唯一形态，与 save() 写盘的文件名格式一致）
+_SNAPSHOT_TS_FORMAT = "%Y%m%dT%H%M%S"
 
 
 def _parse_snapshot_timestamp(ts: str) -> datetime | None:
-    """解析快照时间戳（紧凑/ISO 格式族）；不可解析返回 None。"""
-    for fmt in _SNAPSHOT_TS_FORMATS:
-        try:
-            return datetime.strptime(ts, fmt)
-        except (ValueError, TypeError):
-            continue
-    return None
+    """解析快照时间戳（``YYYYMMDDTHHMMSS``）；不可解析返回 None。"""
+    try:
+        return datetime.strptime(ts, _SNAPSHOT_TS_FORMAT)
+    except (ValueError, TypeError):
+        return None
 
 
 def load_comparison_baseline(current_ts: str, namespace: str | None = None) -> SnapshotData | None:
@@ -245,7 +241,7 @@ def load_comparison_baseline(current_ts: str, namespace: str | None = None) -> S
       - 域内无快照或无更早交易日快照 → None（调用方按首次运行口径隐藏环比）
 
     Args:
-        current_ts: 本次报告快照时间戳（``YYYYMMDDTHHMMSS``，兼容 ISO）
+        current_ts: 本次报告快照时间戳（``YYYYMMDDTHHMMSS``）
         namespace: 隔离域标识（None=共享主目录，如 "web"=web 试算域）
 
     Returns:

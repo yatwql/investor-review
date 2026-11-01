@@ -1,4 +1,10 @@
-﻿colorama==0.4.6
+﻿# 运行时依赖安装清单（启动脚本按此装环境）。
+# 直接依赖的版本约束与 pyproject.toml [project].dependencies 逐字一致——契约由
+# src/test/unit/test_dependency_declarations.py 守卫，改一处必须同步改另一处。
+# 本文件另含 flask 传递依赖锁定（werkzeug/itsdangerous/click/blinker）与开发/工具
+# 依赖（pytest*、Pillow、colorama），这些不进 pyproject 的运行时依赖表。
+# 注：本文件必须为 UTF-8 with BOM（pip ≤24.x 在 cp936 locale 上按 BOM 解码）。
+colorama==0.4.6
 openpyxl==3.1.5
 httpx==0.28.1
 h2>=4.2.0

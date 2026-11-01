@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """测试用例冗余与无效检查（test redundancy / dead test check）—— 静态扫测试源，找「跑不到」「测不出」「同义反复」「重复」的用例。
 
-八类检查（全部基于 AST 静态分析，不执行测试、不依赖网络）：
+九类检查（全部基于 AST 静态分析，不执行测试、不依赖网络）：
 
   A. **死用例（不可收集 / 被覆盖）** — pytest 永远不会执行的用例：
      - 同文件同类内同名重复定义（后者覆盖前者）
@@ -24,12 +24,18 @@
      无任何引用——定义后从未被用例/夹具消费的死代码。
   H. **弱 mock 断言** — `assert <mock>.<属性>` 作真值 / `assertIsNotNone(<mock>)`：Mock 对象
      恒真且不为 None，断言恒成立不验证行为（`.called` / `assert_called*` 等专用断言不算弱）。
+  I. **账本日期写死绝对日期（时间炸弹）** — 账本类调用（`append_signals` / `append_decision` /
+     `register_deterministic_signals` / `prune_jsonl_by_age` …）的 `report_date`/`settle_date`/`date`
+     实参写死「当前年 ±2 年」内的绝对日期字面量。账本按保留期（730 天）在**写侧即裁剪**并按
+     `now()` 判定，这类用例会在「日期 + 保留期」之后静默退化成「空账本 / 键缺失」，失败信息
+     看不出是日期过期。远过去锚点（`"2020-01-02"` 表示「必过期」）不报。正确写法：从当天回推派生。
+     经验筛查（要真跑、非静态）见 `scripts/probe-date-bombs.py`。
 
 按设计排除：`src/test/live/`（`pytest.ini` 刻意排除的 opt-in 真网套件，默认不扫，`--include-live` 可纳入）、
 `*_edge.py` 不特殊对待（同为测试，同样受检）。
 
 用法：
-  python scripts/check-test-redundancy.py                 # 八类全查
+  python scripts/check-test-redundancy.py                 # 九类全查
   python scripts/check-test-redundancy.py -v              # 详细输出（打印被跳过的间接调用用例数等）
   python scripts/check-test-redundancy.py --ci            # CI 模式：仅输出 文件:描述，退出码 2
   python scripts/check-test-redundancy.py --include-live  # 连带扫描 src/test/live/
@@ -38,7 +44,8 @@
 
 退出码：
   0 — 全部通过
-  2 — 发现死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言
+  2 — 发现死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言 /
+      账本日期写死绝对日期
   注：`--audit` 为建议性附加输出，恒不改变退出码（骨架同构多为合法矩阵契约，须人工判读）
 
 性能（增量事实缓存）：
@@ -59,7 +66,7 @@ _SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
-# 八类检查已按 finding 分类拆到 scripts/_test_redundancy/（各检查一个模块，共用
+# 九类检查已按 finding 分类拆到 scripts/_test_redundancy/（各检查一个模块，共用
 # _common 的 AST 原语，runner 负责编排）；入口只保留 CLI 与兼容 re-export，
 # 使 load_script 的既有直调面（run_checks / check_* / cases_in_module …）不变。
 from _test_redundancy._common import (  # noqa: F401 — 兼容 load_script 直调面
@@ -120,6 +127,11 @@ from _test_redundancy.weak_mock import (  # noqa: F401 — 兼容 load_script �
     check_weak_mock_assertions,
 )
 
+from _test_redundancy.date_bombs import (  # noqa: F401 — 兼容 load_script 直调面
+    LEDGER_DATE_CALLS,
+    check_ledger_absolute_dates,
+)
+
 from _test_redundancy.dead_fixtures import (  # noqa: F401 — 兼容 load_script 直调面
     _fixture_exposed_name,
     check_dead_fixtures,
@@ -148,7 +160,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
             "测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / "
-            "恒真断言 / 死 fixture / 弱 mock 断言）"
+            "恒真断言 / 死 fixture / 弱 mock 断言 / 账本日期写死绝对日期）"
         ),
     )
     add_common_args(parser)
@@ -170,7 +182,8 @@ def main() -> None:
             f"  死用例 {stats['dead']} / 无断言 {stats['assertion_free']} /"
             f" 完全重复 {stats['duplicate']} / 自证用例 {stats['self_fulfilling']} /"
             f" 硬编码演进总数 {stats['hardcoded_totals']} / 恒真断言 {stats['trivial']} /"
-            f" 死 fixture {stats['dead_fixtures']} / 弱 mock 断言 {stats['weak_mock']}"
+            f" 死 fixture {stats['dead_fixtures']} / 弱 mock 断言 {stats['weak_mock']} /"
+            f" 账本日期写死 {stats['date_bombs']}"
         )
         print(f"  因不可解析的 self 间接调用而跳过重复比对的用例：{stats['duplicate_skipped']}")
 
@@ -189,7 +202,7 @@ def main() -> None:
         report(
             findings,
             "[OK] 测试用例冗余与无效检查通过（无死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / "
-            "恒真断言 / 死 fixture / 弱 mock 断言）",
+            "恒真断言 / 死 fixture / 弱 mock 断言 / 账本日期写死绝对日期）",
             ci=args.ci,
             fail_message="[!] 发现 {n} 处测试用例问题，须修正后提交",
         )
