@@ -221,7 +221,8 @@ _DEFAULT_CONFIG = {
     "anonymization": {"mode": "off"},  # 匿名化模式：off/code_display/full_anonymous/summary
     # ── L. 批量并行调度 ──
     "batch": {
-        "max_total_workers": 15,  # 全局 batch 线程硬上限（已有池不计入）
+        "max_total_workers": 15,
+        "profile": "high",  # 并发档位：high=100% / medium=50% / low=25%（按核数缩各池申请值）
         "fund_workers": 3,  # 基金排名/持仓批量并发数
         "industry_workers": 8,  # 行业分类批量并发数
         "datasink_workers": 3,  # 财报取数并发数（免费档 3 请求/秒，≥3 才吃满；2 时 6 标的要 3 波）
@@ -393,7 +394,8 @@ def _build_template_from_defaults() -> str:
         # 注释文本对齐 _DEFAULT_CONFIG（batch 子项）与历史 config.json（batch_rate_limit 子项）
         "  // ── L. 批量并行调度 ──",
         '  "batch": {',
-        f'    "max_total_workers": {d["batch"]["max_total_workers"]},  // 全局 batch 线程硬上限（已有池不计入）',
+        f'    "max_total_workers": {d["batch"]["max_total_workers"]},  // 进程级并发预算（与核数取小）',
+        f'    "profile": "{d["batch"]["profile"]}",  // 并发档位：high/medium/low（按核数系数缩各池申请值）',
         f'    "fund_workers": {d["batch"]["fund_workers"]},  // 基金排名/持仓批量并发数',
         f'    "industry_workers": {d["batch"]["industry_workers"]},  // 行业分类批量并发数',
         f'    "datasink_workers": {d["batch"]["datasink_workers"]},  // 财报取数并发数（免费档批量上限 ≤3）',

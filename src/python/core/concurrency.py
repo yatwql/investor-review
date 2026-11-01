@@ -31,6 +31,14 @@ logger = logging.getLogger("invest")
 #: 配置缺失时的默认预算（与 `batch.max_total_workers` 默认值同源）
 DEFAULT_BUDGET = 15
 
+#: 并发档位系数（与 `scripts/_test_runner/pytest_env._PARALLEL_FACTOR` 同源口径：
+#: high=100% 核数 / medium=50% / low=25%）。运行时只缩放**每个池的申请值**，
+#: 预算与逐池上限仍是硬约束——档位是「一把总旋钮」，不是替代各模块的精细配置。
+PROFILE_FACTORS: dict[str, float] = {"high": 1.0, "medium": 0.5, "low": 0.25}
+
+#: 默认档位 = high（等价改动前行为：各池按原值申请，只受逐池/预算钳位）
+DEFAULT_PROFILE = "high"
+
 #: 优先级（仅用于观测与告警排序，不做抢占）：数值小 = 更关键
 PRIORITY_INTERACTIVE = 10  # 交互/报告关键路径（基金持仓、财报、行情回退）
 PRIORITY_BATCH = 30  # 常规批量（行业分类、akshare 指标）
@@ -59,6 +67,23 @@ class ConcurrencyGovernor:
         self._run_peak = 0
 
     # ── 预算 ──────────────────────────────────────────────
+
+    @staticmethod
+    def resolve_profile() -> str:
+        """读取 `batch.profile`（high/medium/low）；非法或缺省回落默认档。"""
+        try:
+            from src.python.config import get_config
+
+            raw = ((get_config() or {}).get("batch") or {}).get("profile", DEFAULT_PROFILE)
+            profile = str(raw or "").strip().lower()
+        except Exception:
+            return DEFAULT_PROFILE
+        return profile if profile in PROFILE_FACTORS else DEFAULT_PROFILE
+
+    @classmethod
+    def profile_factor(cls) -> float:
+        """当前档位的缩放系数。"""
+        return PROFILE_FACTORS.get(cls.resolve_profile(), 1.0)
 
     @staticmethod
     def resolve_budget() -> int:
@@ -113,9 +138,11 @@ class ConcurrencyGovernor:
             if not self._announced:
                 self._announced = True
                 logger.info(
-                    "[并发] 预算 %d（本机 %d 核，配置 max_total_workers），按池顺序分配、不抢占",
+                    "[并发] 预算 %d（本机 %d 核，配置 max_total_workers），档位 %s（×%.2f），按池顺序分配、不抢占",
                     budget,
                     os.cpu_count() or 1,
+                    self.resolve_profile(),
+                    PROFILE_FACTORS.get(self.resolve_profile(), 1.0),
                 )
             if granted < requested:
                 self._run_clamps += 1
@@ -181,9 +208,25 @@ def worker_pool(
         GOVERNOR.release(name)
 
 
+def scale_workers(requested: int, *, profile: str | None = None) -> int:
+    """按并发档位缩放一个池的申请值（至少 1；high 档原样返回）。
+
+    与 test-runner 的并行级别同一套系数，便于「测试机压得住」与「报告跑得动」
+    用同一套语言沟通；区别：运行时下限是 1（不强制 low=2，小池子本来就只有 1~2 路）。
+    """
+    factor = GOVERNOR.profile_factor() if profile is None else PROFILE_FACTORS.get(profile, 1.0)
+    requested = max(1, int(requested))
+    if factor >= 1.0:
+        return requested
+    return max(1, int(requested * factor))
+
+
 __all__ = [
     "GOVERNOR",
     "DEFAULT_BUDGET",
+    "DEFAULT_PROFILE",
+    "PROFILE_FACTORS",
+    "scale_workers",
     "PRIORITY_BATCH",
     "PRIORITY_INTERACTIVE",
     "PRIORITY_PREFETCH",

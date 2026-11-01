@@ -422,6 +422,7 @@ TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一�
 | 键 | 默认值 | 说明 |
 |:---|:------:|:-----|
 | `batch.max_total_workers` | `15` | 各池共享的**进程级预算**：每次建池从余额里分配，不足时缩到至少 1 并打 WARNING（不抢占已运行的池）；同时按本机 CPU 核数再钳一次，弱机器不会多开线程 |
+| `batch.profile` | `"high"` | 并发档位（借鉴 test-runner 的并行级别系数）：high=100% / medium=50% / low=25%，只按系数缩各池申请值，不改各模块打磨过的相对权重；默认 high = 改动前行为 |
 | `batch.fund_workers` | `3` | 基金排名/持仓/费率批量并发数；配 1 = 串行（季报探测的对冲也只剩 2 路） |
 | `batch.industry_workers` | `8` | 行业分类批量并发数 |
 | `batch.datasink_workers` | `3` | 财报全文取数并发数（DataSinking 免费档 3 请求/秒，≥3 才吃满） |
@@ -434,6 +435,7 @@ TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一�
 ```json
 "batch": {
   "max_total_workers": 15,
+  "profile": "high",
   "fund_workers": 3,
   "industry_workers": 8,
   "datasink_workers": 3,

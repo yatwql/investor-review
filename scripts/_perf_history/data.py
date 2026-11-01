@@ -263,14 +263,15 @@ def _llm_cost_data(records: list[dict[str, Any]]) -> dict[str, Any] | None:
         for code, amounts in sorted(per_currency.items())
     }
     single = len(per_currency) == 1
-    only = next(iter(by_currency)) if single else None
+    only: str | None = next(iter(by_currency)) if single else None
+    only_row = by_currency[only] if only is not None else None
     return {
         "runs": runs,
         "currency": only,
-        "total": by_currency[only]["total"] if single else None,
-        "mean": by_currency[only]["mean"] if single else None,
-        "median": by_currency[only]["median"] if single else None,
-        "max": by_currency[only]["max"] if single else None,
+        "total": only_row["total"] if only_row else None,
+        "mean": only_row["mean"] if only_row else None,
+        "median": only_row["median"] if only_row else None,
+        "max": only_row["max"] if only_row else None,
         "by_currency": by_currency,
     }
 
@@ -389,6 +390,9 @@ def _machine_readable(
             "slowest_phase",
             "interrupted_stage",
             "errors_count",
+            "concurrency_budget",
+            "concurrency_peak",
+            "concurrency_clamps",
         ]
     )
     outlier_ids = {id(r) for r in _outlier_records(records, outlier_k)}
@@ -408,6 +412,9 @@ def _machine_readable(
                 _slowest_phase(r),
                 r.get("interrupted_stage") or "",
                 len(r.get("errors") or []),
+                (r.get("counters") or {}).get("concurrency_budget", ""),
+                (r.get("counters") or {}).get("concurrency_peak", ""),
+                (r.get("counters") or {}).get("concurrency_clamps", ""),
             ]
         )
     return buf.getvalue()

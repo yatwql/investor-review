@@ -124,6 +124,7 @@
   // ── M. 批量并行调度 ──
   "batch": {
     "max_total_workers": 15,
+    "profile": "high",
     "fund_workers": 3,
     "industry_workers": 8,
     "datasink_workers": 3,

@@ -478,6 +478,7 @@ class PerfCollector:
             counters["concurrency_budget"] = int(gov["budget"])
             counters["concurrency_peak"] = max(int(counters.get("concurrency_peak", 0)), int(gov["peak"]))
             counters["concurrency_clamps"] = int(gov["clamps"])
+            counters["concurrency_profile_pct"] = int(round(100 * GOVERNOR.profile_factor()))
         except Exception:
             logger.debug("[perf] 读取并发预算快照失败", exc_info=True)
         return ReportRunSnapshot(

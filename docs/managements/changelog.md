@@ -36,6 +36,7 @@
 
 ### 变更
 
+- **并发档位与趋势观测（借鉴 test-runner 并行级别）**：新增 `batch.profile`（high=100% / medium=50% / low=25%，与 `scripts/_test_runner` 的 `_PARALLEL_FACTOR` 同口径）——只按系数缩各池申请值、不改相对权重，默认 high = 改动前行为；`perf_history` 增 `counters.concurrency_profile_pct`，`perf-history.py` 新增「并发预算」段（档位/预算/峰值/缩容，并标注「跨档位不要直接比耗时」），CSV 增预算/峰值/缩容三列。
 - **并发治理：进程级预算 + 4 处热点配置化（rf-1019 / rf-1020）**：新增 `core/concurrency.GOVERNOR`，把「各池各自钳位」补成「逐池 + 进程级」两层上界——参与池建池时从 `batch.max_total_workers`（再按核数钳）的共享预算分配，不足缩到至少 1 并 WARNING，不抢占已运行池；预算/峰值/缩容次数写入 `perf_history` 的 `counters.concurrency_*`，每次报告开头打一条预算 INFO。同时把实时取价 8、基金风格 8、风格因子 6/4、指数历史 5 四处硬编码并发改为配置项（默认值 = 原值，零行为变化）。各模块打磨过的取值一律保留，弱机器用配置下调。
 - **性能细分补充（rf-1016）**：数据准备阶段把「风格与因子」拆成 `因子暴露` / `行业 Beta` / `相关性矩阵` 三个子项，旧键在 perf 历史读取侧按别名单列「旧·合并段」（不与新子项混算）；requirements / technical / scripts-reference 三处子项清单同步。
 - **诊断盲区复核（rf-1014 / rf-1015）**：`llm_settings.json` 读取失败日志已含异常类型与路径（补回归用例锁死）；退役配置键告警随兼容层移除后不再出现，登记收敛。

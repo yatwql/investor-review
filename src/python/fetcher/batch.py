@@ -28,7 +28,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from src.python.core.concurrency import GOVERNOR, PRIORITY_BATCH
+from src.python.core.concurrency import GOVERNOR, PRIORITY_BATCH, scale_workers
 from src.python.core.retry import STRATEGY_LINEAR, RetryPolicy, retry_transient
 from src.python.core.throttle import RateLimiter  # 实现见 core/throttle.py（数据/调度/LLM 三层共用）
 from src.python.config import get_default
@@ -428,6 +428,8 @@ def get_batch_worker_count(config_key: str, default: int = 3) -> int:
         if not isinstance(max_total, (int, float)) or max_total < 1:
             max_total = 15
 
+        # 档位缩放（high=1.0 → 原样；medium=0.5 / low=0.25 按比例缩，至少 1）
+        requested = scale_workers(int(requested))
         clamped = min(int(requested), int(max_total))
         # CPU 钳位：并发线程做的是网络等待 + 解析，弱机器（2~4 核）按 max_total 放行
         # 会开出一堆争 CPU 的线程反而更慢；以核数为上界，配置可以更小但不能更大。

@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 import pytest
 
@@ -99,3 +100,49 @@ class TestPerfObservation:
         assert counters["concurrency_budget"] == 4
         assert counters["concurrency_peak"] == 4
         assert counters["concurrency_clamps"] == 1
+
+
+class TestProfileScaling:
+    """并发档位（借鉴 test-runner 的 high/medium/low 系数）：只缩申请值，不改相对权重。"""
+
+    @staticmethod
+    def _patch_profile(monkeypatch, profile: str | None):
+        cfg: dict[str, dict[str, Any]] = {"batch": {"max_total_workers": 15}}
+        if profile is not None:
+            cfg["batch"]["profile"] = profile
+        monkeypatch.setattr("src.python.config.get_config", lambda: cfg)
+        monkeypatch.setattr(cc.os, "cpu_count", lambda: 16)
+        cc.GOVERNOR.reset()
+
+    def test_high_is_noop(self, monkeypatch):
+        self._patch_profile(monkeypatch, "high")
+        assert cc.scale_workers(8) == 8
+
+    def test_medium_halves(self, monkeypatch):
+        self._patch_profile(monkeypatch, "medium")
+        assert cc.scale_workers(8) == 4
+
+    def test_low_quarters_with_floor_one(self, monkeypatch):
+        self._patch_profile(monkeypatch, "low")
+        assert cc.scale_workers(8) == 2
+        assert cc.scale_workers(2) == 1, "小池子缩到 1，不会归零"
+
+    def test_invalid_or_missing_profile_falls_back_to_high(self, monkeypatch):
+        self._patch_profile(monkeypatch, None)
+        assert cc.GOVERNOR.resolve_profile() == "high"
+        self._patch_profile(monkeypatch, "turbo")
+        assert cc.GOVERNOR.resolve_profile() == "high"
+
+    def test_explicit_profile_argument(self):
+        assert cc.scale_workers(6, profile="medium") == 3
+        assert cc.scale_workers(6, profile="low") == 1
+
+    def test_batch_worker_count_applies_profile(self, monkeypatch):
+        from src.python.fetcher.batch import get_batch_worker_count
+
+        monkeypatch.setattr(
+            "src.python.config.get_config",
+            lambda: {"batch": {"profile": "medium", "industry_workers": 8, "max_total_workers": 15}},
+        )
+        monkeypatch.setattr(cc.os, "cpu_count", lambda: 16)
+        assert get_batch_worker_count("industry_workers", 8) == 4
