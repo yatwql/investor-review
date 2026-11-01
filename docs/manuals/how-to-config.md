@@ -134,6 +134,8 @@
     "fund_style_workers": 8,
     "factor_workers": 6
   },
+  // 上面 batch 段的数值键都可以写 null（或删掉该键）= 跟随默认值，
+  // 只有显式数字才覆盖——升级后默认值调优能直接生效，不必逐项手改。
   "batch_rate_limit": {
     "tencent": 0.0,
     "sina": 0.0,
