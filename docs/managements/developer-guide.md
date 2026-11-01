@@ -1060,7 +1060,8 @@ INVEST_CACHE_DIR=docs/tmp/screenshots/demo/data/cache \    # 缓存改落（不�
 |:-------|:-----|:-----|
 | 单次运行时各阶段耗时 | `perf_history.jsonl` + `scripts/perf-history.py` | 每次运行落一条（含 status/阶段/品种数），`perf-history` 出趋势表、P95/P99、离群归因 |
 | 端到端报告耗时门禁 | `scripts/test-perf-report.py --gate` | 主动压测 mock 管线，basic ≤60s（CI `perf-gate` job 阻塞） |
-| 阶段级耗时 | `PerfCollector.stage_progress` / `reporter.print_timing_summary()` | TUI 报告收尾会打印耗时排行 |
+| 阶段级耗时 | `PerfCollector.stage_progress` / `reporter.print_timing_summary()` | TUI 报告收尾会打印耗时排行；数据准备按 `行情与明细/穿透/因子暴露/行业 Beta/相关性矩阵/…` 逐子项计时 |
+| 写盘停顿 | `core/perf.warn_slow_write`（阈值 5s） | HTML/Excel 落盘超阈即 WARNING，带产物大小与路径（正常 0.2~0.4s，偶发 18s 属磁盘/挂载侧） |
 | 测试档位耗时 | `scripts/test-runner.py --mode bench --update-docs` | 14 档实测回填 `test-coverage.md`（发布子集四档见 §refresh） |
 | CPU 侧归因 | `time` 的 user/sys + `/proc/loadavg` | **先记环境再采信数字**：loadavg 1 分钟 > 核数/2 时该轮作废 |
 
