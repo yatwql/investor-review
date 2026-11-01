@@ -55,6 +55,7 @@
 | `perf-history.py` | 运维 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 并发预算段（档位/预算/峰值/缩容合计，标注跨档位不可直接比耗时）+ 时段聚合（耗时与费用合计/环比/缩容列）/机读输出（llm_cost、by_period 费用字段、CSV 增 budget/peak/clamps 三列）；实现拆在 `_perf_history/`——`stats.py` 统计原语 / `data.py` 派生 / `report.py` 渲染 / `cli.py` 入口，主入口只留 docstring 与 re-export） |
 | `probe.py` | 运维 | 探测统一入口（按 target 分发到 `_probes/` 子模块；新探针实现契约面登记即用） |
 | `eval-factor-zoo.py` | 评测 | 因子动物园目录评测（非生产代码；五个来源族各抽 5 个因子，评测 A 字段可得率 / B 与既有信号族增量 / C 全量计算耗时占比三项指标，A/B/C 全过才转正立项；子命令 catalog / fields / signals / timing / verdict / all，产物只落 `docs/tmp/factor-zoo/`；实现拆在 `_eval_factor_zoo/`） |
+| `eval-decision-quality.py` | 评测 | 投资决策质量待验证项回测（决策视界命中率 / 因子单因子 IC / 估值两口径区分度；判据预注册于脚本常量，样本门槛 100、IC 绝对值拒绝线 0.05；子命令 horizon / factor-ic / valuation / all，产物落 `docs/tmp/decision-quality/`） |
 | `_assets/` | 内部 | 视觉资产实现包（`social_preview.py` 预览图绘制与栅格化 / `svg_check.py` 架构图渲染体检） |
 | `_screenshots/` | 内部 | 演示截图实现包（`demo_workspace.py` 隔离工作区与报告 / `tui_frame.py` 帧文本折行保色与渲染 / `web_shot.py` CDP 封装 + `cdp_shot.mjs` / `xlsx_frame.py` Excel 页签 → HTML 网格 → PNG） |
 | `_shared/` | 内部 | 跨脚本共享设施包（`checklib.py` CLI 契约与输出/路径/区间解析；`traces_common.py` 两域共用痕迹词表） |
@@ -1180,6 +1181,20 @@ curl 对照命令：`curl -s "https://push2.eastmoney.com/api/qt/stock/get?secid
 不向生产模块注入代码（生产侧零改动）；穿透股票池只读复用（不重算穿透）；相关性复用
 `analysis.correlation` 的共享 Pearson 原语（防评测口径漂移）；评测产物**只落 `docs/tmp/factor-zoo/`**
 （git 忽略）。实现拆在 `_eval_factor_zoo/`（因子清单 / 指标计算 / 报告渲染）。
+
+**`eval-decision-quality.py` — 投资决策质量待验证项回测**
+
+三个阶段对应讨论稿 `docs/plan/investment-decision-quality.md` §8 的三项回测；判据与样本门槛在脚本常量预注册（跑完不回改，改判据须全量重跑）：
+
+```bash
+.venv/bin/python scripts/eval-decision-quality.py all          # 三阶段依序
+.venv/bin/python scripts/eval-decision-quality.py horizon     # 决策建议 5/20/60 日视界命中率与超额
+.venv/bin/python scripts/eval-decision-quality.py valuation   # 估值信号两口径（价格代理 / 真实 PE·PB）区分度
+```
+
+取数只经既有能力（`decision_settlement` 行情/指数序列 + `valuation_percentile` 口径函数 +
+`financial_indicator` 缓存链），不裸调 provider；只读账本与缓存，不写 `data/` 生产状态；
+产物只落 `docs/tmp/decision-quality/`（git 忽略）。首批评测结论见讨论稿 §8.1。
 
 ## 启动脚本
 

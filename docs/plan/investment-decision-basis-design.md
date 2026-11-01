@@ -1,7 +1,7 @@
 # 迭代设计：决策依据章与 LLM 章职责切分
 
 > 关联：`plan.md` → `plan-243`（实施任务）· 讨论稿 [`investment-decision-quality.md`](./investment-decision-quality.md) 的「章节归属结论」
-> 状态：设计稿定稿（未实施；实施前须先完成讨论稿待验证清单 V1~V7 的至少 V1/V3）
+> 状态：设计稿定稿（未实施；实施前置 V1/V3 已于 2026-11-02 完成回测——结论见讨论稿 `investment-decision-quality.md` §8.1：V1 样本不足仅记录、V3 两口径 5 日视界均判「叙述性维度」）
 > 红线：本稿为设计说明，不改代码、不改配置、不改提示语。
 
 ## 1. 定位
