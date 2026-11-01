@@ -86,7 +86,7 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 **回测接入（首批结论）**：估值分位按「已回测未通过」接入（R2 首版即真实结论态，`report/decision_basis.py` 模块常量登记、不新增配置键；两口径均无区分度 → 不在管线内计算真实 PE/PB 口径）；因子目录信号按「样本不足」态；V1 复跑触发（20 日成熟样本 ≥100，固定视界与账本动态视界对拍后切换）见设计稿 R0。
 **章节归属**：先以「行动建议」章内块形态（形态 A）落地「判断依据」（纯规则、零 LLM），LLM 章退回解读层；独立章节（形态 B）留作升级路径。
 **迭代计划**：R0~R7 八轮（设计稿 §4），每轮独立可验收、任一失败即停；LLM 章改造拆为 R6 语义增量与 R7 冲突措辞替换两刀，前后脚同版本发布。
-**质量门禁**：跨轮门禁见设计稿 §4——每轮 `dev-verify` 全绿 + 守护全绿 + 设计护栏 E 级 0 + 文档同步（`technical.md` 附录 H 契约与语义命名表、`test-coverage.md`、`folders.md`、`changelog.md`；R1 起补 `requirements.md` 的 R-OUT 条目与 `core/section_block_registry.py` 区块登记，R2 起在 `config/_feature_registry.py` 与 `how-to-config-reference.md` 登记 `decision_basis.enabled`）；累计完成后走 `release.py gate`；80 轮复盘记录见设计稿 §7。
+**质量门禁**：跨轮门禁见设计稿 §4——每轮 `dev-verify` 全绿 + 守护全绿 + 设计护栏 E 级 0 + 文档同步（`technical.md` 附录 H 契约与语义命名表、`test-coverage.md`、`folders.md`、`changelog.md`；R1 起补 `requirements.md` 的 R-OUT 条目与 `core/section_block_registry.py` 区块登记，R2 起在 `config/_feature_registry.py` 与 `how-to-config-reference.md` 登记 `decision_basis.enabled`）；累计完成后走 `release.py gate`。
 **验收**：R0~R7 逐轮验收全过；跨轮汇总口径见设计稿 §5（含回归：`enable_llm` 两态下该块输出逐字节一致、`decision_basis.enabled=false` 与基线快照逐字节一致）；回滚通道 `decision_basis.enabled` 可用。
 **事实位**：轮次计划与验收口径在设计稿维护，本表不重复。
 
