@@ -82,7 +82,8 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 #### `plan-243` 决策依据章与 LLM 章职责切分（实施）
 
 **现状**：设计定稿待实施，承接 `plan-242` 讨论稿「章节归属结论」；设计稿 [`investment-decision-basis-design.md`](../plan/investment-decision-basis-design.md)。
-**前置**：讨论稿待验证清单 V1（视界建议命中率）与 V3（估值两口径区分度）**已于 2026-11-02 完成回测**（`scripts/eval-decision-quality.py`，结论见讨论稿 §8.1——V1 样本不足仅记录、V3 两口径均无区分度）；前置已满足。
+**前置**：讨论稿待验证清单 V1/V2/V3 **已于 2026-11-02 同批完成回测**（`scripts/eval-decision-quality.py`，结论见讨论稿 §8.1——V1/V2 样本不足仅记录、V3 两口径 5 日视界均无区分度）；实施门禁 V1/V3 已满足。
+**回测接入（首批结论）**：估值分位按「已回测未通过」接入（R2 首版即真实结论态，`report/decision_basis.py` 模块常量登记、不新增配置键；两口径均无区分度 → 不在管线内计算真实 PE/PB 口径）；因子目录信号按「样本不足」态；V1 复跑触发（20 日成熟样本 ≥100，固定视界与账本动态视界对拍后切换）见设计稿 R0。
 **章节归属**：先以「行动建议」章内块形态（形态 A）落地「判断依据」（纯规则、零 LLM），LLM 章退回解读层；独立章节（形态 B）留作升级路径。
 **迭代计划**：R0~R7 八轮（设计稿 §4），每轮独立可验收、任一失败即停；LLM 章改造拆为 R6 语义增量与 R7 冲突措辞替换两刀，前后脚同版本发布。
 **质量门禁**：跨轮门禁见设计稿 §4——每轮 `dev-verify` 全绿 + 守护全绿 + 设计护栏 E 级 0 + 文档同步（`technical.md` 附录 H 契约与语义命名表、`test-coverage.md`、`folders.md`、`changelog.md`；R1 起补 `requirements.md` 的 R-OUT 条目，R2 起登记 `decision_basis.enabled`）；累计完成后走 `release.py gate`。

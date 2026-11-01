@@ -1,7 +1,7 @@
 # 迭代设计：决策依据章与 LLM 章职责切分
 
 > 关联：`plan.md` → `plan-243`（实施任务）· 讨论稿 [`investment-decision-quality.md`](./investment-decision-quality.md) 的「章节归属结论」
-> 状态：设计稿定稿（未实施；实施前置 V1/V3 已于 2026-11-02 完成回测——结论见讨论稿 `investment-decision-quality.md` §8.1：V1 样本不足仅记录、V3 两口径 5 日视界均判「叙述性维度」）
+> 状态：设计稿定稿（未实施；实施前置 V1/V3 已于 2026-11-02 完成回测，V2 同批完成——结论见讨论稿 `investment-decision-quality.md` §8.1：V1/V2 样本不足仅记录、V3 两口径 5 日视界均判「叙述性维度」；据此的回测结论接入见 §2.1 三态契约与 R2，V1 复跑触发见 R0）
 > 红线：本稿为设计说明，不改代码、不改配置、不改提示语。
 
 ## 1. 定位
@@ -28,8 +28,8 @@
   "available": true,
   "signals": [
     {"name": "估值分位", "direction": "bearish", "basis": "price_proxy",
-     "n_obs": 365, "n_backtest": null, "ic": null, "monotonic": null,
-     "note": "价格分位代理；未回测前不进方向轴"}
+     "n_obs": 365, "n_backtest": 117, "ic": 0.04, "monotonic": false,
+     "note": "价格分位代理；5 日视界回测未通过（叙述性维度），不进方向轴"}
   ],
   "risk_budget": {
     "single_max_pct": 0.20, "single_current_pct": 0.31, "breached": true,
@@ -40,7 +40,7 @@
     {"code": "022365", "rule": "止损线 -15%", "value": -10.88, "distance_pct": 4.12,
      "regime_note": "下跌段：单点阈值触发需叠加趋势确认"}
   ],
-  "confidence": {"level": "low", "reason": "insufficient_signals", "detail": "有效信号 2/5，其中 1 项为价格代理"},
+  "confidence": {"level": "low", "reason": "insufficient_signals", "detail": "有效信号 2/5（估值分位回测未通过，不计入）"},
   "settlement": {"window": [5, 20, 60], "recent": [{"date": "2026-10-27", "n": 6, "excess_by_window": {"5": 0.0018, "20": null}}]}
 }
 ```
@@ -50,7 +50,7 @@
 - `basis`、`n_obs`、`ic`/`monotonic` 三组字段为**必填**（可空但须显式给出）——缺一即视为该信号不可进方向轴。
 - `confidence` 由规则仲裁给出，**不是模型自评**，且**只描述「信号可信度」，不描述「建议胜率」**（后者属结算统计，不进该字段，避免用一个数混合两种语义）。取值规则：有效信号数 ≥3 且方向一致 → `mid`；方向分裂 → `low`（`reason=split_direction`）；有效信号 <3 → `low`（`reason=insufficient_signals`）；全部为口径代理 → `low`（`reason=all_proxy`）。不做加权投票（权重无依据）。
 - `basis` 取值域：`valuation_real` / `price_proxy` / `rule_based` / `stat_model` / `unknown`；`unknown` 不得进方向轴。
-- `discrimination` 由 `ic`（数值）+ `monotonic`（布尔）表达，未回测时统一 `null` 并在页面标注「未回测」，不得用主观先验填充。
+- `discrimination` 由 `ic`（数值）+ `monotonic`（布尔）表达，**三态如实标注，不得用主观先验填充**：①「未回测」——`ic`/`monotonic` 为 `null`，`note` 标「未回测」；②「样本不足」——仍为 `null`，`note` 标「样本不足 n=X（<100 不裁决）」（因子目录信号即此态，V2 回测已跑、单因子最大 n=19）；③「已回测」——填实测值并二分：通过（进方向轴）/ 未通过（`note` 标「回测未通过（叙述性维度）」，不进方向轴——估值分位两口径即此态，见讨论稿 `investment-decision-quality.md` §8.1）。回测结论登记机制见 R2。
 - **禁止读取任何 LLM 产出文本**（只读账本字段与确定性计算），保证与 LLM 章节开关零联动。
 
 ### 2.2 LLM 章（解读层契约）
@@ -130,6 +130,8 @@
 | 验收 | ① 同一决策可产出 3 条结算（5/20/60），`horizon_bars` 各自正确；② **结算事件按 `(decision_id, horizon_bars)` 唯一**——重复结算幂等、不产生重复行（现账本以「该决策是否已有 settlement」判重，多视界后必须改键，否则 5 日结算会让 20/60 日永远无法落账）；③ 5 日与 20 日之间不得互相「认领」已结算状态；④ 账本向后兼容（旧记录仍可按 5 日读，缺失的长视界显示「未到期」）；⑤ 保留期：长视界样本（60 日 ≈ 3 个月）在 730 天保留期内不受影响，但**滑动窗口会挤掉早期批次**——须在摘要里标注样本窗口；⑥ 结算不依赖报告生成（脚本可独立触发）；⑦ 单测覆盖多视界幂等与旧记录兼容；⑧ `perf_history` 无新增阶段 |
 | 风险与回滚 | 低：只增字段与结算路径；回滚=停止新视界写入，旧字段不受影响 |
 
+> **V1 复跑触发（回测侧）**：`scripts/eval-decision-quality.py horizon` 已固化判据（样本门槛 100、|IC| 0.05、三分位单调；改判据须全量重跑）。20 日视界成熟样本 ≥100 时复跑并把命中率写回讨论稿 `investment-decision-quality.md` §8.1；账本多视界结算（R0）与脚本侧固定视界为两套终点口径——基线同源（决策登记 `baseline_close`），账本取结算时点最新收盘、脚本取第 h 根 bar 收盘，以对拍一致为数据切换前提。首批读数见讨论稿 `investment-decision-quality.md` §8.1（5 日 n=61 命中率 0.5385、20 日 n=2、60 日 n=0，均未达裁决门槛）。
+
 ### R1. 骨架：行动章内块 + 契约空态（不含真实数据）
 
 | 项 | 内容 |
@@ -149,7 +151,7 @@
 | 改动面 | `report/decision_basis.py` 接 `signal_ledger`；`confidence` 仲裁（四枚举）；HTML/Excel 渲染两小节 |
 | 架构约束 | **代码类型判定中心化**（行业/品种判定走 `code_utils`）、**缓存读走原子读**（读账本快照）、**日志统一走 invest logger**、**渲染数据走模板 context**、**pipeline_data Schema 契约**、**时间距离按交易日计** |
 | 设计契约 | 信号可信度用 `data-status` 组件（ok/warn/info 语义色，不用涨跌域色）；数值列 `tabular-nums` 右对齐；无效信号标「仅参考」用中性态，不染状态色 |
-| 验收 | ① 信号字段 `basis`/`n_obs`/`ic`/`monotonic` 齐全，缺任一则该信号**不进方向轴**（负向用例）；② 未回测显示「未回测」而非先验值（契约测试）；③ 可信度四枚举（含 `reason`）各有单测；④ **零 LLM 依赖**：装配函数签名不含 LLM 参数，且 `enable_llm=True/False` 输出逐字节一致（注：生成层在 `enable_llm=False` 时走 both 路径，该块不参与任何 LLM 门控判断）；⑤ 三渠道：HTML/Excel 呈现，CLI/TUI 不出现（断言） |
+| 验收 | ① 信号字段 `basis`/`n_obs`/`ic`/`monotonic` 齐全，缺任一则该信号**不进方向轴**（负向用例）；② 未回测显示「未回测」而非先验值（契约测试）；③ 可信度四枚举（含 `reason`）各有单测；④ **零 LLM 依赖**：装配函数签名不含 LLM 参数，且 `enable_llm=True/False` 输出逐字节一致（注：生成层在 `enable_llm=False` 时走 both 路径，该块不参与任何 LLM 门控判断）；⑤ 三渠道：HTML/Excel 呈现，CLI/TUI 不出现（断言）；⑥ **首批回测结论接入**：回测结论以 `report/decision_basis.py` 模块常量登记（含来源脚本、回测日期、讨论稿 `investment-decision-quality.md` §8.1 指针），不新增配置键、不写运行时账本、不硬编码散落各处——估值分位按「已回测未通过」态渲染（`n_backtest=117`、`ic≈0.04`、`monotonic=false`，两口径同判无区分度故**不在管线内计算真实 PE/PB 口径**，口径透明由 `basis=price_proxy` 表达）、因子目录信号按「样本不足」态（`null` + note），复跑回测出新结论后随代码常量更新（changelog 记录） |
 | 风险与回滚 | 中：信号口径若标注错误会误导 → 未回测一律「未回测」，宁可空着 |
 
 ### R3. 风险预算块（上限 vs 现状）
@@ -236,7 +238,7 @@
 | 架构 | 代码类型判定中心化 / 章节序号与显示名不硬编码 / 日志统一走 invest logger / 渲染数据走模板 context / pipeline_data Schema 契约 / 提示词变更即指纹变更 / 时间距离按交易日计 —— 逐轮落实（见各轮「架构约束」行）；形态 A 不新增章节 key；形态 B 新增时注册表三向对账通过 |
 | 设计 | Data States 三档空态口径、语义色、字阶/间距档、涨跌域与状态域分离、暗色同步、打印展开——均按 `DESIGN.md` 验收 |
 | 质量 | `dev-verify` 全绿；十守护全绿；`check-style-guardrails` E 级 0；新增 token 两面登记（本节为**全局判定口径**，逐轮检查项见「跨轮质量门禁」） |
-| 红线 | 未回测信号必须标「未回测」且不进方向轴；空态不得显示「置信度高」；块内零 LLM 文本 |
+| 红线 | 信号区分度三态如实标注（未回测 / 样本不足 / 回测未通过均不进方向轴）；空态不得显示「置信度高」；块内零 LLM 文本 |
 | 回归 | `enable_llm=False` 与 `True` 时该块输出逐字节一致；`decision_basis.enabled=false` 时全报告与其基线快照逐字节一致 |
 
 ## 6. 风险与回滚
@@ -244,7 +246,7 @@
 | 风险 | 缓解 |
 |:---|:---|
 | 新章与「行动建议」章内容重复、用户困惑 | 明确分工：行动建议=算法动作，决策依据=材料与约束；文案互引 |
-| `discrimination` 需回测才可信，早期只能用先验 | 初版标「先验，未回测」，回测完成后更新 |
+| `discrimination` 需回测才可信 | 无结论一律「未回测/样本不足」不填先验；估值分位已有首批结论（两口径均无区分度，讨论稿 `investment-decision-quality.md` §8.1）按「已回测未通过」接入，复跑达到裁决门槛后随 R2 的模块常量更新 |
 | LLM 章转为解读层后「没结论」被用户视为退步 | 决策依据章承担「结论」职责；LLM 章定位为「为什么与什么时候会错」 |
 | 章首过重（形态 A） | 默认折叠 + summary 一句话结论；只放一块，详情引用既有章节数据 |
 | 可发现性弱（形态 A） | 块标题固定为「判断依据」，并在行动章标题副行补「依据 · 信号 · 纪律 · 调仓 · 归因」 |
