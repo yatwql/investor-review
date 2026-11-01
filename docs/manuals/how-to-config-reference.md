@@ -432,6 +432,9 @@ TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一�
 | `batch.fund_style_workers` | `8` | 基金重仓股市值/PE 批量并发数（push2 降级路径） |
 | `batch.factor_workers` | `6` | 风格因子/行业 Beta 的持仓历史与指数 K 线并发数 |
 
+> `batch` 段的数值键可写成 `null`（或直接省略）：表示**跟随默认值**（见上表），只有显式数字才覆盖。
+> 好处是升级后默认值调优（如 `datasink_workers` 2→3）能直接生效，不必逐项手改。
+
 ```json
 "batch": {
   "max_total_workers": 15,

@@ -870,6 +870,14 @@ class TestWorkerCountClamp:
         monkeypatch.setattr(batch.os, "cpu_count", lambda: 32)
         assert batch.get_batch_worker_count("fund_workers", 3) == 1
 
+    def test_null_value_follows_default(self, monkeypatch):
+        """`null`/省略 = 跟随默认值（默认调优能直接生效，无需逐项手改配置文件）。"""
+        import src.python.fetcher.batch as batch
+
+        self._patch_config(monkeypatch, {"datasink_workers": None, "max_total_workers": 15})
+        monkeypatch.setattr(batch.os, "cpu_count", lambda: 16)
+        assert batch.get_batch_worker_count("datasink_workers", 3) == 3
+
     def test_unknown_cpu_count_falls_back_to_one(self, monkeypatch):
         import src.python.fetcher.batch as batch
 
