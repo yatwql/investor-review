@@ -41,13 +41,6 @@ from src.python.core.trading_calendar import (
 )
 
 
-def _market_price_workers() -> int:
-    """实时取价并发数（batch.market_price_workers，默认 8；弱机器可下调）。"""
-    from src.python.fetcher.batch import get_batch_worker_count
-
-    return get_batch_worker_count("market_price_workers", 8)
-
-
 logger = logging.getLogger("invest")
 
 # 占位符 — 非 QDII 或无参考净值时使用
@@ -434,9 +427,11 @@ def _generate_details(holdings: list[Holding], today_str: str = "") -> list[Deta
 
     # 4. 并行 HTTP 路径
     if live_holdings:
+        from src.python.fetcher.batch import get_batch_worker_count
+
         with worker_pool(
             "batch:market_price",
-            _market_price_workers(),
+            get_batch_worker_count("market_price_workers", 8),  # 弱机器可配小
             thread_name_prefix="market_price",
         ) as executor:
             future_map = {}

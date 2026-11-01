@@ -429,7 +429,8 @@ def get_batch_worker_count(config_key: str, default: int = 3) -> int:
             max_total = 15
 
         # 档位缩放（high=1.0 → 原样；medium=0.5 / low=0.25 按比例缩，至少 1）
-        requested = scale_workers(int(requested))
+        raw_requested = int(requested)
+        requested = scale_workers(raw_requested)
         clamped = min(int(requested), int(max_total))
         # CPU 钳位：并发线程做的是网络等待 + 解析，弱机器（2~4 核）按 max_total 放行
         # 会开出一堆争 CPU 的线程反而更慢；以核数为上界，配置可以更小但不能更大。
@@ -439,8 +440,9 @@ def get_batch_worker_count(config_key: str, default: int = 3) -> int:
             clamped = cpu
         if clamped != int(requested):
             logger.warning(
-                "[batch] %s 请求 %d workers 超过上限 %d，已钳位至 %d",
+                "[batch] %s 请求 %d workers（档位缩放后 %d）超过上限 %d，已钳位至 %d",
                 config_key,
+                raw_requested,
                 int(requested),
                 int(max_total),
                 clamped,

@@ -14,21 +14,16 @@ from datetime import datetime
 
 from src.python.core.code_utils import is_six_digit_code
 from src.python.core.concurrency import worker_pool
+from src.python.core.perf import SLOW_SPAN_WARN_SECONDS
 from src.python.report.progress import ProgressReporter
-
-
-def _factor_workers() -> int:
-    """风格因子/行业 Beta 并发数（batch.factor_workers，默认 6；弱机器可下调）。"""
-    from src.python.fetcher.batch import get_batch_worker_count
-
-    return get_batch_worker_count("factor_workers", 6)
 
 
 logger = logging.getLogger("invest")
 
 #: 单路取数慢告警阈值（秒）：实测 9.4s 的一路 tencent K 线会把整个因子阶段拖到 10s+，
 #: 而此前既无单路耗时也无告警，事后只能看到「因子暴露 10.5s」这一个总数。
-_SLOW_FETCH_WARN_SECONDS = 5.0
+#: 与落盘慢告警共用同一阈值源（core.perf），避免两处数字各改一半。
+_SLOW_FETCH_WARN_SECONDS = SLOW_SPAN_WARN_SECONDS
 
 
 def _timed_fetch(fn, *args, label: str = "", **kwargs):
@@ -145,13 +140,17 @@ def compute_factor_exposure_data(
         holdings_bars: dict[str, dict] = {}
         factor_klines: dict[str, list[dict]] = {}
         _n = len(holdings)
+        from src.python.fetcher.batch import get_batch_worker_count
+
         with worker_pool(
             "batch:orch_factor",
-            min(_factor_workers(), max(1, _n + len(FACTOR_INDICES))),
+            min(get_batch_worker_count("factor_workers", 6), max(1, _n + len(FACTOR_INDICES))),
             thread_name_prefix="orch_factor",
         ) as _pool:
             bar_futs = {
-                _pool.submit(_timed_fetch, _fetch_holding_bars, h.code, h.name, _days, label=f"持仓 K 线 {h.code} {h.name}"): h
+                _pool.submit(
+                    _timed_fetch, _fetch_holding_bars, h.code, h.name, _days, label=f"持仓 K 线 {h.code} {h.name}"
+                ): h
                 for h in holdings
             }
             idx_futs = {
@@ -279,13 +278,17 @@ def compute_industry_beta_data(
         # ── 3. 组合 as-if 日收益（并行拉取持仓 K 线） ──
         holdings_bars: dict[str, dict] = {}
         _n = len(holdings)
+        from src.python.fetcher.batch import get_batch_worker_count
+
         with worker_pool(
             "batch:orch_ind",
-            min(_factor_workers(), max(1, _n)),
+            min(get_batch_worker_count("factor_workers", 6), max(1, _n)),
             thread_name_prefix="orch_ind",
         ) as _pool:
             _futs = {
-                _pool.submit(_timed_fetch, _fetch_holding_bars, h.code, h.name, _days, label=f"持仓 K 线 {h.code} {h.name}"): h
+                _pool.submit(
+                    _timed_fetch, _fetch_holding_bars, h.code, h.name, _days, label=f"持仓 K 线 {h.code} {h.name}"
+                ): h
                 for h in holdings
             }
             for _fut in _futs:
@@ -307,11 +310,13 @@ def compute_industry_beta_data(
         if mapped_industries:
             with worker_pool(
                 "batch:orch_ind_idx",
-                min(4, _factor_workers()),
+                min(4, get_batch_worker_count("factor_workers", 6)),
                 thread_name_prefix="orch_ind_idx",
             ) as _pool:
                 _futs = {
-                    _pool.submit(_timed_fetch, fetch_index_history, INDUSTRY_INDEX_MAP[i], _days, label=f"行业指数 K 线 {i}"): i
+                    _pool.submit(
+                        _timed_fetch, fetch_index_history, INDUSTRY_INDEX_MAP[i], _days, label=f"行业指数 K 线 {i}"
+                    ): i
                     for i in mapped_industries
                 }
                 for _fut in _futs:

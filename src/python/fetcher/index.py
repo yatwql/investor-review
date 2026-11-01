@@ -24,13 +24,6 @@ from src.python.core.retry import STRATEGY_FIXED, RetryPolicy, retry_transient
 from src.python.providers import sina, tencent
 
 
-def _index_workers() -> int:
-    """指数历史批量并发数（batch.index_workers，默认 5；弱机器可下调）。"""
-    from src.python.fetcher.batch import get_batch_worker_count
-
-    return get_batch_worker_count("index_workers", 5)
-
-
 logger = logging.getLogger("invest")
 
 #: 上游指数日线单次返回上限（腾讯/新浪均约 2000 根）：结果达到该长度即视为
@@ -94,9 +87,11 @@ def _fetch_indices_from_tencent(uncached: list[str]) -> dict[str, dict[str, Any]
             return index_code, data
         return None
 
+    from src.python.fetcher.batch import get_batch_worker_count
+
     with worker_pool(
         "batch:index_history",
-        _index_workers(),
+        get_batch_worker_count("index_workers", 5),  # 弱机器可配小
         thread_name_prefix="index_history",
     ) as executor:
         futures = {executor.submit(_fetch_one, code): code for code in uncached}

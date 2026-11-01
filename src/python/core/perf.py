@@ -46,8 +46,11 @@ from src.python.core.jsonl_store import append_jsonl_atomic
 
 logger = logging.getLogger("invest")
 
-#: 落盘阶段慢告警阈值（秒）：正常产物 0.2~0.4s；实测偶发 18s（磁盘/fsync 等待）
-SLOW_WRITE_WARN_SECONDS = 5.0
+#: 慢阶段告警阈值（秒）：正常产物/取数 0.2~0.4s；实测写盘偶发 18s、单路取数 9.4s
+SLOW_SPAN_WARN_SECONDS = 5.0
+
+#: 兼容旧名（写盘侧历史引用；新代码用 SLOW_SPAN_WARN_SECONDS）
+SLOW_WRITE_WARN_SECONDS = SLOW_SPAN_WARN_SECONDS
 
 
 def warn_slow_write(label: str, seconds: float, path: Any = None) -> None:

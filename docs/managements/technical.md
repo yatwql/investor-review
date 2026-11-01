@@ -2232,13 +2232,13 @@ report/ 渲染                   # 模板 context 传递（C14）→ 风格表 +
 | 约束 | 适配方式 |
 |:-----|:---------|
 | **C1** (代码类型判定中心化) | 因子代理指数代码统一走 `core/code_utils.py::is_index_code()` 判定；因子指数**不作为 `_A_INDICES` 成员**（避免污染实时指数行情循环与报告"指数对比"章节噪声），代码集合定义为分析模块内部常量 |
-| **取数并发** | 风格因子与行业 Beta 的「持仓 K 线 + 指数 K 线」同池并发（互不依赖，不再串行等待）；单路取数经 `_timed_fetch` 记耗时，超 5s WARNING（实测一路 9.4s 慢请求曾把阶段拖到 10.5s 而日志无痕） | `report/_report_factor_metrics.py` |
-
 | **C6** (Provider Chain 必经) | 指数历史 K 线经 `fetcher/index.py::fetch_index_history()` 复用 `history_index` chain（`["tencent", "eastmoney", "sina"]`），不绕过 Chain 直调 Provider。Sina 备用链路当前 404（降级接受），故补东方财富 push2his 为实际可用的第二源；腾讯与东方财富均故障时因子章节落 §1.4.5 数据不足分支 |
 | **C7** (报告序号可配置) | 在 `core/registry.py` 的 `_REPORT_SECTION_DEFAULT` 注册条目（type=`fund_deep_analysis`、data_flag=`style_factor_data`），支持用户通过 `config.json` 自定义序号与开关，不硬编码序号。注册表 19 个模块序号连续（1~19），`style_factor` 为基金深度分析一章四区块（风格表 + 风格因子回归 + 行业 Beta 子表 + 因子目录区块） |
 | **C14** (渲染期数据不可写入模块级全局变量) | 风格与因子数据通过模板 `render()` 的 context 参数传递，不写入 `_ENV.globals` 或模块级 dict |
 | **C19** (pipeline_data Schema 契约) | 新增 `style_factor_data` 键（类型 `dict`，内嵌 `industry_beta` 子键），键结构见附录 H，先定义类型再使用 |
 | **§1.4.5** (数据降级治理) | 区分两分支：① **数据不足**——因子指数历史不足 36 期或有效样本 < 36，标记 `style_factor_data.available=false`，显示"数据不足"占位文本，**不走 DegradationTracker**（系数据量不足，非故障）；② **数据源故障**——`fetch_index_history` 返回空（chain 全失败），走 DegradationTracker 记录 T2 降级事件，显示"数据源暂不可用"，与数据不足文案区分。行业 Beta 子表独立降级（`industry_beta=None` 开关关闭隐藏 / `available=false` 标题+占位），**绝不输出误导性数字** |
+
+> **取数并发与慢告警**：风格因子/行业 Beta 的「持仓 K 线 + 指数 K 线」同池并发（互不依赖，不再串行等待）；单路取数经 `_timed_fetch` 记耗时，超 5s WARNING（实测一路 9.4s 慢请求曾把阶段拖到 10.5s 而日志无痕）。
 
 ##### 区块三：行业 Beta 子表
 

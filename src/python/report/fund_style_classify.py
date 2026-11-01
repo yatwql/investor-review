@@ -22,13 +22,6 @@ from src.python.report.fund_style_base import (
 )
 
 
-def _fund_style_workers() -> int:
-    """基金重仓股市值/PE 批量并发数（batch.fund_style_workers，默认 8）。"""
-    from src.python.fetcher.batch import get_batch_worker_count
-
-    return get_batch_worker_count("fund_style_workers", 8)
-
-
 logger = logging.getLogger("invest")
 
 
@@ -265,9 +258,11 @@ def _batch_tencent_extended(codes: list[str]) -> dict[str, dict[str, Any]]:
     if not codes:
         return {}
     results: dict[str, dict[str, Any]] = {}
+    from src.python.fetcher.batch import get_batch_worker_count
+
     with worker_pool(
         "batch:fund_style",
-        _fund_style_workers(),
+        get_batch_worker_count("fund_style_workers", 8),  # 弱机器可配小
         thread_name_prefix="fund_style",
     ) as ex:
         fut_map = {ex.submit(_tencent_extended, c): c for c in codes}

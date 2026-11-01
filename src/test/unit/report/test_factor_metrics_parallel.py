@@ -90,7 +90,9 @@ class TestFactorFetchParallelism:
             return _bars()
 
         monkeypatch.setattr(rfm, "_fetch_holding_bars", _slow_holding)
-        monkeypatch.setattr("src.python.fetcher.index.fetch_index_history", lambda code, days=90, start_from=None: _bars())
+        monkeypatch.setattr(
+            "src.python.fetcher.index.fetch_index_history", lambda code, days=90, start_from=None: _bars()
+        )
 
         with caplog.at_level(logging.WARNING, logger="invest"):
             rfm.compute_factor_exposure_data([_holding("600900", "长江电力")], {}, cast(ProgressReporter, _Reporter()))
