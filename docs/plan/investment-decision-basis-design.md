@@ -1,6 +1,6 @@
 # 迭代设计：决策依据章与 LLM 章职责切分
 
-> 关联：`plan.md` → `plan-242`（讨论稿）· 讨论稿 [`investment-decision-quality.md`](./investment-decision-quality.md) 的「章节归属结论」
+> 关联：`plan.md` → `plan-243`（实施任务）· 讨论稿 [`investment-decision-quality.md`](./investment-decision-quality.md) 的「章节归属结论」
 > 状态：设计稿定稿（未实施；实施前须先完成讨论稿待验证清单 V1~V7 的至少 V1/V3）
 > 红线：本稿为设计说明，不改代码、不改配置、不改提示语。
 
