@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.16.15-dev
-> **编号源**：`rf-next = 1023`（新增问题提出后更新为 +1；已用最大 rf-1022，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1024`（新增问题提出后更新为 +1；已用最大 rf-1023，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -50,6 +50,7 @@
 
 | # | 问题 | 修复 |
 |---|------|------|
+| **rf-1023** | 事件窗为 `sh000012`（中证全债）取 K 线：tencent SSL 握手白等 10s、东财/新浪同样 0 条，事件窗装配被拖到 10.6s（占当轮 LLM+新闻 18.3s 的 58%），且每轮重复；事件窗取数无单路耗时/告警 | ① 指数历史加「全链空」两级负缓存：确定性空 12h（`idx_hist_miss`）、含传输失败 1h 短退避（`idx_hist_backoff`），按 `chain:code` 隔离、非空不写；② 事件窗基准取数抽成可测工厂：同码 memo、无 K 线债券基准（`sh000012`）直接按缺基准降级不发请求、单路超 5s 打 `[event_impact] 基准指数取数偏慢` WARNING；4 例负缓存回归 + 3 例事件窗取数回归；缓存类型/文档四处同步 |
 | **rf-1022** | 技术债 4 处：① `technical.md` 风格因子「架构约束遵从」表中多出一条非约束行 + 空行，表格被截断；② 慢告警阈值 5.0s 两处各写一份（`perf.SLOW_WRITE_WARN_SECONDS` 与因子模块 `_SLOW_FETCH_WARN_SECONDS`），调一处漏一处；③ `_index_workers` / `_market_price_workers` / `_fund_style_workers` / `_factor_workers` 四个近同构包装函数各写一遍；④ 并发钳位告警打印的是「档位缩放后」的请求值，读者无法还原自己配的数 | ① 表格为纯约束行，并发/慢告警说明置于表后注记（doc-drift 通过）；② 阈值单源 `perf.SLOW_SPAN_WARN_SECONDS`，写盘侧保留旧名别名、因子模块引用同一常量；③ 删除四个包装，调用点直接 `get_batch_worker_count(key, default)`（带「弱机器可配小」注释）；④ 告警改为「请求 N（档位缩放后 M）」；`dev-verify` 8907 通过 |
 | **rf-1021** | 因子暴露取数串行 + 单路取数无耗时/告警盲区：实测因子暴露 10.48s，其中 9.4s 是「持仓 K 线全部回来后才开始拉因子指数 K 线」的空等（两组互不依赖）；单路取数无计时，事后只能看到阶段总数，无法定位是哪只标的/哪个指数 | 两组取数合并到同一 `worker_pool` 并发发出（worker = min(factor_workers, 持仓数 + 因子指数数)），墙钟取两组各自最慢值（非两组之和）；新增 `_timed_fetch` 单路计时，超 5s 打 WARNING（带标的标签与耗时），行业 Beta 的两路取数同样接入；2 例回归（并发墙钟 < 0.7×串行基线、慢路告警含标的） |
 | **rf-1019** | 并发只有「逐池上限」没有「进程级预算」：各池各自 `min(请求, max_total_workers)`，多池叠加实测可达 15+ 线程；而配置注释/文档把 `max_total_workers` 写成「全局 batch 线程硬上限」，与实现不符；弱机器依赖核数钳位兜底 | 新增 `core/concurrency.GOVERNOR`：参与池（`BatchDispatcher` + `worker_pool`）建池时从共享预算分配，不足缩到至少 1 并 WARNING（不抢占已运行池）；预算 = min(配置 max_total_workers, 核数)；每份报告由 `PerfCollector` 重置观测并把 `concurrency_budget/peak/clamps` 写入 perf_history；文档表述为「两层上界（逐池 + 进程级）」；9 例回归（预算解析/缩容告警/同名幂等/释放/worker_pool/快照计数）+ conftest 自动重置账本 |

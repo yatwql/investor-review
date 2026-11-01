@@ -345,3 +345,52 @@ def test_complete_window_summary_has_no_partial_line():
         }
     )
     assert "后窗未满" not in "\n".join(view["summary_lines"])
+
+
+class TestDefaultIndexFetcher:
+    """事件窗默认基准取数：无 K 线债券指数跳过、单路慢告警、同码 memo。"""
+
+    def test_bond_index_skipped_without_fetch(self, monkeypatch):
+        from src.python.report import event_impact_panel as ep
+
+        calls: list[str] = []
+        monkeypatch.setattr(
+            "src.python.fetcher.index.fetch_index_history",
+            lambda code, days=365: calls.append(code) or [{"date": "2026-09-01", "close": 1.0}],
+        )
+        fetch = ep._make_default_index_fetcher()
+        assert fetch("sh000012") == []
+        assert calls == [], "中证全债无 K 线数据，不应发起取数（省一次 10s 白等）"
+
+    def test_slow_index_logs_warning(self, monkeypatch, caplog):
+        import logging
+        import time
+
+        from src.python.report import event_impact_panel as ep
+
+        def _slow(code, days=365):
+            time.sleep(0.03)
+            return [{"date": "2026-09-01", "close": 1.0}]
+
+        monkeypatch.setattr("src.python.fetcher.index.fetch_index_history", _slow)
+        monkeypatch.setattr(ep, "SLOW_SPAN_WARN_SECONDS", 0.01)
+
+        fetch = ep._make_default_index_fetcher()
+        with caplog.at_level(logging.WARNING, logger="invest"):
+            fetch("sh000300")
+
+        messages = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("基准指数取数偏慢" in m and "sh000300" in m for m in messages), messages
+
+    def test_same_code_fetched_once(self, monkeypatch):
+        calls: list[str] = []
+        monkeypatch.setattr(
+            "src.python.fetcher.index.fetch_index_history",
+            lambda code, days=365: calls.append(code) or [{"date": "2026-09-01", "close": 1.0}],
+        )
+        from src.python.report import event_impact_panel as ep
+
+        fetch = ep._make_default_index_fetcher()
+        fetch("sh000300")
+        fetch("sh000300")
+        assert calls == ["sh000300"], "同码 memo，一轮只取一次"

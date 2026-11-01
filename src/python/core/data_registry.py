@@ -425,6 +425,18 @@ _CACHE_ONLY_REGISTRY: tuple[DataModuleDef, ...] = (
         cache_prefixes=("hold_qmiss_",),
         cache_ttl=6 * 3600,
     ),
+    DataModuleDef(
+        "指数历史全链空（确定性）",
+        "idx_hist_miss",
+        cache_prefixes=("idx_hist_miss_",),
+        cache_ttl=12 * 3600,
+    ),
+    DataModuleDef(
+        "指数历史全链空（含传输失败）",
+        "idx_hist_backoff",
+        cache_prefixes=("idx_hist_backoff_",),
+        cache_ttl=3600,
+    ),
     # 与上一条**语义不同**：上一类是「源侧确认没有清单」（确定性，6h），本条是
     # 「这次探测传输级挂起了」（瞬时，30min 退避）——探测本身只是取数优选路径，
     # 挂起一次白等 20s，短退避即可止住「每份报告都再撞一次」。

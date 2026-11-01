@@ -302,6 +302,8 @@
 | `report_symbol_miss` | `report_symbol_miss_{symbol}.json` | 6h | — | 标的正文缺失负缓存（章节阶 + 备源均无正文） |
 | `report_sections_miss` | `report_sections_miss_{doc_id}.json` | 6h | — | 章节清单不可得负缓存（源侧应答但无可用清单，避免每份报告重探 `/sections`） |
 | `hold_qmiss` | `hold_qmiss_{code}{YYYYMM}.json` | 6h | — | 基金季报空季度负缓存（jjcc/zqcc 双通道均无持仓，跳过重探） |
+| `idx_hist_miss` | `idx_hist_miss_{chain}:{code}.json` | 12h | — | 指数历史全链空（各源应答但无数据，确定性） |
+| `idx_hist_backoff` | `idx_hist_backoff_{chain}:{code}.json` | 1h | — | 指数历史全链空且含传输失败（短退避，恢复后自动重取） |
 | `report_sections_backoff` | `report_sections_backoff_{doc_id}.json` | 30min | — | 章节清单**探测失败**的短退避（传输级挂起，成功后立即解除；与上一条语义不同） |
 
 ##### 历史走势类
