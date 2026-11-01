@@ -14,6 +14,7 @@
 - **实施任务立项（plan-243）**：`plan.md` 新增 `plan-243` 决策依据章与 LLM 章职责切分（实施），承接 plan-242 讨论稿「章节归属结论」与设计稿 [`investment-decision-basis-design.md`](../plan/investment-decision-basis-design.md) 的 R0~R7 迭代计划；前置为讨论稿 V1/V3 回测；plan-242 保持仅探讨定位，`plan-next` 更新为 244。纯文档变更，无代码/配置/提示语改动。
 - **决策质量首批回测（plan-243 前置）**：新增 `scripts/eval-decision-quality.py`（决策视界命中率 / 因子单因子 IC / 估值两口径区分度；判据预注册：视界 5/20/60 交易日、样本门槛 100、|IC| 拒绝线 0.05、三分位单调）+ 单元测试；结论回写讨论稿 §8.1/§8.2——V1/V2 样本不足仅记录不裁决，V3 5 日视界两口径（n=117）均判「叙述性维度」；plan-243 实施前置 V1/V3 完成。
 - **迭代设计按首批回测修订（plan-243）**：设计稿 `investment-decision-basis-design.md` 接入回测结论——§2.1 `discrimination` 升为三态契约（未回测 / 样本不足 / 已回测通过·未通过）并更新信号与可信度示例，R0 补 V1 复跑触发与固定/动态视界对拍口径，R2 补回测结论登记机制（模块常量、不新增配置键）与首版渲染态，§5 红线与 §6 风险表同步；`plan.md` plan-243 条目同步（前置改为 V1~V3 同批完成 + 新增「回测接入」行）。
+- **plan-243 设计 80 轮复盘**：设计稿新增 §7 复盘记录（33 轮发现 → 18 项整改：confidence 四枚举规则重写〔有效信号定义/short-circuit 仲裁/首版不产 high/unknown→暂不可判〕、配置与文件实名（`rebalance.threshold`、`discipline.*`、`analysis/trade_discipline.py`、`action_section.html`/`action_sheet.py`）、§3 冗余行合并与 `enable_action` 容器联动、R1 Excel 无折叠概念与验收重编号、门禁补十守护/edge/浮点/LLM mock/移动档核验、术语统一「信号可信度」）；plan-243 条目门禁行同步。
 
 ## 归档
 
