@@ -16,11 +16,11 @@ CLI 命令行模式无需 TUI 菜单界面，通过命令行参数驱动，适�
 - [9. 使用示例](#9-使用示例) · [10. 常用命令速查](#10-常用命令速查)（[10.1 TUI 菜单 → CLI 命令对照](#101-tui-菜单--cli-命令对照) · [10.2 一键快捷入口](#102-一键快捷入口)）
 - [11. 退出码含义](#11-退出码含义) · [12. 最佳实践](#12-最佳实践)（[12.1 缓存预热](#121-缓存预热) · [12.2 报告输出路径](#122-报告输出路径) · [12.3 网络退避策略](#123-网络退避策略) · [12.4 性能历史自动收集](#124-性能历史自动收集) · [12.5 日志轮转](#125-日志轮转)）
 - [13. 定时任务](#13-定时任务)（[13.1 Windows 任务计划程序](#131-windows-任务计划程序) · [13.2 Linux crontab](#132-linux-crontab) · [13.3 定时任务排障](#133-定时任务排障) · [13.4 任务完成通知（notify）](#134-任务完成通知notify)）
-- [14. `config` 子命令（读写共享配置）](#14-config-子命令读写共享配置)
+- [14. `config` 子命令（读写共享配置）](#14-config-子命令读写共享配置) · [15. `settle-decisions` 子命令（决策账本结算）](#15-settle-decisions-子命令决策账本结算)
 
 ## 1. 命令结构
 
-CLI 命令分两层：**全局参数**（位于子命令之前）+ **子命令**（`report` / `cache` / `whatif` / `config` / `check-sources` / `health-history` / `view-logs` / `doctor` / `cassettes`）。
+CLI 命令分两层：**全局参数**（位于子命令之前）+ **子命令**（`report` / `cache` / `whatif` / `config` / `check-sources` / `health-history` / `view-logs` / `doctor` / `cassettes` / `settle-decisions`）。
 
 > 其中 `cassettes` 是**开发维护命令**（列出/校验已录制的数据源真实响应，供离线回归使用），日常使用报告功能不需要它——详见 [开发者指南](../managements/developer-guide.md) → CLI 子命令。
 
@@ -610,3 +610,23 @@ cron / 任务计划运行只有退出码，失败也无人知晓。config.json `
 **一次性 vs 持久化**：`config set` 是**持久化**写入；只想改这一次命令的产物，用全局参数 `--chapter` / `--feature` / `--anonymize`（零写盘）。`config list/get` 显示的是**当前生效值**——若同一条命令带了 `--chapter` / `--feature` / `--anonymize`，会看到覆写后的值。
 
 **调度说明**：`config set scheduler.*` 只写配置；实际触发由 **Web 服务常驻调度线程**执行（需 Web 进程在运行）。纯 headless 场景继续用 cron / 任务计划程序调用 `report`（见 [§13](#13-定时任务)）。
+
+## 15. `settle-decisions` 子命令（决策账本结算）
+
+`settle-decisions` 对决策账本（`decision_reflection` 实验功能）中**已到期**的方向性决策做多视界结算（默认 5/20/60 交易日各一），**不依赖报告生成**，可配合 cron / 任务计划程序独立推进长视界样本积累。
+
+| 参数 | 用途 |
+|:--|:--|
+| `--report-date YYYY-MM-DD` | 结算运行所在交易日（缺省本地当日） |
+| `--horizons 5,20,60` | 目标视界列表，逗号分隔（缺省 5/20/60；低于 5 按 5 计） |
+
+```bash
+# 按默认视界（5/20/60）结算全部到期决策
+.venv/bin/python -m src.python.cli settle-decisions
+
+# 只结算短视界 / 指定结算运行日
+.venv/bin/python -m src.python.cli settle-decisions --horizons 5,20
+.venv/bin/python -m src.python.cli settle-decisions --report-date 2026-11-02
+```
+
+**幂等语义**：判重键为「决策 × 目标视界」——同一视界只结一次，重复执行不产生重复记录；未到期或行情暂不可得的视界单独暂缓，序列增长后下次运行自动回补。结算结果只写决策账本（`data/state/decision_ledger.jsonl`），不产出报告文件；报告运行时也会自动结算（同一幂等机制，两条路径互不重复）。开关 `decision_reflection` 未开启时命令直接提示并返回成功。

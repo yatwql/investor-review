@@ -303,6 +303,79 @@ class TestFoldStats:
             assert c["accuracy"] == 0.5
 
 
+class TestFoldMultiHorizon:
+    """多视界 fold：(decision_id, 目标视界) 关联、口径基准与 by_horizon 统计。"""
+
+    @staticmethod
+    def _seed(lp, *, target_horizons=(5, 20), legacy=False):
+        did = dl.append_decision(
+            code="600000",
+            name="x",
+            direction=dl.DIRECTION_SHORT,
+            carrier=dl.CARRIER_EXPERT_REVIEW,
+            baseline_close=10.0,
+            path=lp,
+        )
+        for h in target_horizons:
+            kwargs = {} if legacy else {"target_horizon": h}
+            dl.append_settlement(
+                decision_id=did,
+                raw_return=-0.02,
+                outcome=dl.OUTCOME_HIT,
+                direction_hit=True,
+                bench_return=-0.01,
+                horizon_bars=h + 2,
+                path=lp,
+                **kwargs,
+            )
+        return did
+
+    def test_settlements_map_and_canonical_baseline(self, tmp_path):
+        lp = str(tmp_path / "ledger.jsonl")
+        self._seed(lp)
+        fold = dl.fold_ledger(path=lp)
+        [d] = fold["decisions"]
+        assert set(d["settlements"]) == {5, 20}
+        assert d["settlement"]["target_horizon"] == 5  # 口径基准 = 5 日
+        assert d["status"] == "settled"
+        assert fold["settled_count"] == 1
+        # 口径基准统计只数 5 日（不被 20 日翻倍，既有消费面不变）
+        assert fold["counts"][dl.OUTCOME_HIT] == 1
+
+    def test_by_horizon_stats(self, tmp_path):
+        lp = str(tmp_path / "ledger.jsonl")
+        self._seed(lp)
+        fold = dl.fold_ledger(path=lp)
+        assert set(fold["by_horizon"]) == {5, 20}
+        for agg in fold["by_horizon"].values():
+            assert agg["settled"] == 1
+            assert agg["directional_total"] == 1
+            assert agg["direction_accuracy"] == 1.0
+            # alpha = (raw − bench) × 方向符号 = (−0.02 − (−0.01)) × (−1) = +0.01
+            assert agg["alpha_mean"] == pytest.approx(0.01)
+
+    def test_legacy_event_grouped_as_five_day(self, tmp_path):
+        lp = str(tmp_path / "ledger.jsonl")
+        self._seed(lp, target_horizons=(5,), legacy=True)
+        fold = dl.fold_ledger(path=lp)
+        [d] = fold["decisions"]
+        assert set(d["settlements"]) == {5}
+        assert "target_horizon" not in d["settlement"]  # 旧事件不改写
+        assert d["settlement"]["horizon_bars"] == 7  # 实际覆盖 bar 数保留
+        assert fold["by_horizon"][5]["settled"] == 1
+
+    def test_long_horizon_only_keeps_canonical_pending(self, tmp_path):
+        lp = str(tmp_path / "ledger.jsonl")
+        self._seed(lp, target_horizons=(20,))
+        fold = dl.fold_ledger(path=lp)
+        [d] = fold["decisions"]
+        assert "settlement" not in d  # 5 日基准未结 → 不冒充 settled
+        assert d["status"] != "settled"
+        assert set(d["settlements"]) == {20}
+        assert fold["by_horizon"][20]["settled"] == 1
+        assert fold["pending_count"] == 1
+
+
 class TestSampleSufficiency:
     """有效样本门槛（MEANINGFUL_SAMPLE=20）。"""
 

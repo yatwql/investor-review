@@ -442,6 +442,14 @@ def _check_review_ledger_overview() -> list[dict[str, Any]]:
                 _msg = f"已结算 {_settled} 条 / 待结算 {_pending} 条 — {_acc_text}"
                 if not _sufficient and _accuracy is not None:
                     _msg += "（样本未达可信阈值，仅供观察）"
+                # 多视界补充（5 日为口径基准，仅列其余视界已结数）
+                _long = {
+                    h: v.get("settled", 0)
+                    for h, v in (_fold.get("by_horizon") or {}).items()
+                    if h != decision_ledger.MIN_SETTLE_BARS and v.get("settled", 0) > 0
+                }
+                if _long:
+                    _msg += " · " + " · ".join(f"{h} 日视界已结 {n} 条" for h, n in sorted(_long.items()))
             items.append(_item(GROUP_FEATURES, "决策复盘账本", True, _msg))
         except Exception as exc:  # noqa: BLE001
             items.append(_item(GROUP_FEATURES, "决策复盘账本", False, f"读取失败: {type(exc).__name__}: {exc}"))

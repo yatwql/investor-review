@@ -103,9 +103,13 @@ def record_deterministic_decisions(prep: dict, action_data: Any, reporter: Progr
         from src.python.report import decision_record, decision_settlement
 
         _report_date = prep["today_str"]
-        # ① 结算到期 pending 决策（幂等：同 decision 只结一次；未到期/行情
-        #    不可得保持 pending；无基线的早期登记暂缓不结）。
-        _settle = decision_settlement.settle_pending_decisions(report_date=_report_date)
+        # ① 结算到期 pending 决策（幂等：按 (decision, 目标视界) 判重；未到期/
+        #    行情不可得保持未结；无基线的早期登记暂缓不结）。多视界 5/20/60
+        #    随报告运行推进，长视界成熟后自动回补。
+        _settle = decision_settlement.settle_pending_decisions(
+            report_date=_report_date,
+            horizons=decision_ledger.SETTLE_HORIZONS,
+        )
         if _settle.get("settled"):
             reporter.ok(f"决策复盘：已结算 {_settle['settled']} 条到期决策")
         elif _settle.get("deferred") or _settle.get("skipped"):

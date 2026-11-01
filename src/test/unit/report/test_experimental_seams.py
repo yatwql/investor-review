@@ -28,6 +28,7 @@ from unittest.mock import patch
 import pytest
 
 from src.python.core.constants import PROJECT_ROOT
+from src.python.core import decision_ledger as dl
 from src.python.report import _experimental_seams as seams
 from src.python.report.progress import ProgressReporter
 
@@ -117,7 +118,7 @@ class TestDeterministicDecisions:
         ):
             seams.record_deterministic_decisions(_PREP, {"sell": []}, reporter)
 
-        settle.assert_called_once_with(report_date="2026-09-10")
+        settle.assert_called_once_with(report_date="2026-09-10", horizons=dl.SETTLE_HORIZONS)
         register.assert_called_once()
         assert register.call_args.kwargs["report_date"] == "2026-09-10"
         ok_messages = [msg for level, msg in reporter.messages if level == "ok"]
@@ -494,7 +495,7 @@ class TestFacadeWiringOrder:
         source = Path(seams.__file__).read_text(encoding="utf-8")
         tree = ast.parse(source)
         eagerly_imported = {
-            node.module.split(".")[-1]
+            (node.module or "").split(".")[-1]
             for node in tree.body
             if isinstance(node, ast.ImportFrom) and str(node.module or "").startswith("src.python.report.")
         }

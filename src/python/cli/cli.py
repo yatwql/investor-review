@@ -40,6 +40,7 @@ from src.python.cli._handlers import (
     _handle_doctor,
     _handle_health_history,
     _handle_report,
+    _handle_settle_decisions,
     _handle_view_logs,
     _handle_whatif,
     _resolve_source_overrides,
@@ -77,6 +78,7 @@ __all__ = [
     "_handle_doctor",
     "_handle_health_history",
     "_handle_report",
+    "_handle_settle_decisions",
     "_handle_view_logs",
     "_handle_whatif",
     "_resolve_source_overrides",
@@ -276,6 +278,8 @@ def main() -> int:
         return _handle_cache(args, config)
     elif args.command == "whatif":
         return _handle_whatif(args, config)
+    elif args.command == "settle-decisions":
+        return _handle_settle_decisions(args, config)
     elif args.command == "config":
         return _handle_config(args, config)
     return _EXIT_SEVERE
