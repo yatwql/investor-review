@@ -1063,6 +1063,7 @@ INVEST_CACHE_DIR=docs/tmp/screenshots/demo/data/cache \    # 缓存改落（不�
 | 阶段级耗时 | `PerfCollector.stage_progress` / `reporter.print_timing_summary()` | TUI 报告收尾会打印耗时排行；数据准备按 `行情与明细/穿透/因子暴露/行业 Beta/相关性矩阵/…` 逐子项计时 |
 | 写盘停顿 | `core/perf.warn_slow_write`（阈值 5s） | HTML/Excel 落盘超阈即 WARNING，带产物大小与路径（正常 0.2~0.4s，偶发 18s 属磁盘/挂载侧） |
 | 单路取数偏慢 | `[factor] 取数偏慢` / `[event_impact] 基准指数取数偏慢` WARNING（阈值 5s） | 风格因子、行业 Beta 与事件窗基准的单路耗时 + 标的标签（慢请求不再只体现为阶段总数） |
+| 新闻源单源耗时 | `[news] 源耗时` INFO（每次抓取一行，按耗时降序）+ `[news] 源抓取偏慢` WARNING（阈值 3s） | 多源并行时单源长尾会顶住整段「新闻源抓取」（实测 4.1s），逐源耗时直接点名 |
 | 测试档位耗时 | `scripts/test-runner.py --mode bench --update-docs` | 14 档实测回填 `test-coverage.md`（发布子集四档见 §refresh） |
 | CPU 侧归因 | `time` 的 user/sys + `/proc/loadavg` | **先记环境再采信数字**：loadavg 1 分钟 > 核数/2 时该轮作废 |
 

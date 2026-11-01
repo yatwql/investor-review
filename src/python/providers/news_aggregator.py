@@ -26,6 +26,10 @@ from src.python.providers.news_sources import (
 
 logger = logging.getLogger("invest")
 
+#: 单新闻源抓取慢告警阈值（秒）：多源并行，单源慢会直接顶住「新闻源抓取」整段
+#: （实测抓取 4.1s，其中单一源的长尾就是主因）；逐源耗时另打一行 INFO 汇总。
+SLOW_NEWS_SOURCE_WARN_SECONDS = 3.0
+
 
 def get_enabled_sources() -> list[str]:
     """返回当前启用的新闻来源名称列表。
@@ -45,9 +49,9 @@ def _compute_cache_key(
     sources: list[str],
     per_source: int,
 ) -> str:
-    """计算新闻缓存键。"""
+    """计算新闻缓存键（sha256 前 12 位；非安全用途，与弱哈希扫描口径一致）。"""
     raw = json.dumps([keywords, top_n, sources, per_source], sort_keys=True, ensure_ascii=False)
-    return "news_" + hashlib.md5(raw.encode()).hexdigest()[:12]
+    return "news_" + hashlib.sha256(raw.encode()).hexdigest()[:12]
 
 
 def _check_news_cache(cache_key: str, sources: list[str]) -> list[dict] | None:
@@ -140,6 +144,16 @@ def _fetch_from_all_sources(
     seen_urls: set[str] = set()
     src_results: dict[str, tuple[int, str]] = {}
 
+    timings: dict[str, float] = {}
+
+    def _timed_fetch(src: str, fetch_fn: Callable[[int], Any], per_source: int) -> Any:
+        """在 worker 内计时（排除线程池排队等待），供逐源耗时归因。"""
+        started = time.perf_counter()
+        try:
+            return fetch_fn(per_source)
+        finally:
+            timings[src] = time.perf_counter() - started
+
     with ThreadPoolExecutor(max_workers=5) as executor:
         fut_to_src: dict[Any, str] = {}
         for src in sources:
@@ -147,7 +161,7 @@ def _fetch_from_all_sources(
             if not fetch_fn:
                 src_results[src] = (0, "未知源")
                 continue
-            fut = executor.submit(fetch_fn, per_source)
+            fut = executor.submit(_timed_fetch, src, fetch_fn, per_source)
             fut_to_src[fut] = src
 
         for future in as_completed(fut_to_src):
@@ -174,7 +188,27 @@ def _fetch_from_all_sources(
                     # 失败时未拿到条目，按静态标签报（不复用上一轮登记的子渠道标签）
                     progress_callback(_SOURCE_LABELS.get(src, src), 0, err_msg)
 
+    _log_source_timings(timings)
     return all_raw, src_results
+
+
+def _log_source_timings(timings: dict[str, float]) -> None:
+    """逐源抓取耗时观测：一行 INFO 汇总（按耗时降序）+ 超阈逐源 WARNING。"""
+    if not timings:
+        return
+    ranked = sorted(timings.items(), key=lambda kv: -kv[1])
+    for src, seconds in ranked:
+        if seconds >= SLOW_NEWS_SOURCE_WARN_SECONDS:
+            logger.warning(
+                "[news] 源抓取偏慢：%s %.2fs（阈值 %.0fs）——单源慢会顶住整段新闻抓取",
+                _SOURCE_LABELS.get(src, src),
+                seconds,
+                SLOW_NEWS_SOURCE_WARN_SECONDS,
+            )
+    logger.info(
+        "[news] 源耗时: %s",
+        " | ".join(f"{_SOURCE_LABELS.get(src, src)} {seconds:.2f}s" for src, seconds in ranked),
+    )
 
 
 def _log_source_status(src_results: dict[str, tuple[int, str]]) -> None:

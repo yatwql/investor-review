@@ -38,6 +38,7 @@
 
 ### 变更
 
+- **新闻源逐源耗时观测**：新闻多源抓取完成后打一行 `[news] 源耗时: 新浪财经 1.20s | 东方财富 0.90s …`（按耗时降序），单源超 3s 另打 `[news] 源抓取偏慢` WARNING——多源并行时单源长尾会顶住整段抓取，此前只有「新闻源抓取」一个总数；抓取计时在 worker 内完成（排除线程池排队等待）。新闻缓存键改用 sha256（非安全用途，仅使 15 分钟旧缓存失效一次）。
 - **近 6 小时变更自审（rf-1022）**：修掉 4 处债——技术文档约束表被非约束行打断（恢复表结构，说明改表后注记）；慢告警阈值 5s 收敛到 `core.perf.SLOW_SPAN_WARN_SECONDS`（写盘保留旧名别名，取数模块引用同一常量）；删除 `_index_workers` / `_market_price_workers` / `_fund_style_workers` / `_factor_workers` 四个同构包装，调用点直接 `get_batch_worker_count(...)`；并发钳位告警补「档位缩放前/后」两个数值。
 - **配置约定：`batch` 数值键可 `null`/省略 = 跟随默认**：空值回落默认值（如 `datasink_workers` 默认 3），只有显式数字才覆盖——默认值调优（2→3）可直接生效，不必逐项手改配置文件；本机 `datasink_workers` 已改为 `null`。模板仍写显式数字（保留可发现性），已配置项按需自行置 `null`。
 - **并发档位与趋势观测（借鉴 test-runner 并行级别）**：新增 `batch.profile`（high=100% / medium=50% / low=25%，与 `scripts/_test_runner` 的 `_PARALLEL_FACTOR` 同口径）——只按系数缩各池申请值、不改相对权重，默认 high = 改动前行为；`perf_history` 增 `counters.concurrency_profile_pct`，`perf-history.py` 新增「并发预算」段（档位/预算/峰值/缩容，并标注「跨档位不要直接比耗时」），CSV 增预算/峰值/缩容三列。

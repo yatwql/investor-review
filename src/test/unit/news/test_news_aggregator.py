@@ -375,3 +375,45 @@ class TestAggregateNewsSpans:
         from src.python.providers.news_aggregator import aggregate_news
 
         assert aggregate_news(["茅台"], top_n=5, sources=["sina"]) == []
+
+
+class TestSourceTimings:
+    """逐源抓取耗时观测：INFO 汇总一行 + 超阈逐源 WARNING（带源展示名）。"""
+
+    @staticmethod
+    def _patch_sources(monkeypatch, fetchers, warn_seconds=0.02):
+        from src.python.providers import news_aggregator as na
+
+        monkeypatch.setattr(na, "_FETCH_MAP", fetchers)
+        monkeypatch.setattr(na, "SLOW_NEWS_SOURCE_WARN_SECONDS", warn_seconds)
+        return na
+
+    def test_slow_source_warns_with_label_and_summary_line(self, monkeypatch, caplog):
+        import logging
+        import time
+
+        def _slow(per_source):
+            time.sleep(0.05)
+            return []
+
+        def _fast(per_source):
+            return []
+
+        na = self._patch_sources(monkeypatch, {"sina": _slow, "eastmoney": _fast})
+        with caplog.at_level(logging.INFO, logger="invest"):
+            na._fetch_from_all_sources(["sina", "eastmoney"], 10)
+
+        messages = [r.getMessage() for r in caplog.records]
+        assert any("源抓取偏慢" in m and "新浪财经" in m for m in messages), messages
+        assert any("源耗时" in m and "新浪财经" in m and "东方财富" in m for m in messages), messages
+
+    def test_fast_sources_do_not_warn(self, monkeypatch, caplog):
+        import logging
+
+        na = self._patch_sources(monkeypatch, {"sina": lambda n: [], "eastmoney": lambda n: []}, warn_seconds=5.0)
+        with caplog.at_level(logging.INFO, logger="invest"):
+            na._fetch_from_all_sources(["sina", "eastmoney"], 10)
+
+        assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
+        assert any("源耗时" in r.getMessage() for r in caplog.records), "汇总行始终输出"
+
