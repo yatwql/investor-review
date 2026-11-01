@@ -11,6 +11,7 @@ re-export 两层原语（``from ...news_dedup import compact_anchor_file`` /
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from src.python.providers.news_dedup_anchor_policy import (  # noqa: F401  — 门面 re-export
@@ -108,6 +109,8 @@ def _dedup_by_title(
     if not items:
         return items
 
+    _t0 = time.perf_counter()
+    pairs_compared = 0
     kept: list[dict[str, Any]] = []
     kept_norms: list[str] = []
     kept_sources: list[str] = []
@@ -119,6 +122,7 @@ def _dedup_by_title(
         is_dup = False
         source = item.get("_source", "") or ""
         for idx, existing in enumerate(kept_norms):
+            pairs_compared += 1
             existing_src = kept_sources[idx]
             existing_item = kept[idx]
             same_source = bool(source) and bool(existing_src) and source == existing_src
@@ -199,4 +203,11 @@ def _dedup_by_title(
             kept_norms.append(norm)
             kept_sources.append(source)
             kept.append(item)
+    logger.info(
+        "[news] 去重内部: 去重前 %d 条 → 保留 %d 条，两两比较 %d 对，耗时 %.2fs",
+        len(items),
+        len(kept),
+        pairs_compared,
+        time.perf_counter() - _t0,
+    )
     return kept

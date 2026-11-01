@@ -416,4 +416,3 @@ class TestSourceTimings:
 
         assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
         assert any("源耗时" in r.getMessage() for r in caplog.records), "汇总行始终输出"
-

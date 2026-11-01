@@ -237,14 +237,27 @@ def _finalize_news_results(
     all_raw.sort(key=lambda item: item.get("ctime", ""), reverse=True)
 
     # 标题模糊去重（同一新闻跨源不同 URL）
+    _t0 = time.perf_counter()
+    _before = len(all_raw)
     all_raw = _dedup_by_title(all_raw)
+    _dedupe_seconds = time.perf_counter() - _t0
 
     # 与关键词关联
+    _t0 = time.perf_counter()
     correlated = correlate_news_with_holdings(
         all_raw,
         keywords,
         top_n=top_n,
         lightweight_keywords=lightweight_keywords,
+    )
+    _correlate_seconds = time.perf_counter() - _t0
+    logger.info(
+        "[news] 去重 %.2fs（%d→%d 条）/ 关联 %.2fs（%d 条）",
+        _dedupe_seconds,
+        _before,
+        len(all_raw),
+        _correlate_seconds,
+        len(correlated),
     )
 
     # 确保 matched_keywords 字段

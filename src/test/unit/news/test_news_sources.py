@@ -139,16 +139,26 @@ class TestSinaSourceBudget(unittest.TestCase):
 
     @patch("src.python.providers.sina_news.fetch_news")
     def test_budget_exhausted_stops_and_keeps_collected(self, mock_fetch: MagicMock) -> None:
-        """预算耗尽 → 停止翻页并保留已取条目（不整源丢弃）。"""
+        """预算耗尽 → 停止翻页并保留已取条目（不整源丢弃；分类并发下按共享 deadline 收尾）。"""
+        import itertools
+        import threading
+
         from src.python.providers import news_sources
 
         mock_fetch.return_value = [{"title": "t", "url": "http://u"}]
-        clock = MagicMock(side_effect=[0.0, 0.1, 999.0])
+        # 线程安全的假时钟：每次调用 +5s，预算 20s → 三个分类合计约 4 次调用后耗尽
+        counter = itertools.count()
+        lock = threading.Lock()
+
+        def _clock() -> float:
+            with lock:
+                return next(counter) * 5.0
+
         with patch.object(news_sources, "time") as fake_time:
-            fake_time.monotonic = clock
+            fake_time.monotonic = _clock
             result = news_sources._fetch_from_sina(num=90)
         assert len(result) >= 1, "预算耗尽前取到的条目必须保留"
-        assert mock_fetch.call_count < 6, "预算耗尽后不得继续翻页"
+        assert mock_fetch.call_count <= 9, "预算耗尽后不得继续翻页"
         for call in mock_fetch.call_args_list:
             assert "timeout" in call.kwargs, "每次请求都带按预算收紧的超时"
 
@@ -508,3 +518,33 @@ class TestDedupTokenGradientMerge(unittest.TestCase):
             self._make_item("SpaceX股价盘初重挫12%", "东方财富"),
         ]
         self.assertEqual(len(_dedup_by_title(items)), 1)
+
+
+class TestSinaParallelism:
+    """新浪三分类并发抓取：墙钟取最慢分类，跨分类仍按 URL 去重。"""
+
+    @patch("src.python.providers.sina_news.fetch_news")
+    def test_categories_fetch_concurrently(self, mock_fetch: MagicMock) -> None:
+        import time
+
+        from src.python.providers import news_sources
+
+        def _slow(**kwargs):
+            time.sleep(0.05)
+            return [{"title": "t", "url": f"http://u-{kwargs['lid']}-{kwargs['page']}"}]
+
+        mock_fetch.side_effect = _slow
+        started = time.perf_counter()
+        result = news_sources._fetch_from_sina(num=150)  # per_category=50 → 每类 1 页即止
+        elapsed = time.perf_counter() - started
+
+        assert len(result) == 3
+        assert elapsed < 0.12, f"三个分类未并发（{elapsed:.2f}s，串行约 0.15s）"
+
+    @patch("src.python.providers.sina_news.fetch_news")
+    def test_cross_category_url_dedupe_kept(self, mock_fetch: MagicMock) -> None:
+        from src.python.providers import news_sources
+
+        mock_fetch.return_value = [{"title": "same", "url": "http://same"}]
+        result = news_sources._fetch_from_sina(num=150)
+        assert len(result) == 1, "跨分类重复 URL 合并后只保留一条"

@@ -3984,7 +3984,7 @@ investor-review/
 | 指数历史 K 线（A 股指数） | 腾讯财经 K 线 → 东方财富 push2his 指数 K 线 → 新浪财经 K 线 | `fetcher/index.py` |
 | 指数历史 K 线（美股指数） | 新浪财经 K 线 → 腾讯财经 K 线 | `fetcher/index.py` |
 
-新闻数据处理模块：`news_aggregator.py`（聚合去重）、`news_correlator.py`（关联分析）、`news_keywords.py`（关键词提取）、`news_sources.py`（源元数据定义），均位于 `providers/` 下。
+新闻数据处理模块：`news_aggregator.py`（聚合去重）、`news_correlator.py`（关联分析）、`news_keywords.py`（关键词提取）、`news_sources.py`（源元数据定义），均位于 `providers/` 下。抓取并发与观测：新浪三分类（财经要闻/国内财经/国际财经）经 `worker_pool` 并发、分类内逐页、整源预算共享；各源抓取耗时按源汇总（`[news] 源耗时`，单源 >3s WARNING），去重/关联两段分别计时（`[news] 去重 … / 关联 …`），`_dedup_by_title` 另记「保留条数 + 两两比较对数」用于判断是否值得分桶预筛。
 
 ### 附录 C：缓存 TTL 明细
 
