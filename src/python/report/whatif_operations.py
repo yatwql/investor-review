@@ -36,6 +36,10 @@ logger = logging.getLogger("invest")
 #: 调仓对比不可用的一句话（CLI / TUI / Web 三渠道共用，避免同一句四份拷贝）
 WHATIF_UNAVAILABLE = "调仓对比数据不可用"
 
+#: 调仓输入持仓读取失败提示（CLI / TUI / Web 三渠道共用，避免同句三份拷贝）
+WHATIF_BASE_HOLDINGS_UNREADABLE = "基准持仓读取失败或为空"
+WHATIF_TARGET_HOLDINGS_UNREADABLE = "目标持仓读取失败或为空"
+
 
 def whatif_unavailable_message(reason: str) -> str:
     """把失败原因拼成渠道统一的提示行（三渠道只换输出方式，不换措辞）。"""

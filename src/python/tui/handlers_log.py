@@ -141,14 +141,14 @@ def _cmd_log_settings() -> None:
 
 def _cmd_view_logs() -> None:
     """查看最近运行日志（可按级别筛选，traceback 折叠为提示行）。"""
-    from src.python.core.log_reader import read_log
+    from src.python.core.log_reader import LOG_READ_FAILED_MESSAGE, read_log
 
     level = _level_prompt()
     try:
         entries = read_log(limit=_DISPLAY_LINES, level=level)
     except (ValueError, OSError):
         logger.exception("读取运行日志失败")
-        emit_error("读取运行日志失败", "logs")
+        emit_error(LOG_READ_FAILED_MESSAGE, "logs")
         return
 
     if not entries:
@@ -184,13 +184,13 @@ def _cmd_view_logs() -> None:
 
 def _cmd_view_health_history() -> None:
     """查看数据源健康历史（最近 10 次检查记录）。"""
-    from src.python.core.perf import summarize_health_history
+    from src.python.core.perf import HEALTH_HISTORY_READ_FAILED_MESSAGE, summarize_health_history
 
     try:
         summaries = summarize_health_history(limit=10)
     except OSError:
         logger.exception("读取数据源健康历史失败")
-        emit_error("读取数据源健康历史失败", "logs")
+        emit_error(HEALTH_HISTORY_READ_FAILED_MESSAGE, "logs")
         return
 
     if not summaries:

@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.16.15-dev
-> **编号源**：`rf-next = 1010`（新增问题提出后更新为 +1；已用最大 rf-1009，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1011`（新增问题提出后更新为 +1；已用最大 rf-1010，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -50,6 +50,7 @@
 
 | # | 问题 | 修复 |
 |---|------|------|
+| **rf-1010** | 近 60 小时变更自查出三类跨层文案重复：①同一句「本次改动 N 项（u 撤销上次 · U 全部还原）」页脚在 `tui/handlers_config.py` 与 `tui/handlers_switch.py` 各一份；②调仓输入持仓读取失败提示在 CLI/TUI/Web 各写一份 f-string；③日志/健康历史读取失败提示三渠道三种措辞（「读取运行日志失败（详见日志）」/「读取运行日志失败」/「读取运行日志失败（详情请查看日志）」，「读取数据源健康历史失败」/「读取健康历史失败」）——渠道共性规则单源清单未覆盖，改一处漂一处 | ①`tui/switch_panel.change_footer(count)` 单源，配置面板与导航面板共用（`config_undo_footer` 改为委托）；②`whatif_operations.WHATIF_BASE/TARGET_HOLDINGS_UNREADABLE` 常量三渠道引用；③`core/log_reader.LOG_READ_FAILED_MESSAGE` + `core/perf.HEALTH_HISTORY_READ_FAILED_MESSAGE` 三渠道引用（Web 措辞随之与 CLI/TUI 统一）；`test_channel_layering` 补 3 例契约（含渠道层不得复现字面量的反向断言），`technical.md` 跨渠道单源清单登记三项新来源 |
 | **rf-1009** | 只读外部虚拟环境启动中断：`.venv` 符号链接到他人所有的 `env.investor`（`drwxr-xr-x nobody:nogroup`）时，`requirements.txt` 一变（哈希漂移）便进依赖安装——依赖已满足时 pip 不写盘即成功返回，紧接着 `echo "$REQ_HASH" > .venv/.deps_installed` 报 `Permission denied`，被 `set -e` 直接掐断启动（此前「无此毛病」只因哈希恰好未变、从不写标记） | 依赖标记加可写性回退（标记或 venv 目录不可写 → 落 `data/cache/.deps_installed`）；只读 venv 按 `requirements.txt` 逐条校验已装版本（不跑 `pip install`），缺/低于约束才报错并给出外部环境安装命令；`test_launch_script_regression.py` 补 2 例回归（只读+已满足 → 越过依赖段；只读+缺失 → 可读报错）；实机启动已越过依赖段进入 TUI |
 | **rf-995** | 设计护栏 W4 字号档外 8 处：`font-size: 0.95rem`（15.2px），折算后不在字阶 11/12/13/14/16/17/18/20/22px 上 | 统一取 `1rem`（16px），行高与间距不变；护栏 W4 归零 |
 | **rf-996** | 设计护栏 W5 间距档外 172 处：实现停在 6/10/14/18/20 等中间档，与 DESIGN.md 间距阶 0/4/8/12/16/24/32 不符 | 全部吸附到间距阶（等距取小值）；侧栏 220px 收敛为 `--toc-width` token、`.sr-only` 与汇总片负值归零；护栏 W5 归零 |

@@ -340,7 +340,12 @@ def _handle_whatif():
     成功返回产物 basename，前端经 /api/reports/<filename> 预览下载。
     """
     from src.python.core.reader import read_holdings
-    from src.python.report.whatif_operations import run_whatif_simulation, whatif_unavailable_message
+    from src.python.report.whatif_operations import (
+        WHATIF_BASE_HOLDINGS_UNREADABLE,
+        WHATIF_TARGET_HOLDINGS_UNREADABLE,
+        run_whatif_simulation,
+        whatif_unavailable_message,
+    )
     from src.python.web.upload import resolve_file
 
     payload = request.get_json(silent=True) or {}
@@ -389,9 +394,11 @@ def _handle_whatif():
     base_holdings = read_holdings(base_path)
     cand_holdings = read_holdings(candidate_path)
     if not base_holdings:
-        return _err("WHATIF_UNAVAILABLE", f"基准持仓读取失败或为空: {os.path.basename(base_path)}"), 422
+        return _err("WHATIF_UNAVAILABLE", f"{WHATIF_BASE_HOLDINGS_UNREADABLE}: {os.path.basename(base_path)}"), 422
     if not cand_holdings:
-        return _err("WHATIF_UNAVAILABLE", f"目标持仓读取失败或为空: {os.path.basename(candidate_path)}"), 422
+        return _err(
+            "WHATIF_UNAVAILABLE", f"{WHATIF_TARGET_HOLDINGS_UNREADABLE}: {os.path.basename(candidate_path)}"
+        ), 422
 
     # ── 互斥执行（忙碌 → 429）──
     if not _whatif_lock.acquire(blocking=False):

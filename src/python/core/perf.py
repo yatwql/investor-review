@@ -534,6 +534,10 @@ def load_health_history(path: str | None = None) -> list[dict[str, Any]]:
     return records
 
 
+#: 健康历史读取失败的用户提示（CLI / TUI / Web 共用同一句）
+HEALTH_HISTORY_READ_FAILED_MESSAGE = "读取数据源健康历史失败"
+
+
 def summarize_health_history(limit: int = 10) -> list[dict[str, Any]]:
     """聚合数据源健康历史为最近 limit 次运行摘要。
 

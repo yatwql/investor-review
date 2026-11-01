@@ -31,6 +31,7 @@
 
 ### 变更
 
+- **跨层文案单源（rf-1010）**：60 小时变更自查出的三类重复文案收敛到单源——TUI「本次改动 N 项」页脚改为 `switch_panel.change_footer(count)`；调仓输入持仓不可读提示收敛为 `whatif_operations.WHATIF_BASE/TARGET_HOLDINGS_UNREADABLE`；日志/健康历史读取失败提示收敛为 `core/log_reader.LOG_READ_FAILED_MESSAGE` / `core/perf.HEALTH_HISTORY_READ_FAILED_MESSAGE`，Web 侧措辞随之与 CLI/TUI 统一。`test_channel_layering` 补 3 例契约，`technical.md` 单源清单同步登记。
 - **本轮变更自检（rf-1008）**：把同一「相对日期」助手收敛到 `src/test/_relative_dates.py` 单源（原 6 个测试文件各写一份 `_d`/`_day`/`_recent_ts`），删 1 处未使用导入，修正 2 处「行为改了文案没改」（校准工具仍打印「已补 legacy 标注」、紧凑化用例 docstring 仍写「无需补标注」），并为 `test_decision_llm_capture` 5 处 `_parse_table_row()` 结果补非 None 断言；顺带给 `history_snapshot`/`whatif_writer` 的目录创建异常带上目标路径
 
 - **旧形态兼容层清理（rf-1007）**：按「不兼容旧数据文件/旧缓存/旧配置项/旧内部 API」政策清掉 8 处遗留兼容——去重锚点无指纹旧行由「补 legacy 标注保留」改为**直接丢弃**（`unattributed` 统计语义同步为丢弃数，校准工具打印文案随之调整）；快照时间戳只认 `YYYYMMDDTHHMMSS`（删 ISO 等 3 种旧形态）；LLM 内容不再对纯文本按 `\n\n` 兜底分段（只认块级 HTML）；JS 资产只内嵌、不再向输出目录产松散副本（`_copy_js_assets` 与 `html_writer`/`whatif_writer` 两处调用删除）；删 `reader._EXPECTED_HEADER`（零引用死别名）与 `reader._TRADE_HEADER`（内部别名，直接用 `TRADE_HEADER`）、`fund_manager._request_fund_html`（无调用方的旧 API 壳）；改写指向已删模块的「orchestrator.py 兼容入口」标题。同步校正 4 个锁定旧形态的用例并给 prosperity「旧 dict benchmarks」用例改名。核查确认**无需改动**：旧缓存文件（版本号入文件名、不读旧版本）、旧配置项（未知键只告警、无迁移回填）、持仓表头（仅容忍尾部多余列）

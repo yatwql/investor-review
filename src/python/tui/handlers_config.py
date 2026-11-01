@@ -21,6 +21,7 @@ from src.python.tui.tui_menu import (
     refresh_config,
 )
 from src.python.tui.switch_panel import (
+    change_footer,
     inner_width,
     render_titled_panel,
     use_panel_box,
@@ -154,7 +155,7 @@ def handle_config_undo(choice: str, session: ConfigSession, emit: Callable[[str]
 
 def config_undo_footer(session: ConfigSession) -> str | None:
     """配置面板页脚事实行（无改动时返回 None，不向「什么都没改」喊话）。"""
-    return f"  本次改动 {session.count} 项（u 撤销上次 · U 全部还原）" if session.count else None
+    return change_footer(session.count)
 
 
 def _apply_inverse(payload: dict) -> bool:

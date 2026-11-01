@@ -23,6 +23,7 @@ from src.python.core.ansi_colors import GREEN, RESET, YELLOW
 from src.python.tui.panel_runtime import NavState, PanelItem, panel_loop
 from src.python.tui.prompt_text import panel_prompt
 from src.python.tui.switch_panel import (
+    change_footer,
     format_heading,
     format_item,
     inner_width,
@@ -205,7 +206,7 @@ def run_content_options_panel() -> None:
         rows.append("")
         rows.append(f"{nav.marker(len(tuples))}0. 返回主菜单")
         if session.count:
-            rows.append(f"  本次改动 {session.count} 项（u 撤销上次 · U 全部还原）")
+            rows.append(change_footer(session.count))
         state["tuples"] = tuples
         print()
         panel_rows = [

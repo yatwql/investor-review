@@ -436,7 +436,12 @@ def _handle_whatif(args: argparse.Namespace, config: dict) -> int:
     from src.python.config import resolve_holdings_path
     from src.python.core.reader import read_holdings
     from src.python.report.cli_progress import CliProgressReporter
-    from src.python.report.whatif_operations import run_whatif_simulation, whatif_unavailable_message
+    from src.python.report.whatif_operations import (
+        WHATIF_BASE_HOLDINGS_UNREADABLE,
+        WHATIF_TARGET_HOLDINGS_UNREADABLE,
+        run_whatif_simulation,
+        whatif_unavailable_message,
+    )
 
     reporter = CliProgressReporter(verbose=args.verbose)
 
@@ -448,14 +453,14 @@ def _handle_whatif(args: argparse.Namespace, config: dict) -> int:
         base_file = resolve_holdings_path(config)
         base_holdings = _cli_read_holdings(config)
     if not base_holdings:
-        reporter.error(f"基准持仓读取失败或为空: {base_file}")
+        reporter.error(f"{WHATIF_BASE_HOLDINGS_UNREADABLE}: {base_file}")
         return _EXIT_SEVERE
 
     # ── 目标持仓（--candidate，必填）──
     cand_file = args.candidate
     cand_holdings = read_holdings(cand_file)
     if not cand_holdings:
-        reporter.error(f"目标持仓读取失败或为空: {cand_file}")
+        reporter.error(f"{WHATIF_TARGET_HOLDINGS_UNREADABLE}: {cand_file}")
         return _EXIT_SEVERE
 
     output_dir = resolve_output_dir(config, args.output)
@@ -485,7 +490,7 @@ def _handle_health_history(args: argparse.Namespace) -> int:
     Returns:
         int 退出码（0=读取成功，2=历史文件读取失败）
     """
-    from src.python.core.perf import summarize_health_history
+    from src.python.core.perf import HEALTH_HISTORY_READ_FAILED_MESSAGE, summarize_health_history
 
     raw_limit = getattr(args, "limit", None)
     limit = 10 if raw_limit is None else max(1, int(raw_limit))
@@ -493,7 +498,7 @@ def _handle_health_history(args: argparse.Namespace) -> int:
         summaries = summarize_health_history(limit=limit)
     except OSError as e:
         logger.exception("读取数据源健康历史失败")
-        print(f"[ERR] 读取数据源健康历史失败: {e}")
+        print(f"[ERR] {HEALTH_HISTORY_READ_FAILED_MESSAGE}: {e}")
         return _EXIT_SEVERE
 
     if getattr(args, "json", False):
@@ -567,14 +572,14 @@ def _handle_view_logs(args: argparse.Namespace) -> int:
     """
     import logging
 
-    from src.python.core.log_reader import read_log
+    from src.python.core.log_reader import LOG_READ_FAILED_MESSAGE, read_log
 
     lines = max(1, args.lines)
     try:
         entries = read_log(limit=lines, level=args.level, since=args.since, until=args.until)
     except (ValueError, OSError):
         logging.getLogger("invest").exception("读取运行日志失败")
-        print("[ERR] 读取运行日志失败（详见日志）", file=sys.stderr)
+        print(f"[ERR] {LOG_READ_FAILED_MESSAGE}（详见日志）", file=sys.stderr)
         return _EXIT_SEVERE
 
     if not entries:
