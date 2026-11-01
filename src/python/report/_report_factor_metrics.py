@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime
 
 from src.python.core.code_utils import is_six_digit_code
@@ -24,6 +25,26 @@ def _factor_workers() -> int:
 
 
 logger = logging.getLogger("invest")
+
+#: 单路取数慢告警阈值（秒）：实测 9.4s 的一路 tencent K 线会把整个因子阶段拖到 10s+，
+#: 而此前既无单路耗时也无告警，事后只能看到「因子暴露 10.5s」这一个总数。
+_SLOW_FETCH_WARN_SECONDS = 5.0
+
+
+def _timed_fetch(fn, *args, label: str = "", **kwargs):
+    """包一层单路取数计时：超阈值时告警（带标的标签），不改变返回语义。"""
+    started = time.perf_counter()
+    try:
+        return fn(*args, **kwargs)
+    finally:
+        elapsed = time.perf_counter() - started
+        if elapsed >= _SLOW_FETCH_WARN_SECONDS:
+            logger.warning(
+                "[factor] 取数偏慢：%s 耗时 %.2fs（阈值 %.0fs）——单路慢请求会拖住整个因子阶段",
+                label or getattr(fn, "__name__", "fetch"),
+                elapsed,
+                _SLOW_FETCH_WARN_SECONDS,
+            )
 
 
 # ── 持仓历史 K 线路由 ──
@@ -116,43 +137,44 @@ def compute_factor_exposure_data(
     _days = 90
 
     try:
-        # ── 1. 拉取组合 as-if 日收益（并行） ──
+        # ── 1. 取数（两组互不依赖，同一池并发发出） ──
+        # 持仓 K 线与因子指数 K 线原本分两个池串行：因子指数要等持仓 K 线全部回来才发，
+        # 一路 9.4s 的慢请求就把整段拖成 10s+（实测 因子暴露 10.48s，其中 9.4s 空白）。
+        # 合并后两组的墙钟取各自最慢值，且单路由 `_timed_fetch` 记耗时、超阈告警。
         reporter.info("正在计算风格因子回归...")
         holdings_bars: dict[str, dict] = {}
+        factor_klines: dict[str, list[dict]] = {}
         _n = len(holdings)
         with worker_pool(
             "batch:orch_factor",
-            min(_factor_workers(), max(1, _n)),
+            min(_factor_workers(), max(1, _n + len(FACTOR_INDICES))),
             thread_name_prefix="orch_factor",
         ) as _pool:
-            _futs = {_pool.submit(_fetch_holding_bars, h.code, h.name, _days): h for h in holdings}
-            for _fut in _futs:
-                h = _futs[_fut]
+            bar_futs = {
+                _pool.submit(_timed_fetch, _fetch_holding_bars, h.code, h.name, _days, label=f"持仓 K 线 {h.code} {h.name}"): h
+                for h in holdings
+            }
+            idx_futs = {
+                _pool.submit(_timed_fetch, fetch_index_history, code, _days, label=f"因子指数 K 线 {f}"): f
+                for f, code in FACTOR_INDICES.items()
+            }
+            for _fut, h in bar_futs.items():
                 try:
                     _bars = _fut.result()
                 except Exception:
                     _bars = None
                 if _bars:
                     holdings_bars[h.code] = {"shares": float(h.shares), "bars": _bars}
-        portfolio_returns = asif_portfolio_daily_returns(holdings_bars)
-        if not portfolio_returns:
-            logger.warning("[factor] 组合历史收益为空，因子暴露数据不足")
-            return unavailable_result("insufficient")
-
-        # ── 2. 拉取因子指数 K 线（并行；fetch_index_history 内置 T2 降级记录） ──
-        factor_klines: dict[str, list[dict]] = {}
-        with worker_pool(
-            "batch:orch_factor_idx",
-            min(4, _factor_workers()),
-            thread_name_prefix="orch_factor_idx",
-        ) as _pool:
-            _futs = {_pool.submit(fetch_index_history, code, _days): f for f, code in FACTOR_INDICES.items()}
-            for _fut in _futs:
-                f = _futs[_fut]
+            for _fut, f in idx_futs.items():
                 try:
                     factor_klines[f] = _fut.result() or []
                 except Exception:
                     factor_klines[f] = []
+
+        portfolio_returns = asif_portfolio_daily_returns(holdings_bars)
+        if not portfolio_returns:
+            logger.warning("[factor] 组合历史收益为空，因子暴露数据不足")
+            return unavailable_result("insufficient")
 
         # 数据源故障：全部因子拉取为空（区别于数据不足，§1.4.5 ②）
         if all(not bars for bars in factor_klines.values()):
@@ -262,7 +284,10 @@ def compute_industry_beta_data(
             min(_factor_workers(), max(1, _n)),
             thread_name_prefix="orch_ind",
         ) as _pool:
-            _futs = {_pool.submit(_fetch_holding_bars, h.code, h.name, _days): h for h in holdings}
+            _futs = {
+                _pool.submit(_timed_fetch, _fetch_holding_bars, h.code, h.name, _days, label=f"持仓 K 线 {h.code} {h.name}"): h
+                for h in holdings
+            }
             for _fut in _futs:
                 h = _futs[_fut]
                 try:
@@ -285,7 +310,10 @@ def compute_industry_beta_data(
                 min(4, _factor_workers()),
                 thread_name_prefix="orch_ind_idx",
             ) as _pool:
-                _futs = {_pool.submit(fetch_index_history, INDUSTRY_INDEX_MAP[i], _days): i for i in mapped_industries}
+                _futs = {
+                    _pool.submit(_timed_fetch, fetch_index_history, INDUSTRY_INDEX_MAP[i], _days, label=f"行业指数 K 线 {i}"): i
+                    for i in mapped_industries
+                }
                 for _fut in _futs:
                     i = _futs[_fut]
                     try:

@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.16.15-dev
-> **编号源**：`rf-next = 1021`（新增问题提出后更新为 +1；已用最大 rf-1020，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1022`（新增问题提出后更新为 +1；已用最大 rf-1021，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -50,6 +50,7 @@
 
 | # | 问题 | 修复 |
 |---|------|------|
+| **rf-1021** | 因子暴露取数串行 + 单路取数无耗时/告警盲区：04-01 12:27 运行 因子暴露 10.48s，其中 9.4s 是「持仓 K 线全部回来后才开始拉因子指数 K 线」的空等（两组互不依赖）；单路取数无计时，事后只能看到阶段总数，无法定位是哪只标的/哪个指数 | 两组取数合并到同一 `worker_pool` 并发发出（worker = min(factor_workers, 持仓数 + 因子指数数)），墙钟由「两组之和」变为「各自最慢值」；新增 `_timed_fetch` 单路计时，超 5s 打 WARNING（带标的标签与耗时），行业 Beta 的两路取数同样接入；2 例回归（并发墙钟 < 0.7×串行基线、慢路告警含标的） |
 | **rf-1019** | 并发只有「逐池上限」没有「进程级预算」：各池各自 `min(请求, max_total_workers)`，多池叠加实测可达 15+ 线程；而配置注释/文档把 `max_total_workers` 写成「全局 batch 线程硬上限」，与实现不符；弱机器只能靠新加的核数钳位兜底 | 新增 `core/concurrency.GOVERNOR`：参与池（`BatchDispatcher` + `worker_pool`）建池时从共享预算分配，不足缩到至少 1 并 WARNING（不抢占已运行池）；预算 = min(配置 max_total_workers, 核数)；每份报告由 `PerfCollector` 重置观测并把 `concurrency_budget/peak/clamps` 写入 perf_history；文档改为「两层上界（逐池 + 进程级）」；9 例回归（预算解析/缩容告警/同名幂等/释放/worker_pool/快照计数）+ conftest 自动重置账本 |
 | **rf-1020** | 4 处压力敏感并发热点硬编码且无配置口：实时取价 8、基金重仓股市值/PE 8、风格因子 6（两处）/4（两处）、指数历史 5——弱机器/弱网只能改代码；同时这些池也不参与全局预算，缩容管不到 | 新增 `batch.market_price_workers`(8) / `fund_style_workers`(8) / `factor_workers`(6) / `index_workers`(5)，默认值 = 原硬编码值（零行为变化），四处改为 `get_batch_worker_count(...) + worker_pool(...)` 纳入预算；配置默认值、模板、配置手册/参考手册四处同步 |
 | **rf-1017** | 财报摘要并发度不足：`batch.datasink_workers` 默认 2，6 只标的 × 3 次请求（索引/章节清单/正文）要排 3 波——实测首波索引 4.3s、整段 13s，加上正文波次共 25.7s，是数据准备的最大残差 | 默认并发提到 **3**（DataSinking 免费档 3 请求/秒，2 并发吃不满；provider 层限速器仍逐请求兜底，不会因并发超限）；config 默认值、`financial_report_digest` 兜底值与配置手册/参考手册三处同步，3 并发压到 2 波 |
