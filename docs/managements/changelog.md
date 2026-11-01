@@ -11,6 +11,8 @@
 
 ### 修复
 
+- **财报摘要并发度提到 3（rf-1017）**：`batch.datasink_workers` 默认 2 → 3——6 只标的 × 3 次请求（索引/章节清单/正文）由 3 波压到 2 波（实测首波索引 4.3s、整段 13s）；免费档 3 请求/秒正好吃满，provider 层限速器仍逐请求兜底。配置手册/参考手册与代码默认值三处同步。
+- **季报探测负缓存 + jjcc 对冲并发（rf-1018）**：新增 6h 空季度负缓存 `hold_qmiss`（jjcc/zqcc 双通道均无持仓即登记，无数据基金不再每轮重走 4 个季度）；jjcc 超 1.5s 未返回即并发发出 zqcc、先到先得（实测超短债基金 6.9s 空回等待），jjcc 快速返回时不发额外请求；穿透阶段单只基金的最坏等待由「整段超时预算」降到 1.5s + 一次 zqcc。
 - **基金费率并行取数 + 连接预算收紧（rf-1011）**：`fetch_fee_index` 由串行改并行扇出（`BatchDispatcher`，≤4 线程、保序、单代码失败不中断批），费率页超时拆为 `read=15s / connect=4s`——近 7 天最慢一次 289s 里的 85.8s 阶段（9 只基金费率 6~31s 串行）与「不可达主机每只各等 15s」同时收敛，补并发/失败隔离与连接预算回归。
 - **hithink 指数 K 线死兜底移除（rf-1012）**：该源只有 A 股端点，指数 thscode 被上游 `code=1002` 拒收（10-28 单次 18 次）。指数 K 线改为直接返回空不发请求，删除随之无用的 `to_index_thscode`，`history_index` 链移除该源；回归用例改为断言「不发请求 + 链不含该源」。
 - **落盘慢告警（rf-1013）**：`core/perf.warn_slow_write` 在阶段超 5s 时告警并带产物大小与路径，接入 HTML 页面写入与 Excel 生成——把 7 天内 3 次 18s 级写盘停顿从「只能事后翻历史」变成日志自带现场。
@@ -34,6 +36,7 @@
 
 ### 变更
 
+- **并发治理：进程级预算 + 4 处热点配置化（rf-1019 / rf-1020）**：新增 `core/concurrency.GOVERNOR`，把「各池各自钳位」补成「逐池 + 进程级」两层上界——参与池建池时从 `batch.max_total_workers`（再按核数钳）的共享预算分配，不足缩到至少 1 并 WARNING，不抢占已运行池；预算/峰值/缩容次数写入 `perf_history` 的 `counters.concurrency_*`，每次报告开头打一条预算 INFO。同时把实时取价 8、基金风格 8、风格因子 6/4、指数历史 5 四处硬编码并发改为配置项（默认值 = 原值，零行为变化）。各模块打磨过的取值一律保留，弱机器用配置下调。
 - **性能细分补充（rf-1016）**：数据准备阶段把「风格与因子」拆成 `因子暴露` / `行业 Beta` / `相关性矩阵` 三个子项，旧键在 perf 历史读取侧按别名单列「旧·合并段」（不与新子项混算）；requirements / technical / scripts-reference 三处子项清单同步。
 - **诊断盲区复核（rf-1014 / rf-1015）**：`llm_settings.json` 读取失败日志已含异常类型与路径（补回归用例锁死）；退役配置键告警随兼容层移除后不再出现，登记收敛。
 - **跨层文案单源（rf-1010）**：60 小时变更自查出的三类重复文案收敛到单源——TUI「本次改动 N 项」页脚改为 `switch_panel.change_footer(count)`；调仓输入持仓不可读提示收敛为 `whatif_operations.WHATIF_BASE/TARGET_HOLDINGS_UNREADABLE`；日志/健康历史读取失败提示收敛为 `core/log_reader.LOG_READ_FAILED_MESSAGE` / `core/perf.HEALTH_HISTORY_READ_FAILED_MESSAGE`，Web 侧措辞随之与 CLI/TUI 统一。`test_channel_layering` 补 3 例契约，`technical.md` 单源清单同步登记。

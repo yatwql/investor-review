@@ -303,6 +303,33 @@ class TestFeeIndexAssembly:
         assert "000002" not in index, "单代码异常不得进索引，也不得中断其余代码"
         assert {"000001", "000003", "000004"} <= set(index)
 
+    def test_fanout_worker_count_comes_from_config(self, monkeypatch: pytest.MonkeyPatch):
+        """并发度取配置（fund_workers）：配 1 时退化为串行，弱机器不会被强行并发。"""
+        import threading
+        import time
+
+        lock = threading.Lock()
+        state = {"active": 0, "max_active": 0}
+
+        def _fake(code: str):
+            with lock:
+                state["active"] += 1
+                state["max_active"] = max(state["max_active"], state["active"])
+            try:
+                time.sleep(0.05)
+                return _payload()
+            finally:
+                with lock:
+                    state["active"] -= 1
+
+        monkeypatch.setattr(fund_fee, "fetch_fund_fee_cached", _fake)
+        monkeypatch.setattr(fund_fee, "get_batch_worker_count", lambda *a, **k: 1)
+
+        index = fetch_fee_index(["000001", "000003", "000004"])
+
+        assert state["max_active"] == 1, "配置 1 时应串行取数"
+        assert {"000001", "000003", "000004"} <= set(index)
+
     def test_both_schedules_from_f10(self, monkeypatch: pytest.MonkeyPatch):
         """F10 双侧可得 → 均标 f10_tier；全量申购状态表**不被触发**（惰性）。"""
         table_spy = MagicMock(name="fetch_fund_purchase_status_cached", return_value=None)

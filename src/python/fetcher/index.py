@@ -8,7 +8,9 @@
 from __future__ import annotations
 
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import as_completed
+
+from src.python.core.concurrency import worker_pool
 from typing import Any
 
 from src.python.cache import get as cache_get
@@ -20,6 +22,14 @@ from src.python.cache import set as cache_set
 from src.python.core.constants import CACHE_WEEKLY
 from src.python.core.retry import STRATEGY_FIXED, RetryPolicy, retry_transient
 from src.python.providers import sina, tencent
+
+
+def _index_workers() -> int:
+    """指数历史批量并发数（batch.index_workers，默认 5；弱机器可下调）。"""
+    from src.python.fetcher.batch import get_batch_worker_count
+
+    return get_batch_worker_count("index_workers", 5)
+
 
 logger = logging.getLogger("invest")
 
@@ -84,7 +94,11 @@ def _fetch_indices_from_tencent(uncached: list[str]) -> dict[str, dict[str, Any]
             return index_code, data
         return None
 
-    with ThreadPoolExecutor(max_workers=5) as executor:
+    with worker_pool(
+        "batch:index_history",
+        _index_workers(),
+        thread_name_prefix="index_history",
+    ) as executor:
         futures = {executor.submit(_fetch_one, code): code for code in uncached}
         for future in as_completed(futures):
             result = future.result()

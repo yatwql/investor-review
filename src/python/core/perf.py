@@ -273,6 +273,13 @@ class PerfCollector:
         self._interrupted = False
         self._interrupted_stage: str | None = None
         self._saved = False
+        # 并发预算观测：每份报告开一条新账（只重置观测计数，不动存活租约）
+        try:
+            from src.python.core.concurrency import GOVERNOR
+
+            GOVERNOR.begin_run()
+        except Exception:  # 观测失败绝不影响报告
+            logger.debug("[perf] 并发预算观测初始化失败", exc_info=True)
         self._log_handler: logging.Handler | None = None
         self._llm_context: dict[str, Any] = {}
 
@@ -463,6 +470,16 @@ class PerfCollector:
                 breakdown[rec.parent_phase] = spans
             for key, n in rec.counters().items():
                 counters[key] = counters.get(key, 0) + n
+        # 并发预算的机读事实位：预算 / 峰值占用 / 缩池次数（弱机器与多池叠加的直接证据）
+        try:
+            from src.python.core.concurrency import GOVERNOR
+
+            gov = GOVERNOR.snapshot()
+            counters["concurrency_budget"] = int(gov["budget"])
+            counters["concurrency_peak"] = max(int(counters.get("concurrency_peak", 0)), int(gov["peak"]))
+            counters["concurrency_clamps"] = int(gov["clamps"])
+        except Exception:
+            logger.debug("[perf] 读取并发预算快照失败", exc_info=True)
         return ReportRunSnapshot(
             version=APP_VERSION,
             timestamp=datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),

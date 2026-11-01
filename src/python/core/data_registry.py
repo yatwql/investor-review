@@ -419,6 +419,12 @@ _CACHE_ONLY_REGISTRY: tuple[DataModuleDef, ...] = (
         cache_prefixes=("report_sections_miss_",),
         cache_ttl=6 * 3600,
     ),
+    DataModuleDef(
+        "基金季报空季度",
+        "hold_qmiss",
+        cache_prefixes=("hold_qmiss_",),
+        cache_ttl=6 * 3600,
+    ),
     # 与上一条**语义不同**：上一类是「源侧确认没有清单」（确定性，6h），本条是
     # 「这次探测传输级挂起了」（瞬时，30min 退避）——探测本身只是取数优选路径，
     # 挂起一次白等 20s，短退避即可止住「每份报告都再撞一次」。

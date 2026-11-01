@@ -126,8 +126,12 @@
     "max_total_workers": 15,
     "fund_workers": 3,
     "industry_workers": 8,
-    "datasink_workers": 2,
-    "akshare_workers": 2
+    "datasink_workers": 3,
+    "akshare_workers": 2,
+    "index_workers": 5,
+    "market_price_workers": 8,
+    "fund_style_workers": 8,
+    "factor_workers": 6
   },
   "batch_rate_limit": {
     "tencent": 0.0,
@@ -294,6 +298,7 @@
 | `datasink_probe_miss` | `datasink_probe_miss_{hash}.json` | 12h | — | 财报章节 404 探测负缓存（只记**确定性**缺失；调大=省请求但恢复更慢） |
 | `report_symbol_miss` | `report_symbol_miss_{symbol}.json` | 6h | — | 标的正文缺失负缓存（章节阶 + 备源均无正文） |
 | `report_sections_miss` | `report_sections_miss_{doc_id}.json` | 6h | — | 章节清单不可得负缓存（源侧应答但无可用清单，避免每份报告重探 `/sections`） |
+| `hold_qmiss` | `hold_qmiss_{code}{YYYYMM}.json` | 6h | — | 基金季报空季度负缓存（jjcc/zqcc 双通道均无持仓，跳过重探） |
 | `report_sections_backoff` | `report_sections_backoff_{doc_id}.json` | 30min | — | 章节清单**探测失败**的短退避（传输级挂起，成功后立即解除；与上一条语义不同） |
 
 ##### 历史走势类

@@ -421,19 +421,27 @@ TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一�
 
 | 键 | 默认值 | 说明 |
 |:---|:------:|:-----|
-| `batch.max_total_workers` | `15` | 全局 batch 线程硬上限，超过时自动钳位 |
-| `batch.fund_workers` | `3` | 基金排名/持仓批量并发数 |
+| `batch.max_total_workers` | `15` | 各池共享的**进程级预算**：每次建池从余额里分配，不足时缩到至少 1 并打 WARNING（不抢占已运行的池）；同时按本机 CPU 核数再钳一次，弱机器不会多开线程 |
+| `batch.fund_workers` | `3` | 基金排名/持仓/费率批量并发数；配 1 = 串行（季报探测的对冲也只剩 2 路） |
 | `batch.industry_workers` | `8` | 行业分类批量并发数 |
-| `batch.datasink_workers` | `2` | 财报全文取数并发数（DataSinking 免费档批量上限 ≤3） |
+| `batch.datasink_workers` | `3` | 财报全文取数并发数（DataSinking 免费档 3 请求/秒，≥3 才吃满） |
 | `batch.akshare_workers` | `2` | akshare 财务指标取数并发数（财务指标章 + 景气度框架②维基金重仓 ROE 推演共用） |
+| `batch.index_workers` | `5` | 指数历史批量并发数（基准/风格指数） |
+| `batch.market_price_workers` | `8` | 行情缓存未命中时的实时取价并发数 |
+| `batch.fund_style_workers` | `8` | 基金重仓股市值/PE 批量并发数（push2 降级路径） |
+| `batch.factor_workers` | `6` | 风格因子/行业 Beta 的持仓历史与指数 K 线并发数 |
 
 ```json
 "batch": {
   "max_total_workers": 15,
   "fund_workers": 3,
   "industry_workers": 8,
-  "datasink_workers": 2,
-  "akshare_workers": 2
+  "datasink_workers": 3,
+  "akshare_workers": 2,
+  "index_workers": 5,
+  "market_price_workers": 8,
+  "fund_style_workers": 8,
+  "factor_workers": 6
 }
 ```
 

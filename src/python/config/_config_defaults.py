@@ -224,8 +224,12 @@ _DEFAULT_CONFIG = {
         "max_total_workers": 15,  # 全局 batch 线程硬上限（已有池不计入）
         "fund_workers": 3,  # 基金排名/持仓批量并发数
         "industry_workers": 8,  # 行业分类批量并发数
-        "datasink_workers": 2,  # 财报取数并发数（免费档批量上限 ≤3）
+        "datasink_workers": 3,  # 财报取数并发数（免费档 3 请求/秒，≥3 才吃满；2 时 6 标的要 3 波）
         "akshare_workers": 2,  # akshare 财务指标取数并发数（财务指标章 + 基金重仓 ROE 推演）
+        "index_workers": 5,  # 指数历史批量并发数（基准/风格指数个数；原先硬编码 5）
+        "market_price_workers": 8,  # 行情缓存未命中时的实时取价并发数（原先硬编码 8）
+        "fund_style_workers": 8,  # 基金重仓股市值/PE 批量（push2 降级路径，原先硬编码 8）
+        "factor_workers": 6,  # 风格因子/行业 Beta 的持仓历史与指数 K 线并发数（原先硬编码 6）
     },
     "batch_rate_limit": {  # Provider 级别请求间隔（秒），0=不限速
         "tencent": 0.0,
@@ -393,7 +397,11 @@ def _build_template_from_defaults() -> str:
         f'    "fund_workers": {d["batch"]["fund_workers"]},  // 基金排名/持仓批量并发数',
         f'    "industry_workers": {d["batch"]["industry_workers"]},  // 行业分类批量并发数',
         f'    "datasink_workers": {d["batch"]["datasink_workers"]},  // 财报取数并发数（免费档批量上限 ≤3）',
-        f'    "akshare_workers": {d["batch"]["akshare_workers"]}  // akshare 财务指标取数并发数（财务指标章 + 基金重仓 ROE 推演）',
+        f'    "akshare_workers": {d["batch"]["akshare_workers"]},  // akshare 财务指标取数并发数（财务指标章 + 基金重仓 ROE 推演）',
+        f'    "index_workers": {d["batch"]["index_workers"]},  // 指数历史批量并发数',
+        f'    "market_price_workers": {d["batch"]["market_price_workers"]},  // 行情未命中回退的实时取价并发数',
+        f'    "fund_style_workers": {d["batch"]["fund_style_workers"]},  // 基金重仓股市值/PE 批量并发数',
+        f'    "factor_workers": {d["batch"]["factor_workers"]}  // 风格因子/行业 Beta 并发数',
         "  },",
         '  "batch_rate_limit": {  // Provider 级别请求间隔（秒），0=不限速',
         f'    "tencent": {d["batch_rate_limit"]["tencent"]},  // 腾讯行情（不限速）',

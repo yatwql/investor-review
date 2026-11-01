@@ -12,7 +12,16 @@ import logging
 from datetime import datetime
 
 from src.python.core.code_utils import is_six_digit_code
+from src.python.core.concurrency import worker_pool
 from src.python.report.progress import ProgressReporter
+
+
+def _factor_workers() -> int:
+    """风格因子/行业 Beta 并发数（batch.factor_workers，默认 6；弱机器可下调）。"""
+    from src.python.fetcher.batch import get_batch_worker_count
+
+    return get_batch_worker_count("factor_workers", 6)
+
 
 logger = logging.getLogger("invest")
 
@@ -88,8 +97,6 @@ def compute_factor_exposure_data(
     if not is_enable_fund_deep_analysis(config):
         return None
 
-    from concurrent.futures import ThreadPoolExecutor
-
     from src.python.analysis.style_factor_regression import (
         BASELINE_INDEX,
         DEFAULT_WINDOW,
@@ -113,7 +120,11 @@ def compute_factor_exposure_data(
         reporter.info("正在计算风格因子回归...")
         holdings_bars: dict[str, dict] = {}
         _n = len(holdings)
-        with ThreadPoolExecutor(max_workers=min(6, max(1, _n)), thread_name_prefix="orch_factor") as _pool:
+        with worker_pool(
+            "batch:orch_factor",
+            min(_factor_workers(), max(1, _n)),
+            thread_name_prefix="orch_factor",
+        ) as _pool:
             _futs = {_pool.submit(_fetch_holding_bars, h.code, h.name, _days): h for h in holdings}
             for _fut in _futs:
                 h = _futs[_fut]
@@ -130,7 +141,11 @@ def compute_factor_exposure_data(
 
         # ── 2. 拉取因子指数 K 线（并行；fetch_index_history 内置 T2 降级记录） ──
         factor_klines: dict[str, list[dict]] = {}
-        with ThreadPoolExecutor(max_workers=4, thread_name_prefix="orch_factor_idx") as _pool:
+        with worker_pool(
+            "batch:orch_factor_idx",
+            min(4, _factor_workers()),
+            thread_name_prefix="orch_factor_idx",
+        ) as _pool:
             _futs = {_pool.submit(fetch_index_history, code, _days): f for f, code in FACTOR_INDICES.items()}
             for _fut in _futs:
                 f = _futs[_fut]
@@ -206,8 +221,6 @@ def compute_industry_beta_data(
     if not is_enable_industry_beta():
         return None
 
-    from concurrent.futures import ThreadPoolExecutor
-
     from src.python.analysis.style_factor_regression import asif_portfolio_daily_returns, klines_to_returns
     from src.python.analysis.industry_beta import (
         INDUSTRY_INDEX_MAP,
@@ -244,7 +257,11 @@ def compute_industry_beta_data(
         # ── 3. 组合 as-if 日收益（并行拉取持仓 K 线） ──
         holdings_bars: dict[str, dict] = {}
         _n = len(holdings)
-        with ThreadPoolExecutor(max_workers=min(6, max(1, _n)), thread_name_prefix="orch_ind") as _pool:
+        with worker_pool(
+            "batch:orch_ind",
+            min(_factor_workers(), max(1, _n)),
+            thread_name_prefix="orch_ind",
+        ) as _pool:
             _futs = {_pool.submit(_fetch_holding_bars, h.code, h.name, _days): h for h in holdings}
             for _fut in _futs:
                 h = _futs[_fut]
@@ -263,7 +280,11 @@ def compute_industry_beta_data(
         mapped_industries = sorted(i for i in exposure_result["exposure"] if i in INDUSTRY_INDEX_MAP)
         industry_klines: dict[str, list[dict]] = {}
         if mapped_industries:
-            with ThreadPoolExecutor(max_workers=4, thread_name_prefix="orch_ind_idx") as _pool:
+            with worker_pool(
+                "batch:orch_ind_idx",
+                min(4, _factor_workers()),
+                thread_name_prefix="orch_ind_idx",
+            ) as _pool:
                 _futs = {_pool.submit(fetch_index_history, INDUSTRY_INDEX_MAP[i], _days): i for i in mapped_industries}
                 for _fut in _futs:
                     i = _futs[_fut]

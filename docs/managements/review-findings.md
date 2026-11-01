@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.16.15-dev
-> **编号源**：`rf-next = 1017`（新增问题提出后更新为 +1；已用最大 rf-1016，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1021`（新增问题提出后更新为 +1；已用最大 rf-1020，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -50,6 +50,10 @@
 
 | # | 问题 | 修复 |
 |---|------|------|
+| **rf-1019** | 并发只有「逐池上限」没有「进程级预算」：各池各自 `min(请求, max_total_workers)`，多池叠加实测可达 15+ 线程；而配置注释/文档把 `max_total_workers` 写成「全局 batch 线程硬上限」，与实现不符；弱机器只能靠新加的核数钳位兜底 | 新增 `core/concurrency.GOVERNOR`：参与池（`BatchDispatcher` + `worker_pool`）建池时从共享预算分配，不足缩到至少 1 并 WARNING（不抢占已运行池）；预算 = min(配置 max_total_workers, 核数)；每份报告由 `PerfCollector` 重置观测并把 `concurrency_budget/peak/clamps` 写入 perf_history；文档改为「两层上界（逐池 + 进程级）」；9 例回归（预算解析/缩容告警/同名幂等/释放/worker_pool/快照计数）+ conftest 自动重置账本 |
+| **rf-1020** | 4 处压力敏感并发热点硬编码且无配置口：实时取价 8、基金重仓股市值/PE 8、风格因子 6（两处）/4（两处）、指数历史 5——弱机器/弱网只能改代码；同时这些池也不参与全局预算，缩容管不到 | 新增 `batch.market_price_workers`(8) / `fund_style_workers`(8) / `factor_workers`(6) / `index_workers`(5)，默认值 = 原硬编码值（零行为变化），四处改为 `get_batch_worker_count(...) + worker_pool(...)` 纳入预算；配置默认值、模板、配置手册/参考手册四处同步 |
+| **rf-1017** | 财报摘要并发度不足：`batch.datasink_workers` 默认 2，6 只标的 × 3 次请求（索引/章节清单/正文）要排 3 波——实测首波索引 4.3s、整段 13s，加上正文波次共 25.7s，是数据准备的最大残差 | 默认并发提到 **3**（DataSinking 免费档 3 请求/秒，2 并发吃不满；provider 层限速器仍逐请求兜底，不会因并发超限）；config 默认值、`financial_report_digest` 兜底值与配置手册/参考手册三处同步，3 并发压到 2 波 |
+| **rf-1018** | 季报持仓探测两处浪费：① 无数据的基金每轮都重走 4 个季度 × 2 通道（jjcc/zqcc），无负缓存；② jjcc 空回前挂起实测 6.9s（012325 超短债），串行等完才改 zqcc，单只基金白等一整段预算，穿透阶段 15.3s 由此抬升 | ① 新增负缓存类型 `hold_qmiss`（6h，键含年月，新季度天然新键）——双通道均空即登记，后续运行跳过该季度；② 新增 1.5s 对冲：jjcc 超时未回即并发发出 zqcc，谁先带回非空内容先用谁（jjcc 快速返回时不发额外请求），线程池 `shutdown(wait=False)` 避免等回在途请求；负缓存与对冲各 1 例回归 + 快速路径「不多发请求」1 例；负缓存登记表/配置手册/手册缓存表/technical 四处同步 |
 | **rf-1011** | 近 7 天最慢一次 289s：基金 F10 费率按代码串行取数（9 只 6.1/18.8/26.1/31.0s ≈ 82s，快照对比 85.8s 几乎全是它）；同一站不可达时每只基金还要等满 15s | `fetch_fee_index` 改并行扇出（复用 `fetcher/batch.BatchDispatcher`，≤4 线程、结果保序、单代码失败不中断批）；费率页超时拆为 `httpx.Timeout(read=15, connect=4)`，不可达主机 4s 内失败；补 2 例回归（并发度≥2 + 单代码异常隔离、连接预算 4s） |
 | **rf-1012** | hithink 指数 K 线必然失败：`fetch_index_kline` 把指数 thscode（`000930.SH` 等）发到 A 股端点，上游回 `code=1002 Unknown thscode`（2026-10-28 单次运行 18 次）；该源又是 `history_index` 链最后一位＝必然失败的兜底 | 本源指数 K 线直接返回空（不发请求，docstring 写明实测依据），删除只剩它用的 `to_index_thscode`，`history_index` 链移除 hithink；回归用例改为「不发起任何请求 + 链成员不含 hithink」 |
 | **rf-1013** | 写盘阶段偶发 18s 无告警无归因：HTML「页面写入」p50 0.23s，7 天内 3 次 18.0/18.3/19.8s，同批 Excel 一次 10.6s | `core/perf.warn_slow_write(label, seconds, path)` 超阈（5s）告警并带产物大小/路径；接入 HTML 页面写入（路径+大小）与 Excel 生成（输出目录）；补 3 例（阈值下静默、超阈含 MB 与路径、目录路径只报路径） |

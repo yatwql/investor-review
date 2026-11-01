@@ -36,7 +36,7 @@ from src.python.analysis.fee_schedule_model import (
 )
 from src.python.cache import get_ttl
 from src.python.config import get_config
-from src.python.fetcher.batch import BatchDispatcher
+from src.python.fetcher.batch import BatchDispatcher, get_batch_worker_count
 from src.python.fetcher.chain import FailureDiagnostics, fetch_with_fallback
 from src.python.providers.tiantian_fund_fee import (
     fee_payload_is_valid,
@@ -171,7 +171,9 @@ def fetch_fee_index(codes: list[str] | tuple[str, ...] | set[str]) -> dict[str, 
     payloads: dict[str, Any] = {}
     results: list[Any] = []
     if ordered:
-        workers = min(4, len(ordered))
+        # 并发度取配置（fund_workers，默认 3）：不想并发/弱机器可配 1 → 退化为串行。
+        # 并发安全：每个代码一个独立缓存键，registry/会话缓存自带锁，结果仅主线程回收。
+        workers = max(1, min(get_batch_worker_count("fund_workers", 3), len(ordered)))
         with BatchDispatcher(max_workers=workers, thread_name_prefix="fund_fee") as dispatcher:
             results = dispatcher.execute([lambda c=code: fetch_fund_fee_cached(c) for code in ordered])
         for code, result in zip(ordered, results):
