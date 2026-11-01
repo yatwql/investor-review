@@ -73,6 +73,8 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 
 **动作**：讨论稿已完成（[`investment-decision-quality.md`](../plan/investment-decision-quality.md)，30 轮复盘定稿）：四问均成文，结论含 7 条结构性事实 + 6 项优先级建议；剩余待验证项（回测/执行记录/A-B）见稿内清单。**实施由后续任务另行立项**。
 
+**章节归属结论**：实施时**新开「决策依据」章（纯规则）+ 改造现有 LLM 章（退回解读层）**，设计见 [`investment-decision-basis-design.md`](../plan/investment-decision-basis-design.md)；理由见讨论稿「章节归属结论」与设计稿第 1 节。
+
 **验收**：讨论稿四问均有书面结论且标注证据来源；争议表与待验证清单全部收敛；明确「不承诺收益、不构成投资建议」。
 
 **事实位**：结论与证据在本条指向的讨论稿维护，本表不重复。
