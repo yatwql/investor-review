@@ -1,5 +1,5 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.16.15
+> 文档版本：0.16.16-dev
 > **编号源**：`rf-next = 1024`（新增问题提出后更新为 +1；已用最大 rf-1023，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
@@ -45,10 +45,6 @@
 | `src/static/tmpl/report_template.html` 994 行（**不在行数守护域内**：`check-file-length` 只扫 `.py`） | 要么纳入守护扫面（模板按 1000 红线），要么按页签拆 partial；余量约 6 行，下一项报告页改动即触线 |
 
 ## 已解决问题
-
-### 开发期已修复（0.16.15-dev）
-
-（本版开发期已修复项已随 v0.16.15 发布迁入归档档案）
 
 ### 归档档案
 - [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-11-01）
