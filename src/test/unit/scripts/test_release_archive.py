@@ -244,6 +244,19 @@ class TestPlaceholderCollapse:
         assert all("✅" in head for head in heads)
         assert not any("plan-77" in head for head in heads)
 
+    def test_landed_marker_counts_as_closed(self, rel):
+        """「（已落地）」「（已实现）」同属收口表述：标题无 ✅ 也必须迁档，在办节不得误判。"""
+        text = (
+            "## 当前迭代待办\n\n### P2 — 下一阶段就绪\n\n"
+            "#### `plan-240` 新浪分类抓取并行（已落地）\n\n已做\n\n"
+            "#### `plan-241` 去重分段剖析（已实现）\n\n已做\n\n"
+            "#### `plan-242` 在办任务\n\n未做\n"
+        )
+        heads = [head for _s, _e, head in rel.plan_completed_sections(text)]
+        assert any("plan-240" in head for head in heads), heads
+        assert any("plan-241" in head for head in heads), heads
+        assert not any("plan-242" in head for head in heads), "在办节不得被判为已完成（判定不外溢）"
+
     def test_design_doc_candidates_only_strong_signal(self, rel):
         """候选只认「引用编号均已归档」；仍有开放引用者留原处，无引用者不自动判定。"""
         docs = {

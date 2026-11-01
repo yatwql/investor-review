@@ -342,7 +342,9 @@ def _bump_index_range(text: str, date: str) -> str:
 #: 否则台账里的完成项永远不会被搬走（清单只认二级时，`####` 任务节积压在主台账）。
 #: 「已完成」或「已决策不做」——两者都是「不再在办」，迁档口径一致；标记本身保留，
 #: 归档里仍能区分「做完」与「决定不做」。
-_PLAN_CLOSED_MARK = r"(?:✅|❌|已完成)"
+#: 「已落地 / 已实现 / 已交付」也是任务收口表述（计划项立项时即写明落地，标题里不会再加 ✅），
+#: 纳入识别避免完成节积压在主台账（此前只认 ✅/❌/已完成，`（已落地）` 的节整批留在 plan.md）。
+_PLAN_CLOSED_MARK = r"(?:✅|❌|已完成|已落地|已实现|已交付)"
 _PLAN_DONE_HEAD_RE = re.compile(
     rf"^#{{2,4}}\s*(?:`?plan-\d+[^\n]*{_PLAN_CLOSED_MARK}|{_PLAN_CLOSED_MARK}[^\n]*`?plan-\d+)",
     re.M,
@@ -392,7 +394,7 @@ def recompute_current_iteration(text: str) -> str:
     for idx, (start, tier) in enumerate(tiers):
         end = tiers[idx + 1][0] if idx + 1 < len(tiers) else len(text)
         for m in _PLAN_ITEM_RE.finditer(text, start, end):
-            if any(mark in m.group(2) for mark in ("✅", "❌", "已完成")):
+            if any(mark in m.group(2) for mark in ("✅", "❌", "已完成", "已落地", "已实现", "已交付")):
                 continue  # 已完成待归档 / 已决策不做：都不计入「在办」
             grouped[tier].append(m.group(1))
     total = sum(len(ids) for ids in grouped.values())
