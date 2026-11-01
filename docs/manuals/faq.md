@@ -128,6 +128,8 @@ echo 'export VENV_PATH=/path/to/venvs/investor-review' >> ~/.bashrc && source ~/
 | B. VENV_PATH | `$env:VENV_PATH` | `export VENV_PATH` | ✅ 设一次 | 多项目共享 |
 | C. 解释器路径 | `外/Scripts/python.exe` | `外/bin/python` | ❌ | CI/CD / 部署 |
 
+**外部虚拟环境只读时（Linux/macOS，非本人所有 / 只读挂载）**：`launch.sh` 不会因此失败。依赖已满足时只校验版本（不跑 `pip install`），依赖标记写到 `data/cache/.deps_installed`（不写虚拟环境目录）；若 `requirements.txt` 新增了依赖，会逐条报出缺失项并给出在外部环境安装的命令——由该环境所有者执行 `pip install -r requirements.txt`，或 `sudo chown -R "$USER" <venv 路径>` 后交给启动脚本自装。
+
 **Q: Git clone 后运行脚本报错"项目不在正确的目录结构中"？**
 
 A: 确保 clone 后直接在项目根目录（`investor-review/`）下运行启动脚本，不要手动移动子目录。目录结构应保持：

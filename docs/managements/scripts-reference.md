@@ -38,9 +38,10 @@
 | `check-doc-links.py` | 文档 | 文档链接与结构一致性校验（死链/死锚点/重复标题/层级/编号序列/§引用） |
 | `check-import-surface.py` | 质量 | 导入面契约观察（compat-comment 兼容注释 / private-all 私有 `__all__` / cross-private 跨包私有导入 / dynamic-target 动态导入字面量；例外表 `_import_surface_exceptions.json`，观察期未入钩子与 CI） |
 | `check-file-length.py` | 质量 | 单文件行数红线守护（主程序/脚本 >1000 行 / 测试 >1200 行；豁免登记与 review-findings 挂账同步，`-v` 输出可选优化区间清单与「行数 × 近 90 天改动」优先级，供登记表派生） |
-| `check-test-redundancy.py` | 测试 | 测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言；实现拆在 `_test_redundancy/`——八类检查各一模块 + 共用 AST 原语 + 事实缓存 + 编排，入口只留 CLI） |
+| `check-test-redundancy.py` | 测试 | 测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言 / 账本日期写死绝对日期；实现拆在 `_test_redundancy/`——九类检查各一模块 + 共用 AST 原语 + 事实缓存 + 编排，入口只留 CLI） |
 | `check-requirement-trace.py` | 质量 | 需求 ID ↔ 验证载体追溯（单段 ID 全域覆盖 / 载体文件存在 / ID 双向一致） |
 | `hook-install-claude.py` | 质量 | 安装/卸载 Claude Code PostToolUse hook（任务编号一致性自动校验） |
+| `probe-date-bombs.py` | 测试 | 时间炸弹经验筛查（变异法）：把候选测试文件里的绝对日期整体回移 N 年再逐个跑 pytest，失败即「依赖日期处于近期」（rot-suspect）；改写前备份、`finally`/`atexit` 双兜底还原并校验 sha256，脏文件默认跳过；结果需人工判读（生产侧显式注入 today / 星期-财季语义 / 断言目标在未变异 fixture 均为伪信号）；不入门禁 |
 | `eval-llm-hallucination.py` | 评测 | 10 组标准持仓 × LLM 幻觉率采样（薄 CLI，实现在 `_eval_halluc_sampler/` 包） |
 | `eval-dedup-threshold.py` | 评测 | 新闻去重阈值校准分析 |
 | `eval-llm-budget.py` | 评测 | LLM 表达预算校准（冻结持仓样本 × 预算档位 × 模式矩阵；墙钟/输出 tokens/分段字数/要素机检/操作建议行数；`freeze` 建样本、`run --dry-run` 零费用；产物落 `docs/tmp/llm-budget/`，实现在 `_eval_llm_budget/`） |
@@ -85,7 +86,7 @@
 | `test-*` | 测试 | 测试执行与测试工程：驱动、覆盖计数、失败提取、顺序依赖定位、Web 冒烟、性能**测试**报告 |
 | `eval-*` | 评测与基准 | 离线评测/采样/阈值校准：不入门禁，产物落 `docs/tmp/` 或只输出计分 |
 | `perf-*` | 运维观测 | 读生产运行台账的性能历史查看（被动统计，不用于门禁） |
-| `probe-*` | 运维观测 | 连通性/可用性探测，纯只读无副作用 |
+| `probe-*` | 运维观测 | 探测类：连通性/可用性探测与一次性经验筛查。**默认纯只读无副作用**；确需改写数据的筛查（如 `probe-date-bombs.py`）须在 docstring 显式声明，并自带备份 + `finally`/`atexit` 还原兜底，且不入门禁 |
 | `hook-*` | 工具链 | 编辑器 / 版本钩子接线（安装、卸载） |
 | `make-*` | 文档（资产） | 仓库视觉资产的「造」与「检」（本机手工运行，不进钩子/CI） |
 | 无前缀 | 单件 | `release.py`（发布编排，全流程唯一入口） |
@@ -246,7 +247,7 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 
 **设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
 
-静态分析 `src/test/`（默认跳过 `pytest.ini` 刻意排除的 `live/` 真网套件），抓八类「看着有测试其实没测住」的问题：
+静态分析 `src/test/`（默认跳过 `pytest.ini` 刻意排除的 `live/` 真网套件），抓九类「看着有测试其实没测住」的问题：
 
 1. **死用例**：同文件同类同名重复定义（后者覆盖前者）、类名不以 `Test` 开头的方法形式 `test_*`、`Test*` 类定义了 `__init__`（pytest 整类跳过）
 2. **无断言用例**：既无 `assert`、也无 `pytest.raises/warns/fail`、也无 `assertEqual` 等 `assert*` / `assert_called*`，且不经同类辅助方法（如 `self._assert_pairs_contain(...)`，其内部含断言）——断言落在辅助方法里同样算数
@@ -259,11 +260,12 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 6. **恒真断言**：`assert True` / `assert x == x`——形式上有断言、实际不验证任何行为
 7. **死 fixture**：test 文件内定义（排除 conftest 自身与 autouse）且全仓语料（测试 + conftest）无任何引用——定义后从未被消费的死代码
 8. **弱 mock 断言**：`assert <mock>.<属性>` 作真值 / `assertIsNotNone(<mock>)`——Mock 恒真且恒不为 None，断言恒成立不验证行为（`.called` / `assert_called*` 等专用断言不算弱）
+9. **账本日期写死绝对日期（时间炸弹）**：账本写入/裁剪类调用（`append_signals` / `append_decision` / `register_deterministic_signals` / `prune_jsonl_by_age` …）的 `report_date` / `settle_date` / `date` 实参写死「当前年 ±2 年」内的绝对日期字面量（含经模块级常量转手）。账本按保留期（730 天）在**写侧即裁剪**并按 `now()` 判定，这类用例会在「日期 + 保留期」之后静默退化成「空账本 / 键缺失」。远过去锚点（`"2020-01-02"` 表「必过期」）不报；正确写法是从当天回推派生。经验筛查（真跑、不入门禁）见 `probe-date-bombs.py`
 
 **使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
 
 ```bash
-.venv/bin/python scripts/check-test-redundancy.py                 # 八类全查
+.venv/bin/python scripts/check-test-redundancy.py                 # 九类全查
 .venv/bin/python scripts/check-test-redundancy.py -v              # 详细输出（扫描规模 + 各类计数 + 跳过的间接调用用例数）
 .venv/bin/python scripts/check-test-redundancy.py --ci            # CI 模式（只输出 文件:描述，退出码 2）
 .venv/bin/python scripts/check-test-redundancy.py --include-live  # 连带扫描 src/test/live/
@@ -1118,7 +1120,7 @@ curl 对照命令：`curl -s "https://push2.eastmoney.com/api/qt/stock/get?secid
 
 **`eval-dedup-threshold.py` — 新闻去重阈值校准**
 
-新闻标题去重（同源/跨源安全区分级 + 候选区阶梯 + 方向对立防护，阈值见 `news_dedup.py` 校准常量）的"边界案例"**默认采集**到 `data/calibration/dedup_anchors-YYYYMM.jsonl.gz`（按月 gzip 分片，写侧按 multi-member gzip 追加、不读旧文件；读侧 `gzip.open` 透明解压，跨轮重复由本脚本 `load_anchors` 按键去重），`INVEST_DEDUP_COLLECT_ANCHORS=0` 可关闭采集。积累足够锚点后，用此脚本分析当前阈值是否合理。**评估默认在分析完成后压缩一次锚点文件**（每 key 最新 + 保留期 30 天 + 体积目标 24MB 与分支配额，实现在 `news_dedup.compact_anchor_file`，与本工具同源），顺带完成体积维护；压缩结果会打印超期/体积裁剪（含分支分布）/无指纹补标注/并发放弃四类计数。`--no-compact` 只读分析，`--dry-run` 演练不写盘，`--compact` 仅压缩不分析。报告路径仍不自动压缩。
+新闻标题去重（同源/跨源安全区分级 + 候选区阶梯 + 方向对立防护，阈值见 `news_dedup.py` 校准常量）的"边界案例"**默认采集**到 `data/calibration/dedup_anchors-YYYYMM.jsonl.gz`（按月 gzip 分片，写侧按 multi-member gzip 追加、不读旧文件；读侧 `gzip.open` 透明解压，跨轮重复由本脚本 `load_anchors` 按键去重），`INVEST_DEDUP_COLLECT_ANCHORS=0` 可关闭采集。积累足够锚点后，用此脚本分析当前阈值是否合理。**评估默认在分析完成后压缩一次锚点文件**（每 key 最新 + 保留期 30 天 + 体积目标 24MB 与分支配额，实现在 `news_dedup.compact_anchor_file`，与本工具同源），顺带完成体积维护；压缩结果会打印超期/体积裁剪（含分支分布）/无指纹旧行丢弃/并发放弃四类计数。`--no-compact` 只读分析，`--dry-run` 演练不写盘，`--compact` 仅压缩不分析。报告路径仍不自动压缩。
 
 ```bash
 # 分析全部锚点，输出建议
@@ -1193,7 +1195,7 @@ curl 对照命令：`curl -s "https://push2.eastmoney.com/api/qt/stock/get?secid
 .\scripts\launch.ps1
 ```
 
-两者均负责：激活虚拟环境（如存在）、设置 `PYTHONPATH`、启动主程序 TUI。
+两者均负责：激活虚拟环境（如存在）、按 `requirements.txt` 安装依赖、设置 `PYTHONPATH`、启动主程序 TUI。`launch.sh` 额外兼容**只读外部虚拟环境**：依赖已满足时跳过 `pip install`、仅校验已装版本，依赖标记写入 `data/cache/.deps_installed`（不写不可写的 venv 目录）。
 
 **`launch.sh web` / `launch.ps1 web` — Web 浏览器模式**
 
@@ -1400,3 +1402,22 @@ CLI 模式的便捷入口，跳过 TUI 界面，直接以命令行模式运行�
 
 **注意**：事实校验器对仓位占比百分比和情景假设百分比设跳过策略（`_POSITION_WEIGHT_KEYWORDS` / `_HYPOTHETICAL_KEYWORDS`），避免将百分比陈述误报为幻觉。最终幻觉率以 `docs/tmp/hallucination-report.md` 为准。
 
+
+**`probe-date-bombs.py` — 时间炸弹经验筛查**
+
+测试写死绝对日期后，用例会随墙上时钟走过去而静默腐化（典型案例：账本保留期 730 天在**写侧即裁剪**，样本日期一过期，用例就退化成「空账本 / 键缺失」，失败信息完全看不出原因）。本工具用**变异法**找出这一整类：把候选测试文件里的绝对日期整体回移 N 年，再逐个跑 pytest——只有「要求日期处于近期（相对 `now()`）」的用例才会因此失败。
+
+静态窄口径守卫是 `check-test-redundancy.py` 第 9 类（入门禁）；本工具覆盖面更宽但**不入门禁**：要改写真实测试文件、单文件秒级全集分钟级、且结果含变异伪信号（生产侧显式注入 `today` 参数、星期/财季语义随日期位移改变、断言目标在未被替换的 fixture 模块里），必须人工判读。
+
+```bash
+# 默认候选：含绝对日期且与保留期/TTL 关键词同现的测试文件
+.venv/bin/python scripts/probe-date-bombs.py -v
+
+# 全部含绝对日期的测试文件（慢）
+.venv/bin/python scripts/probe-date-bombs.py --all
+
+# 只查指定文件 / 调整回移年数与超时
+.venv/bin/python scripts/probe-date-bombs.py --files src/test/unit/core/test_doctor.py --years 3 --timeout 600
+```
+
+**安全约定**（改写真实文件是唯一风险点）：只处理 git 工作区干净的文件（`--allow-dirty` 可强制）；改写前备份原文、`finally` 还原并校验 `sha256`、`atexit` 兜底（Ctrl-C / 用例崩溃也不留脏文件）；退出码 0 = 无 rot-suspect，2 = 有 rot-suspect 或超时。
