@@ -224,8 +224,8 @@ def fetch_price(code: str) -> dict[str, Any] | None:
     symbol = to_thscode(code)
     if not symbol:
         return None
-    data = fetch_price_snapshot([symbol])
-    items = [i for i in ((data or {}).get("item") or []) if isinstance(i, dict)]
+    data = fetch_price_snapshot([symbol]) or {}
+    items = [i for i in (data.get("item") or []) if isinstance(i, dict)]
     if not items:
         return None
     item = items[0]
@@ -260,17 +260,23 @@ def fetch_kline(code: str, days: int = 30, start_from: str | None = None) -> lis
 
 
 def fetch_index_kline(code: str, days: int = 30, start_from: str | None = None) -> list[dict[str, Any]]:
-    """指数历史日 K（**前复权**），形态对齐 ``providers/tencent.fetch_index_kline``。
+    """指数历史日 K —— **本源不支持**，恒返回空列表（由链路继续降级到下一源）。
 
-    与 :func:`fetch_kline` 共用同一条上游（``fetch_price_history``），仅**代码映射**不同：
-    指数代码带 ``sh``/``sz`` 前缀，不能被 A 股 :func:`to_thscode` 的 ``to_fmp_symbol``
-    判定覆盖，故走 :func:`to_index_thscode`。美股指数（``gb_*``）无 A 股口径映射，
-    返回空列表由链路继续降级。
+    依据：本源只有 A 股口径的 ``/api/a-share/prices/historical``，指数 thscode
+    （``000930.SH`` / ``000919.SH`` / ``000925.SH``）会被上游拒收
+    （``code=1002 参数格式错误：Unknown thscode``，实测 2026-10-28 一次运行 18 次）。
+    既然该跳必然失败，本函数不再发请求：直接返回空，链路按空结果降级，
+    既省一次必败调用，也避免把失败记成「该源不稳」。
+
+    Args:
+        code: 指数代码（本源不消费）
+        days: 天数（本源不消费）
+        start_from: 起始日（本源不消费）
 
     Returns:
-        ``[{date, open, close, high, low, volume}, ...]`` 按日期升序；失败返回空列表。
+        恒为空列表。
     """
-    return _kline_for_symbol(to_index_thscode(code), days, start_from)
+    return []
 
 
 def _kline_for_symbol(symbol: str, days: int, start_from: str | None) -> list[dict[str, Any]]:
@@ -351,35 +357,6 @@ def to_thscode(code: str, *, is_fund: bool = False) -> str:
     if exchange is not None:
         return exchange
     return ""
-
-
-def to_index_thscode(code: str) -> str:
-    """指数代码 → 同花顺 thscode（``000300.SH`` / ``399001.SZ``）。
-
-    与 :func:`to_thscode` 的差别：指数代码带 ``sh``/``sz`` 前缀（或裸 6 位 000/399/932），
-    走 A 股 ``to_fmp_symbol`` 判定会落空，故按指数口径单独映射。
-
-    Args:
-        code: 指数代码，如 ``sh000300`` / ``sz399001``
-
-    Returns:
-        thscode；无法映射（非指数代码 / 美股指数）返回空串。
-    """
-    from src.python.core.code_utils import is_index_code, is_us_index_code
-    from src.python.core.code_symbols import get_index_exchange_prefix, index_exchange_of
-
-    raw = (code or "").strip().lower()
-    if not raw or is_us_index_code(raw) or not is_index_code(raw):
-        return ""
-    prefix = get_index_exchange_prefix(raw)
-    digits = raw[len(prefix) :] if prefix else raw
-    if not digits.isdigit() or len(digits) != 6:
-        return ""
-    exchange = index_exchange_of(raw)
-    return f"{digits}.{'SZ' if exchange == 'sz' else 'SH'}"
-
-
-# ── A 股：财务报表（三张合并报表；指标由报表派生，见 analysis/financial_statement_derive.py）──
 
 
 def _statement_params(thscode: str, period: str, limit: int, start: int | None, end: int | None) -> dict[str, Any]:

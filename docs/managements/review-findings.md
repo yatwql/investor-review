@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.16.15-dev
-> **编号源**：`rf-next = 1011`（新增问题提出后更新为 +1；已用最大 rf-1010，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1017`（新增问题提出后更新为 +1；已用最大 rf-1016，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -50,6 +50,12 @@
 
 | # | 问题 | 修复 |
 |---|------|------|
+| **rf-1011** | 近 7 天最慢一次 289s：基金 F10 费率按代码串行取数（9 只 6.1/18.8/26.1/31.0s ≈ 82s，快照对比 85.8s 几乎全是它）；同一站不可达时每只基金还要等满 15s | `fetch_fee_index` 改并行扇出（复用 `fetcher/batch.BatchDispatcher`，≤4 线程、结果保序、单代码失败不中断批）；费率页超时拆为 `httpx.Timeout(read=15, connect=4)`，不可达主机 4s 内失败；补 2 例回归（并发度≥2 + 单代码异常隔离、连接预算 4s） |
+| **rf-1012** | hithink 指数 K 线必然失败：`fetch_index_kline` 把指数 thscode（`000930.SH` 等）发到 A 股端点，上游回 `code=1002 Unknown thscode`（2026-10-28 单次运行 18 次）；该源又是 `history_index` 链最后一位＝必然失败的兜底 | 本源指数 K 线直接返回空（不发请求，docstring 写明实测依据），删除只剩它用的 `to_index_thscode`，`history_index` 链移除 hithink；回归用例改为「不发起任何请求 + 链成员不含 hithink」 |
+| **rf-1013** | 写盘阶段偶发 18s 无告警无归因：HTML「页面写入」p50 0.23s，7 天内 3 次 18.0/18.3/19.8s，同批 Excel 一次 10.6s | `core/perf.warn_slow_write(label, seconds, path)` 超阈（5s）告警并带产物大小/路径；接入 HTML 页面写入（路径+大小）与 Excel 生成（输出目录）；补 3 例（阈值下静默、超阈含 MB 与路径、目录路径只报路径） |
+| **rf-1014** | `读取 llm_settings.json 失败，LLM 开关按默认展示` 6 次（10-27/10-28）不带原因，无法区分半写、权限、JSONC 解析失败 | 复核：读取入口已在 2026-10-28 补 `(异常类型: 消息)` 与路径（此后 0 复现）。本轮补回归用例锁死「失败日志必须含类型与路径」，防再次退回静默 None |
+| **rf-1015** | 退役配置键告警 `config.json market_hour_aware 已退役并被忽略` 5 次（2026-10-25） | 复核关闭：兼容层移除后源码已无该文案，当前 `config.json` 无该键，2026-10-25 之后 0 次复现——无需改代码 |
+| **rf-1016** | 「风格与因子」阶段 p95 18.3s / max 208.8s，却只是一个合并计时项，分不清是取数、行业 Beta 还是相关性计算 | 拆三段记入 breakdown（`因子暴露` / `行业 Beta` / `相关性矩阵`）；旧「风格与因子」键在 perf 历史读取侧按别名列为「因子暴露+行业Beta+相关性（旧·合并段）」，不与新子项混算；补 2 例（三子项入账、旧键别名可见），文档三处同步 |
 | **rf-1010** | 近 60 小时变更自查出三类跨层文案重复：①同一句「本次改动 N 项（u 撤销上次 · U 全部还原）」页脚在 `tui/handlers_config.py` 与 `tui/handlers_switch.py` 各一份；②调仓输入持仓读取失败提示在 CLI/TUI/Web 各写一份 f-string；③日志/健康历史读取失败提示三渠道三种措辞（「读取运行日志失败（详见日志）」/「读取运行日志失败」/「读取运行日志失败（详情请查看日志）」，「读取数据源健康历史失败」/「读取健康历史失败」）——渠道共性规则单源清单未覆盖，改一处漂一处 | ①`tui/switch_panel.change_footer(count)` 单源，配置面板与导航面板共用（`config_undo_footer` 改为委托）；②`whatif_operations.WHATIF_BASE/TARGET_HOLDINGS_UNREADABLE` 常量三渠道引用；③`core/log_reader.LOG_READ_FAILED_MESSAGE` + `core/perf.HEALTH_HISTORY_READ_FAILED_MESSAGE` 三渠道引用（Web 措辞随之与 CLI/TUI 统一）；`test_channel_layering` 补 3 例契约（含渠道层不得复现字面量的反向断言），`technical.md` 跨渠道单源清单登记三项新来源 |
 | **rf-1009** | 只读外部虚拟环境启动中断：`.venv` 符号链接到他人所有的 `env.investor`（`drwxr-xr-x nobody:nogroup`）时，`requirements.txt` 一变（哈希漂移）便进依赖安装——依赖已满足时 pip 不写盘即成功返回，紧接着 `echo "$REQ_HASH" > .venv/.deps_installed` 报 `Permission denied`，被 `set -e` 直接掐断启动（此前「无此毛病」只因哈希恰好未变、从不写标记） | 依赖标记加可写性回退（标记或 venv 目录不可写 → 落 `data/cache/.deps_installed`）；只读 venv 按 `requirements.txt` 逐条校验已装版本（不跑 `pip install`），缺/低于约束才报错并给出外部环境安装命令；`test_launch_script_regression.py` 补 2 例回归（只读+已满足 → 越过依赖段；只读+缺失 → 可读报错）；实机启动已越过依赖段进入 TUI |
 | **rf-995** | 设计护栏 W4 字号档外 8 处：`font-size: 0.95rem`（15.2px），折算后不在字阶 11/12/13/14/16/17/18/20/22px 上 | 统一取 `1rem`（16px），行高与间距不变；护栏 W4 归零 |

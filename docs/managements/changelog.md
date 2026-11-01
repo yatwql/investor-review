@@ -11,6 +11,9 @@
 
 ### 修复
 
+- **基金费率并行取数 + 连接预算收紧（rf-1011）**：`fetch_fee_index` 由串行改并行扇出（`BatchDispatcher`，≤4 线程、保序、单代码失败不中断批），费率页超时拆为 `read=15s / connect=4s`——近 7 天最慢一次 289s 里的 85.8s 阶段（9 只基金费率 6~31s 串行）与「不可达主机每只各等 15s」同时收敛，补并发/失败隔离与连接预算回归。
+- **hithink 指数 K 线死兜底移除（rf-1012）**：该源只有 A 股端点，指数 thscode 被上游 `code=1002` 拒收（10-28 单次 18 次）。指数 K 线改为直接返回空不发请求，删除随之无用的 `to_index_thscode`，`history_index` 链移除该源；回归用例改为断言「不发请求 + 链不含该源」。
+- **落盘慢告警（rf-1013）**：`core/perf.warn_slow_write` 在阶段超 5s 时告警并带产物大小与路径，接入 HTML 页面写入与 Excel 生成——把 7 天内 3 次 18s 级写盘停顿从「只能事后翻历史」变成日志自带现场。
 - **只读外部虚拟环境启动中断（rf-1009）**：`.venv` 链接到他人所有的外部环境时，`requirements.txt` 一变就走依赖安装（依赖已满足时 pip 不写盘即成功），随后写 `.venv/.deps_installed` 报 `Permission denied` 被 `set -e` 掐断启动。依标记改为「不可写则落 `data/cache/.deps_installed`」；只读 venv 按 `requirements.txt` 逐条校验已装版本（不跑 `pip install`），缺/低于约束时明确报错并给出外部环境安装命令；补 2 例回归（只读+已满足、只读+缺失）。
 
 - **弱证据断言清零（rf-1006）**：按「用例名承诺了什么」逐例判读，强化 28 例——trace 守卫 4 文件的命中断言从「有命中」升级为断言**规则分类**（`_code_cat`/`_doc_cat`：能发现规则顺序调整与跨类误匹配），并把两个测试文件里各自复制一份的 `_code_hit`/`_doc_hit` 改为从兄弟模块导入（顺带消掉重复实现）；熔断网关 4 例由 `isinstance` 升级为「多次取到同一实例」与「稳定快照」断言。另修正 rf-1006 的统计口径（189 → 143 → 真弱 75：先前未计 `unittest` 断言与 `assert_called*` mock 断言），余 47 例经逐类判读确认为「类型契约/对象存在/非空集合」即其正确强度，不再改写
@@ -31,6 +34,8 @@
 
 ### 变更
 
+- **性能细分补充（rf-1016）**：数据准备阶段把「风格与因子」拆成 `因子暴露` / `行业 Beta` / `相关性矩阵` 三个子项，旧键在 perf 历史读取侧按别名单列「旧·合并段」（不与新子项混算）；requirements / technical / scripts-reference 三处子项清单同步。
+- **诊断盲区复核（rf-1014 / rf-1015）**：`llm_settings.json` 读取失败日志已含异常类型与路径（补回归用例锁死）；退役配置键告警随兼容层移除后不再出现，登记收敛。
 - **跨层文案单源（rf-1010）**：60 小时变更自查出的三类重复文案收敛到单源——TUI「本次改动 N 项」页脚改为 `switch_panel.change_footer(count)`；调仓输入持仓不可读提示收敛为 `whatif_operations.WHATIF_BASE/TARGET_HOLDINGS_UNREADABLE`；日志/健康历史读取失败提示收敛为 `core/log_reader.LOG_READ_FAILED_MESSAGE` / `core/perf.HEALTH_HISTORY_READ_FAILED_MESSAGE`，Web 侧措辞随之与 CLI/TUI 统一。`test_channel_layering` 补 3 例契约，`technical.md` 单源清单同步登记。
 - **本轮变更自检（rf-1008）**：把同一「相对日期」助手收敛到 `src/test/_relative_dates.py` 单源（原 6 个测试文件各写一份 `_d`/`_day`/`_recent_ts`），删 1 处未使用导入，修正 2 处「行为改了文案没改」（校准工具仍打印「已补 legacy 标注」、紧凑化用例 docstring 仍写「无需补标注」），并为 `test_decision_llm_capture` 5 处 `_parse_table_row()` 结果补非 None 断言；顺带给 `history_snapshot`/`whatif_writer` 的目录创建异常带上目标路径
 

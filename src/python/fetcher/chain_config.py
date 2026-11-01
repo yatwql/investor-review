@@ -58,7 +58,9 @@ _DEFAULT_CHAINS: dict[str, list[str]] = {
     # 新浪（``getKLineData`` 端点实测不可用，留作代码级备用）→ 同花顺官方（需 key）。
     # 新浪单靠不住，故补东方财富作为**可用**的第二源——避免整链退化为事实单源后
     # 「抖动即整链空」（历史链无链级重试，重试在各 provider 内，见 tencent/eastmoney）。
-    "history_index": ["tencent", "eastmoney", "sina", "hithink"],
+    # 同花顺不进本链：其指数 K 线只能走 A 股端点，指数 thscode 被上游拒收
+    # （code=1002 Unknown thscode），放进来等于「最后一兜底保证失败」
+    "history_index": ["tencent", "eastmoney", "sina"],
     # 美股指数历史日线：新浪实现 fetch_index_kline（providers/sina_kline.py，经
     # providers/sina.py 重导出），但其 getKLineData 端点对全部代码返回 404/空，
     # 故实际取数通常由腾讯完成；腾讯 K 线接口对 gb_* 代码支持有限，该链可能整链
@@ -179,12 +181,18 @@ def is_provider_chain_broken(data_type: str) -> bool:
     return get_registry().is_chain_broken(chain)
 
 
+def _official_trading_days() -> dict:
+    """官方交易日序列（取不到时给空表——注册表契约要求返回 dict）。"""
+    from src.python.providers import hithink
+
+    return hithink.fetch_trading_days() or {}
+
+
 def _register_core_calendar_fallback() -> None:
     """官方交易日序列兜底注入 core 交易日历（core 不反向 import providers）。"""
-    from src.python.providers import hithink
     from src.python.core.trading_calendar import register_trading_days_fallback
 
-    register_trading_days_fallback(hithink.fetch_trading_days)
+    register_trading_days_fallback(_official_trading_days)
 
 
 # 模块加载时自动注册默认 Provider Chain，使 registry.get_chain() 和策略选择器生效

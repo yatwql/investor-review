@@ -143,6 +143,19 @@ class TestMergeBreakdownStats:
         names = list(mod._merge_breakdown_stats(records)["LLM+新闻"])
         assert names == ["新闻获取", "持仓体检报告"]
 
+    def test_legacy_style_factor_span_kept_as_separate_bucket(self, mod):
+        """旧「风格与因子」合并段单列展示，不与拆开后的三子项混算。"""
+        records = [
+            {"breakdown": {"数据准备": {"风格与因子": 6.0}}},
+            {"breakdown": {"数据准备": {"因子暴露": 2.0, "行业 Beta": 1.0, "相关性矩阵": 0.5}}},
+        ]
+        stats = mod._merge_breakdown_stats(records)["数据准备"]
+        legacy_name = mod._LEGACY_BREAKDOWN_ALIASES["风格与因子"]
+        assert legacy_name in stats
+        assert stats[legacy_name]["avg"] == pytest.approx(6.0)
+        assert stats["因子暴露"]["avg"] == pytest.approx(2.0)
+        assert "风格与因子" not in stats
+
     def test_legacy_merged_span_is_renamed_not_mixed(self, mod):
         """跨版本键名：旧「合并段」带显式标记单列，不与拆分后的新子项混算。
 

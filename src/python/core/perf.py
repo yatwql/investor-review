@@ -46,6 +46,42 @@ from src.python.core.jsonl_store import append_jsonl_atomic
 
 logger = logging.getLogger("invest")
 
+#: 落盘阶段慢告警阈值（秒）：正常产物 0.2~0.4s；实测偶发 18s（磁盘/fsync 等待）
+SLOW_WRITE_WARN_SECONDS = 5.0
+
+
+def warn_slow_write(label: str, seconds: float, path: Any = None) -> None:
+    """落盘阶段超阈值时告警，并带上可定位的现场（耗时/阈值/产物大小/路径）。
+
+    为什么单独一条 WARNING：偶发十几秒的「页面写入」在 perf 里只是一个分阶段数字，
+    事后只能人工比对历史；有了带阈值与产物大小的告警，日志本身就能区分
+    「产物变大」与「磁盘/挂载抖动」。
+
+    Args:
+        label: 阶段名（如 ``HTML 页面写入``）。
+        seconds: 该阶段耗时（秒）。
+        path: 产物路径；给目录时只报路径不报大小。
+    """
+    if seconds < SLOW_WRITE_WARN_SECONDS:
+        return
+    size_text = ""
+    if path is not None:
+        try:
+            target = os.fspath(path)
+            if os.path.isfile(target):
+                size_text = f"产物 {os.path.getsize(target) / 1024 / 1024:.2f} MB，"
+        except OSError:
+            size_text = ""
+    logger.warning(
+        "[perf] %s 落盘偏慢：%.2fs（阈值 %.1fs，%s路径 %s）——排查磁盘/挂载与 fsync 等待",
+        label,
+        seconds,
+        SLOW_WRITE_WARN_SECONDS,
+        size_text,
+        path,
+    )
+
+
 # ── 持久化路径 ──────────────────────────────────────────
 # module-level 变量，测试时可通过 setattr 重定向（测试隔离模式）
 _PERF_HISTORY_DIR = os.path.join(PROJECT_ROOT, "data", "state")

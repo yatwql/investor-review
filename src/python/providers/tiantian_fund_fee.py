@@ -30,6 +30,8 @@ import re
 from datetime import datetime
 from typing import Any
 
+import httpx
+
 from src.python.core.constants import BEIJING_TZ
 from src.python.core.http_client import make_http_client
 
@@ -42,7 +44,9 @@ _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     "Referer": "https://fund.eastmoney.com/",
 }
-_TIMEOUT = 15.0
+#: 读超时 15s、**建连 4s**——同站点慢响应实测单页 6~31s，握手不可达时按 4s 快速失败
+#: （与 ``fetcher/fund_manager`` 同口径：站点级不可达不该让每只基金各等满 15s）
+_TIMEOUT = httpx.Timeout(15.0, connect=4.0)
 
 #: 载荷语义版本——费率口径/行结构变更即递增，旧缓存按未命中丢弃（同 purchase_schema 习语）
 

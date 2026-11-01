@@ -284,7 +284,7 @@
 | `financial_indicator` | akshare | DataSinking 章节解析 → 同花顺官方合并报表派生（需 key） | `akshare_financial` → `datasink_indicator` → `hithink` | 上游不可用/解析无命中（逐槽递补） |
 | `history_stock` | 腾讯 K 线 | 新浪 K 线 → 同花顺官方（需 key） | `tencent` → `sina` → `hithink` | 腾讯不可用 |
 | `history_fund_otc` | 天天基金净值 | 东方财富净值 | `tiantian` → `eastmoney` | 天天基金不可用 |
-| `history_index` | 腾讯 K 线 | 东方财富 push2his（免 key 的独立厂商备源）→ 新浪 K 线 → 同花顺官方（需 key） | `tencent` → `eastmoney` → `sina` → `hithink` | 腾讯不可用（新浪 `getKLineData` 端点实测不可用，故东方财富为实际第二可用源） |
+| `history_index` | 腾讯 K 线 | 东方财富 push2his（免 key 的独立厂商备源）→ 新浪 K 线 | `tencent` → `eastmoney` → `sina` | 腾讯不可用（新浪 `getKLineData` 端点实测不可用，故东方财富为实际第二可用源）；同花顺不在此链——其指数 K 线只能走 A 股端点，指数 thscode 被上游以 `code=1002` 拒收 |
 | `history_index_us` | 新浪 K 线（实现存在，但端点对全部代码返回 404/空） | 腾讯 K 线（`gb_*` 代码支持有限，实际取数通常由此承担） | `sina` → `tencent` | 两源均返回空 → 该链路整体取空 |
 | `bond_yield` | akshare | —（配置兵底） | `akshare` | akshare 不可用时回落配置值 |
 | `sentiment` | 同花顺龙虎榜（需 key） | —（单源） | `hithink` | 缺 key 由链路预检跳过（报告写占位）；两源不可用或无命中 → 章节降级占位 |

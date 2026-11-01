@@ -108,15 +108,23 @@ def prepare_report_data(
     # style_factor_data dict 主键（保留全部子键，不重复定义），
     # 内嵌 industry_beta 子键（行业 Beta 子表）。
     factor_exposure = compute_factor_exposure_data(holdings, config, reporter)
+    # 三段分开计时：合并成一个「风格与因子」时，p95 18s / max 208s 的抖动无法判断
+    # 是三因子族取数、行业 Beta 还是相关性矩阵——分开后才好对症。
+    _record_span(recorder, "因子暴露", _t0)
+
+    _t0 = time.perf_counter()
     if factor_exposure is not None:
         # 行业 Beta 子表：功能开关 `industry_beta` 开关关闭时返回 None（区块隐藏）；
         # 开启但数据不足时 available=False（标题 + 占位，不阻塞本页签其余区块）
         factor_exposure["industry_beta"] = compute_industry_beta_data(holdings, details, config, reporter)
+    _record_span(recorder, "行业 Beta", _t0)
+
+    _t0 = time.perf_counter()
     # 持仓关系矩阵（相关性区块）：同因子暴露，基金深度分析关闭时为 None（章节隐藏）。
     # 数据契约 position_relationship_data——持仓关系矩阵一章两区块（重合度+相关性），
     # 相关性矩阵由编排层注入 pipeline_data；重合度区块为渲染期派生（§8.3）。
     correlation_data = compute_correlation_data(holdings, config, reporter)
-    _record_span(recorder, "风格与因子", _t0)
+    _record_span(recorder, "相关性矩阵", _t0)
 
     _t0 = time.perf_counter()
     # 品种覆盖诊断：逐品种标注数据状态，position_status数据契约

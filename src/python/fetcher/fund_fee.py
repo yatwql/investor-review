@@ -36,6 +36,7 @@ from src.python.analysis.fee_schedule_model import (
 )
 from src.python.cache import get_ttl
 from src.python.config import get_config
+from src.python.fetcher.batch import BatchDispatcher
 from src.python.fetcher.chain import FailureDiagnostics, fetch_with_fallback
 from src.python.providers.tiantian_fund_fee import (
     fee_payload_is_valid,
@@ -157,18 +158,32 @@ def fetch_fee_index(codes: list[str] | tuple[str, ...] | set[str]) -> dict[str, 
     purchase_table: Any = _UNLOADED  # 延迟加载：全量表单档兜底才取一次（同会话命中缓存零额外请求）
     config_fb = _config_fallback_map()
 
+    ordered: list[str] = []
+    seen: set[str] = set()
     for raw_code in codes or ():
         code = str(raw_code or "").strip()
-        if not code:
-            continue
+        if code and code not in seen:
+            seen.add(code)
+            ordered.append(code)
 
+    # 取数并行：单只基金 F10 页实测 6~31s（同站点慢响应），串行 9 只就是 80s 级长尾。
+    # 并行度取小值（站点同一域），结果按输入序回收；单代码失败不中断批。
+    payloads: dict[str, Any] = {}
+    results: list[Any] = []
+    if ordered:
+        workers = min(4, len(ordered))
+        with BatchDispatcher(max_workers=workers, thread_name_prefix="fund_fee") as dispatcher:
+            results = dispatcher.execute([lambda c=code: fetch_fund_fee_cached(c) for code in ordered])
+        for code, result in zip(ordered, results):
+            if result.success:
+                payloads[code] = result.result
+            else:  # 链路应自行消化传输异常；此处兜住不放大（单代码不中断批）
+                logger.warning("[基金费率] %s 取数异常，按未知继续: %s", code, result.error)
+
+    for code in ordered:
         purchase: dict[str, Any] | None = None
         redemption: dict[str, Any] | None = None
-        try:
-            payload = fetch_fund_fee_cached(code)
-        except Exception as exc:  # 链路应自行消化传输异常；此处兜住不放大（单代码不中断批）
-            logger.warning("[基金费率] %s 取数异常，按未知继续: %s", code, exc)
-            payload = None
+        payload = payloads.get(code)
         if payload is not None:
             purchase = parse_purchase_fee_schedule(payload.get("purchase_rows") or [], SRC_F10)
             redemption = parse_redemption_fee_schedule(payload.get("redemption_rows") or [], SRC_F10)
