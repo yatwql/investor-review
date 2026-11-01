@@ -1708,7 +1708,7 @@ verbose 模式颜色由 `stderr.isatty()` + `NO_COLOR` 环境变量控制，使�
 | 模板 | `tmpl/report_template.html` + `tmpl/partials/` | Jinja2 模板 + 宏 + 章节级 partial（主模板经 include 按组拆入） |
 | 环境 | `html_jinja_env.py` | Jinja2 环境初始化、过滤器注册 |
 | 保存 | `html_save.py` | HTML 文件写入 |
-| JS 资产 | `html_writer_assets.py` | `_copy_js_assets` 复制 Chart.js bundle 到输出目录；`_inline_js_assets` 保存前内嵌为行内脚本（单文件自包含） |
+| JS 资产 | `html_writer_assets.py` | `_inline_js_assets` 保存前把 Chart.js bundle 内嵌为行内脚本（单文件自包含；不产出松散副本） |
 
 **渲染期通信**（C14 约束）：所有渲染期数据（`section_visible_dict` 等）必须通过模板 `render()` 的 context 参数传递，不得写入 `_ENV.globals` 或模块级 dict 作为跨函数通信渠道。单次会话中不变的数据（如 `_ENV` 过滤器注册）不受此限。
 
@@ -2665,7 +2665,7 @@ analysis/whatif_backtest.py      # 纯计算（不联网、不 import report/）
 report/portfolio_history.py      # as-if 时序引擎：close×shares 综合走势（days 已透传到持仓历史链路）
 report/whatif_operations.py      # 共享层编排：build_whatif_data → build_whatif_backtest（联网取历史）→ 写报告
 report/whatif_sheet.py           # Excel 3 页签 + 条件第 4 页签「时序回测」（指定生效日时）
-report/whatif_writer.py          # 编排双产物：调仓模拟.xlsx / .html（最新版固定名 + 日期目录归档版）+ Chart.js 资产复制/内嵌（单文件自包含）
+report/whatif_writer.py          # 编排双产物：调仓模拟.xlsx / .html（最新版固定名 + 日期目录归档版）+ Chart.js 资产内嵌（单文件自包含，不产出松散副本）
 cli/_handlers.py               # whatif 子命令处理器（_handle_whatif）：--candidate 必填、--base 可选（缺省用 config 持仓）、--effective-date 透传（argparse 定义与类型钩子在 cli/_parser.py，钩子经共享层 normalize_effective_date 前置校验）
 tui/handlers_whatif.py           # [W] 入口：文件选择 + 生效日交互提示（_prompt_effective_date，校验委托共享层、非法重新询问）
 ```
@@ -2692,7 +2692,7 @@ tui/handlers_whatif.py           # [W] 入口：文件选择 + 生效日交互�
 
 **打印协调**：暗色下 `@media print` 的 CSS 覆盖只影响非 canvas 部分，canvas 像素仍暗色。`theme.js` 用**捕获阶段**监听 `beforeprint`（`addEventListener('beforeprint', fn, true)`——捕获先于 chart-print.js 的冒泡阶段快照执行）：若暗色，先移除 `data-theme` + 重读变量 + 遍历图表 `update()`（同步渲染浅色像素）→ chart-print.js 快照抓到浅色；`afterprint` 捕获阶段恢复暗色 + 重绘（`restoreAfterPrint` 标志记录状态）。`@media print` 同时隐藏 `.theme-toggle-btn`。
 
-**JS 资产**：`html_writer_assets.py::JS_ASSETS` 资产清单（9 个本地 bundle，含主题 `theme.js` 与正文折叠 `fold.js`），whatif 复用同一复制函数；两模板均在 `toc.js` 之后以 `defer` 加载（DOMContentLoaded 前执行，无 FOUC）。**单文件自包含**：`html_writer_assets.py::_inline_js_assets` 在保存前把 9 个资产内容内嵌——移除 head 区 `<script defer src="X.js">` 外链标签，按 bundle 依赖顺序追加为行内 `<script>` 到 `</body>` 前（复刻 defer 时序：DOM 解析完后、DOMContentLoaded 前按序执行，chart-init 能取到已解析 canvas/chart-data、toc.js/theme.js 内部 DOMContentLoaded 监听仍触发），报告 HTML 单文件完全自包含（Web 下载到其他目录/单发移动端浏览不依赖同目录松散 JS）；`_copy_js_assets` 保留作兜底（资产缺失/读取失败/含 `</script` 序列时该资产外链标签保留原位，松散文件仍可加载）。
+**JS 资产**：`html_writer_assets.py::JS_ASSETS` 资产清单（9 个本地 bundle，含主题 `theme.js` 与正文折叠 `fold.js`），whatif 复用同一内嵌函数；两模板均在 `toc.js` 之后以 `defer` 加载（DOMContentLoaded 前执行，无 FOUC）。**单文件自包含**：`html_writer_assets.py::_inline_js_assets` 在保存前把 9 个资产内容内嵌——移除 head 区 `<script defer src="X.js">` 外链标签，按 bundle 依赖顺序追加为行内 `<script>` 到 `</body>` 前（复刻 defer 时序：DOM 解析完后、DOMContentLoaded 前按序执行，chart-init 能取到已解析 canvas/chart-data、toc.js/theme.js 内部 DOMContentLoaded 监听仍触发），报告 HTML 单文件完全自包含（Web 下载到其他目录/单发移动端浏览不依赖同目录松散 JS）；不产出松散副本——资产缺失/读取失败/含 `</script` 序列时该资产的外链标签保留原位（下游可能 404，属可接受的降级）。
 
 **架构约束遵从**：
 
@@ -3770,9 +3770,9 @@ web/ (Web 服务层，薄入口)
 >
 > **约束外参照（脚本 CLI 契约）**：`scripts/` 下的检查脚本统一 `-v/--verbose` + `--ci`（仅输出 `文件:描述`）与退出码语义（0=通过 / 2=发现 finding，`check-code-traces.py` 保留 HIGH=1、LOW=3 分级）；共享设施集中在 `scripts/_shared/checklib.py`（CLI/输出/路径/文档区间解析）；历史痕迹检查内部实现拆在 `scripts/_traces_code/` 包内（共享排除模式在 `exemptions.py`，两脚本共用的历史叙述词表由 `_shared/traces_common.py` 单源提供）；检查脚本内部实现普遍拆 `前置横线包`pattern（`_doc_drift/` / `_traces_code/` / `_traces_doc/` / `_test_runner/` / `_eval_halluc_sampler/`，入口仅留 CLI 与原面 re-export）；连通性探测统一入口 `scripts/probe.py`（target registry，实现在 `scripts/_probes/`，新探针登记即用）；发布编排分步 CLI `scripts/release.py`（check/prepare/refresh/evolution/gate/publish/devbump，每步独立可审阅、失败即停，内部实现同为入口薄 CLI + 单模块）。
 
-> **约束外参照（配置默认值单源纪律）**：配置项的出厂缺省值只有一份事实位（`config/_config_defaults.py` / `_llm_settings_defaults.py` / `_llm_providers_defaults.py` 三张默认表），读取侧一律经 `get_default()` / `get_llm_setting_default()` 取值（支持点分嵌套路径与逐层传参），**不得自带与默认表同值同键的字面量兜底**——同一数值两份拷贝时改默认表必然漏改其一，症状是「配置文件里没写该键却拿到旧值」。由 `scripts/check-code-traces.py --ci` 的 DEFAULTDUP 支路强制（AST 判定 `x.get("<键>", <默认值>)`，默认表自身与测试不在扫描域）。
+> **约束外参照（配置默认值单源纪律）**：配置项的出厂缺省值只有一份事实位（`config/_config_defaults.py` / `_llm_settings_defaults.py` / `_llm_providers_defaults.py` 三张默认表），读取侧一律经 `get_default()` / `get_llm_setting_default()` 取值（支持点分嵌套路径与逐层传参），**不得自带与默认表同值同键的字面量兜底**；跨模块共享的**分析口径常量**（回看窗口 `DEFAULT_WINDOW`、估值三档 `TIER_*`、买卖方向 `SIDE_BUY/SIDE_SELL`、来源标记 `SOURCE_CONFIG`）同理单源在 `core/constants.py`，消费模块只 import 不重复定义——同一数值两份拷贝时改默认表必然漏改其一，症状是「配置文件里没写该键却拿到旧值」。由 `scripts/check-code-traces.py --ci` 的 DEFAULTDUP 支路强制（AST 判定 `x.get("<键>", <默认值>)`，默认表自身与测试不在扫描域）。
 
-> **约束外参照（测试有效性纪律）**：测试用例不得是「死用例 / 无断言 / 完全重复 / 自证用例」——分别指：pytest 永不收集或同名覆盖的用例、没有任何断言（也不经含断言的同类辅助方法）、函数体与参数装饰器归一化后彼此完全一致的用例、以及 patch 掉被测函数后又把其 `return_value` 断言回原值的用例。由 `scripts/check-test-redundancy.py --ci` 强制；删除/合并用例后须同步刷新 `test-coverage.md` 与 `folders.md` 计数（`check-doc-drift.py --with-test-count` 兜底）。
+> **约束外参照（测试有效性纪律）**：测试用例不得是「死用例 / 无断言 / 完全重复 / 自证用例」——分别指：pytest 永不收集或同名覆盖的用例、没有任何断言（也不经含断言的同类辅助方法）、函数体与参数装饰器归一化后彼此完全一致的用例、以及 patch 掉被测函数后又把其 `return_value` 断言回原值的用例。另有「账本日期写死绝对日期」：账本写入/裁剪类调用（`append_signals` / `append_decision` / `register_action_decisions` / `register_llm_decisions` / `prune_jsonl_by_age` …）的 `report_date`/`settle_date`/`date` 实参若写死「当前年 ±2 年」内的绝对日期，会在「日期 + 保留期（730 天）」之后静默退化成空账本——必须从当天回推派生。由 `scripts/check-test-redundancy.py --ci` 强制；删除/合并用例后须同步刷新 `test-coverage.md` 与 `folders.md` 计数（`check-doc-drift.py --with-test-count` 兜底）。
 
 ### 8.1 数据获取层约束
 
@@ -3905,7 +3905,7 @@ investor-review/
 │   │   │   ├── check_sources.py #   数据源健康检查（CLI/报告共享）
 │   │   │   ├── circuit_breaker.py #  统一断路器网关
 │   │   │   ├── code_utils.py    #   代码类型判定中心化
-│   │   │   ├── constants.py     #   共享常量 + 项目根路径
+│   │   │   ├── constants.py     #   共享常量 + 项目根路径（含跨模块分析口径：回看窗口/估值档位/买卖方向/来源标记）
 │   │   │   ├── http_client.py   #   HTTP 客户端工厂
 │   │   │   ├── retry.py         #   重试与退避唯一原语（策略/瞬时判据/执行器）
 │   │   │   ├── throttle.py      #   按名最小间隔节流唯一原语（含抖动算式）

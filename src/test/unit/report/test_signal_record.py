@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
+
 import pytest
 
 from src.python.config.features import reset_feature_flags, set_feature_enabled
@@ -19,7 +21,11 @@ from src.python.report import signal_record
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report, pytest.mark.usefixtures("offline_external_sources")]
 
-REPORT_DATE = "2026-09-10"
+#: 账本样本基准日：信号账本写侧按 730 天保留期裁剪（`append_signals` →
+#: `prune_jsonl_by_age`），写死绝对日期会在保留期过后被当作过期记录清掉，
+#: 用例静默退化成「一条都没登记」，故从当天回推派生。
+REPORT_DATE = (date.today() - timedelta(days=30)).isoformat()
+NEXT_DATE = (date.today() - timedelta(days=29)).isoformat()
 
 
 @pytest.fixture(autouse=True)
@@ -350,7 +356,7 @@ class TestIdempotenceAndFlag:
     def test_next_date_registers_again(self, ledger_path):
         signal_record.register_deterministic_signals(_pipeline_data(), report_date=REPORT_DATE, path=ledger_path)
 
-        nxt = signal_record.register_deterministic_signals(_pipeline_data(), report_date="2026-09-11", path=ledger_path)
+        nxt = signal_record.register_deterministic_signals(_pipeline_data(), report_date=NEXT_DATE, path=ledger_path)
 
         assert nxt["registered"] == 5
         assert len(sl.load_signals(ledger_path)) == 10

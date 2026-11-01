@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import date, timedelta
 
 import pytest
 
@@ -30,12 +31,13 @@ def _reset_flags():
 def _minimal(signal_type=sl.SIGNAL_TAIL_RISK, rating="尾部正常", **overrides):
     kwargs = dict(
         signal_type=signal_type,
-        report_date="2026-09-10",
+        # 账本写侧按 730 天保留期裁剪，日期必须相对当天派生（写死会被当过期记录清掉）
+        report_date=(date.today() - timedelta(days=30)).isoformat(),
         rating=rating,
         value=-1.0,
     )
     kwargs.update(overrides)
-    return sl.build_signal(**kwargs)
+    return sl.build_signal(**kwargs)  # type: ignore[arg-type]  # overrides 允许覆盖任何字段验边界
 
 
 class TestUnrecognizedFreshness:
@@ -146,7 +148,7 @@ class TestFieldExtremes:
 
         record = sl.build_signal(
             signal_type=sl.SIGNAL_STYLE_FACTOR,
-            report_date="2026-09-10",
+            report_date=(date.today() - timedelta(days=30)).isoformat(),
             rating="价值",
             detail=detail,
         )
@@ -157,7 +159,7 @@ class TestFieldExtremes:
         """detail 不可序列化是编程错误：须显式失败而非静默丢记录（seam 侧兜底）。"""
         record = sl.build_signal(
             signal_type=sl.SIGNAL_STYLE_FACTOR,
-            report_date="2026-09-10",
+            report_date=(date.today() - timedelta(days=30)).isoformat(),
             rating="价值",
             detail={"bad": object()},
         )

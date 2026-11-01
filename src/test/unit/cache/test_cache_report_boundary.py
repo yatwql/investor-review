@@ -39,7 +39,6 @@ def _write(cache_dir, key: str, age_seconds: float, data=None) -> None:
     payload = {"_ts": time.time() - age_seconds, "_data": data if data is not None else {"v": 1}}
     (cache_dir / f"{key}_{_CACHE_KEY_VERSION}.json").write_text(json.dumps(payload), encoding="utf-8")
 
-    @pytest.mark.unit_cache
     def test_per_module_cost_and_cache_flag_are_per_report(self):
         """逐模块费用同样只算本次；「本次命中缓存」按本次有无真实调用判定。
 

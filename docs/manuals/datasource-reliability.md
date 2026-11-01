@@ -394,7 +394,7 @@
 
 - 全量菜单 L 前先执行菜单 E/B，热点缓存命中后 LLM 生成阶段速度更快
 - 定期在菜单 `[3]` 缓存管理中执行 `3` 清理过期缓存（不影响 TTL 内数据）
-- akshare 接口频繁变更时，以 `pyproject.toml` 锁定的版本为准（当前 `akshare==1.18.64`），必要时在 requirements 中固定版本
+- akshare 接口频繁变更时，以 `pyproject.toml` 的约束为准（当前 `akshare>=1.16,<2.0`，与 `requirements.txt` 逐字一致）；需要精确复现某次排查时可临时在 requirements 中 pin 到具体版本
 
 ---
 

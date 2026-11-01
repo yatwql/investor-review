@@ -50,7 +50,6 @@ from src.python.providers.news_dedup_anchor_store import (  # noqa: F401  — �
     read_anchor_lines,
 )
 from src.python.providers.news_dedup_rules import (  # noqa: F401  — 门面 re-export
-    ANCHOR_LEGACY_ERA,
     ANCHOR_RULES_FIELD,
     _ANCHOR_RULES_VERSION,
     anchor_rules_version,

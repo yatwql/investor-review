@@ -16,7 +16,12 @@ import pytest
 
 from src.python.core import decision_ledger as dl
 
+from src.test._relative_dates import day as _d
+
 pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
+#: 账本样本日期：决策账本按 730 天保留期在写侧裁剪
+#: 写死绝对日期会在「日期 + 保留期」之后被 `prune_jsonl_by_age` 当过期记录清掉，
+#: 用例静默变成「账本为空 / 键缺失」，失败信息完全看不出是日期过期——故从当天回推派生。
 
 
 def _w(ledger_path, events):
@@ -117,12 +122,10 @@ class TestSameDayPending:
             name="华夏回报",
             direction=dl.DIRECTION_SHORT,
             carrier=dl.CARRIER_EXPERT_REVIEW,
-            report_date="2026-09-01",
+            report_date=_d(0),
             path=lp,
         )
-        assert dl.same_day_pending_exists(
-            code="040046", carrier=dl.CARRIER_EXPERT_REVIEW, report_date="2026-09-01", path=lp
-        )
+        assert dl.same_day_pending_exists(code="040046", carrier=dl.CARRIER_EXPERT_REVIEW, report_date=_d(0), path=lp)
 
     def test_false_when_settled(self, tmp_path):
         lp = str(tmp_path / "ledger.jsonl")
@@ -131,12 +134,12 @@ class TestSameDayPending:
             name="华夏回报",
             direction=dl.DIRECTION_SHORT,
             carrier=dl.CARRIER_EXPERT_REVIEW,
-            report_date="2026-09-01",
+            report_date=_d(0),
             path=lp,
         )
         dl.append_settlement(decision_id=did, raw_return=-0.02, outcome=dl.OUTCOME_MISS, path=lp)
         assert not dl.same_day_pending_exists(
-            code="040046", carrier=dl.CARRIER_EXPERT_REVIEW, report_date="2026-09-01", path=lp
+            code="040046", carrier=dl.CARRIER_EXPERT_REVIEW, report_date=_d(0), path=lp
         )
 
     def test_false_different_report_date(self, tmp_path):
@@ -146,12 +149,12 @@ class TestSameDayPending:
             name="华夏回报",
             direction=dl.DIRECTION_SHORT,
             carrier=dl.CARRIER_EXPERT_REVIEW,
-            report_date="2026-09-01",
+            report_date=_d(0),
             path=lp,
         )
         # 跨日重跑（新 report_date）→ 不误伤：视为新一轮判断
         assert not dl.same_day_pending_exists(
-            code="040046", carrier=dl.CARRIER_EXPERT_REVIEW, report_date="2026-09-02", path=lp
+            code="040046", carrier=dl.CARRIER_EXPERT_REVIEW, report_date=_d(1), path=lp
         )
 
     def test_false_different_carrier_or_code(self, tmp_path):
@@ -161,15 +164,13 @@ class TestSameDayPending:
             name="华夏回报",
             direction=dl.DIRECTION_SHORT,
             carrier=dl.CARRIER_REBALANCE,
-            report_date="2026-09-01",
+            report_date=_d(0),
             path=lp,
         )
         assert not dl.same_day_pending_exists(
-            code="040046", carrier=dl.CARRIER_EXPERT_REVIEW, report_date="2026-09-01", path=lp
+            code="040046", carrier=dl.CARRIER_EXPERT_REVIEW, report_date=_d(0), path=lp
         )
-        assert not dl.same_day_pending_exists(
-            code="600519", carrier=dl.CARRIER_REBALANCE, report_date="2026-09-01", path=lp
-        )
+        assert not dl.same_day_pending_exists(code="600519", carrier=dl.CARRIER_REBALANCE, report_date=_d(0), path=lp)
 
     def test_false_without_report_date(self, tmp_path):
         lp = str(tmp_path / "ledger.jsonl")

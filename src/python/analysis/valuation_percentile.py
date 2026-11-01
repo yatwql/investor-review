@@ -17,6 +17,8 @@ from __future__ import annotations
 import logging
 import math
 
+from src.python.core.constants import TIER_FAIR, TIER_OVERVALUED, TIER_UNDERVALUED
+
 logger = logging.getLogger("invest")
 
 # ═══════════════════════════════════════════════════════════════
@@ -25,18 +27,15 @@ logger = logging.getLogger("invest")
 
 # 默认回看窗口（交易日 ≈ 3 年）
 DEFAULT_LOOKBACK_DAYS: int = 750
-# 有效样本下限：低于此判数据不足，不接受硬算（与因子暴露一致）
+# 有效样本下限：低于此判数据不足，不接受硬算（与因子暴露一致）。
+# 注：与 correlation.MIN_SAMPLES 同值但不同义（此处为估值序列样本下限，
+# 该处为两序列对齐后的重叠样本），口径各自独立，勿合并为同一常量。
 MIN_SAMPLES: int = 60
 # 三档刻度边界（价格分位 %）
 LOW_BOUND: float = 30.0  # 分位 < 此值 → 低估
 HIGH_BOUND: float = 70.0  # 分位 > 此值 → 高估
 # 显式局限标注（渲染层必须展示，合规/误导风险）
 DISCLAIMER: str = "价格分位代理，非真实历史估值分位"
-
-# 三档刻度中文名（文档/UI 统一口径）
-TIER_UNDERVALUED = "低估"
-TIER_FAIR = "合理"
-TIER_OVERVALUED = "高估"
 
 
 def tier_from_percentile(pct: float) -> str:

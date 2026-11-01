@@ -7,11 +7,14 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 import pytest
 from src.test._script_loader import load_script
+from src.test.unit.scripts.test_trace_check_scripts import (  # 单源：命中判定与分类抓取
+    _doc_cat,
+    _doc_hit,
+)
 
 pytestmark = [
     pytest.mark.unit,
@@ -24,41 +27,14 @@ def doc_traces():
     return load_script("check-doc-traces.py")
 
 
-def _doc_hit(mod, line: str, task_record: bool = False) -> str | None:
-    """返回 check-doc-traces 命中的 desc；未命中返回 None。
-
-    与 scan_file 行为一致：对 CHAPTER/ROUND 应用计数/序数豁免；
-    目录树行（│ ├ └ 开头）跳过通用豁免且仅 ARCHIVE 类豁免、STATUS
-    仅在目录树行检出（正文当前状态叙述不检）；NARRATIVE 复盘叙事
-    仅任务记录域检出（task_record=True）。
-    """
-    is_tree = bool(mod._TREE_LINE.match(line))
-    if not is_tree and mod._is_excluded(line):
-        return None
-    for pat, cat, desc in mod._DOC_PATTERNS:
-        if is_tree and cat == "ARCHIVE":
-            continue
-        if cat == "STATUS" and not is_tree:
-            continue
-        if cat == "NARRATIVE" and not task_record:
-            continue
-        if cat == "CHAPTER" and mod._is_chapter_excluded(line):
-            continue
-        if cat == "ROUND" and mod._is_round_excluded(line):
-            continue
-        if re.search(pat, line):
-            return desc
-    return None
-
-
 class TestDocTreeLineNarrowing:
     """目录树行豁免收窄：仅 ARCHIVE 类豁免；任务编号（CODE）与进度状态
     词（STATUS）在树行照检，正文状态叙述不检（全类别树行豁免使目录树
     描述中的任务号与进度类措辞整体过闸）。"""
 
     def test_task_id_in_tree_line_flagged(self, doc_traces):
-        assert _doc_hit(doc_traces, "│   ├── foo.py # 设计（plan-123）") is not None
-        assert _doc_hit(doc_traces, "│   ├── foo.py # 设计（rf-456 关联）") is not None
+        assert _doc_cat(doc_traces, "│   ├── foo.py # 设计（plan-123）") == "CODE"
+        assert _doc_cat(doc_traces, "│   ├── foo.py # 设计（rf-456 关联）") == "CODE"
 
     def test_status_word_in_tree_line_flagged(self, doc_traces):
         for line in (
@@ -75,7 +51,7 @@ class TestDocTreeLineNarrowing:
             "│   ├── foo.py # 设计（NaN 不再经 or 0.0 渗入）",
             "│   ├── foo.py # 设计草案（判定通道/降级矩阵）",
         ):
-            assert _doc_hit(doc_traces, line) is not None, f"树行进度状态词未检出: {line}"
+            assert _doc_cat(doc_traces, line) == "STATUS", f"树行进度状态词未检出: {line}"
 
     def test_marker_enum_in_tree_line_exempt(self, doc_traces):
         """测试标记违规类别枚举（未注册/已移除/edge）属语义名，树行合法不检。"""
@@ -84,8 +60,8 @@ class TestDocTreeLineNarrowing:
 
     def test_migration_source_in_prose_flagged(self, doc_traces):
         """来源叙述补强：无后缀模块名的迁入/移入（带后缀文件模式覆盖不到）。"""
-        assert _doc_hit(doc_traces, "归因生成器（自 generators 迁入，彼处 re-export）") is not None
-        assert _doc_hit(doc_traces, "从 analysis 移入 core 的判定原语") is not None
+        assert _doc_cat(doc_traces, "归因生成器（自 generators 迁入，彼处 re-export）") == "HIGH"
+        assert _doc_cat(doc_traces, "从 analysis 移入 core 的判定原语") == "HIGH"
 
     def test_archive_in_tree_line_exempt(self, doc_traces):
         """目录树行的 archive/ 与归档文件名指向仍豁免（结构记录合法指向）。"""

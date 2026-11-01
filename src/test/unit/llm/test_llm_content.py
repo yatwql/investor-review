@@ -42,6 +42,12 @@ pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.llm]
 # ═══════════════════════════════════════════════════════════
 
 
+def _rgb(cell) -> str | None:
+    """单元格字体颜色 RGB（openpyxl 的 font.color 可为 None）。"""
+    color = cell.font.color
+    return None if color is None else color.rgb
+
+
 class TestCalcRowHeight(unittest.TestCase):
     """测试行高估算函数。"""
 
@@ -103,7 +109,7 @@ class TestStripHtml(unittest.TestCase):
         self.assertEqual(strip_html("A &amp; B"), "A &amp; B")
 
     def test_none_input(self) -> None:
-        self.assertEqual(strip_html(None), "")
+        self.assertEqual(strip_html(None), "")  # type: ignore[arg-type]  # 刻意传 None 验容错
 
     def test_empty_string(self) -> None:
         self.assertEqual(strip_html(""), "")
@@ -161,7 +167,7 @@ class TestWriteContentSheet(unittest.TestCase):
 
     def test_wrap_text_enabled(self):
         """每行内容单元格启用文本换行。"""
-        ws = self._write_and_get_sheet(content="段落一\n\n段落二")
+        ws = self._write_and_get_sheet(content="<p>段落一</p><p>段落二</p>")
         for r in (2, 4):
             cell = ws.cell(row=r, column=1)
             self.assertTrue(cell.alignment.wrap_text, f"Row {r} wrap_text should be True")
@@ -171,7 +177,7 @@ class TestWriteContentSheet(unittest.TestCase):
         ws = self._write_and_get_sheet(content="测试内容")
         cell = ws.cell(row=2, column=1)
         self.assertEqual(cell.font.size, CONTENT_FONT.size)
-        self.assertEqual(cell.font.color.rgb, CONTENT_FONT.color.rgb)
+        self.assertEqual(_rgb(cell), CONTENT_FONT.color.rgb)
 
     def test_row_height_short(self):
         """短段落行高 = 最小行高。"""
@@ -392,7 +398,7 @@ class TestLlmModuleFailureReset(unittest.TestCase):
         # 复现 autouse fixture 的执行时机（__wrapped__ 取 fixture 底层函数）
         from src.test.conftest import _auto_reset_llm_module_failure
 
-        _auto_reset_llm_module_failure.__wrapped__()
+        getattr(_auto_reset_llm_module_failure, "__wrapped__")()
 
         self.assertEqual(LLM_MODULE_FAILURE, {})
 
@@ -468,7 +474,7 @@ class TestExtractFooterText(unittest.TestCase):
     """测试从 HTML 中提取底部 LLM 标识行。"""
 
     def test_none_input(self) -> None:
-        self.assertEqual(_extract_footer_text(None), "")
+        self.assertEqual(_extract_footer_text(None), "")  # type: ignore[arg-type]  # 刻意传 None 验容错
 
     def test_empty_input(self) -> None:
         self.assertEqual(_extract_footer_text(""), "")
@@ -629,8 +635,8 @@ class TestSplitHtmlBlocks(unittest.TestCase):
         self.assertEqual(_split_html_blocks(""), [])
 
     def test_no_block_tags(self) -> None:
-        """无块级标签 → 按 \\n\\n 分段（兼容纯文本输入）。"""
-        self.assertEqual(_split_html_blocks("段落一\n\n段落二"), ["段落一", "段落二"])
+        """无块级标签 → 整段作为一个块（不再按 \\n\\n 二次分段）。"""
+        self.assertEqual(_split_html_blocks("段落一\n\n段落二"), ["段落一\n\n段落二"])
 
     def test_no_newline_between_p(self) -> None:
         """markdown_to_html 无换行拼接 <p> 标签 → 正确切分为独立块。"""
@@ -724,11 +730,11 @@ class TestWriteContentSheetFactCheck(unittest.TestCase):
         first = ws.cell(row=2, column=1)
         detail = ws.cell(row=3, column=1)
         self.assertIn("事实校验：3/5 项通过", str(first.value))
-        self.assertEqual(first.font.color.rgb, _FACT_CHECK_WARN_FONT.color.rgb)
+        self.assertEqual(_rgb(first), _FACT_CHECK_WARN_FONT.color.rgb)
         self.assertIn("持仓占比 25%", str(detail.value))
-        self.assertEqual(detail.font.color.rgb, _FACT_CHECK_DETAIL_FONT.color.rgb)
+        self.assertEqual(_rgb(detail), _FACT_CHECK_DETAIL_FONT.color.rgb)
         # 第二明细行继续灰色
-        self.assertEqual(ws.cell(row=4, column=1).font.color.rgb, _FACT_CHECK_DETAIL_FONT.color.rgb)
+        self.assertEqual(_rgb(ws.cell(row=4, column=1)), _FACT_CHECK_DETAIL_FONT.color.rgb)
 
     def test_pass_summary_green_corrections_gray(self) -> None:
         """通过摘要（含自动修正）→ 首行绿色，已修正明细灰色。"""
@@ -740,9 +746,9 @@ class TestWriteContentSheetFactCheck(unittest.TestCase):
         first = ws.cell(row=2, column=1)
         detail = ws.cell(row=3, column=1)
         self.assertIn("✓ 事实校验通过", str(first.value))
-        self.assertEqual(first.font.color.rgb, GREEN_FONT.color.rgb)
+        self.assertEqual(_rgb(first), GREEN_FONT.color.rgb)
         self.assertIn("已修正明细: 5.0%→30.3%", str(detail.value))
-        self.assertEqual(detail.font.color.rgb, _FACT_CHECK_DETAIL_FONT.color.rgb)
+        self.assertEqual(_rgb(detail), _FACT_CHECK_DETAIL_FONT.color.rgb)
 
     def test_no_newline_p_tags_split_into_rows(self) -> None:
         """markdown_to_html 无换行多段 → 每段独立单元格（修复整模块坍缩）。"""

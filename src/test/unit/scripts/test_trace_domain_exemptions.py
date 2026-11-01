@@ -9,6 +9,10 @@ from __future__ import annotations
 
 import pytest
 from src.test._script_loader import load_script
+from src.test.unit.scripts.test_trace_check_scripts import (  # 单源：命中判定与分类抓取
+    _code_cat,
+    _code_hit,
+)
 
 pytestmark = [
     pytest.mark.unit,
@@ -19,34 +23,6 @@ pytestmark = [
 @pytest.fixture(scope="module")
 def code_traces():
     return load_script("check-code-traces.py")
-
-
-def _code_hit(mod, line: str) -> str | None:
-    """返回 check-code-traces 命中的 desc；未命中返回 None。
-
-    与 scan_file 行为一致：对 CHAPTER/ROUND 应用计数/序数豁免，
-    对 DASHTASK/UNDERSCORE 应用合法领域值豁免，对 MAGIC 逐 token 应用
-    合法领域值豁免（"共 19 章"/"T-1 交易日"/"S1 场景"等合法表述不误报）。
-    """
-    if mod._is_excluded(line):
-        return None
-    for pat, cat, desc in mod.PATTERNS:
-        if cat == "CHAPTER" and mod._is_chapter_excluded(line):
-            continue
-        if cat == "ROUND" and mod._is_round_excluded(line):
-            continue
-        if cat == "DASHTASK" and mod._is_dash_excluded(line):
-            continue
-        if cat == "UNDERSCORE" and mod._is_under_excluded(line):
-            continue
-        if cat == "MAGIC":
-            for m in __import__("re").finditer(pat, line):
-                if not mod._is_magic_match_excluded(line, m.start(), m.end()):
-                    return desc
-            continue
-        if __import__("re").search(pat, line):
-            return desc
-    return None
 
 
 class TestDomainValueExemptions:
@@ -76,7 +52,9 @@ class TestDomainValueExemptions:
             "C19 契约",
         ]
         for line in flagged:
-            assert _code_hit(code_traces, line) is not None, f"魔法编号未检出: {line}"
+            # 这组样本横跨「魔法编号」与「架构约束代号」两类（后者判定为 CODE），
+            # 断言落到允许分类集合，而非只证明「有命中」。
+            assert _code_cat(code_traces, line) in {"MAGIC", "CODE"}, f"魔法编号未检出: {line}"
 
     def test_magic_percentile_notation_not_flagged(self, code_traces):
         """MAGIC 合法领域值：分位记号（P50/P90/P95/P99）为性能/风险统计口径，非任务编号。"""
@@ -91,7 +69,7 @@ class TestDomainValueExemptions:
 
     def test_magic_percentile_exemption_stays_narrow(self, code_traces):
         """豁免只覆盖两位数分位记号：一位数近邻（P9）仍属魔法编号须检出。"""
-        assert _code_hit(code_traces, "P9 协议") is not None
+        assert _code_cat(code_traces, "P9 协议") == "MAGIC"
 
     def test_magic_style_guardrail_codes_not_flagged(self, code_traces):
         """MAGIC 合法领域值：样式护栏编号（E1~E3/W1~W5）为 DESIGN.md「机检落地」
@@ -99,7 +77,7 @@ class TestDomainValueExemptions:
         for line in ["W3 内联色值观察", "W4/W5 档外字号间距", "E1 强调色越权", "W2 圆角档外"]:
             assert _code_hit(code_traces, line) is None, f"护栏编号被误伤: {line}"
         for line in ["W6 新维度", "E6 规则"]:
-            assert _code_hit(code_traces, line) is not None, f"越界护栏编号未检出: {line}"
+            assert _code_cat(code_traces, line) == "MAGIC", f"越界护栏编号未检出: {line}"
 
     def test_dashtask_letter_digit_flagged(self, code_traces):
         """DASHTASK：注释中"字母-数字/连续字母-数字"（F-1/G-1/TASK-22/D-8）疑似任务编号须检出。"""
@@ -112,7 +90,7 @@ class TestDomainValueExemptions:
             "CONCENTRATION-03 阈值",  # 非 requirements.md 需求 ID 形态的裸字母-数字
         ]
         for line in flagged:
-            assert _code_hit(code_traces, line) is not None, f"疑似任务编号未检出: {line}"
+            assert _code_cat(code_traces, line) == "DASHTASK", f"疑似任务编号未检出: {line}"
 
     def test_dashtask_legit_not_flagged(self, code_traces):
         """DASHTASK 合法领域值不误伤：交易日（T-1）、小写下标/编码（i-1/utf-8）、计数算术（N-2 项）。"""
@@ -134,7 +112,7 @@ class TestDomainValueExemptions:
             "MINE_22 编号",
         ]
         for line in flagged:
-            assert _code_hit(code_traces, line) is not None, f"疑似无意义代码未检出: {line}"
+            assert _code_cat(code_traces, line) == "UNDERSCORE", f"疑似无意义代码未检出: {line}"
 
     def test_underscore_legit_not_flagged(self, code_traces):
         """UNDERSCORE 合法领域值不误伤：小写语义短名（changed_1m/syl_1y）。"""

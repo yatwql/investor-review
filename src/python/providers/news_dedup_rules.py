@@ -252,13 +252,9 @@ _FINGERPRINT_PROBES: tuple[str, ...] = (
 #: 锚点记录的规则版本字段名（校准工具按它分规则时代）
 ANCHOR_RULES_FIELD = "anchor_rules_version"
 
-#: 无规则指纹旧行的标注值（早期版本写入的锚点没有该字段，压缩时补此标注，
-#: 避免这些行与在用指纹混算；仍作为「历史时代」样本保留，不丢历史）
-ANCHOR_LEGACY_ERA = "legacy"
-
 
 def anchor_rules_version(record: dict) -> str:
-    """记录归属的规则时代指纹（字段缺失/空 → 空串，由压缩路径补 ``ANCHOR_LEGACY_ERA``）。"""
+    """记录归属的规则时代指纹（字段缺失/空 → 空串，压缩路径据此丢弃旧行）。"""
     return str(record.get(ANCHOR_RULES_FIELD) or "").strip()
 
 

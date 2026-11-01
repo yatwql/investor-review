@@ -16,14 +16,12 @@ logger = logging.getLogger("invest")
 
 # 主表固定四列表头（唯一事实源：解析 / 写回 / 校验共用）
 HOLDINGS_HEADER: list[str] = ["名称", "代码", "持仓份额", "每份成本"]
-_EXPECTED_HEADER = HOLDINGS_HEADER  # 模块内既有引用（含测试）沿用
 
 # 可选流水页签名与表头（持仓文件扩展——不触碰主表 4 列语义）
 _TRADE_SHEET_NAME = "交易流水"
 _DIVIDEND_SHEET_NAME = "分红流水"
 # 交易流水列：日期/代码/操作/份额/价格 + 可选费用列（费用列缺失时按 0 处理）
 TRADE_HEADER: list[str] = ["日期", "代码", "操作", "份额", "价格"]
-_TRADE_HEADER = TRADE_HEADER  # 模块内既有引用（含测试）沿用
 # 分红流水列：日期/代码/每份分红
 _DIVIDEND_HEADER = ["日期", "代码", "每份分红"]
 
@@ -306,8 +304,8 @@ def _parse_trade_sheet(ws) -> list[TradeRecord]:
         return records
 
     header = [_safe_str(cell.value) for cell in next(ws.iter_rows(min_row=1, max_row=1))]
-    if header[:5] != _TRADE_HEADER:
-        logger.warning("交易流水页签表头不匹配: %s，跳过（应为 %s）", header, _TRADE_HEADER)
+    if header[:5] != TRADE_HEADER:
+        logger.warning("交易流水页签表头不匹配: %s，跳过（应为 %s）", header, TRADE_HEADER)
         return records
     has_fee = len(header) >= 6 and header[5] == "费用"
 

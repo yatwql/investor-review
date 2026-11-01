@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from src.python.providers import news_dedup, news_dedup_anchor_policy, news_dedup_anchor_store
+from src.test._relative_dates import recent_ts as _recent_ts  # 样本时间戳单源（禁止各文件自写一份）
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_news]
 
@@ -75,17 +76,20 @@ def _raw(directory) -> str:
     return "".join(chunks)
 
 
-def _record(source: str, title: str, ratio: float) -> str:
-    return json.dumps(
-        {
-            "source_a": source,
-            "title_a": title,
-            "source_b": "src-b",
-            "title_b": f"对照-{title}",
-            "ratio": ratio,
-        },
-        ensure_ascii=False,
-    )
+def _record(source: str, title: str, ratio: float, *, with_fingerprint: bool = True) -> str:
+    """构造锚点记录（默认带规则指纹 = 当前文件格式；不带指纹的旧行会被压缩丢弃）。"""
+    from src.python.providers.news_dedup_rules import ANCHOR_RULES_FIELD, _ANCHOR_RULES_VERSION
+
+    record = {
+        "source_a": source,
+        "title_a": title,
+        "source_b": "src-b",
+        "title_b": f"对照-{title}",
+        "ratio": ratio,
+    }
+    if with_fingerprint:
+        record[ANCHOR_RULES_FIELD] = _ANCHOR_RULES_VERSION
+    return json.dumps(record, ensure_ascii=False)
 
 
 class TestAnchorCompaction:
@@ -150,17 +154,24 @@ class TestAnchorCompaction:
         news_dedup_anchor_policy._compact_anchor_file(path.stat().st_size)
         assert path.read_bytes() == before
 
-    def test_marks_unattributed_rows_as_legacy(self, tmp_path, monkeypatch):
-        """无规则指纹的早期行补 legacy 标注后保留（不丢历史，也不与在用指纹混算）。"""
-        from src.python.providers.news_dedup_rules import ANCHOR_LEGACY_ERA, ANCHOR_RULES_FIELD
+    def test_drops_rows_without_fingerprint(self, tmp_path, monkeypatch):
+        """无规则指纹的早期行直接丢弃（不保留旧数据文件形态，也不与在用指纹混算）。"""
+        import gzip
 
-        path = self._anchor_file(tmp_path, monkeypatch)
-        news_dedup_anchor_policy._compact_anchor_file(path.stat().st_size)
+        from src.python.providers.news_dedup_rules import ANCHOR_RULES_FIELD
+
+        shard = tmp_path / "dedup_anchors-202610.jsonl.gz"
+        with gzip.open(shard, "wt", encoding="utf-8") as f:
+            f.write(_record("sina", "旧标题", 0.5, with_fingerprint=False) + "\n")
+            f.write(_record("sina", "新标题", 0.5) + "\n")
+        monkeypatch.setattr(news_dedup_anchor_policy, "_ANCHOR_SIZE_WARN_BYTES", 1)
+
+        result = news_dedup.compact_anchor_file(str(shard), target_bytes=10**9, retention_days=0)
+
+        assert result["unattributed"] == 1, "无指纹行须计入丢弃数"
         rows = _rows(tmp_path)
-        assert rows
-        assert {r[ANCHOR_RULES_FIELD] for r in rows} == {ANCHOR_LEGACY_ERA}
-        kept = {(r["source_a"], r["title_a"]): r["ratio"] for r in rows}
-        assert kept[("sina", "标题A")] == 0.9, "补标注只加字段，不改原记录内容"
+        assert [r["title_a"] for r in rows] == ["新标题"], "只应保留带指纹的当前格式行"
+        assert all(row.get(ANCHOR_RULES_FIELD) for row in rows)
 
 
 class TestSizeCap:
@@ -188,12 +199,15 @@ class TestSizeCap:
 
     def test_branch_quota_protects_small_branch(self, tmp_path):
         """体积裁剪不得把小分支整类裁光（否则校准报告会误报「该规则没生效」）。"""
-        rows = [self._row("cross_skip", f"旧样本{i:03d}", "2026-10-01 10:00") for i in range(300)]
-        rows += [self._row("cross_opposite", f"稀{branch}", "2026-10-02 10:00") for branch in "ABC"]
+        rows = [self._row("cross_skip", f"旧样本{i:03d}", _recent_ts(2)) for i in range(300)]
+        rows += [self._row("cross_opposite", f"稀{branch}", _recent_ts(1)) for branch in "ABC"]
         path = self._write(tmp_path, rows)
 
         result = news_dedup.compact_anchor_file(str(path), target_bytes=20_000, branch_min_keep=3)
 
+        # 前提自检：样本必须落在保留期内。否则本用例退化成"保留期裁剪"用例，
+        # 体积裁剪路径根本没走到，断言失败却看起来像功能坏了。
+        assert result["expired"] == 0, "用例样本已超出保留期（时间戳必须在窗口内）"
         assert result["trimmed"] > 0
         assert result["trimmed_by_branch"].get("cross_opposite", 0) == 0
         kept = _rows(tmp_path)
@@ -201,7 +215,7 @@ class TestSizeCap:
 
     def test_aborts_when_file_changes_during_read(self, tmp_path, monkeypatch):
         """读取期间被并发追加 → 放弃本次压缩（不吞掉另一个进程写入的行）。"""
-        path = self._write(tmp_path, [self._row("cross_skip", "甲", "2026-10-01 10:00")])
+        path = self._write(tmp_path, [self._row("cross_skip", "甲", _recent_ts(2))])
         real_read = news_dedup.read_anchor_lines
 
         import gzip
@@ -210,7 +224,7 @@ class TestSizeCap:
             lines = real_read(base)
             # 读取完成、写回之前，另一个进程追加了一行（gzip 追加 = 新 member）
             with gzip.open(path, "at", encoding="utf-8") as f:
-                f.write(json.dumps(self._row("cross_skip", "并发写入", "2026-10-02 10:00"), ensure_ascii=False) + "\n")
+                f.write(json.dumps(self._row("cross_skip", "并发写入", _recent_ts(1)), ensure_ascii=False) + "\n")
             return lines
 
         monkeypatch.setattr(news_dedup_anchor_policy, "read_anchor_lines", racing_read)
@@ -222,8 +236,8 @@ class TestSizeCap:
             assert "并发写入" in f.read(), "并发写入的行必须保留"
 
     def test_no_rewrite_when_nothing_to_trim(self, tmp_path):
-        """无行可裁、无需补标注时不重写文件（避免几十 MB 的空转重写）。"""
-        rows = [self._row("cross_skip", "甲", "2026-10-28 10:00"), self._row("cross_skip", "乙", "2026-10-28 11:00")]
+        """无行可裁时不重写文件（避免几十 MB 的空转重写）。"""
+        rows = [self._row("cross_skip", "甲", _recent_ts(2, 10)), self._row("cross_skip", "乙", _recent_ts(2, 11))]
         path = self._write(tmp_path, rows)
         news_dedup.compact_anchor_file(str(path), target_bytes=10**9)  # 首次：旧单文件迁入分片
         shard = next(tmp_path.glob("dedup_anchors-*.jsonl.gz"))
@@ -317,7 +331,7 @@ class TestSharding:
         """未分片的单文件不参与读取与体积统计（锚点只认按月分片）。"""
         base = self._base(tmp_path, monkeypatch)
         Path(base).write_text(
-            json.dumps(self._row("早期新闻", "2026-10-01 10:00"), ensure_ascii=False) + "\n", encoding="utf-8"
+            json.dumps(self._row("早期新闻", _recent_ts(2)), ensure_ascii=False) + "\n", encoding="utf-8"
         )
 
         assert news_dedup.read_anchor_lines(base) == []

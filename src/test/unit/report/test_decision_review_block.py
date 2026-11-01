@@ -15,7 +15,12 @@ from src.python.config.features import set_feature_enabled, reset_feature_flags
 from src.python.core import decision_ledger as dl
 from src.python.report import decision_review_block as rb
 
+from src.test._relative_dates import day as _d
+
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
+#: 账本样本日期：复盘区块读决策账本（730 天写侧裁剪）
+#: 写死绝对日期会在「日期 + 保留期」之后被 `prune_jsonl_by_age` 当过期记录清掉，
+#: 用例静默变成「账本为空 / 键缺失」，失败信息完全看不出是日期过期——故从当天回推派生。
 
 
 @pytest.fixture(autouse=True)
@@ -42,11 +47,11 @@ class TestReviewBlock:
             name="电池ETF",
             direction=dl.DIRECTION_SHORT,
             carrier=dl.CARRIER_EXPERT_REVIEW,
-            report_date="2026-09-01",
+            report_date=_d(0),
             baseline_close=0.712,
             path=lp,
         )
-        block = rb.build_review_block(report_date="2026-09-09", ledger_path=lp)
+        block = rb.build_review_block(report_date=_d(8), ledger_path=lp)
         assert block is not None
         assert block["available"] is True
         assert block["pending_count"] == 1
@@ -64,7 +69,7 @@ class TestReviewBlock:
             name="长江电力",
             direction=dl.DIRECTION_SHORT,
             carrier=dl.CARRIER_DISCIPLINE,
-            report_date="2026-08-20",
+            report_date=_d(-12),
             baseline_close=22.5,
             path=lp,
         )
@@ -73,11 +78,12 @@ class TestReviewBlock:
             raw_return=-0.05,
             outcome=dl.OUTCOME_HIT,
             direction_hit=True,
-            settle_date="2026-08-27",
+            settle_date=_d(-5),
             horizon_bars=5,
             path=lp,
         )
         block = rb.build_review_block(ledger_path=lp)
+        assert block is not None, "装配结果应可读"
         assert block["settled_count"] == 1
         assert block["pending_count"] == 0
         assert len(block["recent_settled"]) == 1
@@ -104,6 +110,7 @@ class TestReviewBlock:
             path=lp,
         )
         block = rb.build_review_block(ledger_path=lp)
+        assert block is not None, "装配结果应可读"
         assert block["sample_sufficient"] is False
         assert block["direction_accuracy"] is None
         assert block["alpha_mean"] == pytest.approx((0.03 - 0.01))  # (raw-bench)*sign, long=+1
@@ -116,6 +123,7 @@ class TestReviewBlock:
         )
         dl.append_settlement(decision_id=did, raw_return=0.03, outcome=dl.OUTCOME_HIT, direction_hit=True, path=lp)
         block = rb.build_review_block(ledger_path=lp)
+        assert block is not None, "装配结果应可读"
         assert block["alpha_mean"] is None
 
     def test_recent_limits(self, tmp_path):
@@ -128,5 +136,6 @@ class TestReviewBlock:
                 path=lp,
             )
         block = rb.build_review_block(ledger_path=lp)
+        assert block is not None, "装配结果应可读"
         assert block["pending_count"] == 8
         assert len(block["recent_pending"]) == 5

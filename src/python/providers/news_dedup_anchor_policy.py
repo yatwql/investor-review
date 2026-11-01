@@ -18,7 +18,6 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from src.python.providers.news_dedup_rules import (
-    ANCHOR_LEGACY_ERA,
     ANCHOR_RULES_FIELD,
     _ANCHOR_RULES_VERSION,
     anchor_rules_version,
@@ -177,13 +176,13 @@ def compact_anchor_file(
        （方向对立等只有几十条）不会整类消失，否则校准报告会误报「该规则没生效」。
 
     并发安全：读取前后比对 ``(size, mtime_ns)``，期间被并发追加则放弃本次压缩并在结果
-    标 ``aborted``（不加锁也不吞并发写入）。无行可裁且无需补标注时**不重写**文件
+    标 ``aborted``（不加锁也不吞并发写入）。无行可裁时**不重写**文件
     （避免几十 MB 的空转重写）。
 
     Returns:
         统计字典：``before_lines`` / ``after_lines`` / ``before_bytes`` / ``after_bytes`` /
         ``unique_keys`` / ``legacy_era``（丢弃的重复行中指纹不一致的条数）/
-        ``unattributed``（补 legacy 标注的行数）/ ``expired``（超保留期丢弃）/
+        ``unattributed``（无规则指纹、被丢弃的旧行数）/ ``expired``（超保留期丢弃）/
         ``trimmed`` / ``trimmed_by_branch``（体积裁剪）/ ``retention_days`` /
         ``aborted``（放弃原因）/ ``written``（是否已写盘）。
     """
@@ -256,11 +255,10 @@ def compact_anchor_file(
             continue
         text = lines[idx] if lines[idx].endswith("\n") else lines[idx] + "\n"
         if not anchor_rules_version(record):
-            # 早期版本写入的行没有规则指纹（无法归因到任何时代）：补 legacy 标注后
-            # 保留，避免它们与在用指纹的样本混在一起统计
-            record = {**record, ANCHOR_RULES_FIELD: ANCHOR_LEGACY_ERA}
-            text = json.dumps(record, ensure_ascii=False) + "\n"
+            # 早期版本写入的行没有规则指纹（无法归因到任何时代）：直接丢弃——
+            # 不保留旧数据文件形态，混入只会污染规则时代样本。
             stats["unattributed"] += 1
+            continue
         when = _anchor_parse_ts(record.get("ts")) or _anchor_parse_ts(record.get("written_at"))
         kept.append((idx, record, text, when or datetime.max))
 
@@ -378,7 +376,7 @@ def _compact_anchor_file(size: int) -> bool:
     branch_text = "、".join(f"{name or '(无分支)'} {count} 条" for name, count in branches)
     logger.info(
         "[dedup] 锚点文件已压缩（维护）：%.1f MB → %.1f MB（每 key 最新 + 近 %d 天 + 体积上限 %.0f MB；"
-        "超期 %d 条、体积裁剪 %d 条%s、无指纹旧行补 legacy %d 条）",
+        "超期 %d 条、体积裁剪 %d 条%s、无指纹旧行丢弃 %d 条）",
         result["before_bytes"] / 1e6,
         result["after_bytes"] / 1e6,
         result["retention_days"],

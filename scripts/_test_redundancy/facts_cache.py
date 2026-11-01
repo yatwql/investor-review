@@ -10,6 +10,9 @@ from _test_redundancy.cases import (
     check_dead_tests,
     check_assertion_free,
 )
+from _test_redundancy.date_bombs import (
+    check_ledger_absolute_dates,
+)
 from _test_redundancy.dead_fixtures import (
     _fixture_exposed_name,
 )
@@ -125,6 +128,7 @@ def _file_facts(path: Path, tree: ast.Module, cases: list[TestCase]) -> dict:
         "hard": check_hardcoded_evolving_totals(cases),
         "trivial": check_trivially_true(cases),
         "weak": check_weak_mock_assertions(cases),
+        "date_bomb": check_ledger_absolute_dates(tree, path),
         "fixtures": fixtures,
         "params": params,
         "usefix": usefix,

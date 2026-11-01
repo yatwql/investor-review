@@ -61,10 +61,6 @@ TEMPERATURE_DISCLAIMER: str = (
     "市场温度为估值分位（不可得时回落价格分位）、均线偏离与波动率三因子合成的信号，仅供参考，不构成任何仓位建议"
 )
 
-# 三档刻度中文名（与估值分位一致，文档/UI 统一口径）
-TIER_UNDERVALUED = "低估"
-TIER_FAIR = "合理"
-TIER_OVERVALUED = "高估"
 
 # 估值序列（PE/PB/ERP 月频）最少样本（对齐估值分位模块的 MIN_SAMPLES 口径）
 MIN_VAL_SAMPLES: int = 60

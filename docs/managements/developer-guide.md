@@ -140,7 +140,7 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 .venv/bin/python scripts/check-task-numbering.py --ci       # 任务编号全局一致性检查
 .venv/bin/python scripts/check-semantic-index.py --ci       # 语义命名索引正反向校验
 .venv/bin/python scripts/check-doc-drift.py --ci            # 文档与实现一致性（章节/开关/默认值/面板编号/目录树/统计表/归档索引/分区纪律/占位归档节/树描述计数/Thinking 支持矩阵/章节-区块矩阵/需求菜单表/手册菜单块）
-.venv/bin/python scripts/check-test-redundancy.py --ci      # 测试用例冗余与无效（死用例/无断言/完全重复/自证用例/硬编码演进总数/恒真断言/死 fixture/弱 mock 断言）
+.venv/bin/python scripts/check-test-redundancy.py --ci      # 测试用例冗余与无效（死用例/无断言/完全重复/自证用例/硬编码演进总数/恒真断言/死 fixture/弱 mock 断言 / 账本日期写死绝对日期）
 .venv/bin/python scripts/check-requirement-trace.py --ci   # 需求 ID ↔ 验证载体追溯（已补全域全覆盖 + 载体文件存在）
 .venv/bin/python scripts/check-version-consistency.py --ci   # 版本号全局一致性（APP_VERSION ↔ README/pyproject/管理文档 10 份）
 .venv/bin/python scripts/check-doc-links.py --ci              # 文档死链/死锚点/重复标题/层级/编号序列/§引用机检
@@ -801,11 +801,18 @@ test-reports/latest/
   - ❌ 硬编码总数：`assert len(req_ids) == 276`、`assert len(sections) == 17`
   - 需要「条数」语义时用「域覆盖 + 序号连续」等价表达（强度不低于写死条数，且能发现跳号/重号）
   - 由此守：`scripts/check-test-redundancy.py` 第 5 类 `check_hardcoded_evolving_totals`
+- **账本日期不得写死绝对日期**：账本类调用（`append_signals` / `append_decision` / `register_deterministic_signals` / `prune_jsonl_by_age` …）的 `report_date`/`settle_date`/`date` 实参必须是**从当天回推派生**的值（`_d(offset)` / `date.today() - timedelta(days=N)`）。账本按保留期（730 天）在**写侧即裁剪**，写死的近期日期会在「日期 + 保留期」后让用例静默变成「空账本 / 键缺失」。
+  - 由此守：`scripts/check-test-redundancy.py` 第 9 类 `check_ledger_absolute_dates`（静态，入门禁）
+  - 全域经验筛查（会真跑测试、不入门禁）：`.venv/bin/python scripts/probe-date-bombs.py`——把候选文件的绝对日期回移 N 年再跑，失败即 rot-suspect，须人工判读
 - **浮点断言容差化**：涉及浮点计算结果的断言用 `pytest.approx(...)`（或显式 `abs=`/`rel=`），**禁止 `==`/`!=` 比较两条计算路径**——「同一函数、不同输入长度或求和顺序」也算两条路径。
   - ❌ `assert beta == portfolio_beta(portfolio[:200], benchmark)`（内部对齐 vs 显式截断，末位差 1 ulp：3.13 相等、3.11 不等）
   - ✅ `assert beta == pytest.approx(portfolio_beta(portfolio[:200], benchmark), abs=1e-12)` + 长度敏感反例 `assert abs(portfolio_beta(portfolio[:100], benchmark) - beta) > 1e-6`
   - 只有整数、`len`、set/list 结构、字符串/指纹等精确可表示的值才用 `==`；容差取「远大于 ulp、远小于真正区分的量级」
 - **勿断言「随周期/环境变化的仓库状态」**：读**真实仓库**的契约测试（如 `TestRealArchiveContract`）只能约束「结构的 invariant」，不能要求「某种状态必须存在」——例如「主台账至少有一节开发期已修复」在新开发周期开张时必然不成立（`devbump` 会清空上一版占位），本地恰巧有节、CI 上却是空台账，于是出现「本地全绿、CI 三版本 + portability 全红」。写这类断言时穷举状态并给出各自的合法判据；**能空的状态就要允许空**。同理：新增子命令/新条目的测试优先从实现集合派生（如 `cmd_*` 函数集合），不写死清单。
+- **勿用绝对日期参与「与现在比较」的判定**：保留期/TTL/回看窗口、`market_hours` 判定、`data_freshness` 阈值这类逻辑以 `now()` 为基准，测试若写死日期造样本，会在墙钟走过「日期 + 窗口」后静默改走另一条分支——实测 2026-10-01 的样本在 2026-10-31 当天全部被判 `expired`，体积裁剪用例退化成保留期用例、断言失败却看起来像功能坏了。
+  - ✅ `ts = _recent_ts(days_ago=2)`（相对 `datetime.now()` 计算）；✅ 被测路径加**前提自检**：`assert result["expired"] == 0, "样本已超出保留期"`
+  - ❌ `self._row("cross_skip", title, "2026-10-01 10:00")` 配 30 天保留期
+  - 语义上确实需要「远过去/远未来」时用常量偏移（`2020-01-02` 表示必过期）而非「今天附近」的绝对日期
 - 新增文件后运行 `.venv/bin/python scripts/check-test-markers.py` 验证标记合规性
 
 ### 新增测试指南
@@ -1001,7 +1008,7 @@ INVEST_CACHE_DIR=docs/tmp/screenshots/demo/data/cache \    # 缓存改落（不�
 
 **LLM 总时间预算**：`llm_settings.json → llm_total_time_budget_sec`（秒，`0`=不启用）。超预算后**不再启动新模块**（已在跑的模块不打断），日志回显已用时与预算值，报告按已生成内容呈现。用于兜住「单模块卡住 + 重试叠加」把一次 full 拖成小时级（审计实测曾出现 6,623s 的 LLM+新闻阶段）。
 
-**去重锚点默认采集、写侧零读取**：`data/calibration/dedup_anchors-YYYYMM.jsonl.gz`（按月 gzip 分片；写侧按 multi-member gzip 追加，不重写既有压缩块，也不解析旧文件——读侧 `gzip.open` 透明解压，损坏分片只跳过其余内容）每次报告只追加边界案例；同源（`same_src`）样本按标题对哈希 **1/50 确定性采样**（同源 2~5 bigram 区间样本极密，全量采集曾占文件 61% 而 `ratio` 恒为占位值），其余规则全量采集；跨轮重复由 `eval-dedup-threshold.py::load_anchors` 按键去重（保留最早一条），诊断结论不受重复行影响。`INVEST_DEDUP_COLLECT_ANCHORS=0` 可关闭采集。文件超过 32MB 时只记提示，不自动压缩——压缩由 `scripts/eval-dedup-threshold.py` 评估后**默认顺带执行**（分析用完整样本，随后按三条件维护：① 每 key 最新；② 保留期 30 天——`ts`（发布时间）或 `written_at`（写入时刻）任一在窗口内即保留，补录/回溯抓到的老新闻不被秒裁，`INVEST_DEDUP_ANCHOR_RETENTION_DAYS` 可覆盖、`0` = 不按时间裁剪；③ 体积上限 24MB——超目标按最旧裁剪，每分支至少保留最新 50 条，小分支（方向对立等）不被整类裁光；`--no-compact` 关闭、`--retention-days` 指定窗口）或 `INVEST_DEDUP_MAINTENANCE=1` 显式触发。压缩前后比对 `(size, mtime)`，期间被并发追加则放弃本次压缩（不吞另一个进程写入的行）；无行可裁且无需补标注时不重写文件。压缩前 `.bak` 与主文件等大，默认校验后清理（`INVEST_DEDUP_KEEP_BACKUP=1` 保留）。
+**去重锚点默认采集、写侧零读取**：`data/calibration/dedup_anchors-YYYYMM.jsonl.gz`（按月 gzip 分片；写侧按 multi-member gzip 追加，不重写既有压缩块，也不解析旧文件——读侧 `gzip.open` 透明解压，损坏分片只跳过其余内容）每次报告只追加边界案例；同源（`same_src`）样本按标题对哈希 **1/50 确定性采样**（同源 2~5 bigram 区间样本极密，全量采集曾占文件 61% 而 `ratio` 恒为占位值），其余规则全量采集；跨轮重复由 `eval-dedup-threshold.py::load_anchors` 按键去重（保留最早一条），诊断结论不受重复行影响。`INVEST_DEDUP_COLLECT_ANCHORS=0` 可关闭采集。文件超过 32MB 时只记提示，不自动压缩——压缩由 `scripts/eval-dedup-threshold.py` 评估后**默认顺带执行**（分析用完整样本，随后按三条件维护：① 每 key 最新；② 保留期 30 天——`ts`（发布时间）或 `written_at`（写入时刻）任一在窗口内即保留，补录/回溯抓到的老新闻不被秒裁，`INVEST_DEDUP_ANCHOR_RETENTION_DAYS` 可覆盖、`0` = 不按时间裁剪；③ 体积上限 24MB——超目标按最旧裁剪，每分支至少保留最新 50 条，小分支（方向对立等）不被整类裁光；`--no-compact` 关闭、`--retention-days` 指定窗口）或 `INVEST_DEDUP_MAINTENANCE=1` 显式触发。压缩前后比对 `(size, mtime)`，期间被并发追加则放弃本次压缩（不吞另一个进程写入的行）；无行可裁时不重写文件；无规则指纹的旧行（早期版本写入）压缩时直接丢弃，不保留旧文件形态。压缩前 `.bak` 与主文件等大，默认校验后清理（`INVEST_DEDUP_KEEP_BACKUP=1` 保留）。
 
 ### 兼容层纪律（不保留旧形态支持）
 
@@ -1619,9 +1626,16 @@ CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` /
 
 ### 依赖升级流程
 
-`requirements.txt` 与 `pyproject.toml` 双份声明，改依赖时**两边同步**：
+`requirements.txt` 与 `pyproject.toml` 两处声明，**角色分工固定、运行时直接依赖的约束逐字一致**（契约由 `src/test/unit/test_dependency_declarations.py` 守，改一处不一致即红）：
 
-1. 改 `requirements.txt`（**必须保持 UTF-8 BOM**，否则 cp936 的旧 pip 解析会 `UnicodeDecodeError`）与 `pyproject.toml` 的对应字段；
+| 文件 | 只放什么 |
+|:--|:--|
+| `pyproject.toml` → `[project].dependencies` | 运行时**直接**依赖（打包元数据） |
+| `requirements.txt` | 同一批直接依赖（约束逐字相同）+ flask 传递依赖锁定 + 开发/工具依赖 |
+
+新增依赖时的判定：是运行时直接依赖 → **两处都写且约束逐字相同**；是传递锁定/开发工具 → 只写 `requirements.txt`，并同时加进上述用例的 `_EXTRAS_ONLY` 白名单（否则用例报「未分类的包」）。
+
+1. 改 `requirements.txt`（**必须保持 UTF-8 BOM**，否则 cp936 的旧 pip 解析会 `UnicodeDecodeError`）与 `pyproject.toml` 的对应字段，再用 `pytest src/test/unit/test_dependency_declarations.py -q` 验证两侧一致；
 2. 重建虚拟环境或 `pip install -r requirements.txt` 验证可装；
 3. 跑 `pytest src/test/unit -q` + `PYTHONWARNDEFAULTENCODING=1 pytest src/test/unit -q`（本地模拟 `portability` job）；
 4. 若升级涉及数据源库（如 openpyxl/httpx/pandas）：跑一次 `--mode dev-verify` 与 `scripts/test-smoke-web.py`；

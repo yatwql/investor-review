@@ -49,6 +49,7 @@ from src.python.analysis.fee_schedule_model import (
     select_redemption_tier,
 )
 from src.python.analysis.portfolio_evolution import _dedup_by_date
+from src.python.core.constants import SIDE_BUY, SIDE_SELL
 
 # ── 常量 ────────────────────────────────────────────────
 
@@ -58,9 +59,7 @@ _SHARES_EPS = 1e-3
 #: 交易日计数注入类型：(start, end) → 经过的交易日数（YYYY-MM-DD）
 TradingDayCounter = Callable[[str, str], int | None]
 
-# 腿侧别与费率来源枚举（报告层展示与测试断言的唯一取值）
-SIDE_BUY = "buy"
-SIDE_SELL = "sell"
+# 腿侧别枚举（单源在 core.constants；本模块另有 SIDE_UNMODELED 记录不可建模腿）
 SIDE_UNMODELED = "unmodeled"
 
 _BUY_ACTIONS = frozenset({"新增", "加仓"})

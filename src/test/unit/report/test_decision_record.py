@@ -10,12 +10,19 @@
 
 from __future__ import annotations
 
+from src.test._relative_dates import day as _day
+
 import pytest
 
 from src.python.config.features import set_feature_enabled, reset_feature_flags
 from src.python.core import decision_ledger as dl
 from src.python.report import decision_record as rec
 
+
+#: 账本写入包装层按保留期（730 天）在写侧裁剪，样本日期须从当天回推派生
+#: （写死绝对日期会在「日期 + 保留期」后静默变成空账本）。
+_REPORT_DATE = _day(0)
+_NEXT_DATE = _day(1)
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
 # 持仓明细：price 即登记日结算基线
@@ -142,7 +149,7 @@ class TestRegister:
             "rebalance_signals": [],
         }
         out = rec.register_action_decisions(
-            ad, holdings_details=_HOLDINGS, report_date="2026-09-01", path=str(tmp_path / "ledger.jsonl")
+            ad, holdings_details=_HOLDINGS, report_date=_REPORT_DATE, path=str(tmp_path / "ledger.jsonl")
         )
         assert out["registered"] == 1
         assert len(out["ids"]) == 1
@@ -185,9 +192,9 @@ class TestRegister:
             "discipline_signals": [_signal("600519", "贵州茅台", "部分止盈", rule="止盈线 +20%")],
             "rebalance_signals": [],
         }
-        first = rec.register_action_decisions(ad, holdings_details=_HOLDINGS, report_date="2026-09-01", path=lp)
+        first = rec.register_action_decisions(ad, holdings_details=_HOLDINGS, report_date=_REPORT_DATE, path=lp)
         assert first["registered"] == 1
-        second = rec.register_action_decisions(ad, holdings_details=_HOLDINGS, report_date="2026-09-01", path=lp)
+        second = rec.register_action_decisions(ad, holdings_details=_HOLDINGS, report_date=_REPORT_DATE, path=lp)
         assert second == {"registered": 0, "ids": []}
         assert dl.fold_ledger(path=lp)["pending_count"] == 1
 
@@ -199,8 +206,8 @@ class TestRegister:
             "discipline_signals": [_signal("600519", "贵州茅台", "部分止盈", rule="止盈线 +20%")],
             "rebalance_signals": [],
         }
-        rec.register_action_decisions(ad, holdings_details=_HOLDINGS, report_date="2026-09-01", path=lp)
-        rec.register_action_decisions(ad, holdings_details=_HOLDINGS, report_date="2026-09-02", path=lp)
+        rec.register_action_decisions(ad, holdings_details=_HOLDINGS, report_date=_REPORT_DATE, path=lp)
+        rec.register_action_decisions(ad, holdings_details=_HOLDINGS, report_date=_NEXT_DATE, path=lp)
         assert dl.fold_ledger(path=lp)["pending_count"] == 2
 
     def test_flag_off_no_register(self, tmp_path):

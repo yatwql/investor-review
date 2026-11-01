@@ -88,8 +88,8 @@ def _history() -> dict:
     }
 
 
-def _history_legacy_dict_benchmarks() -> dict:
-    """旧/注入形态：benchmarks 为 dict[str, dict]（兼容性用例）。"""
+def _history_dict_shape_benchmarks() -> dict:
+    """注入形态：benchmarks 为 dict[str, dict]（非契约形状，应被忽略而不抛异常）。"""
     return {
         "status": "ok",
         "drawdown_available": True,
@@ -506,11 +506,13 @@ class TestPerformanceDimensionBenchmarkShapes:
         assert any("未跑赢最强对比基准（沪深300 -10.36%）" in e for e in dim["evidence"])
         assert any("最大回撤 22.42%" in e for e in dim["evidence"])
 
-    def test_legacy_dict_benchmarks_still_supported(self):
+    def test_dict_shape_benchmarks_ignored_without_raise(self):
+        """非契约形状（dict）的 benchmarks 被忽略：仅按自身收益/回撤计分，不抛异常。"""
         from src.python.analysis.prosperity_framework import _score_performance
 
-        dim = _score_performance(_history_legacy_dict_benchmarks())
+        dim = _score_performance(_history_dict_shape_benchmarks())
         assert dim["status"] == "scored"
+        assert any("对比基准数据不可解析" in e for e in dim["evidence"]), "须显式说明基准未参与对比"
 
     def test_malformed_benchmarks_do_not_raise(self):
         """畸形基准（非 dict 元素/缺字段/非数值）→ 不抛异常，仅按自身收益回撤计分。"""

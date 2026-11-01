@@ -173,7 +173,7 @@ LLM 分析结果独立缓存，通过指纹自动失效，不占用数据源请�
 
 ### akshare 兼容性
 
-本程序依赖 **akshare**（`pyproject.toml` 锁定 `akshare==1.18.64`）。akshare 接口更新较频繁，以下场景可能导致数据获取失败：
+本程序依赖 **akshare**（`pyproject.toml` 约束 `akshare>=1.16,<2.0`，与 `requirements.txt` 逐字一致；需要精确复现某次排查时可临时 pin 到具体版本）。akshare 接口更新较频繁，以下场景可能导致数据获取失败：
 
 - akshare 版本过低 → 接口签名变更导致报错
 - akshare 版本过高 → 接口返回格式微调

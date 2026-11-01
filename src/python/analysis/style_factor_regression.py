@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 
 from src.python.analysis._math_utils import _t_critical_95
+from src.python.core.constants import DEFAULT_WINDOW
 from src.python.core.trading_calendar import count_trading_days_elapsed
 
 logger = logging.getLogger("invest")
@@ -50,8 +51,6 @@ BASELINE_NAME: str = "沪深300"
 
 # 有效样本下限：低于此判数据不足，不接受硬算
 MIN_SAMPLES: int = 36
-# 默认回归窗口（交易日 ≈ 3 个月）
-DEFAULT_WINDOW: int = 60
 # 剩余有效因子少于 2 → 数据不足分支
 MIN_FACTORS: int = 2
 
@@ -296,24 +295,25 @@ def _align_series(
     pdf = pdf.dropna(subset=["return"]).set_index("date")["return"]
     pdf = pdf.ffill().dropna()  # 单日缺口前向填充；无效日（首部）剔除
 
-    frames: list[pd.Series] = []
+    frames: list[pd.DataFrame] = []
     for factor, bars in factor_returns.items():
         if not bars:
             continue
         s = pd.DataFrame(bars).dropna(subset=["return"]).set_index("date")["return"]
         if not s.empty:
-            frames.append(s.rename(factor))
+            # to_frame(名称) 与 Series.rename(标量) 等价，且避开桩类型告警误报
+            frames.append(s.to_frame(factor))
     if not frames:
         return pd.DataFrame()
 
     factor_df = pd.concat(frames, axis=1, join="inner")
-    merged = factor_df.join(pdf.rename("portfolio"), how="inner")
+    merged = factor_df.join(pdf.to_frame("portfolio"), how="inner")
 
     if baseline_returns:
         bs = pd.DataFrame(baseline_returns)
         if not bs.empty and "date" in bs.columns and "return" in bs.columns:
             bs = bs.dropna(subset=["return"]).set_index("date")["return"]
-            merged = merged.join(bs.rename("baseline"), how="left")
+            merged = merged.join(bs.to_frame("baseline"), how="left")
     return merged
 
 

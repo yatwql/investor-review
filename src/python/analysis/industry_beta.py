@@ -21,6 +21,7 @@ from __future__ import annotations
 import logging
 
 from src.python.analysis.style_factor_regression import compute_factor_exposure
+from src.python.core.constants import DEFAULT_WINDOW
 
 logger = logging.getLogger("invest")
 
@@ -52,8 +53,6 @@ INDUSTRY_INDEX_MAP: dict[str, str] = {
 
 # 有效样本下限：低于此判数据不足，不接受硬算（与因子暴露一致）
 MIN_INDUSTRY_SAMPLES: int = 36
-# 默认回归窗口（交易日 ≈ 3 个月）
-DEFAULT_WINDOW: int = 60
 
 
 def industry_index_for(industry: str) -> str | None:
@@ -217,7 +216,8 @@ def _portfolio_industry_corr(
         return None
     ind_s = ib.dropna(subset=["return"]).set_index("date")["return"]
 
-    merged = pd.concat([ps.rename("p"), ind_s.rename("i")], axis=1, join="inner").dropna()
+    # 用 to_frame(名称) 而非 Series.rename（标量改名的桩类型告警误报；对齐结果等价）
+    merged = pd.concat([ps.to_frame("p"), ind_s.to_frame("i")], axis=1, join="inner").dropna()
     if len(merged) < 2:
         return None
     _win = min(window, len(merged))

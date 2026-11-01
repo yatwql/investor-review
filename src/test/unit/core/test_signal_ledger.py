@@ -12,13 +12,18 @@ from __future__ import annotations
 
 import json
 import os
-
 import pytest
 
 from src.python.config.features import reset_feature_flags, set_feature_enabled
 from src.python.core import signal_ledger as sl
 
+from src.test._relative_dates import day as _day
+
 pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
+
+# 账本保留期 730 天且写侧即裁剪，样本日期一律从当天回推派生（单源见 _relative_dates）
+
+_REPORT_DATE = _day(0)
 
 
 @pytest.fixture(autouse=True)
@@ -27,7 +32,7 @@ def _reset_flags():
     reset_feature_flags()
 
 
-def _sig(signal_type, rating, *, date="2026-09-10", subject="", source=sl.DATA_SOURCE_LIVE, value=1.0):
+def _sig(signal_type, rating, *, date=_REPORT_DATE, subject="", source=sl.DATA_SOURCE_LIVE, value=1.0):
     return sl.build_signal(
         signal_type=signal_type,
         report_date=date,
@@ -75,13 +80,13 @@ class TestBuildSignal:
     def test_id_is_date_type_subject(self):
         record = _sig(sl.SIGNAL_VALUATION, "低估", subject="600000")
 
-        assert record["id"] == "2026-09-10|valuation_percentile|600000"
+        assert record["id"] == f"{_REPORT_DATE}|valuation_percentile|600000"
 
     def test_empty_subject_falls_back_to_portfolio(self):
         record = _sig(sl.SIGNAL_TAIL_RISK, "尾部正常")
 
         assert record["subject"] == "portfolio"
-        assert record["id"] == "2026-09-10|tail_risk|portfolio"
+        assert record["id"] == f"{_REPORT_DATE}|tail_risk|portfolio"
 
     def test_direction_defaults_to_flat(self):
         assert _sig(sl.SIGNAL_STYLE_FACTOR, "价值")["direction"] == 0
@@ -89,7 +94,7 @@ class TestBuildSignal:
     def test_direction_accepted_explicitly(self):
         record = sl.build_signal(
             signal_type=sl.SIGNAL_VALUATION,
-            report_date="2026-09-10",
+            report_date=_REPORT_DATE,
             rating="高估",
             direction=-1,
         )
@@ -158,7 +163,7 @@ class TestAppendSignals:
         path = tmp_path / "signals.jsonl"
 
         assert sl.append_signals([], path=path) == []
-        assert sl.append_signals([None, {}, {"id": ""}], path=path) == []
+        assert sl.append_signals([None, {}, {"id": ""}], path=path) == []  # type: ignore[list-item]  # 故意传畸形项验容错
         assert not path.exists()
 
     def test_all_duplicates_does_not_rewrite_file(self, tmp_path):
@@ -174,7 +179,7 @@ class TestAppendSignals:
         path = str(tmp_path / "signals.jsonl")
         kwargs = dict(
             signal_type=sl.SIGNAL_TAIL_RISK,
-            report_date="2026-09-10",
+            report_date=_REPORT_DATE,
             rating="尾部正常",
             value=-1.2,
         )
@@ -215,7 +220,7 @@ class TestAppendSignals:
         assert (
             sl.append_signal(
                 signal_type=sl.SIGNAL_TAIL_RISK,
-                report_date="2026-09-10",
+                report_date=_REPORT_DATE,
                 rating="尾部正常",
                 path=str(tmp_path / "signals.jsonl"),
             )
@@ -228,10 +233,10 @@ class TestFoldSignals:
 
     def _mixed(self):
         return [
-            _sig(sl.SIGNAL_VALUATION, "低估", date="2026-09-08", subject="600000"),
-            _sig(sl.SIGNAL_VALUATION, "高估", date="2026-09-09", subject="600000"),
-            _sig(sl.SIGNAL_VALUATION, "合理", date="2026-09-10", subject="600000"),
-            _sig(sl.SIGNAL_TAIL_RISK, "尾部正常", date="2026-09-10", source=sl.DATA_SOURCE_DEMO),
+            _sig(sl.SIGNAL_VALUATION, "低估", date=_day(-2), subject="600000"),
+            _sig(sl.SIGNAL_VALUATION, "高估", date=_day(-1), subject="600000"),
+            _sig(sl.SIGNAL_VALUATION, "合理", date=_REPORT_DATE, subject="600000"),
+            _sig(sl.SIGNAL_TAIL_RISK, "尾部正常", date=_REPORT_DATE, source=sl.DATA_SOURCE_DEMO),
         ]
 
     def test_live_only_default_excludes_demo(self):
@@ -259,16 +264,16 @@ class TestFoldSignals:
 
         info = folded["by_type"][sl.SIGNAL_VALUATION]
         assert info["records"] == 3
-        assert info["latest_date"] == "2026-09-10"
+        assert info["latest_date"] == _REPORT_DATE
         assert info["latest_rating"] == "合理"
         assert info["label"] == "估值分位"
 
     def test_dates_span_counted_records(self):
         folded = sl.fold_signals(self._mixed())
 
-        assert folded["first_date"] == "2026-09-08"
-        assert folded["last_date"] == "2026-09-10"
-        assert folded["dates"] == ["2026-09-08", "2026-09-09", "2026-09-10"]
+        assert folded["first_date"] == _day(-2)
+        assert folded["last_date"] == _REPORT_DATE
+        assert folded["dates"] == [_day(-2), _day(-1), _REPORT_DATE]
 
     def test_sample_threshold(self):
         assert sl.fold_signals(self._mixed())["sample_sufficient"] is True
@@ -318,7 +323,7 @@ class TestSummaryBlock:
 
         assert "非实时" not in sl.summary_block(records)
 
-        records = records + [_sig(sl.SIGNAL_TAIL_RISK, "尾部正常", date="2026-09-11", source=sl.DATA_SOURCE_DEMO)]
+        records = records + [_sig(sl.SIGNAL_TAIL_RISK, "尾部正常", date=_day(1), source=sl.DATA_SOURCE_DEMO)]
         assert "已剔除" in sl.summary_block(records)
 
     def test_demo_only_records_yield_empty_summary(self):

@@ -58,6 +58,19 @@ CACHE_WEEKLY = 604800  # 每周（7d）
 CACHE_TWO_WEEKS = 1209600  # 两周（14d）
 CACHE_MONTHLY = 2592000  # 每月（30d）
 
+# ── 跨模块共享的分析口径与枚举（单一来源：各模块 import，不得就地重定义） ──
+# 回看窗口（交易日 ≈ 3 个月）默认值：行业 Beta、风格因子回归、相关性分析同口径，
+# 调整口径只改此处，避免三处字面量各自漂移。
+DEFAULT_WINDOW: int = 60
+# 三档估值刻度中文名（估值分位与市场温度统一口径，UI/文档不得另写字面量）。
+# 注意：与 valuation_percentile / correlation 各自的 MIN_SAMPLES（样本下限）无关。
+TIER_UNDERVALUED = "低估"
+TIER_FAIR = "合理"
+TIER_OVERVALUED = "高估"
+# 交易方向枚举（费用模型的腿侧别与持仓编辑器的录入方向共用同一取值）。
+SIDE_BUY = "buy"
+SIDE_SELL = "sell"
+
 # ── 组合历史走势 ─────────────────────────────────
 
 # 快照目录（相对于 PROJECT_ROOT）

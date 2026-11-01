@@ -31,6 +31,7 @@ def run_checks(include_live: bool = False) -> tuple[list[str], dict[str, int]]:
     hardcoded: list[str] = []
     trivial: list[str] = []
     weak: list[str] = []
+    date_bomb: list[str] = []
     entries: list[tuple[str, int, str, str | None]] = []
     n_cases = 0
     for key, item in facts.items():
@@ -41,6 +42,7 @@ def run_checks(include_live: bool = False) -> tuple[list[str], dict[str, int]]:
         hardcoded += item["hard"]
         trivial += item["trivial"]
         weak += item["weak"]
+        date_bomb += item["date_bomb"]
         n_cases += item["count"]
         entries.extend((rel_path, e["lineno"], e["name"], e["sig"]) for e in item["entries"])
     dup_findings, skipped = _group_duplicate_entries(entries)
@@ -54,6 +56,7 @@ def run_checks(include_live: bool = False) -> tuple[list[str], dict[str, int]]:
     findings += trivial
     findings += dead_fixtures
     findings += weak
+    findings += date_bomb
     stats = {
         "files": len(facts),
         "cases": n_cases,
@@ -66,5 +69,6 @@ def run_checks(include_live: bool = False) -> tuple[list[str], dict[str, int]]:
         "trivial": len(trivial),
         "dead_fixtures": len(dead_fixtures),
         "weak_mock": len(weak),
+        "date_bombs": len(date_bomb),
     }
     return findings, stats

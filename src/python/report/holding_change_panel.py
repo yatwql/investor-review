@@ -297,7 +297,7 @@ def _llm_review_view(llm_review: str) -> tuple[list[str], str, str]:
         ``_extract_footer_text`` 提取为 footer 单独着色行，与其余 LLM 页签
         标识行格式一致；正文块不含 footer（避免重复）。
 
-    纯文本输入（历史缓存/测试）回退按 \"\n\n\" 分段，footer 为空串。
+    输入契约为块级 HTML（LLM 输出经 markdown 转换）；无块级标签的纯文本整段作为一块，footer 为空串。
     """
     from src.python.report.llm_content import (
         _extract_footer_text,

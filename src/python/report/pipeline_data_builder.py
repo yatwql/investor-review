@@ -368,7 +368,7 @@ def _validate_diff(diff: dict) -> None:
             _assert_type(diff[key], expected, f"diff.{key}")
 
 
-# ── orchestrator.py 兼容入口（合并 capture_snapshot 返回值 + 可选扩展）──
+# ── 合并 capture_snapshot 返回值 + 可选扩展字段 ──
 
 
 def merge_pipeline_data(

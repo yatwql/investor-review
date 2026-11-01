@@ -262,7 +262,6 @@ class TestWriteWhatifHtml:
                 "src.python.report.whatif_writer.render_whatif_html",
                 return_value="<html>调仓模拟</html>",
             ) as mock_render,
-            patch("src.python.report.whatif_writer._copy_js_assets") as mock_copy,
             patch(
                 "src.python.report.whatif_writer._inline_js_assets",
                 side_effect=lambda html: html,
@@ -280,7 +279,6 @@ class TestWriteWhatifHtml:
         assert latest.read_text(encoding="utf-8") == "<html>调仓模拟</html>"
         assert archives[0].read_text(encoding="utf-8") == "<html>调仓模拟</html>"
         mock_render.assert_called_once()
-        mock_copy.assert_called_once_with(output_dir)
         mock_inline.assert_called_once_with("<html>调仓模拟</html>")
         mock_cleanup.assert_called_once_with(output_dir)
 
@@ -297,7 +295,6 @@ class TestWriteWhatifHtmlAtomicity:
                 "src.python.report.whatif_writer.render_whatif_html",
                 return_value="<html>atomic</html>",
             ),
-            patch("src.python.report.whatif_writer._copy_js_assets"),
             patch("src.python.report.whatif_writer._inline_js_assets", side_effect=lambda html: html),
             patch("src.python.report.whatif_writer._cleanup_old_archives"),
             patch("src.python.report.whatif_writer._write_html_atomic") as mock_atomic,
@@ -322,7 +319,6 @@ class TestWriteWhatifHtmlAtomicity:
                 "src.python.report.whatif_writer.render_whatif_html",
                 return_value="<html>新一代内容</html>",
             ),
-            patch("src.python.report.whatif_writer._copy_js_assets"),
             patch("src.python.report.whatif_writer._inline_js_assets", side_effect=lambda html: html),
             patch("src.python.report.whatif_writer._cleanup_old_archives"),
             patch("src.python.report.html_save.os.replace", side_effect=KeyboardInterrupt),
@@ -791,7 +787,6 @@ class TestWhatifHtmlAnonymization:
         data["base_file"] = "贵州茅台持仓.xlsx"  # 字段层不覆盖 → 靠产物清扫兜底
         data["cost"]["impact"]["cand_t0_value"] = 1600900.0  # 金额串含真码 600900 子串
         with (
-            patch("src.python.report.whatif_writer._copy_js_assets"),
             patch("src.python.report.whatif_writer._inline_js_assets", side_effect=lambda html: html),
         ):
             path = write_whatif_html(data, str(tmp_path))

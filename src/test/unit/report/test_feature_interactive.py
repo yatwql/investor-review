@@ -4,7 +4,7 @@
   - enable_interactive_charts 开关已随 Canvas 回退分支移除（注册表与模板零残留）
   - _build_chart_datasets_for_report：恒构建数据集（无 Flag 分支）
   - 顶层兜底：build_chart_datasets 异常 → 返回空 dict（报告仍正常）
-  - _copy_js_assets：Chart.js 本地 bundle 全部 JS 文件随报告复制
+  - 不产出松散 JS 副本：资产只内嵌进 HTML（单文件自包含）
   - 调试页 test-chart.html 引擎注入列表与报告模板一致（浏览器人工验证前置载体）
 
 运行：
@@ -23,7 +23,7 @@ from unittest.mock import patch
 import pytest
 
 from src.python.report._report_generation import _build_chart_datasets_for_report
-from src.python.report.html_writer import _copy_js_assets, _inline_js_assets
+from src.python.report.html_writer import _inline_js_assets
 from src.python.report.html_writer_assets import JS_ASSETS
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
@@ -98,23 +98,6 @@ class TestBuildChartDatasetsForReport:
         ):
             result = _build_chart_datasets_for_report(history_data=_history_ok())
         assert result == {}
-
-
-class TestCopyJsAssets:
-    def test_copies_all_js_files(self, tmp_path) -> None:
-        """Chart.js 本地 bundle 全部 JS 文件随报告复制到输出目录。"""
-        _copy_js_assets(str(tmp_path))
-        for fname in (
-            "chart.min.js",
-            "chart-print.js",
-            "chart-config.js",
-            "chart-export.js",
-            "chart-common.js",
-            "chart-init.js",
-            "toc.js",
-            "theme.js",
-        ):
-            assert (tmp_path / fname).exists(), f"{fname} 未复制"
 
 
 class TestInlineJsAssets:

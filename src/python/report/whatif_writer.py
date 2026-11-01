@@ -37,7 +37,7 @@ from src.python.core.constants import (
 )
 from src.python.report.excel_writer import _cleanup_old_archives, _ensure_reports_dir
 from src.python.report.html_save import _write_html_atomic
-from src.python.report.html_writer import _copy_js_assets, _inline_js_assets
+from src.python.report.html_writer import _inline_js_assets
 from src.python.report.whatif_sheet import (
     write_whatif_backtest_sheet,
     write_whatif_category_sheet,
@@ -214,6 +214,7 @@ def write_whatif_excel(whatif_data: dict[str, Any], output_dir: str = "reports")
     _ensure_reports_dir(output_dir)
     wb = Workbook()
     ws_sum = wb.active
+    assert ws_sum is not None, "新 Workbook 必有活动页签"  # openpyxl 类型桩：active 可为 None
     ws_sum.title = "调仓摘要"
     write_whatif_summary_sheet(ws_sum, _anon_data)
     ws_cat = wb.create_sheet("分类配置对比")
@@ -372,7 +373,6 @@ def write_whatif_html(whatif_data: dict[str, Any], output_dir: str = "reports") 
         _masked_codes = mask_code_text(html, _code_map)
         if _masked_codes:
             html = _masked_codes
-    _copy_js_assets(output_dir)
     # 内嵌 Chart.js 资产 → HTML 单文件自包含（下载/移动/单发移动端浏览）
     html = _inline_js_assets(html)
 
@@ -380,12 +380,24 @@ def write_whatif_html(whatif_data: dict[str, Any], output_dir: str = "reports") 
     date_str = now.strftime("%Y%m%d")
     time_str = now.strftime("%H%M%S")
     latest = os.path.join(output_dir, LATEST_WHATIF_HTML_NAME)
-    _write_html_atomic(html, latest)
+    try:
+        _write_html_atomic(html, latest)
+    except OSError as e:  # 写失败带上目标路径，便于定位
+        raise OSError(f"调仓最新 HTML 写入失败: {latest}") from e
     archive_dir = os.path.join(output_dir, date_str)
-    os.makedirs(archive_dir, exist_ok=True)
+    try:
+        os.makedirs(archive_dir, exist_ok=True)
+    except OSError as e:  # 带上目标路径，便于定位权限/路径问题
+        raise OSError(f"调仓归档目录创建失败: {archive_dir}") from e
     archive = os.path.join(archive_dir, f"{WHATIF_FILE_BASE}-{date_str}-{time_str}.html")
-    _write_html_atomic(html, archive)
-    _cleanup_old_archives(output_dir)
+    try:
+        _write_html_atomic(html, archive)
+    except OSError as e:  # 归档写失败带上目标路径，便于定位
+        raise OSError(f"调仓归档 HTML 写入失败: {archive}") from e
+    try:  # 归档清理属尽力而为：失败只告警，不影响本次产物
+        _cleanup_old_archives(output_dir)
+    except OSError as e:
+        logger.warning("[whatif] 归档清理失败（不影响本次报告）: %s", e)
     logger.info("调仓模拟 HTML 已保存: %s", latest)
     return os.path.abspath(latest)
 

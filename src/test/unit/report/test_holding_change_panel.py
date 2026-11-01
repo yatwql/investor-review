@@ -231,7 +231,7 @@ class TestViewSingleSource:
         view = build_holding_change_view(contract)
         assert view["llm_review_paragraphs"] is None
 
-        contract["llm_review"] = "第一段归因。\n\n第二段归因。"
+        contract["llm_review"] = "<p>第一段归因。</p><p>第二段归因。</p>"
         view2 = build_holding_change_view(contract)
         assert view2["llm_review_paragraphs"] == ["第一段归因。", "第二段归因。"]
 
