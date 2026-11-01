@@ -129,19 +129,18 @@ class TestChapterPanelRendering:
                 assert flag in out
 
     def test_sub_items_render_under_parent_with_derived_numbers(self, monkeypatch, llm_settings):
-        from src.python.config.chapter_registry import sub_item_numbers
+        from src.python.config.chapter_registry import chapter_number, chapter_registry, sub_item_numbers
 
         llm_settings({})
         out = _run(monkeypatch, ["0"])
-        parent_line = next(
-            i
-            for i, line in enumerate(out.splitlines())
-            if f"{_chapter_number('expert_review')}. 智囊团深度复盘" in line
-        )
         lines = out.splitlines()
-        for number in sub_item_numbers():
-            sub_line = next(i for i, line in enumerate(lines) if f"{number}" in line and "辩论" in line)
-            assert sub_line > parent_line, "子项应排在父章节之后"
+        # 每个子项编号（形如「5.1」「7.2」，由父项编号派生）所在行应排在其父章节行之后
+        for number, flag in sub_item_numbers().items():
+            parent_no = number.split(".")[0]
+            label = next(e.label for e in chapter_registry if chapter_number(e.key) == int(parent_no))
+            parent_line = next(i for i, line in enumerate(lines) if f"{parent_no}. {label}" in line)
+            sub_line = next(i for i, line in enumerate(lines) if number in line)
+            assert sub_line > parent_line, f"子项 {number}({flag}) 应排在父章节之后"
 
     def test_narrow_shows_key_on_second_line(self, monkeypatch, llm_settings):
         """窄档两行：名称+状态 / 键名（键名不因窄屏丢失）。"""

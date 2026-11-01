@@ -2998,7 +2998,7 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
 - **缺省一律收起**：模板不写 `open` 属性（收起是原生行为、不依赖 JS）；`fold.js` 初始 load 不执行锚点展开——打开报告（地址带 `#sec-…` / 浏览器恢复会话）全部收起，仅会话内 `hashchange`（点击目录原生锚点链接）自动展开目标章折叠块保证跳转后可见；回归用例 `test_fold_js_keeps_collapsed_on_initial_load` 锁死初始不展开。
 - **打印**：`beforeprint` 以捕获阶段注册（先于 chart-print.js 快照）全展开 + 同步 resize 内部 Chart.js 图表（收起态 canvas 为 0 尺寸），`afterprint` 恢复用户原折叠状态；`@media print` 隐藏 `summary` 提示条并去边框/背景，打印稿不显示提示条。
 - **手动展开**：`details` 的 `toggle` 事件逐块绑定，展开时对内部 canvas `resize()`（ResizeObserver 兜底）。
-- **载体**：`details.section-fold` 共 11 处，全部位于章节 partial（模板拆分后主模板仅剩 CSS 注释与 fold.js 装配）：10 个章节各 1 处（`portfolio_history_drawdown_section` / `news_correlation_section` / `holding_change_section` / `schedule_replay_section` / `position_structure_section` / `style_factor_section` / `data_source_status_section` / `evolution_section` / `fundamental_snapshot_section` / `action_section`）+ 章内块级 1 处（`event_impact_section` 事件窗对照块）；结构回归 `TestSectionFold`（历史章）+ `TestSectionFoldMoreChapters`（`_FOLD_KEYS` 八个章节逐章遍历五类断言：包裹收起/summary 首元素/标题回顶在外/关键摘要/初始收起）+ `test_action_html.py::TestActionSectionFold`（行动建议章折叠，含降级占位不折叠与回顶在外）。需求 `R-OUT-12`。
+- **载体**：`details.section-fold` 共 12 处，全部位于章节 partial（模板拆分后主模板仅剩 CSS 注释与 fold.js 装配）：9 个章节各 1 处（`portfolio_history_drawdown_section` / `news_correlation_section` / `holding_change_section` / `schedule_replay_section` / `position_structure_section` / `style_factor_section` / `data_source_status_section` / `evolution_section` / `fundamental_snapshot_section`）+ `action_section` 2 处（外层正文折叠 + 判断依据章内块 `#decision-basis`）+ 章内块级 1 处（`event_impact_section` 事件窗对照块）；结构回归 `TestSectionFold`（历史章）+ `TestSectionFoldMoreChapters`（`_FOLD_KEYS` 八个章节逐章遍历五类断言：包裹收起/summary 首元素/标题回顶在外/关键摘要/初始收起）+ `test_action_html.py::TestActionSectionFold`（行动建议章折叠，含降级占位不折叠与回顶在外）。需求 `R-OUT-12`。
 
 ### 4.22 章节-区块矩阵
 
@@ -3018,7 +3018,7 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
 | 4 | `fund_performance` | 2 | fund_performance_section.html | 候选基金比较 / 基金经理变更监控 | fund_performance.py | 候选比较为开关门控区块（两态标题去重后计 1） |
 | 5 | `position_structure` | 3 | position_structure_section.html | 持仓重合度矩阵 / 持仓相关性矩阵 / 持仓集中度监控 | position_structure_sheet.py | 双端对等 |
 | 6 | `style_factor` | 4 | style_factor_section.html | 基金风格表 / 风格因子回归 / 行业 Beta / 因子目录 | style_factor_sheet.py | 行业 Beta 子表与因子目录默认关（条件区块，归一化去重计 4） |
-| 7 | `action` | 7 | action_section.html | 再平衡信号 / 交易纪律 / 调仓建议清单 / 收益归因 / 历史决策复盘 / 景气度框架诊断 / 市场情绪与持仓热点 | action_sheet.py | ⑤⑥⑦ 门控（决策复盘/景气度/市场情绪，默认关） |
+| 7 | `action` | 8 | action_section.html | 判断依据 / 再平衡信号 / 交易纪律 / 调仓建议清单 / 收益归因 / 历史决策复盘 / 景气度框架诊断 / 市场情绪与持仓热点 | action_sheet.py | 判断依据为章内块（开关 `decision_basis` 默认开，骨架期空态）；⑤⑥⑦ 门控（决策复盘/景气度/市场情绪，默认关） |
 | 8 | `news_correlation` | 2 | news_correlation_section.html + event_impact_section.html | 事件窗对照 / 事件窗对照表 | news_correlation.py + event_impact_panel.py | 量化对照为章内块级、对照表为其折叠子块（双端同构）；新闻主表为章主体 |
 | 9 | `global_macro` | — | global_macro_section.html | — | llm_content.py | LLM 流式章；事实校验块为内容内嵌（无标题行，契约外） |
 | 10 | `expert_review` | — | expert_review_section.html | — | llm_content.py | 同上 |
@@ -3557,6 +3557,8 @@ make_http_client(timeout=10.0) → httpx.Client
 | `decision_settlement` | 到期决策结算（幂等：同 decision 只结一次，行情不可得保持 pending） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `decision_llm_capture` | LLM 操作建议表解析登记（误导性操作格不登记） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `decision_review_block` | 「历史决策复盘」区块数据契约（结构稳定，HTML/Excel 双端消费） | 行动建议 | 监控 | 随 `decision_reflection` |
+| `decision_basis` | 行动建议章内「判断依据」确定性事实块（形态 A：信号清单/置信度/风险预算/纪律/结算摘要五节，零 LLM；骨架期规范空契约） | 行动建议（章内嵌块） | 监控 | 开关 `decision_basis`（默认开，章节内选项组） |
+| `build_decision_basis_data` | 判断依据块装配入口（纯确定性：只读账本/持仓/配置，零取数零 LLM；零参数签名） | 行动建议（章内嵌块） | 分析计算 | 随 `decision_basis` |
 | `build_structured_header_instruction` | 决策头结构化契约构建（提示词侧追加 `决策头：…` 行，与解析器口径锁定） | 行动建议 | 监控 | 已内置（缓存后缀 `_dh` 常驻） |
 | `decision_header` | 决策词归一解析器（标签优先/长词优先/否定守卫/复合词左边界/二义不猜） | 行动建议 | 监控 | 已内置（A 通道无开关） |
 | `deterministic_signal` | 确定性信号模块（实时注入 + 跨期沉淀双面：温度/分位/尾部风险预消化信号行 + 确定性评级账本沉淀，内置五类、因子目录随实验开关追加第 6 类；原 `signal_pre_digest`/`signal_ledger` 两开关合并转正） | LLM 生成 | LLM 生成 | 开关 `deterministic_signal`（默认开，机制与诊断组） |
@@ -4140,6 +4142,7 @@ investor-review/
 | position_status | dict | 是 | prepare_report_data |
 | data_freshness | dict | 是 | prepare_report_data |
 | action_data | dict | 是 | prepare_report_data；basic 路径由 generate_excel_report 就地构建 |
+| decision_basis_data | dict | 是 | prepare_report_data |
 | crisis_annotation_data | dict | 是 | assemble_history_augmented_data（full/both 双路径同源装配，`report/_snapshot.py`；危机标注关态恒写、回放态加 replay 层；风险调整超额同点按开关注入 risk_adjusted_excess_data） |
 | risk_adjusted_excess_data | dict | 是 | build_risk_adjusted_excess（报告章节与增强开关 risk_adjusted_excess，默认关） |
 | tail_risk_data | dict | 是 | prepare_report_data |

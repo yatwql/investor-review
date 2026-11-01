@@ -11,6 +11,7 @@
 ### 变更
 
 - **R0 结算视界扩展（plan-243）**：决策账本支持 5/20/60 多视界结算——结算事件新增 `target_horizon`（判重键 `(decision_id, 目标视界)`，历史事件无此字段按 5 日归属，旧记录不改写）；`fold_ledger` 新增 `settlements` 全量映射与 `by_horizon` 多视界统计（`settlement`/命中率等口径基准仍为 5 日，既有消费面不变）；报告 seam 随运行推进全部视界；新增 CLI 子命令 `settle-decisions`（结算不依赖报告生成，幂等可重复执行）；doctor 账本概览补多视界已结数。单测覆盖多视界幂等/回补/旧记录兼容。
+- **R1 判断依据块骨架（plan-243）**：新增 `report/decision_basis.py`（形态 A 规范空契约，零 LLM、零取数、零参数）；注册功能开关 `decision_basis`（默认开，章节内选项组）与 `pipeline_data["decision_basis_data"]`（附录 H Schema 契约登记）；行动建议章 HTML 嵌入 `#decision-basis` 折叠块（复用折叠组组件）、Excel 页签顶部子块；区块注册表 / §4.22 矩阵（8 区块）/ 语义命名表 / R-OUT-17 同步；骨架期双端空态「数据不可用：<原因>」，R2 起逐节填充（含章标题副行补「判断依据」），`decision_basis.enabled=false` 双端完全隐藏（回滚通道）。
 
 - **投资决策质量讨论稿定稿（plan-242）**：成稿 `docs/plan/investment-decision-quality.md`——归因结论（建议方向胜率≈随机、组合略弱于基准、纪律建议方向不稳）、7 条结构性事实（无执行回执、结算依赖跑报告频率、3/5 信号零区分度、估值信号丢失口径、纪律规则结构偏空、提示语强制方向且无可信度、无硬性风险约束）、6 项优先级建议与 7 项待验证清单。不实施任何代码/配置/提示语改动。
 - **实施任务立项（plan-243）**：`plan.md` 新增 `plan-243` 决策依据章与 LLM 章职责切分（实施），承接 plan-242 讨论稿「章节归属结论」与设计稿 [`investment-decision-basis-design.md`](../plan/investment-decision-basis-design.md) 的 R0~R7 迭代计划；前置为讨论稿 V1/V3 回测；plan-242 保持仅探讨定位，`plan-next` 更新为 244。纯文档变更，无代码/配置/提示语改动。

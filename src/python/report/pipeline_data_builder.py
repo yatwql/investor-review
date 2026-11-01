@@ -42,6 +42,9 @@ _PIPELINE_DATA_KNOWN_KEYS: set[str] = {
     "data_freshness",
     # 行动建议单一数据源：行动板块 + 智囊团深度复盘行动摘要（单源计算两处呈现）
     "action_data",
+    # 判断依据章内块（形态 A）：确定性事实块数据契约（开关 decision_basis，
+    # 关闭时 enabled=False → 双端完全隐藏；骨架阶段 available=False 走空态）
+    "decision_basis_data",
     # 景气度框架诊断（实验性功能 prosperity_framework）：六维评分卡组合契合度
     "prosperity_framework_data",
     # 市场情绪与持仓热点（报告增强开关 market_sentiment）：龙虎榜/连板梯队 ∩ 持仓与穿透
@@ -156,6 +159,7 @@ _PIPELINE_DATA_TYPE_MAP: dict[str, type | tuple[type, ...]] = {
     "position_status": (dict, type(None)),
     "data_freshness": (dict, type(None)),
     "action_data": (dict, type(None)),
+    "decision_basis_data": (dict, type(None)),
     "fund_flow_data": (dict, type(None)),
     "valuation_data": (dict, type(None)),
     "market_temperature_data": (dict, type(None)),

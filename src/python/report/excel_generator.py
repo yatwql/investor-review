@@ -434,6 +434,7 @@ def generate_excel_report(
                 decision_review_data=(pipeline_data or {}).get("decision_review_data"),
                 prosperity_framework_data=(pipeline_data or {}).get("prosperity_framework_data"),
                 market_sentiment_data=(pipeline_data or {}).get("market_sentiment_data"),
+                decision_basis_data=(pipeline_data or {}).get("decision_basis_data"),
             )
         except Exception:
             logger.debug("[excel] 行动建议页签写入失败（非关键）", exc_info=True)

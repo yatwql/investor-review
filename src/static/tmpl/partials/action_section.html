@@ -31,6 +31,24 @@
         </summary>
     <div class="section-content">
 
+        <!-- 判断依据（形态 A 章内块；纯确定性零 LLM，数据契约 decision_basis_data） -->
+        {% set _db = decision_basis_data or {} %}
+        {% if _db.get("enabled") %}
+        <details class="section-fold" id="decision-basis">
+            <summary class="section-fold-summary">
+                {% if _db.get("summary") %}{{ _db.get("summary") }}{% else %}判断依据 —— 点击展开/收起信号清单、风险预算与结算摘要{% endif %}
+            </summary>
+            <div class="section-content">
+                <div class="block-title">判断依据</div>
+                {% if _db.get("available") %}
+                {# 后续轮次填充：信号清单 / 置信度 / 风险预算 / 纪律 / 结算摘要 #}
+                {% else %}
+                <div class="empty-note"><p>数据不可用：{{ _db.get("reason") or "原因未知" }}</p></div>
+                {% endif %}
+            </div>
+        </details>
+        {% endif %}
+
         <!-- ① 再平衡信号（单品占比超警戒线） -->
         {% set _rb = _action.get("rebalance_signals") or [] %}
         <div style="font-weight: bold; font-size: var(--fs-body); margin: 8px 0 4px;">① 再平衡信号（单品占比超警戒线）</div>

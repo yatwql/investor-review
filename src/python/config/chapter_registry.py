@@ -77,7 +77,7 @@ chapter_registry: tuple[ChapterEntry, ...] = (
     ChapterEntry("enable_news", BLOCK_TOP, SOURCE_CONFIG, "财经热点关联分析"),
     ChapterEntry("enable_history", BLOCK_TOP, SOURCE_CONFIG, "组合历史走势+回撤"),
     ChapterEntry("enable_portfolio_evolution", BLOCK_TOP, SOURCE_CONFIG, "组合演进"),
-    ChapterEntry("enable_action", BLOCK_TOP, SOURCE_CONFIG, "行动建议"),
+    ChapterEntry("enable_action", BLOCK_TOP, SOURCE_CONFIG, "行动建议", sub_items=("decision_basis",)),
     ChapterEntry("global_macro", BLOCK_LLM, SOURCE_LLM),
     ChapterEntry(
         "expert_review",

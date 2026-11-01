@@ -224,12 +224,14 @@
 
 #### [C] 配置报告章节显隐（四块 + 智囊团生成子项）
 
-交互式配置**报告章节是否出现**。清单、编号与分块由章节注册表（`config/chapter_registry.py`）派生，四块编号连续；「智囊团深度复盘」章节下的 `7.1` / `7.2` 是其**生成选项**，不占章节编号（编号随注册表变化，稳定入口是键名）：
+交互式配置**报告章节是否出现**。清单、编号与分块由章节注册表（`config/chapter_registry.py`）派生，四块编号连续；各章节下的 `5.1`、`7.1` / `7.2` 是其**生成选项**（章内块开关，不占章节编号；编号随注册表变化，稳定入口是键名）：
 
 ```text
   ── 顶层章节 ──
    1. 基金深度分析            enable_fund_deep_analysis  [开启]
    ...
+   5. 行动建议                enable_action              [开启]
+      5.1 判断依据              decision_basis             [开启]
   ── LLM 章节 ──
    7. 智囊团深度复盘          expert_review              [开启]
       7.1 辩论-正反辩论        llm_debate_procon          [关闭]
@@ -249,6 +251,7 @@
 | 3 | 组合历史走势+回撤（走势表 + 回撤矩阵 + 危机区间标注） | `enable_history` |
 | 4 | 组合演进（多快照趋势） | `enable_portfolio_evolution` |
 | 5 | 行动建议（再平衡信号 / 交易纪律 / 调仓建议 / 收益归因） | `enable_action` |
+| 5.1 | 判断依据（行动建议章内确定性事实块：信号清单/置信度/风险预算/纪律/结算摘要；零 LLM，骨架期空态；默认开） | `decision_basis` |
 
 **LLM 章节（6-12，写 `llm_settings.json` 的 `enabled_llm`；编号随注册表）**：
 
@@ -383,10 +386,11 @@
 > | `holding_change_review` | `[C]` 14 | 独立章节与回放 | 持仓变动复盘 |
 > | `stock_fundamentals` | `[C]` 15 | 独立章节与回放 | 个股基本面 |
 > | `whatif_trade_cost` | `[C]` 16 | 独立章节与回放 | What-if 交易成本对比（关联产物） |
+> | `decision_basis` | `[C]` 5.1 | 章节内选项 | 判断依据（行动建议章内确定性事实块） |
 > | `llm_debate_procon` | `[C]` 7.1 | 章节内选项 | 辩论-正反辩论 |
 > | `llm_debate_conditional` | `[C]` 7.2 | 章节内选项 | 辩论-条件推理 |
 >
-> 全部 24 项功能开关的键空间、默认值与分组见上表及[配置指引-功能开关 §N](how-to-config.md#n-功能开关featuresjson)。**联接基金穿透无开关**（内置恒开，不在此列）。
+> 全部 25 项功能开关的键空间、默认值与分组见上表及[配置指引-功能开关 §N](how-to-config.md#n-功能开关featuresjson)。**联接基金穿透无开关**（内置恒开，不在此列）。
 > **不在 `features.json` 的开关**：LLM 模块启停走 `llm_settings.json` 的 `enabled_llm`（`[C]` LLM 章节块），基金深度分析与新闻/历史章节走 `config.json` 的 `enable_*`（`[C]` 顶层章节块），新闻源走 `config.json` 的 `news_sources`，匿名化模式走 `config.json` 的 `anonymization.mode`（菜单 **G → A**）。
 
 #### [G] 全局设置（七项四组：目录与文件 / LLM 调优 / 基准与脱敏 / 索引）

@@ -1,10 +1,12 @@
 """行动建议 Excel 写入模块 —「行动建议」页签。
 
-决策闭环的核心产出页签，展示四个行动子块：
-  1. 再平衡信号 — 单品占比超警戒线（复用 simple_rebalance 计算）
-  2. 交易纪律   — 止盈/止损/回撤触发（analysis/trade_discipline 计算）
-  3. 调仓建议   — 可行化调仓清单（analysis/rebalance_advisor 计算，份额取整/费用/现金）
-  4. 收益归因   — 品种收益贡献占比（TOP5 正负分列 + 净额合计摘要）
+决策闭环的核心产出页签，展示八个行动子块：
+  1. 判断依据   — 行动章内确定性事实块（形态 A；纯确定性零 LLM，开关 `decision_basis`）
+  2. 再平衡信号 — 单品占比超警戒线（复用 simple_rebalance 计算）
+  3. 交易纪律   — 止盈/止损/回撤触发（analysis/trade_discipline 计算）
+  4. 调仓建议   — 可行化调仓清单（analysis/rebalance_advisor 计算，份额取整/费用/现金）
+  5. 收益归因   — 品种收益贡献占比（TOP5 正负分列 + 净额合计摘要）
+  6~8. 历史决策复盘 / 景气度框架诊断 / 市场情绪与持仓热点（可选章内块，各自开关控制）
 
 数据源为 `action_data` 契约（`analysis/action_advisor.build_action_data` 组装、
 orchestrator 注入 pipeline_data）。子块为空时写「暂无」占位——收益归因无可归因
@@ -95,12 +97,46 @@ def _write_sub_block(
     return row
 
 
+#: 判断依据区块标题（写入器字面量——区块提取按 `write_block_title` 第 3 参解析；
+#: 归一化名与 section_block_registry 清单「判断依据」三向对账）
+_TITLE_DECISION_BASIS = "判断依据"
+
+
+def _write_decision_basis_block(
+    ws: Worksheet,
+    row: int,
+    data: dict[str, Any] | None,
+    ncols: int,
+) -> int:
+    """写入行动页签顶部的「判断依据」子块（形态 A；开关关闭/键缺席 → 原样返回）。
+
+    空态写「数据不可用：<原因>」（Data States 口径）；后续按信号清单/置信度/
+    风险预算/纪律/结算摘要五节填充。
+
+    Returns:
+        子块结束行号（未写入时为入参 row）。
+    """
+    if not data or not data.get("enabled"):
+        return row
+    row += 1
+    row = write_block_title(ws, row, _TITLE_DECISION_BASIS)
+    row += 1
+    summary = str(data.get("summary") or "").strip()
+    if summary:
+        ws.cell(row=row, column=1, value=summary).font = _FONT_ACCENT
+        row += 1
+    if not data.get("available"):
+        row = write_data_row(ws, row, [f"数据不可用：{data.get('reason') or '原因未知'}"] + [""] * (ncols - 1))
+    return row
+
+
 def write_action_sheet(
     ws: Worksheet,
     action_data: dict[str, Any] | None,
     decision_review_data: dict[str, Any] | None = None,
     prosperity_framework_data: dict[str, Any] | None = None,
     market_sentiment_data: dict[str, Any] | None = None,
+    decision_basis_data: dict[str, Any] | None = None,
 ) -> None:
     """写入行动建议页签（行动板块 + 可选章内块）。
 
@@ -113,11 +149,16 @@ def write_action_sheet(
             `prosperity_framework`，默认关闭）；None 时页签保持既有输出。
         market_sentiment_data: 「市场情绪与持仓热点」契约 dict（报告增强开关
             `market_sentiment`，默认关闭）；None 时页签保持既有输出。
+        decision_basis_data: 「判断依据」章内块契约 dict（形态 A；纯确定性零 LLM，
+            开关 `decision_basis` 默认开）；None 或 enabled=False 时页签保持既有输出。
     """
     _name = get_report_sheet_name("action")
     _ncols = 5
     write_title_row(ws, 1, _name, ncols=_ncols)
     row = 2
+
+    # 子块 1：判断依据（形态 A 章内块顶部呈现；纯确定性零 LLM；开关 decision_basis 控制显隐）
+    row = _write_decision_basis_block(ws, row, decision_basis_data, _ncols)
 
     if not action_data or not action_data.get("available"):
         row = write_data_row(ws, row, [_PLACEHOLDER_UNAVAILABLE, "", "", "", ""])

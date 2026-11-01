@@ -506,7 +506,7 @@ Web 模式（浏览器界面）提供「配置编辑」面板，可修改的配�
 | 事件与摘要 | `event_window_impact`（默认关）/ `market_sentiment`（默认关）/ `summary_highlights`（默认关） | `[S]` 12-14 |
 | 机制与质量 | `decision_reflection`（默认关）/ `report_qa`（默认关、实验）/ `deterministic_signal` / `module_quality_gate` | `[S]` 15-18 |
 | 独立章节与回放 | `rebalance_schedule_replay`（默认关）/ `holding_change_review`（默认关）/ `whatif_trade_cost`（默认关）/ `stock_fundamentals`（默认关） | `[C]` 整章与关联产物块 |
-| 章节内选项 | `llm_debate_procon`（默认关）/ `llm_debate_conditional` | `[C]` 7.1 / 7.2（智囊团复盘子项） |
+| 章节内选项 | `llm_debate_procon`（默认关）/ `llm_debate_conditional` / `decision_basis`（默认开，行动建议章内「判断依据」块） | `[C]` 7.1 / 7.2（智囊团复盘子项）· 行动建议子项 |
 | 持仓匿名化 | `anonymization.mode`（off / code_display / full_anonymous / summary） | `[G]` → `A` |
 | 对比指数池 | `comparison_indices`（增 / 删 / 重置默认） | `[G]` → `I` |
 | LLM 多链线路优先级 | `llm_providers.providers[].priority`（各条目 ▲▼ 调序） | `[G]` → `L` 第 7 项 |

@@ -142,6 +142,7 @@ def _render_template(
     position_status: dict | None = None,  # 品种覆盖诊断 position_status
     data_freshness: dict | None = None,  # 可信度摘要 data_freshness
     action_data: dict | None = None,  # 行动建议单一数据源 action_data（行动板块 + 智囊团深度复盘行动摘要）
+    decision_basis_data: dict | None = None,  # 判断依据章内块契约（开关 decision_basis，None=隐藏）
     prosperity_framework_data: dict
     | None = None,  # 景气度框架诊断契约（实验性功能 prosperity_framework，None=开关关闭）
     market_sentiment_data: dict | None = None,  # 市场情绪与持仓热点契约（报告增强开关 market_sentiment，None=开关关闭）
@@ -267,6 +268,7 @@ def _render_template(
         position_status=position_status,
         data_freshness=data_freshness,
         action_data=action_data,
+        decision_basis_data=decision_basis_data,
         prosperity_framework_data=prosperity_framework_data,
         market_sentiment_data=market_sentiment_data,
         crisis_annotation_data=crisis_annotation_data,
@@ -311,6 +313,7 @@ def write_html_report(
     position_status: dict | None = None,  # 品种覆盖诊断 position_status（品种覆盖区块）
     data_freshness: dict | None = None,  # 可信度摘要 data_freshness（可信度区块 + 头部摘要行）
     action_data: dict | None = None,  # 行动建议单一数据源 action_data（行动板块 + 智囊团深度复盘行动摘要）
+    decision_basis_data: dict | None = None,  # 判断依据章内块契约（开关 decision_basis，None=隐藏）
     prosperity_framework_data: dict
     | None = None,  # 景气度框架诊断契约（实验性功能 prosperity_framework，None=开关关闭）
     market_sentiment_data: dict | None = None,  # 市场情绪与持仓热点契约（报告增强开关 market_sentiment，None=开关关闭）
@@ -623,6 +626,7 @@ def write_html_report(
         position_status=position_status,
         data_freshness=data_freshness,
         action_data=action_data,
+        decision_basis_data=decision_basis_data,
         prosperity_framework_data=prosperity_framework_data,
         market_sentiment_data=market_sentiment_data,
         crisis_annotation_data=crisis_annotation_data,

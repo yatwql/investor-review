@@ -18,6 +18,7 @@ orchestrator 注入 pipeline_data）——与 Excel 端 write_action_sheet 共�
 from __future__ import annotations
 
 import unittest
+from typing import Any
 
 import pytest
 
@@ -45,7 +46,7 @@ def _order_with_action() -> list[dict]:
     return order
 
 
-def _render(action_data, action_enabled: bool = True, decision_review_data=None) -> "BeautifulSoup":
+def _render(action_data, action_enabled: bool = True, decision_review_data=None, decision_basis_data=None) -> Any:
     """渲染 action 与 expert_review 可见、其余隐藏的模板。
 
     expert_review 章节在模板中嵌套于 `section_visible("global_macro")` 守卫内
@@ -57,6 +58,7 @@ def _render(action_data, action_enabled: bool = True, decision_review_data=None)
     data = _build_minimal_render_data(order, numbers, sv_dict)
     data["action_data"] = action_data
     data["decision_review_data"] = decision_review_data
+    data["decision_basis_data"] = decision_basis_data
     # 行动章节可见性同时受 board 层（enable_action）与数据层控制；
     # 此处用 sv_dict 模拟 board 层开关（与生产 html_writer 的两层合并等效）
     if not action_enabled:
@@ -315,6 +317,45 @@ class TestActionSingleSource(unittest.TestCase):
         # 无重复品种行（同一对象渲染两次会产生重复，此处应为 1 行）
         rows = action_sec.select("table tbody tr")
         self.assertLessEqual(len(rows), 1, "单一 action_data 不应产生重复信号行")
+
+
+class TestDecisionBasisBlock(unittest.TestCase):
+    """判断依据章内块（形态 A）HTML 呈现——骨架期空态。"""
+
+    @staticmethod
+    def _contract():
+        from src.python.report.decision_basis import build_decision_basis_data
+
+        return build_decision_basis_data()
+
+    def test_block_renders_collapsed_with_empty_state(self):
+        """契约 provided → #decision-basis 折叠块（默认收起）+ Data States 空态。"""
+        section = _render(_action_data(), decision_basis_data=self._contract()).find(id="sec-action")
+        block = section.find(id="decision-basis")
+        self.assertIsNotNone(block, "契约开启时应有 #decision-basis 块")
+        self.assertEqual(block.name, "details")
+        self.assertIn("section-fold", block.get("class", []))
+        self.assertIsNone(block.get("open"), "折叠块应默认收起")
+        self.assertIsNotNone(block.select_one(".block-title"), "块内应有标题行（区块提取面）")
+        text = block.get_text()
+        self.assertIn("判断依据", text)
+        self.assertIn("数据不可用", text)
+
+    def test_absent_key_renders_no_block(self):
+        """context 无键（既有渲染路径）→ 零行为变化。"""
+        section = _render(_action_data()).find(id="sec-action")
+        self.assertIsNone(section.find(id="decision-basis"))
+
+    def test_disabled_contract_renders_no_block(self):
+        """开关关闭（enabled=False）→ 块完全隐藏（回滚通道）。"""
+        section = _render(_action_data(), decision_basis_data={"enabled": False}).find(id="sec-action")
+        self.assertIsNone(section.find(id="decision-basis"))
+
+    def test_existing_blocks_rendering_unchanged(self):
+        """验收⑥：接入判断依据后其余区块输出不变（①②标题仍在）。"""
+        text = _render(_action_data(), decision_basis_data=self._contract()).find(id="sec-action").get_text()
+        self.assertIn("① 再平衡信号", text)
+        self.assertIn("② 交易纪律", text)
 
 
 class TestActionSectionFold(unittest.TestCase):
