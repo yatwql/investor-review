@@ -423,8 +423,8 @@ class TestRefreshFundManagerCache(unittest.TestCase):
         funds = [self._make_fund("000001"), self._make_fund("000002"), self._make_fund("000003")]
         self.assertEqual(self._call(funds), 1)
 
-    def test_empty(self):
-        """空列表 → 0。"""
+    def test_empty_fund_list_returns_zero(self):
+        """空基金列表 → 0（计数不依赖列表非空）。"""
         self.assertEqual(self._call([]), 0)
 
 
@@ -462,8 +462,8 @@ class TestRefreshExtendedCache(unittest.TestCase):
         self.assertEqual(self._call(holdings), 0)
         mock_prefetch.assert_not_called()
 
-    def test_empty(self):
-        """空持仓 → 0。"""
+    def test_empty_holdings_returns_zero(self):
+        """空持仓列表 → 0（与基金口径同断言、不同 SUT）。"""
         self.assertEqual(self._call([]), 0)
 
 
