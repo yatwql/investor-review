@@ -127,6 +127,37 @@ def _write_decision_basis_block(
         row += 1
     if not data.get("available"):
         row = write_data_row(ws, row, [f"数据不可用：{data.get('reason') or '原因未知'}"] + [""] * (ncols - 1))
+        return row
+    # 信号清单 + 信号可信度（risk_budget/discipline/settlement 后续轮次填充）
+    # 内节标题不走 write_block_title：它是判断依据块的子节，不是注册区块
+    row += 1
+    ws.cell(row=row, column=1, value="信号清单").font = _FONT_SUB_BLOCK
+    row += 1
+    signals = data.get("signals") or []
+    if signals:
+        row = write_header_row(ws, row, ["信号", "方向", "口径·样本", "回测样本", "标注"][:ncols])
+        for s in signals:
+            row = write_data_row(
+                ws,
+                row,
+                [
+                    s.get("name", ""),
+                    s.get("direction_label", ""),
+                    s.get("basis_sample_label", ""),
+                    s.get("n_backtest") if s.get("n_backtest") is not None else "—",
+                    f"{s.get('discrimination_label', '')}；{s.get('note', '')}".rstrip("；"),
+                ][:ncols],
+            )
+    else:
+        row = write_data_row(ws, row, ["暂无信号记录"] + [""] * (ncols - 1))
+    confidence = data.get("confidence") or {}
+    row += 1
+    row = write_data_row(
+        ws,
+        row,
+        [f"信号可信度：{confidence.get('level_label') or '暂不可判'} —— {confidence.get('detail') or ''}"]
+        + [""] * (ncols - 1),
+    )
     return row
 
 

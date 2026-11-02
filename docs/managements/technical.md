@@ -3557,8 +3557,9 @@ make_http_client(timeout=10.0) → httpx.Client
 | `decision_settlement` | 到期决策结算（幂等：同 decision 只结一次，行情不可得保持 pending） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `decision_llm_capture` | LLM 操作建议表解析登记（误导性操作格不登记） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `decision_review_block` | 「历史决策复盘」区块数据契约（结构稳定，HTML/Excel 双端消费） | 行动建议 | 监控 | 随 `decision_reflection` |
-| `decision_basis` | 行动建议章内「判断依据」确定性事实块（形态 A：信号清单/置信度/风险预算/纪律/结算摘要五节，零 LLM；骨架期规范空契约） | 行动建议（章内嵌块） | 监控 | 开关 `decision_basis`（默认开，章节内选项组） |
-| `build_decision_basis_data` | 判断依据块装配入口（纯确定性：只读账本/持仓/配置，零取数零 LLM；零参数签名） | 行动建议（章内嵌块） | 分析计算 | 随 `decision_basis` |
+| `decision_basis` | 行动建议章内「判断依据」确定性事实块（形态 A：信号清单/信号可信度已接入（读信号账本快照，区分度三态 + 回测结论模块常量登记，可信度规则仲裁四枚举），风险预算/纪律/结算摘要待后续轮次，零 LLM） | 行动建议（章内嵌块） | 监控 | 开关 `decision_basis`（默认开，章节内选项组） |
+| `build_decision_basis_data` | 判断依据块装配入口（纯确定性：只读信号账本快照，零取数零 LLM；零参数签名） | 行动建议（章内嵌块） | 分析计算 | 随 `decision_basis` |
+| `arbitrate_confidence` | 信号可信度规则仲裁（清单空→unknown；有效 0→unknown；全口径代理/方向分裂/不足 3 → low；≥3 且方向一致 → medium；首版不产 high，防高置信幻觉） | 行动建议（章内嵌块） | 分析计算 | 随 `decision_basis` |
 | `build_structured_header_instruction` | 决策头结构化契约构建（提示词侧追加 `决策头：…` 行，与解析器口径锁定） | 行动建议 | 监控 | 已内置（缓存后缀 `_dh` 常驻） |
 | `decision_header` | 决策词归一解析器（标签优先/长词优先/否定守卫/复合词左边界/二义不猜） | 行动建议 | 监控 | 已内置（A 通道无开关） |
 | `deterministic_signal` | 确定性信号模块（实时注入 + 跨期沉淀双面：温度/分位/尾部风险预消化信号行 + 确定性评级账本沉淀，内置五类、因子目录随实验开关追加第 6 类；原 `signal_pre_digest`/`signal_ledger` 两开关合并转正） | LLM 生成 | LLM 生成 | 开关 `deterministic_signal`（默认开，机制与诊断组） |

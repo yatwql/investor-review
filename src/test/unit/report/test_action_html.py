@@ -320,7 +320,7 @@ class TestActionSingleSource(unittest.TestCase):
 
 
 class TestDecisionBasisBlock(unittest.TestCase):
-    """判断依据章内块（形态 A）HTML 呈现——骨架期空态。"""
+    """判断依据章内块（形态 A）HTML 呈现——信号清单与可信度空态。"""
 
     @staticmethod
     def _contract():
@@ -329,7 +329,7 @@ class TestDecisionBasisBlock(unittest.TestCase):
         return build_decision_basis_data()
 
     def test_block_renders_collapsed_with_empty_state(self):
-        """契约 provided → #decision-basis 折叠块（默认收起）+ Data States 空态。"""
+        """契约 provided → #decision-basis 折叠块（默认收起）+ 信号/可信度空态。"""
         section = _render(_action_data(), decision_basis_data=self._contract()).find(id="sec-action")
         block = section.find(id="decision-basis")
         self.assertIsNotNone(block, "契约开启时应有 #decision-basis 块")
@@ -339,7 +339,8 @@ class TestDecisionBasisBlock(unittest.TestCase):
         self.assertIsNotNone(block.select_one(".block-title"), "块内应有标题行（区块提取面）")
         text = block.get_text()
         self.assertIn("判断依据", text)
-        self.assertIn("数据不可用", text)
+        self.assertIn("暂无信号记录", text)  # 空账本 → 清单空态（Data States 口径）
+        self.assertIn("暂不可判", text)  # 空态不得显示可信度高
 
     def test_absent_key_renders_no_block(self):
         """context 无键（既有渲染路径）→ 零行为变化。"""

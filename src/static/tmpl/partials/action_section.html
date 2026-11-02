@@ -19,6 +19,7 @@
 <!--  行动建议（决策闭环）                              -->
 <!-- ═══════════════════════════════════════════════════════ -->
 {% set _action = action_data or {} %}
+<!-- // pi-lens-ignore: css-ruleorselectorexpected, css-propertyvalueexpected -- Jinja style 属性误报 -->
 <div class="section" id="sec-action" style="order: {{ section_numbers['action'] }};">
     <div class="section-title">
         {{ section_numbers['action'] }}、{{ section_names['action'] }}
@@ -40,9 +41,40 @@
             </summary>
             <div class="section-content">
                 <div class="block-title">判断依据</div>
-                {% if _db.get("available") %}
-                {# 后续轮次填充：信号清单 / 置信度 / 风险预算 / 纪律 / 结算摘要 #}
-                {% else %}
+        {% if _db.get("available") %}
+        {# 信号清单 + 信号可信度（risk_budget/discipline/settlement 后续轮次填充） #}
+        <div style="font-weight: bold; font-size: var(--fs-body); margin: 8px 0 4px;">信号清单</div>
+        {% set _sigs = _db.get("signals") or [] %}
+        {% if _sigs %}
+        <div style="overflow-x:auto;">
+        <table>
+            <thead>
+                <tr><th>信号</th><th>方向</th><th>口径·样本</th><th>回测样本</th><th>IC</th><th>单调</th><th>标注</th></tr>
+            </thead>
+            <tbody>
+                {% for s in _sigs %}
+                <tr>
+                    <td class="text-left">{{ s.get("name", "") }}</td>
+                    <td class="text-left">{{ s.get("direction_label", "") }}</td>
+                    <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ s.get("basis_sample_label", "") }}</td>
+                    <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ s.get("n_backtest") if s.get("n_backtest") is not none else "—" }}</td>
+                    <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ "%.4f"|format(s.get("ic")) if s.get("ic") is not none else "—" }}</td>
+                    <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ "是" if s.get("monotonic") else ("否" if s.get("monotonic") is not none else "—") }}</td>
+                    <td class="text-left">{{ s.get("discrimination_label", "") }}{% if s.get("note") %}；{{ s.get("note") }}{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <div class="empty-note"><p>暂无信号记录</p></div>
+        {% endif %}
+        {% set _conf = _db.get("confidence") or {} %}
+        <div class="{{ _conf.get('level_class') or 'data-status-info' }}" style="margin-top:8px;">
+            <strong>信号可信度：{{ _conf.get("level_label") or "暂不可判" }}</strong>
+            <span style="font-size: var(--fs-table-sm);opacity:0.85;">—— {{ _conf.get("detail") or "" }}</span>
+        </div>
+        {% else %}
                 <div class="empty-note"><p>数据不可用：{{ _db.get("reason") or "原因未知" }}</p></div>
                 {% endif %}
             </div>
