@@ -6,8 +6,8 @@
 口径：
   - 单品种上限：沿用 `rebalance.threshold`（与再平衡信号、判断依据风险预算同源，
     不再新增第二个单品种上限键，避免两处口径漂移）；
-  - 行业上限：`constraints.industry_max_pct` 显式配置才启用，缺省 `None` = 未配置
-    不拦截；行业分类由调用方传入（复用既有穿透分类，本模块不另起一套归类）；
+  - 行业上限：`constraints.industry_max_pct` 默认 30%（开关一开即生效），显式设
+    `null` 才关闭该项；行业分类由调用方传入（复用既有穿透分类，不另起一套归类）；
   - 相关性上限：`constraints.correlation_max` 显式配置且样本窗口 ≥
     `constraints.correlation_min_window_days`（默认 250 交易日）才评估，否则
     「未评估」不拦截（短样本相关性不稳定，宁可空着）。
@@ -162,7 +162,7 @@ def evaluate_constraints(
     # ② 行业（显式配置才启用；缺分类数据 → 未评估）
     industry_limit = _to_float(section.get("industry_max_pct"))
     if industry_limit is None:
-        items.append(_item(ITEM_INDUSTRY, "industry", None, None, False, note="无行业上限配置键"))
+        items.append(_item(ITEM_INDUSTRY, "industry", None, None, False, note="行业上限已关闭（设为 null）"))
     elif not industry_shares:
         items.append(_item(ITEM_INDUSTRY, "industry", industry_limit, None, False, note="缺行业分类数据"))
     else:
