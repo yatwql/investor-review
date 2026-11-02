@@ -400,6 +400,16 @@ def _check_experimental_features() -> list[dict[str, Any]]:
     return [_item(GROUP_FEATURES, "实验功能", True, f"已启用 {len(enabled)} 项 — {detail}")]
 
 
+def _check_eval_status() -> list[dict[str, Any]]:
+    """决策质量回测的最近执行状态（信息性，不影响自检结论）。"""
+    try:
+        from src.python.core.eval_status import format_eval_hint
+
+        return [_item(GROUP_LOG_CACHE, "决策质量回测", True, format_eval_hint())]
+    except Exception as exc:  # noqa: BLE001
+        return [_item(GROUP_LOG_CACHE, "决策质量回测", False, f"读取失败: {type(exc).__name__}: {exc}")]
+
+
 def _check_report_qa_usage() -> list[dict[str, Any]]:
     """报告追问（实验项）的使用与效果概览（信息性，不影响自检结论）。
 
@@ -647,6 +657,7 @@ def run_doctor_checks(*, include_network: bool = True, max_timeout: float = 8.0)
     results.extend(_check_directories())
     results.extend(_check_logs_and_cache())
     results.extend(_check_experimental_features())
+    results.extend(_check_eval_status())
     results.extend(_check_report_qa_usage())
     results.extend(_check_review_ledger_overview())
     results.extend(_check_source_adapters())

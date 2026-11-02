@@ -306,10 +306,27 @@ def _handle_report(args: argparse.Namespace, config: dict) -> int:
     # 严重失败时不列——目录里留的是上一次的产物，列出来会被误认为本次结果
     if exit_code != _EXIT_SEVERE:
         _print_artifact_paths(config, args.output)
+        _print_eval_status(post_eval=bool(getattr(args, "post_eval", False)))
 
     # 任务完成/失败通知（尽力而为：未配置静默跳过，任何异常不影响退出码）
     _notify_report_completion(args, config, exit_code, result)
     return exit_code
+
+
+def _print_eval_status(*, post_eval: bool) -> None:
+    """收尾评测提示（一行）与可选随报告执行（opt-in，失败不影响退出码）。"""
+    from src.python.core.eval_status import format_eval_hint, run_post_eval
+
+    print(format_eval_hint())
+    if not post_eval:
+        return
+    outcome = run_post_eval()
+    if outcome.get("ok"):
+        print("[OK] 随报告回测已完成（zero-取数阶段）")
+        if outcome.get("tail"):
+            print(outcome["tail"])
+    else:
+        print(f"[!] 随报告回测未完成（不影响报告）：{outcome.get('error') or outcome.get('returncode')}")
 
 
 def _print_artifact_paths(config: dict, output_override: str | None) -> None:

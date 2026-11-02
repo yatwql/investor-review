@@ -76,3 +76,7 @@ select = ["E4", "E7", "E9", "F"]
 "src/test/unit/report/test_drawdown_html_excel.py" = ["F821"]
 "src/test/unit/report/test_evolution_html.py" = ["F821"]
 
+[tool.pyright]
+# scripts/ 下的评测实现包（_eval_factor_zoo / _eval_decision_quality）在运行期经
+# sys.path 注入解析；静态分析需显式声明搜索路径，否则入口脚本的包导入判为未解析。
+extraPaths = ["scripts"]

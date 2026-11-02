@@ -186,6 +186,30 @@ def _build_concentration_qa_block(
 # （集中度问答段为辩论流程内建段落，仅辩论路径传 True；阈值配置 debate.concentration_qa.threshold）
 
 
+# ── 情景段方向约束（两套文本常量共存一版；回退通道 = decision_basis 关闭）──
+# 默认口径：条件化动作 + 触发条件，触发条件不满足即写明「不操作」；
+# 回退口径：强制方向（回滚用，确认回滚完成后随下一版收敛回单源）。
+MANDATE_STRICT = "注意：两个情景必须给出方向性判断和具体品种建议，避免'视情况而定'这类模棱两可的表述。"
+MANDATE_CONDITIONAL = (
+    "注意：两个情景必须给出条件化动作与触发条件（写明满足什么条件才动手）；"
+    "触发条件不满足时写明「不操作」及所缺数据，不必为凑方向勉强下判断。"
+)
+
+
+def scenario_mandate() -> str:
+    """情景段方向约束文本：默认条件化口径；`decision_basis` 关闭时走回退严格口径。"""
+    from src.python.config.features import is_feature_enabled
+
+    return MANDATE_CONDITIONAL if is_feature_enabled("decision_basis") else MANDATE_STRICT
+
+
+def scenario_mandate_cache_suffix() -> str:
+    """情景段方向约束变体后缀：仅回退口径非空，避免回退后仍命中旧口径缓存。"""
+    from src.python.config.features import is_feature_enabled
+
+    return "" if is_feature_enabled("decision_basis") else "_ms"
+
+
 def _build_expert_review_prompt(
     total_mv: float,
     total_cost: float,
@@ -288,7 +312,9 @@ def _build_expert_review_prompt(
         "",
         "请严格基于以上【持仓明细】中的品种进行深度复盘，"
         "只引用我实际持有的品种代码（上面列出的），"
-        "不要虚构任何持仓代码。每个建议必须引用具体品种的名称和代码。\n"
+        "不要虚构任何持仓代码。每个建议必须引用具体品种的名称和代码，"
+        "除非你的结论是「不对具体品种动手」（如整体降仓、持币观望）——"
+        "此时写明理由即可，无需勉强引用品种。\n"
         "【数值精度约束】\n"
         f"1. 持仓明细中每只品种已标注「{LABEL_POSITION_SHORT}」（如 +6.00%），"
         "请直接引用这些数据，不要自行计算或虚构收益率、涨幅等百分比数值；"
@@ -333,9 +359,15 @@ def _build_expert_review_prompt(
                 "- 结合当前持仓结构和盈亏状态给出差异化建议\n\n"
                 "📉 **下跌情景：如果未来市场下跌 20%…**\n"
                 "- 至少 2 句具体行动建议（如：哪些品种可逢低补仓、是否需要设止损、现金管理建议等）\n"
-                "- 结合品种的当前回撤位置和基本面判断\n\n"
-                "注意：两个情景必须给出方向性判断和具体品种建议，"
-                "避免'视情况而定'这类模棱两可的表述。"
+                "- 结合品种的当前回撤位置和基本面判断\n\n" + scenario_mandate()
+            )
+            _scenario_appended = True
+        # 信息不足时的合法出口：与上述强制项并存（增量只加不改）；仅在情景段确实
+        # 出现时追加，避免条件推理未配置情景时凭空多出一句无托的指令
+        if _scenario_appended:
+            parts.append(
+                "\n- 若你认为现有信息不足以支撑方向判断，请明确写出「不操作」以及所缺的具体数据；"
+                "「不操作」是合法结论，不必为凑方向勉强下判断。"
             )
 
     # ── 集中度问答引导（辩论流程内建段落，仅辩论路径注入） ──

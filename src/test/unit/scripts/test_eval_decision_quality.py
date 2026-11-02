@@ -119,6 +119,222 @@ def test_forward_close_empty_series():
     assert mod.forward_close(None, "2026-09-17", 5) == (None, 0)
 
 
+# ── 相关性↔回撤对照 ────────────────────────────────────
+
+
+def _bars(prices: list[float], start: str = "2026-01-05") -> list[dict]:
+    from datetime import date, timedelta
+
+    d = date.fromisoformat(start)
+    out = []
+    for price in prices:
+        out.append({"date": d.isoformat(), "close": price})
+        d += timedelta(days=1)
+    return out
+
+
+def test_series_daily_returns_skips_invalid_close():
+    bars = _bars([100.0, 110.0, 0.0, 99.0])
+    rets = mod.series_daily_returns(bars)
+    assert rets[0]["return"] == pytest.approx(0.1)
+    assert len(rets) == 2  # 0 价被剔除，之后相邻对重新配对（110→99）
+
+
+def test_max_drawdown_of():
+    rets = [{"date": "d1", "return": 0.10}, {"date": "d2", "return": -0.20}]
+    assert mod.max_drawdown_of(rets) == pytest.approx(0.2, abs=1e-9)
+    assert mod.max_drawdown_of([]) is None
+
+
+def test_average_pairwise_correlation_identical_series():
+    rets = [{"date": f"d{i}", "return": 0.01 * ((i % 3) - 1)} for i in range(60)]
+    corr = mod.average_pairwise_correlation({"a": rets, "b": list(rets)})
+    assert corr == pytest.approx(1.0, abs=1e-6)
+
+
+def test_build_correlation_windows_produces_windows():
+    prices = [100.0 + (i % 7) * 0.5 for i in range(120)]
+    series = {"a": _bars(prices), "b": _bars([p * 1.01 for p in prices]), "c": _bars([p * 0.99 for p in prices])}
+    rows, span = mod.build_correlation_windows(series)
+    assert span == pytest.approx(119)  # 120 根 bar → 119 个日收益
+    assert rows, "窗口内样本充足时应产出窗口行"
+    assert all(-1.0 <= r["mean_correlation"] <= 1.0 for r in rows)
+    assert all(r["max_drawdown"] >= 0 for r in rows)
+
+
+@pytest.mark.parametrize(
+    ("span", "n_rows", "expected"),
+    [(146, 5, "样本期不足"), (300, 5, "样本不足"), (300, 100, "叙述性维度")],
+)
+def test_aggregate_correlation_gates(span, n_rows, expected):
+    rows = [{"mean_correlation": 0.1 + (i % 5) * 0.05, "max_drawdown": 0.02 + (i % 7) * 0.01} for i in range(n_rows)]
+    out = mod.aggregate_correlation(rows, span)
+    assert out["verdict"].startswith(expected)
+
+
+def test_aggregate_correlation_pass_requires_expected_sign():
+    rows = [{"mean_correlation": 0.1 * i, "max_drawdown": 0.01 * i} for i in range(120)]
+    passed = mod.aggregate_correlation(rows, 300)
+    assert passed["ic"] > 0 and passed["verdict"].startswith("通过")
+
+    inverted = [{"mean_correlation": 0.1 * i, "max_drawdown": -0.01 * i} for i in range(120)]
+    reversed_out = mod.aggregate_correlation(inverted, 300)
+    assert reversed_out["ic"] < 0 and reversed_out["verdict"].startswith("方向相反")
+
+
+def test_render_markdown_correlation():
+    result = {
+        "phase": "correlation",
+        "params": {
+            "window": 60,
+            "step": 20,
+            "min_span": 250,
+            "min_samples": 100,
+            "ic_threshold": 0.05,
+            "expected_sign": 1,
+        },
+        "n_codes": 14,
+        "summary": {
+            "span_days": 146,
+            "n_windows": 5,
+            "ic": -0.3591,
+            "tercile_monotonic": False,
+            "expected_sign": 1,
+            "verdict": "样本期不足（146 < 250 交易日，仅记录不裁决）",
+        },
+        "rows": [],
+        "caveats": ["x"],
+    }
+    md = mod.render_markdown(result)
+    assert "窗口数" in md and "样本期不足" in md
+
+
+# ── 止损口径对照（固定线 vs 波动率归一化线）────────────
+
+
+def _series_with_forward(
+    after_closes: dict[int, float], prior_n: int = 61, prior_price: float = 100.0
+) -> tuple[list[dict], str]:
+    """构造「prior_n 根等收盘之前段 + 24 根后置 bar」的序列，返回 (series, rep_date)。
+
+    after_closes: {第 i 根后置 bar(1-based): close}，未指定的后置 bar 取 prior_price。
+    """
+    from datetime import date, timedelta
+
+    d = date(2026, 1, 5)
+    bars = []
+    for _ in range(prior_n):
+        bars.append({"date": d.isoformat(), "close": prior_price})
+        d += timedelta(days=1)
+    rep = bars[-1]["date"]
+    for i in range(1, 25):
+        bars.append({"date": d.isoformat(), "close": after_closes.get(i, prior_price)})
+        d += timedelta(days=1)
+    return bars, rep
+
+
+def test_daily_volatility_requires_full_window():
+    series, rep = _series_with_forward({}, prior_n=30)
+    assert mod.daily_volatility(series, rep) is None
+
+
+def test_daily_volatility_flat_series_is_zero_and_ignores_future_bars():
+    series, rep = _series_with_forward({})
+    assert mod.daily_volatility(series, rep) == pytest.approx(0.0)
+    # 报告日之后的 bar 不参与（无前视偏差）：给它一个极端跌幅也不影响 σ
+    series[70]["close"] = 1.0
+    assert mod.daily_volatility(series, rep) == pytest.approx(0.0)
+
+
+def test_discipline_sample_hits_fixed_and_normalized_lines():
+    """触发窗口 −20%：固定 −15% 必触发；σ=0 时归一化线 0%，同样触发。"""
+    series, rep = _series_with_forward({5: 80.0, **{i: 80.0 for i in range(6, 20)}, 20: 72.0})
+    decision = {"decision_id": "d1", "code": "600000", "report_date": rep, "baseline_close": 100.0}
+    row = mod.discipline_sample(decision, series)
+    assert row is not None
+    assert row["trigger_return"] == pytest.approx(-0.2)
+    assert row["fixed_hit"] is True
+    assert row["normalized_hit"] is True
+    assert row["effect_return"] == pytest.approx(-0.1, abs=1e-6)
+
+
+def test_discipline_sample_skips_immature_windows():
+    """后置 bar 不足 20 根（20 日视界未成熟）→ 不产生样本，不猜。"""
+    series, rep = _series_with_forward({}, prior_n=61)
+    series = [b for b in series if b["date"] <= series[-1]["date"]][:72]  # 截断到 rep 后 11 根
+    decision = {"decision_id": "d", "code": "600000", "report_date": rep, "baseline_close": 100.0}
+    assert mod.discipline_sample(decision, series) is None
+
+
+def test_aggregate_discipline_sample_gate():
+    rows = [
+        {"fixed_hit": True, "normalized_hit": True, "effect_return": -0.02},
+        {"fixed_hit": False, "normalized_hit": True, "effect_return": -0.03},
+        {"fixed_hit": False, "normalized_hit": False, "effect_return": 0.01},
+    ]
+    out = mod.aggregate_discipline(rows)
+    assert out["fixed"]["n"] == 1 and out["normalized"]["n"] == 2
+    assert out["verdict"].startswith("样本不足")
+
+
+def test_aggregate_discipline_verdicts_with_enough_samples():
+    def _rows(norm_effect: float):
+        rows = [{"fixed_hit": True, "normalized_hit": True, "effect_return": -0.01} for _ in range(100)]
+        rows += [{"fixed_hit": False, "normalized_hit": True, "effect_return": norm_effect} for _ in range(100)]
+        rows += [{"fixed_hit": False, "normalized_hit": False, "effect_return": 0.0} for _ in range(100)]
+        return rows
+
+    assert mod.aggregate_discipline(_rows(-0.05))["verdict"].startswith("归一化更优")
+    assert mod.aggregate_discipline(_rows(0.04))["verdict"].startswith("归一化更差")
+
+
+def test_stage_discipline_with_injected_series(tmp_path):
+    series, rep = _series_with_forward({5: 80.0, **{i: 80.0 for i in range(6, 20)}, 20: 72.0})
+    rows = [
+        {
+            "event": "decision",
+            "decision_id": "d1",
+            "direction": 1,
+            "baseline_close": 100.0,
+            "report_date": rep,
+            "code": "600000",
+            "name": "X",
+        }
+    ]
+    (tmp_path / "decision_ledger.jsonl").write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
+    result = mod.stage_discipline(ledger_dir=tmp_path, days=120, price_fn=lambda *a, **k: series)
+    assert result["phase"] == "discipline"
+    assert result["summary"]["n_samples"] == 1
+    assert result["summary"]["fixed"]["n"] == 1
+    assert "止损口径对照" in " ".join(result["caveats"])
+
+
+def test_render_markdown_discipline(tmp_path):
+    result = {
+        "phase": "discipline",
+        "params": {
+            "fixed_stop_pct": -0.15,
+            "vol_multiple": 2.5,
+            "vol_window": 60,
+            "min_edge": -0.01,
+            "min_samples": 100,
+        },
+        "n_decisions": 3,
+        "summary": {
+            "n_samples": 1,
+            "fixed": {"n": 1, "hit_rate": 1.0, "mean_effect_return": -0.1},
+            "normalized": {"n": 1, "hit_rate": 1.0, "mean_effect_return": -0.1},
+            "edge": None,
+            "verdict": "样本不足（<100，仅记录不裁决）",
+        },
+        "rows": [],
+        "caveats": ["x"],
+    }
+    md = mod.render_markdown(result)
+    assert "固定线" in md and "归一化线" in md
+    assert "样本不足" in md
+
+
 # ── 统计原语 ─────────────────────────────────────────────
 
 

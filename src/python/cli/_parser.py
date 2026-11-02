@@ -173,6 +173,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "仅 --type both/full 时有效）",
     )
     report_p.add_argument("--force-llm", action="store_true", help="强制重新生成 LLM 内容（跳过缓存）")
+    report_p.add_argument(
+        "--post-eval",
+        action="store_true",
+        help="报告成功后顺带跑零取数回测阶段（horizon/valuation，产物落 docs/tmp；失败不影响报告）",
+    )
     from src.python.llm.force_scope import FORCEABLE_LLM_MODULES
 
     report_p.add_argument(
