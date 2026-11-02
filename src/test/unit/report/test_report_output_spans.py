@@ -106,6 +106,42 @@ class TestFullPathPhaseSpans:
             "stop",
         ], "HTML 阶段须细分为「图表数据装配」与「页面写入」两段（整段异常偏慢时才能定位）"
 
+    def test_html_receives_decision_basis_data(self, monkeypatch, tmp_path, prep_stub):
+        """生产 HTML 路径必须透传判断依据块契约，否则块整块不渲染。"""
+        captured: dict[str, object] = {}
+
+        def _fake_html(*_a, **kwargs):
+            captured.update(kwargs)
+            return str(tmp_path / "report.html")
+
+        monkeypatch.setattr("src.python.report.html_writer.write_html_report", _fake_html)
+        _bind(monkeypatch, _RecordingPerf())
+        monkeypatch.setattr("src.python.config.features.is_feature_enabled", lambda *a, **k: False)
+        monkeypatch.setattr(rg, "_build_chart_datasets_for_report", lambda *a, **k: {})
+        basis = {"enabled": True, "summary": "x"}
+        prep_stub["decision_basis_data"] = basis
+
+        rg._generate_full_html_report(
+            [],
+            prep_stub,
+            str(tmp_path),
+            [],
+            (None, None, None, None),
+            [],
+            {},
+            True,
+            None,
+            MagicMock(),
+            False,
+            False,
+            False,
+            False,
+            None,
+            ReportResult(),
+        )
+
+        assert captured.get("decision_basis_data") == basis
+
     def test_excel_helper_records_phase(self, monkeypatch, tmp_path, prep_stub):
         perf = _RecordingPerf()
         _bind(monkeypatch, perf)
