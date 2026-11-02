@@ -1184,14 +1184,17 @@ curl 对照命令：`curl -s "https://push2.eastmoney.com/api/qt/stock/get?secid
 
 **`eval-decision-quality.py` — 投资决策质量待验证项回测**
 
-三个阶段对应讨论稿 `docs/plan/investment-decision-quality.md` §8 的三项回测；判据与样本门槛在脚本常量预注册（跑完不回改，改判据须全量重跑）：
+五个阶段对应决策质量待验证清单 V1~V3、V5 与 V7 的回测（V1~V3 结论登记在 `report/decision_basis.py` 的 `BACKTEST_CONCLUSIONS`；V5 为交易纪律止损口径对照、V7 为持仓相关性矩阵与最大回撤的关系，结论未达门槛前只在计划条目记录）；判据与样本门槛在脚本常量预注册（跑完不回改，改判据须全量重跑）：
 
 ```bash
-.venv/bin/python scripts/eval-decision-quality.py all          # 三阶段依序
+.venv/bin/python scripts/eval-decision-quality.py all          # 五阶段依序
 .venv/bin/python scripts/eval-decision-quality.py horizon     # 决策建议 5/20/60 日视界命中率与超额
 .venv/bin/python scripts/eval-decision-quality.py valuation   # 估值信号两口径（价格代理 / 真实 PE·PB）区分度
+.venv/bin/python scripts/eval-decision-quality.py discipline  # V5：固定 −15% vs −2.5σ 止损线的触发后效果
+.venv/bin/python scripts/eval-decision-quality.py correlation # V7：窗口平均两两相关 vs 等权组合最大回撤
 ```
 
+实现拆在 `_eval_decision_quality/`（primitives 常量与纯原语 / stages 五阶段 / report 产物与控制台摘要），入口只留 CLI 与原面 re-export。
 取数只经既有能力（`decision_settlement` 行情/指数序列 + `valuation_percentile` 口径函数 +
 `financial_indicator` 缓存链），不裸调 provider；只读账本与缓存，不写 `data/` 生产状态；
 产物只落 `docs/tmp/decision-quality/`（git 忽略）。首批评测结论见讨论稿 §8.1。

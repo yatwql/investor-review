@@ -7,7 +7,7 @@
 
 ## 概述
 
-在办 7 项：P1 2 项（**plan-238**、**plan-239**）、P2 1 项（**plan-92**）、P3 4 项（**plan-70**、**plan-233**、**plan-242**、**plan-243**）、P4 1 项（**plan-55**）。命名与实现纪律见 `CLAUDE.md`（单一事实位，本表不重复）。
+在办 7 项：P1 2 项（**plan-238**、**plan-239**）、P2 1 项（**plan-92**）、P3 3 项（**plan-70**、**plan-233**、**plan-243**）、P4 1 项（**plan-55**）。命名与实现纪律见 `CLAUDE.md`（单一事实位，本表不重复）。
 
 ---
 
@@ -62,32 +62,30 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 
 #### `plan-70` 决策跨期反思闭环（decision_reflection）转正判据
 
-**状态**：观察中（实验项，默认关）。进度以 `doctor` 账本概览为准，当前（2026-10-31）：启用 118 次、已结算 27 / 待结算 63、有方向 18 条、命中率 72.2%、`sample_sufficient=false` —— 距采信门槛差 2 条、距裁决门槛差 22 条，本期不作裁决。
+**状态**：实验项（默认关），未达采信门槛（有方向 18 条 < 20）。读数以 `doctor` 账本概览为准：启用 118 次、已结算 27 / 待结算 63、命中率 72.2%、`sample_sufficient=false`。
 **判据**：`directional_total ≥ 20` 时命中率可采信（该门槛上的首次读数即正式读数，未达时按命中/总数并列观察）；`≥ 40` 才做转正裁决——据账本摘除 `experimental`（面板 ⚗ 消失，页脚自述转常规口径）。撤销：启用次数停止增长，或已结算 <10 条且无达标趋势（含 `decision_llm_capture`、行动章复盘块与对应需求条目一并撤除）。
 **设计**：[`decision-reflection-design.md`](../plan/decision-reflection-design.md)（转正后按其迭代计划执行）；与持仓变动复盘构成「意图 vs 成交」对账（只读，不互写）。
 **事实位**：判据、门槛与进度在本条维护；已落地机制与观测数据源见 [technical §6.9 实验项生命周期表](technical.md#69-实验项生命周期表)。
 
 #### `plan-233` `report_qa` 转正评估（按埋点数据裁决）
 
-#### `plan-242` 投资决策质量议题（**仅探讨，不实施**）
-
-**现状**：用户反馈持续亏损，想换更强模型或改提示语以得到更优决策建议。方向未验证前不实施任何改动。
-
-**动作**：讨论稿已完成（[`investment-decision-quality.md`](../plan/investment-decision-quality.md)）：四问均成文，结论含 7 条结构性事实 + 6 项优先级建议；待验证项（回测/执行记录/A-B）见稿内清单。**实施由后续任务 `plan-243` 承接（本条保持不实施）**。
-
-**验收**：讨论稿四问均有书面结论且标注证据来源；争议表与待验证清单全部收敛；明确「不承诺收益、不构成投资建议」。
-
-**事实位**：结论与证据在本条指向的讨论稿维护，本表不重复。
+**状态**：实验项（默认关，唯一新增 LLM 费用的实验项），未达转正判据——账本 `data/state/qa_usage.jsonl` 尚无记录（零提问），三项判据均不可评估；观测期内维持 `experimental=True`。
+**判据**（`qa/telemetry.py` 常量，`doctor` 逐条上屏）：提问量 `attempts ≥ 30`、无回答占比 `≤ 15%`、事实核对降级率 `≤ 30%`——三项同时满足才判「可评估转正」（`summarize_qa_usage(days=30).verdict.ready`），随后据账本摘除 `experimental`（面板 ⚗ 消失、页脚实验自述移除）。
+**数据源**：`qa/telemetry.py` 每次提问记一行账本（只记字数不记正文、滚动上限 5000 行），`doctor` 汇总最近 30 天；`experiment_stats.report_qa` 只记开关启用次数（当前 63 次），不构成效果判据。
+**撤销死线**：最近 90 天新增提问 <10 条（用户不用）或质量指标连续两个观测窗口越线且提示词/上下文一轮整改后仍不改善（质量不达标）→ 连同 `qa/` 子包、`report_qa` 开关、报告页追问区块、TUI `[Q]` 入口与 R-QA-01~10 需求条目一并撤除。
+**机制**：`qa/` 会话层与 `QaSession`、`record_attempt` 记账、报告页区块与 TUI `[Q]` 入口，机制登记见 [technical §6.9 实验项生命周期表](technical.md#69-实验项生命周期表)；需求条目 R-QA-01~10。
+**事实位**：判据常量在 `qa/telemetry.py`；转正/撤销条款与当前态在本条维护，技术机制见 §6.9。
 
 #### `plan-243` 决策依据章与 LLM 章职责切分（实施）
 
-**现状**：设计定稿待实施，承接 `plan-242` 讨论稿「章节归属结论」；设计稿 [`investment-decision-basis-design.md`](../plan/investment-decision-basis-design.md)。
-**前置**：讨论稿待验证清单 V1/V2/V3 **已于 2026-11-02 同批完成回测**（`scripts/eval-decision-quality.py`，结论见讨论稿 §8.1——V1/V2 样本不足仅记录、V3 两口径 5 日视界均无区分度）；实施门禁 V1/V3 已满足。
-**回测接入（首批结论）**：估值分位按「已回测未通过」接入（R2 首版即真实结论态，`report/decision_basis.py` 模块常量登记、不新增配置键；两口径均无区分度 → 不在管线内计算真实 PE/PB 口径）；因子目录信号按「样本不足」态；V1 复跑触发（20 日成熟样本 ≥100，固定视界与账本动态视界对拍后切换）见设计稿 R0。
+**现状**：R0~R7 已落地（含提示词两刀与版本盐递增）；R9 约束标注已实现（开关 `portfolio_constraints` 默认关，阈值待按需配置）；R8 待 V5 样本门槛满足；承接已归档讨论稿「章节归属结论」，设计稿 [`investment-decision-basis-design.md`](../plan/investment-decision-basis-design.md)。
+**前置**：讨论稿待验证清单 V1/V2/V3 已有回测结论（`scripts/eval-decision-quality.py`，见 [归档讨论稿](../archive/v0.16.x/investment-decision-quality/investment-decision-quality.md) §8.1——V1/V2 样本不足仅记录、V3 两口径 5 日视界均无区分度）；实施门禁 V1/V3 满足。
+**回测接入**：估值分位按「已回测未通过」接入（`report/decision_basis.py` 模块常量登记、不新增配置键；两口径均无区分度 → 不在管线内计算真实 PE/PB 口径）；因子目录信号按「样本不足」态；V1 复跑触发（20 日成熟样本 ≥100，固定视界与账本动态视界对拍后切换）见设计稿 R0。
 **章节归属**：先以「行动建议」章内块形态（形态 A）落地「判断依据」（纯规则、零 LLM），LLM 章退回解读层；独立章节（形态 B）留作升级路径。
-**迭代计划**：R0~R7 八轮（设计稿 §4），每轮独立可验收、任一失败即停；LLM 章改造拆为 R6 语义增量与 R7 冲突措辞替换两刀，前后脚同版本发布。
-**质量门禁**：跨轮门禁见设计稿 §4——每轮 `dev-verify` 全绿 + 守护全绿 + 设计护栏 E 级 0 + 文档同步（`technical.md` 附录 H 契约与语义命名表、`test-coverage.md`、`folders.md`、`changelog.md`；R1 起补 `requirements.md` 的 R-OUT 条目与 `core/section_block_registry.py` 区块登记，R2 起在 `config/_feature_registry.py` 与 `how-to-config-reference.md` 登记 `decision_basis.enabled`）；累计完成后走 `release.py gate`。
-**验收**：R0~R7 逐轮验收全过；跨轮汇总口径见设计稿 §5（含回归：`enable_llm` 两态下该块输出逐字节一致、`decision_basis.enabled=false` 与基线快照逐字节一致）；回滚通道 `decision_basis.enabled` 可用。
+**迭代计划**：R0~R9 十轮（设计稿 §4），每轮独立可验收、任一失败即停；LLM 章改造拆为 R6 语义增量与 R7 冲突措辞替换两刀，前后脚同版本发布；R8 纪律规则重构、R9 集中度/相关性硬约束承接归档讨论稿优先级 3/5（算法层，与决策依据块的只读呈现分开，首发默认关、可回退）。
+**质量门禁**：跨轮门禁见设计稿 §4——每轮 `dev-verify` 全绿 + 守护全绿 + 设计护栏 E 级 0 + 文档同步（`technical.md` 附录 H 契约与语义命名表、`test-coverage.md`、`folders.md`、`changelog.md`；R1 起补 `requirements.md` 的 R-OUT 条目与 `core/section_block_registry.py` 区块登记，R2 起在 `src/python/config/_feature_registry.py` 与 `how-to-config-reference.md` 登记 `decision_basis`，R8/R9 起补 `requirements.md` 的 R-DIS-06~09、`config/_config_defaults.py` 新键与功能语义命名表条目）；累计完成后走 `release.py gate`。
+**验收**：R0~R9 逐轮验收全过；跨轮汇总口径见设计稿 §5（含回归：`enable_llm` 两态下该块输出逐字节一致、`decision_basis.enabled=false` 与基线快照逐字节一致）；回滚通道 `decision_basis.enabled` 可用。
+**挂账（未排期）**：① R8 纪律规则重构（前置：V5 回测门槛——已跑、20 日成熟样本 2 条、两口径触发 0，未达样本门槛故阈值口径维持默认）；R9 已实现默认关，启用待配置 `constraints` 阈值（相关性项待 V7：已跑，样本期 146 交易日 < 250、窗口 5 个、IC −0.36，样本期不足不采信）；② 归档讨论稿优先级 6（模型同输入 A/B）与待验证项 V4（执行回执来源）、V6（模型 A/B）、V7；③ R6/R7 真机采样清单（基线/新提示词各 5 次、同输入 A/B 各 10 次的方向陈述比例与人判读，人工执行不入自动化）。
 **事实位**：轮次计划与验收口径在设计稿维护，本表不重复。
 
 ### P4 — 实验候选（先决门槛未过，暂缓）
