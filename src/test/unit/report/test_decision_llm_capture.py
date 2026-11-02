@@ -13,6 +13,9 @@ from __future__ import annotations
 
 from src.test._relative_dates import day as _day
 
+import json
+from pathlib import Path
+
 import pytest
 
 from src.python.config.features import set_feature_enabled, reset_feature_flags
@@ -54,6 +57,62 @@ def _enable_flag():
 
 def _ids_for(rows):
     return [r["code"] for r in rows]
+
+
+class TestParseFallback:
+    """解析兜底：缺行/缺方向（含「不操作」）跳过登记并记 INFO，不抛错。"""
+
+    def test_no_action_row_skipped_with_info(self, caplog):
+        html = _HTML_HEADER + "<p>| 🔴 高 | 600900 长江电力 | 不操作 | 等条件明朗再做决定 |</p>"
+        with caplog.at_level("INFO", logger="invest"):
+            rows = cap.extract_llm_decisions(html, _HOLDINGS)
+        assert rows == []
+        messages = [rec.getMessage() for rec in caplog.records]
+        assert any("解析兜底跳过登记" in msg and "无方向 1 条" in msg for msg in messages)
+
+    def test_malformed_row_does_not_raise_and_logs(self, caplog):
+        """有品种代码但方向格无法识别 → 跳过并留痕（表头/分隔行不计，避免噪声）。"""
+        html = _HTML_HEADER + "<p>| 🔴 高 | 600900 长江电力 | ？？ | 理由 |</p>"
+        with caplog.at_level("INFO", logger="invest"):
+            rows = cap.extract_llm_decisions(html, _HOLDINGS)
+        assert rows == []
+        messages = [rec.getMessage() for rec in caplog.records]
+        assert any("无法解析 1 条" in msg for msg in messages)
+
+    def test_register_swallows_unexpected_parse_error(self, monkeypatch):
+        """解析异常不得中断报告生成：返回零登记。"""
+
+        def _boom(*_a, **_k):
+            raise ValueError("bad payload")
+
+        monkeypatch.setattr(cap, "extract_llm_decisions", _boom)
+        assert cap.register_llm_decisions(_HTML_TWO_ROWS, _HOLDINGS) == {"registered": 0, "ids": []}
+
+
+class TestConstrainedFlag:
+    """约束标注：只在账本事件上置 constrained=true（只标注不阻断，动作与登记都不改）。"""
+
+    def test_constrained_codes_mark_only_breached_rows(self, tmp_path):
+        lp = str(tmp_path / "ledger.jsonl")
+        out = cap.register_llm_decisions(
+            _HTML_TWO_ROWS,
+            _HOLDINGS,
+            report_date=_REPORT_DATE,
+            constrained_codes={"561910"},
+            path=lp,
+        )
+        assert out["registered"] >= 1
+        events = [json.loads(line) for line in Path(lp).read_text(encoding="utf-8").splitlines() if line.strip()]
+        decisions = {e["code"]: e for e in events if e.get("event") == "decision"}
+        assert decisions["561910"].get("constrained") is True
+        # 未超限的登记行不写该字段（旧事件无字段一律按未拦截读）
+        assert all("constrained" not in e for code, e in decisions.items() if code != "561910")
+
+    def test_without_constraints_no_field_written(self, tmp_path):
+        lp = str(tmp_path / "ledger2.jsonl")
+        cap.register_llm_decisions(_HTML_TWO_ROWS, _HOLDINGS, report_date=_REPORT_DATE, path=lp)
+        events = [json.loads(line) for line in Path(lp).read_text(encoding="utf-8").splitlines() if line.strip()]
+        assert all("constrained" not in e for e in events if e.get("event") == "decision")
 
 
 class TestIterAndParseRows:

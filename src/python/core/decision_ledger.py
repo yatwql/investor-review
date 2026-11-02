@@ -140,6 +140,7 @@ def append_decision(
     magnitude: str = "mid",
     report_date: str | None = None,
     baseline_close: float | None = None,
+    constrained: bool | None = None,
     path: str | None = None,
 ) -> str:
     """登记一条 pending 决策，返回 decision_id。
@@ -150,6 +151,8 @@ def append_decision(
         magnitude: 强度/优先级（high/mid/low）
         report_date: 登记运行所在交易日（缺省取本地当日）
         baseline_close: 登记日收盘（结算基线，由 report 层拉取当日行情给出）
+        constrained: 建议是否触及集中度/相关性约束（只标注不阻断；缺省不写字段，
+            历史事件无该字段一律按「未拦截」读）
     """
     decision_id = uuid.uuid4().hex[:12]
     event: dict[str, Any] = {
@@ -167,6 +170,8 @@ def append_decision(
     }
     if baseline_close is not None:
         event["baseline_close"] = baseline_close
+    if constrained:
+        event["constrained"] = True
     _append_event_atomic(event, path=path)
     return decision_id
 
@@ -496,5 +501,5 @@ def lessons_cache_suffix(events: Iterable[dict[str, Any]] | None = None, *, path
     block = lessons_block(events, path=path)
     if not block:
         return ""
-    digest = hashlib.md5(block.encode("utf-8")).hexdigest()[:12]
+    digest = hashlib.sha256(block.encode("utf-8")).hexdigest()[:12]
     return f"_lr{digest}"

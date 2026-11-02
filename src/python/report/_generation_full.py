@@ -208,6 +208,20 @@ def _generate_report_full(
     if pipeline_data is not None:
         pipeline_data["action_data"] = _action_data
 
+    # 判断依据块随峰值就绪重装配一次（风险预算的回撤现状依赖历史峰值；
+    # 其余字段与首装配同源，重装配幂等）
+    from src.python.report.decision_basis import build_decision_basis_data
+
+    _decision_basis = build_decision_basis_data(
+        prep.get("holdings_details") or [],
+        prep.get("total_mv", 0),
+        portfolio_peak_mv=_peak_mv,
+        discipline_signals=_action_data.get("discipline_signals"),
+    )
+    prep["decision_basis_data"] = _decision_basis
+    if pipeline_data is not None:
+        pipeline_data["decision_basis_data"] = _decision_basis
+
     # ── 3.6 决策跨期反思闭环（decision_reflection 实验功能，默认关）──
     # 结算必须先于 LLM 拉取：否则当次教训（含本批结算结果）在 LLM 注入前未落档，
     # 注入读不到新结算。挂载点实现与异常守护见 `_experimental_seams`。

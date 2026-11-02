@@ -229,8 +229,13 @@ def prepare_report_data(
     # 使占位构建不读写纪律静默文件，保证最终构建为唯一静默写入方。
     action_data = build_action_data(holdings_details, total_mv, persist_silence=False)
     # 判断依据章内块（形态 A，数据契约 decision_basis_data；开关 decision_basis
-    # 关闭 → enabled=False 双端完全隐藏；骨架阶段 available=False 走空态）
-    decision_basis_data = build_decision_basis_data()
+    # 关闭 → enabled=False 双端完全隐藏）。风险预算块与 action_data 同源持仓，
+    # 历史峰值未就绪时回撤现状标「未评估」，峰值就绪后由 full/both 路径重装配。
+    decision_basis_data = build_decision_basis_data(
+        holdings_details,
+        total_mv,
+        discipline_signals=(action_data or {}).get("discipline_signals"),
+    )
 
     # 深度档位：新闻采集条数按档位下界修正（延迟导入避免报告层与 LLM 层在导入期互相牵连）
     from src.python.llm.depth_profile import effective_news_limit, resolve_depth_profile

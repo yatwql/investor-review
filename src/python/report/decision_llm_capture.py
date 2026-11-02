@@ -119,6 +119,16 @@ def _parse_table_row(line: str) -> dict[str, Any] | None:
     }
 
 
+#: 无操作类措辞（方向格写这些即视为「不操作」，跳过登记并留痕）
+_NO_ACTION_WORDS: tuple[str, ...] = ("不操作", "暂不操作", "观望", "等待", "按兵不动")
+
+
+def _is_no_action(op_cell: str) -> bool:
+    """方向格是否为「不操作」类表述（无需方向，按兜底跳过）。"""
+    text = (op_cell or "").strip()
+    return bool(text) and parse_decision_word(text) is None and any(word in text for word in _NO_ACTION_WORDS)
+
+
 def _strip_code(stock_cell: str) -> str:
     """从品种单元格去掉 6 位代码与分隔符，留下名称。"""
     return re.sub(r"(?<!\d)[0-9]{6}(?!\d)", "", stock_cell or "").strip(" -")
@@ -172,15 +182,33 @@ def extract_llm_decisions(
         return []
     holdings = _build_holdings_index(holdings_details)
     best: dict[str, dict[str, Any]] = {}
+    skipped: dict[str, int] = {}
+
+    def _note(reason: str | None) -> None:
+        if reason:
+            skipped[reason] = skipped.get(reason, 0) + 1
+
     structured = parse_structured_header(_normalized_text(expert_review_html))
     if structured is not None:
         for item in structured:
-            _collect_decision(best, item, holdings)
-        return list(best.values())
-    for line in _iter_table_rows(expert_review_html):
-        row = _parse_table_row(line)
-        if row:
-            _collect_decision(best, row, holdings)
+            _note(_collect_decision(best, item, holdings))
+    else:
+        for line in _iter_table_rows(expert_review_html):
+            row = _parse_table_row(line)
+            if row:
+                _note(_collect_decision(best, row, holdings))
+            elif extract_code(line) is not None:
+                # 有品种代码却没解析出方向：区分「不操作/观望」与真正的异常行
+                op_cell = _split_cells(line)[2] if len(_split_cells(line)) >= 4 else ""
+                _note("no_direction" if _is_no_action(op_cell) else "unparsed")
+    if skipped:
+        # 解析兜底：缺行/缺方向（如「不操作」）跳过登记并留痕，不中断报告生成
+        logger.info(
+            "[decision_llm_capture] 解析兜底跳过登记：无方向 %d 条（含「不操作」）、非持仓 %d 条、无法解析 %d 条",
+            skipped.get("no_direction", 0),
+            skipped.get("not_in_holdings", 0),
+            skipped.get("unparsed", 0),
+        )
     return list(best.values())
 
 
@@ -188,7 +216,7 @@ def _collect_decision(
     best: dict[str, dict[str, Any]],
     row: dict[str, Any],
     holdings: dict[str, dict[str, Any]],
-) -> None:
+) -> str | None:
     """把一条候选决策并入结果集（登记纪律在此统一执行）。
 
     纪律：持有/中性剔除；非持仓 code（空上下文/幻觉）不入账；同 code 保留
@@ -196,10 +224,10 @@ def _collect_decision(
     契约无理由列）；baseline 取持仓 price，无价则 None。
     """
     if row["direction"] not in (dl.DIRECTION_LONG, dl.DIRECTION_SHORT):
-        return  # 持有/中性剔除（结算无方向语义，落账即成永久 pending）
+        return "no_direction"  # 持有/中性/「不操作」剔除（结算无方向语义）
     holding = holdings.get(row["code"])
     if holding is None:
-        return  # 非持仓 code（空上下文/幻觉）不入账
+        return "not_in_holdings"  # 非持仓 code（空上下文/幻觉）不入账
     if not row.get("name"):
         row["name"] = holding["name"]
     # 结构化决策头契约仅 {code, action, priority} 三字段（无理由列）：detail 在此
@@ -216,6 +244,7 @@ def _collect_decision(
             }
         )
         best[row["code"]] = row
+    return None
 
 
 def register_llm_decisions(
@@ -223,16 +252,26 @@ def register_llm_decisions(
     holdings_details: list[dict[str, Any]] | None,
     *,
     report_date: str | None = None,
+    constrained_codes: set[str] | None = None,
     path: str | None = None,
 ) -> dict[str, Any]:
     """登记 expert_review 操作建议表中的方向决策为 pending（开关关闭时无感）。
+
+    Args:
+        constrained_codes: 触及集中度/相关性约束的品种代码集合（只标注不阻断；
+            None/空集 = 不标注）。
+
 
     Returns:
         {"registered": int, "ids": [decision_id, ...]}
     """
     if not is_active():
         return {"registered": 0, "ids": []}
-    rows = extract_llm_decisions(expert_review_html, holdings_details)
+    try:
+        rows = extract_llm_decisions(expert_review_html, holdings_details)
+    except Exception as exc:  # noqa: BLE001 — 解析兜底：LLM 文本异常不得中断报告生成
+        logger.info("[decision_llm_capture] 解析兜底跳过本次登记: %s: %s", type(exc).__name__, exc)
+        return {"registered": 0, "ids": []}
     ids: list[str] = []
     skipped_dup = 0
     for row in rows:
@@ -263,6 +302,7 @@ def register_llm_decisions(
             detail=row["detail"],
             report_date=report_date,
             baseline_close=baseline,
+            constrained=bool(constrained_codes and row["code"] in constrained_codes),
             path=path,
         )
         ids.append(did)

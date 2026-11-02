@@ -12,9 +12,12 @@
   summary     一句话结论（折叠组 summary）
   signals     信号清单（判断类信号各一行：口径/样本/区分度/标注，见设计稿 §2.1）
   confidence  信号可信度（规则仲裁四枚举，非模型自评，只描述信号可信度不描述建议胜率）
-  risk_budget / discipline / settlement
-              后续轮次逐节填充（字段先立、数据后到；任一节缺失 → 该节空态，
-              不隐藏整块容器）
+  risk_budget 风险预算块（上限 vs 现状三行：单品种权重 / 行业权重 / 组合回撤；
+              只摄上限与现状，不产动作；缺数据时 available=False + reason）
+  discipline  纪律明细块（复用「交易纪律」块已产出的触发条：规则/品种/当前值/
+              距阈值 + 阶段化执行口径说明；只读，不改触发逻辑）
+  settlement  结算摘要块（按结算交易日聚合最近 5 批 × 5/20/60 视界均值与超额；
+              未到期视界显式「未到期」，不按 0 呈现）
 
 硬约束（设计稿 §2.1）：
   - 任何字段数值来自确定性计算（信号账本 / 持仓 / 配置），不由 LLM 生成或改写；
@@ -31,9 +34,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.python.analysis.portfolio_constraints import evaluate_constraints, max_single_weight, status_of
+from src.python.config import get_config
 from src.python.config.features import is_feature_enabled
 from src.python.core import signal_ledger as sl
-from src.python.core.decision_ledger import DIRECTION_FLAT, DIRECTION_LONG, DIRECTION_SHORT
+from src.python.core.decision_ledger import DIRECTION_FLAT, DIRECTION_LONG, DIRECTION_SHORT, fold_ledger
 
 #: 功能开关名（登记见 config/_feature_registry.py，TUI [C] 面板可切换）
 FEATURE_FLAG = "decision_basis"
@@ -56,10 +61,10 @@ _DISCRIMINATION_LABELS: dict[str, str] = {
 # ── 首批回测结论登记（唯一事实源；复跑回测出新结论后更新本表 + changelog）──
 # 来源：scripts/eval-decision-quality.py（阶段 horizon/factor-ic/valuation，
 # 判据预注册：视界 5/20/60 交易日、样本门槛 100、|IC| 拒绝线 0.05、三分位单调）；
-# 结论证据见 docs/plan/investment-decision-quality.md §8.1。
+# 结论证据见归档讨论稿 `docs/archive/v0.16.x/investment-decision-quality/investment-decision-quality.md` §8.1。
 BACKTEST_SOURCE = "scripts/eval-decision-quality.py"
 BACKTEST_DATE = "2026-11-02"
-BACKTEST_REF = "docs/plan/investment-decision-quality.md §8.1"
+BACKTEST_REF = "docs/archive/v0.16.x/investment-decision-quality/investment-decision-quality.md §8.1"
 
 BACKTEST_CONCLUSIONS: dict[str, dict[str, Any]] = {
     # 估值分位：5 日视界两口径（n=117）均无区分度 → 已回测未通过，不进方向轴；
@@ -238,6 +243,385 @@ def _build_signal_rows() -> list[dict[str, Any]]:
     return rows
 
 
+# ── 风险预算（上限 vs 现状：只读呈现，不产动作）──────────
+# 分工：本块只摆「上限 / 现状 / 是否超限」，超限之后的动作在「再平衡信号」块，
+# 两处不重复动作文案（同一阈值表）。行业上限无可配置键 → 显式「未配置上限」，不臆造。
+RISK_ITEM_SINGLE = "单品种权重"
+RISK_ITEM_INDUSTRY = "行业权重"
+RISK_ITEM_DRAWDOWN = "组合回撤"
+RISK_UNCONFIGURED = "未配置上限"
+RISK_UNEVALUATED = "未评估"
+
+
+def _fmt_pct(value: float | None) -> str:
+    """百分比展示（百分数数值口径，与 `discipline.*_pct` 同源；None → —）。"""
+    return "—" if value is None else f"{value:g}%"
+
+
+def _to_float(value: Any, default: float = 0.0) -> float:
+    """配置值 → float（非数值/缺失回退默认值，不抛错：配置由用户手改）。"""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def build_risk_budget(
+    holdings_details: list[dict[str, Any]] | None = None,
+    total_mv: float | None = None,
+    portfolio_peak_mv: float | None = None,
+    config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """装配风险预算块（单品种 / 行业 / 回撤三行，上限与现状各自可缺）。
+
+    阈值来源单一：单品种取 `rebalance.threshold`（经 `resolve_rebalance_config`
+    应用 profile 预设）、回撤取 `discipline.drawdown_pct`（经
+    `resolve_discipline_config` 填充默认值），不新增配置键；行业上限无配置键，
+    固定显式「未配置上限」。
+
+    Args:
+        holdings_details: 持仓明细行（含 market_value/name/code）。
+        total_mv: 组合总市值（≤ 0 或无明细时该块不可用）。
+        portfolio_peak_mv: 组合历史峰值市值（None → 回撤现状「未评估」）。
+        config: 全局配置字典（None 时读当前配置）。
+
+    Returns:
+        {available, reason, items[{item, max_pct, current_pct, breached,
+        max_label, current_label, note}], breached_count}
+    """
+    if not holdings_details or isinstance(total_mv, bool) or not isinstance(total_mv, (int, float)) or total_mv <= 0:
+        # 非数值入参（缺省/异常装配）一律按不可用处理，不抛错、不臆造 0 值
+        return {"available": False, "reason": "缺少持仓市值", "items": [], "breached_count": 0}
+
+    from src.python.analysis.rebalance import resolve_rebalance_config
+    from src.python.analysis.trade_discipline import resolve_discipline_config
+
+    cfg = config if config is not None else get_config()
+    single_max_pct = _to_float(resolve_rebalance_config(cfg.get("rebalance")).get("threshold")) * 100
+    discipline = resolve_discipline_config(cfg.get("discipline"))
+    drawdown_max_pct = -abs(_to_float(discipline.get("drawdown_pct")))
+
+    items: list[dict[str, Any]] = []
+    single_pct, single_holder, _ = max_single_weight(holdings_details, total_mv)
+    items.append(
+        {
+            "item": RISK_ITEM_SINGLE,
+            "max_pct": round(single_max_pct, 2),
+            "current_pct": None if single_pct is None else round(single_pct, 2),
+            "breached": single_pct is not None and single_pct > single_max_pct,
+            "max_label": _fmt_pct(round(single_max_pct, 2)),
+            "current_label": RISK_UNEVALUATED if single_pct is None else _fmt_pct(round(single_pct, 2)),
+            "note": f"最大：{single_holder}" if single_holder else "无有效市值行",
+        }
+    )
+    items[-1]["status_label"], items[-1]["status_class"] = status_of(
+        items[-1]["max_pct"], items[-1]["current_pct"], items[-1]["breached"]
+    )
+    items.append(
+        {
+            "item": RISK_ITEM_INDUSTRY,
+            "max_pct": None,
+            "current_pct": None,
+            "breached": False,
+            "max_label": RISK_UNCONFIGURED,
+            "current_label": RISK_UNEVALUATED,
+            "note": "无行业上限配置键",
+        }
+    )
+    items[-1]["status_label"], items[-1]["status_class"] = status_of(None, None, False)
+    if (
+        isinstance(portfolio_peak_mv, (int, float))
+        and not isinstance(portfolio_peak_mv, bool)
+        and portfolio_peak_mv > 0
+    ):
+        # 正数=跌幅；市值创新高时回撤归零（不出现「负回撤」）
+        drawdown_pct = max(0.0, (portfolio_peak_mv - total_mv) / portfolio_peak_mv * 100)
+        current_drawdown = -drawdown_pct
+        items.append(
+            {
+                "item": RISK_ITEM_DRAWDOWN,
+                "max_pct": round(drawdown_max_pct, 2),
+                "current_pct": round(current_drawdown, 2),
+                "breached": current_drawdown <= drawdown_max_pct,
+                "max_label": _fmt_pct(round(drawdown_max_pct, 2)),
+                "current_label": _fmt_pct(round(current_drawdown, 2)),
+                "note": "相对历史峰值",
+            }
+        )
+    else:
+        items.append(
+            {
+                "item": RISK_ITEM_DRAWDOWN,
+                "max_pct": round(drawdown_max_pct, 2),
+                "current_pct": None,
+                "breached": False,
+                "max_label": _fmt_pct(round(drawdown_max_pct, 2)),
+                "current_label": RISK_UNEVALUATED,
+                "note": "缺历史峰值",
+            }
+        )
+    for item in items[2:]:
+        item["status_label"], item["status_class"] = status_of(item["max_pct"], item["current_pct"], item["breached"])
+    return {
+        "available": True,
+        "reason": "",
+        "items": items,
+        "breached_count": sum(1 for it in items if it["breached"]),
+    }
+
+
+# ── 纪律明细（上下文与是否应执行：只读复用纪律触发条，不改触发逻辑）──────
+DISCIPLINE_REGIME_DOWN = "down"
+DISCIPLINE_REGIME_NORMAL = "normal"
+DISCIPLINE_REGIME_UNKNOWN = "unknown"
+_REGIME_LABELS: dict[str, str] = {
+    DISCIPLINE_REGIME_DOWN: "下跌段",
+    DISCIPLINE_REGIME_NORMAL: "常态段",
+    DISCIPLINE_REGIME_UNKNOWN: "未评估",
+}
+
+
+def _discipline_regime(total_mv: float | None, portfolio_peak_mv: float | None, drawdown_threshold_pct: float) -> str:
+    """所处阶段（规则化判定）：距回撤线过半即「下跌段」，否则「常态段」。
+
+    仅在峰值与市值可用时判定；两者缺失一律「未评估」，不做主观推断。
+    """
+    if (
+        not isinstance(total_mv, (int, float))
+        or isinstance(total_mv, bool)
+        or total_mv <= 0
+        or not isinstance(portfolio_peak_mv, (int, float))
+        or isinstance(portfolio_peak_mv, bool)
+        or portfolio_peak_mv <= 0
+    ):
+        return DISCIPLINE_REGIME_UNKNOWN
+    drawdown_pct = max(0.0, (portfolio_peak_mv - total_mv) / portfolio_peak_mv * 100)
+    threshold = max(abs(drawdown_threshold_pct), 1.0)  # 阈值缺失/0 时按 1% 兜底，避免恒判下跌段
+    return DISCIPLINE_REGIME_DOWN if drawdown_pct >= threshold / 2 else DISCIPLINE_REGIME_NORMAL
+
+
+def _discipline_note(rule: str, regime: str, *, stop_present: bool) -> tuple[str, str]:
+    """单条纪律的上下文说明与执行口径（规则化模板，零 LLM）。
+
+    Returns:
+        (说明, 执行口径标签)
+    """
+    is_stop = "止损线" in rule
+    is_take = "止盈线" in rule
+    is_drawdown = "回撤线" in rule
+    if regime == DISCIPLINE_REGIME_UNKNOWN:
+        return "缺历史峰值，无法判断所处阶段：按阈值口径执行", "按阈值执行"
+    if regime == DISCIPLINE_REGIME_DOWN:
+        if is_stop or is_drawdown:
+            prefix = "与止损同向触发：避免双重减仓；" if is_drawdown and stop_present else ""
+            return f"{prefix}下跌段：单点阈值易被波动打穿，执行前确认趋势未反转", "宜确认后执行"
+        if is_take:
+            return "下跌段：已达止盈线，兑现前确认趋势", "按阈值执行"
+    return "常态段：按阈值口径执行", "按阈值执行"
+
+
+def build_discipline_detail(
+    discipline_signals: list[dict[str, Any]] | None = None,
+    total_mv: float | None = None,
+    portfolio_peak_mv: float | None = None,
+    config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """装配纪律明细块（触发条 + 距阈值 + 阶段化执行口径说明）。
+
+    数据来源是「交易纪律」块已算出的触发条（`action_data["discipline_signals"]`），
+    本函数**不重算触发、不写静默状态**——保证纪律引擎是唯一触发真值，本块只补
+    「为什么此刻该/不该执行」的上下文，动作仍归既有纪律块。
+
+    Args:
+        discipline_signals: 纪律触发条列表（None → 该块不可用；[] → 无触发的空态）。
+        total_mv: 组合总市值（判阶段用）。
+        portfolio_peak_mv: 组合历史峰值市值（None → 阶段未评估）。
+        config: 全局配置字典（None 时读当前配置）。
+
+    Returns:
+        {available, reason, regime, regime_label, items[{rule, name, code, value_label,
+        distance_label, distance_pct, stance_label, note}], note}
+    """
+    if discipline_signals is None:
+        return {
+            "available": False,
+            "reason": "未接入纪律信号",
+            "regime": DISCIPLINE_REGIME_UNKNOWN,
+            "regime_label": _REGIME_LABELS[DISCIPLINE_REGIME_UNKNOWN],
+            "items": [],
+            "note": "",
+        }
+    from src.python.analysis.trade_discipline import resolve_discipline_config
+
+    cfg = config if config is not None else get_config()
+    drawdown_threshold_pct = abs(_to_float(resolve_discipline_config(cfg.get("discipline")).get("drawdown_pct")))
+    regime = _discipline_regime(total_mv, portfolio_peak_mv, drawdown_threshold_pct)
+    stop_present = any("止损线" in str(sig.get("rule") or "") for sig in discipline_signals)
+    items: list[dict[str, Any]] = []
+    for sig in discipline_signals:
+        rule = str(sig.get("rule") or "")
+        raw_distance = sig.get("distance_pct")
+        distance_value: float | None = None
+        if isinstance(raw_distance, (int, float)) and not isinstance(raw_distance, bool):
+            try:
+                distance_value = float(raw_distance)
+            except (TypeError, ValueError):  # 防御性：异常载荷按无距阈值呈现
+                distance_value = None
+        note, stance = _discipline_note(rule, regime, stop_present=stop_present)
+        items.append(
+            {
+                "rule": rule,
+                "name": sig.get("name", ""),
+                "code": sig.get("code", ""),
+                "value_label": sig.get("value", ""),
+                "distance_pct": round(distance_value, 2) if distance_value is not None else None,
+                "distance_label": (
+                    f"超线 {distance_value:.2f}%"
+                    if distance_value is not None and distance_value > 0
+                    else ("在线上" if distance_value is not None else "—")
+                ),
+                "stance_label": stance,
+                "note": note,
+            }
+        )
+    return {
+        "available": True,
+        "reason": "",
+        "regime": regime,
+        "regime_label": _REGIME_LABELS[regime],
+        "items": items,
+        "note": "本块只说明上下文与执行口径；触发与动作见「交易纪律」块" if items else "当前无纪律触发",
+    }
+
+
+# ── 结算摘要（最近 5 批 × 多视界；批次 = 结算交易日）────────────
+SETTLEMENT_HORIZONS: tuple[int, ...] = (5, 20, 60)
+SETTLEMENT_MAX_BATCHES = 5
+
+
+def _tone_of(value: float | None) -> str:
+    """涨跌域色变量（红涨绿跌，A 股口径；与状态域互斥，不混用）。"""
+    if value is None or value == 0:
+        return ""
+    return "--profit" if value > 0 else "--loss"
+
+
+def _tone_class_of(value: float | None) -> str:
+    """涨跌域语义类（红涨绿跌；零/缺失不加类，与状态域互斥）。"""
+    if value is None or value == 0:
+        return ""
+    return "tone-profit" if value > 0 else "tone-loss"
+
+
+def _mean(values: list[float]) -> float | None:
+    return sum(values) / len(values) if values else None
+
+
+def build_settlement_summary(
+    decisions: list[dict[str, Any]] | None = None,
+    *,
+    max_batches: int = SETTLEMENT_MAX_BATCHES,
+) -> dict[str, Any]:
+    """装配结算摘要块（最近 N 批 × 5/20/60 视界，均值收益与均值超额）。
+
+    批次口径 = 结算交易日（与「历史决策复盘」块同一数据源 `fold_ledger`，不另算
+    一套）；超额 = 该条原始收益 − 同期基准收益，基准缺失的条目只计入收益均值。
+
+    Args:
+        decisions: `fold_ledger()` 的 decisions（含 `settlements` 多视界映射）；
+            None 时读当前账本。
+        max_batches: 批次上限（默认 5）。
+
+    Returns:
+        {available, reason, horizons, batches[{date, n, cells[{horizon, n,
+        state, mean_return_pct, mean_excess_pct, value_label, excess_label,
+        color_var}]}], note}
+    """
+    ledger_decisions: list[dict[str, Any]] = (
+        decisions if decisions is not None else list(fold_ledger().get("decisions") or [])
+    )
+    # settle_date → horizon → [(raw_return, excess|None)]
+    buckets: dict[str, dict[int, list[tuple[float, float | None]]]] = {}
+    for decision in ledger_decisions:
+        settlements = decision.get("settlements") or {}
+        if not isinstance(settlements, dict):
+            continue
+        for raw_horizon, event in settlements.items():
+            if not isinstance(event, dict):
+                continue
+            try:
+                horizon = int(raw_horizon)
+            except (TypeError, ValueError):
+                continue
+            settle_date = str(event.get("settle_date") or "")
+            raw_return = event.get("raw_return")
+            if not settle_date or not isinstance(raw_return, (int, float)) or isinstance(raw_return, bool):
+                continue
+            try:
+                raw_value = float(raw_return)
+            except (TypeError, ValueError):
+                continue
+            bench_return = event.get("bench_return")
+            excess: float | None = None
+            if isinstance(bench_return, (int, float)) and not isinstance(bench_return, bool):
+                try:
+                    excess = raw_value - float(bench_return)
+                except (TypeError, ValueError):
+                    excess = None
+            buckets.setdefault(settle_date, {}).setdefault(horizon, []).append((raw_value, excess))
+
+    dates = sorted(buckets, reverse=True)[: max(int(max_batches), 1)]
+    batches: list[dict[str, Any]] = []
+    for date in dates:
+        cells: list[dict[str, Any]] = []
+        batch_n = 0
+        for horizon in SETTLEMENT_HORIZONS:
+            samples: list[tuple[float, float | None]] = buckets[date].get(horizon) or []
+            batch_n = max(batch_n, len(samples))
+            if not samples:
+                cells.append(
+                    {
+                        "horizon": horizon,
+                        "n": 0,
+                        "state": "pending",
+                        "mean_return_pct": None,
+                        "mean_excess_pct": None,
+                        "value_label": "未到期",
+                        "excess_label": "—",
+                        "color_var": "",
+                        "tone_class": "",
+                    }
+                )
+                continue
+            mean_return = _mean([raw for raw, _ in samples])
+            excess_values = [exc for _, exc in samples if exc is not None]
+            mean_excess = _mean(excess_values)
+            return_pct = None if mean_return is None else mean_return * 100
+            excess_pct = None if mean_excess is None else mean_excess * 100
+            cells.append(
+                {
+                    "horizon": horizon,
+                    "n": len(samples),
+                    "state": "settled",
+                    "mean_return_pct": None if return_pct is None else round(return_pct, 2),
+                    "mean_excess_pct": None if excess_pct is None else round(excess_pct, 2),
+                    # 展示口径：收益（超额）——超额缺失只显示收益
+                    "value_label": "—" if return_pct is None else f"{return_pct:+.2f}%",
+                    "excess_label": "—" if excess_pct is None else f"{excess_pct:+.2f}%",
+                    "color_var": _tone_of(return_pct),
+                    "tone_class": _tone_class_of(return_pct),
+                }
+            )
+        batches.append({"date": date, "n": batch_n, "cells": cells})
+    return {
+        "available": True,
+        "reason": "",
+        "horizons": list(SETTLEMENT_HORIZONS),
+        "batches": batches,
+        "note": ("批次按结算交易日聚合（上限 5 批），更多明细见「历史决策复盘」块" if batches else "暂无结算样本"),
+    }
+
+
 # ── 信号可信度仲裁（规则引擎，非模型自评）────────────────────
 
 
@@ -299,8 +683,25 @@ def arbitrate_confidence(signals: list[dict[str, Any]]) -> dict[str, Any]:
 # ── 装配入口 ────────────────────────────────────────────────
 
 
-def build_decision_basis_data() -> dict[str, Any]:
-    """装配判断依据块数据（纯确定性：只读账本快照，零取数零 LLM、零参数）。
+def build_decision_basis_data(
+    holdings_details: list[dict[str, Any]] | None = None,
+    total_mv: float | None = None,
+    portfolio_peak_mv: float | None = None,
+    discipline_signals: list[dict[str, Any]] | None = None,
+    settlement_decisions: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """装配判断依据块数据（纯确定性：只读账本快照与已装配持仓，零取数零 LLM）。
+
+    不重复读盘：持仓明细与总市值由编排层传入（`prepare_report_data` 已装配），
+    回撤现状仅在历史峰值就绪后传入（full/both 路径峰值就绪后重装配一次）。
+
+    Args:
+        holdings_details: 持仓明细行（缺省 → 风险预算块不可用，信号部分照常）。
+        total_mv: 组合总市值（缺省 0 → 风险预算块不可用）。
+        portfolio_peak_mv: 组合历史峰值市值（缺省 → 回撤现状「未评估」）。
+        discipline_signals: 纪律触发条（`action_data["discipline_signals"]` 只读透传；
+            缺省 → 纪律明细块不可用）。
+        settlement_decisions: `fold_ledger()` 的 decisions（缺省读当前账本）。
 
     Returns:
         数据子契约 dict（见模块 docstring）；开关关闭 → 仅 ``{"enabled": False}``。
@@ -309,20 +710,34 @@ def build_decision_basis_data() -> dict[str, Any]:
         return {"enabled": False}
     signals = _build_signal_rows()
     confidence = arbitrate_confidence(signals)
+    risk_budget = build_risk_budget(holdings_details, total_mv, portfolio_peak_mv)
+    discipline_detail = build_discipline_detail(discipline_signals, total_mv, portfolio_peak_mv)
+    settlement_summary = build_settlement_summary(settlement_decisions)
+    constraints = evaluate_constraints(holdings_details, total_mv)
     valid = sum(1 for s in signals if s.get("in_axis"))
-    if signals:
-        summary = f"{BLOCK_TITLE}：有效信号 {valid}/{len(signals)} · 信号可信度：{confidence['level_label']}"
-    else:
-        summary = f"{BLOCK_TITLE}：暂无信号记录 · 信号可信度：暂不可判"
-    return {
+    parts = [f"有效信号 {valid}/{len(signals)}" if signals else "暂无信号记录"]
+    if risk_budget.get("breached_count"):
+        parts.append(f"风险预算超限 {risk_budget['breached_count']} 项")
+    if discipline_detail.get("items") and discipline_detail.get("regime_label"):
+        parts.append(f"纪律触发 {len(discipline_detail['items'])} 条（{discipline_detail['regime_label']}）")
+    if settlement_summary.get("batches"):
+        parts.append(f"结算 {len(settlement_summary['batches'])} 批")
+    if constraints.get("breached_count"):
+        parts.append(f"约束标注 {constraints['breached_count']} 项")
+    parts.append(f"信号可信度：{confidence['level_label']}")
+    data: dict[str, Any] = {
         "enabled": True,
         "available": True,
         "reason": "",
         "title": BLOCK_TITLE,
-        "summary": summary,
+        "summary": f"{BLOCK_TITLE}：" + " · ".join(parts),
         "confidence": confidence,
         "signals": signals,
-        "risk_budget": {},
-        "discipline": {},
-        "settlement": {},
+        "risk_budget": risk_budget,
+        "discipline": discipline_detail,
+        "settlement": settlement_summary,
     }
+    if constraints.get("enabled"):
+        # 仅开关开启时出现该键：关闭时输出与未接线逐字节一致（回滚通道）
+        data["constraints"] = constraints
+    return data

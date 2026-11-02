@@ -246,10 +246,22 @@ def generate_excel_report(
             from src.python.report._report_helpers import _action_holdings_details
 
             pipeline_data = {**(pipeline_data or {})}
-            pipeline_data["action_data"] = build_action_data(
-                _action_holdings_details(_action_details, transactions),
+            _basic_holdings = _action_holdings_details(_action_details, transactions)
+            _basic_action = build_action_data(
+                _basic_holdings,
                 data.get("total_mv", 0.0),
             )
+            pipeline_data["action_data"] = _basic_action
+            if not pipeline_data.get("decision_basis_data"):
+                # 判断依据块：basic 不经编排层，由同一份明细就地构建（回撤现状按
+                # 「峰值未知」标未评估）；full/both 路径已注入时不重复构建。
+                from src.python.report.decision_basis import build_decision_basis_data
+
+                pipeline_data["decision_basis_data"] = build_decision_basis_data(
+                    _basic_holdings,
+                    data.get("total_mv", 0.0),
+                    discipline_signals=_basic_action.get("discipline_signals"),
+                )
 
     # ── 各页签写入 ──
     pen_result = write_content_sheets(

@@ -158,6 +158,133 @@ def _write_decision_basis_block(
         [f"信号可信度：{confidence.get('level_label') or '暂不可判'} —— {confidence.get('detail') or ''}"]
         + [""] * (ncols - 1),
     )
+    # 风险预算（上限 vs 现状三行；只摆事实，超限后的动作见「再平衡信号」子块）
+    risk_budget = data.get("risk_budget") or {}
+    row += 1
+    ws.cell(row=row, column=1, value="风险预算").font = _FONT_SUB_BLOCK
+    row += 1
+    if risk_budget.get("available") and risk_budget.get("items"):
+        row = write_header_row(ws, row, ["项目", "上限", "现状", "状态", "说明"][:ncols])
+        for item in risk_budget["items"]:
+            row = write_data_row(
+                ws,
+                row,
+                [
+                    item.get("item", ""),
+                    item.get("max_label") or "—",
+                    item.get("current_label") or "—",
+                    item.get("status_label") or "—",
+                    item.get("note") or "",
+                ][:ncols],
+            )
+        row = write_data_row(
+            ws,
+            row,
+            ["本块只摆上限与现状；超限后的动作见「再平衡信号」子块。"] + [""] * (ncols - 1),
+        )
+    else:
+        row = write_data_row(
+            ws,
+            row,
+            [f"风险预算数据不可用：{risk_budget.get('reason') or '原因未知'}"] + [""] * (ncols - 1),
+        )
+    # 纪律明细（触发条 + 距阈值 + 阶段化执行口径；只读复用纪律引擎结果）
+    discipline = data.get("discipline") or {}
+    row += 1
+    regime = discipline.get("regime_label")
+    ws.cell(row=row, column=1, value=f"纪律明细（{regime}）" if regime else "纪律明细").font = _FONT_SUB_BLOCK
+    row += 1
+    if discipline.get("available") and discipline.get("items"):
+        row = write_header_row(ws, row, ["规则", "品种", "当前值", "距阈值", "说明"][:ncols])
+        for item in discipline["items"]:
+            holder = f"{item.get('name', '')}（{item.get('code', '')}）" if item.get("code") else item.get("name", "")
+            row = write_data_row(
+                ws,
+                row,
+                [
+                    item.get("rule", ""),
+                    holder,
+                    item.get("value_label") or "—",
+                    item.get("distance_label") or "—",
+                    f"{item.get('stance_label') or ''}；{item.get('note') or ''}".strip("；"),
+                ][:ncols],
+            )
+        row = write_data_row(
+            ws,
+            row,
+            ["本块只说明上下文与执行口径；触发与动作见「交易纪律」子块。"] + [""] * (ncols - 1),
+        )
+    else:
+        row = write_data_row(
+            ws,
+            row,
+            [
+                (
+                    discipline.get("note") or "当前无纪律触发"
+                    if discipline.get("available")
+                    else f"纪律明细数据不可用：{discipline.get('reason') or '原因未知'}"
+                )
+            ]
+            + [""] * (ncols - 1),
+        )
+    # 结算摘要（最近 5 批 × 多视界；未到期显式标注，收益与超额同为百分数）
+    settlement = data.get("settlement") or {}
+    row += 1
+    ws.cell(row=row, column=1, value="结算摘要").font = _FONT_SUB_BLOCK
+    row += 1
+    batches = settlement.get("batches") or []
+    if batches:
+        horizons = settlement.get("horizons") or []
+        row = write_header_row(ws, row, (["结算日", "条数"] + [f"{h} 日" for h in horizons])[:ncols])
+        for batch in batches:
+            cells = []
+            for cell in batch.get("cells") or []:
+                label = str(cell.get("value_label") or "—")
+                excess = cell.get("excess_label")
+                cells.append(f"{label}（超额 {excess}）" if excess and excess != "—" else label)
+            row = write_data_row(ws, row, [batch.get("date", ""), batch.get("n", 0)] + cells[: max(ncols - 2, 0)])
+        row = write_data_row(
+            ws,
+            row,
+            [settlement.get("note") or ""] + [""] * (ncols - 1),
+        )
+    else:
+        row = write_data_row(
+            ws,
+            row,
+            [settlement.get("note") or "暂无结算样本"] + [""] * (ncols - 1),
+        )
+    # 集中度约束（开关 portfolio_constraints；只标注不阻断）
+    constraints = data.get("constraints") or {}
+    if constraints.get("enabled"):
+        row += 1
+        ws.cell(row=row, column=1, value="集中度约束").font = _FONT_SUB_BLOCK
+        row += 1
+        if constraints.get("available") and constraints.get("items"):
+            row = write_header_row(ws, row, ["项目", "上限", "现状", "状态", "说明"][:ncols])
+            for item in constraints["items"]:
+                row = write_data_row(
+                    ws,
+                    row,
+                    [
+                        item.get("item", ""),
+                        item.get("limit_label") or "—",
+                        item.get("current_label") or "—",
+                        item.get("status_label") or "—",
+                        item.get("note") or "",
+                    ][:ncols],
+                )
+            row = write_data_row(
+                ws,
+                row,
+                ["仅标注，不阻断动作；阈值需在 config.json 的 constraints 段显式配置。"] + [""] * (ncols - 1),
+            )
+        else:
+            row = write_data_row(
+                ws,
+                row,
+                [f"约束数据不可用：{constraints.get('reason') or '原因未知'}"] + [""] * (ncols - 1),
+            )
     return row
 
 

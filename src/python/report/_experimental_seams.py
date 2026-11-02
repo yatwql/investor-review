@@ -151,10 +151,14 @@ def record_llm_decisions_and_review_block(
         from src.python.report import decision_llm_capture, decision_review_block
 
         if enable_llm and llm_content and len(llm_content) > 1 and llm_content[1]:
+            from src.python.analysis.portfolio_constraints import evaluate_constraints
+
+            _constraints = evaluate_constraints(prep.get("holdings_details"), prep.get("total_mv", 0))
             _llm_reg = decision_llm_capture.register_llm_decisions(
                 llm_content[1],
                 prep.get("holdings_details"),
                 report_date=prep["today_str"],
+                constrained_codes=set(_constraints.get("breached_codes") or []),
             )
             if _llm_reg.get("registered"):
                 reporter.ok(f"决策复盘：登记 {_llm_reg['registered']} 条 LLM 操作建议")

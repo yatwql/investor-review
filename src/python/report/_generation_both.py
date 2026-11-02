@@ -251,10 +251,23 @@ def _generate_report_both(
     from src.python.analysis.metrics import compute_portfolio_peak_mv
 
     if pipeline_data is not None:
-        pipeline_data["action_data"] = build_action_data(
-            _action_holdings_details(details, transactions),
-            sum(d.market_value for d in details),
-            portfolio_peak_mv=compute_portfolio_peak_mv((history_data or {}).get("bars")),
+        _peak_mv = compute_portfolio_peak_mv((history_data or {}).get("bars"))
+        _both_holdings = _action_holdings_details(details, transactions)
+        _both_total_mv = sum(d.market_value for d in details)
+        _both_action = build_action_data(
+            _both_holdings,
+            _both_total_mv,
+            portfolio_peak_mv=_peak_mv,
+        )
+        pipeline_data["action_data"] = _both_action
+        # 判断依据块随峰值与纪律触发条就绪重装配（幂等）
+        from src.python.report.decision_basis import build_decision_basis_data
+
+        pipeline_data["decision_basis_data"] = build_decision_basis_data(
+            _both_holdings,
+            _both_total_mv,
+            portfolio_peak_mv=_peak_mv,
+            discipline_signals=_both_action.get("discipline_signals"),
         )
 
     # 景气度框架诊断（实验性功能 prosperity_framework）：经实验挂载点接入（守护与

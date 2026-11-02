@@ -132,6 +132,13 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         True,
         True,
     ),
+    "portfolio_constraints": FeatureSwitchDef(
+        "集中度/相关性约束",
+        "按可配置上限标注单品种/行业/相关性超限（只标注不阻断；阈值需显式配置）",
+        GROUP_MECHANISM,
+        False,
+        True,
+    ),
     "decision_reflection": FeatureSwitchDef(
         "决策跨期反思闭环",
         "登记决策 → 真实行情结算命中率 → 教训回灌专家复盘提示词",
