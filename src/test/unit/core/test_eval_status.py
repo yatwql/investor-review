@@ -110,3 +110,13 @@ def test_last_eval_date_is_single_source_for_report_side(tmp_path):
     latest = eval_status.last_eval_date(tmp_path)
     assert latest is not None
     assert decision_basis.backtest_run_date(tmp_path) == latest.strftime("%Y-%m-%d")
+
+
+def test_eval_command_uses_project_venv_interpreter(monkeypatch):
+    """提示命令必须走项目虚拟环境解释器（裸 python 会命中系统解释器、缺 pandas 等依赖）。"""
+    import platform
+
+    assert eval_status.EVAL_COMMAND.startswith(eval_status.VENV_PYTHON)
+    assert not eval_status.EVAL_COMMAND.startswith("python ")
+    expected = r".venv\Scripts\python.exe" if platform.system() == "Windows" else ".venv/bin/python"
+    assert eval_status.VENV_PYTHON == expected

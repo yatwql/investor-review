@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 import sys
 from datetime import date, datetime
@@ -29,8 +30,11 @@ logger = logging.getLogger("invest")
 #: 回测产物目录（与 `scripts/eval-decision-quality.py` 默认 --out 一致）
 SUMMARY_DIR = Path(PROJECT_ROOT) / "docs" / "tmp" / "decision-quality"
 
+#: 项目虚拟环境解释器（仓库相对路径，提示语里可直接复制粘贴；裸 python 会命中系统解释器、缺依赖）
+VENV_PYTHON = r".venv\Scripts\python.exe" if os.name == "nt" else ".venv/bin/python"
+
 #: 常用命令（提示语里直接给出，避免用户翻文档）
-EVAL_COMMAND = "python scripts/eval-decision-quality.py all"
+EVAL_COMMAND = f"{VENV_PYTHON} scripts/eval-decision-quality.py all"
 
 #: 默认随报告执行的阶段：只选零取数项（决策视界 / 估值口径），长窗口阶段留给人工
 DEFAULT_POST_EVAL_STAGES: tuple[str, ...] = ("horizon", "valuation")
@@ -125,6 +129,7 @@ def run_post_eval(
 __all__ = [
     "DEFAULT_POST_EVAL_STAGES",
     "EVAL_COMMAND",
+    "VENV_PYTHON",
     "POST_EVAL_TIMEOUT",
     "SUMMARY_DIR",
     "format_eval_hint",
