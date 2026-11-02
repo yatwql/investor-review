@@ -128,7 +128,9 @@ if (-not $skipInstall) {
     Write-Host "正在安装依赖 ..."
     try {
         # -qq 级静默：抑制 pip 版本通知和下载进度条
-        pip install -qq -r requirements.txt
+        # 用 python -m pip 而非 pip：pip.exe 启动器硬编码创建时的 Python 绝对路径，
+        # venv 被复制/移动后会指向旧路径报 Fatal error in launcher
+        python -m pip install -qq -r requirements.txt
         if ($LASTEXITCODE -eq 0) {
             Set-Content -Path $depsMarker -Value $reqHash
         }
