@@ -30,6 +30,8 @@
 
 - **R5 结算摘要块（plan-243）**：`report/decision_basis.py` 新增 `build_settlement_summary`——读 R0 的多视界结算映射（`fold_ledger().decisions[].settlements`，与「历史决策复盘」块同源），按**结算交易日**聚合最近 5 批，每批给 5/20/60 视界的均值收益与均值超额；未到期视界显式「未到期」（`state=pending`、均值恒 null，不按 0 呈现）；着色只给涨跌域变量（`--profit`/`--loss`），与状态域互斥；批次超 5 时指向历史决策复盘块；`build_decision_basis_data` 新增 `settlement_decisions` 入参（缺省读账本）并接入 summary「结算 N 批」；HTML/Excel 双端渲染结算摘要表，判断依据五节齐；单测覆盖空账本/未到期标注/批次上限/收益与超额均值/涨跌域着色/超额缺失回退/双端渲染，并为本模块补决策账本 tmp 隔离；`technical.md` 语义命名表、`requirements.md` R-OUT-17、TUI 手册说明同步。
 
+- **判断依据块生产路径透传修复（plan-243）**：`report/_report_output.py` 的整段 HTML 报告此前未把 `prep["decision_basis_data"]` 传入 `write_html_report`，开关开启时判断依据块在 HTML 端整块不渲染（Excel 端不受影响）；补传该参数并新增回归用例（生产路径必须把块契约原样透传到渲染入口，否则块静默消失）。
+
 - **R6 LLM 章语义增量（plan-243）**：`llm/prompts_action.py` 情景段末尾追加「信息不足以支撑方向判断时明确写『不操作』及所缺数据」（既有强制方向句逐字保留，只加不改；仅在情景段实际出现时追加，条件推理未配置情景与辩论跳过情景均不追加）；`llm/prompts_review.py` 自检清单新增第 4 项「结论是否附条件（失效条件/观察指标）」；`llm/module_fingerprint.py` 把 `PROMPT_SCHEMA_VERSION` 并入自检指纹分段构成（自检清单是静态文案、原内容寻址键不含文本版本，补此缺口后改清单即换键）；本刀不递增版本盐，与 R7 合并为同版本一次重算；单测覆盖三态追加（fallback/条件情景/无情景/辩论跳过）、既有强制句保留、自检第 4 项存在、自检指纹随版本盐变化。
 
 - **R7 提示语替换与解析兜底（plan-243）**：`llm/prompts_action.py` 情景段方向约束改为「条件化动作 + 触发条件，触发条件不满足即写明『不操作』及所缺数据」（默认口径），并保留强制方向口径作为回退常量（`decision_basis` 关闭即回退，回退口径以 `_ms` 缓存后缀换键，两套文本共存一版）；「每个建议必须引用具体品种」开口子（允许「不对具体品种动手 + 理由」）；`llm/rate_caliber.py` 的 `PROMPT_SCHEMA_VERSION` 递增为 `rate-caliber-2`——**本版首轮 LLM 缓存整批重算**（四主模块 + 辩论三段 + 自检；`news_item` 与 `holding_change` 不受影响），R6 的增量与本刀同时生效；`report/decision_llm_capture.py` 解析兜底：缺行/缺方向（含「不操作」行）跳过登记并按原因记 INFO，解析异常不中断报告生成；`requirements.md` 新增 R-LLM-ER-09 并修 R-LLM-ER-05、`testplan.md`/`technical.md` 语义命名表同步；单测覆盖两套口径切换、回退后缀、品种开口子、解析兜底三类跳过与异常兜底。真机采样（基线/新提示词各 5 次、同输入 A/B 各 10 次）挂账待人工执行。
