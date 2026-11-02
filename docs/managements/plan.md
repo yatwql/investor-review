@@ -78,7 +78,7 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 
 #### `plan-243` 决策依据章与 LLM 章职责切分（实施）
 
-**现状**：R0~R7 已落地（含提示词两刀与版本盐递增）；R9 约束标注已实现（开关 `portfolio_constraints` 默认关，阈值待按需配置）；R8 待 V5 样本门槛满足；承接已归档讨论稿「章节归属结论」，设计稿 [`investment-decision-basis-design.md`](../plan/investment-decision-basis-design.md)。
+**现状**：R0~R7 已落地（含提示词两刀与版本盐递增）；R9 约束标注已实现（开关 `portfolio_constraints` 默认关，阈值待按需配置）；R1 契约补完「双路径 HTML 透传」与「回测产物日期随产物派生（`backtest_as_of`）」并补独立 perf 阶段；R8 待 V5 样本门槛满足；承接已归档讨论稿「章节归属结论」，设计稿 [`investment-decision-basis-design.md`](../plan/investment-decision-basis-design.md)。
 **前置**：讨论稿待验证清单 V1/V2/V3 已有回测结论（`scripts/eval-decision-quality.py`，见 [归档讨论稿](../archive/v0.16.x/investment-decision-quality/investment-decision-quality.md) §8.1——V1/V2 样本不足仅记录、V3 两口径 5 日视界均无区分度）；实施门禁 V1/V3 满足。
 **回测接入**：估值分位按「已回测未通过」接入（`report/decision_basis.py` 模块常量登记、不新增配置键；两口径均无区分度 → 不在管线内计算真实 PE/PB 口径）；因子目录信号按「样本不足」态；V1 复跑触发（20 日成熟样本 ≥100，固定视界与账本动态视界对拍后切换）见设计稿 R0。
 **章节归属**：先以「行动建议」章内块形态（形态 A）落地「判断依据」（纯规则、零 LLM），LLM 章退回解读层；独立章节（形态 B）留作升级路径。

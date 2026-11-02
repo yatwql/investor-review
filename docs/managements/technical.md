@@ -3565,7 +3565,8 @@ make_http_client(timeout=10.0) → httpx.Client
 | `build_discipline_detail` | 纪律明细块装配（只读透传 `action_data["discipline_signals"]`：规则/品种/当前值/距阈值 + 阶段化执行口径；不重算触发、不写静默状态；阶段按「回撤是否过半阈值」规则化判定） | 行动建议（章内嵌块） | 分析计算 | 随 `decision_basis` |
 | `build_settlement_summary` | 结算摘要块装配（`fold_ledger().decisions[].settlements` 多视界映射 → 按结算交易日聚合最近 5 批 × 5/20/60 视界均值与超额；未到期视界记 pending，不按 0 呈现；着色只给涨跌域变量） | 行动建议（章内嵌块） | 分析计算 | 随 `decision_basis` |
 | `arbitrate_confidence` | 信号可信度规则仲裁（清单空→unknown；有效 0→unknown；全口径代理/方向分裂/不足 3 → low；≥3 且方向一致 → medium；首版不产 high，防高置信幻觉） | 行动建议（章内嵌块） | 分析计算 | 随 `decision_basis` |
-| `eval_status` | 决策质量回测入口状态（读 `docs/tmp/decision-quality/` 产物时间 → 「距上次 N 天」提示；`doctor` 与 CLI 收尾同源）；`post_eval` 为 opt-in 随报告执行（子进程跑零取数阶段，失败不影响报告） | 报告输出 | 运行收尾 | CLI `--post-eval`（默认关） |
+| `eval_status` | 决策质量回测入口状态（读 `docs/tmp/decision-quality/` 产物时间 → 「距上次 N 天」提示；`doctor` 与 CLI 收尾同源）；`last_eval_date` 为「产物最新日期」的唯一实现（报告侧同源派生）、`VENV_PYTHON` 给出提示命令的项目虚拟环境解释器；`post_eval` 为 opt-in 随报告执行（子进程跑零取数阶段，失败不影响报告） | 报告输出 | 运行收尾 | CLI `--post-eval`（默认关） |
+| `backtest_run_date` | 回测产物最新运行日（委派 `eval_status.last_eval_date()`；产物缺失回落 `BACKTEST_DATE_FALLBACK`），经契约字段 `backtest_as_of` 双端显示 | 行动建议（章内嵌块） | 分析计算 | 随 `decision_basis` |
 | `portfolio_constraints` | 集中度/相关性约束标注（单品种沿用 `rebalance.threshold`、行业/相关性需显式配置；只标注不阻断；缺数据/短样本记「未评估」） | 行动建议（章内嵌块） | 监控 | 开关 `portfolio_constraints`（默认关，机制与诊断组） |
 | `evaluate_constraints` | 约束判定入口（三道上限 → 超限项 + `breached_codes`；开关关闭返回 `{"enabled": False}`） | 行动建议（章内嵌块） | 分析计算 | 随 `portfolio_constraints` |
 | `scenario_mandate` | 情景段方向约束口径选择（默认条件化动作 + 触发条件 + 「不操作」出口；`decision_basis` 关闭走回退强制方向口径；回退口径经 `scenario_mandate_cache_suffix` 以 `_ms` 后缀换键，两套文本常量共存一版） | LLM 生成 | LLM 生成 | 随 `decision_basis` |
