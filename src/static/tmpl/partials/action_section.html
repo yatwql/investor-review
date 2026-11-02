@@ -44,6 +44,9 @@
         {% if _db.get("available") %}
         {# 信号清单 + 信号可信度（risk_budget/discipline/settlement 后续轮次填充） #}
         <div style="font-weight: bold; font-size: var(--fs-body); margin: 8px 0 4px;">信号清单</div>
+        {% if _db.get("backtest_as_of") %}
+        <div style="font-size: var(--fs-footnote); color: var(--text-muted); margin: 0 0 4px;">回测产物：{{ _db.get("backtest_as_of") }} 运行（scripts/eval-decision-quality.py；样本累积后重跑，日期随产物刷新）</div>
+        {% endif %}
         {% set _sigs = _db.get("signals") or [] %}
         {% if _sigs %}
         <div style="overflow-x:auto;">

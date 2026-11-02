@@ -22,7 +22,7 @@ from src.python.core import signal_ledger as sl
 from src.python.report import decision_basis as db
 from src.python.report.decision_basis import (
     BACKTEST_CONCLUSIONS,
-    BACKTEST_DATE,
+    BACKTEST_DATE_FALLBACK,
     BACKTEST_REF,
     build_discipline_detail,
     build_settlement_summary,
@@ -233,10 +233,30 @@ class TestBacktestRegistry:
     """验收⑥：首批回测结论以模块常量登记，不新增配置键、不写运行时账本。"""
 
     def test_registry_provenance_fields(self):
-        """登记含来源脚本、回测日期、讨论稿指针（可追溯三要素）。"""
+        """登记含来源脚本、回测采样日兜底、讨论稿指针（可追溯三要素）。"""
         assert BACKTEST_SOURCE == "scripts/eval-decision-quality.py"
-        assert BACKTEST_DATE and len(BACKTEST_DATE) == 10
+        assert BACKTEST_DATE_FALLBACK and len(BACKTEST_DATE_FALLBACK) == 10
         assert "investment-decision-quality.md" in BACKTEST_REF and "8.1" in BACKTEST_REF
+
+    def test_backtest_run_date_follows_products(self, tmp_path):
+        """回测采样日随产物刷新：取最新一份产物的日期，不写死常量。"""
+        import os
+        from datetime import datetime
+
+        older = tmp_path / "horizon.json"
+        older.write_text("{}", encoding="utf-8")
+        os.utime(older, (1_700_000_000, 1_700_000_000))
+        expected = "2026-03-05"
+        stamp = datetime.strptime(expected, "%Y-%m-%d").timestamp()
+        newer = tmp_path / "factor-ic.json"
+        newer.write_text("{}", encoding="utf-8")
+        os.utime(newer, (stamp, stamp))
+
+        assert db.backtest_run_date(tmp_path) == expected
+
+    def test_backtest_run_date_falls_back_without_products(self, tmp_path):
+        """产物缺失（新克隆/被清理）→ 回落到归档结论采样日，不抛异常。"""
+        assert db.backtest_run_date(tmp_path) == BACKTEST_DATE_FALLBACK
 
     def test_valuation_entry(self, ledger_path):
         """估值分位：已回测未通过（n=117、ic≈0.0399、monotonic=false）。"""

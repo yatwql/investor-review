@@ -209,15 +209,20 @@ def _generate_report_full(
         pipeline_data["action_data"] = _action_data
 
     # 判断依据块随峰值就绪重装配一次（风险预算的回撤现状依赖历史峰值；
-    # 其余字段与首装配同源，重装配幂等）
+    # 其余字段与首装配同源，重装配幂等）。独立阶段计时：该块纯内存组装，
+    # 若耗时异常升高说明输入的账本/持仓规模失控（而非取数），与本函数其余阶段分开看。
     from src.python.report.decision_basis import build_decision_basis_data
 
-    _decision_basis = build_decision_basis_data(
-        prep.get("holdings_details") or [],
-        prep.get("total_mv", 0),
-        portfolio_peak_mv=_peak_mv,
-        discipline_signals=_action_data.get("discipline_signals"),
-    )
+    perf.start("判断依据块装配")
+    try:
+        _decision_basis = build_decision_basis_data(
+            prep.get("holdings_details") or [],
+            prep.get("total_mv", 0),
+            portfolio_peak_mv=_peak_mv,
+            discipline_signals=_action_data.get("discipline_signals"),
+        )
+    finally:
+        perf.stop()
     prep["decision_basis_data"] = _decision_basis
     if pipeline_data is not None:
         pipeline_data["decision_basis_data"] = _decision_basis

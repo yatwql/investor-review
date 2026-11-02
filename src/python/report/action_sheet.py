@@ -133,6 +133,16 @@ def _write_decision_basis_block(
     row += 1
     ws.cell(row=row, column=1, value="信号清单").font = _FONT_SUB_BLOCK
     row += 1
+    if data.get("backtest_as_of"):
+        row = write_data_row(
+            ws,
+            row,
+            [
+                f"回测产物：{data.get('backtest_as_of')} 运行"
+                "（scripts/eval-decision-quality.py；样本累积后重跑，日期随产物刷新）"
+            ]
+            + [""] * (ncols - 1),
+        )
     signals = data.get("signals") or []
     if signals:
         row = write_header_row(ws, row, ["信号", "方向", "口径·样本", "回测样本", "标注"][:ncols])
