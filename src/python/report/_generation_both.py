@@ -262,9 +262,9 @@ def _generate_report_both(
         pipeline_data["action_data"] = _both_action
         # 判断依据块随峰值与纪律触发条就绪重装配（幂等）；独立阶段计时——
         # 纯内存组装，耗时只随账本/持仓规模变化，与取数阶段分开看。
-        from src.python.report.decision_basis import build_decision_basis_data
+        from src.python.report.decision_basis import PERF_PHASE_ASSEMBLY, build_decision_basis_data
 
-        perf.start("判断依据块装配")
+        perf.start(PERF_PHASE_ASSEMBLY)
         try:
             pipeline_data["decision_basis_data"] = build_decision_basis_data(
                 _both_holdings,

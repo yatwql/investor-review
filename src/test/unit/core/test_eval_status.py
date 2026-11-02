@@ -99,3 +99,14 @@ def test_doctor_reports_eval_status_line():
     items = doctor._check_eval_status()
     assert any(item["label"] == "决策质量回测" for item in items)
     assert items[0]["group"] == doctor.GROUP_LOG_CACHE
+
+
+def test_last_eval_date_is_single_source_for_report_side(tmp_path):
+    """报告侧的「回测产物日期」必须与本模块同源（口径唯一，不得各写一份 glob+mtime）。"""
+    from src.python.report import decision_basis
+
+    assert eval_status.last_eval_date(tmp_path / "nope") is None
+    _write_stub(tmp_path, days_ago=4)
+    latest = eval_status.last_eval_date(tmp_path)
+    assert latest is not None
+    assert decision_basis.backtest_run_date(tmp_path) == latest.strftime("%Y-%m-%d")

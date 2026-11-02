@@ -34,6 +34,8 @@
 
 - **判断依据块三处实现加固（plan-243）**：① 回测采样日不再写死常量——新增 `decision_basis.backtest_run_date()` 读 `docs/tmp/decision-quality/*.json` 最新产物日期派生，产物缺失才回落 `BACKTEST_DATE_FALLBACK`（归档结论采样日），并在契约新增 `backtest_as_of`、HTML/Excel 双端在信号清单上方显示「回测产物：<日期> 运行」；② 装配补独立 perf 阶段「判断依据块装配」（full/both 双路径），纯内存组装耗时从此可与取数阶段分开定位；③ `decision_basis.py` 781 行过主程序登记线 700，登记进 `review-findings.md` P4 膨胀监控表（拆分方向：信号清单与区分度登记下沉、风险预算/纪律/结算各成一簇）。
 
+- **24 小时变更技术债清理**：① 「回测产物最新日期」此前在 `core/eval_status`（评测提示）与 `report/decision_basis`（判断依据块 `backtest_as_of`）各写一份 glob + mtime 与一份目录常量——口径两处易漂移，现抽出 `eval_status.last_eval_date()` 为唯一实现、`SUMMARY_DIR` 为唯一目录来源，报告侧改为委派调用（新增同源断言用例）；② perf 阶段名 `判断依据块装配` 原在两个生成模块各写一次字面量，收敛为 `decision_basis.PERF_PHASE_ASSEMBLY` 单一常量；③ 清理未使用导入。
+
 - **R6 LLM 章语义增量（plan-243）**：`llm/prompts_action.py` 情景段末尾追加「信息不足以支撑方向判断时明确写『不操作』及所缺数据」（既有强制方向句逐字保留，只加不改；仅在情景段实际出现时追加，条件推理未配置情景与辩论跳过情景均不追加）；`llm/prompts_review.py` 自检清单新增第 4 项「结论是否附条件（失效条件/观察指标）」；`llm/module_fingerprint.py` 把 `PROMPT_SCHEMA_VERSION` 并入自检指纹分段构成（自检清单是静态文案、原内容寻址键不含文本版本，补此缺口后改清单即换键）；本刀不递增版本盐，与 R7 合并为同版本一次重算；单测覆盖三态追加（fallback/条件情景/无情景/辩论跳过）、既有强制句保留、自检第 4 项存在、自检指纹随版本盐变化。
 
 - **R7 提示语替换与解析兜底（plan-243）**：`llm/prompts_action.py` 情景段方向约束改为「条件化动作 + 触发条件，触发条件不满足即写明『不操作』及所缺数据」（默认口径），并保留强制方向口径作为回退常量（`decision_basis` 关闭即回退，回退口径以 `_ms` 缓存后缀换键，两套文本共存一版）；「每个建议必须引用具体品种」开口子（允许「不对具体品种动手 + 理由」）；`llm/rate_caliber.py` 的 `PROMPT_SCHEMA_VERSION` 递增为 `rate-caliber-2`——**本版首轮 LLM 缓存整批重算**（四主模块 + 辩论三段 + 自检；`news_item` 与 `holding_change` 不受影响），R6 的增量与本刀同时生效；`report/decision_llm_capture.py` 解析兜底：缺行/缺方向（含「不操作」行）跳过登记并按原因记 INFO，解析异常不中断报告生成；`requirements.md` 新增 R-LLM-ER-09 并修 R-LLM-ER-05、`testplan.md`/`technical.md` 语义命名表同步；单测覆盖两套口径切换、回退后缀、品种开口子、解析兜底三类跳过与异常兜底。真机采样（基线/新提示词各 5 次、同输入 A/B 各 10 次）挂账待人工执行。

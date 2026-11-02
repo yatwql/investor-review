@@ -39,6 +39,25 @@ DEFAULT_POST_EVAL_STAGES: tuple[str, ...] = ("horizon", "valuation")
 POST_EVAL_TIMEOUT = 180
 
 
+def last_eval_date(summary_dir: str | Path | None = None) -> date | None:
+    """最近一次回测的产物日期（无产物 → None）。
+
+    产物日期取目录内最新一份 JSON 的修改日期——**本函数是该口径的唯一实现**，
+    报告侧（`report/decision_basis.backtest_run_date`）与提示侧（`last_eval_days`）
+    都从这里派生，避免各写一份 glob + mtime 而口径漂移。
+
+    Args:
+        summary_dir: 产物目录（None 用默认 `docs/tmp/decision-quality`）。
+    """
+    directory = Path(summary_dir) if summary_dir is not None else SUMMARY_DIR
+    if not directory.is_dir():
+        return None
+    stamps = [path.stat().st_mtime for path in directory.glob("*.json") if path.is_file()]
+    if not stamps:
+        return None
+    return datetime.fromtimestamp(max(stamps)).date()
+
+
 def last_eval_days(summary_dir: str | Path | None = None, *, today: date | None = None) -> int | None:
     """距最近一次回测的天数（无产物 → None）。
 
@@ -46,13 +65,9 @@ def last_eval_days(summary_dir: str | Path | None = None, *, today: date | None 
         summary_dir: 产物目录（None 用默认 `docs/tmp/decision-quality`）。
         today: 基准日（测试注入；None 用当天）。
     """
-    directory = Path(summary_dir) if summary_dir is not None else SUMMARY_DIR
-    if not directory.is_dir():
+    latest = last_eval_date(summary_dir)
+    if latest is None:
         return None
-    stamps = [path.stat().st_mtime for path in directory.glob("*.json")]
-    if not stamps:
-        return None
-    latest = datetime.fromtimestamp(max(stamps)).date()
     base = today or date.today()
     return max((base - latest).days, 0)
 
@@ -113,6 +128,7 @@ __all__ = [
     "POST_EVAL_TIMEOUT",
     "SUMMARY_DIR",
     "format_eval_hint",
+    "last_eval_date",
     "last_eval_days",
     "run_post_eval",
 ]

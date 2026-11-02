@@ -36,7 +36,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -69,39 +68,36 @@ _DISCRIMINATION_LABELS: dict[str, str] = {
 # 判据预注册：视界 5/20/60 交易日、样本门槛 100、|IC| 拒绝线 0.05、三分位单调）；
 # 结论证据见归档讨论稿 `docs/archive/v0.16.x/investment-decision-quality/investment-decision-quality.md` §8.1。
 BACKTEST_SOURCE = "scripts/eval-decision-quality.py"
-#: 回测产物目录（`scripts/eval-decision-quality.py` 落盘处；各阶段一份 JSON）
-BACKTEST_PRODUCTS_DIR = "docs/tmp/decision-quality"
 #: 产物缺失时的兜底采样日（归档讨论稿 §8.1 结论的采样日，不随开发演进）
 BACKTEST_DATE_FALLBACK = "2026-11-02"
 BACKTEST_REF = "docs/archive/v0.16.x/investment-decision-quality/investment-decision-quality.md §8.1"
+
+#: 装配阶段名（perf 计时口径，full/both 双路径共用同一字面量）
+PERF_PHASE_ASSEMBLY = "判断依据块装配"
 
 
 def backtest_run_date(products_dir: str | Path | None = None) -> str:
     """回测产物的最新运行日（``YYYY-MM-DD``）。
 
     回测结论会随样本累积变化（累计成熟样本过后重跑），采样日因此不能写成常量——
-    取 ``docs/tmp/decision-quality/*.json`` 中最新一份的修改日期，产物缺失（新克隆/
-    产物被清理）时回落到归档结论的采样日 ``BACKTEST_DATE_FALLBACK``，全部只读。
+    日期口径由 `core/eval_status.last_eval_date()` 单一实现（读产物目录内最新一份
+    JSON 的修改日期），产物缺失（新克隆/产物被清理）时回落到归档结论采样日
+    ``BACKTEST_DATE_FALLBACK``，全部只读。
 
     Args:
-        products_dir: 产物目录（测试注入 ``tmp_path`` 用；缺省取仓库内默认路径）。
+        products_dir: 产物目录（测试注入 ``tmp_path`` 用；缺省取 `docs/tmp/decision-quality`）。
 
     Returns:
-        日期字符串；不可解析或目录不存在时返回兜底值。
+        日期字符串；产物缺失或不可读时返回兜底值。
     """
-    if products_dir is None:
-        from src.python.core.constants import PROJECT_ROOT
+    from src.python.core.eval_status import last_eval_date
 
-        base = Path(PROJECT_ROOT) / BACKTEST_PRODUCTS_DIR
-    else:
-        base = Path(products_dir)
     try:
-        stamps = [p.stat().st_mtime for p in base.glob("*.json") if p.is_file()]
+        latest = last_eval_date(products_dir)
     except OSError:
-        stamps = []
-    if not stamps:
-        return BACKTEST_DATE_FALLBACK
-    return datetime.fromtimestamp(max(stamps)).strftime("%Y-%m-%d")
+        latest = None
+    return latest.strftime("%Y-%m-%d") if latest is not None else BACKTEST_DATE_FALLBACK
+
 
 BACKTEST_CONCLUSIONS: dict[str, dict[str, Any]] = {
     # 估值分位：5 日视界两口径（n=117）均无区分度 → 已回测未通过，不进方向轴；
