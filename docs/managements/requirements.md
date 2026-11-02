@@ -1340,7 +1340,7 @@ LLM 五维度量化评分，每项满分 100：
 | `history.coverage_threshold` | float | 0.8 | — | 有效区间覆盖阈值 |
 | `history.benchmark_indices` | dict | {"sh000300":"沪深300"} | — | 基准指数配置，组合历史走势对比 |
 | `history.lookback_days` | int | 90 | — | 历史走势取数窗口（K 线条数/交易日），需 ≥ 60（MIN_SPAN）才能计算回撤分析 |
-| `features.json` 的 24 项功能开关 | bool | 各组默认值见功能开关注册表 | — | **报告产物开关**（24 项全部 `affects_report=True`；七组：持仓与交易 / 市场与估值 / 基金与风格 / 事件与摘要 / 机制与质量 / 独立章节与回放 / 章节内选项，存 `data/config/features.json`；TUI 呈现按面板分流：前六组在 `[S]`，后两组在 `[C]`） |
+| `features.json` 的 26 项功能开关 | bool | 各组默认值见功能开关注册表 | — | **报告产物开关**（24 项全部 `affects_report=True`；七组：持仓与交易 / 市场与估值 / 基金与风格 / 事件与摘要 / 机制与质量 / 独立章节与回放 / 章节内选项，存 `data/config/features.json`；TUI 呈现按面板分流：前六组在 `[S]`，后两组在 `[C]`） |
 | `holdings_start_date` | str | `""` | — | 组合建仓日期（YYYY-MM-DD，可选）。持仓 Excel 未录入交易/分红流水时，成本流水子模块按「建仓日一次性买入」近似年化（`build_approximate_fund_flow_data`）；空=不计算近似年化，仅成本分档近似（每份成本 vs 市价） |
 | `comparison_indices` | dict | {"sh000300":"沪深300","sh000905":"中证500","sh000012":"中证全债"} | — | 竞争语境对比指数池，支持多指数对比 |
 | `rebalance.threshold` | float | 0.15 | — | 单品种权重超限阈值（15%），超限触发再平衡建议 |

@@ -1674,7 +1674,7 @@ CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` /
 | 代码与文件质量 | `check-code-traces.py` / `check-requirement-trace.py` / `check-task-numbering.py` / `check-file-length.py` / `check-version-consistency.py` / `check-style-guardrails.py` / `check-script-contract.py` | 痕迹、需求追溯、编号、行数红线、版本、样式护栏 |
 | 发布 | `release.py`（分步编排）/ `test-collect-coverage.py` | 发版全流程 |
 | 运维观测 | `perf-history.py` / `probe.py` / `check-sources`（CLI 子命令）/ `doctor`（CLI 子命令）/ `view-logs`（CLI 子命令） / `cassettes`（CLI 子命令） | 性能历史查看、数据源链路探测、日志与系统自检 |
-| 评测与基准 | `test-perf-report.py` / `eval-llm-hallucination.py` / `eval-factor-zoo.py` / `eval-dedup-threshold.py` | 性能门禁压测、LLM 幻觉率采样、能力评测与阈值校准（不参与提交门禁） |
+| 评测与基准 | `test-perf-report.py` / `eval-llm-hallucination.py` / `eval-factor-zoo.py` / `eval-decision-quality.py`（决策视界/因子 IC/估值口径/止损口径/相关性↔回撤；实现拆在 `_eval_decision_quality/`） / `eval-dedup-threshold.py` | 性能门禁压测、LLM 幻觉率采样、能力评测与阈值校准（不参与提交门禁） |
 | 启动 | `launch.sh` / `launch.ps1`（TUI 与 `web` 子命令）/ `cli.sh` / `llm.sh` 及其 `.ps1` 版 | 免解释器前缀的常用入口 |
 | CLI 子命令 | `report` / `cache` / `whatif` / `config` / `check-sources` / `health-history` / `view-logs` / `doctor` / `cassettes` / `settle-decisions` | 用户侧命令行入口（详见 [CLI 手册](../manuals/how-to-use-cli-mode.md)；`config` 为持久化配置编辑，`settle-decisions` 为决策账本多视界结算） |
 

@@ -1,4 +1,4 @@
-"""回测产物落盘与控制台摘要（纯展示）。"""
+"""回测产物落盘与控制台摘要（纯展示：JSON + Markdown 摘要 + 控制台一行结论）。"""
 
 from __future__ import annotations
 

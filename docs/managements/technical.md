@@ -2719,6 +2719,8 @@ report/decision_llm_capture.py   # 抽取：结构化优先 → 表格兜底
 
 方向常量复用 `core.decision_ledger` 的 `DIRECTION_LONG/SHORT/FLAT`，不另立一套 int 常量。
 
+**解析兜底**：缺行/缺方向（含方向格写「不操作」/观望类措辞）按原因跳过登记并记一条 INFO（表头与分隔行不计，避免噪声）；`extract_llm_decisions` 抛异常时整体兜底返回零登记、不中断报告生成。
+
 **归一判据（`parse_decision_word`）**：
 
 | 判据 | 说明 |
@@ -3555,7 +3557,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `decision_ledger` | 决策账本（append-only JSONL，pending/settled 折叠统计） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `decision_record` | 确定性卖出建议登记（仅带持仓基线者落账，入账必可结算） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `decision_settlement` | 到期决策结算（幂等：同 decision 只结一次，行情不可得保持 pending） | 行动建议 | 监控 | 随 `decision_reflection` |
-| `decision_llm_capture` | LLM 操作建议表解析登记（误导性操作格不登记） | 行动建议 | 监控 | 随 `decision_reflection` |
+| `decision_llm_capture` | LLM 操作建议表解析登记（结构化优先 → 表格兜底；缺行/缺方向/「不操作」行按原因记 INFO 后跳过，异常不中断报告） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `decision_review_block` | 「历史决策复盘」区块数据契约（结构稳定，HTML/Excel 双端消费） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `decision_basis` | 行动建议章内「判断依据」确定性事实块（形态 A：信号清单/信号可信度/风险预算已接入（信号读账本快照，区分度三态 + 回测结论模块常量登记，可信度规则仲裁四枚举；风险预算三行取 `rebalance.threshold` 与 `discipline.drawdown_pct`，行业上限无配置键即「未配置上限」；纪律明细只读复用纪律引擎触发条并补阶段化执行口径；结算摘要按结算交易日聚合最近 5 批 × 5/20/60 视界均值与超额，未到期显式标注），五节齐，零 LLM） | 行动建议（章内嵌块） | 监控 | 开关 `decision_basis`（默认开，章节内选项组） |
 | `build_decision_basis_data` | 判断依据块装配入口（纯确定性：只读信号账本快照与编排层已装配持仓，零取数零 LLM；入参仅确定性数据 `holdings_details`/`total_mv`/`portfolio_peak_mv`，全可缺省） | 行动建议（章内嵌块） | 分析计算 | 随 `decision_basis` |
