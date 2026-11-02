@@ -325,6 +325,7 @@ def _generate_report_both(
             position_status=(pipeline_data or {}).get("position_status"),
             data_freshness=(pipeline_data or {}).get("data_freshness"),
             action_data=(pipeline_data or {}).get("action_data"),
+            decision_basis_data=(pipeline_data or {}).get("decision_basis_data"),
             prosperity_framework_data=(pipeline_data or {}).get("prosperity_framework_data"),
             market_sentiment_data=(pipeline_data or {}).get("market_sentiment_data"),
             crisis_annotation_data=(pipeline_data or {}).get("crisis_annotation_data"),

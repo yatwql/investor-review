@@ -30,7 +30,7 @@
 
 - **R5 结算摘要块（plan-243）**：`report/decision_basis.py` 新增 `build_settlement_summary`——读 R0 的多视界结算映射（`fold_ledger().decisions[].settlements`，与「历史决策复盘」块同源），按**结算交易日**聚合最近 5 批，每批给 5/20/60 视界的均值收益与均值超额；未到期视界显式「未到期」（`state=pending`、均值恒 null，不按 0 呈现）；着色只给涨跌域变量（`--profit`/`--loss`），与状态域互斥；批次超 5 时指向历史决策复盘块；`build_decision_basis_data` 新增 `settlement_decisions` 入参（缺省读账本）并接入 summary「结算 N 批」；HTML/Excel 双端渲染结算摘要表，判断依据五节齐；单测覆盖空账本/未到期标注/批次上限/收益与超额均值/涨跌域着色/超额缺失回退/双端渲染，并为本模块补决策账本 tmp 隔离；`technical.md` 语义命名表、`requirements.md` R-OUT-17、TUI 手册说明同步。
 
-- **判断依据块生产路径透传修复（plan-243）**：`report/_report_output.py` 的整段 HTML 报告此前未把 `prep["decision_basis_data"]` 传入 `write_html_report`，开关开启时判断依据块在 HTML 端整块不渲染（Excel 端不受影响）；补传该参数并新增回归用例（生产路径必须把块契约原样透传到渲染入口，否则块静默消失）。
+- **判断依据块双路径 HTML 透传修复（plan-243）**：两条 HTML 生成链都装配了 `decision_basis_data`但都没传给 `write_html_report`——`report/_report_output.py`（full）与 `report/_generation_both.py`（both）均漏传，开关开启时判断依据块在 HTML 端整块不渲染（模板 `{% if _db.get("enabled") %}` 恒假，仅留注释行；Excel 端一直正常）。两处补传并新增回归用例（源码级调用点全覆盖：每条 HTML 调用链必须带该参数，否则新增链忘转发即红）。
 
 - **R6 LLM 章语义增量（plan-243）**：`llm/prompts_action.py` 情景段末尾追加「信息不足以支撑方向判断时明确写『不操作』及所缺数据」（既有强制方向句逐字保留，只加不改；仅在情景段实际出现时追加，条件推理未配置情景与辩论跳过情景均不追加）；`llm/prompts_review.py` 自检清单新增第 4 项「结论是否附条件（失效条件/观察指标）」；`llm/module_fingerprint.py` 把 `PROMPT_SCHEMA_VERSION` 并入自检指纹分段构成（自检清单是静态文案、原内容寻址键不含文本版本，补此缺口后改清单即换键）；本刀不递增版本盐，与 R7 合并为同版本一次重算；单测覆盖三态追加（fallback/条件情景/无情景/辩论跳过）、既有强制句保留、自检第 4 项存在、自检指纹随版本盐变化。
 

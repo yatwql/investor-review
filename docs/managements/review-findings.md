@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.16.16-dev
-> **编号源**：`rf-next = 1024`（新增问题提出后更新为 +1；已用最大 rf-1023，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1025`（新增问题提出后更新为 +1；已用最大 rf-1024，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -28,6 +28,7 @@
 
 | # | 问题 | 修复方向 |
 | --- | --- | --- |
+| **rf-1024** | both 路径（HTML+Excel 同跑）未接线 `decision_review_data`：`_generation_both.py` 既不装配该契约、也未向 `write_html_report` 转发，`decision_reflection`（实验、默认关）开启时行动章「决策跨期反思」块在该路径整块不渲染（full 路径正常；同类缺口：判断依据块双路径漏传已修复） | 参照 full 路径 `record_deterministic_decisions` 后取值接线；落地前先确认 both 路径 Excel 端是否同缺。属实验功能，排期跟随 `decision_reflection` 启用决策 |
 
 ### P4 — 持续监控：文件膨胀登记
 

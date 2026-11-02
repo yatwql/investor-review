@@ -284,3 +284,42 @@ class TestLlmObservationRecorded:
         src = inspect.getsource(rg._generate_report_full)
         assert "_record_llm_context(perf, _llm_sink" in src
         assert "_usage_baseline" in src, "报告用量须按本次运行基线记账（不累加会话累计）"
+
+
+class TestDecisionBasisContractForwarding:
+    """判断依据块契约的 HTML 转发守卫：每条 HTML 调用链都必须带上该参数。
+
+    现场（用户报障「行动建议里没看到判断依据」）：full 路径与 both 路径都装配了
+    ``decision_basis_data``，但两处 ``write_html_report(...)`` 调用都漏传 → 模板
+    ``{% if _db.get("enabled") %}`` 恒假，整块静默不渲染（Excel 端正常）。
+    """
+
+    _MODULES = (
+        "src/python/report/_generation_both.py",
+        "src/python/report/_generation_full.py",
+        "src/python/report/_report_output.py",
+    )
+
+    def _source(self) -> str:
+        from pathlib import Path
+
+        return "\n".join(Path(f).read_text(encoding="utf-8") for f in self._MODULES)
+
+    def test_every_write_html_report_call_passes_contract(self):
+        """源码级调用点全覆盖：新增 HTML 调用链忘记转发即失败。"""
+        import re
+
+        calls = re.findall(r"write_html_report\(\s*\n(.*?)\n\s*\)", self._source(), re.S)
+        assert len(calls) >= 2, f"预期至少两处 HTML 调用点（both/full），实际 {len(calls)}"
+        missing = [c.strip().splitlines()[0] for c in calls if "decision_basis_data" not in c]
+        assert not missing, f"以下 HTML 调用点未转发 decision_basis_data: {missing}"
+
+    def test_both_path_builds_contract_with_peak(self):
+        """both 路径须按历史峰值重装配（风险预算的回撤现状依赖它）。"""
+        import inspect
+
+        from src.python.report import _generation_both
+
+        src = inspect.getsource(_generation_both._generate_report_both)
+        assert 'pipeline_data["decision_basis_data"] = build_decision_basis_data(' in src
+        assert "discipline_signals=" in src, "纪律触发条须与峰值同批重装配（否则纪律行空）"
