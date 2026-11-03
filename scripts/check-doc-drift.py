@@ -6,7 +6,7 @@
 逐条比对，使漂移在提交前暴露（与 check-doc-traces 的「历史痕迹」检查互补：
 那边管「不该写的内容」，这边管「写了但与实现不符的内容」）。
 
-二十五项检查（权威源 → 受检文档）：
+二十六项检查（权威源 → 受检文档）：
   1.  报告章节表        core/report_section_registry.py `_REPORT_SECTION_DEFAULT` → manuals/reports-instruction.md
       （含「可见性规则总览」表 `type` 行：文档 type 集合 ↔ 注册表 type 集合双向对账）
   2.  章节数量断言      同上（`页签编号 1~N` / `默认顺序（N 项` / `返回 result（N 项` / `N 个报告章节`）→ 全库文档
@@ -39,6 +39,8 @@
                         （漏列 = 读者找不到入口；幽灵引用 = 死链）
   25. README 派生量禁令    对外第一屏禁写实体计数与测量值（页签/菜单项/脚本/图表/用例数），
                         可信值留在机检统计文档（与第 23 项 CLAUDE.md 同一规则、更宽模式面）
+  26. 手册总索引覆盖       docs/manuals/README.md 的分册链接集合 ↔ docs/manuals/*.md 双向一致
+                        （漏列 = 分册无人可达；幽灵引用 = 死链）
 
 按设计豁免的历史记录文档：`changelog.md` / `review-findings.md`（会如实引用旧数字作为变更记录）
 与 `docs/archive/**`（版本快照）不参与第 2/4/5 项扫描。
@@ -205,6 +207,7 @@ from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc
     check_thinking_support_matrix,
     find_guard_parity,
     check_claude_md_derived_counts,
+    check_manuals_index,
     check_readme_doc_index,
     check_readme_derived_counts,
     check_guard_parity,
@@ -261,6 +264,7 @@ def run_checks(with_test_count: bool = False, docs: dict | None = None) -> list[
     findings += check_claude_md_derived_counts()
     findings += check_readme_doc_index()
     findings += check_readme_derived_counts()
+    findings += check_manuals_index()
     findings += check_guard_parity()
     findings += check_block_matrix(docs[_TECHNICAL_MD])
     findings += check_project_stats(docs[_FOLDERS_MD], with_test_count=with_test_count, snapshot=snapshot)

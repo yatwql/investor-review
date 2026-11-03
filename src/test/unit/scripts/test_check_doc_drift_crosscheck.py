@@ -860,3 +860,23 @@ class TestReadmeDerivedCounts:
     def test_real_readme_is_clean(self, drift):
         """真实 README 不含派生量（本项入 CI 后，写死数字会当场打红）。"""
         assert drift.check_readme_derived_counts() == []
+
+
+class TestManualsIndex:
+    """手册总索引（docs/manuals/README.md）↔ 目录实际分册双向一致。"""
+
+    def test_missing_manual_flagged(self, drift):
+        """漏列分册 → 报「漏列」并点出文件名（读者将无入口）。"""
+        findings = drift.check_manuals_index("- [快速开始](how-to-start.md)\n")
+        assert findings
+        assert any("漏列" in f and "faq.md" in f for f in findings)
+
+    def test_ghost_manual_flagged(self, drift):
+        """引用不存在的分册 → 报幽灵引用（死链）。"""
+        real = "\n".join(f"- [x]({p.name})" for p in drift._MANUALS.glob("*.md") if p.name != "README.md")
+        findings = drift.check_manuals_index(real + "\n- [幽灵](no_such_manual.md)\n")
+        assert any("不存在的分册" in f and "no_such_manual.md" in f for f in findings)
+
+    def test_real_index_covers_all_manuals(self, drift):
+        """真实索引覆盖全部分册（新增手册必须登记）。"""
+        assert drift.check_manuals_index() == []

@@ -520,7 +520,7 @@ schtasks /CREATE /SC WEEKLY /D MON /TN "InvestCacheUpdate" /TR "D:\path\to\inves
 
 #### PowerShell 包装脚本（推荐）
 
-推荐使用 PowerShell 包装脚本，方便日志记录和错误处理（自行创建 `scripts/scheduled_report.ps1`）：
+推荐自己写一个 PowerShell 包装脚本（仓库**不自带**该文件，下方片段供复制到本地任意位置），方便日志记录与错误处理：
 
 ```powershell
 param(

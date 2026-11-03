@@ -51,6 +51,7 @@ from _doc_drift._format import (  # noqa: F401
     _COUNT_NAME_ALIAS,
     check_test_coverage_counts,
     check_claude_md_derived_counts,
+    check_manuals_index,
     check_readme_doc_index,
     check_readme_derived_counts,
 )

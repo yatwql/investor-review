@@ -21,6 +21,7 @@ from src.python.fetcher.chain import _DEFAULT_CHAINS  # noqa: E402
 from _doc_drift._shared import (
     _CLAUDE_MD,
     _MANAGEMENTS,
+    _MANUALS,
     _README,
     _DATASOURCE_MD,
     _RELIABILITY_MD,
@@ -713,4 +714,29 @@ def check_readme_derived_counts(doc_text: str | None = None) -> list[str]:
                     "——对外文档不写派生量/测量值（改用定性表述，精确值留机检统计文档）"
                 )
                 break
+    return findings
+
+
+#: 手册总索引中指向同目录分册的相对链接（形如 `how-to-start.md`）
+_MANUALS_INDEX_LINK = re.compile(r"\]\(([a-z0-9_-]+\.md)\)")
+
+
+def check_manuals_index(doc_text: str | None = None) -> list[str]:
+    """手册总索引（`docs/manuals/README.md`）须与目录下实际分册双向一致。
+
+    总索引是读者进入手册体系的唯一门户，新增/改名分册时最易漏登记（漏了就等于
+    该分册无人可达）；幽灵引用同样要拦——它会把读者送到死链。索引自身不入清单。
+    """
+    index = _MANUALS / "README.md"
+    if doc_text is None:
+        try:
+            doc_text = index.read_text(encoding="utf-8")
+        except OSError:  # pragma: no cover - 仓库内恒存在
+            return []
+    listed = set(_MANUALS_INDEX_LINK.findall(doc_text)) - {"README.md"}
+    actual = {p.name for p in _MANUALS.glob("*.md")} - {"README.md"}
+    findings = [
+        f"{rel(index)}: 手册总索引漏列分册 `{name}`（文件存在但读者无入口）" for name in sorted(actual - listed)
+    ]
+    findings += [f"{rel(index)}: 手册总索引引用了不存在的分册 `{name}`" for name in sorted(listed - actual)]
     return findings

@@ -378,7 +378,7 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
 使漂移在提交前暴露。与 `check-doc-traces.py` 互补：那边管「不该写的内容」（历史痕迹），这边管
 「写了但与实现不符的内容」。
 
-二十六项检查（权威源 → 受检文档）：
+二十七项检查（权威源 → 受检文档）：
 
 1. 报告章节表（`reports-instruction.md`）↔ 章节注册表 `_REPORT_SECTION_DEFAULT`（行数/序号/名称）；
    含「可见性规则总览」表 `type` 行双向对账（文档 type 集合 ↔ 注册表 type 集合；历史漂移：注册表把财报两章合为
@@ -402,7 +402,7 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
     plan 未完成区不得含 ✅/已归档项；现行 changelog 只允许一个 `-dev` 段头
 14. Extended Thinking 支持矩阵：手册对比表须覆盖代码支持的全部厂商族、「仅」式预算枚举句须列全、
     默认开思考族须有提示（权威源为 `llm/api_base.py` 的前缀名单）
-15. Provider Chain 降级表：`fetcher/chain_config.py::_DEFAULT_CHAINS` 的 15 条链 ↔
+15. Provider Chain 降级表：`fetcher/chain_config.py::_DEFAULT_CHAINS` 的逐条链路 ↔
     `datasource-reliability.md` §4.2 表逐链**双向**比对（漏链 → 「缺少链路」；幽灵行 → 「无此链」）
 16. 守护清单同源：developer-guide 的 P0/P2 门禁代码块、`ci.yml` guards steps、CLAUDE.md P0/P2 条款、
     testplan P0/P2 清单行与 `.githooks/pre-commit` 执行体，五处的 `scripts/check-*.py --ci` 引用集合两两一致（新增守护脚本漏改任一处即报）
@@ -428,11 +428,13 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
 26. README 派生量禁令：对外第一屏禁写实体计数与测量值（页签/菜单项/脚本/图表/用例数，含「上万条」式
     中文数词近似量）；兼容矩阵、版本徽章、门禁红线属规则本身，白名单放行
     （实现 `_doc_drift/_format.py::check_readme_derived_counts`，与第 24 项 CLAUDE.md 同一规则、更宽模式面）
+27. 手册总索引覆盖：`manuals/README.md` 的分册链接集合 ↔ `docs/manuals/*.md` 双向对账（漏列 = 分册无人可达；
+    幽灵引用 = 死链；实现 `_doc_drift/_format.py::check_manuals_index`）
 
 **使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
 
 ```bash
-.venv/bin/python scripts/check-doc-drift.py                   # 二十六项全查
+.venv/bin/python scripts/check-doc-drift.py                   # 二十七项全查
 .venv/bin/python scripts/check-doc-drift.py -v                # 详细输出（打印解析结果与实测统计）
 .venv/bin/python scripts/check-doc-drift.py --ci              # CI 模式（只输出 文件:描述，退出码 2）
 .venv/bin/python scripts/check-doc-drift.py --with-test-count # 附带 pytest 收集，核对「测试用例」与 test-coverage.md 计数表
