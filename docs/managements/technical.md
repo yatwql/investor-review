@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.16.15
+> 文档版本：0.16.16
 
 ## 目录
 
@@ -523,7 +523,7 @@ CLI 渠道是**命令行参数**形态，面向脚本化与自动化场景：定
 
 #### 1.7.2 argparse 结构
 
-`_build_parser()`（`cli/_parser.py`）：`prog="investor-review"`，全局参数 + 7 个子命令。
+`_build_parser()`（`cli/_parser.py`）：`prog="investor-review"`，全局参数 + 10 个子命令。
 
 - **全局参数**：`--config`（备用配置文件路径）、`--output`（报告输出目录，覆盖 config 的 output_dir）、`--verbose`（进度同步到 stderr，默认仅写 logs/app.log）、`--non-interactive`（跳过首次运行交互式引导，定时任务/脚本使用）、`--experiment NAME`（可重复；启用实验性功能且**仅本次运行生效、不写盘**。NAME 取开关名或显示名，`all` = 全部启用。取值经 `_experiment_name` argparse type 回调即时校验：空串/未知名即报错，可选值由 `features.describe_experiment_flags()` 生成）、`--feature NAME=VALUE`（可重复；**全部**功能开关的双向一次性开关，同样是仅本次运行、不写盘。VALUE 取 `on/off/true/false/1/0`（大小写不敏感），NAME 取注册表键名。取值经 `_feature_override` argparse type 回调即时校验：非 `NAME=VALUE` 形态、未知开关名、不可识别取值均即报错并列出可选值；同名后者覆盖前者。两者共用一个应用原语，`--feature` 在 `--experiment` 之后应用，故显式取值可覆盖 `--experiment` 的隐式「置开」）、`--version`。
 - **`report`**：`--type basic/both/full`（默认 basic）、`--history auto/off`（未指定回退配置层 `history.fetch_mode`，仅 both/full 有效）、`--force-llm`（全量强刷）、`--llm-module KEY`（可重复传参，仅强刷指定模块，粒度优先于 `--force-llm`；可选键见 `llm/force_scope.py::FORCEABLE_LLM_MODULES`）、`--prefer-source NAME`（可重复；本次运行优先数据源，仅排到链首，不绕过熔断与凭据就绪预检，不写配置）、`--exclude-source NAME`（可重复；排障复现排除数据源，未知名即报错并列出可用源名）、`--yes`（跳过生成前 LLM 费用预估确认，仅 full 有预估；日预算超限仍直接中止）。
@@ -533,10 +533,13 @@ CLI 渠道是**命令行参数**形态，面向脚本化与自动化场景：定
 - **`check-sources`**：数据源健康检查，**无需 config**（main() 中特殊前置分派）。
 - **`view-logs`**：结构化运行日志查看（`core/log_reader.py::read_log`），`--level {DEBUG,INFO,WARNING,ERROR,CRITICAL}`（最小级别阈值）、`--lines N`（默认 5000，读取末尾行数上限）、`--since/--until`（时间前缀过滤）；**无需 config**（main() 中特殊前置分派，配置损坏时仍可查日志诊断）。
 - **`doctor`**：系统自检（`core/doctor.py`，§4.17.3），`--offline`（跳过数据源联网检查）、`--timeout SECONDS`（默认 8.0，联网检查总预算）；**无需 config**（main() 中特殊前置分派——配置损坏正是它要诊断的场景，若被开关拦住即成死锁）。
+- **`health-history`**：数据源健康历史（最近 N 次采集），聚合单源在 `core/perf.py::summarize_health_history`（TUI `[H]` / Web `/api/health/history` 同源），`--limit N`（默认 10，最小 1）、`--json`（脚本消费：`timestamp` / `report_type` / `holdings_count` / `total` / `ok_count` / `fail_count` / `failed_sources`）；**无需 config**（main() 中特殊前置分派——只读 `data/state/` 下的健康快照）。
+- **`settle-decisions`**：决策账本多视界结算（`report/decision_settlement.py`），`--report-date YYYY-MM-DD`（缺省本地当日）、`--horizons 5,20,60`（逗号分隔，缺省 `decision_ledger.SETTLE_HORIZONS`；低于 5 按 5 计）；**需 config**（结算走行情链路取数）。**独立于报告生成**——只写决策账本、不产出报告，可配 cron 推进长视界样本；开关关闭（`decision_reflection`）时打印提示并以 0 退出。
+- **`config`**：共享配置读写（持久化，非一次性），子动作 `list`（`--json`）/ `get KEY` / `set KEY VALUE`（`--dry-run` 只校验不写盘），写入径走 `config/edit_ops.py` 编辑层的白名单与校验；动作型键（`comparison_indices` 增删重置、`llm_providers.priority` 重排）与密钥文件不在白名单。
 
 #### 1.7.3 主流程
 
-`main()`：`setup_logger` → `_build_parser` → `parse_args` → `check-sources` / `view-logs` / `doctor` / `cassettes` 特殊处理（均不 init_config，经 `_prepare_early_exit_switches(groups, pairs)` 先加载 `features.json` 覆写再叠加 `--experiment` / `--feature` 增量）→ `init_config` + `get_config` → `_apply_cli_experiments(args.experiment)` + `_apply_cli_switches(args.feature)`（命令行功能开关，须在配置初始化**之后**——覆写加载已完成，此处只做本次运行的增量 `set_feature_enabled`，绝不 `save_feature_overrides` 写盘；顺序为 `--experiment`（只开实验项）在前、`--feature` 显式取值在后，故后者可覆盖前者）→ `startup_wizard(non_interactive)`（非交互/CI 环境自动跳过，不阻塞命令）→ 按 `args.command` 分派 `_handle_report` / `_handle_cache` / `_handle_whatif`。
+`main()`：`setup_logger` → `_build_parser` → `parse_args` → `check-sources` / `view-logs` / `doctor` / `cassettes` / `health-history` 特殊处理（均不 init_config，经 `_prepare_early_exit_switches(groups, pairs)` 先加载 `features.json` 覆写再叠加 `--experiment` / `--feature` 增量）→ `init_config` + `get_config` → `_apply_cli_experiments(args.experiment)` + `_apply_cli_switches(args.feature)`（命令行功能开关，须在配置初始化**之后**——覆写加载已完成，此处只做本次运行的增量 `set_feature_enabled`，绝不 `save_feature_overrides` 写盘；顺序为 `--experiment`（只开实验项）在前、`--feature` 显式取值在后，故后者可覆盖前者）→ `startup_wizard(non_interactive)`（非交互/CI 环境自动跳过，不阻塞命令）→ 按 `args.command` 分派 `_handle_report` / `_handle_cache` / `_handle_whatif` / `_handle_settle_decisions` / `_handle_config`（分组依据：**是否需 config**——自检/日志/健康/录制回放类必须先于 `init_config`，否则配置损坏即无法诊断）。
 
 **持仓定位差异**：CLI 不经过 TUI 文件选择器——`_cli_resolve_holdings_file()` 通过 config 的 `holdings_dir + holdings_filename` 直接定位；若该路径为目录则自动选第一个 `.xlsx`（多个时告警）。`_cli_read_holdings()` / `_cli_read_holdings_with_flows()` 分别读主表与「主表+流水」，与 TUI 读取路径对齐。
 
@@ -2719,6 +2722,8 @@ report/decision_llm_capture.py   # 抽取：结构化优先 → 表格兜底
 
 方向常量复用 `core.decision_ledger` 的 `DIRECTION_LONG/SHORT/FLAT`，不另立一套 int 常量。
 
+**解析兜底**：缺行/缺方向（含方向格写「不操作」/观望类措辞）按原因跳过登记并记一条 INFO（表头与分隔行不计，避免噪声）；`extract_llm_decisions` 抛异常时整体兜底返回零登记、不中断报告生成。
+
 **归一判据（`parse_decision_word`）**：
 
 | 判据 | 说明 |
@@ -2998,7 +3003,7 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
 - **缺省一律收起**：模板不写 `open` 属性（收起是原生行为、不依赖 JS）；`fold.js` 初始 load 不执行锚点展开——打开报告（地址带 `#sec-…` / 浏览器恢复会话）全部收起，仅会话内 `hashchange`（点击目录原生锚点链接）自动展开目标章折叠块保证跳转后可见；回归用例 `test_fold_js_keeps_collapsed_on_initial_load` 锁死初始不展开。
 - **打印**：`beforeprint` 以捕获阶段注册（先于 chart-print.js 快照）全展开 + 同步 resize 内部 Chart.js 图表（收起态 canvas 为 0 尺寸），`afterprint` 恢复用户原折叠状态；`@media print` 隐藏 `summary` 提示条并去边框/背景，打印稿不显示提示条。
 - **手动展开**：`details` 的 `toggle` 事件逐块绑定，展开时对内部 canvas `resize()`（ResizeObserver 兜底）。
-- **载体**：`details.section-fold` 共 11 处，全部位于章节 partial（模板拆分后主模板仅剩 CSS 注释与 fold.js 装配）：10 个章节各 1 处（`portfolio_history_drawdown_section` / `news_correlation_section` / `holding_change_section` / `schedule_replay_section` / `position_structure_section` / `style_factor_section` / `data_source_status_section` / `evolution_section` / `fundamental_snapshot_section` / `action_section`）+ 章内块级 1 处（`event_impact_section` 事件窗对照块）；结构回归 `TestSectionFold`（历史章）+ `TestSectionFoldMoreChapters`（`_FOLD_KEYS` 八个章节逐章遍历五类断言：包裹收起/summary 首元素/标题回顶在外/关键摘要/初始收起）+ `test_action_html.py::TestActionSectionFold`（行动建议章折叠，含降级占位不折叠与回顶在外）。需求 `R-OUT-12`。
+- **载体**：`details.section-fold` 共 12 处，全部位于章节 partial（模板拆分后主模板仅剩 CSS 注释与 fold.js 装配）：9 个章节各 1 处（`portfolio_history_drawdown_section` / `news_correlation_section` / `holding_change_section` / `schedule_replay_section` / `position_structure_section` / `style_factor_section` / `data_source_status_section` / `evolution_section` / `fundamental_snapshot_section`）+ `action_section` 2 处（外层正文折叠 + 判断依据章内块 `#decision-basis`）+ 章内块级 1 处（`event_impact_section` 事件窗对照块）；结构回归 `TestSectionFold`（历史章）+ `TestSectionFoldMoreChapters`（`_FOLD_KEYS` 八个章节逐章遍历五类断言：包裹收起/summary 首元素/标题回顶在外/关键摘要/初始收起）+ `test_action_html.py::TestActionSectionFold`（行动建议章折叠，含降级占位不折叠与回顶在外）。需求 `R-OUT-12`。
 
 ### 4.22 章节-区块矩阵
 
@@ -3018,7 +3023,7 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
 | 4 | `fund_performance` | 2 | fund_performance_section.html | 候选基金比较 / 基金经理变更监控 | fund_performance.py | 候选比较为开关门控区块（两态标题去重后计 1） |
 | 5 | `position_structure` | 3 | position_structure_section.html | 持仓重合度矩阵 / 持仓相关性矩阵 / 持仓集中度监控 | position_structure_sheet.py | 双端对等 |
 | 6 | `style_factor` | 4 | style_factor_section.html | 基金风格表 / 风格因子回归 / 行业 Beta / 因子目录 | style_factor_sheet.py | 行业 Beta 子表与因子目录默认关（条件区块，归一化去重计 4） |
-| 7 | `action` | 7 | action_section.html | 再平衡信号 / 交易纪律 / 调仓建议清单 / 收益归因 / 历史决策复盘 / 景气度框架诊断 / 市场情绪与持仓热点 | action_sheet.py | ⑤⑥⑦ 门控（决策复盘/景气度/市场情绪，默认关） |
+| 7 | `action` | 8 | action_section.html | 判断依据 / 再平衡信号 / 交易纪律 / 调仓建议清单 / 收益归因 / 历史决策复盘 / 景气度框架诊断 / 市场情绪与持仓热点 | action_sheet.py | 判断依据为章内块（开关 `decision_basis` 默认开，骨架期空态）；⑤⑥⑦ 门控（决策复盘/景气度/市场情绪，默认关） |
 | 8 | `news_correlation` | 2 | news_correlation_section.html + event_impact_section.html | 事件窗对照 / 事件窗对照表 | news_correlation.py + event_impact_panel.py | 量化对照为章内块级、对照表为其折叠子块（双端同构）；新闻主表为章主体 |
 | 9 | `global_macro` | — | global_macro_section.html | — | llm_content.py | LLM 流式章；事实校验块为内容内嵌（无标题行，契约外） |
 | 10 | `expert_review` | — | expert_review_section.html | — | llm_content.py | 同上 |
@@ -3555,8 +3560,19 @@ make_http_client(timeout=10.0) → httpx.Client
 | `decision_ledger` | 决策账本（append-only JSONL，pending/settled 折叠统计） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `decision_record` | 确定性卖出建议登记（仅带持仓基线者落账，入账必可结算） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `decision_settlement` | 到期决策结算（幂等：同 decision 只结一次，行情不可得保持 pending） | 行动建议 | 监控 | 随 `decision_reflection` |
-| `decision_llm_capture` | LLM 操作建议表解析登记（误导性操作格不登记） | 行动建议 | 监控 | 随 `decision_reflection` |
+| `decision_llm_capture` | LLM 操作建议表解析登记（结构化优先 → 表格兜底；缺行/缺方向/「不操作」行按原因记 INFO 后跳过，异常不中断报告） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `decision_review_block` | 「历史决策复盘」区块数据契约（结构稳定，HTML/Excel 双端消费） | 行动建议 | 监控 | 随 `decision_reflection` |
+| `decision_basis` | 行动建议章内「判断依据」确定性事实块（形态 A：信号清单/信号可信度/风险预算已接入（信号读账本快照，区分度三态 + 回测结论模块常量登记，可信度规则仲裁四枚举；风险预算三行取 `rebalance.threshold` 与 `discipline.drawdown_pct`，行业上限无配置键即「未配置上限」；纪律明细只读复用纪律引擎触发条并补阶段化执行口径；结算摘要按结算交易日聚合最近 5 批 × 5/20/60 视界均值与超额，未到期显式标注），五节齐，零 LLM） | 行动建议（章内嵌块） | 监控 | 开关 `decision_basis`（默认开，章节内选项组） |
+| `build_decision_basis_data` | 判断依据块装配入口（纯确定性：只读信号账本快照与编排层已装配持仓，零取数零 LLM；入参仅确定性数据 `holdings_details`/`total_mv`/`portfolio_peak_mv`，全可缺省） | 行动建议（章内嵌块） | 分析计算 | 随 `decision_basis` |
+| `build_risk_budget` | 风险预算块装配（单品种权重 / 行业权重 / 组合回撤三行：上限 vs 现状，超限只标注不改行为；阈值经 `resolve_rebalance_config` 与 `resolve_discipline_config` 单源解析，行业上限无键即「未配置上限」） | 行动建议（章内嵌块） | 分析计算 | 随 `decision_basis` |
+| `build_discipline_detail` | 纪律明细块装配（只读透传 `action_data["discipline_signals"]`：规则/品种/当前值/距阈值 + 阶段化执行口径；不重算触发、不写静默状态；阶段按「回撤是否过半阈值」规则化判定） | 行动建议（章内嵌块） | 分析计算 | 随 `decision_basis` |
+| `build_settlement_summary` | 结算摘要块装配（`fold_ledger().decisions[].settlements` 多视界映射 → 按结算交易日聚合最近 5 批 × 5/20/60 视界均值与超额；未到期视界记 pending，不按 0 呈现；着色只给涨跌域变量） | 行动建议（章内嵌块） | 分析计算 | 随 `decision_basis` |
+| `arbitrate_confidence` | 信号可信度规则仲裁（清单空→unknown；有效 0→unknown；全口径代理/方向分裂/不足 3 → low；≥3 且方向一致 → medium；首版不产 high，防高置信幻觉） | 行动建议（章内嵌块） | 分析计算 | 随 `decision_basis` |
+| `eval_status` | 决策质量回测入口状态（读 `docs/tmp/decision-quality/` 产物时间 → 「距上次 N 天」提示；`doctor` 与 CLI 收尾同源）；`last_eval_date` 为「产物最新日期」的唯一实现（报告侧同源派生）、`VENV_PYTHON` 给出提示命令的项目虚拟环境解释器；`post_eval` 为 opt-in 随报告执行（子进程跑零取数阶段，失败不影响报告） | 报告输出 | 运行收尾 | CLI `--post-eval`（默认关） |
+| `backtest_run_date` | 回测产物最新运行日（委派 `eval_status.last_eval_date()`；产物缺失回落 `BACKTEST_DATE_FALLBACK`），经契约字段 `backtest_as_of` 双端显示 | 行动建议（章内嵌块） | 分析计算 | 随 `decision_basis` |
+| `portfolio_constraints` | 集中度/相关性约束标注（单品种沿用 `rebalance.threshold`、行业/相关性需显式配置；只标注不阻断；缺数据/短样本记「未评估」） | 行动建议（章内嵌块） | 监控 | 开关 `portfolio_constraints`（默认关，机制与诊断组） |
+| `evaluate_constraints` | 约束判定入口（三道上限 → 超限项 + `breached_codes`；开关关闭返回 `{"enabled": False}`） | 行动建议（章内嵌块） | 分析计算 | 随 `portfolio_constraints` |
+| `scenario_mandate` | 情景段方向约束口径选择（默认条件化动作 + 触发条件 + 「不操作」出口；`decision_basis` 关闭走回退强制方向口径；回退口径经 `scenario_mandate_cache_suffix` 以 `_ms` 后缀换键，两套文本常量共存一版） | LLM 生成 | LLM 生成 | 随 `decision_basis` |
 | `build_structured_header_instruction` | 决策头结构化契约构建（提示词侧追加 `决策头：…` 行，与解析器口径锁定） | 行动建议 | 监控 | 已内置（缓存后缀 `_dh` 常驻） |
 | `decision_header` | 决策词归一解析器（标签优先/长词优先/否定守卫/复合词左边界/二义不猜） | 行动建议 | 监控 | 已内置（A 通道无开关） |
 | `deterministic_signal` | 确定性信号模块（实时注入 + 跨期沉淀双面：温度/分位/尾部风险预消化信号行 + 确定性评级账本沉淀，内置五类、因子目录随实验开关追加第 6 类；原 `signal_pre_digest`/`signal_ledger` 两开关合并转正） | LLM 生成 | LLM 生成 | 开关 `deterministic_signal`（默认开，机制与诊断组） |
@@ -4140,6 +4156,7 @@ investor-review/
 | position_status | dict | 是 | prepare_report_data |
 | data_freshness | dict | 是 | prepare_report_data |
 | action_data | dict | 是 | prepare_report_data；basic 路径由 generate_excel_report 就地构建 |
+| decision_basis_data | dict | 是 | prepare_report_data（首次装配）+ full/both 峰值就绪后重装配（风险预算回撤现状依赖历史峰值）；含 `backtest_as_of`＝回测产物最新运行日，由 `decision_basis.backtest_run_date()` 从 `docs/tmp/decision-quality/*.json` 派生 |
 | crisis_annotation_data | dict | 是 | assemble_history_augmented_data（full/both 双路径同源装配，`report/_snapshot.py`；危机标注关态恒写、回放态加 replay 层；风险调整超额同点按开关注入 risk_adjusted_excess_data） |
 | risk_adjusted_excess_data | dict | 是 | build_risk_adjusted_excess（报告章节与增强开关 risk_adjusted_excess，默认关） |
 | tail_risk_data | dict | 是 | prepare_report_data |

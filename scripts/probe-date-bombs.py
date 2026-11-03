@@ -9,13 +9,17 @@
 - 静态窄口径守卫见 `check-test-redundancy.py` 的 I 类（账本类调用的日期实参）；
 - probe- 前缀属探测类活动，不进十守护、不进 CI，按需运行。
 
-安全约定（改写真实文件是唯一风险点，故三层兜底）：
+安全约定（改写真实文件是唯一风险点，故四层兜底）：
 1. 只处理 git 工作区干净的文件（脏文件一律跳过，除 `--allow-dirty`）；
 2. 改写前备份原文到临时目录，`finally` 还原并校验 sha256 与原文一致；
-3. 进程异常退出时由 `atexit` 兜底还原（Ctrl-C / 用例崩溃都不会留下脏文件）。
+3. 进程异常退出时由 `atexit` 兜底还原（Ctrl-C / 用例崩溃都不会留下脏文件）；
+4. 子进程带 `-B` 与 `PYTHONDONTWRITEBYTECODE=1`——变异源码不写 `.pyc`；否则断言
+   重写缓存（按 size/mtime 命中）在还原后仍指向变异版，下一次正常跑测试会凭空失败。
 
 判读要求：rot-suspect ≠ 缺陷。常见变异伪信号——生产侧显式注入 today 参数、星期/财季语义
-随日期位移改变、断言目标在未被替换的 fixture 模块里。必须人工过一遍再动手改。
+随日期位移改变、断言目标在未被替换的 fixture 模块里、毫秒时间戳等非日期字面量。
+`--detail` 直接打印失败断言的「实际 vs 期望」两侧，据此判读（口径见
+`docs/managements/scripts-reference.md`）。
 
 用法：
   python scripts/probe-date-bombs.py                    # 默认候选：含保留期/TTL 关键词的测试文件
@@ -131,37 +135,56 @@ def _git_dirty(path: Path) -> bool:
     return bool(proc.stdout.strip())
 
 
-def probe_file(path: Path, years: int, timeout: int, python: str) -> dict:
-    """单文件变异筛查：改写 → 跑 pytest → 还原，返回 {status, fails, summary}。"""
+def probe_file(path: Path, years: int, timeout: int, python: str, detail: bool = False) -> dict:
+    """单文件变异筛查：改写 → 跑 pytest → 还原，返回 {status, fails, summary, asserts}。"""
     original = path.read_text(encoding="utf-8")
     mutated = mutate_dates(original, years)
     if mutated == original:
-        return {"status": "no-literal", "fails": [], "summary": ""}
+        return {"status": "no-literal", "fails": [], "summary": "", "asserts": []}
     _PENDING_RESTORE[path] = (original, _digest(original))
     try:
         path.write_text(mutated, encoding="utf-8")
         proc = subprocess.run(
-            [python, "-m", "pytest", rel(path), "-q", "-p", "no:cacheprovider", "--tb=no"],
+            [
+                python,
+                "-B",
+                "-m",
+                "pytest",
+                rel(path),
+                "-q",
+                "-p",
+                "no:cacheprovider",
+                "--tb=line" if detail else "--tb=no",
+            ],
             cwd=REPO_ROOT,
             capture_output=True,
             encoding="utf-8",
             timeout=timeout,
+            # -B + PYTHONDONTWRITEBYTECODE：变异源码绝不得写出 .pyc。pytest 的断言
+            # 重写缓存按（size, mtime）命中——还原后文件大小不变、mtime 分辨率内
+            # 常与原值相同，下一次正常跑测试会命中**变异版字节码**，凭空报出
+            # 已经修好的失败（实测污染 3 文件 11 例）。
+            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
         )
         out = f"{proc.stdout}\n{proc.stderr}"
     except subprocess.TimeoutExpired:
-        return {"status": "timeout", "fails": [], "summary": f"超时（>{timeout}s）"}
+        return {"status": "timeout", "fails": [], "summary": f"超时（>{timeout}s）", "asserts": []}
     finally:
         _restore_all()
 
     fails = sorted({line.split("::", 1)[-1].split(" ")[0] for line in out.splitlines() if line.startswith("FAILED")})
     errors = [line for line in out.splitlines() if line.startswith("ERROR")]
+    # --detail：失败断言的原文（`--tb=line` 的 `路径:行: AssertionError: ...` 行）——
+    # 判读的实质依据：看「实际值 vs 期望值」两侧年份，才能分辨「期望被平移、数据
+    # 在未变异处」与「生产侧真读 now()」。
+    asserts = sorted({line.strip() for line in out.splitlines() if ": AssertionError:" in line})
     summary = next(
         (line.strip() for line in reversed(out.splitlines()) if re.search(r"\d+ (passed|failed|error)", line)), ""
     )
     status = "rot" if fails or errors else "ok"
     if errors:
         summary = f"{summary} / 收集期错误 {len(errors)} 处"
-    return {"status": status, "fails": fails, "summary": summary}
+    return {"status": status, "fails": fails, "summary": summary, "asserts": asserts}
 
 
 def main() -> None:
@@ -173,6 +196,11 @@ def main() -> None:
     parser.add_argument("--timeout", type=int, default=600, help="单文件 pytest 超时秒数（默认 600）")
     parser.add_argument("--python", default=sys.executable, help="跑 pytest 的解释器（默认当前解释器）")
     parser.add_argument("--allow-dirty", action="store_true", help="允许改写有未提交改动的文件（默认跳过）")
+    parser.add_argument(
+        "--detail",
+        action="store_true",
+        help="rot-suspect 文件额外打印失败断言原文（实际/期望值两侧，供人工判读真伪信号）",
+    )
     parser.add_argument("--dry-run", action="store_true", help="只列出候选与命中数，不改写不跑测试")
     args = parser.parse_args()
 
@@ -196,7 +224,7 @@ def main() -> None:
             if args.verbose:
                 print(f"[!] 跳过（工作区有未提交改动，--allow-dirty 可强制）：{rel(path)}")
             continue
-        result = probe_file(path, args.years, args.timeout, args.python)
+        result = probe_file(path, args.years, args.timeout, args.python, detail=args.detail)
         if result["status"] == "timeout":
             counts["timeout"] += 1
             findings.append(f"{rel(path)}: 变异后跑测试超时（{result['summary']}）")
@@ -205,6 +233,9 @@ def main() -> None:
             counts["rot"] += 1
             detail = "、".join(result["fails"][:4]) + ("…" if len(result["fails"]) > 4 else "")
             findings.append(f"{rel(path)}: rot-suspect（{result['summary']}）{detail}")
+            if args.detail:
+                for line in result["asserts"][:12]:
+                    print(f"      {line}")
             continue
         counts["ok"] += 1
         if args.verbose:

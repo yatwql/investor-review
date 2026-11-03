@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.16.15
+> 文档版本：0.16.16
 
 ## 概述
 
@@ -175,7 +175,7 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 
 **归档区冻结**：`docs/` 下为历史快照（含各版本归档里的脚本副本），**不得被 lint/format 重排**。配置已声明 `extend-exclude` + `force-exclude = true`——后者是关键：ruff 的 `exclude` 只在整树扫描时生效，命令行显式给目录（`ruff format docs`）会绕过它、把归档脚本一并重排（实测曾误改 7 个文件）。因此需要格式化的只能是 `src/` / `scripts/` 等活代码路径；契约由 `src/test/unit/test_ruff_exclude_contract.py` 锁定。
 
-**CI 同步执行（`.github/workflows/ci.yml`）**：三档测试按分支/标签分流——`dev` 推送跑 P0（`dev-verify`）、`master` 推送或 PR 跑 P1（`verify`）、打 `v*` tag 跑 P2（`regression`），矩阵覆盖 Python 3.11/3.12/3.13；另有三个独立 job：`guards`（**阻塞**，10 个 `--ci` 守护脚本即上方 P0/P2 清单全量——job 内按 pre-commit 同款后台并行回放，任一守护非零退出折叠为 FAIL 分组并使 job 红；守护经 src.python 链依赖项目运行时包（如 check-doc-drift → httpx），故 editable 安装保留）、`portability`（**阻塞**，非 UTF-8 locale + 隐式编码双探针，见下方「编码/locale 自检」）与 `format`（非阻塞，`ruff format --check src/python/ scripts/` + `ruff check`）。
+**CI 同步执行（`.github/workflows/ci.yml`）**：三档测试按分支/标签分流——`dev` 推送跑 P0（`dev-verify`）、`master` 推送或 PR 跑 P1（`verify`）、打 `v*` tag 跑 P2（`regression`），矩阵覆盖 Python 3.11/3.12/3.13；另有三个独立 job：`guards`（**阻塞**，10 个 `--ci` 守护脚本即上方 P0/P2 清单全量——job 内按 pre-commit 同款后台并行回放，任一守护非零退出折叠为 FAIL 分组并使 job 红；守护经 src.python 链依赖项目运行时包（如 check-doc-drift → httpx），故 editable 安装保留）、`portability`（**阻塞**，非 UTF-8 locale + 隐式编码双探针，见下方「编码/locale 自检」）与 `format`（非阻塞，`ruff format --check src/python/ src/test/ scripts/` + `ruff check`；三条路径必须与本地整树基线同口径——只查 `src/python`+`scripts` 会放行测试文件的格式漂移）。
 
 ### 编码/locale 自检（旧 pip 回退解码 / 隐式编码）
 
@@ -803,7 +803,7 @@ test-reports/latest/
   - 由此守：`scripts/check-test-redundancy.py` 第 5 类 `check_hardcoded_evolving_totals`
 - **账本日期不得写死绝对日期**：账本类调用（`append_signals` / `append_decision` / `register_deterministic_signals` / `prune_jsonl_by_age` …）的 `report_date`/`settle_date`/`date` 实参必须是**从当天回推派生**的值（`_d(offset)` / `date.today() - timedelta(days=N)`）。账本按保留期（730 天）在**写侧即裁剪**，写死的近期日期会在「日期 + 保留期」后让用例静默变成「空账本 / 键缺失」。
   - 由此守：`scripts/check-test-redundancy.py` 第 9 类 `check_ledger_absolute_dates`（静态，入门禁）
-  - 全域经验筛查（会真跑测试、不入门禁）：`.venv/bin/python scripts/probe-date-bombs.py`——把候选文件的绝对日期回移 N 年再跑，失败即 rot-suspect，须人工判读
+  - 全域经验筛查（会真跑测试、不入门禁）：`.venv/bin/python scripts/probe-date-bombs.py`——把候选文件的绝对日期回移 N 年再跑，失败即 rot-suspect，须人工判读；加 `--detail` 直接给出失败断言的「实际 vs 期望」原文（判据：实际侧年份未被平移 = 数据在未变异 fixture/毫秒时间戳里→伪信号；两侧同年平移但值不同 = 星期/财季语义位移→伪信号）。当前全库判读结论为无真实残留，新增用例后重跑即可增量复核
 - **浮点断言容差化**：涉及浮点计算结果的断言用 `pytest.approx(...)`（或显式 `abs=`/`rel=`），**禁止 `==`/`!=` 比较两条计算路径**——「同一函数、不同输入长度或求和顺序」也算两条路径。
   - ❌ `assert beta == portfolio_beta(portfolio[:200], benchmark)`（内部对齐 vs 显式截断，末位差 1 ulp：3.13 相等、3.11 不等）
   - ✅ `assert beta == pytest.approx(portfolio_beta(portfolio[:200], benchmark), abs=1e-12)` + 长度敏感反例 `assert abs(portfolio_beta(portfolio[:100], benchmark) - beta) > 1e-6`
@@ -1630,14 +1630,17 @@ CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` /
 
 ### 依赖升级流程
 
-`requirements.txt` 与 `pyproject.toml` 两处声明，**角色分工固定、运行时直接依赖的约束逐字一致**（契约由 `src/test/unit/test_dependency_declarations.py` 守，改一处不一致即红）：
+`requirements.txt` 与 `pyproject.toml` 两处声明，**角色分工固定、两侧出现的同名包约束逐字一致**（契约由 `src/test/unit/test_dependency_declarations.py` 守：运行时依赖一侧 + extras 一侧各一条用例，改一处不一致即红）：
 
 | 文件 | 只放什么 |
 |:--|:--|
 | `pyproject.toml` → `[project].dependencies` | 运行时**直接**依赖（打包元数据） |
+| `pyproject.toml` → `[project.optional-dependencies]` | extras（color / svg / test）：开发与可选能力依赖 |
 | `requirements.txt` | 同一批直接依赖（约束逐字相同）+ flask 传递依赖锁定 + 开发/工具依赖 |
 
-新增依赖时的判定：是运行时直接依赖 → **两处都写且约束逐字相同**；是传递锁定/开发工具 → 只写 `requirements.txt`，并同时加进上述用例的 `_EXTRAS_ONLY` 白名单（否则用例报「未分类的包」）。
+**两侧都出现的包约束必须一致**，包括 extras 里那批开发工具（`pytest` / `pytest-mock` / `pytest-html` 曾出现 `>=9.1` vs `>=8.0` 的漂移——启动脚本装出的环境与 CI 跑的是两套 pytest 语义，差异不可复现）。只在 `pyproject` extras 声明、`requirements.txt` 未列的包（如 `ruff`）不在该约束内。
+
+新增依赖时的判定：是运行时直接依赖 → **两处都写且约束逐字相同**；是 extras 依赖 → `pyproject` 的对应 extras 写，若 `requirements.txt` 也列则**同约束**；是传递锁定/开发工具 → 只写 `requirements.txt`，并同时加进上述用例的 `_EXTRAS_ONLY` 白名单（否则用例报「未分类的包」）。
 
 1. 改 `requirements.txt`（**必须保持 UTF-8 BOM**，否则 cp936 的旧 pip 解析会 `UnicodeDecodeError`）与 `pyproject.toml` 的对应字段，再用 `pytest src/test/unit/test_dependency_declarations.py -q` 验证两侧一致；
 2. 重建虚拟环境或 `pip install -r requirements.txt` 验证可装；
@@ -1674,9 +1677,9 @@ CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` /
 | 代码与文件质量 | `check-code-traces.py` / `check-requirement-trace.py` / `check-task-numbering.py` / `check-file-length.py` / `check-version-consistency.py` / `check-style-guardrails.py` / `check-script-contract.py` | 痕迹、需求追溯、编号、行数红线、版本、样式护栏 |
 | 发布 | `release.py`（分步编排）/ `test-collect-coverage.py` | 发版全流程 |
 | 运维观测 | `perf-history.py` / `probe.py` / `check-sources`（CLI 子命令）/ `doctor`（CLI 子命令）/ `view-logs`（CLI 子命令） / `cassettes`（CLI 子命令） | 性能历史查看、数据源链路探测、日志与系统自检 |
-| 评测与基准 | `test-perf-report.py` / `eval-llm-hallucination.py` / `eval-factor-zoo.py` / `eval-dedup-threshold.py` | 性能门禁压测、LLM 幻觉率采样、能力评测与阈值校准（不参与提交门禁） |
+| 评测与基准 | `test-perf-report.py` / `eval-llm-hallucination.py` / `eval-factor-zoo.py` / `eval-decision-quality.py`（决策视界/因子 IC/估值口径/止损口径/相关性↔回撤；实现拆在 `_eval_decision_quality/`） / `eval-dedup-threshold.py` | 性能门禁压测、LLM 幻觉率采样、能力评测与阈值校准（不参与提交门禁） |
 | 启动 | `launch.sh` / `launch.ps1`（TUI 与 `web` 子命令）/ `cli.sh` / `llm.sh` 及其 `.ps1` 版 | 免解释器前缀的常用入口 |
-| CLI 子命令 | `report` / `cache` / `whatif` / `config` / `check-sources` / `health-history` / `view-logs` / `doctor` / `cassettes` | 用户侧命令行入口（详见 [CLI 手册](../manuals/how-to-use-cli-mode.md)；`config` 为持久化配置编辑） |
+| CLI 子命令 | `report` / `cache` / `whatif` / `config` / `check-sources` / `health-history` / `view-logs` / `doctor` / `cassettes` / `settle-decisions` | 用户侧命令行入口（详见 [CLI 手册](../manuals/how-to-use-cli-mode.md)；`config` 为持久化配置编辑，`settle-decisions` 为决策账本多视界结算） |
 
 > 改名/合并脚本时按**五处同步**自查（本次改名的长尾教训）：① 同名测试文件；② `scripts-reference` 一览与详情小节；③ `folders.md` 目录树；④ CI/钩子/`release.py`/`test-runner` 等调用点；⑤ 文档与代码注释里的命令示例。机检覆盖 ②③④（一览覆盖、目录树双向、脚本存在性），①⑤ 靠本清单。
 >

@@ -41,7 +41,7 @@
 | `check-test-redundancy.py` | 测试 | 测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言 / 账本日期写死绝对日期；实现拆在 `_test_redundancy/`——九类检查各一模块 + 共用 AST 原语 + 事实缓存 + 编排，入口只留 CLI） |
 | `check-requirement-trace.py` | 质量 | 需求 ID ↔ 验证载体追溯（单段 ID 全域覆盖 / 载体文件存在 / ID 双向一致） |
 | `hook-install-claude.py` | 质量 | 安装/卸载 Claude Code PostToolUse hook（任务编号一致性自动校验） |
-| `probe-date-bombs.py` | 测试 | 时间炸弹经验筛查（变异法）：把候选测试文件里的绝对日期整体回移 N 年再逐个跑 pytest，失败即「依赖日期处于近期」（rot-suspect）；改写前备份、`finally`/`atexit` 双兜底还原并校验 sha256，脏文件默认跳过；结果需人工判读（生产侧显式注入 today / 星期-财季语义 / 断言目标在未变异 fixture 均为伪信号）；不入门禁 |
+| `probe-date-bombs.py` | 测试 | 时间炸弹经验筛查（变异法）：把候选测试文件里的绝对日期整体回移 N 年再逐个跑 pytest，失败即「依赖日期处于近期」（rot-suspect）；`--detail` 打印失败断言原文（实际/期望两侧）供判读；改写前备份、`finally`/`atexit` 双兜底还原并校验 sha256，脏文件默认跳过；结果需人工判读（生产侧显式注入 today / 星期-财季语义 / 断言目标在未变异 fixture 均为伪信号）；不入门禁 |
 | `eval-llm-hallucination.py` | 评测 | 10 组标准持仓 × LLM 幻觉率采样（薄 CLI，实现在 `_eval_halluc_sampler/` 包） |
 | `eval-dedup-threshold.py` | 评测 | 新闻去重阈值校准分析 |
 | `eval-llm-budget.py` | 评测 | LLM 表达预算校准（冻结持仓样本 × 预算档位 × 模式矩阵；墙钟/输出 tokens/分段字数/要素机检/操作建议行数；`freeze` 建样本、`run --dry-run` 零费用；产物落 `docs/tmp/llm-budget/`，实现在 `_eval_llm_budget/`） |
@@ -55,6 +55,7 @@
 | `perf-history.py` | 运维 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 并发预算段（档位/预算/峰值/缩容合计，标注跨档位不可直接比耗时）+ 时段聚合（耗时与费用合计/环比/缩容列）/机读输出（llm_cost、by_period 费用字段、CSV 增 budget/peak/clamps 三列）；实现拆在 `_perf_history/`——`stats.py` 统计原语 / `data.py` 派生 / `report.py` 渲染 / `cli.py` 入口，主入口只留 docstring 与 re-export） |
 | `probe.py` | 运维 | 探测统一入口（按 target 分发到 `_probes/` 子模块；新探针实现契约面登记即用） |
 | `eval-factor-zoo.py` | 评测 | 因子动物园目录评测（非生产代码；五个来源族各抽 5 个因子，评测 A 字段可得率 / B 与既有信号族增量 / C 全量计算耗时占比三项指标，A/B/C 全过才转正立项；子命令 catalog / fields / signals / timing / verdict / all，产物只落 `docs/tmp/factor-zoo/`；实现拆在 `_eval_factor_zoo/`） |
+| `eval-decision-quality.py` | 评测 | 投资决策质量待验证项回测（决策视界命中率 / 因子单因子 IC / 估值两口径区分度；判据预注册于脚本常量，样本门槛 100、IC 绝对值拒绝线 0.05；子命令 horizon / factor-ic / valuation / all，产物落 `docs/tmp/decision-quality/`） |
 | `_assets/` | 内部 | 视觉资产实现包（`social_preview.py` 预览图绘制与栅格化 / `svg_check.py` 架构图渲染体检） |
 | `_screenshots/` | 内部 | 演示截图实现包（`demo_workspace.py` 隔离工作区与报告 / `tui_frame.py` 帧文本折行保色与渲染 / `web_shot.py` CDP 封装 + `cdp_shot.mjs` / `xlsx_frame.py` Excel 页签 → HTML 网格 → PNG） |
 | `_shared/` | 内部 | 跨脚本共享设施包（`checklib.py` CLI 契约与输出/路径/区间解析；`traces_common.py` 两域共用痕迹词表） |
@@ -1181,6 +1182,23 @@ curl 对照命令：`curl -s "https://push2.eastmoney.com/api/qt/stock/get?secid
 `analysis.correlation` 的共享 Pearson 原语（防评测口径漂移）；评测产物**只落 `docs/tmp/factor-zoo/`**
 （git 忽略）。实现拆在 `_eval_factor_zoo/`（因子清单 / 指标计算 / 报告渲染）。
 
+**`eval-decision-quality.py` — 投资决策质量待验证项回测**
+
+五个阶段对应决策质量待验证清单 V1~V3、V5 与 V7 的回测（V1~V3 结论登记在 `report/decision_basis.py` 的 `BACKTEST_CONCLUSIONS`；V5 为交易纪律止损口径对照、V7 为持仓相关性矩阵与最大回撤的关系，结论未达门槛前只在计划条目记录）；判据与样本门槛在脚本常量预注册（跑完不回改，改判据须全量重跑）：
+
+```bash
+.venv/bin/python scripts/eval-decision-quality.py all          # 五阶段依序
+.venv/bin/python scripts/eval-decision-quality.py horizon     # 决策建议 5/20/60 日视界命中率与超额
+.venv/bin/python scripts/eval-decision-quality.py valuation   # 估值信号两口径（价格代理 / 真实 PE·PB）区分度
+.venv/bin/python scripts/eval-decision-quality.py discipline  # V5：固定 −15% vs −2.5σ 止损线的触发后效果
+.venv/bin/python scripts/eval-decision-quality.py correlation # V7：窗口平均两两相关 vs 等权组合最大回撤
+```
+
+实现拆在 `_eval_decision_quality/`（primitives 常量与纯原语 / stages 五阶段 / report 产物与控制台摘要），入口只留 CLI 与原面 re-export。
+取数只经既有能力（`decision_settlement` 行情/指数序列 + `valuation_percentile` 口径函数 +
+`financial_indicator` 缓存链），不裸调 provider；只读账本与缓存，不写 `data/` 生产状态；
+产物只落 `docs/tmp/decision-quality/`（git 忽略）。首批评测结论见讨论稿 §8.1。
+
 ## 启动脚本
 
 **`launch.sh` — Linux/macOS 启动**
@@ -1418,6 +1436,11 @@ CLI 模式的便捷入口，跳过 TUI 界面，直接以命令行模式运行�
 
 # 只查指定文件 / 调整回移年数与超时
 .venv/bin/python scripts/probe-date-bombs.py --files src/test/unit/core/test_doctor.py --years 3 --timeout 600
+
+# 判读辅助：rot-suspect 文件额外打印失败断言原文（实际/期望两侧，一行一个）
+.venv/bin/python scripts/probe-date-bombs.py --all --detail
 ```
+
+**判读口径（必读）**：rot-suspect ≠ 缺陷。`--detail` 给出的「实际 vs 期望」两侧即判据——若**实际侧**的年份未被平移（如期望 `'2023-06-30'` vs 实际 `'2026-06-30'`），说明数据来自未变异的 fixture/毫秒时间戳/cassette 快照，属「期望被平移、数据没动」的伪信号；若两侧年份**同年平移**但值不同（如 `'2023-09-19'` vs `'2023-09-21'`），则是星期/节假日语义随年份改变。已完成的 47 文件全域判读结论：四类伪信号（未变异数据源 / 星期-财季语义 / 生产侧静态历史事实表 / 时间戳定值）全覆盖，**无真实时间炸弹残留**。
 
 **安全约定**（改写真实文件是唯一风险点）：只处理 git 工作区干净的文件（`--allow-dirty` 可强制）；改写前备份原文、`finally` 还原并校验 `sha256`、`atexit` 兜底（Ctrl-C / 用例崩溃也不留脏文件）；退出码 0 = 无 rot-suspect，2 = 有 rot-suspect 或超时。

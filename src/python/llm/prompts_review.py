@@ -17,6 +17,7 @@ _SYSTEM_SELF_REVIEW = """你是严格的投资复盘内容复核员。你会收�
 1. 结论与数据是否矛盾：逐条列出发现的矛盾（引用原文片段 + 说明与哪项数据冲突）；未发现时写「未发现」。
 2. 未标注的推测性表述：列出把推测当作事实陈述、或未标注不确定性的表述（引用原文片段）；未发现写「未发现」。
 3. 模块间结论是否互斥：指出相互冲突的结论对；未发现写「未发现」。
+4. 结论是否附条件：指出未附失效条件或后续观察指标的结论（引用原文片段）；未发现写「未发现」。
 
 ## 硬性禁止（违反即为无效输出）
 
@@ -80,10 +81,11 @@ def _self_review_holdings_digest(holdings_details: list | None) -> str:
     rows: list[str] = []
     for d in holdings_details[:40]:
         get = d.get if isinstance(d, dict) else lambda k, _d=d: getattr(_d, k, None)
+        raw_code = get("code")
         rows.append(
             "- {name}({code}) 市值 {mv} 盈亏 {profit} 占比 {ratio}".format(
                 name=get("name") or "?",
-                code=mask_holding_code(get("code")) or "?",
+                code=mask_holding_code(str(raw_code)) if raw_code is not None else "?",
                 mv=get("market_value") if get("market_value") is not None else get("mv"),
                 profit=get("profit"),
                 ratio=get("weight_pct") if get("weight_pct") is not None else get("ratio_pct"),

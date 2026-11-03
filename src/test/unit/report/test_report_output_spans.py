@@ -106,6 +106,42 @@ class TestFullPathPhaseSpans:
             "stop",
         ], "HTML 阶段须细分为「图表数据装配」与「页面写入」两段（整段异常偏慢时才能定位）"
 
+    def test_html_receives_decision_basis_data(self, monkeypatch, tmp_path, prep_stub):
+        """生产 HTML 路径必须透传判断依据块契约，否则块整块不渲染。"""
+        captured: dict[str, object] = {}
+
+        def _fake_html(*_a, **kwargs):
+            captured.update(kwargs)
+            return str(tmp_path / "report.html")
+
+        monkeypatch.setattr("src.python.report.html_writer.write_html_report", _fake_html)
+        _bind(monkeypatch, _RecordingPerf())
+        monkeypatch.setattr("src.python.config.features.is_feature_enabled", lambda *a, **k: False)
+        monkeypatch.setattr(rg, "_build_chart_datasets_for_report", lambda *a, **k: {})
+        basis = {"enabled": True, "summary": "x"}
+        prep_stub["decision_basis_data"] = basis
+
+        rg._generate_full_html_report(
+            [],
+            prep_stub,
+            str(tmp_path),
+            [],
+            (None, None, None, None),
+            [],
+            {},
+            True,
+            None,
+            MagicMock(),
+            False,
+            False,
+            False,
+            False,
+            None,
+            ReportResult(),
+        )
+
+        assert captured.get("decision_basis_data") == basis
+
     def test_excel_helper_records_phase(self, monkeypatch, tmp_path, prep_stub):
         perf = _RecordingPerf()
         _bind(monkeypatch, perf)
@@ -248,3 +284,76 @@ class TestLlmObservationRecorded:
         src = inspect.getsource(rg._generate_report_full)
         assert "_record_llm_context(perf, _llm_sink" in src
         assert "_usage_baseline" in src, "报告用量须按本次运行基线记账（不累加会话累计）"
+
+
+class TestDecisionBasisContractForwarding:
+    """判断依据块契约的 HTML 转发守卫：每条 HTML 调用链都必须带上该参数。
+
+    现场（用户报障「行动建议里没看到判断依据」）：full 路径与 both 路径都装配了
+    ``decision_basis_data``，但两处 ``write_html_report(...)`` 调用都漏传 → 模板
+    ``{% if _db.get("enabled") %}`` 恒假，整块静默不渲染（Excel 端正常）。
+    """
+
+    _MODULES = (
+        "src/python/report/_generation_both.py",
+        "src/python/report/_generation_full.py",
+        "src/python/report/_report_output.py",
+    )
+
+    def _source(self) -> str:
+        from pathlib import Path
+
+        return "\n".join(Path(f).read_text(encoding="utf-8") for f in self._MODULES)
+
+    def test_every_write_html_report_call_passes_contract(self):
+        """源码级调用点全覆盖：新增 HTML 调用链忘记转发即失败。"""
+        import re
+
+        calls = re.findall(r"write_html_report\(\s*\n(.*?)\n\s*\)", self._source(), re.S)
+        assert len(calls) >= 2, f"预期至少两处 HTML 调用点（both/full），实际 {len(calls)}"
+        missing = [c.strip().splitlines()[0] for c in calls if "decision_basis_data" not in c]
+        assert not missing, f"以下 HTML 调用点未转发 decision_basis_data: {missing}"
+
+    def test_both_path_builds_contract_with_peak(self):
+        """both 路径须按历史峰值重装配（风险预算的回撤现状依赖它）。"""
+        import inspect
+
+        from src.python.report import _generation_both
+
+        src = inspect.getsource(_generation_both._generate_report_both)
+        assert 'pipeline_data["decision_basis_data"] = build_decision_basis_data(' in src
+        assert "discipline_signals=" in src, "纪律触发条须与峰值同批重装配（否则纪律行空）"
+
+
+class TestDecisionReviewContractForwarding:
+    """决策复盘区块契约（decision_review_data）的 both 路径接线守卫。
+
+    现场（自审挂账）：`decision_reflection` 开启时，full 路径行动章正常渲染
+    「决策跨期反思」块，both 路径整块静默不渲染——`_generation_both.py` 既不
+    调用确定性登记挂载点，也未向 `write_html_report` 转发该契约（Excel 侧因
+    消费 `pipeline_data` 本身不难，但区块从未装配 → 双端同缺）。
+    """
+
+    _BOTH = "src/python/report/_generation_both.py"
+
+    def test_both_path_assembles_review_block_via_seams(self):
+        """both 路径须走同一对挂载点（确定性登记 + 复盘区块装配）。"""
+        from pathlib import Path
+
+        src = Path(self._BOTH).read_text(encoding="utf-8")
+        assert "record_deterministic_decisions(" in src, "both 路径缺确定性结算/登记挂载点"
+        assert "record_llm_decisions_and_review_block(" in src, "both 路径缺复盘区块装配挂载点"
+        assert src.index("record_deterministic_decisions(") < src.index("record_llm_decisions_and_review_block("), (
+            "结算须先于复盘区块装配（否则当次教训未落档）"
+        )
+
+    def test_both_path_forwards_contract_to_html(self):
+        """both 路径的 HTML 调用点须转发 decision_review_data。"""
+        import re
+        from pathlib import Path
+
+        src = Path(self._BOTH).read_text(encoding="utf-8")
+        calls = re.findall(r"write_html_report\(\s*\n(.*?)\n\s*\)", src, re.S)
+        assert calls, "未找到 both 路径的 write_html_report 调用点"
+        missing = [c.strip().splitlines()[0] for c in calls if "decision_review_data" not in c]
+        assert not missing, f"以下 HTML 调用点未转发 decision_review_data: {missing}"

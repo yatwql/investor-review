@@ -1,5 +1,5 @@
 # 投资复盘助手 — 质量控制与测试标准
-> 文档版本：0.16.15
+> 文档版本：0.16.16
 
 ---
 
@@ -480,6 +480,11 @@
 | R-OUT-14 | `src/test/unit/core/test_completion_notify.py` + `src/test/unit/cli/test_cli.py` + `src/test/unit/web/test_web_completion_notify.py` | 批 13 |
 | R-OUT-15 | `src/test/unit/report/test_summary_highlights.py` | 批 14 |
 | R-OUT-16 | `src/test/unit/web/test_server.py`（陈旧锁判据与接管 / Windows 不调 os.kill / 无法判定按文件年龄） | 批 15 |
+| R-OUT-17 | `src/test/unit/report/test_decision_basis.py` | 批 16 |
+| R-OUT-18 | `src/test/unit/core/test_eval_status.py` | 批 17 |
+| R-LLM-ER-09 | `src/test/unit/llm/test_prompts_core.py` + `src/test/unit/report/test_decision_llm_capture.py` | 批 17 |
+| R-DIS-06 | `src/test/unit/analysis/test_portfolio_constraints.py` | 批 17 |
+| R-DIS-07 | `src/test/unit/analysis/test_portfolio_constraints.py` + `src/test/unit/report/test_decision_basis.py` + `src/test/unit/report/test_decision_llm_capture.py` | 批 17 |
 | R-COR-01 | `src/test/unit/analysis/test_correlation.py` + `src/test/unit/analysis/test_correlation_edge.py` + `src/test/unit/report/test_correlation_html.py` + `src/test/unit/report/test_position_structure_sheet.py` + `src/test/unit/fetcher/test_chain.py` | 批 14 |
 | R-PERF-01 | `src/test/unit/news/test_news_aggregator.py` | 批 4 |
 | R-PERF-02 | `src/test/unit/llm/test_generate_all_llm.py` | 批 4 |

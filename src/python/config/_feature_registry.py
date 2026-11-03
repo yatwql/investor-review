@@ -123,6 +123,22 @@ class FeatureSwitchDef:
 
 feature_switch_registry: dict[str, FeatureSwitchDef] = {
     # ── 机制与诊断：LLM 输出增强实验项（写盘积累账本，experimental=True 需真实数据验证） ──
+    # ── 章节内选项：行动建议「判断依据」章内块（纯确定性事实，零 LLM；
+    #    消费点：report/decision_basis.py 装配 + action_section.html / action_sheet.py 双端 ──
+    "decision_basis": FeatureSwitchDef(
+        "判断依据（行动章内块）",
+        "行动建议章内的确定性事实块：信号清单/置信度/风险预算/纪律/结算摘要",
+        GROUP_CHAPTER_OPTIONS,
+        True,
+        True,
+    ),
+    "portfolio_constraints": FeatureSwitchDef(
+        "集中度/相关性约束",
+        "按可配置上限标注单品种/行业/相关性超限（只标注不阻断；阈值需显式配置）",
+        GROUP_MECHANISM,
+        False,
+        True,
+    ),
     "decision_reflection": FeatureSwitchDef(
         "决策跨期反思闭环",
         "登记决策 → 真实行情结算命中率 → 教训回灌专家复盘提示词",

@@ -37,6 +37,19 @@ def _clr(text: str, color: str) -> str:
     return f"{color}{text}{_RESET}" if _should_color() else text
 
 
+def _fmt_duration(seconds: float) -> str:
+    """耗时上屏口径：亚秒级改用毫秒，避免缓存全命中时整表都是 0.0s。
+
+    排行表按「毫秒级差异」看才有意义（同一台机器冷/热两档动辄差两个数量级），
+    统一保留一位小数会把 < 50ms 的阶段全部压成 0.0s；毫秒口径下仍能看出谁最慢。
+    """
+    if seconds < 0.001:
+        return "<1ms"
+    if seconds < 1:
+        return f"{round(seconds * 1000):.0f}ms"
+    return f"{seconds:.1f}s"
+
+
 class CliProgressReporter(ProgressReporter):
     """CLI 进度报告器。
 
@@ -135,13 +148,13 @@ class CliProgressReporter(ProgressReporter):
         total = sum(merged.values())
 
         lines: list[str] = []
-        lines.append(f"  模块耗时排行（总计 {total:.1f}s）")
+        lines.append(f"  模块耗时排行（总计 {_fmt_duration(total)}）")
         sorted_records = sorted(merged.items(), key=lambda x: -x[1])
         for label, t in sorted_records:
             pct = t / total * 100 if total > 0 else 0
             bar_len = int(pct / 100 * 24)
             bar = "█" * bar_len + "░" * (24 - bar_len)
-            lines.append(f"  {label:<18s} {t:>6.1f}s {pct:>5.1f}% {bar}")
+            lines.append(f"  {label:<18s} {_fmt_duration(t):>7s} {pct:>5.1f}% {bar}")
 
         for line in lines:
             _logger.info(line)

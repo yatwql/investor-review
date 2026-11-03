@@ -43,10 +43,17 @@ _TRADING_CALENDAR_AKSHARE_LOCK = threading.Lock()
 #: 进程内日历 memo：(缓存文件指纹, 到期 monotonic, 日期集合)；None = 未装载
 _CAL_MEMO: tuple[tuple[int, int] | None, float, frozenset[str]] | None = None
 
+#: 取数失败冷却（秒）：失败后同一进程内不再重复探源（见 _calendar_failure_mark）
+_CAL_FAILURE_COOLDOWN_SECONDS = 300.0
+
+#: 失败冷却截止时刻（monotonic）；None = 无失败记录
+_CAL_FAILURE_UNTIL: float | None = None
+
 __all__ = [
     "_count_trading_days_back",
     "_get_trading_calendar",
     "_is_trading_day",
+    "cached_trading_days",
     "count_trading_days_elapsed",
     "register_trading_days_fallback",
     "elapsed_trading_days_with_natural_fallback",
@@ -102,9 +109,56 @@ def _calendar_memo_store(dates: set[str]) -> None:
 
 
 def _reset_calendar_memo() -> None:
-    """清空进程内 memo（测试隔离与长驻进程手动复位用）。"""
-    global _CAL_MEMO
+    """清空进程内 memo 与失败冷却（测试隔离与长驻进程手动复位用）。"""
+    global _CAL_MEMO, _CAL_FAILURE_UNTIL
     _CAL_MEMO = None
+    _CAL_FAILURE_UNTIL = None
+
+
+def _calendar_failure_active() -> bool:
+    """失败冷却是否生效（生效期内直接回落空集合，不读盘不取数）。"""
+    return _CAL_FAILURE_UNTIL is not None and time.monotonic() < _CAL_FAILURE_UNTIL
+
+
+def _calendar_failure_clear() -> None:
+    """清除失败冷却（取数成功后调用）。"""
+    global _CAL_FAILURE_UNTIL
+    _CAL_FAILURE_UNTIL = None
+
+
+def _calendar_failure_mark() -> None:
+    """记一次取数失败，冷却期内不再探源。
+
+    日历拿不到时各调用方都会回落到「排除周六日」的周度判断，重探不改变结果，
+    却会让同一缓存键在单轮运行里反复未命中（实测 6 次），把「同键未命中」告警
+    刷成噪音——该告警本应只指向真实的重探/失效问题。
+    """
+    global _CAL_FAILURE_UNTIL
+    _CAL_FAILURE_UNTIL = time.monotonic() + _CAL_FAILURE_COOLDOWN_SECONDS
+
+
+def cached_trading_days() -> list[str]:
+    """已缓存交易日（升序）；未缓存或失败冷却中返回空列表（**不触网**）。
+
+    与 `_get_trading_calendar` 共用同一进程内 memo：需要「只看已缓存日历、绝不取数」
+    的调用方（数据新鲜度判定等）走本出口，避免它们各自 `cache.get` 反复读盘——
+    那会让同一缓存键在单轮运行里被记 6 次未命中，把「同键未命中」告警变成噪音。
+    """
+    memo = _calendar_memo_lookup()
+    if memo is not None:
+        return sorted(memo)
+    if _calendar_failure_active():
+        return []
+    try:
+        cached = cache.get(_TRADING_CALENDAR_CACHE_KEY, cache.get_ttl("calendar"))
+    except Exception:  # 缓存不可用时按「无日历」处理，回落自然日阈值
+        return []
+    if not isinstance(cached, list):
+        return []
+    dates = {str(day)[:10] for day in cached if day}
+    if dates:
+        _calendar_memo_store(dates)
+    return sorted(dates)
 
 
 def _get_trading_calendar() -> set[str]:
@@ -128,14 +182,17 @@ def _get_trading_calendar() -> set[str]:
     if memo is not None:
         return memo
 
-    cached = cache.get(_TRADING_CALENDAR_CACHE_KEY, cache.get_ttl("calendar"))
-    if cached is not None and isinstance(cached, list):
-        dates = set(cached)
-        _calendar_memo_store(dates)
-        return dates
+    if _calendar_failure_active():
+        return set()
 
+    # 首次装载走单一入口：探测缓存的 `cache.get` 也放进锁内。否则并发线程会在
+    # 谁都没填 memo 之前各读一次（实测 6 个线程 → 同一键记 6 次未命中，把
+    # 「同键未命中」告警刷成噪音）。锁内二次检查后只有拿锁者读盘/取数，
+    # 其余线程拿锁即命中 memo，代价是「冷启动首读串行」这一次。
     with _TRADING_CALENDAR_AKSHARE_LOCK:
-        # 双重检查：等待锁期间其他线程可能已写入缓存
+        memo = _calendar_memo_lookup()
+        if memo is not None:
+            return memo
         cached = cache.get(_TRADING_CALENDAR_CACHE_KEY, cache.get_ttl("calendar"))
         if cached is not None and isinstance(cached, list):
             dates = set(cached)
@@ -149,6 +206,7 @@ def _get_trading_calendar() -> set[str]:
             if dates:
                 cache.set(_TRADING_CALENDAR_CACHE_KEY, sorted(dates))
                 _calendar_memo_store(dates)
+                _calendar_failure_clear()
                 logger.info("交易日历已更新（%d 个交易日）", len(dates))
                 return dates
         except Exception as exc:
@@ -158,8 +216,12 @@ def _get_trading_calendar() -> set[str]:
     # 由调用方回退简易周度判断）。兜底函数由 fetcher 侧导入时经
     # register_trading_days_fallback 注入（core 不反向 import providers）；
     # 未注册 → 直接返回空集合（降级语义与兜底失败一致）。
+    fallback = _TRADING_DAYS_FALLBACK
+    if fallback is None:
+        _calendar_failure_mark()
+        return set()
     try:
-        data = _TRADING_DAYS_FALLBACK() or {}
+        data = fallback() or {}
         dates = {
             str(item.get("date"))
             for item in (data.get("item") or [])
@@ -167,11 +229,14 @@ def _get_trading_calendar() -> set[str]:
         }
     except Exception as exc:  # 兜底源不可用同样降级，不抛
         logger.warning("交易日历兜底失败: %s", exc)
+        _calendar_failure_mark()
         return set()
     if dates:
         cache.set(_TRADING_CALENDAR_CACHE_KEY, sorted(dates))
+        _calendar_failure_clear()
         logger.info("交易日历已更新（官方序列兜底，%d 个交易日）", len(dates))
         return dates
+    _calendar_failure_mark()
     return set()
 
 

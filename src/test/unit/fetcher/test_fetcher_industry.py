@@ -40,6 +40,7 @@ class TestIndustryTransform(unittest.TestCase):
             "concept_ids": ["BK0500", "BK0600"],
         }
         result = self._call(raw)
+        assert result is not None
         self.assertEqual(result["code"], "000001")
         self.assertEqual(result["industry"], "银行")
         self.assertEqual(len(result["concepts"]), 2)
@@ -55,6 +56,7 @@ class TestIndustryTransform(unittest.TestCase):
     def test_missing_fields(self):
         """缺字段 → 不抛异常。"""
         result = self._call({"code": "000001"})
+        assert result is not None
         self.assertEqual(result["code"], "000001")
         self.assertEqual(result["industry"], "")
         self.assertEqual(result["concepts"], [])
@@ -63,11 +65,13 @@ class TestIndustryTransform(unittest.TestCase):
         """申万层级后缀（银行Ⅱ/白酒Ⅱ/国有大型银行Ⅱ）→ 剥离为干净名。"""
         for raw_name, expected in [("银行Ⅱ", "银行"), ("白酒Ⅱ", "白酒"), ("国有大型银行Ⅱ", "国有大型银行")]:
             result = self._call({"code": "000001", "industry": raw_name})
+            assert result is not None
             self.assertEqual(result["industry"], expected, f"{raw_name} → {expected}")
 
     def test_keeps_plain_name(self):
         """无层级后缀的行业名（电力）→ 原样保留。"""
         result = self._call({"code": "600900", "industry": "电力"})
+        assert result is not None
         self.assertEqual(result["industry"], "电力")
 
 
@@ -88,7 +92,7 @@ class TestStripHierarchySuffix(unittest.TestCase):
 
         self.assertEqual(strip_hierarchy_suffix("电力"), "电力")
         self.assertEqual(strip_hierarchy_suffix(""), "")
-        self.assertIsNone(strip_hierarchy_suffix(None))
+        assert strip_hierarchy_suffix(None) is None
 
 
 class TestFetchIndustryData(unittest.TestCase):
@@ -105,6 +109,7 @@ class TestFetchIndustryData(unittest.TestCase):
         from src.python.fetcher.industry import fetch_industry_data
 
         result = fetch_industry_data("000001")
+        assert result is not None
         self.assertEqual(result["industry"], "银行")
         mock_fallback.assert_called_once()
 
@@ -134,6 +139,7 @@ class TestFetchIndustryData(unittest.TestCase):
         from src.python.fetcher.industry import fetch_industry_data
 
         result = fetch_industry_data("000001")
+        assert result is not None
         self.assertEqual(result["industry"], "银行")
 
 
@@ -148,6 +154,7 @@ class TestIndustryTransformValuationPassthrough(unittest.TestCase):
             {"code": "600900", "industry": "电力", "pe": 12.5, "pb": 1.2, "market_cap": 1e11}, "eastmoney"
         )
 
+        assert result is not None
         self.assertEqual(result["pe"], 12.5)
         self.assertEqual(result["pb"], 1.2)
         self.assertEqual(result["market_cap"], 1e11)
@@ -202,6 +209,7 @@ class TestFetchValuationFields(unittest.TestCase):
         mock_fetch.return_value = {"industry": "电力", "pe": 20.0, "pb": 2.0}
 
         result = fetch_valuation_fields("600900")
+        assert result is not None
         self.assertEqual(result["pe"], 20.0)
         mock_fetch.assert_called_once_with("600900")
 
@@ -219,7 +227,7 @@ class TestBatchFetchIndustryData(unittest.TestCase):
         """全空/无效代码 → 空字典。"""
         from src.python.fetcher.industry import batch_fetch_industry_data
 
-        self.assertEqual(batch_fetch_industry_data(["", " ", None]), {})
+        self.assertEqual(batch_fetch_industry_data(["", " ", ""]), {})
 
     @patch("src.python.fetcher.industry.fetch_industry_data")
     def test_batch_success(self, mock_fetch):
@@ -261,14 +269,15 @@ class TestBatchFetchIndustryData(unittest.TestCase):
     @patch("src.python.fetcher.industry.fetch_industry_data", return_value=None)
     def test_us_stock_filtered_out(self, mock_fetch):
         """美股代码自动过滤，不调 API。"""
+        from src.python.core.provider_registry import get_registry
         from src.python.fetcher.industry import batch_fetch_industry_data
 
+        get_registry().session_cache_clear("industry")
         result = batch_fetch_industry_data(["600900", "AAPL", "00700", "PEP"])
-        # AAPL/00700/PEP 被过滤，只调用了 600900（首次失败后重试一次）
         self.assertEqual(result, {})
+        # AAPL/00700/PEP 被过滤；600900 失败 → 批内重试确实再取一次（双重降级治理"),
+        # 但重试走的是绕开会话缓存的路径，故首次失败不会把重试架空
         self.assertEqual(mock_fetch.call_count, 2)
-        # 600900 两次均返回 None，全空
-        self.assertEqual(result, {})
 
     @patch("src.python.fetcher.industry.fetch_industry_data")
     def test_all_us_stocks_return_empty(self, mock_fetch):
@@ -342,3 +351,82 @@ class TestBatchFetchIndustryDataBroken(unittest.TestCase):
         result = batch_fetch_industry_data(["000001"])
         self.assertEqual(len(result), 1)
         mock_fetch.assert_called()
+
+
+class TestIndustrySessionCacheNegative(unittest.TestCase):
+    """会话缓存须记住「取不到」的结论，一次运行内同一代码不重探。
+
+    现场（README 截图复核）：演示组合里的场外基金 005827 被上层逐只调用行业取数，
+    失败结果不写会话缓存 → 同一键在一轮报告里未命中 18 次，触发「同键未命中 ≥3 次」
+    告警（该告警本应指向缓存键设计问题，被这类重探污染）。
+    """
+
+    def setUp(self):
+        from src.python.core.provider_registry import get_registry
+
+        get_registry().session_cache_clear("industry")
+
+    @patch("src.python.fetcher.industry.fetch_industry_data")
+    def test_failure_probed_once_per_run(self, mock_fetch):
+        mock_fetch.return_value = None
+        from src.python.fetcher.industry import fetch_industry_data_cached
+
+        assert fetch_industry_data_cached("005827") is None
+        assert fetch_industry_data_cached("005827") is None
+        assert fetch_industry_data_cached("005827") is None
+        self.assertEqual(mock_fetch.call_count, 1, "失败结论须进会话缓存，否则每轮重探")
+
+    @patch("src.python.fetcher.industry.fetch_industry_data")
+    def test_success_still_cached(self, mock_fetch):
+        mock_fetch.return_value = {"code": "600900", "industry": "电力"}
+        from src.python.fetcher.industry import fetch_industry_data_cached
+
+        first = fetch_industry_data_cached("600900")
+        second = fetch_industry_data_cached("600900")
+        assert first is not None and second is not None
+        self.assertEqual(first["industry"], "电力")
+        self.assertEqual(second["industry"], "电力")
+        self.assertEqual(mock_fetch.call_count, 1)
+
+
+class TestBatchIndustryNegativeCache(unittest.TestCase):
+    """批量路径也须共享会话缓存：失败代码跨阶段不重探（「同键未命中」告警才有指向性）。"""
+
+    def setUp(self):
+        from src.python.core.provider_registry import get_registry
+
+        get_registry().session_cache_clear("industry")
+
+    @patch("src.python.fetcher.industry.fetch_industry_data", return_value=None)
+    def test_repeated_batch_calls_probe_once(self, mock_fetch):
+        """首批 1 次初探 + 1 次重试；第二批直接吃会话缓存结论，不再重探。"""
+        from src.python.fetcher.industry import batch_fetch_industry_data
+
+        assert batch_fetch_industry_data(["005827"]) == {}
+        first_round_calls = mock_fetch.call_count
+        assert first_round_calls == 2, "初探 1 次 + 重试 1 次（重试不得被失败记忆架空）"
+        assert batch_fetch_industry_data(["005827"]) == {}
+        self.assertEqual(mock_fetch.call_count, first_round_calls, "跨批/跨阶段只探一次")
+
+
+class TestRetryNotAirgappedBySessionCache(unittest.TestCase):
+    """会话缓存记住失败结论后，批内重试仍须真取数（不得空转）。
+
+    双重降级治理：链路失败必须真重试，只有最终结论才进会话缓存；若重试也走
+    `fetch_industry_data_cached`，首次失败被记忆 → 重试瞬间返回 None，
+    「失败后重试」形同虚设。
+    """
+
+    def setUp(self):
+        from src.python.core.provider_registry import get_registry
+
+        get_registry().session_cache_clear("industry")
+
+    @patch("src.python.fetcher.industry.fetch_industry_data")
+    def test_retry_recovers_after_first_failure(self, mock_fetch):
+        mock_fetch.side_effect = [None, {"code": "600900", "industry": "电力"}]
+        from src.python.fetcher.industry import batch_fetch_industry_data
+
+        result = batch_fetch_industry_data(["600900"])
+        self.assertEqual(result["600900"]["industry"], "电力")
+        self.assertEqual(mock_fetch.call_count, 2, "重试必须真的再取一次")

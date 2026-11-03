@@ -151,9 +151,11 @@ def _cached_trading_days(calendar: list | None = None) -> list[str]:
     """已缓存的交易日列表（升序）；未缓存返回空列表（**不触网**）。"""
     if calendar is None:
         try:
-            from src.python import cache
+            # 经 calendar 模块的统一出口（共用进程内 memo，且失败冷却中不再读盘）：
+            # 直接 cache.get 会让同一键在单轮运行里被反复记为未命中。
+            from src.python.core.trading_calendar import cached_trading_days
 
-            calendar = cache.get("trading_calendar", cache.get_ttl("calendar"))
+            return cached_trading_days()
         except Exception:  # 缓存不可用时按「无日历」处理，回落自然日阈值
             calendar = None
     if not isinstance(calendar, list):
@@ -170,7 +172,7 @@ def header_stale_threshold_days(config: dict | None = None) -> int:
             config = get_config() or {}
         degradation = (config or {}).get("degradation") or {}
         values = [
-            int(tier.get("stale_days"))
+            int(str(tier.get("stale_days", "")).strip())
             for tier in degradation.values()
             if isinstance(tier, dict) and str(tier.get("stale_days", "")).strip().isdigit()
         ]

@@ -232,6 +232,7 @@ def _generate_full_html_report(
             position_status=position_status,
             data_freshness=data_freshness,
             action_data=action_data,
+            decision_basis_data=prep.get("decision_basis_data"),
             prosperity_framework_data=prosperity_framework_data,
             crisis_annotation_data=crisis_annotation_data,
             risk_adjusted_excess_data=risk_adjusted_excess_data,

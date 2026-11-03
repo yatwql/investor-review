@@ -400,6 +400,16 @@ def _check_experimental_features() -> list[dict[str, Any]]:
     return [_item(GROUP_FEATURES, "实验功能", True, f"已启用 {len(enabled)} 项 — {detail}")]
 
 
+def _check_eval_status() -> list[dict[str, Any]]:
+    """决策质量回测的最近执行状态（信息性，不影响自检结论）。"""
+    try:
+        from src.python.core.eval_status import format_eval_hint
+
+        return [_item(GROUP_LOG_CACHE, "决策质量回测", True, format_eval_hint())]
+    except Exception as exc:  # noqa: BLE001
+        return [_item(GROUP_LOG_CACHE, "决策质量回测", False, f"读取失败: {type(exc).__name__}: {exc}")]
+
+
 def _check_report_qa_usage() -> list[dict[str, Any]]:
     """报告追问（实验项）的使用与效果概览（信息性，不影响自检结论）。
 
@@ -442,6 +452,14 @@ def _check_review_ledger_overview() -> list[dict[str, Any]]:
                 _msg = f"已结算 {_settled} 条 / 待结算 {_pending} 条 — {_acc_text}"
                 if not _sufficient and _accuracy is not None:
                     _msg += "（样本未达可信阈值，仅供观察）"
+                # 多视界补充（5 日为口径基准，仅列其余视界已结数）
+                _long = {
+                    h: v.get("settled", 0)
+                    for h, v in (_fold.get("by_horizon") or {}).items()
+                    if h != decision_ledger.MIN_SETTLE_BARS and v.get("settled", 0) > 0
+                }
+                if _long:
+                    _msg += " · " + " · ".join(f"{h} 日视界已结 {n} 条" for h, n in sorted(_long.items()))
             items.append(_item(GROUP_FEATURES, "决策复盘账本", True, _msg))
         except Exception as exc:  # noqa: BLE001
             items.append(_item(GROUP_FEATURES, "决策复盘账本", False, f"读取失败: {type(exc).__name__}: {exc}"))
@@ -639,6 +657,7 @@ def run_doctor_checks(*, include_network: bool = True, max_timeout: float = 8.0)
     results.extend(_check_directories())
     results.extend(_check_logs_and_cache())
     results.extend(_check_experimental_features())
+    results.extend(_check_eval_status())
     results.extend(_check_report_qa_usage())
     results.extend(_check_review_ledger_overview())
     results.extend(_check_source_adapters())

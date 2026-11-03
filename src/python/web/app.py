@@ -20,6 +20,7 @@ import time
 from uuid import uuid4
 
 from flask import Flask, g, request
+from flask.json.provider import DefaultJSONProvider
 
 from src.python.core.constants import PROJECT_ROOT
 from src.python.web.handlers import _err, create_handlers
@@ -57,8 +58,12 @@ def create_app(run_manager=None) -> Flask:
         static_url_path="/static",
     )
     app.config["MAX_CONTENT_LENGTH"] = _MAX_BYTES
-    # 中文 JSON 不转义（对齐仓库中文文案惯例）
-    app.json.ensure_ascii = False
+    # 中文 JSON 不转义（对齐仓库中文文案惯例）。
+    # flask 的类型标注把 app.json 声明为基类 JSONProvider，而 ensure_ascii 实际
+    # 定义在 DefaultJSONProvider 上（未替换 provider 时运行期即该子类）——用
+    # isinstance 缩小类型，既过静态检查又保住自定义 provider 时不踩属性缺失。
+    if isinstance(app.json, DefaultJSONProvider):
+        app.json.ensure_ascii = False
 
     # werkzeug 自带访问日志纳入 invest logger 统一通道：调低级别避免双通道噪音
     logging.getLogger("werkzeug").setLevel(logging.WARNING)
@@ -72,11 +77,9 @@ def create_app(run_manager=None) -> Flask:
     @app.after_request
     def _log_access(response):
         # 隐私边界：仅记录 method/path/状态/耗时，不记录请求体/文件名/持仓内容
-        duration_ms = 0.0
-        try:
-            duration_ms = (time.perf_counter() - g.get("_start_ts", time.perf_counter())) * 1000
-        except Exception:
-            pass
+        # `g.get` 未取到 _start_ts 时以当前时刻兜底（耗时记 0），无需异常兜底——
+        # perf_counter 不抛异常，外层 try/except 属不可达分支的死防御代码。
+        duration_ms = (time.perf_counter() - g.get("_start_ts", time.perf_counter())) * 1000
         logger.info(
             "[web %s] %s %s -> %s (%dms)",
             getattr(g, "request_id", "-"),

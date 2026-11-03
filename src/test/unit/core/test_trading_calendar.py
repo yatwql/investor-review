@@ -179,16 +179,16 @@ class TestElapsedTradingDaysWithNaturalFallback:
         """end 早于 start（异常数据）→ 差值钳为 0，不为负。"""
         from src.python.core import trading_calendar as tc
 
-        tc.register_trading_days_fallback(lambda: None)
+        tc.register_trading_days_fallback(lambda: {})
         assert tc.elapsed_trading_days_with_natural_fallback("2024-12-27", "2024-12-20") == 0
 
     def test_unparseable_dates_return_zero(self):
         """两端日期均不可解析 → 0（不中断展示，且不会为零值误判崩溃）。"""
         from src.python.core import trading_calendar as tc
 
-        tc.register_trading_days_fallback(lambda: None)
+        tc.register_trading_days_fallback(lambda: {})
         assert tc.elapsed_trading_days_with_natural_fallback("not-a-date", "2024-12-27") == 0
-        assert tc.elapsed_trading_days_with_natural_fallback("", None) == 0
+        assert tc.elapsed_trading_days_with_natural_fallback("", "bad-end") == 0
 
     def test_trading_calendar_available_counts_trading_days(self, monkeypatch):
         """日历可用 → 按交易日计（扣除周末/节假日）。"""
@@ -262,3 +262,102 @@ class TestCalendarProcessMemo:
         first = tc._get_trading_calendar()
         first.discard("2026-09-17")
         assert tc._get_trading_calendar() == {"2026-09-17"}
+
+
+class TestCalendarFailureCooldown:
+    """日历取不到时须记失败冷却：同一进程内不重复探源（否则同键未命中告警成噪音）。
+
+    现场（README 截图复核）：演示报告一轮内 `trading_calendar` 同一缓存键未命中 6 次，
+    每次都重新尝试 akshare + 兜底源；而日历缺失时调用方本就回落周度判断，重探不改变结果。
+    """
+
+    def _fail_asis(self):
+        """akshare 与兜底源同时不可用（真实失败态）。"""
+        from unittest.mock import patch as _patch
+
+        return [
+            _patch.dict(sys.modules, {"akshare": None}),
+            _patch("src.python.core.trading_calendar._TRADING_DAYS_FALLBACK", None),
+            _patch("src.python.core.trading_calendar.cache.get", return_value=None),
+        ]
+
+    def test_repeated_calls_probe_once_within_cooldown(self):
+        from src.python.core import trading_calendar as tc
+
+        tc._reset_calendar_memo()
+        patches = self._fail_asis()
+        for p in patches:
+            p.start()
+        try:
+            assert tc._get_trading_calendar() == set()
+            assert tc._calendar_failure_active() is True
+            assert tc._get_trading_calendar() == set()
+            assert tc._get_trading_calendar() == set()
+        finally:
+            for p in patches:
+                p.stop()
+            tc._reset_calendar_memo()
+
+    def test_cooldown_expires_and_retries(self):
+        from unittest.mock import patch as _patch
+
+        from src.python.core import trading_calendar as tc
+
+        tc._reset_calendar_memo()
+        with (
+            _patch.object(tc, "_CAL_FAILURE_COOLDOWN_SECONDS", 60.0),
+            _patch.object(tc.time, "monotonic", return_value=1000.0),
+        ):
+            tc._calendar_failure_mark()
+            assert tc._calendar_failure_active() is True
+        with _patch.object(tc.time, "monotonic", return_value=1061.0):
+            assert tc._calendar_failure_active() is False
+        tc._reset_calendar_memo()
+
+
+class TestCachedTradingDaysSingleSource:
+    """「只看已缓存日历」的调用方须走统一出口：共用 memo、不重复读盘、不触网。"""
+
+    def test_repeated_reads_hit_memo_once(self):
+        from unittest.mock import patch as _patch
+
+        from src.python.core import trading_calendar as tc
+
+        tc._reset_calendar_memo()
+        calls = []
+
+        def _fake_get(key, ttl=None):
+            calls.append(key)
+            return ["2026-11-02", "2026-11-03"]
+
+        with (
+            _patch.object(tc.cache, "get", side_effect=_fake_get),
+            _patch.object(tc.cache, "get_ttl", return_value=86400.0),
+        ):
+            assert tc.cached_trading_days() == ["2026-11-02", "2026-11-03"]
+            assert tc.cached_trading_days() == ["2026-11-02", "2026-11-03"]
+        assert len(calls) == 1, "第二次起须由进程内 memo 供给，不再读缓存文件"
+        tc._reset_calendar_memo()
+
+    def test_never_fetches_when_cache_empty(self):
+        from unittest.mock import patch as _patch
+
+        from src.python.core import trading_calendar as tc
+
+        tc._reset_calendar_memo()
+        with (
+            _patch.object(tc.cache, "get", return_value=None),
+            _patch.object(tc, "_get_trading_calendar", side_effect=AssertionError("不得触网")),
+        ):
+            assert tc.cached_trading_days() == []
+        tc._reset_calendar_memo()
+
+    def test_data_freshness_uses_shared_exit(self):
+        """数据新鲜度判定经统一出口取值（不再各自 cache.get 同一键）。"""
+        import inspect
+
+        from src.python.core import data_freshness
+
+        src = inspect.getsource(data_freshness._cached_trading_days)
+        assert "cached_trading_days" in src
+        assert 'cache.get("trading_calendar"' not in src

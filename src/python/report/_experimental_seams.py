@@ -103,9 +103,13 @@ def record_deterministic_decisions(prep: dict, action_data: Any, reporter: Progr
         from src.python.report import decision_record, decision_settlement
 
         _report_date = prep["today_str"]
-        # ① 结算到期 pending 决策（幂等：同 decision 只结一次；未到期/行情
-        #    不可得保持 pending；无基线的早期登记暂缓不结）。
-        _settle = decision_settlement.settle_pending_decisions(report_date=_report_date)
+        # ① 结算到期 pending 决策（幂等：按 (decision, 目标视界) 判重；未到期/
+        #    行情不可得保持未结；无基线的早期登记暂缓不结）。多视界 5/20/60
+        #    随报告运行推进，长视界成熟后自动回补。
+        _settle = decision_settlement.settle_pending_decisions(
+            report_date=_report_date,
+            horizons=decision_ledger.SETTLE_HORIZONS,
+        )
         if _settle.get("settled"):
             reporter.ok(f"决策复盘：已结算 {_settle['settled']} 条到期决策")
         elif _settle.get("deferred") or _settle.get("skipped"):
@@ -147,10 +151,14 @@ def record_llm_decisions_and_review_block(
         from src.python.report import decision_llm_capture, decision_review_block
 
         if enable_llm and llm_content and len(llm_content) > 1 and llm_content[1]:
+            from src.python.analysis.portfolio_constraints import evaluate_constraints
+
+            _constraints = evaluate_constraints(prep.get("holdings_details"), prep.get("total_mv", 0))
             _llm_reg = decision_llm_capture.register_llm_decisions(
                 llm_content[1],
                 prep.get("holdings_details"),
                 report_date=prep["today_str"],
+                constrained_codes=set(_constraints.get("breached_codes") or []),
             )
             if _llm_reg.get("registered"):
                 reporter.ok(f"决策复盘：登记 {_llm_reg['registered']} 条 LLM 操作建议")

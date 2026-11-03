@@ -435,6 +435,10 @@ def price_kind_from_quote(data: dict | None) -> str | None:
     return PRICE_KIND_EXCHANGE
 
 
+#: 行情会话缓存域（同一次运行内同标的一次取数，见 `fetch_market_data`）
+_PRICE_SESSION_DOMAIN = "price"
+
+
 def fetch_market_data(code: str, expected_name: str = "") -> dict[str, Any] | None:
     """获取一只证券的市场行情（按代码类型自动路由 Provider Chain）。
 
@@ -450,7 +454,21 @@ def fetch_market_data(code: str, expected_name: str = "") -> dict[str, Any] | No
         None: 全部接口失败
     """
     code = code.strip()
+    # 会话级 single-flight：同一次运行内同一标的只取一次（失败也记）。
+    # 报告侧三个阶段（行情核算 / 风格判定 / 穿透）会并行查同一只标的，仅靠文件缓存
+    # 各自探测会让同一键记 3 次未命中（实测 price_stock_005827 ×3），把
+    # 「同键未命中」告警刷成噪音；行情在一次运行内不会变，缓存不改变语义。
+    from src.python.core.provider_registry import get_registry
 
+    return get_registry().session_cache_fetch(
+        _PRICE_SESSION_DOMAIN,
+        f"{code}|{(expected_name or '').strip()}",
+        lambda: _fetch_market_data_uncached(code, expected_name),
+    )
+
+
+def _fetch_market_data_uncached(code: str, expected_name: str = "") -> dict[str, Any] | None:
+    """`fetch_market_data` 的取数主体（不含会话缓存，供 single-flight 调用）。"""
     # 按代码类型选择数据路由（缓存键随路由分域，避免同代码跨路由串味）
     data_type, _needs_degrade = _route_price_request(code, expected_name)
 

@@ -62,6 +62,10 @@ DIRECTION_SHORT = -1
 DIRECTION_FLAT = 0
 
 MIN_SETTLE_BARS = 5  # 决策后至少 N 个交易日后才允许结算
+SETTLE_HORIZONS: tuple[int, ...] = (MIN_SETTLE_BARS, 20, 60)
+"""多视界结算目标（交易日）：5 日为既有口径与命中率统计基准；20/60 日为长视界
+观察（判断依据块结算摘要用）。同一决策可按视界各落一条结算事件，判重键为
+`(decision_id, 目标视界)`——见 `fold_ledger` 的 `settlements` 与结算事件 `target_horizon`。"""
 DIRECTION_THRESHOLD = 0.015  # |区间涨跌| 低于该值判「平盘不判定」，防噪声计为命中
 MEANINGFUL_SAMPLE = 20  # 有效样本 ≥ 该值才给出正式命中率结论
 MIN_LESSON_SAMPLE = 3  # 方向判定样本低于该值不产出教训块（防噪声误导）
@@ -93,7 +97,7 @@ def is_active() -> bool:
 # ── 原子 JSONL 追加（对齐 src/python/core/perf.py _append_jsonl_atomic）──────
 
 
-def _append_event_atomic(event: dict[str, Any], path: str | None = None) -> None:
+def _append_event_atomic(event: dict[str, Any], path: str | None = None) -> bool:
     """向事件账本原子追加一行 JSON（原语见 `core/jsonl_store.py`）。
 
     策略：读全部现有内容 → 追加新行 → tempfile.mkstemp + os.replace 写回，
@@ -136,6 +140,7 @@ def append_decision(
     magnitude: str = "mid",
     report_date: str | None = None,
     baseline_close: float | None = None,
+    constrained: bool | None = None,
     path: str | None = None,
 ) -> str:
     """登记一条 pending 决策，返回 decision_id。
@@ -146,6 +151,8 @@ def append_decision(
         magnitude: 强度/优先级（high/mid/low）
         report_date: 登记运行所在交易日（缺省取本地当日）
         baseline_close: 登记日收盘（结算基线，由 report 层拉取当日行情给出）
+        constrained: 建议是否触及集中度/相关性约束（只标注不阻断；缺省不写字段，
+            历史事件无该字段一律按「未拦截」读）
     """
     decision_id = uuid.uuid4().hex[:12]
     event: dict[str, Any] = {
@@ -163,6 +170,8 @@ def append_decision(
     }
     if baseline_close is not None:
         event["baseline_close"] = baseline_close
+    if constrained:
+        event["constrained"] = True
     _append_event_atomic(event, path=path)
     return decision_id
 
@@ -175,6 +184,7 @@ def append_settlement(
     direction_hit: bool | None = None,
     settle_date: str | None = None,
     horizon_bars: int = 0,
+    target_horizon: int | None = None,
     bench_return: float | None = None,
     path: str | None = None,
 ) -> None:
@@ -184,6 +194,9 @@ def append_settlement(
         outcome: OUTCOME_HIT/MISS/FLAT/GAP
         direction_hit: 方向是否命中（flat/gap 为 None）
         settle_date: 结算运行所在交易日
+        horizon_bars: 实际覆盖的后置交易日 bar 数（结算终点口径）
+        target_horizon: 目标视界（多视界落账的判重键；缺省视为 5 日口径——
+            历史事件无此字段，fold 统一按 MIN_SETTLE_BARS 归属）
     """
     event: dict[str, Any] = {
         "event": EVENT_SETTLEMENT,
@@ -194,6 +207,8 @@ def append_settlement(
         "outcome": outcome,
         "created_at": _now_iso(),
     }
+    if target_horizon is not None:
+        event["target_horizon"] = target_horizon
     if direction_hit is not None:
         event["direction_hit"] = direction_hit
     if bench_return is not None:
@@ -258,6 +273,14 @@ def classify_direction_outcome(
 # ── fold：decision + settlement 合并统计（不可变聚合）───
 
 
+def _settlement_horizon(event: dict[str, Any]) -> int:
+    """结算事件归属的目标视界（历史事件无 `target_horizon` → 按 5 日口径归属）。"""
+    try:
+        return int(event.get("target_horizon") or MIN_SETTLE_BARS)
+    except (TypeError, ValueError):
+        return MIN_SETTLE_BARS
+
+
 def fold_ledger(
     events: Iterable[dict[str, Any]] | None = None,
     *,
@@ -265,31 +288,41 @@ def fold_ledger(
 ) -> dict[str, Any]:
     """合并账本事件 → 统计摘要。
 
-    以 decision_id 关联 settlement；未结算决策保持 pending。
+    结算按 `(decision_id, 目标视界)` 关联；`settlement` 仍为**口径基准**（5 日
+    视界——历史事件无 `target_horizon` 亦归 5 日），既有消费面（命中率/教训/
+    复盘块/doctor）不变；`settlements` 为 `{目标视界: 结算事件}` 全量映射
+    （多视界摘要用）。未结算决策保持 pending。
     返回新字典，不修改入参。结构：
-        decisions     已解析决策列表（含 settlement 字段，未结为 None）
-        pending_count / settled_count
-        counts        {hit, miss, flat, gap}（仅方向性决策计数）
+        decisions     已解析决策列表（含 settlement/settlements 字段）
+        pending_count / settled_count（按口径基准视界）
+        counts        {hit, miss, flat, gap}（仅方向性决策计数，口径基准视界）
         directional_total / direction_accuracy / sample_sufficient
         alpha_mean    方向性相对基准超额均值（(raw−bench)×方向，可判 alpha 样本）
         by_carrier    {carrier: {...分项}}
+        by_horizon    {目标视界: {settled, counts, directional_total,
+                      direction_accuracy, alpha_mean}}（仅方向性决策）
     """
     if events is None:
         events = load_events(path=path)
 
     decisions: list[dict[str, Any]] = []
-    settlements: dict[str, dict[str, Any]] = {}
+    settlements: dict[str, dict[int, dict[str, Any]]] = {}
     for ev in events:
         kind = ev.get("event")
         if kind == EVENT_DECISION:
             decisions.append(dict(ev))
         elif kind == EVENT_SETTLEMENT:
-            settlements[ev.get("decision_id")] = dict(ev)
+            did = str(ev.get("decision_id") or "")
+            if not did:
+                continue
+            settlements.setdefault(did, {})[_settlement_horizon(ev)] = dict(ev)
 
     resolved: list[dict[str, Any]] = []
     for d in decisions:
         item: dict[str, Any] = dict(d)
-        s = settlements.get(d.get("decision_id"))
+        by_h = settlements.get(str(d.get("decision_id") or "")) or {}
+        item["settlements"] = dict(sorted(by_h.items()))
+        s = by_h.get(MIN_SETTLE_BARS)
         if s is not None:
             item["status"] = "settled"
             item["settlement"] = s
@@ -339,6 +372,38 @@ def fold_ledger(
             "accuracy": agg[OUTCOME_HIT] / d_total if d_total else None,
         }
 
+    # 多视界统计：按目标视界聚合（仅方向性决策；与口径基准统计同法）
+    by_horizon: dict[int, dict[str, Any]] = {}
+    for h in sorted({h for r in resolved for h in r.get("settlements", {})}):
+        h_counts = {OUTCOME_HIT: 0, OUTCOME_MISS: 0, OUTCOME_FLAT: 0, OUTCOME_GAP: 0}
+        h_alpha_sum = 0.0
+        h_alpha_n = 0
+        h_settled = 0
+        for r in resolved:
+            s_h = r.get("settlements", {}).get(h)
+            if s_h is None:
+                continue
+            h_settled += 1
+            if r.get("direction") not in (DIRECTION_LONG, DIRECTION_SHORT):
+                continue
+            outcome = s_h.get("outcome")
+            if outcome in h_counts:
+                h_counts[outcome] += 1
+            raw = s_h.get("raw_return")
+            bench = s_h.get("bench_return")
+            if outcome in (OUTCOME_HIT, OUTCOME_MISS) and raw is not None and bench is not None:
+                sign = 1 if r.get("direction") == DIRECTION_LONG else -1
+                h_alpha_sum += (float(raw) - float(bench)) * sign
+                h_alpha_n += 1
+        h_total = h_counts[OUTCOME_HIT] + h_counts[OUTCOME_MISS]
+        by_horizon[h] = {
+            "settled": h_settled,
+            "counts": dict(h_counts),
+            "directional_total": h_total,
+            "direction_accuracy": h_counts[OUTCOME_HIT] / h_total if h_total else None,
+            "alpha_mean": h_alpha_sum / h_alpha_n if h_alpha_n else None,
+        }
+
     return {
         "decisions": resolved,
         "pending_count": sum(1 for r in resolved if r.get("status") != "settled"),
@@ -349,6 +414,7 @@ def fold_ledger(
         "sample_sufficient": directional_total >= MEANINGFUL_SAMPLE,
         "alpha_mean": alpha_sum / alpha_n if alpha_n else None,
         "by_carrier": per_carrier,
+        "by_horizon": by_horizon,
     }
 
 
@@ -388,7 +454,7 @@ def _short_examples(resolved: list[dict[str, Any]], limit: int = 2) -> list[str]
             continue
         horizon = s.get("horizon_bars") or "?"
         lines.append(
-            f"- {r.get('name')}({r.get('code')}) {_direction_verb(r.get('direction'))}后"
+            f"- {r.get('name')}({r.get('code')}) {_direction_verb(int(r.get('direction') or 0))}后"
             f"{horizon}个交易日累计 {ret:+.1%} → {_conclusion(s.get('outcome'))}"
         )
     return lines
@@ -435,5 +501,5 @@ def lessons_cache_suffix(events: Iterable[dict[str, Any]] | None = None, *, path
     block = lessons_block(events, path=path)
     if not block:
         return ""
-    digest = hashlib.md5(block.encode("utf-8")).hexdigest()[:12]
+    digest = hashlib.sha256(block.encode("utf-8")).hexdigest()[:12]
     return f"_lr{digest}"

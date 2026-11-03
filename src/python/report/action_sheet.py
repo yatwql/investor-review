@@ -1,10 +1,12 @@
 """行动建议 Excel 写入模块 —「行动建议」页签。
 
-决策闭环的核心产出页签，展示四个行动子块：
-  1. 再平衡信号 — 单品占比超警戒线（复用 simple_rebalance 计算）
-  2. 交易纪律   — 止盈/止损/回撤触发（analysis/trade_discipline 计算）
-  3. 调仓建议   — 可行化调仓清单（analysis/rebalance_advisor 计算，份额取整/费用/现金）
-  4. 收益归因   — 品种收益贡献占比（TOP5 正负分列 + 净额合计摘要）
+决策闭环的核心产出页签，展示八个行动子块：
+  1. 判断依据   — 行动章内确定性事实块（形态 A；纯确定性零 LLM，开关 `decision_basis`）
+  2. 再平衡信号 — 单品占比超警戒线（复用 simple_rebalance 计算）
+  3. 交易纪律   — 止盈/止损/回撤触发（analysis/trade_discipline 计算）
+  4. 调仓建议   — 可行化调仓清单（analysis/rebalance_advisor 计算，份额取整/费用/现金）
+  5. 收益归因   — 品种收益贡献占比（TOP5 正负分列 + 净额合计摘要）
+  6~8. 历史决策复盘 / 景气度框架诊断 / 市场情绪与持仓热点（可选章内块，各自开关控制）
 
 数据源为 `action_data` 契约（`analysis/action_advisor.build_action_data` 组装、
 orchestrator 注入 pipeline_data）。子块为空时写「暂无」占位——收益归因无可归因
@@ -95,12 +97,214 @@ def _write_sub_block(
     return row
 
 
+#: 判断依据区块标题（写入器字面量——区块提取按 `write_block_title` 第 3 参解析；
+#: 归一化名与 section_block_registry 清单「判断依据」三向对账）
+_TITLE_DECISION_BASIS = "判断依据"
+
+
+def _write_decision_basis_block(
+    ws: Worksheet,
+    row: int,
+    data: dict[str, Any] | None,
+    ncols: int,
+) -> int:
+    """写入行动页签顶部的「判断依据」子块（形态 A；开关关闭/键缺席 → 原样返回）。
+
+    空态写「数据不可用：<原因>」（Data States 口径）；后续按信号清单/置信度/
+    风险预算/纪律/结算摘要五节填充。
+
+    Returns:
+        子块结束行号（未写入时为入参 row）。
+    """
+    if not data or not data.get("enabled"):
+        return row
+    row += 1
+    row = write_block_title(ws, row, _TITLE_DECISION_BASIS)
+    row += 1
+    summary = str(data.get("summary") or "").strip()
+    if summary:
+        ws.cell(row=row, column=1, value=summary).font = _FONT_ACCENT
+        row += 1
+    if not data.get("available"):
+        row = write_data_row(ws, row, [f"数据不可用：{data.get('reason') or '原因未知'}"] + [""] * (ncols - 1))
+        return row
+    # 信号清单 + 信号可信度（risk_budget/discipline/settlement 后续轮次填充）
+    # 内节标题不走 write_block_title：它是判断依据块的子节，不是注册区块
+    row += 1
+    ws.cell(row=row, column=1, value="信号清单").font = _FONT_SUB_BLOCK
+    row += 1
+    if data.get("backtest_as_of"):
+        row = write_data_row(
+            ws,
+            row,
+            [
+                f"回测产物：{data.get('backtest_as_of')} 运行"
+                "（scripts/eval-decision-quality.py；样本累积后重跑，日期随产物刷新）"
+            ]
+            + [""] * (ncols - 1),
+        )
+    signals = data.get("signals") or []
+    if signals:
+        row = write_header_row(ws, row, ["信号", "方向", "口径·样本", "回测样本", "标注"][:ncols])
+        for s in signals:
+            row = write_data_row(
+                ws,
+                row,
+                [
+                    s.get("name", ""),
+                    s.get("direction_label", ""),
+                    s.get("basis_sample_label", ""),
+                    s.get("n_backtest") if s.get("n_backtest") is not None else "—",
+                    f"{s.get('discrimination_label', '')}；{s.get('note', '')}".rstrip("；"),
+                ][:ncols],
+            )
+    else:
+        row = write_data_row(ws, row, ["暂无信号记录"] + [""] * (ncols - 1))
+    confidence = data.get("confidence") or {}
+    row += 1
+    row = write_data_row(
+        ws,
+        row,
+        [f"信号可信度：{confidence.get('level_label') or '暂不可判'} —— {confidence.get('detail') or ''}"]
+        + [""] * (ncols - 1),
+    )
+    # 风险预算（上限 vs 现状三行；只摆事实，超限后的动作见「再平衡信号」子块）
+    risk_budget = data.get("risk_budget") or {}
+    row += 1
+    ws.cell(row=row, column=1, value="风险预算").font = _FONT_SUB_BLOCK
+    row += 1
+    if risk_budget.get("available") and risk_budget.get("items"):
+        row = write_header_row(ws, row, ["项目", "上限", "现状", "状态", "说明"][:ncols])
+        for item in risk_budget["items"]:
+            row = write_data_row(
+                ws,
+                row,
+                [
+                    item.get("item", ""),
+                    item.get("max_label") or "—",
+                    item.get("current_label") or "—",
+                    item.get("status_label") or "—",
+                    item.get("note") or "",
+                ][:ncols],
+            )
+        row = write_data_row(
+            ws,
+            row,
+            ["本块只摆上限与现状；超限后的动作见「再平衡信号」子块。"] + [""] * (ncols - 1),
+        )
+    else:
+        row = write_data_row(
+            ws,
+            row,
+            [f"风险预算数据不可用：{risk_budget.get('reason') or '原因未知'}"] + [""] * (ncols - 1),
+        )
+    # 纪律明细（触发条 + 距阈值 + 阶段化执行口径；只读复用纪律引擎结果）
+    discipline = data.get("discipline") or {}
+    row += 1
+    regime = discipline.get("regime_label")
+    ws.cell(row=row, column=1, value=f"纪律明细（{regime}）" if regime else "纪律明细").font = _FONT_SUB_BLOCK
+    row += 1
+    if discipline.get("available") and discipline.get("items"):
+        row = write_header_row(ws, row, ["规则", "品种", "当前值", "距阈值", "说明"][:ncols])
+        for item in discipline["items"]:
+            holder = f"{item.get('name', '')}（{item.get('code', '')}）" if item.get("code") else item.get("name", "")
+            row = write_data_row(
+                ws,
+                row,
+                [
+                    item.get("rule", ""),
+                    holder,
+                    item.get("value_label") or "—",
+                    item.get("distance_label") or "—",
+                    f"{item.get('stance_label') or ''}；{item.get('note') or ''}".strip("；"),
+                ][:ncols],
+            )
+        row = write_data_row(
+            ws,
+            row,
+            ["本块只说明上下文与执行口径；触发与动作见「交易纪律」子块。"] + [""] * (ncols - 1),
+        )
+    else:
+        row = write_data_row(
+            ws,
+            row,
+            [
+                (
+                    discipline.get("note") or "当前无纪律触发"
+                    if discipline.get("available")
+                    else f"纪律明细数据不可用：{discipline.get('reason') or '原因未知'}"
+                )
+            ]
+            + [""] * (ncols - 1),
+        )
+    # 结算摘要（最近 5 批 × 多视界；未到期显式标注，收益与超额同为百分数）
+    settlement = data.get("settlement") or {}
+    row += 1
+    ws.cell(row=row, column=1, value="结算摘要").font = _FONT_SUB_BLOCK
+    row += 1
+    batches = settlement.get("batches") or []
+    if batches:
+        horizons = settlement.get("horizons") or []
+        row = write_header_row(ws, row, (["结算日", "条数"] + [f"{h} 日" for h in horizons])[:ncols])
+        for batch in batches:
+            cells = []
+            for cell in batch.get("cells") or []:
+                label = str(cell.get("value_label") or "—")
+                excess = cell.get("excess_label")
+                cells.append(f"{label}（超额 {excess}）" if excess and excess != "—" else label)
+            row = write_data_row(ws, row, [batch.get("date", ""), batch.get("n", 0)] + cells[: max(ncols - 2, 0)])
+        row = write_data_row(
+            ws,
+            row,
+            [settlement.get("note") or ""] + [""] * (ncols - 1),
+        )
+    else:
+        row = write_data_row(
+            ws,
+            row,
+            [settlement.get("note") or "暂无结算样本"] + [""] * (ncols - 1),
+        )
+    # 集中度约束（开关 portfolio_constraints；只标注不阻断）
+    constraints = data.get("constraints") or {}
+    if constraints.get("enabled"):
+        row += 1
+        ws.cell(row=row, column=1, value="集中度约束").font = _FONT_SUB_BLOCK
+        row += 1
+        if constraints.get("available") and constraints.get("items"):
+            row = write_header_row(ws, row, ["项目", "上限", "现状", "状态", "说明"][:ncols])
+            for item in constraints["items"]:
+                row = write_data_row(
+                    ws,
+                    row,
+                    [
+                        item.get("item", ""),
+                        item.get("limit_label") or "—",
+                        item.get("current_label") or "—",
+                        item.get("status_label") or "—",
+                        item.get("note") or "",
+                    ][:ncols],
+                )
+            row = write_data_row(
+                ws,
+                row,
+                ["仅标注，不阻断动作；阈值需在 config.json 的 constraints 段显式配置。"] + [""] * (ncols - 1),
+            )
+        else:
+            row = write_data_row(
+                ws,
+                row,
+                [f"约束数据不可用：{constraints.get('reason') or '原因未知'}"] + [""] * (ncols - 1),
+            )
+    return row
+
+
 def write_action_sheet(
     ws: Worksheet,
     action_data: dict[str, Any] | None,
     decision_review_data: dict[str, Any] | None = None,
     prosperity_framework_data: dict[str, Any] | None = None,
     market_sentiment_data: dict[str, Any] | None = None,
+    decision_basis_data: dict[str, Any] | None = None,
 ) -> None:
     """写入行动建议页签（行动板块 + 可选章内块）。
 
@@ -113,11 +317,16 @@ def write_action_sheet(
             `prosperity_framework`，默认关闭）；None 时页签保持既有输出。
         market_sentiment_data: 「市场情绪与持仓热点」契约 dict（报告增强开关
             `market_sentiment`，默认关闭）；None 时页签保持既有输出。
+        decision_basis_data: 「判断依据」章内块契约 dict（形态 A；纯确定性零 LLM，
+            开关 `decision_basis` 默认开）；None 或 enabled=False 时页签保持既有输出。
     """
     _name = get_report_sheet_name("action")
     _ncols = 5
     write_title_row(ws, 1, _name, ncols=_ncols)
     row = 2
+
+    # 子块 1：判断依据（形态 A 章内块顶部呈现；纯确定性零 LLM；开关 decision_basis 控制显隐）
+    row = _write_decision_basis_block(ws, row, decision_basis_data, _ncols)
 
     if not action_data or not action_data.get("available"):
         row = write_data_row(ws, row, [_PLACEHOLDER_UNAVAILABLE, "", "", "", ""])

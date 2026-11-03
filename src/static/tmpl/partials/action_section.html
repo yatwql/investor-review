@@ -19,6 +19,7 @@
 <!--  行动建议（决策闭环）                              -->
 <!-- ═══════════════════════════════════════════════════════ -->
 {% set _action = action_data or {} %}
+<!-- // pi-lens-ignore: css-ruleorselectorexpected, css-propertyvalueexpected, css-rcurlyexpected, css-rparentexpected, css-lcurlyexpected -- Jinja style 属性误报 -->
 <div class="section" id="sec-action" style="order: {{ section_numbers['action'] }};">
     <div class="section-title">
         {{ section_numbers['action'] }}、{{ section_names['action'] }}
@@ -30,6 +31,164 @@
             {% if _action.get("summary") %}{{ _action["summary"] }}{% else %}调仓信号与建议明细{% endif %} —— 点击展开/收起再平衡信号、调仓清单与收益归因
         </summary>
     <div class="section-content">
+
+        <!-- 判断依据（形态 A 章内块；纯确定性零 LLM，数据契约 decision_basis_data） -->
+        {% set _db = decision_basis_data or {} %}
+        {% if _db.get("enabled") %}
+        <details class="section-fold" id="decision-basis">
+            <summary class="section-fold-summary">
+                {% if _db.get("summary") %}{{ _db.get("summary") }}{% else %}判断依据 —— 点击展开/收起信号清单、风险预算与结算摘要{% endif %}
+            </summary>
+            <div class="section-content">
+                <div class="block-title">判断依据</div>
+        {% if _db.get("available") %}
+        {# 信号清单 + 信号可信度（risk_budget/discipline/settlement 后续轮次填充） #}
+        <div style="font-weight: bold; font-size: var(--fs-body); margin: 8px 0 4px;">信号清单</div>
+        {% if _db.get("backtest_as_of") %}
+        <div style="font-size: var(--fs-footnote); color: var(--text-muted); margin: 0 0 4px;">回测产物：{{ _db.get("backtest_as_of") }} 运行（scripts/eval-decision-quality.py；样本累积后重跑，日期随产物刷新）</div>
+        {% endif %}
+        {% set _sigs = _db.get("signals") or [] %}
+        {% if _sigs %}
+        <div style="overflow-x:auto;">
+        <table>
+            <thead>
+                <tr><th>信号</th><th>方向</th><th>口径·样本</th><th>回测样本</th><th>IC</th><th>单调</th><th>标注</th></tr>
+            </thead>
+            <tbody>
+                {% for s in _sigs %}
+                <tr>
+                    <td class="text-left">{{ s.get("name", "") }}</td>
+                    <td class="text-left">{{ s.get("direction_label", "") }}</td>
+                    <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ s.get("basis_sample_label", "") }}</td>
+                    <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ s.get("n_backtest") if s.get("n_backtest") is not none else "—" }}</td>
+                    <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ "%.4f"|format(s.get("ic")) if s.get("ic") is not none else "—" }}</td>
+                    <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ "是" if s.get("monotonic") else ("否" if s.get("monotonic") is not none else "—") }}</td>
+                    <td class="text-left">{{ s.get("discrimination_label", "") }}{% if s.get("note") %}；{{ s.get("note") }}{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <div class="empty-note"><p>暂无信号记录</p></div>
+        {% endif %}
+        {% set _conf = _db.get("confidence") or {} %}
+        <div class="{{ _conf.get('level_class') or 'data-status-info' }}" style="margin-top:8px;">
+            <strong>信号可信度：{{ _conf.get("level_label") or "暂不可判" }}</strong>
+            <span style="font-size: var(--fs-table-sm);opacity:0.85;">—— {{ _conf.get("detail") or "" }}</span>
+        </div>
+        {# 风险预算（上限 vs 现状三行；只摆事实，超限后的动作见「再平衡信号」块） #}
+        {% set _rb = _db.get("risk_budget") or {} %}
+        <div style="font-weight: bold; font-size: var(--fs-body); margin: 12px 0 4px;">风险预算</div>
+        {% if _rb.get("available") and _rb.get("items") %}
+        <div style="overflow-x:auto;">
+        <table>
+            <thead>
+                <tr><th>项目</th><th>上限</th><th>现状</th><th>状态</th><th>说明</th></tr>
+            </thead>
+            <tbody>
+                {% for r in _rb.get("items") %}
+                <tr>
+                    <td class="text-left">{{ r.get("item", "") }}</td>
+                    <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ r.get("max_label") or "—" }}</td>
+                    <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ r.get("current_label") or "—" }}</td>
+                    <td class="text-left"><span class="{{ r.get('status_class') or 'data-status-info' }}">{{ r.get("status_label") or "—" }}</span></td>
+                    <td class="text-left">{{ r.get("note") or "" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        <div style="font-size: var(--fs-table-sm);opacity:0.85;margin-top:4px;">本块只摆上限与现状；超限后的动作见「再平衡信号」块。</div>
+        {% else %}
+        <div class="empty-note"><p>风险预算数据不可用：{{ _rb.get("reason") or "原因未知" }}</p></div>
+        {% endif %}
+        {# 纪律明细（触发条 + 距阈值 + 阶段化执行口径；只读复用纪律引擎结果） #}
+        {% set _disc = _db.get("discipline") or {} %}
+        <div style="font-weight: bold; font-size: var(--fs-body); margin: 12px 0 4px;">纪律明细{% if _disc.get("regime_label") %}（{{ _disc.get("regime_label") }}）{% endif %}</div>
+        {% if _disc.get("available") and _disc.get("items") %}
+        <div style="overflow-x:auto;">
+        <table>
+            <thead>
+                <tr><th>规则</th><th>品种</th><th>当前值</th><th>距阈值</th><th>说明</th></tr>
+            </thead>
+            <tbody>
+                {% for r in _disc.get("items") %}
+                <tr>
+                    <td class="text-left">{{ r.get("rule", "") }}</td>
+                    <td class="text-left">{{ r.get("name", "") }}{% if r.get("code") %}（{{ r.get("code") }}）{% endif %}</td>
+                    <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ r.get("value_label") or "—" }}</td>
+                    <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ r.get("distance_label") or "—" }}</td>
+                    <td class="text-left">{{ r.get("stance_label") or "" }}；{{ r.get("note") or "" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <div class="empty-note"><p>{% if _disc.get("available") %}{{ _disc.get("note") or "当前无纪律触发" }}{% else %}纪律明细数据不可用：{{ _disc.get("reason") or "原因未知" }}{% endif %}</p></div>
+        {% endif %}
+        <div style="font-size: var(--fs-table-sm);opacity:0.85;margin-top:4px;">本块只说明上下文与执行口径；触发与动作见「交易纪律」块。</div>
+        {# 结算摘要（最近 5 批 × 5/20/60 视界；涨跌域着色，未到期显式标注） #}
+        {% set _st = _db.get("settlement") or {} %}
+        <div style="font-weight: bold; font-size: var(--fs-body); margin: 12px 0 4px;">结算摘要</div>
+        {% if _st.get("batches") %}
+        <div style="overflow-x:auto;">
+        <table>
+            <thead>
+                <tr><th>结算日</th><th>条数</th>{% for h in _st.get("horizons") or [] %}<th>{{ h }} 日</th>{% endfor %}</tr>
+            </thead>
+            <tbody>
+                {% for b in _st.get("batches") %}
+                <tr>
+                    <td class="text-left">{{ b.get("date", "") }}</td>
+                    <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ b.get("n", 0) }}</td>
+                    {% for c in b.get("cells") or [] %}
+                    <td class="text-right {{ c.get('tone_class') or '' }}">{{ c.get("value_label") or "—" }}{% if c.get("excess_label") and c.get("excess_label") != "—" %}<span style="opacity:0.8;font-size:var(--fs-table-sm);">（超额 {{ c.get("excess_label") }}）</span>{% endif %}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <div class="empty-note"><p>{{ _st.get("note") or "暂无结算样本" }}</p></div>
+        {% endif %}
+        {% if _st.get("batches") %}<div style="font-size: var(--fs-table-sm);opacity:0.85;margin-top:4px;">{{ _st.get("note") or "" }}</div>{% endif %}
+        {# 集中度约束（开关 portfolio_constraints；只标注不阻断） #}
+        {% set _cons = _db.get("constraints") or {} %}
+        {% if _cons.get("enabled") %}
+        <div style="font-weight: bold; font-size: var(--fs-body); margin: 12px 0 4px;">集中度约束</div>
+        {% if _cons.get("available") and _cons.get("items") %}
+        <div style="overflow-x:auto;">
+        <table>
+            <thead>
+                <tr><th>项目</th><th>上限</th><th>现状</th><th>状态</th><th>说明</th></tr>
+            </thead>
+            <tbody>
+                {% for r in _cons.get("items") %}
+                <tr>
+                    <td class="text-left">{{ r.get("item", "") }}</td>
+                    <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ r.get("limit_label") or "—" }}</td>
+                    <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ r.get("current_label") or "—" }}</td>
+                    <td class="text-left"><span class="{{ r.get('status_class') or 'data-status-info' }}">{{ r.get("status_label") or "—" }}</span></td>
+                    <td class="text-left">{{ r.get("note") or "" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <div class="empty-note"><p>约束数据不可用：{{ _cons.get("reason") or "原因未知" }}</p></div>
+        {% endif %}
+        <div style="font-size: var(--fs-table-sm);opacity:0.85;margin-top:4px;">仅标注，不阻断动作；阈值需在 config.json 的 constraints 段显式配置。</div>
+        {% endif %}
+        {% else %}
+                <div class="empty-note"><p>数据不可用：{{ _db.get("reason") or "原因未知" }}</p></div>
+                {% endif %}
+            </div>
+        </details>
+        {% endif %}
 
         <!-- ① 再平衡信号（单品占比超警戒线） -->
         {% set _rb = _action.get("rebalance_signals") or [] %}

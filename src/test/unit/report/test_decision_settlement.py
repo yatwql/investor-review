@@ -231,6 +231,94 @@ class TestSettleBenchmark:
         assert out["summary"][0]["outcome"] == dl.OUTCOME_HIT
 
 
+class TestMultiHorizon:
+    """多视界结算（5/20/60）：同决策多行落账、逐视界幂等、旧记录兼容。"""
+
+    @staticmethod
+    def _long_mature(bars_after: int, base: float = 10.0, step: float = -0.01):
+        """决策日（_d(0)）后恰好 bars_after 根 bar 的长序列（单调涨跌由 step 定）。"""
+        closes = [base] + [base + step * i for i in range(1, bars_after + 1)]
+        dates = [_d(0)] + [_d(i) for i in range(1, bars_after + 1)]
+        return _bars(dates, closes)
+
+    @staticmethod
+    def _settle(lp, series, horizons, report_date):
+        return ds.settle_pending_decisions(
+            report_date=report_date,
+            ledger_path=lp,
+            horizons=horizons,
+            price_series_fn=_FakePrices(series),
+            index_series_fn=_FakeIndex([]),
+        )
+
+    def test_three_horizons_one_run_and_idempotent(self, tmp_path):
+        lp = str(tmp_path / "ledger.jsonl")
+        _seed_decision(lp, rep=_REP, baseline=10.0)
+        series = self._long_mature(65)
+        out = self._settle(lp, series, dl.SETTLE_HORIZONS, _d(70))
+        assert out["settled"] == 3  # 同一决策产出 3 条结算（验收①）
+        assert sorted(s["target_horizon"] for s in out["summary"]) == [5, 20, 60]
+        fold = dl.fold_ledger(path=lp)
+        [d] = fold["decisions"]
+        assert set(d["settlements"]) == {5, 20, 60}
+        assert d["settlement"]["target_horizon"] == 5  # 口径基准仍是 5 日
+        assert fold["by_horizon"][60]["settled"] == 1
+        # 逐视界幂等：同视界不重结（验收②）
+        out2 = self._settle(lp, series, dl.SETTLE_HORIZONS, _d(71))
+        assert out2["settled"] == 0
+
+    def test_partial_maturity_then_backfill(self, tmp_path):
+        lp = str(tmp_path / "ledger.jsonl")
+        _seed_decision(lp, rep=_REP, baseline=10.0)
+        out = self._settle(lp, self._long_mature(25), dl.SETTLE_HORIZONS, _d(26))
+        assert out["settled"] == 2  # 5/20 成熟，60 未到期
+        assert sorted(s["target_horizon"] for s in out["summary"]) == [5, 20]
+        assert out["deferred"] == 1
+        # 序列增长 → 只回补 60，已结视界不认领不重结（验收③）
+        out2 = self._settle(lp, self._long_mature(65), dl.SETTLE_HORIZONS, _d(70))
+        assert out2["settled"] == 1
+        assert out2["summary"][0]["target_horizon"] == 60
+        fold = dl.fold_ledger(path=lp)
+        [d] = fold["decisions"]
+        assert set(d["settlements"]) == {5, 20, 60}
+
+    def test_legacy_five_day_record_backfills_long_horizons(self, tmp_path):
+        lp = str(tmp_path / "ledger.jsonl")
+        did = _seed_decision(lp, rep=_REP, baseline=10.0)
+        # 旧数据：无 target_horizon 的 5 日结算事件（历史事件不改写，验收④）
+        dl.append_settlement(
+            decision_id=did,
+            raw_return=-0.05,
+            outcome=dl.OUTCOME_HIT,
+            direction_hit=True,
+            horizon_bars=7,
+            path=lp,
+        )
+        out = self._settle(lp, self._long_mature(65), dl.SETTLE_HORIZONS, _d(70))
+        assert out["settled"] == 2  # 20/60 回补，5 不重结
+        assert sorted(s["target_horizon"] for s in out["summary"]) == [20, 60]
+        fold = dl.fold_ledger(path=lp)
+        [d] = fold["decisions"]
+        assert set(d["settlements"]) == {5, 20, 60}
+        assert d["settlement"]["horizon_bars"] == 7  # 旧事件原样保留
+        assert "target_horizon" not in d["settlement"]
+
+    def test_single_horizon_mode_backward_compatible(self, tmp_path):
+        # 缺省 horizons=None → 单视界（既有调用面行为不变）
+        lp = str(tmp_path / "ledger.jsonl")
+        _seed_decision(lp, rep=_REP, baseline=10.0)
+        out = ds.settle_pending_decisions(
+            report_date=_d(8),
+            ledger_path=lp,
+            price_series_fn=_FakePrices(_mature([10.0, 9.9, 9.8, 9.7, 9.6, 9.5])),
+            index_series_fn=_FakeIndex([]),
+        )
+        assert out["settled"] == 1
+        fold = dl.fold_ledger(path=lp)
+        [d] = fold["decisions"]
+        assert set(d["settlements"]) == {5}  # 只落 5 日视界
+
+
 class TestSettleGating:
     """开关与幂等。"""
 

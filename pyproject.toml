@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "investor-review"
-version = "0.16.15"
+version = "0.16.16"
 description = "投资复盘助手：读取持仓 Excel，生成 Excel/HTML 投资分析报告（含行情、穿透、基金业绩、财经热点关联关联分析与 LLM 深度复盘）"
 requires-python = ">=3.11"
 dependencies = [
@@ -43,7 +43,9 @@ testpaths = ["src/test"]
 required_plugins = ["pytest-mock>=3.15", "pytest-xdist>=3.6"]
 
 [tool.ruff]
-target-version = "py310"
+# 与 `requires-python = ">=3.11"` 及 CI 矩阵（3.11/3.12/3.13）对齐：低标会让规则按
+# 旧版语义给建议（如可升级语法被拒、可选语法改写方向偏差），与真实运行环境脱节。
+target-version = "py311"
 line-length = 120
 # docs 下为归档快照（含历史脚本副本），冻结不再参与 lint / format
 # force-exclude：带上命令行显式路径（如 `ruff format docs`）时仍尊重 exclude。
@@ -76,3 +78,7 @@ select = ["E4", "E7", "E9", "F"]
 "src/test/unit/report/test_drawdown_html_excel.py" = ["F821"]
 "src/test/unit/report/test_evolution_html.py" = ["F821"]
 
+[tool.pyright]
+# scripts/ 下的评测实现包（_eval_factor_zoo / _eval_decision_quality）在运行期经
+# sys.path 注入解析；静态分析需显式声明搜索路径，否则入口脚本的包导入判为未解析。
+extraPaths = ["scripts"]

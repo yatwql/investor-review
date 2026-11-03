@@ -624,7 +624,9 @@ class TestCacheDirIsolation(unittest.TestCase):
 
         with patch.dict(os.environ, {_paths._CACHE_DIR_ENV: "docs/tmp/democache"}):
             resolved = _paths._resolve_cache_dir()
-        self.assertTrue(resolved.endswith(os.path.join("docs", "tmp", "democache")))
+        # 相对路径按项目根解析——只断言 endswith 会在「拼接出 docs/tmp/democache 子串」
+        # 的错误实现上通过；精确比对路径。
+        self.assertEqual(resolved, os.path.join(_paths.PROJECT_ROOT, "docs", "tmp", "democache"))
 
     def test_absolute_env_kept_verbatim(self):
         from unittest.mock import patch

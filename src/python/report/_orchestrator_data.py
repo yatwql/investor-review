@@ -63,6 +63,7 @@ def prepare_report_data(
     from src.python.core.data_freshness import build_freshness_summary
     from src.python.core.holding_status import build_coverage_summary
     from src.python.analysis.action_advisor import build_action_data
+    from src.python.report.decision_basis import build_decision_basis_data
     from src.python.fetcher.index import fetch_indices, fetch_us_indices
     from src.python.report.market_value import (
         _generate_details,
@@ -227,6 +228,14 @@ def prepare_report_data(
     # full 路径在 _prepare_full_risk_metrics 后重建），persist_silence=False
     # 使占位构建不读写纪律静默文件，保证最终构建为唯一静默写入方。
     action_data = build_action_data(holdings_details, total_mv, persist_silence=False)
+    # 判断依据章内块（形态 A，数据契约 decision_basis_data；开关 decision_basis
+    # 关闭 → enabled=False 双端完全隐藏）。风险预算块与 action_data 同源持仓，
+    # 历史峰值未就绪时回撤现状标「未评估」，峰值就绪后由 full/both 路径重装配。
+    decision_basis_data = build_decision_basis_data(
+        holdings_details,
+        total_mv,
+        discipline_signals=(action_data or {}).get("discipline_signals"),
+    )
 
     # 深度档位：新闻采集条数按档位下界修正（延迟导入避免报告层与 LLM 层在导入期互相牵连）
     from src.python.llm.depth_profile import effective_news_limit, resolve_depth_profile
@@ -276,6 +285,8 @@ def prepare_report_data(
         "data_freshness": freshness_summary,
         # 行动建议单一数据源（数据契约 action_data；行动建议板块 + 智囊团深度复盘行动摘要）
         "action_data": action_data,
+        # 判断依据章内块（数据契约 decision_basis_data；纯确定性零 LLM，见 report/decision_basis.py）
+        "decision_basis_data": decision_basis_data,
         # 估值分位（数据契约 valuation_data；功能开关 `valuation_percentile` 关闭时为 None）
         "valuation_data": valuation_data,
         # 市场温度（数据契约 market_temperature_data；功能开关 `market_temperature` 关闭时为 None）

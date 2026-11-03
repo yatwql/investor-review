@@ -100,6 +100,7 @@ SECTION_BLOCK_SPECS: dict[str, SectionBlockSpec] = {
     ),
     "action": SectionBlockSpec.both(
         (
+            "判断依据",
             "再平衡信号",
             "交易纪律",
             "调仓建议清单",

@@ -30,7 +30,7 @@ from src.python.llm.self_review import (
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.llm]
 
-_OUTPUTS = {"global_macro": "<p>宏观分析正文</p>", "expert_review": "<p>智囊团正文</p>"}
+_OUTPUTS: dict[str, str | None] = {"global_macro": "<p>宏观分析正文</p>", "expert_review": "<p>智囊团正文</p>"}
 
 
 @pytest.fixture(autouse=True)
@@ -99,7 +99,8 @@ def test_generated_block_always_carries_non_guarantee_note(monkeypatch):
         lambda *a, **k: ("<p>【自检清单】一切正常</p>", False),
     )
     run_self_review(_OUTPUTS, [], [], _llm_config(True))
-    assert NON_GUARANTEE_NOTE in get_self_review_block()
+    block = get_self_review_block()
+    assert block is not None and NON_GUARANTEE_NOTE in block
 
 
 def test_ensure_note_is_idempotent():
@@ -222,6 +223,27 @@ def test_prompt_builder_includes_module_texts_and_digests():
     assert "宁德时代" in prompt
 
 
+def test_system_prompt_requires_conditional_conclusion_item():
+    """清单新增「结论是否附条件」一项（与数据矛盾/推测/互斥并列，缺一条即不合格）。"""
+    from src.python.llm.prompts_review import _SYSTEM_SELF_REVIEW
+
+    assert "结论是否附条件" in _SYSTEM_SELF_REVIEW
+    assert "失效条件" in _SYSTEM_SELF_REVIEW and "观察指标" in _SYSTEM_SELF_REVIEW
+
+
+def test_fingerprint_includes_prompt_schema_version(monkeypatch):
+    """自检指纹并入提示词文本版本盐：静态清单改动也须换键。"""
+    import src.python.llm.module_fingerprint as mf
+
+    outputs: dict[str, str | None] = {"global_macro": "<p>x</p>"}
+    before = self_review_fingerprint(outputs)
+    parts = mf.self_review_fingerprint_parts(outputs)
+    assert parts["prompt_version"] == mf.PROMPT_SCHEMA_VERSION
+    monkeypatch.setattr(mf, "PROMPT_SCHEMA_VERSION", "rate-caliber-selftest")
+    after = self_review_fingerprint(outputs)
+    assert after != before, "提示词版本盐变化必须换键（否则旧自检结论按旧清单复用）"
+
+
 def test_prompt_builder_skips_empty_outputs():
     """空/None 产出不进入提示词（不给模型无意义空段）。"""
     from src.python.llm.prompts import _build_self_review_prompt
@@ -270,6 +292,7 @@ def test_real_generator_reaches_provider_with_compliance_and_caches(monkeypatch)
     assert first and "【自检清单】" in first
     assert cached_first is False
     assert cached_second is True, "同产出第二次应命中缓存"
+    assert second is not None and first is not None
     assert second.startswith(first), "缓存返回的内容主体应与首次一致（仅追加缓存页脚）"
     assert len(calls) == 1, "命中缓存后不得再次调用 provider"
     assert COMPLIANCE_CLOSING in calls[0][0], "自检模块的 system prompt 须经漏斗叠加合规声明"

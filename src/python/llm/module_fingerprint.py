@@ -53,7 +53,9 @@ from src.python.llm.fingerprint import (
     extract_stable_penetration,
     risk_signals_of,
 )
+from src.python.llm.prompts_action import scenario_mandate_cache_suffix
 from src.python.llm.prompts_signals import _signal_digest_cache_suffix
+from src.python.llm.rate_caliber import PROMPT_SCHEMA_VERSION
 
 __all__ = [
     "ModuleFingerprintInputs",
@@ -357,6 +359,7 @@ def expert_review_fingerprint(inputs: ModuleFingerprintInputs) -> str:
     _fp += _pipeline_block_cache_suffix(inputs.pipeline_data)
     _fp += signal_ledger.summary_cache_suffix()
     _fp += structured_header_cache_suffix()
+    _fp += scenario_mandate_cache_suffix()
     _fp += generation_params_suffix("expert_review")
     return _fp
 
@@ -527,6 +530,8 @@ def self_review_fingerprint(
 
     覆盖判据仍是「提示词是否真的含该段」：自检提示词由各模块产出正文 + 持仓/穿透
     摘要构成，三者都进键；产出未变（含全部命中缓存）时键不变 → 自检同样命中缓存。
+    提示词文本版本盐（`PROMPT_SCHEMA_VERSION`）并入分段构成——自检清单/禁止项等
+    静态文案改动同样须换键，否则旧自检结论会按旧清单继续被复用。
 
     Args:
         module_outputs: 模块名 → HTML 产出（None/空串按缺失处理）。
@@ -570,6 +575,8 @@ def self_review_fingerprint_parts(
         if isinstance(text, str) and text.strip()
     }
     parts: dict[str, object] = {
+        # 提示词文本版本盐：自检清单等静态文案改动也须换键（与四主模块同口径）
+        "prompt_version": PROMPT_SCHEMA_VERSION,
         "outputs": normalized,
         "holdings": extract_stable_holdings(holdings_details),
         "penetration": extract_stable_penetration(penetrated_assets),

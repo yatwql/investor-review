@@ -140,6 +140,8 @@ class DataSourceRegistry:
         self._cache_lock = threading.RLock()
         self._providers: dict[str, ProviderState] = {}
         self._session_cache: dict[str, dict[str, SessionCacheEntry]] = {}
+        # 会话级 single-flight 在飞锁：按 (domain, code) 惰性创建（见 session_cache_fetch）
+        self._session_inflight: dict[tuple[str, str], threading.Lock] = {}
         self._chains: dict[str, list[str]] = {}
         self._initialized = True
         # 启动时加载持久化熔断状态
@@ -457,6 +459,50 @@ class DataSourceRegistry:
                 source=source,
             )
 
+    def session_cache_fetch(
+        self,
+        domain: str,
+        code: str,
+        fetch_fn: Callable[[], Any],
+        source: str = "api",
+    ) -> Any:
+        """会话级 single-flight 取数：同一 (domain, code) 并发只允许一个在飞。
+
+        三个报告阶段（因子指标 / 新闻关联 / 穿透）在并行线程里各查同一只标的时，
+        若只做「查缓存 → 取数 → 写缓存」，三者会同时未命中、同时探测文件缓存并各自
+        取数（实测同一键一轮记 3 次未命中）。此处按 key 加锁并二次检查：先到者取数，
+        其余等锁后直接读会话缓存（含失败结论 None），既有语义不变、只是不再重复探。
+
+        Args:
+            domain: 会话缓存域（如 ``industry``）。
+            code: 域内键（如证券代码）。
+            fetch_fn: 会话缓存缺失时的取数函数（返回 None 表示取不到，同样会缓存）。
+            source: 写入会话缓存时的来源标签。
+
+        Returns:
+            取数结果（可为 None）。
+        """
+        cached = self.session_cache_get(domain, code)
+        if cached is not NOT_FOUND:
+            return cached
+        with self._session_inflight_lock(domain, code):
+            cached = self.session_cache_get(domain, code)
+            if cached is not NOT_FOUND:
+                return cached
+            result = fetch_fn()
+            self.session_cache_set(domain, code, result, source=source if result is not None else "miss")
+            return result
+
+    def _session_inflight_lock(self, domain: str, code: str) -> threading.Lock:
+        """按 (domain, code) 取在飞锁（惰性创建）。"""
+        with self._cache_lock:
+            key = (domain, code)
+            lock = self._session_inflight.get(key)
+            if lock is None:
+                lock = threading.Lock()
+                self._session_inflight[key] = lock
+            return lock
+
     def session_cache_contains(self, domain: str, code: str) -> bool:
         """检查某 key 是否在会话缓存中（无视值是否为 None）。"""
         with self._cache_lock:
@@ -578,7 +624,10 @@ class DataSourceRegistry:
             from src.python import cache as _cache
 
             key = cache_key_fn(code)
-            data = _cache.get(key, 86400 * 7)
+            # 这是**只看缓存**的窥视（不取数），未命中不代表需要拉取，故不计入
+            # 命中率与「同键未命中」告警——行情一次性核算里它会让同一键多记一次
+            # 未命中（实测 price_stock_005827 ×3 里含这一路），告警指向被稀释。
+            data = _cache.get(key, 86400 * 7, record_stats=False)
             if data is not None:
                 data = dict(data)  # 复制避免修改缓存原始对象
                 # 检查 price_date 是否匹配今天
@@ -632,6 +681,7 @@ class DataSourceRegistry:
             self._chains.clear()
         with self._cache_lock:
             self._session_cache.clear()
+            self._session_inflight.clear()
 
 
 # ── 工厂函数 ────────────────────────────────────────────

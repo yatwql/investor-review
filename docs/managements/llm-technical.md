@@ -1,5 +1,5 @@
 # LLM 集成层技术设计
-> 文档版本：0.16.15
+> 文档版本：0.16.16
 
 本文档是 `technical.md` 的 LLM 集成层专项技术设计补充，对应 `technical.md` §5（LLM 集成层概要设计）。
 `technical.md` §5 提供 LLM 层的总体架构、模块清单、调用链概览、多 Provider 链模式概要及关键机制速览；
@@ -177,7 +177,7 @@ skeleton.py:generate_llm_content()
 | `prompts_core.py` | 工具 | 提示词门面：System Prompt 常量 + 辩论 synthesis 构建 + **三域子模块门面再导出**（失败原因/数据块/复盘自审，旧导入面不变） | `_SYSTEM_*` 常量 + `_build_system_debate_synthesis()` |
 | `failure_reasons.py` | 工具 | LLM 模块失败原因常量（`FAIL_REASON_*` + `LLM_MODULE_FAILURE`，自 prompts_core 按职责下沉） | `LLM_MODULE_FAILURE` |
 | `prompts_data_blocks.py` | 工具 | 上下文数据块与格式化辅助（管线差异/数据降级/收益归因/竞争语境/再平衡/概念板块 + `_fmt_wan`/`_fmt_holding_line`/`_is_valid_number`，自 prompts_core 下沉） | `_build_*_block()` |
-| `prompts_review.py` | 工具 | 自审与持仓变动复盘提示词（`_SYSTEM_SELF_REVIEW`/`_SYSTEM_HOLDING_CHANGE_REVIEW` + 构建器与摘要辅助，自 prompts_core 下沉） | `_build_self_review_prompt()` |
+| `prompts_review.py` | 工具 | 自审与持仓变动复盘提示词（`_SYSTEM_SELF_REVIEW` 含四类复核项：数据矛盾 / 未标注推测 / 模块互斥 / **结论是否附条件**；`_SYSTEM_HOLDING_CHANGE_REVIEW` + 构建器与摘要辅助，自 prompts_core 下沉） | `_build_self_review_prompt()` |
 | `prompts_tables.py` | 工具 | 持仓/穿透/指标/情景/数据质量/汇率等数据块格式化为 Markdown | `_format_holdings_block()` / `_build_holdings_summary()` |
 | `prompts_action.py` | 工具 | 各模块 User Prompt 构建（global_macro / expert_review / health_check / penetration_deep / debate_synthesis）+ 集中度问答块 | `_build_expert_review_prompt()` / `_build_concentration_qa_block()` |
 | `rate_caliber.py` | 工具 | 收益率口径标签的唯一声明点（持仓 / 组合 / 区间标签 + 口径说明）；`PROMPT_SCHEMA_VERSION` 为提示词文本版本，并入 `build_llm_fingerprint()`，静态文案改动也换缓存键 | `LABEL_POSITION` / `LABEL_PORTFOLIO` / `LABEL_INTERVAL` / `CALIBER_NOTE` / `PROMPT_SCHEMA_VERSION` |
@@ -878,6 +878,8 @@ penetrated_assets ──→ extract_stable_penetration()
 **提示词文本版本（`rate_caliber.PROMPT_SCHEMA_VERSION`）**：标签、表头、口径说明等**静态文案**改动不改变持仓/行情数据，哪怕提示词内容变了，结构化输入的指纹也可能不变——预检会命中按旧口径生成的缓存，静默复用错口径结论。故 `build_llm_fingerprint()` 把该版本号并入哈希输入：改文案即递增版本（一次性换键，旧缓存自动重算）。标签本身收敛在 `llm/rate_caliber.py` 单一声明点，供 `prompts_action` / `prompts_tables` / `prompts_data_blocks` 共同引用。
 
 **事实校验规则版本（`fact_checker.FACT_CHECK_RULES_VERSION`）**：校验修正后的正文会**回写模块缓存**（`llm.skeleton.write_back_module_cache`，键刻意不变），缓存正文因此与「哪一版校验规则改过它」绑定。规则语义变更（新增/收窄非收益率豁免、改写策略变化）而不换键，旧缓存里被旧规则改错的正文会继续被复用，修复对存量缓存不生效、只能等 TTL 过期。故该版本号并入四可回写模块（`global_macro` / `expert_review` / `health_check` / `penetration_deep`）与辩论键的指纹：改规则语义即递增版本，一次性换键重算。
+
+**情景段方向约束变体（`scenario_mandate_cache_suffix`）**：`prompts_action.py` 保留两套方向约束文本——默认口径要求「条件化动作 + 触发条件，触发条件不满足即写明『不操作』及所缺数据」，回退口径为旧的强制方向表述；`decision_basis` 关闭时走回退口径，并给 `expert_review` 指纹追加 `_ms` 后缀，保证回滚当次即换键（不复用新口径缓存）。同时 `self_review` 指纹并入 `PROMPT_SCHEMA_VERSION`——自检清单是静态文案，内容寻址键原不含文本版本，补此盐后改清单即换键。
 
 **版本盐首尾日志**：两个版本号（`PROMPT_SCHEMA_VERSION` / `FACT_CHECK_RULES_VERSION`）都会改变四可回写模块与辩论键的缓存键，但**运行日志里看不出来**——模块整批重算的归因只有「键变了」这一信号，看不到版本盐就只能翻代码比对指纹才能确认「这次全量重算是改了规则还是缓存被裁」。故单源出口 `llm.fingerprint.cache_key_salts()` / `log_cache_key_salts()` 在**本轮开始**（报告边界）打一行 INFO，并在**本轮结束**的 `[cache] 本次命中 …` 汇总行带上尾注（`；缓存键版本盐：提示词=… 校验规则=…`）。收尾行从 `cache._stats` 惰性读 `llm.fingerprint`（cache → llm 单向、无环）。
 

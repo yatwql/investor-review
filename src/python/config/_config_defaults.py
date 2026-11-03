@@ -215,6 +215,12 @@ _DEFAULT_CONFIG = {
         "drawdown_pct": -10.0,  # 回撤线：组合相对历史峰值回撤 ≥ 此绝对值 → 建议控回撤
         "silence_days": 30,  # 交易纪律信号静默期天数（默认 30 天）
     },
+    # ── 集中度/相关性约束（开关 portfolio_constraints 默认关；只标注不阻断）──
+    "constraints": {
+        "industry_max_pct": 30.0,  # 行业权重上限（%）：默认 30%，设 null 则关闭行业项
+        "correlation_max": None,  # 两两相关系数上限：显式配置才启用，None=未配置不拦截
+        "correlation_min_window_days": 250,  # 相关性样本窗口门槛（交易日），不足记「未评估」
+    },
     # ── J. 流动性配置 ──
     "redemption_limits": {},  # 场外基金单日赎回上限（code → 金额，空=未配置）
     # ── K. 匿名化配置 ──
@@ -371,6 +377,14 @@ def _build_template_from_defaults() -> str:
         "  },",
         "",
         # ── J ──
+        # ── 集中度/相关性约束（默认未配置；开关 portfolio_constraints 控制启用）──
+        "  // ── 集中度/相关性约束（仅 switch portfolio_constraints 开启时生效；只标注不阻断）──",
+        '  "constraints": {',
+        f'    "industry_max_pct": {json.dumps(d["constraints"]["industry_max_pct"])},  // 行业权重上限（%），null=关闭行业项',
+        f'    "correlation_max": {json.dumps(d["constraints"]["correlation_max"])},  // 两两相关系数上限，null=未配置',
+        f'    "correlation_min_window_days": {d["constraints"]["correlation_min_window_days"]}  // 相关性样本窗口门槛（交易日）',
+        "  },",
+        "",
         "  // ── J. 流动性配置 ──",
         f'  "redemption_limits": {json.dumps(d["redemption_limits"])},  // 场外基金单日赎回上限（code → 金额，空=未配置）',
         "",

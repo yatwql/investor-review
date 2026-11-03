@@ -11,7 +11,6 @@ import logging
 import re
 from typing import Any
 
-from src.python.cache import get as cache_get
 from src.python.cache import get_ttl
 from src.python.core.code_utils import is_a_share_code
 from src.python.core.log_dedupe import log_throttled
@@ -37,7 +36,7 @@ _BATCH_RETRY_DELAY = 0.8
 _BATCH_RETRY_JITTER = 0.4
 
 
-def strip_hierarchy_suffix(name: str) -> str:
+def strip_hierarchy_suffix(name: str | None) -> str | None:
     """剥离行业名末尾的申万层级后缀（Ⅰ/Ⅱ/Ⅲ/Ⅳ）。
 
     东方财富 f127 / bk_name 返回申万行业名带层级标记（如「银行Ⅱ」「白酒Ⅱ」——
@@ -55,7 +54,7 @@ def strip_hierarchy_suffix(name: str) -> str:
     return _HIERARCHY_SUFFIX_RE.sub("", name)
 
 
-def _industry_transform(raw: dict, _source: str) -> dict | None:
+def _industry_transform(raw: dict | None, _source: str) -> dict | None:
     """东方财富行业原始数据 → 统一行业格式（行业名剥离申万层级后缀）。
 
     同时**透传**同一次 push2 响应已带出的扩展行情字段（pe/pb/market_cap）。
@@ -118,16 +117,12 @@ def fetch_industry_data_cached(code: str) -> dict | None:
 
     消除多个模块独立调用 fetch_industry_data 的冗余文件缓存读取。
     """
-    from src.python.core.provider_registry import NOT_FOUND, get_registry
+    from src.python.core.provider_registry import get_registry
 
-    registry = get_registry()
-    cached = registry.session_cache_get("industry", code)
-    if cached is not NOT_FOUND:
-        return cached
-    result = fetch_industry_data(code)
-    if result is not None:
-        registry.session_cache_set("industry", code, result, source="api")
-    return result
+    # 失败也写会话缓存（值为 None）：场外基金等非 A 股标的会被上层逐个调用，
+    # 不缓存失败结果时同一代码在一轮报告里会被反复重探（实测同一键未命中 16 次）；
+    # single-flight 再压并发首探——三个报告阶段并行查同一只时只探一次。
+    return get_registry().session_cache_fetch("industry", code, lambda: fetch_industry_data(code))
 
 
 def fetch_valuation_fields(code: str) -> dict[str, float | None] | None:
@@ -147,6 +142,20 @@ def fetch_valuation_fields(code: str) -> dict[str, float | None] | None:
     if data is None:
         return None
     return {"pe": data.get("pe"), "pb": data.get("pb")}
+
+
+def _retry_industry_fetch(code: str) -> dict | None:
+    """批内重试专用取数：绕开会话缓存，并把新结论回写。
+
+    会话缓存会记住失败结论（防同轮重探），若重试也走 `fetch_industry_data_cached`，
+    首次失败即被记忆、重试退化为空转——「失败后重试」这条降级治理要求因此失效
+    （双重降级治理：链路失败必须真重试，只有最终结论才进会话缓存）。
+    """
+    from src.python.core.provider_registry import get_registry
+
+    result = fetch_industry_data(code)
+    get_registry().session_cache_set("industry", code, result, source="api" if result is not None else "miss")
+    return result
 
 
 def batch_fetch_industry_data(codes: list[str]) -> dict[str, dict]:
@@ -179,6 +188,24 @@ def batch_fetch_industry_data(codes: list[str]) -> dict[str, dict]:
     if not a_codes:
         return {}
 
+    # 会话缓存已给过结论（成功或明确取不到）的代码不再进批：既省一次文件缓存探测，
+    # 也让「同键未命中」告警只反映真实重探（同一代码一轮内被多次批量查询时，
+    # 此前每次都记一次未命中，命中率与告警都被稀释）。
+    from src.python.core.provider_registry import NOT_FOUND, get_registry
+
+    _registry = get_registry()
+    settled: dict[str, dict] = {}
+    pending: list[str] = []
+    for code in a_codes:
+        _cached = _registry.session_cache_get("industry", code)
+        if _cached is NOT_FOUND:
+            pending.append(code)
+        elif _cached:
+            settled[code] = _cached
+    a_codes = pending
+    if not a_codes:
+        return settled
+
     # 熔断预检：全链已熔断时跳过批量请求，避免逐条冗余调用
     if is_provider_chain_broken("industry"):
         logger.warning("[industry] 行业数据 API 全链不可用（熔断），跳过 %d 个代码的批量获取", len(a_codes))
@@ -194,17 +221,28 @@ def batch_fetch_industry_data(codes: list[str]) -> dict[str, dict]:
         rate_limit_provider="eastmoney_industry",
     )
 
+    # 走会话缓存变体：同一代码一轮报告内只探一次（失败结论也记），
+    # 否则失败标的会在「批内 → 重试 → 下一阶段再来一批」里被反复重探
+    # （实测场外基金同一缓存键一轮未命中 16 次，污染「同键未命中」告警指向）。
     items = [
         (
             f"{_INDUSTRY_CACHE_PREFIX}{code}",
-            partial(fetch_industry_data, code=code),
+            partial(fetch_industry_data_cached, code=code),
         )
         for code in a_codes
     ]
 
     def _cache_check(cache_id: str) -> Any:
-        """缓存命中判据：按 TTL 读取。"""
-        return cache_get(cache_id, get_ttl("industry"))
+        """批前预检只看会话缓存（已结案即跳过调度）。
+
+        文件缓存探测有意留在任务内的 `fetch_with_fallback`：那里已由会话级
+        single-flight 收口，每个代码一轮只探一次；若此处直接 `cache_get`，
+        三个并行报告阶段会为同一只标的各记一次未命中（实测 `industry_005827` ×3），
+        而「同键未命中」告警本应只指向真实重探。
+        """
+        code = cache_id[len(_INDUSTRY_CACHE_PREFIX) :]
+        cached = _registry.session_cache_get("industry", code)
+        return None if cached is NOT_FOUND else cached
 
     results = dispatcher.execute_with_cache_check(
         items,
@@ -215,12 +253,12 @@ def batch_fetch_industry_data(codes: list[str]) -> dict[str, dict]:
     # 通用重试（复用主 executor）
     results = dispatcher.retry_failed(
         results,
-        task_factory=lambda idx: partial(fetch_industry_data, code=a_codes[idx]),
+        task_factory=lambda idx: partial(_retry_industry_fetch, code=a_codes[idx]),
         delay=_BATCH_RETRY_DELAY,
         jitter=_BATCH_RETRY_JITTER,
     )
 
-    result_map: dict[str, dict] = {}
+    result_map: dict[str, dict] = dict(settled)
     for code, r in zip(a_codes, results):
         if r.success and r.result:
             # 缓存命中路径绕过 fetch_industry_data 出口归一化，组装时兜底剥离层级后缀

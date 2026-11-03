@@ -614,13 +614,13 @@ class TestExtendedCacheSharing(unittest.TestCase):
 
         # 第一次调用：经行业请求取数，写入缓存
         result1 = _push2_extended("600519")
-        self.assertIsNotNone(result1)
+        assert result1 is not None
         self.assertAlmostEqual(result1["market_cap"], 1e11)
         self.assertAlmostEqual(result1["pe"], 25.0)
 
         # 第二次调用：tencent 应命中同一缓存，不调用 tencent API
         result2 = _tencent_extended("600519")
-        self.assertIsNotNone(result2)
+        assert result2 is not None
         self.assertAlmostEqual(result2["market_cap"], 1e11)
         self.assertAlmostEqual(result2["pe"], 25.0)
         # tencent 数据源不应被调用（缓存命中）
@@ -642,12 +642,12 @@ class TestExtendedCacheSharing(unittest.TestCase):
 
         # 第一次调用：tencent API 被调用，写入缓存（2000亿 → 2e11 元）
         result1 = _tencent_extended("600519")
-        self.assertIsNotNone(result1)
+        assert result1 is not None
         self.assertAlmostEqual(result1["market_cap"], 2e11)
 
         # 第二次调用：push2 应命中同一缓存，不取行业数据
         result2 = _push2_extended("600519")
-        self.assertIsNotNone(result2)
+        assert result2 is not None
         self.assertAlmostEqual(result2["market_cap"], 2e11)
         mock_fetch_ind.assert_not_called()
 
@@ -672,12 +672,34 @@ class TestExtendedCacheSharing(unittest.TestCase):
         from src.python.report.fund_style_classify import _tencent_extended
 
         r1 = _tencent_extended("600519")
-        self.assertIsNotNone(r1)
+        assert r1 is not None
         self.assertAlmostEqual(r1["market_cap"], 1e11)
 
         r2 = _tencent_extended("000858")
-        self.assertIsNotNone(r2)
+        assert r2 is not None
         self.assertAlmostEqual(r2["market_cap"], 5e10)
 
         # tencent 数据源全程未实际调用（缓存命中）
         mock_tencent_api.assert_not_called()
+
+
+class TestPush2ExtendedSessionCache(unittest.TestCase):
+    """_push2_extended 必须走会话缓存变体（同代码一轮报告只探一次，含失败）。
+
+    现场（README 截图复核）：演示组合里的场外基金被逐只调用风格判定，_push2_extended
+    直调 fetch_industry_data → 取不到也不记会话缓存，同一键一轮未命中 18 次。
+    """
+
+    def setUp(self):
+        from src.python.core.provider_registry import get_registry
+
+        get_registry().session_cache_clear("industry")
+
+    @patch("src.python.fetcher.industry.fetch_industry_data")
+    def test_unavailable_probed_once_per_run(self, mock_fetch_ind):
+        mock_fetch_ind.return_value = None
+        from src.python.report.fund_style_classify import _push2_extended
+
+        assert _push2_extended("005827") is None
+        assert _push2_extended("005827") is None
+        self.assertEqual(mock_fetch_ind.call_count, 1, "取不到的代码须进会话缓存，否则每轮重探")

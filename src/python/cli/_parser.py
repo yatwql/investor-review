@@ -173,6 +173,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "仅 --type both/full 时有效）",
     )
     report_p.add_argument("--force-llm", action="store_true", help="强制重新生成 LLM 内容（跳过缓存）")
+    report_p.add_argument(
+        "--post-eval",
+        action="store_true",
+        help="报告成功后顺带跑零取数回测阶段（horizon/valuation，产物落 docs/tmp；失败不影响报告）",
+    )
     from src.python.llm.force_scope import FORCEABLE_LLM_MODULES
 
     report_p.add_argument(
@@ -319,6 +324,25 @@ def _build_parser() -> argparse.ArgumentParser:
         "  doctor              完整自检（含数据源联通性）\n"
         "  doctor --offline    仅本地自检，不联网\n"
         "  doctor --timeout 15 放宽网络检查耗时预算"
+    )
+
+    # ── settle-decisions 子命令（决策账本多视界结算，独立于报告生成）──
+    settle_p = sub.add_parser("settle-decisions", help="决策账本多视界结算（幂等，可独立于报告运行）")
+    settle_p.add_argument(
+        "--report-date",
+        default=None,
+        help="结算运行所在交易日（缺省本地当日）",
+    )
+    settle_p.add_argument(
+        "--horizons",
+        default=None,
+        help="目标视界列表，逗号分隔（缺省 5,20,60；低于 5 按 5 计）",
+    )
+    settle_p.epilog = (
+        "示例:\n"
+        "  settle-decisions                          按默认视界（5/20/60）结算全部到期决策\n"
+        "  settle-decisions --horizons 5,20          只结算短视界\n"
+        "  settle-decisions --report-date 2026-11-02 指定结算运行日"
     )
 
     # ── config 子命令（共享配置的查看与持久化编辑）──

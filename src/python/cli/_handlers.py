@@ -306,10 +306,27 @@ def _handle_report(args: argparse.Namespace, config: dict) -> int:
     # 严重失败时不列——目录里留的是上一次的产物，列出来会被误认为本次结果
     if exit_code != _EXIT_SEVERE:
         _print_artifact_paths(config, args.output)
+        _print_eval_status(post_eval=bool(getattr(args, "post_eval", False)))
 
     # 任务完成/失败通知（尽力而为：未配置静默跳过，任何异常不影响退出码）
     _notify_report_completion(args, config, exit_code, result)
     return exit_code
+
+
+def _print_eval_status(*, post_eval: bool) -> None:
+    """收尾评测提示（一行）与可选随报告执行（opt-in，失败不影响退出码）。"""
+    from src.python.core.eval_status import format_eval_hint, run_post_eval
+
+    print(format_eval_hint())
+    if not post_eval:
+        return
+    outcome = run_post_eval()
+    if outcome.get("ok"):
+        print("[OK] 随报告回测已完成（zero-取数阶段）")
+        if outcome.get("tail"):
+            print(outcome["tail"])
+    else:
+        print(f"[!] 随报告回测未完成（不影响报告）：{outcome.get('error') or outcome.get('returncode')}")
 
 
 def _print_artifact_paths(config: dict, output_override: str | None) -> None:
@@ -792,3 +809,44 @@ def _handle_config(args, config) -> int:
     except (ConfigEditError, ValueError, OSError) as exc:
         print(f"  [ERR] {exc}")
         return _EXIT_SEVERE
+
+
+def _handle_settle_decisions(args: argparse.Namespace, config: dict) -> int:
+    """处理 settle-decisions 子命令——决策账本多视界结算（独立于报告生成）。
+
+    判重键 ``(decision_id, 目标视界)``：同决策同视界幂等，未到期/行情不可得
+    视界级暂缓，长视界成熟后自动回补。结算仅写决策账本，不产出报告文件。
+    需要 config（结算走行情链路取数）。
+
+    Returns:
+        int 退出码（_EXIT_SUCCESS=结算执行完成，含 0 条也属成功——幂等语义）。
+    """
+    from datetime import datetime
+
+    from src.python.core import decision_ledger
+    from src.python.report import decision_settlement
+
+    if not decision_ledger.is_active():
+        print("[!] decision_reflection 实验功能未开启，账本未激活，无可结算")
+        return _EXIT_SUCCESS
+
+    report_date = args.report_date or datetime.now().strftime("%Y-%m-%d")
+    if args.horizons:
+        try:
+            horizons = [int(x) for x in args.horizons.split(",") if x.strip()]
+        except ValueError:
+            print(f"[!] --horizons 格式错误（应为逗号分隔整数）：{args.horizons}")
+            return _EXIT_SEVERE
+        if not horizons:
+            print("[!] --horizons 为空")
+            return _EXIT_SEVERE
+    else:
+        horizons = list(decision_ledger.SETTLE_HORIZONS)
+
+    result = decision_settlement.settle_pending_decisions(report_date=report_date, horizons=horizons)
+    touched = sorted({s["target_horizon"] for s in result["summary"]})
+    print(
+        f"[OK] 结算事件 {result['settled']} 条（触及视界 {touched or '无'}，"
+        f"决策 {len(result['ids'])} 条）；未到期/行情暂不可得 {result['deferred']}，无方向跳过 {result['skipped']}"
+    )
+    return _EXIT_SUCCESS

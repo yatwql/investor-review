@@ -47,14 +47,17 @@ def _action_data(**extra) -> dict:
 class _ExcelSheetAssertHelpers:
     """Excel 呈现测试共享断言助手（写页签 / 取全部文本 / 展平）。"""
 
-    def _write(self, action_data, decision_review_data=None) -> "object":
+    def _write(self, action_data, decision_review_data=None, decision_basis_data=None) -> "object":
         from openpyxl import Workbook
 
         from src.python.report.action_sheet import write_action_sheet
 
         wb = Workbook()
         ws = wb.active
-        write_action_sheet(ws, action_data, decision_review_data=decision_review_data)
+        assert ws is not None
+        write_action_sheet(
+            ws, action_data, decision_review_data=decision_review_data, decision_basis_data=decision_basis_data
+        )
         return ws
 
     def _all_text(self, ws) -> list[list[str]]:
@@ -62,6 +65,45 @@ class _ExcelSheetAssertHelpers:
 
     def _flat(self, ws) -> list[str]:
         return [v for row in self._all_text(ws) for v in row]
+
+
+class TestDecisionBasisBlock(_ExcelSheetAssertHelpers, unittest.TestCase):
+    """判断依据子块（形态 A 顶部呈现）——信号清单与可信度空态。"""
+
+    @staticmethod
+    def _contract():
+        from src.python.report.decision_basis import build_decision_basis_data
+
+        return build_decision_basis_data()
+
+    def test_block_at_top_with_title_summary_and_empty_state(self):
+        """契约 provided → 页签顶部出现判断依据：标题 + summary + 信号/可信度空态。"""
+        data = self._contract()
+        text = " ".join(self._flat(self._write(_action_data(), decision_basis_data=data)))
+        assert data["title"] in text
+        assert data["summary"] in text
+        assert "暂无信号记录" in text  # 空账本 → 清单空态（Data States 口径）
+        assert "暂不可判" in text  # 空态不得显示可信度高
+        # 位置：判断依据在再平衡信号之前（顶部子块）
+        assert text.index(data["title"]) < text.index("再平衡信号")
+
+    def test_absent_key_output_identical(self):
+        """验收⑥：键缺席时输出与既有完全一致（零行为变化）。"""
+        from openpyxl import Workbook
+
+        from src.python.report.action_sheet import write_action_sheet
+
+        ws_a = self._write(_action_data())
+        wb = Workbook()
+        ws_b = wb.active
+        assert ws_b is not None
+        write_action_sheet(ws_b, _action_data())
+        assert self._all_text(ws_a) == self._all_text(ws_b)
+
+    def test_disabled_contract_hidden(self):
+        """开关关闭（enabled=False）→ 子块完全隐藏（回滚通道）。"""
+        text = " ".join(self._flat(self._write(_action_data(), decision_basis_data={"enabled": False})))
+        assert "判断依据" not in text
 
 
 class TestExcelActionSheet(_ExcelSheetAssertHelpers, unittest.TestCase):

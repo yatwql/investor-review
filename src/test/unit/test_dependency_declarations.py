@@ -84,6 +84,19 @@ def _pyproject_runtime_entries() -> dict[str, str]:
     return entries
 
 
+def _pyproject_optional_entries() -> dict[str, str]:
+    """`[project.optional-dependencies]`（展平所有 extras）→ {规范名: 说明符}。"""
+    with open(_PYPROJECT, "rb") as f:
+        data = tomllib.load(f)
+    entries: dict[str, str] = {}
+    for specs in (data["project"].get("optional-dependencies") or {}).values():
+        for spec in specs:
+            parsed = _parse_requirement_line(spec)
+            assert parsed is not None, f"pyproject extras 依赖项无法解析：{spec!r}"
+            entries[parsed[0]] = parsed[1]
+    return entries
+
+
 def test_runtime_dependency_specs_match_requirements() -> None:
     """运行时直接依赖的说明符必须两侧逐字一致（区间/钉死策略不得各写一套）。"""
     runtime = _pyproject_runtime_entries()
@@ -97,6 +110,27 @@ def test_runtime_dependency_specs_match_requirements() -> None:
         elif requirements[name] != spec:
             drift.append(f"{name}: pyproject={spec!r} vs requirements.txt={requirements[name]!r}")
     assert not drift, "运行时依赖约束漂移：\n  " + "\n  ".join(drift)
+
+
+def test_extras_dependency_specs_match_requirements() -> None:
+    """extras（开发/工具依赖）两侧出现的同名包，说明符必须一致。
+
+    回归场景：`pytest`/`pytest-mock`/`pytest-html` 曾在 pyproject extras 里写
+    `>=9.1`/`>=3.15`/`>=4.2`，requirements.txt 却停在 `>=8.0`/`>=3.15.1`/`>=4.0`——
+    「启动脚本装环境」得到 pytest 8，CI 得到 pytest 9.x，同一套用例在两套
+    框架语义下跑，差异既不可复现也无法归因。运行时依赖一侧已有 ① 号契约，
+    这条补齐 extras 一侧（只约束两侧都出现的包；只在 pyproject 声明的包不在此列）。
+    """
+    extras = _pyproject_optional_entries()
+    requirements = _requirements_entries()
+    assert extras, "pyproject 未声明任何 optional-dependencies，本契约失去意义"
+
+    drift = [
+        f"{name}: pyproject extras={spec!r} vs requirements.txt={requirements[name]!r}"
+        for name, spec in sorted(extras.items())
+        if name in requirements and requirements[name] != spec
+    ]
+    assert not drift, "extras 依赖约束漂移：\n  " + "\n  ".join(drift)
 
 
 def test_requirements_extras_are_whitelisted() -> None:

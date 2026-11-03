@@ -184,7 +184,12 @@ class TestAppendSignals:
             value=-1.2,
         )
 
-        assert sl.append_signal(path=path, **kwargs) is not None
+        record = sl.append_signal(path=path, **kwargs)
+        # 只断言非空/再调为 None → 「返回任意非 None 垃圾」也能过；锁定回写记录的归一键。
+        assert record is not None
+        assert record["signal_type"] == kwargs["signal_type"]
+        assert record["report_date"] == kwargs["report_date"]
+        assert record["rating"] == kwargs["rating"]
         assert sl.append_signal(path=path, **kwargs) is None
 
     def test_corrupt_line_tolerated_on_load(self, tmp_path):

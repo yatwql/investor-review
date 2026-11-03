@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 
 from src.python.report._experimental_seams import (
     inject_holding_change_data,
+    record_deterministic_decisions,
+    record_llm_decisions_and_review_block,
     record_prosperity_diagnosis,
 )
 
@@ -251,11 +254,43 @@ def _generate_report_both(
     from src.python.analysis.metrics import compute_portfolio_peak_mv
 
     if pipeline_data is not None:
-        pipeline_data["action_data"] = build_action_data(
-            _action_holdings_details(details, transactions),
-            sum(d.market_value for d in details),
-            portfolio_peak_mv=compute_portfolio_peak_mv((history_data or {}).get("bars")),
+        _peak_mv = compute_portfolio_peak_mv((history_data or {}).get("bars"))
+        _both_holdings = _action_holdings_details(details, transactions)
+        _both_total_mv = sum(d.market_value for d in details)
+        _both_action = build_action_data(
+            _both_holdings,
+            _both_total_mv,
+            portfolio_peak_mv=_peak_mv,
         )
+        pipeline_data["action_data"] = _both_action
+        # 判断依据块随峰值与纪律触发条就绪重装配（幂等）；独立阶段计时——
+        # 纯内存组装，耗时只随账本/持仓规模变化，与取数阶段分开看。
+        from src.python.report.decision_basis import PERF_PHASE_ASSEMBLY, build_decision_basis_data
+
+        perf.start(PERF_PHASE_ASSEMBLY)
+        try:
+            pipeline_data["decision_basis_data"] = build_decision_basis_data(
+                _both_holdings,
+                _both_total_mv,
+                portfolio_peak_mv=_peak_mv,
+                discipline_signals=_both_action.get("discipline_signals"),
+            )
+        finally:
+            perf.stop()
+
+        # 决策跨期反思闭环（decision_reflection 实验功能，默认关）：与 full 路径同一
+        # 挂载点，只换入参来源——both 路径无 prep 契约，按挂载点所需键构最小入参
+        # （today_str 供账本报告日；holdings_details 供结算基线取值）。
+        # 结算必须先于产出：两侧（HTML 行动章 / Excel 行动页签）消费的复盘区块由
+        # ③④ 装配后写入 pipeline_data，再随 write_html_report / generate_excel_report 转发。
+        # 无 LLM 章节 → LLM 侧登记自然跳过（enable_llm=False），但复盘区块装配与
+        # LLM 无关，仍须执行（否则开关开启时 both 路径整块不渲染）。
+        _decision_input = {
+            "today_str": datetime.now().strftime("%Y-%m-%d"),
+            "holdings_details": _both_holdings,
+        }
+        record_deterministic_decisions(_decision_input, _both_action, reporter)
+        record_llm_decisions_and_review_block(_decision_input, (), False, pipeline_data, reporter)
 
     # 景气度框架诊断（实验性功能 prosperity_framework）：经实验挂载点接入（守护与
     # 注入语义见 `_experimental_seams`）。依赖已算好的基本面契约（ROE）与历史走势
@@ -312,6 +347,8 @@ def _generate_report_both(
             position_status=(pipeline_data or {}).get("position_status"),
             data_freshness=(pipeline_data or {}).get("data_freshness"),
             action_data=(pipeline_data or {}).get("action_data"),
+            decision_basis_data=(pipeline_data or {}).get("decision_basis_data"),
+            decision_review_data=(pipeline_data or {}).get("decision_review_data"),
             prosperity_framework_data=(pipeline_data or {}).get("prosperity_framework_data"),
             market_sentiment_data=(pipeline_data or {}).get("market_sentiment_data"),
             crisis_annotation_data=(pipeline_data or {}).get("crisis_annotation_data"),

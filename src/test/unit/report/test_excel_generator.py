@@ -235,6 +235,45 @@ class TestGenerateExcelReport(unittest.TestCase):
         self.assertIsInstance(action_data, dict)
         self.assertTrue(action_data.get("available"), "行动建议页签应拿到可用数据而非降级占位")
 
+    def test_decision_basis_built_in_basic_path(self) -> None:
+        """basic 路径不经编排层 → 判断依据块由同一份明细就地构建（含风险预算）。"""
+        from src.python.report.excel_generator import generate_excel_report
+
+        with patch("src.python.report.action_sheet.write_action_sheet") as mock_write:
+            generate_excel_report(
+                self.holdings,
+                details=[self._action_detail()],
+                enable_action=True,
+                progress=self.progress,
+            )
+
+        basis = mock_write.call_args.kwargs["decision_basis_data"]
+        self.assertIsInstance(basis, dict)
+        self.assertTrue(basis.get("enabled"))
+        risk_budget = basis["risk_budget"]
+        self.assertTrue(risk_budget["available"], "有持仓市值即风险预算可用")
+        items = risk_budget["items"]
+        self.assertEqual([it["item"] for it in items], ["单品种权重", "行业权重", "组合回撤"])
+        self.assertEqual(items[1]["max_label"], "未配置上限")
+        self.assertEqual(items[2]["current_label"], "未评估", "basic 无历史峰值 → 回撤现状未评估")
+
+    def test_decision_basis_not_rebuilt_when_injected(self) -> None:
+        """编排层已注入判断依据块时原样透传（峰值就绪后那次装配为唯一事实源）。"""
+        from src.python.report.excel_generator import generate_excel_report
+
+        injected_basis = {"enabled": True, "available": True, "summary": "编排层注入"}
+
+        with patch("src.python.report.action_sheet.write_action_sheet") as mock_write:
+            generate_excel_report(
+                self.holdings,
+                details=[self._action_detail()],
+                enable_action=True,
+                pipeline_data={"action_data": {"available": True}, "decision_basis_data": injected_basis},
+                progress=self.progress,
+            )
+
+        self.assertIs(mock_write.call_args.kwargs["decision_basis_data"], injected_basis)
+
     def test_action_data_not_rebuilt_when_injected(self) -> None:
         """编排层已注入 action_data 时原样透传，不重复构建（保持单一事实来源）。"""
         from src.python.report.excel_generator import generate_excel_report

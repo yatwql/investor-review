@@ -90,9 +90,11 @@ def _push2_extended(code: str) -> dict[str, Any] | None:
         return _cached
 
     try:
-        from src.python.fetcher.industry import fetch_industry_data
+        from src.python.fetcher.industry import fetch_industry_data_cached
 
-        industry_data = fetch_industry_data(code)
+        # 走会话缓存变体：同一代码一轮报告内只探一次（含失败结果），
+        # 直接调 fetch_industry_data 会让「取不到」的标的每轮重探。
+        industry_data = fetch_industry_data_cached(code)
         if industry_data is None:
             return None
 
@@ -112,7 +114,7 @@ def _push2_extended(code: str) -> dict[str, Any] | None:
         return None
 
 
-def _tencent_extended(code: str) -> dict[str, Any] | None:
+def _tencent_extended(code: str, name: str = "") -> dict[str, Any] | None:
     """从腾讯财经 API 获取市值+PE 扩展数据（二级降级）。
 
     结果以全天 TTL 写入文件缓存，同一股票同日内跨进程不重复请求。
@@ -138,7 +140,9 @@ def _tencent_extended(code: str) -> dict[str, Any] | None:
     try:
         from src.python.fetcher.price import fetch_market_data
 
-        data = fetch_market_data(code)
+        # 带上名称：行情会话缓存按 (代码, 名称) 分键（00 重叠区同码可能是股票与
+        # 场外基金两只证券），不传名称会与被持仓核算侧的带名调用分叉成两次取数。
+        data = fetch_market_data(code, name)
         if data is None:
             return None
 
@@ -182,7 +186,9 @@ def _get_industry_avg_pe(codes: list[str], names_by_code: dict[str, str] | None 
         当无可用数据时返回 ``{}``（方案 C 降级走代码段估算）。
     """
     try:
-        from src.python.fetcher.industry import fetch_industry_data
+        # 会话缓存变体：行业平均 PE 每个基金都要查一次，直接取数会让
+        # 「取不到」的代码在多阶段重复探测（同键未命中告警噪音）。
+        from src.python.fetcher.industry import fetch_industry_data_cached as fetch_industry_data
     except ImportError:
         logger.warning("行业数据 fetcher 模块不可用，行业平均 PE 功能降级")
         return {}
@@ -242,7 +248,7 @@ def _get_industry_avg_pe(codes: list[str], names_by_code: dict[str, str] | None 
         return {}
 
 
-def _batch_tencent_extended(codes: list[str]) -> dict[str, dict[str, Any]]:
+def _batch_tencent_extended(codes: list[str], names: dict[str, str] | None = None) -> dict[str, dict[str, Any]]:
     """并发批量通过腾讯 API 获取多只股票的扩展数据。
 
     当 push2 熔断时作为批量降级方案，避免逐个串行请求。
@@ -265,7 +271,8 @@ def _batch_tencent_extended(codes: list[str]) -> dict[str, dict[str, Any]]:
         get_batch_worker_count("fund_style_workers", 8),  # 弱机器可配小
         thread_name_prefix="fund_style",
     ) as ex:
-        fut_map = {ex.submit(_tencent_extended, c): c for c in codes}
+        _names = names or {}
+        fut_map = {ex.submit(_tencent_extended, c, _names.get(c, "")): c for c in codes}
         for fut in as_completed(fut_map):
             c = fut_map[fut]
             try:
@@ -295,6 +302,7 @@ def _prefetch_extended_data(
         for h in holdings
         if (c := (h.get("code") or "").strip()) and c and is_a_share_stock(h.get("name", "") or "", c)
     ]
+    _names: dict[str, str] = {(h.get("code") or "").strip(): (h.get("name") or "").strip() for h in holdings}
     # 去重：同一股票跨基金不重复请求
     _seen: set[str] = set()
     _unique_codes = [c for c in _codes_to_fetch if not (c in _seen or _seen.add(c))]
@@ -310,7 +318,7 @@ def _prefetch_extended_data(
             reg.session_cache_set("extended", code, ext_data)
     # 并发批量腾讯回退（push2 熔断时的降级方案）
     if _need_tencent and not reg.is_circuit_broken("tencent_style"):
-        _batch_tencent_extended(_need_tencent)
+        _batch_tencent_extended(_need_tencent, _names)
 
 
 def _classify_stock_styles(

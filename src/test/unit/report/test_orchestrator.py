@@ -168,6 +168,8 @@ class TestPrepareReportData:
             "data_freshness",
             # 行动建议单一数据源：「行动建议」章行动板块 + 「智囊团深度复盘」章行动摘要共享（数据契约）
             "action_data",
+            # 判断依据章内块（形态 A；纯确定性零 LLM，开关 decision_basis 默认开）
+            "decision_basis_data",
             # 估值分位契约（功能开关 valuation_percentile 关闭时为 None）
             "valuation_data",
             # 市场温度契约（功能开关 market_temperature 关闭时为 None）

@@ -88,7 +88,9 @@ jobs:
           pip install --retries 5 --timeout 60 -e ".[test]"
 
       - name: Ruff 格式检查
-        run: python -m ruff format --check src/python/ scripts/
+        # 扫面须覆盖 src/test：本地基线命令是整树 `ruff format --check`，只查 src/python + scripts
+        # 会让测试文件的格式漂移在 CI 上静默放行（本地红、CI 绿），形成双口径。
+        run: python -m ruff format --check src/python/ src/test/ scripts/
 
       - name: Ruff Lint 检查
         run: python -m ruff check

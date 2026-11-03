@@ -8,7 +8,7 @@
 |---|---|---|
 | 第一次装好、跑出第一份报告 | [快速开始](how-to-start.md) | 全文（约 15 分钟） |
 | 在手机上用 SSH 看持仓、生成报告 | [TUI 菜单操作手册](how-to-use-tui-menu.md) | §主菜单总览、§键盘操作 |
-| 让机器每天自动生成报告 | [CLI 命令行模式](how-to-use-cli-mode.md) | §13 定时任务 |
+| 让机器每天自动生成报告 | [CLI 命令行模式](how-to-use-cli-mode.md) | §16 定时任务 |
 | 用浏览器点点鼠标生成 / 预览报告 | [Web 浏览器模式](how-to-use-web-mode.md) | §2 首页布局（六区标签页工作台） |
 | 对比「如果调仓」会怎样 | [报告文件结构](reports-instruction.md) | §调仓 What-if 模拟 |
 | 对已生成的报告追问几个问题 | [TUI 菜单操作手册](how-to-use-tui-menu.md) | §对话式追问类（`[Q]`） |

@@ -198,14 +198,14 @@ class TestIsBondFund(unittest.TestCase):
             "某债券A",
         ]:
             with self.subTest(name=name):
-                self.assertTrue(is_bond_related_by_name(name))
+                self.assertIs(is_bond_related_by_name(name), True)
 
     def test_not_bond(self):
         from src.python.core.code_utils import is_bond_related_by_name
 
-        self.assertFalse(is_bond_related_by_name("中欧医疗健康混合"))
+        self.assertIs(is_bond_related_by_name("中欧医疗健康混合"), False)
         self.assertFalse(is_bond_related_by_name("华夏纳斯达克100ETF(QDII)"))
-        self.assertFalse(is_bond_related_by_name("电池ETF"))
+        self.assertIs(is_bond_related_by_name("电池ETF"), False)
 
 
 class TestIsIndexLink(unittest.TestCase):
@@ -221,14 +221,14 @@ class TestIsIndexLink(unittest.TestCase):
             "某指数联接A",
         ]:
             with self.subTest(name=name):
-                self.assertTrue(is_index_link_by_name(name))
+                self.assertIs(is_index_link_by_name(name), True)
 
     def test_not_link(self):
         from src.python.core.code_utils import is_index_link_by_name
 
-        self.assertFalse(is_index_link_by_name("中欧医疗健康混合"))
-        self.assertFalse(is_index_link_by_name("电池ETF"))
-        self.assertFalse(is_index_link_by_name("招商鑫福中短债A"))
+        self.assertIs(is_index_link_by_name("中欧医疗健康混合"), False)
+        self.assertIs(is_index_link_by_name("电池ETF"), False)
+        self.assertIs(is_index_link_by_name("招商鑫福中短债A"), False)
 
 
 class TestFundTypeTag(unittest.TestCase):
