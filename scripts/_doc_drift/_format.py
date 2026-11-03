@@ -672,8 +672,7 @@ def check_readme_doc_index(doc_text: str | None = None) -> list[str]:
         for name in sorted(actual - listed)
     ]
     findings += [
-        f"{rel(_README)}: 管理文档索引引用了不存在的 `docs/managements/{name}`"
-        for name in sorted(listed - actual)
+        f"{rel(_README)}: 管理文档索引引用了不存在的 `docs/managements/{name}`" for name in sorted(listed - actual)
     ]
     return findings
 
@@ -685,7 +684,10 @@ _README_DERIVED_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = _CLAUDE_DERI
     (re.compile(r"\d+\s*项\s*(?:含|共)?"), "条目计数"),
     (re.compile(r"\d+\s*张\s*(?:图|表|Chart)"), "图表计数"),
     # 中文数词近似量（「上万条用例」「数千个脚本」）：同样是读不出来源的规模断言
-    (re.compile(r"[上万数千百十]\s*[余多]?\s*(?:条|项|个)[^\n]{0,6}?(?:用例|测试|脚本|页签|章节|菜单)"), "中文数词计数"),
+    (
+        re.compile(r"[上万数千百十]\s*[余多]?\s*(?:条|项|个)[^\n]{0,6}?(?:用例|测试|脚本|页签|章节|菜单)"),
+        "中文数词计数",
+    ),
 )
 
 
