@@ -275,8 +275,9 @@ class TestBatchFetchIndustryData(unittest.TestCase):
         get_registry().session_cache_clear("industry")
         result = batch_fetch_industry_data(["600900", "AAPL", "00700", "PEP"])
         self.assertEqual(result, {})
-        # AAPL/00700/PEP 被过滤；600900 失败结论进会话缓存，批内重试不再重探
-        self.assertEqual(mock_fetch.call_count, 1)
+        # AAPL/00700/PEP 被过滤；600900 失败 → 批内重试确实再取一次（双重降级治理"),
+        # 但重试走的是绕开会话缓存的路径，故首次失败不会把重试架空
+        self.assertEqual(mock_fetch.call_count, 2)
 
     @patch("src.python.fetcher.industry.fetch_industry_data")
     def test_all_us_stocks_return_empty(self, mock_fetch):
@@ -398,8 +399,34 @@ class TestBatchIndustryNegativeCache(unittest.TestCase):
 
     @patch("src.python.fetcher.industry.fetch_industry_data", return_value=None)
     def test_repeated_batch_calls_probe_once(self, mock_fetch):
+        """首批 1 次初探 + 1 次重试；第二批直接吃会话缓存结论，不再重探。"""
         from src.python.fetcher.industry import batch_fetch_industry_data
 
         assert batch_fetch_industry_data(["005827"]) == {}
+        first_round_calls = mock_fetch.call_count
+        assert first_round_calls == 2, "初探 1 次 + 重试 1 次（重试不得被失败记忆架空）"
         assert batch_fetch_industry_data(["005827"]) == {}
-        self.assertEqual(mock_fetch.call_count, 1, "同一代码跨批/跨阶段只探一次")
+        self.assertEqual(mock_fetch.call_count, first_round_calls, "跨批/跨阶段只探一次")
+
+
+class TestRetryNotAirgappedBySessionCache(unittest.TestCase):
+    """会话缓存记住失败结论后，批内重试仍须真取数（不得空转）。
+
+    双重降级治理：链路失败必须真重试，只有最终结论才进会话缓存；若重试也走
+    `fetch_industry_data_cached`，首次失败被记忆 → 重试瞬间返回 None，
+    「失败后重试」形同虚设。
+    """
+
+    def setUp(self):
+        from src.python.core.provider_registry import get_registry
+
+        get_registry().session_cache_clear("industry")
+
+    @patch("src.python.fetcher.industry.fetch_industry_data")
+    def test_retry_recovers_after_first_failure(self, mock_fetch):
+        mock_fetch.side_effect = [None, {"code": "600900", "industry": "电力"}]
+        from src.python.fetcher.industry import batch_fetch_industry_data
+
+        result = batch_fetch_industry_data(["600900"])
+        self.assertEqual(result["600900"]["industry"], "电力")
+        self.assertEqual(mock_fetch.call_count, 2, "重试必须真的再取一次")

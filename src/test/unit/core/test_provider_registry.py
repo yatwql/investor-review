@@ -591,3 +591,12 @@ class TestSessionCacheFetchSingleFlight:
         assert reg.session_cache_fetch("industry", "005827", _fetch) is None
         assert reg.session_cache_fetch("industry", "005827", _fetch) is None
         assert len(calls) == 1
+
+    def test_reset_clears_inflight_locks(self):
+        """reset() 须一并清空在飞锁表（否则测试间/长驻进程跨轮残留）。"""
+        reg = self._registry()
+        reg.session_cache_fetch("industry", "600519", lambda: {"industry": "白酒"})
+        assert reg._session_inflight, "取数后应留有在飞锁条目"
+        reg.reset()
+        assert not reg._session_inflight
+        assert not reg._session_cache

@@ -626,7 +626,10 @@ class DataSourceRegistry:
             from src.python import cache as _cache
 
             key = cache_key_fn(code)
-            data = _cache.get(key, 86400 * 7)
+            # 这是**只看缓存**的窥视（不取数），未命中不代表需要拉取，故不计入
+            # 命中率与「同键未命中」告警——行情一次性核算里它会让同一键多记一次
+            # 未命中（实测 price_stock_005827 ×3 里含这一路），告警指向被稀释。
+            data = _cache.get(key, 86400 * 7, record_stats=False)
             if data is not None:
                 data = dict(data)  # 复制避免修改缓存原始对象
                 # 检查 price_date 是否匹配今天
@@ -680,6 +683,7 @@ class DataSourceRegistry:
             self._chains.clear()
         with self._cache_lock:
             self._session_cache.clear()
+            self._session_inflight.clear()
 
 
 # ── 工厂函数 ────────────────────────────────────────────

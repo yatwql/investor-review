@@ -11,7 +11,6 @@ import logging
 import re
 from typing import Any
 
-from src.python.cache import get as cache_get
 from src.python.cache import get_ttl
 from src.python.core.code_utils import is_a_share_code
 from src.python.core.log_dedupe import log_throttled
@@ -145,6 +144,22 @@ def fetch_valuation_fields(code: str) -> dict[str, float | None] | None:
     return {"pe": data.get("pe"), "pb": data.get("pb")}
 
 
+def _retry_industry_fetch(code: str) -> dict | None:
+    """批内重试专用取数：绕开会话缓存，并把新结论回写。
+
+    会话缓存会记住失败结论（防同轮重探），若重试也走 `fetch_industry_data_cached`，
+    首次失败即被记忆、重试退化为空转——「失败后重试」这条降级治理要求因此失效
+    （双重降级治理：链路失败必须真重试，只有最终结论才进会话缓存）。
+    """
+    from src.python.core.provider_registry import get_registry
+
+    result = fetch_industry_data(code)
+    get_registry().session_cache_set(
+        "industry", code, result, source="api" if result is not None else "miss"
+    )
+    return result
+
+
 def batch_fetch_industry_data(codes: list[str]) -> dict[str, dict]:
     """批量获取多只证券的行业分类和概念板块归属。
 
@@ -220,8 +235,16 @@ def batch_fetch_industry_data(codes: list[str]) -> dict[str, dict]:
     ]
 
     def _cache_check(cache_id: str) -> Any:
-        """缓存命中判据：按 TTL 读取。"""
-        return cache_get(cache_id, get_ttl("industry"))
+        """批前预检只看会话缓存（已结案即跳过调度）。
+
+        文件缓存探测有意留在任务内的 `fetch_with_fallback`：那里已由会话级
+        single-flight 收口，每个代码一轮只探一次；若此处直接 `cache_get`，
+        三个并行报告阶段会为同一只标的各记一次未命中（实测 `industry_005827` ×3），
+        而「同键未命中」告警本应只指向真实重探。
+        """
+        code = cache_id[len(_INDUSTRY_CACHE_PREFIX) :]
+        cached = _registry.session_cache_get("industry", code)
+        return None if cached is NOT_FOUND else cached
 
     results = dispatcher.execute_with_cache_check(
         items,
@@ -232,7 +255,7 @@ def batch_fetch_industry_data(codes: list[str]) -> dict[str, dict]:
     # 通用重试（复用主 executor）
     results = dispatcher.retry_failed(
         results,
-        task_factory=lambda idx: partial(fetch_industry_data_cached, code=a_codes[idx]),
+        task_factory=lambda idx: partial(_retry_industry_fetch, code=a_codes[idx]),
         delay=_BATCH_RETRY_DELAY,
         jitter=_BATCH_RETRY_JITTER,
     )

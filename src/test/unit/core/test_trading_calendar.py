@@ -304,8 +304,9 @@ class TestCalendarFailureCooldown:
         from src.python.core import trading_calendar as tc
 
         tc._reset_calendar_memo()
-        with _patch.object(tc, "_CAL_FAILURE_COOLDOWN_SECONDS", 60.0), _patch.object(
-            tc.time, "monotonic", return_value=1000.0
+        with (
+            _patch.object(tc, "_CAL_FAILURE_COOLDOWN_SECONDS", 60.0),
+            _patch.object(tc.time, "monotonic", return_value=1000.0),
         ):
             tc._calendar_failure_mark()
             assert tc._calendar_failure_active() is True
@@ -329,8 +330,9 @@ class TestCachedTradingDaysSingleSource:
             calls.append(key)
             return ["2026-11-02", "2026-11-03"]
 
-        with _patch.object(tc.cache, "get", side_effect=_fake_get), _patch.object(
-            tc.cache, "get_ttl", return_value=86400.0
+        with (
+            _patch.object(tc.cache, "get", side_effect=_fake_get),
+            _patch.object(tc.cache, "get_ttl", return_value=86400.0),
         ):
             assert tc.cached_trading_days() == ["2026-11-02", "2026-11-03"]
             assert tc.cached_trading_days() == ["2026-11-02", "2026-11-03"]
@@ -343,8 +345,9 @@ class TestCachedTradingDaysSingleSource:
         from src.python.core import trading_calendar as tc
 
         tc._reset_calendar_memo()
-        with _patch.object(tc.cache, "get", return_value=None), _patch.object(
-            tc, "_get_trading_calendar", side_effect=AssertionError("不得触网")
+        with (
+            _patch.object(tc.cache, "get", return_value=None),
+            _patch.object(tc, "_get_trading_calendar", side_effect=AssertionError("不得触网")),
         ):
             assert tc.cached_trading_days() == []
         tc._reset_calendar_memo()
