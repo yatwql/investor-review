@@ -41,7 +41,7 @@
   - **不依赖外部数据的用例显式声明离线**：报告/编排/集成类用例的**附带依赖**（交易日历、行业数据、行情、健康检查探针、akshare 直连路径等）并非其测试目标——这类文件在模块级加一行 `pytest.mark.usefixtures("offline_external_sources")`（`src/test/_network_guard.py::apply_offline_stubs`）即可：HTTP 出口换成即时失败的离线桩、交易日历回空集、链路瞬时重试退避置 0（不再等待）、akshare 换空桩；同 fixture 另用 `_NoWaitClock` 接管 `core.throttle`/`core.retry`/`providers.cninfo`/`providers.datasink` 的模块级 `time`（sleep 空操作、monotonic 仍真实），间隔节流与 429 限速窗口也不再白等。**需要验证某源真实行为的用例必须自行 mock 该源**，不得用本 fixture 遮掩
   - **测试目标源要 patch 对模块**：生产代码常在函数内 `from ... import`（如 `report/news_correlation.py` 从 `fetcher.news` 导入）——patch 必须指向**调用点所在模块**的属性，patch 上游 provider 模块的同名函数**不会**生效（该名字已在导入时绑定），否则用例会静默走真实链路
 - **调试失败用例流程**：测试失败后**禁止**重新跑全量测试套件。先用 `.venv/bin/python scripts/test-extract-failures.py` 提取失败用例名，修复后只跑该单个用例验证（`.venv/bin/python -m pytest <test_file>::<test_name> -v --tb=short`）。仅提交/发布前才需跑完整门禁。
-- **自审记录**：自查发现的所有问题 **必须** 先记录到 `docs/managements/review-findings.md`，标注状态（待处理/已完成）。待办区允许非空（有未修复问题属正常）。修复后 **立即** 从 review-findings.md 中移除该条详细说明（仅保留摘要行），变更记录移至 `docs/managements/changelog.md`。
+- **自审记录**：自查发现的所有问题 **必须** 先记录到 `docs/managements/review-findings.md`，标注状态（待处理/已完成）。待办区允许非空（有未修复问题属正常）。修复后 **立即** 从 review-findings.md 中移除该条详细说明，**但摘要行必须留在 `## 已解决问题` → `### 开发期已修复（<当前版本>-dev）` 表内**（该表是发布时 `release.py prepare` archive 步的搬料源），**禁止整行删除**（整行删 = 归档步按「本版无该节」放行，自审历史只剩 changelog 一句）；变更记录移至 `docs/managements/changelog.md`。该纪律由 `check-doc-drift` 分区纪律的 G 条机检：现行 changelog 提到的 `rf-N` 必须在主台账或归档台账有条目。
 - **任务编号规范**：
   - `plan.md` 的待办任务：`plan-{全局递增序号}`（如 `plan-1`、`plan-2`），从 1 开始单调递增，已归档或已完成的序号不回收
   - `review-findings.md` 的自审问题：`rf-{全局递增序号}`（如 `rf-1`、`rf-2`），从 1 开始单调递增，已修复归档的序号不回收

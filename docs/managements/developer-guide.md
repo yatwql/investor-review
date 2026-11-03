@@ -247,6 +247,17 @@ PYTHONWARNDEFAULTENCODING=1 .venv/bin/python -m pytest src/test/unit -q
 2. **批量修复**：按上表 + 触点一次性修完，同一文件多处改动合并为一次 edit。
 3. **单次复核**：手动只跑 `dev-verify` 测试门禁；ruff 探针（错误类阻塞 + format 非阻塞提示）与十守护一并交由 `git commit` 的 pre-commit 钩子一次收集（失败即中止）→ 批量修复 → 重新提交，不手动重复跑守护。
 
+**台账收尾（自审条目的唯一正确形态）**：修复自审条目时，「移除详情」不等于「删行」——摘要行必须落在
+`review-findings.md` 的 `## 已解决问题` → `### 开发期已修复（<当前版本>-dev）` 表内：
+
+1. 从 P 档未完成表删掉该条详情（含修复方向列）；
+2. 在同一周期的「开发期已修复」表补一行 `| **rf-N** | 问题一句话 | 处置一句话（含落地位置/用例数） |`；
+3. 变更正文写进 `changelog.md` 当前 `-dev` 段。
+
+**反例（本项现场）**：只做第 1、3 步而整行删除 → `release.py prepare` 的 archive 步按「本版无该节」放行，
+归档台账里不会有这条，自审历史只剩 changelog 一句残迹。机检兜底：`check-doc-drift` 分区纪律 G 条要求
+现行 changelog 提到的每个 `rf-N` 都能在主台账或该版本的自审归档台账里找到。
+
 **红线**：编辑批次与 `--sync`/检查类脚本**永不同批**（sync 写文件，与编辑并行会竞态）；**所有写者（编辑 / `ruff format` / `test-collect-coverage --update-docs`）必须在 `--sync` 之前完成，sync 之后再无写入**（否则刚回写的统计数字又变陈旧，`dev-verify` 报「行数与实测不一致」）；`check-file-length` 随每批代码改动跑，ruff 由钩子在提交时把关（批内可提前手跑），不留到收尾才爆。
 
 ## 测试指南

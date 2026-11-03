@@ -399,7 +399,7 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
     「开发期已修复」节只允许出现在已解决区、P 档标题只允许出现在未完成区（节归属，标题错位时
     rf 标识比对完全静默）；已解决区的台账行必须写在版本节内（落在直属层 = 发布归档会静默漏搬）；
     本开发周期 changelog 提到的 plan-N 须在 plan.md 或计划归档有对应条目（完成项被直接删除即丢任务）；
-    plan 未完成区不得含 ✅/已归档项；现行 changelog 只允许一个 `-dev` 段头
+    plan 未完成区不得含 ✅/已归档项；现行 changelog 只允许一个 `-dev` 段头；现行 changelog 提到的 `rf-N` 须在主台账（`### 开发期已修复` 表）或归档台账有条目（整行删除会让自审历史只剩 changelog 一句，归档步静默漏搬）
 14. Extended Thinking 支持矩阵：手册对比表须覆盖代码支持的全部厂商族、「仅」式预算枚举句须列全、
     默认开思考族须有提示（权威源为 `llm/api_base.py` 的前缀名单）
 15. Provider Chain 降级表：`fetcher/chain_config.py::_DEFAULT_CHAINS` 的逐条链路 ↔

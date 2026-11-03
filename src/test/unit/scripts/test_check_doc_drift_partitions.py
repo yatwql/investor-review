@@ -210,6 +210,43 @@ class TestManagementPartitions:
         )
         assert [f for f in findings if "计划归档都找不到" in f] == []
 
+    def test_cycle_changelog_rf_id_without_ledger_entry(self, drift):
+        """本开发周期 changelog 提到的自审条目在主台账/归档台账均无条目 → 报 finding。
+
+        回归场景（本项自带的现场）：修复后把台账行**整行删除**而不是留摘要行，条目只剩
+        changelog 一句，发布时 archive 步按「本版无该节」放行，自审历史静默丢失。
+        """
+        findings = drift.audit_management_partitions(
+            review_findings="## 已解决问题\n\n### 归档档案\n",
+            plan="## 当前迭代待办\n\n## 归档\n",
+            changelog=self._CHANGELOG_OK + "\n- 修复 `rf-901` 的口径矛盾\n",
+        )
+        assert any("rf-901" in f and "归档台账都找不到" in f for f in findings)
+
+    def test_cycle_changelog_rf_id_present_in_summary_table(self, drift):
+        """摘要行留在「开发期已修复」表内 → 不误报。"""
+        review = (
+            "## 已解决问题\n\n### 开发期已修复（9.9.9-dev）\n\n"
+            "| # | 问题 | 处置 |\n| --- | --- | --- |\n| **rf-901** | 某问题 | 已修 |\n\n"
+            "### 归档档案\n"
+        )
+        findings = drift.audit_management_partitions(
+            review_findings=review,
+            plan="## 当前迭代待办\n\n## 归档\n",
+            changelog=self._CHANGELOG_OK + "\n- 修复 `rf-901`\n",
+        )
+        assert [f for f in findings if "归档台账都找不到" in f] == []
+
+    def test_cycle_changelog_rf_id_present_in_archive(self, drift):
+        """条目已随发布迁入归档台账 → 不误报（发布后主台账只剩占位的正常形态）。"""
+        findings = drift.audit_management_partitions(
+            review_findings="## 已解决问题\n\n### 归档档案\n",
+            plan="## 当前迭代待办\n\n## 归档\n",
+            changelog=self._CHANGELOG_OK + "\n- 修复 `rf-900`\n",
+            archived_review_findings=["## 已修复（9.9.8）\n\n| **rf-900** | 某问题 | 已修 |\n"],
+        )
+        assert [f for f in findings if "归档台账都找不到" in f] == []
+
     def test_completed_plan_left_in_todo(self, drift):
         """未完成区出现 ✅ 已完成项 → 报 finding。"""
         plan = "## 当前迭代待办\n\n#### ✅ `plan-9` 已做完\n\n## 归档\n"
