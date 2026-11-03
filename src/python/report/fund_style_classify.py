@@ -90,9 +90,11 @@ def _push2_extended(code: str) -> dict[str, Any] | None:
         return _cached
 
     try:
-        from src.python.fetcher.industry import fetch_industry_data
+        from src.python.fetcher.industry import fetch_industry_data_cached
 
-        industry_data = fetch_industry_data(code)
+        # 走会话缓存变体：同一代码一轮报告内只探一次（含失败结果），
+        # 直接调 fetch_industry_data 会让「取不到」的标的每轮重探。
+        industry_data = fetch_industry_data_cached(code)
         if industry_data is None:
             return None
 
@@ -182,7 +184,9 @@ def _get_industry_avg_pe(codes: list[str], names_by_code: dict[str, str] | None 
         当无可用数据时返回 ``{}``（方案 C 降级走代码段估算）。
     """
     try:
-        from src.python.fetcher.industry import fetch_industry_data
+        # 会话缓存变体：行业平均 PE 每个基金都要查一次，直接取数会让
+        # 「取不到」的代码在多阶段重复探测（同键未命中告警噪音）。
+        from src.python.fetcher.industry import fetch_industry_data_cached as fetch_industry_data
     except ImportError:
         logger.warning("行业数据 fetcher 模块不可用，行业平均 PE 功能降级")
         return {}
