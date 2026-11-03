@@ -84,7 +84,10 @@ def test_no_output_marks_failure_reason():
     from src.python.llm._llm_news_correlation import run_news_correlation_safe
 
     with (
-        patch("src.python.llm._llm_news_correlation.get_llm_config", return_value={"enabled_llm": {"news_correlation": True}}),
+        patch(
+            "src.python.llm._llm_news_correlation.get_llm_config",
+            return_value={"enabled_llm": {"news_correlation": True}},
+        ),
         patch("src.python.llm.generators_news.enhance_news_correlation", return_value=([{"t": 1}], False, {})),
     ):
         run_news_correlation_safe([{"title": "t"}], [])
@@ -98,7 +101,10 @@ def test_output_clears_previous_failure_reason():
 
     LLM_MODULE_FAILURE["news_correlation"] = "circuit_open"
     with (
-        patch("src.python.llm._llm_news_correlation.get_llm_config", return_value={"enabled_llm": {"news_correlation": True}}),
+        patch(
+            "src.python.llm._llm_news_correlation.get_llm_config",
+            return_value={"enabled_llm": {"news_correlation": True}},
+        ),
         patch(
             "src.python.llm.generators_news.enhance_news_correlation",
             return_value=([{"t": 1}], False, {"input_tokens": 10, "output_tokens": 5}),
