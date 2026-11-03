@@ -902,7 +902,7 @@ A: 默认 INFO 级别下，日志记录模块调用结果和错误信息，不�
 | `2` | 未处理异常 / 参数写法错误 | argparse 参数错也走这里；堆栈在 `logs/app.log` |
 | `130` | 被 Ctrl+C 中断 | 正常退出路径 |
 
-> 完整说明：CLI 见 [退出码含义](how-to-use-cli-mode.md#11-退出码含义)；Web 交互细节见 [边界与错误提示](how-to-use-web-mode.md#42-边界与错误提示)。
+> 完整说明：CLI 见 [退出码含义](how-to-use-cli-mode.md#14-退出码含义)；Web 交互细节见 [边界与错误提示](how-to-use-web-mode.md#42-边界与错误提示)。
 
 ---
 

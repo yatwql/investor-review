@@ -16,10 +16,10 @@
 | 源代码合计 | — | 591 | 150,423 | 主程序 + 模板 + 脚本 + SVG |
 | 测试代码 | Python | 703 | 193,027 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
 | 测试用例 | — | — | 13,251 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
-| 用户文档 | Markdown | 15 | 6,972 | 含 README.md；行数为 README + manuals 之和 |
-| ├ manuals/ | 用户手册分册 | 14 | 6,741 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 209 | 72,841 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,156 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 用户文档 | Markdown | 15 | 6,984 | 含 README.md；行数为 README + manuals 之和 |
+| ├ manuals/ | 用户手册分册 | 14 | 6,753 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
+| 项目文档 | Markdown | 209 | 72,848 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,163 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 190 | 57,577 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 5 | ~1014 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -70,10 +70,10 @@ git grep -c "def test_" <rev> -- 'src/test'
 |:-----|:---------|:---------|
 | 代码组织 | `src/` 平铺 8 个模块 | 分层包：`core` / `providers` / `fetcher` / `analysis` / `report` / `llm` / `cache` / `cli` / `tui` / `web` / `schemas` |
 | 测试组织 | 测试与源码同级平铺 | 独立 `src/test/` 树：按域分子目录 + `*_edge.py` 边缘用例文件隔离 + pytest marker 分组 |
-| 管理文档 | 5 份（需求 / 测试计划 / 计划 / 变更日志 / 自审记录） | 10 份（新增 目录结构与统计 / 测试覆盖 / 技术设计 / LLM 技术设计 / 开发者指南） |
-| 用户手册 | 0 | 10 分册（`manuals/`：上手 / 三种运行模式 / 配置 / 数据源与可靠性 / 报告解读 / FAQ） |
-| 版本归档 | 0 | 160 份版本快照（各版本 changelog / 计划 / 自审记录与专题设计） |
-| 工程设施 | 2 个启动脚本 | 77 个脚本（测试驱动、10 个一致性守护脚本、LLM 幻觉率评估、测试覆盖计数、连通性诊断、SVG 审查等） |
+| 管理文档 | 5 份（需求 / 测试计划 / 计划 / 变更日志 / 自审记录） | 13 份（`docs/managements/` 下 `.md`：新增 目录结构与统计 / 测试覆盖 / 技术设计 / LLM 技术设计 / 开发者指南 / 脚本参考 / Web 与 TUI 设计契约） |
+| 用户手册 | 0 | 14 分册（`docs/manuals/` 下 `.md`：总索引 / 上手 / 三种运行模式 / 配置三册 / 数据源与可靠性 / 报告解读 / 数据与备份 / FAQ） |
+| 版本归档 | 0 | 189 份版本快照（归档目录下 `.md`：各版本 changelog / 计划 / 自审记录与专题设计） |
+| 工程设施 | 2 个启动脚本 | 138 个脚本（`scripts/` 下 `.py`，含 10 个一致性守护脚本、测试驱动、LLM 幻觉率与因子目录评测、测试覆盖计数、连通性诊断、SVG 审查等） |
 | 架构图示 | 0 | 5 张 SVG + 7 张界面/报告 PNG（架构图示 + 报告/Web/TUI/CLI 实景截图） |
 | 质量门禁 | 无 | 分层门禁：提交前 P0 / 合入前 P1 / 发布前 P2 + 10 个一致性守护脚本 + 三档 CI（含非 UTF-8 locale 可移植性探针） |
 

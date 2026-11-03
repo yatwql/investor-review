@@ -3,20 +3,28 @@
 CLI 命令行模式无需 TUI 菜单界面，通过命令行参数驱动，适合**定时任务、脚本化批量生成、服务器 / 无桌面环境**使用。本文从用户角度完整介绍 CLI 模式的命令结构、子命令参数与使用技巧。
 
 > **入口**：`.venv/bin/python -m src.python.cli [全局参数] <子命令> [子命令参数]`
-> **定时任务**：配合 Windows 任务计划程序 / Linux cron 自动运行，见本文 [§13 定时任务](#13-定时任务)。
+> **定时任务**：配合 Windows 任务计划程序 / Linux cron 自动运行，见本文 [§16 定时任务](#16-定时任务)。
 
 ---
 
 ## 目录
 
-- [1. 命令结构](#1-命令结构) · [2. 全局参数](#2-全局参数)
-- [3. `report` 子命令（生成报告）](#3-report-子命令生成报告) · [4. `cache` 子命令（缓存管理）](#4-cache-子命令缓存管理)
-- [5. `whatif` 子命令（调仓 What-if 模拟）](#5-whatif-子命令调仓-what-if-模拟) · [6. `check-sources` 子命令（数据源健康检查）](#6-check-sources-子命令数据源健康检查) · [6.1 `health-history` 子命令（数据源健康历史）](#61-health-history-子命令数据源健康历史)
-- [7. `view-logs` 子命令（结构化日志查看）](#7-view-logs-子命令结构化日志查看) · [8. `doctor` 子命令（系统自检）](#8-doctor-子命令系统自检)
-- [9. 使用示例](#9-使用示例) · [10. 常用命令速查](#10-常用命令速查)（[10.1 TUI 菜单 → CLI 命令对照](#101-tui-菜单--cli-命令对照) · [10.2 一键快捷入口](#102-一键快捷入口)）
-- [11. 退出码含义](#11-退出码含义) · [12. 最佳实践](#12-最佳实践)（[12.1 缓存预热](#121-缓存预热) · [12.2 报告输出路径](#122-报告输出路径) · [12.3 网络退避策略](#123-网络退避策略) · [12.4 性能历史自动收集](#124-性能历史自动收集) · [12.5 日志轮转](#125-日志轮转)）
-- [13. 定时任务](#13-定时任务)（[13.1 Windows 任务计划程序](#131-windows-任务计划程序) · [13.2 Linux crontab](#132-linux-crontab) · [13.3 定时任务排障](#133-定时任务排障) · [13.4 任务完成通知（notify）](#134-任务完成通知notify)）
-- [14. `config` 子命令（读写共享配置）](#14-config-子命令读写共享配置) · [15. `settle-decisions` 子命令（决策账本结算）](#15-settle-decisions-子命令决策账本结算)
+- [1. 命令结构](#1-命令结构)
+- [2. 全局参数](#2-全局参数)
+- [3. `report` 子命令（生成报告）](#3-report-子命令生成报告)
+- [4. `cache` 子命令（缓存管理）](#4-cache-子命令缓存管理)
+- [5. `whatif` 子命令（调仓 What-if 模拟）](#5-whatif-子命令调仓-what-if-模拟)
+- [6. `check-sources` 子命令（数据源健康检查）](#6-check-sources-子命令数据源健康检查)
+- [7. `health-history` 子命令（数据源健康历史）](#7-health-history-子命令数据源健康历史)
+- [8. `view-logs` 子命令（结构化日志查看）](#8-view-logs-子命令结构化日志查看)
+- [9. `doctor` 子命令（系统自检）](#9-doctor-子命令系统自检)
+- [10. `config` 子命令（读写共享配置）](#10-config-子命令读写共享配置)
+- [11. `settle-decisions` 子命令（决策账本结算）](#11-settle-decisions-子命令决策账本结算)
+- [12. 使用示例](#12-使用示例)
+- [13. 常用命令速查](#13-常用命令速查)（[13.1 TUI 菜单 → CLI 命令对照](#131-tui-菜单--cli-命令对照) · [13.2 一键快捷入口](#132-一键快捷入口)）
+- [14. 退出码含义](#14-退出码含义)
+- [15. 最佳实践](#15-最佳实践)（[15.1 缓存预热](#151-缓存预热) · [15.2 报告输出路径](#152-报告输出路径) · [15.3 网络退避策略](#153-网络退避策略) · [15.4 性能历史自动收集](#154-性能历史自动收集) · [15.5 日志轮转](#155-日志轮转)）
+- [16. 定时任务](#16-定时任务)（[16.1 Windows 任务计划程序](#161-windows-任务计划程序) · [16.2 Linux crontab](#162-linux-crontab) · [16.3 定时任务排障](#163-定时任务排障) · [16.4 任务完成通知（notify）](#164-任务完成通知notify)）
 
 ## 1. 命令结构
 
@@ -80,7 +88,7 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 >
 > 两个参数可同时使用：`--feature` 在 `--experiment` 之后应用，故 `--experiment all --feature factor_catalog=off` 表示「其余实验功能全开、只关掉因子目录」。
 >
-> **一次性覆写与持久化的分工**：`--experiment` / `--feature` / `--chapter` / `--anonymize` 只作用于**这一次命令**（进程退出即失效，不写盘）；要把改动落到共享配置，用 `config set`（见 [§14](#14-config-子命令读写共享配置)），或在 TUI / Web 配置面板操作。`--chapter` 与 `--feature` 的分工：前者按**章节键**（可覆盖 `config.json` 的 `enable_*`、`llm_settings.json` 的 `enabled_llm.*` 与独立章节/关联产物/智囊团子项），后者只覆盖 `features.json` 的功能开关。
+> **一次性覆写与持久化的分工**：`--experiment` / `--feature` / `--chapter` / `--anonymize` 只作用于**这一次命令**（进程退出即失效，不写盘）；要把改动落到共享配置，用 `config set`（见 [§10](#10-config-子命令读写共享配置)），或在 TUI / Web 配置面板操作。`--chapter` 与 `--feature` 的分工：前者按**章节键**（可覆盖 `config.json` 的 `enable_*`、`llm_settings.json` 的 `enabled_llm.*` 与独立章节/关联产物/智囊团子项），后者只覆盖 `features.json` 的功能开关。
 
 ---
 
@@ -140,7 +148,9 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 .venv/bin/python -m src.python.cli check-sources
 ```
 
-### 6.1 `health-history` 子命令（数据源健康历史）
+---
+
+## 7. `health-history` 子命令（数据源健康历史）
 
 查看**最近 N 次采集**的数据源健康记录（与 TUI `[H]`、Web `/api/health/history` 同一份聚合，字段一致）；无需配置，只读 `data/state/` 下的健康快照。
 
@@ -162,7 +172,7 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 
 ---
 
-## 7. `view-logs` 子命令（结构化日志查看）
+## 8. `view-logs` 子命令（结构化日志查看）
 
 按级别/行数/时间范围查看最近运行日志，无需生成报告，也**无需配置**（读取逻辑不依赖 config——配置损坏时仍可查日志诊断）。日志路径取自运行期 `logs/app.log`。
 
@@ -188,7 +198,7 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 
 ---
 
-## 8. `doctor` 子命令（系统自检）
+## 9. `doctor` 子命令（系统自检）
 
 一键盘点运行环境，分组报告 **环境 / 配置 / 目录 / 日志与缓存 / 功能开关 / 数据源适配 / 数据源凭据 / 数据源** 八组检查结果，**失败项附可执行修复建议**。适合新机部署、报告跑不起来、怀疑配置损坏时先跑一遍。
 
@@ -220,7 +230,67 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 
 ---
 
-## 9. 使用示例
+## 10. `config` 子命令（读写共享配置）
+
+`config` 用于在命令行**查看与持久化修改**共享配置，写盘路径与 TUI / Web 配置面板**同一编辑层**（`config/edit_ops.py`）：白名单校验、写前 `.bak` 备份、注释保留、缓存即时失效。适用于无桌面 / 服务器 / 自动化场景。
+
+| 子命令 | 用途 |
+|:--|:--|
+| `config list [--json]` | 列出白名单键与**当前生效值**（含 `scheduler.*`；动作型键单列） |
+| `config get KEY` | 读取单个键的当前生效值（JSON 输出） |
+| `config set KEY VALUE [--dry-run]` | 写入单个键（`--dry-run` 只校验并输出归一化值，不落盘） |
+
+**取值写法**：布尔用 `on`/`off`（也接受 `true/false/1/0`）；整数直接写数字；枚举写可选值；`scheduler.weekdays` 用逗号分隔（`0=周一`）。写入失败（未知键、取值越界、动作型键）退出码 2，并给出可操作提示。
+
+```bash
+# 查看/读取
+.venv/bin/python -m src.python.cli config list
+.venv/bin/python -m src.python.cli config list --json          # 供脚本消费
+.venv/bin/python -m src.python.cli config get holdings_dir
+
+# 持久化修改（写盘前自动 .bak）
+.venv/bin/python -m src.python.cli config set holdings_dir /data/holdings
+.venv/bin/python -m src.python.cli config set enable_news off
+.venv/bin/python -m src.python.cli config set anonymization.mode summary
+.venv/bin/python -m src.python.cli config set logging.level DEBUG
+.venv/bin/python -m src.python.cli config set scheduler.enabled on
+.venv/bin/python -m src.python.cli config set scheduler.weekdays 0,1,2,3,4
+.venv/bin/python -m src.python.cli config set holdings_filename 持仓.xlsx --dry-run
+```
+
+**覆盖范围（白名单）**：持仓目录/文件名、报告输出目录、顶层章节开关（`enable_*`）、匿名化模式、对比指数池（动作型，见下）、`enabled_llm.*`、全部功能开关、LLM 调优参数、`logging.*`，以及 `scheduler.*` 四个字段。
+
+**动作型键不提供 `set`**：`comparison_indices`（增/删/重置）请用 TUI `[G]` / Web 配置面；`llm_providers.priority`（重排）请用 `--llm-provider-order`。密钥（`llm_key.json` / `data_key.json`）**不在**配置编辑白名单内，请按手册直接维护文件或环境变量。
+
+**一次性 vs 持久化**：`config set` 是**持久化**写入；只想改这一次命令的产物，用全局参数 `--chapter` / `--feature` / `--anonymize`（零写盘）。`config list/get` 显示的是**当前生效值**——若同一条命令带了 `--chapter` / `--feature` / `--anonymize`，会看到覆写后的值。
+
+**调度说明**：`config set scheduler.*` 只写配置；实际触发由 **Web 服务常驻调度线程**执行（需 Web 进程在运行）。纯 headless 场景继续用 cron / 任务计划程序调用 `report`（见 [§16](#16-定时任务)）。
+
+---
+
+## 11. `settle-decisions` 子命令（决策账本结算）
+
+`settle-decisions` 对决策账本（`decision_reflection` 实验功能）中**已到期**的方向性决策做多视界结算（默认 5/20/60 交易日各一），**不依赖报告生成**，可配合 cron / 任务计划程序独立推进长视界样本积累。
+
+| 参数 | 用途 |
+|:--|:--|
+| `--report-date YYYY-MM-DD` | 结算运行所在交易日（缺省本地当日） |
+| `--horizons 5,20,60` | 目标视界列表，逗号分隔（缺省 5/20/60；低于 5 按 5 计） |
+
+```bash
+# 按默认视界（5/20/60）结算全部到期决策
+.venv/bin/python -m src.python.cli settle-decisions
+
+# 只结算短视界 / 指定结算运行日
+.venv/bin/python -m src.python.cli settle-decisions --horizons 5,20
+.venv/bin/python -m src.python.cli settle-decisions --report-date 2026-11-02
+```
+
+**幂等语义**：判重键为「决策 × 目标视界」——同一视界只结一次，重复执行不产生重复记录；未到期或行情暂不可得的视界单独暂缓，序列增长后下次运行自动回补。结算结果只写决策账本（`data/state/decision_ledger.jsonl`），不产出报告文件；报告运行时也会自动结算（同一幂等机制，两条路径互不重复）。开关 `decision_reflection` 未开启时命令直接提示并返回成功。
+
+---
+
+## 12. 使用示例
 
 ```bash
 # 生成全量报告，强制重新调用 LLM
@@ -259,7 +329,7 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 
 ---
 
-## 10. 常用命令速查
+## 13. 常用命令速查
 
 | 用途 | 命令 |
 |:-----|:-----|
@@ -280,7 +350,7 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 | 一次性关闭某章节 | `.venv/bin/python -m src.python.cli --chapter enable_news=off report --type both` |
 | 查看性能历史趋势 | `.venv/bin/python scripts/perf-history.py` |
 
-### 10.1 TUI 菜单 → CLI 命令对照
+### 13.1 TUI 菜单 → CLI 命令对照
 
 TUI 菜单与 CLI 子命令落到**同一个业务编排函数**（`report/orchestrator.py::generate_report` 等），差别只在入参从哪来：TUI 在菜单里问，CLI 用参数传。下表对照**生成类菜单**（E/B/L/W）与配置类菜单；缓存管理（`[1]`~`[3]`）的等价见上方「常用命令速查」。
 
@@ -324,7 +394,7 @@ TUI 菜单与 CLI 子命令落到**同一个业务编排函数**（`report/orche
 1. **`history.fetch_mode = "prompt"` 时**：TUI 会停下来问；CLI 省略 `--history` 时按「获取」处理（非交互场景无从询问）。
 2. **`enable_history = false` 时**：历史走势整体不获取，此时加 `--history auto` 也不会生效——外层开关优先于本参数。TUI 与 CLI 行为一致。
 
-### 10.2 一键快捷入口
+### 13.2 一键快捷入口
 
 若只想要 `[L]` 这一件事，`scripts/llm.sh`（Linux/macOS）与 `scripts/llm.ps1`（Windows）把子命令与报告类型写死在脚本里，免去每次敲 `report --type full`：
 
@@ -336,11 +406,11 @@ TUI 菜单与 CLI 子命令落到**同一个业务编排函数**（`report/orche
 
 追加的参数即 `report` 的报告级参数。需要全局参数（`--config` / `--output` / `--experiment` / `--feature`）时仍走 `cli.sh` / `cli.ps1`——它们必须写在子命令之前。
 
-其余菜单项（配置类、缓存类、日志/健康/自检）在 CLI 侧均有对应命令或子命令，见上方速查表、§10.1 与各节说明。
+其余菜单项（配置类、缓存类、日志/健康/自检）在 CLI 侧均有对应命令或子命令，见上方速查表、§13.1 与各节说明。
 
 ---
 
-## 11. 退出码含义
+## 14. 退出码含义
 
 | 退出码 | 含义 | 说明 |
 |:------:|:-----|:-----|
@@ -361,9 +431,9 @@ TUI 菜单与 CLI 子命令落到**同一个业务编排函数**（`report/orche
 
 ---
 
-## 12. 最佳实践
+## 15. 最佳实践
 
-### 12.1 缓存预热
+### 15.1 缓存预热
 
 首次运行或新增持仓后，建议先更新缓存再生成报告：
 
@@ -373,7 +443,7 @@ TUI 菜单与 CLI 子命令落到**同一个业务编排函数**（`report/orche
 .venv/bin/python -m src.python.cli --output ./reports report --type basic
 ```
 
-### 12.2 报告输出路径
+### 15.2 报告输出路径
 
 通过 `--output DIR` 全局参数指定报告输出目录，覆盖 `config.json` 中的 `output_dir` 配置：
 
@@ -390,7 +460,7 @@ TUI 菜单与 CLI 子命令落到**同一个业务编排函数**（`report/orche
 
 > 定时任务中建议使用绝对路径，避免因工作目录不确定导致的路径问题。
 
-### 12.3 网络退避策略
+### 15.3 网络退避策略
 
 Provider Chain 内置同源瞬时失败重试 + 熔断机制，网络临时故障时自动降级使用过期缓存：
 
@@ -398,7 +468,7 @@ Provider Chain 内置同源瞬时失败重试 + 熔断机制，网络临时故�
 - 数据源持续不可用 → 熔断器开启 → 使用过期缓存
 - 报告在无网络环境下降级生成（exit=1，部分数据为空）
 
-### 12.4 性能历史自动收集
+### 15.4 性能历史自动收集
 
 每次 CLI 报告生成时，系统自动记录性能数据到 `data/state/` 目录：
 
@@ -411,7 +481,7 @@ Provider Chain 内置同源瞬时失败重试 + 熔断机制，网络临时故�
 
 趋势报告开头输出「总体分位概览」：样本数 / 平均 / 中位 / P95 / P99 / 最长。P95、P99 为最近秩分位，统一表述为 **「95% 的报告在 Xs 内完成，99% 的报告在 Ys 内完成」**（概览口径行与分组段同一句式），可据此判断常见与最坏等待时间。
 
-### 12.5 日志轮转
+### 15.5 日志轮转
 
 应用日志已自动轮转（`logs/app.log`，单文件最大 10 MB，保留 5 份备份），**无需额外配置**。
 
@@ -430,11 +500,11 @@ Provider Chain 内置同源瞬时失败重试 + 熔断机制，网络临时故�
 
 ---
 
-## 13. 定时任务
+## 16. 定时任务
 
 CLI 模式配合操作系统定时任务可实现无人值守的自动报告生成（定时驱动报告 / 更新缓存），无需人工操作 TUI 菜单。定时任务中建议使用**绝对路径**（避免工作目录不确定）与 `--non-interactive`（跳过首次运行引导）。
 
-### 13.1 Windows 任务计划程序
+### 16.1 Windows 任务计划程序
 
 #### 基础配置（Windows）
 
@@ -487,7 +557,7 @@ try {
 schtasks /CREATE /SC DAILY /TN "InvestReport" /TR "powershell -NoProfile -Command \"if (-not (Test-Path '$env:TEMP\invest.lock')) { New-Item '$env:TEMP\invest.lock' -Force | Out-Null; try { D:\path\to\investor-review\.venv\Scripts\python.exe -m src.python.cli report --type full --history auto } finally { Remove-Item '$env:TEMP\invest.lock' -ErrorAction SilentlyContinue } }\"" /ST 16:00
 ```
 
-### 13.2 Linux crontab
+### 16.2 Linux crontab
 
 #### 基础配置（Linux）
 
@@ -514,7 +584,7 @@ crontab -e
 0 16 * * * cd /home/user/investor-review && flock -n /tmp/invest.lock .venv/bin/python -m src.python.cli report --type full --history auto >> logs/cron.log 2>&1
 ```
 
-### 13.3 定时任务排障
+### 16.3 定时任务排障
 
 **检查日志**：
 
@@ -545,7 +615,7 @@ tail -20 logs/cron.log
 
 ---
 
-### 13.4 任务完成通知（notify）
+### 16.4 任务完成通知（notify）
 
 cron / 任务计划运行只有退出码，失败也无人知晓。config.json `notify` 节可配置报告生成完成后的通知推送（也可由 Web 配置面板/TUI 同份配置编辑）：
 
@@ -577,61 +647,3 @@ cron / 任务计划运行只有退出码，失败也无人知晓。config.json `
 
 **相关手册**：[← TUI 菜单操作手册](how-to-use-tui-menu.md) · [Web 浏览器模式 →](how-to-use-web-mode.md) · [手册总索引](README.md)
 同主题：[常规配置指引](how-to-config.md) · [数据与备份](data-and-backup.md)
-
----
-
-## 14. `config` 子命令（读写共享配置）
-
-`config` 用于在命令行**查看与持久化修改**共享配置，写盘路径与 TUI / Web 配置面板**同一编辑层**（`config/edit_ops.py`）：白名单校验、写前 `.bak` 备份、注释保留、缓存即时失效。适用于无桌面 / 服务器 / 自动化场景。
-
-| 子命令 | 用途 |
-|:--|:--|
-| `config list [--json]` | 列出白名单键与**当前生效值**（含 `scheduler.*`；动作型键单列） |
-| `config get KEY` | 读取单个键的当前生效值（JSON 输出） |
-| `config set KEY VALUE [--dry-run]` | 写入单个键（`--dry-run` 只校验并输出归一化值，不落盘） |
-
-**取值写法**：布尔用 `on`/`off`（也接受 `true/false/1/0`）；整数直接写数字；枚举写可选值；`scheduler.weekdays` 用逗号分隔（`0=周一`）。写入失败（未知键、取值越界、动作型键）退出码 2，并给出可操作提示。
-
-```bash
-# 查看/读取
-.venv/bin/python -m src.python.cli config list
-.venv/bin/python -m src.python.cli config list --json          # 供脚本消费
-.venv/bin/python -m src.python.cli config get holdings_dir
-
-# 持久化修改（写盘前自动 .bak）
-.venv/bin/python -m src.python.cli config set holdings_dir /data/holdings
-.venv/bin/python -m src.python.cli config set enable_news off
-.venv/bin/python -m src.python.cli config set anonymization.mode summary
-.venv/bin/python -m src.python.cli config set logging.level DEBUG
-.venv/bin/python -m src.python.cli config set scheduler.enabled on
-.venv/bin/python -m src.python.cli config set scheduler.weekdays 0,1,2,3,4
-.venv/bin/python -m src.python.cli config set holdings_filename 持仓.xlsx --dry-run
-```
-
-**覆盖范围（白名单）**：持仓目录/文件名、报告输出目录、顶层章节开关（`enable_*`）、匿名化模式、对比指数池（动作型，见下）、`enabled_llm.*`、全部功能开关、LLM 调优参数、`logging.*`，以及 `scheduler.*` 四个字段。
-
-**动作型键不提供 `set`**：`comparison_indices`（增/删/重置）请用 TUI `[G]` / Web 配置面；`llm_providers.priority`（重排）请用 `--llm-provider-order`。密钥（`llm_key.json` / `data_key.json`）**不在**配置编辑白名单内，请按手册直接维护文件或环境变量。
-
-**一次性 vs 持久化**：`config set` 是**持久化**写入；只想改这一次命令的产物，用全局参数 `--chapter` / `--feature` / `--anonymize`（零写盘）。`config list/get` 显示的是**当前生效值**——若同一条命令带了 `--chapter` / `--feature` / `--anonymize`，会看到覆写后的值。
-
-**调度说明**：`config set scheduler.*` 只写配置；实际触发由 **Web 服务常驻调度线程**执行（需 Web 进程在运行）。纯 headless 场景继续用 cron / 任务计划程序调用 `report`（见 [§13](#13-定时任务)）。
-
-## 15. `settle-decisions` 子命令（决策账本结算）
-
-`settle-decisions` 对决策账本（`decision_reflection` 实验功能）中**已到期**的方向性决策做多视界结算（默认 5/20/60 交易日各一），**不依赖报告生成**，可配合 cron / 任务计划程序独立推进长视界样本积累。
-
-| 参数 | 用途 |
-|:--|:--|
-| `--report-date YYYY-MM-DD` | 结算运行所在交易日（缺省本地当日） |
-| `--horizons 5,20,60` | 目标视界列表，逗号分隔（缺省 5/20/60；低于 5 按 5 计） |
-
-```bash
-# 按默认视界（5/20/60）结算全部到期决策
-.venv/bin/python -m src.python.cli settle-decisions
-
-# 只结算短视界 / 指定结算运行日
-.venv/bin/python -m src.python.cli settle-decisions --horizons 5,20
-.venv/bin/python -m src.python.cli settle-decisions --report-date 2026-11-02
-```
-
-**幂等语义**：判重键为「决策 × 目标视界」——同一视界只结一次，重复执行不产生重复记录；未到期或行情暂不可得的视界单独暂缓，序列增长后下次运行自动回补。结算结果只写决策账本（`data/state/decision_ledger.jsonl`），不产出报告文件；报告运行时也会自动结算（同一幂等机制，两条路径互不重复）。开关 `decision_reflection` 未开启时命令直接提示并返回成功。
