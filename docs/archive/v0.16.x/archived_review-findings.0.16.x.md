@@ -1,8 +1,8 @@
 # 自审记录归档 — v0.16.x
 
-> 归档时间：2026-10-25（v0.16.0 发布，本系列首批开发期已修复批次并入）；2026-10-25 v0.16.1 本批原表搬运；2026-10-26 v0.16.3 本批原表搬运；2026-10-27 v0.16.4 本批原表搬运；2026-10-28 v0.16.7 本批原表搬运；2026-10-29 v0.16.8 本批原表搬运；2026-10-29 v0.16.9 本批原表搬运；2026-10-30 v0.16.11 本批原表搬运；2026-10-30 v0.16.13 本批原表搬运；2026-10-30 补录 changelog-only 条目 10 条（rf-902、rf-903、rf-904、rf-905、rf-906、rf-907、rf-908、rf-910、rf-911、rf-943）；2026-10-30 v0.16.14 本批原表搬运；2026-11-01 v0.16.15 本批原表搬运
+> 归档时间：2026-10-25（v0.16.0 发布，本系列首批开发期已修复批次并入）；2026-10-25 v0.16.1 本批原表搬运；2026-10-26 v0.16.3 本批原表搬运；2026-10-27 v0.16.4 本批原表搬运；2026-10-28 v0.16.7 本批原表搬运；2026-10-29 v0.16.8 本批原表搬运；2026-10-29 v0.16.9 本批原表搬运；2026-10-30 v0.16.11 本批原表搬运；2026-10-30 v0.16.13 本批原表搬运；2026-10-30 补录 changelog-only 条目 10 条（rf-902、rf-903、rf-904、rf-905、rf-906、rf-907、rf-908、rf-910、rf-911、rf-943）；2026-10-30 v0.16.14 本批原表搬运；2026-11-01 v0.16.15 本批原表搬运；2026-11-03 v0.16.17 本批原表搬运
 > 原始文件：`docs/managements/review-findings.md`
-> 涵盖版本：v0.16.x 开发期已修复项（v0.16.0 → ）（含 v0.16.15）
+> 涵盖版本：v0.16.x 开发期已修复项（v0.16.0 → ）（含 v0.16.17）
 > 归档内容：台账表格经 `release.py prepare` 整块搬运（无损）；表外散文留主台账
 
 ---
@@ -212,3 +212,21 @@
 | **rf-1007** | 遗留兼容层 8 处（按「不兼容旧形态」政策）：①去重锚点旧行（无 `anchor_rules_version`）补 `legacy` 标注永久保留（`news_dedup_anchor_policy` / `news_dedup_rules.ANCHOR_LEGACY_ERA`）②快照时间戳接受 ISO 等 4 种旧形态（`history_snapshot._SNAPSHOT_TS_FORMATS`）③LLM 内容纯文本回退按 `\n\n` 分段「兼容历史输入」（`llm_content._split_html_blocks`）④JS 资产产出松散副本「兼容既有产物布局」（`_copy_js_assets`，`html_writer` + `whatif_writer` 调用）⑤`reader._EXPECTED_HEADER` 无引用死别名、⑥`reader._TRADE_HEADER` 内部别名⑦`fund_manager._request_fund_html` 无调用方兼容壳、⑧`pipeline_data_builder` 指向已删模块的「orchestrator.py 兼容入口」陈旧标题 | 全部删除/收敛：旧锚点行**直接丢弃**（统计键 `unattributed` 语义改为「丢弃数」）；快照时间戳唯一形态 `YYYYMMDDTHHMMSS`；LLM 内容只认块级 HTML；JS 资产只内嵌不产松散副本（`_copy_js_assets` 及 2 处调用点删除）；两个 reader 别名删除（`TRADE_HEADER` 直接引用）；`_request_fund_html` 删除；陈旧标题改写。同时校正 4 个锁定旧形态的用例（锚点 legacy 标注→丢弃、ISO/纯文本分段→单块、旧 `metrics_*` 键→通用未知键、旧 `history.analysis`→通用未知项），并把 prosperity「旧 dict benchmarks」用例改名为「非契约形状被忽略」（生产本就只接受 list）。**无需改动三类**：旧缓存文件（`_CACHE_KEY_VERSION` 入文件名、不读旧版本）、旧配置项（未知键只 warn 忽略、无迁移/回填）、持仓表头（仅容忍尾部多余列，不接受旧列名/列序） |
 | **rf-1005** | `src/test/unit/cache/test_cache_report_boundary.py:42` 方法级 `@pytest.mark.unit_cache` 使用**未注册**标记（文件级 `pytestmark` 已是 `unit_core`，该行属残留笔误）——`check-test-markers` 唯一违规项，且会让该用例在选择器上成为「无域」孤儿 | 删除该行方法级标记（域由文件级 `pytestmark` 提供）；`check-test-markers` 由 649 通过 / 1 违规 → 650 通过 / 0 违规 |
 | **rf-1003** | 时间炸弹（变异筛查：把测试内绝对日期整体回移 3 年，“差异即依赖日期处于近期”）：4 文件 20 例依赖写死日期处于保留期内，而账本**写侧即裁剪**（`signal_ledger.append_signals` → `prune_jsonl_by_age` 730 天；`decision_ledger` 同系）——最早失效日期 2028-09-09，失败形态是“空账本/KeyError”，看不出是日期过期 | 4 文件（`unit/core/test_signal_ledger.py`、`..._edge.py`、`test_doctor.py`、`unit/report/test_signal_record.py`）全部改为从当天回推派生（`_day(offset)` / `date.today() - timedelta(days=30)`），断言改用派生值拼接；文件内绝对日期清零；边界用例 2 处刻意畸形入参补类型忽略注释。**该类缺陷已常驻化**：静态守卫 `check-test-redundancy.py` 第 9 类 `check_ledger_absolute_dates`（入门禁）+ 全域经验筛查 `probe-date-bombs.py`（不入门禁）。**其余 7 文件为变异伪信号**（生产侧显式注入 today 参数 / 无时钟依赖 / 星期-财季语义随日期位移改变）：`test_crisis_annotation`（历史危机区间为生产侧真实日期）、`test_trading_calendar`（周末判定）、`test_cninfo`（财季分类）、`test_tiantian`（新老期间比较）、`test_market_value_premium`（显式 `self.td`，2023-06-24 为周六）、`test_release_tool`（today 作参数传入，样本在未变异的 fixture 里）、`test_holding_change_injection`（窗口串为无横线格式未被替换） |
+
+## 已修复（0.16.17）
+
+> 完整复盘见 `changelog.md` 0.16.17 段；此处为台账原表搬运（无损），本批发布日 2026-11-03。
+
+| # | 问题 | 处置 |
+| --- | --- | --- |
+| **rf-1025** | 缓存键版本换代后旧版本缓存文件无主动清除 | 实测无残留；`cache_key_from_file_name` 改为剥任意 `_v{N}` 戳，旧戳文件按自身精确键 TTL 判龄（+2 用例） |
+| **rf-1026** | 决策账本历史结算事件缺 `target_horizon` 的读取侧兼容 | 新增写侧一次性回填 `backfill_settlement_horizons()`（幂等，结算前调用）+ 3 例回归 |
+| **rf-1027** | 持仓明细 dict / `DetailRow` 双形态，多处双分支 | 收编为单源 `core/detail_view.detail_value()`，两处消费点改为委托（+5 用例） |
+| **rf-1028** | `purchase_status` 未使用的 `config` 形参（假签名兼容） | 删除形参并同步 3 处调用点与测试 |
+| **rf-1029** | 同阈值双名常量（`SLOW_WRITE_WARN_SECONDS` / `SLOW_SPAN_WARN_SECONDS`） | 删旧名，模块内与测试统一新名 |
+| **rf-1030** | `settle_pending_decisions(horizons=None)` 缺省退回单视界 | 删除 `horizon_bars` 形参，缺省一律取 `SETTLE_HORIZONS`（消除第二条口径） |
+| **rf-1031** | 模块门面 re-export 面缺退出条件 | `technical.md` §9.1 增「面类型 + 归属判据 + 退出条件」表（只给规则不抄实测） |
+| **rf-1032** | 旧配置键静默处置口径不统一 | 新增 `config/_legacy_keys.py`（登记表 + 归一文案），两站点共用一条告警（+8 用例） |
+| **rf-1033** | 上游形状容错与本方旧结构兼容混类 | `technical.md` §9.2 三分归属表（第三方变体 / 本方输入 / 本方旧结构） |
+| **rf-1034** | 混合结果下 LLM 用量台账与模块状态口径矛盾 | 零产出不写模块记录 + 无产出落失败原因（+5 用例） |
+| **rf-1035** | （误判撤回）thinking 不支持被判作终止模块 | 核查为参数级降级；日志改为「本次调用不启用思考（模块照常执行）」 |

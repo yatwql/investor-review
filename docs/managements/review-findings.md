@@ -1,5 +1,5 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.16.17-dev
+> 文档版本：0.16.17
 > **编号源**：`rf-next = 1036`（新增问题提出后更新为 +1；已用最大 rf-1035，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
@@ -50,22 +50,10 @@
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
 
-| # | 问题 | 处置 |
-| --- | --- | --- |
-| **rf-1025** | 缓存键版本换代后旧版本缓存文件无主动清除 | 实测无残留；`cache_key_from_file_name` 改为剥任意 `_v{N}` 戳，旧戳文件按自身精确键 TTL 判龄（+2 用例） |
-| **rf-1026** | 决策账本历史结算事件缺 `target_horizon` 的读取侧兼容 | 新增写侧一次性回填 `backfill_settlement_horizons()`（幂等，结算前调用）+ 3 例回归 |
-| **rf-1027** | 持仓明细 dict / `DetailRow` 双形态，多处双分支 | 收编为单源 `core/detail_view.detail_value()`，两处消费点改为委托（+5 用例） |
-| **rf-1028** | `purchase_status` 未使用的 `config` 形参（假签名兼容） | 删除形参并同步 3 处调用点与测试 |
-| **rf-1029** | 同阈值双名常量（`SLOW_WRITE_WARN_SECONDS` / `SLOW_SPAN_WARN_SECONDS`） | 删旧名，模块内与测试统一新名 |
-| **rf-1030** | `settle_pending_decisions(horizons=None)` 缺省退回单视界 | 删除 `horizon_bars` 形参，缺省一律取 `SETTLE_HORIZONS`（消除第二条口径） |
-| **rf-1031** | 模块门面 re-export 面缺退出条件 | `technical.md` §9.1 增「面类型 + 归属判据 + 退出条件」表（只给规则不抄实测） |
-| **rf-1032** | 旧配置键静默处置口径不统一 | 新增 `config/_legacy_keys.py`（登记表 + 归一文案），两站点共用一条告警（+8 用例） |
-| **rf-1033** | 上游形状容错与本方旧结构兼容混类 | `technical.md` §9.2 三分归属表（第三方变体 / 本方输入 / 本方旧结构） |
-| **rf-1034** | 混合结果下 LLM 用量台账与模块状态口径矛盾 | 零产出不写模块记录 + 无产出落失败原因（+5 用例） |
-| **rf-1035** | （误判撤回）thinking 不支持被判作终止模块 | 核查为参数级降级；日志改为「本次调用不启用思考（模块照常执行）」 |
+（本版开发期已修复项已随 v0.16.17 发布迁入归档档案）
 
 ### 归档档案
-- [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-11-01）
+- [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-11-03）
 - [`archived_review-findings.0.15.x.md`](../archive/v0.15.x/archived_review-findings.0.15.x.md) — v0.15.x（2026-10-24 ~ 2026-10-25）
 - [`archived_review-findings.0.14.x.md`](../archive/v0.14.x/archived_review-findings.0.14.x.md) — v0.14.x（2026-10-21 ~ 2026-10-23）
 - [`archived_review-findings.0.13.x.md`](../archive/v0.13.x/archived_review-findings.0.13.x.md) — v0.13.x（2026-10-14 ~ 2026-10-21）
