@@ -540,3 +540,54 @@ class TestReset:
         assert "t1" in report
         assert report["t1"]["total_failures"] >= 3
         assert report["t1"]["last_failure_context"] == "timeout"
+
+
+class TestSessionCacheFetchSingleFlight:
+    """session_cache_fetch：同一 (domain, code) 并发只允许一个在飞，失败结论也缓存。"""
+
+    def _registry(self):
+        from src.python.core.provider_registry import get_registry
+
+        reg = get_registry()
+        reg.session_cache_clear("industry")
+        return reg
+
+    def test_concurrent_callers_fetch_once(self):
+        import threading
+
+        reg = self._registry()
+        calls = []
+        started = threading.Barrier(4)
+
+        def _fetch():
+            calls.append(1)
+            import time as _time
+
+            _time.sleep(0.05)  # 让其他线程真正并发进入
+            return {"industry": "白酒"}
+
+        results = []
+
+        def _worker():
+            started.wait()
+            results.append(reg.session_cache_fetch("industry", "600519", _fetch))
+
+        threads = [threading.Thread(target=_worker) for _ in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert len(calls) == 1, "并发首探须只取数一次"
+        assert all(r == {"industry": "白酒"} for r in results)
+
+    def test_failure_is_cached_and_not_refetched(self):
+        reg = self._registry()
+        calls = []
+
+        def _fetch():
+            calls.append(1)
+            return None
+
+        assert reg.session_cache_fetch("industry", "005827", _fetch) is None
+        assert reg.session_cache_fetch("industry", "005827", _fetch) is None
+        assert len(calls) == 1

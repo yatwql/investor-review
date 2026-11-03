@@ -118,18 +118,12 @@ def fetch_industry_data_cached(code: str) -> dict | None:
 
     消除多个模块独立调用 fetch_industry_data 的冗余文件缓存读取。
     """
-    from src.python.core.provider_registry import NOT_FOUND, get_registry
+    from src.python.core.provider_registry import get_registry
 
-    registry = get_registry()
-    cached = registry.session_cache_get("industry", code)
-    if cached is not NOT_FOUND:
-        return cached
-    result = fetch_industry_data(code)
     # 失败也写会话缓存（值为 None）：场外基金等非 A 股标的会被上层逐个调用，
-    # 不缓存失败结果时同一代码在一轮报告里会被反复重探（实测同一键未命中 18 次），
-    # 既浪费链路重试又让「同键未命中」告警失去指向性。
-    registry.session_cache_set("industry", code, result, source="api" if result is not None else "miss")
-    return result
+    # 不缓存失败结果时同一代码在一轮报告里会被反复重探（实测同一键未命中 16 次）；
+    # single-flight 再压并发首探——三个报告阶段并行查同一只时只探一次。
+    return get_registry().session_cache_fetch("industry", code, lambda: fetch_industry_data(code))
 
 
 def fetch_valuation_fields(code: str) -> dict[str, float | None] | None:
