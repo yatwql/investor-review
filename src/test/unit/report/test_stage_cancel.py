@@ -115,7 +115,9 @@ class TestTokenOf:
         class _Reporter:
             cancel_token = CancelToken("用户取消")
 
-        assert isinstance(token_of(_Reporter()), CancelToken)
+        reporter = _Reporter()
+        # 只断言 isinstance 会放过「另建一个空 token」的实现；名字承诺的是「取回真实 token」。
+        assert token_of(reporter) is reporter.cancel_token
 
     def test_plain_object_yields_no_token(self):
         from src.python.core.cancel import token_of

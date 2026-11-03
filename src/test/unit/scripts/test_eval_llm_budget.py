@@ -79,7 +79,10 @@ class TestMeasure:
 
     def test_elements_complete(self):
         result = measure.check_elements(self.SAMPLE)
-        assert result["complete"], result["missing"]
+        # 只断言 complete 真值 → 「complete=True 但 missing 非空」的矛盾契约也能过；
+        # 同时锁定布尔类型与缺失列表为空（两者互证）。
+        assert result["complete"] is True
+        assert result["missing"] == [], result["missing"]
 
     def test_elements_report_missing(self):
         result = measure.check_elements("无结构的纯文本")

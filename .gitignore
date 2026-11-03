@@ -37,6 +37,9 @@ test-reports/
 .coverage
 htmlcov/
 
+# ── 崩溃转储（core dump，进程被信号打断时由内核写出）──
+core.*
+
 # ── ruff ────────────────────────────────────────────
 .ruff_cache/
 

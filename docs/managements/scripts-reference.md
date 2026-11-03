@@ -41,7 +41,7 @@
 | `check-test-redundancy.py` | 测试 | 测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言 / 账本日期写死绝对日期；实现拆在 `_test_redundancy/`——九类检查各一模块 + 共用 AST 原语 + 事实缓存 + 编排，入口只留 CLI） |
 | `check-requirement-trace.py` | 质量 | 需求 ID ↔ 验证载体追溯（单段 ID 全域覆盖 / 载体文件存在 / ID 双向一致） |
 | `hook-install-claude.py` | 质量 | 安装/卸载 Claude Code PostToolUse hook（任务编号一致性自动校验） |
-| `probe-date-bombs.py` | 测试 | 时间炸弹经验筛查（变异法）：把候选测试文件里的绝对日期整体回移 N 年再逐个跑 pytest，失败即「依赖日期处于近期」（rot-suspect）；改写前备份、`finally`/`atexit` 双兜底还原并校验 sha256，脏文件默认跳过；结果需人工判读（生产侧显式注入 today / 星期-财季语义 / 断言目标在未变异 fixture 均为伪信号）；不入门禁 |
+| `probe-date-bombs.py` | 测试 | 时间炸弹经验筛查（变异法）：把候选测试文件里的绝对日期整体回移 N 年再逐个跑 pytest，失败即「依赖日期处于近期」（rot-suspect）；`--detail` 打印失败断言原文（实际/期望两侧）供判读；改写前备份、`finally`/`atexit` 双兜底还原并校验 sha256，脏文件默认跳过；结果需人工判读（生产侧显式注入 today / 星期-财季语义 / 断言目标在未变异 fixture 均为伪信号）；不入门禁 |
 | `eval-llm-hallucination.py` | 评测 | 10 组标准持仓 × LLM 幻觉率采样（薄 CLI，实现在 `_eval_halluc_sampler/` 包） |
 | `eval-dedup-threshold.py` | 评测 | 新闻去重阈值校准分析 |
 | `eval-llm-budget.py` | 评测 | LLM 表达预算校准（冻结持仓样本 × 预算档位 × 模式矩阵；墙钟/输出 tokens/分段字数/要素机检/操作建议行数；`freeze` 建样本、`run --dry-run` 零费用；产物落 `docs/tmp/llm-budget/`，实现在 `_eval_llm_budget/`） |
@@ -1436,6 +1436,11 @@ CLI 模式的便捷入口，跳过 TUI 界面，直接以命令行模式运行�
 
 # 只查指定文件 / 调整回移年数与超时
 .venv/bin/python scripts/probe-date-bombs.py --files src/test/unit/core/test_doctor.py --years 3 --timeout 600
+
+# 判读辅助：rot-suspect 文件额外打印失败断言原文（实际/期望两侧，一行一个）
+.venv/bin/python scripts/probe-date-bombs.py --all --detail
 ```
+
+**判读口径（必读）**：rot-suspect ≠ 缺陷。`--detail` 给出的「实际 vs 期望」两侧即判据——若**实际侧**的年份未被平移（如期望 `'2023-06-30'` vs 实际 `'2026-06-30'`），说明数据来自未变异的 fixture/毫秒时间戳/cassette 快照，属「期望被平移、数据没动」的伪信号；若两侧年份**同年平移**但值不同（如 `'2023-09-19'` vs `'2023-09-21'`），则是星期/节假日语义随年份改变。已完成的 47 文件全域判读结论：四类伪信号（未变异数据源 / 星期-财季语义 / 生产侧静态历史事实表 / 时间戳定值）全覆盖，**无真实时间炸弹残留**。
 
 **安全约定**（改写真实文件是唯一风险点）：只处理 git 工作区干净的文件（`--allow-dirty` 可强制）；改写前备份原文、`finally` 还原并校验 `sha256`、`atexit` 兜底（Ctrl-C / 用例崩溃也不留脏文件）；退出码 0 = 无 rot-suspect，2 = 有 rot-suspect 或超时。

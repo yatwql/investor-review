@@ -14,7 +14,7 @@
 from __future__ import annotations
 
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 import pytest
@@ -161,7 +161,9 @@ class TestPayloadAdmission:
     def test_stamp_carries_schema_and_tz_fetched_at(self):
         payload = stamp_fee_payload([["小于7天", "1.50%"]], [])
         fetched = datetime.fromisoformat(payload["fetched_at"])
-        assert fetched.tzinfo is not None
+        # 只断言 tzinfo 非空会放过「任意本地时区」——费率阶梯时效按北京时间判，
+        # 这里锁定时区偏移为 +08:00。
+        assert fetched.utcoffset() == timedelta(hours=8)
 
 
 # ============================================================

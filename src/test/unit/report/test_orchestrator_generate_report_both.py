@@ -510,3 +510,109 @@ class TestGenerateReportBoth:
 
         assert result.report_generated is True
         assert captured["portfolio_peak_mv"] is None
+
+
+class TestDecisionReviewWiring:
+    """both 路径决策复盘区块接线（decision_reflection 开启时的回归守卫）。
+
+    现场（自审挂账）：both 路径既不装配 `decision_review_data`、也不向
+    `write_html_report` 转发，实验功能开启时行动章「决策跨期反思」块在该路径
+    整块不渲染（full 路径正常）。本用例锁定「挂载点被调用 + 契约传到双端 writer」。
+    """
+
+    def _run(self, captured: dict):
+        mock_reporter = MagicMock()
+        mock_holdings = [MagicMock(code="SH600001", name="测试", shares=100, cost_price=10.0)]
+
+        mock_detail = MagicMock()
+        mock_detail.code = "SH600001"
+        mock_detail.name = "测试"
+        mock_detail.market_value = 1200.0
+        mock_detail.cost = 1000.0
+        mock_detail.shares = 100
+        mock_detail.price = 12.0
+
+        def _fake_record_deterministic(prep, action_data, reporter):
+            captured["det_prep"] = prep
+            captured["det_action"] = action_data
+
+        def _fake_record_review(prep, llm_content, enable_llm, pipeline_data, reporter):
+            captured["review_prep"] = prep
+            captured["review_llm"] = (llm_content, enable_llm)
+            captured["review_pipeline_is_none"] = pipeline_data is None
+            if pipeline_data is not None:
+                pipeline_data["decision_review_data"] = {"available": True, "rows": []}
+
+        with (
+            patch("src.python.report.market_value._generate_details", return_value=[mock_detail]),
+            patch("src.python.report._snapshot.capture_snapshot", return_value={}),
+            patch("src.python.report._snapshot.fetch_history_data"),
+            patch("src.python.report.html_writer.write_html_report") as mock_html,
+            patch("src.python.report.excel_generator.generate_excel_report") as mock_xls,
+            patch("src.python.core.registry.get_report_section_order"),
+            patch("src.python.config.is_enable_fund_deep_analysis", return_value=True),
+            patch("src.python.config.is_enable_news", return_value=True),
+            patch("src.python.config.is_enable_history", return_value=False),
+            patch(
+                "src.python.core.holding_status.build_coverage_summary",
+                return_value={"available": True, "items": [], "abnormal_count": 0, "summary": ""},
+            ),
+            patch(
+                "src.python.core.data_freshness.build_freshness_summary",
+                return_value={"available": True, "items": [], "abnormal_count": 0, "summary": ""},
+            ),
+            patch(
+                "src.python.analysis.action_advisor.build_action_data",
+                return_value={"available": True, "summary": "", "rebalance_signals": []},
+            ),
+            patch(
+                "src.python.report._generation_both.record_deterministic_decisions",
+                side_effect=_fake_record_deterministic,
+            ),
+            patch(
+                "src.python.report._generation_both.record_llm_decisions_and_review_block",
+                side_effect=_fake_record_review,
+            ),
+        ):
+            result = generate_report(
+                holdings=mock_holdings,
+                config={"output_dir": "reports"},
+                reporter=mock_reporter,
+                report_type="both",
+                fetch_history=True,
+            )
+        return result, mock_html, mock_xls
+
+    def test_seams_receive_date_and_holdings_for_settlement_baseline(self):
+        """挂载点入参须带 today_str 与 holdings_details（结算基线来源）。"""
+        import re
+
+        captured: dict = {}
+        result, _, _ = self._run(captured)
+        assert result.report_generated is True
+
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", captured["det_prep"]["today_str"]), (
+            "today_str 须为 ISO 日期（账本报告日，跨期结算按它分档）"
+        )
+        assert isinstance(captured["det_prep"]["holdings_details"], list), (
+            "holdings_details 缺失 → 登记无基线 → 全部跳过（入账必可结算纪律）"
+        )
+        assert captured["det_action"] == {"available": True, "summary": "", "rebalance_signals": []}, (
+            "确定性登记须消费本轮最终 action_data（含峰值重建版）"
+        )
+        # both 路径无 LLM 章节：LLM 侧登记自然跳过，但复盘区块仍须装配
+        assert captured["review_llm"] == ((), False)
+        assert captured["review_pipeline_is_none"] is False
+
+    def test_review_block_reaches_both_writers(self):
+        """装配出的复盘区块须同时到达 HTML 与 Excel（双端公平）。"""
+        captured: dict = {}
+        _, mock_html, mock_xls = self._run(captured)
+
+        assert mock_html.call_args.kwargs.get("decision_review_data") == {"available": True, "rows": []}, (
+            "HTML 未收到 decision_review_data → 行动章复盘块静默不渲染"
+        )
+        _pipeline = mock_xls.call_args.kwargs.get("pipeline_data") or {}
+        assert _pipeline.get("decision_review_data") == {"available": True, "rows": []}, (
+            "Excel 未收到 decision_review_data → 行动页签复盘子块缺失"
+        )

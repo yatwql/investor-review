@@ -43,7 +43,10 @@ class TestSharedSafeFloat:
         assert _utils.safe_float("abc") == 0.0
 
     def test_always_returns_float(self):
-        assert isinstance(_utils.safe_float(3), float)
+        # 只断言 isinstance 会放过「类型对、值错」的回归；同时锁住类型与数值。
+        value = _utils.safe_float(3)
+        assert isinstance(value, float)
+        assert value == pytest.approx(3.0)
 
 
 @pytest.mark.unit
@@ -53,7 +56,7 @@ class TestTencentParsers:
 
     def test_parse_float_positive_inf_no_longer_leaks(self):
         """``inf > 0`` 为真，仅凭正负号判断会让 +inf 直入 price 字段。"""
-        assert tencent._parse_float(float("inf")) == 0.0
+        assert tencent._parse_float(float("inf")) == 0.0  # pyright: ignore[reportArgumentType]  # 故意传非 str：脏类型健壮性即被测行为
         assert tencent._parse_float("inf") == 0.0
 
     def test_parse_float_keeps_positive_values(self):
@@ -61,11 +64,11 @@ class TestTencentParsers:
 
     def test_parse_float_clamps_negative(self):
         """负数钳制为 0.0 属既有口径，保持不变。"""
-        assert tencent._parse_float(-3.0) == 0.0
+        assert tencent._parse_float(-3.0) == 0.0  # pyright: ignore[reportArgumentType]  # 故意传非 str：脏类型健壮性即被测行为
 
     def test_parse_float_field_rejects_non_finite(self):
-        assert tencent._parse_float_field(float("nan")) == 0.0
-        assert tencent._parse_float_field(float("-inf")) == 0.0
+        assert tencent._parse_float_field(float("nan")) == 0.0  # pyright: ignore[reportArgumentType]  # 故意传非 str
+        assert tencent._parse_float_field(float("-inf")) == 0.0  # pyright: ignore[reportArgumentType]  # 故意传非 str
 
     def test_parse_float_field_keeps_legitimate(self):
         assert tencent._parse_float_field("7.25") == 7.25

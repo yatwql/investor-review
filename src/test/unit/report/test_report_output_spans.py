@@ -323,3 +323,37 @@ class TestDecisionBasisContractForwarding:
         src = inspect.getsource(_generation_both._generate_report_both)
         assert 'pipeline_data["decision_basis_data"] = build_decision_basis_data(' in src
         assert "discipline_signals=" in src, "纪律触发条须与峰值同批重装配（否则纪律行空）"
+
+
+class TestDecisionReviewContractForwarding:
+    """决策复盘区块契约（decision_review_data）的 both 路径接线守卫。
+
+    现场（自审挂账）：`decision_reflection` 开启时，full 路径行动章正常渲染
+    「决策跨期反思」块，both 路径整块静默不渲染——`_generation_both.py` 既不
+    调用确定性登记挂载点，也未向 `write_html_report` 转发该契约（Excel 侧因
+    消费 `pipeline_data` 本身不难，但区块从未装配 → 双端同缺）。
+    """
+
+    _BOTH = "src/python/report/_generation_both.py"
+
+    def test_both_path_assembles_review_block_via_seams(self):
+        """both 路径须走同一对挂载点（确定性登记 + 复盘区块装配）。"""
+        from pathlib import Path
+
+        src = Path(self._BOTH).read_text(encoding="utf-8")
+        assert "record_deterministic_decisions(" in src, "both 路径缺确定性结算/登记挂载点"
+        assert "record_llm_decisions_and_review_block(" in src, "both 路径缺复盘区块装配挂载点"
+        assert src.index("record_deterministic_decisions(") < src.index("record_llm_decisions_and_review_block("), (
+            "结算须先于复盘区块装配（否则当次教训未落档）"
+        )
+
+    def test_both_path_forwards_contract_to_html(self):
+        """both 路径的 HTML 调用点须转发 decision_review_data。"""
+        import re
+        from pathlib import Path
+
+        src = Path(self._BOTH).read_text(encoding="utf-8")
+        calls = re.findall(r"write_html_report\(\s*\n(.*?)\n\s*\)", src, re.S)
+        assert calls, "未找到 both 路径的 write_html_report 调用点"
+        missing = [c.strip().splitlines()[0] for c in calls if "decision_review_data" not in c]
+        assert not missing, f"以下 HTML 调用点未转发 decision_review_data: {missing}"

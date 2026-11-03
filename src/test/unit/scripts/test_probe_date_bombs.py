@@ -96,3 +96,28 @@ def test_restore_all_verifies_content(probe, tmp_path, capsys):
     assert target.read_text(encoding="utf-8") == original
     assert target not in probe._PENDING_RESTORE
     assert "还原校验失败" not in capsys.readouterr().out
+
+
+def test_probe_file_disables_bytecode_cache(probe, tmp_path, monkeypatch):
+    """变异源码不得写出 .pyc：断言重写缓存按（size, mtime）命中，还原后文件大小不变、
+    mtime 常落在同一分辨率内——下一次正常跑测试会命中变异版字节码，凭空报出已修好的
+    失败（实测污染 3 文件 11 例）。故子进程必须带 `-B` 且禁写字节码。"""
+    target = tmp_path / "test_sample.py"
+    target.write_text('def test_x():\n    assert "2026-09-01" == "x"\n', encoding="utf-8")
+    seen: dict = {}
+
+    class _FakeCompleted:
+        stdout = "1 passed in 0.10s\n"
+        stderr = ""
+
+    def _run(args, **kwargs):
+        seen["args"] = args
+        seen["env"] = kwargs.get("env") or {}
+        return _FakeCompleted()
+
+    monkeypatch.setattr(probe.subprocess, "run", _run)
+
+    probe.probe_file(target, years=3, timeout=60, python=sys.executable)
+
+    assert "-B" in seen["args"], "子进程须禁写字节码（-B）"
+    assert seen["env"].get("PYTHONDONTWRITEBYTECODE") == "1", "同理须以环境变量兜底（插件/子进程重入）"

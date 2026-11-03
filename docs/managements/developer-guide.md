@@ -803,7 +803,7 @@ test-reports/latest/
   - 由此守：`scripts/check-test-redundancy.py` 第 5 类 `check_hardcoded_evolving_totals`
 - **账本日期不得写死绝对日期**：账本类调用（`append_signals` / `append_decision` / `register_deterministic_signals` / `prune_jsonl_by_age` …）的 `report_date`/`settle_date`/`date` 实参必须是**从当天回推派生**的值（`_d(offset)` / `date.today() - timedelta(days=N)`）。账本按保留期（730 天）在**写侧即裁剪**，写死的近期日期会在「日期 + 保留期」后让用例静默变成「空账本 / 键缺失」。
   - 由此守：`scripts/check-test-redundancy.py` 第 9 类 `check_ledger_absolute_dates`（静态，入门禁）
-  - 全域经验筛查（会真跑测试、不入门禁）：`.venv/bin/python scripts/probe-date-bombs.py`——把候选文件的绝对日期回移 N 年再跑，失败即 rot-suspect，须人工判读
+  - 全域经验筛查（会真跑测试、不入门禁）：`.venv/bin/python scripts/probe-date-bombs.py`——把候选文件的绝对日期回移 N 年再跑，失败即 rot-suspect，须人工判读；加 `--detail` 直接给出失败断言的「实际 vs 期望」原文（判据：实际侧年份未被平移 = 数据在未变异 fixture/毫秒时间戳里→伪信号；两侧同年平移但值不同 = 星期/财季语义位移→伪信号）。当前全库判读结论为无真实残留，新增用例后重跑即可增量复核
 - **浮点断言容差化**：涉及浮点计算结果的断言用 `pytest.approx(...)`（或显式 `abs=`/`rel=`），**禁止 `==`/`!=` 比较两条计算路径**——「同一函数、不同输入长度或求和顺序」也算两条路径。
   - ❌ `assert beta == portfolio_beta(portfolio[:200], benchmark)`（内部对齐 vs 显式截断，末位差 1 ulp：3.13 相等、3.11 不等）
   - ✅ `assert beta == pytest.approx(portfolio_beta(portfolio[:200], benchmark), abs=1e-12)` + 长度敏感反例 `assert abs(portfolio_beta(portfolio[:100], benchmark) - beta) > 1e-6`

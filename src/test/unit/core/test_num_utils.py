@@ -115,7 +115,11 @@ class TestFiniteOr:
         assert finite_or("3.5") == 3.5
 
     def test_always_returns_float(self):
-        assert isinstance(finite_or(3), float)
+        # 只断言 isinstance 会放过「类型对、值错」的回归（如整数直通 / 精度丢失）；
+        # 同时锁住类型与数值。
+        value = finite_or(3)
+        assert isinstance(value, float)
+        assert value == pytest.approx(3.0)
 
     def test_custom_fallback(self):
         assert finite_or(None, fallback=-1.0) == -1.0

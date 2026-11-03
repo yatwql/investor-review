@@ -171,45 +171,45 @@ class TestSupportsExtendedThinking(unittest.TestCase):
     """测试 Extended Thinking 模型兼容性检查。"""
 
     def test_sonnet4_supported(self) -> None:
-        self.assertTrue(_supports_extended_thinking("claude-sonnet-4-20250514"))
+        self.assertIs(_supports_extended_thinking("claude-sonnet-4-20250514"), True)
 
     def test_opus4_supported(self) -> None:
-        self.assertTrue(_supports_extended_thinking("claude-opus-4-20250514"))
+        self.assertIs(_supports_extended_thinking("claude-opus-4-20250514"), True)
 
     def test_sonnet4_variant_supported(self) -> None:
         """claude-sonnet-4 系列任意变体都应支持。"""
-        self.assertTrue(_supports_extended_thinking("claude-sonnet-4-20251022"))
+        self.assertIs(_supports_extended_thinking("claude-sonnet-4-20251022"), True)
 
     def test_opus4_variant_supported(self) -> None:
-        self.assertTrue(_supports_extended_thinking("claude-opus-4-20251022"))
+        self.assertIs(_supports_extended_thinking("claude-opus-4-20251022"), True)
 
     def test_sonnet35_not_supported(self) -> None:
-        self.assertFalse(_supports_extended_thinking("claude-sonnet-3-5-20241022"))
+        self.assertIs(_supports_extended_thinking("claude-sonnet-3-5-20241022"), False)
 
     def test_haiku35_not_supported(self) -> None:
-        self.assertFalse(_supports_extended_thinking("claude-haiku-3-5-20241022"))
+        self.assertIs(_supports_extended_thinking("claude-haiku-3-5-20241022"), False)
 
     def test_claude3_not_supported(self) -> None:
-        self.assertFalse(_supports_extended_thinking("claude-3-opus-20240229"))
-        self.assertFalse(_supports_extended_thinking("claude-3-sonnet-20240229"))
-        self.assertFalse(_supports_extended_thinking("claude-3-haiku-20240307"))
+        self.assertIs(_supports_extended_thinking("claude-3-opus-20240229"), False)
+        self.assertIs(_supports_extended_thinking("claude-3-sonnet-20240229"), False)
+        self.assertIs(_supports_extended_thinking("claude-3-haiku-20240307"), False)
 
     def test_empty_string_not_supported(self) -> None:
-        self.assertFalse(_supports_extended_thinking(""))
+        self.assertIs(_supports_extended_thinking(""), False)
 
     def test_deepseek_v4_flash_supported(self) -> None:
-        self.assertTrue(_supports_extended_thinking("DeepSeek-V4-Flash"))
+        self.assertIs(_supports_extended_thinking("DeepSeek-V4-Flash"), True)
 
     def test_deepseek_v4_pro_supported(self) -> None:
-        self.assertTrue(_supports_extended_thinking("deepseek-v4-pro"))
+        self.assertIs(_supports_extended_thinking("deepseek-v4-pro"), True)
 
     def test_deepseek_flash_supported(self) -> None:
         """新一代 Flash 正式模型名 deepseek-flash 支持 Extended Thinking。"""
-        self.assertTrue(_supports_extended_thinking("deepseek-flash"))
-        self.assertTrue(_supports_extended_thinking("DeepSeek-Flash"))
+        self.assertIs(_supports_extended_thinking("deepseek-flash"), True)
+        self.assertIs(_supports_extended_thinking("DeepSeek-Flash"), True)
 
     def test_deepseek_v3_not_supported(self) -> None:
-        self.assertFalse(_supports_extended_thinking("deepseek-v3"))
+        self.assertIs(_supports_extended_thinking("deepseek-v3"), False)
 
     def test_kimi_code_model_ids_supported(self) -> None:
         """Kimi Code 订阅端点的模型名须识别为支持 thinking。
@@ -218,7 +218,7 @@ class TestSupportsExtendedThinking(unittest.TestCase):
         单独登记——漏登记会让「未开启 thinking 时显式禁用」的安全网失效。
         """
         for model in ("kimi-for-coding", "kimi-for-coding-highspeed", "k3", "k3-256k", "kimi-k2.6"):
-            self.assertTrue(_supports_extended_thinking(model), model)
+            self.assertIs(_supports_extended_thinking(model), True, model)
 
     def test_kimi_code_models_default_thinking_on(self) -> None:
         """Kimi Code 端点默认开思考：须列入默认开思考族（含 k3 前缀）。"""
@@ -232,12 +232,12 @@ class TestSupportsExtendedThinking(unittest.TestCase):
 
     def test_non_llm_family_not_supported(self) -> None:
         """非 Claude/DeepSeek/Gemini/Kimi 家族（如 OpenAI）不判定为支持。"""
-        self.assertFalse(_supports_extended_thinking("gpt-4o"))
+        self.assertIs(_supports_extended_thinking("gpt-4o"), False)
 
     def test_kimi_supported(self) -> None:
         """Kimi（Anthropic 兼容端点，budget_tokens 控制）支持 Extended Thinking。"""
-        self.assertTrue(_supports_extended_thinking("kimi-k2.6"))
-        self.assertTrue(_supports_extended_thinking("Kimi-K3"))
+        self.assertIs(_supports_extended_thinking("kimi-k2.6"), True)
+        self.assertIs(_supports_extended_thinking("Kimi-K3"), True)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -249,16 +249,16 @@ class TestIsEffortModel(unittest.TestCase):
     """测试模型类型识别：budget（Claude）vs effort（DeepSeek）。"""
 
     def test_claude_sonnet4_is_not_effort(self) -> None:
-        self.assertFalse(_is_effort_model("claude-sonnet-4-20250514"))
+        self.assertIs(_is_effort_model("claude-sonnet-4-20250514"), False)
 
     def test_claude_opus4_is_not_effort(self) -> None:
-        self.assertFalse(_is_effort_model("claude-opus-4-20250514"))
+        self.assertIs(_is_effort_model("claude-opus-4-20250514"), False)
 
     def test_deepseek_v4_flash_is_effort(self) -> None:
-        self.assertTrue(_is_effort_model("DeepSeek-V4-Flash"))
+        self.assertIs(_is_effort_model("DeepSeek-V4-Flash"), True)
 
     def test_deepseek_v4_pro_is_effort(self) -> None:
-        self.assertTrue(_is_effort_model("deepseek-v4-pro"))
+        self.assertIs(_is_effort_model("deepseek-v4-pro"), True)
 
     def test_deepseek_flash_is_effort(self) -> None:
         """deepseek-flash 属 effort 族。
@@ -266,16 +266,16 @@ class TestIsEffortModel(unittest.TestCase):
         该判定同时决定「未开启 thinking 时显式注入 disabled」的安全网是否生效——
         漏登记会让请求落入 DeepSeek 默认思考模式占满 max_tokens 而无正文。
         """
-        self.assertTrue(_is_effort_model("deepseek-flash"))
-        self.assertTrue(_is_effort_model("DeepSeek-Flash"))
+        self.assertIs(_is_effort_model("deepseek-flash"), True)
+        self.assertIs(_is_effort_model("DeepSeek-Flash"), True)
 
     def test_kimi_is_not_effort(self) -> None:
         """Kimi 用 budget_tokens（而非 output_config.effort）控制思考深度。"""
-        self.assertFalse(_is_effort_model("kimi-k2.6"))
-        self.assertFalse(_is_effort_model("kimi-k3"))
+        self.assertIs(_is_effort_model("kimi-k2.6"), False)
+        self.assertIs(_is_effort_model("kimi-k3"), False)
 
     def test_empty_is_not_effort(self) -> None:
-        self.assertFalse(_is_effort_model(""))
+        self.assertIs(_is_effort_model(""), False)
 
 
 # ═══════════════════════════════════════════════════════════
