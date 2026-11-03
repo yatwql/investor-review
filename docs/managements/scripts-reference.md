@@ -110,6 +110,7 @@
 
 - **统一契约**（`checklib.add_common_args()` / `report()`）：`-v/--verbose` 详细输出、`--ci` 仅输出 `文件:描述`；**通过退出 0，发现 finding 退出 2**（`check-code-traces.py` 另有 HIGH=1 / LOW=3 的分级语义，属其自身约定）；通过打印 `[OK] …`，失败逐条 `[ERR] file:desc`（`--ci` 下为裸行）+ 汇总行
 - **共享原语**：`REPO_ROOT` / `rel()`（仓库相对路径，非仓库内路径原样返回）、`extract_region()` / `replace_region()`（标记区间）、`extract_table_region()` / `replace_table_region()`（表区域，带结构校验）
+- **子进程一律设超时**：检查/钩子脚本对 `git`、`pytest`、子脚本的调用必须带 `timeout=`，超时按「环境不可用」走明确分支（缓存指纹退全量、钩子放行并告警、编排抛 `ReleaseError`），**不得**裸等——卡死的 git 会把提交钩子或 CI `guards` job 挂成无输出等待，现场还看不出原因
 - **`_traces_code/`**：check-code-traces 内部实现包——`patterns.py`（**匹配表**：历史痕迹/标识符/暗号模式与编译镜像；只管「命中了什么」，共享历史叙述正则引用 `_traces_common` 常量）、`exemptions.py`（**豁免表**：章节计数与迭代轮次豁免〔check-doc-traces 共用〕+ 代码侧行级豁免〔合法领域值/魔法编号领域值/测试回归元描述〕与 `_is_*_excluded` 判定——调漏检改前者、调误报改后者，不在一处相互淹没）、`extract.py`（注释/标识符抽取）、`scan.py`（扫描调度）、`layers.py`（core 反向依赖守卫）、`config.py`（扫描域配置与规则载体豁免：`RULE_CARRIER_DIRS` / `RULE_CARRIER_FILES`）；check-code-traces.py 只留 CLI 与原面 re-export
 - **`_traces_doc/`**：check-doc-traces 后端包——`patterns.py`（文档痕迹模式表 `DOC_PATTERNS` / 树行专属 `TREE_ONLY_PATTERNS` / 行级豁免 `EXCLUDE_PATTERNS`+`is_excluded`，共享历史叙述正则引用 `_traces_common` 常量）、`bundle.py`（编译镜像 + 按域取子集 + 树行拼表 + 高置信度分类 `HIGH_CATEGORIES`，`pattern_bundle` 按〔分类集, CIPHER 开关, 树行〕lru 缓存并集预筛——预筛面与精确面同源）、`dedup.py`（结构性冗余扫描：单次遍历内完成标题路径感知判重、台账/归档域重复长行与区块同小节限定、空白归一与同块单报）、`deleted_refs.py`（已删除函数残留：git 历史 def 全集 × 当前 def 全集差集比对，浅克隆告警不假绿）、`findings.py`（结论汇总行与退出码 + 缓存结论结构校验，全量与回放两路共用），入口薄 CLI 与原面 re-export
 - **`_shared/traces_common.py`**：两脚本**逐字节相同**的历史叙述正则单一来源（命名常量 + `SHARED_REGEXES` 元组）；只登记字面量，**分类与描述仍按各自域定义**，判定入口/域矩阵/豁免语义不在此模块——新增同源词汇先加此处再两侧引用，仅一域需要的词汇不进共享表（机检见 `test_trace_shared_vocabulary`：两表交集须恰等于词表、两侧须都引用、模式源码内不得写死字面量）
@@ -680,14 +681,7 @@ y 范围（svg 单位）；`margin` = 检测范围到卡片右缘的右扩量（
 .venv/bin/python scripts/check-code-traces.py --ci
 ```
 
-除注释痕迹外，另有四条 **AST 级架构守卫**（直接看语法树，与注释格式无关）：
-
-| 守卫 | 检出内容 | 实现 |
-|:-----|:---------|:-----|
-| core 分层 | core 层反向 `import` 上层包（`fetcher`/`analysis`/`report`/`llm`/`providers`/`web`/`tui`/`cli`） | `_traces_code/layers.py`（豁免文件在 technical.md 声明） |
-| 日志统一 | 非交互呈现层调用 `print()`（诊断输出应走 `logging` 落盘） | `_traces_code/logging_discipline.py`（豁免域：`tui/`、`cli/` 整目录 + 进度/一次性检查报告/向导六个模块） |
-| 语义命名 | 标识符/注释夹带任务编号、系列代号、字母数字暗号 | `_traces_code/extract.py` + `patterns.py` |
-| 配置默认值单源 | 生产代码自带与默认值表同值同键的字面量兜底（`x.get("<键>", <默认值>)`，改默认表不会跟随） | `_traces_code/config_defaults.py`（默认表自身与测试不在扫描域） |
+**性能与并行**：扫描面 1200+ 文件，冷缓存全量 AST/tokenize 约 8s，是提交钩子与 CI `guards` job 的最慢项。`--ci` 走进程池并行扫描（默认 `min(4, CPU)`，不取满核以免与钩子内其它守护抢核），结果按输入顺序回排，故 `--ci` 输出与结论缓存回放逐字不变；`CHECK_TRACES_JOBS=1` 退到串行（复现/排障用）。命中结论仍按全仓输入指纹缓存，同树重复运行直接回放。
 
 **退出码含义**：
 

@@ -98,11 +98,16 @@ def run(
     command = build_command(
         url, output.resolve(), scroll_y=scroll_y, width=width, height=height, replace=replace, node=node
     )
-    completed = subprocess.run(
-        command,
-        env={**os.environ, "CHROME_BIN": str(resolved_chrome)},
-        check=False,
-        encoding="utf-8",
-        errors="replace",
-    )
+    try:
+        completed = subprocess.run(
+            command,
+            env={**os.environ, "CHROME_BIN": str(resolved_chrome)},
+            check=False,
+            encoding="utf-8",
+            errors="replace",
+            timeout=300,
+        )
+    except subprocess.TimeoutExpired:
+        print("  [ERR] 截图超时（300s）：页面可能加载未完成或浏览器无响应")
+        return 1
     return completed.returncode

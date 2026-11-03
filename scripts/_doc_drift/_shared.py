@@ -345,14 +345,18 @@ def _parse_collect_stdout(stdout: str) -> tuple[dict[str, int], dict[str, int]]:
 
 def _run_collect(file_args: list[str]) -> tuple[dict[str, int], dict[str, int]] | None:
     """跑收集脚本（``file_args``=限定文件，空 = 整树）。失败/空输出/非零退出 → None。"""
-    proc = subprocess.run(
-        [sys.executable, str(REPO_ROOT / "scripts" / "test-collect-coverage.py"), *file_args],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        encoding="utf-8",  # 显式编码（cp936 Windows/locale 假设 + EncodingWarning 严格档）
-        errors="replace",  # 子进程若因环境写出非 UTF-8 字节，降级替换而非在 reader 线程抛 UnicodeDecodeError
-        text=True,
-    )
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "test-collect-coverage.py"), *file_args],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            encoding="utf-8",  # 显式编码（cp936 Windows/locale 假设 + EncodingWarning 严格档）
+            errors="replace",  # 子进程若因环境写出非 UTF-8 字节，降级替换而非在 reader 线程抛 UnicodeDecodeError
+            text=True,
+            timeout=600,
+        )
+    except subprocess.TimeoutExpired:
+        return None  # 收集超时 → 与「收集失败」同路（拒收，不回写统计）
     stdout = proc.stdout or ""
     if proc.returncode not in (0, 5) or not stdout.strip():
         # 非零退出 = 收集出错（exit=4 时输出含未过滤错数）→ 拒收，不回写

@@ -265,14 +265,20 @@ def _cache_inputs() -> list[Path] | None:
     """
 
     def _ls(*extra: str) -> list[str] | None:
-        proc = subprocess.run(
-            ["git", "ls-files", *extra],
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
+        # 超时按「非 git 环境」处理（返回 None → 跳过结论缓存、直接全量检查），
+        # 方向安全：宁可多跑一遍扫描，也不让缓存指纹基于残缺清单命中。
+        try:
+            proc = subprocess.run(
+                ["git", "ls-files", *extra],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=120,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return None
         if proc.returncode != 0:
             return None
         return [ln.strip() for ln in proc.stdout.splitlines() if ln.strip()]
@@ -340,7 +346,10 @@ def main() -> None:
         # 同步后自动把回写结果加进 git 暂存区（pre-commit 钩子内使用），
         # 非 git 环境或未在提交流程中调用时忽略错误
         if applied:
-            subprocess.run(["git", "add", str(_FOLDERS_MD)], cwd=REPO_ROOT, check=False)
+            try:
+                subprocess.run(["git", "add", str(_FOLDERS_MD)], cwd=REPO_ROOT, check=False, timeout=120)
+            except (OSError, subprocess.TimeoutExpired):
+                print("[!] git add 超时/不可用：统计回写未入暂存区，请手动 git add")
 
     # 结论缓存（仅 --ci 且非 verbose/非 sync/非 with-test-count）：全集输入与逻辑指纹未变时
     # 逐字回放——同树重复（发布 gate → 提交钩子 / 重试）命中省全仓扫描；

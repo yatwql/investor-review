@@ -759,3 +759,44 @@ class TestSharedCliContract:
         shared = sys.modules.get("_shared.checklib")
         assert shared is not None, "check-code-traces 应从 _shared.checklib 引入共享 CLI 助手"
         assert code_traces.add_common_args is shared.add_common_args
+
+
+class TestScanParallelism:
+    """并行扫描契约：结果与串行逐字一致、顺序稳定，且可由环境变量退回串行。
+
+    背景：`check-code-traces --ci` 冷缓存时需全量 AST/tokenize 扫描（1267 文件约 8s），
+    是提交钩子与 CI `guards` job 的最慢项。进程池路径必须与串行**输出逐字相同**
+    （`--ci` 输出与结论缓存回放都依赖顺序稳定），否则缓存会把错位结果固化下来。
+    """
+
+    def _sample_files(self, tmp_path: Path) -> list[Path]:
+        files = []
+        for idx in range(3):
+            p = tmp_path / f"sample_{idx}.py"
+            # 命中的是注释里的历史痕迹词（HIGH 分类）——样本必须真产出 finding，
+            # 否则「串并行等价」退化为比较两个空列表
+            p.write_text("# 此前实现走的是另一条路径\ndef f():\n    return 1\n", encoding="utf-8")
+            files.append(p)
+        return files
+
+    def test_parallel_matches_serial(self, code_traces, tmp_path):
+        """进程池结果与串行逐字相同（含命中顺序）。"""
+        files = self._sample_files(tmp_path)
+        serial = code_traces._scan_files(files, False, jobs=1)
+        parallel = code_traces._scan_files(files, False, jobs=2)
+        assert parallel == serial
+        assert any(serial), "样本须至少命中一次，否则等价性断言无意义"
+
+    def test_small_batch_stays_serial(self, code_traces, tmp_path):
+        """小批量不启进程池（避免为几个文件付进程启动成本）。"""
+        files = self._sample_files(tmp_path)
+        assert code_traces._scan_files(files, False, jobs=8) == code_traces._scan_files(files, False, jobs=1)
+
+    def test_jobs_env_override(self, code_traces, monkeypatch):
+        """`CHECK_TRACES_JOBS` 可显式退到串行（复现/排障用）。"""
+        monkeypatch.setenv("CHECK_TRACES_JOBS", "1")
+        assert code_traces._scan_jobs() == 1
+        monkeypatch.setenv("CHECK_TRACES_JOBS", "3")
+        assert code_traces._scan_jobs() == 3
+        monkeypatch.setenv("CHECK_TRACES_JOBS", "not-a-number")
+        assert code_traces._scan_jobs() >= 1
