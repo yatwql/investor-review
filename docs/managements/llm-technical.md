@@ -26,7 +26,7 @@
 - [13. 集成点](#13-集成点)
 - [附录](#附录)
   - [附录 A：LLM 模块配置参数总览](#附录-allm-模块配置参数总览)
-  - [附录 B：内置模型定价表](#附录-b内置模型定价表)
+  - [附录 B：模型定价的来源与口径](#附录-b模型定价的来源与口径)
   - [附录 C：LLM 模块指纹依赖字段](#附录-cllm-模块指纹依赖字段)
 
 ---
@@ -101,7 +101,7 @@
               └──────────────────┘          └────────────────────┘
               ┌──────────────────┐          ┌────────────────────┐
               │ circuit_breaker  │          │ fact_checker/      │
-              │ .py              │          │ 子包，9 个模块      │
+              │ .py              │          │ 子包，按域分文件      │
               │ LLM 端点熔断器    │          └────────────────────┘
               └──────────────────┘
               ┌──────────────────┐
@@ -162,7 +162,7 @@ skeleton.py:generate_llm_content()
 | `generators_orchestrator.py` | 编排门面 | 缓存预检查（`_compute_module_cache_info` / `_precheck_*`）+ 主编排入口与**生成后一遍**（事实锚定校验 + 可选生成后自检）；worker 装配与线程池分发下沉 `_llm_dispatch.py` 并经本门面 re-export（`_dispatch_llm_workers`，patch 点不变） | `generate_all_llm()` |
 | `_llm_dispatch.py` | 编排层 | 4+1 模块并行调度：`_build_module_fns` 模块→生成函数映射（`_MODULE_FNS`）、`ThreadPoolExecutor` 分发与进度回调、thinking 串行上限与辩论模式 `_debate_wrapper` 路由、`_LLM_CLIENT_SETTINGS` HTTP 客户端设置 | `_dispatch_llm_workers()` |
 | `generators.py` | 生成层 | 生成门面（按生成器域拆分）：辩论模式 pro/con/synthesis 生成 + `generate_self_review()`（生成后自检）+ `generate_holding_change_review()` 门面（实现于 `holding_change_review.py`）+ 单例四函数门面再导出 | 各 `generate_*()` |
-| `generators_singletons.py` | 生成层 | 4 个单例生成函数（global_macro / expert_review / health_check / penetration_deep，自 generators 按生成器域下沉；**测试 patch 以本模块为解析点**——`generate_llm_module` 等 seam 名在本域内解析） | 各 `generate_*()` |
+| `generators_singletons.py` | 生成层 | 单例生成函数（global_macro / expert_review / health_check / penetration_deep，自 generators 按生成器域下沉；**测试 patch 以本模块为解析点**——`generate_llm_module` 等 seam 名在本域内解析） | 各 `generate_*()` |
 | `self_review.py` | 运行作用域 | 生成后自检的开关判定/输入存在性判定/失败隔离与运行作用域载体（报告层零参 pull；**不经** `_MODULE_FNS` 并行调度）。输入为**纯分析正文**：编排层先剥离 LLM 用量页脚（`skeleton.strip_llm_footer`）与事实校验产物段落（`fact_checker.strip_fact_check_blocks`）——两段均为运行元信息且随缓存态变化，并入自检输入会让同一份正文算出不同缓存键 | `run_self_review()` / `get_self_review_block()` |
 | `holding_change_review.py` | 运行作用域 | 持仓变动复盘归因的契约准入（feature + 快照准入 + 事实块非空）/失败隔离，结果写回契约 `llm_review`（**经** `_MODULE_FNS['holding_change']` 并入并行批：只吃持仓变动契约、不依赖四模块产出，串行后置会把单次 4~25s 白加到关键路径） | `run_holding_change_review()` / `run_holding_change_in_worker()` |
 | `depth_profile.py` | 配置层 | 报告深度档位表（唯一事实来源）：档位只**收窄**模块集合与新闻采集规模，不进提示词正文 | `resolve_depth_profile()` / `depth_gate()` |
@@ -455,13 +455,13 @@ _LLM_CLIENT_SETTINGS = {
 
 `max_workers=llm_config.llm_max_concurrency`（config 默认 3）控制并行调用数。开启 Extended Thinking 的模块（`thinking_enabled_{suffix}=true`）受独立信号量 `llm_max_thinking_concurrency`（默认 2）约束——多 thinking 模块并发涌向 DeepSeek 等强制推理端点时偶发返回空 content（HTTP 200 空响应），该信号量从源头降低并发（thinking 请求同时最多 N 个），非 thinking 模块不受此限。
 
-**信号量等待必须可观测**：上限 1 时两个 thinking 模块（`expert_review` / `health_check`）是完全串行的——两次实测分别为 51s + 37s（等待 38s）与 68.7s + 28.5s（等待 68.7s，占该次总墙钟 154s 的 44%），后者在前者释放前无法起跑（线程池空槽也救不了）。现 `_dispatch_llm_workers` 在**等待超 5s** 时记一条 INFO（模块名 / 已等待秒数 / 上限），用于区分「端点慢」与「被信号量排队」。
+**信号量等待必须可观测**：上限 1 时两个 thinking 模块（`expert_review` / `health_check`）是完全串行的——后者在前者释放前无法起跑，排队等待直接计入该次墙钟（线程池空槽也救不了）。现 `_dispatch_llm_workers` 在**等待超 5s** 时记一条 INFO（模块名 / 已等待秒数 / 上限），用于区分「端点慢」与「被信号量排队」。
 
-**量化与决策（默认 2）**：默认值已由 1 提到 2（依据：第二组实测串行等待 68.7s = 该次墙钟 44%，提到 2 直接省该时长）。风险控制靠三层：① 端点返回空 content 时既有链路会**关闭 thinking 同 provider 重试一次**，最坏代价是一次重试而非内容缺失；② 等待总量仍可观测——单模块等待超 5s 记 INFO，段末累计 ≥20s 且上限 <2 时给出「提到 2 约可省该时长」提示（用户手动设 1 时才会触发）；③ 累计毫秒数进 `perf_history.counters.llm_thinking_wait_ms`。**回滚条件**：日志出现空内容重试或内容质量下降 → 该端点把 `llm_max_thinking_concurrency` 改回 1（配置侧即可，无需改代码）。
+**量化与决策（默认 2）**：默认值已由 1 提到 2（依据：串行等待可占掉该次墙钟的可观比例，提到 2 直接省掉这段时长）。风险控制靠三层：① 端点返回空 content 时既有链路会**关闭 thinking 同 provider 重试一次**，最坏代价是一次重试而非内容缺失；② 等待总量仍可观测——单模块等待超 5s 记 INFO，段末累计 ≥20s 且上限 <2 时给出「提到 2 约可省该时长」提示（用户手动设 1 时才会触发）；③ 累计毫秒数进 `perf_history.counters.llm_thinking_wait_ms`。**回滚条件**：日志出现空内容重试或内容质量下降 → 该端点把 `llm_max_thinking_concurrency` 改回 1（配置侧即可，无需改代码）。
 
 ### 4.2.1 端点级节流与并发治理（`llm/pacing.py`）
 
-**总时间预算**：`llm_total_time_budget_sec`（秒，`0`=不启用）在**每个模块启动前**检查已用时长，超预算不再提交新模块（已提交的不打断，避免半截内容与连接泄漏）；日志回显「已用/预算」，报告按已生成内容呈现。用于兜住「单模块卡住 + 重试叠加」把一次 full 拖成小时级（实测出现过 6,623s 的 LLM+新闻阶段）。
+**总时间预算**：`llm_total_time_budget_sec`（秒，`0`=不启用）在**每个模块启动前**检查已用时长，超预算不再提交新模块（已提交的不打断，避免半截内容与连接泄漏）；日志回显「已用/预算」，报告按已生成内容呈现。用于兜住「单模块卡住 + 重试叠加」把一次 full 拖成小时级。
 
 **问题**：全局键 `llm_max_concurrency` 只能表达「所有模块合起来最多几个线程」，无法表达「同一程序、不同端点不同策略」。而同一次报告生成的调用会落在约束截然不同的端点上：订阅制编码端点在服务条款上要求**交互式**使用、带滚动频率窗口与风控型并发上限；按量付费端点有明确的分级 RPM/TPM，可放心高并发。
 
@@ -742,7 +742,7 @@ call_gemini() Extended Thinking 注入
 第 2 层：重试骨架（api_base.py）
     ── 墙钟总超时（core/http_client.post_with_deadline）：POST 以独立 daemon
        线程执行、主线程 join(timeout) 到点放弃并归一为超时——httpx read
-       超时是「块间间隔」，服务端排队滴流时会被骗过（实测挂足 900s），
+       超时是「块间间隔」，服务端排队滴流时会被骗过（服务端滴流会让块间超时失效），
        须以墙钟兜底总时长
     ── 可重试错误 (503/超时/网络异常) → 递增退避重试（1s/3s/5s/10s/15s）
     ── 配额/限速/风控终态 (429/403) → 不重试，记 FAIL_REASON_QUOTA_EXCEEDED 并降级
@@ -1194,7 +1194,7 @@ reload_pricing() → 读 llm_pricing_ref.json
                     可选字段 input_cache_hit 缺失时继承内置（或等于 input）
 ```
 
-文件缺失 → 仅用内置价；单条模型非法 → 告警跳过；`version` 不符 → 拒绝加载并提示重新生成（内置价兜底，报告仍可生成）。结构见 [`config-llm-settings-design.md`](../archive/v0.15.x/config-rework/config-llm-settings-design.md) / 用户手册 [`how-to-config-llm.md`](../manuals/how-to-config-llm.md)「完整模型定价表」。
+文件缺失 → 仅用内置价；单条模型非法 → 告警跳过；`version` 不符 → 拒绝加载并提示重新生成（内置价兜底，报告仍可生成）。结构与内置价表本章「模型定价」节同源说明。
 
 ### 10.2 费用计算
 
@@ -1329,7 +1329,7 @@ reload_pricing() → 读 llm_pricing_ref.json
   thinking_budget_{suffix}
   reasoning_effort_{suffix}
 
-除 news_correlation 外的 4 个模块额外增加：
+除 news_correlation 外的模块额外增加：
   output_brief_{suffix}
 
 加上全局键名：
@@ -1346,7 +1346,7 @@ reload_pricing() → 读 llm_pricing_ref.json
 
 所有键名由 `get_known_llm_settings_keys()` 统一校验。新增 LLM 模块只需在 registry.py 注册表中添加一行 `DataModuleDef`，无需修改 config 校验逻辑。
 
-> **辩论模块派生**：3 个辩论模块（`debate_pro`/`debate_con`/`debate_synthesis`，`settings_suffix` 同规则）同样按每模块 9 键派生（如 `model_debate_pro`、`system_prompt_debate_con`），使 `enabled_llm` 合法子键共 **10** 个（7 标准 + 3 辩论）。辩论开关实际由 `features.json` 的分析增强组 Flag（`llm_debate_procon` 默认关 / `llm_debate_conditional` 默认开，两者相邻可查）控制，集中度问答段内建于辩论流程，`enabled_llm` 辩论子键仅属校验层合法键，不在菜单 [S] 展示（由 `tui_menu.LLM_MENU_HIDDEN_KEYS` 隐藏），注册表保留以维持缓存 TTL/前缀清理。
+> **辩论模块派生**：3 个辩论模块（`debate_pro`/`debate_con`/`debate_synthesis`，`settings_suffix` 同规则）同样按每模块同一套键派生（如 `model_debate_pro`、`system_prompt_debate_con`）。辩论开关实际由 `features.json` 的分析增强组 Flag（`llm_debate_procon` 默认关 / `llm_debate_conditional` 默认开，两者相邻可查）控制，集中度问答段内建于辩论流程，`enabled_llm` 辩论子键仅属校验层合法键，不在菜单 [S] 展示（由 `tui_menu.LLM_MENU_HIDDEN_KEYS` 隐藏），注册表保留以维持缓存 TTL/前缀清理。
 
 ### 12.3 报告深度档位（`llm_report_depth`）
 
@@ -1513,44 +1513,11 @@ LLM 集成层与系统其他组件的接口：
 
 所有参数在 `llm_settings.json` 中配置，`{module_key}` 取值为 `global_macro` / `expert_review` / `health_check` / `penetration_deep` / `news_correlation` / `self_review`。
 
-### 附录 B：内置模型定价表
+### 附录 B：模型定价的来源与口径
 
-以下为 `core/constants.py` 中 `MODEL_PRICING` 内置的定价快照（**按厂商官方标价币种原样记录**，单位：每百万 token），可通过 `data/config/llm_pricing_ref.json` 的 `models` 逐模型覆盖：
+**单源声明**：内置价表声明在 `core/constants.py` 的 `MODEL_PRICING`（按厂商官方标价币种原样记录，不做汇率换算）；运行时合并顺序为「内置价 → `llm_pricing_ref.json` 用户覆写」，覆写文件带 `version` 硬闸门，不符即拒绝加载并回落内置价。
 
-| 模型 | 币种 | 输入 | 输出 | 缓存命中 | 说明 |
-|:-----|:----:|:----:|:----:|:--------:|:-----|
-| claude-fable-5-1 | USD | 10.00 | 50.00 | 0.250 | 官方 $10/$50（2026-10-25 核实） |
-| claude-fable-5 | USD | 10.00 | 50.00 | 1.000 | legacy $10/$50 |
-| claude-haiku-4-5 | USD | 1.00 | 5.00 | 0.100 | legacy $1/$5 |
-| claude-haiku-5-5 | USD | 0.10 | 0.50 | 0.010 | 官方 $0.10/$0.50（prompt ≤100K；>100K 档 $0.50/$2.50 不单列） |
-| claude-opus-4-6 / -4-8 | USD | 5.00 | 25.00 | 0.500 | legacy $5/$25 |
-| claude-opus-5-5 | USD | 4.00 | 20.00 | 0.200 | 官方 $4/$20 |
-| claude-sonnet-4-6 | USD | 3.00 | 15.00 | 0.300 | legacy $3/$15 |
-| claude-sonnet-5 | USD | 2.00 | 10.00 | 0.200 | legacy $2/$10（缓存命中 $0.20） |
-| claude-sonnet-5-5 | USD | 2.00 | 10.00 | 0.100 | 官方 $2/$10（缓存命中 $0.10） |
-| deepseek-flash | CNY | 1.00 / 2.00 | 4.00 / 8.00 | 0.02 / 0.04 | 峰谷定价（闲时/高峰）；DeepSeek-V4.1-Flash 正式模型名（2026-09-10 发布） |
-| deepseek-v4-flash | CNY | 1.00 / 2.00 | 4.00 / 8.00 | 0.02 / 0.04 | 峰谷定价（闲时/高峰）；别名，端点仍接受、底层由 V4.1-Flash 接管并按同价计费 |
-| deepseek-v4-pro | CNY | 4.50 / 9.00 | 13.50 / 27.00 | 0.15 / 0.30 | 峰谷定价（闲时/高峰）；官方 2026-09-10 公告继续提供 API 服务，计费方式不变 |
-| gemini-2.5-flash | USD | 0.30 | 2.50 | 0.030 | legacy $0.30/$2.50 |
-| gemini-2.5-pro | USD | 1.25 | 10.00 | 0.125 | legacy $1.25/$10（≤200k 上下文） |
-| gemini-3.1-pro | USD | 2.00 | 12.00 | 0.200 | preview $2/$12 |
-| gemini-3.8-flash | USD | 0.75 | 3.75 | 0.075 | 官方 $0.75/$3.75（2026-12-31 前优惠价） |
-| gpt-4o | USD | 2.50 | 10.00 | 1.250 | legacy $2.50/$10（缓存 50% 折扣） |
-| gpt-4o-mini | USD | 0.15 | 0.60 | 0.075 | legacy $0.15/$0.60（缓存 50% 折扣） |
-| gpt-5.6-sol | USD | 4.00 | 20.00 | 0.400 | 上一代主力 $4/$20 |
-| gpt-6-astra | USD | 10.00 | 50.00 | 1.000 | 旗舰 $10/$50 |
-| gpt-6-luna | USD | 0.10 | 0.50 | 0.010 | 轻量 $0.10/$0.50 |
-| gpt-6.1-sol | USD | 2.00 | 10.00 | 0.100 | 现役主力 $2/$10 |
-| kimi-k2.6 | CNY | 6.50 | 27.00 | 1.10 | Kimi 通用主力（256k 上下文），Anthropic 兼容端点默认开思考（未开启 thinking 时显式禁用） |
-| kimi-k3 | CNY | 20.00 | 100.00 | 2.00 | Kimi 上一代旗舰（1M 上下文） |
-| kimi-k3.1-pro | CNY | 13.00 | 68.00 | 1.30 | Kimi 现役旗舰（1M 上下文） |
-| kimi-k3.1-pro-highspeed | CNY | 26.00 | 136.00 | 1.30 | Kimi 现役旗舰高速档 |
-
-> 上表为具名模型定价；`MODEL_PRICING` 另有 12 个前缀回退键（`claude-fable-5-`/`claude-opus-5-`/`claude-sonnet-5-`/`claude-haiku-5-`/`claude-sonnet-4-`/`claude-opus-4-`/`claude-haiku-4-`/`gpt-6.1-`/`gpt-5.6-`/`gemini-3.8-`/`gemini-3.1-`/`gemini-2.5-`）用于 startswith 回退匹配日期戳变体，未逐行列示。
->
-> 峰谷定价模型的「闲时/高峰」两列为非高峰与高峰时段单价（高峰时段为北京时间 09:00–12:00、14:00–18:00，**仅高峰日（周一至周五，不含中国法定节假日）生效**；闲时为其外全部时间，**周末与法定节假日全天按闲时价**）；模型条目含 `"peak"` 高峰价子段，时段可经 `llm_pricing_ref.json` 顶层 `peak_periods`/`idle_periods`/`timezone`/`weekend_always_idle`/`holiday_always_idle` 覆盖。
-
-费用按 `(input_tokens × 输入单价 + output_tokens × 输出单价 + cache_hit_tokens × 缓存命中单价) / 1_000_000` 计算，货币单位即该行「币种」列。
+**口径纪律**：① 同一模型的多档价（长上下文、缓存命中、批量）必须全部记录档位判据，不得只记一档；② 未登记的模型按「未知定价」处理并告警，不得按同名族推测；③ 费用估算与预算闸门共用该表，禁止在调用点写死单价；④ 定价更新只改声明处，文档不保留价格副本（价格是厂商数据 + 代码常量，随厂商调价变动）。
 
 ### 附录 C：LLM 模块指纹依赖字段
 
