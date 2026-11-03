@@ -43,7 +43,9 @@ testpaths = ["src/test"]
 required_plugins = ["pytest-mock>=3.15", "pytest-xdist>=3.6"]
 
 [tool.ruff]
-target-version = "py310"
+# 与 `requires-python = ">=3.11"` 及 CI 矩阵（3.11/3.12/3.13）对齐：低标会让规则按
+# 旧版语义给建议（如可升级语法被拒、可选语法改写方向偏差），与真实运行环境脱节。
+target-version = "py311"
 line-length = 120
 # docs 下为归档快照（含历史脚本副本），冻结不再参与 lint / format
 # force-exclude：带上命令行显式路径（如 `ruff format docs`）时仍尊重 exclude。

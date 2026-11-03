@@ -10,6 +10,14 @@
 
 ### 变更
 
+- **全仓技术债核查与修复（代码 + 配置）**：按仓内十道守护 + `ruff check`/`ruff format` 全量盘点（全部绿）后，修复六处自查发现的实际欠账：
+  - **配置口径不一致**：`pyproject.toml` 的 `[tool.ruff] target-version` 为 `py310`，与 `requires-python = ">=3.11"` 及 CI 矩阵（3.11/3.12/3.13）脱节——改为 `py311`（规则建议重新对齐真实运行环境）。
+  - **依赖约束双源头漂移**：`pytest`/`pytest-mock`/`pytest-html` 在 `pyproject` 的 `[test]` extras 是 `>=9.1`/`>=3.15`/`>=4.2`，`requirements.txt` 却停在 `>=8.0`/`>=3.15.1`/`>=4.0`——「启动脚本装环境」与 CI 跑的是两套 pytest 语义；`requirements.txt` 对齐至 extras 同约束（保留 UTF-8 BOM）。补齐缺失的回归契约：`test_dependency_declarations.py` 新增 `test_extras_dependency_specs_match_requirements`（原有契约只覆盖运行时直接依赖，extras 侧无守卫）。
+  - **CI 格式扫面与本地基线双口径**：`format` job 只查 `src/python/ scripts/`，而本地基线是整树 `ruff format --check`——`src/test/` 的格式漂移在 CI 上被静默放行（本地红、CI 绿）；纳入 `src/test/`，同步 `developer-guide.md` 门禁说明与「依赖升级流程」契约段落。
+  - **格式漂移 3 文件**：`core/provider_registry.py`、`fetcher/industry.py`、`report/fund_style_classify.py` 与声明的「零告警基线」不符，已 `ruff format` 归一。
+  - **不可达防御代码**：`web/app.py` 访问日志计算耗时时用 `try/except Exception: pass` 包住 `perf_counter`（该函数不抛异常，`g.get` 自带默认值兜底），删除死分支；同一文件 `app.json.ensure_ascii` 赋值被静态检查判为未知属性（flask 把 `app.json` 标注为基类 `JSONProvider`），改用 `isinstance(..., DefaultJSONProvider)` 缩小类型——行为不变，消掉常驻诊断噪声。
+  - **核查结论留档**：无 TODO/FIXME/HACK 残留（生产代码 0 处）、无可变默认参数、无裸 `except:`、无重复长函数体（≥12 行函数体 AST 归一后 0 组重复）、无真死模块（9 个疑似均为包内相对导入/`__main__` 入口的扫描伪信号）、无可删的失效 `noqa`（RUF100 命中 398 处全为未启用规则的有意声明，启用规则集下 0 处）。
+
 - **R0 结算视界扩展（plan-243）**：决策账本支持 5/20/60 多视界结算——结算事件新增 `target_horizon`（判重键 `(decision_id, 目标视界)`，历史事件无此字段按 5 日归属，旧记录不改写）；`fold_ledger` 新增 `settlements` 全量映射与 `by_horizon` 多视界统计（`settlement`/命中率等口径基准仍为 5 日，既有消费面不变）；报告 seam 随运行推进全部视界；新增 CLI 子命令 `settle-decisions`（结算不依赖报告生成，幂等可重复执行）；doctor 账本概览补多视界已结数。单测覆盖多视界幂等/回补/旧记录兼容。
 - **R1 判断依据块骨架（plan-243）**：新增 `report/decision_basis.py`（形态 A 规范空契约，零 LLM、零取数、零参数）；注册功能开关 `decision_basis`（默认开，章节内选项组）与 `pipeline_data["decision_basis_data"]`（附录 H Schema 契约登记）；行动建议章 HTML 嵌入 `#decision-basis` 折叠块（复用折叠组组件）、Excel 页签顶部子块；区块注册表 / §4.22 矩阵（8 区块）/ 语义命名表 / R-OUT-17 同步；骨架期双端空态「数据不可用：<原因>」，R2 起逐节填充（含章标题副行补「判断依据」），`decision_basis.enabled=false` 双端完全隐藏（回滚通道）。
 - **R2 信号清单与信号可信度（plan-243）**：`report/decision_basis.py` 接信号账本快照（只读、零取数）——信号清单五类判断类信号（口径/样本/区分度/标注），`basis` 按账本事实判定（估值分位 `detail.pe/pb` 均 null ⇒ 价格代理）；区分度三态如实标注（未回测/样本不足/回测未通过均不进方向轴，`in_direction_axis` 负向用例覆盖）；首批回测结论以模块常量 `BACKTEST_CONCLUSIONS` 登记（估值分位已回测未通过 n=117/ic≈0.04/单调否，因子目录样本不足 n=19，含来源脚本/回测日期/讨论稿 §8.1 指针，不新增配置键）；信号可信度规则仲裁四枚举（`arbitrate_confidence`：no_signal/no_valid_signal/all_proxy/split_direction/insufficient_signals/direction_aligned，首版不产 high）；HTML/Excel 双端渲染信号清单表 + 可信度行（data-status 语义色、数值列 tabular-nums、无效信号标「仅参考」）；空态「暂无信号记录」+「暂不可判」；`enable_llm` 两态输出逐字节一致，CLI/TUI 零引用。

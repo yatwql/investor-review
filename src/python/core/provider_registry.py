@@ -490,9 +490,7 @@ class DataSourceRegistry:
             if cached is not NOT_FOUND:
                 return cached
             result = fetch_fn()
-            self.session_cache_set(
-                domain, code, result, source=source if result is not None else "miss"
-            )
+            self.session_cache_set(domain, code, result, source=source if result is not None else "miss")
             return result
 
     def _session_inflight_lock(self, domain: str, code: str) -> threading.Lock:

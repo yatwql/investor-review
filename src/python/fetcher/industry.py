@@ -154,9 +154,7 @@ def _retry_industry_fetch(code: str) -> dict | None:
     from src.python.core.provider_registry import get_registry
 
     result = fetch_industry_data(code)
-    get_registry().session_cache_set(
-        "industry", code, result, source="api" if result is not None else "miss"
-    )
+    get_registry().session_cache_set("industry", code, result, source="api" if result is not None else "miss")
     return result
 
 

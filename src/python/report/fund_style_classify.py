@@ -302,9 +302,7 @@ def _prefetch_extended_data(
         for h in holdings
         if (c := (h.get("code") or "").strip()) and c and is_a_share_stock(h.get("name", "") or "", c)
     ]
-    _names: dict[str, str] = {
-        (h.get("code") or "").strip(): (h.get("name") or "").strip() for h in holdings
-    }
+    _names: dict[str, str] = {(h.get("code") or "").strip(): (h.get("name") or "").strip() for h in holdings}
     # 去重：同一股票跨基金不重复请求
     _seen: set[str] = set()
     _unique_codes = [c for c in _codes_to_fetch if not (c in _seen or _seen.add(c))]
