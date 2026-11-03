@@ -76,6 +76,8 @@
   - [8.5 基础设施约束](#85-基础设施约束)
   - [8.6 测试约束](#86-测试约束)
 - [9. 导入面所有权](#9-导入面所有权)
+  - [9.1 模块门面 re-export 面与退出条件](#91-模块门面-re-export-面与退出条件)
+  - [9.2 形状容错归属（第三方变体 / 本方输入 / 本方旧结构）](#92-形状容错归属第三方变体--本方输入--本方旧结构)
 - [附录](#附录)
   - [附录 A：目录结构](#附录-a目录结构)
   - [附录 B：数据源一览](#附录-b数据源一览)
@@ -3210,8 +3212,11 @@ config/
 ├── _llm_settings.py              # llm_settings.json 读取/合并/缓存与 LLM 配置入口
 ├── _llm_settings_defaults.py     # llm_settings.json 默认模板生成
 ├── _llm_providers.py             # llm_providers.json 多链解析/凭据注入
-└── _llm_providers_defaults.py    # llm_providers.json 默认模板生成
+├── _llm_providers_defaults.py    # llm_providers.json 默认模板生成
+└── _legacy_keys.py               # 已删除/已改名配置键登记表（RENAMED/REMOVED + 统一告警文案单源）
 ```
+
+**旧配置键的处置口径（单源）**：站点侧只有两种动作——`report_section_order` 的无效键**从内存剔除**（仍计 1 问题提示同步文件）、`features.json` 的无效开关**照常加载但无消费方**；两者共用 `_legacy_keys.format_unknown_keys(scope, names)` 产出**一条**归并告警（逐键注明：已删除的原因 / 应改用的新键 / 疑似拼写错误），用户侧对照表见 `how-to-config.md`「已删除 / 已改名的配置键」一节。删除或改名任何可配置键时，先在该表登记、再改代码，避免三处措辞各自漂移。
 
 #### 机器本地状态
 
@@ -3896,7 +3901,41 @@ web/ (Web 服务层，薄入口)
 
 **`noqa: F401` 保留口径**：包级公共聚合面（`analysis/__init__.py`、`core/registry.py`、`llm/__init__.py`、`llm/fact_checker/__init__.py`）的公开 API 再导出；动态调度面（`providers/sina.py` 的 K 线函数供 chain 按 provider 名 `getattr`）；显式副作用/类型导入。新增 `noqa: F401` 须在行内写明理由；测试私有导入只允许指向 owner。
 
-**机检**：`scripts/check-import-surface.py`（观察期，规则 compat-comment / private-all / cross-private / dynamic-target）；包 `__all__` 私有名、兼容注释、跨包私有导入当前均为 0。
+**机检**：`scripts/check-import-surface.py`（观察期，规则 compat-comment / private-all / cross-private / dynamic-target）；包 `__all__` 私有名、兼容注释、跨包私有导入当前
+
+### 9.1 模块门面 re-export 面与退出条件
+
+> **方向纪律**：本节给**规则**（哪类面永久、哪类面必须有退出条件、下线时看什么），**不记录实测计数**。消费者数量是代码派生量，抄进设计文档即与代码双向漂移（新增一处 import 就让文档失真，而文档失真不会触发任何门禁）；需要现值时用工具现取（`scripts/check-import-surface.py` 与全仓 import 检索），权威结果永远在代码侧。
+>
+> **面类型判据**：**永久面** = 对外承诺的入口（包 `__init__` 公共 API、CLI/TUI/Web 入口、脚本入口、文档已承诺的 patch 点），不设退出条件；**迁移期面** = 模块拆分时保留的 import / patch 路径，**必须**写明退出条件与判定方式。
+
+| 门面 | 面类型 | 归属判据 | 退出条件（迁移期面必填） |
+|:--|:--|:--|:--|
+| `config/__init__.py`、`cache/__init__.py`、`analysis/__init__.py`、`llm/__init__.py`、`llm/fact_checker/__init__.py`、`core/registry.py` | 永久 | 包级公共 API，跨包唯一入口 | 不设——包级公共面即对外契约 |
+| `fetcher/chain.py` | 永久（路由入口） | `fetch_with_fallback` / `reset_chain_overrides` 是链路公开入口，子模块只是实现拆分 | 不设 |
+| `scripts/test-runner.py`、`scripts/release.py`、`scripts/check-*-traces.py` | 永久（脚本入口） | 测试经 `load_script` 取属性（动态面），属文档承诺的调用面与 patch 点 | 不设 |
+| `llm/generators_orchestrator.py` | 迁移期 | 拆分后仅转发 `llm/generators_*` 与 `_llm_dispatch` 的实现符号 | 所有调用方直连实现模块后删除 re-export 块并同步撤 E402 豁免；判定方式：按符号逐个检索 import 点，仅剩本模块自引即可删 |
+| `report/_report_generation.py` | 迁移期 | 拆分后仅转发 `_generation_full` / `_generation_both` 的实现符号 | 同上；`orchestrator` 改直连实现模块即可删 |
+| `llm/depth_profile.py` | 迁移期（常量门面） | 常量本体在 `core.constants`，本模块只做转发 | 调用方改直连 `core.constants` 后删除 |
+| `llm/holding_change_review.py` | 迁移期 | 拆分后仅转发实现模块符号 | 调用方直连实现模块后删除 |
+
+> **下线判据（统一）**：看「该符号是否还有只经门面的调用方」——全部调用方直连 owner 后，门面只剩 re-export，删它不改变行为；删时同步撤 E402/F401 豁免，否则禁止项会反向把门面固化成永久壳。**登记迁移期面时写判据与判定方式，不写「目前有 N 处调用」**。
+
+### 9.2 形状容错归属（第三方变体 / 本方输入 / 本方旧结构）
+
+> 三者都表现为「多写一层分支」，但**处置完全相反**：第三方变体随上游接口演化（删了会在其他部署上炸）；本方输入形状属用户数据（Excel / 代码写法，删了会让用户文件读不出）；只有**本方旧结构**才是待下线技术债。新增容错分支时先在此归档，避免清债时误删。
+
+| 位置 | 分支 | 归属 | 判据 | 处置 |
+|:--|:--|:--|:--|:--|
+| `providers/cninfo.py::resolve_org_id` | 载荷直接为数组 / 被 dict 包一层 | 第三方变体（含企业网关代理） | 官方接口直接返回数组，代理层可能包一层 | 保留；两侧取同名字段，命中即止 |
+| `llm/_api_responses.py` | `usage` 与 `usageMetadata` 并存；`content` 为字符串 | 第三方变体（Gemini / 各家兼容实现） | 家系差异而非版本差异 | 保留；按家系分支解析 |
+| `providers/tiantian_holdings.py::_fetch_legacy_quarterly` | 不带年份参数的默认请求跳 | 第三方端点行为 | 上游「年份域回溯」可能空，默认请求有数据 | 保留为第 3 跳；报告层按报告期时效标注 |
+| `providers/eastmoney.py` | 返回结构与天天基金同形 | 本方跨源对齐（非容错） | 两个源解析后的统一契约 | 保留；契约由 `analysis` 消费方约束 |
+| `core/holding_status.py` | `"600900.0"` 归一为 `"600900"` | 本方输入形状（Excel 浮点） | 表格数字单元格导出即带 `.0` | 保留；归一在入口一次完成 |
+| `core/decision_header.py`、`report/decision_llm_capture.py` | `sh600000` 等带前缀代码补挂裸 6 位别名 | 本方输入形状（持仓代码写法） | 用户可写带交易所前缀 | 保留；别名只用于对账 |
+| `fetcher/financial_report.py` | 裸代码字符串入参 | 本方输入形状（内部调用变体） | 调用方传 code 或 {code, name} | 保留；展示层回退 symbol |
+| `core/data_freshness.py` | 由 `nav_date` 推断最近交易日 | 本方数据缺省补全 | 调用方未显式传 today | 保留；显式传参优先 |
+均为 0。
 
 ## 附录
 

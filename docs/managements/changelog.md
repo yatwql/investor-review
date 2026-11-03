@@ -10,6 +10,12 @@
 
 ### 变更
 
+- **兼容面整改（rf-1025 / rf-1029 / rf-1031 / rf-1032 / rf-1033）**：
+  - **缓存键版本残留（rf-1025）**：实测本机缓存目录 344 个文件全部为当前戳 `v4`、旧戳残留 0 个——TTL 兜底确实能清掉换代残留，故不必新增扫除动作；实际缺陷在 `cache_key_from_file_name` 只剥**当前**戳：旧戳文件反推出的逻辑键带 `_v3` → 精确键 TTL 表命不中 → 退成前缀默认 TTL（`sector_flow_` 仅 900s），有效期内的负缓存/回退基准被提前删。改为剥任意 `_v{N}` 戳，旧戳文件与当前文件同口径判龄。
+  - **同阈值双名收敛（rf-1029）**：`core/perf.py` 删除 `SLOW_WRITE_WARN_SECONDS` 别名（模块内两处与测试统一到 `SLOW_SPAN_WARN_SECONDS`），消除「改一处漏一处」的两个名字并存。
+  - **旧配置键处置口径单源（rf-1032）**：新增 `config/_legacy_keys.py`（`RENAMED` / `REMOVED` 登记表 + `format_unknown_keys` 归一文案）；`report_section_order` 的无效键与 `features.json` 的无消费开关改为**同一条归并告警**，逐键注明「已删除的原因 / 应改用的新键 / 疑似拼写错误」，两站点各自的处置动作（内存剔除 / 照常加载）保持不变。用户手册 `how-to-config.md` 新增「已删除 / 已改名的配置键」对照表（随登记表派生）。
+  - **门面 re-export 面与形状容错归属（rf-1031 / rf-1033）**：`technical.md` 新增 §9.1「模块门面 re-export 面与退出条件」（永久面 vs 迁移期面 + 实测消费者数：`fetcher/chain.py` 53、`llm/generators_orchestrator.py` 39、`llm/holding_change_review.py` 15、`llm/depth_profile.py` 9、`report/_report_generation.py` 6，迁移期面写明下线判据）与 §9.2「形状容错归属」（第三方变体 / 本方输入形状 / 本方旧结构三分，逐分支给判据与处置——当前无「本方旧结构」待下线项）。
+- **兼容面盘点（旧配置项 / 配置文件 / 数据文件 / 数据结构 / 缓存结构 / 缓存文件 / 内部 API）**：逐类核查后登记 9 项待评估（`review-findings.md` P3，rf-1025~rf-1033）——缓存键版本换代后的旧版本文件无主动清扫、决策账本旧结算事件按 5 日口径归属的读取分支、持仓明细双内部表示（DetailRow / dict）、`compute_purchase_status_data` 的未使用形参、`core/perf.py` 同阈值双名常量、`settle_pending_decisions` 单视界缺省、模块拆分 re-export 面缺退出条件、旧配置键静默处置口径不统一、上游返回形状容错与本方旧结构兼容混类。**核对为无兼容面**的部分：各配置文件的 `schema_version`/`version` 硬闸门（不符即拒载并提示重建）、`features.json` 无旧文件名回退、缓存读取路径不保留旧文件兼容（损坏即删）、`replay_schedule` 旧版本规则序列按未命中丢弃。
 - **脚本层优化（`scripts/` 目录审计）**：
   - **并行扫描**：`check-code-traces --ci` 的逐文件扫描改进程池（默认 `min(4, CPU)`，不取满核以免与钩子内其它守护抢核；`CHECK_TRACES_JOBS=1` 可退串行复现）。结果按输入顺序回排，`--ci` 输出与结论缓存回放逐字不变；冷缓存全量扫描 7.9s → 2.4s，十项守护冷缓存合计 12.0s → 7.2s（其余九项均 ≤1.1s，无需并行化）。
   - **子进程超时**：守护/钩子/编排类脚本对 `git`、`pytest`、子脚本的调用统一补 `timeout=`，超时按「环境不可用」走明确分支——结论缓存指纹退全量重算（方向安全）、pre-commit 钩子放行并告警、发布编排抛 `ReleaseError`，不再把提交钩子或 CI `guards` job 挂成无输出等待。

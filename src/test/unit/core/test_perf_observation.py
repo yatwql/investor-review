@@ -381,19 +381,19 @@ class TestSlowWriteWarning:
         assert not [r for r in caplog.records if r.levelno == logging.WARNING]
 
     def test_above_threshold_reports_size_and_path(self, tmp_path, caplog):
-        from src.python.core.perf import SLOW_WRITE_WARN_SECONDS, warn_slow_write
+        from src.python.core.perf import SLOW_SPAN_WARN_SECONDS, warn_slow_write
 
         target = tmp_path / "report.html"
         target.write_bytes(b"x" * (2 * 1024 * 1024))
 
         with caplog.at_level(logging.WARNING, logger="invest"):
-            warn_slow_write("HTML 页面写入", SLOW_WRITE_WARN_SECONDS + 13.0, target)
+            warn_slow_write("HTML 页面写入", SLOW_SPAN_WARN_SECONDS + 13.0, target)
 
         messages = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
         assert len(messages) == 1, messages
         message = messages[0]
         assert "HTML 页面写入" in message
-        assert f"{SLOW_WRITE_WARN_SECONDS + 13.0:.2f}s" in message
+        assert f"{SLOW_SPAN_WARN_SECONDS + 13.0:.2f}s" in message
         assert "2.00 MB" in message
         assert str(target) in message
 

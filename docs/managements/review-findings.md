@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.16.17-dev
-> **编号源**：`rf-next = 1025`（新增问题提出后更新为 +1；已用最大 rf-1024，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1034`（新增问题提出后更新为 +1；已用最大 rf-1033，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -23,7 +23,14 @@
 
 入选标准：需先确认数据契约再动，当前不影响行为正确性。
 
-（当前无待处理项）
+**本轮盘点口径**：逐类比对「旧配置项 / 旧配置文件 / 旧数据文件 / 旧数据文件结构 / 旧缓存结构 / 旧缓存文件 / 旧内部 API」。**已核对为无兼容面的部分**（不入待办）：`config.json` / `llm_settings.json` / `llm_providers.json` / `logger.json` / `llm_pricing_ref.json` 一律用 `schema_version`（或 `version`）硬闸门，不符即**拒绝加载并提示重新生成**，无静默迁移分支；`features.json` 无名称级兼容（无旧文件名回退）；缓存读取路径声明「不保留旧缓存文件的兼容」（`cache/_io.py`：损坏即删）；`schemas/replay_schedule.py` 对旧版本规则序列**按未命中丢弃**；`cninfo`/`_api_responses` 等上游返回形状容错属第三方变体（见 rf-1033 边界）。
+
+| # | 问题 | 修复方向 |
+| --- | --- | --- |
+| **rf-1026** | 旧数据文件结构的读取侧兼容：`core/decision_ledger.py::_event_horizon` 对无 `target_horizon` 的历史结算事件按 5 日口径归属；账本按龄保留 730 天，该分支至少要存续到老事件全部过期 | 二选一——按保留期给出下线时间点，或写侧一次性回填 `target_horizon` 后删除读取侧分支；同口径复核 `signal_ledger` 是否有同类字段缺省分支 |
+| **rf-1027** | 同一份持仓明细在管线中存在两种内部表示（`DetailRow` 对象 / 明细字典），多处读取点写双形态分支：`report/_snapshot.py::latest_quotes_from_detail_rows`（"兼容两种形态"）、`core/data_freshness.py::_detail_value`（dict 或含属性对象）；每处双分支都是长期的漏改面 | 评估统一为单形态的回归面（双表示各自被哪些层级独占消费），再决定「收编到边界转换一次」还是保留通用取值器 |
+| **rf-1028** | 旧内部 API 的假兼容形参：`report/purchase_status.py::compute_purchase_status_data(config)` 已不读该形参（开关走注册表），注释标为「签名兼容」，而调用方仍按位置传 `get_config()` | 删除形参并同步 2 处调用点（`report/_orchestrator_data.py`、`report/whatif_operations.py`）与相关测试 |
+| **rf-1030** | 旧调用面缺省值留存：`report/decision_settlement.py::settle_pending_decisions(horizons=None)` 缺省退回单视界（多视界已上线），而两个生产调用点均已显式传 `horizons` | 收窄为必填（或保留缺省但改为「取 `SETTLE_HORIZONS`」以消除第二条口径），核实测试里的 None 路径是否仍具意义 |
 
 ### P4 — 持续监控：文件膨胀登记
 

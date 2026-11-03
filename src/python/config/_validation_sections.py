@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ._legacy_keys import format_unknown_keys
 from ._validation_common import (  # noqa: F401 — 共用原语
     _FETCH_MODES,
     _MISSING,
@@ -81,16 +82,16 @@ def _validate_report_section_order(config: dict, issues: int) -> int:
         return issues
     valid_keys = get_report_section_keys()
     seen_numbers: set[int] = set()
-    unknown_keys: list[str] = []
+    invalid_keys: list[str] = []
     for key, num in order.items():
         if key == "llm_usage":
-            logger.warning("config.json report_section_order 中不应包含 llm_usage")
+            logger.debug("config.json report_section_order 不应包含 llm_usage")
             issues += 1
+            invalid_keys.append(key)
             continue
         if key not in valid_keys:
-            logger.warning("config.json report_section_order 中存在未知的模块标识 %r（已自动清理）", key)
             issues += 1
-            unknown_keys.append(key)
+            invalid_keys.append(key)
             continue
         try:
             n = int(num)
@@ -107,11 +108,14 @@ def _validate_report_section_order(config: dict, issues: int) -> int:
             issues += 1
         else:
             seen_numbers.add(n)
-    # 未知键从内存配置剔除：注册表没有对应条目时它既不参与排序也不占号，
+    # 无效/旧键从内存配置剔除：注册表没有对应条目时它既不参与排序也不占号，
     # 留着会让「已配置在前/未配置排尾」的合并产生错位预期；文件层漂移仍计 1
-    # 问题提示同步 config.json（校验不回写文件）。
-    for key in unknown_keys:
+    # 问题提示同步 config.json（校验不回写文件）。告警归并成一条（措辞与旧键
+    # 处置建议由 `_legacy_keys` 单源给出，与 features.json 侧同口径）。
+    for key in invalid_keys:
         order.pop(key, None)
+    if invalid_keys:
+        logger.warning(format_unknown_keys("config.json report_section_order", invalid_keys))
     return issues
 
 

@@ -577,7 +577,7 @@ class TestUnknownOverrideWarning:
             patch.dict(FEATURE_FLAGS, {}),
         ):
             load_feature_overrides()
-            warnings = [text for text in self._rendered_warnings(mock_logger) if "无消费者" in text]
+            warnings = [text for text in self._rendered_warnings(mock_logger) if "无效/旧键" in text]
 
             assert len(warnings) == 1, "多个无消费者开关应合并为一条告警，而非逐键刷屏"
             assert "no_such_switch" in warnings[0]
@@ -595,7 +595,7 @@ class TestUnknownOverrideWarning:
             patch.dict(FEATURE_FLAGS, {}),
         ):
             load_feature_overrides()
-            warnings = [text for text in self._rendered_warnings(mock_logger) if "无消费者" in text]
+            warnings = [text for text in self._rendered_warnings(mock_logger) if "无效/旧键" in text]
 
             assert warnings == []
             assert FEATURE_FLAGS["cost_position"] is False, "已登记开关的覆写仍须正常生效"
@@ -615,7 +615,7 @@ class TestUnknownOverrideWarning:
             patch.dict(FEATURE_FLAGS, {}),
         ):
             load_feature_overrides()
-            warnings = [text for text in self._rendered_warnings(mock_logger) if "无消费者" in text]
+            warnings = [text for text in self._rendered_warnings(mock_logger) if "无效/旧键" in text]
 
             assert len(warnings) == 1
             assert "no_such_flag_a" in warnings[0]
