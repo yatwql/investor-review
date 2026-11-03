@@ -47,6 +47,9 @@ _HOW_TO_START_MD = _MANUALS / "how-to-start.md"
 
 _LLM_TECHNICAL_MD = _MANAGEMENTS / "llm-technical.md"
 
+#: 工程纪律速查（纪律唯一来源）；只受「派生量禁令」一项检查：纪律源写规则不写计数
+_CLAUDE_MD = _MANAGEMENTS.parents[1] / "CLAUDE.md"
+
 _TECHNICAL_MD = _MANAGEMENTS / "technical.md"
 _RELIABILITY_MD = _MANUALS / "datasource-reliability.md"
 
@@ -397,7 +400,8 @@ def _collect_test_snapshot(full_buckets: bool = False) -> dict[str, int]:
     cache = _read_snapshot_state()
     files = _current_test_files()
     sigs = {rel: _file_signature(p) for rel, p in files.items()}
-    store: dict[str, dict] = cache.get("files") if cache else {}
+    _stored_files = cache.get("files") if cache else None
+    store: dict[str, dict] = _stored_files if isinstance(_stored_files, dict) else {}
     shared_ok = bool(cache) and cache.get("shared") == shared
     if not shared_ok:
         store = {}
@@ -409,14 +413,15 @@ def _collect_test_snapshot(full_buckets: bool = False) -> dict[str, int]:
     if shared_ok and not changed:
         if set(store) != set(sigs):
             store = {rel: store[rel] for rel in sigs}
-            _write_snapshot_state({**cache, "files": store})
+            _write_snapshot_state({**(cache or {}), "files": store})
         total = sum(int(store[rel].get("total", 0)) for rel in sigs)
         if not full_buckets:
             return {"_总收集": total}
-        if block_valid:
+        if block_valid and isinstance(full_block, dict):
             try:
-                return {str(k): int(v) for k, v in full_block["snapshot"].items()}
-            except (TypeError, ValueError, KeyError):
+                block_snapshot = full_block.get("snapshot") or {}
+                return {str(k): int(v) for k, v in block_snapshot.items()}
+            except (TypeError, ValueError):
                 pass  # full 块损坏 → 落到下方全量
         # 块指纹失效/损坏 → 全量重取分组桶
 
@@ -492,7 +497,7 @@ def _collect_test_snapshot(full_buckets: bool = False) -> dict[str, int]:
                 "shadow_ok": prev_ok,
             }
         )
-        result = {"_总收集": inc_total}
+        result = {"_总收集": int(inc_total or 0)}
 
     if full_buckets and full is None:
         return {}  # 分组桶必须来自成功全量：残缺桶会误报计数表

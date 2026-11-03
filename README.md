@@ -40,8 +40,8 @@
 
 | 亮点 | 说明 |
 |:---|:---|
-| **一次持仓，三种用法** | 同一套引擎、三种入口，产物与配置完全一致：**TUI**（全键盘菜单，15 项含退出 + 二级子菜单；`[Q]` 报告追问按功能开关显示，`[U]` 在线改持仓，`[T]` 系统自检常驻）· **CLI**（参数驱动，Windows 任务计划 / cron 无人值守）· **Web**（浏览器上传 → 选格式 → 看进度 → 预览/下载 + 在线持仓录入 + 配置编辑面板） |
-| **全量专业报告，双格式** | **Excel** 最多 19 个页签（条件页签按开关自动显隐，不留空壳）；**HTML** 单页自包含、响应式布局、**最多 12 张 Chart.js 交互图表**（悬停看精确值、可缩放、一键导出 PNG / CSV）+ 深浅色主题切换——手机上看也不翻车 |
+| **一次持仓，三种用法** | 同一套引擎、三种入口，产物与配置完全一致：**TUI**（全键盘菜单，按任务分组编排、含二级子菜单；`[Q]` 报告追问按功能开关显示，`[U]` 在线改持仓，`[T]` 系统自检常驻）· **CLI**（参数驱动，Windows 任务计划 / cron 无人值守）· **Web**（浏览器上传 → 选格式 → 看进度 → 预览/下载 + 在线持仓录入 + 配置编辑面板） |
+| **全量专业报告，双格式** | **Excel** 页签按开关自动显隐（条件页签不留空壳）；**HTML** 单页自包含、响应式布局、内嵌 Chart 图.js 交互图表**（悬停看精确值、可缩放、一键导出 PNG / CSV）+ 深浅色主题切换——手机上看也不翻车 |
 | **穿透到真实持仓** | 基金/ETF 拆解为底层标的合并排序（TOP10），**ETF 联接基金按目标 ETF 穿透**；标注各基金报告期与「未折算持有比例」，不做精确性误导 |
 | **量化风控成体系** | Beta 置信区间 + t/p 检验、6 种涨跌情景回撤推演（CI 传播）、尾部风险（VaR 95/99、最长连跌、恢复天数）、再平衡超限告警、流动性变现天数、币种敞口——机构风控的个人版 |
 | **真正把 LLM 用成智囊团** | 三阶段圆桌复盘（召集令→辩论→定音锤）+ 可选正反辩论/条件推理/集中度问答；输出自动附**事实校验**（数值/品种/排名回查）与**质量分级** A~F；多 Provider 链式分发（priority / weighted / cost_first / fallback_only），失败自动递补；分析先核对申购限购可执行性（限大额 / 暂停申购不进不实建议） |
@@ -59,7 +59,7 @@
 
 ![交互图表：穿透行业分布与 TOP10 持仓资产](src/static/report-charts.png)
 
-同一份持仓还会产出 **Excel 报告**（最多 19 页签，条件页签按开关自动显隐）——下表是「持仓明细与分类」页签实景：按账户分组、小计与总计自动核算，盈亏/收益率带涨跌配色，页签条即全部章节：
+同一份持仓还会产出 **Excel 报告**（页签按开关自动显隐，条件页签不留空壳）——下表是「持仓明细与分类」页签实景：按账户分组、小计与总计自动核算，盈亏/收益率带涨跌配色，页签条即全部章节：
 
 ![Excel 报告：持仓明细与分类页签，按账户分组带小计，右侧盈亏与收益率列](src/static/excel-report.png)
 
@@ -67,7 +67,7 @@
 
 ## 🖥️ 界面实景
 
-**TUI 交互模式**——全键盘主菜单（五个任务分组共 15 项含退出，方向键 + 字母直达，`/` 关键词筛选，页头常驻状态行（上次报告 / 新鲜度 / 数据源失败 / LLM 状态，缓存过期仅在存在过期文件时出现，异常时附一行带键动作提示），页脚常驻键位提示；首用未就绪项在页头只占一行（详情按 `?`）；终端适配见下方「环境变量」；`0` 或 `X` 退出；窄屏/手机 SSH 自适应折行。「配置」组按高频优先排列：报告章节 → 功能开关 → LLM 多链 → 对比指数 → 匿名化 → 目录信息 → 刷新配置）：
+**TUI 交互模式**——全键盘主菜单（按任务分组编排、含退出项，方向键 + 字母直达，`/` 关键词筛选，页头常驻状态行（上次报告 / 新鲜度 / 数据源失败 / LLM 状态，缓存过期仅在存在过期文件时出现，异常时附一行带键动作提示），页脚常驻键位提示；首用未就绪项在页头只占一行（详情按 `?`）；终端适配见下方「环境变量」；`0` 或 `X` 退出；窄屏/手机 SSH 自适应折行。「配置」组按高频优先排列：报告章节 → 功能开关 → LLM 多链 → 对比指数 → 匿名化 → 目录信息 → 刷新配置）：
 
 ![TUI 主菜单](src/static/tui-menu.png)
 
@@ -160,8 +160,8 @@ git clone https://github.com/yatwql/investor-review.git && cd investor-review
 
 | 能力域 | 一句话介绍 | 深入阅读 |
 |:---|:---|:---|
-| 📄 报告与行情 | 多账户核算、双格式报告（Excel 19 页签 + HTML 12 图）、智能缓存、主备链路与「命中源」可追溯 | [报告文件结构](docs/manuals/reports-instruction.md) · [数据源一览](docs/manuals/datasource.md) |
-| 📰 新闻增强 | 5 源财经新闻并行采集、去重、按持仓关键词关联；盈利预测、分红历史、市场情绪热点 | [报告文件结构](docs/manuals/reports-instruction.md) |
+| 📄 报告与行情 | 多账户核算、双格式报告（Excel 页签按开关显隐 + HTML 内嵌图表）、智能缓存、主备链路与「命中源」可追溯 | [报告文件结构](docs/manuals/reports-instruction.md) · [数据源一览](docs/manuals/datasource.md) |
+| 📰 新闻增强 | 多源财经新闻并行采集、去重、按持仓关键词关联；盈利预测、分红历史、市场情绪热点 | [报告文件结构](docs/manuals/reports-instruction.md) |
 | 🤖 LLM 智囊团 | 圆桌复盘 + 正反辩论、事实校验、质量分级 A~F、多 Provider 链式分发、深度档位、幻觉率评估 | [LLM 配置指引](docs/manuals/how-to-config-llm.md) · [LLM 技术要点](docs/managements/llm-technical.md) |
 | 📈 量化风控 | Beta 置信区间 + 统计检验、情景回撤推演、VaR 尾部风险、再平衡告警、流动性变现天数、币种敞口 | [报告文件结构](docs/manuals/reports-instruction.md) |
 | 🏆 基金评价 | 5 级评级、经理变更监控、重合度矩阵、集中度与风格漂移、因子回归、候选基金比较 | [报告文件结构](docs/manuals/reports-instruction.md) |
@@ -199,8 +199,8 @@ git clone https://github.com/yatwql/investor-review.git && cd investor-review
 
 **这是一个把工程质量当真的一人项目**，对贡献者意味着：
 
-- ✅ **上万条测试用例**（提交门禁 dev-verify 覆盖其中八千余项）+ 场景化回归套件，改动有底气（实时数字见 [测试覆盖率文档](docs/managements/test-coverage.md)）
-- ✅ **10 个 CI 守护脚本**把历史教训变成硬门禁：代码/文档痕迹、任务编号、语义命名、文档一致性、测试冗余、需求追溯、版本号、文档链接、行数红线——文档与代码永不漂移
+- ✅ **全量用例 + 提交门禁快速档 + 场景化回归套件**，改动有底气（实时数字见 [测试覆盖率文档](docs/managements/test-coverage.md)）
+- ✅ **一组 CI 守护脚本**把历史教训变成硬门禁：代码/文档痕迹、任务编号、语义命名、文档一致性、测试冗余、需求追溯、版本号、文档链接、行数红线——文档与代码永不漂移
 - ✅ **P0/P1/P2 三级门禁**：提交、合并、发布各有明确的通过标准，CI 矩阵覆盖 Python 3.11/3.12/3.13 + Windows 可移植性 + 非 UTF-8 locale 探测
 - ✅ **清晰的协作契约**：[开发者指南](docs/managements/developer-guide.md) 写明了工作流、任务编号规范与发布流程；[需求文档](docs/managements/requirements.md) 与 [测试标准](docs/managements/testplan.md) 让每个需求可追溯、每个缺陷有回归用例
 
@@ -219,13 +219,15 @@ git clone https://github.com/yatwql/investor-review.git && cd investor-review
 
 | 文档 | 说明 |
 |------|------|
-| [迭代计划](docs/managements/plan.md) | 迭代计划 |
-| [需求文档](docs/managements/requirements.md) | 完整需求定义 |
+| [迭代计划](docs/managements/plan.md) | 在办任务与优先级（P1~P4），含归档放弃项边界 |
+| [需求文档](docs/managements/requirements.md) | 需求 ID（`R-XXX-NN`）与验收判据，需求侧唯一真源 |
 | [技术设计](docs/managements/technical.md) | 技术设计与架构设计约束（含各约束的设计目的与违反后果） |
 | [LLM 技术要点](docs/managements/llm-technical.md) | LLM 客户端架构与技术细节 |
-| [质量控制与测试标准](docs/managements/testplan.md) | 质量控制与测试标准 |
-| [测试覆盖情况](docs/managements/test-coverage.md) | 测试覆盖情况 |
-| [自审记录](docs/managements/review-findings.md) | 自我审查问题记录 |
-| [变更日志](docs/managements/changelog.md) | 版本更新记录 |
-| [目录结构及文件概览](docs/managements/folders.md) | 目录结构及文件概览 |
-| [CLAUDE.md](CLAUDE.md) | AI 编程助手指引 |
+| [质量控制与测试标准](docs/managements/testplan.md) | 门禁完整口径、需求↔验证载体映射、回归清单 |
+| [测试覆盖情况](docs/managements/test-coverage.md) | 各模式/子标记/功能域的用例计数（机检回写） |
+| [自审记录](docs/managements/review-findings.md) | 自审问题记录与历史归档索引 |
+| [变更日志](docs/managements/changelog.md) | 按版本记录变更（当前开发段 + 归档索引） |
+| [目录结构及文件概览](docs/managements/folders.md) | 目录树、项目统计与版本演进对照（`--sync` 机器回写） |
+| [Web 与报告设计契约](docs/managements/DESIGN.md) | 改 UI 前必读：颜色语义/字阶/组件六态/断点/护栏 |
+| [TUI 交互契约](docs/managements/DESIGN-TUI.md) | 改终端交互前必读：键分工/提示三段式/配色职责/术语对照 |
+| [CLAUDE.md](CLAUDE.md) | AI 编程助手指引（工程纪律速查） |

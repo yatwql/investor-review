@@ -19,6 +19,9 @@ from src.python.core.registry import _REPORT_SECTION_DEFAULT, get_cache_ttl_defa
 
 from src.python.fetcher.chain import _DEFAULT_CHAINS  # noqa: E402
 from _doc_drift._shared import (
+    _CLAUDE_MD,
+    _MANAGEMENTS,
+    _README,
     _DATASOURCE_MD,
     _RELIABILITY_MD,
     _doc_section,
@@ -597,4 +600,115 @@ def check_cache_ttl_tables(*docs: tuple[Path | str, str]) -> list[str]:
                 findings.append(
                     f"{label}: 缓存 `{data_type}` TTL 文档 {ttl_text.strip()} 与注册表 {int(expected)}s 不一致"
                 )
+    return findings
+
+
+# ── CLAUDE.md 派生量禁令 ───────────────────────────────
+
+
+#: 纪律源禁写的「数字+量词」形态：这些数值随代码演进必然变化（用例数、耗时、份数、
+#: 约束编号范围、条目计数），写进纪律源就是给自己埋漂移。红线阈值（行数/耗时门禁/
+#: 交互行数上限）属纪律常量，不在本项扫描面。
+_CLAUDE_DERIVED_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"\d+\+?\s*例"), "用例/样本计数"),
+    (re.compile(r"[~≈]\s*\d+(?:\.\d+)?\s*s\b"), "耗时测量值"),
+    (re.compile(r"\d+\s*份"), "文档/文件份数"),
+    (re.compile(r"C\d+\s*[~-]\s*C\d+"), "约束编号范围"),
+    (re.compile(r"\d+\s*条约束"), "约束条数"),
+    (re.compile(r"\d+\s*项(?:功能开关|约束|检查|守护)"), "条目计数"),
+)
+
+
+def check_claude_md_derived_counts(doc_text: str | None = None) -> list[str]:
+    """CLAUDE.md 禁写派生量与测量值（纪律源只写规则，数值真源在代码与机检文档）。
+
+    与「测试真值单一来源」「树描述计数禁令」同源纪律：纪律源里的 N 例/N 秒/N 份/N 项
+    是实现的派生量或一次测量结果，代码演进后既不会自然失效、也没有任何检查项覆盖——
+    只能靠本项在提交前拦住。允许的例外是**纪律阈值**（大文件红线、性能门禁、
+    交互输出行数上限），它们是规则本身而非派生数据。
+    """
+    if doc_text is None:
+        try:
+            doc_text = _CLAUDE_MD.read_text(encoding="utf-8")
+        except OSError:  # pragma: no cover - 仓库内恒存在
+            return []
+    findings: list[str] = []
+    for lineno, line in enumerate(doc_text.splitlines(), 1):
+        for pattern, label in _CLAUDE_DERIVED_PATTERNS:
+            m = pattern.search(line)
+            if m:
+                findings.append(
+                    f"{rel(_CLAUDE_MD)}:{lineno}: 出现{label}「{m.group(0)}」"
+                    "——纪律源不写派生量/测量值（改用规则表述，或指向技术设计文档与机检统计）"
+                )
+                break
+    return findings
+
+
+# ── README 内部文档索引覆盖 ────────────────────────────
+
+
+#: README 中指向管理文档的相对链接（形如 `docs/managements/xxx.md`）
+_README_MGMT_LINK = re.compile(r"\]\(docs/managements/([A-Za-z0-9._-]+\.md)\)")
+
+
+def check_readme_doc_index(doc_text: str | None = None) -> list[str]:
+    """README 的管理文档索引须与 `docs/managements/` 实际文件双向一致。
+
+    背景：README 的「开发者参考 / 项目内部文档」两张表是外部读者唯一能看到的
+    管理文档清单，手工维护必漏（曾漏 DESIGN.md / DESIGN-TUI.md 两份契约档，
+    读者找不到「改 UI 前必读」的入口）。此处把清单与目录做双向对账：
+    漏列 → 补表；幽灵引用 → 删行/改链接。
+    """
+    if doc_text is None:
+        try:
+            doc_text = _README.read_text(encoding="utf-8")
+        except OSError:  # pragma: no cover - 仓库内恒存在
+            return []
+    listed = set(_README_MGMT_LINK.findall(doc_text))
+    actual = {p.name for p in _MANAGEMENTS.glob("*.md")}
+    findings = [
+        f"{rel(_README)}: 管理文档索引漏列 `docs/managements/{name}`（该文档存在但 README 未给出入口）"
+        for name in sorted(actual - listed)
+    ]
+    findings += [
+        f"{rel(_README)}: 管理文档索引引用了不存在的 `docs/managements/{name}`"
+        for name in sorted(listed - actual)
+    ]
+    return findings
+
+
+#: README 派生量禁令：在 CLAUDE.md 规则之上补「实体名词计数」（页签/菜单/分组/脚本/
+#: 图表/维度/源），这些是外部读者第一屏最容易被写死的数字。
+_README_DERIVED_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = _CLAUDE_DERIVED_PATTERNS + (
+    (re.compile(r"\d+\s*个[^\n]{0,8}?(?:页签|章节|菜单|分组|脚本|图表|维度|源|文档)"), "实体计数"),
+    (re.compile(r"\d+\s*项\s*(?:含|共)?"), "条目计数"),
+    (re.compile(r"\d+\s*张\s*(?:图|表|Chart)"), "图表计数"),
+    # 中文数词近似量（「上万条用例」「数千个脚本」）：同样是读不出来源的规模断言
+    (re.compile(r"[上万数千百十]\s*[余多]?\s*(?:条|项|个)[^\n]{0,6}?(?:用例|测试|脚本|页签|章节|菜单)"), "中文数词计数"),
+)
+
+
+def check_readme_derived_counts(doc_text: str | None = None) -> list[str]:
+    """README 禁写派生量与测量值（对外第一屏，写死的数字最易陈旧）。
+
+    与 CLAUDE.md 同一规则、更宽的模式面（对外文案里的页签数/菜单项数/脚本数/
+    图表数都会被读者当事实）；真源分别是章节注册表、TUI 菜单注册表、守护脚本集合
+    与测试用例收集结果，精确值留在 `test-coverage.md` / `folders.md` 等机检文档。
+    """
+    if doc_text is None:
+        try:
+            doc_text = _README.read_text(encoding="utf-8")
+        except OSError:  # pragma: no cover - 仓库内恒存在
+            return []
+    findings: list[str] = []
+    for lineno, line in enumerate(doc_text.splitlines(), 1):
+        for pattern, label in _README_DERIVED_PATTERNS:
+            m = pattern.search(line)
+            if m:
+                findings.append(
+                    f"{rel(_README)}:{lineno}: 出现{label}「{m.group(0)}」"
+                    "——对外文档不写派生量/测量值（改用定性表述，精确值留机检统计文档）"
+                )
+                break
     return findings

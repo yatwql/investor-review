@@ -50,6 +50,9 @@ from _doc_drift._format import (  # noqa: F401
     _COUNT_CELL,
     _COUNT_NAME_ALIAS,
     check_test_coverage_counts,
+    check_claude_md_derived_counts,
+    check_readme_doc_index,
+    check_readme_derived_counts,
 )
 from _doc_drift._format_panels import (  # noqa: F401
     _HOWTO_PANEL_HEADING,

@@ -378,7 +378,7 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
 使漂移在提交前暴露。与 `check-doc-traces.py` 互补：那边管「不该写的内容」（历史痕迹），这边管
 「写了但与实现不符的内容」。
 
-二十一项检查（权威源 → 受检文档）：
+二十六项检查（权威源 → 受检文档）：
 
 1. 报告章节表（`reports-instruction.md`）↔ 章节注册表 `_REPORT_SECTION_DEFAULT`（行数/序号/名称）；
    含「可见性规则总览」表 `type` 行双向对账（文档 type 集合 ↔ 注册表 type 集合；历史漂移：注册表把财报两章合为
@@ -420,11 +420,19 @@ AST 静态扫描所有 `test_*.py` 文件，检查：
 23. 台账段序升序：review-findings / changelog / plan 的版本段（`## 已修复（X.Y.Z）`、`## [X.Y.Z]`、
     `### 开发期已修复（X-dev）`）与 plan 条目自带完成版本，在**同一文件内**一律升序（旧 → 新）；
     现行文件与版本归档子树中的归档文件同一口径（实现 `_doc_drift/_ledger.py::check_ledger_order`）
+24. CLAUDE.md 派生量禁令：纪律源（工程纪律速查）禁写「数字+量词」派生量与测量值——用例/样本计数、
+    耗时（`~N s`）、文档份数、约束编号范围（形如「约束前缀 + 起止编号」的范围式写法）、条目计数；大文件红线、性能门禁、
+    交互输出行数上限属**规则本身**，不在扫描面（实现 `_doc_drift/_format.py::check_claude_md_derived_counts`）
+25. README 管理文档索引：README 的「开发者参考 / 项目内部文档」`docs/managements/*.md` 链接集合 ↔ 目录实际文件
+    双向对账（漏列 = 外部读者找不到入口；幽灵引用 = 死链；实现 `_doc_drift/_format.py::check_readme_doc_index`）
+26. README 派生量禁令：对外第一屏禁写实体计数与测量值（页签/菜单项/脚本/图表/用例数，含「上万条」式
+    中文数词近似量）；兼容矩阵、版本徽章、门禁红线属规则本身，白名单放行
+    （实现 `_doc_drift/_format.py::check_readme_derived_counts`，与第 24 项 CLAUDE.md 同一规则、更宽模式面）
 
 **使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
 
 ```bash
-.venv/bin/python scripts/check-doc-drift.py                   # 二十二项全查
+.venv/bin/python scripts/check-doc-drift.py                   # 二十六项全查
 .venv/bin/python scripts/check-doc-drift.py -v                # 详细输出（打印解析结果与实测统计）
 .venv/bin/python scripts/check-doc-drift.py --ci              # CI 模式（只输出 文件:描述，退出码 2）
 .venv/bin/python scripts/check-doc-drift.py --with-test-count # 附带 pytest 收集，核对「测试用例」与 test-coverage.md 计数表
