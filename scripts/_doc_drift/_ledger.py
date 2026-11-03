@@ -223,9 +223,7 @@ def check_management_partitions() -> list[str]:
         changelog=_read(_CHANGELOG_MD),
         archived_changelogs=[_read(p) for p in sorted(archive_root.rglob("archived_changelog.*.md"))],
         archived_plans=[_read(p) for p in sorted(archive_root.rglob("archived_plan.*.md"))],
-        archived_review_findings=[
-            _read(p) for p in sorted(archive_root.rglob("archived_review-findings.*.md"))
-        ],
+        archived_review_findings=[_read(p) for p in sorted(archive_root.rglob("archived_review-findings.*.md"))],
     )
 
 
