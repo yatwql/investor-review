@@ -54,9 +54,10 @@ def main() -> int:
             encoding="utf-8",
             errors="replace",
             cwd=_REPO_ROOT,
+            timeout=300,
         )
-    except OSError:
-        return 0  # 校验脚本不可运行，放行（不阻断编辑）
+    except (OSError, subprocess.TimeoutExpired):
+        return 0  # 校验脚本不可运行/超时，放行（钩子不得阻塞编辑）
 
     if proc.returncode != 0:
         output = (proc.stdout or "") + (proc.stderr or "")

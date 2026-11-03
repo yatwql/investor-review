@@ -158,12 +158,11 @@ def _purchase_restricted_index(candidate_holdings: list[Holding]) -> dict[str, A
     既有链一次；取契约异常兜底空索引，不阻断模拟（降级矩阵末行）。
     观测：命中数/降级以统一 logger 打 debug（单点）。
     """
-    from src.python.config import get_config
     from src.python.report.orchestrator import compute_purchase_status_data
     from src.python.report.purchase_status import build_restricted_index
 
     try:
-        contract = compute_purchase_status_data(get_config())
+        contract = compute_purchase_status_data()
         index = build_restricted_index(contract, [h.code for h in candidate_holdings])
     except Exception:  # noqa: BLE001 — 取契约异常不得阻断模拟（仅兜底 Exception，不吞 BaseException）
         logger.debug("申购受限索引获取失败，what-if 提示降级缺席", exc_info=True)

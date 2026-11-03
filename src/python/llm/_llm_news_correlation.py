@@ -78,8 +78,14 @@ def run_news_correlation_safe(
             llm_config=llmc,
             purchase_constraint_block=purchase_constraint_block,
         )
-        LLM_MODULE_FAILURE.pop("news_correlation", None)
-        logger.info("%s生成完成%s", _MN("news_correlation"), "（缓存）" if cached else "")
+        # 只在真有产出时清失败原因：批量路径把「逐条调用失败」收成 0 条分析且不抛异常，
+        # 若无条件 pop，用量页签会把该模块记为「成功」（与汇总调用次数 0 矛盾）。
+        if token_usage or cached:
+            LLM_MODULE_FAILURE.pop("news_correlation", None)
+            logger.info("%s生成完成%s", _MN("news_correlation"), "（缓存）" if cached else "")
+        else:
+            LLM_MODULE_FAILURE["news_correlation"] = FAIL_REASON_API_ERROR
+            logger.warning("%s本次无产出（逐条调用均失败），已标记失败原因", _MN("news_correlation"))
         return result, cached, token_usage
     except Exception as e:
         LLM_MODULE_FAILURE["news_correlation"] = FAIL_REASON_API_ERROR

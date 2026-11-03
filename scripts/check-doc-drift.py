@@ -6,7 +6,7 @@
 逐条比对，使漂移在提交前暴露（与 check-doc-traces 的「历史痕迹」检查互补：
 那边管「不该写的内容」，这边管「写了但与实现不符的内容」）。
 
-二十一项检查（权威源 → 受检文档）：
+二十六项检查（权威源 → 受检文档）：
   1.  报告章节表        core/report_section_registry.py `_REPORT_SECTION_DEFAULT` → manuals/reports-instruction.md
       （含「可见性规则总览」表 `type` 行：文档 type 集合 ↔ 注册表 type 集合双向对账）
   2.  章节数量断言      同上（`页签编号 1~N` / `默认顺序（N 项` / `返回 result（N 项` / `N 个报告章节`）→ 全库文档
@@ -20,7 +20,7 @@
   10. 项目统计表        文件系统实测（文件数/行数）+ 可选 pytest 收集数 → managements/folders.md
   11. 测试覆盖计数表    `scripts/test-collect-coverage.py` 快照 → managements/test-coverage.md（仅 `--with-test-count`）
   12. 归档索引完整性    changelog / plan / review-findings 的「归档」索引 ↔ 归档目录 `archived_*` 文件（双向）
-  13. 管理文档分区纪律  未完成/已解决/已归档三分区互斥 + 「开发期已修复」节须在已解决区（节归属）+ 已解决区台账行须在版本节内（直属层台账行 = 归档会静默漏搬）+ 现行 changelog 提到的 plan-N 须在台账或计划归档有条目；现行 changelog 只允许一个 `-dev` 段头
+  13. 管理文档分区纪律  未完成/已解决/已归档三分区互斥 + 「开发期已修复」节须在已解决区（节归属）+ 已解决区台账行须在版本节内（直属层台账行 = 归档会静默漏搬）+ 现行 changelog 提到的 plan-N 须在台账或计划归档有条目；现行 changelog 只允许一个 `-dev` 段头 + 现行 changelog 提到的 `rf-N` 须在主台账或归档台账有条目（防整行删除导致自审历史丢失）
   14. Extended Thinking 支持矩阵  手册对比表/「仅」式枚举/默认开思考提示 ↔ `llm/api_base` 前缀名单
   15. Provider Chain 降级表  `fetcher/chain.py` `_DEFAULT_CHAINS` → manuals/datasource-reliability.md（逐链双向）
   16. 守护清单同源        developer-guide P0/P2 门禁块 + ci.yml guards steps + CLAUDE.md/testplan.md 清单 + .githooks/pre-commit（五处）`check-*.py --ci` 引用集合两两一致
@@ -33,6 +33,14 @@
   21. 树描述计数禁令    folders.md 目录树描述禁写「阿拉伯数字+量词」易漂移计数（docs/archive 记录域豁免；中文数词设计常量不入检）
   22. 台账段序升序      review-findings / changelog / plan 的版本段与计划条目（现行 + 归档）一律升序（旧→新）：
                         版本号段升序、plan 条目按编号升序（现行台账按 P1~P4 分组，组内升序）
+  23. CLAUDE.md 派生量禁令  纪律源禁写「数字+量词」派生量与测量值（用例数 / 耗时 / 份数 /
+                        约束编号范围 / 条目计数）；红线阈值（大文件行数、性能门禁、交互行数上限）属规则本身，不在扫描面
+  24. README 管理文档索引   README 的「开发者参考 / 项目内部文档」链接集合 ↔ docs/managements/*.md 双向一致
+                        （漏列 = 读者找不到入口；幽灵引用 = 死链）
+  25. README 派生量禁令    对外第一屏禁写实体计数与测量值（页签/菜单项/脚本/图表/用例数），
+                        可信值留在机检统计文档（与第 23 项 CLAUDE.md 同一规则、更宽模式面）
+  26. 手册总索引覆盖       docs/manuals/README.md 的分册链接集合 ↔ docs/manuals/*.md 双向一致
+                        （漏列 = 分册无人可达；幽灵引用 = 死链）
 
 按设计豁免的历史记录文档：`changelog.md` / `review-findings.md`（会如实引用旧数字作为变更记录）
 与 `docs/archive/**`（版本快照）不参与第 2/4/5 项扫描。
@@ -198,6 +206,10 @@ from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc
     _thinking_families,
     check_thinking_support_matrix,
     find_guard_parity,
+    check_claude_md_derived_counts,
+    check_manuals_index,
+    check_readme_doc_index,
+    check_readme_derived_counts,
     check_guard_parity,
     guard_parity_sources,
     check_menu_blocks,
@@ -249,6 +261,10 @@ def run_checks(with_test_count: bool = False, docs: dict | None = None) -> list[
     findings += check_ledger_order(docs)
     findings += check_management_partitions()
     findings += check_thinking_support_matrix(docs.get(_THINKING_MANUAL))
+    findings += check_claude_md_derived_counts()
+    findings += check_readme_doc_index()
+    findings += check_readme_derived_counts()
+    findings += check_manuals_index()
     findings += check_guard_parity()
     findings += check_block_matrix(docs[_TECHNICAL_MD])
     findings += check_project_stats(docs[_FOLDERS_MD], with_test_count=with_test_count, snapshot=snapshot)
@@ -265,14 +281,20 @@ def _cache_inputs() -> list[Path] | None:
     """
 
     def _ls(*extra: str) -> list[str] | None:
-        proc = subprocess.run(
-            ["git", "ls-files", *extra],
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
+        # 超时按「非 git 环境」处理（返回 None → 跳过结论缓存、直接全量检查），
+        # 方向安全：宁可多跑一遍扫描，也不让缓存指纹基于残缺清单命中。
+        try:
+            proc = subprocess.run(
+                ["git", "ls-files", *extra],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=120,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return None
         if proc.returncode != 0:
             return None
         return [ln.strip() for ln in proc.stdout.splitlines() if ln.strip()]
@@ -340,7 +362,10 @@ def main() -> None:
         # 同步后自动把回写结果加进 git 暂存区（pre-commit 钩子内使用），
         # 非 git 环境或未在提交流程中调用时忽略错误
         if applied:
-            subprocess.run(["git", "add", str(_FOLDERS_MD)], cwd=REPO_ROOT, check=False)
+            try:
+                subprocess.run(["git", "add", str(_FOLDERS_MD)], cwd=REPO_ROOT, check=False, timeout=120)
+            except (OSError, subprocess.TimeoutExpired):
+                print("[!] git add 超时/不可用：统计回写未入暂存区，请手动 git add")
 
     # 结论缓存（仅 --ci 且非 verbose/非 sync/非 with-test-count）：全集输入与逻辑指纹未变时
     # 逐字回放——同树重复（发布 gate → 提交钩子 / 重试）命中省全仓扫描；

@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -178,7 +179,9 @@ class TestCollectTestSnapshot:
     @staticmethod
     def _proc(stdout, returncode: int = 0):
         class _Proc:
-            pass
+            #: 子进程替身：以类属性形式携带固定输出与退出码（调用方只读这两个字段）
+            stdout: ClassVar[str | None] = None
+            returncode: ClassVar[int] = 0
 
         _Proc.stdout = stdout
         _Proc.returncode = returncode
@@ -770,3 +773,110 @@ class TestGuardParity:
     def test_real_sources_guard_sets_match(self, drift):
         """五份真实源（含钩子执行体）的守护集合两两一致——真实仓库断言。"""
         assert drift.find_guard_parity(drift.guard_parity_sources()) == []
+
+
+class TestClaudeMdDerivedCounts:
+    """CLAUDE.md 派生量禁令：纪律源只写规则，不写随代码演进的计数与测量值。
+
+    背景：纪律速查里写「集成契约 50+ 例 / ~5s」「管理文档 10 份」「架构约束表的编号范围」
+    这类数字，会随代码演进静默失真（约束条数、用例数都已变化），而这类事实的真实
+    来源是代码与机检文档。红线阈值（行数/性能门禁/交互行数上限）是规则本身，须放行。
+    """
+
+    def test_derived_counts_flagged(self, drift):
+        # 每行只报首个命中模式（避免同一行刷多条），故按模式分行给样本
+        # 范围式代号在运行期拼接：源码不留约束代号字面量（本项检测的正是运行期文本）
+        cipher_range = "C1" + "~" + "C28"
+        text = (
+            "- 集成契约覆盖跨模块盲区，告警示例：50+ 例\n"
+            "- 复用 gate 结果可省一次重跑，约 ~5s\n"
+            "- 版本号一致性：README/pyproject/管理文档 10 份\n"
+            f"- 架构约束：表格含 {cipher_range} 的设计目的（28 条约束）\n"
+        )
+        findings = drift.check_claude_md_derived_counts(text)
+        labels = "\n".join(findings)
+        assert "用例/样本计数" in labels
+        assert "耗时测量值" in labels
+        assert "文档/文件份数" in labels
+        assert "约束编号范围" in labels
+
+    def test_discipline_thresholds_allowed(self, drift):
+        """红线阈值/门禁档位/兼容矩阵属规则常量，不得误报。"""
+        text = (
+            "- 行数红线：主程序 >1000 行 / 脚本 >1000 行 / 测试 >1200 行\n"
+            "- 性能门禁：basic 模式 ≤60s\n"
+            "- 输出硬约束：单次回复正文 ≤5 行\n"
+            "- CI 矩阵：Python 3.11/3.12/3.13；hooksPath 示例 2>/dev/null\n"
+        )
+        assert drift.check_claude_md_derived_counts(text) == []
+
+    def test_real_claude_md_is_clean(self, drift):
+        """真实 CLAUDE.md 不含派生量（本项入 CI 后，新增数字会当场打红）。"""
+        assert drift.check_claude_md_derived_counts() == []
+
+
+class TestReadmeDocIndex:
+    """README 管理文档索引 ↔ docs/managements 双向一致（外部读者唯一入口清单）。"""
+
+    def test_missing_doc_flagged(self, drift):
+        """漏列某份管理文档 → 报「漏列」，并指出文件名。"""
+        findings = drift.check_readme_doc_index("[需求文档](docs/managements/requirements.md)\n")
+        assert findings, "只列一份文档时必须报漏列"
+        assert any("漏列" in f and "technical.md" in f for f in findings)
+
+    def test_ghost_link_flagged(self, drift):
+        """引用了不存在的文档 → 报幽灵引用（死链在 README 里最易漏）。"""
+        real = "\n".join(f"- [x](docs/managements/{p.name})" for p in drift._MANAGEMENTS.glob("*.md"))
+        findings = drift.check_readme_doc_index(real + "\n- [幽灵](docs/managements/no_such_doc.md)\n")
+        assert any("不存在的" in f and "no_such_doc.md" in f for f in findings)
+
+    def test_real_readme_covers_all_docs(self, drift):
+        """真实 README 覆盖 docs/managements 全部文档（新增管理文档必须补表格）。"""
+        assert drift.check_readme_doc_index() == []
+
+
+class TestReadmeDerivedCounts:
+    """README 派生量禁令：对外第一屏不写实体计数与测量值（与 CLAUDE.md 同一规则）。"""
+
+    def test_entity_counts_flagged(self, drift):
+        text = "- Excel 最多 19 个页签\n- 10 个 CI 守护脚本\n- 13000 例测试用例\n- 上万条测试用例，改动有底气\n"
+        findings = drift.check_readme_derived_counts(text)
+        labels = "\n".join(findings)
+        assert "实体计数「19 个页签」" in labels
+        assert "实体计数「10 个CI" in labels or "10 个 CI" in labels
+        assert "用例/样本计数" in labels
+        assert "中文数词计数" in labels
+
+    def test_legit_rule_numbers_allowed(self, drift):
+        """兼容矩阵/徽章/中文数词/门禁档位不属派生量，不得误报。"""
+        text = (
+            "[![Python](https://img.shields.io/badge/Python-%3E%3D3.11-3776AB)]\n"
+            "- CI 矩阵覆盖 Python 3.11/3.12/3.13\n"
+            "- P0/P1/P2 三级门禁；一次持仓，三种用法\n"
+            "- 行数红线：主程序 >1000 行 / 测试 >1200 行\n"
+        )
+        assert drift.check_readme_derived_counts(text) == []
+
+    def test_real_readme_is_clean(self, drift):
+        """真实 README 不含派生量（本项入 CI 后，写死数字会当场打红）。"""
+        assert drift.check_readme_derived_counts() == []
+
+
+class TestManualsIndex:
+    """手册总索引（docs/manuals/README.md）↔ 目录实际分册双向一致。"""
+
+    def test_missing_manual_flagged(self, drift):
+        """漏列分册 → 报「漏列」并点出文件名（读者将无入口）。"""
+        findings = drift.check_manuals_index("- [快速开始](how-to-start.md)\n")
+        assert findings
+        assert any("漏列" in f and "faq.md" in f for f in findings)
+
+    def test_ghost_manual_flagged(self, drift):
+        """引用不存在的分册 → 报幽灵引用（死链）。"""
+        real = "\n".join(f"- [x]({p.name})" for p in drift._MANUALS.glob("*.md") if p.name != "README.md")
+        findings = drift.check_manuals_index(real + "\n- [幽灵](no_such_manual.md)\n")
+        assert any("不存在的分册" in f and "no_such_manual.md" in f for f in findings)
+
+    def test_real_index_covers_all_manuals(self, drift):
+        """真实索引覆盖全部分册（新增手册必须登记）。"""
+        assert drift.check_manuals_index() == []

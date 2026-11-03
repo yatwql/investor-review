@@ -46,11 +46,8 @@ from src.python.core.jsonl_store import append_jsonl_atomic
 
 logger = logging.getLogger("invest")
 
-#: 慢阶段告警阈值（秒）：正常产物/取数 0.2~0.4s；实测写盘偶发 18s、单路取数 9.4s
+#: 慢阶段/落盘告警阈值（秒）：正常产物/取数 0.2~0.4s；实测写盘偶发 18s、单路取数 9.4s
 SLOW_SPAN_WARN_SECONDS = 5.0
-
-#: 兼容旧名（写盘侧历史引用；新代码用 SLOW_SPAN_WARN_SECONDS）
-SLOW_WRITE_WARN_SECONDS = SLOW_SPAN_WARN_SECONDS
 
 
 def warn_slow_write(label: str, seconds: float, path: Any = None) -> None:
@@ -65,7 +62,7 @@ def warn_slow_write(label: str, seconds: float, path: Any = None) -> None:
         seconds: 该阶段耗时（秒）。
         path: 产物路径；给目录时只报路径不报大小。
     """
-    if seconds < SLOW_WRITE_WARN_SECONDS:
+    if seconds < SLOW_SPAN_WARN_SECONDS:
         return
     size_text = ""
     if path is not None:
@@ -79,7 +76,7 @@ def warn_slow_write(label: str, seconds: float, path: Any = None) -> None:
         "[perf] %s 落盘偏慢：%.2fs（阈值 %.1fs，%s路径 %s）——排查磁盘/挂载与 fsync 等待",
         label,
         seconds,
-        SLOW_WRITE_WARN_SECONDS,
+        SLOW_SPAN_WARN_SECONDS,
         size_text,
         path,
     )

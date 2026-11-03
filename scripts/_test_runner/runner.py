@@ -197,14 +197,22 @@ def _run_phased(
 
     # 预检门禁：非 pytest 脚本（如任务编号一致性检查），失败则中止本模式
     for preflight_cmd in mode_cfg.get("preflight", []):
-        proc = subprocess.run(
-            preflight_cmd,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            cwd=_PROJECT_ROOT,
-        )
+        try:
+            proc = subprocess.run(
+                preflight_cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                cwd=_PROJECT_ROOT,
+                # 预检是秒级守护脚本：卡死即视为失败（不无限等，否则整轮门禁无输出）
+                timeout=600,
+            )
+        except subprocess.TimeoutExpired:
+            print(f"    [ERR] 预检超时（600s）: {' '.join(preflight_cmd)}")
+            combined["exit_code"] = 2
+            print(f"\n  [ERR] {mode_key}（分阶段）: 预检超时，跳过测试阶段")
+            return combined
         if proc.returncode != 0:
             output = (proc.stdout or "") + (proc.stderr or "")
             print(f"    [ERR] 预检失败: {' '.join(preflight_cmd)}")

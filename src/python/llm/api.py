@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import httpx
@@ -457,7 +457,7 @@ def call_llm(
 
 
 def configure_extended_thinking(
-    payload: dict,
+    payload: dict[str, Any],
     llm_config: dict | None,
     config_field: str,
     model: str,
@@ -485,7 +485,7 @@ def configure_extended_thinking(
     resolved_model = model or _DEFAULT_CLAUDE_MODEL
     if not _supports_extended_thinking(resolved_model):
         logger.warning(
-            "模型 %s 不支持 Extended Thinking，已自动降级跳过 [%s]",
+            "模型 %s 不支持 Extended Thinking：本次调用不启用思考（模块照常执行）[%s]",
             resolved_model,
             module_suffix,
         )
@@ -501,7 +501,9 @@ def configure_extended_thinking(
         logger.info("Extended Thinking 已开启 [%s]: effort=%s", module_suffix, effort)
     else:
         budget = _resolve_thinking_budget(llm_config, config_field, max_tokens)
-        payload["thinking"]["budget_tokens"] = budget
+        # 一次赋值写全（而非对已有 dict 追写子键），避免静态检查把套嵌 dict 的元素类型
+        # 收窄成声明处的 str；行为与分两步写等价。
+        payload["thinking"] = {"type": "enabled", "budget_tokens": budget}
         logger.info("Extended Thinking 已开启 [%s]: budget=%d", module_suffix, budget)
 
 

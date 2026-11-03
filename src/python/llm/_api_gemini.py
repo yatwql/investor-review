@@ -80,7 +80,11 @@ def call_gemini(
                 payload["generationConfig"].pop("temperature", None)
                 logger.info("Gemini Extended Thinking 已开启 [%s]: budget=%d", module_suffix, budget)
             else:
-                logger.warning("模型 %s 不支持 Extended Thinking，已自动降级跳过 [%s]", resolved_model, module_suffix)
+                logger.warning(
+                    "模型 %s 不支持 Extended Thinking：本次调用不启用思考（模块照常执行）[%s]",
+                    resolved_model,
+                    module_suffix,
+                )
 
     client = http_client
     if client is None:  # 收窄而非 assert：-O 下 assert 会被剥离，留 None 只会在调用处炸得更晚

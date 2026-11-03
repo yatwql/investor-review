@@ -31,26 +31,40 @@ def _historical_defs() -> set[str]:
     """
     global _HIST_DEFS
     if _HIST_DEFS is None:
-        shallow = subprocess.run(
-            ["git", "rev-parse", "--is-shallow-repository"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            cwd=REPO_ROOT,
-        )
-        if shallow.returncode != 0 or shallow.stdout.strip() == "true":
-            print("[!] 浅克隆/git 不可用环境：已删函数残留检查跳过（需 fetch-depth=0 全历史）", file=sys.stderr)
-            _HIST_DEFS = set()
-        else:
-            result = subprocess.run(
-                ["git", "log", "--format=", "-p", "--unified=0", "--", "src", "scripts"],
+        # 两个 git 调用均设超时：钩子/CI 里卡死的 git 会把守护拖成无限等待，
+        # 且现场看不出原因。超时按「环境不可用」处理——走下面的跳过分支并告警。
+        try:
+            shallow = subprocess.run(
+                ["git", "rev-parse", "--is-shallow-repository"],
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
                 cwd=REPO_ROOT,
+                timeout=60,
             )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            print(f"[!] git 不可用/超时（{exc}）：已删函数残留检查跳过", file=sys.stderr)
+            _HIST_DEFS = set()
+            return _HIST_DEFS
+        if shallow.returncode != 0 or shallow.stdout.strip() == "true":
+            print("[!] 浅克隆/git 不可用环境：已删函数残留检查跳过（需 fetch-depth=0 全历史）", file=sys.stderr)
+            _HIST_DEFS = set()
+        else:
+            try:
+                result = subprocess.run(
+                    ["git", "log", "--format=", "-p", "--unified=0", "--", "src", "scripts"],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    cwd=REPO_ROOT,
+                    timeout=600,
+                )
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                print(f"[!] git log 超时（{exc}）：已删函数残留检查跳过", file=sys.stderr)
+                _HIST_DEFS = set()
+                return _HIST_DEFS
             _HIST_DEFS = (
                 {
                     m.group(1)

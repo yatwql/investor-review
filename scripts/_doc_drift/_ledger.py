@@ -93,6 +93,7 @@ def audit_management_partitions(
     changelog: str,
     archived_changelogs: list[str] | None = None,
     archived_plans: list[str] | None = None,
+    archived_review_findings: list[str] | None = None,
 ) -> list[str]:
     """审计管理文档的未完成/已解决/已归档分区纪律（纯函数，便于用例直测）。
 
@@ -113,6 +114,9 @@ def audit_management_partitions(
       F. 现行 changelog（本开发周期）提到的 `plan-N` 必须在 plan.md 在办条目或计划归档中有条目——
          实现完成时把台账节直接删除而不入档，任务会从两面消失（只剩 changelog 一句残迹）。
          只查**现行**段：历史 trains 多采无编号标题的旧格式，不追溯。
+      G. 现行 changelog 提到的 `rf-N` 必须在主台账（任意位置）或归档台账中有条目——
+         条目若被整行删除而不留摘要行，就只剩 changelog 一句，归档步按「本版无该节」
+         放行，自审历史随之丢失（对称于 F 条对 plan 的要求）。
     """
     findings: list[str] = []
 
@@ -178,6 +182,19 @@ def audit_management_partitions(
             "——有编号无正文（孤儿编号，任务会被静默丢失）"
         )
 
+    # G. 本开发周期 changelog 提到的自审条目必须在主台账或归档台账里有条目
+    archived_rf_ids: set[str] = set()
+    for text in archived_review_findings or []:
+        archived_rf_ids |= {f"rf-{n}" for n in _RF_ID.findall(text)}
+    live_rf_ids = {f"rf-{n}" for n in _RF_ID.findall(review_findings)}
+    cycle_rf_ids = {f"rf-{n}" for n in _RF_ID.findall(changelog)}
+    for rid in sorted(cycle_rf_ids - (live_rf_ids | archived_rf_ids), key=lambda r: int(r.split("-")[1])):
+        findings.append(
+            f"{rel(_CHANGELOG_MD)}: 本开发周期提到的 `{rid}` 在主台账与归档台账都找不到"
+            "——修复后须以摘要行留在 `### 开发期已修复（<版本>-dev）` 表内（发布时由 archive 步搬档），"
+            "整行删除会让自审历史只剩 changelog 一句"
+        )
+
     if changelog:
         headers = _CHANGELOG_HEADER.findall(changelog)
         if not headers:
@@ -206,6 +223,7 @@ def check_management_partitions() -> list[str]:
         changelog=_read(_CHANGELOG_MD),
         archived_changelogs=[_read(p) for p in sorted(archive_root.rglob("archived_changelog.*.md"))],
         archived_plans=[_read(p) for p in sorted(archive_root.rglob("archived_plan.*.md"))],
+        archived_review_findings=[_read(p) for p in sorted(archive_root.rglob("archived_review-findings.*.md"))],
     )
 
 

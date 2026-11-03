@@ -65,7 +65,6 @@ PURCHASE_STATUS_FOOTNOTE = (
 
 
 def build_purchase_status_data(
-    config: dict | None = None,
     holdings_details: list[dict] | None = None,
 ) -> dict | None:
     """构建申购状态数据契约（``purchase_status_data``）。
@@ -79,7 +78,6 @@ def build_purchase_status_data(
     :func:`build_purchase_constraint_block` 渲染一次（准入不过 → ""）。
 
     Args:
-        config: 完整配置字典（开关读注册表，形参为与同类装配函数一致的签名兼容）
         holdings_details: 持仓明细（渲染约束块用的最小形态，至少含 name/code；
             缺省/空 → ``constraint_block=""``——无 LLM 消费方的路径
             （both/basic/What-if 取契约）可不传，块缺席零开销）

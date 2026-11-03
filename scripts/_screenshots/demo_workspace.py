@@ -350,6 +350,7 @@ def run_report(output_root: Path | None = None) -> int:
             check=False,
             encoding="utf-8",
             errors="replace",
+            timeout=900,
         )
     finally:
         # 演示运行写下的 perf 台账 / 健康历史 / 去重锚点一律还原（截图不污染真实统计）

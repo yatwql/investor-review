@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.16.16
+> 文档版本：0.16.17
 
 ## 概述
 
@@ -14,13 +14,13 @@
 
 | 文档 | 管什么 | 什么时候读 | 真源级别 |
 |:-----|:-------|:-----------|:---------|
-| **本指南** | 怎么开发：环境、门禁、测试、调试、扩展、发布 | 日常编码 / 新人上手 | 面向人（细节指向下列文档） |
+| **本指南** | 怎么开发：环境、门禁、测试、调试、扩展、发布 | 日常编码 / 新人上手 | **`technical.md` / `llm-technical.md` 的延伸**（规则层给判据，执行流程在此展开） |
 | [CLAUDE.md](../../CLAUDE.md) | 工程纪律速查：分支、门禁清单、测试隔离、命名、编码 | 提交前对照 / 写新代码前 | **纪律唯一来源** |
 | [technical.md](technical.md) | 架构设计约束（编号约束表）、语义命名表、实验项生命周期 | 改动设计、跨模块改动前 | 架构真源 |
 | [requirements.md](requirements.md) | 需求 ID（`R-XXX-NN`）与描述 | 判断「这算不算需求变更」 | 需求真源 |
 | [testplan.md](testplan.md) | 门禁完整口径、需求↔验证载体映射、回归清单 | 加/改测试、发布前 | 测试口径真源 |
 | [DESIGN.md](DESIGN.md) / [DESIGN-TUI.md](DESIGN-TUI.md) | Web/报告与 TUI 的交互与视觉契约 | 动 UI 之前**必读** | UI 契约真源 |
-| [scripts-reference.md](scripts-reference.md) | 每个辅助脚本干什么、怎么跑、何时跑 | 需要跑某个脚本时 | 脚本字典 |
+| [scripts-reference.md](scripts-reference.md) | 每个辅助脚本干什么、怎么跑、何时跑 | 需要跑某个脚本时 | **技术文档的延伸**（脚本字典；口径源自 technical.md 的规则） |
 | [folders.md](folders.md) | 目录树与统计快照（`--sync` 自动回写） | 新增文件后核对 | 结构性事实 |
 | [test-coverage.md](test-coverage.md) | 各模式/子标记/功能域的用例计数 | 需要实时测试数字 | 派生物 |
 | [plan.md](plan.md) / [review-findings.md](review-findings.md) / [changelog.md](changelog.md) | 计划 / 自审问题 / 变更记录 | 开工前、修缺陷后、发布时 | 台账真源 |
@@ -246,6 +246,17 @@ PYTHONWARNDEFAULTENCODING=1 .venv/bin/python -m pytest src/test/unit -q
 1. **一次枚举**：编辑全部完成后按下方「计划收尾：文档触点清单」主动扫触点批量核对/修复（统计快照回写与十守护校验由提交时的 pre-commit 钩子自动完成，本地不手动重复）。
 2. **批量修复**：按上表 + 触点一次性修完，同一文件多处改动合并为一次 edit。
 3. **单次复核**：手动只跑 `dev-verify` 测试门禁；ruff 探针（错误类阻塞 + format 非阻塞提示）与十守护一并交由 `git commit` 的 pre-commit 钩子一次收集（失败即中止）→ 批量修复 → 重新提交，不手动重复跑守护。
+
+**台账收尾（自审条目的唯一正确形态）**：修复自审条目时，「移除详情」不等于「删行」——摘要行必须落在
+`review-findings.md` 的 `## 已解决问题` → `### 开发期已修复（<当前版本>-dev）` 表内：
+
+1. 从 P 档未完成表删掉该条详情（含修复方向列）；
+2. 在同一周期的「开发期已修复」表补一行 `| **rf-N** | 问题一句话 | 处置一句话（含落地位置/用例数） |`；
+3. 变更正文写进 `changelog.md` 当前 `-dev` 段。
+
+**反例（本项现场）**：只做第 1、3 步而整行删除 → `release.py prepare` 的 archive 步按「本版无该节」放行，
+归档台账里不会有这条，自审历史只剩 changelog 一句残迹。机检兜底：`check-doc-drift` 分区纪律 G 条要求
+现行 changelog 提到的每个 `rf-N` 都能在主台账或该版本的自审归档台账里找到。
 
 **红线**：编辑批次与 `--sync`/检查类脚本**永不同批**（sync 写文件，与编辑并行会竞态）；**所有写者（编辑 / `ruff format` / `test-collect-coverage --update-docs`）必须在 `--sync` 之前完成，sync 之后再无写入**（否则刚回写的统计数字又变陈旧，`dev-verify` 报「行数与实测不一致」）；`check-file-length` 随每批代码改动跑，ruff 由钩子在提交时把关（批内可提前手跑），不留到收尾才爆。
 

@@ -249,8 +249,10 @@ def _finalize_news_token_usage(
             "cache_read_input_tokens": total_hit,
             "total_tokens": total_in + total_out,
         }
-    # 无论是否有新用量，都记录 per_module（all_cached 时也需标记缓存状态）
-    if llm_config:
+    # 记录条件：真有产出（含全缓存命中）或真有用量。零产出 + 零用量说明本批逐条调用
+    # 全部失败（批量路径把逐条失败收成 0 条分析），此时写 per_module 会让用量页签的
+    # 状态列凭「有记录」显示「成功」，与汇总的「调用次数 0」自相矛盾。
+    if llm_config and (total_in > 0 or total_out > 0 or analysis_count > 0):
         if total_in > 0 or total_out > 0:
             _log_token_usage(
                 _first_provider_name(llm_config),

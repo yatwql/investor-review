@@ -71,6 +71,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import io
+import os
 import sys
 from pathlib import Path
 
@@ -157,17 +158,48 @@ def _collect_scan_files() -> list[Path]:
     return files
 
 
-def _scan_all(args: argparse.Namespace) -> int:
-    """全量扫描并打印，返回分级退出码（0/1/2/3，语义见模块 docstring）。"""
+def _scan_jobs() -> int:
+    """并行度：`CHECK_TRACES_JOBS` 优先，否则 ``min(4, CPU)``。
+
+    默认不取满核：pre-commit 锟子自身会并行跑多个守护，每个再开满核会互相
+    抢核而总墙钟不降。可以用环境变量退到 1 复现串行行为。
+    """
+    raw = os.environ.get("CHECK_TRACES_JOBS", "").strip()
+    if raw.isdigit():
+        return max(1, int(raw))
+    return max(1, min(4, os.cpu_count() or 1))
+
+
+def _scan_files(files: list[Path], verbose: bool, jobs: int = 1) -> list[list]:
+    """按顺序扫描文件，返回与 `files` 同序的命中列表（串/并行结果逐字相同）。
+
+    并行用进程池而非线程：瓶颈是 AST 解析与 tokenize（纯 CPU，受 GIL 限制）。
+    结果按输入顺序回排，故 --ci 输出与串行完全一致（缓存回放也依赖这点）。
+    """
+    if jobs <= 1 or len(files) < 64:
+        return [scan_file(f, verbose) for f in files]
+
+    from concurrent.futures import ProcessPoolExecutor
+
+    with ProcessPoolExecutor(max_workers=jobs) as pool:
+        return list(pool.map(scan_file, files, [verbose] * len(files), chunksize=16))
+
+
+def _scan_all(args: argparse.Namespace, jobs: int | None = None) -> int:
+    """全量扫描并打印，返回分级退出码（0/1/2/3，语义见模块 docstring）。
+
+    `jobs=None`（默认）时按 `_scan_jobs()` 解析并行度；显式传值供测试/基准固定串行。
+    """
+    jobs = _scan_jobs() if jobs is None else jobs
     total_hits = 0
     high_count = 0
     code_count = 0
     low_count = 0
     summary: dict[str, int] = {}
 
-    for fpath in _collect_scan_files():
+    files = _collect_scan_files()
+    for fpath, hits in zip(files, _scan_files(files, args.verbose, jobs)):
         file_ref = rel_path(fpath)
-        hits = scan_file(fpath, args.verbose)
         if not hits:
             continue
 

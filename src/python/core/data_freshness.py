@@ -24,6 +24,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
+from src.python.core.detail_view import detail_value
 from src.python.core.num_utils import finite_or
 
 #: 页头偏旧阈值的兜底值（与 degradation 出厂 T2 档一致：3 天）
@@ -64,12 +65,8 @@ _JUMP_THRESHOLD_DEFAULT = 0.20
 
 
 def _detail_value(detail: Any, field: str, default: Any = None) -> Any:
-    """从行情明细读取字段（兼容 dict 或含属性对象，如 DetailRow）。"""
-    if detail is None:
-        return default
-    if isinstance(detail, dict):
-        return detail.get(field, default)
-    return getattr(detail, field, default)
+    """从行情明细读取字段（形态分派单源在 `core/detail_view.py`，本函数仅保留旧名）。"""
+    return detail_value(detail, field, default)
 
 
 def _has_effective_quote(detail: Any) -> bool:

@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 
+from src.python.core.detail_view import detail_value
 from src.python.report.progress import ProgressReporter
 from src.python.config import get_default
 
@@ -329,8 +330,8 @@ def _crisis_index_days() -> int:
 def latest_quotes_from_detail_rows(rows: list | None) -> dict[str, tuple[float, str]]:
     """持仓明细行 → {code: (最新价/净值, 估值日)}（历史走势终点回填用）。
 
-    兼容两种形态：``DetailRow`` 对象与明细字典（``build_holding_detail_rows``
-    的 ``with_market_fields=True`` 输出）。无价格 / 无估值日的行不入表——
+    两种形态（``DetailRow`` 对象 / ``build_holding_detail_rows`` 的明细字典）经
+    ``core/detail_view.detail_value`` 统一取值，本函数不自写形态分支。无价格 / 无估值日的行不入表——
     没有可信估值日就不可当作终点 bar（否则会把未知时点的值伪装成当日估值）。
 
     Args:
@@ -341,14 +342,10 @@ def latest_quotes_from_detail_rows(rows: list | None) -> dict[str, tuple[float, 
     """
     quotes: dict[str, tuple[float, str]] = {}
     for row in rows or []:
-        if isinstance(row, dict):
-            code = str(row.get("code") or "").strip()
-            price = row.get("price")
-            nav_date = str(row.get("nav_date") or "").strip()
-        else:
-            code = str(getattr(row, "code", "") or "").strip()
-            price = getattr(row, "price", None)
-            nav_date = str(getattr(row, "nav_date", "") or "").strip()
+        # 形态分派单源：`core/detail_view.detail_value`（dict / DetailRow 同语义）
+        code = str(detail_value(row, "code", "") or "").strip()
+        price = detail_value(row, "price")
+        nav_date = str(detail_value(row, "nav_date", "") or "").strip()
         if not code or not nav_date or not isinstance(price, (int, float)) or price <= 0:
             continue
         quotes[code] = (float(price), nav_date)

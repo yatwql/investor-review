@@ -105,7 +105,6 @@ def _bar_date(bar: dict[str, Any]) -> str:
 def settle_pending_decisions(
     *,
     report_date: str,
-    horizon_bars: int = dl.MIN_SETTLE_BARS,
     horizons: Sequence[int] | None = None,
     ledger_path: str | None = None,
     benchmark_index: str | None = None,
@@ -121,9 +120,10 @@ def settle_pending_decisions(
     Args:
         price_series_fn / index_series_fn: 依赖注入（测试用 mock）；
             缺省走真实行情（fetch_price_series / fetch_index_series）。
-        horizon_bars: 单视界模式的结算视界（账本常量 5）；此处用 max 防御低位。
-        horizons: 多视界模式（如 5/20/60）；缺省 None → 单视界（向后兼容）。
+        horizons: 目标视界列表（如 5/20/60）；缺省 None → 取账本常量
+            `decision_ledger.SETTLE_HORIZONS`。**不再有「单视界缺省」第二条口径**：
             同一决策每个视界各计一次 deferred（未到期/行情不可得）。
+            低于 `MIN_SETTLE_BARS` 的视界按 5 计（低位防御）。
 
     Returns:
         {"settled": 结算事件数, "ids": 触及的决策 id（去重）,
@@ -134,9 +134,11 @@ def settle_pending_decisions(
     if not dl.is_active():
         return {"settled": 0, "ids": [], "deferred": 0, "skipped": 0, "summary": []}
 
-    targets = tuple(
-        sorted({max(int(h), dl.MIN_SETTLE_BARS) for h in (horizons if horizons is not None else (horizon_bars,))})
-    )
+    # 历史结算事件缺 target_horizon（多视界上线前落账）→ 先按 5 日口径回填一次，
+    # 让 fold 的 settlements 映射与判重键口径一致（回填幂等，仅在有缺字段时写盘）。
+    dl.backfill_settlement_horizons(ledger_path)
+
+    targets = tuple(sorted({max(int(h), dl.MIN_SETTLE_BARS) for h in (horizons or dl.SETTLE_HORIZONS)}))
     bench = benchmark_index or _BENCHMARK_INDEX
     _price_fn = price_series_fn or fetch_price_series
     _index_fn = index_series_fn or fetch_index_series
