@@ -17,9 +17,7 @@
 
 入选标准：重构收益明确、回归面可圈定。
 
-| # | 问题 | 修复方向 |
-| --- | --- | --- |
-| **rf-1035** | provider 链遇「模型不支持 Extended Thinking」时终止该模块，而非继续切换后续 provider：日志先记「模型 GLM-5.3-Flash 不支持 Extended Thinking，已自动降级跳过 [expert_review]/[health_check]」，随后该模块判「LLM 内容生成失败」；本次 4 个基础模块因此全部无产出，相关 LLM 章节落成「LLM API 暂时不可用（熔断冷却中）」 | 把「thinking 能力不匹配」按「该 provider 不适用」处理（继续切链），或在建链时按 provider 能力表预过滤；补回归：链首不支持 thinking、链尾支持 → 模块仍须产出内容 |
+（当前无待处理项）
 
 
 ### P3 — 持续监控：兼容残留
