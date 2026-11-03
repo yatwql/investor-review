@@ -28,8 +28,6 @@
 
 | # | 问题 | 修复方向 |
 | --- | --- | --- |
-| **rf-1027** | 同一份持仓明细在管线中存在两种内部表示（`DetailRow` 对象 / 明细字典），多处读取点写双形态分支：`report/_snapshot.py::latest_quotes_from_detail_rows`（"兼容两种形态"）、`core/data_freshness.py::_detail_value`（dict 或含属性对象）；每处双分支都是长期的漏改面 | 评估统一为单形态的回归面（双表示各自被哪些层级独占消费），再决定「收编到边界转换一次」还是保留通用取值器 |
-| **rf-1028** | 旧内部 API 的假兼容形参：`report/purchase_status.py::compute_purchase_status_data(config)` 已不读该形参（开关走注册表），注释标为「签名兼容」，而调用方仍按位置传 `get_config()` | 删除形参并同步 2 处调用点（`report/_orchestrator_data.py`、`report/whatif_operations.py`）与相关测试 |
 
 ### P4 — 持续监控：文件膨胀登记
 

@@ -238,7 +238,7 @@ class TestContractBuilder:
 
         monkeypatch.setattr("src.python.fetcher.fund_purchase.fetch_fund_purchase_status_cached", _boom)
         set_feature_enabled("fund_purchase_limit", False)
-        assert ps.build_purchase_status_data({}) is None
+        assert ps.build_purchase_status_data() is None
 
     def test_fetch_success_builds_available_contract(self, monkeypatch):
         """取数成功 → available=True 契约（rows/fetched_at/source 透传）。"""
@@ -252,7 +252,8 @@ class TestContractBuilder:
             "src.python.fetcher.fund_purchase.fetch_fund_purchase_status_cached",
             lambda: payload,
         )
-        data = ps.build_purchase_status_data({})
+        data = ps.build_purchase_status_data()
+        assert data is not None, "取数成功/降级均返回契约 dict，None 只表示开关关闭"
         assert data["available"] is True
         assert data["rows"] == _rows()
         assert data["fetched_at"] == "2026-10-09T08:00:00+08:00"
@@ -264,7 +265,8 @@ class TestContractBuilder:
             "src.python.fetcher.fund_purchase.fetch_fund_purchase_status_cached",
             lambda: None,
         )
-        data = ps.build_purchase_status_data({})
+        data = ps.build_purchase_status_data()
+        assert data is not None, "取数成功/降级均返回契约 dict，None 只表示开关关闭"
         assert data["available"] is False
         assert data["rows"] == {}
         assert data["fetched_at"] is None
@@ -277,7 +279,8 @@ class TestContractBuilder:
             raise RuntimeError("传输层意外异常")
 
         monkeypatch.setattr("src.python.fetcher.fund_purchase.fetch_fund_purchase_status_cached", _boom)
-        data = ps.build_purchase_status_data({})
+        data = ps.build_purchase_status_data()
+        assert data is not None, "取数成功/降级均返回契约 dict，None 只表示开关关闭"
         assert data["available"] is False
         assert data["rows"] == {}
 
@@ -658,16 +661,19 @@ class TestConstraintBlock:
         payload = {"rows": _rows(), "fetched_at": _fresh_ts(), "source": "天天基金"}
         monkeypatch.setattr("src.python.fetcher.fund_purchase.fetch_fund_purchase_status_cached", lambda: payload)
         holdings = self._holdings(("110022", "安心债券"))
-        data = ps.build_purchase_status_data({}, holdings_details=holdings)
+        data = ps.build_purchase_status_data(holdings_details=holdings)
+        assert data is not None, "取数成功/降级均返回契约 dict，None 只表示开关关闭"
         assert isinstance(data["constraint_block"], str)
         assert "【申购限购约束】" in data["constraint_block"]
-        data_no_holding = ps.build_purchase_status_data({})
+        data_no_holding = ps.build_purchase_status_data()
+        assert data_no_holding is not None, "取数成功/降级均返回契约 dict，None 只表示开关关闭"
         assert data_no_holding["constraint_block"] == ""
 
     def test_contract_field_degraded_to_empty(self, monkeypatch):
         """降级契约（available=False）→ constraint_block 恒为空串（字段在、值空）。"""
         monkeypatch.setattr("src.python.fetcher.fund_purchase.fetch_fund_purchase_status_cached", lambda: None)
-        data = ps.build_purchase_status_data({}, holdings_details=self._holdings(("110022", "安心债券")))
+        data = ps.build_purchase_status_data(holdings_details=self._holdings(("110022", "安心债券")))
+        assert data is not None, "取数成功/降级均返回契约 dict，None 只表示开关关闭"
         assert data["available"] is False
         assert data["constraint_block"] == ""
 

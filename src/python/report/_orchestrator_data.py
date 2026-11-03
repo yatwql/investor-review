@@ -173,7 +173,7 @@ def prepare_report_data(
     # holdings_details 最小形态（name/code）供构建期渲染 constraint_block 约束块
     # （进 LLM 分析章提示词的唯一渲染点，一次渲染、提示词与指纹共享同一实例）
     purchase_status_data = compute_purchase_status_data(
-        config, holdings_details=[{"name": d.name, "code": d.code} for d in details]
+        holdings_details=[{"name": d.name, "code": d.code} for d in details]
     )
     # 受限标的预格式化索引（restricted_index 契约字段）：字段值由
     # report/purchase_status 单源渲染，供建议层可行性判定只读消费；
@@ -385,7 +385,6 @@ def compute_financial_indicator_data(
 
 
 def compute_purchase_status_data(
-    config: dict,
     holdings_details: list[dict] | None = None,
 ) -> dict | None:
     """编排申购限购状态数据（`purchase_status_data` 数据契约）。
@@ -398,7 +397,7 @@ def compute_purchase_status_data(
     """
     from src.python.report.purchase_status import build_purchase_status_data
 
-    return build_purchase_status_data(config, holdings_details)
+    return build_purchase_status_data(holdings_details)
 
 
 def compute_cost_position_data(holdings: list, config: dict) -> dict | None:

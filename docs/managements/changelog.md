@@ -10,6 +10,10 @@
 
 ### 变更
 
+- **明细双形态收编单源 + 删除假兼容形参（rf-1027 / rf-1028）**：
+  - **rf-1027**：新增 `core/detail_view.py::detail_value()` 作为持仓明细「dict / `DetailRow` 对象」的**唯一**形态分派点（两种表示并存是既有事实：`DetailRow` 供明细计算与渲染、明细字典供数据契约跨层传递，短期不收敛）；`core/data_freshness._detail_value` 改为委托、`report/_snapshot.latest_quotes_from_detail_rows` 删除自带 `isinstance(dict)` 分支，从此新增读取点只有一个漏改面。语义上明确「字段存在但值为 None」不等于「缺字段」（取值层不做真值判断，0/空串同样保留）。
+  - **rf-1028**：`report/purchase_status.build_purchase_status_data()` 与其编排包装 `compute_purchase_status_data()` 删除从未读取的 `config` 形参（开关走注册表），同步 3 处调用点（`_orchestrator_data` / `whatif_operations`）与测试。
+  - 用例：新增 5 例 `detail_view` 回归（两形态同值 / 缺字段同默认 / 存在即 None 不顶替 / 行 None / 0 与空串不算缺失）。
 - **决策账本视界口径收口（rf-1026 / rf-1030，plan-243 R0 收尾）**：
   - **历史结算事件回填（rf-1026）**：新增 `core/decision_ledger.backfill_settlement_horizons()`——为缺 `target_horizon` 的结算事件按 5 日口径一次性写齐（读全量→补字段→整档原子替换，仅在确有缺字段时写盘，幂等），由 `settle_pending_decisions` 在结算前调用；此后 `_settlement_horizon` 的兜底分支只剩「归档账本副本只读」这类场景，fold 的 settlements 映射与判重键回到同一口径。
   - **消除单视界第二条口径（rf-1030）**：`settle_pending_decisions` 去掉 `horizon_bars` 形参，`horizons=None` 一律取账本常量 `SETTLE_HORIZONS`；原先「缺省退回单视界」的兼容缺省已删除。
