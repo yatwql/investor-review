@@ -14,13 +14,13 @@
 
 | 文档 | 管什么 | 什么时候读 | 真源级别 |
 |:-----|:-------|:-----------|:---------|
-| **本指南** | 怎么开发：环境、门禁、测试、调试、扩展、发布 | 日常编码 / 新人上手 | 面向人（细节指向下列文档） |
+| **本指南** | 怎么开发：环境、门禁、测试、调试、扩展、发布 | 日常编码 / 新人上手 | **`technical.md` / `llm-technical.md` 的延伸**（规则层给判据，执行流程在此展开） |
 | [CLAUDE.md](../../CLAUDE.md) | 工程纪律速查：分支、门禁清单、测试隔离、命名、编码 | 提交前对照 / 写新代码前 | **纪律唯一来源** |
 | [technical.md](technical.md) | 架构设计约束（编号约束表）、语义命名表、实验项生命周期 | 改动设计、跨模块改动前 | 架构真源 |
 | [requirements.md](requirements.md) | 需求 ID（`R-XXX-NN`）与描述 | 判断「这算不算需求变更」 | 需求真源 |
 | [testplan.md](testplan.md) | 门禁完整口径、需求↔验证载体映射、回归清单 | 加/改测试、发布前 | 测试口径真源 |
 | [DESIGN.md](DESIGN.md) / [DESIGN-TUI.md](DESIGN-TUI.md) | Web/报告与 TUI 的交互与视觉契约 | 动 UI 之前**必读** | UI 契约真源 |
-| [scripts-reference.md](scripts-reference.md) | 每个辅助脚本干什么、怎么跑、何时跑 | 需要跑某个脚本时 | 脚本字典 |
+| [scripts-reference.md](scripts-reference.md) | 每个辅助脚本干什么、怎么跑、何时跑 | 需要跑某个脚本时 | **技术文档的延伸**（脚本字典；口径源自 technical.md 的规则） |
 | [folders.md](folders.md) | 目录树与统计快照（`--sync` 自动回写） | 新增文件后核对 | 结构性事实 |
 | [test-coverage.md](test-coverage.md) | 各模式/子标记/功能域的用例计数 | 需要实时测试数字 | 派生物 |
 | [plan.md](plan.md) / [review-findings.md](review-findings.md) / [changelog.md](changelog.md) | 计划 / 自审问题 / 变更记录 | 开工前、修缺陷后、发布时 | 台账真源 |

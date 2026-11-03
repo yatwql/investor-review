@@ -69,6 +69,7 @@
   - [6.9 实验项生命周期表](#69-实验项生命周期表)
 - [7. 模块间依赖关系](#7-模块间依赖关系)
 - [8. 架构设计约束](#8-架构设计约束)
+  - [8.0 文档分层与引用规则](#80-文档分层与引用规则)
   - [8.1 数据获取层约束](#81-数据获取层约束)
   - [8.2 缓存层约束](#82-缓存层约束)
   - [8.3 报告层约束](#83-报告层约束)
@@ -2504,7 +2505,7 @@ _dedup_by_title(items)
 
 ##### 校准工具
 
-`.venv/bin/python scripts/eval-dedup-threshold.py` 分析 `data/calibration/dedup_anchors-*.jsonl.gz`（各月分片合并读取）。
+由 `scripts/eval-dedup-threshold.py` 分析 `data/calibration/dedup_anchors-*.jsonl.gz`（各月分片合并读取；用法与参数见 `scripts-reference.md`）。
 
 **口径（关键）**：工具**不信任锚点里的 `ratio`/`bigram_overlap`/`rule`**（它们是各次记录
 当时的规则产物），而是拿 `title_a`/`title_b` 用当前代码重算并按当前阈值重判——阈值从
@@ -3795,6 +3796,19 @@ web/ (Web 服务层，薄入口)
 > **约束外参照（配置默认值单源纪律）**：配置项的出厂缺省值只有一份事实位（`config/_config_defaults.py` / `_llm_settings_defaults.py` / `_llm_providers_defaults.py` 三张默认表），读取侧一律经 `get_default()` / `get_llm_setting_default()` 取值（支持点分嵌套路径与逐层传参），**不得自带与默认表同值同键的字面量兜底**；跨模块共享的**分析口径常量**（回看窗口 `DEFAULT_WINDOW`、估值三档 `TIER_*`、买卖方向 `SIDE_BUY/SIDE_SELL`、来源标记 `SOURCE_CONFIG`）同理单源在 `core/constants.py`，消费模块只 import 不重复定义——同一数值两份拷贝时改默认表必然漏改其一，症状是「配置文件里没写该键却拿到旧值」。由 `scripts/check-code-traces.py --ci` 的 DEFAULTDUP 支路强制（AST 判定 `x.get("<键>", <默认值>)`，默认表自身与测试不在扫描域）。**读取侧空值语义**：配置文件里写成 `null` 或省略该键 = **跟随默认值**（`batch` 段数值键等消费点对非数值回落默认），只有显式数字/字符串才是覆盖——因此调整默认表能对「没显式覆盖」的机器直接生效；配置模板仍写显式值以保留可发现性，需要跟随默认的用户把该项置 `null`（约定见配置参考手册）。
 
 > **约束外参照（测试有效性纪律）**：测试用例不得是「死用例 / 无断言 / 完全重复 / 自证用例」——分别指：pytest 永不收集或同名覆盖的用例、没有任何断言（也不经含断言的同类辅助方法）、函数体与参数装饰器归一化后彼此完全一致的用例、以及 patch 掉被测函数后又把其 `return_value` 断言回原值的用例。另有「账本日期写死绝对日期」：账本写入/裁剪类调用（`append_signals` / `append_decision` / `register_action_decisions` / `register_llm_decisions` / `prune_jsonl_by_age` …）的 `report_date`/`settle_date`/`date` 实参若写死「当前年 ±2 年」内的绝对日期，会在「日期 + 保留期（730 天）」之后静默退化成空账本——必须从当天回推派生。由 `scripts/check-test-redundancy.py --ci` 强制；删除/合并用例后须同步刷新 `test-coverage.md` 与 `folders.md` 计数（`check-doc-drift.py --with-test-count` 兜底）。
+
+### 8.0 文档分层与引用规则
+
+本章及全文只给**架构规则与契约**；执行细节与工具口径不在技术文档内展开，避免同一事实两处维护：
+
+| 层 | 文档 | 管什么 | 引用方向 |
+|:--|:--|:--|:--|
+| 规则层（本文） | `technical.md`（本文） / `llm-technical.md`（其 LLM 分部） | 架构约束、模块职责、数据契约、判据与纪律 | 可引 `requirements.md`（需求真源）与下列**延伸**两份；**不引用户文档** |
+| 延伸层 | `developer-guide.md` | 怎么开发：环境、门禁、测试、调试、扩展、发布流程 | 引本文各节作为设计依据 |
+| 延伸层 | `scripts-reference.md` | 每个辅助脚本干什么、怎么跑、何时跑、退出码 | 引本文与延伸层的规则作为口径 |
+| 实现产物 | 用户手册（`docs/manuals/`）与 `README.md` | 面向使用者的操作说明 | **技术文档不得引用**（产物不反向约束设计） |
+
+**三条写作纪律**：① 技术文档写**规则**（要什么、为什么、怎么判），不写**操作步骤**（命令序列归 `developer-guide.md`、脚本参数归 `scripts-reference.md`）；② 不抄**代码派生量与测量结果**（条数、行数、耗时、覆盖率、跑测数字）——这类事实的真源在代码与机检回填的统计文档，抄进设计文档只会漂移；③ 代码**文件名与符号名可以写**（它是设计的落点），但只描述职责与契约，不复述实现行号或清单。
 
 ### 8.1 数据获取层约束
 
