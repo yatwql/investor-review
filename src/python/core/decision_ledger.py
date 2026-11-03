@@ -34,6 +34,7 @@ from datetime import datetime
 from typing import Any, Iterable
 
 from src.python.core.constants import PROJECT_ROOT
+from src.python.core.atomic_write import write_text_atomic
 from src.python.core.jsonl_store import append_jsonl_atomic, prune_jsonl_by_age, read_jsonl
 
 logger = logging.getLogger("invest")
@@ -271,6 +272,35 @@ def classify_direction_outcome(
 
 
 # ── fold：decision + settlement 合并统计（不可变聚合）───
+
+
+def backfill_settlement_horizons(path: str | None = None) -> int:
+    """为缺 `target_horizon` 的历史结算事件回填目标视界（按 5 日口径），返回回填行数。
+
+    多视界结算上线后，判重键是 `(decision_id, 目标视界)`；多视界之前落账的结算事件
+    没有该字段，fold 只能按 `MIN_SETTLE_BARS` 归属。此函数把账本**一次写齐**：读全量
+    → 补字段 → 整档原子替换（仅在确有缺字段时才写，幂等）。回填之后
+    `_settlement_horizon` 的兜底分支不再命中，只剩「归档账本副本只读」这类场景。
+
+    保留期内的账本由 `append_jsonl_atomic` 触发按龄裁剪（`DECISION_LEDGER_RETENTION_DAYS`），
+    因此回填 + 裁剪之后不会再有缺字段事件进入统计。
+    """
+    target = path or _DECISION_LEDGER_FILE
+    events = load_events(target)
+    if not events:
+        return 0
+    changed = 0
+    for event in events:
+        if event.get("event") != EVENT_SETTLEMENT or "target_horizon" in event:
+            continue
+        event["target_horizon"] = MIN_SETTLE_BARS
+        changed += 1
+    if not changed:
+        return 0
+    lines = "".join(json.dumps(e, ensure_ascii=False, sort_keys=True) + "\n" for e in events)
+    write_text_atomic(target, lines, prefix=".decision_ledger_", log_tag="decision_ledger", noun="账本")
+    logger.info("[decision_ledger] 历史结算事件回填目标视界 %d 条", changed)
+    return changed
 
 
 def _settlement_horizon(event: dict[str, Any]) -> int:

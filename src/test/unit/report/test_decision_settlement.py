@@ -104,6 +104,7 @@ class TestSettleMaturity:
         series = _bars([_d(5), _d(13), _d(14), _d(15)], [10.0, 9.8, 9.7, 9.6])
         out = ds.settle_pending_decisions(
             report_date=_d(20),
+            horizons=(dl.MIN_SETTLE_BARS,),
             ledger_path=lp,
             price_series_fn=_FakePrices(series),
             index_series_fn=_FakeIndex([]),
@@ -169,6 +170,7 @@ class TestSettleOutcomes:
         _seed_decision(lp, rep=_d(0), baseline=10.0)
         out = ds.settle_pending_decisions(
             report_date=_d(8),
+            horizons=(dl.MIN_SETTLE_BARS,),
             ledger_path=lp,
             price_series_fn=_FakePrices([]),  # 全链路无行情
             index_series_fn=_FakeIndex([]),
@@ -300,11 +302,13 @@ class TestMultiHorizon:
         fold = dl.fold_ledger(path=lp)
         [d] = fold["decisions"]
         assert set(d["settlements"]) == {5, 20, 60}
-        assert d["settlement"]["horizon_bars"] == 7  # 旧事件原样保留
-        assert "target_horizon" not in d["settlement"]
+        assert d["settlement"]["horizon_bars"] == 7  # 结算 bar 数沿用事件本身
+        assert d["settlement"]["target_horizon"] == dl.MIN_SETTLE_BARS, (
+            "缺字段的历史结算事件由写侧回填目标视界（否则 fold 与判重键两套口径）"
+        )
 
-    def test_single_horizon_mode_backward_compatible(self, tmp_path):
-        # 缺省 horizons=None → 单视界（既有调用面行为不变）
+    def test_default_targets_follow_ledger_horizons(self, tmp_path):
+        """缺省 `horizons=None` → 取 `SETTLE_HORIZONS`（唯一口径，不再是单视界缺省）。"""
         lp = str(tmp_path / "ledger.jsonl")
         _seed_decision(lp, rep=_REP, baseline=10.0)
         out = ds.settle_pending_decisions(
@@ -313,10 +317,12 @@ class TestMultiHorizon:
             price_series_fn=_FakePrices(_mature([10.0, 9.9, 9.8, 9.7, 9.6, 9.5])),
             index_series_fn=_FakeIndex([]),
         )
+        # 样本只够 5 日：5 日落账，20/60 各暂缓一次 → 三条口径都在跑
         assert out["settled"] == 1
+        assert out["deferred"] == len(dl.SETTLE_HORIZONS) - 1
         fold = dl.fold_ledger(path=lp)
         [d] = fold["decisions"]
-        assert set(d["settlements"]) == {5}  # 只落 5 日视界
+        assert set(d["settlements"]) == {5}
 
 
 class TestSettleGating:

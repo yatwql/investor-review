@@ -28,10 +28,8 @@
 
 | # | 问题 | 修复方向 |
 | --- | --- | --- |
-| **rf-1026** | 旧数据文件结构的读取侧兼容：`core/decision_ledger.py::_event_horizon` 对无 `target_horizon` 的历史结算事件按 5 日口径归属；账本按龄保留 730 天，该分支至少要存续到老事件全部过期 | 二选一——按保留期给出下线时间点，或写侧一次性回填 `target_horizon` 后删除读取侧分支；同口径复核 `signal_ledger` 是否有同类字段缺省分支 |
 | **rf-1027** | 同一份持仓明细在管线中存在两种内部表示（`DetailRow` 对象 / 明细字典），多处读取点写双形态分支：`report/_snapshot.py::latest_quotes_from_detail_rows`（"兼容两种形态"）、`core/data_freshness.py::_detail_value`（dict 或含属性对象）；每处双分支都是长期的漏改面 | 评估统一为单形态的回归面（双表示各自被哪些层级独占消费），再决定「收编到边界转换一次」还是保留通用取值器 |
 | **rf-1028** | 旧内部 API 的假兼容形参：`report/purchase_status.py::compute_purchase_status_data(config)` 已不读该形参（开关走注册表），注释标为「签名兼容」，而调用方仍按位置传 `get_config()` | 删除形参并同步 2 处调用点（`report/_orchestrator_data.py`、`report/whatif_operations.py`）与相关测试 |
-| **rf-1030** | 旧调用面缺省值留存：`report/decision_settlement.py::settle_pending_decisions(horizons=None)` 缺省退回单视界（多视界已上线），而两个生产调用点均已显式传 `horizons` | 收窄为必填（或保留缺省但改为「取 `SETTLE_HORIZONS`」以消除第二条口径），核实测试里的 None 路径是否仍具意义 |
 
 ### P4 — 持续监控：文件膨胀登记
 

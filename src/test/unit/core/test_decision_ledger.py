@@ -443,3 +443,71 @@ class TestLessons:
         self._seed_hits(lp)
         combined = "base_cq" + dl.lessons_cache_suffix(path=lp)
         assert combined.startswith("base_cq_lr")
+
+
+class TestBackfillSettlementHorizons:
+    """历史结算事件的目标视界回填（写侧一次性迁移，读完即写齐）。
+
+    多视界上线前落账的结算事件没有 `target_horizon`，fold 只能按 5 日归属；回填后
+    判重键 `(decision_id, 目标视界)` 与 fold 的 settlements 映射回到同一口径。
+    """
+
+    def _legacy_ledger(self, tmp_path):
+        lp = str(tmp_path / "ledger.jsonl")
+        _w(
+            lp,
+            [
+                {
+                    "event": dl.EVENT_DECISION,
+                    "decision_id": "d1",
+                    "code": "600900",
+                    "report_date": _d(0),
+                    "direction": dl.DIRECTION_LONG,
+                    "carrier": "deterministic",
+                    "baseline_close": 10.0,
+                },
+                {  # 多视界上线前落账：无 target_horizon
+                    "event": dl.EVENT_SETTLEMENT,
+                    "decision_id": "d1",
+                    "settle_date": _d(6),
+                    "horizon_bars": 7,
+                    "raw_return": -0.05,
+                    "outcome": dl.OUTCOME_HIT,
+                },
+                {  # 已有目标视界：不动
+                    "event": dl.EVENT_SETTLEMENT,
+                    "decision_id": "d1",
+                    "settle_date": _d(21),
+                    "horizon_bars": 20,
+                    "raw_return": 0.03,
+                    "outcome": dl.OUTCOME_HIT,
+                    "target_horizon": 20,
+                },
+            ],
+        )
+        return lp
+
+    def test_backfills_only_missing_and_is_idempotent(self, tmp_path):
+        lp = self._legacy_ledger(tmp_path)
+
+        assert dl.backfill_settlement_horizons(lp) == 1, "只应回填缺字段的那一条结算事件"
+
+        events = dl.load_events(lp)
+        settlements = [e for e in events if e["event"] == dl.EVENT_SETTLEMENT]
+        assert settlements[0]["target_horizon"] == dl.MIN_SETTLE_BARS
+        assert settlements[0]["horizon_bars"] == 7, "结算 bar 数属事件本身，回填不改"
+        assert settlements[1]["target_horizon"] == 20
+        decision = next(e for e in events if e["event"] == dl.EVENT_DECISION)
+        assert "target_horizon" not in decision, "决策事件不参与回填"
+
+        assert dl.backfill_settlement_horizons(lp) == 0, "第二次调用应幂等（无缺字段即不写盘）"
+
+    def test_fold_counts_backfilled_event_under_five_day(self, tmp_path):
+        lp = self._legacy_ledger(tmp_path)
+        dl.backfill_settlement_horizons(lp)
+
+        [d] = dl.fold_ledger(path=lp)["decisions"]
+        assert set(d["settlements"]) == {dl.MIN_SETTLE_BARS, 20}, "回填后按目标视界归组"
+
+    def test_missing_file_is_noop(self, tmp_path):
+        assert dl.backfill_settlement_horizons(str(tmp_path / "nope.jsonl")) == 0
