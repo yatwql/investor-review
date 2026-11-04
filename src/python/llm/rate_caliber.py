@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 #: 提示词文本版本（改动标签/表头/口径说明等静态文案时递增）
-PROMPT_SCHEMA_VERSION = "rate-caliber-3"
+PROMPT_SCHEMA_VERSION = "rate-caliber-4"
 
 #: 单品种持仓收益率（自买入、按成本、未年化；独立成句/表头用）
 LABEL_POSITION = "持仓收益率（自买入，未年化）"
