@@ -14,7 +14,7 @@ import subprocess
 import sys
 from importlib import metadata
 from pathlib import Path
-from _shared.checklib import MANAGEMENTS_DIR, MANUALS_DIR, REPO_ROOT, rel
+from _shared.checklib import MANAGEMENTS_DIR, MANUALS_DIR, REPO_ROOT, file_signature as _file_signature, rel
 
 
 _README = REPO_ROOT / "README.md"
@@ -265,11 +265,6 @@ _LIVE_DIR = _TEST_ROOT / "live"
 _SNAPSHOT_FORMAT = 2
 #: 影子双算连续一致次数达标后停用影子（纯增量）；不一致立即归零继续守门
 _SHADOW_MATCHES_NEEDED = 5
-
-
-def _file_signature(path: Path) -> str:
-    st = path.stat()
-    return f"{st.st_size}:{st.st_mtime_ns}"
 
 
 def _is_test_file(path: Path) -> bool:

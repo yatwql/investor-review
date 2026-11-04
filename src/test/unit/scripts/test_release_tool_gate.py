@@ -94,14 +94,14 @@ class TestGate:
             assert script.startswith("scripts/check-"), script
 
     def test_gate_records_step_timings(self, rel, monkeypatch, tmp_path):
-        """门禁三步（并行 verify+回归 / 十守护 / 设计护栏）入计时器。"""
+        """门禁三步（并行 verify+回归 / 守护清单 / 设计护栏）入计时器。"""
         monkeypatch.setattr(rel, "GATE_STAMP_FILE", tmp_path / "stamp.json")
         rel._reset_timer()
         runner = FakeRunner()
         rc = rel.cmd_gate(ns(), runner=runner)
         assert rc == 0
         labels = [entry["step"] for entry in rel._timer().steps]
-        assert labels == ["P2 verify+regression（并行）", "P2 十守护", "P2 设计护栏"]
+        assert labels == ["P2 verify+regression（并行）", "P2 守护清单", "P2 设计护栏"]
         assert all(entry["elapsed_s"] >= 0 for entry in rel._timer().steps)
 
     def test_gate_stops_on_stale_evolution(self, rel):
@@ -114,7 +114,7 @@ class TestGate:
         assert runner.calls == []  # 新鲜度失败即中止，回归/守护一个不跑
 
     def test_gate_runs_verify_and_regression_before_guards(self, rel, monkeypatch, tmp_path):
-        """gate 同时跑 P1 verify 与 P2 regression（并行），且都在十守护之前。"""
+        """gate 同时跑 P1 verify 与 P2 regression（并行），且都在守护清单之前。"""
         monkeypatch.setattr(rel, "GATE_STAMP_FILE", tmp_path / "stamp.json")
         runner = FakeRunner()
         rc = rel.cmd_gate(ns(), runner=runner)
@@ -133,14 +133,14 @@ class TestGate:
         assert all("--ci" in c for c in guard_calls)
 
     def test_gate_runs_style_guardrail(self, rel):
-        """发布门禁包含设计护栏（E 级拦 / W 级观察统计；不并入十守护清单）。"""
+        """发布门禁包含设计护栏（E 级拦 / W 级观察统计；不并入守护清单清单）。"""
         runner = FakeRunner()
         rc = rel.cmd_gate(ns(), runner=runner)
         assert rc == 0
         guardrail_calls = [c for c in runner.calls if any("style-guardrails" in part for part in c)]
         assert len(guardrail_calls) == 1
         assert "--ci" in guardrail_calls[0]
-        # 护栏在十守护之后执行（守护清单语义独立）
+        # 护栏在守护清单之后执行（守护清单语义独立）
         guard_idx = max(i for i, c in enumerate(runner.calls) if any("check-doc-links" in part for part in c))
         assert runner.calls.index(guardrail_calls[0]) > guard_idx
 
@@ -158,7 +158,7 @@ class TestGate:
         runner = FakeRunner(responses=[(["scripts/test-runner.py"], (1, "", "boom"))])
         rc = rel.cmd_gate(ns(), runner=runner)
         assert rc == 1
-        assert not any(any("check-" in p for p in c) for c in runner.calls)  # 回归/verify 失败 → 十守护一个不跑
+        assert not any(any("check-" in p for p in c) for c in runner.calls)  # 回归/verify 失败 → 守护清单一个不跑
 
     def test_gate_stops_on_verify_failure(self, rel, monkeypatch, tmp_path):
         """P1 verify 失败同样在合并前中止（且不写通过戳）。"""

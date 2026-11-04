@@ -19,7 +19,7 @@
 #   任一 finding 即中止提交。
 #
 # 分域原则（质量 × 时间平衡）：本地分域只省「结果不可能变化」的重复触发；CI guards
-#   job 对同一清单恒全量十守护兜底，且守护清单同源检查（check-doc-drift 第 16 项）
+#   job 对同一清单恒全量守护清单兜底，且守护清单同源检查（check-doc-drift 第 16 项）
 #   保证本执行体与 CLAUDE.md / testplan / developer-guide / ci.yml 五处引用集合一致。
 #   历史教训：本钩子曾仅条件触发 3 项守护，致 README 痕迹与 folders 行数漂移本地放行、
 #   到 CI 才红——故分域必须与 CI 全量成对设计，不得单端条件化。
@@ -30,7 +30,7 @@ set -e
 
 # Windows 编码：守护经 run_bg 重定向到日志文件，Python 按 locale ANSI（cp936）落盘
 # 会在 UTF-8 终端把回放内容读成乱码；UTF-8 模式统一按 UTF-8 写（Linux/CI 本就是
-# UTF-8，行为不变）；守护详情可读性见 `scripts/_checklib.py::_force_utf8_stream`。
+# UTF-8，行为不变）；守护详情可读性见 `scripts/_shared/checklib.py::_force_utf8_stream`。
 export PYTHONUTF8=1
 
 # 优先项目虚拟环境解释器（CLAUDE.md：Python 命令一律走 .venv）。
@@ -105,11 +105,24 @@ if in_changed '\.py$'; then
     ) &
 fi
 
-# 测试域：测试冗余与无效（AST 只读 src/test + 自身 + _checklib；按文件事实缓存：
-# 冷 ~1.8s / 变更文件增量 ~0.1s；仅测试变更触发）
-if in_changed '^src/test/|scripts/check-test-redundancy\.py|scripts/_checklib\.py'; then
+# 测试域：测试冗余与无效（AST 只读 src/test + 自身 + 共享库；按文件事实缓存：
+# 冷 ~1.8s / 变更文件增量 ~0.1s；仅测试变更触发；共享库内任何文件改动都会
+# 影响用例事实（facts_cache 指纹含 checklib 逻辑指纹），故按目录整体匹配）
+if in_changed '^src/test/|scripts/check-test-redundancy\.py|scripts/_shared/checklib\.py|^scripts/_test_redundancy/'; then
     echo "[..] pre-commit: 测试域（test-redundancy，与 doc-drift 并行）"
     run_bg check-test-redundancy scripts/check-test-redundancy.py --ci
+fi
+
+# 导入面域：导入面契约（AST 只读 src/python；纯 ~1s，只随 src/python 变更触发）
+if in_changed '^src/python/|scripts/check-import-surface\.py'; then
+    echo "[..] pre-commit: 导入面域（import-surface，与 doc-drift 并行）"
+    run_bg check-import-surface scripts/check-import-surface.py --ci
+fi
+
+# 脚本域：scripts/ 顶层脚本契约（AST 只读 scripts/*.py；只随 scripts/ 变更触发）
+if in_changed '^scripts/'; then
+    echo "[..] pre-commit: 脚本域（script-contract，与 doc-drift 并行）"
+    run_bg check-script-contract scripts/check-script-contract.py --ci
 fi
 
 # ── 2) 统计快照同步 + 文档漂移 ──

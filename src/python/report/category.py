@@ -36,9 +36,10 @@ _HEADERS = [
 def _tier_label(buckets: dict | None) -> str:
     """成本分档标签：低成本/高成本/混合/未分档。
 
-    档位口径同 analysis/cost_flow.compute_cost_tiers：批次成本价 ≤ 市价 →
-    低成本档；> 市价 → 高成本档；无市价品种单列「未分档」。持仓批次横跨
-    多档时按份额取主导档位（低==高 → 「混合」）。
+    档位口径同 analysis/cost_flow.compute_cost_tiers：**净成本单价** ≤ 市价 →
+    低成本档；> 市价 → 高成本档；无市价品种单列「未分档」。净成本口径下每代码
+    恒单档（不算批次），「横跨多档按份额取主导、低==高 → 混合」仅对上游传入的
+    多档桶生效（当前上游不会产出，保留为契约防御）。
 
     Args:
         buckets: cost_tiers.per_code 中某代码的分档桶 dict，缺码时为 None

@@ -2837,11 +2837,13 @@
       setMsg(els.error, '已清空变更清单（持仓文件未改动）', 'ok');
     });
 
-    // 记住「同时记入交易流水」的选择，省去每次重勾
+    // 缺省勾选「同时记入交易流水」（买入/卖出都是真实交易，流水缺省留痕）；
+    // 记住过的选择优先，取消勾选记为 '0'，下次仍不勾
     try {
-      els.flows.checked = localStorage.getItem('holdings:flows') === '1';
+      const stored = localStorage.getItem('holdings:flows');
+      els.flows.checked = stored === null ? true : stored === '1';
     } catch (e) {
-      /* 隐私模式下 localStorage 不可用，保持默认未勾选 */
+      /* 隐私模式下 localStorage 不可用：沿用 HTML 的 checked 缺省（勾上） */
     }
     els.flows.addEventListener('change', function () {
       try {

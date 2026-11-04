@@ -1,4 +1,4 @@
-"""P2 gate 门禁编排：verify+regression 并行、十守护、设计护栏、通过戳。
+"""P2 gate 门禁编排：verify+regression 并行、守护清单、设计护栏、通过戳。
 
 从 `scripts/release.py` 下沉（入口行数红线），只收显式依赖（`ctx`）：
 路径常量、子进程执行器、守护清单与计时器都由入口按当前模块状态注入——
@@ -221,7 +221,7 @@ def run_gate(args, ctx, runner=None) -> int:
 
     # P1 verify（全量单元，约 28s）与 P2 regression（场景，约 6s）并行。verify 在
     # 两种情况下可省：① refresh 的 bench 刚跑过 `unit`（verify 的严格超集，由
-    # check-test-markers 的「unit_* ⇒ unit」不变量保证）且代码指纹未变；此时只跑回归，
+    # check-test-redundancy 标记支路的「unit_* ⇒ unit」不变量保证）且代码指纹未变；此时只跑回归，
     # 省 28s。否则照常并行实跑——状态缺失/过期一律回落实跑，不盲信。
     bench_stamp = bench_covers_verify(ctx.bench_stamp_file, version, code_fingerprint(ctx.exec_fn, ctx.root, runner))
     print("[..] P2 门禁：P1 verify + 场景回归（并行）")
@@ -271,7 +271,7 @@ def run_gate(args, ctx, runner=None) -> int:
     print("[OK] 场景回归通过\n")
 
     workers = ctx.gate_workers()
-    print(f"[..] P2 门禁：十守护 --ci（{workers} 路并行）")
+    print(f"[..] P2 门禁：守护清单 --ci（{workers} 路并行）")
     from concurrent.futures import ThreadPoolExecutor
 
     started = time.perf_counter()
@@ -295,12 +295,12 @@ def run_gate(args, ctx, runner=None) -> int:
                 if err.strip():
                     print("    " + err.strip().replace("\n", "\n    "))
                 worst = max(worst, rc) if rc in (1, 2, 3) else 1
-    ctx.timer().mark_elapsed("P2 十守护", started, workers=workers)
+    ctx.timer().mark_elapsed("P2 守护清单", started, workers=workers)
     if worst:
         print("[ERR] P2 守护存在 finding，先修复再发布")
         return worst
 
-    # 设计护栏（不入十守护清单——清单为 pre-commit/CI guards 五处同源硬约定；
+    # 设计护栏（不入守护清单清单——清单为 pre-commit/CI guards 五处同源硬约定；
     # 发布门禁域单独纳入：E 级拦 / W 级观察统计，开发期快反馈由 unit 测试承担）
     print("[..] P2 门禁：设计护栏（check-style-guardrails，E 级拦 / W 级观察统计）")
     started = time.perf_counter()
@@ -339,7 +339,7 @@ def run_gate(args, ctx, runner=None) -> int:
         ctx.stamp_file, version, fingerprint, verify_passed, source=verify_source, code_files=code_files or {}
     )
     suffix = " + portability" if getattr(args, "with_portability", False) else ""
-    print(f"[OK] P2 门禁全绿（演进新鲜度 + verify + regression + 十守护 + 设计护栏{suffix}）")
+    print(f"[OK] P2 门禁全绿（演进新鲜度 + verify + regression + 守护清单 + 设计护栏{suffix}）")
     print(f"[OK] gate 通过戳已写入（指纹 {fingerprint[:12]}…），publish 指纹一致时复用 P1 verify")
     return 0
 

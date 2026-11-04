@@ -21,6 +21,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from _shared.checklib import repo_relative_posix as _rel_posix
+
 #: 默认值事实位（相对仓库根，POSIX 形态）：这三份之外的"默认值"都不合法
 _DEFAULT_TABLE_FILES = (
     "src/python/config/_config_defaults.py",
@@ -33,14 +35,6 @@ _SCAN_PREFIX = "src/python/"
 
 #: 默认值对缓存（repo_root 字符串 → {(键, 值字面量)}）
 _PAIRS_CACHE: dict[str, frozenset[tuple[str, str]]] = {}
-
-
-def _rel_posix(fpath: Path, repo_root: Path) -> str:
-    """仓库相对 POSIX 路径（不在仓库内时退回绝对形态，避免误判豁免）。"""
-    try:
-        return fpath.resolve().relative_to(Path(repo_root).resolve()).as_posix()
-    except ValueError:
-        return fpath.as_posix()
 
 
 def _literal_value(node: ast.expr) -> tuple[str, bool]:

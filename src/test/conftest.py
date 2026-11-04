@@ -1133,7 +1133,7 @@ def pytest_collection_modifyitems(config, items):
     # 若没有，发出 PytestWarning 提醒补充 pytestmark 模块级变量。
     # 当前全部已有测试均已覆盖（通过 pytestmark 模块级变量），
     # 本检查旨在防止新增测试文件时遗漏标记。目录归域特例（handlers/cache→unit_core、
-    # startup→unit_ui 等）以 scripts/check-test-markers.py 期望表为单一事实来源。
+    # startup→unit_ui 等）以 scripts/_test_redundancy/markers.py 期望表为单一事实来源。
     _warned_files: set[str] = set()
     for item in items:
         item_markers = {m.name for m in item.iter_markers()}
@@ -1148,7 +1148,7 @@ def pytest_collection_modifyitems(config, items):
                     f"[!] 测试文件缺少项目标记（pytestmark）：{fspath}\n"
                     f"    请在文件顶部添加 pytestmark 变量，例如：\n"
                     f"    pytestmark = [pytest.mark.unit, pytest.mark.unit_report]\n"
-                    f"    目录归域以 scripts/check-test-markers.py 期望表为准（特例："
+                    f"    目录归域以 scripts/_test_redundancy/markers.py 期望表为准（特例："
                     f"unit/startup→unit_ui、unit/handlers 与 unit/cache→unit_core）\n"
                     f"    已知标记：{', '.join(sorted(_KNOWN_MARKERS))}"
                 )

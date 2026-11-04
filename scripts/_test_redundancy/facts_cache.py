@@ -28,6 +28,8 @@ from _test_redundancy.self_fulfilling import (
 from _test_redundancy.trivial import (
     check_trivially_true,
 )
+from _test_redundancy import _common
+from _test_redundancy.markers import check_file as _check_marker_file
 from _test_redundancy.weak_mock import (
     check_weak_mock_assertions,
 )
@@ -41,7 +43,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_checklib）
-from _shared.checklib import REPO_ROOT, rel  # noqa: E402
+from _shared.checklib import REPO_ROOT, file_signature as _file_signature, rel  # noqa: E402
 
 
 _CACHE_ENV = "TEST_REDUNDANCY_CACHE"
@@ -58,17 +60,19 @@ def _facts_cache_path() -> Path:
 def _cache_version() -> str:
     """缓存格式/判定逻辑版本：本脚本 + 同目录 _checklib + 解释器大版本，任一变化全量失效。"""
     parts = [f"{sys.version_info[0]}.{sys.version_info[1]}"]
-    for src in (Path(__file__), Path(__file__).resolve().parents[1] / "_shared" / "checklib.py"):
+    logic_files = (
+        Path(__file__),
+        Path(__file__).resolve().parents[1] / "_shared" / "checklib.py",
+        # 标记支路的判定口径（EXPECTED_DIR_MARKERS / 注册集解析）是同源的 per-file 事实，
+        # 改它必须与改本文件一样让缓存全量失效，否则旧「合规」结论会继续命中
+        Path(__file__).with_name("markers.py"),
+    )
+    for src in logic_files:
         try:
             parts.append(hashlib.sha1(src.read_bytes()).hexdigest())
         except OSError:
             parts.append("?")
     return hashlib.sha1("|".join(parts).encode("utf-8")).hexdigest()
-
-
-def _file_signature(path: Path) -> str:
-    st = path.stat()
-    return f"{st.st_size}:{st.st_mtime_ns}"
 
 
 def _load_facts_cache(path: Path) -> dict[str, dict]:
@@ -133,6 +137,7 @@ def _file_facts(path: Path, tree: ast.Module, cases: list[TestCase]) -> dict:
         "params": params,
         "usefix": usefix,
         "entries": [{"sig": body_signature(c), "lineno": c.lineno, "name": c.name} for c in cases],
+        "markers": _check_marker_file(path, _common._TEST_ROOT, tree),
     }
 
 

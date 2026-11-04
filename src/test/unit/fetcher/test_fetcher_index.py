@@ -115,7 +115,7 @@ class TestFetchIndices(unittest.TestCase):
 
         call_count = 0
 
-        def side_effect(key, ttl):
+        def side_effect(key, ttl, **_kwargs):
             nonlocal call_count
             call_count += 1
             if call_count >= 6:  # 第 6 次调用是过期缓存读取（CACHE_WEEKLY）
@@ -201,7 +201,7 @@ class TestFetchUsIndices(unittest.TestCase):
         """新浪+腾讯都失败 → 降级到过期缓存。"""
         stale_data = {"name": "道琼斯(旧)", "price": 34000}
 
-        def cache_get_side_effect(key, ttl):
+        def cache_get_side_effect(key, ttl, **_kwargs):
             if ttl == 604800:  # 过期缓存
                 return stale_data
             return None

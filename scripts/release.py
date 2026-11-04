@@ -14,7 +14,7 @@
 
 退出码：0 = 通过；2 = 预检/门禁发现（与守护脚本 CLI 契约一致）；1 = 执行失败。
 
-耗时埋点：每命令的总墙钟与分步耗时（gate 的回归/十守护/护栏、refresh 的
+耗时埋点：每命令的总墙钟与分步耗时（gate 的回归/守护清单/护栏、refresh 的
 bench/collect/sync、publish 的 P1 verify）追加写入 `logs/release.jsonl`（git 忽略域，
 不入目录树、无门禁依赖），终端尾行同步打印摘要——跨版本对拍直接
 `tail -n 20 logs/release.jsonl`，无需现场重测。
@@ -46,7 +46,7 @@ PLAN_FILE = _MANAGEMENTS_DIR / "plan.md"
 PLAN_DOCS_DIR = REPO_ROOT / "docs" / "plan"
 FOLDERS_FILE = _MANAGEMENTS_DIR / "folders.md"
 
-# P2 十守护清单（与 CLAUDE.md / testplan.md / developer-guide.md / ci.yml / pre-commit 钩子同源）
+# P2 守护清单（与 CLAUDE.md / testplan.md / developer-guide.md / ci.yml / pre-commit 钩子同源）
 GUARD_SCRIPTS = [
     "scripts/check-code-traces.py",
     "scripts/check-doc-traces.py",
@@ -58,6 +58,8 @@ GUARD_SCRIPTS = [
     "scripts/check-version-consistency.py",
     "scripts/check-doc-links.py",
     "scripts/check-file-length.py",
+    "scripts/check-import-surface.py",
+    "scripts/check-script-contract.py",
 ]
 
 #: 发布耗时台账（`logs/` 属 git 忽略域：不入目录树、不进门禁）

@@ -156,11 +156,38 @@ def _fetch_indices_from_sina(uncached: list[str]) -> dict[str, dict[str, Any]]:
     return results
 
 
+#: 行情类会话缓存的域（同一轮运行内同键只取一次，见 fetch_indices / fetch_us_indices）
+_QUOTE_SESSION_DOMAIN = "index_quote"
+
+
 def fetch_indices() -> dict[str, dict[str, Any]]:
     """获取 A 股主要指数行情。
 
-    链路：腾讯财经 → 新浪财经 → 过期缓存
+    链路：会话缓存 → 腾讯财经 → 新浪财经 → 过期缓存
+
+    同一轮运行内重复调用复用会话缓存（`DataSourceRegistry.session_cache`）：行情页与
+    渲染层各自调用时，无会话复用会把同一缓存键记多次未命中、并对上游重复请求。
     """
+    from src.python.core.provider_registry import NOT_FOUND, get_registry
+
+    reg = get_registry()
+    cached_bundle = reg.session_cache_get(_QUOTE_SESSION_DOMAIN, "a_indices")
+    if cached_bundle is not NOT_FOUND:
+        logger.info("[index] A 股指数会话缓存复用（%d 个）", len(cached_bundle))
+        return {code: dict(data) for code, data in cached_bundle.items()}
+
+    indices = _fetch_indices_uncached()
+    reg.session_cache_set(
+        _QUOTE_SESSION_DOMAIN,
+        "a_indices",
+        {code: dict(data) for code, data in indices.items()},
+        source="api",
+    )
+    return indices
+
+
+def _fetch_indices_uncached() -> dict[str, dict[str, Any]]:
+    """A 股指数取数本体（不含会话缓存，入口见 :func:`fetch_indices`）。"""
     indices: dict[str, dict[str, Any]] = {}
 
     # 先行收集已缓存的指数
@@ -196,7 +223,9 @@ def fetch_indices() -> dict[str, dict[str, Any]]:
     still_missing = [c for c in uncached_codes if c not in indices]
     if still_missing:
         for code in still_missing:
-            stale = cache_get(_index_cache_key(code), CACHE_WEEKLY)
+            # 过期兜底读取只作降级判定，不计入命中/未命中统计：同一键的"未命中"
+            # 已在上面那次常规 TTL 读取里记过一次，再计一次会把真实重探噪声放大
+            stale = cache_get(_index_cache_key(code), CACHE_WEEKLY, record_stats=False)
             if stale is not None:
                 stale["_source"] = "stale_cache"
                 indices[code] = stale
@@ -362,8 +391,32 @@ def fetch_index_history(code: str, days: int = 365) -> list[dict] | None:
 def fetch_us_indices() -> dict[str, dict[str, Any]]:
     """获取美股三大指数行情（带重试和备用链路）。
 
-    链路：新浪财经（带 2 次重试）→ 腾讯财经 → 过期缓存
+    链路：会话缓存 → 新浪财经（带 2 次重试）→ 腾讯财经 → 过期缓存
+
+    同一轮运行内重复调用复用会话缓存（`DataSourceRegistry.session_cache`）：本函数在
+    一份报告里被行情页与渲染层各调一次，无会话复用会把 `gb_dji/gb_ixic/gb_inx`
+    各记 3~4 次未命中并重复请求上游。
     """
+    from src.python.core.provider_registry import NOT_FOUND, get_registry
+
+    reg = get_registry()
+    cached_bundle = reg.session_cache_get(_QUOTE_SESSION_DOMAIN, "us_indices")
+    if cached_bundle is not NOT_FOUND:
+        logger.info("[index] 美股指数会话缓存复用（%d 个）", len(cached_bundle))
+        return {code: dict(data) for code, data in cached_bundle.items()}
+
+    indices = _fetch_us_indices_uncached()
+    reg.session_cache_set(
+        _QUOTE_SESSION_DOMAIN,
+        "us_indices",
+        {code: dict(data) for code, data in indices.items()},
+        source="api",
+    )
+    return indices
+
+
+def _fetch_us_indices_uncached() -> dict[str, dict[str, Any]]:
+    """美股指数取数本体（不含会话缓存，入口见 :func:`fetch_us_indices`）。"""
     indices: dict[str, dict[str, Any]] = {}
     expired_cached: dict[str, dict[str, Any]] = {}
 
@@ -374,7 +427,8 @@ def fetch_us_indices() -> dict[str, dict[str, Any]]:
             cached["_source"] = "cache"
             indices[code] = cached
         else:
-            stale = cache_get(cache_key, 604800)
+            # 过期兜底读取不计统计（同上：常规 TTL 读取已记过这次未命中）
+            stale = cache_get(cache_key, 604800, record_stats=False)
             if stale is not None:
                 expired_cached[code] = stale
 

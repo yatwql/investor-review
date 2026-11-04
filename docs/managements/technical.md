@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.16.17
+> 文档版本：0.17.0
 
 ## 目录
 
@@ -994,7 +994,7 @@ with phase_timeout(seconds=120, phase_name="data_fetch") as ctx:
 ```
 fetcher/
 ├── price.py            股票/ETF 最新价 + 场外基金净值 + 00 代码降级
-├── index.py            A 股/美股指数（直调 Provider，不走 Chain）
+├── index.py            A 股/美股指数（直调 Provider，不走 Chain；会话缓存域 `index_quote`）
 │                       + fetch_index_history 历史日线（走 Chain，C6 约束）
 ├── fund.py             基金排名/持仓/基准（天天基金数据 + 同花顺官方备源）
 ├── fund_manager.py     基金经理数据（天天基金 HTML 解析）
@@ -1305,7 +1305,7 @@ cache/
 
 | 函数 | 签名 | 说明 |
 |:-----|:------|:------|
-| `get(key, max_age_seconds)` | `(str, float) → Any\|None` | 先查 `.json.gz`，不存在时回退 `.json`；超龄返回 None |
+| `get(key, max_age_seconds)` | `(str, float) → Any\|None` | 先查 `.json.gz`，不存在时回退 `.json`；超龄返回 None。`record_stats=False` 供**探测/兜底读**用（负缓存探针、陈旧缓存兜底）：这类读不是真实取数需求，计入会让命中率与未命中前缀分布失真 |
 | `set(key, data)` | `(str, Any) → None` | `{"_ts": now, "_data": data}` 序列化 + 原子写入；≥100KB 自动 `.json.gz` |
 | `clear(key)` | `(str) → None` | 同时删除 `.json` 和 `.json.gz` |
 | `get_ttl(data_type)` | `(str) → float` | TTL 分辨率（见下方流程图）；只由数据类型决定（无按 key 抖动、无兼容参数） |
@@ -1356,9 +1356,9 @@ get_ttl(data_type)
 
 **盘中覆盖可见**：若用户同时配了 `cache_ttl.{type}` 而该类型盘中敏感，`get_ttl` 会打一条 INFO（每类型一次）说明"盘中以 `market_hour_ttl` 为准，`cache_ttl` 仅盘后生效"——把静默失效变成可观测。
 
-**负缓存单一样板**：四类确定性缺失（标的正文缺失 / 章节清单不可得 / 该文档无该章节 / provider 404 探测）统一经 `cache/_negative.py::NegativeCache` 登记——调用点只声明「标签 + 键前缀 + TTL 类型」，锁/命中计数/汇总文案由该类统一承接，`cache.negative_cache_entries()` 给出可枚举清单、`nonzero_summaries()` 直接产出报告级汇总行（新增一类负缓存不再复制一份 lock+counter+reset 样板）。
+**负缓存单一样板**：确定性缺失与传输级短退避（标的正文缺失 / 章节清单不可得 / 该文档无该章节 / provider 404 探测 / 基金季报空季度 / 指数历史全链空 / 基金经理主页空与不可达——完整清单见 §缓存域注册表与 `datasource.md` 负缓存表）统一经 `cache/_negative.py::NegativeCache` 登记——调用点只声明「标签 + 键前缀 + TTL 类型」，锁/命中计数/汇总文案由该类统一承接，`cache.negative_cache_entries()` 给出可枚举清单、`nonzero_summaries()` 直接产出报告级汇总行（新增一类负缓存不再复制一份 lock+counter+reset 样板）。
 
-**负缓存同源**：缺失探测类负缓存（`datasink_probe_miss_` 12h、`report_symbol_miss_` 6h、`report_sections_miss_` 6h、`hold_qmiss_` 6h、`idx_hist_miss_` 12h、`idx_hist_backoff_` 1h）登记为正式缓存类型，读侧 TTL、`cleanup_expired` 判定、`cache_ttl` 覆盖与文档表格共用同一注册表条目（未登记时会被按未注册默认 24h 判定，滞留更久且配置不可见）。
+**负缓存同源**：缺失探测类负缓存（`datasink_probe_miss_` 12h、`report_symbol_miss_` 6h、`report_sections_miss_` 6h、`hold_qmiss_` 6h、`idx_hist_miss_` 12h、`idx_hist_backoff_` 1h、`fmgr_miss_` 12h、`fmgr_backoff_` 1h）登记为正式缓存类型，读侧 TTL、`cleanup_expired` 判定、`cache_ttl` 覆盖与文档表格共用同一注册表条目（未登记时会被按未注册默认 24h 判定，滞留更久且配置不可见）。
 
 ### 3.3 原子写入与并发安全
 
@@ -3042,13 +3042,13 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
 
 ### 4.23 测试域归属与门禁纳入纪律
 
-**决策**：测试目录的 marker 归域以 `scripts/check-test-markers.py` 的 `EXPECTED_DIR_MARKERS` 期望表为单一事实来源，且**归域即进门禁**——期望表声明的每一个 `unit_*` 域必须出现在 P1（`--mode verify`）选择器中，`dev-verify`（P0）域集必须 ⊆ P1；快速门禁与合入门禁的差集只允许是「域内子集」维度（`and not (edge or data)`、`scenario_basic`），不允许是「域」维度。
+**决策**：测试目录的 marker 归域以 `scripts/_test_redundancy/markers.py` 的 `EXPECTED_DIR_MARKERS` 期望表为单一事实来源，且**归域即进门禁**——期望表声明的每一个 `unit_*` 域必须出现在 P1（`--mode verify`）选择器中，`dev-verify`（P0）域集必须 ⊆ P1；快速门禁与合入门禁的差集只允许是「域内子集」维度（`and not (edge or data)`、`scenario_basic`），不允许是「域」维度。
 
 **动机**：门禁档位按 marker 表达式筛选，「改域=门禁搬家」——归域调整若与选择器漂移，用例会静默脱离回归覆盖（审计中实际发现两例：`unit` 曾在 `pytest_configure` 漏注册致 `unit` 通配表达式匹配全空，unit_* 全集 10,136 条不进任何档位；TUI/CLI 域曾不在 `verify` 选择器）。另需防止「为进门禁而蹭域」的语义漂移反弹——归域特例必须显式登记。
 
 **已登记归域特例**：`unit/handlers`（TUI 处理层）与 `unit/cache`（存储/IO 基础设施）取 `unit_core`（无专属域，归核心域搭车门禁，子集语义「至少命中其一」）；`unit/startup`（首次运行交互引导）取 `unit_ui`。conftest 缺标记警告文案同步指向期望表，新增/调整特例须同批更新期望表与本节。
 
-**守护**：`test_check_test_markers.py::TestP1GateCoversDeclaredDomains` 双结构锁（期望表全部 unit_* 域 ∈ verify 选择器；P0 域集 ⊆ P1）——域集合从期望表/模式注册表动态派生，不写死域数（测试真值单一来源纪律）。场景侧同源机制：`scenario` 目录×裸 `scenario` marker 收集期双向硬拦截（见 conftest）。
+**守护**：`test_marker_compliance.py::TestP1GateCoversDeclaredDomains` 双结构锁（期望表全部 unit_* 域 ∈ verify 选择器；P0 域集 ⊆ P1）——域集合从期望表/模式注册表动态派生，不写死域数（测试真值单一来源纪律）。场景侧同源机制：`scenario` 目录×裸 `scenario` marker 收集期双向硬拦截（见 conftest）。
 
 [↑ 回到顶部](#目录)
 
@@ -3816,7 +3816,7 @@ web/ (Web 服务层，薄入口)
 | # | 约束 | 设计目的 | 违反后果 | 适用范围 |
 |:---|:-----|:---------|:---------|:---------|
 | **C1** | **代码类型判定中心化** — 所有资产代码类型判定必须使用 `core/code_utils.py` 提供的函数，禁止任何模块自行实现判定逻辑 | 系统 20+ 处需要判断资产类型（A 股/ETF/基金/QDII/港股/债券等），分散判定导致代码前缀知识散落，"魔法判定"遍地，新增资产类型时需全局搜索替换 | 代码评审不通过；新增资产类型时遗漏大量散落判定点 | 所有涉及代码类型判定的模块（fetcher/、report/、llm/、config/ 等）；含「按代码前缀分类资产类型」与「判定代码是否合法」两类判定，一律复用 `core/code_utils.py` 的判定函数，不得自建前缀表或白名单 |
-| **C4** | **会话级 API 复用** — 同次会话内同一 API 返回的数据必须通过 `DataSourceRegistry.session_cache` 复用，禁止重复 HTTP 请求 | 避免同一资产在多个模块中重复请求相同 API 数据，降低 API 限频风险，提升性能 | API 调用量膨胀、触发限频、报告生成时间增长 | 所有通过 Provider 获取数据的模块 |
+| **C4** | **会话级 API 复用** — 同次会话内同一 API 返回的数据必须通过 `DataSourceRegistry.session_cache` 复用，禁止重复 HTTP 请求（行情类整包取数用域 `index_quote`：`fetch_indices`/`fetch_us_indices` 的包装层按 `a_indices`/`us_indices` 存整包，同一轮只取一次） | 避免同一资产在多个模块中重复请求相同 API 数据，降低 API 限频风险，提升性能 | API 调用量膨胀、触发限频、报告生成时间增长 | 所有通过 Provider 获取数据的模块 |
 | **C5** | **HTTP 客户端统一** — 所有 HTTP 请求必须使用 `core/http_client.py` 工厂方法创建客户端实例 | 统一 SSL 配置、超时策略、连接池管理；防止各模块自行构造 request 导致配置散落、连接池泄漏。该工厂同时是**数据源记录-回放（cassette）的唯一注入点**（§2.6）：绕过工厂自建客户端的 provider 不受回放替换，回放用例会**真实联网并静默通过**——离线保证随之失效 | SSL 配置不一致、连接泄漏、重试策略不统一；绕过工厂的请求使 cassette 回放静默失效（测试实际联网而无人察觉） | 所有发起 HTTP 请求的模块（providers/、llm/） |
 | **C6** | **Provider Chain 必经** — 大多数数据获取必须通过 `fetch_with_fallback()` 走 Chain 路由，不得直接调用 Provider 函数 | 跳过 Chain 直接调用 Provider 会导致熔断器不被激活（故障后无冷却恢复）、fallback 链路断路（某 Provider 失败时不会自动递补）、日志审计缺失 | 熔断器失效、fallback 断路、故障记录缺失 | fetcher/ 各模块（例外：index.py 直调 Provider 的双链路 fallback 硬编码，熔断器不适用于指数场景）；report/ 与 analysis/ 层取估值/行业等外部数据必须经 fetcher 网关入口（如 `fetcher/industry.py::fetch_valuation_fields`），不得 import `providers.*` 直连 |
 | **C24** | **凭据值不落日志与产物** — 需要凭据的数据源必须经 `core/datasource_credential.py` 登记声明（源标识 + 环境变量名 + 申请地址），凭据值只从环境变量读取；对外一律只暴露「环境变量名 + 是否就绪」，**凭据值永不落日志、永不写入报告/缓存**。未就绪的源由链路主动跳过并给出「缺什么、去哪申请」，不得当作「源不可达」反复重试或计入熔断 | 凭据一旦出现在日志/报告/缓存中，即随日志文件、报告产物、问题反馈与截图外泄，且事后无法区分「是否已泄露」；把配置级缺失（key 没配）混入可用性统计，会污染数据源可用性矩阵的语义——用户看到的是「源不稳定」而非「你没配 key」 | 凭据泄露（日志/报告被复制、上传、粘贴即泄露）；用户据失真的可用性矩阵排查错误方向，反复重试注定失败的请求 | providers/ 各数据源、`fetcher/chain.py`（未就绪主动跳过且不计熔断）、`core/check_sources.py`、`core/doctor.py`、`core/datasource_credential.py`（唯一声明点） |
@@ -3899,7 +3899,7 @@ web/ (Web 服务层，薄入口)
 | LLM 响应解析 | `llm/_api_responses.py` | `llm/api_base.py` 公共 API | llm / report | 公共常量/函数保留；内部 helper 直接导入 owner |
 | Web 生成 / 健康路由 | `web/run_generation.py`、`web/handlers_health.py` | `web/handlers.py` 仅路由聚合 | web / tests | 测试 patch 指向 owner；门面不再转出私有实现 |
 
-**登记例外**（保留理由见代码注释与 `check-import-surface` 观察期）：
+**登记例外**（保留理由见代码注释与 `check-import-surface` 的例外登记口径）：
 
 - `analysis/__init__.py`、`core/registry.py`、`llm/__init__.py`、`llm/fact_checker/__init__.py`：包级公共聚合面，`__all__` 只列公共 API；其中 `noqa: F401` 为门面再导出。
 - `providers/sina.py` 的 `fetch_kline` / `fetch_index_kline`：`fetcher/chain_incremental.py` 按 provider 名动态 `getattr`，属动态调度面而非普通转发。
@@ -3914,7 +3914,7 @@ web/ (Web 服务层，薄入口)
 
 **`noqa: F401` 保留口径**：包级公共聚合面（`analysis/__init__.py`、`core/registry.py`、`llm/__init__.py`、`llm/fact_checker/__init__.py`）的公开 API 再导出；动态调度面（`providers/sina.py` 的 K 线函数供 chain 按 provider 名 `getattr`）；显式副作用/类型导入。新增 `noqa: F401` 须在行内写明理由；测试私有导入只允许指向 owner。
 
-**机检**：`scripts/check-import-surface.py`（观察期，规则 compat-comment / private-all / cross-private / dynamic-target）；包 `__all__` 私有名、兼容注释、跨包私有导入当前
+**机检**：`scripts/check-import-surface.py`（守护清单成员，规则 compat-comment / private-all / cross-private / dynamic-target + exception-table）；包 `__all__` 私有名、兼容注释、跨包私有导入当前
 
 ### 9.1 模块门面 re-export 面与退出条件
 
@@ -3983,7 +3983,7 @@ web/ (Web 服务层，薄入口)
 
 **盘中特殊**：交易时段内价格/指数类走短 TTL，收盘后回落日级 TTL；收市后只读缓存（CACHE_ONLY）避免取到收盘价当实时价。
 
-**负缓存纪律**：只在**确定性**缺失（404/空正文/标的无此章节）时落负缓存，传输级失败不落（否则一次抖动会把该标的静默屏蔽整个负缓存周期）；负缓存 TTL 短于正缓存，且按标的/（文档,章节）粒度分区。
+**负缓存纪律**：分两级——**确定性缺失**（404/空正文/标的无此章节）落长 TTL 的 `*_miss`（6~12h）；**传输级失败**（握手/连接/读超时）只允许落 `*_backoff` 短退避（≤1h，恢复后自动重取），不得落长 TTL，否则一次抖动会把该标的静默屏蔽整个负缓存周期。新增一类须成对命名与登记（`*_miss` / `*_backoff`），前缀不得被其他已登记前缀包含；负缓存 TTL 短于正缓存，且按标的/（文档,章节）粒度分区。
 
 **托管边界**：缓存引擎只清理自己写入的包封文件；脚本自管产物（性能/健康历史等）落在同一目录时由各自模块负责保留策略。
 
@@ -4092,7 +4092,7 @@ web/ (Web 服务层，薄入口)
 
 > `data_freshness`（数据可信度诊断，C19 契约）：`{"available": bool, "items": list[dict], "abnormal_count": int, "summary": str, "trading_day": str, "prev_trading_day": str}`。`trading_day`/`prev_trading_day` 为本次判定所依据的最近交易日与其前一交易日，随契约一并回传——消费方判断新鲜度必须以其为基准，不得以运行时刻替代（报告可在非交易日运行，运行时刻与最近交易日天然相差一个自然日，用自然日差会把正常的 T-1 净值误报为延迟）；体检报告「数据质量」维度即消费此二字段构造基准行。`items` 每项含 code/name/account/freshness/freshness_label/reason/jump/jump_label/change_pct；freshness 取值 `fresh`（净值=当日）/`cached`（=上一交易日，正常 T-1）/`stale`（更早或缺失）/`degraded`（无有效行情）。单日跳变仅对 fresh/cached 品种判定（|涨跌幅| ≥ ±20% 标记 jump，label「疑似数据错误（单日 +X.XX%）」），stale/degraded 跳过以免跨非交易日累计涨跌误报。由 `core/data_freshness.py`（`classify_freshness`/`detect_price_jumps`/`build_freshness_summary`）计算，交易日依据 `core/trading_calendar.py::get_last_trading_day/get_prev_trading_day`（akshare 日历缓存；`report/market_value.py` 按原公共名重新导出保持既有导入路径，实现已下沉至 `core/` 供各层共用）。由 `report/orchestrator.py::prepare_report_data` 组装，both 路径在 `_report_generation.py` 直接以 `build_freshness_summary` 注入。消费方：数据质量仪表盘（内置恒开、无开关，「可信度」区块 + 报告头部「N 个品种数据异常」摘要行，Excel 见 `report/data_quality_sheet.py`、HTML 见模板 `report_template.html`）；basic 路径无行情数据时 available=False，可信度区块落降级占位。
 
-> `fund_flow_data`（成本流水，C19 契约，功能开关 `cost_lots` 默认关）：`{"available": bool, "xirr": dict\|None, "cost_tiers": dict\|None, "dividends": dict\|None}`。`xirr` 含 `{"rate": float\|None, "ok": bool, "message": str}`（资金加权收益率，Newton-Raphson + bisection 回退，natural-day 年化 `t=days/365`，投资者视角现金流）；`cost_tiers` 含 `{"available": bool, "per_code": {code: {"low"/"high"/"unpriced": {"shares", "cost"}}}}`（成本分档，批次成本价 ≤ 市价 → 低成本档、> 市价 → 高成本档、无市价单列未分档，由 `analysis/cost_flow.compute_cost_tiers` 计算）；`dividends` 含 `{"available": bool, "per_code": {code: 分红累计金额}}`（分红现金流累计）。由 `analysis/cost_flow.py::build_fund_flow_data(transactions, dividends, holdings, current_prices)` 计算（纯计算层，不依赖 report/），在 Excel 渲染层 `report/excel_market_data.py::_build_flow_data` 基于交易/分红流水组装（开关关闭或流水为空 → None，汇总/持仓明细与分类页签保持既有输出）。消费方（Excel 汇总/市值/分类页签，开关开启时）：「投资分析汇总」盈亏汇总末尾追加「资金加权收益率 (XIRR)」行（无可用现金流写「未录入流水/无法计算」占位）、「持仓明细与分类」区块①追加「资金加权成本」列（批次成本价按份额加权，`report/holdings_detail_sheet.py::_weighted_avg_cost`）、区块②追加「成本分档」「分红累计」子列（`report/category.py::_tier_label` + `div_sum` 小计/总计）。数据入口：持仓 Excel 可选「交易流水」「分红流水」页签（`core/reader.py::read_holdings_with_flows`，不破坏既有 4 列），经 `report/orchestrator.generate_report(transactions=..., dividends=...)` 贯穿。
+> `fund_flow_data`（成本流水，C19 契约，功能开关 `cost_lots` 默认关）：`{"available": bool, "xirr": dict\|None, "cost_tiers": dict\|None, "dividends": dict\|None}`。`xirr` 含 `{"rate": float\|None, "ok": bool, "message": str}`（资金加权收益率，Newton-Raphson + bisection 回退，natural-day 年化 `t=days/365`，投资者视角现金流）；`cost_tiers` 含 `{"available": bool, "per_code": {code: {"low"/"high"/"unpriced": {"shares", "cost"}}}}`（成本分档，**净成本单价** ≤ 市价 → 低成本档、> 市价 → 高成本档、无市价单列未分档；净成本 = Σ(买入+费用) − Σ(卖出−费用)，不做批次追踪，由 `analysis/cost_flow.compute_cost_tiers` 计算）；`dividends` 含 `{"available": bool, "per_code": {code: 分红累计金额}}`（分红现金流累计）。由 `analysis/cost_flow.py::build_fund_flow_data(transactions, dividends, holdings, current_prices)` 计算（纯计算层，不依赖 report/），在 Excel 渲染层 `report/excel_market_data.py::_build_flow_data` 基于交易/分红流水组装（开关关闭或流水为空 → None，汇总/持仓明细与分类页签保持既有输出）。消费方（Excel 汇总/市值/分类页签，开关开启时）：「投资分析汇总」盈亏汇总末尾追加「资金加权收益率 (XIRR)」行（无可用现金流写「未录入流水/无法计算」占位）、「持仓明细与分类」区块①追加「资金加权成本」列（各档成本价按份额加权，`report/holdings_detail_sheet.py::_weighted_avg_cost`）、区块②追加「成本分档」「分红累计」子列（`report/category.py::_tier_label` + `div_sum` 小计/总计）。数据入口：持仓 Excel 可选「交易流水」「分红流水」页签（`core/reader.py::read_holdings_with_flows`，不破坏既有 4 列；日期单元格文本与 Excel 原生日期类型均可，读取侧 `_coerce_flow_date` 统一归一为 `YYYY-MM-DD`，`_valid_date` 另按日历校验拒绝 `2026-13-01` 一类形态合法但日期不存在的行），经 `report/orchestrator.generate_report(transactions=..., dividends=...)` 贯穿。
 
 > `prosperity_framework_data`（景气度框架诊断，C19 契约，常规功能 `prosperity_framework` 默认开）：`{"available": bool, "reason": str, "total_score": int, "scored_weight": int, "max_score": int, "total_score_pct": int, "rating": str, "rating_label": str, "dimensions": list[dict], "holdings_view": list[dict], "concentration_pct": float\|None, "turnover_proxy_pct": float\|None, "unverified": list[str], "partial_notes": list[str], "notes": list[str]}`。`dimensions` 每项含 `key`/`name`/`score`/`max_score`/`status`（scored/partial/unverified）/`evidence`/`unverified`；六维 = 景气方向/通胀属性 25 + ROE 低位弹性 20 + 全球视野/中国比较优势 15 + 流动性 10 + 集中度与周期拼接 15 + 业绩与回撤印证 15。**总分口径**：只累计 `status != unverified` 的维度（`scored_weight`），`total_score_pct = total_score / scored_weight`，评级四档（≥80 高度契合 / 60–79 较契合 / 40–59 部分契合 / <40 不契合）；缺数据维度进 `unverified` 且**不计分、不臆造**。输入全部取自既有能力（`penetration_data` 板块/概念、`financial_indicator_data` ROE、`check_liquidity` 变现天数、历史快照换手代理、`history_data` 收益与回撤；②维基金层扩展另取 `fund_roe_estimates`（基金重仓股 ROE 加权推演值，仅对无直接 ROE 的权益类基金生效，证据/持仓视角/契约 notes 均标注「按框架推演」）。由 `analysis/prosperity_framework.py::build_prosperity_framework_data` 计算、`report/_report_aux_metrics.py::compute_prosperity_framework_data` 组装（开关关闭返回 None → 契约缺席）。消费方：行动建议章内嵌块（HTML `partials/action_section.html` ⑥ / Excel `report/action_sheet.py::_write_prosperity_block`）。方法骨架借鉴开源项目 zhengxi-views（MIT），设计文档随该功能一并归档（索引见 `docs/managements/folders.md` 目录树）。
 >

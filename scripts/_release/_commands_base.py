@@ -324,7 +324,7 @@ def _run_step(label: str, cmd: list[str], root: Path, runner=None) -> int:
 
 
 def _gate_workers() -> int:
-    """十守护并行度：4 路封顶、随核数收敛——弱机器（如 2 核）自动降路，避免 CPU 超订反而拖慢总墙钟。"""
+    """守护清单并行度：4 路封顶、随核数收敛——弱机器（如 2 核）自动降路，避免 CPU 超订反而拖慢总墙钟。"""
     return max(1, min(4, os.cpu_count() or 4))
 
 

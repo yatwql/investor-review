@@ -44,6 +44,16 @@ def _make_file(root: Path, rel_path: str, lines: int) -> Path:
     return path
 
 
+def _empty_registry(root: Path) -> Path:
+    """把 REPO_ROOT 改指临时树时，登记表须一并重定向（否则真表指向的文件全「不存在」）。"""
+    doc = root / "review-findings.md"
+    doc.write_text(
+        "# review-findings\n\n### P4 — 持续监控：文件膨胀登记\n\n| 文件 | 现状 |\n|---|---|\n\n## 已解决问题\n",
+        encoding="utf-8",
+    )
+    return doc
+
+
 class TestThresholdBoundary:
     """阈值边界：恰好等于上限不算违规，超出一行即违规。"""
 
@@ -158,6 +168,7 @@ class TestCliContract:
     def test_clean_tree_exits_zero(self, length_script, tmp_path, monkeypatch, capsys):
         _make_file(tmp_path, "src/python/small.py", 10)
         monkeypatch.setattr(length_script, "REPO_ROOT", tmp_path)
+        monkeypatch.setattr(length_script, "REGISTRY_DOC", _empty_registry(tmp_path))
         monkeypatch.setattr(sys, "argv", ["check-file-length.py", "--ci"])
         assert length_script.main() == 0
         assert "[OK]" in capsys.readouterr().out
@@ -173,6 +184,7 @@ class TestCliContract:
         path = _make_file(tmp_path, "src/python/huge.py", length_script.MAIN_SOURCE_LIMIT + 1)
         monkeypatch.setattr(length_script, "REPO_ROOT", tmp_path)
         monkeypatch.setattr(length_script, "EXEMPTIONS", {length_script.rel(path): "挂账说明"})
+        monkeypatch.setattr(length_script, "REGISTRY_DOC", _empty_registry(tmp_path))
         monkeypatch.setattr(sys, "argv", ["check-file-length.py", "--ci"])
         assert length_script.main() == 0
 
@@ -248,3 +260,55 @@ class TestPriorityInventory:
         rows = length_script.priority_inventory(records, {})
         assert len(rows) == 2
         assert all("0 次" in row for row in rows)
+
+
+class TestRegistryDrift:
+    """review-findings P4 登记表同实：登记行数须等于实测（表腐化即 finding）。"""
+
+    @staticmethod
+    def _use_registry(length_script, monkeypatch, tmp_path, rows: list[tuple[str, int]], section: bool = True):
+        doc = tmp_path / "review-findings.md"
+        body = "## 已解决问题\n"
+        if section:
+            body = (
+                "### P4 — 持续监控：文件膨胀登记\n\n"
+                "| 文件 | 现状与拆分方向 |\n|------|----------------|\n"
+                + "".join(f"| `{path}` {lines} 行（登记线 700） | 拆分方向 |\n" for path, lines in rows)
+                + "\n"
+                + body
+            )
+        doc.write_text("# review-findings\n\n" + body, encoding="utf-8")
+        monkeypatch.setattr(length_script, "REGISTRY_DOC", doc)
+        return doc
+
+    def test_drift_reported_with_both_numbers(self, length_script, monkeypatch, tmp_path):
+        _make_file(tmp_path, "src/python/big.py", 713)
+        self._use_registry(length_script, monkeypatch, tmp_path, [("src/python/big.py", 700)])
+        findings = length_script.check_registry_lines(tmp_path)
+        assert len(findings) == 1
+        assert "700" in findings[0] and "713" in findings[0]
+
+    def test_matching_registry_passes(self, length_script, monkeypatch, tmp_path):
+        _make_file(tmp_path, "src/python/big.py", 700)
+        self._use_registry(length_script, monkeypatch, tmp_path, [("src/python/big.py", 700)])
+        assert length_script.check_registry_lines(tmp_path) == []
+
+    def test_missing_registered_file_reported(self, length_script, monkeypatch, tmp_path):
+        """拆分/改名后登记行未删——登记表指向不存在的文件。"""
+        self._use_registry(length_script, monkeypatch, tmp_path, [("src/python/gone.py", 750)])
+        findings = length_script.check_registry_lines(tmp_path)
+        assert any("gone.py" in finding and "无法核对" in finding for finding in findings)
+
+    def test_missing_section_reported(self, length_script, monkeypatch, tmp_path):
+        """标题结构变更会让登记表静默失配——锚点失配须显式报。"""
+        self._use_registry(length_script, monkeypatch, tmp_path, [], section=False)
+        findings = length_script.check_registry_lines(tmp_path)
+        assert any("P4" in finding for finding in findings)
+
+    def test_main_exits_two_on_registry_drift(self, length_script, monkeypatch, tmp_path, capsys):
+        _make_file(tmp_path, "src/python/big.py", 705)
+        self._use_registry(length_script, monkeypatch, tmp_path, [("src/python/big.py", 700)])
+        monkeypatch.setattr(length_script, "REPO_ROOT", tmp_path)
+        monkeypatch.setattr(sys, "argv", ["check-file-length.py", "--ci"])
+        assert length_script.main() == 2
+        assert "big.py" in capsys.readouterr().out

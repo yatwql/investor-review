@@ -8,8 +8,10 @@
   1. XIRR 资金加权收益：现金流时点加权内部收益率（Newton-Raphson + 二分兜底）。
      现金流口径（投资者视角）：买入/申购为负（资金流出），卖出/赎回与分红
      到账为正（资金流入），期末市值为正（资金收回）。分红按登记日份额纳入时点效应。
-  2. 成本分档：交易流水按代码 FIFO 合并成本批次（lot），相对当前市价分
-     低成本/高成本档（支持分档止盈与「是否追高加仓」判断）；无市价品种单列。
+  2. 成本分档：交易流水按代码合并为**净成本**持仓（卖出回收冲减成本总额，
+     不做批次追踪——卖方流水可能不全，与持仓录入的卖出重算同口径），净成本
+     单价相对当前市价分低成本/高成本档（支持分档止盈与「是否追高加仓」判断）；
+     无市价品种单列。
   3. 分红累计：按代码汇总分红金额（每份分红×登记日份额，份额未知回退当前持仓）。
 
 数据契约 `fund_flow_data`（pipeline_data 键，`build_fund_flow_data` 输出）：
@@ -41,7 +43,7 @@ logger = logging.getLogger("invest")
 __all__ = [
     "solve_xirr",
     "build_xirr_cashflows",
-    "build_cost_lots",
+    "build_net_cost_positions",
     "compute_cost_tiers",
     "compute_dividend_totals",
     "build_fund_flow_data",
@@ -57,7 +59,7 @@ _BISECT_STEPS = 200
 _BISECT_SCAN = (-0.9999, -0.5, 0.0, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0)
 # 自然日年化基准
 _DAYS_PER_YEAR = 365.0
-# 份额比较容差（FIFO 扣减）
+# 份额比较容差（净份额累加的浮点余量）
 _EPS = 1e-9
 
 
@@ -239,51 +241,41 @@ def build_xirr_cashflows(
 
 
 # ─────────────────────────────────────────────────────────────
-#  成本分档（FIFO 批次）
+#  成本分档（净成本单价 vs 市价）
 # ─────────────────────────────────────────────────────────────
 
 
-def build_cost_lots(transactions: list[TradeRecord]) -> dict[str, Any]:
-    """交易流水按代码 FIFO 合并成本批次（lot）。
+def build_net_cost_positions(transactions: list[TradeRecord]) -> dict[str, Any]:
+    """交易流水按代码合并为**净成本**持仓（卖出回收冲减成本总额）。
 
-    买入流水生成批次（成本价 = 价格 + 费用/份额摊薄）；卖出流水按
-    FIFO 扣减批次份额。返回剩余批次即当前持仓的成本结构（供分档用）。
+    口径（与持仓录入 `core/holdings_editor.py` 的卖出重算一致）：卖方不保证录入完整
+    流水，故不做批次追踪，只按「回收多少就冲减多少成本」——净成本 =
+    Σ(买入金额+费用) − Σ(卖出金额−费用)，单位净成本 = 净成本 / 净份额；
+    回收超过成本（净成本 ≤ 0）时成本记 0，不产生负成本。
 
     Args:
         transactions: 交易流水记录
 
     Returns:
-        {"available": bool, "lots": {code: [{"date", "shares", "cost_price"}]}}
-        无买入流水或全部批次被卖出清空时 available=False。
+        {"available": bool, "positions": {code: {"shares", "cost", "cost_price"}}}
+        无买入流水或净份额归零时 available=False。
     """
-    lots: dict[str, list[dict[str, Any]]] = {}
-    has_buy = False
-    for t in sorted(transactions, key=lambda x: (_as_date(x.date) or _dt.date.min, x.code)):
-        if t.action == "buy":
-            has_buy = True
-            cost_price = t.price + (t.fee / t.shares if t.shares > 0 else 0.0)
-            lots.setdefault(t.code, []).append(
-                {
-                    "date": (_as_date(t.date) or _dt.date.min).isoformat(),
-                    "shares": t.shares,
-                    "cost_price": cost_price,
-                }
-            )
-        elif t.action == "sell":
-            queue = lots.get(t.code)
-            if not queue:
-                continue
-            remaining = t.shares
-            while remaining > _EPS and queue:
-                lot = queue[0]
-                if lot["shares"] <= remaining:
-                    remaining -= lot["shares"]
-                    queue.pop(0)
-                else:
-                    lot["shares"] -= remaining
-                    remaining = 0.0
-    has_lots = has_buy and any(queue for queue in lots.values())
-    return {"available": has_lots, "lots": lots}
+    amounts: dict[str, float] = {}
+    shares: dict[str, float] = {}
+    for t in transactions:
+        delta_shares = t.shares if t.action == "buy" else -t.shares
+        # 买入：支出（含费用）计入成本；卖出：回收（扣费用）冲减成本
+        delta_cost = (t.price * t.shares + t.fee) if t.action == "buy" else -(t.price * t.shares - t.fee)
+        shares[t.code] = shares.get(t.code, 0.0) + delta_shares
+        amounts[t.code] = amounts.get(t.code, 0.0) + delta_cost
+
+    positions: dict[str, dict[str, float]] = {}
+    for code, held in shares.items():
+        if held <= _EPS:
+            continue
+        net_cost = max(0.0, amounts.get(code, 0.0))
+        positions[code] = {"shares": held, "cost": net_cost, "cost_price": net_cost / held}
+    return {"available": bool(positions), "positions": positions}
 
 
 def compute_cost_tiers(
@@ -292,9 +284,10 @@ def compute_cost_tiers(
 ) -> dict[str, Any]:
     """成本分档（低成本/高成本档，相对当前市价）。
 
-    档位口径：批次成本价 ≤ 当前市价 → 低成本档（盈利在握，可止盈）；
+    档位口径：**净成本单价** ≤ 当前市价 → 低成本档（盈利在握，可止盈）；
     > 当前市价 → 高成本档（浮亏，追高加仓）；无市价品种单列「未分档」，
-    不计入档位占比。
+    不计入档位占比。净成本即「买入支出 − 卖出回收」，不要求完整流水（卖方可能
+    只录了近期几笔），故不按批次分档。
 
     Args:
         transactions: 交易流水记录
@@ -315,31 +308,30 @@ def compute_cost_tiers(
         "totals": {"low": _tier_zero(), "high": _tier_zero(), "unpriced": _tier_zero()},
         "high_cost_ratio": 0.0,
     }
-    lots_data = build_cost_lots(transactions)
-    if not lots_data["available"]:
+    positions_data = build_net_cost_positions(transactions)
+    if not positions_data["available"]:
         return empty
 
     prices = current_prices or {}
     per_code: dict[str, dict[str, Any]] = {}
     totals = {"low": _tier_zero(), "high": _tier_zero(), "unpriced": _tier_zero()}
 
-    for code, lots in lots_data["lots"].items():
+    for code, position in positions_data["positions"].items():
         price = prices.get(code)
         buckets = {"low": _tier_zero(), "high": _tier_zero(), "unpriced": _tier_zero()}
-        for lot in lots:
-            shares = lot["shares"]
-            cost = lot["cost_price"] * shares
-            market = shares * price if price is not None else 0.0
-            if price is None:
-                bucket = "unpriced"
-            elif lot["cost_price"] <= price:
-                bucket = "low"
-            else:
-                bucket = "high"
-            b = buckets[bucket]
-            b["shares"] += shares
-            b["cost"] += cost
-            b["market_value"] += market
+        shares = position["shares"]
+        cost = position["cost"]
+        market = shares * price if price is not None else 0.0
+        if price is None:
+            bucket = "unpriced"
+        elif position["cost_price"] <= price:
+            bucket = "low"
+        else:
+            bucket = "high"
+        b = buckets[bucket]
+        b["shares"] += shares
+        b["cost"] += cost
+        b["market_value"] += market
         per_code[code] = buckets
         for bucket in ("low", "high", "unpriced"):
             _merge_tier(totals[bucket], buckets[bucket])

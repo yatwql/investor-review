@@ -5,7 +5,7 @@
     空输入 / 长度不一致 / 日期非法 / 全部同一天返回 None；不同初始猜测收敛一致
   - `build_xirr_cashflows`：买入负 / 卖出正 / 分红正 / 期末市值正、按日期升序；
     无流水返回 None；分红份额未知回退当前持仓；费用计入
-  - `build_cost_lots`：单笔买入 / 多笔买入 FIFO / 卖出扣减 / 无买入不可用
+  - `build_net_cost_positions`：单笔买入 / 卖出回收冲减净成本 / 超额回收钳 0 / 无买入或份额归零不可用
   - `compute_cost_tiers`：相对市价低/高/未分档划分、组合级合计与追高占比
   - `compute_dividend_totals`：按代码汇总、无持仓份额回退跳过
   - `build_fund_flow_data`：数据契约形状（available 与子数据联动）
@@ -24,7 +24,7 @@ import pytest
 
 from src.python.analysis.cost_flow import (
     build_approximate_fund_flow_data,
-    build_cost_lots,
+    build_net_cost_positions,
     build_fund_flow_data,
     build_xirr_cashflows,
     compute_cost_tiers,
@@ -196,52 +196,61 @@ def test_cashflows_fee_included():
 
 
 # ─────────────────────────────────────────────────────────────
-#  build_cost_lots
+#  build_net_cost_positions
 # ─────────────────────────────────────────────────────────────
 
 
-def test_cost_lots_single_buy():
-    """单笔买入 -> 单批次，成本价含费用摊薄。"""
+def test_net_cost_single_buy_includes_fee():
+    """单笔买入 → 净成本含费用摊薄（单位净成本 = 价格 + 费用/份额）。"""
     tx = [_trade("600900", "2025-01-05", "buy", 200, 25.0, fee=5.0)]
-    data = build_cost_lots(tx)
+    data = build_net_cost_positions(tx)
     assert data["available"] is True
-    lots = data["lots"]["600900"]
-    assert len(lots) == 1
-    assert lots[0]["shares"] == pytest.approx(200.0)
-    assert lots[0]["cost_price"] == pytest.approx(25.0 + 5.0 / 200.0)
+    pos = data["positions"]["600900"]
+    assert pos["shares"] == pytest.approx(200.0)
+    assert pos["cost"] == pytest.approx(200 * 25.0 + 5.0)
+    assert pos["cost_price"] == pytest.approx(25.0 + 5.0 / 200.0)
 
 
-def test_cost_lots_fifo_sell_consumes():
-    """多笔买入 + 卖出 FIFO 扣减（先买先卖）。"""
+def test_net_cost_sell_recovery_reduces_unit_cost():
+    """卖出回收冲减成本总额（不做批次追踪）：净成本 = 买入支出 − 卖出回收。"""
     tx = [
         _trade("600900", "2025-01-05", "buy", 100, 20.0),
         _trade("600900", "2025-02-05", "buy", 100, 30.0),
         _trade("600900", "2025-03-05", "sell", 150, price=28.0),
     ]
-    data = build_cost_lots(tx)
-    assert data["available"] is True
-    lots = data["lots"]["600900"]
-    # 卖出 150 扣减第一批 100 + 第二批 50
-    assert len(lots) == 1
-    assert lots[0]["shares"] == pytest.approx(50.0)
-    assert lots[0]["cost_price"] == pytest.approx(30.0)
+    data = build_net_cost_positions(tx)
+    pos = data["positions"]["600900"]
+    assert pos["shares"] == pytest.approx(50.0)
+    # 5000 − 150×28 = 800 → 单位净成本 16.0（FIFO 口径此处会是 30.0）
+    assert pos["cost"] == pytest.approx(800.0)
+    assert pos["cost_price"] == pytest.approx(16.0)
 
 
-def test_cost_lots_sell_all_empty_unavailable():
-    """卖出清空全部批次 -> available=False。"""
+def test_net_cost_excess_recovery_clamped_to_zero():
+    """回收超过成本总额 → 净成本钳制为 0（不产生负成本）。"""
+    tx = [
+        _trade("600900", "2025-01-05", "buy", 100, 20.0),
+        _trade("600900", "2025-03-05", "sell", 90, price=40.0),  # 回收 3600 > 2000
+    ]
+    pos = build_net_cost_positions(tx)["positions"]["600900"]
+    assert pos["cost"] == pytest.approx(0.0)
+    assert pos["cost_price"] == pytest.approx(0.0)
+
+
+def test_net_cost_sell_all_unavailable():
+    """卖出清空份额 → available=False。"""
     tx = [
         _trade("600900", "2025-01-05", "buy", 100, 20.0),
         _trade("600900", "2025-03-05", "sell", 100, price=28.0),
     ]
-    data = build_cost_lots(tx)
-    assert data["available"] is False
+    assert build_net_cost_positions(tx)["available"] is False
 
 
-def test_cost_lots_no_buy_unavailable():
-    """无买入流水 -> available=False。"""
+def test_net_cost_no_buy_unavailable():
+    """无买入流水（或空流水）→ available=False：只凭卖出算不出成本。"""
     tx = [_trade("600900", "2025-03-05", "sell", 100, price=28.0)]
-    assert build_cost_lots(tx)["available"] is False
-    assert build_cost_lots([])["available"] is False
+    assert build_net_cost_positions(tx)["available"] is False
+    assert build_net_cost_positions([])["available"] is False
 
 
 # ─────────────────────────────────────────────────────────────
@@ -249,21 +258,33 @@ def test_cost_lots_no_buy_unavailable():
 # ─────────────────────────────────────────────────────────────
 
 
-def test_cost_tiers_low_high_split():
-    """相对市价低/高成本档划分与组合合计、追高占比。"""
+def test_cost_tiers_classifies_by_net_unit_cost():
+    """按**净成本单价**整体归档：两笔买入合并成一个净成本，与市价比较后整码归入一档。"""
     tx = [
-        _trade("600900", "2025-01-05", "buy", 100, 20.0),  # 低成本
-        _trade("600900", "2025-02-05", "buy", 100, 40.0),  # 高成本
+        _trade("600900", "2025-01-05", "buy", 100, 20.0),
+        _trade("600900", "2025-02-05", "buy", 100, 40.0),
     ]
+    # 净成本单价 = (2000+4000)/200 = 30 → 与市价 30 相等 → 低成本档（≤）
     data = compute_cost_tiers(tx, {"600900": 30.0})
-    assert data["available"] is True
-    low = data["totals"]["low"]
-    high = data["totals"]["high"]
-    assert low["shares"] == pytest.approx(100.0)
-    assert high["shares"] == pytest.approx(100.0)
-    assert low["market_value"] == pytest.approx(100.0 * 30.0)
-    assert high["market_value"] == pytest.approx(100.0 * 30.0)
-    assert data["high_cost_ratio"] == pytest.approx(0.5)
+    assert data["high_cost_ratio"] == pytest.approx(0.0)
+    assert data["totals"]["low"]["shares"] == pytest.approx(200.0)
+
+    # 市价跌到 25：净成本 30 > 25 → 整码归入高成本档（不再拆成两个批次）
+    data = compute_cost_tiers(tx, {"600900": 25.0})
+    assert data["totals"]["high"]["shares"] == pytest.approx(200.0)
+    assert data["high_cost_ratio"] == pytest.approx(1.0)
+
+
+def test_cost_tiers_sell_recovery_flips_tier():
+    """卖出回收会降低净成本单价 → 同一市价下可从高成本档翻到低成本档。"""
+    tx = [
+        _trade("600900", "2025-01-05", "buy", 100, 30.0),
+        _trade("600900", "2025-03-05", "sell", 50, price=34.0),
+    ]
+    # 净成本 = 3000 − 1700 = 1300，净份额 50 → 26 ≤ 28 → 低成本档
+    data = compute_cost_tiers(tx, {"600900": 28.0})
+    assert data["totals"]["low"]["shares"] == pytest.approx(50.0)
+    assert data["totals"]["high"]["shares"] == pytest.approx(0.0)
 
 
 def test_cost_tiers_no_price_unpriced():
@@ -276,8 +297,8 @@ def test_cost_tiers_no_price_unpriced():
     assert data["high_cost_ratio"] == pytest.approx(0.0)
 
 
-def test_cost_tiers_unavailable_without_lots():
-    """无可分档批次 -> available=False。"""
+def test_cost_tiers_unavailable_without_positions():
+    """无净成本持仓（无买入流水）-> available=False。"""
     data = compute_cost_tiers([], {"600900": 30.0})
     assert data["available"] is False
 

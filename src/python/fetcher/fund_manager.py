@@ -21,6 +21,7 @@ from typing import Any
 import httpx
 
 from src.python.core.trading_calendar import elapsed_trading_days_with_natural_fallback
+from src.python.cache import NegativeCache
 from src.python.cache import get as cache_get
 from src.python.cache import get_ttl
 from src.python.cache import set as cache_set
@@ -31,6 +32,23 @@ logger = logging.getLogger("invest")
 _CACHE_PREFIX = "fund_manager_"
 # TTL 不在本模块声明：直读缓存注册表（fund_manager）
 _MANAGER_TTL = get_ttl("fund_manager")
+
+#: 基金经理主页「确定性解析不出」与「本次不可达」两级负缓存。
+#: 无此结论时，同一份报告里穿透 / 基金经理分析 / 菜单预热各调一次
+#: `fetch_fund_manager`，每次都重走一遍 HTTP 并再记一次缓存未命中
+#: （实测 `fund_manager_017730×4`）；传输级失败只短退避，恢复后自动重取。
+FUND_MANAGER_MISS = NegativeCache(
+    "基金经理主页空（确定性）",
+    "fmgr_miss_",
+    "fmgr_miss",
+    hit_note="跳过无条件重取",
+)
+FUND_MANAGER_BACKOFF = NegativeCache(
+    "基金经理主页不可达",
+    "fmgr_backoff_",
+    "fmgr_backoff",
+    hit_note="短退避，恢复后自动重取",
+)
 
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -369,6 +387,14 @@ def fetch_fund_manager(code: str) -> dict[str, Any] | None:
     code = code.strip()
     cache_key = _CACHE_PREFIX + code
 
+    # 先看负缓存：上一段/同一轮已判定「没有或不达」就不再发请求（也不计缓存未命中）
+    if FUND_MANAGER_MISS.is_missing(FUND_MANAGER_MISS.key(code)):
+        logger.debug("基金经理命中确定性空负缓存，跳过取数 [%s]", code)
+        return None
+    if FUND_MANAGER_BACKOFF.is_missing(FUND_MANAGER_BACKOFF.key(code)):
+        logger.debug("基金经理命中不可达短退避，跳过取数 [%s]", code)
+        return None
+
     # 读缓存
     cached = cache_get(cache_key, _MANAGER_TTL)
     if cached is not None:
@@ -385,6 +411,7 @@ def fetch_fund_manager(code: str) -> dict[str, Any] | None:
     elif unreachable:
         # 传输级不可达（握手/连接/读超时）：同一站群档案页同样不通，再赌一次只会把等待翻倍
         logger.warning("基金经理主页不可达，跳过档案页回退（按缺数据降级）[%s]", code)
+        FUND_MANAGER_BACKOFF.mark(FUND_MANAGER_BACKOFF.key(code), "主页不可达")
         return None
     else:
         logger.debug("基金经理主页请求失败 [%s]，尝试档案页回退", code)
@@ -396,4 +423,10 @@ def fetch_fund_manager(code: str) -> dict[str, Any] | None:
         return result
 
     logger.warning("基金经理全部解析失败 [%s]", code)
+    # 主页请求失败（非不可达）与解析不出都归「本轮跳过」：前者短退避（可能只是瞬时），
+    # 后者确定性空（源侧应答但无经理信息，12h 内不再重探）
+    if html:
+        FUND_MANAGER_MISS.mark(FUND_MANAGER_MISS.key(code), "主页与档案页均解析不出经理信息")
+    else:
+        FUND_MANAGER_BACKOFF.mark(FUND_MANAGER_BACKOFF.key(code), "主页与档案页请求均失败")
     return None

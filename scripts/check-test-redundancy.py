@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """测试用例冗余与无效检查（test redundancy / dead test check）—— 静态扫测试源，找「跑不到」「测不出」「同义反复」「重复」的用例。
 
-九类检查（全部基于 AST 静态分析，不执行测试、不依赖网络）：
+九类用例质量检查 + 一条标记合规支路（全部基于 AST 静态分析，不执行测试、不依赖网络）：
 
   A. **死用例（不可收集 / 被覆盖）** — pytest 永远不会执行的用例：
      - 同文件同类内同名重复定义（后者覆盖前者）
@@ -30,12 +30,17 @@
      `now()` 判定，这类用例会在「日期 + 保留期」之后静默退化成「空账本 / 键缺失」，失败信息
      看不出是日期过期。远过去锚点（`"2020-01-02"` 表示「必过期」）不报。正确写法：从当天回推派生。
      经验筛查（要真跑、非静态）见 `scripts/probe-date-bombs.py`。
+  J. **标记合规**（与用例质量同源同窗的支路，实现在 `_test_redundancy/markers.py`）——
+     标记注册集从 `src/test/conftest.py` 的 `addinivalue_line("markers", …)` 静态派生；
+     未注册标记（拼写错误）/ 已移除标记 / `_edge.py` 缺 `edge` / 目录缺域标记 /
+     `unit_*` 缺 bare `unit`（会破「verify ⊆ unit」不变量）均判 finding。漏标与死用例同一
+     后果：用例存在却跑不到（`-m unit` 选不中、P1 域搬家），故归在同一入口而非另开脚本。
 
 按设计排除：`src/test/live/`（`pytest.ini` 刻意排除的 opt-in 真网套件，默认不扫，`--include-live` 可纳入）、
 `*_edge.py` 不特殊对待（同为测试，同样受检）。
 
 用法：
-  python scripts/check-test-redundancy.py                 # 九类全查
+  python scripts/check-test-redundancy.py                 # 九类 + 标记合规全查
   python scripts/check-test-redundancy.py -v              # 详细输出（打印被跳过的间接调用用例数等）
   python scripts/check-test-redundancy.py --ci            # CI 模式：仅输出 文件:描述，退出码 2
   python scripts/check-test-redundancy.py --include-live  # 连带扫描 src/test/live/
@@ -45,7 +50,7 @@
 退出码：
   0 — 全部通过
   2 — 发现死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言 /
-      账本日期写死绝对日期
+      账本日期写死绝对日期 / 标记合规违规
   注：`--audit` 为建议性附加输出，恒不改变退出码（骨架同构多为合法矩阵契约，须人工判读）
 
 性能（增量事实缓存）：
@@ -149,6 +154,13 @@ from _test_redundancy.facts_cache import (  # noqa: F401 — 兼容 load_script 
     _CACHE_FILE,
 )
 
+from _test_redundancy.markers import (  # noqa: F401 — 兼容 load_script 直调面
+    EXPECTED_DIR_MARKERS,
+    KNOWN_MARKERS,
+    check_file,
+    check_marker_compliance,
+)
+
 from _test_redundancy.runner import (  # noqa: F401 — 兼容 load_script 直调面
     run_checks,
 )
@@ -160,7 +172,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
             "测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / "
-            "恒真断言 / 死 fixture / 弱 mock 断言 / 账本日期写死绝对日期）"
+            "恒真断言 / 死 fixture / 弱 mock 断言 / 账本日期写死绝对日期 / 标记合规）"
         ),
     )
     add_common_args(parser)
@@ -183,7 +195,7 @@ def main() -> None:
             f" 完全重复 {stats['duplicate']} / 自证用例 {stats['self_fulfilling']} /"
             f" 硬编码演进总数 {stats['hardcoded_totals']} / 恒真断言 {stats['trivial']} /"
             f" 死 fixture {stats['dead_fixtures']} / 弱 mock 断言 {stats['weak_mock']} /"
-            f" 账本日期写死 {stats['date_bombs']}"
+            f" 账本日期写死 {stats['date_bombs']} / 标记违规 {stats['markers']}"
         )
         print(f"  因不可解析的 self 间接调用而跳过重复比对的用例：{stats['duplicate_skipped']}")
 
@@ -202,7 +214,7 @@ def main() -> None:
         report(
             findings,
             "[OK] 测试用例冗余与无效检查通过（无死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / "
-            "恒真断言 / 死 fixture / 弱 mock 断言 / 账本日期写死绝对日期）",
+            "恒真断言 / 死 fixture / 弱 mock 断言 / 账本日期写死绝对日期 / 标记合规）",
             ci=args.ci,
             fail_message="[!] 发现 {n} 处测试用例问题，须修正后提交",
         )

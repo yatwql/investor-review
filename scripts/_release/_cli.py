@@ -79,7 +79,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_evolution = sub.add_parser("evolution", help="版本演进对照快照（默认只滚当前开发版列）")
     p_evolution.add_argument("--release", action="store_true", help="发布期使用：发布列与增长比一并写入")
 
-    p_gate = sub.add_parser("gate", help="P2 门禁：演进新鲜度 + verify + regression + 十守护 --ci + 设计护栏")
+    p_gate = sub.add_parser("gate", help="P2 门禁：演进新鲜度 + verify + regression + 守护清单 --ci + 设计护栏")
     p_gate.add_argument(
         "--with-portability",
         action="store_true",

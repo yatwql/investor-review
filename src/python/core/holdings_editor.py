@@ -13,8 +13,9 @@
   - 落盘经 :func:`core.atomic_write.write_bytes_atomic`（同目录临时文件 + ``os.replace``），
     不存在半写状态。
 
-成本口径（规则的事实位在实现计划表「持仓录入」条）：买入按份额加权平均成本；卖出
-保留原每份成本、只减份额，份额归零时移除该行。
+成本口径（规则的事实位见 `requirements.md` R-HLD-08）：买入按份额加权平均成本；
+卖出按**净成本法**——卖出回收金额冲减成本总额，剩余每份成本 = 剩余成本 / 剩余份额，
+超额回收时钳制为 0；份额归零时移除该行。
 """
 
 from __future__ import annotations
@@ -177,7 +178,12 @@ class HoldingsBook:
             if remaining <= _ZERO_EPS:
                 rows.remove(existing)
             else:
+                # 净成本法：卖出回收金额冲减成本总额，剩余每份成本 = 剩余成本 / 剩余份额。
+                # 超额回收（卖出金额 > 原成本总额，即已实现盈利覆盖全部成本）时钳制为 0，
+                # 不产生负成本（负成本会让收益率/成本分档失去意义）。
+                remaining_cost = existing.shares * existing.cost_price - intent.shares * intent.price
                 existing.shares = round(remaining, _SHARES_DIGITS)
+                existing.cost_price = round(max(0.0, remaining_cost / existing.shares), _COST_DIGITS)
 
         self.drafts.append(intent)
         self.dirty.add((account, strip_to_digits(intent.code)))

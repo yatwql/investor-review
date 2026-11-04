@@ -11,6 +11,9 @@
   - ``__init__.py`` 包标记按「薄壳」独立警告线 200 行（门面/包标记应收薄）。
   - ``-v`` 另按「行数 × 近 90 天改动次数」输出拆分优先级排序（git 不可用时
     静默跳过），回答「先拆哪个」而不是只看绝对行数。
+  - **登记表同实**：review-findings「文件膨胀登记」P4 表的每条登记行数须等于实测
+    行数（文件已删/改名亦判 finding）。登记表是「该拆哪个、距红线多远」的唯一入口，
+    手工维护且无其他断言——实测曾 6/9 项漂移（最大 +148 行），余量判断全部失真。
 
 豁免登记：既有破线项须同时在 review-findings 挂账限期处理，二者同步存在——
   - 豁免文件超限 → 不报 finding，``-v`` 列为「豁免」状态；
@@ -26,18 +29,19 @@
   python scripts/check-file-length.py --ci       # CI 模式（只输出 文件:描述）
 
 退出码：
-  0 — 全部通过（无破线、豁免项均在阈值内）
-  2 — 发现 finding（非豁免文件超红线）
+  0 — 全部通过（无破线、豁免项均在阈值内、登记表与实测一致）
+  2 — 发现 finding（非豁免文件超红线 / 登记表与实测不符）
 """
 
 import argparse
+import re
 import subprocess
 import sys
 from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_checklib）
-from _shared.checklib import REPO_ROOT, add_common_args, rel, report  # noqa: E402
+from _shared.checklib import MANAGEMENTS_DIR, REPO_ROOT, add_common_args, rel, report  # noqa: E402
 
 # ── 阈值与检查域 ──────────────────────────────────────────────
 
@@ -71,6 +75,62 @@ CHURN_WINDOW_DAYS = 90
 #: 既有破线豁免：相对路径 → 挂账说明（review-findings 待处理区须有对应条目）。
 #: 空 = 当前无挂账破线项；新破线须先拆分，无法立即拆分时在此登记并同步挂账。
 EXEMPTIONS: dict[str, str] = {}
+
+
+#: 文件膨胀登记表所在文档（review-findings 的 P4「存量监控清单」）
+REGISTRY_DOC = MANAGEMENTS_DIR / "review-findings.md"
+
+#: 登记行形态：``| \`<相对路径>\` <行数> 行（…） | … |``
+_REGISTRY_ROW = re.compile(r"^\|\s*`([^`]+)`\s*(\d+)\s*行", re.M)
+
+#: 登记表所在章节（``### P4`` 起、下一个 ``## `` 止）
+_REGISTRY_SECTION = re.compile(r"^### P4.*?$(.*?)(?=^## )", re.M | re.S)
+
+
+def _parse_registry(text: str, root: Path) -> list[tuple[str, int, int | str]]:
+    """从登记表文本取 [(相对路径, 登记行数, 实测行数或错误说明)]；章节缺失返回空列表。"""
+    match = _REGISTRY_SECTION.search(text)
+    if match is None:
+        return []
+    rows: list[tuple[str, int, int | str]] = []
+    for path_str, registered in _REGISTRY_ROW.findall(match.group(1)):
+        try:
+            actual: int | str = len((root / path_str).read_text(encoding="utf-8").splitlines())
+        except (OSError, UnicodeDecodeError):
+            actual = "文件不存在或不可读"
+        rows.append((path_str, int(registered), actual))
+    return rows
+
+
+def registry_rows(root: Path = REPO_ROOT) -> list[tuple[str, int, int | str]]:
+    """返回 [(相对路径, 登记行数, 实测行数或错误说明)]；文档/章节缺失返回空列表。"""
+    try:
+        text = REGISTRY_DOC.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return []
+    return _parse_registry(text, root)
+
+
+def check_registry_lines(root: Path = REPO_ROOT) -> list[str]:
+    """登记表同实：P4 登记行数须等于实测行数（登记表腐化即 finding）。"""
+    try:
+        text = REGISTRY_DOC.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        return [f"{rel(REGISTRY_DOC)}: 文件膨胀登记表不可读（{exc}）"]
+    if _REGISTRY_SECTION.search(text) is None:
+        return [f"{rel(REGISTRY_DOC)}: 未匹配到 P4 登记表章节（标题结构已变更，请同步本检查的锚点）"]
+    findings: list[str] = []
+    # 章节存在但零条登记属合法态（全部拆完），只对实际条目判同实
+    for path_str, registered, actual in _parse_registry(text, root):
+        if not isinstance(actual, int):
+            findings.append(f"{rel(REGISTRY_DOC)}: 登记项 {path_str} 无法核对（{actual}）")
+            continue
+        if actual != registered:
+            findings.append(
+                f"{rel(REGISTRY_DOC)}: 登记项 {path_str} 记 {registered} 行 ≠ 实测 {actual} 行"
+                f"（{actual - registered:+d}，拆分/登记变更后须回写该值）"
+            )
+    return findings
 
 
 def collect_line_counts(root: Path) -> list[tuple[str, str, int]]:
@@ -194,20 +254,27 @@ def main() -> int:
             print("按「行数 × 近 90 天改动次数」的拆分优先级：")
             for line in priority_inventory(records, churn):
                 print(line)
+        rows = registry_rows(REPO_ROOT)
+        if rows:
+            print(f"文件膨胀登记表（{rel(REGISTRY_DOC)} P4）：")
+            for path_str, registered, actual in rows:
+                mark = "" if actual == registered else "  ← 须回写"
+                print(f"  {path_str}: 记 {registered} 行 / 实测 {actual}{mark}")
         for line in exempted:
             print(f"[豁免] {line}")
         for line in removable:
             print(f"[可移除豁免] {line}")
 
+    registry_findings = check_registry_lines(REPO_ROOT)  # 显式传根：与上面 -v 的登记实况同源
     ok_message = (
         f"[OK] 行数红线通过（主程序/脚本 ≤{MAIN_SOURCE_LIMIT} 行 / 测试 ≤{TEST_SOURCE_LIMIT} 行；"
-        f"豁免在列 {len(exempted)} 项，违规 {len(violations)} 项）"
+        f"豁免在列 {len(exempted)} 项，违规 {len(violations)} 项；登记表 {len(registry_rows())} 项与实测一致）"
     )
     return report(
-        violations,
+        [*violations, *registry_findings],
         ok_message,
         ci=args.ci,
-        fail_message="[!] 发现 {n} 个文件超行数红线，须拆分（或同步挂账豁免并登记 review-findings）",
+        fail_message="[!] 发现 {n} 处行数问题（超红线 / 登记表与实测不符），须拆分或回写登记值",
     )
 
 
