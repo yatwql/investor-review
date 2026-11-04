@@ -4,6 +4,7 @@ import logging
 import os
 import re
 import zipfile
+from datetime import date, datetime
 
 import openpyxl
 from openpyxl.utils.exceptions import InvalidFileException
@@ -316,9 +317,9 @@ def _parse_trade_sheet(ws) -> list[TradeRecord]:
         code = _safe_str(row[1])
         if not code:
             continue
-        date = _safe_str(row[0])
+        date = _coerce_flow_date(row[0])
         if not _valid_date(date):
-            logger.warning("交易流水页签第 %d 行日期无效 (%s)，跳过该行", excel_row, date)
+            logger.warning("交易流水页签第 %d 行日期无效 (%s)，跳过该行", excel_row, row[0])
             continue
         action = _normalize_action(_safe_str(row[2]))
         if action is None:
@@ -370,9 +371,9 @@ def _parse_dividend_sheet(ws) -> list[DividendRecord]:
         code = _safe_str(row[1])
         if not code:
             continue
-        date = _safe_str(row[0])
+        date = _coerce_flow_date(row[0])
         if not _valid_date(date):
-            logger.warning("分红流水页签第 %d 行日期无效 (%s)，跳过该行", excel_row, date)
+            logger.warning("分红流水页签第 %d 行日期无效 (%s)，跳过该行", excel_row, row[0])
             continue
         amount = _safe_float(row[2], "每份分红", _DIVIDEND_SHEET_NAME, excel_row)
         if amount is None or amount < 0:
@@ -389,9 +390,46 @@ def _parse_dividend_sheet(ws) -> list[DividendRecord]:
     return records
 
 
+def _coerce_flow_date(value) -> str:
+    """把流水页签的日期单元格归一为 ``YYYY-MM-DD`` 字符串（非法形态原样返回，由校验判无效）。
+
+    Excel 里手工填的日期是**原生日期单元格**（openpyxl 读回 ``datetime``/``date``），
+    `str()` 化会得到 ``2026-11-04 00:00:00``——带时间尾巴过不了 ``_DATE_RE``，整行被
+    当成「日期无效」静默丢弃（实测：一行卖出流水在 XIRR/成本分档里凭空消失）。故写入
+    侧虽是 ISO 文本，读取侧仍必须接受原生日期单元格。
+    """
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    text = str(value).strip()
+    if not _DATE_RE.match(text):
+        return text
+    # 文本形态（YYYY-MM-DD / YYYY/M/D）统一补零为 ISO：下游按字典序排序、
+    # 与 `normalize_trade_date` 产出同形，避免 "2026/1/5" 与 "2026-01-05" 并存
+    try:
+        year, month, day = (int(part) for part in re.split(r"[-/]", text))
+        return date(year, month, day).isoformat()
+    except ValueError:
+        return text
+
+
 def _valid_date(value: str) -> bool:
-    """判断字符串是否为合法日期（YYYY-MM-DD 或 YYYY/MM/DD）。"""
-    return bool(_DATE_RE.match(value))
+    """判断字符串是否为合法日期（YYYY-MM-DD 或 YYYY/MM/DD，且为真实存在的日历日）。
+
+    只验形态会放过 `2026-13-01` / `2026-02-30`：这类串能进流水记录，随后在
+    按日排序、交易日回推（成本/回测）处炸掉或静默算错，故就地按日历校验。
+    """
+    if not _DATE_RE.match(value):
+        return False
+    try:
+        year, month, day = (int(part) for part in re.split(r"[-/]", value))
+        date(year, month, day)
+    except ValueError:
+        return False
+    return True
 
 
 def _normalize_action(value: str) -> str | None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import unittest
+from datetime import date, datetime
 from unittest.mock import MagicMock, patch
 from src.python.core import reader
 import pytest
@@ -372,3 +373,68 @@ class TestRequireHoldings(unittest.TestCase):
         msg = str(ctx.exception)
         self.assertIn("持仓文件为空", msg)
         self.assertNotIn("/", msg)
+
+
+class TestFlowDateCells(unittest.TestCase):
+    """流水页签日期接受 Excel 原生日期单元格（缺陷回归：带时间尾巴整行被丢弃）。
+
+    Excel 里手工填的日期读回是 ``datetime(2026, 11, 4, 0, 0)``，`str()` 后带
+    ``00:00:00`` 尾巴过不了 `_DATE_RE`，此前整行被判「日期无效」静默丢弃——
+    该笔卖出在 XIRR / 成本分档 / 分红里凭空消失。写入侧是 ISO 文本，两侧都必须能读。
+    """
+
+    def test_coerce_accepts_excel_native_date_cells(self):
+        self.assertEqual(reader._coerce_flow_date(datetime(2026, 11, 4, 0, 0)), "2026-11-04")
+        self.assertEqual(reader._coerce_flow_date(date(2026, 1, 5)), "2026-01-05")
+
+    def test_coerce_pads_text_dates_to_iso(self):
+        """文本形态补零为 ISO：与 normalize_trade_date 同形，避免排序/比较失配。"""
+        self.assertEqual(reader._coerce_flow_date("2026/1/5"), "2026-01-05")
+        self.assertEqual(reader._coerce_flow_date(" 2026-11-04 "), "2026-11-04")
+
+    def test_coerce_keeps_invalid_text_for_validation(self):
+        for value in ("昨天", "", None, "2026-13-01"):
+            self.assertFalse(reader._valid_date(reader._coerce_flow_date(value)))
+
+    def test_trade_sheet_native_date_cell_parsed(self):
+        ws = reader_ws(
+            "交易流水",
+            ["日期", "代码", "操作", "份额", "价格"],
+            [[datetime(2026, 11, 4, 0, 0), "561910", "卖出", 5000, 0.573]],
+        )
+        records = reader._parse_trade_sheet(ws)
+        self.assertEqual(len(records), 1, "原生日期单元格的行被丢弃")
+        self.assertEqual(records[0].date, "2026-11-04")
+        self.assertEqual(records[0].action, "sell")
+
+    def test_dividend_sheet_native_date_cell_parsed(self):
+        ws = reader_ws(
+            "分红流水",
+            ["日期", "代码", "每份分红"],
+            [[datetime(2026, 6, 30, 0, 0), "003095", 0.05]],
+        )
+        records = reader._parse_dividend_sheet(ws)
+        self.assertEqual(len(records), 1, "原生日期单元格的行被丢弃")
+        self.assertEqual(records[0].date, "2026-06-30")
+
+
+def reader_ws(title, header, data_rows):
+    """构造最小工作表桩（表头走 cell.value，数据行走 values_only 元组）。"""
+    ws = MagicMock()
+    ws.title = title
+    ws.max_row = len(data_rows) + 1
+    header_cells = []
+    for value in header:
+        cell = MagicMock()
+        cell.value = value
+        header_cells.append(cell)
+
+    def iter_rows_side_effect(min_row=1, max_row=None, values_only=False):
+        if min_row == 1 and not values_only:
+            return iter([header_cells])
+        if min_row >= 2 and values_only:
+            return iter(data_rows)
+        return iter([])
+
+    ws.iter_rows.side_effect = iter_rows_side_effect
+    return ws
