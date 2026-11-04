@@ -7,8 +7,9 @@
   - ``2`` / ``3`` 只把意图写进内存变更清单（``book.drafts``），文件 mtime 不变；
   - 单笔录入只回显（一行明细 + 总笔数），不加确认闸门——保护点在保存与撤销；
   - ``4`` 先逐笔回显「用户刚才改变的持仓信息」并列受影响账户条数，再用**一次输入**
-    表达意图（回车=写入并留 ``.bak`` / ``f``=记入交易流水后写入 / ``2``=丢弃草稿 /
-    ``0``=返回），确认后才原子写回文件（写前校验文件未被其他程序改动）；
+    表达意图（回车=写入并**记入「交易流水」**，留 ``.bak`` / ``n``=只写持仓不记流水 /
+    ``2``=丢弃草稿 / ``0``=返回），确认后才原子写回文件（写前校验文件未被其他程序改动）；
+    录入的买入与卖出都得交易，流水缺省留痕，``n`` 用于「成交流水另有出处、不想重复记」的场合；
   - 退出（``0`` / ``Esc``）时有未保存变更 → 三选一（保存后退出 / 丢弃退出 / 继续编辑），
     默认继续编辑（安全侧）。
 
@@ -747,7 +748,9 @@ def _save(session: _Session) -> None:
     _print_draft_summary(book)
     count = len(book.drafts)
     target = os.path.basename(book.filepath)
-    raw = _ask(f"  回车=写入 {target}（自动 .bak）· f=记入「交易流水」后写入 · 2=丢弃草稿 · 0 返回: ")
+    raw = _ask(
+        f"  回车=写入 {target} 并记入「交易流水」（自动 .bak）· n=只写持仓不记流水 · 2=丢弃草稿 · 0 返回: "
+    )
     token = (raw or "").strip().lower()
     if raw is None or token == "0":
         print("  [!] 已取消保存，草稿保留")
@@ -756,7 +759,9 @@ def _save(session: _Session) -> None:
         del book.drafts[:]
         print(f"  {YELLOW}[!]{RESET} 已丢弃 {count} 笔草稿（持仓文件未改动）")
         return
-    append_flows = token == "f"
+    # 缺省（回车）即记入交易流水：买入/卖出都是真实交易，留痕是常规意图；
+    # ``n`` 显式声明「只写持仓」，``f`` 保留为同义别名（既有肌肉记忆不受影响）
+    append_flows = token != "n"
     backup = _backup_file(book.filepath)
     try:
         book.save(append_flows=append_flows)

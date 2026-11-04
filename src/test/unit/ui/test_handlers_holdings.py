@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from src.python.core.holdings_editor import SIDE_BUY, TradeIntent, load_book
+from src.python.core.holdings_editor import SIDE_BUY, SIDE_SELL, TradeIntent, load_book
 from src.test._holdings_fixture import make_holdings_file
 from src.python.tui import handlers_holdings as hh
 
@@ -170,7 +170,7 @@ def test_save_single_decision_prompt(tmp_path: Path, feed, capsys: pytest.Captur
             trade_date="2026-07-01",
         )
     )
-    feed("")  # 回车 = 写入文件（不记流水）
+    feed("")  # 回车 = 写入文件（缺省同时记入交易流水）
     hh._save(session)
 
     assert session.book.drafts == []
@@ -443,3 +443,46 @@ def test_save_f_records_flow_sheet(tmp_path: Path, feed, monkeypatch: pytest.Mon
     feed("f")
     hh._save(session)
     assert calls == [True], calls
+
+
+def _draft_buy_or_sell(session, side: str) -> None:
+    """给会话排一笔草稿（买入/卖出同一保存出口，等价覆盖两条录入路径）。"""
+    session.book.apply(
+        TradeIntent(
+            account="股票账户",
+            name="长江电力",
+            code="600900",
+            side=side,
+            shares=100,
+            price=21.0,
+            trade_date="2026-07-01",
+        )
+    )
+
+
+@pytest.mark.parametrize("side", [SIDE_BUY, SIDE_SELL])
+def test_save_enter_defaults_to_recording_flow(
+    tmp_path: Path, feed, monkeypatch: pytest.MonkeyPatch, side: str
+):
+    """回车缺省 = 写入并记入交易流水（买入与卖出同一出口，两条路径都要覆盖）。"""
+    path = _ui_file(tmp_path)
+    session = hh._Session(book=load_book(str(path)), mtime=os.path.getmtime(path))
+    _draft_buy_or_sell(session, side)
+    calls: list[bool] = []
+    monkeypatch.setattr(session.book, "save", lambda **kw: calls.append(bool(kw.get("append_flows"))))
+    feed("")
+    hh._save(session)
+    assert calls == [True], calls
+
+
+@pytest.mark.parametrize("side", [SIDE_BUY, SIDE_SELL])
+def test_save_n_skips_flow_sheet(tmp_path: Path, feed, monkeypatch: pytest.MonkeyPatch, side: str):
+    """`n` 显式声明「只写持仓不记流水」（成交流水另有出处时用）。"""
+    path = _ui_file(tmp_path)
+    session = hh._Session(book=load_book(str(path)), mtime=os.path.getmtime(path))
+    _draft_buy_or_sell(session, side)
+    calls: list[bool] = []
+    monkeypatch.setattr(session.book, "save", lambda **kw: calls.append(bool(kw.get("append_flows"))))
+    feed("n")
+    hh._save(session)
+    assert calls == [False], calls
