@@ -550,6 +550,100 @@ def _mean(values: list[float]) -> float | None:
     return sum(values) / len(values) if values else None
 
 
+PERFORMANCE_TITLE = "我的建议历史表现（按视界）"
+
+
+def build_performance(
+    decisions: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """按视界聚合「我的建议历史表现」（只读账本，与 `settle-decisions` 同口径）。
+
+    口径单源：命中判定复用 `core.decision_ledger.classify_direction_outcome`
+    （含 ±1.5% 平盘不判定阈值），均值超额 = 原始收益 − 同期基准收益（基准缺失
+    的条目不进超额均值）。命中率仅在方向性有效样本 ≥ `MEANINGFUL_SAMPLE` 时给
+    百分比结论，否则以「命中/总数」并列并标注样本不足——与命令行结算、`doctor`
+    账本概览同一判据，不另立口径。
+
+    Args:
+        decisions: `fold_ledger()` 的 decisions；None 时读当前账本。
+
+    Returns:
+        每个视界一行：{horizon, settled, directional, hit, miss, flat, gap,
+        accuracy_label, accuracy_value, mean_excess_label, sample_sufficient,
+        tone_class}
+    """
+    from src.python.core import decision_ledger as dl
+
+    ledger_decisions: list[dict[str, Any]] = (
+        decisions if decisions is not None else list(fold_ledger().get("decisions") or [])
+    )
+    per_horizon: dict[int, dict[str, Any]] = {}
+    for decision in ledger_decisions:
+        settlements = decision.get("settlements") or {}
+        if not isinstance(settlements, dict):
+            continue
+        try:
+            direction = int(decision.get("direction") or 0)
+        except (TypeError, ValueError):
+            direction = 0
+        for raw_horizon, event in settlements.items():
+            if not isinstance(event, dict):
+                continue
+            try:
+                horizon = int(raw_horizon)
+            except (TypeError, ValueError):
+                continue
+            raw_return = event.get("raw_return")
+            raw_value: float | None = None
+            if isinstance(raw_return, (int, float)) and not isinstance(raw_return, bool):
+                raw_value = float(raw_return)
+            bucket = per_horizon.setdefault(horizon, {"counts": {}, "excess": []})
+            # 缺失收益的行计入 gap（数据缺口），不能静默丢样本——否则已结算数与账本不符
+            outcome, _hit = dl.classify_direction_outcome(raw_value, direction)
+            bucket["counts"][outcome] = bucket["counts"].get(outcome, 0) + 1
+            bench_return = event.get("bench_return")
+            if raw_value is not None and isinstance(bench_return, (int, float)) and not isinstance(bench_return, bool):
+                bucket["excess"].append(raw_value - float(bench_return))
+
+    rows: list[dict[str, Any]] = []
+    for horizon in SETTLEMENT_HORIZONS:
+        bucket = per_horizon.get(horizon)
+        if bucket is None:
+            continue
+        counts = bucket["counts"]
+        hit = counts.get("hit", 0)
+        miss = counts.get("miss", 0)
+        directional = hit + miss
+        settled = sum(counts.values())
+        mean_excess = _mean(bucket["excess"])
+        excess_pct = None if mean_excess is None else mean_excess * 100
+        sufficient = directional >= dl.MEANINGFUL_SAMPLE
+        accuracy = hit / directional if directional else None
+        if accuracy is None:
+            accuracy_label = "—"
+        elif sufficient:
+            accuracy_label = f"{accuracy:.0%}"
+        else:
+            accuracy_label = f"{hit}/{directional}（样本不足）"
+        rows.append(
+            {
+                "horizon": horizon,
+                "settled": settled,
+                "directional": directional,
+                "hit": hit,
+                "miss": miss,
+                "flat": counts.get("flat", 0),
+                "gap": counts.get("gap", 0),
+                "accuracy_label": accuracy_label,
+                "accuracy_value": None if accuracy is None else round(accuracy, 4),
+                "mean_excess_label": "—" if excess_pct is None else f"{excess_pct:+.2f}%",
+                "sample_sufficient": sufficient,
+                "tone_class": _tone_class_of(excess_pct),
+            }
+        )
+    return rows
+
+
 def build_settlement_summary(
     decisions: list[dict[str, Any]] | None = None,
     *,
@@ -651,6 +745,9 @@ def build_settlement_summary(
         "reason": "",
         "horizons": list(SETTLEMENT_HORIZONS),
         "batches": batches,
+        # 「我的建议历史表现」按视界聚合：只读账本、不依赖 decision_reflection 开关
+        "performance_title": PERFORMANCE_TITLE,
+        "performance": build_performance(ledger_decisions),
         "note": ("批次按结算交易日聚合（上限 5 批），更多明细见「历史决策复盘」块" if batches else "暂无结算样本"),
     }
 
@@ -716,6 +813,56 @@ def arbitrate_confidence(signals: list[dict[str, Any]]) -> dict[str, Any]:
 # ── 装配入口 ────────────────────────────────────────────────
 
 
+BLOCK_HEADLINE_EMPTY = "判断依据：暂无可用数据（信号 / 风险预算 / 纪律均未就绪）"
+
+
+def build_headline(
+    signals: list[dict[str, Any]],
+    confidence: dict[str, Any],
+    risk_budget: dict[str, Any],
+    discipline_detail: dict[str, Any],
+) -> list[str]:
+    """章首三行摘要（双端逐字同源：HTML 渲染在折叠块上方，Excel 写在块首）。
+
+    三行固定含义：① 有效信号数与可信度档 ② 风险预算超限项 ③ 纪律触发数。
+    任一段无可用数据时用否定态文案占位（「未评估」「未接入」），不用空白行；
+    三段全部不可用（新装/账本空）时压成一行空态，避免三行均为“未就绪”的噪声。
+
+    Args:
+        signals: 信号行清单（`in_axis` 为真的才是有效信号）。
+        confidence: `arbitrate_confidence()` 返回值（取 `level_label`）。
+        risk_budget: `build_risk_budget()` 返回值（`available` / `breached_count`）。
+        discipline_detail: `build_discipline_detail()` 返回值（`available` / `items` / `regime_label`）。
+
+    Returns:
+        1~3 行摘要文本（确定性顺序，不随数据漂移）。
+    """
+    valid = sum(1 for s in signals if s.get("in_axis"))
+    risk_available = bool(risk_budget.get("available"))
+    discipline_items = discipline_detail.get("items") or []
+    discipline_available = bool(discipline_detail.get("available"))
+    if not signals and not risk_available and not discipline_available:
+        return [BLOCK_HEADLINE_EMPTY]
+    if signals:
+        label = confidence.get("level_label") or "暂不可判"
+        lines = [f"信号：有效 {valid}/{len(signals)} · 可信度 {label}"]
+    else:
+        lines = ["信号：暂无信号记录"]
+    if not risk_available:
+        lines.append("风险预算：未评估")
+    elif risk_budget.get("breached_count"):
+        lines.append(f"风险预算：超限 {risk_budget['breached_count']} 项")
+    else:
+        lines.append("风险预算：未超限")
+    if not discipline_available:
+        lines.append("纪律：未接入")
+    elif discipline_items:
+        lines.append(f"纪律：触发 {len(discipline_items)} 条（{discipline_detail.get('regime_label') or '未知'}）")
+    else:
+        lines.append("纪律：未触发")
+    return lines
+
+
 def build_decision_basis_data(
     holdings_details: list[dict[str, Any]] | None = None,
     total_mv: float | None = None,
@@ -763,6 +910,8 @@ def build_decision_basis_data(
         "available": True,
         "reason": "",
         "title": BLOCK_TITLE,
+        # 章首三行摘要（可见性保障：块默认折叠，读者不展开也能读到关键事实）
+        "headline": build_headline(signals, confidence, risk_budget, discipline_detail),
         "summary": f"{BLOCK_TITLE}：" + " · ".join(parts),
         "backtest_as_of": backtest_run_date(),
         "confidence": confidence,

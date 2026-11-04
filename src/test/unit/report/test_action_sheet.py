@@ -76,12 +76,14 @@ class TestDecisionBasisBlock(_ExcelSheetAssertHelpers, unittest.TestCase):
 
         return build_decision_basis_data()
 
-    def test_block_at_top_with_title_summary_and_empty_state(self):
-        """契约 provided → 页签顶部出现判断依据：标题 + summary + 信号/可信度空态。"""
+    def test_block_at_top_with_title_headline_and_empty_state(self):
+        """契约 provided → 页签顶部出现判断依据：标题 + 章首 headline + 信号空态。"""
         data = self._contract()
         text = " ".join(self._flat(self._write(_action_data(), decision_basis_data=data)))
         assert data["title"] in text
-        assert data["summary"] in text
+        # 章首摘要三行（Excel 无折叠，行即视为章首可见区）：逐行与契约同文
+        for line in data["headline"]:
+            assert line in text
         assert "暂无信号记录" in text  # 空账本 → 清单空态（Data States 口径）
         assert "暂不可判" in text  # 空态不得显示可信度高
         # 位置：判断依据在再平衡信号之前（顶部子块）
