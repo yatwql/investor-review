@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.16.18-dev
-> **编号源**：`rf-next = 1037`（新增问题提出后更新为 +1；已用最大 rf-1036，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1038`（新增问题提出后更新为 +1；已用最大 rf-1037，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -17,7 +17,9 @@
 
 入选标准：重构收益明确、回归面可圈定。
 
-（当前无待处理项）
+| # | 问题 | 修复方向 |
+| --- | --- | --- |
+| **rf-1037** | 美股三大指数行情**无会话级复用**，同一缓存键一轮运行被记 3~4 次未命中并可能重复请求上游：`fetcher/index.py::fetch_us_indices()` 每次调用先 `cache_get(key, ttl)`、未命中再 `cache_get(key, 604800)` 取陈旧兜底（同键第二次未命中），而该函数在一轮报告里被两处调用（`providers/akshare_extras.py`、`report/html_renderers.py`）且不共享结果——日志实测 `index_gb_dji/inx/ixic` 各 ×3；对比 `fetch_index_history()` 已有 `DataSourceRegistry.session_cache` 会话复用，行情侧没有 | ① 给 `fetch_indices()` / `fetch_us_indices()` 加会话级缓存（与 history 路径同口径：同一轮内同键只取一次）；② 陈旧兜底那次读取不计入未命中统计（改为不计数读取入口），避免统计噪音掩盖真实重探；补回归：同一轮调用两次 → 上游只请求一次、未命中计数只记一次 |
 
 ### P3 — 持续监控：兼容残留
 
@@ -49,6 +51,12 @@
 ### 开发期已修复（0.16.17-dev）
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
+
+### 开发期已修复（0.16.18-dev）
+
+| # | 问题 | 处置 |
+| --- | --- | --- |
+| **rf-1036** | 财报源挂起型超时预算偏长（单次 23~25s，7 日 26 次） | `providers/datasink.py` 预算分档：正文档 20s / 章节清单探测 8s，预算经 `_request`/`_get_with_transient_retry` 透传（+3 用例） |
 
 ### 归档档案
 - [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-11-03）
