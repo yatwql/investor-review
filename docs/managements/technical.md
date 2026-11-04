@@ -994,7 +994,7 @@ with phase_timeout(seconds=120, phase_name="data_fetch") as ctx:
 ```
 fetcher/
 ├── price.py            股票/ETF 最新价 + 场外基金净值 + 00 代码降级
-├── index.py            A 股/美股指数（直调 Provider，不走 Chain）
+├── index.py            A 股/美股指数（直调 Provider，不走 Chain；会话缓存域 `index_quote`）
 │                       + fetch_index_history 历史日线（走 Chain，C6 约束）
 ├── fund.py             基金排名/持仓/基准（天天基金数据 + 同花顺官方备源）
 ├── fund_manager.py     基金经理数据（天天基金 HTML 解析）
@@ -3816,7 +3816,7 @@ web/ (Web 服务层，薄入口)
 | # | 约束 | 设计目的 | 违反后果 | 适用范围 |
 |:---|:-----|:---------|:---------|:---------|
 | **C1** | **代码类型判定中心化** — 所有资产代码类型判定必须使用 `core/code_utils.py` 提供的函数，禁止任何模块自行实现判定逻辑 | 系统 20+ 处需要判断资产类型（A 股/ETF/基金/QDII/港股/债券等），分散判定导致代码前缀知识散落，"魔法判定"遍地，新增资产类型时需全局搜索替换 | 代码评审不通过；新增资产类型时遗漏大量散落判定点 | 所有涉及代码类型判定的模块（fetcher/、report/、llm/、config/ 等）；含「按代码前缀分类资产类型」与「判定代码是否合法」两类判定，一律复用 `core/code_utils.py` 的判定函数，不得自建前缀表或白名单 |
-| **C4** | **会话级 API 复用** — 同次会话内同一 API 返回的数据必须通过 `DataSourceRegistry.session_cache` 复用，禁止重复 HTTP 请求 | 避免同一资产在多个模块中重复请求相同 API 数据，降低 API 限频风险，提升性能 | API 调用量膨胀、触发限频、报告生成时间增长 | 所有通过 Provider 获取数据的模块 |
+| **C4** | **会话级 API 复用** — 同次会话内同一 API 返回的数据必须通过 `DataSourceRegistry.session_cache` 复用，禁止重复 HTTP 请求（行情类整包取数用域 `index_quote`：`fetch_indices`/`fetch_us_indices` 的包装层按 `a_indices`/`us_indices` 存整包，同一轮只取一次） | 避免同一资产在多个模块中重复请求相同 API 数据，降低 API 限频风险，提升性能 | API 调用量膨胀、触发限频、报告生成时间增长 | 所有通过 Provider 获取数据的模块 |
 | **C5** | **HTTP 客户端统一** — 所有 HTTP 请求必须使用 `core/http_client.py` 工厂方法创建客户端实例 | 统一 SSL 配置、超时策略、连接池管理；防止各模块自行构造 request 导致配置散落、连接池泄漏。该工厂同时是**数据源记录-回放（cassette）的唯一注入点**（§2.6）：绕过工厂自建客户端的 provider 不受回放替换，回放用例会**真实联网并静默通过**——离线保证随之失效 | SSL 配置不一致、连接泄漏、重试策略不统一；绕过工厂的请求使 cassette 回放静默失效（测试实际联网而无人察觉） | 所有发起 HTTP 请求的模块（providers/、llm/） |
 | **C6** | **Provider Chain 必经** — 大多数数据获取必须通过 `fetch_with_fallback()` 走 Chain 路由，不得直接调用 Provider 函数 | 跳过 Chain 直接调用 Provider 会导致熔断器不被激活（故障后无冷却恢复）、fallback 链路断路（某 Provider 失败时不会自动递补）、日志审计缺失 | 熔断器失效、fallback 断路、故障记录缺失 | fetcher/ 各模块（例外：index.py 直调 Provider 的双链路 fallback 硬编码，熔断器不适用于指数场景）；report/ 与 analysis/ 层取估值/行业等外部数据必须经 fetcher 网关入口（如 `fetcher/industry.py::fetch_valuation_fields`），不得 import `providers.*` 直连 |
 | **C24** | **凭据值不落日志与产物** — 需要凭据的数据源必须经 `core/datasource_credential.py` 登记声明（源标识 + 环境变量名 + 申请地址），凭据值只从环境变量读取；对外一律只暴露「环境变量名 + 是否就绪」，**凭据值永不落日志、永不写入报告/缓存**。未就绪的源由链路主动跳过并给出「缺什么、去哪申请」，不得当作「源不可达」反复重试或计入熔断 | 凭据一旦出现在日志/报告/缓存中，即随日志文件、报告产物、问题反馈与截图外泄，且事后无法区分「是否已泄露」；把配置级缺失（key 没配）混入可用性统计，会污染数据源可用性矩阵的语义——用户看到的是「源不稳定」而非「你没配 key」 | 凭据泄露（日志/报告被复制、上传、粘贴即泄露）；用户据失真的可用性矩阵排查错误方向，反复重试注定失败的请求 | providers/ 各数据源、`fetcher/chain.py`（未就绪主动跳过且不计熔断）、`core/check_sources.py`、`core/doctor.py`、`core/datasource_credential.py`（唯一声明点） |
