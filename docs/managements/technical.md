@@ -1305,7 +1305,7 @@ cache/
 
 | 函数 | 签名 | 说明 |
 |:-----|:------|:------|
-| `get(key, max_age_seconds)` | `(str, float) → Any\|None` | 先查 `.json.gz`，不存在时回退 `.json`；超龄返回 None |
+| `get(key, max_age_seconds)` | `(str, float) → Any\|None` | 先查 `.json.gz`，不存在时回退 `.json`；超龄返回 None。`record_stats=False` 供**探测/兜底读**用（负缓存探针、陈旧缓存兜底）：这类读不是真实取数需求，计入会让命中率与未命中前缀分布失真 |
 | `set(key, data)` | `(str, Any) → None` | `{"_ts": now, "_data": data}` 序列化 + 原子写入；≥100KB 自动 `.json.gz` |
 | `clear(key)` | `(str) → None` | 同时删除 `.json` 和 `.json.gz` |
 | `get_ttl(data_type)` | `(str) → float` | TTL 分辨率（见下方流程图）；只由数据类型决定（无按 key 抖动、无兼容参数） |
