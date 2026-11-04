@@ -1,5 +1,5 @@
 # 目录结构与项目统计
-> 文档版本：0.16.18-dev
+> 文档版本：0.17.0-dev
 >
 > 项目目录树 — 新增/重命名任何非排除文件或目录时，必须同步更新此文档。
 >
@@ -18,9 +18,9 @@
 | 测试用例 | — | — | 13,327 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,021 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,788 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 209 | 72,758 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 13,943 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
-| ├ archive/ | 版本归档 | 190 | 57,705 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
+| 项目文档 | Markdown | 212 | 72,789 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 13,950 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| ├ archive/ | 版本归档 | 193 | 57,729 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 5 | ~1014 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
 
@@ -44,7 +44,7 @@ git grep -c "def test_" <rev> -- 'src/test'
 
 > 等价做法（更省事，前两列即以此重跑）：`git archive <rev> | tar -x -C <临时目录>` 导出后本地计数——免去逐文件 `cat-file` 的解析；口径同上（末行无换行按 1 行计）。
 
-| 指标 | 最初版本（首个提交 · 2026-06-27） | 最新发布（最近发布 tag v0.16.17 · 2026-11-03） | 当前开发版（0.16.18-dev · 本次重跑时的工作区 · 2026-11-03） | 增长（最初 → 当前） |
+| 指标 | 最初版本（首个提交 · 2026-06-27） | 最新发布（最近发布 tag v0.16.17 · 2026-11-03） | 当前开发版（0.17.0-dev · 本次重跑时的工作区 · 2026-11-03） | 增长（最初 → 当前） |
 |:-----|:----------------------------------|:-----------------------|:--------------------------|:----:|
 | 主程序（`src/**/*.py`，不含测试） | 30 文件 / 7,258 行 | 423 文件 / 115,908 行 | 423 文件 / 115,908 行 | 16.0×
 | 测试（`src/test/**/*.py`） | 13 文件 / 6,108 行 | 706 文件 / 193,627 行 | 706 文件 / 193,627 行 | 31.7×
@@ -1867,18 +1867,22 @@ investor-review/
 │   │   │   │   └── tui-interaction-batch3-plan.md       # 第三批：/ 筛选进面板、配置快照退回、页头瘦身、TUI_ASCII
 │   │   │   └── web-browser-verification/                # Web 工作台交互路径验收（上传/拖拽/进度/禁用态/窄屏）
 │   │   │       └── web-browser-verification.md         # Web 交互路径验收：五类断言的可复现验证（启动、HTTP 层证据、headless CDP 实测、人工余项），约束条件为全程不触发生成
-│   │   └── v0.16.x/                         # v0.16.x 版本归档（changelog/plan/review-findings + 设计文档）
-│   │       ├── archived_changelog.0.16.x.md       # 变更日志归档 v0.16.x
-│   │       ├── archived_plan.0.16.x.md            # 实现计划归档 v0.16.x
-│   │       ├── archived_review-findings.0.16.x.md # 自审记录归档 v0.16.x
-│   │       ├── dedup-anchor-storage/               # append-only 采集文件的增长治理（按月分片/体积目标/保留期）
-│   │       │   └── dedup-anchor-storage-design.md  # 锚点存储治理：采样、保留期与写入时刻判定、体积目标与分支配额、月 gzip 分片、迁移与回滚
-│   │       ├── investment-decision-quality/            # 投资决策质量讨论稿（定稿归档，不实施）
-│   │       │   └── investment-decision-quality.md      # 亏损归因/维度预测力/决策形态三路线/提示语改造清单与回测结论
-│   │       ├── llm-critical-path-instrumentation/   # 关键路径耗时不可见；逐模块耗时入台账，归因并入并行批
-│   │       │   └── llm-critical-path-instrumentation-design.md # 关键路径测量：逐模块耗时入台账、归因并入并行批、A1~A6 实测与风险
-│   │       └── llm-expression-budget/               # 关键路径尾部时延与超时余量治理（五条路径预算约束）；四组实测后不采纳
-│   │           └── llm-critical-path-design.md      # 表达预算评估：设计与量化评估（结论：不采纳；预算档、补写接缝、TTL、指纹瘦身四组实测）
+│   │   ├── v0.16.x/                         # v0.16.x 版本归档（changelog/plan/review-findings + 设计文档）
+│   │   │   ├── archived_changelog.0.16.x.md       # 变更日志归档 v0.16.x
+│   │   │   ├── archived_plan.0.16.x.md            # 实现计划归档 v0.16.x
+│   │   │   ├── archived_review-findings.0.16.x.md # 自审记录归档 v0.16.x
+│   │   │   ├── dedup-anchor-storage/               # append-only 采集文件的增长治理（按月分片/体积目标/保留期）
+│   │   │   │   └── dedup-anchor-storage-design.md  # 锚点存储治理：采样、保留期与写入时刻判定、体积目标与分支配额、月 gzip 分片、迁移与回滚
+│   │   │   ├── investment-decision-quality/            # 投资决策质量讨论稿（定稿归档，不实施）
+│   │   │   │   └── investment-decision-quality.md      # 亏损归因/维度预测力/决策形态三路线/提示语改造清单与回测结论
+│   │   │   ├── llm-critical-path-instrumentation/   # 关键路径耗时不可见；逐模块耗时入台账，归因并入并行批
+│   │   │   │   └── llm-critical-path-instrumentation-design.md # 关键路径测量：逐模块耗时入台账、归因并入并行批、A1~A6 实测与风险
+│   │   │   └── llm-expression-budget/               # 关键路径尾部时延与超时余量治理（五条路径预算约束）；四组实测后不采纳
+│   │   │       └── llm-critical-path-design.md      # 表达预算评估：设计与量化评估（结论：不采纳；预算档、补写接缝、TTL、指纹瘦身四组实测）
+│   │   └── v0.17.x/                         # v0.17.x 版本归档（changelog/plan/review-findings + 设计文档）
+│   │       ├── archived_changelog.0.17.x.md # 变更日志归档 v0.17.x
+│   │       ├── archived_plan.0.17.x.md      # 实现计划归档 v0.17.x
+│   │       └── archived_review-findings.0.17.x.md # 自审记录归档 v0.17.x
 │   └── plan/                          #   在办设计文档（扁平存放，原型就近建子目录）
 │       ├── jev-news-judgment-evaluation.md # 判定通道迁移的对照评测方案（三方对照、语料冻结、预注册阈值）
 │       ├── jev-news-judgment-design.md # 判定通道接入设计（独立于对话链、模板理由、降级矩阵）

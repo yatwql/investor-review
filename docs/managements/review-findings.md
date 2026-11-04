@@ -1,5 +1,5 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.16.18-dev
+> 文档版本：0.17.0-dev
 > **编号源**：`rf-next = 1040`（新增问题提出后更新为 +1；已用最大 rf-1039，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
@@ -51,7 +51,7 @@
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
 
-### 开发期已修复（0.16.18-dev）
+### 开发期已修复（0.17.0-dev）
 
 | # | 问题 | 处置 |
 | --- | --- | --- |
@@ -61,6 +61,7 @@
 | **rf-1039** | 基金经理主页失败无负缓存：同一轮穿透/基金经理分析/菜单预热各调一次都重走 HTTP 并各记一次未命中（实测 `fund_manager_017730×4`） | `fetcher/fund_manager.py` 增两级 `NegativeCache`：确定性解析不出 12h（`fund_manager_miss_`）/ 不可达 1h 短退避（`fund_manager_backoff_`），命中即跳过取数且不计缓存未命中；注册表与三份文档表格同步；+4 用例 |
 
 ### 归档档案
+- [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-04）
 - [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-11-03）
 - [`archived_review-findings.0.15.x.md`](../archive/v0.15.x/archived_review-findings.0.15.x.md) — v0.15.x（2026-10-24 ~ 2026-10-25）
 - [`archived_review-findings.0.14.x.md`](../archive/v0.14.x/archived_review-findings.0.14.x.md) — v0.14.x（2026-10-21 ~ 2026-10-23）

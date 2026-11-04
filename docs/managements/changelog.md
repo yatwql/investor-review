@@ -6,7 +6,7 @@
 
 ---
 
-## [0.16.18-dev] - 开发中（未发布）
+## [0.17.0-dev] - 开发中（未发布）
 
 ### 变更
 
@@ -20,6 +20,7 @@
 
 ## 归档
 
+- [`archived_changelog.0.17.x.md`](../archive/v0.17.x/archived_changelog.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-04）
 - [`archived_changelog.0.16.x.md`](../archive/v0.16.x/archived_changelog.0.16.x.md) — v0.16.0 ~ v0.16.17（2026-10-25 ~ 2026-11-03）
 - [`archived_changelog.0.15.x.md`](../archive/v0.15.x/archived_changelog.0.15.x.md) — v0.15.0 ~ v0.15.9（2026-10-24 ~ 2026-10-25）
 - [`archived_changelog.0.14.x.md`](../archive/v0.14.x/archived_changelog.0.14.x.md) — v0.14.0 ~ v0.14.8（2026-10-21 ~ 2026-10-23）
