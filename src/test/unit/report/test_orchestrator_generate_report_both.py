@@ -92,6 +92,57 @@ class TestGenerateReportBoth:
         _xls_kwargs = mock_xls.call_args.kwargs
         assert _xls_kwargs.get("enable_llm") is False
 
+    def test_both_path_passes_holdings_details_not_config_to_purchase_status(self):
+        """both 路径把持仓明细（name/code 最小形态）交给 build_purchase_status_data。
+
+        回归：曾经误传 `config`（dict），迭代出的是键名（str）→
+        `h.get("code")` 当场 AttributeError，开启「基金申购限购」后 both 路径整条中断。
+        """
+        mock_detail = MagicMock()
+        mock_detail.name = "演示基金"
+        mock_detail.code = "000001"
+        mock_detail.market_value = 1200.0
+        mock_detail.cost = 1000.0
+
+        with (
+            patch("src.python.report.market_value._generate_details", return_value=[mock_detail]),
+            patch("src.python.report._snapshot.capture_snapshot", return_value={"diff": {}}),
+            patch("src.python.report._snapshot.fetch_history_data", return_value={"dates": []}),
+            patch("src.python.report.html_writer.write_html_report"),
+            patch("src.python.report.excel_generator.generate_excel_report"),
+            patch("src.python.core.registry.get_report_section_order", return_value=[]),
+            patch("src.python.config.is_enable_fund_deep_analysis", return_value=False),
+            patch("src.python.config.is_enable_news", return_value=False),
+            patch("src.python.config.is_enable_history", return_value=False),
+            patch(
+                "src.python.core.holding_status.build_coverage_summary",
+                return_value={"available": True, "items": [], "abnormal_count": 0, "summary": ""},
+            ),
+            patch(
+                "src.python.core.data_freshness.build_freshness_summary",
+                return_value={"available": True, "items": [], "abnormal_count": 0, "summary": ""},
+            ),
+            patch(
+                "src.python.analysis.action_advisor.build_action_data",
+                return_value={"available": True, "summary": "", "rebalance_signals": []},
+            ),
+            patch("src.python.report.purchase_status.build_purchase_status_data") as mock_purchase,
+        ):
+            mock_purchase.return_value = None
+            generate_report(
+                holdings=[MagicMock(code="000001", name="演示基金", shares=100, cost_price=10.0)],
+                config={"output_dir": "reports"},
+                reporter=MagicMock(),
+                report_type="both",
+                fetch_history=False,
+            )
+
+        mock_purchase.assert_called_once()
+        passed = mock_purchase.call_args.args[0]
+        assert isinstance(passed, list), f"必须传持仓明细列表，实传 {type(passed).__name__}"
+        assert passed and passed[0].get("code") == "000001"
+        assert passed[0].get("name") == "演示基金"
+
     def test_generate_report_both_history_off(self):
         """both 路径历史走势关闭（enable_history=False）时不调用 fetch_history_data。"""
         mock_reporter = MagicMock()

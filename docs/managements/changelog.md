@@ -15,6 +15,8 @@
 
 ### 变更
 
+- **both 路径申购限购取数接线修错（`rf-1041`）**：`_generation_both` 把 `config` 当 `holdings_details` 传给 `build_purchase_status_data`，开启「基金申购限购」（默认开）且全量表取数成功时，构建期渲染约束块迭代 dict 得到键名（str）→ `h.get("code")` 抛 `AttributeError`，HTML+Excel 双产物整条中断（`report` 命令直接失败）。改传持仓明细最小形态 `[{"name": d.name, "code": d.code} for d in details]`（与 full 路径同源同形，受阻标的口径不变）；补回归用例（`test_both_path_passes_holdings_details_not_config_to_purchase_status`）。
+
 - **智囊团复盘方向约束收敛为一句（去掉叠用的对冲措辞）**：情景段原有三处同义且互相抵消的指令——条件化动作要求、随情景段追加的「不操作是合法结论」出口、以及品种引用段「除非不对具体品种动手…无需勉强引用品种」的口子，与系统提示 Phase 3「给出量化调仓方案」并存时只能产出官样回避口吻。改为单源一句：`MANDATE_CONDITIONAL` 写清「满足什么条件动手、动什么」，条件不成立或信息不足则直接写「不操作」并点明所缺数据；`scenario_mandate()` 改由两条情景路径（标准 fallback / 配置条件情景）共用一处追加，品种引用口子压成一句、不再复述「不操作」；系统提示 Phase 3 补「结论为不操作时写明理由与触发条件」使两处口径同向。
 - **智囊团专家须具名**：召集令只要求「挑 5 位流派对立专家并标明立场」，模型常以 A/B/C/D/E 或「专家1/2」占位，可读性差。系统提示补「姓名式称呼 + 机构/头衔，禁止 A/B/C/D/E、「专家1/2」或「多/空」这类占位名，同一专家全篇用同一称呼」。
 - 上述两项均为提示词静态文案改动，`PROMPT_SCHEMA_VERSION` 递增 `rate-caliber-2 → 3` 一次性换键（四可回写模块与自检键同步重算，属预期）；`test_module_fingerprint` 的接线前基线随盐刷新；单测补「对冲措辞只出现一处」「专家具名禁止占位名」断言。

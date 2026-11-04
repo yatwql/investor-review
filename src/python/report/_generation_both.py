@@ -147,10 +147,12 @@ def _generate_report_both(
 
     # 申购限购状态（数据契约 purchase_status_data）：功能开关 `fund_purchase_limit`
     # 开启时取全量表（会话内单次）；关闭时为 None（申购状态列隐藏），
-    # 全链失败为 available=False（静默隐列，不阻断报告生成）
+    # 全链失败为 available=False（静默隐列，不阻断报告生成）。
+    # holdings_details 传最小形态（name/code，与 full 路径同源同形）——此处曾误传 `config`，
+    # 迭代 dict 只会得到键名（str），`h.get("code")` 当场 AttributeError 中断 both 路径
     from src.python.report.purchase_status import build_purchase_status_data
 
-    purchase_status_data = build_purchase_status_data(config)
+    purchase_status_data = build_purchase_status_data([{"name": d.name, "code": d.code} for d in details])
 
     # ── 2. 快照对比（始终执行） ──
     perf.start("快照对比")

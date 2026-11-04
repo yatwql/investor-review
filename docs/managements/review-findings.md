@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.1-dev
-> **编号源**：`rf-next = 1041`（新增问题提出后更新为 +1；已用最大 rf-1040，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1042`（新增问题提出后更新为 +1；已用最大 rf-1041，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -53,6 +53,7 @@
 
 | # | 问题 | 修复 |
 |---|------|------|
+| **rf-1041** | both 路径把 `config` 当持仓明细传给 `build_purchase_status_data`：开启「基金申购限购」（默认开）且取数成功时，`build_purchase_constraint_block` 迭代 config 得到键名（str）→ `h.get("code")` 抛 `AttributeError`，HTML+Excel 双产物整条中断 | 改传持仓明细最小形态 `[{"name": d.name, "code": d.code} for d in details]`（与 full 路径 `_orchestrator_data.compute_purchase_status_data` 同源同形）；补回归用例锁定「传 list 而非 dict」 |
 | **rf-1040** | LLM 四模块缓存 TTL 4h/24h 形同虚设：连续两轮「持仓与市值完全相同」仍 4/4 全 miss（预检归因 `fingerprint_changed`，非 `ttl_expired`）——指纹把行情派生量（总市值/盈亏、指数、竞争语境、量化指标、风险信号、穿透市值占比）与时效数据（事件窗分歧例块、调仓纪律回放块，新闻 15 分钟刷新且含浮点）全数锁进键 | 指纹改为「**只锁结构与口径**」：入键仅持仓成本、分类结构（`extract_stable_categories`，无市值/盈亏）、穿透品种集与行业、版本盐、生成参数、口径类附录块；行情/时效类只进提示词、时效由 TTL 兜底。`global_macro` 另按 `_APPENDIX_EXCLUDED_SECTIONS` 不注入事件窗分歧例块（口径不符 + 省 token），自检/辩论键同步剔除时效块。同步改 requirements（R-HCR-05/R-SR-04/R-EW-06）、technical §3.4 分界说明与七份单测（含新增 `test_market_derived_inputs_do_not_change_fingerprint` / `test_structural_inputs_change_fingerprint`） |
 
 ### 归档档案
