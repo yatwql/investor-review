@@ -47,26 +47,27 @@ def _precheck_lines(caplog) -> list[str]:
 class TestPerModulePrecision:
     """每个模块只对自己消费的输入敏感；别人的输入变，它必须仍命中。"""
 
-    def test_index_change_invalidates_index_consumers_only(self, llm_cache_dir):
-        """指数变化 → 直接消费指数的 global_macro 与含竞争语境的 expert_review 重算；
-        health_check / penetration_deep 的提示词不含指数段，必须仍命中。"""
+    def test_index_change_does_not_invalidate_any_module(self, llm_cache_dir):
+        """指数行情变化 **不**换键：四个模块全命中。
+
+        指数是行情派生量（分钟级变），它仍进提示词（全球政经/智囊团），
+        但时效由缓存 TTL 兜底——否则当天重跑永远全量重算。
+        """
         base = make_inputs()
         _run(base)
         changed = dict(base)
         changed["a_indices"] = {"sh000300": {"name": "沪深300", "close": 4100.0, "change_pct": 3.0}}
         flags = _run(changed)
-        assert flags[_IDX["global_macro"]] is False
-        assert flags[_IDX["expert_review"]] is False, "竞争语境块由指数渲染，须重算"
-        for key in ("health_check", "penetration_deep"):
+        for key in _IDX:
             assert flags[_IDX[key]] is True, f"{key} 不该因指数变化重算：{flags}"
 
-    def test_metrics_change_only_invalidates_expert(self, llm_cache_dir):
+    def test_metrics_change_does_not_invalidate_any_module(self, llm_cache_dir):
+        """量化指标（行情派生）变化不换键：四模块全命中。"""
         base = make_inputs()
         _run(base)
         changed = dict(base, metrics={"sharpe": 2.4, "hhi": 0.55})
         flags = _run(changed)
-        assert flags[_IDX["expert_review"]] is False
-        for key in ("global_macro", "health_check", "penetration_deep"):
+        for key in _IDX:
             assert flags[_IDX[key]] is True, f"{key} 不该因量化指标变化重算：{flags}"
 
     def test_penetration_change_invalidates_penetration_consumers(self, llm_cache_dir):
@@ -93,16 +94,15 @@ class TestPerModulePrecision:
         for key in ("global_macro", "expert_review", "penetration_deep"):
             assert flags[_IDX[key]] is True, f"{key} 不该因数据源失败集合变化重算：{flags}"
 
-    def test_history_risk_change_invalidates_risk_consumers(self, llm_cache_dir):
-        """历史风险信号变化 → 消费该摘要的模块重算（global_macro 不消费，仍命中）。"""
+    def test_history_risk_change_does_not_invalidate_any_module(self, llm_cache_dir):
+        """风险信号（行情派生：由最新 K 线现算）变化不换键：四模块全命中。"""
         base = make_inputs()
         _run(base)
         changed = dict(base)
         changed["history_data"] = dict(base["history_data"], max_drawdown_pct=-25.0)
         flags = _run(changed)
-        assert flags[_IDX["global_macro"]] is True, "global_macro 提示词不含风险信号摘要"
-        assert flags[_IDX["expert_review"]] is False
-        assert flags[_IDX["health_check"]] is False
+        for key in _IDX:
+            assert flags[_IDX[key]] is True, f"{key} 不该因风险信号变化重算：{flags}"
 
 
 class TestForceScopes:

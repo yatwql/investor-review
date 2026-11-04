@@ -184,8 +184,10 @@ class TestPromptEndToEndContainsBlock(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════
 
 
-class TestFingerprintConditionalJoin(unittest.TestCase):
-    """指纹条件并入：块空 = 与不带该段逐字节一致；块非空 = 键改变。"""
+class TestFingerprintIgnoresTimelyBlock(unittest.TestCase):
+    """调仓纪律回放块**不进**缓存键：它属行情/时效派生（含年化/回撤浮点），
+    仍进提示词，时效由 TTL 兜底——否则四模块与自检当日重跑永远全量重算。
+    """
 
     @staticmethod
     def _inputs(**kw):
@@ -193,7 +195,7 @@ class TestFingerprintConditionalJoin(unittest.TestCase):
 
         return ModuleFingerprintInputs(total_mv=100.0, total_profit=10.0, **kw)
 
-    def test_standard_modules_conditional(self):
+    def test_standard_modules_ignore_block(self):
         from src.python.llm.module_fingerprint import (
             expert_review_fingerprint,
             global_macro_fingerprint,
@@ -201,20 +203,21 @@ class TestFingerprintConditionalJoin(unittest.TestCase):
             penetration_deep_fingerprint,
         )
 
-        for fn in (global_macro_fingerprint, expert_review_fingerprint, health_check_fingerprint):
+        for fn in (
+            global_macro_fingerprint,
+            expert_review_fingerprint,
+            health_check_fingerprint,
+            penetration_deep_fingerprint,
+        ):
             base = fn(self._inputs())
             assert fn(self._inputs(schedule_replay_block="")) == base, f"{fn.__name__}: 空块改变了键"
-            assert fn(self._inputs(schedule_replay_block=_BLOCK)) != base, f"{fn.__name__}: 非空块未进键"
-        base = penetration_deep_fingerprint(self._inputs())
-        assert penetration_deep_fingerprint(self._inputs(schedule_replay_block="")) == base
-        assert penetration_deep_fingerprint(self._inputs(schedule_replay_block=_BLOCK)) != base
+            assert fn(self._inputs(schedule_replay_block=_BLOCK)) == base, f"{fn.__name__}: 时效块进了键"
 
-    def test_self_review_conditional(self):
+    def test_self_review_ignores_block(self):
         from src.python.llm.module_fingerprint import self_review_fingerprint
 
         base = self_review_fingerprint({"a": "<p>x</p>"})
-        assert self_review_fingerprint({"a": "<p>x</p>"}, schedule_replay_block="") == base
-        assert self_review_fingerprint({"a": "<p>x</p>"}, schedule_replay_block=_BLOCK) != base
+        assert self_review_fingerprint({"a": "<p>x</p>"}) == base
 
 
 # ═══════════════════════════════════════════════════════════════

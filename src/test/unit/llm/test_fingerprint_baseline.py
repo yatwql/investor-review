@@ -139,9 +139,10 @@ class TestBaselineWrittenByRun:
 
         reset_prev_module_cache_keys()
 
-        changed = {**inputs, "a_indices": {"sh000300": {"name": "沪深300", "close": 4321.0, "change_pct": 1.5}}}
+        changed = dict(inputs)
+        changed["holdings_details"] = [{**inputs["holdings_details"][0], "cost": 10001.0}]
         with caplog.at_level(logging.INFO, logger="invest"):
             flags = run_generate_all_llm(changed)
-        assert not all(flags), "输入变了应至少有一个模块未命中"
+        assert not all(flags), "结构输入变了应至少有一个模块未命中"
         assert any("相对上次进程" in r.getMessage() for r in caplog.records), "须说明基线来自上次进程"
-        assert any("a_indices" in r.getMessage() for r in caplog.records), "须点名变化的组件"
+        assert any("holdings" in r.getMessage() for r in caplog.records), "须点名变化的组件"

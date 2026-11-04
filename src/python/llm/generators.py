@@ -427,8 +427,6 @@ def generate_self_review(
             penetrated_assets,
             purchase_block=purchase_constraint_block or "",
             holding_change_block=holding_change_block or "",
-            event_impact_block=event_impact_block or "",
-            schedule_replay_block=schedule_replay_block or "",
         )
 
     def _prompt():
@@ -462,8 +460,6 @@ def generate_self_review(
             penetrated_assets,
             purchase_block=purchase_constraint_block or "",
             holding_change_block=holding_change_block or "",
-            event_impact_block=event_impact_block or "",
-            schedule_replay_block=schedule_replay_block or "",
         )
         # `outputs` 合并摘要之外另列逐模块摘要：四模块产出是自检键里唯一会随上游
         # 重算/事实校验回写而变化的段，只看合并摘要无法判断是哪一段变了。

@@ -67,6 +67,15 @@ logger = logging.getLogger("invest")
 # （lessons_cache_suffix() / signal_ledger.summary_cache_suffix()，各 2 处）。
 _LEDGER_CONTEXT_MODULES: frozenset[str] = frozenset({"expert_review"})
 
+# 统一 prompt 附录的**分段白名单排除**（模块 → 不注入的分段名）。
+# 默认四段全注入；排除表只收「该段与模块口径不符」的组合：
+#   全球政经局势谈指数与宏观，而事件窗分歧例是「单标的·事件窗·文本判定 vs 实际方向」
+#   的微观对照，放进去是噪声且多耗 token；**该段也据此不入其缓存指纹**
+#   （行情/时效类数据由 TTL 兜底，见 llm/module_fingerprint.py 模块说明）。
+_APPENDIX_EXCLUDED_SECTIONS: dict[str, frozenset[str]] = {
+    "global_macro": frozenset({"event_impact"}),
+}
+
 __all__ = [
     "is_llm_module_enabled",
     "generate_llm_content",
@@ -648,15 +657,16 @@ def _run_standard_mode(
 
     # ── 统一注入 prompt 附录（TOP3 + 数据速查表 + 代码白名单 + 申购限购约束块 + 持仓变动复盘块 + 事件窗分歧例块 + 调仓纪律回放引用块） ──
     if _user:
+        _excluded = _APPENDIX_EXCLUDED_SECTIONS.get(module_key, frozenset())
         appendix = _build_prompt_appendix(
             holdings_details,
             total_mv,
             total_cost,
             total_profit,
-            purchase_constraint_block,
-            holding_change_block,
-            event_impact_block,
-            schedule_replay_block,
+            "" if "purchase" in _excluded else purchase_constraint_block,
+            "" if "holding_change" in _excluded else holding_change_block,
+            "" if "event_impact" in _excluded else event_impact_block,
+            "" if "schedule_replay" in _excluded else schedule_replay_block,
         )
         if appendix:
             _user = _user + "\n\n" + appendix

@@ -49,6 +49,7 @@ from src.python.core.decision_header import structured_header_cache_suffix
 from src.python.llm.fingerprint import (
     build_llm_fingerprint,
     compute_fingerprint,
+    extract_stable_categories,
     extract_stable_holdings,
     extract_stable_penetration,
     risk_signals_of,
@@ -289,21 +290,17 @@ def generation_params_suffix(module: str) -> str:
 
 
 def global_macro_fingerprint(inputs: ModuleFingerprintInputs) -> str:
-    """全球政经局势：指数行情 / 总市值 / 盈亏 / 分类汇总 + 竞争语境块。
+    """全球政经局势：持仓结构 + 分类结构 + 统一附录**口径类**块 + 版本盐。
 
-    竞争语境块（组合 vs 指数今日/区间对比）由其提示词直接承载，故必须进键：
-    否则「组合未动、基准指数已动」时键不变，预检命中旧键后复用按旧指数算出的
-    对比结论。该块为**已渲染文本**，与注入提示词的实例同一（见模块 docstring）。
+    **不入键**（行情/时效类，仍进提示词，由 TTL 豁免）：指数行情、总市值/盈亏、
+    竞争语境块、事件窗分歧例块、调仓纪律回放引用块。本模块 TTL 为 24h，把分钟频
+    变动的行情与 15 分钟刷新的新闻锁进键后，24h TTL 实际从未生效。
     """
     _parts = [
-        inputs.a_indices,
-        inputs.us_indices,
-        inputs.total_mv,
-        inputs.total_profit,
-        inputs.categories,
-        inputs.competitive_context,
+        extract_stable_holdings(inputs.holdings_details),
+        extract_stable_categories(inputs.categories),
         # 事实校验规则版本：修正正文会回写模块缓存（键不变），故规则语义变化也须
-        # 换键，否则旧缓存里被旧规则改错的正文会继续被复用。本模块不走
+        # 换键，否则旧缓存里按旧规则改错的正文会继续被复用。本模块不走
         # build_llm_fingerprint，故在此单列（与那边同一常量，口径同源）。
         FACT_CHECK_RULES_VERSION,
     ]
@@ -311,10 +308,6 @@ def global_macro_fingerprint(inputs: ModuleFingerprintInputs) -> str:
         _parts.append(inputs.purchase_block)
     if inputs.holding_change_block:
         _parts.append(inputs.holding_change_block)
-    if inputs.event_impact_block:
-        _parts.append(inputs.event_impact_block)
-    if inputs.schedule_replay_block:
-        _parts.append(inputs.schedule_replay_block)
     return compute_fingerprint(*_parts) + generation_params_suffix("global_macro")
 
 
@@ -340,17 +333,11 @@ def expert_review_fingerprint(inputs: ModuleFingerprintInputs) -> str:
             categories=inputs.categories,
             history_data=inputs.history_data,
         ),
-        inputs.competitive_context,
-        inputs.metrics,
     ]
     if inputs.purchase_block:
         _parts.append(inputs.purchase_block)
     if inputs.holding_change_block:
         _parts.append(inputs.holding_change_block)
-    if inputs.event_impact_block:
-        _parts.append(inputs.event_impact_block)
-    if inputs.schedule_replay_block:
-        _parts.append(inputs.schedule_replay_block)
     _fp = compute_fingerprint(*_parts)
     _fp += debate_feature_cache_suffix()
     if decision_ledger.is_active():
@@ -370,17 +357,16 @@ def debate_procon_fingerprint(inputs: ModuleFingerprintInputs) -> str:
     **仅写侧使用**：辩论模式绕过标准预检（其缓存键族 ``llm_debate_*`` 与标准
     ``llm_expert_review_*`` 不同），故不进 ``MODULE_FINGERPRINT_BUILDERS``。
 
-    输入口径以其提示词实际包含的段落为准——基础持仓 + 竞争语境块 + 量化指标 +
-    辩论增强后缀 + ``pipeline_data`` 派生的【环比变化】【数据质量降级】两段
-    （白脸/黑脸复用 ``_build_expert_review_prompt``，这两段随之进入其提示词）+
-    统一 prompt 附录四块（申购限购 / 持仓变动复盘 / 事件窗分歧例 / 调仓纪律回放；
-    白脸/黑脸经 ``generate_llm_module`` → skeleton 追加附录，故与四标准模块同形
-    **非空才并入**——否则仅附录内容变化（如申购状态更新）时键不动，回放带旧
+    输入口径以其提示词实际包含的段落为准——持仓结构与分类结构 + 辩论增强后缀 +
+    ``pipeline_data`` 派生的【环比变化】【数据质量降级】两段（白脸/黑脸复用
+    ``_build_expert_review_prompt``，这两段随之进入其提示词）+ 统一 prompt 附录中
+    的**口径类**块（申购限购 / 持仓变动复盘；经 skeleton 追加附录，故与四标准模块
+    同形**非空才并入**——否则仅附录内容变化（如申购状态更新）时键不动，回放带旧
     附录上下文的旧输出；空串不追加 part，键与引入前逐字节一致）。
 
-    **刻意不并入** ``history_data`` 与决策教训、信号摘要、结构化决策头后缀：
-    辩论提示词不含这些段落（不传 ``history_data``、不开信号预消化与结构化决策头），
-    并入只会让每次运行都换键 —— 白脸/黑脸两次昂贵调用每份报告必 miss。
+    **刻意不并入**：``history_data`` 与决策教训、信号摘要、结构化决策头后缀
+    （辩论提示词不含这些段落）；以及纯行情/时效类输入（totals / 竞争语境 /
+    量化指标 / 事件窗分歧例块 / 调仓纪律回放块）——它们仍进提示词，但由 TTL 兜底。
     """
     _parts = [
         build_llm_fingerprint(
@@ -392,18 +378,12 @@ def debate_procon_fingerprint(inputs: ModuleFingerprintInputs) -> str:
             penetrated_assets=inputs.penetrated_assets,
             categories=inputs.categories,
         ),
-        inputs.competitive_context,
-        inputs.metrics,
     ]
-    # 条件并入：进提示词必进指纹；块空不追加 part（逐字节回退，不误伤存量缓存）
+    # 条件并入：口径类块进提示词即进键；块空不追加 part（逐字节回退，不误伤存量缓存）
     if inputs.purchase_block:
         _parts.append(inputs.purchase_block)
     if inputs.holding_change_block:
         _parts.append(inputs.holding_change_block)
-    if inputs.event_impact_block:
-        _parts.append(inputs.event_impact_block)
-    if inputs.schedule_replay_block:
-        _parts.append(inputs.schedule_replay_block)
     return (
         compute_fingerprint(*_parts)
         + debate_feature_cache_suffix()
@@ -444,17 +424,14 @@ def debate_synthesis_fingerprint(inputs: ModuleFingerprintInputs, synthesis_prom
 def health_check_fingerprint(inputs: ModuleFingerprintInputs) -> str:
     """持仓体检报告：基础指纹 + 数据质量详细状态块 + 信号预消化后缀。
 
-    数据质量块（【数据质量详细状态】）由其提示词直接承载，故必须进键：否则
-    「数据源故障期间生成并缓存、随后源恢复」时持仓未变故键不变，预检命中旧键、
-    复用陈述与此刻事实相反的故障结论。该块为**已渲染文本**，与注入提示词的实例
-    同一（见模块 docstring）。
+    数据质量块（【数据质量详细状态】）由其提示词直接承载，且是**本次运行**的
+    数据源画像（属口径类事实，不是行情）：数据源故障期间生成的结论若被复用，
+    会陈述与此刻事实相反的故障状态，故进键。该块为**已渲染文本**，与注入
+    提示词的实例同一（见模块 docstring）。
 
-    成本口径：该块是**本次运行**的数据源画像（事件集只在进程内累积，不含时间戳
-    等易变字段），且本模块指纹本就含 ``total_today_profit``——交易日内持仓一有
-    盈亏变化即换键，故纳入本块带来的边际额外失效接近零。
-
-    同理由纳入 ``pipeline_data`` 派生的【环比变化】【数据质量降级】两段（体检
-    提示词同样承载它们，见 ``_pipeline_block_cache_suffix``）。
+    ``pipeline_data`` 派生的【环比变化】【数据质量降级】两段同属口径类事实，同进。
+    纯行情/时效类输入（totals / 风险信号 / 事件窗分歧例块 / 调仓纪律回放块）
+    不入键——它们仍进提示词，由 TTL 兜底。
     """
     _parts = [
         build_llm_fingerprint(
@@ -473,10 +450,6 @@ def health_check_fingerprint(inputs: ModuleFingerprintInputs) -> str:
         _parts.append(inputs.purchase_block)
     if inputs.holding_change_block:
         _parts.append(inputs.holding_change_block)
-    if inputs.event_impact_block:
-        _parts.append(inputs.event_impact_block)
-    if inputs.schedule_replay_block:
-        _parts.append(inputs.schedule_replay_block)
     _fp = compute_fingerprint(*_parts)
     _fp += _signal_digest_cache_suffix(inputs.pipeline_data)
     _fp += _pipeline_block_cache_suffix(inputs.pipeline_data)
@@ -485,7 +458,12 @@ def health_check_fingerprint(inputs: ModuleFingerprintInputs) -> str:
 
 
 def penetration_deep_fingerprint(inputs: ModuleFingerprintInputs) -> str:
-    """穿透深度分析：基础指纹（穿透资产含 mv/sector/ratio 全字段）+ 条件并入约束块。"""
+    """穿透深度分析：基础指纹（穿透资产含 sector 行业归属）+ 条件并入**口径类**约束块。
+
+    穿透资产的 mv/ratio 是行情派生值（ETF 报价变动即变），不入键；sector 是
+    行业归属，属结构性事实，保留。事件窗分歧例块与调仓纪律回放块仍进提示词，
+    但不入键（时效类，由 TTL 兜底）。
+    """
     _base = build_llm_fingerprint(
         total_mv=inputs.total_mv,
         total_cost=inputs.total_cost,
@@ -502,13 +480,11 @@ def penetration_deep_fingerprint(inputs: ModuleFingerprintInputs) -> str:
         for part in (
             inputs.purchase_block,
             inputs.holding_change_block,
-            inputs.event_impact_block,
-            inputs.schedule_replay_block,
         )
         if part
     ]
     if _extra:
-        # 条件并入：进提示词必进指纹；两块均空时不追加 part（逐字节回退）
+        # 条件并入：口径类块进提示词即进键；两块均空时不追加 part（逐字节回退）
         return compute_fingerprint(_base, *_extra) + generation_params_suffix("penetration_deep")
     return _base + generation_params_suffix("penetration_deep")
 
@@ -519,8 +495,6 @@ def self_review_fingerprint(
     penetrated_assets: list[dict] | None = None,
     purchase_block: str = "",
     holding_change_block: str = "",
-    event_impact_block: str = "",
-    schedule_replay_block: str = "",
 ) -> str:
     """生成后自检：**内容寻址**指纹——各模块产出文本 + 数据摘要。
 
@@ -528,14 +502,18 @@ def self_review_fingerprint(
     不存在「预检侧提前算同一键」的需求，故不进 ``MODULE_FINGERPRINT_BUILDERS``
     （该表供预检/写两侧共享同一构造，键形为 ``ModuleFingerprintInputs``）。
 
-    覆盖判据仍是「提示词是否真的含该段」：自检提示词由各模块产出正文 + 持仓/穿透
-    摘要构成，三者都进键；产出未变（含全部命中缓存）时键不变 → 自检同样命中缓存。
+    覆盖判据：自检提示词由各模块产出正文 + 持仓/穿透摘要构成，三者都进键；
+    产出未变（含全部命中缓存）时键不变 → 自检同样命中缓存。
     提示词文本版本盐（`PROMPT_SCHEMA_VERSION`）并入分段构成——自检清单/禁止项等
     静态文案改动同样须换键，否则旧自检结论会按旧清单继续被复用。
 
+    **口径类附录块进键，时效类附录块不进**：申购限购 / 持仓变动复盘属口径事实
+    （进键）；事件窗分歧例 / 调仓纪律回放属行情与新闻派生数据（仍进提示词，
+    由 TTL 兜底）——否则自检会跟着新闻刷新每 15 分钟全量重算。
+
     Args:
         module_outputs: 模块名 → HTML 产出（None/空串按缺失处理）。
-        holdings_details: 持仓明细（仅取 name/code/市值稳定字段）。
+        holdings_details: 持仓明细（仅取 name/code/cost 稳定字段）。
         penetrated_assets: 穿透资产列表。
         purchase_block: 申购限购约束块（非空 → 提示词附录含块，故进键；
             块空 → 逐字节沿用不带该段的原形态，键与引入前一致）。
@@ -548,8 +526,6 @@ def self_review_fingerprint(
         penetrated_assets,
         purchase_block=purchase_block,
         holding_change_block=holding_change_block,
-        event_impact_block=event_impact_block,
-        schedule_replay_block=schedule_replay_block,
     )
     return compute_fingerprint(*_parts.values()) + generation_params_suffix("self_review")
 
@@ -560,8 +536,6 @@ def self_review_fingerprint_parts(
     penetrated_assets: list[dict] | None = None,
     purchase_block: str = "",
     holding_change_block: str = "",
-    event_impact_block: str = "",
-    schedule_replay_block: str = "",
 ) -> dict[str, object]:
     """自检指纹的**分段构成**（有序）：同一事实源供指纹与「哪一段变了」诊断共用。
 
@@ -581,15 +555,11 @@ def self_review_fingerprint_parts(
         "holdings": extract_stable_holdings(holdings_details),
         "penetration": extract_stable_penetration(penetrated_assets),
     }
-    # 条件并入：进提示词必进指纹；块空不追加 part（逐字节回退）
+    # 条件并入（口径类）：块空不追加 part（逐字节回退）
     if purchase_block:
         parts["purchase"] = purchase_block
     if holding_change_block:
         parts["holding_change"] = holding_change_block
-    if event_impact_block:
-        parts["event_impact"] = event_impact_block
-    if schedule_replay_block:
-        parts["schedule_replay"] = schedule_replay_block
     return parts
 
 

@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.1-dev
-> **编号源**：`rf-next = 1040`（新增问题提出后更新为 +1；已用最大 rf-1039，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1041`（新增问题提出后更新为 +1；已用最大 rf-1039，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -39,7 +39,7 @@
 | `src/test/conftest.py` 1155 行（测试登记线 900） | fixture 族按域下沉（行情/LLM/网络/持久化各一模块），conftest 只留 autouse 装配与 marker 注册 |
 | `src/python/llm/generators_orchestrator.py` 905 行（主程序登记线 700） | 生成编排与共享钩子按模块族再分；预检键/指纹段可下沉 `generators_orchestrator_cache.py` |
 | `src/python/report/decision_basis.py` 777 行（主程序登记线 700） |形态 A 章内块装配已含信号清单/可信度/风险预算/纪律/结算/约束六段；拆分方向：信号清单与区分度登记（`_build_signal_rows`＋`BACKTEST_CONCLUSIONS`）可下沉 `decision_basis_signals.py`，风险预算/纪律/结算各成一簇（均只读输入、互不依赖） |
-| `src/python/llm/skeleton.py` 815 行（主程序登记线 700） | 模板数据与渲染逻辑可下沉 `llm/skeleton_*`（骨架模板 / 占位渲染 / 缓存归因 / 回写四簇并存） |
+| `src/python/llm/skeleton.py` 825 行（主程序登记线 700） | 模板数据与渲染逻辑可下沉 `llm/skeleton_*`（骨架模板 / 占位渲染 / 缓存归因 / 回写四簇并存） |
 | `src/python/cli/_handlers.py` 852 行（主程序登记线 700） | 命令处理器按渠道分文件（generate/config/data 三簇），保持入口薄壳 |
 | `src/python/tui/handlers_holdings.py` 853 行（红线 1000） | 面板流程与输入采集高度耦合（共用 `_Session`），拆分收益低于回归面；再涨 ~150 行则按「面板流程 / 输入采集」两段拆，并把 `_market_data` 的会话内记忆一并做进去 |
 | `src/python/fetcher/financial_report.py` 729 行（主程序登记线 700） | 刚过线：再涨则按「索引 / 正文 / 全文定位」三阶下沉（负缓存样板统一在 `cache/_negative.py`） |
@@ -50,6 +50,10 @@
 ### 开发期已修复（0.16.17-dev）
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
+
+| # | 问题 | 修复 |
+|---|------|------|
+| **rf-1040** | LLM 四模块缓存 TTL 4h/24h 形同虚设：连续两轮「持仓与市值完全相同」仍 4/4 全 miss（预检归因 `fingerprint_changed`，非 `ttl_expired`）——指纹把行情派生量（总市值/盈亏、指数、竞争语境、量化指标、风险信号、穿透市值占比）与时效数据（事件窗分歧例块、调仓纪律回放块，新闻 15 分钟刷新且含浮点）全数锁进键 | 指纹改为「**只锁结构与口径**」：入键仅持仓成本、分类结构（`extract_stable_categories`，无市值/盈亏）、穿透品种集与行业、版本盐、生成参数、口径类附录块；行情/时效类只进提示词、时效由 TTL 兜底。`global_macro` 另按 `_APPENDIX_EXCLUDED_SECTIONS` 不注入事件窗分歧例块（口径不符 + 省 token），自检/辩论键同步剔除时效块。同步改 requirements（R-HCR-05/R-SR-04/R-EW-06）、technical §3.4 分界说明与七份单测（含新增 `test_market_derived_inputs_do_not_change_fingerprint` / `test_structural_inputs_change_fingerprint`） |
 
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-04）
