@@ -1358,7 +1358,7 @@ get_ttl(data_type)
 
 **负缓存单一样板**：四类确定性缺失（标的正文缺失 / 章节清单不可得 / 该文档无该章节 / provider 404 探测）统一经 `cache/_negative.py::NegativeCache` 登记——调用点只声明「标签 + 键前缀 + TTL 类型」，锁/命中计数/汇总文案由该类统一承接，`cache.negative_cache_entries()` 给出可枚举清单、`nonzero_summaries()` 直接产出报告级汇总行（新增一类负缓存不再复制一份 lock+counter+reset 样板）。
 
-**负缓存同源**：缺失探测类负缓存（`datasink_probe_miss_` 12h、`report_symbol_miss_` 6h、`report_sections_miss_` 6h、`hold_qmiss_` 6h、`idx_hist_miss_` 12h、`idx_hist_backoff_` 1h）登记为正式缓存类型，读侧 TTL、`cleanup_expired` 判定、`cache_ttl` 覆盖与文档表格共用同一注册表条目（未登记时会被按未注册默认 24h 判定，滞留更久且配置不可见）。
+**负缓存同源**：缺失探测类负缓存（`datasink_probe_miss_` 12h、`report_symbol_miss_` 6h、`report_sections_miss_` 6h、`hold_qmiss_` 6h、`idx_hist_miss_` 12h、`idx_hist_backoff_` 1h、`fmgr_miss_` 12h、`fmgr_backoff_` 1h）登记为正式缓存类型，读侧 TTL、`cleanup_expired` 判定、`cache_ttl` 覆盖与文档表格共用同一注册表条目（未登记时会被按未注册默认 24h 判定，滞留更久且配置不可见）。
 
 ### 3.3 原子写入与并发安全
 

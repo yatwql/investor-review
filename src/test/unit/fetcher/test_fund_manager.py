@@ -404,3 +404,62 @@ class TestManagerTimeoutBudget(unittest.TestCase):
         self.assertIsNone(html)
         self.assertTrue(unreachable, "握手/建连失败必须归为站点不可达")
         mock_archive.assert_not_called()
+
+
+class TestManagerNegativeCache:
+    """失败结论入负缓存（缺陷回归：同一轮多处调用各撞一次，`fund_manager_017730×4`）。
+
+    穿透 / 基金经理分析 / 菜单预热在一份报告里各调一次 `fetch_fund_manager`，无负缓存时
+    每次都重走 HTTP 并再记一次缓存未命中。两类结论分开存：确定性解析不出（12h）与本次
+    不可达（1h 短退避，恢复后自动重取）。
+    """
+
+    def test_second_call_after_failure_skips_http(self):
+        from src.python.fetcher import fund_manager as fm
+
+        calls = {"n": 0}
+
+        def _req(_code):
+            calls["n"] += 1
+            return None, False
+
+        with (
+            patch.object(fm, "_request_fund_html_status", _req),
+            patch.object(fm, "_parse_manager_from_archive_page", lambda _c: None),
+        ):
+            assert fm.fetch_fund_manager("990001") is None
+            assert fm.fetch_fund_manager("990001") is None
+        assert calls["n"] == 1, "同轮第二次调用仍发请求——负缓存未生效"
+
+    def test_unreachable_marks_short_backoff_not_deterministic_miss(self):
+        from src.python.fetcher import fund_manager as fm
+
+        with (
+            patch.object(fm, "_request_fund_html_status", lambda _c: (None, True)),
+            patch.object(fm, "_parse_manager_from_archive_page", lambda _c: None),
+        ):
+            assert fm.fetch_fund_manager("990002") is None
+        assert fm.FUND_MANAGER_BACKOFF.is_missing(fm.FUND_MANAGER_BACKOFF.key("990002"))
+        assert not fm.FUND_MANAGER_MISS.is_missing(fm.FUND_MANAGER_MISS.key("990002"))
+
+    def test_parse_failure_marks_deterministic_miss(self):
+        from src.python.fetcher import fund_manager as fm
+
+        with (
+            patch.object(fm, "_request_fund_html_status", lambda _c: ("<html></html>", False)),
+            patch.object(fm, "_parse_manager_from_archive_page", lambda _c: None),
+        ):
+            assert fm.fetch_fund_manager("990003") is None
+        assert fm.FUND_MANAGER_MISS.is_missing(fm.FUND_MANAGER_MISS.key("990003"))
+        assert not fm.FUND_MANAGER_BACKOFF.is_missing(fm.FUND_MANAGER_BACKOFF.key("990003"))
+
+    def test_success_leaves_no_negative_marker(self):
+        from src.python.fetcher import fund_manager as fm
+
+        with (
+            patch.object(fm, "_request_fund_html_status", lambda _c: (_HTML_INFOOFUND, False)),
+        ):
+            result = fm.fetch_fund_manager("990004")
+        assert result is not None
+        assert not fm.FUND_MANAGER_MISS.is_missing(fm.FUND_MANAGER_MISS.key("990004"))
+        assert not fm.FUND_MANAGER_BACKOFF.is_missing(fm.FUND_MANAGER_BACKOFF.key("990004"))

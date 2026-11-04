@@ -426,6 +426,18 @@ _CACHE_ONLY_REGISTRY: tuple[DataModuleDef, ...] = (
         cache_ttl=6 * 3600,
     ),
     DataModuleDef(
+        "基金经理主页空（确定性）",
+        "fmgr_miss",
+        cache_prefixes=("fmgr_miss_",),
+        cache_ttl=12 * 3600,
+    ),
+    DataModuleDef(
+        "基金经理主页不可达退避",
+        "fmgr_backoff",
+        cache_prefixes=("fmgr_backoff_",),
+        cache_ttl=3600,
+    ),
+    DataModuleDef(
         "指数历史全链空（确定性）",
         "idx_hist_miss",
         cache_prefixes=("idx_hist_miss_",),

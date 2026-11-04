@@ -305,6 +305,8 @@
 | `idx_hist_miss` | `idx_hist_miss_{chain}:{code}.json` | 12h | — | 指数历史全链空（各源应答但无数据，确定性） |
 | `idx_hist_backoff` | `idx_hist_backoff_{chain}:{code}.json` | 1h | — | 指数历史全链空且含传输失败（短退避，恢复后自动重取） |
 | `report_sections_backoff` | `report_sections_backoff_{doc_id}.json` | 30min | — | 章节清单**探测失败**的短退避（传输级挂起，成功后立即解除；与上一条语义不同） |
+| `fmgr_miss` | `fmgr_miss_{code}.json` | 12h | — | 基金经理主页与档案页均解析不出（确定性空，避免同轮多处调用各撞一次） |
+| `fmgr_backoff` | `fmgr_backoff_{code}.json` | 1h | — | 基金经理主页不可达的短退避（恢复后自动重取） |
 
 ##### 历史走势类
 
