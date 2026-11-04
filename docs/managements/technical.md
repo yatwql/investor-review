@@ -3580,7 +3580,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `backtest_run_date` | 回测产物最新运行日（委派 `eval_status.last_eval_date()`；产物缺失回落 `BACKTEST_DATE_FALLBACK`），经契约字段 `backtest_as_of` 双端显示 | 行动建议（章内嵌块） | 分析计算 | 随 `decision_basis` |
 | `portfolio_constraints` | 集中度/相关性约束标注（单品种沿用 `rebalance.threshold`、行业/相关性需显式配置；只标注不阻断；缺数据/短样本记「未评估」） | 行动建议（章内嵌块） | 监控 | 开关 `portfolio_constraints`（默认关，机制与诊断组） |
 | `evaluate_constraints` | 约束判定入口（三道上限 → 超限项 + `breached_codes`；开关关闭返回 `{"enabled": False}`） | 行动建议（章内嵌块） | 分析计算 | 随 `portfolio_constraints` |
-| `scenario_mandate` | 情景段方向约束口径选择（默认条件化动作 + 触发条件 + 「不操作」出口；`decision_basis` 关闭走回退强制方向口径；回退口径经 `scenario_mandate_cache_suffix` 以 `_ms` 后缀换键，两套文本常量共存一版） | LLM 生成 | LLM 生成 | 随 `decision_basis` |
+| `scenario_mandate` | 情景段方向约束口径选择（默认一句收敛：动手条件 + 「不操作」及所缺数据，两情景路径共用；`decision_basis` 关闭走回退强制方向口径；回退口径经 `scenario_mandate_cache_suffix` 以 `_ms` 后缀换键，两套文本常量共存一版） | LLM 生成 | LLM 生成 | 随 `decision_basis` |
 | `build_structured_header_instruction` | 决策头结构化契约构建（提示词侧追加 `决策头：…` 行，与解析器口径锁定） | 行动建议 | 监控 | 已内置（缓存后缀 `_dh` 常驻） |
 | `decision_header` | 决策词归一解析器（标签优先/长词优先/否定守卫/复合词左边界/二义不猜） | 行动建议 | 监控 | 已内置（A 通道无开关） |
 | `deterministic_signal` | 确定性信号模块（实时注入 + 跨期沉淀双面：温度/分位/尾部风险预消化信号行 + 确定性评级账本沉淀，内置五类、因子目录随实验开关追加第 6 类；原 `signal_pre_digest`/`signal_ledger` 两开关合并转正） | LLM 生成 | LLM 生成 | 开关 `deterministic_signal`（默认开，机制与诊断组） |

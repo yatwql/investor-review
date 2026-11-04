@@ -881,7 +881,7 @@ penetrated_assets ──→ extract_stable_penetration()
 
 **事实校验规则版本（`fact_checker.FACT_CHECK_RULES_VERSION`）**：校验修正后的正文会**回写模块缓存**（`llm.skeleton.write_back_module_cache`，键刻意不变），缓存正文因此与「哪一版校验规则改过它」绑定。规则语义变更（新增/收窄非收益率豁免、改写策略变化）而不换键，旧缓存里被旧规则改错的正文会继续被复用，修复对存量缓存不生效、只能等 TTL 过期。故该版本号并入四可回写模块（`global_macro` / `expert_review` / `health_check` / `penetration_deep`）与辩论键的指纹：改规则语义即递增版本，一次性换键重算。
 
-**情景段方向约束变体（`scenario_mandate_cache_suffix`）**：`prompts_action.py` 保留两套方向约束文本——默认口径要求「条件化动作 + 触发条件，触发条件不满足即写明『不操作』及所缺数据」，回退口径为旧的强制方向表述；`decision_basis` 关闭时走回退口径，并给 `expert_review` 指纹追加 `_ms` 后缀，保证回滚当次即换键（不复用新口径缓存）。同时 `self_review` 指纹并入 `PROMPT_SCHEMA_VERSION`——自检清单是静态文案，内容寻址键原不含文本版本，补此盐后改清单即换键。
+**情景段方向约束变体（`scenario_mandate_cache_suffix`）**：`prompts_action.py` 保留两套方向约束文本——默认口径以**一句**给出「满足什么条件动手、动什么」，条件不成立或信息不足就写『不操作』并点明所缺数据，标准情景与配置条件情景两路径共用同一句（不叠同义对冲句）；回退口径为旧的强制方向表述；`decision_basis` 关闭时走回退口径，并给 `expert_review` 指纹追加 `_ms` 后缀，保证回滚当次即换键（不复用新口径缓存）。同时 `self_review` 指纹并入 `PROMPT_SCHEMA_VERSION`——自检清单是静态文案，内容寻址键原不含文本版本，补此盐后改清单即换键。
 
 **版本盐首尾日志**：两个版本号（`PROMPT_SCHEMA_VERSION` / `FACT_CHECK_RULES_VERSION`）都会改变四可回写模块与辩论键的缓存键，但**运行日志里看不出来**——模块整批重算的归因只有「键变了」这一信号，看不到版本盐就只能翻代码比对指纹才能确认「这次全量重算是改了规则还是缓存被裁」。故单源出口 `llm.fingerprint.cache_key_salts()` / `log_cache_key_salts()` 在**本轮开始**（报告边界）打一行 INFO，并在**本轮结束**的 `[cache] 本次命中 …` 汇总行带上尾注（`；缓存键版本盐：提示词=… 校验规则=…`）。收尾行从 `cache._stats` 惰性读 `llm.fingerprint`（cache → llm 单向、无环）。
 
@@ -1010,9 +1010,9 @@ cache_get(optimistic_key, ttl) → 命中 → 直接返回（+ 缓存标记）
 **智囊团深度复盘** (`_SYSTEM_EXPERT_REVIEW`)：三阶段格式：
 | 阶段 | 内容 |
 |:-----|:------|
-| Phase 1 — 召集令 | 指出组合核心矛盾，挑 5 位流派对立专家并标明立场 |
+| Phase 1 — 召集令 | 指出组合核心矛盾，挑 5 位流派对立专家并标明立场；专家须具名（称呼 + 机构/头衔），禁止 A/B/C/D/E 等占位名，全篇同一称呼 |
 | Phase 2 — 圆桌会 | 两轮辩论：第一轮立足结构提方向，第二轮互相反驳 |
-| Phase 3 — 定音锤 | 量化调仓方案 + 风险提示（不可调穿透层资产） |
+| Phase 3 — 定音锤 | 量化调仓方案 + 风险提示（不可调穿透层资产）；结论为不操作时写明理由与触发条件 |
 
 约束：每个论点引用品种代码和收益率；禁止虚构数据；标注 `(QDII滞后1日)` 的基金不得讨论本日盈亏。
 
