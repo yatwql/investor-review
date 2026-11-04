@@ -1356,7 +1356,7 @@ get_ttl(data_type)
 
 **盘中覆盖可见**：若用户同时配了 `cache_ttl.{type}` 而该类型盘中敏感，`get_ttl` 会打一条 INFO（每类型一次）说明"盘中以 `market_hour_ttl` 为准，`cache_ttl` 仅盘后生效"——把静默失效变成可观测。
 
-**负缓存单一样板**：四类确定性缺失（标的正文缺失 / 章节清单不可得 / 该文档无该章节 / provider 404 探测）统一经 `cache/_negative.py::NegativeCache` 登记——调用点只声明「标签 + 键前缀 + TTL 类型」，锁/命中计数/汇总文案由该类统一承接，`cache.negative_cache_entries()` 给出可枚举清单、`nonzero_summaries()` 直接产出报告级汇总行（新增一类负缓存不再复制一份 lock+counter+reset 样板）。
+**负缓存单一样板**：确定性缺失与传输级短退避（标的正文缺失 / 章节清单不可得 / 该文档无该章节 / provider 404 探测 / 基金季报空季度 / 指数历史全链空 / 基金经理主页空与不可达——完整清单见 §缓存域注册表与 `datasource.md` 负缓存表）统一经 `cache/_negative.py::NegativeCache` 登记——调用点只声明「标签 + 键前缀 + TTL 类型」，锁/命中计数/汇总文案由该类统一承接，`cache.negative_cache_entries()` 给出可枚举清单、`nonzero_summaries()` 直接产出报告级汇总行（新增一类负缓存不再复制一份 lock+counter+reset 样板）。
 
 **负缓存同源**：缺失探测类负缓存（`datasink_probe_miss_` 12h、`report_symbol_miss_` 6h、`report_sections_miss_` 6h、`hold_qmiss_` 6h、`idx_hist_miss_` 12h、`idx_hist_backoff_` 1h、`fmgr_miss_` 12h、`fmgr_backoff_` 1h）登记为正式缓存类型，读侧 TTL、`cleanup_expired` 判定、`cache_ttl` 覆盖与文档表格共用同一注册表条目（未登记时会被按未注册默认 24h 判定，滞留更久且配置不可见）。
 
@@ -3983,7 +3983,7 @@ web/ (Web 服务层，薄入口)
 
 **盘中特殊**：交易时段内价格/指数类走短 TTL，收盘后回落日级 TTL；收市后只读缓存（CACHE_ONLY）避免取到收盘价当实时价。
 
-**负缓存纪律**：只在**确定性**缺失（404/空正文/标的无此章节）时落负缓存，传输级失败不落（否则一次抖动会把该标的静默屏蔽整个负缓存周期）；负缓存 TTL 短于正缓存，且按标的/（文档,章节）粒度分区。
+**负缓存纪律**：分两级——**确定性缺失**（404/空正文/标的无此章节）落长 TTL 的 `*_miss`（6~12h）；**传输级失败**（握手/连接/读超时）只允许落 `*_backoff` 短退避（≤1h，恢复后自动重取），不得落长 TTL，否则一次抖动会把该标的静默屏蔽整个负缓存周期。新增一类须成对命名与登记（`*_miss` / `*_backoff`），前缀不得被其他已登记前缀包含；负缓存 TTL 短于正缓存，且按标的/（文档,章节）粒度分区。
 
 **托管边界**：缓存引擎只清理自己写入的包封文件；脚本自管产物（性能/健康历史等）落在同一目录时由各自模块负责保留策略。
 
