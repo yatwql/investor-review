@@ -59,6 +59,18 @@ def _force_utf8_stdio() -> None:
 _force_utf8_stdio()
 
 
+def repo_relative_posix(path: Path, repo_root: Path = REPO_ROOT) -> str:
+    """相对**给定仓库根**的 POSIX 路径（根外路径退回 `as_posix()` 绝对形态）。
+
+    与 :func:`rel` 同义，只是仓库根可传：扫描器逐文件判定豁免时根是入参而非全局常量
+    （构造合成目录的单测也要能按自己的根算相对路径）。
+    """
+    try:
+        return Path(path).resolve().relative_to(Path(repo_root).resolve()).as_posix()
+    except ValueError:
+        return Path(path).as_posix()
+
+
 def rel(path: Path) -> str:
     """仓库相对路径，**POSIX 分隔符**（非仓库内路径原样返回，便于单测传合成路径）。
 
@@ -67,10 +79,17 @@ def rel(path: Path) -> str:
     调用方的字符串比较/拼接会全部失配（`parse_tree_paths` 的 `/` 拼接
     与 `_actual_files()` 的 `\\` 比对不上，导致“目录树缺全部条目”误报）。
     """
-    try:
-        return Path(path).resolve().relative_to(REPO_ROOT).as_posix()
-    except ValueError:
-        return Path(path).as_posix()
+    return repo_relative_posix(path, REPO_ROOT)
+
+
+def file_signature(path: Path) -> str:
+    """文件事实指纹 `size:mtime_ns`（缓存命中判定用，**不读内容**）。
+
+    结论缓存的输入指纹统一走此处：两个检查域各自实现一份时，改了指纹口径（如
+    换成内容哈希）只会改到其中一处，另一处继续拿旧口径比对 → 缓存静默命中错口径。
+    """
+    st = path.stat()
+    return f"{st.st_size}:{st.st_mtime_ns}"
 
 
 def add_common_args(parser: argparse.ArgumentParser) -> None:

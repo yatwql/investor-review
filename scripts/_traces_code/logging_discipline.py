@@ -22,6 +22,8 @@ import ast
 from pathlib import Path
 from typing import cast
 
+from _shared.checklib import repo_relative_posix as _rel_posix
+
 #: 整目录豁免（交互呈现层：终端 UI 与命令行入口，其输出即终端交互本身）
 _PRINT_EXEMPT_DIR_PREFIXES = (
     "src/python/tui/",
@@ -39,14 +41,6 @@ _PRINT_EXEMPT_FILES = frozenset(
         "src/python/startup_wizard.py",
     }
 )
-
-
-def _rel_posix(fpath: Path, repo_root: Path) -> str:
-    """仓库相对 POSIX 路径（不在仓库内时退回绝对形态，避免误判豁免）。"""
-    try:
-        return fpath.resolve().relative_to(Path(repo_root).resolve()).as_posix()
-    except ValueError:
-        return fpath.as_posix()
 
 
 def _is_print_exempt(rel_path: str) -> bool:

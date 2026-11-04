@@ -1,4 +1,4 @@
-"""check-test-markers.py 测试标记合规检查（AST 静态提取 / 目录期望标记 / 违规判定）。
+"""`_test_redundancy/markers.py` 标记合规支路（AST 静态提取 / 目录期望标记 / 违规判定）。
 
 覆盖 `_extract_markers_from_file` 的三种标记来源（模块级 pytestmark、类/方法装饰器、
 语法错误降级）、`_get_relative_dir` 的目录键、`check_file` 的四类违规分支
@@ -21,10 +21,10 @@ pytestmark = [pytest.mark.unit, pytest.mark.unit_scripts, pytest.mark.usefixture
 
 @pytest.fixture(name="mod")
 def fixture_mod():
-    """加载 `scripts/check-test-markers.py` 为可测模块。"""
+    """加载 `scripts/_test_redundancy/markers.py`（`check-test-redundancy` 的标记合规支路）。"""
     from src.test._script_loader import load_script
 
-    return load_script("check-test-markers.py")
+    return load_script("_test_redundancy/markers.py", module_name="_markers_under_test")
 
 
 @pytest.fixture(name="isolated_dir")
@@ -113,7 +113,7 @@ class TestCheckFile:
             "test_sample.py",
             "import pytest\npytestmark = [pytest.mark.unit, pytest.mark.unit_zzz]\n",
         )
-        violations = mod.check_file(path, verbose=False, ci_mode=True)
+        violations = mod.check_file(path)
         assert len(violations) == 1
         assert "unit_zzz" in violations[0]
         assert "未注册" in violations[0]
@@ -125,7 +125,7 @@ class TestCheckFile:
             "test_sample.py",
             "import pytest\npytestmark = [pytest.mark.unit, pytest.mark.legacy_marker]\n",
         )
-        violations = mod.check_file(path, verbose=False, ci_mode=True)
+        violations = mod.check_file(path)
         assert len(violations) == 1
         assert "已移除" in violations[0]
 
@@ -135,7 +135,7 @@ class TestCheckFile:
             "test_sample_edge.py",
             "import pytest\npytestmark = [pytest.mark.unit, pytest.mark.unit_core]\n",
         )
-        violations = mod.check_file(path, verbose=False, ci_mode=True)
+        violations = mod.check_file(path)
         assert len(violations) == 1
         assert "_edge.py" in violations[0]
 
@@ -145,7 +145,7 @@ class TestCheckFile:
             "test_sample_edge.py",
             "import pytest\npytestmark = [pytest.mark.unit, pytest.mark.unit_core, pytest.mark.edge]\n",
         )
-        assert mod.check_file(path, verbose=False, ci_mode=True) == []
+        assert mod.check_file(path) == []
 
     def test_dir_expectation_unmet_reported(self, mod, isolated_dir):
         """unit/core 目录期望 {unit, unit_core}，域标记 unit_core 缺失即报违规。"""
@@ -154,7 +154,7 @@ class TestCheckFile:
             "unit/core/test_cache.py",
             "import pytest\npytestmark = [pytest.mark.edge]\n",
         )
-        violations = mod.check_file(path, verbose=False, ci_mode=True)
+        violations = mod.check_file(path)
         assert len(violations) == 1
         assert "域标记" in violations[0]
         assert "unit_core" in violations[0]
@@ -165,7 +165,7 @@ class TestCheckFile:
             "unit/core/test_cache.py",
             "import pytest\npytestmark = [pytest.mark.unit, pytest.mark.unit_core]\n",
         )
-        assert mod.check_file(path, verbose=False, ci_mode=True) == []
+        assert mod.check_file(path) == []
 
     def test_subunit_without_bare_unit_reported(self, mod, isolated_dir):
         """不变量：带 unit_* 子标记必须同时带 bare `unit`（保证 `-m unit` ⊇ P1 verify）。"""
@@ -174,7 +174,7 @@ class TestCheckFile:
             "unit/core/test_cache.py",
             "import pytest\npytestmark = [pytest.mark.unit_core]\n",
         )
-        violations = mod.check_file(path, verbose=False, ci_mode=True)
+        violations = mod.check_file(path)
         assert any("verify ⊆ unit" in v for v in violations)
 
     def test_real_repo_satisfies_subunit_invariant(self, mod):
@@ -193,17 +193,7 @@ class TestCheckFile:
             "unit/misc/test_odd.py",
             "import pytest\npytestmark = [pytest.mark.unit, pytest.mark.unit_core]\n",
         )
-        assert mod.check_file(path, verbose=False, ci_mode=True) == []
-
-    def test_clean_file_reports_ok_when_verbose(self, mod, isolated_dir, capsys):
-        path = _write(
-            isolated_dir,
-            "unit/core/test_cache.py",
-            "import pytest\npytestmark = [pytest.mark.unit, pytest.mark.unit_core]\n",
-        )
-        violations = mod.check_file(path, verbose=True, ci_mode=False)
-        assert violations == []
-        assert "[OK]" in capsys.readouterr().out
+        assert mod.check_file(path) == []
 
 
 # ── 标记清单单一事实来源 ──
@@ -266,7 +256,7 @@ class TestRegisteredMarkers:
             "test_sample.py",
             "import pytest\npytestmark = [pytest.mark.unit, pytest.mark.unit_brandnew]\n",
         )
-        assert mod.check_file(path, verbose=False, ci_mode=True) == []
+        assert mod.check_file(path) == []
 
 
 # ── 目录期望表与目录结构绑定 ──
@@ -389,7 +379,7 @@ class TestDomainMarkerRequired:
             "unit/core/test_only_generic.py",
             "import pytest\npytestmark = [pytest.mark.unit]\ndef test_x():\n    assert True\n",
         )
-        violations = mod.check_file(path, verbose=False, ci_mode=True)
+        violations = mod.check_file(path)
         assert violations, "只标 unit 应报缺少域标记"
         assert "unit_core" in violations[0]
 
@@ -399,7 +389,7 @@ class TestDomainMarkerRequired:
             "unit/core/test_with_domain.py",
             "import pytest\npytestmark = [pytest.mark.unit, pytest.mark.unit_core]\ndef test_x():\n    assert True\n",
         )
-        assert mod.check_file(path, verbose=False, ci_mode=True) == []
+        assert mod.check_file(path) == []
 
 
 class TestRealTreeDomainCompliance:

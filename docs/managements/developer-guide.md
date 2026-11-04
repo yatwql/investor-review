@@ -127,11 +127,11 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 
 | 门禁 | 触发点 | 命令 | 说明 |
 |:-----|:-------|:-----|:-----|
-| **P0** | 提交前 | `.venv/bin/python scripts/test-runner.py --mode dev-verify` + 十守护（`--ci` 全套，钩子自动执行） | 阻塞提交，不得 commit |
+| **P0** | 提交前 | `.venv/bin/python scripts/test-runner.py --mode dev-verify` + 守护清单（`--ci` 全套，钩子自动执行） | 阻塞提交，不得 commit |
 | **P1** | 合入 master 前 | `.venv/bin/python scripts/test-runner.py --mode verify`（全部 `unit_*` 目录域，含 TUI/CLI——归域即进门禁，`technical.md` §4.23） | 阻塞合入，不得 merge |
-| **P2** | 发布前 | `.venv/bin/python scripts/release.py gate`（= 演进对照新鲜度断言〔当前开发版列头日期须为当日〕+ **verify 与 regression 并行**（verify 提前到合并前拦截）+ 十守护 `--ci` 全套〔并行执行，并发度随核数收敛 ≤4 路〕+ 设计护栏；`--with-portability` 追加 portability 探针，gate 自动编排） | 阻塞发布，不得 release |
+| **P2** | 发布前 | `.venv/bin/python scripts/release.py gate`（= 演进对照新鲜度断言〔当前开发版列头日期须为当日〕+ **verify 与 regression 并行**（verify 提前到合并前拦截）+ 守护清单 `--ci` 全套〔并行执行，并发度随核数收敛 ≤4 路〕+ 设计护栏；`--with-portability` 追加 portability 探针，gate 自动编排） | 阻塞发布，不得 release |
 
-**P0 提交前门禁**（全部通过才可 commit；手动项 = dev-verify，下列十守护由 pre-commit 钩子在 `git commit` 时自动执行、CI guards job 同源兜底，本地不手动重复——清单为五处同源引用）：
+**P0 提交前门禁**（全部通过才可 commit；手动项 = dev-verify，下列守护清单由 pre-commit 钩子在 `git commit` 时自动执行、CI guards job 同源兜底，本地不手动重复——清单为五处同源引用）：
 
 ```bash
 .venv/bin/python scripts/test-runner.py --mode dev-verify   # 核心单元 + 基础场景快速验证
@@ -144,7 +144,9 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 .venv/bin/python scripts/check-requirement-trace.py --ci   # 需求 ID ↔ 验证载体追溯（已补全域全覆盖 + 载体文件存在）
 .venv/bin/python scripts/check-version-consistency.py --ci   # 版本号全局一致性（APP_VERSION ↔ README/pyproject/管理文档 10 份）
 .venv/bin/python scripts/check-doc-links.py --ci              # 文档死链/死锚点/重复标题/层级/编号序列/§引用机检
-.venv/bin/python scripts/check-file-length.py --ci         # 单文件行数红线（主程序/脚本 >1000 行 / 测试 >1200 行）
+.venv/bin/python scripts/check-script-contract.py --ci       # scripts 顶层脚本契约（退出码声明/CLI 面/显式 encoding/测试覆盖）
+.venv/bin/python scripts/check-import-surface.py --ci         # 导入面契约（兼容注释/私有 `__all__`/跨包私有导入/动态导入字面量 + 例外表自审）
+.venv/bin/python scripts/check-file-length.py --ci         # 单文件行数红线（主程序/脚本 >1000 行 / 测试 >1200 行 + 膨胀登记表同实）
 ```
 
 > **`--sync` 统计快照口径（CI 分叉坑）**：`check-doc-drift --sync`（及 pre-commit 自动回写）按**工作区**实测写入 `folders.md` 行数，而 CI 的 `check-doc-drift` 按 **committed** 树实测——若受检目录存在**长期不提交的修改**（本地游离改动），本地已同步的数字会在 CI 上判「不一致」，连带 guards / test / portability 三个 job 同时红。提交前确认受检文件全部纳入本次提交；有长期游离修改时先提交它们、再 `--sync`。
@@ -153,7 +155,7 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 >
 > **钩子触发面 = 全部被统计的域**：`docs/managements/`（文档行数）、`src/test/`（测试行数 + 用例数）、`src/python/`（主程序行数）、`scripts/`（脚本行数）任一变更，`git commit` 即走 `--sync` 写路径自动回写并 `git add`。只覆盖部分域时，纯 `src/python`/`scripts` 改动会以「行数不一致」finding 拦下提交、逼人工 sync 再重提（多一轮往返）。
 
-**P1 合入门禁**：`test-runner.py --mode verify`（全部 `unit_*` 目录域单元测试，含 TUI/CLI；目录归域以 `check-test-markers.py` 期望表为准且全部入门禁），否则不得 merge。
+**P1 合入门禁**：`test-runner.py --mode verify`（全部 `unit_*` 目录域单元测试，含 TUI/CLI；目录归域以 `check-test-redundancy.py` 标记支路（`_test_redundancy/markers.py`）的 `EXPECTED_DIR_MARKERS` 为准且全部入门禁），否则不得 merge。
 
 **P2 发布门禁**：
 
@@ -169,6 +171,8 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 .venv/bin/python scripts/check-version-consistency.py --ci
 .venv/bin/python scripts/check-doc-links.py --ci
 .venv/bin/python scripts/check-file-length.py --ci
+.venv/bin/python scripts/check-import-surface.py --ci
+.venv/bin/python scripts/check-script-contract.py --ci
 ```
 
 **辅助（非阻塞）**：`.venv/bin/ruff check`（lint 基线，选择项与刻意豁免均在 `pyproject.toml` 显式声明）+ `.venv/bin/ruff format --check`（代码格式一致性）——问题可经 `.venv/bin/ruff check --fix` / `.venv/bin/ruff format` 自动修复，不阻止合并/发布。当前两者均为零告警基线，新增代码应在提交前保持干净。
@@ -243,9 +247,9 @@ PYTHONWARNDEFAULTENCODING=1 .venv/bin/python -m pytest src/test/unit -q
 
 **三步工作流**：
 
-1. **一次枚举**：编辑全部完成后按下方「计划收尾：文档触点清单」主动扫触点批量核对/修复（统计快照回写与十守护校验由提交时的 pre-commit 钩子自动完成，本地不手动重复）。
+1. **一次枚举**：编辑全部完成后按下方「计划收尾：文档触点清单」主动扫触点批量核对/修复（统计快照回写与守护清单校验由提交时的 pre-commit 钩子自动完成，本地不手动重复）。
 2. **批量修复**：按上表 + 触点一次性修完，同一文件多处改动合并为一次 edit。
-3. **单次复核**：手动只跑 `dev-verify` 测试门禁；ruff 探针（错误类阻塞 + format 非阻塞提示）与十守护一并交由 `git commit` 的 pre-commit 钩子一次收集（失败即中止）→ 批量修复 → 重新提交，不手动重复跑守护。
+3. **单次复核**：手动只跑 `dev-verify` 测试门禁；ruff 探针（错误类阻塞 + format 非阻塞提示）与守护清单一并交由 `git commit` 的 pre-commit 钩子一次收集（失败即中止）→ 批量修复 → 重新提交，不手动重复跑守护。
 
 **台账收尾（自审条目的唯一正确形态）**：修复自审条目时，「移除详情」不等于「删行」——摘要行必须落在
 `review-findings.md` 的 `## 已解决问题` → `### 开发期已修复（<当前版本>-dev）` 表内：
@@ -824,7 +828,7 @@ test-reports/latest/
   - ✅ `ts = _recent_ts(days_ago=2)`（相对 `datetime.now()` 计算）；✅ 被测路径加**前提自检**：`assert result["expired"] == 0, "样本已超出保留期"`
   - ❌ `self._row("cross_skip", title, "2026-10-01 10:00")` 配 30 天保留期
   - 语义上确实需要「远过去/远未来」时用常量偏移（`2020-01-02` 表示必过期）而非「今天附近」的绝对日期
-- 新增文件后运行 `.venv/bin/python scripts/check-test-markers.py` 验证标记合规性
+- 新增文件后运行 `.venv/bin/python scripts/check-test-redundancy.py --ci` 验证标记合规性（标记支路在 `src/test/` 变更时由钩子自动执行）
 
 ### 新增测试指南
 
@@ -900,7 +904,7 @@ mod = load_script("_test_runner/modes.py", module_name="modes_under_test")   # �
 .venv/bin/python -m pytest src/test/                                   # 全量通过
 .venv/bin/python -m pytest --co                                         # 无 patch 残留污染
 .venv/bin/python -m pytest src/test/unit/core/test_registry.py --co -v      # 新文件隔离（示例）
-.venv/bin/python scripts/check-test-markers.py                # 标记合规性检查（AST 静态扫描）
+.venv/bin/python scripts/check-test-redundancy.py --ci        # 用例质量 + 标记合规（AST 静态扫描）
 ```
 
 **文件膨胀阈值**：
@@ -915,7 +919,7 @@ mod = load_script("_test_runner/modes.py", module_name="modes_under_test")   # �
 | 单类方法数 | > 15 项 | > 25 项 | 拆为多个 Test 类或拆分文件 |
 | 单方法 mock 数 | > 5 个 patch | > 8 个 patch | 重构被测函数以降低耦合 |
 
-> **门禁**：红线列由 `scripts/check-file-length.py --ci` 强制——**主程序 >1000 行**（硬上限，review-findings 文件膨胀登记区）、**脚本 >1000 行**与**测试 >1200 行**即 finding 退出 2；豁免路径须与 review-findings 挂账同步（拆分后自动提示移除豁免）。警告线即**登记线**（不再维护第三套数字）：`-v` 输出的可选优化区间清单（主程序 >700 / 脚本 >600 / 测试 >900、薄壳 >200）就是 review-findings P3 登记表的派生源；`-v` 同时按「行数 × 近 90 天改动次数」给出拆分优先级，回答「先拆哪个」。
+> **门禁**：红线列由 `scripts/check-file-length.py --ci` 强制（并断言本表登记行数与实测一致，防登记表腐化）——**主程序 >1000 行**（硬上限，review-findings 文件膨胀登记区）、**脚本 >1000 行**与**测试 >1200 行**即 finding 退出 2；豁免路径须与 review-findings 挂账同步（拆分后自动提示移除豁免）。警告线即**登记线**（不再维护第三套数字）：`-v` 输出的可选优化区间清单（主程序 >700 / 脚本 >600 / 测试 >900、薄壳 >200）就是 review-findings P3 登记表的派生源；`-v` 同时按「行数 × 近 90 天改动次数」给出拆分优先级，回答「先拆哪个」。
 
 ### 常见问题
 
@@ -935,7 +939,7 @@ A: `unit/conftest.py` 的验证模式要求每个单元测试文件必须包含 
 A: 在 `src/test/conftest.py` 的 `pytest_configure` 中注册新标记，然后在测试类前加 `@pytest.mark.<新标记>`。单元测试使用模块级 `pytestmark` 列表，而非类级装饰器。
 
 **Q: 如何验证新增文件的标记是否正确？**
-A: 运行 `.venv/bin/python scripts/check-test-markers.py`，脚本会静态扫描所有 `test_*.py` 文件，检查标记完整性、是否有拼写错误、`_edge.py` 是否漏标 `edge` 等。
+A: 运行 `.venv/bin/python scripts/check-test-redundancy.py --ci`（标记合规支路），它会静态扫描所有 `test_*.py` 文件，检查标记完整性、是否有拼写错误、`_edge.py` 是否漏标 `edge` 等；`src/test/` 变更时钩子已自动跑，手动跑仅用于定位。
 
 ## 调试与剖析
 排查分三条主线：**看日志**（发生了什么）、**交互式调试**（在哪一步错）、**性能剖析**（为什么慢）。
@@ -1319,7 +1323,7 @@ DataModuleDef("我的 LLM 分析", "llm_my_analysis",
 | ⑤ | **添加报告页签** | `report/llm_content.py` | 在 `write_llm_sheets()` 的 `_module_keys` 和 `_module_contents` 列表中添加新模块键名 |
 | ⑥ | **暴露导出接口** | `llm/__init__.py` | 将新生成函数加入 `__all__` |
 | ⑦ | **运行注册表测试** | 终端 | `.venv/bin/python -m pytest src/test/unit/core/test_registry.py -v` — 验证 TTL/前缀/键名完整性 |
-| ⑧ | **验证标记合规** | 终端 | `.venv/bin/python scripts/check-test-markers.py` — 确认测试文件标记无遗漏 |
+| ⑧ | **验证标记合规** | 终端 | 钩子已随 `src/test/` 变更自动跑标记支路；单独复核用 `.venv/bin/python scripts/check-test-redundancy.py --ci` |
 
 > **LLM 模块补充步骤**：在上述 registry 清单基础上，新增 LLM 模块还需完成领域特定步骤——`llm/prompts.py` 新增 `_SYSTEM_{MODULE}` 常量与提示词构建函数；`report/html_writer.py`（HTML）+ `report/llm_content.py`（Excel）新章节双渲染；在 `core/data_registry.py` 为该模块登记 `DataModuleDef`（`cache_ttl` 即默认 TTL，LLM 惯例：分析类 4h、内容寻址类 24h；无需改 `config.json`）；`llm_settings.json` 加入推荐默认值并更新 [配置指南](../manuals/how-to-config.md)。
 >
@@ -1507,11 +1511,11 @@ registry 的测试在 `src/test/unit/core/test_registry.py`，验证 TTL 默认�
 
 | 机制 | 触发 | 跨机器 |
 |:-----|:-----|:------|
-| **P0/P2 门禁** | 提交/发布前 10 个 `--ci` 守护脚本全量（清单见 P0/P2 门禁条款）；P2 另含设计护栏段（gate 内置 `check-style-guardrails`，E 级拦 / W 级观察统计） | ✅ 零配置 |
+| **P0/P2 门禁** | 提交/发布前 12 个 `--ci` 守护脚本全量（清单见 P0/P2 门禁条款）；P2 另含设计护栏段（gate 内置 `check-style-guardrails`，E 级拦 / W 级观察统计） | ✅ 零配置 |
 | **dev-verify preflight** | `test-runner.py --mode dev-verify` 自动运行（仅 `check-task-numbering` 快检；重量守护不入预检，由钩子唯一执行防同树重复） | ✅ 零配置 |
 | **Claude Code hook** | 编辑 `plan.md`/`review-findings.md` 后实时校验 | ⚠️ clone 后运行 `.venv/bin/python scripts/hook-install-claude.py` |
-| **git pre-commit** | `git commit` 执行十守护（与 P0/CI guards 同源）：**读写分层调度**——不读 folders.md 的守护（快集 code-traces/task-numbering/semantic-index/requirement-trace + py 域 file-length + 测试域 test-redundancy）先行后台启动，与 `check-doc-drift` 段并行执行（跨域守护恒跑；涉及**任一被统计域**（`docs/managements/` / `src/test/` / `src/python/` / `scripts/`）时 `--sync` 写路径串行先行并自动回写统计快照，其中暂存含 `src/test/` 时追加 `--with-test-count` 校验 `test-coverage.md` 的收集派生计数——否则新增用例后计数静默陈旧、只在 CI master 档才红；其余提交纯 `--ci` 后台并行）；读 folders.md 的 version-consistency 与 doc 域（doc-traces/doc-links）在 doc-drift 完成后启动（避 --sync 写读竞态）；域条件不变（doc 域仅 `*.md`、py 域仅 `*.py`、测试域仅 `src/test/` 变更触发），典型提交约 1~4 秒；六守护另有结论缓存（doc-traces/semantic-index/doc-links/code-traces/requirement-trace/doc-drift，输入与逻辑指纹未变回放上次结论，冷/热 --ci 输出逐字一致）；CI guards job 恒全量兜底 | ⚠️ clone 后运行 `sh .githooks/install-hooks.sh` |
-| **CI guards job** | push / PR / tag 时自动校验（10 个 `--ci` 脚本之一） | ✅ 零配置 |
+| **git pre-commit** | `git commit` 执行守护清单（与 P0/CI guards 同源）：**读写分层调度**——不读 folders.md 的守护（快集 code-traces/task-numbering/semantic-index/requirement-trace + py 域 file-length + 测试域 test-redundancy）先行后台启动，与 `check-doc-drift` 段并行执行（跨域守护恒跑；涉及**任一被统计域**（`docs/managements/` / `src/test/` / `src/python/` / `scripts/`）时 `--sync` 写路径串行先行并自动回写统计快照，其中暂存含 `src/test/` 时追加 `--with-test-count` 校验 `test-coverage.md` 的收集派生计数——否则新增用例后计数静默陈旧、只在 CI master 档才红；其余提交纯 `--ci` 后台并行）；读 folders.md 的 version-consistency 与 doc 域（doc-traces/doc-links）在 doc-drift 完成后启动（避 --sync 写读竞态）；域条件不变（doc 域仅 `*.md`、py 域仅 `*.py`、测试域仅 `src/test/` 变更触发），典型提交约 1~4 秒；六守护另有结论缓存（doc-traces/semantic-index/doc-links/code-traces/requirement-trace/doc-drift，输入与逻辑指纹未变回放上次结论，冷/热 --ci 输出逐字一致）；CI guards job 恒全量兜底 | ⚠️ clone 后运行 `sh .githooks/install-hooks.sh` |
+| **CI guards job** | push / PR / tag 时自动校验（12 个 `--ci` 脚本之一） | ✅ 零配置 |
 
 > `core.hooksPath` 与 `.claude/settings.json` 均为本地配置、不随仓库同步，新机器 clone 后运行上方激活命令一次即可；hook 脚本本体（`.githooks/`、`scripts/`）随仓库同步。
 
@@ -1519,7 +1523,7 @@ registry 的测试在 `src/test/unit/core/test_registry.py`，验证 TTL 默认�
 
 发布版本时，按以下六步顺序执行：
 
-> 可用 `scripts/release.py` 分步编排（发布流程的可执行封装，每步独立可审阅、失败即停）：`check`（预检）→ `archive-init`（**仅新小版本首发需要**：三份归档 + 目录树块 + 三处索引行一次建齐，幂等）→ `prepare`（版本全链、changelog 发布段归档**并自动重写归档头部「涵盖版本 / 归档时间」（区间与并入记录由归档内各发布段标题派生，无需人工维护）与主文件指针的版本号/日期/归档文件名**、一致性 `--fix`，收尾自动 `doc-drift --sync`）→ `refresh` + `evolution --release`（数据刷新——纯文档变更〔仅 `.md`/图片〕自动跳过 bench+collect，`--force-refresh` 强制；演进快照，evolution 收尾同样自动 sync）→ `gate`（P2 门禁：verify 与 regression 并行；若 `refresh` 的 bench **实跑过 `unit`** 且代码指纹未变，则复用该次结果替代 verify（`unit` 是 verify 的严格超集，由标记不变量保证），否则实跑；十守护并行且并发度随核数收敛 ≤4 路；`--with-portability` 加跑 portability 探针；全绿后写「版本+代码指纹」通过戳——**指纹 = `CODE_PATHS` 下文件内容的 sha256（与是否已提交无关）**：gate 打戳时 prepare 的改动尚未提交、publish 提交后再算，两者仍相等）→ `publish --title`（**代码指纹与 gate 戳一致时复用 P1 verify**；提交前按钩子同源参数 `--sync --ci --with-test-count` 同步统计快照——只跑 `--sync` 时 `test-coverage.md` 收集计数不被校验，会「本地通过、钩子仍红」白跑一轮；同步失败即中止 + release 提交 + P1 verify + `--no-ff` 合并 + tag）→ `devbump`（切开发版 + 默认 `git push origin dev`（`--no-push` 跳过），并清空上一版迁档占位节）；bench 默认只测发布子集四档（`--full-bench` 全量；`--bench-jobs N` 调整采集并行度，改变并行度会改变耗时口径，环境表需同并行度可比），采集顺序为「场景档先、长尾档后」（`regression → integration → unit → dev-verify`）——`--fail-fast` 只取消尚未启动的档，长尾档压后才能让场景失败立刻中止；每命令耗时、执行环境（provider/model/thinking）与 agent 会话 token 累计入 `logs/release.jsonl` 台账，失败命令另写 `failure`（失败步 / 退出码 / 报告目录 / 失败用例名 / 输出尾部）；`check` 会预演 changelog 派生（只算不写），publish 在 gate 戳指纹不一致时点名 gate 后改动的代码文件并说明将实跑 P1 verify，提交/合并/tag/推送分段计时入账（发布墙钟、token 成本与执行模型均可跳版本对拍）；rf/plan/docs-plan 归档迁移的**机械部分已由 `prepare` 自动完成**（含 plan.md「当前迭代」概述行按剩余任务重算在办项数与 P1~P4 分档编号；人工只复核条目归属与设计文件判定，见下方步骤③），`gate` 会断言该版本台账已迁完、changelog 归档段非空，未迁/为空则前置中止；`prepare` 不跨版本发布（`--version` 与开发链推导值不一致时立即中止并给四步指引）；**分层纪律**：归档迁移或任何涉及管理文档/代码注释的改动完成后，进 `gate` 前先跑秒级便宜守护（至少 `check-doc-traces --ci` + `check-doc-links --ci`，改动面大时十守护全跑）——守护发现前置，避免 P2 门禁的全量 regression 因文档级 finding 白跑第二轮。下列手动命令为底层口径，脚本失败时按手动步骤排查。**publish 的 release 提交仍走 pre-commit 钩子全量守护**（不跳过）：与 gate 重复约 2~6s，换取「自动化提交也不旁路守护」的兜底——实测收益小于风险，故不做跳过。
+> 可用 `scripts/release.py` 分步编排（发布流程的可执行封装，每步独立可审阅、失败即停）：`check`（预检）→ `archive-init`（**仅新小版本首发需要**：三份归档 + 目录树块 + 三处索引行一次建齐，幂等）→ `prepare`（版本全链、changelog 发布段归档**并自动重写归档头部「涵盖版本 / 归档时间」（区间与并入记录由归档内各发布段标题派生，无需人工维护）与主文件指针的版本号/日期/归档文件名**、一致性 `--fix`，收尾自动 `doc-drift --sync`）→ `refresh` + `evolution --release`（数据刷新——纯文档变更〔仅 `.md`/图片〕自动跳过 bench+collect，`--force-refresh` 强制；演进快照，evolution 收尾同样自动 sync）→ `gate`（P2 门禁：verify 与 regression 并行；若 `refresh` 的 bench **实跑过 `unit`** 且代码指纹未变，则复用该次结果替代 verify（`unit` 是 verify 的严格超集，由标记不变量保证），否则实跑；守护清单并行且并发度随核数收敛 ≤4 路；`--with-portability` 加跑 portability 探针；全绿后写「版本+代码指纹」通过戳——**指纹 = `CODE_PATHS` 下文件内容的 sha256（与是否已提交无关）**：gate 打戳时 prepare 的改动尚未提交、publish 提交后再算，两者仍相等）→ `publish --title`（**代码指纹与 gate 戳一致时复用 P1 verify**；提交前按钩子同源参数 `--sync --ci --with-test-count` 同步统计快照——只跑 `--sync` 时 `test-coverage.md` 收集计数不被校验，会「本地通过、钩子仍红」白跑一轮；同步失败即中止 + release 提交 + P1 verify + `--no-ff` 合并 + tag）→ `devbump`（切开发版 + 默认 `git push origin dev`（`--no-push` 跳过），并清空上一版迁档占位节）；bench 默认只测发布子集四档（`--full-bench` 全量；`--bench-jobs N` 调整采集并行度，改变并行度会改变耗时口径，环境表需同并行度可比），采集顺序为「场景档先、长尾档后」（`regression → integration → unit → dev-verify`）——`--fail-fast` 只取消尚未启动的档，长尾档压后才能让场景失败立刻中止；每命令耗时、执行环境（provider/model/thinking）与 agent 会话 token 累计入 `logs/release.jsonl` 台账，失败命令另写 `failure`（失败步 / 退出码 / 报告目录 / 失败用例名 / 输出尾部）；`check` 会预演 changelog 派生（只算不写），publish 在 gate 戳指纹不一致时点名 gate 后改动的代码文件并说明将实跑 P1 verify，提交/合并/tag/推送分段计时入账（发布墙钟、token 成本与执行模型均可跳版本对拍）；rf/plan/docs-plan 归档迁移的**机械部分已由 `prepare` 自动完成**（含 plan.md「当前迭代」概述行按剩余任务重算在办项数与 P1~P4 分档编号；人工只复核条目归属与设计文件判定，见下方步骤③），`gate` 会断言该版本台账已迁完、changelog 归档段非空，未迁/为空则前置中止；`prepare` 不跨版本发布（`--version` 与开发链推导值不一致时立即中止并给四步指引）；**分层纪律**：归档迁移或任何涉及管理文档/代码注释的改动完成后，进 `gate` 前先跑秒级便宜守护（至少 `check-doc-traces --ci` + `check-doc-links --ci`，改动面大时守护清单全跑）——守护发现前置，避免 P2 门禁的全量 regression 因文档级 finding 白跑第二轮。下列手动命令为底层口径，脚本失败时按手动步骤排查。**publish 的 release 提交仍走 pre-commit 钩子全量守护**（不跳过）：与 gate 重复约 2~6s，换取「自动化提交也不旁路守护」的兜底——实测收益小于风险，故不做跳过。
 
 **① 版本号一致**
 
@@ -1683,7 +1687,7 @@ CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` /
 
 | 域 | 代表脚本 | 什么时候用 |
 |:---|:---------|:-----------|
-| 测试 | `test-runner.py` / `test-collect-coverage.py` / `test-extract-failures.py` / `test-find-order-dependent.py` / `test-smoke-web.py` / `check-test-redundancy.py` / `check-test-markers.py` | 跑测试、统计覆盖、定位失败、用例质量机检 |
+| 测试 | `test-runner.py` / `test-collect-coverage.py` / `test-extract-failures.py` / `test-find-order-dependent.py` / `test-smoke-web.py` / `check-test-redundancy.py` | 跑测试、统计覆盖、定位失败、用例质量与标记合规机检 |
 | 文档 | `check-doc-traces.py` / `check-doc-links.py` / `check-doc-drift.py` / `check-semantic-index.py` / `make-assets.py` / `make-screenshots.py` | 文档漂移、死链、语义命名、视觉资产（预览图生成 / 架构图渲染体检 / README 与手册演示截图） |
 | 代码与文件质量 | `check-code-traces.py` / `check-requirement-trace.py` / `check-task-numbering.py` / `check-file-length.py` / `check-version-consistency.py` / `check-style-guardrails.py` / `check-script-contract.py` | 痕迹、需求追溯、编号、行数红线、版本、样式护栏 |
 | 发布 | `release.py`（分步编排）/ `test-collect-coverage.py` | 发版全流程 |

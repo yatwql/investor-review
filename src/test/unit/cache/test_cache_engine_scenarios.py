@@ -4,7 +4,7 @@
 - 本文件：TTL 边界、压缩往返、损坏载荷、原子写、键版本升级、目录不可写；
 - LLM 侧：指纹/键同源、逐模块精度、强制范围、串行模块等。
 
-归域说明：`unit/cache` 目录按 `scripts/check-test-markers.py` 期望表归 `unit_core`
+归域说明：`unit/cache` 目录按 `scripts/_test_redundancy/markers.py` 的 `EXPECTED_DIR_MARKERS` 期望表归 `unit_core`
 （缓存基础设施无专属域，搭核心域的 P0 `dev-verify` 车）。
 """
 

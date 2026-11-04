@@ -1,40 +1,26 @@
-#!/usr/bin/env python3
-"""测试标记合规性检查脚本。
+"""测试标记合规（`check-test-redundancy` 的 J 支路）：标记注册集同源 / 目录域归属 / 不变量。
 
-扫描 src/test/ 下所有测试文件，验证标记（pytestmark / 装饰器）与
-所在目录的预期匹配，避免新文件漏标导致标记体系退化。
+为什么并入冗余检查而不是独立脚本：漏标与「死用例」是同一类缺陷——用例存在却**跑不到**
+（`-m unit` 选不中、`verify` 域搬家）。两者同源（都读同一批测试文件的 AST）、同一时机
+（`src/test/` 变更）、同一处置（改测试源），合在一处才不会出现「改测试只跑了一个入口」。
 
-通过标准：
-  - unit/ 下每个文件按目录期望须含对应 unit_* 子标记（unit/conftest.py 已有运行时强制）
-  - scenario/ 下每个文件按目录期望须含对应 scenario_* 标记
-  - 期望表声明的全部 unit_* 域必须被 P1 门禁（test-runner `verify`）选择器覆盖——
-    目录归域即进门禁，防止「改域=门禁搬家」静默丢覆盖（结构锁见
-    test_check_test_markers.py::TestP1GateCoversDeclaredDomains，决策见技术设计 §4.23）
-  - _edge.py 文件必须包含 pytest.mark.edge
-  - 标记须在 src/test/conftest.py 注册集内（`KNOWN_MARKERS` 由该文件 AST 派生，conftest 新增标记自动跟随）
-  - `DEPRECATED_MARKERS` 登记的已移除标记不得出现（当前登记集为空）
-
-用法：
-  python scripts/check-test-markers.py          # 检查全部
-  python scripts/check-test-markers.py -v       # 详细输出
-  python scripts/check-test-markers.py --ci     # CI 模式（只输出错误，退出码非零即失败）
-
-退出码：
-  0 — 全部通过
-  2 — 存在违规（与 _checklib.report 返回值域一致）
+标记清单的单一事实来源是 `src/test/conftest.py` 的 `addinivalue_line("markers", …)`
+注册语句：`registered_markers()` 静态解析（不执行 conftest），conftest 增删标记后此
+支路自动跟随，不靠人肉对表。反之，`EXPECTED_DIR_MARKERS`（目录 → 应含域标记）是
+归域**决策**，须人工维护，并由测试与 `src/test/` 真实目录双向绑定校验。
 """
 
 from __future__ import annotations
 
-import argparse
 import ast
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享设施（_checklib）
-from _shared.checklib import REPO_ROOT, add_common_args, rel, report  # noqa: E402,F401
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/（`_shared` 与 `_test_redundancy` 均从此解析）
+from _shared.checklib import REPO_ROOT, rel  # noqa: E402
 
-TEST_DIR = REPO_ROOT / "src" / "test"
+from _test_redundancy._common import _TEST_ROOT as TEST_DIR  # noqa: E402
+
 #: 标记注册的单一事实来源（`pytest_configure` 里的 `addinivalue_line("markers", …)`）
 CONFTEST_PATH = REPO_ROOT / "src" / "test" / "conftest.py"
 
@@ -78,7 +64,7 @@ def registered_markers(conftest_path: Path = CONFTEST_PATH) -> set[str]:
     """从 `conftest.py` 的 `pytest_configure` 提取 `addinivalue_line("markers", …)` 注册的标记名。
 
     AST 解析（不执行 conftest），值取 `"名称: 说明"` 的冒号前部分；多行调用与相邻字符串
-    字面量拼接由 `ast` 天然处理。标记清单只此一处事实源，conftest 新增/删除标记后本脚本
+    字面量拼接由 `ast` 天然处理。标记清单只此一处事实源，conftest 新增/删除标记后本支路
     自动跟随，不再靠人肉对表。
     """
     tree = ast.parse(conftest_path.read_text(encoding="utf-8"))
@@ -129,7 +115,15 @@ def _extract_markers_from_file(filepath: Path) -> set[str]:
         tree = ast.parse(filepath.read_text(encoding="utf-8"))
     except SyntaxError:
         return set()
+    return markers_from_tree(tree)
 
+
+def markers_from_tree(tree: ast.Module) -> set[str]:
+    """从已解析的 AST 提取标记名（`run_checks` 复用事实缓存的 tree，不再重复解析）。
+
+    冷路径只解析一次：文件事实缓存（`facts_cache`）已持有 AST，标记提取若自带
+    `ast.parse` 就会让「未变更文件零解析」的增量缓存失效（每轮全量重解析一遍）。
+    """
     markers: set[str] = set()
 
     for node in ast.walk(tree):
@@ -153,21 +147,27 @@ def _extract_markers_from_file(filepath: Path) -> set[str]:
     return markers
 
 
-def _get_relative_dir(filepath: Path) -> str:
-    """获取测试文件相对于 TEST_DIR 的父目录路径（不含文件名）。
+def _get_relative_dir(filepath: Path, test_dir: Path | None = None) -> str:
+    """获取测试文件相对于测试根（默认 TEST_DIR）的父目录路径（不含文件名）。
 
     例如 unit/core/test_cache.py → "unit/core"
     integration/test_integration_coverage.py → "integration"
+
+    `test_dir` 可显式传入：`run_checks` 与它自己的文件枚举（`_common._TEST_ROOT`，
+    可被测试替换）必须用同一个根，否则临时树会落到 `relative_to` 的 ValueError。
     """
-    rel = filepath.relative_to(TEST_DIR)
-    parent = rel.parent
+    rel_dir = filepath.relative_to(test_dir or TEST_DIR)
+    parent = rel_dir.parent
     return str(parent) if parent != Path(".") else ""
 
 
-def check_file(filepath: Path, verbose: bool, ci_mode: bool) -> list[str]:
-    """检查单个文件的标记合规性。返回违规列表（空=通过）。"""
+def check_file(filepath: Path, test_dir: Path | None = None, tree: ast.Module | None = None) -> list[str]:
+    """检查单个文件的标记合规性。返回违规列表（空=通过）。
+
+    `tree` 已给定时复用该 AST（不重复解析），由 `facts_cache` 在冷路径传入。
+    """
     violations: list[str] = []
-    markers = _extract_markers_from_file(filepath)
+    markers = markers_from_tree(tree) if tree is not None else _extract_markers_from_file(filepath)
     rel_path = rel(filepath)
 
     # 检查已移除的标记
@@ -191,7 +191,7 @@ def check_file(filepath: Path, verbose: bool, ci_mode: bool) -> list[str]:
         violations.append(f"{rel_path}: _edge.py 文件缺少 'edge' 标记")
 
     # 按目录检查预期标记
-    rel_dir = _get_relative_dir(filepath)
+    rel_dir = _get_relative_dir(filepath, test_dir)
     expected = EXPECTED_DIR_MARKERS.get(rel_dir)
     if expected is not None:
         # 通用标记（`unit` / `scenario`）只表达测试层级，不承载域归属：只标 `unit`
@@ -202,41 +202,16 @@ def check_file(filepath: Path, verbose: bool, ci_mode: bool) -> list[str]:
         if not (markers & required):
             violations.append(f"{rel_path}: 缺少域标记 {sorted(required)}（当前: {markers or '空'}）")
 
-    if verbose and not violations:
-        print(f"  [OK] {rel_path} — markers: {sorted(markers)}")
-
     return violations
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="测试标记合规性检查",
-    )
-    add_common_args(parser)
-    args = parser.parse_args()
+def check_marker_compliance(files: list[Path], test_dir: Path | None = None) -> list[str]:
+    """对给定测试文件逐文件判定标记合规，返回全部违规（空=通过）。
 
-    # 收集所有测试文件
-    test_files = sorted(TEST_DIR.rglob("test_*.py"))
-
-    all_violations: list[str] = []
-    passed = 0
-    failed = 0
-
-    for fp in test_files:
-        violations = check_file(fp, verbose=args.verbose, ci_mode=args.ci)
-        if violations:
-            failed += 1
-            all_violations.extend(violations)
-        else:
-            passed += 1
-
-    # 输出汇总
-    if not args.ci:
-        print(f"\n{'=' * 50}")
-        print(f"检查完成: {passed} 通过, {failed} 违规")
-
-    return report(all_violations, "全部通过。", ci=args.ci, fail_message=f"检查完成: {passed} 通过, {{n}} 违规")
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+    供测试与一次性复核使用；`run_checks` 走事实缓存里的 per-file `markers` 事实，
+    不经过此处（避免与缓存重复解析）。
+    """
+    findings: list[str] = []
+    for path in files:
+        findings.extend(check_file(path, test_dir))
+    return findings

@@ -30,15 +30,14 @@
 | `make-screenshots.py` | 文档 | README/手册演示截图生成：隔离演示工作区（`INVEST_PROJECT_ROOT` 整体搬根 + 自造持仓 + 占位凭据）/ 演示报告 / TUI 帧渲染 / CLI 伪终帧采集 / Web CDP 截图（`--serve-demo` 自起演示服务）/ Excel 页签表格图；需 Pillow + 等宽 CJK 字体，Web 与 Excel 档另需 Node ≥22 + Chromium |
 | `check-code-traces.py` | 质量 | 代码注释/文档字符串中历史变更痕迹检查 + AST 守卫（分层/日志/配置默认值单源） |
 | `check-doc-traces.py` | 文档 | 面向读者文档（.md）历史变更痕迹 + 结构性冗余（DUPLICATE）检查 |
-| `check-test-markers.py` | 测试 | AST 静态扫描验证测试标记合规性 |
 | `check-task-numbering.py` | 质量 | 任务编号（plan-/rf-）全局一致性检查，防新增编号与历史归档冲突 |
 | `check-task-numbering-hook.py` | 质量 | Claude Code PostToolUse hook——编辑编号管理文档后自动校验编号一致性 |
 | `check-semantic-index.py` | 文档 | 功能语义命名表正反向一致性校验（功能开关注册表表外键 / 僵尸条目 / 合并章 key 缺失） |
 | `check-doc-drift.py` | 文档 | 文档与实现一致性校验（章节表/章节数量、开关表/分组计数/默认值断言、配置与 LLM 默认值表、`datasource.md` 的 LLM 缓存 TTL 行（按前缀反查注册表）、`technical.md`+`how-to-config.md` 的缓存 TTL 表（逐类型对账）、TUI 面板编号、目录树、项目统计表；`--sync` 自动回写统计快照） |
 | `check-doc-links.py` | 文档 | 文档链接与结构一致性校验（死链/死锚点/重复标题/层级/编号序列/§引用） |
-| `check-import-surface.py` | 质量 | 导入面契约观察（compat-comment 兼容注释 / private-all 私有 `__all__` / cross-private 跨包私有导入 / dynamic-target 动态导入字面量；例外表 `_import_surface_exceptions.json`，观察期未入钩子与 CI） |
-| `check-file-length.py` | 质量 | 单文件行数红线守护（主程序/脚本 >1000 行 / 测试 >1200 行；豁免登记与 review-findings 挂账同步，`-v` 输出可选优化区间清单与「行数 × 近 90 天改动」优先级，供登记表派生） |
-| `check-test-redundancy.py` | 测试 | 测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言 / 账本日期写死绝对日期；实现拆在 `_test_redundancy/`——九类检查各一模块 + 共用 AST 原语 + 事实缓存 + 编排，入口只留 CLI） |
+| `check-import-surface.py` | 质量 | 导入面契约（compat-comment 兼容注释 / private-all 私有 `__all__` / cross-private 跨包私有导入 / dynamic-target 动态导入字面量 / exception-table 例外表自审（字段齐全+到期+失效）；例外表 `_import_surface_exceptions.json`；**已入域**：钩子只随 `src/python/` 变更触发（~1s），CI `guards` 与 P2 恒全量） |
+| `check-file-length.py` | 质量 | 单文件行数红线守护（主程序/脚本 >1000 行 / 测试 >1200 行；豁免登记与 review-findings 挂账同步；另断言 review-findings P4 膨胀登记表行数与实测一致（防表腐化），`-v` 输出可选优化区间清单、登记实况与「行数 × 近 90 天改动」优先级） |
+| `check-test-redundancy.py` | 测试 | 测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言 / 账本日期写死绝对日期；实现拆在 `_test_redundancy/`——九类用例质量检查 + 标记合规支路各一模块 + 共用 AST 原语 + 事实缓存 + 编排，入口只留 CLI） |
 | `check-requirement-trace.py` | 质量 | 需求 ID ↔ 验证载体追溯（单段 ID 全域覆盖 / 载体文件存在 / ID 双向一致） |
 | `hook-install-claude.py` | 质量 | 安装/卸载 Claude Code PostToolUse hook（任务编号一致性自动校验） |
 | `probe-date-bombs.py` | 测试 | 时间炸弹经验筛查（变异法）：把候选测试文件里的绝对日期整体回移 N 年再逐个跑 pytest，失败即「依赖日期处于近期」（rot-suspect）；`--detail` 打印失败断言原文（实际/期望两侧）供判读；改写前备份、`finally`/`atexit` 双兜底还原并校验 sha256，脏文件默认跳过；结果需人工判读（生产侧显式注入 today / 星期-财季语义 / 断言目标在未变异 fixture 均为伪信号）；不入门禁 |
@@ -49,8 +48,8 @@
 | `test-smoke-web.py` | 测试 | Web 模式 HTTP 冒烟脚本（test_client 进程内全链路断言，可独立运行） |
 | `check-version-consistency.py` | 发布 | 版本号全局一致性检查（P0/P2 守护脚本 + 发布流程必跑） |
 | `check-style-guardrails.py` | 质量 | 设计护栏机检（DESIGN.md 护栏样式面；E 级：强调色越权/明暗同步/双面 token 对表判 finding，W 级：裸色值/圆角档位观察统计——未入 pre-commit 钩子与 CI guards；**发布门禁**（release.py gate）已纳入，开发期快反馈由 unit 测试承担） |
-| `check-script-contract.py` | 质量 | scripts 顶层脚本契约机检（退出码声明 ⊆ {0,2} 白名单、check-* 统一 `add_common_args` CLI 面、文本 I/O 显式 encoding、脚本↔测试覆盖映射，四条规则——**观察期**未入钩子与 CI） |
-| `release.py` | 发布 | 发布流程分步编排（check / archive-init〔新小版本归档骨架：三份归档 + 目录树块 + 三处索引行，幂等〕/ prepare〔含台账与设计文件归档迁移；不跨版本发布，`--version` 与推导值不一致即中止并给指引〕/ refresh / evolution / gate / publish〔提交前按 pre-commit 钩子同源参数 `--sync --ci --with-test-count` 同步统计快照，失败即中止；`--title` 自带的 `release: v… —— ` 或裸 `v… —— ` 前缀自动剥离，避免提交标题重版版本号〕/ devbump〔切版 + 默认推送 + **发布闭环校验**：tag 在 master 历史内、master 的 `APP_VERSION` 为发布版、本分支为下一开发版，不一致退出 1；无 tag 仅告警〕，每步独立可审阅、失败即停；refresh 纯文档变更跳过 bench+collect（`--force-refresh` 强制）、bench 默认只测发布子集四档且按「场景档先、长尾档后」排序（`--full-bench` 全量、`--bench-jobs N` 调并行度）、gate 十守护并行且随核数收敛 ≤4 路并断言归档已迁完、gate 戳存逐文件代码哈希（publish 点名 gate 后改动并说明重跑 verify）；check 预演 changelog 派生（只算不写）；publish 提交/合并/tag/推送分段计时；每命令（含 devbump）耗时与失败原因（`failure`：失败步/报告目录/失败用例名）入 `logs/release.jsonl`；devbump 切版后清空上一版迁档占位节） |
+| `check-script-contract.py` | 质量 | scripts 顶层脚本契约机检（退出码声明 ⊆ {0,2} 白名单、check-* 统一 `add_common_args` CLI 面、文本 I/O 显式 encoding、脚本↔测试覆盖映射，四条规则；**已入域**：钩子只随 `scripts/` 变更触发，CI `guards` 与 P2 恒全量） |
+| `release.py` | 发布 | 发布流程分步编排（check / archive-init〔新小版本归档骨架：三份归档 + 目录树块 + 三处索引行，幂等〕/ prepare〔含台账与设计文件归档迁移；不跨版本发布，`--version` 与推导值不一致即中止并给指引〕/ refresh / evolution / gate / publish〔提交前按 pre-commit 钩子同源参数 `--sync --ci --with-test-count` 同步统计快照，失败即中止；`--title` 自带的 `release: v… —— ` 或裸 `v… —— ` 前缀自动剥离，避免提交标题重版版本号〕/ devbump〔切版 + 默认推送 + **发布闭环校验**：tag 在 master 历史内、master 的 `APP_VERSION` 为发布版、本分支为下一开发版，不一致退出 1；无 tag 仅告警〕，每步独立可审阅、失败即停；refresh 纯文档变更跳过 bench+collect（`--force-refresh` 强制）、bench 默认只测发布子集四档且按「场景档先、长尾档后」排序（`--full-bench` 全量、`--bench-jobs N` 调并行度）、gate 守护清单并行且随核数收敛 ≤4 路并断言归档已迁完、gate 戳存逐文件代码哈希（publish 点名 gate 后改动并说明重跑 verify）；check 预演 changelog 派生（只算不写）；publish 提交/合并/tag/推送分段计时；每命令（含 devbump）耗时与失败原因（`failure`：失败步/报告目录/失败用例名）入 `logs/release.jsonl`；devbump 切版后清空上一版迁档占位节） |
 | `test-perf-report.py` | 评测 | 端到端报告生成管线性能基准（独立脚本，mock 外部数据源） |
 | `perf-history.py` | 运维 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 并发预算段（档位/预算/峰值/缩容合计，标注跨档位不可直接比耗时）+ 时段聚合（耗时与费用合计/环比/缩容列）/机读输出（llm_cost、by_period 费用字段、CSV 增 budget/peak/clamps 三列）；实现拆在 `_perf_history/`——`stats.py` 统计原语 / `data.py` 派生 / `report.py` 渲染 / `cli.py` 入口，主入口只留 docstring 与 re-export） |
 | `probe.py` | 运维 | 探测统一入口（按 target 分发到 `_probes/` 子模块；新探针实现契约面登记即用） |
@@ -83,7 +82,7 @@
 
 | 前缀 | 域 | 判据 / 契约 |
 |:-----|:---|:------------|
-| `check-*` | 代码与文件质量 / 文档 | **可入门禁**的检查脚本：统一 `-v/--ci`、退出码 0/2（特例见 docstring），十守护与 CI `guards` 同源 |
+| `check-*` | 代码与文件质量 / 文档 | **可入门禁**的检查脚本：统一 `-v/--ci`、退出码 0/2（特例见 docstring），守护清单与 CI `guards` 同源 |
 | `test-*` | 测试 | 测试执行与测试工程：驱动、覆盖计数、失败提取、顺序依赖定位、Web 冒烟、性能**测试**报告 |
 | `eval-*` | 评测与基准 | 离线评测/采样/阈值校准：不入门禁，产物落 `docs/tmp/` 或只输出计分 |
 | `perf-*` | 运维观测 | 读生产运行台账的性能历史查看（被动统计，不用于门禁） |
@@ -98,7 +97,7 @@
 - **设计逻辑**——为什么存在、判什么、怎么判定、边界与取舍（改规则前先读这段）。
 - **使用逻辑**——怎么跑、退出码怎么读、finding 怎么处置、什么时候会自动跑。
 
-所有检查脚本共用的契约、设施与处置流程集中在「检查脚本的公共部分」，各条目不再重复。哪些脚本属于阻塞门禁的十守护、各在 P0 还是 P2，以「三级门禁」章节的五处同源清单为准。
+所有检查脚本共用的契约、设施与处置流程集中在「检查脚本的公共部分」，各条目不再重复。哪些脚本属于阻塞门禁的守护清单、各在 P0 还是 P2，以「三级门禁」章节的五处同源清单为准。
 
 ## 检查脚本的公共部分
 
@@ -156,7 +155,7 @@
   3. **判为应检出但漏了 → 加词条**：先定语义名与分类，再按"共享词表 → 两域引用 → 正向用例"落地；只在一域需要的词条不进共享表。
   4. **判为误伤当前语义 → 加负向用例**：先把"有意不检"锁进测试，再收窄正则——否则下次扩词会把它扫回来。
 - **改检查项的标准顺序**（固定，跳过任一步都会留下单侧漂移）：词条 → 分类/分桶 → 域矩阵 → 正向+负向用例 → 三处文档（脚本 docstring / 本指南 / 门禁清单）→ 全仓 `--ci` 对拍（改动前后 findings 必须能逐条解释）。
-- **何时跑**：`git commit` 时钩子按暂存域自动执行，**不要手动重复**；提交前手动只需跑测试门禁；发布门禁（P2）里它属十守护之一，CI 的 `guards` job 恒跑全量兜底。
+- **何时跑**：`git commit` 时钩子按暂存域自动执行，**不要手动重复**；提交前手动只需跑测试门禁；发布门禁（P2）里它属守护清单之一，CI 的 `guards` job 恒跑全量兜底。
 - **缓存**：输入或逻辑面变化自动失效；排查"改了规则结论没变"时**不要删缓存**，用 `CHECK_CONCLUSION_CACHE_DIR=$(mktemp -d)` 隔离跑一次对照——这样能区分"缓存未失效（缺陷）"与"规则确实没覆盖（漏报）"。
 - **报误报的最小信息集**：finding 原文 + 你的判定（合法 / 应改）+ 处置（豁免 / 词条）+ 用例名。四项齐了，一次提交即可落地，不用来回确认。
 
@@ -164,7 +163,7 @@
 
 ## 测试类
 
-测试驱动、覆盖率采集、失败定位与 Web 冒烟工具，以及测试质量机检（冗余 / 标记，其中部分属十守护——以「三级门禁」清单为准）。
+测试驱动、覆盖率采集、失败定位与 Web 冒烟工具，以及测试质量机检（冗余 / 标记，其中部分属守护清单——以「三级门禁」清单为准）。
 
 **测试驱动与覆盖率**
 
@@ -267,7 +266,7 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 **使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
 
 ```bash
-.venv/bin/python scripts/check-test-redundancy.py                 # 九类全查
+.venv/bin/python scripts/check-test-redundancy.py                 # 九类用例质量 + 标记合规全查
 .venv/bin/python scripts/check-test-redundancy.py -v              # 详细输出（扫描规模 + 各类计数 + 跳过的间接调用用例数）
 .venv/bin/python scripts/check-test-redundancy.py --ci            # CI 模式（只输出 文件:描述，退出码 2）
 .venv/bin/python scripts/check-test-redundancy.py --include-live  # 连带扫描 src/test/live/
@@ -283,24 +282,25 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 
 > **何时跑**：`git commit` 时由 pre-commit 钩子按暂存域自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` job 恒跑全量兜底。
 
-**`check-test-markers.py` — 标记合规性检查**
+**标记合规支路（`_test_redundancy/markers.py`，随 `check-test-redundancy.py` 执行）**
 
 **设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
 
-AST 静态扫描所有 `test_*.py` 文件，检查：
-- 标记完整性（是否有 `unit_*` 子标记）
-- 拼写错误（未注册的 marker 名）
-- `_edge.py` 是否漏标 `edge`，或非 `_edge.py` 文件是否误标 `edge`
+与用例质量同源同窗：都读这批测试文件的 AST、都在 `src/test/` 变更时触发、都由改测试源修复。漏标与死用例后果相同——用例存在却跑不到（`-m unit` 选不中、P1 域搬家），故并入同一入口而非另开脚本（脚本数不涨、支路可涨）。
+
+- 标记注册集从 `src/test/conftest.py` 的 `addinivalue_line("markers", …)` 静态派生，conftest 增删标记后自动跟随
+- 判四类违规：未注册标记（拼写错误）/ 已移除标记 / `_edge.py` 缺 `edge` / 目录缺域标记（`EXPECTED_DIR_MARKERS`）
+- 不变量：含 `unit_*` 子标记必须同时带 bare `unit`（保证 `-m unit` ⊇ P1 `verify` 选择面，发布期 bench 复用 verify 判定的前提）
 
 **使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
 
+随入口脚本执行（无需单独命令）：
+
 ```bash
-.venv/bin/python scripts/check-test-markers.py
+.venv/bin/python scripts/check-test-redundancy.py --ci
 ```
 
-无报错输出即合规。新增/修改测试文件后必须运行此脚本。
-
-> **何时跑**：不入钩子与 CI——新增/修改测试文件后手动跑；`conftest.py` 的收集期校验是兜底。
+判 finding 与其余九类同一退出码（2）。`src/test/` 变更即由 pre-commit 触发；入口本身不另设开关。
 
 ## 文档类
 
@@ -661,7 +661,7 @@ y 范围（svg 单位）；`margin` = 检测范围到卡片右缘的右扩量（
 
 ## 代码与文件质量类
 
-代码注释痕迹（含四条 AST 守卫）、文件行数红线、需求追溯与任务编号一致性（含钩子接线），以及两条观察期契约检查。
+代码注释痕迹（含四条 AST 守卫）、文件行数红线、需求追溯与任务编号一致性（含钩子接线）、导入面契约与 scripts 顶层脚本契约机检。
 
 **`check-code-traces.py` — 代码注释历史痕迹检查**
 
@@ -760,7 +760,7 @@ Claude Code 编辑 `plan.md` / `review-findings.md` 后自动运行编号校验�
 
 **`install-hooks.sh` — git pre-commit hook 激活脚本（`.githooks/`）**
 
-`.githooks/` 的 git pre-commit hook（10 个守护脚本全量校验 + 统计快照自动同步）默认**休眠**——`core.hooksPath` 是本机 git 配置、不随仓库同步。clone 后运行一次激活：
+`.githooks/` 的 git pre-commit hook（12 个守护脚本全量校验 + 统计快照自动同步）默认**休眠**——`core.hooksPath` 是本机 git 配置、不随仓库同步。clone 后运行一次激活：
 
 ```bash
 sh .githooks/install-hooks.sh          # 启用（写入本机 core.hooksPath）
@@ -769,7 +769,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 与 `hook-install-claude.py`（Claude Code hook）配套；两条 hook 均调用 `check-task-numbering-hook.py` 校验编号文档。
 
-**`check-file-length.py` — 单文件行数红线守护**
+**`check-file-length.py` — 单文件行数红线守护（含膨胀登记表同实）**
 
 **设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
 
@@ -793,7 +793,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 > **何时跑**：`git commit` 时钩子自动执行；发布门禁（P2）与 CI `guards` 全量兜底；新增文件或拆分后务必本地跑一次。
 
-**`check-script-contract.py` — scripts 顶层脚本契约机检（观察期）**
+**`check-script-contract.py` — scripts 顶层脚本契约机检**
 
 **设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
 
@@ -804,7 +804,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 3. **显式编码**：`open()`（非二进制）、`Path.read_text/write_text`、`subprocess` 文本模式均须显式 `encoding=`——cp936 Windows 上隐式编码会静默写错或报错。
 4. **测试覆盖**：每个顶层脚本须被 `src/test/` 下至少一个测试按文件名引用；一次性工具在 `_UNTESTED_EXEMPT` 豁免。
 
-**观察期**：与样式护栏同模式——未入钩子与 CI，改动 `scripts/` 后本地跑，避免"新增脚本无人引用/无编码声明"沉淀。
+**已入域**（守护清单成员）：本地由 pre-commit 在 `scripts/` 变更时并行触发（AST 只读，毫秒级），CI `guards` job 与 P2 门禁恒全量覆盖——观察期结束条件（真实 `scripts/` 零 finding）已满足。
 
 **使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
 
@@ -818,20 +818,21 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 处置：按规则号补声明 / 补 `add_common_args` / 补 `encoding=` / 补测试引用或登记豁免；确属特例才加白名单，并在注释写清理由。
 
-> **何时跑**：观察期——未入钩子与 CI；新增或改动 `scripts/` 顶层脚本后手动跑。
+> **何时跑**：`git commit` 触及 `scripts/` 时由钩子自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` 恒全量兜底。
 
-**`check-import-surface.py` — 导入面契约检查（观察期）**
+**`check-import-surface.py` — 导入面契约检查**
 
 **设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
 
-四条规则对应 `technical.md`「导入面所有权」与导入面重命名分析稿的 compat-comment / private-all / cross-private / dynamic-target 规格：
+四条扫描规则对应 `technical.md`「导入面所有权」与导入面重命名分析稿的 compat-comment / private-all / cross-private / dynamic-target 规格，第五条是**例外表自审**：
 
 1. **compat-comment 兼容注释**：`src/python/` 出现「兼容既有导入面 / 兼容既有引用 / 公开别名 / 私有名保留」即 finding。
 2. **private-all 私有 `__all__`**：包 `__init__.py` 的 `__all__` 不得列 `_` 开头的私有名。
 3. **cross-private 跨包私有导入**：跨包 `from src.python.<pkg>._x import ...` 即 finding；同包与测试私有导入不在此规则。
 4. **dynamic-target 动态导入字面量**：`importlib.import_module("字面量")` 的目标不可解析即 finding；变量形目标由 `test_check_import_surface.py` 的 smoke 覆盖。
+5. **exception-table 例外表自审**：每条须齐 `path / name / owner / reason / expiry / replacement`；`expiry`（`YYYY-MM-DD`）到期即 finding——续期须显式改日期并复核理由；登记项若已不再命中任何违规（规则早修好）也判 finding（`[exception-stale]`），防例外腐化成永久豁免。例外表解析失败同样按 finding 报（不以 traceback 窜出契约码域）。
 
-例外登记在 `scripts/_import_surface_exceptions.json`，每条须写 `path / name / owner / reason / expiry / replacement`；观察期与 `check-script-contract` 同模式，未接入钩子与 CI。
+例外登记在 `scripts/_import_surface_exceptions.json`。已入域（守护清单成员）：本地由 pre-commit 在 `src/python/` 变更时并行触发（~1s），CI `guards` job 与 P2 门禁恒全量覆盖——观察期结束条件（真实树零 finding、零例外）已满足，误报为零故无须继续观察。
 
 **使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
 
@@ -843,9 +844,9 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 退出码：0 通过；2 发现 finding。
 
-处置：优先改 owner 导入或收窄 `__all__`；确需保留的公开门面/动态调度面写进例外表并注明替代路径与复核期限。
+处置：优先改 owner 导入或收窄 `__all__`；确需保留的公开门面/动态调度面写进例外表并注明替代路径与复核期限；到期或已被修复的例外由规则 5 报出，须删条目或续期。
 
-> **何时跑**：观察期——改动 `src/python/` 导入面后手动跑；转正门禁前先清空或登记例外。
+> **何时跑**：`git commit` 触及 `src/python/` 或本脚本时由钩子自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` 恒全量兜底。
 
 **`check-style-guardrails.py` — 设计护栏机检（DESIGN.md 样式面）**
 
@@ -936,7 +937,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 .venv/bin/python scripts/release.py archive   # 单独重跑归档迁移（--dry-run 只报告、--skip-design-docs 只做台账）；prepare 已内置，通常无需单独执行
 .venv/bin/python scripts/release.py refresh   # bench --update-docs（发布子集四档，--full-bench 全量）+ collect + doc-drift --sync
 .venv/bin/python scripts/release.py evolution --release   # 演进对照快照（默认只滚当前开发版列）+ 收尾 doc-drift --sync
-.venv/bin/python scripts/release.py gate      # P2：regression + 十守护 --ci + 设计护栏（gate 内置）
+.venv/bin/python scripts/release.py gate      # P2：regression + 守护清单 --ci + 设计护栏（gate 内置）
 .venv/bin/python scripts/release.py publish --title "<发布主题>"   # 提交前同步统计快照 + release 提交 + P1 verify + --no-ff 合并 + tag
 .venv/bin/python scripts/release.py devbump    # 切下一开发版并提交
 ```
@@ -976,7 +977,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 **`check` 的本地门禁前置**：除分支/工作树/版本/tag/归档前置与 changelog 派生预演外，默认再跑两项（`--no-local-gate` 跳过）——① 统计快照核对（`check-doc-drift --ci`，秒级）；② 本地全量测试（`test-runner --mode dev-verify`，≈30s）。二者是「进 gate 才发现」的高频返工源（实测一次发布因此多跑 1 次 refresh + 3 次 gate ≈150s），实现见 `_release/_local_gate.py`。
 
-**耗时与 token 台账（`logs/release.jsonl`）**：每个子命令结束追加一行 JSON——`command` / `ok` / `elapsed_s` / `version` / `steps[]` / `failure{}`（仅失败命令：失败步 / 退出码 / 测试报告目录 / 失败用例名 / 输出尾部，保留第一现场；非 `_run_step` 路径只记 rc） / `agent{}`（执行环境身份：`provider`/`model`/`thinking`/`session_id`，取自 `PI_PROVIDER`/`PI_MODEL`/`PI_REASONING_LEVEL`/`PI_SESSION_ID`；非 agent 环境省略）/ `session_usage{}`（agent 会话**累计** token 快照：`input`/`output`/`cache_read`/`cache_write`/`total`——**只记 token，不折算金额**：金额只能来自 pi 的逐模型单价表，而订阅制/转发端点（opencode 等）的单价不是实际账单口径，折算值容易被视为账单；取自 `PI_SESSION_FILE` 会话 JSONL 的 assistant 消息 + 非消息用量（cache_warm 等）+ compaction 三类条目，与 pi 自身 token 统计同口径；非 agent 环境省略该字段，旧台账行形状不变）（gate 的 `P2 场景回归`·`P2 十守护`·`P2 设计护栏`、refresh 的 bench·collect·sync、publish 的 `release 提交`·`P1 verify`·`合并到 master`·`打 tag`·`推送 dev/master/tags`、evolution 的快照统计·统计同步、prepare 的 `台账归档迁移`、devbump 的 `版本全链改写 + 一致性收敛`·`迁档占位清理`·`切版提交`·`推送 dev`·`发布闭环校验`）；终端尾行同步打印摘要。`logs/` 属 git 忽略域，台账不入仓库、不参与门禁，写入失败只打 `[!]` 且不改退出码（观测面不阻断发布）。跨版本对拍：`tail -n 20 logs/release.jsonl`（发布墙钟的变化归因到此，不再靠现场重测）。**token 统计口径**：窗口 = 上一次 `devbump` 之后的行，用量 = 末行累计 − 边界行累计（跨会话按正增量分段累加，不会出现负数）；每条命令尾行自动打印「执行环境：provider/model（thinking=…）」与「本次发布累计 token：N tok（in/out/cache r/w）」，便于把发布成本按版本对拍。
+**耗时与 token 台账（`logs/release.jsonl`）**：每个子命令结束追加一行 JSON——`command` / `ok` / `elapsed_s` / `version` / `steps[]` / `failure{}`（仅失败命令：失败步 / 退出码 / 测试报告目录 / 失败用例名 / 输出尾部，保留第一现场；非 `_run_step` 路径只记 rc） / `agent{}`（执行环境身份：`provider`/`model`/`thinking`/`session_id`，取自 `PI_PROVIDER`/`PI_MODEL`/`PI_REASONING_LEVEL`/`PI_SESSION_ID`；非 agent 环境省略）/ `session_usage{}`（agent 会话**累计** token 快照：`input`/`output`/`cache_read`/`cache_write`/`total`——**只记 token，不折算金额**：金额只能来自 pi 的逐模型单价表，而订阅制/转发端点（opencode 等）的单价不是实际账单口径，折算值容易被视为账单；取自 `PI_SESSION_FILE` 会话 JSONL 的 assistant 消息 + 非消息用量（cache_warm 等）+ compaction 三类条目，与 pi 自身 token 统计同口径；非 agent 环境省略该字段，旧台账行形状不变）（gate 的 `P2 场景回归`·`P2 守护清单`·`P2 设计护栏`、refresh 的 bench·collect·sync、publish 的 `release 提交`·`P1 verify`·`合并到 master`·`打 tag`·`推送 dev/master/tags`、evolution 的快照统计·统计同步、prepare 的 `台账归档迁移`、devbump 的 `版本全链改写 + 一致性收敛`·`迁档占位清理`·`切版提交`·`推送 dev`·`发布闭环校验`）；终端尾行同步打印摘要。`logs/` 属 git 忽略域，台账不入仓库、不参与门禁，写入失败只打 `[!]` 且不改退出码（观测面不阻断发布）。跨版本对拍：`tail -n 20 logs/release.jsonl`（发布墙钟的变化归因到此，不再靠现场重测）。**token 统计口径**：窗口 = 上一次 `devbump` 之后的行，用量 = 末行累计 − 边界行累计（跨会话按正增量分段累加，不会出现负数）；每条命令尾行自动打印「执行环境：provider/model（thinking=…）」与「本次发布累计 token：N tok（in/out/cache r/w）」，便于把发布成本按版本对拍。
 
 ## 运维观测类
 

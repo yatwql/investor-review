@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""scripts/ 顶层脚本契约机检（观察期：不入 pre-commit 钩子与 CI，模式同 check-style-guardrails）。
+"""scripts/ 顶层脚本契约机检（第 12 条守护：钩子随 `scripts/` 变更触发，CI `guards` 与 P2 恒全量）。
 
 四条规则覆盖 2026-10-08 scripts 核查中靠人肉逐案发现的契约偏离：
 
@@ -201,7 +201,7 @@ def script_findings(path: Path) -> list[str]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="scripts 顶层脚本契约机检（观察期，不入钩子与 CI）")
+    parser = argparse.ArgumentParser(description="scripts 顶层脚本契约机检（钩子随 scripts/ 变更触发，CI/P2 恒全量）")
     add_common_args(parser)
     args = parser.parse_args()
 

@@ -1,7 +1,7 @@
 """测试：test-runner 模式注册表 —— preflight 去重契约 + dev-verify 双阶段合一。
 
 回归背景：dev-verify 预检曾内置 check-doc-drift / check-test-redundancy 两个重量守护，
-与 pre-commit 钩子的十守护在同一批次内对**同一待提交树**重复执行——其中
+与 pre-commit 钩子的守护清单在同一批次内对**同一待提交树**重复执行——其中
 check-test-redundancy 全量 AST 解析约 3.5s/次，一轮任务最多跑 3 遍（冗余调用主因）。
 
 去重设计：预检只保留 <100ms 的任务编号快检（fail-fast），重量守护由 pre-commit

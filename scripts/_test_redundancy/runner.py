@@ -1,4 +1,4 @@
-"""编排：按八类检查依次执行并汇总 finding 与统计。CLI 面在入口脚本。"""
+"""编排：按各检查支路依次执行并汇总 finding 与统计。CLI 面在入口脚本。"""
 
 from __future__ import annotations
 from _test_redundancy.dead_fixtures import (
@@ -32,6 +32,7 @@ def run_checks(include_live: bool = False) -> tuple[list[str], dict[str, int]]:
     trivial: list[str] = []
     weak: list[str] = []
     date_bomb: list[str] = []
+    marker: list[str] = []
     entries: list[tuple[str, int, str, str | None]] = []
     n_cases = 0
     for key, item in facts.items():
@@ -43,6 +44,7 @@ def run_checks(include_live: bool = False) -> tuple[list[str], dict[str, int]]:
         trivial += item["trivial"]
         weak += item["weak"]
         date_bomb += item["date_bomb"]
+        marker += item["markers"]
         n_cases += item["count"]
         entries.extend((rel_path, e["lineno"], e["name"], e["sig"]) for e in item["entries"])
     dup_findings, skipped = _group_duplicate_entries(entries)
@@ -57,6 +59,7 @@ def run_checks(include_live: bool = False) -> tuple[list[str], dict[str, int]]:
     findings += dead_fixtures
     findings += weak
     findings += date_bomb
+    findings += marker
     stats = {
         "files": len(facts),
         "cases": n_cases,
@@ -70,5 +73,6 @@ def run_checks(include_live: bool = False) -> tuple[list[str], dict[str, int]]:
         "dead_fixtures": len(dead_fixtures),
         "weak_mock": len(weak),
         "date_bombs": len(date_bomb),
+        "markers": len(marker),
     }
     return findings, stats

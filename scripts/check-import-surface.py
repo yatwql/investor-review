@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""导入面契约检查（观察期）：兼容注释 / 私有 __all__ / 跨包私有导入 / 动态导入字面量。
+"""导入面契约检查：兼容注释 / 私有 __all__ / 跨包私有导入 / 动态导入字面量 / 例外表自审。
 
 规则对应 `docs/managements/technical.md` 的「导入面所有权」表与
 `docs/archive/v0.15.x/import-surface/import-surface-rename.md` 的 compat-comment / private-all / cross-private / dynamic-target 规格：
@@ -8,9 +8,13 @@
   private-all 公共 __all__  包 `__init__.py` 的 `__all__` 含 `_` 私有名
   cross-private 跨包私有导入  跨包 `from src.python.<pkg>._x import ...`（同包与测试私有导入除外）
   dynamic-target 动态导入字面量 `importlib.import_module("...")` 的直接字符串目标不可解析
+  exception-table 例外表自审   每条例外须齐 owner/reason/expiry/replacement；`expiry` 到期即
+                            finding（续期须显式改日期并复核理由），且登记项须仍命中违规
+                            （规则已修复却留着例外 → 腐化成永久豁免，须清理）
 
-例外表在 `scripts/_import_surface_exceptions.json`；每条须有 owner/reason/expiry/replacement。
-本脚本先作观察期检查（未接入 pre-commit/CI 门禁），稳定后按脚本命名约定评估入门禁。
+例外表在 `scripts/_import_surface_exceptions.json`。已入域为第 11 条守护：本地只随
+`src/python/` 变更由 pre-commit 触发，CI `guards` job 与 P2 门禁恒全量覆盖（观察期
+结束条件——真实树上零 finding、零例外，误报为零）。
 
 用法：
   python scripts/check-import-surface.py
@@ -28,7 +32,9 @@ import argparse
 import ast
 import importlib.util
 import json
+import re
 import sys
+from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -37,6 +43,12 @@ from _shared.checklib import REPO_ROOT, add_common_args, rel, report  # noqa: E4
 PY_ROOT = REPO_ROOT / "src" / "python"
 EXCEPTIONS_FILE = Path(__file__).resolve().parent / "_import_surface_exceptions.json"
 COMPAT_MARKERS = ("兼容既有导入面", "兼容既有引用", "公开别名", "私有名保留")
+
+#: 例外条目必填字段（缺一即无法追责或无法自动到期）
+_REQUIRED_FIELDS = ("owner", "reason", "expiry", "replacement")
+
+#: 到期日格式（ISO 日历日，无时区歧义；`YYYY-MM-DD` 之外的写法一律判元数据违规）
+_EXPIRY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def _module_name(path: Path, root: Path) -> str:
@@ -55,19 +67,67 @@ def _package_of(module: str) -> str:
     return ".".join(module.split(".")[:3])
 
 
-def _load_exceptions() -> dict[str, set[tuple[str, str]]]:
-    """返回 {规则: {(相对路径, 符号)}}；文件缺失视为无例外。"""
+class _ExceptionTable(dict):
+    """例外表：`{规则: {(相对路径, 符号)}}`，附带原始条目与命中记录。
+
+    `used` 记下 `_excepted` 实际查询过的 `(规则, 路径, 符号)`：查询由违规候选驱动，
+    没命中说明该规则早已修复，留下的例外只是永不到期的豁免。
+    """
+
+    def __init__(self, raw: dict[str, list[dict]] | None = None) -> None:
+        super().__init__()
+        self.raw: dict[str, list[dict]] = dict(raw or {})
+        self.used: set[tuple[str, str, str]] = set()
+        #: 读表失败原因（非空时整张表作废，由 `collect` 转成一条 finding）
+        self.load_error: str = ""
+        for rule, entries in self.raw.items():
+            self[rule] = {(str(e.get("path", "")), str(e.get("name", ""))) for e in entries}
+
+
+def _load_exceptions() -> _ExceptionTable:
+    """返回例外表；文件缺失视为无例外，解析失败落在 `load_error` 上。"""
     if not EXCEPTIONS_FILE.exists():
-        return {}
-    raw = json.loads(EXCEPTIONS_FILE.read_text(encoding="utf-8"))
-    result: dict[str, set[tuple[str, str]]] = {}
-    for rule, entries in raw.items():
-        result[rule] = {(str(e["path"]), str(e["name"])) for e in entries}
-    return result
+        return _ExceptionTable()
+    try:
+        return _ExceptionTable(json.loads(EXCEPTIONS_FILE.read_text(encoding="utf-8")))
+    except (OSError, ValueError) as exc:
+        table = _ExceptionTable()
+        table.load_error = f"{rel(EXCEPTIONS_FILE)} 无法解析：{exc}"
+        return table
 
 
 def _excepted(exceptions: dict[str, set[tuple[str, str]]], rule: str, path: Path, name: str) -> bool:
-    return (rel(path), name) in exceptions.get(rule, set())
+    rel_path = rel(path)
+    if (rel_path, name) not in exceptions.get(rule, set()):
+        return False
+    used = getattr(exceptions, "used", None)
+    if used is not None:
+        used.add((rule, rel_path, name))
+    return True
+
+
+def audit_exceptions(exceptions: _ExceptionTable) -> list[str]:
+    """exception-table：例外条目元数据齐全 + 未到期 + 仍命中违规。"""
+    findings: list[str] = []
+    today = date.today()
+    for rule, entries in exceptions.raw.items():
+        for entry in entries:
+            path = str(entry.get("path", ""))
+            name = str(entry.get("name", ""))
+            where = f"{rel(EXCEPTIONS_FILE)} {rule}:{path}::{name}"
+            missing = [field for field in _REQUIRED_FIELDS if not str(entry.get(field, "")).strip()]
+            if missing:
+                findings.append(f"[exception-metadata] {where} 缺少字段 {'/'.join(missing)}")
+                continue
+            expiry_raw = str(entry["expiry"]).strip()
+            if not _EXPIRY_RE.match(expiry_raw):
+                findings.append(f"[exception-metadata] {where} expiry 须为 YYYY-MM-DD，实为「{expiry_raw}」")
+                continue
+            if date.fromisoformat(expiry_raw) < today:
+                findings.append(f"[exception-expiry] {where} 已于 {expiry_raw} 到期，须删除例外或续期并复核理由")
+            elif (rule, path, name) not in exceptions.used:
+                findings.append(f"[exception-stale] {where} 未命中任何违规（规则已修复），须删除该例外")
+    return findings
 
 
 def scan_compat(root: Path = PY_ROOT, exceptions=None) -> list[str]:
@@ -155,18 +215,24 @@ def scan_dynamic(root: Path = PY_ROOT, exceptions=None) -> list[str]:
 
 def collect(root: Path = PY_ROOT) -> tuple[list[str], dict[str, int]]:
     exceptions = _load_exceptions()
+    if exceptions.load_error:
+        # 例外表是受检资产：解析失败按 finding 报（退出 2），不让 JSONDecodeError
+        # 以 traceback 窜出（退出 1 不在契约码域内）
+        return [f"[exception-metadata] {exceptions.load_error}"], {"exception-table": 1}
     groups = {
         "compat-comment": scan_compat(root, exceptions),
         "private-all": scan_private_all(root, exceptions),
         "cross-private": scan_cross_private(root, exceptions),
         "dynamic-target": scan_dynamic(root, exceptions),
     }
+    # 例外表自审放在扫描之后：`used` 已由上述四条规则填满，才能判出失效例外
+    groups["exception-table"] = audit_exceptions(exceptions)
     findings = [finding for group in groups.values() for finding in group]
     return findings, {rule: len(items) for rule, items in groups.items()}
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="导入面契约检查（观察期）")
+    parser = argparse.ArgumentParser(description="导入面契约检查")
     add_common_args(parser)
     args = parser.parse_args()
     findings, stats = collect()

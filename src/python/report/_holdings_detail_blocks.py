@@ -125,13 +125,13 @@ _BLOCK_TITLE_CATEGORY = "二、持仓分类汇总"
 
 
 def _weighted_avg_cost(buckets: dict | None) -> float | None:
-    """资金加权成本（批次成本价按份额加权，含费用摊薄）。
+    """资金加权成本（各档成本价按份额加权；净成本已含费用摊薄）。
 
     Args:
         buckets: cost_tiers.per_code 中某代码的分档桶 dict，缺码时为 None
 
     Returns:
-        加权成本价浮点（无批次数据返回 None，渲染层写空）
+        加权成本价浮点（无成本数据返回 None，渲染层写空）
     """
     if not isinstance(buckets, dict):
         return None
