@@ -210,7 +210,7 @@ class TestRequestStatus:
                 attempts["n"] += 1
                 raise httpx.ConnectTimeout("handshake operation timed out")
 
-        monkeypatch.setattr(ds, "_TIMEOUT", 0.2)
+        monkeypatch.setattr(ds, "_CONTENT_TIMEOUT", 0.2)
         monkeypatch.setattr(ds, "make_http_client", lambda **_kw: _HangClient(_FakeResp()))
         monkeypatch.setattr(ds, "credential_value", lambda _sid: "test-key")
         monkeypatch.setattr(ds, "missing_credential", lambda _sid: None)
@@ -334,30 +334,58 @@ class TestFetchPrimitives:
     def test_document_passes_section(self, monkeypatch):
         client = _prepare(monkeypatch, _FakeResp(payload={"id": 7, "content": "# x"}))
         data = ds.fetch_report_document(7, section="管理层讨论与分析")
+        assert data is not None, "成功响应必须返回文档对象"
         assert data["id"] == 7
         assert client.calls[0]["params"]["section"] == "管理层讨论与分析"
 
 
 class TestFetchReportSections:
-    """章节清单端点：返回章节名列表，异常形态一律 None。"""
+    """章节清单端点：返回章节名列表，异常形态一律 None；走**探测档预算**。"""
 
     def test_returns_section_names(self, monkeypatch):
         from src.python.providers import datasink as ds
 
-        monkeypatch.setattr(
-            ds, "_request", lambda path, params: {"sections": ["第三节管理层讨论与分析", "第八节财务报告"]}
-        )
+        seen: dict = {}
+
+        def _fake_request(path, params, **kwargs):
+            seen.update(kwargs)
+            return {"sections": ["第三节管理层讨论与分析", "第八节财务报告"]}
+
+        monkeypatch.setattr(ds, "_request", _fake_request)
         assert ds.fetch_report_sections(59797) == ["第三节管理层讨论与分析", "第八节财务报告"]
+        assert seen.get("timeout") == ds._PROBE_TIMEOUT, (
+            "章节清单属探测请求，必须用探测档预算（正文预算会让一次 SSL 挂起白等 20s+）"
+        )
 
     def test_filters_blank_and_non_list(self, monkeypatch):
         from src.python.providers import datasink as ds
 
-        monkeypatch.setattr(ds, "_request", lambda path, params: {"sections": ["  ", "甲", ""]})
+        monkeypatch.setattr(ds, "_request", lambda path, params, **_kw: {"sections": ["  ", "甲", ""]})
         assert ds.fetch_report_sections(1) == ["甲"]
-        monkeypatch.setattr(ds, "_request", lambda path, params: {"sections": "oops"})
+        monkeypatch.setattr(ds, "_request", lambda path, params, **_kw: {"sections": "oops"})
         assert ds.fetch_report_sections(1) is None
-        monkeypatch.setattr(ds, "_request", lambda path, params: None)
+        monkeypatch.setattr(ds, "_request", lambda path, params, **_kw: None)
         assert ds.fetch_report_sections(1) is None
+
+    def test_content_paths_keep_long_budget(self, monkeypatch):
+        """正文/索引仍用长预算（大文档全文抽取慢，短预算会误判超时）。"""
+        from src.python.providers import datasink as ds
+
+        seen: dict = {}
+
+        def _fake_request(path, params, **kwargs):
+            seen[path] = kwargs.get("timeout")
+            return {"items": [{"id": 7}]}
+
+        monkeypatch.setattr(ds, "_request", _fake_request)
+        ds.fetch_report_documents("600519.SS")
+        assert seen["/documents"] is None, "未显式传预算 → 落正文档默认（20s），由 _request 内部归一"
+
+    def test_probe_budget_is_shorter_than_content(self):
+        """两档预算的关系固定：探测档必须显著短于正文档（预算分档本身即本条纪律）。"""
+        from src.python.providers import datasink as ds
+
+        assert ds._PROBE_TIMEOUT < ds._CONTENT_TIMEOUT
 
 
 class TestEmptyReasonSelfReport:

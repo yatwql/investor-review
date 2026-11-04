@@ -54,7 +54,12 @@ logger = logging.getLogger("invest")
 _BASE_URL = "https://api.datasink.ing"
 #: 429 限速退避策略（重试一次；免费档 3 请求/秒）
 _RATE_LIMIT_POLICY = RetryPolicy(attempts=2, strategy=STRATEGY_FIXED, base_backoff=1.0)
-_TIMEOUT = 20.0
+#: 正文/全文取数预算（秒）：大文档全文本抽取慢，保留长预算
+_CONTENT_TIMEOUT = 20.0
+#: 探测类请求预算（秒）：`/documents/{id}/sections` 只回小 JSON，**挂起即主机不可达**；
+#: 用正文预算会让一次握手挂起吃掉 20s+ 墙钟（实测单次 23~25s，7 日 26 次），是「数据准备」
+#: 阶段从 1.5s 涨到 59s 量级的主因。探测预算更短，挂起时更快判定不可达并走冷却。
+_PROBE_TIMEOUT = 8.0
 _HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; investor-review)"}
 
 SOURCE_ID = "datasink"
@@ -202,7 +207,7 @@ def _consume_quota() -> bool:
 # ═══════════════════════════════════════════════════════════════
 
 
-def _get_with_transient_retry(path: str, query: dict[str, Any]) -> Any:
+def _get_with_transient_retry(path: str, query: dict[str, Any], *, timeout: float | None = None) -> Any:
     """限速 GET（**每次尝试前**取限速许可）；连接级瞬时失败退避重试，耗尽后**上抛**。
 
     上抛是刻意设计：链路（``fetcher/chain``）的传输级判据**只认异常**——返回值哨兵不参与
@@ -213,15 +218,16 @@ def _get_with_transient_retry(path: str, query: dict[str, Any]) -> Any:
     退避策略/挂起判据/限速许可收敛于 ``providers/_utils.with_connect_retry``（三处连接级
     重试共用同一脚手架）。
     """
+    timeout = _CONTENT_TIMEOUT if timeout is None else timeout
     url = f"{_BASE_URL}{path}"
 
     def _request_once() -> Any:
-        with make_http_client(timeout=_TIMEOUT, follow_redirects=True) as client:
+        with make_http_client(timeout=timeout, follow_redirects=True) as client:
             return client.get(url, params=query, headers=_HEADERS)
 
     return with_connect_retry(
         _request_once,
-        timeout=_TIMEOUT,
+        timeout=timeout,
         log_tag="datasink",
         label=path,
         before_attempt=lambda: _get_limiter().acquire(SOURCE_ID),
@@ -252,7 +258,7 @@ def _probe_miss_key(path: str, params: dict[str, Any]) -> str:
     return PROBE_MISS.key(hashlib.md5(payload.encode("utf-8")).hexdigest()[:12])
 
 
-def _request(path: str, params: dict[str, Any]) -> dict[str, Any] | None:
+def _request(path: str, params: dict[str, Any], *, timeout: float | None = None) -> dict[str, Any] | None:
     """带凭据 / 限速 / 配额护栏的 GET。
 
     两类失败**分开处理**（降级治理口径）：
@@ -370,8 +376,11 @@ def fetch_report_sections(doc_id: int | str) -> list[str] | None:
     章节名各公司/文种不同（如「第三节管理层讨论与分析」「五、主要会计数据和财务指标」），
     硬编码裸章节名会因服务端匹配规则不一致而 404。先取清单再按子串匹配选择，
     即可避免「章节名猜错 → 整只标的被判未取到财报」。
+
+    预算按**探测档**（`_PROBE_TIMEOUT`）：本请求只回小 JSON，SSL 握手挂起即主机不可达，
+    长预算只会把墙钟白等掉（该路径是 full 报告「数据准备」抖动的主要来源）。
     """
-    data = _request(f"/documents/{doc_id}/sections", {})
+    data = _request(f"/documents/{doc_id}/sections", {}, timeout=_PROBE_TIMEOUT)
     if data is None:
         return None
     sections = data.get("sections")

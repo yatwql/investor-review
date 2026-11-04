@@ -8,8 +8,9 @@
 
 ## [0.16.18-dev] - 开发中（未发布）
 
+### 变更
 
-（本次发布内容见下方归档索引）
+- **财报源超时预算分档（rf-1036）**：`providers/datasink.py` 把单一 20s 预算拆为**正文档 20s / 探测档 8s**——章节清单 `/documents/{id}/sections` 只回小 JSON，SSL 握手挂起即主机不可达，用正文预算会让一次挂起白等 20s+（实测单次 23~25s、7 日 26 次，使 full 报告「数据准备」从 1.5s 涨到 59s 量级）。预算经 `_request(..., timeout=)` / `_get_with_transient_retry(..., timeout=)` 透传（晚绑定默认值，运行期可覆盖），挂起判据与连接级重试沿用同一 `with_connect_retry` 脚手架。新增 3 例回归（探测档预算生效 / 正文档仍走长预算 / 两档关系固定）；`datasource-reliability.md` 的 DataSinking 节补「超时设定」行。
 
 ## 归档
 
