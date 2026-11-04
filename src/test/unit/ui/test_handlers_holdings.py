@@ -408,7 +408,10 @@ def test_continue_previous_entry_shortens_flow(tmp_path: Path, feed, monkeypatch
 
     keys = [item.key for item in hh._panel_items(session)]
     assert "6" in keys and keys[-1] == "0", keys
-    continue_item = next(item for item in hh._panel_items(session) if item.key == "6")
+    continue_items = [item for item in hh._panel_items(session) if item.key == "6"]
+    assert continue_items, "继续录上一笔项缺失"
+    continue_item = continue_items[0]
+    assert continue_item.action is not None, "继续录上一笔项缺动作闭包"
     assert "贵州茅台" in continue_item.label
 
     feed("20", "2026-07-02", "")  # 只填份额/交易日/价格（账户与标的沿用）
@@ -461,9 +464,7 @@ def _draft_buy_or_sell(session, side: str) -> None:
 
 
 @pytest.mark.parametrize("side", [SIDE_BUY, SIDE_SELL])
-def test_save_enter_defaults_to_recording_flow(
-    tmp_path: Path, feed, monkeypatch: pytest.MonkeyPatch, side: str
-):
+def test_save_enter_defaults_to_recording_flow(tmp_path: Path, feed, monkeypatch: pytest.MonkeyPatch, side: str):
     """回车缺省 = 写入并记入交易流水（买入与卖出同一出口，两条路径都要覆盖）。"""
     path = _ui_file(tmp_path)
     session = hh._Session(book=load_book(str(path)), mtime=os.path.getmtime(path))

@@ -393,6 +393,10 @@ def _parse_dividend_sheet(ws) -> list[DividendRecord]:
 def _coerce_flow_date(value) -> str:
     """把流水页签的日期单元格归一为 ``YYYY-MM-DD`` 字符串（非法形态原样返回，由校验判无效）。
 
+    与录入侧 `fetcher/nav_lookup.normalize_trade_date` 分工：那边是**写入口**（严格要求
+    用户输入的文本并抛错），这边是**读入口**（宽容：接受 Excel 原生日期、非法形态原样
+    返回给调用方判无效）。core 不依赖 fetcher，故两者各留一份，勿合并成跨层调用。
+
     Excel 里手工填的日期是**原生日期单元格**（openpyxl 读回 ``datetime``/``date``），
     `str()` 化会得到 ``2026-11-04 00:00:00``——带时间尾巴过不了 ``_DATE_RE``，整行被
     当成「日期无效」静默丢弃（实测：一行卖出流水在 XIRR/成本分档里凭空消失）。故写入

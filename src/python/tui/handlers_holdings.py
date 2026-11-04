@@ -748,9 +748,7 @@ def _save(session: _Session) -> None:
     _print_draft_summary(book)
     count = len(book.drafts)
     target = os.path.basename(book.filepath)
-    raw = _ask(
-        f"  回车=写入 {target} 并记入「交易流水」（自动 .bak）· n=只写持仓不记流水 · 2=丢弃草稿 · 0 返回: "
-    )
+    raw = _ask(f"  回车=写入 {target} 并记入「交易流水」（自动 .bak）· n=只写持仓不记流水 · 2=丢弃草稿 · 0 返回: ")
     token = (raw or "").strip().lower()
     if raw is None or token == "0":
         print("  [!] 已取消保存，草稿保留")
