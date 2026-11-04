@@ -2,7 +2,7 @@
 """持仓录入编辑层（core/holdings_editor.py）单元测试。
 
 覆盖「读文件 → 内存草稿 → 原子写回」的正面路径：账户/行保序、买入加权平均成本、
-卖出保留原成本、写回后其他页签不受影响、可选交易流水追加、新账户建页。
+卖出净成本重算（超额回收钳 0）、写回后其他页签不受影响、可选交易流水追加、新账户建页。
 边缘与异常场景见 ``test_holdings_editor_edge.py``。
 """
 
@@ -75,7 +75,7 @@ def test_buy_new_asset_appends_row(tmp_path: Path):
     assert rows[-1].shares == pytest.approx(300)
 
 
-def test_sell_partial_keeps_original_cost(tmp_path: Path):
+def test_sell_partial_recomputes_net_cost(tmp_path: Path):
     book = load_book(str(make_holdings_file(tmp_path)))
     book.apply(
         TradeIntent(
@@ -90,7 +90,27 @@ def test_sell_partial_keeps_original_cost(tmp_path: Path):
     )
     row = next(row for row in book.rows("股票账户") if row.code == "600900")
     assert row.shares == pytest.approx(600)
-    assert row.cost_price == pytest.approx(20.0)
+    # 净成本法：1000×20 − 400×25 = 10000 → 剩余每份成本 10000/600
+    assert row.cost_price == pytest.approx(10000 / 600)
+
+
+def test_sell_excess_recovery_clamps_cost_to_zero(tmp_path: Path):
+    """卖出回收金额超过原成本总额 → 剩余成本钳制为 0（不出现负成本）。"""
+    book = load_book(str(make_holdings_file(tmp_path)))
+    book.apply(
+        TradeIntent(
+            account="股票账户",
+            name="长江电力",
+            code="600900",
+            side=SIDE_SELL,
+            shares=400,
+            price=60.0,  # 400×60=24000 > 1000×20=20000
+            trade_date="2026-07-01",
+        )
+    )
+    row = next(row for row in book.rows("股票账户") if row.code == "600900")
+    assert row.shares == pytest.approx(600)
+    assert row.cost_price == 0.0
 
 
 def test_sell_all_removes_row(tmp_path: Path):
