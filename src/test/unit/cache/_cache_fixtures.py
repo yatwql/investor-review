@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from src.python.core.constants import BEIJING_TZ
@@ -40,10 +40,17 @@ def write_cache_at(cache_dir, key: str, moment: float) -> None:
     _payload_path(cache_dir, key).write_text(json.dumps(payload), encoding="utf-8")
 
 
-def today_at(hour: int, minute: int) -> float:
-    """今天（北京时间）某时某刻的时间戳。"""
+def today_at(hour: int, minute: int = 0) -> float:
+    """北京时间某时刻的**过去最近一次**时间戳（凌晨跑测也不会落在未来）。
+
+    务必不要用 `now.replace(hour=…)` 直接造：凌晨 00:00–08:00 运行时该戳在未来，
+    缓存年龄为负，`超过 TTL 必须回收`/`盘中快照盘后回收` 两类断言随即失真。
+    """
     now = datetime.now(BEIJING_TZ)
-    return now.replace(hour=hour, minute=minute, second=0, microsecond=0).timestamp()
+    stamp = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if stamp > now:
+        stamp -= timedelta(days=1)
+    return stamp.timestamp()
 
 
 def pre_open_ts() -> float:

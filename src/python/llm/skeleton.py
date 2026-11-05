@@ -35,6 +35,7 @@ from src.python.llm.prompts import (
     FAIL_REASON_NOT_CONFIGURED,
     LLM_MODULE_FAILURE,
 )
+from src.python.llm.failure_reasons import describe_failure_reason
 from src.python.llm.prompts_tables import _build_prompt_appendix
 from src.python.llm.session import record_per_module
 from src.python.core.registry import get_llm_module_name
@@ -437,12 +438,19 @@ def _execute_llm_with_finalize(
             duration=_duration,
         )
 
-    logger.warning("LLM 内容生成失败: %s", cache_key)
+    _fail_reason = _get_last_llm_failure() or FAIL_REASON_API_ERROR
+    # 内容不可用是错误级事件（与「数值缺失」类 WARNING 区分）：带模块名与原因，
+    # 否则只剩一个缓存键，事后无法判「哪个模块、为什么」。
+    logger.error(
+        "LLM 内容生成失败（模块=%s，原因=%s）: %s——该模块本轮无内容，报告对应章节将降级/占位",
+        module_key or "未指定",
+        describe_failure_reason(_fail_reason),
+        cache_key,
+    )
     if module_key:
         existing = LLM_MODULE_FAILURE.get(module_key)
         if not isinstance(existing, dict):
-            failure_reason = _get_last_llm_failure() or FAIL_REASON_API_ERROR
-            LLM_MODULE_FAILURE[module_key] = failure_reason
+            LLM_MODULE_FAILURE[module_key] = _fail_reason
     return (None, False)
 
 

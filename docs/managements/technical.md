@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.17.2
+> 文档版本：0.17.3
 
 ## 目录
 
@@ -2920,6 +2920,8 @@ llm/skeleton.py            # 摘要注入 expert_review 提示词（开关门控
 
 ---
 
+**LLM 模块结果行的级别口径（单源）**：每轮每模块只打一条结果行，分四级——成功 `INFO 生成完成`；开关关闭 `INFO 未生成（开关关闭）`；总时间预算到点 `INFO 未生成（总时间预算跳过）`；**其余一律 `ERROR 生成失败（<可读原因>）`** 并附「报告对应章节将降级/占位」。判据取 `llm/failure_reasons.py` 的 `LLM_MODULE_FAILURE`（dict 形态取 `final_status`、str 形态直接用），可读文案取同模块 `FAIL_REASON_LABELS` / `describe_failure_reason()`——报告模块状态（`report/llm_module_info.py` 的 `_DISPLAY_REASON` 即同一对象）与日志因此不会出现两套措辞。过去「provider 全挂」与「用户关了开关」「预算跳过」都打成 `INFO 生成失败（跳过）`，事后无法区分内容缺失的原因；`llm/skeleton.py` 的失败行同时补齐模块名与原因（此前只有缓存键）。
+
 ### 4.18 决策跨期反思闭环
 
 LLM 的操作建议与确定性调仓信号此前「当次即评、事后无对账」——看多看空的判断无法用真实后续行情验证，判断质量既不沉淀也无从回灌后续分析。本项把决策登记为追加型账本 `data/state/decision_ledger.jsonl`，到期用真实行情结算命中率，再把教训回灌专家复盘提示词，形成「登记 → 结算 → 回灌」闭环（实验开关 `decision_reflection`，默认关）。
@@ -3563,7 +3565,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `inject_holding_change_data` | 持仓变动复盘挂载点（独立章节与回放组开关；守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供） | 持仓变动复盘（报告独立章，type=holding_change） | 报告输出 | 独立章节与回放开关 `holding_change_review`（默认关） |
 | `inject_event_impact_data` | 事件窗对照挂载点（事件与摘要组开关；守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供；新闻先行串行段内注入，供分歧例附录块同轮进 LLM） | 事件窗对照（财经新闻章内区块，随父章；注册表无独立条目） | 报告输出 | 报告章节与增强开关 `event_window_impact`（默认关） |
 | `inject_schedule_replay_data` | 调仓纪律回放挂载点（守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供；快照与持仓变动注入后串行装配，回放引用 `prompt_block` 经统一附录进 LLM） | 调仓纪律回放（报告独立章，type=schedule_replay） | 报告输出 | 功能开关 `rebalance_schedule_replay`（默认关，独立章节与回放组） |
-| `event_impact_panel` | 事件窗对照表数据编排与双端单源展示（事件行/降级/占位 + view 与页签同文 + 分歧例附录块）；关键词索引三键（品种名/去后缀简称/代码变体、板块名、`sector_keywords()` 行业关键词），行业级命中标注「（行业）」；行情取数窗口按最早事件日自适应（`history_days_for`，365~1095 天夹取），防止事件日早于固定窗口时整条按「映射交易日不在行情轴」降级；事件日晚于行情轴末日时按末日对齐（`anchor_shifted`/`align_note`），视图单独计数；单次事件表行数上限 80（超出计入 `capped`）；基准取数同码 memo，**无 K 线债券基准（`sh000012`）不取数直接降级**，单路超 5s WARNING | 事件窗对照 | 报告输出 | 随 `event_window_impact` |
+| `event_impact_panel` | 事件窗对照表数据编排与双端单源展示（事件行/降级/占位 + view 与页签同文 + 分歧例附录块）；关键词索引三键（品种名/去后缀简称/代码变体、板块名、`sector_keywords()` 行业关键词），行业级命中标注「（行业）」；行情取数窗口按最早事件日自适应（`history_days_for`，365~1095 天夹取），防止事件日早于固定窗口时整条按「映射交易日不在行情轴」降级；事件日晚于行情轴末日时按末日对齐（`anchor_shifted`/`align_note`），视图单独计数；单次事件表行数上限 160（超出计入 `capped`）；基准取数同码 memo，**无 K 线债券基准（`sh000012`）不取数直接降级**，单路超 5s WARNING | 事件窗对照 | 报告输出 | 随 `event_window_impact` |
 | `event_window_impact` | 事件窗对照（新闻事件 → 交易日映射的 ±5 交易日窗收益 vs 文本极性方向比对；行情轴右端不足 5 日时按可用交易日截断并标未满窗，分歧例进 LLM 统一附录） | 事件窗对照 | 报告输出 | 报告章节与增强开关 `event_window_impact`（默认关） |
 | `schedule_replay_panel` | 调仓纪律回放数据装配与双端单源展示（回放契约 + view 与页签同文 + 回放引用 prompt_block） | 调仓纪律回放 | 报告输出 | 随 `rebalance_schedule_replay` |
 | `rebalance_schedule_replay` | 调仓纪律回放（月度定期/阈值偏离纪律多期回放 vs 买入持有，双线图与逐期成本表，回放结论进 LLM 统一附录） | 调仓纪律回放 | 报告输出 | 功能开关 `rebalance_schedule_replay`（默认关，独立章节与回放组） |

@@ -326,8 +326,12 @@ class TestArchivePageTimeout:
     def test_archive_page_uses_tighter_timeout(self):
         from src.python.fetcher import fund_manager as fm
 
-        assert fm._ARCHIVE_TIMEOUT.read < fm._TIMEOUT.read, "回退页读超时应小于主页读超时"
-        assert fm._TIMEOUT.connect <= 3.0, "连接阶段（含 TLS 握手）须单独封顶"
+        # httpx.Timeout 的分项可能为 None（未显式设置）；此处断言前先投影成数值
+        main_read = fm._TIMEOUT.read or 0.0
+        archive_read = fm._ARCHIVE_TIMEOUT.read or 0.0
+        connect = fm._TIMEOUT.connect or 0.0
+        assert archive_read < main_read, "回退页读超时应小于主页读超时"
+        assert connect <= 3.0, "连接阶段（含 TLS 握手）须单独封顶"
 
         with patch.object(fm, "make_http_client") as mock_client:
             mock_client.return_value.__enter__.return_value.get.return_value.text = "<html></html>"
@@ -377,9 +381,11 @@ class TestManagerTimeoutBudget(unittest.TestCase):
         """主页 + 档案页超时预算合计不超过 ~10s（实测旧值 15+8 造成 27s 挂起）。"""
         from src.python.fetcher import fund_manager
 
-        self.assertLessEqual(fund_manager._TIMEOUT.read, 6.0)
-        self.assertLessEqual(fund_manager._ARCHIVE_TIMEOUT.read, 4.0)
-        self.assertLessEqual(fund_manager._TIMEOUT.read + fund_manager._ARCHIVE_TIMEOUT.read, 10.0)
+        main_read = fund_manager._TIMEOUT.read or 0.0
+        archive_read = fund_manager._ARCHIVE_TIMEOUT.read or 0.0
+        self.assertLessEqual(main_read, 6.0)
+        self.assertLessEqual(archive_read, 4.0)
+        self.assertLessEqual(main_read + archive_read, 10.0)
 
     def test_connect_failure_skips_archive_fallback(self):
         """SSL 握手超时以 ConnectError 抛出（非 TimeoutException）→ 同样视为站点不可达、不再赌档案页。
@@ -463,3 +469,35 @@ class TestManagerNegativeCache:
         assert result is not None
         assert not fm.FUND_MANAGER_MISS.is_missing(fm.FUND_MANAGER_MISS.key("990004"))
         assert not fm.FUND_MANAGER_BACKOFF.is_missing(fm.FUND_MANAGER_BACKOFF.key("990004"))
+
+
+class TestAllParseFailedHint(unittest.TestCase):
+    """全部解析失败时的告警要能指导下一步（回归：此前只有一句「全部解析失败」）。"""
+
+    @patch("src.python.fetcher.fund_manager.cache_get")
+    @patch("src.python.fetcher.fund_manager._request_fund_html_status")
+    @patch("src.python.fetcher.fund_manager._parse_manager_from_archive_page")
+    @patch("src.python.fetcher.fund_manager.cache_set")
+    def test_warning_states_degradation_and_next_step(
+        self,
+        mock_set: MagicMock,
+        mock_archive: MagicMock,
+        mock_request: MagicMock,
+        mock_cache: MagicMock,
+    ):
+        """两条链路都解析不出 → 告警须写明「按缺数据降级」与重试/排查方向。"""
+        mock_cache.return_value = None
+        mock_request.return_value = (_HTML_INFOOFUND, False)
+        mock_archive.return_value = None
+
+        with (
+            patch("src.python.fetcher.fund_manager.parse_manager_from_html", return_value=None),
+            self.assertLogs("invest", level="WARNING") as cm,
+        ):
+            result = fetch_fund_manager("110011")
+
+        self.assertIsNone(result)
+        msg = "\n".join(cm.output)
+        self.assertIn("基金经理全部解析失败", msg)
+        self.assertIn("缺数据降级", msg)
+        self.assertIn("下次运行会自动重试", msg)
