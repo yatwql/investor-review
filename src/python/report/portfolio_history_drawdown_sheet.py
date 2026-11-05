@@ -33,6 +33,7 @@ from src.python.report.excel_writer import (
     write_header_row,
     write_title_row,
 )
+from src.python.report._history_quality import terminal_staleness_asset_line, terminal_staleness_caveat
 from src.python.report.styles import FMT_MONEY, FMT_PERCENT, profit_font
 
 logger = logging.getLogger("invest")
@@ -476,29 +477,16 @@ def _write_terminal_staleness_note(ws: Worksheet, row: int, history_data: dict, 
     assets = stale.get("assets") or []
     if not assets:
         return row
-    lag = int(stale.get("max_lag_trading_days") or 0)
+    # 文案取契约里由 `_history_quality` 单源生成的 `caveat`/`detail`，不在这里重写一句。
+    caveat = stale.get("caveat") or terminal_staleness_caveat(len(assets), int(stale.get("max_lag_trading_days") or 0))
     ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=ncols)
-    cell = ws.cell(
-        row=row,
-        column=1,
-        value=(
-            f"读数口径提示：{len(assets)} 只标的净值落后组合终点至多 {lag} 个交易日，"
-            "走势终值与最新市值口径不同——末端日收益与最大回撤会偏低，终点附近的数字只作参考"
-        ),
-    )
+    cell = ws.cell(row=row, column=1, value=f"读数口径提示：{caveat}")
     cell.font = Font(size=11, color="B45309")
     cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
     row += 1
     for a in assets:
         ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=ncols)
-        detail = ws.cell(
-            row=row,
-            column=1,
-            value=(
-                f"· {a.get('label', '?')}：最新净值日 {a.get('last_date', '?')}"
-                f"（滞后 {a.get('lag_trading_days', 0)} 个交易日，占 {float(a.get('weight_pct') or 0):.1f}%）"
-            ),
-        )
+        detail = ws.cell(row=row, column=1, value=f"· {a.get('detail') or terminal_staleness_asset_line(a)}")
         detail.font = Font(size=10, color="6B7280")
         row += 1
     return row

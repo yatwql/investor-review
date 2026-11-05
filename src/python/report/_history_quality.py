@@ -43,6 +43,34 @@ def _validate_bars(bars: list[dict]) -> list[str]:
     return warnings
 
 
+#: 终点滞后的口径提示（**唯一文案源**）：报告章内与 Excel 页签、数据源状态词均取自此。
+#: 分段拼接以适配不同渲染器的数字占位（标的数/最大滞后天数由调用方填入）。
+TERMINAL_STALENESS_HEADLINE = "{count} 只标的净值落后组合终点至多 {max_lag} 个交易日，走势终值与最新市值口径不同"
+#: 后果句：与 headline 一起组成完整口径提示（两端呈现必须一字不差，避免同一事实两种说法）
+TERMINAL_STALENESS_CONSEQUENCE = "末端日收益与最大回撤会偏低，终点附近的数字只作参考"
+
+
+def terminal_staleness_caveat(count: int, max_lag: int) -> str:
+    """口径提示全文（标的数据章/页签标题行用）。
+
+    Args:
+        count: 滞后标的数
+        max_lag: 最大滞后交易日数
+
+    Returns:
+        一句完整提示（含后果）
+    """
+    return f"{TERMINAL_STALENESS_HEADLINE.format(count=count, max_lag=max_lag)}——{TERMINAL_STALENESS_CONSEQUENCE}"
+
+
+def terminal_staleness_asset_line(asset: dict) -> str:
+    """单只滞后标的的明细行（标的 / 最新净值日 / 滞后交易日数 / 占组合比）。"""
+    return (
+        f"{asset.get('label', '?')}：最新净值日 {asset.get('last_date', '?')}"
+        f"（滞后 {asset.get('lag_trading_days', 0)} 个交易日，占 {float(asset.get('weight_pct') or 0):.1f}%）"
+    )
+
+
 def _detect_terminal_staleness(
     series_entries: list[tuple[str, str, list[dict]]],
     merged_dates: list[str],

@@ -84,6 +84,23 @@ class TestUpdateBasicCacheScope:
         leaked = {"report_datasink_doc_", "report_datasink_index_", "fin_indicator_"} & only
         assert leaked == set(), f"财报/财务指标由报告管线回填，不得随刷新作废：{leaked}"
 
+    def test_declared_keys_all_registered(self):
+        """声明的域名必须都能在缓存注册表里找到（防前缀改名后静默失效）。
+
+        `_BASIC_REFRESHED_CACHE_KEYS` 是手写清单，与注册表之间没有类型约束：某个前缀或
+        精确键换了名，清缓存会静默变成空操作（刷新不再生效，且无任何报错），故逐项
+        断言登记存在。
+        """
+        from src.python.cache.operations import _BASIC_REFRESHED_CACHE_KEYS
+        from src.python.core.registry import get_cache_registry
+
+        registered: set[str] = set()
+        for module in get_cache_registry():
+            registered |= set(module.cache_prefixes) | set(module.exact_cache_keys)
+        assert not (set(_BASIC_REFRESHED_CACHE_KEYS) - registered), (
+            "以下域名未在缓存注册表登记（前缀/精确键改名后需同步本清单）"
+        )
+
 
 class TestWarmNewAssetCaches:
     """预热编排在共享层：变更检测 → 行情/基金 → 行业；异常不阻断。"""

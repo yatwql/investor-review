@@ -22,6 +22,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, TypedDict
 
+from src.python.report._history_quality import TERMINAL_STALENESS_CONSEQUENCE
+
 from src.python.cache import get_cache_dir
 from src.python.config import get_config
 from src.python.core.atomic_write import write_json_atomic
@@ -100,8 +102,7 @@ STATUS_MESSAGES: dict[str, str] = {
     "history_correction": "检测到历史数据修正（重叠覆盖），走势可能已重新计算",
     "history_zero_value": "部分交易日存在零收盘价，可能涉及停牌或节假日数据",
     "history_nav_stale": (
-        "部分持仓净值刷新滞后（落后组合终点≥2 个交易日），走势终值与最新市值口径不同——"
-        "末端日收益与最大回撤按滞后方口径算出，会偏低，读到终点附近的数字仅供参考"
+        f"部分持仓净值刷新滞后（落后组合终点≥2 个交易日），走势终值与最新市值口径不同——{TERMINAL_STALENESS_CONSEQUENCE}"
     ),
 }
 
