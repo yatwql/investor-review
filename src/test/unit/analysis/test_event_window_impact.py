@@ -229,3 +229,31 @@ def test_complete_window_not_marked_partial():
     res = compute_event_impact("2026-09-15", _ASSET, _INDEX, text_polarity="利好")
     assert res["window_partial"] is False
     assert res["window_after_actual"] == 5
+
+
+# ── 事件日行情未落地 → 按行情轴末日对齐（不整条降级） ──────────────
+
+
+def test_anchor_after_axis_tail_aligns_to_last_bar():
+    """事件日晚于行情轴末日（当日 K 线未出）→ 按末日对齐并标注，不出降级。"""
+    tail = _dates("2026-09-01", "2026-09-30")
+    asset = _bars(tail, 100.0)
+    index = _bars(tail, 3000.0)
+    res = compute_event_impact("2026-10-08", asset, index)
+    assert res["available"] is True
+    assert res["anchor_shifted"] is True
+    assert "行情轴末日对齐" in res["align_note"]
+    assert res["trading_day"] == "2026-10-08"  # 原始映射日保留，对齐只影响取数锚点
+    assert res["prev_date"] == tail[-2]  # 基点取对齐后锚点的前一交易日
+    assert res["end_date"] == tail[-1]
+    assert res["window_partial"] is True  # 后窗全缺，按可用日截断
+
+
+def test_anchor_before_axis_head_still_degrades():
+    """事件日早于行情轴首日仍降级（属行情窗口不足，由取数窗口自适应负责）。"""
+    tail = _dates("2026-10-01", "2026-10-30")
+    asset = _bars(tail, 100.0)
+    index = _bars(tail, 3000.0)
+    res = compute_event_impact("2026-09-15", asset, index)
+    assert res["available"] is False
+    assert "映射交易日不在行情轴" in res["reason"]

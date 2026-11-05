@@ -443,6 +443,12 @@ def build_event_impact_view(contract: dict[str, Any] | None) -> dict[str, Any]:
             f"日期不可解析 {skipped.get('bad_date', 0)} 条）"
         ),
     ]
+    shifted_events = [e for e in events if e.get("anchor_shifted")]
+    if shifted_events:
+        view["summary_lines"].append(
+            f"其中 {len(shifted_events)} 条事件日（多为当日）行情尚未落地，已按行情轴末日对齐后计算，"
+            "读数请按「事件日顺延至最近交易日」理解。"
+        )
     partial_events = [e for e in events if e.get("window_partial")]
     if partial_events:
         shortest = min(int(e.get("window_after_actual") or 0) for e in partial_events)

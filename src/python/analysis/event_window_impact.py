@@ -110,8 +110,11 @@ def _closes(bars: list[dict[str, Any]] | None) -> dict[str, float]:
         day = bar.get("date")
         if not day:
             continue
+        raw_close = bar.get("close")
+        if raw_close is None:
+            continue
         try:
-            value = float(bar.get("close"))
+            value = float(raw_close)
         except (TypeError, ValueError):
             continue
         if value > 0 and value == value and value != float("inf") and value != float("-inf"):
@@ -162,6 +165,8 @@ def compute_event_impact(
         "locf_filled": 0,
         "window_after_actual": 0,
         "window_partial": False,
+        "anchor_shifted": False,
+        "align_note": "",
     }
 
     def _fail(reason: str) -> dict[str, Any]:
@@ -182,9 +187,16 @@ def compute_event_impact(
         return _fail("基准行情不可得")
 
     axis = sorted(set(asset_map) | set(index_map))
-    try:
+    align_note = ""
+    if anchor in asset_map or anchor in index_map:
         anchor_pos = axis.index(anchor)
-    except ValueError:
+    elif axis and anchor > axis[-1]:
+        # 事件日（常见为当日）行情尚未落地：按行情轴末日对齐并显式标注，
+        # 避免把「今天的新闻」整条判成降级（右界截断已负责后窗不足的口径）
+        anchor_pos = len(axis) - 1
+        align_note = "事件日行情未出，按行情轴末日对齐"
+        result["anchor_shifted"] = True
+    else:
         return _fail("映射交易日不在行情轴")
     if anchor_pos - window_before < 0:
         return _fail("窗口超出行情范围")
@@ -239,6 +251,8 @@ def compute_event_impact(
             "locf_filled": missing,
             "window_after_actual": after_actual,
             "window_partial": after_actual < window_after,
+            "anchor_shifted": bool(result.get("anchor_shifted")),
+            "align_note": align_note,
         }
     )
     return result
