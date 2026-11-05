@@ -1,5 +1,5 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.17.3-dev
+> 文档版本：0.17.3
 > **编号源**：`rf-next = 1055`（新增问题提出后更新为 +1；已用最大 rf-1047，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
@@ -52,14 +52,10 @@
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
 
-| # | 问题 | 修复 |
-|---|------|------|
-| **rf-1054** | 缓存 TTL 业务矩阵用例用 `now.replace(hour=8/10)` 构造时间戳：跑在 00:00–08:00 时戳落在**未来**，年龄为负，「超过静态 TTL 必须回收」「盘中快照盘后回收」两类断言失真——实测 01:01 跑出 14 例假失败（HEAD 上同样失败，与业务改动无关） | 抽 `_recent(hour, minute)` 取「今天该时刻的过去最近一次」，时段语义不变且与运行时刻无关；105 例全通过 |
-| **rf-1053** | 基金经理主页与档案页都解析不出时，日志只有「基金经理全部解析失败 [code]」：既没说明本轮会按缺数据降级，也没给下一步方向——实测连续两天 SSL 握手超时后该章直接占位，读者无从判断是否要处理 | 告警补「本轮按缺数据降级（报告该章写占位），下次运行会自动重试；若连续多日出现，先查档案页链路是否可达（SSL/超时）」；补 1 例单测 |
-| **rf-1052** | LLM 模块结果行把 provider 全挂 / 开关关闭 / 预算跳过三种情况都打成同一条 `INFO 生成失败（跳过）`；`llm/skeleton.py` 的失败行只有缓存键、无模块与原因——实测 11-03 四模块全跳过，事后要翻十几行 WARNING 才能复原 | 新增 `_log_module_outcome()`：成功 / 关开关 / 预算跳过走 INFO，其余 ERROR + 可读原因 + 降级后果；`skeleton` 失败行补模块名与原因；文案收敛到 `FAIL_REASON_LABELS` 单源并被报告模块状态复用。补 9 例单测 |
+（本版开发期已修复项已随 v0.17.3 发布迁入归档档案）
 
 ### 归档档案
-- [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-05）
+- [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-06）
 - [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-11-03）
 - [`archived_review-findings.0.15.x.md`](../archive/v0.15.x/archived_review-findings.0.15.x.md) — v0.15.x（2026-10-24 ~ 2026-10-25）
 - [`archived_review-findings.0.14.x.md`](../archive/v0.14.x/archived_review-findings.0.14.x.md) — v0.14.x（2026-10-21 ~ 2026-10-23）
