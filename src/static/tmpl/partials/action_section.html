@@ -168,7 +168,7 @@
         <div style="overflow-x:auto;">
         <table>
             <thead>
-                <tr><th>视界</th><th>已结算</th><th>方向性</th><th>命中</th><th>命中率</th><th>均值超额</th></tr>
+                <tr><th>视界</th><th>已结算</th><th>方向性</th><th>命中</th><th>命中率</th><th>均值超额</th><th>结论</th></tr>
             </thead>
             <tbody>
                 {% for _p in _st.get("performance") %}
@@ -179,6 +179,7 @@
                     <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ _p.get("hit", 0) }}</td>
                     <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ _p.get("accuracy_label") or "—" }}</td>
                     <td class="text-right {{ _p.get('tone_class') or '' }}">{{ _p.get("mean_excess_label") or "—" }}</td>
+                    <td class="text-left {{ _p.get('tone_class') or '' }}">{{ _p.get("verdict_label") or "—" }}</td>
                 </tr>
                 {% endfor %}
             </tbody>

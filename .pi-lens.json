@@ -1,11 +1,9 @@
 {
   "rules": {
     "css-ruleorselectorexpected": {
-      "disable": true,
       "ignorePaths": ["src/static/tmpl/**"]
     },
     "css-propertyvalueexpected": {
-      "disable": true,
       "ignorePaths": ["src/static/tmpl/**"]
     }
   }
