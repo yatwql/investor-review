@@ -3216,10 +3216,9 @@ config/
 ├── _llm_settings_defaults.py     # llm_settings.json 默认模板生成
 ├── _llm_providers.py             # llm_providers.json 多链解析/凭据注入
 ├── _llm_providers_defaults.py    # llm_providers.json 默认模板生成
-└── _legacy_keys.py               # 已删除/已改名配置键登记表（RENAMED/REMOVED + 统一告警文案单源）
 ```
 
-**旧配置键的处置口径（单源）**：站点侧只有两种动作——`report_section_order` 的无效键**从内存剔除**（仍计 1 问题提示同步文件）、`features.json` 的无效开关**照常加载但无消费方**；两者共用 `_legacy_keys.format_unknown_keys(scope, names)` 产出**一条**归并告警（逐键注明：已删除的原因 / 应改用的新键 / 疑似拼写错误）。删除或改名任何可配置键时，先在该表登记、再改代码，避免三处措辞各自漂移。
+**未登记配置键的处置口径**：站点侧只有两种动作——`report_section_order` 的未登记章节键**从内存剔除**（仍计 1 问题提示同步文件）、`features.json` 的未登记开关**照常加载但无消费方**；两处各自把同类问题归并成**一条**告警（含键名与条数），不维护旧键改名/删除对照表——本项目不保留跨版本配置兼容，未登记键一律按「配置了也不生效」处理。
 
 #### 机器本地状态
 
