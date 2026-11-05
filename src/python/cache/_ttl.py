@@ -80,6 +80,42 @@ def get_cache_age_by_data_type(
     return None
 
 
+def _static_ttl(data_type: str, config: dict, defaults: dict[str, float]) -> float:
+    """静态 TTL：`config.json → cache_ttl.{type}`（正数）优先，否则取注册表默认。"""
+    ttl_config = config.get("cache_ttl") or {}
+    if data_type in ttl_config:
+        val = float(ttl_config[data_type])
+        return val if val > 0 else defaults.get(data_type, CACHE_DAILY)
+    return defaults.get(data_type, CACHE_DAILY)
+
+
+def get_cleanup_ttl(data_type: str) -> float:
+    """清理侧 TTL：**忽略盘中覆盖**，按静态 TTL 判定文件是否过期。
+
+    清理是磁盘回收，与「读侧新鲜度」是两个判据。行情类盘中 TTL（30s）是读侧策略：
+    拿它判过期等于把 30s 前刚写入的文件立刻判死删掉，下一轮再写一遍（实测每轮启动与
+    收尾都在反复预览 22~63 个待删文件，缓存文件数只在 0 与满载之间抖动）；而被删掉的
+    这部分对读侧本就没有价值（读侧同口径已判过期），删除不带来任何新鲜度收益，只放大
+    未命中统计、制造「缓存反复失效」的假象。
+
+    读侧仍走 :func:`get_ttl`（含盘中覆盖），两处判据的差异是设计意图，不是不一致。
+
+    Args:
+        data_type: 数据类型键名，如 "price"、"index"、"rank"
+
+    Returns:
+        过期时间（秒，永远为静态 TTL）
+    """
+    defaults = get_cache_ttl_defaults()
+    try:
+        from src.python.config import get_config  # lazy import
+
+        return _static_ttl(data_type, get_config(), defaults)
+    except (ImportError, TypeError, ValueError, KeyError, AttributeError, RuntimeError):
+        logger.debug("get_cleanup_ttl: 配置读取失败，使用默认值")
+        return defaults.get(data_type, CACHE_DAILY)
+
+
 def get_ttl(data_type: str) -> float:
     """获取指定数据类型的缓存过期时间（秒）—— **同一类型恒返回同一值**。
 
@@ -96,6 +132,8 @@ def get_ttl(data_type: str) -> float:
 
     读侧（`cache.get`）与清理侧（`cleanup_expired`）取到的是同一个数——这是
     「读写两侧判定期一致」的前提，不需要两侧各自对齐。
+
+    注：清理侧**不用**本函数，改用 :func:`get_cleanup_ttl`（忽略盘中覆盖，见其文档）。
 
     Args:
         data_type: 数据类型键名，如 "price"、"rank"、"hold"

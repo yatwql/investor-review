@@ -201,7 +201,7 @@ class TestCleanupExpired(CacheTestBase):
         self.assertEqual(count, 0)
 
     @patch("src.python.cache._cleanup.time.time")
-    @patch("src.python.cache._cleanup.get_ttl")
+    @patch("src.python.cache._cleanup.get_cleanup_ttl")
     def test_expired_files_deleted(self, mock_ttl, mock_time):
         """过期的缓存文件被删除。"""
         mock_time.return_value = 10000.0
@@ -223,7 +223,7 @@ class TestCleanupExpired(CacheTestBase):
         self.assertTrue(os.path.exists(fresh_path))
 
     @patch("src.python.cache._cleanup.time.time")
-    @patch("src.python.cache._cleanup.get_ttl")
+    @patch("src.python.cache._cleanup.get_cleanup_ttl")
     def test_dry_run_does_not_delete(self, mock_ttl, mock_time):
         """dry_run=True 时文件不被删除，但计数正确。"""
         mock_time.return_value = 10000.0
@@ -270,7 +270,7 @@ class TestCleanupExpired(CacheTestBase):
         self.assertTrue(os.path.exists(path))
 
     @patch("src.python.cache._cleanup.time.time")
-    @patch("src.python.cache._cleanup.get_ttl")
+    @patch("src.python.cache._cleanup.get_cleanup_ttl")
     def test_non_json_ignored(self, mock_ttl, mock_time):
         """非 .json 文件被忽略。"""
         mock_time.return_value = 1000.0
@@ -287,7 +287,7 @@ class TestCleanupExpired(CacheTestBase):
         self.assertTrue(os.path.exists(path))
 
     @patch("src.python.cache._cleanup.time.time")
-    @patch("src.python.cache._cleanup.get_ttl")
+    @patch("src.python.cache._cleanup.get_cleanup_ttl")
     def test_multiple_prefixes_use_different_ttl(self, mock_ttl, mock_time):
         """不同前缀使用对应 TTL 判断过期。"""
         mock_time.return_value = 10000.0
@@ -312,7 +312,7 @@ class TestCleanupExpired(CacheTestBase):
         self.assertTrue(os.path.exists(_cache_path("news_old")))
 
     @patch("src.python.cache._cleanup.time.time")
-    @patch("src.python.cache._cleanup.get_ttl")
+    @patch("src.python.cache._cleanup.get_cleanup_ttl")
     def test_cleanup_os_error_removal_skipped(self, mock_ttl, mock_time):
         """删除文件时 OSError 被吞掉。"""
         mock_time.return_value = 10000.0
@@ -354,7 +354,7 @@ class TestCleanupExpired(CacheTestBase):
         self.assertTrue(os.path.exists(path))
 
     @patch("src.python.cache._cleanup.time.time")
-    @patch("src.python.cache._cleanup.get_ttl")
+    @patch("src.python.cache._cleanup.get_cleanup_ttl")
     def test_sorted_file_processing(self, mock_ttl, mock_time):
         """文件按名称排序处理，不报错。"""
         mock_time.return_value = 10000.0
@@ -541,7 +541,7 @@ class TestCleanupUnmanagedAndLogNoise(CacheTestBase):
     """无 `_ts` 包封的文件不得按 epoch 虚龄删除；逐文件明细不得刷 INFO。"""
 
     @patch("src.python.cache._cleanup.time.time")
-    @patch("src.python.cache._cleanup.get_ttl")
+    @patch("src.python.cache._cleanup.get_cleanup_ttl")
     def test_file_without_ts_is_skipped_not_deleted(self, mock_ttl, mock_time):
         """脚本自管的性能缓存（裸 JSON，无 `_ts`）不得按虚龄删除。
 
@@ -561,7 +561,7 @@ class TestCleanupUnmanagedAndLogNoise(CacheTestBase):
         assert os.path.exists(path), "无 _ts 的文件不属缓存引擎托管，不得删除"
 
     @patch("src.python.cache._cleanup.time.time")
-    @patch("src.python.cache._cleanup.get_ttl")
+    @patch("src.python.cache._cleanup.get_cleanup_ttl")
     def test_per_file_detail_is_debug_only(self, mock_ttl, mock_time):
         """逐文件明细必须留在 DEBUG；INFO 只允许汇总行（单日 257 行刷屏回归）。"""
         mock_time.return_value = 10000.0

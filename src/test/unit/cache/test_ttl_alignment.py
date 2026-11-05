@@ -170,14 +170,20 @@ class TestIntradayAndNegativeCacheTTL:
         _write_cache(cache_env, "report_symbol_miss_abc123", age_seconds=7 * 3600)
         assert _cleanup(cache_env) == 1
 
-    def test_intraday_price_uses_short_ttl_on_cleanup(self, cache_env, monkeypatch):
-        """盘中：价的 60s 缓存即过期（清理侧与读侧同为 30s），防盘中价被当收盘价。"""
+    def test_intraday_price_kept_by_cleanup_but_stale_for_reader(self, cache_env, monkeypatch):
+        """盘中：60s 前的价缓存不被清理删除，但读侧仍判未命中。
+
+        清理侧按静态 TTL（磁盘回收判据）、读侧按盘中 30s（新鲜度判据）——
+        「盘中价不得当收盘价」的防护在读侧，不靠在清理时删文件。
+        """
         from src.python.cache import _ttl as ttl_mod
+        from src.python.cache import get as cache_get
 
         monkeypatch.setattr(ttl_mod, "_is_market_open", lambda: True)
 
         _write_cache(cache_env, "price_600519", age_seconds=60)
-        assert _cleanup(cache_env) == 1, "盘中 30s TTL：60s 前写入的价必须清理"
+        assert _cleanup(cache_env) == 0, "清理侧按静态 TTL：盘中刚写入的价不得被删（删了下一轮还要重取）"
+        assert cache_get("price_600519", ttl_mod.get_ttl("price")) is None, "读侧仍按盘中短 TTL 判过期"
 
     def test_closed_market_price_keeps_static_ttl(self, cache_env, monkeypatch):
         """盘后：静态 TTL（24h）生效，1h 前抓的价格不重复清理（避免白打上游）。"""

@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from openpyxl.styles import Font
+from openpyxl.styles import Alignment, Font
 from openpyxl.worksheet.worksheet import Worksheet
 
 from src.python.core.registry import get_report_sheet_name
@@ -125,7 +125,7 @@ def _write_trend_block(
     row = write_header_row(ws, row, matrix_headers)
 
     pd = history_data
-    metrics: list[tuple[str, Any, str | None, str, str | None]] = [
+    metrics: list[tuple[str, Any, str | None, str | None, str | None]] = [
         ("累计收益率(%)", round(pd.get("total_return_pct", 0) / 100, 4), FMT_PERCENT, "total_return_pct", FMT_PERCENT),
         ("累计收益(元)", pd.get("total_return", 0), FMT_MONEY, None, None),
         ("最大回撤(%)", round(pd.get("max_drawdown_pct", 0) / 100, 4), FMT_PERCENT, "max_drawdown_pct", FMT_PERCENT),
@@ -463,6 +463,47 @@ def _write_monthly_calendar_block(
     return row + 1
 
 
+def _write_terminal_staleness_note(ws: Worksheet, row: int, history_data: dict, ncols: int) -> int:
+    """在页签顶部写一行「读数口径提示」——终点由滞后净值构成时，末端日收益与回撤会偏低。
+
+    与 HTML 同一章的就地标注同事实（`history_data.terminal_staleness` 契约）；
+    不写时本页只有指标，读者会把滞后口径的终值当最新市值读。
+
+    Returns:
+        写入后的下一个行号
+    """
+    stale = history_data.get("terminal_staleness") or {}
+    assets = stale.get("assets") or []
+    if not assets:
+        return row
+    lag = int(stale.get("max_lag_trading_days") or 0)
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=ncols)
+    cell = ws.cell(
+        row=row,
+        column=1,
+        value=(
+            f"读数口径提示：{len(assets)} 只标的净值落后组合终点至多 {lag} 个交易日，"
+            "走势终值与最新市值口径不同——末端日收益与最大回撤会偏低，终点附近的数字只作参考"
+        ),
+    )
+    cell.font = Font(size=11, color="B45309")
+    cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    row += 1
+    for a in assets:
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=ncols)
+        detail = ws.cell(
+            row=row,
+            column=1,
+            value=(
+                f"· {a.get('label', '?')}：最新净值日 {a.get('last_date', '?')}"
+                f"（滞后 {a.get('lag_trading_days', 0)} 个交易日，占 {float(a.get('weight_pct') or 0):.1f}%）"
+            ),
+        )
+        detail.font = Font(size=10, color="6B7280")
+        row += 1
+    return row
+
+
 def write_portfolio_history_drawdown_sheet(
     ws: Worksheet,
     history_data: dict | None = None,
@@ -494,6 +535,9 @@ def write_portfolio_history_drawdown_sheet(
         return
 
     row = 2
+    # 过守卫后契约非空（`_data_ok` 不是 TypeGuard，显式归一化以消除 None 分支）
+    history_data = history_data or {}
+    row = _write_terminal_staleness_note(ws, row, history_data, ncols)
     row = _write_trend_block(ws, row, history_data, ncols, tail_risk)
     row = _write_drawdown_block(ws, row, history_data, ncols)
     row = _write_crisis_block(ws, row, crisis_annotation, ncols)

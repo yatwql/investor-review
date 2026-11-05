@@ -119,18 +119,25 @@ def test_cache_read_uses_same_ttl_as_resolver(ttl_env, cache_env, label, is_open
 
 
 @pytest.mark.parametrize("label,is_open,_desc", SESSION_CASES, ids=[c[0] for c in SESSION_CASES])
-def test_cleanup_uses_same_ttl_as_resolver(ttl_env, cache_env, label, is_open, _desc):
-    """清理路径与读路径同口径：同一份缓存不能出现「读未命中但清理保留」或反之。"""
+def test_cleanup_uses_static_ttl_ignoring_intraday(ttl_env, cache_env, label, is_open, _desc):
+    """清理侧按**静态 TTL** 判过期（与读侧盘中 30s 判据分开）。
+
+    清理是磁盘回收：若跟着盘中 30s 判过期，刚写入的行情缓存会被当场删掉、下一轮再写
+    一遍；磁盘上留着无副作用（读侧同口径已判未命中）。静态 TTL 到期仍需回收。
+    """
     from src.python.cache import get_ttl
+    from src.python.cache._cleanup import cleanup_expired
+    from src.python.cache._ttl import get_cleanup_ttl
 
     ttl_env({}, is_open)
-    ttl = get_ttl("price")
-    _write_cache(cache_env, "price_600519", age_seconds=ttl + 1)
-    from src.python.cache._cleanup import cleanup_expired
+    intraday_ttl = get_ttl("price")
+    static_ttl = get_cleanup_ttl("price")
 
-    assert cleanup_expired(dry_run=False) == 1, f"{label}: 超过 TTL 的价必须被清理"
-    _write_cache(cache_env, "price_601398", age_seconds=max(ttl - 1, 0))
-    assert cleanup_expired(dry_run=True) == 0, f"{label}: TTL 内的价不得被清理"
+    _write_cache(cache_env, "price_600519", age_seconds=max(1, min(intraday_ttl, static_ttl) - 1))
+    assert cleanup_expired(dry_run=False) == 0, f"{label}: 短 TTL 内的价不得被清理"
+
+    _write_cache(cache_env, "price_601398", age_seconds=static_ttl + 1)
+    assert cleanup_expired(dry_run=True) == 1, f"{label}: 超过静态 TTL 的价必须被清理"
 
 
 class TestOverrideLayers:

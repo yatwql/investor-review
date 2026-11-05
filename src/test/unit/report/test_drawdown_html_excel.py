@@ -213,6 +213,41 @@ class TestHtmlDrawdownSection(unittest.TestCase):
         text = section.get_text()
         self.assertNotIn("危机区间标注", text)
 
+    def test_terminal_staleness_caveat_rendered(self):
+        """终点净值滞后 → 走势/回撤章就地渲染「读数口径提示」与逐标的明细。
+
+        回归：口径差异原先只进数据源状态章，读者在本章读到的最大回撤仍会被当准确值。
+        """
+        section = self._section(
+            _history(
+                [],
+                terminal_staleness={
+                    "latest_date": "2026-11-04",
+                    "max_lag_trading_days": 2,
+                    "assets": [
+                        {
+                            "label": "嘉实全球产业升级股票(QDII)A(017730)",
+                            "code": "017730",
+                            "last_date": "2026-11-03",
+                            "lag_trading_days": 2,
+                            "value": 30000.0,
+                            "weight_pct": 30.9,
+                        }
+                    ],
+                },
+            ),
+            None,
+        )
+        text = section.get_text()
+        self.assertIn("读数口径提示", text)
+        self.assertIn("最大回撤会偏低", text)
+        self.assertIn("30.9%", text)
+
+    def test_no_caveat_without_staleness(self):
+        """无滞后 → 不渲染口径提示。"""
+        section = self._section(_history([]), None)
+        self.assertNotIn("读数口径提示", section.get_text())
+
 
 # ── Excel 呈现 ───────────────────────────────────────────────
 
@@ -319,6 +354,41 @@ class TestExcelDrawdownSheet(unittest.TestCase):
         flat = [v for row in self._all_text(ws) for v in row]
         self.assertIn("未恢复", flat)
         self.assertIn("--", flat)  # recovery_days 占位
+
+    def test_terminal_staleness_note_at_top(self):
+        """终点净值滞后时页签顶部写「读数口径提示」+ 逐标的明细。
+
+        回归：滞后口径的终值若只在数据质量页签报降级，本章指标区仍会被当最新值读。
+        """
+        ws = self._write(
+            _history(
+                [],
+                terminal_staleness={
+                    "latest_date": "2026-11-04",
+                    "max_lag_trading_days": 2,
+                    "assets": [
+                        {
+                            "label": "嘉实全球产业升级股票(QDII)A(017730)",
+                            "code": "017730",
+                            "last_date": "2026-11-03",
+                            "lag_trading_days": 2,
+                            "value": 30000.0,
+                            "weight_pct": 30.9,
+                        }
+                    ],
+                },
+            )
+        )
+        rows = self._all_text(ws)
+        note = next((r[0] for r in rows if "读数口径提示" in r[0]), "")
+        self.assertIn("最大回撤会偏低", note, "口径提示必须写明对末端收益/回撤的影响")
+        self.assertTrue(any("017730" in r[0] for r in rows), "应逐标的列出滞后明细")
+
+    def test_no_staleness_note_when_absent(self):
+        """无滞后时不写口径提示（不制造无谓噪声）。"""
+        ws = self._write(_history([]))
+        flat = [r[0] for r in self._all_text(ws)]
+        self.assertFalse(any("读数口径提示" in v for v in flat))
 
 
 def _monthly_calendar() -> dict:

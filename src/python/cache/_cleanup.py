@@ -14,7 +14,7 @@ from src.python.core.registry import get_exact_ttl_map, get_exact_type_map, get_
 from ._io import _read_cache_data
 from ._paths import _CACHE_DIR, cache_key_from_file_name
 from ._store import _cache_lock
-from ._ttl import get_ttl
+from ._ttl import get_cleanup_ttl
 
 logger = logging.getLogger("invest")
 
@@ -73,7 +73,9 @@ def _process_cache_file(
                 data_type = dtype
                 break
 
-    ttl = get_ttl(data_type)
+    # 清理侧用静态 TTL（忽略盘中 30s 覆盖）：否则刚写入的行情缓存会被立刻判死删除，
+    # 下一轮再写一遍——删除对读侧无收益，只制造「缓存反复失效」的假象。
+    ttl = get_cleanup_ttl(data_type)
     # 同前缀下的异构寿命键（回退基准/负缓存等）按精确键独立 TTL 裁：
     # 前缀默认值只适用于本域常规载荷，套到这些键上会腰斩甚至直接删掉它们。
     override = (exact_ttl_map or {}).get(logical_key)

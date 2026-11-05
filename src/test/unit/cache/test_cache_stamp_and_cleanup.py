@@ -68,6 +68,30 @@ class TestLegacyStampIsUnreachable:
 class TestPerTypeCleanupTTL:
     """清理按各类型自己的 TTL 判定，不退化成单一默认值。"""
 
+    def test_intraday_quote_cache_not_deleted_by_cleanup(self, cache_env, monkeypatch):
+        """盘中 60s 龄的行情缓存不被清理（读侧 30s 判过期，清理侧按静态 TTL）。
+
+        回归：清理与读侧共用盘中 30s TTL，每轮启动/收尾都把刚写的行情缓存删一遍
+        （实测反复预览 22~63 个待删文件），删除对读侧无收益且制造缓存反复失效假象。
+        """
+        from src.python.cache import _ttl
+
+        monkeypatch.setattr(_ttl, "_is_market_open", lambda: True)
+        _write(cache_env, "price_600519_v4.json", age_seconds=60)
+        _write(cache_env, "index_sh000001_v4.json", age_seconds=60)
+
+        assert _cleanup() == 0, "盘中新写的行情缓存不得被判过期删除"
+
+    def test_intraday_quote_cache_still_reads_as_stale(self, cache_env, monkeypatch):
+        """读侧仍按盘中 30s 判过期——清理侧放宽不得让陈旧行情被当新鲜用。"""
+        from src.python.cache import _ttl
+        from src.python.cache import get as cache_get
+
+        monkeypatch.setattr(_ttl, "_is_market_open", lambda: True)
+        assert _ttl.get_ttl("price") <= 60, "盘中读侧 TTL 应仍为分钟级"
+        _write(cache_env, "price_600519_v4.json", age_seconds=60)
+        assert cache_get("price_600519", _ttl.get_ttl("price")) is None
+
     def test_llm_module_ttl_differs_by_type(self, cache_env):
         """expert_review（4h）5 小时后清理；global_macro（24h）同年龄保留。"""
         _write(cache_env, "llm_expert_review_abc_v4.json", age_seconds=5 * 3600)

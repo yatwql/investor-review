@@ -15,6 +15,16 @@
             </summary>
         {% if history_data and history_data.status != "unavailable" %}
         <div class="section-content">
+            {% set _stale = history_data.terminal_staleness %}
+            {% if _stale and _stale.assets %}
+            <div class="data-status" style="margin-bottom:16px;">
+                <div class="data-status-title">读数口径提示</div>
+                <div class="data-status-warn">&#9888; {{ _stale.assets | length }} 只标的净值落后组合终点至多 {{ _stale.max_lag_trading_days }} 个交易日，走势终值与最新市值口径不同——<b>末端日收益与最大回撤会偏低，终点附近的数字只作参考</b></div>
+                {% for a in _stale.assets %}
+                <div class="data-status-info">&#8505; {{ a.label }}：最新净值日 {{ a.last_date }}（滞后 {{ a.lag_trading_days }} 个交易日，占 {{ "%.1f" | format(a.weight_pct) }}%）</div>
+                {% endfor %}
+            </div>
+            {% endif %}
             {% set _crisis_ok = crisis_annotation_data and crisis_annotation_data.available %}
             {% set _crisis_in_range = _crisis_ok and (crisis_annotation_data.intervals | selectattr("in_range") | list) %}
             <!-- ── 一、走势表：净值趋势图 + 危机区间着色 ── -->

@@ -1287,7 +1287,7 @@ fetch_index_data(code)
 cache/
 ├── __init__.py        公开 API 导出（__all__ 精简形态）
 ├── _store.py          核心存取：get()、set()、clear()
-├── _ttl.py            TTL 查询：get_ttl()、get_cache_age()
+├── _ttl.py            TTL 查询：get_ttl()（读侧）、get_cleanup_ttl()（清理侧）、get_cache_age()
 ├── _io.py             文件 I/O：_read_cache_data()、_write_atomic()
 ├── _paths.py          路径管理：_cache_path()、_GZIP_THRESHOLD（100KB）
 ├── _groups.py         分组清理：clear_by_group()、clear_by_prefix()
@@ -1308,7 +1308,8 @@ cache/
 | `get(key, max_age_seconds)` | `(str, float) → Any\|None` | 先查 `.json.gz`，不存在时回退 `.json`；超龄返回 None。`record_stats=False` 供**探测/兜底读**用（负缓存探针、陈旧缓存兜底）：这类读不是真实取数需求，计入会让命中率与未命中前缀分布失真 |
 | `set(key, data)` | `(str, Any) → None` | `{"_ts": now, "_data": data}` 序列化 + 原子写入；≥100KB 自动 `.json.gz` |
 | `clear(key)` | `(str) → None` | 同时删除 `.json` 和 `.json.gz` |
-| `get_ttl(data_type)` | `(str) → float` | TTL 分辨率（见下方流程图）；只由数据类型决定（无按 key 抖动、无兼容参数） |
+| `get_ttl(data_type)` | `(str) → float` | TTL 分辨率（见下方流程图）；只由数据类型决定（无按 key 抖动、无兼容参数）——**读侧用**，含盘中覆盖 |
+| `get_cleanup_ttl(data_type)` | `(str) → float` | 清理侧 TTL：**忽略盘中覆盖**，按静态 TTL 判过期。盘中 30s 是读侧策略，拿它判清理会把刚写入的行情缓存立刻删掉再造一遍（见下「读写两侧判据」） |
 | `clear_by_group(group, only=None)` | `(str, Iterable[str]\|None) → dict[str, int]` | 按 preload/refresh 分组清除；`only` 传缓存键前缀/精确键名集合时**只清这些域所属的模块**（用于「刷新基础缓存」这类只回填部分域的流程，避免连坐作废财报/财务指标等下次出报告才重取的域） |
 | `cleanup_expired()` | `() → int` | 扫描全量缓存，删除超龄项（逐文件明细只进 DEBUG，INFO 留汇总行 + 释放字节；age/TTL 按量级自适应单位——盘中 30s 的 price TTL 不再印成 `ttl=0.0h`；**无 `_ts` 包封的文件跳过 TTL 判定**，见下） |
 
@@ -1355,6 +1356,8 @@ get_ttl(data_type)
 **盘中敏感性由注册表声明**（`DataModuleDef.market_ttl`，当前只有 `price`/`index` = 30s）：这是数据属性而非用户偏好——价格/指数分钟级变化，盘中必须短 TTL 才能避免把盘中价当收盘价（否则"本日盈亏/快照环比"系统性偏离），而非行情数据（新闻 900s、情绪 3600s 等）不得因盘中被降频、白打上游。`config.json → market_hour_aware` 已移除（无对应实现，写入即被忽略，不再有识别/告警分支）。
 
 **盘中覆盖可见**：若用户同时配了 `cache_ttl.{type}` 而该类型盘中敏感，`get_ttl` 会打一条 INFO（每类型一次）说明"盘中以 `market_hour_ttl` 为准，`cache_ttl` 仅盘后生效"——把静默失效变成可观测。
+
+**读写两侧判据不同（设计意图）**：读侧 `get_ttl` 含盘中覆盖（价/指 30s），清理侧 `get_cleanup_ttl` 忽略盘中覆盖、按静态 TTL（默认 24h）判过期。清理是磁盘回收：拿 30s 判过期等于把刚写入的行情缓存当场删掉、下一轮再写一遍，而删掉的部分对读侧本就无价值，只放大「未命中」统计并制造「缓存反复失效」的假象（实测每轮启动与收尾反复预览 22~63 个待删文件）。读侧新鲜度不受影响——`cache.get` 仍按 `get_ttl` 判过期。
 
 **负缓存单一样板**：确定性缺失与传输级短退避（标的正文缺失 / 章节清单不可得 / 该文档无该章节 / provider 404 探测 / 基金季报空季度 / 指数历史全链空 / 基金经理主页空与不可达——完整清单见 §缓存域注册表与 `datasource.md` 负缓存表）统一经 `cache/_negative.py::NegativeCache` 登记——调用点只声明「标签 + 键前缀 + TTL 类型」，锁/命中计数/汇总文案由该类统一承接，`cache.negative_cache_entries()` 给出可枚举清单、`nonzero_summaries()` 直接产出报告级汇总行（新增一类负缓存不再复制一份 lock+counter+reset 样板）。
 
