@@ -1,4 +1,4 @@
-    <div class="section" id="sec-holdings_detail" style="order: {{ section_numbers['holdings_detail'] }};">
+    <div class="section" id="sec-holdings_detail">
         <div class="section-title">{{ section_numbers['holdings_detail'] }}、{{ section_names['holdings_detail'] }}</div>
         <div class="block-title">一、市值核算明细</div>
         <div class="section-content" style="padding: 0;">
@@ -26,14 +26,14 @@
                             <td class="text-right">{{ d.price | price }}</td>
                             <td>{{ d.nav_date }}</td>
                             <td class="text-right">{{ d.yesterday_close | price }}</td>
-                            <td{% if (d.price_type | price_type_color(d.name)) %} style="color: {{ d.price_type | price_type_color(d.name) }}; font-weight: bold;"{% endif %}>{{ d.price_type }}</td>
+                            <td{% if (d.price_type | price_type_class(d.name)) %} class="{{ d.price_type | price_type_class(d.name) }} fw-600"{% endif %}>{{ d.price_type }}</td>
                             <td>{{ d.premium }}</td>
                             <td class="text-right">{{ d.shares | shares }}</td>
                             <td class="text-right">{{ d.market_value | money }}</td>
                             <td class="text-right">{{ d.cost | money }}</td>
-                            <td class="text-right" style="color: {{ d.profit | profit_color }}">{{ d.profit | money }}</td>
-                            <td class="text-right" style="color: {{ d.profit_rate | profit_color }}">{{ d.profit_rate | pct }}</td>
-                            <td class="text-right" style="color: {{ d.today_profit | profit_color }}">{{ d.today_profit | money }}</td>
+                            <td class="text-right {{ d.profit | profit_class }}">{{ d.profit | money }}</td>
+                            <td class="text-right {{ d.profit_rate | profit_class }}">{{ d.profit_rate | pct }}</td>
+                            <td class="text-right {{ d.today_profit | profit_class }}">{{ d.today_profit | money }}</td>
                             <td>{{ d.source }}</td>
                             {% if flow_display %}
                             {% set wac = flow_display.cost_map.get(d.code) %}
@@ -51,9 +51,9 @@
                             <td class="text-right">--</td>
                             <td class="text-right">{{ acc_tot.get("market_value", 0) | money }}</td>
                             <td class="text-right">{{ acc_tot.get("cost", 0) | money }}</td>
-                            <td class="text-right" style="color: {{ acc_tot.get("profit", 0) | profit_color }}">{{ acc_tot.get("profit", 0) | money }}</td>
-                            <td class="text-right" style="color: {{ acc_tot.get("profit_rate", 0) | profit_color }}">{{ acc_tot.get("profit_rate", 0) | pct }}</td>
-                            <td class="text-right" style="color: {{ acc_tot.get("today_profit", 0) | profit_color }}">{{ acc_tot.get("today_profit", 0) | money }}</td>
+                            <td class="text-right {{ acc_tot.get("profit", 0) | profit_class }}">{{ acc_tot.get("profit", 0) | money }}</td>
+                            <td class="text-right {{ acc_tot.get("profit_rate", 0) | profit_class }}">{{ acc_tot.get("profit_rate", 0) | pct }}</td>
+                            <td class="text-right {{ acc_tot.get("today_profit", 0) | profit_class }}">{{ acc_tot.get("today_profit", 0) | money }}</td>
                             <td></td>
                             {% if flow_display %}<td></td>{% endif %}
                             {% if purchase_status_display %}<td></td>{% endif %}
@@ -70,9 +70,9 @@
                         <td class="text-right">--</td>
                         <td class="text-right">{{ grand_mv.v | money }}</td>
                         <td class="text-right">{{ grand_cost.v | money }}</td>
-                        <td class="text-right" style="color: {{ grand_profit.v | profit_color }}">{{ grand_profit.v | money }}</td>
-                        <td class="text-right" style="color: {{ (g_rate / 100) | profit_color }}">{{ g_rate | change }}</td>
-                        <td class="text-right" style="color: {{ grand_today.v | profit_color }}">{{ grand_today.v | money }}</td>
+                        <td class="text-right {{ grand_profit.v | profit_class }}">{{ grand_profit.v | money }}</td>
+                        <td class="text-right {{ (g_rate / 100) | profit_class }}">{{ g_rate | change }}</td>
+                        <td class="text-right {{ grand_today.v | profit_class }}">{{ grand_today.v | money }}</td>
                         <td></td>
                         {% if flow_display %}<td></td>{% endif %}
                         {% if purchase_status_display %}<td></td>{% endif %}
@@ -80,7 +80,7 @@
                 </tbody>
             </table>
             {% if purchase_status_display %}
-            <div style="padding: 4px 8px; font-size: var(--fs-table-sm); color: {% if purchase_status_display.level == 'stale' %}var(--warn-text); font-weight: bold;{% else %}var(--text-muted);{% endif %}">{{ purchase_status_display.footnote }}</div>
+            <div class="ps-footnote{% if purchase_status_display.level == 'stale' %} text-warn fw-600{% else %} text-muted{% endif %}">{{ purchase_status_display.footnote }}</div>
             {% endif %}
         </div>
 
@@ -109,9 +109,9 @@
                             <td>{{ item["code"] | anon_code }}</td>
                             <td class="text-right">{{ item["market_value"] | money }}</td>
                             <td class="text-right">{{ item["cost"] | money }}</td>
-                            <td class="text-right" style="color: {{ item["profit"] | profit_color }}">{{ item["profit"] | money }}</td>
-                            <td class="text-right" style="color: {{ item["profit_rate"] | profit_color }}">{{ item["profit_rate"] | pct }}</td>
-                            <td class="text-right" style="color: {{ item["today_profit"] | profit_color }}">{{ item["today_profit"] | money }}</td>
+                            <td class="text-right {{ item["profit"] | profit_class }}">{{ item["profit"] | money }}</td>
+                            <td class="text-right {{ item["profit_rate"] | profit_class }}">{{ item["profit_rate"] | pct }}</td>
+                            <td class="text-right {{ item["today_profit"] | profit_class }}">{{ item["today_profit"] | money }}</td>
                             <td>{{ item.get("yield_text", "--") }}</td>
                             {% if flow_display %}
                             <td>{{ flow_display.tier_map.get(item["code"], "--") }}</td>
@@ -127,9 +127,9 @@
                             <td></td><td></td>
                             <td class="text-right">{{ group["sub_mv"] | money }}</td>
                             <td class="text-right">{{ group["sub_cost"] | money }}</td>
-                            <td class="text-right" style="color: {{ group["sub_profit"] | profit_color }}">{{ group["sub_profit"] | money }}</td>
-                            <td class="text-right" style="color: {{ group["sub_rate"] | profit_color }}">{{ group["sub_rate"] | pct }}</td>
-                            <td class="text-right" style="color: {{ group["sub_today"] | profit_color }}">{{ group["sub_today"] | money }}</td>
+                            <td class="text-right {{ group["sub_profit"] | profit_class }}">{{ group["sub_profit"] | money }}</td>
+                            <td class="text-right {{ group["sub_rate"] | profit_class }}">{{ group["sub_rate"] | pct }}</td>
+                            <td class="text-right {{ group["sub_today"] | profit_class }}">{{ group["sub_today"] | money }}</td>
                             <td></td>
                             {% if flow_display %}<td></td><td></td>{% endif %}
                             {% if purchase_status_display %}<td></td>{% endif %}
@@ -145,9 +145,9 @@
                         <td colspan="4" class="text-left">总计</td>
                         <td class="text-right">{{ cat_grand_mv.v | money }}</td>
                         <td class="text-right">{{ cat_grand_cost.v | money }}</td>
-                        <td class="text-right" style="color: {{ cat_grand_profit.v | profit_color }}">{{ cat_grand_profit.v | money }}</td>
-                        <td class="text-right" style="color: {{ (cat_g_rate / 100) | profit_color }}">{{ cat_g_rate | change }}</td>
-                        <td class="text-right" style="color: {{ cat_grand_today.v | profit_color }}">{{ cat_grand_today.v | money }}</td>
+                        <td class="text-right {{ cat_grand_profit.v | profit_class }}">{{ cat_grand_profit.v | money }}</td>
+                        <td class="text-right {{ (cat_g_rate / 100) | profit_class }}">{{ cat_g_rate | change }}</td>
+                        <td class="text-right {{ cat_grand_today.v | profit_class }}">{{ cat_grand_today.v | money }}</td>
                         <td></td>
                         {% if flow_display %}<td></td><td></td>{% endif %}
                         {% if purchase_status_display %}<td></td>{% endif %}

@@ -7,7 +7,7 @@
 
 ## 概述
 
-在办 8 项：P1 2 项（**plan-238**、**plan-239**）、P2 1 项（**plan-92**）、P3 4 项（**plan-70**、**plan-233**、**plan-243**、**plan-246**）、P4 1 项（**plan-55**）。命名与实现纪律见 `CLAUDE.md`（单一事实位，本表不重复）。
+在办 7 项：P1 2 项（**plan-238**、**plan-239**）、P2 1 项（**plan-92**）、P3 3 项（**plan-70**、**plan-233**、**plan-243**）、P4 1 项（**plan-55**）。命名与实现纪律见 `CLAUDE.md`（单一事实位，本表不重复）。
 
 ---
 
@@ -84,13 +84,6 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 **接续**：剩余用户价值已交付（章首三行摘要、「我的建议历史表现」按视界表，均只读账本聚合）；本条只维护收口结论与观察触发条件。
 **事实位**：轮次明细与验收记录在设计稿 [`investment-decision-basis-design.md`](../plan/investment-decision-basis-design.md)（§4/§5），回测读数见 [归档讨论稿](../archive/v0.16.x/investment-decision-quality/investment-decision-quality.md) §8.1；本表不复述。
 
-#### `plan-246` 报告模板内联样式去 Jinja 化（class 驱动）
-
-**现状**：`src/static/tmpl/` 下多个 partial 把 Jinja 表达式放在 CSS 值位置（`style="order: {{ n }}"`、`style="color: {{ x | profit_color }}"`、`style="… {% if … %}color:…{% endif %}"`）。HTML 语言服务把它当 CSS 扫，单模板稳定报 28 条 `at-rule or selector expected` / `property value expected`（与模板逻辑无关的纯解析误报）。当前已用项目 `.pi-lens.json` 的 `lsp.disabledServers: ["html"]` 把该服务整体关掉止声，代价是 `src/static/web/index.html` 等非模板页也失去 HTML LSP 诊断。
-**动作**：把动态样式改成 **class 驱动**——颜色走已有的 `.profit` / `.loss`（`report_template.html` 已有定义，与 `DESIGN.md` 色彩语义角色表一致），数值性样式（`order`、`font-weight`、`text-align`）走工具类：Jinja 只在 `class` 属性里做选择，CSS 值一律静态。逐步覆盖 `partials/` 下有该写法的文件，完成后可从 `.pi-lens.json` 移除 `lsp.disabledServers`（恢复 HTML LSP）。
-**风险与验收**：涉及渲染，须逐章比对改动前后 HTML 输出（样式值一致）+ 跑 `src/test/unit/report/` 全绿 + 目测暗色主题与窄屏档（DESIGN.md 断点表）；禁止顺手改视觉（颜色/间距语义变都算越界）。曾试过的两种“小改”已证伪，不要重走：① 用 Jinja `%` 拼整个 `style` 属性（HTML 校验器报特殊字符未转义）；② 条件分支复制开标签（报标签未配对）。
-**前置**：无硬门槛；优先级低于任何用户可见缺陷，仅在需要恢复 HTML LSP 或其写法的模板继续增多时启动。
-
 ### P4 — 实验候选（先决门槛未过，暂缓）
 入选标准：接入前有硬性先决门槛，门槛未过不排期。
 
@@ -102,6 +95,15 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 **约束与红线**：① 不作为用户可选对话模型（不生成文本）；② 不做「生成 + 判定」双供应商级联；③ 语料冻结产物落 `docs/tmp/`，仅脱敏样例可入库；④ 类型化通道故障不得拖垮生成链（熔断实例分离）；⑤ 新增配置键按开关注册表纪律登记，默认值保持 `chat`。
 
 ### 已完成（待发布归档）
+
+#### `plan-246` 报告模板内联样式去 Jinja 化（class 驱动）——已完成
+
+**现状**：`src/static/tmpl/` 下多个 partial 把 Jinja 表达式放在 CSS 值位置（`style="order: {{ n }}"`、`style="color: {{ x | profit_color }}"`、`style="… {% if … %}color:…{% endif %}"`）。HTML 语言服务把它当 CSS 扫，单模板稳定报 28 条 `at-rule or selector expected` / `property value expected`（与模板逻辑无关的纯解析误报）。当前已用项目 `.pi-lens.json` 的 `lsp.disabledServers: ["html"]` 把该服务整体关掉止声，代价是 `src/static/web/index.html` 等非模板页也失去 HTML LSP 诊断。
+**动作**：把动态样式改成 **class 驱动**——颜色走已有的 `.profit` / `.loss`（`report_template.html` 已有定义，与 `DESIGN.md` 色彩语义角色表一致），数值性样式（`order`、`font-weight`、`text-align`）走工具类：Jinja 只在 `class` 属性里做选择，CSS 值一律静态。逐步覆盖 `partials/` 下有该写法的文件，完成后可从 `.pi-lens.json` 移除 `lsp.disabledServers`（恢复 HTML LSP）。
+**风险与验收**：涉及渲染，须逐章比对改动前后 HTML 输出（样式值一致）+ 跑 `src/test/unit/report/` 全绿 + 目测暗色主题与窄屏档（DESIGN.md 断点表）；禁止顺手改视觉（颜色/间距语义变都算越界）。曾试过的两种“小改”已证伪，不要重走：① 用 Jinja `%` 拼整个 `style` 属性（HTML 校验器报特殊字符未转义）；② 条件分支复制开标签（报标签未配对）。
+**前置**：无硬门槛；优先级低于任何用户可见缺陷，仅在需要恢复 HTML LSP 或其写法的模板继续增多时启动。
+**完成记录**：64 处动态内联样式清零（20 处 `order` 改由 DOM 顺序承载、40 处颜色/字号/字重改语义 class、1 处配置分布条改 SVG 属性宽度）。新增 `profit_class`/`price_type_class` 两个过滤器与 11 个工具类（颜色全部引用既有 token）；`report_template.html` 的 include 顺序对齐 `_REPORT_SECTION_DEFAULT`，`action` 与 `data_source_status` 各归位（渲染顺序与改动前一致）。守卫用例 3 条（模板静态扫描 + 渲染产物断言 + DOM 顺序/编号），报告套件 2827 通过。`.pi-lens.json` 已删除（html 语言服务恢复）。
+
 
 > 完成态暂存本节，`release.py publish` 前的 archive 步搬入 `archived_plan.*`；不计入上方「在办」计数。
 

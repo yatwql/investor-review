@@ -402,22 +402,11 @@ class TestFundFlowTemplate(unittest.TestCase):
     def setUp(self):
         from jinja2 import Environment
 
-        from src.python.report.html_jinja_env import (
-            _jinja_money,
-            _jinja_pct,
-            _jinja_price,
-            _jinja_profit_color,
-        )
+        from src.python.report.html_jinja_env import _ENV
 
         self.env = Environment(autoescape=True)
-        self.env.filters.update(
-            {
-                "money": _jinja_money,
-                "pct": _jinja_pct,
-                "price": _jinja_price,
-                "profit_color": _jinja_profit_color,
-            }
-        )
+        # 过滤器一律取自生产环境单源，不在测试里手抄白名单（少一个就会在模板改动时假红）
+        self.env.filters.update(_ENV.filters)
         tmpl_path = os.path.normpath(
             os.path.join(os.path.dirname(__file__), "..", "..", "..", "static", "tmpl", "report_template.html")
         )

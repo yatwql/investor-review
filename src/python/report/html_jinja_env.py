@@ -81,6 +81,29 @@ def _jinja_price_type_color(price_type: str, name: str = "") -> str:
     return ""
 
 
+def _jinja_price_type_class(price_type: str, name: str = "") -> str:
+    """取价方式着色的 class 形式（与 `price_type_color` 同判据，避免两处规则分叉）。"""
+    return "rating-stable" if _jinja_price_type_color(price_type, name) else ""
+
+
+def _jinja_profit_class(value: Any) -> str:
+    """盈亏语义 class：盈→`profit`、亏→`loss`、零/不可解析→空串。
+
+    模板改用 class 而非内联 `style="color:..."`：把 Jinja 花括号放进 CSS 值位置会被任何
+    CSS 解析器判为语法错（HTML 语言服务因此对每个模板报几十条误报），且颜色语义本应
+    由 class 承载（`DESIGN.md` 色彩角色表），暗色主题自动跟随。
+    """
+    try:
+        v = float(value)
+        if v > 0:
+            return "profit"
+        if v < 0:
+            return "loss"
+        return ""
+    except (ValueError, TypeError):
+        return ""
+
+
 def _jinja_profit_color(value: Any) -> str:
     """盈亏颜色：盈利红 var(--profit)，亏损绿 var(--loss)（跟随主题）。"""
     try:
@@ -145,7 +168,9 @@ _ENV.filters["price"] = _jinja_price
 _ENV.filters["shares"] = _jinja_shares
 _ENV.filters["change"] = _jinja_change
 _ENV.filters["profit_color"] = _jinja_profit_color
+_ENV.filters["profit_class"] = _jinja_profit_class
 _ENV.filters["price_type_color"] = _jinja_price_type_color
+_ENV.filters["price_type_class"] = _jinja_price_type_class
 _ENV.filters["thousands"] = _jinja_thousands
 _ENV.filters["sentiment_colorize"] = _jinja_sentiment_colorize
 _ENV.filters["anon_code"] = _jinja_anon_code

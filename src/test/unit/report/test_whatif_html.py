@@ -339,8 +339,13 @@ class TestSwitchOffGoldenBaseline(unittest.TestCase):
     # 基线复核记录（2026-10-30，设计护栏 W 级清零批次）：字节差异仅来自模板 CSS 的间距/字号收敛
     # （阶外 6/10/14/18/20 → 4/8/12/16、0.95rem → 1rem、侧栏 220px 提取为 --toc-width token）与
     # 汇总片负值内联 margin 归零；关态业务字节面（数据、文案、结构）零变化，仅样式字面量对齐契约。
-    _GOLDEN_BASE_SHA256 = "a43fa88ffb686b8cfd16c8ae18245c0db604dcc5ef48f2bf0fb707346883aaec"
-    _GOLDEN_FULL_SHA256 = "50d52ecced011c768e40cdb15745cffb260df1f642ec4ef639232b61131acd7a"
+    #
+    # 基线复核记录（2026-11-05，模板内联样式去 Jinja 化批次）：字节差异仅来自调仓对比表
+    # 「变化(%)」列的着色落到语义类 `profit` / `loss` / `text-muted`（
+    # 颜色转由 CSS 类承载，视觉一致）；关态业务字节面
+    # （数据、文案、结构、章节顺序）零变化。
+    _GOLDEN_BASE_SHA256 = "1a27416c0b06720af110c9db01c6dae462e623c2d7656ffeae4f6d1cc7e2fa67"
+    _GOLDEN_FULL_SHA256 = "e742a80af2c75786f797366c23f625a0560322fde2e58e22b6593f9459870afe"
 
     def _render(self, **extra) -> str:
         from unittest.mock import patch
@@ -458,7 +463,7 @@ class TestWhatifPrintButton(unittest.TestCase):
 
         html = self._render()
         m = re.search(r"\.report-print-btn\s*\{[^}]*\}", html)
-        self.assertIsNotNone(m, "应存在 .report-print-btn 样式规则")
+        assert m is not None, "应存在 .report-print-btn 样式规则"
         rule = m.group(0)
         self.assertIn("44px", rule, "打印按钮应保持 44×44 触控目标")
         self.assertIn("var(--primary)", rule, "背景应引用语义 token 而非裸色值")

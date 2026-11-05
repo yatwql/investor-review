@@ -15,6 +15,22 @@
 - **中文优先**：所有界面文案、空态、状态提示为中文；术语与 `../manuals/` 一致。
 
 ## Colors — 语义角色表
+### 语义色 / 工具类（报告侧模板契约）
+
+模板**不得把 Jinja 表达式写进 CSS 值位置**（`style="color: {{ … }}"`）：CSS 解析器会把 `{{ }}` 判为语法错，且颜色语义本该由 class 承载。颜色一律通过语义 class 施加，色值只出现在 token 定义与这些 class 里（暗色随 token 自动跟随）：
+
+| 语义 | class | 对应 token |
+|---|---|---|
+| 盈 / 涨 | `.profit` | `--profit` |
+| 亏 / 跌 | `.loss` | `--loss` |
+| 评级（优秀 / 偏差 / 较差 / 稳定） | `.rating-excellent` / `.rating-deviation` / `.rating-poor` / `.rating-stable` | 同名 token |
+| 告警文字 / 次级文字 / 主色文字 | `.text-warn` / `.text-muted` / `.text-primary` | `--warn-text` / `--text-muted` / `--primary` |
+| 相关性热力（强正 / 正 / 强负） | `.corr-pos-strong` / `.corr-pos-mid` / `.corr-neg-strong` | 同名 token |
+| 配置分布条填充 | `.fill-primary` / `.fill-alloc-mid` / `.fill-alloc-low` | `--primary` / `--alloc-mid` / `--alloc-low` |
+| 字重 / 字号 | `.fw-600` / `.fs-table-sm` / `.fs-kpi` | `--fs-table-sm` / `--fs-kpi` |
+
+出类名由过滤器 `profit_class`（盈→`profit`、亏→`loss`、零→空）与 `price_type_class` 统一产出，模板只做拼接。数据驱动的几何量（如分布条宽度）走 HTML/SVG 属性（`<svg width="{{ pct }}%">`），不走 CSS 值。守卫见 `src/test/unit/report/test_html_report_structure.py`。
+
 
 > 角色族是**真值**，两面变量名是实现细节。双面同义异名的收敛、旧名兼容映射由 token 统一任务落地；落地后本表「实现列」即为终态。
 

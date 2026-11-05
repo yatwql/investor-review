@@ -266,6 +266,30 @@
         .rating-poor { color: var(--rating-poor); font-weight: 600; }
         .rating-stable { color: var(--rating-stable); font-weight: 600; }
 
+        /* 语义色工具类：模板只在 class 上做选择，CSS 值一律静态（动态内联样式会
+           把 Jinja 花括号混进 CSS 值位置，任何 CSS 解析器都会报语法错）。
+           颜色一律引用既有 token，不在此新增色值；暗色主题随 token 自动跟随。 */
+        .text-warn { color: var(--warn-text); }
+        .text-muted { color: var(--text-muted); }
+        .text-primary { color: var(--primary); }
+        .corr-pos-strong { color: var(--corr-pos-strong); }
+        .corr-pos-mid { color: var(--corr-pos-mid); }
+        .corr-neg-strong { color: var(--corr-neg-strong); }
+        .bg-primary { background: var(--primary); }
+        .bg-alloc-mid { background: var(--alloc-mid); }
+        .bg-alloc-low { background: var(--alloc-low); }
+        .fw-600 { font-weight: 600; }
+        .fs-table-sm { font-size: var(--fs-table-sm); }
+        .fs-kpi { font-size: var(--fs-kpi); }
+        .text-success { color: var(--success); }
+        .rating-deviation { color: var(--rating-deviation); font-weight: 600; }
+        .ps-footnote { padding: 4px 8px; font-size: var(--fs-table-sm); }
+        /* 配置分布条（SVG）：宽度走属性，颜色走 fill 类 */
+        .alloc-bar { display: inline-block; vertical-align: middle; }
+        .fill-primary { fill: var(--primary); }
+        .fill-alloc-mid { fill: var(--alloc-mid); }
+        .fill-alloc-low { fill: var(--alloc-low); }
+
         .row-danger { background: var(--row-danger-bg) !important; }
         .row-danger td { border-top: 1px solid var(--row-danger-border); }
         .row-warning { background: var(--row-warning-bg) !important; }
@@ -889,6 +913,7 @@
     {% include "partials/style_factor_section.html" with context %}
     {% endif %}
 
+    {% include "partials/action_section.html" with context %}
 
     {% if section_visible("news_correlation") %}
     <!-- ═══════════════════════════════════════════════════════ -->
@@ -932,7 +957,7 @@
 
     {# 生成后自检（附录区块：不占报告章节号，不参与目录导航；零产出时整段不出现） #}
     {% if llm_enabled and self_review_block %}
-    <div class="llm-self-review" id="sec-self_review" style="order: {{ section_numbers['penetration_deep'] }};">
+    <div class="llm-self-review" id="sec-self_review">
         <div style="font-weight:600; font-size: var(--fs-h3); margin:16px 0 8px;">🔎 生成后自检（附录）</div>
         {{ self_review_block | safe }}
     </div>
@@ -954,16 +979,15 @@
 
     {% include "partials/schedule_replay_section.html" with context %}
 
-    {% include "partials/fundamental_snapshot_section.html" with context %}
-
-    {% include "partials/action_section.html" with context %}
-
     {% if section_visible("data_source_status") %}
     <!-- ═══════════════════════════════════════════════════════ -->
     <!--  数据源可用性矩阵                                       -->
     <!-- ═══════════════════════════════════════════════════════ -->
     {% include "partials/data_source_status_section.html" with context %}
     {% endif %}
+
+    {% include "partials/fundamental_snapshot_section.html" with context %}
+
 
     {% if section_visible("llm_usage") %}
     <!-- ═══════════════════════════════════════════════════════ -->

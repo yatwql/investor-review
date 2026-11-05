@@ -430,9 +430,9 @@ class TestHtmlMonthlyCalendar(unittest.TestCase):
         self.assertIn("+10.00%", text)  # 2026-09 月收益（change 滤镜两位小数）
         self.assertIn("胜", text)
         self.assertIn("最长连亏", text)
-        # 盈利格着色（profit_color，正值 var(--profit)）
-        colored = table.select("td[style*='--profit']")
-        self.assertTrue(colored, "正收益格应带 profit_color 内联样式")
+        # 盈利格着色（profit_class → .profit，颜色由 CSS 类承载，不写内联样式）
+        colored = table.select("td.profit")
+        self.assertTrue(colored, "正收益格应带 .profit 语义类")
 
     def test_calendar_hidden_without_contract(self) -> None:
         """history_data 无 monthly_returns（样本不足/旧数据）→ 区块整体不渲染。"""

@@ -16,8 +16,12 @@ test_html_report_structure_content.py（交互图表/主题/数据质量块/页�
 """
 
 from __future__ import annotations
+# pyright: reportOptionalMemberAccess=false, reportOptionalSubscript=false, reportArgumentType=false, reportAttributeAccessIssue=false, reportUnhashable=false, reportCallIssue=false
+# bs4 的 `Tag.get`/`select_one` 在严格模式下恒为 Optional，断言对象全是渲染产物；
+# 缺元素时由各用例自己的 assert 报错（比类型层报错更具体），故本文件放宽这几类检查。
 
 import os
+import pathlib
 import re
 import unittest
 
@@ -89,8 +93,10 @@ class TestHtmlNavStructure(unittest.TestCase):
                 target,
                 f"导航链接 href='{href}' 未找到对应的 section #{section_id}",
             )
-            self.assertTrue(
-                "section" in target.get("class", []),
+            assert target is not None, f"锚点 {section_id} 未命中任何元素"
+            self.assertIn(
+                "section",
+                target.get("class") or [],
                 f"#{section_id} 不是 .section 容器（class={target.get('class')}）",
             )
 
@@ -100,53 +106,62 @@ class TestHtmlNavStructure(unittest.TestCase):
         ids = [sec.get("id") for sec in sections if sec.get("id")]
         self.assertEqual(len(ids), len(set(ids)), f"发现重复 section id: {set(i for i in ids if ids.count(i) > 1)}")
 
-    # ── CSS order ──────────────────────────────────────────────
+    # ── 模板样式写法（静态守卫）────────────────────────────
 
-    def test_all_sections_have_unique_order(self):
-        """所有 section 的 CSS order 值唯一。"""
-        sections = self.soup.select("div.section")
-        orders = []
-        for sec in sections:
-            style = sec.get("style", "")
-            m = re.search(r"order:\s*(\d+)", style)
-            self.assertIsNotNone(m, f"#{sec.get('id')} 缺少 order 样式: {style}")
-            orders.append(int(m.group(1)))
+    def test_templates_put_no_jinja_inside_style_values(self):
+        """模板不得把 Jinja 表达式写进 CSS 值位置（`style="…{{ }}…"` / `{% %}`）。
 
+        任何 CSS 解析器遇到花括号都会报语法错（HTML 语言服务因此对每个模板报几十条
+        误报，曾不得不整体关掉该服务）；颜色语义应由 class 承载、顺序由 DOM 顺序承载。
+        """
+        import glob as _glob
+        import os as _os
+
+        tmpl_dir = _os.path.normpath(_os.path.join(_os.path.dirname(__file__), "..", "..", "..", "static", "tmpl"))
+        offenders = []
+        for path in _glob.glob(_os.path.join(tmpl_dir, "**", "*.html"), recursive=True):
+            text = pathlib.Path(path).read_text(encoding="utf-8")
+            for lineno, line in enumerate(text.splitlines(), start=1):
+                for m in re.finditer(r'style="([^"]*)"', line):
+                    if "{{" in m.group(1) or "{%" in m.group(1):
+                        offenders.append(f"{_os.path.basename(path)}:{lineno}")
+        self.assertEqual(offenders, [], f"以下位置仍把 Jinja 写进 CSS 值：{offenders}")
+
+    def test_rendered_html_has_no_jinja_leftover_in_style(self):
+        """渲染产物里 style 属性不得残留模板标记（防越界写入未渲染字符串）。"""
+        for el in self.soup.select("[style]"):
+            style = el.get("style") or ""
+            self.assertNotIn("{{", style, f"渲染产物 style 残留模板标记：{style}")
+            self.assertNotIn("{%", style, f"渲染产物 style 残留模板标记：{style}")
+
+    # ── 章节顺序（DOM 顺序即渲染顺序）─────────────────────────
+
+    def test_sections_have_no_inline_order(self):
+        """章节容器不得带内联 `order:` 样式。
+
+        章节顺序由 DOM 顺序承载（模板 include 顺序 = 注册表顺序）：内联 `order:` 要把
+        Jinja 表达式放进 CSS 值位置，任何 CSS 解析器都会判为语法错，且顺序事实分裂成
+        「模板 include 顺序」+「CSS order 值」两处，改一处就会静默错位。
+        """
+        for sec in self.soup.select("div.section"):
+            self.assertNotIn("order:", sec.get("style", ""), f"#{sec.get('id')} 仍带内联 order 样式")
+
+    def test_dom_order_matches_numbers_dict(self):
+        """DOM 中章节的先后顺序必须与 section_numbers 的编号顺序一致。"""
+        keys = [sec.get("id", "").replace("sec-", "") for sec in self.soup.select("div.section")]
+        keys = [k for k in keys if k in self.numbers]
+        actual = [self.numbers[k] for k in keys]
         self.assertEqual(
-            len(orders), len(set(orders)), f"order 值不唯一: {set(o for o in orders if orders.count(o) > 1)}"
+            actual,
+            sorted(actual),
+            f"DOM 顺序与编号不一致：{[(k, self.numbers[k]) for k in keys]}",
         )
 
-    def test_order_values_start_from_1(self):
-        """order 值从 1 开始，无缺失。"""
-        sections = self.soup.select("div.section")
-        orders = set()
-        for sec in sections:
-            m = re.search(r"order:\s*(\d+)", sec.get("style", ""))
-            if m:
-                orders.add(int(m.group(1)))
-
-        expected = set(range(1, len(sections) + 1))
-        self.assertEqual(
-            orders,
-            expected,
-            f"order 值不连续: 获得 {sorted(orders)}，期望 {sorted(expected)}",
-        )
-
-    def test_section_order_matches_numbers_dict(self):
-        """section 的 order 值与 section_numbers 字典一致。"""
-        sections = self.soup.select("div.section")
-        for sec in sections:
-            sec_id = sec.get("id", "")
-            key = sec_id.replace("sec-", "")
-            m = re.search(r"order:\s*(\d+)", sec.get("style", ""))
-            self.assertIsNotNone(m, f"#{sec_id} 缺少 order")
-            actual_order = int(m.group(1))
-            expected_order = self.numbers.get(key)
-            self.assertEqual(
-                actual_order,
-                expected_order,
-                f"#{sec_id} order 为 {actual_order}，但 section_numbers['{key}'] = {expected_order}",
-            )
+    def test_numbering_is_contiguous_from_1(self):
+        """编号从 1 起连续（visible 章节按 DOM 顺序重新编号）。"""
+        keys = [sec.get("id", "").replace("sec-", "") for sec in self.soup.select("div.section")]
+        numbers = sorted(self.numbers[k] for k in keys if k in self.numbers)
+        self.assertEqual(numbers, list(range(1, len(numbers) + 1)), f"编号不连续：{numbers}")
 
     # ── Nav link text ──────────────────────────────────────────
 
@@ -280,11 +295,12 @@ class TestHtmlSectionVisibility(unittest.TestCase):
         self.assertNotIn("order: ;", str(soup), "不应输出空的 CSS order 声明（该章会被排到最前）")
 
     def test_llm_usage_rendered_last_when_visible(self):
-        """llm_usage 可见时正常渲染，且 order 为其末位序号。"""
+        """llm_usage 可见时正常渲染，且排在 DOM 末位（渲染顺序即章节顺序）。"""
         soup = self._render_with_visibility(_ALWAYS_KEYS | {"llm_usage"})
         sec = soup.find(id="sec-llm_usage")
         self.assertIsNotNone(sec, "llm_usage 可见时应渲染 section 容器")
-        self.assertIn(f"order: {self.numbers['llm_usage']}", sec.get("style", ""))
+        ids = [s.get("id") for s in soup.select("div.section")]
+        self.assertEqual(ids[-1], "sec-llm_usage", f"llm_usage 应为最后一个章节：{ids}")
 
     def test_disabled_llm_module_section_hidden_individually(self):
         """逐模块守卫回归：任一 LLM 章禁用只隐藏该章（容器 + 导航），其余兄弟章照常渲染。
@@ -385,18 +401,14 @@ class TestHtmlCustomOrder(unittest.TestCase):
                     )
 
     def test_llm_usage_still_last_in_order(self):
-        """llm_usage 的 order 值仍然最大（末位）。"""
+        """自定义顺序下 llm_usage 仍排 DOM 末位，且其编号为最大号。"""
         sections = self.soup.select("div.section")
-        orders = {}
-        for sec in sections:
-            sec_id = sec.get("id", "")
-            m = re.search(r"order:\s*(\d+)", sec.get("style", ""))
-            if m and sec_id == "sec-llm_usage":
-                orders[sec_id] = int(m.group(1))
-
-        self.assertIn("sec-llm_usage", orders)
-        # llm_usage 的 order 应为 13（末位，合并章节后总条目 17）
-        self.assertEqual(orders["sec-llm_usage"], 13, "llm_usage 的 order 应为 13（末位）")
+        ids = [sec.get("id", "") for sec in sections]
+        if "sec-llm_usage" not in ids:
+            self.skipTest("llm_usage 在该顺序配置下不可见")
+        self.assertEqual(ids[-1], "sec-llm_usage", f"llm_usage 应为末位：{ids}")
+        numbers = [self.numbers[i.replace("sec-", "")] for i in ids if i.replace("sec-", "") in self.numbers]
+        self.assertEqual(self.numbers["llm_usage"], max(numbers), "llm_usage 编号应为最大号")
 
 
 # ═══════════════════════════════════════════════════════════════

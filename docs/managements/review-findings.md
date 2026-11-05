@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.2-dev
-> **编号源**：`rf-next = 1047`（新增问题提出后更新为 +1；已用最大 rf-1046，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1048`（新增问题提出后更新为 +1；已用最大 rf-1047，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -43,7 +43,7 @@
 | `src/python/cli/_handlers.py` 852 行（主程序登记线 700） | 命令处理器按渠道分文件（generate/config/data 三簇），保持入口薄壳 |
 | `src/python/tui/handlers_holdings.py` 853 行（红线 1000） | 面板流程与输入采集高度耦合（共用 `_Session`），拆分收益低于回归面；再涨 ~150 行则按「面板流程 / 输入采集」两段拆，并把 `_market_data` 的会话内记忆一并做进去 |
 | `src/python/fetcher/financial_report.py` 729 行（主程序登记线 700） | 刚过线：再涨则按「索引 / 正文 / 全文定位」三阶下沉（负缓存样板统一在 `cache/_negative.py`） |
-| `src/static/tmpl/report_template.html` 997 行（**不在行数守护域内**：`check-file-length` 只扫 `.py`） | 要么纳入守护扫面（模板按 1000 红线），要么按页签拆 partial；余量约 6 行，下一项报告页改动即触线 |
+| `src/static/tmpl/report_template.html` 1021 行（**不在行数守护域内**：`check-file-length` 只扫 `.py`） | 要么纳入守护扫面（模板按 1000 红线），要么按页签拆 partial；已过 1000 行，下一项报告页改动即触线 |
 
 ## 已解决问题
 
@@ -53,6 +53,7 @@
 
 | # | 问题 | 修复 |
 |---|------|------|
+| **rf-1047** | 报告模板把 Jinja 写进 CSS 值位置，HTML 语言服务据此对每个模板报 28 条解析误报；此前用 `.pi-lens.json` 的 `lsp.disabledServers: [html]` 整体关掉该服务止声，代价是非模板页也失去 HTML LSP，且章节顺序分裂成「include 顺序 + CSS order 值」两处 | 按「颜色→语义 class、顺序→DOM 顺序、几何量→HTML/SVG 属性」改写：64 处动态内联样式清零（20 `order` + 40 颜色/字号/字重 + 1 配置分布条改 SVG 属性宽度），新增 `profit_class`/`price_type_class` 过滤器与 11 个工具类（色值引用既有 token）；include 顺序对齐 `_REPORT_SECTION_DEFAULT`；`.pi-lens.json` 删除、HTML LSP 恢复。守卫 3 条单测（模板静态扫描 / 渲染产物 style 无残留 / `div.section` 无 inline order 且 DOM 顺序与编号一致） |
 | **rf-1046** | 走势终点由滞后净值构成（QDII T-1/T-2）时，口径差异只在日志 WARNING 与数据源状态章可见；读者在「组合历史走势与回撤」章看到的末端日收益/最大回撤仍会被当准确值 | `STATUS_MESSAGES["history_nav_stale"]` 补上口径后果（末端日收益与最大回撤会偏低、终点附近数字仅供参考）；HTML 该章首与 Excel 页签顶部各加一块「读数口径提示」（逐标的滞后交易日数与占比）；手册报告说明同步。**口径文案单一源**：标题句/后果句/明细行在 `report/_history_quality` 定常量与拼装函数，生产侧写入契约（`headline`/`consequence`/`caveat`/`assets[].detail`），Excel 与数据状态词直接取用，HTML 副本由渲染用例按同一常量逐字断言（防三处静默漂移）。补 4 例单测（HTML 正反向渲染、Excel 提示行与无滞后不写） |
 | **rf-1045** | 缓存清理与读侧共用盘中 30s TTL，行情类缓存刚写入即被判过期删除，下一轮再写一遍——每轮启动与收尾反复预览 22~63 个待删文件，删除对读侧无收益，只放大未命中统计并制造「缓存反复失效」假象 | 新增 `cache/_ttl.get_cleanup_ttl(data_type, written_at)`：盘中一律按静态 TTL；**盘后**对盘中敏感类型额外回收**盘中写入**的快照（按写入时刻判定，TTL 归 0），收盘后写入的保留；读侧 `get_ttl` 不变。新增 `core/market_hours.is_intraday_timestamp()` 单一承接交易时段判定。technical 接口表与 TTL 章补「读写两侧判据不同（设计意图）」。补 4 例单测（盘中不快删、盘后回收盘中快照、盘后保留收盘快照、读侧仍判过期） |
 | **rf-1044** | 「刷新基础缓存」`clear_by_group("refresh")` 清整组 19 个模块，但流程只回填其中 10 个——财报索引/正文、财务指标、市场情绪、新闻逐条分析、费率、估值、无风险利率被连坐作废，要等下一次出报告才逐只回源（实测一次刷新后紧接的报告多付 267 次请求、墙钟 134s、命中率 35%，同日前序运行均 95~99%） | `clear_by_group()` 新增 `only` 参数（按缓存前缀/精确键名限定域），`update_basic_cache` 传 `_BASIC_REFRESHED_CACHE_KEYS`（本流程真回填的 10 个域）；手册 `[1]` 段落区分「会清」与「未连带清」两清单，technical 接口表与菜单表同步。补 2 例单测（only 限定保留未列域、编排层只清回填域） |

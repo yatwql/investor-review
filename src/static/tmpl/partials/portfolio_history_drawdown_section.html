@@ -1,4 +1,4 @@
-    <div class="section" id="sec-portfolio_history_drawdown" style="order: {{ section_numbers['portfolio_history_drawdown'] }};">
+    <div class="section" id="sec-portfolio_history_drawdown">
         <div class="section-title">
             {{ section_numbers['portfolio_history_drawdown'] }}、{{ section_names['portfolio_history_drawdown'] }}
             {% if history_data and history_data.status != "unavailable" %}
@@ -40,7 +40,7 @@
             <div class="summary-grid" style="margin-top:16px;">
                 <div class="summary-card">
                     <h3>累计收益</h3>
-                    <div class="value" style="color: {{ history_data.total_return_pct | profit_color }};">{{ history_data.total_return_pct | change }}</div>
+                    <div class="value {{ history_data.total_return_pct | profit_class }}">{{ history_data.total_return_pct | change }}</div>
                     <div class="meta">
                         {{ history_data.total_return | money }} ·
                         {% if history_data.data_start %} {{ history_data.data_start }} ~ {{ history_data.data_end }} {% else %}全周期{% endif %}
@@ -61,7 +61,7 @@
                 <div class="summary-card">
                     <h3>当前回撤状态</h3>
                     {% set _dd_last = (history_data.drawdown_events[-1] if history_data.drawdown_events else none) %}
-                    <div class="value" style="font-size: var(--fs-kpi); {% if _dd_last and not _dd_last.recovered %}color:var(--profit);{% else %}color:var(--success);{% endif %}">
+                    <div class="value fs-kpi{% if _dd_last and not _dd_last.recovered %} profit{% else %} text-success{% endif %}">
                         {% if _dd_last and not _dd_last.recovered %}回撤中{% elif history_data.drawdown_events %}已恢复{% else %}无显著回撤{% endif %}
                     </div>
                     <div class="meta">
@@ -241,7 +241,7 @@
                     <tr>
                         <th style="text-align:left;">{{ year_group.year }}</th>
                         {% for cell in year_group.cells %}
-                        <td style="text-align:center;{% if cell.return_pct is not none %} color: {{ cell.return_pct | profit_color }}; font-weight: 600;{% endif %}">
+                        <td class="text-center{% if cell.return_pct is not none %} {{ cell.return_pct | profit_class }} fw-600{% endif %}">
                             {%- if cell.return_pct is not none %}{{ cell.return_pct | change }}{% endif -%}
                         </td>
                         {% endfor %}
@@ -269,7 +269,7 @@
                         <td>{{ bm.name }}</td>
                         <td class="text-right">{% if bm.ir_annual is not none %}{{ "%.2f"|format(bm.ir_annual) }}{% else %}—{% endif %}</td>
                         <td class="text-right">{% if bm.te_annual is not none %}{{ "%.2f"|format(bm.te_annual) }}{% else %}—{% endif %}</td>
-                        <td class="text-right" style="{% if bm.excess_annual_pct is not none %}font-weight:600; color: {{ bm.excess_annual_pct | profit_color }};{% endif %}">{% if bm.excess_annual_pct is not none %}{{ "%.2f"|format(bm.excess_annual_pct) }}%{% else %}—{% endif %}</td>
+                        <td class="text-right{% if bm.excess_annual_pct is not none %} fw-600 {{ bm.excess_annual_pct | profit_class }}{% endif %}">{% if bm.excess_annual_pct is not none %}{{ "%.2f"|format(bm.excess_annual_pct) }}%{% else %}—{% endif %}</td>
                         <td class="text-right">{% if bm.win_rate_12m is not none %}{{ "%.1f"|format(bm.win_rate_12m) }}%{% else %}数据不足{% endif %}</td>
                         <td class="text-right">{% if bm.win_rate_24m is not none %}{{ "%.1f"|format(bm.win_rate_24m) }}%{% else %}数据不足{% endif %}</td>
                         <td class="text-right">{{ bm.complete_months }}</td>

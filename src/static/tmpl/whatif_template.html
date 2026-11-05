@@ -407,7 +407,7 @@
                         <td class="text-left">{{ c.get("label", c.get("key", "")) }}</td>
                         <td class="text-right">{{ "%.2f" | format(c.get("base_weight", 0.0)) }}</td>
                         <td class="text-right">{{ "%.2f" | format(c.get("cand_weight", 0.0)) }}</td>
-                        <td class="text-right" style="color: {{ 'var(--profit)' if c.get('delta_pct', 0.0) > 0 else ('var(--loss)' if c.get('delta_pct', 0.0) < 0 else 'var(--text-muted)') }};">{{ "%+.2f" | format(c.get("delta_pct", 0.0)) }}</td>
+                        <td class="text-right {{ 'profit' if c.get('delta_pct', 0.0) > 0 else ('loss' if c.get('delta_pct', 0.0) < 0 else 'text-muted') }}">{{ "%+.2f" | format(c.get("delta_pct", 0.0)) }}</td>
                         <td class="text-right">{{ c.get("base_cost", 0.0) | money }}</td>
                         <td class="text-right">{{ c.get("cand_cost", 0.0) | money }}</td>
                     </tr>
