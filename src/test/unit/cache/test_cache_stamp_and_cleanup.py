@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime
 
 import pytest
 
@@ -40,24 +39,13 @@ def _write(cache_dir, filename: str, age_seconds: float) -> None:
     (cache_dir / filename).write_text(json.dumps(payload), encoding="utf-8")
 
 
-def _write_at(cache_dir, filename: str, moment: float) -> None:
-    """写一份**指定写入时刻**的缓存（用于「盘中快照 vs 收盘后数据」判定）。"""
-    payload = {"_ts": moment, "_data": {"v": 1}}
-    (cache_dir / filename).write_text(json.dumps(payload), encoding="utf-8")
-
-
-def _today_at(hour: int, minute: int) -> float:
-    """今天（北京时间）某时某刻的时间戳。"""
-    from src.python.core.constants import BEIJING_TZ
-
-    now = datetime.now(BEIJING_TZ)
-    return now.replace(hour=hour, minute=minute, second=0, microsecond=0).timestamp()
-
-
 def _cleanup(cache_dir=None) -> int:
     from src.python.cache._cleanup import cleanup_expired
 
     return cleanup_expired(dry_run=False)
+
+
+from src.test.unit.cache._cache_fixtures import today_at, write_cache_at  # noqa: E402
 
 
 class TestLegacyStampIsUnreachable:
@@ -66,12 +54,12 @@ class TestLegacyStampIsUnreachable:
     def test_legacy_stamp_not_readable(self, cache_env):
         from src.python.cache import get as cache_get
 
-        _write_at(cache_env, "price_600519_v3.json", _today_at(8, 0))
+        write_cache_at(cache_env, "price_600519_v3", today_at(8, 0))
         assert cache_get("price_600519", 86400) is None, "旧戳文件不得被读路径命中"
 
     def test_legacy_stamp_still_cleaned_by_type_ttl(self, cache_env):
         """非当前版本戳的价缓存超过 price TTL → 清理（不是永远滞留）。"""
-        _write_at(cache_env, "price_600519_v3.json", _today_at(8, 0) - 86401)
+        write_cache_at(cache_env, "price_600519_v3", today_at(8, 0) - 86401)
         assert _cleanup() == 1
 
     def test_legacy_stamp_fresh_survives(self, cache_env):
@@ -79,7 +67,7 @@ class TestLegacyStampIsUnreachable:
 
         写入时刻取盘前 08:00：避开「盘后回收盘中快照」分支，用例不随跑测时段变脸。
         """
-        _write_at(cache_env, "price_600519_v3.json", _today_at(8, 0))
+        write_cache_at(cache_env, "price_600519_v3", today_at(8, 0))
         assert _cleanup() == 0
 
 
@@ -94,7 +82,7 @@ class TestPerTypeCleanupTTL:
         from src.python.cache import _ttl
 
         monkeypatch.setattr(_ttl, "_is_market_open", lambda: False)
-        _write_at(cache_env, "price_600519_v4.json", _today_at(10, 5))
+        write_cache_at(cache_env, "price_600519_v4", today_at(10, 5))
 
         assert _cleanup() == 1, "盘后应回收盘中快照，避免盘中价被当收盘价"
 
@@ -103,7 +91,7 @@ class TestPerTypeCleanupTTL:
         from src.python.cache import _ttl
 
         monkeypatch.setattr(_ttl, "_is_market_open", lambda: False)
-        _write_at(cache_env, "price_600519_v4.json", _today_at(15, 30))
+        write_cache_at(cache_env, "price_600519_v4", today_at(15, 30))
 
         assert _cleanup() == 0, "收盘后写入的价不得被误删"
 

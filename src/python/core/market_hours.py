@@ -20,7 +20,7 @@ import threading
 from datetime import datetime
 from typing import Any
 
-from src.python.core.constants import BEIJING_TZ
+from src.python.core.constants import BEIJING_TZ, CACHE_WEEKLY
 
 logger = logging.getLogger("invest")
 
@@ -187,7 +187,8 @@ def _is_market_open_official(current_min: int) -> bool | None:
     now = datetime.now(_BJ_TZ)
     if now.weekday() >= 5:
         return None  # 周末 return None 让 fallback 处理
-    official_ttl = 60 if _MORNING_START <= current_min <= _AFTERNOON_END else 86400 * 7
+    # 盘中 60s 刷新官方状态；盘后沿用上次结论一周（周末再打源无意义）
+    official_ttl = 60 if _MORNING_START <= current_min <= _AFTERNOON_END else CACHE_WEEKLY
     cached = get(_CACHE_KEY_MARKET_HOURS, official_ttl)
     if cached is not None and isinstance(cached, dict):
         status = cached.get("status")
