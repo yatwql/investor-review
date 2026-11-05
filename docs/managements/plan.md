@@ -1,13 +1,13 @@
 # 投资复盘助手 — 实现计划
 
 > 文档版本：0.17.2-dev
-> **编号源**：`plan-next = 246`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-245，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`plan-next = 247`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-246，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
 ## 概述
 
-在办 7 项：P1 2 项（**plan-238**、**plan-239**）、P2 1 项（**plan-92**）、P3 3 项（**plan-70**、**plan-233**、**plan-243**）、P4 1 项（**plan-55**）。命名与实现纪律见 `CLAUDE.md`（单一事实位，本表不重复）。
+在办 8 项：P1 2 项（**plan-238**、**plan-239**）、P2 1 项（**plan-92**）、P3 4 项（**plan-70**、**plan-233**、**plan-243**、**plan-246**）、P4 1 项（**plan-55**）。命名与实现纪律见 `CLAUDE.md`（单一事实位，本表不重复）。
 
 ---
 
@@ -84,8 +84,14 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 **接续**：剩余用户价值已交付（章首三行摘要、「我的建议历史表现」按视界表，均只读账本聚合）；本条只维护收口结论与观察触发条件。
 **事实位**：轮次明细与验收记录在设计稿 [`investment-decision-basis-design.md`](../plan/investment-decision-basis-design.md)（§4/§5），回测读数见 [归档讨论稿](../archive/v0.16.x/investment-decision-quality/investment-decision-quality.md) §8.1；本表不复述。
 
-### P4 — 实验候选（先决门槛未过，暂缓）
+#### `plan-246` 报告模板内联样式去 Jinja 化（class 驱动）
 
+**现状**：`src/static/tmpl/` 下多个 partial 把 Jinja 表达式放在 CSS 值位置（`style="order: {{ n }}"`、`style="color: {{ x | profit_color }}"`、`style="… {% if … %}color:…{% endif %}"`）。HTML 语言服务把它当 CSS 扫，单模板稳定报 28 条 `at-rule or selector expected` / `property value expected`（与模板逻辑无关的纯解析误报）。当前已用项目 `.pi-lens.json` 的 `lsp.disabledServers: ["html"]` 把该服务整体关掉止声，代价是 `src/static/web/index.html` 等非模板页也失去 HTML LSP 诊断。
+**动作**：把动态样式改成 **class 驱动**——颜色走已有的 `.profit` / `.loss`（`report_template.html` 已有定义，与 `DESIGN.md` 色彩语义角色表一致），数值性样式（`order`、`font-weight`、`text-align`）走工具类：Jinja 只在 `class` 属性里做选择，CSS 值一律静态。逐步覆盖 `partials/` 下有该写法的文件，完成后可从 `.pi-lens.json` 移除 `lsp.disabledServers`（恢复 HTML LSP）。
+**风险与验收**：涉及渲染，须逐章比对改动前后 HTML 输出（样式值一致）+ 跑 `src/test/unit/report/` 全绿 + 目测暗色主题与窄屏档（DESIGN.md 断点表）；禁止顺手改视觉（颜色/间距语义变都算越界）。曾试过的两种“小改”已证伪，不要重走：① 用 Jinja `%` 拼整个 `style` 属性（HTML 校验器报特殊字符未转义）；② 条件分支复制开标签（报标签未配对）。
+**前置**：无硬门槛；优先级低于任何用户可见缺陷，仅在需要恢复 HTML LSP 或其写法的模板继续增多时启动。
+
+### P4 — 实验候选（先决门槛未过，暂缓）
 入选标准：接入前有硬性先决门槛，门槛未过不排期。
 
 #### `plan-55` 新闻关联判定接入 Jev（对照评测先决）
