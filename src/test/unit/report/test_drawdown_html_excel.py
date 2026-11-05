@@ -264,6 +264,7 @@ class TestExcelDrawdownSheet(unittest.TestCase):
 
         wb = Workbook()
         ws = wb.active
+        assert ws is not None  # 单页工作簿：active 恒存在，显式收窄以消除 Optional
         write_portfolio_history_drawdown_sheet(ws, history_data, crisis_annotation)
         return ws
 
@@ -440,6 +441,7 @@ class TestExcelMonthlyCalendar(unittest.TestCase):
 
         wb = Workbook()
         ws = wb.active
+        assert ws is not None  # 单页工作簿：active 恒存在，显式收窄以消除 Optional
         write_portfolio_history_drawdown_sheet(ws, history_data)
         return ws
 

@@ -90,6 +90,27 @@ def _parse_time_to_minutes(time_str: str) -> int | None:
         return None
 
 
+def is_intraday_timestamp(ts: float) -> bool:
+    """给定时间戳是否落在 A 股交易时段内（当日 09:30~11:30 或 13:00~15:00，北京时间）。
+
+    用途：判定一个缓存文件是「盘中快照」还是「收盘后数据」。盘中写入的行情值只是
+    当时的价格，盘后不得当作收盘价长期复用，因此盘后回收时以**写入时刻**而非
+    当前时刻判定（见 `cache/_ttl.get_cleanup_ttl`）。
+
+    Args:
+        ts: Unix 时间戳
+
+    Returns:
+        写入时刻处于交易时段返回 True；否则 False
+    """
+    try:
+        moment = datetime.fromtimestamp(float(ts), _BJ_TZ)
+    except (TypeError, ValueError, OSError, OverflowError):
+        return False
+    minutes = moment.hour * 60 + moment.minute
+    return (_MORNING_START <= minutes <= _MORNING_END) or (_AFTERNOON_START <= minutes <= _AFTERNOON_END)
+
+
 def _fetch_trading_status_from_official() -> int | None:
     """从东方财富 push2 API 获取上证指数实时交易状态。
 

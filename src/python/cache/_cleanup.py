@@ -73,15 +73,9 @@ def _process_cache_file(
                 data_type = dtype
                 break
 
-    # 清理侧用静态 TTL（忽略盘中 30s 覆盖）：否则刚写入的行情缓存会被立刻判死删除，
-    # 下一轮再写一遍——删除对读侧无收益，只制造「缓存反复失效」的假象。
-    ttl = get_cleanup_ttl(data_type)
     # 同前缀下的异构寿命键（回退基准/负缓存等）按精确键独立 TTL 裁：
     # 前缀默认值只适用于本域常规载荷，套到这些键上会腰斩甚至直接删掉它们。
     override = (exact_ttl_map or {}).get(logical_key)
-    if override is not None:
-        ttl = override
-        logger.debug("缓存清理按精确键 TTL: %s (ttl=%s)", logical_key, _fmt_span(ttl))
     payload = _read_cache_data(fpath, fkey, dry_run=dry_run)
     if payload is None:
         return 1  # 损坏也算清理
@@ -97,6 +91,14 @@ def _process_cache_file(
         # 属托管边界之外，跳过 TTL 判定，只留 DEBUG 痕迹，不打 INFO 刷屏。
         logger.debug("缓存清理跳过（无 _ts 包封，非缓存引擎托管）: %s", fname)
         return 0
+
+    # TTL 需在拿到写入时间后才定：盘后要按「写入时刻是否落在交易时段」回收盘中快照
+    # （见 `_ttl.get_cleanup_ttl`），盘中则一律按静态 TTL，不拿 30s 读侧口径删文件。
+    if override is not None:
+        ttl = override
+        logger.debug("缓存清理按精确键 TTL: %s (ttl=%s)", logical_key, _fmt_span(ttl))
+    else:
+        ttl = get_cleanup_ttl(data_type, written_at=ts)
 
     now = time.time()
     age = now - ts

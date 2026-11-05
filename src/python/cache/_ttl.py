@@ -89,31 +89,47 @@ def _static_ttl(data_type: str, config: dict, defaults: dict[str, float]) -> flo
     return defaults.get(data_type, CACHE_DAILY)
 
 
-def get_cleanup_ttl(data_type: str) -> float:
-    """清理侧 TTL：**忽略盘中覆盖**，按静态 TTL 判定文件是否过期。
+def get_cleanup_ttl(data_type: str, written_at: float | None = None) -> float:
+    """清理侧 TTL：按静态 TTL 判过期，并在**盘后回收盘中快照**。
 
-    清理是磁盘回收，与「读侧新鲜度」是两个判据。行情类盘中 TTL（30s）是读侧策略：
-    拿它判过期等于把 30s 前刚写入的文件立刻判死删掉，下一轮再写一遍（实测每轮启动与
-    收尾都在反复预览 22~63 个待删文件，缓存文件数只在 0 与满载之间抖动）；而被删掉的
-    这部分对读侧本就没有价值（读侧同口径已判过期），删除不带来任何新鲜度收益，只放大
-    未命中统计、制造「缓存反复失效」的假象。
+    清理是磁盘回收，与「读侧新鲜度」是两个判据：
+
+    1. 交易时段内：一律按静态 TTL。行情类盘中 TTL（30s）是读侧策略，拿它判清理等于
+       把 30s 前刚写入的文件当场删掉、下一轮再写一遍（实测每轮启动与收尾都在反复预览
+       22~63 个待删文件），而读侧同口径已判过期，删除不带来任何新鲜度收益。
+    2. 盘后：对盘中敏感类型（注册表 `market_ttl`）额外回收**盘中写入**的副本——它的
+       值只是当时的价（如 14:00 的快照），盘后读侧按静态 TTL 会把它当收盘价沿用 24h。
+       判定看**写入时刻**是否落在 A 股交易时段（`core.market_hours.is_intraday_timestamp`），
+       不看当前时刻：盘后（如 15:30 收盘抓取）写入的才是当日收盘值，必须保留。
 
     读侧仍走 :func:`get_ttl`（含盘中覆盖），两处判据的差异是设计意图，不是不一致。
 
     Args:
         data_type: 数据类型键名，如 "price"、"index"、"rank"
+        written_at: 缓存写入时间戳（取自载荷 `_ts`）；None 时只算静态 TTL
 
     Returns:
-        过期时间（秒，永远为静态 TTL）
+        过期时间（秒）；盘后遇到盘中快照时返回 0.0（任何年龄均判过期）
     """
     defaults = get_cache_ttl_defaults()
     try:
         from src.python.config import get_config  # lazy import
 
-        return _static_ttl(data_type, get_config(), defaults)
+        static = _static_ttl(data_type, get_config(), defaults)
     except (ImportError, TypeError, ValueError, KeyError, AttributeError, RuntimeError):
         logger.debug("get_cleanup_ttl: 配置读取失败，使用默认值")
-        return defaults.get(data_type, CACHE_DAILY)
+        static = defaults.get(data_type, CACHE_DAILY)
+
+    if written_at is None or get_market_ttl_map().get(data_type) is None:
+        return static
+    if _is_market_open():
+        return static
+    from src.python.core.market_hours import is_intraday_timestamp
+
+    if is_intraday_timestamp(written_at):
+        logger.debug("盘后回收盘中快照: %s (写入时刻落在交易时段)", data_type)
+        return 0.0
+    return static
 
 
 def get_ttl(data_type: str) -> float:

@@ -78,6 +78,14 @@ def _write_cache(cache_dir, key: str, age_seconds: float) -> None:
     (cache_dir / f"{key}_{_CACHE_KEY_VERSION}.json").write_text(json.dumps(payload), encoding="utf-8")
 
 
+def _write_at(cache_dir, key: str, moment: float) -> None:
+    """写一份**指定写入时刻**的缓存（盘中快照/盘后数据的判定依赖它）。"""
+    from src.python.cache._paths import _CACHE_KEY_VERSION
+
+    payload = {"_ts": moment, "_data": {"v": 1}}
+    (cache_dir / f"{key}_{_CACHE_KEY_VERSION}.json").write_text(json.dumps(payload), encoding="utf-8")
+
+
 def _expected_ttl(data_type: str, is_open: bool, config: dict) -> float:
     """矩阵期望值：盘中敏感类型在交易时段走盘中 TTL，其余走静态覆盖/注册表默认。"""
     registry_default = get_cache_ttl_defaults()[data_type]
@@ -125,19 +133,41 @@ def test_cleanup_uses_static_ttl_ignoring_intraday(ttl_env, cache_env, label, is
     清理是磁盘回收：若跟着盘中 30s 判过期，刚写入的行情缓存会被当场删掉、下一轮再写
     一遍；磁盘上留着无副作用（读侧同口径已判未命中）。静态 TTL 到期仍需回收。
     """
-    from src.python.cache import get_ttl
     from src.python.cache._cleanup import cleanup_expired
     from src.python.cache._ttl import get_cleanup_ttl
 
     ttl_env({}, is_open)
-    intraday_ttl = get_ttl("price")
+    from datetime import datetime
+
+    from src.python.core.constants import BEIJING_TZ
+
     static_ttl = get_cleanup_ttl("price")
+    _now = datetime.now(BEIJING_TZ)
+    _pre_open = _now.replace(hour=8, minute=0, second=0, microsecond=0).timestamp()
 
-    _write_cache(cache_env, "price_600519", age_seconds=max(1, min(intraday_ttl, static_ttl) - 1))
-    assert cleanup_expired(dry_run=False) == 0, f"{label}: 短 TTL 内的价不得被清理"
+    # 盘前写入（非交易时段）：按静态 TTL 判，远未到期 → 保留；超期 → 回收
+    _write_at(cache_env, "price_600519", _pre_open)
+    assert cleanup_expired(dry_run=False) == 0, f"{label}: 静态 TTL 内的价不得被清理"
 
-    _write_cache(cache_env, "price_601398", age_seconds=static_ttl + 1)
+    _write_at(cache_env, "price_601398", _pre_open - static_ttl - 1)
     assert cleanup_expired(dry_run=True) == 1, f"{label}: 超过静态 TTL 的价必须被清理"
+
+
+@pytest.mark.parametrize("label,is_open,_desc", SESSION_CASES, ids=[c[0] for c in SESSION_CASES])
+def test_cleanup_reclaims_intraday_snapshot_only_after_close(ttl_env, cache_env, label, is_open, _desc):
+    """盘中写入的行情快照：盘中保留（读侧自理），盘后回收（它只是当时的价）。"""
+    from datetime import datetime
+
+    from src.python.core.constants import BEIJING_TZ
+    from src.python.cache._cleanup import cleanup_expired
+
+    ttl_env({}, is_open)
+    _now = datetime.now(BEIJING_TZ)
+    _intraday = _now.replace(hour=10, minute=5, second=0, microsecond=0).timestamp()
+    _write_at(cache_env, "price_600519", _intraday)
+
+    expected = 0 if is_open else 1
+    assert cleanup_expired(dry_run=True) == expected, f"{label}: 盘中快照回收策略不符预期"
 
 
 class TestOverrideLayers:

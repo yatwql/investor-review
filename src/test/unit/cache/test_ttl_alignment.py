@@ -41,6 +41,23 @@ def _write_cache(cache_env, key: str, age_seconds: float) -> None:
     (cache_env / f"{key}_{_CACHE_KEY_VERSION}.json").write_text(json.dumps(payload), encoding="utf-8")
 
 
+def _write_at(cache_env, key: str, moment: float) -> None:
+    """写一份**指定写入时刻**的缓存（盘中快照/盘后数据的判定依赖写入时刻）。"""
+    from src.python.cache._paths import _CACHE_KEY_VERSION
+
+    payload = {"_ts": moment, "_data": {"v": 1}}
+    (cache_env / f"{key}_{_CACHE_KEY_VERSION}.json").write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _pre_open_ts() -> float:
+    """今天盘前 08:00（北京时间）的时间戳：非交易时段，清理侧按静态 TTL 判。"""
+    from datetime import datetime
+
+    from src.python.core.constants import BEIJING_TZ
+
+    return datetime.now(BEIJING_TZ).replace(hour=8, minute=0, second=0, microsecond=0).timestamp()
+
+
 def _cleanup(cache_env) -> int:
     from src.python.cache._cleanup import cleanup_expired
 
@@ -186,12 +203,15 @@ class TestIntradayAndNegativeCacheTTL:
         assert cache_get("price_600519", ttl_mod.get_ttl("price")) is None, "读侧仍按盘中短 TTL 判过期"
 
     def test_closed_market_price_keeps_static_ttl(self, cache_env, monkeypatch):
-        """盘后：静态 TTL（24h）生效，1h 前抓的价格不重复清理（避免白打上游）。"""
+        """盘后：静态 TTL（24h）生效，盘前/收盘后写入的价格未到期时不清理。
+
+        写入时刻取盘前 08:00：避开「盘后回收盘中快照」分支，用例不随跑测时段变脸。
+        """
         from src.python.cache import _ttl as ttl_mod
 
         monkeypatch.setattr(ttl_mod, "_is_market_open", lambda: False)
 
-        _write_cache(cache_env, "price_600519", age_seconds=3600)
+        _write_at(cache_env, "price_600519", _pre_open_ts())
         assert _cleanup(cache_env) == 0
 
     def test_every_registered_type_has_positive_ttl(self):

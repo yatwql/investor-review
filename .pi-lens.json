@@ -1,10 +1,5 @@
 {
-  "rules": {
-    "css-ruleorselectorexpected": {
-      "ignorePaths": ["src/static/tmpl/**"]
-    },
-    "css-propertyvalueexpected": {
-      "ignorePaths": ["src/static/tmpl/**"]
-    }
+  "lsp": {
+    "disabledServers": ["html"]
   }
 }
