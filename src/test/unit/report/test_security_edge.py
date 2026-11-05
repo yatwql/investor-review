@@ -131,20 +131,16 @@ class TestXssCacheInjection(unittest.TestCase):
         result = template.render(value=1234.5)
         self.assertIn("1,234.50", result)
 
-    def test_profit_color_filter_autoescape_safe(self):
-        """profit_color 过滤器输出主题 CSS 变量（var(--profit)/var(--loss)）→ autoescape 不影响。"""
+    def test_profit_class_filter_outputs_no_raw_css(self):
+        """profit_class 只输出类名（profit/loss/空）——不含任何 CSS 值，故 autoescape 不参与。"""
         from src.python.report.html_jinja_env import _ENV
 
-        template = _ENV.from_string("{{ value | profit_color }}")
-        result = template.render(value=100)
-        self.assertIn("var(--profit)", result)
-        result2 = template.render(value=-50)
-        self.assertIn("var(--loss)", result2)
-        # 边界：零/非数字不输出颜色
-        result3 = template.render(value=0)
-        self.assertEqual(result3, "")
-        result4 = template.render(value="n/a")
-        self.assertEqual(result4, "")
+        template = _ENV.from_string("{{ value | profit_class }}")
+        self.assertEqual(template.render(value=100), "profit")
+        self.assertEqual(template.render(value=-50), "loss")
+        # 边界：零/非数字不染色
+        self.assertEqual(template.render(value=0), "")
+        self.assertEqual(template.render(value="n/a"), "")
 
     def test_xss_payload_in_name_preserved(self):
         """持仓名含 XSS payload → DetailRow 中原样传递（需在模板层 autoescape）。"""
@@ -179,8 +175,8 @@ class TestSymlink(unittest.TestCase):
         from src.python.cache._paths import _cache_path
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            # 创建普通文件而不是符号链接（Windows 兼容）
-            _cache_path.__wrapped__("test_key") if hasattr(_cache_path, "__wrapped__") else None
+            # 创建普通文件而不是符号链接（Windows 兼容）；此处只验证路径构造不抛异常
+            _cache_path("test_key")
             # 简单验证：os.listdir 不因文件类型异常
             try:
                 entries = os.listdir(tmpdir)

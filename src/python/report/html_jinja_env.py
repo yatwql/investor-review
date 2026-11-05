@@ -66,24 +66,19 @@ def _jinja_change(value: Any) -> str:
         return "--"
 
 
-def _jinja_price_type_color(price_type: str, name: str = "") -> str:
-    """取价方式颜色：蓝色代表数据时效性高/可靠。
+def _jinja_price_type_class(price_type: str, name: str = "") -> str:
+    """取价方式着色的语义 class：数据时效性高/可靠 → `rating-stable`，否则空串。
 
-    着色规则同 Excel 端 _apply_price_type_colors：
-      - "场内收盘价(T)"、"场内午市收盘(T)"、"官方净值(T)" → var(--rating-stable)
-      - QDII 基金（取价方式常量为「官方净值」旧一日口径）→ var(--rating-stable)
-    返回 CSS 变量表达式（暗色模式（主题切换）），模板中直接用于 style="color: ..."。
+    着色规则同 Excel 端 `_apply_price_type_colors`：
+      - "场内收盘价(T)"、"场内午市收盘(T)"、"官方净值(T)" → 稳定（蓝）
+      - QDII 基金（取价方式为「官方净值」旧一日口径）→ 稳定（蓝）
+    模板只用 class，不写内联 `style="color: …"`（Jinja 进 CSS 值位置会被解析器判语法错）。
     """
     if price_type in ("场内收盘价(T)", "场内午市收盘(T)", "官方净值(T)"):
-        return "var(--rating-stable)"
+        return "rating-stable"
     if price_type == PRICE_TYPE_OFFICIAL_NAV_T1 and name and is_qdii_extended(name):
-        return "var(--rating-stable)"
+        return "rating-stable"
     return ""
-
-
-def _jinja_price_type_class(price_type: str, name: str = "") -> str:
-    """取价方式着色的 class 形式（与 `price_type_color` 同判据，避免两处规则分叉）。"""
-    return "rating-stable" if _jinja_price_type_color(price_type, name) else ""
 
 
 def _jinja_profit_class(value: Any) -> str:
@@ -99,19 +94,6 @@ def _jinja_profit_class(value: Any) -> str:
             return "profit"
         if v < 0:
             return "loss"
-        return ""
-    except (ValueError, TypeError):
-        return ""
-
-
-def _jinja_profit_color(value: Any) -> str:
-    """盈亏颜色：盈利红 var(--profit)，亏损绿 var(--loss)（跟随主题）。"""
-    try:
-        v = float(value)
-        if v > 0:
-            return "var(--profit)"
-        elif v < 0:
-            return "var(--loss)"
         return ""
     except (ValueError, TypeError):
         return ""
@@ -167,9 +149,7 @@ _ENV.filters["pct"] = _jinja_pct
 _ENV.filters["price"] = _jinja_price
 _ENV.filters["shares"] = _jinja_shares
 _ENV.filters["change"] = _jinja_change
-_ENV.filters["profit_color"] = _jinja_profit_color
 _ENV.filters["profit_class"] = _jinja_profit_class
-_ENV.filters["price_type_color"] = _jinja_price_type_color
 _ENV.filters["price_type_class"] = _jinja_price_type_class
 _ENV.filters["thousands"] = _jinja_thousands
 _ENV.filters["sentiment_colorize"] = _jinja_sentiment_colorize

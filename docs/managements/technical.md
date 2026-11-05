@@ -1355,7 +1355,7 @@ get_ttl(data_type)
 
 **盘中敏感性由注册表声明**（`DataModuleDef.market_ttl`，当前只有 `price`/`index` = 30s）：这是数据属性而非用户偏好——价格/指数分钟级变化，盘中必须短 TTL 才能避免把盘中价当收盘价（否则"本日盈亏/快照环比"系统性偏离），而非行情数据（新闻 900s、情绪 3600s 等）不得因盘中被降频、白打上游。`config.json → market_hour_aware` 已移除（无对应实现，写入即被忽略，不再有识别/告警分支）。
 
-**报告模板样式写法（架构约束）**：`src/static/tmpl/` 是 Jinja2 模板，**不得把 Jinja 表达式写进 CSS 值位置**（`style="…{{ }}…"` / `{% %}`）——CSS 解析器对花括号一律判语法错，且颜色/顺序会因此分裂成两份事实（内联值 + class/token）。三条替代口径：颜色→语义 class（`profit_class`/`price_type_class` 出类名，色值只在 token 与工具类）、章节顺序→DOM 顺序（模板 include 顺序 = `_REPORT_SECTION_DEFAULT`，不用 CSS `order`）、数据驱动几何量→HTML/SVG 属性（如分布条 `<svg width="{{ pct }}%">`）。守卫：`test_html_report_structure` 的模板静态扫描 + 渲染产物断言 + DOM 顺序/编号断言。
+**报告模板样式写法（架构约束）**：`src/static/tmpl/` 是 Jinja2 模板，**不得把 Jinja 表达式写进 CSS 值位置**（`style="…{{ }}…"` / `{% %}`）——CSS 解析器对花括号一律判语法错，且颜色/顺序会因此分裂成两份事实（内联值 + class/token）。三条替代口径：颜色→语义 class（`profit_class`/`price_type_class` 出类名（原 `profit_color`/`price_type_color` 内联颜色过滤器已下线），色值只在 token 与工具类）、章节顺序→DOM 顺序（模板 include 顺序 = `_REPORT_SECTION_DEFAULT`，不用 CSS `order`）、数据驱动几何量→HTML/SVG 属性（如分布条 `<svg width="{{ pct }}%">`）。守卫：`test_html_report_structure` 的模板静态扫描 + 渲染产物断言 + DOM 顺序/编号断言。
 
 **盘中覆盖可见**：若用户同时配了 `cache_ttl.{type}` 而该类型盘中敏感，`get_ttl` 会打一条 INFO（每类型一次）说明"盘中以 `market_hour_ttl` 为准，`cache_ttl` 仅盘后生效"——把静默失效变成可观测。
 

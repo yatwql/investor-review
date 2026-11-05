@@ -370,7 +370,7 @@ class TestPurchaseStatusTemplate:
             _jinja_money,
             _jinja_pct,
             _jinja_price,
-            _jinja_profit_color,
+            _jinja_profit_class,
         )
 
         self.env = Environment(autoescape=True)
@@ -379,7 +379,7 @@ class TestPurchaseStatusTemplate:
                 "money": _jinja_money,
                 "pct": _jinja_pct,
                 "price": _jinja_price,
-                "profit_color": _jinja_profit_color,
+                "profit_class": _jinja_profit_class,
             }
         )
         # 片段取自真实模板 partials，须继承生产过滤器（含匿名化代码列 anon_code）
@@ -708,7 +708,7 @@ class TestCategoryPurchaseTemplate:
             _jinja_money,
             _jinja_pct,
             _jinja_price,
-            _jinja_profit_color,
+            _jinja_profit_class,
         )
 
         self.env = Environment(autoescape=True)
@@ -717,7 +717,7 @@ class TestCategoryPurchaseTemplate:
                 "money": _jinja_money,
                 "pct": _jinja_pct,
                 "price": _jinja_price,
-                "profit_color": _jinja_profit_color,
+                "profit_class": _jinja_profit_class,
             }
         )
         # 片段取自真实模板 partials，须继承生产过滤器（含匿名化代码列 anon_code）
