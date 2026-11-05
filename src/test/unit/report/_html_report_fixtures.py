@@ -144,7 +144,11 @@ def _build_minimal_render_data(
 def _render_template(render_data: dict) -> BeautifulSoup:
     """用 html_writer._ENV 渲染模板并返回 BeautifulSoup 对象。"""
     from src.python.report.html_jinja_env import _ENV
-    from src.python.report.html_writer import _LLM_SUPPORTED_SECTIONS, _build_section_nav_groups
+    from src.python.report.html_writer import (
+        _LLM_SUPPORTED_SECTIONS,
+        _build_section_nav_groups,
+        _inject_section_order_css,
+    )
 
     # 注入 section_visible 闭包 + section_groups 分组导航（与生产代码相同的 context 变量方式，不写入 _ENV.globals）
     _sv_dict = render_data.get("section_visible_dict", {})
@@ -163,6 +167,8 @@ def _render_template(render_data: dict) -> BeautifulSoup:
         section_groups=section_groups,
         llm_supported_sections=_LLM_SUPPORTED_SECTIONS,
     )
+    # 与生产同路：章节序号落成 CSS order 规则（自定义 report_section_order 时生效）
+    html = _inject_section_order_css(html, render_data.get("section_numbers", {}))
     return BeautifulSoup(html, "html.parser")
 
 

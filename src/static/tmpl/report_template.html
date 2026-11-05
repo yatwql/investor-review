@@ -772,6 +772,10 @@
         @media print { .chart-export-actions, .chart-export-btn { display: none; } }
     </style>
 
+    {# 章节顺序：`report_section_order` 自定义序号时需用 CSS `order` 生效；
+       规则由 html_writer 服务端生成并替换本占位（不能写 Jinja，花括号进 CSS 值位置会被解析器判语法错） #}
+    <!--SECTION_ORDER_CSS-->
+
 
 {# Chart.js 交互图表（本地 bundle：相对路径，离线自包含） #}
 {# chart_datasets 数据经 context 传递（不写 _ENV.globals） #}

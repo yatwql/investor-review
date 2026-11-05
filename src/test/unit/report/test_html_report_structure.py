@@ -366,6 +366,21 @@ class TestHtmlCustomOrder(unittest.TestCase):
             _build_minimal_render_data(cls.custom_order, cls.numbers, cls.sv_dict),
         )
 
+    def test_custom_order_emits_css_order_rules(self):
+        """自定义序号 → 服务端注入 CSS `order` 规则（DOM 顺序固定，排序必须靠它生效）。
+
+        回归：章节 `order` 曾写在模板内联样式里（Jinja 进 CSS 值）；去内联化后一度丢失，
+        导致 `report_section_order` 配置失效（序号变了但排版不动）。
+        """
+        style_text = " ".join(style.get_text() for style in self.soup.select("style"))
+        for sec in self.custom_order:
+            self.assertIn(
+                f"#sec-{sec['key']}{{order:{sec['number']}}}",
+                style_text,
+                f"{sec['key']} 缺少注入的 order 规则",
+            )
+        self.assertNotIn("SECTION_ORDER_CSS", style_text, "占位符必须被替换")
+
     def test_nav_links_in_custom_order(self):
         """导航链接顺序应与 section_order 一致。"""
         links = self.soup.select("nav.section-nav a")

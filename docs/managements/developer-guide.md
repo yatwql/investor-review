@@ -116,7 +116,7 @@
 | 维度 | 承载方式 | 说明 |
 |---|---|---|
 | 颜色 | **语义 class**（`.profit` / `.loss` / `.rating-*` / `.text-warn` / `.corr-*` / `.fill-*`…） | 过滤器 `profit_class` / `price_type_class` 出类名；色值只在 `report_template.html` 的 token 与工具类里出现，暗色主题自动跟随 |
-| 章节顺序 | **DOM 顺序**（模板 include 顺序 = `_REPORT_SECTION_DEFAULT` 注册表顺序） | 不用 CSS `order`：它要把 Jinja 写进 `style`，且顺序事实会分裂成「include 顺序 + order 值」两处 |
+| 章节顺序 | 模板 **DOM 顺序**（include 顺序 = `_REPORT_SECTION_DEFAULT`）+ **服务端注入的 CSS `order` 规则** | 用户配置 `report_section_order` 时序号与 DOM 顺序不一致，靠 `html_writer._inject_section_order_css()` 把`#sec-x{order:N}` 拼好替换模板占位 `<!--SECTION_ORDER_CSS-->`；不用 Jinja 写 `style`（花括号会被 CSS 解析器判语法错） |
 | 数据驱动的几何量 | **HTML/SVG 属性**（如配置分布条 `<svg width="{{ pct }}%">`） | 属性不是 CSS 值，解析器不介入 |
 
 守卫：`src/test/unit/report/test_html_report_structure.py` 静态扫描全部模板 `style="…"` 不得含 `{{`/`{%`，并对渲染产物断言 `style` 无模板残留；同文件另断言 `div.section` 无内联 `order:` 且 DOM 顺序与编号一致。压误报用的 `.pi-lens.json` 已随本批次删除，HTML 语言服务恢复启用。

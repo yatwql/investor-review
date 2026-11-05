@@ -184,7 +184,7 @@ def _render_template(
     # 目录分组导航：按「基础信息/基金深度分析/行动建议/历史/LLM/附录」六组折叠（_sv_fn 闭包过滤不可见章节）
     section_groups = _build_section_nav_groups(order, _sv_fn, section_numbers)
 
-    return _ENV.get_template("report_template.html").render(
+    html = _ENV.get_template("report_template.html").render(
         flow_display=_build_flow_display(fund_flow_data),
         purchase_status_display=purchase_status_display,
         section_groups=section_groups,
@@ -283,6 +283,38 @@ def _render_template(
         financial_indicator_data=financial_indicator_data,
         summary_highlights_data=summary_highlights_data,
     )
+    return _inject_section_order_css(html, section_numbers)
+
+
+#: 模板里章节顺序 CSS 的占位符（HTML 注释：CSS 解析器不介入，避免 Jinja 进 CSS 值位置）
+_SECTION_ORDER_PLACEHOLDER = "<!--SECTION_ORDER_CSS-->"
+
+
+def _inject_section_order_css(html: str, section_numbers: dict) -> str:
+    """把章节序号落成 CSS `order` 规则，替换模板占位符。
+
+    章节顺序的**事实源**是 `get_report_section_order(config)` → `section_numbers`；模板 DOM
+    顺序按注册表固排，只有用户自定义 `report_section_order` 时两者才不一致，需 `order` 生效。
+    规则在服务端拼好再注入——用 Jinja 写进模板会把 `{{ }}` 落在 CSS 值位置，任何 CSS 解析器
+    都会判语法错（HTML 语言服务因此会对每个模板报几十条误报）。
+
+    附属区块 `#sec-self_review`（生成后自检）与 `penetration_deep` 同号：数值相等时由 DOM
+    顺序决胜，它排在该章之后，与「附录紧跟穿透章」的既有观感一致。
+
+    Args:
+        html: 已渲染的报告 HTML
+        section_numbers: {章节 key: 连续序号}（可见章节重新编号后）
+
+    Returns:
+        注入后的 HTML（无占位符或无编号时原样返回）
+    """
+    if not section_numbers or _SECTION_ORDER_PLACEHOLDER not in html:
+        return html
+    rules = "".join(f"#sec-{key}{{order:{num}}}" for key, num in section_numbers.items())
+    self_review = section_numbers.get("penetration_deep")
+    if self_review is not None:
+        rules += f"#sec-self_review{{order:{self_review}}}"
+    return html.replace(_SECTION_ORDER_PLACEHOLDER, f"<style>{rules}</style>")
 
 
 # ── 核心生成函数 ────────────────────────────────────────────
