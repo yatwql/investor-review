@@ -21,6 +21,8 @@ from datetime import datetime
 
 import pytest
 
+from src.test.unit.cache._cache_fixtures import today_at
+
 from src.python.core.registry import get_cache_ttl_defaults, get_market_ttl_map
 
 from src.test.unit.cache._cache_fixtures import write_cache, write_cache_at  # noqa: E402
@@ -122,13 +124,10 @@ def test_cleanup_uses_static_ttl_ignoring_intraday(ttl_env, cache_env, label, is
     from src.python.cache._ttl import get_cleanup_ttl
 
     ttl_env({}, is_open)
-    from datetime import datetime
 
-    from src.python.core.constants import BEIJING_TZ
 
     static_ttl = get_cleanup_ttl("price")
-    _now = datetime.now(BEIJING_TZ)
-    _pre_open = _now.replace(hour=8, minute=0, second=0, microsecond=0).timestamp()
+    _pre_open = today_at(8)
 
     # 盘前写入（非交易时段）：按静态 TTL 判，远未到期 → 保留；超期 → 回收
     write_cache_at(cache_env, "price_600519", _pre_open)
@@ -141,14 +140,11 @@ def test_cleanup_uses_static_ttl_ignoring_intraday(ttl_env, cache_env, label, is
 @pytest.mark.parametrize("label,is_open,_desc", SESSION_CASES, ids=[c[0] for c in SESSION_CASES])
 def test_cleanup_reclaims_intraday_snapshot_only_after_close(ttl_env, cache_env, label, is_open, _desc):
     """盘中写入的行情快照：盘中保留（读侧自理），盘后回收（它只是当时的价）。"""
-    from datetime import datetime
 
-    from src.python.core.constants import BEIJING_TZ
     from src.python.cache._cleanup import cleanup_expired
 
     ttl_env({}, is_open)
-    _now = datetime.now(BEIJING_TZ)
-    _intraday = _now.replace(hour=10, minute=5, second=0, microsecond=0).timestamp()
+    _intraday = today_at(10, 5)
     write_cache_at(cache_env, "price_600519", _intraday)
 
     expected = 0 if is_open else 1

@@ -236,6 +236,43 @@ def _build_module_fns(
     }
 
 
+def _log_module_outcome(
+    key: str,
+    result: Any,
+    label_map: dict[str, str],
+    budget_skipped: list[str],
+) -> None:
+    """模块产出的结果行：成功 / 关掉 / 预算跳过 / **真失败** 分级留痕。
+
+    三者过去都打成 INFO「生成失败（跳过）」：事后无法区分「用户关了开关」「预算到点」与
+    「provider 全挂导致内容缺失」。真失败必须是 ERROR（内容不可用是错误级事件），
+    原因取 `LLM_MODULE_FAILURE` 的单一事实来源。
+    """
+    from src.python.llm.failure_reasons import (
+        FAIL_REASON_DISABLED,
+        LLM_MODULE_FAILURE,
+        describe_failure_reason,
+    )
+
+    label = label_map.get(key, key)
+    if result:
+        logger.info("%s生成完成", label)
+        return
+    if key in budget_skipped:
+        logger.info("%s未生成（总时间预算跳过）", label)
+        return
+    reason = LLM_MODULE_FAILURE.get(key)
+    final = reason.get("final_status") if isinstance(reason, dict) else reason
+    if final == FAIL_REASON_DISABLED:
+        logger.info("%s未生成（开关关闭）", label)
+        return
+    logger.error(
+        "%s生成失败（%s）——该模块本轮无内容，报告对应章节将降级/占位",
+        label,
+        describe_failure_reason(final) or "原因未记录",
+    )
+
+
 def make_budget_guard(
     budget_sec: float,
     started: float,
@@ -387,8 +424,8 @@ def _dispatch_llm_workers(
                 _settings = dict(_LLM_CLIENT_SETTINGS)
                 _settings.pop("http2", None)
                 c = make_http_client(timeout=LLM_TIMEOUT, **_settings)
+            _started = time.perf_counter()
             try:
-                _started = time.perf_counter()
                 return fn(c, llm_config)
             finally:
                 c.close()
@@ -511,7 +548,7 @@ def _dispatch_llm_workers(
                 result, from_cache = future.result()
                 key = _futures[future]
                 results_dict[key] = {"result": result, "cached": from_cache}
-                logger.info("%s生成完成" if result else "%s生成失败（跳过）", _label_map.get(key, key))
+                _log_module_outcome(key, result, _label_map, _budget_skipped)
             except Exception:  # noqa: PERF203
                 logger.warning("LLM 生成线程异常", exc_info=True)
 

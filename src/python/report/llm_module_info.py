@@ -10,6 +10,7 @@ from typing import Any
 
 from src.python.config import DEFAULT_PROVIDER_PRIORITY
 from src.python.core.registry import get_llm_module_names
+from src.python.llm.failure_reasons import FAIL_REASON_LABELS as _DISPLAY_REASON
 from src.python.llm.pricing import costs_of, format_costs
 
 try:
@@ -19,7 +20,6 @@ try:
         FAIL_REASON_DISABLED,
         FAIL_REASON_NETWORK_ERROR,
         FAIL_REASON_NOT_CONFIGURED,
-        FAIL_REASON_QUOTA_EXCEEDED,
         FAIL_REASON_TIMEOUT,
     )
 except ImportError:
@@ -54,16 +54,6 @@ def _module_keys(llm_failure: dict, per_module: dict) -> list[str]:
         if has_data or has_status:
             keys.append(optional_key)
     return keys
-
-
-_DISPLAY_REASON: dict[str, str] = {
-    FAIL_REASON_NOT_CONFIGURED: "LLM 未配置",
-    FAIL_REASON_API_ERROR: "LLM API 调用失败",
-    FAIL_REASON_NETWORK_ERROR: "LLM API 网络连接失败",
-    FAIL_REASON_TIMEOUT: "LLM API 请求超时",
-    FAIL_REASON_CIRCUIT_OPEN: "LLM API 暂时不可用（熔断冷却中）",
-    FAIL_REASON_QUOTA_EXCEEDED: "LLM 端点配额/风控限制已触发（稍后重试或改用按量付费端点）",
-}
 
 
 def get_llm_module_failure_reason(module_failure: dict, module_key: str) -> str | None:

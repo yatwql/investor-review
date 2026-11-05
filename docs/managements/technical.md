@@ -2920,6 +2920,8 @@ llm/skeleton.py            # 摘要注入 expert_review 提示词（开关门控
 
 ---
 
+**LLM 模块结果行的级别口径（单源）**：每轮每模块只打一条结果行，分四级——成功 `INFO 生成完成`；开关关闭 `INFO 未生成（开关关闭）`；总时间预算到点 `INFO 未生成（总时间预算跳过）`；**其余一律 `ERROR 生成失败（<可读原因>）`** 并附「报告对应章节将降级/占位」。判据取 `llm/failure_reasons.py` 的 `LLM_MODULE_FAILURE`（dict 形态取 `final_status`、str 形态直接用），可读文案取同模块 `FAIL_REASON_LABELS` / `describe_failure_reason()`——报告模块状态（`report/llm_module_info.py` 的 `_DISPLAY_REASON` 即同一对象）与日志因此不会出现两套措辞。过去「provider 全挂」与「用户关了开关」「预算跳过」都打成 `INFO 生成失败（跳过）`，事后无法区分内容缺失的原因；`llm/skeleton.py` 的失败行同时补齐模块名与原因（此前只有缓存键）。
+
 ### 4.18 决策跨期反思闭环
 
 LLM 的操作建议与确定性调仓信号此前「当次即评、事后无对账」——看多看空的判断无法用真实后续行情验证，判断质量既不沉淀也无从回灌后续分析。本项把决策登记为追加型账本 `data/state/decision_ledger.jsonl`，到期用真实行情结算命中率，再把教训回灌专家复盘提示词，形成「登记 → 结算 → 回灌」闭环（实验开关 `decision_reflection`，默认关）。

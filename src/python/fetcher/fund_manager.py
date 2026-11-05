@@ -422,7 +422,11 @@ def fetch_fund_manager(code: str) -> dict[str, Any] | None:
         cache_set(cache_key, result)
         return result
 
-    logger.warning("基金经理全部解析失败 [%s]", code)
+    logger.warning(
+        "基金经理全部解析失败 [%s]——本轮按缺数据降级（报告该章写占位），下次运行会自动重试；"
+        "若连续多日出现，先查档案页链路是否可达（SSL/超时）",
+        code,
+    )
     # 主页请求失败（非不可达）与解析不出都归「本轮跳过」：前者短退避（可能只是瞬时），
     # 后者确定性空（源侧应答但无经理信息，12h 内不再重探）
     if html:

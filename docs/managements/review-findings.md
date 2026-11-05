@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.3-dev
-> **编号源**：`rf-next = 1052`（新增问题提出后更新为 +1；已用最大 rf-1047，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1055`（新增问题提出后更新为 +1；已用最大 rf-1047，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -39,7 +39,7 @@
 | `src/test/conftest.py` 1155 行（测试登记线 900） | fixture 族按域下沉（行情/LLM/网络/持久化各一模块），conftest 只留 autouse 装配与 marker 注册 |
 | `src/python/llm/generators_orchestrator.py` 905 行（主程序登记线 700） | 生成编排与共享钩子按模块族再分；预检键/指纹段可下沉 `generators_orchestrator_cache.py` |
 | `src/python/report/decision_basis.py` 962 行（主程序登记线 700，红线 1000） | 六段块装配（信号/可信度/风险预算/纪律/结算+按视界表现/约束）仍在单模块；拆分方向：结算批表与按视界表现聚合（`build_settlement_summary`＋`build_performance`＋`_mean`/`_tone_*` 色彩助手）可整体下沉 `decision_basis_settlement.py`（只读账本、无跨段依赖，预计 −180 行）；信号清单与区分度登记（`_build_signal_rows`＋`BACKTEST_CONCLUSIONS`）可再下沉一簇 |
-| `src/python/llm/skeleton.py` 825 行（主程序登记线 700） | 模板数据与渲染逻辑可下沉 `llm/skeleton_*`（骨架模板 / 占位渲染 / 缓存归因 / 回写四簇并存） |
+| `src/python/llm/skeleton.py` 833 行（主程序登记线 700） | 模板数据与渲染逻辑可下沉 `llm/skeleton_*`（骨架模板 / 占位渲染 / 缓存归因 / 回写四簇并存） |
 | `src/python/cli/_handlers.py` 852 行（主程序登记线 700） | 命令处理器按渠道分文件（generate/config/data 三簇），保持入口薄壳 |
 | `src/python/tui/handlers_holdings.py` 855 行（红线 1000） | 面板流程与输入采集高度耦合（共用 `_Session`），拆分收益低于回归面；再涨 ~150 行则按「面板流程 / 输入采集」两段拆，并把 `_market_data` 的会话内记忆一并做进去 |
 | `src/python/fetcher/financial_report.py` 729 行（主程序登记线 700） | 刚过线：再涨则按「索引 / 正文 / 全文定位」三阶下沉（负缓存样板统一在 `cache/_negative.py`） |
@@ -48,9 +48,15 @@
 
 ## 已解决问题
 
-### 开发期已修复（0.17.2-dev）
+### 开发期已修复（0.17.3-dev）
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
+
+| # | 问题 | 修复 |
+|---|------|------|
+| **rf-1054** | 缓存 TTL 业务矩阵用例用 `now.replace(hour=8/10)` 构造时间戳：跑在 00:00–08:00 时戳落在**未来**，年龄为负，「超过静态 TTL 必须回收」「盘中快照盘后回收」两类断言失真——实测 01:01 跑出 14 例假失败（HEAD 上同样失败，与业务改动无关） | 抽 `_recent(hour, minute)` 取「今天该时刻的过去最近一次」，时段语义不变且与运行时刻无关；105 例全通过 |
+| **rf-1053** | 基金经理主页与档案页都解析不出时，日志只有「基金经理全部解析失败 [code]」：既没说明本轮会按缺数据降级，也没给下一步方向——实测连续两天 SSL 握手超时后该章直接占位，读者无从判断是否要处理 | 告警补「本轮按缺数据降级（报告该章写占位），下次运行会自动重试；若连续多日出现，先查档案页链路是否可达（SSL/超时）」；补 1 例单测 |
+| **rf-1052** | LLM 模块结果行把 provider 全挂 / 开关关闭 / 预算跳过三种情况都打成同一条 `INFO 生成失败（跳过）`；`llm/skeleton.py` 的失败行只有缓存键、无模块与原因——实测 11-03 四模块全跳过，事后要翻十几行 WARNING 才能复原 | 新增 `_log_module_outcome()`：成功 / 关开关 / 预算跳过走 INFO，其余 ERROR + 可读原因 + 降级后果；`skeleton` 失败行补模块名与原因；文案收敛到 `FAIL_REASON_LABELS` 单源并被报告模块状态复用。补 9 例单测 |
 
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-05）
