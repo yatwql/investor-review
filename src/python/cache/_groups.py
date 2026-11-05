@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Iterable
 
 from src.python.core.registry import get_cache_registry
 
@@ -47,7 +48,7 @@ def clear_by_prefix(key_prefix: str) -> int:
     return count
 
 
-def clear_by_group(group_name: str) -> dict[str, int]:
+def clear_by_group(group_name: str, only: Iterable[str] | None = None) -> dict[str, int]:
     """清除指定缓存组的所有缓存文件。
 
     从缓存域注册表（含注册表外缓存专属项）自动推导该组的缓存前缀与精确键名，
@@ -55,13 +56,20 @@ def clear_by_group(group_name: str) -> dict[str, int]:
 
     Args:
         group_name: 缓存组名，对应 DataModuleDef.cache_groups 中的值
+        only: 只清这些缓存键前缀/精确键名所属的模块；None（默认）清整组。
+            用于「刷新基础缓存」这类**只回填部分域**的流程：整组清空会把本流程
+            不回填的域（财报索引/正文、财务指标等）一并作废，下一次出报告全部
+            回源——实测一次「刷新基础缓存」后紧接的报告多付 267 次请求、墙钟翻倍。
 
     Returns:
         {模块名: 清除的文件数} 字典，方便日志/UI 展示
     """
+    allowed = set(only) if only is not None else None
     result: dict[str, int] = {}
     for m in get_cache_registry():
         if group_name not in m.cache_groups:
+            continue
+        if allowed is not None and not (allowed & (set(m.cache_prefixes) | set(m.exact_cache_keys))):
             continue
         total = 0
         for prefix in m.cache_prefixes:

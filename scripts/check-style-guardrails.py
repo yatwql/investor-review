@@ -192,10 +192,21 @@ def _dark_override_lines(text: str) -> set[int]:
     return _scoped_block_lines(text, r'(\.dark\b|\[data-theme=["\']dark["\'])')
 
 
+#: 样式已抽成专用 partial：W1 白名单按「内容归属」登记在原模板路径上，
+#: 命中判定时把样式 partial 映射回它的宿主模板（输出仍用真实路径，可追溯）。
+_STYLE_PARTIAL_HOSTS: dict[str, str] = {
+    "src/static/tmpl/partials/_report_styles.html": "src/static/tmpl/report_template.html",
+    "src/static/tmpl/partials/_whatif_styles.html": "src/static/tmpl/whatif_template.html",
+    # 公共样式面（两页共用）：规则原本从报告页抽出，白名单归属按报告页登记
+    "src/static/tmpl/partials/_base_styles.html": "src/static/tmpl/report_template.html",
+}
+
+
 def _w1_exempt(rel_path: str, line: str) -> str | None:
     """存量白名单命中判定，返回豁免理由（未命中返回 None）。"""
+    lookup_path = _STYLE_PARTIAL_HOSTS.get(rel_path, rel_path)
     for path_pat, line_pat, reason in _RAW_COLOR_EXEMPTIONS:
-        if rel_path == path_pat and re.search(line_pat, line):
+        if lookup_path == path_pat and re.search(line_pat, line):
             return reason
     return None
 
@@ -448,6 +459,30 @@ def _collect_files(paths: tuple[str, ...] | None) -> list[Path]:
     return files
 
 
+#: 报告主模板与调仓页模板：样式已抽到同目录 partial，比对前需聚合
+_REPORT_TEMPLATE_NAMES = frozenset({"report_template.html"})
+_WHATIF_TEMPLATE_NAMES = frozenset({"whatif_template.html"})
+
+
+def _report_css_text(path: Path) -> str:
+    """主模板 + 同目录全部 partial 的 `<style>` 块内容（样式资产聚合读取）。"""
+    import re as _re
+
+    texts = [path.read_text(encoding="utf-8")]
+    partial_dir = path.parent / "partials"
+    if partial_dir.is_dir():
+        # 只聚合「整块样式」的专用 partial（`_` 前缀）；章节 partial 自带的局部样式块
+        # 维持既有 per-file 口径，不并入全局 CSS，避免把它们的裸色值算进报告侧基线。
+        texts += [p.read_text(encoding="utf-8") for p in sorted(partial_dir.glob("_*.html"))]
+    blocks = []
+    for t in texts:
+        blocks += _re.findall(r"<style>(.*?)</style>", t, _re.S)
+    if not blocks:
+        # 合成夹具（测试注入的临时文件）常直接写裸 CSS，无 <style> 包裹 → 原样返回
+        return path.read_text(encoding="utf-8")
+    return "\n".join(blocks)
+
+
 def run_checks(
     paths: tuple[str, ...] | None = None,
     design_text: str | None = None,
@@ -483,8 +518,13 @@ def run_checks(
     web_css = ""
     for path in targets:
         text = path.read_text(encoding="utf-8")
-        if path.name == "report_template.html":
-            report_css = text
+        if path.name in _REPORT_TEMPLATE_NAMES:
+            # 报告样式已按关注点抽到 partials（`_report_styles.html` 等）：CSS token 与规则
+            # 活在样式 partial 里，主模板只剩 include。只读主模板会判定「报告侧无 token」，
+            # 因此按主模板 + 同目录样式 partial 聚合成一份报告 CSS 文本再比对。
+            report_css = report_css + "\n" + _report_css_text(path)
+        if path.name in _WHATIF_TEMPLATE_NAMES:
+            report_css = report_css + "\n" + _report_css_text(path)
         if path.name == "style.css":
             web_css = text
         findings += check_emphasis_color(path, brand)

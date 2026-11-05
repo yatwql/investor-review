@@ -13,6 +13,8 @@ import unittest
 
 import pytest
 
+from src.test.unit.report._html_report_fixtures import read_template_css, read_template_text
+
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
 
@@ -20,18 +22,7 @@ class TestHtmlTemplatePrintStyles(unittest.TestCase):
     """@media print 样式规则完整性检测。"""
 
     def setUp(self):
-        tmpl_path = os.path.join(
-            os.path.dirname(__file__),
-            "..",
-            "..",
-            "..",
-            "static",
-            "tmpl",
-            "report_template.html",
-        )
-        self.tmpl_path = os.path.normpath(tmpl_path)
-        with open(self.tmpl_path, encoding="utf-8") as f:
-            self.html = f.read()
+        self.html = read_template_css()
 
     def test_has_media_print_block(self):
         """模板包含 @media print 规则块。"""
@@ -153,17 +144,8 @@ class TestHtmlPrintButton(unittest.TestCase):
     """HTML 打印/导出 PDF 浮动按钮 — 存在性/可访问性/触控尺寸/打印自隐藏。"""
 
     def setUp(self):
-        tmpl_path = os.path.join(
-            os.path.dirname(__file__),
-            "..",
-            "..",
-            "..",
-            "static",
-            "tmpl",
-            "report_template.html",
-        )
-        with open(os.path.normpath(tmpl_path), encoding="utf-8") as f:
-            self.html = f.read()
+        # 聚合口径同时覆盖主模板标记与 partials 样式（打印按钮两类断言都要）
+        self.html = read_template_text()
 
     def test_print_button_present_with_print_action(self):
         """浮动打印按钮存在且点击唤起 window.print()。"""
@@ -174,29 +156,31 @@ class TestHtmlPrintButton(unittest.TestCase):
     def test_print_button_accessible(self):
         """按钮含 aria-label 与 title（可发现性护栏）。"""
         m = re.search(r'<button[^>]*class="report-print-btn"[^>]*>', self.html)
-        self.assertIsNotNone(m, "应存在 report-print-btn 按钮元素")
+        assert m is not None, "应存在 report-print-btn 按钮元素"
         tag = m.group(0)
         self.assertIn('aria-label="打印或导出 PDF"', tag)
         self.assertIn("title=", tag)
 
     def test_print_button_touch_target_and_tokens(self):
         """44×44 触控目标 + 固定右上浮动，配色取语义 token 并有 hover 反馈。"""
-        m = re.search(r"\.report-print-btn\s*\{[^}]*\}", self.html)
-        self.assertIsNotNone(m, "应存在 .report-print-btn 样式规则")
+        html = read_template_css()
+        m = re.search(r"\.report-print-btn\s*\{[^}]*\}", html)
+        assert m is not None, "应存在 .report-print-btn 样式规则"
         css = m.group(0)
         self.assertIn("position: fixed", css)
         self.assertIn("width: 44px", css)
         self.assertIn("height: 44px", css)
         self.assertIn("var(--primary)", css)
-        hover = re.search(r"\.report-print-btn:hover\s*\{[^}]*\}", self.html)
-        self.assertIsNotNone(hover, "按钮须有 hover 反馈（设计契约护栏）")
+        hover = re.search(r"\.report-print-btn:hover\s*\{[^}]*\}", html)
+        assert hover is not None, "按钮须有 hover 反馈（设计契约护栏）"
         self.assertIn("var(--primary-hover)", hover.group(0))
 
     def test_print_button_hidden_in_print(self):
         """打印稿自隐藏（浮动控件不入 PDF/纸稿）。"""
+        html = read_template_css()
         m = re.search(
             r"@media print\s*\{\s*\.report-print-btn\s*\{\s*display:\s*none\s*!important\s*;\s*\}",
-            self.html,
+            html,
         )
         self.assertIsNotNone(m, "@media print 应含 .report-print-btn 自隐藏规则")
 
@@ -205,17 +189,8 @@ class TestTooltipXssHygiene(unittest.TestCase):
     """图表 tooltip XSS 纪律：DOM API 构建，全文无 HTML 注入 sink。"""
 
     def setUp(self):
-        tmpl_path = os.path.join(
-            os.path.dirname(__file__),
-            "..",
-            "..",
-            "..",
-            "static",
-            "tmpl",
-            "report_template.html",
-        )
-        with open(os.path.normpath(tmpl_path), encoding="utf-8") as f:
-            self.html = f.read()
+        # 聚合口径含 partials 的内联脚本与注释，会误报注入 sink；本类只查主模板内联 JS
+        self.html = read_template_text(with_partials=False)
 
     def test_no_html_injection_sinks_anywhere(self):
         """模板内联 JS 禁 innerHTML / insertAdjacentHTML / document.write / eval。"""
@@ -226,3 +201,49 @@ class TestTooltipXssHygiene(unittest.TestCase):
         """Canvas 回退渲染器（drawSimpleChart 与旧 Flag 门）已整体移除，Chart.js 为唯一渲染器。"""
         self.assertNotIn("drawSimpleChart", self.html)
         self.assertNotIn("enable_interactive", self.html)
+
+
+class TestSemanticClassFilters:
+    """语义 class 过滤器：模板只拼接类名，色值一律在 CSS 里（禁止 Jinja 进 CSS 值位置）。"""
+
+    @staticmethod
+    def _profit_class(v):
+        from src.python.report.html_jinja_env import _jinja_profit_class
+
+        return _jinja_profit_class(v)
+
+    @staticmethod
+    def _price_type_class(price_type, name=""):
+        from src.python.report.html_jinja_env import _jinja_price_type_class
+
+        return _jinja_price_type_class(price_type, name)
+
+    def test_profit_class_three_way(self):
+        """盈→profit、亏→loss、零→空串（零不染色，避免把「没变化」读成涨/跌）。"""
+        assert self._profit_class(12.5) == "profit"
+        assert self._profit_class(-0.01) == "loss"
+        assert self._profit_class(0) == ""
+
+    def test_profit_class_tolerates_dirty_input(self):
+        """脏值不抛异常、不误染色（模板层不能因缺字段炸渲染）。"""
+        for bad in (None, "", "abc", object()):
+            assert self._profit_class(bad) == ""
+
+    def test_price_type_class_maps_t_fresh_rows(self):
+        """T 口径（场内收盘/午市收盘/官方净值 T）与 QDII 旧一日净值 → rating-stable。"""
+        assert self._price_type_class("场内收盘价(T)") == "rating-stable"
+        assert self._price_type_class("场内午市收盘(T)") == "rating-stable"
+        assert self._price_type_class("官方净值(T)") == "rating-stable"
+
+    def test_price_type_class_leaves_other_rows_uncolored(self):
+        """非 T 口径不着色（空串），未知取价方式也不猜。"""
+        assert self._price_type_class("场内实时价") == ""
+        assert self._price_type_class("") == ""
+
+    def test_removed_color_filters_are_not_registered(self):
+        """内联颜色过滤器已下线：模板不得再通过它写 style="color: …"。"""
+        from src.python.report.html_jinja_env import _ENV
+
+        assert "profit_color" not in _ENV.filters
+        assert "price_type_color" not in _ENV.filters
+        assert "profit_class" in _ENV.filters and "price_type_class" in _ENV.filters

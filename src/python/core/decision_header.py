@@ -259,22 +259,6 @@ def build_structured_header_instruction() -> str:
     )
 
 
-def structured_header_cache_suffix() -> str:
-    """结构化决策头的缓存指纹后缀（保障读写键同源）。
-
-    开关关闭 → ``""``，缓存键与未追加决策头时逐字节一致（不误伤旧缓存、不因
-    开关切换而强制全量重生成）；开启 → 固定后缀（提示词多了契约段，必须换键，
-    否则会读到「提示词已改、缓存内容还是旧格式」的错配内容）。
-
-    后缀恒含 ``_dh``：决策头契约已内置（提示词始终追加、抽取侧优先读取），
-    此后缀仍保留——用于区分「未引入本机制前」的旧缓存指纹（旧条目按 TTL 自然
-    退场）；写侧指纹闭包与 orchestrator 预检闭包都无条件调用本函数
-    （对齐 ``prompts_signals._signal_digest_cache_suffix`` 的同源纪律），
-    不再有开关判定可漂移。
-    """
-    return "_dh"
-
-
 def _extract_header_payload(text: str | None) -> str | None:
     """从文本中取出 ``决策头：`` 之后的 JSON 载荷。
 
@@ -453,5 +437,4 @@ __all__ = [
     "parse_structured_header",
     "strip_marks",
     "strip_structured_header",
-    "structured_header_cache_suffix",
 ]

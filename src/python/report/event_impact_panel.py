@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Callable
 
 from src.python.analysis.event_window_impact import (
@@ -46,7 +46,8 @@ __all__ = [
 _CTIME_FORMATS = ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d")
 
 #: 单次事件表行数上限（防极端召回爆炸，超出计入 skipped）
-MAX_EVENT_ROWS = 50
+#: 索引扩面后单轮可命中 60+ 条（行业级关联占大头），50 会截掉有效行；80 留出余量又不失控
+MAX_EVENT_ROWS = 80
 
 
 def extract_text_polarity(item: dict[str, Any]) -> str | None:
@@ -327,7 +328,44 @@ def _short_title(title: str, limit: int = 32) -> str:
 _NO_KLINE_BENCHMARKS = frozenset({"sh000012"})
 
 
-def _make_default_index_fetcher() -> Callable[[str], Any]:
+#: 事件窗行情取数窗口下限（自然日）：与历史行为一致，短窗新闻不额外拉数
+HISTORY_DAYS_FLOOR = 365
+#: 上限：老新闻再多也只拉三年，避免单轮把取数预算打穿
+HISTORY_DAYS_CAP = 1095
+
+
+def history_days_for(news_data: list[dict[str, Any]] | None, today: date | None = None) -> int:
+    """按最早事件日推导行情取数窗口（自然日），保证事件日落在行情轴内。
+
+    固定 365 天的旧口径在「新闻比窗口更早」时会让事件日落在行情轴之外，
+    整条按「映射交易日不在行情轴」降级——索引扩面后这类降级占到降级总数的大部分。
+    这里按最早事件日回推：窗口 = 事件日回看天数 + 后窗余量（``WINDOW_AFTER`` 两手数）
+    + 30 天缓冲，再夹在 [``HISTORY_DAYS_FLOOR``, ``HISTORY_DAYS_CAP``] 内。
+
+    Args:
+        news_data: 新闻列表（取 ``ctime`` 解析出的最早事件日；不可解析的忽略）。
+        today: 基准日（缺省今天），测试注入用。
+
+    Returns:
+        取数窗口天数（自然日），恒 ≥ ``HISTORY_DAYS_FLOOR``。
+    """
+    base = today or date.today()
+    event_dates: list[date] = []
+    for item in news_data or []:
+        parsed = parse_event_date(item.get("ctime"))
+        if not parsed:
+            continue
+        try:
+            event_dates.append(datetime.strptime(parsed, "%Y-%m-%d").date())
+        except ValueError:
+            continue
+    if not event_dates:
+        return HISTORY_DAYS_FLOOR
+    span = (base - min(event_dates)).days + WINDOW_AFTER * 2 + 30
+    return max(HISTORY_DAYS_FLOOR, min(HISTORY_DAYS_CAP, span))
+
+
+def _make_default_index_fetcher(days: int = HISTORY_DAYS_FLOOR) -> Callable[[str], Any]:
     """事件窗默认基准取数：同码 memo + 无 K 线品种跳过 + 单路慢告警。"""
     from src.python.fetcher.index import fetch_index_history
 
@@ -339,7 +377,7 @@ def _make_default_index_fetcher() -> Callable[[str], Any]:
             return []
         if code not in memo:
             started = time.perf_counter()
-            memo[code] = fetch_index_history(code, days=365)
+            memo[code] = fetch_index_history(code, days=days)
             elapsed = time.perf_counter() - started
             if elapsed >= SLOW_SPAN_WARN_SECONDS:
                 logger.warning(
@@ -406,6 +444,12 @@ def build_event_impact_view(contract: dict[str, Any] | None) -> dict[str, Any]:
             f"日期不可解析 {skipped.get('bad_date', 0)} 条）"
         ),
     ]
+    shifted_events = [e for e in events if e.get("anchor_shifted")]
+    if shifted_events:
+        view["summary_lines"].append(
+            f"其中 {len(shifted_events)} 条事件日（多为当日）行情尚未落地，已按行情轴末日对齐后计算，"
+            "读数请按「事件日顺延至最近交易日」理解。"
+        )
     partial_events = [e for e in events if e.get("window_partial")]
     if partial_events:
         shortest = min(int(e.get("window_after_actual") or 0) for e in partial_events)
@@ -488,6 +532,9 @@ def build_event_impact_panel(
     """
     from src.python.analysis.benchmark_index_resolver import resolve_benchmark_index
 
+    # 行情窗口按「最早事件日」自适应：固定 365 天会把更早的新闻整条判成
+    # 「映射交易日不在行情轴」而降级（索引扩面后这是降级的主因）
+    history_days = history_days_for(news_data)
     if fetch_bars is None:
         from src.python.fetcher.chain_incremental import fetch_with_incremental_fallback
 
@@ -495,13 +542,13 @@ def build_event_impact_panel(
 
         def _default_fetch_bars(code: str) -> Any:
             if code not in _bars_memo:
-                _bars_memo[code] = fetch_with_incremental_fallback("history_stock", code, days=365)
+                _bars_memo[code] = fetch_with_incremental_fallback("history_stock", code, days=history_days)
             return _bars_memo[code]
 
         fetch_bars = _default_fetch_bars
 
     if fetch_index is None:
-        fetch_index = _make_default_index_fetcher()
+        fetch_index = _make_default_index_fetcher(history_days)
 
     if benchmark_text_getter is None:
         from src.python.fetcher.fund import fetch_fund_benchmark

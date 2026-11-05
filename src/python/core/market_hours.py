@@ -20,7 +20,7 @@ import threading
 from datetime import datetime
 from typing import Any
 
-from src.python.core.constants import BEIJING_TZ
+from src.python.core.constants import BEIJING_TZ, CACHE_WEEKLY
 
 logger = logging.getLogger("invest")
 
@@ -88,6 +88,29 @@ def _parse_time_to_minutes(time_str: str) -> int | None:
         return int(parts[0]) * 60 + int(parts[1])
     except (ValueError, IndexError):
         return None
+
+
+def is_intraday_timestamp(ts: float | str | None) -> bool:
+    """给定时间戳是否落在 A 股交易时段内（当日 09:30~11:30 或 13:00~15:00，北京时间）。
+
+    用途：判定一个缓存文件是「盘中快照」还是「收盘后数据」。盘中写入的行情值只是
+    当时的价格，盘后不得当作收盘价长期复用，因此盘后回收时以**写入时刻**而非
+    当前时刻判定（见 `cache/_ttl.get_cleanup_ttl`）。
+
+    Args:
+        ts: Unix 时间戳；容忍脏值（`None`/非数字字符串）——它们来自未经校验的缓存载荷
+
+    Returns:
+        写入时刻处于交易时段返回 True；否则 False（含无法解析的情形）
+    """
+    if ts is None:
+        return False
+    try:
+        moment = datetime.fromtimestamp(float(ts), _BJ_TZ)
+    except (TypeError, ValueError, OSError, OverflowError):
+        return False
+    minutes = moment.hour * 60 + moment.minute
+    return (_MORNING_START <= minutes <= _MORNING_END) or (_AFTERNOON_START <= minutes <= _AFTERNOON_END)
 
 
 def _fetch_trading_status_from_official() -> int | None:
@@ -164,7 +187,8 @@ def _is_market_open_official(current_min: int) -> bool | None:
     now = datetime.now(_BJ_TZ)
     if now.weekday() >= 5:
         return None  # 周末 return None 让 fallback 处理
-    official_ttl = 60 if _MORNING_START <= current_min <= _AFTERNOON_END else 86400 * 7
+    # 盘中 60s 刷新官方状态；盘后沿用上次结论一周（周末再打源无意义）
+    official_ttl = 60 if _MORNING_START <= current_min <= _AFTERNOON_END else CACHE_WEEKLY
     cached = get(_CACHE_KEY_MARKET_HOURS, official_ttl)
     if cached is not None and isinstance(cached, dict):
         status = cached.get("status")

@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 
+from src.test.unit.report._html_report_fixtures import read_template_text
+
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -114,13 +116,13 @@ class TestBrandMark:
     LIMITS = {"report": 40, "web": 40, "excel": 48}
 
     def test_report_header_has_brand_mark(self):
-        html = (REPO_ROOT / "src/static/tmpl/report_template.html").read_text(encoding="utf-8")
+        html = read_template_text()
         assert 'class="report-brand-mark"' in html, "报告页头缺品牌标记"
         assert "width: 32px" in html, "报告标记应为 32px（≤40px 契约）"
 
     def test_report_favicon_is_owl_not_chart(self):
         """报告 favicon 与 Web 同源（猫头鹰头像），不得退回折线图。"""
-        html = (REPO_ROOT / "src/static/tmpl/report_template.html").read_text(encoding="utf-8")
+        html = read_template_text()
         favicon_line = next(ln for ln in html.splitlines() if 'rel="icon"' in ln)
         assert "%23e8f1fb" in favicon_line, "favicon 应为猫头鹰头像（脸盘色 #e8f1fb）"
         assert "M7 22 13.5 15.5" not in favicon_line, "favicon 不得退回折线图"

@@ -553,6 +553,35 @@ def _mean(values: list[float]) -> float | None:
 PERFORMANCE_TITLE = "我的建议历史表现（按视界）"
 
 
+def performance_verdict(accuracy: float | None, excess_pct: float | None) -> str:
+    """按「命中率 × 均值超额」两轴给一句人话结论（四象限 + 缺轴降级）。
+
+    命中过半只看 > 50%（含 50% 视为「过半」边界；口径与账本「方向命中」一致），
+    超额正负按 0 分界。任一轴缺数据时只说可得的那一轴，不拿单项冒充整体。
+
+    Args:
+        accuracy: 命中率（0~1；None = 无方向性样本）。
+        excess_pct: 均值超额（百分数；None = 无基准数据）。
+
+    Returns:
+        一句结论文本；两轴都缺 → 「—」。
+    """
+    if accuracy is None and excess_pct is None:
+        return "—"
+    if accuracy is None:
+        return "仅有超额：跑赢基准" if excess_pct is not None and excess_pct >= 0 else "仅有超额：跑输基准"
+    hit_half = accuracy >= 0.5
+    if excess_pct is None:
+        return "方向命中过半（缺基准，无法比超额）" if hit_half else "方向命中不足一半（缺基准，无法比超额）"
+    if hit_half and excess_pct >= 0:
+        return "方向有效且跑赢基准"
+    if hit_half:
+        return "方向命中但跑输基准"
+    if excess_pct >= 0:
+        return "方向偏错但选品仍跑赢基准"
+    return "方向与超额双弱"
+
+
 def build_performance(
     decisions: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
@@ -637,6 +666,13 @@ def build_performance(
                 "accuracy_label": accuracy_label,
                 "accuracy_value": None if accuracy is None else round(accuracy, 4),
                 "mean_excess_label": "—" if excess_pct is None else f"{excess_pct:+.2f}%",
+                "verdict": performance_verdict(accuracy, excess_pct),
+                # 样本不足时把结论降级为「仅参考」标注，避免小样本被当定论
+                "verdict_label": (
+                    performance_verdict(accuracy, excess_pct)
+                    if sufficient or accuracy is None
+                    else f"{performance_verdict(accuracy, excess_pct)}（样本不足，仅参考）"
+                ),
                 "sample_sufficient": sufficient,
                 "tone_class": _tone_class_of(excess_pct),
             }

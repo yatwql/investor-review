@@ -1,4 +1,4 @@
-    <div class="section" id="sec-summary" style="order: {{ section_numbers['summary'] }};">
+    <div class="section" id="sec-summary">
         <div class="section-title">{{ section_numbers['summary'] }}、{{ section_names['summary'] }}</div>
         <div class="section-content">
 
@@ -25,11 +25,11 @@
                 <table class="kv-table">
                     <tr>
                         <td>总市值环比</td>
-                        <td><span style="color: {{ _sh.total_value_diff | profit_color }};">{{ "+" if _sh.total_value_diff > 0 }}{{ _sh.total_value_diff | money }} 元（{{ _sh.total_value_diff_pct | change }}）</span></td>
+                        <td><span class="{{ _sh.total_value_diff | profit_class }}">{{ "+" if _sh.total_value_diff > 0 }}{{ _sh.total_value_diff | money }} 元（{{ _sh.total_value_diff_pct | change }}）</span></td>
                     </tr>
                     <tr>
                         <td>总收益率环比</td>
-                        <td><span style="color: {{ _sh.total_pnl_pct_diff | profit_color }};">{{ "+" if _sh.total_pnl_pct_diff > 0 }}{{ "%.2f" | format(_sh.total_pnl_pct_diff) }} 个百分点</span></td>
+                        <td><span class="{{ _sh.total_pnl_pct_diff | profit_class }}">{{ "+" if _sh.total_pnl_pct_diff > 0 }}{{ "%.2f" | format(_sh.total_pnl_pct_diff) }} 个百分点</span></td>
                     </tr>
                     <tr>
                         <td>持仓数环比</td>
@@ -38,7 +38,7 @@
                     {% if _sh.hhi_change is not none %}
                     <tr>
                         <td>集中度环比（HHI）</td>
-                        <td><span style="color: {{ _sh.hhi_change | profit_color }};">{{ "+" if _sh.hhi_change > 0 }}{{ "%.4f" | format(_sh.hhi_change) }}</span></td>
+                        <td><span class="{{ _sh.hhi_change | profit_class }}">{{ "+" if _sh.hhi_change > 0 }}{{ "%.4f" | format(_sh.hhi_change) }}</span></td>
                     </tr>
                     {% endif %}
                 </table>
@@ -50,7 +50,7 @@
                 {% if _sh.changes %}
                 <div style="font-size: var(--fs-table); line-height: 1.9; margin-top: 4px;">
                     {% for c in _sh.changes %}
-                    <div>{{ c.action }}「{{ c.name }}」<span style="color: {{ c.value_diff | profit_color }};">{{ "+" if c.value_diff > 0 }}{{ c.value_diff | money }} 元</span></div>
+                    <div>{{ c.action }}「{{ c.name }}」<span class="{{ c.value_diff | profit_class }}">{{ "+" if c.value_diff > 0 }}{{ c.value_diff | money }} 元</span></div>
                     {% endfor %}
                     {% if _sh.change_total > (_sh.changes | length) %}
                     <div style="opacity: 0.75;">…等共 {{ _sh.change_total }} 项变动，完整明细见「组合演进」章</div>
@@ -110,24 +110,24 @@
                 </div>
                 <div class="summary-card">
                     <h3>总盈亏 (元)</h3>
-                    <div class="value" style="color: {{ total_profit | profit_color }}">{{ total_profit | money }}</div>
+                    <div class="value {{ total_profit | profit_class }}">{{ total_profit | money }}</div>
                 </div>
                 <div class="summary-card">
                     <h3>总收益率</h3>
-                    <div class="value" style="color: {{ total_profit_rate | profit_color }}">{{ total_profit_rate | pct }}</div>
+                    <div class="value {{ total_profit_rate | profit_class }}">{{ total_profit_rate | pct }}</div>
                 </div>
                 <div class="summary-card">
                     <h3>本日盈亏 (元)</h3>
-                    <div class="value" style="color: {{ total_today_profit | profit_color }}">{{ total_today_profit | money }}</div>
+                    <div class="value {{ total_today_profit | profit_class }}">{{ total_today_profit | money }}</div>
                 </div>
                 <div class="summary-card">
                     <h3>本日收益率</h3>
-                    <div class="value" style="color: {{ today_profit_rate | profit_color }}">{{ today_profit_rate | pct }}</div>
+                    <div class="value {{ today_profit_rate | profit_class }}">{{ today_profit_rate | pct }}</div>
                 </div>
                 {% if flow_display and flow_display.xirr_rate is not none %}
                 <div class="summary-card">
                     <h3>资金加权收益率 (XIRR{% if flow_display.approximate %}，近似{% endif %})</h3>
-                    <div class="value" style="color: {{ flow_display.xirr_rate | profit_color }}">{{ flow_display.xirr_rate | pct }}</div>
+                    <div class="value {{ flow_display.xirr_rate | profit_class }}">{{ flow_display.xirr_rate | pct }}</div>
                 </div>
                 {% endif %}
             </div>
@@ -150,7 +150,7 @@
                         <span class="index-name">{{ idx.name }}</span>
                         <span>
                             <span class="index-price">{{ idx.price | price }}</span>
-                            <span class="index-change" style="color: {{ idx.change_pct | profit_color }}">
+                            <span class="index-change {{ idx.change_pct | profit_class }}">
                                 {{ idx.change_pct | change }}
                             </span>
                         </span>
@@ -168,7 +168,7 @@
                         <span class="index-name">{{ idx.name }}</span>
                         <span>
                             <span class="index-price">{{ idx.price | price }}</span>
-                            <span class="index-change" style="color: {{ idx.change_pct | profit_color }}">
+                            <span class="index-change {{ idx.change_pct | profit_class }}">
                                 {{ idx.change_pct | change }}
                             </span>
                         </span>

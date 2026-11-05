@@ -116,18 +116,10 @@ class TestCheckpointSmoke:
         from src.python.llm.fingerprint import build_llm_fingerprint
 
         fp_with = build_llm_fingerprint(
-            total_mv=10000,
-            total_cost=9000,
-            total_profit=1000,
-            total_today_profit=100,
+            holdings_details=[{"name": "A", "code": "600519", "cost": 100.0}],
             history_data={"annualized_volatility": 0.15, "max_drawdown_pct": -0.10},
         )
-        fp_without = build_llm_fingerprint(
-            total_mv=10000,
-            total_cost=9000,
-            total_profit=1000,
-            total_today_profit=100,
-        )
+        fp_without = build_llm_fingerprint(holdings_details=[{"name": "A", "code": "600519", "cost": 100.0}])
         assert fp_with == fp_without, "行情派生量不应换键（时效由 TTL 兜底）"
 
     def test_fingerprint_tracks_holdings_structure(self):

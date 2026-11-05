@@ -634,3 +634,32 @@ class TestDebugLogDedup:
             _debug_on_change("config", "市场时段: %s", True)
             _debug_on_change("config", "市场时段: %s", True)
         assert sum(r.getMessage().startswith("市场时段") for r in caplog.records) == 2
+
+
+class TestIsIntradayTimestamp:
+    """`is_intraday_timestamp`：按写入时刻判定是否为盘中快照（清理侧回收盘中价的判据）。"""
+
+    @staticmethod
+    def _ts(hour: int, minute: int) -> float:
+        from src.python.core.constants import BEIJING_TZ
+
+        now = datetime.now(BEIJING_TZ)
+        return now.replace(hour=hour, minute=minute, second=0, microsecond=0).timestamp()
+
+    def test_boundaries_follow_trading_sessions(self):
+        """边界含端点：09:30 / 11:30 / 13:00 / 15:00 均算盘中；一分钟外均不算。"""
+        from src.python.core.market_hours import is_intraday_timestamp
+
+        inside = [(9, 30), (10, 0), (11, 30), (13, 0), (14, 59), (15, 0)]
+        outside = [(9, 29), (11, 31), (12, 59), (15, 1), (8, 0), (0, 0), (23, 59)]
+        for hour, minute in inside:
+            assert is_intraday_timestamp(self._ts(hour, minute)) is True, f"{hour:02d}:{minute:02d} 应属盘中"
+        for hour, minute in outside:
+            assert is_intraday_timestamp(self._ts(hour, minute)) is False, f"{hour:02d}:{minute:02d} 不应属盘中"
+
+    def test_invalid_timestamp_is_not_intraday(self):
+        """非法值不抛异常，按「非盘中」处理（清理侧不得因脏数据崩）。"""
+        from src.python.core.market_hours import is_intraday_timestamp
+
+        assert is_intraday_timestamp(None) is False
+        assert is_intraday_timestamp("not-a-ts") is False

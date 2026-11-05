@@ -15,9 +15,14 @@
 from __future__ import annotations
 
 import json
-import time
 
 import pytest
+
+from src.test.unit.cache._cache_fixtures import (  # noqa: E402 — 夹具导入置于 marker 后保持既有结构
+    pre_open_ts,
+    write_cache,
+    write_cache_at,
+)
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
 
@@ -32,13 +37,6 @@ def cache_env(tmp_path, monkeypatch):
     _store.reset_debug_log_state()
     yield tmp_path
     _store.reset_debug_log_state()
-
-
-def _write_cache(cache_env, key: str, age_seconds: float) -> None:
-    from src.python.cache._paths import _CACHE_KEY_VERSION
-
-    payload = {"_ts": time.time() - age_seconds, "_data": {"v": 1}}
-    (cache_env / f"{key}_{_CACHE_KEY_VERSION}.json").write_text(json.dumps(payload), encoding="utf-8")
 
 
 def _cleanup(cache_env) -> int:
@@ -63,10 +61,10 @@ class TestCleanupReaderAlignment:
         key = "llm_expert_review_deadbeef_probe-main"
         ttl = get_ttl("llm_expert_review")
 
-        _write_cache(cache_env, key, age_seconds=ttl - 60)
+        write_cache(cache_env, key, age_seconds=ttl - 60)
         assert _cleanup(cache_env) == 0, "读侧仍有效的文件不得被清理删除"
 
-        _write_cache(cache_env, key, age_seconds=ttl + 60)
+        write_cache(cache_env, key, age_seconds=ttl + 60)
         assert _cleanup(cache_env) == 1
 
     def test_exact_key_mapping_uses_version_stripped_key(self, cache_env):
@@ -96,7 +94,7 @@ class TestCleanupReaderAlignment:
 
         ttl = get_ttl(data_type)
         assert ttl == pytest.approx(exact_ttl, rel=1e-9)
-        _write_cache(cache_env, key, age_seconds=(naive_ttl + ttl) / 2)
+        write_cache(cache_env, key, age_seconds=(naive_ttl + ttl) / 2)
         assert _cleanup(cache_env) == 0, f"精确键 {key} 应命中 {data_type} 的 TTL，未被提前删除"
 
 
@@ -160,32 +158,41 @@ class TestIntradayAndNegativeCacheTTL:
 
     def test_probe_miss_survives_twelve_hours_only(self, cache_env):
         """带 12h 负缓存的探测缺失：7h 保留、13h 清理（不被 24h 兜底延长）。"""
-        _write_cache(cache_env, "datasink_probe_miss_abc123", age_seconds=7 * 3600)
+        write_cache(cache_env, "datasink_probe_miss_abc123", age_seconds=7 * 3600)
         assert _cleanup(cache_env) == 0, "7h 未到 12h，应保留"
-        _write_cache(cache_env, "datasink_probe_miss_def456", age_seconds=13 * 3600)
+        write_cache(cache_env, "datasink_probe_miss_def456", age_seconds=13 * 3600)
         assert _cleanup(cache_env) == 1, "13h 超过 12h，应清理"
 
     def test_symbol_miss_expires_at_six_hours(self, cache_env):
         """标的正文缺失（6h）在 7h 后清理——负结论不跨报告周期堆积。"""
-        _write_cache(cache_env, "report_symbol_miss_abc123", age_seconds=7 * 3600)
+        write_cache(cache_env, "report_symbol_miss_abc123", age_seconds=7 * 3600)
         assert _cleanup(cache_env) == 1
 
-    def test_intraday_price_uses_short_ttl_on_cleanup(self, cache_env, monkeypatch):
-        """盘中：价的 60s 缓存即过期（清理侧与读侧同为 30s），防盘中价被当收盘价。"""
+    def test_intraday_price_kept_by_cleanup_but_stale_for_reader(self, cache_env, monkeypatch):
+        """盘中：60s 前的价缓存不被清理删除，但读侧仍判未命中。
+
+        清理侧按静态 TTL（磁盘回收判据）、读侧按盘中 30s（新鲜度判据）——
+        「盘中价不得当收盘价」的防护在读侧，不靠在清理时删文件。
+        """
         from src.python.cache import _ttl as ttl_mod
+        from src.python.cache import get as cache_get
 
         monkeypatch.setattr(ttl_mod, "_is_market_open", lambda: True)
 
-        _write_cache(cache_env, "price_600519", age_seconds=60)
-        assert _cleanup(cache_env) == 1, "盘中 30s TTL：60s 前写入的价必须清理"
+        write_cache(cache_env, "price_600519", age_seconds=60)
+        assert _cleanup(cache_env) == 0, "清理侧按静态 TTL：盘中刚写入的价不得被删（删了下一轮还要重取）"
+        assert cache_get("price_600519", ttl_mod.get_ttl("price")) is None, "读侧仍按盘中短 TTL 判过期"
 
     def test_closed_market_price_keeps_static_ttl(self, cache_env, monkeypatch):
-        """盘后：静态 TTL（24h）生效，1h 前抓的价格不重复清理（避免白打上游）。"""
+        """盘后：静态 TTL（24h）生效，盘前/收盘后写入的价格未到期时不清理。
+
+        写入时刻取盘前 08:00：避开「盘后回收盘中快照」分支，用例不随跑测时段变脸。
+        """
         from src.python.cache import _ttl as ttl_mod
 
         monkeypatch.setattr(ttl_mod, "_is_market_open", lambda: False)
 
-        _write_cache(cache_env, "price_600519", age_seconds=3600)
+        write_cache_at(cache_env, "price_600519", pre_open_ts())
         assert _cleanup(cache_env) == 0
 
     def test_every_registered_type_has_positive_ttl(self):

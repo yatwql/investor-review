@@ -767,6 +767,71 @@ class TestPerformanceByHorizon:
         assert "settle-decisions" in html and "settle-decisions" in excel_text
 
 
+class TestPerformanceVerdict:
+    """按视界结论句：命中率 × 均值超额四象限 + 缺轴降级 + 样本不足标注。"""
+
+    def test_four_quadrants(self):
+        from src.python.report.decision_basis import performance_verdict
+
+        assert performance_verdict(0.72, -0.65) == "方向命中但跑输基准"
+        assert performance_verdict(0.72, 0.40) == "方向有效且跑赢基准"
+        assert performance_verdict(0.40, 0.30) == "方向偏错但选品仍跑赢基准"
+        assert performance_verdict(0.40, -0.20) == "方向与超额双弱"
+
+    def test_missing_axis_downgrades_not_guesses(self):
+        """任一轴缺数据时只说可得的那一轴，不拿单项冒充整体结论。"""
+        from src.python.report.decision_basis import performance_verdict
+
+        assert performance_verdict(None, 0.5) == "仅有超额：跑赢基准"
+        assert performance_verdict(None, -0.5) == "仅有超额：跑输基准"
+        assert "缺基准" in performance_verdict(0.6, None)
+        assert performance_verdict(None, None) == "—"
+
+    def test_small_sample_marked_as_reference_only(self, ledger_path):
+        """方向性样本不足 → 结论后缀「样本不足，仅参考」，不把小样本当定论。"""
+        decisions = [
+            {
+                "code": "600519",
+                "name": "演示品种",
+                "direction": 1,
+                "settlements": {"5": {"settle_date": "2026-11-01", "raw_return": 0.05, "bench_return": 0.02}},
+            }
+        ]
+        from src.python.report.decision_basis import build_performance
+
+        row = build_performance(decisions)[0]
+        assert row["sample_sufficient"] is False
+        assert row["verdict_label"].endswith("（样本不足，仅参考）")
+
+    def test_verdict_rendered_both_channels(self):
+        """结论列在 HTML 与 Excel 双端同文出现。"""
+        from openpyxl import Workbook
+
+        from src.python.report.action_sheet import write_action_sheet
+        from src.test.unit.report.test_action_html import _action_data, _render
+
+        decisions = [
+            {
+                "code": "600519",
+                "name": "演示品种",
+                "direction": 1,
+                "settlements": {"5": {"settle_date": "2026-11-01", "raw_return": 0.05, "bench_return": 0.08}},
+            }
+        ]
+        data = build_decision_basis_data(settlement_decisions=decisions)
+        verdict = data["settlement"]["performance"][0]["verdict_label"]
+        html = str(_render(_action_data(), decision_basis_data=data))
+        wb = Workbook()
+        ws = wb.active
+        assert ws is not None
+        write_action_sheet(ws, _action_data(), decision_basis_data=data)
+        excel_text = " ".join(str(c.value) for row in ws.iter_rows() for c in row if c.value is not None)
+        for text in (html, excel_text):
+            assert verdict in text
+        assert "结论" in html  # HTML 单列
+        assert "均值超额（结论）" in excel_text  # Excel 列宽 5，结论并入超额列
+
+
 class TestBothEndsSameSource:
     """双端同源：同一份契约在 HTML/Excel 渲染出的标题与 summary 一致。"""
 

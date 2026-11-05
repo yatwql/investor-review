@@ -21,7 +21,12 @@ from __future__ import annotations
 
 import unittest
 
+from typing import TYPE_CHECKING
+
 import pytest
+
+if TYPE_CHECKING:
+    from bs4 import BeautifulSoup
 
 from src.test.unit.report.test_html_report_structure import (
     _REPORT_SECTION_DEFAULT,
@@ -97,7 +102,9 @@ class TestHtmlDrawdownSection(unittest.TestCase):
 
     def _section(self, history_data, crisis_annotation=None):
         soup = _render_drawdown(history_data, crisis_annotation)
-        return soup.find(id="sec-portfolio_history_drawdown")
+        section = soup.find(id="sec-portfolio_history_drawdown")
+        assert section is not None, "章节容器必须渲染（可见性由模板上下文控制）"
+        return section
 
     def test_events_table_rendered_when_available(self):
         """drawdown_available=True → 渲染回撤明细事件表。"""
@@ -213,6 +220,45 @@ class TestHtmlDrawdownSection(unittest.TestCase):
         text = section.get_text()
         self.assertNotIn("危机区间标注", text)
 
+    def test_terminal_staleness_caveat_rendered(self):
+        """终点净值滞后 → 走势/回撤章就地渲染「读数口径提示」与逐标的明细。
+
+        回归：口径差异原先只进数据源状态章，读者在本章读到的最大回撤仍会被当准确值。
+        断言取 `_history_quality` 的单源文案：模板不得自带一份可能漂移的副本。
+        """
+        from src.python.report._history_quality import (
+            TERMINAL_STALENESS_CONSEQUENCE,
+            TERMINAL_STALENESS_HEADLINE,
+            terminal_staleness_asset_line,
+        )
+
+        asset = {
+            "label": "嘉实全球产业升级股票(QDII)A(017730)",
+            "code": "017730",
+            "last_date": "2026-11-03",
+            "lag_trading_days": 2,
+            "value": 30000.0,
+            "weight_pct": 30.9,
+        }
+        section = self._section(
+            _history(
+                [],
+                terminal_staleness={"latest_date": "2026-11-04", "max_lag_trading_days": 2, "assets": [asset]},
+            ),
+            None,
+        )
+        text = " ".join(section.get_text().split())
+        self.assertIn("读数口径提示", text)
+        self.assertIn(TERMINAL_STALENESS_CONSEQUENCE, text, "后果句必须与单源文案一字不差")
+        self.assertIn(terminal_staleness_asset_line(asset).split("（")[0], text, "逐标的明细同源")
+        self.assertIn(TERMINAL_STALENESS_HEADLINE.format(count=1, max_lag=2), text, "标题句同源")
+        self.assertIn("30.9%", text)
+
+    def test_no_caveat_without_staleness(self):
+        """无滞后 → 不渲染口径提示。"""
+        section = self._section(_history([]), None)
+        self.assertNotIn("读数口径提示", section.get_text())
+
 
 # ── Excel 呈现 ───────────────────────────────────────────────
 
@@ -229,6 +275,7 @@ class TestExcelDrawdownSheet(unittest.TestCase):
 
         wb = Workbook()
         ws = wb.active
+        assert ws is not None  # 单页工作簿：active 恒存在，显式收窄以消除 Optional
         write_portfolio_history_drawdown_sheet(ws, history_data, crisis_annotation)
         return ws
 
@@ -320,6 +367,41 @@ class TestExcelDrawdownSheet(unittest.TestCase):
         self.assertIn("未恢复", flat)
         self.assertIn("--", flat)  # recovery_days 占位
 
+    def test_terminal_staleness_note_at_top(self):
+        """终点净值滞后时页签顶部写「读数口径提示」+ 逐标的明细。
+
+        回归：滞后口径的终值若只在数据质量页签报降级，本章指标区仍会被当最新值读。
+        """
+        ws = self._write(
+            _history(
+                [],
+                terminal_staleness={
+                    "latest_date": "2026-11-04",
+                    "max_lag_trading_days": 2,
+                    "assets": [
+                        {
+                            "label": "嘉实全球产业升级股票(QDII)A(017730)",
+                            "code": "017730",
+                            "last_date": "2026-11-03",
+                            "lag_trading_days": 2,
+                            "value": 30000.0,
+                            "weight_pct": 30.9,
+                        }
+                    ],
+                },
+            )
+        )
+        rows = self._all_text(ws)
+        note = next((r[0] for r in rows if "读数口径提示" in r[0]), "")
+        self.assertIn("最大回撤会偏低", note, "口径提示必须写明对末端收益/回撤的影响")
+        self.assertTrue(any("017730" in r[0] for r in rows), "应逐标的列出滞后明细")
+
+    def test_no_staleness_note_when_absent(self):
+        """无滞后时不写口径提示（不制造无谓噪声）。"""
+        ws = self._write(_history([]))
+        flat = [r[0] for r in self._all_text(ws)]
+        self.assertFalse(any("读数口径提示" in v for v in flat))
+
 
 def _monthly_calendar() -> dict:
     """真实聚合器构造月度日历契约（8月基线 → 9月 +10%，不 mock 计算引擎）。"""
@@ -340,6 +422,7 @@ class TestHtmlMonthlyCalendar(unittest.TestCase):
         """契约可用 → 年×月表格 + 口径标题 + 红绿格数值 + 胜亏统计说明。"""
         soup = _render_drawdown(_history([], monthly_returns=_monthly_calendar()))
         table = soup.select_one("table.monthly-return-calendar")
+        assert table is not None, "月度收益日历表必须渲染"
         self.assertIsNotNone(table, "月度收益日历表应渲染")
         text = soup.get_text()
         self.assertIn("四、月度收益日历", text)
@@ -347,9 +430,9 @@ class TestHtmlMonthlyCalendar(unittest.TestCase):
         self.assertIn("+10.00%", text)  # 2026-09 月收益（change 滤镜两位小数）
         self.assertIn("胜", text)
         self.assertIn("最长连亏", text)
-        # 盈利格着色（profit_color，正值 var(--profit)）
-        colored = table.select("td[style*='--profit']")
-        self.assertTrue(colored, "正收益格应带 profit_color 内联样式")
+        # 盈利格着色（profit_class → .profit，颜色由 CSS 类承载，不写内联样式）
+        colored = table.select("td.profit")
+        self.assertTrue(colored, "正收益格应带 .profit 语义类")
 
     def test_calendar_hidden_without_contract(self) -> None:
         """history_data 无 monthly_returns（样本不足/旧数据）→ 区块整体不渲染。"""
@@ -370,6 +453,7 @@ class TestExcelMonthlyCalendar(unittest.TestCase):
 
         wb = Workbook()
         ws = wb.active
+        assert ws is not None  # 单页工作簿：active 恒存在，显式收窄以消除 Optional
         write_portfolio_history_drawdown_sheet(ws, history_data)
         return ws
 
@@ -385,7 +469,10 @@ class TestExcelMonthlyCalendar(unittest.TestCase):
         year_row = next(r for r in ws.iter_rows() if r[0].value == "2026年")
         cell = next(c for c in year_row if isinstance(c.value, float) and abs(c.value - 0.1) < 1e-9)
         self.assertEqual(cell.number_format, FMT_PERCENT)
-        self.assertEqual(cell.font.color.rgb, profit_font(0.1).color.rgb)
+        self.assertIsNotNone(cell.font.color)
+        expected_color = profit_font(0.1).color
+        assert expected_color is not None
+        self.assertEqual(cell.font.color.rgb, expected_color.rgb)
         # 说明行携带口径与胜亏平统计
         flat = [str(c.value) for row in ws.iter_rows() for c in row if c.value is not None]
         self.assertTrue(any("口径：" in t and "胜" in t for t in flat))

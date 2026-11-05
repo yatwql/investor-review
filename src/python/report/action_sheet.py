@@ -281,8 +281,12 @@ def _write_decision_basis_block(
             row=row, column=1, value=str(settlement.get("performance_title") or "我的建议历史表现（按视界）")
         ).font = _FONT_SUB_BLOCK
         row += 1
-        row = write_header_row(ws, row, ["视界", "已结算", "方向性", "命中", "命中率", "均值超额"][:ncols])
+        row = write_header_row(ws, row, ["视界", "已结算", "方向性", "命中", "命中率", "均值超额（结论）"][:ncols])
         for perf in performance:
+            # 页签列宽固定 5 列：结论并入超额列（HTML 端为独立列，文本同源）
+            _excess = perf.get("mean_excess_label") or "—"
+            _verdict = perf.get("verdict_label") or ""
+            _excess_cell = f"{_excess}（{_verdict}）" if _verdict and _verdict != "—" else _excess
             row = write_data_row(
                 ws,
                 row,
@@ -292,7 +296,7 @@ def _write_decision_basis_block(
                     perf.get("directional", 0),
                     perf.get("hit", 0),
                     perf.get("accuracy_label") or "—",
-                    perf.get("mean_excess_label") or "—",
+                    _excess_cell,
                 ][:ncols],
             )
         row = write_data_row(
@@ -361,7 +365,8 @@ def write_action_sheet(
             开关 `decision_basis` 默认开）；None 或 enabled=False 时页签保持既有输出。
     """
     _name = get_report_sheet_name("action")
-    _ncols = 5
+    # 列宽 6：判断依据的「按视界表现」表含视界/已结算/方向性/命中/命中率/均值超额(结论) 六列
+    _ncols = 6
     write_title_row(ws, 1, _name, ncols=_ncols)
     row = 2
 

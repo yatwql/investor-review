@@ -34,10 +34,10 @@ class TestJinjaFilters(unittest.TestCase):
     """Jinja2 自定义过滤器测试。"""
 
     def setUp(self):
-        from src.python.report.html_jinja_env import _jinja_price_type_color, _jinja_thousands
+        from src.python.report.html_jinja_env import _jinja_price_type_class, _jinja_thousands
 
         self.fn = _jinja_thousands
-        self.price_type_fn = _jinja_price_type_color
+        self.price_type_fn = _jinja_price_type_class
 
     def test_thousands_formats_integer(self):
         self.assertEqual(self.fn(2500), "2,500")
@@ -53,31 +53,31 @@ class TestJinjaFilters(unittest.TestCase):
 
     # ── price_type_color 过滤器 ─────────────────────────────────
 
-    def test_price_type_color_onchange(self):
+    def test_price_type_class_onchange(self):
         """场内收盘价(T) → var(--rating-stable)（主题切换 主题 CSS 变量）"""
-        self.assertEqual(self.price_type_fn("场内收盘价(T)"), "var(--rating-stable)")
+        self.assertEqual(self.price_type_fn("场内收盘价(T)"), "rating-stable")
 
-    def test_price_type_color_nav_today(self):
+    def test_price_type_class_nav_today(self):
         """官方净值(T) → var(--rating-stable)（主题切换 主题 CSS 变量）"""
-        self.assertEqual(self.price_type_fn("官方净值(T)"), "var(--rating-stable)")
+        self.assertEqual(self.price_type_fn("官方净值(T)"), "rating-stable")
 
-    def test_price_type_color_qdii_t_minus_1(self):
+    def test_price_type_class_qdii_t_minus_1(self):
         """QDII 官方净值(T-1) → var(--rating-stable)（主题切换 主题 CSS 变量）"""
-        self.assertEqual(self.price_type_fn("官方净值(T-1)", "标普500(QDII)"), "var(--rating-stable)")
+        self.assertEqual(self.price_type_fn("官方净值(T-1)", "标普500(QDII)"), "rating-stable")
 
-    def test_price_type_color_non_qdii_t_minus_1(self):
+    def test_price_type_class_non_qdii_t_minus_1(self):
         """非 QDII 官方净值(T-1) → 不蓝"""
         self.assertEqual(self.price_type_fn("官方净值(T-1)", "易方达中小盘"), "")
 
-    def test_price_type_color_t_minus_1_no_name(self):
+    def test_price_type_class_t_minus_1_no_name(self):
         """官方净值(T-1) 无名称 → 不蓝"""
         self.assertEqual(self.price_type_fn("官方净值(T-1)"), "")
 
-    def test_price_type_color_intraday(self):
+    def test_price_type_class_intraday(self):
         """场内实时价 → 不蓝"""
         self.assertEqual(self.price_type_fn("场内实时价"), "")
 
-    def test_price_type_color_unknown(self):
+    def test_price_type_class_unknown(self):
         """未知取价方式 → 不蓝"""
         self.assertEqual(self.price_type_fn("场内收盘价(T-2)"), "")
 
@@ -402,22 +402,11 @@ class TestFundFlowTemplate(unittest.TestCase):
     def setUp(self):
         from jinja2 import Environment
 
-        from src.python.report.html_jinja_env import (
-            _jinja_money,
-            _jinja_pct,
-            _jinja_price,
-            _jinja_profit_color,
-        )
+        from src.python.report.html_jinja_env import _ENV
 
         self.env = Environment(autoescape=True)
-        self.env.filters.update(
-            {
-                "money": _jinja_money,
-                "pct": _jinja_pct,
-                "price": _jinja_price,
-                "profit_color": _jinja_profit_color,
-            }
-        )
+        # 过滤器一律取自生产环境单源，不在测试里手抄白名单（少一个就会在模板改动时假红）
+        self.env.filters.update(_ENV.filters)
         tmpl_path = os.path.normpath(
             os.path.join(os.path.dirname(__file__), "..", "..", "..", "static", "tmpl", "report_template.html")
         )
@@ -621,7 +610,7 @@ class TestBuildFlowDisplay(unittest.TestCase):
             "dividends": {"per_code": {"600900": 120.5}, "total": 120.5},
         }
         display = _build_flow_display(contract)
-        self.assertIsNotNone(display)
+        assert display is not None, "有契约时必须返回展示字典"
         self.assertIs(display["available"], True)
         self.assertAlmostEqual(display["xirr_rate"], 0.1035)
         self.assertAlmostEqual(display["cost_map"]["600900"], 50.0)  # 5000/100
@@ -634,7 +623,7 @@ class TestBuildFlowDisplay(unittest.TestCase):
         from src.python.report.html_writer import _build_flow_display
 
         display = _build_flow_display({"available": False})
-        self.assertIsNotNone(display)
+        assert display is not None, "不可用契约也须返回展示字典（降级而非 None）"
         self.assertIs(display["available"], False)
         self.assertIsNone(display["xirr_rate"])
         self.assertEqual(display["cost_map"], {})

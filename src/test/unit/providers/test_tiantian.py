@@ -226,14 +226,14 @@ class TestFetchFundHoldingsLadder(unittest.TestCase):
         self.assertEqual(result["date"], "2026-06-30")
         mock_html.assert_not_called()
 
-    @patch("src.python.providers.tiantian_holdings._fetch_legacy_quarterly", return_value=_LEGACY)
+    @patch("src.python.providers.tiantian_holdings._fetch_default_quarter", return_value=_LEGACY)
     @patch("src.python.providers.tiantian_holdings._fetch_dated_quarterly", return_value=None)
     @patch("src.python.providers.tiantian_holdings._request_fund_html", return_value=None)
     def test_hop3_skipped_when_main_page_request_fails(self, _m1, _m2, _m3):
         """主页面请求失败即返回 None，不落到第 3 跳。"""
         self.assertIsNone(fetch_fund_holdings("016055"))
 
-    @patch("src.python.providers.tiantian_holdings._fetch_legacy_quarterly", return_value=_LEGACY)
+    @patch("src.python.providers.tiantian_holdings._fetch_default_quarter", return_value=_LEGACY)
     @patch("src.python.providers.tiantian_holdings._fetch_dated_quarterly", return_value=None)
     @patch("src.python.providers.tiantian_holdings._request_fund_html")
     def test_feeder_returns_target_and_skips_hop3(self, mock_html, _dated, mock_legacy):
@@ -245,7 +245,7 @@ class TestFetchFundHoldingsLadder(unittest.TestCase):
         self.assertEqual(result["holdings"], [])
         mock_legacy.assert_not_called()
 
-    @patch("src.python.providers.tiantian_holdings._fetch_legacy_quarterly", return_value=_LEGACY)
+    @patch("src.python.providers.tiantian_holdings._fetch_default_quarter", return_value=_LEGACY)
     @patch("src.python.providers.tiantian_holdings._fetch_dated_quarterly", return_value=None)
     @patch("src.python.providers.tiantian_holdings._request_fund_html")
     def test_regular_etf_reverse_link_not_treated_as_feeder(self, mock_html, _dated, mock_legacy):
@@ -261,7 +261,7 @@ class TestFetchFundHoldingsLadder(unittest.TestCase):
         self.assertEqual(len(result["holdings"]), 3)
         mock_legacy.assert_not_called()
 
-    @patch("src.python.providers.tiantian_holdings._fetch_legacy_quarterly", return_value=_LEGACY)
+    @patch("src.python.providers.tiantian_holdings._fetch_default_quarter", return_value=_LEGACY)
     @patch("src.python.providers.tiantian_holdings._fetch_dated_quarterly", return_value=None)
     @patch("src.python.providers.tiantian_holdings._request_fund_html")
     def test_hop2_holdings_win_over_hop3(self, mock_html, _dated, mock_legacy):
@@ -272,7 +272,7 @@ class TestFetchFundHoldingsLadder(unittest.TestCase):
         self.assertEqual(result["holdings"][0]["name"], "贵州茅台")
         mock_legacy.assert_not_called()
 
-    @patch("src.python.providers.tiantian_holdings._fetch_legacy_quarterly", return_value=_LEGACY)
+    @patch("src.python.providers.tiantian_holdings._fetch_default_quarter", return_value=_LEGACY)
     @patch("src.python.providers.tiantian_holdings._fetch_dated_quarterly", return_value=None)
     @patch("src.python.providers.tiantian_holdings._request_fund_html")
     def test_hop3_reached_only_when_hop2_yields_nothing(self, mock_html, _dated, mock_legacy):
@@ -283,7 +283,7 @@ class TestFetchFundHoldingsLadder(unittest.TestCase):
         self.assertEqual(result["date"], "2023-09-30")
         mock_legacy.assert_called_once()
 
-    @patch("src.python.providers.tiantian_holdings._fetch_legacy_quarterly", return_value=None)
+    @patch("src.python.providers.tiantian_holdings._fetch_default_quarter", return_value=None)
     @patch("src.python.providers.tiantian_holdings._fetch_dated_quarterly", return_value=None)
     @patch("src.python.providers.tiantian_holdings._request_fund_html")
     def test_all_hops_empty_returns_named_empty_result(self, mock_html, _dated, _legacy):
@@ -963,3 +963,33 @@ class TestQuarterlyFetchDiagnostics:
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestNavTrendDateTimezone(unittest.TestCase):
+    """天天基金净值序列的日期时区口径（回归：曾按 UTC 解，整条序列前移一天）。"""
+
+    def test_ms_timestamp_uses_beijing_time(self):
+        """x 为当日 00:00（UTC+8）的毫秒数——按 UTC 解会变成前一天，按北京时间才对。"""
+        from src.python.providers.tiantian_nav import _parse_nav_trend
+
+        ts = 1793808000000  # 2026-11-05 00:00 +08:00 = 2026-11-04 16:00 UTC
+        bars = _parse_nav_trend(f'var Data_netWorthTrend = [{{"x":{ts},"y":1.5574}}];', "Data_netWorthTrend")
+
+        self.assertEqual(bars, [{"date": "2026-11-05", "nav": pytest.approx(1.5574)}])
+
+    def test_integer_yyyyMMdd_still_supported(self):
+        """8 位整数形态（无时区参与）不受影响。"""
+        from src.python.providers.tiantian_nav import _parse_nav_trend
+
+        bars = _parse_nav_trend('var Data_netWorthTrend = [{"x":20261105,"y":1.23}];', "Data_netWorthTrend")
+
+        self.assertEqual(bars, [{"date": "2026-11-05", "nav": pytest.approx(1.23)}])
+
+    def test_consecutive_days_map_to_consecutive_dates(self):
+        """相差 86400000ms 的两条 → 日期正好相邻（按 UTC 解会整体前移、仍相邻但错日）。"""
+        from src.python.providers.tiantian_nav import _parse_nav_trend
+
+        js = 'var Data_netWorthTrend = [{"x":1793971200000,"y":1.55},{"x":1793808000000,"y":1.52}];'
+        bars = _parse_nav_trend(js, "Data_netWorthTrend")
+
+        self.assertEqual([b["date"] for b in bars], ["2026-11-05", "2026-11-06"])

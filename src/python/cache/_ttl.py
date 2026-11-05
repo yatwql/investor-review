@@ -80,6 +80,58 @@ def get_cache_age_by_data_type(
     return None
 
 
+def _static_ttl(data_type: str, config: dict, defaults: dict[str, float]) -> float:
+    """静态 TTL：`config.json → cache_ttl.{type}`（正数）优先，否则取注册表默认。"""
+    ttl_config = config.get("cache_ttl") or {}
+    if data_type in ttl_config:
+        val = float(ttl_config[data_type])
+        return val if val > 0 else defaults.get(data_type, CACHE_DAILY)
+    return defaults.get(data_type, CACHE_DAILY)
+
+
+def get_cleanup_ttl(data_type: str, written_at: float | None = None) -> float:
+    """清理侧 TTL：按静态 TTL 判过期，并在**盘后回收盘中快照**。
+
+    清理是磁盘回收，与「读侧新鲜度」是两个判据：
+
+    1. 交易时段内：一律按静态 TTL。行情类盘中 TTL（30s）是读侧策略，拿它判清理等于
+       把 30s 前刚写入的文件当场删掉、下一轮再写一遍（实测每轮启动与收尾都在反复预览
+       22~63 个待删文件），而读侧同口径已判过期，删除不带来任何新鲜度收益。
+    2. 盘后：对盘中敏感类型（注册表 `market_ttl`）额外回收**盘中写入**的副本——它的
+       值只是当时的价（如 14:00 的快照），盘后读侧按静态 TTL 会把它当收盘价沿用 24h。
+       判定看**写入时刻**是否落在 A 股交易时段（`core.market_hours.is_intraday_timestamp`），
+       不看当前时刻：盘后（如 15:30 收盘抓取）写入的才是当日收盘值，必须保留。
+
+    读侧仍走 :func:`get_ttl`（含盘中覆盖），两处判据的差异是设计意图，不是不一致。
+
+    Args:
+        data_type: 数据类型键名，如 "price"、"index"、"rank"
+        written_at: 缓存写入时间戳（取自载荷 `_ts`）；None 时只算静态 TTL
+
+    Returns:
+        过期时间（秒）；盘后遇到盘中快照时返回 0.0（任何年龄均判过期）
+    """
+    defaults = get_cache_ttl_defaults()
+    try:
+        from src.python.config import get_config  # lazy import
+
+        static = _static_ttl(data_type, get_config(), defaults)
+    except (ImportError, TypeError, ValueError, KeyError, AttributeError, RuntimeError):
+        logger.debug("get_cleanup_ttl: 配置读取失败，使用默认值")
+        static = defaults.get(data_type, CACHE_DAILY)
+
+    if written_at is None or get_market_ttl_map().get(data_type) is None:
+        return static
+    if _is_market_open():
+        return static
+    from src.python.core.market_hours import is_intraday_timestamp
+
+    if is_intraday_timestamp(written_at):
+        logger.debug("盘后回收盘中快照: %s (写入时刻落在交易时段)", data_type)
+        return 0.0
+    return static
+
+
 def get_ttl(data_type: str) -> float:
     """获取指定数据类型的缓存过期时间（秒）—— **同一类型恒返回同一值**。
 
@@ -96,6 +148,8 @@ def get_ttl(data_type: str) -> float:
 
     读侧（`cache.get`）与清理侧（`cleanup_expired`）取到的是同一个数——这是
     「读写两侧判定期一致」的前提，不需要两侧各自对齐。
+
+    注：清理侧**不用**本函数，改用 :func:`get_cleanup_ttl`（忽略盘中覆盖，见其文档）。
 
     Args:
         data_type: 数据类型键名，如 "price"、"rank"、"hold"

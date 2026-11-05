@@ -287,9 +287,9 @@ def fetch_fund_holdings(code: str) -> dict[str, Any] | None:
         return {"code": code.strip(), "name": fund_name, "date": "", "holdings": holdings}
 
     # ── 第 3 跳：季报接口（无年份兜底）—— 最早可得报告，通常已陈旧 ──
-    legacy = _fetch_legacy_quarterly(code)
-    if legacy is not None:
-        return legacy
+    default_quarter = _fetch_default_quarter(code)
+    if default_quarter is not None:
+        return default_quarter
 
     logger.info("基金 %s（%s）: 三跳均无持仓数据", fund_name or code, code)
     return {"code": code.strip(), "name": fund_name, "date": "", "holdings": []}
@@ -459,7 +459,7 @@ def _quarter_channel_payloads(code: str, year: int | None, month: int | None):
         pool.shutdown(wait=False, cancel_futures=True)
 
 
-def _fetch_legacy_quarterly(code: str) -> dict[str, Any] | None:
+def _fetch_default_quarter(code: str) -> dict[str, Any] | None:
     """第 3 跳：不指定年份的默认请求。
 
     返回的是**最早可得**报告而非最新，故通常已陈旧；本函数不做时效判定
@@ -488,10 +488,10 @@ def fetch_quarterly_holdings(code: str) -> dict[str, Any] | None:
     dated = _fetch_dated_quarterly(code)
     if dated is not None:
         return dated
-    legacy = _fetch_legacy_quarterly(code)
-    if legacy is None:
+    default_quarter = _fetch_default_quarter(code)
+    if default_quarter is None:
         logger.info("基金持仓 API 全部无有效持仓: %s", code)
-    return legacy
+    return default_quarter
 
 
 def _quarter_label(year: int | None, month: int | None) -> str:

@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.17.1
+> 文档版本：0.17.2
 
 ## 目录
 
@@ -136,7 +136,7 @@
   │  ┌─────────────────────────┐   ┌───────────────────────────────┐  │
   │  │   Excel 管线            │   │   HTML 管线                   │  │
   │  │   openpyxl              │   │   Jinja2 模板                 │  │
-  │  │   双端共享 data_status   │   │   CSS order 视觉排序          │  │
+  │  │   双端共享 data_status   │   │   语义 class + DOM 顺序       │  │
   │  └─────────────────────────┘   └───────────────────────────────┘  │
   └───────────────────────────────────────────────────────────────────┘
 ```
@@ -462,7 +462,7 @@ while True:
 | | `[W]` | 调仓 What-if 模拟（对比两份持仓，独立报告） |
 | | `[Q]` | 报告对话式追问（选择已生成 HTML 报告进入多轮文本输入循环，委托 `qa/session.ask_report_qa`，§6.8；`report_qa` 门控） |
 | 配置管理 | `[G]` | 全局设置七项（`GLOBAL_SETTINGS_ITEMS` 单源登记：键 / 显示名 / 处理器 / 分组），数字为主入口、字母为别名：`H` 持仓信息目录、`F` 持仓信息文件名、`O` 报告输出目录、`L` LLM 设置（运行参数 1-6 + 第 7 项多链线路）、`I` 对比基准指数、`A` 持仓匿名化、`M` 配置入口地图（`_CONFIG_ENTRY_MAP` 只读索引）；目录三项直挂二级、无中间子面板（同一配置只有一条入口路径） |
-| 缓存管理 | `[1]`/`[2]` | 更新基础类缓存（基金业绩/持仓/经理/基准等，`clear_by_group("refresh")` 先清后取）/ 行情类缓存（价格/指数等，`clear_by_group("preload")` 先清后取） |
+| 缓存管理 | `[1]`/`[2]` | 更新基础类缓存（基金业绩/持仓/经理/基准等，`clear_by_group("refresh", only=…)` 先清后取——只清本流程会回填的 10 个域，财报/财务指标/情绪/费率/估值等不回填域不清）/ 行情类缓存（价格/指数等，`clear_by_group("preload")` 先清后取） |
 | | `[3]` | 缓存管理**子菜单**（统计首屏 → 子菜单内 `3` 清理过期 / `B`/回车 返回；合并原清理与统计两个平级入口，`handlers_cache.py::_cmd_cache_management`） |
 | 配置管理 | `[C]` | 报告章节显隐（四块：顶层 / LLM / 默认关闭的整章 / 关联产物，另含智囊团生成子项；清单、编号、分块与来源由 `config/chapter_registry.py` 派生，四来源写入统一经共享编辑层 `config/edit_ops.py`；面板只切显隐、不增删章节不改顺序；子项在父章节关闭时名称/键名置灰并提示原因、状态字仍红色「关」；`?编号`/`?键名` 查看来源文件/写键/默认值，行尾 `*` 标漂移，LLM 行附近 7 日费用摘要） |
 | | `[I]` | 对比指数池管理（自定义基准指数） |
@@ -1287,7 +1287,7 @@ fetch_index_data(code)
 cache/
 ├── __init__.py        公开 API 导出（__all__ 精简形态）
 ├── _store.py          核心存取：get()、set()、clear()
-├── _ttl.py            TTL 查询：get_ttl()、get_cache_age()
+├── _ttl.py            TTL 查询：get_ttl()（读侧）、get_cleanup_ttl()（清理侧）、get_cache_age()
 ├── _io.py             文件 I/O：_read_cache_data()、_write_atomic()
 ├── _paths.py          路径管理：_cache_path()、_GZIP_THRESHOLD（100KB）
 ├── _groups.py         分组清理：clear_by_group()、clear_by_prefix()
@@ -1308,8 +1308,9 @@ cache/
 | `get(key, max_age_seconds)` | `(str, float) → Any\|None` | 先查 `.json.gz`，不存在时回退 `.json`；超龄返回 None。`record_stats=False` 供**探测/兜底读**用（负缓存探针、陈旧缓存兜底）：这类读不是真实取数需求，计入会让命中率与未命中前缀分布失真 |
 | `set(key, data)` | `(str, Any) → None` | `{"_ts": now, "_data": data}` 序列化 + 原子写入；≥100KB 自动 `.json.gz` |
 | `clear(key)` | `(str) → None` | 同时删除 `.json` 和 `.json.gz` |
-| `get_ttl(data_type)` | `(str) → float` | TTL 分辨率（见下方流程图）；只由数据类型决定（无按 key 抖动、无兼容参数） |
-| `clear_by_group(group)` | `(str) → None` | 按 preload/refresh 分组清除 |
+| `get_ttl(data_type)` | `(str) → float` | TTL 分辨率（见下方流程图）；只由数据类型决定（无按 key 抖动、无兼容参数）——**读侧用**，含盘中覆盖 |
+| `get_cleanup_ttl(data_type, written_at=None)` | `(str, float\|None) → float` | 清理侧 TTL：盘中一律按静态 TTL（不拿 30s 读侧口径删文件）；**盘后**对盘中敏感类型额外回收**盘中写入**的快照（看写入时刻是否在交易时段，返回 0），收盘后写入的当日收盘值保留 |
+| `clear_by_group(group, only=None)` | `(str, Iterable[str]\|None) → dict[str, int]` | 按 preload/refresh 分组清除；`only` 传缓存键前缀/精确键名集合时**只清这些域所属的模块**（用于「刷新基础缓存」这类只回填部分域的流程，避免连坐作废财报/财务指标等下次出报告才重取的域） |
 | `cleanup_expired()` | `() → int` | 扫描全量缓存，删除超龄项（逐文件明细只进 DEBUG，INFO 留汇总行 + 释放字节；age/TTL 按量级自适应单位——盘中 30s 的 price TTL 不再印成 `ttl=0.0h`；**无 `_ts` 包封的文件跳过 TTL 判定**，见下） |
 
 #### TTL 分辨率流程
@@ -1354,7 +1355,14 @@ get_ttl(data_type)
 
 **盘中敏感性由注册表声明**（`DataModuleDef.market_ttl`，当前只有 `price`/`index` = 30s）：这是数据属性而非用户偏好——价格/指数分钟级变化，盘中必须短 TTL 才能避免把盘中价当收盘价（否则"本日盈亏/快照环比"系统性偏离），而非行情数据（新闻 900s、情绪 3600s 等）不得因盘中被降频、白打上游。`config.json → market_hour_aware` 已移除（无对应实现，写入即被忽略，不再有识别/告警分支）。
 
+**报告模板样式写法（架构约束）**：`src/static/tmpl/` 是 Jinja2 模板，**不得把 Jinja 表达式写进 CSS 值位置**（`style="…{{ }}…"` / `{% %}`）——CSS 解析器对花括号一律判语法错，且颜色/顺序会因此分裂成两份事实（内联值 + class/token）。三条替代口径：颜色→语义 class（`profit_class`/`price_type_class` 出类名（原 `profit_color`/`price_type_color` 内联颜色过滤器已下线），色值只在 token 与工具类）、章节顺序→模板 DOM 顺序（include 顺序 = `_REPORT_SECTION_DEFAULT`）＋用户自定义 `report_section_order` 时由`html_writer._inject_section_order_css()` 服务端注入 `#sec-x{order:N}` 规则（占位 `<!--SECTION_ORDER_CSS-->`，不经 Jinja）、数据驱动几何量→HTML/SVG 属性（如分布条 `<svg width="{{ pct }}%">`）。守卫：`test_html_report_structure` 的模板静态扫描 + 渲染产物断言 + DOM 顺序/编号断言。
+
 **盘中覆盖可见**：若用户同时配了 `cache_ttl.{type}` 而该类型盘中敏感，`get_ttl` 会打一条 INFO（每类型一次）说明"盘中以 `market_hour_ttl` 为准，`cache_ttl` 仅盘后生效"——把静默失效变成可观测。
+
+**读写两侧判据不同（设计意图）**：读侧 `get_ttl` 含盘中覆盖（价/指 30s），清理侧 `get_cleanup_ttl` 分两种情形——
+
+- **交易时段内**：按静态 TTL（默认 24h）。拿 30s 判过期等于把刚写入的行情缓存当场删掉、下一轮再写一遍，而删掉的部分对读侧本就无价值（`cache.get` 同口径已判未命中），只放大「未命中」统计并制造「缓存反复失效」的假象。
+- **盘后**：按静态 TTL，并额外回收**盘中写入**的副本。盘中写入的值只是当时的价（如 14:00 快照），盘后读侧按静态 TTL 会把它当收盘价沿用 24h，因此以**写入时刻**是否落在交易时段（`core.market_hours.is_intraday_timestamp`）判定、命中即回收（TTL 归 0）；收盘后（如 15:30）写入的才是当日收盘值，必须保留。
 
 **负缓存单一样板**：确定性缺失与传输级短退避（标的正文缺失 / 章节清单不可得 / 该文档无该章节 / provider 404 探测 / 基金季报空季度 / 指数历史全链空 / 基金经理主页空与不可达——完整清单见 §缓存域注册表与 `datasource.md` 负缓存表）统一经 `cache/_negative.py::NegativeCache` 登记——调用点只声明「标签 + 键前缀 + TTL 类型」，锁/命中计数/汇总文案由该类统一承接，`cache.negative_cache_entries()` 给出可枚举清单、`nonzero_summaries()` 直接产出报告级汇总行（新增一类负缓存不再复制一份 lock+counter+reset 样板）。
 
@@ -1513,6 +1521,8 @@ class PositionCacheResult:
     a_index_count: int = 0
     us_index_count: int = 0
     errors: list[str] = field(default_factory=list)
+    trading_day: str = ""              # 本次刷新对应的属交易日（历法不可得时为空串）
+    market_breakdown: list[dict] | None = None  # 分市场（场内/国内场外/QDII）口径与「已更新至最新」计数
 
 @dataclass
 class CacheStats:
@@ -1530,7 +1540,7 @@ class CacheStats:
 | 函数 | 说明 |
 |:-----|:------|
 | `update_basic_cache(holdings, reporter) → CacheUpdateResult` | 基金缓存 + 公共缓存（盈利预测/资金流向/行业/分红）并行刷新 |
-| `update_position_cache(holdings, reporter) → PositionCacheResult` | 持仓价格 + 指数并行获取 |
+| `update_position_cache(holdings, reporter) → PositionCacheResult` | 持仓价格 + 指数并行获取；完成后**一次判定**回传属交易日与分市场口径（`_judge_after_refresh`：历法只解析一次、明细只归一一次），判据全部引用 `report.market_value`——`classify_holdings` 分组、`price_update_status` 判是否已更新到最新（场内需已收市且为 T、国内场外 T、QDII 以 T-1 为最新）、`_determine_price_type` 出口径文案 |
 | `cleanup_cache(reporter) → int` | 扫描清理过期缓存 |
 | `get_cache_stats(reporter) → CacheStats` | 三目录统计（cache + snapshots + state） |
 | `get_cache_stats_payload() → dict` | GET /api/cache 结构化载荷单源组装（保序数组/top 截断/命中率/过期预估，Web 只做传输封装） |
@@ -2745,7 +2755,7 @@ report/decision_llm_capture.py   # 抽取：结构化优先 → 表格兜底
 **结构化决策头（已内置）**：提示词末尾恒追加一行 `决策头：{"decisions":[{"code","action","priority"}]}` 契约；抽取侧先 `parse_structured_header` 读结构化头，逐字段归一校验（`action` 必须经上述判据归一为方向，否则丢弃该条；`code` 必须 6 位数字），全批不可用 → 回落确定性表格解析。两路产物形状统一为 `{code, name, direction, magnitude, detail, …}`（结构化头的 `priority` 在解析侧即归一为 `magnitude`），`_collect_decision` 对两路走同一段登记纪律（持有剔除 / code 白名单 / 名称回填 / detail 空串回补 / 同码取高）。
 
 - **载荷提取用花括号配平扫描**（字符串/转义感知），而非 `find("{")`/`rfind("}")`——后者在同一行出现两个 JSON 对象时会把跨度拉通成非法 JSON；`决策头：` 后为空行时以空串兜底，不抛 `IndexError`。
-- **缓存键同源**：开关影响提示词 → **写侧指纹**与**预检指纹**都取自 `llm/module_fingerprint.py::expert_review_fingerprint()` 内无条件调用的 `structured_header_cache_suffix()`（开关判定收敛在函数内部）。关闭返回 `""`（键不变、不误伤旧缓存）；开启两侧同步换键，避免预检命中旧键而跳过重生成使开关形同虚设。关闭时提示词**逐字节不变**。
+- **缓存键同源**：开关影响提示词 → **写侧指纹**与**预检指纹**都取自 `llm/module_fingerprint.py` 的同源构造（决策头等内置段恒在提示词中，不参与开关、也不追加缓存后缀；仍需按开关换键的增强段各自提供后缀函数供两侧调用）。
 
 **架构约束遵从**：
 
@@ -3216,10 +3226,9 @@ config/
 ├── _llm_settings_defaults.py     # llm_settings.json 默认模板生成
 ├── _llm_providers.py             # llm_providers.json 多链解析/凭据注入
 ├── _llm_providers_defaults.py    # llm_providers.json 默认模板生成
-└── _legacy_keys.py               # 已删除/已改名配置键登记表（RENAMED/REMOVED + 统一告警文案单源）
 ```
 
-**旧配置键的处置口径（单源）**：站点侧只有两种动作——`report_section_order` 的无效键**从内存剔除**（仍计 1 问题提示同步文件）、`features.json` 的无效开关**照常加载但无消费方**；两者共用 `_legacy_keys.format_unknown_keys(scope, names)` 产出**一条**归并告警（逐键注明：已删除的原因 / 应改用的新键 / 疑似拼写错误）。删除或改名任何可配置键时，先在该表登记、再改代码，避免三处措辞各自漂移。
+**未登记配置键的处置口径**：站点侧只有两种动作——`report_section_order` 的未登记章节键**从内存剔除**（仍计 1 问题提示同步文件）、`features.json` 的未登记开关**照常加载但无消费方**；两处各自把同类问题归并成**一条**告警（含键名与条数），不维护旧键改名/删除对照表——本项目不保留跨版本配置兼容，未登记键一律按「配置了也不生效」处理。
 
 #### 机器本地状态
 
@@ -3554,7 +3563,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `inject_holding_change_data` | 持仓变动复盘挂载点（独立章节与回放组开关；守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供） | 持仓变动复盘（报告独立章，type=holding_change） | 报告输出 | 独立章节与回放开关 `holding_change_review`（默认关） |
 | `inject_event_impact_data` | 事件窗对照挂载点（事件与摘要组开关；守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供；新闻先行串行段内注入，供分歧例附录块同轮进 LLM） | 事件窗对照（财经新闻章内区块，随父章；注册表无独立条目） | 报告输出 | 报告章节与增强开关 `event_window_impact`（默认关） |
 | `inject_schedule_replay_data` | 调仓纪律回放挂载点（守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供；快照与持仓变动注入后串行装配，回放引用 `prompt_block` 经统一附录进 LLM） | 调仓纪律回放（报告独立章，type=schedule_replay） | 报告输出 | 功能开关 `rebalance_schedule_replay`（默认关，独立章节与回放组） |
-| `event_impact_panel` | 事件窗对照表数据编排与双端单源展示（事件行/降级/占位 + view 与页签同文 + 分歧例附录块）；关键词索引三键（品种名/去后缀简称/代码变体、板块名、`sector_keywords()` 行业关键词），行业级命中标注「（行业）」；基准取数同码 memo，**无 K 线债券基准（`sh000012`）不取数直接降级**，单路超 5s WARNING | 事件窗对照 | 报告输出 | 随 `event_window_impact` |
+| `event_impact_panel` | 事件窗对照表数据编排与双端单源展示（事件行/降级/占位 + view 与页签同文 + 分歧例附录块）；关键词索引三键（品种名/去后缀简称/代码变体、板块名、`sector_keywords()` 行业关键词），行业级命中标注「（行业）」；行情取数窗口按最早事件日自适应（`history_days_for`，365~1095 天夹取），防止事件日早于固定窗口时整条按「映射交易日不在行情轴」降级；事件日晚于行情轴末日时按末日对齐（`anchor_shifted`/`align_note`），视图单独计数；单次事件表行数上限 80（超出计入 `capped`）；基准取数同码 memo，**无 K 线债券基准（`sh000012`）不取数直接降级**，单路超 5s WARNING | 事件窗对照 | 报告输出 | 随 `event_window_impact` |
 | `event_window_impact` | 事件窗对照（新闻事件 → 交易日映射的 ±5 交易日窗收益 vs 文本极性方向比对；行情轴右端不足 5 日时按可用交易日截断并标未满窗，分歧例进 LLM 统一附录） | 事件窗对照 | 报告输出 | 报告章节与增强开关 `event_window_impact`（默认关） |
 | `schedule_replay_panel` | 调仓纪律回放数据装配与双端单源展示（回放契约 + view 与页签同文 + 回放引用 prompt_block） | 调仓纪律回放 | 报告输出 | 随 `rebalance_schedule_replay` |
 | `rebalance_schedule_replay` | 调仓纪律回放（月度定期/阈值偏离纪律多期回放 vs 买入持有，双线图与逐期成本表，回放结论进 LLM 统一附录） | 调仓纪律回放 | 报告输出 | 功能开关 `rebalance_schedule_replay`（默认关，独立章节与回放组） |
@@ -3581,7 +3590,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `portfolio_constraints` | 集中度/相关性约束标注（单品种沿用 `rebalance.threshold`、行业/相关性需显式配置；只标注不阻断；缺数据/短样本记「未评估」） | 行动建议（章内嵌块） | 监控 | 开关 `portfolio_constraints`（默认关，机制与诊断组） |
 | `evaluate_constraints` | 约束判定入口（三道上限 → 超限项 + `breached_codes`；开关关闭返回 `{"enabled": False}`） | 行动建议（章内嵌块） | 分析计算 | 随 `portfolio_constraints` |
 | `scenario_mandate` | 情景段方向约束口径选择（默认一句收敛：动手条件 + 「不操作」及所缺数据，两情景路径共用；`decision_basis` 关闭走回退强制方向口径；回退口径经 `scenario_mandate_cache_suffix` 以 `_ms` 后缀换键，两套文本常量共存一版） | LLM 生成 | LLM 生成 | 随 `decision_basis` |
-| `build_structured_header_instruction` | 决策头结构化契约构建（提示词侧追加 `决策头：…` 行，与解析器口径锁定） | 行动建议 | 监控 | 已内置（缓存后缀 `_dh` 常驻） |
+| `build_structured_header_instruction` | 决策头结构化契约构建（提示词侧追加 `决策头：…` 行，与解析器口径锁定） | 行动建议 | 监控 | 已内置（缓存后缀 `_dh` 随旧缓存兼容移除，不再追加） |
 | `decision_header` | 决策词归一解析器（标签优先/长词优先/否定守卫/复合词左边界/二义不猜） | 行动建议 | 监控 | 已内置（A 通道无开关） |
 | `deterministic_signal` | 确定性信号模块（实时注入 + 跨期沉淀双面：温度/分位/尾部风险预消化信号行 + 确定性评级账本沉淀，内置五类、因子目录随实验开关追加第 6 类；原 `signal_pre_digest`/`signal_ledger` 两开关合并转正） | LLM 生成 | LLM 生成 | 开关 `deterministic_signal`（默认开，机制与诊断组） |
 | `prompts_signals` | 信号预消化提示词块（开关判定收敛于缓存后缀函数） | LLM 生成 | LLM 生成 | 随 `deterministic_signal` |
@@ -3660,7 +3669,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `extract_purchase_constraint_block` | 约束块提取唯一单源（编排层与新闻链两侧共用，契约键/嵌套调整只改此处） | 申购限购 | LLM 生成 | 无 |
 | `holdings_editor` | 持仓录入编辑层（读→内存草稿→原子写回单源；账户=工作表名、保留非持仓页签、买入加权平均成本/卖出保留原成本） | 持仓录入 | 数据获取 | 无 |
 | `price_kind` | 品种价格形态判定（场内需录成交价 / 场外按交易日取官方净值；复用 `code_utils` 资产类型判定，不重写前缀知识） | 持仓录入 | 数据获取 | 无 |
-| `nav_lookup` | 按交易日取场外官方净值（复用既有历史净值链，不新增网络源；当日无净值取之前最近净值日并标明实际日期，取不到返回空） | 持仓录入 | 数据获取 | 无 |
+| `nav_lookup` | 按交易日取场外官方净值（复用既有历史净值链，不新增网络源；当日无净值取之前最近净值日并标明实际日期，取不到返回空）。**日期口径**：历史净值链的毫秒时间戳按 `BEIJING_TZ` 解（当日 00:00 UTC+8），按 UTC 解会整条前移一天，使「按交易日取净值」永远取到前一日 | 持仓录入 | 数据获取 | 无 |
 | `resolve_nav_on_trade_date` | 交易日→官方净值解析（交易日归一 + 当日前最近净值回溯 + 取不到即空，不猜价） | 持仓录入 | 数据获取 | 无 |
 | `resolve_purchase_shares` | 场外申购金额→份额换算（份额只在当日净值公布后成立；净值未公布返回空，交互层据此拒绝写入估算净值） | 持仓录入 | 数据获取 | 无 |
 | `ambiguous_price_kind` | 品种形态歧义判定（`00` 代码重叠区且名称无基金特征词 → 场内/场外无法只凭代码判定，交交互层反推或确认） | 持仓录入 | 数据获取 | 无 |
@@ -3944,7 +3953,7 @@ web/ (Web 服务层，薄入口)
 |:--|:--|:--|:--|:--|
 | `providers/cninfo.py::resolve_org_id` | 载荷直接为数组 / 被 dict 包一层 | 第三方变体（含企业网关代理） | 官方接口直接返回数组，代理层可能包一层 | 保留；两侧取同名字段，命中即止 |
 | `llm/_api_responses.py` | `usage` 与 `usageMetadata` 并存；`content` 为字符串 | 第三方变体（Gemini / 各家兼容实现） | 家系差异而非版本差异 | 保留；按家系分支解析 |
-| `providers/tiantian_holdings.py::_fetch_legacy_quarterly` | 不带年份参数的默认请求跳 | 第三方端点行为 | 上游「年份域回溯」可能空，默认请求有数据 | 保留为第 3 跳；报告层按报告期时效标注 |
+| `providers/tiantian_holdings.py::_fetch_default_quarter` | 不带年份参数的默认请求跳 | 第三方端点行为 | 上游「年份域回溯」可能空，默认请求有数据 | 保留为第 3 跳；报告层按报告期时效标注 |
 | `providers/eastmoney.py` | 返回结构与天天基金同形 | 本方跨源对齐（非容错） | 两个源解析后的统一契约 | 保留；契约由 `analysis` 消费方约束 |
 | `core/holding_status.py` | `"600900.0"` 归一为 `"600900"` | 本方输入形状（Excel 浮点） | 表格数字单元格导出即带 `.0` | 保留；归一在入口一次完成 |
 | `core/decision_header.py`、`report/decision_llm_capture.py` | `sh600000` 等带前缀代码补挂裸 6 位别名 | 本方输入形状（持仓代码写法） | 用户可写带交易所前缀 | 保留；别名只用于对账 |
@@ -4080,7 +4089,7 @@ web/ (Web 服务层，薄入口)
 
 > `evolution_data`（组合演进，C19 契约，多快照趋势聚合）：`{"available": bool, "snapshot_count": int, "min_snapshots": int, "periods": list[str], "total_value": list[float], "total_cost": list[float], "total_pnl": list[float], "holding_counts": list[int], "account_flows": {account: list[float]}, "hhi": list[float\|None], "top_holdings": list[dict], "reason": str}`。`top_holdings` 每项含 code/name/weights（各期占比 %）/present_count（出现期数）；历史快照 `market_value=0.0` 时权重回退成本口径。由 `analysis/portfolio_evolution.py` 计算、`report/orchestrator.py` 注入（C7 注册 type=`evolution`、data_flag=`evolution_data`，见 §4.12），有效快照 < MIN_SNAPSHOTS=3 时 `available=false` 落 §1.4.5 降级。
 
-> `history_data`（组合历史走势 + 回撤，C19 契约，供组合历史走势与回撤章复用）：`{"bars": list[dict], "max_drawdown": float, "max_drawdown_pct": float, "drawdown_events": list[dict], "recovery_times": list[dict], "drawdown_available": bool, "annualized_volatility": float, "total_return": float, "daily_returns": list[float], "monthly_returns": dict, "warnings": list[str], "terminal_staleness": dict|None, "benchmarks": list[dict], "successful_holdings": list}`。`drawdown_events`（独立回撤事件）含 peak_date/trough_date/recovery_date/drawdown_pct/duration_days/recovery_days/recovered；`recovery_times`（恢复耗时明细）含 start_date/end_date/days。`terminal_staleness` 为走势终点口径校验结果（`latest_date`/`max_lag_trading_days`/`assets`），只有存在标的净值落后组合终点 ≥2 个交易日时才有值：LOCF 合并会把未刷新的标的沿用上次净值，落在「QDII/场外基金 T-1」属常态不提示，落后 2 个交易日以上则走势终值与最新市值口径不同（末端日收益/回撤偏低），此时同步追加一条 `warnings` 并在数据状态区显示 `history_nav_stale`。**终点回填（消除口径差）**：`get_combined_timeseries(latest_quotes=...)` 接收`{code: (最新价/净值, 估值日)}`（由 `_snapshot.latest_quotes_from_detail_rows` 从持仓明细行派生，估值日缺失不入表），某标的历史末条早于其估值日时按最新价追加一条「估值日 = 行情日」的 bar（份额恒定的 as-if 语义不变、走副本不改会话缓存序列），使走势终值与报告头总市值同口径；回填后仍滞后的标的才进 `terminal_staleness`。同一次运行的两遍全量计算（主窗口 + 子块长窗）里长窗传`warn_on_terminal_staleness=False`，只保留契约字段不重复打 WARNING。由 `report/portfolio_history.py` 组装（C7 注册 type=`history`），`drawdown_available` 表示有效交易日 ≥ MIN_SPAN 才渲染回撤明细，否则落 §1.4.5 降级。消费方为「组合历史走势与回撤」（`portfolio_history_drawdown`，一章多区块，Excel 见 `report/portfolio_history_drawdown_sheet.py`、HTML 见模板 `report_template.html`），区块数据由本契约 + 下方 `crisis_annotation_data`/`tail_risk_data` 提供。
+> `history_data`（组合历史走势 + 回撤，C19 契约，供组合历史走势与回撤章复用）：`{"bars": list[dict], "max_drawdown": float, "max_drawdown_pct": float, "drawdown_events": list[dict], "recovery_times": list[dict], "drawdown_available": bool, "annualized_volatility": float, "total_return": float, "daily_returns": list[float], "monthly_returns": dict, "warnings": list[str], "terminal_staleness": dict|None, "benchmarks": list[dict], "successful_holdings": list}`。`drawdown_events`（独立回撤事件）含 peak_date/trough_date/recovery_date/drawdown_pct/duration_days/recovery_days/recovered；`recovery_times`（恢复耗时明细）含 start_date/end_date/days。`terminal_staleness` 为走势终点口径校验结果（`latest_date`/`max_lag_trading_days`/`assets` + 展示单一源 `headline`/`consequence`/`caveat`，`assets` 每项另带预格式化 `detail`），只有存在标的净值落后组合终点 ≥2 个交易日时才有值：LOCF 合并会把未刷新的标的沿用上次净值，落在「QDII/场外基金 T-1」属常态不提示，落后 2 个交易日以上则走势终值与最新市值口径不同（末端日收益/回撤偏低），此时同步追加一条 `warnings` 并在数据状态区显示 `history_nav_stale`。**口径文案单一源**：标题句/后果句分别在 `report/_history_quality.py` 的 `TERMINAL_STALENESS_HEADLINE`/`TERMINAL_STALENESS_CONSEQUENCE`，`terminal_staleness_caveat()`/`terminal_staleness_asset_line()` 负责拼装；生产侧（`portfolio_history.get_combined_timeseries`）写入 `caveat`/`detail`，Excel 页签与数据状态词直接取用，HTML 模板副本由 `test_drawdown_html_excel` 按同一常量逐字断言——三处不会静默漂移。**终点回填（消除口径差）**：`get_combined_timeseries(latest_quotes=...)` 接收`{code: (最新价/净值, 估值日)}`（由 `_snapshot.latest_quotes_from_detail_rows` 从持仓明细行派生，估值日缺失不入表），某标的历史末条早于其估值日时按最新价追加一条「估值日 = 行情日」的 bar（份额恒定的 as-if 语义不变、走副本不改会话缓存序列），使走势终值与报告头总市值同口径；回填后仍滞后的标的才进 `terminal_staleness`。同一次运行的两遍全量计算（主窗口 + 子块长窗）里长窗传`warn_on_terminal_staleness=False`，只保留契约字段不重复打 WARNING。由 `report/portfolio_history.py` 组装（C7 注册 type=`history`），`drawdown_available` 表示有效交易日 ≥ MIN_SPAN 才渲染回撤明细，否则落 §1.4.5 降级。消费方为「组合历史走势与回撤」（`portfolio_history_drawdown`，一章多区块，Excel 见 `report/portfolio_history_drawdown_sheet.py`、HTML 见模板 `report_template.html`），区块数据由本契约 + 下方 `crisis_annotation_data`/`tail_risk_data` 提供。
 
 > `crisis_annotation_data`（危机区间标注，C19 契约，关态 2 键 + 回放态 4 键）：`{"available": bool, "intervals": list[dict]}`，回放态（开关 `crisis_replay`）顶层追加 `"replay": true` 与可选 `"index_reason"`（指数层不可用原因）。`intervals` 每项含 name/start/end/desc/in_range/interval_drawdown_pct/trough_date/recovery_days/recovered——基于 `history_data.bars` 对预设历史危机区间（2015 股灾 / 2018 贸易摩擦 / 2020 疫情 / 2022 调整 / 2025 关税冲击，`analysis/crisis_annotation.py::CRISIS_INTERVALS` 静态历史事实表，新增区间只改该表、全端清单动态跟随）做窗口重叠裁剪与区间统计：`in_range` 表示与报告数据窗口重叠；`interval_drawdown_pct` 为区间内 running-peak 最大回撤（正数 %，窗口内无 bar 时为 None）；`trough_date` 为区间最深日；`recovery_days` 为最深日→首个回到峰值的恢复耗时（数据窗口内未恢复为 None）；`recovered` 为是否已恢复。回放态每区间另含 `portfolio_return_pct`（组合窗内区间首尾净值收益，窗外 None）、`index_return_pct`/`index_drawdown_pct`（指数层区间收益与区间最大回撤，来自基准长窗日线 LOCF 序列，不可用 None）与 `index_available`——**双层回放**：指数层覆盖全部静态区间（指数源可回溯 3650 交易日），组合层仅覆盖子块扩展窗（`max(lookback_days, 365)`）内区间，窗外行状态标「组合窗口外」。由 `analysis/crisis_annotation.py::build_crisis_annotation(history_data, replay, index_series)` 计算（纯标准库、analysis 层隔离，无 report/llm 依赖），full/both 两路径统一由 `report/_snapshot.py::assemble_history_augmented_data` 注入 pipeline_data（回放开关开时指数层随 `_crisis_index_days()`（按静态表最早起点动态推算、封顶 3650）经 `fetch_benchmarks` 取数），Chart.js 净值图阴影带（`chart_data_builder.py` 计算起止索引 → `chart-init.js::buildCrisisBandPlugin`）与 HTML 危机表/Excel 危机区块消费。危机标注净值图必须 C20 图下说明（`.chart-caption` 跟随是否有 in_range 区间数据）。
 

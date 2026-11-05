@@ -350,6 +350,7 @@ class TestHtmlDisplayBuilder:
 
         accounts = {"证券账户": [{"code": "600900"}]}
         display = _build_purchase_status_display(_contract(), accounts)
+        assert display is not None, "有契约时展示数据不得为 None"
         assert display["cells"]["600900"] == "🟢 开放"
 
 
@@ -369,7 +370,7 @@ class TestPurchaseStatusTemplate:
             _jinja_money,
             _jinja_pct,
             _jinja_price,
-            _jinja_profit_color,
+            _jinja_profit_class,
         )
 
         self.env = Environment(autoescape=True)
@@ -378,7 +379,7 @@ class TestPurchaseStatusTemplate:
                 "money": _jinja_money,
                 "pct": _jinja_pct,
                 "price": _jinja_price,
-                "profit_color": _jinja_profit_color,
+                "profit_class": _jinja_profit_class,
             }
         )
         # 片段取自真实模板 partials，须继承生产过滤器（含匿名化代码列 anon_code）
@@ -463,9 +464,7 @@ class TestPurchaseStatusTemplate:
 
     def test_footnote_rendered_with_channel_caveat(self):
         """脚注区块：列展示时恒在，文案与 Excel 同源（单源函数产出）。"""
-        frag = self._extract(
-            '{% if purchase_status_display %}\n            <div style="padding: 4px 8px; font-size: var(--fs-table-sm); color:'
-        )
+        frag = self._extract('{% if purchase_status_display %}\n            <div class="ps-footnote')
         data = _contract()
         display = {"footnote": ps.purchase_status_footnote(data), "level": "fresh"}
         html = self._render(frag, purchase_status_display=display)
@@ -473,12 +472,10 @@ class TestPurchaseStatusTemplate:
         assert self._render(frag, purchase_status_display=None).strip() == ""
 
     def test_footnote_stale_level_uses_warning_style(self) -> None:
-        """stale 档脚注用告警色 token（黄标；文案本身仍为单源同一条）。"""
-        frag = self._extract(
-            '{% if purchase_status_display %}\n            <div style="padding: 4px 8px; font-size: var(--fs-table-sm); color:'
-        )
+        """stale 档脚注用告警色语义类（text-warn → var(--warn-text)；文案本身仍为单源同一条）。"""
+        frag = self._extract('{% if purchase_status_display %}\n            <div class="ps-footnote')
         html = self._render(frag, purchase_status_display={"footnote": "x", "level": "stale"})
-        assert "var(--warn-text)" in html
+        assert "text-warn" in html
 
 
 class TestRestrictedIndex:
@@ -711,7 +708,7 @@ class TestCategoryPurchaseTemplate:
             _jinja_money,
             _jinja_pct,
             _jinja_price,
-            _jinja_profit_color,
+            _jinja_profit_class,
         )
 
         self.env = Environment(autoescape=True)
@@ -720,7 +717,7 @@ class TestCategoryPurchaseTemplate:
                 "money": _jinja_money,
                 "pct": _jinja_pct,
                 "price": _jinja_price,
-                "profit_color": _jinja_profit_color,
+                "profit_class": _jinja_profit_class,
             }
         )
         # 片段取自真实模板 partials，须继承生产过滤器（含匿名化代码列 anon_code）

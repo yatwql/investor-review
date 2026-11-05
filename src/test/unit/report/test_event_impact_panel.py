@@ -455,3 +455,80 @@ def test_keyword_index_marks_sector_level_entries():
     assert ("600900", "品种") in index["长江电力"]
     # 场外基金（名称命中基金特征词）不入索引
     assert "稳健增长混合" not in index
+
+
+# ── 行情取数窗口自适应（固定 365 天窗口会让更早事件日整条降级） ──
+
+
+def test_history_days_floor_for_recent_or_empty_news():
+    """无新闻或新闻都在窗口内 → 保持 365 天基线（不额外拉数）。"""
+    from datetime import date
+
+    from src.python.report.event_impact_panel import history_days_for
+
+    assert history_days_for([]) == 365
+    assert history_days_for([{"ctime": "2026-11-01 10:00:00"}], today=date(2026, 11, 5)) == 365
+
+
+def test_history_days_expands_to_cover_old_news_and_caps():
+    """老新闻 → 窗口按最早事件日回推（覆盖 + 后窗余量 + 缓冲）；极老时夹到上限。"""
+    from datetime import date
+
+    from src.python.report.event_impact_panel import HISTORY_DAYS_CAP, history_days_for
+
+    # 2026-08-01 距 2026-11-05 共 96 天 → 96 + 后窗两手数(10) + 30 = 136 < 365，仍取基线
+    assert history_days_for([{"ctime": "2026-08-01"}], today=date(2026, 11, 5)) == 365
+    # 2025-11-05 距 365 天 → 365 + 40 = 405，超过基线按规定放大
+    assert history_days_for([{"ctime": "2025-11-05"}], today=date(2026, 11, 5)) == 405
+    # 极老新闻夹到上限，避免单轮取数预算失控
+    assert history_days_for([{"ctime": "2015-01-01"}], today=date(2026, 11, 5)) == HISTORY_DAYS_CAP
+
+
+def test_default_fetchers_use_derived_history_window(monkeypatch):
+    """默认取数器按推导窗口请求行情（防退回固定 365 天的旧口径）。"""
+    from src.python.report import event_impact_panel as eip
+
+    calls: list[tuple[str, int]] = []
+
+    def _fake_stock(kind, code, days=365):
+        calls.append((code, days))
+        return _bars()
+
+    monkeypatch.setattr(
+        "src.python.fetcher.chain_incremental.fetch_with_incremental_fallback", _fake_stock, raising=True
+    )
+    monkeypatch.setattr(
+        "src.python.fetcher.index.fetch_index_history", lambda code, days=365: _bars(3000.0), raising=True
+    )
+
+    eip.build_event_impact_panel(
+        _HOLDINGS,
+        [_news(ctime="2025-11-05 10:30:00", matched_keywords=["工商银行"])],
+        _PENETRATED,
+        benchmark_override="sh000300",
+    )
+    assert calls, "默认取数器未被调用"
+    expected = eip.history_days_for([_news(ctime="2025-11-05 10:30:00")])
+    assert expected > eip.HISTORY_DAYS_FLOOR
+    assert all(days == expected for _code, days in calls), calls
+
+
+def test_default_row_cap_bounds_events_and_reports_capped():
+    """默认上限：命中数超过 MAX_EVENT_ROWS 时出行数被夹住，超出部分计入 capped。"""
+    from src.python.report.event_impact_panel import MAX_EVENT_ROWS
+
+    total = MAX_EVENT_ROWS + 10
+    news = [
+        _news(title=f"第 {i} 条", url=f"https://example.com/n{i}", matched_keywords=["工商银行"]) for i in range(total)
+    ]
+    fetch_bars, fetch_index, resolve = _providers()
+    res = build_event_rows(
+        _HOLDINGS,
+        news,
+        _PENETRATED,
+        fetch_bars=fetch_bars,
+        fetch_index=fetch_index,
+        benchmark_code_for=resolve,
+    )
+    assert len(res["events"]) == MAX_EVENT_ROWS
+    assert res["skipped"]["capped"] == total - MAX_EVENT_ROWS

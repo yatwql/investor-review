@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.17.1
+> 文档版本：0.17.2
 
 ## 概述
 
@@ -106,6 +106,32 @@
 开启后上屏显著缓存未命中、缓存保活成功、**压缩用量**、provider 恢复四类通知。这是排查「额度去哪了」的主观测口：压缩一次要读整个上下文，其用量此前完全不可见。
 
 **未改动**：`thinkingLevelMap`（内置 `low/high/max` 已够用，用 `/thinking` 切档）、`compat`（`thinkingFormat` 等由 pi 内置目录提供）、`input`（flash 为纯文本，视觉实验版另有一个模型）、`samplingParams`（仅对 OpenAI 兼容传输生效；订阅端点走 Anthropic/兼容协议时该参数不适用，故未对它们下发）。
+
+**⑦ 静态检查：模板不把 Jinja 写进 CSS 值位置**
+
+报告模板（`src/static/tmpl/`）是 **Jinja2** 而非合法 HTML。曾经的写法把 Jinja 表达式放进 CSS 值位置（`style="order: {{ n }}"`、`style="color: {{ x | profit_color }}"`），HTML 语言服务把属性值当 CSS 扫，单模板稳定报几十条 `at-rule or selector expected` / `property value expected`——纯解析误报，与模板逻辑无关。
+
+现约定三条，避免误报也避免「同一事实两处定义」：
+
+| 维度 | 承载方式 | 说明 |
+|---|---|---|
+| 颜色 | **语义 class**（`.profit` / `.loss` / `.rating-*` / `.text-warn` / `.corr-*` / `.fill-*`…） | 过滤器 `profit_class` / `price_type_class` 出类名；色值只在 `report_template.html` 的 token 与工具类里出现，暗色主题自动跟随 |
+| 章节顺序 | 模板 **DOM 顺序**（include 顺序 = `_REPORT_SECTION_DEFAULT`）+ **服务端注入的 CSS `order` 规则** | 用户配置 `report_section_order` 时序号与 DOM 顺序不一致，靠 `html_writer._inject_section_order_css()` 把`#sec-x{order:N}` 拼好替换模板占位 `<!--SECTION_ORDER_CSS-->`；不用 Jinja 写 `style`（花括号会被 CSS 解析器判语法错） |
+| 数据驱动的几何量 | **HTML/SVG 属性**（如配置分布条 `<svg width="{{ pct }}%">`） | 属性不是 CSS 值，解析器不介入 |
+| 样式资产 | **独立 partial**（`_base_styles.html` + `_report_styles.html` / `_whatif_styles.html`，整块 `<style>`） | 主模板经 `{% include %}` 引在 `<style>` 之外，块内保持纯 CSS；改样式与改结构不再挤同一文件 |
+
+**样式放哪儿（归属判据）**：三类载体各有边界，不按文件大小随手挪——
+
+| 载体 | 放什么 | 判据 |
+|---|---|---|
+| `partials/_base_styles.html` | **两页共用的基础面**（排版、表格、页头页脚、浮动按钮） | 两页都需要且规则逐字相同——先放这里，页面面只留差异 |
+| `partials/_report_styles.html` / `_whatif_styles.html` | 页面级样式（该页独有的排版、图表、打印覆盖） | 该页任何状态下都要用的规则 |
+| 章节 partial 内嵌 `<style>`（如 `report_qa_section.html`） | 该章独有样式 | 章节可整体关闭：关态**零字节**，不为关掉的功能付样式体积 |
+| 主模板 `<style>` | 仅 `_base_styles.html`/页面样式 partial 的 `{% include %}` | 主模板本身不写 CSS |
+
+级联先后是前提：`_base_styles.html` 必须 include 在页面样式**之前**（否则基础面会覆盖页面的有意差异）。「报告 CSS」在两个地方被读取，口径**有意不同**，改动时两边都要看：`scripts/check-style-guardrails._report_css_text()` 只聚合 `_*_styles.html`（做双面 token 对齐，不含章节局部样式）；测试侧 `read_template_css()` 聚合**全部** partial（含章节样式，供字号/断点类断言覆盖到章内规则）。
+
+守卫：`src/test/unit/report/test_html_report_structure.py` 静态扫描全部模板 `style="…"` 不得含 `{{`/`{%`、`<style>` 块内不得含 `{{`/`{%`，并对渲染产物断言 `style` 无模板残留；同文件另断言 `div.section` 无内联 `order:` 且 DOM 顺序与编号一致。压误报用的 `.pi-lens.json` 已随本批次删除，HTML 语言服务恢复启用。
 
 **为什么模型覆盖放在 `.pi/` 而要软链生效**：pi CLI **只读** `~/.pi/agent/models.json`（`getModelsPath() = getAgentDir() + "/models.json"`，`getAgentDir()` 只认 `PI_AGENT_DIR` 或 `~/.pi/agent`），**不读项目级 `.pi/models.json`**；项目级 `.pi/` 仅支持 `settings.json`/扩展/技能/主题。因此模型覆盖的仓库文件是**唯一事实来源**，用软链挂到全局路径生效（`settings.json` 走项目级路径，无需软链）：
 
@@ -1370,7 +1396,7 @@ DataModuleDef("我的 LLM 分析", "llm_my_analysis",
 
 > **内部接缝类开关也应转正（第二类首例：`datasource_adapter`）**：判据与上一条同源但落在另一面——**开关两种取值下报告产物是否等价**。若等价（新实现只是把既有路径换成结构更清晰的等价实现，差异经等价性回归测试逐项锁定且不影响下游取值语义），则它既不是用户可感知的功能、也不是用户能做的选择，摆在用户面前只会让人误以为「开了有好处」，而默认关的实际代价是**生产路径从不执行新实现**、新数据源/新字段接入时才第一次实跑。此类开关转正为默认开（摘除实验身份，`group` 不变）：① `experimental` 置 `False` 且 `default` 置 `True`（**两处字段改动**）；② 开关经跨版本稳定期评估后**进一步内置化**（删开关与关态死分支；回退仅保留「适配器不可用时回落既有映射」的运行时安全网，不再可经配置触发）；③ 测试守两向——默认配置走新实现、回退与既有实现等价（见 `test_features.py::TestDatasourceAdapterBuiltinized` 与 `test_quote_adapter_parity.py`）。数据源适配契约（`datasource_adapter`）是此模式的首例（已内置）。
 
-> **读侧增强类开关也应转正（第三类首例：`deterministic_signal` / `module_quality_gate` / `llm_debate_conditional`）**：判据落在「**开启的代价是否只在读侧**」——只在既有提示词或既有产物流水线上追加一段由**已算出的**数据派生的内容，不新增 LLM 调用次数、不写新的持久化文件、无隐式网络与耗时；且该段内容有确定的收益（方向性结论替代裸数值、结构化契约替代表格猜测、质量分级提示读者降级参考、缺凭据时给可读指引）。此类开关默认关的实际代价是**机制在生产路径从不执行**，用户手上的产物看不到这层增强；用户若逐项去 `features.json` 里打开它，等于用配置承担了本该由默认值表达的取舍（转正判据的可观测量：见 core/experiment_stats.py 的启用次数统计与 doctor 账本概览）。转正口径：① `experimental` 置 `False` 且 `default` 置 `True`（**两处字段改动**；作用域属机制与诊断，`group` 不变）；② `affects_report` **照实答 `True`**——它们确实改变产物内容（`deterministic_signal` 注入信号块、`module_quality_gate` 注入质量横幅、`llm_debate_conditional` 追加情景段），故 Web 面板照常带「（影响报告）」标记；③ 开关保留为关闭杠杆，`features.json` 置 false 即回到「未引入本机制」的行为；④ 凡开关改变提示词者，其缓存后缀函数（`structured_header_cache_suffix()` → `_dh`、`debate_feature_cache_suffix()` → `_c`、`prompts_signals._signal_digest_cache_suffix()`、`core.signal_ledger.summary_cache_suffix()` → `_sg`）随之由「默认返回空」变为「默认返回非空」——**升级后首次运行会换键重生成一次**，属预期行为，须在变更记录中写明；⑤ 测试补四向——默认值、非实验项（`--experiment` 取值域退出）、显式关闭仍走未引入前的路径（关闭基线必须**显式**置 false，不能再依赖 `reset_feature_flags()`，它现在返回的是已转正的默认值）、默认配置下走增强路径（见 `test_features.py::TestReadSidePromotion`）。
+> **读侧增强类开关也应转正（第三类首例：`deterministic_signal` / `module_quality_gate` / `llm_debate_conditional`）**：判据落在「**开启的代价是否只在读侧**」——只在既有提示词或既有产物流水线上追加一段由**已算出的**数据派生的内容，不新增 LLM 调用次数、不写新的持久化文件、无隐式网络与耗时；且该段内容有确定的收益（方向性结论替代裸数值、结构化契约替代表格猜测、质量分级提示读者降级参考、缺凭据时给可读指引）。此类开关默认关的实际代价是**机制在生产路径从不执行**，用户手上的产物看不到这层增强；用户若逐项去 `features.json` 里打开它，等于用配置承担了本该由默认值表达的取舍（转正判据的可观测量：见 core/experiment_stats.py 的启用次数统计与 doctor 账本概览）。转正口径：① `experimental` 置 `False` 且 `default` 置 `True`（**两处字段改动**；作用域属机制与诊断，`group` 不变）；② `affects_report` **照实答 `True`**——它们确实改变产物内容（`deterministic_signal` 注入信号块、`module_quality_gate` 注入质量横幅、`llm_debate_conditional` 追加情景段），故 Web 面板照常带「（影响报告）」标记；③ 开关保留为关闭杠杆，`features.json` 置 false 即回到「未引入本机制」的行为；④ 凡开关改变提示词者，其缓存后缀函数（→ `_dh`、`debate_feature_cache_suffix()` → `_c`、`prompts_signals._signal_digest_cache_suffix()`、`core.signal_ledger.summary_cache_suffix()` → `_sg`）随之由「默认返回空」变为「默认返回非空」——**升级后首次运行会换键重生成一次**，属预期行为，须在变更记录中写明；⑤ 测试补四向——默认值、非实验项（`--experiment` 取值域退出）、显式关闭仍走未引入前的路径（关闭基线必须**显式**置 false，不能再依赖 `reset_feature_flags()`，它现在返回的是已转正的默认值）、默认配置下走增强路径（见 `test_features.py::TestReadSidePromotion`）。
 >
 > **章节/页签类开关转正目标是独立章 / 事件与摘要组（第四类首例：`holding_change_review` / `whatif_trade_cost` / `event_window_impact` 已按此归入，default 保持 `False`）**：判据落在「产物形态」——独立章节/页签类能力验证通过后的归宿按作用域入独立章节与回放 / 分析增强组：`default` 保持 `False`（默认产物字节不因转正变化，读者拿到的报告不因转正多出章节），面板入口随分组自动延续，`--experiment` 取值域随 `experimental` 摘除同步退出，产物自述与启用统计随实验身份移除（「质量可能不稳定」警示只属于未验证功能，统计的观测使命随转正完成）。转正定义因此为「**摘除 experimental 身份，作用域变则同时改 group**」。
 >

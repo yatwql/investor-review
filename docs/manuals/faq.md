@@ -288,7 +288,15 @@ A: 可以。编辑 `data/config/config.json` 的 `rebalance` 段：
 
 **Q: 如何自定义 HTML 报告样式？**
 
-A: 直接编辑 `src/static/tmpl/report_template.html`，所有样式在 `<style>` 标签内集中定义。修改后重新生成报告即可生效，无需重启程序。
+A: 样式集中在 `src/static/tmpl/partials/` 下的三个样式文件里，改哪一层取决于你要影响哪些报告：
+
+| 想改什么 | 改哪个文件 |
+|---|---|
+| 两类报告都生效的公共面（正文字体、表格、页头页脚、浮动按钮） | `_base_styles.html` |
+| 只影响主分析报告（章节版式、图表、打印） | `_report_styles.html` |
+| 只影响调仓 What-if 对比页 | `_whatif_styles.html` |
+
+修改后重新生成报告即可生效，无需重启程序。`report_template.html` / `whatif_template.html` 本身只保留结构并引用上述文件，里面不再有样式本体。
 
 ---
 

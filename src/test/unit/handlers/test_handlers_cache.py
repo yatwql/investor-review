@@ -774,3 +774,88 @@ class TestCacheManagementEsc(unittest.TestCase):
             result = _cmd_cache_management()
         self.assertIsNone(result)
         mock_choice.assert_called_once()
+
+
+@pytest.mark.unit_core
+class TestPositionResultFreshnessOutput(unittest.TestCase):
+    """刷新后按市场列取价口径与「已更新到最新」计数（口径全引用报告侧实现）。"""
+
+    @staticmethod
+    def _result(groups, trading_day="2026-11-05"):
+        from src.python.cache.operations import PositionCacheResult
+
+        result = PositionCacheResult(total=3, price_ok=2)
+        result.trading_day = trading_day
+        result.market_breakdown = groups
+        return result
+
+    def test_prints_group_labels_and_pending_items(self):
+        import src.python.tui.handlers_cache as hc
+
+        result = self._result(
+            [
+                {
+                    "group": "场内",
+                    "total": 2,
+                    "latest": 1,
+                    "labels": {"场内收盘价(T)": 1, "场内收盘价(2026-10-30)": 1},
+                    "pending": [
+                        {
+                            "code": "513100",
+                            "name": "纳指ETF",
+                            "label": "场内收盘价(2026-10-30)",
+                            "nav_date": "2026-10-30",
+                        }
+                    ],
+                },
+                {
+                    "group": "QDII",
+                    "total": 1,
+                    "latest": 1,
+                    "labels": {"官方净值(T-1)": 1},
+                    "pending": [],
+                },
+            ]
+        )
+
+        buf = io.StringIO()
+        with (
+            patch("src.python.core.trading_calendar.count_trading_days_elapsed", lambda *_args: 4),
+            patch("src.python.tui.text_layout.terminal_columns", lambda: 160),
+            contextlib.redirect_stdout(buf),
+        ):
+            hc._print_position_result(result)
+
+        out = " ".join(buf.getvalue().split())
+        self.assertIn("场内 2 条：场内收盘价(T) 1 条 · 场内收盘价(2026-10-30) 1 条（已更新至最新 1/2）", out)
+        self.assertIn("QDII 1 条：官方净值(T-1) 1 条（已更新至最新 1/1）", out)
+        self.assertIn("纳指ETF (513100) 场内收盘价(2026-10-30)，落后 4 个交易日", out)
+
+    def test_all_latest_shows_ok_marker(self):
+        import src.python.tui.handlers_cache as hc
+
+        result = self._result(
+            [{"group": "国内场外", "total": 1, "latest": 1, "labels": {"官方净值(T)": 1}, "pending": []}]
+        )
+
+        buf = io.StringIO()
+        with (
+            patch("src.python.tui.text_layout.terminal_columns", lambda: 160),
+            contextlib.redirect_stdout(buf),
+        ):
+            hc._print_position_result(result)
+
+        out = " ".join(buf.getvalue().split())
+        self.assertIn("[OK] 国内场外 1 条：官方净值(T) 1 条（已更新至最新 1/1）", out)
+
+    def test_no_breakdown_silent(self):
+        """历法不可得（breakdown 为 None）时只打原有结果，不硬凑一行。"""
+        import src.python.tui.handlers_cache as hc
+        from src.python.cache.operations import PositionCacheResult
+
+        result = PositionCacheResult(total=1, price_ok=1)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            hc._print_position_result(result)
+
+        self.assertNotIn("取价口径", buf.getvalue())

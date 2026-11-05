@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pytest
 
+from src.test.unit.report._html_report_fixtures import read_template_text
+
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -45,7 +47,7 @@ def _root_defs(text: str) -> set[str]:
 # 类作用域 fixture 置于模块级（类内实例方法形式不被 pytest 接受）
 @pytest.fixture(scope="class")
 def report_defs():
-    return _root_defs(REPORT_TMPL.read_text(encoding="utf-8"))
+    return _root_defs(read_template_text())
 
 
 @pytest.fixture(scope="class")
@@ -87,7 +89,7 @@ class TestReportBrandToken:
     def test_css_brand_usage_uses_token(self):
         """CSS 使用行不得再裸写品牌蓝（Chart 定义行与 JS fallback 豁免）。"""
         bad = []
-        for i, ln in enumerate(REPORT_TMPL.read_text(encoding="utf-8").splitlines(), 1):
+        for i, ln in enumerate(read_template_text().splitlines(), 1):
             if "#2E75B6" not in ln:
                 continue
             if "--chart-primary:" in ln or "--primary:" in ln or "'#2E75B6'" in ln:
@@ -97,10 +99,10 @@ class TestReportBrandToken:
 
     def test_renamed_status_tokens_no_legacy_defs(self):
         """旧 --status-* 定义与引用已切换（--llm-status-* 为独立域不受影响）。"""
-        text = REPORT_TMPL.read_text(encoding="utf-8")
+        text = read_template_text()
         legacy = re.findall(r"(?<!llm)--status-(?:ok|warn|info)\b", text)
         assert legacy == [], f"残留旧状态名: {legacy}"
 
     def test_body_font_uses_token(self):
-        text = REPORT_TMPL.read_text(encoding="utf-8")
+        text = read_template_text()
         assert "font-family: var(--font-stack);" in text

@@ -113,3 +113,50 @@ def test_output_clears_previous_failure_reason():
         run_news_correlation_safe([{"title": "t"}], [])
 
     assert "news_correlation" not in LLM_MODULE_FAILURE
+
+
+# ── 批次级成败回传（回归：全批失败与全缓存命中同形，被记成成功）──
+
+
+def _run_batch_mode_with(returned):
+    """用固定返回值跑一轮批量骨架，返回 (usage, ok_batches, failed_batches)。"""
+    from src.python.llm import _batch_mode
+
+    items = [{"id": i} for i in range(3)]
+    with patch.object(_batch_mode, "call_llm", return_value=returned):
+        _map, _cached, usage, _cnt = _batch_mode.run_batch_mode(
+            {"cache_enabled_news_correlation": False},
+            "news_correlation",
+            batch_preparer=lambda: (items, "fp"),
+            per_item_cache_fn=None,
+            batch_prompt_fn=lambda batch, fp: "prompt",
+            response_parser=lambda batch, result: [{"t": 1} for _ in batch],
+        )
+    return usage
+
+
+def test_batch_mode_reports_zero_ok_when_all_batches_fail():
+    """全部批次无产出 → ok_batches=0、failed_batches=批数（不得用零用量冒充成功）。"""
+    usage = _run_batch_mode_with((None, None, None))
+
+    assert usage["ok_batches"] == 0
+    assert usage["failed_batches"] == usage["total_batches"] >= 1
+
+
+def test_batch_mode_reports_ok_batches_when_produced():
+    """有产出 → ok_batches 计数上挑，failed_batches 为 0（正向上屏依据）。"""
+    usage = _run_batch_mode_with(("响应正文", {"input_tokens": 10, "output_tokens": 5}, {}))
+
+    assert usage["ok_batches"] >= 1
+    assert usage["failed_batches"] == 0
+
+
+def test_finalize_marks_all_batches_failed_as_no_production():
+    """批次全失败时即使回到零用量，也不得落模块用量行（明细不得显示成功）。"""
+    token_usage = _finalize(
+        {"input": 0, "output": 0, "cache_hit": 0, "ok_batches": 0, "failed_batches": 3, "total_batches": 3},
+        analysis_count=0,
+    )
+
+    assert token_usage == {}
+    assert "news_correlation" not in _session_usage["per_module"]

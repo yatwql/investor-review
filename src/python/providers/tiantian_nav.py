@@ -10,8 +10,9 @@ from __future__ import annotations
 import json
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime
 
+from src.python.core.constants import BEIJING_TZ
 from src.python.providers.tiantian_base import _request_pingzhong_data, _safe_float
 
 logger = logging.getLogger("invest")
@@ -121,9 +122,11 @@ def _parse_nav_trend(text: str, var_name: str) -> list[dict]:
         elif len(date_str) == 10 and "-" in date_str:
             pass  # 已经是 YYYY-MM-DD 格式
         elif len(date_str) >= 13:
-            # 毫秒时间戳 → YYYY-MM-DD
+            # 毫秒时间戳 → YYYY-MM-DD。必须按**北京时间**解：天天基金的 x 是当日
+            # 00:00（UTC+8）的毫秒数，即前一日 16:00 UTC——用 UTC 解会整体前移一天，
+            # 让每一条净值都标注成前一交易日（录入按交易日取净值时永远取到前一日）。
             try:
-                dt = datetime.fromtimestamp(ts / 1000, tz=timezone.utc)
+                dt = datetime.fromtimestamp(ts / 1000, tz=BEIJING_TZ)
                 date_str = dt.strftime("%Y-%m-%d")
             except (OSError, ValueError):
                 continue

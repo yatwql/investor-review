@@ -70,11 +70,14 @@ def _execute_and_merge_batch(
     item_cache_keys: dict[int, str],
     per_item_cache_fn: Any,
     total_batches: int,
-) -> tuple[int, int, int]:
+) -> tuple[int, int, int, int]:
     """执行单批 LLM 调用、解析结果并写入缓存。
 
     Returns:
-        (input_tokens, output_tokens) 本批的 token 用量
+        (input_tokens, output_tokens, cache_hit_tokens, 本批解析出的条目数)
+
+        末项是「本批是否真出了货」的判据：``usage`` 为空/零不代表失败（全缓存命中
+        也走这里），只有一条也没解析出来才是本批失败。
     """
     from src.python.llm.skeleton import _MN, _handle_truncation
 
@@ -89,6 +92,7 @@ def _execute_and_merge_batch(
     total_in = 0
     total_out = 0
     total_hit = 0
+    produced = 0
     try:
         batch_items = [items[i] for i in batch_indices]
         user_prompt = batch_prompt_fn(batch_items, context_fp)
@@ -125,6 +129,7 @@ def _execute_and_merge_batch(
                 results_map[global_idx] = parsed
                 if per_item_cache_fn and item_cache_keys.get(global_idx):
                     cache_set(item_cache_keys[global_idx], parsed)
+            produced = len(parsed_list)
             if usage:
                 from src.python.llm.session import _normalize_usage_tokens
 
@@ -137,7 +142,7 @@ def _execute_and_merge_batch(
             logger.warning("%s（批 %d/%d）: 分析失败", _MN(module_key), batch_id + 1, total_batches)
     finally:
         batch_client.close()
-    return total_in, total_out, total_hit
+    return total_in, total_out, total_hit, produced
 
 
 def run_batch_mode(
@@ -180,11 +185,15 @@ def run_batch_mode(
     total_in = 0
     total_out = 0
     total_hit = 0
+    ok_batches = 0
+    failed_batches = 0
+    total_batches = 0
 
     if uncached_indices and batch_prompt_fn and response_parser:
         batches = [
             uncached_indices[i : i + _BATCH_CHUNK_SIZE] for i in range(0, len(uncached_indices), _BATCH_CHUNK_SIZE)
         ]
+        total_batches = len(batches)
         logger.info(
             "[LLM] 正在调用 %s（%d 批未缓存，每批最多 %d 条）...",
             _MN(module_key),
@@ -218,16 +227,41 @@ def run_batch_mode(
             }
             for future in as_completed(_fut_map):
                 try:
-                    inp, out, hit = future.result()
+                    inp, out, hit, produced = future.result()
                     total_in += inp
                     total_out += out
                     total_hit += hit
+                    if produced > 0:
+                        ok_batches += 1
+                    else:
+                        failed_batches += 1
                 except Exception as e:  # noqa: PERF203
+                    failed_batches += 1
                     logger.warning("批处理异常: %s", e)
+
+    # 批次成败必须回传：全失败时用量字典会退化成零值（与「全缓存命中」同形），
+    # 调用方若只看用量就会把「一条也没分析成」记成成功——报告里静默残缺。
+    if failed_batches:
+        log = logger.error if ok_batches == 0 else logger.warning
+        log(
+            "%s 批次失败 %d/%d（成功 %d 批）",
+            _MN(module_key),
+            failed_batches,
+            total_batches,
+            ok_batches,
+        )
 
     return (
         results_map,
         all_cached,
-        {"input": total_in, "output": total_out, "cache_hit": total_hit, "model": _model},
+        {
+            "input": total_in,
+            "output": total_out,
+            "cache_hit": total_hit,
+            "model": _model,
+            "ok_batches": ok_batches,
+            "failed_batches": failed_batches,
+            "total_batches": total_batches,
+        },
         cached_count,
     )

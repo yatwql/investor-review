@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import os
+import pathlib
 
 from bs4 import BeautifulSoup
 
@@ -144,7 +145,11 @@ def _build_minimal_render_data(
 def _render_template(render_data: dict) -> BeautifulSoup:
     """用 html_writer._ENV 渲染模板并返回 BeautifulSoup 对象。"""
     from src.python.report.html_jinja_env import _ENV
-    from src.python.report.html_writer import _LLM_SUPPORTED_SECTIONS, _build_section_nav_groups
+    from src.python.report.html_writer import (
+        _LLM_SUPPORTED_SECTIONS,
+        _build_section_nav_groups,
+        _inject_section_order_css,
+    )
 
     # 注入 section_visible 闭包 + section_groups 分组导航（与生产代码相同的 context 变量方式，不写入 _ENV.globals）
     _sv_dict = render_data.get("section_visible_dict", {})
@@ -163,6 +168,8 @@ def _render_template(render_data: dict) -> BeautifulSoup:
         section_groups=section_groups,
         llm_supported_sections=_LLM_SUPPORTED_SECTIONS,
     )
+    # 与生产同路：章节序号落成 CSS order 规则（自定义 report_section_order 时生效）
+    html = _inject_section_order_css(html, render_data.get("section_numbers", {}))
     return BeautifulSoup(html, "html.parser")
 
 
@@ -171,3 +178,50 @@ def _get_section_id_from_href(href: str) -> str:
     if href.startswith("#"):
         return href[1:]
     return href
+
+
+# ── 模板源文本（含已抽出的样式 partial）─────────────────────────
+_TMPL_DIR = pathlib.Path(__file__).resolve().parents[4] / "src" / "static" / "tmpl"
+
+
+def read_template_text(name: str = "report_template.html", *, with_partials: bool = True) -> str:
+    """读模板源文本；主模板/页面模板默认拼接同目录全部 partial。
+
+    CSS 与区块已按关注点拆到 `partials/`（`_report_styles.html` / `_whatif_styles.html` 等），
+    **样式与结构的断言必须同时看到 partial**，否则每次拆分都会把一批"规则找不到"的用例
+    打红——这类失败不是回归，是断言口径绑死了文件布局。聚合顺序：主模板在前、partial 在后。
+    """
+    path = _TMPL_DIR / name
+    if not path.exists():
+        path = _TMPL_DIR / "partials" / name
+    text = path.read_text(encoding="utf-8")
+    if not with_partials:
+        return text
+    parts = [p.read_text(encoding="utf-8") for p in sorted((_TMPL_DIR / "partials").glob("*.html"))]
+    return "\n".join([text, *parts])
+
+
+def read_template_css() -> str:
+    """返回报告渲染用到的**全部 CSS**（主模板与各 partial 的 `<style>` 块内容拼接）。
+
+    样式按关注点抽到 `partials/_report_styles.html` 后，「某规则是否存在」这类断言必须看
+    聚合后的样式面；而「几个 .section 容器」这类计数断言只能看单个文件（拼接会虚增计数）。
+    两个口径分开，避免拆分时批量假红或误判。
+    """
+    import re as _re
+
+    blocks = []
+    for path in [_TMPL_DIR / "report_template.html", *sorted((_TMPL_DIR / "partials").glob("*.html"))]:
+        for m in _re.finditer(r"<style>(.*?)</style>", path.read_text(encoding="utf-8"), _re.S):
+            blocks.append(m.group(1))
+    return "\n".join(blocks)
+
+
+def rendered_css(soup) -> str:
+    """渲染产物中**全部** `<style>` 块拼接文本。
+
+    报告样式按关注点拆成多个 partial（`_base_styles.html` / `_report_styles.html` /
+    章节自带样式），渲染后因此有多个 `<style>` 元素。只取 `soup.find("style")` 会漏掉
+    其余块——凡是「某 CSS 规则/变量是否存在」的断言都必须用本函数取全文。
+    """
+    return "\n".join(s.get_text() for s in soup.find_all("style"))

@@ -204,6 +204,27 @@ class TestGroupClear:
         assert cache_get("sentiment_dragon_tiger", 60) is None
         assert cache_get("price_600519", 60) == {"v": 1}, "preload 组不应被 refresh 清除波及"
 
+    def test_clear_by_group_only_keeps_unlisted_domains(self, cache_env):
+        """only 限定：只清本流程会回填的域，同组内其余域（财报/财务指标）保留。
+
+        回归：整组清空会把「刷新基础缓存」不回填的财报索引/正文与财务指标一并作废，
+        下一次出报告逐只回源（实测多付几百次请求）。
+        """
+        from src.python.cache import clear_by_group, get as cache_get
+        from src.python.cache import set as cache_set
+
+        cache_set("news_demo", {"v": 1})
+        cache_set("industry_002916", {"v": 1})
+        cache_set("report_datasink_doc_818577", {"v": 1})
+        cache_set("fin_indicator_600900", {"v": 1})
+
+        clear_by_group("refresh", only={"news_", "industry_"})
+
+        assert cache_get("news_demo", 60) is None
+        assert cache_get("industry_002916", 60) is None
+        assert cache_get("report_datasink_doc_818577", 60) == {"v": 1}, "财报正文按 doc_id 不可变，不得随刷新清空"
+        assert cache_get("fin_indicator_600900", 60) == {"v": 1}, "财务指标不由刷新基础缓存回填，不得连坐作废"
+
 
 class TestConcurrency:
     """并发：多线程读写同一键不产生半写文件或异常（报告内模块并行取数）。"""

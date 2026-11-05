@@ -39,9 +39,13 @@ from src.python.analysis.metrics import compute_daily_returns
 from src.python.analysis.monthly_returns import aggregate_monthly_returns
 from src.python.fetcher.chain import fetch_with_incremental_fallback
 from src.python.report._history_quality import (
+    TERMINAL_STALENESS_CONSEQUENCE,
+    TERMINAL_STALENESS_HEADLINE,
     _detect_terminal_staleness,
     _diagnose_return,
     _validate_bars,
+    terminal_staleness_asset_line,
+    terminal_staleness_caveat,
 )
 from src.python.report.benchmark import fetch_benchmarks, normalize_benchmarks
 
@@ -280,7 +284,18 @@ class PortfolioHistoryCalculator:
         terminal_staleness: dict | None = None
         if staleness:
             warnings.append(staleness["warning"])
-            terminal_staleness = {k: v for k, v in staleness.items() if k != "warning"}
+            _assets = staleness["assets"]
+            _max_lag = staleness["max_lag_trading_days"]
+            # 口径提示的文案由 `_history_quality` 单源产出：HTML 章内/Excel 页签/数据源
+            # 状态词三处共用同一句，避免同一事实在不同渠道出现不同说法。
+            terminal_staleness = {
+                "latest_date": staleness["latest_date"],
+                "max_lag_trading_days": _max_lag,
+                "assets": [dict(a, detail=terminal_staleness_asset_line(a)) for a in _assets],
+                "headline": TERMINAL_STALENESS_HEADLINE.format(count=len(_assets), max_lag=_max_lag),
+                "consequence": TERMINAL_STALENESS_CONSEQUENCE,
+                "caveat": terminal_staleness_caveat(len(_assets), _max_lag),
+            }
             if warn_on_terminal_staleness:
                 logger.warning("[history] %s", staleness["warning"])
 

@@ -305,10 +305,8 @@ class TestReadSidePromotion:
         后缀函数是「开关 → 缓存键」的唯一判定点（写侧指纹与预检侧共用），返回
         非空即证明默认配置下提示词确实带上了增强段；默认值若被改回关，本用例转红。
         """
-        from src.python.core.decision_header import structured_header_cache_suffix
         from src.python.llm.module_fingerprint import debate_feature_cache_suffix
 
-        assert structured_header_cache_suffix() == "_dh"
         assert debate_feature_cache_suffix() == "_c"
 
     def test_not_in_report_notice_after_promotion(self):
@@ -577,7 +575,7 @@ class TestUnknownOverrideWarning:
             patch.dict(FEATURE_FLAGS, {}),
         ):
             load_feature_overrides()
-            warnings = [text for text in self._rendered_warnings(mock_logger) if "无效/旧键" in text]
+            warnings = [text for text in self._rendered_warnings(mock_logger) if "未登记开关" in text]
 
             assert len(warnings) == 1, "多个无消费者开关应合并为一条告警，而非逐键刷屏"
             assert "no_such_switch" in warnings[0]
@@ -595,7 +593,7 @@ class TestUnknownOverrideWarning:
             patch.dict(FEATURE_FLAGS, {}),
         ):
             load_feature_overrides()
-            warnings = [text for text in self._rendered_warnings(mock_logger) if "无效/旧键" in text]
+            warnings = [text for text in self._rendered_warnings(mock_logger) if "未登记开关" in text]
 
             assert warnings == []
             assert FEATURE_FLAGS["cost_position"] is False, "已登记开关的覆写仍须正常生效"
@@ -604,7 +602,7 @@ class TestUnknownOverrideWarning:
     def test_unknown_flag_warns_as_no_consumer(self, tmp_path):
         """未注册的开关名 → 按无消费者告警（不静默生效）。
 
-        配置里残留的旧键/拼错键必须可见地失效，否则「配置了却没效果」会以静默方式复现。
+        配置里残留的拼错键/已删键必须可见地失效，否则「配置了却没效果」会以静默方式复现。
         """
         fpath = tmp_path / "features.json"
         fpath.write_text(json.dumps({"no_such_flag_a": False, "no_such_flag_b": False}), encoding="utf-8")
@@ -615,7 +613,7 @@ class TestUnknownOverrideWarning:
             patch.dict(FEATURE_FLAGS, {}),
         ):
             load_feature_overrides()
-            warnings = [text for text in self._rendered_warnings(mock_logger) if "无效/旧键" in text]
+            warnings = [text for text in self._rendered_warnings(mock_logger) if "未登记开关" in text]
 
             assert len(warnings) == 1
             assert "no_such_flag_a" in warnings[0]

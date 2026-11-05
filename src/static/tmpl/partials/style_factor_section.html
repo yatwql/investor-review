@@ -1,4 +1,4 @@
-    <div class="section" id="sec-style_factor" style="order: {{ section_numbers['style_factor'] }};">
+    <div class="section" id="sec-style_factor">
         <div class="section-title">{{ section_numbers['style_factor'] }}、{{ section_names['style_factor'] }}</div>
         <details class="section-fold">
             <summary class="section-fold-summary">
@@ -76,7 +76,7 @@
                         <td>
                             <div style="display:flex; align-items:center; gap:4px;">
                                 <div style="flex:1; background:var(--progress-track); border-radius:4px; height:14px;">
-                                    <div style="width: {{ _bar_w }}%; height:14px; background:{% if _alloc >= 0.5 %}var(--primary){% elif _alloc >= 0.3 %}var(--alloc-mid){% else %}var(--alloc-low){% endif %}; border-radius:4px;"></div>
+                                    <svg class="alloc-bar" viewBox="0 0 100 14" preserveAspectRatio="none" width="{{ _bar_w }}%" height="14" role="img" aria-label="配置占比"><rect class="alloc-fill {% if _alloc >= 0.5 %}fill-primary{% elif _alloc >= 0.3 %}fill-alloc-mid{% else %}fill-alloc-low{% endif %}" x="0" y="0" width="100" height="14" rx="4"/></svg>
                                 </div>
                                 <span style="font-size: var(--fs-table-sm); white-space:nowrap;">{{ (_alloc * 100) | round(1) }}%</span>
                             </div>

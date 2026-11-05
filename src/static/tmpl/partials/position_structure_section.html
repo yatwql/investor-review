@@ -1,4 +1,4 @@
-    <div class="section" id="sec-position_structure" style="order: {{ section_numbers['position_structure'] }};">
+    <div class="section" id="sec-position_structure">
         <div class="section-title">{{ section_numbers['position_structure'] }}、{{ section_names['position_structure'] }}</div>
         <details class="section-fold">
             <summary class="section-fold-summary">
@@ -210,7 +210,7 @@
                         <td>{{ loop.index }}</td>
                         <td class="text-left">{{ p.name_a }}({{ p.code_a | anon_code }})</td>
                         <td class="text-left">{{ p.name_b }}({{ p.code_b | anon_code }})</td>
-                        <td style="color: {% if p.pearson >= 0.5 %}var(--corr-pos-strong){% elif p.pearson > 0 %}var(--corr-pos-mid){% elif p.pearson <= -0.5 %}var(--corr-neg-strong){% else %}var(--primary){% endif %}; font-weight: 600;">
+                        <td class="fw-600 {% if p.pearson >= 0.5 %}corr-pos-strong{% elif p.pearson > 0 %}corr-pos-mid{% elif p.pearson <= -0.5 %}corr-neg-strong{% else %}text-primary{% endif %}">
                             {{ "%.2f"|format(p.pearson) }}
                         </td>
                         <td>{{ "%.4f"|format(p.p_value) }}</td>
@@ -303,7 +303,7 @@
                     <tr class="{% if _alert == '紧急' %}row-danger{% elif _alert == '关注' %}row-warning{% endif %}">
                         <td class="text-left">{{ r["name"] }}</td>
                         <td>{{ r["code"] | anon_code }}</td>
-                        <td style="font-size: var(--fs-table-sm); {{ 'color: var(--warn-text);' if r.get('report_stale') }}">
+                        <td class="fs-table-sm{{ ' text-warn' if r.get('report_stale') }}">
                             {{ r.get("report_period", "") }}{% if r.get("report_stale") %}（陈旧）{% endif %}
                         </td>
                         <td>{{ "%.2f"|format(r["top3_pct"]) }}%</td>
@@ -322,7 +322,7 @@
                         <td><span class="gray-text">⎯ 报告期未推进</span></td>
                         {% elif r.get("change_pct") is not none %}
                         {% set cp = r["change_pct"] %}
-                        <td style="{% if cp > 10 %}color: var(--profit); font-weight: bold;{% endif %}">
+                        <td{% if cp > 10 %} class="profit fw-600"{% endif %}>
                             {% if cp > 0 %}↑{% elif cp < 0 %}↓{% else %}→{% endif %}
                             {{ "%+.2f"|format(cp) }}%
                         </td>

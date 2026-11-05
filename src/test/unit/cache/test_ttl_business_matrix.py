@@ -17,13 +17,13 @@
 
 from __future__ import annotations
 
-import json
-import time
 from datetime import datetime
 
 import pytest
 
 from src.python.core.registry import get_cache_ttl_defaults, get_market_ttl_map
+
+from src.test.unit.cache._cache_fixtures import write_cache, write_cache_at  # noqa: E402
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
 
@@ -71,13 +71,6 @@ def ttl_env(monkeypatch, cache_env):
     return _setup
 
 
-def _write_cache(cache_dir, key: str, age_seconds: float) -> None:
-    from src.python.cache._paths import _CACHE_KEY_VERSION
-
-    payload = {"_ts": time.time() - age_seconds, "_data": {"v": 1}}
-    (cache_dir / f"{key}_{_CACHE_KEY_VERSION}.json").write_text(json.dumps(payload), encoding="utf-8")
-
-
 def _expected_ttl(data_type: str, is_open: bool, config: dict) -> float:
     """矩阵期望值：盘中敏感类型在交易时段走盘中 TTL，其余走静态覆盖/注册表默认。"""
     registry_default = get_cache_ttl_defaults()[data_type]
@@ -112,25 +105,54 @@ def test_cache_read_uses_same_ttl_as_resolver(ttl_env, cache_env, label, is_open
     from src.python.cache import get as cache_get, get_ttl
 
     ttl = get_ttl("price")
-    _write_cache(cache_env, "price_600519", age_seconds=ttl + 1)
+    write_cache(cache_env, "price_600519", age_seconds=ttl + 1)
     assert cache_get("price_600519", ttl) is None, f"{label}: 超过 TTL 必须判未命中"
-    _write_cache(cache_env, "price_601398", age_seconds=max(ttl - 1, 0))
+    write_cache(cache_env, "price_601398", age_seconds=max(ttl - 1, 0))
     assert cache_get("price_601398", ttl) == {"v": 1}, f"{label}: TTL 之内必须命中"
 
 
 @pytest.mark.parametrize("label,is_open,_desc", SESSION_CASES, ids=[c[0] for c in SESSION_CASES])
-def test_cleanup_uses_same_ttl_as_resolver(ttl_env, cache_env, label, is_open, _desc):
-    """清理路径与读路径同口径：同一份缓存不能出现「读未命中但清理保留」或反之。"""
-    from src.python.cache import get_ttl
+def test_cleanup_uses_static_ttl_ignoring_intraday(ttl_env, cache_env, label, is_open, _desc):
+    """清理侧按**静态 TTL** 判过期（与读侧盘中 30s 判据分开）。
+
+    清理是磁盘回收：若跟着盘中 30s 判过期，刚写入的行情缓存会被当场删掉、下一轮再写
+    一遍；磁盘上留着无副作用（读侧同口径已判未命中）。静态 TTL 到期仍需回收。
+    """
+    from src.python.cache._cleanup import cleanup_expired
+    from src.python.cache._ttl import get_cleanup_ttl
 
     ttl_env({}, is_open)
-    ttl = get_ttl("price")
-    _write_cache(cache_env, "price_600519", age_seconds=ttl + 1)
+    from datetime import datetime
+
+    from src.python.core.constants import BEIJING_TZ
+
+    static_ttl = get_cleanup_ttl("price")
+    _now = datetime.now(BEIJING_TZ)
+    _pre_open = _now.replace(hour=8, minute=0, second=0, microsecond=0).timestamp()
+
+    # 盘前写入（非交易时段）：按静态 TTL 判，远未到期 → 保留；超期 → 回收
+    write_cache_at(cache_env, "price_600519", _pre_open)
+    assert cleanup_expired(dry_run=False) == 0, f"{label}: 静态 TTL 内的价不得被清理"
+
+    write_cache_at(cache_env, "price_601398", _pre_open - static_ttl - 1)
+    assert cleanup_expired(dry_run=True) == 1, f"{label}: 超过静态 TTL 的价必须被清理"
+
+
+@pytest.mark.parametrize("label,is_open,_desc", SESSION_CASES, ids=[c[0] for c in SESSION_CASES])
+def test_cleanup_reclaims_intraday_snapshot_only_after_close(ttl_env, cache_env, label, is_open, _desc):
+    """盘中写入的行情快照：盘中保留（读侧自理），盘后回收（它只是当时的价）。"""
+    from datetime import datetime
+
+    from src.python.core.constants import BEIJING_TZ
     from src.python.cache._cleanup import cleanup_expired
 
-    assert cleanup_expired(dry_run=False) == 1, f"{label}: 超过 TTL 的价必须被清理"
-    _write_cache(cache_env, "price_601398", age_seconds=max(ttl - 1, 0))
-    assert cleanup_expired(dry_run=True) == 0, f"{label}: TTL 内的价不得被清理"
+    ttl_env({}, is_open)
+    _now = datetime.now(BEIJING_TZ)
+    _intraday = _now.replace(hour=10, minute=5, second=0, microsecond=0).timestamp()
+    write_cache_at(cache_env, "price_600519", _intraday)
+
+    expected = 0 if is_open else 1
+    assert cleanup_expired(dry_run=True) == expected, f"{label}: 盘中快照回收策略不符预期"
 
 
 class TestOverrideLayers:
@@ -185,7 +207,7 @@ class TestBusinessScenarios:
         ttl_env({}, is_open=True)
         from src.python.cache import get as cache_get, get_ttl
 
-        _write_cache(cache_env, "price_600519", age_seconds=20)
+        write_cache(cache_env, "price_600519", age_seconds=20)
         assert cache_get("price_600519", get_ttl("price")) == {"v": 1}
 
     def test_same_day_second_run_refetches_after_30s(self, ttl_env, cache_env):
@@ -193,7 +215,7 @@ class TestBusinessScenarios:
         ttl_env({}, is_open=True)
         from src.python.cache import get as cache_get, get_ttl
 
-        _write_cache(cache_env, "price_600519", age_seconds=31)
+        write_cache(cache_env, "price_600519", age_seconds=31)
         assert cache_get("price_600519", get_ttl("price")) is None
 
     def test_after_close_price_survives_overnight(self, ttl_env, cache_env):
@@ -201,7 +223,7 @@ class TestBusinessScenarios:
         ttl_env({}, is_open=False)
         from src.python.cache import get as cache_get, get_ttl
 
-        _write_cache(cache_env, "price_600519", age_seconds=18 * 3600)
+        write_cache(cache_env, "price_600519", age_seconds=18 * 3600)
         assert cache_get("price_600519", get_ttl("price")) == {"v": 1}
 
     def test_negative_probe_cache_lasts_twelve_hours(self, ttl_env, cache_env):
@@ -210,9 +232,9 @@ class TestBusinessScenarios:
         from src.python.cache import get as cache_get, get_ttl
 
         ttl = get_ttl("datasink_probe_miss")
-        _write_cache(cache_env, "datasink_probe_miss_abc123", age_seconds=11 * 3600)
+        write_cache(cache_env, "datasink_probe_miss_abc123", age_seconds=11 * 3600)
         assert cache_get("datasink_probe_miss_abc123", ttl) is not None
-        _write_cache(cache_env, "datasink_probe_miss_def456", age_seconds=13 * 3600)
+        write_cache(cache_env, "datasink_probe_miss_def456", age_seconds=13 * 3600)
         assert cache_get("datasink_probe_miss_def456", ttl) is None
 
     def test_symbol_miss_cache_shorter_than_probe_cache(self, ttl_env):
@@ -228,9 +250,9 @@ class TestBusinessScenarios:
         from src.python.cache import get as cache_get, get_ttl
 
         ttl = get_ttl("llm_expert_review")
-        _write_cache(cache_env, "llm_expert_review_abc", age_seconds=ttl - 60)
+        write_cache(cache_env, "llm_expert_review_abc", age_seconds=ttl - 60)
         assert cache_get("llm_expert_review_abc", ttl) is not None
-        _write_cache(cache_env, "llm_expert_review_def", age_seconds=ttl + 60)
+        write_cache(cache_env, "llm_expert_review_def", age_seconds=ttl + 60)
         assert cache_get("llm_expert_review_def", ttl) is None
 
 

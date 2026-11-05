@@ -487,3 +487,45 @@ def test_save_n_skips_flow_sheet(tmp_path: Path, feed, monkeypatch: pytest.Monke
     feed("n")
     hh._save(session)
     assert calls == [False], calls
+
+
+# ── 口径文案：卖出只按份额、金额仅场外买入 ─────────────────
+
+
+def test_sell_shares_prompt_states_unit_and_sellable(monkeypatch: pytest.MonkeyPatch):
+    """卖出份额提示须写明单位「份」与可卖数量，且不出现「金额」（防口径混淆）。"""
+    prompts: list[str] = []
+
+    def _fake(prompt, **_kwargs):
+        prompts.append(prompt)
+        return "10"
+
+    monkeypatch.setattr(hh, "input_choice", _fake)
+    assert hh._ask_shares("卖出", 500.0) == pytest.approx(10.0)
+    assert "卖出份额（份，可卖 500" in prompts[0]
+    assert "金额" not in prompts[0]
+
+
+def test_buy_shares_prompt_has_no_sellable_hint(monkeypatch: pytest.MonkeyPatch):
+    """买入份额提示同样写单位「份」，但不得出现「可卖」（那是卖出专属口径）。"""
+    prompts: list[str] = []
+
+    def _fake(prompt, **_kwargs):
+        prompts.append(prompt)
+        return "10"
+
+    monkeypatch.setattr(hh, "input_choice", _fake)
+    assert hh._ask_shares("买入") == pytest.approx(10.0)
+    assert "买入份额（份）" in prompts[0]
+    assert "可卖" not in prompts[0] and "金额" not in prompts[0]
+
+
+def test_panel_details_limit_amount_to_otc_buy(tmp_path: Path):
+    """面板说明须把「按金额」限定在场外买入，卖出项只写份额。"""
+    session = hh._Session(book=load_book(str(_ui_file(tmp_path))), mtime=0.0)
+    items = {item.key: item for item in hh._panel_items(session)}
+    buy_detail = items["2"].detail or ""
+    sell_detail = items["3"].detail or ""
+    assert "场外买入可按金额" in buy_detail
+    assert "卖出份额" in sell_detail and "a=全部" in sell_detail
+    assert "金额" not in sell_detail

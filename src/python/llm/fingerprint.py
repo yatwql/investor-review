@@ -119,10 +119,6 @@ def risk_signals_of(history_data: dict | None) -> dict:
 
 
 def build_llm_fingerprint(
-    total_mv: float = 0,
-    total_cost: float = 0,
-    total_profit: float = 0,
-    total_today_profit: float = 0,
     holdings_details: list[dict] | None = None,
     penetrated_assets: list[dict] | None = None,
     categories: dict | None = None,
@@ -138,7 +134,7 @@ def build_llm_fingerprint(
       - 两个版本盐（提示词文本版本 / 事实校验规则版本）
 
     刻意**不入键**（属行情/时效数据，由缓存 TTL 兜底；这些值仍然进提示词）：
-      - total_mv / total_cost / total_profit / total_today_profit（入参保留仅为调用兼容）
+      - 总市值/总成本/总盈亏/本日盈亏（行情派生，已不再作为入参）
       - history_data 派生风险信号（总收益/年化波动/最大回撤，由最新 K 线现算）
 
     为何这样切：行情派生量（含浮点末位）每次刷新都变，入键等于把 TTL 锁死在
@@ -147,11 +143,7 @@ def build_llm_fingerprint(
     其余交给 TTL——TTL 的语义本就允许「几小时前的结论」。
 
     Args:
-        total_mv: 总市值（不参与哈希）
-        total_cost: 总成本（不参与哈希，成本已由 holdings_details 逐笔承载）
-        total_profit: 总盈亏（不参与哈希）
-        total_today_profit: 本日盈亏（不参与哈希）
-        holdings_details: 持仓明细（提取 name/code/cost）
+        holdings_details: 持仓明细（提取 name/code/cost；成本由此逐笔承载）
         penetrated_assets: 穿透资产列表
         categories: 分类汇总（经 extract_stable_categories 只取分类结构）
         full_penetration: 为 True 时穿透资产额外包含 sector（行业归属，结构性字段）

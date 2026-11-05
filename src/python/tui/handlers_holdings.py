@@ -104,13 +104,13 @@ def _panel_items(session: _Session) -> list[PanelItem]:
         PanelItem(
             "2",
             "录入买入",
-            detail="选账户 → 选/输标的 → 份额或金额、价格、交易日；只进内存变更（字母别名 P）",
+            detail="选账户 → 选/输标的 → 份额（场外买入可按金额）、价格、交易日；只进内存变更（字母别名 P）",
             action=lambda: _record(session, SIDE_BUY),
         ),
         PanelItem(
             "3",
             "录入卖出",
-            detail="选账户 → 选标的 → 份额、价格、交易日；只进内存变更（字母别名 S）",
+            detail="选账户 → 选标的 → 卖出份额（份，a=全部）、价格、交易日；只进内存变更（字母别名 S）",
             action=lambda: _record(session, SIDE_SELL),
         ),
         PanelItem(
@@ -162,7 +162,8 @@ def _render_frame(session: _Session, nav: NavState, items: list[PanelItem]) -> l
     else:
         lines.append("  当前无未保存变更")
     lines += wrap_hanging(
-        "  提示：账户与标的都可输编号或名称；金额单位元；价格示例 1.234（场外净值 1.2345）；多数提示回车取默认值",
+        "  提示：账户与标的都可输编号或名称；份额按份录入，金额仅场外买入可用（元）；"
+        "价格示例 1.234（场外净值 1.2345）；每步回车的作用见该行提示",
         columns,
     )
     for index, item in enumerate(items):
@@ -473,7 +474,8 @@ def _ask_shares(label: str, available: float | None = None) -> float | None:
         label: 方向中文（买入 / 卖出），用于提示。
         available: 当前持有份额（卖出时非 None，供 ``a`` 换算）。
     """
-    raw = _ask(f"  回车=取消本笔 · {label}份额（a=全部）· 0 返回: ")
+    field = f"{label}份额（份）" if available is None else f"{label}份额（份，可卖 {available:g}；a=全部）"
+    raw = _ask(f"  回车=取消本笔 · {field} · 0 返回: ")
     if raw is None or raw == "0" or not raw.strip():
         return None
     token = raw.strip()

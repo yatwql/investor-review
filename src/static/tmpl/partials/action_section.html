@@ -20,7 +20,7 @@
 <!-- ═══════════════════════════════════════════════════════ -->
 {% set _action = action_data or {} %}
 <!-- // pi-lens-ignore: css-ruleorselectorexpected, css-propertyvalueexpected, css-rcurlyexpected, css-rparentexpected, css-lcurlyexpected -- Jinja style 属性误报 -->
-<div class="section" id="sec-action" style="order: {{ section_numbers['action'] }};">
+<div class="section" id="sec-action">
     <div class="section-title">
         {{ section_numbers['action'] }}、{{ section_names['action'] }}
         <span style="font-size: var(--fs-table-sm);font-weight:400;opacity:0.8;margin-left:8px;">再平衡信号 · 交易纪律 · 调仓建议 · 收益归因</span>
@@ -38,7 +38,7 @@
         {% set _hl = _db.get("headline") or [] %}
         {% if _hl %}
         <!-- 章首三行摘要：块默认折叠，关键事实不展开也要读到（双端与 Excel 逐字同源） -->
-        <div class="decision-basis-headline" id="decision-basis-headline" style="margin: 10px 0 6px; font-size: var(--fs-body); color: var(--text-secondary); line-height: 1.7;">
+        <div class="decision-basis-headline" id="decision-basis-headline" style="margin: 12px 0 4px; font-size: var(--fs-body); color: var(--text-secondary); line-height: 1.7;">
             {% for _line in _hl %}<div>{{ _line }}</div>{% endfor %}
         </div>
         {% endif %}
@@ -168,7 +168,7 @@
         <div style="overflow-x:auto;">
         <table>
             <thead>
-                <tr><th>视界</th><th>已结算</th><th>方向性</th><th>命中</th><th>命中率</th><th>均值超额</th></tr>
+                <tr><th>视界</th><th>已结算</th><th>方向性</th><th>命中</th><th>命中率</th><th>均值超额</th><th>结论</th></tr>
             </thead>
             <tbody>
                 {% for _p in _st.get("performance") %}
@@ -179,6 +179,7 @@
                     <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ _p.get("hit", 0) }}</td>
                     <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ _p.get("accuracy_label") or "—" }}</td>
                     <td class="text-right {{ _p.get('tone_class') or '' }}">{{ _p.get("mean_excess_label") or "—" }}</td>
+                    <td class="text-left {{ _p.get('tone_class') or '' }}">{{ _p.get("verdict_label") or "—" }}</td>
                 </tr>
                 {% endfor %}
             </tbody>

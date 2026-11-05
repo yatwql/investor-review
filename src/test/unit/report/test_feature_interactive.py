@@ -26,6 +26,8 @@ from src.python.report._report_generation import _build_chart_datasets_for_repor
 from src.python.report.html_writer import _inline_js_assets
 from src.python.report.html_writer_assets import JS_ASSETS
 
+from src.test.unit.report._html_report_fixtures import read_template_text
+
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
 _DEBUG_PAGE_PATH = os.path.normpath(
@@ -319,8 +321,14 @@ class TestChartExportCsv:
         """三处模板把绝对定位放在组容器上，按钮自身静态排布（双按钮并排不重叠）。"""
         for path in _EXPORT_BTN_TEMPLATES:
             name = os.path.basename(path)
-            with open(path, encoding="utf-8") as f:
-                content = f.read()
+            # 样式可能已抽到同目录 partial（_report_styles / _whatif_styles），按聚合口径读
+            try:
+                content = read_template_text(name) if name.endswith("_template.html") else None
+            except OSError:
+                content = None
+            if content is None:
+                with open(path, encoding="utf-8") as f:
+                    content = f.read()
             assert ".chart-export-actions" in content, f"{name} 缺组容器样式"
             blocks = re.findall(r"\.chart-export-btn\s*\{([^}]*)\}", content)
             assert blocks, f"{name} 缺按钮样式"

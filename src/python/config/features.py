@@ -34,7 +34,6 @@ from src.python.core.constants import PROJECT_ROOT
 
 from src.python.core.json_comments import strip_json_comments
 from ._json_patch import _find_top_level_value_span, _patch_config_key, _remove_top_level_key
-from ._legacy_keys import format_unknown_keys
 from ._feature_registry import (
     DOMAIN_DATA_AND_ROUTES,
     DOMAIN_HINTS,
@@ -528,12 +527,15 @@ def load_feature_overrides() -> None:
             else:
                 logger.warning("[features] 覆写 '%s' 值应为 bool，忽略", flag_name)
 
-    # 无消费者开关一次告警（已删除开关、改名开关或拼写错误）：这类键在本版本不
-    # 驱动任何行为，用户照文档配置后会毫无效果，必须让其可见。收集后合并成一条——
-    # 逐键打印会在每次启动刷屏，而 features.json 在模块导入时就会加载一次。
-    # 措辞与旧键处置建议由 `_legacy_keys` 单源给出（与 config.json 校验侧同口径）。
+    # 未知开关一次告警（拼写错误或本版本已删除）：这类键不驱动任何行为，用户照文档
+    # 配置后会毫无效果，必须让其可见。收集后合并成一条——逐键打印会在每次启动刷屏，
+    # 而 features.json 在模块导入时就会加载一次。
     if unknown:
-        logger.warning("[features] %s（见 how-to-config 的旧键对照表）", format_unknown_keys("features.json", unknown))
+        logger.warning(
+            "[features] features.json 含 %d 项未登记开关（拼写错误或本版本已删除），已按默认值继续：%s",
+            len(unknown),
+            "、".join(sorted(unknown)),
+        )
 
     if not valid_count:
         return

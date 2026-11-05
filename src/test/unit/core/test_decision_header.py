@@ -217,13 +217,6 @@ class TestParseStructuredHeader:
         assert rows is not None and rows[0]["code"] == "600900"
 
 
-class TestStructuredHeaderCacheSuffix:
-    """缓存指纹后缀：恒为 _dh（区分未引入本机制前的旧缓存指纹；预检键 = 读写键）。"""
-
-    def test_constant_suffix(self):
-        assert dh.structured_header_cache_suffix() == "_dh"
-
-
 class TestInstructionContractLocksParser:
     """提示词契约与解析器互相锁定（口径漂移即失败）。"""
 
