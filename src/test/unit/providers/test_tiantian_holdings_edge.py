@@ -90,7 +90,7 @@ class TestExtractFundNameEdge(unittest.TestCase):
 class TestFetchFundHoldingsLadderEdge(unittest.TestCase):
     """fetch_fund_holdings 阶梯异常场景。"""
 
-    @patch("src.python.providers.tiantian_holdings._fetch_legacy_quarterly", return_value=None)
+    @patch("src.python.providers.tiantian_holdings._fetch_default_quarter", return_value=None)
     @patch("src.python.providers.tiantian_holdings._fetch_dated_quarterly", return_value=None)
     @patch("src.python.providers.tiantian_holdings._request_fund_html")
     def test_feeder_without_anchor_falls_through_to_hop3(self, mock_html, _dated, mock_legacy):
@@ -104,7 +104,7 @@ class TestFetchFundHoldingsLadderEdge(unittest.TestCase):
         self.assertNotIn("feeder_target_code", result)
         mock_legacy.assert_called_once()
 
-    @patch("src.python.providers.tiantian_holdings._fetch_legacy_quarterly", return_value=None)
+    @patch("src.python.providers.tiantian_holdings._fetch_default_quarter", return_value=None)
     @patch("src.python.providers.tiantian_holdings._fetch_dated_quarterly", return_value=None)
     @patch("src.python.providers.tiantian_holdings._request_fund_html")
     def test_feeder_anchor_pointing_to_self_falls_through(self, mock_html, _dated, mock_legacy):
@@ -120,12 +120,12 @@ class TestFetchFundHoldingsLadderEdge(unittest.TestCase):
     @patch("src.python.providers.tiantian_holdings._fetch_dated_quarterly", return_value=None)
     def test_empty_html_page_falls_through_to_hop3(self, _dated, _mock_html):
         """空 HTML（非 None，即请求成功但内容为空）不当作页面失败。"""
-        with patch("src.python.providers.tiantian_holdings._fetch_legacy_quarterly", return_value=None) as mock_legacy:
+        with patch("src.python.providers.tiantian_holdings._fetch_default_quarter", return_value=None) as mock_legacy:
             result = fetch_fund_holdings("016055")
         mock_legacy.assert_called_once()
         self.assertEqual(result["holdings"], [])
 
-    @patch("src.python.providers.tiantian_holdings._fetch_legacy_quarterly")
+    @patch("src.python.providers.tiantian_holdings._fetch_default_quarter")
     @patch("src.python.providers.tiantian_holdings._fetch_dated_quarterly", return_value=None)
     @patch(
         "src.python.providers.tiantian_holdings._request_fund_html",

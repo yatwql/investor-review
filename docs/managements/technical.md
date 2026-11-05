@@ -3943,7 +3943,7 @@ web/ (Web 服务层，薄入口)
 |:--|:--|:--|:--|:--|
 | `providers/cninfo.py::resolve_org_id` | 载荷直接为数组 / 被 dict 包一层 | 第三方变体（含企业网关代理） | 官方接口直接返回数组，代理层可能包一层 | 保留；两侧取同名字段，命中即止 |
 | `llm/_api_responses.py` | `usage` 与 `usageMetadata` 并存；`content` 为字符串 | 第三方变体（Gemini / 各家兼容实现） | 家系差异而非版本差异 | 保留；按家系分支解析 |
-| `providers/tiantian_holdings.py::_fetch_legacy_quarterly` | 不带年份参数的默认请求跳 | 第三方端点行为 | 上游「年份域回溯」可能空，默认请求有数据 | 保留为第 3 跳；报告层按报告期时效标注 |
+| `providers/tiantian_holdings.py::_fetch_default_quarter` | 不带年份参数的默认请求跳 | 第三方端点行为 | 上游「年份域回溯」可能空，默认请求有数据 | 保留为第 3 跳；报告层按报告期时效标注 |
 | `providers/eastmoney.py` | 返回结构与天天基金同形 | 本方跨源对齐（非容错） | 两个源解析后的统一契约 | 保留；契约由 `analysis` 消费方约束 |
 | `core/holding_status.py` | `"600900.0"` 归一为 `"600900"` | 本方输入形状（Excel 浮点） | 表格数字单元格导出即带 `.0` | 保留；归一在入口一次完成 |
 | `core/decision_header.py`、`report/decision_llm_capture.py` | `sh600000` 等带前缀代码补挂裸 6 位别名 | 本方输入形状（持仓代码写法） | 用户可写带交易所前缀 | 保留；别名只用于对账 |
