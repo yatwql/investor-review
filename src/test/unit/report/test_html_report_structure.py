@@ -16,14 +16,13 @@ test_html_report_structure_content.py（交互图表/主题/数据质量块/页�
 """
 
 from __future__ import annotations
-# pyright: reportOptionalMemberAccess=false, reportOptionalSubscript=false, reportArgumentType=false, reportAttributeAccessIssue=false, reportUnhashable=false, reportCallIssue=false
-# bs4 的 `Tag.get`/`select_one` 在严格模式下恒为 Optional，断言对象全是渲染产物；
-# 缺元素时由各用例自己的 assert 报错（比类型层报错更具体），故本文件放宽这几类检查。
 
 import os
 import pathlib
 import re
 import unittest
+
+from bs4.element import Tag
 
 import pytest
 from bs4 import BeautifulSoup
@@ -50,6 +49,51 @@ pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 # ═══════════════════════════════════════════════════════════════
 #  辅助函数
 # ═══════════════════════════════════════════════════════════════
+
+
+# ── bs4 窄化助手 ────────────────────────────────────────────
+#
+# bs4 的 `Tag.get()` 返回 `str | AttributeValueList | None`、`find()/select_one()` 返回
+# `Tag | None`、`children` 元素是 `PageElement`。测试里把这些宽类型当 str/Tag 用是安全
+# 的（失败由断言兜底），但类型层会对每个调用点刷噪声。集中收口一次：断言信息更具体
+# （带选择器/属性名），也不必给整文件开 pyright 抑制。
+
+
+def _attr(el: Tag, name: str, default: str = "") -> str:
+    """取属性字符串：多值属性取首项，缺失返回 default。"""
+    val = el.get(name)
+    if val is None:
+        return default
+    if isinstance(val, str):
+        return val
+    return str(val[0]) if len(val) else default
+
+
+def _attr_list(el: Tag, name: str) -> list[str]:
+    """取多值属性（class 等）：始终返回 list[str]，缺失为空列表。"""
+    val = el.get(name)
+    if val is None:
+        return []
+    if isinstance(val, str):
+        return val.split()
+    return [str(v) for v in val]
+
+
+def _text(el: Tag) -> str:
+    """元素全部文本（去首尾空白）。"""
+    return el.get_text().strip()
+
+
+def _child_tags(el: Tag) -> list[Tag]:
+    """直接子元素（滤掉 NavigableString 等非 Tag 节点）。"""
+    return [c for c in el.children if isinstance(c, Tag)]
+
+
+def _select_one(soup: Tag, selector: str) -> Tag:
+    """`soup.select_one(selector)`；未命中立即失败（测试语义：缺元素就是失败）。"""
+    node = soup.select_one(selector)
+    assert isinstance(node, Tag), f"未找到元素: {selector}"
+    return node
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -86,7 +130,7 @@ class TestHtmlNavStructure(unittest.TestCase):
         """每个导航链接的 href 指向一个存在的 section id。"""
         links = self.soup.select("nav.section-nav a")
         for link in links:
-            href = link.get("href", "")
+            href = _attr(link, "href")
             section_id = _get_section_id_from_href(href)
             target = self.soup.find(id=section_id)
             self.assertIsNotNone(
@@ -103,7 +147,7 @@ class TestHtmlNavStructure(unittest.TestCase):
     def test_no_duplicate_section_ids(self):
         """所有 section id 唯一，无重复。"""
         sections = self.soup.select("div.section")
-        ids = [sec.get("id") for sec in sections if sec.get("id")]
+        ids = [_attr(sec, "id") for sec in sections if _attr(sec, "id")]
         self.assertEqual(len(ids), len(set(ids)), f"发现重复 section id: {set(i for i in ids if ids.count(i) > 1)}")
 
     # ── 模板样式写法（静态守卫）────────────────────────────
@@ -163,11 +207,11 @@ class TestHtmlNavStructure(unittest.TestCase):
         「模板 include 顺序」+「CSS order 值」两处，改一处就会静默错位。
         """
         for sec in self.soup.select("div.section"):
-            self.assertNotIn("order:", sec.get("style", ""), f"#{sec.get('id')} 仍带内联 order 样式")
+            self.assertNotIn("order:", _attr(sec, "style"), f"#{sec.get('id')} 仍带内联 order 样式")
 
     def test_dom_order_matches_numbers_dict(self):
         """DOM 中章节的先后顺序必须与 section_numbers 的编号顺序一致。"""
-        keys = [sec.get("id", "").replace("sec-", "") for sec in self.soup.select("div.section")]
+        keys = [_attr(sec, "id").replace("sec-", "") for sec in self.soup.select("div.section")]
         keys = [k for k in keys if k in self.numbers]
         actual = [self.numbers[k] for k in keys]
         self.assertEqual(
@@ -178,7 +222,7 @@ class TestHtmlNavStructure(unittest.TestCase):
 
     def test_numbering_is_contiguous_from_1(self):
         """编号从 1 起连续（visible 章节按 DOM 顺序重新编号）。"""
-        keys = [sec.get("id", "").replace("sec-", "") for sec in self.soup.select("div.section")]
+        keys = [_attr(sec, "id").replace("sec-", "") for sec in self.soup.select("div.section")]
         numbers = sorted(self.numbers[k] for k in keys if k in self.numbers)
         self.assertEqual(numbers, list(range(1, len(numbers) + 1)), f"编号不连续：{numbers}")
 
@@ -188,7 +232,7 @@ class TestHtmlNavStructure(unittest.TestCase):
         """导航链接文字格式：{number}、{name}。"""
         links = self.soup.select("nav.section-nav a")
         for link in links:
-            href = link.get("href", "")
+            href = _attr(link, "href")
             key = href.replace("#sec-", "")
             expected = self.numbers.get(key)
             self.assertIsNotNone(expected, f"未知 key: {key}")
@@ -203,7 +247,7 @@ class TestHtmlNavStructure(unittest.TestCase):
         """section-title 文字格式：{number}、{name}。"""
         sections = self.soup.select("div.section")
         for sec in sections:
-            sec_id = sec.get("id", "")
+            sec_id = _attr(sec, "id")
             key = sec_id.replace("sec-", "")
             title_div = sec.find("div", class_="section-title")
             if title_div is None:
@@ -236,7 +280,7 @@ class TestHtmlNavStructure(unittest.TestCase):
     def test_all_default_keys_present(self):
         """默认配置下所有 16 个模块 key 都在导航中。"""
         links = self.soup.select("nav.section-nav a")
-        link_keys = {link.get("href", "").replace("#sec-", "") for link in links}
+        link_keys = {_attr(link, "href").replace("#sec-", "") for link in links}
         self.assertEqual(
             link_keys, set(_ALL_KEYS_DEFAULT), f"导航缺失/多余 keys: 期望 {set(_ALL_KEYS_DEFAULT)}，实际 {link_keys}"
         )
@@ -266,7 +310,7 @@ class TestHtmlSectionVisibility(unittest.TestCase):
         """仅 always 类型可见时，导航只有 5 个链接。"""
         soup = self._render_with_visibility(_ALWAYS_KEYS)
         links = soup.select("nav.section-nav a")
-        link_keys = {link.get("href", "").replace("#sec-", "") for link in links}
+        link_keys = {_attr(link, "href").replace("#sec-", "") for link in links}
         self.assertEqual(link_keys, _ALWAYS_KEYS, f"应只有 always 模块: {_ALWAYS_KEYS}，实际 {link_keys}")
 
     def test_always_plus_fund_deep_analysis(self):
@@ -274,7 +318,7 @@ class TestHtmlSectionVisibility(unittest.TestCase):
         visible = _ALWAYS_KEYS | _FUND_DEEP_ANALYSIS_KEYS
         soup = self._render_with_visibility(visible)
         links = soup.select("nav.section-nav a")
-        link_keys = {link.get("href", "").replace("#sec-", "") for link in links}
+        link_keys = {_attr(link, "href").replace("#sec-", "") for link in links}
         self.assertEqual(link_keys, visible)
 
     def test_always_plus_news(self):
@@ -282,7 +326,7 @@ class TestHtmlSectionVisibility(unittest.TestCase):
         visible = _ALWAYS_KEYS | _NEWS_KEYS
         soup = self._render_with_visibility(visible)
         links = soup.select("nav.section-nav a")
-        link_keys = {link.get("href", "").replace("#sec-", "") for link in links}
+        link_keys = {_attr(link, "href").replace("#sec-", "") for link in links}
         self.assertEqual(link_keys, visible)
 
     def test_all_invisible(self):
@@ -295,7 +339,7 @@ class TestHtmlSectionVisibility(unittest.TestCase):
         soup = self._render_with_visibility(set())
         links = soup.select("nav.section-nav a")
         self.assertEqual(len(links), 0, "全部不可见时导航应为空")
-        rendered_ids = {sec.get("id", "") for sec in soup.select("div.section")}
+        rendered_ids = {_attr(sec, "id") for sec in soup.select("div.section")}
         self.assertEqual(
             rendered_ids,
             {f"sec-{k}" for k in _ALWAYS_KEYS},
@@ -318,7 +362,7 @@ class TestHtmlSectionVisibility(unittest.TestCase):
         soup = self._render_with_visibility(_ALWAYS_KEYS | {"llm_usage"})
         sec = soup.find(id="sec-llm_usage")
         self.assertIsNotNone(sec, "llm_usage 可见时应渲染 section 容器")
-        ids = [s.get("id") for s in soup.select("div.section")]
+        ids = [_attr(s, "id") for s in soup.select("div.section")]
         self.assertEqual(ids[-1], "sec-llm_usage", f"llm_usage 应为最后一个章节：{ids}")
 
     def test_disabled_llm_module_section_hidden_individually(self):
@@ -339,7 +383,7 @@ class TestHtmlSectionVisibility(unittest.TestCase):
                     soup.find(id=f"sec-{disabled_key}"),
                     f"{disabled_key} 禁用时不应渲染 section 容器",
                 )
-                nav_keys = {link.get("href", "").replace("#sec-", "") for link in soup.select("nav.section-nav a")}
+                nav_keys = {_attr(link, "href").replace("#sec-", "") for link in soup.select("nav.section-nav a")}
                 self.assertNotIn(disabled_key, nav_keys, f"{disabled_key} 禁用时导航不应出现")
                 for key in llm_keys:
                     if key == disabled_key:
@@ -404,13 +448,13 @@ class TestHtmlCustomOrder(unittest.TestCase):
         """导航链接顺序应与 section_order 一致。"""
         links = self.soup.select("nav.section-nav a")
         expected_keys = [sec["key"] for sec in self.custom_order]
-        actual_keys = [link.get("href", "").replace("#sec-", "") for link in links]
+        actual_keys = [_attr(link, "href").replace("#sec-", "") for link in links]
         self.assertEqual(actual_keys, expected_keys, f"导航顺序不正确\n  期望: {expected_keys}\n  实际: {actual_keys}")
 
     def test_custom_fund_performance_first(self):
         """自定义配置下 fund_performance 应排第 1 位。"""
         links = self.soup.select("nav.section-nav a")
-        first_key = links[0].get("href", "").replace("#sec-", "")
+        first_key = _attr(links[0], "href").replace("#sec-", "")
         self.assertEqual(first_key, "fund_performance", f"第一位应为 fund_performance，实际为 {first_key}")
         first_text = links[0].get_text(strip=True)
         self.assertTrue(first_text.startswith("1"), f"第一位标题应以 1 开头，实际为 '{first_text}'")
@@ -419,7 +463,7 @@ class TestHtmlCustomOrder(unittest.TestCase):
         """导航文字与 section-title 文字一致（LLM 章节先剔除 🧠 图标）。"""
         links = self.soup.select("nav.section-nav a")
         for link in links:
-            key = link.get("href", "").replace("#sec-", "")
+            key = _attr(link, "href").replace("#sec-", "")
             nav_text = link.get_text(strip=True)
             if key in _LLM_SUPPORTED_KEYS:
                 nav_text = nav_text.replace("🧠", "", 1).strip()
@@ -437,7 +481,7 @@ class TestHtmlCustomOrder(unittest.TestCase):
     def test_llm_usage_still_last_in_order(self):
         """自定义顺序下 llm_usage 仍排 DOM 末位，且其编号为最大号。"""
         sections = self.soup.select("div.section")
-        ids = [sec.get("id", "") for sec in sections]
+        ids = [_attr(sec, "id") for sec in sections]
         if "sec-llm_usage" not in ids:
             self.skipTest("llm_usage 在该顺序配置下不可见")
         self.assertEqual(ids[-1], "sec-llm_usage", f"llm_usage 应为末位：{ids}")
@@ -466,7 +510,7 @@ class TestHtmlAnchorValidity(unittest.TestCase):
         """所有 href 指向的 id 存在于页面中。"""
         links = self.soup.select("nav.section-nav a")
         for link in links:
-            href = link.get("href", "")
+            href = _attr(link, "href")
             self.assertTrue(href.startswith("#"), f"href 不是锚点: {href}")
             target_id = href[1:]
             target = self.soup.find(id=target_id)
@@ -476,16 +520,16 @@ class TestHtmlAnchorValidity(unittest.TestCase):
         """每个 section 都可以从导航中到达。"""
         sections = self.soup.select("div.section")
         links = self.soup.select("nav.section-nav a")
-        link_ids = {link.get("href", "").replace("#", "") for link in links}
+        link_ids = {_attr(link, "href").replace("#", "") for link in links}
 
         # 可见 section 的 id 应在 link_ids 中
-        visible_sections = {sec.get("id") for sec in sections if sec.get("id") in link_ids}
+        visible_sections = {_attr(sec, "id") for sec in sections if _attr(sec, "id") in link_ids}
         self.assertEqual(len(visible_sections), len(sections), "部分 section 不在导航中")
 
     def test_nav_link_ids_are_unique(self):
         """导航链接 href 无重复。"""
         links = self.soup.select("nav.section-nav a")
-        hrefs = [link.get("href", "") for link in links]
+        hrefs = [_attr(link, "href") for link in links]
         self.assertEqual(len(hrefs), len(set(hrefs)), f"导航 href 重复: {set(h for h in hrefs if hrefs.count(h) > 1)}")
 
 
@@ -505,20 +549,19 @@ class TestSectionFold(unittest.TestCase):
 
     def test_history_section_wrapped_by_fold_details(self):
         """历史走势章内容包在 details.section-fold 内且默认收起（无 open）。"""
-        section = self.soup.select_one("#sec-portfolio_history_drawdown")
-        self.assertIsNotNone(section, "历史走势章应存在")
-        details = section.select_one("details.section-fold")
+        section = _select_one(self.soup, "#sec-portfolio_history_drawdown")
+        details = _select_one(section, "details.section-fold")
         self.assertIsNotNone(details, "历史走势章应含 details.section-fold 折叠块")
         self.assertIsNone(details.get("open"), "折叠块应默认收起（不带 open 属性）")
-        summary = details.select_one(":scope > summary.section-fold-summary")
+        summary = _select_one(details, ":scope > summary.section-fold-summary")
         self.assertIsNotNone(summary, "折叠块应有 summary 提示条")
         # summary 在内容之前（原生折叠结构：summary 为 details 首子元素）
-        children = [c for c in details.children if getattr(c, "name", None)]
+        children = _child_tags(details)
         self.assertEqual(children[0].name, "summary", "summary 应为折叠块第一个元素")
 
     def test_fold_block_uses_native_details_no_js_dependency_for_toggle(self):
         """折叠/展开用原生 details（键盘可达、无 JS 也能手动展开）。"""
-        details = self.soup.select_one("details.section-fold")
+        details = _select_one(self.soup, "details.section-fold")
         self.assertIsNotNone(details)
         # 未引入自绘开关类（折叠靠原生 summary 点击）
         self.assertIsNone(details.select_one(".fold-toggle-btn"))
@@ -652,9 +695,9 @@ class TestSectionFoldMoreChapters(unittest.TestCase):
 
     def _fold_of(self, key: str):
         """取章节的折叠块，顺带断言章节与折叠块存在（供各用例复用）。"""
-        section = self.soup.select_one(f"#sec-{key}")
+        section = _select_one(self.soup, f"#sec-{key}")
         self.assertIsNotNone(section, f"{key} 章应存在")
-        details = section.select_one("details.section-fold")
+        details = _select_one(section, "details.section-fold")
         self.assertIsNotNone(details, f"{key} 章内容应包在 details.section-fold 内")
         return section, details
 
@@ -674,9 +717,9 @@ class TestSectionFoldMoreChapters(unittest.TestCase):
         for key in self._FOLD_KEYS:
             with self.subTest(section=key):
                 _section, details = self._fold_of(key)
-                summary = details.select_one(":scope > summary.section-fold-summary")
+                summary = _select_one(details, ":scope > summary.section-fold-summary")
                 self.assertIsNotNone(summary, f"{key} 章折叠块应有 summary 提示条")
-                children = [c for c in details.children if getattr(c, "name", None)]
+                children = _child_tags(details)
                 self.assertEqual(
                     children[0].name,
                     "summary",
@@ -690,10 +733,10 @@ class TestSectionFoldMoreChapters(unittest.TestCase):
         for key in self._FOLD_KEYS:
             with self.subTest(section=key):
                 section, details = self._fold_of(key)
-                title = section.select_one(".section-title")
+                title = _select_one(section, ".section-title")
                 self.assertIsNotNone(title, f"{key} 章应有标题")
                 self.assertIsNot(title.parent, details, f"{key} 章标题应在折叠块外")
-                back = section.select_one(".back-to-top-link")
+                back = _select_one(section, ".back-to-top-link")
                 self.assertIsNotNone(back, f"{key} 章应有「回到顶部」")
                 self.assertNotIn(details, back.parents, f"{key} 章「回到顶部」应在折叠块外")
 
@@ -712,7 +755,7 @@ class TestSectionFoldMoreChapters(unittest.TestCase):
         for key, needle in expectations.items():
             with self.subTest(section=key):
                 _section, details = self._fold_of(key)
-                text = details.select_one("summary").get_text()
+                text = _text(_select_one(details, "summary"))
                 self.assertIn(needle, text, f"{key} 章提示条应携带关键摘要")
 
 
