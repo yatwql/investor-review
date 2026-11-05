@@ -864,6 +864,8 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 **运行域定档**：W 级不阻塞、不入钩子与 CI；E 级进发布门禁（`release.py gate`：E 级拦截、W 级统计留档）。开发期快反馈由 unit 测试承担（真实仓库冒烟 + 观察数基线断言）。纳入 pre-commit / CI 阻塞域须另行独立决策，**不随脚本改动顺带发生**。
 
+**样式载体已按关注点拆分**：报告样式在 `src/static/tmpl/partials/_base_styles.html`（两页公共面）与 `_report_styles.html` / `_whatif_styles.html`（页面面）里，主模板只剩 `{% include %}`。因此本脚本对报告侧 CSS 按「主模板 + 同目录 `_*.html` 样式 partial」**聚合读取**再比对（不聚合会把「报告侧无 token」误判成 finding）；W1 白名单按**内容归属**登记在宿主模板路径上，聚合时经 `_STYLE_PARTIAL_HOSTS` 映射回宿主判定，新增 `_*_styles.html` 必须同步登记该映射（由 `TestStylePartialHostMapping` 校验覆盖性）。
+
 **流程管控**：白名单只减不增（新增须带理由并复审，未命中任何现行行的条目会被告警点名，应及时删除）；收敛优先于豁免——能等值收敛到 token 的一律收敛，白名单只兜契约钦定值与恒定/派生域。
 
 **使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
