@@ -38,7 +38,7 @@
         {% set _hl = _db.get("headline") or [] %}
         {% if _hl %}
         <!-- 章首三行摘要：块默认折叠，关键事实不展开也要读到（双端与 Excel 逐字同源） -->
-        <div class="decision-basis-headline" id="decision-basis-headline" style="margin: 10px 0 6px; font-size: var(--fs-body); color: var(--text-secondary); line-height: 1.7;">
+        <div class="decision-basis-headline" id="decision-basis-headline" style="margin: 12px 0 4px; font-size: var(--fs-body); color: var(--text-secondary); line-height: 1.7;">
             {% for _line in _hl %}<div>{{ _line }}</div>{% endfor %}
         </div>
         {% endif %}
