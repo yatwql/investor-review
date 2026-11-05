@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.2-dev
-> **编号源**：`rf-next = 1048`（新增问题提出后更新为 +1；已用最大 rf-1047，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1052`（新增问题提出后更新为 +1；已用最大 rf-1047，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -41,7 +41,7 @@
 | `src/python/report/decision_basis.py` 962 行（主程序登记线 700，红线 1000） | 六段块装配（信号/可信度/风险预算/纪律/结算+按视界表现/约束）仍在单模块；拆分方向：结算批表与按视界表现聚合（`build_settlement_summary`＋`build_performance`＋`_mean`/`_tone_*` 色彩助手）可整体下沉 `decision_basis_settlement.py`（只读账本、无跨段依赖，预计 −180 行）；信号清单与区分度登记（`_build_signal_rows`＋`BACKTEST_CONCLUSIONS`）可再下沉一簇 |
 | `src/python/llm/skeleton.py` 825 行（主程序登记线 700） | 模板数据与渲染逻辑可下沉 `llm/skeleton_*`（骨架模板 / 占位渲染 / 缓存归因 / 回写四簇并存） |
 | `src/python/cli/_handlers.py` 852 行（主程序登记线 700） | 命令处理器按渠道分文件（generate/config/data 三簇），保持入口薄壳 |
-| `src/python/tui/handlers_holdings.py` 853 行（红线 1000） | 面板流程与输入采集高度耦合（共用 `_Session`），拆分收益低于回归面；再涨 ~150 行则按「面板流程 / 输入采集」两段拆，并把 `_market_data` 的会话内记忆一并做进去 |
+| `src/python/tui/handlers_holdings.py` 855 行（红线 1000） | 面板流程与输入采集高度耦合（共用 `_Session`），拆分收益低于回归面；再涨 ~150 行则按「面板流程 / 输入采集」两段拆，并把 `_market_data` 的会话内记忆一并做进去 |
 | `src/python/fetcher/financial_report.py` 729 行（主程序登记线 700） | 刚过线：再涨则按「索引 / 正文 / 全文定位」三阶下沉（负缓存样板统一在 `cache/_negative.py`） |
 | `src/static/tmpl/report_template.html` 277 行（样式已抽到 `partials/_report_styles.html` 750 行，各自单一关注点，均未触 1000 行） | 主模板只剩骨架 + include；再增长则按「首页/持仓/LLM/附录」四段拆 partial |
 | `src/static/tmpl/whatif_template.html` 543 行（**不在行数守护域内**：`check-file-length` 只扫 `.py`） | 样式已抽到 `partials/_whatif_styles.html`；剩余为标记与图表配置，暂无需拆分 |
@@ -53,7 +53,11 @@
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
 
 | # | 问题 | 修复 |
-|---|------|------|
+| --- | --- | --- |
+| **rf-1051** | `providers/tiantian_nav._parse_nav_trend` 按 `timezone.utc` 解 `Data_netWorthTrend[].x`（实为当日 00:00 UTC+8 的毫秒数），整条历史净值日期前移一天：录入「按交易日取净值」永远取不到 T 日、把 T-1 的值当成 T-1（实测 240012 卖出提示「2026-11-05 无净值」而缓存刷新标 11-05，两条路径矛盾） | 改按 `BEIJING_TZ` 解析（与 `tiantian_ranking`、`providers/utils.ts_to_str` 同口径）；已缓存历史按 provider 全量返回的替换分支自动更正。补 3 例单测（北京时间解毫秒戳、整数 YYYYMMDD 不受影响、相邻时间戳→相邻日期） |
+| **rf-1050** | 分市场取价口径判定用明细自带的 `name` 识别 QDII，但场外净值接口（东财/新浪）不回名称——QDII 全部被判成「国内场外」，`price_update_status` 因此要求 T 日净值，把正常的 T-1 官方净值误报为未更新（实测 4/4 全误报） | `_market_breakdown_after_refresh` 构造明细行时名称以持仓名为准、取数名仅作兜底；补 2 例单测（无名称时 QDII T-1 计最新、国内场外 T-1 仍计未更新） |
+| **rf-1049** | 行情类缓存刷新后的新鲜度判定直接吃取数层明细，而取数层日期字段是 `price_date`、报告侧 `DetailRow` 才映射为 `nav_date`——判据读不到日期，把全部品种报成「过期」并显示「无净值日期」（实测 12/12 全误报，含收市价齐全的 A 股） | `_judge_after_refresh` 先给明细补 `nav_date` 别名（`price_date` → `nav_date`）再交同一判据；TUI 侧日期回退链同步接受 `price_date`。补 2 例单测（别名后判为实时、过期行给出净值日与落后天数） |
+| **rf-1048** | TUI 持仓录入的卖出第一步口径读不出：面板买入项说明写「份额或金额」（金额实际只在场外买入口径可选），相邻卖出项只写份额，对照读像卖出也能选金额；帧头提示只写「金额单位元」「多数提示回车取默认值」，而卖出份额那步回车是取消本笔，且不显示单位与可卖份数 | 三处同源改写：买入项说明限定「份额（场外买入可按金额）」、卖出项写明「卖出份额（份，a=全部）」，帧头提示改为「份额按份录入，金额仅场外买入可用（元）……每步回车的作用见该行提示」；`_ask_shares` 卖出提示补单位与可卖份数（`卖出份额（份，可卖 500；a=全部）`），买入仍为「买入份额（份）」。口径未变（卖出始终按份额）。补 3 例单测（卖出提示含单位与可卖、买入提示不含可卖/金额、面板说明把金额限定在场外买入） |
 | **rf-1047** | 报告模板把 Jinja 写进 CSS 值位置，HTML 语言服务据此对每个模板报 28 条解析误报；此前用 `.pi-lens.json` 的 `lsp.disabledServers: [html]` 整体关掉该服务止声，代价是非模板页也失去 HTML LSP，且章节顺序分裂成「include 顺序 + CSS order 值」两处 | 按「颜色→语义 class、顺序→DOM 顺序、几何量→HTML/SVG 属性」改写：64 处动态内联样式清零（20 `order` + 40 颜色/字号/字重 + 1 配置分布条改 SVG 属性宽度），新增 `profit_class`/`price_type_class` 过滤器与 11 个工具类（色值引用既有 token）；include 顺序对齐 `_REPORT_SECTION_DEFAULT`；`.pi-lens.json` 删除、HTML LSP 恢复。守卫 3 条单测（模板静态扫描 / 渲染产物 style 无残留 / `div.section` 无 inline order 且 DOM 顺序与编号一致） |
 | **rf-1046** | 走势终点由滞后净值构成（QDII T-1/T-2）时，口径差异只在日志 WARNING 与数据源状态章可见；读者在「组合历史走势与回撤」章看到的末端日收益/最大回撤仍会被当准确值 | `STATUS_MESSAGES["history_nav_stale"]` 补上口径后果（末端日收益与最大回撤会偏低、终点附近数字仅供参考）；HTML 该章首与 Excel 页签顶部各加一块「读数口径提示」（逐标的滞后交易日数与占比）；手册报告说明同步。**口径文案单一源**：标题句/后果句/明细行在 `report/_history_quality` 定常量与拼装函数，生产侧写入契约（`headline`/`consequence`/`caveat`/`assets[].detail`），Excel 与数据状态词直接取用，HTML 副本由渲染用例按同一常量逐字断言（防三处静默漂移）。补 4 例单测（HTML 正反向渲染、Excel 提示行与无滞后不写） |
 | **rf-1045** | 缓存清理与读侧共用盘中 30s TTL，行情类缓存刚写入即被判过期删除，下一轮再写一遍——每轮启动与收尾反复预览 22~63 个待删文件，删除对读侧无收益，只放大未命中统计并制造「缓存反复失效」假象 | 新增 `cache/_ttl.get_cleanup_ttl(data_type, written_at)`：盘中一律按静态 TTL；**盘后**对盘中敏感类型额外回收**盘中写入**的快照（按写入时刻判定，TTL 归 0），收盘后写入的保留；读侧 `get_ttl` 不变。新增 `core/market_hours.is_intraday_timestamp()` 单一承接交易时段判定。technical 接口表与 TTL 章补「读写两侧判据不同（设计意图）」。补 4 例单测（盘中不快删、盘后回收盘中快照、盘后保留收盘快照、读侧仍判过期） |

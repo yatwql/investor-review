@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -178,3 +179,133 @@ class TestStatsPayload:
         assert payload["top_by_size"] == []
         # json 可序列化（前端契约）
         assert json.dumps(payload, ensure_ascii=False)
+
+
+@contextlib.contextmanager
+def _report_rules(monkeypatch: pytest.MonkeyPatch, trading_day: str = "2026-11-05", prev: str = "2026-11-04"):
+    """把报告侧与历法的判定点全部钉死（只需交易日 / 收市状态）。"""
+    monkeypatch.setattr("src.python.core.trading_calendar.get_last_trading_day", lambda: trading_day)
+    monkeypatch.setattr("src.python.core.trading_calendar.get_prev_trading_day", lambda day="": prev)
+    monkeypatch.setattr("src.python.report.market_value.is_market_open", lambda: False)
+    monkeypatch.setattr("src.python.report.market_value.is_midday_break", lambda: False)
+    monkeypatch.setattr("src.python.report.market_value.get_last_trading_day", lambda: trading_day)
+    monkeypatch.setattr("src.python.report.market_value.get_prev_trading_day", lambda day="": prev)
+    yield
+
+
+class TestJudgeAfterRefresh:
+    """刷新后单次判定：分组 / 是否最新 / 口径标签全引用 report.market_value。"""
+
+    def test_groups_and_latest_follow_report_rules(self, monkeypatch: pytest.MonkeyPatch):
+        """场内取收市价(T)、国内场外取 T 日净值、QDII 以 T-1 为最新。"""
+        from src.python.cache.operations import _judge_after_refresh
+
+        holdings = [
+            SimpleNamespace(code="600900", name="长江电力", account="A股账户"),
+            SimpleNamespace(code="011506", name="建信高端装备股票A", account="基金账户"),
+            SimpleNamespace(code="017730", name="嘉实全球产业升级股票(QDII)A", account="基金账户"),
+        ]
+        details = [
+            {"code": "600900", "name": "长江电力", "price": 29.0, "price_date": "2026-11-05", "source_api": "tencent"},
+            {
+                "code": "011506",
+                "name": "建信高端装备A",
+                "price": 1.38,
+                "price_date": "2026-11-05",
+                "source_api": "eastmoney",
+            },
+            {
+                "code": "017730",
+                "name": "嘉实全球(QDII)A",
+                "price": 3.15,
+                "price_date": "2026-11-04",
+                "source_api": "eastmoney",
+            },
+        ]
+        with _report_rules(monkeypatch):
+            trading_day, breakdown = _judge_after_refresh(holdings, details)
+
+        assert trading_day == "2026-11-05"
+        assert breakdown is not None
+        by_group = {slot["group"]: slot for slot in breakdown}
+        assert by_group["场内"]["latest"] == 1
+        assert by_group["场内"]["labels"]["场内收盘价(T)"] == 1
+        assert by_group["国内场外"]["latest"] == 1
+        assert by_group["国内场外"]["labels"]["官方净值(T)"] == 1
+        assert by_group["QDII"]["latest"] == 1
+        assert by_group["QDII"]["labels"]["官方净值(T-1)"] == 1
+
+    def test_stale_item_lands_in_pending(self, monkeypatch: pytest.MonkeyPatch):
+        """T-1 的国内场外净值不算最新（只有 QDII 才把 T-1 当最新）。"""
+        from src.python.cache.operations import _judge_after_refresh
+
+        holdings = [SimpleNamespace(code="011506", name="建信高端装备A", account="基金账户")]
+        details = [
+            {
+                "code": "011506",
+                "name": "建信高端装备A",
+                "price": 1.38,
+                "price_date": "2026-11-04",
+                "source_api": "eastmoney",
+            }
+        ]
+        with _report_rules(monkeypatch):
+            _, breakdown = _judge_after_refresh(holdings, details)
+
+        assert breakdown is not None
+        slot = breakdown[0]
+        assert slot["latest"] == 0
+        assert slot["pending"][0]["code"] == "011506"
+        assert slot["pending"][0]["label"] == "官方净值(T-1)"
+
+    def test_name_falls_back_to_holding_for_qdii(self, monkeypatch: pytest.MonkeyPatch):
+        """场外净值接口不回名称：QDII 要靠持仓名识别，否则 T-1 会被误判未更新。"""
+        from src.python.cache.operations import _judge_after_refresh
+
+        holdings = [SimpleNamespace(code="017730", name="嘉实全球产业升级股票(QDII)A", account="基金账户")]
+        details = [{"code": "017730", "name": "", "price": 3.15, "price_date": "2026-11-04", "source_api": "eastmoney"}]
+        with _report_rules(monkeypatch):
+            _, breakdown = _judge_after_refresh(holdings, details)
+
+        assert breakdown is not None
+        assert breakdown[0]["group"] == "QDII"
+        assert breakdown[0]["latest"] == 1
+        assert breakdown[0]["pending"] == []
+
+    def test_calendar_failure_returns_empty_without_raising(self, monkeypatch: pytest.MonkeyPatch):
+        """交易日历不可得时只丢判定，不得把刷新结果带崩。"""
+        from src.python.cache.operations import _judge_after_refresh
+
+        def _boom():
+            raise RuntimeError("日历不可用")
+
+        monkeypatch.setattr("src.python.core.trading_calendar.get_last_trading_day", _boom)
+        assert _judge_after_refresh([SimpleNamespace(code="600900", name="长江电力", account="A")], []) == ("", None)
+
+    def test_update_position_cache_carries_trading_day_and_breakdown(self, monkeypatch: pytest.MonkeyPatch):
+        """刷新流程把属交易日与分市场判定一起回传，且不再回传原始明细。"""
+        from src.python.cache import operations
+
+        monkeypatch.setattr("src.python.cache.clear_by_group", lambda *a, **kw: {})
+        monkeypatch.setattr(
+            "src.python.fetcher.price.fetch_market_data",
+            lambda code, name="": {
+                "code": code,
+                "name": name,
+                "price": 20.0,
+                "price_date": "2026-11-05",
+                "source_api": "tencent",
+            },
+        )
+        monkeypatch.setattr("src.python.fetcher.index.fetch_indices", lambda: {})
+        monkeypatch.setattr("src.python.fetcher.index.fetch_us_indices", lambda: {})
+        with _report_rules(monkeypatch):
+            result = operations.update_position_cache(
+                [SimpleNamespace(code="600900", name="长江电力", account="A股账户")], MagicMock()
+            )
+
+        assert result.price_ok == 1
+        assert result.trading_day == "2026-11-05"
+        assert result.market_breakdown is not None
+        assert result.market_breakdown[0]["latest"] == 1
+        assert not hasattr(result, "price_details")

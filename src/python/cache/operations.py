@@ -96,6 +96,11 @@ class PositionCacheResult:
     a_index_count: int = 0
     us_index_count: int = 0
     errors: list[str] = field(default_factory=list)
+    #: 本次刷新对应的交易日（YYYY-MM-DD）；历法不可得时为空串
+    trading_day: str = ""
+    #: 分市场取价口径计数（场内 / 国内场外 / QDII，判据全部引用 report.market_value）；
+    #: 交易日历不可得时为 None
+    market_breakdown: list[dict] | None = None
 
     @property
     def exit_code(self) -> int:
@@ -254,15 +259,19 @@ def update_basic_cache(holdings: list, reporter) -> CacheUpdateResult:
 # ═══════════════════════════════════════════════════════════════
 
 
-def _fetch_prices_and_indices(holdings: list, reporter) -> PositionCacheResult:
+def _fetch_prices_and_indices(holdings: list, reporter) -> tuple[PositionCacheResult, list[dict]]:
     """并行获取持仓价格 + 市场指数，通过 reporter.* 输出进度。
 
     内部管理线程池，operations 池唯一存在。
+
+    Returns:
+        ``(结果, 逐品种行情明细)``——明细只供本次刷新的判定使用，不进结果对象。
     """
     from src.python.fetcher.index import fetch_indices, fetch_us_indices
     from src.python.fetcher.price import fetch_market_data
 
     result = PositionCacheResult(total=len(holdings))
+    details: list[dict] = []
     pool = _get_pool()
     fut_map: dict = {}
 
@@ -289,6 +298,8 @@ def _fetch_prices_and_indices(holdings: list, reporter) -> PositionCacheResult:
                 price_res = future.result()
                 if price_res and price_res.get("price", 0) > 0:
                     result.price_ok += 1
+                    if isinstance(price_res, dict):
+                        details.append(price_res)
                     reporter.ok(f"{h.name} ({h.code}) → {price_res['price']:.4f}")
                 else:
                     reporter.warn(f"{h.name} ({h.code}) → 失败")
@@ -304,11 +315,11 @@ def _fetch_prices_and_indices(holdings: list, reporter) -> PositionCacheResult:
                 reporter.error(f"{h_or_none.name} ({h_or_none.code}) → {_hint}")
                 result.errors.append(f"{h_or_none.name}: {_hint}")
 
-    return result
+    return result, details
 
 
 def update_position_cache(holdings: list, reporter) -> PositionCacheResult:
-    """更新行情类缓存（价格+指数）。
+    """更新行情类缓存（价格+指数），并给出「刷新后仍有不规范数据」的判定。
 
     内部管理线程池，使用 reporter.* 输出进度。
     """
@@ -316,7 +327,132 @@ def update_position_cache(holdings: list, reporter) -> PositionCacheResult:
 
     clear_by_group("preload")
     reporter.info("正在并行获取持仓价格/净值 + 市场指数...")
-    return _fetch_prices_and_indices(holdings, reporter)
+    result, details = _fetch_prices_and_indices(holdings, reporter)
+    result.trading_day, result.market_breakdown = _judge_after_refresh(holdings, details)
+    return result
+
+
+def _with_nav_date(details: list[dict]) -> list[dict]:
+    """给取数层明细补 `nav_date` 别名（取数层叫 `price_date`，报告明细行叫 `nav_date`）。"""
+    normalized: list[dict] = []
+    for detail in details:
+        if isinstance(detail, dict) and not detail.get("nav_date"):
+            detail = {**detail, "nav_date": detail.get("price_date") or ""}
+        normalized.append(detail)
+    return normalized
+
+
+#: 报告分类 → 提示分组（场内股票与场内ETF 合成「场内」）
+_MARKET_GROUP_LABELS: dict[str, str] = {
+    "场内股票": "场内",
+    "场内ETF": "场内",
+    "国内场外": "国内场外",
+    "QDII": "QDII",
+}
+
+
+def _market_breakdown(holdings: list, details: list[dict], trading_day: str) -> list[dict] | None:
+    """按报告分类与取价口径给出分市场计数（不另立判据，全不重写）。
+
+    分组、是否已更新到最新、取价口径标签均引用报告侧公共实现：
+      - `report.market_value.classify_holdings()`：场内 / 国内场外 / QDII 分组；
+      - `report.market_value.price_update_status()`：场内需收市且日期为 T、国内场外 T、QDII T 或 T-1；
+      - `report.market_value._determine_price_type()`：「场内实时价」/「场内收盘价(T)」/
+        「官方净值(T)」/「官方净值(T-1)」等口径文案。
+
+    Args:
+        holdings: 持仓列表
+        details: 本次取到的行情明细（已补 `nav_date`）
+        trading_day: 属交易日（单次解析后下传，不在本函数重取）
+
+    Returns:
+        分市场条目列表（场内 → 国内场外 → QDII）；无待判定持仓时为 None
+    """
+    if not holdings:
+        return None
+    from collections import Counter
+
+    from src.python.report.market_value import (
+        DetailRow,
+        _determine_price_type,
+        classify_holdings,
+        price_update_status,
+    )
+
+    # 明细里的 name 在场外净值源下常为空（净值接口不回名称），而 QDII 判定要靠名称
+    # （`price_update_status` 用 `is_qdii_extended(d.name)` 区分 T/T-1 口径），故以持仓名
+    # 为准、取数名兵补。
+    by_code: dict[str, dict] = {}
+    for detail in details:
+        code = str(detail.get("code") or "").strip()
+        if not code or code in by_code:
+            continue
+        by_code[code] = {
+            "name": str(detail.get("name") or ""),
+            "nav_date": str(detail.get("nav_date") or ""),
+            "source_api": str(detail.get("source_api") or ""),
+            "price": float(detail.get("price") or 0.0),
+        }
+
+    slots: dict[str, dict] = {}
+    for raw_group, group_holdings in classify_holdings(holdings).items():
+        if not group_holdings:
+            continue
+        group = _MARKET_GROUP_LABELS.get(raw_group, raw_group)
+        slot = slots.setdefault(
+            group,
+            {"group": group, "total": 0, "latest": 0, "labels": Counter(), "pending": []},
+        )
+        for holding in group_holdings:
+            slot["total"] += 1
+            raw = by_code.get(str(holding.code or "").strip())
+            if raw is None:
+                slot["pending"].append(
+                    {"code": holding.code, "name": holding.name, "label": "无有效行情", "nav_date": ""}
+                )
+                continue
+            row = DetailRow(
+                code=str(holding.code or "").strip(),
+                name=str(holding.name or raw["name"]),
+                nav_date=raw["nav_date"],
+                source_api=raw["source_api"],
+                price=raw["price"],
+            )
+            label = _determine_price_type(row.source_api, row.nav_date, trading_day)
+            slot["labels"][label] += 1
+            if price_update_status([row], trading_day)[0]:
+                slot["latest"] += 1
+            else:
+                slot["pending"].append({"code": row.code, "name": row.name, "label": label, "nav_date": row.nav_date})
+
+    return [slots[group] for group in ("场内", "国内场外", "QDII") if group in slots]
+
+
+def _judge_after_refresh(holdings: list, details: list[dict]) -> tuple[str, list[dict] | None]:
+    """刷新后一次性给出「属交易日」与分市场取价口径计数。
+
+    交易日历只解析一次、明细只归一一次，再交给报告侧同一套判据
+    （`classify_holdings` 分组 / `price_update_status` 判是否已更新到最新 /
+    `_determine_price_type` 出口径文案），不另立阈值。
+
+    Args:
+        holdings: 持仓列表
+        details: 本次取到的行情明细（取数层日期字段为 `price_date`）
+
+    Returns:
+        ``(属交易日, 分市场条目)``；无持仓或历法不可得时返回 ``("", None)``
+    """
+    if not holdings:
+        return "", None
+    normalized = _with_nav_date(details)
+    try:
+        from src.python.core.trading_calendar import get_last_trading_day
+
+        trading_day = get_last_trading_day()
+    except Exception as e:  # 交易日历不可得：只丢判定，不影响已刷新的缓存
+        logger.debug("刷新后取价口径判定跳过: %s", e)
+        return "", None
+    return trading_day, _market_breakdown(holdings, normalized, trading_day)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -378,29 +514,34 @@ def get_cache_stats(reporter) -> CacheStats:
 
     # ── 2. data/history/snapshots ──
     _hist_dir = os.path.join(PROJECT_ROOT, "data", "history", "snapshots")
-    if os.path.isdir(_hist_dir):
-        s_files = s_size = 0
-        for _f in os.listdir(_hist_dir):
-            _fp = os.path.join(_hist_dir, _f)
-            if os.path.isfile(_fp) and _f.endswith(".json"):
-                s_files += 1
-                s_size += os.path.getsize(_fp)
-        stats.snapshot_files = s_files
-        stats.snapshot_size_bytes = s_size
+    stats.snapshot_files, stats.snapshot_size_bytes = _dir_file_stats(_hist_dir, suffix=".json")
 
     # ── 3. data/state ──
     _state_dir = os.path.join(PROJECT_ROOT, "data", "state")
-    if os.path.isdir(_state_dir):
-        s_files = s_size = 0
-        for _f in os.listdir(_state_dir):
-            _fp = os.path.join(_state_dir, _f)
-            if os.path.isfile(_fp):
-                s_files += 1
-                s_size += os.path.getsize(_fp)
-        stats.state_files = s_files
-        stats.state_size_bytes = s_size
+    stats.state_files, stats.state_size_bytes = _dir_file_stats(_state_dir)
 
     return stats
+
+
+def _dir_file_stats(directory: str, suffix: str = "") -> tuple[int, int]:
+    """目录内（可选后缀筛选）文件数与字节数；目录不可读时返回 (0, 0)。"""
+    files = size = 0
+    try:
+        entries = os.listdir(directory)
+    except OSError:  # 目录在枚举期间消失/不可读：当作空目录，不把统计打崩
+        return 0, 0
+    for name in entries:
+        if suffix and not name.endswith(suffix):
+            continue
+        path = os.path.join(directory, name)
+        try:
+            if not os.path.isfile(path):
+                continue
+            size += os.path.getsize(path)
+        except OSError:
+            continue
+        files += 1
+    return files, size
 
 
 def update_all_cache(holdings: list, reporter) -> int:

@@ -146,9 +146,62 @@ def _print_position_result(result) -> None:
         f"  {GREEN}[OK]{RESET} index_{{code}}.json           (A股 {result.a_index_count} 个 + 美股 {result.us_index_count} 个 = {total_idx} 个指数)"
     )
     print(f"  {GREEN}[OK]{RESET} LLM 关联缓存已清除（下次菜单 L 自动使用最新数据）")
+    _print_freshness_after_refresh(result)
 
 
-# ── TUI 命令入口（委托至 cache/operations.py）────────────────
+def _lag_trading_days(nav_date: str, trading_day: str) -> int | None:
+    """落后多少个交易日（历法不可得时返回 None）。"""
+    if not nav_date or not trading_day:
+        return None
+    try:
+        from src.python.core.trading_calendar import count_trading_days_elapsed
+
+        return count_trading_days_elapsed(nav_date, trading_day)
+    except Exception:
+        return None
+
+
+def _print_freshness_after_refresh(result) -> None:
+    """按市场列出取价口径与「已更新到最新」计数（判据全引用报告侧实现）。
+
+    分组与「是否最新」不在这里重写：场内→需已收市且日期为 T；国内场外→官方净值 T；
+    QDII→官方净值 T 或 T-1。口径文案直接取 `_determine_price_type` 的标签
+    （「场内实时价」/「场内收盘价(T)」/「官方净值(T)」/「官方净值(T-1)」等）。
+    每组给「已更新至最新 N/总数」，未更新的逐条点名（带口径标签与落后交易日数）。
+    """
+    from src.python.tui.text_layout import terminal_columns, wrap_hanging
+
+    breakdown = getattr(result, "market_breakdown", None)
+    trading_day = getattr(result, "trading_day", "")
+    if not breakdown:
+        return
+
+    columns = terminal_columns()
+    print()
+    for line in wrap_hanging(
+        f"  刷新后的取价口径（属交易日 {trading_day}，判据同报告：场内已收市为收盘价（盘中为实时价）、"
+        "国内场外为 T 日官方净值、QDII 以 T-1 为最新）",
+        columns,
+    ):
+        print(line)
+
+    for slot in breakdown:
+        labels = " · ".join(f"{name} {count} 条" for name, count in slot.get("labels", {}).items())
+        latest = slot.get("latest", 0)
+        total = slot.get("total", 0)
+        marker = GREEN + "[OK]" + RESET if latest >= total else YELLOW + "[!]" + RESET
+        for line in wrap_hanging(
+            f"  {marker} {slot.get('group', '')} {total} 条：{labels or '无有效行情'}（已更新至最新 {latest}/{total}）",
+            columns,
+        ):
+            print(line)
+        for item in slot.get("pending", []):
+            lag = _lag_trading_days(str(item.get("nav_date") or ""), trading_day)
+            detail = str(item.get("label") or "")
+            if lag is not None:
+                detail += f"，落后 {lag} 个交易日"
+            for line in wrap_hanging(f"      - {item.get('name', '')} ({item.get('code', '')}) {detail}", columns):
+                print(line)
 
 
 def _run_cache_update(group_name: str, update_fn, print_fn, action_name: str) -> None:
@@ -254,10 +307,13 @@ def _render_cache_stats() -> None:
         _hist_dir = os.path.join(PROJECT_ROOT, "data", "history", "snapshots")
         _emit(f"  目录: {os.path.abspath(_hist_dir)}")
         _emit(f"  文件: {stats.snapshot_files} 个 | 大小: {format_size(stats.snapshot_size_bytes)}")
-        _latest = max(
-            (os.path.getmtime(os.path.join(_hist_dir, _f)) for _f in os.listdir(_hist_dir) if _f.endswith(".json")),
-            default=0,
-        )
+        try:
+            _latest = max(
+                (os.path.getmtime(os.path.join(_hist_dir, _f)) for _f in os.listdir(_hist_dir) if _f.endswith(".json")),
+                default=0,
+            )
+        except OSError:  # 目录在枚举期间消失/不可读：只丢「最新」一行，不影响统计主体
+            _latest = 0
         if _latest:
             _emit(f"  最新: {datetime.fromtimestamp(_latest).strftime('%Y-%m-%d %H:%M')}")
         _emit("  （持仓快照，超期自动删除，不随缓存清理）")

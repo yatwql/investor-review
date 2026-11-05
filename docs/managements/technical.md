@@ -1521,6 +1521,8 @@ class PositionCacheResult:
     a_index_count: int = 0
     us_index_count: int = 0
     errors: list[str] = field(default_factory=list)
+    trading_day: str = ""              # 本次刷新对应的属交易日（历法不可得时为空串）
+    market_breakdown: list[dict] | None = None  # 分市场（场内/国内场外/QDII）口径与「已更新至最新」计数
 
 @dataclass
 class CacheStats:
@@ -1538,7 +1540,7 @@ class CacheStats:
 | 函数 | 说明 |
 |:-----|:------|
 | `update_basic_cache(holdings, reporter) → CacheUpdateResult` | 基金缓存 + 公共缓存（盈利预测/资金流向/行业/分红）并行刷新 |
-| `update_position_cache(holdings, reporter) → PositionCacheResult` | 持仓价格 + 指数并行获取 |
+| `update_position_cache(holdings, reporter) → PositionCacheResult` | 持仓价格 + 指数并行获取；完成后**一次判定**回传属交易日与分市场口径（`_judge_after_refresh`：历法只解析一次、明细只归一一次），判据全部引用 `report.market_value`——`classify_holdings` 分组、`price_update_status` 判是否已更新到最新（场内需已收市且为 T、国内场外 T、QDII 以 T-1 为最新）、`_determine_price_type` 出口径文案 |
 | `cleanup_cache(reporter) → int` | 扫描清理过期缓存 |
 | `get_cache_stats(reporter) → CacheStats` | 三目录统计（cache + snapshots + state） |
 | `get_cache_stats_payload() → dict` | GET /api/cache 结构化载荷单源组装（保序数组/top 截断/命中率/过期预估，Web 只做传输封装） |
@@ -3667,7 +3669,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `extract_purchase_constraint_block` | 约束块提取唯一单源（编排层与新闻链两侧共用，契约键/嵌套调整只改此处） | 申购限购 | LLM 生成 | 无 |
 | `holdings_editor` | 持仓录入编辑层（读→内存草稿→原子写回单源；账户=工作表名、保留非持仓页签、买入加权平均成本/卖出保留原成本） | 持仓录入 | 数据获取 | 无 |
 | `price_kind` | 品种价格形态判定（场内需录成交价 / 场外按交易日取官方净值；复用 `code_utils` 资产类型判定，不重写前缀知识） | 持仓录入 | 数据获取 | 无 |
-| `nav_lookup` | 按交易日取场外官方净值（复用既有历史净值链，不新增网络源；当日无净值取之前最近净值日并标明实际日期，取不到返回空） | 持仓录入 | 数据获取 | 无 |
+| `nav_lookup` | 按交易日取场外官方净值（复用既有历史净值链，不新增网络源；当日无净值取之前最近净值日并标明实际日期，取不到返回空）。**日期口径**：历史净值链的毫秒时间戳按 `BEIJING_TZ` 解（当日 00:00 UTC+8），按 UTC 解会整条前移一天，使「按交易日取净值」永远取到前一日 | 持仓录入 | 数据获取 | 无 |
 | `resolve_nav_on_trade_date` | 交易日→官方净值解析（交易日归一 + 当日前最近净值回溯 + 取不到即空，不猜价） | 持仓录入 | 数据获取 | 无 |
 | `resolve_purchase_shares` | 场外申购金额→份额换算（份额只在当日净值公布后成立；净值未公布返回空，交互层据此拒绝写入估算净值） | 持仓录入 | 数据获取 | 无 |
 | `ambiguous_price_kind` | 品种形态歧义判定（`00` 代码重叠区且名称无基金特征词 → 场内/场外无法只凭代码判定，交交互层反推或确认） | 持仓录入 | 数据获取 | 无 |
