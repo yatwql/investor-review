@@ -34,9 +34,9 @@ class TestLabels:
 
 class TestSchemaVersionEntersFingerprint:
     def test_version_change_changes_fingerprint(self, monkeypatch):
-        base = build_llm_fingerprint(total_mv=1000, total_cost=900, total_profit=100)
+        base = build_llm_fingerprint(holdings_details=[{"name": "A", "code": "000001", "cost": 100}])
         monkeypatch.setattr("src.python.llm.fingerprint.PROMPT_SCHEMA_VERSION", "another-version")
-        assert build_llm_fingerprint(total_mv=1000, total_cost=900, total_profit=100) != base
+        assert build_llm_fingerprint(holdings_details=[{"name": "A", "code": "000001", "cost": 100}]) != base
 
     def test_fingerprint_still_12_hex(self):
         assert len(build_llm_fingerprint()) == 12

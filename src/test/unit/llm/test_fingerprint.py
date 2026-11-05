@@ -131,18 +131,8 @@ class TestBuildLlmFingerprint(unittest.TestCase):
 
     def test_fingerprint_is_deterministic(self):
         """相同输入 → 相同指纹。"""
-        fp1 = build_llm_fingerprint(
-            total_mv=100000,
-            total_cost=80000,
-            total_profit=20000,
-            holdings_details=[{"name": "A", "code": "000001", "cost": 100}],
-        )
-        fp2 = build_llm_fingerprint(
-            total_mv=100000,
-            total_cost=80000,
-            total_profit=20000,
-            holdings_details=[{"name": "A", "code": "000001", "cost": 100}],
-        )
+        fp1 = build_llm_fingerprint(holdings_details=[{"name": "A", "code": "000001", "cost": 100}])
+        fp2 = build_llm_fingerprint(holdings_details=[{"name": "A", "code": "000001", "cost": 100}])
         self.assertEqual(fp1, fp2)
 
     def test_market_derived_inputs_do_not_change_fingerprint(self):
@@ -151,7 +141,6 @@ class TestBuildLlmFingerprint(unittest.TestCase):
         它们仍进提示词，时效由缓存 TTL 兜底——把分钟级变动的行情锁进键，
         等于让 4h TTL 从未生效（实测：同日持仓与市值相同的两轮仍 4/4 全 miss）。
         """
-        self.assertEqual(build_llm_fingerprint(total_mv=100000), build_llm_fingerprint(total_mv=200000))
         self.assertEqual(
             build_llm_fingerprint(history_data={"total_return_pct": 1.0}),
             build_llm_fingerprint(history_data={"total_return_pct": 9.0}),
@@ -182,7 +171,7 @@ class TestBuildLlmFingerprint(unittest.TestCase):
 
     def test_returns_12_char_hex(self):
         """返回 12 位十六进制字符串。"""
-        fp = build_llm_fingerprint(total_mv=50000)
+        fp = build_llm_fingerprint()
         self.assertEqual(len(fp), 12)
         int(fp, 16)  # 合法十六进制
 

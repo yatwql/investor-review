@@ -45,7 +45,6 @@ from src.python.config.features import is_feature_enabled
 from src.python.llm.fact_checker._constants import FACT_CHECK_RULES_VERSION
 from src.python.core import decision_ledger
 from src.python.core import signal_ledger
-from src.python.core.decision_header import structured_header_cache_suffix
 from src.python.llm.fingerprint import (
     build_llm_fingerprint,
     compute_fingerprint,
@@ -324,10 +323,6 @@ def expert_review_fingerprint(inputs: ModuleFingerprintInputs) -> str:
     """
     _parts = [
         build_llm_fingerprint(
-            total_mv=inputs.total_mv,
-            total_cost=inputs.total_cost,
-            total_profit=inputs.total_profit,
-            total_today_profit=inputs.total_today_profit,
             holdings_details=inputs.holdings_details,
             penetrated_assets=inputs.penetrated_assets,
             categories=inputs.categories,
@@ -345,7 +340,6 @@ def expert_review_fingerprint(inputs: ModuleFingerprintInputs) -> str:
     _fp += _signal_digest_cache_suffix(inputs.pipeline_data)
     _fp += _pipeline_block_cache_suffix(inputs.pipeline_data)
     _fp += signal_ledger.summary_cache_suffix()
-    _fp += structured_header_cache_suffix()
     _fp += scenario_mandate_cache_suffix()
     _fp += generation_params_suffix("expert_review")
     return _fp
@@ -370,10 +364,6 @@ def debate_procon_fingerprint(inputs: ModuleFingerprintInputs) -> str:
     """
     _parts = [
         build_llm_fingerprint(
-            total_mv=inputs.total_mv,
-            total_cost=inputs.total_cost,
-            total_profit=inputs.total_profit,
-            total_today_profit=inputs.total_today_profit,
             holdings_details=inputs.holdings_details,
             penetrated_assets=inputs.penetrated_assets,
             categories=inputs.categories,
@@ -430,15 +420,11 @@ def health_check_fingerprint(inputs: ModuleFingerprintInputs) -> str:
     提示词的实例同一（见模块 docstring）。
 
     ``pipeline_data`` 派生的【环比变化】【数据质量降级】两段同属口径类事实，同进。
-    纯行情/时效类输入（totals / 风险信号 / 事件窗分歧例块 / 调仓纪律回放块）
+    纯行情/时效类输入（风险信号 / 事件窗分歧例块 / 调仓纪律回放块）
     不入键——它们仍进提示词，由 TTL 兜底。
     """
     _parts = [
         build_llm_fingerprint(
-            total_mv=inputs.total_mv,
-            total_cost=inputs.total_cost,
-            total_profit=inputs.total_profit,
-            total_today_profit=inputs.total_today_profit,
             holdings_details=inputs.holdings_details,
             penetrated_assets=inputs.penetrated_assets,
             categories=inputs.categories,
@@ -465,10 +451,6 @@ def penetration_deep_fingerprint(inputs: ModuleFingerprintInputs) -> str:
     但不入键（时效类，由 TTL 兜底）。
     """
     _base = build_llm_fingerprint(
-        total_mv=inputs.total_mv,
-        total_cost=inputs.total_cost,
-        total_profit=inputs.total_profit,
-        total_today_profit=inputs.total_today_profit,
         holdings_details=inputs.holdings_details,
         penetrated_assets=inputs.penetrated_assets,
         categories=inputs.categories,

@@ -305,10 +305,8 @@ class TestReadSidePromotion:
         后缀函数是「开关 → 缓存键」的唯一判定点（写侧指纹与预检侧共用），返回
         非空即证明默认配置下提示词确实带上了增强段；默认值若被改回关，本用例转红。
         """
-        from src.python.core.decision_header import structured_header_cache_suffix
         from src.python.llm.module_fingerprint import debate_feature_cache_suffix
 
-        assert structured_header_cache_suffix() == "_dh"
         assert debate_feature_cache_suffix() == "_c"
 
     def test_not_in_report_notice_after_promotion(self):

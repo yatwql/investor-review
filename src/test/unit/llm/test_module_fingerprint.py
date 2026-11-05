@@ -713,10 +713,10 @@ _PURCHASE_BLOCK_CHANGED = _PURCHASE_BLOCK.replace("100 元", "200 元")
 # 标签/表头等静态文案改动、或校验修正语义（会影响回写的缓存正文）改动，均须换键，
 # 否则预检会命中按旧口径生成/旧规则改过的缓存。该表随版本号一次性刷新，属预期。
 #: 空块基线（接线前形态）：随提示词文本版本盐递增同步刷新（当前 `rate-caliber-4`）；
-#: 结构后缀 `_c` / `_dh` 不应随盐变化——后缀增减即为键形漂移，属需排查的异常。
+#: 结构后缀 `_c` 不应随盐变化——后缀增减即为键形漂移，属需排查的异常。
 _PRE_WIRE_BASELINE = {
     "global_macro": "df8fb2929da0",
-    "expert_review": "437755c22ee6_c_dh",
+    "expert_review": "437755c22ee6_c",
     "health_check": "e06878f7600a",
     "penetration_deep": "12f59e5d9751",
 }
