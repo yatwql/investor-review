@@ -29,6 +29,28 @@ from ._cache_refresh import (  # noqa: E402 — 刷新族实现下沉，编排�
     sector_flow_hint,
 )
 
+#: 「刷新基础缓存」真正会回填的缓存域（前缀 + 精确键名）。
+#:
+#: 该流程只刷新基金业绩/持仓/基准、盈利预测、行业资金流向、持仓行业分类、分红、
+#: 新闻、基金经理、风格扩展；refresh 组里的其余域（财报索引与正文、财务指标、
+#: 市场情绪、新闻逐条分析、费率、指数估值）**本流程不回填**，因此不能随整组清空——
+#: 否则穿透成分股的行业/财报/指标缓存被作废后，要等到下一次出报告才逐只重新拉取。
+_BASIC_REFRESHED_CACHE_KEYS: frozenset[str] = frozenset(
+    {
+        "fund_perf_",
+        "fund_hold_",
+        "fund_benchmarks",
+        "profit_forecast_",
+        "sector_flow_",
+        "industry_",
+        "dividend_",
+        "news_",
+        "fund_manager_",
+        "fund_manager_snapshot",
+        "extended_",
+    }
+)
+
 
 @dataclass
 class CacheUpdateResult:
@@ -149,8 +171,9 @@ def update_basic_cache(holdings: list, reporter) -> CacheUpdateResult:
     result = CacheUpdateResult()
     result.holdings_count = len(holdings)
 
-    # 先清旧缓存（匹配 TUI 语义）
-    clear_by_group("refresh")
+    # 先清旧缓存（匹配 TUI 语义）——只清本流程会回填的域，避免连坐作废
+    # 财报/财务指标等要等到出报告才重取的域（见 _BASIC_REFRESHED_CACHE_KEYS）。
+    clear_by_group("refresh", only=_BASIC_REFRESHED_CACHE_KEYS)
 
     from src.python.report.fund_performance import is_fund
 
@@ -342,7 +365,7 @@ def get_cache_stats(reporter) -> CacheStats:
     stats.total_size_bytes = raw_stats.get("total_size_bytes", 0)
     if hit_rate.get("total", 0) > 0:
         stats.hit_rate = hit_rate.get("rate", 0.0) * 100
-        stats.hit_total = hit_rate.get("total", 0)
+        stats.hit_total = int(hit_rate.get("total", 0))
     stats.by_prefix = raw_stats.get("by_prefix", {})
     stats.top_by_size = raw_stats.get("top_by_size", [])
 

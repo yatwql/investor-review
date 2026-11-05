@@ -240,6 +240,8 @@ def _finalize_news_token_usage(
     total_in = batch_usage.get("input", 0)
     total_out = batch_usage.get("output", 0)
     total_hit = batch_usage.get("cache_hit", 0)
+    ok_batches = int(batch_usage.get("ok_batches", 0))
+    failed_batches = int(batch_usage.get("failed_batches", 0))
     token_usage: dict = {}
     if total_in > 0 or total_out > 0:
         token_usage = {
@@ -248,6 +250,8 @@ def _finalize_news_token_usage(
             "output_tokens": total_out,
             "cache_read_input_tokens": total_hit,
             "total_tokens": total_in + total_out,
+            "ok_batches": ok_batches,
+            "failed_batches": failed_batches,
         }
     # 记录条件：真有产出（含全缓存命中）或真有用量。零产出 + 零用量说明本批逐条调用
     # 全部失败（批量路径把逐条失败收成 0 条分析），此时写 per_module 会让用量页签的
@@ -289,6 +293,21 @@ def _finalize_news_token_usage(
         )
 
     fresh_count = len(top_news) - cached_count
+    if not analysis_count and failed_batches:
+        logger.error(
+            "%s全部 %d 批失败：%d 条无 LLM 分析（报告内该模块将标为失败）",
+            _MN("news_correlation"),
+            failed_batches,
+            fresh_count,
+        )
+    elif failed_batches:
+        logger.warning(
+            "%s部分批次失败 %d/%d：%d 条无 LLM 分析",
+            _MN("news_correlation"),
+            failed_batches,
+            ok_batches + failed_batches,
+            fresh_count,
+        )
     logger.info(
         "%s完成: %d 条 → %d 条含 LLM 分析（缓存 %d 条 + 新处理 %d 条）",
         _MN("news_correlation"),

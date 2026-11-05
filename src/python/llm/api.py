@@ -435,7 +435,12 @@ def call_llm(
             logger.warning("provider %s 异常，切换下一 provider", _entry_desc, exc_info=True)
             attempted.append(f"{name}: EXCEPTION")
 
-    logger.warning("全部 provider 尝试失败")
+    # 全链不可用是错误级事件（不是可容忍的降级）：升 ERROR 以便与「数值缺失」类
+    # WARNING 区分开——这类事件若只发 WARNING，事后只能翻日志才能发现整段内容缺失。
+    logger.error(
+        "全部 provider 尝试失败（已尝试：%s）——本轮 LLM 内容不可用，报告将降级/占位",
+        "、".join(attempted) or "无可用 provider",
+    )
     if module_key:
         # 从最后一次失败推论 final_status
         final_status = FAIL_REASON_API_ERROR

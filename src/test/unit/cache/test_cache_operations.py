@@ -61,6 +61,30 @@ class TestUpdateAllCache:
         m_pos.assert_called_once()
 
 
+class TestUpdateBasicCacheScope:
+    """「刷新基础缓存」只作废本流程会回填的缓存域。
+
+    回归：原先 clear_by_group("refresh") 清整组，把不回填的财报索引/正文与财务
+    指标一并作废——实测一次刷新后紧接的报告多付 267 次请求、墙钟翻倍。
+    """
+
+    def test_clears_only_refilled_domains(self):
+        from src.python.cache.operations import update_basic_cache
+
+        with (
+            patch("src.python.cache.clear_by_group") as m_clear,
+            patch("src.python.cache.operations._refresh_common_caches", return_value=(1, 1, 1, 1)),
+            patch("src.python.cache.operations._refresh_extended_caches"),
+            patch("src.python.report.fund_performance.is_fund", return_value=False),
+        ):
+            update_basic_cache([], MagicMock())
+
+        only = set(m_clear.call_args.kwargs["only"])
+        assert {"news_", "industry_", "fund_perf_"} <= only, "本流程会回填的域必须清（否则刷新无效）"
+        leaked = {"report_datasink_doc_", "report_datasink_index_", "fin_indicator_"} & only
+        assert leaked == set(), f"财报/财务指标由报告管线回填，不得随刷新作废：{leaked}"
+
+
 class TestWarmNewAssetCaches:
     """预热编排在共享层：变更检测 → 行情/基金 → 行业；异常不阻断。"""
 

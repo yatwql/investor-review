@@ -462,7 +462,7 @@ while True:
 | | `[W]` | 调仓 What-if 模拟（对比两份持仓，独立报告） |
 | | `[Q]` | 报告对话式追问（选择已生成 HTML 报告进入多轮文本输入循环，委托 `qa/session.ask_report_qa`，§6.8；`report_qa` 门控） |
 | 配置管理 | `[G]` | 全局设置七项（`GLOBAL_SETTINGS_ITEMS` 单源登记：键 / 显示名 / 处理器 / 分组），数字为主入口、字母为别名：`H` 持仓信息目录、`F` 持仓信息文件名、`O` 报告输出目录、`L` LLM 设置（运行参数 1-6 + 第 7 项多链线路）、`I` 对比基准指数、`A` 持仓匿名化、`M` 配置入口地图（`_CONFIG_ENTRY_MAP` 只读索引）；目录三项直挂二级、无中间子面板（同一配置只有一条入口路径） |
-| 缓存管理 | `[1]`/`[2]` | 更新基础类缓存（基金业绩/持仓/经理/基准等，`clear_by_group("refresh")` 先清后取）/ 行情类缓存（价格/指数等，`clear_by_group("preload")` 先清后取） |
+| 缓存管理 | `[1]`/`[2]` | 更新基础类缓存（基金业绩/持仓/经理/基准等，`clear_by_group("refresh", only=…)` 先清后取——只清本流程会回填的 10 个域，财报/财务指标/情绪/费率/估值等不回填域不清）/ 行情类缓存（价格/指数等，`clear_by_group("preload")` 先清后取） |
 | | `[3]` | 缓存管理**子菜单**（统计首屏 → 子菜单内 `3` 清理过期 / `B`/回车 返回；合并原清理与统计两个平级入口，`handlers_cache.py::_cmd_cache_management`） |
 | 配置管理 | `[C]` | 报告章节显隐（四块：顶层 / LLM / 默认关闭的整章 / 关联产物，另含智囊团生成子项；清单、编号、分块与来源由 `config/chapter_registry.py` 派生，四来源写入统一经共享编辑层 `config/edit_ops.py`；面板只切显隐、不增删章节不改顺序；子项在父章节关闭时名称/键名置灰并提示原因、状态字仍红色「关」；`?编号`/`?键名` 查看来源文件/写键/默认值，行尾 `*` 标漂移，LLM 行附近 7 日费用摘要） |
 | | `[I]` | 对比指数池管理（自定义基准指数） |
@@ -1309,7 +1309,7 @@ cache/
 | `set(key, data)` | `(str, Any) → None` | `{"_ts": now, "_data": data}` 序列化 + 原子写入；≥100KB 自动 `.json.gz` |
 | `clear(key)` | `(str) → None` | 同时删除 `.json` 和 `.json.gz` |
 | `get_ttl(data_type)` | `(str) → float` | TTL 分辨率（见下方流程图）；只由数据类型决定（无按 key 抖动、无兼容参数） |
-| `clear_by_group(group)` | `(str) → None` | 按 preload/refresh 分组清除 |
+| `clear_by_group(group, only=None)` | `(str, Iterable[str]\|None) → dict[str, int]` | 按 preload/refresh 分组清除；`only` 传缓存键前缀/精确键名集合时**只清这些域所属的模块**（用于「刷新基础缓存」这类只回填部分域的流程，避免连坐作废财报/财务指标等下次出报告才重取的域） |
 | `cleanup_expired()` | `() → int` | 扫描全量缓存，删除超龄项（逐文件明细只进 DEBUG，INFO 留汇总行 + 释放字节；age/TTL 按量级自适应单位——盘中 30s 的 price TTL 不再印成 `ttl=0.0h`；**无 `_ts` 包封的文件跳过 TTL 判定**，见下） |
 
 #### TTL 分辨率流程
