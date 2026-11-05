@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 from src.python.core.constants import PROJECT_ROOT
 from bs4 import BeautifulSoup
+from src.test.unit.report._html_report_fixtures import rendered_css
 from .test_html_report_structure import (
     _REPORT_SECTION_DEFAULT,
     _build_minimal_render_data,
@@ -84,14 +85,14 @@ class TestHtmlTheme(unittest.TestCase):
     def test_root_css_variables(self) -> None:
         """:root 定义页面级 CSS 变量（--bg/--surface/--text 等）。"""
         soup = self._render_theme_soup()
-        style = soup.find("style").get_text()
+        style = rendered_css(soup)
         for var_name in ("--bg:", "--surface:", "--text:", "--profit:", "--loss:"):
             self.assertIn(var_name, style, f":root 应定义 {var_name} 页面级变量")
 
     def test_dark_theme_override_block(self) -> None:
         """存在 [data-theme="dark"] 深色覆盖块（含深色背景/提亮语义色）。"""
         soup = self._render_theme_soup()
-        style = soup.find("style").get_text()
+        style = rendered_css(soup)
         self.assertIn('[data-theme="dark"]', style, 'style 应含 [data-theme="dark"] 覆盖块')
         self.assertIn("--bg: #121212", style, "深色块应定义深色背景")
         self.assertIn("--surface: #1e1e1e", style, "深色块应定义深色卡片表面")
@@ -99,7 +100,7 @@ class TestHtmlTheme(unittest.TestCase):
     def test_theme_button_hidden_in_print(self) -> None:
         """@media print 隐藏切换按钮（打印不出现浮动控件）。"""
         soup = self._render_theme_soup()
-        style = soup.find("style").get_text()
+        style = rendered_css(soup)
         self.assertIn("@media print", style, "模板应含打印媒体查询")
         self.assertIn(".theme-toggle-btn { display: none", style, "打印时应隐藏主题切换按钮")
 

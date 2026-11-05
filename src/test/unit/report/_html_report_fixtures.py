@@ -215,3 +215,13 @@ def read_template_css() -> str:
         for m in _re.finditer(r"<style>(.*?)</style>", path.read_text(encoding="utf-8"), _re.S):
             blocks.append(m.group(1))
     return "\n".join(blocks)
+
+
+def rendered_css(soup) -> str:
+    """渲染产物中**全部** `<style>` 块拼接文本。
+
+    报告样式按关注点拆成多个 partial（`_base_styles.html` / `_report_styles.html` /
+    章节自带样式），渲染后因此有多个 `<style>` 元素。只取 `soup.find("style")` 会漏掉
+    其余块——凡是「某 CSS 规则/变量是否存在」的断言都必须用本函数取全文。
+    """
+    return "\n".join(s.get_text() for s in soup.find_all("style"))

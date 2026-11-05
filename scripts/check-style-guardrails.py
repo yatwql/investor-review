@@ -197,6 +197,8 @@ def _dark_override_lines(text: str) -> set[int]:
 _STYLE_PARTIAL_HOSTS: dict[str, str] = {
     "src/static/tmpl/partials/_report_styles.html": "src/static/tmpl/report_template.html",
     "src/static/tmpl/partials/_whatif_styles.html": "src/static/tmpl/whatif_template.html",
+    # 公共样式面（两页共用）：规则原本从报告页抽出，白名单归属按报告页登记
+    "src/static/tmpl/partials/_base_styles.html": "src/static/tmpl/report_template.html",
 }
 
 

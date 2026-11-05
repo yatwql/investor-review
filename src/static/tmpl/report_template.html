@@ -21,6 +21,7 @@
 {% macro render_back_to_top() %}
 <div class="back-to-top-link"><a href="#report-top" title="回到报告顶部">↑ 回到顶部</a></div>
 {% endmacro %}
+{% include "partials/_base_styles.html" %}
 {% include "partials/_report_styles.html" %}
 
     {# 章节顺序：`report_section_order` 自定义序号时需用 CSS `order` 生效；

@@ -124,11 +124,12 @@
 
 | 载体 | 放什么 | 判据 |
 |---|---|---|
-| `partials/_report_styles.html` / `_whatif_styles.html` | 页面级全局样式（排版、表格、页头页脚、打印） | 该页任何状态下都要用的规则 |
+| `partials/_base_styles.html` | **两页共用的基础面**（排版、表格、页头页脚、浮动按钮） | 两页都需要且规则逐字相同——先放这里，页面面只留差异 |
+| `partials/_report_styles.html` / `_whatif_styles.html` | 页面级样式（该页独有的排版、图表、打印覆盖） | 该页任何状态下都要用的规则 |
 | 章节 partial 内嵌 `<style>`（如 `report_qa_section.html`） | 该章独有样式 | 章节可整体关闭：关态**零字节**，不为关掉的功能付样式体积 |
 | 主模板 `<style>` | 仅 `_base_styles.html`/页面样式 partial 的 `{% include %}` | 主模板本身不写 CSS |
 
-「报告 CSS」在两个地方被读取，口径**有意不同**，改动时两边都要看：`scripts/check-style-guardrails._report_css_text()` 只聚合 `_*_styles.html`（做双面 token 对齐，不含章节局部样式）；测试侧 `read_template_css()` 聚合**全部** partial（含章节样式，供字号/断点类断言覆盖到章内规则）。
+级联先后是前提：`_base_styles.html` 必须 include 在页面样式**之前**（否则基础面会覆盖页面的有意差异）。「报告 CSS」在两个地方被读取，口径**有意不同**，改动时两边都要看：`scripts/check-style-guardrails._report_css_text()` 只聚合 `_*_styles.html`（做双面 token 对齐，不含章节局部样式）；测试侧 `read_template_css()` 聚合**全部** partial（含章节样式，供字号/断点类断言覆盖到章内规则）。
 
 守卫：`src/test/unit/report/test_html_report_structure.py` 静态扫描全部模板 `style="…"` 不得含 `{{`/`{%`、`<style>` 块内不得含 `{{`/`{%`，并对渲染产物断言 `style` 无模板残留；同文件另断言 `div.section` 无内联 `order:` 且 DOM 顺序与编号一致。压误报用的 `.pi-lens.json` 已随本批次删除，HTML 语言服务恢复启用。
 

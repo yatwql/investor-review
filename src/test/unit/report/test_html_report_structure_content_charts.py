@@ -4,6 +4,7 @@ from __future__ import annotations
 import unittest
 import pytest
 from bs4 import BeautifulSoup
+from src.test.unit.report._html_report_fixtures import rendered_css
 from .test_html_report_structure import (
     _REPORT_SECTION_DEFAULT,
     _build_minimal_render_data,
@@ -350,7 +351,7 @@ class TestHtmlInteractiveCharts(unittest.TestCase):
     def test_print_css_forces_light_theme(self) -> None:
         """/media print 覆盖 --chart-* 为浅色 + .chart-box break-inside（§4.5）。"""
         soup = self._render_interactive()
-        style = soup.find("style").get_text()
+        style = rendered_css(soup)
         # 打印覆盖只在 @media print 内出现（主 :root 是 #333333，这里是 #000）
         self.assertIn("--chart-text: #000", style)
         self.assertIn("--chart-grid", style)

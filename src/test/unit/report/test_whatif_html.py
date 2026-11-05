@@ -344,8 +344,15 @@ class TestSwitchOffGoldenBaseline(unittest.TestCase):
     # 「变化(%)」列的着色落到语义类 `profit` / `loss` / `text-muted`（
     # 颜色转由 CSS 类承载，视觉一致）；关态业务字节面
     # （数据、文案、结构、章节顺序）零变化。
-    _GOLDEN_BASE_SHA256 = "1a27416c0b06720af110c9db01c6dae462e623c2d7656ffeae4f6d1cc7e2fa67"
-    _GOLDEN_FULL_SHA256 = "e742a80af2c75786f797366c23f625a0560322fde2e58e22b6593f9459870afe"
+    #
+    # 基线复核记录（2026-11-05，公共样式抽 `_base_styles.html` 批次）：字节差异仅来自样式块
+    # 位置搬移（34 条两页公共规则移入 `partials/_base_styles.html`，两页各自 include 在页面
+    # 样式之前）。已按「规则集不变」验证：页内 CSS 归一化「选择器→声明」多重集哈希、
+    # @media 块数、以及去样式后的正文逐字符哈希三者与改动前完全一致（正文哈希
+    # 822813842e30f32465d7cfdd12363c639c13b8d924c661dc3c0ca2aafe2197ed，样式规则集哈希
+    # 505214c481ef2963a9c17517d681fdaaf843b8db1316e0a327a2df54f497e28a）。
+    _GOLDEN_BASE_SHA256 = "d29d82feb070e8e6485eb13f8ecf6b1355f618a558268b185776d57f9167d050"
+    _GOLDEN_FULL_SHA256 = "bec364bcdbb3547421062e69f088740dbc945340814de6e72e0d4306d07ceb55"
 
     def _render(self, **extra) -> str:
         from unittest.mock import patch
