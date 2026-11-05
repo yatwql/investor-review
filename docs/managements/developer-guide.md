@@ -107,6 +107,20 @@
 
 **未改动**：`thinkingLevelMap`（内置 `low/high/max` 已够用，用 `/thinking` 切档）、`compat`（`thinkingFormat` 等由 pi 内置目录提供）、`input`（flash 为纯文本，视觉实验版另有一个模型）、`samplingParams`（仅对 OpenAI 兼容传输生效；订阅端点走 Anthropic/兼容协议时该参数不适用，故未对它们下发）。
 
+**⑦ 静态检查：`.pi-lens.json` 关掉 `html` 语言服务**
+
+报告模板（`src/static/tmpl/` 下 23 个文件）是 **Jinja2** 而不是合法 HTML：`style="…{{ }}…"` 这类属性值会被 HTML 语言服务内部的 CSS 解析器当 CSS 扫，单个文件稳定报 28 条 `at-rule or selector expected` / `property value expected`（属解析器对模板语法的误报，与模板本身无关）。
+
+故项目级 `.pi-lens.json` 声明 `lsp.disabledServers: ["html"]`（deny 型键，按层级取并集，项目只能加不能减；**新开会话才生效**，可用 `effective_config file=<模板路径>` 确认显示 `html — disabled-by-config`）。关掉不意味着 HTML 无保障：
+
+| 保障面 | 承担者 |
+|---|---|
+| HTML/JSX 语法与可访问性 | pi-lens 的 `htmlhint` runner（仍启用，同受 `src/static/tmpl/**` 之外的全部 `.html` 覆盖） |
+| 模板渲染结果 | `src/test/unit/report/` 下的 Jinja 渲染用例（章节/区块/提示文本断言） |
+| 设计语言合规 | `DESIGN.md` 契约结构测试 + `check-doc-drift` 的章节-区块矩阵 |
+
+仅两个非模板静态页（`src/static/web/index.html`、`src/static/test-chart.html`）会失去 HTML LSP 诊断，它们同样在 `htmlhint` 覆盖内。若将来出现需要 HTML 语言服务主持的页面工作，临时注释掉该 deny 并重启会话即可。
+
 **为什么模型覆盖放在 `.pi/` 而要软链生效**：pi CLI **只读** `~/.pi/agent/models.json`（`getModelsPath() = getAgentDir() + "/models.json"`，`getAgentDir()` 只认 `PI_AGENT_DIR` 或 `~/.pi/agent`），**不读项目级 `.pi/models.json`**；项目级 `.pi/` 仅支持 `settings.json`/扩展/技能/主题。因此模型覆盖的仓库文件是**唯一事实来源**，用软链挂到全局路径生效（`settings.json` 走项目级路径，无需软链）：
 
 ```bash
