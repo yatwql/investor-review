@@ -178,6 +178,18 @@ def _load_sector_keywords() -> dict[str, str]:
 _SECTOR_KEYWORDS: dict[str, str] = _load_sector_keywords()
 
 
+def sector_keywords() -> dict[str, str]:
+    """行业关键词表只读副本（关键词 → 板块），供其他域复用同一份映射。
+
+    单源在 ``data/knowledge/sector_keywords.json``（本模块加载），事件窗等消费方
+    经本访问器取用，不各自读盘也不复制一份表，避免两处口径漂移。
+
+    Returns:
+        关键词 → 板块名（如 ``{"白酒": "消费", "芯片": "科技"}``）的浅拷贝。
+    """
+    return dict(_SECTOR_KEYWORDS)
+
+
 def classify_sector(name: str, _code: str = "") -> str:
     """根据证券名称和代码判断所属板块。
 
@@ -360,6 +372,9 @@ def _merge_fund_layer(
         report_date = parse_report_date(raw_period)
         report_period = format_report_period(raw_period)
         if is_stale_report(report_date, today):
+            # 陈旧分支只会在报告期可解析时进入（is_stale_report 对 None 返回 False），
+            # 显式取一次季度数，避免两处重复计算与「报告期缺失」的类型歧义
+            stale_quarters = complete_quarters_since(report_date, today) if report_date else 0
             unknown_mv += fund_mv
             stale_count += 1
             stale_fund_details.append(
@@ -367,7 +382,7 @@ def _merge_fund_layer(
                     "name": fund.name,
                     "code": fund.code,
                     "period": report_period,
-                    "quarters": str(complete_quarters_since(report_date, today)),
+                    "quarters": str(stale_quarters),
                 }
             )
             logger.warning(
@@ -376,7 +391,7 @@ def _merge_fund_layer(
                 fund.name,
                 fund.code,
                 report_period,
-                complete_quarters_since(report_date, today),
+                stale_quarters,
                 STALE_QUARTERS,
             )
             continue

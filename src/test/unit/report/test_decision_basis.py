@@ -28,6 +28,7 @@ from src.python.report.decision_basis import (
     build_settlement_summary,
     build_risk_budget,
     BACKTEST_SOURCE,
+    BLOCK_HEADLINE_EMPTY,
     BLOCK_TITLE,
     DISCRIMINATION_FAILED,
     DISCRIMINATION_INSUFFICIENT,
@@ -36,6 +37,8 @@ from src.python.report.decision_basis import (
     FEATURE_FLAG,
     arbitrate_confidence,
     build_decision_basis_data,
+    build_headline,
+    build_performance,
     in_direction_axis,
     is_decision_basis_enabled,
 )
@@ -622,6 +625,148 @@ class TestRiskBudget:
         assert "风险预算超限 1 项" in data["summary"]
 
 
+class TestDecisionBasisHeadline:
+    """章首三行摘要（`build_headline`）：可见性保障 + 双端同文 + 空态压缩。"""
+
+    @staticmethod
+    def _signals(*rows):
+        base = {"name": "市场温度", "in_axis": True, "direction": 1, "basis": "price"}
+        return [{**base, **r} for r in rows]
+
+    def test_empty_contract_compresses_to_single_line(self):
+        """信号/风险预算/纪律三者全不可用 → 压成一行空态（不留三行未就绪噪音）。"""
+        lines = build_headline([], {"level_label": "无信号"}, {"available": False}, {"available": False})
+        assert lines == [BLOCK_HEADLINE_EMPTY]
+        assert "暂无可用数据" in lines[0]
+
+    def test_three_lines_cover_signal_risk_discipline(self):
+        """三行固定含义：有效信号+可信度 / 风险预算 / 纪律。"""
+        lines = build_headline(
+            self._signals({"direction": 1}, {"direction": 1}),
+            {"level_label": "低"},
+            {"available": True, "breached_count": 2},
+            {"available": True, "items": [{"rule": "止盈"}], "regime_label": "正常"},
+        )
+        assert len(lines) == 3
+        assert "有效 2/2" in lines[0] and "可信度 低" in lines[0]
+        assert "超限 2 项" in lines[1]
+        assert "触发 1 条" in lines[2] and "正常" in lines[2]
+
+    def test_no_breach_and_no_trigger_use_negative_state_wording(self):
+        """无超限/无触发用否定态文案，不写 0 项 0 条（与块内空态口径一致）。"""
+        lines = build_headline(
+            self._signals({"direction": 1}),
+            {"level_label": "低"},
+            {"available": True, "breached_count": 0},
+            {"available": True, "items": [], "regime_label": "正常"},
+        )
+        assert lines[1] == "风险预算：未超限"
+        assert lines[2] == "纪律：未触发"
+
+    def test_unavailable_states_are_labelled(self):
+        """未接入/未评估必须显式标注，不能留空行或伪造 0 值。"""
+        lines = build_headline(
+            self._signals({"direction": 1}),
+            {"level_label": "低"},
+            {"available": False},
+            {"available": False, "items": []},
+        )
+        assert lines[1] == "风险预算：未评估"
+        assert lines[2] == "纪律：未接入"
+
+    def test_headline_enters_contract_and_html_renders_it(self, ledger_path):
+        """契约带 headline，HTML 章首在折叠块之前渲染同一批行。"""
+        from src.test.unit.report.test_action_html import _action_data, _render
+
+        data = build_decision_basis_data()
+        assert data["headline"]
+        html = str(_render(_action_data(), decision_basis_data=data))
+        assert 'id="decision-basis-headline"' in html
+        head_start = html.index('id="decision-basis-headline"')
+        fold_start = html.index('id="decision-basis"')
+        assert head_start < fold_start, "章首摘要必须在折叠块之前（不展开也能读到）"
+        for line in data["headline"]:
+            assert line in html[head_start:fold_start]
+
+
+class TestPerformanceByHorizon:
+    """「我的建议历史表现」按视界聚合：计数、命中率门槛、均值超额、双端渲染。"""
+
+    @staticmethod
+    def _decision(direction, settlements, code="600519"):
+        return {"code": code, "name": "演示品种", "direction": direction, "settlements": settlements}
+
+    def test_empty_ledger_returns_no_rows(self):
+        """账本为空 → 不造行（渲染层按无数据显示空态）。"""
+        assert build_performance([]) == []
+
+    def test_counts_hit_miss_flat_gap_by_horizon(self):
+        """5 日：命中 1、未命中 1、平盘 1、缺口 1；方向性 = 命中 + 未命中。"""
+        decisions = [
+            self._decision(1, {"5": {"settle_date": "2026-11-01", "raw_return": 0.05, "bench_return": 0.02}}),
+            self._decision(1, {"5": {"settle_date": "2026-11-01", "raw_return": -0.03, "bench_return": -0.01}}),
+            self._decision(1, {"5": {"settle_date": "2026-11-01", "raw_return": 0.001, "bench_return": 0.0}}),
+            self._decision(1, {"5": {"settle_date": "2026-11-01"}}),
+        ]
+        rows = {row["horizon"]: row for row in build_performance(decisions)}
+        five = rows[5]
+        assert five["settled"] == 4
+        assert five["directional"] == 2
+        assert five["hit"] == 1 and five["miss"] == 1
+        assert five["flat"] == 1 and five["gap"] == 1
+
+    def test_accuracy_label_requires_meaningful_sample(self):
+        """方向性样本 < 20 → 「命中/方向性（样本不足）」；足够 → 百分比结论。"""
+        small = self._decision(1, {"20": {"settle_date": "2026-11-01", "raw_return": 0.04}})
+        assert build_performance([small])[0]["accuracy_label"] == "1/1（样本不足）"
+
+        enough = [
+            self._decision(1, {"60": {"settle_date": f"2026-10-{d:02d}", "raw_return": 0.04 if d % 2 else -0.04}})
+            for d in range(1, 21)
+        ]
+        row = build_performance(enough)[0]
+        assert row["directional"] == 20
+        assert row["sample_sufficient"] is True
+        assert row["accuracy_label"] == "50%"
+
+    def test_mean_excess_ignores_missing_benchmark(self):
+        """基准缺失的条目不入超额均值，但计入收益样本（口径与结算摘要一致）。"""
+        decisions = [
+            self._decision(1, {"5": {"settle_date": "2026-11-01", "raw_return": 0.10, "bench_return": 0.02}}),
+            self._decision(1, {"5": {"settle_date": "2026-11-02", "raw_return": 0.50}}),
+        ]
+        row = build_performance(decisions)[0]
+        assert row["settled"] == 2
+        assert row["mean_excess_label"] == "+8.00%"
+
+    def test_performance_enters_contract_and_both_channels(self):
+        """契约带 performance 表并在 HTML 与 Excel 双端渲染同一批行。"""
+        from openpyxl import Workbook
+
+        from src.python.report.action_sheet import write_action_sheet
+        from src.test.unit.report.test_action_html import _action_data, _render
+
+        decisions = [self._decision(1, {"5": {"settle_date": "2026-11-01", "raw_return": 0.05, "bench_return": 0.02}})]
+        settlement = build_settlement_summary(decisions)
+        assert settlement["performance"] and settlement["performance_title"]
+
+        data = build_decision_basis_data(settlement_decisions=decisions)
+        assert data["settlement"]["performance"]
+
+        html = str(_render(_action_data(), decision_basis_data=data))
+        wb = Workbook()
+        ws = wb.active
+        assert ws is not None
+        write_action_sheet(ws, _action_data(), decision_basis_data=data)
+        excel_text = " ".join(str(c.value) for row in ws.iter_rows() for c in row if c.value is not None)
+        for text in (html, excel_text):
+            assert "我的建议历史表现（按视界）" in text
+            assert "命中率" in text
+        # 表头列数受页签可用列宽约束，超额列只保证在 HTML 端出现
+        assert "均值超额" in html
+        assert "settle-decisions" in html and "settle-decisions" in excel_text
+
+
 class TestBothEndsSameSource:
     """双端同源：同一份契约在 HTML/Excel 渲染出的标题与 summary 一致。"""
 
@@ -633,11 +778,15 @@ class TestBothEndsSameSource:
 
         _append(sl.SIGNAL_MARKET_TEMPERATURE, subject="sh000300", detail={"sample_count": 90})
         data = build_decision_basis_data()
-        # HTML 端：#decision-basis 块内含标题与 summary
-        block = _render(_action_data(), decision_basis_data=data).find(id="decision-basis")
+        html = _render(_action_data(), decision_basis_data=data)
+        # HTML 端：#decision-basis 折叠块内含标题与单行 summary；章首摘要行在块外（上方）
+        block = html.find(id="decision-basis")
         assert block is not None
         html_text = block.get_text()
-        # Excel 端：顶部子块含同一标题与 summary
+        html_headline_span = str(html)[
+            str(html).index('id="decision-basis-headline"') : str(html).index('id="decision-basis"')
+        ]
+        # Excel 端：顶部子块写同一份章首 headline（双端逐字一致）
         wb = Workbook()
         ws = wb.active
         assert ws is not None
@@ -645,9 +794,14 @@ class TestBothEndsSameSource:
         excel_text = " ".join(str(c.value) for row in ws.iter_rows() for c in row if c.value is not None)
         for text in (html_text, excel_text):
             assert data["title"] in text
-            assert data["summary"] in text
             assert "信号清单" in text
             assert "信号可信度" in text
+        for line in data["headline"]:
+            assert line in excel_text, f"Excel 章首摘要缺行：{line}"
+            assert line in html_headline_span, f"HTML 章首摘要缺行：{line}"
+        # HTML 折叠块自身的单行 summary 仍保留（点击标题）
+        assert data["summary"] in html_text
+        for text in (html_text, excel_text):
             assert "市场温度" in text  # 账本记录双端同现
 
     def test_risk_budget_rendered_both_channels(self, ledger_path):

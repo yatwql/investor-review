@@ -34,6 +34,7 @@ from src.python.report.excel_writer import (
 logger = logging.getLogger("invest")
 
 _FONT_ACCENT = Font(size=12, bold=True, color="2E75B6")
+_FONT_SUMMARY_LINE = Font(size=11, color="404040")
 _FONT_SUB_BLOCK = Font(bold=True, color="404040")
 
 
@@ -121,10 +122,18 @@ def _write_decision_basis_block(
     row += 1
     row = write_block_title(ws, row, _TITLE_DECISION_BASIS)
     row += 1
-    summary = str(data.get("summary") or "").strip()
-    if summary:
-        ws.cell(row=row, column=1, value=summary).font = _FONT_ACCENT
-        row += 1
+    # 章首摘要：优先写契约的 headline 三行（与 HTML 章首同源同文）；
+    # 只有旧契约（无 headline 键）才回落单行 summary
+    headline = [str(line).strip() for line in (data.get("headline") or []) if str(line).strip()]
+    if headline:
+        for line in headline:
+            ws.cell(row=row, column=1, value=line).font = _FONT_SUMMARY_LINE
+            row += 1
+    else:
+        summary = str(data.get("summary") or "").strip()
+        if summary:
+            ws.cell(row=row, column=1, value=summary).font = _FONT_ACCENT
+            row += 1
     if not data.get("available"):
         row = write_data_row(ws, row, [f"数据不可用：{data.get('reason') or '原因未知'}"] + [""] * (ncols - 1))
         return row
@@ -263,6 +272,37 @@ def _write_decision_basis_block(
             ws,
             row,
             [settlement.get("note") or "暂无结算样本"] + [""] * (ncols - 1),
+        )
+    # 我的建议历史表现（按视界聚合：命中率/均值超额/样本数；只读账本，与 HTML 同源）
+    performance = settlement.get("performance") or []
+    if performance:
+        row += 1
+        ws.cell(
+            row=row, column=1, value=str(settlement.get("performance_title") or "我的建议历史表现（按视界）")
+        ).font = _FONT_SUB_BLOCK
+        row += 1
+        row = write_header_row(ws, row, ["视界", "已结算", "方向性", "命中", "命中率", "均值超额"][:ncols])
+        for perf in performance:
+            row = write_data_row(
+                ws,
+                row,
+                [
+                    f"{perf.get('horizon')} 日",
+                    perf.get("settled", 0),
+                    perf.get("directional", 0),
+                    perf.get("hit", 0),
+                    perf.get("accuracy_label") or "—",
+                    perf.get("mean_excess_label") or "—",
+                ][:ncols],
+            )
+        row = write_data_row(
+            ws,
+            row,
+            [
+                "命中率仅在方向性有效样本 ≥ 20 时给结论值（否则为「命中/方向性」）；平盘与数据缺口不计命中，"
+                "口径与 settle-decisions 子命令、doctor 账本概览一致。"
+            ]
+            + [""] * (ncols - 1),
         )
     # 集中度约束（开关 portfolio_constraints；只标注不阻断）
     constraints = data.get("constraints") or {}

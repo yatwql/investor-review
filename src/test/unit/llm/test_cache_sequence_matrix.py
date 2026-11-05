@@ -6,12 +6,13 @@
 | 变化维度 | 期望命中 | 理由 |
 |---------|---------|------|
 | 完全相同的输入 | 四模块全命中 | 不重复付费 |
-| 行情指数变化 | `global_macro` 未命中，其余命中 | 只有宏观用指数 |
-| 持仓成本变化 | 含持仓明细的模块未命中 | 成本进提示词 |
-| 风险信号变化 | `health_check`/`expert_review` 未命中 | 风险摘要进提示词 |
-| 数据质量降级源变化 | `health_check` 未命中 | 降级块进其提示词 |
-| 量化指标变化 | `expert_review` 未命中 | 指标是复盘正文段 |
-| 穿透资产变化 | `penetration_deep` 未命中 | 穿透模块专用输入 |
+| 行情指数变化 | 四模块全命中 | 行情派生量由 TTL 兜底，不锁进键 |
+| 持仓成本变化 | `expert_review`/`health_check` 未命中 | 成本结构进提示词与键 |
+| 风险信号变化 | 四模块全命中 | 由最新 K 线现算，由 TTL 兜底 |
+| 数据质量降级源变化 | `health_check` 未命中 | 降级块（口径类事实）进其提示词与键 |
+| 量化指标变化 | 四模块全命中 | 行情派生量，由 TTL 兜底 |
+| 穿透品种集变化 | `penetration_deep` 未命中 | 穿透模块专用输入（结构） |
+| 分类结构变化 | 四模块未命中 | 分类结构进键（不含市值/盈亏） |
 | 生成参数（温度）变化 | 四模块全未命中 | 参数进后缀 |
 | 强制重生成 | 全量强制全未命中 / 模块强制只绕该模块 | 用户意图优先 |
 | 模型覆写变化 | 对应模块未命中 | 换模型即换结论 |
@@ -56,19 +57,18 @@ class TestHitGranularity:
         assert not any(_run(inputs)), "首份无缓存"
         assert _run(inputs) == _ALL
 
-    def test_index_change_only_misses_macro(self, llm_cache_dir):
+    def test_index_change_keeps_all_hits(self, llm_cache_dir):
+        """指数行情变化不换键：四模块全命中（行情/时效类由 TTL 兜底）。"""
         inputs = make_inputs()
         _run(inputs)
         changed = {**inputs, "a_indices": {"sh000300": {"name": "沪深300", "close": 4050.0, "change_pct": 1.2}}}
-        flags = _run(changed)
-        assert flags[0] is False, "global_macro 依赖指数，必须重算"
-        assert flags[2] is True, "health_check 不含指数"
+        assert _run(changed) == _ALL, "指数变化不应触发重算"
 
-    def test_us_index_change_misses_macro(self, llm_cache_dir):
+    def test_us_index_change_keeps_all_hits(self, llm_cache_dir):
         inputs = make_inputs()
         _run(inputs)
         changed = {**inputs, "us_indices": {"^IXIC": {"name": "纳斯达克", "close": 18100.0, "change_pct": 0.4}}}
-        assert _run(changed)[0] is False
+        assert _run(changed) == _ALL, "美股指数变化不应触发重算"
 
     def test_cost_basis_change_misses_holdings_modules(self, llm_cache_dir):
         inputs = make_inputs()
@@ -79,14 +79,12 @@ class TestHitGranularity:
         assert flags[1] is False, "expert_review 用持仓成本"
         assert flags[2] is False, "health_check 用持仓成本"
 
-    def test_risk_signal_change_misses_health_and_expert(self, llm_cache_dir):
+    def test_risk_signal_change_keeps_all_hits(self, llm_cache_dir):
+        """风险信号（行情派生）变化不换键：四模块全命中。"""
         inputs = make_inputs()
         _run(inputs)
         history = {**inputs["history_data"], "max_drawdown_pct": -22.0}
-        flags = _run({**inputs, "history_data": history})
-        assert flags[2] is False, "health_check 用风险摘要"
-        assert flags[1] is False, "expert_review 用风险摘要"
-        assert flags[0] is True, "global_macro 不含风险信号"
+        assert _run({**inputs, "history_data": history}) == _ALL, "风险信号不应触发重算"
 
     def test_data_degradation_change_misses_health_only(self, llm_cache_dir):
         inputs = make_inputs()
@@ -95,12 +93,11 @@ class TestHitGranularity:
         assert flags[2] is False, "降级块进 health_check 提示词"
         assert flags[0] is True and flags[1] is True
 
-    def test_metrics_change_misses_expert(self, llm_cache_dir):
+    def test_metrics_change_keeps_all_hits(self, llm_cache_dir):
+        """量化指标（行情派生）变化不换键：四模块全命中。"""
         inputs = make_inputs()
         _run(inputs)
-        flags = _run({**inputs, "metrics": {"sharpe": 0.8, "hhi": 0.45}})
-        assert flags[1] is False, "量化指标是复盘正文段"
-        assert flags[0] is True
+        assert _run({**inputs, "metrics": {"sharpe": 0.8, "hhi": 0.45}}) == _ALL
 
     def test_penetration_change_misses_penetration(self, llm_cache_dir):
         inputs = make_inputs()
@@ -110,11 +107,12 @@ class TestHitGranularity:
         assert flags[3] is False, "穿透模块输入（mv/ratio/sector）变了"
 
     def test_categories_change_misses_all_dependent(self, llm_cache_dir):
+        """分类**结构**变化（某品种归到另一类）⇒ 四模块全重算。"""
         inputs = make_inputs()
         _run(inputs)
-        changed = {**inputs, "categories": {"股票": {"market_value": 11000.0, "cost": 9000.0, "count": 1}}}
-        flags = _run(changed)
-        assert flags[0] is False, "global_macro 用分类汇总"
+        code = inputs["holdings_details"][0]["code"]
+        changed = {**inputs, "categories": {"QDII": [{"code": code, "name": "测试A"}]}}
+        assert not any(_run(changed)), "分类结构进键，四个模块都应重算"
 
 
 class TestParameterAndModelChanges:

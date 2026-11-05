@@ -394,3 +394,64 @@ class TestDefaultIndexFetcher:
         fetch("sh000300")
         fetch("sh000300")
         assert calls == ["sh000300"], "同码 memo，一轮只取一次"
+
+
+# ── 关键词索引覆盖（品种直指 / 代码变体 / 行业关键词） ─────────────
+
+
+def test_industry_keyword_hits_by_sector_with_label():
+    """行业关键词（白酒）命中同板块持仓 → 出行，并在关键词后标「行业」。"""
+    holdings = [SimpleNamespace(name="贵州茅台", code="600519")]
+    fetch_bars, fetch_index, resolve = _providers()
+    res = build_event_rows(
+        holdings,
+        [_news(matched_keywords=["白酒"], title="白酒动销回暖")],
+        [],
+        fetch_bars=fetch_bars,
+        fetch_index=fetch_index,
+        benchmark_code_for=resolve,
+    )
+    assert res["available"] is True
+    row = res["events"][0]
+    assert row["code"] == "600519"
+    assert row["matched_keyword"] == "白酒（行业）"
+
+
+def test_prefixed_code_variant_hits():
+    """带市场前缀的代码写法（sh601398）同样命中持仓。"""
+    fetch_bars, fetch_index, resolve = _providers()
+    res = build_event_rows(
+        _HOLDINGS,
+        [_news(matched_keywords=["sh601398"])],
+        _PENETRATED,
+        fetch_bars=fetch_bars,
+        fetch_index=fetch_index,
+        benchmark_code_for=resolve,
+    )
+    assert res["events"][0]["matched_keyword"] == "sh601398"
+
+
+def test_name_alias_strips_product_suffix():
+    """产品后缀剥离：ETF/指数（LOF）等后缀不计入简称。"""
+    from src.python.report.event_impact_panel import _name_alias
+
+    assert _name_alias("沪深300ETF") == "沪深300"
+    assert _name_alias("招商中证白酒指数（LOF）") == "招商中证白酒"
+    # 剥离后不足 2 字则不产出别名（防「A」「C」这类噪声键）
+    assert _name_alias("ETF") == ""
+
+
+def test_keyword_index_marks_sector_level_entries():
+    """索引同时含品种级与行业级条目，层次标注可区分，且不含非 A 股品种。"""
+    from src.python.report.event_impact_panel import _build_keyword_index
+
+    index = _build_keyword_index(
+        [SimpleNamespace(name="贵州茅台", code="600519"), SimpleNamespace(name="稳健增长混合", code="002943")],
+        [{"name": "长江电力", "codes": ["600900"]}],
+    )
+    assert ("600519", "品种") in index["贵州茅台"]
+    assert ("600519", "品种") in index["sh600519"]
+    assert ("600519", "行业") in index["白酒"]
+    assert ("600900", "品种") in index["长江电力"]
+    # 场外基金（名称命中基金特征词）不入索引
+    assert "稳健增长混合" not in index

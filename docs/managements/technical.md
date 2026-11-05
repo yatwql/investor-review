@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.17.0
+> 文档版本：0.17.1
 
 ## 目录
 
@@ -628,7 +628,7 @@ Web 渠道是第三种交互入口：**浏览器内完成「上传持仓 Excel �
 | GET | `/api/cache` | 缓存统计 | 只读：总量/前缀分布/命中率/过期预估（过期数以 dry_run 预扫描不删除） |
 | POST | `/api/cache/cleanup` | 清理过期缓存 | `_is_same_origin()` 同源守卫；删除 TTL 过期文件，有效缓存不受影响 |
 | POST | `/api/qa/ask` | 报告对话式追问 | 开关 `report_qa`（默认关，关闭时 403），见 §6.8 |
-| GET | `/api/config/edit` | 配置编辑面板 | 无守卫；返回 `domains` 编排契约（五域：报告内容 / 呈现与机制 / 数据与线路 / LLM 运行 / 运行与诊断，每域带 `title`/`hint`/`tui` 导引 + 有序块清单）+ 各块数据面（`paths` / `sections` / `standalone_chapters` / `standalone_related` / `anonymization`（含四档 `labels`）/ `comparison_indices` / `llm` / `llm_tuning` / `llm_providers` / `features`（`groups` + `labels` + `experimental` + `report_affecting`）/ `logging` / `reference`）+ 元数据面（`labels` / `descriptions` / `defaults` / `needs_hint`，覆盖白名单全部可编辑键）；块 id ↔ 渲染器契约由 `test_config_surface_contract.py` 双向断言 |
+| GET | `/api/config/edit` | 配置编辑面板 | 无守卫；返回 `domains` 编排契约（五域：报告内容 / 呈现与机制 / 数据与线路 / LLM 运行 / 运行与诊断，每域带 `title`/`hint`/`tui` 导引 + 有序块清单）+ 各块数据面（`paths` / `sections` / `standalone_chapters` / `standalone_related` / `anonymization`（含四档 `labels`）/ `comparison_indices` / `llm` / `llm_tuning` / `llm_providers` / `features`（`groups` + `labels` + `experimental` + `report_affecting`；组按 `GROUP_DOMAIN` 分「报告内容」与「呈现与机制」两段呈现，故同一开关换组即换段——`decision_basis` 归后者）/ `logging` / `reference`）+ 元数据面（`labels` / `descriptions` / `defaults` / `needs_hint`，覆盖白名单全部可编辑键）；块 id ↔ 渲染器契约由 `test_config_surface_contract.py` 双向断言 |
 | POST | `/api/config/edit` | 应用配置编辑 | `_is_same_origin()` 同源守卫（失败 403）；校验失败 400 BAD_PARAM；写共享配置异常 500 CONFIG_WRITE_FAILED |
 
 #### 1.8.5 RunManager 单 worker 串行队列
@@ -1461,9 +1461,11 @@ _write_atomic(fd, tmp_path, final_path)
 | **指数指纹** | `akshare_extras.py:_compute_index_fingerprint()` | A 股+美股指数收盘价（列表拼接→MD5） | `profit_forecast_*`、`sector_flow_*` |
 | **代码列表指纹** | `holdings_tracker.py:compute_holdings_fingerprint()` | 持仓+穿透 A 股代码（去重排序→MD5） | `dividend_*` |
 | **输入参数指纹** | `news_aggregator.py:_compute_cache_key()` | 新闻源参数+关键词（拼接→MD5） | `news_*` |
-| **输入数据指纹** | `llm/fingerprint.py` | LLM 模块依赖数据（持仓汇总/结构序列化→MD5） | `llm_global_macro_*`、`expert_review_*`、`health_check_*`、`penetration_deep_*`、`news_item_*` |
+| **输入数据指纹** | `llm/fingerprint.py` | LLM 模块依赖的**结构与口径**（持仓成本、分类结构、穿透品种集/行业、版本盐→MD5） | `llm_global_macro_*`、`expert_review_*`、`health_check_*`、`penetration_deep_*`、`news_item_*` |
 
-**LLM 指纹筛选**：expert_review / health_check / penetration_deep 的 `compute_fingerprint()` 在序列化前排除行情波动字段（`price`、`change_pct`），仅品种/份额/成本变化时指纹改变。
+**LLM 指纹分界（结构与口径 vs 行情与时效）**：`compute_fingerprint()` 入键的只有结构与口径类输入——持仓成本（`name/code/cost`）、分类结构（`extract_stable_categories`：类型→品种集，不含市值/盈亏）、穿透品种集与行业归属、提示词文本版本与事实校验规则版本、生成参数后缀，以及口径类附录块（申购限购 / 持仓变动复盘 / 环比与降级 / 账本后缀）。**行情与时效类一律不入键**（仍进提示词，时效由缓存 TTL 兜底）：总量与盈亏、指数行情、竞争语境块、量化指标、历史风险信号（最大回撤/年化波动/总收益，由最新 K 线现算）、穿透市值与占比、事件窗分歧例块（新闻 15 分钟刷新）、调仓纪律回放块。
+
+为何这样切：行情派生量含浮点末位，报价一刷新即变；时效块随新闻刷新（15 分钟）翻新。把它们锁进键等于让 4h/24h TTL 实际退化为分钟级——本机实测两轮报 **持仓与市值完全相同**（256029.34 元）仍因美股开盘后净值/风险指标/新闻派生块变化而四模块 4/4 全 miss（预检归因 `fingerprint_changed=4`，非 `ttl_expired`）。分界后同日重跑命中，跨日或真实持仓变动仍重算。
 
 **精确键名**：`fund_benchmarks.json`、`fund_concentration_snapshot.json`、`holdings_tracking.json` 等无指纹后缀，仅依赖标准 TTL 过期刷新。
 
@@ -3552,7 +3554,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `inject_holding_change_data` | 持仓变动复盘挂载点（独立章节与回放组开关；守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供） | 持仓变动复盘（报告独立章，type=holding_change） | 报告输出 | 独立章节与回放开关 `holding_change_review`（默认关） |
 | `inject_event_impact_data` | 事件窗对照挂载点（事件与摘要组开关；守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供；新闻先行串行段内注入，供分歧例附录块同轮进 LLM） | 事件窗对照（财经新闻章内区块，随父章；注册表无独立条目） | 报告输出 | 报告章节与增强开关 `event_window_impact`（默认关） |
 | `inject_schedule_replay_data` | 调仓纪律回放挂载点（守卫 + 契约注入 `pipeline_data` 由 `_experimental_seams` 统一提供；快照与持仓变动注入后串行装配，回放引用 `prompt_block` 经统一附录进 LLM） | 调仓纪律回放（报告独立章，type=schedule_replay） | 报告输出 | 功能开关 `rebalance_schedule_replay`（默认关，独立章节与回放组） |
-| `event_impact_panel` | 事件窗对照表数据编排与双端单源展示（事件行/降级/占位 + view 与页签同文 + 分歧例附录块）；基准取数同码 memo，**无 K 线债券基准（`sh000012`）不取数直接降级**，单路超 5s WARNING | 事件窗对照 | 报告输出 | 随 `event_window_impact` |
+| `event_impact_panel` | 事件窗对照表数据编排与双端单源展示（事件行/降级/占位 + view 与页签同文 + 分歧例附录块）；关键词索引三键（品种名/去后缀简称/代码变体、板块名、`sector_keywords()` 行业关键词），行业级命中标注「（行业）」；基准取数同码 memo，**无 K 线债券基准（`sh000012`）不取数直接降级**，单路超 5s WARNING | 事件窗对照 | 报告输出 | 随 `event_window_impact` |
 | `event_window_impact` | 事件窗对照（新闻事件 → 交易日映射的 ±5 交易日窗收益 vs 文本极性方向比对；行情轴右端不足 5 日时按可用交易日截断并标未满窗，分歧例进 LLM 统一附录） | 事件窗对照 | 报告输出 | 报告章节与增强开关 `event_window_impact`（默认关） |
 | `schedule_replay_panel` | 调仓纪律回放数据装配与双端单源展示（回放契约 + view 与页签同文 + 回放引用 prompt_block） | 调仓纪律回放 | 报告输出 | 随 `rebalance_schedule_replay` |
 | `rebalance_schedule_replay` | 调仓纪律回放（月度定期/阈值偏离纪律多期回放 vs 买入持有，双线图与逐期成本表，回放结论进 LLM 统一附录） | 调仓纪律回放 | 报告输出 | 功能开关 `rebalance_schedule_replay`（默认关，独立章节与回放组） |
@@ -3568,7 +3570,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `decision_settlement` | 到期决策结算（幂等：同 decision 只结一次，行情不可得保持 pending） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `decision_llm_capture` | LLM 操作建议表解析登记（结构化优先 → 表格兜底；缺行/缺方向/「不操作」行按原因记 INFO 后跳过，异常不中断报告） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `decision_review_block` | 「历史决策复盘」区块数据契约（结构稳定，HTML/Excel 双端消费） | 行动建议 | 监控 | 随 `decision_reflection` |
-| `decision_basis` | 行动建议章内「判断依据」确定性事实块（形态 A：信号清单/信号可信度/风险预算已接入（信号读账本快照，区分度三态 + 回测结论模块常量登记，可信度规则仲裁四枚举；风险预算三行取 `rebalance.threshold` 与 `discipline.drawdown_pct`，行业上限无配置键即「未配置上限」；纪律明细只读复用纪律引擎触发条并补阶段化执行口径；结算摘要按结算交易日聚合最近 5 批 × 5/20/60 视界均值与超额，未到期显式标注），五节齐，零 LLM） | 行动建议（章内嵌块） | 监控 | 开关 `decision_basis`（默认开，章节内选项组） |
+| `decision_basis` | 行动建议章内「判断依据」确定性事实块（形态 A：信号清单/信号可信度/风险预算已接入（信号读账本快照，区分度三态 + 回测结论模块常量登记，可信度规则仲裁四枚举；风险预算三行取 `rebalance.threshold` 与 `discipline.drawdown_pct`，行业上限无配置键即「未配置上限」；纪律明细只读复用纪律引擎触发条并补阶段化执行口径；结算摘要按结算交易日聚合最近 5 批 × 5/20/60 视界均值与超额，未到期显式标注），五节齐，零 LLM） | 行动建议（章内嵌块） | 监控 | 开关 `decision_basis`（默认开，机制与质量组 `[S]` 15 号；原 `[C]` 5.1 章节子项，移组后不再受「父章关闭则子项置灰拒写入」闸门约束，可与 `enable_action` 状态独立切换） |
 | `build_decision_basis_data` | 判断依据块装配入口（纯确定性：只读信号账本快照与编排层已装配持仓，零取数零 LLM；入参仅确定性数据 `holdings_details`/`total_mv`/`portfolio_peak_mv`，全可缺省） | 行动建议（章内嵌块） | 分析计算 | 随 `decision_basis` |
 | `build_risk_budget` | 风险预算块装配（单品种权重 / 行业权重 / 组合回撤三行：上限 vs 现状，超限只标注不改行为；阈值经 `resolve_rebalance_config` 与 `resolve_discipline_config` 单源解析，行业上限无键即「未配置上限」） | 行动建议（章内嵌块） | 分析计算 | 随 `decision_basis` |
 | `build_discipline_detail` | 纪律明细块装配（只读透传 `action_data["discipline_signals"]`：规则/品种/当前值/距阈值 + 阶段化执行口径；不重算触发、不写静默状态；阶段按「回撤是否过半阈值」规则化判定） | 行动建议（章内嵌块） | 分析计算 | 随 `decision_basis` |
@@ -3578,7 +3580,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `backtest_run_date` | 回测产物最新运行日（委派 `eval_status.last_eval_date()`；产物缺失回落 `BACKTEST_DATE_FALLBACK`），经契约字段 `backtest_as_of` 双端显示 | 行动建议（章内嵌块） | 分析计算 | 随 `decision_basis` |
 | `portfolio_constraints` | 集中度/相关性约束标注（单品种沿用 `rebalance.threshold`、行业/相关性需显式配置；只标注不阻断；缺数据/短样本记「未评估」） | 行动建议（章内嵌块） | 监控 | 开关 `portfolio_constraints`（默认关，机制与诊断组） |
 | `evaluate_constraints` | 约束判定入口（三道上限 → 超限项 + `breached_codes`；开关关闭返回 `{"enabled": False}`） | 行动建议（章内嵌块） | 分析计算 | 随 `portfolio_constraints` |
-| `scenario_mandate` | 情景段方向约束口径选择（默认条件化动作 + 触发条件 + 「不操作」出口；`decision_basis` 关闭走回退强制方向口径；回退口径经 `scenario_mandate_cache_suffix` 以 `_ms` 后缀换键，两套文本常量共存一版） | LLM 生成 | LLM 生成 | 随 `decision_basis` |
+| `scenario_mandate` | 情景段方向约束口径选择（默认一句收敛：动手条件 + 「不操作」及所缺数据，两情景路径共用；`decision_basis` 关闭走回退强制方向口径；回退口径经 `scenario_mandate_cache_suffix` 以 `_ms` 后缀换键，两套文本常量共存一版） | LLM 生成 | LLM 生成 | 随 `decision_basis` |
 | `build_structured_header_instruction` | 决策头结构化契约构建（提示词侧追加 `决策头：…` 行，与解析器口径锁定） | 行动建议 | 监控 | 已内置（缓存后缀 `_dh` 常驻） |
 | `decision_header` | 决策词归一解析器（标签优先/长词优先/否定守卫/复合词左边界/二义不猜） | 行动建议 | 监控 | 已内置（A 通道无开关） |
 | `deterministic_signal` | 确定性信号模块（实时注入 + 跨期沉淀双面：温度/分位/尾部风险预消化信号行 + 确定性评级账本沉淀，内置五类、因子目录随实验开关追加第 6 类；原 `signal_pre_digest`/`signal_ledger` 两开关合并转正） | LLM 生成 | LLM 生成 | 开关 `deterministic_signal`（默认开，机制与诊断组） |
@@ -3654,7 +3656,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `build_purchase_constraint_block` | 申购限购约束块单源渲染器（准入四条任一不过 → ""；行序 = 持仓序、缺名回退代码、陈旧附标、尾行硬约束声明） | 申购限购 | LLM 生成 | 无 |
 | `constraint_block` | 契约条件字段（构建期渲染一次，llm 层只读数据，both/basic/What-if 路径恒空零开销） | 申购限购 | LLM 生成 | 无 |
 | `purchase_constraint_block` | 约束块透传形参（提取同一实例交统一附录 / 指纹 / 新闻批量 hooks，全程不重拼） | 申购限购 | LLM 生成 | 无 |
-| `purchase_block` | 指纹输入字段（条件并入：进提示词必进指纹，块空不追加 part 逐字节回退，接线前基线锁定） | 申购限购 | LLM 生成 | 无 |
+| `purchase_block` | 指纹输入字段（口径类：条件并入，块空不追加 part 逐字节回退，接线前基线锁定） | 申购限购 | LLM 生成 | 无 |
 | `extract_purchase_constraint_block` | 约束块提取唯一单源（编排层与新闻链两侧共用，契约键/嵌套调整只改此处） | 申购限购 | LLM 生成 | 无 |
 | `holdings_editor` | 持仓录入编辑层（读→内存草稿→原子写回单源；账户=工作表名、保留非持仓页签、买入加权平均成本/卖出保留原成本） | 持仓录入 | 数据获取 | 无 |
 | `price_kind` | 品种价格形态判定（场内需录成交价 / 场外按交易日取官方净值；复用 `code_utils` 资产类型判定，不重写前缀知识） | 持仓录入 | 数据获取 | 无 |
@@ -4033,7 +4035,7 @@ web/ (Web 服务层，薄入口)
 | position_status | dict | 是 | prepare_report_data |
 | data_freshness | dict | 是 | prepare_report_data |
 | action_data | dict | 是 | prepare_report_data；basic 路径由 generate_excel_report 就地构建 |
-| decision_basis_data | dict | 是 | prepare_report_data（首次装配）+ full/both 峰值就绪后重装配（风险预算回撤现状依赖历史峰值）；含 `backtest_as_of`＝回测产物最新运行日，由 `decision_basis.backtest_run_date()` 从 `docs/tmp/decision-quality/*.json` 派生 |
+| decision_basis_data | dict | 是 | 含 `headline`（章首三行摘要，双端逐字同源）与 `settlement.performance`（按视界命中率/均值超额/样本数）；prepare_report_data（首次装配）+ full/both 峰值就绪后重装配（风险预算回撤现状依赖历史峰值）；含 `backtest_as_of`＝回测产物最新运行日，由 `decision_basis.backtest_run_date()` 从 `docs/tmp/decision-quality/*.json` 派生 |
 | crisis_annotation_data | dict | 是 | assemble_history_augmented_data（full/both 双路径同源装配，`report/_snapshot.py`；危机标注关态恒写、回放态加 replay 层；风险调整超额同点按开关注入 risk_adjusted_excess_data） |
 | risk_adjusted_excess_data | dict | 是 | build_risk_adjusted_excess（报告章节与增强开关 risk_adjusted_excess，默认关） |
 | tail_risk_data | dict | 是 | prepare_report_data |
@@ -4070,7 +4072,7 @@ web/ (Web 服务层，薄入口)
 >
 > `financial_indicator_data`（财务指标，C19 契约，5 键）：`{"available": bool, "reason": str, "rows": list[dict], "failures": list[dict], "entry_count": int}`。`rows` 每项含 `code`/`name`/`report_period`/`doc_type`/`doc_type_label`/`source_api`/`source`/`revenue`/`net_profit`/`revenue_yoy`/`net_profit_yoy`/`gross_margin`/`roe`/`debt_ratio`/`operating_cash_flow`/`eps`/`bvps`/`pe`/`pb`/`quality_grade`/`quality_score`/`trend`/`series`/`period_count`；`failures` 每项含 `code`/`name`/`reason`。对持仓 + 穿透中的 A 股标的取多期指标（`fetcher/financial_indicator.py`：主源 akshare 一次调用得多期；主源不可用时先由**同花顺官方合并报表派生多期**（`analysis/financial_statement_derive.py`，三张报表各一次请求即得多期），再退化为链路单期记录），由 `analysis/financial_indicator.py::quality_grade`/`trend_label`/`current_valuation` 派生质量档（ROE/毛利率/资产负债率/经营现金流对净利覆盖 四维均值启发式，**非投资建议、非评级**，阈值不区分行业）、年度趋势（相邻年报营收与净利）与当前 PE/PB（**官方 TTM/MRQ 口径优先**：数据源提供 `pe_ttm`/`pb_mrq` 时直接采用；缺失才回退「现价 ÷ 该报告期每股收益/每股净资产」，亏损或净资产非正留空——自算口径在半年报/季报上会明显虚高，两者混用会误导估值判断），由 `report/financial_indicator.py::build_financial_indicator` 装配（现价来自行情明细，经 `fetcher/financial_indicator.py::collect_price_map`）。功能开关 `stock_fundamentals` 默认关（关闭 → None → 区块不写）；无 A 股标的/数据源不可用 → `available=False` 降级。历史 PE/PB 分位（TTM 口径）属后续阶段，本章只给当前值。C7 注册：该契约并入合并章 `fundamental_snapshot` 的 `data_flag_any`（无独立 type）。消费方：Excel `report/fundamental_snapshot_sheet.py::_write_indicator_block` 与 HTML `partials/fundamental_snapshot_section.html`（区块一）。
 
-> `purchase_status_data`（申购限购状态，C19 契约，7 键）：`{"available": bool, "reason": str\|None, "rows": dict, "fetched_at": str\|None, "source": str\|None, "constraint_block": str, "restricted_index": dict}`。`constraint_block` 为构建期渲染的申购限购约束块（`purchase_status.py::build_purchase_constraint_block` 单源：准入四条任一不过 → `""`；行序 = 持仓明细顺序、字段值与单元格同源；`holdings_details` 缺省不传 → `""`——both/basic/What-if 取契约路径块恒空零开销），消费方为 LLM 分析章提示词（`generate_all_llm` 从 `pipeline_data` 提取同一实例 → `llm/prompts_tables.py::_build_prompt_appendix` 统一附录第 4 段，`skeleton` 单点注入，进提示词必进指纹；新闻批量路径由 `_llm_news.py::_fetch_llm_and_news` 同源读取交 `generators_news` 批量 hooks 的提示词与缓存指纹）。`restricted_index` 为受限标的预格式化索引（code → status/limit/limit_text/next_open_text/level，由 `purchase_status.py::build_restricted_index` 经 `_filter_restricted_rows` 单源筛选与格式化、`report/orchestrator.py` 编排层注入；准入不满足 → `{}`，消费方按缺席回退；What-if 路径经 `whatif_operations._purchase_restricted_index` 单点就地构建同名索引）。`rows` 为 `{代码: {purchase_status, redemption_status, next_open_date, daily_limit, min_purchase}}`（0 元/缺失限额在解析层已单点转 `daily_limit=None` → 展示「限额未知」）；由 `fetcher/fund_purchase.py::fetch_fund_purchase_status_cached` 取天天基金全量表（Provider Chain + 形状/值域准入 + 会话复用），`report/purchase_status.py::build_purchase_status_data` 装配。功能开关 `fund_purchase_limit` 默认开（关闭 → None → 列隐藏）；全链失败 → `available=False` 静默隐列（不阻断主链路）。时效分档由 `purchase_status.py::stale_level` 按交易日历计（≤3 正常 / 4~7 展示并标数据陈旧 / >7 显示「—」，宁缺毋错，长假不计入）。单元格文案、口径脚注、列可见判据均单源于 `report/purchase_status.py`（Excel 与 HTML 共用，不发散）。消费方：HTML `report_template.html` 持仓市值明细与持仓分类表条件列（同一 `purchase_status_display` 上下文——cells/level/footnote——明细行取 cells 映射、小计/总计空 td）与 Excel `report/holdings_detail_sheet.py`（市值明细与分类汇总两区块末列追加——明细行渲染、小计/总计留空——+ 区块①下方口径脚注，该行位于两区块之间覆盖两块）；What-if 目标持仓受限提示（`analysis/whatif.py::build_whatif_data` 的 `restricted_index` 形参 → 契约条件键 `feasibility` → Excel 持仓变动明细尾部区块 + HTML⑦申购受限提示节）。
+> `purchase_status_data`（申购限购状态，C19 契约，7 键）：`{"available": bool, "reason": str\|None, "rows": dict, "fetched_at": str\|None, "source": str\|None, "constraint_block": str, "restricted_index": dict}`。`constraint_block` 为构建期渲染的申购限购约束块（`purchase_status.py::build_purchase_constraint_block` 单源：准入四条任一不过 → `""`；行序 = 持仓明细顺序、字段值与单元格同源；`holdings_details` 缺省不传 → `""`——both/basic/What-if 取契约路径块恒空零开销），消费方为 LLM 分析章提示词（`generate_all_llm` 从 `pipeline_data` 提取同一实例 → `llm/prompts_tables.py::_build_prompt_appendix` 统一附录第 4 段，`skeleton` 单点注入，口径类块进提示词即进指纹；新闻批量路径由 `_llm_news.py::_fetch_llm_and_news` 同源读取交 `generators_news` 批量 hooks 的提示词与缓存指纹）。`restricted_index` 为受限标的预格式化索引（code → status/limit/limit_text/next_open_text/level，由 `purchase_status.py::build_restricted_index` 经 `_filter_restricted_rows` 单源筛选与格式化、`report/orchestrator.py` 编排层注入；准入不满足 → `{}`，消费方按缺席回退；What-if 路径经 `whatif_operations._purchase_restricted_index` 单点就地构建同名索引）。`rows` 为 `{代码: {purchase_status, redemption_status, next_open_date, daily_limit, min_purchase}}`（0 元/缺失限额在解析层已单点转 `daily_limit=None` → 展示「限额未知」）；由 `fetcher/fund_purchase.py::fetch_fund_purchase_status_cached` 取天天基金全量表（Provider Chain + 形状/值域准入 + 会话复用），`report/purchase_status.py::build_purchase_status_data` 装配。功能开关 `fund_purchase_limit` 默认开（关闭 → None → 列隐藏）；全链失败 → `available=False` 静默隐列（不阻断主链路）。时效分档由 `purchase_status.py::stale_level` 按交易日历计（≤3 正常 / 4~7 展示并标数据陈旧 / >7 显示「—」，宁缺毋错，长假不计入）。单元格文案、口径脚注、列可见判据均单源于 `report/purchase_status.py`（Excel 与 HTML 共用，不发散）。消费方：HTML `report_template.html` 持仓市值明细与持仓分类表条件列（同一 `purchase_status_display` 上下文——cells/level/footnote——明细行取 cells 映射、小计/总计空 td）与 Excel `report/holdings_detail_sheet.py`（市值明细与分类汇总两区块末列追加——明细行渲染、小计/总计留空——+ 区块①下方口径脚注，该行位于两区块之间覆盖两块）；What-if 目标持仓受限提示（`analysis/whatif.py::build_whatif_data` 的 `restricted_index` 形参 → 契约条件键 `feasibility` → Excel 持仓变动明细尾部区块 + HTML⑦申购受限提示节）。
 
 > `style_factor_data`（风格与因子分析，C19 契约，13 键 + 内嵌 `industry_beta` 子键）：主键 `{"available": bool, "status": str, "betas": {factor: float}, "t_stats": {factor: float}, "significant": {factor: bool}, "style_allocation": {factor: float}, "baseline_betas": {factor: float}, "factor_correlations": {pair: float}, "correlation_note": str, "alpha": float, "window": int, "sample_count": int, "stale_factors": list[str]}`。MVP 3 因子（价值/成长/质量），由 `analysis/style_factor_regression.py` 计算、`report/orchestrator.py` 组装。子键 `industry_beta`（行业 Beta，`industry_beta.py::compute_industry_beta_analysis`，功能开关 `industry_beta` 默认关；关闭 → None → 区块隐藏）：`{"available": bool, "exposure": {industry: float}, "index_codes": {industry: str}, "betas": {industry: float}, "t_stats": {industry: float}, "significant": {industry: bool}, "correlations": {industry: float}, "unmapped_industries": list[str]}`——行业暴露占比按持仓市值聚合，行业指数为中证行业指数（`INDUSTRY_INDEX_MAP`），β 复用 `compute_factor_exposure` 单因子 OLS。C7 注册见 §8.3（type=`fund_deep_analysis`、data_flag=`style_factor_data`），计算方案/架构约束/降级分支见 §4.8 风格与因子分析。
 

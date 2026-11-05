@@ -66,11 +66,24 @@ class TestConsecutiveReportCache:
         flags = _run(inputs, degradation_events("industry", times=3, count=9))
         assert all(flags), f"仅失败条数/累计次数变化时第二份应全部命中，实际 {flags}"
 
-    def test_market_change_misses_macro(self, llm_cache_dir):
-        """行情变化必须使对应模块未命中——命中不得以忽略真实数据变化为代价。"""
+    def test_market_change_keeps_all_hits(self, llm_cache_dir):
+        """指数等行情变化**不**重算：行情/时效类由 TTL 兜底，不锁进键。
+
+        回归：这些值随报价现算（浮点末位一刷新就变），入键让 4h/24h TTL
+        从未生效（实测：同日持仓与市值完全相同的两轮报告仍 4/4 全 miss）。
+        """
         inputs = make_inputs()
         _run(inputs)
         changed = dict(inputs)
         changed["a_indices"] = {"sh000300": {"name": "沪深300", "close": 4100.0, "change_pct": 3.0}}
+        assert all(_run(changed)), "指数变化不应触发重算"
+
+    def test_structural_change_misses_modules(self, llm_cache_dir):
+        """结构变化（持仓成本）必须重算——命中不得以忽略真实持仓变化为代价。"""
+        inputs = make_inputs()
+        _run(inputs)
+        changed = dict(inputs)
+        changed["holdings_details"] = [{**inputs["holdings_details"][0], "cost": 10001.0}]
+        changed["categories"] = {"股票": [{"code": inputs["holdings_details"][0]["code"], "name": "测试A"}]}
         flags = _run(changed)
-        assert flags[0] is False, "指数变化时 global_macro 必须重算"
+        assert not all(flags), "持仓成本变化应至少有一个模块未命中"

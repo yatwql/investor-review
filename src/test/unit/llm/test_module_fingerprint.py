@@ -290,15 +290,17 @@ def test_precheck_key_equals_write_key(module_key: str, scenario: str):
 # ═══════════════════════════════════════════════════════════════
 
 
-@pytest.mark.parametrize("module_key", ("expert_review", "health_check", "penetration_deep"))
-def test_risk_signals_enter_write_side_fingerprint(module_key: str):
-    """写侧指纹必须随 history_data 风险信号变化（历史缺陷：写侧漏传 → 键脱钩）。"""
-    without_history = _write_fingerprint(module_key)
-    with_history = _write_fingerprint(module_key, history_data=_HISTORY)
-    changed_history = _write_fingerprint(module_key, history_data=_HISTORY_CHANGED)
+@pytest.mark.parametrize("module_key", _MODULE_KEYS)
+def test_market_derived_inputs_ignored_by_write_side_fingerprint(module_key: str):
+    """行情/时效类输入（风险信号 / 总量）**不进**写侧指纹——它们由缓存 TTL 兜底。
 
-    assert without_history != with_history, "风险信号未进入写侧指纹"
-    assert with_history != changed_history, "风险信号变化未换键"
+    历史缺陷回归：这些值由最新一根 K 线现算，行情一刷新就变末位，入键会把 TTL
+    压到分钟级（实测：持仓与市值完全相同的两轮报告因美股开盘而 4/4 全 miss）。
+    """
+    baseline = _write_fingerprint(module_key)
+
+    assert _write_fingerprint(module_key, history_data=_HISTORY) == baseline, "风险信号进了指纹"
+    assert _write_fingerprint(module_key, history_data=_HISTORY_CHANGED) == baseline, "风险信号变化换了键"
 
 
 def test_global_macro_fingerprint_ignores_risk_signals():
@@ -337,56 +339,68 @@ def test_signal_suffix_only_affects_digest_modules():
 
 
 # ═══════════════════════════════════════════════════════════════
-#  提示词覆盖：进了提示词的内容必须进指纹（且只进真的进了提示词的模块）
+#  分界：结构与口径类进键，行情与时效类不进键（提示词侧照旧全量）
 # ═══════════════════════════════════════════════════════════════
 
-
-_BLOCK_MODULES = ("global_macro", "expert_review")
-_NO_BLOCK_MODULES = ("health_check", "penetration_deep")
+_MARKET_DERIVED = ("competitive_context", "metrics", "indices", "totals", "risk", "event", "replay")
 
 
-@pytest.mark.parametrize("module_key", _BLOCK_MODULES)
-def test_competitive_block_enters_fingerprint(module_key: str):
-    """竞争语境块内容变化 ⇒ 指纹随之变化。
+@pytest.mark.parametrize("module_key", _MODULE_KEYS)
+def test_market_derived_inputs_do_not_change_fingerprint(module_key: str):
+    """行情/时效类输入变化一律不换键（仍进提示词，由 TTL 兜底）。
 
-    否则「持仓未动、基准指数已动」时键不变，预检命中旧键、直接复用按旧指数
-    算出的对比结论——提示词与缓存键脱钩，且不报错。
+    覆盖：竞争语境块 / 量化指标 / 指数行情 / 总量盈亏 / 风险信号 /
+    事件窗分歧例块 / 调仓纪律回放块。它们要么由报价现算，要么每 15 分钟随新闻
+    刷新——入键等于把 4h（或 24h）TTL 实际降到分钟级。
     """
-    baseline = _write_fingerprint(module_key, competitive_context=_COMPETITIVE_BLOCK)
-    changed = _write_fingerprint(module_key, competitive_context=_COMPETITIVE_BLOCK_CHANGED)
-    empty = _write_fingerprint(module_key)
+    builder = MODULE_FINGERPRINT_BUILDERS[module_key]
+    base = ModuleFingerprintInputs(
+        total_mv=_TOTAL_MV,
+        total_cost=_TOTAL_COST,
+        total_profit=_TOTAL_PROFIT,
+        total_today_profit=_TODAY_PROFIT,
+        holdings_details=_HOLDINGS,
+        categories=dict(_CATEGORIES),
+        history_data=_HISTORY,
+    )
+    baseline = builder(base)
 
-    assert baseline != changed, "竞争语境块变化未换键 → 会复用陈旧对比内容"
-    assert baseline != empty, "竞争语境块未进入指纹"
-
-
-@pytest.mark.parametrize("module_key", _NO_BLOCK_MODULES)
-def test_competitive_block_ignored_without_block_in_prompt(module_key: str):
-    """提示词不含竞争语境块的模块，指纹不随其变化（并入即纯成本失效）。"""
-    assert _write_fingerprint(module_key, competitive_context=_COMPETITIVE_BLOCK) == _write_fingerprint(module_key)
-
-
-def test_metrics_enter_expert_review_fingerprint():
-    """量化指标内容变化 ⇒ 智囊团指纹随之变化（指标表 / 情景分析 / 风格一致性同源）。"""
-    baseline = _write_fingerprint("expert_review", metrics=_METRICS)
-    changed = _write_fingerprint("expert_review", metrics=_METRICS_CHANGED)
-
-    assert baseline != changed, "量化指标变化未换键 → 会复用按旧指标算出的分析"
-    assert baseline != _write_fingerprint("expert_review"), "量化指标未进入指纹"
-
-
-@pytest.mark.parametrize("module_key", ("global_macro", "health_check", "penetration_deep"))
-def test_metrics_ignored_without_metrics_block_in_prompt(module_key: str):
-    """提示词不含量化指标段的模块，指纹不随 metrics 变化。"""
-    assert _write_fingerprint(module_key, metrics=_METRICS) == _write_fingerprint(module_key)
+    variants = {
+        "competitive_context": dataclasses.replace(base, competitive_context=_COMPETITIVE_BLOCK_CHANGED),
+        "metrics": dataclasses.replace(base, metrics=_METRICS_CHANGED),
+        "indices": dataclasses.replace(base, a_indices={"sh": {"pct": 1.2}}, us_indices={"ndx": {"pct": -0.4}}),
+        "totals": dataclasses.replace(base, total_mv=_TOTAL_MV * 1.07, total_profit=_TOTAL_PROFIT * 1.3),
+        "risk": dataclasses.replace(base, history_data=_HISTORY_CHANGED),
+        "event": dataclasses.replace(base, event_impact_block="【事件窗对照·分歧例】新增一条"),
+        "replay": dataclasses.replace(base, schedule_replay_block="【调仓纪律回放】新增一条"),
+    }
+    changed = [name for name in _MARKET_DERIVED if builder(variants[name]) != baseline]
+    assert not changed, f"{module_key}：行情/时效类输入仍在键里 → {sorted(changed)}"
 
 
-def test_competitive_block_enters_precheck_key_not_only_write_side():
-    """预检侧同样随竞争语境块换键——只改写侧会让预检恒命中旧键。"""
-    baseline = _precheck_info(competitive_context=_COMPETITIVE_BLOCK)["expert_review"]["key"]
-    changed = _precheck_info(competitive_context=_COMPETITIVE_BLOCK_CHANGED)["expert_review"]["key"]
+@pytest.mark.parametrize("module_key", _MODULE_KEYS)
+def test_structural_inputs_change_fingerprint(module_key: str):
+    """结构/口径类输入变化必须换键：持仓成本 / 分类结构 / 行业归属。"""
+    builder = MODULE_FINGERPRINT_BUILDERS[module_key]
+    base = ModuleFingerprintInputs(
+        holdings_details=[{"name": "示例", "code": "600519", "cost": 100.0}],
+        categories={"股票": [{"code": "600519", "name": "示例"}]},
+        penetrated_assets=[{"name": "底", "codes": ["600519"], "sector": "白酒"}],
+    )
+    baseline = builder(base)
 
-    assert baseline != changed, "预检侧未随竞争语境块换键"
+    more_shares = dataclasses.replace(base, holdings_details=[{"name": "示例", "code": "600519", "cost": 200.0}])
+    assert builder(more_shares) != baseline, f"{module_key}：持仓成本（份额）变化未换键"
+
+    recategorized = dataclasses.replace(base, categories={"股票": [{"code": "600519", "name": "示例"}], "QDII": []})
+    assert builder(recategorized) != baseline, f"{module_key}：分类结构变化未换键"
+
+    sector_moved = dataclasses.replace(base, penetrated_assets=[{"name": "底", "codes": ["600519"], "sector": "消费"}])
+    if module_key == "penetration_deep":
+        # 行业归属属结构性事实，只进穿透深度分析（其余模块提示词不含该字段）
+        assert builder(sector_moved) != baseline, f"{module_key}：穿透行业归属变化未换键"
+    else:
+        assert builder(sector_moved) == baseline, f"{module_key}：sector 不应进该模块的键"
 
 
 def test_data_quality_block_enters_health_check_fingerprint():
@@ -512,14 +526,18 @@ def _debate_inputs(
     return dataclasses.replace(base, **appendix_blocks) if appendix_blocks else base
 
 
-def test_debate_fingerprint_covers_its_prompt_content():
-    """辩论提示词含竞争语境块与量化指标 ⇒ 基础指纹须覆盖二者。"""
+def test_debate_fingerprint_ignores_market_derived_prompt_content():
+    """辩论提示词虽含竞争语境块与量化指标，但二者属行情派生 ⇒ **不换键**。
+
+    它们随报价现算（浮点末位一刷新就变），入键会把白脸/黑脸两次昂贵调用
+    压到分钟级重算；仍进提示词，时效由 TTL 兜底。
+    """
     from src.python.llm.module_fingerprint import debate_procon_fingerprint
 
     baseline = debate_procon_fingerprint(_debate_inputs(_COMPETITIVE_BLOCK, _METRICS))
-    assert baseline != debate_procon_fingerprint(_debate_inputs(_COMPETITIVE_BLOCK_CHANGED, _METRICS))
-    assert baseline != debate_procon_fingerprint(_debate_inputs(_COMPETITIVE_BLOCK, _METRICS_CHANGED))
-    assert baseline != debate_procon_fingerprint(_debate_inputs())
+    assert debate_procon_fingerprint(_debate_inputs(_COMPETITIVE_BLOCK_CHANGED, _METRICS)) == baseline
+    assert debate_procon_fingerprint(_debate_inputs(_COMPETITIVE_BLOCK, _METRICS_CHANGED)) == baseline
+    assert debate_procon_fingerprint(_debate_inputs()) == baseline
 
 
 def test_debate_fingerprint_covers_pipeline_blocks_in_its_prompt():
@@ -626,6 +644,11 @@ def test_debate_fingerprint_carries_debate_feature_suffix():
 _DEBATE_APPENDIX_SAMPLES = {
     "purchase_block": "【申购限购约束】\n- 110022 示例安心债券 限大额：单账户单日限购 100 元",
     "holding_change_block": "【持仓变动复盘】\n- 区间净额推断：600900 净增持 +2,000 份",
+}
+
+# 统一附录中的**时效类**块（新闻/行情派生）：进提示词但不进键——它们每 15 分钟
+# 随新闻刷新、行情一变动浮点即变，入键会把辩论三键压到分钟级重算。
+_DEBATE_TIMELY_BLOCKS = {
     "event_impact_block": "【事件窗分歧例】\n- 2026-09-18 513100 文本判利好 / 窗口方向下",
     "schedule_replay_block": "【调仓纪律回放引用】\n- 月度定期 37.16% vs 买入持有 32.85%",
 }
@@ -633,7 +656,7 @@ _DEBATE_APPENDIX_SAMPLES = {
 # 条件并入之前以本文件样例输入录制的辩论基础指纹（四块皆空时键必须与引入前
 # 逐字节一致——抓「空串 + 分隔符改变哈希」陷阱，存量辩论缓存不无谓失效）。
 # 后缀逻辑有意变更时应同步更新（黄金值例外登记）。
-_DEBATE_PRE_WIRE_BASELINE = "de8d52da87e8_c"
+_DEBATE_PRE_WIRE_BASELINE = "437755c22ee6_c"
 
 
 def test_debate_appendix_blocks_empty_equals_pre_wire_baseline():
@@ -645,7 +668,7 @@ def test_debate_appendix_blocks_empty_equals_pre_wire_baseline():
 
 @pytest.mark.parametrize("block_field", sorted(_DEBATE_APPENDIX_SAMPLES))
 def test_debate_appendix_block_enters_fingerprint(block_field):
-    """统一附录块非空 ⇒ 辩论键变；块内容变 ⇒ 键再变（防回放带旧附录上下文）。"""
+    """**口径类**附录块非空 ⇒ 辩论键变；块内容变 ⇒ 键再变（防回放带旧附录上下文）。"""
     from src.python.llm.module_fingerprint import debate_procon_fingerprint
 
     block = _DEBATE_APPENDIX_SAMPLES[block_field]
@@ -657,6 +680,19 @@ def test_debate_appendix_block_enters_fingerprint(block_field):
 
     assert baseline != with_block, f"{block_field}: 附录块未进辩论指纹（换附录不换键 → 复用旧上下文）"
     assert with_block != changed, f"{block_field}: 附录块内容变化未换键"
+
+
+@pytest.mark.parametrize("block_field", sorted(_DEBATE_TIMELY_BLOCKS))
+def test_debate_appendix_timely_block_ignored(block_field):
+    """**时效类**附录块（新闻/行情派生）不进辩论键：仍进提示词，时效由 TTL 兜底。"""
+    from src.python.llm.module_fingerprint import debate_procon_fingerprint
+
+    baseline = debate_procon_fingerprint(_debate_inputs(_COMPETITIVE_BLOCK, _METRICS))
+    with_block = debate_procon_fingerprint(
+        _debate_inputs(_COMPETITIVE_BLOCK, _METRICS, **{block_field: _DEBATE_TIMELY_BLOCKS[block_field]})
+    )
+
+    assert with_block == baseline, f"{block_field}: 时效类块进了辩论键 → 辩论三键每份报告必 miss"
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -676,20 +712,20 @@ _PURCHASE_BLOCK_CHANGED = _PURCHASE_BLOCK.replace("100 元", "200 元")
 # 基线含「提示词文本版本」（rate-caliber-1）与「事实校验规则版本」（fact-rules-6）：
 # 标签/表头等静态文案改动、或校验修正语义（会影响回写的缓存正文）改动，均须换键，
 # 否则预检会命中按旧口径生成/旧规则改过的缓存。该表随版本号一次性刷新，属预期。
-#: 空块基线（接线前形态）：随提示词文本版本盐递增同步刷新（当前 `rate-caliber-2`）；
+#: 空块基线（接线前形态）：随提示词文本版本盐递增同步刷新（当前 `rate-caliber-4`）；
 #: 结构后缀 `_c` / `_dh` 不应随盐变化——后缀增减即为键形漂移，属需排查的异常。
 _PRE_WIRE_BASELINE = {
-    "global_macro": "9ddada1cc045",
-    "expert_review": "debb51c4cf07_c_dh",
-    "health_check": "c89133b6c99a",
-    "penetration_deep": "a01df07f2edf",
+    "global_macro": "df8fb2929da0",
+    "expert_review": "437755c22ee6_c_dh",
+    "health_check": "e06878f7600a",
+    "penetration_deep": "12f59e5d9751",
 }
 
 
 def test_purchase_block_empty_equals_pre_wire_baseline():
     """空块 = 接线前基线摘要（防分隔符陷阱：条件并入，空串不追加 part）。"""
-    for module_key, expected in _PRE_WIRE_BASELINE.items():
-        assert _write_fingerprint(module_key) == expected, f"{module_key}: 空块指纹偏离接线前基线"
+    actual = {module_key: _write_fingerprint(module_key) for module_key in _MODULE_KEYS}
+    assert actual == _PRE_WIRE_BASELINE
 
 
 @pytest.mark.parametrize("module_key", sorted(_MODULE_KEYS))

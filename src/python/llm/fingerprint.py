@@ -15,6 +15,7 @@ logger = logging.getLogger("invest")
 __all__ = [
     "cache_key_salts",
     "compute_fingerprint",
+    "extract_stable_categories",
     "extract_stable_holdings",
     "extract_stable_penetration",
     "build_llm_fingerprint",
@@ -39,20 +40,58 @@ def extract_stable_holdings(holdings_details: list[dict] | None) -> list[dict]:
     return [{"name": d.get("name", ""), "code": d.get("code", ""), "cost": d.get("cost", 0)} for d in holdings_details]
 
 
-def extract_stable_penetration(penetrated_assets: list[dict] | None, full: bool = False) -> list[dict]:
+def extract_stable_categories(categories: dict | None) -> dict[str, list]:
+    """从分类汇总中提取稳定结构（类型 → 排序后的 (代码, 名称) 列表）。
+
+    分类汇总的值是 Holding 对象（含市值/盈亏/本日盈亏/占比等行情派生字段），
+    直接进哈希会在每次行情刷新后换键——本函数只保留**分类结果本身**
+    （某品种归到哪一类、这一类里有哪些品种），与报价无关。
+
+    Args:
+        categories: ``classify_holdings`` 产出的 {类型: [Holding, ...]}（也接受 dict 元素）
+
+    Returns:
+        {类型: [(code, name), ...]}，类型键与条目均排序以保确定性
+    """
+    if not categories:
+        return {}
+    result: dict[str, list] = {}
+    for key in sorted(categories):
+        raw = categories[key]
+        # 只认可迭代的品种集：调用方传别的形态（如计数）属契约外，按空类处理，
+        # 不让指纹构造抛异常（指纹异常会让整轮报告落不了缓存键）
+        items = raw if isinstance(raw, (list, tuple, set, frozenset)) else []
+        entries: list[tuple[str, str]] = []
+        for item in items:
+            if isinstance(item, dict):
+                entries.append((str(item.get("code", "")), str(item.get("name", ""))))
+            else:
+                entries.append((str(getattr(item, "code", "") or ""), str(getattr(item, "name", "") or "")))
+        result[str(key)] = sorted(entries)
+    return result
+
+
+def extract_stable_penetration(
+    penetrated_assets: list[dict] | None, full: bool = False, include_sector: bool = False
+) -> list[dict]:
     """从穿透资产中提取稳定的（无行情波动）字段。
 
     Args:
         penetrated_assets: 穿透 TOP10 资产列表
-        full: 若为 True 则包含 mv/ratio/sector（用于穿透深度分析的额外区分）
+        full: 若为 True 则包含 mv/ratio/sector（**仅诊断用途**，mv/ratio 为行情派生值）
+        include_sector: 若为 True 则额外包含 sector（行业归属，结构性事实，与报价无关）
 
     Returns:
         稳定字段的字典列表
     """
+    if include_sector and full:
+        raise ValueError("include_sector 与 full 互斥：full 是诊断口径，include_sector 是入键口径")
     result: list[dict] = []
     if penetrated_assets:
         for a in penetrated_assets:
             entry = {"name": a.get("name", ""), "codes": a.get("codes", [])}
+            if include_sector:
+                entry["sector"] = a.get("sector", "")
             if full:
                 entry["mv"] = a.get("mv", 0)
                 entry["sector"] = a.get("sector", "")
@@ -65,11 +104,15 @@ def extract_stable_penetration(penetrated_assets: list[dict] | None, full: bool 
 
 
 RISK_SIGNAL_KEYS = ("max_drawdown_pct", "annualized_volatility", "total_return_pct", "status")
-"""进指纹的风险信号键（唯一声明点；审计组件与正式指纹共用，避免口径漂移）。"""
+"""风险信号键（唯一声明点；**仅诊断用**，不入缓存键——见 build_llm_fingerprint 纪律）。"""
 
 
 def risk_signals_of(history_data: dict | None) -> dict:
-    """从 history_data 提取进指纹的风险信号子集（不含 bars 等易变载荷）。"""
+    """从 history_data 提取风险信号子集（不含 bars 等易变载荷）。
+
+    **仅用于指纹组件诊断**（``fingerprint_components``）：这些指标由最新一根 K 线
+    算出，行情刷新即变末位，入键会把缓存寿命压到分钟级。
+    """
     if not history_data or not isinstance(history_data, dict):
         return {}
     return {key: history_data[key] for key in RISK_SIGNAL_KEYS if key in history_data}
@@ -86,49 +129,44 @@ def build_llm_fingerprint(
     full_penetration: bool = False,
     history_data: dict | None = None,
 ) -> str:
-    """构建 LLM 模块的缓存指纹，统一剔除行情波动字段。
+    """构建 LLM 模块的缓存指纹：**只锁结构与口径，不锁行情**。
 
-    替代 _expert_review_fingerprint / _health_check_fingerprint / _penetration_deep_fingerprint。
+    键内容（全部与报价无关，同日重跑逐字节不变）：
+      - 持仓结构：name/code/cost（份额×成本价，随交易变、不随行情变）
+      - 分类结构：类型 → [(code, name)]（某品种归哪类，不含市值/盈亏）
+      - 穿透结构：name/codes（+ sector，full_penetration=True 时）
+      - 两个版本盐（提示词文本版本 / 事实校验规则版本）
 
-    使用 _extract_stable_holdings 剔除行情波动；
-    穿透资产默认仅取 (name, codes)，full_penetration=True 时额外包含
-    mv/sector/ratio（穿透深度分析需要穿透数据更新触发缓存失效）。
+    刻意**不入键**（属行情/时效数据，由缓存 TTL 兜底；这些值仍然进提示词）：
+      - total_mv / total_cost / total_profit / total_today_profit（入参保留仅为调用兼容）
+      - history_data 派生风险信号（总收益/年化波动/最大回撤，由最新 K 线现算）
 
-    history_data 参数提取 key 风险信号摘要加入指纹，
-    使风险指标变化时自动失效 LLM 缓存。
+    为何这样切：行情派生量（含浮点末位）每次刷新都变，入键等于把 TTL 锁死在
+    「行情刷新周期」（本机实测：20:49 与 22:01 两轮持仓与市值完全相同，仍因
+    美股开盘后净值/风险指标变化而 4/4 全 miss）。结构与口径变了才真需要重算，
+    其余交给 TTL——TTL 的语义本就允许「几小时前的结论」。
 
     Args:
-        total_mv: 总市值
-        total_cost: 总成本
-        total_profit: 总盈亏
-        total_today_profit: 本日盈亏
-        holdings_details: 持仓明细（仅提取 name/code/cost）
+        total_mv: 总市值（不参与哈希）
+        total_cost: 总成本（不参与哈希，成本已由 holdings_details 逐笔承载）
+        total_profit: 总盈亏（不参与哈希）
+        total_today_profit: 本日盈亏（不参与哈希）
+        holdings_details: 持仓明细（提取 name/code/cost）
         penetrated_assets: 穿透资产列表
-        categories: 分类汇总
-        full_penetration: 为 True 时穿透资产包含 mv/sector/ratio（用于穿透深度分析）
-        history_data: 组合历史走势数据，仅提取 key 风险信号摘要
+        categories: 分类汇总（经 extract_stable_categories 只取分类结构）
+        full_penetration: 为 True 时穿透资产额外包含 sector（行业归属，结构性字段）
+        history_data: 组合历史走势数据（不参与哈希）
 
     Returns:
         指纹哈希值（前 12 位）
     """
     _details = extract_stable_holdings(holdings_details)
-    _pen = extract_stable_penetration(penetrated_assets, full=full_penetration)
-
-    # 从 history_data 提取 key 风险信号摘要
-    _risk_signals = risk_signals_of(history_data)
-
-    if logger.isEnabledFor(logging.DEBUG):
-        logger.debug("[fingerprint] history 风险信号: %s", _risk_signals)
+    _pen = extract_stable_penetration(penetrated_assets, include_sector=full_penetration)
 
     return compute_fingerprint(
-        total_mv,
-        total_cost,
-        total_profit,
-        total_today_profit,
-        categories,
+        extract_stable_categories(categories),
         _details,
         _pen,
-        _risk_signals,
         # 提示词文本版本：标签/表头等静态文案改动也须换键（否则复用按旧口径生成的结论）
         PROMPT_SCHEMA_VERSION,
         # 事实校验规则版本：校验修正的正文会回写模块缓存（键不变），故规则语义变化

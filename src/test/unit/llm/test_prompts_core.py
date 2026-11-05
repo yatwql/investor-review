@@ -26,6 +26,14 @@ class TestPromptsCore:
         assert "置信度指引" in _SYSTEM_EXPERT_REVIEW
         assert "竞争语境约束" in _SYSTEM_EXPERT_REVIEW
 
+    def test_system_expert_review_forbids_placeholder_expert_names(self):
+        """召集令要求专家具名：禁止 A/B/C/D/E 这类占位名。"""
+        from src.python.llm.prompts_core import _SYSTEM_EXPERT_REVIEW
+
+        assert "专家须具名" in _SYSTEM_EXPERT_REVIEW
+        assert "A/B/C/D/E" in _SYSTEM_EXPERT_REVIEW
+        assert "同一称呼" in _SYSTEM_EXPERT_REVIEW
+
     def test_system_health_check_constant(self):
         """_SYSTEM_HEALTH_CHECK 是非常字符串。"""
         from src.python.llm.prompts_core import _SYSTEM_HEALTH_CHECK
@@ -73,7 +81,7 @@ class TestPromptsCore:
 
 
 class TestInsufficientInfoEscape:
-    """情景段「不操作」出口：与强制方向项并存，且仅在情景段出现时追加。"""
+    """情景段「不操作」出口：与动手条件收敛在同一句，攒措辞只出现一处。"""
 
     _BUILDER_KWARGS = {
         "total_mv": 100_000.0,
@@ -93,9 +101,12 @@ class TestInsufficientInfoEscape:
     def test_fallback_scenario_carries_escape_and_conditional_mandate(self):
         prompt = self._build()
         assert "### 情景分析" in prompt
-        # 信息不足出口（增量）+ 条件化方向约束（替换后口径）并存
-        assert "「不操作」" in prompt and "所缺的具体数据" in prompt
-        assert "条件化动作与触发条件" in prompt
+        # 动手条件与「不操作」出口同句给全（条件、缺数据、不勉强）
+        assert "满足什么条件动手" in prompt
+        assert "「不操作」" in prompt
+        assert "所缺的数据" in prompt
+        # 攒措辞只出现一处：旧的双通道文本会在此计到 2 次以上
+        assert prompt.count("「不操作」") == 1
 
     def test_conditional_scenario_carries_escape(self, monkeypatch):
         from src.python.config import get_llm_config
@@ -128,7 +139,7 @@ class TestInsufficientInfoEscape:
     def test_default_mandate_is_conditional_not_directional(self):
         """默认口径：要求条件化动作 + 触发条件，强制方向句不出现。"""
         prompt = self._build()
-        assert "条件化动作与触发条件" in prompt
+        assert "满足什么条件动手" in prompt
         assert "必须给出方向性判断" not in prompt
 
     def test_strict_mandate_restored_when_block_disabled(self):
@@ -141,12 +152,12 @@ class TestInsufficientInfoEscape:
         finally:
             reset_feature_flags()
         assert "必须给出方向性判断" in prompt
-        assert "条件化动作与触发条件" not in prompt
+        assert "满足什么条件动手" not in prompt
 
     def test_specific_holding_mandate_allows_no_position_action(self):
         """品种约束开口子：允许「不对具体品种动手 + 理由」而不勉强引用品种。"""
         prompt = self._build()
-        assert "不对具体品种动手" in prompt
+        assert "整体降仓、持币观望" in prompt
         # 原约束仍保留（只是开口子，不是取消）
         assert "每个建议必须引用具体品种的名称和代码" in prompt
 

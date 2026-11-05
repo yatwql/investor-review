@@ -78,30 +78,85 @@ def parse_event_date(ctime: Any) -> str | None:
     return None
 
 
-def _build_keyword_index(holdings: list[Any], penetrated_assets: list[dict] | None) -> dict[str, list[str]]:
-    """关键词（持仓名/代码/穿透资产名）→ 可取行情的 A 股代码。
+#: 名称里可安全剥离的产品后缀（去后缀后的剩余名才作为别名，避免把 ETF/基金当个股）
+_NAME_SUFFIXES = ("ETF", "LOF", "QDII", "基金", "指数", "联接", "增强", "发起式", "场内", "场外")
 
-    仅收录名称+代码双维判定为 A 股的直接持仓与穿透 A 股代码；基金等无日频
-    股票行情的品种不入索引（其命中计入 unmatched，不硬算）。
+#: 代码市场前缀（指数/行情链两种写法都会出现在新闻与关联关键词里）
+_CODE_MARKET_PREFIX = {"6": "sh", "9": "sh", "0": "sz", "3": "sz", "2": "sz"}
+
+
+def _code_variants(code: str) -> list[str]:
+    """代码写法变体：裸码 + 小写市场前缀（``600519`` / ``sh600519``）。"""
+    bare = str(code or "").strip()
+    if not bare:
+        return []
+    prefix = _CODE_MARKET_PREFIX.get(bare[0])
+    return [bare, f"{prefix}{bare}"] if prefix else [bare]
+
+
+def _name_alias(name: str) -> str:
+    """名称 → 常用简称（去掉 ETF/基金/指数/联接 等产品后缀与全角括号段）。"""
+    alias = str(name or "").strip()
+    for sep in ("（", "("):
+        if sep in alias:
+            alias = alias.split(sep)[0]
+    for suffix in _NAME_SUFFIXES:
+        if alias.upper().endswith(suffix.upper()):
+            alias = alias[: -len(suffix)]
+    alias = alias.strip()
+    return alias if len(alias) >= 2 else ""
+
+
+def _build_keyword_index(holdings: list[Any], penetrated_assets: list[dict] | None) -> dict[str, list[tuple[str, str]]]:
+    """关键词 → [(可取行情的 A 股代码, 命中层级)]；层级 ∈ {"品种", "行业"}。
+
+    索引三类键（同一代码可经多条键命中，按层级保序去重）：
+      1. **品种直指**：持仓/穿透资产的名称与简称、代码裸码与带市场前缀写法；
+      2. **行业直指**：该品种所属板块名（``classify_sector``）；
+      3. **行业关键词**：``sector_keywords()`` 中指向同一板块的词（如「白酒」「芯片」），
+         命中即视为行业级关联——把「新闻讲行业、组合正好暴露在该行业」的情形纳入事件窗，
+         这类新闻此前整条计入 unmatched。
+
+    仅收录名称+代码双维判定为 A 股的直接持仓与穿透 A 股代码；基金等无日频股票
+    行情的品种不入索引（其命中计入 unmatched，不硬算）。
     """
-    lookup: dict[str, list[str]] = {}
+    from src.python.report.penetration import classify_sector, sector_keywords
 
-    def _add(key: str | None, code: str) -> None:
-        if key and code and code not in lookup.setdefault(key, []):
-            lookup[key].append(code)
+    lookup: dict[str, list[tuple[str, str]]] = {}
+    sector_kw = sector_keywords()
+
+    def _add(key: str | None, code: str, level: str) -> None:
+        entries = lookup.setdefault(key, []) if key else None
+        if entries is None:
+            return
+        if (code, level) not in entries:
+            entries.append((code, level))
+
+    def _index(code: str, name: str) -> None:
+        """登记一个 A 股代码：品种名/简称/代码变体 + 所属板块与板块关键词。"""
+        _add(name, code, "品种")
+        _add(_name_alias(name), code, "品种")
+        for variant in _code_variants(code):
+            _add(variant, code, "品种")
+        sector = classify_sector(name, code)
+        if not sector or sector == "--":
+            return
+        _add(sector, code, "行业")
+        for keyword, target in sector_kw.items():
+            if target == sector:
+                _add(keyword, code, "行业")
 
     for holding in holdings or []:
         name = str(getattr(holding, "name", "") or "")
         code = str(getattr(holding, "code", "") or "")
         if name and code and is_a_share_stock(name, code):
-            _add(name, code)
-            _add(code, code)
+            _index(code, name)
     for asset in penetrated_assets or []:
         if not isinstance(asset, dict):
             continue
         codes = [c for c in (asset.get("codes") or []) if isinstance(c, str) and is_a_share_code(c)]
         if codes:
-            _add(str(asset.get("name") or ""), codes[0])
+            _index(codes[0], str(asset.get("name") or ""))
     return lookup
 
 
@@ -154,11 +209,13 @@ def build_event_rows(
             # 前者是新闻关联环节召回为 0，后者是索引（持仓/穿透关键词）没覆盖到。
             skipped["no_keywords"] += 1
             continue
-        hit_codes: list[tuple[str, str]] = []  # (code, 命中关键词)
+        hit_codes: list[tuple[str, str]] = []  # (code, 命中关键词展示文案)
         for kw in keywords:
-            for code in index.get(kw, []):
-                if (code, kw) not in hit_codes:
-                    hit_codes.append((code, kw))
+            for code, level in index.get(kw, []):
+                # 行业级关联在关键词后缀标注，读者能分辨「新闻讲的是该品种」还是「讲它所在行业」
+                label = f"{kw}（行业）" if level == "行业" else kw
+                if (code, label) not in hit_codes:
+                    hit_codes.append((code, label))
         if not hit_codes:
             skipped["unmatched"] += 1
             skipped["not_in_holdings"] += 1

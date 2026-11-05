@@ -145,11 +145,24 @@ class TestBuildLlmFingerprint(unittest.TestCase):
         )
         self.assertEqual(fp1, fp2)
 
-    def test_different_input_different_fingerprint(self):
-        """不同输入 → 不同指纹。"""
-        fp1 = build_llm_fingerprint(total_mv=100000)
-        fp2 = build_llm_fingerprint(total_mv=200000)
-        self.assertNotEqual(fp1, fp2)
+    def test_market_derived_inputs_do_not_change_fingerprint(self):
+        """行情派生入参（总量/风险信号）不入键：键只锁结构与口径。
+
+        它们仍进提示词，时效由缓存 TTL 兜底——把分钟级变动的行情锁进键，
+        等于让 4h TTL 从未生效（实测：同日持仓与市值相同的两轮仍 4/4 全 miss）。
+        """
+        self.assertEqual(build_llm_fingerprint(total_mv=100000), build_llm_fingerprint(total_mv=200000))
+        self.assertEqual(
+            build_llm_fingerprint(history_data={"total_return_pct": 1.0}),
+            build_llm_fingerprint(history_data={"total_return_pct": 9.0}),
+        )
+
+    def test_structural_input_changes_fingerprint(self):
+        """结构变化（持仓成本）必须换键。"""
+        self.assertNotEqual(
+            build_llm_fingerprint(holdings_details=[{"name": "A", "code": "000001", "cost": 100}]),
+            build_llm_fingerprint(holdings_details=[{"name": "A", "code": "000001", "cost": 200}]),
+        )
 
     def test_full_penetration_changes_fingerprint(self):
         """full_penetration=True 时穿透数据影响指纹。"""

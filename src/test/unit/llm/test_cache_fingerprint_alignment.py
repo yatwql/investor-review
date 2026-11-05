@@ -143,29 +143,30 @@ class TestSensitivityChangesFingerprint:
         )
         assert builder(changed) != builder(_inputs())
 
-    def test_global_macro_keys_on_totals_not_holdings_detail(self):
-        """全球政经局势只用总量/指数/分类：份额变化但总量不变时键不变（不白算）。"""
+    def test_global_macro_keys_on_structure_not_totals(self):
+        """全球政经局势只用结构（持仓成本/分类）：总量变了但结构不变时键不变。
+
+        总量（市值/盈亏）是行情派生量，进键会把 24h TTL 压到分钟级；它们仍进
+        提示词，时效由 TTL 兜底。
+        """
+        assert global_macro_fingerprint(_inputs(total_mv=120_000.0)) == global_macro_fingerprint(_inputs())
         moved = _inputs(
             holdings_details=[
                 {"code": "600519", "name": "贵州茅台", "shares": 200, "cost": 75000.0},
                 {"code": "510300", "name": "沪深300ETF", "shares": 1000, "cost": 4000.0},
             ]
         )
-        assert global_macro_fingerprint(moved) == global_macro_fingerprint(_inputs())
-
-    def test_global_macro_keys_on_total_mv(self):
-        """总市值变了必须换键（对比结论依赖它）。"""
-        assert global_macro_fingerprint(_inputs(total_mv=120_000.0)) != global_macro_fingerprint(_inputs())
+        assert global_macro_fingerprint(moved) != global_macro_fingerprint(_inputs()), "成本结构变化必须换键"
 
     def test_history_risk_signal_change(self):
-        """风险信号子集变化 → 承载它的模块指纹变；global_macro 只用总量/指数，不参与。"""
+        """风险信号属行情派生量 → **任何**模块都不换键（仍进提示词）。"""
         from src.python.llm.fingerprint import RISK_SIGNAL_KEYS
 
         key = sorted(RISK_SIGNAL_KEYS)[0]
         base = _inputs(history_data={key: 0.1})
         changed = _inputs(history_data={key: 0.2})
-        assert health_check_fingerprint(base) != health_check_fingerprint(changed)
-        assert expert_review_fingerprint(base) != expert_review_fingerprint(changed)
+        assert health_check_fingerprint(base) == health_check_fingerprint(changed)
+        assert expert_review_fingerprint(base) == expert_review_fingerprint(changed)
         assert global_macro_fingerprint(base) == global_macro_fingerprint(changed), "宏观模块不含持仓风险信号"
 
     def test_data_quality_text_change_affects_health_check(self):
@@ -174,9 +175,17 @@ class TestSensitivityChangesFingerprint:
         assert health_check_fingerprint(base) != health_check_fingerprint(changed)
 
     def test_penetration_change_affects_penetration_module(self):
+        """穿透品种集变了必须换键（结构变化）；单纯市值/占比变动（行情派生）不换。"""
         base = _inputs(penetrated_assets=[{"code": "00700", "name": "腾讯", "mv": 1000.0, "ratio": 0.1}])
-        changed = _inputs(penetrated_assets=[{"code": "00700", "name": "腾讯", "mv": 2000.0, "ratio": 0.2}])
-        assert penetration_deep_fingerprint(base) != penetration_deep_fingerprint(changed)
+        revalued = _inputs(penetrated_assets=[{"code": "00700", "name": "腾讯", "mv": 2000.0, "ratio": 0.2}])
+        added = _inputs(
+            penetrated_assets=[
+                {"code": "00700", "name": "腾讯", "mv": 1000.0, "ratio": 0.1},
+                {"code": "09988", "name": "阿里", "mv": 900.0, "ratio": 0.09},
+            ]
+        )
+        assert penetration_deep_fingerprint(base) == penetration_deep_fingerprint(revalued), "市值/占比不入键"
+        assert penetration_deep_fingerprint(base) != penetration_deep_fingerprint(added), "穿透品种集变化必须换键"
 
 
 class TestNoiseDoesNotChangeFingerprint:

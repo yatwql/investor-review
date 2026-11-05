@@ -35,6 +35,13 @@
         <!-- 判断依据（形态 A 章内块；纯确定性零 LLM，数据契约 decision_basis_data） -->
         {% set _db = decision_basis_data or {} %}
         {% if _db.get("enabled") %}
+        {% set _hl = _db.get("headline") or [] %}
+        {% if _hl %}
+        <!-- 章首三行摘要：块默认折叠，关键事实不展开也要读到（双端与 Excel 逐字同源） -->
+        <div class="decision-basis-headline" id="decision-basis-headline" style="margin: 10px 0 6px; font-size: var(--fs-body); color: var(--text-secondary); line-height: 1.7;">
+            {% for _line in _hl %}<div>{{ _line }}</div>{% endfor %}
+        </div>
+        {% endif %}
         <details class="section-fold" id="decision-basis">
             <summary class="section-fold-summary">
                 {% if _db.get("summary") %}{{ _db.get("summary") }}{% else %}判断依据 —— 点击展开/收起信号清单、风险预算与结算摘要{% endif %}
@@ -155,6 +162,30 @@
         <div class="empty-note"><p>{{ _st.get("note") or "暂无结算样本" }}</p></div>
         {% endif %}
         {% if _st.get("batches") %}<div style="font-size: var(--fs-table-sm);opacity:0.85;margin-top:4px;">{{ _st.get("note") or "" }}</div>{% endif %}
+        {# 我的建议历史表现（按视界聚合：命中率/均值超额/样本数；只读账本，与 settle-decisions 同口径） #}
+        {% if _st.get("performance") %}
+        <div style="font-weight: bold; font-size: var(--fs-body); margin: 12px 0 4px;">{{ _st.get("performance_title") or "我的建议历史表现（按视界）" }}</div>
+        <div style="overflow-x:auto;">
+        <table>
+            <thead>
+                <tr><th>视界</th><th>已结算</th><th>方向性</th><th>命中</th><th>命中率</th><th>均值超额</th></tr>
+            </thead>
+            <tbody>
+                {% for _p in _st.get("performance") %}
+                <tr>
+                    <td class="text-left">{{ _p.get("horizon") }} 日</td>
+                    <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ _p.get("settled", 0) }}</td>
+                    <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ _p.get("directional", 0) }}</td>
+                    <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ _p.get("hit", 0) }}</td>
+                    <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ _p.get("accuracy_label") or "—" }}</td>
+                    <td class="text-right {{ _p.get('tone_class') or '' }}">{{ _p.get("mean_excess_label") or "—" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        <div style="font-size: var(--fs-table-sm);opacity:0.85;margin-top:4px;">命中率仅在方向性有效样本 ≥ 20 时给结论值（否则为「命中/方向性」）；平盘与数据缺口不计命中，口径与 settle-decisions 子命令、doctor 账本概览一致。</div>
+        {% endif %}
         {# 集中度约束（开关 portfolio_constraints；只标注不阻断） #}
         {% set _cons = _db.get("constraints") or {} %}
         {% if _cons.get("enabled") %}

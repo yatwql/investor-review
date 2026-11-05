@@ -111,8 +111,8 @@ class TestCheckpointSmoke:
 
     # ── Checkpoint 4 ─────────────────────────────────
 
-    def test_fingerprint_includes_risk_signals(self):
-        """build_llm_fingerprint 提取 history_data 中的风险信号。"""
+    def test_fingerprint_ignores_market_derived_inputs(self):
+        """build_llm_fingerprint 只锁结构与口径：总量/风险信号（行情派生）不入键。"""
         from src.python.llm.fingerprint import build_llm_fingerprint
 
         fp_with = build_llm_fingerprint(
@@ -128,7 +128,15 @@ class TestCheckpointSmoke:
             total_profit=1000,
             total_today_profit=100,
         )
-        assert fp_with != fp_without, "有/无风险信号应产生不同指纹"
+        assert fp_with == fp_without, "行情派生量不应换键（时效由 TTL 兜底）"
+
+    def test_fingerprint_tracks_holdings_structure(self):
+        """持仓成本（结构）变化必须换键——这是「需要重算」的唯一判据。"""
+        from src.python.llm.fingerprint import build_llm_fingerprint
+
+        base = build_llm_fingerprint(holdings_details=[{"name": "A", "code": "600519", "cost": 100.0}])
+        more = build_llm_fingerprint(holdings_details=[{"name": "A", "code": "600519", "cost": 200.0}])
+        assert base != more
 
     # ── Helpers ──────────────────────────────────────────
 

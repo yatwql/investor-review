@@ -145,12 +145,15 @@ class TestPromptEndToEndContainsBlock(unittest.TestCase):
         call = mock_content.call_args
         return [a for a in call.args if isinstance(a, str)] + [v for v in call.kwargs.values() if isinstance(v, str)]
 
-    def test_four_modules_receive_block(self, mock_cfg, mock_content):
-        """四个模块送入模型的 prompt 均含块。"""
+    def test_three_modules_receive_block_macro_excluded(self, mock_cfg, mock_content):
+        """事件窗分歧例块进三模块提示词；全球政经局势不注入（口径不符 + 省 token）。
+
+        块属时效/行情派生数据（新闻 15 分钟刷新），且与「全球指数/宏观」口径无关，
+        故不进全球政经的提示词，也不进任何模块的缓存键（见 TestFingerprintConditionalJoin）。
+        """
         from src.python.llm import generators
 
         fns = {
-            "global_macro": generators.generate_global_macro,
             "expert_review": generators.generate_expert_review,
             "health_check": generators.generate_health_check,
             "penetration_deep": generators.generate_penetration_deep_analysis,
@@ -160,6 +163,11 @@ class TestPromptEndToEndContainsBlock(unittest.TestCase):
             fn(**self._call_kwargs(module_key), event_impact_block=_BLOCK)
             texts = self._prompt_texts(mock_content)
             assert any("【事件窗对照·分歧例" in s for s in texts), f"{module_key}: 最终 prompt 不含块"
+
+        mock_content.reset_mock()
+        generators.generate_global_macro(**self._call_kwargs("global_macro"), event_impact_block=_BLOCK)
+        texts = self._prompt_texts(mock_content)
+        assert not any("【事件窗对照·分歧例" in s for s in texts), "global_macro 不应注入事件窗分歧例块"
 
     def test_four_modules_absent_block_unchanged(self, mock_cfg, mock_content):
         """块缺席 → 最终 prompt 不含块（关态逐字节回退面）。"""
@@ -210,7 +218,12 @@ class TestDebateCarriesBlock(unittest.TestCase):
 
 
 class TestFingerprintConditionalJoin(unittest.TestCase):
-    """指纹条件并入：块空 = 与不带该段逐字节一致；块非空 = 键改变。"""
+    """事件窗分歧例块**不进**缓存键：它属时效类数据，仍进提示词，由 TTL 兜底。
+
+    块内容每 15 分钟随新闻刷新、并含每行「收益/超额」浮点（盘中重算即变），
+    入键会把四模块与自检的 4h/24h TTL 实际降到分钟级（实测：持仓与市值完全
+    相同的两轮报告仍 4/4 全 miss）。
+    """
 
     @staticmethod
     def _inputs(**kw):
@@ -218,7 +231,7 @@ class TestFingerprintConditionalJoin(unittest.TestCase):
 
         return ModuleFingerprintInputs(total_mv=100.0, total_profit=10.0, **kw)
 
-    def test_standard_modules_conditional(self):
+    def test_standard_modules_ignore_block(self):
         from src.python.llm.module_fingerprint import (
             expert_review_fingerprint,
             global_macro_fingerprint,
@@ -226,20 +239,23 @@ class TestFingerprintConditionalJoin(unittest.TestCase):
             penetration_deep_fingerprint,
         )
 
-        for fn in (global_macro_fingerprint, expert_review_fingerprint, health_check_fingerprint):
+        for fn in (
+            global_macro_fingerprint,
+            expert_review_fingerprint,
+            health_check_fingerprint,
+            penetration_deep_fingerprint,
+        ):
             base = fn(self._inputs())
             assert fn(self._inputs(event_impact_block="")) == base, f"{fn.__name__}: 空块改变了键"
-            assert fn(self._inputs(event_impact_block=_BLOCK)) != base, f"{fn.__name__}: 非空块未进键"
-        base = penetration_deep_fingerprint(self._inputs())
-        assert penetration_deep_fingerprint(self._inputs(event_impact_block="")) == base
-        assert penetration_deep_fingerprint(self._inputs(event_impact_block=_BLOCK)) != base
+            assert fn(self._inputs(event_impact_block=_BLOCK)) == base, f"{fn.__name__}: 时效块进了键"
 
-    def test_self_review_conditional(self):
-        from src.python.llm.module_fingerprint import self_review_fingerprint
+    def test_self_review_parts_carry_no_event_impact_segment(self):
+        """自检指纹的分段构成里不得出现 event_impact 段（时效类块只进提示词）。"""
+        from src.python.llm.module_fingerprint import self_review_fingerprint_parts
 
-        base = self_review_fingerprint({"a": "<p>x</p>"})
-        assert self_review_fingerprint({"a": "<p>x</p>"}, event_impact_block="") == base
-        assert self_review_fingerprint({"a": "<p>x</p>"}, event_impact_block=_BLOCK) != base
+        parts = self_review_fingerprint_parts({"a": "<p>x</p>"})
+        assert "event_impact" not in parts
+        assert "schedule_replay" not in parts
 
 
 # ═══════════════════════════════════════════════════════════════
