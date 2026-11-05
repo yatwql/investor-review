@@ -187,3 +187,51 @@ class TestWcagContrast:
                 if r < 4.5:
                     below.append(f"dark {fg}({fg_hex}) on {bg}({bg_hex})={r:.2f}")
         assert not below, f"暗色对比度 <4.5: {below}"
+
+
+class TestSharedStylesheetParity:
+    """报告页与调仓页两套样式表：同名选择器不得静默漂移。
+
+    `_whatif_styles.html` 早年从报告样式抄了一份基础面，两表同名规则一度 39 条、其中 30 条
+    逐字重复。真正的风险不是重复本身，而是「改一处漏一处」——同一角色两页不同实现。
+    这里锁两条：① 同名规则要么逐字一致（归一化空白后），要么在上面的差异白名单里；
+    ② 白名单只减不增，新增差异必须显式登记并写明理由。
+    """
+
+    #: 两页**有意不同**的选择器 → 理由（新增条目须写明为什么两页必须不同）
+    ALLOWED_DIVERGENCE = {
+        ":root": "两页 token 集合不同（调仓页无 TOC/图表相关 token）",
+        ".chart-export-btn": "报告页按 44px 触控目标，调仓页按导出按钮字号收敛",
+        ".section-title": "报告页章节题有左右留白差异（TOC 折叠态）",
+        ".summary-card .meta": "报告页 meta 上边距归零（草稿对照表间距契约）",
+        "td": "报告页加 line-height token（宽表行高契约）",
+        "th": "报告页加 line-height token（宽表行高契约）",
+    }
+
+    @staticmethod
+    def _rules(path: Path) -> dict[str, list[str]]:
+        import re as _re
+
+        text = path.read_text(encoding="utf-8")
+        masked = _re.sub(r"@media[^{]*\{(?:[^{}]|\{[^{}]*\})*\}", lambda m: " " * len(m.group(0)), text)
+        out: dict[str, list[str]] = {}
+        for m in _re.finditer(r"(?P<sel>[^{}\n][^{}]*?)\s*\{(?P<body>[^{}]*)\}", masked):
+            out.setdefault(m.group("sel").strip(), []).append(_re.sub(r"\s+", " ", m.group("body")).strip())
+        return out
+
+    def test_shared_selectors_are_identical_or_allowlisted(self):
+        tmpl = Path(__file__).resolve().parents[4] / "src" / "static" / "tmpl" / "partials"
+        rep = self._rules(tmpl / "_report_styles.html")
+        wif = self._rules(tmpl / "_whatif_styles.html")
+        drift = [
+            sel for sel in sorted(set(rep) & set(wif)) if rep[sel] != wif[sel] and sel not in self.ALLOWED_DIVERGENCE
+        ]
+        assert drift == [], f"两套样式表同名规则实现不一致（确认是否有意，再登记白名单）: {drift}"
+
+    def test_allowlist_has_no_stale_entries(self):
+        """白名单条目必须仍然真实存在差异（防止登记后差异消失却没人删）。"""
+        tmpl = Path(__file__).resolve().parents[4] / "src" / "static" / "tmpl" / "partials"
+        rep = self._rules(tmpl / "_report_styles.html")
+        wif = self._rules(tmpl / "_whatif_styles.html")
+        stale = [sel for sel in self.ALLOWED_DIVERGENCE if sel not in rep or sel not in wif or rep[sel] == wif[sel]]
+        assert stale == [], f"白名单条目已无差异或选择器已消失，应删除: {stale}"

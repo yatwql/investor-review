@@ -312,3 +312,33 @@ class TestBaselineNoGrowth:
         assert len(obs["inline_colors"]) <= self._W3_BASELINE
         assert len(obs["type_scale"]) <= self._W4_BASELINE
         assert len(obs["spacing_scale"]) <= self._W5_BASELINE
+
+
+class TestStylePartialHostMapping:
+    """样式 partial → 宿主模板映射的覆盖性。
+
+    W1 白名单按「内容归属」登记在宿主模板路径上（`_report_styles.html` → `report_template.html`）。
+    新增一个 `_*_styles.html` 却忘了登记映射时，该文件的裸色值会**静默**按自身路径判定——
+    白名单不生效、观察数暴涨，且没有任何报错指向真正原因。
+    """
+
+    def test_every_style_partial_has_host_mapping(self, guard, tmp_path):
+        from pathlib import Path as _Path
+
+        partial_dir = _Path(__file__).resolve().parents[4] / "src" / "static" / "tmpl" / "partials"
+        style_partials = sorted(p.name for p in partial_dir.glob("_*_styles.html"))
+        assert style_partials, "应存在专用样式 partial（`_*_styles.html`）"
+
+        unmapped = []
+        for name in style_partials:
+            rel = f"src/static/tmpl/partials/{name}"
+            if guard._STYLE_PARTIAL_HOSTS.get(rel) is None:
+                unmapped.append(rel)
+        assert unmapped == [], f"以下样式 partial 未登记宿主模板（W1 白名单会静默失效）: {unmapped}"
+
+    def test_host_mapping_points_at_existing_templates(self, guard):
+        from pathlib import Path as _Path
+
+        root = _Path(__file__).resolve().parents[4]
+        missing = [host for host in guard._STYLE_PARTIAL_HOSTS.values() if not (root / host).is_file()]
+        assert missing == [], f"映射指向不存在的宿主模板: {missing}"

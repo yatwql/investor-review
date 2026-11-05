@@ -120,6 +120,16 @@
 | 数据驱动的几何量 | **HTML/SVG 属性**（如配置分布条 `<svg width="{{ pct }}%">`） | 属性不是 CSS 值，解析器不介入 |
 | 样式资产 | **独立 partial**（`partials/_report_styles.html` / `_whatif_styles.html`，整块 `<style>`） | 主模板经 `{% include %}` 引在 `<style>` 之外，块内保持纯 CSS；改样式与改结构不再挤同一文件 |
 
+**样式放哪儿（归属判据）**：三类载体各有边界，不按文件大小随手挪——
+
+| 载体 | 放什么 | 判据 |
+|---|---|---|
+| `partials/_report_styles.html` / `_whatif_styles.html` | 页面级全局样式（排版、表格、页头页脚、打印） | 该页任何状态下都要用的规则 |
+| 章节 partial 内嵌 `<style>`（如 `report_qa_section.html`） | 该章独有样式 | 章节可整体关闭：关态**零字节**，不为关掉的功能付样式体积 |
+| 主模板 `<style>` | 仅 `_base_styles.html`/页面样式 partial 的 `{% include %}` | 主模板本身不写 CSS |
+
+「报告 CSS」在两个地方被读取，口径**有意不同**，改动时两边都要看：`scripts/check-style-guardrails._report_css_text()` 只聚合 `_*_styles.html`（做双面 token 对齐，不含章节局部样式）；测试侧 `read_template_css()` 聚合**全部** partial（含章节样式，供字号/断点类断言覆盖到章内规则）。
+
 守卫：`src/test/unit/report/test_html_report_structure.py` 静态扫描全部模板 `style="…"` 不得含 `{{`/`{%`、`<style>` 块内不得含 `{{`/`{%`，并对渲染产物断言 `style` 无模板残留；同文件另断言 `div.section` 无内联 `order:` 且 DOM 顺序与编号一致。压误报用的 `.pi-lens.json` 已随本批次删除，HTML 语言服务恢复启用。
 
 **为什么模型覆盖放在 `.pi/` 而要软链生效**：pi CLI **只读** `~/.pi/agent/models.json`（`getModelsPath() = getAgentDir() + "/models.json"`，`getAgentDir()` 只认 `PI_AGENT_DIR` 或 `~/.pi/agent`），**不读项目级 `.pi/models.json`**；项目级 `.pi/` 仅支持 `settings.json`/扩展/技能/主题。因此模型覆盖的仓库文件是**唯一事实来源**，用软链挂到全局路径生效（`settings.json` 走项目级路径，无需软链）：
