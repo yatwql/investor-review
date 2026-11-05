@@ -511,3 +511,24 @@ def test_default_fetchers_use_derived_history_window(monkeypatch):
     expected = eip.history_days_for([_news(ctime="2025-11-05 10:30:00")])
     assert expected > eip.HISTORY_DAYS_FLOOR
     assert all(days == expected for _code, days in calls), calls
+
+
+def test_default_row_cap_bounds_events_and_reports_capped():
+    """默认上限：命中数超过 MAX_EVENT_ROWS 时出行数被夹住，超出部分计入 capped。"""
+    from src.python.report.event_impact_panel import MAX_EVENT_ROWS
+
+    total = MAX_EVENT_ROWS + 10
+    news = [
+        _news(title=f"第 {i} 条", url=f"https://example.com/n{i}", matched_keywords=["工商银行"]) for i in range(total)
+    ]
+    fetch_bars, fetch_index, resolve = _providers()
+    res = build_event_rows(
+        _HOLDINGS,
+        news,
+        _PENETRATED,
+        fetch_bars=fetch_bars,
+        fetch_index=fetch_index,
+        benchmark_code_for=resolve,
+    )
+    assert len(res["events"]) == MAX_EVENT_ROWS
+    assert res["skipped"]["capped"] == total - MAX_EVENT_ROWS

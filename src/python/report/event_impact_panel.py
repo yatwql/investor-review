@@ -46,7 +46,8 @@ __all__ = [
 _CTIME_FORMATS = ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d")
 
 #: 单次事件表行数上限（防极端召回爆炸，超出计入 skipped）
-MAX_EVENT_ROWS = 50
+#: 索引扩面后单轮可命中 60+ 条（行业级关联占大头），50 会截掉有效行；80 留出余量又不失控
+MAX_EVENT_ROWS = 80
 
 
 def extract_text_polarity(item: dict[str, Any]) -> str | None:
