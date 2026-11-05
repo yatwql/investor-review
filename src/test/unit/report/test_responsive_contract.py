@@ -13,6 +13,8 @@ import re
 import pytest
 from src.test._script_loader import load_script
 
+from src.test.unit.report._html_report_fixtures import read_template_text
+
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report, pytest.mark.unit_web]
 
 _ROOT = pathlib.Path(__file__).resolve().parents[4]
@@ -26,6 +28,13 @@ _checklib = load_script("_shared/checklib.py")
 
 
 def _css(path: pathlib.Path) -> str:
+    """读模板/样式文本；报告与调仓模板的 CSS 已抽到 partials，故聚合读取。
+
+    样式按关注点拆到 `partials/_report_styles.html` / `_whatif_styles.html` 后，只读主
+    模板会看不到任何 CSS——断言口径必须跟随文件布局，否则每次拆分都会假红一批用例。
+    """
+    if path.name in ("report_template.html", "whatif_template.html"):
+        return read_template_text(path.name)
     return path.read_text(encoding="utf-8")
 
 
@@ -45,7 +54,7 @@ def _design_breakpoints() -> set[int]:
 class TestBreakpointContract:
     """四档断点契约：实现 ⊆ 契约族，主报告四档齐全，旧值零残留。"""
 
-    def test_report_breakpoints_within_contract(self) -> str:
+    def test_report_breakpoints_within_contract(self) -> None:
         vals = _breakpoint_values(_css(_REPORT))
         assert vals, "主报告应存在断点"
         # 合法族 = DESIGN 档位值 ∪ 各档左边界（1024 档的补集边界 1023）

@@ -118,8 +118,9 @@
 | 颜色 | **语义 class**（`.profit` / `.loss` / `.rating-*` / `.text-warn` / `.corr-*` / `.fill-*`…） | 过滤器 `profit_class` / `price_type_class` 出类名；色值只在 `report_template.html` 的 token 与工具类里出现，暗色主题自动跟随 |
 | 章节顺序 | 模板 **DOM 顺序**（include 顺序 = `_REPORT_SECTION_DEFAULT`）+ **服务端注入的 CSS `order` 规则** | 用户配置 `report_section_order` 时序号与 DOM 顺序不一致，靠 `html_writer._inject_section_order_css()` 把`#sec-x{order:N}` 拼好替换模板占位 `<!--SECTION_ORDER_CSS-->`；不用 Jinja 写 `style`（花括号会被 CSS 解析器判语法错） |
 | 数据驱动的几何量 | **HTML/SVG 属性**（如配置分布条 `<svg width="{{ pct }}%">`） | 属性不是 CSS 值，解析器不介入 |
+| 样式资产 | **独立 partial**（`partials/_report_styles.html` / `_whatif_styles.html`，整块 `<style>`） | 主模板经 `{% include %}` 引在 `<style>` 之外，块内保持纯 CSS；改样式与改结构不再挤同一文件 |
 
-守卫：`src/test/unit/report/test_html_report_structure.py` 静态扫描全部模板 `style="…"` 不得含 `{{`/`{%`，并对渲染产物断言 `style` 无模板残留；同文件另断言 `div.section` 无内联 `order:` 且 DOM 顺序与编号一致。压误报用的 `.pi-lens.json` 已随本批次删除，HTML 语言服务恢复启用。
+守卫：`src/test/unit/report/test_html_report_structure.py` 静态扫描全部模板 `style="…"` 不得含 `{{`/`{%`、`<style>` 块内不得含 `{{`/`{%`，并对渲染产物断言 `style` 无模板残留；同文件另断言 `div.section` 无内联 `order:` 且 DOM 顺序与编号一致。压误报用的 `.pi-lens.json` 已随本批次删除，HTML 语言服务恢复启用。
 
 **为什么模型覆盖放在 `.pi/` 而要软链生效**：pi CLI **只读** `~/.pi/agent/models.json`（`getModelsPath() = getAgentDir() + "/models.json"`，`getAgentDir()` 只认 `PI_AGENT_DIR` 或 `~/.pi/agent`），**不读项目级 `.pi/models.json`**；项目级 `.pi/` 仅支持 `settings.json`/扩展/技能/主题。因此模型覆盖的仓库文件是**唯一事实来源**，用软链挂到全局路径生效（`settings.json` 走项目级路径，无需软链）：
 

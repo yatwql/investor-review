@@ -13,6 +13,8 @@ import unittest
 
 import pytest
 
+from src.test.unit.report._html_report_fixtures import read_template_css, read_template_text
+
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
 
@@ -20,18 +22,7 @@ class TestHtmlTemplatePrintStyles(unittest.TestCase):
     """@media print 样式规则完整性检测。"""
 
     def setUp(self):
-        tmpl_path = os.path.join(
-            os.path.dirname(__file__),
-            "..",
-            "..",
-            "..",
-            "static",
-            "tmpl",
-            "report_template.html",
-        )
-        self.tmpl_path = os.path.normpath(tmpl_path)
-        with open(self.tmpl_path, encoding="utf-8") as f:
-            self.html = f.read()
+        self.html = read_template_css()
 
     def test_has_media_print_block(self):
         """模板包含 @media print 规则块。"""
@@ -153,17 +144,8 @@ class TestHtmlPrintButton(unittest.TestCase):
     """HTML 打印/导出 PDF 浮动按钮 — 存在性/可访问性/触控尺寸/打印自隐藏。"""
 
     def setUp(self):
-        tmpl_path = os.path.join(
-            os.path.dirname(__file__),
-            "..",
-            "..",
-            "..",
-            "static",
-            "tmpl",
-            "report_template.html",
-        )
-        with open(os.path.normpath(tmpl_path), encoding="utf-8") as f:
-            self.html = f.read()
+        # 聚合口径同时覆盖主模板标记与 partials 样式（打印按钮两类断言都要）
+        self.html = read_template_text()
 
     def test_print_button_present_with_print_action(self):
         """浮动打印按钮存在且点击唤起 window.print()。"""
@@ -181,22 +163,24 @@ class TestHtmlPrintButton(unittest.TestCase):
 
     def test_print_button_touch_target_and_tokens(self):
         """44×44 触控目标 + 固定右上浮动，配色取语义 token 并有 hover 反馈。"""
-        m = re.search(r"\.report-print-btn\s*\{[^}]*\}", self.html)
+        html = read_template_css()
+        m = re.search(r"\.report-print-btn\s*\{[^}]*\}", html)
         assert m is not None, "应存在 .report-print-btn 样式规则"
         css = m.group(0)
         self.assertIn("position: fixed", css)
         self.assertIn("width: 44px", css)
         self.assertIn("height: 44px", css)
         self.assertIn("var(--primary)", css)
-        hover = re.search(r"\.report-print-btn:hover\s*\{[^}]*\}", self.html)
+        hover = re.search(r"\.report-print-btn:hover\s*\{[^}]*\}", html)
         assert hover is not None, "按钮须有 hover 反馈（设计契约护栏）"
         self.assertIn("var(--primary-hover)", hover.group(0))
 
     def test_print_button_hidden_in_print(self):
         """打印稿自隐藏（浮动控件不入 PDF/纸稿）。"""
+        html = read_template_css()
         m = re.search(
             r"@media print\s*\{\s*\.report-print-btn\s*\{\s*display:\s*none\s*!important\s*;\s*\}",
-            self.html,
+            html,
         )
         self.assertIsNotNone(m, "@media print 应含 .report-print-btn 自隐藏规则")
 
@@ -205,17 +189,8 @@ class TestTooltipXssHygiene(unittest.TestCase):
     """图表 tooltip XSS 纪律：DOM API 构建，全文无 HTML 注入 sink。"""
 
     def setUp(self):
-        tmpl_path = os.path.join(
-            os.path.dirname(__file__),
-            "..",
-            "..",
-            "..",
-            "static",
-            "tmpl",
-            "report_template.html",
-        )
-        with open(os.path.normpath(tmpl_path), encoding="utf-8") as f:
-            self.html = f.read()
+        # 聚合口径含 partials 的内联脚本与注释，会误报注入 sink；本类只查主模板内联 JS
+        self.html = read_template_text(with_partials=False)
 
     def test_no_html_injection_sinks_anywhere(self):
         """模板内联 JS 禁 innerHTML / insertAdjacentHTML / document.write / eval。"""

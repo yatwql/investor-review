@@ -16,6 +16,8 @@ import pathlib
 
 import pytest
 
+from src.test.unit.report._html_report_fixtures import read_template_text
+
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
 _ROOT = pathlib.Path(__file__).resolve().parents[4]
@@ -39,10 +41,10 @@ class TestEmptyFamilyTiers:
 
     def test_three_tier_selectors_defined(self) -> None:
         """主模板三档选择器齐备；What-if 至少单元级（其域无章节/图表级用点）。"""
-        css = _REPORT.read_text(encoding="utf-8")
+        css = read_template_text()
         for sel in (".empty-section", ".empty-note", ".chart-empty-note"):
             assert f"{sel} {{" in css, f"主模板缺空态族选择器 {sel}"
-        assert ".empty-note {" in _WHATIF.read_text(encoding="utf-8")
+        assert ".empty-note {" in read_template_text("whatif_template.html")
 
     def test_merged_class_zero_residual(self) -> None:
         """placeholder-note 归并后：class 属性与选择器定义零残留（注释历史说明豁免）。"""
@@ -50,14 +52,14 @@ class TestEmptyFamilyTiers:
             text = path.read_text(encoding="utf-8")
             assert 'placeholder-note"' not in text.replace("empty-note placeholder-note", "X"), path
             assert 'class="empty-note placeholder-note"' not in text, path
-        report_css = _REPORT.read_text(encoding="utf-8")
+        report_css = read_template_text()
         assert ".placeholder-note {" not in report_css, "选择器定义应已归并"
-        assert ".placeholder-note {" not in _WHATIF.read_text(encoding="utf-8")
+        assert ".placeholder-note {" not in read_template_text("whatif_template.html")
 
     def test_empty_note_carries_placeholder_box(self) -> None:
         """单元级基底自带占位框（淡底 + 虚线），视觉一族不依赖修饰类。"""
         for path in (_REPORT, _WHATIF):
-            text = path.read_text(encoding="utf-8")
+            text = read_template_text(path.name)
             idx = text.find(".empty-note {")
             assert idx > 0, f"{path.name} 缺 .empty-note 定义"
             body = text[idx : text.find("}", idx)]
@@ -66,7 +68,7 @@ class TestEmptyFamilyTiers:
 
     def test_chart_empty_tier_kept(self) -> None:
         """图表级占位保留（chart 位内居中，不渲染空白 canvas 的观感）。"""
-        assert _REPORT.read_text(encoding="utf-8").count("chart-empty-note") >= 1
+        assert read_template_text().count("chart-empty-note") >= 1
 
 
 class TestCopyDiction:
@@ -102,14 +104,14 @@ class TestStatusObservation:
     def test_data_status_has_status_tokens(self) -> None:
         """数据源状态区引用状态语义色（ok/warn/info 三态）。"""
         text = (_TMPL / "partials/data_source_status_section.html").read_text(encoding="utf-8")
-        css = _REPORT.read_text(encoding="utf-8")
+        css = read_template_text()
         assert "data-status" in text and "data-status" in css
         for token in ("--ok", "--warn", "--info"):
             assert f"{token}:" in css, f"主模板缺状态色 token {token}"
 
     def test_empty_family_stays_neutral(self) -> None:
         """空态族定义不直接染状态色（状态着色只由状态组件承载）。"""
-        css = _REPORT.read_text(encoding="utf-8")
+        css = read_template_text()
         for sel in (".empty-section", ".empty-note", ".chart-empty-note"):
             idx = css.find(f"{sel} {{")
             body = css[idx : css.find("}", idx)]

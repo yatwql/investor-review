@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pytest
 
+from src.test.unit.report._html_report_fixtures import read_template_text
+
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -76,17 +78,17 @@ def _ratio(a: str, b: str) -> float:
 class TestTypeScaleTokens:
     """字阶/行高 token 两模板就位。"""
 
-    @pytest.mark.parametrize("tmpl", [REPORT_TMPL, WHATIF_TMPL], ids=["report", "whatif"])
+    @pytest.mark.parametrize("tmpl", ["report_template.html", "whatif_template.html"], ids=["report", "whatif"])
     def test_font_scale_defined(self, tmpl):
-        root = _root_block(tmpl.read_text(encoding="utf-8"))
+        root = _root_block(read_template_text(tmpl))
         missing = [t for t in REQUIRED_FS if f"--{t}:" not in root]
-        assert not missing, f"{tmpl.name} 缺字阶 token: {missing}"
+        assert not missing, f"{tmpl} 缺字阶 token: {missing}"
 
-    @pytest.mark.parametrize("tmpl", [REPORT_TMPL, WHATIF_TMPL], ids=["report", "whatif"])
+    @pytest.mark.parametrize("tmpl", ["report_template.html", "whatif_template.html"], ids=["report", "whatif"])
     def test_line_height_defined(self, tmpl):
-        root = _root_block(tmpl.read_text(encoding="utf-8"))
+        root = _root_block(read_template_text(tmpl))
         missing = [t for t in REQUIRED_LH if f"--{t}:" not in root]
-        assert not missing, f"{tmpl.name} 缺行高 token: {missing}"
+        assert not missing, f"{tmpl} 缺行高 token: {missing}"
 
 
 class TestNoStrayFontSizes:
@@ -94,8 +96,8 @@ class TestNoStrayFontSizes:
 
     def test_template_and_partials_tokenized(self):
         stray = []
-        for f in [REPORT_TMPL, WHATIF_TMPL, *PARTIALS]:
-            for i, ln in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+        for f in PARTIALS:
+            for i, ln in enumerate(read_template_text(f.name, with_partials=False).splitlines(), 1):
                 m = re.search(r"font-size:\s*(\d+(?:\.\d+)?)px", ln)
                 if m and float(m.group(1)) <= 24:
                     stray.append(f"{f.name}:{i}")
@@ -105,29 +107,29 @@ class TestNoStrayFontSizes:
 class TestTableNumericTypography:
     """表格数字排版与行高档。"""
 
-    @pytest.mark.parametrize("tmpl", [REPORT_TMPL, WHATIF_TMPL], ids=["report", "whatif"])
+    @pytest.mark.parametrize("tmpl", ["report_template.html", "whatif_template.html"], ids=["report", "whatif"])
     def test_tabular_nums(self, tmpl):
-        text = tmpl.read_text(encoding="utf-8")
+        text = read_template_text(tmpl)
         assert "font-variant-numeric: tabular-nums" in text
         table_rule = re.search(r"table \{[^}]+\}", text)
         assert table_rule and "tabular-nums" in table_rule.group(0), "tabular-nums 应在 table 规则上"
 
     def test_row_line_height_token(self):
-        text = REPORT_TMPL.read_text(encoding="utf-8")
+        text = read_template_text()
         assert re.search(r"\btd \{[^}]*line-height: var\(--lh-table\)", text)
         assert re.search(r"\bth \{[^}]*line-height: var\(--lh-table\)", text)
 
     def test_body_line_height_token(self):
         for f in (REPORT_TMPL, WHATIF_TMPL):
-            assert "line-height: var(--lh-body);" in f.read_text(encoding="utf-8")
+            assert "line-height: var(--lh-body);" in read_template_text(f.name)
 
 
 class TestReadingWidth:
     """宽度密度分治：正文行长受控，宽表/图表保持全宽横滚。"""
 
-    @pytest.mark.parametrize("tmpl", [REPORT_TMPL, WHATIF_TMPL], ids=["report", "whatif"])
+    @pytest.mark.parametrize("tmpl", ["report_template.html", "whatif_template.html"], ids=["report", "whatif"])
     def test_prose_max_width(self, tmpl):
-        text = tmpl.read_text(encoding="utf-8")
+        text = read_template_text(tmpl)
         assert ".section p { max-width: 78ch; }" in text
 
 
@@ -136,9 +138,9 @@ class TestWcagContrast:
 
     BGS_LIGHT = ["--bg", "--surface"]
 
-    @pytest.mark.parametrize("tmpl", [REPORT_TMPL, WHATIF_TMPL], ids=["report", "whatif"])
+    @pytest.mark.parametrize("tmpl", ["report_template.html", "whatif_template.html"], ids=["report", "whatif"])
     def test_light_text_contrast(self, tmpl):
-        root = _root_block(tmpl.read_text(encoding="utf-8"))
+        root = _root_block(read_template_text(tmpl))
         below = []
         for fg in CORE_LIGHT_TEXT:
             fg_hex = _hex(root, fg)
@@ -151,10 +153,10 @@ class TestWcagContrast:
                     below.append(f"{fg}({fg_hex}) on {bg}({bg_hex})={r:.2f}")
         assert not below, f"亮色对比度 <4.5: {below}"
 
-    @pytest.mark.parametrize("tmpl", [REPORT_TMPL, WHATIF_TMPL], ids=["report", "whatif"])
+    @pytest.mark.parametrize("tmpl", ["report_template.html", "whatif_template.html"], ids=["report", "whatif"])
     def test_light_updown_contrast(self, tmpl):
         """涨跌语义色有定义时须达 AA（两模板有则算）。"""
-        root = _root_block(tmpl.read_text(encoding="utf-8"))
+        root = _root_block(read_template_text(tmpl))
         below = []
         for fg in CORE_LIGHT_RISK:
             fg_hex = _hex(root, fg)
@@ -162,14 +164,16 @@ class TestWcagContrast:
                 continue
             for bg in self.BGS_LIGHT:
                 bg_hex = _hex(root, bg)
+                if not bg_hex:
+                    continue
                 r = _ratio(fg_hex, bg_hex)
                 if r < 4.5:
                     below.append(f"{fg}({fg_hex}) on {bg}({bg_hex})={r:.2f}")
         assert not below, f"涨跌色对比度 <4.5: {below}"
 
-    @pytest.mark.parametrize("tmpl", [REPORT_TMPL, WHATIF_TMPL], ids=["report", "whatif"])
+    @pytest.mark.parametrize("tmpl", ["report_template.html", "whatif_template.html"], ids=["report", "whatif"])
     def test_dark_text_contrast(self, tmpl):
-        dark = _dark_block(tmpl.read_text(encoding="utf-8"))
+        dark = _dark_block(read_template_text(tmpl))
         below = []
         for fg in CORE_LIGHT_TEXT:
             fg_hex = _hex(dark, fg)

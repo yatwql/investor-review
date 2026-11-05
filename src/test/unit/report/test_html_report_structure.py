@@ -127,6 +127,25 @@ class TestHtmlNavStructure(unittest.TestCase):
                         offenders.append(f"{_os.path.basename(path)}:{lineno}")
         self.assertEqual(offenders, [], f"以下位置仍把 Jinja 写进 CSS 值：{offenders}")
 
+    def test_style_blocks_contain_no_jinja(self):
+        """`<style>` 块内不得出现 `{{`/`{%`（样式是纯 CSS 资产，不是模板逻辑）。
+
+        回归：样式块里曾混入 Jinja 宏与内联表达式，CSS 解析器一律判语法错（HTML 语言服务
+        因此对每个模板报几十条误报）。现样式已抽到 `partials/_report_styles.html` /
+        `_whatif_styles.html`，块内须保持纯 CSS。
+        """
+        import glob as _glob
+        import os as _os
+
+        tmpl_dir = _os.path.normpath(_os.path.join(_os.path.dirname(__file__), "..", "..", "..", "static", "tmpl"))
+        offenders = []
+        for path in _glob.glob(_os.path.join(tmpl_dir, "**", "*.html"), recursive=True):
+            text = pathlib.Path(path).read_text(encoding="utf-8")
+            for block in re.findall(r"<style>(.*?)</style>", text, re.S):
+                if "{{" in block or "{%" in block:
+                    offenders.append(_os.path.basename(path))
+        self.assertEqual(offenders, [], f"以下模板的 <style> 块内混入了 Jinja：{sorted(set(offenders))}")
+
     def test_rendered_html_has_no_jinja_leftover_in_style(self):
         """渲染产物里 style 属性不得残留模板标记（防越界写入未渲染字符串）。"""
         for el in self.soup.select("[style]"):

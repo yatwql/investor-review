@@ -17,6 +17,8 @@ import unittest
 import pytest
 from src.test._script_loader import load_script
 
+from src.test.unit.report._html_report_fixtures import read_template_text
+
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report, pytest.mark.edge]
 
 
@@ -31,8 +33,7 @@ class TestHtmlCssStructure(unittest.TestCase):
     """HTML 模板 CSS 静态结构检查 — 不依赖渲染。"""
 
     def setUp(self):
-        with open(_TEMPLATE_PATH, "r", encoding="utf-8") as f:
-            self.tmpl = f.read()
+        self.tmpl = read_template_text()
 
     # ── .section-nav flex-wrap ─────────────────────────────────
 
@@ -91,11 +92,17 @@ class TestHtmlCssStructure(unittest.TestCase):
         for sec_tag in sections:
             self.assertIn(' id="', sec_tag, f"section div 缺少 id 属性: {sec_tag}")
 
-    def test_all_section_divs_have_order(self):
-        """每个 <div class="section"> 必须有 style="order: ..."。"""
+    def test_all_section_divs_have_no_inline_order(self):
+        """章节容器不得再带内联 `order`：顺序由 DOM + 服务端注入的 CSS 规则承载。
+
+        内联 `order` 要求把 Jinja 写进 CSS 值位置（解析器判语法错）；自定义序号由
+        `html_writer._inject_section_order_css()` 生成 `#sec-x{order:N}` 规则替换占位符，
+        渲染期断言见 `test_html_report_structure.test_custom_order_emits_css_order_rules`。
+        """
         sections = re.findall(r'<div\s+class="section"[^>]*>', self.tmpl)
+        assert sections, "应存在 section 容器"
         for sec_tag in sections:
-            self.assertIn('style="order:', sec_tag, f"section div 缺少 order 样式: {sec_tag}")
+            self.assertNotIn('style="order:', sec_tag, f"section div 不应再带内联 order: {sec_tag}")
 
     def test_section_count(self):
         """模板 + partials 应共含 19 个 .section 容器（含 style_factor、position_structure、
@@ -107,7 +114,7 @@ class TestHtmlCssStructure(unittest.TestCase):
         与 partials/schedule_replay_section.html（经 include 引入）；事件窗对照为
         新闻章内区块（partial 无独立 .section 容器），不计入本统计。
         """
-        sections = re.findall(r'<div\s+class="section"[^>]*>', self.tmpl)
+        sections = re.findall(r'<div\s+class="section"[^>]*>', read_template_text(with_partials=False))
         partials_dir = os.path.join(os.path.dirname(_TEMPLATE_PATH), "partials")
         extra = 0
         if os.path.isdir(partials_dir):
@@ -152,14 +159,13 @@ class TestHtmlRegressionChecks(unittest.TestCase):
     """回归检查 — 防止同一问题再次出现。"""
 
     def setUp(self):
-        with open(_TEMPLATE_PATH, "r", encoding="utf-8") as f:
-            self.tmpl = f.read()
+        self.tmpl = read_template_text()
 
     def test_no_lonely_anchor_div(self):
         """不存在 <div id="sec-xxx">（不含 class="section"）的空锚点。"""
         lonely = re.findall(
             r'<div\s+id="sec-\w+"[^>]*>(?!\s*<div\s+class="section)',
-            self.tmpl,
+            read_template_text(with_partials=False),
         )
         lonely_clean = [d for d in lonely if 'class="section"' not in d]
         self.assertEqual(
@@ -194,8 +200,7 @@ class TestHtmlBackToTopStatic(unittest.TestCase):
     """章节底部"回到顶部"链接静态检查 — CSS / 宏 / 打印样式。"""
 
     def setUp(self):
-        with open(_TEMPLATE_PATH, "r", encoding="utf-8") as f:
-            self.tmpl = f.read()
+        self.tmpl = read_template_text()
 
     def test_report_top_anchor_in_header(self):
         """报告头部 div 应含 id="report-top" 锚点。"""
@@ -221,9 +226,11 @@ class TestHtmlBackToTopStatic(unittest.TestCase):
 
     def test_back_to_top_macro_defined_and_called(self):
         """render_back_to_top 宏已定义，且调用次数 = .section 容器数。"""
-        self.assertIn("{% macro render_back_to_top() %}", self.tmpl, "应定义 render_back_to_top 宏")
-        calls = len(re.findall(r"\{\{\s*render_back_to_top\(\)\s*\}\}", self.tmpl))
-        sections = len(re.findall(r'<div\s+class="section"[^>]*>', self.tmpl))
+        self.assertIn(
+            "{% macro render_back_to_top() %}", read_template_text(with_partials=False), "应定义 render_back_to_top 宏"
+        )
+        calls = len(re.findall(r"\{\{\s*render_back_to_top\(\)\s*\}\}", read_template_text(with_partials=False)))
+        sections = len(re.findall(r'<div\s+class="section"[^>]*>', read_template_text(with_partials=False)))
         self.assertEqual(
             calls, sections, f"宏调用 {calls} 次应与 .section 容器 {sections} 个一致（每个章节底部各 1 个链接）"
         )
@@ -233,8 +240,7 @@ class TestHtmlTocStatic(unittest.TestCase):
     """左侧目录 TOC 静态检查 — CSS 结构 / 折叠状态 / 响应式 / 打印。"""
 
     def setUp(self):
-        with open(_TEMPLATE_PATH, "r", encoding="utf-8") as f:
-            self.tmpl = f.read()
+        self.tmpl = read_template_text()
 
     def test_toc_sidebar_fixed_position(self):
         """.toc-sidebar 应为 fixed 定位（独立于页面滚动）。"""
@@ -305,8 +311,7 @@ class TestHtmlThemeStatic(unittest.TestCase):
     """暗色模式（主题切换）原始模板文本静态断言 — 不依赖渲染。"""
 
     def setUp(self):
-        with open(_TEMPLATE_PATH, "r", encoding="utf-8") as f:
-            self.tmpl = f.read()
+        self.tmpl = read_template_text()
 
     def test_theme_js_script_tag(self):
         """模板引用 theme.js（defer，在 toc.js 之后）。"""
