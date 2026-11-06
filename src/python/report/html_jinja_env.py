@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from typing import Any
 
 from jinja2 import BytecodeCache, Environment, FileSystemLoader, pass_context
@@ -14,6 +15,9 @@ from src.python.core.constants import PROJECT_ROOT
 from src.python.report.market_value import PRICE_TYPE_OFFICIAL_NAV_T1
 
 logger = logging.getLogger("invest")
+
+#: 模板字节码缓存保留天数（改模板会换键，旧键靠此回收，防只增不减）
+BYTECODE_CACHE_TTL_DAYS = 14
 
 # ── 路径 & Jinja2 环境 ─────────────────────────────────────
 
@@ -40,10 +44,34 @@ class _JinjaBytecodeCache(BytecodeCache):
         super().__init__()
         self._subdir = subdir
 
-    def _path(self, bucket: Any) -> str:
+    def _dir(self) -> str:
         from src.python.cache import get_cache_dir
 
-        return os.path.join(get_cache_dir(), self._subdir, f"{bucket.key}.cache")
+        return os.path.join(get_cache_dir(), self._subdir)
+
+    def _path(self, bucket: Any) -> str:
+        return os.path.join(self._dir(), f"{bucket.key}.cache")
+
+    @staticmethod
+    def _prune_stale(directory: str) -> None:
+        """删除超过保留期的旧条目（改模板会换键，旧键成只增不减的垃圾）。
+
+        保留期从写入时按日判：条目量级为「模板数 × 改几次」，扫描成本可忽，
+        且不依赖缓存引擎的 `_ts` 包封（字节码是二进制，不走 JSON 壳）。
+        """
+        cutoff = time.time() - BYTECODE_CACHE_TTL_DAYS * 86400
+        try:
+            with os.scandir(directory) as entries:
+                for entry in entries:
+                    if not entry.name.endswith(".cache"):
+                        continue
+                    try:
+                        if entry.stat().st_mtime < cutoff:
+                            os.remove(entry.path)
+                    except OSError:
+                        continue
+        except OSError:
+            return
 
     def load_bytecode(self, bucket: Any) -> None:
         try:
@@ -55,15 +83,18 @@ class _JinjaBytecodeCache(BytecodeCache):
             logger.debug("Jinja 字节码缓存读取失败（回退编译）: %s", e)
 
     def dump_bytecode(self, bucket: Any) -> None:
-        path = self._path(bucket)
+        directory = self._dir()
+        path = os.path.join(directory, f"{bucket.key}.cache")
         try:
-            os.makedirs(os.path.dirname(path), exist_ok=True)
+            os.makedirs(directory, exist_ok=True)
             tmp = f"{path}.tmp"
             with open(tmp, "wb") as f:
                 f.write(bucket.bytecode_to_string())
             os.replace(tmp, path)
         except OSError as e:  # 写不进缓存最多是下次再编译，不得影响报告产出
             logger.debug("Jinja 字节码缓存写入失败（忽略）: %s", e)
+            return
+        self._prune_stale(directory)
 
 
 _ENV = Environment(

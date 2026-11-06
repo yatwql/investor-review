@@ -104,3 +104,26 @@ def test_second_environment_skips_compilation(tmp_path, monkeypatch):
     assert first_calls >= 1, "首次加载必须编译（否则缓存无从产生）"
     assert second_calls == 0, f"命中字节码缓存时不得再编译（实测 0.65s → 0.03s）: {second_calls} 次"
     assert first_path == second_path
+
+
+def test_stale_entries_pruned_on_write(tmp_path, monkeypatch):
+    """改模板会换缓存键：旧键须按保留期回收，否则只增不减。"""
+    import os
+    import time as _time
+
+    import src.python.cache._paths as cache_paths
+    from src.python.report.html_jinja_env import BYTECODE_CACHE_TTL_DAYS
+
+    monkeypatch.setattr(cache_paths, "_CACHE_DIR", str(tmp_path / "cache-root"))
+    cache = _JinjaBytecodeCache()
+    cache.dump_bytecode(_FakeBucket("stale-key", b"old"))
+
+    directory = tmp_path / "cache-root" / "jinja"
+    stale = directory / "stale-key.cache"
+    aged = _time.time() - (BYTECODE_CACHE_TTL_DAYS + 1) * 86400
+    os.utime(stale, (aged, aged))
+
+    cache.dump_bytecode(_FakeBucket("fresh-key", b"new"))
+
+    assert not stale.exists(), "超过保留期的旧字节码须被回收"
+    assert (directory / "fresh-key.cache").is_file()
