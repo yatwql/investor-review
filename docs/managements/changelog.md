@@ -26,6 +26,12 @@
   实测 0.98MB 产物**落盘仅 0.003s**，此前 6.15s 的「页面写入」实为模板渲染——告警方向原先指错了磁盘。
 - **Jinja 模板字节码缓存**（rf-1059）：HTML 生成阶段的耗时实为**模板编译**（18 个模板 0.65s ≈ 97%，渲染仅 ~0.02s、落盘 0.003s），接入字节码缓存到 `<缓存根>/jinja/` 后**冷 0.654s → 热 0.027s（≈24×）**；键含模板源码校验和（改模板自动失效），缓存目录按需解析以尊重测试隔离与 `INVEST_CACHE_DIR`。
 
+### 清理
+
+- **48h 变更技术债清理**（rf-1060）：删 `_first_provider_name` 死函数、`_render_template(self_review_block=...)`
+  被架空的死形参、`write_html_report(force_llm=...)` 无调用方的死参数；HTML 阶段收口（总值记录 + 慢段告警）
+  抽成 `html_writer.close_html_generation_stage` 由 full/both 共用——此前 both 路径完全没有慢段告警。
+
 ## 归档
 
 - [`archived_changelog.0.17.x.md`](../archive/v0.17.x/archived_changelog.0.17.x.md) — v0.17.0 ~ v0.17.3（2026-11-04 ~ 2026-11-06）

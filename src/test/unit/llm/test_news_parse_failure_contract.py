@@ -59,8 +59,8 @@ def test_parse_failure_batch_is_failed_not_cached(monkeypatch):
             {"cache_enabled_news_correlation": False},
             "news_correlation",
             batch_preparer=lambda: (items, "fp"),
-            per_item_cache_fn=lambda idx, item, fp: f"k{idx}",
-            batch_prompt_fn=lambda batch, fp: "prompt",
+            per_item_cache_fn=lambda idx, item, _fp: f"k{idx}",
+            batch_prompt_fn=lambda batch, _fp: "prompt",
             response_parser=lambda batch, result: None,
         )
 

@@ -29,14 +29,6 @@ from src.python.config import get_llm_setting_default
 logger = logging.getLogger("invest")
 
 
-def _first_provider_name(llm_config: dict) -> str:
-    """记录用 provider 名：取 provider 链首个条目的 name（无链即 "unknown"）。"""
-    chain = llm_config.get("_provider_list") or []
-    if chain and isinstance(chain[0], dict):
-        return str(chain[0].get("name") or "unknown")
-    return "unknown"
-
-
 _MN = get_llm_module_name
 
 

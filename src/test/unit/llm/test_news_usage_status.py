@@ -129,7 +129,7 @@ def _run_batch_mode_with(returned):
             "news_correlation",
             batch_preparer=lambda: (items, "fp"),
             per_item_cache_fn=None,
-            batch_prompt_fn=lambda batch, fp: "prompt",
+            batch_prompt_fn=lambda batch, _fp: "prompt",
             response_parser=lambda batch, result: [{"t": 1} for _ in batch],
         )
     return usage

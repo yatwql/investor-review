@@ -179,8 +179,7 @@ def _generate_full_html_report(
             与 Excel 侧同源，由编排层 `_generate_report_full` 注入——须在写 HTML 之前完成
             取数，否则本类别既不出现在矩阵、说明表也记「未使用」（与 Excel 自相矛盾）。
     """
-    from src.python.core.perf import warn_slow_write
-    from src.python.report.html_writer import write_html_report
+    from src.python.report.html_writer import close_html_generation_stage, write_html_report
     from src.python.report.run_integrity import current_perf
 
     _perf = current_perf()
@@ -262,27 +261,5 @@ def _generate_full_html_report(
         return False
     finally:
         if _perf is not None:
-            if _html_recorder is not None:
-                # 这一步的细分（模板渲染/资产内嵌/匿名化/落盘）由 write_html_report
-                # 逐段记入；慢告警按段分别报——实测 0.98MB 产物落盘只占 0.003s，
-                # 偏慢的几乎总是模板渲染（2~21s），合并报一个总值会把排查引向磁盘。
-                page_write = time.perf_counter() - _t0
-                _html_recorder.record("页面写入", page_write)  # 保留总值：跨版本 perf 历史可比
-                _spans: dict = {}
-                _spans_fn = getattr(_html_recorder, "spans", None)
-                if callable(_spans_fn):
-                    _raw = _spans_fn()
-                    if isinstance(_raw, dict):
-                        _spans = _raw
-                _slow = _spans.get("落盘")
-                warn_slow_write("HTML 页面写入", page_write if _slow is None else _slow, html_path)
-                _render = _spans.get("模板渲染")
-                if _render is not None:
-                    warn_slow_write(
-                        "HTML 模板渲染",
-                        _render,
-                        html_path,
-                        what="渲染",
-                        hint="排查模板内逐行循环/过滤器与上下文体量（非磁盘）",
-                    )
+            close_html_generation_stage(_html_recorder, time.perf_counter() - _t0, html_path)
             _perf.stop()

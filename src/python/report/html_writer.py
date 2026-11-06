@@ -84,8 +84,6 @@ def _render_template(
     trading_day: str,
     # 匿名化：{真码: 显示掩码}，供模板 | anon_code 在代码列渲染点结构化折叠（None/空 = 不掩）
     anon_code_map: dict | None = None,
-    # 生成后自检区块 HTML（与其余 LLM 内容同层传入）
-    self_review_block: str | None = None,
     total_mv: float,
     total_cost: float,
     total_profit: float,
@@ -327,7 +325,6 @@ def write_html_report(
     news_top_count: int = 100,
     enable_llm: bool = False,
     include_news: bool = True,
-    force_llm: bool = False,
     llm_content: tuple[str | None, str | None, str | None, str | None] | None = None,
     details: list | None = None,
     news_data: list | None = None,
@@ -650,7 +647,6 @@ def write_html_report(
         expert_review_content=expert_review_content,
         health_check_content=health_check_content,
         penetration_deep_content=penetration_deep_content,
-        self_review_block=_self_review_block(),
         _llm_session_usage=_llm_session_usage,
         _llm_module_info=llm_module_info,
         llm_endpoint=llm_endpoint,
@@ -720,6 +716,45 @@ def write_html_report(
     _path = _save_html_report(html or "", output_dir, total_mv, total_profit, prog)
     _mark("落盘")
     return _path
+
+
+def close_html_generation_stage(
+    recorder: Any | None,
+    elapsed: float,
+    html_path: str | None,
+) -> None:
+    """HTML 生成阶段的收口：记总值 + 把慢段告警分流到正确的排查方向。
+
+    两条生成路径（full / both）共用这一份实现：此前各自写一份，both 侧漏了渲染与
+    落盘的慢告警，表现为「both 跑得慢却没有任何提示」；合并后口径不会再漂。
+
+    Args:
+        recorder: 阶段细分记录器（``core.perf.PhaseBreakdownRecorder``）；None 时直接返回。
+        elapsed: 整段耗时（秒）。
+        html_path: 产物路径（告警里报产物大小）；生成失败时为 None。
+    """
+    if recorder is None:
+        return
+    from src.python.core.perf import warn_slow_write
+
+    recorder.record("页面写入", elapsed)  # 保留总值：跨版本 perf 历史可比
+    spans: dict = {}
+    _spans_fn = getattr(recorder, "spans", None)
+    if callable(_spans_fn):
+        _raw = _spans_fn()
+        if isinstance(_raw, dict):
+            spans = _raw
+    _disk = spans.get("落盘")
+    warn_slow_write("HTML 页面写入", elapsed if _disk is None else _disk, html_path)
+    _render = spans.get("模板渲染")
+    if _render is not None:
+        warn_slow_write(
+            "HTML 模板渲染",
+            _render,
+            html_path,
+            what="渲染",
+            hint="排查模板内逐行循环/过滤器与上下文体量（非磁盘）",
+        )
 
 
 # ── 桥接 import：外部子模块 ─────────────────────────────────

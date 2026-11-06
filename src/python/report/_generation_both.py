@@ -78,7 +78,7 @@ def _generate_report_both(
     from src.python.llm.depth_profile import effective_news_limit, resolve_depth_profile
     from src.python.report._snapshot import capture_snapshot, fetch_history_data, latest_quotes_from_detail_rows
     from src.python.report.excel_generator import generate_excel_report
-    from src.python.report.html_writer import write_html_report
+    from src.python.report.html_writer import close_html_generation_stage, write_html_report
     from src.python.report.orchestrator import ReportResult
 
     from src.python.report._run_scope import finish_report_run, start_report_run
@@ -322,6 +322,7 @@ def _generate_report_both(
     perf.start("HTML 生成")
     _html_rec = perf.recorder("HTML 生成")
     _phase_t0 = time.perf_counter()
+    _html_path: str | None = None
     try:
         chart_datasets = _build_chart_datasets_for_report(
             history_data=history_data,
@@ -377,11 +378,14 @@ def _generate_report_both(
             stage_recorder=_html_rec,
         )
         reporter.ok(f"HTML 报告已生成: {path}")
+        _html_path = path
         result.html_ok = True
     except Exception:
         reporter.add_error("HTML 报告生成失败（详情请查看日志文件 logs/app.log）")
         logger.exception("HTML 报告写入失败")
         result.errors.append("HTML 报告生成失败")
+    # 收口与慢段告警与 full 路径共用同一份实现（此前 both 侧完全无告警）
+    close_html_generation_stage(_html_rec, time.perf_counter() - _phase_t0, _html_path)
     perf.stop()
 
     # ── 5. Excel 报告 ──
