@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -319,11 +320,16 @@ def _generate_report_both(
     _news_label = "含新闻" if _enable_news else "无新闻"
     reporter.info(f"正在生成 HTML 报告（{_news_label}）...")
     perf.start("HTML 生成")
+    _html_rec = perf.recorder("HTML 生成")
+    _phase_t0 = time.perf_counter()
     try:
         chart_datasets = _build_chart_datasets_for_report(
             history_data=history_data,
             details=details,
         )
+        if _html_rec is not None:
+            # 图表数据装配与后续渲染/落盘分开记：整段偏慢时先分清是哪一段
+            _html_rec.record("图表数据装配", time.perf_counter() - _phase_t0)
         # 成本流水数据（fund_flow_data）：复用 excel_market_data 组装逻辑，
         # 开关关闭返回 None（HTML 模板保持既有输出）。
         from src.python.report.excel_market_data import _build_flow_data
@@ -368,6 +374,7 @@ def _generate_report_both(
             schedule_replay_data=(pipeline_data or {}).get("schedule_replay_data"),
             risk_adjusted_excess_data=(pipeline_data or {}).get("risk_adjusted_excess_data"),
             summary_highlights_data=(pipeline_data or {}).get("summary_highlights_data"),
+            stage_recorder=_html_rec,
         )
         reporter.ok(f"HTML 报告已生成: {path}")
         result.html_ok = True
