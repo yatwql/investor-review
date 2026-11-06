@@ -24,10 +24,13 @@
 - **慢段告警按段分流**（rf-1058）：`warn_slow_write` 支持自定义事件名与排查提示，渲染慢报「HTML 模板渲染 渲染
   偏慢 → 排查模板内逐行循环/过滤器」，落盘慢才报「排查磁盘/挂载与 fsync」；full/both 两条路径均接线。
   实测 0.98MB 产物**落盘仅 0.003s**，此前 6.15s 的「页面写入」实为模板渲染——告警方向原先指错了磁盘。
-- **Jinja 模板字节码缓存**（rf-1059）：HTML 生成阶段的耗时实为**模板编译**（18 个模板 0.65s ≈ 97%，渲染仅 ~0.02s、落盘 0.003s），接入字节码缓存到 `<缓存根>/jinja/` 后**冷 0.654s → 热 0.027s（≈24×）**；键含模板源码校验和（改模板自动失效），缓存目录按需解析以尊重测试隔离与 `INVEST_CACHE_DIR`。
+- **Jinja 模板字节码缓存**（rf-1059）：HTML 生成阶段的耗时实为**模板编译**（18 个模板 0.65s ≈ 97%，渲染仅 ~0.02s、落盘 0.003s），接入字节码缓存到 `<缓存根>/jinja/` 后**冷 0.654s → 热 0.027s（≈24×）**；键含模板源码校验和（改模板自动失效），缓存目录按需解析以尊重测试隔离与 `INVEST_CACHE_DIR`；旧键按 `BYTECODE_CACHE_TTL_DAYS=14` 在写入时回收（改模板换键后不再只增不减）。
 
 ### 清理
 
+- **文档与架构约束同步**（rf-1060）：`technical.md` 把 `data/cache/jinja/` 字节码缓存登记为「缓存统一管理」架构约束的
+  唯一例外（二进制非 KV、自管保留期）；`requirements` R-PERF-09 / `technical` / `scripts-reference` 的阶段细分名单补齐
+  HTML 生成四步；`developer-guide` 补写盘告警按段分流的判读口径；`data-and-backup` 补 `data/cache/jinja` 删除影响。
 - **48h 变更技术债清理**（rf-1060）：删 `_first_provider_name` 死函数、`_render_template(self_review_block=...)`
   被架空的死形参、`write_html_report(force_llm=...)` 无调用方的死参数；HTML 阶段收口（总值记录 + 慢段告警）
   抽成 `html_writer.close_html_generation_stage` 由 full/both 共用——此前 both 路径完全没有慢段告警。
