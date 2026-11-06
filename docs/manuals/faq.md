@@ -844,6 +844,21 @@ A: 可以。项目路径包含中文不会影响程序正常运行。唯一需�
 
 A: 不推荐。缓存文件（`data/cache/`）和配置文件（`data/config/`）共享同一份磁盘文件，多实例并发读写可能导致数据竞争或缓存损坏。如确需并行操作，建议复制整个项目目录到不同路径，各自独立运行。
 
+**Q: Windows PowerShell 里 `cat` 一个 `.md` 文档显示乱码，但记事本和 Linux 下都正常？**
+
+A: 文档本身没坏——`.md` 是 **UTF-8 无 BOM**（`.editorconfig` 规定全仓文本默认 `utf-8`，仅 `.ps1` 与 `requirements.txt` 例外带 BOM）。`powershell.exe`（5.1）的 `cat` 就是 `Get-Content`，没有 BOM 时按 ANSI 代码页（中文 Windows 为 GBK）解码 UTF-8 中文，于是乱码；记事本会嗅探编码、Linux `cat` 只透传字节给 UTF-8 终端，所以都正常。
+
+三种解法（任选，都不动文件）：
+
+| 方式 | 命令 | 说明 |
+|:-----|:-----|:-----|
+| 换 PowerShell 7 | `pwsh` 后 `cat .\docs\managements\plan.md` | `pwsh` 默认 UTF-8，最省事 |
+| PS 5.1 显式指定 | `Get-Content -Encoding UTF8 .\docs\managements\plan.md` | 终端仍乱码时再执行 `chcp 65001` |
+| 写进 profile | `$PSDefaultParameterValues['Get-Content:Encoding']='UTF8'; [Console]::OutputEncoding=[Text.Encoding]::UTF8` | 打开 PowerShell 即生效 |
+
+不建议给 `.md` 加 BOM 来"修"：那会污染 git diff 并让文档工具误判，且与全仓 UTF-8 无 BOM 的约定冲突。
+
+
 ---
 
 ## 隐私与安全
