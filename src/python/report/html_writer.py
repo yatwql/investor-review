@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import Any
 
 import logging
+import time as _time
 from datetime import datetime
 
 from src.python.cache import get_cache_hit_rate
@@ -377,6 +378,7 @@ def write_html_report(
     | None = None,  # data 层：调仓纪律回放契约（实验开关 `rebalance_schedule_replay`，None=键缺席→整章隐藏）
     summary_highlights_data: dict
     | None = None,  # data 层：首页执行摘要卡契约（报告章节与增强开关 `summary_highlights`，None=键缺席→首屏块隐藏）
+    stage_recorder: Any | None = None,
 ) -> str:
     """生成 HTML 分析报告并保存到文件。
 
@@ -400,7 +402,21 @@ def write_html_report(
 
     Returns:
         最新版报告的绝对路径
+
+    ``stage_recorder`` 为阶段细分记录器（``core.perf.PhaseBreakdownRecorder``）：
+    传入时把本次「渲染→内嵌→匿名化→落盘」四步分别记入父阶段细分。此前只记一个
+    「页面写入」总值，慢的时候无法分辨是渲染、资产内嵌、匿名化还是真落盘 IO——
+    实测同一份 0.98MB 产物在 0.02s / 6.15s / 21.0s 三档，凭总值无法定位。
     """
+    _step_t0 = _time.perf_counter()
+
+    def _mark(step: str) -> None:
+        """记一步细分耗时并重置起点（无记录器时只重置起点，零额外开支）。"""
+        nonlocal _step_t0
+        if stage_recorder is not None:
+            stage_recorder.record(step, _time.perf_counter() - _step_t0)
+        _step_t0 = _time.perf_counter()
+
     prog = progress if progress is not None else SilentProgressReporter()
     now_str, today_str, trading_day = _time_strings()
 
@@ -674,10 +690,12 @@ def write_html_report(
         schedule_replay_view=schedule_replay_view,
         summary_highlights_data=summary_highlights_data,
     )
+    _mark("模板渲染")
 
     # 内嵌 Chart.js 资产 → HTML 单文件自包含（下载/移动/单发移动端浏览
     # 不再依赖同目录松散 JS；不产出松散副本）
     html = _inline_js_assets(html)
+    _mark("资产内嵌")
 
     # 产物文本清扫（匿名化）：字段层未覆盖的派生面（分类/业绩/管理人等从
     # holdings 直取名称的区块）在最终 HTML 文本统一真名→代号；明细区块已
@@ -697,8 +715,11 @@ def write_html_report(
     if _anon_mode != "off":
         html = mask_display_text(html, build_report_alias_map(holdings, _anon_mode, include_codes=False))
         html = mask_code_text(html, _code_display_map)
+    _mark("匿名化")
 
-    return _save_html_report(html or "", output_dir, total_mv, total_profit, prog)
+    _path = _save_html_report(html or "", output_dir, total_mv, total_profit, prog)
+    _mark("落盘")
+    return _path
 
 
 # ── 桥接 import：外部子模块 ─────────────────────────────────

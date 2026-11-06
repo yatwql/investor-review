@@ -205,6 +205,7 @@ def _generate_full_html_report(
             _t0 = time.perf_counter()
         html_path = write_html_report(
             holdings,
+            stage_recorder=_html_recorder,
             output_dir=output_dir or prep["output_dir"],
             news_top_count=prep["news_top_count"],
             include_news=news_ok,
@@ -262,7 +263,15 @@ def _generate_full_html_report(
     finally:
         if _perf is not None:
             if _html_recorder is not None:
+                # 这一步的细分（模板渲染/资产内嵌/匿名化/落盘）由 write_html_report
+                # 逐段记入；慢写告警只针对真落盘那段，其余段慢属渲染开销，调点不同。
                 page_write = time.perf_counter() - _t0
-                _html_recorder.record("页面写入", page_write)
-                warn_slow_write("HTML 页面写入", page_write, html_path)
+                _html_recorder.record("页面写入", page_write)  # 保留总值：跨版本 perf 历史可比
+                _spans_fn = getattr(_html_recorder, "spans", None)
+                _slow: float | None = None
+                if callable(_spans_fn):
+                    _spans = _spans_fn()
+                    if isinstance(_spans, dict):
+                        _slow = _spans.get("落盘")
+                warn_slow_write("HTML 页面写入", page_write if _slow is None else _slow, html_path)
             _perf.stop()

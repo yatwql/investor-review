@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.4-dev
-> **编号源**：`rf-next = 1055`（新增问题提出后更新为 +1；已用最大 rf-1047，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1059`（新增问题提出后更新为 +1；已用最大 rf-1058，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -39,7 +39,7 @@
 | `src/test/conftest.py` 1155 行（测试登记线 900） | fixture 族按域下沉（行情/LLM/网络/持久化各一模块），conftest 只留 autouse 装配与 marker 注册 |
 | `src/python/llm/generators_orchestrator.py` 905 行（主程序登记线 700） | 生成编排与共享钩子按模块族再分；预检键/指纹段可下沉 `generators_orchestrator_cache.py` |
 | `src/python/report/decision_basis.py` 962 行（主程序登记线 700，红线 1000） | 六段块装配（信号/可信度/风险预算/纪律/结算+按视界表现/约束）仍在单模块；拆分方向：结算批表与按视界表现聚合（`build_settlement_summary`＋`build_performance`＋`_mean`/`_tone_*` 色彩助手）可整体下沉 `decision_basis_settlement.py`（只读账本、无跨段依赖，预计 −180 行）；信号清单与区分度登记（`_build_signal_rows`＋`BACKTEST_CONCLUSIONS`）可再下沉一簇 |
-| `src/python/llm/skeleton.py` 833 行（主程序登记线 700） | 模板数据与渲染逻辑可下沉 `llm/skeleton_*`（骨架模板 / 占位渲染 / 缓存归因 / 回写四簇并存） |
+| `src/python/llm/skeleton.py` 830 行（主程序登记线 700） | 模板数据与渲染逻辑可下沉 `llm/skeleton_*`（骨架模板 / 占位渲染 / 缓存归因 / 回写四簇并存） |
 | `src/python/cli/_handlers.py` 852 行（主程序登记线 700） | 命令处理器按渠道分文件（generate/config/data 三簇），保持入口薄壳 |
 | `src/python/tui/handlers_holdings.py` 855 行（红线 1000） | 面板流程与输入采集高度耦合（共用 `_Session`），拆分收益低于回归面；再涨 ~150 行则按「面板流程 / 输入采集」两段拆，并把 `_market_data` 的会话内记忆一并做进去 |
 | `src/python/fetcher/financial_report.py` 729 行（主程序登记线 700） | 刚过线：再涨则按「索引 / 正文 / 全文定位」三阶下沉（负缓存样板统一在 `cache/_negative.py`） |
@@ -48,9 +48,16 @@
 
 ## 已解决问题
 
-### 开发期已修复（0.17.3-dev）
+### 开发期已修复（0.17.4-dev）
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
+
+| # | 问题 | 修复方向 |
+| --- | --- | --- |
+| **rf-1055** | 新闻关联批量「响应不可解析」被当成功：解析器给整批填 `("低","中性","")` 占位 → 批次计 ok、占位写进逐条缓存、报告把 20/30 条占位算成「含 LLM 分析」，连带事件窗极性缺失（91% 不可判） | 解析器改为返回 `None`（LLM 部分作答仍填默认值）；批量骨架按失败收口：不写结果、不写缓存、计 `failed_batches`、已耗 token 照常计费 |
+| **rf-1056** | 批量用量行恒为「输入 0 + 输出 0」：把 provider 条目名（`deepseek-main`）当协议名传给 `_log_token_usage`，claude 形 usage 落进 openai 分支读 `prompt_tokens` | 归一化协议改按 usage 形状判定（含 `input_tokens` 即 claude），与逐条调用同一口径 |
+| **rf-1057** | 逐模块费用丢精度：`estimate_cost` 展示串（≥0.01 只到 3 位小数）回读成 float，0.0646 记成 0.0650，用量页签逐模块合计 ¥0.1325 ≠ 表头 ¥0.1320 | 逐模块费用改用 `compute_cost_value` 数值口径（news 批量与标准模块两处） |
+| **rf-1058** | 「页面写入」段名实不符：实际含模板渲染/JS 资产内嵌/匿名化/落盘四件事，实测同尺寸产物 0.02s / 6.15s / 21.0s 三档，凭总值无法归因 | `write_html_report` 增 `stage_recorder` 逐段记细分（并保留总值供跨版本比对），慢写告警只针对「落盘」段 |
 
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-06）

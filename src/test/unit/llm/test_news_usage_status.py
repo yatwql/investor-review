@@ -160,3 +160,50 @@ def test_finalize_marks_all_batches_failed_as_no_production():
 
     assert token_usage == {}
     assert "news_correlation" not in _session_usage["per_module"]
+
+
+# ── 批量用量行与逐模块费用口径（回归：用量行恒 0 token、模块费用丢精度）──
+
+
+def test_batch_usage_line_reports_real_tokens(caplog):
+    """批量用量行须按 usage 形状归一。
+
+    旧实现把 provider 条目名（如 deepseek-main）当协议名传进 ``_log_token_usage``，
+    落到 openai 分支读 ``prompt_tokens``（claude 形 usage 无此键）→ 行恒为
+    「输入 0 + 输出 0 = 0 tokens」，与真实计费自相矛盾。
+    """
+    import logging
+
+    with caplog.at_level(logging.INFO, logger="invest"):
+        _finalize({"input": 1200, "output": 300, "cache_hit": 200}, analysis_count=5)
+
+    line = next(r.getMessage() for r in caplog.records if "（批处理）" in r.getMessage())
+    assert "输入 1,200" in line, f"用量行须显示真实输入量（含缓存命中口径）: {line}"
+    assert "输出 300" in line, f"用量行须显示真实输出量: {line}"
+    assert "缓存命中 200" in line, f"用量行须显示真实缓存命中量: {line}"
+
+
+@pytest.mark.usefixtures("offline_external_sources")
+def test_module_cost_uses_numeric_precision():
+    """逐模块费用取数值口径，不得回读 3 位小数的展示串。
+
+    旧实现把 ``estimate_cost`` 的格式化串（>=0.01 时只到 3 位小数）解析回 float，
+    0.064563 被记成 0.065，逐模块合计与页签总计不等。
+    """
+    from src.python.llm.pricing import compute_cost_value
+
+    _finalize_news_token_usage(
+        {"input": 6907, "output": 14508, "cache_hit": 384},
+        {"_provider_list": [{"name": "deepseek-main"}]},
+        "deepseek-v4-flash",
+        top_news=[{"title": "t"}] * 3,
+        cached_count=0,
+        news_data=[{"title": "t"}] * 3,
+        analysis_count=5,
+    )
+
+    expected = compute_cost_value("deepseek-v4-flash", 6907, 14508, cache_hit_input_tokens=384)
+    assert expected is not None
+    recorded = sum(_session_usage["per_module"]["news_correlation"]["costs"].values())
+    assert recorded == pytest.approx(expected, abs=1e-12), "逐模块费用须与数值口径一致（不得经展示串回归）"
+    assert recorded != pytest.approx(round(expected, 3), abs=1e-12), "展示串回读会把费用截到 3 位小数"

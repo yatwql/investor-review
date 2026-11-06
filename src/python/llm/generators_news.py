@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 from src.python.llm._api_responses import _log_token_usage
 from src.python.llm.fingerprint import compute_fingerprint
-from src.python.llm.pricing import estimate_cost
+from src.python.llm.pricing import compute_cost_value
 from src.python.llm.prompts import (
     _SYSTEM_NEWS_CORRELATION,
     CACHE_PREFIX_LLM,
@@ -54,7 +54,7 @@ __all__ = [
 def _apply_llm_news_correlation(
     news_batch: list[dict],
     llm_response: str,
-) -> list[tuple[str, str, str]]:
+) -> list[tuple[str, str, str]] | None:
     """解析 LLM JSON 响应，返回批次内每条新闻的 (relevance, sentiment, analysis) 元组。
 
     Args:
@@ -63,8 +63,11 @@ def _apply_llm_news_correlation(
 
     Returns:
         (relevance, sentiment, analysis) 元组列表，长度与 news_batch 一致。
-        LLM 返回结果少于请求数时，缺失项用默认值 ("低", "中性", "") 填充。
-        JSON 解析失败时，所有项返回默认值。
+        LLM 返回结果少于请求数时，缺失项用默认值 ("低", "中性", "") 填充（LLM
+        部分作答属正常产出）。
+        响应整体不可解析（非 JSON / 非数组）时返回 ``None``——整批按失败收口：
+        占位项既不计入「含 LLM 分析」条数，也不写进逐条缓存（占位一旦入缓存，
+        后续轮次会把「解析失败」当成命中结果长期复用）。
     """
     import json
 
@@ -88,12 +91,12 @@ def _apply_llm_news_correlation(
     try:
         analyses = json.loads(text)
     except json.JSONDecodeError as e:
-        logger.warning("%s JSON 解析失败: %s", _MN("news_correlation"), e)
-        return [("低", "中性", "")] * batch_size
+        logger.warning("%s JSON 解析失败（本批 %d 条按失败收口）: %s", _MN("news_correlation"), batch_size, e)
+        return None
 
     if not isinstance(analyses, list):
-        logger.warning("%s 返回格式异常: 非数组", _MN("news_correlation"))
-        return [("低", "中性", "")] * batch_size
+        logger.warning("%s 返回格式异常（非数组，本批 %d 条按失败收口）", _MN("news_correlation"), batch_size)
+        return None
 
     # 建立 idx → (relevance, sentiment, analysis) 映射
     result_map: dict[int, tuple[str, str, str]] = {}
@@ -258,24 +261,24 @@ def _finalize_news_token_usage(
     # 状态列凭「有记录」显示「成功」，与汇总的「调用次数 0」自相矛盾。
     if llm_config and (total_in > 0 or total_out > 0 or analysis_count > 0):
         if total_in > 0 or total_out > 0:
+            # 合成 usage 还原未命中口径：input_tokens=未命中 + cache_read=命中。
+            # 归一化协议须按「usage 形状」判定，不能传 provider 条目名（如
+            # deepseek-main）：名字不是协议名会落进 openai 分支读 prompt_tokens，
+            # 而 claude 协议形 usage 没有该键 → 用量行恒显示 0 token。
+            _synthetic_usage = {
+                "input_tokens": total_in - total_hit,
+                "output_tokens": total_out,
+                "cache_read_input_tokens": total_hit,
+            }
             _log_token_usage(
-                _first_provider_name(llm_config),
-                {
-                    # 合成 usage 还原未命中口径：input_tokens=未命中 + cache_read=命中
-                    "input_tokens": total_in - total_hit,
-                    "output_tokens": total_out,
-                    "cache_read_input_tokens": total_hit,
-                },
+                "claude" if "input_tokens" in _synthetic_usage else "openai",
+                _synthetic_usage,
                 f"{_MN('news_correlation')}（批处理）",
                 model_name=_model,
             )
-        _cost_val = 0.0
-        _cost = estimate_cost(_model, total_in, total_out, cache_hit_input_tokens=total_hit)
-        if _cost != "-":
-            try:
-                _cost_val = float(_cost.lstrip("$¥€£"))
-            except ValueError as e:
-                logger.warning("[llm] 费用估值 JSON 解码失败: %s", e)
+        # 费用直接取数值口径：estimate_cost 会按展示精度（>=0.01 保留 3 位小数）
+        # 格式化，回读成 float 会丢精度，逐模块合计与页签总计对不上。
+        _cost_val = compute_cost_value(_model, total_in, total_out, cache_hit_input_tokens=total_hit) or 0.0
         _endpoint = ""
         if llm_config.get("_provider_list"):
             from src.python.llm.api import _resolve_first_provider_model_endpoint

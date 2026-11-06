@@ -36,6 +36,7 @@ class TestApplyLlmNewsCorrelation(unittest.TestCase):
     def test_empty_batch(self):
         """空 batch → 空列表。"""
         result = self._call(news_batch=[])
+        self.assertIsNotNone(result)
         self.assertEqual(result, [])
 
     def test_valid_json(self):
@@ -45,6 +46,7 @@ class TestApplyLlmNewsCorrelation(unittest.TestCase):
             ' {"idx": 1, "relevance": "低", "sentiment": "中性", "analysis": "中性1"}]'
         )
         result = self._call(llm_response=response)
+        self.assertIsNotNone(result)
         self.assertEqual(len(result), 2)
         self.assertEqual(result[0], ("高", "利好", "利好1"))
         self.assertEqual(result[1], ("低", "中性", "中性1"))
@@ -53,35 +55,32 @@ class TestApplyLlmNewsCorrelation(unittest.TestCase):
         """JSON 在 Markdown 代码块内仍能解析。"""
         response = '```json\n[{"idx": 0, "relevance": "高", "sentiment": "利好", "analysis": "test"}]\n```'
         result = self._call(news_batch=[{"title": "单条新闻"}], llm_response=response)
+        self.assertIsNotNone(result)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0][0], "高")
 
-    def test_malformed_json_returns_defaults(self):
-        """乱码 JSON → 所有条目返回默认值。"""
+    def test_malformed_json_returns_none(self):
+        """乱码 JSON → None（整批失败，不给占位冒充 LLM 分析）。"""
         response = "这不是 JSON {{{{"
-        result = self._call(llm_response=response)
-        self.assertEqual(len(result), 2)
-        for r in result:
-            self.assertEqual(r, ("低", "中性", ""))
+        self.assertIsNone(self._call(llm_response=response))
 
     def test_non_array_response(self):
-        """非数组 JSON → 所有条目返回默认值。"""
+        """非数组 JSON → None（同上，整批失败收口）。"""
         response = '{"not": "array"}'
-        result = self._call(llm_response=response)
-        self.assertEqual(len(result), 2)
-        for r in result:
-            self.assertEqual(r, ("低", "中性", ""))
+        self.assertIsNone(self._call(llm_response=response))
 
     def test_missing_fields_use_defaults(self):
         """缺失可选字段使用默认值。"""
         response = '[{"idx": 0}]'
         result = self._call(news_batch=[{"title": "A"}], llm_response=response)
+        self.assertIsNotNone(result)
         self.assertEqual(result[0], ("低", "中性", ""))
 
     def test_fewer_results_than_batch(self):
         """LLM 返回少于 batch 数量 → 缺失项用默认值填充。"""
         response = '[{"idx": 0, "relevance": "高", "sentiment": "利好", "analysis": "a"}]'
         result = self._call(llm_response=response)
+        self.assertIsNotNone(result)
         self.assertEqual(len(result), 2)
         self.assertEqual(result[0], ("高", "利好", "a"))
         self.assertEqual(result[1], ("低", "中性", ""))
@@ -90,6 +89,7 @@ class TestApplyLlmNewsCorrelation(unittest.TestCase):
         """idx 超出范围 → 跳过并用默认值填充。"""
         response = '[{"idx": 99, "relevance": "高", "sentiment": "利好", "analysis": "a"}]'
         result = self._call(llm_response=response)
+        self.assertIsNotNone(result)
         self.assertEqual(len(result), 2)
         for r in result:
             self.assertEqual(r, ("低", "中性", ""))
@@ -98,6 +98,7 @@ class TestApplyLlmNewsCorrelation(unittest.TestCase):
         """idx 非整数 → 跳过。"""
         response = '[{"idx": "0", "relevance": "高", "sentiment": "利好", "analysis": "a"}]'
         result = self._call(news_batch=[{"title": "A"}], llm_response=response)
+        self.assertIsNotNone(result)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0], ("低", "中性", ""))
 
@@ -105,6 +106,7 @@ class TestApplyLlmNewsCorrelation(unittest.TestCase):
         """额外空白不影响解析。"""
         response = '  [  {  "idx": 0,  "relevance": "高"  }  ]  '
         result = self._call(news_batch=[{"title": "A"}], llm_response=response)
+        self.assertIsNotNone(result)
         self.assertEqual(len(result), 1)
 
     def test_all_news_high_correlation(self):
@@ -116,6 +118,7 @@ class TestApplyLlmNewsCorrelation(unittest.TestCase):
         )
         batch = [{"title": f"N{i}"} for i in range(5)]
         result = self._call(news_batch=batch, llm_response=response)
+        self.assertIsNotNone(result)
         self.assertEqual(len(result), 5)
         for r in result:
             self.assertEqual(r[0], "高")
@@ -127,6 +130,7 @@ class TestApplyLlmNewsCorrelation(unittest.TestCase):
             ' {"idx": 1, "relevance": "无关", "sentiment": "中性", "analysis": "b"}]'
         )
         result = self._call(llm_response=response)
+        self.assertIsNotNone(result)
         self.assertEqual(result[0][0], "高")
         self.assertEqual(result[1][0], "无关")
 

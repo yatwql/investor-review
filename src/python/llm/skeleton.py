@@ -27,7 +27,7 @@ from src.python.llm.api_base import (
 from src.python.llm._api_responses import TRUNCATION_MARKER
 from src.python.llm.fingerprint import get_cache_ttl_llm
 from src.python.llm.markdown import markdown_to_html
-from src.python.llm.pricing import estimate_cost
+from src.python.llm.pricing import compute_cost_value, estimate_cost
 from src.python.llm.prompts import (
     CACHE_PREFIX_LLM,
     FAIL_REASON_API_ERROR,
@@ -182,12 +182,9 @@ def _finalize_and_cache(
         html += f'<p style="color:#888;font-size:12px">{_footer}</p>'
         if module_key:
             _inp, _out = inp, out  # 与页脚共用同一份归一后用量
-            _cost_val = 0.0
-            if _cost != "-":
-                try:
-                    _cost_val = float(_cost.lstrip("$¥€£"))
-                except ValueError:
-                    logger.warning("LLM 费用字符串解析失败: %s", _cost)
+            # 费用取数值口径而非回读展示串：estimate_cost 按展示精度格式化
+            # （>=0.01 只到 3 位小数），回读会丢精度，导致逐模块合计与页签总计不等
+            _cost_val = compute_cost_value(_model_name, _inp, _out, cache_hit_input_tokens=cache_hit) or 0.0
             _endpoint_for_record = endpoint or llm_config.get("endpoint", "") or ""
             _cache_hit = cache_hit
             record_per_module(

@@ -123,13 +123,25 @@ def _execute_and_merge_batch(
             )
 
         if result:
+            # 解析器返回 None / 空列表 = 响应整体不可用（JSON 截断、非数组…）：
+            # 本批按失败收口——不写 results_map、不写逐条缓存（占位入缓存会被
+            # 后续轮次当命复复用），produced=0 供上层计 failed_batches。
             parsed_list = response_parser(batch_items, result)
-            for local_idx, parsed in enumerate(parsed_list):
-                global_idx = batch_indices[local_idx]
-                results_map[global_idx] = parsed
-                if per_item_cache_fn and item_cache_keys.get(global_idx):
-                    cache_set(item_cache_keys[global_idx], parsed)
-            produced = len(parsed_list)
+            if parsed_list:
+                for local_idx, parsed in enumerate(parsed_list):
+                    global_idx = batch_indices[local_idx]
+                    results_map[global_idx] = parsed
+                    if per_item_cache_fn and item_cache_keys.get(global_idx):
+                        cache_set(item_cache_keys[global_idx], parsed)
+                produced = len(parsed_list)
+            else:
+                logger.warning(
+                    "%s（批 %d/%d）: 响应不可解析，本批 %d 条无分析（不写缓存）",
+                    _MN(module_key),
+                    batch_id + 1,
+                    total_batches,
+                    len(batch_items),
+                )
             if usage:
                 from src.python.llm.session import _normalize_usage_tokens
 
