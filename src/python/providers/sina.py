@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -269,30 +270,43 @@ def _parse_a_index(text: str) -> dict[str, Any] | None:
     }
 
 
-def fetch_a_indices() -> dict[str, dict[str, Any]]:
-    """通过新浪财经获取 A 股主要指数行情（Tencent 主链路的备用）。
+def _fetch_sina_indices(
+    codes_map: dict[str, str],
+    parse_one: Callable[[str], dict[str, Any] | None],
+    *,
+    market_label: str,
+    warn_malformed: bool,
+) -> dict[str, dict[str, Any]]:
+    """新浪指数拉取本体（A 股/美股共用：请求 → 逐行解析 → 按代码白名单收敛）。
+
+    Args:
+        codes_map: 代码 → 展示名映射（同时用作白名单）
+        parse_one: 单行解析器（`_parse_a_index` / `_parse_us_index`）
+        market_label: 日志中的市场称谓（"A 股指数" / "US 指数"）
+        warn_malformed: 非 ``var hq_str_`` 行是否记 warning（美股链路需可观测性）
 
     Returns:
         {code: {name, price, yesterday_close, price_date, change, change_pct}}
     """
-    codes = list(_A_INDICES_SINA.keys())
+    codes = list(codes_map.keys())
     url = _BASE_URL + ",".join(codes)
 
-    logger.debug("Sina A 股指数请求: %s", codes)
+    logger.debug("Sina %s 请求: %s", market_label, codes)
 
     try:
         with make_http_client(timeout=_TIMEOUT) as client:
             resp = client.get(url, headers={"Referer": "https://finance.sina.com.cn"})
-            resp.encoding = "gb18030"
+            resp.encoding = "gb18030"  # Sina 返回 GB18030 编码
             text = resp.text
     except (httpx.TimeoutException, httpx.RequestError) as e:
-        logger.warning("Sina A 股指数 API 请求失败: %s", e)
+        logger.warning("Sina %s API 请求失败: %s", market_label, e)
         return {}
 
     results: dict[str, dict[str, Any]] = {}
-    lines = text.strip().split("\n")
-    for line in lines:
+    for line in text.strip().split("\n"):
         if not line.startswith("var hq_str_"):
+            if warn_malformed:
+                logger.warning("Sina 格式异常: %s", line[:60])
             continue
         if "=" not in line:
             continue
@@ -301,10 +315,10 @@ def fetch_a_indices() -> dict[str, dict[str, Any]]:
         if code not in codes:
             continue
 
-        parsed = _parse_a_index(line)
+        parsed = parse_one(line)
         if parsed and parsed["price"] > 0:
             results[code] = {
-                "name": _A_INDICES_SINA.get(code, parsed.get("name", "")),
+                "name": codes_map.get(code, parsed.get("name", "")),
                 "code": code,
                 "price": parsed["price"],
                 "yesterday_close": parsed["yesterday_close"],
@@ -314,6 +328,15 @@ def fetch_a_indices() -> dict[str, dict[str, Any]]:
             }
 
     return results
+
+
+def fetch_a_indices() -> dict[str, dict[str, Any]]:
+    """通过新浪财经获取 A 股主要指数行情（Tencent 主链路的备用）。
+
+    Returns:
+        {code: {name, price, yesterday_close, price_date, change, change_pct}}
+    """
+    return _fetch_sina_indices(_A_INDICES_SINA, _parse_a_index, market_label="A 股指数", warn_malformed=False)
 
 
 def _parse_us_index(text: str) -> dict[str, Any] | None:
@@ -380,48 +403,7 @@ def fetch_us_indices() -> dict[str, dict[str, Any]]:
     Returns:
         {code: {name, price, yesterday_close, price_date, change, change_pct}}
     """
-    codes = list(_US_INDICES.keys())
-    url = _BASE_URL + ",".join(codes)
-
-    logger.debug("Sina US 指数请求: %s", codes)
-
-    try:
-        with make_http_client(timeout=_TIMEOUT) as client:
-            resp = client.get(url, headers={"Referer": "https://finance.sina.com.cn"})
-            resp.encoding = "gb18030"  # Sina 返回 GB18030 编码
-            text = resp.text
-    except (httpx.TimeoutException, httpx.RequestError) as e:
-        logger.warning("Sina API 请求失败: %s", e)
-        return {}
-
-    # 每行一条指数，用换行分隔
-    results: dict[str, dict[str, Any]] = {}
-    lines = text.strip().split("\n")
-    for line in lines:
-        if not line.startswith("var hq_str_"):
-            logger.warning("Sina 格式异常: %s", line[:60])
-            continue
-        if "=" not in line:
-            continue
-        var_part = line.split("=", 1)[0]
-        # 提取代码 (hq_str_int_dji → int_dji)
-        code = var_part.replace("var hq_str_", "").strip()
-        if code not in codes:
-            continue
-
-        parsed = _parse_us_index(line)
-        if parsed and parsed["price"] > 0:
-            results[code] = {
-                "name": _US_INDICES.get(code, parsed.get("name", "")),
-                "code": code,
-                "price": parsed["price"],
-                "yesterday_close": parsed["yesterday_close"],
-                "price_date": parsed["price_date"],
-                "change": parsed["change"],
-                "change_pct": parsed["change_pct"],
-            }
-
-    return results
+    return _fetch_sina_indices(_US_INDICES, _parse_us_index, market_label="US 指数", warn_malformed=True)
 
 
 # ── 从 sina_kline 子模块导入 K 线相关函数 ────────────────────────

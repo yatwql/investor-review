@@ -54,7 +54,7 @@ class TestExcelSheetOrder(unittest.TestCase):
         from openpyxl import Workbook
 
         wb = Workbook()
-        wb.remove(wb.active)
+        wb.remove(wb.worksheets[0])
         return wb
 
     def test_sheet_order_matches_default_section_order(self):
@@ -140,7 +140,7 @@ class TestExcelSheetTitleFormat(unittest.TestCase):
         from openpyxl import Workbook
 
         wb = Workbook()
-        wb.remove(wb.active)
+        wb.remove(wb.worksheets[0])
         return wb
 
     def test_all_titles_follow_number_name_format(self):
@@ -349,7 +349,8 @@ class TestExcelExperimentalNotice(unittest.TestCase):
         from openpyxl import Workbook
 
         wb = Workbook()
-        ws = wb.active
+        # 新建 Workbook 恒有一个默认工作表，取 worksheets[0] 显式跳过 wb.active 的 Optional
+        ws = wb.worksheets[0]
         ws.title = "LLM 用量"
         return ws
 
@@ -413,7 +414,7 @@ class TestExcelSummaryFallbackNotice(unittest.TestCase):
         from openpyxl import Workbook
 
         wb = Workbook()
-        ws = wb.active
+        ws = wb.worksheets[0]
         ws.title = "1.投资分析汇总"
         ws.cell(row=1, column=1, value="投资分析汇总")
         sheets: dict = {"summary": ws}
@@ -496,7 +497,7 @@ class TestExcelModuleSheets(unittest.TestCase):
         from openpyxl import Workbook
 
         wb = Workbook()
-        ws = wb.active
+        ws = wb.worksheets[0]
         ws.title = "test"
         return ws
 
@@ -532,16 +533,19 @@ class TestExcelModuleSheets(unittest.TestCase):
         """写入器函数正确使用边框样式（回归检查）。
 
         确认 excel_writer 中的写入函数设置了 cell.border，
-        避免因隐式依赖导致边框缺失。
+        避免因隐式依赖导致边框缺失。小计/总计行共用 `_write_summary_row`，
+        边框在该本体中设置，故两者以本体为检查点。
         """
         from src.python.report import excel_writer as ew
         import inspect
 
-        # 检查核心写入函数是否使用边框
-        for fn_name in ("write_data_row", "write_subtotal_row", "write_total_row"):
-            fn = getattr(ew, fn_name, None)
-            if fn is None:
-                continue
+        # 检查核心写入函数是否使用边框（小计/总计行本体为 _write_summary_row）
+        targets = {
+            "write_data_row": ew.write_data_row,
+            "write_subtotal_row": ew._write_summary_row,
+            "write_total_row": ew._write_summary_row,
+        }
+        for fn_name, fn in targets.items():
             source = inspect.getsource(fn)
             self.assertIn("border", source, f"{fn_name} 应设置 cell.border")
 

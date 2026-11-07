@@ -66,6 +66,33 @@ def display_width(text: str) -> int:
     return width
 
 
+def _terminal_dimension(*, env_key: str, attribute: str, minimum: int, default: int) -> int:
+    """探测终端单维尺寸（列/行共用的优先级链）。
+
+    实时尺寸优先（ioctl 紧跟 resize），`COLUMNS`/`LINES` 环境变量只是会话
+    建立时的快照，仅作次选。不取两者最大值，否则窄终端会被误判成宽屏
+    （内容被终端硬折成鈽齿）。
+
+    Args:
+        env_key: 环境变量名（`COLUMNS` / `LINES`）
+        attribute: `os.get_terminal_size()` 返回对象的属性名（`columns` / `lines`）
+        minimum: 下限
+        default: 探测不到时的兜底值
+
+    Returns:
+        终端尺寸（≥ ``minimum``）。
+    """
+    for fd in (1, 2):
+        try:
+            return max(minimum, getattr(os.get_terminal_size(fd), attribute))
+        except OSError:
+            continue
+    env = os.environ.get(env_key)
+    if env and env.isdigit() and int(env) > 0:
+        return max(minimum, int(env))
+    return max(minimum, default)
+
+
 def terminal_columns(default: int = 100) -> int:
     """当前终端列数（实时尺寸优先，其次 `COLUMNS` 环境变量，最后兜底值）。
 
@@ -79,15 +106,7 @@ def terminal_columns(default: int = 100) -> int:
     Returns:
         终端列数（≥ ``MIN_TERMINAL_COLUMNS``）。
     """
-    for fd in (1, 2):
-        try:
-            return max(MIN_TERMINAL_COLUMNS, os.get_terminal_size(fd).columns)
-        except OSError:
-            continue
-    env = os.environ.get("COLUMNS")
-    if env and env.isdigit() and int(env) > 0:
-        return max(MIN_TERMINAL_COLUMNS, int(env))
-    return max(MIN_TERMINAL_COLUMNS, default)
+    return _terminal_dimension(env_key="COLUMNS", attribute="columns", minimum=MIN_TERMINAL_COLUMNS, default=default)
 
 
 def terminal_rows(default: int = 24) -> int:
@@ -103,15 +122,7 @@ def terminal_rows(default: int = 24) -> int:
     Returns:
         终端行数（≥ ``MIN_TERMINAL_ROWS``）。
     """
-    for fd in (1, 2):
-        try:
-            return max(MIN_TERMINAL_ROWS, os.get_terminal_size(fd).lines)
-        except OSError:
-            continue
-    env = os.environ.get("LINES")
-    if env and env.isdigit() and int(env) > 0:
-        return max(MIN_TERMINAL_ROWS, int(env))
-    return max(MIN_TERMINAL_ROWS, default)
+    return _terminal_dimension(env_key="LINES", attribute="lines", minimum=MIN_TERMINAL_ROWS, default=default)
 
 
 def pad_right(text: str, columns: int) -> str:

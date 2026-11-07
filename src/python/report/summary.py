@@ -146,8 +146,10 @@ def _embed_brand_mark(ws: Worksheet) -> None:
         stream = BytesIO(png_bytes)
         img = XLImage(stream)
         img.width = img.height = _BRAND_MARK_PX
-        img._brand_stream = stream  # noqa: SLF001 — 保活底层流（openpyxl 无公开接口）
-        img._data = lambda _b=png_bytes: _b  # noqa: SLF001 — 两次保存都返回同一份字节
+        # 两个私有属性经 setattr 写入：openpyxl 无公开接口做「保活流 / 倍增复用字节」，
+        # 而静态类型桩把 Image 的属性集固定死了，直接赋值会被判为未知属性。
+        setattr(img, "_brand_stream", stream)  # noqa: B010 — 保活底层流
+        setattr(img, "_data", lambda _b=png_bytes: _b)  # noqa: B010 — 两次保存都返回同一份字节
         ws.add_image(img, "A1")
     except Exception as exc:  # noqa: BLE001 — 品牌标记失败不得影响报告产出
         logger.debug("品牌标记嵌入跳过：%s", exc)
@@ -317,64 +319,87 @@ def _write_profit_summary(
     return row
 
 
-def _write_a_share_indices(ws: Worksheet, row: int, a_indices: dict[str, dict[str, Any]] | None) -> int:
-    """写入 A 股指数（本日 + 上日）。"""
-    if not a_indices:
-        return _write_kv_row(ws, row, "── A股指数 ──", "暂无指数数据")
+def _write_index_group(
+    ws: Worksheet,
+    row: int,
+    indices: dict[str, dict[str, Any]] | None,
+    *,
+    section_label: str,
+    today_label: str,
+    index_list: list[tuple[str, str]],
+) -> int:
+    """写一个指数区块（本日/最新 + 上日共用的渲染本体）。
 
-    row = _write_kv_row(ws, row, "── A股指数（本日）──", "")
-    a_list = [
-        ("sh000001", "上证指数"),
-        ("sz399001", "深证成指"),
-        ("sh000300", "沪深300"),
-        ("sh000688", "科创板50"),
-        ("sz399006", "创业板指"),
-    ]
-    for code, cname in a_list:
-        idx = a_indices.get(code)
+    Args:
+        ws: 目标工作表
+        row: 起始行号
+        indices: {代码: 行情} 映射；空/None 时写占位行
+        section_label: 区块标题（如 "A股指数"）
+        today_label: 当日行标题后缀（A 股用 "本日"、美股用 "最新"）
+        index_list: [(代码, 展示名)]，决定显示顺序与集合
+
+    Returns:
+        下一行起始行号
+    """
+    if not indices:
+        return _write_kv_row(ws, row, f"── {section_label} ──", "暂无指数数据")
+
+    row = _write_kv_row(ws, row, f"── {section_label}（{today_label}）──", "")
+    for code, cname in index_list:
+        idx = indices.get(code)
         if idx and idx.get("price", 0) > 0:
             row = _write_index_row(ws, row, cname, idx["price"], idx.get("change_pct", 0))
         else:
             row = _write_kv_row(ws, row, f"  {cname}", "--")
 
-    row = _write_kv_row(ws, row, "── A股指数（上日）──", "")
-    for code, cname in a_list:
-        idx = a_indices.get(code)
+    row = _write_kv_row(ws, row, f"── {section_label}（上日）──", "")
+    for code, cname in index_list:
+        idx = indices.get(code)
         yclose = idx.get("yesterday_close", 0) if idx else 0
         if yclose > 0:
             row = _write_kv_row(ws, row, f"  {cname}", f"{yclose:.2f}")
         else:
             row = _write_kv_row(ws, row, f"  {cname}", "--")
     return row
+
+
+_A_SHARE_INDEX_LIST: list[tuple[str, str]] = [
+    ("sh000001", "上证指数"),
+    ("sz399001", "深证成指"),
+    ("sh000300", "沪深300"),
+    ("sh000688", "科创板50"),
+    ("sz399006", "创业板指"),
+]
+
+_US_INDEX_LIST: list[tuple[str, str]] = [
+    ("gb_dji", "道琼斯"),
+    ("gb_ixic", "纳斯达克"),
+    ("gb_inx", "标普500"),
+]
+
+
+def _write_a_share_indices(ws: Worksheet, row: int, a_indices: dict[str, dict[str, Any]] | None) -> int:
+    """写入 A 股指数（本日 + 上日）。"""
+    return _write_index_group(
+        ws,
+        row,
+        a_indices,
+        section_label="A股指数",
+        today_label="本日",
+        index_list=_A_SHARE_INDEX_LIST,
+    )
 
 
 def _write_us_indices(ws: Worksheet, row: int, us_indices: dict[str, dict[str, Any]] | None) -> int:
     """写入美股指数（最新 + 上日）。"""
-    if not us_indices:
-        return _write_kv_row(ws, row, "── 美股指数 ──", "暂无指数数据")
-
-    row = _write_kv_row(ws, row, "── 美股指数（最新）──", "")
-    us_list = [
-        ("gb_dji", "道琼斯"),
-        ("gb_ixic", "纳斯达克"),
-        ("gb_inx", "标普500"),
-    ]
-    for code, cname in us_list:
-        idx = us_indices.get(code)
-        if idx and idx.get("price", 0) > 0:
-            row = _write_index_row(ws, row, cname, idx["price"], idx.get("change_pct", 0))
-        else:
-            row = _write_kv_row(ws, row, f"  {cname}", "--")
-
-    row = _write_kv_row(ws, row, "── 美股指数（上日）──", "")
-    for code, cname in us_list:
-        idx = us_indices.get(code)
-        yclose = idx.get("yesterday_close", 0) if idx else 0
-        if yclose > 0:
-            row = _write_kv_row(ws, row, f"  {cname}", f"{yclose:.2f}")
-        else:
-            row = _write_kv_row(ws, row, f"  {cname}", "--")
-    return row
+    return _write_index_group(
+        ws,
+        row,
+        us_indices,
+        section_label="美股指数",
+        today_label="最新",
+        index_list=_US_INDEX_LIST,
+    )
 
 
 def _write_market_temperature(ws: Worksheet, row: int, temperature: dict | None) -> int:

@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from openpyxl import Workbook
+from openpyxl.cell.cell import MergedCell
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
@@ -171,6 +172,11 @@ def mask_workbook_text(wb: Workbook, alias_map: dict[str, str]) -> int:
     for ws in wb.worksheets:
         for row in ws.iter_rows():
             for cell in row:
+                # 被合并吞掉的从属单元格是 MergedCell，value 只读（写入抛
+                # AttributeError）；其文本存放于锚点单元格，锚点本身会被
+                # iter_rows 遍历到，故跳过从属单元格不会漏清扫。
+                if isinstance(cell, MergedCell):
+                    continue
                 value = cell.value
                 if not isinstance(value, str) or not value:
                     continue
@@ -278,6 +284,39 @@ def write_data_row(ws, row: int, values: list[Any], formats: list[str | None] | 
     return row + 1
 
 
+def _write_summary_row(
+    ws, row: int, label: str, values: list[Any], ncols: int, formats: list[str | None] | None, fill
+) -> int:
+    """写汇总行本体（小计/总计共用）：首列标签 + 后续各列居中对齐，统一底色。
+
+    Args:
+        fill: 行底色（`SUBTOTAL_FILL` / `TOTAL_FILL`）
+        其余参数同 :func:`write_subtotal_row`
+
+    Returns:
+        下一行起始行号
+    """
+    cell = ws.cell(row=row, column=1, value=label)
+    cell.font = BOLD_FONT
+    cell.alignment = CENTER_ALIGN
+    cell.fill = fill
+    cell.border = THIN_BORDER
+
+    for col in range(2, ncols + 1):
+        idx = col - 2
+        v = values[idx] if idx < len(values) else None
+        cell = ws.cell(row=row, column=col, value=v)
+        cell.font = BOLD_FONT
+        cell.alignment = CENTER_ALIGN
+        cell.fill = fill
+        cell.border = THIN_BORDER
+        # +1 因为 values 从列 2 开始，而 formats 从列 1 起索引
+        fmt_idx = idx + 1
+        if formats and fmt_idx < len(formats) and formats[fmt_idx]:
+            cell.number_format = formats[fmt_idx]
+    return row + 1
+
+
 def write_subtotal_row(
     ws, row: int, label: str, values: list[Any], ncols: int, formats: list[str | None] | None = None
 ) -> int:
@@ -293,50 +332,14 @@ def write_subtotal_row(
     Returns:
         下一行起始行号
     """
-    cell = ws.cell(row=row, column=1, value=label)
-    cell.font = BOLD_FONT
-    cell.alignment = CENTER_ALIGN
-    cell.fill = SUBTOTAL_FILL
-    cell.border = THIN_BORDER
-
-    for col in range(2, ncols + 1):
-        idx = col - 2
-        v = values[idx] if idx < len(values) else None
-        cell = ws.cell(row=row, column=col, value=v)
-        cell.font = BOLD_FONT
-        cell.alignment = CENTER_ALIGN
-        cell.fill = SUBTOTAL_FILL
-        cell.border = THIN_BORDER
-        # +1 因为 values 从列 2 开始，而 formats 从列 1 起索引
-        fmt_idx = idx + 1
-        if formats and fmt_idx < len(formats) and formats[fmt_idx]:
-            cell.number_format = formats[fmt_idx]
-    return row + 1
+    return _write_summary_row(ws, row, label, values, ncols, formats, SUBTOTAL_FILL)
 
 
 def write_total_row(
     ws, row: int, label: str, values: list[Any], ncols: int, formats: list[str | None] | None = None
 ) -> int:
     """写总计行（绿底加粗，与上方的分隔线）。"""
-    cell = ws.cell(row=row, column=1, value=label)
-    cell.font = BOLD_FONT
-    cell.alignment = CENTER_ALIGN
-    cell.fill = TOTAL_FILL
-    cell.border = THIN_BORDER
-
-    for col in range(2, ncols + 1):
-        idx = col - 2
-        v = values[idx] if idx < len(values) else None
-        cell = ws.cell(row=row, column=col, value=v)
-        cell.font = BOLD_FONT
-        cell.alignment = CENTER_ALIGN
-        cell.fill = TOTAL_FILL
-        cell.border = THIN_BORDER
-        # +1 因为 values 从列 2 开始，而 formats 从列 1 起索引
-        fmt_idx = idx + 1
-        if formats and fmt_idx < len(formats) and formats[fmt_idx]:
-            cell.number_format = formats[fmt_idx]
-    return row + 1
+    return _write_summary_row(ws, row, label, values, ncols, formats, TOTAL_FILL)
 
 
 def auto_width(ws, min_width: int = 8, max_width: int = 30) -> None:

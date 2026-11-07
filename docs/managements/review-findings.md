@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.4-dev
-> **编号源**：`rf-next = 1061`（新增问题提出后更新为 +1；已用最大 rf-1060，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1063`（新增问题提出后更新为 +1；已用最大 rf-1062，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -60,6 +60,8 @@
 | **rf-1058** | 「页面写入」段名实不符：实际含模板渲染/JS 资产内嵌/匿名化/落盘四件事，凭总值无法归因（告警还指向「排查磁盘/挂载与 fsync」） | `write_html_report` 增 `stage_recorder` 逐段记细分（并保留总值供跨版本比对）；full/both 两条路径均接线；慢告警按段分流（渲染→模板，落盘→磁盘） |
 | **rf-1059** | Jinja 模板渲染被当成渲染热点：实为**模板编译**（18 个模板编译占 HTML 生成阶段绝大部分），冷缓存还要从挂载盘读 18 个文件，是该阶段耗时抖动的来源 | `html_jinja_env` 接入字节码缓存（落 `<缓存根>/jinja/`，键含模板源码校验和，改模板自动失效；目录按需解析以尊重测试隔离与 `INVEST_CACHE_DIR`），并新增回归用例 |
 | **rf-1060** | 四处技术债：①`generators_news._first_provider_name` 无任何调用方；②`_render_template` 的 `self_review_block` 形参不被函数体使用（渲染时自行取值，调用方传入不生效）；③`write_html_report` 的 `force_llm` 形参无任何调用方；④HTML 阶段收口（总值记录 + 慢段告警）在 full/both 两条路径各写一份，两处口径不一致（both 侧无慢段告警） | 删除死函数/死形参并同步收敛调用点；收口逻辑抽到 `html_writer.close_html_generation_stage` 单源共用 |
+| **rf-1061** | `excel_writer.mask_workbook_text` 遍历 `ws.iter_rows()` 时未跳过 `MergedCell`：被合并吞掉的从属单元格 `value` 只读，清扫命中一处带笔名的合并行即抛 `AttributeError`，整份报告生成失败（匿名化 full 模式 + 含合并单元格页签的组合必现） | 清扫前 `isinstance(cell, MergedCell)` 跳过从属单元格（锚点本身会被遍历到，不漏清扫）；新增合并区域回归用例 |
+| **rf-1062** | 六处同构副本散在不同模块，改一处另一处易漏（口径漂移）：①`atomic_write` 文本/二进制写入本体逐字重复；②`excel_writer` 小计/总计行仅底色不同；③`text_layout` 终端列/行探测同构；④`_json_patch` dict/array 区块括号平衡替换同构；⑤`_report_helpers` 组合演进/快照差异注入同构；⑥`providers/sina` 与 `report/summary` 的 A 股/美股指数取数与渲染同构 | 各抽一份参数化本体（`_write_atomic` / `_write_summary_row` / `_terminal_dimension` / `_replace_value_block` / `_inject_optional_section` / `_fetch_sina_indices` / `_write_index_group`），对外的公开函数签名与输出逐字不变 |
 
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-06）

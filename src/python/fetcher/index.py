@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from concurrent.futures import as_completed
 
 from src.python.core.concurrency import worker_pool
@@ -160,6 +161,42 @@ def _fetch_indices_from_sina(uncached: list[str]) -> dict[str, dict[str, Any]]:
 _QUOTE_SESSION_DOMAIN = "index_quote"
 
 
+def _fetch_with_session_cache(
+    cache_key: str,
+    fetch_uncached: Callable[[], dict[str, dict[str, Any]]],
+    *,
+    cache_label: str,
+) -> dict[str, dict[str, Any]]:
+    """会话缓存包层（A 股/美股指数共用）：命中直接返回副本，未命中取数后回存。
+
+    返回值一律深一层复制（``dict(data)``），避免调用方改动污染缓存条目。
+
+    Args:
+        cache_key: 会话缓存键（`a_indices` / `us_indices`）
+        fetch_uncached: 不含会话缓存的取数本体
+        cache_label: 日志中的称谓（"A 股指数" / "美股指数"）
+
+    Returns:
+        {代码: 行情}
+    """
+    from src.python.core.provider_registry import NOT_FOUND, get_registry
+
+    reg = get_registry()
+    cached_bundle = reg.session_cache_get(_QUOTE_SESSION_DOMAIN, cache_key)
+    if cached_bundle is not NOT_FOUND:
+        logger.info("[index] %s会话缓存复用（%d 个）", cache_label, len(cached_bundle))
+        return {code: dict(data) for code, data in cached_bundle.items()}
+
+    indices = fetch_uncached()
+    reg.session_cache_set(
+        _QUOTE_SESSION_DOMAIN,
+        cache_key,
+        {code: dict(data) for code, data in indices.items()},
+        source="api",
+    )
+    return indices
+
+
 def fetch_indices() -> dict[str, dict[str, Any]]:
     """获取 A 股主要指数行情。
 
@@ -168,22 +205,7 @@ def fetch_indices() -> dict[str, dict[str, Any]]:
     同一轮运行内重复调用复用会话缓存（`DataSourceRegistry.session_cache`）：行情页与
     渲染层各自调用时，无会话复用会把同一缓存键记多次未命中、并对上游重复请求。
     """
-    from src.python.core.provider_registry import NOT_FOUND, get_registry
-
-    reg = get_registry()
-    cached_bundle = reg.session_cache_get(_QUOTE_SESSION_DOMAIN, "a_indices")
-    if cached_bundle is not NOT_FOUND:
-        logger.info("[index] A 股指数会话缓存复用（%d 个）", len(cached_bundle))
-        return {code: dict(data) for code, data in cached_bundle.items()}
-
-    indices = _fetch_indices_uncached()
-    reg.session_cache_set(
-        _QUOTE_SESSION_DOMAIN,
-        "a_indices",
-        {code: dict(data) for code, data in indices.items()},
-        source="api",
-    )
-    return indices
+    return _fetch_with_session_cache("a_indices", _fetch_indices_uncached, cache_label="A 股指数")
 
 
 def _fetch_indices_uncached() -> dict[str, dict[str, Any]]:
@@ -397,22 +419,7 @@ def fetch_us_indices() -> dict[str, dict[str, Any]]:
     一份报告里被行情页与渲染层各调一次，无会话复用会把 `gb_dji/gb_ixic/gb_inx`
     各记 3~4 次未命中并重复请求上游。
     """
-    from src.python.core.provider_registry import NOT_FOUND, get_registry
-
-    reg = get_registry()
-    cached_bundle = reg.session_cache_get(_QUOTE_SESSION_DOMAIN, "us_indices")
-    if cached_bundle is not NOT_FOUND:
-        logger.info("[index] 美股指数会话缓存复用（%d 个）", len(cached_bundle))
-        return {code: dict(data) for code, data in cached_bundle.items()}
-
-    indices = _fetch_us_indices_uncached()
-    reg.session_cache_set(
-        _QUOTE_SESSION_DOMAIN,
-        "us_indices",
-        {code: dict(data) for code, data in indices.items()},
-        source="api",
-    )
-    return indices
+    return _fetch_with_session_cache("us_indices", _fetch_us_indices_uncached, cache_label="美股指数")
 
 
 def _fetch_us_indices_uncached() -> dict[str, dict[str, Any]]:
