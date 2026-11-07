@@ -96,7 +96,7 @@ DeepSeek 官方提供 Anthropic API 兼容端点，`provider` 设为 `"claude"` 
 
 - API Key 使用 DeepSeek 官方 Key（带 `sk-` 前缀）
 - 模型：`deepseek-v4-flash`（推荐，**注意全小写**）、`deepseek-flash`（DeepSeek-V4.1-Flash 正式模型名，2026-09-10 发布，与前者同价）
-- **已停用模型名**：`deepseek-chat` / `deepseek-reasoner` 曾是 flash 系列非思考 / 思考模式的兼容别名（**不是**独立的 V3 模型），已于 2026-07-24 下线且端点不再接受。本程序对旧名**不再做任何兼容**：不收录价格表（历史报告费用按未知模型显示 `-`）、不收录思考名单，请一律改用 `deepseek-flash`
+- **已停用模型名**：`deepseek-chat` / `deepseek-reasoner` 是 flash 系列非思考 / 思考模式的兼容别名（**不是**独立的 V3 模型），官方已于 2026-07-24 下线、端点不再接受。本程序对旧名**不再做任何兼容**：不收录价格表（历史报告费用按未知模型显示 `-`）、不收录思考名单，请一律改用 `deepseek-flash`
 - **注意**：`deepseek-v4-pro` 官方 2026-09-10 公告继续提供 API 服务（2026-09-14 之后不下线），计费方式不变；`deepseek-v4-flash` 与 `deepseek-v4-flash-vision-exp` 底层模型同样由 V4.1-Flash 接管，价格不变。费用估算以 `core/constants.py` 的 `MODEL_PRICING` 为准
 - 官方文档：https://api-docs.deepseek.com/guides/anthropic_api
 </details>

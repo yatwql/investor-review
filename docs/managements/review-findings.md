@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.5-dev
-> **编号源**：`rf-next = 1067`（新增问题提出后更新为 +1；已用最大 rf-1066，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1068`（新增问题提出后更新为 +1；已用最大 rf-1067，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -61,6 +61,7 @@
 | --- | --- | --- |
 | **rf-1065** | 用例审计（四维）发现 4 处名实不符/断言强度不足：①幻觉采样 `test_wrong_profit_rate_vs_portfolio` / `test_mixed_correct_and_wrong` / `test_missing_code` 只断言 `len(issues) >= 1`，任意无关告警都能转绿，测不出「对照的是组合收益率/涉事个股/涉事代码」这一口径；②`test_intraday_written_cache_expired_right_after_close_gate` 名称称「已过期」而断言「仍可读」，方向相反 | ①三处补点名断言（`累计收益率`+实际值 / `600036` / `002837` in issues[0]），与仓内已有 `test_wrong_stock_return` 同标准；②用例改名为 `..._survives_static_ttl_after_close` 并在 docstring 写明只验读侧（收盘门禁由同文件 TTL 口径用例覆盖） |
 | **rf-1066** | `test-coverage.md` 蹿入历史复盘痕迹与失真导语：①两条带日期的「门禁口径变更」告示（变更记录，已在 changelog/归档）；②其中一条把上方耗时表的 `dev-verify`/`verify` 行标为「并入前快照」，而该表已重测，属错误导语；③「两机差距」段内联绝对耗时与紧邻其上的表相互矛盾；④旧采集事故叙事带当日数字 | 删除两条变更告示、改指口径真源 `technical.md` §4.23；两机差距只保留按表重算的比例区间；事故叙事改写成不带日期的排查口径（先查未 mock 外部访问） |
+| **rf-1067** | 8 份文档正文残留历史复盘痕迹（带日期的「已采纳/已落地/收紧」告示、「曾经的写法」「曾占…现口径」对照叙事、「此前只存在于…」式缺陷描述）。这类内容与当前状态无关，且会随演进腐化为错误导语（读者据此判断「表不可信/行为待变」） | 全部改写为当前状态陈述：告示去掉日期与「已采纳」口吻只留规则；对照叙事改为风险机制陈述（若…则…）；缺陷描述改为要求陈述；指针类内容（口径、判据）改指真源 |
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-08）
 - [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-11-03）
