@@ -896,7 +896,7 @@ def generate_all_llm(
     from src.python.llm.fingerprint_baseline import save_baseline
 
     save_baseline(
-        _LAST_FP_COMPONENTS,
+        _LAST_FP_COMPONENTS or {},
         {mk: str((info.get("key") or "")) for mk, info in (cache_info or {}).items() if isinstance(info, dict)},
     )
     _raw_debate_info = _debate_info_container[0] if _has_debate else None

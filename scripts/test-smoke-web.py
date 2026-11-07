@@ -64,7 +64,7 @@ def _make_holdings_xlsx() -> bytes:
     from openpyxl import Workbook
 
     wb = Workbook()
-    ws = wb.active
+    ws = wb.worksheets[0]  # 新建 Workbook 恒有默认表；取 worksheets[0] 避开 Optional
     ws.title = "账户一"
     ws.append(["名称", "代码", "持仓份额", "每份成本"])
     ws.append(["测试基金", "000001", 1000, 1.0])

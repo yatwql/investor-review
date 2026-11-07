@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Any
+from typing import Any, TypeGuard
 
 from src.python.llm.fingerprint import compute_fingerprint
 from src.python.llm.prompts_core import _fmt_wan
@@ -165,11 +165,12 @@ _DIGEST_DIVERGENCE_NOTE = "（存在「叙事与数字背离」项：请在结�
 # ═══════════════════════════════════════════════════════════════
 
 
-def _is_number(value: Any) -> bool:
-    """可用数值判定：排除 bool 与 NaN/±inf。
+def _is_number(value: Any) -> TypeGuard[float]:
+    """可用数值判定：排除 bool 与 NaN/±inf（判定为真即收窄为 float）。
 
     bool 是 int 的子类（``True`` 会被当成 1 元）；NaN/±inf 格式化后是 ``nan``/``inf``
     这类文字，进提示词比裸数值更糟——两者都按「无此字段」处理，交由降级路径。
+    ``TypeGuard`` 让调用点在 ``if _is_number(x):`` 之后直接按数值运算，不必各自再收窄。
     """
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 

@@ -104,6 +104,7 @@ def _call_llm_module(
                 {},
                 total_mv,
                 total_profit,
+                total_cost,
                 categories,
             )
             return f"[SYSTEM]\n{_SYSTEM_GLOBAL_MACRO}\n\n[USER]\n{prompt}", {"dry_run": True}
@@ -137,6 +138,7 @@ def _call_llm_module(
     # ── 真实 LLM 调用 ──
     http_client = _get_http_client()
     try:
+        cached = False  # 各模块分支自带返回值；未进入任何分支时按「未命中缓存」计
         if module_name == "expert_review":
             content, cached = generate_expert_review(
                 total_mv,
@@ -158,6 +160,7 @@ def _call_llm_module(
                 us_indices,
                 total_mv,
                 total_profit,
+                total_cost,
                 categories,
                 force=force,
                 http_client=http_client,

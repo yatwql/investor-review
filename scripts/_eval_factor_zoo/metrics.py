@@ -117,7 +117,7 @@ def build_family_series(
     if family == FAMILY_REBALANCE:
         raise ValueError(FAMILY_DEGRADED[FAMILY_REBALANCE])
     closes = _closes(index_bars)
-    dates = [b.get("date") for b in index_bars]
+    dates = [str(b.get("date") or "") for b in index_bars]  # 键一律 str（下游用作 series 键）
     series: dict[str, float] = {}
 
     if family == FAMILY_MARKET_TEMPERATURE:

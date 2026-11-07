@@ -199,7 +199,12 @@ def _load_settings_document(raw: str, path: str) -> dict:
     Raises:
         LLMSchemaError: 根元素/版本/段结构不符（消息含文件名、版本与重新生成指引）
     """
-    document = json.loads(strip_json_comments(raw))
+    try:
+        document = json.loads(strip_json_comments(raw))
+    except json.JSONDecodeError:
+        # 解析失败原样上抛：调用方（read_llm_settings_file / load_llm_settings）按「读取失败」
+        # 记原因并回落默认值，异常类型与消息须保持可诊断（含行/列），故不在此改写。
+        raise
     _llm_schema.validate_document(document, filename=os.path.basename(path))
     from src.python.config._validation_llm import sanitize_document
 
@@ -287,7 +292,10 @@ def write_llm_settings(settings: dict, path: str) -> None:
         logger.error("[ERR] %s", e)
         raise
 
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+    except OSError as e:
+        raise OSError(f"无法创建配置目录 {os.path.dirname(path)}: {e}") from e
     current_flat = _llm_schema.flatten(_llm_schema.merge_defaults(document, _DEFAULTS_NESTED))
     patch_updates: dict[str, Any] = {}
     structural: dict[str, Any] = {}

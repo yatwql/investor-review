@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.5-dev
-> **编号源**：`rf-next = 1069`（新增问题提出后更新为 +1；已用最大 rf-1068，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1070`（新增问题提出后更新为 +1；已用最大 rf-1069，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -63,6 +63,7 @@
 | **rf-1066** | `test-coverage.md` 蹿入历史复盘痕迹与失真导语：①两条带日期的「门禁口径变更」告示（变更记录，已在 changelog/归档）；②其中一条把上方耗时表的 `dev-verify`/`verify` 行标为「并入前快照」，而该表已重测，属错误导语；③「两机差距」段内联绝对耗时与紧邻其上的表相互矛盾；④旧采集事故叙事带当日数字 | 删除两条变更告示、改指口径真源 `technical.md` §4.23；两机差距只保留按表重算的比例区间；事故叙事改写成不带日期的排查口径（先查未 mock 外部访问） |
 | **rf-1067** | 8 份文档正文残留历史复盘痕迹（带日期的「已采纳/已落地/收紧」告示、「曾经的写法」「曾占…现口径」对照叙事、「此前只存在于…」式缺陷描述）。这类内容与当前状态无关，且会随演进腐化为错误导语（读者据此判断「表不可信/行为待变」） | 全部改写为当前状态陈述：告示去掉日期与「已采纳」口吻只留规则；对照叙事改为风险机制陈述（若…则…）；缺陷描述改为要求陈述；指针类内容（口径、判据）改指真源 |
 | **rf-1068** | 程序注释里的历史复盘叙事：`src/python` 47 处、`scripts` 19 处、`src/test` 44 处（「此前 X 现在 Y」「原先各写一份」「曾占…」式对照，以及带日期的校准/收紧告示）。这类注释随演进腐化：读者据此以为行为待变或表不可信 | 除「回归背景/回归场景」元描述（`CLAUDE.md` 明确豁免、用于说明断言存在理由）外，全部改写为当前状态：对照句改「若/不得 X，否则 Y」，告示去日期留规则，重命名史改「不得沿用旧称」 |
+| **rf-1069** | 静态类型检查暴露的真缺陷与类型债：①`scripts/_eval_halluc_sampler/llm_call.py` 调 `_build_global_macro_prompt` / `generate_global_macro` 少传 `total_cost`，`categories` 落在 `total_cost` 位、`categories` 缺参——该评测脚本 global_macro 路径运行时必抛 TypeError；②6 文件存量 Pyright 错误：`_is_number` 非 `TypeGuard` 致 11 处数值运算报 Unknown、`get_llm_setting_default` 返回 object 直取键、`_max_tokens`/`_LAST_FP_COMPONENTS` 可能为 None、`wb.active`/`find()` 返回 Optional 直接下标、`cached` 可能未绑定、`json.loads`/`os.makedirs` 未包 try | ①补 `total_cost` 实参并初始化 `cached=False`；②`_is_number` 改 `TypeGuard[float]`、默认值取键前 `isinstance(..., dict)` 收窄、`_max_tokens` 显式兜底 18432、测试侧 `_require_section()` 断言取节点、`wb.worksheets[0]` 替代 `wb.active`、I/O 调用包 try 并保留原异常语义 |
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-08）
 - [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-11-03）

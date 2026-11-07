@@ -210,7 +210,10 @@ def copy_file_atomic(
         OSError: copy/replace 失败（临时文件已清理后向上抛出，调用方自行降级）。
     """
     dst_dir = os.path.dirname(os.path.abspath(dst)) or "."
-    os.makedirs(dst_dir, exist_ok=True)
+    try:
+        os.makedirs(dst_dir, exist_ok=True)
+    except OSError as e:
+        raise OSError(f"无法创建目标目录 {dst_dir}: {e}") from e
     fd, tmp_path = tempfile.mkstemp(dir=dst_dir, prefix=prefix, suffix=".tmp")
     os.close(fd)
     try:

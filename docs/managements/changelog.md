@@ -34,6 +34,13 @@
   「原先各写一份」「曾占…」式对照与带日期的校准告示，统一改写为**当前状态陈述**：对照句改「若/不得 X，否则 Y」，
   告示去日期只留规则，重命名史改「不得沿用旧称」。保留「回归背景 / 回归场景」元描述（`CLAUDE.md` 明确豁免，
   用于说明断言为何存在）。顺带修 `edit_ops`/`_ymd` 两处入参类型收窄（Pyright 报 Unknown|None 赋给 str）。
+- **评测脚本 global_macro 漏传 `total_cost`**（rf-1069）：`scripts/_eval_halluc_sampler/llm_call.py` 调用
+  `_build_global_macro_prompt` / `generate_global_macro` 时少传 `total_cost`——`categories` 落在 `total_cost` 位置、
+  `categories` 缺参，该评测路径运行时必抛 `TypeError`。补实参；顺带初始化 `cached=False`（未命中任何分支时不再未绑定）。
+- **6 文件静态类型债清理**（rf-1069）：`prompts_signals._is_number` 改 `TypeGuard[float]`（11 处数值运算不再报
+  Unknown）、`generators` 的默认值取键前 `isinstance(..., dict)` 收窄且 `_max_tokens` 显式兜底 18432、
+  `generators_orchestrator` 的基线组件 `or {}`、`test_correlation_html` 用 `_require_section()` 断言取节点并
+  去掉 Optional 下标、`test-smoke-web`/`metrics.py`/`_llm_settings`/`atomic_write` 的 Optional 与 I/O 调用收口。
 
 （本次发布内容见下方归档索引）
 
