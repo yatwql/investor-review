@@ -172,12 +172,25 @@ def _link_repo_src(demo: Path) -> None:
 
     隔离的是「数据面」（``data/`` / ``reports/``），代码与模板资产不复制——
     否则演示根会变成第二份源码树，容易与仓库漂移。
+
+    链接存在但指向**别处**（仓库被移动/改名后遗留的旧链）时重指本仓：旧链会让模板解析
+    跑到废路径（典型症状 `TemplateNotFound: report_template.html`），而「链接存在就算就绪」
+    的判断会把这种状态当成已完成，重跑 `demo` 也修不回来。重指后目录联接（Windows
+    真实目录）与已正确的软链均原样保留。
     """
     import os
 
     link = demo / "src"
     target = REPO_ROOT / "src"
-    if link.is_symlink() or link.exists():
+    if link.is_symlink():
+        try:
+            current = Path(os.readlink(link))
+        except OSError:  # 读不到链接目标（平台差异）时不冒险动它
+            return
+        if current.resolve() == target.resolve():
+            return
+        link.unlink()
+    elif link.exists():
         return
     try:
         os.symlink(target, link, target_is_directory=True)

@@ -52,6 +52,10 @@
     「格式异常行是否告警」不同（美股链路保留该告警，A 股原先就没有，不借重构改行为）；
   - `report/summary.py` / `fetcher/index.py` —— 指数渲染共享 `_write_index_group`（当日标题
     「本日」/「最新」参数化，保持两个市场的原有文案）、指数取数共享 `_fetch_with_session_cache`。
+- **截图演示工作区重建不再被旧软链卡住**（rf-1063）：仓库换目录后 `demo/src` 的旧指向仍在，`_link_repo_src`
+  把「链接存在」当就绪直接跳过，报告渲染于是落到废路径（`TemplateNotFound: report_template.html`），
+  重跑 `demo` 也修不好、只能手工删链；现校验链接目标与当前 `REPO_ROOT/src` 是否一致，不一致则重指，
+  并补「旧指向 → 重跑 demo → 自愈」回归用例。
 
 ## 归档
 
