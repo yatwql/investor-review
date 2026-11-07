@@ -85,13 +85,13 @@
 | 数据更新时间 | 2026-11-08 | 2026-10-02 |
 <!-- duration-table:end -->
 
-> **2026-10-03 门禁口径变更**：P0 `dev-verify` 与 P1 `verify` 的 marker 已并入 `unit_report` 域（98 文件 / 2,130 用例此前不进任何门禁档），新量级见上方「模式对应测试量」表（本机实测 ~38s / ~32s）；上方对照表中 `dev-verify`/`verify` 两行为**并入前快照**，跨档对比时以新口径为准。
->
-> **2026-10-17 门禁口径变更（rf-697，`technical.md` §4.23）**：① 修复 conftest `pytest_configure` 漏注册裸 `unit`——修复前 `unit`/`standard` 等按 `unit` 通配的档位匹配全空（台账旧值 10,136 为域求和口径），注册后通配生效、`unit` 档实测 10,145；② `verify`（P1）选择器纳入 `unit_ui`/`unit_cli` 并确立「归域即进门禁」不变式（期望表×选择器结构锁 `TestP1GateCoversDeclaredDomains`），verify 9,800→10,145；dev-verify（P0）保持核心域子集不变（6,969→6,978 系本批新增守护用例）。
+> **档位口径**：marker 域与 P0/P1/P2 门禁档的对应关系、以及「归域即进门禁」不变式见 `technical.md` §4.23；本表耗时与「模式对应测试量」表均按**当前口径**采集，不存在需要跨口径换算的历史列。
 
-> 两机差距因模式而异：大多数模式 dragonball 较 stallman-NB1 快约 **2~13 倍**（如 `unit` ~28s vs ~4min、`all` ~39s vs ~3min、`data` ~3s vs ~14s），最接近的是 `verify`（~19s vs ~46s）与 `edge`（~19s vs ~32s）。差距为 CPU 代差 + OS 差异 + 并行度差异的叠加（未逐项归因）。dragonball worker=8（medium=50% 核数），stallman-NB1 worker=4。
+> 两机差距因模式而异：大多数模式 dragonball 较 stallman-NB1 快约 **3~9 倍**（逐模式见上表；最接近的是 `unit` ≈3 倍），差距为 CPU 代差 + OS 差异 + 并行度差异的叠加（未逐项归因）。dragonball worker=8（medium=50% 核数），stallman-NB1 worker=4。
 >
-> **耗时异常先查“未 mock 的外部访问”，不要先归因机器负载**：dragonball 2026-09-26 首次采集（`unit` ~37s、`all` ~59s、`edge` ~40s）比 09-15 慢约 2 倍，排查发现是**测试侧未 mock 外部网络**——链路会把被阻断的请求当成传输级失败并**真等**同源瞬时重试退避（`unit` 模式 300 次睡眠 / 累计 149.3s），而非机器变慢；修复后（守卫硬化 + `offline_external_sources` 离线桩，见 changelog 同批次条目）同机复测回到 `unit` ~20s / `all` ~22s / `edge` ~17s。故同机跨批次耗时异常时，应先看是否有新增的未 mock 外部访问（守卫会瞬时硬失败并提示补 mock），再考虑机器负载/并行度。
+> **耗时异常先查「未 mock 的外部访问」，不要先归因机器负载**：链路会把被阻断的请求当成传输级失败并**真等**
+> 同源瞬时重试退避（数百次睡眠可累计上百秒），而非机器变慢。同机跨批次耗时不符时，先看是否有新增的未 mock
+> 外部访问（守卫会瞬时硬失败并提示补 mock，或漏加 `offline_external_sources` 离线桩），再考虑负载与并行度。
 >
 > **耗时口径**：表中耗时为**单次实测快照**，随用例数与机器负载浮动；`scripts/test-collect-coverage.py --update-docs` 只回写计数列、不改耗时列，耗时以最近一次 `--mode bench` 采集为准（跨机对比只看量级，不做逐秒对拍）。
 
