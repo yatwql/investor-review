@@ -41,6 +41,10 @@
   Unknown）、`generators` 的默认值取键前 `isinstance(..., dict)` 收窄且 `_max_tokens` 显式兜底 18432、
   `generators_orchestrator` 的基线组件 `or {}`、`test_correlation_html` 用 `_require_section()` 断言取节点并
   去掉 Optional 下标、`test-smoke-web`/`metrics.py`/`_llm_settings`/`atomic_write` 的 Optional 与 I/O 调用收口。
+- **96h 变更技术债收口**（rf-1070）：去 Jinja 化批次留下的 `.bg-primary` / `.bg-alloc-mid` / `.bg-alloc-low`
+  三条工具类无任何引用（SVG 用的是 `.fill-alloc-*`），按死样式删除并重标定报告页 CSS 规则集哈希；
+  `close_html_generation_stage`（full/both 共用收口）此前只有端到端间接触及，补 4 条直测锁住其分支——
+  无 recorder 静默返回、有分段时按「落盘」耗时告警、渲染慢指向模板而非磁盘、无分段时回落总值。
 
 （本次发布内容见下方归档索引）
 

@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.5-dev
-> **编号源**：`rf-next = 1070`（新增问题提出后更新为 +1；已用最大 rf-1069，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1071`（新增问题提出后更新为 +1；已用最大 rf-1070，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -64,6 +64,7 @@
 | **rf-1067** | 8 份文档正文残留历史复盘痕迹（带日期的「已采纳/已落地/收紧」告示、「曾经的写法」「曾占…现口径」对照叙事、「此前只存在于…」式缺陷描述）。这类内容与当前状态无关，且会随演进腐化为错误导语（读者据此判断「表不可信/行为待变」） | 全部改写为当前状态陈述：告示去掉日期与「已采纳」口吻只留规则；对照叙事改为风险机制陈述（若…则…）；缺陷描述改为要求陈述；指针类内容（口径、判据）改指真源 |
 | **rf-1068** | 程序注释里的历史复盘叙事：`src/python` 47 处、`scripts` 19 处、`src/test` 44 处（「此前 X 现在 Y」「原先各写一份」「曾占…」式对照，以及带日期的校准/收紧告示）。这类注释随演进腐化：读者据此以为行为待变或表不可信 | 除「回归背景/回归场景」元描述（`CLAUDE.md` 明确豁免、用于说明断言存在理由）外，全部改写为当前状态：对照句改「若/不得 X，否则 Y」，告示去日期留规则，重命名史改「不得沿用旧称」 |
 | **rf-1069** | 静态类型检查暴露的真缺陷与类型债：①`scripts/_eval_halluc_sampler/llm_call.py` 调 `_build_global_macro_prompt` / `generate_global_macro` 少传 `total_cost`，`categories` 落在 `total_cost` 位、`categories` 缺参——该评测脚本 global_macro 路径运行时必抛 TypeError；②6 文件存量 Pyright 错误：`_is_number` 非 `TypeGuard` 致 11 处数值运算报 Unknown、`get_llm_setting_default` 返回 object 直取键、`_max_tokens`/`_LAST_FP_COMPONENTS` 可能为 None、`wb.active`/`find()` 返回 Optional 直接下标、`cached` 可能未绑定、`json.loads`/`os.makedirs` 未包 try | ①补 `total_cost` 实参并初始化 `cached=False`；②`_is_number` 改 `TypeGuard[float]`、默认值取键前 `isinstance(..., dict)` 收窄、`_max_tokens` 显式兜底 18432、测试侧 `_require_section()` 断言取节点、`wb.worksheets[0]` 替代 `wb.active`、I/O 调用包 try 并保留原异常语义 |
+| **rf-1070** | 近 96h 变更残留两处技术债：①去 Jinja 化批次加了三组工具类，但只有 `.fill-alloc-*` 被 SVG 用上，`.bg-primary`/`.bg-alloc-mid`/`.bg-alloc-low` 无任何引用（死样式，规则集哈希把它当既定事实）；②`close_html_generation_stage`（rf-1060 抽出的full/both 共用收口）只被端到端用例间接触及，自身的三个分支（无 recorder / 无分段 / 有分段分流）无直测 |①删 3 条死规则并重标定 CSS 规则集哈希（评审动作）；②补 4 条直测：无 recorder 静默返回、有分段时按「落盘」告警、渲染慢指向模板而非磁盘、无分段回落总值 |
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-08）
 - [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-11-03）
