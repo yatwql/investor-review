@@ -343,9 +343,9 @@ Kimi 开放平台提供 Anthropic API 兼容端点，`provider` 设为 `"claude"
 | `claude-sonnet-5-5` | USD | 2.00 | 10.00 | 0.10 | Claude 现役主力（官方 $/M） |
 | `claude-opus-5-5` | USD | 4.00 | 20.00 | 0.20 | Claude 现役旗舰推理，适合智囊团等复杂分析 |
 | `claude-haiku-5-5` | USD | 0.10 | 0.50 | 0.01 | Claude 现役轻量（单次输入 ≤100K token） |
-| `claude-sonnet-5` | USD | 2.00 | 10.00 | 0.20 | 上一代 Sonnet（legacy） |
 | `claude-sonnet-4-6` | USD | 3.00 | 15.00 | 0.30 | 上一代 Sonnet（legacy） |
 | `claude-opus-4-8` | USD | 5.00 | 25.00 | 0.50 | 上一代 Opus（legacy） |
+| `claude-opus-4-6` | USD | 5.00 | 25.00 | 0.50 | 上一代 Opus 早期小版（legacy，同 4-8 价） |
 | `claude-haiku-4-5` | USD | 1.00 | 5.00 | 0.10 | 上一代轻量（legacy） |
 | `claude-fable-5-1` | USD | 10.00 | 50.00 | 0.25 | Claude 顶级推理与长程 agent 任务 |
 | `claude-fable-5` | USD | 10.00 | 50.00 | 1.00 | 上一代顶级（legacy） |

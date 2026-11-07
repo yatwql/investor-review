@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.4-dev
-> **编号源**：`rf-next = 1064`（新增问题提出后更新为 +1；已用最大 rf-1063，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1065`（新增问题提出后更新为 +1；已用最大 rf-1064，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -63,6 +63,7 @@
 | **rf-1061** | `excel_writer.mask_workbook_text` 遍历 `ws.iter_rows()` 时未跳过 `MergedCell`：被合并吞掉的从属单元格 `value` 只读，清扫命中一处带笔名的合并行即抛 `AttributeError`，整份报告生成失败（匿名化 full 模式 + 含合并单元格页签的组合必现） | 清扫前 `isinstance(cell, MergedCell)` 跳过从属单元格（锚点本身会被遍历到，不漏清扫）；新增合并区域回归用例 |
 | **rf-1062** | 六处同构副本散在不同模块，改一处另一处易漏（口径漂移）：①`atomic_write` 文本/二进制写入本体逐字重复；②`excel_writer` 小计/总计行仅底色不同；③`text_layout` 终端列/行探测同构；④`_json_patch` dict/array 区块括号平衡替换同构；⑤`_report_helpers` 组合演进/快照差异注入同构；⑥`providers/sina` 与 `report/summary` 的 A 股/美股指数取数与渲染同构 | 各抽一份参数化本体（`_write_atomic` / `_write_summary_row` / `_terminal_dimension` / `_replace_value_block` / `_inject_optional_section` / `_fetch_sina_indices` / `_write_index_group`），对外的公开函数签名与输出逐字不变 |
 | **rf-1063** | 截图演示工作区的 `src/` 软链指向旧仓库路径时不自愈：仓库挪位置后旧链仍在，`_link_repo_src` 把「链接存在」当作就绪直接返回，报告渲染跑到废路径（`TemplateNotFound: report_template.html`），重跑 `demo` 也修不回来，只能手工删链 | 软链目标与当前 `REPO_ROOT/src` 不一致时先删链再重指（读不到目标则不动）；补「旧指向→重跑 demo→自愈」回归用例 |
+| **rf-1064** | 文档与实现/文档自身不一致（机检未覆盖的部分）：①Web 手册标题写「六区」而正文写「5 个工作区」且页签表缺「持仓录入」行；②Web 手册目录把 §5 持仓录入排在 §8/§9 之后（序号乱序）；③`requirements.md` 写「24 项全部 affects_report」与「前六组在 `[S]`」，而注册表是 26 项且 `[S]` 只含五组（6+2≠7 组，与同文件另一处自相矛盾）；④定价附录缺 `claude-opus-4-6`、多出注册表已无的 `claude-sonnet-5` | 逐项对齐注册表真值：六区 + 补持仓录入行、目录按 §1~§11 重排、开关数与面板分组改正、定价表按 `MODEL_PRICING` 增删一进一出 |
 
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-06）
