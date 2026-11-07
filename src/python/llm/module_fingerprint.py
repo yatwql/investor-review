@@ -6,7 +6,7 @@
   - **写侧**：``generators.py`` 各生成函数的 ``_fingerprint`` 闭包（经 ``skeleton.py``
     的 ``_run_standard_mode`` 组装同一形态的键）
 
-历史教训：两侧原先靠「注释声明同调」维护，每逢新增影响提示词或内容的输入
+风险：两侧靠「注释声明同调」维护时，每逢新增影响提示词或内容的输入
 （风险信号摘要、信号预消化后缀、决策教训后缀、辩论增强后缀…），都要在两处手工
 各改一遍。任一侧漏改即产生**读写键永不同源**——预检 read 落空、每次报告全量派发，
 且不报错、只表现为静默的性能与日志噪声（如 ``history_data`` 与辩论增强后缀两处
@@ -157,7 +157,7 @@ def _pipeline_block_cache_suffix(pipeline_data: dict | None) -> str:
 
     复盘与辩论提示词都会带上【环比变化】【数据质量降级】两段（构建器
     ``_build_difpipeline_data_block`` / ``_build_data_degradation_block``），
-    但这两段此前不参与指纹——持仓未动而降级事件集变化时键不变，预检命中旧键，
+    但这两段若不参与指纹——持仓未动而降级事件集变化时键不变，预检命中旧键，
     报告继续陈述「某数据源不可用」（或漏报新故障），且不报错。
 
     与 ``_signal_digest_cache_suffix`` 同法：调用**提示词侧同一构建器**取文本再
@@ -392,7 +392,7 @@ def debate_synthesis_fingerprint(inputs: ModuleFingerprintInputs, synthesis_prom
     ``_build_debate_synthesis_prompt`` 一次性渲染。既然提示词就是这三者的函数，
     键直接取该渲染结果——无需逐项枚举入哈希的来源，也就不会漏项。
 
-    此前本键另起一套：截取 pro/con **前 200 字符**摘要再拼接。两处后果——
+    本键不得另起一套摘要：只截取 pro/con **前 200 字符**再拼接会有两处后果——
     正文差异落在 200 字符之后时键不动（命中按旧正文生成的综合结论），仅改
     config（情景名/描述、集中度阈值）而开关位不变时键同样不动。
 

@@ -137,7 +137,7 @@ class TestPerfLedgerFactFix:
 
 
 class TestAnchorPathSource:
-    """doctor 与采集侧必须指向同一个锚点文件（曾误指 data/cache 下的陈旧副本）。"""
+    """doctor 与采集侧必须指向同一个锚点文件（误指 data/cache 下的陈旧副本即失败）。"""
 
     def test_path_matches_producer(self):
         import os
@@ -160,7 +160,7 @@ class TestGroupWiring:
 
 
 class TestNetworkTimeoutSingleSource:
-    """网络检查预算三渠道同源（此前 CLI 8s / Web 12s / TUI 6s 各写一份字面量）。"""
+    """网络检查预算三渠道同源（CLI 8s / Web 12s / TUI 6s 各写一份字面量即分叉）。"""
 
     def test_defaults_declared_in_core(self):
         from src.python.core import doctor

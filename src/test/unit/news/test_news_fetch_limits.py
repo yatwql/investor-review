@@ -54,7 +54,7 @@ class TestNewsFetchLimits(unittest.TestCase):
     def test_call_sites_use_single_source(self) -> None:
         """接线守卫：凡是**调用** `aggregate_news` 的位置都必须经 `news_fetch_limits` 取预算。
 
-        判据按「AST 调用关系」派生而非写死文件路径——新闻刷新曾从 `cache/operations.py`
+        判据按「AST 调用关系」派生而非写死文件路径——新闻刷新若从 `cache/operations.py`
         拆到 `cache/_cache_refresh.py`，写死路径的守卫会静默失效（CI portability 档才暴露）；
         另按文本匹配会把注释里的 `aggregate_news()` 也误算成调用点，故改用 AST Call。
         定义体模块（`fetcher/news.py` 包装器 / `providers/news_aggregator.py`）豁免：

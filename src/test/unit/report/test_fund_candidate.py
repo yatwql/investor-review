@@ -546,7 +546,7 @@ class TestCandidateRowRealShapes(unittest.TestCase):
         self.assertEqual(len(passed), 2)
 
     def test_overlap_column_filled_without_mocked_matrix(self):
-        """重合度矩阵接真实输入 → 重合度列被填出（曾因整字典入参恒为空）。"""
+        """重合度矩阵接真实输入 → 重合度列被填出（整字典入参会使该列恒为空）。"""
         row = self._row()
 
         self.assertEqual(row["overlap_name"], "000001")

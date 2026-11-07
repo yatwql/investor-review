@@ -162,7 +162,7 @@ def run_flow(keys: list[str], *, pre_patches=(), handler_patches=()) -> KeyFeede
     ctxs = [p for p in _patch_readers(feeder)] + list(pre_patches) + list(handler_patches)
     entered = []
     try:
-        for ctx in ctxs:  # 显式进入/退出：ExitStack 在 unittest 与 pytest 混跑时曾遗留激活中的打点
+        for ctx in ctxs:  # 显式进入/退出：否则 ExitStack 在 unittest 与 pytest 混跑时会遗留激活中的打点
             ctx.__enter__()
             entered.append(ctx)
         violations = validate_reader_patches(feeder)

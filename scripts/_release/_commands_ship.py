@@ -173,7 +173,7 @@ def cmd_publish(args: argparse.Namespace, env, runner=None) -> int:
 
     # 提交前先按 pre-commit 钩子同源参数同步统计快照：钩子对「含 src/test 变更」的提交走
     # `--sync --ci --with-test-count`，而只跑 `--sync` 时 test-coverage.md 的收集派生计数
-    # 不会被校验——本地「通过」、钩子里仍红，publish 白跑一轮（实测曾连败两次）。
+    # 不会被校验——本地「通过」、钩子里仍红，publish 白跑一轮（实测连败两次即属此类）。
     print("[..] 提交前统计快照同步（与 pre-commit 钩子同源参数）")
     started = time.perf_counter()
     rc, out, err = _exec(

@@ -217,7 +217,7 @@ class TestDebugPageAssets:
         """注入列表必须含 chart-common.js 且先于 chart-init.js（回归防护）。
 
         chart-init.js 依赖 window.ChartCommon（chart-common.js 提供），报告模板
-        已加载它，但调试页 test-chart.html 注入列表曾漏掉该文件，导致调试页
+        已加载它，但调试页 test-chart.html 注入列表漏掉该文件时，调试页
         0/6 图全部跳过、自检无法进行。本用例保证两处注入顺序一致。
         """
         with open(_DEBUG_PAGE_PATH, encoding="utf-8") as f:

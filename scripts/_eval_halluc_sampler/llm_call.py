@@ -1,7 +1,7 @@
 """LLM 模块调用（HTTP 客户端工厂 / 模块映射 / prompt 构建与真实调用）。
 
 持仓侧派生（品种分类 / 组合核心数值 / 数据集加载）不在本模块实现——唯一实现是
-``holdings.py``，本模块直接复用：两份副本曾随 ``fact_checker`` 内部结构调整各自失效
+``holdings.py``，本模块直接复用：两份副本会随 ``fact_checker`` 内部结构调整各自失效
 （其中一份引用了已搬走的 ``fact_checker._calc_portfolio_values`` 而静默不可用）。
 """
 

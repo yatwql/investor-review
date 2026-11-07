@@ -464,7 +464,7 @@ def compute_rolling_correlations(
         if max_common < w:
             notes.append(f"历史仅 {max_common} 期重叠 < {w} 日窗，该窗全程按可得区间截断计算")
         elif full_window_from.get(wk) and full_window_from[wk] != portfolio[wk][0]["date"]:
-            notes.append(f"{w} 日窗完整重叠自 {full_window_from[wk]} 起，此前端点按可得区间（<{w} 期）计算")
+            notes.append(f"{w} 日窗完整重叠自 {full_window_from[wk]} 起，更早端点按可得区间（<{w} 期）计算")
     if not focus_out:
         notes.append("重点品对：无可计算对（重叠样本不足），仅输出组合平均趋势")
 

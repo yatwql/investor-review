@@ -238,7 +238,7 @@ class TestIntradayToCloseTransition:
     def test_intraday_written_cache_survives_static_ttl_after_close(self, cache_env, monkeypatch):
         """盘中写的价：盘后按静态 TTL 仍「未过期」（本用例只验读侧；收盘时点门禁由上一用例的 TTL 口径负责）。
 
-        名实对齐：本用例断言的是「盘后仍可读」，命名须直接陈述该事实（旧名曾称「已过期」，与断言方向相反）。
+        名实对齐：本用例断言的是「盘后仍可读」，命名须直接陈述该事实（不得称「已过期」而与断言方向相反）。
         """
         from src.python.cache import get as cache_get
 

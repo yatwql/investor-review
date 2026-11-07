@@ -1,8 +1,8 @@
 """LLM 缓存测试共用构造器（输入 / 编排调用 / 常量；命名遵循 `_<模块>_fixtures.py`）。
 
 四个缓存测试文件（`test_report_sequence_cache` / `test_cache_matrix` /
-`test_cache_real_config` / `test_cache_cost_accounting`）此前各自复制了一份
-`_inputs()`、`cache_dir` fixture、`_run()` 与常量——同一份「最小自洽输入」改一处
+`test_cache_real_config` / `test_cache_cost_accounting`）各自复制一份
+`_inputs()`、`cache_dir` fixture、`_run()` 与常量时，同一份「最小自洽输入」改一处
 要改四遍，且容易漂移出只在一个文件里存在的差异。集中在此，各文件只保留自己的
 关注点（断言）。
 

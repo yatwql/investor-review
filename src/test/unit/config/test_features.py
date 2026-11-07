@@ -181,7 +181,7 @@ class TestReportAffectingClassification:
 
     实验注册表第三字段是该问题的书面答案。报告是脱离本机流转的文件，其自述
     只应列出可能改变内容的开关；列进一个不改报告任何字节的开关，读者会推断
-    内容受其影响（系统自检曾如此，转正前它门控 TUI 菜单与 Web 卡片，产物零影响）。
+    内容受其影响（系统自检即此形态：它门控 TUI 菜单与 Web 卡片，产物零影响）。
     """
 
     def test_every_entry_declares_affects_report(self):
@@ -320,7 +320,7 @@ class TestReadSidePromotion:
 class TestRegistryLiveness:
     """开关注册表每一项都必须有消费者。
 
-    缺陷场景：``_FEATURE_FLAGS_DEFAULT`` 曾声明 16 项全仓无任何代码读取的开关
+    缺陷场景：``_FEATURE_FLAGS_DEFAULT`` 若声明全仓无任何代码读取的开关
     （LLM 模块启停、基金深度分析、新闻源、历史走势、匿名化总开关、缓存日清理）
     ——这些能力实际由 ``config.json`` / ``llm_settings.json`` 各自的键控制，开关
     声明了却从未接线（``git log -S`` 证实从未被任何提交消费过）。用户在

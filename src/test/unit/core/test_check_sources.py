@@ -182,7 +182,7 @@ class TestResultRowRenderingConsistency:
     def test_budget_timeout_row_rendered_as_warn(self, capsys):
         """预算超时（消息「超时（预算 Ns）」）→ 行符号为告警、统计计入告警、退出码 1。
 
-        曾出现：统计分支判「timeout / 超时」两种措辞，符号分支只判 "timeout"，
+        缺陷形态：统计分支判「timeout / 超时」两种措辞，符号分支只判 "timeout"，
         于是 `超时（预算 15s）` 被计入 warn_count 却渲染成 `_ERR`（红色错误）——
         同一行自相矛盾（统计行说告警、行首说错误），退出码也按失败处理。
         """
@@ -249,7 +249,7 @@ class TestProxyHint:
 class TestFinancialReportProbes:
     """财报域两个源纳入健康检查。
 
-    背景：`_checks` 原先只探 10 个源（行情/基金/行业/新闻/K 线），**DataSinking 与
+    背景：`_checks` 只探 10 个源（行情/基金/行业/新闻/K 线）时，**DataSinking 与
     巨潮资讯都不探测**——财报域整链失败时用户跑 `check-sources` 得到「10/10 全绿」，
     实际两个源都不可用，故障现场无可见线索（只能翻 logs/app.log）。
     """

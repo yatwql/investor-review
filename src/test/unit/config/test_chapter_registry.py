@@ -157,7 +157,7 @@ class TestPanelMatchesReportChapterNames:
         top = chapter_by_key("enable_news")
         llm = chapter_by_key("news_correlation")
         assert top is not None and llm is not None
-        # 章节本体：显示名即报告产物里的章节名（改名前曾叫「市场新闻」，与产物不一致）
+        # 章节本体：显示名即报告产物里的章节名（不得沿用「市场新闻」等与产物不一致的旧称）
         assert chapter_label(top) == report_name
         # 同一报告章的 LLM 增强行：同源 + 括注，不另起别名
         llm_label = chapter_label(llm)

@@ -138,7 +138,7 @@ def _check_page_render(client, results):
     ok = ok and 'name="use_existing"' in html and 'value="existing"' in html
     ok = ok and 'id="formal-options"' in html and 'id="confirm-overwrite"' in html and 'id="formal-warning"' in html
     # 静态资产可解析：index.html 引用的每个 /static/* 资源都必须返回 200。
-    # 盲区——此前仅查引用串存在（"/static/main.js" in html）不查资源可访问，
+    # 盲区——只查引用串存在（"/static/main.js" in html）而不查资源可访问时，
     # static_url_path 推导漂移致全部资产 404 时整页 JS/CSS 失效、冒烟仍误报通过。
     assets = re.findall(r'(?:src|href)="(/static/[^"?#]+)', html)
     missing = [a for a in assets if client.get(a).status_code != 200]

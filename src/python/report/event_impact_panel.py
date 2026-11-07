@@ -117,7 +117,7 @@ def _build_keyword_index(holdings: list[Any], penetrated_assets: list[dict] | No
       2. **行业直指**：该品种所属板块名（``classify_sector``）；
       3. **行业关键词**：``sector_keywords()`` 中指向同一板块的词（如「白酒」「芯片」），
          命中即视为行业级关联——把「新闻讲行业、组合正好暴露在该行业」的情形纳入事件窗，
-         这类新闻此前整条计入 unmatched。
+         这类新闻不得整条计入 unmatched。
 
     仅收录名称+代码双维判定为 A 股的直接持仓与穿透 A 股代码；基金等无日频股票
     行情的品种不入索引（其命中计入 unmatched，不硬算）。

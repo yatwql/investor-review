@@ -42,8 +42,8 @@ class TestProbeMissNegativeCache:
         ):
             assert datasink._request("/documents/1", {"section": "管理层讨论与分析"}) is None
             first_calls = http.call_count
-            # 模拟负缓存生效（该类探测此前已确认缺失）
-            with patch.object(datasink.PROBE_MISS, "probe", return_value="该章节此前确认缺失（负缓存）"):
+            # 模拟负缓存生效（该类探测已确认缺失）
+            with patch.object(datasink.PROBE_MISS, "probe", return_value="该章节已确认缺失（负缓存）"):
                 assert datasink._request("/documents/1", {"section": "管理层讨论与分析"}) is None
         assert first_calls == 1
         assert http.call_count == first_calls, "命中负缓存后不得再发请求"

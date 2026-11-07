@@ -170,7 +170,7 @@ def _prep_stub(tmp_path) -> dict:
 class TestFullPathInjection:
     """full 路径（HTML+Excel+LLM）须在写 HTML 之前取数并注入市场情绪契约。
 
-    回归场景：`_generate_report_full` 曾只把契约给 Excel（靠 excel_generator 的就地
+    回归场景：`_generate_report_full` 只把契约给 Excel（靠 excel_generator 的就地
     兜底才取数），HTML 侧既无形参也不传参——于是同一次运行的 HTML 不渲染情绪区块、
     其「数据源可用性矩阵」缺「市场情绪」行、说明表记「未使用」，与 Excel 产物自相矛盾。
     """

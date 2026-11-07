@@ -255,7 +255,7 @@ class TestDedupByTitle(unittest.TestCase):
     def test_cross_source_roundup_closing_terminology_synonym_merged(self) -> None:
         """跨源：收评/午评语义同义，收盘/午评归一为收评后同一收评簇应合并。
 
-        背景：港股每日收评，新浪用"收评"、东方财富用"收盘"，二者同义但此前
+        背景：港股每日收评，新浪用"收评"、东方财富用"收盘"，二者同义但若
         未被归一，导致"港股收评恒指涨0.07%…"与"8月18日港股收盘恒指涨0.07%…"
         只共享 2 个 bigram（恒指+指涨）被漏判保留两条。校准数据发现该漏判簇。
         归一化后 overlap=4、ratio≈0.54（≥安全区 0.50）→ 应合并。

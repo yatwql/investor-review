@@ -141,8 +141,8 @@ _FLAT_DEFAULTS: dict[str, Any] = {
 }
 
 # 模块显示名映射（键 = settings_suffix，与 _DEFAULT_LLM_SETTINGS["enabled_llm"] 对齐）。
-# 唯一事实来源为中央注册表（core.registry），此处不再自留副本：模板注释里的模块名
-# 曾是与注册表并存的第三份硬编码 —— 注册表改名或新增模块时它不会跟着动，生成的
+# 唯一事实来源为中央注册表（core.registry）：模板注释里的模块名不得自留副本——
+# 与注册表并存的硬编码不会随注册表改名或新增模块而动，生成的
 # 模板注释就与实际模块名静默不一致（不报错，只误导用户）。
 _MODULE_LABELS = get_llm_module_names()
 

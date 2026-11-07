@@ -144,7 +144,7 @@ class AnnouncingProgressReporter(ProgressReporter):
 
     与基类实现的区别仅在文案：调用前 ``info("正在生成…")``、成功后
     ``ok("…生成完成")``、失败走 ``add_error``。文案逐字同源，避免两个
-    渠道各写一份后漂移（原先 TUI / Web 各持一份逐字相同的实现）。
+    渠道各写一份必然漂移（TUI / Web 曾逐字相同地各持一份）。
     """
 
     def call_sheet(self, label: str, fn: Callable | None, *args: Any, **kwargs: Any) -> bool:

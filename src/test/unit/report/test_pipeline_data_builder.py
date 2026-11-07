@@ -117,7 +117,7 @@ class TestPipelineDataMergeExtra(unittest.TestCase):
 class TestSchemaRegisteredInAppendixH(unittest.TestCase):
     """数据契约：代码中在用的 pipeline_data 键必须先在附录 H 登记。
 
-    背景：`decision_review_data`（决策复盘区块）曾由挂载点写入并被执行章消费，
+    背景：`decision_review_data`（决策复盘区块）由挂载点写入并被执行章消费时，
     却未登记进 `_PIPELINE_DATA_KNOWN_KEYS`/附录 H——两处清单各自漂移即失去
     「先定义类型再使用」的守门作用；`portfolio_daily_returns` 则是反向问题
     （登记了类型却在全仓库无任何消费者，属死键，已随本次整改移除）。

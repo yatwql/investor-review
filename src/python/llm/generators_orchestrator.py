@@ -705,7 +705,7 @@ def generate_all_llm(
         needs["expert_review"] = depth_gate(is_llm_module_enabled(llm_config, "expert_review"), "expert_review", _depth)
 
     # ── 持仓变动复盘归因并入并行批 ──────────────────────
-    # 只吃持仓变动契约、不依赖四模块产出，无串行后置的必要；其单次 4~25s 原先完全
+    # 只吃持仓变动契约、不依赖四模块产出，无串行后置的必要；其单次 4~25s 若串行后置会完全
     # 叠加在 expert_review 之后的关键路径上。契约缺席/开关关闭由模块内部跳过。
     needs.setdefault("holding_change", True)
 

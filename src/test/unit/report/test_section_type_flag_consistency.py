@@ -85,7 +85,7 @@ class TestComputeModuleKeyConsistency:
         return set(re.findall(r'modules\[\s*"(compute_[a-z_]+)"\s*\]', src))
 
     def test_all_dispatch_compute_keys_are_assembled(self):
-        """compute_* 分派键与装配键同步（持仓集中度曾因漏装恒占位）。"""
+        """compute_* 分派键与装配键同步（漏装时持仓集中度恒为占位）。"""
         missing = self._dispatch_compute_keys() - self._assembled_compute_keys()
         assert not missing, f"分派层引用了未装配的计算模块键: {sorted(missing)}"
 

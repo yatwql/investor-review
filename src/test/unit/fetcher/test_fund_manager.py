@@ -341,7 +341,7 @@ class TestArchivePageTimeout:
 
 
 class TestManagerTimeoutBudget(unittest.TestCase):
-    """基金经理抓取的时间预算（握手挂起曾导致单代码 27s 且最终仍失败）。"""
+    """基金经理抓取的时间预算（握手挂起会致单代码 27s 且最终仍失败）。"""
 
     def test_timeout_skips_archive_fallback(self):
         """主页网络级超时 → 不再赌档案页（同站群），直接按缺数据降级。"""

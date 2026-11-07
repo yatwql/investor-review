@@ -513,7 +513,7 @@ class TestFetchLlmAndNews:
 class TestSubmitLlmFutureDegradationEvents:
     """_submit_llm_future 数据降级事件透传回归测试。
 
-    回归场景：数据源降级事件此前未随参数送入 generate_all_llm，持仓体检
+    回归场景：数据源降级事件未随参数送入 generate_all_llm 时，持仓体检
     提示词中的【数据质量降级】详情段在生产路径恒为空，LLM 只能凭基础
     降级块泛泛而谈。此处锁定「事件快照确实被读取并透传」。
     """

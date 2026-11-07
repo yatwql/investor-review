@@ -239,8 +239,8 @@ def read_llm_settings_file() -> tuple[dict, str] | None:
 
     与 :func:`get_llm_config` 的分工：后者是「合并默认值 + providers/key」后的运行期
     有效配置；本函数只回文件里真实写了什么（配置面板展示「当前落盘值」、写前合并用）。
-    三渠道（TUI 配置面板 / Web 配置面板 / 编辑层）共用——此前 TUI 与 Web 各自
-    open + strip + parse 一份，新增键或改合并规则时容易分叉。
+    三渠道（TUI 配置面板 / Web 配置面板 / 编辑层）共用——渠道各自
+    open + strip + parse 一份时，新增键或改合并规则必然分叉。
 
     Returns:
         ``(settings, path)``；文件缺失/解析失败返回 None（调用方决定提示方式）。
@@ -254,7 +254,7 @@ def read_llm_settings_file() -> tuple[dict, str] | None:
         logger.error("[ERR] %s", e)
         return None
     except (OSError, json.JSONDecodeError) as e:
-        # 必须带出原因：原先静默返回 None，面板只看到「读取失败，按默认展示」，
+        # 必须带出原因：只返回 None 时面板只看到「读取失败，按默认展示」，
         # 现场无法区分「文件被占/半写」「JSONC 解析失败」还是「编码问题」。
         logger.warning("llm_settings.json 读取失败（%s: %s），按默认值处理: %s", type(e).__name__, e, path)
         return None

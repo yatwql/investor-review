@@ -203,7 +203,7 @@ def _parse_holdings_rows(table_html: str) -> list[dict[str, Any]]:
 def _extract_fund_name(html: str) -> str:
     """从基金主页 HTML 提取基金名称。
 
-    报告期**不在此处提取**：主页没有带语义标注的报告期字段，此前按字节窗口
+    报告期**不在此处提取**：主页没有带语义标注的报告期字段，按字节窗口
     盲扫（``html[2000:5000]``）既几乎不命中（实测 10 只基金 0 命中），又可能
     命中导航/日历控件里的当天日期——比空值更危险。报告期只从季报接口取。
     """
@@ -408,7 +408,7 @@ def _quarter_channel_payloads(code: str, year: int | None, month: int | None):
     对冲：jjcc 超过 :data:`_HEDGE_AFTER_SECONDS` 仍未返回时并发发出 zqcc——债券基金的
     jjcc 常空回（实测空回前挂起 6.9s），串行会让单只基金白等一整段超时预算；
     正常路径（jjcc 快速返回）不发额外请求。调用方解析出 0 条持仓会继续消费下一项，
-    与原先「jjcc 有页面但无持仓 → 再试 zqcc」的阶梯一致。
+    阶梯与「jjcc 有页面但无持仓 → 再试 zqcc」一致。
 
     并发上界：本函数每只基金最多 2 路请求（jjcc + zqcc），而基金层已由
     ``batch.fund_workers`` 限制同时探测的基金数，故全局季度请求并发 ≤ fund_workers × 2；

@@ -208,7 +208,7 @@ for _g_name, _g_key in zip(_GROUP_DOC_NAMES, GROUP_ORDER):
     _GROUP_NAME_TO_KIND[_g_name] = _g_key
     _GROUP_NAME_TO_KIND[_g_name + "组"] = _g_key
 
-#: 旧三组分组名（生命周期轴曾兼作分组轴的遗留措辞）——扫描域命中即报残留
+#: 非当前三组分组名（生命周期轴与分组轴混用的措辞）——扫描域命中即报残留
 _RETIRED_GROUP_NAMES: tuple[str, ...] = ("实验组", "常规组", "报告组", "报告章节与增强组")
 
 
@@ -504,7 +504,7 @@ def check_chain_table(doc_text: str) -> list[str]:
 
     缺口：只比对链路名时槽位漂移无人发现——巨潮备源适配器已登记而
     ``_DEFAULT_CHAINS['financial_report']`` 只列主源槽，备源正文路径实际不可用；
-    另该表曾只列 5 行却声称枚举全部链路。故本检查同时做槽位级同序比对。
+    另该表可能只列 5 行却声称枚举全部链路。故本检查同时做槽位级同序比对。
     """
     findings: list[str] = []
     header = _chain_id_column_index(doc_text)
@@ -657,7 +657,7 @@ def check_readme_doc_index(doc_text: str | None = None) -> list[str]:
     """README 的管理文档索引须与 `docs/managements/` 实际文件双向一致。
 
     背景：README 的「开发者参考 / 项目内部文档」两张表是外部读者唯一能看到的
-    管理文档清单，手工维护必漏（曾漏 DESIGN.md / DESIGN-TUI.md 两份契约档，
+    管理文档清单，手工维护必漏（易漏 DESIGN.md / DESIGN-TUI.md 两份契约档，
     读者找不到「改 UI 前必读」的入口）。此处把清单与目录做双向对账：
     漏列 → 补表；幽灵引用 → 删行/改链接。
     """

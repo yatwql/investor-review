@@ -190,7 +190,7 @@ def batch_fetch_industry_data(codes: list[str]) -> dict[str, dict]:
 
     # 会话缓存已给过结论（成功或明确取不到）的代码不再进批：既省一次文件缓存探测，
     # 也让「同键未命中」告警只反映真实重探（同一代码一轮内被多次批量查询时，
-    # 此前每次都记一次未命中，命中率与告警都被稀释）。
+    # 若每次都记一次未命中，命中率与告警都被稀释）。
     from src.python.core.provider_registry import NOT_FOUND, get_registry
 
     _registry = get_registry()

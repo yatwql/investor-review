@@ -7,7 +7,7 @@
 - 展示原语（``simplify_endpoint`` / ``circuit_display`` / ``strategy_label`` /
   ``priority_display`` / ``anon_mode_label`` / ``resolve_provider_credentials`` /
   ``resolve_provider_credentials``）：熔断规则、主机名简化、策略标签、凭据回填等
-  曾在渠道各持一份的展示规则，收敛于此单点实现。
+  展示规则不得由渠道各持一份，收敛于此单点实现。
 
 配置读取失败按默认值兜底，不阻断页面渲染。
 """

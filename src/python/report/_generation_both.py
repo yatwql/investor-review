@@ -149,7 +149,7 @@ def _generate_report_both(
     # 申购限购状态（数据契约 purchase_status_data）：功能开关 `fund_purchase_limit`
     # 开启时取全量表（会话内单次）；关闭时为 None（申购状态列隐藏），
     # 全链失败为 available=False（静默隐列，不阻断报告生成）。
-    # holdings_details 传最小形态（name/code，与 full 路径同源同形）——此处曾误传 `config`，
+    # holdings_details 传最小形态（name/code，与 full 路径同源同形）——误传 `config` 时
     # 迭代 dict 只会得到键名（str），`h.get("code")` 当场 AttributeError 中断 both 路径
     from src.python.report.purchase_status import build_purchase_status_data
 
@@ -384,7 +384,7 @@ def _generate_report_both(
         reporter.add_error("HTML 报告生成失败（详情请查看日志文件 logs/app.log）")
         logger.exception("HTML 报告写入失败")
         result.errors.append("HTML 报告生成失败")
-    # 收口与慢段告警与 full 路径共用同一份实现（此前 both 侧完全无告警）
+    # 收口与慢段告警与 full 路径共用同一份实现（both 侧不得缺少告警）
     close_html_generation_stage(_html_rec, time.perf_counter() - _phase_t0, _html_path)
     perf.stop()
 

@@ -152,7 +152,7 @@ def _generate_report_impl(
     result = ReportResult()
 
     # 生成入口静默自动清理过期缓存（尽力而为：清理失败绝不影响生成——无人值守
-    # CLI 定时任务此前无任何自动清理入口，过期缓存文件只增不减）
+    # CLI 定时任务无自动清理入口时，过期缓存文件只增不减）
     from src.python.cache import auto_cleanup_expired
 
     removed = auto_cleanup_expired()

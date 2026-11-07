@@ -21,7 +21,7 @@ from src.python.report.progress import ProgressReporter
 logger = logging.getLogger("invest")
 
 #: 单路取数慢告警阈值（秒）：实测 9.4s 的一路 tencent K 线会把整个因子阶段拖到 10s+，
-#: 而此前既无单路耗时也无告警，事后只能看到「因子暴露 10.5s」这一个总数。
+#: 若无单路耗时与告警，事后只能看到「因子暴露 10.5s」这一个总数。
 #: 与落盘慢告警共用同一阈值源（core.perf），避免两处数字各改一半。
 _SLOW_FETCH_WARN_SECONDS = SLOW_SPAN_WARN_SECONDS
 

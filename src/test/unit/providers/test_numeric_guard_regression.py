@@ -1,6 +1,6 @@
 """数值归一回归测试 —— provider 解析器不得泄漏 NaN/±inf。
 
-缺陷背景：``float("nan")`` / ``float("inf")`` 不抛异常，原先各 provider 的
+缺陷背景：``float("nan")`` / ``float("inf")`` 不抛异常，各 provider 的
 ``try: float(x) except`` 兜底对它们完全无效，脏值会一路穿透到市值、收益序列
 与绘图数据。本文件锁定「provider 解析器的输出一定是有限值」这一不变量。
 """
@@ -22,7 +22,7 @@ class TestSharedSafeFloat:
     """providers/_utils.safe_float —— 命中面最广的一个（基金净值/排名链路）。"""
 
     def test_nan_becomes_zero(self):
-        """核心缺陷：NaN 净值曾原样流向 fetcher/price.py → market_value。"""
+        """核心缺陷：NaN 净值会原样流向 fetcher/price.py → market_value。"""
         result = _utils.safe_float(float("nan"))
         assert result == 0.0
         assert math.isfinite(result)

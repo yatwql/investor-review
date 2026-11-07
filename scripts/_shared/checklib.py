@@ -158,7 +158,7 @@ def extract_at_rule_blocks(css: str, at_rule: str) -> list[str]:
     """提取全部 ``@<at_rule>`` 块体（括号平衡解析），如 ``at_rule="media print"``。
 
     拒绝「首匹配起固定字符窗」类脆弱正则——样式块增删会使窗口越界造成假阴性
-    （曾致打印断言随内容增长随机失败）；括号平衡定位语义精确，块内嵌套
+    （会让打印断言随内容增长随机失败）；括号平衡定位语义精确，块内嵌套
     ``{...}``（``@page``/``keyframes``）亦正确收敛。
     """
     blocks: list[str] = []

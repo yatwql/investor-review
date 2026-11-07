@@ -31,7 +31,7 @@ from _eval_factor_zoo.probe import (
 )
 from src.python.analysis.correlation import _pearson_pvalue  # 共享 Pearson + p 值
 
-# 因子公式与生产层同源（原先各拷一份，改一处忘另一处会导致评测口径漂移）
+# 因子公式与生产层同源（各拷一份会因改一处忘另一处导致评测口径漂移）
 from src.python.analysis._factor_formulas import (  # noqa: F401 — 供评测与测试按原面引用
     _aligned_index_returns,
     _ema,

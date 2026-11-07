@@ -104,7 +104,7 @@ def header_freshness(date_str: Any, *, config: dict | None = None, calendar: lis
     - 日历**仅用已缓存**的交易日历（``calendar`` 参数用于测试注入）；未命中时
       绝不为页头去触发 akshare——回落「自然日龄 ≥ 配置阈值」；
     - 阈值取 ``degradation.<tier>.stale_days`` 的**最严一档**（默认 T2=3 天），
-      与数据状态告警同一配置源，替代此前 TUI 自定的 ``_STALE_DAYS = 7``（自然日）。
+      与数据状态告警同一配置源，不按自然日固定天数写死。
 
     Args:
         date_str: 数据日期（净值/行情日期，``YYYY-MM-DD`` 前缀即可）。

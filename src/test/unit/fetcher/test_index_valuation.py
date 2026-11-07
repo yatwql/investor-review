@@ -8,7 +8,7 @@
   5. 无 symbol 映射（非 sh000300）→ None 且不触达 akshare
   6. 缓存命中 → 不触达 akshare
   7. 熔断隔离回归：任何路径都不向共享 akshare 熔断键写失败/成功
-     （曾把可选源失败计入共享键，会连坐无风险利率 bond_yield）
+     （把可选源失败计入共享键会连坐无风险利率 bond_yield）
 """
 
 from __future__ import annotations

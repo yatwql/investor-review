@@ -80,7 +80,7 @@ class TestFactorFetchParallelism:
         assert elapsed < serial_seconds * 0.7, f"两组取数未并发（{elapsed:.2f}s vs 串行 {serial_seconds:.2f}s）"
 
     def test_slow_single_fetch_logs_warning_with_label(self, monkeypatch, caplog):
-        """单路取数超阈 → WARNING 带标的与耗时（此前只有阶段总数，无法定位）。"""
+        """单路取数超阈 → WARNING 带标的与耗时（只有阶段总数时无法定位）。"""
         _stub_pipeline(monkeypatch)
         monkeypatch.setattr(rfm, "_SLOW_FETCH_WARN_SECONDS", 0.05)
 

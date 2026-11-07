@@ -163,8 +163,8 @@ class TestIndustryTransformValuationPassthrough(unittest.TestCase):
 class TestFetchValuationFields(unittest.TestCase):
     """fetch_valuation_fields — 经 Provider Chain 取 PE/PB（唯一网关入口）。
 
-    背景：报告层曾直接 import ``providers.eastmoney_industry`` 的估值取值函数，
-    绕开 fetcher 网关（无链路降级/诊断）。现值取值经本网关取用，断言：
+    背景：报告层直接 import ``providers.eastmoney_industry`` 的估值取值函数会
+    绕开 fetcher 网关（无链路降级/诊断）。取值一律经本网关，断言：
       - 结果透传行业请求带出的 pe/pb；
       - 取数走行业数据入口（不直连 provider）。
     """

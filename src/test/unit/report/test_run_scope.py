@@ -41,7 +41,7 @@ class TestStartReportRun:
     def test_boundary_clears_events_and_carrier_keeps_cross_facts(self, tmp_path):
         """一次报告边界同时成立：事件清空 + 自检载体复位 + 跨报告事实保留。
 
-        这三件事此前分散在三条用例里各自验证；此处按**真实入口** `start_report_run()`
+        这三件事分散在三条用例里各自验证会漏掉先后关系；此处按**真实入口** `start_report_run()`
         一次性断言，防止将来只做到其中一两件（例如又在报告边界里重置指纹审计基线）。
         """
         from src.python.llm.self_review import get_self_review_block, set_self_review_block

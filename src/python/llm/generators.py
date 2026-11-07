@@ -451,7 +451,7 @@ def generate_self_review(
     )
     if not _result[1]:
         # 未命中时逐段摘要（8 位）落日志：自检键并入六类输入，只看总键无法判断
-        # 「哪一段变了」——缺这条只能靠反复试跑反推（该键曾出现同输入隔次未命中）。
+        # 「哪一段变了」——缺这条只能靠反复试跑反推（同输入隔次未命中时无从定位）。
         from src.python.llm.module_fingerprint import self_review_fingerprint_parts
 
         _parts = self_review_fingerprint_parts(
