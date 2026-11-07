@@ -50,8 +50,15 @@ logger = logging.getLogger("invest")
 SLOW_SPAN_WARN_SECONDS = 5.0
 
 
-def warn_slow_write(label: str, seconds: float, path: Any = None) -> None:
-    """落盘阶段超阈值时告警，并带上可定位的现场（耗时/阈值/产物大小/路径）。
+def warn_slow_write(
+    label: str,
+    seconds: float,
+    path: Any = None,
+    *,
+    what: str = "落盘",
+    hint: str = "排查磁盘/挂载与 fsync 等待",
+) -> None:
+    """落盘（或指定事件）阶段超阈值时告警，并带上可定位的现场（耗时/阈值/产物大小/路径）。
 
     为什么单独一条 WARNING：偶发十几秒的「页面写入」在 perf 里只是一个分阶段数字，
     事后只能人工比对历史；有了带阈值与产物大小的告警，日志本身就能区分
@@ -61,6 +68,8 @@ def warn_slow_write(label: str, seconds: float, path: Any = None) -> None:
         label: 阶段名（如 ``HTML 页面写入``）。
         seconds: 该阶段耗时（秒）。
         path: 产物路径；给目录时只报路径不报大小。
+        what: 事件名（默认「落盘」；非落盘事件须改写，否则指错排查方向）。
+        hint: 排查提示；非落盘事件须与 ``what`` 同时改写（默认指向磁盘）。
     """
     if seconds < SLOW_SPAN_WARN_SECONDS:
         return
@@ -73,12 +82,14 @@ def warn_slow_write(label: str, seconds: float, path: Any = None) -> None:
         except OSError:
             size_text = ""
     logger.warning(
-        "[perf] %s 落盘偏慢：%.2fs（阈值 %.1fs，%s路径 %s）——排查磁盘/挂载与 fsync 等待",
+        "[perf] %s %s偏慢：%.2fs（阈值 %.1fs，%s路径 %s）——%s",
         label,
+        what,
         seconds,
         SLOW_SPAN_WARN_SECONDS,
         size_text,
         path,
+        hint,
     )
 
 

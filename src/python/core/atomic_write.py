@@ -45,6 +45,57 @@ from typing import Any
 logger = logging.getLogger("invest")
 
 
+def _write_atomic(
+    path: str,
+    data: str | bytes,
+    *,
+    prefix: str = ".atomic_",
+    log_tag: str = "atomic",
+    noun: str = "文件",
+    mode: int | None = None,
+) -> bool:
+    """原子写入本体（文本/二进制共用）：临时文件 → `_replace` 顶替目标。
+
+    文本与二进制分开打开（不用动态 mode 字符串）：文本走 `os.fdopen(..., "w")`
+    以保留 `open()` 的换行翻译语义（与原先的文本写入完全一致），二进制走 `"wb"`。
+
+    Args:
+        path: 目标文件路径
+        data: 完整的目标内容（覆盖式写入，非追加；`str` 走文本、`bytes` 走二进制）
+        其余参数同 :func:`write_text_atomic`
+
+    Returns:
+        是否落盘成功（语义同 :func:`write_text_atomic`）。
+    """
+    parent = os.path.dirname(path)
+    try:
+        # 建目录也纳入守护：父路径被占（同名文件）等场景下 makedirs 会抛
+        # FileExistsError/PermissionError，若逸出则违背「本原语不抛出」的契约，
+        # 而调用方（如 news_dedup 锚点写入）正是靠返回值而非异常判定成败。
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        fd, tmp_path = tempfile.mkstemp(dir=parent or ".", prefix=prefix, suffix=".tmp")
+    except OSError:
+        logger.exception("[%s] 准备写入失败（创建目录或临时文件）: %s", log_tag, path)
+        return False
+    try:
+        if isinstance(data, str):
+            with os.fdopen(fd, "w", encoding="utf-8") as text_f:
+                text_f.write(data)
+        else:
+            with os.fdopen(fd, "wb") as bin_f:
+                bin_f.write(data)
+        if mode is not None:
+            os.chmod(tmp_path, mode)
+        _replace(tmp_path, path)
+    except Exception:
+        with contextlib.suppress(OSError):
+            os.remove(tmp_path)
+        logger.exception("[%s] 写入%s失败: %s", log_tag, noun, path)
+        return False
+    return True
+
+
 def write_text_atomic(
     path: str,
     content: str,
@@ -70,29 +121,7 @@ def write_text_atomic(
         依赖「已持久化」这一前提做后续动作（如迁移成功后删除旧文件），就得据此
         判定，否则会在写入失败时误删唯一的数据源。
     """
-    parent = os.path.dirname(path)
-    try:
-        # 建目录也纳入守护：父路径被占（同名文件）等场景下 makedirs 会抛
-        # FileExistsError/PermissionError，若逸出则违背「本原语不抛出」的契约，
-        # 而调用方（如 news_dedup 锚点写入）正是靠返回值而非异常判定成败。
-        if parent:
-            os.makedirs(parent, exist_ok=True)
-        fd, tmp_path = tempfile.mkstemp(dir=parent or ".", prefix=prefix, suffix=".tmp")
-    except OSError:
-        logger.exception("[%s] 准备写入失败（创建目录或临时文件）: %s", log_tag, path)
-        return False
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(content)
-        if mode is not None:
-            os.chmod(tmp_path, mode)
-        _replace(tmp_path, path)
-    except Exception:
-        with contextlib.suppress(OSError):
-            os.remove(tmp_path)
-        logger.exception("[%s] 写入%s失败: %s", log_tag, noun, path)
-        return False
-    return True
+    return _write_atomic(path, content, prefix=prefix, log_tag=log_tag, noun=noun, mode=mode)
 
 
 def write_json_atomic(
@@ -159,26 +188,8 @@ def write_bytes_atomic(
     Returns:
         是否落盘成功（语义同 :func:`write_text_atomic`）。
     """
-    parent = os.path.dirname(path)
-    try:
-        if parent:
-            os.makedirs(parent, exist_ok=True)
-        fd, tmp_path = tempfile.mkstemp(dir=parent or ".", prefix=prefix, suffix=".tmp")
-    except OSError:
-        logger.exception("[%s] 准备写入失败（创建目录或临时文件）: %s", log_tag, path)
-        return False
-    try:
-        with os.fdopen(fd, "wb") as f:
-            f.write(data)
-        if mode is not None:
-            os.chmod(tmp_path, mode)
-        _replace(tmp_path, path)
-    except Exception:
-        with contextlib.suppress(OSError):
-            os.remove(tmp_path)
-        logger.exception("[%s] 写入%s失败: %s", log_tag, noun, path)
-        return False
-    return True
+
+    return _write_atomic(path, data, prefix=prefix, log_tag=log_tag, noun=noun, mode=mode)
 
 
 def copy_file_atomic(

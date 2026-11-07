@@ -1,5 +1,5 @@
 # 投资复盘助手 — 需求文档
-> 文档版本：0.17.3
+> 文档版本：0.17.4
 
 ---
 
@@ -1300,7 +1300,7 @@ LLM 五维度量化评分，每项满分 100：
 | R-PERF-06 | 风格与因子分析中同一品种的 API 数据应在会话内跨基金复用 |
 | R-PERF-07 | 历史数据获取应使用增量模式（缓存底座 + 增量新数据），避免全量重取 |
 | R-PERF-08 | 历史走势获取应阶段超时保护（超时后已完成部分保留，未完成部分以占位处理） |
-| R-PERF-09 | 每次报告生成应自动记录各阶段耗时（含**逐模块** `llm.modules[*].duration_seconds`，缓存命中记 0）（行情获取/数据准备/HTML生成/Excel生成/LLM+新闻等）及子阶段 `breakdown`（数据准备：行情与明细/指数获取/穿透/因子暴露/行业 Beta/相关性矩阵/覆盖与新鲜度/估值与温度/财报摘要/财务指标/申购与成本位置/明细装配与建议；LLM+新闻：新闻源抓取/去重与关联/锚点维护/事件窗装配/LLM 模块；HTML 生成：图表数据装配/页面写入），并以 `counters.prep_cache_hits` / `prep_cache_misses` 标注数据准备的**缓存冷热**（无此标记时冷/热两种运行的耗时不可比），持久化到 `data/state/perf_history.jsonl` 用于跨版本性能趋势追踪与瓶颈归因 |
+| R-PERF-09 | 每次报告生成应自动记录各阶段耗时（含**逐模块** `llm.modules[*].duration_seconds`，缓存命中记 0）（行情获取/数据准备/HTML生成/Excel生成/LLM+新闻等）及子阶段 `breakdown`（数据准备：行情与明细/指数获取/穿透/因子暴露/行业 Beta/相关性矩阵/覆盖与新鲜度/估值与温度/财报摘要/财务指标/申购与成本位置/明细装配与建议；LLM+新闻：新闻源抓取/去重与关联/锚点维护/事件窗装配/LLM 模块；HTML 生成：图表数据装配/页面写入总值 + 四个子步骤（模板渲染/资产内嵌/匿名化/落盘）），并以 `counters.prep_cache_hits` / `prep_cache_misses` 标注数据准备的**缓存冷热**（无此标记时冷/热两种运行的耗时不可比），持久化到 `data/state/perf_history.jsonl` 用于跨版本性能趋势追踪与瓶颈归因 |
 | R-PERF-10 | 每次报告生成应在后台自动执行数据源健康检查（HTTP 连通性+延迟），结果存入 `data/state/datasource_health.jsonl` 并注入 DegradationTracker 供数据源可用性矩阵展示 |
 | R-PERF-11 | **LLM 缓存未命中须归因到四态**（观测，不改控制流）：`forced`（用户强刷）、`fingerprint_changed`（输入指纹变了，放宽 TTL 也省不下）、`ttl_expired`（内容没变、纯到点，放宽 TTL 可省）、`cache_miss`（无上轮指纹快照的冷启动）；**归因主信号为「键是否变化」**（进程内上轮键优先，其次上次进程落盘基线 `data/state/llm_fingerprint_snapshot.json`），键变即 `fingerprint_changed` 并打出变化组件名，键未变而读不到内容才是 `ttl_expired`。**冷启动不得记为 `ttl_expired`**：那是「内容没变只是到点」的结论，与「压根无上轮缓存可命中」相反，混同会让「放宽 TTL 能省钱」的判断系统性偏离。分布写入 perf（`llm.recompute_reasons` 聚合 + `llm.module_recompute_reasons` 逐模块） |
 
@@ -1340,7 +1340,7 @@ LLM 五维度量化评分，每项满分 100：
 | `history.coverage_threshold` | float | 0.8 | — | 有效区间覆盖阈值 |
 | `history.benchmark_indices` | dict | {"sh000300":"沪深300"} | — | 基准指数配置，组合历史走势对比 |
 | `history.lookback_days` | int | 90 | — | 历史走势取数窗口（K 线条数/交易日），需 ≥ 60（MIN_SPAN）才能计算回撤分析 |
-| `features.json` 的 26 项功能开关 | bool | 各组默认值见功能开关注册表 | — | **报告产物开关**（24 项全部 `affects_report=True`；七组：持仓与交易 / 市场与估值 / 基金与风格 / 事件与摘要 / 机制与质量 / 独立章节与回放 / 章节内选项，存 `data/config/features.json`；TUI 呈现按面板分流：前六组在 `[S]`，后两组在 `[C]`） |
+| `features.json` 的 26 项功能开关 | bool | 各组默认值见功能开关注册表 | — | **报告产物开关**（26 项全部 `affects_report=True`；七组：持仓与交易 / 市场与估值 / 基金与风格 / 事件与摘要 / 机制与质量 / 独立章节与回放 / 章节内选项，存 `data/config/features.json`；TUI 呈现按面板分流：前五组在 `[S]`，后两组在 `[C]`） |
 | `holdings_start_date` | str | `""` | — | 组合建仓日期（YYYY-MM-DD，可选）。持仓 Excel 未录入交易/分红流水时，成本流水子模块按「建仓日一次性买入」近似年化（`build_approximate_fund_flow_data`）；空=不计算近似年化，仅成本分档近似（每份成本 vs 市价） |
 | `comparison_indices` | dict | {"sh000300":"沪深300","sh000905":"中证500","sh000012":"中证全债"} | — | 竞争语境对比指数池，支持多指数对比 |
 | `rebalance.threshold` | float | 0.15 | — | 单品种权重超限阈值（15%），超限触发再平衡建议 |

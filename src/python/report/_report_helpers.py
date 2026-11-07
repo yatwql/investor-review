@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Any, cast
 
 from src.python.report.progress import ProgressReporter
@@ -39,6 +40,56 @@ def _compute_details(holdings: list, reporter: ProgressReporter) -> list:
 # ── 组合演进数据（多快照趋势聚合）──
 
 
+def _inject_optional_section(
+    pipeline_data: dict | None,
+    *,
+    data_key: str,
+    builder: Callable[[str | None], dict],
+    log_tag: str,
+    failure_reason: str,
+    snapshot_namespace: str | None = None,
+) -> dict:
+    """构造一个可选分析区块并注入 pipeline_data（失败降级、绝不阻断报告）。
+
+    组合演进与快照差异两个区块的注入逻辑完全同构（惰性导入 → 构建 → 失败
+    写 available=False 的降级 dict），差异只在键名/构建函数/日志标签/降级文案，
+    统一由本函数参数化，避免两份拷贝各自漂移（§1.4.5 隔离降级口径）。
+
+    Args:
+        pipeline_data: capture_snapshot 返回的 A 通道数据（可能为 None）
+        data_key: 注入到 pipeline_data 的键名
+        builder: 构建函数（各调用方用惰性导入包装，避免循环依赖与启动开销）
+        log_tag: 降级警告日志标签
+        failure_reason: 降级 dict 的 reason 文案
+        snapshot_namespace: 快照隔离域（None=共享主目录；如 "web"=web 试算域）
+
+    Returns:
+        注入后的 pipeline_data（None 时新建字典）
+    """
+    if pipeline_data is None:
+        pipeline_data = {}
+    try:
+        pipeline_data[data_key] = builder(snapshot_namespace)
+    except Exception:
+        logger.warning("[%s] %s（非关键）", log_tag, failure_reason, exc_info=True)
+        pipeline_data[data_key] = {"available": False, "reason": failure_reason}
+    return pipeline_data
+
+
+def _build_evolution_data(snapshot_namespace: str | None) -> dict:
+    """组合演进数据构建（惰性导入，避免报告管线启动即加载分析模块）。"""
+    from src.python.analysis.portfolio_evolution import build_evolution_data
+
+    return build_evolution_data(snapshot_namespace=snapshot_namespace)
+
+
+def _build_snapshot_diff_data(snapshot_namespace: str | None) -> dict:
+    """快照差异摘要构建（惰性导入，同上）。"""
+    from src.python.analysis.snapshot_diff import build_snapshot_diff
+
+    return build_snapshot_diff(snapshot_namespace=snapshot_namespace)
+
+
 def _inject_evolution_data(
     pipeline_data: dict | None,
     *,
@@ -57,16 +108,14 @@ def _inject_evolution_data(
        Returns:
            注入 evolution_data 后的 pipeline_data（None 时新建字典）
     """
-    if pipeline_data is None:
-        pipeline_data = {}
-    try:
-        from src.python.analysis.portfolio_evolution import build_evolution_data
-
-        pipeline_data["evolution_data"] = build_evolution_data(snapshot_namespace=snapshot_namespace)
-    except Exception:
-        logger.warning("[evolution] 组合演进数据构建失败（非关键）", exc_info=True)
-        pipeline_data["evolution_data"] = {"available": False, "reason": "组合演进数据构建失败"}
-    return pipeline_data
+    return _inject_optional_section(
+        pipeline_data,
+        data_key="evolution_data",
+        builder=_build_evolution_data,
+        log_tag="evolution",
+        failure_reason="组合演进数据构建失败",
+        snapshot_namespace=snapshot_namespace,
+    )
 
 
 def _inject_snapshot_diff_data(
@@ -90,16 +139,14 @@ def _inject_snapshot_diff_data(
        Returns:
            注入 snapshot_diff_data 后的 pipeline_data（None 时新建字典）
     """
-    if pipeline_data is None:
-        pipeline_data = {}
-    try:
-        from src.python.analysis.snapshot_diff import build_snapshot_diff
-
-        pipeline_data["snapshot_diff_data"] = build_snapshot_diff(snapshot_namespace=snapshot_namespace)
-    except Exception:
-        logger.warning("[snapshot_diff] 快照差异摘要构建失败（非关键）", exc_info=True)
-        pipeline_data["snapshot_diff_data"] = {"available": False, "reason": "快照差异摘要构建失败"}
-    return pipeline_data
+    return _inject_optional_section(
+        pipeline_data,
+        data_key="snapshot_diff_data",
+        builder=_build_snapshot_diff_data,
+        log_tag="snapshot_diff",
+        failure_reason="快照差异摘要构建失败",
+        snapshot_namespace=snapshot_namespace,
+    )
 
 
 # ── 校验函数 ──

@@ -179,8 +179,7 @@ def _generate_full_html_report(
             与 Excel 侧同源，由编排层 `_generate_report_full` 注入——须在写 HTML 之前完成
             取数，否则本类别既不出现在矩阵、说明表也记「未使用」（与 Excel 自相矛盾）。
     """
-    from src.python.core.perf import warn_slow_write
-    from src.python.report.html_writer import write_html_report
+    from src.python.report.html_writer import close_html_generation_stage, write_html_report
     from src.python.report.run_integrity import current_perf
 
     _perf = current_perf()
@@ -205,6 +204,7 @@ def _generate_full_html_report(
             _t0 = time.perf_counter()
         html_path = write_html_report(
             holdings,
+            stage_recorder=_html_recorder,
             output_dir=output_dir or prep["output_dir"],
             news_top_count=prep["news_top_count"],
             include_news=news_ok,
@@ -261,8 +261,5 @@ def _generate_full_html_report(
         return False
     finally:
         if _perf is not None:
-            if _html_recorder is not None:
-                page_write = time.perf_counter() - _t0
-                _html_recorder.record("页面写入", page_write)
-                warn_slow_write("HTML 页面写入", page_write, html_path)
+            close_html_generation_stage(_html_recorder, time.perf_counter() - _t0, html_path)
             _perf.stop()

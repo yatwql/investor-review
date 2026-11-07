@@ -113,6 +113,25 @@ class TestDemoWorkspace:
         assert "report" in command
         assert command[-1] == "--yes"
 
+    @pytest.mark.unit_scripts
+    def test_stale_src_symlink_is_repointed_to_current_repo(self, demo, tmp_path):
+        """回归：演示根 src 软链指向旧仓库路径时，重跑 demo 必须自愈。
+
+        仓库挪位置后旧链仍在，旧实现把「链接存在」当成就绪直接跳过，报告渲染于是
+        跑到废路径上（`TemplateNotFound: report_template.html`），重跑 demo 也修不好。
+        """
+        workspace = demo.build(tmp_path / "shots")
+        link = workspace / "src"
+        link.unlink()
+        stale = tmp_path / "moved-away-repo" / "src"
+        stale.mkdir(parents=True)
+        link.symlink_to(stale, target_is_directory=True)
+
+        demo.build(tmp_path / "shots")
+
+        assert link.is_symlink()
+        assert link.resolve() == (demo.REPO_ROOT / "src").resolve()
+
 
 class TestCliText:
     """CLI 输出清洗：剥时间戳、进度回车只留末段、抹绝对路径、截尾。"""

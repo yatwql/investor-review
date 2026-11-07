@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -77,7 +78,7 @@ def _generate_report_both(
     from src.python.llm.depth_profile import effective_news_limit, resolve_depth_profile
     from src.python.report._snapshot import capture_snapshot, fetch_history_data, latest_quotes_from_detail_rows
     from src.python.report.excel_generator import generate_excel_report
-    from src.python.report.html_writer import write_html_report
+    from src.python.report.html_writer import close_html_generation_stage, write_html_report
     from src.python.report.orchestrator import ReportResult
 
     from src.python.report._run_scope import finish_report_run, start_report_run
@@ -319,11 +320,17 @@ def _generate_report_both(
     _news_label = "含新闻" if _enable_news else "无新闻"
     reporter.info(f"正在生成 HTML 报告（{_news_label}）...")
     perf.start("HTML 生成")
+    _html_rec = perf.recorder("HTML 生成")
+    _phase_t0 = time.perf_counter()
+    _html_path: str | None = None
     try:
         chart_datasets = _build_chart_datasets_for_report(
             history_data=history_data,
             details=details,
         )
+        if _html_rec is not None:
+            # 图表数据装配与后续渲染/落盘分开记：整段偏慢时先分清是哪一段
+            _html_rec.record("图表数据装配", time.perf_counter() - _phase_t0)
         # 成本流水数据（fund_flow_data）：复用 excel_market_data 组装逻辑，
         # 开关关闭返回 None（HTML 模板保持既有输出）。
         from src.python.report.excel_market_data import _build_flow_data
@@ -368,13 +375,17 @@ def _generate_report_both(
             schedule_replay_data=(pipeline_data or {}).get("schedule_replay_data"),
             risk_adjusted_excess_data=(pipeline_data or {}).get("risk_adjusted_excess_data"),
             summary_highlights_data=(pipeline_data or {}).get("summary_highlights_data"),
+            stage_recorder=_html_rec,
         )
         reporter.ok(f"HTML 报告已生成: {path}")
+        _html_path = path
         result.html_ok = True
     except Exception:
         reporter.add_error("HTML 报告生成失败（详情请查看日志文件 logs/app.log）")
         logger.exception("HTML 报告写入失败")
         result.errors.append("HTML 报告生成失败")
+    # 收口与慢段告警与 full 路径共用同一份实现（此前 both 侧完全无告警）
+    close_html_generation_stage(_html_rec, time.perf_counter() - _phase_t0, _html_path)
     perf.stop()
 
     # ── 5. Excel 报告 ──

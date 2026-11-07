@@ -80,25 +80,36 @@ def _detect_indent_unit(text: str, default: int = 2) -> int:
     return default
 
 
-def _replace_dict_block(text: str, key: str, new_val: dict) -> str:
-    """在 JSON 文本中找到指定 key 的 dict 值区块，自适应缩进替换。
+def _replace_value_block(text: str, key: str, new_val: dict | list, open_ch: str, close_ch: str) -> str:
+    """在 JSON 文本中找到指定 key 的容器值区块，自适应缩进替换。
 
-    使用 brace 平衡算法确保正确匹配嵌套大括号，自动检测周围缩进层级，
-    使替换后的 JSON 与文件缩进风格一致。
+    括号平衡算法：从开括号起逐字符计数，深度归零时的位置就是匹配的闭括号，
+    因此嵌套容器也能正确定位（dict 用 ``{}``、array 用 ``[]``）。自适应周围
+    缩进（缩进单位经 ``_detect_indent_unit`` 沿用文件现有风格），替换后的
+    JSON 与文件风格一致。
+
+    Args:
+        text: 原始 JSON 文本（可含注释）
+        key: 目标顶层键名
+        new_val: 新值（dict 或 list）
+        open_ch: 开括号字符（``"{"`` 或 ``"["``）
+        close_ch: 闭括号字符（``"}"`` 或 ``"]"``）
+
+    Returns:
+        替换后的文本；未找到 key 或括号不平衡时原样返回。
     """
-    match = re.search(re.escape(f'"{key}":') + r"\s*\{", text)
+    match = re.search(re.escape(f'"{key}":') + r"\s*" + re.escape(open_ch), text)
     if not match:
         return text
 
     # 检测 key 所在的当前行缩进
     line_start = text.rfind("\n", 0, match.start()) + 1
-    base_indent = match.start() - line_start  # ""{key}"" 前的空格数
+    base_indent = match.start() - line_start  # 键名前的空格数
 
-    # 序列化新值，内缩沿用文件现有缩进单位（而非硬编码 4）
-    INNER_INDENT = _detect_indent_unit(text)
-    lines = json.dumps(new_val, ensure_ascii=False, indent=INNER_INDENT).split("\n")
+    # 序列化新值，内缩沿用文件现有缩进单位（而非硬编码）
+    lines = json.dumps(new_val, ensure_ascii=False, indent=_detect_indent_unit(text)).split("\n")
 
-    # 第一行是 "{"，续行加 base_indent 前缀，末行 "}" 也加 base_indent
+    # 首行是开括号，续行（含末行闭括号）统一加 base_indent 前缀
     block_lines = [lines[0]]
     for line in lines[1:]:
         stripped = line.lstrip()
@@ -109,62 +120,33 @@ def _replace_dict_block(text: str, key: str, new_val: dict) -> str:
             block_lines.append(" " * base_indent + line)
     block_text = "\n".join(block_lines)
 
-    # 从 opening brace 开始逐字符查找 matching closing brace
-    brace_start = match.end() - 1  # '{' 的位置
+    # 从开括号开始逐字符查找匹配的闭括号
     depth = 0
-    pos = brace_start
+    pos = match.end() - 1  # 开括号的位置
     while pos < len(text):
         ch = text[pos]
-        if ch == "{":
+        if ch == open_ch:
             depth += 1
-        elif ch == "}":
+        elif ch == close_ch:
             depth -= 1
             if depth == 0:
                 return text[: match.start()] + f'"{key}": {block_text}' + text[pos + 1 :]
         pos += 1
-    return text  # brace 不平衡，放弃替换
+    return text  # 括号不平衡，放弃替换
+
+
+def _replace_dict_block(text: str, key: str, new_val: dict) -> str:
+    """替换指定 key 的 dict 值区块（brace 平衡 + 自适应缩进）。"""
+    return _replace_value_block(text, key, new_val, "{", "}")
 
 
 def _replace_array_block(text: str, key: str, new_val: list) -> str:
-    """在 JSON 文本中找到指定 key 的 array 值区块，自适应缩进替换。
+    """替换指定 key 的 array 值区块（bracket 平衡 + 自适应缩进）。
 
-    bracket 平衡算法（与 ``_replace_dict_block`` 同构）：正确匹配嵌套方括号，
-    自适应周围缩进（缩进单位经 ``_detect_indent_unit`` 沿用文件现有风格）。
     注意：被替换区块内的行注释随区块一并刷新（数组整体重写，
     区块外注释不受影响）——调用方须保证数组内容可全量重序列化。
     """
-    match = re.search(re.escape(f'"{key}":') + r"\s*\[", text)
-    if not match:
-        return text
-
-    line_start = text.rfind("\n", 0, match.start()) + 1
-    base_indent = match.start() - line_start
-
-    INNER_INDENT = _detect_indent_unit(text)
-    lines = json.dumps(new_val, ensure_ascii=False, indent=INNER_INDENT).split("\n")
-    block_lines = [lines[0]]
-    for line in lines[1:]:
-        stripped = line.lstrip()
-        leading = len(line) - len(stripped)
-        if leading == 0:
-            block_lines.append(" " * base_indent + stripped)
-        else:
-            block_lines.append(" " * base_indent + line)
-    block_text = "\n".join(block_lines)
-
-    bracket_start = match.end() - 1
-    depth = 0
-    pos = bracket_start
-    while pos < len(text):
-        ch = text[pos]
-        if ch == "[":
-            depth += 1
-        elif ch == "]":
-            depth -= 1
-            if depth == 0:
-                return text[: match.start()] + f'"{key}": {block_text}' + text[pos + 1 :]
-        pos += 1
-    return text  # bracket 不平衡，放弃替换
+    return _replace_value_block(text, key, new_val, "[", "]")
 
 
 # ═══════════════════════════════════════════════════════════════

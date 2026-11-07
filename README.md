@@ -32,7 +32,7 @@
 - 🔁 **决策有闭环** — 建议 → 登记 → 真实行情结算命中率 → 教训回灌提示词，越用越懂你的组合
 - 🔒 **隐私优先** — 数据全部本地处理，支持 4 档匿名化，凭据永不落日志与报告
 
-> 当前版本：0.17.3（[版本历史](docs/managements/changelog.md)）
+> 当前版本：0.17.4（[版本历史](docs/managements/changelog.md)）
 
 ## ✨ 核心亮点
 
@@ -184,7 +184,7 @@ git clone https://github.com/yatwql/investor-review.git && cd investor-review
 | 1 | [快速开始](docs/manuals/how-to-start.md) | 三种启动方式、持仓格式、首次运行会生成什么 |
 | 2 | [TUI 菜单操作手册](docs/manuals/how-to-use-tui-menu.md) | 各菜单详解（含 `[C]` 章节显隐、`[S]` 章内内容、`[G]` 全局设置、`[D]` 诊断四项）、报告内容对照、缓存管理 |
 | 3 | [CLI 命令行模式使用指南](docs/manuals/how-to-use-cli-mode.md) | 命令结构、全局参数（`--experiment` / `--feature` / `--chapter` / `--anonymize`）、各子命令（含 `config`）、退出码、定时任务 |
-| 4 | [Web 浏览器模式使用指南](docs/manuals/how-to-use-web-mode.md) | 六区标签页工作台：生成报告 / 调仓模拟 / 配置 / 运行状态（含缓存管理）/ 日志 |
+| 4 | [Web 浏览器模式使用指南](docs/manuals/how-to-use-web-mode.md) | 六区标签页工作台：生成报告 / 调仓模拟 / 持仓录入 / 配置 / 运行状态（含缓存管理）/ 日志 |
 | 5 | [常规配置指引](docs/manuals/how-to-config.md) | `config.json` 字段说明、数据源、缓存 TTL、章节可见性、功能开关 |
 | 6 | [LLM 配置指引](docs/manuals/how-to-config-llm.md) | 接入 LLM 分析、参数调优、多 Provider 策略、端点级节流、定价 |
 | 7 | [报告文件结构](docs/manuals/reports-instruction.md) | Excel/HTML 报告逐章说明、基金业绩评价、投资知识点 |
@@ -211,7 +211,7 @@ git clone https://github.com/yatwql/investor-review.git && cd investor-review
 | 文档 | 说明 |
 |:-----|:------|
 | [开发者指南](docs/managements/developer-guide.md) | 文档地图、开发环境与工作流、三级门禁（P0/P1/P2）、测试驱动、调试与剖析、扩展清单、注册表使用、版本发布与 CI 排查 |
-| [辅助脚本参考](docs/managements/scripts-reference.md) | 60+ 辅助脚本字典（按用途分类，每条含设计逻辑与使用逻辑） |
+| [辅助脚本参考](docs/managements/scripts-reference.md) | 40+ 辅助脚本字典（按用途分类，每条含设计逻辑与使用逻辑） |
 
 ## 📋 项目内部文档
 

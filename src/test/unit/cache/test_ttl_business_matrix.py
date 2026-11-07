@@ -125,7 +125,6 @@ def test_cleanup_uses_static_ttl_ignoring_intraday(ttl_env, cache_env, label, is
 
     ttl_env({}, is_open)
 
-
     static_ttl = get_cleanup_ttl("price")
     _pre_open = today_at(8)
 

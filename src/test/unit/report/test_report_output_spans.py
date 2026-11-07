@@ -48,6 +48,32 @@ class _RecordingPerf:
         return _Rec()
 
 
+class _SpanPerf:
+    """PerfCollector 替身：记录事件序列，并给出子步骤耗时快照（供慢段告警分流用）。"""
+
+    def __init__(self, spans: dict[str, float]) -> None:
+        self.events: list[str] = []
+        self.spans_value = spans
+
+    def start(self, phase_name: str) -> None:
+        self.events.append(f"start:{phase_name}")
+
+    def stop(self) -> None:
+        self.events.append("stop")
+
+    def recorder(self, parent_phase: str):
+        outer = self
+
+        class _Rec:
+            def record(self, name: str, seconds: float) -> None:
+                outer.events.append(f"span:{parent_phase}:{name}")
+
+            def spans(self) -> dict[str, float]:
+                return outer.spans_value
+
+        return _Rec()
+
+
 @pytest.fixture(name="prep_stub")
 def fixture_prep_stub(tmp_path):
     return {
@@ -357,3 +383,58 @@ class TestDecisionReviewContractForwarding:
         assert calls, "未找到 both 路径的 write_html_report 调用点"
         missing = [c.strip().splitlines()[0] for c in calls if "decision_review_data" not in c]
         assert not missing, f"以下 HTML 调用点未转发 decision_review_data: {missing}"
+
+
+class TestSlowStageWarningSplit:
+    """慢段告警按段分流：渲染慢指模板，落盘慢才指磁盘（实测落盘仅 0.003s）。"""
+
+    def _run_with_spans(self, monkeypatch, tmp_path, prep_stub, spans):
+        from src.python.core.perf import SLOW_SPAN_WARN_SECONDS
+
+        assert max(spans.values()) > SLOW_SPAN_WARN_SECONDS, "用例须制造超阈值场景"
+        perf = _SpanPerf(spans)
+        _bind(monkeypatch, perf)
+        monkeypatch.setattr("src.python.config.features.is_feature_enabled", lambda *a, **k: False)
+        monkeypatch.setattr(rg, "_build_chart_datasets_for_report", lambda *a, **k: {})
+        monkeypatch.setattr(
+            "src.python.report.html_writer.write_html_report",
+            lambda *a, **k: str(tmp_path / "report.html"),
+        )
+        rg._generate_full_html_report(
+            [],
+            prep_stub,
+            str(tmp_path),
+            [],
+            (None, None, None, None),
+            [],
+            {},
+            True,
+            None,
+            MagicMock(),
+            False,
+            False,
+            False,
+            False,
+            None,
+            ReportResult(),
+        )
+
+    def test_slow_render_points_at_template_not_disk(self, monkeypatch, tmp_path, prep_stub, caplog):
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="invest"):
+            self._run_with_spans(monkeypatch, tmp_path, prep_stub, {"模板渲染": 6.5, "落盘": 0.003})
+
+        messages = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("HTML 模板渲染 渲染偏慢" in m for m in messages), messages
+        assert not any("落盘偏慢" in m for m in messages), f"落盘只用了毫秒级，不得报磁盘慢: {messages}"
+
+    def test_slow_disk_still_reports_disk(self, monkeypatch, tmp_path, prep_stub, caplog):
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="invest"):
+            self._run_with_spans(monkeypatch, tmp_path, prep_stub, {"模板渲染": 0.2, "落盘": 7.0})
+
+        messages = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("HTML 页面写入 落盘偏慢" in m for m in messages), messages
+        assert not any("渲染偏慢" in m for m in messages), f"渲染只用了毫秒级，不得报模板慢: {messages}"

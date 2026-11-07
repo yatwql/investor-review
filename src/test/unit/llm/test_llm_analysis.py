@@ -26,6 +26,13 @@ from src.test.helpers import SynchronousExecutor
 pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.llm]
 
 
+def _parsed(batch: list[dict], llm_response: str) -> list[tuple[str, str, str]]:
+    """解析并断言成功——成功路径用例的类型收窄（None 分支另有专门用例）。"""
+    result = _apply_llm_news_correlation(batch, llm_response)
+    assert result is not None
+    return result
+
+
 # ═══════════════════════════════════════════════════════════
 #  _apply_llm_news_correlation — LLM 响应解析
 # ═══════════════════════════════════════════════════════════
@@ -43,7 +50,7 @@ class TestApplyLLMAnalysis(unittest.TestCase):
 
     def test_standard_response(self) -> None:
         llm_resp = '[{"idx": 0, "relevance": "高", "sentiment": "利好", "analysis": "白酒利好"}, {"idx": 1, "relevance": "中", "sentiment": "中性", "analysis": "间接影响"}]'
-        result = _apply_llm_news_correlation(self.news, llm_resp)
+        result = _parsed(self.news, llm_resp)
         self.assertEqual(len(result), 3)
         self.assertEqual(result[0], ("高", "利好", "白酒利好"))
         self.assertEqual(result[1], ("中", "中性", "间接影响"))
@@ -57,7 +64,7 @@ class TestApplyLLMAnalysis(unittest.TestCase):
             ' {"idx": 2, "relevance": "低", "sentiment": "中性", "analysis": "中性影响"}]'
         )
         batch = self.news + [{"title": "新闻D", "matched_keywords": []}]
-        result = _apply_llm_news_correlation(batch, llm_resp)
+        result = _parsed(batch, llm_resp)
         self.assertEqual(len(result), 4)
         self.assertEqual(result[0], ("高", "利好", "白酒利好"))
         self.assertEqual(result[1], ("高", "利空", "利空影响"))
@@ -67,43 +74,37 @@ class TestApplyLLMAnalysis(unittest.TestCase):
     def test_irrelevant_not_filtered(self) -> None:
         """ "无关"不被过滤——元组中直接返回原始数据，由调用方决定是否跳过。"""
         llm_resp = '[{"idx": 0, "relevance": "高", "sentiment": "中性", "analysis": "利好"}, {"idx": 1, "relevance": "无关", "sentiment": "中性", "analysis": "无关内容"}]'
-        result = _apply_llm_news_correlation(self.news, llm_resp)
+        result = _parsed(self.news, llm_resp)
         self.assertEqual(len(result), 3)
         self.assertEqual(result[0], ("高", "中性", "利好"))
         self.assertEqual(result[1], ("无关", "中性", "无关内容"))
         self.assertEqual(result[2], ("低", "中性", ""))
 
     def test_malformed_json(self) -> None:
-        """JSON 解析失败 → 全部返回默认值。"""
-        result = _apply_llm_news_correlation(self.news, "不是json")
-        self.assertEqual(len(result), 3)
-        for t in result:
-            self.assertEqual(t, ("低", "中性", ""))
+        """响应不可解析 → None（整批按失败收口，不给占位冒充分析）。"""
+        self.assertIsNone(_apply_llm_news_correlation(self.news, "不是json"))
 
     def test_not_a_list(self) -> None:
-        """LLM 返回非数组 → 全部返回默认值。"""
-        result = _apply_llm_news_correlation(self.news, '{"error": "wrong"}')
-        self.assertEqual(len(result), 3)
-        for t in result:
-            self.assertEqual(t, ("低", "中性", ""))
+        """LLM 返回非数组 → None（同上，整批按失败收口）。"""
+        self.assertIsNone(_apply_llm_news_correlation(self.news, '{"error": "wrong"}'))
 
     def test_with_code_block(self) -> None:
         """响应包含 Markdown 代码块 → 正确提取 JSON。"""
         llm_resp = '```json\n[{"idx": 0, "relevance": "高", "sentiment": "利好", "analysis": "直接利好"}]\n```'
-        result = _apply_llm_news_correlation(self.news[:1], llm_resp)
+        result = _parsed(self.news[:1], llm_resp)
         self.assertEqual(result[0], ("高", "利好", "直接利好"))
 
     def test_idx_out_of_range(self) -> None:
         """idx 越界时忽略该条目，使用默认值填充。"""
         llm_resp = '[{"idx": 99, "relevance": "高", "sentiment": "利好", "analysis": "越界"}]'
-        result = _apply_llm_news_correlation(self.news, llm_resp)
+        result = _parsed(self.news, llm_resp)
         self.assertEqual(len(result), 3)
         for t in result:
             self.assertEqual(t, ("低", "中性", ""))
 
     def test_empty_batch(self) -> None:
         """空列表 → 返回空列表。"""
-        result = _apply_llm_news_correlation([], "[]")
+        result = _parsed([], "[]")
         self.assertEqual(result, [])
 
 
@@ -123,7 +124,7 @@ class TestBatchNewsAnalysis(unittest.TestCase):
         llm_resp = json.dumps(
             [{"idx": i, "relevance": "高", "sentiment": "利好", "analysis": f"原因{i}"} for i in range(5)]
         )
-        result = _apply_llm_news_correlation(self.news_5, llm_resp)
+        result = _parsed(self.news_5, llm_resp)
         self.assertEqual(len(result), 5)
         for i in range(5):
             self.assertEqual(result[i], ("高", "利好", f"原因{i}"))
@@ -137,7 +138,7 @@ class TestBatchNewsAnalysis(unittest.TestCase):
                 {"idx": 4, "relevance": "高", "sentiment": "利空", "analysis": "原因4"},
             ]
         )
-        result = _apply_llm_news_correlation(self.news_5, llm_resp)
+        result = _parsed(self.news_5, llm_resp)
         self.assertEqual(len(result), 5)
         self.assertEqual(result[0], ("高", "利好", "原因0"))
         self.assertEqual(result[1], ("低", "中性", ""))  # 缺失
@@ -152,18 +153,15 @@ class TestBatchNewsAnalysis(unittest.TestCase):
                 {"idx": 0, "relevance": "高", "sentiment": "利好", "analysis": "原因0"},
             ]
         )
-        result = _apply_llm_news_correlation(self.news_5, llm_resp)
+        result = _parsed(self.news_5, llm_resp)
         self.assertEqual(len(result), 5)
         self.assertEqual(result[0], ("高", "利好", "原因0"))
         for i in range(1, 5):
             self.assertEqual(result[i], ("低", "中性", ""))
 
     def test_malformed_json_in_batch(self) -> None:
-        """JSON 格式错误 → 全部返回默认值。"""
-        result = _apply_llm_news_correlation(self.news_5, "这不是JSON")
-        self.assertEqual(len(result), 5)
-        for t in result:
-            self.assertEqual(t, ("低", "中性", ""))
+        """JSON 格式错误 → None（整批失败，不在缓存里留占位）。"""
+        self.assertIsNone(_apply_llm_news_correlation(self.news_5, "这不是JSON"))
 
 
 # ═══════════════════════════════════════════════════════════

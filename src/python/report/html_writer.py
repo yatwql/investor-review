@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import Any
 
 import logging
+import time as _time
 from datetime import datetime
 
 from src.python.cache import get_cache_hit_rate
@@ -83,8 +84,6 @@ def _render_template(
     trading_day: str,
     # 匿名化：{真码: 显示掩码}，供模板 | anon_code 在代码列渲染点结构化折叠（None/空 = 不掩）
     anon_code_map: dict | None = None,
-    # 生成后自检区块 HTML（与其余 LLM 内容同层传入）
-    self_review_block: str | None = None,
     total_mv: float,
     total_cost: float,
     total_profit: float,
@@ -326,7 +325,6 @@ def write_html_report(
     news_top_count: int = 100,
     enable_llm: bool = False,
     include_news: bool = True,
-    force_llm: bool = False,
     llm_content: tuple[str | None, str | None, str | None, str | None] | None = None,
     details: list | None = None,
     news_data: list | None = None,
@@ -377,6 +375,7 @@ def write_html_report(
     | None = None,  # data 层：调仓纪律回放契约（实验开关 `rebalance_schedule_replay`，None=键缺席→整章隐藏）
     summary_highlights_data: dict
     | None = None,  # data 层：首页执行摘要卡契约（报告章节与增强开关 `summary_highlights`，None=键缺席→首屏块隐藏）
+    stage_recorder: Any | None = None,
 ) -> str:
     """生成 HTML 分析报告并保存到文件。
 
@@ -400,7 +399,21 @@ def write_html_report(
 
     Returns:
         最新版报告的绝对路径
+
+    ``stage_recorder`` 为阶段细分记录器（``core.perf.PhaseBreakdownRecorder``）：
+    传入时把本次「渲染→内嵌→匿名化→落盘」四步分别记入父阶段细分。此前只记一个
+    「页面写入」总值，慢的时候无法分辨是渲染、资产内嵌、匿名化还是真落盘 IO——
+    实测同一份 0.98MB 产物在 0.02s / 6.15s / 21.0s 三档，凭总值无法定位。
     """
+    _step_t0 = _time.perf_counter()
+
+    def _mark(step: str) -> None:
+        """记一步细分耗时并重置起点（无记录器时只重置起点，零额外开支）。"""
+        nonlocal _step_t0
+        if stage_recorder is not None:
+            stage_recorder.record(step, _time.perf_counter() - _step_t0)
+        _step_t0 = _time.perf_counter()
+
     prog = progress if progress is not None else SilentProgressReporter()
     now_str, today_str, trading_day = _time_strings()
 
@@ -634,7 +647,6 @@ def write_html_report(
         expert_review_content=expert_review_content,
         health_check_content=health_check_content,
         penetration_deep_content=penetration_deep_content,
-        self_review_block=_self_review_block(),
         _llm_session_usage=_llm_session_usage,
         _llm_module_info=llm_module_info,
         llm_endpoint=llm_endpoint,
@@ -674,10 +686,12 @@ def write_html_report(
         schedule_replay_view=schedule_replay_view,
         summary_highlights_data=summary_highlights_data,
     )
+    _mark("模板渲染")
 
     # 内嵌 Chart.js 资产 → HTML 单文件自包含（下载/移动/单发移动端浏览
     # 不再依赖同目录松散 JS；不产出松散副本）
     html = _inline_js_assets(html)
+    _mark("资产内嵌")
 
     # 产物文本清扫（匿名化）：字段层未覆盖的派生面（分类/业绩/管理人等从
     # holdings 直取名称的区块）在最终 HTML 文本统一真名→代号；明细区块已
@@ -697,8 +711,50 @@ def write_html_report(
     if _anon_mode != "off":
         html = mask_display_text(html, build_report_alias_map(holdings, _anon_mode, include_codes=False))
         html = mask_code_text(html, _code_display_map)
+    _mark("匿名化")
 
-    return _save_html_report(html or "", output_dir, total_mv, total_profit, prog)
+    _path = _save_html_report(html or "", output_dir, total_mv, total_profit, prog)
+    _mark("落盘")
+    return _path
+
+
+def close_html_generation_stage(
+    recorder: Any | None,
+    elapsed: float,
+    html_path: str | None,
+) -> None:
+    """HTML 生成阶段的收口：记总值 + 把慢段告警分流到正确的排查方向。
+
+    两条生成路径（full / both）共用这一份实现：此前各自写一份，both 侧漏了渲染与
+    落盘的慢告警，表现为「both 跑得慢却没有任何提示」；合并后口径不会再漂。
+
+    Args:
+        recorder: 阶段细分记录器（``core.perf.PhaseBreakdownRecorder``）；None 时直接返回。
+        elapsed: 整段耗时（秒）。
+        html_path: 产物路径（告警里报产物大小）；生成失败时为 None。
+    """
+    if recorder is None:
+        return
+    from src.python.core.perf import warn_slow_write
+
+    recorder.record("页面写入", elapsed)  # 保留总值：跨版本 perf 历史可比
+    spans: dict = {}
+    _spans_fn = getattr(recorder, "spans", None)
+    if callable(_spans_fn):
+        _raw = _spans_fn()
+        if isinstance(_raw, dict):
+            spans = _raw
+    _disk = spans.get("落盘")
+    warn_slow_write("HTML 页面写入", elapsed if _disk is None else _disk, html_path)
+    _render = spans.get("模板渲染")
+    if _render is not None:
+        warn_slow_write(
+            "HTML 模板渲染",
+            _render,
+            html_path,
+            what="渲染",
+            hint="排查模板内逐行循环/过滤器与上下文体量（非磁盘）",
+        )
 
 
 # ── 桥接 import：外部子模块 ─────────────────────────────────

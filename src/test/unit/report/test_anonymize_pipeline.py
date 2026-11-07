@@ -340,7 +340,7 @@ class TestMaskWorkbookText:
         from src.python.report.excel_writer import mask_workbook_text
 
         wb = Workbook()
-        ws = wb.active
+        ws = wb.worksheets[0]
         ws["A1"] = "贵州茅台(600519)"
         ws["A2"] = 600519  # 数值单元格：即使等于代码也不动（无数字子串误伤）
         ws["A3"] = 42.5
@@ -358,9 +358,33 @@ class TestMaskWorkbookText:
         from src.python.report.excel_writer import mask_workbook_text
 
         wb = Workbook()
-        wb.active["A1"] = "贵州茅台"
+        ws = wb.worksheets[0]
+        ws["A1"] = "贵州茅台"
         assert mask_workbook_text(wb, {}) == 0
-        assert wb.active["A1"].value == "贵州茅台"
+        assert ws["A1"].value == "贵州茅台"
+
+    def test_merged_cells_do_not_raise_and_anchor_is_masked(self):
+        """回归：合并区域的从属单元格（MergedCell）只读，清扫不得向其写入。
+
+        `ws.iter_rows()` 会逐个吐出被合并吞掉的 MergedCell，其 ``value`` 只可读
+        （赋非 None 抛 AttributeError）。清扫必须跳过从属单元格并改写锚点单元格，
+        否则扫到第一个带笔名的合并行就整份报告生成失败。
+        """
+        from openpyxl import Workbook
+
+        from src.python.report.excel_writer import mask_workbook_text
+
+        wb = Workbook()
+        ws = wb.worksheets[0]
+        ws["A1"] = "贵州茅台(600519)"
+        ws.merge_cells("A1:C1")  # 同行后两列成为只读 MergedCell
+        ws["A2"] = "普通行"
+
+        changed = mask_workbook_text(wb, {"贵州茅台": "品种B", "600519": "000XXX"})
+
+        assert changed == 1
+        assert ws["A1"].value == "品种B(000XXX)"
+        assert ws["A2"].value == "普通行"
 
 
 class TestNewsDisplayMask:
@@ -430,11 +454,13 @@ class TestAnonCodeRenderMask:
         mode = "full_anonymous"
         html = "<td>贵州茅台</td><td>600519</td><span>1600519.00</span><i>600036</i>"
         swept = mask_display_text(html, build_report_alias_map(details, mode, include_codes=False))
+        assert swept is not None  # 有别名映射时必须返回文本（None 仅表示无映射可应用）
         # 名称已折叠；金额含真码数字片段但名称清扫不含代码 → 绝不被破坏
         assert "贵州茅台" not in swept
         assert "600519" in swept
         assert "1600519.00" in swept
         final = mask_code_text(swept, build_code_display_map(details, mode))
+        assert final is not None
         # 代码面由边界安全替换折叠：独立代码 token 折叠、JSON 数值片段原样
         assert "600519" not in final.replace("1600519.00", "")
         assert "600036" not in final

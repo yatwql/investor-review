@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.17.3
+> 文档版本：0.17.4
 
 ## 目录
 
@@ -247,7 +247,7 @@ llm/generators_orchestrator.py ──→ cache/（可选）
 | **贯穿** | 代码类型判定 | 资产识别原语 | `core/code_utils.py` |
 | **贯穿** | 交易时段判断 | A 股时段、午间休市 | `core/market_hours.py` |
 | **贯穿** | HTTP 客户端 | 统一工厂 | `core/http_client.py` |
-| **贯穿** | 性能收集 | PerfCollector 三路径计时 + 子阶段 `breakdown`（数据准备：行情与明细/指数获取/穿透/因子暴露/行业 Beta/相关性矩阵/覆盖与新鲜度/估值与温度/财报摘要/财务指标/申购与成本位置/明细装配与建议；LLM+新闻：新闻源抓取/去重与关联/锚点维护/事件窗装配/LLM 模块 span；HTML 生成：图表数据装配/页面写入）；数据准备另记**缓存冷热**增量（`counters.prep_cache_hits` / `prep_cache_misses`，阶段前后快照相减——同一阶段耗时在冷/热两态差一个数量级，跨运行对拍必须先看这两个数）+ perf_history.jsonl 持久化 + 数据源健康历史聚合 `summarize_health_history()`；`counters` 除 warnings/errors 外含**事实校验自动修正计数**（`fact_fix_total` / `fact_fix_numeric` / `fact_fix_code` / `fact_fix:<模块>`，由 `llm/fact_checker` 线程安全累加、报告层 LLM 阶段前清零后汇入——修正次数是模型口径偏差的直接信号，单次只进日志时无法跨期对拍。**计数口径 = 新生成正文的修正**：命中轮次的正文已由回写（`skeleton.write_back_module_cache`）带去修正结果，故稳态运行该计数为 0，不是「模型变准了」；跨期对拍照样以首轮生成样本为准，`action_fix` 归零时需回看 `llm.cache_hits` 确认是命中轮）；`llm` 段除各模块 model/token/费用外记 **`duration_seconds`**（逐模块耗时；缓存命中记 0，统计口径只取非命中样本——关键路径分析的机读依据，span 只覆盖经 `_MODULE_FNS` 调度的模块）；另有 `llm_thinking_wait_ms`（thinking 并发槽串行等待累计——默认上限已为 2；配回 1 时据此量化串行代价）；控制台阶段汇总行附带**最慢三项子耗时**（`[perf] LLM+新闻: 94.3s（智囊团深度复盘 75.7s / …）`），日志本身即可归因，台账仍为机读事实位 | `core/perf.py` + `llm/fact_checker/_corrections.py` |
+| **贯穿** | 性能收集 | PerfCollector 三路径计时 + 子阶段 `breakdown`（数据准备：行情与明细/指数获取/穿透/因子暴露/行业 Beta/相关性矩阵/覆盖与新鲜度/估值与温度/财报摘要/财务指标/申购与成本位置/明细装配与建议；LLM+新闻：新闻源抓取/去重与关联/锚点维护/事件窗装配/LLM 模块 span；HTML 生成：图表数据装配/页面写入总值 + 四个子步骤（模板渲染/资产内嵌/匿名化/落盘））；数据准备另记**缓存冷热**增量（`counters.prep_cache_hits` / `prep_cache_misses`，阶段前后快照相减——同一阶段耗时在冷/热两态差一个数量级，跨运行对拍必须先看这两个数）+ perf_history.jsonl 持久化 + 数据源健康历史聚合 `summarize_health_history()`；`counters` 除 warnings/errors 外含**事实校验自动修正计数**（`fact_fix_total` / `fact_fix_numeric` / `fact_fix_code` / `fact_fix:<模块>`，由 `llm/fact_checker` 线程安全累加、报告层 LLM 阶段前清零后汇入——修正次数是模型口径偏差的直接信号，单次只进日志时无法跨期对拍。**计数口径 = 新生成正文的修正**：命中轮次的正文已由回写（`skeleton.write_back_module_cache`）带去修正结果，故稳态运行该计数为 0，不是「模型变准了」；跨期对拍照样以首轮生成样本为准，`action_fix` 归零时需回看 `llm.cache_hits` 确认是命中轮）；`llm` 段除各模块 model/token/费用外记 **`duration_seconds`**（逐模块耗时；缓存命中记 0，统计口径只取非命中样本——关键路径分析的机读依据，span 只覆盖经 `_MODULE_FNS` 调度的模块）；另有 `llm_thinking_wait_ms`（thinking 并发槽串行等待累计——默认上限已为 2；配回 1 时据此量化串行代价）；控制台阶段汇总行附带**最慢三项子耗时**（`[perf] LLM+新闻: 94.3s（智囊团深度复盘 75.7s / …）`），日志本身即可归因，台账仍为机读事实位 | `core/perf.py` + `llm/fact_checker/_corrections.py` |
 | **贯穿** | 运行一致性 | 生成中断收口（KeyboardInterrupt 安全落点：临时产物清扫 + `status=interrupted` 运行记录 + 已写盘/已丢弃明细）+ HTML/Excel 产物原子落盘登记 | `report/run_integrity.py` |
 | **贯穿** | 日志可视化 | 结构化日志读取（parse_log/tail_log/read_log），CLI/TUI/Web 三端共享 | `core/log_reader.py` |
 | **贯穿** | 日志去重 | 同 key 时间窗内折叠重复日志（同窗口重复降 DEBUG）：报告多阶段重复装配同一批数据时只留一行，跨窗（下一次报告）照常上屏；窗口默认 60s，键不足 64 个 | `core/log_dedupe.py` |
@@ -1281,7 +1281,9 @@ fetch_index_data(code)
 
 ### 3.1 子模块结构
 
-缓存统一存放在 `data/cache/` 目录，由 `cache/` 子包提供泛用键值对存储接口：
+缓存统一存放在 `data/cache/` 目录，由 `cache/` 子包提供泛用键值对存储接口。
+
+> **直写子目录（唯一例外）**：`data/cache/jinja/` 存 Jinja 模板**字节码**（`.cache` 二进制，键含模板源码校验和，改模板自动换键失效）。它不进 KV 引擎（二进制装不进 `_ts`/`_data` 包封），由 `report/html_jinja_env.py` 自管：写入时按 `BYTECODE_CACHE_TTL_DAYS`（14 天）回收旧键防只增不减；`cleanup_expired()` 按「无 `_ts` 即非托管、跳过不删」的既有口径天然不碰它，故删 `data/cache/` 只是让下次渲染重新编译一次模板（实测 0.027s → 0.654s）。
 
 ```
 cache/
@@ -3592,7 +3594,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `portfolio_constraints` | 集中度/相关性约束标注（单品种沿用 `rebalance.threshold`、行业/相关性需显式配置；只标注不阻断；缺数据/短样本记「未评估」） | 行动建议（章内嵌块） | 监控 | 开关 `portfolio_constraints`（默认关，机制与诊断组） |
 | `evaluate_constraints` | 约束判定入口（三道上限 → 超限项 + `breached_codes`；开关关闭返回 `{"enabled": False}`） | 行动建议（章内嵌块） | 分析计算 | 随 `portfolio_constraints` |
 | `scenario_mandate` | 情景段方向约束口径选择（默认一句收敛：动手条件 + 「不操作」及所缺数据，两情景路径共用；`decision_basis` 关闭走回退强制方向口径；回退口径经 `scenario_mandate_cache_suffix` 以 `_ms` 后缀换键，两套文本常量共存一版） | LLM 生成 | LLM 生成 | 随 `decision_basis` |
-| `build_structured_header_instruction` | 决策头结构化契约构建（提示词侧追加 `决策头：…` 行，与解析器口径锁定） | 行动建议 | 监控 | 已内置（缓存后缀 `_dh` 随旧缓存兼容移除，不再追加） |
+| `build_structured_header_instruction` | 决策头结构化契约构建（提示词侧追加 `决策头：…` 行，与解析器口径锁定） | 行动建议 | 监控 | 已内置（指纹与缓存键均不带决策头后缀） |
 | `decision_header` | 决策词归一解析器（标签优先/长词优先/否定守卫/复合词左边界/二义不猜） | 行动建议 | 监控 | 已内置（A 通道无开关） |
 | `deterministic_signal` | 确定性信号模块（实时注入 + 跨期沉淀双面：温度/分位/尾部风险预消化信号行 + 确定性评级账本沉淀，内置五类、因子目录随实验开关追加第 6 类；原 `signal_pre_digest`/`signal_ledger` 两开关合并转正） | LLM 生成 | LLM 生成 | 开关 `deterministic_signal`（默认开，机制与诊断组） |
 | `prompts_signals` | 信号预消化提示词块（开关判定收敛于缓存后缀函数） | LLM 生成 | LLM 生成 | 随 `deterministic_signal` |
@@ -3838,7 +3840,7 @@ web/ (Web 服务层，薄入口)
 
 | # | 约束 | 设计目的 | 违反后果 | 适用范围 |
 |:---|:-----|:---------|:---------|:---------|
-| **C2** | **缓存统一管理** — 所有持久化缓存必须通过 `cache/` 子包的 `get()`/`set()` 接口读写，禁止直接操作 `data/cache/` 文件系统 | 直接操作文件系统导致 TTL 失效（缓存无法感知过期时间）、分组清理遗漏（菜单命令无法清除对应缓存）、路径穿越隐患 | 缓存不一致、TTL 失效、分组清理遗漏、路径安全风险 | 所有读写 data/cache/ 的模块 |
+| **C2** | **缓存统一管理** — 所有持久化缓存必须通过 `cache/` 子包的 `get()`/`set()` 接口读写，禁止直接操作 `data/cache/` 文件系统（**唯一登记例外**：`data/cache/jinja/` 的模板字节码缓存——二进制非 KV、不能装进 `_ts`/`_data` JSON 壳，由 `report/html_jinja_env.py` 自管，见 §3.1） | 直接操作文件系统导致 TTL 失效（缓存无法感知过期时间）、分组清理遗漏（菜单命令无法清除对应缓存）、路径穿越隐患 | 缓存不一致、TTL 失效、分组清理遗漏、路径安全风险 | 所有读写 data/cache/ 的模块 |
 | **C3** | **缓存原子写入** — 所有缓存/配置文件写入必须使用 `tempfile.mkstemp` + `os.replace` 原子写入模式；**实现收敛到唯一原语** `core/atomic_write.py`（`write_text_atomic` / `write_json_atomic`，成败如实布尔返回），各调用点不得自留第二份 mkstemp + os.replace 拷贝 | 直接覆写文件在断电/崩溃时产生半写损坏文件，导致后续读取解析失败；多份拷贝各自演化会让「原子」语义在其中一份上悄悄失效（修了 A 漏了 B），且调用点无法据成败判定后续动作（如写失败后误删唯一数据源） | 半写文件损坏、数据不完整、崩溃后无法自恢复；迁移类逻辑在写失败时误删数据源 | cache/ 子包（`cache/_io.py`+`_store.py`）、config/ 子包（`config/_core.py`）、`core/atomic_write.py` 及其调用方（`core/jsonl_store.py`、`core/provider_registry.py`、`report/history_snapshot.py`、`config/features.py`、`analysis/_silence.py`、`analysis/circuit_breaker_wrapper.py`、`report/data_status.py`）。例外（契约相反，有意不合并）：`cache/` 需 gzip 分支与文件锁；`config/_core.py::_atomic_write` 契约是「失败即抛且保留异常类型」（`init_config()` 的 `except PermissionError` 并发容忍分支、TUI 的权限不足提示依赖类型） |
 
 > **缓存载荷语义版本（词条外，非编号约束）**：当修复改变缓存**载荷字段的含义**而非键结构时，不得只靠 TTL 自然过期——旧条目在 TTL 内会被新代码误读，使修复在缓存未过期的机器上完全失效（已发生：QDII 联接穿透修复被 7 天旧 `fund_hold_*` 条目遮蔽）。规则：生产者在载荷里盖语义版本字段，读侧把「版本不符」当未命中（丢弃重取），判据接在**每一处读缓存接缝**（含批量缓存预检与过期降级）。通用原语：`fetch_with_fallback(cache_validate=...)`。
