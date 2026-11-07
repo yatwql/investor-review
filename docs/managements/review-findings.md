@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.5-dev
-> **编号源**：`rf-next = 1065`（新增问题提出后更新为 +1；已用最大 rf-1064，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1066`（新增问题提出后更新为 +1；已用最大 rf-1065，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -56,6 +56,10 @@
 ### 开发期已修复（0.17.5-dev）
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
+
+| # | 问题 | 修复方向 |
+| --- | --- | --- |
+| **rf-1065** | 用例审计（四维）发现 4 处名实不符/断言强度不足：①幻觉采样 `test_wrong_profit_rate_vs_portfolio` / `test_mixed_correct_and_wrong` / `test_missing_code` 只断言 `len(issues) >= 1`，任意无关告警都能转绿，测不出「对照的是组合收益率/涉事个股/涉事代码」这一口径；②`test_intraday_written_cache_expired_right_after_close_gate` 名称称「已过期」而断言「仍可读」，方向相反 | ①三处补点名断言（`累计收益率`+实际值 / `600036` / `002837` in issues[0]），与仓内已有 `test_wrong_stock_return` 同标准；②用例改名为 `..._survives_static_ttl_after_close` 并在 docstring 写明只验读侧（收盘门禁由同文件 TTL 口径用例覆盖） |
 
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-08）

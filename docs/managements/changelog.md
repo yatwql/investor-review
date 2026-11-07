@@ -8,6 +8,15 @@
 
 ## [0.17.5-dev] - 开发中（未发布）
 
+### 修复
+
+- **幻觉采样三处断言只看「有告警」**（rf-1065）：`test_wrong_profit_rate_vs_portfolio` / `test_mixed_correct_and_wrong` /
+  `test_missing_code` 原本只断言 `len(issues) >= 1`——检测器把任意无关数值判成偏离也能转绿，测不出「对照的是组合
+  累计收益率 / 涉事个股 600036 / 涉事代码 002837」这一核心口径。现补点名断言（含实际值 9.7% 与代码）；
+  与仓内已有的 `test_wrong_stock_return`（已断言 `issues[0]` 含代码）同标准。
+- **缓存边界用例名实不符**（rf-1065）：`test_intraday_written_cache_expired_right_after_close_gate` 名称称
+  「盘后已过期」，断言却是「仍可读」（本用例只验读侧，收盘时点门禁由同文件 TTL 口径用例覆盖）。
+  改名为 `test_intraday_written_cache_survives_static_ttl_after_close`，docstring 直接写明验证的是「静态 TTL 下仍可读」。
 
 （本次发布内容见下方归档索引）
 

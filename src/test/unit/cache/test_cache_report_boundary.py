@@ -235,8 +235,11 @@ class TestIntradayToCloseTransition:
         assert intraday < after_close, "盘中必须比盘后更短"
         assert intraday == 30 and after_close == 86400
 
-    def test_intraday_written_cache_expired_right_after_close_gate(self, cache_env, monkeypatch):
-        """盘中写的价：盘后按静态 TTL 仍"未过期"，但必须再过收盘时点门禁（本文件只验读侧）。"""
+    def test_intraday_written_cache_survives_static_ttl_after_close(self, cache_env, monkeypatch):
+        """盘中写的价：盘后按静态 TTL 仍「未过期」（本用例只验读侧；收盘时点门禁由上一用例的 TTL 口径负责）。
+
+        名实对齐：本用例断言的是「盘后仍可读」，命名须直接陈述该事实（旧名曾称「已过期」，与断言方向相反）。
+        """
         from src.python.cache import get as cache_get
 
         cache_dir, ttl_mod = cache_env
