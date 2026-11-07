@@ -24,7 +24,7 @@
 
 入选标准：需先确认数据契约再动，当前不影响行为正确性。
 
-**本轮盘点口径**：逐类比对「旧配置项 / 旧配置文件 / 旧数据文件 / 旧数据文件结构 / 旧缓存结构 / 旧缓存文件 / 旧内部 API」。**已核对为无兼容面的部分**（不入待办）：`config.json` / `llm_settings.json` / `llm_providers.json` / `logger.json` / `llm_pricing_ref.json` 一律用 `schema_version`（或 `version`）硬闸门，不符即**拒绝加载并提示重新生成**，无静默迁移分支；`features.json` 无名称级兼容（无旧文件名回退）；缓存读取路径声明「不保留旧缓存文件的兼容」（`cache/_io.py`：损坏即删）；`schemas/replay_schedule.py` 对旧版本规则序列**按未命中丢弃**；`cninfo`/`_api_responses` 等上游返回形状容错属第三方变体（见 rf-1033 边界）。
+**盘点口径**：逐类比对「旧配置项 / 旧配置文件 / 旧数据文件 / 旧数据文件结构 / 旧缓存结构 / 旧缓存文件 / 旧内部 API」。**已核对为无兼容面的部分**（不入待办）：`config.json` / `llm_settings.json` / `llm_providers.json` / `logger.json` / `llm_pricing_ref.json` 一律用 `schema_version`（或 `version`）硬闸门，不符即**拒绝加载并提示重新生成**，无静默迁移分支；`features.json` 无名称级兼容（无旧文件名回退）；缓存读取路径声明「不保留旧缓存文件的兼容」（`cache/_io.py`：损坏即删）；`schemas/replay_schedule.py` 对旧版本规则序列**按未命中丢弃**；`cninfo`/`_api_responses` 等上游返回形状容错属第三方变体（见 rf-1033 边界）。
 
 | # | 问题 | 修复方向 |
 | --- | --- | --- |
@@ -57,9 +57,9 @@
 | **rf-1055** | 新闻关联批量「响应不可解析」被当成功：解析器给整批填 `("低","中性","")` 占位 → 批次计 ok、占位写进逐条缓存、报告把 20/30 条占位算成「含 LLM 分析」，连带事件窗极性缺失（91% 不可判） | 解析器改为返回 `None`（LLM 部分作答仍填默认值）；批量骨架按失败收口：不写结果、不写缓存、计 `failed_batches`、已耗 token 照常计费 |
 | **rf-1056** | 批量用量行恒为「输入 0 + 输出 0」：把 provider 条目名（`deepseek-main`）当协议名传给 `_log_token_usage`，claude 形 usage 落进 openai 分支读 `prompt_tokens` | 归一化协议改按 usage 形状判定（含 `input_tokens` 即 claude），与逐条调用同一口径 |
 | **rf-1057** | 逐模块费用丢精度：`estimate_cost` 展示串（≥0.01 只到 3 位小数）回读成 float，0.0646 记成 0.0650，用量页签逐模块合计 ¥0.1325 ≠ 表头 ¥0.1320 | 逐模块费用改用 `compute_cost_value` 数值口径（news 批量与标准模块两处） |
-| **rf-1058** | 「页面写入」段名实不符：实际含模板渲染/JS 资产内嵌/匿名化/落盘四件事，实测同尺寸产物 0.02s / 6.15s / 21.0s 三档，凭总值无法归因（告警还指向「排查磁盘/挂载与 fsync」） | `write_html_report` 增 `stage_recorder` 逐段记细分（并保留总值供跨版本比对）；full/both 两条路径均接线；慢告警按段分流（渲染→模板，落盘→磁盘）。**实测结论**：0.98MB 产物落盘仅 0.003s，慢的 100% 是模板渲染（both 实测 2.14s / full 6.15s） |
-| **rf-1059** | Jinja 模板渲染被当成渲染热点：实为**模板编译**——18 个模板（主模板 + 17 partial）编译占 HTML 生成阶段 0.65s ≈ 97%（渲染 ~0.02s、落盘 0.003s），冷缓存还要从挂载盘读 18 个文件，是该阶段 0.02s~21s 抖动的来源 | `html_jinja_env` 接入字节码缓存（落 `<缓存根>/jinja/`，键含模板源码校验和，改模板自动失效；目录按需解析以尊重测试隔离与 `INVEST_CACHE_DIR`）。**实测**：冷 0.654s → 热 0.027s（≈24×），并新增 5 例回归 |
-| **rf-1060** | 48h 变更范围内的四处技术债：①`generators_news._first_provider_name` 无任何调用方；②`_render_template` 的 `self_review_block` 形参不被函数体使用（渲染时自行取值，调用方传入不生效）；③`write_html_report` 的 `force_llm` 形参无任何调用方；④HTML 阶段收口（总值记录 + 慢段告警）在 full/both 两条路径各写一份，两处口径不一致（both 侧无慢段告警） | 删除死函数/死形参并同步收敛调用点；收口逻辑抽到 `html_writer.close_html_generation_stage` 单源共用 |
+| **rf-1058** | 「页面写入」段名实不符：实际含模板渲染/JS 资产内嵌/匿名化/落盘四件事，凭总值无法归因（告警还指向「排查磁盘/挂载与 fsync」） | `write_html_report` 增 `stage_recorder` 逐段记细分（并保留总值供跨版本比对）；full/both 两条路径均接线；慢告警按段分流（渲染→模板，落盘→磁盘） |
+| **rf-1059** | Jinja 模板渲染被当成渲染热点：实为**模板编译**（18 个模板编译占 HTML 生成阶段绝大部分），冷缓存还要从挂载盘读 18 个文件，是该阶段耗时抖动的来源 | `html_jinja_env` 接入字节码缓存（落 `<缓存根>/jinja/`，键含模板源码校验和，改模板自动失效；目录按需解析以尊重测试隔离与 `INVEST_CACHE_DIR`），并新增回归用例 |
+| **rf-1060** | 四处技术债：①`generators_news._first_provider_name` 无任何调用方；②`_render_template` 的 `self_review_block` 形参不被函数体使用（渲染时自行取值，调用方传入不生效）；③`write_html_report` 的 `force_llm` 形参无任何调用方；④HTML 阶段收口（总值记录 + 慢段告警）在 full/both 两条路径各写一份，两处口径不一致（both 侧无慢段告警） | 删除死函数/死形参并同步收敛调用点；收口逻辑抽到 `html_writer.close_html_generation_stage` 单源共用 |
 
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-06）
