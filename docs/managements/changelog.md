@@ -10,9 +10,6 @@
 
 ### 修复
 
-- **Excel 匿名化清扫遇合并单元格崩溃**（rf-1061）：`mask_workbook_text` 未跳过 `MergedCell`，命中带笔名的合并行即抛
-  `AttributeError` 导致整份报告生成失败；现跳过从属单元格（文本在锚点上，不漏清扫），并补合并区域回归用例。
-
 - **新闻关联批量解析失败不再冒充成功**（rf-1055）：响应整体不可解析时解析器返回 `None`，批量骨架按「本批
   失败」收口——不写结果、不写逐条缓存（占位入缓存会被后续轮次当命中复用）、计入 `failed_batches` 并触发
   「部分批次失败」告警，已消耗 token 照常计费；LLM 部分作答仍按正常产出处理（缺失项填默认值）。此前 3 批中
@@ -28,12 +25,13 @@
   偏慢 → 排查模板内逐行循环/过滤器」，落盘慢才报「排查磁盘/挂载与 fsync」；full/both 两条路径均接线。
   实测 0.98MB 产物**落盘仅 0.003s**，此前 6.15s 的「页面写入」实为模板渲染——告警方向原先指错了磁盘。
 - **Jinja 模板字节码缓存**（rf-1059）：HTML 生成阶段的耗时实为**模板编译**（18 个模板 0.65s ≈ 97%，渲染仅 ~0.02s、落盘 0.003s），接入字节码缓存到 `<缓存根>/jinja/` 后**冷 0.654s → 热 0.027s（≈24×）**；键含模板源码校验和（改模板自动失效），缓存目录按需解析以尊重测试隔离与 `INVEST_CACHE_DIR`；旧键按 `BYTECODE_CACHE_TTL_DAYS=14` 在写入时回收（改模板换键后不再只增不减）。
+- **Excel 产物清扫遇合并单元格整份报告生成失败**（rf-1061）：`mask_workbook_text` 遍历 `ws.iter_rows()` 时未跳过
+  `MergedCell`，而被合并吞掉的从属单元格 `value` 只读——清扫命中一处带笔名的合并行即抛 `AttributeError`。
+  `full_anonymous` 模式下只要页签里有一条合并单元格（汇总警示行、指数标题行都是），整份 Excel 报告就写不出来。
+  现按单元格类型跳过从属单元格（笔名文本存于锚点单元格，锚点仍在遍历集内，不漏清扫），并补「合并区域不抛异常
+  + 锚点被改写 + 非合并行照常改写」的回归用例。
 
 ### 清理
-
-- **六处同构副本收口**（rf-1062）：`atomic_write` 文本/二进制写入、`excel_writer` 小计/总计行、`text_layout` 终端列/行探测、
-  `_json_patch` dict/array 区块替换、`_report_helpers` 组合演进/快照差异注入、`sina` 与 `summary` 的 A 股/美股指数取数与渲染，
-  各抽一份参数化本体共用；对外公开函数签名与输出逐字不变（既有用例全绿）。
 
 - **文档与架构约束同步**（rf-1060）：`technical.md` 把 `data/cache/jinja/` 字节码缓存登记为「缓存统一管理」架构约束的
   唯一例外（二进制非 KV、自管保留期）；`requirements` R-PERF-09 / `technical` / `scripts-reference` 的阶段细分名单补齐
@@ -41,6 +39,19 @@
 - **48h 变更技术债清理**（rf-1060）：删 `_first_provider_name` 死函数、`_render_template(self_review_block=...)`
   被架空的死形参、`write_html_report(force_llm=...)` 无调用方的死参数；HTML 阶段收口（总值记录 + 慢段告警）
   抽成 `html_writer.close_html_generation_stage` 由 full/both 共用——此前 both 路径完全没有慢段告警。
+- **七组同构副本收口为单一本体**（rf-1062，覆盖 8 个文件、+342/−274）：这些成对的函数原先逐字重复，改一侧
+  另一侧不会跟着变，正是口径漂移的温床。各组现共用一个参数化本体，对外签名与输出**逐字不变**：
+  - `core/atomic_write.py` —— 文本/二进制写入共享 `_write_atomic`（临时文件→`os.replace`→Windows 占用回退），
+    文本仍走 `os.fdopen(fd, "w")` 以保留换行翻译语义（若改成直接写字节，Windows 产物会从 CRLF 变 LF）；
+  - `report/excel_writer.py` —— 小计/总计行共享 `_write_summary_row`，差异只剩底色（黄/绿）；
+  - `tui/text_layout.py` —— 终端列/行探测共享 `_terminal_dimension`（实时 ioctl → `COLUMNS`/`LINES` → 下限兜底）；
+  - `config/_json_patch.py` —— dict/array 值区块共享 `_replace_value_block`，括号字符参数化（`{}`/`[]`）；
+  - `report/_report_helpers.py` —— 组合演进/快照差异注入共享 `_inject_optional_section`，构建函数经惰性导入
+    包装传入（不做运行时动态 import），失败降级口径仍是「`available=False` + 不阻断报告」；
+  - `providers/sina.py` —— A 股/美股指数拉取共享 `_fetch_sina_indices`，仅解析器、日志称谓与
+    「格式异常行是否告警」不同（美股链路保留该告警，A 股原先就没有，不借重构改行为）；
+  - `report/summary.py` / `fetcher/index.py` —— 指数渲染共享 `_write_index_group`（当日标题
+    「本日」/「最新」参数化，保持两个市场的原有文案）、指数取数共享 `_fetch_with_session_cache`。
 
 ## 归档
 
