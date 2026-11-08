@@ -89,22 +89,26 @@ if (Test-Path ".venv") {
     }
 }
 
-# 3. 激活虚拟环境
-Write-Host "正在激活虚拟环境 ..."
-$activateScript = ".\.venv\Scripts\Activate.ps1"
-if (-not (Test-Path $activateScript)) {
-    Write-Host "错误: 未找到虚拟环境激活脚本 ($activateScript)。" -ForegroundColor Red
+# 3. 定位虚拟环境解释器（不依赖 Activate.ps1）
+# 不使用 `. Activate.ps1`：激活脚本内烘焙的是**绝对** VIRTUAL_ENV 路径，venv 目录被移动/
+# 改软链位置后它仍指向旧路径，PATH 前置失效 → 裸 python/python3 落到系统解释器，
+# 表现为跑到中途 ModuleNotFoundError: No module named 'pandas'。此处直接调用 venv 内解释器。
+Write-Host "正在定位虚拟环境解释器 ..."
+if (Test-Path ".\.venv\Scripts\python.exe") {
+    $venvPy = ".\.venv\Scripts\python.exe"
+}
+elseif (Test-Path ".\.venv\bin\python") {
+    $venvPy = ".\.venv\bin\python"
+}
+else {
+    Write-Host "错误: 未找到虚拟环境解释器（.\.venv\Scripts\python.exe 或 .\.venv\bin\python）。" -ForegroundColor Red
+    Write-Host "提示: 删除 .venv 后重新运行本脚本，或确认 VENV_PATH 指向的环境已就绪。" -ForegroundColor DarkGray
     exit 1
 }
-try {
-    . $activateScript
-} catch {
-    Write-Host "错误: 激活虚拟环境失败。请检查执行策略: Set-ExecutionPolicy RemoteSigned -Scope CurrentUser" -ForegroundColor Red
-    exit 1
-}
+Write-Host "虚拟环境解释器: $venvPy" -ForegroundColor Cyan
 
 # 3.5. 检查 Python 版本（要求 >= 3.10）
-$pyVer = & $pythonCmd -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
+$pyVer = & $venvPy -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
 $verParts = $pyVer.Split('.')
 $major = [int]$verParts[0]
 $minor = [int]$verParts[1]
@@ -130,7 +134,7 @@ if (-not $skipInstall) {
         # -qq 级静默：抑制 pip 版本通知和下载进度条
         # 用 python -m pip 而非 pip：pip.exe 启动器硬编码创建时的 Python 绝对路径，
         # venv 被复制/移动后会指向旧路径报 Fatal error in launcher
-        python -m pip install -qq -r requirements.txt
+        & $venvPy -m pip install -qq -r requirements.txt
         if ($LASTEXITCODE -eq 0) {
             Set-Content -Path $depsMarker -Value $reqHash
         }
@@ -150,19 +154,29 @@ New-Item -ItemType Directory -Force -Path "data\config" | Out-Null
 New-Item -ItemType Directory -Force -Path "docs\tmp" | Out-Null
 New-Item -ItemType Directory -Force -Path "logs" | Out-Null
 
-# 6. 启动主程序
+# 6. 启动前硬闸：解释器必须能导入重依赖
+# 与上面的「解释器定位」互补：.venv 存在但半装时，跑到数据准备阶段才报
+# ModuleNotFoundError，用户看到的是一份失败报告而非可读错误。
+$null = & $venvPy -c "import pandas, numpy" 2>$null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "错误: $venvPy 缺少关键依赖（pandas / numpy），无法生成报告。" -ForegroundColor Red
+    Write-Host "请安装依赖: $venvPy -m pip install -r requirements.txt" -ForegroundColor DarkGray
+    exit 1
+}
+
+# 7. 启动主程序
 if ($entry -eq "web") {
     Write-Host "正在启动 Web 服务（http://127.0.0.1:8000，Ctrl+C 退出）..." -ForegroundColor Cyan
     Write-Host "(提示: 局域网访问用 launch.ps1 web --host 0.0.0.0)" -ForegroundColor DarkGray
     try {
-        & $pythonCmd src\python\web\server.py @entryArgs
+        & $venvPy src\python\web\server.py @entryArgs
     } catch {
         Write-Host "错误: 程序运行失败: $_" -ForegroundColor Red
     }
 } else {
     Write-Host "正在启动主程序 ..."
     try {
-        & $pythonCmd src\python\tui\tui.py
+        & $venvPy src\python\tui\tui.py
     } catch {
         Write-Host "错误: 程序运行失败: $_" -ForegroundColor Red
     }

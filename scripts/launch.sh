@@ -72,21 +72,27 @@ else
 	fi
 fi
 
-# 3. 激活虚拟环境（兼容 Linux bin/activate 和 Windows Git Bash Scripts/activate）
-echo "正在激活虚拟环境 ..."
-if [ -f ".venv/bin/activate" ]; then
-	source .venv/bin/activate
-elif [ -f ".venv/Scripts/activate" ]; then
-	source .venv/Scripts/activate
+# 3. 定位虚拟环境解释器（不依赖 activate）
+# 不使用 `source .venv/bin/activate`：activate 内烘焙的是**绝对** VIRTUAL_ENV 路径，
+# venv 目录被移动/改软链位置后，它仍指向旧路径 → `PATH="$VIRTUAL_ENV/bin:$PATH"`
+# 前置一个不存在的目录，激活静默失效，随后裸 `python3` 落到系统解释器，表现为
+# 跑到中途 `ModuleNotFoundError: No module named 'pandas'`。此处直接调用
+# `.venv` 里的解释器，路径与 venv 位置无关。
+echo "正在定位虚拟环境解释器 ..."
+if [ -x ".venv/bin/python" ]; then
+	VENV_PY=".venv/bin/python"
+elif [ -x ".venv/Scripts/python.exe" ]; then
+	VENV_PY=".venv/Scripts/python.exe"
 else
-	echo "错误: 未找到虚拟环境激活脚本（.venv/bin/activate 或 .venv/Scripts/activate）。" >&2
+	echo "错误: 未找到虚拟环境解释器（.venv/bin/python 或 .venv/Scripts/python.exe）。" >&2
+	echo "提示: 删除 .venv 后重新运行本脚本，或确认 VENV_PATH 指向的环境已就绪。" >&2
 	exit 1
 fi
-# 注：激活失败由 set -e 直接中止（source 非零即退），故无需额外 $? 检查
+echo "虚拟环境解释器: $VENV_PY"
 
 # 3.5. 检查 Python 版本（要求 >= 3.10）
 echo "正在检查 Python 版本 ..."
-PY_VER=$($PYTHON_CMD -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+PY_VER=$("$VENV_PY" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
 PY_MAJOR=$(echo "$PY_VER" | cut -d. -f1)
 PY_MINOR=$(echo "$PY_VER" | cut -d. -f2)
 if [ "$PY_MAJOR" -lt 3 ] || [ "$PY_MAJOR" -eq 3 -a "$PY_MINOR" -lt 10 ]; then
@@ -120,7 +126,7 @@ if [ "$SKIP_INSTALL" = false ]; then
 		# 只读虚拟环境无法 pip install：按 requirements.txt 逐条校验已装版本，缺/低于约束即报错。
 		echo "虚拟环境只读（外部管理），跳过 pip install，改为校验依赖版本 ..."
 		MISSING_DEPS=$(
-			python - <<'PY'
+			"$VENV_PY" - <<'PY'
 import importlib.metadata as md
 
 from packaging.requirements import Requirement
@@ -150,7 +156,7 @@ PY
 		fi
 		echo "依赖校验通过（外部虚拟环境已满足 requirements.txt）"
 		echo "$REQ_HASH" >"$DEPS_MARKER"
-	elif pip install -qq -r requirements.txt; then
+	elif "$VENV_PY" -m pip install -qq -r requirements.txt; then
 		# -qq 级静默：抑制 pip 版本通知和下载进度条
 		echo "$REQ_HASH" >"$DEPS_MARKER"
 	else
@@ -165,16 +171,22 @@ fi
 echo "正在创建数据目录 ..."
 mkdir -p data/holdings data/cache data/config docs/tmp logs
 
-# 6. 启动主程序
-# 注册退出处理：TUI 退出后自动退出虚拟环境（覆盖 Ctrl+C / 正常退出 / 错误）
-trap 'deactivate 2>/dev/null; echo "虚拟环境已退出。"' EXIT
+# 6. 启动前硬闸：解释器必须能导入重依赖
+# 与上面的「解释器定位」互补：即便 .venv 存在，也可能是个半装/不受管的空环境，
+# 跑到数据准备阶段才报 ModuleNotFoundError 的话，用户看到的是一份失败报告。
+if ! "$VENV_PY" -c 'import pandas, numpy' >/dev/null 2>&1; then
+	echo "错误: $VENV_PY 缺少关键依赖（pandas / numpy），无法生成报告。" >&2
+	echo "请安装依赖：$(readlink -f .venv)/bin/python -m pip install -r requirements.txt" >&2
+	exit 1
+fi
 
+# 7. 启动主程序
 if [ "$ENTRY" = "web" ]; then
 	echo "正在启动 Web 服务（http://127.0.0.1:8000，Ctrl+C 退出）..."
 	echo "(提示: 局域网访问用 launch.sh web --host 0.0.0.0)"
-	$PYTHON_CMD src/python/web/server.py "$@"
+	"$VENV_PY" src/python/web/server.py "$@"
 else
 	echo "正在启动主程序 ..."
-	$PYTHON_CMD src/python/tui/tui.py
+	"$VENV_PY" src/python/tui/tui.py
 fi
 # 注：程序非零退出由 set -e 直接中止（其上 $? 检查为死代码，已移除）

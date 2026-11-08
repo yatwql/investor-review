@@ -42,6 +42,49 @@ def _timed_fetch(fn, *args, label: str = "", **kwargs):
             )
 
 
+# ── 依赖缺失时的最小数据契约（不经过计算层，避免二次 ImportError） ──
+
+
+def _factor_unavailable_fallback(status: str) -> dict:
+    """风格因子回归区块的降级契约（纯计算层 import 失败时使用）。
+
+    键集与 `analysis.style_factor_regression.unavailable_result` 一致；但本函数
+    住在编排层，不得反向 import 那个模块（正是它 import 失败）。
+    """
+    return {
+        "available": False,
+        "status": status,
+        "betas": {},
+        "t_stats": {},
+        "significant": {},
+        "style_allocation": {},
+        "baseline_betas": {},
+        "factor_correlations": {},
+        "correlation_note": "",
+        "alpha": 0.0,
+        "window": 0,
+        "sample_count": 0,
+        "stale_factors": [],
+    }
+
+
+def _industry_unavailable_fallback(status: str) -> dict:
+    """行业 Beta 子表的降级契约（键集同 `analysis.industry_beta.unavailable_result`）。"""
+    return {
+        "available": False,
+        "status": status,
+        "exposure": {},
+        "betas": {},
+        "alphas": {},
+        "t_stats": {},
+        "significant": {},
+        "correlations": {},
+        "unmapped_industries": [],
+        "window": 0,
+        "sample_count": 0,
+    }
+
+
 # ── 持仓历史 K 线路由 ──
 
 
@@ -113,19 +156,25 @@ def compute_factor_exposure_data(
     if not is_enable_fund_deep_analysis(config):
         return None
 
-    from src.python.analysis.style_factor_regression import (
-        BASELINE_INDEX,
-        DEFAULT_WINDOW,
-        FACTOR_INDICES,
-        MIN_FACTORS,
-        MIN_SAMPLES,
-        asif_portfolio_daily_returns,
-        compute_factor_exposure,
-        filter_stale_factor_klines,
-        klines_to_returns,
-        unavailable_result,
-    )
-    from src.python.fetcher.index import fetch_index_history
+    try:
+        from src.python.analysis.style_factor_regression import (
+            BASELINE_INDEX,
+            DEFAULT_WINDOW,
+            FACTOR_INDICES,
+            MIN_FACTORS,
+            MIN_SAMPLES,
+            asif_portfolio_daily_returns,
+            compute_factor_exposure,
+            filter_stale_factor_klines,
+            klines_to_returns,
+            unavailable_result,
+        )
+        from src.python.fetcher.index import fetch_index_history
+    except ImportError as exc:
+        # 纯计算层重依赖（pandas/numpy）缺失：该区块降级，不阻塞主报告（§1.4.5）
+        logger.warning("[factor] 风格因子回归依赖缺失（%s），章节降级为数据源暂不可用", exc)
+        reporter.warn("风格因子回归依赖缺失，章节降级")
+        return _factor_unavailable_fallback("source_failed")
 
     today_str = datetime.now().strftime("%Y-%m-%d")
     # 90 条历史：预留对齐/dropna 头部损耗，保证 ≥window(60) 期有效样本
@@ -243,15 +292,22 @@ def compute_industry_beta_data(
         return None
 
     from src.python.analysis.style_factor_regression import asif_portfolio_daily_returns, klines_to_returns
-    from src.python.analysis.industry_beta import (
-        INDUSTRY_INDEX_MAP,
-        compute_industry_beta_analysis,
-        compute_industry_exposure,
-        unavailable_result,
-    )
     from src.python.core.code_utils import is_a_share_stock
     from src.python.fetcher.index import fetch_index_history
     from src.python.fetcher.industry import batch_fetch_industry_data
+
+    try:
+        from src.python.analysis.industry_beta import (
+            INDUSTRY_INDEX_MAP,
+            compute_industry_beta_analysis,
+            compute_industry_exposure,
+            unavailable_result,
+        )
+    except ImportError as exc:
+        # 纯计算层重依赖缺失：子表降级（§1.4.5），不阻塞主报告
+        logger.warning("[industry_beta] 行业 Beta 依赖缺失（%s），子表降级", exc)
+        reporter.warn("行业 Beta 依赖缺失，子表降级")
+        return _industry_unavailable_fallback("source_failed")
 
     _days = 90
 

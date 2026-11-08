@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.5-dev
-> **编号源**：`rf-next = 1073`（新增问题提出后更新为 +1；已用最大 rf-1072，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1074`（新增问题提出后更新为 +1；已用最大 rf-1073，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -67,6 +67,7 @@
 | **rf-1070** | 近 96h 变更残留两处技术债：①去 Jinja 化批次加了三组工具类，但只有 `.fill-alloc-*` 被 SVG 用上，`.bg-primary`/`.bg-alloc-mid`/`.bg-alloc-low` 无任何引用（死样式，规则集哈希把它当既定事实）；②`close_html_generation_stage`（rf-1060 抽出的full/both 共用收口）只被端到端用例间接触及，自身的三个分支（无 recorder / 无分段 / 有分段分流）无直测 |①删 3 条死规则并重标定 CSS 规则集哈希（评审动作）；②补 4 条直测：无 recorder 静默返回、有分段时按「落盘」告警、渲染慢指向模板而非磁盘、无分段回落总值 |
 | **rf-1071** | 违背「控制台着色单源 + NO_COLOR/TTY 降级」约束（架构约束表内条目）：`core/doctor.py` 与 `report/cli_progress.py` 各自硬写 `\033[...` 转义码并各自复制 `NO_COLOR`/`isatty` 判定——`core/ansi_colors` 已是唯一色源与降级实现，两处却另写一份，改配色或降级口径时会漏改 |`ansi_colors` 增 `RAW_CODES`（原样码表）与 `supports_color(stream)` / `codes_for(stream)`（按**指定流**判定着色能力，解决「stdout 被重定向致 stderr 失色」）；两模块改调前者，删掉各自的转义码字面量与 `NO_COLOR` 判断 |
 | **rf-1072** | 兼容面盘点（七类：旧配置项/旧配置文件/旧数据文件/旧数据结构/旧缓存结构/旧缓存文件/旧内部接口）发现 1 处**旧内部接口门面**：`core/data_freshness._detail_value` 是 `core/detail_view.detail_value` 的一行转发（docstring 自述「本函数仅保留旧名」），`holding_status` 也经它取值——改名后保留旧名属多余的兼容残留 |删旧名门面，`data_freshness` 内部与 `holding_status` 一律直调 `detail_value`（单源在 `core/detail_view`）；顺带把 `detect_price_jumps(details)` 形参放宽为 `list \| None`（实现本就以 `details or []` 容忍空入参）并给 3 处 `header_freshness` 调用补 `is not None` 断言 |
+| **rf-1073** | 裸解释器启动的 full 报告整份失败：系统 Python（无 pandas/numpy）生成报告时 `ModuleNotFoundError: No module named 'pandas'` 一路冒泡到 `generate_report`，用户只得到「生成失败」。三处根因：①`scripts/launch.sh`/`launch.ps1` 依赖 `activate`，而激活脚本内烘焙的是创建时的绝对 `VIRTUAL_ENV`——venv 目录搬家后 PATH 前置失效、激活静默无效，脚本里的裸 `python3` 落到系统解释器；②`pandas`/`numpy` 从未在 `requirements.txt`/`pyproject.toml` 声明（仅经 akshare 传递安装）；③`analysis/style_factor_regression.py` 在模块顶层 `import pandas`，而 `report/_report_factor_metrics.py` 的导入语句在 `try` 之外，ImportError 直接击穿数据准备阶段，违反 §1.4.5（该区块应 available=False 降级） | ①两个启动脚本改为直接调用 `.venv` 内解释器（与 venv 位置无关）并在启动前用该解释器 import 重依赖做硬闸，缺依赖给可读错误与修复命令；②两库补进依赖清单（单源契约测试同步）；③计算层重依赖惰性导入（`_numeric_stack()` + `TYPE_CHECKING` 类型注释），编排层把计算层导入纳入 `try` 并捕获 `ImportError` → `available=False` 降级；④`core/doctor.py` 增「关键依赖」自检行与 `interpreter_preflight_error()`，TUI/Web 入口启动即拦截 |
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-08）
 - [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-11-03）

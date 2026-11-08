@@ -240,6 +240,15 @@ def main() -> None:
     上移+清屏，菜单不滚屏），不支持 ANSI 的环境（管道/测试/旧控制台）回退
     整屏追加。Esc 需连按两次确认（3 秒窗口；防高延迟链路方向键拆包把孤 ESC 误判为退出），0/X 单次即退。
     """
+    # 启动硬闸：缺重依赖时立即给可读错误（否则会跑到数据准备阶段才报
+    # ModuleNotFoundError，用户只看到一份失败报告）
+    from src.python.core.doctor import interpreter_preflight_error
+
+    preflight_error = interpreter_preflight_error()
+    if preflight_error:
+        print(preflight_error, file=sys.stderr)
+        return
+
     # ASCII 降级（TUI_ASCII=1）：在写出层做一字符换一字符的符号替换，版面代码不动
     from src.python.tui.symbols import install_ascii_stream
 

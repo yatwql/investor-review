@@ -98,6 +98,10 @@ class TestLaunchScriptReadOnlyVenvRegression:
         venv = tmp_path / ".venv"
         (venv / "bin").mkdir(parents=True)
         (venv / "bin" / "activate").write_text("# stub\n", encoding="utf-8")
+        # 启动脚本按 .venv 内解释器定位（不依赖 activate）：直通桩转交真实解释器
+        venv_py = venv / "bin" / "python"
+        venv_py.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n', encoding="utf-8")
+        venv_py.chmod(0o755)
         (tmp_path / "requirements.txt").write_text(requirement + "\n", encoding="utf-8")
         # python/python3 桩指向当前测试解释器：版本检查与依赖校验均需真实执行
         for name in ("python", "python3"):

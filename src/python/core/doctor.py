@@ -56,6 +56,13 @@ GROUP_ORDER = [
 # 支持的最低 Python 版本（项目依赖的语法特性下限）
 MIN_PYTHON = (3, 10)
 
+#: 启动即必须可导入的重依赖 → 用途。缺任何一个都不能出报告，且失败点很深（数据准备阶段），
+#: 故必须在启动时前置拦截，而不是让用户等一轮取数后收到一份失败报告。
+REQUIRED_RUNTIME_PACKAGES: dict[str, str] = {
+    "pandas": "风格因子回归 / 行业 Beta 等纯计算层",
+    "numpy": "风格因子回归 / 行业 Beta 等纯计算层",
+}
+
 # ── 数据源网络检查的耗时预算（三渠道唯一取值来源）──────────────
 # 三渠道各写一份字面量时，同一台机器同一批数据源会给出不同结论：
 # 三渠道会给出不同结论（慢源在 6s 判超时、在 12s 通过），改预算还要改三处。
@@ -129,6 +136,52 @@ def _check_python_version() -> dict[str, Any]:
         False,
         f"{version} 低于要求的 {required}",
         hint="升级 Python 后重建虚拟环境",
+    )
+
+
+def missing_runtime_packages() -> list[str]:
+    """返回当前解释器缺失的重依赖包名（可导入的不返回）。"""
+    import importlib.util
+
+    return [name for name in REQUIRED_RUNTIME_PACKAGES if importlib.util.find_spec(name) is None]
+
+
+def interpreter_preflight_error() -> str | None:
+    """启动前置检查：解释器能否支撑出报告。
+
+    Returns:
+        ``None`` 表示可用；否则为可读的多行错误文本（含当前解释器与修复命令）。
+
+    为何不只看「是否在 venv 里」：容器/NAS 部署可能把依赖装在系统解释器，
+    只看 venv（``_check_venv``）会误拦这种合法部署；而只看依赖可导入
+    则同时拦住「裸解释器」与「半装 venv」两种真实的报告失败。
+    """
+    missing = missing_runtime_packages()
+    if not missing:
+        return None
+    venv_python = os.path.join(PROJECT_ROOT, ".venv", "bin", "python")
+    if os.name == "nt":  # pragma: no cover —— 平台分支
+        venv_python = os.path.join(PROJECT_ROOT, ".venv", "Scripts", "python.exe")
+    detail = "、".join(f"{name}（{REQUIRED_RUNTIME_PACKAGES[name]}）" for name in missing)
+    return (
+        f"[ERR] 当前解释器缺少关键依赖: {detail}\n"
+        f"      解释器: {sys.executable}\n"
+        f"      修复: {venv_python} -m pip install -r requirements.txt\n"
+        f"      或改用项目虚拟环境启动: scripts/launch.sh（Windows: scripts\\launch.ps1）"
+    )
+
+
+def _check_runtime_deps() -> dict[str, Any]:
+    """检查关键重依赖是否可导入（缺包时报出解释器路径与安装命令）。"""
+    missing = missing_runtime_packages()
+    if not missing:
+        return _item(GROUP_ENV, "关键依赖", True, "、".join(REQUIRED_RUNTIME_PACKAGES) + " 均可导入")
+    return _item(
+        GROUP_ENV,
+        "关键依赖",
+        False,
+        f"缺失: {'、'.join(missing)}（解释器 {sys.executable}）",
+        hint="用 .venv 解释器安装依赖: .venv/bin/python -m pip install -r requirements.txt",
     )
 
 
@@ -653,6 +706,7 @@ def run_doctor_checks(*, include_network: bool = True, max_timeout: float = 8.0)
     results: list[dict[str, Any]] = []
     results.append(_check_python_version())
     results.append(_check_venv())
+    results.append(_check_runtime_deps())
     results.append(_check_project_root())
     results.extend(_check_config())
     results.extend(_check_directories())
