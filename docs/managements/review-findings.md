@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.7-dev
-> **编号源**：`rf-next = 1088`（新增问题提出后更新为 +1；已用最大 rf-1087，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1089`（新增问题提出后更新为 +1；已用最大 rf-1088，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -56,6 +56,10 @@
 ### 开发期已修复（0.17.7-dev）
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
+
+| # | 问题 | 修复方向 |
+|---|------|----------|
+| **rf-1088** | `core/holdings_editor.py::ambiguous_price_kind` 内联 ``len(raw) == 6 and raw.startswith("00")`` 做代码形态/重叠区判定，属代码类型判定分散（违反「代码类型判定中心化」约束） | 改用 ``code_utils`` 的 ``is_six_digit_code`` + ``is_otc_code_overlap``；补「非 6 位码恒 False」形态用例 |
 
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-08）

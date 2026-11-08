@@ -34,7 +34,9 @@ from src.python.core.code_utils import (
     is_a_share_stock,
     is_exchange_fund_code,
     is_hk_stock_code,
+    is_otc_code_overlap,
     is_otc_fund_by_name,
+    is_six_digit_code,
 )
 from src.python.core.constants import SIDE_BUY, SIDE_SELL
 from src.python.core.models import Holding
@@ -295,7 +297,7 @@ def ambiguous_price_kind(code: str, name: str = "") -> bool:
         True 表示需一次显式确认。
     """
     raw = strip_to_digits(code)
-    if len(raw) != 6 or not raw.startswith("00"):
+    if not is_six_digit_code(raw) or not is_otc_code_overlap(raw):
         return False
     if is_exchange_fund_code(raw) or is_hk_stock_code(raw):
         return False

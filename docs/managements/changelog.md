@@ -8,6 +8,14 @@
 
 ## [0.17.7-dev] - 开发中（未发布）
 
+### 修复
+
+- **代码类型判定回归中心化（rf-1088）** —— `core/holdings_editor.py::ambiguous_price_kind`
+  原内联 `len(raw) == 6 and raw.startswith("00")` 自行判代码形态与 00 重叠区，属架构约束
+  「代码类型判定中心化」违规；改用 `code_utils.is_six_digit_code` +
+  `is_otc_code_overlap`，与 `price_kind`/`analysis/rebalance.py` 等处口径同一源（消除「代码类型判定中心化」约束下的分散判定）。
+  行为不变，补「非 6 位码恒 False」形态用例锁住门槛。
+
 
 （本次发布内容见下方归档索引）
 
