@@ -129,14 +129,16 @@ class TestSystemInfo:
     def test_config_summary_defaults(self, monkeypatch):
         """配置为空 dict：持仓目录/文件未设置、输出取 get_default、新闻 300、匿名化关闭。"""
         from src.python.config import get_default, resolve_holdings_path
+        from src.python.core.system_info import display_path
 
         self._patch_llm(monkeypatch, config=None)
         self._patch_config(monkeypatch, config={})
         info = _build_system_info()
         assert info["holdings_dir"] == "未设置"
         assert info["holdings_filename"] == "未设置"
-        # 输出默认 = get_default（真值来源，单源解析；不写死字面量）
-        assert info["output_dir"] == get_default("output_dir")
+        # 输出默认 = get_default 按上屏口径呈现（真值来源 + 展示原语，均不写死字面量）
+        assert info["output_dir"] == display_path(get_default("output_dir"))
+        assert not os.path.isabs(info["output_dir"]), "项目内路径上屏须相对化（绝对路径不可移植）"
         assert info["news_top_count"] == 300
         # 就绪判定反映 resolve_holdings_path 指向的真实文件（状态与生成链路同一路径口径）
         assert info["holdings_ready"] is os.path.exists(resolve_holdings_path())

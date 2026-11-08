@@ -303,13 +303,16 @@ def get_config_edit_surface() -> dict:
     )
 
     from src.python.config.anonymizer import ANONYMIZATION_MODE_DESCRIPTIONS, get_anonymization_mode
+    from src.python.core.system_info import display_path
     from src.python.config.features import PANEL_GROUPS, is_feature_enabled, panel_switches
 
     config = get_config()
+    # 路径输入框按「相对项目根」呈现（`display_path` 与系统状态卡同源）：写盘时配置层
+    # 会按需反绝对化，读入的绝对路径若原样上屏会把本机目录带进截图与分享。
     paths = {
-        "holdings_dir": config.get("holdings_dir") or "",
+        "holdings_dir": display_path(config.get("holdings_dir") or ""),
         "holdings_filename": config.get("holdings_filename") or "",
-        "output_dir": resolve_output_dir(config),
+        "output_dir": display_path(resolve_output_dir(config)),
     }
     sections = {
         "enable_fund_deep_analysis": is_enable_fund_deep_analysis(config),

@@ -6,7 +6,7 @@
 - ``llm_status()``：LLM 配置状态单源（三渠道状态展示共用判定树，渠道不复刻分支）。
 - 展示原语（``simplify_endpoint`` / ``circuit_display`` / ``strategy_label`` /
   ``priority_display`` / ``anon_mode_label`` / ``resolve_provider_credentials`` /
-  ``resolve_provider_credentials``）：熔断规则、主机名简化、策略标签、凭据回填等
+  ``display_path``）：熔断规则、主机名简化、策略标签、凭据回填、路径上屏口径等
   展示规则不得由渠道各持一份，收敛于此单点实现。
 
 配置读取失败按默认值兜底，不阻断页面渲染。
@@ -18,6 +18,32 @@ import logging
 import os
 
 logger = logging.getLogger("invest")
+
+
+def display_path(value: str) -> str:
+    """路径上屏口径：项目根之下 → 相对路径（与 config.json 落盘口径一致），其余原样。
+
+    判据与 `config._validation_scalars._deabsolutize_paths` 同源：越出项目根（relpath
+    以 ``..`` 开头）或跨盘符（Windows ``ValueError``）时保持绝对路径，因为那种路径
+    无法相对化。这里只改**展示值**，不动任何运行时解析结果。
+
+    Args:
+        value: 配置里的路径值（可能已是绝对路径）。
+
+    Returns:
+        上屏用字符串：项目内路径为 ``data/holdings`` 这类相对形式。
+    """
+    if not value or not os.path.isabs(value):
+        return value
+    from src.python.core.constants import PROJECT_ROOT
+
+    try:
+        rel = os.path.relpath(value, PROJECT_ROOT)
+    except ValueError:  # 不同盘符（Windows）无法计算相对路径
+        return value
+    if not rel or rel.startswith(".."):
+        return value
+    return rel.replace(os.sep, "/")
 
 
 def simplify_endpoint(endpoint: str) -> str:
@@ -132,9 +158,11 @@ def build_system_info() -> dict:
         config = {}
     holdings_dir = config.get("holdings_dir") or ""
     holdings_filename = config.get("holdings_filename") or ""
-    info["holdings_dir"] = holdings_dir or "未设置"
+    # 路径摘要按「相对项目根」上屏（与 config.json 落盘口径一致）：本机绝对路径既不可移植，
+    # 在面板与 README 截图里也只是噪声。运行时解析仍走绝对路径，不受影响。
+    info["holdings_dir"] = display_path(holdings_dir) or "未设置"
     info["holdings_filename"] = holdings_filename or "未设置"
-    info["output_dir"] = config.get("output_dir") or get_default("output_dir")
+    info["output_dir"] = display_path(config.get("output_dir") or get_default("output_dir"))
     info["news_top_count"] = config.get("news_top_count") or get_default("news_top_count")
     holdings_path = ""
     if config_readable:

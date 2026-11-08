@@ -1009,6 +1009,8 @@ INVEST_CACHE_DIR=docs/tmp/screenshots/demo/data/cache \    # 缓存改落（不�
 
 演示根只隔离「数据面」，代码与模板资产仍从仓库读取：`build()` 会在演示根建 `src/` 软链指向仓库 `src/`（不复制第二份源码树，避免与仓库漂移）。
 
+**路径上屏口径**：演示配置只写相对项目根的路径（`data/holdings` / `reports`），而配置层读入时会把路径绝对化——所以面板/状态卡显示路径前必须过 `core/system_info.display_path()`（项目根之下 → 相对形式，越出根目录或跨盘符保持绝对）。Web 工作台的正式覆盖提示、TUI 首页摘要、`/api/config/edit` 的路径输入框都走这一个原语；漏掉它的直接后果是 README/手册配图里带着 `/home/<user>/...` 这类本机目录。
+
 > **Windows 限制**：未开启开发者模式时创建符号链接失败，报告 HTML 会因 `TemplateNotFound: report_template.html` 失败（Excel 仍能生成）。两种解法任选其一：① 开启开发者模式（设置 → 隐私和安全性 → 开发者选项）；② 手工建目录联接：`mklink /J <demo>\src <repo>\src`。设置后重跑 `make-screenshots.py demo` 即可。
 
 **一条可重复的配图流水线**（README / 手册配图刷新，全部来自虚构演示持仓）：
