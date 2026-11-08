@@ -550,24 +550,17 @@ def generate_llm_content(
     from src.python.llm.observation import current_llm_observation
 
     _hit_sink = current_llm_observation()
-    from src.python.core.market_hours import market_snapshot_bucket
+    from src.python.llm.cache_policy import intraday_reuse_blocked
 
-    _bucket = market_snapshot_bucket()
-    if cache_enabled and not force and _bucket.intraday:
-        # 盘中档不复用（与预检侧同一策略，见 core.market_hours.market_snapshot_bucket）：
-        # 本骨架覆盖预检之后的模块（self_review / holding_change 等），闸门漏在这里
-        # 就等于「基础模块重算了、后置模块仍复用旧盘中结论」。
-        logger.info("[LLM] %s 盘中档不复用缓存（%s）", module_key or precheck_key, _bucket.label)
-        if _hit_sink is not None and hasattr(_hit_sink, "note_cache"):
-            _hit_sink.note_cache(False)
-        if _hit_sink is not None and hasattr(_hit_sink, "note_recompute_reason") and module_key:
-            from src.python.llm.observation import RECOMPUTE_INTRADAY_NO_REUSE
-
-            _hit_sink.note_recompute_reason(module_key, RECOMPUTE_INTRADAY_NO_REUSE)
-        _force_read = True
-    else:
-        _force_read = False
-    if cache_enabled and not force and not _force_read:
+    # 盘中止复用（与预检同一判定点）：本路径覆盖预检之后才确定键的模块
+    # （self_review / holding_change 等），漏在这里就等于「基础模块重算了、
+    # 后置模块仍复用旧盘中结论」。
+    _reuse_blocked = cache_enabled and not force and intraday_reuse_blocked(module_key or precheck_key, _hit_sink)
+    # 基线记账与是否复用无关：每份报告都要记下本轮键，否则盘中跳过读之后
+    # 「上一轮键」停留在更早的收盘档，下次归因会把换键误报成 ttl_expired。
+    if module_key:
+        _PREV_MODULE_CACHE_KEY[module_key] = precheck_key
+    if cache_enabled and not force and not _reuse_blocked:
         cached = cache_get(precheck_key, cache_ttl)
         if _hit_sink is not None and hasattr(_hit_sink, "note_cache"):
             _hit_sink.note_cache(bool(cached))
@@ -600,8 +593,6 @@ def generate_llm_content(
                 else:
                     _reason = RECOMPUTE_FINGERPRINT_CHANGED
                 _sink.note_recompute_reason(module_key, _reason)
-        if module_key:
-            _PREV_MODULE_CACHE_KEY[module_key] = precheck_key
         if cached:
             return (
                 _handle_cache_hit(

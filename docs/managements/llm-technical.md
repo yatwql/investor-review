@@ -185,6 +185,7 @@ skeleton.py:generate_llm_content()
 | `rate_caliber.py` | 工具 | 收益率口径标签的唯一声明点（持仓 / 组合 / 区间标签 + 口径说明）；`PROMPT_SCHEMA_VERSION` 为提示词文本版本，并入 `build_llm_fingerprint()`，静态文案改动也换缓存键 | `LABEL_POSITION` / `LABEL_PORTFOLIO` / `LABEL_INTERVAL` / `CALIBER_NOTE` / `PROMPT_SCHEMA_VERSION` |
 | `prompts_signals.py` | 工具 | 信号预消化：行业资金流向段方向标注与分方向排名（无开关，默认路径）+ 算法评级信号块（市场温度/估值分位/尾部风险/持仓基本面/叙事与数字背离 → `信号：…` 行，`deterministic_signal` 开关（读侧注入面），判定收敛于缓存后缀函数保证读写键同源） | `_build_sector_flow_block()` / `_build_signal_digest_block()` / `_signal_digest_cache_suffix()` |
 | `fingerprint.py` | 工具 | LLM 缓存指纹计算、稳定性字段提取、TTL 查询 | `compute_fingerprint()` / `build_llm_fingerprint()` |
+| `cache_policy.py` | 策略 | **缓存复用策略的唯一判定点**：盘中档不复用（预检与骨架两条路径共用同一判定/日志/归因） | `intraday_reuse_blocked()` |
 | `force_scope.py` | 工具 | 模块级强刷范围：可强刷键清单（注册表 settings_suffix 子集）+ `resolve_force_scope` 粒度优先归一与未知键校验 + `is_module_forced`；全局 force 与模块子集在 `generate_all_llm` 入口归一为模块键集合，不改缓存键构造 | `resolve_force_scope()` / `is_module_forced()` |
 | `module_fingerprint.py` | 工具 | **模块指纹的唯一事实来源（预检侧与写侧同源）**：四模块指纹构造器 + 输入闭包 + 注册表，两侧都调用同一函数，结构性消除「预检键 ≠ 写侧键」的漂移；另提供**组件级哈希审计**（逐输入分量的哈希与相对上次报告的变化定位；**变化定位恒开打 INFO**，逐组件哈希快照仅 DEBUG） | `MODULE_FINGERPRINT_BUILDERS` / `ModuleFingerprintInputs` / `*_fingerprint()` / `fingerprint_components()` / `diff_fingerprint_components()` |
 | `session.py` | 工具 | 会话级 Token 累计、模块级记录、格式化输出 | `track_session_usage()` / `get_session_usage()` |

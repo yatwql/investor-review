@@ -327,9 +327,6 @@ def _note_recompute_reason(sink, module_key: str, reason: str) -> None:
     sink.note_recompute_reason(module_key, reason)
 
 
-from src.python.llm.observation import RECOMPUTE_INTRADAY_NO_REUSE
-
-
 def _precheck_one_cache(
     cache_info: dict,
     llm_config: dict,
@@ -348,19 +345,11 @@ def _precheck_one_cache(
             module_key or cache_info["key"],
         )
         return (None, False)
-    from src.python.core.market_hours import market_snapshot_bucket
+    from src.python.llm.cache_policy import intraday_reuse_blocked
     from src.python.llm.observation import current_llm_observation
 
     _sink = current_llm_observation()
-    _bucket = market_snapshot_bucket()
-    if _bucket.intraday:
-        # 盘中档：行情逐分钟变，「十分钟前的结论」不该以交易时段口径上屏（策略见
-        # core.market_hours.market_snapshot_bucket）。此处只跳读、仍照常写缓存未来未必用
-        # ——写侧键含桶标识，盘中键不会污染收盘档缓存。
-        logger.info("[LLM 预检] %s 盘中档不复用缓存（%s）", module_key or cache_info["key"], _bucket.label)
-        if _sink is not None:
-            _sink.note_cache(False)
-            _note_recompute_reason(_sink, module_key or cache_info["key"], RECOMPUTE_INTRADAY_NO_REUSE)
+    if intraday_reuse_blocked(module_key or cache_info["key"], _sink):
         return (None, False)
 
     cached = cache_get(cache_info["key"], cache_info["ttl"])

@@ -302,7 +302,9 @@ def market_snapshot_bucket(now: datetime | None = None) -> MarketSnapshot:
 
     today = moment.strftime("%Y-%m-%d")
     minute = moment.hour * 60 + moment.minute
-    # 交易日判定复用交易日历单源：trading_day_as_of 在盘前与节假日都会回溯到最近交易日
+    # 交易日判定复用交易日历单源：trading_day_as_of 在盘前与节假日都会回溯到最近交易日。
+    # 函数内导入是**必需**的：cache._ttl → market_hours → trading_calendar → cache 已成链，
+    # 提到模块顶层即循环导入。
     from src.python.core.trading_calendar import trading_day_as_of
 
     as_of_trading_day = trading_day_as_of(moment)
