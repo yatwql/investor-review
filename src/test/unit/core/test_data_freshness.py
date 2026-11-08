@@ -104,7 +104,7 @@ class TestClassifyFreshness(unittest.TestCase):
         self.assertEqual(df.classify_freshness(d, _T, _PREV), df.FRESHNESS_DEGRADED)
 
     def test_dict_detail_supported(self):
-        """dict 形式明细 → 新鲜度分类一致（_detail_value 兼容 dict/对象）。"""
+        """dict 形式明细 → 新鲜度分类一致（detail_value 同时支持 dict 与含属性对象）。"""
         d = {"code": "600900", "name": "长江电力", "price": 10.0, "nav_date": _T, "price_type": "场内收盘价(T)"}
         self.assertEqual(df.classify_freshness(d, _T, _PREV), df.FRESHNESS_FRESH)
 
@@ -340,6 +340,7 @@ class TestHeaderFreshness:
 
         monkeypatch.setattr("src.python.core.trading_calendar.datetime", __import__("datetime").datetime)
         summary = header_freshness("2026-10-21", config={}, calendar=self._CAL)
+        assert summary is not None
         # 以测试当天为界取日历尾部；只要日期早于「前一交易日」才偏旧
         assert summary["stale"] is (
             summary["prev_trading_day"] is not None and "2026-10-21" < summary["prev_trading_day"]
@@ -349,6 +350,7 @@ class TestHeaderFreshness:
         from src.python.core.data_freshness import header_freshness
 
         summary = header_freshness("2026-10-10", config={}, calendar=self._CAL)
+        assert summary is not None
         assert summary["stale"] is True
         assert summary["trading_day"] == self._CAL[-1]
 
@@ -358,6 +360,7 @@ class TestHeaderFreshness:
         today = __import__("datetime").date.today()
         old = (today - __import__("datetime").timedelta(days=5)).isoformat()
         summary = header_freshness(old, config={"degradation": {"t2": {"stale_days": 3}}}, calendar=[])
+        assert summary is not None
         assert summary["trading_day"] is None
         assert summary["stale"] is True
         assert summary["threshold_days"] == 3

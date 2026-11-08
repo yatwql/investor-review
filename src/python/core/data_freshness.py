@@ -64,19 +64,14 @@ _JUMP_THRESHOLD_DEFAULT = 0.20
 # ── 行情明细读取 ─────────────────────────────────────────────
 
 
-def _detail_value(detail: Any, field: str, default: Any = None) -> Any:
-    """从行情明细读取字段（形态分派单源在 `core/detail_view.py`，本函数仅保留旧名）。"""
-    return detail_value(detail, field, default)
-
-
 def _has_effective_quote(detail: Any) -> bool:
     """判断该品种是否取到有效行情（price>0 且非「暂无行情」）。"""
     if detail is None:
         return False
-    price = _detail_value(detail, "price", 0.0)
+    price = detail_value(detail, "price", 0.0)
     if price is None or price <= 0:
         return False
-    price_type = _detail_value(detail, "price_type", "") or ""
+    price_type = detail_value(detail, "price_type", "") or ""
     if price_type == "暂无行情":
         return False
     return True
@@ -201,7 +196,7 @@ def classify_freshness(
     if not _has_effective_quote(detail):
         return FRESHNESS_DEGRADED
 
-    nav_date = _normalize_date(_detail_value(detail, "nav_date"))
+    nav_date = _normalize_date(detail_value(detail, "nav_date"))
     if nav_date is None:
         return FRESHNESS_STALE
     if nav_date == trading_day:
@@ -215,7 +210,7 @@ def classify_freshness(
 
 
 def detect_price_jumps(
-    details: list,
+    details: list | None,
     trading_day: str,
     prev_trading_day: str,
     threshold: float = _JUMP_THRESHOLD_DEFAULT,
@@ -226,7 +221,7 @@ def detect_price_jumps(
     stale/degraded 跳过——跨多个交易日/非交易日的累计涨跌不视为单日异常。
 
     Args:
-        details: 行情明细列表
+        details: 行情明细列表（None 视为空，返回空列表）
         trading_day: 最近交易日 YYYY-MM-DD
         prev_trading_day: 前一交易日 YYYY-MM-DD
         threshold: 单日涨跌幅阈值（小数，默认 0.20 = ±20%）
@@ -238,15 +233,15 @@ def detect_price_jumps(
     """
     jumps: list[dict] = []
     for detail in details or []:
-        code = _detail_value(detail, "code", "") or ""
+        code = detail_value(detail, "code", "") or ""
         if not code:
             continue
         freshness = classify_freshness(detail, trading_day, prev_trading_day)
         if freshness not in (FRESHNESS_FRESH, FRESHNESS_CACHED):
             continue
 
-        price = finite_or(_detail_value(detail, "price", 0.0))
-        yesterday_close = finite_or(_detail_value(detail, "yesterday_close", 0.0))
+        price = finite_or(detail_value(detail, "price", 0.0))
+        yesterday_close = finite_or(detail_value(detail, "yesterday_close", 0.0))
         if not yesterday_close or abs(yesterday_close) <= 1e-10:
             continue
 
@@ -255,11 +250,11 @@ def detect_price_jumps(
             continue
 
         direction = "up" if change_pct > 0 else "down"
-        nav_date = _normalize_date(_detail_value(detail, "nav_date")) or ""
+        nav_date = _normalize_date(detail_value(detail, "nav_date")) or ""
         jumps.append(
             {
                 "code": code,
-                "name": _detail_value(detail, "name", "") or "",
+                "name": detail_value(detail, "name", "") or "",
                 "change_pct": round(change_pct, 2),
                 "direction": direction,
                 "nav_date": nav_date,
@@ -319,7 +314,7 @@ def build_freshness_summary(
 
     detail_map: dict[str, Any] = {}
     for d in details or []:
-        code = _detail_value(d, "code", "") or ""
+        code = detail_value(d, "code", "") or ""
         if code:
             detail_map.setdefault(code, d)
 
@@ -334,14 +329,14 @@ def build_freshness_summary(
         change_pct = (
             round(
                 (
-                    finite_or(_detail_value(detail, "price", 0.0))
-                    - finite_or(_detail_value(detail, "yesterday_close", 0.0))
+                    finite_or(detail_value(detail, "price", 0.0))
+                    - finite_or(detail_value(detail, "yesterday_close", 0.0))
                 )
-                / finite_or(_detail_value(detail, "yesterday_close", 0.0), 1.0)
+                / finite_or(detail_value(detail, "yesterday_close", 0.0), 1.0)
                 * 100,
                 2,
             )
-            if detail and finite_or(_detail_value(detail, "yesterday_close", 0.0)) > 0
+            if detail and finite_or(detail_value(detail, "yesterday_close", 0.0)) > 0
             else 0.0
         )
         items.append(
@@ -374,7 +369,7 @@ def _infer_latest_nav_date(details: list | None) -> str:
     """从行情明细中推断最近的净值日期（用于未显式传入交易日时的近似）。"""
     latest: str | None = None
     for d in details or []:
-        nav = _normalize_date(_detail_value(d, "nav_date"))
+        nav = _normalize_date(detail_value(d, "nav_date"))
         if nav and (latest is None or nav > latest):
             latest = nav
     return latest or datetime.now().strftime("%Y-%m-%d")

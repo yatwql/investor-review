@@ -49,6 +49,10 @@
   `supports_color(stream)` / `codes_for(stream)`（按**指定流**判定着色能力），`core/doctor.py` 与
   `report/cli_progress.py` 改为调用前者——此前两模块各自硬写 `\033[...` 转义码并各自复制
   `NO_COLOR`/`isatty` 判定，改配色或降级口径必漏改一处。
+- **删掉最后一处「旧内部接口」门面**（rf-1072）：`core/data_freshness._detail_value` 只是
+  `core/detail_view.detail_value` 的一行转发（自述「仅保留旧名」），`holding_status` 也经它取值；
+  现已统一直调 `detail_value`。兼容面七类复核结论保持不变：旧配置项/旧配置文件/旧数据文件/
+  旧数据结构/旧缓存结构/旧缓存文件均无兼容分支（结构变更一律硬闸门拒绝或整体作废，见 `technical.md` §9.2）。
 
 （本次发布内容见下方归档索引）
 

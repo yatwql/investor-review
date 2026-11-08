@@ -27,7 +27,8 @@ from typing import Any
 
 from src.python.core.code_utils import is_fund_holding, is_offsite_fund
 from src.python.core.code_symbols import strip_exchange_prefix
-from src.python.core.data_freshness import _detail_value, _has_effective_quote
+from src.python.core.data_freshness import _has_effective_quote
+from src.python.core.detail_view import detail_value
 
 logger = logging.getLogger("invest")
 
@@ -183,7 +184,7 @@ def _status_for_holding(holding: Any, detail: Any) -> str:
             return STATUS_NAV_MISSING
         return STATUS_POSSIBLY_DELISTED
 
-    market_name = _detail_value(detail, "name", "") or ""
+    market_name = detail_value(detail, "name", "") or ""
     if not names_match(holding.name, market_name):
         return STATUS_NAME_MISMATCH
     return STATUS_OK
@@ -205,7 +206,7 @@ def annotate_position_status(holdings: list, details: list | None = None) -> lis
     """
     detail_map: dict[str, Any] = {}
     for d in details or []:
-        code = _detail_value(d, "code", "") or ""
+        code = detail_value(d, "code", "") or ""
         if code:
             detail_map.setdefault(code, d)
 
