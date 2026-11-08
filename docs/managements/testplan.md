@@ -562,7 +562,7 @@
 | R-LLM-11 | `src/test/unit/llm/test_depth_profile.py` + `src/test/unit/report/test_summary.py` + `src/test/unit/report/test_summary_module_rows.py` | 批 5 |
 | R-LLM-12 | `src/test/unit/llm/test_self_review.py` + `src/test/unit/report/test_llm_module_info.py` | 批 5 |
 | R-LLM-13 | `src/test/unit/llm/test_cost_forecast.py` + `src/test/unit/cli/test_cli_cost_forecast.py` + `src/test/unit/web/test_cost_forecast_flow.py` + `src/test/unit/handlers/test_handlers_report.py` | 批 5 |
-| R-LLM-14 | `src/test/unit/config/test_config_llm_providers_priority.py`（CLI/面板/Web 同源用例：`test_cli_llm_provider_order.py` / `test_handlers_llm_providers.py` / `test_config_edit.py::TestLlmProvidersBlock`） | 批 5 |
+| R-LLM-14 | `src/test/unit/config/test_config_llm_providers_priority.py`（CLI/面板/Web 同源用例：`test_cli_llm_provider_order.py` / `test_handlers_llm_providers.py` / `test_config_edit.py::TestLlmProvidersBlock`） | 批 5；桶策略：`src/test/unit/core/test_market_snapshot_bucket.py`（五时点分档/每份报告判定一次/提示词口径/进键）+ `src/test/unit/llm/test_cache_matrix.py::TestMarketSnapshotBucketPolicy`（盘中不复用 / 收盘档复用 / 口径行） |
 | R-LLM-15 | `src/test/unit/llm/test_llm_budget.py` | 批 6 |
 | R-DATA-08 | `src/test/unit/fetcher/test_chain_overrides.py` | 批 5 |
 | R-DATA-09 | `src/test/unit/news/test_news_dedup_compact.py` + `src/test/unit/news/test_news_dedup.py`（锚点追加写/保留期/同源采样） | 批 6 |
