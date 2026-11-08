@@ -10,6 +10,8 @@
 
 ### 修复
 
+- **LLM 指纹分两类**（rf-1078）（价格相关 / 价格无关，`cache_policy.PRICE_INDEPENDENT_MODULES` 单源）：价格无关模块（`global_macro` / `news_correlation`）键里不含价格、不带行情口径桶后缀，盘中可复用；其余模块带桶后缀、盘中不复用。分类同时驱动「桶后缀」与「盘中闸门」两处行为，新模块默认按价格相关处理。
+- **与价格无关模块的缓存键去掉价格信息**（rf-1077）：`global_macro`（全球政经局势）与 `news_correlation`（财经热点关联）的结论只取决于「持有哪些品种」，此前键里带着持仓变动复盘块（市值/盈亏差）、行情口径桶后缀与穿透 mv/ratio_pct，价格一变就整批换键、TTL 从未生效。现前者只留结构/分类/申购限购块，后者穿透只留 `name/codes`（`news_context_fingerprint()` 单点构造）。另新增 `trading_calendar.trading_day_as_of_cached()`：行情口径桶改用「只读已缓存日历、绝不触网」的判定，指纹相关用例不再隐性依赖取数。
 - **LLM 缓存加时间口径：盘中不复用、收盘档可复用**（rf-1076）：LLM 指纹含行情派生块（申购限购/持仓变动/环比降级），盘中逐分钟变、收盘后冻结。新增 `core.market_hours.market_snapshot_bucket()` 把「本次运行依据哪个已完成时点」抽成四档（盘中 / 上午收盘 / 当日收盘 / 上一交易日收盘），每轮报告判定一次；盘中档在预检与骨架两处跳过缓存读（归因 `intraday_no_reuse`），收盘档同档内正常复用；桶键进四个基础模块与辩论键指纹；统一 prompt 附录后追加 `【数据口径】…` 行，预检摘要旁打印本轮口径。文档：`llm-technical.md` §7.6、`technical.md` §3.4、FAQ 同步。
 - **运行观测口径回正：逐模块耗时扣排队、批量模块耗时落账、市场情绪零命中可判读**（rf-1075）：`per_module.duration` 改为「模型耗时」（`PacingGate` 现按线程记账整段过闸等待——含此前漏记的并发许可等待——骨架调用前后扣减；实测串行端点曾把 62s 墙钟记成 88.2s）；批量路径（`news_correlation`）由骨架回传阶段墙钟，不再恒记 0.0s；`market_sentiment` 日志补两侧规模（龙虎榜/连板梯队条目数 × 跟踪标的数），交易日改为龙虎榜→连板梯队双源兜底。
 - **空数据契约键集收口单源 + TUI 前置失败退出码**（rf-1074）：上一轮修复引入的兜底把 `available=False` 的键集写到第三处（`report/_report_factor_metrics` 字面量），且兜底 `window` 退化为 `0`；现键集单源到新增的 `analysis/unavailable_contracts.py`（无 numpy/pandas，重依赖坏掉时仍可用），两个计算模块与编排层兜底统一委托它，补三条单源断言。`tui.main()` 前置检查失败改为 `raise SystemExit(1)`，直连入口也能被脚本感知。

@@ -232,7 +232,7 @@ class TestInMemoryStateReset:
 class TestSerialModules:
     """串行后置模块（生成后自检 / 持仓变动复盘归因）的缓存行为。"""
 
-    _OUTPUTS = {
+    _OUTPUTS: dict[str, str | None] = {
         "global_macro": "<p>宏观</p>",
         "expert_review": "<p>专家</p>",
         "health_check": "<p>体检</p>",
@@ -297,7 +297,7 @@ class TestSerialModules:
 
 
 class TestMarketSnapshotBucketPolicy:
-    """行情口径桶决定复用：收盘档同档内可命中，盘中档一律不复用。"""
+    """行情口径桶决定复用：价格相关模块盘中不复用；价格无关模块两种档位都可复用。"""
 
     @staticmethod
     def _freeze(monkeypatch, key: str, label: str, intraday: bool) -> None:
@@ -306,14 +306,33 @@ class TestMarketSnapshotBucketPolicy:
         frozen = market_hours.MarketSnapshot(key=key, label=label, as_of="2026-11-06", intraday=intraday)
         monkeypatch.setattr(market_hours, "market_snapshot_bucket", lambda now=None: frozen)
 
-    def test_intraday_run_never_reuses_cache(self, llm_cache_dir, monkeypatch):
-        """盘中档：即便同输入、TTL 未到，也必须重算（不把盘中结论复用给下一次运行）。"""
+    def test_intraday_run_never_reuses_price_sensitive_modules(self, llm_cache_dir, monkeypatch):
+        """盘中档：价格相关模块即便同输入、TTL 未到也必须重算。
+
+        全球政经局势（`global_macro`）属价格无关模块——结论不随报价变化，
+        盘中复用是安全的，故对它不断言 miss。
+        """
+        from src.python.llm.cache_policy import is_price_sensitive_module
+
         self._freeze(monkeypatch, "intraday:2026-11-06", "盘中（2026-11-06 10:00）", True)
         base = make_inputs()
         _run(base)
         flags = _run(base)
 
-        assert not any(flags), f"盘中档不得命中缓存：{flags}"
+        sensitive = {k: flags[_IDX[k]] for k in _IDX if is_price_sensitive_module(k)}
+        assert not any(sensitive.values()), f"价格相关模块盘中不得命中缓存：{sensitive}"
+        assert flags[_IDX["global_macro"]] is True, f"价格无关模块盘中应可复用：{flags}"
+
+    def test_price_independent_module_reuses_across_buckets(self, llm_cache_dir, monkeypatch):
+        """跨档：价格无关模块的键不含桶，收盘档写入的缓存盘中仍命中。"""
+        self._freeze(monkeypatch, "close:2026-11-06", "当日收盘（2026-11-06）", False)
+        base = make_inputs()
+        _run(base)
+        self._freeze(monkeypatch, "intraday:2026-11-06", "盘中（2026-11-06 10:00）", True)
+        flags = _run(base)
+
+        assert flags[_IDX["global_macro"]] is True, f"价格无关模块跨档应复用：{flags}"
+        assert flags[_IDX["expert_review"]] is False, f"价格相关模块跨档必须重算：{flags}"
 
     def test_closed_bucket_reuses_cache(self, llm_cache_dir, monkeypatch):
         """收盘档：同输入第二次运行全命中（这是桶机制要换来的收益）。"""
@@ -334,3 +353,36 @@ class TestMarketSnapshotBucketPolicy:
         assert bucket_lines, "预检须留下本轮行情口径行"
         assert "盘中" in bucket_lines[-1]
         assert "盘中不复用" in bucket_lines[-1]
+
+
+class TestPriceClassification:
+    """指纹分两类的单源：价格相关 / 价格无关（`cache_policy.PRICE_INDEPENDENT_MODULES`）。"""
+
+    def test_classification_covers_known_modules(self):
+        from src.python.llm.cache_policy import PRICE_INDEPENDENT_MODULES, is_price_sensitive_module
+
+        assert PRICE_INDEPENDENT_MODULES == frozenset({"global_macro", "news_correlation"})
+        assert all(is_price_sensitive_module(k) for k in ("expert_review", "health_check", "penetration_deep"))
+        assert not any(is_price_sensitive_module(k) for k in PRICE_INDEPENDENT_MODULES)
+
+    def test_unknown_module_defaults_to_price_sensitive(self):
+        """保守方向：新模块默认按价格相关处理（误判只多算一次，反向会复用旧结论）。"""
+        from src.python.llm.cache_policy import is_price_sensitive_module
+
+        assert is_price_sensitive_module("brand_new_module") is True
+
+    def test_intraday_gate_only_blocks_price_sensitive_modules(self, monkeypatch):
+        from src.python.core import market_hours
+        from src.python.llm.cache_policy import intraday_reuse_blocked
+
+        monkeypatch.setattr(
+            market_hours,
+            "market_snapshot_bucket",
+            lambda now=None: market_hours.MarketSnapshot(
+                key="intraday:2026-11-06", label="盘中", as_of="2026-11-06", intraday=True
+            ),
+        )
+
+        assert intraday_reuse_blocked("expert_review") is True
+        assert intraday_reuse_blocked("global_macro") is False
+        assert intraday_reuse_blocked("news_correlation") is False

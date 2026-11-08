@@ -19,7 +19,30 @@ from src.python.llm.observation import RECOMPUTE_INTRADAY_NO_REUSE
 
 logger = logging.getLogger("invest")
 
-__all__ = ["intraday_reuse_blocked"]
+__all__ = [
+    "PRICE_INDEPENDENT_MODULES",
+    "is_price_sensitive_module",
+    "intraday_reuse_blocked",
+]
+
+#: 指纹与持仓产品**价格无关**的模块 —— LLM 指纹分两类的唯一事实来源。
+#:
+#: 判据是「结论是否随标的价格变化」：
+#:   - 价格无关：`global_macro`（全球政经局势，看宏观与组合构成）、`news_correlation`
+#:     （财经热点关联，看新闻涉不涉及持有的品种/行业）。它们的键里只留结构（品种/代码/
+#:     成本/分类/申购限购约束），既不带行情口径桶后缀，也不受盘中「价格还在变」影响。
+#:   - 其余（`expert_review` / `health_check` / `penetration_deep` / 生成后自检 /
+#:     持仓变动复盘 / 辩论三键）一律按**价格相关**对待：键含价格派生块（风险信号、
+#:     市值/盈亏差、穿透占比），故带行情口径桶后缀，盘中档不复用。
+#:
+#: 保守方向：新模块默认归入价格相关——误判成相关的代价只是多算一次，误判成无关
+#: 会复用按旧价格生成的结论。
+PRICE_INDEPENDENT_MODULES: frozenset[str] = frozenset({"global_macro", "news_correlation"})
+
+
+def is_price_sensitive_module(module_key: str) -> bool:
+    """该模块的结论是否随持仓产品价格变化（即其指纹里是否含价格派生块）。"""
+    return module_key not in PRICE_INDEPENDENT_MODULES
 
 
 def intraday_reuse_blocked(module_key: str, sink: Any = None) -> bool:
@@ -35,6 +58,9 @@ def intraday_reuse_blocked(module_key: str, sink: Any = None) -> bool:
         True 表示本轮不复用该模块缓存。
     """
     # 经模块属性取值：单测按需替换判定源（直接 from-import 会把绑定固定在此处）
+    if not is_price_sensitive_module(module_key):
+        # 价格无关模块：结论不随报价变化，盘中复用是安全的（也就不用为它白算一次）
+        return False
     bucket = market_hours.market_snapshot_bucket()
     if not bucket.intraday:
         return False

@@ -60,6 +60,7 @@ __all__ = [
     "get_last_trading_day",
     "get_prev_trading_day",
     "trading_day_as_of",
+    "trading_day_as_of_cached",
 ]
 
 
@@ -297,6 +298,34 @@ def trading_day_as_of(moment: datetime) -> str:
         check -= timedelta(days=1)
 
     # 极端回退（不应到达）
+    return moment.strftime("%Y-%m-%d")
+
+
+def trading_day_as_of_cached(moment: datetime) -> str:
+    """同 :func:`trading_day_as_of`，但**只读已缓存日历**、绝不触网。
+
+    用途：「运行中元数据」类判定（如 LLM 缓存的行情口径桶）不该因为源不可用或
+    离线环境而中断，也不该为了一个分组标签去拉日历。口径与全量版一致——盘前与
+    非交易日向前回溯到最近交易日；日历缓存不可用时按「排除周六日」近似
+    （与 ``_is_trading_day`` 的回退口径同源，方向上偏保守：节假日会被当成交易日，
+    此时只会让「盘中档不复用」这类保守策略多生效一次，不会误复用）。
+
+    Args:
+        moment: 待判定时点（naive 按北京时区解释）
+
+    Returns:
+        YYYY-MM-DD 格式的所属交易日；回溯 14 天未命中时返回 moment 自身日期。
+    """
+    calendar = set(cached_trading_days())
+    check = moment - timedelta(days=1) if moment.hour < 9 or moment.hour == 9 and moment.minute < 30 else moment
+    for _ in range(14):
+        if calendar:
+            hit = check.strftime("%Y-%m-%d") in calendar
+        else:
+            hit = check.weekday() < 5
+        if hit:
+            return check.strftime("%Y-%m-%d")
+        check -= timedelta(days=1)
     return moment.strftime("%Y-%m-%d")
 
 

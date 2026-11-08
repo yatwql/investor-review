@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.5-dev
-> **编号源**：`rf-next = 1077`（新增问题提出后更新为 +1；已用最大 rf-1076，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1079`（新增问题提出后更新为 +1；已用最大 rf-1078，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -41,7 +41,7 @@
 | 文件 | 现状与拆分方向 |
 |------|----------------|
 | `src/test/unit/scripts/test_release_tool_gate.py` 1147 行（测试登记线 900 / 红线 1200） | 按域再拆：`refresh` 编排一组、`publish` 一组独立成文件；拆分前先确认不放宽断言 |
-| `src/test/conftest.py` 1155 行（测试登记线 900） | fixture 族按域下沉（行情/LLM/网络/持久化各一模块），conftest 只留 autouse 装配与 marker 注册 |
+| `src/test/conftest.py` 1170 行（测试登记线 900） | fixture 族按域下沉（行情/LLM/网络/持久化各一模块），conftest 只留 autouse 装配与 marker 注册 |
 | `src/python/llm/generators_orchestrator.py` 919 行（主程序登记线 700） | 生成编排与共享钩子按模块族再分；预检键/指纹段可下沉 `generators_orchestrator_cache.py` |
 | `src/python/report/decision_basis.py` 962 行（主程序登记线 700，红线 1000） | 六段块装配（信号/可信度/风险预算/纪律/结算+按视界表现/约束）仍在单模块；拆分方向：结算批表与按视界表现聚合（`build_settlement_summary`＋`build_performance`＋`_mean`/`_tone_*` 色彩助手）可整体下沉 `decision_basis_settlement.py`（只读账本、无跨段依赖，预计 −180 行）；信号清单与区分度登记（`_build_signal_rows`＋`BACKTEST_CONCLUSIONS`）可再下沉一簇 |
 | `src/python/llm/skeleton.py` 848 行（主程序登记线 700） | 模板数据与渲染逻辑可下沉 `llm/skeleton_*`（骨架模板 / 占位渲染 / 缓存归因 / 回写四簇并存） |
@@ -71,6 +71,8 @@
 | **rf-1074** | 空数据契约键集三处维护（本轮修复留下的债）：`style_factor_regression.unavailable_result`、`industry_beta.unavailable_result` 与 `report/_report_factor_metrics` 的降级兜底各写一份字面量键集，且兜底版 `window` 由 `DEFAULT_WINDOW` 退化成 `0`——加一个契约键就要改三处，漏改即渲染期 KeyError 或契约字段缺失。另 `tui.main()` 的前置检查失败只 `print` + `return`，直连 `python src/python/tui/tui.py` 时退出码仍为 0 | 新增 `analysis/unavailable_contracts.py`（纯字典装配、无 numpy/pandas，正因它是「重依赖坏掉时仍须可用」的那层），两个计算模块与编排层兜底全部委托该工厂（`window` 回到 `DEFAULT_WINDOW` 单源）；补三条单源断言（键集逐键相等 / 契约模块无第三方依赖 / 计算层委托）。`tui.main()` 前置失败改 `raise SystemExit(1)` |
 | **rf-1075** | 运行观测三处口径债（`per_module.duration` 含排队、批量模块耗时恒 0、`market_sentiment` 零命中不可判读）：①逐模块 `duration` 记的是 `call_llm` 墙钟，串行端点（`max_concurrency=1`）的排队被算进模型耗时——实测 `expert_review` 记 88.2s 而日志时间戳墙钟约 62s（高估 ~40%），且 `PacingGate` 只记 `min_interval` 等待、不记并发许可等待；②`news_correlation` 走批量骨架，`record_per_module` 未传 `duration`，用量页签恒记 0.0s（实际约 3s），该模块无法归因；③`market_sentiment` 只打「命中 0 条」，事后无法区分「源无条目 / 跟踪标的为空 / 当日确无交集」 | ①`PacingGate` 测量整段过闸等待（含并发许可）并按线程记账（`pop_thread_pacing_wait`），骨架从 `elapsed` 扣除后落 `duration`；观测汇聚器仍记全局白等总量，并新增 `pacing_wait_seconds()` 读口；②`run_batch_mode` 回传本段墙钟（扣排队）→ `batch_usage["duration"]` → 用量落账；③日志补「龙虎榜 N 只 / 连板梯队 M 只 ∩ 跟踪标的 K 只」，并把交易日做成龙虎榜→连板梯队双源兜底（单源缺失时仍给出可读交易日）；补 11 条断言 |
 | **rf-1076** | LLM 缓存无时间口径区分：指纹里含行情派生块（申购限购 / 持仓变动 / 环比降级），盘中逐分钟变、收盘后冻结，但缓存判定只看内容与 TTL——盘中反复出报告等于每次全量重算（实测 4 个基础模块 0/4 命中、9 次调用约 130s/¥0.13），而「一律复用」又会让交易时段内的读者拿到十分钟前的盘中结论 | `core/market_hours.py` 新增行情口径桶 `market_snapshot_bucket()`（盘中 / 上午收盘 / 当日收盘 / 上一交易日收盘四档，每轮报告判定一次并由 `generate_report` 入口重置）：盘中档在预检与骨架两处跳过缓存读（归因 `intraday_no_reuse`），其余档同档内可复用；桶键作为后缀进四个基础模块与辩论键的指纹，统一 prompt 附录后追加 `【数据口径】…` 声明，预检摘要旁固定打印本轮口径；补 15 条断言（分档/每轮一次/提示词口径/进键/盘中断复用/收盘复用） |
+| **rf-1077** | 与个股价格无关的模块把价格锁进了键：`global_macro` 的键含持仓变动复盘块（市值差/盈亏差）与行情口径桶后缀，`news_correlation` 的逐条键用原始 `penetrated_assets`（含 mv/ratio_pct）——两者结论都只与「我持有哪些品种」有关，价格一变键就换，24h/1h TTL 实际从未生效，TOP N 新闻的逐条缓存每轮全废 | `global_macro_fingerprint` 去掉持仓变动复盘块与桶后缀（保留结构/分类/申购限购块，后者无价格）；新闻侧新增 `generators_news.news_context_fingerprint()`，穿透资产经 `extract_stable_penetration` 只留 name/codes；`trading_calendar.trading_day_as_of_cached()` 新增（桶只读已缓存日历、不触网，消除指纹用例对离线的隐性依赖）；测试补 6 条断言（两模块键不受价格/桶影响、结构仍换键），并修 `purchase_constraint_injection` 的两处位置实参类型债 |
+| **rf-1078** | 「价格相关 / 价格无关」两分类只体现在各指纹函数的实现里：去价格改了 `global_macro`/`news_correlation`，但盘中闸门仍对**所有**模块生效——价格无关模块（结论不随报价变）在盘中也被强行重算，分类没有驱动力，后续新增模块只能靠人记住「该不该带桶后缀」 | 分类单源到 `llm/cache_policy.PRICE_INDEPENDENT_MODULES` + `is_price_sensitive_module()`：盘中闸门先判分类、再判档位（价格无关模块盘中直接复用）；新模块默认归入价格相关；补 5 条断言（分类集合 / 未知模块保守归类 / 闸门按分类生效 / 盘中仅价格相关模块重算 / 跨档复用） |
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-08）
 - [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-11-03）

@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     import httpx
 
 from src.python.llm._api_responses import _log_token_usage
-from src.python.llm.fingerprint import compute_fingerprint
+from src.python.llm.fingerprint import compute_fingerprint, extract_stable_penetration
 from src.python.llm.pricing import compute_cost_value
 from src.python.llm.prompts import (
     _SYSTEM_NEWS_CORRELATION,
@@ -132,6 +132,34 @@ def _select_top_news(
     return top_news, top_to_original
 
 
+def news_context_fingerprint(
+    holdings: list,
+    penetrated_assets: list | None,
+    purchase_constraint_block: str = "",
+) -> str:
+    """新闻关联分析的上下文指纹（**只含结构，不含价格**）。
+
+    关联判断看的是「这条新闻涉不涉及我持有的品种/行业」，与标的价格无关；把
+    mv/ratio_pct 这类行情派生值留在键里，会让每轮行情刷新都把 TOP N 新闻的逐条
+    缓存全部换掉（实测这些字段随报价分钟级变化）。
+
+    Args:
+        holdings: 持仓对象列表（只取前 20 只的 name/code）
+        penetrated_assets: 穿透 TOP10 资产（经 `extract_stable_penetration` 只留 name/codes）
+        purchase_constraint_block: 申购限购约束块（无价格，属可执行性硬约束）；空则不入键
+
+    Returns:
+        上下文指纹（并入每条新闻的逐条缓存键）
+    """
+    holdings_summary = [{"name": h.name, "code": h.code} for h in holdings[:20]]
+    stable_pen = extract_stable_penetration(penetrated_assets)
+    if purchase_constraint_block:
+        # 条件并入：约束块进批量提示词 → 必进指纹（逐级影响逐条缓存键）；
+        # 块空 → 逐字节沿用原两参形态，存量缓存键不变
+        return compute_fingerprint(holdings_summary, stable_pen, purchase_constraint_block)
+    return compute_fingerprint(holdings_summary, stable_pen)
+
+
 def _build_news_hooks(
     top_news: list[dict],
     holdings: list,
@@ -158,14 +186,7 @@ def _build_news_hooks(
         _model = (llm_config or {}).get("model", "") or "未指定" if llm_config else "未指定"
 
     def _batch_preparer():
-        holdings_summary = [{"name": h.name, "code": h.code} for h in holdings[:20]]
-        if purchase_constraint_block:
-            # 条件并入：约束块进批量提示词 → 必进指纹（逐级影响逐条缓存键）；
-            # 块空 → 逐字节沿用原两参形态，存量缓存键不变
-            holdings_fp = compute_fingerprint(holdings_summary, penetrated_assets, purchase_constraint_block)
-        else:
-            holdings_fp = compute_fingerprint(holdings_summary, penetrated_assets)
-        return top_news, holdings_fp
+        return top_news, news_context_fingerprint(holdings, penetrated_assets, purchase_constraint_block)
 
     def _per_item_cache(_idx: int, item: dict, context_fp: str) -> str:
         title_prefix = (item.get("title", "") or "")[:80]

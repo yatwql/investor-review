@@ -83,7 +83,7 @@ class TestBucketMemo:
             calls.append(moment.strftime("%Y-%m-%d"))
             return moment.strftime("%Y-%m-%d")
 
-        monkeypatch.setattr("src.python.core.trading_calendar.trading_day_as_of", _counting)
+        monkeypatch.setattr("src.python.core.trading_calendar.trading_day_as_of_cached", _counting)
 
         first = market_hours.market_snapshot_bucket()
         second = market_hours.market_snapshot_bucket()
@@ -94,7 +94,7 @@ class TestBucketMemo:
     def test_explicit_moment_is_not_memoized(self, monkeypatch):
         """显式传时点（测试/回放）不写 memo：不得污染后续真实判定。"""
         monkeypatch.setattr(
-            "src.python.core.trading_calendar.trading_day_as_of",
+            "src.python.core.trading_calendar.trading_day_as_of_cached",
             lambda moment: moment.strftime("%Y-%m-%d"),
         )
 
@@ -106,7 +106,7 @@ class TestBucketMemo:
     def test_reset_clears_memo(self, monkeypatch):
         """重置后必须重新判定：长驻进程跨时段连续出报告不能沿用上一轮的档。"""
         monkeypatch.setattr(
-            "src.python.core.trading_calendar.trading_day_as_of",
+            "src.python.core.trading_calendar.trading_day_as_of_cached",
             lambda moment: moment.strftime("%Y-%m-%d"),
         )
         first = market_hours.market_snapshot_bucket(_at(_TRADING_DAY, 10, 0))

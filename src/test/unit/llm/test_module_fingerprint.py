@@ -745,7 +745,8 @@ _PURCHASE_BLOCK_CHANGED = _PURCHASE_BLOCK.replace("100 元", "200 元")
 #: 空块基线（接线前形态）：随提示词文本版本盐递增同步刷新（当前 `rate-caliber-4`）；
 #: 结构后缀 `_c` 不应随盐变化——后缀增减即为键形漂移，属需排查的异常。
 _PRE_WIRE_BASELINE = {
-    "global_macro": "df8fb2929da0" + _BUCKET_SUFFIX,
+    # global_macro 键里没有价格，故不带行情口径桶后缀（跨时段复用是安全的）
+    "global_macro": "df8fb2929da0",
     "expert_review": "437755c22ee6_c" + _BUCKET_SUFFIX,
     "health_check": "e06878f7600a" + _BUCKET_SUFFIX,
     "penetration_deep": "12f59e5d9751" + _BUCKET_SUFFIX,
@@ -808,7 +809,7 @@ def test_fact_check_rules_version_enters_module_fingerprints(monkeypatch):
 def test_market_bucket_key_enters_fingerprint(monkeypatch):
     """收盘档与盘中档的键必须不同：否则盘中写下的缓存会被收盘档读到。"""
     from src.python.core import market_hours
-    from src.python.llm.module_fingerprint import global_macro_fingerprint
+    from src.python.llm.module_fingerprint import expert_review_fingerprint
 
     base = ModuleFingerprintInputs(
         total_mv=_TOTAL_MV,
@@ -819,7 +820,7 @@ def test_market_bucket_key_enters_fingerprint(monkeypatch):
         categories=dict(_CATEGORIES),
         history_data=_HISTORY,
     )
-    closed = global_macro_fingerprint(base)
+    closed = expert_review_fingerprint(base)
     monkeypatch.setattr(
         market_hours,
         "market_snapshot_bucket",
@@ -827,6 +828,57 @@ def test_market_bucket_key_enters_fingerprint(monkeypatch):
             key="intraday:2026-11-06", label="盘中（2026-11-06 10:00）", as_of="2026-11-06", intraday=True
         ),
     )
-    intraday = global_macro_fingerprint(base)
+    intraday = expert_review_fingerprint(base)
 
     assert closed != intraday
+
+
+class TestNoPriceModules:
+    """全球政经局势 / 财经热点关联的键不含持仓价格信息（结论与个股价格无关）。"""
+
+    @staticmethod
+    def _inputs(**kw):
+        return ModuleFingerprintInputs(
+            total_mv=_TOTAL_MV,
+            holdings_details=_HOLDINGS,
+            categories=dict(_CATEGORIES),
+            history_data=_HISTORY,
+            **kw,
+        )
+
+    def test_global_macro_ignores_bucket(self, monkeypatch):
+        """键里没有价格 → 不需要按行情快照分档，跨档复用安全。"""
+        from src.python.core import market_hours
+        from src.python.llm.module_fingerprint import global_macro_fingerprint
+
+        closed = global_macro_fingerprint(self._inputs())
+        monkeypatch.setattr(
+            market_hours,
+            "market_snapshot_bucket",
+            lambda now=None: market_hours.MarketSnapshot(
+                key="intraday:2026-11-06", label="盘中", as_of="2026-11-06", intraday=True
+            ),
+        )
+        assert global_macro_fingerprint(self._inputs()) == closed
+
+    def test_global_macro_ignores_holding_change_block(self):
+        """持仓变动复盘块含市值/盈亏差（价格派生），不得进该模块键。"""
+        from src.python.llm.module_fingerprint import global_macro_fingerprint
+
+        base = global_macro_fingerprint(self._inputs())
+        assert global_macro_fingerprint(self._inputs(holding_change_block="【持仓变动】市值差 +3821.5 元")) == base
+
+    def test_global_macro_still_tracks_structure_and_purchase_block(self):
+        """去价格 ≠ 去结构：换品种 / 换申购限购约束仍须换键。"""
+        from src.python.llm.module_fingerprint import global_macro_fingerprint
+
+        base = global_macro_fingerprint(self._inputs())
+        assert global_macro_fingerprint(self._inputs(purchase_block="限大额：单日 100 元")) != base
+        other = [dict(_HOLDINGS[0], code="000001", name="平安银行"), *_HOLDINGS[1:]]
+        changed = ModuleFingerprintInputs(
+            total_mv=_TOTAL_MV,
+            holdings_details=other,
+            categories=dict(_CATEGORIES),
+            history_data=_HISTORY,
+        )
+        assert global_macro_fingerprint(changed) != base

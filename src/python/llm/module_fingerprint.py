@@ -303,11 +303,19 @@ def market_bucket_cache_suffix() -> str:
 
 
 def global_macro_fingerprint(inputs: ModuleFingerprintInputs) -> str:
-    """全球政经局势：持仓结构 + 分类结构 + 统一附录**口径类**块 + 版本盐。
+    """全球政经局势：持仓结构 + 分类结构 + 申购限购块 + 版本盐（**不含任何价格**）。
 
-    **不入键**（行情/时效类，仍进提示词，由 TTL 豁免）：指数行情、总市值/盈亏、
-    竞争语境块、事件窗分歧例块、调仓纪律回放引用块。本模块 TTL 为 24h，把分钟频
-    变动的行情与 15 分钟刷新的新闻锁进键后，24h TTL 实际从未生效。
+    本模块谈的是全球政经与宏观环境，结论不依赖持仓标的的具体价格，故键里只留
+    「我的组合由哪些品种构成」这一层事实：
+
+    **不入键**（仍进提示词，时效由 TTL 兜底）：指数/美股行情、总市值/盈亏、竞争语境块、
+    事件窗分歧例块、调仓纪律回放块，以及**持仓变动复盘块**（含跨快照市值差/盈亏差，
+    属价格派生）——它一变就换键会让 24h TTL 实际从未生效。
+    ``purchase_block`` 只含限购额度/申购状态/下一开放日，与报价无关，属可执行性硬约束，
+    故保留在键内。
+
+    同因：**不带行情口径桶后缀**——键里既然没有价格，就没有「按行情快照分档」的必要，
+    跨时段复用是安全的（`module_fingerprint.market_bucket_cache_suffix()` 只给含价格的模块）。
     """
     _parts = [
         extract_stable_holdings(inputs.holdings_details),
@@ -319,9 +327,7 @@ def global_macro_fingerprint(inputs: ModuleFingerprintInputs) -> str:
     ]
     if inputs.purchase_block:
         _parts.append(inputs.purchase_block)
-    if inputs.holding_change_block:
-        _parts.append(inputs.holding_change_block)
-    return compute_fingerprint(*_parts) + market_bucket_cache_suffix() + generation_params_suffix("global_macro")
+    return compute_fingerprint(*_parts) + generation_params_suffix("global_macro")
 
 
 def expert_review_fingerprint(inputs: ModuleFingerprintInputs) -> str:
