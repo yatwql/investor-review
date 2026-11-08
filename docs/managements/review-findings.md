@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.6-dev
-> **编号源**：`rf-next = 1080`（新增问题提出后更新为 +1；已用最大 rf-1079，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1081`（新增问题提出后更新为 +1；已用最大 rf-1080，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -60,6 +60,7 @@
 | 编号 | 问题 | 修复 |
 |:--|:--|:--|
 | **rf-1079** | `[S]` 面板混排两类语义（章内内容 vs 机制/入口）：6 项机制类里「报告对话式追问」其实只是主菜单 `Q` 的入口开关；`decision_basis` / `module_quality_gate` 默认常开却占面板编号；`candidate_compare` 候选池为空也渲染空表；`whatif_trade_cost` 挂在 `[C]`「关联产物」但不新增章节；`market_sentiment` 需凭据却未标 `needs_hint` | 注册表新增 `panel_visible` 并据此派生编号：前两者不上面板（默认常开，仍可用 `features.json` 覆写关闭）；`candidate_compare` 改自动项（不上面板、补空池判定）；`summary_highlights` 转正默认开；`market_sentiment` 补 `needs_hint`；`whatif_trade_cost` 迁入 `[S]` 持仓与交易，`[C]` 回归纯章节；守护与夹具补「空块」容忍 |
+| **rf-1080** | 成本流水「近似分支」缺数值防护：`_build_flow_data` 把明细里的 `price` 原样收进 `current_prices`，一旦是非数值（旧缓存/残缺明细/测试桩），下游 `sum(... * prices[code])` 与 `final_value > 0` 即抛 `TypeError` ——异常冒泡到 HTML 写入，整份报告 `html_ok=False`。该分支此前只有mock 级用例（只验传参），真实执行路径从未被跑到 | `current_prices` 改为只收「正数值」市价（`isinstance(price, (int, float))` 且 > 0），缺价品种只是少一个估值锚；补两条真实现回归：无流水 + 开关开跑通近似契约、非数值/字符串市价被过滤不抛 |
 
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-08）
