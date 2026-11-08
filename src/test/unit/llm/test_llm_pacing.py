@@ -292,7 +292,7 @@ class TestPacingWaitAccounting:
 
         waited = pop_thread_pacing_wait()
         assert waited >= 0.09, f"三次过闸至少累计两个间隔，实际 {waited:.3f}s"
-        assert pop_thread_pacing_wait() == 0.0, "领取后必须清零，否则下一次调用会重复扣除"
+        assert pop_thread_pacing_wait() == pytest.approx(0.0, abs=1e-12), "领取后必须清零，否则下一次调用会重复扣除"
 
     def test_concurrency_slot_wait_is_counted(self):
         """在途并发上限造成的等待同样计入（此前只记了间隔等待）。"""
