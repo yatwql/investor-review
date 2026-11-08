@@ -758,7 +758,8 @@ class TestPricing(unittest.TestCase):
 
     def test_holiday_peak_hour_bills_idle_rate(self) -> None:
         """法定节假日（工作日但非 A 股交易日）高峰钟点（10:00）也按闲时价计费。"""
-        with patch("src.python.core.trading_calendar._is_trading_day", return_value=False):
+        # 计价只读已缓存日历：日历里不包含国庆当天 → 判定为法定节假日
+        with patch("src.python.core.trading_calendar.cached_trading_days", return_value=["2026-08-21"]):
             cost_holiday = estimate_cost(
                 "deepseek-v4-flash", 1_000_000, 1_000_000, at_time=self._HOLIDAY_PEAK_HOUR_TIME
             )
@@ -766,7 +767,7 @@ class TestPricing(unittest.TestCase):
 
     def test_holiday_cache_hit_bills_idle_rate(self) -> None:
         """法定节假日缓存命中输入按闲时 input_cache_hit（0.02）而非高峰价（0.04）计费。"""
-        with patch("src.python.core.trading_calendar._is_trading_day", return_value=False):
+        with patch("src.python.core.trading_calendar.cached_trading_days", return_value=["2026-08-21"]):
             cost_holiday = estimate_cost(
                 "deepseek-v4-flash",
                 1_000_000,
@@ -778,7 +779,7 @@ class TestPricing(unittest.TestCase):
 
     def test_holiday_workday_trading_day_bills_peak(self) -> None:
         """普通工作日（交易日）不受节假日判定影响，仍按高峰价计费。"""
-        with patch("src.python.core.trading_calendar._is_trading_day", return_value=True):
+        with patch("src.python.core.trading_calendar.cached_trading_days", return_value=["2026-08-21"]):
             cost_workday = estimate_cost("deepseek-v4-flash", 1_000_000, 1_000_000, at_time=self._PEAK_TIME)
         self.assertEqual(cost_workday, "¥10.000")  # (2+8) 高峰价
 
@@ -800,7 +801,7 @@ class TestPricing(unittest.TestCase):
             ):
                 reload_pricing()
             self.assertFalse(_pricing_mod.PRICING_HOLIDAY_ALWAYS_IDLE)
-            with patch("src.python.core.trading_calendar._is_trading_day", return_value=False):
+            with patch("src.python.core.trading_calendar.cached_trading_days", return_value=["2026-08-21"]):
                 cost_peak = estimate_cost(
                     "deepseek-v4-flash", 1_000_000, 1_000_000, at_time=self._HOLIDAY_PEAK_HOUR_TIME
                 )

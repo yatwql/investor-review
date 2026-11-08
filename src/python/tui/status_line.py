@@ -251,6 +251,36 @@ def build_status_line(*, now: float | None = None) -> str:
     return line
 
 
+def machine_ip_line(*, now: float | None = None) -> str:
+    """首页页脚的本机 IP 行（``本机 IP 192.168.1.5``，取不到给 ``—``）。
+
+    首页每帧重绘，而 ``get_machine_ip`` 会做一次 UDP 路由探测 + 主机名解析，
+    故与状态行共用 TTL 记忆化（``reset_status_memo`` 一并清）。
+
+    Args:
+        now: 时间戳注入（测试用）；None 取当前时间。
+
+    Returns:
+        单行文本（调用方决定折行与配色）。
+    """
+    ts = time.time() if now is None else float(now)
+    cached = _memo.get("machine_ip")
+    if cached is not None and ts - float(_memo.get("machine_ip_ts", 0.0)) < _STATUS_TTL:
+        return str(cached)
+    try:
+        from src.python.core.logger import get_machine_ip
+
+        ip = str(get_machine_ip() or "")
+        # unknown 是取数原语的失败哨兵值，上屏按「—」降级（不向用户暴露内部哨兵）
+        text = f"本机 IP {ip}" if ip and ip != "unknown" else "本机 IP —"
+    except Exception:
+        logger.debug("首页页脚「本机 IP」取数失败，降级为 —", exc_info=True)
+        text = "本机 IP —"
+    _memo["machine_ip"] = text
+    _memo["machine_ip_ts"] = ts
+    return text
+
+
 def reset_status_memo() -> None:
     """清空状态行记忆（配置变更 / [R] 刷新后回首页即重绘；亦供测试用）。"""
     _memo.clear()

@@ -294,7 +294,7 @@ class TestNarrowMainLoopDirectNav(unittest.TestCase):
         fired, renders, _, out, cleared = self._drive(["KEY_ESC", "KEY_DOWN", "0"], columns=40, tty=True)
         self.assertEqual(fired, ["exit"])
         self.assertEqual(renders, 2)
-        cleared.assert_called_once_with(1)  # 渲染器 mock 帧行数 0 + Esc 提示 1 行
+        cleared.assert_called_once_with(2)  # 渲染器 mock 菜单 0 行 + 页脚 IP 行 1 + Esc 提示 1 行
 
 
 class TestTierSemanticParity(unittest.TestCase):

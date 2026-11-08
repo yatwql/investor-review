@@ -182,10 +182,11 @@ def _is_weekend(at_time: datetime | None) -> bool:
 def _is_holiday(at_time: datetime | None) -> bool:
     """待判定时刻（定价时区）是否为法定节假日（工作日但非 A 股交易日）。
 
-    复用 core.trading_calendar._is_trading_day：交易日历（akshare / 同花顺兜底）
-    可用时精确判定法定节假日（端午/中秋/国庆等）；日历不可用时回退为「非周末即
-    交易日」，与周末闲时规则叠加后等价于仅周末闲时，降级可用不报错。仅工作日
-    （周一至周五）才可能命中法定节假日——周末由 weekend_always_idle 单独处理。
+    只读**已缓存**的交易日历（``core.trading_calendar.cached_trading_days``）：节假日只
+    影响计价口径，绝不该为此触网——计价发生在每次 LLM 调用收尾，拉日历既慢又与
+    本次调用无关。无日历缓存时按「非周末即交易日」处理（即不认定节假日），与
+    ``_is_trading_day`` 的降级口径一致。仅工作日（周一至周五）才可能命中法定
+    节假日——周末由 weekend_always_idle 单独处理。
     """
     tz = PRICING_TZ
     if at_time is None:
@@ -197,9 +198,12 @@ def _is_holiday(at_time: datetime | None) -> bool:
     if date.weekday() >= 5:
         return False
     try:
-        from src.python.core.trading_calendar import _is_trading_day
+        from src.python.core.trading_calendar import cached_trading_days
 
-        return not _is_trading_day(date)
+        trading_days = cached_trading_days()
+        if not trading_days:
+            return False  # 无日历缓存：降级为不认定节假日（日历缺失不阻断计价）
+        return date.strftime("%Y-%m-%d") not in set(trading_days)
     except Exception:  # noqa: BLE001 — 交易日历不可用时降级为不认定节假日，不影响计价
         return False
 
@@ -406,7 +410,7 @@ def compute_cost_value(
         return None
     # 峰谷定价：高峰日（工作日且非法定节假日）命中高峰时段时切换到高峰价子段；
     # 周末/法定节假日全天恒为闲时（受对应开关控制）
-    effective: dict[str, float | dict[str, float]] = pricing
+    effective: Any = pricing
     peak = pricing.get("peak")
     if isinstance(peak, dict) and _is_peak_minute(_effective_minute(at_time), _is_idle_day(at_time)):
         effective = peak
