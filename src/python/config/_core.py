@@ -372,15 +372,23 @@ def is_enable_history(config: dict | None = None) -> bool:
     return bool(val)
 
 
-def is_enable_candidate_compare() -> bool:
+def is_enable_candidate_compare(config: dict | None = None) -> bool:
     """候选基金比较子表是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_FUND_STYLE``）。
 
-    取值来自功能开关注册表（``features.candidate_compare``，出厂默认关），可用 `features.json`
-    覆盖。
+    取值来自功能开关注册表（``features.candidate_compare``，出厂默认开、不上面板）：
+    候选池（``comparison_candidates``）为空时视为关闭——空表没有阅读价值，
+    此前需要用户自己去面板关掉。
     """
     from src.python.config.features import is_feature_enabled
 
-    return is_feature_enabled("candidate_compare")
+    if not is_feature_enabled("candidate_compare"):
+        return False
+    if config is None:
+        from src.python.config import get_config
+
+        config = get_config()
+    candidates = config.get("comparison_candidates")
+    return bool(candidates)
 
 
 def is_enable_stock_fundamentals() -> bool:

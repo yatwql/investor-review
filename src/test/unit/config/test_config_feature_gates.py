@@ -168,7 +168,19 @@ class TestReportProducingSwitches:
             accessor = getattr(_core, f"is_enable_{flag}", None)
             if accessor is None:
                 continue
-            assert accessor() is bool(feature_switch_registry[flag].default), flag
+            definition = feature_switch_registry[flag]
+            if not definition.panel_visible:
+                # 不上面板的开关不参与「取值 == 出厂默认」核对：自动项要按数据判定
+                # （候选池为空即不生效，见 test_auto_switch_requires_data）
+                continue
+            assert accessor() is bool(definition.default), flag
+
+    def test_auto_switch_requires_data(self):
+        """自动项（候选池为空即不生效）：空池不渲染空表，配置了候选池才出子表。"""
+        from src.python.config import _core
+
+        assert _core.is_enable_candidate_compare({}) is False
+        assert _core.is_enable_candidate_compare({"comparison_candidates": ["000001", "110022"]}) is True
 
     def test_report_submodule_accessors_exist(self):
         """报告增强子模块访问器齐全（与功能开关注册表同名）。"""

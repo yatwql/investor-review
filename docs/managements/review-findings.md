@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.6-dev
-> **编号源**：`rf-next = 1079`（新增问题提出后更新为 +1；已用最大 rf-1078，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1080`（新增问题提出后更新为 +1；已用最大 rf-1079，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -56,6 +56,10 @@
 ### 开发期已修复（0.17.6-dev）
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
+
+| 编号 | 问题 | 修复 |
+|:--|:--|:--|
+| **rf-1079** | `[S]` 面板混排两类语义（章内内容 vs 机制/入口）：6 项机制类里「报告对话式追问」其实只是主菜单 `Q` 的入口开关；`decision_basis` / `module_quality_gate` 默认常开却占面板编号；`candidate_compare` 候选池为空也渲染空表；`whatif_trade_cost` 挂在 `[C]`「关联产物」但不新增章节；`market_sentiment` 需凭据却未标 `needs_hint` | 注册表新增 `panel_visible` 并据此派生编号：前两者不上面板（默认常开，仍可用 `features.json` 覆写关闭）；`candidate_compare` 改自动项（不上面板、补空池判定）；`summary_highlights` 转正默认开；`market_sentiment` 补 `needs_hint`；`whatif_trade_cost` 迁入 `[S]` 持仓与交易，`[C]` 回归纯章节；守护与夹具补「空块」容忍 |
 
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-08）

@@ -72,9 +72,10 @@ def _panel_section(doc_text: str, panel: str) -> list[str] | None:
 def check_panel_numbering(doc_text: str) -> list[str]:
     """校验手册两面板编号表与注册表派生一致。
 
-    - ``[S]``：六组 20 项，编号 = ``panel_option_numbers("[S]")``（组序派生、无 LLM 前缀）；
+    - ``[S]``：编号 = ``panel_option_numbers("[S]")``（组序派生、无 LLM 前缀），
       组块标题区间与 features.json 键名映射同源；
-    - ``[C]``：章节编号自 1 连续 + 智囊团子项（``7.1``/``7.2`` 形态），四块标题区间由章节注册表派生。
+    - ``[C]``：章节编号自 1 连续 + 智囊团子项（``7.1``/``7.2`` 形态），各块标题区间由章节注册表派生
+      （空块跳过——块定义保留、但当前可能无章节挂在其中）。
 
     面板编号一律派生、不硬编码——新增/挪动章节或开关时，手册表格不改即报错。
     """
@@ -142,6 +143,10 @@ def check_panel_numbering(doc_text: str) -> list[str]:
         p_text = "\n".join(p_section)
         for block in BLOCK_ORDER:
             numbers = [chapter_number(entry.key) for entry in chapters_in_block(block)]
+            if not numbers:
+                # 空块合法（如 artifact 当前无章节）：无标题可核对，直接跳过，
+                # 不得让空列表取下标把整个守护崩掉。
+                continue
             first, last = numbers[0], numbers[-1]
             m = _BLOCK_PANEL_RANGE[block].search(p_text)
             if not m:

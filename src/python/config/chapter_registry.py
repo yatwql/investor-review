@@ -94,7 +94,6 @@ chapter_registry: tuple[ChapterEntry, ...] = (
     ChapterEntry("rebalance_schedule_replay", BLOCK_STANDALONE, SOURCE_FEATURES),
     ChapterEntry("holding_change_review", BLOCK_STANDALONE, SOURCE_FEATURES),
     ChapterEntry("stock_fundamentals", BLOCK_STANDALONE, SOURCE_FEATURES),
-    ChapterEntry("whatif_trade_cost", BLOCK_ARTIFACT, SOURCE_FEATURES, artifact_note="仅调仓模拟报告"),
 )
 
 

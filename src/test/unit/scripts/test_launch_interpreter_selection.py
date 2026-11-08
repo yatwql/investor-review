@@ -77,7 +77,8 @@ def _project(tmp_path: Path, *, interpreter_wrapper: str | None = None) -> None:
     entry = tmp_path / "src" / "python" / "tui"
     entry.mkdir(parents=True)
     (entry / "tui.py").write_text(
-        "import os\nprint(f'LAUNCHED_BY={os.environ.get('LAUNCH_INTERPRETER', '')}')\n",
+        # 不用 f-string：表达式中含引号在 Python 3.11（PEP 701 之前）是 SyntaxError
+        "import os\nprint('LAUNCHED_BY=' + os.environ.get('LAUNCH_INTERPRETER', ''))\n",
         encoding="utf-8",
     )
 
