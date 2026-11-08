@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.7-dev
-> **编号源**：`rf-next = 1092`（新增问题提出后更新为 +1；已用最大 rf-1091，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1093`（新增问题提出后更新为 +1；已用最大 rf-1092，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -19,6 +19,7 @@
 
 | # | 问题 | 修复方向 |
 | --- | --- | --- |
+| **rf-1092** | `src/python` 仍余 **34 处** pyright error（现场扫描口径：`pyright src/python`，或 `lens_diagnostics(source="lsp", scope="paths")`），且类型检查未进门禁——只能靠偶发人工扫描发现；已修批次（rf-1090/rf-1091、`cost_first` 单价键、`PacingGate.__exit__` 被推断为吞异常、配置段 None 下标、CI 区间 None 相乘）证明这批告警里**混有真实缺陷与崩溃风险**，不是纯噪声 | 分三簇清零，再落门禁：① **可空值簇**（`reportOptional*` / `reportPossiblyUnboundVariable`）优先——逐点判空收窄，不允许用 `# type: ignore` 蒙住；② **Unknown 噪声簇**（`json`/`.get()` 取出的 `Unknown` 参与运算）在入口处显式收窄或 `cast`，统一口径而非逐点豁免；③ **平台桩簇**（`msvcrt.getch/getwch` 类）走 `getattr` 降级（已在 `tui/tui_keys.py` 示范）；④ 新增 `scripts/check-types.py`（复用 `_shared/checklib`，退出码 0/2 契约，`pyproject.toml [tool.pyright]` 作规则基线），入 CI `guards` job 与 pre-commit 守护清单；⑤ 典型存例：`cache/_store.py` 模块内自定义 `set(key, data)` 遮蔽内置名，使模块级 `set()` 与 `set[str]` 注解靠导入顺序才正确（现无其他内置 `set` 调用，属待清除的潜在雷）。验收：`pyright src/python` 与 `pyright src/test/unit` 均零 error；`check-types --ci` 已入守护清单并在 CI 变绿；保留的 `# type: ignore` 逐条带原因注释 |
 
 ### P3 — 持续监控：兼容残留
 
