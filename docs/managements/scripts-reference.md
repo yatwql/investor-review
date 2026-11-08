@@ -49,6 +49,7 @@
 | `check-version-consistency.py` | 发布 | 版本号全局一致性检查（P0/P2 守护脚本 + 发布流程必跑） |
 | `check-style-guardrails.py` | 质量 | 设计护栏机检（DESIGN.md 护栏样式面；E 级：强调色越权/明暗同步/双面 token 对表判 finding，W 级：裸色值/圆角档位观察统计——未入 pre-commit 钩子与 CI guards；**发布门禁**（release.py gate）已纳入，开发期快反馈由 unit 测试承担） |
 | `check-script-contract.py` | 质量 | scripts 顶层脚本契约机检（退出码声明 ⊆ {0,2} 白名单、check-* 统一 `add_common_args` CLI 面、文本 I/O 显式 encoding、脚本↔测试覆盖映射，四条规则；**已入域**：钩子只随 `scripts/` 变更触发，CI `guards` 与 P2 恒全量） |
+| `check-types.py` | 质量 | pyright 类型错误守护（受检域 `src/python`，规则基线与 `exclude` 在 `pyproject.toml` 的 `[tool.pyright]`；`src/test` 刻意不入域——单测 mock 噪声远多于缺陷收益，由 pytest 运行时守卫；退出码 0 通过 / 1 环境缺失（pyright 与 npx 皆不可用）/ 2 有 finding；**已入域**：钩子只随 `src/python/`、本脚本或 `pyproject.toml` 变更触发，CI `guards` 与 P2 恒全量） |
 | `release.py` | 发布 | 发布流程分步编排（check / archive-init〔新小版本归档骨架：三份归档 + 目录树块 + 三处索引行，幂等〕/ prepare〔含台账与设计文件归档迁移；不跨版本发布，`--version` 与推导值不一致即中止并给指引〕/ refresh / evolution / gate / publish〔提交前按 pre-commit 钩子同源参数 `--sync --ci --with-test-count` 同步统计快照，失败即中止；`--title` 自带的 `release: v… —— ` 或裸 `v… —— ` 前缀自动剥离，避免提交标题重版版本号〕/ devbump〔切版 + 默认推送 + **发布闭环校验**：tag 在 master 历史内、master 的 `APP_VERSION` 为发布版、本分支为下一开发版，不一致退出 1；无 tag 仅告警〕，每步独立可审阅、失败即停；refresh 纯文档变更跳过 bench+collect（`--force-refresh` 强制）、bench 默认只测发布子集四档且按「场景档先、长尾档后」排序（`--full-bench` 全量、`--bench-jobs N` 调并行度）、gate 守护清单并行且随核数收敛 ≤4 路并断言归档已迁完、gate 戳存逐文件代码哈希（publish 点名 gate 后改动并说明重跑 verify）；check 预演 changelog 派生（只算不写）；publish 提交/合并/tag/推送分段计时；每命令（含 devbump）耗时与失败原因（`failure`：失败步/报告目录/失败用例名）入 `logs/release.jsonl`；devbump 切版后清空上一版迁档占位节） |
 | `test-perf-report.py` | 评测 | 端到端报告生成管线性能基准（独立脚本，mock 外部数据源） |
 | `perf-history.py` | 运维 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 并发预算段（档位/预算/峰值/缩容合计，标注跨档位不可直接比耗时）+ 时段聚合（耗时与费用合计/环比/缩容列）/机读输出（llm_cost、by_period 费用字段、CSV 增 budget/peak/clamps 三列）；实现拆在 `_perf_history/`——`stats.py` 统计原语 / `data.py` 派生 / `report.py` 渲染 / `cli.py` 入口，主入口只留 docstring 与 re-export） |
@@ -818,6 +819,47 @@ sh .githooks/install-hooks.sh --off   # 停用
 处置：按规则号补声明 / 补 `add_common_args` / 补 `encoding=` / 补测试引用或登记豁免；确属特例才加白名单，并在注释写清理由。
 
 > **何时跑**：`git commit` 触及 `scripts/` 时由钩子自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` 恒全量兜底。
+
+**`check-types.py` — 类型检查守护（pyright）**
+
+**设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
+
+类型错误里混着真实缺陷（`cost_first` 单价键读错导致策略静默退化、上下文管理器 `__exit__`
+声明 `bool` 使 `result` 可能未绑定、配置段 `None` 直接下标、CI 区间 `None` 参与乘法），
+但项目此前没有任何类型门禁——只能靠偶发人工扫描发现。本守护把「产品代码零 ERROR 级诊断」
+变成可回归的约束：
+
+1. **受检域**：`src/python`（`[tool.pyright] include`）。`scripts/` 入口脚本的 argparse 写法、
+   流对象替换、平台桩（`msvcrt` 等）噪声大，另立项清理；`src/test` 刻意排除——单测天然大量
+   mock/行内 dict，静态噪音远多于缺陷收益，其正确性由 pytest 运行时守卫。
+2. **判据**：只计 `ERROR` 级诊断（pyright 默认级别即可，不自造阈值）；`WARNING`/`INFORMATION`
+   不入 finding。
+3. **依赖解析**：`[tool.pyright] venvPath`/`venv` 指向项目虚拟环境，否则 pandas/akshare/flask
+   等第三方导入会被判缺失（会掩盖真实错误）。
+4. **解析器来源**：优先 PATH 上的 `pyright`（`pip install pyright` 即可，CI guards job 安装），
+   否则退回 `npx --no-install pyright`；两者皆无按**环境缺失**退出 1（不静默放过）。
+
+**已入域**（守护清单成员）：pre-commit 在 `src/python/` 变更时并行触发，CI `guards` job 与 P2
+门禁恒全量覆盖（该 job 直接 `pip install pyright` 作解析器）。**推送前本地可先跑**（约 10s）。
+
+**使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
+
+```bash
+.venv/bin/python scripts/check-types.py                    # 检查全守护域（src/python）
+.venv/bin/python scripts/check-types.py -v                 # 附带解析器与诊断统计
+.venv/bin/python scripts/check-types.py --ci               # CI 模式（只输出 文件:行:列 规则）
+.venv/bin/python scripts/check-types.py src/python/llm     # 显式路径（单模块快反馈；exclude 仍生效）
+```
+
+退出码：0 无 ERROR 级诊断；1 环境缺失（pyright 与 npx 皆不可用，或 pyright 未返回 JSON 报告）；
+2 发现类型错误。
+
+处置：`文件:行:列 规则: 说明` 逐条修——**优先**加值判空 / `isinstance` 收窄 / `TypeGuard`
+谓词，**不要**用 `# type: ignore` 蒙住（真噪声才忽略，且必须写清理由）。数值归一用
+`core.num_utils` 的 `safe_num` / `finite_or`（同一处口径），不要各写 `float(x)` + `except`。
+
+> **何时跑**：`git commit` 触及 `src/python/`、本脚本或 `pyproject.toml` 时由钩子自动执行
+> （**勿手动重复**）；改单个模块时可显式给路径做快反馈；发布门禁（P2）与 CI `guards` 恒全量兜底。
 
 **`check-import-surface.py` — 导入面契约检查**
 

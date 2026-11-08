@@ -18,6 +18,13 @@
 
 ### 修复
 
+- **类型检查落地为门禁（rf-1092）** —— `src/python` 的 pyright 错误由 83 处清零（可空值逐点收窄、
+  数值归一统一走 `core.num_utils` 的 `safe_num`/`finite_or`、谓词升级 `TypeGuard`、平台桩走
+  `getattr` 降级、`PacingGate.__exit__` 改 `-> None`、`cache._store` 用 `builtin_set` 避开同名遮蔽），
+  并新增 `scripts/check-types.py`（0 通过 / 1 环境缺失 / 2 有 finding）入 pre-commit 与 CI `guards`；
+  规则基线落 `pyproject.toml [tool.pyright]`（受检域 `src/python`，`src/test` 刻意不入域——单测
+  mock 噪声远多于缺陷收益，由 pytest 运行时守卫）。`scripts/` 入口脚本残余 52 处另立项（rf-1093）。
+
 - **计价节假日判定只读缓存交易日历（rf-1089）** —— `llm/pricing.py::_is_holiday` 原经
   `trading_calendar._is_trading_day` 判定，日历缓存缺失时会真实取数（akshare）；计价发生在
   每次 LLM 调用收尾，为此拉一次远端日历既慢又与本次调用无关，且无日历缓存的机器 / CI 上

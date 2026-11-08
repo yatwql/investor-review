@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Any
+from typing import Any, TypeGuard
 
 from src.python.analysis.portfolio_evolution import _dedup_by_date
 from src.python.fetcher.history_diff import HistoryDiff
@@ -326,5 +326,6 @@ def _value_of(h: SnapshotHolding | None) -> float | None:
     return float(value) if _is_finite(value) else None
 
 
-def _is_finite(value: Any) -> bool:
+def _is_finite(value: Any) -> TypeGuard[int | float]:
+    """有限真数值（排除 bool）：作为 TypeGuard 让下游 float() 转换可直接依赖收窄结果。"""
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)

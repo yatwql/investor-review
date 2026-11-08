@@ -84,3 +84,14 @@ select = ["E4", "E7", "E9", "F"]
 # scripts/ 下的评测实现包（_eval_factor_zoo / _eval_decision_quality）在运行期经
 # sys.path 注入解析；静态分析需显式声明搜索路径，否则入口脚本的包导入判为未解析。
 extraPaths = ["scripts"]
+
+# 类型检查守护（scripts/check-types.py）的规则基线：受检域 = 产品代码 src/python
+# （scripts/ 入口脚本的 argparse / 流替换 / 平台桩噪声另立项，不入本域）。
+# 测试代码刻意不入域：单测天然大量 mock/行内 dict，静态噪音远多于缺陷收益，其正确性
+# 由 pytest 运行时守卫（同理不追求 src/test 零告警）。
+include = ["src/python"]
+exclude = ["**/__pycache__", "src/test", "src/static", ".venv", "build", "dist"]
+pythonVersion = "3.11"
+# 依赖解析走项目虚拟环境（否则 pandas/akshare/flask 等第三方导入判为缺失）
+venvPath = "."
+venv = ".venv"

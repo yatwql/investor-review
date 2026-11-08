@@ -12,7 +12,7 @@ industry_bar/penetration_bar/radar；空 labels/datasets → "无数据"；degra
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, TypeGuard
 
 from src.python.analysis.crisis_annotation import CRISIS_INTERVALS
 from src.python.core.code_utils import is_a_share_stock, is_exchange_fund_code
@@ -450,9 +450,9 @@ def _extract_rate(win_rate: Any) -> float | None:
     return win_rate
 
 
-def _is_valid_metric(value: Any) -> bool:
-    """指标值是否有效（float/int 且非 None）。"""
-    return isinstance(value, (int, float)) and value is not None
+def _is_valid_metric(value: Any) -> TypeGuard[int | float]:
+    """指标值是否有效（float/int 且非 None）；TypeGuard 让下游 float() 免二次判空。"""
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
 def _build_excess_rolling_dataset(risk_adjusted_excess_data: dict | None) -> dict:

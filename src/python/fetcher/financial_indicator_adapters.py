@@ -46,7 +46,10 @@ class AkshareFinancialAdapter(SourceAdapter):
 
     def extract_data(self, query: dict[str, Any]) -> Any:
         """按 ``code`` 取最新报告期标准指标记录。"""
-        return akshare_financial.fetch_financial_indicators(query.get("code"))
+        code = query.get("code")
+        if not isinstance(code, str) or not code:
+            return None  # 缺代码属调用方契约错误：按无数据交下一链路
+        return akshare_financial.fetch_financial_indicators(code)
 
 
 class DataSinkIndicatorAdapter(SourceAdapter):

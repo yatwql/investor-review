@@ -89,7 +89,7 @@ def build_financial_indicator(
     reporter: Any = None,
     penetrated_targets: Sequence[dict[str, Any] | str] | None = None,
     prices: dict[str, float] | None = None,
-) -> dict[str, Any]:
+) -> dict[str, Any] | None:
     """构建「财务指标」数据契约。
 
     Args:

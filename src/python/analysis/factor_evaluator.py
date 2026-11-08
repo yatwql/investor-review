@@ -19,6 +19,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from src.python.core.num_utils import safe_num
+
 from src.python.analysis._factor_formulas import compute_factor_values
 from src.python.fetcher.factor_catalog_loader import (
     load_factor_catalog,
@@ -119,9 +121,11 @@ def _apply_scalar(
     key = required_value_key(item, field_kind)
     values: list[float] = []
     for code in codes_all:
-        value = (source.get(code) or {}).get(key)
-        if value_present(value):
-            values.append(float(value))
+        # 标量可能是数值字符串（上游 JSON 口径不统一）：走 safe_num 单点归一，
+        # 非数值/NaN 视为缺失（与 value_present 同口径，且不会抛 ValueError）
+        numeric = safe_num((source.get(code) or {}).get(key))
+        if numeric is not None:
+            values.append(float(numeric))
     row["codes_ok"] = len(values)
     if len(values) >= MIN_CODES_PER_DAY:
         row["value"] = sum(values) / len(values)

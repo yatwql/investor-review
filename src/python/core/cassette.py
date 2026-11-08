@@ -144,13 +144,15 @@ class Interaction:
         if not isinstance(method, str) or not isinstance(url, str) or not isinstance(status, int):
             raise CassetteError(f"cassette 交互项缺少 method/url/status: {origin}")
         headers = response.get("headers")
+        body_raw = response.get("body")
+        encoding_raw = response.get("encoding")
         return cls(
             method=method,
             url=url,
             status=status,
             headers={str(k): str(v) for k, v in headers.items()} if isinstance(headers, dict) else {},
-            body=response.get("body") if isinstance(response.get("body"), str) else "",
-            encoding=response.get("encoding") if isinstance(response.get("encoding"), str) else "utf-8",
+            body=body_raw if isinstance(body_raw, str) else "",
+            encoding=encoding_raw if isinstance(encoding_raw, str) else "utf-8",
         )
 
 
@@ -214,10 +216,12 @@ class Cassette:
         raw_items = data.get("interactions")
         if not isinstance(raw_items, list):
             raise CassetteError(f"cassette 缺少 interactions 列表: {origin}")
+        source_raw = data.get("source")
+        recorded_raw = data.get("recorded_at")
         return cls(
             name=name,
-            source=data.get("source") if isinstance(data.get("source"), str) else "",
-            recorded_at=data.get("recorded_at") if isinstance(data.get("recorded_at"), str) else "",
+            source=source_raw if isinstance(source_raw, str) else "",
+            recorded_at=recorded_raw if isinstance(recorded_raw, str) else "",
             interactions=[Interaction.from_dict(item, origin=origin) for item in raw_items],
         )
 
@@ -278,7 +282,12 @@ def list_cassettes(directory: str | None = None) -> list[dict[str, Any]]:
             continue
         name = filename[: -len(".json")]
         path = os.path.join(target_dir, filename)
-        entry: dict[str, Any] = {"name": name, "path": path, "size_bytes": os.path.getsize(path)}
+        # 文件可能在 listdir 与 stats 之间被删除：单个 cassette 的不确定不得带倒整个索引
+        try:
+            size_bytes = os.path.getsize(path)
+        except OSError:
+            size_bytes = 0
+        entry: dict[str, Any] = {"name": name, "path": path, "size_bytes": size_bytes}
         try:
             cassette = load_cassette(name, target_dir)
         except CassetteError as err:

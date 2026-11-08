@@ -173,6 +173,7 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 .venv/bin/python scripts/check-script-contract.py --ci       # scripts 顶层脚本契约（退出码声明/CLI 面/显式 encoding/测试覆盖）
 .venv/bin/python scripts/check-import-surface.py --ci         # 导入面契约（兼容注释/私有 `__all__`/跨包私有导入/动态导入字面量 + 例外表自审）
 .venv/bin/python scripts/check-file-length.py --ci         # 单文件行数红线（主程序/脚本 >1000 行 / 测试 >1200 行 + 膨胀登记表同实）
+.venv/bin/python scripts/check-types.py --ci               # pyright 类型错误（受检域 src/python；规则基线与排除项在 pyproject.toml [tool.pyright]）
 ```
 
 > **`--sync` 统计快照口径（CI 分叉坑）**：`check-doc-drift --sync`（及 pre-commit 自动回写）按**工作区**实测写入 `folders.md` 行数，而 CI 的 `check-doc-drift` 按 **committed** 树实测——若受检目录存在**长期不提交的修改**（本地游离改动），本地已同步的数字会在 CI 上判「不一致」，连带 guards / test / portability 三个 job 同时红。提交前确认受检文件全部纳入本次提交；有长期游离修改时先提交它们、再 `--sync`。
@@ -199,13 +200,14 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 .venv/bin/python scripts/check-file-length.py --ci
 .venv/bin/python scripts/check-import-surface.py --ci
 .venv/bin/python scripts/check-script-contract.py --ci
+.venv/bin/python scripts/check-types.py --ci
 ```
 
 **辅助（非阻塞）**：`.venv/bin/ruff check`（lint 基线，选择项与刻意豁免均在 `pyproject.toml` 显式声明）+ `.venv/bin/ruff format --check`（代码格式一致性）——问题可经 `.venv/bin/ruff check --fix` / `.venv/bin/ruff format` 自动修复，不阻止合并/发布。当前两者均为零告警基线，新增代码应在提交前保持干净。
 
 **归档区冻结**：`docs/` 下为历史快照（含各版本归档里的脚本副本），**不得被 lint/format 重排**。配置已声明 `extend-exclude` + `force-exclude = true`——后者是关键：ruff 的 `exclude` 只在整树扫描时生效，命令行显式给目录（`ruff format docs`）会绕过它、把归档脚本一并重排（实测曾误改 7 个文件）。因此需要格式化的只能是 `src/` / `scripts/` 等活代码路径；契约由 `src/test/unit/test_ruff_exclude_contract.py` 锁定。
 
-**CI 同步执行（`.github/workflows/ci.yml`）**：三档测试按分支/标签分流——`dev` 推送跑 P0（`dev-verify`）、`master` 推送或 PR 跑 P1（`verify`）、打 `v*` tag 跑 P2（`regression`），矩阵覆盖 Python 3.11/3.12/3.13；另有三个独立 job：`guards`（**阻塞**，10 个 `--ci` 守护脚本即上方 P0/P2 清单全量——job 内按 pre-commit 同款后台并行回放，任一守护非零退出折叠为 FAIL 分组并使 job 红；守护经 src.python 链依赖项目运行时包（如 check-doc-drift → httpx），故 editable 安装保留）、`portability`（**阻塞**，非 UTF-8 locale + 隐式编码双探针，见下方「编码/locale 自检」）与 `format`（非阻塞，`ruff format --check src/python/ src/test/ scripts/` + `ruff check`；三条路径必须与本地整树基线同口径——只查 `src/python`+`scripts` 会放行测试文件的格式漂移）。
+**CI 同步执行（`.github/workflows/ci.yml`）**：三档测试按分支/标签分流——`dev` 推送跑 P0（`dev-verify`）、`master` 推送或 PR 跑 P1（`verify`）、打 `v*` tag 跑 P2（`regression`），矩阵覆盖 Python 3.11/3.12/3.13；另有三个独立 job：`guards`（**阻塞**，13 个 `--ci` 守护脚本即上方 P0/P2 清单全量（含 `check-types.py`，job 内另装 pyright 作解析器）——job 内按 pre-commit 同款后台并行回放，任一守护非零退出折叠为 FAIL 分组并使 job 红；守护经 src.python 链依赖项目运行时包（如 check-doc-drift → httpx），故 editable 安装保留）、`portability`（**阻塞**，非 UTF-8 locale + 隐式编码双探针，见下方「编码/locale 自检」）与 `format`（非阻塞，`ruff format --check src/python/ src/test/ scripts/` + `ruff check`；三条路径必须与本地整树基线同口径——只查 `src/python`+`scripts` 会放行测试文件的格式漂移）。
 
 ### 编码/locale 自检（旧 pip 回退解码 / 隐式编码）
 

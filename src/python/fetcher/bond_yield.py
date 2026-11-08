@@ -18,6 +18,7 @@ from src.python.cache import get as cache_get
 from src.python.cache import get_ttl
 from src.python.cache import set as cache_set
 from src.python.config import get_config
+from src.python.core.num_utils import safe_num
 
 logger = logging.getLogger("invest")
 
@@ -200,8 +201,6 @@ def _fetch_history_from_akshare() -> list[dict]:
         [{"date": "YYYY-MM-DD", "rate": float}, ...] 升序；失败返回 []。
     """
     try:
-        import pandas as pd
-
         import akshare as ak
     except ImportError:
         logger.warning("无风险利率历史: akshare 未安装，无法获取")
@@ -232,9 +231,11 @@ def _fetch_history_from_akshare() -> list[dict]:
         rows: list[dict] = []
         for _, r in df.iterrows():
             raw_date, raw_value = r.iloc[0], r[value_col]
-            if pd.isna(raw_value):
-                continue  # 早期年份常为 NaN，跳过
-            rate = float(raw_value) / 100.0
+            # 早期年份常为 NaN/缺失：safe_num 单点归一（NaN/None/非数值一律 None）
+            pct = safe_num(raw_value)
+            if pct is None:
+                continue
+            rate = pct / 100.0
             if not (0 < rate < 1):
                 continue
             rows.append({"date": str(raw_date).strip()[:10], "rate": rate})

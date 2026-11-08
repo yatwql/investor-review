@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from typing import Any, ClassVar
 
 from src.python.fetcher.report_locate import locate_keyword_excerpt
@@ -31,7 +32,7 @@ class DataSinkReportAdapter(SourceAdapter):
     source_id: ClassVar[str] = datasink.SOURCE_ID
     display_name: ClassVar[str] = datasink.DISPLAY_NAME
     #: 上游文档号字段名为 ``id``，标准字段统一为 ``doc_id``
-    aliases: ClassVar[dict[str, str]] = {"id": "doc_id"}
+    aliases: ClassVar[Mapping[str, str]] = {"id": "doc_id"}
 
     def extract_data(self, query: dict[str, Any]) -> Any:
         """按 ``doc_id``（可选 ``section``）取单篇正文。
@@ -46,7 +47,11 @@ class DataSinkReportAdapter(SourceAdapter):
             set_last_reason(f"异源候选拒服务(hint={hint})")
             logger.debug("[financial_report] DataSinking 拒异源候选 hint=%s doc=%s", hint, query.get("doc_id"))
             return None
-        return datasink.fetch_report_document(query.get("doc_id"), query.get("section"))
+        doc_id = query.get("doc_id")
+        if not isinstance(doc_id, (int, str)):
+            return None  # 缺文档号属调用方契约错误：按无数据交下一链路
+        section = query.get("section")
+        return datasink.fetch_report_document(doc_id, section if isinstance(section, str) else None)
 
 
 class CninfoReportAdapter(SourceAdapter):

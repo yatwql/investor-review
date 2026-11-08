@@ -39,8 +39,8 @@ def collect_artifacts(config: dict | None, output_dir: str | None = None) -> tup
     """
     from src.python.config import resolve_output_dir
 
-    output_dir = Path(resolve_output_dir(config, output_dir))
-    candidates = (output_dir / LATEST_HTML_NAME, output_dir / LATEST_XLSX_NAME)
+    resolved_dir = Path(resolve_output_dir(config, output_dir))
+    candidates = (resolved_dir / LATEST_HTML_NAME, resolved_dir / LATEST_XLSX_NAME)
     return tuple(path for path in candidates if path.is_file())
 
 

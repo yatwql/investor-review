@@ -20,6 +20,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.python.core.num_utils import safe_num
+
 CALIBER_AS_IF = "as-if"
 #: 预留口径：成交回放数据就绪后接入（结构与标签先行，渲染按 caliber 并排）
 CALIBER_REALIZED = "realized"
@@ -72,10 +74,12 @@ def aggregate_monthly_returns(
     sample_dates = 0
     for bar in bars or []:
         date = str(bar.get("date") or "")[:10]
-        try:
-            value = float(bar.get("total_value"))
-        except (TypeError, ValueError):
+        raw_value = bar.get("total_value")
+        # bool 不是市值；数值字符串归一再判定（原 float() + except 同义，但类型可收窄）
+        parsed = safe_num(raw_value)
+        if parsed is None:
             continue
+        value = float(parsed)
         if len(date) != 10 or date[4] != "-" or date[7] != "-" or value <= 0:
             continue
         sample_dates += 1

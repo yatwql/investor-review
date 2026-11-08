@@ -135,8 +135,9 @@ def compute_factor_values(
         diff = [a - b if a is not None and b is not None else None for a, b in zip(ema12, ema26)]
         signal = _ema([d if d is not None else 0.0 for d in diff], 9)
         for i in range(n):
-            if diff[i] is not None and signal[i] is not None:
-                out[i] = diff[i] - signal[i]
+            diff_i, signal_i = diff[i], signal[i]
+            if diff_i is not None and signal_i is not None:
+                out[i] = diff_i - signal_i
     elif slug == "qlib_rsi_14":
         for i in range(window, n):
             seg = rets[i - window : i + 1][1:]

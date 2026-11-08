@@ -131,7 +131,7 @@ def _record_llm_context(perf, sink=None, baseline: dict | None = None) -> None:
         _reasons = getattr(sink, "module_recompute_reasons", None) if sink is not None else None
         if callable(_reasons):
             _reason_map = _reasons()
-            if _reason_map:
+            if isinstance(_reason_map, dict) and _reason_map:
                 context["module_recompute_reasons"] = dict(sorted(_reason_map.items()))
         costs = {str(k).upper(): round(float(v or 0.0), 6) for k, v in (usage.get("costs") or {}).items()}
         context["cost_by_currency"] = costs

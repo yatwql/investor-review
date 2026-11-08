@@ -28,6 +28,8 @@ Web 路由（``web/handlers._handle_report_qa_ask``）与 TUI 追问入口共用
 
 from __future__ import annotations
 
+from typing import Any
+
 import logging
 import threading
 import time
@@ -103,7 +105,7 @@ class QaSession:
         self.history: list[dict] = []
         self.turns = 0
         self.usage: dict = {"input_tokens": 0, "output_tokens": 0, "provider": ""}
-        self.context = None
+        self.context: Any = None  # 惰性构建的追问上下文（构建后仅本会话复用）
         self.last_used = time.time()
         self._lock = threading.Lock()
 

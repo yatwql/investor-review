@@ -163,7 +163,7 @@ def resolve_credential(spec: CredentialSpec) -> tuple[str, str]:
     **值仅供取数使用**，调用方不得写入日志/报告/缓存。
     """
     env_val = os.environ.get(spec.env_var)
-    if not _is_blank(env_val):
+    if isinstance(env_val, str) and not _is_blank(env_val):
         return env_val.strip(), "环境变量"
     path = _key_file_path(spec)
     if path:

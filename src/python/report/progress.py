@@ -58,17 +58,19 @@ class ProgressReporter:
         self._errors: list[str] = []
         self._timing_records: list[tuple[str, float]] = []
 
-    def info(self, msg: str) -> None:
-        """进行中消息（对应 [..] 前缀）。"""
+    # 四个渠道方法的返回值是「事件序号 / None」：无事件通道的渠道（终端、日志、
+    # 静默）返回 None；Web 渠道把事件写入 run 缓冲并回传序号，供轮询增量对账。
+    def info(self, msg: str) -> int | None:
+        """进行中消息（对应 [..] 前缀）；返回事件序号，无事件通道时为 None。"""
 
-    def ok(self, msg: str) -> None:
-        """成功消息（对应 [OK] 前缀）。"""
+    def ok(self, msg: str) -> int | None:
+        """成功消息（对应 [OK] 前缀）；返回事件序号，无事件通道时为 None。"""
 
-    def warn(self, msg: str) -> None:
-        """警告消息（对应 [!] 前缀）。"""
+    def warn(self, msg: str) -> int | None:
+        """警告消息（对应 [!] 前缀）；返回事件序号，无事件通道时为 None。"""
 
-    def error(self, msg: str) -> None:
-        """错误消息（对应 [ERR] 前缀）。"""
+    def error(self, msg: str) -> int | None:
+        """错误消息（对应 [ERR] 前缀）；返回事件序号，无事件通道时为 None。"""
 
     def add_error(self, msg: str) -> None:
         """记录非致命错误，不影响继续执行。"""

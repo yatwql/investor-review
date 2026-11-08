@@ -30,7 +30,7 @@
 from __future__ import annotations
 
 import math
-from typing import Any, Callable
+from typing import Any, Callable, TypeGuard
 
 from src.python.analysis.fee_schedule_model import (
     SRC_CONFIG,
@@ -147,7 +147,8 @@ def _period_date(timestamp: str | None) -> str:
     return ""
 
 
-def _finite(value: Any) -> bool:
+def _finite(value: Any) -> TypeGuard[int | float]:
+    """有限真数值（排除 bool）：作为 TypeGuard 让下游 float() 转换可直接依赖收窄结果。"""
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 

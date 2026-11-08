@@ -36,6 +36,7 @@ from typing import Any
 from src.python.core.code_utils import is_six_digit_code
 from src.python.core.constants import BEIJING_TZ
 from src.python.core.http_client import make_http_client
+from src.python.core.num_utils import safe_num
 
 logger = logging.getLogger("invest")
 
@@ -292,12 +293,9 @@ def fetch_fund_purchase_table_via_akshare() -> dict[str, Any] | None:
         code = str(record.get("基金代码") or "").strip()
         if not code:
             continue
-        limit = record.get("日累计限定金额")
-        try:
-            limit_val = float(limit)
-            limit_val = None if (math.isnan(limit_val) or limit_val == 0) else limit_val
-        except (TypeError, ValueError):
-            limit_val = None
+        # 日累计限额：NaN / 非数值 / 0 一律按「无限额」处理（safe_num 已排除 NaN）
+        parsed_limit = safe_num(record.get("日累计限定金额"))
+        limit_val = None if parsed_limit is None or float(parsed_limit) == 0 else float(parsed_limit)
         next_open = record.get("下一开放日")
         rows[code] = {
             "purchase_status": str(record.get("申购状态") or "").strip(),

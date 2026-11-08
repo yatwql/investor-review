@@ -227,21 +227,20 @@ def build_data_source_matrix() -> list[dict[str, Any]]:
         if cd["total"] == 0:
             status = "ok"
             detail = f"取数 {sum(int(p['count']) for p in providers.values())} 次（无降级事件）"
-        elif cd["failed"] == 0 and cd["degraded"] == 0:
-            status = "ok"
-        elif cd["failed"] > 0 and cd["ok"] == 0:
-            status = "failed"
         else:
-            status = "degraded"
-
-        detail_parts: list[str] = []
-        if cd["ok"] > 0:
-            detail_parts.append(f"{cd['ok']} 正常")
-        if cd["degraded"] > 0:
-            detail_parts.append(f"{cd['degraded']} 降级")
-        if cd["failed"] > 0:
-            detail_parts.append(f"{cd['failed']} 失败")
-        if cd["total"] > 0:
+            if cd["failed"] == 0 and cd["degraded"] == 0:
+                status = "ok"
+            elif cd["failed"] > 0 and cd["ok"] == 0:
+                status = "failed"
+            else:
+                status = "degraded"
+            detail_parts: list[str] = []
+            if cd["ok"] > 0:
+                detail_parts.append(f"{cd['ok']} 正常")
+            if cd["degraded"] > 0:
+                detail_parts.append(f"{cd['degraded']} 降级")
+            if cd["failed"] > 0:
+                detail_parts.append(f"{cd['failed']} 失败")
             detail = "，".join(detail_parts) if detail_parts else "无数据"
 
         row: dict[str, Any] = {

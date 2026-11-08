@@ -297,7 +297,12 @@ def _tiers_from_config(tiers: list[Any]) -> list[dict[str, Any]] | None:
             if max_days is not None:
                 return None  # 末档必须开区间（覆盖到无穷，无右端缺口）
         else:
-            if isinstance(max_days, bool) or not isinstance(max_days, int) or max_days <= prev_max:
+            if (
+                isinstance(max_days, bool)
+                or not isinstance(max_days, int)
+                or prev_max is None
+                or max_days <= prev_max
+            ):
                 return None  # 上界须为严格递增正整数交易日
         built.append(
             {

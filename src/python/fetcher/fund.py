@@ -16,6 +16,8 @@ import threading
 from collections.abc import Callable
 from typing import Any
 
+from src.python.core.num_utils import safe_num
+
 from src.python.cache import get as cache_get
 from src.python.cache import get_ttl
 from src.python.cache import set as cache_set
@@ -97,11 +99,11 @@ def _normalize_hithink_holdings(raw: dict[str, Any]) -> dict[str, Any]:
     for item in raw.get("item") or []:
         if not isinstance(item, dict) or str(item.get("asset_type") or "") != "stock":
             continue
-        ratio = item.get("hold_ratio")
-        try:
-            ratio = float(ratio)
-        except (TypeError, ValueError):
+        # 持仓比例：数值字符串先解析，NaN/非数值一律按缺失跳过（原 float()+except 同义）
+        parsed_ratio = safe_num(item.get("hold_ratio"))
+        if parsed_ratio is None:
             continue
+        ratio = float(parsed_ratio)
         if not 0 < ratio <= 100:
             continue
         name = str(item.get("stock_name") or "").strip()

@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.7-dev
-> **编号源**：`rf-next = 1093`（新增问题提出后更新为 +1；已用最大 rf-1092，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1094`（新增问题提出后更新为 +1；已用最大 rf-1093，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -19,7 +19,10 @@
 
 | # | 问题 | 修复方向 |
 | --- | --- | --- |
-| **rf-1092** | `src/python` 仍余 **34 处** pyright error（现场扫描口径：`pyright src/python`，或 `lens_diagnostics(source="lsp", scope="paths")`），且类型检查未进门禁——只能靠偶发人工扫描发现；已修批次（rf-1090/rf-1091、`cost_first` 单价键、`PacingGate.__exit__` 被推断为吞异常、配置段 None 下标、CI 区间 None 相乘）证明这批告警里**混有真实缺陷与崩溃风险**，不是纯噪声 | 分三簇清零，再落门禁：① **可空值簇**（`reportOptional*` / `reportPossiblyUnboundVariable`）优先——逐点判空收窄，不允许用 `# type: ignore` 蒙住；② **Unknown 噪声簇**（`json`/`.get()` 取出的 `Unknown` 参与运算）在入口处显式收窄或 `cast`，统一口径而非逐点豁免；③ **平台桩簇**（`msvcrt.getch/getwch` 类）走 `getattr` 降级（已在 `tui/tui_keys.py` 示范）；④ 新增 `scripts/check-types.py`（复用 `_shared/checklib`，退出码 0/2 契约，`pyproject.toml [tool.pyright]` 作规则基线），入 CI `guards` job 与 pre-commit 守护清单；⑤ 典型存例：`cache/_store.py` 模块内自定义 `set(key, data)` 遮蔽内置名，使模块级 `set()` 与 `set[str]` 注解靠导入顺序才正确（现无其他内置 `set` 调用，属待清除的潜在雷）。验收：`pyright src/python` 与 `pyright src/test/unit` 均零 error；`check-types --ci` 已入守护清单并在 CI 变绿；保留的 `# type: ignore` 逐条带原因注释 |
+
+| # | 问题 | 修复方向 |
+| --- | --- | --- |
+| **rf-1093** | `scripts/` 顶层脚本仍有 52 处 pyright error（`reportAttributeAccessIssue` 为主：`sys.stdout.reconfigure`、替换式 socket 桩、`getattr(argparse)` 等），故未入 `check-types` 守护域 | 按簇清理：① 流对象改 `TextIO` 协议/显式 `cast`；② 桩替换改 `monkeypatch.setattr` + 显式声明；③ argparse 解析器改先赋值再断言非 None。清零后把 `scripts` 加回 `pyproject.toml` 的 `[tool.pyright] include` 与 `check-types` 默认受检路径，验收同 rf-1092 |
 
 ### P3 — 持续监控：兼容残留
 
@@ -64,6 +67,7 @@
 | **rf-1089** | `llm/pricing.py::_is_holiday` 经 `trading_calendar._is_trading_day` 判节假日，日历缓存缺失时会真实取数（akshare）；撤离线声明后无日历缓存的机器上整批 LLM 缓存用例被网络守卫拦成硬失败 | 改读 `cached_trading_days()`（只读缓存、绝不取数），无缓存按「非节假日」降级；补「只读缓存 / 无缓存降级 / 周末不查日历 / 异常降级」4 例回归 |
 | **rf-1090** | `llm/strategy.py::_apply_cost_first` 读 `input_price`/`output_price`（计价表实际键为 `input`/`output`），所有模型得分恒 `inf`，`cost_first` 策略静默退化为「保持原序」；旧用例用同款假键名把错哄住了 | 改读真实键 + 模型名小写归一，缺价/子表按未知排末尾；用例改用真实键名，并新增「以真实定价表为真值」的顺序断言 |
 | **rf-1091** | 类型债清理：`api_base._attempt` 的 `result` 可能未绑定（`PacingGate.__exit__` 声明为 `bool` 即可被推断为吞异常）、`analysis/scenario.py` CI 区间值可能为 None 仍参与乘法、`analysis/rebalance.py`/`trade_discipline.py` 配置段可能为 None 却被 `dict()`/下标、`tui_keys` 的 msvcrt 平台桩与 `fd` 可空、`holding_change_review` 方向值 `get` 重载不匹配 | 逐个按「值判空 + 显式类型收窄」修：`__exit__` 改 `-> None`、`_attempt` 结果与返回下沉进 `with`、CI/配置段先 `isinstance` 收窄、msvcrt 走 `getattr` 降级、方向值 `isinstance(int)` 判定；无行为变更，均由既有用例与静态检查复核 |
+| **rf-1092** | `src/python` 余 34 处 pyright error（现场 pyright 实测 83 处，含 48 处 `reportArgumentType`），且类型检查未进门禁——只能靠偶发人工扫描发现，其中已证明混有真实缺陷 | 分簇清零到 **0 error**：① 可空值簇（`reportOptional*` / `possiblyUnbound`）逐点判空收窄；② 数值归一统一走 `core.num_utils` （`safe_num` / `finite_or`），谓词升级 `TypeGuard`（免二次判空）；③ 平台桩走 `getattr` 降级（`msvcrt`）、`PacingGate.__exit__` 改 `-> None`、`cache._store` 用 `builtin_set` 别名避开同名遮蔽；④ 新增 `scripts/check-types.py`（退出码 0/1 环境缺失/2）入 pre-commit 与 CI `guards`，规则基线落 `pyproject.toml [tool.pyright]`（受检域 `src/python`，`src/test` 刻意不入域）；⑤ 补 14 例脚本测试。验收：`check-types.py --ci` 通过（`src/python` 零 ERROR），CI `guards` 变绿 |
 
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-08）
