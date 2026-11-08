@@ -111,20 +111,20 @@ class TestCliEdge:
 
     @pytest.mark.edge
     def test_verbose_ansi_auto_disable(self, monkeypatch):
-        """NO_COLOR 环境变量禁用 ANSI 颜色。"""
+        """NO_COLOR 环境变量禁用 ANSI 颜色（上色通道实测）。"""
         monkeypatch.setenv("NO_COLOR", "1")
-        from src.python.report.cli_progress import _should_color
+        from src.python.report.cli_progress import _clr
 
-        assert _should_color() is False
+        assert _clr("文本", "CYAN") == "文本"
 
     @pytest.mark.edge
     def test_verbose_no_color_pipe(self, monkeypatch):
         """stderr 非 TTY 时 ANSI 禁用。"""
         monkeypatch.delenv("NO_COLOR", raising=False)
-        from src.python.report.cli_progress import _should_color
+        from src.python.report.cli_progress import _clr
 
         # 测试环境中 stderr 被 pytest 捕获（非 TTY），应禁用颜色
-        assert _should_color() is False
+        assert _clr("文本", "CYAN") == "文本"
 
     @pytest.mark.edge
     def test_experiment_blank_value_rejected(self):

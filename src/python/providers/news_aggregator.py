@@ -22,6 +22,7 @@ from src.python.providers.news_dedup import (
 from src.python.providers.news_sources import (
     _FETCH_MAP,
     _SOURCE_LABELS,
+    get_source_label,
 )
 
 logger = logging.getLogger("invest")
@@ -99,7 +100,7 @@ def _channel_label(src: str, items: list[dict[str, Any]]) -> str:
         channel = item.get("_channel")
         if isinstance(channel, str) and channel and channel not in channels:
             channels.append(channel)
-    return " + ".join(channels) if channels else _SOURCE_LABELS.get(src, src)
+    return " + ".join(channels) if channels else get_source_label(src)
 
 
 def _remember_label(src: str, label: str) -> None:
@@ -112,7 +113,7 @@ def _label_for(src: str) -> str:
     """取本次运行的源展示标签（未登记时回退静态标签）。"""
     with _src_results_lock:
         label = _last_src_labels.get(src)
-    return label or _SOURCE_LABELS.get(src, src)
+    return label or get_source_label(src)
 
 
 def get_last_source_status() -> dict[str, dict]:
@@ -186,7 +187,7 @@ def _fetch_from_all_sources(
                 src_results[src] = (0, err_msg)
                 if progress_callback:
                     # 失败时未拿到条目，按静态标签报（不复用上一轮登记的子渠道标签）
-                    progress_callback(_SOURCE_LABELS.get(src, src), 0, err_msg)
+                    progress_callback(get_source_label(src), 0, err_msg)
 
     _log_source_timings(timings)
     return all_raw, src_results
@@ -201,26 +202,14 @@ def _log_source_timings(timings: dict[str, float]) -> None:
         if seconds >= SLOW_NEWS_SOURCE_WARN_SECONDS:
             logger.warning(
                 "[news] 源抓取偏慢：%s %.2fs（阈值 %.0fs）——单源慢会顶住整段新闻抓取",
-                _SOURCE_LABELS.get(src, src),
+                get_source_label(src),
                 seconds,
                 SLOW_NEWS_SOURCE_WARN_SECONDS,
             )
     logger.info(
         "[news] 源耗时: %s",
-        " | ".join(f"{_SOURCE_LABELS.get(src, src)} {seconds:.2f}s" for src, seconds in ranked),
+        " | ".join(f"{get_source_label(src)} {seconds:.2f}s" for src, seconds in ranked),
     )
-
-
-def _log_source_status(src_results: dict[str, tuple[int, str]]) -> None:
-    """输出各新闻源状态汇总日志。"""
-    status_parts = []
-    for s, (n, st) in src_results.items():
-        label = _label_for(s)
-        if st == "OK":
-            status_parts.append(f"{label} {n}条")
-        else:
-            status_parts.append(f"{label} {st}")
-    logger.info("新闻源状态: %s", " | ".join(status_parts))
 
 
 def _finalize_news_results(

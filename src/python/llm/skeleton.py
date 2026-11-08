@@ -40,9 +40,8 @@ from src.python.llm.prompts_tables import _build_prompt_appendix
 from src.python.llm.session import record_per_module
 from src.python.core.registry import get_llm_module_name
 
-#: 页脚样式标记（生成用量页脚与缓存命中提示行共用同一 markup）——语义为「本次调用的
+#: 页脚匹配（生成用量页脚与缓存命中提示行共用同一 markup）——语义为「本次调用的
 #: 运行元信息」而非分析正文，随缓存态变化（新生成含 Token/耗时/费用，命中含"使用缓存"）。
-_LLM_FOOTER_STYLE = 'style="color:#888;font-size:12px"'
 _LLM_FOOTER_RE = re.compile(r'<p style="color:#888;font-size:12px">[^<]*</p>')
 
 

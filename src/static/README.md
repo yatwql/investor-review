@@ -2,7 +2,7 @@
 
 非 Python 前端资产统一存放于此目录，按归属分为三类：
 
-1. **报告图表 bundle**（`chart*.js` / `toc.js` / `theme.js` / `test-chart.html`）：报告生成时由 `report/html_writer_assets.py` 复制到报告输出目录（与 HTML 同目录），模板以**相对路径**引用，报告完全离线自包含（纯本地 bundle 决策）。
+1. **报告图表 bundle**（`chart*.js` / `toc.js` / `fold.js` / `theme.js` / `test-chart.html`）：报告生成时由 `report/html_writer_assets.py` 的 `_inline_js_assets` **内嵌**进报告 HTML 的行内 `<script>`（不产出松散副本，单文件完全自包含；资产清单见该模块的 `JS_ASSETS`），报告下载/移动/单发移动端浏览均不依赖外部文件（纯本地 bundle 决策）。
 2. **Web UI 前端**（`web/`）：轻量 Web 模式单页 UI 的 Jinja 模板 + 静态资产。`web/app.py` 的 Flask `template_folder` / `static_folder` 指向 `src/static/web/`，URL 前缀 `/static/`、`render_template("index.html")` 契约与归入前一致。
 3. **报告 Jinja 模板**（`tmpl/`）：HTML 报告主模板、调仓 What-if 独立页与章节级 partial，由 `report/html_jinja_env.py` 的 `FileSystemLoader` 加载（单加载点）。
 
@@ -10,17 +10,22 @@
 
 ## 报告图表 bundle
 
-Chart.js 交互式图表的前端资产（引擎 + 自有 JS + 独立调试页）。报告生成时复制到输出目录，模板以相对路径引用。
+Chart.js 交互式图表的前端资产（引擎 + 自有 JS + 独立调试页）。报告生成时整体内嵌进报告 HTML（`report/html_writer_assets.py` 的 `JS_ASSETS` 为唯一清单），模板里只留 `<script defer src="X.js">` 占位标签供内嵌步骤替换。
 
 ### 文件清单
 
 | 文件 | 职责 | 体积 |
 |:-----|:-----|:----:|
-| `chart.min.js` | **Chart.js v4 引擎**（UMD 构建，第三方库） | ~205KB |
-| `chart-print.js` | 打印降级：beforeprint 快照 `<img>` / afterprint 恢复 | <5KB |
-| `chart-config.js` | 全局配置：配色（CSS 变量驱动）、关闭动画、限制 `devicePixelRatio` | <5KB |
-| `chart-init.js` | 12 张图表初始化（单图异常隔离 + `typeof Chart` 守卫） | <10KB |
-| `test-chart.html` | **独立调试页**：6 图渲染/交互/降级场景验证，Chart.js 升级的验收载体 | <20KB |
+| `chart.min.js` | **Chart.js v4 引擎**（UMD 构建，第三方库） | ~200KB |
+| `chart-print.js` | 打印降级：beforeprint 快照 `<img>` / afterprint 恢复 | ~3KB |
+| `chart-config.js` | 全局配置：配色（CSS 变量驱动）、关闭动画、限制 `devicePixelRatio` | ~4KB |
+| `chart-common.js` | 图表公共 helper（`window.ChartCommon`：登记/折线/环形配置），主报告与 What-if 页共用 | ~3KB |
+| `chart-init.js` | 主报告图表初始化（单图异常隔离 + `typeof Chart` 守卫） | ~16KB |
+| `chart-export.js` | 单图导出 PNG / CSV 按钮（`window.ChartExport.register`） | ~6KB |
+| `toc.js` | 左侧目录：折叠/展开、点击平滑滚动、滚动高亮当前章节 | ~3KB |
+| `fold.js` | 正文大块折叠（`details.section-fold`）交互增强与锚点自动展开 | ~4KB |
+| `theme.js` | 深/浅色主题切换（含 `ChartTheme` 刷新），主报告与 What-if 页共用 | ~7KB |
+| `test-chart.html` | **独立调试页**：多图渲染/交互/降级场景验证，Chart.js 升级的验收载体 | <20KB |
 
 ### 版本记录
 

@@ -16,7 +16,6 @@ from unittest.mock import MagicMock, patch
 from src.python.report._llm_news import _fetch_llm_and_news, _report_llm_module_results
 from src.python.report.orchestrator import (
     ReportResult,
-    _read_section_flags,
     prepare_report_data,
 )
 
@@ -42,46 +41,6 @@ class TestReportResult:
         """report_generated=False 即使有 errors 也返回 2（严重错误优先）。"""
         result = ReportResult(errors=["错误"])
         assert result.exit_code == 2
-
-
-class TestReadSectionFlags:
-    """_read_section_flags 配置解析测试。"""
-
-    def test_all_enabled(self):
-        with (
-            patch("src.python.config.is_enable_fund_deep_analysis", return_value=True),
-            patch("src.python.config.is_enable_news", return_value=True),
-            patch("src.python.config.is_enable_history", return_value=True),
-            patch("src.python.config.is_enable_portfolio_evolution", return_value=True),
-            patch("src.python.config.is_enable_llm", return_value=True),
-        ):
-            flags = _read_section_flags({})
-        assert flags == {"fund_deep_analysis": True, "news": True, "history": True, "evolution": True, "llm": True}
-
-    def test_all_disabled(self):
-        with (
-            patch("src.python.config.is_enable_fund_deep_analysis", return_value=False),
-            patch("src.python.config.is_enable_news", return_value=False),
-            patch("src.python.config.is_enable_history", return_value=False),
-            patch("src.python.config.is_enable_portfolio_evolution", return_value=False),
-            patch("src.python.config.is_enable_llm", return_value=False),
-        ):
-            flags = _read_section_flags({})
-        assert flags == {"fund_deep_analysis": False, "news": False, "history": False, "evolution": False, "llm": False}
-
-    def test_partial_flags(self):
-        with (
-            patch("src.python.config.is_enable_fund_deep_analysis", return_value=True),
-            patch("src.python.config.is_enable_news", return_value=False),
-            patch("src.python.config.is_enable_history", return_value=True),
-            patch("src.python.config.is_enable_portfolio_evolution", return_value=False),
-            patch("src.python.config.is_enable_llm", return_value=False),
-        ):
-            flags = _read_section_flags({})
-        assert flags["news"] is False
-        assert flags["llm"] is False
-        assert flags["fund_deep_analysis"] is True
-        assert flags["evolution"] is False
 
 
 @pytest.mark.unit

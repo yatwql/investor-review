@@ -15,7 +15,7 @@ from datetime import datetime
 from html.parser import HTMLParser
 
 from src.python.config import resolve_output_dir
-from src.python.core.constants import LATEST_HTML_NAME, LATEST_WHATIF_HTML_NAME, WHATIF_FILE_BASE
+from src.python.core.constants import LATEST_HTML_NAME, LATEST_WHATIF_HTML_NAME
 from src.python.core.logger import setup_logger
 from src.python.qa.error_codes import QA_CONTEXT_INVALID, QA_INPUT_CAP_EXCEEDED, QA_REPORT_NOT_FOUND, QA_SESSION_LIMIT
 from src.python.qa.session import ask_report_qa
@@ -27,7 +27,6 @@ logger = setup_logger()
 _QA_REPORT_LIST_MAX = 8  # 报告候选展示上限（输出目录顶层 .html，主报告优先 + 修改时间倒序）
 #: 调仓模拟产物名（固定名 + 归档式前缀），统一排到候选末档
 _WHATIF_HTML_NAMES = frozenset({LATEST_WHATIF_HTML_NAME})
-_WHATIF_HTML_PREFIX = f"{WHATIF_FILE_BASE}-"
 _QA_PROMPT = "  请输入问题（回车=返回主菜单）: "
 #: 终止整个输入循环的错误码（会话上限/报告不可用——继续提问无意义）
 _EXIT_LOOP_CODES = frozenset({QA_SESSION_LIMIT, QA_INPUT_CAP_EXCEEDED, QA_REPORT_NOT_FOUND, QA_CONTEXT_INVALID})

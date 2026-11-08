@@ -227,12 +227,10 @@ def parse_switch_override(token: str) -> tuple[str, bool]:
     if name not in feature_switch_registry:
         raise ValueError(f"未知功能开关 '{name}'；可选: {describe_switches()}")
 
-    value = raw_value.strip().lower()
-    if value in SWITCH_TRUE_TOKENS:
-        return name, True
-    if value in SWITCH_FALSE_TOKENS:
-        return name, False
-    raise ValueError(f"开关 '{name}' 的取值 '{raw_value}' 不可识别；可选: on / off")
+    value = parse_switch_value(raw_value)
+    if value is None:
+        raise ValueError(f"开关 '{name}' 的取值 '{raw_value}' 不可识别；可选: on / off")
+    return name, value
 
 
 def parse_switch_value(text: str) -> bool | None:

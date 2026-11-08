@@ -164,35 +164,6 @@ def _load_debate_config(settings: dict) -> dict:
     return merged
 
 
-def _merge_llm_defaults(base: dict) -> dict:
-    """默认值打底 + 用户覆盖合并；null 不覆盖；dict 键一层合并；未知键透传。
-
-    与 get_config 的 config.json 合并策略一致：
-      - 用户显式写 null 时不覆盖默认值（null 不覆盖）
-      - 嵌套 dict（enabled_llm / fact_check / pricing 等）一层合并，
-        允许用户只覆盖部分子键而不丢失默认值
-      - 默认中不存在的键原样透传（未知键透传，供消费端自定义字段使用）
-
-    debate 段保留默认值作为合并底（_load_debate_config 会对每个子键做
-    schema 校验并以出厂 debate 默认值兜底），此处不特殊处理。
-
-    Args:
-        base: 从 llm_settings.json 解析的用户配置字典。
-
-    Returns:
-        合并默认值后的完整配置字典（含全部默认键，消费端 .get() 可直接取值）。
-    """
-    merged = copy.deepcopy(_DEFAULT_LLM_SETTINGS)
-    for key, val in base.items():
-        if val is None and key in merged:
-            continue
-        if key in merged and isinstance(merged[key], dict) and isinstance(val, dict):
-            merged[key] = {**merged[key], **val}
-        else:
-            merged[key] = val
-    return merged
-
-
 def _load_settings_document(raw: str, path: str) -> dict:
     """解析并校验 llm_settings.json（v2），返回扁平视图。
 

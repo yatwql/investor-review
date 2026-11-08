@@ -264,13 +264,6 @@ _US_INDEX_CODES = {
     "gb_inx": "标普500",
 }
 
-# Tencent 美股指数代码（与 _US_INDEX_CODES 键名一致）
-_US_TENCENT_CODES: dict[str, str] = {
-    "gb_dji": "gb_dji",
-    "gb_ixic": "gb_ixic",
-    "gb_inx": "gb_inx",
-}
-
 
 def _fetch_us_from_tencent(missing: list[str]) -> dict[str, dict[str, Any]]:
     """通过腾讯财经获取美股指数（备用链路）。"""

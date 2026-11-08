@@ -68,25 +68,6 @@ class ReportResult:
         return 0
 
 
-def _read_section_flags(config: dict) -> dict:
-    """从 config 读取章节可见性开关，返回统一字典。"""
-    from src.python.config import (
-        is_enable_fund_deep_analysis,
-        is_enable_history,
-        is_enable_llm,
-        is_enable_news,
-        is_enable_portfolio_evolution,
-    )
-
-    return {
-        "fund_deep_analysis": is_enable_fund_deep_analysis(config),
-        "news": is_enable_news(config),
-        "history": is_enable_history(config),
-        "evolution": is_enable_portfolio_evolution(config),
-        "llm": is_enable_llm(config),
-    }
-
-
 # ── prepare_report_data ──
 # ★ config 参数已为必传
 

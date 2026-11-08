@@ -32,8 +32,10 @@ from src.python.config._validation_scalars import (
     _is_abs,
 )
 
-# 本模块 init_config 触发的 llm_settings.json 存在性确保
+# 本模块 init_config 触发的可编辑配置文件存在性确保（缺失即按模板铺出）
+from src.python.config._llm_pricing import ensure_llm_pricing_file
 from src.python.config._llm_settings import _ensure_llm_settings_file
+from src.python.config._logging import ensure_logger_file
 
 logger = logging.getLogger("invest")
 
@@ -306,6 +308,8 @@ def init_config(config_path: str | None = None) -> None:
 
     _ensure_llm_settings_file()
     _ensure_llm_providers_file()
+    ensure_logger_file()
+    ensure_llm_pricing_file()
 
 
 # ═══════════════════════════════════════════════════════════════

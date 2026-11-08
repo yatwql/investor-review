@@ -118,12 +118,3 @@ def save_baseline(components: dict[str, str], keys: dict[str, str]) -> bool:
     with _lock:
         _loaded = dict(payload)
     return True
-
-
-def changed_components(current: dict[str, str], baseline: dict[str, str] | None = None) -> list[str]:
-    """相对基线的变化组件名（升序）；无基线时返回空列表（不臆测）。"""
-    base = baseline if baseline is not None else baseline_components()
-    if not base:
-        return []
-    names = set(base) | set(current)
-    return sorted(name for name in names if base.get(name) != current.get(name))

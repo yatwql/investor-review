@@ -343,8 +343,9 @@ def _apply_llm_enhancement(
 ) -> dict:
     """可选 LLM 增强：对新闻逐条判定关联度。
 
-    注意：此模块不提供 output_brief 配置项。其他 LLM 模块支持精简模式，
-    但新闻模块输出严格 JSON 供程序解析，精简会破坏 JSON 结构，故不支持。
+    注意：``output_brief`` 在 v2 模块参数面上对所有 LLM 模块统一出现
+    （见 ``core/data_registry.py`` 的 settings 键派生），但**本模块不读取**该键：
+    新闻模块输出严格 JSON 供程序解析，精简会破坏 JSON 结构，故不生效。
 
     Returns:
         更新后的 meta 字典
@@ -675,13 +676,14 @@ def write_news_sheet(
             item.get("ctime", ""),
             keywords_str,
         ]
+        llm_text = ""
         if has_llm:
             llm_text = item.get("llm_analysis", "")
             vals.append(llm_text)
         write_data_row(ws, row, vals)
         ws.cell(row=row, column=2).alignment = wrap_left
         ws.cell(row=row, column=3).alignment = wrap_left
-        if has_llm and llm_text:
+        if llm_text and llm_col is not None:
             _colorize_llm_cell(ws, row, llm_col, llm_text)
         row += 1
 
